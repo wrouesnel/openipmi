@@ -101,9 +101,9 @@ typedef int (*ipmi_control_identifier_get_val_cb)(
     void                           *cb_data);
 
 typedef int (*ipmi_control_identifier_set_val_cb)(ipmi_control_t     *control,
-						  ipmi_control_op_cb handler,
 						  unsigned char      *val,
 						  int                length,
+						  ipmi_control_op_cb handler,
 						  void               *cb_data);
 
 typedef struct ipmi_control_cbs_s

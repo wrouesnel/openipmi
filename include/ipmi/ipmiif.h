@@ -733,9 +733,9 @@ int ipmi_control_identifier_get_val(ipmi_control_t                 *control,
 				    ipmi_control_identifier_val_cb handler,
 				    void                           *cb_data);
 int ipmi_control_identifier_set_val(ipmi_control_t     *control,
-				    ipmi_control_op_cb handler,
 				    unsigned char      *val,
 				    int                length,
+				    ipmi_control_op_cb handler,
 				    void               *cb_data);
 unsigned int ipmi_control_identifier_get_max_length(ipmi_control_t *control);
 

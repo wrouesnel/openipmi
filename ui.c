@@ -1205,6 +1205,33 @@ normal_control_val_read(ipmi_control_t *control,
 }
 
 static void
+identifier_control_val_read(ipmi_control_t *control,
+			    int            err,
+			    unsigned char  *val,
+			    int            length,
+			    void           *cb_data)
+{
+    ipmi_control_id_t control_id;
+    int               i;
+
+    control_id = ipmi_control_convert_to_id(control);
+    if (!((curr_display_type == DISPLAY_CONTROL)
+	  && (ipmi_cmp_control_id(control_id, curr_control_id) == 0)))
+	return;
+
+    if (err) {
+	wmove(display_pad, value_pos.y, value_pos.x);
+	wprintw(display_pad, "?");
+    } else {
+	for (i=0; i<length; i++) {
+	    wmove(display_pad, value_pos.y+i, value_pos.x);
+	    wprintw(display_pad, "0x%x", val[i]);
+	}
+    }
+    display_pad_refresh();
+}
+
+static void
 redisplay_control(ipmi_control_t *control, void *cb_data)
 {
     int           control_type;
@@ -1217,6 +1244,7 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
     if (!ipmi_entity_is_present(entity)) {
 	wmove(display_pad, value_pos.y, value_pos.x);
 	wprintw(display_pad, "not present");
+	display_pad_refresh();
 	return;
     }
 
@@ -1235,6 +1263,9 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
 	break;
 
     case IPMI_CONTROL_IDENTIFIER:
+	ipmi_control_identifier_get_val(control,
+					identifier_control_val_read,
+					NULL);
 	break;
     }
 }
@@ -1304,6 +1335,9 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 	    break;
 
 	case IPMI_CONTROL_IDENTIFIER:
+	    ipmi_control_identifier_get_val(control,
+					    identifier_control_val_read,
+					    NULL);
 	    break;
 	}
 
@@ -1501,37 +1535,85 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
 static void
 set_control(ipmi_control_t *control, void *cb_data)
 {
-    char **toks = cb_data;
-    int  num_vals = ipmi_control_get_num_vals(control);
-    int  i;
-    int  *vals;
-    char *tok;
-    char *estr;
-    int  rv;
+    char          **toks = cb_data;
+    int           num_vals;
+    int           i;
+    int           *vals;
+    unsigned char *cvals;
+    char          *tok;
+    char          *estr;
+    int           rv;
+    int           control_type;
 
-    vals = malloc(sizeof(*vals) * num_vals);
-    if (!vals) {
-	wprintw(cmd_win, "set_control: out of memory\n");
-	goto out;
-    }
+    control_type = ipmi_control_get_type(control);
+    switch (control_type) {
+	case IPMI_CONTROL_RELAY:
+	case IPMI_CONTROL_ALARM:
+	case IPMI_CONTROL_RESET:
+	case IPMI_CONTROL_POWER:
+	case IPMI_CONTROL_FAN_SPEED:
+	case IPMI_CONTROL_LIGHT:
+	    num_vals = ipmi_control_get_num_vals(control);
+	    vals = malloc(sizeof(*vals) * num_vals);
+	    if (!vals) {
+		wprintw(cmd_win, "set_control: out of memory\n");
+		goto out;
+	    }
 	
-    for (i=0; i<num_vals; i++) {
-	tok = strtok_r(NULL, " \t\n", toks);
-	if (!tok) {
-	    wprintw(cmd_win, "set_control: Value %d is not present\n", i);
-	    goto out;
-	}
-	vals[i] = strtol(tok, &estr, 0);
-	if (*estr != '\0') {
-	    wprintw(cmd_win, "set_control: Value %d is invalid\n", i);
-	    goto out;
-	}
-    }
+	    for (i=0; i<num_vals; i++) {
+		tok = strtok_r(NULL, " \t\n", toks);
+		if (!tok) {
+		    wprintw(cmd_win,
+			    "set_control: Value %d is not present\n",
+			    i);
+		    goto out;
+		}
+		vals[i] = strtol(tok, &estr, 0);
+		if (*estr != '\0') {
+		    wprintw(cmd_win, "set_control: Value %d is invalid\n", i);
+		    goto out;
+		}
+	    }
 
-    rv = ipmi_control_set_val(control, vals, NULL, NULL);
-    if (rv) {
-	wprintw(cmd_win, "set_control: Returned error 0x%x\n", rv);
-    }
+	    rv = ipmi_control_set_val(control, vals, NULL, NULL);
+	    if (rv) {
+		wprintw(cmd_win, "set_control: Returned error 0x%x\n", rv);
+	    }
+	    break;
+
+	case IPMI_CONTROL_DISPLAY:
+	    break;
+
+	case IPMI_CONTROL_IDENTIFIER:
+	    num_vals = ipmi_control_identifier_get_max_length(control);
+	    cvals = malloc(sizeof(*cvals) * num_vals);
+	    if (!cvals) {
+		wprintw(cmd_win, "set_control: out of memory\n");
+		goto out;
+	    }
+	
+	    for (i=0; i<num_vals; i++) {
+		tok = strtok_r(NULL, " \t\n", toks);
+		if (!tok) {
+		    wprintw(cmd_win,
+			    "set_control: Value %d is not present\n",
+			    i);
+		    goto out;
+		}
+		cvals[i] = strtol(tok, &estr, 0);
+		if (*estr != '\0') {
+		    wprintw(cmd_win, "set_control: Value %d is invalid\n", i);
+		    goto out;
+		}
+	    }
+
+	    rv = ipmi_control_identifier_set_val(control, cvals, num_vals,
+						 NULL, NULL);
+	    if (rv) {
+		wprintw(cmd_win, "set_control: Returned error 0x%x\n", rv);
+	    }
+	    break;
+	}
  out:
 }
 

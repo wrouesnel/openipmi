@@ -417,17 +417,17 @@ ipmi_control_identifier_get_val(ipmi_control_t                 *control,
 				
 int
 ipmi_control_identifier_set_val(ipmi_control_t     *control,
-				ipmi_control_op_cb handler,
 				unsigned char      *val,
 				int                length,
+				ipmi_control_op_cb handler,
 				void               *cb_data)
 {
     if (!control->cbs.set_identifier_val)
 	return ENOSYS;
     return control->cbs.set_identifier_val(control,
-					   handler,
 					   val,
 					   length,
+					   handler,
 					   cb_data);
 }
 
