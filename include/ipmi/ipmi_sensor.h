@@ -370,6 +370,19 @@ extern ipmi_sensor_cbs_t ipmi_standard_sensor_cb;
 void ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info);
 void *ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor);
 
+typedef void (*ipmi_sensor_opq_cb)(ipmi_sensor_t *sensor,
+				   int           err,
+				   void          *cb_data);
+
+typedef struct ipmi_sensor_opq_info_s
+{
+    ipmi_sensor_id_t     sensor_id;
+    ipmi_sensor_t        *sensor;
+    void                 *cb_data;
+    ipmi_sensor_opq_cb   handler;
+    ipmi_msg_t           *rsp;
+} ipmi_sensor_opq_info_t;
+
 void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,
 					       char          *str);
