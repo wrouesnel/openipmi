@@ -58,14 +58,14 @@ int ipmi_register_oem_handler(unsigned int                 manufacturer_id,
    false, the oem callback cannot use this value.  If this returns
    true, the oem callback will own the link and be responsible for
    freeing the link.  Setting the callback to NULL will disable it. */
-typedef int (*ipmi_bmc_oem_new_sensor_cb)(ipmi_mc_t     *mc,
-					  ipmi_entity_t *ent,
-					  ipmi_sensor_t *sensor,
-					  void          *link,
-					  void          *cb_data);
-int ipmi_bmc_set_oem_new_sensor_handler(ipmi_mc_t                  *mc,
-					ipmi_bmc_oem_new_sensor_cb handler,
-					void                       *cb_data);
+typedef int (*ipmi_mc_oem_new_sensor_cb)(ipmi_mc_t     *mc,
+					 ipmi_entity_t *ent,
+					 ipmi_sensor_t *sensor,
+					 void          *link,
+					 void          *cb_data);
+int ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
+				       ipmi_mc_oem_new_sensor_cb handler,
+				       void                      *cb_data);
 
 /* Used to report a new entity to the OEM handler.  The OEM handler
    may not refuse to allow the entity to be added, but it can fetch

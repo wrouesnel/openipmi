@@ -153,7 +153,6 @@ struct ipmi_sensor_s
     unsigned char oem1;
 
     char id[SENSOR_ID_LEN+1]; /* The ID from the device SDR. */
-    char assigned_id[SENSOR_ID_LEN+1]; /* The ID from the main SDR. */
 
     char *sensor_type_string;
     char *event_reading_type_string;
@@ -392,6 +391,27 @@ ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
     info->__cb_data = cb_data;
     info->__rsp_handler = handler;
     rv = ipmi_send_command(mc, lun, msg, sensor_rsp_handler, info);
+    return rv;
+}
+
+int
+ipmi_sensor_send_command_addr(ipmi_mc_t             *bmc,
+			      ipmi_sensor_t         *sensor,
+			      ipmi_addr_t           *addr,
+			      unsigned int          addr_len,
+			      ipmi_msg_t            *msg,
+			      ipmi_sensor_rsp_cb    handler,
+			      ipmi_sensor_op_info_t *info,
+			      void                  *cb_data)
+{
+    int rv;
+
+    info->__sensor = sensor;
+    info->__sensor_id = ipmi_sensor_convert_to_id(sensor);
+    info->__cb_data = cb_data;
+    info->__rsp_handler = handler;
+    rv = ipmi_bmc_send_command_addr(bmc, addr, addr_len,
+				    msg, sensor_rsp_handler, info);
     return rv;
 }
 
@@ -1935,19 +1955,6 @@ ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length)
     id[length] = '\0';
 }
 
-int
-ipmi_sensor_get_assigned_id_length(ipmi_sensor_t *sensor)
-{
-    return strlen(sensor->assigned_id);
-}
-
-void
-ipmi_sensor_get_assigned_id(ipmi_sensor_t *sensor, char *id, int length)
-{
-    strncpy(id, sensor->assigned_id, length);
-    id[length] = '\0';
-}
-
 void
 ipmi_sensor_set_owner(ipmi_sensor_t *sensor, int owner)
 {
@@ -2289,13 +2296,6 @@ ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id)
 {
     strncpy(sensor->id, id, SENSOR_ID_LEN);
     sensor->id[SENSOR_ID_LEN] = '\0';
-}
-
-void
-ipmi_sensor_set_assigned_id(ipmi_sensor_t *sensor, char *id)
-{
-    strncpy(sensor->assigned_id, id, SENSOR_ID_LEN);
-    sensor->assigned_id[SENSOR_ID_LEN] = '\0';
 }
 
 int

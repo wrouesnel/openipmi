@@ -161,8 +161,10 @@ struct ipmi_mc_s
 
     uint8_t  aux_fw_revision[4];
 
-    ipmi_bmc_oem_new_sensor_cb new_sensor_handler;
-    void                       *new_sensor_cb_data;
+    ipmi_mc_oem_new_sensor_cb new_sensor_handler;
+    void                      *new_sensor_cb_data;
+
+    void *oem_data;
 };
 
 struct ipmi_event_handler_id_s
@@ -360,7 +362,7 @@ ipmi_send_command(ipmi_mc_t               *mc,
 		  ipmi_response_handler_t rsp_handler,
 		  void                    *rsp_data)
 {
-    int                rv;
+    int         rv;
     ipmi_addr_t addr = mc->addr;
 
     rv = ipmi_addr_set_lun(&addr, lun);
@@ -372,6 +374,27 @@ ipmi_send_command(ipmi_mc_t               *mc,
 					     msg,
 					     ll_rsp_handler, rsp_data,
 					     rsp_handler, mc->bmc_mc);
+    return rv;
+}
+
+int
+ipmi_bmc_send_command_addr(ipmi_mc_t               *bmc,
+			   ipmi_addr_t		   *addr,
+			   unsigned int            addr_len,
+			   ipmi_msg_t              *msg,
+			   ipmi_response_handler_t rsp_handler,
+			   void                    *rsp_data)
+{
+    int rv;
+
+    if (bmc->bmc == NULL)
+	return EINVAL;
+
+    rv = bmc->bmc->conn->send_command(bmc->bmc->conn,
+				      addr, addr_len,
+				      msg,
+				      ll_rsp_handler, rsp_data,
+				      rsp_handler, bmc);
     return rv;
 }
 
@@ -467,8 +490,8 @@ system_event_handler(ipmi_mc_t  *bmc,
 	} else {
 	    id.channel = log->data[4] >> 4;
 	}
-	id.mc_num = log->data[7];
-	id.lun = log->data[8] & 0x3;
+	id.mc_num = log->data[4];
+	id.lun = log->data[5] & 0x3;
 	id.sensor_num = log->data[8];
 
 	info.err = 0;
@@ -1070,7 +1093,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     }
 
  next_addr:
-    (info->addr.slave_addr)++;
+    info->addr.slave_addr += 2;
     if (info->addr.slave_addr == 0xf0) {
 	/* We've hit the end, we can quit now. */
 	free(info);
@@ -1657,6 +1680,18 @@ ipmi_get_user_data(ipmi_mc_t *mc)
     return ipmi->user_data;
 }
 
+void
+ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data)
+{
+    mc->oem_data = data;
+}
+
+void *
+ipmi_mc_get_oem_data(ipmi_mc_t *mc)
+{
+    return mc->oem_data;
+}
+
 int
 ipmi_bmc_get_num_channels(ipmi_mc_t *mc, int *val)
 {
@@ -1754,7 +1789,7 @@ ipmi_mc_get_sdrs(ipmi_mc_t *mc)
     return mc->sdrs;
 }
 
-int
+unsigned int
 ipmi_mc_get_address(ipmi_mc_t *mc)
 {
     if (mc->addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
@@ -1766,7 +1801,7 @@ ipmi_mc_get_address(ipmi_mc_t *mc)
     return 0;
 }
 
-int
+unsigned int
 ipmi_mc_get_channel(ipmi_mc_t *mc)
 {
     return mc->addr.channel;
@@ -1974,9 +2009,9 @@ ipmi_bmc_oem_new_sensor(ipmi_mc_t     *mc,
 }
 
 int
-ipmi_bmc_set_oem_new_sensor_handler(ipmi_mc_t                  *mc,
-				    ipmi_bmc_oem_new_sensor_cb handler,
-				    void                       *cb_data)
+ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
+				   ipmi_mc_oem_new_sensor_cb handler,
+				   void                      *cb_data)
 {
     mc->new_sensor_handler = handler;
     mc->new_sensor_cb_data = cb_data;

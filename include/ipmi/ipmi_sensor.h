@@ -35,6 +35,7 @@
 #define _IPMI_SENSOR_H
 
 #include <ipmi/ipmi_types.h>
+#include <ipmi/ipmi_addr.h>
 
 /* The abstract type for sensors. */
 typedef struct ipmi_sensor_info_s ipmi_sensor_info_t;
@@ -418,6 +419,15 @@ int ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
 			     ipmi_sensor_rsp_cb    handler,
 			     ipmi_sensor_op_info_t *info,
 			     void                  *cb_data);
+
+int ipmi_sensor_send_command_addr(ipmi_mc_t             *bmc,
+				  ipmi_sensor_t         *sensor,
+				  ipmi_addr_t           *addr,
+				  unsigned int          addr_len,
+				  ipmi_msg_t            *msg,
+				  ipmi_sensor_rsp_cb    handler,
+				  ipmi_sensor_op_info_t *info,
+				  void                  *cb_data);
 
 void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,

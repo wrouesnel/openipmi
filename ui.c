@@ -1536,20 +1536,63 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     info.msg.data_len = data_len;
     info.msg.data = data;
 
-    if (info.addr == 0x20) {
-	int rv;
-	rv = ipmi_send_command(bmc, info.lun, &(info.msg), mccmd_rsp_handler,
-			       NULL);
-	if (rv)
-	    wprintw(cmd_win, "Send command failure: %x\n", rv);
-    } else {
-	info.found = 0;
-	ipmi_bmc_iterate_mcs(bmc, mccmd_handler, &info);
-	if (!info.found) {
-	    wprintw(cmd_win, "Unable to find MC at address 0x%x\n", info.addr);
-	}
-	display_pad_refresh();
+    info.found = 0;
+    ipmi_bmc_iterate_mcs(bmc, mccmd_handler, &info);
+    if (!info.found) {
+	wprintw(cmd_win, "Unable to find MC at address 0x%x\n", info.addr);
     }
+    display_pad_refresh();
+
+    return 0;
+}
+
+int
+msg_cmd(char *cmd, char **toks, void *cb_data)
+{
+    unsigned char    data[MCCMD_DATA_SIZE];
+    unsigned int     data_len;
+    ipmi_ipmb_addr_t addr;
+    unsigned int     channel;
+    ipmi_msg_t       msg;
+    int              rv;
+    
+    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+    if (get_uint(toks, &channel, "channel"))
+	return 0;
+    addr.channel = channel;
+
+    if (get_uchar(toks, &addr.slave_addr, "slave address"))
+	return 0;
+
+    if (addr.slave_addr == 0) {
+	addr.addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
+	if (get_uchar(toks, &addr.slave_addr, "slave address"))
+	    return 0;
+    }
+
+    if (get_uchar(toks, &addr.lun, "LUN"))
+	return 0;
+
+    if (get_uchar(toks, &msg.netfn, "NetFN"))
+	return 0;
+
+    if (get_uchar(toks, &msg.cmd, "command"))
+	return 0;
+
+    for (data_len=0; ; data_len++) {
+	if (get_uchar(toks, data+data_len, NULL))
+	    break;
+    }
+
+    msg.data_len = data_len;
+    msg.data = data;
+
+    rv = ipmi_bmc_send_command_addr(bmc, (ipmi_addr_t *) &addr, sizeof(addr),
+				    &msg, mccmd_rsp_handler, NULL);
+    if (rv)
+	wprintw(cmd_win, "Send command failure: %x\n", rv);
+    display_pad_refresh();
+
     return 0;
 }
 

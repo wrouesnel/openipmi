@@ -361,8 +361,7 @@ ipmi_sensor_discrete_set_event_handler(
 /* The event state is which events are set and cleared for the given
    sensor.  Events are enumerated for threshold events and numbered
    for discrete events.  Use the provided functions to initialize,
-   read, and modify an event state, sense the internals of the event
-   state structure are subject to change. */
+   read, and modify an event state. */
 typedef struct ipmi_event_state_s ipmi_event_state_t;
 
 /* Return the size of an event state data structure, so you can
@@ -528,9 +527,6 @@ int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
 int ipmi_sensor_get_oem1(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
 void ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
-/* The ID from the main SDR. */
-int ipmi_sensor_get_assigned_id_length(ipmi_sensor_t *sensor);
-void ipmi_sensor_get_assigned_id(ipmi_sensor_t *sensor, char *id, int length);
 
 /* Returns true if the sensor reports when an operator want to remove
    the hot-swappable entity from the system. */
@@ -546,19 +542,22 @@ typedef struct ipmi_thresholds_s ipmi_thresholds_t;
 unsigned int ipmi_thresholds_size(void);
 void ipmi_copy_thresholds(ipmi_thresholds_t *dest, ipmi_thresholds_t *src);
 
+/* Clear out all the thresholds. */
 int ipmi_thresholds_init(ipmi_thresholds_t *th);
 
-/* Set a threshold and make t valid in the thresholds data structure.
+/* Set a threshold and make it valid in the thresholds data structure.
    If sensor is non-null, it verifies that the given threshold can be
    set for the sensor. */
 int ipmi_threshold_set(ipmi_thresholds_t  *th,
 		       ipmi_sensor_t      *sensor,
 		       enum ipmi_thresh_e threshold,
 		       double             value);
-
+/* Return the value of the threshold in the set of thresholds.
+   Returns an error if the threshold is not set. */
 int ipmi_threshold_get(ipmi_thresholds_t  *th,
 		       enum ipmi_thresh_e threshold,
 		       double             *value);
+
 		       
 /* Set the thresholds for the given sensor. */
 int ipmi_thresholds_set(ipmi_sensor_t       *sensor,
@@ -575,7 +574,9 @@ int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 			ipmi_thresh_get_cb done,
 			void               *cb_data);
 
-/* Discrete states, or threshold status. */
+/* Discrete states, or threshold status.  This is the set of states or
+   thresholds that the sensor has enabled event for, and the global
+   event state of the sensor. */
 typedef struct ipmi_states_s ipmi_states_t;
 
 /* Get the size of ipmi_states_t, so you can allocate your own and
@@ -593,13 +594,14 @@ int ipmi_is_state_set(ipmi_states_t *states,
 void ipmi_set_state(ipmi_states_t *states,
 		    int           state_num,
 		    int           val);
-
-/* Read the current value of the given threshold sensor. */
 int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
 				   enum ipmi_thresh_e thresh);
 void ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 				     enum ipmi_thresh_e thresh,
 				     int                val);
+
+/* Read the current value of the given threshold sensor.  It also
+   returns the states of all the thresholds. */
 typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t *sensor,
 				     int           err,
 				     int           val_present,
@@ -610,6 +612,8 @@ int ipmi_reading_get(ipmi_sensor_t        *sensor,
 		     ipmi_reading_done_cb done,
 		     void                 *cb_data);
 
+/* Read the current value of the given threshold sensor, returning the
+   set of states that are active. */
 typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
 				    int           err,
 				    ipmi_states_t *states,

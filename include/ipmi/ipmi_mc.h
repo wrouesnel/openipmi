@@ -62,6 +62,16 @@ int ipmi_send_command(ipmi_mc_t               *mc,
 		      ipmi_response_handler_t rsp_handler,
 		      void                    *rsp_data);
 
+/* Like ipmi_send_command, but sends it directly to the address
+   specified, not to an MC. */
+int
+ipmi_bmc_send_command_addr(ipmi_mc_t               *bmc,
+			   ipmi_addr_t		   *addr,
+			   unsigned int            addr_len,
+			   ipmi_msg_t              *msg,
+			   ipmi_response_handler_t rsp_handler,
+			   void                    *rsp_data);
+
 /*
  * Registration for receiving incoming commands.  Not all systems
  * support this, you will receive an ENOSYS error if that's the case.
@@ -195,10 +205,10 @@ int ipmi_detect_bmc_presence_changes(ipmi_mc_t *mc, int force);
 ipmi_sdr_info_t *ipmi_mc_get_sdrs(ipmi_mc_t *mc);
 
 /* Get the IPMI slave address of the given MC. */
-int ipmi_mc_get_address(ipmi_mc_t *mc);
+unsigned ipmi_mc_get_address(ipmi_mc_t *mc);
 
 /* Get the channel for the given MC. */
-int ipmi_mc_get_channel(ipmi_mc_t *mc);
+unsigned ipmi_mc_get_channel(ipmi_mc_t *mc);
 
 /* Should the BMC do a full bus scan at startup?  This is so OEM
    code can turn this function off.  The value is a boolean. */
@@ -232,6 +242,10 @@ int ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc);
 
 /* Destroy an MC. */
 void ipmi_cleanup_mc(ipmi_mc_t *mc);
+
+/* Set and get the OEM data pointer in the mc. */
+void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
+void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);
 
 /* Initialize the MC code, called only once at init time. */
 int ipmi_mc_init(void);
