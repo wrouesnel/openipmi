@@ -1378,6 +1378,7 @@ handle_ipmi_set_lan_config_parms(lan_data_t *lan,
     case 1:
     case 17:
 	err = 0x82; /* Read-only data */
+	break;
 
     case 2:
 	if (msg->len < 7)
@@ -1703,6 +1704,341 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
 }
 
 static void
+handle_ipmi_get_pef_capabilities(lan_data_t *lan,
+				 session_t  *session,
+				 msg_t      *msg)
+{
+    unsigned char data[4];
+
+    data[0] = 0;
+    data[1] = 0x51; /* version */
+    data[2] = 0x3f; /* support everything but OEM */
+    data[3] = MAX_EVENT_FILTERS;
+
+    return return_rsp_data(lan, msg, session, data, 4);
+}
+
+static void
+handle_ipmi_set_pef_config_parms(lan_data_t *lan,
+				 session_t  *session,
+				 msg_t      *msg)
+{
+    unsigned char err = 0;
+    int           set, block;
+
+    if (msg->len < 2) {
+	lan->log(INVALID_MSG, msg, "Set pef config parm too short");
+	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
+	return;
+    }
+
+    switch (msg->data[0] & 0x7f)
+    {
+    case 0:
+	switch (msg->data[1] & 0x3)
+	{
+	case 0:
+	    if (lan->pef.set_in_progress) {
+		/* rollback */
+		memcpy(&lan->pef, &lan->pef_rollback,
+		       sizeof(lan->pef));
+	    }
+	    /* No affect otherwise */
+	    break;
+
+	case 1:
+	    if (lan->pef.set_in_progress)
+		err = 0x81; /* Another user is writing. */
+	    else {
+		/* Save rollback data */
+		memcpy(&lan->pef_rollback, &lan->pef,
+		       sizeof(lan->pef));
+		lan->pef.set_in_progress = 1;
+	    }
+	    break;
+
+	case 2:
+	    if (lan->pef.commit)
+		lan->pef.commit(lan);
+	    memset(&lan->pef.changed, 0, sizeof(lan->pef.changed));
+	    lan->pef.set_in_progress = 0;
+	    break;
+
+	case 3:
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	}
+	break;
+
+    case 5:
+    case 8:
+    case 11:
+	err = 0x82; /* Read-only data */
+	break;
+
+    case 1:
+	lan->pef.pef_control = msg->data[1];
+	lan->pef.changed.pef_control = 1;
+	break;
+
+    case 2:
+	lan->pef.pef_action_global_control = msg->data[1];
+	lan->pef.changed.pef_action_global_control = 1;
+	break;
+
+    case 3:
+	lan->pef.pef_startup_delay = msg->data[1];
+	lan->pef.changed.pef_startup_delay = 1;
+	break;
+
+    case 4:
+	lan->pef.pef_alert_startup_delay = msg->data[1];
+	lan->pef.changed.pef_alert_startup_delay = 1;
+	break;
+
+    case 6:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 22)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if ((set <= 0) || (set >= lan->pef.num_event_filters))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    set = msg->data[1] & 0x7f;
+	    memcpy(lan->pef.event_filter_table[set], msg->data+1, 21);
+	    lan->pef.changed.event_filter_table[set] = 1;
+	}
+	break;
+
+    case 7:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 3)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if ((set <= 0) || (set >= lan->pef.num_event_filters))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    set = msg->data[1] & 0x7f;
+	    memcpy(lan->pef.event_filter_data1[set], msg->data+1, 2);
+	    lan->pef.changed.event_filter_data1[set] = 1;
+	}
+	break;
+
+    case 9:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 5)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if ((set <= 0) || (set >= lan->pef.num_alert_policies))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    set = msg->data[1] & 0x7f;
+	    memcpy(lan->pef.alert_policy_table[set], msg->data+1, 4);
+	    lan->pef.changed.alert_policy_table[set] = 1;
+	}
+	break;
+
+    case 10:
+	if (msg->len < 18)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->pef.system_guid, msg->data+1, 17);
+	    lan->pef.changed.system_guid = 1;
+	}
+	break;
+
+    case 12:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 4)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if (set >= lan->pef.num_alert_strings)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    set = msg->data[1] & 0x7f;
+	    memcpy(lan->pef.alert_string_keys[set], msg->data+1, 3);
+	    lan->pef.changed.alert_string_keys[set] = 1;
+	}
+	break;
+
+    case 13:
+	set = msg->data[1] & 0x7f;
+	if (msg->len < 4)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if (set >= lan->pef.num_alert_strings)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    int dlen = msg->len - 3;
+	    set = msg->data[1] & 0x7f;
+	    block = msg->data[2];
+	    if (((block*16) + dlen) > MAX_ALERT_STRING_LEN) {
+		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
+		break;
+	    }
+	    memcpy(lan->pef.alert_strings[set]+(block*16), msg->data+3, dlen);
+	    lan->pef.changed.alert_strings[set] = 1;
+	}
+	break;
+
+    default:
+	err = 0x80; /* Parm not supported */
+    }
+
+    return_err(lan, msg, session, err);
+}
+
+static void
+return_pef_config_data(lan_data_t *lan, unsigned int rev, int rev_only,
+		       msg_t *msg, session_t *session,
+		       unsigned char *data, unsigned int data_len)
+{
+    rsp_msg_t rsp;
+    unsigned char d[36];
+    unsigned int  d_len;
+
+    d[0] = 0;
+    d[1] = rev;
+    if (rev_only) {
+	d_len = 2;
+    } else {
+	memcpy(d+2, data, data_len);
+	d_len = data_len + 2;
+    }
+	
+    rsp.netfn = IPMI_SENSOR_EVENT_NETFN | 1;
+    rsp.cmd = IPMI_GET_PEF_CONFIG_PARMS_CMD;
+    rsp.data = d;
+    rsp.data_len = d_len;
+    return_rsp(lan, msg, session, &rsp);
+}
+
+
+static void
+handle_ipmi_get_pef_config_parms(lan_data_t *lan,
+				 session_t  *session,
+				 msg_t      *msg)
+{
+    int           set, block;
+    unsigned char databyte = 0;
+    unsigned char *data = NULL;
+    unsigned int  length = 0;
+    unsigned char err = 0;
+    unsigned char tmpdata[18];
+
+    if (msg->len < 3) {
+	lan->log(INVALID_MSG, msg, "Get pef config parm too short");
+	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
+	return;
+    }
+
+    switch (msg->data[0] & 0x7f)
+    {
+    case 0:
+	databyte = lan->pef.set_in_progress;
+	break;
+
+    case 5:
+	databyte = lan->pef.num_event_filters - 1;
+	break;
+
+    case 8:
+	databyte = lan->pef.num_alert_policies - 1;
+	break;
+
+    case 11:
+	databyte = lan->pef.num_alert_strings - 1;
+	break;
+
+    case 1:
+	databyte = lan->pef.pef_control;
+	break;
+
+    case 2:
+	databyte = lan->pef.pef_action_global_control;
+	break;
+
+    case 3:
+	databyte = lan->pef.pef_startup_delay;
+	break;
+
+    case 4:
+	databyte = lan->pef.pef_alert_startup_delay;
+	break;
+
+    case 6:
+	set = msg->data[1] & 0x7f;
+	if ((set <= 0) || (set >= lan->pef.num_event_filters))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    data = lan->pef.event_filter_table[set];
+	    length = 21;
+	}
+	break;
+
+    case 7:
+	set = msg->data[1] & 0x7f;
+	if ((set <= 0) || (set >= lan->pef.num_event_filters))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    data = lan->pef.event_filter_data1[set];
+	    length = 2;
+	}
+	break;
+
+    case 9:
+	set = msg->data[1] & 0x7f;
+	if ((set <= 0) || (set >= lan->pef.num_alert_policies))
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    data = lan->pef.alert_policy_table[set];
+	    length = 4;
+	}
+	break;
+
+    case 10:
+	data = lan->pef.system_guid;
+	length = 17;
+	break;
+
+    case 12:
+	set = msg->data[1] & 0x7f;
+	if (set >= lan->pef.num_alert_strings)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    data = lan->pef.alert_string_keys[set];
+	    length = 3;
+	}
+	break;
+
+    case 13:
+	set = msg->data[1] & 0x7f;
+	if (set >= lan->pef.num_alert_strings)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    block = msg->data[2];
+	    if ((block*16) > MAX_ALERT_STRING_LEN) {
+		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
+		break;
+	    }
+	    tmpdata[0] = set;
+	    tmpdata[1] = block;
+	    memcpy(tmpdata+2, lan->pef.alert_strings[set]+(block*16), 16);
+	    data = tmpdata;
+	    length = 18;
+	}
+	break;
+
+    default:
+	err = 0x80; /* Parm not supported */
+    }
+
+    if (err) {
+	return_err(lan, msg, session, err);
+    } else if (data) {
+	return_pef_config_data(lan, 0x11, msg->data[0] & 0x80,
+			       msg, session, data, length);
+    } else {
+	return_pef_config_data(lan, 0x11, msg->data[0] & 0x80,
+			       msg, session, &databyte, 1);
+    }
+}
+
+static void
 handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 {
     session_t *session = sid_to_session(lan, msg->sid);
@@ -1753,124 +2089,143 @@ handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 	rv = ipmi_cmd_permitted(session->priv, msg->netfn, msg->cmd);
 
     switch (rv) {
-	case IPMI_PRIV_PERMITTED:
+    case IPMI_PRIV_PERMITTED:
+	break;
+
+    case IPMI_PRIV_SEND:
+	/* The spec says that operator privilege is require to
+	   send on other channels, but that doesn't make any
+	   sense.  Instead, we look at the message to tell if the
+	   operation is permitted. */
+	rv = ipmi_cmd_permitted(session->priv,
+				msg->data[2]>>2, /* netfn */
+				msg->data[6]);   /* cmd */
+	if (rv == IPMI_PRIV_PERMITTED)
 	    break;
 
-	case IPMI_PRIV_SEND:
-	    /* The spec says that operator privilege is require to
-               send on other channels, but that doesn't make any
-               sense.  Instead, we look at the message to tell if the
-               operation is permitted. */
-	    rv = ipmi_cmd_permitted(session->priv,
-				    msg->data[2]>>2, /* netfn */
-				    msg->data[6]);   /* cmd */
-	    if (rv == IPMI_PRIV_PERMITTED)
-		break;
+	/* fallthrough */
 
-	    /* fallthrough */
+    case IPMI_PRIV_DENIED:
+    case IPMI_PRIV_BOOT: /* FIXME - this can sometimes be permitted. */
+	lan->log(INVALID_MSG, msg,
+		 "Normal session message failure: no privilege");
+	return_err(lan, msg, session, IPMI_INSUFFICIENT_PRIVILEGE_CC);
+	return;
 
-	case IPMI_PRIV_DENIED:
-	case IPMI_PRIV_BOOT: /* FIXME - this can sometimes be permitted. */
-	    lan->log(INVALID_MSG, msg,
-		     "Normal session message failure: no privilege");
-	    return_err(lan, msg, session, IPMI_INSUFFICIENT_PRIVILEGE_CC);
-	    return;
-
-	case IPMI_PRIV_INVALID:
-	default:
-	    lan->log(INVALID_MSG, msg,
-		     "Normal session message failure: Internal error 1");
-	    return_err(lan, msg, session, IPMI_UNKNOWN_ERR_CC);
-	    return;
+    case IPMI_PRIV_INVALID:
+    default:
+	lan->log(INVALID_MSG, msg,
+		 "Normal session message failure: Internal error 1");
+	return_err(lan, msg, session, IPMI_UNKNOWN_ERR_CC);
+	return;
     }
 
     if (msg->netfn == IPMI_APP_NETFN) {
 	switch (msg->cmd)
 	{
-	    case IPMI_GET_SYSTEM_GUID_CMD:
-		handle_get_system_guid(lan, session, msg);
-		break;
+	case IPMI_GET_SYSTEM_GUID_CMD:
+	    handle_get_system_guid(lan, session, msg);
+	    break;
 
-	    case IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD:
-	    case IPMI_GET_SESSION_CHALLENGE_CMD:
-		return_err(lan, msg, session,
-			   IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC);
-		break;
+	case IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD:
+	case IPMI_GET_SESSION_CHALLENGE_CMD:
+	    return_err(lan, msg, session,
+		       IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC);
+	    break;
 		
-	    case IPMI_ACTIVATE_SESSION_CMD:
-		handle_activate_session_cmd(lan, session, msg);
-		break;
+	case IPMI_ACTIVATE_SESSION_CMD:
+	    handle_activate_session_cmd(lan, session, msg);
+	    break;
 
-	    case IPMI_SET_SESSION_PRIVILEGE_CMD:
-		handle_set_session_privilege(lan, session, msg);
-		break;
+	case IPMI_SET_SESSION_PRIVILEGE_CMD:
+	    handle_set_session_privilege(lan, session, msg);
+	    break;
 		
-	    case IPMI_CLOSE_SESSION_CMD:
-		handle_close_session(lan, session, msg);
-		break;
+	case IPMI_CLOSE_SESSION_CMD:
+	    handle_close_session(lan, session, msg);
+	    break;
 
-	    case IPMI_GET_SESSION_INFO_CMD:
-		handle_get_session_info(lan, session, msg);
-		break;
+	case IPMI_GET_SESSION_INFO_CMD:
+	    handle_get_session_info(lan, session, msg);
+	    break;
 
-	    case IPMI_GET_AUTHCODE_CMD:
-		handle_get_authcode(lan, session, msg);
-		break;
+	case IPMI_GET_AUTHCODE_CMD:
+	    handle_get_authcode(lan, session, msg);
+	    break;
 
-	    case IPMI_SET_CHANNEL_ACCESS_CMD:
-		handle_set_channel_access(lan, session, msg);
-		break;
+	case IPMI_SET_CHANNEL_ACCESS_CMD:
+	    handle_set_channel_access(lan, session, msg);
+	    break;
 
-	    case IPMI_GET_CHANNEL_ACCESS_CMD:
-		handle_get_channel_access(lan, session, msg);
-		break;
+	case IPMI_GET_CHANNEL_ACCESS_CMD:
+	    handle_get_channel_access(lan, session, msg);
+	    break;
 
-	    case IPMI_GET_CHANNEL_INFO_CMD:
-		handle_get_channel_info(lan, session, msg);
-		break;
+	case IPMI_GET_CHANNEL_INFO_CMD:
+	    handle_get_channel_info(lan, session, msg);
+	    break;
 
-	    case IPMI_SET_USER_ACCESS_CMD:
-		handle_set_user_access(lan, session, msg);
-		break;
+	case IPMI_SET_USER_ACCESS_CMD:
+	    handle_set_user_access(lan, session, msg);
+	    break;
 
-	    case IPMI_GET_USER_ACCESS_CMD:
-		handle_get_user_access(lan, session, msg);
-		break;
+	case IPMI_GET_USER_ACCESS_CMD:
+	    handle_get_user_access(lan, session, msg);
+	    break;
 
-	    case IPMI_SET_USER_NAME_CMD:
-		handle_set_user_name(lan, session, msg);
-		break;
+	case IPMI_SET_USER_NAME_CMD:
+	    handle_set_user_name(lan, session, msg);
+	    break;
 
-	    case IPMI_GET_USER_NAME_CMD:
-		handle_get_user_name(lan, session, msg);
-		break;
+	case IPMI_GET_USER_NAME_CMD:
+	    handle_get_user_name(lan, session, msg);
+	    break;
 
-	    case IPMI_SET_USER_PASSWORD_CMD:
-		handle_set_user_password(lan, session, msg);
-		break;
+	case IPMI_SET_USER_PASSWORD_CMD:
+	    handle_set_user_password(lan, session, msg);
+	    break;
 
-	    default:
-		handle_smi_msg(lan, session, msg);
+	default:
+	    handle_smi_msg(lan, session, msg);
 	}
     } else if (msg->netfn == IPMI_TRANSPORT_NETFN) {
 	switch (msg->cmd)
 	{
-	    case IPMI_SET_LAN_CONFIG_PARMS_CMD:
-		handle_ipmi_set_lan_config_parms(lan, session, msg);
-		break;
+	case IPMI_SET_LAN_CONFIG_PARMS_CMD:
+	    handle_ipmi_set_lan_config_parms(lan, session, msg);
+	    break;
 
-	    case IPMI_GET_LAN_CONFIG_PARMS_CMD:
-		handle_ipmi_get_lan_config_parms(lan, session, msg);
-		break;
+	case IPMI_GET_LAN_CONFIG_PARMS_CMD:
+	    handle_ipmi_get_lan_config_parms(lan, session, msg);
+	    break;
 
-	    default:
-		lan->log(INVALID_MSG, msg,
-			 "Normal session message failure: Invalid cmd: 0x%x",
-			 msg->cmd);
-		return_err(lan, msg, session, IPMI_INVALID_CMD_CC);
-		break;
+	default:
+	    lan->log(INVALID_MSG, msg,
+		     "Normal session message failure: Invalid cmd: 0x%x",
+		     msg->cmd);
+	    return_err(lan, msg, session, IPMI_INVALID_CMD_CC);
+	    break;
+	}
+    } else if (msg->netfn == IPMI_SENSOR_EVENT_NETFN) {
+	switch (msg->cmd)
+	{
+	case IPMI_GET_PEF_CAPABILITIES_CMD:
+	    handle_ipmi_get_pef_capabilities(lan, session, msg);
+	    break;
+
+	case IPMI_SET_PEF_CONFIG_PARMS_CMD:
+	    handle_ipmi_set_pef_config_parms(lan, session, msg);
+	    break;
+
+	case IPMI_GET_PEF_CONFIG_PARMS_CMD:
+	    handle_ipmi_get_pef_config_parms(lan, session, msg);
+	    break;
+
+	default:
+	    goto normal_msg;
 	}
     } else {
+    normal_msg:
 	handle_smi_msg(lan, session, msg);
     }
 }
@@ -2079,6 +2434,20 @@ ipmi_lan_init(lan_data_t *lan)
     for (i=0; i<16; i++) {
 	lan->lanparm.dest[i].addr[0] = i;
 	lan->lanparm.dest[i].type[0] = i;
+    }
+
+    lan->pef.num_event_filters = MAX_EVENT_FILTERS;
+    for (i=0; i<MAX_EVENT_FILTERS; i++) {
+	lan->pef.event_filter_table[i][0] = i;
+	lan->pef.event_filter_data1[i][0] = i;
+    }
+    lan->pef.num_alert_policies = MAX_ALERT_POLICIES;
+    for (i=0; i<MAX_ALERT_POLICIES; i++)
+	lan->pef.alert_policy_table[i][0] = i;
+    lan->pef.num_alert_strings = MAX_ALERT_STRINGS;
+    for (i=0; i<MAX_ALERT_STRINGS; i++) {
+	lan->pef.alert_string_keys[i][0] = i;
+	lan->pef.alert_strings[i][0] = i;
     }
 
     /* Force user 1 to be a null user. */

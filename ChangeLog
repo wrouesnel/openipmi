@@ -1,3 +1,13 @@
+2004-12-31 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/lanserv.h, lanserv/lanserv_ipmi.c: Added PEF
+	config support.
+
+	* cmdlang/cmd_pef.c: Fixed some printing problems.
+
+	* lib/pef.c: Fixed a problem getting the last alert string and the
+	guid data and a few data format problems.
+
 2004-12-30 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_strings.h: Converted return strings to

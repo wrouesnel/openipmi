@@ -616,7 +616,7 @@ config_info(ipmi_cmd_info_t *cmd_info, ipmi_pef_config_t *config)
 	ipmi_cmdlang_down(cmd_info);
 	ipmi_cmdlang_out_int(cmd_info, "Number", j);
 	for (i=0; lps[i].name; i++) {
-	    ulp_item_t *lp = lps->lpi;
+	    ulp_item_t *lp = lps[i].lpi;
 	    lp->out(cmd_info, j, lps[i].name, config, lps[i].get_func);
 	}
 	ipmi_cmdlang_up(cmd_info);
@@ -630,7 +630,7 @@ config_info(ipmi_cmd_info_t *cmd_info, ipmi_pef_config_t *config)
 	ipmi_cmdlang_down(cmd_info);
 	ipmi_cmdlang_out_int(cmd_info, "Number", j);
 	for (i=0; lps[i].name; i++) {
-	    ulp_item_t *lp = lps->lpi;
+	    ulp_item_t *lp = lps[i].lpi;
 	    lp->out(cmd_info, j, lps[i].name, config, lps[i].get_func);
 	}
 	ipmi_cmdlang_up(cmd_info);
@@ -644,7 +644,7 @@ config_info(ipmi_cmd_info_t *cmd_info, ipmi_pef_config_t *config)
 	ipmi_cmdlang_down(cmd_info);
 	ipmi_cmdlang_out_int(cmd_info, "Number", j);
 	for (i=0; lps[i].name; i++) {
-	    ulp_item_t *lp = lps->lpi;
+	    ulp_item_t *lp = lps[i].lpi;
 	    lp->out(cmd_info, j, lps[i].name, config, lps[i].get_func);
 	}
 	ipmi_cmdlang_up(cmd_info);

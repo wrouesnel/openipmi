@@ -207,6 +207,45 @@ struct lanparm_data_s
     } changed;
 };
 
+#define MAX_EVENT_FILTERS 16
+#define MAX_ALERT_POLICIES 16
+#define MAX_ALERT_STRINGS 16
+#define MAX_ALERT_STRING_LEN 64
+
+typedef struct pef_data_s
+{
+    unsigned int set_in_progress : 2;
+    void (*commit)(lan_data_t *lan); /* Called when the commit occurs. */
+
+    unsigned char pef_control;
+    unsigned char pef_action_global_control;
+    unsigned char pef_startup_delay;
+    unsigned char pef_alert_startup_delay;
+    unsigned char num_event_filters;
+    unsigned char event_filter_table[MAX_EVENT_FILTERS][21];
+    unsigned char event_filter_data1[MAX_EVENT_FILTERS][2];
+    unsigned char num_alert_policies;
+    unsigned char alert_policy_table[MAX_ALERT_POLICIES][4];
+    unsigned char system_guid[17];
+    unsigned char num_alert_strings;
+    unsigned char alert_string_keys[MAX_ALERT_STRINGS][3];
+    unsigned char alert_strings[MAX_ALERT_STRINGS][MAX_ALERT_STRING_LEN];
+
+    /* Tells what has changed, so the commit can do something about it. */
+    struct {
+	unsigned int pef_control : 1;
+	unsigned int pef_action_global_control : 1;
+	unsigned int pef_startup_delay : 1;
+	unsigned int pef_alert_startup_delay : 1;
+	unsigned int system_guid : 1;
+	unsigned char event_filter_table[MAX_EVENT_FILTERS];
+	unsigned char event_filter_data1[MAX_EVENT_FILTERS];
+	unsigned char alert_policy_table[MAX_ALERT_POLICIES];
+	unsigned int alert_string_keys[MAX_ALERT_STRINGS];
+	unsigned int alert_strings[MAX_ALERT_STRINGS];
+    } changed;
+} pef_data_t;
+
 struct lan_data_s
 {
     /* user 0 is not used. */
@@ -299,6 +338,9 @@ struct lan_data_s
 
     lanparm_data_t lanparm;
     lanparm_data_t lanparm_rollback;
+
+    pef_data_t pef;
+    pef_data_t pef_rollback;
 };
 
 

@@ -242,7 +242,10 @@ unsigned int ipmi_lanconfig_get_ip_addr_source(ipmi_lan_config_t *lanc);
 int ipmi_lanconfig_set_ip_addr_source(ipmi_lan_config_t *lanc,
 				      unsigned int      val);
 
-/* Number of allowed alert destinations.  This is read-only. */
+/* Number of allowed alert destinations.  This is read-only.  Note
+   that this is *not* the value returned from the config, it is one
+   more than the value, so it is the actual number of alert
+   destinations (including the volatile destination 0). */
 unsigned int ipmi_lanconfig_get_num_alert_destinations(ipmi_lan_config_t *c);
 
 

@@ -1409,6 +1409,7 @@ static int gnas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     if (num == 0)
 	return 0;
 
+    num++;
     pefc->asks = ipmi_mem_alloc(sizeof(ipmi_ask_t) * num);
     if (!pefc->asks)
 	return ENOMEM;
@@ -2258,8 +2259,10 @@ ipmi_pefconfig_get_guid_val(ipmi_pef_config_t *pefc,
 			    unsigned char     *data,
 			    unsigned int      *data_len)
 {
-    if (*data_len <= 16)
-        return EINVAL;
+    if (*data_len < 16) {
+	*data_len = 16;
+        return EBADF;
+    }
     memcpy(data, pefc->guid, 16);
     *data_len = 16;
     return 0;
@@ -2400,6 +2403,7 @@ ipmi_pefconfig_get_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
 {
     unsigned int olen = *len;
     unsigned int rlen;
+
     if (sel >= pefc->num_alert_strings)
 	return EINVAL;
     if (! pefc->alert_strings[sel]) {
@@ -2411,7 +2415,7 @@ ipmi_pefconfig_get_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
     }
     rlen = strlen((char *) pefc->alert_strings[sel]) + 1;
     *len = rlen;
-    if (rlen < olen)
+    if (rlen > olen)
 	return EBADF;
     strcpy(val, pefc->alert_strings[sel]);
     return 0;
@@ -2520,57 +2524,57 @@ typedef struct pefparm_gendata_s
 
 static pefparm_gendata_t gdata[] =
 {
-    F_BOOL(alert_startup_delay_enabled),
+    F_BOOL(alert_startup_delay_enabled),			/* 0 */
     F_BOOL(startup_delay_enabled),
     F_BOOL(event_messages_enabled),
     F_BOOL(pef_enabled),
     F_BOOL(diagnostic_interrupt_enabled),
-    F_BOOL(oem_action_enabled),
+    F_BOOL(oem_action_enabled),					/* 5 */
     F_BOOL(power_cycle_enabled),
     F_BOOL(reset_enabled),
     F_BOOL(power_down_enabled),
     F_BOOL(alert_enabled),
-    F_INTV(startup_delay),
+    F_INTV(startup_delay),					/* 10 */
     F_INTV(alert_startup_delay),
     F_BOOL(guid_enabled),
     F_DATA(guid_val),
     F_INTR(num_event_filters),
-    F_BOOLIV(enable_filter, ipmi_pefconfig_get_num_event_filters),
+    F_BOOLIV(enable_filter, ipmi_pefconfig_get_num_event_filters), /* 15 */
     F_INTIV(filter_type, ipmi_pefconfig_get_num_event_filters),
     F_BOOLIV(diagnostic_interrupt, ipmi_pefconfig_get_num_event_filters),
     F_BOOLIV(oem_action, ipmi_pefconfig_get_num_event_filters),
     F_BOOLIV(power_cycle, ipmi_pefconfig_get_num_event_filters),
-    F_BOOLIV(reset, ipmi_pefconfig_get_num_event_filters),
+    F_BOOLIV(reset, ipmi_pefconfig_get_num_event_filters),	  /* 20 */
     F_BOOLIV(power_down, ipmi_pefconfig_get_num_event_filters),
     F_BOOLIV(alert, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(alert_policy_number, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(event_severity, ipmi_pefconfig_get_num_event_filters),
-    F_INTIV(generator_id_addr, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(generator_id_addr, ipmi_pefconfig_get_num_event_filters), /* 25 */
     F_INTIV(generator_id_channel_lun, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(sensor_type, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(sensor_number, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(event_trigger, ipmi_pefconfig_get_num_event_filters),
-    F_INTIV(data1_offset_mask, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data1_offset_mask, ipmi_pefconfig_get_num_event_filters), /* 30 */
     F_INTIV(data1_mask, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(data1_compare1, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(data1_compare2, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(data2_mask, ipmi_pefconfig_get_num_event_filters),
-    F_INTIV(data2_compare1, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data2_compare1, ipmi_pefconfig_get_num_event_filters), /* 35 */
     F_INTIV(data2_compare2, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(data3_mask, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(data3_compare1, ipmi_pefconfig_get_num_event_filters),
     F_INTIV(data3_compare2, ipmi_pefconfig_get_num_event_filters),
-    F_INTR(num_alert_policies),
+    F_INTR(num_alert_policies),					   /* 40 */
     F_INTIV(policy_num, ipmi_pefconfig_get_num_alert_policies),
-    F_INTIV(enabled, ipmi_pefconfig_get_num_alert_policies),
+    F_BOOLIV(enabled, ipmi_pefconfig_get_num_alert_policies),
     F_INTIV(policy, ipmi_pefconfig_get_num_alert_policies),
     F_INTIV(channel, ipmi_pefconfig_get_num_alert_policies),
-    F_INTIV(destination_selector, ipmi_pefconfig_get_num_alert_policies),
-    F_INTIV(alert_string_event_specific, ipmi_pefconfig_get_num_alert_policies),
+    F_INTIV(destination_selector, ipmi_pefconfig_get_num_alert_policies), /* 45 */
+    F_BOOLIV(alert_string_event_specific, ipmi_pefconfig_get_num_alert_policies),
     F_INTIV(alert_string_selector, ipmi_pefconfig_get_num_alert_policies),
     F_INTR(num_alert_strings),
     F_INTIV(event_filter, ipmi_pefconfig_get_num_alert_strings),
-    F_INTIV(alert_string_set, ipmi_pefconfig_get_num_alert_strings),
+    F_INTIV(alert_string_set, ipmi_pefconfig_get_num_alert_strings), /* 50 */
     F_STRIV(alert_string, ipmi_pefconfig_get_num_alert_strings),
 };
 #define NUM_GDATA_ENTRIES (sizeof(gdata) / sizeof(pefparm_gendata_t))

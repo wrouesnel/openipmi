@@ -540,7 +540,9 @@ int ipmi_pefconfig_set_alert_string_selector(ipmi_pef_config_t *pefc,
 					     unsigned int      val);
 
 /*
- * Values from the alert string keys and alert strings
+ * Values from the alert string keys and alert strings.  Note that
+ * unlike the other PEF set data, there is a zero value here so the
+ * numbering matches the numbering in the actual data.
  */
 unsigned int ipmi_pefconfig_get_num_alert_strings(ipmi_pef_config_t *pefc);
 int ipmi_pefconfig_get_event_filter(ipmi_pef_config_t *pefc,
