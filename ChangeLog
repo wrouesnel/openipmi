@@ -1,3 +1,9 @@
+2004-03-01 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_atca_conn.c: Set broadcast_broken all the time.
+
+	* lib/ipmi.c: Added raw debug tracing for incoming SNMP traps.
+
 2004-02-26 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a way to check if an

@@ -114,6 +114,11 @@ atca_oem_finish_check(ipmi_con_t   *ipmi,
     if (ipmi && (msg->data_len >= 8) && (msg->data[0] == 0)) {
 	/* We've got an ATCA system, set up the handler. */
 	ipmi->get_ipmb_addr = lan_atca_ipmb_fetch;
+	/* Broadcast may or may not be broken on ATCA, but no I2C devices
+	   are allowed on the ATCA IPMB bus thus broadcast is not needed,
+	   and broadcast seems to be broken about half the time anyway,
+	   so... */
+	ipmi->broadcast_broken = 1;
     }
     done(ipmi, cb_data);
 }

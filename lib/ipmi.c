@@ -49,6 +49,20 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/mxp.h>
 
+#if defined(DEBUG_MSG) || defined(DEBUG_RAWMSG)
+static void
+dump_hex(void *vdata, int len)
+{
+    unsigned char *data = vdata;
+    int i;
+    for (i=0; i<len; i++) {
+	if ((i != 0) && ((i % 16) == 0)) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  ");
+	}
+	ipmi_log(IPMI_LOG_DEBUG_CONT, " %2.2x", data[i]);
+    }
+}
+#endif
 static os_hnd_rwlock_t *global_lock;
 static os_handler_t *ipmi_os_handler;
 
@@ -1438,6 +1452,14 @@ ipmi_handle_snmp_trap_data(void            *src_addr,
     int            handled = 0;
     unsigned char  pet_ack[12];
     ipmi_msg_t     *msg = NULL;
+
+    if (DEBUG_RAWMSG) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "Got SNMP trap from:\n  ");
+	dump_hex(src_addr, 16);
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data is:\n  ");
+	dump_hex(data, data_len);
+	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+    }
 
     if (data_len < 46)
 	return 0;
