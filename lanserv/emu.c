@@ -763,8 +763,8 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 
     if (omsg->cmd == IPMI_SEND_MSG_CMD) {
 	int i;
-	for (i=*rdata_len-1; i>0; i--)
-	    rdata[i+6] = rdata[i];
+	for (i=*rdata_len-1; i>=0; i--)
+	    rdata[i+7] = rdata[i];
 	rdata[0] = 0;
 	rdata[1] = emu->bmc_mc;
 	rdata[2] = ((msg->netfn | 1) << 2) | (data[4] & 0x3);
