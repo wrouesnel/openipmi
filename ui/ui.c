@@ -3220,8 +3220,8 @@ display_pef_config(void)
 
     count = ipmi_pefconfig_get_num_event_filters(pef_config);
     display_pad_out("  num_event_filters: %d\n", count);
-    for (i=1; i<count; i++) {
-	display_pad_out("  event filter %d:\n", i);
+    for (i=0; i<count; i++) {
+	display_pad_out("  event filter %d:\n", i+1);
 	for (j=0; eft_table[j].name != NULL; j++) {
 	    rv = eft_table[j].get(pef_config, i, &val);
 	    display_pad_out("    %s: ", eft_table[j].name);
@@ -3235,8 +3235,8 @@ display_pef_config(void)
 
     count = ipmi_pefconfig_get_num_alert_policies(pef_config);
     display_pad_out("  num_event_filters: %d\n", count);
-    for (i=1; i<count; i++) {
-	display_pad_out("  alert policy %d:\n", i);
+    for (i=0; i<count; i++) {
+	display_pad_out("  alert policy %d:\n", i+1);
 	for (j=0; apt_table[j].name != NULL; j++) {
 	    rv = apt_table[j].get(pef_config, i, &val);
 	    display_pad_out("    %s: ", apt_table[j].name);
@@ -3313,6 +3313,7 @@ readpef_alloc_handler(ipmi_pef_t *lpef,
 void
 readpef_mc_handler(ipmi_mc_t *mc, void *cb_data)
 {
+    int          rv;
     mccmd_info_t *info = cb_data;
 
     info->found = 1;
@@ -3326,7 +3327,9 @@ readpef_mc_handler(ipmi_mc_t *mc, void *cb_data)
 	pef_config = NULL;
     }
 
-    ipmi_pef_alloc(mc, readpef_alloc_handler, NULL, NULL);
+    rv = ipmi_pef_alloc(mc, readpef_alloc_handler, NULL, NULL);
+    if (rv)
+        cmd_win_out("Error allocating PEF");
 }
 
 int
