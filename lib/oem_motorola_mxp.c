@@ -8424,6 +8424,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     /* Nominal is 105 (-12V), step is 68mV.  The Vccp1 itself is 14.1mV
        per step and zero-based, the equation for the resistor network is
        V = (4.8265 * Vccp1) - 19.1326. */
+    /* Note - due to the was measured, the tolerances here are 15%. */
     rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num+5,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
@@ -8431,7 +8432,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 					       "-12V",
 					       0, 0,
 					       i2c_sens_get_reading,
-					       105, 87, 123,
+					       105, 78, 132,
 					       68, -191, 2, -3,
 					       &sinfo->vneg12);
     if (rv) {
