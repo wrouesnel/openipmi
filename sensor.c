@@ -1422,6 +1422,21 @@ ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
     return 0;
 }
 
+void
+ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
+				   enum ipmi_thresh_e event,
+				   int                val)
+{
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* Not a threshold sensor, it doesn't have readings. */
+	return;
+
+    if (event > IPMI_UPPER_NON_RECOVERABLE)
+	return;
+
+    sensor->mask3[event + 8] = val;
+}
+
 int
 ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 			       enum ipmi_thresh_e event,
@@ -1436,6 +1451,21 @@ ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 
     *val = sensor->mask3[event];
     return 0;
+}
+
+void
+ipmi_sensor_threshold_set_readable(ipmi_sensor_t      *sensor,
+				   enum ipmi_thresh_e event,
+				   int                val)
+{
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* Not a threshold sensor, it doesn't have readings. */
+	return;
+
+    if (event > IPMI_UPPER_NON_RECOVERABLE)
+	return;
+
+    sensor->mask3[event] = val;
 }
 
 int
@@ -1484,6 +1514,21 @@ ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 
     *val = sensor->mask3[event];
     return 0;
+}
+
+void
+ipmi_sensor_discrete_set_event_readable(ipmi_sensor_t *sensor,
+					int           event,
+					int           val)
+{
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* A threshold sensor, it doesn't have events. */
+	return;
+
+    if (event > 14)
+	return;
+
+    sensor->mask3[event] = val;
 }
 
 int

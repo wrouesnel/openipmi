@@ -231,6 +231,17 @@ void ipmi_sensor_set_negative_going_threshold_hysteresis(
 void ipmi_sensor_set_oem1(ipmi_sensor_t *sensor, int oem1);
 void ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id);
 
+void ipmi_sensor_discrete_set_event_readable(ipmi_sensor_t *sensor,
+					     int           event,
+					     int           val);
+
+void ipmi_sensor_threshold_set_readable(ipmi_sensor_t      *sensor,
+					enum ipmi_thresh_e thresh,
+					int                val);
+void ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
+					enum ipmi_thresh_e thresh,
+					int                val);
+
 
 
 /* Typedefs for the sensor polymorphic functions. */
