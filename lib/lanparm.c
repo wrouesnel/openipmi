@@ -671,11 +671,13 @@ static void sba(ipmi_lan_config_t *lanc, lanparms_t *lp, unsigned char *data)
 }
 
 #define GETAUTH(d, v) \
-	(d)->oem = (((v) >> 5) & 1); \
-	(d)->straight = (((v) >> 4) & 1); \
-	(d)->md5 = (((v) >> 2) & 1); \
-	(d)->md2 = (((v) >> 1) & 1); \
-	(d)->none = (((v) >> 0) & 1);
+	do { \
+	    (d)->oem = (((v) >> 5) & 1); \
+	    (d)->straight = (((v) >> 4) & 1); \
+	    (d)->md5 = (((v) >> 2) & 1); \
+	    (d)->md2 = (((v) >> 1) & 1); \
+	    (d)->none = (((v) >> 0) & 1); \
+	} while (0)
 
 #define SETAUTH(d) \
 	(((d)->oem << 5) \
@@ -707,6 +709,9 @@ static int gae(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	return err;
 
     data++; /* Skip over the revision byte. */
+
+    for (i=0; i<5; i++)
+	ipmi_log(IPMI_LOG_DEBUG, "enable %d = %x\n", i, data[i]);
 
     for (i=0; i<5; i++)
 	GETAUTH(&(lanc->auth_enable[i]), data[i]);
