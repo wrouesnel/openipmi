@@ -189,6 +189,9 @@ struct ipmi_mc_s
     ipmi_mc_oem_new_sensor_cb new_sensor_handler;
     void                      *new_sensor_cb_data;
 
+    ipmi_oem_event_handler_cb oem_event_handler;
+    void                      *oem_event_handler_cb_data;
+
     void *oem_data;
 };
 
@@ -465,10 +468,13 @@ remove_event_handler(ipmi_mc_t               *mc,
 
 typedef struct event_sensor_info_s
 {
+    int        handled;
     int        err;
     ipmi_log_t *log;
 } event_sensor_info_t;
-void event_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
+
+void
+event_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     event_sensor_info_t *info = cb_data;
 
@@ -487,6 +493,27 @@ ipmi_bmc_set_oem_event_handler(ipmi_mc_t                 *bmc,
     bmc->bmc->oem_event_handler = handler;
     bmc->bmc->oem_event_cb_data = cb_data;
     return 0;
+}
+
+int
+ipmi_mc_set_oem_event_handler(ipmi_mc_t                 *mc,
+			      ipmi_oem_event_handler_cb handler,
+			      void                      *cb_data)
+{
+    mc->oem_event_handler = handler;
+    mc->oem_event_handler_cb_data = cb_data;
+    return 0;
+}
+
+void
+mc_event_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    event_sensor_info_t *info = cb_data;
+
+    if (mc->oem_event_handler)
+	info->handled = mc->oem_event_handler(mc,
+					      info->log,
+					      mc->oem_event_handler_cb_data);
 }
 
 static void
@@ -508,19 +535,33 @@ system_event_handler(ipmi_mc_t  *bmc,
 
     /* It's a system event record from an MC. */
     if ((log->type == 0x02) && ((log->data[4] & 0x01) == 0)) {
+	ipmi_mc_id_t mc_id;
+
+	info.handled = 0;
+	info.err = 0;
+	info.log = log;
+
+	/* See if the MC has an OEM handler for this. */
+	mc_id.bmc = bmc;
+	if (log->data[6] == 0x03) {
+	    mc_id.channel = 0;
+	} else {
+	    mc_id.channel = log->data[5] >> 4;
+	}
+	mc_id.mc_num = log->data[4];
+	ipmi_mc_pointer_cb(mc_id, mc_event_cb, &info);
+
 	/* It's from an MC. */
 	id.bmc = bmc;
 	if (log->data[6] == 0x03) {
 	    id.channel = 0;
 	} else {
-	    id.channel = log->data[4] >> 4;
+	    id.channel = log->data[5] >> 4;
 	}
 	id.mc_num = log->data[4];
 	id.lun = log->data[5] & 0x3;
 	id.sensor_num = log->data[8];
 
-	info.err = 0;
-	info.log = log;
 	rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
 	if (rv) {
 	    rv = info.err;
