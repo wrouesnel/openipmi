@@ -37,7 +37,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
-#include "md5.h"
+#include <OpenIPMI/md5.h>
 
 typedef uint32_t u32;
 typedef uint8_t  byte;
@@ -451,7 +451,7 @@ md5_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD5 ($Revision: 1.5 $)";
+const char * const gnupgext_version = "MD5 ($Revision: 1.1 $)";
 
 static struct {
     int class;

@@ -43,8 +43,8 @@
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
-#include "ilist.h"
-#include "opq.h"
+#include <OpenIPMI/ilist.h>
+#include <OpenIPMI/opq.h>
 
 struct ipmi_sensor_info_s
 {

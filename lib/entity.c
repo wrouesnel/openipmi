@@ -39,7 +39,7 @@
 #include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
-#include "ilist.h"
+#include <OpenIPMI/ilist.h>
 
 /* These are the versions of IPMI we write to the SDR repository */
 #define IPMI_MAJOR_NUM_SDR 1

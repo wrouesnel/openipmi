@@ -34,8 +34,8 @@
 #include <stdlib.h>
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_int.h>
-#include "ilist.h"
-#include "opq.h"
+#include <OpenIPMI/ilist.h>
+#include <OpenIPMI/opq.h>
 
 typedef struct opq_elem_s
 {

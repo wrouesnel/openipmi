@@ -35,7 +35,7 @@
 #ifndef UI_COMMAND_H
 #define UI_COMMAND_H
 
-#include "ilist.h"
+#include <OpenIPMI/ilist.h>
 
 typedef int (*cmd_handler_t)(char *cmd, char **toks, void *cb_data);
 

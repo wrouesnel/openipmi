@@ -35,7 +35,7 @@
 #include <string.h>
 #include <execinfo.h> /* For backtrace() */
 #include <OpenIPMI/ipmi_int.h>
-#include "ilist.h"
+#include <OpenIPMI/ilist.h>
 
 #define DBG_ALIGN 16
 

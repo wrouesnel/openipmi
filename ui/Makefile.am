@@ -1,0 +1,31 @@
+
+empty:=
+space:= $(empty) $(empty)
+
+LIB_VERSION = 0.0.1
+
+SPACE_VERSION = $(subst .,$(space),$(LIB_VERSION))
+VERSION_CURRENT = $(wordlist 1, 1, $(SPACE_VERSION))
+VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
+VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
+
+AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
+
+bin_PROGRAMS = ipmi_ui
+
+noinst_HEADERS = ui_keypad.h ui_command.h
+
+LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
+
+lib_LTLIBRARIES = libOpenIPMIui.la
+
+libOpenIPMIui_la_SOURCES = ui.c ui_os.c ui_keypad.c ui_command.c 
+libOpenIPMIui_la_LIBADD =
+libOpenIPMIui_la_LDFLAGS = -version-info $(LD_VERSION) \
+	-Wl,-Map -Wl,libOpenIPMIui.map
+
+ipmi_ui_SOURCES = basic_ui.c
+ipmi_ui_LDADD = libOpenIPMIui.la $(top_srcdir)/lib/libOpenIPMI.la -lncurses
+
+clean:
+	rm -f *.map

@@ -1,4 +1,10 @@
 
+2003-07-22 Corey Minyard <cminyard@mvista.com>
+
+	* everything: Restructured the entire tree and split up everyting
+	into subdirectories.  Hopefully the code is much better structured
+	now.
+
 2003-07-21 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi_smi.c: Added socket interface handling for the SMI

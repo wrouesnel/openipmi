@@ -1,0 +1,202 @@
+
+           Implementing SA HPI on top of OpenIPMI
+
+OpenIPMI was designed with HPI in mind, but the mapping is not 100%
+straightforward.
+
+This document assumes understanding of the HPI spec and OpenIPMI.
+Documentation on those should be read before this document.
+
+Domains
+-------
+
+Domains have no real mapping to OpenIPMI because they occur above the
+level of OpenIPMI.  The inner workings of the domains are also not
+specified in HPI, so how the domain discovers things exist is
+implementation dependent.
+
+For this implementation, each domain is a chassis, and the default
+domain is simply a table of the registered chassis.  The chassis may
+be registered by reading a file or by using a non-standard call to add
+the domain.
+
+
+Sessions
+--------
+
+A session maps to an OpenIPMI bmc.  The registered domain information
+gives the information about the bmc connection (type, authentication
+parms, etc.).  Opening a session maps to creating a session to a BMC.
+
+The implementation should provide the suggested schemas as well as
+allowing custom schemas to be defined.
+
+
+Resources
+---------
+
+Resources is a stupid name and a stupid concept.  A "resource" is
+really a management controller.  Management controllers are not
+directly exposed in OpenIPMI, because they don't really serve any
+direct purpose for the user.  However, they are defined in HPI, so
+something will have to be done with them.
+
+It's also the case that things that are managed as resources (take
+hot-swap, for example) may not have management controllers.  A
+hot-swappable entity, which is by HPI definition a resource, therefore
+may be more things than a management controller.
+
+Because of this, instead of mapping management controllers to
+resources, this implementation maps entities to resources.  This also
+makes management of entities easier.
+
+In OpenIPMI, the discovery of entities is dynamic via callbacks, so
+the discovery calls don't do anything.  This implementation will
+monitor the set of entities and keep an internal table of the current
+set of MCs to provide in the various RPT calls.  The internal table
+will also keep the resource severity, tag, and other information about
+the resource.
+
+
+Event Log
+---------
+
+This implementation will keep it's own copy of the event log, so the
+various resources can be more easily tracked.  That will hold all the
+event information in an HPI-like format, and track the original SEL
+event that cause it, so that those events can be removed.
+
+To clear the event log, just delete all the entries.
+
+A time may need to be added to the OpenIPMI event log, to give the
+latest update time from the last event.
+
+The "Log State" calls are badly documented, they really tell if the
+management controller can generate logs.  This is done in IPMI with
+commands to set the event receiver, OpenIPMI will have to be extended
+to accomidate this.  I have no idea why you would want to turn logs
+off, but, it's in HPI.
+
+
+Events
+------
+
+Events in OpenIPMI and events in HPI work quite differently.  In
+OpenIPMI, all events are mapped to the object they belong to.  For
+instance, each sensor has it's own event callback.  Each entity has a
+callback that reports new sensors and controls.
+
+Note that in HPI, events reported through the event interface don't
+necessarily correlate with events in the event log.  Many of the HPI
+"events" do not come in as IPMI events, at least directly.
+
+This implementation will keep track of every OpenIPMI object and have
+a callback registered for it.  When an sensor is reported, the current
+states of the thresholds are queried, anything out of range will be
+reported as an HPI event.  All other callbacks will be mapped as
+events as necessary.
+
+Events will be held in a queue, the event get function will just
+return the top of the queue (or wait until something is in the queue,
+if necessary).
+
+
+Sensors
+-------
+
+HPI sensors are a straightforward map from OpenIPMI.  All readings
+will be in converted format and not in raw format.
+
+Sensors reported for an entity are added to that entity/resources
+Resource Data Record (RDR) repository.
+
+The implementation will have to implement the aggregate status
+information from HPI.
+
+
+Controls
+--------
+
+HPI Controls are a straightforward mapping from OpenIPMI controls.
+
+Controls reported for an entity are added to that entity/resources
+Resource Data Record (RDR) repository.
+
+
+Inventory
+---------
+
+OpenIPMI does not currently implement and FRU information, so entity
+inventory capability will be turned off for the first release of this
+HPI implementation.
+
+
+Watchdog Timer
+--------------
+
+It's completely stupid to provide watchdog timers through this
+interface.  Therefore, no resources will have watchdog timer
+capability set, and this function will not be implemented.
+
+
+Hot Swap
+--------
+
+If an entity (resource) has a sensor that supports
+ipmi_sensor_is_hot_swap_requester() and a control that supports
+ipmi_control_is_hot_swap_indicator(), then the entity supports full
+6-state managed hot-swap.  Otherwise, the presence of the entity is
+reported via hot-swap events using the simplified hot swap model that
+just reports the hot-swap status and doesn't allow control.
+
+The hot-swap control and sensor are not reported in the list of
+sensors.
+
+
+Configuration
+-------------
+
+Configuration is so vague it's hard to know what to do, so it will not
+be implemented in this implementation.
+
+
+Reset
+-----
+
+Entities that have reset controls can support reset easily.  The reset
+control is not reported in the list of controls.
+
+
+System Resources
+----------------
+
+The code will need to do locks and things of that nature.  For this,
+it must use the os_handler calls defined in OpenIPMI/os_handler.h.
+This will make the code more portable between systems and give the
+user more control over the implementation.
+
+It is not reasonably possible to implement HPI without threads.  This
+implementation will create one thread that uses the standard selector
+code to wait for input and time things.  That thread will run the
+entire OpenIPMI layer.
+
+Thread handling needs to be added to the os_handler structure.
+
+
+Blocking Calls
+--------------
+
+Most HPI calls are blocking, they wait until the operation is complete
+before returning, even if the operation must send messages and wait
+for responses.  In OpenIPMI, all calls are callback based, they never
+block.  This implementation will use condition variables defined in
+os_handler.h to block waiting for the results.
+
+
+ID Tables
+---------
+
+This implementation will need to keep ID tables to track all the IDs.
+IDs will be 100% unique (meaning that an ID holds it's type and will
+be rejected if the type is invalid) and will be designed to be reused
+as seldom as reasonably possible.

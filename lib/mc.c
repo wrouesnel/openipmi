@@ -46,8 +46,8 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_oem.h>
 
-#include "ilist.h"
-#include "opq.h"
+#include <OpenIPMI/ilist.h>
+#include <OpenIPMI/opq.h>
 
 /* Timer structure for rereading the SEL. */
 typedef struct mc_reread_sel_s

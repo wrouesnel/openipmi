@@ -1,3 +1,4 @@
+
 This is the OpenIPMI library, a library that makes simplifies building
 complex IPMI systems.
 
@@ -22,3 +23,24 @@ However, the LGPL license may be a restriction.  If you are interested
 in re-licensing parts of OpenIPMI, contact MontaVista software.
 
 
+The source tree here consists of the following directories:
+
+  include - Most of the include files used by the systems, all the
+  public ones.
+
+  utils - Basic utilities (mostly authentication) that other parts of
+  the system use.  This is a non-shared library that the other shared
+  libraries pick up stuff from.
+
+  lib - The main library for OpenIPMI.
+
+  ui - A cheesy user interface for OpenIPMI, mostly for testing.
+
+  lanserv - An IPMI LAN server, it turns an SMI interface into a LAN
+  interface.
+
+  sample - Some sample code, and the ipmicmd utility.
+
+  doc - The documentation.
+
+  man - The man pages.

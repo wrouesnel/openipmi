@@ -1,12 +1,19 @@
-AC_INIT(ipmi.c)
+AC_INIT(README.Force)
 AC_CANONICAL_TARGET
-AM_INIT_AUTOMAKE(OpenIPMI, 0.4.3)
+AM_INIT_AUTOMAKE(OpenIPMI, 1.0.0)
 
 AC_PROG_CC
 AM_PROG_LIBTOOL
 AC_STDC_HEADERS
 
 AC_OUTPUT(Makefile
+	  utils/Makefile
+	  lib/Makefile
+	  ui/Makefile
+	  lanserv/Makefile
+	  sample/Makefile
+	  doc/Makefile
+	  man/Makefile
 	  include/Makefile
 	  include/OpenIPMI/Makefile
 	  include/linux/Makefile

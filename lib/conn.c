@@ -36,7 +36,7 @@
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_oem.h>
 #include <OpenIPMI/ipmi_int.h>
-#include "ilist.h"
+#include <OpenIPMI/ilist.h>
 
 /***********************************************************************
  *

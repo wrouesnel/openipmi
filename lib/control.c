@@ -39,8 +39,8 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_control.h>
-#include "ilist.h"
-#include "opq.h"
+#include <OpenIPMI/ilist.h>
+#include <OpenIPMI/opq.h>
 
 struct ipmi_control_info_s
 {

@@ -34,7 +34,7 @@
 #ifndef UI_KEYPAD_H
 #define UI_KEYPAD_H
 
-#include "ilist.h"
+#include <OpenIPMI/ilist.h>
 
 typedef int (*key_handler_t)(int key, void *cb_data);
 

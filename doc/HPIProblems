@@ -1,0 +1,94 @@
+
+1. The interface is not nearly abstract enough.
+
+  The whole point of HPI was to abstract the system from IPMI, so that
+  someday, when IPMI went away and something new came along, this
+  could still work with the replacement.  However, the interfaces in
+  HPI are all through direct data-structure access, and everything is
+  fixed size.  Do you have a discrete sensor that supports more than
+  15 states?  Well, that's too bad, you only get 15 states to
+  represent in a sensor.  How about more than 6 basic thresholds, like
+  perhaps you want an informational threshold?  Too bad.  The problem
+  is that adding these things will break binary compatability with
+  older implementations, because you have to extend the data
+  structures.  Breaking binary compatability is one of the worse sins
+  you can commit when maintaining an interface.  And the basic design
+  of HPI requires it to extend anything.  HPI should be using opaque
+  types accessor methods for everything.
+
+  It also doesn't tie associated events as closely as I would like.  I
+  hesitate to use the term, but the interface is not really very
+  OO. It would be nice if incoming events could be tied directly to
+  the sensor that generated them, so that you could tie a callback
+  event to a specific sensor.  With HPI you have to provide that level
+  of abstraction yourself.  It would have been nice if HPI could have
+  done that for you, since it easily could.  However, since the
+  interface it not event-driven, it really can't.
+
+2. The interface is not event-driven.
+
+  On the event-driven problem, perhaps I'm biased.  I came from a job
+  where we were building huge distributed telephone systems, like a
+  100 million subscriber HLR with triplicate redundancy.  In a big
+  system like that, you can have a thousand chassis.  HPI requires you
+  to have a thread for each managed chassis, or you have to poll them.
+  With a thousand chassis, neither of those options are feasible.  All
+  the operations in HPI are blocking, you do the operation, and the
+  thread blocks until the operation completes.  Again, with a thousand
+  chassis, having a thread for each operation just doesn't scale.
+  IMHO, this is not the way that you build control systems, control
+  systems should always be event-driven.
+
+3. There is no provision for using multiple vendor's HPI
+   implementation in the same program.
+
+  If you want to manage chassis from different vendors in the same
+  program, HPI doesn't provide a way to do that.  You would have to
+  write two programs, one for each vendor, then invent your own
+  protocol to talk to a third program that did the actual management.
+  That would suck.
+
+4. Why would the user ever want to work with raw values?
+
+  They shouldn't even be there.  Why are the data values represented
+  as 8, 16, and 32-bit quantities?  That complicates the code, just
+  make it all 32-bits and float.
+
+5. There's no provision for managing the underlying threads
+
+  You cannot set their priority or whatever. 
+
+6. Resources are irrelevant.
+
+  In reality, the user doesn't really care about what HPI calls
+  "resources".  Resources seem to be intelligent entities (management
+  controllers in IPMI-speak).  They don't really do anything except
+  manage hot-swap and handle watchdogs.
+
+  It seems completely wierd to me that watchdogs are part of the
+  standard.  They don't really belong here, since they are more a
+  local resouce.
+
+  For hot-swap, many systems have non-intelligent entities that can be
+  hot-swapped.  HPI can't handle these without kludges.  Hot-swap
+  should really be on entities.
+
+7. Entities should be first-class objects, not just inferred.
+
+  Entities are the things the user is really interested in.  After
+  all, they are thing things the sensors monitor.  Why doesn't HPI
+  represent these as first-class objects?  IPMI has ways to give
+  entities names (through Entity-Association records), but HPI doesn't
+  represent this.
+
+8. Controls are not detailed enough.
+
+  The designers of HPI left the IPMI-way when specifying control
+  types.  Sensor types are very specific, controls should be, too.
+
+9. There's no support for multiple-setting-controls.
+
+  Many output devices only allow setting multiple things
+  simultaneously (such as you send a single message that controls
+  three different LEDs).  There's no way to do independent control of
+  these, so HPI should have a way to set them all simultaneously.

@@ -40,8 +40,8 @@
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
-#include "opq.h"
-#include "ilist.h"
+#include <OpenIPMI/opq.h>
+#include <OpenIPMI/ilist.h>
 
 #define MAX_SEL_FETCH_RETRIES 10
 

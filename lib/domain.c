@@ -46,7 +46,7 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_oem.h>
 
-#include "ilist.h"
+#include <OpenIPMI/ilist.h>
 
 /* Rescan the bus for MCs every 10 minutes by default. */
 #define IPMI_RESCAN_BUS_INTERVAL 600
