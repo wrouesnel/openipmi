@@ -1633,6 +1633,7 @@ chassis_id_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     memcpy(control_info->vals, val, 4);
     rv = ipmi_control_add_opq(control, chassis_id_set_start,
 			     &(control_info->sdata), control_info);
@@ -1723,6 +1724,7 @@ chassis_id_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     rv = ipmi_control_add_opq(control, chassis_id_get_start,
 			     &(control_info->sdata), control_info);
     if (rv)
@@ -1785,6 +1787,7 @@ chassis_type_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     control_info->vals[0] = *val;
     rv = ipmi_control_add_opq(control, chassis_type_set_start,
 			     &(control_info->sdata), control_info);
@@ -1874,6 +1877,7 @@ chassis_type_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     rv = ipmi_control_add_opq(control, chassis_type_get_start,
 			     &(control_info->sdata), control_info);
     if (rv)
@@ -1932,6 +1936,7 @@ sys_led_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     control_info->vals[0] = (((val[0] & 0x3) << 6)
 			     | ((val[1] & 0x3) << 4)
 			     | ((val[2] & 0x3) << 2));
@@ -2028,6 +2033,7 @@ sys_led_get(ipmi_control_t      *control,
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     rv = ipmi_control_add_opq(control, sys_led_get_start,
 			     &(control_info->sdata), control_info);
     if (rv)
@@ -2084,6 +2090,7 @@ relay_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     control_info->vals[0] = ((val[0] & 1) | ((val[1] & 1) << 1)
 			     | ((val[2] & 1) << 2) | ((val[3] & 1) << 3));
     rv = ipmi_control_add_opq(control, relay_set_start,
@@ -2179,6 +2186,7 @@ relay_get(ipmi_control_t      *control,
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     rv = ipmi_control_add_opq(control, relay_get_start,
 			     &(control_info->sdata), control_info);
     if (rv)
@@ -2520,6 +2528,7 @@ ps_enable_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = psinfo;
     control_info->vals[0] = *val;
 
     rv = ipmi_control_add_opq(control, ps_enable_set_start,
@@ -2588,6 +2597,7 @@ ps_enable_get(ipmi_control_t      *control,
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = psinfo;
     control_info->get_val = ps_enable_get_cb;
 
     rv = ipmi_control_add_opq(control, ps_enable_get_start,
@@ -2656,6 +2666,7 @@ ps_led_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = psinfo;
     control_info->vals[0] = *val;
 
     rv = ipmi_control_add_opq(control, ps_led_set_start,
@@ -2728,6 +2739,7 @@ ps_led_get(ipmi_control_t      *control,
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = psinfo;
     control_info->get_val = ps_led_get_cb;
 
     rv = ipmi_control_add_opq(control, ps_led_get_start,
@@ -2879,6 +2891,7 @@ fan_speed_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = psinfo;
     control_info->vals[0] = *val;
 
     rv = ipmi_control_add_opq(control, fan_speed_set_start,
@@ -2946,6 +2959,7 @@ fan_speed_get(ipmi_control_t      *control,
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = psinfo;
     control_info->get_val = fan_speed_get_cb;
 
     rv = ipmi_control_add_opq(control, fan_speed_get_start,
@@ -3014,6 +3028,7 @@ fan_led_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = psinfo;
     control_info->vals[0] = *val;
 
     rv = ipmi_control_add_opq(control, fan_led_set_start,
@@ -3088,6 +3103,7 @@ fan_led_get(ipmi_control_t      *control,
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = psinfo;
     control_info->get_val = fan_led_get_cb;
 
     rv = ipmi_control_add_opq(control, fan_led_get_start,
@@ -3642,6 +3658,7 @@ board_led_set(ipmi_control_t     *control,
 	return ENOMEM;
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = binfo;
     control_info->vals[0] = *val;
     rv = ipmi_control_add_opq(control, board_led_set_start,
 			     &(control_info->sdata), control_info);
@@ -3734,6 +3751,7 @@ board_led_get(ipmi_control_t      *control,
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = binfo;
     control_info->get_val = board_led_get_cb;
     rv = ipmi_control_add_opq(control, board_led_get_start,
 			     &(control_info->sdata), control_info);
@@ -4814,6 +4832,7 @@ amc_hw_version_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     control_info->misc = 9; /* Offset of the hw version */
     rv = ipmi_control_add_opq(control, amc_version_get_start,
 			      &(control_info->sdata), control_info);
@@ -4837,6 +4856,7 @@ amc_fw_version_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     control_info->misc = 10; /* Offset of the fw version */
     rv = ipmi_control_add_opq(control, amc_version_get_start,
 			      &(control_info->sdata), control_info);
@@ -4860,6 +4880,7 @@ amc_fpga_version_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
+    control_info->idinfo = info;
     control_info->misc = 11; /* Offset of the fpga version */
     rv = ipmi_control_add_opq(control, amc_version_get_start,
 			     &(control_info->sdata), control_info);

@@ -14,6 +14,8 @@
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a mc reset command
 	for sending MC cold and warm resets.
 
+	* lib/chassis.c: Added a one-shot reset control.
+
 	* lib/oem_motorola_mxp.c: Added controls for the version AMC
 	version.
 
