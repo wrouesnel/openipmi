@@ -127,4 +127,5 @@ AC_OUTPUT(Makefile
 	  include/linux/Makefile
 	  include/net/Makefile
 	  OpenIPMI.pc
+	  OpenIPMIpthread.pc
 	  OpenIPMIui.pc)

@@ -210,4 +210,12 @@ struct os_handler_s
     int (*thread_exit)(os_handler_t *handler);
 };
 
+/* This is a defined OS handler for POSIX threading.  If the user uses
+   this, they must set ipmi_threaded_posix_vlog or logs will not come
+   out anywhere. */
+extern os_handler_t ipmi_posix_thread_os_handler;
+void (*ipmi_threaded_posix_vlog)(char *format,
+				 enum ipmi_log_type_e log_type,
+				 va_list ap);
+
 #endif /* __OS_HANDLER_H */

@@ -10,6 +10,10 @@
 	* Makefile.am, configure.in, OpenIPMI.pc.in, OpenIPMIui.pc.in:
 	Added pkg-config info for OpenIPMI libraries.
 
+	* lib/posix_thread_os_hnd.c, lib/Makefile.am: Add a first shot
+	at a threaded POSIX OS handler.
+	* OpenIPMIpthread.pc.in, Makefile.am, configure.in: ditto
+
 2004-03-15 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/selector.h, lib/selector.c: Unfortunately,
