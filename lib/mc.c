@@ -856,17 +856,20 @@ ipmi_mc_reread_sel(ipmi_mc_t       *mc,
     sel_reread_t *info;
     int           rv;
 
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
+    if (handler) {
+	info = ipmi_mem_alloc(sizeof(*info));
+	if (!info)
+	  return ENOMEM;
 
-    info->handler = handler;
-    info->cb_data = cb_data;
-    info->mcid = ipmi_mc_convert_to_id(mc);
+	info->handler = handler;
+	info->cb_data = cb_data;
+	info->mcid = ipmi_mc_convert_to_id(mc);
 
-    rv = ipmi_sel_get(mc->sel, reread_sel_done, info);
-    if (rv)
-	ipmi_mem_free(info);
+	rv = ipmi_sel_get(mc->sel, reread_sel_done, info);
+	if (rv)
+	    ipmi_mem_free(info);
+    } else
+	rv = ipmi_sel_get(mc->sel, NULL, NULL);
     return rv;
 }
 

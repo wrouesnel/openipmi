@@ -1958,15 +1958,32 @@ ll_event_handler(ipmi_con_t   *ipmi,
 		 void         *event_data,
 		 void         *data2)
 {
-    ipmi_event_t  devent;
-    ipmi_domain_t *domain = data2;
-    ipmi_mc_t     *mc;
-    int           rv;
+    ipmi_event_t                 devent;
+    ipmi_domain_t                *domain = data2;
+    ipmi_mc_t                    *mc;
+    int                          rv;
+    ipmi_system_interface_addr_t si;
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
     if (rv)
 	goto out;
+
+    /* Convert the address to the proper one if it comes from a
+       specific connection. */
+    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	int i;
+
+	for (i=0; i<MAX_CONS; i++) {
+	    if (domain->conn[i] == ipmi)
+		break;
+	}
+	addr = (ipmi_addr_t *) &si;
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = i;
+	si.lun = 0;
+	addr_len = sizeof(si);
+    }
 
     /* It came from an MC, so find the MC. */
     mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);

@@ -860,10 +860,12 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 	}
 	elem->next = NULL;
 	sel->fetch_handlers = elem;
-    } else {
+    } else if (elem->handler) {
 	/* Add it to the list of waiting fetch handlers. */
 	elem->next = sel->fetch_handlers;
 	sel->fetch_handlers = elem;
+    } else {
+	ipmi_mem_free(elem);
     }
 
  out_unlock:
