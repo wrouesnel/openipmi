@@ -86,6 +86,12 @@ The specification for \acs{IPMI} is \cite{ipmi-spec}.
 \acro{ARP}{Address Resolution Protocol}
 \acro{GUID}{Globally Unique IDentifier}
 \acro{NMI}{Non Maskable Interrupt}
+\acro{EAR}{Entity Association Record}
+\acro{DREAR}{Device Relative Entity Association Record}
+\acro{DLR}{Device Locator Record}
+\acro{MCDLR}{Management Controller Device Locator Record}
+\acro{FRUDLR}{Field Replacable Unit Device Locator Record}
+\acro{GDLR}{Generic Device Locator Record}
 \end{acronym}
 
 \mainmatter
@@ -4298,8 +4304,8 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 
 To send to an \acs{MC}, you must have a valid MC.  You can usually
 extract this from a control or sensor (the MC the sensor belongs to)
-or you can iterate or keep the \ac{MC} id around.  The function to do
-this is:
+or you can iterate the \acs{MC}s or keep the \ac{MC} id around.  The
+function to send a message to an \acs{MC} is:
 
 \begin{verbatim}
 int ipmi_mc_send_command(ipmi_mc_t                  *mc,
@@ -4313,8 +4319,292 @@ int ipmi_mc_send_command(ipmi_mc_t                  *mc,
 %---------------------------------------------------------------------
 \chapter{\acs{SDR} Repositories}
 
+\ac{IPMI} systems keep information about their sensors and entities in
+an \ac{SDR} repository.  The SDR repository is a set of record; each
+record holding information about the sensor or entity.  An \ac{SDR}
+repository may also hold \ac{OEM} records; those are system-specific
+and not discussed here.
+
+\ac{IPMI} systems have two types of SDR repositories.  The \ac{IPMI}
+spec does not give a name to the first type, but we shall refer to it
+here as the ``main'' \ac{SDR} repository.  A system should generally
+only have one of these.  This repository is writable by the user using
+standard operations.
+
+Each \ac{MC} in an IPMI system may have a device \ac{SDR} repository.
+\ac{IPMI} does not have standard operations to write this repository,
+just to read it.  This repository may also change dynamically.  For
+instance, if some device is hot-plugged onto a board, the \ac{MC} for
+that board may dynamically add or change sensors and entities for the
+new device.
+
+The records in these two types of repositories are the same.
+
+\section{The Main \acs{SDR} Repository}
+
+\subsection{Modal and Non-Modal \acs{SDR} Repositories}
+
+\subsection{Commands for Main \acs{SDR} Repositories}
+
+\section{Device \acs{SDR} Repositories}
+
+\subsection{Dynamic Device \acs{SDR} Repositories}
+
+\subsection{Commands for Device \acs{SDR} Repositories}
+
+\section{Records in an \acs{SDR} Repository}
+
+Section~\ref{sec-entity-sdrs} on entities and
+section~\ref{sec-sensor-sdrs} on sensors describe the specific records
+in \ac{SDR} repositories.  They all follow a general format, though;
+this section describes that format.
+
+Each SDR has three parts: A header, a key, and a body.  Note that all
+multi-byte values in SDRs are little-endian unless specified
+otherwise.  The header is:
+
+\begin{showmsg}
+\hline
+\msgitem{0-1}{Record ID.  This is the number used to fetch the record
+	from the \ac{SDR} repository.}
+\msgitem{2}{IPMI Version.  This is the IPMI version the record is
+	specified under.}
+\msgitem{3}{Record Type.  This tells the specific type of record
+	contained in the \ac{SDR}; it gives the format of the data
+	after the header.}
+\msgitem{4}{Record Size.  This is the number of bytes in the SDR,
+	not including the header.}
+\msgcaption{The \acs{SDR} header}
+\end{showmsg}
+
+The key and body are dependent on the record type and are defined in
+the specific record definitions.  Table~\ref{tab-sdr-types} shows the
+various record types supported by IPMI.
+
+\begin{table}
+\begin{tabular}{|l|p{0.85\textwidth}|}
+\hline
+01h & Type 1 sensors are generally used for analog sensors.  They
+	can be used for discrete sensors, too, but most of the
+	fields are irrelevant for discrete sensors.\\
+\hline
+02h & Type 2 sensors are used for discrete sensors.  Multiple
+	similar sensors may be specific in a single type 2
+	record if the sensor meet certain criteria.\\
+\hline
+03h & Type 3 sensors are used for sensors that only send events.\\
+\hline
+08h & A type 8 sensor is called a \acf{EAR}.  These are used to specify
+	entity containment; to specify, for instance that a processor
+	entity is on a specific board entity.\\
+\hline
+09h & A type 9 sensor is called a \acf{DREAR}.  It is like a type 8
+	record, but can contain device-relative entities.\\
+\hline
+10h & A type 16 record is called a \acf{GDLR}.  It is used to give
+	information about an entity when the entity is not a \acs{FRU}
+	or \acs{MC}.\\
+\hline
+11h & A type 17 record is called a \acf{FRUDLR}.  It is used to give
+	information about a \acs{FRU} entity in the system that is
+	not a \acs{MC}.\\
+\hline
+12h & A type 18 record is called a \acf{MCDLR}.  It is used to give
+	information about a \acs{MC} entity in the system.\\
+\hline
+13h & A type 19 record is called a Management Controller Confirmation
+	Record.  It record the fact that a \acs{MC} has been found in
+	the system.  Note that OpenIPMI does not currently use these.\\
+\hline
+14h & A type 20 record is called a \acs{BMC} Message Channel Info Record.
+	It is only used in \acs{IPMI} version 1.0; it specifies the
+	channels available on the system.  Newer version of \acs{IPMI}
+	use specific messages to carry this information.\\
+\hline
+C0h & This is used for OEM records.  The format depends on the specific
+	system type.\\
+\hline
+\end{tabular}
+\caption{\label{tab-sdr-types}SDR types.  All other record types are reserved}
+\end{table}
+
+To fetch an SDR, first fetch the SDR header.  Once the size is known
+the rest of the SDR can be fetched.
+
+\section{Dealing with \acs{SDR} Repositories in OpenIPMI}
+
+\acs{SDR}s can be rather difficult to deal with.  OpenIPMI hides most,
+if not all, of the difficulty from the user.  It fetches the
+\acs{SDR}s, decodes them, create entities and sensors as necessary,
+and reports those to the user.  The user of OpenIPMI will not have to
+know anything about \acs{SDR}s, in general.
+
+The type used by OpenIPMI to hold an \acs{SDR} repository is
+\verb=ipmi_sdr_info_t=.  The type used to hold individual SDRs is
+\verb=ipmi_sdr_t=.  The internals of \verb=ipmi_sdr_info_t= are
+opaque, you can only use functions to manipulate it.  The internals of
+\verb=ipmi_sdr_t= are not (currently) opaque, you can access the
+internals directly.
+
+\subsection{Getting an SDR Repository}
+
+If you need to fetch the SDRs for a system, you can get the main SDRs
+by calling:
+
+\begin{verbatim}
+ipmi_sdr_t *ipmi_domain_get_main_sdrs(ipmi_domain_t *domain);
+\end{verbatim}
+
+You can fetch the SDRs for an MC with the following:
+
+\begin{verbatim}
+ipmi_sdr_t *ipmi_mc_get_sdrs(ipmi_domain_t *domain);
+\end{verbatim}
+
+You can also fetch your own copy of an SDR repository using the
+following call to create it:
+
+\begin{verbatim}
+int ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
+			ipmi_mc_t       *mc,
+			unsigned int    lun,
+			int             sensor,
+			ipmi_sdr_info_t **new_sdrs);
+\end{verbatim}
+
+And then the following call to fetch it:
+
+\begin{verbatim}
+typedef void (*ipmi_sdrs_fetched_t)(ipmi_sdr_info_t *sdrs,
+				    int             err,
+				    int             changed,
+				    unsigned int    count,
+				    void            *cb_data);
+int ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
+		   ipmi_sdrs_fetched_t handler,
+		   void                *cb_data);
+\end{verbatim}
+
+If you create your own SDR repository, you should destroy it when
+you are done with it with the following call:
+
+\begin{verbatim}
+typedef void (*ipmi_sdr_destroyed_t)(ipmi_sdr_info_t *sdrs, void *cb_data);
+int ipmi_sdr_info_destroy(ipmi_sdr_info_t      *sdrs,
+			  ipmi_sdr_destroyed_t handler,
+			  void                 *cb_data);
+\end{verbatim}
+
+Note that you should \emph{not} destroy an SDR repository you fetched
+from the domain or \acs{MC}.  Those are managed by OpenIPMI; if you
+destroy them you will cause problems.
+
+Note that an SDR repository from a \acs{MC} or domain is dynamic; it
+may change.
+
+\subsection{\acs{SDR} Repository Information}
+
+General SDR info is available about the repository once the fetch is
+complete.  The format of the functions to get them are all
+\begin{verbatim}
+int ipmi_sdr_get_xxx(ipmi_sdr_info_t *sdr, int *val);
+\end{verbatim}
+where the \verb=xxx= is replaced by the item you wish to get.  Valid
+items are:
+
+\begin{longtable}{|p{.25\textwidth}|p{0.7\textwidth}|}
+\hline
+major\_version & The major IPMI version the SDR repository supports, like
+	1 for IPMI 1.0 and 1.5, and 2 for IPMI 2.0.\\
+\hline
+minor\_version & The minor IPMI version the SDR repository supports, like
+	0 for IPMI 1.0 and 2.0, and 5 for IPMI 1.5.\\
+\hline
+overflow & An SDR write operation has failed to do lack of space.\\
+\hline
+update\_mode & The update modes supported.  Valid values are:
+	\begin{description}
+	\item[00b] - unspecified
+	\item[01b] - Only non-modal updates are supported
+	\item[10b] - Only modal updates are supported
+	\item[11b] - Both modal and non-modal updates are supported
+	\end{description}\\
+\hline
+supports\_delete\_sdr & If true, the repository supports deleting individual
+	\acs{SDR}s one at a time.\\
+\hline
+supports\_partial \_add\_sdr & If true, the repository supports the partial
+	add command.\\
+\hline
+supports\_reserve\_sdr & If true, the repository supports using reservations.\\
+\hline
+supports\_get\_sdr \_repository \_allocation & If true, the repository allows
+	allocation information to be fetched with the Get SDR Repository
+	Allocation Info command.\\
+\hline
+dynamic\_population & If true, the \emph{system} can dynamically change the
+	contents of the SDR repository.  This may only be true for device
+	SDR repositories.  Although main SDR repositories can dynamically
+	change, it is not the system that does this, it is the user.\\
+\hline
+\end{longtable}
+
+The following call can be used to tell whether sensors are available
+on specific \acs{LUN}s.
+\begin{verbatim}
+int ipmi_sdr_get_lun_has_sensors(ipmi_sdr_info_t *sdr,
+				 unsigned int    lun,
+				 int             *val);
+\end{verbatim}
+
+\subsection{Handling a \acs{SDR} Repository}
+
+Once you have an SDR repository, you can fetch individual SDRs from it
+by the record id, type, or index.  To find out the number of SDRs
+in the repository, use:
+\begin{verbatim}
+int ipmi_get_sdr_count(ipmi_sdr_info_t *sdr,
+		       unsigned int    *count);
+\end{verbatim}
+
+Fetching the \acs{SDR}s by index is probably the most useful function;
+it treats the repository as an array and lets you fetch items,
+starting at zero.  The call is:
+\begin{verbatim}
+int ipmi_get_sdr_by_index(ipmi_sdr_info_t *sdr,
+			  int             index,
+			  ipmi_sdr_t      *return_sdr);
+\end{verbatim}
+If you are interested in a specific record number, you can fetch it
+with:
+\begin{verbatim}
+int ipmi_get_sdr_by_type(ipmi_sdr_info_t *sdr,
+			 int             type,
+			 ipmi_sdr_t      *return_sdr);
+\end{verbatim}
+If you want to find the first \acs{SDR} of a given type, use the
+following call:
+\begin{verbatim}
+int ipmi_get_sdr_by_type(ipmi_sdr_info_t *sdr,
+			 int             type,
+			 ipmi_sdr_t      *return_sdr);
+\end{verbatim}
+To get all the \acs{SDR}s, use the following:
+\begin{verbatim}
+int ipmi_get_all_sdrs(ipmi_sdr_info_t *sdr,
+		      int             *array_size,
+		      ipmi_sdr_t      *array);
+\end{verbatim}
+Your passed in array will be filled with the SDR data.  The int
+pointed to by \verb=array_size= must be set to the number of available
+elements in \verb=array=.  It will be modified to be the actual
+number of \acs{SDR}s put into the array.  If the array is not big
+enough to hold all the \acs{SDR}s, the call will fail and have no
+effect.
+
 %---------------------------------------------------------------------
 \chapter{Entities}
+\label{chap-entities}
 
 Though you might not know it from a cursory reading of the \ac{IPMI}
 spec, entities are an important part of IPMI.  They define what a
@@ -4343,14 +4633,14 @@ are defined to be less than 96.
 
 Device-relative entities are unique on the management controller that
 controls them.  These entity's instances are numbered 96-128.  These
-are referred to using their LUN and IPMB address in the form
-r($<$LUN$>$,$<$IPMB$>$,$<$entity id$>$,$<$entity instance$>$-96).  For
-instance, if an \acs{MC} at address C0h had a sensor on LUN 0 that
+are referred to using their channel and IPMB address in the form
+r($<$channel$>$,$<$IPMB$>$,$<$entity id$>$,$<$entity instance$>$-96).  For
+instance, if an \acs{MC} at address C0h had a sensor on channel 0 that
 monitored entity id 3, instance 97, that would be r(0,C0,3,1)
 
 Entities may or may not have specific information describing them.
 Entities that do have specific information describing them have device
-locator records
+locator records.
 
 Entity IDs defined by \ac{IPMI} are:
 
@@ -4473,11 +4763,188 @@ Entity IDs defined by \ac{IPMI} are:
 \hline
 \end{longtable}
 
-\section{Entity Containment}
+\section{Entity Containment and OpenIPMI}
 
-Entities may be contained inside other entities.  
+Entities may be contained inside other entities.  For instance, a
+chassis may contain a board, and a board may have a processor on it.
+This is expressed in specific entity \acs{SDR}s.  OpenIPMI represents
+this by entities having children and parents.
+
+To discover the parents of a sensor, they may be iterated.  It seems
+possible for an entity to have more than one parent; there is no
+direct prohibition of this in \acs{IPMI}, although it would be a
+little wierd.  To iterate the parents, use the following call:
+\begin{verbatim}
+typedef void (*ipmi_entity_iterate_child_cb)(ipmi_entity_t *ent,
+					     ipmi_entity_t *child,
+					     void          *cb_data);
+void ipmi_entity_iterate_children(ipmi_entity_t                *ent,
+				  ipmi_entity_iterate_child_cb handler,
+				  void                         *cb_data);
+\end{verbatim}
+
+Similarly, an entity may have children, but it is certain that more
+than one child is allowed.  To iterate entities children, use the
+following call:
+\begin{verbatim}
+typedef void (*ipmi_entity_iterate_parent_cb)(ipmi_entity_t *ent,
+					      ipmi_entity_t *parent,
+					      void          *cb_data);
+void ipmi_entity_iterate_parents(ipmi_entity_t                 *ent,
+				 ipmi_entity_iterate_parent_cb handler,
+				 void                          *cb_data);
+\end{verbatim}
+
+To discover if an entity is a child (has parent entities) or is a
+parent (has child entities), you may use the following calls:
+\begin{verbatim}
+int ipmi_entity_get_is_child(ipmi_entity_t *ent);
+int ipmi_entity_get_is_parent(ipmi_entity_t *ent);
+\end{verbatim}
+
+\section{Entity Presence}
+
+An entity identified in an \acs{SDR} may or may not be present in the
+system.  \acs{IPMI} specifies an algorithm for detecting whether an
+entity is present.  Unfortunately, this algorithm is extremely
+complicated. The algorithm is given in stages:
+\begin{itemize}
+\item If the entity has a presence sensor attached (sensor type 25h)
+  or a bit in some sensor that is attached to it that shows presense
+  (sensor type 21h bit 02h, sensor type 08h bit 00h, or sensor type
+  29h bit 02h), that sensor should always be present and will tell if
+  the entity is present.  A presence sensor or bit will override all
+  other entity detection methods; it directly tells if the entity is
+  present or not.
+\item If a \acs{FRU} device for the entity is specified and is
+  operational, then the entity is present.
+\item The entity is present if at least one sensor is available and
+  scanning is enabled on that sensor.
+\item The entity is present if the entity is a parent entity and at
+  least one of its children is present.
+\item Otherwise the entity is not present.
+\end{itemize}
+
+Entity presence may also affect whether the sensors attached to the
+entity are present.  The sensor \acs{SDR}s have a flag that specifies
+whether the sensor is present even if the entity is not present.
+
+\subsection{Entity Presence in OpenIPMI}
+OpenIPMI handles detection of entity presence for the user.  If you
+have an entity pointer or entity id, you can directly query to see if
+the entity is present using:
+\begin{verbatim}
+int ipmi_entity_is_present(ipmi_entity_t *ent);
+int ipmi_entity_id_is_present(ipmi_entity_id_t id, int *present);
+\end{verbatim}
+
+If you need to know when an entity becomes present or absent, you may
+use the following callback registration:
+\begin{verbatim}
+typedef int (*ipmi_entity_presence_change_cb)(ipmi_entity_t *entity,
+					      int           present,
+					      void          *cb_data,
+					      ipmi_event_t  *event);
+int ipmi_entity_add_presence_handler(ipmi_entity_t                  *ent,
+				     ipmi_entity_presence_change_cb handler,
+				     void                           *cb_data);
+int ipmi_entity_remove_presence_handler
+(ipmi_entity_t                  *ent,
+ ipmi_entity_presence_change_cb handler,
+ void                           *cb_data);
+\end{verbatim}
+
+\section{Entity Types and Info}
+Entities come in four different flavors:
+\begin{description}
+\item[\acs{MC}] - An \acs{MC} entity is for a \acs{MC}.
+\item[FRU] - This is for field-replacable entities that are
+  not \acs{MC}s.
+\item[Generic] - Some other device on the \acs{IPMB} bus.
+\item[Unknown] - This is for entities that do not have an \acs{SDR}
+  record to identify them.  These entities are generally only
+  referenced in sensor records or in entity association records.
+\end{description}
+
+The following call returns the entity type:
+\begin{verbatim}
+enum ipmi_dlr_type_e ipmi_entity_get_type(ipmi_entity_t *ent);
+\end{verbatim}
+Valid entity types are:
+\begin{description}
+\item[IPMI\_ENTITY\_UNKNOWN]
+\item[IPMI\_ENTITY\_MC]
+\item[IPMI\_ENTITY\_FRU]
+\item[IPMI\_ENTITY\_GENERIC]
+\end{description}
+
+There are calls to fetch information about entities, but only certain
+calls are available for certain entities.  All these calls have the
+form:
+\begin{verbatim}
+int ipmi_entity_get_xxx(ipmi_entity_t *ent);
+\end{verbatim}
+where \verb=xxx= is the data item.  These will not return errors, they
+will return undefined information if they are called on an entity that
+does not support the specific data item.  The data items supported are:
+
+\begin{longtable}{|p{.25\textwidth}|p{.6\textwidth}|l|l|l|l|}
+\bfseries{Data Item} & \bfseries{Description} & \bfseries{M} & \bfseries{F}
+  & \bfseries{G} & \bfseries{U}\\
+\hline
+is\_fru & This will be true if the item has \acs{FRU} information
+	& x & x & x & x\\
+\hline
+entity\_id & This will be the entity id of the entity.
+	& x & x & x & x\\
+\hline
+entity\_instance & This will be the entity instance of the entity.
+	& x & x & x & x\\
+\hline
+device\_channel & This is the device channel for the entity.  It is
+	only useful if the entity instance is device-relative.  See
+	section~\ref{chap-entities} for more details.
+	& x & x & x & x\\
+\hline
+device\_address & This is the \acs{IPMB} address for the entity.  It is
+	only useful if the entity instance is device-relative.  See
+	section~\ref{chap-entities} for more details.
+	& x & x & x & x\\
+\hline
+presense\_sensor \_always\_there & If this is true, then the entity has
+	a presence sensor or a presence bit sensor and that sensor is
+	always present.
+	& x & x & x & x\\
+\hline
+channel & The channel number for the entity.  This is different than
+	device\_channel because it is the actual value from the \acs{SDR},
+	not the value from the entity info.
+	& x & x & x &  \\
+\hline
+lun & The \acs{LUN} from the SDR.
+	& x & x & x &  \\
+\hline
+oem & The entity SDRs have an \acs{OEM} field that may be fetched with this
+	call.  The meaning of this is system dependent.
+	& x & x & x &  \\
+\hline
+access\_address & The \acs{IPMB} address of the \acs{MC} the entity is on
+	or is represented by.
+	&   & x & x &  \\
+\hline
+private\_bus\_id & The FRU information may be on an \acs{EEPROM} device on
+	a private bus.  If so, 
+	&   & x & x &  \\
+\hline
+\_ & 
+	& x & x & x & x\\
+\hline
+\end{longtable}
 
 \section{\acs{FRU} Data}
+
+\section{Entity \acs{SDR}s}
+\label{sec-entity-sdrs}
 
 %---------------------------------------------------------------------
 \chapter{Sensors}
@@ -4534,6 +5001,9 @@ That information may be fetched by the user.
 \hline
 \end{longtable}
 
+\section{Sensor \acs{SDR}s}
+\label{sec-sensor-sdrs}
+
 %---------------------------------------------------------------------
 \chapter{Controls and Miscellany}
 
@@ -4558,6 +5028,47 @@ OpenIPMI automatically sets the event receiver.
 \section{\acs{MC} Event Enables}
 
 \section{Coordinating Multiple Users of an \acs{SEL}}
+
+%---------------------------------------------------------------------
+\chapter{Other OpenIPMI Concerns}
+\label{chap-other-openipmi-concerns}
+
+\section{When Operations Happen}
+
+As mentioned before, OpenIPMI has a very dynamic view of the domain.
+It also reports things as it finds them, but the work on those things
+is not necessarily ``done''.  OpenIPMI has no concept of anything
+being ``done''; it views a domain as a dynamic entity that can change
+over time.
+
+In some cases, though, it may be useful to know when certain
+operations complete.  The following call will tell you when the main
+\ac{SDR} repository has been read.  You can call it after you create the
+domain but before the domain has finished initialization; you can
+register your own handler here:
+
+\begin{verbatim}
+int
+ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
+				       ipmi_domain_cb handler,
+				       void           *cb_data)
+\end{verbatim}
+
+Likewise, when a \ac{MC} is reported the \acs{SDR}s and events have
+not yet been read.  To register handlers for those, use:
+
+\begin{verbatim}
+int ipmi_mc_set_sdrs_first_read_handler(ipmi_mc_t      *mc,
+					ipmi_mc_ptr_cb handler,
+					void           *cb_data);
+int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
+					ipmi_mc_ptr_cb handler,
+					void           *cb_data);
+\end{verbatim}
+
+Note that you should almost certainly \emph{not} use these, unless you
+absolutely have to.  In general, your software should handle the
+dynamic nature of an \ac{IPMI} system dynamically.
 
 %---------------------------------------------------------------------
 \appendix
