@@ -5,6 +5,10 @@
 
 	* lib/oem_atca.c: Added the cold reset control.
 
+	* lib/sensor.c: Fixed the range check in ipmi_sensor_pointer_cb().
+
+	* lib/control.c: Fixed the range check in ipmi_control_pointer_cb().
+
 2004-03-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca_conn.c: Set broadcast_broken all the time.

@@ -269,7 +269,7 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
     sensors = _ipmi_mc_get_sensors(mc);
     if (info->id.lun > 4)
 	info->err = EINVAL;
-    else if (info->id.sensor_num > sensors->idx_size[info->id.lun])
+    else if (info->id.sensor_num >= sensors->idx_size[info->id.lun])
 	info->err = EINVAL;
     else if (sensors->sensors_by_idx[info->id.lun][info->id.sensor_num]
 	     == NULL)

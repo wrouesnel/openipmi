@@ -166,7 +166,7 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
     controls = _ipmi_mc_get_controls(mc);
     if (info->id.lun != 4)
 	info->err = EINVAL;
-    else if (info->id.control_num > controls->idx_size)
+    else if (info->id.control_num >= controls->idx_size)
 	info->err = EINVAL;
     else if (controls->controls_by_idx[info->id.control_num] == NULL)
 	info->err = EINVAL;
