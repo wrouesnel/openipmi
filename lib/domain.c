@@ -408,8 +408,10 @@ cleanup_domain(ipmi_domain_t *domain)
        only left inactive) in the first pass due to references form
        other MCs SDR repositories.  The second pass will get them
        all. */
-    ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
-    ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
+    if (domain->mc_list) {
+	ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
+	ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
+    }
 
     if (domain->si_mc)
 	_ipmi_cleanup_mc(domain->si_mc);
