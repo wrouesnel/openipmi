@@ -54,6 +54,12 @@
 /* Recheck the PET config every 10 minutes. */
 #define PET_TIMEOUT_SEC 600
 
+/* Time between alert retries (in seconds). */
+#define IPMI_LANPARM_DEFAULT_ALERT_RETRY_TIMEOUT 1
+
+/* Alerts get retried this many times. */
+#define IPMI_LANPARM_DEFAULT_ALERT_RETRIES 3
+
 static ipmi_rwlock_t  *pet_lock = NULL;
 static os_hnd_fd_id_t *pet_wait_id = NULL;
 static int            pet_fd = -1;
@@ -1112,7 +1118,7 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->pef_check[3].mask[1] = 0xff;
     pet->pef_check[3].data[2] = lan_dest_sel; /* Channel set when found */
     pet->pef_check[3].mask[2] = 0xff;
-    pet->pef_check[3].data[3] = 0x00;
+    pet->pef_check[3].data[3] = 0;
     pet->pef_check[3].mask[3] = 0xff;
 
     pet->lanparm_check[0].conf_num = IPMI_LANPARM_DEST_TYPE;
@@ -1122,10 +1128,10 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->lanparm_check[0].mask[0] = 0x0f;
     pet->lanparm_check[0].data[1] = 0x80;
     pet->lanparm_check[0].mask[1] = 0x87;
-    pet->lanparm_check[0].data[2] = 1;
+    pet->lanparm_check[0].data[2] = IPMI_LANPARM_DEFAULT_ALERT_RETRY_TIMEOUT;
     pet->lanparm_check[0].mask[2] = 0xff;
-    pet->lanparm_check[0].data[3] = 0x80;
-    pet->lanparm_check[0].mask[3] = 0x87;
+    pet->lanparm_check[0].data[3] = IPMI_LANPARM_DEFAULT_ALERT_RETRIES;
+    pet->lanparm_check[0].mask[3] = 0x07;
     pet->lanparm_check[1].conf_num = IPMI_LANPARM_DEST_ADDR;
     pet->lanparm_check[1].set = lan_dest_sel;
     pet->lanparm_check[1].data_len = 13;
