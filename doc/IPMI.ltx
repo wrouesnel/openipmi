@@ -569,15 +569,15 @@ OS handlers have some standard functions pointers for the user.  These
 are:
 
 \begin{tabularx}{\textwidth}{lX}
-\verb=free_os_handler= &
+\texttt{free\_os\_handler} &
 Free the OS handler.  Do not use the OS handler after calling this.\\
 
-\verb=perform_one_op= &
+\texttt{perform\_one\_op} &
 Handle one event (a timer timeout or a file operation) and return.
 This takes a timeout; it will wait up to the amount of time given for
 the event.\\
 
-\verb=operation_loop= &
+\texttt{operation\_loop} &
 Continuously handle events.  This function will not return.\\
 \end{tabularx}
 
@@ -908,10 +908,14 @@ repository, you may change them and store them back, if you like and if
 the system supports that.
 
 \ac{FRU} information about the entity is sometimes available.  You can
-register with an entity to see if/when it becomes available using
-\verb=ipmi_entity_add_fru_update_handler()=.  Once it is available,
-you can fetch the \ac{FRU} data using the commands defined in the \acs{IPMI}
-include file.
+register with an entity to see if/when it becomes available using:
+\begin{verbatim}
+int ipmi_entity_add_fru_update_handler(ipmi_entity_t     *ent,
+                                       ipmi_entity_fru_cb handler,
+                                       void              *cb_data);
+\end{verbatim}
+Once it is available, you can fetch the \ac{FRU} data using the
+commands defined in the \acs{IPMI} include file.
 
 \paragraph{Device-Relative vs System-Relative Entities}
 
@@ -973,9 +977,10 @@ hot-swap, you will have a blue light in your system.  You can search
 through the controls to find a light that's blue.  Then, if a special
 is on, or you want the operator to remove a card, you can light the
 blue light.  Lights may blink, too.  Two types of lights are
-available.  Transition light can have a series of transitions.  Each setting
-describes a sequence of one or more transitions the light may go
-through.
+available.  Transition lights can have a series of transitions; as
+series of transition is called a value.  Each value describes a
+sequence of one or more transitions the light may go through.  Setting
+lights allow direct setting of the color and on/off time of the light.
 
 Relays are binary outputs.  Most telephony systems have them; they are
 required by telephony specs.  They are simple on/off devices.
