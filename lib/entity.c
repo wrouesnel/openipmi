@@ -1292,7 +1292,7 @@ gdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 
     sdr.major_version = IPMI_MAJOR_NUM_SDR;
     sdr.minor_version = IPMI_MINOR_NUM_SDR;
-    sdr.type = 0x10; /* Generic Device Locator */
+    sdr.type = IPMI_SDR_GENERIC_DEVICE_LOCATOR_RECORD;
     sdr.length = 10; /* We'll fix it later. */
     sdr.data[0] = info->access_address;
     sdr.data[1] = (info->slave_address
@@ -1365,7 +1365,7 @@ frudlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 
     sdr.major_version = IPMI_MAJOR_NUM_SDR;
     sdr.minor_version = IPMI_MINOR_NUM_SDR;
-    sdr.type = 0x11; /* FRU Device Locator */
+    sdr.type = IPMI_SDR_FRU_DEVICE_LOCATOR_RECORD;
     sdr.length = 10; /* We'll fix it later. */
     sdr.data[0] = info->access_address;
     sdr.data[1] = info->fru_device_id;
@@ -1436,7 +1436,7 @@ mcdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 
     sdr.major_version = IPMI_MAJOR_NUM_SDR;
     sdr.minor_version = IPMI_MINOR_NUM_SDR;
-    sdr.type = 0x12; /* MC Device Locator */
+    sdr.type = IPMI_SDR_MC_DEVICE_LOCATOR_RECORD;
     sdr.length = 10; /* We'll fix it later. */
     sdr.data[0] = info->slave_address;
     sdr.data[1] = info->channel & 0xf;
@@ -1470,8 +1470,8 @@ mcdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 }
 
 static int
-decode_mcdlr(ipmi_sdr_t         *sdr,
-	     dlr_info_t         *info)
+decode_mcdlr(ipmi_sdr_t *sdr,
+	     dlr_info_t *info)
 {
     unsigned char *data;
     unsigned int  length;
@@ -1811,31 +1811,31 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    return rv;
 
 	switch (sdr.type) {
-	    case 0x08: /* Entity Association Record */
+	    case IPMI_SDR_ENITY_ASSOCIATION_RECORD:
 		rv = decode_ear(&sdr, &dlr);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
-	    case 0x09: /* Device-relative Entity Association Record */
+	    case IPMI_SDR_DR_ENITY_ASSOCIATION_RECORD:
 		rv = decode_drear(&sdr, &dlr);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
-	    case 0x10: /* Generic Device Locator Record */
+	    case IPMI_SDR_GENERIC_DEVICE_LOCATOR_RECORD:
 		rv = decode_gdlr(&sdr, &dlr);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
-	    case 0x11: /* FRU Device Locator Record. */
+	    case IPMI_SDR_FRU_DEVICE_LOCATOR_RECORD:
 		rv = decode_frudlr(&sdr, &dlr);
 		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
 		break;
 
-	    case 0x12: /* Management Controller Device Locator Record. */
+	    case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
 		rv = decode_mcdlr(&sdr, &dlr);
 		if ((!rv) && dlr.entity_id)
 		    rv = add_sdr_info(&infos, &dlr);
@@ -2103,7 +2103,7 @@ do_ear_output(ipmi_sdr_info_t *sdrs,
     int old_flags_pos;
     int i;
 
-    if (sdr->type == 0x08) {
+    if (sdr->type == IPMI_SDR_ENITY_ASSOCIATION_RECORD) {
 	/* not device-relative */
 	memset(sdr->data+3, 0, 8);
 	old_flags = sdr->data[2];
@@ -2174,12 +2174,12 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
     if ((sdr.major_version == 1) && (sdr.minor_version < 5)) {
 	/* IPMI 1.0, we can olny use normal entity association
 	   records */
-	sdr.type = 0x08; /* Entity Association Record */
+	sdr.type = IPMI_SDR_ENITY_ASSOCIATION_RECORD;
 	sdr.length = 11;
 	sdr.data[2] = (ent->info.presence_sensor_always_there << 5);
     } else {
 	/* IPMI 1.5, we only use the device-relative EARs. */
-	sdr.type = 0x09; /* Entity Association Record */
+	sdr.type = IPMI_SDR_DR_ENITY_ASSOCIATION_RECORD;
 	sdr.length = 27;
 	sdr.data[2] = ent->info.slave_address;
 	sdr.data[3] = ent->info.channel;

@@ -1524,9 +1524,10 @@ ipmi_get_sdr_by_type(ipmi_sdr_info_t *sdrs,
     return rv;
 }
 
-int ipmi_get_sdr_by_index(ipmi_sdr_info_t *sdrs,
-			  int             index,
-			  ipmi_sdr_t      *return_sdr)
+int
+ipmi_get_sdr_by_index(ipmi_sdr_info_t *sdrs,
+		      int             index,
+		      ipmi_sdr_t      *return_sdr)
 {
     int rv = 0;
 
@@ -1540,6 +1541,28 @@ int ipmi_get_sdr_by_index(ipmi_sdr_info_t *sdrs,
 	rv = ENOENT;
     else
 	*return_sdr = sdrs->sdrs[index];
+
+    sdr_unlock(sdrs);
+    return rv;
+}
+
+int
+ipmi_set_sdr_by_index(ipmi_sdr_info_t *sdrs,
+		      int             index,
+		      ipmi_sdr_t      *sdr)
+{
+    int rv = 0;
+
+    sdr_lock(sdrs);
+    if (sdrs->destroyed) {
+	sdr_unlock(sdrs);
+	return EINVAL;
+    }
+
+    if (index >= sdrs->num_sdrs)
+	rv = ENOENT;
+    else
+	sdrs->sdrs[index] = *sdr;
 
     sdr_unlock(sdrs);
     return rv;

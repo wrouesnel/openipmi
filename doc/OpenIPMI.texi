@@ -2094,10 +2094,9 @@ Used to determine if the fan is present in the power supply.  This
 sensor generates events for changes.
 
 @item speed
-Used to determine if the fan is spinning fast enough.  The
-value is not readable, and will only generate an event if the
-fan stops spinning fast enough.  The thresholds are also not
-readable.
+Used to determine if the fan is spinning fast enough.  It will
+generate an event if the fan stops spinning fast enough.  The
+thresholds are not readable or settable.
 
 
 @item cooling
@@ -2112,13 +2111,6 @@ system.
 It has the following controls:
 
 @table @samp
-@item speed
-Used to control the fan speed for the fan.  Depending
-on the power supply type, this has different meanings.  It is
-recommended that you leave this alone and let the system
-determine the fan speed automatically.  This is @emph{not} the
-current speed of the fan, this is the set speed.
-
 @item OOS LED
 Used to light the out-of-service LED for the fan.
 

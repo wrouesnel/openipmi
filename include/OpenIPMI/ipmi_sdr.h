@@ -105,6 +105,12 @@ int ipmi_get_sdr_by_index(ipmi_sdr_info_t *sdr,
 			  int             index,
 			  ipmi_sdr_t      *return_sdr);
 
+/* Set an SDR's value.  This is primarily for the OEM SDR fixup code,
+   so it can fix an SDR and write it back. */
+int ipmi_set_sdr_by_index(ipmi_sdr_info_t *sdrs,
+			  int             index,
+			  ipmi_sdr_t      *sdr);
+
 /* Fetch all the sdrs.  The array size should point to a value that
    holds the number of elements in the passed in array.  The
    array_size will be set to the actual number of elements put into

@@ -15,6 +15,9 @@
 	* lib/mc.c: Added a way to have an MC's main device repository
 	treated as a device SDR repository.
 
+	* lib/oem_motorola_mxp.c, doc/OpenIPMI.texi: Removed the fan speed
+	control (it no longer works) and added the fan speed reading.
+
 2004-01-14 Corey Minyard <cminyard@mvista.com> 
 
 	* doc/OpenIPMI.texi: Added some MXP-specific information.

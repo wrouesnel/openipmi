@@ -174,7 +174,7 @@
 #define MXP_PS_ENABLE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 1)
 #define MXP_PS_OOS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 2)
 #define MXP_PS_INS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 3)
-#define MXP_FAN_SPEEDCONTROL_NUM(idx) MXP_PS_CONTROL_NUM(idx, 4)
+/* fan speed control (4) is now gone and this is free. */
 #define MXP_FAN_OOS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 5)
 #define MXP_FAN_INS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 6)
 #define MXP_PS_TYPE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 7)
@@ -261,7 +261,6 @@ typedef struct mxp_power_supply_s
     ipmi_sensor_t *fan_presence;
     ipmi_sensor_t *cooling;
 
-    ipmi_control_t *fan_speed;
     ipmi_control_t *fan_oos_led;
     ipmi_control_t *fan_inserv_led;
     ipmi_control_t *fan_type;
@@ -3304,136 +3303,6 @@ fan_presence_states_get(ipmi_sensor_t       *sensor,
 }
 
 static void
-fan_speed_set_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[5];
-
-    if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_SET_FAN_SPEED_CMD;
-    msg.data_len = 5;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    data[4] = control_info->vals[0];
-
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, mxp_control_set_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_set)
-	    control_info->done_set(control, rv, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
-static int
-fan_speed_set(ipmi_control_t     *control,
-	      int                *val,
-	      ipmi_control_op_cb handler,
-	      void               *cb_data)
-{
-    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_power_supply_t   *psinfo = hdr->data;
-    mxp_control_info_t   *control_info;
-    int                  rv;
-
-    control_info = alloc_control_info(psinfo);
-    if (!control_info)
-	return ENOMEM;
-    control_info->done_set = handler;
-    control_info->cb_data = cb_data;
-    control_info->vals[0] = *val;
-
-    rv = ipmi_control_add_opq(control, fan_speed_set_start,
-			      &(control_info->sdata), control_info);
-    if (rv)
-	ipmi_mem_free(control_info);
-
-    return rv;
-}
-
-static int
-fan_speed_get_cb(ipmi_control_t     *control,
-		 mxp_control_info_t *control_info,
-		 unsigned char      *data)
-{
-    return data[10];
-}
-
-static void
-fan_speed_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[5];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_FAN_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
-static int
-fan_speed_get(ipmi_control_t      *control,
-	      ipmi_control_val_cb handler,
-	      void                *cb_data)
-{
-    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_power_supply_t   *psinfo = hdr->data;
-    mxp_control_info_t   *control_info;
-    int                  rv;
-
-    control_info = alloc_control_info(psinfo);
-    if (!control_info)
-	return ENOMEM;
-    control_info->done_get = handler;
-    control_info->cb_data = cb_data;
-    control_info->get_val = fan_speed_get_cb;
-    control_info->min_rsp_length = 11;
-
-    rv = ipmi_control_add_opq(control, fan_speed_get_start,
-			      &(control_info->sdata), control_info);
-    if (rv)
-	ipmi_mem_free(control_info);
-
-    return rv;
-}
-
-static void
 fan_led_set_start(ipmi_control_t *control, int err, void *cb_data)
 {
     mxp_control_info_t *control_info = cb_data;
@@ -3799,6 +3668,9 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
     mxp_reading_done_t *get_info = cb_data;
     mxp_power_supply_t *psinfo = get_info->sdinfo;
     ipmi_states_t      states;
+    enum               ipmi_value_present_e pres = IPMI_NO_VALUES_PRESENT;
+    unsigned char      raw = 0;
+    double             cooked = 0.0;
 
     ipmi_init_states(&states);
     ipmi_set_sensor_scanning_enabled(&states, 1);
@@ -3828,12 +3700,30 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
 	goto out;
     }
 
-    /* Can't get a reading, but can get the states. */
+    if (rsp->data_len < 11) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "mxp_fan_reading_cb: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 11);
+	if (get_info->done)
+	    get_info->done(sensor,
+			   EINVAL,
+			   IPMI_NO_VALUES_PRESENT,
+			   0,
+			   0.0,
+			   &states,
+			   get_info->cb_data);
+	goto out;
+    }
+
     if (sensor == psinfo->fan) {
 	/* The fan sensor is being queried. */
 	if (rsp->data[6] & 0x04)
 	    /* A fan failure event is present. */
 	    ipmi_set_threshold_out_of_range(&states, IPMI_LOWER_CRITICAL, 1);
+	pres = IPMI_BOTH_VALUES_PRESENT;
+	raw = rsp->data[10];
+	cooked = (double) (468750 / raw);
     } else {
 	/* The cooling sensor is being queried. */
 	if (rsp->data[6] & 0x02)
@@ -3848,11 +3738,12 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
     if (get_info->done)
 	get_info->done(sensor,
 		       0,
-		       IPMI_NO_VALUES_PRESENT,
-		       0,
-		       0.0,
+		       pres,
+		       raw,
+		       cooked,
 		       &states,
 		       get_info->cb_data);
+
 
  out:
     ipmi_sensor_opq_done(sensor);
@@ -4100,19 +3991,6 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				    &(ps->cooling));
     if (rv)
 	goto out_err;
-
-    /* Fan speed control */
-    rv = mxp_alloc_control(info->mc, ps->fan_ent,
-			   MXP_FAN_SPEEDCONTROL_NUM(ps->idx),
-			   ps,
-			   IPMI_CONTROL_FAN_SPEED,
-			   "speed",
-			   fan_speed_set,
-			   fan_speed_get,
-			   &(ps->fan_speed));
-    if (rv)
-	goto out_err;
-    ipmi_control_set_num_elements(ps->fan_speed, 1);
 
     /* FAN LED controls. */
     rv = mxp_alloc_control(info->mc, ps->fan_ent,
@@ -9199,8 +9077,6 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_sensor_destroy(info->power_supply[i].fan);
 	if (info->power_supply[i].cooling)
 	    ipmi_sensor_destroy(info->power_supply[i].cooling);
-	if (info->power_supply[i].fan_speed)
-	    ipmi_control_destroy(info->power_supply[i].fan_speed);
 	if (info->power_supply[i].fan_oos_led)
 	    ipmi_control_destroy(info->power_supply[i].fan_oos_led);
 	if (info->power_supply[i].fan_inserv_led)
@@ -9363,13 +9239,35 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 }
 
 static void
-amc_sensor_fixup(ipmi_mc_t     *mc,
-		 ipmi_sensor_t *sensor,
-		 void          *cb_data)
+amc_sdrs_fixup(ipmi_mc_t       *mc,
+	       ipmi_sdr_info_t *sdrs,
+	       void            *cb_data)
 {
-    if (ipmi_sensor_get_entity_instance(sensor) == 0) {
-	/* Set the instance to the proper AMC. */
-	ipmi_sensor_set_entity_instance(sensor, ipmi_mc_get_address(mc) + 1);
+    unsigned int count;
+    int          i;
+    ipmi_sdr_t   sdr;
+    int          rv;
+
+    rv = ipmi_get_sdr_count(sdrs, &count);
+    if (rv)
+	return;
+	
+    for (i=0; i<count; i++) {
+	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
+	if (rv)
+	    break;
+
+	/* Fix up the entity instances for the SDRs. */
+	switch (sdr.type) {
+	case IPMI_SDR_FULL_SENSOR_RECORD:
+	    if ((sdr.data[4] & 0x7f) == 0)
+		sdr.data[4] |= ipmi_mc_get_address(mc) + 1;
+	    break;
+	case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
+	    if (sdr.data[8] == 0)
+		sdr.data[8] = ipmi_mc_get_address(mc) + 1;
+	    break;
+	}
     }
 }
 
@@ -9402,7 +9300,7 @@ mxp_handler(ipmi_mc_t *mc,
 	if (rv)
 	    goto out;
 
-	rv = ipmi_mc_set_sensor_fixup_handler(mc, amc_sensor_fixup, NULL);
+	rv = ipmi_mc_set_sdrs_fixup_handler(mc, amc_sdrs_fixup, NULL);
 	if (rv)
 	    goto out;
 

@@ -127,8 +127,8 @@ struct ipmi_mc_s
 
     void *oem_data;
 
-    ipmi_mc_oem_fixup_sensor_cb fixup_sensor_handler;
-    void                        *fixup_sensor_cb_data;
+    ipmi_mc_oem_fixup_sdrs_cb fixup_sdrs_handler;
+    void                      *fixup_sdrs_cb_data;
 
     ipmi_mc_oem_new_sensor_cb new_sensor_handler;
     void                      *new_sensor_cb_data;
@@ -1637,11 +1637,16 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
 {
     sdr_fetch_info_t   *info = (sdr_fetch_info_t *) cb_data;
     int                rv = 0;
+    ipmi_mc_t          *mc;
 
     if (err) {
 	sdr_reread_done(info, err);
 	return;
     }
+
+    mc = info->source_mc;
+    if (mc->fixup_sdrs_handler)
+	mc->fixup_sdrs_handler(mc, sdrs, mc->fixup_sdrs_cb_data);
 
     if (changed) {
 	ipmi_entity_scan_sdrs(info->domain, info->source_mc,
@@ -2256,24 +2261,14 @@ ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
     return 0;
 }
 
-void
-_ipmi_mc_fixup_sensor(ipmi_mc_t     *mc,
-		      ipmi_sensor_t *sensor)
-{
-    CHECK_MC_LOCK(mc);
-
-    if (mc->fixup_sensor_handler)
-	mc->fixup_sensor_handler(mc, sensor, mc->fixup_sensor_cb_data);
-}
-
 int
-ipmi_mc_set_sensor_fixup_handler(ipmi_mc_t                   *mc,
-				 ipmi_mc_oem_fixup_sensor_cb handler,
-				 void                        *cb_data)
+ipmi_mc_set_sdrs_fixup_handler(ipmi_mc_t                 *mc,
+			       ipmi_mc_oem_fixup_sdrs_cb handler,
+			       void                      *cb_data)
 {
     CHECK_MC_LOCK(mc);
-    mc->fixup_sensor_handler = handler;
-    mc->fixup_sensor_cb_data = cb_data;
+    mc->fixup_sdrs_handler = handler;
+    mc->fixup_sdrs_cb_data = cb_data;
     return 0;
 }
 
