@@ -1,3 +1,14 @@
+2004-12-07 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_mc.h:
+	Moved the ipmi_mc_set_current_sel_time() from the internal to
+	the user-visible interface.
+
+	* cmd_entity.c, man/ipmi_cmdlang.7: Added the id and entity id
+	string to the entity info.
+
+	* cmd_mc.c: Added a way to set the SEL time.
+
 2004-12-03 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a problem where the startup SEL time was not set
