@@ -198,9 +198,6 @@ struct ipmi_domain_s
     ipmi_oem_event_handler_cb oem_event_handler;
     void                      *oem_event_cb_data;
 
-    /* Is broadcasting broken in this domain? */
-    int broadcast_broken;
- 
     /* Are we in the middle of an MC bus scan? */
     int scanning_bus;
 
@@ -1883,10 +1880,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 
     info->domain = domain;
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;
-    if (domain->broadcast_broken)
-	ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
-    else
-        ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
+    ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
     ipmb->channel = channel;
     ipmb->slave_addr = start_addr;
     ipmb->lun = 0;
@@ -2034,8 +2028,11 @@ start_mc_scan(ipmi_domain_t *domain)
 
     /* Now start the IPMB scans. */
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
-	if (domain->chan[i].medium == 1) /* IPMB */
+	if (domain->chan[i].medium == 1) { /* IPMB */
+	    /* Always scan the normal BMC first. */
+	    ipmi_start_ipmb_mc_scan(domain, i, 0x20, 0x20, mc_scan_done, NULL);
 	    ipmi_start_ipmb_mc_scan(domain, i, 0x10, 0xf0, mc_scan_done, NULL);
+	}
     }
 }
 
@@ -3851,8 +3848,6 @@ ll_con_changed(ipmi_con_t   *ipmi,
     ipmi_domain_t   *domain = cb_data;
     int             rv;
     int             u;
-    int             i;
-    int             broadcast_broken;
 
     if (port_num >= MAX_PORTS_PER_CON) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -3883,15 +3878,6 @@ ll_con_changed(ipmi_con_t   *ipmi,
     	ipmi_start_si_scan(domain, u, NULL, NULL);
 
     if (still_connected) {
-	/* Check all the broadcast broken flags to see if we can support
-	   broadcast. */
-	broadcast_broken = 0;
-	for (i=0; i<MAX_CONS; i++) {
-	    if (domain->conn[i])
-		broadcast_broken |= domain->conn[i]->broadcast_broken;
-	}
-	domain->broadcast_broken = broadcast_broken;
-
 	domain->con_up[u] = 1;
 	if (domain->connecting) {
 	    /* If we are connecting, report it. */

@@ -357,6 +357,7 @@ typedef struct amc_info_s
     ipmi_control_t *hw_version;
     ipmi_control_t *fw_version;
     ipmi_control_t *fpga_version;
+    ipmi_control_t *slot_ga;
     ipmi_control_t *last_reset_reason;
     ipmi_control_t *chassis_id;
 } amc_info_t;
@@ -6485,6 +6486,33 @@ amc_fpga_version_get(ipmi_control_t                 *control,
 }
 
 static int
+amc_slot_ga_get(ipmi_control_t                 *control,
+		ipmi_control_identifier_val_cb handler,
+		void                           *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->get_identifier_val = handler;
+    control_info->cb_data = cb_data;
+    control_info->min_rsp_length = 7;
+    control_info->data_off = 6;
+    control_info->data_len = 1;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
+static int
 amc_last_reset_reason_get(ipmi_control_t                 *control,
 			  ipmi_control_identifier_val_cb handler,
 			  void                           *cb_data)
@@ -6540,6 +6568,8 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_control_destroy(info->fw_version);
     if (info->fpga_version)
 	ipmi_control_destroy(info->fpga_version);
+    if (info->slot_ga)
+	ipmi_control_destroy(info->slot_ga);
     if (info->chassis_id)
 	ipmi_control_destroy(info->chassis_id);
 
@@ -6711,6 +6741,19 @@ amc_board_handler(ipmi_mc_t *mc)
 			      NULL,
 			      amc_fpga_version_get,
 			      &info->fpga_version);
+    if (rv)
+	goto out_err;
+
+    /* Slot gegraphic address */
+    rv = mxp_alloc_id_control(mc, info->ent,
+			      MXP_BOARD_SLOT_GA_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "Geog Addr",
+			      1,
+			      NULL,
+			      amc_slot_ga_get,
+			      &info->slot_ga);
     if (rv)
 	goto out_err;
 

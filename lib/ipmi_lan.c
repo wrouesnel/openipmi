@@ -469,8 +469,11 @@ lan_send_addr(lan_data_t  *lan,
 	tmsg[pos++] = IPMI_SEND_MSG_CMD;
 	tmsg[pos++] = ((ipmb_addr->channel & 0xf)
 		       | (1 << 6)); /* Turn on tracking. */
-	if (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	if ((addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	    && (!lan->ipmi->broadcast_broken))
+	{
 	    tmsg[pos++] = 0; /* Do a broadcast. */
+	}
 	msgstart = pos;
 	tmsg[pos++] = ipmb_addr->slave_addr;
 	tmsg[pos++] = (msg->netfn << 2) | ipmb_addr->lun;

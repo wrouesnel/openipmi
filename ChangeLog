@@ -1,6 +1,19 @@
+2004-04-08 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi_smi.c, lib/ipmi_lan.c, lib/domain.c: Remove the broken
+	broadcast handling from the domain code and put it into the
+	lower-level code, so the lower level code knows how to time it
+	better.
+
+	* lib/domain.c: Add a scan of IPMB 0x20 as the first thing.
+
 2004-04-07 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Added an MC active callback to the UI.
+
+	* configure.in: Move to version 1.3.2.
+
+	* lib/oem_motorola_mxp.c: Added a slot GA sensor to the AMC.
 
 2004-04-02 Corey Minyard <cminyard@mvista.com> 
 

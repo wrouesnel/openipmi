@@ -341,6 +341,7 @@ smi_send(smi_data_t   *smi,
 	 long         msgid)
 {
     int rv;
+    ipmi_addr_t myaddr;
 
     if (DEBUG_MSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msgid=%08lx\n addr =", msgid);
@@ -354,6 +355,16 @@ smi_send(smi_data_t   *smi,
 	        dump_hex((unsigned char *)msg->data, msg->data_len);
 	}
 	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+    }
+
+    if ((addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	&& (smi->ipmi->broadcast_broken))
+    {
+	memcpy(&myaddr, addr, addr_len);
+	myaddr.addr_type = IPMI_IPMB_ADDR_TYPE;
+	addr = &myaddr;
+	/* FIXME - this will still be a 5 second timeout, need to fix
+	   that. */
     }
 
     if (msg->data_len > IPMI_MAX_MSG_LENGTH)
