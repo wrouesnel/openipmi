@@ -1093,10 +1093,10 @@ set_sel_time(ipmi_mc_t  *mc,
 }
 
 int
-ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
+ipmi_mc_set_current_sel_time(ipmi_mc_t             *mc,
 			     const struct timeval  *time,
-			     ipmi_mc_done_cb handler,
-			     void            *cb_data)
+			     ipmi_mc_done_cb       handler,
+			     void                  *cb_data)
 {
     ipmi_msg_t     msg;
     int            rv;
@@ -1116,7 +1116,7 @@ ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
     msg.data = data;
     msg.data_len = 4;
     ipmi_set_uint32(data, time->tv_sec);
-    mc->startup_SEL_time = time->tv_sec * 1000000000;
+    mc->startup_SEL_time = ipmi_timeval_to_time(*time);
     rv = ipmi_mc_send_command(mc, 0, &msg, set_sel_time, NULL);
     if (rv)
 	ipmi_mem_free(info);
@@ -1310,7 +1310,7 @@ first_sel_op(ipmi_mc_t *mc)
     msg.data_len = 4;
     gettimeofday(&now, NULL);
     ipmi_set_uint32(data, now.tv_sec);
-    mc->startup_SEL_time = now.tv_sec * 1000000000;
+    mc->startup_SEL_time = ipmi_seconds_to_time(now.tv_sec);
     rv = ipmi_mc_send_command(mc, 0, &msg, startup_set_sel_time, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,

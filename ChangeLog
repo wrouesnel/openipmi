@@ -1,3 +1,10 @@
+2004-03-04 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_int.h, lib/sel.c, lib/mc.c: Fix broken
+	time calculations for events.
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+
 2004-03-02 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_lan.c: Fixed a bug where incoming SNMP traps were
@@ -30,7 +37,7 @@
 	* lib/entity.c: ditto
 
 	* lib/entity.c: Do a changed callback on the parent and child when
-	a parent-child relationship is created or destroyed.
+	a parent-child relationshi<p is created or destroyed.
 
 	* include/OpenIPMI/ipmi_entity.h, lib/entity.c: Added an operation
 	queue and handling functions for entities.

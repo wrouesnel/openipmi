@@ -508,7 +508,7 @@ handle_sel_data(ipmi_mc_t  *mc,
     record_id = ipmi_get_uint16(rsp->data+3);
 
     if (rsp->data[5] < 0xe0)
-	timestamp = ipmi_get_uint32(rsp->data+6);
+	timestamp = ipmi_seconds_to_time(ipmi_get_uint32(rsp->data+6));
     else
 	timestamp = -1;
     del_event = ipmi_event_alloc(ipmi_mc_convert_to_id(mc),

@@ -278,4 +278,8 @@ void ipmi_check_lock(ipmi_lock_t *lock, char *str);
 #define IPMI_REPORT_LOCK_ERROR(handler, str) do {} while (0)
 #endif
 
+#define ipmi_seconds_to_time(x) (((ipmi_time_t) (x)) * 1000000000)
+#define ipmi_timeval_to_time(x) ((((ipmi_time_t) (x).tv_sec) * 1000000000) \
+				 + (((ipmi_time_t) (x).tv_usec) * 1000))
+
 #endif /* _IPMI_INT_H */

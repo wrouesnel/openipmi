@@ -585,7 +585,7 @@ handle_async_event(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     unsigned int               record_id = ipmi_get_uint16(recv->msg.data);
 
     if (type < 0xe0)
-	timestamp = ipmi_get_uint32(recv->msg.data+3);
+	timestamp = ipmi_seconds_to_time(ipmi_get_uint32(recv->msg.data+3));
     else
 	timestamp = -1;
     event = ipmi_event_alloc(invalid_mcid,
