@@ -1,3 +1,7 @@
+2003-11-21  Louis Zhuang  <louis.zhuang@linux.intel.com>
+
+	* lib/domain.c: Fix a bug in ipmi_domain_reread_sels
+
 2003-11-17 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, lib/domain.c: Added support for detection old and

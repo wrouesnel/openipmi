@@ -2240,7 +2240,7 @@ ipmi_domain_reread_sels(ipmi_domain_t  *domain,
 	return ENOMEM;
 
     rv = ipmi_create_lock(domain, &info->lock);
-    if (!rv) {
+    if (rv) {
 	ipmi_mem_free(info);
 	return rv;
     }
