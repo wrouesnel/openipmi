@@ -940,6 +940,9 @@ int ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
 				       ipmi_entity_val_cb handler,
 				       void               *cb_data);
 
+/* Check the state of hot-swap for the entity. */
+int ipmi_entity_check_hot_swap_state(ipmi_entity_t *ent);
+
 /* Entity ID based versions of some of the above calls. */
 int ipmi_entity_id_get_hot_swap_state(ipmi_entity_id_t              id,
 				      ipmi_entity_hot_swap_state_cb handler,
@@ -974,6 +977,7 @@ int ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
 int ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
 					  ipmi_entity_val_cb handler,
 					  void               *cb_data);
+int ipmi_entity_id_check_hot_swap_state(ipmi_entity_id_t id);
 
 
 /* Handles events from the given sensor with the handler.  Only one

@@ -313,6 +313,8 @@ static int e_get_hot_swap_requester(ipmi_entity_t      *ent,
 				    ipmi_entity_val_cb handler,
 				    void               *cb_data);
 
+static int e_check_hot_swap_state(ipmi_entity_t *ent);
+
 static ipmi_entity_hot_swap_t internal_hs_cb =
 {
     .get_hot_swap_state = e_get_hot_swap_state,
@@ -325,6 +327,7 @@ static ipmi_entity_hot_swap_t internal_hs_cb =
     .get_hot_swap_indicator = e_get_hot_swap_indicator,
     .set_hot_swap_indicator = e_set_hot_swap_indicator,
     .get_hot_swap_requester = e_get_hot_swap_requester,
+    .check_hot_swap_state = e_check_hot_swap_state,
 };
 
 /***********************************************************************
@@ -4695,6 +4698,16 @@ ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
     return ent->hs_cb.get_hot_swap_requester(ent, handler, cb_data);
 }
 
+int
+ipmi_entity_check_hot_swap_state(ipmi_entity_t *ent)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.check_hot_swap_state)
+	return ENOSYS;
+    return ent->hs_cb.check_hot_swap_state(ent);
+}
+
 /***********************************************************************
  *
  * Entity ID versions of the hot-swap calls.
@@ -4996,6 +5009,27 @@ ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
     info.handler = handler;
     info.cb_data = cb_data;
     rv = ipmi_entity_pointer_cb(id, entity_get_hot_swap_requester_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_check_hot_swap_state_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_val_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_check_hot_swap_state(ent);
+}
+
+int
+ipmi_entity_id_check_hot_swap_state(ipmi_entity_id_t id)
+{
+    entity_val_cb_info_t info;
+    int                  rv;
+
+    info.rv = 0;
+    rv = ipmi_entity_pointer_cb(id, entity_check_hot_swap_state_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;
@@ -5908,6 +5942,18 @@ e_get_hot_swap_requester(ipmi_entity_t      *ent,
     if (rv)
 	ipmi_mem_free(info);
     return rv;
+}
+
+static int
+e_check_hot_swap_state(ipmi_entity_t *ent)
+{
+    if (ent->hot_swap_power)
+	ipmi_control_get_val(ent->hot_swap_power, power_checked, ent);
+
+    if (ent->hot_swap_requester)
+	ipmi_states_get(ent->hot_swap_requester, requester_checked, ent);
+
+    return 0;
 }
 
 /***********************************************************************

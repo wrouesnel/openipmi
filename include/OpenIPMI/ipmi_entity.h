@@ -295,6 +295,9 @@ typedef struct ipmi_entity_hot_swap_s
     int (*get_hot_swap_requester)(ipmi_entity_t      *ent,
 				  ipmi_entity_val_cb handler,
 				  void               *cb_data);
+
+    /* Audit the hot-swap state to make sure it is correct. */
+    int (*check_hot_swap_state)(ipmi_entity_t *ent);
 } ipmi_entity_hot_swap_t;
 
 /* Call all the hot-swap handlers associated with the entity */

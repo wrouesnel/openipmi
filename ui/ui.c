@@ -1421,6 +1421,32 @@ hs_deactivate(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static void
+hs_check_ent(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_entity_check_hot_swap_state(entity);
+}
+
+static void
+hs_check_cmder(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_domain_iterate_entities(domain, hs_check_ent, NULL);
+}
+
+int
+hs_check_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int rv;
+
+    rv = ipmi_domain_pointer_cb(domain_id, hs_check_cmder, NULL);
+    if (rv) {
+	cmd_win_out("Unable to convert domain id to a pointer\n");
+	return 0;
+    }
+    
+    return 0;
+}
+
 
 
 static void
@@ -5881,6 +5907,8 @@ static struct {
       " <entity name> - activate the given entity" },
     { "hs_deactivate", hs_deactivate,
       " <entity name> - deactivate the given entity" },
+    { "hs_check", hs_check_cmd,
+      " - Check all the entities hot-swap states" },
     { "sensors",	sensors_cmd,
       " <entity name> - list all the sensors that monitor the entity" },
     { "sensor",		sensor_cmd,

@@ -19,6 +19,12 @@
 	* lib/mc.c: Fixed connection up info to be freed for MCs that
 	never go active.
 
+	* lib/entity.c, include/OpenIPMI/ipmi_entity.c: Added support for
+	checking the current hot-swap state (as in an audit).
+	
+	* include/OpenIPMI/ipmiif.h.in: Added functions for the above
+	call.
+
 2004-04-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start
