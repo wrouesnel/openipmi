@@ -1,4 +1,8 @@
 
+2003-07-25 Corey Minyard <cminyard@mvista.com>
+
+	* doc/OpenIPMI.texi: Minor doc updates about authentication.
+
 2003-07-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c: Delayed the start of fetching events for an MC's SEL

@@ -85,6 +85,29 @@ Some types of connections need to be authenticated, you will need to
 provide userids and passwords for the BMC to accept your messages.
 Several different authentication algorithms are available.
 
+Authentication is done on LAN connections (and in the future, on dial-in
+connections).  There is no authentication on SMI connections.  There are
+four standard mechanisms for authentication.  The session is established
+using the userid/key, and once the session is up, the key must be
+present in every packet if authentication is done.  The methods of
+authentication are:
+
+@enumerate
+@item none - No authentication is done
+@item straight - The password is transmitted in plain text over the
+network as part of the packet.  The host and target will not accept a
+packet without the right key.
+@item md2 - The "Message Digest Algorithm 2" is applied to the contents
+of the packet using the password, and an authentication code is
+generated.  The host and target will not accept a message who's
+authentication codes do not match.  The password is *not* transmitted
+over the network and it is difficult to find the password or generate
+valid packets by just looking at the data and authentication code.
+@item md5 - Like md2, but uses the "Message Digest Algorithm 5".
+@end enumerate
+
+The use of md5 or md2 is strongly recommended.
+
 @node    How IPMI Works, The User View, Things in IPMI, Intro to IPMI
 @section Things in IPMI
 
