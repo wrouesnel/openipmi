@@ -2261,13 +2261,22 @@ iterate_control_handler(void *cb_data, void *item1, void *item2)
     iterate_control_info_t *info = cb_data;
     ipmi_control_t         *control = item1;
     int                   rv;
+    ipmi_mc_t             *mc = ipmi_control_get_mc(control);
 
-    rv = _ipmi_control_get(control);
+    if (!mc)
+	goto out;
+    rv = _ipmi_mc_get(mc);
     if (rv)
 	goto out;
+    rv = _ipmi_control_get(control);
+    if (rv) {
+	_ipmi_mc_put(mc);
+	goto out;
+    }
     _ipmi_domain_entity_unlock(info->ent->domain);
     info->handler(info->ent, item1, info->cb_data);
     _ipmi_control_put(control);
+    _ipmi_mc_put(mc);
     _ipmi_domain_entity_lock(info->ent->domain);
  out:
     return LOCKED_LIST_ITER_CONTINUE;

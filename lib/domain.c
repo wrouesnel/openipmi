@@ -4758,7 +4758,6 @@ ipmi_domain_register_attribute(ipmi_domain_t            *domain,
     ipmi_lock(domain->domain_lock);
     locked_list_iterate(domain->attr, domain_attr_cmp, &info);
     if (info.attr) {
-	ipmi_unlock(domain->domain_lock);
 	*data = info.attr->data;
 	goto out_unlock;
     }

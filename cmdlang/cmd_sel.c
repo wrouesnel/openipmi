@@ -79,10 +79,18 @@ sel_list(ipmi_domain_t *domain, void *cb_data)
     ipmi_cmdlang_up(cmd_info);
 }
 
+typedef struct sel_delete_s
+{
+    ipmi_cmd_info_t *cmd_info;
+    int             record;
+    char            mc_name[IPMI_MC_NAME_LEN];
+} sel_delete_t;
+
 static void
 sel_delete_done(ipmi_domain_t *domain, int err, void *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    sel_delete_t    *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
     ipmi_cmdlang_lock(cmd_info);
@@ -92,7 +100,17 @@ sel_delete_done(ipmi_domain_t *domain, int err, void *cb_data)
 	ipmi_domain_get_name(domain, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sel.c(sel_delete_done)";
+	goto out;
     }
+
+    ipmi_cmdlang_out(cmd_info, "Event deleted", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "MC", info->mc_name);
+    ipmi_cmdlang_out_int(cmd_info, "Record", info->record);
+    ipmi_cmdlang_up(cmd_info);
+
+ out:
+    ipmi_mem_free(info);
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -108,6 +126,7 @@ sel_delete(ipmi_mc_t *mc, void *cb_data)
     char            **argv = ipmi_cmdlang_get_argv(cmd_info);
     ipmi_event_t    *event = NULL;
     int             record_id;
+    sel_delete_t    *info;
 
     if ((argc - curr_arg) < 1) {
 	cmdlang->errstr = "Not enough parameters";
@@ -129,12 +148,23 @@ sel_delete(ipmi_mc_t *mc, void *cb_data)
 	goto out_err;
     }
 
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    info->record = record_id;
+    ipmi_mc_get_name(mc, info->mc_name, sizeof(info->mc_name));
+
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_event_delete(event, sel_delete_done, cmd_info);
+    rv = ipmi_event_delete(event, sel_delete_done, info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error deleting event";
 	cmdlang->err = rv;
+	ipmi_mem_free(info);
 	goto out_err;
     }
     ipmi_event_free(event);
@@ -246,7 +276,11 @@ sel_add(ipmi_mc_t *mc, void *cb_data)
 static void
 sel_clear(ipmi_domain_t *domain, void *cb_data)
 {
-    ipmi_event_t *event, *event2;
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_event_t    *event, *event2;
+    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
     event = ipmi_domain_first_event(domain);
     while (event) {
@@ -255,6 +289,7 @@ sel_clear(ipmi_domain_t *domain, void *cb_data)
 	ipmi_domain_del_event(domain, event2, NULL, NULL);
 	ipmi_event_free(event2);
     }
+    ipmi_cmdlang_out(cmd_info, "SEL Clear done", domain_name);
 }
 
 static ipmi_cmdlang_cmd_t *sel_cmds;

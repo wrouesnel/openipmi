@@ -55,21 +55,6 @@ void ipmi_cmdlang_control_change(enum ipmi_update_e op,
 				 void               *cb_data);
 
 static void
-entity_list_handler(ipmi_entity_t *entity, void *cb_data)
-{
-    ipmi_cmd_info_t *cmd_info = cb_data;
-    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    char            entity_name[IPMI_ENTITY_NAME_LEN];
-
-    if (cmdlang->err)
-	return;
-
-    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
-
-    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
-}
-
-static void
 entity_iterate_handler(ipmi_entity_t *entity, ipmi_entity_t *parent,
 		       void *cb_data)
 {
@@ -86,27 +71,44 @@ entity_iterate_handler(ipmi_entity_t *entity, ipmi_entity_t *parent,
 }
 
 static void
-entity_list(ipmi_domain_t *domain, void *cb_data)
+entity_list_handler(ipmi_entity_t *entity, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-
-    ipmi_domain_iterate_entities(domain, entity_list_handler, cmd_info);
-}
-
-static void
-entity_info(ipmi_entity_t *entity, void *cb_data)
-{
-    ipmi_cmd_info_t *cmd_info = cb_data;
-    enum ipmi_dlr_type_e type;
-    static char     *ent_types[] = { "unknown", "mc", "fru",
-				     "generic", "invalid" };
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    if (cmdlang->err)
+	return;
 
     ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
 
-    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
-    ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+}
+
+static void
+entity_list(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    ipmi_cmdlang_out(cmd_info, "Entities", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_domain_iterate_entities(domain, entity_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+}
+
+static void
+entity_dump(ipmi_entity_t *entity, ipmi_cmd_info_t *cmd_info)
+{
+    enum ipmi_dlr_type_e type;
+    static char     *ent_types[] = { "unknown", "mc", "fru",
+				     "generic", "invalid" };
+
     type = ipmi_entity_get_type(entity);
     if (type > IPMI_ENTITY_GENERIC)
 	type = IPMI_ENTITY_GENERIC + 1;
@@ -208,6 +210,20 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
     default:
 	break;
     }
+}
+
+static void
+entity_info(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    entity_dump(entity, cmd_info);
     ipmi_cmdlang_up(cmd_info);
 }
 
@@ -292,6 +308,7 @@ entity_hs_set_act_time_done(ipmi_entity_t  *entity,
 {
     ipmi_cmd_info_t    *cmd_info = cb_data;
     ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char               entity_name[IPMI_ENTITY_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -300,8 +317,13 @@ entity_hs_set_act_time_done(ipmi_entity_t  *entity,
 	ipmi_entity_get_name(entity, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(entity_hs_set_act_time_done)";
+	goto out;
     }
 
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Set act time", entity_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -339,9 +361,7 @@ entity_hs_set_act_time(ipmi_entity_t *entity, void *cb_data)
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->err = rv;
 	cmdlang->errstr = "Error setting auto activate time";
-	ipmi_entity_get_name(entity, cmdlang->objstr,
-			     cmdlang->objstr_len);
-	cmdlang->location = "cmd_entity.c(entity_hs_set_act_time)";
+	goto out_err;
     }
     return;
 
@@ -410,6 +430,7 @@ entity_hs_set_deact_time_done(ipmi_entity_t  *entity,
 {
     ipmi_cmd_info_t    *cmd_info = cb_data;
     ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char               entity_name[IPMI_ENTITY_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -418,8 +439,13 @@ entity_hs_set_deact_time_done(ipmi_entity_t  *entity,
 	ipmi_entity_get_name(entity, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(entity_hs_set_deact_time_done)";
+	goto out;
     }
 
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Set deact time", entity_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -457,9 +483,7 @@ entity_hs_set_deact_time(ipmi_entity_t *entity, void *cb_data)
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->err = rv;
 	cmdlang->errstr = "Error setting auto deactivate time";
-	ipmi_entity_get_name(entity, cmdlang->objstr,
-			     cmdlang->objstr_len);
-	cmdlang->location = "cmd_entity.c(entity_hs_set_deact_time)";
+	goto out_err;
     }
     return;
 
@@ -476,6 +500,7 @@ entity_hs_activation_request_done(ipmi_entity_t  *entity,
 {
     ipmi_cmd_info_t    *cmd_info = cb_data;
     ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char               entity_name[IPMI_ENTITY_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -484,8 +509,13 @@ entity_hs_activation_request_done(ipmi_entity_t  *entity,
 	ipmi_entity_get_name(entity, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(entity_hs_activation_request_done)";
+	goto out;
     }
 
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Activation requested", entity_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -519,6 +549,7 @@ entity_hs_activate_done(ipmi_entity_t  *entity,
 {
     ipmi_cmd_info_t    *cmd_info = cb_data;
     ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char               entity_name[IPMI_ENTITY_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -527,8 +558,13 @@ entity_hs_activate_done(ipmi_entity_t  *entity,
 	ipmi_entity_get_name(entity, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(entity_hs_activate_done)";
+	goto out;
     }
 
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Activated", entity_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -561,6 +597,7 @@ entity_hs_deactivate_done(ipmi_entity_t  *entity,
 {
     ipmi_cmd_info_t    *cmd_info = cb_data;
     ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char               entity_name[IPMI_ENTITY_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -569,8 +606,13 @@ entity_hs_deactivate_done(ipmi_entity_t  *entity,
 	ipmi_entity_get_name(entity, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(entity_hs_deactivate_done)";
+	goto out;
     }
 
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Deactivated", entity_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -654,6 +696,7 @@ entity_hs_check(ipmi_entity_t *entity, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
 
     rv = ipmi_entity_check_hot_swap_state(entity);
     if (rv) {
@@ -662,6 +705,9 @@ entity_hs_check(ipmi_entity_t *entity, void *cb_data)
 	ipmi_entity_get_name(entity, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_entity.c(entity_hs_check)";
+    } else {
+      ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+      ipmi_cmdlang_out(cmd_info, "Check started", entity_name);
     }
 }
 
@@ -752,8 +798,12 @@ presence_change(ipmi_entity_t *entity,
     ipmi_cmdlang_out(evi, "Operation", "Presence Change");
     ipmi_cmdlang_out_bool(evi, "Present", present);
 
-    if (event)
+    if (event) {
+	ipmi_cmdlang_out(evi, "Event", NULL);
+	ipmi_cmdlang_down(evi);
 	ipmi_cmdlang_event_out(event, evi);
+	ipmi_cmdlang_up(evi);
+    }
 
     ipmi_cmdlang_cmd_info_put(evi);
     return IPMI_EVENT_HANDLED;
@@ -796,8 +846,12 @@ entity_hot_swap(ipmi_entity_t             *entity,
 		     ipmi_hot_swap_state_name(last_state));
     ipmi_cmdlang_out(evi, "State", ipmi_hot_swap_state_name(curr_state));
 
-    if (event)
+    if (event) {
+	ipmi_cmdlang_out(evi, "Event", NULL);
+	ipmi_cmdlang_down(evi);
 	ipmi_cmdlang_event_out(event, evi);
+	ipmi_cmdlang_up(evi);
+    }
 
     ipmi_cmdlang_cmd_info_put(evi);
     return IPMI_EVENT_HANDLED;
@@ -838,11 +892,9 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	ipmi_cmdlang_out(evi, "Operation", "Add");
-	if (ipmi_cmdlang_get_evinfo()) {
-	    ipmi_cmdlang_down(evi);
-	    entity_info(entity, evi);
-	    ipmi_cmdlang_up(evi);
-	}
+	if (ipmi_cmdlang_get_evinfo())
+	    entity_dump(entity, evi);
+
 	rv = ipmi_entity_add_sensor_update_handler(entity,
 						   ipmi_cmdlang_sensor_change,
 						   entity);
@@ -887,11 +939,8 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 
 	case IPMI_CHANGED:
 	    ipmi_cmdlang_out(evi, "Operation", "Change");
-	    if (ipmi_cmdlang_get_evinfo()) {
-		ipmi_cmdlang_down(evi);
-		entity_info(entity, evi);
-		ipmi_cmdlang_up(evi);
-	    }
+	    if (ipmi_cmdlang_get_evinfo())
+		entity_dump(entity, evi);
 	    break;
     }
 

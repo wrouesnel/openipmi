@@ -117,6 +117,14 @@ After you have configured OpenIPMI, type "make" to build it.  To
 install it in the prefix you defined, do "make install".
 
 
+Using ipmish
+============
+
+ipmish is a command interpreter that lets you execute IPMI operations,
+get the results, etc.  It gives you the full power of OpenIPMI.  It
+can easily be driven with a TCL script or the like.  See the man page
+for more details.
+
 Using ipmi_ui
 =============
 

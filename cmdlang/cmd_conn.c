@@ -63,7 +63,18 @@ con_list_handler(ipmi_domain_t *domain, int conn, void *cb_data)
 static void
 con_list(ipmi_domain_t *domain, void *cb_data)
 {
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    ipmi_cmdlang_out(cmd_info, "Connections", NULL);
+    ipmi_cmdlang_down(cmd_info);
     ipmi_domain_iterate_connections(domain, con_list_handler, cb_data);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -95,8 +106,9 @@ con_activate(ipmi_domain_t *domain, int conn, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
+    char            conn_name[IPMI_MAX_DOMAIN_NAME_LEN+20];
+    int             p;
 
-printf("**a");
     rv = ipmi_domain_activate_connection(domain, conn);
     if (rv) {
 	cmdlang->errstr = "Unable to activate connection";
@@ -105,6 +117,10 @@ printf("**a");
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_conn.c(con_activate)";
     }
+
+    p = ipmi_domain_get_name(domain, conn_name, sizeof(conn_name));
+    snprintf(conn_name+p, sizeof(conn_name)-p, ".%d", conn);
+    ipmi_cmdlang_out(cmd_info, "Connection activated", conn_name);
 }
 
 static ipmi_cmdlang_cmd_t *conn_cmds;

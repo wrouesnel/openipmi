@@ -62,22 +62,24 @@ static void
 mc_list(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    ipmi_cmdlang_out(cmd_info, "MCs", NULL);
+    ipmi_cmdlang_down(cmd_info);
     ipmi_domain_iterate_mcs(domain, mc_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
-mc_info(ipmi_mc_t *mc, void *cb_data)
+mc_dump(ipmi_mc_t *mc, ipmi_cmd_info_t *cmd_info)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
     unsigned char   vals[4];
     char            str[100];
-    char            mc_name[IPMI_MC_NAME_LEN];
-
-    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
-    ipmi_cmdlang_out(cmd_info, "MC", NULL);
-    ipmi_cmdlang_down(cmd_info);
-    ipmi_cmdlang_out(cmd_info, "Name", mc_name);
 
     ipmi_cmdlang_out_bool(cmd_info, "provides_device_sdrs",
 			  ipmi_mc_provides_device_sdrs(mc));
@@ -116,24 +118,44 @@ mc_info(ipmi_mc_t *mc, void *cb_data)
     ipmi_cmdlang_out_hex(cmd_info, "product_id", ipmi_mc_product_id(mc));
     ipmi_mc_aux_fw_revision(mc, vals);
     ipmi_cmdlang_out_binary(cmd_info, "aux_fw_revision", vals, sizeof(vals));
+}
+
+static void
+mc_info(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "MC", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", mc_name);
+    mc_dump(mc, cmd_info);
     ipmi_cmdlang_up(cmd_info);
 }
 
 static void
-reset_done(ipmi_mc_t *mc, int err, void *cb_data)
+mc_reset_done(ipmi_mc_t *mc, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            mc_name[IPMI_MC_NAME_LEN];
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	cmdlang->errstr = "Error resetting MC";
 	cmdlang->err = err;
 	ipmi_mc_get_name(mc, cmdlang->objstr,
 			 cmdlang->objstr_len);
-	cmdlang->location = "cmd_mc.c(reset_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	cmdlang->location = "cmd_mc.c(mc_reset_done)";
+	goto out;
     }
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "Reset done", mc_name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
@@ -166,7 +188,7 @@ mc_reset(ipmi_mc_t *mc, void *cb_data)
     }
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_mc_reset(mc, cmd, reset_done, cmd_info);
+    rv = ipmi_mc_reset(mc, cmd, mc_reset_done, cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error from ipmi_mc_reset";
@@ -183,25 +205,32 @@ mc_reset(ipmi_mc_t *mc, void *cb_data)
 }
 
 static void
-set_events_enabled_done(ipmi_mc_t *mc, int err, void *cb_data)
+set_events_enable_done(ipmi_mc_t *mc, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            mc_name[IPMI_MC_NAME_LEN];
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	cmdlang->errstr = "Error setting events enable";
 	cmdlang->err = err;
 	ipmi_mc_get_name(mc, cmdlang->objstr,
 			 cmdlang->objstr_len);
 	cmdlang->location = "cmd_mc.c(set_events_enable_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "Events enable done", mc_name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
 static void
-mc_set_events_enabled(ipmi_mc_t *mc, void *cb_data)
+mc_set_events_enable(ipmi_mc_t *mc, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
@@ -229,7 +258,7 @@ mc_set_events_enabled(ipmi_mc_t *mc, void *cb_data)
     }
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_mc_set_events_enable(mc, enable, set_events_enabled_done,
+    rv = ipmi_mc_set_events_enable(mc, enable, set_events_enable_done,
 				   cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
@@ -247,7 +276,7 @@ mc_set_events_enabled(ipmi_mc_t *mc, void *cb_data)
 }
 
 static void
-mc_get_events_enabled(ipmi_mc_t *mc, void *cb_data)
+mc_get_events_enable(ipmi_mc_t *mc, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     
@@ -578,17 +607,8 @@ ipmi_cmdlang_mc_change(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	ipmi_cmdlang_out(evi, "Operation", "Add");
-	if (ipmi_cmdlang_get_evinfo()) {
-	    ipmi_cmdlang_down(evi);
-	    mc_info(mc, evi);
-	    ipmi_cmdlang_up(evi);
-	}
-#if 0
-	if (ipmi_mc_is_active(mc)) {
-	    ipmi_mc_set_sdrs_first_read_handler(mc, mc_sdrs_read, NULL);
-	    ipmi_mc_set_sels_first_read_handler(mc, mc_sels_read, NULL);
-	}
-#endif
+	if (ipmi_cmdlang_get_evinfo())
+	    mc_dump(mc, evi);
 	break;
 
 	case IPMI_DELETED:
@@ -597,11 +617,8 @@ ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 
 	case IPMI_CHANGED:
 	    ipmi_cmdlang_out(evi, "Operation", "Change");
-	    if (ipmi_cmdlang_get_evinfo()) {
-		ipmi_cmdlang_down(evi);
-		mc_info(mc, evi);
-		ipmi_cmdlang_up(evi);
-	    }
+	    if (ipmi_cmdlang_get_evinfo())
+		mc_dump(mc, evi);
 	    break;
     }
 
@@ -635,14 +652,14 @@ static ipmi_cmdlang_init_t cmds_mc[] =
       " that this does *not* reset the main processor, and the effects of"
       " this are implementation-defined",
       ipmi_cmdlang_mc_handler, mc_reset, NULL },
-    { "set_events_enabled", &mc_cmds,
+    { "set_events_enable", &mc_cmds,
       "<mc> <enable | disable> - Sets if the events are enabled or disabled"
       " for an MC",
-      ipmi_cmdlang_mc_handler, mc_set_events_enabled, NULL },
-    { "get_events_enabled", &mc_cmds,
+      ipmi_cmdlang_mc_handler, mc_set_events_enable, NULL },
+    { "get_events_enable", &mc_cmds,
       "<mc> - Returns if the events are enabled or disabled"
       " for an MC",
-      ipmi_cmdlang_mc_handler, mc_get_events_enabled, NULL },
+      ipmi_cmdlang_mc_handler, mc_get_events_enable, NULL },
     { "sel_info", &mc_cmds,
       "<mc> - Returns information about the SEL on the MC",
       ipmi_cmdlang_mc_handler, mc_sel_info, NULL },

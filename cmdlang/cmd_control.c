@@ -62,27 +62,28 @@ static void
 control_list(ipmi_entity_t *entity, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
 
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    ipmi_cmdlang_down(cmd_info);
     ipmi_entity_iterate_controls(entity, control_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
-control_info(ipmi_control_t *control, void *cb_data)
+control_dump(ipmi_control_t *control, ipmi_cmd_info_t *cmd_info)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             num;
     char            *str;
     int             len;
     int             val, val2, val3;
     int             i, j, k;
-    char            control_name[IPMI_CONTROL_NAME_LEN];
 
-    ipmi_control_get_name(control, control_name, sizeof(control_name));
-
-    ipmi_cmdlang_out(cmd_info, "Control", NULL);
-    ipmi_cmdlang_down(cmd_info);
-    ipmi_cmdlang_out(cmd_info, "Name", control_name);
     ipmi_cmdlang_out(cmd_info, "Type", ipmi_control_get_type_string(control));
     ipmi_cmdlang_out_bool(cmd_info, "Generates events",
 			  ipmi_control_has_events(control));
@@ -172,13 +173,27 @@ control_info(ipmi_control_t *control, void *cb_data)
     case IPMI_CONTROL_ONE_SHOT_OUTPUT:
 	break;
     }
-    ipmi_cmdlang_up(cmd_info);
     return;
 
  out_err:
     ipmi_control_get_name(control, cmdlang->objstr,
 			 cmdlang->objstr_len);
-    cmdlang->location = "cmd_control.c(control_info)";
+    cmdlang->location = "cmd_control.c(control_dump)";
+}
+
+static void
+control_info(ipmi_control_t *control, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            control_name[IPMI_CONTROL_NAME_LEN];
+
+    ipmi_control_get_name(control, control_name, sizeof(control_name));
+
+    ipmi_cmdlang_out(cmd_info, "Control", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", control_name);
+    control_dump(control, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -188,6 +203,7 @@ control_set_done(ipmi_control_t *control,
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            control_name[IPMI_CONTROL_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -196,7 +212,13 @@ control_set_done(ipmi_control_t *control,
 	ipmi_control_get_name(control, cmdlang->objstr,
 			      cmdlang->objstr_len);
 	cmdlang->location = "cmd_control.c(control_set_done)";
+	goto out;
     }
+
+    ipmi_control_get_name(control, control_name, sizeof(control_name));
+    ipmi_cmdlang_out(cmd_info, "Set done", control_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -377,7 +399,7 @@ control_set(ipmi_control_t *control, void *cb_data)
  out_err:
     ipmi_control_get_name(control, cmdlang->objstr,
 			 cmdlang->objstr_len);
-    cmdlang->location = "cmd_control.c(control_info)";
+    cmdlang->location = "cmd_control.c(control_set)";
     if (s)
 	ipmi_free_light_settings(s);
     if (ucdata)
@@ -593,7 +615,7 @@ control_get(ipmi_control_t *control, void *cb_data)
  out_err:
     ipmi_control_get_name(control, cmdlang->objstr,
 			 cmdlang->objstr_len);
-    cmdlang->location = "cmd_control.c(control_info)";
+    cmdlang->location = "cmd_control.c(control_get)";
 }
 
 static int
@@ -632,8 +654,12 @@ control_event_handler(ipmi_control_t *control,
 	ipmi_cmdlang_out_int(evi, "Value", vals[i]);
 	ipmi_cmdlang_up(evi);
     }
-    if (event)
+    if (event) {
+	ipmi_cmdlang_out(evi, "Event", NULL);
+	ipmi_cmdlang_down(evi);
 	ipmi_cmdlang_event_out(event, evi);
+	ipmi_cmdlang_up(evi);
+    }
     ipmi_cmdlang_cmd_info_put(evi);
     return IPMI_EVENT_HANDLED;
 
@@ -672,11 +698,9 @@ ipmi_cmdlang_control_change(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	ipmi_cmdlang_out(evi, "Operation", "Add");
-	if (ipmi_cmdlang_get_evinfo()) {
-	    ipmi_cmdlang_down(evi);
-	    control_info(control, evi);
-	    ipmi_cmdlang_up(evi);
-	}
+	if (ipmi_cmdlang_get_evinfo())
+	    control_dump(control, evi);
+
 	if (ipmi_control_has_events(control)) {
 	    rv = ipmi_control_add_val_event_handler(control,
 						    control_event_handler,
@@ -697,11 +721,8 @@ ipmi_cmdlang_control_change(enum ipmi_update_e op,
 
 	case IPMI_CHANGED:
 	    ipmi_cmdlang_out(evi, "Operation", "Change");
-	    if (ipmi_cmdlang_get_evinfo()) {
-		ipmi_cmdlang_down(evi);
-		control_info(control, evi);
-		ipmi_cmdlang_up(evi);
-	    }
+	    if (ipmi_cmdlang_get_evinfo())
+		control_dump(control, evi);
 	    break;
     }
 

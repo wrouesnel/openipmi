@@ -43,7 +43,7 @@ The commands may take parameters.  Some general ones are:
 * <lanparm> - A LAN parameter id, in the form [<domain>][.<integer>]
 * <pef> - A PEF id, in the form [<domain>][.<integer>]
 * <guid> - a 16-byte globally unique ID, all globbed together in
-  on big hexidecimal thing.
+  one big hexidecimal thing.
 
 Note that the domain name and sensor/control name may have spaces in
 them; the names may be bracketed by quotes (' or ").  A backslash (\)
@@ -62,14 +62,16 @@ The command hierarchy is:
 
   * list - List all domains
     Response is:
-    Name: <domain1>
-    Name: <domain2>
+    Domains
+      Name: <domain1>
+      Name: <domain2>
       .
       .
 
   * info <domain> - List information about the given domain
     Response is:
     Domain
+      Name: <domain>
       **DOMAIN INFO**
 
   * new <domain> <options> <parms...> - Open a connection to a new domain
@@ -96,12 +98,16 @@ The command hierarchy is:
     Note that setting event receivers it not affected by the -all
     option.  By default -all -seteventrcvr is true, which turns
     everything on.
+    Response is:
+    Domain Created: <domain>
 
   * fru <domain> <is_logical> <device_address> <device_id> <lun> <private_bus>
     <channel> - dump a fru given all it's insundry information.
     Response is:
-    FRU
-      **FRU INFO**
+    Domain
+      Name: <domain>
+      FRU
+        **FRU INFO**
 
   * msg <domain> <channel> <ipmb> <LUN> <NetFN> <Cmd> [data...] - Send
     a command to the given IPMB address on the given channel and display the
@@ -118,66 +124,44 @@ The command hierarchy is:
 
   * scan <domain> <ipmb addr> [ipmb addr] - scan an IPMB to add or remove it.
     If a range is given, then scan all IPMBs in the range.
+    Response is:
+    Scan done: <domain>
 
   * presence - Check the presence of entities.
+    Response is:
+    Presence check started: <domain>
 
   * close <domain> - close the given domain.
+    Response is:
+    Domain closed: <domain>
 
   * sel_rescan_time <domain> <time in seconds> - Set the time between
     SEL rescans for all SELs in the system.  zero disables scans.
+    Response is:
+    Domain SEL rescan time set: <domain>
 
   * ipmb_rescan_time <domain> <time in seconds> - Set the time between
     IPMB rescans for this domain.  zero disables scans.
+    Response is:
+    Domain IPMB rescan time set: <domain>
 
 * entity
 
   * list <domain> - List all entities.
     Response is:
-    Name: <entity1>
-    Name: <entity2>
-    .
-    .
+    Domain
+      Name: <domain>
+      Entities
+        Name: <entity1>
+        Name: <entity2>
+        .
+        .
 
   * info <entity> - List information about the given entity
     Response is:
     Entity
+      Name: <entity>
       **ENTITY INFO**
-
-  * hs - hot-swap control
-    * get_act_time <entity> - Get the hot-swap auto-activate time
-      Response is:
-      Entity
-        Name: <entity>
-	Auto-Activation Time: <integer>
-
-    * set_act_time <entity> - Set the hot-swap auto-activate time
-
-    * get_deact_time <entity> - Get the hot-swap auto-deactivate time
-      Response is:
-      Entity
-        Name: <entity>
-	Auto-Deactivation Time: <integer>
-
-    * set_deact_time <entity> - Set the hot-swap auto-deactivate time
-
-    * activation_request <entity> Act like a user requested an
-      activation of the entity.  This is generally equivalent to
-      closing the handle latch or something like that.
-
-    * activate <entity> - activate the given entity
-
-    * deactivate <entity> - deactivate the given entity
-
-    * state <entity> - Return the current hot-swap state of the given
-      entity.
-      Reponse is:
-      Entity
-        Name: <entity>
-	State: not_present | inactive | activation_requested |
-	       activation_in_progress | active | deactivation_requested |
-	       deactivation_in_progress | out_of_con
-
-    * check <entity> - Audit the entities hot-swap state
 
   * fru <entity> - Dump the FRU information about the given entity.
     Reponse is:
@@ -189,18 +173,71 @@ The command hierarchy is:
     "FRU" will only be present if the entity can have FRU info.  FRU
     info may be empty.
 
+  * hs - hot-swap control
+
+    * get_act_time <entity> - Get the hot-swap auto-activate time
+      Response is:
+      Entity
+        Name: <entity>
+	Auto-Activation Time: <integer>
+
+    * set_act_time <entity> - Set the hot-swap auto-activate time
+      Reponse is:
+      Set act time: <entity>
+
+    * get_deact_time <entity> - Get the hot-swap auto-deactivate time
+      Response is:
+      Entity
+        Name: <entity>
+	Auto-Deactivation Time: <integer>
+
+    * set_deact_time <entity> - Set the hot-swap auto-deactivate time
+      Reponse is:
+      Set deact time: <entity>
+
+    * activation_request <entity> Act like a user requested an
+      activation of the entity.  This is generally equivalent to
+      closing the handle latch or something like that.
+      Reponse is:
+      Activation requested: <entity>
+
+    * activate <entity> - activate the given entity
+      Reponse is:
+      Activated: <entity>
+
+    * deactivate <entity> - deactivate the given entity
+      Reponse is:
+      Deactivated: <entity>
+
+    * state <entity> - Return the current hot-swap state of the given
+      entity.
+      Reponse is:
+      Entity
+        Name: <entity>
+	State: not_present | inactive | activation_requested |
+	       activation_in_progress | active | deactivation_requested |
+	       deactivation_in_progress | out_of_con
+
+    * check <entity> - Audit the entities hot-swap state
+      Reponse is:
+      Check started: <entity>
+
 * sensor
 
   * list <entity> - List all sensors
     Response is:
-    Name: <sensor1>
-    Name: <sensor2>
-      .
-      .
+    Entity
+      Name: <entity>
+      Sensors
+        Name: <sensor1>
+	Name: <sensor2>
+        .
+        .
 
   * info <sensor> 
     Response is:
     Sensor
+      Name: <sensor>
       **SENSOR INFO**
 
   * get <sensor> - Get the sensor's current reading.
@@ -226,14 +263,16 @@ The command hierarchy is:
       Set: true | false
 
   * rearm <sensor> global | <thresholds> | <discrete states> -
-      Rearm the sensor.  If global is specified, then rearm
-      all events in the sensor.  If it is a threshold sensor, then
-      put in a list of thresholds of the form '[ul][ncr][hl][ad]
-      where [ul] means upper or lower, [ncr] means non-critical,
-      critical, or non-recoverable, [hl] means going high or going
-      low, and [ad] means assertion or deassertion.  If it is a
-      discrete sensor, then the form is <num>[ad] where the number
-      is the offset and [ad] means assertion or deassertion
+    Rearm the sensor.  If global is specified, then rearm
+    all events in the sensor.  If it is a threshold sensor, then
+    put in a list of thresholds of the form '[ul][ncr][hl][ad]
+    where [ul] means upper or lower, [ncr] means non-critical,
+    critical, or non-recoverable, [hl] means going high or going
+    low, and [ad] means assertion or deassertion.  If it is a
+    discrete sensor, then the form is <num>[ad] where the number
+    is the offset and [ad] means assertion or deassertion
+    Response is:  
+    Rearm done: <sensor>
 
   * get_thresholds <sensor> - Get the sensor's thresholds
     Response is:
@@ -249,6 +288,8 @@ The command hierarchy is:
     it will not be modified.  Thresholds are unc, uc, unr, lnr, lc.
     The u stands for upper, l for lower, nc for non-critical, c for
     critical, and nr for non-recoverable.  The value is floating point.
+    Response is:  
+    Thresholds set: <sensor>
       
   * get_hysteresis <sensor> - Get the sensor's hysteresis values
     Response is:
@@ -262,6 +303,8 @@ The command hierarchy is:
     value; hystersis is specified as a raw value and it cannot be
     converted to floating point because the function may be
     non-linear.
+    Response is:  
+    Hysteresis set: <sensor>
 
   * get_event_enables <sensor> - Get the sensor's event enable values
     Response is:
@@ -295,6 +338,8 @@ The command hierarchy is:
     disable all over events.  The events are in the same format as
     the rearm subcommand and depend on the sensor type.  See the
     rearm command for details.
+    Response is:  
+    Event enables set: <sensor>
 
   * enable_events <sensor> msg|nomsg scan|noscan [<event> [<event> ...]]
     - Enable event enable values.  This turns sensor messages and
@@ -302,6 +347,8 @@ The command hierarchy is:
     events are in the same format as the rearm subcommand and depend
     on the sensor type.  See the rearm command for details.  This will
     only enable the given events, the other events will be left alone.
+    Response is:  
+    Event enables set: <sensor>
 
   * disable_events <sensor> msg|nomsg scan|noscan [<event> [<event> ...]]
     - Disable event enable values.  This turns sensor messages and
@@ -309,19 +356,25 @@ The command hierarchy is:
     events are in the same format as the rearm subcommand and depend
     on the sensor type.  See the rearm command for details.  This will
     only disable the given events, the other events will be left alone.
+    Response is:  
+    Event enables set: <sensor>
 
 * control
 
   * list <entity> - List all controls
     Response is:
-    Name: <control1>
-    Name: <control2>
+    Entity
+      Name: <entity>
+      Controls
+        Name: <control1>
+        Name: <control2>
       .
       .
 
   * info <control>
     Response is:
     Control
+      Name: <control>
       **CONTROL INFO**
 
   * set <control> <values> - Set the value of a control.  The settings
@@ -367,10 +420,13 @@ The command hierarchy is:
 
   * list <domain> - List all MCs
     Reponse is:
-    Name: <mc1>
-    Name: <mc2>
-      .
-      .
+    Domain
+      Name: <domain>
+      MCs
+        Name: <mc1>
+	Name: <mc2>
+        .
+        .
 
   * info <mc> 
     Response is:
@@ -379,6 +435,8 @@ The command hierarchy is:
       **MC INFO**
 
   * reset <warm | cold> <mc> - Do a warm or cold reset on the given MC
+    Response is:
+    Reset done: <mc>
 
   * msg <mc> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
     to the management controller and display the response.
@@ -391,13 +449,15 @@ The command hierarchy is:
 
   * set_events_enable <mc> <enable | disable> - enables or disables
     events on the MC.
+    Response is:
+    Events enable done: <mc>
 
-  * get_events_enabled <mc> - Prints out if the events are enabled for
+  * get_events_enable <mc> - Prints out if the events are enabled for
     the given MC.
     Response is:
     Events Enable: true | false
 
-  * sdrs <main | sensor> <mc> - list the SDRs for the mc.  Either gets
+  * sdrs <mc> <main | sensor> - list the SDRs for the mc.  Either gets
     the main SDR repository or the sensor SDR repository.
     Response is:
     MC
@@ -420,6 +480,11 @@ The command hierarchy is:
       Name: <mc>
       SEL Time: <integer>
 
+  * sel_info <mc> - Dump information about the MC's SEL.
+    Reponse is:
+    SEL Count: <integer>
+    SEL Slots Used: <integer>
+
 * sel
 
   * list <domain> - list the local copy of the system event log
@@ -429,19 +494,18 @@ The command hierarchy is:
       Entries: <integer>
       Slots in use: <integer>
       Event
-        Object Type: Event
-        MC: <mc>
-        Record ID: <integer>
-        Event type: <integer>
-        Timestamp: <time>
-        Data: <data bytes>
+        **EVENT INFO**
        .
        .
 
-  * delevent <mc> <record #> - Delete the given event number from the
+  * delete <mc> <record #> - Delete the given event number from the
     SEL
+    Response is:
+    Event deleted
+      MC: <mc>
+      Record: <integer>
 
-  * addevent <mc> <record id> <type> <13 bytes of data> - Add the
+  * add <mc> <type> <13 bytes of data> - Add the
     event data to the SEL.
     Response is:
     MC
@@ -453,10 +517,13 @@ The command hierarchy is:
 * con
   * list <domain> - List all the connections in the domain.
     Response is:
-    Name: <connection>
-    Name: <connection>
-      .
-      .
+    Domain
+      Name: <domain>
+      Connections
+        Name: <connection>
+        Name: <connection>
+        .
+        .
 
   * info <connection> 
     Response is:
@@ -465,6 +532,8 @@ The command hierarchy is:
       Active: true | false
 
   * activate <connection> - Activate the given connection
+    Response is:
+    Connection activated: <connection>
 
 * pet
 
@@ -503,6 +572,7 @@ The command hierarchy is:
     PET Created: <pet>
 
   * close <pet> - Close the pet.
+    PET destroyed: <pet>
 
 * pef - commands dealing with platform even filters.  These are
   basically connections to the PEF configuration parameters in an MC.
@@ -529,18 +599,22 @@ The command hierarchy is:
     PEF: <pef>
 
   * unlock_mc <mc> - Unlock the PEF lock on the given MC.
+    Response is:
+    PEF unlocked: <mc>
 
   * close <pef> - Free the given pef
+    PEF destroyed: <pef>
 
   * config - commands dealing with PEF configurations.  These
     are the actual PEF data items.
 
     * list - list all the PEF configs
       Response is:
-      Name: <pef config>
-      Name: <pef config>
-      .
-      .
+      PEFs
+        Name: <pef config>
+        Name: <pef config>
+        .
+        .
 
     * info <pef config> - Dump information about the pef config.
       Response is:
@@ -555,14 +629,26 @@ The command hierarchy is:
         Name: <pef config>
 	** PEF CONFIG **
 
+    * update <pef config> <parm> [selector] <value> - Set the given parameter
+      in the pef config to the given value.  If the parameter has
+      a selector of some type, the selector must be given, otherwise
+      no selector should be given.
+      Response is:
+      PEF config updated: <pef config>
+
     * set <pef> <pef config> - Write the pef data back
       to the pef.  Note that this must be the same pef used
       to create the config.
+      Response is:
+      PEF config set: <pef config>
 
     * unlock <pef> <pef config> - Unlock the lock in the
       MC and mark the pef config as unlocked.
+      Response is:
+      PEF config unlocked: <pef config>
 
     * close <pef config> - Free the pef config.
+      PEF config destroyed: <pef config>
 
 * lanparm - commands dealing with lanparms.  These are basically
   connections to the LAN configuration parameters in an MC.  You
@@ -574,10 +660,13 @@ The command hierarchy is:
   * list <domain> - List all the lanparms that currently exist in the
     domain.
     Response is:
-    Name: <lanparm>
-    Name: <lanparm>
-      .
-      .
+    Domain
+      Name: <domain>
+      LANPARMs
+        Name: <lanparm>
+        Name: <lanparm>
+        .
+        .
 
   * info <lanparm> - Dump info about the lanparm. 
     Response is:
@@ -593,18 +682,23 @@ The command hierarchy is:
 
   * unlock_mc <mc> <channel> - Unlock the lanparm lock on the given
     MC and channel.
+    Response is:
+    LANPARM unlocked: <mc>
 
   * close <lanparm> - Free the given lanparm
+    Response is:
+    LANPARM destroyed: <lanparm>
 
   * config - commands dealing with lanparm configurations.  These
     are the actual lanparm data items.
 
     * list - list all the lanparm configs
       Response is:
-      Name: <lanparm config>
-      Name: <lanparm config>
-      .
-      .
+      LANPARMS
+        Name: <lanparm config>
+        Name: <lanparm config>
+        .
+        .
 
     * info <lanparm config> - Dump information about the lanparm config.
       Response is:
@@ -622,11 +716,17 @@ The command hierarchy is:
     * set <lanparm> <lanparm config> - Write the lanparm data back
       to the lanparm.  Note that this must be the same lanparm used
       to create the config.
+      Response is:
+      LANPARM config set: <lanparm config>
 
     * unlock <lanparm> <lanparm config> - Unlock the lock in the
       MC and mark the lanparm config as unlocked.
+      Response is:
+      LANPARM config unlocked: <lanparm config>
 
     * close <lanparm config> - Free the lanparm config.
+      Response is:
+      LANPARM config destroyed: <lanparm config>
 
 * general
   * evinfo true | false - Turn on or off dumping object information
@@ -635,16 +735,212 @@ The command hierarchy is:
   * debug <type> on|off - Turn the given debugging type on or off
 
 
+EVENTS
+======
+
+The command language will output events to the console when they
+happen.  Events all occur in the format:
+  Event
+    **EVENT INFO**
+
+The event info varies on the type of events.  The defined events are
+listed.
+
+The following event is output when the domain is completely up and
+operational and finished all it SDR, FRU, and bus scans:
+  EVENT
+    Object Type: Domain
+    Name: <domain>
+    Operation: Domain fully up
+    Connection Number: <integer>
+    Port Number: <integer>
+    Any Connection Up: true | false
+    Error: <integer>
+
+The following comes out when domain connection infomration changes:
+  EVENT
+    Object Type: Domain
+    Name: <domain>
+    Operation: Connection Change
+    
+The following comes out when domains are added:
+  EVENT
+    Object Type: Domain
+    Name: <domain>
+    Operation: Add
+    %**DOMAIN INFO**
+
+The following comes out when domains are destroyed:
+  EVENT
+    Object Type: Domain
+    Name: <domain>
+    Operation: Delete
+
+The following comes out when the domain gets an event that does not
+have a handler:
+  EVENT
+    Object Type: Event
+    **EVENT INFO**
+
+The following comes out when an entity is added:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Add
+    %**ENTITY INFO**
+
+The following comes out when an entity is deleted:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Delete
+
+The following comes out when an entity is changed:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Change
+    %**ENTITY INFO**
+
+The following comes out when an entity's FRU is added:
+  EVENT
+    Object Type: Entity FRU
+    Name: <entity>
+    Operation: Add
+    %**FRU INFO**
+
+The following comes out when an entity's FRU is deleted:
+  EVENT
+    Object Type: Entity FRU
+    Name: <entity>
+    Operation: Delete
+
+The following comes out when an entity's FRU is changed:
+  EVENT
+    Object Type: Entity FRU
+    Name: <entity>
+    Operation: Change
+    %**FRU INFO**
+
+The following comes out when an entity's presence changes:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Presence Change
+    Present: true | false
+    %Event
+      **EVENT INFO**
+
+The following comes out when an entity's hot-swap state changes:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Hot-Swap Change
+    Last State: not_present | inactive | activation_requested |
+	       activation_in_progress | active | deactivation_requested |
+	       deactivation_in_progress | out_of_con
+    State: not_present | inactive | activation_requested |
+	       activation_in_progress | active | deactivation_requested |
+	       deactivation_in_progress | out_of_con
+    %Event
+      **EVENT INFO**
+
+The following comes out when a discrete sensor gets an event:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Event
+    Offset: <integer>
+    Direction: assertion | deassertion
+    Severity: <integer>
+    Previous Severity: <integer>
+    %Event
+      **EVENT INFO**
+    
+The following comes out when a threshold sensor gets an event:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Event
+    Threshold: lower non critical | lower critical | lower non recoverable
+              | upper non critical | upper critical | upper non recoverable
+    High/Low: going high | going low
+    Direction: assertion | deassertion
+    %Value: <double>
+    %Raw Value: <integer>
+    %Event
+      **EVENT INFO**
+    
+The following comes out when a sensor is added:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Add
+    %**SENSOR INFO**
+
+The following comes out when a sensor is deleted:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Delete
+
+The following comes out when a sensor is changed:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Change
+    %**SENSOR INFO**
+
+The following comes out when a control gets an event:
+  EVENT
+    Object Type: Control
+    Name: <control>
+    Operation: Event
+    Value
+      Number: <integer>
+      Value: <integer>
+    %Event
+      **EVENT INFO**
+    
+The following comes out when a control is added:
+  EVENT
+    Object Type: Control
+    Name: <control>
+    Operation: Add
+    %**CONTROL INFO**
+
+The following comes out when a control is deleted:
+  EVENT
+    Object Type: Control
+    Name: <control>
+    Operation: Delete
+
+The following comes out when a control is changed:
+  EVENT
+    Object Type: Control
+    Name: <control>
+    Operation: Change
+    %**CONTROL INFO**
+
+
+OBJECT INFO
+===========
+
+**EVENT INFO**
+  MC: <mc>
+  Record ID: <integer>
+  Event type: <integer>
+  Timestamp: <integer>
+  Data: <data bytes>
+
 
 **DOMAIN INFO**
-  Name: <domain>
   Type: <domain type>
   SEL Rescan Time: <time>
   IPMB Rescan Time: <time>
 
 
 **ENTITY INFO**
-  Name: <entity>
   Type: unknown | mc | fru | generic
   Present: true | false
   Presence sensor always there: true | false
@@ -728,7 +1024,6 @@ generic:
 
 
 *SENSOR INFO**
-  Name: <sensor>
   LUN: <integer>
   Number: <integer>
   Event Reading Type: one of:
@@ -789,7 +1084,6 @@ Fields marked with % are optional
 
 
 **CONTROL INFO**
-  Name: <control>
   Type: <control type>
   Generates Events: true | false
   Settable: true | false

@@ -61,9 +61,20 @@ pef_list_handler(ipmi_pef_t *pef, void *cb_data)
 }
 
 static void
-pef_list(ipmi_domain_t *domain, ipmi_cmd_info_t *cmd_info)
+pef_list(ipmi_domain_t *domain, void *cb_data)
 {
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    ipmi_cmdlang_out(cmd_info, "PEFs", NULL);
+    ipmi_cmdlang_down(cmd_info);
     ipmi_pef_iterate_pefs(domain, pef_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -80,7 +91,6 @@ static void
 pef_info(ipmi_pef_t *pef, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    int             rv;
     char            pef_name[IPMI_PEF_NAME_LEN];
 
     ipmi_pef_get_name(pef, pef_name, sizeof(pef_name));
@@ -88,8 +98,7 @@ pef_info(ipmi_pef_t *pef, void *cb_data)
     ipmi_cmdlang_out(cmd_info, "PEF", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", pef_name);
-    rv = ipmi_mc_pointer_cb(ipmi_pef_get_mc(pef), get_mc_name,
-			    cmd_info);
+    ipmi_mc_pointer_cb(ipmi_pef_get_mc(pef), get_mc_name, cmd_info);
     ipmi_cmdlang_up(cmd_info);
 }
 
@@ -144,17 +153,23 @@ pef_close_done(ipmi_pef_t *pef, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            pef_name[IPMI_PEF_NAME_LEN];
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_pef_get_name(pef, cmdlang->objstr,
 			  cmdlang->objstr_len);
 	cmdlang->errstr = "Error closing PEF";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_pef.c(pef_close_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
 
+    ipmi_pef_get_name(pef, pef_name, sizeof(pef_name));
+    ipmi_cmdlang_out(cmd_info, "PEF destroyed", pef_name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
@@ -673,7 +688,7 @@ pef_config_get_done(ipmi_pef_t        *pef,
     }
     unique_num++;
 
-    ipmi_cmdlang_out(cmd_info, "PEF Config", pef_name);
+    ipmi_cmdlang_out(cmd_info, "PEF Config", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", info->name);
     config_info(cmd_info, config);
@@ -708,23 +723,36 @@ pef_config_get(ipmi_pef_t *pef, void *cb_data)
     }
 }
 
+typedef struct pef_config_op_s
+{
+    char            name[PEF_CONFIG_NAME_LEN];
+    ipmi_cmd_info_t *cmd_info;
+} pef_config_op_t;
+
 static void
 pef_config_set_done(ipmi_pef_t *pef,
 		    int        err,
 		    void       *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    pef_config_op_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_pef_get_name(pef, cmdlang->objstr,
 			      cmdlang->objstr_len);
 	cmdlang->errstr = "Error setting PEF";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_pef.c(pef_config_set_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
+
+    ipmi_cmdlang_out(cmd_info, "PEF config set", info->name);
+
+ out:
+    ipmi_mem_free(info);
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
@@ -738,6 +766,8 @@ pef_config_set(ipmi_pef_t *pef, void *cb_data)
     int               argc = ipmi_cmdlang_get_argc(cmd_info);
     char              **argv = ipmi_cmdlang_get_argv(cmd_info);
     ipmi_pef_config_t *lanc;
+    pef_config_op_t   *info;
+    char              *name;
 
     if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
@@ -746,20 +776,31 @@ pef_config_set(ipmi_pef_t *pef, void *cb_data)
 	goto out_err;
     }
 
-    lanc = find_config(argv[curr_arg], 0);
+    name = argv[curr_arg];
+    curr_arg++;
+    lanc = find_config(name, 0);
     if (!lanc) {
 	cmdlang->errstr = "Invalid PEF config";
 	cmdlang->err = EINVAL;
 	goto out_err;
     }
-    curr_arg++;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    strncpy(info->name, name, sizeof(info->name));
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_pef_set_config(pef, lanc, pef_config_set_done, cmd_info);
+    rv = ipmi_pef_set_config(pef, lanc, pef_config_set_done, info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error setting PEF";
 	cmdlang->err = rv;
+	ipmi_mem_free(info);
 	goto out_err;
     }
 
@@ -776,18 +817,25 @@ pef_config_unlock_done(ipmi_pef_t *pef,
 		       int        err,
 		       void       *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    pef_config_op_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_pef_get_name(pef, cmdlang->objstr,
 			      cmdlang->objstr_len);
 	cmdlang->errstr = "Error unlocking PEF";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_pef.c(pef_config_unlock_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
+
+    ipmi_cmdlang_out(cmd_info, "PEF config unlocked", info->name);
+
+ out:
+    ipmi_mem_free(info);
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
@@ -801,6 +849,8 @@ pef_config_unlock(ipmi_pef_t *pef, void *cb_data)
     int               argc = ipmi_cmdlang_get_argc(cmd_info);
     char              **argv = ipmi_cmdlang_get_argv(cmd_info);
     ipmi_pef_config_t *lanc;
+    pef_config_op_t   *info;
+    char              *name;
 
     if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
@@ -809,21 +859,31 @@ pef_config_unlock(ipmi_pef_t *pef, void *cb_data)
 	goto out_err;
     }
 
-    lanc = find_config(argv[curr_arg], 0);
+    name = argv[curr_arg];
+    curr_arg++;
+    lanc = find_config(name, 0);
     if (!lanc) {
 	cmdlang->errstr = "Invalid PEF config";
 	cmdlang->err = EINVAL;
 	goto out_err;
     }
-    curr_arg++;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    strncpy(info->name, name, sizeof(info->name));
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_pef_clear_lock(pef, lanc, pef_config_unlock_done,
-			     cmd_info);
+    rv = ipmi_pef_clear_lock(pef, lanc, pef_config_unlock_done, info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error clearing PEF lock";
 	cmdlang->err = rv;
+	ipmi_mem_free(info);
 	goto out_err;
     }
 
@@ -862,6 +922,7 @@ pef_config_close(ipmi_cmd_info_t *cmd_info)
     }
 
     ipmi_pef_free_config(lanc);
+    ipmi_cmdlang_out(cmd_info, "PEF config destroyed", lanc_name);
     return;
 
  out_err:
@@ -882,7 +943,10 @@ pef_config_list_handler(void *cb_data, void *item1, void *item2)
 static void
 pef_config_list(ipmi_cmd_info_t *cmd_info)
 {
+    ipmi_cmdlang_out(cmd_info, "PEF Configs", NULL);
+    ipmi_cmdlang_down(cmd_info);
     locked_list_iterate(pefs, pef_config_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static int
@@ -1072,6 +1136,7 @@ pef_config_update(ipmi_cmd_info_t *cmd_info)
     goto out_err;
 
  out:
+    ipmi_cmdlang_out(cmd_info, "PEF config updated", lanc_name);
     return;
 
  out_err:
@@ -1079,30 +1144,43 @@ pef_config_update(ipmi_cmd_info_t *cmd_info)
     cmdlang->location = "cmd_pef.c(pef_config_update)";
 }
 
+typedef struct pet_mc_unlock_s
+{
+    char            name[IPMI_MC_NAME_LEN];
+    ipmi_cmd_info_t *cmd_info;
+} pef_mc_unlock_t;
+
 static void
 pef_unlock_mc_done2(ipmi_pef_t *pef, int err, void *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    pef_mc_unlock_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_pef_get_name(pef, cmdlang->objstr,
 			  cmdlang->objstr_len);
 	cmdlang->errstr = "Error unlocking MC PEF";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_pef.c(pef_unlock_mc_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
 
-    ipmi_pef_destroy(pef, NULL, NULL);
+    ipmi_cmdlang_out(cmd_info, "PEF unlocked", info->name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_pef_destroy(pef, NULL, NULL);
+    ipmi_mem_free(info);
 }
 
 static void
 pef_unlock_mc_done1(ipmi_pef_t *pef, int err, void *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    pef_mc_unlock_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
 
@@ -1115,7 +1193,7 @@ pef_unlock_mc_done1(ipmi_pef_t *pef, int err, void *cb_data)
 	goto out_err;
     }
 
-    rv = ipmi_pef_clear_lock(pef, NULL, pef_unlock_mc_done2, cmd_info);
+    rv = ipmi_pef_clear_lock(pef, NULL, pef_unlock_mc_done2, info);
     if (rv) {
 	ipmi_cmdlang_lock(cmd_info);
 	cmdlang->errstr = "Error from ipmi_pef_clear_lock";
@@ -1128,21 +1206,33 @@ pef_unlock_mc_done1(ipmi_pef_t *pef, int err, void *cb_data)
  out_err:
     ipmi_pef_destroy(pef, NULL, NULL);
     ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
 }
 
 static void
 pef_unlock_mc(ipmi_mc_t *mc, void *cb_data)
 {
+    pef_mc_unlock_t *info;
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
 
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    ipmi_mc_get_name(mc, info->name, sizeof(info->name));
+    
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_pef_alloc(mc, pef_unlock_mc_done1, cmd_info, NULL);
+    rv = ipmi_pef_alloc(mc, pef_unlock_mc_done1, info, NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error from ipmi_pef_alloc";
 	cmdlang->err = rv;
+	ipmi_mem_free(info);
 	goto out_err;
     }
     return;

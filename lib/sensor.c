@@ -3766,6 +3766,7 @@ stand_ipmi_sensor_get_event_enables(ipmi_sensor_t                *sensor,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(info));
     info->done = done;
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, event_enable_get_start,

@@ -1412,8 +1412,6 @@ ipmi_control_set_callbacks(ipmi_control_t *control, ipmi_control_cbs_t *cbs)
 ipmi_mc_t *
 ipmi_control_get_mc(ipmi_control_t *control)
 {
-    CHECK_CONTROL_LOCK(control);
-
     return control->mc;
 }
 

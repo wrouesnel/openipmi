@@ -2180,7 +2180,7 @@ event_up(ipmi_cmdlang_t *cmdlang)
     if (cmdlang->err)
 	return;
 
-    event->curr_level++;
+    event->curr_level--;
 }
 
 void
@@ -2191,7 +2191,7 @@ event_down(ipmi_cmdlang_t *cmdlang)
     if (cmdlang->err)
 	return;
 
-    event->curr_level--;
+    event->curr_level++;
 }
 
 void

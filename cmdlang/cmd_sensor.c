@@ -62,14 +62,22 @@ static void
 sensor_list(ipmi_entity_t *entity, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
 
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    ipmi_cmdlang_out(cmd_info, "Sensors", NULL);
+    ipmi_cmdlang_down(cmd_info);
     ipmi_entity_iterate_sensors(entity, sensor_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
-sensor_info(ipmi_sensor_t *sensor, void *cb_data)
+sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             num, lun;
     char            *str;
@@ -77,13 +85,6 @@ sensor_info(ipmi_sensor_t *sensor, void *cb_data)
     int             event_reading_type;
     int             len;
     int             rv;
-    char            sensor_name[IPMI_SENSOR_NAME_LEN];
-
-    ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
-
-    ipmi_cmdlang_out(cmd_info, "Sensor", NULL);
-    ipmi_cmdlang_down(cmd_info);
-    ipmi_cmdlang_out(cmd_info, "Name", sensor_name);
 
     event_reading_type = ipmi_sensor_get_event_reading_type(sensor);
 
@@ -252,14 +253,14 @@ sensor_info(ipmi_sensor_t *sensor, void *cb_data)
 	default:
 	    break;
 	}
-	if (ipmi_sensor_set_percentage)
+	if (ipmi_sensor_get_percentage(sensor))
 	    ipmi_cmdlang_out(cmd_info, "Percentage", "%");
     } else {
 	int                   event;
 	int                   val;
 	enum ipmi_event_dir_e dir;
 
-	for (event=0; ; event++) {
+	for (event=0; event<15; event++) {
 	    rv = ipmi_discrete_event_readable(sensor, event, &val);
 	    if (rv || !val)
 		continue;
@@ -286,13 +287,27 @@ sensor_info(ipmi_sensor_t *sensor, void *cb_data)
 	    ipmi_cmdlang_up(cmd_info);
 	}
     }
-    ipmi_cmdlang_up(cmd_info);
     return;
 
  out_err:
     ipmi_sensor_get_name(sensor, cmdlang->objstr,
 			 cmdlang->objstr_len);
     cmdlang->location = "cmd_sensor.c(sensor_info)";
+}
+
+static void
+sensor_info(ipmi_sensor_t *sensor, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            sensor_name[IPMI_SENSOR_NAME_LEN];
+
+    ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
+
+    ipmi_cmdlang_out(cmd_info, "Sensor", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", sensor_name);
+    sensor_dump(sensor, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -316,7 +331,7 @@ read_sensor(ipmi_sensor_t             *sensor,
 	cmdlang->err = err;
 	ipmi_sensor_get_name(sensor, cmdlang->objstr,
 			     cmdlang->objstr_len);
-	cmdlang->location = "cmd_sensor.c(sensor_rearm_done)";
+	cmdlang->location = "cmd_sensor.c(read_sensor)";
 	goto out;
     }
 
@@ -385,7 +400,7 @@ read_sensor_states(ipmi_sensor_t *sensor,
 	cmdlang->err = err;
 	ipmi_sensor_get_name(sensor, cmdlang->objstr,
 			     cmdlang->objstr_len);
-	cmdlang->location = "cmd_sensor.c(sensor_rearm_done)";
+	cmdlang->location = "cmd_sensor.c(read_sensor_states)";
 	goto out;
     }
 
@@ -456,6 +471,7 @@ sensor_rearm_done(ipmi_sensor_t *sensor,
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            sensor_name[IPMI_SENSOR_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -464,7 +480,13 @@ sensor_rearm_done(ipmi_sensor_t *sensor,
 	ipmi_sensor_get_name(sensor, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(sensor_rearm_done)";
+	goto out;
     }
+
+    ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
+    ipmi_cmdlang_out(cmd_info, "Rearm done", sensor_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -632,8 +654,9 @@ sensor_set_thresholds_done(ipmi_sensor_t *sensor,
 			   int           err,
 			   void          *cb_data)
 {
-    ipmi_cmd_info_t    *cmd_info = cb_data;
-    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            sensor_name[IPMI_SENSOR_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -642,8 +665,13 @@ sensor_set_thresholds_done(ipmi_sensor_t *sensor,
 	ipmi_sensor_get_name(sensor, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(sensor_set_thresholds_done)";
+	goto out;
     }
 
+    ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
+    ipmi_cmdlang_out(cmd_info, "Thresholds set", sensor_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -674,12 +702,14 @@ sensor_set_thresholds(ipmi_sensor_t *sensor, void *cb_data)
 	cmdlang->err = ENOMEM;
 	goto out_err;
     }
+    ipmi_thresholds_init(th);
     while (curr_arg < argc) {
 	ipmi_cmdlang_get_threshold(argv[curr_arg], &thresh, cmd_info);
 	if (cmdlang->err) {
 	    cmdlang->errstr = "Invalid threshold";
 	    goto out_err;
 	}
+	curr_arg++;
 
 	ipmi_cmdlang_get_double(argv[curr_arg], &val, cmd_info);
 	if (cmdlang->err) {
@@ -780,8 +810,9 @@ sensor_set_hysteresis_done(ipmi_sensor_t *sensor,
 			   int           err,
 			   void          *cb_data)
 {
-    ipmi_cmd_info_t    *cmd_info = cb_data;
-    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            sensor_name[IPMI_SENSOR_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -790,8 +821,13 @@ sensor_set_hysteresis_done(ipmi_sensor_t *sensor,
 	ipmi_sensor_get_name(sensor, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(sensor_set_hysteresis_done)";
+	goto out;
     }
 
+    ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
+    ipmi_cmdlang_out(cmd_info, "Hysteresis set", sensor_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -991,8 +1027,9 @@ sensor_set_event_enables_done(ipmi_sensor_t *sensor,
 			      int           err,
 			      void          *cb_data)
 {
-    ipmi_cmd_info_t    *cmd_info = cb_data;
-    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            sensor_name[IPMI_SENSOR_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -1001,8 +1038,13 @@ sensor_set_event_enables_done(ipmi_sensor_t *sensor,
 	ipmi_sensor_get_name(sensor, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(sensor_set_event_enables_done)";
+	goto out;
     }
 
+    ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
+    ipmi_cmdlang_out(cmd_info, "Event enables set", sensor_name);
+
+ out:
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
@@ -1174,8 +1216,12 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
     ipmi_cmdlang_out(evi, "Direction", ipmi_get_event_dir_string(dir));
     ipmi_cmdlang_out_int(evi, "Severity", severity);
     ipmi_cmdlang_out_int(evi, "Previous Severity", prev_severity);
-    if (event)
+    if (event) {
+	ipmi_cmdlang_out(evi, "Event", NULL);
+	ipmi_cmdlang_down(evi);
 	ipmi_cmdlang_event_out(event, evi);
+	ipmi_cmdlang_up(evi);
+    }
     ipmi_cmdlang_cmd_info_put(evi);
     return IPMI_EVENT_HANDLED;
 
@@ -1230,8 +1276,12 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
     default:
 	break;
     }
-    if (event)
+    if (event) {
+	ipmi_cmdlang_out(evi, "Event", NULL);
+	ipmi_cmdlang_down(evi);
 	ipmi_cmdlang_event_out(event, evi);
+	ipmi_cmdlang_up(evi);
+    }
     ipmi_cmdlang_cmd_info_put(evi);
     return IPMI_EVENT_HANDLED;
 
@@ -1270,11 +1320,9 @@ ipmi_cmdlang_sensor_change(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	ipmi_cmdlang_out(evi, "Operation", "Add");
-	if (ipmi_cmdlang_get_evinfo()) {
-	    ipmi_cmdlang_down(evi);
-	    sensor_info(sensor, evi);
-	    ipmi_cmdlang_up(evi);
-	}
+	if (ipmi_cmdlang_get_evinfo())
+	    sensor_dump(sensor, evi);
+
 	if (ipmi_sensor_get_event_reading_type(sensor)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	{
@@ -1302,11 +1350,8 @@ ipmi_cmdlang_sensor_change(enum ipmi_update_e op,
 
 	case IPMI_CHANGED:
 	    ipmi_cmdlang_out(evi, "Operation", "Change");
-	    if (ipmi_cmdlang_get_evinfo()) {
-		ipmi_cmdlang_down(evi);
-		sensor_info(sensor, evi);
-		ipmi_cmdlang_up(evi);
-	    }
+	    if (ipmi_cmdlang_get_evinfo())
+		sensor_dump(sensor, evi);
 	    break;
     }
 

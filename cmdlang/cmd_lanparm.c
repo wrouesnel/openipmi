@@ -61,9 +61,20 @@ lanparm_list_handler(ipmi_lanparm_t *lanparm, void *cb_data)
 }
 
 static void
-lanparm_list(ipmi_domain_t *domain, ipmi_cmd_info_t *cmd_info)
+lanparm_list(ipmi_domain_t *domain, void *cb_data)
 {
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    ipmi_cmdlang_out(cmd_info, "LANPARMs", NULL);
+    ipmi_cmdlang_down(cmd_info);
     ipmi_lanparm_iterate_lanparms(domain, lanparm_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -140,23 +151,35 @@ lanparm_new(ipmi_mc_t *mc, void *cb_data)
     cmdlang->location = "cmd_lanparm.c(lanparm_new)";
 }
 
+typedef struct lanparm_info_s
+{
+    char            name[IPMI_LANPARM_NAME_LEN];
+    ipmi_cmd_info_t *cmd_info;
+} lanparm_info_t;
+
 static void
 lanparm_close_done(ipmi_lanparm_t *lanparm, int err, void *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    lanparm_info_t  *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_lanparm_get_name(lanparm, cmdlang->objstr,
 			  cmdlang->objstr_len);
 	cmdlang->errstr = "Error closing LANPARM";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_lanparm.c(lanparm_close_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
 
+    ipmi_cmdlang_out(cmd_info, "LANPARM destroyed", info->name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -165,17 +188,31 @@ lanparm_close(ipmi_lanparm_t *lanparm, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
+    lanparm_info_t  *info;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    ipmi_lanparm_get_name(lanparm, info->name, sizeof(info->name));
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_lanparm_destroy(lanparm, lanparm_close_done, cmd_info);
+    rv = ipmi_lanparm_destroy(lanparm, lanparm_close_done, info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	ipmi_lanparm_get_name(lanparm, cmdlang->objstr,
 			      cmdlang->objstr_len);
 	cmdlang->errstr = "Error closing LANPARM";
 	cmdlang->err = rv;
-	cmdlang->location = "cmd_lanparm.c(lanparm_close)";
+	ipmi_mem_free(info);
     }
+    return;
+
+ out_err:
+    cmdlang->location = "cmd_lanparm.c(lanparm_close)";
 }
 
 #define LAN_CONFIG_NAME_LEN 80
@@ -775,7 +812,7 @@ lanparm_config_get_done(ipmi_lanparm_t    *lanparm,
     }
     unique_num++;
 
-    ipmi_cmdlang_out(cmd_info, "LANPARM Config", lanparm_name);
+    ipmi_cmdlang_out(cmd_info, "LANPARM Config", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", info->name);
     config_info(cmd_info, config);
@@ -810,23 +847,36 @@ lanparm_config_get(ipmi_lanparm_t *lanparm, void *cb_data)
     }
 }
 
+typedef struct lp_config_op_s
+{
+    char            name[LAN_CONFIG_NAME_LEN];
+    ipmi_cmd_info_t *cmd_info;
+} lp_config_op_t;
+
 static void
 lanparm_config_set_done(ipmi_lanparm_t    *lanparm,
 			int               err,
 			void              *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    lp_config_op_t  *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_lanparm_get_name(lanparm, cmdlang->objstr,
 			      cmdlang->objstr_len);
 	cmdlang->errstr = "Error setting LANPARM";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_lanparm.c(lanparm_config_set_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
+
+    ipmi_cmdlang_out(cmd_info, "LANPARM config set", info->name);
+
+ out:
+    ipmi_mem_free(info);
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
@@ -840,6 +890,8 @@ lanparm_config_set(ipmi_lanparm_t *lanparm, void *cb_data)
     int               argc = ipmi_cmdlang_get_argc(cmd_info);
     char              **argv = ipmi_cmdlang_get_argv(cmd_info);
     ipmi_lan_config_t *lanc;
+    lp_config_op_t    *info = cb_data;
+    char              *name;
 
     if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
@@ -848,20 +900,32 @@ lanparm_config_set(ipmi_lanparm_t *lanparm, void *cb_data)
 	goto out_err;
     }
 
-    lanc = find_config(argv[curr_arg], 0);
+    name = argv[curr_arg];
+    curr_arg++;
+    
+    lanc = find_config(name, 0);
     if (!lanc) {
 	cmdlang->errstr = "Invalid LAN config";
 	cmdlang->err = EINVAL;
 	goto out_err;
     }
-    curr_arg++;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    strncpy(info->name, name, sizeof(info->name));
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_lan_set_config(lanparm, lanc, lanparm_config_set_done, cmd_info);
+    rv = ipmi_lan_set_config(lanparm, lanc, lanparm_config_set_done, info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error setting LANPARM";
 	cmdlang->err = rv;
+	ipmi_mem_free(info);
 	goto out_err;
     }
 
@@ -878,18 +942,25 @@ lanparm_config_unlock_done(ipmi_lanparm_t    *lanparm,
 			   int               err,
 			   void              *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    lp_config_op_t  *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_lanparm_get_name(lanparm, cmdlang->objstr,
 			      cmdlang->objstr_len);
 	cmdlang->errstr = "Error unlocking LANPARM";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_lanparm.c(lanparm_config_unlock_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
+
+    ipmi_cmdlang_out(cmd_info, "LANPARM config unlocked", info->name);
+
+ out:
+    ipmi_mem_free(info);
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
@@ -903,6 +974,8 @@ lanparm_config_unlock(ipmi_lanparm_t *lanparm, void *cb_data)
     int               argc = ipmi_cmdlang_get_argc(cmd_info);
     char              **argv = ipmi_cmdlang_get_argv(cmd_info);
     ipmi_lan_config_t *lanc;
+    lp_config_op_t    *info = cb_data;
+    char              *name;
 
     if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
@@ -911,21 +984,31 @@ lanparm_config_unlock(ipmi_lanparm_t *lanparm, void *cb_data)
 	goto out_err;
     }
 
-    lanc = find_config(argv[curr_arg], 0);
+    name = argv[curr_arg];
+    curr_arg++;
+    lanc = find_config(name, 0);
     if (!lanc) {
 	cmdlang->errstr = "Invalid LAN config";
 	cmdlang->err = EINVAL;
 	goto out_err;
     }
-    curr_arg++;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    strncpy(info->name, name, sizeof(info->name));
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_lan_clear_lock(lanparm, lanc, lanparm_config_unlock_done,
-			     cmd_info);
+    rv = ipmi_lan_clear_lock(lanparm, lanc, lanparm_config_unlock_done, info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error getting LANPARM";
 	cmdlang->err = rv;
+	ipmi_mem_free(info);
 	goto out_err;
     }
 
@@ -964,6 +1047,7 @@ lanparm_config_close(ipmi_cmd_info_t *cmd_info)
     }
 
     ipmi_lan_free_config(lanc);
+    ipmi_cmdlang_out(cmd_info, "LANPARM config destroyed", lanc_name);
     return;
 
  out_err:
@@ -984,7 +1068,10 @@ lanparm_config_list_handler(void *cb_data, void *item1, void *item2)
 static void
 lanparm_config_list(ipmi_cmd_info_t *cmd_info)
 {
+    ipmi_cmdlang_out(cmd_info, "LANPARM Configs", NULL);
+    ipmi_cmdlang_down(cmd_info);
     locked_list_iterate(lancs, lanparm_config_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static int
@@ -1143,6 +1230,7 @@ lanparm_config_update(ipmi_cmd_info_t *cmd_info)
     goto out_err;
 
  out:
+    ipmi_cmdlang_out(cmd_info, "LANPARM config updated", lanc_name);
     return;
 
  out_err:
@@ -1150,24 +1238,36 @@ lanparm_config_update(ipmi_cmd_info_t *cmd_info)
     cmdlang->location = "cmd_lanparm.c(lanparm_config_update)";
 }
 
+typedef struct lanparm_mc_unlock_s
+{
+    char            name[IPMI_MC_NAME_LEN];
+    ipmi_cmd_info_t *cmd_info;
+} lanparm_mc_unlock_t;
+
 static void
 lanparm_unlock_mc_done(ipmi_lanparm_t *lanparm, int err, void *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
-    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    lanparm_mc_unlock_t *info = cb_data;
+    ipmi_cmd_info_t     *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t      *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_lanparm_get_name(lanparm, cmdlang->objstr,
 			  cmdlang->objstr_len);
 	cmdlang->errstr = "Error unlocking MC LANPARM";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_lanparm.c(lanparm_unlock_mc_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
 
+    ipmi_cmdlang_out(cmd_info, "LANPARM unlocked", info->name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_lanparm_destroy(lanparm, NULL, NULL);
     ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -1180,7 +1280,8 @@ lanparm_unlock_mc(ipmi_mc_t *mc, void *cb_data)
     int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
     int             argc = ipmi_cmdlang_get_argc(cmd_info);
     char            **argv = ipmi_cmdlang_get_argv(cmd_info);
-    ipmi_lanparm_t  *lanparm;
+    ipmi_lanparm_t  *lanparm = NULL;
+    lanparm_mc_unlock_t *info;
 
     if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
@@ -1203,18 +1304,30 @@ lanparm_unlock_mc(ipmi_mc_t *mc, void *cb_data)
 	goto out_err;
     }
 
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    ipmi_mc_get_name(mc, info->name, sizeof(info->name));
+    
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_lan_clear_lock(lanparm, NULL, lanparm_unlock_mc_done, cmd_info);
+    rv = ipmi_lan_clear_lock(lanparm, NULL, lanparm_unlock_mc_done, info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error from ipmi_lan_clear_lock";
 	cmdlang->err = rv;
 	ipmi_lanparm_destroy(lanparm, NULL, NULL);
+	ipmi_mem_free(info);
 	goto out_err;
     }
     return;
 
  out_err:
+    if (lanparm)
+	ipmi_lanparm_destroy(lanparm, NULL, NULL);
     ipmi_mc_get_name(mc, cmdlang->objstr,
 		     cmdlang->objstr_len);
     cmdlang->location = "cmd_lanparm.c(lanparm_unlock_mc)";

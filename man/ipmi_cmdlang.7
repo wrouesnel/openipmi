@@ -1,0 +1,35 @@
+.TH ipmi_cmdlang 7 05/13/03 OpenIPMI "Shell interface to an IPMI system"
+
+.SH NAME
+ipmi_cmdlang \- A command language interface to the IPMI library
+
+.SH DESCRIPTION
+.B ipmi_cmdlang
+is a command language designed to supply the full power of OpenIPMI on a
+command line.  It has a large number of commands and well-formed responses
+to each command.
+
+.B ipmish
+starts up with no connections or anything of that nature.  You must
+enter commands to make connections to domains.
+
+.SH COMMANDS
+
+.TP
+.B read
+Read and execute commands from the given file.
+
+.TP
+.B exit
+Quit
+.B ipmish
+
+.SH "SEE ALSO"
+ipmish(1)
+
+.SH "KNOWN PROBLEMS"
+None
+
+.SH AUTHOR
+.PP
+Corey Minyard <cminyard@mvista.org>

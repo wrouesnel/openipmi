@@ -59,9 +59,20 @@ pet_list_handler(ipmi_pet_t *pet, void *cb_data)
 }
 
 static void
-pet_list(ipmi_domain_t *domain, ipmi_cmd_info_t *cmd_info)
+pet_list(ipmi_domain_t *domain, void *cb_data)
 {
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    ipmi_cmdlang_out(cmd_info, "PETs", NULL);
+    ipmi_cmdlang_down(cmd_info);
     ipmi_pet_iterate_pets(domain, pet_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -81,9 +92,12 @@ pet_info(ipmi_pet_t *pet, void *cb_data)
     int             rv;
     unsigned char   mac_addr[6];
     struct in_addr  ip_addr;
+    char            pet_name[IPMI_PET_NAME_LEN];
 
+    ipmi_pet_get_name(pet, pet_name, sizeof(pet_name));
     ipmi_cmdlang_out(cmd_info, "PET", NULL);
     ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", pet_name);
     rv = ipmi_mc_pointer_cb(ipmi_pet_get_mc_id(pet), get_mc_name, cmd_info);
     if (rv)
 	ipmi_cmdlang_out(cmd_info, "Domain", NULL);
@@ -326,17 +340,23 @@ close_done(ipmi_pet_t *pet, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            pet_name[IPMI_PET_NAME_LEN];
 
+    ipmi_cmdlang_lock(cmd_info);
     if (err) {
-	ipmi_cmdlang_lock(cmd_info);
 	ipmi_pet_get_name(pet, cmdlang->objstr,
 			  cmdlang->objstr_len);
 	cmdlang->errstr = "Error closing PET";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_pet.c(close_done)";
-	ipmi_cmdlang_unlock(cmd_info);
+	goto out;
     }
 
+    ipmi_pet_get_name(pet, pet_name, sizeof(pet_name));
+    ipmi_cmdlang_out(cmd_info, "PET destroyed", pet_name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 

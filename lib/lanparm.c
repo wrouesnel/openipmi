@@ -620,11 +620,14 @@ set_complete(ipmi_lanparm_t *lanparm, int err, lanparm_set_handler_t *elem)
     if (lanparm->in_destroy)
 	goto out;
 
+    lanparm_unlock(lanparm);
+
     if (elem->handler)
 	elem->handler(lanparm, err, elem->cb_data);
 
     ipmi_mem_free(elem);
 
+    lanparm_lock(lanparm);
     if (!lanparm->destroyed)
 	opq_op_done(lanparm->opq);
 

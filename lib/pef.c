@@ -698,11 +698,14 @@ set_complete(ipmi_pef_t *pef, int err, pef_set_handler_t *elem)
     if (pef->in_destroy)
 	goto out;
 
+    pef_unlock(pef);
+
     if (elem->handler)
 	elem->handler(pef, err, elem->cb_data);
 
     ipmi_mem_free(elem);
 
+    pef_lock(pef);
     if (!pef->destroyed)
 	opq_op_done(pef->opq);
 

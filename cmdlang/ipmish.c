@@ -823,13 +823,34 @@ add_exec_str(char *str)
     }
 }
 
+static char *usage_str =
+"%s is a program that gives access to the OpenIPMI library from a command\n"
+"line.  It is designed to be script driven.  Format is:\n"
+"  %s [options]\n"
+"Options are:\n"
+"  --execute <string> - execute the given string at startup.  This may be\n"
+"    entered multiple times for multiple commands.\n"
+"  -x <string> - same as --execute\n"
+"  --dlock - turn on lock debugging.\n"
+"  --dmem - turn on memory debugging.\n"
+"  --drawmsg - turn on raw message tracing.\n"
+"  --dmsg - turn on message tracing debugging.\n"
+#ifdef HAVE_UCDSNMP
+"  --snmp - turn on SNMP trap handling.\n"
+#endif
+"  --help - This output.\n"
+;
+static void usage(char *name)
+{
+    fprintf(stderr, usage_str, name, name);
+}
+
 int
 main(int argc, char *argv[])
 {
     int              rv;
     int              curr_arg = 1;
     const char       *arg;
-    int              full_screen = 1;
 #ifdef HAVE_UCDSNMP
     int              init_snmp = 0;
 #endif
@@ -850,30 +871,34 @@ main(int argc, char *argv[])
 	curr_arg++;
 	if (strcmp(arg, "--") == 0) {
 	    break;
-	} else if ((strcmp(arg, "-x") == 0) || (strcmp(arg, "-execute") == 0)){
+	} else if ((strcmp(arg, "-x") == 0) || (strcmp(arg, "--execute") == 0))
+	{
 	    if (curr_arg >= argc) {
 		fprintf(stderr, "No option given for %s", arg);
+		usage(argv[0]);
 		return 1;
 	    }
 	    add_exec_str(argv[curr_arg]);
 	    curr_arg++;
-	} else if (strcmp(arg, "-c") == 0) {
-	    full_screen = 0;
-	} else if (strcmp(arg, "-dlock") == 0) {
+	} else if (strcmp(arg, "--dlock") == 0) {
 	    DEBUG_LOCKS_ENABLE();
 	    use_debug_os = 1;
-	} else if (strcmp(arg, "-dmem") == 0) {
+	} else if (strcmp(arg, "--dmem") == 0) {
 	    DEBUG_MALLOC_ENABLE();
-	} else if (strcmp(arg, "-drawmsg") == 0) {
+	} else if (strcmp(arg, "--drawmsg") == 0) {
 	    DEBUG_RAWMSG_ENABLE();
-	} else if (strcmp(arg, "-dmsg") == 0) {
+	} else if (strcmp(arg, "--dmsg") == 0) {
 	    DEBUG_MSG_ENABLE();
 #ifdef HAVE_UCDSNMP
-	} else if (strcmp(arg, "-snmp") == 0) {
+	} else if (strcmp(arg, "--snmp") == 0) {
 	    init_snmp = 1;
 #endif
+	} else if (strcmp(arg, "--help") == 0) {
+	    usage(argv[0]);
+	    return 0;
 	} else {
 	    fprintf(stderr, "Unknown option: %s\n", arg);
+	    usage(argv[0]);
 	    return 1;
 	}
     }

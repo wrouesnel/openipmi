@@ -65,7 +65,10 @@ domain_list_handler(ipmi_domain_t *domain, void *cb_data)
 static void
 domain_list(ipmi_cmd_info_t *cmd_info)
 {
+    ipmi_cmdlang_out(cmd_info, "Domains", NULL);
+    ipmi_cmdlang_down(cmd_info);
     ipmi_domain_iterate_domains(domain_list_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -129,10 +132,17 @@ domain_new_done(ipmi_domain_t *domain,
     domain_con_change(domain, err, conn_num, port_num, still_connected,
 		      NULL);
 
-    if ((!rv) && cmd_info)
-	/* If we get an error removing the connect change handler,
-	   that means this has already been done. */
+    /* If we get an error removing the connect change handler,
+       that means this has already been done. */
+    if ((!rv) && cmd_info) {
+	char  domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+	ipmi_cmdlang_lock(cmd_info);
+	ipmi_cmdlang_out(cmd_info, "Domain Created", domain_name);
+	ipmi_cmdlang_unlock(cmd_info);
 	ipmi_cmdlang_cmd_info_put(cmd_info);
+    }
 }
 
 void
@@ -166,8 +176,15 @@ domain_fully_up(ipmi_domain_t *domain, void *cb_data)
     if (evi)
 	ipmi_cmdlang_cmd_info_put(evi);
 
-    if (cmd_info)
+    if (cmd_info) {
+	char  domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+	ipmi_cmdlang_lock(cmd_info);
+	ipmi_cmdlang_out(cmd_info, "Domain Created", domain_name);
+	ipmi_cmdlang_unlock(cmd_info);
 	ipmi_cmdlang_cmd_info_put(cmd_info);
+    }
 }
 
 static void
@@ -334,12 +351,12 @@ domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    ipmi_domain_t   *domain = ipmi_fru_get_domain(fru);
+    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
 
     if (err) {
-	ipmi_domain_t *domain = ipmi_fru_get_domain(fru);
-
 	cmdlang->errstr = "Error fetching FRU info";
 	cmdlang->err = err;
 	ipmi_domain_get_name(domain, cmdlang->objstr,
@@ -348,7 +365,12 @@ domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	goto out;
     }
 
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
     ipmi_cmdlang_dump_fru_info(cmd_info, fru);
+    ipmi_cmdlang_up(cmd_info);
 
  out:
     ipmi_cmdlang_unlock(cmd_info);
@@ -607,18 +629,25 @@ scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
-    if (! cmdlang->err) {
-	if (err) {
-	    ipmi_cmdlang_lock(cmd_info);
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	if (! cmdlang->err) {
 	    cmdlang->err = err;
 	    cmdlang->errstr = "Error scanning domain";
 	    ipmi_domain_get_name(domain, cmdlang->objstr,
 				 cmdlang->objstr_len);
 	    cmdlang->location = "cmd_domain.c(scan_done)";
-	    ipmi_cmdlang_unlock(cmd_info);
 	}
+	goto out;
     }
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Scan done", domain_name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
@@ -689,6 +718,7 @@ domain_presence(ipmi_domain_t *domain, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
     rv = ipmi_detect_domain_presence_changes(domain, 1);
     if (rv) {
@@ -696,7 +726,12 @@ domain_presence(ipmi_domain_t *domain, void *cb_data)
 	ipmi_domain_get_name(domain, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_domain.c(domain_presence)";
+	goto out;
     }
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Presence check started", domain_name);
+ out:
+    return;
 }
 
 static void
@@ -708,6 +743,7 @@ domain_sel_rescan_time(ipmi_domain_t *domain, void *cb_data)
     int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
     int             argc = ipmi_cmdlang_get_argc(cmd_info);
     char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
     if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
@@ -724,6 +760,9 @@ domain_sel_rescan_time(ipmi_domain_t *domain, void *cb_data)
     curr_arg++;
 
     ipmi_domain_set_sel_rescan_time(domain, time);
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain SEL rescan time set", domain_name);
 
  out_err:
     if (cmdlang->err) {
@@ -743,6 +782,7 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
     int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
     int             argc = ipmi_cmdlang_get_argc(cmd_info);
     char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
     if ((argc - curr_arg) < 1) {
 	cmdlang->errstr = "Not enough parameters";
@@ -759,6 +799,9 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
 
     ipmi_domain_set_ipmb_rescan_time(domain, time);
 
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain IPMB rescan time set", domain_name);
+
  out_err:
     if (cmdlang->err) {
 	ipmi_domain_get_name(domain, cmdlang->objstr,
@@ -767,29 +810,58 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
     }
 }
 
+typedef struct domain_close_info_s
+{
+    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    ipmi_cmd_info_t *cmd_info;
+} domain_close_info_t;
+
 static void
 final_close(void *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
+    domain_close_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+
+    ipmi_cmdlang_lock(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Domain closed", info->domain_name);
+    ipmi_cmdlang_unlock(cmd_info);
+
+    ipmi_mem_free(info);
+
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
 static void
 domain_close(ipmi_domain_t *domain, void *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
-    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    int             rv;
+    ipmi_cmd_info_t     *cmd_info = cb_data;
+    ipmi_cmdlang_t      *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int                 rv;
+    domain_close_info_t *info = cb_data;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    ipmi_domain_get_name(domain, info->domain_name, sizeof(info->domain_name));
+    info->cmd_info = cmd_info;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_domain_close(domain, final_close, cmd_info);
+    rv = ipmi_domain_close(domain, final_close, info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->errstr = "Unable to close domain";
 	cmdlang->err = rv;
-	ipmi_domain_get_name(domain, cmdlang->objstr,
-			     cmdlang->objstr_len);
-	cmdlang->location = "cmd_domain.c(domain_close)";
+	goto out_err;
     }
+    return;
+
+ out_err:
+    ipmi_domain_get_name(domain, cmdlang->objstr,
+			 cmdlang->objstr_len);
+    cmdlang->location = "cmd_domain.c(domain_close)";
 }
 
 
@@ -815,6 +887,7 @@ domain_event_handler(ipmi_domain_t *domain,
 	goto out_err;
     }
 
+    ipmi_cmdlang_out(evi, "Object Type", "Event");
     ipmi_cmdlang_event_out(event, evi);
 
  out_err:
@@ -853,11 +926,11 @@ domain_con_change(ipmi_domain_t *domain,
     }
 
     ipmi_cmdlang_out(evi, "Object Type", "Domain");
-    ipmi_cmdlang_out(evi, "Operation", "Connection Change");
     ipmi_cmdlang_out(evi, "Name", domain_name);
+    ipmi_cmdlang_out(evi, "Operation", "Connection Change");
     ipmi_cmdlang_out_int(evi, "Connection Number", conn_num);
     ipmi_cmdlang_out_int(evi, "Port Number", port_num);
-    ipmi_cmdlang_out_int(evi, "Any Connection Up", still_connected);
+    ipmi_cmdlang_out_bool(evi, "Any Connection Up", still_connected);
     ipmi_cmdlang_out_int(evi, "Error", err);
 
     errstr = NULL; /* Get rid of warning */
@@ -944,7 +1017,7 @@ domain_change(ipmi_domain_t      *domain,
  out_err:
     /* FIXME - should we shut the connection down on errors? */
     if (rv) {
-	ipmi_cmdlang_global_err(domain_name, "cmd_domain.c(domain_new_done)",
+	ipmi_cmdlang_global_err(domain_name, "cmd_domain.c(domain_change)",
 				errstr, rv);
     }
     if (evi)
@@ -976,7 +1049,6 @@ ipmi_cmdlang_event_out(ipmi_event_t    *event,
 	return;
     }
 
-    ipmi_cmdlang_out(cmd_info, "Object Type", "Event");
     ipmi_cmdlang_out(cmd_info, "MC", mc_name);
     ipmi_cmdlang_out_int(cmd_info, "Record ID",
 			 ipmi_event_get_record_id(event));

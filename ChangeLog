@@ -18,6 +18,23 @@
 
 	* cmdlang/*, include/OpenIPMI/ipmi_cmdlang.h: Added the new and
 	improved command language.
+
+	* lib/control.c: Removed lock check from ipmi_control_get_mc()
+	since it is needed to check the lock.
+
+	* lib/domain.c: Fixed a lock problem in the attributes.
+
+	* lib/entity.c: Make sure the MC is locked when iterating controls.
+
+	* lib/lanparm.c: Fixed a lock problem.
+	
+	* lib/pef.c: Fixed a lock problem.
+
+	* lib/sensor.c: Zero the data used when fetching event enables.
+
+	* man/ipmish.1: Added man page.
+
+	* man/ipmi_cmdlang.7: Started man page.
 	
 	* configure.in: Move to version 1.4.3
 
