@@ -394,11 +394,20 @@ fetch_complete(ipmi_sdr_info_t *sdrs, int err)
 	    sdrs->working_sdrs = NULL;
 	}
     } else {
+	/* The wierd to_free business is because at some points we put
+	   the sdrs into the working_sdrs so they will be restored
+	   properly. */
+	ipmi_sdr_t *to_free = NULL;
+
 	sdrs->fetched = 1;
 	sdrs->num_sdrs = sdrs->curr_read_idx+1;
 	sdrs->sdr_array_size = sdrs->num_sdrs;
+	if (sdrs->sdrs != sdrs->working_sdrs)
+	    to_free = sdrs->sdrs;
 	sdrs->sdrs = sdrs->working_sdrs;
 	sdrs->working_sdrs = NULL;
+	if (to_free)
+	    ipmi_mem_free(to_free);
     }
     sdrs->fetch_state = HANDLERS;
     sdr_unlock(sdrs);

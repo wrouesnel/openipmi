@@ -92,6 +92,40 @@ get_uint(char **toks, unsigned int *val, char *errstr)
     return 0;
 }
 
+void
+read_command_file(emu_data_t *emu, char *command_file)
+{
+    FILE *f = fopen(command_file, "r");
+
+    if (!f) {
+	fprintf(stderr, "Unable to open command file '%s'\n",
+		command_file);
+    } else {
+	char buffer[1024];
+	int  pos = 0;
+	while (fgets(buffer+pos, sizeof(buffer)-pos, f)) {
+	    printf("%s", buffer+pos);
+	    pos = strlen(buffer);
+	    if (pos == 0)
+		continue;
+	    pos--;
+	    while ((pos > 0) && (buffer[pos] == '\n'))
+		pos--;
+	    if (pos == 0)
+		continue;
+	    if ((pos > 0) && (buffer[pos] == '\\')) {
+		/* Continue the line. */
+		pos--;
+		continue;
+	    }
+	    
+	    ipmi_emu_cmd(emu, buffer);
+	    pos = 0;
+	}
+	fclose(f);
+    }
+}
+
 static void
 sel_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
@@ -497,24 +531,13 @@ static void
 read_cmds(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     char *filename = strtok_r(NULL, " \t\n", toks);
-    FILE *f;
-    char buffer[1024];
 
     if (!filename) {
 	printf("No filename specified\n");
 	return;
     }
 
-    f = fopen(filename, "r");
-    if (!f) {
-	printf("Unable to open file '%s', %s\n", filename, strerror(errno));
-	return;
-    }
-
-    while (fgets(buffer, sizeof(buffer), f)) {
-	printf("%s", buffer);
-	ipmi_emu_cmd(emu, buffer);
-    }
+    read_command_file(emu, filename);
 }
 
 static void

@@ -487,21 +487,8 @@ main(int argc, const char *argv[])
 	ipmi_emu_cmd(emu, command_string);
     }
 
-    if (command_file) {
-	FILE *f = fopen(command_file, "r");
-
-	if (!f) {
-	    fprintf(stderr, "Unable to open command file '%s'\n",
-		    command_file);
-	} else {
-	    char buffer[1024];
-	    while (fgets(buffer, sizeof(buffer), f)) {
-		printf("%s", buffer);
-		ipmi_emu_cmd(emu, buffer);
-	    }
-	    fclose(f);
-	}
-    }
+    if (command_file)
+	read_command_file(emu, command_file);
 
     gettimeofday(&time_next, NULL);
     time_next.tv_sec += 10;
