@@ -624,7 +624,7 @@ the system supports that.
 
 FRU information about the entity is sometimes available.  You can
 register with an entity to see if/when it becomes available using
-@code{ipmi_entity_set_fru_update_handler()}.  Once it is available,
+@code{ipmi_entity_add_fru_update_handler()}.  Once it is available,
 you can fetch the FRU data using the commands defined in the IPMI
 include file.
 
@@ -1045,10 +1045,10 @@ For example, you may have the following code to set up a single address:
 @section The Domain
 
 After you create a connection, you pass it into
-@code{ipmi_init_domain()} to create a domain with the connection.  This
+@code{ipmi_open_domain()} to create a domain with the connection.  This
 gives you back a domain that you can work with.  When the domain is
 first created, it is not considered ``up'' though, you supply a callback
-in the @code{ipmi_init_domain()} call which will tell you when the
+in the @code{ipmi_open_domain()} call which will tell you when the
 connection comes up, the callback will also be used in the future to
 tell you of state changes.  The id of the callback is also returned, you
 can remove the callback with
@@ -1067,7 +1067,7 @@ expected that OEM handlers can detect new MCs with custom events and add
 the new MC sooner.
 
 Events come in through the domain.  In the setup done callback, you
-should register for events with @code{ipmi_register_for_events()},
+should register for events with @code{ipmi_domain_add_event_handler()},
 even if you are not interested in them, because you need to delete
 them.  This means that your callback will receive all events that are
 not attached to a sensor or otherwise handled by something inside
@@ -1112,7 +1112,7 @@ might be called because of that event will get a NULL.  You are
 expected to free the event.  Return @var{IPMI_EVENT_NOT_HANDLED} if
 you do not wish to handle the event.  Any events that are not handled
 by an event handler will be delivered to the functions registered with
-@code{ipmi_register_for_events()}.
+@code{ipmi_domain_add_event_handler()}.
 
 @node    Entities, Sensors, Events, Using OpenIPMI
 @section Entities
@@ -1360,10 +1360,11 @@ function to tell if you need to initialize the events.  The
 events.
 
 You register to receive events for a sensor with
-@code{ipmi_sensor_set_event_handler()}, which sets a callback that gets
-called when an event comes in from the given sensor.  When the callback
-comes in, the information from the event is presented, depending on the
-sensor type.
+@code{ipmi_sensor_add_discrete_event_handler()} or
+@code{ipmi_sensor_add_threshold_event_handler()}, which sets a callback
+that gets called when an event comes in from the given sensor.  When
+the callback comes in, the information from the event is presented,
+depending on the sensor type.
 
 For all sensor types, the direction (whether the state causing the event
 is being asserted or deasserted) is present.  The offset specifies the
@@ -1571,7 +1572,7 @@ multiple MCs may have an SEL.  When traversing the SEL, OpenIPMI will go
 through @emph{all} the SEL devices on all MCs.  Also, events have the id
 of the MC they came from so they can be traced back to their source.
 
-The @code{ipmi_register_for_events()} function allows you to get events
+The @code{ipmi_domain_add_event_handler()} function allows you to get events
 OpenIPMI couldn't correlate to a sensor.  As well, the functions
 @code{ipmi_domain_first_event()}, @code{ipmi_domain_last_event()},
 @code{ipmi_domain_next_event()}, and @code{ipmi_domain_prev_event()} let you
