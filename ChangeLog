@@ -1,3 +1,23 @@
+2004-08-20 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_intel.c: Fixed some problems with the alarm panel,
+	modified to add the controls and entities at the right time and
+	to handle removal of the MC properly.
+
+	* lib/sensor.c, lib/control.c: Added an "add_pending" flag to
+	sensors and controls so that the sensor or control is not reported
+	until it has been "put" for the last time.  This works like
+	entities and allows creators of non-standard controls and sensors
+	to report the entities when they want to report them.
+
+	* lib/entity.c: Make sure the entity add handler is called before
+	calling the sensor update handlers.
+
+	* lib/chassis.c: Reworked the getting and putting so the
+	controls are reported properly.
+
+	* doc/IPMI.ltx: Added docs for the Intel alarm panel.
+
 2004-08-19 Andrew Cress <andrew.r.cress@intel.com>
 
 	* lib/oem_intel.c: Handle different bus ids for alarm panel.

@@ -79,6 +79,11 @@ struct ipmi_control_s
 
     int destroyed;
 
+    /* After the control is added, it will not be reported immediately.
+       Instead, it will wait until the usecount goes to zero before
+       being reported.  This marks that the add report is pending */
+    int add_pending;
+
     int type;
     char *type_str;
 
@@ -154,12 +159,21 @@ void
 _ipmi_control_put(ipmi_control_t *control)
 {
     _ipmi_domain_entity_lock(control->domain);
-    if ((control->usecount == 1) && (control->destroyed)
-	&& (!opq_stuff_in_progress(control->waitq)))
-    {
-	_ipmi_domain_entity_unlock(control->domain);
-	control_final_destroy(control);
-	return;
+    if (control->usecount == 1) {
+	if (control->add_pending) {
+	    control->add_pending = 0;
+	    _ipmi_domain_entity_unlock(control->domain);
+	    _ipmi_entity_call_control_handlers(control->entity,
+					       control, IPMI_ADDED);
+	    _ipmi_domain_entity_lock(control->domain);
+	}
+	if (control->destroyed
+	    && (!opq_stuff_in_progress(control->waitq)))
+	{
+	    _ipmi_domain_entity_unlock(control->domain);
+	    control_final_destroy(control);
+	    return;
+	}
     }
     control->usecount--;
     _ipmi_domain_entity_unlock(control->domain);
@@ -802,7 +816,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 
     _ipmi_domain_entity_unlock(domain);
 
-    _ipmi_entity_call_control_handlers(ent, control, IPMI_ADDED);
+    control->add_pending = 1;
 
     return 0;
 }

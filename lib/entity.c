@@ -1797,6 +1797,17 @@ _ipmi_entity_call_sensor_handlers(ipmi_entity_t *ent, ipmi_sensor_t *sensor,
     sensor_handler_t info;
     int              old_destroyed;
 
+    /* If we are reporting things, make sure the entity they are attached
+       to is already reported. */
+    _ipmi_domain_entity_lock(ent->domain);
+    if (ent->add_pending) {
+	ent->add_pending = 0;
+	_ipmi_domain_entity_unlock(ent->domain);
+	call_entity_update_handlers(ent, IPMI_ADDED);
+    } else {
+	_ipmi_domain_entity_unlock(ent->domain);
+    }
+
     old_destroyed = ent->destroyed;
 
     info.op = op;
@@ -1853,6 +1864,18 @@ _ipmi_entity_call_control_handlers(ipmi_entity_t      *ent,
 {
     control_handler_t info;
     int               old_destroyed;
+
+
+    /* If we are reporting things, make sure the entity they are attached
+       to is already reported. */
+    _ipmi_domain_entity_lock(ent->domain);
+    if (ent->add_pending) {
+	ent->add_pending = 0;
+	_ipmi_domain_entity_unlock(ent->domain);
+	call_entity_update_handlers(ent, IPMI_ADDED);
+    } else {
+	_ipmi_domain_entity_unlock(ent->domain);
+    }
 
     old_destroyed = ent->destroyed;
 

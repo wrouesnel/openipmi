@@ -92,6 +92,11 @@ struct ipmi_sensor_s
 
     int           destroyed;
 
+    /* After the sensor is added, it will not be reported immediately.
+       Instead, it will wait until the usecount goes to zero before
+       being reported.  This marks that the add report is pending */
+    int add_pending;
+
     unsigned char owner;
     unsigned char channel;
     unsigned char lun;
@@ -230,12 +235,21 @@ _ipmi_sensor_put(ipmi_sensor_t *sensor)
 {
     ipmi_domain_t *domain = sensor->domain;
     _ipmi_domain_entity_lock(domain);
-    if ((sensor->usecount == 1) && (sensor->destroyed)
-	&& (!opq_stuff_in_progress(sensor->waitq)))
-    {
-	_ipmi_domain_entity_unlock(domain);
-	sensor_final_destroy(sensor);
-	return;
+    if (sensor->usecount == 1) {
+	if (sensor->add_pending) {
+	    sensor->add_pending = 0;
+	    _ipmi_domain_entity_unlock(sensor->domain);
+	    _ipmi_entity_call_sensor_handlers(sensor->entity,
+					      sensor, IPMI_ADDED);
+	    _ipmi_domain_entity_lock(sensor->domain);
+	}
+	if (sensor->destroyed
+	    && (!opq_stuff_in_progress(sensor->waitq)))
+	{
+	    _ipmi_domain_entity_unlock(domain);
+	    sensor_final_destroy(sensor);
+	    return;
+	}
     }
     sensor->usecount--;
     _ipmi_domain_entity_unlock(domain);
@@ -334,8 +348,8 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
 
     info->handler(sensor, info->cb_data);
 
-    _ipmi_sensor_put(sensor);
     _ipmi_entity_put(entity);
+    _ipmi_sensor_put(sensor);
     return;
 
  out_unlock:
@@ -844,7 +858,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 
     _ipmi_domain_entity_unlock(domain);
 
-    _ipmi_entity_call_sensor_handlers(ent, sensor, IPMI_ADDED);
+    sensor->add_pending = 1;
 
     return 0;
 }
@@ -1692,10 +1706,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     while (del_sensors) {
 	ent_item = del_sensors;
 	del_sensors = del_sensors->next;
-	if (ent_item->sensor)
-	    _ipmi_sensor_put(ent_item->sensor);
 	if (ent_item->ent)
 	    _ipmi_entity_put(ent_item->ent);
+	if (ent_item->sensor)
+	    _ipmi_sensor_put(ent_item->sensor);
 	if (ent_item->mc)
 	    _ipmi_mc_put(ent_item->mc);
 	ipmi_mem_free(ent_item);
@@ -1707,14 +1721,11 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	new_sensors = new_sensors->next;
 
 	if (ent_item->ent && ent_item->sensor)
-	    _ipmi_entity_call_sensor_handlers(ent_item->ent,
-					      ent_item->sensor,
-					      IPMI_ADDED);
-
-	if (ent_item->sensor)
-	    _ipmi_sensor_put(ent_item->sensor);
+	    ent_item->sensor->add_pending = 1;
 	if (ent_item->ent)
 	    _ipmi_entity_put(ent_item->ent);
+	if (ent_item->sensor)
+	    _ipmi_sensor_put(ent_item->sensor);
 	if (ent_item->mc)
 	    _ipmi_mc_put(ent_item->mc);
 	ipmi_mem_free(ent_item);
@@ -1735,10 +1746,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     while (del_sensors) {
 	ent_item = del_sensors;
 	del_sensors = del_sensors->next;
-	if (ent_item->sensor)
-	    _ipmi_sensor_put(ent_item->sensor);
 	if (ent_item->ent)
 	    _ipmi_entity_put(ent_item->ent);
+	if (ent_item->sensor)
+	    _ipmi_sensor_put(ent_item->sensor);
 	if (ent_item->mc)
 	    _ipmi_mc_put(ent_item->mc);
 	ipmi_mem_free(ent_item);
@@ -1746,10 +1757,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     while (new_sensors) {
 	ent_item = new_sensors;
 	new_sensors = new_sensors->next;
-	if (ent_item->sensor)
-	    _ipmi_sensor_put(ent_item->sensor);
 	if (ent_item->ent)
 	    _ipmi_entity_put(ent_item->ent);
+	if (ent_item->sensor)
+	    _ipmi_sensor_put(ent_item->sensor);
 	if (ent_item->mc)
 	    _ipmi_mc_put(ent_item->mc);
 	ipmi_mem_free(ent_item);

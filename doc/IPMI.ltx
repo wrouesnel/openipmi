@@ -7654,6 +7654,39 @@ in.
 \label{app-motorola-mxp}
 
 %---------------------------------------------------------------------
+\chapter{Intel Servers}
+\label{app-intel-servers}
+
+Many Intel server systems have an alarm panel and a relay output that
+can be monitored and controlled through IPMI.  This will appear under
+entity 12.1 (Alarm Panel) and will be named ``alarm''.  It takes an
+8-bit setting.  The meanings of the bits are:
+
+\begin{longtable}{|l|p{0.8\textwidth}|}
+\hline
+7 &  Reserved, always write 1\\
+\hline
+6 &  LED colors, 1 = amber (default), 0 = red.  Note that the colors were
+	added in some later firmware versions, not in all, and the
+	colors may not affect all LEDs.\\
+\hline
+5 & Minor Relay bit, 0 = on, 1=off.  This is a read only bit and should
+	always be written 1.\\
+\hline
+4 & Major Relay bit, 0 = on, 1=off.  This is a read only bit and should
+	always be written 1.\\
+\hline
+3 & Minor LED bit, 0 = on, 1=off\\
+\hline
+2 & Major LED bit, 0 = on, 1=off\\
+\hline
+1 & Critical LED bit, 0 = on, 1=off\\
+\hline
+0 & Power LED bit, 0 = on, 1=off\\
+\hline
+\end{longtable}
+
+%---------------------------------------------------------------------
 \chapter{Sample Program Showing Basic Operations}
 \label{app-sample-prog-basic}
 The following program shows basic setup, registration, and registering

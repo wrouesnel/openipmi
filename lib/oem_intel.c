@@ -51,6 +51,13 @@
 
 static unsigned char busid = 0x03;   /*default to PRIVATE_BUS_ID;  */
 
+typedef struct intel_tig_info_s
+{
+    ipmi_mcid_t    mc_id;
+    int            initialized;
+    ipmi_control_t *alarm;
+} intel_tig_info_t;
+
 static int get_alarm_control_number(int ipmb)
 {
         return (ipmb >> 1);
@@ -282,12 +289,11 @@ alarm_led_get(ipmi_control_t      *control,
 }
 
 static void
-add_alarm_handler(ipmi_mc_t *mc)
+add_tig_alarm_handler(ipmi_mc_t *mc, intel_tig_info_t *info)
 {
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
     ipmi_entity_t      *ent;
-    ipmi_control_t     *control;
     int                rv = 0;
     ipmi_control_cbs_t cbs;
 
@@ -306,28 +312,31 @@ add_alarm_handler(ipmi_mc_t *mc)
     }
 
     /* Allocate the alarm control. */
-    rv = ipmi_control_alloc_nonstandard(&control);
+    rv = ipmi_control_alloc_nonstandard(&info->alarm);
     if (rv) {
+            ipmi_log(IPMI_LOG_WARNING,
+                     "%s oem_intel.c: could not alloc alarm panel control: %x",
+                     MC_NAME(mc), rv);
             goto out;
     }
 
-    ipmi_control_set_type(control, IPMI_CONTROL_ALARM);
-    ipmi_control_set_ignore_if_no_entity(control, 0);
-    ipmi_control_set_id(control, "alarm", IPMI_ASCII_STR, 5);
+    ipmi_control_set_type(info->alarm, IPMI_CONTROL_ALARM);
+    ipmi_control_set_ignore_if_no_entity(info->alarm, 0);
+    ipmi_control_set_id(info->alarm, "alarm", IPMI_ASCII_STR, 5);
 
-    ipmi_control_set_settable(control, 1);
-    ipmi_control_set_readable(control, 1);
+    ipmi_control_set_settable(info->alarm, 1);
+    ipmi_control_set_readable(info->alarm, 1);
 
     memset(&cbs, 0, sizeof(cbs));
     cbs.set_val = alarm_led_set;
     cbs.get_val = alarm_led_get;
 
-    ipmi_control_set_callbacks(control, &cbs);
-    ipmi_control_set_num_elements(control, 1);
+    ipmi_control_set_callbacks(info->alarm, &cbs);
+    ipmi_control_set_num_elements(info->alarm, 1);
 
     /* Add it to the MC and entity.  We presume this comes from the
        "main" SDR, so set the source_mc to NULL. */
-    rv = ipmi_control_add_nonstandard(mc, NULL, control,
+    rv = ipmi_control_add_nonstandard(mc, NULL, info->alarm,
                                       get_alarm_control_number(0x40),
                                       ent, NULL, NULL);
 
@@ -336,12 +345,49 @@ add_alarm_handler(ipmi_mc_t *mc)
                      "%soem_intel.c: "
                      "Could not add the alarm control: %x",
                      MC_NAME(mc), rv);
-            ipmi_control_destroy(control);
+            ipmi_control_destroy(info->alarm);
+	    info->alarm = NULL;
             goto out;
     }
 
+    _ipmi_control_put(info->alarm);
+    _ipmi_entity_put(ent);
+
 out:
     return;
+}
+
+static void
+con_up_mc(ipmi_mc_t *mc, void *cb_data)
+{
+    add_tig_alarm_handler(mc, cb_data);
+}
+
+static void
+con_up_handler(ipmi_domain_t *domain,
+	       int           err,
+	       unsigned int  conn_num,
+	       unsigned int  port_num,
+	       int           still_connected,
+	       void          *cb_data)
+{
+    intel_tig_info_t *info = cb_data;
+
+    if (!info->initialized && still_connected) {
+	ipmi_mc_pointer_cb(info->mc_id, con_up_mc, info);
+	info->initialized = 1;
+    }
+}
+
+static void
+tig_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+{
+    intel_tig_info_t *info = cb_data;
+
+    if (info->alarm)
+	ipmi_control_destroy(info->alarm);
+    ipmi_domain_remove_connect_change_handler(domain, con_up_handler, info);
+    ipmi_mem_free(info);
 }
 
 static int
@@ -368,9 +414,11 @@ static int
 tig_handler(ipmi_mc_t *mc,
 	    void      *cb_data)
 {
-    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
-    unsigned int  channel = ipmi_mc_get_channel(mc);
-    unsigned int  addr    = ipmi_mc_get_address(mc);
+    ipmi_domain_t    *domain = ipmi_mc_get_domain(mc);
+    unsigned int     channel = ipmi_mc_get_channel(mc);
+    unsigned int     addr    = ipmi_mc_get_address(mc);
+    intel_tig_info_t *info;
+    int              rv;
     
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
 	/* It's the SI MC, which we detect at startup.  Set up the MCs
@@ -380,9 +428,43 @@ tig_handler(ipmi_mc_t *mc,
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0x27);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xbf);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0xc1, 0xff);
-	add_alarm_handler(mc);
+
+	/* Save the MC ID in a connection up handler.  We wait
+	   for the connection to come up before we report the
+	   addition of the entities and controls so they appear
+	   after the user is informed of the domain. */
+	info = ipmi_mem_alloc(sizeof(*info));
+	if (!info) {
+            ipmi_log(IPMI_LOG_WARNING,
+                     "%s oem_intel.c: could not allocate TIG info",
+                     MC_NAME(mc));
+	}
+	memset(info, 0, sizeof(*info));
+	info->mc_id = ipmi_mc_convert_to_id(mc);
+
+	rv = ipmi_mc_add_oem_removed_handler(mc, tig_removal_handler, info);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_motorola_mxp.c(mxp_handler): "
+		     "could not register removal handler",
+		     MC_NAME(mc));
+	    ipmi_mem_free(info);
+	    goto out;
+	}
+
+	ipmi_mc_set_oem_data(mc, info);
+
+	rv = ipmi_domain_add_connect_change_handler(domain, con_up_handler,
+						    info);
+	if (rv) {
+            ipmi_log(IPMI_LOG_WARNING,
+                     "%s oem_intel.c: could not add connect change"
+		     " handler: %x",
+                     MC_NAME(mc), rv);
+	}
     }
 
+ out:
     return 0;
 }
 

@@ -372,8 +372,8 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
     ipmi_entity_t      *chassis_ent = NULL;
-    ipmi_control_t     *power_control;
-    ipmi_control_t     *reset_control;
+    ipmi_control_t     *power_control = NULL;
+    ipmi_control_t     *reset_control = NULL;
     int                rv;
     ipmi_control_cbs_t cbs;
 
@@ -418,7 +418,6 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 				      chassis_ent, NULL, NULL);
     if (rv) {
 	ipmi_control_destroy(power_control);
-	_ipmi_control_put(power_control);
 	goto out;
     }
 
@@ -427,10 +426,8 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 					 power_control);
     if (rv) {
 	ipmi_control_destroy(power_control);
-	_ipmi_control_put(power_control);
 	goto out;
     }
-    _ipmi_control_put(power_control);
 
     /* Allocate the reset control. */
     rv = ipmi_control_alloc_nonstandard(&reset_control);
@@ -459,7 +456,6 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 				      chassis_ent, NULL, NULL);
     if (rv) {
 	ipmi_control_destroy(reset_control);
-	_ipmi_control_put(reset_control);
 	goto out;
     }
 
@@ -468,12 +464,14 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 					 reset_control);
     if (rv) {
 	ipmi_control_destroy(reset_control);
-	_ipmi_control_put(reset_control);
 	goto out;
     }
-    _ipmi_control_put(reset_control);
 
  out:
+    if (power_control)
+	_ipmi_control_put(power_control);
+    if (reset_control)
+	_ipmi_control_put(reset_control);
     if (chassis_ent)
 	_ipmi_entity_put(chassis_ent);
     return rv;
