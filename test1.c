@@ -216,8 +216,9 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
 }
 
 static void
-sui_log(os_handler_t *handler,
-	char         *format,
+sui_log(os_handler_t         *handler,
+	enum ipmi_log_type_e log_type,
+	char                 *format,
 	...)
 {
     va_list ap;
@@ -228,9 +229,10 @@ sui_log(os_handler_t *handler,
 }
 
 static void
-sui_vlog(os_handler_t *handler,
-	 char         *format,
-	 va_list      ap)
+sui_vlog(os_handler_t         *handler,
+	 enum ipmi_log_type_e log_type,
+	 char                 *format,
+	 va_list              ap)
 {
     vprintf(format, ap);
 }

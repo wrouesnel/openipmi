@@ -36,6 +36,7 @@
 
 #include <stdarg.h>
 #include <sys/time.h>
+#include <OpenIPMI/log.h>
 
 /* An os-independent normal lock. */
 typedef struct os_hnd_lock_s os_hnd_lock_t;
@@ -162,13 +163,17 @@ struct os_handler_s
 		      void          *data,
 		      unsigned int  len);
 
-    /* Report an error. */
-    void (*log)(os_handler_t  *handler,
-		char          *format,
+    /* Log reports some through here.  They will not end in newlines.
+       See the log types defined in ipmiif.h for more information on
+       handling these. */
+    void (*log)(os_handler_t         *handler,
+		enum ipmi_log_type_e log_type, 
+		char                 *format,
 		...);
-    void (*vlog)(os_handler_t  *handler,
-		 char          *format,
-		 va_list       ap);
+    void (*vlog)(os_handler_t         *handler,
+		 enum ipmi_log_type_e log_type, 
+		 char                 *format,
+		 va_list              ap);
 
     /* The user may use this for whatever they like. */
     void *user_data;

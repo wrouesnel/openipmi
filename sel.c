@@ -522,12 +522,12 @@ sel_handle_reservation(ipmi_mc_t  *mc,
     }
 	
     if (rsp->data[0] != 0) {
-	ipmi_log("sel_handle_reservation:"
-		 " Failed getting reservation\n");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel_handle_reservation: Failed getting reservation");
 	fetch_complete(sel, ENOSYS);
     } else if (rsp->data_len < 3) {
-	ipmi_log("sel_handle_reservation:"
-		 " got invalid reservation length\n");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel_handle_reservation: got invalid reservation length");
 	fetch_complete(sel, EINVAL);
 	return;
     }
@@ -586,7 +586,8 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
 
     elem = malloc(sizeof(*elem));
     if (!elem) {
-	ipmi_log("ipmi_sel_get: could not allocate the sel element\n");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_sel_get: could not allocate the sel element");
 	return ENOMEM;
     }
 
@@ -595,12 +596,13 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
 
     ipmi_read_lock();
     if ((rv = ipmi_mc_validate(sel->mc))) {
-	ipmi_log("ipmi_sel_get: MC is not valid\n");
+	ipmi_log(IPMI_LOG_ERR_INFO, "ipmi_sel_get: MC is not valid");
 	goto out_unlock2;
     }
 
     if (!ipmi_mc_sel_device_support(sel->mc)) {
-	ipmi_log("ipmi_sel_get: No support for the system event log\n");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_sel_get: No support for the system event log");
 	rv = ENOSYS;
 	goto out_unlock2;
     }

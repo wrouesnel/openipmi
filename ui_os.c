@@ -215,18 +215,19 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
     return rv;
 }
 
-extern void ui_vlog(char *format, va_list ap);
+extern void ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap);
 
 static void
-sui_log(os_handler_t *handler,
-	char         *format,
+sui_log(os_handler_t         *handler,
+	enum ipmi_log_type_e log_type,
+	char                 *format,
 	...)
 {
     va_list ap;
 
     va_start(ap, format);
 #if 1
-    ui_vlog(format, ap);
+    ui_vlog(format, log_type, ap);
 #else
     vfprintf(stderr, format, ap);
 #endif
@@ -234,12 +235,13 @@ sui_log(os_handler_t *handler,
 }
 
 static void
-sui_vlog(os_handler_t *handler,
-	 char         *format,
-	 va_list      ap)
+sui_vlog(os_handler_t         *handler,
+	 enum ipmi_log_type_e log_type,
+	 char                 *format,
+	 va_list              ap)
 {
 #if 1
-    ui_vlog(format, ap);
+    ui_vlog(format, log_type, ap);
 #else
     vfprintf(stderr, format, ap);
 #endif

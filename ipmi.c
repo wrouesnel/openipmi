@@ -130,12 +130,12 @@ void ipmi_unlock(ipmi_lock_t *lock)
 }
 
 void
-ipmi_log(char *format, ...)
+ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
 {
     va_list ap;
 
     va_start(ap, format);
-    ipmi_os_handler->vlog(ipmi_os_handler, format, ap);
+    ipmi_os_handler->vlog(ipmi_os_handler, log_type, format, ap);
     va_end(ap);
 }
 

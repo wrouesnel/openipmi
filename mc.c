@@ -1078,8 +1078,9 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
        events. */
     info = malloc(sizeof(*info));
     if (!info) {
-	ipmi_log("Unable to allocate info for system event log timer."
-		 " System event log will not be queried\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "Unable to allocate info for system event log timer."
+		 " System event log will not be queried");
 	return;
     }
     info->bmc = mc;
@@ -1100,8 +1101,9 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     }
     if (rv) {
 	free(info);
-	ipmi_log("Unable to start the system event log timer."
-		 " System event log will not be queried\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "Unable to start the system event log timer."
+		 " System event log will not be queried");
     } else {
 	mc->bmc->sel_timer_info = info;
     }
@@ -1378,8 +1380,9 @@ set_operational(ipmi_mc_t *mc)
 	}
     }
     if (rv) {
-	ipmi_log("Unable to start the bus scan timer."
-		 " The bus will not be scanned periodically.\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "Unable to start the bus scan timer."
+		 " The bus will not be scanned periodically.");
     } else {
 	mc->bmc->bus_scan_timer_info = info;
     }
@@ -2477,13 +2480,13 @@ void
 __ipmi_check_mc_lock(ipmi_mc_t *mc)
 {
     ipmi_check_lock(mc->bmc_mc->bmc->mc_list_lock,
-		    "MC not locked when it should have been\n");
+		    "MC not locked when it should have been");
 }
 
 void
 __ipmi_check_mc_entity_lock(ipmi_mc_t *mc)
 {
     ipmi_check_lock(mc->bmc_mc->bmc->entities_lock,
-		    "Entity not locked when it should have been\n");
+		    "Entity not locked when it should have been");
 }
 #endif

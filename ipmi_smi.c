@@ -56,9 +56,9 @@ dump_hex(unsigned char *data, int len)
     int i;
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 16) == 0)) {
-	    ipmi_log("\n  ");
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  ");
 	}
-	ipmi_log(" %2.2x", data[i]);
+	ipmi_log(IPMI_LOG_DEBUG_CONT, " %2.2x", data[i]);
     }
 }
 #endif
@@ -298,11 +298,12 @@ smi_send(smi_data_t   *smi,
     ipmi_req_t     req;
 
     if (DEBUG_MSG) {
-	ipmi_log("outgoing, addr = ");
+	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing, addr = ");
 	dump_hex((unsigned char *) addr, addr_len);
-	ipmi_log("\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", msg->netfn, msg->cmd);
+	ipmi_log(IPMI_LOG_DEBUG_CONT,
+		 "\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", msg->netfn, msg->cmd);
 	dump_hex(msg->data, msg->data_len);
-	ipmi_log("\n");
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
     }
     req.addr = (unsigned char *) addr;
     req.addr_len = addr_len;
@@ -516,12 +517,13 @@ data_handler(int            fd,
     }
 
     if (DEBUG_MSG) {
-	ipmi_log("incoming, addr = ");
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming, addr = ");
 	dump_hex(recv.addr, recv.addr_len);
-	ipmi_log("\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", recv.msg.netfn, 
+	ipmi_log(IPMI_LOG_DEBUG_CONT,
+		 "\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", recv.msg.netfn, 
 		 recv.msg.cmd);
 	dump_hex(recv.msg.data, recv.msg.data_len);
-	ipmi_log("\n");
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
     }
 
     switch (recv.recv_type) {

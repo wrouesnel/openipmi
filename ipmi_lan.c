@@ -57,9 +57,9 @@ dump_hex(unsigned char *data, int len)
     int i;
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 16) == 0)) {
-	    ipmi_log("\n  ");
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  ");
 	}
-	ipmi_log(" %2.2x", data[i]);
+	ipmi_log(IPMI_LOG_DEBUG_CONT, " %2.2x", data[i]);
     }
 }
 #endif
@@ -360,11 +360,11 @@ lan_send(lan_data_t  *lan,
     }
 
     if (DEBUG_MSG) {
-	ipmi_log("outgoing\n addr =");
+	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing\n addr =");
 	dump_hex((unsigned char *) &(lan->addr), sizeof(lan->addr));
-	ipmi_log("\n data =\n  ");
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, pos);
-	ipmi_log("\n");
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
     }
 
     rv = sendto(lan->fd, data, pos, 0,
@@ -538,11 +538,11 @@ data_handler(int            fd,
 	goto out_unlock2;
 
     if (DEBUG_MSG) {
-	ipmi_log("incoming\n addr = ");
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr = ");
 	dump_hex((unsigned char *) &ipaddrd, from_len);
-	ipmi_log("\n data =\n  ");
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, len);
-	ipmi_log("\n");
+	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
     }
 
     /* Make sure the source IP matches what we expect the other end to
@@ -1239,8 +1239,9 @@ auth_cap_done(ipmi_con_t   *ipmi,
 
     if ((msg->data[0] != 0) || (msg->data_len < 9)) {
         if (lan->authtype != IPMI_AUTHTYPE_NONE) {
-	    ipmi_log("No authentication supported, but an authorization"
-		     " type was requested\n");
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "No authentication supported, but an authorization"
+		     " type was requested");
 	    if (ipmi->setup_cb)
 	        ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
 	    cleanup_con(ipmi);
@@ -1258,7 +1259,7 @@ auth_cap_done(ipmi_con_t   *ipmi,
     }
 
     if (!(msg->data[1] & (1 << lan->authtype))) {
-        ipmi_log("Requested authentication not supported\n");
+        ipmi_log(IPMI_LOG_ERR_INFO, "Requested authentication not supported");
 	if (ipmi->setup_cb)
 	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
 	cleanup_con(ipmi);
@@ -1267,7 +1268,8 @@ auth_cap_done(ipmi_con_t   *ipmi,
 
     rv = send_challenge(ipmi, lan);
     if (rv) {
-        ipmi_log("Unable to send challenge command: 0x%x", rv);
+        ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Unable to send challenge command: 0x%x", rv);
         if (ipmi->setup_cb)
 	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
 	cleanup_con(ipmi);

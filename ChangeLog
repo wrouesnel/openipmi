@@ -1,4 +1,19 @@
 
+2003-01-07 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/log.h: Reworked log handling to add a log type.
+	* include/OpenIPMI/os_handler.h: ditto
+	* ipmi.c: ditto
+	* ipmi_lan.c: ditto
+	* ipmi_smi.c: ditto
+	* mc.c: ditto
+	* sel.c: ditto
+	* ui.c: ditto
+	* ui_os.c: ditto
+
+	* include/OpenIPMI/log.h, include/OpenIPMI/ipmiif.h: moved log
+	information from ipmiif.h to log.h.
+
 2003-01-06 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Converted the bmc pointer to a bmc id.

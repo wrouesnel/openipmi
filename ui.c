@@ -247,9 +247,10 @@ draw_lines()
 }    
 
 void
-ui_vlog(char *format, va_list ap)
+ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     int y, x;
+    int do_nl = 1;
 
     /* Generate the output to the dummy pad to see how many lines we
        will use. */
@@ -257,7 +258,45 @@ ui_vlog(char *format, va_list ap)
     getyx(dummy_pad, y, x);
     wmove(dummy_pad, 0, x);
 
+    switch(log_type)
+    {
+	case IPMI_LOG_INFO:
+	    wprintw(log_pad, "INFO: ");
+	    break;
+
+	case IPMI_LOG_WARNING:
+	    wprintw(log_pad, "WARN: ");
+	    break;
+
+	case IPMI_LOG_SEVERE:
+	    wprintw(log_pad, "SEVR: ");
+	    break;
+
+	case IPMI_LOG_FATAL:
+	    wprintw(log_pad, "FATL: ");
+	    break;
+
+	case IPMI_LOG_ERR_INFO:
+	    wprintw(log_pad, "EINF: ");
+	    break;
+
+	case IPMI_LOG_DEBUG_START:
+	    do_nl = 0;
+	    /* FALLTHROUGH */
+	case IPMI_LOG_DEBUG:
+	    wprintw(log_pad, "DEBG: ");
+	    break;
+
+	case IPMI_LOG_DEBUG_CONT:
+	    do_nl = 0;
+	    /* FALLTHROUGH */
+	case IPMI_LOG_DEBUG_END:
+	    break;
+    }
+
     vwprintw(log_pad, format, ap);
+    if (do_nl)
+	wprintw(log_pad, "\n");
     log_pad_refresh(y);
     wrefresh(cmd_win);
 }
@@ -268,7 +307,7 @@ ui_log(char *format, ...)
     va_list ap;
 
     va_start(ap, format);
-    ui_vlog(format, ap);
+    ui_vlog(format, IPMI_LOG_WARNING, ap);
     va_end(ap);
 }
 
