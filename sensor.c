@@ -481,40 +481,37 @@ ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
 int
 ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 			    ipmi_sensor_t          *sensor,
+			    unsigned int           num,
 			    ipmi_entity_t          *ent,
 			    ipmi_sensor_destroy_cb destroy_handler,
 			    void                   *destroy_handler_cb_data)
 {
-    int                i;
-    int                found = 0;
     ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(mc);
     void               *link;
 
+    if (num >= 256)
+	return EINVAL;
 
-    for (i=0; i<sensors->idx_size[4]; i++) {
-	if (!sensors->sensors_by_idx[4][i]) {
-	    found = 1;
-	    break;
-	}
-    }
-
-    if (!found) {
+    if (num >= sensors->idx_size[4]) {
 	ipmi_sensor_t **new_array;
+	unsigned int  new_size;
+	int           i;
 
-	if (sensors->idx_size[4] >= 256)
-	    return EMFILE;
-	new_array = malloc(sizeof(*new_array) * (sensors->idx_size[4] + 16));
+	/* Allocate the array in multiples of 16 (to avoid thrashing malloc
+	   too much). */
+	new_size = ((num % 16) * 16) + 16;
+	new_array = malloc(sizeof(*new_array) * new_size);
 	if (!new_array)
 	    return ENOMEM;
-	memcpy(new_array, sensors->sensors_by_idx[4],
-	       sizeof(*new_array) * (sensors->idx_size[4]));
-	for (i=sensors->idx_size[4]; i<sensors->idx_size[4]+16; i++)
+	if (sensors->sensors_by_idx[4])
+	    memcpy(new_array, sensors->sensors_by_idx[4],
+		   sizeof(*new_array) * (sensors->idx_size[4]));
+	for (i=sensors->idx_size[4]; i<new_size; i++)
 	    new_array[i] = NULL;
 	if (sensors->sensors_by_idx[4])
 	    free(sensors->sensors_by_idx[4]);
 	sensors->sensors_by_idx[4] = new_array;
-	i = sensors->idx_size[4];
-	sensors->idx_size[4] = i+16;
+	sensors->idx_size[4] = new_size;
     }
 
     sensor->waitq = opq_alloc(ipmi_mc_get_os_hnd(mc));
@@ -530,9 +527,9 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 
     sensor->mc = mc;
     sensor->lun = 4;
-    sensor->num = i;
+    sensor->num = num;
     sensor->source_idx = -1;
-    sensors->sensors_by_idx[4][i] = sensor;
+    sensors->sensors_by_idx[4][num] = sensor;
     sensor->entity_id = ipmi_entity_get_entity_id(ent);
     sensor->entity_instance = ipmi_entity_get_entity_instance(ent);
     sensor->destroy_handler = destroy_handler;

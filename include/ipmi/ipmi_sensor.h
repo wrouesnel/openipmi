@@ -65,9 +65,11 @@ typedef void (*ipmi_sensor_destroy_cb)(ipmi_sensor_t *sensor,
    for the OS handler and such.  A handler can be supplied if the OEM
    code wants to be called when the sensor is destroyed, or NULL can
    be supplied if none is needed. */
+#define NONSTANDARD_SENSOR_LUN 4
 int ipmi_sensor_add_nonstandard(
     ipmi_mc_t              *mc,
     ipmi_sensor_t          *sensor,
+    unsigned int           num,
     ipmi_entity_t          *ent,
     ipmi_sensor_destroy_cb destroy_handler,
     void                   *destroy_handler_cb_data);
