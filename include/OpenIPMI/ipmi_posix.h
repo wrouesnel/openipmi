@@ -113,8 +113,13 @@ void ipmi_posix_thread_sel_select_loop(os_handler_t *os_hnd);
 /* Gets the selector associated with the OS handler. */
 selector_t *ipmi_posix_thread_os_handler_get_sel(os_handler_t *os_hnd);
 
+/**********************************************************************
+ * Special code, like the previous non-threaded ones.  Only needed
+ * if you have special selector needs.
+ *********************************************************************/
 os_handler_t *ipmi_posix_thread_get_os_handler(void);
 void ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd);
 void ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd,
 					  selector_t   *sel);
+
 #endif /* __IPMI_POSIX_H */
