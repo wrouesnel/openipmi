@@ -294,7 +294,7 @@ return_rmcpp_rsp(lan_data_t *lan, session_t *session, msg_t *msg,
 		 unsigned char iana[3], unsigned int payload_id)
 {
     uint8_t d[IPMI_LAN_MAX_HEADER_SIZE+IPMI_LAN_MAX_HEADER_SIZE
-	      +IPMI_LAN_MAX_TRAILER_SIZE];
+	      +IPMI_LAN_MAX_TRAILER_SIZE+1];
     uint8_t *pos = d + IPMI_LAN_MAX_HEADER_SIZE;
     uint8_t *tpos;
     unsigned int hdr_left = IPMI_LAN_MAX_HEADER_SIZE;

@@ -500,9 +500,9 @@ ipmi_set_8_bit_ascii(char          *input,
 
     /* A length of 1 is invalid, make it 2 with a nil char */
     if (in_len == 1) {
-	input = tmp;
 	tmp[0] = input[0];
 	tmp[1] = '\0';
+	input = tmp;
 	in_len++;
     }
 

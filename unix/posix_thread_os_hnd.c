@@ -747,7 +747,7 @@ ipmi_posix_thread_get_os_handler(void)
     info = malloc(sizeof(pt_os_hnd_data_t));
     if (!info) {
 	free(rv);
-	rv = NULL;
+	return NULL;
     }
     rv->internal_data = info;
 
@@ -756,7 +756,7 @@ ipmi_posix_thread_get_os_handler(void)
     if (err) {
 	free(info);
 	free(rv);
-	rv = NULL;
+	return NULL;
     }
 #endif
 

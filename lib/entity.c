@@ -1667,7 +1667,7 @@ try_presence_frudev(ipmi_entity_t *ent, ent_active_detect_t *info)
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_GET_FRU_INVENTORY_AREA_INFO_CMD;
     msg.data = data;
-    data[1] = ent->info.fru_device_id; /* Will be 0 for MCs, so this
+    data[0] = ent->info.fru_device_id; /* Will be 0 for MCs, so this
 					  is ok even though it is not
 					  in the MC record. */
     msg.data_len = 1;

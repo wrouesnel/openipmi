@@ -1,3 +1,27 @@
+2005-03-22 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c: Fix a bug in fru presence handling, addressing
+	beyond the end of the array.
+
+	* lib/ipmi.c: Fixed a problem with handling of 1-byte full ASCII.
+
+	* lib/ipmi_lan.c: Lots of little fixes.
+
+	* include/OpenIPMI/ipmi_lan.h: Added a string for the IPMI LAN
+	standard port.
+
+	* unix/posix_thread_os_hnd.c: Fix a possible double-free scenario.
+
+	* glib/glib_os_hnd.c: Fix a possible use of free data scenario.
+
+	* lanserv/lanserv_ipmi.c: in return_rmcpp_rsp, make the d[] array
+	be one longer to accomidate the checksum.
+
+	* lanserv/lanserv.c: in handle_msg_ipmi_dev, make the data[] array
+	be one longer to accomidate the checksum.
+
+	* sample/ipmicmd.c: Check to make sure the channel is present.
+
 2005-03-21 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Added IPMI 2.0 as a supported version.

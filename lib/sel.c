@@ -766,7 +766,7 @@ sel_fixups(ipmi_mc_t *mc, ipmi_sel_info_t *sel)
     /* Fixups */
     mfg_id = ipmi_mc_manufacturer_id(mc);
     product_id = ipmi_mc_product_id(mc);
-    if ((mfg_id == 0x157) && (product_id = 0x841))
+    if ((mfg_id == 0x157) && (product_id == 0x841))
 	/* Intel ATCA CMM mistakenly reports that it supports delete SEL */
 	sel->supports_delete_sel = 0;
 }

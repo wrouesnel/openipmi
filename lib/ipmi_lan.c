@@ -4959,6 +4959,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     int		       count;
     struct sockaddr_in *pa;
     char               **ip_addrs = NULL;
+    char               *tports[MAX_IP_ADDR];
     char               **ports = NULL;
     lan_conn_parms_t   cparm;
 
@@ -5071,6 +5072,12 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	return EINVAL;
     if ((cparm.num_ip_addr < 1) || (cparm.num_ip_addr > MAX_IP_ADDR))
 	return EINVAL;
+
+    if (!ports) {
+	ports = tports;
+	for (i=0; i<MAX_IP_ADDR; i++)
+	    ports[i] = IPMI_LAN_STD_PORT_STR;
+    }
 
     count = 0;
 #ifdef HAVE_GETADDRINFO
@@ -5283,8 +5290,8 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
        than one. */
     while (l->lan) {
 	lan = NULL;
-	for (i=0; i<lan->cparm.num_ip_addr; i++) {
-	    if (lan->cparm.ip_addr[i].s_ipsock.s_addr.sa_family
+	for (i=0; i<l->lan->cparm.num_ip_addr; i++) {
+	    if (l->lan->cparm.ip_addr[i].s_ipsock.s_addr.sa_family
 		!= src_addr->sa_family)
 	    {
 		continue;
@@ -5295,7 +5302,7 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 	    {
 		struct sockaddr_in *src, *dst;
 		src = (struct sockaddr_in *) src_addr;
-		dst = &(lan->cparm.ip_addr[i].s_ipsock.s_addr4);
+		dst = &(l->lan->cparm.ip_addr[i].s_ipsock.s_addr4);
 		if (dst->sin_addr.s_addr == src->sin_addr.s_addr) {
 		    /* We have a match, handle it */
 		    lan = l->lan;
@@ -5308,7 +5315,7 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 	    {
 		struct sockaddr_in6 *src, *dst;
 		src = (struct sockaddr_in6 *) src_addr;
-		dst = &(lan->cparm.ip_addr[i].s_ipsock.s_addr6);
+		dst = &(l->lan->cparm.ip_addr[i].s_ipsock.s_addr6);
 		if (memcmp(dst->sin6_addr.s6_addr,
 			   src->sin6_addr.s6_addr,
 			   sizeof(struct in6_addr))

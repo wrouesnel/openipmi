@@ -362,7 +362,7 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 {
     struct ipmi_recv rsp;
     struct ipmi_addr addr;
-    unsigned char    data[IPMI_MAX_MSG_LENGTH+7];
+    unsigned char    data[IPMI_MAX_MSG_LENGTH+8];
     unsigned char    rdata[IPMI_MAX_MSG_LENGTH];
     int              rv;
     msg_t            *msg;

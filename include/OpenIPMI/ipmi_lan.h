@@ -44,6 +44,7 @@ extern "C" {
 #endif
 
 #define IPMI_LAN_STD_PORT	623
+#define IPMI_LAN_STD_PORT_STR	"623"
 
 /*
  * Yet another interface to set up a LAN connection.  This is the

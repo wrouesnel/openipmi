@@ -822,7 +822,7 @@ ipmi_glib_get_os_handler(int priority)
     if (!info->gdbm_lock) {
 	free(info);
 	free(rv);
-	rv = NULL;
+	return NULL;
     }
 #endif
 

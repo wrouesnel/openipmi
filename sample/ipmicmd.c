@@ -217,7 +217,7 @@ dump_msg_data(ipmi_msg_t *msg, ipmi_addr_t *addr, char *type)
 		   smi_addr->lun,
 		   msg->cmd);
 	}
-	else
+	else if (ipmb_addr)
 	{
 	    printf("%2.2x %2.2x %2.2x %2.2x ",
 		   addr->channel,
@@ -225,6 +225,12 @@ dump_msg_data(ipmi_msg_t *msg, ipmi_addr_t *addr, char *type)
 		   ipmb_addr->lun,
 		   msg->cmd);
 	}
+	else if (lan_addr)
+	    printf("    lan addr = %x,%x,%x,%x\n",
+		   lan_addr->session_handle,
+		   lan_addr->remote_SWID,
+		   lan_addr->local_SWID,
+		   lan_addr->lun);
     }
 
     for (i=0; i<msg->data_len; i++) {
@@ -498,6 +504,11 @@ process_input_line(char *buf)
 	}
 	pos++;
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
+    }
+
+    if (pos <= 0) {
+	printf("No channel specified\n");
+	return -1;
     }
 
     start = 0;
