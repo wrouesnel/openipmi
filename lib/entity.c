@@ -1320,16 +1320,20 @@ presence_parent_handler(ipmi_entity_t *ent,
     int present = 0;
     unsigned int *start_presence_event_count = cb_data;
 
-    if (locked_list_num_entries(parent->sensors) != 0)
+    if (ent && (locked_list_num_entries(parent->sensors) != 0))
 	/* The parent has sensors, so it doesn't depend on the children
-	   for presence. */
+	   for presence.  Note that we check for ent here because that
+	   means an actual child is present, which is the only case we
+	   care about here.  Other paths to this code don't have a
+	   child entity, and we always want to run the code below in
+	   that case. */
 	return;
 
     /* If any children are present, then the parent is present. */
     ipmi_entity_iterate_children(parent, presence_child_handler, &present);
     if ((!present)
 	&& start_presence_event_count
-	&& (*start_presence_event_count != ent->presence_event_count))
+	&& (*start_presence_event_count != parent->presence_event_count))
     {
 	/* If the entity is not present and something else has changed
 	   the presence since re started the presence detection

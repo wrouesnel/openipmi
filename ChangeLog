@@ -8,6 +8,10 @@
 	* bootstrap: Added a helper shell script for starting up a
 	raw CVS checkout.
 
+	* lib/entity.c: Fix a problem with entity presence detection,
+	entities were not being detected not-present in some cases
+	when they went from non-present to present.
+
 2004-06-28 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a theoretical race condition in fetching
