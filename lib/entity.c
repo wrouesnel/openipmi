@@ -548,7 +548,7 @@ int
 ipmi_entity_info_destroy(ipmi_entity_info_t *ents)
 {
     locked_list_destroy(ents->update_handlers);
-    locked_list_iterate_nolock(ents->entities, destroy_entity, NULL);
+    locked_list_iterate(ents->entities, destroy_entity, NULL);
     locked_list_destroy(ents->entities);
     ipmi_mem_free(ents);
     return 0;
