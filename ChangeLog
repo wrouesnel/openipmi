@@ -1,3 +1,17 @@
+2005-03-02 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Added a
+	statistics interface.
+
+	* include/OpenIPMI/ipmi_conn.h: Added a statistics interface for
+	connections.
+
+	* lib/ipmi_lan.c: Started adding statistics.
+
+	* cmdlang/cmd_domain.c: Added statistics dumping.
+
+	* lib/ipmi_lan.c: Converted to socket to be non-blocking.
+
 2005-02-28 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Modified sending to sending to odd netfns will

@@ -891,7 +891,7 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
     int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
     int             argc = ipmi_cmdlang_get_argc(cmd_info);
     char            **argv = ipmi_cmdlang_get_argv(cmd_info);
-    char             domain_name[IPMI_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
 
     if ((argc - curr_arg) < 1) {
 	cmdlang->errstr = "Not enough parameters";
@@ -917,6 +917,35 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_domain.c(domain_ipmb_rescan_time)";
     }
+}
+
+static void
+handle_stat(ipmi_domain_t *domain, ipmi_domain_stat_t *stat, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    const char      *name = ipmi_domain_stat_get_name(stat);
+    const char      *inst = ipmi_domain_stat_get_instance(stat);
+    char            *s = ipmi_mem_alloc(strlen(name) + strlen(inst) + 2);
+
+    if (!s)
+	return;
+    sprintf(s, "%s %s", name, inst);
+    ipmi_cmdlang_out_int(cmd_info, s, ipmi_domain_stat_get(stat));
+    ipmi_mem_free(s);
+}
+
+static void
+domain_stats(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain statistics", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Domain", domain_name);
+    ipmi_domain_stat_iterate(domain, NULL, NULL, handle_stat, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
 }
 
 typedef struct domain_close_info_s
@@ -1266,6 +1295,9 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "<domain> <time in seconds> - Set the time between IPMB rescans"
       " for this domain.  zero disables scans.",
       ipmi_cmdlang_domain_handler, domain_ipmb_rescan_time, NULL },
+    { "stats", &domain_cmds,
+      "<domain> - Dump all the domain's statistics",
+      ipmi_cmdlang_domain_handler, domain_stats, NULL },
 };
 #define CMDS_DOMAIN_LEN (sizeof(cmds_domain)/sizeof(ipmi_cmdlang_init_t))
 

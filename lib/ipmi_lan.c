@@ -335,6 +335,9 @@ struct lan_data_s
 
     lan_link_t link;
     lan_link_t ip_link[MAX_IP_ADDR];
+
+    /* Statistics */
+    void *stat_rcv_packets;
 };
 
 
@@ -1099,6 +1102,16 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	}
 
 	/* Bind is not necessary, we don't care what port we are. */
+
+	/* We want it to be non-blocking. */
+	rv = fcntl(item->fd, F_SETFL, O_NONBLOCK);
+	if (rv) {
+	    close(item->fd);
+	    item->next = *free_list;
+	    *free_list = item;
+	    item = NULL;
+	    goto out_unlock;
+	}
 
 	rv = lan_os_hnd->add_fd_to_wait_for(lan_os_hnd,
 					    item->fd,
@@ -3079,7 +3092,11 @@ data_handler(int            fd,
     len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 
 		   &from_len);
 
-    if (DEBUG_RAWMSG && (len > 0)) {
+    if (len < 0)
+	/* Got an error, probably no data, just return. */
+	return;
+
+    if (DEBUG_RAWMSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr = ");
 	dump_hex((unsigned char *) &ipaddrd, from_len);
 	if (len) {
@@ -3112,11 +3129,14 @@ data_handler(int            fd,
     }
 
     if (!lan_valid_ipmi(ipmi))
-	/* We can have due to a race condition, just return and
+	/* This can fail due to a race condition, just return and
            everything should be fine. */
 	return;
 
     lan = ipmi->con_data;
+
+    if (lan->stat_rcv_packets)
+	ipmi->add_stat(ipmi->user_data, lan->stat_rcv_packets, 1);
 
     if (data[4] == IPMI_AUTHTYPE_RMCP_PLUS) {
 	handle_rmcpp_recv(ipmi, lan, addr_num, data, len);
@@ -3463,6 +3483,10 @@ lan_cleanup(ipmi_con_t *ipmi)
 	}
     }
     ipmi_unlock(lan->seq_num_lock);
+
+    if (ipmi->finished_with_stat) {
+	ipmi->finished_with_stat(ipmi->user_data, lan->stat_rcv_packets);
+    }
 
     if (ipmi->oem_data_cleanup)
 	ipmi->oem_data_cleanup(ipmi);
@@ -4562,6 +4586,12 @@ lan_start_con(ipmi_con_t *ipmi)
     int            rv;
     struct timeval timeout;
     int            i;
+
+    /* Register our statistics. */
+    if (ipmi->register_stat) {
+	ipmi->register_stat(ipmi->user_data, "lan_received_packets",
+			    ipmi->name, &lan->stat_rcv_packets);
+    }
 
     ipmi_lock(lan->ip_lock);
     if (lan->started) {

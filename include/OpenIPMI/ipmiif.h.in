@@ -498,7 +498,9 @@ unsigned int ipmi_domain_stat_get_and_zero(ipmi_domain_stat_t *stat);
 const char *ipmi_domain_stat_get_name(ipmi_domain_stat_t *stat);
 const char *ipmi_domain_stat_get_instance(ipmi_domain_stat_t *stat);
 
-/* Iterate through all the statistics. */
+/* Iterate through all the statistics.  This will get and put the stat
+   for you, you should not put the stat (unless you make your own
+   copy). */
 void ipmi_domain_stat_iterate(ipmi_domain_t *domain,
 			      char          *name,
 			      char          *instance,

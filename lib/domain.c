@@ -4634,6 +4634,28 @@ process_options(ipmi_domain_t      *domain,
     return 0;
 }
 
+int con_register_stat(void *user_data, char *name,
+		      char *instance,  void **stat)
+{
+    ipmi_domain_stat_t *rstat;
+    int                rv;
+
+    rv = ipmi_domain_stat_register(user_data, name, instance, &rstat);
+    if (!rv)
+	*stat = rstat;
+    return rv;
+}
+
+void con_add_stat(void *user_data, void *stat, int value)
+{
+    ipmi_domain_stat_add(stat, value);
+}
+
+void con_finished_with_stat(void *user_data, void *stat)
+{
+    ipmi_domain_stat_put(stat);
+}
+
 int
 ipmi_open_domain(char               *name,
 		 ipmi_con_t         *con[],
@@ -4664,6 +4686,10 @@ ipmi_open_domain(char               *name,
 
     priv = IPMI_PRIVILEGE_ADMIN;
     for (i=0; i<num_con; i++) {
+	con[i]->register_stat = con_register_stat;
+	con[i]->add_stat = con_add_stat;
+	con[i]->finished_with_stat = con_finished_with_stat;
+
 	/* Find the least-common demominator privilege for the
 	   connections. */
 	if ((con[i]->priv_level != 0) && (con[i]->priv_level < priv))
@@ -5190,7 +5216,7 @@ ipmi_domain_stat_register(ipmi_domain_t      *domain,
 	goto out_unlock;
     }
 
-    val->instance = ipmi_strdup(name);
+    val->instance = ipmi_strdup(instance);
     if (!val->instance) {
 	ipmi_mem_free(val->name);
 	ipmi_mem_free(val);
@@ -5632,6 +5658,9 @@ ipmi_init_domain(ipmi_con_t               *con[],
 
     domain->in_startup = 1;
     for (i=0; i<num_con; i++) {
+	con[i]->register_stat = con_register_stat;
+	con[i]->add_stat = con_add_stat;
+	con[i]->finished_with_stat = con_finished_with_stat;
 	rv = con[i]->add_con_change_handler(con[i], ll_con_changed, domain);
 	if (rv)
 	    return rv;
