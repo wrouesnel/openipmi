@@ -1152,7 +1152,7 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 						    lan->conf_data[addr_num],
 						    msgdata,
 						    &header_len, data_len,
-						    max_data_len);
+						    &max_data_len);
 	if (rv)
 	    return rv;
     }
@@ -3623,7 +3623,6 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     lan->working_conf[addr_num] = conf;
     lan->working_integ[addr_num] = integ;
-printf("A: %d %d\n", lan->working_conf[addr_num], lan->working_integ[addr_num]);
     lan->conf_info[addr_num] = confp;
     lan->integ_info[addr_num] = integp;
 

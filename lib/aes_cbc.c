@@ -71,75 +71,84 @@ aes_cbc_free(ipmi_con_t *ipmi, void *conf_data)
     ipmi_mem_free(info);
 }
 
+static void
+dump_data(const unsigned char *d, int l, const char *n)
+{
+    int i;
+    printf("%s:", n);
+    for (i=0; i<l; i++) {
+	if ((i%16) == 0)
+	    printf("\n ");
+	printf(" %2.2x", d[i]);
+    }
+    printf("\n");
+}
+
+
 static int
 aes_cbc_encrypt(ipmi_con_t    *ipmi,
 		void          *conf_data,
 		unsigned char **payload,
 		unsigned int  *header_len,
 		unsigned int  *payload_len,
-		unsigned int  max_payload_len)
+		unsigned int  *max_payload_len)
 {
     aes_cbc_info_t *info = conf_data;
-    unsigned char  *p;
+    unsigned char  *iv;
     unsigned int   l = *payload_len;
     unsigned int   e;
-    int            i;
     unsigned char  *d;
     EVP_CIPHER_CTX ctx;
-    unsigned int   tmplen;
     int            rv;
     unsigned int   outlen;
+    unsigned int   tmplen;
 
     if (*header_len < 16)
 	return E2BIG;
 
     /* Calculate the number of padding bytes -> e.  Note that the pad
-       length byte is included, thus the +1. */
+       length byte is included, thus the +1.  We assume AES does the
+       padding, but we need to know how much. */
     e = 16 -((l+1) % 16);
     if (e == 16)
 	e = 0;
     l += e+1;
-    if (l > max_payload_len)
+    if (l > *max_payload_len)
 	return E2BIG;
 
     /* We store the unencrypted data here, then crypt into the real
        data. */
-    d = ipmi_mem_alloc(l+16);
+    d = ipmi_mem_alloc(*payload_len);
     if (!d)
 	return ENOMEM;
+    iv = (*payload)-16;
 
-    rv = ipmi->os_hnd->get_random(ipmi->os_hnd, d, 16);
+    rv = ipmi->os_hnd->get_random(ipmi->os_hnd, iv, 16);
     if (rv) {
 	ipmi_mem_free(d);
 	return rv;
     }
 
-    memcpy(d+16, *payload, *payload_len);
+    memcpy(d, *payload, *payload_len);
 
-    /* Add the padding bytes. */
-    p = d + *payload_len + 16;
-    for (i=0; i<e; i++, p++)
-	*p = i;
-    *p = e; /* length byte */
-    *payload_len += e + 1;
+    /* Make room for the initialization vector. */
+    *header_len -= 16;
+    *max_payload_len += 16;
 
     /* Ok, we're set to do the crypt operation. */
     EVP_CIPHER_CTX_init(&ctx);
-    EVP_EncryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, info->k2, d);
-    if (!EVP_EncryptUpdate(&ctx, *payload, &outlen, d+16, l)) {
+    EVP_EncryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, info->k2, iv);
+    if (!EVP_EncryptUpdate(&ctx, *payload, &outlen, d, *payload_len)) {
 	ipmi_mem_free(d);
 	return ENOMEM; /* right? */
     }
-
-    if (!EVP_EncryptFinal_ex(&ctx, (*payload)+outlen, &tmplen)) {
-	ipmi_mem_free(d);
+    if (!EVP_EncryptFinal(&ctx, (*payload)+outlen, &tmplen)) {
+	free(d);
 	return ENOMEM; /* right? */
     }
-
     outlen += tmplen;
 
-    *payload -= 16;
-    memcpy(*payload, d, 16);
+    *payload = iv;
     *payload_len = outlen + 16;
     ipmi_mem_free(d);
     return 0;
@@ -152,14 +161,13 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
 		unsigned int  *payload_len)
 {
     aes_cbc_info_t *info = conf_data;
-    unsigned char  *p;
     unsigned int   l = *payload_len;
     unsigned char  *d;
+    unsigned char  *p;
     EVP_CIPHER_CTX ctx;
-    unsigned int   tmplen;
     unsigned int   outlen;
+    unsigned int   tmplen;
 
-    l = *payload_len;
     if (l < 32)
 	/* Not possible with this algorithm. */
 	return EINVAL;
@@ -171,34 +179,25 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
     if (!d)
 	return ENOMEM;
 
-    p = *payload;
-    p += 16;
+    p = (*payload)+16;
 
     memcpy(d, p, l);
 
     /* Ok, we're set to do the decrypt operation. */
     EVP_CIPHER_CTX_init(&ctx);
+    EVP_CIPHER_CTX_set_padding(&ctx, 0);
     EVP_DecryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, info->k2, *payload);
     if (!EVP_DecryptUpdate(&ctx, p, &outlen, d, l)) {
 	ipmi_mem_free(d);
 	return ENOMEM; /* right? */
     }
-
-    if (!EVP_DecryptFinal_ex(&ctx, p+outlen, &tmplen)) {
+    if (!EVP_DecryptFinal(&ctx, p+outlen, &tmplen)) {
 	ipmi_mem_free(d);
 	return ENOMEM; /* right? */
     }
-
     outlen += tmplen;
-    if (outlen < 16)
-	return EINVAL;
 
-    if (p[outlen-1] > 15)
-	return EINVAL;
-
-    outlen -= p[outlen-1];
-
-    *payload += 16;
+    *payload = p;
     *payload_len = outlen;
     ipmi_mem_free(d);
     return 0;

@@ -429,13 +429,14 @@ typedef struct ipmi_rmcpp_confidentiality_s
        its header, and update the payload length for any trailer used.
        The original payload_len value plus the trailer data should not
        exceed the max_payload_len for the trailer nor should
-       header_len go negative. */
+       header_len go negative.  Note that if you use header data, you
+       should increase max_payload_len appropriately. */
     int (*conf_encrypt)(ipmi_con_t    *ipmi,
 			void          *conf_data,
 			unsigned char **payload,
 			unsigned int  *header_len,
 			unsigned int  *payload_len,
-			unsigned int  max_payload_len);
+			unsigned int  *max_payload_len);
 
 
     /* Decrypt the given data (in place).  The payload starts at

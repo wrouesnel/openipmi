@@ -103,8 +103,15 @@ RMCP+ questions
   truncate the BMC key to 16 bytes for the RAKP-HMAC-MD5?
 
 * What should one do with an unencrypted message recieved on an
-  encrypted channel?  The integrity has a setting whether to accept
+  encrypted session?  The integrity has a setting whether to accept
   these, but the encryption does not.
 
-* In the session id, there are two sessions ids, but it is not
-  indicated which session id is used in the message header.
+* In the session id in the example LAN packet (table 13-8 in the 2.0
+  spec), there are two sessions ids, but it is not indicated which
+  session id is used in the message header.
+
+* For AES-CBC-128, it is not indicated whether the padding
+  to 16 bytes is part of the AES spec or is something in
+  addition to the AES spec.  I have found that AES adds
+  a padding like this (from the OpenSSL spec, at least)
+  and I'm not sure if I need to add another one.

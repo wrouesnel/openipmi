@@ -169,11 +169,16 @@ typedef struct auth_data_s
     unsigned char sik[20];
     unsigned char k1[20];
     unsigned char k2[20];
-    unsigned int  key_len;
-    const void    *data;
-    const void    *idata;
+    unsigned int  akey_len;
+    void          *adata;
+    const void    *akey;
+    unsigned int  ikey_len;
+    void          *idata;
     const void    *ikey;
-    const void    *cdata;
+    const void    *ikey2;
+    unsigned int  ckey_len;
+    void          *cdata;
+    const void    *ckey;
 } auth_data_t;
 
 struct session_s

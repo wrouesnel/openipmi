@@ -111,10 +111,6 @@ md5_pad(ipmi_con_t    *ipmi,
     unsigned int   l = *payload_len;
     unsigned int   count = 0;
 
-    /* We don't authenticate this part of the header. */
-    p += 4;
-    l -= 4;
-
     /* Pad so that when we add two bytes (the pad length and the next
        header) the result is on a multiple of 4 boundary. */
     while (((l+2) % 4) != 0) {
@@ -154,22 +150,18 @@ md5_add(ipmi_con_t    *ipmi,
     if (l < 4)
 	return E2BIG;
 
-    /* We don't authenticate this part of the header. */
-    p += 4;
-    l -= 4;
-
     p[l] = 0x07; /* Next header */
     l++;
 
-    data[0].data = p;
-    data[0].len = l;
+    data[0].data = p+4;
+    data[0].len = l-4;
     data[1].data = NULL;
     rv = ipmi_md5_authcode_gen(info->authdata, data, p+l);
     if (rv)
 	return rv;
     l += 16;
 
-    *payload_len += l;
+    *payload_len = l;
     return 0;
 }
 

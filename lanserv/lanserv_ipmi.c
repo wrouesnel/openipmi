@@ -48,15 +48,16 @@
 
 #if 0
 static void
-dump_hex(uint8_t *data, int len)
+dump_data(const unsigned char *d, int l, const char *n)
 {
     int i;
-    for (i=0; i<len; i++) {
-	if ((i != 0) && ((i % 16) == 0)) {
-	    printf("\n  ");
-	}
-	printf(" %2.2x", data[i]);
+    printf("%s:", n);
+    for (i=0; i<l; i++) {
+	if ((i%16) == 0)
+	    printf("\n ");
+	printf(" %2.2x", d[i]);
     }
+    printf("\n");
 }
 #endif
 
@@ -889,7 +890,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     session->authtype = auth;
     session->authdata = dummy_session.authdata;
     rv = lan->gen_rand(lan, seq_data, 4);
-    if (rv < 0) {
+    if (rv) {
 	lan->log(NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Could not generate random number");
 	return_err(lan, msg, &dummy_session, IPMI_UNKNOWN_ERR_CC);
@@ -1059,9 +1060,10 @@ handle_close_session(lan_data_t *lan, session_t *session, msg_t *msg)
 
     lan->log(SESSION_CLOSED, msg,
 	     "Session closed: Closed due to request");
-    close_session(lan, nses);
 
     return_err(lan, msg, session, 0);
+
+    close_session(lan, nses);
 }
 
 static void
@@ -2447,16 +2449,16 @@ handle_ipmi_payload(lan_data_t *lan, msg_t *msg)
 static int 
 rakp_hmac_sha1_init(lan_data_t *lan, session_t *session)
 {
-    session->auth_data.data = EVP_sha1();
-    session->auth_data.key_len = 20;
+    session->auth_data.akey = EVP_sha1();
+    session->auth_data.akey_len = 20;
     return 0;
 }
 
 static int 
 rakp_hmac_md5_init(lan_data_t *lan, session_t *session)
 {
-    session->auth_data.data = EVP_md5();
-    session->auth_data.key_len = 16;
+    session->auth_data.akey = EVP_md5();
+    session->auth_data.akey_len = 16;
     return 0;
 }
 
@@ -2471,7 +2473,7 @@ rakp_hmac_set2(lan_data_t *lan, session_t *session,
     user_t              *user;
     auth_data_t         *a = &session->auth_data;
 
-    if (((*data_len) + a->key_len) > max_len)
+    if (((*data_len) + a->akey_len) > max_len)
 	return E2BIG;
 
     ipmi_set_uint32(idata+0, session->rem_sid);
@@ -2484,10 +2486,10 @@ rakp_hmac_set2(lan_data_t *lan, session_t *session,
     memcpy(idata+58, a->username, idata[57]);
     user = &(lan->users[session->userid]);
 
-    HMAC(a->data, user->pw, a->key_len,
+    HMAC(a->akey, user->pw, a->akey_len,
 	 idata, 58+idata[57], data + *data_len, &ilen);
 
-    *data_len += a->key_len;
+    *data_len += a->akey_len;
 
     /* Now generate the SIK */
     memcpy(idata+0, a->rem_rand, 16);
@@ -2499,13 +2501,13 @@ rakp_hmac_set2(lan_data_t *lan, session_t *session,
 	p = lan->bmc_key;
     else
 	p = user->pw;
-    HMAC(a->data, p, a->key_len, idata, 34+idata[33], a->sik, &ilen);
+    HMAC(a->akey, p, a->akey_len, idata, 34+idata[33], a->sik, &ilen);
 
     /* Now generate k1 and k2. */
-    memset(idata, 1, a->key_len);
-    HMAC(a->data, a->sik, a->key_len, idata, a->key_len, a->k1, &ilen);
-    memset(idata, 2, a->key_len);
-    HMAC(a->data, a->sik, a->key_len, idata, a->key_len, a->k1, &ilen);
+    memset(idata, 1, a->akey_len);
+    HMAC(a->akey, a->sik, a->akey_len, idata, a->akey_len, a->k1, &ilen);
+    memset(idata, 2, a->akey_len);
+    HMAC(a->akey, a->sik, a->akey_len, idata, a->akey_len, a->k2, &ilen);
 
     return 0;
 }
@@ -2520,7 +2522,7 @@ rakp_hmac_check3(lan_data_t *lan, session_t *session,
     user_t              *user = &(lan->users[session->userid]);
     auth_data_t         *a = &session->auth_data;
 
-    if (((*data_len) - a->key_len) < 8)
+    if (((*data_len) - a->akey_len) < 8)
 	return E2BIG;
 
     memcpy(idata+0, a->rand, 16);
@@ -2529,11 +2531,11 @@ rakp_hmac_check3(lan_data_t *lan, session_t *session,
     idata[21] = a->username_len;
     memcpy(idata+22, a->username, idata[21]);
 
-    HMAC(a->data, user->pw, a->key_len, idata, 22+idata[21], integ, &ilen);
-    if (memcmp(integ, data+(*data_len)-a->key_len, a->key_len) != 0)
+    HMAC(a->akey, user->pw, a->akey_len, idata, 22+idata[21], integ, &ilen);
+    if (memcmp(integ, data+(*data_len)-a->akey_len, a->akey_len) != 0)
 	return EINVAL;
 
-    *data_len -= a->key_len;
+    *data_len -= a->akey_len;
     return 0;
 }
 
@@ -2546,16 +2548,16 @@ rakp_hmac_set4(lan_data_t *lan, session_t *session,
     unsigned int        ilen;
     auth_data_t         *a = &session->auth_data;
 
-    if (((*data_len) + a->key_len) > max_len)
+    if (((*data_len) + a->akey_len) > max_len)
 	return E2BIG;
 
     memcpy(idata+0, a->rem_rand, 16);
     ipmi_set_uint32(idata+16, session->sid);
     memcpy(idata+20, lan->guid, 16);
 
-    HMAC(a->data, a->sik, a->key_len, idata, 36, data + *data_len, &ilen);
+    HMAC(a->akey, a->sik, a->akey_len, idata, 36, data + *data_len, &ilen);
 
-    *data_len += a->key_len;
+    *data_len += a->akey_len;
     return 0;
 }
 
@@ -2579,8 +2581,9 @@ static auth_handlers_t rakp_hmac_md5 =
 static int
 hmac_sha1_init(lan_data_t *lan, session_t *session)
 {
-    session->auth_data.idata = EVP_sha1();
+    session->auth_data.ikey2 = EVP_sha1();
     session->auth_data.ikey = session->auth_data.sik;
+    session->auth_data.ikey_len = 20;
     return 0;
 }
 
@@ -2588,8 +2591,9 @@ static int
 hmac_md5_init(lan_data_t *lan, session_t *session)
 {
     user_t *user = &(lan->users[session->userid]);
-    session->auth_data.idata = EVP_md5();
+    session->auth_data.ikey2 = EVP_md5();
     session->auth_data.ikey = user->pw;
+    session->auth_data.ikey_len = 16;
     return 0;
 }
 
@@ -2606,12 +2610,12 @@ hmac_add(lan_data_t *lan, session_t *session,
     auth_data_t  *a = &session->auth_data;
     unsigned int ilen;
 
-    if (((*data_len) + a->key_len) > data_size)
+    if (((*data_len) + a->ikey_len) > data_size)
 	return E2BIG;
 
-    HMAC(a->idata, a->ikey, a->key_len, pos+4, (*data_len)-4,
+    HMAC(a->ikey2, a->ikey, a->ikey_len, pos+4, (*data_len)-4,
 	 pos+(*data_len), &ilen);
-    *data_len += a->key_len;
+    *data_len += a->ikey_len;
     return 0;
 }
 
@@ -2622,30 +2626,234 @@ hmac_check(lan_data_t *lan, session_t *session, msg_t *msg)
     auth_data_t   *a = &session->auth_data;
     unsigned int  ilen;
 
-    if ((msg->len-5) < a->key_len)
+    if ((msg->len-5) < a->ikey_len)
 	return E2BIG;
 
-    HMAC(a->idata, a->ikey, a->key_len, msg->data, msg->len-a->key_len,
+    HMAC(a->ikey2, a->ikey, a->ikey_len, msg->data, msg->len-a->ikey_len,
 	 integ, &ilen);
-    if (memcmp(msg->data+msg->len-a->key_len, integ, a->key_len) != 0)
+    if (memcmp(msg->data+msg->len-a->ikey_len, integ, a->ikey_len) != 0)
 	return EINVAL;
     return 0;
+}
+
+static void *
+auth_alloc(void *info, int size)
+{
+    return malloc(size);
+}
+
+static void
+auth_free(void *info, void *data)
+{
+    free(data);
+}
+
+static int
+md5_init(lan_data_t *lan, session_t *session)
+{
+    user_t          *user = &(lan->users[session->userid]);
+    int             rv;
+    ipmi_authdata_t idata;
+
+    rv = ipmi_md5_authcode_initl(user->pw, 20, &idata, NULL,
+				 auth_alloc, auth_free);
+    if (rv)
+	return rv;
+    session->auth_data.idata = idata;
+    session->auth_data.ikey_len = 16;
+    return 0;
+}
+
+static void
+md5_cleanup(lan_data_t *lan, session_t *session)
+{
+    ipmi_md5_authcode_cleanup(session->auth_data.idata);
+    session->auth_data.idata = NULL;
+}
+
+static int 
+md5_add(lan_data_t *lan, session_t *session,
+	 unsigned char *pos,
+	 unsigned int *data_len, unsigned int data_size)
+{
+    auth_data_t    *a = &session->auth_data;
+    ipmi_auth_sg_t data[2];
+    int            rv;
+
+    if (((*data_len) + a->ikey_len) > data_size)
+	return E2BIG;
+
+    data[0].data = pos+4;
+    data[0].len = (*data_len)-4;
+    data[1].data = NULL;
+    rv = ipmi_md5_authcode_gen(a->idata, data, pos+(*data_len));
+    if (rv)
+	return rv;
+    *data_len += a->ikey_len;
+    return 0;
+}
+
+static int
+md5_check(lan_data_t *lan, session_t *session, msg_t *msg)
+{
+    auth_data_t    *a = &session->auth_data;
+    ipmi_auth_sg_t data[2];
+    int            rv;
+
+    if ((msg->len-5) < a->ikey_len)
+	return E2BIG;
+
+    data[0].data = msg->data;
+    data[0].len = msg->len - a->ikey_len;
+    data[1].data = NULL;
+    rv = ipmi_md5_authcode_check(a->idata, data,
+				 msg->data + msg->len - a->ikey_len);
+    return rv;
 }
 
 static integ_handlers_t hmac_sha1_integ =
 { hmac_sha1_init, hmac_cleanup, hmac_add, hmac_check };
 static integ_handlers_t hmac_md5_integ =
 { hmac_md5_init, hmac_cleanup, hmac_add, hmac_check };
+static integ_handlers_t md5_integ =
+{ md5_init, md5_cleanup, md5_add, md5_check };
 #define HMAC_INIT , &hmac_sha1_integ, &hmac_md5_integ
-#define MD5_INIT
+#define MD5_INIT , &md5_integ
+
+static int
+aes_cbc_init(lan_data_t *lan, session_t *session)
+{
+    session->auth_data.ckey = session->auth_data.k2;
+    session->auth_data.ckey_len = 16;
+    return 0;
+}
+
+static void
+aes_cbc_cleanup(lan_data_t *lan, session_t *session)
+{
+}
+
+static int
+aes_cbc_encrypt(lan_data_t *lan, session_t *session,
+		unsigned char **pos, unsigned int *hdr_left,
+		unsigned int *data_len, unsigned int *data_size)
+{
+    auth_data_t    *a = &session->auth_data;
+    unsigned int   l = *data_len;
+    unsigned char  *d;
+    unsigned char  *iv;
+    unsigned int   e;
+    EVP_CIPHER_CTX ctx;
+    int            rv;
+    unsigned int   outlen;
+    unsigned int   tmplen;
+
+    if (*hdr_left < 16)
+	return E2BIG;
+
+    /* Calculate the number of padding bytes -> e.  Note that the pad
+       length byte is included, thus the +1.  We don't add the pad,
+       AES does, but we need to know what it is. */
+    e = 16 -((l+1) % 16);
+    if (e == 16)
+	e = 0;
+    l += e+1;
+    if (l > *data_size)
+	return E2BIG;
+
+    /* We store the unencrypted data here, then crypt into the real
+       data. */
+    d = malloc(*data_len);
+    if (!d)
+	return ENOMEM;
+
+    iv = (*pos) - 16;
+    rv = lan->gen_rand(lan, iv, 16);
+    if (rv) {
+	free(d);
+	return rv;
+    }
+
+    memcpy(d, *pos, *data_len);
+
+    /* Make room for the initialization vector. */
+    *hdr_left -= 16;
+    *data_size += 16;
+
+    /* Ok, we're set to do the crypt operation. */
+    EVP_CIPHER_CTX_init(&ctx);
+    EVP_EncryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, a->ckey, iv);
+    if (!EVP_EncryptUpdate(&ctx, *pos, &outlen, d, *data_len)) {
+	free(d);
+	return ENOMEM; /* right? */
+    }
+    if (!EVP_EncryptFinal(&ctx, (*pos)+outlen, &tmplen)) {
+	free(d);
+	return ENOMEM; /* right? */
+    }
+    outlen += tmplen;
+
+    *pos = iv;
+    *data_len = outlen + 16;
+    free(d);
+    return 0;
+}
+
+static int
+aes_cbc_decrypt(lan_data_t *lan, session_t *session, msg_t *msg)
+{
+    auth_data_t    *a = &session->auth_data;
+    unsigned int   l = msg->len;
+    unsigned char  *d;
+    EVP_CIPHER_CTX ctx;
+    unsigned int   outlen;
+    unsigned int   tmplen;
+
+    if (l < 32)
+	/* Not possible with this algorithm. */
+	return EINVAL;
+    l -= 16;
+
+    /* We store the encrypted data here, then decrypt into the real
+       data. */
+    d = malloc(l);
+    if (!d)
+	return ENOMEM;
+
+    memcpy(d, msg->data+16, l);
+
+    /* Ok, we're set to do the decrypt operation. */
+    EVP_CIPHER_CTX_init(&ctx);
+    EVP_CIPHER_CTX_set_padding(&ctx, 0);
+    EVP_DecryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, a->k2, msg->data);
+    if (!EVP_DecryptUpdate(&ctx, msg->data+16, &outlen, d, l)) {
+	free(d);
+	return ENOMEM; /* right? */
+    }
+    if (!EVP_DecryptFinal(&ctx, msg->data+16+outlen, &tmplen)) {
+	free(d);
+	return ENOMEM; /* right? */
+    }
+    outlen += tmplen;
+
+    msg->data += 16;
+    msg->len = outlen;
+    free(d);
+    return 0;
+}
+
+static conf_handlers_t aes_cbc_conf =
+{ aes_cbc_init, aes_cbc_cleanup, aes_cbc_encrypt, aes_cbc_decrypt };
+#define AES_CBC_INIT , &aes_cbc_conf
 
 unsigned int default_auth = 1; /* RAKP-HMAC-SHA1 */
 unsigned int default_integ = 1; /* HMAC-SHA1-96 */
 unsigned int default_conf = 1; /* AES-CBC-128 */
 #else
-#define RAKP_INIT
-#define MD5_INIT
-#define HMAC_INIT
+#define RAKP_INIT , NULL, NULL
+#define MD5_INIT , NULL
+#define HMAC_INIT , NULL
+#define AES_CBC_INIT , NULL
 unsigned int default_auth = 0;
 unsigned int default_integ = 0;
 unsigned int default_conf = 0;
@@ -2654,7 +2862,10 @@ integ_handlers_t *integs[64] =
 {
     NULL HMAC_INIT MD5_INIT
 };
-conf_handlers_t *confs[64];
+conf_handlers_t *confs[64] =
+{
+    NULL AES_CBC_INIT
+};
 auth_handlers_t *auths[64] =
 {
     NULL RAKP_INIT
@@ -2802,7 +3013,7 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
     session->rmcpplus = 1;
     session->authtype = IPMI_AUTHTYPE_RMCP_PLUS;
     rv = lan->gen_rand(lan, session->auth_data.rand, 16);
-    if (rv < 0) {
+    if (rv) {
 	lan->log(NEW_SESSION_FAILED, msg,
 		 "Activate session failed: Could not generate random number");
 	err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
@@ -2820,22 +3031,8 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
 	session->authh->init(lan, session);
     session->integ = integ;
     session->integh = integs[integ];
-    if (session->integh) {
-	rv = session->integh->init(lan, session);
-	if (rv) {
-	    err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
-	    goto out_err;
-	}
-    }
     session->conf = conf;
     session->confh = confs[conf];
-    if (session->confh) {
-	rv = session->confh->init(lan, session);
-	if (rv) {
-	    err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
-	    goto out_err;
-	}
-    }
 
     session->userid = 0;
     session->time_left = lan->default_session_timeout;
@@ -2934,10 +3131,25 @@ void handle_rakp1_payload(lan_data_t *lan, msg_t *msg)
 	err = IPMI_RMCPP_ILLEGAL_PARAMETER;
 	goto out_err;
     }
-    session->userid = user->idx;
 
+    session->userid = user->idx;
     session->auth_data.username_len = name_len;
     memcpy(session->auth_data.username, username, 16);
+
+    if (session->integh) {
+	int rv = session->integh->init(lan, session);
+	if (rv) {
+	    err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
+	    goto out_err;
+	}
+    }
+    if (session->confh) {
+	int rv = session->confh->init(lan, session);
+	if (rv) {
+	    err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
+	    goto out_err;
+	}
+    }
 
  out_err:
     memset(data, 0, sizeof(data));
@@ -3066,7 +3278,6 @@ check_message_integrity(lan_data_t *lan, session_t *session, msg_t *msg)
 	return EINVAL;
     }
 
-
     return session->integh->check(lan, session, msg);
 }
 
@@ -3153,6 +3364,17 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 		     " Message integrity failed");
 	    return;
 	}
+
+	/* Remove the integrity padding */
+	if ((msg->data[msg->len-1] > 3)
+	    || (msg->data[msg->len-1] > msg->len))
+	{
+	    lan->log(LAN_ERR, msg,
+		     "LAN msg failure:"
+		     " Message integrity padding invalid");
+	    return;
+	}
+	msg->len -= msg->data[msg->len-1] + 1;
 
 	rv = decrypt_message(lan, session, msg);
 	if (rv) {
@@ -3438,7 +3660,7 @@ ipmi_lan_init(lan_data_t *lan)
     memset(lan->users[1].username, 0, 16);
 
     i = lan->gen_rand(lan, challenge_data, 16);
-    if (i < 0)
+    if (i)
 	return i;
 
     i = ipmi_md5_authcode_init(challenge_data, &(lan->challenge_auth),

@@ -322,7 +322,7 @@ smi_send_sock(lan_data_t *lan, msg_t *msg)
 }
 
 static int
-gen_rand(lan_data_t *lan, void *data, int size)
+gen_rand(lan_data_t *lan, void *data, int len)
 {
     int fd = open("/dev/urandom", O_RDONLY);
     int rv;
@@ -330,8 +330,18 @@ gen_rand(lan_data_t *lan, void *data, int size)
     if (fd == -1)
 	return errno;
 
-    rv = read(fd, data, size);
+    while (len > 0) {
+	rv = read(fd, data, len);
+	if (rv < 0) {
+	    rv = errno;
+	    goto out;
+	}
+	len -= rv;
+    }
 
+    rv = 0;
+
+ out:
     close(fd);
     return rv;
 }
