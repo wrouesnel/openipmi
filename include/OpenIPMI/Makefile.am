@@ -7,4 +7,4 @@ pkginclude_HEADERS = \
 	ipmi_fru.h   ipmi_ui.h      ipmi_log.h  ipmi_domain.h  lanserv.h      \
 	opq.h	     ilist.h        md2.h       md5.h	       mxp.h	      \
 	ipmi_pef.h   ipmi_lanparm.h ipmi_pet.h  ipmi_event.h   ipmi_malloc.h  \
-	ipmi_locks.h ipmi_posix.h   ipmi_picmg.h
+	ipmi_locks.h ipmi_posix.h   ipmi_picmg.h ipmi_utils.h
