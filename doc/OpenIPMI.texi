@@ -947,7 +947,7 @@ For example, you may have the following code to set up a single address:
         @}
 @end example
 
-@node    The Domain, Entities, The Connection, Using OpenIPMI
+@node    The Domain, Events, The Connection, Using OpenIPMI
 @section The Domain
 
 After you create a connection, you pass it into
@@ -1607,7 +1607,7 @@ OEM handler can perform the functions it needs to do for that MC.
 * OEM Controls::
 * Special Strings::
 * Data Conversion::
-* Events::
+* Special Event Handling::
 * Using IDs in OEM Code::
 * Sensor and Control Operation Queues::
 * SDR Repository and OEM Code::
@@ -1720,7 +1720,7 @@ override the @var{ipmi_sensor_reading_name_string} in the sensor
 callbacks and provde you own function to convert the readings to
 strings.
 
-@node    Data Conversion, Events, Special Strings, How to Write OEM Plugins
+@node    Data Conversion, Special Event Handling, Special Strings, How to Write OEM Plugins
 @section Data Conversion
 
 As described in @xref{Fixups}, sensors can be detected as they are added
@@ -1729,8 +1729,8 @@ function, it can provide a converter by overriding the
 @var{ipmi_sensor_convert_from_raw} and @var{ipmi_sensor_convert_to_raw}
 variables in the sensor callbacks.
 
-@node    Events, Using IDs in OEM Code, Data Conversion, How to Write OEM Plugins
-@section Events
+@node    Special Event Handling, Using IDs in OEM Code, Data Conversion, How to Write OEM Plugins
+@section Special Event Handling
 
 An MC with an SEL may need custom handling for incoming events.  The
 @code{ipmi_mc_set_sel_oem_event_handler()} call allows the OEM code to
@@ -1756,7 +1756,7 @@ startup of the system).  The OEM code can fetch the event from the
 timestamp, and it can get the SEL timestamp at startup using
 @code{ipmi_mc_get_startup_SEL_time()}.
 
-@node    Using IDs in OEM Code, Sensor and Control Operation Queues, Events, How to Write OEM Plugins
+@node    Using IDs in OEM Code, Sensor and Control Operation Queues, Special Event Handling, How to Write OEM Plugins
 @section Using IDs in OEM Code
 
 OEM code may need to be able to create its own IDs to lock an entity.
