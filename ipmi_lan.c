@@ -129,6 +129,9 @@ typedef struct lan_data_s
     ipmi_ll_event_handler_id_t *event_handlers;
     ipmi_lock_t                *event_handlers_lock;
 
+    ipmi_ll_con_failed_cb con_fail_handler;
+    void                  *con_fail_cb_data;
+
     struct lan_data_s *next, *prev;
 } lan_data_t;
 
@@ -1300,6 +1303,17 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
     return rv;
 }
 
+static void
+lan_set_con_fail_handler(ipmi_con_t            *ipmi,
+			 ipmi_ll_con_failed_cb handler,
+			 void                  *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    lan->con_fail_handler = handler;
+    lan->con_fail_cb_data = cb_data;
+}
+
 int
 ipmi_lan_setup_con(struct in_addr    addr,
 		   int               port,
@@ -1333,6 +1347,7 @@ ipmi_lan_setup_con(struct in_addr    addr,
     ipmi = malloc(sizeof(*ipmi));
     if (!ipmi)
 	return ENOMEM;
+    memset(ipmi, 0, sizeof(*ipmi));
 
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
@@ -1373,6 +1388,7 @@ ipmi_lan_setup_con(struct in_addr    addr,
     memcpy(lan->password, password, password_len);
     lan->password_len = password_len;
 
+    ipmi->set_con_fail_handler = lan_set_con_fail_handler;
     ipmi->send_command = lan_send_command;
     ipmi->register_for_events = lan_register_for_events;
     ipmi->deregister_for_events = lan_deregister_for_events;

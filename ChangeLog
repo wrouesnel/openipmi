@@ -1,6 +1,13 @@
 
 2003-01-16 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c, include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_conn.h:
+	Added a mechanism to report failures of the lower-level
+	connection, and added code to ignore periodic events (bus scan,
+	SEL scan) while the connection is down.
+	* ipmi_lan.c: ditto
+	* ipmi_smi.c: ditto
+	
 	* OpenIPMI.texi: Documented the changes to the SEL code.
 	
 	* mc.c, include/OpenIPMI/ipmi_oem.h: Added an OEM callback for MC

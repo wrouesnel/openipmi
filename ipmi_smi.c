@@ -892,6 +892,15 @@ cleanup_con(ipmi_con_t *ipmi)
     }
 }
 
+static void
+smi_set_con_fail_handler(ipmi_con_t            *ipmi,
+			 ipmi_ll_con_failed_cb handler,
+			 void                  *cb_data)
+{
+    /* SMI connections can't fail, so we ignore this. */
+    return;
+}
+
 static int
 setup(int          if_num,
       os_handler_t *handlers,
@@ -912,6 +921,7 @@ setup(int          if_num,
     ipmi = malloc(sizeof(*ipmi));
     if (!ipmi)
 	return ENOMEM;
+    memset(ipmi, 0, sizeof(*ipmi));
 
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
@@ -921,6 +931,8 @@ setup(int          if_num,
 	rv = ENOMEM;
 	goto out_err;
     }
+    memset(smi, 0, sizeof(*smi));
+
     ipmi->con_data = smi;
 
     smi->ipmi = ipmi;
@@ -953,6 +965,7 @@ setup(int          if_num,
 
     smi->if_num = if_num;
 
+    ipmi->set_con_fail_handler = smi_set_con_fail_handler;
     ipmi->send_command = smi_send_command;
     ipmi->register_for_events = smi_register_for_events;
     ipmi->deregister_for_events = smi_deregister_for_events;

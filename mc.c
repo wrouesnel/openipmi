@@ -82,6 +82,12 @@ typedef struct bmc_rescan_bus_info_s
     ipmi_mc_t *bmc;
 } bmc_rescan_bus_info_t;
 
+struct ipmi_bmc_con_fail_s
+{
+    ipmi_bmc_cb handler;
+    void        *cb_data;
+};
+
 typedef struct ipmi_bmc_s
 {
     /* The main set of SDRs on a BMC. */
@@ -144,6 +150,11 @@ typedef struct ipmi_bmc_s
     /* Timer for rescanning the sel periodically. */
     os_hnd_timer_id_t *sel_timer;
     bmc_reread_info_t *sel_timer_info;
+
+    ilist_t *con_fail_handlers;
+
+    /* Is the low-level connection up? */
+    int connection_up;
 } ipmi_bmc_t;
 
 struct ipmi_mc_s
@@ -369,13 +380,106 @@ ipmi_mc_find_or_create_mc_by_slave_addr(ipmi_mc_t    *bmc,
     return 0;
 }
 
-static void ll_rsp_handler(ipmi_con_t   *ipmi,
-			   ipmi_addr_t  *addr,
-			   unsigned int addr_len,
-			   ipmi_msg_t   *msg,
-			   void         *rsp_data,
-			   void         *data2,
-			   void         *data3)
+int
+ipmi_bmc_add_con_fail_handler(ipmi_mc_t           *bmc,
+			      ipmi_bmc_cb         handler,
+			      void                *cb_data,
+			      ipmi_bmc_con_fail_t **id)
+{
+    ipmi_bmc_con_fail_t *new_id;
+
+    if (bmc->bmc_mc != bmc)
+	/* Not a BMC. */
+	return EINVAL;
+
+    new_id = malloc(sizeof(*new_id));
+    if (!new_id)
+	return ENOMEM;
+
+    new_id->handler = handler;
+    new_id->cb_data = cb_data;
+    if (! ilist_add_tail(bmc->bmc->con_fail_handlers, new_id, NULL)) {
+	free(new_id);
+	return ENOMEM;
+    }
+
+    return 0;
+}
+
+void
+ipmi_bmc_remove_con_fail_handler(ipmi_mc_t           *bmc,
+				 ipmi_bmc_con_fail_t *id)
+{
+    ilist_iter_t iter;
+    int          rv;
+
+    if (bmc->bmc_mc != bmc)
+	/* Not a BMC. */
+	return;
+
+    ilist_init_iter(&iter, bmc->bmc->con_fail_handlers);
+    rv = ilist_first(&iter);
+    while (rv) {
+	if (ilist_get(&iter) == id) {
+	    ilist_delete(&iter);
+	    free(id);
+	    break;
+	}
+	rv = ilist_next(&iter);
+    }
+}
+
+typedef struct con_fail_info_s
+{
+    ipmi_mc_t *bmc;
+    int       err;
+} con_fail_info_t;
+
+static void
+iterate_con_fails(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    con_fail_info_t     *info = cb_data;
+    ipmi_bmc_con_fail_t *id = item;
+
+    id->handler(info->bmc, info->err, id->cb_data);
+}
+
+static void
+ll_con_failed(ipmi_con_t *ipmi,
+	      int        err,
+	      void       *cb_data)
+{
+    ipmi_mc_t       *bmc = cb_data;
+    con_fail_info_t info = {bmc, err};
+    int             rv;
+
+    ipmi_read_lock();
+    rv = ipmi_mc_validate(bmc);
+    if (rv)
+	/* So the connection failed.  So what, there's no BMC. */
+	goto out_unlock;
+
+    if (err)
+	bmc->bmc->connection_up = 0;
+    else
+	bmc->bmc->connection_up = 1;
+
+    ipmi_lock(bmc->bmc->mc_list_lock);
+    ilist_iter(bmc->bmc->mc_list, iterate_con_fails, &info);
+    ipmi_unlock(bmc->bmc->mc_list_lock);
+
+ out_unlock:
+    ipmi_read_unlock();
+}
+
+static void
+ll_rsp_handler(ipmi_con_t   *ipmi,
+	       ipmi_addr_t  *addr,
+	       unsigned int addr_len,
+	       ipmi_msg_t   *msg,
+	       void         *rsp_data,
+	       void         *data2,
+	       void         *data3)
 {
     ipmi_response_handler_t rsp_handler = data2;
     ipmi_mc_t               *bmc = data3;
@@ -1076,6 +1180,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 
 	if (mc->bmc->mc_list)
 	    free_ilist(mc->bmc->mc_list);
+	if (mc->bmc->con_fail_handlers)
+	    free_ilist(mc->bmc->con_fail_handlers);
 	if (mc->bmc->mc_list_lock)
 	    ipmi_destroy_lock(mc->bmc->mc_list_lock);
 	if (mc->bmc->event_handlers_lock)
@@ -1089,6 +1195,7 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	if (mc->bmc->ll_event_id)
 	    mc->bmc->conn->deregister_for_events(mc->bmc->conn,
 						 mc->bmc->ll_event_id);
+	mc->bmc->conn->set_con_fail_handler(mc->bmc->conn, NULL,  NULL);
 	free(mc->bmc);
     } else if (mc->in_bmc_list) {
 	ilist_iter_t iter;
@@ -1171,7 +1278,9 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 	return;
     }
 
-    ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
+    /* Only fetch the SEL if we know the connection is up. */
+    if (bmc->bmc->connection_up)
+	ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
 
     timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
     timeout.tv_usec = 0;
@@ -1547,11 +1656,16 @@ bmc_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 	return;
     }
 
-    /* Rescan all the presence sensors to make sure they are valid. */
-    ipmi_detect_bmc_presence_changes(bmc, 1);
+    /* Only operate if we know the connection is up. */
+    if (bmc->bmc->connection_up) {
+	/* Rescan all the presence sensors to make sure they are valid. */
+	ipmi_detect_bmc_presence_changes(bmc, 1);
 
-    ipmi_lock(bmc->bmc->mc_list_lock);
-    start_mc_scan(bmc);
+	ipmi_lock(bmc->bmc->mc_list_lock);
+	start_mc_scan(bmc);
+	ipmi_unlock(bmc->bmc->mc_list_lock);
+    }
+
     timeout.tv_sec = IPMI_RESCAN_BUS_INTERVAL;
     timeout.tv_usec = 0;
     bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
@@ -1559,7 +1673,6 @@ bmc_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 					&timeout,
 					bmc_rescan_bus,
 					info);
-    ipmi_unlock(bmc->bmc->mc_list_lock);
 }
 
 static void
@@ -1920,8 +2033,17 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->bmc->setup_finished_handler = NULL;
     mc->bmc->do_bus_scan = 1;
 
+    mc->bmc->connection_up = 1;
+    mc->bmc->conn->set_con_fail_handler(mc->bmc->conn, ll_con_failed, mc);
+
     mc->bmc->mc_list = alloc_ilist();
     if (! mc->bmc->mc_list) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    mc->bmc->con_fail_handlers = alloc_ilist();
+    if (! mc->bmc->con_fail_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }

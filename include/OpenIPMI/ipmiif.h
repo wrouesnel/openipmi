@@ -128,6 +128,17 @@ int ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2);
 /* Callback used for generic BMC reporting. */
 typedef void (*ipmi_bmc_cb)(ipmi_mc_t *bmc, int err, void *cb_data);
 
+typedef struct ipmi_bmc_con_fail_s ipmi_bmc_con_fail_t;
+
+/* Add and remove a function to be called when the connection to the
+   BMC goes down. */
+int ipmi_bmc_add_con_fail_handler(ipmi_mc_t           *bmc,
+				  ipmi_bmc_cb         handler,
+				  void                *cb_data,
+				  ipmi_bmc_con_fail_t **id);
+void ipmi_bmc_remove_con_fail_handler(ipmi_mc_t           *bmc,
+				      ipmi_bmc_con_fail_t *id);
+
 /* Events come in this format. */
 typedef void (*ipmi_event_handler_t)(ipmi_mc_t    *bmc,
 				     ipmi_event_t *event,

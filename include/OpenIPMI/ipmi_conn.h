@@ -73,6 +73,14 @@ typedef void (*ipmi_ll_cmd_handler_t)(ipmi_con_t   *ipmi,
 				      void         *data2,
 				      void         *data3);
 
+/* Called when a low-level connection has failed or come up.  If err
+   is zero, the connection has come up after being failed.  if err is
+   non-zero, it's an error number to report why the failure
+   occurred. */
+typedef void (*ipmi_ll_con_failed_cb)(ipmi_con_t *ipmi,
+				      int        err,
+				      void       *cb_data);
+
 /* The data structure representing a connection.  The low-level handler
    fills this out then calls ipmi_init_con() with the connection. */
 struct ipmi_con_s
@@ -95,6 +103,13 @@ struct ipmi_con_s
 
     /* Calls for the interface.  These should all return standard
        "errno" errors if they fail. */
+
+    /* Set the callback to call when the connection goes down or up.
+       There is only one of these handlers, changing it overwrites it.
+       Setting it to NULL disables it. */
+    void (*set_con_fail_handler)(ipmi_con_t            *ipmi,
+				 ipmi_ll_con_failed_cb handler,
+				 void                  *cb_data);
 
     /* Send an IPMI command (in "msg".  on the "ipmi" connection to
        the given "addr".  When the response comes in or the message
