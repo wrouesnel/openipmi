@@ -1,11 +1,17 @@
 
+2003-06-06 Corey Minyard <cminyard@mvista.com>
+
+	* sel.c: Modified to not use the state to tell if something is
+	going on, but to use the opq.  Deletes don't modify the state, but
+	they may still be in process at deletion.
+
 2003-06-05 Corey Minyard <cminyard@mvista.com>
 
 	* sel.c: Fixed a SEL destruction race condition.
 
 2003-06-04 Corey Minyard <cminyard@mvista.com>
 
-	* OpenIPMI.tex, REAME.Force: Minor updates to make some things
+	* OpenIPMI.tex, README.Force: Minor updates to make some things
 	clearer.
 
 	* basic_ui.c: Fixed a problem with SMI connections.

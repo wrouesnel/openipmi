@@ -62,8 +62,6 @@ typedef struct sel_event_holder_s
     ipmi_event_t event;
 } sel_event_holder_t;
 
-enum fetch_state_e { IDLE, FETCHING, HANDLERS };
-
 struct ipmi_sel_info_s
 {
     ipmi_mcid_t mc;
@@ -91,11 +89,14 @@ struct ipmi_sel_info_s
        reaches a point were it can be stopped safely. */
     unsigned int destroyed : 1;
     unsigned int in_destroy : 1;
+
+    /* Is a fetch in the queue or currently running? */
+    unsigned int in_fetch : 1;
+
     /* Something to call when the destroy is complete. */
     ipmi_sel_destroyed_t destroy_handler;
     void                 *destroy_cb_data;
 
-    enum fetch_state_e fetch_state;
 
     /* When fetching the data in event-driven mode, these are the
        variables that track what is going on. */
@@ -219,7 +220,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
     sel->os_hnd = ipmi_domain_get_os_hnd(domain);
     sel->sel_lock = NULL;
     sel->fetched = 0;
-    sel->fetch_state = IDLE;
+    sel->in_fetch = 0;
     sel->num_sels = 0;
     sel->del_sels = 0;
     sel->destroy_handler = NULL;
@@ -298,10 +299,10 @@ ipmi_sel_destroy(ipmi_sel_info_t      *sel,
     sel->destroyed = 1;
     sel->destroy_handler = handler;
     sel->destroy_cb_data = cb_data;
-    if (sel->fetch_state != IDLE) {
-	/* It's currently in fetch state, so let it be destroyed in
-           the handler, since we can't cancel the handler or
-           operation. */
+    if (opq_stuff_in_progress(sel->opq)) {
+	/* It's currently doing something with callbacks, so let it be
+           destroyed in the handler, since we can't cancel the handler
+           or operation. */
 	sel_unlock(sel);
 	return 0;
     }
@@ -324,7 +325,7 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
     elem = sel->fetch_handlers;
     sel->fetch_handlers = NULL;
     sel->fetched = 1;
-    sel->fetch_state = HANDLERS;
+    sel->in_fetch = 0;
     while (elem) {
 	next = elem->next;
 	elem->next = NULL;
@@ -343,10 +344,6 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
 	/* Previous call releases lock. */
 	return;
     }
-
-    if (sel->fetch_state == HANDLERS)
-	/* The fetch process wasn't restarted, so go to IDLE. */
-	sel->fetch_state = IDLE;
 
     opq_op_done(sel->opq);
 
@@ -849,12 +846,12 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
     }
 
     sel_lock(sel);
-    if (sel->fetch_state != FETCHING) {
+    if (! sel->in_fetch) {
 	/* If we are not currently fetching sels, then start the
 	   process.  If we are already fetching sels, then the current
 	   fetch process will handle it. */
 	sel->fetch_retry_count = 0;
-	sel->fetch_state = FETCHING;
+	sel->in_fetch = 1;
 	sel->sels_changed = 0;
 
 	if (!opq_new_op(sel->opq, start_fetch, elem, 0)) {
@@ -1321,7 +1318,7 @@ sel_del_event_cb(ipmi_mc_t *mc, void *cb_data)
 	if (!opq_new_op(sel->opq, start_del_sel, data, 0))
 	    ipmi_mem_free(data);
     } else {
-	/* Do don't really delete the event, but report is as done. */
+	/* Don't really delete the event, but report is as done. */
 	info->handler(sel, info->cb_data, 0);
     }
 
