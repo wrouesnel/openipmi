@@ -1,3 +1,8 @@
+2004-08-10 Corey Minyard <cminyard@mvista.com> 
+
+	* ui/ui.c: Added support for displaying the one-shot reset and
+	output devices.
+
 2004-08-06 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c: Fixed some problems with handling event

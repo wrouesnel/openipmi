@@ -2558,9 +2558,11 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
 	case IPMI_CONTROL_RELAY:
 	case IPMI_CONTROL_ALARM:
 	case IPMI_CONTROL_RESET:
+	case IPMI_CONTROL_ONE_SHOT_RESET:
 	case IPMI_CONTROL_POWER:
 	case IPMI_CONTROL_FAN_SPEED:
 	case IPMI_CONTROL_OUTPUT:
+	case IPMI_CONTROL_ONE_SHOT_OUTPUT:
 	    display_pad_out("  num entities = %d\n", num_vals);
 	    break;
 
@@ -2608,9 +2610,11 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
 	    case IPMI_CONTROL_RELAY:
 	    case IPMI_CONTROL_ALARM:
 	    case IPMI_CONTROL_RESET:
+	    case IPMI_CONTROL_ONE_SHOT_RESET:
 	    case IPMI_CONTROL_POWER:
 	    case IPMI_CONTROL_FAN_SPEED:
 	    case IPMI_CONTROL_OUTPUT:
+	    case IPMI_CONTROL_ONE_SHOT_OUTPUT:
 		if (normal_control_vals) {
 		    for (i=0; i<num_vals; ) {
 			display_pad_out("%d (0x%x)", normal_control_vals[i],
@@ -2843,9 +2847,11 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
     case IPMI_CONTROL_RELAY:
     case IPMI_CONTROL_ALARM:
     case IPMI_CONTROL_RESET:
+    case IPMI_CONTROL_ONE_SHOT_RESET:
     case IPMI_CONTROL_POWER:
     case IPMI_CONTROL_FAN_SPEED:
     case IPMI_CONTROL_OUTPUT:
+    case IPMI_CONTROL_ONE_SHOT_OUTPUT:
 	ipmi_control_get_val(control, normal_control_val_read, NULL);
 	break;
 
@@ -2883,13 +2889,13 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 
 	control_ops_to_read_count = 1;
 
+	control_displayed = 0;
+
 	if (! ipmi_control_is_readable(control)) {
 	    /* If the control can't be read, then just display it now. */
 	    display_control(entity, control);
 	    return;
 	}
-
-	control_displayed = 0;
 
 	control_type = ipmi_control_get_type(control);
 	switch (control_type) {
@@ -2907,9 +2913,11 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 	case IPMI_CONTROL_RELAY:
 	case IPMI_CONTROL_ALARM:
 	case IPMI_CONTROL_RESET:
+	case IPMI_CONTROL_ONE_SHOT_RESET:
 	case IPMI_CONTROL_POWER:
 	case IPMI_CONTROL_FAN_SPEED:
 	case IPMI_CONTROL_OUTPUT:
+	case IPMI_CONTROL_ONE_SHOT_OUTPUT:
 	    control_ops_to_read_count++;
 	    rv = ipmi_control_get_val(control, normal_control_val_read, NULL);
 	    if (rv) {
@@ -5228,10 +5236,10 @@ set_control(ipmi_control_t *control, void *cb_data)
 	case IPMI_CONTROL_RELAY:
 	case IPMI_CONTROL_ALARM:
 	case IPMI_CONTROL_RESET:
+	case IPMI_CONTROL_ONE_SHOT_RESET:
 	case IPMI_CONTROL_POWER:
 	case IPMI_CONTROL_FAN_SPEED:
 	case IPMI_CONTROL_OUTPUT:
-	case IPMI_CONTROL_ONE_SHOT_RESET:
 	case IPMI_CONTROL_ONE_SHOT_OUTPUT:
 	    num_vals = ipmi_control_get_num_vals(control);
 	    vals = ipmi_mem_alloc(sizeof(*vals) * num_vals);
