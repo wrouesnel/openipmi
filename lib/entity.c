@@ -5526,7 +5526,7 @@ power_checked(ipmi_control_t *control,
 
     if (err) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%sentity.c(power_chedked): Unable to"
+		 "%sentity.c(power_checked): Unable to"
 		 " get power value, error %x",
 		 CONTROL_NAME(control), err);
 	return;
