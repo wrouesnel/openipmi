@@ -47,3 +47,10 @@
    information to correctly identify the sensor.
 
 10)There is no way to set the SNMP trap destination port.
+
+11)There does not appear to be a way to clear the SEL overflow flag
+   once it is set.  The operation of that flag (when set, how
+   cleared) is not defined.
+
+12)There appears to be no way to get the session limit or the enable
+   value for IPMI users. 

@@ -43,6 +43,7 @@
 #include <OpenIPMI/ipmi_glib.h>
 #include <OpenIPMI/ipmi_debug.h>
 #include <OpenIPMI/ipmi_user.h>
+#include <OpenIPMI/ipmi_lanparm.h>
 
 /* For ipmi_debug_malloc_cleanup() */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -1640,6 +1641,8 @@ sensor_event_enable_handler(ipmi_sensor_t *sensor,
     sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
     swig_call_cb(cb, "sensor_event_enable_cb", "%p%d", &sensor_ref, err);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -1665,6 +1668,8 @@ sensor_get_event_enables_handler(ipmi_sensor_t      *sensor,
 		 &sensor_ref, err, st);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
     free(st);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -1678,6 +1683,8 @@ sensor_rearm_handler(ipmi_sensor_t      *sensor,
     sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
     swig_call_cb(cb, "sensor_rearm_cb", "%p%d", &sensor_ref, err);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -1694,6 +1701,8 @@ sensor_get_hysteresis_handler(ipmi_sensor_t *sensor,
     swig_call_cb(cb, "sensor_get_hysteresis_cb", "%p%d%d%d", &sensor_ref, err,
 		 positive_hysteresis, negative_hysteresis);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -1707,6 +1716,8 @@ sensor_set_hysteresis_handler(ipmi_sensor_t      *sensor,
     sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
     swig_call_cb(cb, "sensor_set_hysteresis_cb", "%p%d", &sensor_ref, err);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -1720,6 +1731,8 @@ sensor_set_thresholds_handler(ipmi_sensor_t      *sensor,
     sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
     swig_call_cb(cb, "sensor_set_thresholds_cb", "%p%d", &sensor_ref, err);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void sensor_get_thresholds_handler(ipmi_sensor_t     *sensor,
@@ -1736,6 +1749,8 @@ static void sensor_get_thresholds_handler(ipmi_sensor_t     *sensor,
 		 thstr);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
     free(thstr);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -1765,6 +1780,8 @@ sensor_get_reading_handler(ipmi_sensor_t             *sensor,
 		 raw_set, raw_value, value_set, value, statestr);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
     free(statestr);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -1783,6 +1800,8 @@ sensor_get_states_handler(ipmi_sensor_t *sensor,
 		 err, statestr);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
     free(statestr);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static int
@@ -1985,6 +2004,8 @@ control_val_set_handler(ipmi_control_t *control, int err, void *cb_data)
     control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
     swig_call_cb(cb, "control_set_val_cb", "%p%d", &control_ref, err);
     swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -1998,6 +2019,8 @@ control_val_get_handler(ipmi_control_t *control, int err, int *val,
     swig_call_cb(cb, "control_get_val_cb", "%p%d%*p", &control_ref, err,
 		 ipmi_control_get_num_vals(control), val);
     swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -2012,6 +2035,8 @@ control_val_get_light_handler(ipmi_control_t *control, int err,
     swig_call_cb(cb, "control_get_light_cb", "%p%d%s", &control_ref, err,
 		 light_setting_to_str(val));
     swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -2026,6 +2051,8 @@ control_val_get_id_handler(ipmi_control_t *control, int err,
     swig_call_cb(cb, "control_get_id_cb", "%p%d%*s", &control_ref, err,
 		 length, val);
     swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static int
@@ -2046,6 +2073,37 @@ control_val_event_handler(ipmi_control_t *control, int *valid_vals, int *val,
     swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
     swig_free_ref(event_ref);
     return IPMI_EVENT_NOT_HANDLED;
+}
+
+static void
+lanparm_get_parm(ipmi_lanparm_t *lanparm,
+		 int            err,
+		 unsigned char  *data,
+		 unsigned int   data_len,
+		 void           *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    lanparm_ref;
+
+    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
+    swig_call_cb(cb, "lanparm_got_parm_cb", "%p%d%*s", &lanparm_ref, err,
+		 data_len, (char *) data);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+lanparm_set_parm(ipmi_lanparm_t *lanparm,
+		 int            err,
+		 void           *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    lanparm_ref;
+
+    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
+    swig_call_cb(cb, "lanparm_set_parm_cb", "%p%d", &lanparm_ref, err);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 %}
@@ -2094,6 +2152,12 @@ typedef struct {
 
 typedef struct {
 } ipmi_user_t;
+
+typedef struct {
+} ipmi_lanparm_t;
+
+typedef struct {
+} ipmi_lan_config_t;
 
 %inline %{
 void enable_debug_malloc()
@@ -4581,8 +4645,8 @@ char *color_string(int color);
      */
     int get_users(int channel, int user, swig_cb handler)
     {
-	int                  rv;
-	swig_cb_val          handler_val = NULL;
+	int         rv;
+	swig_cb_val handler_val;
 
 	if (!valid_swig_cb(handler))
 	    return EINVAL;
@@ -4610,9 +4674,9 @@ char *color_string(int color);
 		 int         usernum,
 		 swig_cb     handler = NULL)
     {
-	int                  rv;
-	swig_cb_val          handler_val = NULL;
-	ipmi_mc_done_cb      done = NULL;
+	int             rv;
+	swig_cb_val     handler_val = NULL;
+	ipmi_mc_done_cb done = NULL;
 
 	if (valid_swig_cb(handler)) {
 	    handler_val = ref_swig_cb(handler);
@@ -4623,6 +4687,22 @@ char *color_string(int color);
 	if (rv)
 	    deref_swig_cb_val(handler_val);
 	return rv;
+    }
+
+    /*
+     * Allocate a lanparm object for the MC.  The channel is the first
+     * parameter, the lanparm is returned.
+     */
+    %newobject get_lanparm;
+    ipmi_lanparm_t *get_lanparm(int channel)
+    {
+	int            rv;
+	ipmi_lanparm_t *lp;
+
+	rv = ipmi_lanparm_alloc(self, channel, &lp);
+	if (rv)
+	    return NULL;
+	return lp;
     }
 }
 
@@ -6774,7 +6854,7 @@ char *color_string(int color);
      *  "ascii" - The string passed in is used.
      * Passing an undefined value for binary, unicode, and ascii
      * will result in the field being cleared or (for custom fields)
-     * deleted.  NULL values are not allowed for integer or times.
+     * deleted.  NULL values are not allowed for integer or time.
      */
     int set(int index, int num, char *type, char *value = NULL)
     {
@@ -7157,4 +7237,151 @@ char *color_string(int color);
 	rv.len = data_len;
 	return rv;
     }
+}
+
+%extend ipmi_lanparm_t {
+    ~ipmi_lanparm_t()
+    {
+	ipmi_lanparm_destroy(self, NULL, NULL);
+    }
+
+    %newobject get_mc_id;
+    ipmi_mcid_t *get_mc_id()
+    {
+	ipmi_mcid_t *rv = malloc(sizeof(*rv));
+	if (rv)
+	    *rv = ipmi_lanparm_get_mc_id(self);
+	return rv;
+    }
+
+    int get_channel()
+    {
+	return ipmi_lanparm_get_channel(self);
+    }
+
+#define LANPARM_SET_IN_PROGRESS			0
+#define LANPARM_AUTH_TYPE_SUPPORT		1
+#define LANPARM_AUTH_TYPE_ENABLES		2
+#define LANPARM_IP_ADDRESS			3
+#define LANPARM_IP_ADDRESS_SRC			4
+#define LANPARM_MAX_ADDRESS			5
+#define LANPARM_SUBNET_MASK			6
+#define LANPARM_IPV4_HDR_PARMS			7
+#define LANPARM_PRIMARY_RMCP_PORT		8
+#define LANPARM_SECONDARY_RMCP_PORT		9
+#define LANPARM_BMC_GENERATED_ARP_CNTL		10
+#define LANPARM_GRATUIDOUS_ARP_INTERVAL		11
+#define LANPARM_DEFAULT_GATEWAY_ADDR		12
+#define LANPARM_DEFAULT_GATEWAY_MAC_ADDR	13
+#define LANPARM_BACKUP_GATEWAY_ADDR		14
+#define LANPARM_BACKUP_GATEWAY_MAC_ADDR		15
+#define LANPARM_COMMUNITY_STRING		16
+#define LANPARM_NUM_DESTINATIONS		17
+#define LANPARM_DEST_TYPE			18
+#define LANPARM_DEST_ADDR			19
+
+    /*
+     * Fetch an individual parm from the MC.  The parameter (parm1) ,
+     * and set (parm2) and block (parm3) are specified, along with a
+     * handler (parm4).  The lanparm_got_parm_cb method on the handler
+     * will be called when the the operation completes with the
+     * following parms: <self> <lanparm> <err> <data1> [<data2> ...]
+     */
+    int get_parm(int parm, int set, int block, swig_cb handler)
+    {
+	int         rv;
+	swig_cb_val handler_val;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_lanparm_get_parm(self, parm, set, block, lanparm_get_parm,
+				   handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set an individual parm on the MC.  The parameter (parm1),
+     * and string value (parm2) is specified, along with an optional
+     * handler (parm3).  The lanparm_set_parm_cb method on the handler
+     * will be called when the the operation completes with the
+     * following parms: <self> <lanparm> <err>.
+     *
+     * The string value is in the form "0xNN 0xNN ...", basically
+     * a string of integer values.
+     */
+    int set_parm(int parm, char *value, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_lanparm_done_cb done = NULL;
+	unsigned char        *data;
+	unsigned int         length;
+
+	data = parse_raw_str_data(value, &length);
+	if (!data)
+	    return ENOMEM;
+
+	if (valid_swig_cb(handler)) {
+	    done = lanparm_set_parm;
+	    handler_val = ref_swig_cb(handler);
+	}
+
+	rv = ipmi_lanparm_set_parm(self, parm, data, length,
+				   done, handler_val);
+	free(data);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set an individual parm on the MC.  The parameter (parm1), and
+     * an array of integers (parm2) is specified, along with an
+     * optional handler (parm3).  The lanparm_set_parm_cb method on
+     * the handler will be called when the the operation completes
+     * with the following parms: <self> <lanparm> <err>.
+     *
+     * The string value is in the form "0xNN 0xNN ...", basically
+     * a string of integer values.
+     */
+    int set_parm(int parm, intarray value, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_lanparm_done_cb done = NULL;
+	unsigned char        *data;
+	unsigned int         length = value.len;
+
+	if (length == 0)
+	    data = malloc(1);
+	else
+	    data = malloc(length);
+	if (!data)
+	    return ENOMEM;
+	parse_ipmi_data(value, data, length, &length);
+
+	if (valid_swig_cb(handler)) {
+	    done = lanparm_set_parm;
+	    handler_val = ref_swig_cb(handler);
+	}
+
+	rv = ipmi_lanparm_set_parm(self, parm, data, length,
+				   done, handler_val);
+	free(data);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+}
+
+%extend ipmi_lan_config_t {
+    ~ipmi_lan_config_t()
+    {
+	ipmi_lan_free_config(self);
+    }
+
+
 }

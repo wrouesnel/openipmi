@@ -1324,21 +1324,382 @@ handle_ipmi_set_lan_config_parms(lan_data_t *lan,
 				 session_t  *session,
 				 msg_t      *msg)
 {
-    lan->log(INVALID_MSG, msg,
-	     "Set LAN config parms failure: invalid cmd");
-    /* FIXME -  This is manditory, and we don't do it yet. */
-    return_err(lan, msg, session, IPMI_INVALID_CMD_CC);
+    unsigned char err = 0;
+    int           idx;
+
+    if (msg->len < 3) {
+	lan->log(INVALID_MSG, msg, "Set lan config parm too short");
+	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
+	return;
+    }
+
+    if ((msg->data[0] & 0xf) != MAIN_CHANNEL) {
+	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	return;
+    }
+
+    switch (msg->data[1])
+    {
+    case 0:
+	switch (msg->data[2] & 0x3)
+	{
+	case 0:
+	    if (lan->lanparm.set_in_progress) {
+		/* rollback */
+		memcpy(&lan->lanparm, &lan->lanparm_rollback,
+		       sizeof(lan->lanparm));
+	    }
+	    /* No affect otherwise */
+	    break;
+
+	case 1:
+	    if (lan->lanparm.set_in_progress)
+		err = 0x81; /* Another user is writing. */
+	    else {
+		/* Save rollback data */
+		memcpy(&lan->lanparm_rollback, &lan->lanparm,
+		       sizeof(lan->lanparm));
+		lan->lanparm.set_in_progress = 1;
+	    }
+	    break;
+
+	case 2:
+	    if (lan->lanparm.commit)
+		lan->lanparm.commit(lan);
+	    memset(&lan->lanparm.changed, 0, sizeof(lan->lanparm.changed));
+	    lan->lanparm.set_in_progress = 0;
+	    break;
+
+	case 3:
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	}
+	break;
+
+    case 1:
+    case 17:
+	err = 0x82; /* Read-only data */
+
+    case 2:
+	if (msg->len < 7)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.auth_type_enables, msg->data+2, 5);
+	    lan->lanparm.changed.auth_type_enables = 1;
+	}
+	break;
+
+    case 3:
+	if (msg->len < 6)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.ip_addr, msg->data+2, 4);
+	    lan->lanparm.changed.ip_addr = 1;
+	}
+	break;
+
+    case 4:
+	lan->lanparm.ip_addr_src = msg->data[2];
+	lan->lanparm.changed.ip_addr_src = 1;
+	break;
+
+    case 5:
+	if (msg->len < 8)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.mac_addr, msg->data+2, 6);
+	    lan->lanparm.changed.mac_addr = 1;
+	}
+	break;
+
+    case 6:
+	if (msg->len < 6)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.subnet_mask, msg->data+2, 4);
+	    lan->lanparm.changed.subnet_mask = 1;
+	}
+	break;
+
+    case 7:
+	if (msg->len < 5)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.ipv4_hdr_parms, msg->data+2, 3);
+	    lan->lanparm.changed.ipv4_hdr_parms = 1;
+	}
+	break;
+
+    case 8:
+	if (msg->len < 4)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.primary_rmcp_port, msg->data+2, 2);
+	    lan->lanparm.changed.primary_rmcp_port = 1;
+	}
+	break;
+
+    case 9:
+	if (msg->len < 4)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.secondary_rmcp_port, msg->data+2, 2);
+	    lan->lanparm.changed.secondary_rmcp_port = 1;
+	}
+	break;
+
+    case 10:
+	lan->lanparm.bmc_gen_arp_ctl = msg->data[2];
+	lan->lanparm.changed.bmc_gen_arp_ctl = 1;
+	break;
+
+    case 11:
+	lan->lanparm.garp_interval = msg->data[2];
+	lan->lanparm.changed.garp_interval = 1;
+	break;
+
+    case 12:
+	if (msg->len < 6)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.default_gw_ip_addr, msg->data+2, 4);
+	    lan->lanparm.changed.default_gw_ip_addr = 1;
+	}
+	break;
+
+    case 13:
+	if (msg->len < 8)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.default_gw_mac_addr, msg->data+2, 6);
+	    lan->lanparm.changed.default_gw_mac_addr = 1;
+	}
+	break;
+
+    case 14:
+	if (msg->len < 6)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.backup_gw_ip_addr, msg->data+2, 4);
+	    lan->lanparm.changed.backup_gw_ip_addr = 1;
+	}
+	break;
+
+    case 15:
+	if (msg->len < 8)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.backup_gw_mac_addr, msg->data+2, 6);
+	    lan->lanparm.changed.backup_gw_mac_addr = 1;
+	}
+	break;
+
+    case 16:
+	if (msg->len < 20)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.community_string, msg->data+2, 18);
+	    lan->lanparm.changed.community_string = 1;
+	}
+	break;
+
+    case 18:
+	idx = msg->data[2] & 0xf;
+	if (msg->len < 6)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if (idx > lan->lanparm.num_destinations)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    memcpy(lan->lanparm.dest[idx].type, msg->data+3, 3);
+	    lan->lanparm.changed.dest_type[idx] = 1;
+	}
+	break;
+
+    case 19:
+	idx = msg->data[2] & 0xf;
+	if (msg->len < 15)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if (idx > lan->lanparm.num_destinations)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    memcpy(lan->lanparm.dest[idx].addr, msg->data+3, 12);
+	    lan->lanparm.changed.dest_addr[idx] = 1;
+	}
+	break;
+
+    default:
+	err = 0x80; /* Parm not supported */
+    }
+
+    return_err(lan, msg, session, err);
 }
+
+static void
+return_lan_config_data(lan_data_t *lan, unsigned int rev, int rev_only,
+		       msg_t *msg, session_t *session,
+		       unsigned char *data, unsigned int data_len)
+{
+    rsp_msg_t rsp;
+    unsigned char d[36];
+    unsigned int  d_len;
+
+    d[0] = 0;
+    d[1] = rev;
+    if (rev_only) {
+	d_len = 2;
+    } else {
+	memcpy(d+2, data, data_len);
+	d_len = data_len + 2;
+    }
+	
+    rsp.netfn = IPMI_TRANSPORT_NETFN | 1;
+    rsp.cmd = IPMI_GET_LAN_CONFIG_PARMS_CMD;
+    rsp.data = d;
+    rsp.data_len = d_len;
+    return_rsp(lan, msg, session, &rsp);
+}
+
 
 static void
 handle_ipmi_get_lan_config_parms(lan_data_t *lan,
 				 session_t  *session,
 				 msg_t      *msg)
 {
-    lan->log(INVALID_MSG, msg,
-	     "Get LAN config parms failure: invalid cmd");
-    /* FIXME -  This is manditory, and we don't do it yet. */
-    return_err(lan, msg, session, IPMI_INVALID_CMD_CC);
+    int           idx;
+    unsigned char databyte = 0;
+    unsigned char *data = NULL;
+    unsigned int  length = 0;
+
+    if (msg->len < 4) {
+	lan->log(INVALID_MSG, msg, "Get lan config parm too short");
+	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
+	return;
+    }
+
+    if ((msg->data[0] & 0xf) != MAIN_CHANNEL) {
+	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	return;
+    }
+
+    switch (msg->data[1])
+    {
+    case 0:
+	databyte = lan->lanparm.set_in_progress;
+	break;
+
+    case 1:
+	databyte = lan->lanparm.auth_type_support;
+	break;
+
+    case 17:
+	databyte = lan->lanparm.num_destinations;
+	break;
+
+    case 2:
+	data = lan->lanparm.auth_type_enables;
+	length = 5;
+	break;
+
+    case 3:
+	data = lan->lanparm.ip_addr;
+	length = 4;
+	break;
+
+    case 4:
+	databyte = lan->lanparm.ip_addr_src;
+	break;
+
+    case 5:
+	data = lan->lanparm.mac_addr;
+	length = 6;
+	break;
+
+    case 6:
+	data = lan->lanparm.subnet_mask;
+	length = 4;
+	break;
+
+    case 7:
+	data = lan->lanparm.ipv4_hdr_parms;
+	length = 3;
+	break;
+
+    case 8:
+	data = lan->lanparm.primary_rmcp_port;
+	length = 2;
+	break;
+
+    case 9:
+	data = lan->lanparm.secondary_rmcp_port;
+	length = 2;
+	break;
+
+    case 10:
+	databyte = lan->lanparm.bmc_gen_arp_ctl;
+	break;
+
+    case 11:
+	databyte = lan->lanparm.garp_interval;
+	break;
+
+    case 12:
+	data = lan->lanparm.default_gw_ip_addr;
+	length = 4;
+	break;
+
+    case 13:
+	data = lan->lanparm.default_gw_mac_addr;
+	length = 6;
+	break;
+
+    case 14:
+	data = lan->lanparm.backup_gw_ip_addr;
+	length = 4;
+	break;
+
+    case 15:
+	data = lan->lanparm.backup_gw_mac_addr;
+	length = 6;
+	break;
+
+    case 16:
+	data = lan->lanparm.community_string;
+	length = 18;
+	break;
+
+    case 18:
+	idx = msg->data[2] & 0xf;
+	if (idx > lan->lanparm.num_destinations) {
+	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	    return;
+	} else {
+	    data = lan->lanparm.dest[idx].type;
+	    length = 3;
+	}
+	break;
+
+    case 19:
+	idx = msg->data[2] & 0xf;
+	if (idx > lan->lanparm.num_destinations) {
+	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	    return;
+	} else {
+	    data = lan->lanparm.dest[idx].addr;
+	    length = 12;
+	}
+	break;
+
+    default:
+	return_err(lan, msg, session, 0x80); /* Parm not supported */
+	return;
+    }
+
+    if (data) {
+	return_lan_config_data(lan, 0x11, msg->data[0] & 0x80,
+			       msg, session, data, length);
+    } else {
+	return_lan_config_data(lan, 0x11, msg->data[0] & 0x80,
+			       msg, session, &databyte, 1);
+    }
 }
 
 static void
