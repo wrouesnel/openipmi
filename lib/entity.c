@@ -397,6 +397,8 @@ entity_final_destroy(ipmi_entity_t *ent)
     locked_list_destroy(ent->control_handlers);
     locked_list_destroy(ent->sensor_handlers);
 
+    ipmi_destroy_lock(ent->lock);
+
     ipmi_unlock(ent->timer_lock);
     ipmi_destroy_lock(ent->timer_lock);
     ipmi_mem_free(ent);
