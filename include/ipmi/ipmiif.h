@@ -276,24 +276,47 @@ int ipmi_entity_set_ind_update_handler(ipmi_entity_t      *ent,
 /* Handles events from the given sensor with the handler.  Only one
    handler may be registered against a sensor, if you call this again
    with a new handler, the old handler will be replaced.  Set the
-   handler to NULL to disable it.  If this is called inside an entity
-   sensor add callback, the sensor will not receive any events until
-   that callback returns, so you can safely add this without loosing
-   any events from the sensor. For a threshold, offset will be: (enum
-   ipmi_thresh_e << 1) | (enum ipmi_event_value_dir_e) For discrete
-   sensors the offset will be from the tables for the sensor read or
-   sensor type. */
-typedef void (*ipmi_sensor_event_handler_cb)(
+   handler to NULL to disable it.  The dir variable tells if the
+   threshold is being asserted or deasserted.  The high_low value
+   tells if the value is going high or low, and the threshold value
+   tells which threshold is being reported.  if value_present is true,
+   the the "value" has been reported in the event and has been
+   converted to a linear value. */
+typedef void (*ipmi_sensor_threshold_event_handler_cb)(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_event_dir_e       dir,
+    enum ipmi_thresh_e          threshold,
+    enum ipmi_event_value_dir_e high_low,
+    int                         value_present,
+    double                      value,
+    void                        *cb_data);
+int
+ipmi_sensor_threshold_set_event_handler(
+    ipmi_sensor_t                          *sensor,
+    ipmi_sensor_threshold_event_handler_cb handler,
+    void                                   *cb_data);
+
+/* Register a handler for a discrete sensor.  Only one handler may be
+   registered against a sensor, if you call this again with a new
+   handler, the old handler will be replaced.  Set the handler to NULL
+   to disable it.  When an event comes in from the sensor, the
+   callback function will be called.  The "dir" variable tells if the
+   state is being asserted or deasserted, the offset is the state that
+   is being asserted or deasserted. */
+typedef void (*ipmi_sensor_discrete_event_handler_cb)(
     ipmi_sensor_t         *sensor,
     enum ipmi_event_dir_e dir,
     int                   offset,
-    int                   value_present,
-    double                value,
+    int                   severity_present,
+    int                   severity,
+    int			  prev_severity_present,
+    int                   prev_severity,
     void                  *cb_data);
 int
-ipmi_sensor_set_event_handler(ipmi_sensor_t                *sensor,
-			      ipmi_sensor_event_handler_cb handler,
-			      void                         *cb_data);
+ipmi_sensor_discrete_set_event_handler(
+    ipmi_sensor_t                         *sensor,
+    ipmi_sensor_discrete_event_handler_cb handler,
+    void                                  *cb_data);
 
 /* The event state is which events are set and cleared for the given
    sensor.  Events are enumerated for threshold events and numbered

@@ -687,16 +687,15 @@ possible discrete state.  One bit is reserved for other use.  This
 limits you to 15 possible states for each sensor, but that's generally
 not a big deal
 
-The readings are specified one of two ways.  This is specified by the
-@var{ipmi_sensor_get_event_reading_type}.  A value of one means a
-threshold sensor.  A value of 0x6f means the reading depends on the
-sensor type.  Values 0x2-0xc are generic are generic readings that can
-apply no matter what the sensor type, and are specified in the IPMI
-spec.
+The meanings of the readings are specified one of two ways.  This is
+specified by the @var{ipmi_sensor_get_event_reading_type}.  A value of
+one means a threshold sensor.  A value of 0x6f means the reading depends
+on the sensor type.  Values 0x2-0xc are generic readings that can apply
+no matter what the sensor type, and are specified in the IPMI spec.
 
 When the reading depends on the sensor type, you must do an
 @var{ipmi_sensor_get_sensor_type} to retrieve the sensor type.  You can
-use this to tell what the reading mean.
+use this to tell what the reading means.
 
 @node    Sensor Events, , Discrete Sensors, Sensors
 @subsection Sensor Events
@@ -727,7 +726,14 @@ events.
 
 You register to receive events for a sensor with
 @var{ipmi_sensor_set_event_handler}, which sets a callback that gets
-called when an event comes in from the given sensor.
+called when an event comes in from the given sensor.  When the callback
+comes in, the information from the event is presented, depending on the
+sensor type.
+
+For all sensor types, the direction (whether the state causing the event
+is being asserted or deasserted) is present.  The offset specifies the
+specific state or threshold that caused the event to be asserted.  If
+@var{value_present} is true, then the value was passed in the 
 
 @node    Indicators, , Sensors, Using OpenIPMI
 @section Indicators

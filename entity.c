@@ -520,8 +520,10 @@ static void
 presence_sensor_changed(ipmi_sensor_t         *sensor,
 			enum ipmi_event_dir_e dir,
 			int                   offset,
-			int                   value_present,
-			double                value,
+			int                   severity_present,
+			int                   severity,
+			int		      prev_severity_present,
+			int                   prev_severity,
 			void                  *cb_data)
 {
     ipmi_entity_t *ent = cb_data;
@@ -658,7 +660,9 @@ handle_new_presence_sensor(ipmi_entity_t *ent,
     ipmi_event_state_t events;
 
     /* Add our own event handler. */
-    ipmi_sensor_set_event_handler(sensor, presence_sensor_changed, ent);
+    ipmi_sensor_discrete_set_event_handler(sensor,
+					   presence_sensor_changed,
+					   ent);
 
     /* Configure the sensor per our liking (enable the proper events). */
     ipmi_event_state_init(&events);
