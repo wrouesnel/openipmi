@@ -5301,6 +5301,41 @@ mxp_create_entities(ipmi_mc_t  *mc,
  *
  **********************************************************************/
 
+static int
+board_reset_get_cb(ipmi_control_t     *control,
+		      mxp_control_info_t *control_info,
+		      unsigned char      *data)
+{
+    return data[11];
+}
+
+static int
+board_reset_get(ipmi_control_t      *control,
+		   ipmi_control_val_cb handler,
+		   void                *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->done_get = handler;
+    control_info->cb_data = cb_data;
+    control_info->get_val = board_reset_get_cb;
+    control_info->min_rsp_length = 13;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_SLOT_HS_STATUS_CMD;
+    control_info->extra_data_len = 0;
+
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
 static void
 board_reset_set_start(ipmi_control_t *control, int err, void *cb_data)
 {
@@ -5986,7 +6021,7 @@ new_board_sensors(ipmi_mc_t           *mc,
 			   IPMI_CONTROL_RESET,
 			   "reset",
 			   board_reset_set,
-			   NULL,
+			   board_reset_get,
 			   &sinfo->reset);
     if (rv)
 	goto out_err;

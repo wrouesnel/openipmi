@@ -1,3 +1,8 @@
+2004-02-22 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_motorola_mxp.c: Added reading the reset control for
+	boards.
+
 2004-02-20 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Added multi-record
