@@ -28,6 +28,10 @@
 	* lib/oem_motorola_mxp.c: Add fan speed raw/cooked conversion
 	function.
 
+	* lib/domain.c: Fixed a problem with handling old messages
+	on a failover.  Changed so that old messages will certainly
+	be ignored.
+
 2004-02-17 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_conn.h: Added a "broadcast broken" flag

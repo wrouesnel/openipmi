@@ -171,6 +171,9 @@ struct ipmi_domain_s
     long        cmds_seq; /* Sequence number for messages to avoid
 			     reuse problems. */
 
+    long        conn_seq; /* Sequence number for connection switchovers
+			     to avoid handling old messages. */
+
     ipmi_event_handler_id_t  *event_handlers;
     ipmi_lock_t              *event_handlers_lock;
     ipmi_oem_event_handler_cb oem_event_handler;
@@ -1285,18 +1288,17 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
     ipmi_domain_t *domain = rsp_data1;
     ll_msg_t      *nmsg = rsp_data2;
     long          seq = (long) rsp_data3;
+    long          conn_seq = (long) rsp_data4;
     int           rv;
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
-    if (rv) {
-	if (domain)
-	    find_and_remove_msg(domain, nmsg, seq);
-	if (nmsg->rsp_handler)
-	    nmsg->rsp_handler(NULL, NULL, 0, msg,
-			      nmsg->rsp_data1, nmsg->rsp_data2);
+    if (rv)
 	goto out_unlock;
-    }
+
+    if (conn_seq != domain->conn_seq)
+	/* The message has been rerouted, just ignore this response. */
+	goto out_unlock;
 
     if (!find_and_remove_msg(domain, nmsg, seq))
 	goto out_unlock;
@@ -1304,8 +1306,8 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
     if (nmsg->rsp_handler)
 	nmsg->rsp_handler(domain, addr, addr_len, msg,
 			  nmsg->rsp_data1, nmsg->rsp_data2);
- out_unlock:
     ipmi_mem_free(nmsg);
+ out_unlock:
     ipmi_read_unlock();
 }
 
@@ -1409,7 +1411,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 	if (u == -1)
 	    u = 0;
 	handler = ll_rsp_handler;
-	data4 = NULL;
+	data4 = (void *) (long) domain->conn_seq;
     }
 
     nmsg->domain = domain;
@@ -1468,6 +1470,7 @@ reroute_cmds(ipmi_domain_t *domain, int new_con)
     ipmi_lock(domain->cmds_lock);
     ilist_init_iter(&iter, domain->cmds);
     rv = ilist_first(&iter);
+    domain->conn_seq++;
     while (rv) {
 	nmsg = ilist_get(&iter);
 	if ((!domain->con_active[nmsg->con])
@@ -1487,7 +1490,7 @@ reroute_cmds(ipmi_domain_t *domain, int new_con)
 						     domain,
 						     nmsg,
 						     (void *) nmsg->seq,
-						     NULL);
+						     (void *) domain->conn_seq);
 	    if (rv) {
 		/* Couldn't send the message, just fail it. */
 		if (nmsg->rsp_handler) {
