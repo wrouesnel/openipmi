@@ -1,3 +1,12 @@
+2004-11-16 Corey Minyard <cminyard@mvista.com> 
+
+	* cmdlang/cmd_mc.c: Added support for the user information
+	viewing and modification.
+
+	* man/ipmi_cmdlang.7: Added information about the channel
+	and user commands just added.
+
+
 2004-11-15 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_auth.h, lib/ipmi_lan.c: Added the

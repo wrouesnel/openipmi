@@ -1044,18 +1044,147 @@ MC SEL rescan time set: <domain>
 Response:
 .RS
 .nf
-SEL Version: <integer>.<integer>
-SEL Count: <integer>
-SEL Slots Used: <integer>
-SEL Free Bytes: <integer>
-SEL Last Addition Timestamp: <integer>
-SEL overflow: <bool>
-SEL Supports Delete: <bool>
-SEL Supports Partial Add: <bool>
-SEL Supports Reserve: <bool>
-SEL Supports Get SEL Allocation: <bool>
+MC
+  Name: <mc>
+  SEL Version: <integer>.<integer>
+  SEL Count: <integer>
+  SEL Slots Used: <integer>
+  SEL Free Bytes: <integer>
+  SEL Last Addition Timestamp: <integer>
+  SEL overflow: <bool>
+  SEL Supports Delete: <bool>
+  SEL Supports Partial Add: <bool>
+  SEL Supports Reserve: <bool>
+  SEL Supports Get SEL Allocation: <bool>
 .fi
 .RE
+
+.B chan info <mc> <channel>
+- Dump information about the MC's channel.
+.TP
+Response:
+.RS
+.nf
+Channel Info
+  MC: <mc>
+  Number: <integer>
+  Medium: <integer>
+  Protocol Type: <integer>
+  Session Support: session-less|single-session|multi-session|session-based
+  Vendor ID: <data bytes>
+  Aux Info: <data bytes>
+.fi
+.RE
+
+.B chan get_access <mc> <channel> non-volatile|present|both
+- Dump information about the MC's channel access.  There are two different
+places where this is stored, the present in-use values (volatile) and the
+non-volatile storage that is loaded at startup.  Note if you specify
+channel 0xe, the response channel will be different; it will be the
+current channel.
+.TP
+Response:
+.RS
+.nf
+Channel Access
+  MC: <mc>
+  Channel: <integer>
+  Type: non-volatile|present
+  Alerting Enabled: <bool>
+  Per-Message Auth: <bool>
+  User Auth: <bool>
+  Access Mode: disable|pre-boot|always|shared
+  Privilege Limit: callback|user|operator|admin|oem
+.fi
+.RE
+
+.B chan set_access <mc> <channel> non-volatile|present|both <parm> <value> ...
+- Set information about the MC's channel access.  There are two different
+places where this is stored, the present in-use values (volatile) and the
+non-volatile storage that is loaded at startup.  Note if you specify
+channel 0xe, the modified channel will be the current channel.  Parms
+are:
+.RS
+.nf
+alert true|false
+msg_auth true|false
+user_auth true|false
+access_mode disabled|pre-boot|always|shared
+privilege_limit callback|user|operator|admin|oem
+.fi
+.RE
+.TP
+Response:
+.RS
+.nf
+Channel Access Set
+  MC: <mc>
+  Channel: <integer>
+.fi
+.RE
+
+.B chan user list <mc> <channel> [<user num>]
+- List users associated with the channel.  Each user number has
+an associated name and password that is global in the MC (not
+associated with a channel).  There is also channel-specific
+information for each user.  This command lists the global user
+information and the channel-specific information for the
+channel specified.  If no user number is listed, then
+all users for the channel are listed.  Otherwise only the
+given user is listed.
+.TP
+Response:
+.RS
+.nf
+Channel Access Set
+  MC: <mc>
+  Channel: <integer>
+  User
+    Number: <integer>
+    *String Name: <string>
+    *Binary Name: <data bytes>
+   Link Auth Enabled: <bool>
+   Msg Auth Enabled: <bool>
+   Access CB Only: <bool>
+  .
+  .
+.fi
+.RE
+All the users are listed.  One of string name or binary name is
+present, if the name is not a printable string, then the binary
+data is dumped.
+
+.B chan user set <mc> <channel> <user num> <parm> <value> ...
+- Set information about the user number.  Only the specified values are
+modified.  The name and password are global values, all other are
+channel-specific.  The parms are:
+are:
+.RS
+.nf
+link_enabled true|false
+msg_enabled true|false
+cb_only true|false
+privilege_limit callback|user|operator|admin|oem|no_access
+session_limit <integer>
+name <user name string>
+password <password string, <= 16 characters>
+password2 <password string, <= 20 characters>
+.fi
+.RE
+The password is the 16-byte IPMI 1.5 passwords., the password2 is for
+20-byte IPMI 2.0 passwords.  Note that setting the session limit to
+zero means there is no session limit.  Also note that some systems
+have a bug where the session limit is not optional (as the spec says
+it is). If you get C7 errors back from this command, you will have to
+always specify the session limit.
+.TP
+Response:
+.RS
+.nf
+User Info Set: <mc>
+.fi
+.RE
+
 
 .SS sel
 Commands dealing with the system event log.  Note that there is no

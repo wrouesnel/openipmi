@@ -732,7 +732,7 @@ got_chan_info(ipmi_mc_t  *mc,
     ipmi_cmdlang_out(cmd_info, "Channel Info", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "MC", mc_name);
-    ipmi_cmdlang_out_int(cmd_info, "Number", rsp->data[1] & 0xf);
+    ipmi_cmdlang_out_int(cmd_info, "Channel", rsp->data[1] & 0xf);
     ipmi_cmdlang_out_int(cmd_info, "Medium", rsp->data[2] & 0x7f);
     ipmi_cmdlang_out_int(cmd_info, "Protocol Type", rsp->data[3] & 0x1f);
     switch (rsp->data[4] >> 6) {
@@ -1136,24 +1136,28 @@ mc_set_chan_access(ipmi_mc_t *mc, void *cb_data)
 	if (!non_volatile) {
 	    cmdlang->err = ENOMEM;
 	    cmdlang->errstr = "Out of memory";
+	    goto out_err;
 	}
     } else if (strcmp(argv[curr_arg], "present") == 0) {
 	present = ipmi_mem_alloc(sizeof(*present));
 	if (!present) {
 	    cmdlang->err = ENOMEM;
 	    cmdlang->errstr = "Out of memory";
+	    goto out_err;
 	}
     } else if (strcmp(argv[curr_arg], "both") == 0) {
 	non_volatile = ipmi_mem_alloc(sizeof(*non_volatile));
 	if (!non_volatile) {
 	    cmdlang->err = ENOMEM;
 	    cmdlang->errstr = "Out of memory";
+	    goto out_err;
 	}
 	present = ipmi_mem_alloc(sizeof(*present));
 	if (!present) {
 	    ipmi_mem_free(non_volatile);
 	    cmdlang->err = ENOMEM;
 	    cmdlang->errstr = "Out of memory";
+	    goto out_err;
 	}
     } else {
 	cmdlang->err = EINVAL;
@@ -1319,6 +1323,718 @@ mc_set_chan_access(ipmi_mc_t *mc, void *cb_data)
     cmdlang->location = "cmd_mc.c(mc_get_chan_access)";
 }
 
+typedef struct user_info_s
+{
+    int  num;
+    int  link_enabled;
+    int  msg_enabled;
+    int  privilege_limit;
+    int  cb_only;
+    char name[17];
+} user_info_t;
+
+typedef struct user_list_s
+{
+    int             channel;
+    int             curr;
+    int             max;
+    int             idx;
+    ipmi_cmd_info_t *cmd_info;
+    user_info_t     *users;
+} user_list_t;
+
+static int list_next_user(ipmi_mc_t *mc, user_list_t *info);
+
+static void
+user_list_done(ipmi_mc_t *mc, user_list_t *info)
+{
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    char            mc_name[IPMI_MC_NAME_LEN];
+    int             i, j, k;
+    char            *str;
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    ipmi_cmdlang_lock(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "User", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+    ipmi_cmdlang_out_int(cmd_info, "Channel", info->channel);
+    for (i=0; i<info->idx; i++) {
+	ipmi_cmdlang_out(cmd_info, "User", NULL);
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_out_int(cmd_info, "Number", info->users[i].num);
+	str = info->users[i].name;
+	for (j=15; j>=0; j--) {
+	    if (str[j] != '\0')
+		break;
+	}
+	for (k=0; k<=j; k++) {
+	    if (! isprint(str[k])) {
+		str = NULL;
+		break;
+	    }
+	}
+	if (str)
+	    ipmi_cmdlang_out(cmd_info, "String Name", str);
+	else
+	    ipmi_cmdlang_out_binary(cmd_info, "Binary Name",
+				    info->users[i].name, 16);
+	ipmi_cmdlang_out_bool(cmd_info, "Link Auth Enabled",
+			      info->users[i].link_enabled);
+	ipmi_cmdlang_out_bool(cmd_info, "Msg Auth Enabled",
+			      info->users[i].msg_enabled);
+	ipmi_cmdlang_out_bool(cmd_info, "Access CB Only",
+			      info->users[i].cb_only);
+	ipmi_cmdlang_up(cmd_info);
+    }
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    if (info->users)
+	ipmi_mem_free(info->users);
+    ipmi_mem_free(info);
+}
+
+static void
+got_user2(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    user_list_t     *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error getting user name";
+	goto out_err;
+    }
+
+    if (rsp->data_len < 17) {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "User name response too small";
+	goto out_err;
+    }
+
+    memcpy(info->users[info->idx].name, rsp->data+1, 16);
+    info->users[info->idx].name[16] = '\0';
+
+    if (info->curr >= info->max)
+	user_list_done(mc, info);
+    else {
+	info->curr++;
+	info->idx++;
+	rv = list_next_user(mc, info);
+	if (rv) {
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Error sending get user name cmd";
+	    goto out_err;
+	}
+    }
+    return;
+
+ out_err:
+    cmdlang->location = "cmd_mc.c(got_user2)";
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    if (info->users)
+	ipmi_mem_free(info->users);
+    ipmi_mem_free(info);
+}
+
+static void
+got_user1(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    user_list_t     *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    int             idx;
+    ipmi_msg_t      msg;
+    unsigned char   data[1];
+
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error getting user info";
+	goto out_err;
+    }
+
+    if (rsp->data_len < 5) {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "User access info response too small";
+	goto out_err;
+    }
+
+    if (! info->users) {
+	if (info->max == 0)
+	    info->max = rsp->data[1] & 0x1f;
+	if (info->max < 1) {
+	    cmdlang->err = EINVAL;
+	    cmdlang->errstr = "User access user count is zero";
+	    goto out_err;
+	}
+	info->users = ipmi_mem_alloc(sizeof(user_info_t)
+				     * (info->max - info->curr + 1));
+	if (!info->users) {
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Could not allocate user info array";
+	    goto out_err;
+	}
+	memset(info->users, 0,
+	       sizeof(user_info_t) * (info->max - info->curr + 1));
+    }
+
+    idx = info->idx;
+    info->users[idx].num = info->curr;
+    info->users[idx].cb_only = (rsp->data[4] >> 6) & 1;
+    info->users[idx].link_enabled = (rsp->data[4] >> 5) & 1;
+    info->users[idx].msg_enabled = (rsp->data[4] >> 4) & 1;
+    info->users[idx].privilege_limit = rsp->data[4] & 0x0f;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_USER_NAME_CMD;
+    msg.data = data;
+    msg.data_len = 1;
+    data[0] = info->curr;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_user2, info);
+    if (rv) {
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error sending get user name cmd";
+	goto out_err;
+    }
+    
+    return;
+
+ out_err:
+    cmdlang->location = "cmd_mc.c(got_user1)";
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    if (info->users)
+	ipmi_mem_free(info->users);
+    ipmi_mem_free(info);
+}
+
+static int
+list_next_user(ipmi_mc_t *mc, user_list_t *info)
+{
+    ipmi_msg_t      msg;
+    unsigned char   data[2];
+
+    if ((info->curr > 0x1f) || (info->curr < 1))
+	return EINVAL;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_USER_ACCESS_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = info->channel & 0xf;
+    data[1] = info->curr;
+
+    return ipmi_mc_send_command(mc, 0, &msg, got_user1, info);
+}
+
+static void
+mc_user_list(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    user_list_t     *info = NULL;
+    int             channel;
+    int             user = 0;
+
+    if ((argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    if (argc > curr_arg) {
+	ipmi_cmdlang_get_int(argv[curr_arg], &user, cmd_info);
+	if (cmdlang->err) {
+	    cmdlang->errstr = "user invalid";
+	    goto out_err;
+	}
+	curr_arg++;
+    }
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->err = ENOMEM;
+	cmdlang->errstr = "Out of memory";
+	goto out_err;
+    }
+    memset(info, 0, sizeof(*info));
+
+    info->channel = channel;
+    info->cmd_info = cmd_info;
+    if (user) {
+	info->curr = user;
+	info->max = user;
+    } else {
+	info->curr = 1;
+	info->max = 0;
+    }
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = list_next_user(mc, info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	goto out_err;
+    }
+    return;
+
+ out_err:
+    if (info)
+	ipmi_mem_free(info);
+    ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
+    cmdlang->location = "cmd_mc.c(mc_user_list)";
+}
+
+typedef struct user_set_s
+{
+    int             channel;
+    int             user;
+    ipmi_cmd_info_t *cmd_info;
+    int             link_enabled_set;
+    int             link_enabled_val;
+    int             msg_enabled_set;
+    int             msg_enabled_val;
+    int             privilege_limit_set;
+    int             privilege_limit_val;
+    int             cb_only_set;
+    int             cb_only_val;
+    int             session_limit_set;
+    int             session_limit_val;
+    int             name_set;
+    char            name[16];
+    int             pw_set;
+    int             pw2_set;
+    char            pw[20];
+} user_set_t;
+
+static void set_user_done(ipmi_mc_t *mc, user_set_t *info)
+{
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    char            mc_name[IPMI_MC_NAME_LEN];
+    
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    ipmi_cmdlang_lock(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "User Info Set", mc_name);
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static void
+set_user4(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    user_set_t      *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error setting user password";
+	goto out_err;
+    }
+    set_user_done(mc, info);
+
+    return;
+
+ out_err:
+    cmdlang->location = "cmd_mc.c(set_user4)";
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static int set_pw(ipmi_mc_t *mc, user_set_t *info)
+{
+    ipmi_msg_t      msg;
+    unsigned char   data[22];
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_USER_PASSWORD_CMD;
+    msg.data = data;
+
+
+    data[0] = info->user;
+    data[1] = 0x02; /* set password */
+    if (info->pw2_set) {
+	msg.data_len = 22;
+	memcpy(data+2, info->pw, 20);
+    } else {
+	msg.data_len = 18;
+	memcpy(data+2, info->pw, 16);
+    }
+	
+    return ipmi_mc_send_command(mc, 0, &msg, set_user4, info);
+}
+
+static void
+set_user3(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    user_set_t      *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error setting user name";
+	goto out_err;
+    }
+
+    if (info->pw_set || info->pw2_set) {
+	rv = set_pw(mc, info);
+	if (rv) {
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Error sending set user password cmd";
+	    goto out_err;
+	}
+    } else
+	set_user_done(mc, info);
+
+    return;
+
+ out_err:
+    cmdlang->location = "cmd_mc.c(set_user3)";
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static int set_name(ipmi_mc_t *mc, user_set_t *info)
+{
+    ipmi_msg_t      msg;
+    unsigned char   data[17];
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_USER_NAME_CMD;
+    msg.data = data;
+    msg.data_len = 17;
+
+
+    data[0] = info->user;
+    memcpy(data+1, info->name, 16);
+	
+    return ipmi_mc_send_command(mc, 0, &msg, set_user3, info);
+}
+
+static void
+set_user2(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    user_set_t      *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv = 0;
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error setting user info";
+	goto out_err;
+    }
+
+    if (info->name_set) {
+	rv = set_name(mc, info);
+	if (rv) {
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Error sending set user name cmd";
+	    goto out_err;
+	}
+    } else if (info->pw_set || info->pw2_set) {
+	rv = set_pw(mc, info);
+	if (rv) {
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Error sending set user password cmd";
+	    goto out_err;
+	}
+    } else
+	set_user_done(mc, info);
+
+    return;
+
+ out_err:
+    cmdlang->location = "cmd_mc.c(set_user2)";
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static void
+set_user1(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    user_set_t      *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    ipmi_msg_t      msg;
+    unsigned char   data[4];
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error getting user info";
+	goto out_err;
+    }
+
+    if (rsp->data_len < 5) {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "User access info response too small";
+	goto out_err;
+    }
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_USER_ACCESS_CMD;
+    msg.data = data;
+    msg.data_len = 3;
+
+    data[0] = (rsp->data[4] & 0xf0) | 0x80 | info->channel;
+    data[1] = info->user;
+    data[2] = rsp->data[4] & 0x0f;
+    if (info->link_enabled_set)
+	data[0] = (data[0] & ~0x20) | info->link_enabled_val;
+    if (info->msg_enabled_set)
+	data[0] = (data[0] & ~0x10) | info->msg_enabled_val;
+    if (info->cb_only_set)
+	data[0] = (data[0] & ~0x40) | info->cb_only_val;
+    if (info->privilege_limit_set)
+	data[2] = (data[2] & ~0x0f) | info->privilege_limit_val;
+    if (info->session_limit_set) {
+	/* Optional value, afaict there is no way to get this value. */
+	data[3] = (info->session_limit_val & 0x0f);
+	msg.data_len++;
+    }
+	
+    rv = ipmi_mc_send_command(mc, 0, &msg, set_user2, info);
+    if (rv) {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "Error sending set user access cmd";
+	goto out_err;
+    }
+    return;
+
+ out_err:
+    cmdlang->location = "cmd_mc.c(set_user1)";
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static void
+mc_user_set(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int             channel;
+    int             user;
+    user_set_t      *info = NULL;
+    ipmi_msg_t      msg;
+    unsigned char   data[2];
+
+    if ((argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &user, cmd_info);
+    if (cmdlang->err || (user > 0x1f) || (user < 1)) {
+	cmdlang->errstr = "user invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->err = ENOMEM;
+	cmdlang->errstr = "Out of memory";
+	goto out_err;
+    }
+    memset(info, 0, sizeof(*info));
+    info->channel = channel;
+    info->cmd_info = cmd_info;
+    info->user = user;
+
+    while (curr_arg < argc) {
+	if (strcmp(argv[curr_arg], "link_enabled") == 0) {
+	    info->link_enabled_set = 1;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "link_enabled value";
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_bool(argv[curr_arg], &info->link_enabled_val,
+				  cmd_info);
+	    if (cmdlang->err) {
+		cmdlang->errstr = "invalid link_enabled value";
+		goto out_err;
+	    }
+	    info->link_enabled_val <<= 5;
+	} else if (strcmp(argv[curr_arg], "msg_enabled") == 0) {
+	    info->msg_enabled_set = 1;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no msg_enabled value";
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_bool(argv[curr_arg], &info->msg_enabled_val,
+				  cmd_info);
+	    if (cmdlang->err) {
+		cmdlang->errstr = "invalid msg_auth value";
+		goto out_err;
+	    }
+	    info->msg_enabled_val <<= 4;
+	} else if (strcmp(argv[curr_arg], "cb_only") == 0) {
+	    info->cb_only_set = 0x08;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no cb_only value";
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_bool(argv[curr_arg], &info->cb_only_val,
+				  cmd_info);
+	    if (cmdlang->err) {
+		cmdlang->errstr = "invalid cb_only value";
+		goto out_err;
+	    }
+	    info->cb_only_val <<= 6;
+	} else if (strcmp(argv[curr_arg], "privilege_limit") == 0) {
+	    info->privilege_limit_set = 1;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no privilege_limit value";
+		goto out_err;
+	    }
+	    if (strcmp(argv[curr_arg], "callback") == 0) {
+		info->privilege_limit_val = IPMI_PRIVILEGE_CALLBACK;
+	    } else if (strcmp(argv[curr_arg], "user") == 0) {
+		info->privilege_limit_val = IPMI_PRIVILEGE_USER;
+	    } else if (strcmp(argv[curr_arg], "operator") == 0) {
+		info->privilege_limit_val = IPMI_PRIVILEGE_OPERATOR;
+	    } else if (strcmp(argv[curr_arg], "admin") == 0) {
+		info->privilege_limit_val = IPMI_PRIVILEGE_ADMIN;
+	    } else if (strcmp(argv[curr_arg], "oem") == 0) {
+		info->privilege_limit_val = IPMI_PRIVILEGE_OEM;
+	    } else if (strcmp(argv[curr_arg], "no_access") == 0) {
+		info->privilege_limit_val = 0xf;
+	    } else {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "invalid privilege_limit value";
+		goto out_err;
+	    }
+	} else if (strcmp(argv[curr_arg], "session_limit") == 0) {
+	    info->session_limit_set = 1;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no session_limit value";
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_int(argv[curr_arg], &info->session_limit_val,
+				 cmd_info);
+	    if ((cmdlang->err) || (info->session_limit_val > 0xf)
+		|| (info->session_limit_val < 0))
+	    {
+		cmdlang->errstr = "invalid session_limit value";
+		goto out_err;
+	    }
+	} else if (strcmp(argv[curr_arg], "name") == 0) {
+	    info->name_set = 1;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no name value";
+		goto out_err;
+	    }
+	    strncpy(info->name, argv[curr_arg], 16);
+	} else if (strcmp(argv[curr_arg], "password") == 0) {
+	    info->pw_set = 1;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no name value";
+		goto out_err;
+	    }
+	    strncpy(info->pw, argv[curr_arg], 16);
+	} else if (strcmp(argv[curr_arg], "password2") == 0) {
+	    info->pw2_set = 1;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no name value";
+		goto out_err;
+	    }
+	    strncpy(info->pw, argv[curr_arg], 20);
+	} else {
+	    cmdlang->err = EINVAL;
+	    cmdlang->errstr = "invalid setting";
+	    goto out_err;
+	}
+	curr_arg++;
+    }
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_USER_ACCESS_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = info->channel & 0xf;
+    data[1] = info->user;
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_send_command(mc, 0, &msg, set_user1, info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error sending get user access cmd";
+	ipmi_cmdlang_unlock(cmd_info);
+	goto out_err;
+    }
+    return;
+
+ out_err:
+    if (info)
+	ipmi_mem_free(info);
+    ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
+    cmdlang->location = "cmd_mc.c(mc_user_list)";
+}
+
 static void
 mc_active(ipmi_mc_t *mc, int active, void *cb_data)
 {
@@ -1412,6 +2128,7 @@ ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 
 static ipmi_cmdlang_cmd_t *mc_cmds;
 static ipmi_cmdlang_cmd_t *mc_chan_cmds;
+static ipmi_cmdlang_cmd_t *mc_user_cmds;
 
 static ipmi_cmdlang_init_t cmds_mc[] =
 {
@@ -1465,13 +2182,48 @@ static ipmi_cmdlang_init_t cmds_mc[] =
       "<mc> <channel> - Get information about the channel on the MC.",
       ipmi_cmdlang_mc_handler, mc_get_chan_info, NULL },
     { "get_access", &mc_chan_cmds,
-      "<mc> <channel> nonvolatile|present|both - Get access info about the"
+      "<mc> <channel> non-volatile|present|both - Get access info about the"
       " channel on the MC.  Get either the the non-volatile settings,"
       " the current (volatile) settings, or both.",
       ipmi_cmdlang_mc_handler, mc_get_chan_access, NULL },
     { "set_access", &mc_chan_cmds,
-      "<mc> <channel> - Set access info about the channel on the MC.",
+      "<mc> <channel> non-volatile|present|both parm value [parm value ...]"
+      " - Set access info about the channel on the MC.  This will read"
+      " the values and modify the values specified in the parm/value"
+      " pairs.  The parms available are:\n"
+      "  alert true|false\n"
+      "  msg_auth true|false\n"
+      "  user_auth true|false\n"
+      "  access_mode disabled|pre-boot|always|shared\n"
+      "  privilege_limit callback|user|operator|admin|oem\n"
+      " See the spec for details on what this means.",
       ipmi_cmdlang_mc_handler, mc_set_chan_access, NULL },
+    { "user", &mc_chan_cmds,
+      "Commands to view manipulate users of a channel",
+      NULL, NULL, &mc_user_cmds },
+    { "list", &mc_user_cmds,
+      "<mc> <channel> [<num>]- List users for the given MC's channel."
+      " If the user number is given, only list that user, otherwise list"
+      " all the users",
+      ipmi_cmdlang_mc_handler, mc_user_list, NULL },
+    { "set", &mc_user_cmds,
+      "<mc> <channel> <num> <parm> <value> [<parm> <value> ...] - Set info"
+      " for the given user number.  The parameters are:\n"
+      "  link_enabled true|false\n"
+      "  msg_enabled true|false\n"
+      "  cb_only true|false\n"
+      "  privilege_limit callback|user|operator|admin|oem|no_access\n"
+      "  session_limit <integer>\n"
+      "  name <user name string>\n"
+      "  password <password string, <= 16 characters>\n"
+      "  password2 <password string, <= 20 characters>\n"
+      " Note that setting the session limit to zero means there is no"
+      " session limit.  Also note that some systems have a bug where"
+      " the session limit is not optional (as the spec says it is)."
+      " If you get C7 errors back from this command, you will have"
+      " to always specify the session limit.  The password2 option"
+      " is for IPMI 2.0 passwords that may be up to 20 characters.",
+      ipmi_cmdlang_mc_handler, mc_user_set, NULL },
 };
 #define CMDS_MC_LEN (sizeof(cmds_mc)/sizeof(ipmi_cmdlang_init_t))
 

@@ -28,3 +28,11 @@
    message to the IPMI controller in an NMI handler; you need a
    register that you can directly read to tell you this.  This makes
    using the NMI pretimeout very risky.
+
+5) In type 9 SDRs, in the entity device address fields, it states that
+   it is "Set to 00h if Instace ID is device-relative".  This is
+   almost certainly a mistake.  It shouldbe system-relative, not
+   device-relative.
+
+6) There is no way to read the user session limit (set by the set user
+   access command)
