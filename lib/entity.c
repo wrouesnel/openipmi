@@ -241,7 +241,8 @@ ipmi_entity_info_destroy(ipmi_entity_info_t *ents)
     return 0;
 }
 
-static void
+/* Returns true if the entity was really deleted, false if not. */
+static int
 cleanup_entity(ipmi_entity_t *ent)
 {
     ilist_iter_t iter;
@@ -253,7 +254,7 @@ cleanup_entity(ipmi_entity_t *ent)
 	|| (!ilist_empty(ent->parent_entities))
 	|| (!ilist_empty(ent->sensors))
 	|| (!ilist_empty(ent->controls)))
-	return;
+	return 0;
 
     /* Tell the user I was destroyed. */
     if (ent->ents->handler)
@@ -272,6 +273,7 @@ cleanup_entity(ipmi_entity_t *ent)
     /* The sensor, control,parent, and child lists should be empty
        now, we can just destroy it. */
     destroy_entity(NULL, ent, NULL);
+    return 1;
 }
 
 typedef struct search_info_s {
@@ -1345,8 +1347,8 @@ decode_gdlr(ipmi_sdr_t         *sdr,
     info->entity_instance = sdr->data[8];
     info->oem = sdr->data[9];
     info->id_len = ipmi_get_device_string(sdr->data+10, sdr->length-10,
-					      info->id, 0,
-					      &info->id_type, ENTITY_ID_LEN);
+					  info->id, 0,
+					  &info->id_type, ENTITY_ID_LEN);
 
     return 0;
 }
@@ -1854,10 +1856,12 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	_ipmi_set_sdr_entities(domain, mc, old_infos);
     }
 
+    /* Clear out all the temporary found information we use for
+       scanning. */
     for (i=0; i<old_infos->next; i++)
-	old_infos->found[i].found = 0;
+	memset(old_infos->found[i], 0, sizeof(entity_found_t));
     for (i=0; i<infos.next; i++)
-	infos.found[i].found = 0;
+	memset(infos.found[i], 0, sizeof(entity_found_t));
 
     /* For every item in the new array, try to find it in the old
        array.  This is O(n^2), but these should be small arrays. */
@@ -1939,18 +1943,6 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	}
     }
 
-    /* Now go through all the old dlrs that were not matched to see if
-       we should delete any entities associated with them. */
-    for (i=0; i<old_infos->next; i++) {
-	found = old_infos->found + i;
-	if (found->found)
-	    continue;
-
-	cleanup_entity(found->ent);
-	for (j=0; j<found->cent_next; j++)
-	    cleanup_entity(found->cent[j]);
-    }
-
     /* Now go through the new dlrs to call the updated handler on
        them. */
     for (i=0; i<infos.next; i++) {
@@ -1967,6 +1959,18 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 		found->cent[j]->ents->handler(IPMI_CHANGED, domain, found->ent,
 					      found->cent[j]->ents->cb_data);
 	}
+    }
+
+    /* Now go through all the old dlrs that were not matched to see if
+       we should delete any entities associated with them. */
+    for (i=0; i<old_infos->next; i++) {
+	found = old_infos->found + i;
+	if (found->found)
+	    continue;
+
+	cleanup_entity(found->ent);
+	for (j=0; j<found->cent_next; j++)
+	    cleanup_entity(found->cent[j]);
     }
 
 
