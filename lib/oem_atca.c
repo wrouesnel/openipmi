@@ -2659,6 +2659,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	atca_ipmc_t *b = &(info->ipmcs[i]);
 	char        *name;
 	int         entity_id;
+	char        *entity_id_str;
 
 	b->shelf = info;
 	b->idx = i;
@@ -2689,36 +2690,43 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	case 0:
 	    name = "ATCA Board";
 	    entity_id = 0xa0;
+	    entity_id_str = name;
 	    break;
 
 	case 1: /* Power entry module */
 	    name = "Power Unit";
 	    entity_id = 0x0a;
+	    entity_id_str = "ATCA Power Unit";
 	    break;
 
 	case 2: /* Shelf FRU info */
 	    name = "Shelf FRU";
 	    entity_id = 0xf2;
+	    entity_id_str = "ATCA Shelf FRU";
 	    break;
 
 	case 3: /* Dedicated ShMC */
 	    name = "ShMC";
 	    entity_id = 0xf0;
+	    entity_id_str = "ATCA ShMC";
 	    break;
 
 	case 4: /* Fan Tray */
 	    name = "Fan Tray";
 	    entity_id = 0x1e;
+	    entity_id_str = "ATCA Fan Tray";
 	    break;
 
 	case 5: /* Fan Filter Tray */
 	    name = "Fan Filters";
 	    entity_id = 0xf1;
+	    entity_id_str = "ATCA Fan Filters";
 	    break;
 
 	case 9: /* Rear Transition Module */
 	    name = "RTM";
 	    entity_id = 0xc0;
+	    entity_id_str = "ATCA RTM";
 	    break;
 
 	case 6: /* Alarm */
@@ -2742,6 +2750,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 		     DOMAIN_NAME(domain), rv);
 	    goto out;
 	}
+	ipmi_entity_set_entity_id_string(b->frus[0]->entity, entity_id_str);
 	rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,

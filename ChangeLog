@@ -7,6 +7,13 @@
 	* lib/oem_atca.c: Added a control for getting the address
 	information of an ATCA FRU.
 
+	* lib/oem_atca.c: Added entity id strings for all ATCA entities
+	that OpenIPMI deals with.
+
+	* lib/entity.c: Defer reporting an entity add until the entity is
+	put, so that the entity can be modified by OEM handlers before
+	they are reported
+
 2004-06-15 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Check for a null event in call_presence_handlers().

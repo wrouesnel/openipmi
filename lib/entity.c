@@ -137,6 +137,11 @@ struct ipmi_entity_s
 
     int          destroyed;
 
+    /* After the entity is added, it will not be reported immediately.
+       Instead, it will wait until the usecount goes to zero before
+       being reported.  This marks that the add report is pending */
+    int add_pending;
+
     /* My domain's os handler. */
     os_handler_t *os_hnd;
 
@@ -631,6 +636,19 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	    ent->pending_info_ready = 0;
 	}
 
+	if (ent->add_pending) {
+	    ent->add_pending = 0;
+	    ent->changed = 0;
+	    _ipmi_domain_entity_unlock(domain);
+	    call_entity_update_handlers(ent, IPMI_ADDED);
+	    _ipmi_domain_entity_lock(domain);
+
+	    /* Something grabbed the entity while the lock wasn't
+	       held, don't attempt the cleanup. */
+	    if (ent->usecount != 1)
+		goto out;
+	}
+
 	/* If the entity has changed, report it to the user. */
 	if (ent->changed) {
 	    ent->changed = 0;
@@ -881,8 +899,8 @@ entity_add(ipmi_entity_info_t *ents,
 
     _ipmi_domain_entity_unlock(ent->domain);
 
-    /* Call the update handler list. */
-    call_entity_update_handlers(ent, IPMI_ADDED);
+    /* Report the add when the entity is put. */
+    ent->add_pending = 1;
 
     if (new_ent)
 	*new_ent = ent;
