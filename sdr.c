@@ -109,6 +109,7 @@ struct ipmi_sdr_info_s
     int                    curr_rec_id;
     int                    next_rec_id;
     int                    sdr_data_read; /* Data read so far in the SDR. */
+    int                    reading_header;
     unsigned int           reservation;
     int                    curr_sdr_num; /* Current array index. */
     int                    working_num_sdrs;
@@ -382,6 +383,7 @@ start_reservation_check(ipmi_sdr_info_t *sdrs)
     sdr_unlock(sdrs);
 }
 
+#define SDR_HEADER_SIZE 5
 static void
 handle_sdr_data(ipmi_mc_t  *mc,
 		ipmi_msg_t *rsp,
@@ -421,6 +423,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    goto out;
 	}
 	sdrs->sdr_data_read = 0;
+	sdrs->reading_header = 1;
 	goto restart_this_sdr;
     }
     if (rsp->data[0] == IPMI_INVALID_RESERVATION_CC) {
@@ -466,9 +469,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    if (sdrs->sdr_data_read == 0) {
-	/* This is the first part of the SDR, so extract it. */
-	if (rsp->data_len < 8) {
+    if (sdrs->reading_header) {
+	/* This is the header part of the SDR, so extract it. */
+	if (rsp->data_len != 8) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "SDR data was too small to be a valid SDR in sdr 0x%x",
 		     sdrs->curr_rec_id);
@@ -483,10 +486,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    sdrs->working_sdrs[curr].minor_version = (rsp->data[5] >> 4) & 0xf;
 	    sdrs->working_sdrs[curr].type = rsp->data[6];
 	    sdrs->working_sdrs[curr].length = rsp->data[7];
-	    sdrs->sdr_data_read += rsp->data_len - 8;
-	    memcpy(sdrs->working_sdrs[curr].data,
-		   rsp->data + 8,
-		   sdrs->sdr_data_read);
+	    sdrs->reading_header = 0;
 	} else if (sdrs->next_rec_id == 0xFFFF) {
 	    /* We are at the end, start the next stage. */
 	    start_reservation_check(sdrs);
@@ -514,7 +514,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    goto out;
 	}
 
-	memcpy(sdrs->working_sdrs[curr].data+sdrs->sdr_data_read,
+	memcpy(sdrs->working_sdrs[curr].data + sdrs->sdr_data_read,
 	       rsp->data + 3,
 	       rsp->data_len - 3);
 	sdrs->sdr_data_read += rsp->data_len - 3;
@@ -534,6 +534,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	}
 	sdrs->curr_rec_id = sdrs->next_rec_id;
 	sdrs->sdr_data_read = 0;
+	sdrs->reading_header = 1;
     }
 
  restart_this_sdr:
@@ -549,11 +550,18 @@ handle_sdr_data(ipmi_mc_t  *mc,
     cmd_msg.data_len = 6;
     ipmi_set_uint16(cmd_msg.data, sdrs->reservation);
     ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
-    if (sdrs->sdr_data_read)
-	cmd_msg.data[4] = sdrs->sdr_data_read + 5;
-    else
+    if (sdrs->reading_header) {
 	cmd_msg.data[4] = 0;
-    cmd_msg.data[5] = MAX_SDR_FETCH;
+	cmd_msg.data[5] = 5; /* Only fetch the header */
+    } else {
+	int to_read = (sdrs->working_sdrs[sdrs->curr_sdr_num].length
+		       - sdrs->sdr_data_read);
+	cmd_msg.data[4] = sdrs->sdr_data_read + SDR_HEADER_SIZE;
+	if (to_read > MAX_SDR_FETCH)
+	    cmd_msg.data[5] = MAX_SDR_FETCH;
+	else
+	    cmd_msg.data[5] = to_read;
+    }
     rv = ipmi_send_command(sdrs->mc, sdrs->lun, &cmd_msg,
 			   handle_sdr_data, sdrs);
     if (rv) {
@@ -588,7 +596,7 @@ initial_sdr_fetch(ipmi_sdr_info_t *sdrs)
     ipmi_set_uint16(cmd_msg.data, sdrs->reservation);
     ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
     cmd_msg.data[4] = 0;
-    cmd_msg.data[5] = MAX_SDR_FETCH;
+    cmd_msg.data[5] = SDR_HEADER_SIZE;
     rv = ipmi_send_command(sdrs->mc, sdrs->lun, &cmd_msg,
 			   handle_sdr_data, sdrs);
     if (rv) {
@@ -803,6 +811,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
     sdrs->curr_rec_id = 0;
     sdrs->curr_sdr_num = 0;
     sdrs->sdr_data_read = 0;
+    sdrs->reading_header = 1; /* First thing is to read the header. */
 
     if (sdrs->supports_reserve_sdr) {
 	/* Now get the reservation. */

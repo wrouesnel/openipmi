@@ -501,6 +501,8 @@ leave_err(int err, char *format, ...)
 
     if (full_screen)
 	endwin();
+    else
+	tcsetattr(0, 0, &old_termios);
     sel_free_selector(ui_sel);
 
     va_start(ap, format);

@@ -1,4 +1,13 @@
 
+2003-03-31 Corey Minyard <cminyard@mvista.com>
+
+	* ui.c: Reset the termios on an error exit, too.
+
+	* sdr.c: Fixed the SDR fetch to only fetch the exact amount of
+	data left, instead of trying to get as much as possible, when at
+	the end of the SDR.  Apparently some hardware doesn't handle this
+	properly.
+
 2003-03-27 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi_smi.c: Removed the timing of commands, because the
