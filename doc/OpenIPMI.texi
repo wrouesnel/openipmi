@@ -1863,6 +1863,10 @@ none exist currently for an alarm card.  The alarm cards are instances
 domain, make sure to put alarm card 1 first and alarm card 2 second in
 the list of connections, otherwise things will get confused.
 
+Note that the AMC has some sensors in the SDR with this entity id, but
+they are not quite correct.  They are not per-AMC, even though the
+sensors are per-AMC.
+
 @item CONNECTIVITY_SWITCH (42)
 Things related to the IP switch.  Currently, these are the same as
 for the board.  The IP switches have instances 1 and 2.
@@ -1962,12 +1966,61 @@ The system 2.5 volt sensor
 @item 8V
 The system 8 volt sensor
 
-@item 
+@item Temp
+A temperature sensor
+
+@item slot
+A standard slot/connector sensor, it has the ejector latch bit (bit 6)
+implemented.  This sensor generates events for changes to this bit.
+
+@item offline
+This is a standard management subsystem health sensor.  It uses the
+offline bit (bit 2) to tell if the AMC is offline (inactive).  This
+bit will be zero if the AMC is active, and one if the AMC is inactive.
+
+@item presence
+A standard presence sensor to tell if the AMC is installed or not.
+This sensor is available even if the AMC is not installed.
 
 @end table
 
-The AMC also has a ``slot'' sensor that can be used to find the state of
-the hot-swap removal switch.  This does generate events.
+It has the following controls:
+
+@table @samp
+
+@item OOS LED
+Used to light the out-of-service LED for the board.
+
+@item InS LED
+Used to light the in-service LED for the board.
+
+@item blue led
+Used to light the blue LED for the board.
+
+@item temp cool led
+This gives access to the temperature and cooling LEDs on the AMC.
+These cannot be set independently, so they are implemented as one
+control with two LEDs.  The first LED is the temperature LED, the
+second in the cooling LED.
+
+@item Last Reset Rsn
+The reason for the last reset of the AMC.  Possible values are:
+1 - pushbutton reset, 2 - watchdog reset, 4 - 3.3V reset, 8 - 5V reset,
+16 - software reset.
+
+@item hw version
+A one-byte identifier that holds the hardware version of the AMC.
+
+@item fw version
+A one-byte identifier that holds the firmware version of the AMC.
+
+@item fpga version
+A one-byte identifier that holds the FPGA version of the AMC.
+
+@item 
+
+
+@end table
 
 @subsubsection The Power Supplies
 Each power supply has the following sensors:
@@ -2000,6 +2053,15 @@ Used to light the out-of-service LED on the power supply.
 
 @item InS LED
 Used to light the in-service LED on the power supply.
+
+@item type
+The power supply type, either: 0 - 400W AC, 1 - 400W DC, 2 - 600W AC,
+3 - 600W DC, 4 - 600W Fan Sled Only, 7 - unknown.
+
+@item revision
+The power supply revision number, with two bytes.  The first byte is
+the major revision, the second byte is the minor revision.  This is
+not valid for 400W power supplies.
 
 @end table
 
@@ -2043,6 +2105,16 @@ Used to light the out-of-service LED for the fan.
 
 @item InS LED
 Used to light the in-service LED for the fan.
+
+@item type
+The power supply type, either: 0 - 400W AC, 1 - 400W DC, 2 - 600W AC,
+3 - 600W DC, 4 - 600W Fan Sled Only, 7 - unknown.
+
+@item revision
+The power supply revision number, with two bytes.  The first byte is
+the major revision, the second byte is the minor revision.  This is
+not valid for 400W power supplies.
+
 @end table
 
 @subsubsection The Boards (including IP switches)
@@ -2051,13 +2123,16 @@ extra sensors.  The board sensors for all boards are:
 
 @table @samp
 @item presence
-Used to determine whether the board is present.  This is a standard IPMI
-presence sensor.  This sensor generates events for changes.
+Used to determine whether the board is present.  This is a standard
+IPMI presence sensor.  This sensor generates events for changes.  It
+uses the Healthy bit from the board to determine it's presence.  This
+sensor is available even if the board is not present.
 
 @item slot
-A standard slot/connector sensor, it currently has the ejector latch and
-the power implemented.  This sensor generates events for changes to
-these bits.
+A standard slot/connector sensor, it currently has the ejector latch
+and the power implemented.  This sensor generates events for changes
+to these bits.  This sensor is available even if the board is not
+present.
 @end table
 
 Boards have the following controls:
@@ -2077,6 +2152,20 @@ Used to light the in-service LED for the board.
 
 @item blue led
 Used to light the blue LED for the board.
+
+@item Bd Sel
+The board select line for the board may be set and read with this
+control.  This control is available even if the board is not present.
+
+@item PCI Reset
+The PCI reset line for theh board may be set and read with this
+control.  This control is available even if the board is not present.
+
+@item Slot Init
+A one-shot output that when set to 1 runs a slot-init cycle on the
+board's slot.  (enables the I2C to the board and enables board
+select).  This control is available even if the board is not present.
+
 @end table
 
 @subsubsection Sensors for the cpip5365 card
