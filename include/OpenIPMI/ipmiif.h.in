@@ -224,7 +224,13 @@ char *ipmi_domain_get_type_string(enum ipmi_domain_type dtype);
    supplied in the array at startup), port_num is the particular port
    on the connection, and depends on the connection type.
    still_connected is true if the system still has a valid connection
-   to the target, or false if all connection are gone. */
+   to the target, or false if all connection are gone.  Note that the
+   connect change handler is called with a lock held, but the lock is
+   only used for that purpose (to sequence connection changes
+   delivered to the user).  This means that you cannot do something
+   that will call another connection change from within a connection
+   change handler, basically you cannot perform operations that wait
+   for I/O. */
 typedef void (*ipmi_domain_con_cb)(ipmi_domain_t *domain,
 				   int           err,
 				   unsigned int  conn_num,

@@ -325,7 +325,7 @@ fru_variable_string_to_out(char *out, unsigned int *length,
 			   fru_variable_t *in, unsigned int num)
 {
     if (num >= in->next)
-	return ENOSYS;
+	return E2BIG;
 
     return fru_string_to_out(out, length, &in->strings[num]);
 }
@@ -336,7 +336,7 @@ fru_variable_string_length(fru_variable_t *in,
 			   unsigned int   *length)
 {
     if (num >= in->next)
-	return ENOSYS;
+	return E2BIG;
 
     if (in->strings[num].type == IPMI_ASCII_STR)
 	*length = in->strings[num].length + 1;
@@ -351,7 +351,7 @@ fru_variable_string_type(fru_variable_t       *in,
 			 enum ipmi_str_type_e *type)
 {
     if (num >= in->next)
-	return ENOSYS;
+	return E2BIG;
 
     *type = in->strings[num].type;
     return 0;
@@ -602,8 +602,8 @@ ipmi_fru_get_internal_use_version(ipmi_fru_t    *fru,
 }
 
 int 
-ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
-				 unsigned int *length)
+ipmi_fru_get_internal_use_len(ipmi_fru_t   *fru,
+			      unsigned int *length)
 {
     GET_DATA_PREFIX(internal_use, INTERNAL_USE);
 
@@ -616,9 +616,9 @@ ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
 
 
 int 
-ipmi_fru_get_internal_use_data(ipmi_fru_t    *fru,
-			       unsigned char *data,
-			       unsigned int  *max_len)
+ipmi_fru_get_internal_use(ipmi_fru_t    *fru,
+			  unsigned char *data,
+			  unsigned int  *max_len)
 {
     int l;
     GET_DATA_PREFIX(internal_use, INTERNAL_USE);
@@ -1252,7 +1252,7 @@ ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return ENOSYS;
+	return E2BIG;
     *type = u->records[num].type;
     return 0;
 }
@@ -1268,7 +1268,7 @@ ipmi_fru_get_multi_record_format_version(ipmi_fru_t    *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return ENOSYS;
+	return E2BIG;
     *ver = u->records[num].format_version;
     return 0;
 }
@@ -1284,7 +1284,7 @@ ipmi_fru_get_multi_record_data_len(ipmi_fru_t   *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return ENOSYS;
+	return E2BIG;
     *len = u->records[num].length;
     return 0;
 }
@@ -1301,7 +1301,7 @@ ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return ENOSYS;
+	return E2BIG;
     if (*length < u->records[num].length)
 	return EINVAL;
     memcpy(data, u->records[num].data, u->records[num].length);
@@ -1320,7 +1320,7 @@ ipmi_fru_get_multi_record_data_offset(ipmi_fru_t    *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return ENOSYS;
+	return E2BIG;
     *offset = u->records[num].offset;
     return 0;
 }
@@ -1778,4 +1778,317 @@ ipmi_domain_t *
 ipmi_fru_get_domain(ipmi_fru_t *fru)
 {
     return fru->domain;
+}
+
+typedef struct fru_data_rep_s
+{
+    char                      *name;
+    enum ipmi_fru_data_type_e type;
+    int                       hasnum;
+
+    union {
+	struct {
+	    int (*fetch_uchar)(ipmi_fru_t *fru, unsigned char *data);
+	} inttype;
+
+	struct {
+	    int (*fetch_uchar)(ipmi_fru_t *fru, unsigned int num,
+			       unsigned char *data);
+	} intnumtype;
+
+	struct {
+	    int (*fetch)(ipmi_fru_t *fru, time_t *data);
+	} timetype;
+
+	struct {
+	    int (*fetch)(ipmi_fru_t *fru, unsigned int num,
+			 time_t *data);
+	} timenumtype;
+
+	struct {
+	    int (*fetch_len)(ipmi_fru_t *fru, unsigned int *len);
+	    int (*fetch_type)(ipmi_fru_t *fru, enum ipmi_str_type_e *type);
+	    int (*fetch_data)(ipmi_fru_t *fru, char *data,
+			      unsigned int *max_len);
+	} strtype;
+
+	struct {
+	    int (*fetch_len)(ipmi_fru_t *fru, unsigned int num,
+			     unsigned int *len);
+	    int (*fetch_type)(ipmi_fru_t *fru, unsigned int num,
+			      enum ipmi_str_type_e *type);
+	    int (*fetch_data)(ipmi_fru_t *fru, unsigned int num,
+			      char *data, unsigned int *max_len);
+	} strnumtype;
+
+	struct {
+	    int (*fetch_len)(ipmi_fru_t *fru, unsigned int *len);
+	    int (*fetch_data)(ipmi_fru_t *fru, unsigned char *data,
+			      unsigned int *max_len);
+	} bintype;
+
+	struct {
+	    int (*fetch_len)(ipmi_fru_t *fru, unsigned int num,
+			     unsigned int *len);
+	    int (*fetch_data)(ipmi_fru_t *fru, unsigned intnum,
+			      unsigned char *data, unsigned int *max_len);
+	} binnumtype;
+    } u;
+} fru_data_rep_t;
+
+#define F_UCHAR(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 0, \
+		     .u.inttype.fetch_uchar = ipmi_fru_get_ ## x }
+#define F_NUM_UCHAR(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 1, \
+		         .u.intnumtype.fetch_uchar = ipmi_fru_get_ ## x }
+#define F_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_TIME, .hasnum = 0, \
+		    .u.timetype.fetch = ipmi_fru_get_ ## x }
+#define F_NUM_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 1, \
+		        .u.timenumtype.fetch = ipmi_fru_get_ ## x }
+#define F_STR(x) { .name = #x, .type = IPMI_FRU_DATA_ASCII, .hasnum = 0, \
+		   .u.strtype.fetch_len = ipmi_fru_get_ ## x ## _len, \
+		   .u.strtype.fetch_type = ipmi_fru_get_ ## x ## _type, \
+		   .u.strtype.fetch_data = ipmi_fru_get_ ## x }
+#define F_NUM_STR(x) { .name = #x, .type = IPMI_FRU_DATA_ASCII, .hasnum = 1, \
+		       .u.strnumtype.fetch_len = ipmi_fru_get_ ## x ## _len, \
+		       .u.strnumtype.fetch_type = ipmi_fru_get_ ## x ## _type,\
+		       .u.strnumtype.fetch_data = ipmi_fru_get_ ## x }
+#define F_BIN(x) { .name = #x, .type = IPMI_FRU_DATA_BINARY, .hasnum = 0, \
+		   .u.bintype.fetch_len = ipmi_fru_get_ ## x ## _len, \
+		   .u.bintype.fetch_data = ipmi_fru_get_ ## x }
+#define F_NUM_BIN(x) { .name = #x, .type = IPMI_FRU_DATA_BINARY, .hasnum = 1, \
+		       .u.binnumtype.fetch_len = ipmi_fru_get_ ## x ## _len, \
+		       .u.binnumtype.fetch_data = ipmi_fru_get_ ## x }
+static fru_data_rep_t frul[] =
+{
+    F_UCHAR(internal_use_version),
+    F_BIN(internal_use),
+    F_UCHAR(chassis_info_version),
+    F_UCHAR(chassis_info_type),
+    F_STR(chassis_info_part_number),
+    F_STR(chassis_info_serial_number),
+    F_NUM_STR(chassis_info_custom),
+    F_UCHAR(board_info_version),
+    F_UCHAR(board_info_lang_code),
+    F_TIME(board_info_mfg_time),
+    F_STR(board_info_board_manufacturer),
+    F_STR(board_info_board_product_name),
+    F_STR(board_info_board_serial_number),
+    F_STR(board_info_board_part_number),
+    F_STR(board_info_fru_file_id),
+    F_NUM_STR(board_info_custom),
+    F_UCHAR(product_info_version),
+    F_UCHAR(product_info_lang_code),
+    F_STR(product_info_manufacturer_name),
+    F_STR(product_info_product_name),
+    F_STR(product_info_product_part_model_number),
+    F_STR(product_info_product_version),
+    F_STR(product_info_product_serial_number),
+    F_STR(product_info_asset_tag),
+    F_STR(product_info_fru_file_id),
+    F_NUM_STR(product_info_custom),
+};
+#define NUM_FRUL_ENTRIES (sizeof(frul) / sizeof(fru_data_rep_t))
+
+int
+ipmi_fru_str_to_index(char *name)
+{
+    int i;
+    for (i=0; i<NUM_FRUL_ENTRIES; i++) {
+	if (strcmp(name, frul[i].name) == 0)
+	    return i;
+    }
+    return -1;
+}
+
+int
+ipmi_fru_get(ipmi_fru_t                *fru,
+	     int                       index,
+	     char                      **name,
+	     int                       *num,
+	     enum ipmi_fru_data_type_e *dtype,
+	     int                       *intval,
+	     time_t                    *time,
+	     char                      **data,
+	     unsigned int              *data_len)
+{
+    fru_data_rep_t *p;
+    unsigned char  ucval, dummy_ucval;
+    unsigned int   dummy_uint;
+    time_t         dummy_time;
+    int            rv = 0, rv2 = 0;
+    unsigned int   len;
+    char           *dval = NULL;
+    enum ipmi_fru_data_type_e rdtype;
+    enum ipmi_str_type_e stype;
+    
+
+    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+	return EINVAL;
+
+    p = frul + index;
+
+    if (name)
+	*name = p->name;
+
+    rdtype = p->type;
+
+    switch (p->type) {
+    case IPMI_FRU_DATA_INT:
+	if (intval) {
+	    if (! p->hasnum) {
+		rv = p->u.inttype.fetch_uchar(fru, &ucval);
+	    } else {
+		rv = p->u.intnumtype.fetch_uchar(fru, *num, &ucval);
+		rv2 = p->u.intnumtype.fetch_uchar(fru, (*num)+1, &dummy_ucval);
+	    }
+	    if (!rv)
+		*intval = ucval;
+	}
+	break;
+
+    case IPMI_FRU_DATA_TIME:
+	if (time) {
+	    if (! p->hasnum) {
+		rv = p->u.timetype.fetch(fru, time);
+	    } else {
+		rv = p->u.timenumtype.fetch(fru, *num, time);
+		rv2 = p->u.timenumtype.fetch(fru, (*num)+1, &dummy_time);
+	    }
+	}
+	break;
+
+    case IPMI_FRU_DATA_ASCII:
+	if (dtype) {
+	    if (! p->hasnum) {
+		rv = p->u.strtype.fetch_type(fru, &stype);
+	    } else {
+		rv = p->u.strnumtype.fetch_type(fru, *num, &stype);
+	    }
+	    if (rv) {
+		break;
+	    } else {
+		switch (stype) {
+		case IPMI_UNICODE_STR: rdtype = IPMI_FRU_DATA_UNICODE; break;
+		case IPMI_BINARY_STR: rdtype = IPMI_FRU_DATA_BINARY; break;
+		case IPMI_ASCII_STR: break;
+		}
+	    }
+	}
+
+	if (data_len || data) {
+	    if (! p->hasnum) {
+		rv = p->u.strtype.fetch_len(fru, &len);
+	    } else {
+		rv = p->u.strnumtype.fetch_len(fru, *num, &len);
+	    }
+	    if (rv)
+		break;
+
+	    if (data) {
+		dval = ipmi_mem_alloc(len);
+		if (!dval) {
+		    rv = ENOMEM;
+		    break;
+		}
+		if (! p->hasnum) {
+		    rv = p->u.strtype.fetch_data(fru, dval, &len);
+		} else {
+		    rv = p->u.strnumtype.fetch_data(fru, *num, dval, &len);
+		}
+		if (rv)
+		    break;
+		*data = dval;
+	    }
+
+	    if (data_len)
+		*data_len = len;
+	}
+
+	if (p->hasnum)
+	    rv2 = p->u.strnumtype.fetch_len(fru, (*num)+1, &dummy_uint);
+	break;
+
+    case IPMI_FRU_DATA_BINARY:
+	if (data_len || data) {
+	    if (! p->hasnum) {
+		rv = p->u.bintype.fetch_len(fru, &len);
+	    } else {
+		rv = p->u.binnumtype.fetch_len(fru, *num, &len);
+	    }
+	    if (rv)
+		break;
+
+	    if (data) {
+		dval = ipmi_mem_alloc(len);
+		if (!dval) {
+		    rv = ENOMEM;
+		    break;
+		}
+		if (! p->hasnum) {
+		    rv = p->u.bintype.fetch_data(fru, (char *) dval, &len);
+		} else {
+		    rv = p->u.binnumtype.fetch_data(fru, *num, (char *) dval,
+						    &len);
+		}
+		if (rv)
+		    break;
+		*data = dval;
+	    }
+
+	    if (data_len)
+		*data_len = len;
+	}
+
+	if (p->hasnum)
+	    rv2 = p->u.binnumtype.fetch_len(fru, (*num)+1, &dummy_uint);
+	break;
+
+    default:
+	break;
+    }
+
+    if (rv) {
+	if (dval)
+	    ipmi_mem_free(dval);
+	return rv;
+    }
+
+    if (p->hasnum) {
+	if (rv2)
+	    *num = -1;
+	else
+	    *num = (*num) + 1;
+    }
+
+    if (dtype)
+	*dtype = rdtype;
+
+    return 0;
+}
+
+int
+ipmi_fru_data_free(char *data)
+{
+    ipmi_mem_free(data);
+}
+
+/************************************************************************
+ *
+ * Cruft
+ *
+ ************************************************************************/
+
+int 
+ipmi_fru_get_internal_use_data(ipmi_fru_t    *fru,
+			       unsigned char *data,
+			       unsigned int  *max_len)
+{
+    return ipmi_fru_get_internal_use(fru, data, max_len);
+}
+
+int 
+ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
+				 unsigned int *length)
+{
+    return ipmi_fru_get_internal_use_len(fru, length);
 }

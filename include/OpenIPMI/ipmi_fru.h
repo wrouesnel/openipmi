@@ -48,16 +48,16 @@
    copied into the output string is returned in max_len. */
 int ipmi_fru_get_internal_use_version(ipmi_fru_t    *fru,
 				      unsigned char *version);
-int ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
-				     unsigned int *length);
-int  ipmi_fru_get_internal_use_data(ipmi_fru_t    *fru,
-				    unsigned char *data,
-				    unsigned int  *max_len);
+int ipmi_fru_get_internal_use_len(ipmi_fru_t   *fru,
+				  unsigned int *length);
+int ipmi_fru_get_internal_use(ipmi_fru_t    *fru,
+			      unsigned char *data,
+			      unsigned int  *max_len);
 
 int ipmi_fru_get_chassis_info_version(ipmi_fru_t    *fru,
 				      unsigned char *version);
-int  ipmi_fru_get_chassis_info_type(ipmi_fru_t    *fru,
-				    unsigned char *type);
+int ipmi_fru_get_chassis_info_type(ipmi_fru_t    *fru,
+				   unsigned char *type);
 
 int ipmi_fru_get_chassis_info_part_number_len(ipmi_fru_t   *fru,
 					      unsigned int *length);
@@ -88,8 +88,8 @@ int ipmi_fru_get_board_info_version(ipmi_fru_t    *fru,
 				    unsigned char *version);
 int ipmi_fru_get_board_info_lang_code(ipmi_fru_t    *fru,
 				      unsigned char *type);
-int  ipmi_fru_get_board_info_mfg_time(ipmi_fru_t *fru,
-				      time_t     *time);
+int ipmi_fru_get_board_info_mfg_time(ipmi_fru_t   *fru,
+				     time_t *time);
 int ipmi_fru_get_board_info_board_manufacturer_len(ipmi_fru_t   *fru,
 						   unsigned int *length);
 int ipmi_fru_get_board_info_board_manufacturer_type(ipmi_fru_t           *fru,
@@ -211,7 +211,7 @@ int ipmi_fru_get_multi_record_data_len(ipmi_fru_t   *fru,
 				       unsigned int num,
 				       unsigned int *len);
 /* Note that length is a in/out parameter, you must set the length to
-   the length of the buffer and the function will set it tot he actual
+   the length of the buffer and the function will set it to the actual
    length. */
 int ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 				   unsigned int  num,
@@ -225,6 +225,75 @@ int ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 int ipmi_fru_get_multi_record_data_offset(ipmi_fru_t    *fru,
 					  unsigned int  num,
 					  unsigned int  *offset);
+
+
+/*
+ * This interface lets you get the FRU data by name.
+ */
+
+enum ipmi_fru_data_type_e
+{
+    IPMI_FRU_DATA_INT,
+    IPMI_FRU_DATA_TIME,
+    IPMI_FRU_DATA_ASCII,
+    IPMI_FRU_DATA_BINARY,
+    IPMI_FRU_DATA_UNICODE,
+};
+
+/*
+ * Find the index number for the given string.  Returns -1 if the string
+ * is invalid.
+ */
+int ipmi_fru_str_to_index(char *name);
+
+/*
+ * Get the FRU information by index.  This is a rather complex
+ * function, but gives probably the simplest possible way to iterate
+ * through the FRU data.  The index is a contiguous range from zero
+ * that holds every FRU data item.  So you can iterate through the
+ * indexes from 0 until it returns EINVAL to find all the names.
+ *
+ * name returns the string name for the index.  Note that the
+ * indexes may change between release, so don't rely on absolute
+ * numbers.  The names will remain the same, so you can rely on
+ * those.
+ *
+ * The number is a pointer to an integer with the number of the item
+ * to get within the field.  Some fields (custom records,
+ * multi-records) have multiple items in them.  The first item will be
+ * zero, and the integer here will be updated to reference the next
+ * item.  When the last item is reached, the field will be updated
+ * to -1.  For fields that don't have multiple items, this will
+ * not modify the value num points to.
+ *
+ * The dtype field will be set to the data type.  If it is an integer
+ * value, then intval will be set to whatever the value is.  If it is
+ * a time value, then the time field will be filled in.  If it is not,
+ * then a block of data will be allocated to hold the field and placed
+ * into data, the length of the data will be in data_len.  You must
+ * free the data when you are done with ipmi_fru_data_free().
+ *
+ * Returns EINVAL if the index is out of range, ENOSYS if the
+ * particular index is not supported, or E2BIG if the num is
+ * too big.
+ *
+ * Any of the return values may be passed NULL to ignore the data.
+ *
+ * This does *not* include the multi-records.
+ */
+int ipmi_fru_get(ipmi_fru_t                *fru,
+		 int                       index,
+		 char                      **name,
+		 int                       *num,
+		 enum ipmi_fru_data_type_e *dtype,
+		 int                       *intval,
+		 time_t                    *time,
+		 char                      **data,
+		 unsigned int              *data_len);
+
+/* Free data that comes from ipmi_fru_get if the data return is
+   non-NULL. */
+int ipmi_fru_data_free(char *data);
 
 
 /* More internal stuff.  The average user will not need to be able
@@ -256,5 +325,17 @@ typedef void (*ipmi_fru_destroyed_cb)(ipmi_fru_t *fru, void *cb_data);
 int ipmi_fru_destroy(ipmi_fru_t            *fru,
 		     ipmi_fru_destroyed_cb handler,
 		     void                  *cb_data);
+
+/************************************************************************
+ *
+ * Cruft
+ *
+ ************************************************************************/
+int ipmi_fru_get_internal_use_data(ipmi_fru_t    *fru,
+				   unsigned char *data,
+				   unsigned int  *max_len);
+
+int ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
+				     unsigned int *length);
 
 #endif /* _IPMI_FRU_H */

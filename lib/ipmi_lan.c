@@ -154,6 +154,12 @@ typedef struct lan_data_s
     unsigned char              slave_addr;
     int                        is_active;
 
+    /* Protects modifiecations to ip_working, curr_ip_addr, RMCP
+       sequence numbers, the con_change_handler, and other
+       connection-related data.  Note that if the seq_num_lock must
+       also be held, it must be locked before this lock.  */
+    ipmi_lock_t                *ip_lock;
+
     int                        curr_ip_addr;
     sockaddr_ip_t              ip_addr[MAX_IP_ADDR];
     int                        ip_working[MAX_IP_ADDR];
@@ -240,6 +246,12 @@ typedef struct lan_data_s
 
     os_hnd_timer_id_t          *audit_timer;
     audit_timer_info_t         *audit_info;
+
+    /* This lock is used to assure that the conn changes occur in
+       proper order.  The user code is called with this lock held, but
+       it should be harmless to the user as this is the only use for
+       it.  But the user cannot do a wait on I/O in the handler. */
+    ipmi_lock_t            *con_change_lock;
 
     ipmi_ll_con_changed_cb con_change_handler;
     void                   *con_change_cb_data;
@@ -578,6 +590,9 @@ lan_send(lan_data_t  *lan,
 	 uint8_t     seq,
 	 int         *send_ip_num)
 {
+    int curr_ip_addr;
+
+    ipmi_lock(lan->ip_lock);
     if (lan->connected) {
 	lan->num_sends++;
 
@@ -603,9 +618,12 @@ lan_send(lan_data_t  *lan,
 	    addr_num = 0;
 	lan->curr_ip_addr = addr_num;
     }
+    curr_ip_addr = lan->curr_ip_addr;
+    ipmi_unlock(lan->ip_lock);
 
-    *send_ip_num = lan->curr_ip_addr;
-    return lan_send_addr(lan, addr, addr_len, msg, seq, lan->curr_ip_addr);
+    *send_ip_num = curr_ip_addr;
+
+    return lan_send_addr(lan, addr, addr_len, msg, seq, curr_ip_addr);
 }
 
 static void
@@ -655,6 +673,7 @@ audit_timeout_handler(void              *cb_data,
     ipmi_msg_t                   msg;
     int                          i;
     ipmi_system_interface_addr_t si;
+    int                          start_up[MAX_IP_ADDR];
 
 
     /* If we were cancelled, just free the data and ignore the call. */
@@ -671,10 +690,14 @@ audit_timeout_handler(void              *cb_data,
     /* Send message to all addresses we think are down.  If the
        connection is down, this will bring it up, otherwise it
        will keep it alive. */
+    ipmi_lock(lan->ip_lock);
+    for (i=0; i<lan->num_ip_addr; i++)
+	    start_up[i] = ! lan->ip_working[i];
+    ipmi_unlock(lan->ip_lock);
+
     for (i=0; i<lan->num_ip_addr; i++) {
-	if (! lan->ip_working[i]) {
+	if (start_up[i])
 	    send_auth_cap(ipmi, lan, i);
-	}
     }
 
     msg.netfn = IPMI_APP_NETFN;
@@ -720,6 +743,7 @@ static void
 connection_up(lan_data_t *lan, int addr_num, int new_con)
 {
     /* The IP is already operational, so ignore this. */
+    ipmi_lock(lan->ip_lock);
     if ((! lan->ip_working[addr_num]) && new_con) {
 	lan->ip_working[addr_num] = 1;
 
@@ -737,9 +761,17 @@ connection_up(lan_data_t *lan, int addr_num, int new_con)
 	lan->curr_ip_addr = addr_num;
     }
 
-    if (lan->connected && lan->con_change_handler)
-	lan->con_change_handler(lan->ipmi, 0, addr_num, 1,
-				lan->con_change_cb_data);
+    if (lan->connected && lan->con_change_handler) {
+	ipmi_ll_con_changed_cb con_change_handler = lan->con_change_handler;
+	void                   *con_change_cb_data = lan->con_change_cb_data;
+
+	ipmi_lock(lan->con_change_lock);
+	ipmi_unlock(lan->ip_lock);
+	con_change_handler(lan->ipmi, 0, addr_num, 1, con_change_cb_data);
+	ipmi_unlock(lan->con_change_lock);
+    } else {
+	ipmi_unlock(lan->ip_lock);
+    }    
 }
 
 
@@ -748,8 +780,11 @@ lost_connection(lan_data_t *lan, int addr_num)
 {
     int i;
 
-    if (! lan->ip_working[addr_num])
+    ipmi_lock(lan->ip_lock);
+    if (! lan->ip_working[addr_num]) {
+	ipmi_unlock(lan->ip_lock);
 	return;
+    }
 
     lan->ip_working[addr_num] = 0;
 
@@ -785,9 +820,19 @@ lost_connection(lan_data_t *lan, int addr_num)
 	}
     }
 
-    if (lan->con_change_handler)
-	lan->con_change_handler(lan->ipmi, ETIMEDOUT, addr_num, lan->connected,
-				lan->con_change_cb_data);
+    if (lan->con_change_handler) {
+	ipmi_ll_con_changed_cb con_change_handler = lan->con_change_handler;
+	void                   *con_change_cb_data = lan->con_change_cb_data;
+	int                    connected = lan->connected;
+	
+	ipmi_lock(lan->con_change_lock);
+	ipmi_unlock(lan->ip_lock);
+	con_change_handler(lan->ipmi, ETIMEDOUT, addr_num, connected,
+			   con_change_cb_data);
+	ipmi_unlock(lan->con_change_lock);
+    } else {
+	ipmi_unlock(lan->ip_lock);
+    }
 }
 
 static void
@@ -841,6 +886,7 @@ rsp_timeout_handler(void              *cb_data,
            Otherwise, if we sent a bunch of messages to the IPMB that
            timed out, we might trigger this code accidentally. */
 	ip_num = lan->seq_table[seq].last_ip_num;
+	ipmi_lock(lan->ip_lock);
 	if (lan->ip_working[ip_num]) {
 	    if (lan->consecutive_ip_failures[ip_num] == 0) {
 		/* Set the time when the connection will be considered
@@ -853,17 +899,23 @@ rsp_timeout_handler(void              *cb_data,
 		    lan->ip_failure_time[ip_num].tv_usec -= 1000000;
 		}
 		lan->consecutive_ip_failures[ip_num] = 1;
+		ipmi_unlock(lan->ip_lock);
 	    } else {
 		lan->consecutive_ip_failures[ip_num]++;
 		if (lan->consecutive_ip_failures[ip_num] >= IP_FAIL_COUNT) {
 		    struct timeval now;
+		    ipmi_unlock(lan->ip_lock);
 		    gettimeofday(&now, NULL);
 		    if (cmp_timeval(&now, &lan->ip_failure_time[ip_num]) > 0)
 		    {
 			lost_connection(lan, ip_num);
 		    }
+		} else {
+		    ipmi_unlock(lan->ip_lock);
 		}
 	    }
+	} else {
+	    ipmi_unlock(lan->ip_lock);
 	}
     }
 
@@ -1362,8 +1414,12 @@ data_handler(int            fd,
     }
 
     /* If it's from a down connection, report it as up. */
-    if (! lan->ip_working[recv_addr])
+    ipmi_lock(lan->ip_lock);
+    if (! lan->ip_working[recv_addr]) {
+	ipmi_unlock(lan->ip_lock);
 	connection_up(lan, recv_addr, 0);
+	ipmi_lock(lan->ip_lock);
+    }
 
     /* Check the sequence number. */
     if ((seq - lan->inbound_seq_num[recv_addr]) <= 8) {
@@ -1377,6 +1433,7 @@ data_handler(int            fd,
 	uint8_t bit = 1 << (lan->inbound_seq_num[recv_addr] - seq);
 	if (lan->recv_msg_map[recv_addr] & bit) {
 	    /* We've already received the message, so discard it. */
+	    ipmi_unlock(lan->ip_lock);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
 	    goto out;
@@ -1386,10 +1443,12 @@ data_handler(int            fd,
     } else {
 	/* It's outside the current sequence number range, discard
 	   the packet. */
+	ipmi_unlock(lan->ip_lock);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message out of seq range");
 	goto out;
     }
+    ipmi_unlock(lan->ip_lock);
 
     /* Now we have an authentic in-sequence message. */
 
@@ -2067,6 +2126,10 @@ lan_cleanup(ipmi_con_t *ipmi)
 	ipmi->oem_data_cleanup(ipmi);
     if (lan->event_handlers_lock)
 	ipmi_destroy_lock(lan->event_handlers_lock);
+    if (lan->con_change_lock)
+	ipmi_destroy_lock(lan->con_change_lock);
+    if (lan->ip_lock)
+	ipmi_destroy_lock(lan->ip_lock);
     if (lan->seq_num_lock)
 	ipmi_destroy_lock(lan->seq_num_lock);
     if (lan->fd_wait_id)
@@ -2117,6 +2180,10 @@ cleanup_con(ipmi_con_t *ipmi)
 
 	if (lan->event_handlers_lock)
 	    ipmi_destroy_lock(lan->event_handlers_lock);
+	if (lan->con_change_lock)
+	    ipmi_destroy_lock(lan->con_change_lock);
+	if (lan->ip_lock)
+	    ipmi_destroy_lock(lan->ip_lock);
 	if (lan->seq_num_lock)
 	    ipmi_destroy_lock(lan->seq_num_lock);
 	if (lan->fd != -1)
@@ -2139,6 +2206,10 @@ handle_connected(ipmi_con_t *ipmi, int err, int addr_num)
 
     lan = (lan_data_t *) ipmi->con_data;
 
+    /* This should be occurring single-threaded (the IP is down and is
+       being brought back up or is initially coming up), so no need
+       for a lock here. */
+
     /* Make sure session data is reset on an error. */
     if (err) {
 	lan->outbound_seq_num[addr_num] = 0;
@@ -2148,9 +2219,15 @@ handle_connected(ipmi_con_t *ipmi, int err, int addr_num)
 	lan->working_authtype[addr_num] = 0;
     }
 
+    ipmi_lock(lan->ip_lock);
     if (lan->con_change_handler) {
+	ipmi_lock(lan->con_change_lock);
+	ipmi_unlock(lan->ip_lock);
 	lan->con_change_handler(ipmi, err, addr_num, lan->connected,
 				lan->con_change_cb_data);
+	ipmi_unlock(lan->con_change_lock);
+    } else {
+	ipmi_unlock(lan->ip_lock);
     }
 }
 
@@ -2619,8 +2696,10 @@ lan_set_con_change_handler(ipmi_con_t             *ipmi,
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
+    ipmi_lock(lan->ip_lock);
     lan->con_change_handler = handler;
     lan->con_change_cb_data = cb_data;
+    ipmi_unlock(lan->ip_lock);
 }
 
 static int
@@ -2831,6 +2910,14 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 
     /* Create the locks if they are available. */
     rv = ipmi_create_lock_os_hnd(handlers, &lan->seq_num_lock);
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_create_lock_os_hnd(handlers, &lan->ip_lock);
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_create_lock_os_hnd(handlers, &lan->con_change_lock);
     if (rv)
 	goto out_err;
 

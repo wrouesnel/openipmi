@@ -2563,6 +2563,11 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
     ipmi_time_t  timestamp = ipmi_event_get_timestamp(event);
     unsigned int type = ipmi_event_get_type(event);
 
+    /* We do not need any locking to assure that events are delivered
+       in order (from the same SEL).  Indeed, locking here wouldn't
+       help.  But the event-fetching mechanisms are guaranteed to be
+       single-threaded, so ordering is always preserved there. */
+
     if (DEBUG_EVENTS) {
 	ipmi_mcid_t mcid = ipmi_event_get_mcid(event);
 	unsigned int record_id = ipmi_event_get_record_id(event);

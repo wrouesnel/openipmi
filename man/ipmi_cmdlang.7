@@ -1860,97 +1860,19 @@ Controls of type identifier have the following:
 .SS **FRU INFO**
 .RS
 .nf
-  %Internal area version: <integer>
-  %Internal area length: <integer>
-  %Internal area data: <data bytes>
-  %Chassis info version: <integer>
-  %Chassis info type: <integer>
-  %Record
-    Name: Chassis info part number
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Chassis info serial number
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %String Field
-    Name: Chassis info
+  record
+    Name: <name>
+    Type: binary | ascii | unicode | integer
+    %Number: <integer>
+    Data: data depending on type
+   .
+   .
+  Multi-record
     Number: <integer>
     Type: binary | ascii | unicode
     Data: <data in the above format>
    .
    .
-  %Board info version: <integer>
-  %Board info lang code: <integer>
-  %Board info mfg time: <integer>
-  %Record
-    Name: Board info board manufacturer
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Board info board product name
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Board info board serial number
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Board info board part number
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Board info fru file id
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %String Field
-    Name: Board info
-    Number: <integer>
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-   .
-   .
-  %Product info version: <integer>
-  %Product info lang code: <integer>
-  %Record
-    Name: Product info manufacturer name
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Product info product name
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Product info product part model number
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Product info product version
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Product info product serial number
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Product info asset tag
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %Record
-    Name: Product info fru file id
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-  %String Field
-    Name: Product info
-    Number: <integer>
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
-   .
-   .
-  %Multi-record
-    Number: <integer>
-    Type: binary | ascii | unicode
-    Data: <data in the above format>
 .fi
 .RE
 

@@ -1075,8 +1075,8 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "<domain> - Dump information about a domain",
       ipmi_cmdlang_domain_handler, domain_info, NULL },
     { "new", &domain_cmds,
-      "[<options>] <domain parms> - Set up a new domain.  Options enable"
-      " and disable various automatic processing and are:\n"
+      "<domain (name)> [<options>] <domain parms> - Set up a new domain."
+      "  Options enable and disable various automatic processing and are:\n"
       "-[no]all - all automatic handling\n"
       "-[no]sdrs - sdr fetching\n"
       "-[no]frus - FRU fetching\n"

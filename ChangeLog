@@ -1,3 +1,22 @@
+2004-10-27 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi_lan.c: Fixed race conditions handling sequence numbers
+	and connection handling.
+
+	* include/OpenIPMI/ipmiif.h.in: Added a comment saying that a lock
+	is held in connection change delivery.
+
+	* lib/domain.c: Added a comment saying that locks are not
+	necessary to sequence event delivery.
+
+	* cmdlang/cmd_domain.c: Fix docs on "domain new".
+
+	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Added an interface to
+	make it possible to get FRU data in a more generic way.
+
+	* cmdlang/out_fru.c, man/ipmi_cmdlang.7: Converted over to the new
+	generic FRU interface and changed the output format some.
+
 2004-10-26 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in, lib/sensor.c: Renamed

@@ -32,6 +32,7 @@
  */
 
 #include <errno.h>
+#include <string.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
@@ -57,234 +58,88 @@ fru_out_data(ipmi_cmd_info_t *cmd_info, unsigned char type,
     }
 }
 
-static void
-dump_fru_str(ipmi_cmd_info_t *cmd_info,
-	     ipmi_fru_t *fru,
-	     char       *str,
-	     int (*glen)(ipmi_fru_t   *fru,
-			 unsigned int *length),
-	     int (*gtype)(ipmi_fru_t           *fru,
-			  enum ipmi_str_type_e *type),
-	     int (*gstr)(ipmi_fru_t   *fru,
-			 char         *str,
-			 unsigned int *strlen))
-{
-    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    enum ipmi_str_type_e type;
-    int          rv = 0;
-    char         *buf = NULL;
-    unsigned int len;
-
-    if (cmdlang->err)
-	return;
-
-    rv = gtype(fru, &type);
-    if (!rv)
-	rv = glen(fru, &len);
-    if (!rv) {
-	buf = ipmi_mem_alloc(len);
-	if (!buf) {
-	    rv = ENOMEM;
-	    cmdlang->errstr = "Out of memory";
-	    goto out_err;
-	}
-	rv = gstr(fru, buf, &len);
-	if (rv)
-	    ipmi_mem_free(buf);
-    }
-    if (rv) {
-	if (rv != ENOSYS)
-	    cmdlang->errstr = "Error getting FRU info";
-	goto out_err;
-    }
-
-    ipmi_cmdlang_out(cmd_info, "Record", NULL);
-    ipmi_cmdlang_down(cmd_info);
-    ipmi_cmdlang_out(cmd_info, "Name", str);
-    fru_out_data(cmd_info, type, buf, len);
-    ipmi_cmdlang_up(cmd_info);
-
- out_err:
-    if (rv) {
-	if (rv != ENOSYS) {
-	    cmdlang->err = rv;
-	    cmdlang->location = "cmd_domain.c(dump_fru_str)";
-	}
-    } else
-	ipmi_mem_free(buf);
-}
-
-static int
-dump_fru_custom_str(ipmi_cmd_info_t *cmd_info,
-		    ipmi_fru_t *fru,
-		    char       *str,
-		    int        num,
-		    int (*glen)(ipmi_fru_t   *fru,
-				unsigned int num,
-				unsigned int *length),
-		    int (*gtype)(ipmi_fru_t           *fru,
-				 unsigned int         num,
-				 enum ipmi_str_type_e *type),
-		    int (*gstr)(ipmi_fru_t   *fru,
-				unsigned int num,
-				char         *str,
-				unsigned int *strlen))
-{
-    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    enum ipmi_str_type_e type;
-    int          rv = 0;
-    char         *buf = NULL;
-    unsigned int len;
-
-    if (cmdlang->err)
-	return cmdlang->err;
-
-    rv = gtype(fru, num, &type);
-    if (!rv)
-	rv = glen(fru, num, &len);
-    if (!rv) {
-	buf = ipmi_mem_alloc(len);
-	if (!buf) {
-	    rv = ENOMEM;
-	    cmdlang->errstr = "Out of memory";
-	    goto out_err;
-	}
-	rv = gstr(fru, num, buf, &len);
-	if (rv)
-	    ipmi_mem_free(buf);
-    }
-    if (rv) {
-	if (rv != ENOSYS)
-	    cmdlang->errstr = "Error getting FRU info";
-	goto out_err;
-    }
-
-    ipmi_cmdlang_out(cmd_info, "String Field", NULL);
-    ipmi_cmdlang_down(cmd_info);
-    ipmi_cmdlang_out(cmd_info, "Name", str);
-    ipmi_cmdlang_out_int(cmd_info, "Number", num);
-    fru_out_data(cmd_info, type, buf, len);
-    ipmi_cmdlang_up(cmd_info);
-
- out_err:
-    if (rv) {
-	if (rv != ENOSYS) {
-	    cmdlang->err = rv;
-	    cmdlang->location = "cmd_domain.c(dump_fru_custom_str)";
-	}
-    } else
-	ipmi_mem_free(buf);
-    return rv;
-}
-
-#define DUMP_FRU_STR(name, str) \
-dump_fru_str(cmd_info, fru, str, ipmi_fru_get_ ## name ## _len, \
-             ipmi_fru_get_ ## name ## _type, \
-             ipmi_fru_get_ ## name)
-
-#define DUMP_FRU_CUSTOM_STR(name, str) \
-do {									\
-    int i, _rv;								\
-    for (i=0; ; i++) {							\
-        _rv = dump_fru_custom_str(cmd_info, fru, str, i,		\
-				  ipmi_fru_get_ ## name ## _custom_len, \
-				  ipmi_fru_get_ ## name ## _custom_type, \
-				  ipmi_fru_get_ ## name ## _custom);	\
-	if (_rv)							\
-	    break;							\
-    }									\
-} while (0)
-
 void
 ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 {
     ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    unsigned char ucval;
-    unsigned int  uival;
-    time_t        tval;
-    int           rv;
-    int           i, num_multi;
-    unsigned char *buf;
+    int                       rv;
+    int                       i;
+    int                       num, onum;
+    char                      *name;
+    enum ipmi_fru_data_type_e dtype;
+    int                       intval;
+    time_t                    time;
+    char                      *data;
+    unsigned int              data_len;
+    unsigned int              num_multi;
 
     ipmi_cmdlang_out(cmd_info, "FRU", NULL);
     ipmi_cmdlang_down(cmd_info);
-    rv = ipmi_fru_get_internal_use_version(fru, &ucval);
-    if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "Internal area version", ucval);
 
-    rv = ipmi_fru_get_internal_use_length(fru, &uival);
-    if (!rv) {
-	ipmi_cmdlang_out_int(cmd_info, "Internal area length", uival);
-
-	buf = ipmi_mem_alloc(uival);
-	if (!buf) {
-	    cmdlang->err = ENOMEM;
-	    cmdlang->errstr = "Out of memory";
+    num = 0;
+    for (i=0; ;) {
+	onum = num;
+	data = NULL;
+	rv = ipmi_fru_get(fru, i, &name, &num, &dtype, &intval, &time,
+			  &data, &data_len);
+	if (rv == EINVAL)
+	    break;
+	else if ((rv == ENOSYS) || (rv == E2BIG)) {
+	    i++;
+	    num = 0;
+	    continue;
+	} else if (rv) {
+	    cmdlang->err = rv;
+	    cmdlang->errstr = strerror(rv);
 	    goto out_err;
 	}
-	ipmi_cmdlang_out_binary(cmd_info, "Internal area data", buf, uival);
-	ipmi_mem_free(buf);
+
+	ipmi_cmdlang_out(cmd_info, "Record", NULL);
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_out(cmd_info, "Name", name);
+	if (num != onum) {
+	    ipmi_cmdlang_out_int(cmd_info, "Number", num);
+	    num++;
+	} else {
+	    i++;
+	    num = 0;
+	}
+	switch(dtype) {
+	case IPMI_FRU_DATA_INT:
+	    ipmi_cmdlang_out(cmd_info, "Type", "integer");
+	    ipmi_cmdlang_out_int(cmd_info, "Data", intval);
+	    break;
+
+	case IPMI_FRU_DATA_TIME:
+	    ipmi_cmdlang_out(cmd_info, "Type", "integer");
+	    ipmi_cmdlang_out_long(cmd_info, "Data", (long) time);
+	    break;
+
+	case IPMI_FRU_DATA_BINARY:
+	    ipmi_cmdlang_out(cmd_info, "Type", "binary");
+	    ipmi_cmdlang_out_binary(cmd_info, "Data", data, data_len);
+	    break;
+
+	case IPMI_FRU_DATA_UNICODE:
+	    ipmi_cmdlang_out(cmd_info, "Type", "unicode");
+	    ipmi_cmdlang_out_unicode(cmd_info, "Data", data, data_len);
+	    break;
+
+	case IPMI_FRU_DATA_ASCII:
+	    ipmi_cmdlang_out(cmd_info, "Type", "ascii");
+	    ipmi_cmdlang_out(cmd_info, "Data", data);
+	    break;
+
+	default:
+	    ipmi_cmdlang_out(cmd_info, "Type", "unknown");
+	    break;
+	}
+	ipmi_cmdlang_up(cmd_info);
+
+	if (data)
+	    ipmi_fru_data_free(data);
     }
 
-    rv = ipmi_fru_get_chassis_info_version(fru, &ucval);
-    if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "Chassis info version", ucval);
-
-    rv = ipmi_fru_get_chassis_info_type(fru, &ucval);
-    if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "Chassis info type", ucval);
-
-    DUMP_FRU_STR(chassis_info_part_number, "Chassis info part number");
-    DUMP_FRU_STR(chassis_info_serial_number, "Chassis info serial number");
-    DUMP_FRU_CUSTOM_STR(chassis_info, "Chassis info");
-
-    rv = ipmi_fru_get_board_info_version(fru, &ucval);
-    if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "Board info version", ucval);
-
-    rv = ipmi_fru_get_board_info_lang_code(fru, &ucval);
-    if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "Board info lang code", ucval);
-
-    rv = ipmi_fru_get_board_info_mfg_time(fru, &tval);
-    if (!rv)
-	ipmi_cmdlang_out_long(cmd_info, "Board info mfg time", (long) tval);
-
-    DUMP_FRU_STR(board_info_board_manufacturer,
-		 "Board info board manufacturer");
-    DUMP_FRU_STR(board_info_board_product_name,
-		 "Board info board product name");
-    DUMP_FRU_STR(board_info_board_serial_number,
-		 "Board info board serial number");
-    DUMP_FRU_STR(board_info_board_part_number,
-		 "Board info board part number");
-    DUMP_FRU_STR(board_info_fru_file_id,
-		 "Board info fru file id");
-    DUMP_FRU_CUSTOM_STR(board_info, "Board info");
-
-    rv = ipmi_fru_get_product_info_version(fru, &ucval);
-    if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "Product info version", ucval);
-
-    rv = ipmi_fru_get_product_info_lang_code(fru, &ucval);
-    if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "Product info lang code", ucval);
-
-    DUMP_FRU_STR(product_info_manufacturer_name,
-		 "Product info manufacturer name");
-    DUMP_FRU_STR(product_info_product_name,
-		 "Product info product name");
-    DUMP_FRU_STR(product_info_product_part_model_number,
-		 "Product info product part model number");
-    DUMP_FRU_STR(product_info_product_version,
-		 "Product info product version");
-    DUMP_FRU_STR(product_info_product_serial_number,
-		 "Product info product serial number");
-    DUMP_FRU_STR(product_info_asset_tag,
-		 "Product info asset tag");
-    DUMP_FRU_STR(product_info_fru_file_id,
-		 "Product info fru file id");
-    DUMP_FRU_CUSTOM_STR(product_info, "Product info");
     num_multi = ipmi_fru_get_num_multi_records(fru);
     for (i=0; i<num_multi; i++) {
 	unsigned char type, ver;
