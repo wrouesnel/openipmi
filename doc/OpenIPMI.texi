@@ -536,6 +536,23 @@ register with an entity to see if/when it becomes available using
 you can fetch the FRU data using the commands defined in the IPMI
 include file.
 
+@subsubsection Device-Relative vs System-Relative Entities
+
+In IPMI, entities may be be either in a fixed place in the system, or
+they may be moved about the system.  Fixed entities, are, well, in a
+fixed location in the system.  These are called system relative
+entities.  They have an entity instance less than 60h.
+
+Other entities may not reside in a fixed location.  For instance, a
+power supply or CompactPCI board may be plugged in to one of many
+locations in a chassis; it doesn't know ahead of time which one.
+These types of entities are generally device-relative and have an
+entity instance of 60h or larger.  For these types of entities, the
+management controller on which they reside becomes part of the entity.
+In OpenIPMI, the IPMB channel number of IPMB address are part of the
+entity.  In @command{ipmi_ui}, these are printed an entered as
+``r<channel>.<ipmb>.<entity id>.<entity instance>''.
+
 @subsection Sensors
 
 Sensor monitor something about an object.  IPMI defines many types of

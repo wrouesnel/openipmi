@@ -8,6 +8,10 @@
 	* lib/oem_motorola_mxp.c: Modified the power supply sensor to only
 	set the power feed failure bits on DC power supplies.
 
+	* doc/OpenIPMI.texi: Revised the Motorola MXP documentation.
+
+	* configure.in: Move to version 1.2.12.
+
 2004-02-17 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_conn.h: Added a "broadcast broken" flag
