@@ -406,9 +406,4 @@ int ipmi_entity_send_command(ipmi_entity_t         *entity,
 			     ipmi_entity_op_info_t *info,
 			     void                  *cb_data);
 
-
-/* Locks for the entity. */
-void ipmi_entity_lock(ipmi_entity_t *ent);
-void ipmi_entity_unlock(ipmi_entity_t *ent);
-
 #endif /* _IPMI_ENTITY_H */

@@ -6872,7 +6872,7 @@ amc_board_handler(ipmi_mc_t *mc)
 	    goto out_err;
     }
 
-    rv = ipmi_mc_add_oem_removed_handler(mc, amc_removal_handler, info, NULL);
+    rv = ipmi_mc_add_oem_removed_handler(mc, amc_removal_handler, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(amc_board_handler):"
@@ -8047,7 +8047,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 	    goto out;
     }
 
-    rv = ipmi_mc_add_oem_removed_handler(mc, zynx_removal_handler, sinfo, NULL);
+    rv = ipmi_mc_add_oem_removed_handler(mc, zynx_removal_handler, sinfo);
 
  out:
     if (rv && sinfo)
@@ -8512,7 +8512,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
     }
 
     rv = ipmi_mc_add_oem_removed_handler(mc, mxp_genboard_removal_handler,
-					 sinfo, NULL);
+					 sinfo);
 
  out:
     if (rv && sinfo)
@@ -8769,7 +8769,7 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 
     ipmi_mc_set_oem_data(mc, info);
 
-    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_removal_handler, info, NULL);
+    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_removal_handler, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(mxp_handler): "

@@ -418,7 +418,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 
     rv = ipmi_mc_add_oem_removed_handler(mc,
 					 chassis_mc_control_removal_handler,
-					 power_control, NULL);
+					 power_control);
     if (rv) {
 	ipmi_control_destroy(power_control);
 	goto out;
@@ -456,7 +456,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 
     rv = ipmi_mc_add_oem_removed_handler(mc,
 					 chassis_mc_control_removal_handler,
-					 reset_control, NULL);
+					 reset_control);
     if (rv) {
 	ipmi_control_destroy(reset_control);
 	goto out;

@@ -552,8 +552,8 @@ ipmi_control_send_command_addr(ipmi_domain_t          *domain,
 {
     int rv;
 
-    CHECK_MC_LOCK(bmc);
     CHECK_CONTROL_LOCK(control);
+    CHECK_MC_LOCK(control->mc);
 
     info->__control = control;
     info->__control_id = ipmi_control_convert_to_id(control);

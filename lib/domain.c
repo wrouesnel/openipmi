@@ -783,9 +783,9 @@ __ipmi_check_domain_lock(ipmi_domain_t *domain)
     if (!DEBUG_LOCKS)
 	return;
 
-    if (domain->usecount != 0)
+    if (domain->usecount == 0)
 	ipmi_report_lock_error(domain->os_hnd,
-			       "MC not locked when it should have been");
+			       "domain not locked when it should have been");
 }
 
 void
@@ -799,6 +799,7 @@ __ipmi_check_domain_entity_lock(ipmi_domain_t *domain)
 void
 ipmi_domain_entity_lock(ipmi_domain_t *domain)
 {
+
     CHECK_DOMAIN_LOCK(domain);
     ipmi_lock(domain->entities_lock);
 }

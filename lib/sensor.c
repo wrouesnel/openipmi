@@ -617,8 +617,8 @@ ipmi_sensor_send_command_addr(ipmi_domain_t         *domain,
 {
     int rv;
 
-    CHECK_MC_LOCK(bmc);
     CHECK_SENSOR_LOCK(sensor);
+    CHECK_MC_LOCK(sensor->mc);
 
     info->__sensor = sensor;
     info->__sensor_id = ipmi_sensor_convert_to_id(sensor);

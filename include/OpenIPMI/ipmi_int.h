@@ -207,7 +207,8 @@ void ipmi_domain_entity_unlock(ipmi_domain_t *domain);
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */
 /* Nothing for now. */
-#define CHECK_MC_LOCK(mc) do {} while (0)
+void __ipmi_check_mc_lock(ipmi_mc_t *mc);
+#define CHECK_MC_LOCK(mc) __ipmi_check_mc_lock(mc)
 
 void __ipmi_check_domain_lock(ipmi_domain_t *domain);
 #define CHECK_DOMAIN_LOCK(domain) __ipmi_check_domain_lock(domain)

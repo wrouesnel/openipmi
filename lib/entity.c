@@ -1411,12 +1411,12 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	/* Presence sensor overrides everything. */
 	rv = ipmi_states_get(ent->presence_sensor, states_read, ent);
     } else if (ent->presence_bit_sensor) {
-	/* Presence bit sensor overrides everything but presence. */
+	/* Presence bit sensor overrides everything but a presence sensor. */
 	rv = ipmi_states_get(ent->presence_bit_sensor, states_bit_read, ent);
     } else if ((ent->frudev_present) && (ent->frudev_active)) {
 	/* Even though the spec lists the frudev check last, since
 	   these are an "or" relationship except for the presence
-	   bits, and this is the simplest check, we do it first. */
+	   sensor, and this is the simplest check, we do it first. */
 	presence_changed(ent, ent->frudev_active, NULL);
     } else if (! ilist_empty(ent->sensors)) {
 	/* It has sensors, try to see if any of those are active. */
@@ -4162,18 +4162,6 @@ ipmi_entity_id_is_invalid(ipmi_entity_id_t *id)
     return (id->domain_id.domain == NULL);
 }
 
-
-void
-ipmi_entity_lock(ipmi_entity_t *ent)
-{
-    ipmi_domain_entity_lock(ent->domain);
-}
-
-void
-ipmi_entity_unlock(ipmi_entity_t *ent)
-{
-    ipmi_domain_entity_unlock(ent->domain);
-}
 
 #ifdef IPMI_CHECK_LOCKS
 void

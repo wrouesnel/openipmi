@@ -46,6 +46,7 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_oem.h>
+#include <OpenIPMI/locked_list.h>
 
 #include <OpenIPMI/ilist.h>
 #include <OpenIPMI/opq.h>
@@ -61,12 +62,6 @@ typedef struct domain_up_info_s
 {
     ipmi_mcid_t mcid;
 } domain_up_info_t;
-
-struct ipmi_mc_removed_s
-{
-    ipmi_mc_oem_removed_cb handler;
-    void                   *cb_data;
-};
 
 #define MC_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
 struct ipmi_mc_s
@@ -157,10 +152,10 @@ struct ipmi_mc_s
     void           *sels_first_read_cb_data;
 
     /* Call these when the MC is destroyed. */
-    ilist_t *removed_handlers;
+    locked_list_t *removed_handlers;
 
     /* Call these when the MC changes from active to inactive. */
-    ilist_t *active_handlers;
+    locked_list_t *active_handlers;
 
     /* The following are for waiting until a domain is up before
        starting the SEL query, so that the domain will be registered
@@ -263,6 +258,7 @@ mc_set_name(ipmi_mc_t *mc)
     int         length;
     ipmi_mcid_t id = ipmi_mc_convert_to_id(mc);
 
+    ipmi_lock(mc->lock);
     mc->name[0] = '(';
     if (*dname != '\0') {
 	length = strlen(dname) - 3; /* Remove the "() " */
@@ -280,6 +276,7 @@ mc_set_name(ipmi_mc_t *mc)
     length++;
     mc->name[length] = '\0';
     length++;
+    ipmi_unlock(mc->lock);
 }
 
 char *
@@ -322,12 +319,12 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     rv = ipmi_create_lock(domain, &mc->lock);
     if (rv)
 	goto out_err;
-    mc->removed_handlers = alloc_ilist();
+    mc->removed_handlers = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
     if (!mc->removed_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }
-    mc->active_handlers = alloc_ilist();
+    mc->active_handlers = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
     if (!mc->active_handlers) {
 	rv = ENOMEM;
 	goto out_err;
@@ -385,16 +382,15 @@ mc_get_os_hnd(ipmi_mc_t *mc)
     return ipmi_domain_get_os_hnd(domain);
 }
 
-static void
-call_removed_handler(ilist_iter_t *iter, void *item, void *cb_data)
+static int
+call_removed_handler(void *cb_data, void *item1, void *item2)
 {
-    ipmi_mc_removed_t *info = item;
-    ipmi_mc_t         *mc = cb_data;
+    ipmi_mc_oem_removed_cb handler = item1;
+    ipmi_mc_t              *mc = cb_data;
 
-    if (info->handler)
-	info->handler(mc->domain, mc, info->cb_data);
-    ipmi_mem_free(info);
-    ilist_delete(iter);
+    ipmi_mc_remove_oem_removed_handler(mc, handler, item2);
+    handler(mc->domain, mc, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static int
@@ -417,17 +413,10 @@ check_mc_destroy(ipmi_mc_t *mc)
 
 	if (mc->conup_info)
 	    ipmi_mem_free(mc->conup_info);
-	if (mc->removed_handlers) {
-	    void *data;
-	    data = ilist_remove_first(mc->removed_handlers);
-	    while (data) {
-		ipmi_mem_free(data);
-		data = ilist_remove_first(mc->removed_handlers);
-	    }
-	    free_ilist(mc->removed_handlers);
-	}
+	if (mc->removed_handlers)
+	    locked_list_destroy(mc->removed_handlers);
     	if (mc->active_handlers)
-	    ilist_twoitem_destroy(mc->active_handlers);
+	    locked_list_destroy(mc->active_handlers);
 	if (mc->sensors)
 	    ipmi_sensors_destroy(mc->sensors);
 	if (mc->controls)
@@ -460,9 +449,7 @@ cleanup_mc(ipmi_mc_t *mc)
     os_handler_t  *os_hnd = ipmi_domain_get_os_hnd(domain);
 
     /* Call the OEM handlers for removal, if it has been registered. */
-    if (mc->removed_handlers) {
-	ilist_iter(mc->removed_handlers, call_removed_handler, mc);
-    }
+    locked_list_iterate(mc->removed_handlers, call_removed_handler, mc);
     
     /* First the device SDR sensors, since they can be there for any
        MC. */
@@ -2331,19 +2318,20 @@ int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
     return 0;
 }
 
-static void
-call_active_handler(void *data, void *ihandler, void *cb_data)
+static int
+call_active_handler(void *cb_data, void *item1, void *item2)
 {
-    ipmi_mc_active_cb handler = ihandler;
-    ipmi_mc_t         *mc = data;
+    ipmi_mc_active_cb handler = item1;
+    ipmi_mc_t         *mc = cb_data;
 
-    handler(mc, mc->active, cb_data);
+    handler(mc, mc->active, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static void
 call_active_handlers(ipmi_mc_t *mc)
 {
-    ilist_iter_twoitem(mc->active_handlers, call_active_handler, mc);
+    locked_list_iterate(mc->active_handlers, call_active_handler, mc);
 }
 
 int
@@ -2353,14 +2341,10 @@ ipmi_mc_add_active_handler(ipmi_mc_t         *mc,
 {
     CHECK_MC_LOCK(mc);
 
-    /* Don't allow two to be added. */
-    if (ilist_twoitem_exists(mc->active_handlers, handler, cb_data))
+    if (locked_list_add(mc->active_handlers, handler, cb_data))
 	return 0;
-
-    if (! ilist_add_twoitem(mc->active_handlers, handler, cb_data))
+    else
 	return ENOMEM;
-
-    return 0;
 }
 
 int
@@ -2370,10 +2354,10 @@ ipmi_mc_remove_active_handler(ipmi_mc_t         *mc,
 {
     CHECK_MC_LOCK(mc);
 
-    if (! ilist_remove_twoitem(mc->active_handlers, handler, cb_data))
-	return ENOENT;
-
-    return 0;
+    if (locked_list_remove(mc->active_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 int
@@ -2676,11 +2660,9 @@ _ipmi_mc_new_sensor(ipmi_mc_t     *mc,
 
     CHECK_MC_LOCK(mc);
 
-    ipmi_entity_lock(ent);
     if (mc->new_sensor_handler)
 	rv = mc->new_sensor_handler(mc, ent, sensor, link,
 				    mc->new_sensor_cb_data);
-    ipmi_entity_unlock(ent);
     return rv;
 }
 
@@ -2709,45 +2691,27 @@ ipmi_mc_set_sdrs_fixup_handler(ipmi_mc_t                 *mc,
 int
 ipmi_mc_add_oem_removed_handler(ipmi_mc_t              *mc,
 				ipmi_mc_oem_removed_cb handler,
-				void                   *cb_data,
-				ipmi_mc_removed_t      **id)
+				void                   *cb_data)
 {
-    ipmi_mc_removed_t *info;
-
     CHECK_MC_LOCK(mc);
 
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
+    if (locked_list_add(mc->removed_handlers, handler, cb_data))
+	return 0;
+    else
 	return ENOMEM;
-
-    info->handler = handler;
-    info->cb_data = cb_data;
-    if (! ilist_add_tail(mc->removed_handlers, info, NULL)) {
-	ipmi_mem_free(info);
-	return ENOMEM;
-    } else if (id) {
-	*id = info;
-    }
-    return 0;
-}
-
-static void
-remove_removed_handler(ilist_iter_t *iter, void *item, void *cb_data)
-{
-    if (item == cb_data) {
-	ipmi_mem_free(item);
-	ilist_delete(iter);
-    }
 }
 
 int
-ipmi_mc_remove_oem_removed_handler(ipmi_mc_t         *mc,
-				   ipmi_mc_removed_t *id)
+ipmi_mc_remove_oem_removed_handler(ipmi_mc_t              *mc,
+				   ipmi_mc_oem_removed_cb handler,
+				   void                   *cb_data)
 {
     CHECK_MC_LOCK(mc);
 
-    ilist_iter(mc->removed_handlers, remove_removed_handler, id);
-    return 0;
+    if (locked_list_remove(mc->removed_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 int
@@ -2836,4 +2800,25 @@ _ipmi_mc_shutdown(void)
 	oem_handlers = NULL;
 	mc_initialized = 0;
     }
+}
+
+/***********************************************************************
+ *
+ * Lock checking
+ *
+ **********************************************************************/
+
+void
+__ipmi_check_mc_lock(ipmi_mc_t *mc)
+{
+    if (!mc)
+	return;
+
+    if (!DEBUG_LOCKS)
+	return;
+
+    if (mc->usecount == 0)
+	ipmi_report_lock_error(ipmi_domain_get_os_hnd(mc->domain),
+			       "MC not locked when it should have been");
+	
 }

@@ -726,7 +726,7 @@ test_handler_0(ipmi_mc_t *mc,
 
     rv = ipmi_mc_add_oem_removed_handler(mc,
 					 mc_control_removal_handler,
-					 control, NULL);
+					 control);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_test.c(test_handler_0): "
@@ -775,7 +775,7 @@ test_handler_0(ipmi_mc_t *mc,
 
     rv = ipmi_mc_add_oem_removed_handler(mc,
 					 mc_control_removal_handler,
-					 control, NULL);
+					 control);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_test.c(test_handler_0): "
