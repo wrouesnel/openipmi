@@ -100,6 +100,7 @@ int _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
 /* Attempt to find the MC, and if it doesn't exist create it and
    return it. */
 int _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
+					  unsigned int  channel,
 					  unsigned int  slave_addr,
 					  ipmi_mc_t     **mc);
 
