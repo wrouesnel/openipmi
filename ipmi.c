@@ -1012,3 +1012,33 @@ ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 	states->__states &= ~(1 << thresh);
 }
 
+unsigned int ipmi_get_uint32(unsigned char *data)
+{
+    return (data[0]
+	    | (data[1] << 8)
+	    | (data[2] << 16)
+	    | (data[3] << 24));
+}
+
+/* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
+unsigned int ipmi_get_uint16(unsigned char *data)
+{
+    return (data[0]
+	    | (data[1] << 8));
+}
+
+/* Add a 32-bit integer to the data, IPMI (little-endian) style. */
+void ipmi_set_uint32(unsigned char *data, int val)
+{
+    data[0] = val & 0xff;
+    data[1] = (val >> 8) & 0xff;
+    data[2] = (val >> 16) & 0xff;
+    data[3] = (val >> 24) & 0xff;
+}
+
+/* Add a 16-bit integer to the data, IPMI (little-endian) style. */
+void ipmi_set_uint16(unsigned char *data, int val)
+{
+    data[0] = val & 0xff;
+    data[1] = (val >> 8) & 0xff;
+}

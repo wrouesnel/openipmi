@@ -782,36 +782,16 @@ typedef void (*ipmi_setup_done_t)(ipmi_mc_t *mc,
 				  int       err);
 
 /* Extract a 32-bit integer from the data, IPMI (little-endian) style. */
-static inline unsigned int ipmi_get_uint32(unsigned char *data)
-{
-    return (data[0]
-	    | (data[1] << 8)
-	    | (data[2] << 16)
-	    | (data[3] << 24));
-}
+unsigned int ipmi_get_uint32(unsigned char *data);
 
 /* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
-static inline unsigned int ipmi_get_uint16(unsigned char *data)
-{
-    return (data[0]
-	    | (data[1] << 8));
-}
+unsigned int ipmi_get_uint16(unsigned char *data);
 
 /* Add a 32-bit integer to the data, IPMI (little-endian) style. */
-static inline void ipmi_set_uint32(unsigned char *data, int val)
-{
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-    data[2] = (val >> 16) & 0xff;
-    data[3] = (val >> 24) & 0xff;
-}
+void ipmi_set_uint32(unsigned char *data, int val);
 
 /* Add a 16-bit integer to the data, IPMI (little-endian) style. */
-static inline void ipmi_set_uint16(unsigned char *data, int val)
-{
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-}
+void ipmi_set_uint16(unsigned char *data, int val);
 
 /* Fetch an IPMI device string as defined in section 37.14 of the IPMI
    version 1.5 manual.  The in_len is the number of input bytes in the
