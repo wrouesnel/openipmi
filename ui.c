@@ -468,10 +468,15 @@ user_input_ready(int fd, void *data)
 {
     int c;
 
-    c = wgetch(cmd_win);
-    while (c != ERR) {
-	handle_user_char(c);
+    if (full_screen) {
 	c = wgetch(cmd_win);
+	while (c != ERR) {
+	    handle_user_char(c);
+	    c = wgetch(cmd_win);
+	}
+    } else {
+	c = getchar();
+	handle_user_char(c);
     }
 }
 
