@@ -394,8 +394,10 @@ ipmi_control_destroy(ipmi_control_t *control)
     ipmi_control_info_t *controls = _ipmi_mc_get_controls(control->mc);
 
     ipmi_lock(controls->idx_lock);
-    if (controls->controls_by_idx[control->num] != control)
+    if (controls->controls_by_idx[control->num] != control) {
+	ipmi_unlock(controls->idx_lock);
 	return EINVAL;
+    }
 
     _ipmi_control_get(control);
 
@@ -765,8 +767,10 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	   too much). */
 	new_size = ((num / 16) * 16) + 16;
 	new_array = ipmi_mem_alloc(sizeof(*new_array) * new_size);
-	if (!new_array)
+	if (!new_array) {
+	    ipmi_unlock(controls->idx_lock);
 	    return ENOMEM;
+	}
 	if (controls->controls_by_idx)
 	    memcpy(new_array, controls->controls_by_idx,
 		   sizeof(*new_array) * (controls->idx_size));
@@ -779,12 +783,15 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     }
 
     control->waitq = opq_alloc(os_hnd);
-    if (! control->waitq)
+    if (! control->waitq) {
+	ipmi_unlock(controls->idx_lock);
 	return ENOMEM;
+    }
 
     control->handler_list = locked_list_alloc(os_hnd);
     if (! control->handler_list) {
 	opq_destroy(control->waitq);
+	ipmi_unlock(controls->idx_lock);
 	return ENOMEM;
     }
 
@@ -794,6 +801,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	control->waitq = NULL;
 	locked_list_destroy(control->handler_list);
 	control->handler_list = NULL;
+	ipmi_unlock(controls->idx_lock);
 	return ENOMEM;
     }
 
@@ -803,8 +811,15 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     control->entity = ent;
     control->lun = 4;
     control->num = num;
-    if (! controls->controls_by_idx[num])
+    if (controls->controls_by_idx[num]) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%scontrol.c(ipmi_control_add_nonstandard): "
+		 " Add a control at index %d, but there was already a"
+		 " control there, overwriting the old control",
+		 MC_NAME(mc), num);
+    } else {
 	controls->control_count++;
+    }
     controls->controls_by_idx[num] = control;
     control->destroy_handler = destroy_handler;
     control->destroy_handler_cb_data = destroy_handler_cb_data;

@@ -62,8 +62,9 @@
 #define IPMC_POWER_CONTROL_NUM     0x81
 
 /* This is a control attached to the system interface used to handle
-   the address control, one for each possible IPMB. */
-#define IPMC_ADDRESS_NUM(ipmb)	   (0x80 + (ipmb / 2))
+   the address control, one for each possible IPMB.  These range from
+   0x80 to 0xff on the SI MC. */
+#define FIRST_IPMC_ADDRESS_NUM	0x80
 
 #define PICMG_MFG_ID	0x315a
 
@@ -171,6 +172,9 @@ struct atca_shelf_s
 
     ipmi_domain_oem_check_done startup_done;
     void                       *startup_done_cb_data;
+
+    /* This is used to allocate address control number sequentially. */
+    unsigned int next_address_control_num;
 
     /* Hacks for broken implementations. */
 
@@ -2003,7 +2007,7 @@ get_address(ipmi_control_t                 *control,
 }
 
 static void
-add_address_control(atca_ipmc_t *ipmc)
+add_address_control(atca_shelf_t *info, atca_ipmc_t *ipmc)
 {
     int                          rv;
     ipmi_system_interface_addr_t si;
@@ -2012,6 +2016,14 @@ add_address_control(atca_ipmc_t *ipmc)
     if (ipmc->address_control)
 	return;
     
+    if (info->next_address_control_num == 0xff) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_address_control_mc_cb): "
+		 "Could not add control, out of address control numbers",
+		 ENTITY_NAME(ipmc->frus[0]->entity));
+	return;
+    }
+
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = 0xf;
     si.lun = 0;
@@ -2046,9 +2058,10 @@ add_address_control(atca_ipmc_t *ipmc)
 	goto out;
     }
 
+    
     rv = atca_add_control(si_mc,
 			  &ipmc->address_control,
-			  IPMC_ADDRESS_NUM(ipmc->ipmb_address),
+			  info->next_address_control_num,
 			  ipmc->frus[0]->entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -2057,6 +2070,8 @@ add_address_control(atca_ipmc_t *ipmc)
 		 ENTITY_NAME(ipmc->frus[0]->entity), rv);
 	goto out;
     }
+
+    info->next_address_control_num++;
 
  out:
     _ipmi_mc_put(si_mc);
@@ -2275,6 +2290,12 @@ destroy_fru_controls(atca_fru_t *finfo)
 }
 
 static int
+any_fru_controls(atca_fru_t *finfo)
+{
+    return ((finfo->leds) || (finfo->cold_reset) || (finfo->power));
+}
+
+static int
 atca_entity_presence_handler(ipmi_entity_t *entity,
 			     int           present,
 			     void          *cb_data,
@@ -2479,16 +2500,18 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
 	    if (!finfo)
 		continue;
 
-	    _ipmi_domain_entity_lock(domain);
-	    if (! finfo->entity)
-		rv = ENOENT;
-	    else
-		rv = _ipmi_entity_get(finfo->entity);
-	    _ipmi_domain_entity_unlock(domain);
-	    if (rv)
-		continue;
-	    destroy_fru_controls(finfo);
-	    _ipmi_entity_put(finfo->entity);
+	    if (any_fru_controls(finfo)) {
+		_ipmi_domain_entity_lock(domain);
+		if (! finfo->entity)
+		    rv = ENOENT;
+		else
+		    rv = _ipmi_entity_get(finfo->entity);
+		_ipmi_domain_entity_unlock(domain);
+		if (rv)
+		    continue;
+		destroy_fru_controls(finfo);
+		_ipmi_entity_put(finfo->entity);
+	    }
 	    /* We always leave FRU 0 around until we destroy the domain. */
 	    if (i != 0) {
 		ipmi_mem_free(finfo);
@@ -2781,7 +2804,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	    _ipmi_entity_put(b->frus[0]->entity);
 	    goto out;
 	}
-	add_address_control(b);
+	add_address_control(info, b);
 	_ipmi_entity_put(b->frus[0]->entity);
     }
 
@@ -3064,15 +3087,15 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 	for (i=0; i<info->num_ipmcs; i++) {
 	    atca_ipmc_t *b = &(info->ipmcs[i]);
 
-	    _ipmi_mc_get(b->mc);
-	    _ipmi_entity_get(b->frus[0]->entity);
-	    destroy_address_control(b);
-	    destroy_fru_controls(b->frus[0]);
-	    if (b->frus[0]->entity)
+	    if (b->frus[0]->entity) {
+		_ipmi_entity_get(b->frus[0]->entity);
+		destroy_address_control(b);
+		destroy_fru_controls(b->frus[0]);
+
 		ipmi_entity_remove_child(info->shelf_entity,
 					 b->frus[0]->entity);
-	    _ipmi_entity_put(b->frus[0]->entity);
-	    _ipmi_mc_put(b->mc);
+		_ipmi_entity_put(b->frus[0]->entity);
+	    }
 	}
     }
     _ipmi_entity_put(info->shelf_entity);
@@ -3170,6 +3193,8 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	goto out;
     }
     memset(info, 0, sizeof(*info));
+
+    info->next_address_control_num = FIRST_IPMC_ADDRESS_NUM;
 
     saddr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     saddr.channel = IPMI_BMC_CHANNEL;

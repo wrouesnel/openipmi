@@ -241,7 +241,10 @@ ipmi_oem_force_conn_init(void)
 					force_oem_conn_handler,
 					NULL);
     if (rv)
-	fprintf(stderr, "Unable to initialize the Force 735 OEM handler\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_force_conn.c(ipmi_oem_force_conn_init): "
+		 "Unable to initialize the Force 735 OEM handler: %x",
+		 rv);
 
     /* The 740 card */
     rv = ipmi_register_oem_conn_handler(0x000e48,
@@ -249,7 +252,10 @@ ipmi_oem_force_conn_init(void)
 					force_oem_conn_handler,
 					NULL);
     if (rv)
-	fprintf(stderr, "Unable to initialize the Force 740 OEM handler\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_force_conn.c(ipmi_oem_force_conn_init): "
+		 "Unable to initialize the Force 740 OEM handler: %x",
+		 rv);
 
     /* The 786 card */
     rv = ipmi_register_oem_conn_handler(0x000e48,
@@ -257,7 +263,10 @@ ipmi_oem_force_conn_init(void)
 					force_oem_conn_handler,
 					NULL);
     if (rv)
-	fprintf(stderr, "Unable to initialize the Force 786 OEM handler\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_force_conn.c(ipmi_oem_force_conn_init): "
+		 "Unable to initialize the Force 786 OEM handler: %x",
+		 rv);
 
     /* The 550 card */
     rv = ipmi_register_oem_conn_handler(0x000e48,
@@ -265,7 +274,10 @@ ipmi_oem_force_conn_init(void)
 					force_oem_conn_handler,
 					NULL);
     if (rv)
-	fprintf(stderr, "Unable to initialize the Force 550 OEM handler\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_force_conn.c(ipmi_oem_force_conn_init): "
+		 "Unable to initialize the Force 550 OEM handler: %x",
+		 rv);
 
     /* The 560 card */
     rv = ipmi_register_oem_conn_handler(0x000e48,
@@ -273,7 +285,10 @@ ipmi_oem_force_conn_init(void)
 					force_oem_conn_handler,
 					NULL);
     if (rv)
-	fprintf(stderr, "Unable to initialize the Force 560 OEM handler\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_force_conn.c(ipmi_oem_force_conn_init): "
+		 "Unable to initialize the Force 560 OEM handler: %x",
+		 rv);
 
     /* The 690 card */
     rv = ipmi_register_oem_conn_handler(0x000e48,
@@ -281,7 +296,10 @@ ipmi_oem_force_conn_init(void)
 					force_oem_conn_handler,
 					NULL);
     if (rv)
-	fprintf(stderr, "Unable to initialize the Force 690 OEM handler\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_force_conn.c(ipmi_oem_force_conn_init): "
+		 "Unable to initialize the Force 690 OEM handler: %x",
+		 rv);
 
     /* The 695 card */
     rv = ipmi_register_oem_conn_handler(0x000e48,
@@ -289,7 +307,10 @@ ipmi_oem_force_conn_init(void)
 					force_oem_conn_handler,
 					NULL);
     if (rv)
-	fprintf(stderr, "Unable to initialize the Force 695 OEM handler\n");
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_force_conn.c(ipmi_oem_force_conn_init): "
+		 "Unable to initialize the Force 695 OEM handler: %x",
+		 rv);
 }
 
 #if 0

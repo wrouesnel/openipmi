@@ -1367,7 +1367,6 @@ call_mc_upd_handlers(ipmi_domain_t      *domain,
     info.op = op;
     info.mc = mc;
     locked_list_iterate(domain->mc_upd_handlers, iterate_mc_upds, &info);
-    _ipmi_mc_clear_active_call(mc);
 }
 
 int
@@ -2011,9 +2010,6 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    ipmi_unlock(domain->mc_lock);
 		    goto out;
 		}
-
-		/* No handlers can be registered yet, so this is safe. */
-		_ipmi_mc_set_active(mc, 1);
 
 		rv = add_mc_to_domain(domain, mc);
 		if (rv) {

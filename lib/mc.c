@@ -239,6 +239,11 @@ static void con_up_handler(ipmi_domain_t *domain,
 
 static void call_active_handlers(ipmi_mc_t *mc);
 
+typedef struct mc_name_info
+{
+    char name[MC_NAME_LEN];
+} mc_name_info_t;
+
 /***********************************************************************
  *
  * Routines for creating and destructing MCs.
@@ -1058,6 +1063,7 @@ typedef struct sel_get_time_s
 {
     sel_get_time_cb handler;
     void            *cb_data;
+    char            name[MC_NAME_LEN];
 } sel_get_time_t;
 
 static void
@@ -1069,7 +1075,10 @@ get_sel_time(ipmi_mc_t  *mc,
 
     if (!mc) {
 	/* The MC went away, deliver an error. */
-	ipmi_log(IPMI_LOG_ERR_INFO, "MC went away during SEL time fetch.");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(get_sel_time): "
+		 "MC went away during SEL time fetch.",
+		 info->name);
 	if (info->handler)
 	    info->handler(mc, ENXIO, 0, info->cb_data);
 	goto out;
@@ -1078,8 +1087,9 @@ get_sel_time(ipmi_mc_t  *mc,
     if (rsp->data[0] != 0) {
 	/* Error setting the event receiver, report it. */
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(get_sel_time): "
 		 "Could not get SEL time for MC at 0x%x",
-		 ipmi_addr_get_slave_addr(&mc->addr));
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
 	if (info->handler)
 	    info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), 0,
 			  info->cb_data);
@@ -1089,8 +1099,9 @@ get_sel_time(ipmi_mc_t  *mc,
     if (rsp->data_len < 5) {
 	/* Not enough data? */
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(get_sel_time): "
 		 "Get SEL time response too short for MC at 0x%x",
-		 ipmi_addr_get_slave_addr(&mc->addr));
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
 	if (info->handler)
 	    info->handler(mc, EINVAL, 0, info->cb_data);
 	goto out;
@@ -1118,6 +1129,7 @@ ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
 
     info->handler = handler;
     info->cb_data = cb_data;
+    strncpy(info->name, mc->name, sizeof(info->name));
 
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_GET_SEL_TIME_CMD;
@@ -1133,6 +1145,7 @@ typedef struct set_sel_time_s
 {
     ipmi_mc_done_cb handler;
     void            *cb_data;
+    char            name[MC_NAME_LEN];
 } set_sel_time_t;
 
 static void
@@ -1144,7 +1157,10 @@ set_sel_time(ipmi_mc_t  *mc,
 
     if (!mc) {
 	/* The MC went away, deliver an error. */
-	ipmi_log(IPMI_LOG_ERR_INFO, "MC went away during SEL time fetch.");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(set_sel_time): "
+		 "MC went away during SEL time fetch.",
+		 info->name);
 	if (info->handler)
 	    info->handler(mc, ENXIO, info->cb_data);
 	goto out;
@@ -1153,8 +1169,9 @@ set_sel_time(ipmi_mc_t  *mc,
     if (rsp->data[0] != 0) {
 	/* Error setting the event receiver, report it. */
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(set_sel_time): "
 		 "Could not get SEL time for MC at 0x%x",
-		 ipmi_addr_get_slave_addr(&mc->addr));
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
 	if (info->handler)
 	    info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
 	goto out;
@@ -1185,6 +1202,7 @@ ipmi_mc_set_current_sel_time(ipmi_mc_t             *mc,
 
     info->handler = handler;
     info->cb_data = cb_data;
+    strncpy(info->name, mc->name, sizeof(info->name));
 
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_SET_SEL_TIME_CMD;
@@ -1235,8 +1253,9 @@ set_event_rcvr_done(ipmi_mc_t  *mc,
     if (rsp->data[0] != 0) {
 	/* Error setting the event receiver, report it. */
 	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(set_event_rcvr_done): "
 		 "Could not set event receiver for MC at 0x%x",
-		 ipmi_addr_get_slave_addr(&mc->addr));
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
 	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
 
@@ -1285,12 +1304,14 @@ get_event_rcvr_done(ipmi_mc_t  *mc,
     if (rsp->data[0] != 0) {
 	/* Error getting the event receiver, report it. */
 	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(get_event_rcvr_done): "
 		 "Could not get event receiver for MC at 0x%x",
-		 ipmi_addr_get_slave_addr(&mc->addr));
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
     } else if (rsp->data_len < 2) {
 	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(get_event_rcvr_done): "
 		 "Get event receiver length invalid for MC at 0x%x",
-		 ipmi_addr_get_slave_addr(&mc->addr));
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
     } else if ((rsp->data[1] == 0) && (!mc->events_enabled))  {
 	/* Nothing to do, our event receiver is disabled. */
     } else {
@@ -1355,9 +1376,13 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 		     ipmi_msg_t *rsp,
 		     void       *rsp_data)
 {
+    mc_name_info_t *info = rsp_data;
+
     if (!mc) {
-	ipmi_log(IPMI_LOG_WARNING, "MC went away during SEL time set");
-	return;
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(startup_set_sel_time): "
+		 "MC went away during SEL time set", info->name);
+	goto out;
     }
 
     if (mc->sels_first_read_handler) {
@@ -1367,12 +1392,16 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(startup_set_sel_time): "
 		 "Unable to set the SEL time due to error: %x",
-		 rsp->data[0]);
+		 mc->name, rsp->data[0]);
 	mc->startup_SEL_time = 0;
     }
 
     ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
+
+ out:
+    ipmi_mem_free(info);
 }
 
 static void
@@ -1382,6 +1411,7 @@ first_sel_op(ipmi_mc_t *mc)
     int            rv;
     unsigned char  data[4];
     struct timeval now;
+    mc_name_info_t *info;
 
     /* Set the current system event log time.  We do this here so
        we can be sure that the entities are all there before
@@ -1393,20 +1423,34 @@ first_sel_op(ipmi_mc_t *mc)
     gettimeofday(&now, NULL);
     ipmi_set_uint32(data, now.tv_sec);
     mc->startup_SEL_time = ipmi_seconds_to_time(now.tv_sec);
-    rv = ipmi_mc_send_command(mc, 0, &msg, startup_set_sel_time, NULL);
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(first_sel_op): "
+		 "Unable to start SEL time, out of memory",
+		 mc->name);
+	goto cont_op;
+    }
+    rv = ipmi_mc_send_command(mc, 0, &msg, startup_set_sel_time, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Unable to start SEL time set due to error: %x\n",
-		 rv);
-	mc->startup_SEL_time = 0;
-	rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer,
-			  mc->sel_timer_info);
-	if (rv) {
-	    sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
-	    if (mc->sels_first_read_handler) {
-		mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
-		mc->sels_first_read_handler = NULL;
-	    }
+		 "%smc.c(first_sel_op): "
+		 "Unable to start SEL time set due to error: %x",
+		 mc->name, rv);
+	ipmi_mem_free(info);
+	goto cont_op;
+    }
+    return;
+
+ cont_op:
+    mc->startup_SEL_time = 0;
+    rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer,
+		      mc->sel_timer_info);
+    if (rv) {
+	sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
+	if (mc->sels_first_read_handler) {
+	    mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
+	    mc->sels_first_read_handler = NULL;
 	}
     }
 }
@@ -1453,9 +1497,11 @@ start_sel_ops(ipmi_mc_t *mc)
 						    mc->conup_info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%smc.c(start_sel_ops): "
 		     "Unable to add a connection change handler for the"
 		     " delayed SEL timer start, starting it now, but some"
-		     " events may come in before the connection is up.");
+		     " events may come in before the connection is up.",
+		     mc->name);
 	    first_sel_op(mc);
 	}
     }
@@ -1499,8 +1545,10 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	info = ipmi_mem_alloc(sizeof(*info));
 	if (!info) {
 	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%smc.c(sensors_reread): "
 		     "Unable to allocate info for system event log timer."
-		     " System event log will not be queried");
+		     " System event log will not be queried",
+		     mc->name);
 	    goto sel_failure;
 	}
 	info->mc = mc;
@@ -1510,8 +1558,10 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	if (rv) {
 	    ipmi_mem_free(info);
 	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%smc.c(sensors_reread): "
 		     "Unable to allocate the system event log timer."
-		     " System event log will not be queried");
+		     " System event log will not be queried",
+		     mc->name);
 	} else {
 	    mc->sel_timer_info = info;
 	}
@@ -2188,18 +2238,19 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 
 	    if (major_version < 1) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "%smc.c(_ipmi_mc_get_device_id_data_from_rsp): "
 			 "IPMI version of the MC at address 0x%2.2x is %d.%d,"
-			 " which is older"
-			 " than OpenIPMI supports",
-			 ipmi_addr_get_slave_addr(&mc->addr),
+			 " which is older than OpenIPMI supports",
+			 mc->name, ipmi_addr_get_slave_addr(&mc->addr),
 			 major_version, minor_version);
 		return EINVAL;
 	    }
 	}
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(_ipmi_mc_get_device_id_data_from_rsp): "
 		 "Invalid return from IPMI Get Device ID from address 0x%2.2x,"
 		 " something is seriously wrong with the MC",
-		 ipmi_addr_get_slave_addr(&mc->addr));
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
 	return EINVAL;
     }
 
@@ -2464,15 +2515,6 @@ _ipmi_mc_set_active(ipmi_mc_t *mc, int val)
 	mc->curr_active = val;
 	mc->active_transitions++;
     }
-    ipmi_unlock(mc->lock);
-}
-
-void
-_ipmi_mc_clear_active_call(ipmi_mc_t *mc)
-{
-    ipmi_lock(mc->lock);
-    mc->active = mc->curr_active;
-    mc->active_transitions = 0;
     ipmi_unlock(mc->lock);
 }
 

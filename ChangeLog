@@ -1,3 +1,36 @@
+2004-09-01 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/chassis.c: Fixed a problem where the wrong error was being
+	passed to a callback.
+
+	* lib/mc.c: Cleaned up the logs.
+	* lib/sel.c: ditto
+	* lib/oem_force_conn.c: ditto
+
+	* lib/opq.c: Initialize the opq data.
+
+	* lib/oem_atca.c: Fixed problems due to the new refcount code.
+	Modify the address control numbers to just be assigned
+	sequentially; you cannot use the IPMB address since multipl
+	functions may be at the same IPMB.
+
+	* lib/control.c: Fix problems with not unlocking locks in
+	certain situations.
+
+	* lib/control.c: Add reporting of duplicate control numbers.
+
+	* lib/domain.c: Don't clear the active call list when
+	reporting updates.
+
+	* lib/domain.c: Remove a redundant set active for MCs.
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Remove
+	_ipmi_mc_clear_active_call().
+
+	* lib/sensor.c: Fixed problems detecting duplicate sensor
+	numbers in an SDR array.  The new code really works, verses
+	the old code which didn't work any more.
+
 2004-08-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_motorola_mxp.c: Fixed a problem with SDR support.

@@ -81,6 +81,7 @@ opq_alloc(os_handler_t *os_hnd)
     opq = ipmi_mem_alloc(sizeof(*opq));
     if (!opq)
 	return NULL;
+    memset(opq, 0, sizeof(*opq));
 
     opq->os_hnd = os_hnd;
     opq->in_handler = 0;

@@ -324,7 +324,7 @@ chassis_power_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &(control_info->sdata), control_info);
     if (rv) {
 	if (control_info->handler)
-	    control_info->handler(control, err, 0, control_info->cb_data);
+	    control_info->handler(control, rv, 0, control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }

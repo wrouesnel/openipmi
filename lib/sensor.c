@@ -1443,6 +1443,7 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     entity_list_t       *ent_item;
     entity_list_t       *new_ent_item;
     locked_list_entry_t *link, *links = NULL;
+    short               *sens_tmp;
     
 
     CHECK_DOMAIN_LOCK(domain);
@@ -1539,6 +1540,42 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	}
     }
 
+    /* Check for duplicate sensor numbers in the new sensor set. */
+    sens_tmp = ipmi_mem_alloc(4 * 256 * sizeof(short));
+    if (!sens_tmp) {
+	rv = ENOMEM;
+	goto out_err_free;
+    }
+    for (i=0; i<(4*256); i++)
+	sens_tmp[i] = -1;
+    ent_item = new_sensors;
+    while (ent_item) {
+	ipmi_sensor_t *nsensor = ent_item->sensor;
+	int           idx;
+
+	if ((!ent_item->ent) || (!nsensor)) {
+	    ent_item = ent_item->next;
+	    continue;
+	}
+
+	idx = (nsensor->lun * 256) + nsensor->num;
+	if (sens_tmp[idx] != -1) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%ssensor.c(ipmi_sensor_handle_sdrs):"
+		     " Sensor idx 0x%x is the same as sensor idx 0x%x in the"
+		     " repository.  Ignoring second sensor.  Fix your SDRs!",
+		     SENSOR_NAME(nsensor),
+		     sens_tmp[idx],
+		     nsensor->source_idx);
+	    ent_item->op = ENT_LIST_DUP;
+	    ent_item->osensor = NULL;
+	} else {
+	    sens_tmp[idx] = nsensor->source_idx;
+	}
+	ent_item = ent_item->next;
+    }
+    ipmi_mem_free(sens_tmp);
+
     _ipmi_domain_entity_lock(domain);
 
     _ipmi_get_sdr_sensors(domain, source_mc,
@@ -1549,8 +1586,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	ipmi_sensor_t      *nsensor = ent_item->sensor;
 	ipmi_sensor_info_t *sensors;
 
-	if ((!ent_item->ent) || (!nsensor))
+	if ((!ent_item->ent) || (!nsensor) || (ent_item->op == ENT_LIST_DUP)) {
+	    ent_item = ent_item->next;
 	    continue;
+	}
 
 	sensors = _ipmi_mc_get_sensors(nsensor->mc);
 	ipmi_lock(sensors->idx_lock);
@@ -1562,22 +1601,7 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	    ipmi_sensor_t *osensor
 		= sensors->sensors_by_idx[nsensor->lun][nsensor->num];
 
-	    if (osensor->source_array == sdr_sensors) {
-		/* It's from the same SDR repository, log an error
-		   and continue to keep the first one. */
-		ipmi_log(IPMI_LOG_WARNING,
-			 "%ssensor.c(ipmi_sensor_handle_sdrs):"
-			 " Sensor 0x%x is the same as sensor 0x%x in the"
-			 " repository",
-			 SENSOR_NAME(nsensor),
-			 osensor->source_idx,
-			 nsensor->source_idx);
-		ent_item->op = ENT_LIST_DUP;
-		ent_item->osensor = osensor;
-		/* Note that there is no need to get anything here,
-		   since the old sensor is in the same SDR repository,
-		   it is in my new sensor list. */
-	    } else if (cmp_sensor(nsensor, osensor)) {
+	    if (cmp_sensor(nsensor, osensor)) {
 		/* Since the data is the same, there is no need to get
 		   the old sensor entity or mc, since they are already
 		   gotten by the new sensor. */
@@ -1641,8 +1665,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	ipmi_sensor_t      *osensor = ent_item->osensor;
 	ipmi_sensor_info_t *sensors;
 
-	if ((!ent_item->ent) || (!nsensor))
+	if ((!ent_item->ent) || (!nsensor)) {
+	    ent_item = ent_item->next;
 	    continue;
+	}
 
 	sensors = _ipmi_mc_get_sensors(nsensor->mc);
 	ipmi_lock(sensors->idx_lock);
@@ -1665,11 +1691,13 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	    locked_list_destroy(nsensor->handler_list);
 	    ipmi_mem_free(nsensor);
 	    ent_item->sensor = NULL;
-	    sdr_sensors[i] = osensor;
-	    if (osensor->source_array)
-		osensor->source_array[osensor->source_idx] = NULL;
-	    osensor->source_idx = i;
-	    osensor->source_array = sdr_sensors;
+	    if (osensor) {
+		sdr_sensors[i] = osensor;
+		if (osensor->source_array)
+		    osensor->source_array[osensor->source_idx] = NULL;
+		osensor->source_idx = i;
+		osensor->source_array = sdr_sensors;
+	    }
 	    break;
 	}
 	ipmi_unlock(sensors->idx_lock);
@@ -3526,7 +3554,6 @@ check_events_capability(ipmi_sensor_t      *sensor,
 	    if (((!sensor->mask1[i]) && (bit & states->__assertion_events))
 		|| ((!sensor->mask2[i]) && (bit & states->__deassertion_events)))
 	    {
-	      ipmi_log(IPMI_LOG_DEBUG, "** %d %d %d %x %x %x", i, sensor->mask1[i], sensor->mask2[i], bit, states->__assertion_events, states->__deassertion_events);
 		/* The user is attempting to set a state that the
                    sensor does not support. */
 		return EINVAL;
