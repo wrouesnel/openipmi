@@ -382,7 +382,6 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
     ipmi_entity_t     *ent;
 
     CHECK_MC_LOCK(mc);
-    CHECK_MC_ENTITY_LOCK(mc);
 
     if (entity_instance >= 0x60) {
 	device_num.channel = ipmi_mc_get_channel(mc);
@@ -392,6 +391,7 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
 	device_num.channel = 0;
 	device_num.address = 0;
     }
+    ipmi_mc_entity_lock(mc);
     rv = entity_add(ents, device_num, entity_id, entity_instance,
 		    sdr_gen_output, sdr_gen_cb_data, &ent);
     if (!rv) {
@@ -402,6 +402,7 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
 	if (new_ent)
 	    *new_ent = ent;
     }
+    ipmi_mc_entity_unlock(mc);
     return 0;
 }
 
