@@ -76,6 +76,7 @@ extern os_handler_t ipmi_ui_cb_handlers;
 
 static int full_screen;
 struct termios old_termios;
+int old_flags;
 
 #define STATUS_WIN_LINES 2
 #define STATUS_WIN_COLS COLS
@@ -507,9 +508,11 @@ leave(int rv, char *format, ...)
     if (full_screen) {
 	endwin();
 	full_screen = 0;
-    }
-    else
+    } else {
 	tcsetattr(0, TCSADRAIN, &old_termios);
+	fcntl(0, F_SETFL, old_flags);
+	tcdrain(0);
+    }
 
     if (line_buffer) {
 	ipmi_mem_free(line_buffer);
@@ -534,8 +537,11 @@ leave_err(int err, char *format, ...)
 
     if (full_screen)
 	endwin();
-    else
-	tcsetattr(0, 0, &old_termios);
+    else {
+	tcsetattr(0, TCSADRAIN, &old_termios);
+	fcntl(0, F_SETFL, old_flags);
+	tcdrain(0);
+    }
     sel_free_selector(ui_sel);
 
     va_start(ap, format);
@@ -4213,7 +4219,8 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 			         |INLCR|IGNCR|ICRNL|IXON);
 	new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
 	tcsetattr(0, TCSADRAIN, &new_termios);
-	fcntl(0, F_SETFL, O_NONBLOCK);
+	old_flags = fcntl(0, F_GETFL) & O_ACCMODE;
+	fcntl(0, F_SETFL, old_flags | O_NONBLOCK);
     }
 
     help_cmd(NULL, NULL, NULL);
