@@ -500,8 +500,6 @@ write_unlock(os_handler_t    *handler,
 	    id->write_lock_count++;
 	    return rv;
 	}
-	if (id->read_lock_count != 0)
-	    ipmi_log(IPMI_LOG_FATAL, "read lock count not zero on write lock");
     }
     return 0;
 }
