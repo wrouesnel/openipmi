@@ -309,6 +309,25 @@ does all the LAN and PEF configuration required to configure a system
 to send event traps.
 
 
+.SH CONNECTIONS
+
+OpenIPMI can maintain multiple connections to a single domain.  It
+will generally only use one of these at a time (although the other
+will constantly be under test).  This is the "active" connection.  You
+can query and set which connection is active.
+
+The connection number is the connection from the command line.  You
+can specify two connections on the command line (the part beginning
+with "lan", "smi", etc.).  The first connection you specify is
+connection zero, the second is connection 1.
+
+.SS is_con_active <connection>
+Print out if the given connection is active or not.
+
+.SS activate_con <connection>
+Activate the given connection.
+
+
 .SH OTHER COMMANDS
 
 .SS msg <channel> <IPMB addr> <LUN> <NetFN> <Cmd> [<data> ...]
