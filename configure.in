@@ -6,7 +6,6 @@ OPENIPMI_VERSION_RELEASE=0
 OPENIPMI_VERSION_EXTRA=
 AM_INIT_AUTOMAKE(OpenIPMI, ${OPENIPMI_VERSION_MAJOR}.${OPENIPMI_VERSION_MINOR}.${OPENIPMI_VERSION_RELEASE}${OPENIPMI_VERSION_EXTRA})
 
-
 SNMPLIBS=
 
 # Where do we find the UCD SNMP includes and libs
@@ -126,4 +125,6 @@ AC_OUTPUT(Makefile
 	  include/OpenIPMI/Makefile
 	  include/OpenIPMI/ipmiif.h
 	  include/linux/Makefile
-	  include/net/Makefile)
+	  include/net/Makefile
+	  OpenIPMI.pc
+	  OpenIPMIui.pc)

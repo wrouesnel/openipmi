@@ -7,6 +7,9 @@
 	* lib/ipmi.c, ui/ui.c: Use OPENIPMI_VERSION for the version
 	string.
 
+	* Makefile.am, configure.in, OpenIPMI.pc.in, OpenIPMIui.pc.in:
+	Added pkg-config info for OpenIPMI libraries.
+
 2004-03-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fix the set_time routine to pass in the info to the
