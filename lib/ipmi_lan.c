@@ -373,8 +373,6 @@ struct lan_data_s
 };
 
 
-static int addr_match(sockaddr_ip_t *a1, sockaddr_ip_t *a2);
-
 /************************************************************************
  *
  * Authentication and encryption information and functions.
@@ -1061,15 +1059,75 @@ static void data_handler(int            fd,
 			 void           *cb_data,
 			 os_hnd_fd_id_t *id);
 
-static void
-move_to_lan_list_end(lan_fd_t *list, lan_fd_t *item)
+static int
+lan_addr_same(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
 {
+    if (a1->s_ipsock.s_addr.sa_family != a2->s_ipsock.s_addr.sa_family) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG, "Address family mismatch: %d %d",
+		     a1->s_ipsock.s_addr.sa_family,
+		     a2->s_ipsock.s_addr.sa_family);
+	return 0;
+    }
+
+    switch (a1->s_ipsock.s_addr.sa_family) {
+    case PF_INET:
+	{
+	    struct sockaddr_in *ip1 = &a1->s_ipsock.s_addr4;
+	    struct sockaddr_in *ip2 = &a2->s_ipsock.s_addr4;
+
+	    if ((ip1->sin_port == ip2->sin_port)
+		&& (ip1->sin_addr.s_addr == ip2->sin_addr.s_addr))
+		return 1;
+	}
+	break;
+
+#ifdef PF_INET6
+    case PF_INET6:
+	{
+	    struct sockaddr_in6 *ip1 = &a1->s_ipsock.s_addr6;
+	    struct sockaddr_in6 *ip2 = &a2->s_ipsock.s_addr6;
+	    if ((ip1->sin6_port == ip2->sin6_port)
+		&& (bcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr,
+			 sizeof(struct in6_addr)) == 0))
+		return 1;
+	}
+	break;
+#endif
+    default:
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan: Unknown protocol family: 0x%x",
+		 a1->s_ipsock.s_addr.sa_family);
+	break;
+    }
+
+    return 0;
+}
+
+static void
+move_to_lan_list_end(lan_fd_t *item)
+{
+    lan_fd_t *list = item->list;
+
     item->next->prev = item->prev;
     item->prev->next = item->next;
     item->next = list;
     item->prev = list->prev;
     list->prev->next = item;
     list->prev = item;
+}
+
+static void
+move_to_lan_list_head(lan_fd_t *item)
+{
+    lan_fd_t *list = item->list;
+
+    item->next->prev = item->prev;
+    item->prev->next = item->next;
+    item->next = list->next;
+    item->prev = list;
+    list->next->prev = item;
+    list->next = item;
 }
 
 static lan_fd_t *
@@ -1112,8 +1170,8 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 
 		for (j=0; j<l->cparm.num_ip_addr; j++) {
 		    for (k=0; k<lan->cparm.num_ip_addr; k++) {
-			if (addr_match(&l->cparm.ip_addr[j],
-				       &lan->cparm.ip_addr[k]))
+			if (lan_addr_same(&l->cparm.ip_addr[j],
+					  &lan->cparm.ip_addr[k]))
 			{
 			    /* Found the same address in the same
 			       lan_data file.  Try another one. */
@@ -1131,7 +1189,7 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	    ipmi_log(IPMI_LOG_SEVERE, "ipmi_lan.c: Internal error, count"
 		     " in lan fd list item incorrect, but we can recover.");
 	    item->cons_in_use = MAX_CONS_PER_FD;
-	    move_to_lan_list_end(list, item);
+	    move_to_lan_list_end(item);
 	    item = next;
 	    goto retry;
 	}
@@ -1142,7 +1200,7 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	if (item->cons_in_use == MAX_CONS_PER_FD)
 	    /* Out of connections in this item, move it to the end of
 	       the list. */
-	    move_to_lan_list_end(list, item);
+	    move_to_lan_list_end(item);
     } else {
 	/* No free entries, create one */
 	if (*free_list) {
@@ -1165,6 +1223,9 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	}
 	if (!item)
 	    goto out_unlock;
+
+	item->next = item;
+	item->prev = item;
 
 	item->fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
 	if (item->fd == -1) {
@@ -1205,10 +1266,7 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	*slot = 0;
 
 	/* This will have free items, put it at the head of the list. */
-	item->next = list->next;
-	item->prev = list;
-	list->next->prev = item;
-	list->next = item;
+	move_to_lan_list_head(item);
     }
  out_unlock:
     ipmi_unlock(lock);
@@ -1231,12 +1289,7 @@ release_lan_fd(lan_fd_t *item, int slot)
     } else {
 	/* This has free connections, move it to the head of the
 	   list. */
-	item->next->prev = item->prev;
-	item->prev->next = item->next;
-	item->next = item->list->next;
-	item->prev = item->list;
-	item->list->next->prev = item;
-	item->list->next = item;
+	move_to_lan_list_head(item);
     }
     ipmi_unlock(item->lock);
 }
@@ -3056,51 +3109,6 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 }
 
 static int
-addr_match(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
-{
-    if (a1->s_ipsock.s_addr.sa_family != a2->s_ipsock.s_addr.sa_family) {
-	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG, "Address family mismatch: %d %d",
-		     a1->s_ipsock.s_addr.sa_family,
-		     a2->s_ipsock.s_addr.sa_family);
-	return 0;
-    }
-
-    switch (a1->s_ipsock.s_addr.sa_family) {
-    case PF_INET:
-	{
-	    struct sockaddr_in *ip1 = &a1->s_ipsock.s_addr4;
-	    struct sockaddr_in *ip2 = &a2->s_ipsock.s_addr4;
-
-	    if ((ip1->sin_port == ip2->sin_port)
-		&& (ip1->sin_addr.s_addr == ip2->sin_addr.s_addr))
-		return 1;
-	}
-	break;
-
-#ifdef PF_INET6
-    case PF_INET6:
-	{
-	    struct sockaddr_in6 *ip1 = &a1->s_ipsock.s_addr6;
-	    struct sockaddr_in6 *ip2 = &a2->s_ipsock.s_addr6;
-	    if ((ip1->sin6_port == ip2->sin6_port)
-		&& (bcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr,
-			 sizeof(struct in6_addr)) == 0))
-		return 1;
-	}
-	break;
-#endif
-    default:
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan: Unknown protocol family: 0x%x",
-		 a1->s_ipsock.s_addr.sa_family);
-	break;
-    }
-
-    return 0;
-}
-
-static int
 addr_match_lan(lan_data_t *lan, uint32_t sid, sockaddr_ip_t *addr,
 	       int *raddr_num)
 {
@@ -3110,7 +3118,7 @@ addr_match_lan(lan_data_t *lan, uint32_t sid, sockaddr_ip_t *addr,
        this system. */
     for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
 	if ((!sid || (lan->ip[addr_num].session_id == sid))
-	    && addr_match(&(lan->cparm.ip_addr[addr_num]), addr))
+	    && lan_addr_same(&(lan->cparm.ip_addr[addr_num]), addr))
 	{
 	    *raddr_num = addr_num;
 	    return 1;
