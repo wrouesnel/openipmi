@@ -1349,8 +1349,6 @@ int ipmi_sensor_set_raw_default_threshold(ipmi_sensor_t *sensor,
 					  int           threshold,
 					  int           val)
 {
-    CHECK_SENSOR_LOCK(sensor);
-
     if ((threshold < 0) || (threshold > 5))
 	return EINVAL;
 
