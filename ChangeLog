@@ -39,6 +39,12 @@
 
 	* lib/oem_atca.c: Reworked the handling of MCs and entity addition
 	to happen after the user is informed of the domain.
+
+	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added a way for OEM
+	code to call the MC scan done handler.
+
+	* lib/oem_atca.c: Fixed some SEL handling and report MC scan done
+	when it is done.
 	
 2004-04-09 Corey Minyard <cminyard@mvista.com> 
 

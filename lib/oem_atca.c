@@ -160,6 +160,7 @@ struct atca_shelf_s
     /* The shelf address is not on the advertised shelf address
        device, it is only on the BMC. */
     unsigned int shelf_address_only_on_bmc : 1;
+    unsigned int allow_sel_on_any : 1;
 };
 
 static void setup_from_shelf_fru(ipmi_domain_t *domain,
@@ -2098,12 +2099,14 @@ atca_fix_sel_handler(enum ipmi_update_e op,
 		     ipmi_mc_t          *mc,
 		     void               *cb_data)
 {
+    atca_shelf_t *info = cb_data;
+
     switch (op) {
     case IPMI_ADDED:
     case IPMI_CHANGED:
 	/* Turn off SEL device support for all devices that are not
 	   the BMC. */
-	if (ipmi_mc_get_address(mc) != 0x20)
+	if ((ipmi_mc_get_address(mc) != 0x20) && (!info->allow_sel_on_any))
 	    ipmi_mc_set_sel_device_support(mc, 0);
 	break;
 
@@ -2132,6 +2135,12 @@ atca_iterate_entities(ipmi_entity_t *entity, void *cb_data)
 }
 
 static void shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data);
+
+static void
+atca_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    _ipmi_mc_scan_done(domain);
+}
 
 static void
 setup_from_shelf_fru(ipmi_domain_t *domain,
@@ -2183,8 +2192,14 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	b->site_num = info->addresses[i].site_num;
 	ipmi_mc_id_set_invalid(&b->mcid);
 
-	ipmi_start_ipmb_mc_scan(domain, 0, b->ipmb_address,
-				b->ipmb_address, NULL, NULL);
+	if ((i+1) == info->num_addresses) {
+	    /* When the last one completes, we report that we are done. */
+	    ipmi_start_ipmb_mc_scan(domain, 0, b->ipmb_address,
+				    b->ipmb_address, atca_scan_done, NULL);
+	} else {
+	    ipmi_start_ipmb_mc_scan(domain, 0, b->ipmb_address,
+				    b->ipmb_address, NULL, NULL);
+	}
 
 	rv = realloc_frus(b, 1); /* Start with 1 FRU for the MC. */
 	if (rv) {
@@ -2278,6 +2293,9 @@ alt_shelf_fru_cb(ipmi_domain_t *domain,
 {
     atca_shelf_t *info;
     int          rv;
+
+    if (!domain)
+	return;
 
     info = ipmi_domain_get_oem_data(domain);
 
@@ -2615,6 +2633,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	prod_id = ipmi_mc_product_id(mc);
 	if ((mfg_id == 0x000157) && (prod_id == 0x0841)) {
 	    //info->shelf_address_only_on_bmc = 1;
+	    info->allow_sel_on_any = 1;
 	}
     }
 

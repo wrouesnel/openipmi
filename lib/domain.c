@@ -2117,6 +2117,13 @@ mc_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 			  	 domain->bus_scan_handler_cb_data);
 }
 
+void
+_ipmi_mc_scan_done(ipmi_domain_t *domain)
+{
+    mc_scan_done(domain, 0, NULL);
+}
+
+
 static void
 start_mc_scan(ipmi_domain_t *domain)
 {
@@ -2141,8 +2148,9 @@ start_mc_scan(ipmi_domain_t *domain)
     /* Now start the IPMB scans. */
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (domain->chan[i].medium == 1) { /* IPMB */
-	    /* Always scan the normal BMC first. */
-	    ipmi_start_ipmb_mc_scan(domain, i, 0x20, 0x20, mc_scan_done, NULL);
+	    /* Always scan the normal BMC first, but don't report scan
+	       done on it. */
+	    ipmi_start_ipmb_mc_scan(domain, i, 0x20, 0x20, NULL, NULL);
 	    ipmi_start_ipmb_mc_scan(domain, i, 0x10, 0xf0, mc_scan_done, NULL);
 	}
     }

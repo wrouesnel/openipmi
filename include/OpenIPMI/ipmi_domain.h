@@ -255,6 +255,10 @@ typedef void (*ipmi_domain_shutdown_cb)(ipmi_domain_t *domain);
 void ipmi_domain_set_oem_shutdown_handler(ipmi_domain_t           *domain,
 					  ipmi_domain_shutdown_cb handler);
 
+/* OEM code can call then when it know that an MC scan is complete, to
+   speed things up. */
+void _ipmi_mc_scan_done(ipmi_domain_t *domain);
+
 /* Initialize the domain code, called only once at init time. */
 int _ipmi_domain_init(void);
 
