@@ -1,6 +1,11 @@
 
 2003-02-20 Corey Minyard <cminyard@mvista.com>
 
+	* Makefile.am, ipmi.c, ipmi_malloc.c: Split off the memory
+	debugging stuff into a separate file.
+
+	* Makefile.am: Added heap.h to the file.
+
 	* mc.c, include/OpenIPMI/ipmi_oem.h: Changed the name of the
 	MC removal callback to reflect it's function better (since it's
 	not BMC-related).

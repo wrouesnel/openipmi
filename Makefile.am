@@ -14,7 +14,7 @@ EXTRA_DIST = TODO
 AM_CFLAGS = -Wall -I$(srcdir)/include -DIPMI_CHECK_LOCKS
 SUBDIRS = include
 
-noinst_HEADERS = opq.h ilist.h md5.h md2.h ui_keypad.h ui_command.h
+noinst_HEADERS = opq.h ilist.h md5.h md2.h ui_keypad.h ui_command.h heap.h
 
 LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
@@ -24,7 +24,7 @@ bin_PROGRAMS = ipmi_ui
 
 libOpenIPMI_la_SOURCES = entity.c ipmi.c mc.c sdr.c selector.c control.c \
 	ilist.c ipmi_smi.c opq.c sel.c sensor.c ipmi_lan.c md5.c md2.c \
-	strings.c
+	strings.c ipmi_malloc.c
 libOpenIPMI_la_LIBADD = -lm
 libOpenIPMI_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMI.map
