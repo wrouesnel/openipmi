@@ -1,5 +1,18 @@
 
+2003-04-01 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Changed the event receiver setting so that it is always
+	done for new MCs, and it is done after the SDRs are read.  That
+	way, any pending conditions for a new MC will be generated
+	immediately with a valid sensor to handle it.
+
+	* mc.c: Modified event handling so that events from the BMC get
+	delivered properly.  It was not converting events from the system
+	interface properly.
+
 2003-03-31 Corey Minyard <cminyard@mvista.com>
+
+	* all: Really release verion 0.2.5.
 
 	* ui.c: Reset the termios on an error exit, too.
 
@@ -44,8 +57,6 @@
 
 	* sdr.c: Check the proper MC flag if it is a sensor SDR to see if
 	it supports device SDRs.
-
-2003-03-17 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Updated version to 0.2.5.
 

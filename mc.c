@@ -495,10 +495,18 @@ find_mc_by_addr(ipmi_mc_t   *bmc,
     if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	return bmc;
     }
+    if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
+	struct ipmi_ipmb_addr *ipmb_addr = (void *) addr;
 
-    memcpy(&(info.addr), addr, addr_len);
-    info.addr_len = addr_len;
-    return ilist_search(bmc->bmc->mc_list, mc_cmp, &info);
+	if (ipmb_addr->slave_addr == bmc->bmc->bmc_slave_addr) {
+	    return bmc;
+	}
+
+	memcpy(&(info.addr), addr, addr_len);
+	info.addr_len = addr_len;
+	return ilist_search(bmc->bmc->mc_list, mc_cmp, &info);
+    }
+    return NULL;
 }
 
 int
@@ -878,20 +886,24 @@ system_event_handler(ipmi_mc_t    *mc,
 	mc_id.mc_num = event->data[4];
 	ipmi_mc_pointer_cb(mc_id, mc_event_cb, &info);
 
-	/* It's from an MC. */
-	id.bmc = mc->bmc_mc;
-	if (event->data[6] == 0x03) {
-	    id.channel = 0;
+	if (info.handled) {
+	    rv = 0;
 	} else {
-	    id.channel = event->data[5] >> 4;
-	}
-	id.mc_num = event->data[4];
-	id.lun = event->data[5] & 0x3;
-	id.sensor_num = event->data[8];
+	    /* The OEM code didn't handle it. */
+	    id.bmc = mc->bmc_mc;
+	    if (event->data[6] == 0x03) {
+		id.channel = 0;
+	    } else {
+		id.channel = event->data[5] >> 4;
+	    }
+	    id.mc_num = event->data[4];
+	    id.lun = event->data[5] & 0x3;
+	    id.sensor_num = event->data[8];
 
-	rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
-	if (!rv) {
-	    rv = info.err;
+	    rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
+	    if (!rv) {
+		rv = info.err;
+	    }
 	}
     }
 
@@ -1746,6 +1758,111 @@ got_sel_time(ipmi_mc_t  *mc,
     ipmi_sel_get(mc->sel, sels_fetched, mc);
 }
 
+static void
+check_event_rcvr(ipmi_mc_t *bmc, ipmi_mc_t *mc, void *cb_data)
+{
+    if (mc->SEL_device_support) {
+	unsigned int *addr = cb_data;
+	*addr = ipmi_addr_get_slave_addr(&mc->addr);
+    }
+}
+
+/* Find a valid event receiver in the system. */
+static unsigned int
+find_event_rcvr(ipmi_mc_t *bmc)
+{
+    unsigned int addr = 0;
+
+    if (bmc->SEL_device_support) {
+	return bmc->bmc->bmc_slave_addr;
+    }
+    ipmi_bmc_iterate_mcs(bmc, check_event_rcvr, &addr);
+    return addr;
+}
+
+static void
+set_event_rcvr_done(ipmi_mc_t  *mc,
+		    ipmi_msg_t *rsp,
+		    void       *rsp_data)
+{
+    if (!mc)
+	return; /* The MC went away, no big deal. */
+
+    if (rsp->data[0] != 0) {
+	/* Error setting the event receiver, report it. */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Could not set event receiver for MC at 0x%x",
+		 ipmi_addr_get_slave_addr(&mc->addr));
+    }
+}
+
+static void
+send_set_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
+{
+    ipmi_msg_t    msg;
+    unsigned char data[2];
+    
+    msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+    msg.cmd = IPMI_SET_EVENT_RECEIVER_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = addr;
+    data[1] = 0; /* LUN is 0 per the spec (section 7.2 of 1.5 spec). */
+    ipmi_send_command(mc, 0, &msg, set_event_rcvr_done, NULL);
+    /* No care about return values, if this fails it will be done
+       again later. */
+}
+
+static void
+get_event_rcvr_done(ipmi_mc_t  *mc,
+		    ipmi_msg_t *rsp,
+		    void       *rsp_data)
+{
+    unsigned long addr = (long) rsp_data;
+
+    if (!mc)
+	return; /* The MC went away, no big deal. */
+
+    if (rsp->data[0] != 0) {
+	/* Error getting the event receiver, report it. */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Could not get event receiver for MC at 0x%x",
+		 ipmi_addr_get_slave_addr(&mc->addr));
+    } else if (rsp->data[1] != addr) {
+	/* The event receiver doesn't match, so change it. */
+	send_set_event_rcvr(mc, addr);
+    }
+}
+
+static void
+send_get_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
+{
+    ipmi_msg_t    msg;
+    
+    msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+    msg.cmd = IPMI_GET_EVENT_RECEIVER_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+    ipmi_send_command(mc, 0, &msg, get_event_rcvr_done,
+		      (void *) (unsigned long) addr);
+    /* No care about return values, if this fails it will be done
+       again later. */
+}
+
+static void
+do_event_rcvr(ipmi_mc_t *mc)
+{
+    if (mc && mc->IPMB_event_generator_support) {
+	/* We have an MC that is live (or still live) and generates
+	   events, make sure the event receiver is set properly. */
+	unsigned int event_rcvr = find_event_rcvr(mc->bmc_mc);
+
+	if (event_rcvr) {
+	    send_get_event_rcvr(mc, event_rcvr);
+	}
+    }
+}
+
 /* This is called after the first sensor scan for the MC, we start up
    timers and things like that here. */
 static void
@@ -1753,6 +1870,29 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
     /* See if any presence has changed with the new sensors. */ 
     ipmi_detect_bmc_presence_changes(mc, 0);
+
+    /* We set the event receiver here, so that we know all the SDRs
+       are installed.  That way any incoming events from the device
+       will have the proper sensor set. */
+    if (mc) {
+	unsigned int event_rcvr = 0;
+
+	if (mc->IPMB_event_generator_support)
+	    event_rcvr = find_event_rcvr(mc->bmc_mc);
+	else if (mc->SEL_device_support) {
+	    /* If it is an SEL device and not an event receiver, then
+                set it's event receiver to itself. */
+	    struct ipmi_ipmb_addr *ipmb_addr = (void *) &mc->addr;
+	    if (mc->bmc)
+		event_rcvr = mc->bmc->bmc_slave_addr;
+	    else
+		event_rcvr = ipmb_addr->slave_addr;
+	}
+
+	if (event_rcvr) {
+	    send_set_event_rcvr(mc, event_rcvr);
+	}
+    }
 
     if (mc->SEL_device_support) {
 	mc_reread_sel_t *info;
@@ -1868,97 +2008,6 @@ remove_bus_scans_running(ipmi_mc_t *bmc, mc_ipmb_scan_info_t *info)
 	}
 }
 
-static void
-check_event_rcvr(ipmi_mc_t *bmc, ipmi_mc_t *mc, void *cb_data)
-{
-    if (mc->SEL_device_support) {
-	unsigned int *addr = cb_data;
-	*addr = ipmi_addr_get_slave_addr(&mc->addr);
-    }
-}
-
-/* Find a valid event receiver in the system. */
-static unsigned int
-find_event_rcvr(ipmi_mc_t *bmc)
-{
-    unsigned int addr = 0;
-
-    if (bmc->SEL_device_support) {
-	return bmc->bmc->bmc_slave_addr;
-    }
-    ipmi_bmc_iterate_mcs(bmc, check_event_rcvr, &addr);
-    return addr;
-}
-
-static void
-set_event_rcvr_done(ipmi_mc_t  *mc,
-		    ipmi_msg_t *rsp,
-		    void       *rsp_data)
-{
-    if (!mc)
-	return; /* The MC went away, no big deal. */
-
-    if (rsp->data[0] != 0) {
-	/* Error setting the event receiver, report it. */
-	ipmi_log(IPMI_LOG_WARNING,
-		 "Could not set event receiver for MC at 0x%x",
-		 ipmi_addr_get_slave_addr(&mc->addr));
-    }
-}
-
-static void
-send_set_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
-{
-    ipmi_msg_t    msg;
-    unsigned char data[2];
-    
-    msg.netfn = IPMI_SENSOR_EVENT_NETFN;
-    msg.cmd = IPMI_SET_EVENT_RECEIVER_CMD;
-    msg.data = data;
-    msg.data_len = 2;
-    data[0] = addr;
-    data[1] = 0; /* LUN is 0 per the spec (section 7.2 of 1.5 spec). */
-    ipmi_send_command(mc, 0, &msg, set_event_rcvr_done, NULL);
-    /* No care about return values, if this fails it will be done
-       again later. */
-}
-
-static void
-get_event_rcvr_done(ipmi_mc_t  *mc,
-		    ipmi_msg_t *rsp,
-		    void       *rsp_data)
-{
-    unsigned long addr = (long) rsp_data;
-
-    if (!mc)
-	return; /* The MC went away, no big deal. */
-
-    if (rsp->data[0] != 0) {
-	/* Error getting the event receiver, report it. */
-	ipmi_log(IPMI_LOG_WARNING,
-		 "Could not get event receiver for MC at 0x%x",
-		 ipmi_addr_get_slave_addr(&mc->addr));
-    } else if (rsp->data[1] != addr) {
-	/* The event receiver doesn't match, so change it. */
-	send_set_event_rcvr(mc, addr);
-    }
-}
-
-static void
-send_get_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
-{
-    ipmi_msg_t    msg;
-    
-    msg.netfn = IPMI_SENSOR_EVENT_NETFN;
-    msg.cmd = IPMI_GET_EVENT_RECEIVER_CMD;
-    msg.data = NULL;
-    msg.data_len = 0;
-    ipmi_send_command(mc, 0, &msg, get_event_rcvr_done,
-		      (void *) (unsigned long) addr);
-    /* No care about return values, if this fails it will be done
-       again later. */
-}
-
 static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 				 ipmi_addr_t  *addr,
 				 unsigned int addr_len,
@@ -1970,6 +2019,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     mc_ipmb_scan_info_t *info = rsp_data;
     int                 rv;
     ipmi_mc_t           *mc;
+    int                 created_here = 0;
 
 
     ipmi_read_lock();
@@ -2025,6 +2075,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    }
 
 	    if (!rv) {
+		created_here = 1;
 		if (mc->provides_device_sdrs)
 		    rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
 		else
@@ -2046,15 +2097,11 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	}
     }
 
-    if (mc && mc->IPMB_event_generator_support) {
-	/* We have an MC that is live (or still live) and generates
-	   events, make sure the event receiver is set properly. */
-	unsigned int event_rcvr = find_event_rcvr(info->bmc);
-
-	if (event_rcvr) {
-	    send_get_event_rcvr(mc, event_rcvr);
-	}
-    }
+    /* If we didn't create the MC above, then check the event
+       receiver.  If the MC was created above, then setting the event
+       receiver will be done after the SDRs are read. */
+    if (!created_here)
+	do_event_rcvr(mc);
 
  next_addr:
     ipmi_unlock(info->bmc->bmc->mc_list_lock);
