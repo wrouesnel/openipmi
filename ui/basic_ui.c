@@ -117,11 +117,12 @@ void ui_reconnect(void)
 int
 main(int argc, char *argv[])
 {
-    int           rv;
-    int           curr_arg = 1;
-    char          *arg;
-    int           full_screen = 1;
-    ipmi_con_t    *con[2];
+    int              rv;
+    int              curr_arg = 1;
+    char             *arg;
+    int              full_screen = 1;
+    ipmi_con_t       *con[2];
+    ipmi_domain_id_t domain_id;
 
     while ((argc > 1) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
@@ -434,11 +435,13 @@ main(int argc, char *argv[])
     }
 
     rv = ipmi_init_domain(con, last_con+1,
-			  ipmi_ui_setup_done, NULL, NULL, NULL);
+			  ipmi_ui_setup_done, NULL, NULL, &domain_id);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	goto out;
     }
+
+    ipmi_ui_set_domain_id(domain_id);
 
     sel_select_loop(selector, NULL, 0, NULL);
 

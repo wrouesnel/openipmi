@@ -1,6 +1,9 @@
 
 2003-09-30 Corey Minyard <cminyard@mvista.com>
 
+	* lib/domain.c: Call the connection change function as soon
+	as the connection is up, don't wait to read the SDRs, etc.
+
 	* ui/ui.c, include/OpenIPMI/ipmi_ui.h: Add a function to set
 	the domain at startup.
 
