@@ -89,6 +89,29 @@ typedef struct sel_s
     long          time_offset;
 } sel_t;
 
+#define MAX_SDR_LENGTH 261
+#define MAX_NUM_SDRS   1024
+typedef struct sdr_s
+{
+    uint16_t      record_id;
+    unsigned int  length;
+    unsigned char *data;
+    struct sdr_s  *next;
+} sdr_t;
+
+typedef struct sdrs_s
+{
+    uint16_t      reservation;
+    uint16_t      sdr_count;
+    uint16_t      sensor_count;
+    uint32_t      last_add_time;
+    uint32_t      last_erase_time;
+    long          time_offset;
+    unsigned char flags;
+    uint16_t      next_entry;
+    sdr_t         *sdrs;
+} sdrs_t;
+
 struct lmc_data_s
 {
     /* Get Device Id contents. */
@@ -102,6 +125,13 @@ struct lmc_data_s
     unsigned char product_id[2];   /* bytes 11-12 */
 
     sel_t sel;
+
+    sdrs_t main_sdrs;
+    sdr_t  *part_add_sdr;
+    int    part_add_next;
+    int    in_update_mode;
+
+    sdrs_t device_sdrs;
 };
 
 struct emu_data_s
@@ -109,6 +139,16 @@ struct emu_data_s
     int        bmc_mc;
     lmc_data_t *ipmb[128];
 };
+
+/* Device ID support bits */
+#define IPMI_DEVID_CHASSIS_DEVICE	(1 << 7)
+#define IPMI_DEVID_BRIDGE		(1 << 6)
+#define IPMI_DEVID_IPMB_EVENT_GEN	(1 << 5)
+#define IPMI_DEVID_IPMB_EVENT_RCV	(1 << 4)
+#define IPMI_DEVID_FRU_INVENTORY_DEV	(1 << 3)
+#define IPMI_DEVID_SEL_DEVICE		(1 << 2)
+#define IPMI_DEVID_SDR_REPOSITORY_DEV	(1 << 1)
+#define IPMI_DEVID_SENSOR_DEV		(1 << 0)
 
 /*
  * SEL handling commands.
@@ -128,7 +168,7 @@ find_sel_event_by_recid(lmc_data_t  *mc,
 
     entry = mc->sel.entries;
     while (entry) {
-	if (record_id == ipmi_get_uint16(entry->data))
+	if (record_id == entry->record_id)
 	    break;
 	p_entry = entry;
 	entry = entry->next;
@@ -164,7 +204,7 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
     struct timeval t;
     uint16_t       start_record_id;
 
-    if (!(mc->device_support & (1 << 2)))
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE))
 	return ENOTSUP;
 
     if (mc->sel.count >= mc->sel.max_count)
@@ -173,10 +213,6 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
     e = malloc(sizeof(*e));
     if (!e)
 	return ENOMEM;
-
-    gettimeofday(&t, NULL);
-
-    mc->sel.last_add_time = t.tv_sec;
 
     /* FIXME - this is inefficient, but simple */
     e->record_id = mc->sel.next_entry;
@@ -212,6 +248,7 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
 
     mc->sel.count++;
 
+    gettimeofday(&t, NULL);
     mc->sel.last_add_time = t.tv_sec + mc->sel.time_offset;
     return 0;
 }
@@ -247,7 +284,7 @@ handle_get_sel_info(lmc_data_t    *mc,
 		    unsigned char *rdata,
 		    unsigned int  *rdata_len)
 {
-    if (!(mc->device_support & (1 << 2))) {
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -274,7 +311,7 @@ handle_get_sel_allocation_info(lmc_data_t    *mc,
 			       unsigned char *rdata,
 			       unsigned int  *rdata_len)
 {
-    if (!(mc->device_support & (1 << 2))) {
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -300,7 +337,7 @@ handle_reserve_sel(lmc_data_t    *mc,
 		   unsigned char *rdata,
 		   unsigned int  *rdata_len)
 {
-    if (!(mc->device_support & (1 << 2))) {
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -329,7 +366,7 @@ handle_get_sel_entry(lmc_data_t    *mc,
     int         count;
     sel_entry_t *entry;
 
-    if (!(mc->device_support & (1 << 2))) {
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -398,7 +435,7 @@ handle_add_sel_entry(lmc_data_t    *mc,
 {
     int rv;
 
-    if (!(mc->device_support & (1 << 2))) {
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -430,7 +467,7 @@ handle_delete_sel_entry(lmc_data_t    *mc,
     uint16_t    record_id;
     sel_entry_t *entry, *p_entry;
 
-    if (!(mc->device_support & (1 << 2))) {
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -498,7 +535,7 @@ handle_clear_sel(lmc_data_t    *mc,
     unsigned char  op;
     struct timeval t;
 
-    if (!(mc->device_support & (1 << 2))) {
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -516,9 +553,9 @@ handle_clear_sel(lmc_data_t    *mc,
 	}
     }
 
-    if ((msg->data[1] != 'C')
-	|| (msg->data[2] != 'L')
-	|| (msg->data[3] != 'R'))
+    if ((msg->data[2] != 'C')
+	|| (msg->data[3] != 'L')
+	|| (msg->data[4] != 'R'))
     {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
@@ -558,6 +595,11 @@ handle_get_sel_time(lmc_data_t    *mc,
 {
     struct timeval t;
 
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
     gettimeofday(&t, NULL);
     rdata[0] = 0;
     ipmi_set_uint32(rdata+1, t.tv_sec + mc->sel.time_offset);
@@ -572,7 +614,7 @@ handle_set_sel_time(lmc_data_t    *mc,
 {
     struct timeval t;
 
-    if (!(mc->device_support & (1 << 2))) {
+    if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -586,6 +628,637 @@ handle_set_sel_time(lmc_data_t    *mc,
     rdata[0] = 0;
     *rdata_len = 1;
 }
+
+/*
+ * SDR handling commands
+ */
+
+#define IPMI_SDR_OVERFLOW_FLAG				(1 << 7)
+#define IPMI_SDR_GET_MODAL(v)   (((v) >> 5) & 0x3)
+#define IPMI_SDR_MODAL_UNSPECIFIED	0
+#define IPMI_SDR_NON_MODAL_ONLY		1
+#define IPMI_SDR_MODAL_ONLY		2
+#define IPMI_SDR_MODAL_BOTH		3
+#define IPMI_SDR_DELETE_SDR_SUPPORTED			(1 << 3)
+#define IPMI_SDR_PARTIAL_ADD_SDR_SUPPORTED		(1 << 2)
+#define IPMI_SDR_RESERVE_SDR_SUPPORTED			(1 << 1)
+#define IPMI_SDR_GET_SDR_ALLOC_INFO_SDR_SUPPORTED	(1 << 0)
+
+static sdr_t *
+find_sdr_by_recid(lmc_data_t *mc,
+		  uint16_t   record_id,
+		  sdr_t      **prev)
+{
+    sdr_t *entry;
+    sdr_t *p_entry = NULL;
+
+    entry = mc->main_sdrs.sdrs;
+    while (entry) {
+	if (record_id == entry->record_id)
+	    break;
+	p_entry = entry;
+	entry = entry->next;
+    }
+    if (prev)
+	*prev = p_entry;
+    return entry;
+}
+
+static sdr_t *
+new_sdr_entry(lmc_data_t *mc, unsigned char length)
+{
+    sdr_t    *entry;
+    uint16_t start_recid;
+
+    entry = malloc(sizeof(*entry));
+    if (!entry)
+	return NULL;
+
+    entry->data = malloc(length + 6);
+    if (!entry->data) {
+	free(entry);
+	return NULL;
+    }
+
+    entry->record_id = mc->main_sdrs.next_entry;
+    start_recid = entry->record_id;
+    if (mc->part_add_sdr && (entry->record_id == mc->part_add_sdr->record_id))
+	mc->main_sdrs.next_entry++;
+    while ((entry->record_id == 0xffff)
+	   || (entry->record_id == 0)
+	   || find_sdr_by_recid(mc, entry->record_id, NULL))
+    {
+	mc->main_sdrs.next_entry++;
+	if (mc->main_sdrs.next_entry == start_recid) {
+	    free(entry->data);
+	    free(entry);
+	    return NULL;
+	}
+    }
+    mc->main_sdrs.next_entry++;
+
+    ipmi_set_uint16(entry->data, entry->record_id);
+
+    entry->length = length + 6;
+    entry->next = NULL;
+    return entry;
+}
+
+static void
+add_sdr_entry(lmc_data_t *mc, sdr_t *entry)
+{
+    sdr_t          *p;
+    struct timeval t;
+
+    entry->next = NULL;
+    p = mc->main_sdrs.sdrs;
+    if (!p)
+	mc->main_sdrs.sdrs = entry;
+    else {
+	while (p->next)
+	    p = p->next;
+	p->next = entry;
+    }
+
+    gettimeofday(&t, NULL);
+    mc->main_sdrs.last_add_time = t.tv_sec + mc->main_sdrs.time_offset;
+}
+
+static void
+free_sdr(sdr_t *sdr)
+{
+    free(sdr->data);
+    free(sdr);
+}
+
+static void
+handle_get_sdr_repository_info(lmc_data_t    *mc,
+			       ipmi_msg_t    *msg,
+			       unsigned char *rdata,
+			       unsigned int  *rdata_len)
+{
+    unsigned int space;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[0] = 0x51;
+    ipmi_set_uint16(rdata+2, mc->main_sdrs.sdr_count);
+    space = MAX_SDR_LENGTH * (MAX_NUM_SDRS - mc->main_sdrs.sdr_count);
+    if (space > 0xfffe)
+	space = 0xfffe;
+    ipmi_set_uint16(rdata+4, space);
+    ipmi_set_uint32(rdata+6, mc->main_sdrs.last_add_time);
+    ipmi_set_uint32(rdata+10, mc->main_sdrs.last_erase_time);
+    rdata[14] = mc->main_sdrs.flags;
+    *rdata_len = 15;
+}
+
+static void
+handle_get_sdr_repository_alloc_info(lmc_data_t    *mc,
+				     ipmi_msg_t    *msg,
+				     unsigned char *rdata,
+				     unsigned int  *rdata_len)
+{
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (!(mc->main_sdrs.flags & IPMI_SDR_GET_SDR_ALLOC_INFO_SDR_SUPPORTED)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    rdata[0] = 0;
+    ipmi_set_uint16(rdata+1, MAX_NUM_SDRS);
+    ipmi_set_uint16(rdata+3, MAX_SDR_LENGTH);
+    ipmi_set_uint16(rdata+5, MAX_NUM_SDRS - mc->main_sdrs.sdr_count);
+    ipmi_set_uint16(rdata+7, MAX_NUM_SDRS - mc->main_sdrs.sdr_count);
+    rdata[9] = 1;
+    *rdata_len = 10;
+}
+
+static void
+handle_reserve_sdr_repository(lmc_data_t    *mc,
+			      ipmi_msg_t    *msg,
+			      unsigned char *rdata,
+			      unsigned int  *rdata_len)
+{
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (!(mc->main_sdrs.flags & IPMI_SDR_RESERVE_SDR_SUPPORTED)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    mc->main_sdrs.reservation++;
+    if (mc->main_sdrs.reservation == 0)
+	mc->main_sdrs.reservation++;
+
+    rdata[0] = 0;
+    ipmi_set_uint16(rdata+1, mc->main_sdrs.reservation);
+    *rdata_len = 3;
+
+    /* If adding an SDR and the reservation changes, we have to
+       destroy the working SDR addition. */
+    if (mc->part_add_sdr) {
+	free_sdr(mc->part_add_sdr);
+	mc->part_add_sdr = NULL;
+    }
+}
+
+static void
+handle_get_sdr(lmc_data_t    *mc,
+	       ipmi_msg_t    *msg,
+	       unsigned char *rdata,
+	       unsigned int  *rdata_len)
+{
+    uint16_t record_id;
+    int      offset;
+    int      count;
+    sdr_t    *entry;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (check_msg_length(msg, 6, rdata, rdata_len))
+	return;
+
+    if (mc->main_sdrs.flags & IPMI_SDR_RESERVE_SDR_SUPPORTED) {
+	uint16_t reservation = ipmi_get_uint16(msg->data+0);
+
+	if ((reservation != 0) && (reservation != mc->main_sdrs.reservation)) {
+	    rdata[0] = IPMI_INVALID_RESERVATION_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    }
+
+    record_id = ipmi_get_uint16(msg->data+2);
+    offset = msg->data[4];
+    count = msg->data[5];
+
+    if (record_id == 0) {
+	entry = mc->main_sdrs.sdrs;
+    } else if (record_id == 0xffff) {
+	entry = mc->main_sdrs.sdrs;
+	if (entry) {
+	    while (entry->next) {
+		entry = entry->next;
+	    }
+	}
+    } else {
+	entry = find_sdr_by_recid(mc, record_id, NULL);
+    }
+
+    if (entry == NULL) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    if (entry->next)
+	ipmi_set_uint16(rdata+1, entry->next->record_id);
+    else {
+	rdata[1] = 0xff;
+	rdata[2] = 0xff;
+    }
+
+    if ((offset+count) > entry->length)
+	count = entry->length - offset;
+    memcpy(rdata+3, entry->data+offset, count);
+    *rdata_len = count + 3;
+}
+
+static void
+handle_add_sdr(lmc_data_t    *mc,
+	       ipmi_msg_t    *msg,
+	       unsigned char *rdata,
+	       unsigned int  *rdata_len)
+{
+    int            modal;
+    sdr_t          *entry;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    modal = IPMI_SDR_GET_MODAL(mc->main_sdrs.flags);
+    if ((modal == IPMI_SDR_NON_MODAL_ONLY)
+	&& !mc->in_update_mode)
+    {
+	rdata[0] = IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (check_msg_length(msg, 6, rdata, rdata_len))
+	return;
+
+    if (msg->data_len != msg->data[5] + 6) {
+	rdata[0] = 0x80; /* Length is invalid. */
+	*rdata_len = 1;
+	return;
+    }
+
+    entry = new_sdr_entry(mc, msg->data[5]);
+    if (!entry) {
+	rdata[0] = IPMI_OUT_OF_SPACE_CC;
+	*rdata_len = 1;
+	return;
+    }
+    add_sdr_entry(mc, entry);
+
+    memcpy(entry->data+2, msg->data+2, entry->length-2);
+
+    rdata[0] = 0;
+    ipmi_set_uint16(rdata+1, entry->record_id);
+    *rdata_len = 3;
+}
+
+static void
+handle_partial_add_sdr(lmc_data_t    *mc,
+		       ipmi_msg_t    *msg,
+		       unsigned char *rdata,
+		       unsigned int  *rdata_len)
+{
+    uint16_t record_id;
+    int      offset;
+    int      modal;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (!(mc->main_sdrs.flags & IPMI_SDR_PARTIAL_ADD_SDR_SUPPORTED)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (mc->main_sdrs.flags & IPMI_SDR_RESERVE_SDR_SUPPORTED) {
+	uint16_t reservation = ipmi_get_uint16(msg->data+0);
+
+	if ((reservation != 0) && (reservation != mc->main_sdrs.reservation)) {
+	    rdata[0] = IPMI_INVALID_RESERVATION_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    }
+
+    modal = IPMI_SDR_GET_MODAL(mc->main_sdrs.flags);
+    if ((modal == IPMI_SDR_NON_MODAL_ONLY)
+	&& !mc->in_update_mode)
+    {
+	rdata[0] = IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    offset = msg->data[4];
+    record_id = ipmi_get_uint16(rdata+2);
+    if (record_id == 0) {
+	/* New add. */
+	if (check_msg_length(msg, 12, rdata, rdata_len))
+	    return;
+	if (offset != 0) {
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	if (msg->data_len > msg->data[11] + 12) {
+	    rdata[0] = 0x80; /* Invalid data length */
+	    *rdata_len = 1;
+	    return;
+	}
+	if (mc->part_add_sdr) {
+	    /* Still working on a previous one, return an error and
+	       abort. */
+	    free_sdr(mc->part_add_sdr);
+	    mc->part_add_sdr = NULL;
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	mc->part_add_sdr = new_sdr_entry(mc, msg->data[11]);
+	memcpy(mc->part_add_sdr->data+2, msg->data+8, msg->data_len - 8);
+	mc->part_add_next = msg->data_len - 8;
+    } else {
+	if (!mc->part_add_next) {
+	    rdata[0] = IPMI_UNKNOWN_ERR_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	if (offset != mc->part_add_next) {
+	    free_sdr(mc->part_add_sdr);
+	    mc->part_add_sdr = NULL;
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+	if ((offset + msg->data_len - 6) > mc->part_add_sdr->length) {
+	    free_sdr(mc->part_add_sdr);
+	    mc->part_add_sdr = NULL;
+	    rdata[0] = 0x80; /* Invalid data length */
+	    *rdata_len = 1;
+	    return;
+	}
+	memcpy(mc->part_add_sdr->data+offset, msg->data+6, msg->data_len-6);
+	mc->part_add_next += msg->data_len - 6;
+    }
+
+    if ((msg->data[5] & 0xf) == 1) {
+	/* End of the operation. */
+	if (mc->part_add_next != mc->part_add_sdr->length) {
+	    free_sdr(mc->part_add_sdr);
+	    mc->part_add_sdr = NULL;
+	    rdata[0] = 0x80; /* Invalid data length */
+	    *rdata_len = 1;
+	    return;
+	}
+	add_sdr_entry(mc, mc->part_add_sdr);
+	mc->part_add_sdr = NULL;
+    }
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void
+handle_delete_sdr(lmc_data_t    *mc,
+		  ipmi_msg_t    *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len)
+{
+    uint16_t       record_id;
+    sdr_t          *entry, *p_entry;
+    struct timeval t;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (check_msg_length(msg, 4, rdata, rdata_len))
+	return;
+
+    if (mc->main_sdrs.flags & IPMI_SDR_RESERVE_SDR_SUPPORTED) {
+	uint16_t reservation = ipmi_get_uint16(msg->data+0);
+
+	if ((reservation != 0) && (reservation != mc->main_sdrs.reservation)) {
+	    rdata[0] = IPMI_INVALID_RESERVATION_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    }
+
+    record_id = ipmi_get_uint16(rdata+2);
+
+    if (record_id == 0) {
+	entry = mc->main_sdrs.sdrs;
+	p_entry = NULL;
+    } else if (record_id == 0xffff) {
+	entry = mc->main_sdrs.sdrs;
+	p_entry = NULL;
+	if (entry) {
+	    while (entry->next) {
+		p_entry = entry;
+		entry = entry->next;
+	    }
+	}
+    } else {
+	entry = find_sdr_by_recid(mc, record_id, &p_entry);
+    }
+    if (!entry) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (p_entry)
+	p_entry->next = entry->next;
+    else
+	mc->main_sdrs.sdrs = entry->next;
+
+    rdata[0] = 0;
+    ipmi_set_uint16(rdata+1, entry->record_id);
+    *rdata_len = 3;
+
+    free_sdr(entry);
+
+    gettimeofday(&t, NULL);
+    mc->main_sdrs.last_erase_time = t.tv_sec + mc->main_sdrs.time_offset;
+}
+
+static void
+handle_clear_sdr_repository(lmc_data_t    *mc,
+			    ipmi_msg_t    *msg,
+			    unsigned char *rdata,
+			    unsigned int  *rdata_len)
+{
+    sdr_t          *entry, *n_entry;
+    struct timeval t;
+    unsigned char  op;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (check_msg_length(msg, 6, rdata, rdata_len))
+	return;
+
+    if (mc->main_sdrs.flags & IPMI_SDR_RESERVE_SDR_SUPPORTED) {
+	uint16_t reservation = ipmi_get_uint16(msg->data+0);
+
+	if ((reservation != 0) && (reservation != mc->main_sdrs.reservation)) {
+	    rdata[0] = IPMI_INVALID_RESERVATION_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    }
+
+    if ((msg->data[2] != 'C')
+	|| (msg->data[3] != 'L')
+	|| (msg->data[4] != 'R'))
+    {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    op = msg->data[5];
+    if ((op != 0) && (op != 0xaa))
+    {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[1] = 1;
+    if (op == 0) {
+	entry = mc->main_sdrs.sdrs;
+	while (entry) {
+	    n_entry = entry->next;
+	    free_sdr(entry);
+	    entry = n_entry;
+	}
+    }
+
+    rdata[0] = 0;
+    *rdata_len = 2;
+
+    gettimeofday(&t, NULL);
+    mc->main_sdrs.last_erase_time = t.tv_sec + mc->main_sdrs.time_offset;
+}
+
+static void
+handle_get_sdr_repository_time(lmc_data_t    *mc,
+			       ipmi_msg_t    *msg,
+			       unsigned char *rdata,
+			       unsigned int  *rdata_len)
+{
+    struct timeval t;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    gettimeofday(&t, NULL);
+    rdata[0] = 0;
+    ipmi_set_uint32(rdata+1, t.tv_sec + mc->main_sdrs.time_offset);
+    *rdata_len = 5;
+}
+
+static void
+handle_set_sdr_repository_time(lmc_data_t    *mc,
+			       ipmi_msg_t    *msg,
+			       unsigned char *rdata,
+			       unsigned int  *rdata_len)
+{
+    struct timeval t;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    if (check_msg_length(msg, 4, rdata, rdata_len))
+	return;
+
+    gettimeofday(&t, NULL);
+    mc->main_sdrs.time_offset = ipmi_get_uint32(msg->data) - t.tv_sec;
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void
+handle_enter_sdr_repository_update(lmc_data_t    *mc,
+				   ipmi_msg_t    *msg,
+				   unsigned char *rdata,
+				   unsigned int  *rdata_len)
+{
+    int modal;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    modal = IPMI_SDR_GET_MODAL(mc->main_sdrs.flags);
+    if ((modal == IPMI_SDR_MODAL_UNSPECIFIED)
+	|| (modal == IPMI_SDR_NON_MODAL_ONLY))
+    {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    mc->in_update_mode = 1;
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void
+handle_exit_sdr_repository_update(lmc_data_t    *mc,
+				  ipmi_msg_t    *msg,
+				  unsigned char *rdata,
+				  unsigned int  *rdata_len)
+{
+    int modal;
+
+    if (!(mc->device_support & IPMI_DEVID_SDR_REPOSITORY_DEV)) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    modal = IPMI_SDR_GET_MODAL(mc->main_sdrs.flags);
+    if ((modal == IPMI_SDR_MODAL_UNSPECIFIED)
+	|| (modal == IPMI_SDR_NON_MODAL_ONLY))
+    {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    mc->in_update_mode = 0;
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
 
 static void
 handle_storage_netfn(lmc_data_t    *mc,
@@ -632,6 +1305,54 @@ handle_storage_netfn(lmc_data_t    *mc,
 
     /* We don't currently care about partial sel adds, since they are
        pretty stupid. */
+
+    case IPMI_GET_SDR_REPOSITORY_INFO_CMD:
+	handle_get_sdr_repository_info(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_SDR_REPOSITORY_ALLOC_INFO_CMD:
+	handle_get_sdr_repository_alloc_info(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_RESERVE_SDR_REPOSITORY_CMD:
+	handle_reserve_sdr_repository(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_SDR_CMD:
+	handle_get_sdr(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_ADD_SDR_CMD:
+	handle_add_sdr(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PARTIAL_ADD_SDR_CMD:
+	handle_partial_add_sdr(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_DELETE_SDR_CMD:
+	handle_delete_sdr(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_CLEAR_SDR_REPOSITORY_CMD:
+	handle_clear_sdr_repository(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_SDR_REPOSITORY_TIME_CMD:
+	handle_get_sdr_repository_time(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_SET_SDR_REPOSITORY_TIME_CMD:
+	handle_set_sdr_repository_time(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_ENTER_SDR_REPOSITORY_UPDATE_CMD:
+	handle_enter_sdr_repository_update(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_EXIT_SDR_REPOSITORY_UPDATE_CMD:
+	handle_exit_sdr_repository_update(mc, msg, rdata, rdata_len);
+	break;
 
     default:
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -820,6 +1541,7 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     mc = malloc(sizeof(*mc));
     if (!mc)
 	return ENOMEM;
+    memset(mc, 0, sizeof(*mc));
 
     if (ipmb & 1)
 	return EINVAL;
@@ -836,6 +1558,8 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     /* Start the time at zero. */
     gettimeofday(&t, NULL);
     mc->sel.time_offset = t.tv_sec;
+    mc->main_sdrs.time_offset = t.tv_sec;
+    mc->device_sdrs.time_offset = t.tv_sec;
 
     if (emu->ipmb[ipmb >> 1])
 	ipmi_mc_destroy(emu->ipmb[ipmb >> 1]);

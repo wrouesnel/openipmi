@@ -1,3 +1,7 @@
+2003-12-05  Louis Zhuang  <louis.zhuang@linux.intel.com>
+
+	* lanserv/emu.c: Work on SDR emulation.
+
 2003-12-04  Louis Zhuang  <louis.zhuang@linux.intel.com>
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.h: Add a new function
