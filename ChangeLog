@@ -1,3 +1,8 @@
+2004-07-29 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/domain.c, include/OpenIPMI/domain.h: Added a way to fetch
+	the main SDRs from a domain.
+
 2004-07-13 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_domain.h: Fixed a misnamed parm.

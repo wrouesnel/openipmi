@@ -116,7 +116,7 @@ void ipmi_mc_set_ipmb_event_receiver_support(ipmi_mc_t *mc, int val);
 void ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val);
 
 /* Reread all the sensors for a given mc.  This will request the
-   sensor SDRs for that mc (And only for that MC) and change the
+   device SDRs for that mc (And only for that MC) and change the
    sensors as necessary. */
 typedef void (*ipmi_mc_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
 int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
@@ -192,7 +192,7 @@ ipmi_sensor_info_t *_ipmi_mc_get_sensors(ipmi_mc_t *mc);
 /* Get the controls that the given MC owns. */
 ipmi_control_info_t *_ipmi_mc_get_controls(ipmi_mc_t *mc);
 
-/* Get the sensor SDRs for the given MC. */
+/* Get the device SDRs for the given MC. */
 ipmi_sdr_info_t *ipmi_mc_get_sdrs(ipmi_mc_t *mc);
 
 /* Get the IPMI slave address of the given MC. */

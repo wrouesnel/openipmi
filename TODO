@@ -1,4 +1,7 @@
 
+Add a way to be notified if children or parents are added to an
+entity.
+
 Add sensor SDRs back into the main SDR repository (if they can from
 there).
 
