@@ -1,4 +1,9 @@
 
+2003-04-16 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: During shutdown, delete entities after sensors and
+	controls because sensors and controls may refer to entities.
+
 2003-04-15 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi_lan.c: Implemented a max outstanding message count to

@@ -1516,10 +1516,6 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    ipmi_destroy_lock(mc->bmc->mc_list_lock);
 	if (mc->bmc->event_handlers_lock)
 	    ipmi_destroy_lock(mc->bmc->event_handlers_lock);
-	if (mc->bmc->entities)
-	    ipmi_entity_info_destroy(mc->bmc->entities);
-	if (mc->bmc->entities_lock)
-	    ipmi_destroy_lock(mc->bmc->entities_lock);
 	if (mc->bmc->ll_event_id)
 	    mc->bmc->conn->deregister_for_events(mc->bmc->conn,
 						 mc->bmc->ll_event_id);
@@ -1536,6 +1532,13 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    ipmi_sensors_destroy(mc->sensors);
 	if (mc->controls)
 	    ipmi_controls_destroy(mc->controls);
+
+	/* Destroy the entities last, since sensors and controls may
+           refer to them. */
+	if (mc->bmc->entities)
+	    ipmi_entity_info_destroy(mc->bmc->entities);
+	if (mc->bmc->entities_lock)
+	    ipmi_destroy_lock(mc->bmc->entities_lock);
 
 	ipmi_mem_free(mc->bmc);
 	ipmi_mem_free(mc);
