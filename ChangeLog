@@ -1,6 +1,9 @@
 
 2003-09-30 Corey Minyard <cminyard@mvista.com>
 
+	* ui/ui.c, include/OpenIPMI/ipmi_ui.h: Add a function to set
+	the domain at startup.
+
 	* lib/entity.c: Make sure to free the entity SDR info when it is
 	destroyed.
 

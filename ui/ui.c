@@ -4176,6 +4176,12 @@ ipmi_ui_domain_ready(ipmi_domain_t *domain,
 {
 }
 
+void
+ipmi_ui_set_domain_id(ipmi_domain_id_t new_domain_id)
+{
+    domain_id = new_domain_id;
+}
+
 int
 ipmi_ui_init(selector_t **selector, int do_full_screen)
 {
