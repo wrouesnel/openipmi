@@ -1885,69 +1885,6 @@ mxp_alloc_id_control(ipmi_mc_t                          *mc,
  *
  **********************************************************************/
 
-static void
-chassis_type_set_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    mxp_info_t           *info = control_info->idinfo;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[4];
-
-    if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_SET_CHASSIS_TYPE_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    memcpy(data+3, control_info->vals, 1);
-
-    rv = ipmi_control_send_command(control, info->mc, 0,
-				   &msg, mxp_control_set_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_set)
-	    control_info->done_set(control, rv, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
-static int
-chassis_type_set(ipmi_control_t     *control,
-		 unsigned char      *val,
-		 int                length,
-		 ipmi_control_op_cb handler,
-		 void               *cb_data)
-{
-    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_info_t           *info = hdr->data;
-    mxp_control_info_t   *control_info;
-    int                  rv;
-
-    if (length != 1)
-	return EINVAL;
-
-    control_info = alloc_control_info(info);
-    if (!control_info)
-	return ENOMEM;
-    control_info->done_set = handler;
-    control_info->cb_data = cb_data;
-    control_info->vals[0] = *val;
-    rv = ipmi_control_add_opq(control, chassis_type_set_start,
-			      &(control_info->sdata), control_info);
-    if (rv)
-	ipmi_mem_free(control_info);
-    return rv;
-}
-
 static int
 chassis_type_get(ipmi_control_t                 *control,
 		 ipmi_control_identifier_val_cb handler,
@@ -2749,7 +2686,7 @@ mxp_add_chassis_sensors(mxp_info_t *info)
 			      IPMI_CONTROL_IDENTIFIER,
 			      "Chassis Type",
 			      1,
-			      chassis_type_set,
+			      NULL,
 			      chassis_type_get,
 			      &(info->chassis_type_control));
     if (rv)
