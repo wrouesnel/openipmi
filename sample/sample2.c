@@ -116,8 +116,6 @@ void got_val(ipmi_control_t *control,
 	printf(" %d", val[i]);
     }
     printf("\n");
-
-    leave();
 }
 
 void got_id(ipmi_control_t *control,
@@ -138,7 +136,6 @@ void got_id(ipmi_control_t *control,
 	printf(" %2.2x", val[i]);
     }
     printf("\n");
-    leave();
 }
 
 
