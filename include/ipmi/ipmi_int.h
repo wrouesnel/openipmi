@@ -112,6 +112,8 @@ struct ipmi_states_s
 
 /* Various logging stuff (mostly for debugging) */
 extern unsigned int __ipmi_log_mask;
-#define DEBUG_MSG_BIT	(1 << 0)
+#define DEBUG_MSG_BIT		(1 << 0)
+#define DEBUG_RAWMSG_BIT	(1 << 1)
 #define DEBUG_MSG	(__ipmi_log_mask & DEBUG_MSG_BIT)
+#define DEBUG_RAWMSG	(__ipmi_log_mask & DEBUG_RAWMSG_BIT)
 #endif /* _IPMI_INT_H */

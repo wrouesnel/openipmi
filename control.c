@@ -78,6 +78,8 @@ struct ipmi_control_s
 
     int hot_swap_indicator;
 
+    int ignore_if_no_entity;
+
     /* For light types. */
     ipmi_control_light_t *lights;
 
@@ -814,4 +816,17 @@ int
 ipmi_control_is_hot_swap_indicator(ipmi_control_t *control)
 {
     return control->hot_swap_indicator;
+}
+
+int
+ipmi_control_get_ignore_if_no_entity(ipmi_control_t *control)
+{
+    return control->ignore_if_no_entity;
+}
+
+void
+ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
+				     int            ignore_if_no_entity)
+{
+    control->ignore_if_no_entity = ignore_if_no_entity;
 }

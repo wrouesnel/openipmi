@@ -160,7 +160,7 @@ get_uchar(char **toks, unsigned char *val, char *errstr)
 	    wprintw(cmd_win, "No %s given\n", errstr);
 	return EINVAL;
     }
-    *val = strtoul(str, &tmpstr, 0);
+    *val = strtoul(str, &tmpstr, 16);
     if (*tmpstr != '\0') {
 	if (errstr)
 	    wprintw(cmd_win, "Invalid %s given\n", errstr);
@@ -181,7 +181,7 @@ get_uint(char **toks, unsigned int *val, char *errstr)
 	    wprintw(cmd_win, "No %s given\n", errstr);
 	return EINVAL;
     }
-    *val = strtoul(str, &tmpstr, 0);
+    *val = strtoul(str, &tmpstr, 16);
     if (*tmpstr != '\0') {
 	if (errstr)
 	    wprintw(cmd_win, "Invalid %s given\n", errstr);
@@ -1283,7 +1283,9 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
     if (!entity)
 	return;
 
-    if (!ipmi_entity_is_present(entity)) {
+    if (!ipmi_entity_is_present(entity)
+	&& ipmi_control_get_ignore_if_no_entity(control))
+    {
 	wmove(display_pad, value_pos.y, value_pos.x);
 	wprintw(display_pad, "not present");
 	display_pad_refresh();
@@ -1538,7 +1540,9 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     info.msg.data = data;
 
     info.found = 0;
-    ipmi_bmc_iterate_mcs(bmc, mccmd_handler, &info);
+    mccmd_handler(bmc, bmc, &info);
+    if (!info.found)
+        ipmi_bmc_iterate_mcs(bmc, mccmd_handler, &info);
     if (!info.found) {
 	wprintw(cmd_win, "Unable to find MC at address 0x%x\n", info.addr);
     }
@@ -1761,6 +1765,8 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
 
     if (strcmp(type, "msg") == 0) {
 	mask = DEBUG_MSG_BIT;
+    } else if (strcmp(type, "rawmsg") == 0) {
+	mask = DEBUG_RAWMSG_BIT;
     } else {
 	wprintw(cmd_win, "Invalid debug type specified: '%s'\n", type);
 	goto out;
@@ -2270,6 +2276,12 @@ ipmi_ui_init(selector_t **selector)
     }
 
     rv = init_win();
+    if (rv) {
+	fprintf(stderr, "Could not initialize curses\n");
+	exit(1);
+    }
+
+    help_cmd(NULL, NULL, NULL);
 
     ipmi_init(&ipmi_ui_cb_handlers);
 
