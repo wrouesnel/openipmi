@@ -105,7 +105,7 @@ ifree(lan_data_t *lan, void *data)
 
 typedef struct lan_addr_s
 {
-    struct sockaddr addr;
+    sockaddr_ip_t   addr;
     socklen_t       addr_len;
     int             xmit_fd;
 } lan_addr_t;
@@ -484,7 +484,8 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
     unsigned char      data[256];
 
     l.addr_len = sizeof(l.addr);
-    len = recvfrom(lan_fd, data, sizeof(data), 0, &(l.addr), &(l.addr_len));
+    len = recvfrom(lan_fd, data, sizeof(data), 0, 
+		    (struct sockaddr *)&(l.addr), &(l.addr_len));
     if (len < 0) {
 	if (errno != EINTR) {
 	    perror("Error receiving message");
@@ -580,18 +581,17 @@ ipmi_open(char *ipmi_dev, int *using_socket)
 }
 
 static int
-open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
+open_lan_fd(sockaddr_ip_t *addr, socklen_t addr_len)
 {
     int                fd;
     int                rv;
 
-    fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    fd = socket(addr->s_ipsock.s_addr4.sin_family, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1) {
 	perror("Unable to create socket");
 	return fd;
     }
-
-    rv = bind(fd, addr, addr_len);
+    rv = bind(fd, (struct sockaddr *)&(addr->s_ipsock.s_addr4), addr_len);
     if (rv == -1)
     {
 	fprintf(stderr, "Unable to bind to LAN port: %s\n",
@@ -720,7 +720,7 @@ write_config(lan_data_t *lan)
 
 void init_oem_force(void);
 
-struct sockaddr addr[MAX_ADDR];
+sockaddr_ip_t addr[MAX_ADDR];
 socklen_t addr_len[MAX_ADDR];
 int num_addr = 0;
 

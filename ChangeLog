@@ -1,3 +1,16 @@
+2003-11-11 Jeff Zheng <jeff.zheng@intel.com>
+
+	* configure.in: Add checking for getaddrinfo().
+
+	* include/OpenIPMI/ipmi_lan.h, lib/ipmi_lan.c: Added support for a
+	IPv6 capable interface.
+
+	* lanserv/lanserv.c, lanserv/lanserv_config.c, lanserv.h: Add
+	support for IPv6 addresses.
+
+	* sample/sample.c, ui/basic_ui.c, sample/ipmicmd.c: Reworked to
+	use the new IPv6 capable interfaces.
+	
 2003-11-10 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed MC scanning to handle a single address

@@ -38,6 +38,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <resolv.h>
 
 #include <OpenIPMI/ipmi_auth.h>
 
@@ -271,12 +272,24 @@ void ipmi_handle_lan_msg(lan_data_t *lan,
 void ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
 			 unsigned char *rsp, int rsp_len);
 
+typedef struct sockaddr_ip_s {
+    union
+        {
+    	    struct sockaddr s_addr;
+            struct sockaddr_in  s_addr4;
+#ifdef PF_INET6
+            struct sockaddr_in6 s_addr6;
+#endif
+        } s_ipsock;
+/*    socklen_t addr_len;*/
+} sockaddr_ip_t;
+
 /* Read in a configuration file and fill in the lan and address info. */
-int lanserv_read_config(lan_data_t      *lan,
-			char            *config_file,
-			struct sockaddr addr[],
-			socklen_t       addr_len[],
-			int             *num_addr);
+int lanserv_read_config(lan_data_t    *lan,
+			char          *config_file,
+			sockaddr_ip_t addr[],
+			socklen_t     addr_len[],
+			int           *num_addr);
 
 /* Call this periodically to time things.  time_since_last is the
    number of seconds since the last call to this. */

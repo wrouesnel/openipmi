@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <netdb.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -131,6 +132,19 @@ typedef struct lan_wait_queue_s
    occurs, we will be outside the sequence number before we switch. */
 #define SENDS_BETWEEN_IP_SWITCHES 3
 
+/* Because sizeof(sockaddr_in6) > sizeof(sockaddr_in), this structure
+ * is used as a replacement of struct sockaddr. */
+typedef struct sockaddr_ip_s {
+    union
+        {
+	    struct sockaddr	s_addr;
+            struct sockaddr_in  s_addr4;
+#ifdef PF_INET6
+            struct sockaddr_in6 s_addr6;
+#endif
+        } s_ipsock;
+} sockaddr_ip_t;
+
 typedef struct lan_data_s
 {
     ipmi_con_t                 *ipmi;
@@ -140,7 +154,7 @@ typedef struct lan_data_s
     int                        is_active;
 
     int                        curr_ip_addr;
-    struct sockaddr_in         ip_addr[MAX_IP_ADDR];
+    sockaddr_ip_t              ip_addr[MAX_IP_ADDR];
     int                        ip_working[MAX_IP_ADDR];
     unsigned int               consecutive_ip_failures[MAX_IP_ADDR];
     struct timeval             ip_failure_time[MAX_IP_ADDR];
@@ -319,24 +333,44 @@ remove_event_handler(lan_data_t                 *lan,
 }
 
 static int
-open_lan_fd(void)
+open_lan_fd(int pf_family)
 {
     int                fd;
-    struct sockaddr_in addr;
+    sockaddr_ip_t      addr;
     int                curr_port;
     int                rv;
 
-    fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    fd = socket(pf_family, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1)
 	return fd;
 
     curr_port = 7000;
     do {
 	curr_port++;
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(curr_port);
-	addr.sin_addr.s_addr = INADDR_ANY;
-
+	switch (pf_family) {
+	   case PF_INET:
+		{
+		    struct sockaddr_in *paddr;
+		    paddr = (struct sockaddr_in *)&addr;
+		    paddr->sin_family = AF_INET;
+		    paddr->sin_port = htons(curr_port);
+		    paddr->sin_addr.s_addr = INADDR_ANY;
+		}
+		break;
+#ifdef PF_INET6
+	   case PF_INET6:
+		{
+		    struct sockaddr_in6 *paddr6;
+		    paddr6 = (struct sockaddr_in6 *)&addr;
+		    paddr6->sin6_family = AF_INET6;
+		    paddr6->sin6_port = htons(curr_port);
+		    paddr6->sin6_addr = in6addr_any;
+		}
+		break;
+#endif
+	   default:
+		return -1;
+	}
 	rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
     } while ((curr_port < 7100) && (rv == -1));
 
@@ -516,7 +550,7 @@ lan_send_addr(lan_data_t  *lan,
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing %sseq %d\n addr =",
 		 sndmsg, seq);
 	dump_hex((unsigned char *) &(lan->ip_addr[lan->curr_ip_addr]),
-		 sizeof(struct sockaddr_in));
+		 sizeof(sockaddr_ip_t));
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d.",
 		 ipmi_get_netfn_string(msg->netfn),
@@ -528,7 +562,7 @@ lan_send_addr(lan_data_t  *lan,
 
     rv = sendto(lan->fd, data, pos, 0,
 		(struct sockaddr *) &(lan->ip_addr[addr_num]),
-		sizeof(struct sockaddr_in));
+		sizeof(sockaddr_ip_t));
     if (rv == -1)
 	rv = errno;
     else
@@ -1120,8 +1154,8 @@ data_handler(int            fd,
     ipmi_con_t         *ipmi = (ipmi_con_t *) cb_data;
     lan_data_t         *lan;
     unsigned char      data[IPMI_MAX_LAN_LEN];
-    struct sockaddr    ipaddrd;
-    struct sockaddr_in *ipaddr;
+    sockaddr_ip_t      ipaddrd;
+    struct sockaddr_in *paddr;
     ipmi_msg_t         msg;
     int                rv;
     int                len;
@@ -1150,7 +1184,8 @@ data_handler(int            fd,
     lan = ipmi->con_data;
 
     from_len = sizeof(ipaddrd);
-    len = recvfrom(fd, data, sizeof(data), 0, &ipaddrd, &from_len);
+    len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 
+		    &from_len);
     if (len < 0)
 	goto out_unlock2;
 
@@ -1164,15 +1199,47 @@ data_handler(int            fd,
 
     /* Make sure the source IP matches what we expect the other end to
        be. */
-    ipaddr = (struct sockaddr_in *) &ipaddrd;
-    for (recv_addr = 0; recv_addr < lan->num_ip_addr; recv_addr++) {
-	if ((ipaddr->sin_port == lan->ip_addr[recv_addr].sin_port)
-	    && (ipaddr->sin_addr.s_addr
-		== lan->ip_addr[recv_addr].sin_addr.s_addr))
-	{
-	    break;
-	}
+    paddr = (struct sockaddr_in *)&ipaddrd;
+    switch (paddr->sin_family) {
+        case PF_INET:
+            {
+            struct sockaddr_in *ipaddr;
+            struct sockaddr_in *ipaddr4;
+            ipaddr = (struct sockaddr_in *)&(ipaddrd);
+            for (recv_addr = 0; recv_addr < lan->num_ip_addr; recv_addr++) {
+                    ipaddr4 = (struct sockaddr_in *)
+                            &(lan->ip_addr[recv_addr]);
+                    if ((ipaddr->sin_port == ipaddr4->sin_port)
+                        && (ipaddr->sin_addr.s_addr
+                            == ipaddr4->sin_addr.s_addr))
+                        break;
+                }
+            }
+            break;
+#ifdef PF_INET6
+        case PF_INET6:
+            {
+            struct sockaddr_in6 *ipa6;
+            struct sockaddr_in6 *ipaddr6;
+            ipa6 = (struct sockaddr_in6 *)&(ipaddrd);
+            for (recv_addr = 0; recv_addr < lan->num_ip_addr; recv_addr++) {
+                    ipaddr6 = (struct sockaddr_in6 *)
+                            &(lan->ip_addr[recv_addr]);
+                    if ((ipa6->sin6_port == ipaddr6->sin6_port)
+                        && (bcmp(ipa6->sin6_addr.s6_addr,
+                                 ipaddr6->sin6_addr.s6_addr,
+                                 sizeof(struct in6_addr)) == 0))
+                        break;
+                }
+            }
+            break;
+#endif
+        default:
+            printf("Unknown protocol family\n");
+            exit(EXIT_FAILURE);
+            break;
     }
+
     if (recv_addr >= lan->num_ip_addr) {
 	if (DEBUG_MSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message due to invalid IP");
@@ -2505,10 +2572,56 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 		   void                      *user_data,
 		   ipmi_con_t                **new_con)
 {
+    char s_ip_addrs[MAX_IP_ADDR][20];
+    char s_ports[MAX_IP_ADDR][10];
+    char *paddrs[MAX_IP_ADDR], *pports[MAX_IP_ADDR];
+    unsigned char *p;
+    int i,rv;
+
+    if ((num_ip_addrs < 1) || (num_ip_addrs > MAX_IP_ADDR))
+	return EINVAL;
+    for (i=0; i<num_ip_addrs; i++) {
+	p = (unsigned char *)&(ip_addrs[i]);
+	sprintf(s_ip_addrs[i], "%u.%u.%u.%u", *p, *(p+1), *(p+2), *(p+3));
+	sprintf(s_ports[i], "%u", ports[i]);
+	paddrs[i] = s_ip_addrs[i];
+	pports[i]= s_ports[i];
+    }
+    rv = ipmi_ip_setup_con(paddrs, 
+			   pports, 
+			   num_ip_addrs,
+			   authtype,
+			   privilege,
+			   username,
+			   username_len,
+			   password,
+			   password_len,
+			   handlers,
+			   user_data,
+			   new_con);
+    return rv;
+}
+
+int
+ipmi_ip_setup_con(char         * const ip_addrs[],
+		  char         * const ports[],
+		  unsigned int num_ip_addrs,
+		  unsigned int authtype,
+		  unsigned int privilege,
+		  void         *username,
+		  unsigned int username_len,
+		  void         *password,
+		  unsigned int password_len,
+		  os_handler_t *handlers,
+		  void         *user_data,
+		  ipmi_con_t   **new_con)
+{
     ipmi_con_t     *ipmi = NULL;
     lan_data_t     *lan = NULL;
     int            rv;
     int            i;
+    int		   count;
+    struct sockaddr_in *pa;
 
     if (username_len > IPMI_USERNAME_MAX)
 	return EINVAL;
@@ -2544,14 +2657,51 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     lan->is_active = 1;
     lan->authtype = authtype;
     lan->privilege = privilege;
-
+    count = 0;
+#ifdef HAVE_GETADDRINFO
     for (i=0; i<num_ip_addrs; i++) {
-	lan->ip_addr[i].sin_family = AF_INET;
-	lan->ip_addr[i].sin_port = htons(ports[i]);
-	lan->ip_addr[i].sin_addr = ip_addrs[i];
-	lan->ip_working[i] = 0;
+        struct addrinfo hints, *res0;
+	struct sockaddr_in *paddr;
+ 
+        memset(&hints, 0, sizeof(hints));
+        if (count == 0)
+            hints.ai_family = PF_UNSPEC;
+        else
+	{
+            /* Make sure all ip address is in the same protocol family*/
+	    paddr = (struct sockaddr_in *)&(lan->ip_addr[0]);
+            hints.ai_family = paddr->sin_family;
+	}
+        hints.ai_socktype = SOCK_DGRAM;
+        rv = getaddrinfo(ip_addrs[i], ports[i], &hints, &res0);
+        if (rv == 0) {
+            /* Only get the first choices */
+	    memcpy(&(lan->ip_addr[count]), res0->ai_addr, res0->ai_addrlen);
+            lan->ip_working[count] = 0;
+            count++;
+            freeaddrinfo(res0);
+        }
     }
-    lan->num_ip_addr = num_ip_addrs;
+#else
+    /* System does not support getaddrinfo, just for IPv4*/
+    for (i=0; i<num_ip_addrs; i++) {
+	struct hostent *ent;
+	struct sockaddr_in *paddr;
+	ent = gethostbyname(ip_addrs[i]);
+	if (!ent) continue;
+	paddr = (struct sockaddr_in *)&(lan->ip_addr[i]);
+        paddr->sin_family = AF_INET;
+        paddr->sin_port = htons(atoi(ports[i]));
+	memcpy(&(paddr->sin_addr), ent->h_addr_list[0], ent->h_length);
+        lan->ip_working[i] = 0;
+	count++;
+    }
+#endif
+    if (count == 0) {
+        printf("No valid ip address\n");
+        exit(EXIT_FAILURE);
+    }
+    lan->num_ip_addr = count;
     lan->curr_ip_addr = 0;
     lan->num_sends = 0;
     lan->connected = 0;
@@ -2562,7 +2712,8 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     lan->wait_q = NULL;
     lan->wait_q_tail = NULL;
 
-    lan->fd = open_lan_fd();
+    pa = (struct sockaddr_in *)&(lan->ip_addr[0]);
+    lan->fd = open_lan_fd(pa->sin_family);
     if (lan->fd == -1) {
 	rv = errno;
 	goto out_err;

@@ -60,6 +60,8 @@ typedef struct con_parms_s
 
     struct in_addr  lan_addr[2];
     int             lan_port[2];
+    char            *str_addr[2];
+    char            *str_port[2];
     int             num_addr;
     int             authtype;
     int             privilege;
@@ -88,19 +90,19 @@ void ui_reconnect(void)
 		exit(1);
 	    }
 	} else if (con_parms[last_con].con_type == LAN) {
-	    rv = ipmi_lan_setup_con(con_parms[i].lan_addr,
-				    con_parms[i].lan_port,
-				    con_parms[i].num_addr,
-				    con_parms[i].authtype,
-				    con_parms[i].privilege,
-				    con_parms[i].username,
-				    strlen(con_parms[i].username),
-				    con_parms[i].password,
-				    strlen(con_parms[i].password),
-				    &ipmi_ui_cb_handlers, selector,
-				    &con[i]);
+	    rv = ipmi_ip_setup_con(con_parms[i].str_addr,
+				   con_parms[i].str_port,
+				   con_parms[i].num_addr,
+				   con_parms[i].authtype,
+				   con_parms[i].privilege,
+				   con_parms[i].username,
+				   strlen(con_parms[i].username),
+				   con_parms[i].password,
+				   strlen(con_parms[i].password),
+				   &ipmi_ui_cb_handlers, selector,
+				   &con[i]);
 	    if (rv) {
-		fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
+		fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
 		exit(1);
 	    }
 	}
@@ -176,8 +178,6 @@ main(int argc, char *argv[])
 	}
 
     } else if (strcmp(argv[curr_arg], "lan") == 0) {
-	struct hostent *ent;
-
 	argc--;
 	curr_arg++;
 
@@ -190,18 +190,10 @@ main(int argc, char *argv[])
 	    exit(1);
 	}
 
-	ent = gethostbyname(argv[curr_arg]);
-	if (!ent) {
-	    fprintf(stderr, "gethostbyname failed: %s\n", strerror(h_errno));
-	    ipmi_ui_shutdown();
-	    exit(1);
-	}
+	con_parms[last_con].str_addr[0] = argv[curr_arg];
 	curr_arg++;
 	argc--;
-	memcpy(&con_parms[last_con].lan_addr[0],
-	       ent->h_addr_list[0],
-	       ent->h_length);
-	con_parms[last_con].lan_port[0] = atoi(argv[curr_arg]);
+	con_parms[last_con].str_port[0] = argv[curr_arg];
 	curr_arg++;
 	argc--;
 
@@ -222,19 +214,10 @@ main(int argc, char *argv[])
 	    }
 
 	    con_parms[last_con].num_addr++;
-	    ent = gethostbyname(argv[curr_arg]);
-	    if (!ent) {
-		fprintf(stderr, "gethostbyname failed: %s\n",
-			strerror(h_errno));
-		rv = EINVAL;
-		goto out;
-	    }
+	    con_parms[last_con].str_addr[1] = argv[curr_arg];
 	    curr_arg++;
 	    argc--;
-	    memcpy(&con_parms[last_con].lan_addr[1],
-		   ent->h_addr_list[0],
-		   ent->h_length);
-	    con_parms[last_con].lan_port[1] = atoi(argv[curr_arg]);
+	    con_parms[last_con].str_port[1] = argv[curr_arg];
 	    curr_arg++;
 	    argc--;
 	    goto doauth;
@@ -277,17 +260,17 @@ main(int argc, char *argv[])
 	curr_arg++;
 	argc--;
 
-	rv = ipmi_lan_setup_con(con_parms[last_con].lan_addr,
-				con_parms[last_con].lan_port,
-				con_parms[last_con].num_addr,
-				con_parms[last_con].authtype,
-				con_parms[last_con].privilege,
-				con_parms[last_con].username,
-				strlen(con_parms[last_con].username),
-				con_parms[last_con].password,
-				strlen(con_parms[last_con].password),
-				&ipmi_ui_cb_handlers, selector,
-				&con[last_con]);
+	rv = ipmi_ip_setup_con(con_parms[last_con].str_addr,
+			       con_parms[last_con].str_port,
+			       con_parms[last_con].num_addr,
+			       con_parms[last_con].authtype,
+			       con_parms[last_con].privilege,
+			       con_parms[last_con].username,
+			       strlen(con_parms[last_con].username),
+			       con_parms[last_con].password,
+			       strlen(con_parms[last_con].password),
+			       &ipmi_ui_cb_handlers, selector,
+			       &con[last_con]);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s\n", strerror(rv));
 	    rv = EINVAL;
@@ -413,7 +396,7 @@ main(int argc, char *argv[])
 			       swid,
 			       &con[last_con]);
 	if (rv) {
-	    fprintf(stderr, "ipmi_lan_setup_con: %s\n", strerror(rv));
+	    fprintf(stderr, "mxp_lan_setup_con: %s\n", strerror(rv));
 	    rv = EINVAL;
 	    goto out;
 	}

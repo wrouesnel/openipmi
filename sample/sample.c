@@ -69,12 +69,12 @@ static enum con_type_e con_type;
 static int smi_intf;
 
 /* LAN parms. */
-static struct in_addr lan_addr;
-static int            lan_port;
-static int            authtype = 0;
-static int            privilege = 0;
-static char           username[17];
-static char           password[17];
+static char *lan_addr[1];
+static char *lan_port[1];
+static int  authtype = 0;
+static int  privilege = 0;
+static char username[17];
+static char password[17];
 
 static char *progname;
 
@@ -439,8 +439,6 @@ main(int argc, char *argv[])
 	}
 
     } else if (strcmp(argv[curr_arg], "lan") == 0) {
-	struct hostent *ent;
-
 	con_type = LAN;
 
 	if (argc < 6) {
@@ -449,12 +447,8 @@ main(int argc, char *argv[])
 	    exit(1);
 	}
 
-	ent = gethostbyname(argv[curr_arg+1]);
-	if (!ent)
-	    fprintf(stderr, "gethostbyname failed: %s\n", strerror(h_errno));
-
-	memcpy(&lan_addr, ent->h_addr_list[0], ent->h_length);
-	lan_port = atoi(argv[curr_arg+2]);
+	lan_addr[0] = argv[curr_arg+1];
+	lan_port[0] = argv[curr_arg+2];
 
 	if (strcmp(argv[curr_arg+3], "none") == 0) {
 	    authtype = IPMI_AUTHTYPE_NONE;
@@ -491,12 +485,12 @@ main(int argc, char *argv[])
 	strncpy(password, argv[curr_arg+6], 16);
 	password[16] = '\0';
 
-	rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
-				authtype, privilege,
-				username, strlen(username),
-				password, strlen(password),
-				&ipmi_ui_cb_handlers, ui_sel,
-				&con);
+	rv = ipmi_ip_setup_con(lan_addr, lan_port, 1,
+			       authtype, privilege,
+			       username, strlen(username),
+			       password, strlen(password),
+			       &ipmi_ui_cb_handlers, ui_sel,
+			       &con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
 	    exit(1);

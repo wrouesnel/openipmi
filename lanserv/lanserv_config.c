@@ -38,6 +38,10 @@
 #include <string.h>
 #include <netdb.h>
 
+#ifndef IPMI_LAN_STD_PORT_STR
+#define IPMI_LAN_STD_PORT_STR	"623"
+#endif
+
 static int
 get_bool(char **tokptr, unsigned int *rval, char **err)
 {
@@ -243,50 +247,76 @@ get_user(char **tokptr, lan_data_t *lan, char **err)
 }
 
 static int
-get_sock_addr(char **tokptr, struct sockaddr *addr, socklen_t *len, char **err)
+get_sock_addr(char **tokptr, sockaddr_ip_t *addr, socklen_t *len, char **err)
 {
-    struct sockaddr_in *a = (void *) addr;
-    struct hostent     *ent;
-    char               *s;
-    char               *end;
+    char *s, *p;
 
     s = strtok_r(NULL, " \t\n", tokptr);
     if (!s) {
 	*err = "No IP address specified";
 	return -1;
     }
+    p = strtok_r(NULL, " \t\n", tokptr);
 
-    ent = gethostbyname(s);
-    if (!ent) {
-	*err = "Invalid IP address specified";
-	return -1;
-    }
+#ifdef HAVE_GETADDRINFO
+    {
+	struct addrinfo     hints, *res0;
+	int rv;
 
-    a->sin_family = AF_INET;
-    memcpy(&(a->sin_addr), ent->h_addr_list[0], ent->h_length);
-
-    s = strtok_r(NULL, " \t\n", tokptr);
-    if (s) {
-	a->sin_port = htons(strtoul(s, &end, 0));
-	if (*end != '\0') {
-	    *err = "Invalid IP port specified";
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = PF_UNSPEC;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_PASSIVE;
+	if (p) {
+	    rv = getaddrinfo(s, p, &hints, &res0);
+	} else {
+	    rv = getaddrinfo(s, IPMI_LAN_STD_PORT_STR, &hints, &res0);
+	}
+	if (rv) {
+	    *err = "getaddrinfo err";
 	    return -1;
 	}
-    } else {
-	a->sin_port = htons(623);
+	memcpy(addr, res0->ai_addr, res0->ai_addrlen);
+	*len = res0->ai_addrlen;
+	freeaddrinfo(res0);
     }
+#else
+    /* System does not support getaddrinfo, just for IPv4*/
+    {
+	struct hostent     *ent;
+	struct sockaddr_in *paddr;
+        char               *end;
 
-    *len = sizeof(*a);
+	ent = gethostbyname(s);
+	if (!ent) {
+	    *err = "Invalid IP address specified";
+	    return -1;
+	}
+
+	paddr = (struct sockaddr_in *)addr;
+	paddr->sin_family = AF_INET;
+	if (p) {
+	    paddr->sin_port = htons(strtoul(p, &end, 0));
+	    if (*end != '\0') {
+	        *err = "Invalid IP port specified";
+	        return -1;
+	    }
+	} else {
+	    paddr->sin_port = htons(623);
+	}
+	*len = sizeof(struct sockaddr_in);
+    }
+#endif
     return 0;
 }
 
 #define MAX_CONFIG_LINE 256
 int
-lanserv_read_config(lan_data_t      *lan,
-		    char            *config_file,
-		    struct sockaddr addr[],
-		    socklen_t       addr_len[],
-		    int             *num_addr)
+lanserv_read_config(lan_data_t    *lan,
+		    char          *config_file,
+		    sockaddr_ip_t addr[],
+		    socklen_t     addr_len[],
+		    int           *num_addr)
 {
     FILE         *f = fopen(config_file, "r");
     char         buf[MAX_CONFIG_LINE];

@@ -700,7 +700,7 @@ con_changed_handler(ipmi_con_t   *ipmi,
 }
 
 int
-main(int argc, const char *argv[])
+main(int argc, char *argv[])
 {
     int          rv;
     int          pos;
@@ -784,14 +784,13 @@ main(int argc, const char *argv[])
 	}
 
     } else if (strcmp(argv[curr_arg], "lan") == 0) {
-	struct hostent *ent;
-	struct in_addr lan_addr[2];
-	int            lan_port[2];
-	int            num_addr = 1;
-	int            authtype = 0;
-	int            privilege = 0;
-	char           username[17];
-	char           password[17];
+	char *lan_addr[2];
+	char *lan_port[2];
+	int  num_addr = 1;
+	int  authtype = 0;
+	int  privilege = 0;
+	char username[17];
+	char password[17];
 
 	argc--;
 	curr_arg++;
@@ -801,14 +800,9 @@ main(int argc, const char *argv[])
 	    exit(1);
 	}
 
-	ent = gethostbyname(argv[curr_arg]);
-	if (!ent) {
-	    fprintf(stderr, "gethostbyname failed: %s\n", strerror(h_errno));
-	    exit(1);
-	}
+	lan_addr[0] = argv[curr_arg];
 	curr_arg++;
-	memcpy(&lan_addr[0], ent->h_addr_list[0], ent->h_length);
-	lan_port[0] = atoi(argv[curr_arg]);
+	lan_port[0] = argv[curr_arg];
 	curr_arg++;
 
     doauth:
@@ -827,16 +821,9 @@ main(int argc, const char *argv[])
 	    }
 
 	    num_addr++;
-	    ent = gethostbyname(argv[curr_arg]);
-	    if (!ent) {
-		fprintf(stderr, "gethostbyname failed: %s\n",
-			strerror(h_errno));
-		rv = EINVAL;
-		goto out;
-	    }
+	    lan_addr[1] = argv[curr_arg];
 	    curr_arg++;
-	    memcpy(&lan_addr[1], ent->h_addr_list[0], ent->h_length);
-	    lan_port[1] = atoi(argv[curr_arg]);
+	    lan_port[1] = argv[curr_arg];
 	    curr_arg++;
 	    goto doauth;
 	} else {
@@ -872,12 +859,12 @@ main(int argc, const char *argv[])
 	password[16] = '\0';
 	curr_arg++;
 
-	rv = ipmi_lan_setup_con(lan_addr, lan_port, num_addr,
-				authtype, privilege,
-				username, strlen(username),
-				password, strlen(password),
-				&ipmi_ui_cb_handlers, ui_sel,
-				&con);
+	rv = ipmi_ip_setup_con(lan_addr, lan_port, num_addr,
+			       authtype, privilege,
+			       username, strlen(username),
+			       password, strlen(password),
+			       &ipmi_ui_cb_handlers, ui_sel,
+			       &con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s\n", strerror(rv));
 	    rv = EINVAL;
@@ -885,7 +872,7 @@ main(int argc, const char *argv[])
 	}
     } else if (strcmp(argv[curr_arg], "mxp") == 0) {
 	struct hostent *ent;
-	unsigned char swid;
+	unsigned char  swid;
 	struct in_addr lan_addr[2];
 	int            lan_port[2];
 	int            num_addr = 1;
