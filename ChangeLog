@@ -1,6 +1,8 @@
 
 2003-02-25 Todd David <todd.c.davis@intel.com>
 
+	* configure.in: Move to version 0.2.1.
+
 	* ipmi.c: Added a check for the lock actually being allocated in
 	ipmi_check_lock().
 
