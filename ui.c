@@ -860,30 +860,6 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
     }
 }
 
-sel_timer_t *redisplay_timer;
-
-static void
-redisplay_timeout(selector_t  *sel,
-		  sel_timer_t *timer,
-		  void        *data)
-{
-    struct timeval now;
-    int            rv;
-
-    if (curr_display_type == DISPLAY_SENSOR) {
-	rv = ipmi_sensor_pointer_cb(curr_sensor_id, redisplay_sensor, NULL);
-	if (rv)
-	    ui_log("redisplay_timeout: Unable to get sensor pointer: 0x%x\n",
-		   rv);
-    }
-
-    gettimeofday(&now, NULL);
-    now.tv_sec += 1;
-    rv = sel_start_timer(timer, &now);
-    if (rv)
-	ui_log("Unable to restart redisplay timer: 0x%x\n", rv);
-}
-
 static void
 sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 {
@@ -1193,6 +1169,42 @@ normal_ind_val_read(ipmi_ind_t *ind,
 	}
     }
     display_pad_refresh();
+}
+
+static void
+redisplay_ind(ipmi_ind_t *ind, void *cb_data)
+{
+    int           ind_type;
+    ipmi_entity_t *entity;
+
+    entity = ipmi_ind_get_entity(ind);
+    if (!entity)
+	return;
+
+    if (!ipmi_entity_is_present(entity)) {
+	wmove(display_pad, value_pos.y, value_pos.x);
+	wprintw(display_pad, "not present");
+	return;
+    }
+
+    ind_type = ipmi_ind_get_type(ind);
+    switch (ind_type) {
+    case IPMI_IND_RELAY:
+    case IPMI_IND_ALARM:
+    case IPMI_IND_RESET:
+    case IPMI_IND_POWER:
+    case IPMI_IND_FAN_SPEED:
+	ipmi_ind_get_val(ind, normal_ind_val_read, NULL);
+	break;
+
+    case IPMI_IND_DISPLAY:
+	break;
+
+    case IPMI_IND_LIGHT:
+	break;
+    case IPMI_IND_IDENTIFIER:
+	break;
+    }
 }
 
 struct ind_info {
@@ -1771,6 +1783,35 @@ event_handler(ipmi_mc_t  *bmc,
 {
     /* FIXME - fill this out. */
     ui_log("Unknown event\n");
+}
+
+sel_timer_t *redisplay_timer;
+
+static void
+redisplay_timeout(selector_t  *sel,
+		  sel_timer_t *timer,
+		  void        *data)
+{
+    struct timeval now;
+    int            rv;
+
+    if (curr_display_type == DISPLAY_SENSOR) {
+	rv = ipmi_sensor_pointer_cb(curr_sensor_id, redisplay_sensor, NULL);
+	if (rv)
+	    ui_log("redisplay_timeout: Unable to get sensor pointer: 0x%x\n",
+		   rv);
+    } else if (curr_display_type == DISPLAY_IND) {
+	rv = ipmi_ind_pointer_cb(curr_ind_id, redisplay_ind, NULL);
+	if (rv)
+	    ui_log("redisplay_timeout: Unable to get sensor pointer: 0x%x\n",
+		   rv);
+    }
+
+    gettimeofday(&now, NULL);
+    now.tv_sec += 1;
+    rv = sel_start_timer(timer, &now);
+    if (rv)
+	ui_log("Unable to restart redisplay timer: 0x%x\n", rv);
 }
 
 void
