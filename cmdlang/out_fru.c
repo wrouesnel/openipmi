@@ -147,7 +147,7 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
     for (i=0; i<num_multi; i++) {
 	unsigned char type, ver;
 	unsigned int  len;
-	char          *data;
+	char          *data = NULL;
 
 	rv = ipmi_fru_get_multi_record_type(fru, i, &type);
 	if (!rv)
