@@ -1497,6 +1497,7 @@ detect_states_read(ipmi_sensor_t *sensor,
     if (info->sensor_try_count == 0) {
 	ipmi_unlock(info->lock);
 	ipmi_entity_pointer_cb(info->ent_id, sensor_read_handler, info);
+	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	_ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
     } else
@@ -1522,6 +1523,7 @@ detect_reading_read(ipmi_sensor_t             *sensor,
     if (info->sensor_try_count == 0) {
 	ipmi_unlock(info->lock);
 	ipmi_entity_pointer_cb(info->ent_id, sensor_read_handler, info);
+	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	_ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
     } else

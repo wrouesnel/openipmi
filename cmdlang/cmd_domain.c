@@ -755,7 +755,7 @@ domain_close(ipmi_domain_t *domain, void *cb_data)
     int             rv;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_close_connection(domain, final_close, cmd_info);
+    rv = ipmi_domain_close(domain, final_close, cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->err = rv;

@@ -3552,9 +3552,9 @@ real_close_connection(ipmi_domain_t *domain)
 }
 
 int
-ipmi_close_connection(ipmi_domain_t             *domain,
-		      ipmi_domain_close_done_cb close_done,
-		      void                      *cb_data)
+ipmi_domain_close(ipmi_domain_t             *domain,
+		  ipmi_domain_close_done_cb close_done,
+		  void                      *cb_data)
 {
     CHECK_DOMAIN_LOCK(domain);
 
@@ -5141,6 +5141,14 @@ ipmi_domain_set_entity_update_handler(ipmi_domain_t         *domain,
 						 cb_data);
     ipmi_unlock(domain->domain_lock);
     return rv;
+}
+
+int
+ipmi_close_connection(ipmi_domain_t             *domain,
+		      ipmi_domain_close_done_cb close_done,
+		      void                      *cb_data)
+{
+    return ipmi_domain_close(domain, close_done, cb_data);
 }
 
 static void

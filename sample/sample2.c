@@ -86,7 +86,7 @@ leave_done(void *cb_data)
 void
 leave2(ipmi_domain_t *domain, void *cb_data)
 {
-    ipmi_close_connection(domain, leave_done, NULL);
+    ipmi_domain_close(domain, leave_done, NULL);
 }
 
 void

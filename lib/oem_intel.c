@@ -389,7 +389,7 @@ tig_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
 	int                rv;
 
-	rv = ipmi_entity_find(ents, domain,
+	rv = ipmi_entity_find(ents, mc,
 			      IPMI_ENTITY_ID_FRONT_PANEL_BOARD, 1,
 			      &ent);
 	if (rv) {

@@ -314,36 +314,6 @@ out_int(ipmi_cmd_info_t *cmd_info, char *name,
 static lp_item_t lp_int = {set_int, out_int};
 
 static void
-set_bool(ipmi_cmd_info_t *cmd_info, char *val,
-	 ipmi_pef_config_t *lanc, void *func)
-{
-    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    int            (*f)(ipmi_pef_config_t *l, unsigned int v) = func;
-    int            v;
-
-    ipmi_cmdlang_get_bool(val, &v, cmd_info);
-    if (!cmdlang->err) {
-	cmdlang->err = f(lanc, v);
-	if (cmdlang->err) {
-	    cmdlang->errstr = "Error setting parameter";
-	}
-    }
-}
-static void
-out_bool(ipmi_cmd_info_t *cmd_info, char *name,
-	 ipmi_pef_config_t *lanc, void *func)
-{
-    unsigned int   v;
-    int            rv;
-    int            (*f)(ipmi_pef_config_t *l, unsigned int *v) = func;
-    
-    rv = f(lanc, &v);
-    if (!rv)
-	ipmi_cmdlang_out_bool(cmd_info, name, v);
-}
-static lp_item_t lp_bool = {set_bool, out_bool};
-
-static void
 set_guid(ipmi_cmd_info_t *cmd_info, char *val,
 	 ipmi_pef_config_t *lanc, void *func)
 {

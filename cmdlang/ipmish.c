@@ -605,7 +605,7 @@ shutdown_domain_handler(ipmi_domain_t *domain, void *cb_data)
     int *count = cb_data;
     int rv;
 
-    rv = ipmi_close_connection(domain, domain_down, cb_data);
+    rv = ipmi_domain_close(domain, domain_down, cb_data);
     if (!rv)
 	(*count)++;
 }

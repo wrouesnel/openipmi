@@ -1766,9 +1766,9 @@ int ipmi_open_domain(char               *name,
    with the connections, any outstanding responses will be lost, etc.
    All slave MC's will be closed when this is closed. */
 typedef void (*ipmi_domain_close_done_cb)(void *cb_data);
-int ipmi_close_connection(ipmi_domain_t             *domain,
-			  ipmi_domain_close_done_cb close_done,
-			  void                      *cb_data);
+int ipmi_domain_close(ipmi_domain_t             *domain,
+		      ipmi_domain_close_done_cb close_done,
+		      void                      *cb_data);
 
 
 /* Domain monitoring, catches add and deletes. */
@@ -2064,5 +2064,10 @@ typedef void (*ipmi_hysteresis_get_cb)(ipmi_sensor_t *sensor,
 				       unsigned int  negative_hysteresis,
 				       void          *cb_data)
      IPMI_TYPE_DEPRECATED;
+
+int ipmi_close_connection(ipmi_domain_t             *domain,
+			  ipmi_domain_close_done_cb close_done,
+			  void                      *cb_data)
+     IPMI_FUNC_DEPRECATED;
 
 #endif /* __IPMIIF_H */

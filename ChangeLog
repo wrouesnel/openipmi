@@ -52,6 +52,15 @@
 	* sample/sample2.c: ditto
 	* sample/sample3.c: ditto
 
+	* include/OpenIPMI/ipmiif.h.in, lib/domain.c: Deprecated
+	ipmi_close_connection() and added ipmi_domain_close() in its
+	place.
+
+	* ui/ui.c: Adjusted for the change to ipmi_close_connection().
+	* sample/sample.c: ditto
+	* sample/sample2.c: ditto
+	* sample/sample3.c: ditto
+
 2004-10-06 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added an anonymous

@@ -833,7 +833,7 @@ leave_cmder(ipmi_domain_t *domain, void *cb_data)
 {
     int rv;
 
-    rv = ipmi_close_connection(domain, final_leave, NULL);
+    rv = ipmi_domain_close(domain, final_leave, NULL);
     if (!rv)
 	leave_count++;
 }
@@ -6095,7 +6095,7 @@ close_domain_handler(ipmi_domain_t *domain, void *cb_data)
     ipmi_domain_get_name(domain, name, sizeof(name));
     if (strcmp(name, info->name) == 0) {
 	/* Found it. */
-	info->err = ipmi_close_connection(domain, final_close, NULL);
+	info->err = ipmi_domain_close(domain, final_close, NULL);
 	if (info->err)
 	    cmd_win_out("Could not close connection\n");
     }
