@@ -37,5 +37,7 @@ lanserv_emu_SOURCES = lanserv_emu.c emu.c emu_cmd.c
 lanserv_emu_LDADD = -lpopt libIPMIlanserv.la
 lanserv_emu_LDFLAGS = -rdynamic
 
+EXTRA_DIST = atca.emu README.emulator
+
 clean:
 	rm -f *.map
