@@ -235,17 +235,17 @@ if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
    fi
    if test "x$perlprog" != "x"; then
       # Find the place where perl lives.
-      if test "x$perldir" == "x"; then
+      if test "x$perldir" = "x"; then
 	 perldir=`$perlprog -e 'for $i (@INC) { if (-r "$i/CORE/perl.h") { print "$i"; last; } }'`
       fi
 
       # Now find a proper installation location.
-      if test "x$perlinstalldir" == "x"; then
+      if test "x$perlinstalldir" = "x"; then
 	 perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /site_perl\/.+\/.+/) { print "$i"; last; } }'`
-	 if test "x$perlinstalldir" == "x" -o ! -d "$perlinstalldir"; then
+	 if test "x$perlinstalldir" = "x" -o ! -d "$perlinstalldir"; then
 	    perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /vendor_perl\/.+\/.+/) { print "$i"; last; } }'`
 	 fi
-	 if test "x$perlinstalldir" == "x" -o ! -d "$perlinstalldir"; then
+	 if test "x$perlinstalldir" = "x" -o ! -d "$perlinstalldir"; then
 	    perlinstalldir=$perldir
 	 fi
       fi
@@ -260,7 +260,7 @@ if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
       else
 	  PERL_CFLAGS="$perlcflags"
       fi
-      if test "$tpprog" == "$perlinstalldir"; then
+      if test "$tpprog" = "$perlinstalldir"; then
 	 PERL_INSTALL_DIR="$perlinstalldir"
       else
 	 PERL_INSTALL_DIR="\${prefix}$tpprog"
@@ -313,18 +313,18 @@ if test "x$tryucdsnmp" != "xno"; then
    # Try net snmp first
    AC_CHECK_HEADER(net-snmp/net-snmp-config.h,
                    FOUND_SNMPINCL=yes; HAVE_NETSNMP=yes; )
-   if test "x$FOUND_SNMPINCL" == "xno"; then
+   if test "x$FOUND_SNMPINCL" = "xno"; then
       # Try old UCD snmp
       AC_CHECK_HEADER(snmp_api.h, FOUND_SNMPINCL=yes; )
-      if test "x$FOUND_SNMPINCL" == "xno"; then
+      if test "x$FOUND_SNMPINCL" = "xno"; then
           AC_CHECK_HEADER(ucd-snmp/snmp_api.h,
                    FOUND_SNMPINCL=yes;
 		   AC_DEFINE(HAVE_ALT_UCDSNMP_DIR))
       fi
    fi
 
-   if test "x$FOUND_SNMPINCL" == "xyes"; then
-      if test "x$HAVE_NETSNMP" == "xyes"; then
+   if test "x$FOUND_SNMPINCL" = "xyes"; then
+      if test "x$HAVE_NETSNMP" = "xyes"; then
          AC_CHECK_LIB(netsnmp, snmp_add, 
 		      SNMPLIBS="-lnetsnmp $SNMPLIBS"
 		      AC_DEFINE(HAVE_UCDSNMP)
@@ -333,7 +333,7 @@ if test "x$tryucdsnmp" != "xno"; then
 		      HAVE_NETSNMP=yes,
 		      ,
 		      $SNMPLIBS)
-         if test "x$HAVE_UCDSNMP" == "xno"; then
+         if test "x$HAVE_UCDSNMP" = "xno"; then
 	     # Try net snmp with crypto
 	     AC_CHECK_LIB(netsnmp, snmp_add_full, 
 	                  SNMPLIBS="-lnetsnmp -lcrypto $SNMPLIBS"
@@ -344,7 +344,7 @@ if test "x$tryucdsnmp" != "xno"; then
 			  ,
 			  -lcrypto $SNMPLIBS)
          fi
-         if test "x$HAVE_UCDSNMP" == "xno"; then
+         if test "x$HAVE_UCDSNMP" = "xno"; then
 	     AC_MSG_WARN([Found NET SNMP include files, but could not find libraries])
 	 fi
       else
@@ -354,7 +354,7 @@ if test "x$tryucdsnmp" != "xno"; then
 		      HAVE_UCDSNMP=yes,
 		      ,
 		      $SNMPLIBS)
-         if test "x$HAVE_UCDSNMP" == "xno"; then
+         if test "x$HAVE_UCDSNMP" = "xno"; then
             # Try with the crypto lib
             AC_CHECK_LIB(snmp, snmp_sess_perror, 
 		         SNMPLIBS="-lsnmp -lcrypto $SNMPLIBS"
@@ -363,7 +363,7 @@ if test "x$tryucdsnmp" != "xno"; then
 			 ,
 			 -lcrypto $SNMPLIBS)
          fi
-         if test "x$HAVE_UCDSNMP" == "xno"; then
+         if test "x$HAVE_UCDSNMP" = "xno"; then
 	     AC_MSG_WARN([Found UCD SNMP include files, but could not find libraries])
 	 fi
       fi
@@ -379,7 +379,7 @@ if test "x$tryopenssl" != "xno"; then
    # Try net snmp first
    AC_CHECK_HEADER(openssl/crypto.h, FOUND_OPENSSL=yes; )
 
-   if test "x$FOUND_OPENSSL" == "xyes"; then
+   if test "x$FOUND_OPENSSL" = "xyes"; then
       AC_CHECK_LIB(crypto, CRYPTO_malloc, 
 		   OPENSSLLIBS="-lcrypto $OPENSSLLIBS"
 		   AC_DEFINE(HAVE_OPENSSL)
