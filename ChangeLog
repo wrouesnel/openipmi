@@ -8,6 +8,11 @@
 	* lib/oem_motorola_mxp.c: Added zeroing all data structures after
 	they are allocated.
 
+	* lib/entity.c, include/OpenIPMI/ipmiif.h: Added a way to have
+	multiple callback handlers on control, sensor, and fru updates.
+
+	* ui/ui.c: Converted over to the multi-callback handlers.
+
 2004-02-24 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/control.c: Added an option for light controls to be able to

@@ -700,18 +700,28 @@ typedef void (*ipmi_entity_time_cb)(ipmi_entity_t  *ent,
 /* Register a handler that will be called fru information is added,
    deleted, or modified.  If you call this in the entity added
    callback for the domain, you are guaranteed to get this set before
-   any fru exist. */
+   any fru exist.  The "add/remove" function allow multiple handlers
+   to be added.  The "set" function is deprecated and should not be
+   used. */
 typedef void (*ipmi_entity_fru_cb)(enum ipmi_update_e op,
 				   ipmi_entity_t      *ent,
 				   void               *cb_data);
 int ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
 				       ipmi_entity_fru_cb handler,
 				       void              *cb_data);
+int ipmi_entity_add_fru_update_handler(ipmi_entity_t     *ent,
+				       ipmi_entity_fru_cb handler,
+				       void              *cb_data);
+int ipmi_entity_remove_fru_update_handler(ipmi_entity_t     *ent,
+					  ipmi_entity_fru_cb handler,
+					  void              *cb_data);
 
 /* Register a handler that will be called when a sensor that monitors
    this entity is added, deleted, or modified.  If you call this in
    the entity added callback for the domain, you are guaranteed to get
-   this set before any sensors exist. */
+   this set before any sensors exist.  The "add/remove" function allow
+   multiple handlers to be added.  The "set" function is deprecated
+   and should not be used. */
 typedef void (*ipmi_entity_sensor_cb)(enum ipmi_update_e op,
 				      ipmi_entity_t      *ent,
 				      ipmi_sensor_t      *sensor,
@@ -719,11 +729,19 @@ typedef void (*ipmi_entity_sensor_cb)(enum ipmi_update_e op,
 int ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
 					  ipmi_entity_sensor_cb handler,
 					  void                  *cb_data);
+int ipmi_entity_add_sensor_update_handler(ipmi_entity_t         *ent,
+					  ipmi_entity_sensor_cb handler,
+					  void                  *cb_data);
+int ipmi_entity_remove_sensor_update_handler(ipmi_entity_t         *ent,
+					     ipmi_entity_sensor_cb handler,
+					     void                  *cb_data);
 
-/* Register a handler that will be called when an control on
-   this entity is added, deleted, or modified.  If you call this in
-   the entity added callback for the domain, you are guaranteed to get
-   this set before any sensors exist. */
+/* Register a handler that will be called when an control on this
+   entity is added, deleted, or modified.  If you call this in the
+   entity added callback for the domain, you are guaranteed to get
+   this set before any sensors exist.  The "add/remove" function allow
+   multiple handlers to be added.  The "set" function is deprecated
+   and should not be used. */
 typedef void (*ipmi_entity_control_cb)(enum ipmi_update_e op,
 				       ipmi_entity_t      *ent,
 				       ipmi_control_t     *control,
@@ -731,6 +749,12 @@ typedef void (*ipmi_entity_control_cb)(enum ipmi_update_e op,
 int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 					   ipmi_entity_control_cb handler,
 					   void                   *cb_data);
+int ipmi_entity_add_control_update_handler(ipmi_entity_t          *ent,
+					   ipmi_entity_control_cb handler,
+					   void                   *cb_data);
+int ipmi_entity_remove_control_update_handler(ipmi_entity_t          *ent,
+					      ipmi_entity_control_cb handler,
+					      void                   *cb_data);
 
 /* Hot-swap is done on entities.  We have a hot-swap model defined
    here that controls basic hot-swap operation on an entity. */

@@ -104,7 +104,10 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 			   ipmi_mc_done_cb done,
 			   void            *done_data);
 
-/* Get and set the setting to enable events for the entire MC. */
+/* Get and set the setting to enable events for the entire MC.  The
+   value returned by the get function is a boolean telling whether
+   events are enabled.  The "val" passed in to the set function is a
+   boolean telling whether to turn events on (true) or off (false). */
 int ipmi_mc_get_events_enable(ipmi_mc_t *mc);
 int ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
 			      int             val,
