@@ -53,6 +53,25 @@ tsrlt2_handler(ipmi_mc_t     *mc,
     return 0;
 }
 
+static int
+se750Xwv2_handler(ipmi_mc_t     *mc,
+		  void          *cb_data)
+{
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+    unsigned int  channel = ipmi_mc_get_channel(mc);
+    unsigned int  addr    = ipmi_mc_get_address(mc);
+    
+    if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
+	/* It's the SI MC, which we detect at startup.  Set up the MCs
+	   for the domain to scan. */
+	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1f);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0x27);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xbf);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0xc1, 0xff);
+    }
+
+    return 0;
+}
 
 int
 ipmi_oem_intel_init(void)
@@ -62,6 +81,14 @@ ipmi_oem_intel_init(void)
     rv = ipmi_register_oem_handler(INTEL_MANUFACTURER_ID,
 				   0x000c,
 				   tsrlt2_handler,
+				   NULL,
+				   NULL);
+    if (rv)
+	return rv;
+
+    rv = ipmi_register_oem_handler(INTEL_MANUFACTURER_ID,
+				   0x0000, /* FIXME, find the number */
+				   se750Xwv2_handler,
 				   NULL,
 				   NULL);
     if (rv)
