@@ -105,7 +105,8 @@ os_handler_t *ipmi_posix_thread_setup_os_handler(int wake_sig);
 /* Clean up the threaded selector, including returning the signal to
    its original state. */
 void ipmi_posix_thread_cleanup_os_handler(os_handler_t *os_hnd);
-/* Calls sel_select() with the proper data. */
+/* Calls sel_select() with the proper data.  Note that if you send
+   "wake_sig" to the calling thread, this will return. */
 int ipmi_posix_thread_sel_select(os_handler_t   *os_hnd,
 				 struct timeval *timeout);
 /* Calls sel_select_loop() with the proper data. */

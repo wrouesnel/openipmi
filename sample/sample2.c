@@ -263,6 +263,16 @@ setup_done(ipmi_domain_t *domain,
     }
 }
 
+static void
+thread(void *data)
+{
+    os_handler_t *os_hnd = data;
+
+    /* This is the main loop of the event-driven program. 
+       Try <CTRL-C> to exit the program */ 
+    ipmi_posix_thread_sel_select_loop(os_hnd);
+}
+
 int
 main(int argc, const char *argv[])
 {
@@ -324,12 +334,24 @@ main(int argc, const char *argv[])
 			check_timer, &check_timeout,
 			control_check_timeout, NULL);
 
-    /* This is the main loop of the event-driven program. 
-       Try <CTRL-C> to exit the program */ 
-    ipmi_posix_thread_sel_select_loop(os_hnd);
+    rv = os_hnd->create_thread(os_hnd, 0, thread, os_hnd);
+    if (rv) {
+	fprintf(stderr, "create_thread: %x\n", rv);
+	exit(1);
+    }
+	
+    rv = os_hnd->create_thread(os_hnd, 0, thread, os_hnd);
+    if (rv) {
+	fprintf(stderr, "create_thread 2: %x\n", rv);
+	exit(1);
+    }
 
-    /* Technically, we can't get here, but this is an example. */
-    ipmi_posix_thread_cleanup_os_handler(os_hnd);
+    /* Let the other threads take over. */
+
+    /* Note that at cleanup time, you should call
+         ipmi_posix_thread_cleanup_os_handler(os_hnd);
+       but this doesn't have any cleanup.
+    */
     return 0;
 }
 
