@@ -299,11 +299,25 @@ gives you a natural way to hold your data, know when to transfer it over
 to the mate system, and continue an operation on the mate system.
 @item If you track the data, it's easy to monitor every operation
 occuring in the system, stop an operations, or whatever.
+@item It's much easuer to detect and manage overload situations in an
+event driven system.  Event-driven systems have event queues of things
+waiting to be processed.  You can put things in the queue and watch the
+queue length.  If the queue length gets too big, you are in overload,
+and can intelligently decide which events you want to throw away, based
+on priority, time to live, or some other criteria.
 @end enumerate
 
 In general, a threaded system is easier to conceptually understand until
 you understand event-driven methods.  An event-driven system is almost
 always easier to correctly implement.
+
+Note that event-driven systems don't preclude the use of threads.
+Threads may be vastly overused, but they are important.  You could, for
+example, allocate one event loop thead per CPU to help scale your
+system.  You need to use threads to manage priorities.  Some inputs may
+be more important than others, so you may have an event loop for each
+priority and feed them that way.  You have a thread per CPU, and/or a
+thread per priority, but you don't need a thread per operation.
 
 This is often called ``state-machine programming'' since most control
 systems are state-machine based, and this is a natural way to implement

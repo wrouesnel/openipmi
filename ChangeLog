@@ -1,6 +1,10 @@
 
 2003-01-13 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move version to 0.1.0.
+
+	* OpenIPMI.texi: More work on docs.
+	
 	* sel.c, mc.c: Minor cleanups.
 
 	* ipmi_smi.c: Modified the timeout to be a much larger value.
