@@ -1096,10 +1096,6 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 	return;
     }
 
-    /* After the first SEL fetch, disable looking at the timestamp, in
-       case someone messes with the SEL time. */
-    bmc->bmc->startup_SEL_time = 0;
-
     ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
 
     timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
@@ -1132,6 +1128,27 @@ start_SEL_timer(ipmi_mc_t *mc)
 }
 
 static void
+sels_fetched(ipmi_sel_info_t *sel,
+	     int             err,
+	     int             changed,
+	     unsigned int    count,
+	     void            *cb_data)
+{
+    ipmi_mc_t *mc = cb_data;
+
+    if (!sel)
+	return;
+
+    /* We can assume the MC is locked because we got the SEL. */
+
+    /* After the first SEL fetch, disable looking at the timestamp, in
+       case someone messes with the SEL time. */
+    bmc->bmc->startup_SEL_time = 0;
+
+    start_SEL_timer(mc);
+}
+
+static void
 got_sel_time(ipmi_mc_t  *mc,
 	     ipmi_msg_t *rsp,
 	     void       *rsp_data)
@@ -1154,9 +1171,7 @@ got_sel_time(ipmi_mc_t  *mc,
 	mc->bmc->startup_SEL_time = ipmi_get_uint32(&(rsp->data[1]));
     }
 
-    ipmi_sel_get(mc->bmc->sel, NULL, NULL);
-
-    start_SEL_timer(mc);
+    ipmi_sel_get(mc->bmc->sel, sels_fetched, mc);
 }
 
 /* This is called after the first sensor scan for the MC, we start up
