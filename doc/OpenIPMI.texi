@@ -550,7 +550,7 @@ These types of entities are generally device-relative and have an
 entity instance of 60h or larger.  For these types of entities, the
 management controller on which they reside becomes part of the entity.
 In OpenIPMI, the IPMB channel number of IPMB address are part of the
-entity.  In @command{ipmi_ui}, these are printed an entered as
+entity.  In @command{ipmi_ui}, these are printed and entered as
 ``r<channel>.<ipmb>.<entity id>.<entity instance>''.
 
 @subsection Sensors
