@@ -1,3 +1,10 @@
+2005-01-17 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_mc.h:
+	Moved ipmi_mc_get_address, ipmi_mc_get_channel, and
+	ipmi_mc_get_ipmi_address from the private to the public
+	interfaces.
+
 2005-01-14 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_lan.c: Fixed some race conditions between reuse of LAN
