@@ -4,6 +4,11 @@
 	default threshold handling, I misread the spec on this.  These are
 	only valid for setting the threshold at init time.
 
+	* lib/oem_motorola_mxp.c: Removed all the SDR hacks, since it is
+	now all correct in the SDRs.
+
+	* configure.in: Move to version 1.2.3.
+
 2004-01-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ilist.c, include/OpenIPMI/ilist.h: Added a
