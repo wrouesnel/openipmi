@@ -131,6 +131,49 @@ int ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
    of this must match the length of the number of addresses. */
 #define IPMI_LANP_PARMID_PORTS		6
 
+/* Set the specific cypher suite the user wants to use.  If none is
+   specified, this will default to RAKP-HMAC-SHA1, HMAC-SHA1-96,
+   AES-CBC-128.  Note that this just sets the algorithm, integrity,
+   and confidentiality settings (below this). */
+#define IPMI_LANP_CIPHER_SUITE		7
+#define IPMI_LANP_CIPHER_SUITE_DEFAULT	(~0)
+#define IPMI_LANP_CIPHER_SUITE_RAKP__NONE__NONE				0
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__NONE__NONE		1
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__HMAC_SHA1_96__NONE	2
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__HMAC_SHA1_96__AES_CBC_128 3
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__HMAC_SHA1_96__xRC4_128	4
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__HMAC_SHA1_96__xRC4_40	5
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__NONE__NONE		6
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__HMAC_MD5_128__NONE	7
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__HMAC_MD5_128__AES_CBC_128	8
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__HMAC_MD5_128__xRC4_128	9
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__HMAC_MD5_128__xRC4_40	10
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__MD5_128__NONE		11
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__MD5_128__AES_CBC_128	12
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__MD5_128__xRC4_128		13
+#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__MD5_128__xRC4_40		14
+
+/* Allow the specific authentication, integrity, and confidentiality
+   algorithms to be specified by the user.  Note that you can specify
+   OEM values here.  If you pick the default values, that will let the
+   BMC pick the authentication algorithms. */
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM	8
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM_DEFAULT		(~0)
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_NONE		0
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_SHA1	1
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_MD5	2
+#define IPMI_LANP_INTEGRITY_ALGORITHM		9
+#define IPMI_LANP_INTEGRITY_ALGORITHM_DEFAULT			(~0)
+#define IPMI_LANP_INTEGRITY_ALGORITHM_NONE			0
+#define IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96		1
+#define IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128		2
+#define IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128			3
+#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM	10
+#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_DEFAULT		(~0)
+#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE		0
+#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128		1
+#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_128		2
+#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_40		3
 
 /*
  * Set up an IPMI LAN connection.  The boatload of parameters are:
@@ -192,6 +235,58 @@ int ipmi_lan_setup_con(struct in_addr *ip_addrs,
 int ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 				   ipmi_msg_t      *msg,
 				   unsigned char   *pet_ack);
+
+#define IPMI_RMCPP_PAYLOAD_TYPE_IPMI		0
+#define IPMI_RMCPP_PAYLOAD_TYPE_SOL		1
+#define IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT	2
+
+#define IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST	0x10
+#define IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE	0x11
+#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_1			0x11
+#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_2			0x12
+#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3			0x13
+#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_4			0x14
+
+typedef struct ipmi_rmcp_confidentiality_s
+{
+    int (*conf_init)(void **conf_data);
+    void (*conf_free)(void *conf_data);
+
+    /* This adds the confidentiality header and trailer.  The payload
+       points to a pointer to the payload data itself.  The header
+       length points to the number of bytes available before the
+       payload.  The payload length points to the length of the
+       payload.  The function should add the header and trailer to the
+       payload, update the payload to point to the start of the
+       header, update the header length to remove the data it used for
+       its header, and update the payload length for any trailer used.
+       It should not exceed the max_payload_len for the trailer nor
+       should header_len go negative. */
+    int (*conf_add)(void          *conf_data,
+		    unsigned char **payload,
+		    unsigned int  *header_len,
+		    unsigned int  *payload_len,
+		    unsigned int  max_payload_len);
+
+} ipmi_rmcp_confidentiality_t;
+
+typedef struct ipmi_rmcp_integrity_s
+{
+    int (*integ_init)(void **integ_data);
+    void (*integ_free)(void *integ_data);
+
+    /* This adds the integrity trailer after the payload data.  It
+       should add any padding after the payload and update the payload
+       length.  It should set the trailer length to the amount of data
+       it used (after the payload and padding).  The payload_len plus
+       the trailer_len should not exceed max_payload_len.  The payload
+       starts at beginning of the user message (the RMCP version). */
+    int (*integ_add)(void          *integ_data,
+		     unsigned char *payload,
+		     unsigned int  *payload_len,
+		     unsigned int  *trailer_len,
+		     unsigned int  max_payload_len);
+} ipmi_rmcp_integrity_t;
 
 #ifdef __cplusplus
 }

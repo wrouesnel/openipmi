@@ -52,6 +52,21 @@
 #define IPMI_GET_IPMI_ERR(E)	((E) & 0xff)
 #define IPMI_IPMI_ERR_VAL(v)	((v) | IPMI_IPMI_ERR_TOP)
 
+/* The following local system completion codes are defined to be
+ * returned by OpenIPMI:
+ *
+ * EBADF
+ * EINVAL
+ * E2BIG
+ * ENOMEM
+ * ENOENT
+ * ECANCELED
+ * ENOSYS
+ * EEXIST
+ * EAGAIN
+ * EPERM
+ */
+
 /*
  * Completion codes for IPMI.
  */

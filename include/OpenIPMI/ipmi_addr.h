@@ -123,6 +123,13 @@ struct ipmi_lan_addr
 
 #endif /* _LINUX_IPMI_H */
 
+/* Used for sending messages that are raw RMCP+ */
+#define IPMI_RMCPP_NOSESSION_ADDR_TYPE   0x100
+typedef struct ipmi_rmcp_nosession_addr
+{
+	int           addr_type;
+} ipmi_rmcp_nosession_addr_t;
+
 /* Generate types for the kernel versions of these. */
 typedef struct ipmi_addr ipmi_addr_t;
 typedef struct ipmi_system_interface_addr ipmi_system_interface_addr_t;

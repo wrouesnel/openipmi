@@ -88,6 +88,8 @@ typedef struct ipmi_auth_s
 #define IPMI_AUTHTYPE_MD2	1
 #define IPMI_AUTHTYPE_MD5	2
 #define IPMI_AUTHTYPE_STRAIGHT	4
+#define IPMI_AUTHTYPE_OEM	5
+#define IPMI_AUTHTYPE_RMCP_PLUS	6
 const char *ipmi_authtype_string(int authtype);
 
 /* This is a table of authentication algorithms. */

@@ -1219,6 +1219,10 @@ ipmi_authtype_string(int authtype)
 	return "md5";
     case IPMI_AUTHTYPE_STRAIGHT:
 	return "straight";
+    case IPMI_AUTHTYPE_OEM:
+	return "oem";
+    case IPMI_AUTHTYPE_RMCP_PLUS:
+	return "rmcp+";
     default:
 	return "invalid";
     }
