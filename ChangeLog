@@ -1,5 +1,12 @@
 2004-02-10 Corey Minyard <cminyard@mvista.com> 
 
+	* lib/sensor.c: Reworked sensor naming to include the entity
+	id and instance.
+
+	* lib/oem_atca_conn.c: Made ATCA connections always active.
+
+2004-02-10 Corey Minyard <cminyard@mvista.com> 
+
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a way to send events
 	to the SEL of an MC.
 	* include/OpenIPMI/ipmi_sel.h, lib/sel.c: ditto

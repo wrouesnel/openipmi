@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 #include <math.h>
 
 #include <OpenIPMI/ipmiif.h>
@@ -726,7 +727,6 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     }
 
     sensor->mc = mc;
-    sensor_set_name(sensor);
     sensor->source_mc = source_mc;
     sensor->lun = 4;
     sensor->send_lun = send_lun;
@@ -740,6 +740,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     sensor->entity_instance = ipmi_entity_get_entity_instance(ent);
     sensor->destroy_handler = destroy_handler;
     sensor->destroy_handler_cb_data = destroy_handler_cb_data;
+    sensor_set_name(sensor);
 
     ipmi_entity_add_sensor(ent, sensor, link);
 
@@ -799,18 +800,32 @@ sensor_set_name(ipmi_sensor_t *sensor)
 {
     char *mc_name = MC_NAME(sensor->mc);
     int  length;
+    int  left;
 
     sensor->name[0] = '(';
     if (*mc_name != '\0') {
 	length = strlen(mc_name) - 3; /* Remove the "() " */
+	if (length > (sizeof(sensor->name) - 2))
+	    length = sizeof(sensor->name) - 2;
 	memcpy(sensor->name+1, mc_name+1, length);
 	length++;
 	sensor->name[length] = '.';
 	length++;
     } else
 	length = 1;
-    memcpy(sensor->name+length, sensor->id, sensor->id_len);
-    length += sensor->id_len;
+
+    left = SENSOR_NAME_LEN - length;
+    length += snprintf(sensor->name+length, left, "%d.%d",
+		       sensor->entity_id, sensor->entity_instance);
+    left = SENSOR_NAME_LEN - length;
+
+    if (sensor->id_len > (left - 3)) {
+	memcpy(sensor->name+length, sensor->id, left-3);
+	length += left - 3;
+    } else {
+	memcpy(sensor->name+length, sensor->id, sensor->id_len);
+	length += sensor->id_len;
+    }
     sensor->name[length] = ')';
     length++;
     sensor->name[length] = ' ';

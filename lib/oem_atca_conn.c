@@ -65,12 +65,13 @@ atca_ipmb_handler(ipmi_con_t   *ipmi,
     else
 	ipmb = msg->data[3];
 
+    /* Note that there is no "inactive" connection with ATCA. */
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, ipmb, ipmb == 0x20);
+	ipmi->set_ipmb_addr(ipmi, ipmb, 1);
 
  out_handler:
     if (handler)
-	handler(ipmi, err, ipmb, ipmb == 0x20, cb_data);
+	handler(ipmi, err, ipmb, 1, cb_data);
 }
 
 static int
