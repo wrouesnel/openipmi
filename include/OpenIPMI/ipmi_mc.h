@@ -220,6 +220,23 @@ int ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
 
 typedef void (*ipmi_mc_cb)(ipmi_mc_t *mc, int err, void *cb_data);
 
+typedef void (ipmi_mc_del_event_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
+int ipmi_mc_del_event(ipmi_mc_t                 *mc,
+		      ipmi_event_t              *event, 
+		      ipmi_mc_del_event_done_cb handler,
+		      void                      *cb_data);
+
+/* Add an event to the real SEL.  This does not directly put it into
+   the internal copy of the SEL. */
+typedef void (*ipmi_mc_add_event_done_cb)(ipmi_mc_t    *mc,
+					  unsigned int record_id,
+					  int          err,
+					  void         *cb_data);
+int ipmi_mc_add_event_to_sel(ipmi_mc_t                 *mc,
+			     ipmi_event_t              *event,
+			     ipmi_mc_add_event_done_cb handler,
+			     void                      *cb_data);
+
 /* Some OEM boxes may have special SEL delete requirements, so we have
    a special hook to let the OEM code delete events on an MC with SEL
    support. */
@@ -229,12 +246,12 @@ typedef int (*ipmi_mc_del_event_cb)(ipmi_mc_t    *mc,
 				    void         *cb_data);
 void ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
 				   ipmi_mc_del_event_cb handler);
-
-typedef void (ipmi_mc_del_event_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
-int ipmi_mc_del_event(ipmi_mc_t                 *mc,
-		      ipmi_event_t              *event, 
-		      ipmi_mc_del_event_done_cb handler,
-		      void                      *cb_data);
+typedef int (*ipmi_mc_add_event_cb)(ipmi_mc_t                 *mc,
+				    ipmi_event_t              *event,
+				    ipmi_mc_add_event_done_cb done_handler,
+				    void                      *cb_data);
+void ipmi_mc_set_add_event_handler(ipmi_mc_t            *mc,
+				   ipmi_mc_add_event_cb handler);
 
 /* Check the event receiver for the MC. */
 void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);

@@ -111,10 +111,11 @@ struct ipmi_mc_s
     /* The system event log, for querying and storing events. */
     ipmi_sel_info_t *sel;
 
-    /* The handler to call for delete event operations.  This is NULL
+    /* The handler to call for add/delete event operations.  This is NULL
        normally and is only used if the MC has a special delete event
        handler. */
     ipmi_mc_del_event_cb sel_del_event_handler;
+    ipmi_mc_add_event_cb sel_add_event_handler;
 
     /* Timer for rescanning the sel periodically. */
     os_hnd_timer_id_t *sel_timer;
@@ -571,6 +572,13 @@ ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
 }
 
 void
+ipmi_mc_set_add_event_handler(ipmi_mc_t            *mc,
+			      ipmi_mc_add_event_cb handler)
+{
+    mc->sel_add_event_handler = handler;
+}
+
+void
 ipmi_mc_set_sel_rescan_time(ipmi_mc_t *mc, unsigned int seconds)
 {
     unsigned int old_time;
@@ -643,6 +651,59 @@ ipmi_mc_del_event(ipmi_mc_t                 *mc,
     sel_info->cb_data = cb_data;
 
     rv = ipmi_sel_del_event(mc->sel, event, sel_op_done, sel_info);
+    if (rv)
+	ipmi_mem_free(sel_info);
+
+    return rv;
+}
+
+typedef struct sel_add_op_done_info_s
+{
+    ipmi_mc_t                 *mc;
+    ipmi_mc_add_event_done_cb done;
+    void                      *cb_data;
+} sel_add_op_done_info_t;
+
+static void sel_add_op_done(ipmi_sel_info_t *sel,
+			    void            *cb_data,
+			    int             err,
+			    unsigned int    record_id)
+{
+    sel_add_op_done_info_t *info = cb_data;
+
+    /* No need to lock, the domain/mc should already be locked. */
+    if (info->done)
+        info->done(info->mc, record_id, err, info->cb_data);
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_add_event_to_sel(ipmi_mc_t                 *mc,
+			 ipmi_event_t              *event,
+			 ipmi_mc_add_event_done_cb handler,
+			 void                      *cb_data)
+{
+    sel_add_op_done_info_t *sel_info;
+    int                    rv;
+
+    if (!mc->SEL_device_support)
+	return EINVAL;
+
+    /* If we have an OEM handler, call it instead. */
+    if (mc->sel_add_event_handler) {
+	rv = mc->sel_add_event_handler(mc, event, handler, cb_data);
+	return rv;
+    }
+
+    sel_info = ipmi_mem_alloc(sizeof(*sel_info));
+    if (!sel_info)
+	return ENOMEM;
+
+    sel_info->mc = mc;
+    sel_info->done = handler;
+    sel_info->cb_data = cb_data;
+
+    rv = ipmi_sel_add_event_to_sel(mc->sel, event, sel_add_op_done, sel_info);
     if (rv)
 	ipmi_mem_free(sel_info);
 

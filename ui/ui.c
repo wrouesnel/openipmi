@@ -4727,6 +4727,61 @@ delevent_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static void
+addevent_cb(ipmi_mc_t *mc, unsigned int record_id, int err, void *cb_data)
+{
+    if (err)
+	ui_log("Error adding event: %x\n", err);
+    else
+	ui_log("event 0x%4.4x added\n", record_id);
+}
+
+typedef struct addevent_info_s
+{
+    ipmi_mcid_t   mc_id;
+    ipmi_event_t  event;
+} addevent_info_t;
+
+static void
+addevent_cmder(ipmi_mc_t *mc, void *cb_data)
+{
+    int             rv;
+    addevent_info_t *info = cb_data;
+
+    rv = ipmi_mc_add_event_to_sel(mc, &info->event, addevent_cb, NULL);
+    if (rv)
+	cmd_win_out("Unable to send add event: %x\n", rv);
+}
+
+static int
+addevent_cmd(char *cmd, char **toks, void *cb_data)
+{
+    addevent_info_t info;
+    int             rv;
+    int             i;
+
+    if (get_mc_id(toks, &info.mc_id))
+	return 0;
+
+    if (get_uint(toks, &info.event.record_id, "record id"))
+	return 0;
+
+    if (get_uint(toks, &info.event.type, "record type"))
+	return 0;
+
+    for (i=0; i<13; i++) {
+	if (get_uchar(toks, &info.event.data[i], "data"))
+	    return 0;
+    }
+
+    rv = ipmi_mc_pointer_cb(info.mc_id, addevent_cmder, &info);
+    if (rv) {
+	cmd_win_out("Unable to convert domain id to a pointer\n");
+	return 0;
+    }
+    return 0;
+}
+
 static int
 debug_cmd(char *cmd, char **toks, void *cb_data)
 {
@@ -5389,6 +5444,9 @@ static struct {
     { "delevent",	delevent_cmd,
       " <channel> <mc num> <log number> - "
       "Delete the given event number from the SEL" },
+    { "addevent",	addevent_cmd,
+      " <channel> <mc num> <record id> <type> <13 bytes of data> - "
+      "Add the event data to the SEL" },
     { "debug",		debug_cmd,
       " <type> on|off - Turn the given debugging type on or off." },
     { "clear_sel",	clear_sel_cmd,

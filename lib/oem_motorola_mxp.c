@@ -448,13 +448,18 @@ add_mxp_mfg_id(unsigned char *data)
     data[2] = (MXP_MANUFACTURER_ID >> 16) & 0xff;
 }
 
-/* We convert addresses to instances by taking the actual I2C address
-   (the upper 7 bits of the IPMB address) and subtracting 57 from it.
-   Boards start at 0x58, so this makes the instance numbers for boards
-   start at one. */
+/* For older MXPs, we convert addresses to instances by taking the
+   actual I2C address (the upper 7 bits of the IPMB address) and
+   subtracting 57 from it.  Boards start at 0x58, so this makes the
+   instance numbers for boards start at one. */
 static unsigned int
-mxp_addr_to_instance(unsigned int slave_addr)
+mxp_addr_to_instance(mxp_info_t *info, unsigned int slave_addr)
 {
+    /* In newer MXPs (and non-MXP chassis), everything is
+       device-relative. */
+    if ((info == NULL) || (info->mxp_version >= MXP_V2))
+	return 0x60;
+
     switch (slave_addr) {
     case 0xe4:
 	return 1; /* IP switch 1 */
@@ -5229,7 +5234,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	name = board_entity_str[idx];
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_PROCESSING_BLADE,
-			     mxp_addr_to_instance(ipmb_addr),
+			     mxp_addr_to_instance(info, ipmb_addr),
 			     name, IPMI_ASCII_STR, strlen(name),
 			     mxp_entity_sdr_add,
 			     NULL, &(info->board[idx].ent));
@@ -7698,7 +7703,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
     ents = ipmi_domain_get_entities(domain);
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_CONNECTIVITY_SWITCH,
-			 mxp_addr_to_instance(slave_addr),
+			 mxp_addr_to_instance(info, slave_addr),
 			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
 			 NULL, &ent);
@@ -8244,7 +8249,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
     ents = ipmi_domain_get_entities(domain);
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_PROCESSING_BLADE,
-			 mxp_addr_to_instance(slave_addr),
+			 mxp_addr_to_instance(info, slave_addr),
 			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
 			 NULL, &ent);

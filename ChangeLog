@@ -1,3 +1,14 @@
+2004-02-10 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a way to send events
+	to the SEL of an MC.
+	* include/OpenIPMI/ipmi_sel.h, lib/sel.c: ditto
+
+	* ui/ui.c: Added a way to add events using the above calls.
+
+	* lib/oem_motorola_mxp.c: Make the entities for boards on the MXP
+	V2 chassis device-relative.
+
 2004-02-09 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.2.7.

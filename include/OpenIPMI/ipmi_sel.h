@@ -140,4 +140,17 @@ int ipmi_sel_get_last_addition_timestamp(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_event_add(ipmi_sel_info_t *sel,
 		       ipmi_event_t    *new_event);
 
+/* Add an event to the remote SEL.  This will not immediately add it
+   to the internal SEL.  The record id of the added record is returned
+   in the callback (if there is no error). */
+typedef void (*ipmi_sel_add_op_done_cb_t)(ipmi_sel_info_t *sel,
+					  void            *cb_data,
+					  int             err,
+					  unsigned int    record_id);
+int ipmi_sel_add_event_to_sel(ipmi_sel_info_t          *sel,
+			      ipmi_event_t             *event_to_add,
+			      ipmi_sel_add_op_done_cb_t done,
+			      void                     *cb_data);
+
 #endif /* _IPMI_SEL_H */
+

@@ -1796,3 +1796,182 @@ ipmi_sel_event_add(ipmi_sel_info_t *sel,
     sel_unlock(sel);
     return rv;
 }
+
+typedef struct sel_add_cb_handler_data_s
+{
+    ipmi_sel_info_t           *sel;
+    ipmi_sel_add_op_done_cb_t handler;
+    void                      *cb_data;
+    unsigned int              record_id;
+    ipmi_event_t              event;
+} sel_add_cb_handler_data_t;
+
+static void
+sel_add_op_done(sel_add_cb_handler_data_t *data,
+		int                       rv)
+{
+    ipmi_sel_info_t *sel = data->sel;
+
+    if (data->handler)
+	data->handler(sel, data->cb_data, rv, data->record_id);
+
+    if (sel->in_destroy) {
+	/* Nothing to do */
+	sel_unlock(sel);
+    } else if (sel->destroyed) {
+	/* This will unlock the lock. */
+	internal_destroy_sel(sel);
+    } else {
+	opq_op_done(sel->opq);
+	sel_unlock(sel);
+    }
+    ipmi_mem_free(data);
+}
+
+static void
+sel_add_event_done(ipmi_mc_t  *mc,
+		   ipmi_msg_t *rsp,
+		   void       *rsp_data)
+{
+    sel_add_cb_handler_data_t *info = rsp_data;
+    ipmi_sel_info_t           *sel = info->sel;
+
+    sel_lock(sel);
+    if (sel->destroyed) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel.c(sel_add_event_done): "
+		 "SEL info was destroyed while an operation was in progress");
+	sel_add_op_done(info, ECANCELED);
+	goto out;
+    }
+
+    if (!mc) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel.c(sel_add_event_done): "
+		 "MC went away while SEL op was in progress");
+        sel_add_op_done(info, ENXIO);
+	goto out;
+    }
+	
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel.c(sel_add_event_done): "
+		 "IPMI error from SEL info fetch: %x",
+		 rsp->data[0]);
+	sel_add_op_done(info, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	goto out;
+    }
+
+    if (rsp->data_len < 3) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel.c(sel_add_event_done): "
+		 "SEL add response too short");
+	sel_add_op_done(info, EINVAL);
+	goto out;
+    }
+
+    info->record_id = ipmi_get_uint16(rsp->data+1);
+    sel_add_op_done(info, 0);
+ out:
+    return;
+}
+
+static void
+sel_add_event_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    sel_add_cb_handler_data_t *info = cb_data;
+    ipmi_sel_info_t           *sel = info->sel;
+    ipmi_event_t              *event = &info->event;
+    unsigned char             data[16];
+    ipmi_msg_t                msg;
+    int                       rv;
+
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_ADD_SEL_ENTRY_CMD;
+    msg.data = data;
+    msg.data_len = 16;
+
+    ipmi_set_uint16(data, event->record_id);
+    data[2] = event->type;
+    memcpy(data+3, event->data, IPMI_MAX_SEL_DATA);
+
+    rv = ipmi_mc_send_command(mc, sel->lun, &msg, sel_add_event_done, info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel.c(sel_add_event_cb): could not send cmd: %x",
+		 rv);
+	sel_add_op_done(info, rv);
+	goto out;
+    }
+
+    sel_unlock(sel);
+ out:
+    return;
+}
+
+static void
+sel_add_event_op(void *cb_data, int shutdown)
+{
+    sel_add_cb_handler_data_t *info = cb_data;
+    ipmi_sel_info_t           *sel = info->sel;
+    int                       rv;
+
+    sel_lock(sel);
+    if (shutdown) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel.c(sel_add_event_op): "
+		 "SEL info was destroyed while an operation was in progress");
+	sel_add_op_done(info, ECANCELED);
+	goto out;
+    }
+
+    rv = ipmi_mc_pointer_cb(sel->mc, sel_add_event_cb, info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel.c(sel_add_event_op): "
+		 "MC went away during delete");
+	sel_add_op_done(info, ECANCELED);
+	goto out;
+    }
+    sel_unlock(sel);
+ out:
+    return;
+}
+
+int
+ipmi_sel_add_event_to_sel(ipmi_sel_info_t           *sel,
+			  ipmi_event_t              *event_to_add,
+			  ipmi_sel_add_op_done_cb_t done,
+			  void                      *cb_data)
+{
+    sel_add_cb_handler_data_t *info = cb_data;
+    int                       rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->sel = sel;
+    info->event = *event_to_add;
+    info->handler = done;
+    info->cb_data = cb_data;
+    info->record_id = 0;
+
+    sel_lock(sel);
+    if (sel->destroyed) {
+	rv = EINVAL;
+	goto out_unlock;
+    }
+
+    /* Schedule this to run at the end of the queue. */
+    if (!opq_new_op(sel->opq, sel_add_event_op, info, 0)) {
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+ out_unlock:
+    sel_unlock(sel);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
