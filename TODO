@@ -44,11 +44,9 @@
 
 5: Add control for heartbeat action
 
-!1: Add control for AMC cooling LED
-    - command 0x36 doesn't seem to work
+*1: Add control for AMC cooling LED
 
-!1: Add control for AMC temp LED
-    - command 0x36 doesn't seem to work
+*1: Add control for AMC temp LED
 
 5: Add sensor for digital input value
 
@@ -68,18 +66,23 @@
 *1: Add an identifier control for power supply type
 
 *?: Add an identifier control for power supply revision
-   major is byte 1, minor is byte 1
+   major is byte 1, minor is byte 2
 
 *1: Add sensor for fan I2C enabled state
 
 *1: Add control for fan identity
 
 *1: Add control for fan revision
-   major is byte 1, minor is byte 1
+   major is byte 1, minor is byte 2
 
 1: Add getting the actual fan speed
 
 *1: Add sensor for current AMC active/standby state
+
+2: Auto-switch to old MXP LAN protocol based on version
+
+1: In the PET code, Handle the fact that the different IP addresses on
+   the AMC have different channels.
 
 
 

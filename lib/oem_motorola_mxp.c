@@ -8953,12 +8953,29 @@ mxp_bmc_handler(ipmi_mc_t *mc)
     return rv;
 }
 
+static void
+amc_sensor_fixup(ipmi_mc_t *mc, ipmi_sensor_t *s, void *cb_data)
+{
+    /* Set the entity instance properly based upon the AMC's position */
+    if (ipmi_sensor_get_entity_instance(s) == 0) {
+	int pos = ipmi_mc_get_address(mc);
+
+	if (pos == 0)
+	    ipmi_sensor_set_entity_instance(s, 1);
+	else
+	    ipmi_sensor_set_entity_instance(s, 2);
+    }
+}
+
 static int
 mxp_handler(ipmi_mc_t *mc,
 	    void      *cb_data)
 {
     int           rv;
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+
+    /* Fixup the SDRs that come in. */
+    ipmi_mc_set_sensor_fixup_handler(mc, amc_sensor_fixup, NULL);
 
     /* The MXP AMC does not support generating events on the IPMB. */
     ipmi_mc_set_ipmb_event_generator_support(mc, 0);

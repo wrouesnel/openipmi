@@ -1,5 +1,13 @@
 2004-01-09 Corey Minyard <cminyard@mvista.com> 
 
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/ipm_oem.h:
+	Added a mechanisms to fixup a sensor before anything is done with
+	it (to fix broken values).
+
+	* lib/oem_motorola_mxp.c: Added a fixup handler for AMC sensors to
+	set the entity instance properly.
+
+2004-01-09 Corey Minyard <cminyard@mvista.com> 
 	* include/OpenIPMI/ipmi_bits.h, ui/ui.c, lib/strings.c: Added
 	one-shot reset, general output, and one-shot ouput controls.
 

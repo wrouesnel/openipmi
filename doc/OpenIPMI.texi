@@ -1807,11 +1807,18 @@ active AMC, the chassis controls are attached to that controller.
 
 @subsection MXP LAN Protocol
 
-The MXP does not exactly follow the IPMI LAN protocol, so a special IPMI
-LAN interface is required for it.  See the @file{OpenIPMI/mxp.h} include
-file for a description of that interface.  In particular, the software
-ID settings must be correct.  Each user of the MXP @emph{must} have a
-unique software ID, or chaos will result.
+The current versions of the MXP correctly follows one of the many
+possible interpretations of the IPMI 1.5 LAN interface.  The standard
+LAN interface works with it.
+
+Older version of the MXP does not exactly follow the IPMI LAN
+protocol, so a special IPMI LAN interface is required for it.  See the
+@file{OpenIPMI/mxp.h} include file for a description of that
+interface.  In particular, the software ID settings must be correct.
+Each user of the MXP @emph{must} have a unique software ID, or chaos
+will result.
+
+FIXME - when the conversion is automatic, rework this text.
 
 @subsection SEL support
 
@@ -1821,18 +1828,19 @@ also doesn't really provide any locking and will cause problems if you
 have multiple management controllers accessing the SEL.  If you never
 use this lock, it will never be activated, so it doesn't matter for
 OpenIPMI.  However, if you use the lock, it is activated and OpenIPMI
-will not be able to use the SEL any more until the AMC is rebooted.  So
-@emph{never} run any tools from Motorola (or any other tools that might
-use this lock) on your chassis if you want OpenIPMI to keep working.
+will not be able to use the SEL any more until the AMC is rebooted.
+So @emph{never} run any tools that might use this lock on your chassis
+if you want OpenIPMI to keep working.
 
-The SELs on the AMCs have a limited size (31 entries), are stored in a
-device with limited write cycles, and the firmware does not have wear
-leveling (this information may be old, so double-check with Motorola to
-be sure).  Because of this, managing the SEL is a little tricky.  You
-don't want to immediately delete events because you will wear out the
-first entry in the SEL.  But it doesn't have very many entries, so you
-don't want to let it fill up very full.  It's probably best to let the
-SEL fill up around half-way before deleting the events.
+On older MXPs, the SELs on the AMCs have a limited size (31 entries),
+are stored in a device with limited write cycles, and the firmware
+does not have wear leveling.  Because of this, managing the SEL is a
+little tricky.  You don't want to immediately delete events because
+you will wear out the first entry in the SEL.  But it doesn't have
+very many entries, so you don't want to let it fill up very full.
+It's probably best to let the SEL fill up around half-way before
+deleting the events.  Newer versions of the MXP do not have these
+problems.
 
 @subsection Entities
 
@@ -1844,25 +1852,29 @@ actual code. These entities are:
 
 @table @samp
 @item SYSTEM_CHASSIS (23)
-Contains sensors and controls that relate to the entire chassis,
-such as telco relays and voltage for the whole system.
+Contains sensors and controls that relate to the entire chassis, such
+as telco relays and voltage for the whole system.  The chassis is
+entity instance 1.
 
-@item MXP ALARM_CARD (0x90)
-Things specific to the alarm card.  This is an OEM entity id
-because none exist currently for an alarm card.
+@item MXP ALARM_CARD (144)
+Things specific to the alarm card.  This is an OEM entity id because
+none exist currently for an alarm card.  The alarm cards are instances
+1 and 2 for the first and second alarm card.  When you create the
+domain, make sure to put alarm card 1 first and alarm card 2 second in
+the list of connections, otherwise things will get confused.
 
 @item CONNECTIVITY_SWITCH (42)
 Things related to the IP switch.  Currently, these are the same as
-for the board.
+for the board.  The IP switches have instances 1 and 2.
 
 @item POWER_SUPPLY (10)
-Things related to the power supply.
+Things related to the power supply.  These have instances 1, 2, and 3.
 
 @item FAN_COOLING (29)
-The fans inside the power supply.
+The fans inside the power supply.  These have instances 1, 2, and 3.
 
 @item PROCESSING_BLADE (41)
-Things related to payload boards.
+Things related to payload boards.  These have instances 1-18.
 
 @end table
 
@@ -1899,7 +1911,7 @@ presence and reports changes using entity presence callbacks per the
 IPMI spec.
 
 @subsubsection The Chassis
-The chassis entity contains the relay controls, the system LED controsl
+The chassis entity contains the relay controls, the system LED controls
 and the chassis type and chassis id controls.
 
 The chassis has one relay control that contains the four standard telco
@@ -1921,9 +1933,10 @@ Minor relay
 @end table
 
 The chassis also has a chassis id control that contains the unique
-4-byte chassis id, named ``Chassis ID'', and a chassis type control
-containing the 1-byte type of chassis, named ``Chassis Type''.  These
-are identifier controls.
+4-byte chassis id, named ``Chassis ID'', a chassis type control
+containing the 1-byte type of chassis, named ``Chassis Type'', and a
+Shelf Geographic Address control names ``Shelf GA''.  These are
+identifier controls.
 
 Finally, the chassis has the system LED pair.  Unlike other LEDs these
 can only be set together, because they are set in the same message.

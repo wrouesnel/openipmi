@@ -127,6 +127,9 @@ struct ipmi_mc_s
 
     void *oem_data;
 
+    ipmi_mc_oem_fixup_sensor_cb fixup_sensor_handler;
+    void                        *fixup_sensor_cb_data;
+
     ipmi_mc_oem_new_sensor_cb new_sensor_handler;
     void                      *new_sensor_cb_data;
 
@@ -1506,7 +1509,7 @@ ipmi_register_oem_handler(unsigned int                 manufacturer_id,
     oem_handlers_t *new_item;
     int            rv;
 
-    /* This might be called before initialization, so be 100% sure.. */
+    /* This might be called before initialization, so be 100% sure. */
     rv = _ipmi_mc_init();
     if (rv)
 	return rv;
@@ -2224,6 +2227,27 @@ ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
     CHECK_MC_LOCK(mc);
     mc->new_sensor_handler = handler;
     mc->new_sensor_cb_data = cb_data;
+    return 0;
+}
+
+void
+_ipmi_mc_fixup_sensor(ipmi_mc_t     *mc,
+		      ipmi_sensor_t *sensor)
+{
+    CHECK_MC_LOCK(mc);
+
+    if (mc->fixup_sensor_handler)
+	mc->fixup_sensor_handler(mc, sensor, mc->fixup_sensor_cb_data);
+}
+
+int
+ipmi_mc_set_sensor_fixup_handler(ipmi_mc_t                   *mc,
+				 ipmi_mc_oem_fixup_sensor_cb handler,
+				 void                        *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+    mc->fixup_sensor_handler = handler;
+    mc->fixup_sensor_cb_data = cb_data;
     return 0;
 }
 

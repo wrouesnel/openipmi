@@ -1124,6 +1124,9 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	if (nsensor != NULL) {
 	    ipmi_sensor_info_t *sensors = _ipmi_mc_get_sensors(nsensor->mc);
 
+	    if (source_mc)
+		_ipmi_mc_fixup_sensor(source_mc, nsensor);
+
 	    /* Make sure the entity exists for ALL sensors in the
 	       new list.  This way, if a sensor has changed
 	       entities, the new entity will exist. */

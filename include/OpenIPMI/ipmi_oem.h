@@ -82,15 +82,24 @@ int ipmi_mc_remove_oem_removed_handler(ipmi_mc_t         *mc,
 				       ipmi_mc_removed_t *id);
 
 /* A new sensor has been added, the OEM handlers get first access at
-   it.  This is called before it is added to the entity.  If this call
-   returns true, the sensor will NOT be added to the entity, the OEM
-   device is assumed to have taken over control of the sensor.  The
-   OEM handler may also add it's own callback or register it's own
-   data conversion handler for this sensor.  The link is a value
-   allocated with ipmi_entity_alloc_sensor_link, if this returns
-   false, the oem callback cannot use this value.  If this returns
-   true, the oem callback will own the link and be responsible for
-   freeing the link.  Setting the callback to NULL will disable it. */
+   it.  The sensor fixup handler is called first; it can be used to
+   modify the contents of a sensor before any comparison or use.  The
+   new sensor handler is called before the sensor is added to the
+   entity.  If this call returns true, the sensor will NOT be added to
+   the entity, the OEM device is assumed to have taken over control of
+   the sensor.  The OEM handler may also add it's own callback or
+   register it's own data conversion handler for this sensor.  The
+   link is a value allocated with ipmi_entity_alloc_sensor_link; if
+   the OEM callback returns false, the oem callback cannot use this
+   value.  If it returns true, the oem callback will own the link and
+   be responsible for freeing the link.  Setting either callback to
+   NULL will disable it. */
+typedef void (*ipmi_mc_oem_fixup_sensor_cb)(ipmi_mc_t     *mc,
+					    ipmi_sensor_t *sensor,
+					    void          *cb_data);
+int ipmi_mc_set_sensor_fixup_handler(ipmi_mc_t                   *mc,
+				     ipmi_mc_oem_fixup_sensor_cb handler,
+				     void                        *cb_data);
 typedef int (*ipmi_mc_oem_new_sensor_cb)(ipmi_mc_t     *mc,
 					 ipmi_entity_t *ent,
 					 ipmi_sensor_t *sensor,

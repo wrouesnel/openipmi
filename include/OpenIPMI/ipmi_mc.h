@@ -265,9 +265,11 @@ int _ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
 void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
 void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);
 
-/* Used by the sensor code to report a new sensor to the MC.  It
-   should return 1 if the sensor code should not add the sensor to
-   its database. */
+/* Used by the sensor code to report a new sensor to the MC.  The new
+   sensor call should return 1 if the sensor code should not add the
+   sensor to its database. */
+void _ipmi_mc_fixup_sensor(ipmi_mc_t     *mc,
+			   ipmi_sensor_t *sensor);
 int _ipmi_mc_new_sensor(ipmi_mc_t     *mc,
 			ipmi_entity_t *ent,
 			ipmi_sensor_t *sensor,
