@@ -6008,6 +6008,7 @@ chassis_id_get(ipmi_control_t                 *control,
 
 typedef struct board_sensor_info_s
 {
+    ipmi_entity_t  *ent;
     ipmi_sensor_t  *slot;
     ipmi_control_t *reset;
     ipmi_control_t *power;
@@ -6020,6 +6021,14 @@ typedef struct board_sensor_info_s
 static void
 destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 {
+    ipmi_entity_t *entity;
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+
+    _ipmi_domain_entity_lock(domain);
+    entity = sinfo->ent;
+    _ipmi_entity_get(entity);
+    _ipmi_domain_entity_unlock(domain);
+
     if (sinfo->slot)
 	ipmi_sensor_destroy(sinfo->slot);
     if (sinfo->reset)
@@ -6034,6 +6043,7 @@ destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 	ipmi_control_destroy(sinfo->power_config);
     if (sinfo->chassis_id)
 	ipmi_control_destroy(sinfo->chassis_id);
+    _ipmi_entity_put(entity);
 }
 
 /*
@@ -6066,6 +6076,8 @@ new_board_sensors(ipmi_mc_t           *mc,
 		  board_sensor_info_t *sinfo)
 {
     int rv;
+
+    sinfo->ent = ent;
 
     /* The slot sensor */
     rv = mxp_alloc_discrete_sensor(mc,
@@ -6568,7 +6580,13 @@ amc_last_reset_reason_get(ipmi_control_t                 *control,
 static void
 amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    amc_info_t *info = cb_data;
+    amc_info_t    *info = cb_data;
+    ipmi_entity_t *entity;
+
+    _ipmi_domain_entity_lock(domain);
+    entity = info->ent;
+    _ipmi_entity_get(entity);
+    _ipmi_domain_entity_unlock(domain);
 
     if (info->slot)
 	ipmi_sensor_destroy(info->slot);
@@ -6598,6 +6616,8 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_control_destroy(info->slot_ga);
     if (info->chassis_id)
 	ipmi_control_destroy(info->chassis_id);
+
+    _ipmi_entity_put(entity);
 
     ipmi_mem_free(info);
 }
@@ -8642,10 +8662,24 @@ mxp_setup_finished(ipmi_mc_t *mc, mxp_info_t *info)
 static void
 mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    mxp_info_t *info = cb_data;
-    int        i;
+    mxp_info_t    *info = cb_data;
+    int           i;
+    ipmi_entity_t *centity;
+    ipmi_entity_t *entity;
+
+    _ipmi_domain_entity_lock(domain);
+    centity = info->chassis_ent;
+    if (centity)
+	_ipmi_entity_get(centity);
+    _ipmi_domain_entity_unlock(domain);
 
     for (i=0; i<MXP_POWER_SUPPLIES; i++) {
+	_ipmi_domain_entity_lock(domain);
+	entity = info->power_supply[i].ent;
+	if (entity)
+	    _ipmi_entity_get(entity);
+	_ipmi_domain_entity_unlock(domain);
+
 	if ((info->chassis_ent) && (info->power_supply[i].ent))
 	    ipmi_entity_remove_child(info->chassis_ent,
 				     info->power_supply[i].ent);
@@ -8665,9 +8699,17 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->power_supply[i].ps_revision);
 	if (info->power_supply[i].ps_i2c_isolate)
 	    ipmi_control_destroy(info->power_supply[i].ps_i2c_isolate);
+	if (entity)
+	    _ipmi_entity_put(entity);
     }
 
     for (i=0; i<MXP_FANS; i++) {
+	_ipmi_domain_entity_lock(domain);
+	entity = info->fan[i].fan_ent;
+	if (entity)
+	    _ipmi_entity_get(entity);
+	_ipmi_domain_entity_unlock(domain);
+
 	if ((info->chassis_ent) && (info->fan[i].fan_ent))
 	    ipmi_entity_remove_child(info->chassis_ent,
 				     info->fan[i].fan_ent);
@@ -8685,9 +8727,17 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->fan[i].fan_oos_led);
 	if (info->fan[i].fan_inserv_led)
 	    ipmi_control_destroy(info->fan[i].fan_inserv_led);
+	if (entity)
+	    _ipmi_entity_put(entity);
     }
 
     for (i=0; i<MXP_TOTAL_BOARDS; i++) {
+	_ipmi_domain_entity_lock(domain);
+	entity = info->board[i].ent;
+	if (entity)
+	    _ipmi_entity_get(entity);
+	_ipmi_domain_entity_unlock(domain);
+
 	if ((info->chassis_ent) && (info->board[i].ent))
 	    ipmi_entity_remove_child(info->chassis_ent, info->board[i].ent);
 	if (info->board[i].presence)
@@ -8708,6 +8758,8 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->board[i].slot_init);
 	if (info->board[i].i2c_isolate)
 	    ipmi_control_destroy(info->board[i].i2c_isolate);
+	if (entity)
+	    _ipmi_entity_put(entity);
     }
 
     if (info->chassis_type_control)
@@ -8729,6 +8781,9 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_mem_free(info->con_ch_info);
     }
     ipmi_domain_remove_mc_updated_handler(domain, mc_upd_handler, NULL);
+
+    if (centity)
+	_ipmi_entity_put(centity);
 
     ipmi_mem_free(info);
 }
