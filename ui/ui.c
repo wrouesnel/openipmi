@@ -5876,7 +5876,7 @@ control_change(enum ipmi_update_e op,
     }
 }
 
-static void
+static int
 entity_presence_handler(ipmi_entity_t *entity,
 			int           present,
 			void          *cb_data,
@@ -5889,6 +5889,7 @@ entity_presence_handler(ipmi_entity_t *entity,
 	   present);
     if (event)
 	ui_log("Due to event 0x%4.4x\n", event->record_id);
+    return IPMI_EVENT_NOT_HANDLED;
 }
 
 void fru_change(enum ipmi_update_e op,
