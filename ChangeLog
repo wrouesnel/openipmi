@@ -1,4 +1,12 @@
 
+2003-10-02 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_lan.c: Changed the max outstanding message default
+	to two.
+
+	* lib/mc.c: Removed setting the event receiver for SEL devices
+	that are not event generators.
+
 2003-10-07 Tony Griffiths <tonyg@agile.tv>
 
 	* lib/domain.c: Fixed channel scanning to go on if it gets an

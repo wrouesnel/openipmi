@@ -81,6 +81,9 @@ dump_hex(void *vdata, int len)
    considered failed. */
 #define IP_FAIL_COUNT 4
 
+/* The default for the maximum number of messages that are allowed to be
+   outstanding.  This is a pretty conservative number. */
+#define DEFAULT_MAX_OUTSTANDING_MSG_COUNT 2
 
 struct ipmi_ll_event_handler_id_s
 {
@@ -2544,7 +2547,7 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     lan->initialized = 0;
 
     lan->outstanding_msg_count = 0;
-    lan->max_outstanding_msg_count = 4;
+    lan->max_outstanding_msg_count = DEFAULT_MAX_OUTSTANDING_MSG_COUNT;
     lan->wait_q = NULL;
     lan->wait_q_tail = NULL;
 

@@ -879,10 +879,6 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	   will have the proper sensor set. */
 	if (mc->IPMB_event_generator_support)
 	    event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
-	else if (mc->SEL_device_support)
-	    /* If it is an SEL device and not an event receiver, then
-                set it's event receiver to itself. */
-	    event_rcvr = ipmi_mc_get_address(mc);
 
 	if (event_rcvr)
 	    send_set_event_rcvr(mc, event_rcvr);
