@@ -14,6 +14,9 @@
 	* lib/oem_motorola_mxp.c: Added handling for newer Zynx switch
 	boards.
 
+	* utils/Makefile.am: Removed the md2 and md5 tests since they
+	contain marginally free code.
+
 2004-02-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a race condition dealing with an MC going away
