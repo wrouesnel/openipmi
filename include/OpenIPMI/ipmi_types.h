@@ -109,9 +109,9 @@ struct ipmi_entity_id_s
    A direct connection to a system interface (KCS, LAN, etc.) is
    represented as IPMI_BMC_CHANNEL in the channel number and the
    interface number in mc_num.  Multiple interface numbers are used
-   because you can have more than one connection to a domain; the main
-   connection (the currently inuse one) will be mc_num 0, the first
-   will be mc_num 1, etc. */
+   because you can have more than one connection to a domain; the
+   first connection will be mc_num 0, the second will be mc_num 1,
+   etc. */
 typedef struct ipmi_mcid_s
 {
     ipmi_domain_id_t domain_id;
