@@ -865,6 +865,8 @@ start_fetch(void *cb_data, int shutdown)
     }
 }
 
+/* We have to have this because the allocate element can go away (the
+   operation can complete) before returning to the user. */
 typedef struct sel_get_cb_s
 {
     sel_fetch_handler_t *elem;

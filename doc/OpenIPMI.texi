@@ -450,39 +450,53 @@ As mentioned before, you may or may not be using locking, @strong{but
 you must read this section anyway.}  Locking here involves existance of
 entities as well as normal locking.
 
+Locking has changed between OpenIPMI 1.3 and 1.4.  In OpenIPMI 1.3,
+locks were held in user callbacks.  Locking was very course grained
+and the locks were recursive, so this was generally not a problem.
+However, in general it is a bad idea to hold locks in user callbacks.
+The user might have two domains and do things between them, resulting
+in possible deadlocks.  Because of this, locking strategy has changed
+in OpenIPMI 1.4.  The interfaces and basic usage are completely
+unchanged, but some of the semantics have changed.
+
 The basic principle of locking is that if you are in a callback for an
 IPMI object (an IPMI object is passed in the callback), that object is
-locked and the system cannot change it.  In any callback for an object
-owned by a particular domain, that object will be locked and anything it
-belongs to will be locked.  So, for instance, in a callback for a
-sensor, the sensor is locked, the entity the sensor belongs to is
-locked, the management controller the sensor is on is locked, and the
-domain the sensor is in will be locked.  No other sensors, entities, or
-management controllers will necessarily be locked.  Outside of
-callbacks, the library is free to change pointers, change information,
-add and remove objects, or whatever it wants.
+refcounted (marked inuse) and the system cannot delete it.  In any
+callback for an object owned by a particular domain, that object will
+be and anything it belongs to will be marked in use.  So, for
+instance, in a callback for a sensor, the sensor is in use, the entity
+the sensor belongs to is in use, the management controller the sensor
+is on is in use, and the domain the sensor is in will be in use.  No
+other sensors, entities, or management controllers will necessarily be
+marked in use.  Outside of callbacks, the library is free to change
+pointers, change information, add and remove objects, or whatever it
+wants to objects.
 
-So how do you obtain a lock for an IPMI object?  If you are handling
-incoming IPMI events you generally don't have to worry about this.  But
-say you are handling outside input, such as a user interface.  What
-then?  If the pointers can change, how do I keep a reference to
+So how do you mark an IPMI object in use?  If you are handling
+incoming IPMI events you generally don't have to worry about this.
+But say you are handling outside input, such as a user interface.
+What then?  If the pointers can change, how do I keep a reference to
 something?
 
 OpenIPMI provides two identifiers for IPMI objects.  One is a pointer,
-but a pointer is only good inside a callback.  The other is an OpenIPMI
-id, the id is good outside callbacks.  But the only thing you can do with
-an id is pass it to a function that will call a callback for you with
-the pointer.  You can convert a pointer to an id (inside a callback, of
-course) so you should do that if you need to save a reference to the
-object.
+but a pointer is only good inside a callback.  The other is an
+OpenIPMI id, the id is good outside callbacks.  But the only thing you
+can do with an id is pass it to a function that will call a callback
+for you with the pointer.  You can convert a pointer to an id (inside
+a callback, of course) so you should do that if you need to save a
+reference to the object.  Note that there are some functions that take
+ids that do this for you (such as @code{ipmi_sensor_id_reading_get()},
+other sensor functions, hot-swap functions, and a few others); these
+are provided for your convenience.
 
-This mechanism, though a little inconvenient, almost guarantees that you
-will not forget to release a lock.  It nicely encapsulates the locked
-operation in a function@footnote{This is how locking works in Ada95 and
-Java, although their mechanisms are a little more convenient since they
-are built into the language}.  You have to return from the function
-unless you exit, longjmp, or throw an exception that falls through the
-callback, and you shouldn't do those things.
+This mechanism, though a little inconvenient, almost guarantees that
+you will not forget to decrement a use count.  It nicely encapsulates
+the locked operation in a function@footnote{This is how locking works
+in Ada95 and Java, although their mechanisms are a little more
+convenient since they are built into the language}.  You have to
+return from the function unless you exit, longjmp, or throw an
+exception that falls through the callback, and you shouldn't do those
+things.
 
 You must do this whether you are using locking or not, because the
 library uses this mechanism to determine whether the id you are holding
@@ -530,7 +544,7 @@ entity_change(enum ipmi_update_e op,
 @}
 @end example
 
-In this example, the entity is locked in this call, because you have
+In this example, the entity is in use in this call, because you have
 received a pointer to the entity in the callback.
 
 However, suppose you want to use the entity id later because the user
@@ -1781,15 +1795,14 @@ this is not how IPMI is supposed to work, OEM code can handle this and
 represent these sensors as though they were standard IPMI sensors.
 
 During the process of adding sensors and entities, the OEM code should
-claim the entity lock in the MC using @code{ipmi_domain_entity_lock()},
-and unlock it with @code{ipmi_domain_entity_unlock()} to keep the entity
-list from changin while this is happening.
-
-If the entity that holds the sensor doesn't exist, you will need to
-create it with @code{ipmi_entity_add()}.  It should create any
-parent-child relationships as required using
-@code{ipmi_entity_add_child()}.  If the entity already exists, it needs
-to be found, and a lock for the entity needs to be held.
+add/find the entity using @code{ipmi_entity_add()} or find the entity
+using @code{ipmi_entity_find()} to increment it's usecount thus keep
+the entity from being deleted while it is being used.  Note that
+@code{ipmi_entity_add()} will return an existing entity if one already
+exists.  It should create any parent-child relationships as required
+using @code{ipmi_entity_add_child()}.  After the OEM code is finished
+with the entity, it should call @code{_ipmi_entity_put()} to decrement
+the usecount.
 
 OEM code can allocate a sensor using
 @code{ipmi_sensor_alloc_nonstandard()}, then fill in all the values for
@@ -1877,11 +1890,11 @@ timestamp, and it can get the SEL timestamp at startup using
 @node    Using IDs in OEM Code, Sensor and Control Operation Queues, Special Event Handling, How to Write OEM Plugins
 @section Using IDs in OEM Code
 
-OEM code may need to be able to create its own IDs to lock an entity.
-For instance, if a custom even comes in and a lock need to be claimed
-for an object, it may fill in an id structure.  The @file{ipmi_types.h}
-file holds the definitions for these structures, they need to be filled
-out completely.
+OEM code may need to be able to construct its own IDs to increment the
+usecount on an object.  For instance, if a custom event comes in and
+an object needs to be used, OEM code may fill in an id structure.  The
+@file{ipmi_types.h} file holds the definitions for these structures,
+they need to be filled out completely.
 
 @node    Sensor and Control Operation Queues, SDR Repository and OEM Code, Using IDs in OEM Code, How to Write OEM Plugins
 @section Sensor and Control Operation Queues
@@ -1891,12 +1904,12 @@ serialized.
 
 Each sensor and control has an operation queue, or opq.  The OEM code
 should use this opq to perform operations that do messaging.  OpenIPMI
-handles the locking for the sensors and controls, so this actually makes
-it more convenient to use.
+handles the serialization for the sensors and controls, so this
+actually makes it more convenient to use.
 
 If OEM code needs to send a command for a sensor, it should use the
 functions defined to do that for sensors and controls.  That way,
-OpenIPMI can handle the locking of the sensor or control for the OEM
+OpenIPMI can handle the usecounts of the sensor or control for the OEM
 code.
 
 The section in @file{ipmi_sensor.h} named ``Operations and callbacks for
@@ -1941,13 +1954,14 @@ if a flag is enabled (for OEM code, for instance), use the
 @node    Debugging Locking, Seeing IPMI Messages, Debug Flags, Debugging Your Application
 @section Debugging Locking
 
-The LOCKS flag turns on locking (if the @var{IPMI_CHECK_LOCKS}
-preprocessor variable is defined, which it is by default).  If you
-enable locking, OpenIPMI will check everywhere that the proper locks are
-held, and do other checks depending on what low-level OS handling code
-is in place, and complain if things aren't right.  You can set a
-breakpoint at the function @code{ipmi_report_lock_error()} to have a
-debugger stop when a lock problem occurs.
+The LOCKS flag turns on usecount checking (if the
+@var{IPMI_CHECK_LOCKS} preprocessor variable is defined, which it is
+by default).  If you enable this checking, OpenIPMI will check
+everywhere that the objects being used have nonzero usecount, and do
+other checks depending on what low-level OS handling code is in place,
+and complain if things aren't right.  You can set a breakpoint at the
+function @code{ipmi_report_lock_error()} to have a debugger stop when
+a lock problem occurs.
 
 The lock checking is somewhat expensive, and if you want to remove the
 calls, you can remove the definition of @var{IPMI_CHECK_LOCKS} from
@@ -1976,17 +1990,20 @@ software.
 @node    How Locking Works, , Internals, Internals
 @section How Locking Works
 
-The locking in OpenIPMI is currently rather course-grained, for
-simplicity.  In the future, it will probably be more fine-grained.
+The locking in OpenIPMI used to be rather course-grained, but has been
+made more fine grained in recent releases.
 
-The system has one read/write lock that protects access to the list of
-domains.  Every operation locks this lock read (except for the ones that
-modify it, which lock it write).  This prevents a domain from going away
-while it's in use.
+Usecounts on objects are what drives most of the locking in the code.
+A lock is claimed, a usecount is incremented, and the object cannot be
+deleted until the usecount goes to zero.  The usecount keeps the
+object from going away while in use.
 
-Every domain has an @var{mc_list_lock}, that lock is used to lock all
-MC's in the domain.  As well, there is an @var{entities_lock} in the
-domain, it is locked for any entities in the domain.
+OpenIPMI has one global domains lock that is used to find and modify
+the usecount of domains.  Every domain has an @var{mc_list_lock}, that
+lock is used to lock the MC table in the domain (use when changing an
+MC usecount).  As well, there is an @var{entities_lock} in the domain,
+it is used for changing the usecounts of just about everything else
+(entities, sensors, and controls).
 
 SDRs, since they may stand alone after their underpinnings have been
 destroyed, have their own lock.

@@ -1668,6 +1668,14 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	else
 	    display_pad_out("disabled");
     }
+    display_pad_out("\n  Hysteresis = ");
+    switch (ipmi_sensor_get_hysteresis_support(sensor)) {
+    case IPMI_HYSTERESIS_SUPPORT_NONE: display_pad_out("none"); break;
+    case IPMI_HYSTERESIS_SUPPORT_READABLE: display_pad_out("readable"); break;
+    case IPMI_HYSTERESIS_SUPPORT_SETTABLE: display_pad_out("settable"); break;
+    case IPMI_HYSTERESIS_SUPPORT_FIXED: display_pad_out("fixed"); break;
+    default: display_pad_out("invalid"); break;
+    }
     display_pad_out("\n");
     display_pad_out("  sensor type = %s (0x%2.2x)\n",
 		    ipmi_sensor_get_sensor_type_string(sensor),
@@ -3064,6 +3072,70 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
 	    ipmi_mem_free(info->states);
 	ipmi_mem_free(info);
     }
+    return 0;
+}
+
+void
+set_hysteresis_done(ipmi_sensor_t *sensor,
+		   int           err,
+		   void          *cb_data)
+{
+    if (err)
+	ui_log("Error setting hysteresis: 0x%x", err);
+    else
+	ui_log("Hysteresis set");
+}
+
+static int
+set_hysteresis_cmd(char *cmd, char **toks, void *cb_data)
+{
+    unsigned char physt, nhyst;
+    int           rv;
+    
+    if (get_uchar(toks, &physt, "positive hysteresis value"))
+	goto out_err;
+
+    if (get_uchar(toks, &nhyst, "negative hysteresis value"))
+	goto out_err;
+
+    rv = ipmi_sensor_id_set_hysteresis(curr_sensor_id, physt, nhyst,
+				       set_hysteresis_done, NULL);
+    if (rv) {
+	cmd_win_out("Unable to set hysteresis: 0x%x\n", rv);
+	goto out_err;
+    }
+
+ out_err:
+    return 0;
+}
+
+void
+get_hysteresis_done(ipmi_sensor_t *sensor,
+		    int           err,
+		    unsigned int  positive_hysteresis,
+		    unsigned int  negative_hysteresis,
+		    void          *cb_data)
+{
+    if (err)
+	ui_log("Error setting hysteresis: 0x%x", err);
+    else
+	ui_log("Hysteresis values: positive = 0x%x, negative = 0x%x",
+	       positive_hysteresis, negative_hysteresis);
+}
+
+static int
+get_hysteresis_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int rv;
+    
+    rv = ipmi_sensor_id_get_hysteresis(curr_sensor_id,
+				       get_hysteresis_done, NULL);
+    if (rv) {
+	cmd_win_out("Unable to get hysteresis: 0x%x\n", rv);
+	goto out_err;
+    }
+
+ out_err:
     return 0;
 }
 
@@ -6140,6 +6212,10 @@ static struct {
       "  <channel> - dump a fru given all it's insundry information" },
     { "rearm",		rearm_cmd,
       " - rearm the current sensor" },
+    { "set_hysteresis",	set_hysteresis_cmd,
+      " <val> - Sets the hysteresis for the current sensor" },
+    { "get_hysteresis",	get_hysteresis_cmd,
+      " - Gets the hysteresis for the current sensor" },
     { "controls",	controls_cmd,
       " <entity name> - list all the controls attached to the entity" },
     { "control",	control_cmd,

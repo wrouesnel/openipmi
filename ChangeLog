@@ -1,3 +1,22 @@
+2004-04-29 Corey Minyard <cminyard@mvista.com> 
+
+	* everything: A massive rework of the internals.  Basically,
+	locking was reworked completely.  Now locks are *not* held in user
+	callbacks.  Instead, items in callbacks are usecounted and will
+	not be destroyed until the usecount goes to zero.  All the same
+	rules apply, there are just no locks held.  This should avoid
+	problems with deadlocks.
+
+	* lib/domain.c, lib/entity.c: Worked on marking deprecated
+	functions using GCC-specific attributes.
+	* include/OpenIPMI/ipmi_types.h: ditto
+	* include/OpenIPMI/ipmi_entity.h: ditto
+	* include/OpenIPMI/ipmi_domain.h: ditto
+
+	* lib/sel.c: Fixed a bug in the sel get where the info allocated
+	can go away before the operation returns, but the info is used
+	after the operation returns.
+
 2004-04-15 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_intel.c: More work on getting the various Intel servers

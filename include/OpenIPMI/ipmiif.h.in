@@ -1814,4 +1814,5 @@ int ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
 				       ipmi_entity_fru_cb handler,
 				       void              *cb_data)
      IPMI_FUNC_DEPRECATED;
+
 #endif /* __IPMIIF_H */
