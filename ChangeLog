@@ -1,5 +1,7 @@
 2004-02-02 Corey Minyard <cminyard@mvista.com> 
 
+	* configure.in: Move to version 1.2.6.
+
 	* everything: Massive rework of the logging to get more
 	information in there so the logs can be correlated to specific
 	domains, sensors, MCs, etc.
