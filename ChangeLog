@@ -8,6 +8,8 @@
 	multiple connections and LAN addresses.
 
 	* configure.in: Move to version 1.2.14.
+
+	* sensor.c: Added a missing command length setting.
 	
 2004-02-20 Corey Minyard <cminyard@mvista.com> 
 

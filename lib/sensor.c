@@ -3114,6 +3114,7 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	cmd_data[3] = info->state.__assertion_events >> 8;
 	cmd_data[4] = info->state.__deassertion_events & 0xff;
 	cmd_data[5] = info->state.__deassertion_events >> 8;
+	cmd_msg.data_len = 6;
 	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				      &cmd_msg, disables_set,
 				      &(info->sdata), info);
