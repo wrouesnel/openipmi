@@ -393,3 +393,78 @@ ilist_remove_item_from_list(ilist_t *list, void *item)
 	ilist_mem_free(curr);
     return 1;
 }
+
+typedef struct ilist_cb_entry_s
+{
+    void *handler;
+    void *cb_data;
+    ilist_item_t entry;
+} ilist_cb_entry_t;
+
+static int cb_cmp(void *item, void *data)
+{
+    ilist_cb_entry_t *e = item;
+    ilist_cb_entry_t *c = data;
+
+    return ((e->handler == c->handler) && (e->cb_data == c->cb_data));
+}
+
+static int
+find_cb(ilist_iter_t *iter, ilist_t *list, void *handler, void *cb_data)
+{
+    ilist_cb_entry_t *val, tmp = { handler, cb_data };
+    ilist_init_iter(iter, list);
+    ilist_unpositioned(iter);
+    val = ilist_search_iter(iter, cb_cmp, &tmp);
+    return (val != NULL);
+}
+
+int
+ilist_add_cb(ilist_t *list, void *handler, void *cb_data)
+{
+    ilist_iter_t     iter;
+    ilist_cb_entry_t *entry;
+
+    if (find_cb(&iter, list, handler, cb_data))
+	return 0;
+
+    entry = ilist_mem_alloc(sizeof(*entry));
+    if (!entry)
+	return 0;
+
+    ilist_add_tail(list, entry, &entry->entry);
+    return 1;
+}
+
+int
+ilist_remove_cb(ilist_t *list, void *handler, void *cb_data)
+{
+    ilist_iter_t     iter;
+
+    if (! find_cb(&iter, list, handler, cb_data))
+	return 0;
+
+    ilist_delete(&iter);
+    return 1;
+}
+
+typedef struct cb_data_s
+{
+    ilist_handle_cb handler;
+    void            *data;
+} cb_data_t;
+
+static void cb_iter(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    ilist_cb_entry_t *entry = item;
+    cb_data_t        *info = cb_data;
+
+    info->handler(info->data, entry->handler, entry->cb_data);
+}
+
+void
+ilist_call_cbs(ilist_t *list, ilist_handle_cb handler, void *data)
+{
+    cb_data_t info = { handler, data };
+    ilist_iter(list, cb_iter, &info);
+}

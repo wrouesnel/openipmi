@@ -1,3 +1,13 @@
+2004-01-20 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h: Added hot-swap state machine and
+	function definitions.
+
+	* include/OpenIPMI/ipmi_entity.h, lib/entity.c: Added hot-swap
+	polymorphic routines.
+
+	* include/OpenIPMI/ilist.h, lib/ilist.c: Added callback list code.
+
 2004-01-19 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/conn.c, include/OpenIPMI/ipmi_conn.h: Added a connection

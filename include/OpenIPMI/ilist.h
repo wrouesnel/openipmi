@@ -124,6 +124,19 @@ typedef int (*ilist_sort_cb)(void *item1, void *item2);
 
 void ilist_sort(ilist_t *list, ilist_sort_cb cmp);
 
+/* A callback list. */
+typedef void (*ilist_handle_cb)(void *data, void *handler, void *cb_data);
+
+/* Add an entry to the list.  Returns 0 upon failure, 1 if successful.
+   Note that this reject duplicates as a failure. */
+int ilist_add_cb(ilist_t *list, void *handler, void *cb_data);
+
+/* Remove an entry, returns 1 if present, 0 if not. */
+int ilist_remove_cb(ilist_t *list, void *handler, void *cb_data);
+
+/* Call all the callbacks in the list */
+void ilist_call_cbs(ilist_t *ilist, ilist_handle_cb handler, void *data);
+
 /* Internal data structures, DO NOT USE THESE. */
 
 struct ilist_item_s

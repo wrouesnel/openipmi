@@ -641,8 +641,6 @@ int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 
    NOT_PRESENT - the device is not physically present in the system.
    INACTIVE - The device is present, but turned off.
-   INSERTION_PENDING - The device is going through the insertion
-       process, but it not yet ready.
    ACTIVE - The device is operational.
    EXTRACTION_PENDING - The device is being disabled.
 
@@ -650,19 +648,21 @@ int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
    INACTIVE normally occurs afer EXTRACTION_PENDING.  NOT_PRESENT can
    occur after any state on an unmanaged extraction.
 
-   A device may also implement an abbreviated state machine, with
-   NOT_PRESENT, optionally INACTIVE, and ACTIVE.  You would do this if
-   the device has no insertion or removal states.
+   A device may not have an INACTIVE and/or EXTRACTION_PENDING state.
+   You would do this if the device has no power control and/or removal
+   states.
 
-   The state machine may also go from INSERTION_PENDING to INACTIVE and
-   from EXTRACTION_PENDING to ACTIVE.
+   The state machine may also go from EXTRACTION_PENDING to ACTIVE.
+
+   Notice, that unlike HPI, there is no "insertion pending" state.
+   This is basically a state that is inactive from insertion, so it
+   can be simulated with a transition from not present to inactive.
 */
 enum ipmi_hot_swap_states {
     IPMI_HOT_SWAP_NOT_PRESENT = 0,
     IPMI_HOT_SWAP_INACTIVE = 1,
-    IPMI_HOT_SWAP_INSERTION_PENDING = 2,
-    IPMI_HOT_SWAP_ACTIVE = 3,
-    IPMI_HOT_SWAP_EXTRACTION_PENDING = 4,
+    IPMI_HOT_SWAP_ACTIVE = 2,
+    IPMI_HOT_SWAP_EXTRACTION_PENDING = 3,
 };
 
 /* Does the entity implement the hot-swap state machine? */
@@ -670,7 +670,8 @@ int ipmi_entity_hot_swappable(ipmi_entity_t *ent);
 
 /* Register to receive the hot-swap state when it changes. */
 typedef void (*ipmi_entity_hot_swap_cb)(ipmi_entity_t             *ent,
-					enum ipmi_hot_swap_states state,
+					enum ipmi_hot_swap_states last_state,
+					enum ipmi_hot_swap_states curr_state,
 					void                      *cb_data);
 int ipmi_entity_register_hot_swap_events(ipmi_entity_t           *ent,
 					 ipmi_entity_hot_swap_cb handler,
@@ -683,33 +684,33 @@ int ipmi_entity_get_hot_swap_state(ipmi_entity_t           *ent,
 
 /* Thses set whether the device will automatically be activated and
    deactivated by the hardware or OpenIPMI.  By default devices will
-   automatically be activated/deactivated and this value is set to tru
-   (upon insertion, they will transition to inactive, then insert
-   pending, then active.  Upon a removal request, then will transition
-   to extraction pending then to inactive.  If this is set to false,
-   then the state machine will stop in the pending state and the user
-   must call the activate or deactivate routines below to push it out
-   of that state. */
+   automatically be activated/deactivated and this value is set to
+   true (upon insertion, they will transition directly to active
+   state.  Upon a removal request, it will transition directly to
+   inactive.  If this is set to false, then the state machine will
+   stop in the inactive/removal pending state and the user must call
+   the activate or deactivate routines below to push it out of those
+   states. */
+int ipmi_entity_get_auto_activate(ipmi_entity_t      *ent,
+				  ipmi_entity_val_cb handler,
+				  void               *cb_data);
 int ipmi_entity_set_auto_activate(ipmi_entity_t  *ent,
 				  int            val,
 				  ipmi_entity_cb done,
 				  void           *cb_data);
+int ipmi_entity_get_auto_deactivate(ipmi_entity_t      *ent,
+				    ipmi_entity_val_cb handler,
+				    void               *cb_data);
 int ipmi_entity_set_auto_deactivate(ipmi_entity_t  *ent,
 				    int            val,
 				    ipmi_entity_cb done,
 				    void           *cb_data);
-int ipmi_entity_get_auto_activate(ipmi_entity_t      *ent,
-				  ipmi_entity_val_cb handler,
-				  void               *cb_data);
-int ipmi_entity_get_auto_deactivate(ipmi_entity_t      *ent,
-				    ipmi_entity_val_cb handler,
-				    void               *cb_data);
 
 /* Attempt to activate or deactivate an entity.  Activate will cause a
-   transition from INSERTION_PENDING to ACTIVE, or from
-   EXTRACTION_PENDING to ACTIVE.  Deactivate will cause a transition
-   from EXTRACTION_PENDING or INSERTION_PENDING to INACTIVE. This is
-   only valid if autoactivate and/or autodeactivate is set. */
+   transition from INACTIVE to ACTIVE, or from EXTRACTION_PENDING to
+   ACTIVE.  Deactivate will cause a transition from EXTRACTION_PENDING
+   or ACTIVE to INACTIVE. This is only valid if autoactivate and/or
+   autodeactivate is set. */
 int ipmi_entity_activate(ipmi_entity_t  *ent,
 			 ipmi_entity_cb done,
 			 void           *cb_data);
@@ -728,7 +729,8 @@ int ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
 				       ipmi_entity_cb done,
 				       void           *cb_data);
 
-/* Get the current value of the hot-swap requester. */
+/* Get the current value of the hot-swap requester, if available.  If
+   not available, this will return ENOSYS. */
 int ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
 				       ipmi_entity_val_cb handler,
 				       void               *cb_data);
