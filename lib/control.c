@@ -117,7 +117,7 @@ ipmi_control_convert_to_id(ipmi_control_t *control)
 
     CHECK_CONTROL_LOCK(control);
 
-    val.mcid = _ipmi_mc_convert_to_id(control->mc);
+    val.mcid = ipmi_mc_convert_to_id(control->mc);
     val.lun = control->lun;
     val.control_num = control->num;
 
@@ -169,7 +169,7 @@ ipmi_control_pointer_cb(ipmi_control_id_t   id,
     info.id = id;
     info.err = 0;
 
-    rv = _ipmi_mc_pointer_cb(id.mcid, mc_cb, &info);
+    rv = ipmi_mc_pointer_cb(id.mcid, mc_cb, &info);
     if (!rv)
 	rv = info.err;
 
@@ -942,7 +942,7 @@ ipmi_control_get_light_color_time(ipmi_control_t   *control,
 int
 ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2)
 {
-    int rv = _ipmi_cmp_mc_id(id1.mcid, id2.mcid);
+    int rv = ipmi_cmp_mc_id(id1.mcid, id2.mcid);
     if (rv)
 	return rv;
     if (id1.lun > id2.lun)

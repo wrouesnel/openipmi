@@ -1,3 +1,15 @@
+2003-12-01 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Renamed some functions to
+	remove the leading "_".  This opens them up for OpenHPI to use.
+
+	* lib/domain.c: Updates for the above changes.
+	* lib/sel.c: ditto
+	* lib/sdr.c: ditto
+	* lib/sensor.c: ditto
+	* lib/control.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* ui/ui.c: ditto
 2003-11-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_control.h, lib/control.c: Added a way to

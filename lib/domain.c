@@ -1777,7 +1777,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 	    return;
 
 	/* The OEM code didn't handle it. */
-	id.mcid = _ipmi_mc_convert_to_id(mc);
+	id.mcid = ipmi_mc_convert_to_id(mc);
 	id.lun = event->data[5] & 0x3;
 	id.sensor_num = event->data[8];
 
@@ -1817,7 +1817,7 @@ ll_event_handler(ipmi_con_t   *ipmi,
     if (!mc)
 	goto out;
 
-    devent.mcid = _ipmi_mc_convert_to_id(mc);
+    devent.mcid = ipmi_mc_convert_to_id(mc);
     devent.record_id = ipmi_get_uint16(event->data);
     devent.type = event->data[2];
     memcpy(devent.data, event+3, IPMI_MAX_SEL_DATA);
@@ -1966,7 +1966,7 @@ del_event_handler(ipmi_mc_t *mc, void *cb_data)
     del_event_info_t *info = cb_data;
     int              rv;
 
-    rv = _ipmi_mc_del_event(mc, info->event, mc_del_event_done, info);
+    rv = ipmi_mc_del_event(mc, info->event, mc_del_event_done, info);
     if (rv) {
 	if (info->done_handler)
 	    info->done_handler(info->domain, rv, info->cb_data);
@@ -1994,7 +1994,7 @@ ipmi_domain_del_event(ipmi_domain_t  *domain,
     info->done_handler = done_handler;
     info->cb_data = cb_data;
     info->rv = 0;
-    rv = _ipmi_mc_pointer_cb(event->mcid, del_event_handler, info);
+    rv = ipmi_mc_pointer_cb(event->mcid, del_event_handler, info);
     if (rv) {
 	ipmi_mem_free(info);
 	return rv;
@@ -2014,7 +2014,7 @@ static void
 next_event_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     next_event_handler_info_t *info = cb_data;
-    ipmi_mcid_t               mcid = _ipmi_mc_convert_to_id(mc);
+    ipmi_mcid_t               mcid = ipmi_mc_convert_to_id(mc);
 
     if (!info->rv)
 	/* We've found an event already, just return. */
@@ -2024,19 +2024,19 @@ next_event_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	if (info->found_curr_mc)
 	    /* We've found the MC that had the event, but it didn't have
 	       any more events.  Look for last events now. */
-	    info->rv = _ipmi_mc_last_event(mc, info->event);
-	else if (_ipmi_cmp_mc_id(info->event->mcid, mcid) == 0) {
+	    info->rv = ipmi_mc_last_event(mc, info->event);
+	else if (ipmi_cmp_mc_id(info->event->mcid, mcid) == 0) {
 	    info->found_curr_mc = 1;
-	    info->rv = _ipmi_mc_prev_event(mc, info->event);
+	    info->rv = ipmi_mc_prev_event(mc, info->event);
 	}
     } else {
 	if (info->found_curr_mc)
 	    /* We've found the MC that had the event, but it didn't have
 	       any more events.  Look for first events now. */
-	    info->rv = _ipmi_mc_first_event(mc, info->event);
-	else if (_ipmi_cmp_mc_id(info->event->mcid, mcid) == 0) {
+	    info->rv = ipmi_mc_first_event(mc, info->event);
+	else if (ipmi_cmp_mc_id(info->event->mcid, mcid) == 0) {
 	    info->found_curr_mc = 1;
-	    info->rv = _ipmi_mc_next_event(mc, info->event);
+	    info->rv = ipmi_mc_next_event(mc, info->event);
 	}
     }
 }
@@ -2122,7 +2122,7 @@ sel_count_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     int *count = cb_data;
 
-    *count += _ipmi_mc_sel_count(mc);
+    *count += ipmi_mc_sel_count(mc);
 }
 
 int
@@ -2141,7 +2141,7 @@ sel_entries_used_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     int *count = cb_data;
 
-    *count += _ipmi_mc_sel_entries_used(mc);
+    *count += ipmi_mc_sel_entries_used(mc);
 }
 
 int ipmi_domain_sel_entries_used(ipmi_domain_t *domain,

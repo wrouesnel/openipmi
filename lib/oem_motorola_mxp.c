@@ -692,10 +692,10 @@ amc_get_mxp_info(ipmi_mc_t *mc, amc_info_t *ainfo)
     if (ainfo->mxp_info)
 	return ainfo->mxp_info;
 
-    mc_id = _ipmi_mc_convert_to_id(mc);
+    mc_id = ipmi_mc_convert_to_id(mc);
     mc_id.channel = 0;
     mc_id.mc_num = 0x20;
-    _ipmi_mc_pointer_noseq_cb(mc_id, amc_get_mxp_info_cb, &mxp_info);
+    ipmi_mc_pointer_noseq_cb(mc_id, amc_get_mxp_info_cb, &mxp_info);
     ainfo->mxp_info = mxp_info;
 
     return mxp_info;
@@ -5351,7 +5351,7 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
     int              rv;
     int              i;
 
-    id.mcid = _ipmi_mc_convert_to_id(mc);
+    id.mcid = ipmi_mc_convert_to_id(mc);
     id.mcid.channel = 0;
     id.mcid.mc_num = 0x20;
     id.lun = 4;
@@ -5495,7 +5495,7 @@ mxp_event_handler(ipmi_mc_t    *mc,
 		  ipmi_event_t *event,
 		  void         *cb_data)
 {
-    ipmi_mcid_t     mc_id = _ipmi_mc_convert_to_id(mc);
+    ipmi_mcid_t     mc_id = ipmi_mc_convert_to_id(mc);
     int             rv;
     mc_event_info_t einfo;
     unsigned long   timestamp;
@@ -5544,7 +5544,7 @@ mxp_event_handler(ipmi_mc_t    *mc,
     einfo.handled = 0;
     einfo.info = amc_get_mxp_info(mc, ainfo);
 
-    rv = _ipmi_mc_pointer_noseq_cb(mc_id, mc_event, &einfo);
+    rv = ipmi_mc_pointer_noseq_cb(mc_id, mc_event, &einfo);
 
     if (rv)
 	return 0;
@@ -6776,7 +6776,7 @@ con_up_handler(ipmi_domain_t *domain,
     domain_up_info_t *info = cb_data;
 
     if (!info->up && still_connected) {
-	_ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
+	ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
 	info->up = 1;
     }
 }
@@ -6844,7 +6844,7 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	    goto out_err;
 	}
 	info->con_ch_info->up = 0;
-	info->con_ch_info->mcid = _ipmi_mc_convert_to_id(mc);
+	info->con_ch_info->mcid = ipmi_mc_convert_to_id(mc);
 	info->con_ch_info->info = info;
 	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
 						info->con_ch_info,

@@ -240,7 +240,7 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     memset(sdrs, 0, sizeof(*sdrs));
 
 
-    sdrs->mc = _ipmi_mc_convert_to_id(mc);
+    sdrs->mc = ipmi_mc_convert_to_id(mc);
     sdrs->os_hnd = os_hnd;
     sdrs->destroyed = 0;
     sdrs->sdr_lock = NULL;
@@ -1341,7 +1341,7 @@ handle_start_fetch(void *cb_data, int shutdown)
     if (shutdown)
 	return;
 
-    rv = _ipmi_mc_pointer_cb(sdrs->mc, handle_start_fetch_cb, sdrs);
+    rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_fetch_cb, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_start_fetch: error finding MC: %x",
@@ -1450,7 +1450,7 @@ ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
     info.rv = 0;
 
     /* Convert the mc id to an mc. */
-    rv = _ipmi_mc_pointer_cb(sdrs->mc, sdr_fetch_cb, &info);
+    rv = ipmi_mc_pointer_cb(sdrs->mc, sdr_fetch_cb, &info);
     if (rv)
 	return rv;
     return info.rv;
@@ -2167,7 +2167,7 @@ handle_start_save(void *cb_data, int shutdown)
     if (shutdown)
 	return;
 
-    rv = _ipmi_mc_pointer_cb(sdrs->mc, handle_start_save_cb, sdrs);
+    rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_save_cb, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_start_save: error finding MC: %x",
@@ -2250,7 +2250,7 @@ ipmi_sdr_save(ipmi_sdr_info_t  *sdrs,
     info.rv = 0;
 
     /* Convert the mc id to an mc. */
-    rv = _ipmi_mc_pointer_cb(sdrs->mc, sdr_save_cb, &info);
+    rv = ipmi_mc_pointer_cb(sdrs->mc, sdr_save_cb, &info);
     if (rv)
 	return rv;
     return info.rv;

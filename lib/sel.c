@@ -171,7 +171,7 @@ event_cmp(ipmi_event_t *event1, ipmi_event_t *event2)
 {
     int rv;
 
-    rv = _ipmi_cmp_mc_id(event1->mcid, event2->mcid);
+    rv = ipmi_cmp_mc_id(event1->mcid, event2->mcid);
     if (rv)
 	return rv;
     if (event1->record_id > event2->record_id)
@@ -214,7 +214,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 	goto out;
     }
 
-    sel->mc = _ipmi_mc_convert_to_id(mc);
+    sel->mc = ipmi_mc_convert_to_id(mc);
     sel->destroyed = 0;
     sel->in_destroy = 0;
     sel->os_hnd = ipmi_domain_get_os_hnd(domain);
@@ -483,7 +483,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 
     sel->next_rec_id = ipmi_get_uint16(rsp->data+1);
 
-    del_event.mcid = _ipmi_mc_convert_to_id(mc);
+    del_event.mcid = ipmi_mc_convert_to_id(mc);
     del_event.record_id = ipmi_get_uint16(rsp->data+3);
     del_event.type = rsp->data[5];
     memcpy(del_event.data, rsp->data+6, 13);
@@ -824,7 +824,7 @@ start_fetch(void *cb_data, int shutdown)
 
     /* The read lock must be claimed before the sel lock to avoid
        deadlock. */
-    rv = _ipmi_mc_pointer_cb(elem->sel->mc, start_fetch_cb, elem);
+    rv = ipmi_mc_pointer_cb(elem->sel->mc, start_fetch_cb, elem);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO, "start_fetch: MC is not valid");
 	sel_lock(elem->sel);
@@ -890,7 +890,7 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
     elem->sel = sel;
     elem->rv = 0;
 
-    rv = _ipmi_mc_pointer_cb(sel->mc, ipmi_sel_get_cb, elem);
+    rv = ipmi_mc_pointer_cb(sel->mc, ipmi_sel_get_cb, elem);
     if (!rv)
 	rv = elem->rv;
     if (rv)
@@ -1072,7 +1072,7 @@ handle_sel_check(ipmi_mc_t  *mc,
     } else {
 	ipmi_event_t ch_event;
 
-	ch_event.mcid = _ipmi_mc_convert_to_id(mc);
+	ch_event.mcid = ipmi_mc_convert_to_id(mc);
 	ch_event.record_id = ipmi_get_uint16(rsp->data+3);
 	ch_event.type = rsp->data[5];
 	memcpy(ch_event.data, rsp->data+6, 13);
@@ -1232,7 +1232,7 @@ start_del_sel(void *cb_data, int shutdown)
 	goto out;
     }
 
-    rv = _ipmi_mc_pointer_cb(sel->mc, start_del_sel_cb, data);
+    rv = ipmi_mc_pointer_cb(sel->mc, start_del_sel_cb, data);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "start_del_sel: MC went away during delete");
@@ -1342,7 +1342,7 @@ sel_del_event(ipmi_sel_info_t       *sel,
     info.cb_data = cb_data;
     info.cmp_event = cmp_event;
     info.rv = 0;
-    rv = _ipmi_mc_pointer_cb(sel->mc, sel_del_event_cb, &info);
+    rv = ipmi_mc_pointer_cb(sel->mc, sel_del_event_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;

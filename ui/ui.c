@@ -2838,7 +2838,7 @@ void mc_handler(ipmi_mc_t *mc, void *cb_data)
 		    vals[0], vals[1], vals[2], vals[3]);
 
     display_pad_out("               SEL count: %d entries, %d slots used\n",
-		    _ipmi_mc_sel_count(mc), _ipmi_mc_sel_entries_used(mc));
+		    ipmi_mc_sel_count(mc), ipmi_mc_sel_entries_used(mc));
 }
 
 int
@@ -2859,7 +2859,7 @@ mc_cmd(char *cmd, char **toks, void *cb_data)
     info.mc_id.domain_id = domain_id;
 
     info.found = 0;
-    rv = _ipmi_mc_pointer_noseq_cb(info.mc_id, mc_handler, &info);
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, mc_handler, &info);
     if (rv) {
 	cmd_win_out("Unable to find MC\n");
 	return 0;
@@ -2983,7 +2983,7 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     info.msg.data = data;
 
     info.found = 0;
-    rv = _ipmi_mc_pointer_noseq_cb(info.mc_id, mccmd_handler, &info);
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, mccmd_handler, &info);
     if (rv) {
 	cmd_win_out("Unable to convert MC id to a pointer\n");
 	return 0;
@@ -3228,7 +3228,7 @@ delevent_cmder(ipmi_domain_t *domain, void *cb_data)
 
     rv = ipmi_domain_first_event(domain, &event);
     while (!rv && !found) {
-	if ((_ipmi_cmp_mc_id_noseq(event.mcid, info->mc_id) == 0)
+	if ((ipmi_cmp_mc_id_noseq(event.mcid, info->mc_id) == 0)
 	    && (event.record_id == info->record_id))
 	{
 	    found = 1;
@@ -3454,7 +3454,7 @@ get_sel_time_cmd(char *cmd, char **toks, void *cb_data)
     info.mc_id.domain_id = domain_id;
 
     info.found = 0;
-    rv = _ipmi_mc_pointer_noseq_cb(info.mc_id, get_sel_time_handler, &info);
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, get_sel_time_handler, &info);
     if (rv) {
 	cmd_win_out("Unable to find MC\n");
 	return 0;
@@ -3596,7 +3596,7 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
 
     info->found = 0;
 
-    rv = _ipmi_mc_pointer_noseq_cb(info->mc_id, sdrs_mcs_handler, info);
+    rv = ipmi_mc_pointer_noseq_cb(info->mc_id, sdrs_mcs_handler, info);
     if (rv) {
 	cmd_win_out("Unable to find MC\n");
 	ipmi_mem_free(info);

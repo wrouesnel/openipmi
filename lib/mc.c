@@ -508,10 +508,10 @@ sel_op_done(ipmi_sel_info_t *sel,
 }
 
 int
-_ipmi_mc_del_event(ipmi_mc_t                 *mc,
-		   ipmi_event_t              *event, 
-		   ipmi_mc_del_event_done_cb handler,
-		   void                      *cb_data)
+ipmi_mc_del_event(ipmi_mc_t                 *mc,
+		  ipmi_event_t              *event, 
+		  ipmi_mc_del_event_done_cb handler,
+		  void                      *cb_data)
 {
     sel_op_done_info_t *sel_info;
     int                rv;
@@ -541,31 +541,31 @@ _ipmi_mc_del_event(ipmi_mc_t                 *mc,
 }
 
 int
-_ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event)
+ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event)
 {
     return ipmi_sel_get_next_event(mc->sel, event);
 }
 
 int
-_ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event)
+ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event)
 {
     return ipmi_sel_get_prev_event(mc->sel, event);
 }
 
 int
-_ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event)
+ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event)
 {
     return ipmi_sel_get_last_event(mc->sel, event);
 }
 
 int
-_ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event)
+ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event)
 {
     return ipmi_sel_get_first_event(mc->sel, event);
 }
 
 int
-_ipmi_mc_sel_count(ipmi_mc_t *mc)
+ipmi_mc_sel_count(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
 
@@ -574,7 +574,7 @@ _ipmi_mc_sel_count(ipmi_mc_t *mc)
 }
 
 int
-_ipmi_mc_sel_entries_used(ipmi_mc_t *mc)
+ipmi_mc_sel_entries_used(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
 
@@ -583,7 +583,7 @@ _ipmi_mc_sel_entries_used(ipmi_mc_t *mc)
 }
 
 int
-_ipmi_mc_sel_get_major_version(ipmi_mc_t *mc)
+ipmi_mc_sel_get_major_version(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
 
@@ -592,7 +592,7 @@ _ipmi_mc_sel_get_major_version(ipmi_mc_t *mc)
 }
 
 int 
-_ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc)
+ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
 
@@ -601,7 +601,7 @@ _ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc)
 }
 
 int 
-_ipmi_mc_sel_get_overflow(ipmi_mc_t *mc)
+ipmi_mc_sel_get_overflow(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
     
@@ -610,7 +610,7 @@ _ipmi_mc_sel_get_overflow(ipmi_mc_t *mc)
 }
 
 int
-_ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc)
+ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
     
@@ -619,7 +619,7 @@ _ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc)
 }
 
 int
-_ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc)
+ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
 
@@ -628,7 +628,7 @@ _ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc)
 }
 
 int
-_ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc)
+ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
 
@@ -637,7 +637,7 @@ _ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc)
 }
 
 int 
-_ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc)
+ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc)
 {
     unsigned int val = 0;
 
@@ -754,7 +754,7 @@ reread_sel_done(ipmi_sel_info_t *sel,
 	    goto out;
 	}
 
-	rv = _ipmi_mc_pointer_cb(info->mcid, mc_reread_sel_cb, info);
+	rv = ipmi_mc_pointer_cb(info->mcid, mc_reread_sel_cb, info);
 	if (rv) {
 	    info->handler(NULL, ECANCELED, cb_data);
 	    goto out;
@@ -778,7 +778,7 @@ ipmi_mc_reread_sel(ipmi_mc_t       *mc,
 
     info->handler = handler;
     info->cb_data = cb_data;
-    info->mcid = _ipmi_mc_convert_to_id(mc);
+    info->mcid = ipmi_mc_convert_to_id(mc);
 
     rv = ipmi_sel_get(mc->sel, reread_sel_done, info);
     if (rv)
@@ -1107,7 +1107,7 @@ con_up_handler(ipmi_domain_t *domain,
 
     ipmi_domain_remove_con_change_handler(domain, info->con_chid);
     info->con_chid = NULL;
-    _ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
+    ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
 }
 
 static void
@@ -1122,7 +1122,7 @@ start_sel_ops(ipmi_mc_t *mc)
     } else {
 	/* The domain is not up yet, wait for it to come up then start
            the process. */
-	mc->conup_info->mcid = _ipmi_mc_convert_to_id(mc);
+	mc->conup_info->mcid = ipmi_mc_convert_to_id(mc);
 	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
 						mc->conup_info,
 					       	&mc->conup_info->con_chid);
@@ -1216,7 +1216,7 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
  **********************************************************************/
 
 ipmi_mcid_t
-_ipmi_mc_convert_to_id(ipmi_mc_t *mc)
+ipmi_mc_convert_to_id(ipmi_mc_t *mc)
 {
     ipmi_mcid_t val;
 
@@ -1231,11 +1231,11 @@ _ipmi_mc_convert_to_id(ipmi_mc_t *mc)
 
 typedef struct mc_ptr_info_s
 {
-    int              err;
-    int              cmp_seq;
-    ipmi_mcid_t      id;
-    _ipmi_mc_ptr_cb  handler;
-    void             *cb_data;
+    int            err;
+    int            cmp_seq;
+    ipmi_mcid_t    id;
+    ipmi_mc_ptr_cb handler;
+    void           *cb_data;
 } mc_ptr_info_t;
 
 static void
@@ -1274,7 +1274,7 @@ mc_ptr_cb(ipmi_domain_t *domain, void *cb_data)
 }
 
 int
-_ipmi_mc_pointer_cb(ipmi_mcid_t id, _ipmi_mc_ptr_cb handler, void *cb_data)
+ipmi_mc_pointer_cb(ipmi_mcid_t id, ipmi_mc_ptr_cb handler, void *cb_data)
 {
     int           rv;
     mc_ptr_info_t info;
@@ -1291,9 +1291,9 @@ _ipmi_mc_pointer_cb(ipmi_mcid_t id, _ipmi_mc_ptr_cb handler, void *cb_data)
 }
 
 int
-_ipmi_mc_pointer_noseq_cb(ipmi_mcid_t     id,
-			  _ipmi_mc_ptr_cb handler,
-			  void            *cb_data)
+ipmi_mc_pointer_noseq_cb(ipmi_mcid_t    id,
+			 ipmi_mc_ptr_cb handler,
+			 void           *cb_data)
 {
     int           rv;
     mc_ptr_info_t info;
@@ -1310,7 +1310,7 @@ _ipmi_mc_pointer_noseq_cb(ipmi_mcid_t     id,
 }
 
 int
-_ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2)
+ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2)
 {
     int d;
 
@@ -1330,11 +1330,11 @@ _ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2)
 }
 
 int
-_ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2)
+ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2)
 {
     int d;
 
-    d = _ipmi_cmp_mc_id_noseq(id1, id2);
+    d = ipmi_cmp_mc_id_noseq(id1, id2);
     if (d)
 	return d;
 

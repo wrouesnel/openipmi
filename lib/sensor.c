@@ -195,7 +195,7 @@ ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor)
 
     CHECK_SENSOR_LOCK(sensor);
 
-    val.mcid = _ipmi_mc_convert_to_id(sensor->mc);
+    val.mcid = ipmi_mc_convert_to_id(sensor->mc);
     val.lun = sensor->lun;
     val.sensor_num = sensor->num;
 
@@ -207,7 +207,7 @@ ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2)
 {
     int rv;
 
-    rv = _ipmi_cmp_mc_id(id1.mcid, id2.mcid);
+    rv = ipmi_cmp_mc_id(id1.mcid, id2.mcid);
     if (rv)
 	return rv;
     if (id1.lun > id2.lun)
@@ -268,7 +268,7 @@ ipmi_sensor_pointer_cb(ipmi_sensor_id_t   id,
     info.id = id;
     info.err = 0;
 
-    rv = _ipmi_mc_pointer_cb(id.mcid, mc_cb, &info);
+    rv = ipmi_mc_pointer_cb(id.mcid, mc_cb, &info);
     if (!rv)
 	rv = info.err;
 
@@ -291,7 +291,7 @@ ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t   id,
     info.id = id;
     info.err = 0;
 
-    rv = _ipmi_mc_pointer_noseq_cb(id.mcid, mc_cb, &info);
+    rv = ipmi_mc_pointer_noseq_cb(id.mcid, mc_cb, &info);
     if (!rv)
 	rv = info.err;
 

@@ -212,10 +212,10 @@ void ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
 				   ipmi_mc_del_event_cb handler);
 
 typedef void (ipmi_mc_del_event_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
-int _ipmi_mc_del_event(ipmi_mc_t                 *mc,
-		       ipmi_event_t              *event, 
-		       ipmi_mc_del_event_done_cb handler,
-		       void                      *cb_data);
+int ipmi_mc_del_event(ipmi_mc_t                 *mc,
+		      ipmi_event_t              *event, 
+		      ipmi_mc_del_event_done_cb handler,
+		      void                      *cb_data);
 
 /* Check the event receiver for the MC. */
 void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
@@ -226,19 +226,20 @@ void _ipmi_mc_shutdown(void);
 
 
 void _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
-int _ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event);
-int _ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event);
-int _ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);
-int _ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
-int _ipmi_mc_sel_count(ipmi_mc_t *mc);
-int _ipmi_mc_sel_entries_used(ipmi_mc_t *mc);
-int _ipmi_mc_sel_get_major_version(ipmi_mc_t *mc);
-int _ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc);
-int _ipmi_mc_sel_get_overflow(ipmi_mc_t *mc);
-int _ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc);
-int _ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc);
-int _ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc);
-int _ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc);
+
+int ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int ipmi_mc_sel_count(ipmi_mc_t *mc);
+int ipmi_mc_sel_entries_used(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_major_version(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_overflow(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc);
 
 int _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
 int _ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
@@ -282,16 +283,16 @@ void _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
 void *_ipmi_mc_get_sdr_entities(ipmi_mc_t *mc);
 void _ipmi_mc_set_sdr_entities(ipmi_mc_t *mc, void *entities);
 
-ipmi_mcid_t _ipmi_mc_convert_to_id(ipmi_mc_t *mc);
-typedef void (*_ipmi_mc_ptr_cb)(ipmi_mc_t *mc, void *cb_data);
-int _ipmi_mc_pointer_cb(ipmi_mcid_t   id,
-			_ipmi_mc_ptr_cb handler,
-			void           *cb_data);
-int _ipmi_mc_pointer_noseq_cb(ipmi_mcid_t   id,
-			      _ipmi_mc_ptr_cb handler,
-			      void           *cb_data);
-int _ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2);
-int _ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2);
+ipmi_mcid_t ipmi_mc_convert_to_id(ipmi_mc_t *mc);
+typedef void (*ipmi_mc_ptr_cb)(ipmi_mc_t *mc, void *cb_data);
+int ipmi_mc_pointer_cb(ipmi_mcid_t    id,
+		       ipmi_mc_ptr_cb handler,
+		       void           *cb_data);
+int ipmi_mc_pointer_noseq_cb(ipmi_mcid_t    id,
+			     ipmi_mc_ptr_cb handler,
+			     void           *cb_data);
+int ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2);
+int ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2);
 
 /* Used to periodically check that the MC data is current and valid. */
 void _ipmi_mc_check_mc(ipmi_mc_t *mc);
