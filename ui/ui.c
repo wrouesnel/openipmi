@@ -3346,6 +3346,235 @@ writepef_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+typedef struct setpef_parm_s
+{
+    char *name;
+    int (*set_val)(ipmi_pef_config_t *, unsigned int);
+    int (*set_data)(ipmi_pef_config_t *, unsigned char *, unsigned int);
+    int (*set_val_sel)(ipmi_pef_config_t *, unsigned int, unsigned int);
+    int (*set_data_sel)(ipmi_pef_config_t *, unsigned int,
+			unsigned char *, unsigned int);
+} setpef_parm_t;
+
+#define N NULL
+#define D(x) #x
+#define C(x) D(x)
+#define H(x) ipmi_pefconfig_set_ ## x
+#define G(x) H(x)
+static setpef_parm_t pef_conf[] =
+{
+#undef V
+#define V startup_delay_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V alert_startup_delay_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V event_messages_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V pef_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V diagnostic_interrupt_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V oem_action_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V power_cycle_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V reset_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V power_down_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V alert_enabled
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V startup_delay
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V alert_startup_delay
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V enable_filter
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V filter_type
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V diagnostic_interrupt
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V oem_action
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V power_cycle
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V reset
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V power_down
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V alert
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V alert_policy_number
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V event_severity
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V generator_id_addr
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V generator_id_channel_lun
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V sensor_type
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V sensor_number
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V event_trigger
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data1_offset_mask
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data1_mask
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data1_compare1
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data1_compare2
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data2_mask
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data2_compare1
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data2_compare2
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data3_mask
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data3_compare1
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V data3_compare2
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V policy_num
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V enabled
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V channel
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V destination_selector
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V alert_string_event_specific
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V alert_string_selector
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V event_filter
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V alert_string_set
+    { C(V),    N,    N, G(V),    N },
+    { NULL }
+};
+
+
+static int
+setpef_cmd(char *cmd, char **toks, void *cb_data)
+{
+    unsigned int  sel;
+    unsigned int  val;
+    unsigned char data[30];
+    char          *name;
+    char          *str;
+    int           i;
+    int           rv = 0;
+
+    if (!pef_config) {
+	cmd_win_out("No PEF config read, use readpef to fetch one\n");
+	return 0;
+    }
+
+    name = strtok_r(NULL, " \t\n", toks);
+    if (!name) {
+	cmd_win_out("No PEF config name given\n");
+	return 0;
+    }
+
+    for (i=0; pef_conf[i].name != NULL; i++) {
+	if (strcmp(pef_conf[i].name, name) == 0)
+	    break;
+    }
+
+    if (pef_conf[i].name == NULL) {
+	if (strcmp(name, "guid") == 0) {
+	    for (i=0; i<sizeof(data); i++) {
+		if (get_uchar(toks, data+i, NULL))
+		    break;
+	    }
+	    rv = ipmi_pefconfig_set_guid(pef_config, sel, data, i);
+	} else if (strcmp(name, "alert_string") == 0) {
+	    if (get_uint(toks, &sel, "selector"))
+		return 0;
+	    str = strtok_r(NULL, "", toks);
+	    rv = ipmi_pefconfig_set_alert_string(pef_config, sel, str);
+	} else {
+	    cmd_win_out("Invalid PEF config name: '%s'\n", name);
+	    return 0;
+	}
+    } else if (pef_conf[i].set_val) {
+	if (get_uint(toks, &val, "value"))
+	    return 0;
+	rv = pef_conf[i].set_val(pef_config, val);
+    } else if (pef_conf[i].set_data) {
+	for (i=0; i<sizeof(data); i++) {
+	    if (get_uchar(toks, data+i, NULL))
+		break;
+	}
+	rv = pef_conf[i].set_data(pef_config, data, i);
+    } else if (pef_conf[i].set_val_sel) {
+	if (get_uint(toks, &sel, "selector"))
+	    return 0;
+	if (get_uint(toks, &val, "value"))
+	    return 0;
+	rv = pef_conf[i].set_val_sel(pef_config, sel, val);
+    } else if (pef_conf[i].set_data_sel) {
+	if (get_uint(toks, &sel, "selector"))
+	    return 0;
+	for (i=0; i<sizeof(data); i++) {
+	    if (get_uchar(toks, data+i, NULL))
+		break;
+	}
+	rv = pef_conf[i].set_data_sel(pef_config, sel, data, i);
+    }
+    if (rv)
+	cmd_win_out("Error setting parm: 0x%x\n", rv);
+    return 0;
+}
+
 static void
 lanparm_out_val(char *name, int rv, char *fmt, unsigned int val)
 {
@@ -3651,6 +3880,189 @@ writelanparm_cmd(char *cmd, char **toks, void *cb_data)
     }
     display_pad_refresh();
 
+    return 0;
+}
+
+typedef struct setlan_parm_s
+{
+    char *name;
+    int (*set_val)(ipmi_lan_config_t *, unsigned int);
+    int (*set_data)(ipmi_lan_config_t *, unsigned char *, unsigned int);
+    int (*set_val_sel)(ipmi_lan_config_t *, unsigned int, unsigned int);
+    int (*set_data_sel)(ipmi_lan_config_t *, unsigned int,
+			unsigned char *, unsigned int);
+} setlan_parm_t;
+
+#undef N
+#define N NULL
+#undef D
+#define D(x) #x
+#undef C
+#define C(x) D(x)
+#undef H
+#define H(x) ipmi_lanconfig_set_ ## x
+#undef G
+#define G(x) H(x)
+static setlan_parm_t lan_conf[] =
+{
+#undef V
+#define V ip_addr_source
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V ipv4_ttl
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V ipv4_flags
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V ipv4_precedence
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V ipv4_tos
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V enable_auth_oem
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V enable_auth_straight
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V enable_auth_md5
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V enable_auth_md2
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V enable_auth_none
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V ip_addr
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V mac_addr
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V subnet_mask
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V primary_rmcp_port
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V secondary_rmcp_port
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V bmc_generated_arps
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V bmc_generated_garps
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V garp_interval
+    { C(V), G(V),    N,    N,    N },
+#undef V
+#define V default_gateway_ip_addr
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V default_gateway_mac_addr
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V backup_gateway_ip_addr
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V backup_gateway_mac_addr
+    { C(V),    N, G(V),    N,    N },
+#undef V
+#define V alert_ack
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V dest_type
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V alert_retry_interval
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V max_alert_retries
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V dest_format
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V gw_to_use
+    { C(V),    N,    N, G(V),    N },
+#undef V
+#define V dest_ip_addr
+    { C(V),    N,    N,    N, G(V) },
+#undef V
+#define V dest_mac_addr
+    { C(V),    N,    N,    N, G(V) },
+};
+
+
+static int
+setlanparm_cmd(char *cmd, char **toks, void *cb_data)
+{
+    unsigned int  sel;
+    unsigned int  val;
+    unsigned char data[30];
+    char          *name;
+    char          *str;
+    int           i;
+    int           rv = 0;
+
+    if (!lanparm_config) {
+	cmd_win_out("No LAN config read, use readlan to fetch one\n");
+	return 0;
+    }
+
+    name = strtok_r(NULL, " \t\n", toks);
+    if (!name) {
+	cmd_win_out("No LAN config name given\n");
+	return 0;
+    }
+
+    for (i=0; lan_conf[i].name != NULL; i++) {
+	if (strcmp(lan_conf[i].name, name) == 0)
+	    break;
+    }
+
+    if (lan_conf[i].name == NULL) {
+        if (strcmp(name, "community_string") == 0) {
+	    if (get_uint(toks, &sel, "selector"))
+		return 0;
+	    str = strtok_r(NULL, "", toks);
+	    rv = ipmi_lanconfig_set_community_string(lanparm_config,
+						     str, strlen(str));
+	} else {
+	    cmd_win_out("Invalid LAN config name: '%s'\n", name);
+	    return 0;
+	}
+    } else if (lan_conf[i].set_val) {
+	if (get_uint(toks, &val, "value"))
+	    return 0;
+	rv = lan_conf[i].set_val(lanparm_config, val);
+    } else if (lan_conf[i].set_data) {
+	for (i=0; i<sizeof(data); i++) {
+	    if (get_uchar(toks, data+i, NULL))
+		break;
+	}
+	rv = lan_conf[i].set_data(lanparm_config, data, i);
+    } else if (lan_conf[i].set_val_sel) {
+	if (get_uint(toks, &sel, "selector"))
+	    return 0;
+	if (get_uint(toks, &val, "value"))
+	    return 0;
+	rv = lan_conf[i].set_val_sel(lanparm_config, sel, val);
+    } else if (lan_conf[i].set_data_sel) {
+	if (get_uint(toks, &sel, "selector"))
+	    return 0;
+	for (i=0; i<sizeof(data); i++) {
+	    if (get_uchar(toks, data+i, NULL))
+		break;
+	}
+	rv = lan_conf[i].set_data_sel(lanparm_config, sel, data, i);
+    }
+    if (rv)
+	cmd_win_out("Error setting parm: 0x%x\n", rv);
     return 0;
 }
 
@@ -4422,6 +4834,10 @@ static struct {
     { "writepef",	writepef_cmd,
       " <channel> <mc num>"
       " - write the current PEF information to an MC" },
+    { "setpef",		setpef_cmd,
+      " <config> [<selector>] <value>"
+      " - Set the given config item to the value.  The optional selector"
+      " is used for items that take a selector" },
     { "readlanparm",	readlanparm_cmd,
       " <channel> <mc num> <channel>"
       " - read lanparm information from an MC" },
@@ -4430,6 +4846,10 @@ static struct {
     { "writelanparm",	writelanparm_cmd,
       " <channel> <mc num> <channel>"
       " - write the current LANPARM information to an MC" },
+    { "setlanparm",	setlanparm_cmd,
+      " <config> [<selector>] <value>"
+      " - Set the given config item to the value.  The optional selector"
+      " is used for items that take a selector" },
     { "delevent",	delevent_cmd,
       " <channel> <mc num> <log number> - "
       "Delete the given event number from the SEL" },

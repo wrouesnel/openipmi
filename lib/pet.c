@@ -160,8 +160,52 @@ static ipmi_pet_t pet_list =
 
 static void rescan_pet(void *cb_data, os_hnd_timer_id_t *id);
 
-static void pet_handler(int fd, void *cb_data, os_hnd_fd_id_t *id)
+#ifdef DEBUG_MSG
+static void
+dump_hex(void *vdata, int len)
 {
+    unsigned char *data = vdata;
+    int i;
+    for (i=0; i<len; i++) {
+	if ((i != 0) && ((i % 16) == 0)) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  ");
+	}
+	ipmi_log(IPMI_LOG_DEBUG_CONT, " %2.2x", data[i]);
+    }
+}
+#endif
+
+/* We got a message from the trap port. */
+static void
+pet_handler(int fd, void *cb_data, os_hnd_fd_id_t *id)
+{
+    struct sockaddr_in addr;
+    unsigned char      buf[500];
+    socklen_t          fromlen;
+    int                len;
+
+    fromlen = sizeof(addr);
+    len = recvfrom(fd, buf, sizeof(buf), MSG_TRUNC,
+		  (struct sockaddr *) &addr, &fromlen);
+    if (len == -1) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Error receiving message from SNMP trap socket: %x", errno);
+    }
+
+    if (len > sizeof(buf)) {
+	/* Packet was truncated. */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Message truncated from SNMP trap socket: %d bytes", len);
+	return;
+    }
+
+    if (DEBUG_MSG) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming SNMP trap\n addr = ");
+	dump_hex((unsigned char *) &addr, fromlen);
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
+	dump_hex(buf, len);
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
+    }
 }
 
 static int
