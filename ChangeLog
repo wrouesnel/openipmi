@@ -1,4 +1,20 @@
 
+2003-06-04 Corey Minyard <cminyard@mvista.com>
+
+	* OpenIPMI.tex, REAME.Force: Minor updates to make some things
+	clearer.
+
+	* basic_ui.c: Fixed a problem with SMI connections.
+
+	* ilist.c, ilist.h: Added some helper functions.
+
+	* ui_os.c: Switch from /dev/random to /dev/srandom to avoid
+	blocking for lack of entropy.
+
+2003-06-03 Corey Minyard <cminyard@mvista.com>
+
+	* ipmicmd.c: Added the latency testing code back in.
+
 2003-06-02 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 0.4.2.

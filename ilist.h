@@ -70,6 +70,16 @@ int ilist_last(ilist_iter_t *iter);
 int ilist_next(ilist_iter_t *iter);
 int ilist_prev(ilist_iter_t *iter);
 
+/* Remove the first or last item from the list.  It will be deleted
+   from the list and returned.  If the list is empty, NULL will be
+   returned. */
+void *ilist_remove_first(ilist_t *list);
+void *ilist_remove_last(ilist_t *list);
+
+/* Remove a given item from the list, if it is there.  Return 1 if it
+   was found and 0 if it was not found. */
+int ilist_remove_item_from_list(ilist_t *list, void *item);
+
 /* Returns failue (false) if unpositioned. */
 int ilist_delete(ilist_iter_t *iter); /* Position on next element after del */
 
@@ -133,7 +143,6 @@ struct ilist_iter_s
     ilist_t      *list;
     ilist_item_t *curr;
 };
-
 
 /* You must define these. */
 void *ilist_mem_alloc(size_t size);

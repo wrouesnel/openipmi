@@ -1,5 +1,5 @@
 /*
- * ilist.
+ * ilist.c
  *
  * Generic lists in C.
  *
@@ -337,3 +337,59 @@ ilist_sort(ilist_t *list, ilist_sort_cb cmp)
     }
 }
 
+void *
+ilist_remove_first(ilist_t *list)
+{
+    ilist_item_t *curr;
+    void         *item;
+
+    if (ilist_empty(list))
+	return NULL;
+
+    curr = list->head->next;
+    curr->next->prev = curr->prev;
+    curr->prev->next = curr->next;
+    item = curr->item;
+    if (curr->malloced)
+	ilist_mem_free(curr);
+    return item;
+}
+
+void *
+ilist_remove_last(ilist_t *list)
+{
+    ilist_item_t *curr;
+    void         *item;
+
+    if (ilist_empty(list))
+	return NULL;
+
+    curr = list->head->prev;
+    curr->next->prev = curr->prev;
+    curr->prev->next = curr->next;
+    item = curr->item;
+    if (curr->malloced)
+	ilist_mem_free(curr);
+    return item;
+}
+
+int
+ilist_remove_item_from_list(ilist_t *list, void *item)
+{
+    ilist_item_t *curr;
+
+    curr = list->head->next;
+    while (curr != list->head) {
+	if (curr->item == item)
+	    break;
+	curr = curr->next;
+    }
+    if (curr == list->head)
+	return 0;
+
+    curr->next->prev = curr->prev;
+    curr->prev->next = curr->next;
+    if (curr->malloced)
+	ilist_mem_free(curr);
+    return 1;
+}

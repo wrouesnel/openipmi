@@ -161,6 +161,8 @@ main(int argc, char *argv[])
 	}
 
 	con_parms[last_con].smi_intf = atoi(argv[curr_arg]);
+	argc--;
+	curr_arg++;
 	rv = ipmi_smi_setup_con(con_parms[last_con].smi_intf,
 				&ipmi_ui_cb_handlers, selector,
 				&con[last_con]);

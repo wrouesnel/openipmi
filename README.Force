@@ -38,6 +38,6 @@ type of interface.
 If you have a single connection to a Force system, it's not big deal,
 of course.  Your connection will be set to the BMC and everything will
 be happy.  This only affects dual connections.  Of course, if you
-connect two different OpenIPMI connections to two different cards,
+connect two different OpenIPMI-enabled programs to two different cards,
 they will get into a war about who's connection is active, so you
 shouldn't do this.

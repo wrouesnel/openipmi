@@ -152,13 +152,17 @@ database, not physical presence in the system.
 The user must know about two other OpenIPMI concepts: connections and
 domains.  A connection provides the interface to the IPMI system.  In
 essence, it is the BMC connection.  You must allocate one or more
-connection and create a domain with them.  OpenIPMI supports multple
+connections and create a domain with them.  OpenIPMI supports multple
 connections to a domain in some cases, but currently it requires the OEM
 plugins exist.  A domain represents a set of devices on a bus (like
 IPMB) whose entities will be unique.  For instance, a chassis with a lot
 of cards plugged could be a domain, each card could be an entity and
 then create it's own sub-entities, but they will be designed so the
 entity id's don't collide.
+
+OpenIPMI will automatically manage the connections, activating and
+deactating the proper connections (if the connections support that),
+detecting failures and switching over, etc.
 
 Though the user doesn't have know the inner details of IPMI addressing
 and messaging, they do need to know about entities and sensors.
@@ -1225,8 +1229,8 @@ If a connections has the concept of being ``active'' and ``standby'', it
 should set the @code{set_active_state} function pointer in the
 connection so it can change the state of the connection as necessary.
 For an active/standby system to work, setting a connection as active
-should automatically (or at least as part of @code{set_active_state}
-deactivate the other interfaces.
+should automatically (or at least as part of @code{set_active_state})
+deactivate the other connections.
 
 @node    Fixups, Non-Standard Sensors, Connections, How to Write OEM Plugins
 @section Fixups
@@ -1239,7 +1243,7 @@ For sensors, the OEM code can register to be told when new sensors are
 added via the @code{ipmi_mc_set_oem_new_sensor_handler()} function.  It
 should do this in the main OEM callback.  Every sensor that comes from
 that MC will be supplied as it is detected from the device SDRs.  The
-OEM code can then fix values in the code.  Note that any sensors from
+OEM code can then fix values in the sensor.  Note that any sensors from
 the main SDR repository will not be called this way, since they will
 already exist before the MC is detected.  If these exist, the OEM code
 will have to scan the existing sensors and fix them up.

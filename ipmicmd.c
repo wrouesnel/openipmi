@@ -52,6 +52,7 @@
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_msgbits.h>
 
 #include <OpenIPMI/ipmi_int.h>
 
@@ -351,53 +352,97 @@ event_handler(ipmi_con_t   *ipmi,
     dump_msg_data(event, addr, "event");
 }
 
-#if 0
-void
-time_msgs(ipmi_msg_t *msg, unsigned long count)
+typedef struct timed_data_s
 {
-    struct timeval   start_time, end_time;
-    int              i;
-    fd_set           rset;
-    struct ipmi_recv rsp;
-    unsigned long    diff;
-    int              rv;
-    struct ipmi_addr addr;
-    char             data[30];
+    ipmi_con_t     *con;
+    struct timeval start_time;
+    ipmi_msg_t     msg;
+    unsigned char  data[MAX_IPMI_DATA_SIZE];
+    ipmi_addr_t    addr;
+    unsigned int   addr_len;
+    unsigned int   count;
+    unsigned int   total_count;
+} timed_data_t;
 
-    gettimeofday(&start_time, NULL);
-    for (i=0; i<count; i++) {
-	rv = ioctl(ipmi_fd, IPMICTL_SEND_COMMAND, req);
+void
+timed_rsp_handler(ipmi_con_t   *con,
+		  ipmi_addr_t  *addr,
+		  unsigned int addr_len,
+		  ipmi_msg_t   *rsp,
+		  void         *data1,
+		  void         *data2,
+		  void         *data3,
+		  void         *data4)
+{
+    timed_data_t *data = data1;
+
+    if (data->count == 0) {
+	unsigned long  diff;
+	struct timeval end_time;
+
+	gettimeofday(&end_time, NULL);
+	diff = (((end_time.tv_sec - data->start_time.tv_sec) * 1000000)
+		+ (end_time.tv_usec - data->start_time.tv_usec));
+	printf("Time was %fus per msg, %ldus total\n",
+	       ((float) diff) / ((float)(data->total_count)),
+	       diff);
+	free(data);
+    } else {
+	int rv;
+
+	rv = con->send_command(data->con,
+			       &data->addr,
+			       data->addr_len,
+			       &data->msg,
+			       timed_rsp_handler,
+			       data, NULL, NULL, NULL);
+	data->count--;
 	if (rv == -1) {
 	    printf("Error sending command: %s\n", strerror(errno));
-	    return;
-	}
-
-	FD_ZERO(&rset);
-	FD_SET(ipmi_fd, &rset);
-	rv = select(ipmi_fd+1, &rset, NULL, NULL, NULL);
-	if (rv == -1) {
-	    printf("Error from select: %s\n", strerror(errno));
-	    return;
-	}
-
-	rsp.addr = (unsigned char *) &addr;
-	rsp.addr_len = sizeof(addr);
-	rsp.msg.data = data;
-	rsp.msg.data_len = sizeof(data);
-	rv = ioctl(ipmi_fd, IPMICTL_RECEIVE_MSG, &rsp);
-	if (rv == -1) {
-	    printf("Error receiving response: %s\n", strerror(errno));
-	    return;
+	    free(data);
 	}
     }
-    gettimeofday(&end_time, NULL);
-    diff = (((end_time.tv_sec - start_time.tv_sec) * 1000000)
-	    + (end_time.tv_usec - start_time.tv_usec));
-    printf("Time was %fus per msg, %ldus total\n",
-	   ((float) diff) / ((float)(count)),
-	   diff);
 }
-#endif
+
+void
+time_msgs(ipmi_con_t    *con,
+	  ipmi_msg_t    *msg,
+	  ipmi_addr_t   *addr,
+	  unsigned int  addr_len,
+	  unsigned long count)
+{
+    timed_data_t *data;
+    int          rv;
+
+    data = malloc(sizeof(*data));
+    if (!data) {
+	printf("No memory to perform command\n");
+	return;
+    }
+
+    data->con = con;
+    gettimeofday(&data->start_time, NULL);
+    data->count = 0;
+    memcpy(&data->msg, msg, sizeof(data->msg));
+    memcpy(data->data, msg->data, msg->data_len);
+    data->msg.data = data->data;
+    memcpy(&data->addr, addr, addr_len);
+    data->addr_len = addr_len;
+    data->count = count;
+    data->total_count = count;
+
+    rv = con->send_command(data->con,
+			   &data->addr,
+			   data->addr_len,
+			   &data->msg,
+			   timed_rsp_handler,
+			   data, NULL, NULL, NULL);
+    data->count--;
+    if (rv == -1) {
+	printf("Error sending command: %s\n", strerror(errno));
+	free(data);
+    }
+}
 
 int
 process_input_line(char *buf)
@@ -410,10 +455,11 @@ process_input_line(char *buf)
     ipmi_addr_t        addr;
     unsigned int       addr_len;
     ipmi_msg_t         msg;
-    char               outbuf[40];
+    char               outbuf[MAX_IPMI_DATA_SIZE];
     int                rv = 0;
     short              channel;
     unsigned char      seq = 0;
+    unsigned int       time_count = 0;
 
     if (v == NULL)
 	return -1;
@@ -429,11 +475,9 @@ process_input_line(char *buf)
 	printf("      send a command on the channel.\n");
 	printf("  <channel> 00 <dest addr> <lun> <netfn> <cmd> <data...> -\n");
 	printf("      broadcast a command on the channel.\n");
-#if 0
 	printf("  test_lat <count> <command> - Send the command and wait for\n"
 	       "      the response <count> times and measure the average\n"
 	       "      time.\n");
-#endif
 	return 0;
     }
 
@@ -484,7 +528,6 @@ process_input_line(char *buf)
 	return 0;
     }
 
-#if 0
     if (strcmp(v, "test_lat") == 0) {
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
 	if (!v) {
@@ -495,7 +538,6 @@ process_input_line(char *buf)
 
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
     }
-#endif
 
     while (v != NULL) {
 	if (pos >= sizeof(outbuf)) {
@@ -564,13 +606,18 @@ process_input_line(char *buf)
     msg.cmd = outbuf[start]; start++;
     msg.data = &(outbuf[start]);
     msg.data_len = pos-start;
-    if (msg.netfn & 1)
-	rv = con->send_response(con, &addr, addr_len, &msg, seq);
-    else
-	rv = con->send_command(con, &addr, addr_len, &msg, rsp_handler,
-			       NULL, NULL, NULL, NULL);
-    if (rv == -1) {
-	printf("Error sending command: %x\n", rv);
+    if (time_count) {
+	time_msgs(con, &msg, &addr, addr_len, time_count);
+	rv = 0;
+    } else {
+	if (msg.netfn & 1)
+	    rv = con->send_response(con, &addr, addr_len, &msg, seq);
+	else
+	    rv = con->send_command(con, &addr, addr_len, &msg, rsp_handler,
+				   NULL, NULL, NULL, NULL);
+	if (rv == -1) {
+	    printf("Error sending command: %x\n", rv);
+	}
     }
 
     return(rv);

@@ -202,7 +202,7 @@ free_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 static int
 get_random(os_handler_t *handler, void *data, unsigned int len)
 {
-    int fd = open("/dev/random", O_RDONLY);
+    int fd = open("/dev/srandom", O_RDONLY);
     int rv;
 
     if (fd == -1)
