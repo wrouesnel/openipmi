@@ -1,4 +1,9 @@
 
+2003-03-06 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Added rescanning the entities when a connection comes
+	back.
+
 2003-03-05 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h: Fixed the description of the

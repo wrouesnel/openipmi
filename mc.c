@@ -609,8 +609,11 @@ ll_con_failed(ipmi_con_t *ipmi,
 	bmc->bmc->connection_up = 0;
     else {
 	bmc->bmc->connection_up = 1;
+	/* When a connection comes back up, rescan the bus and do
+           entity presence detection. */
 	ipmi_lock(bmc->bmc->mc_list_lock);
 	start_mc_scan(bmc);
+	ipmi_detect_ents_presence_changes(bmc->bmc->entities, 1);
 	ipmi_unlock(bmc->bmc->mc_list_lock);
     }
 
