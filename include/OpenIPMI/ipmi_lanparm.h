@@ -146,24 +146,28 @@ unsigned int ipmi_lanconfig_get_support_auth_none(ipmi_lan_config_t *lanc);
 unsigned int ipmi_lanconfig_get_ip_addr_source(ipmi_lan_config_t *lanc);
 int ipmi_lanconfig_set_ip_addr_source(ipmi_lan_config_t *lanc,
 				      unsigned int      val);
-unsigned int ipmi_lanconfig_get_ipv4_ttl(ipmi_lan_config_t *lanc);
-int ipmi_lanconfig_set_ipv4_ttl(ipmi_lan_config_t *lanc,
-				unsigned int      val);
-unsigned int ipmi_lanconfig_get_ipv4_flags(ipmi_lan_config_t *lanc);
-int ipmi_lanconfig_set_ipv4_flags(ipmi_lan_config_t *lanc,
-				  unsigned int      val);
-unsigned int ipmi_lanconfig_get_ipv4_precedence(ipmi_lan_config_t *lanc);
-int ipmi_lanconfig_set_ipv4_precedence(ipmi_lan_config_t *lanc,
-				       unsigned int      val);
-unsigned int ipmi_lanconfig_get_ipv4_tos(ipmi_lan_config_t *lanc);
-int ipmi_lanconfig_set_ipv4_tos(ipmi_lan_config_t *lanc,
-				unsigned int      val);
 
 /* Number of allowed alert destinations.  This is read-only. */
 unsigned int ipmi_lanconfig_get_num_alert_destinations(ipmi_lan_config_t *c);
 
 
 /* Everything else below returns an error. */
+int ipmi_lanconfig_get_ipv4_ttl(ipmi_lan_config_t *lanc,
+				unsigned int      *val);
+int ipmi_lanconfig_set_ipv4_ttl(ipmi_lan_config_t *lanc,
+				unsigned int      val);
+int ipmi_lanconfig_get_ipv4_flags(ipmi_lan_config_t *lanc,
+				  unsigned int      *val);
+int ipmi_lanconfig_set_ipv4_flags(ipmi_lan_config_t *lanc,
+				  unsigned int      val);
+int ipmi_lanconfig_get_ipv4_precedence(ipmi_lan_config_t *lanc,
+				       unsigned int      *val);
+int ipmi_lanconfig_set_ipv4_precedence(ipmi_lan_config_t *lanc,
+				       unsigned int      val);
+int ipmi_lanconfig_get_ipv4_tos(ipmi_lan_config_t *lanc,
+				unsigned int      *val);
+int ipmi_lanconfig_set_ipv4_tos(ipmi_lan_config_t *lanc,
+				unsigned int      val);
 
 /* Authorization enables for the various authentication levels. */
 int ipmi_lanconfig_get_enable_auth_oem(ipmi_lan_config_t *lanc,

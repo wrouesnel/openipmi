@@ -102,10 +102,13 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
     }
 
     if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%s: IPMI error from LANPARM capabilities fetch: %x",
-		 func_name,
-		 rsp->data[0]);
+	/* We ignore 0x80, since that may be a valid error return for an
+	   unsupported parameter. */
+	if (rsp->data[0] != 0x80)
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%s: IPMI error from LANPARM capabilities fetch: %x",
+		     func_name,
+		     rsp->data[0]);
 	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
 
@@ -272,8 +275,9 @@ lanparm_config_fetched(ipmi_mc_t  *mc,
     rv = check_lanparm_response_param(lanparm, mc, rsp, 2,
 				      "lanparm_config_fetched");
 
-    elem->data = rsp->data + 1;
-    elem->data_len = rsp->data_len - 1;
+    /* Skip over the completion code and the revision. */
+    elem->data = rsp->data + 2;
+    elem->data_len = rsp->data_len - 2;
 
     lanparm_lock(lanparm);
     fetch_complete(lanparm, rv, elem);
@@ -581,6 +585,7 @@ struct ipmi_lan_config_s
     unsigned char ipv4_flags;
     unsigned char ipv4_precedence;
     unsigned char ipv4_tos;
+    unsigned char ipv4_header_parms_supported;
     unsigned char primary_rmcp_port[2];
     unsigned char primary_rmcp_port_supported;
     unsigned char secondary_rmcp_port[2];
@@ -592,8 +597,11 @@ struct ipmi_lan_config_s
     unsigned char garp_interval_supported;
     unsigned char default_gateway_ip_addr[4];
     unsigned char default_gateway_mac_addr[6];
+    unsigned char default_gateway_mac_addr_supported;
     unsigned char backup_gateway_ip_addr[4];
+    unsigned char backup_gateway_ip_addr_supported;
     unsigned char backup_gateway_mac_addr[6];
+    unsigned char backup_gateway_mac_addr_supported;
     unsigned char community_string[18];
 
     unsigned char num_alert_destinations;
@@ -620,8 +628,21 @@ struct lanparms_s
 static int gba(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	       unsigned char *data)
 {
-    if (err)
+    unsigned char *opt = NULL;
+
+    if (lp->optional_offset)
+	opt = ((unsigned char *) lanc) + lp->optional_offset;
+
+    if (err) {
+	if (opt && (err == IPMI_IPMI_ERR_VAL(0x80))) {
+	    *opt = 0;
+	    return 0;
+	}
 	return err;
+    }
+
+    if (opt)
+	*opt = 1;
 
     memcpy(((unsigned char *) lanc)+lp->offset, data, lp->length);
     return 0;
@@ -683,8 +704,21 @@ static void sae(ipmi_lan_config_t *lanc, lanparms_t *lp, unsigned char *data)
 static int ghp(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	       unsigned char *data)
 {
-    if (err)
+    unsigned char *opt = NULL;
+
+    if (lp->optional_offset)
+	opt = ((unsigned char *) lanc) + lp->optional_offset;
+
+    if (err) {
+	if (opt && (err == IPMI_IPMI_ERR_VAL(0x80))) {
+	    *opt = 0;
+	    return 0;
+	}
 	return err;
+    }
+
+    if (opt)
+	*opt = 1;
 
     lanc->ipv4_ttl = data[0];
     lanc->ipv4_flags = (data[1] >> 5) & 0x7;
@@ -704,8 +738,21 @@ static void shp(ipmi_lan_config_t *lanc, lanparms_t *lp, unsigned char *data)
 static int gga(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	       unsigned char *data)
 {
-    if (err)
+    unsigned char *opt = NULL;
+
+    if (lp->optional_offset)
+	opt = ((unsigned char *) lanc) + lp->optional_offset;
+
+    if (err) {
+	if (opt && (err == IPMI_IPMI_ERR_VAL(0x80))) {
+	    *opt = 0;
+	    return 0;
+	}
 	return err;
+    }
+
+    if (opt)
+	*opt = 1;
 
     lanc->bmc_generated_arps = (data[0] >> 1) & 1;
     lanc->bmc_generated_garps = (data[0] >> 0) & 1;
@@ -840,14 +887,16 @@ static lanparms_t lanparms[NUM_LANPARMS] =
     { 1, 0, 4, F, gba,  sba  }, /* IPMI_LANPARM_IP_ADDRESS		     */
 #undef F
 #define F OFFSET_OF(ip_addr_source)
-    { 1, 0, 1, 0, gba,  sba  }, /* IPMI_LANPARM_IP_ADDRESS_SRC		     */
+    { 1, 0, 1, F, gba,  sba  }, /* IPMI_LANPARM_IP_ADDRESS_SRC		     */
 #undef F
 #define F OFFSET_OF(mac_addr)
-    { 1, 0, 6, 0, gba,  sba  }, /* IPMI_LANPARM_MAX_ADDRESS		     */
+    { 1, 0, 6, F, gba,  sba  }, /* IPMI_LANPARM_MAX_ADDRESS		     */
 #undef F
 #define F OFFSET_OF(subnet_mask)
-    { 1, 0, 4, 0, gba,  sba  }, /* IPMI_LANPARM_SUBNET_MASK		     */
-    { 1, 0, 3, 0, ghp,  shp  }, /* IPMI_LANPARM_IPV4_HDR_PARMS		     */
+    { 1, 0, 4, F, gba,  sba  }, /* IPMI_LANPARM_SUBNET_MASK		     */
+#undef S
+#define S OFFSET_OF(ipv4_header_parms_supported)
+    { 1, S, 3, 0, ghp,  shp  }, /* IPMI_LANPARM_IPV4_HDR_PARMS		     */
 #undef F
 #define F OFFSET_OF(primary_rmcp_port)
 #undef S
@@ -871,13 +920,19 @@ static lanparms_t lanparms[NUM_LANPARMS] =
     { 1, 0, 4, F, gba,  sba  }, /* IPMI_LANPARM_DEFAULT_GATEWAY_ADDR	     */
 #undef F
 #define F OFFSET_OF(default_gateway_mac_addr)
-    { 1, 0, 6, F, gba,  sba  }, /* IPMI_LANPARM_DEFAULT_GATEWAY_MAC_ADDR     */
+#undef S
+#define S OFFSET_OF(default_gateway_mac_addr_supported)
+    { 1, S, 6, F, gba,  sba  }, /* IPMI_LANPARM_DEFAULT_GATEWAY_MAC_ADDR     */
 #undef F
 #define F OFFSET_OF(backup_gateway_ip_addr)
-    { 1, 0, 4, F, gba,  sba  }, /* IPMI_LANPARM_BACKUP_GATEWAY_ADDR	     */
+#undef S
+#define S OFFSET_OF(backup_gateway_ip_addr_supported)
+    { 1, S, 4, F, gba,  sba  }, /* IPMI_LANPARM_BACKUP_GATEWAY_ADDR	     */
 #undef F
 #define F OFFSET_OF(backup_gateway_mac_addr)
-    { 1, 0, 6, F, gba,  sba  }, /* IPMI_LANPARM_BACKUP_GATEWAY_MAC_ADDR      */
+#undef S
+#define S OFFSET_OF(backup_gateway_mac_addr_supported)
+    { 1, S, 6, F, gba,  sba  }, /* IPMI_LANPARM_BACKUP_GATEWAY_MAC_ADDR      */
 #undef F
 #define F OFFSET_OF(community_string)
     { 1, 0, 18, F, gba, sba  }, /* IPMI_LANPARM_COMMUNITY_STRING	     */
@@ -1295,14 +1350,7 @@ LP_ARRAY_PARM(ip_addr, 4)
 LP_BYTE_PARM(ip_addr_source);
 LP_ARRAY_PARM(mac_addr, 6)
 LP_ARRAY_PARM(subnet_mask, 4)
-LP_BYTE_PARM(ipv4_ttl);
-LP_BYTE_PARM(ipv4_flags);
-LP_BYTE_PARM(ipv4_precedence);
-LP_BYTE_PARM(ipv4_tos);
 LP_ARRAY_PARM(default_gateway_ip_addr, 4)
-LP_ARRAY_PARM(default_gateway_mac_addr, 6)
-LP_ARRAY_PARM(backup_gateway_ip_addr, 4)
-LP_ARRAY_PARM(backup_gateway_mac_addr, 6)
 LP_ARRAY_PARM(community_string, 18)
 
 #define LP_ARRAY_PARM_SUP(n, l) \
@@ -1334,6 +1382,9 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
 
 LP_ARRAY_PARM_SUP(primary_rmcp_port, 4)
 LP_ARRAY_PARM_SUP(secondary_rmcp_port, 4)
+LP_ARRAY_PARM_SUP(default_gateway_mac_addr, 6)
+LP_ARRAY_PARM_SUP(backup_gateway_ip_addr, 4)
+LP_ARRAY_PARM_SUP(backup_gateway_mac_addr, 6)
 
 #define LP_BYTE_PARM_SUP(n, s) \
 int \
@@ -1355,6 +1406,10 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
     return 0; \
 }
 
+LP_BYTE_PARM_SUP(ipv4_ttl, ipv4_header_parms_supported);
+LP_BYTE_PARM_SUP(ipv4_flags, ipv4_header_parms_supported);
+LP_BYTE_PARM_SUP(ipv4_precedence, ipv4_header_parms_supported);
+LP_BYTE_PARM_SUP(ipv4_tos, ipv4_header_parms_supported);
 LP_BYTE_PARM_SUP(bmc_generated_arps, arp_control_supported)
 LP_BYTE_PARM_SUP(bmc_generated_garps, arp_control_supported)
 LP_BYTE_PARM_SUP(garp_interval, garp_interval_supported)

@@ -3348,6 +3348,8 @@ writepef_cmd(char *cmd, char **toks, void *cb_data)
 static void
 lanparm_out_val(char *name, int rv, char *fmt, unsigned int val)
 {
+    if (rv == ENOTSUP)
+	return;
     display_pad_out("  %s: ", name);
     if (rv)
 	display_pad_out("err %x", rv);
@@ -3360,6 +3362,8 @@ static void
 lanparm_out_data(char *name, int rv, unsigned char *data, int len)
 {
     int i;
+    if (rv == ENOTSUP)
+	return;
     display_pad_out("  %s: ", name);
     if (rv)
 	display_pad_out("err %x\n", rv);
@@ -3400,14 +3404,14 @@ display_lanparm_config(void)
 
     display_pad_out("  ip_addr_source: %d\n",
 		    ipmi_lanconfig_get_ip_addr_source(lanparm_config));
-    display_pad_out("  ipv4_ttl: %d\n",
-		    ipmi_lanconfig_get_ipv4_ttl(lanparm_config));
-    display_pad_out("  ipv4_flags: 0x%x\n",
-		    ipmi_lanconfig_get_ipv4_flags(lanparm_config));
-    display_pad_out("  ipv4_precedence: %d\n",
-		    ipmi_lanconfig_get_ipv4_precedence(lanparm_config));
-    display_pad_out("  ipv4_tos: %d\n",
-		    ipmi_lanconfig_get_ipv4_tos(lanparm_config));
+    rv = ipmi_lanconfig_get_ipv4_ttl(lanparm_config, &val);
+    lanparm_out_val("ipv4_ttl", rv, "%d", val);
+    rv = ipmi_lanconfig_get_ipv4_flags(lanparm_config, &val);
+    lanparm_out_val("ipv4_flags", rv, "%d", val);
+    rv = ipmi_lanconfig_get_ipv4_precedence(lanparm_config, &val);
+    lanparm_out_val("ipv4_precedence", rv, "%d", val);
+    rv = ipmi_lanconfig_get_ipv4_tos(lanparm_config, &val);
+    lanparm_out_val("ipv4_tos", rv, "%d", val);
 
     for (i=0; i<5; i++) {
 	display_pad_out("  auth enabled (%d):", i);
@@ -3539,6 +3543,8 @@ readlanparm_mc_handler(ipmi_mc_t *mc, void *cb_data)
 {
     int            rv;
     lanparm_info_t *info = cb_data;
+
+    info->found = 1;
 
     if (lanparm) {
 	ipmi_lanparm_destroy(lanparm, NULL, NULL);
