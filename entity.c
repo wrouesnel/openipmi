@@ -369,6 +369,7 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
 		int                lun,
 		int                entity_id,
 		int                entity_instance,
+		char               *id,
 		entity_sdr_add_cb  sdr_gen_output,
 		void               *sdr_gen_cb_data,
 		ipmi_entity_t      **new_ent)
@@ -388,6 +389,7 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
     rv = entity_add(ents, device_num, entity_id, entity_instance,
 		    sdr_gen_output, sdr_gen_cb_data, &ent);
     if (!rv) {
+	ipmi_entity_set_id(ent, id);
 	ent->access_address = ipmi_mc_get_address(mc);
 	ent->channel = ipmi_mc_get_channel(mc);
 	ent->lun = lun;

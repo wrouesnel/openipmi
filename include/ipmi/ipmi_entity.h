@@ -64,6 +64,7 @@ int ipmi_entity_add(ipmi_entity_info_t *ents,
 		    int                lun,
 		    int                entity_id,
 		    int                entity_instance,
+		    char               *id,
 		    entity_sdr_add_cb  sdr_gen_output,
 		    void               *sdr_gen_cb_data,
 		    ipmi_entity_t      **new_ent);

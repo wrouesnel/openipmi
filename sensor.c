@@ -962,6 +962,7 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
 				     i,
 				     nsensor->entity_id,
 				     nsensor->entity_instance,
+				     "",
 				     NULL,
 				     NULL,
 				     NULL);
