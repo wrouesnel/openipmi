@@ -1,5 +1,14 @@
 2004-10-14 Corey Minyard <cminyard@mvista.com> 
 
+	* Practically_everything: A restructure of the include files
+	so the ipmiif.h is really the only thing you need to include
+	to do pretty much everything (except for the helper things like
+	pefs, lanparm, pets, etc.).  There should no longer be any need
+	for external user programs to use ipmi_domain.h, ipmi_mc.h,
+	or things like that.
+
+2004-10-14 Corey Minyard <cminyard@mvista.com> 
+
 	* include/OpenIPMI/ipmiif.h.in, lib/strings.c, lib/sensor.c: Added
 	sensor direction from the 2.0 spec.
 

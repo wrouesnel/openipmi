@@ -33,6 +33,7 @@
 
 #include <OpenIPMI/ipmi_malloc.h>
 #include <OpenIPMI/ipmi_locks.h>
+#include <OpenIPMI/ipmi_debug.h>
 #include <stdlib.h>
 #include <errno.h>
 

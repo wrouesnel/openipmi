@@ -39,8 +39,9 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ipmi_conn.h>
+
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_malloc.h>
 #include <OpenIPMI/locked_list.h>
 
 static locked_list_t *lancs;
@@ -1389,11 +1390,11 @@ static ipmi_cmdlang_init_t cmds_lanparm[] =
 #define CMDS_LANPARM_LEN (sizeof(cmds_lanparm)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_lanparm_init(void)
+ipmi_cmdlang_lanparm_init(os_handler_t *os_hnd)
 {
     int rv;
 
-    lancs = locked_list_alloc(ipmi_get_global_os_handler());
+    lancs = locked_list_alloc(os_hnd);
     if (!lancs)
 	return ENOMEM;
 

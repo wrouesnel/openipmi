@@ -38,9 +38,9 @@
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_entity.h>
-#include <OpenIPMI/ipmi_control.h>
-#include <OpenIPMI/ipmi_int.h>
+
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_malloc.h>
 
 static void
 control_list_handler(ipmi_entity_t *entity, ipmi_control_t *control,
@@ -766,7 +766,7 @@ static ipmi_cmdlang_init_t cmds_control[] =
 #define CMDS_CONTROL_LEN (sizeof(cmds_control)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_control_init(void)
+ipmi_cmdlang_control_init(os_handler_t *os_hnd)
 {
     return ipmi_cmdlang_reg_table(cmds_control, CMDS_CONTROL_LEN);
 }

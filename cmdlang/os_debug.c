@@ -42,7 +42,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <OpenIPMI/ipmi_int.h>
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/ipmi_debug.h>
 
 extern selector_t *debug_sel;
 

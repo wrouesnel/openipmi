@@ -37,11 +37,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ipmi_conn.h>
+
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/ipmi_mc.h>
 
 static void
 mc_list_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
@@ -718,7 +719,7 @@ static ipmi_cmdlang_init_t cmds_mc[] =
 #define CMDS_MC_LEN (sizeof(cmds_mc)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_mc_init(void)
+ipmi_cmdlang_mc_init(os_handler_t *os_hnd)
 {
     return ipmi_cmdlang_reg_table(cmds_mc, CMDS_MC_LEN);
 }

@@ -42,6 +42,7 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_domain.h>
+#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_event.h>
 
 /* We use a block of MontaVista's private enterprise IDs for our own

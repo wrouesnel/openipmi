@@ -62,17 +62,4 @@ void ipmi_rwlock_read_unlock(ipmi_rwlock_t *lock);
 void ipmi_rwlock_write_lock(ipmi_rwlock_t *lock);
 void ipmi_rwlock_write_unlock(ipmi_rwlock_t *lock);
 
-#ifdef IPMI_CHECK_LOCKS
-void ipmi_report_lock_error(os_handler_t *handler, char *str);
-#define IPMI_REPORT_LOCK_ERROR(handler, str) ipmi_report_lock_error(handler, \
-								    str)
-#else
-#define IPMI_REPORT_LOCK_ERROR(handler, str) do {} while (0)
-#endif
-
-extern int __ipmi_debug_locks;
-#define DEBUG_LOCKS	(__ipmi_debug_locks)
-#define DEBUG_LOCKS_ENABLE() __ipmi_debug_locks = 1
-#define DEBUG_LOCKS_DISABLE() __ipmi_debug_locks = 0
-
 #endif /* _IPMI_LOCKS_H */

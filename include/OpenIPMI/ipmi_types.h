@@ -66,6 +66,12 @@ typedef struct ipmi_domain_id_s ipmi_domain_id_t;
 typedef struct ipmi_entity_s ipmi_entity_t;
 typedef struct ipmi_entity_id_s ipmi_entity_id_t;
 
+/* 
+ * A fru is something that an entity contains that holds information
+ * about the entity in a defined format.
+ */
+typedef struct ipmi_fru_s ipmi_fru_t;
+
 /*
  * A sensor is something connected to an entity that can monitor or control
  * the entity.

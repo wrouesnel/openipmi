@@ -39,8 +39,9 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ipmi_conn.h>
+
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_malloc.h>
 #include <OpenIPMI/locked_list.h>
 
 static locked_list_t *pefs;
@@ -1297,11 +1298,11 @@ static ipmi_cmdlang_init_t cmds_pef[] =
 #define CMDS_PEF_LEN (sizeof(cmds_pef)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_pef_init(void)
+ipmi_cmdlang_pef_init(os_handler_t *os_hnd)
 {
     int rv;
 
-    pefs = locked_list_alloc(ipmi_get_global_os_handler());
+    pefs = locked_list_alloc(os_hnd);
     if (!pefs)
 	return ENOMEM;
 

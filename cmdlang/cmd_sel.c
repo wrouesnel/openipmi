@@ -37,11 +37,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_int.h>
+
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/ipmi_mc.h>
 
 static void
 sel_list(ipmi_domain_t *domain, void *cb_data)
@@ -316,7 +317,7 @@ static ipmi_cmdlang_init_t cmds_sel[] =
 #define CMDS_SEL_LEN (sizeof(cmds_sel)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_sel_init(void)
+ipmi_cmdlang_sel_init(os_handler_t *os_hnd)
 {
     return ipmi_cmdlang_reg_table(cmds_sel, CMDS_SEL_LEN);
 }

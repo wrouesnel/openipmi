@@ -38,9 +38,9 @@
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_entity.h>
-#include <OpenIPMI/ipmi_sensor.h>
-#include <OpenIPMI/ipmi_int.h>
+
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_malloc.h>
 
 static void
 sensor_list_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor,
@@ -1459,7 +1459,7 @@ static ipmi_cmdlang_init_t cmds_sensor[] =
 #define CMDS_SENSOR_LEN (sizeof(cmds_sensor)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_sensor_init(void)
+ipmi_cmdlang_sensor_init(os_handler_t *os_hnd)
 {
     return ipmi_cmdlang_reg_table(cmds_sensor, CMDS_SENSOR_LEN);
 }

@@ -8,4 +8,4 @@ pkginclude_HEADERS = \
 	opq.h	     ilist.h        md2.h       md5.h	       mxp.h	      \
 	ipmi_pef.h   ipmi_lanparm.h ipmi_pet.h  ipmi_event.h   ipmi_malloc.h  \
 	ipmi_locks.h ipmi_posix.h   ipmi_picmg.h ipmi_utils.h  locked_list.h  \
-	ipmi_cmdlang.h
+	ipmi_cmdlang.h ipmi_debug.h

@@ -51,6 +51,7 @@
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_domain.h>
+#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/locked_list.h>
 
 /* Recheck the PET config every 10 minutes. */

@@ -39,8 +39,6 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ipmi_conn.h>
 
 
 static void
@@ -411,7 +409,7 @@ static ipmi_cmdlang_init_t cmds_pet[] =
 #define CMDS_PET_LEN (sizeof(cmds_pet)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_pet_init(void)
+ipmi_cmdlang_pet_init(os_handler_t *os_hnd)
 {
     return ipmi_cmdlang_reg_table(cmds_pet, CMDS_PET_LEN);
 }

@@ -37,12 +37,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_event.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ipmi_conn.h>
 
 static void
 con_list_handler(ipmi_domain_t *domain, int conn, void *cb_data)
@@ -164,7 +159,7 @@ static ipmi_cmdlang_init_t cmds_conn[] =
 #define CMDS_CONN_LEN (sizeof(cmds_conn)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_con_init(void)
+ipmi_cmdlang_con_init(os_handler_t *os_hnd)
 {
     return ipmi_cmdlang_reg_table(cmds_conn, CMDS_CONN_LEN);
 }

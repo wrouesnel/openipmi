@@ -36,9 +36,6 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_types.h>
 
-/* FRU information opaque type. */
-typedef struct ipmi_fru_s ipmi_fru_t;
-
 typedef void (*ipmi_fru_fetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
 int ipmi_fru_alloc(ipmi_domain_t       *domain,
 		   unsigned char       is_logical,

@@ -41,15 +41,16 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_auth.h>
 
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_locks.h>
+#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/ipmi_debug.h>
 
 /*
  * This is the value passed to a command handler.
@@ -97,6 +98,8 @@ struct ipmi_cmdlang_cmd_s
     /* Used for a linked list. */
     ipmi_cmdlang_cmd_t *next;
 };
+
+static os_handler_t *cmdlang_os_hnd;
 
 /* Parse a string of the form [domain][(class)][.obj] and return each
    of the strings in the given string pointers. */
@@ -2297,7 +2300,7 @@ ipmi_cmdlang_alloc_event_info(void)
     memset(cmdinfo, 0, sizeof(*cmdinfo));
     cmdinfo->usecount = 1;
 
-    rv = ipmi_create_global_lock(&cmdinfo->lock);
+    rv = ipmi_create_lock_os_hnd(cmdlang_os_hnd, &cmdinfo->lock);
     if (rv) {
 	ipmi_mem_free(cmdinfo);
 	return NULL;
@@ -2502,52 +2505,52 @@ static ipmi_cmdlang_init_t cmds_global[] =
 };
 #define CMDS_GLOBAL_LEN (sizeof(cmds_global)/sizeof(ipmi_cmdlang_init_t))
 
-int ipmi_cmdlang_domain_init(void);
-int ipmi_cmdlang_con_init(void);
-int ipmi_cmdlang_entity_init(void);
-int ipmi_cmdlang_mc_init(void);
-int ipmi_cmdlang_pet_init(void);
-int ipmi_cmdlang_lanparm_init(void);
-void ipmi_cmdlang_lanparm_shutdown(void);
-int ipmi_cmdlang_pef_init(void);
-void ipmi_cmdlang_pef_shutdown(void);
-int ipmi_cmdlang_sensor_init(void);
-int ipmi_cmdlang_control_init(void);
-int ipmi_cmdlang_sel_init(void);
+int ipmi_cmdlang_domain_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_con_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_entity_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_mc_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_pet_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_lanparm_init(os_handler_t *os_hnd);
+void ipmi_cmdlang_lanparm_shutdown();
+int ipmi_cmdlang_pef_init(os_handler_t *os_hnd);
+void ipmi_cmdlang_pef_shutdown();
+int ipmi_cmdlang_sensor_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_control_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_sel_init(os_handler_t *os_hnd);
 
 int
-ipmi_cmdlang_init(void)
+ipmi_cmdlang_init(os_handler_t *os_hnd)
 {
     int rv;
 
-    rv = ipmi_cmdlang_domain_init();
+    rv = ipmi_cmdlang_domain_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_con_init();
+    rv = ipmi_cmdlang_con_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_entity_init();
+    rv = ipmi_cmdlang_entity_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_mc_init();
+    rv = ipmi_cmdlang_mc_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_pet_init();
+    rv = ipmi_cmdlang_pet_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_lanparm_init();
+    rv = ipmi_cmdlang_lanparm_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_pef_init();
+    rv = ipmi_cmdlang_pef_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_sensor_init();
+    rv = ipmi_cmdlang_sensor_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_control_init();
+    rv = ipmi_cmdlang_control_init(os_hnd);
     if (rv) return rv;
 
-    rv = ipmi_cmdlang_sel_init();
+    rv = ipmi_cmdlang_sel_init(os_hnd);
     if (rv) return rv;
 
     rv = ipmi_cmdlang_reg_table(cmds_global, CMDS_GLOBAL_LEN);

@@ -289,7 +289,7 @@ void ipmi_cmdlang_get_threshold(char               *str,
 /* Call these to initialize and setup the command interpreter.  init
    should be called after the IPMI library proper is initialized, but
    before using it. */
-int ipmi_cmdlang_init(void);
+int ipmi_cmdlang_init(os_handler_t *os_hnd);
 void ipmi_cmdlang_cleanup(void);
 
 

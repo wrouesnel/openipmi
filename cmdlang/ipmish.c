@@ -41,10 +41,13 @@
 #include <unistd.h>
 #include <signal.h>
 #include <OpenIPMI/selector.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
+
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/ipmi_debug.h>
+#include <OpenIPMI/ipmi_malloc.h>
 
 #ifdef HAVE_UCDSNMP
 # ifdef HAVE_NETSNMP
@@ -941,7 +944,7 @@ main(int argc, char *argv[])
     }
 #endif
 
-    rv = ipmi_cmdlang_init();
+    rv = ipmi_cmdlang_init(os_hnd);
     if (rv) {
 	fprintf(stderr, "Unable to initialize command processor: 0x%x\n", rv);
 	return 1;

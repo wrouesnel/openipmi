@@ -37,12 +37,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_event.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_fru.h>
+
+/* Internal includes, do not use in your programs */
 #include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_malloc.h>
 
 /* Don't pollute the namespace iwth ipmi_fru_t. */
 void ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru);
@@ -1117,7 +1118,7 @@ static ipmi_cmdlang_init_t cmds_domain[] =
 #define CMDS_DOMAIN_LEN (sizeof(cmds_domain)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_domain_init(void)
+ipmi_cmdlang_domain_init(os_handler_t *os_hnd)
 {
     int rv;
 

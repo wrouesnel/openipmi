@@ -36,6 +36,10 @@
 
 #include <limits.h>
 
+/* Used in various operations to tell what has happened to a sensor,
+   control, entity, or whatever. */
+enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
+
 /*
  * When dealing with strings, they can be unicode or ASCII, and some
  * can be binary.
@@ -45,6 +49,11 @@ enum ipmi_str_type_e {
   IPMI_UNICODE_STR	= 1,
   IPMI_BINARY_STR	= 2,
 };
+
+/* Used to tell if some value is present.  */
+enum ipmi_value_present_e { IPMI_NO_VALUES_PRESENT,
+			    IPMI_RAW_VALUE_PRESENT,
+			    IPMI_BOTH_VALUES_PRESENT };
 
 /*
  * Sensor bits

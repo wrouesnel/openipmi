@@ -37,10 +37,7 @@
 #include <stdlib.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
-#include <OpenIPMI/ipmi_entity.h>
 #include <OpenIPMI/ipmi_fru.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ipmi_conn.h>
 
 /* Don't pollute the namespace iwth ipmi_fru_t. */
 void ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru);
@@ -1009,7 +1006,7 @@ static ipmi_cmdlang_init_t cmds_entity[] =
 #define CMDS_ENTITY_LEN (sizeof(cmds_entity)/sizeof(ipmi_cmdlang_init_t))
 
 int
-ipmi_cmdlang_entity_init(void)
+ipmi_cmdlang_entity_init(os_handler_t *os_hnd)
 {
     return ipmi_cmdlang_reg_table(cmds_entity, CMDS_ENTITY_LEN);
 }

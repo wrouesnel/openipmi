@@ -41,45 +41,15 @@
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_addr.h>
 
-/* A response comes back in this format. */
-typedef int (*ipmi_addr_response_handler_t)(ipmi_domain_t *domain,
-					    ipmi_msgi_t   *rspi);
-
-/* Like ipmi_send_command, but sends it directly to the address
-   specified, not to an MC. */
-int
-ipmi_send_command_addr(ipmi_domain_t                *domain,
-		       ipmi_addr_t	            *addr,
-		       unsigned int                 addr_len,
-		       ipmi_msg_t                   *msg,
-		       ipmi_addr_response_handler_t rsp_handler,
-		       void                         *rsp_data1,
-		       void                         *rsp_data2);
-
 /* Handle validation and usecounts on domains. */
 int _ipmi_domain_get(ipmi_domain_t *domain);
 void _ipmi_domain_put(ipmi_domain_t *domain);
-
-/* Iterate over all the mc's that the given domain represents. */
-typedef void (*ipmi_domain_iterate_mcs_cb)(ipmi_domain_t *domain,
-					   ipmi_mc_t     *mc,
-					   void          *cb_data);
-int ipmi_domain_iterate_mcs(ipmi_domain_t              *domain,
-			    ipmi_domain_iterate_mcs_cb handler,
-			    void                       *cb_data);
-int ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
-				ipmi_domain_iterate_mcs_cb handler,
-				void                       *cb_data);
 
 /* Return the OS handler used by the mc. */
 os_handler_t *ipmi_domain_get_os_hnd(ipmi_domain_t *domain);
 
 /* Return the entity info for the given domain. */
 ipmi_entity_info_t *ipmi_domain_get_entities(ipmi_domain_t *domain);
-
-/* Rescan the entities for possible presence changes.  "force" causes
-   a full rescan even if nothing on an entity has changed. */
-int ipmi_detect_domain_presence_changes(ipmi_domain_t *domain, int force);
 
 /* Should the BMC do a full bus scan at startup?  This is so OEM
    code can turn this function off.  The value is a boolean. */
@@ -137,19 +107,6 @@ int ipmi_add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
 /* Remove an MC from the list of MCs in the domain. */
 int ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
-/* Register a handler to be called when an MC is added to the domain
-   or removed from the domain. */
-typedef void (*ipmi_domain_mc_upd_cb)(enum ipmi_update_e op,
-				      ipmi_domain_t      *domain,
-				      ipmi_mc_t          *mc,
-				      void               *cb_data);
-int ipmi_domain_add_mc_updated_handler(ipmi_domain_t         *domain,
-				       ipmi_domain_mc_upd_cb handler,
-				       void                  *cb_data);
-int ipmi_domain_remove_mc_updated_handler(ipmi_domain_t        *domain,
-					  ipmi_domain_mc_upd_cb handler,
-					  void                  *cb_data);
-
 /* The old interfaces (for backwards compatability).  DON'T USE THESE!! */
 struct ipmi_domain_mc_upd_s;
 typedef struct ipmi_domain_mc_upd_s ipmi_domain_mc_upd_t
@@ -165,15 +122,6 @@ void ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
 
 /* Call any OEM handlers for the given MC. */
 int _ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);
-
-/* Scan a set of addresses on the bmc for mcs.  This can be used by OEM
-   code to add an MC if it senses that one has become present. */
-int ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
-			    int            channel,
-			    unsigned int   start_addr,
-			    unsigned int   end_addr,
-			    ipmi_domain_cb done_handler,
-			    void           *cb_data);
 
 /* Set a handler that will be called when bus is scanned.  This is 
    primarily here for OpenHPI to meet their requirements */
@@ -205,44 +153,6 @@ void ipmi_handle_unhandled_event(ipmi_domain_t *domain, ipmi_event_t *event);
 void _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 				       ipmi_mc_t     *mc,
 				       ipmi_event_t  *event);
-
-/* Returns if the domain thinks it has a connection up. */
-int ipmi_domain_con_up(ipmi_domain_t *domain);
-
-/* Iterate through the connections on a domain. */
-typedef void (*ipmi_connection_ptr_cb)(ipmi_domain_t *domain, int conn,
-				       void *cb_data);
-void ipmi_domain_iterate_connections(ipmi_domain_t          *domain,
-				     ipmi_connection_ptr_cb handler,
-				     void                   *cb_data);
-
-/* Attempt to activate a given connection. */
-int ipmi_domain_activate_connection(ipmi_domain_t *domain,
-				    unsigned int  connection);
-
-/* Returns if a connection is active. */
-int ipmi_domain_is_connection_active(ipmi_domain_t *domain,
-				     unsigned int  connection,
-				     unsigned int  *active);
-
-/* Is the connection up? */
-int ipmi_domain_is_connection_up(ipmi_domain_t *domain,
-				 unsigned int  connection,
-				 unsigned int  *up);
-
-/* Number of ports in the connection?  A connection may have multiple
-   ports (ie, multiple IP addresses to the same BMC, whereas a
-   separate connection is a connection to a different BMC); these
-   functions let you check their status. */
-int ipmi_domain_num_connection_ports(ipmi_domain_t *domain,
-				     unsigned int  connection,
-				     unsigned int  *ports);
-
-/* Number of ports in the connection? */
-int ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
-				      unsigned int  connection,
-				      unsigned int  port,
-				      unsigned int  *up);
 
 /* Returns the main SDR repository for the domain, or NULL if there is
    not one. */
