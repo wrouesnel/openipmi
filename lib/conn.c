@@ -349,6 +349,11 @@ _ipmi_conn_init(void)
 	if (!oem_conn_handlers)
 	    return ENOMEM;
     }
+    if (!oem_handlers) {
+	oem_handlers = alloc_ilist();
+	if (!oem_handlers)
+	    return ENOMEM;
+    }
     return 0;
 }
 
