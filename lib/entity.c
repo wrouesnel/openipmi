@@ -347,7 +347,7 @@ static void
 entity_final_destroy(ipmi_entity_t *ent)
 {
     if ((ent->running_timer_count != 0)
-	|| (!opq_stuff_in_progress(ent->waitq)))
+	|| (opq_stuff_in_progress(ent->waitq)))
     {
 	ipmi_unlock(ent->timer_lock);
 	return;
