@@ -3,6 +3,8 @@
 	* lib/domain.c: Fixed a few problems were callbacks can receive
 	NULL values that were not being handled.
 
+	* configure.in: Move to version 1.2.16.
+
 2004-02-24 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/control.c: Added an option for light controls to be able to
@@ -47,8 +49,6 @@
 	* lib/domain.c, include/OpenIPMI/ipmi_domain.c, lib/sensor.c:
 	Changed _ipmi_find_or_create_mc_by_slave_addr() to take a channel
 	as part of the address.
-
-	* configure.in: Move to version 1.2.16.
 
 2004-02-23 Corey Minyard <cminyard@mvista.com> 
 
