@@ -1,7 +1,12 @@
 
+2003-09-23 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sel.c, lib/sdr.c: Fixed setting the minor version, thanks
+	Livio Pugliese for pointing this out.
+
 2003-09-19 Corey Minyard <cminyard@mvista.com>
 
-	*lib/selector.c, include/OpenIPMI/selector.h: Change
+	* lib/selector.c, include/OpenIPMI/selector.h: Change
 	sel_select_loop() to return an error if select fails(), instead of
 	calling exit().
 

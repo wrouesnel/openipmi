@@ -624,7 +624,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 
     /* Pull pertinant info from the response. */
     sel->major_version = rsp->data[1] & 0xf;
-    sel->major_version = (rsp->data[1] >> 4) & 0xf;
+    sel->minor_version = (rsp->data[1] >> 4) & 0xf;
     fetched_num_sels = ipmi_get_uint16(rsp->data+2);
     sel->overflow = (rsp->data[14] & 0x80) == 0x80;
     sel->supports_delete_sel = (rsp->data[14] & 0x08) == 0x08;

@@ -1130,7 +1130,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
 
 	/* Pull pertinant info from the response. */
 	sdrs->major_version = rsp->data[1] & 0xf;
-	sdrs->major_version = (rsp->data[1] >> 4) & 0xf;
+	sdrs->minor_version = (rsp->data[1] >> 4) & 0xf;
 	sdrs->working_num_sdrs = ipmi_get_uint16(rsp->data+2);
 	sdrs->overflow = (rsp->data[14] & 0x80) == 0x80;
 	sdrs->update_mode = (rsp->data[14] >> 5) & 0x3;
