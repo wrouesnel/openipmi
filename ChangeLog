@@ -1,6 +1,8 @@
 
 2003-04-17 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c: Added set functions for all the specific MC capabilities.
+
 	* configure.in: Move to version 0.3.1.
 
 	* mc.c: Added a mechanism to ignore IPMB addresses.

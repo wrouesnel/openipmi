@@ -2829,11 +2829,25 @@ ipmi_mc_device_available(ipmi_mc_t *mc)
     return mc->device_available;
 }
 
+void
+ipmi_mc_set_device_available(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->device_available = val;
+}
+
 int
 ipmi_mc_chassis_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
     return mc->chassis_support;
+}
+
+void
+ipmi_mc_set_chassis_support(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->chassis_support = val;
 }
 
 int
@@ -2843,11 +2857,25 @@ ipmi_mc_bridge_support(ipmi_mc_t *mc)
     return mc->bridge_support;
 }
 
+void
+ipmi_mc_set_bridge_support(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->bridge_support = val;
+}
+
 int
 ipmi_mc_ipmb_event_generator_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
     return mc->IPMB_event_generator_support;
+}
+
+void
+ipmi_mc_set_ipmb_event_generator_support(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->IPMB_event_generator_support = val;
 }
 
 int
@@ -2857,11 +2885,25 @@ ipmi_mc_ipmb_event_receiver_support(ipmi_mc_t *mc)
     return mc->IPMB_event_receiver_support;
 }
 
+void
+ipmi_mc_set_ipmb_event_receiver_support(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->IPMB_event_receiver_support = val;
+}
+
 int
 ipmi_mc_fru_inventory_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
     return mc->FRU_inventory_support;
+}
+
+void
+ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->FRU_inventory_support = val;
 }
 
 int

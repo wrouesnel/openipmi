@@ -132,12 +132,18 @@ int ipmi_mc_manufacturer_id(ipmi_mc_t *mc);
 int ipmi_mc_product_id(ipmi_mc_t *mc);
 void ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[]);
 
-/* Some stupid systems don't have some setting right, this lets the
+/* Some stupid systems don't have some settings right, this lets the
    OEM code fix it. */
 void ipmi_mc_set_provides_device_sdrs(ipmi_mc_t *mc, int val);
 void ipmi_mc_set_sel_device_support(ipmi_mc_t *mc, int val);
 void ipmi_mc_set_sdr_repository_support(ipmi_mc_t *mc, int val);
 void ipmi_mc_set_sensor_device_support(ipmi_mc_t *mc, int val);
+void ipmi_mc_set_device_available(ipmi_mc_t *mc, int val);
+void ipmi_mc_set_chassis_support(ipmi_mc_t *mc, int val);
+void ipmi_mc_set_bridge_support(ipmi_mc_t *mc, int val);
+void ipmi_mc_set_ipmb_event_generator_support(ipmi_mc_t *mc, int val);
+void ipmi_mc_set_ipmb_event_receiver_support(ipmi_mc_t *mc, int val);
+void ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val);
 
 /* Reread all the sensors for a given mc.  This will request the
    sensor SDRs for that mc (And only for that MC) and change the
