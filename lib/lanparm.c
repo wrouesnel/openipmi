@@ -1225,13 +1225,14 @@ ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
     sc = ipmi_mem_alloc(sizeof(*sc));
     if (!sc)
 	return ENOMEM;
+    memset(sc, 0, sizeof(*sc));
 
     sc->lanc = ipmi_mem_alloc(sizeof(*lanc));
     if (!sc->lanc) {
 	ipmi_mem_free(sc);
 	return ENOMEM;
     }
-    memset(sc, 0, sizeof(*sc));
+    memset(sc->lanc, 0, sizeof(*(sc->lanc)));
 
     *sc->lanc = *lanc;
     sc->lanc->alert_dest_type = NULL;

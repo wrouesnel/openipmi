@@ -1306,7 +1306,7 @@ static pefparms_t pefparms[NUM_PEFPARMS] =
 #define S OFFSET_OF(startup_delay_supported)
     { 1, S, 0,  1, gsd,  ssd  }, /* IPMI_PEFPARM_STARTUP_DELAY		     */
 #undef S
-#define S OFFSET_OF(startup_delay_supported)
+#define S OFFSET_OF(alert_startup_delay_supported)
     { 1, S, 0,  1, gasd, sasd }, /* IPMI_PEFPARM_ALERT_STARTUP_DELAY	     */
     { 1, 0, 0,  1, gnef, NULL }, /* IPMI_PEFPARM_NUM_EVENT_FILTERS	     */
     { 1, 0, 0, 21, geft, seft }, /* IPMI_PEFPARM_EVENT_FILTER_TABLE	     */
@@ -1576,7 +1576,7 @@ set_done(ipmi_pef_t *pefparm,
 	if (pefc->num_event_filters == 0)
 	    pefc->curr_parm = IPMI_PEFPARM_NUM_ALERT_POLICIES;
 	else {
-	    pefc->curr_sel = 0;
+	    pefc->curr_sel = 1;
 	    data[0] = pefc->curr_sel;
 	}
 	break;
@@ -1595,7 +1595,7 @@ set_done(ipmi_pef_t *pefparm,
 	if (pefc->num_event_filters == 0)
 	    pefc->curr_parm = IPMI_PEFPARM_NUM_ALERT_STRINGS;
 	else {
-	    pefc->curr_sel = 0;
+	    pefc->curr_sel = 1;
 	    data[0] = pefc->curr_sel;
 	}
 	break;
@@ -1611,7 +1611,7 @@ set_done(ipmi_pef_t *pefparm,
 
     case IPMI_PEFPARM_NUM_ALERT_STRINGS:
 	pefc->curr_parm++;
-	if (pefc->num_event_filters == 0)
+	if (pefc->num_alert_strings == 0)
 	    goto done;
 	pefc->curr_sel = 0;
 	data[0] = pefc->curr_sel;
@@ -1681,7 +1681,7 @@ set_done(ipmi_pef_t *pefparm,
 	sc->err = err;
 	err = ipmi_pef_set_parm(pefparm, 0, data, 1, set_clear, sc);
     } else {
-	data[0] = 3; /* Commit the parameters. */
+	data[0] = 2; /* Commit the parameters. */
 	err = ipmi_pef_set_parm(pefparm, 0, data, 1, commit_done, sc);
     }
     if (err) {
@@ -1720,6 +1720,7 @@ ipmi_pef_set_config(ipmi_pef_t        *pef,
     sc->pefc->apts = NULL;
     sc->pefc->asks = NULL;
     sc->pefc->alert_strings = NULL;
+    sc->err = 0;
 
     if (pefc->num_event_filters) {
 	sc->pefc->efts = ipmi_mem_alloc(sizeof(ipmi_eft_t)
