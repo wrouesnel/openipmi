@@ -101,6 +101,7 @@ add_fd(os_handler_t       *handler,
     fd_data->cb_data = cb_data;
     fd_data->data_ready = data_ready;
     fd_data->handler = handler;
+    fd_data->freed = freed;
     rv = sel_set_fd_handlers(ui_sel, fd, fd_data, fd_handler, NULL, NULL,
 			     free_fd_data);
     if (rv) {
