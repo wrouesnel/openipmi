@@ -33,13 +33,13 @@
 
 #ifndef _IPMI_MC_H
 #define _IPMI_MC_H
-#include <ipmi/ipmi_types.h>
-#include <ipmi/os_handler.h>
-#include <ipmi/ipmi_entity.h>
-#include <ipmi/ipmi_sensor.h>
-#include <ipmi/ipmi_control.h>
-#include <ipmi/ipmi_sdr.h>
-#include <ipmi/ipmi_addr.h>
+#include <OpenIPMI/ipmi_types.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/ipmi_entity.h>
+#include <OpenIPMI/ipmi_sensor.h>
+#include <OpenIPMI/ipmi_control.h>
+#include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmi_addr.h>
 
 /* A response comes back in this format. */
 typedef void (*ipmi_response_handler_t)(ipmi_mc_t  *src,

@@ -32,7 +32,7 @@
  */
 
 #include <malloc.h>
-#include "ipmi/os_handler.h"
+#include <OpenIPMI/os_handler.h>
 #include "ilist.h"
 #include "opq.h"
 

@@ -87,9 +87,9 @@
  *
  * asdf */
 
-#include <ipmi/ipmi_types.h>
-#include <ipmi/ipmi_bits.h>
-#include <ipmi/os_handler.h>
+#include <OpenIPMI/ipmi_types.h>
+#include <OpenIPMI/ipmi_bits.h>
+#include <OpenIPMI/os_handler.h>
 
 /* This is how you convert a pointer to and ID and convert an ID to a
    pointer.  Pointers are ONLY valid in callbacks, the system is free

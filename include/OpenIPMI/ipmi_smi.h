@@ -1,7 +1,7 @@
 /*
- * ipmi_lan.h
+ * ipmi_smi.h
  *
- * Routines for setting up a connection to an IPMI Lan interface.
+ * Routines for setting up a connection to a local SMI interface.
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
@@ -31,25 +31,16 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#ifndef __IPMI_LAN_H
-#define __IPMI_LAN_H
+#ifndef __IPMI_SMI_H
+#define __IPMI_SMI_H
 
-#include <ipmi/ipmiif.h>
+#include <OpenIPMI/ipmi_mc.h>
 #include <netinet/in.h>
 
-#define IPMI_LAN_STD_PORT	623
-
-/*
- * Set up an IPMI LAN connection.  The boatload of parameters are:
+/* Create a connection to a system-management interface on the current
+ * computer.  The parameters are: 
  *
- *  ip - The IP address of the remote BMC.
- *  port - The UDP port to use, it should generally be IPMI_LAN_STD_PORT
- *  privilege - The privilege level to request for the connection, from
- *     the set of values in ipmi_auth.h.
- *  username - The 16-byte max username to use for the connection.
- *  username_len - The length of username.
- *  password - The 16-byte max password to use for the connection.
- *  password_len - The length of password.
+ *  if_num - The interface number of the BMC.
  *  handlers - The set of OS handlers to use for this connection.
  *  user_data - This will be put into the BMC and may be fetched by the
  *     user.  The user can use it for anything they like.
@@ -57,17 +48,10 @@
  *     complete, or when the connection setup fails.
  *  cb_data - passed to setup_cb when it is called.
  */
-int ipmi_lan_setup_con(struct in_addr    ip,
-		       int               port,
-		       unsigned int      authtype,
-		       unsigned int      privilege,
-		       void              *username,
-		       unsigned int      username_len,
-		       void              *password,
-		       unsigned int      password_len,
-		       os_handler_t      *handlers,
-		       void              *user_data,
-		       ipmi_setup_done_t setup_cb,
-		       void              *cb_data);
+int ipmi_smi_setup_con(int                if_num,
+		       os_handler_t       *handlers,
+		       void               *user_data,
+		       ipmi_setup_done_t  setup_cb,
+		       void               *cb_data);
 
-#endif /* __IPMI_LAN_H */
+#endif /* __IPMI_SMI_H */

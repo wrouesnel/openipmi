@@ -33,12 +33,12 @@
 
 #include <malloc.h>
 #include <string.h>
-#include <ipmi/ipmiif.h>
-#include <ipmi/ipmi_entity.h>
-#include <ipmi/ipmi_bits.h>
-#include <ipmi/ipmi_mc.h>
-#include <ipmi/ipmi_err.h>
-#include <ipmi/ipmi_int.h>
+#include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_entity.h>
+#include <OpenIPMI/ipmi_bits.h>
+#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_int.h>
 #include "ilist.h"
 
 /* Uniquely identifies a device in the system.  If all the values are

@@ -43,11 +43,11 @@
 #include <string.h>
 
 #include <linux/ipmi.h>
-#include <ipmi/ipmi_conn.h>
-#include <ipmi/ipmi_msgbits.h>
-#include <ipmi/ipmi_int.h>
-#include <ipmi/ipmi_smi.h>
-#include <ipmi/ipmi_err.h>
+#include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_smi.h>
+#include <OpenIPMI/ipmi_err.h>
 
 #ifdef DEBUG_MSG
 static void

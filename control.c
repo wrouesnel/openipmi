@@ -34,11 +34,11 @@
 #include <malloc.h>
 #include <string.h>
 
-#include <ipmi/ipmiif.h>
-#include <ipmi/ipmi_mc.h>
-#include <ipmi/ipmi_err.h>
-#include <ipmi/ipmi_int.h>
-#include <ipmi/ipmi_control.h>
+#include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_control.h>
 #include "ilist.h"
 #include "opq.h"
 

@@ -4,11 +4,11 @@
 #include <string.h>
 #include <netdb.h>
 #include <errno.h>
-#include <ipmi/selector.h>
-#include <ipmi/ipmi_ui.h>
-#include <ipmi/ipmi_auth.h>
-#include <ipmi/ipmi_smi.h>
-#include <ipmi/ipmi_lan.h>
+#include <OpenIPMI/selector.h>
+#include <OpenIPMI/ipmi_ui.h>
+#include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_smi.h>
+#include <OpenIPMI/ipmi_lan.h>
 
 int
 main(int argc, char *argv[])

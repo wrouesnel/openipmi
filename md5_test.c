@@ -31,7 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <ipmi/ipmi_auth.h>
+#include <OpenIPMI/ipmi_auth.h>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>

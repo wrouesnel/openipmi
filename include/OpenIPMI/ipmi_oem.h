@@ -38,7 +38,7 @@
  * create their own entities, sensors, or modify existing ones as necessary.
  */
 
-#include <ipmi/ipmiif.h>
+#include <OpenIPMI/ipmiif.h>
 
 /* This registers an OEM handler.  If an MC is detected that has the
    given manufacturer id and product id, the handler will be called. */

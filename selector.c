@@ -38,7 +38,7 @@
    things happen on those file descriptors this code will call
    routines registered with it. */
 
-#include <ipmi/selector.h>
+#include <OpenIPMI/selector.h>
 
 #include <sys/time.h>
 #include <sys/types.h>

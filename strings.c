@@ -32,7 +32,7 @@
  */
 
 #include <stdlib.h>
-#include <ipmi/ipmi_bits.h>
+#include <OpenIPMI/ipmi_bits.h>
 
 static char *hysteresis_support_types[] =
 {

@@ -33,9 +33,9 @@
 
 #ifndef _IPMI_ENTITY_H
 #define _IPMI_ENTITY_H
-#include <ipmi/ipmi_types.h>
-#include <ipmi/ipmi_sdr.h>
-#include <ipmi/ipmiif.h>
+#include <OpenIPMI/ipmi_types.h>
+#include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmiif.h>
 
 /* This is an abstract type that identifies an entity. */
 typedef struct ipmi_entity_info_s ipmi_entity_info_t;

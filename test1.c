@@ -41,13 +41,13 @@
 #include <unistd.h>
 #include <netdb.h>
 
-#include <ipmi/ipmiif.h>
-#include <ipmi/ipmi_sel.h>
-#include <ipmi/ipmi_smi.h>
-#include <ipmi/ipmi_err.h>
-#include <ipmi/ipmi_auth.h>
-#include <ipmi/ipmi_lan.h>
-#include <ipmi/selector.h>
+#include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_sel.h>
+#include <OpenIPMI/ipmi_smi.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_lan.h>
+#include <OpenIPMI/selector.h>
 
 selector_t *sel;
 

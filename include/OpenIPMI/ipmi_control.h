@@ -34,7 +34,7 @@
 #ifndef _IPMI_CONTROL_H
 #define _IPMI_CONTROL_H
 
-#include <ipmi/ipmi_types.h>
+#include <OpenIPMI/ipmi_types.h>
 
 /* The abstract type for controls. */
 typedef struct ipmi_control_info_s ipmi_control_info_t;

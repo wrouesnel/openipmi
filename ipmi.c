@@ -34,12 +34,12 @@
 #include <malloc.h>
 #include <string.h>
 
-#include <ipmi/os_handler.h>
-#include <ipmi/ipmi_mc.h>
-#include <ipmi/ipmi_int.h>
-#include <ipmi/ipmi_conn.h>
-#include <ipmi/ipmi_auth.h>
-#include <ipmi/ipmi_err.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_err.h>
 #include "md2.h"
 #include "md5.h"
 

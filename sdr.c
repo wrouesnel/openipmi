@@ -34,12 +34,12 @@
 #include <malloc.h>
 #include <string.h>
 
-#include <ipmi/ipmiif.h>
-#include <ipmi/ipmi_sdr.h>
-#include <ipmi/ipmi_msgbits.h>
-#include <ipmi/ipmi_mc.h>
-#include <ipmi/ipmi_err.h>
-#include <ipmi/ipmi_int.h>
+#include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_int.h>
 #include "opq.h"
 
 #define MAX_SDR_FETCH 20

@@ -33,7 +33,7 @@
 
 #ifndef _IPMI_SEL_H
 #define _IPMI_SEL_H
-#include <ipmi/ipmi_types.h>
+#include <OpenIPMI/ipmi_types.h>
 
 
 /* Opaque type representing a remote SEL repository. */

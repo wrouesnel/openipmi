@@ -1,2 +1,2 @@
 
-SUBDIRS = ipmi linux
+SUBDIRS = OpenIPMI linux

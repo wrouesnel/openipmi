@@ -34,7 +34,7 @@
 #ifndef _OPQ_H
 #define _OPQ_H
 
-#include <ipmi/os_handler.h>
+#include <OpenIPMI/os_handler.h>
 
 typedef struct opq_s opq_t;
 

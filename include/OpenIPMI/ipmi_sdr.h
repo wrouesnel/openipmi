@@ -33,7 +33,7 @@
 
 #ifndef _IPMI_SDR_H
 #define _IPMI_SDR_H
-#include <ipmi/ipmi_types.h>
+#include <OpenIPMI/ipmi_types.h>
 #include <stdint.h>
 
 #define MAX_SDR_DATA 255

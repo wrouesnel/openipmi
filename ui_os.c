@@ -35,8 +35,8 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
-#include <ipmi/os_handler.h>
-#include <ipmi/selector.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/selector.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>

@@ -8,5 +8,5 @@ AC_STDC_HEADERS
 
 AC_OUTPUT(Makefile
 	  include/Makefile
-	  include/ipmi/Makefile
+	  include/OpenIPMI/Makefile
 	  include/linux/Makefile)

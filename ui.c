@@ -37,13 +37,13 @@
 #include <curses.h>
 #include <stdarg.h>
 #include <errno.h>
-#include <ipmi/selector.h>
-#include <ipmi/ipmi_err.h>
-#include <ipmi/ipmi_msgbits.h>
-#include <ipmi/ipmi_mc.h>
-#include <ipmi/ipmiif.h>
-#include <ipmi/ipmi_int.h>
-#include <ipmi/ipmi_ui.h>
+#include <OpenIPMI/selector.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_ui.h>
 
 #include "ui_keypad.h"
 #include "ui_command.h"

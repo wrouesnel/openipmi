@@ -36,8 +36,8 @@
 
 /* Stuff used internally in the IPMI code, and possibly by OEM code. */
 
-#include <ipmi/os_handler.h>
-#include <ipmi/ipmi_mc.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/ipmi_mc.h>
 
 /* There is a global read/write lock that protects the addition and
    removal of MCs and high-level information that doesn't change very

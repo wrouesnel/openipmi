@@ -43,12 +43,12 @@
 #include <unistd.h>
 #include <string.h>
 
-#include <ipmi/ipmi_conn.h>
-#include <ipmi/ipmi_msgbits.h>
-#include <ipmi/ipmi_int.h>
-#include <ipmi/ipmi_auth.h>
-#include <ipmi/ipmi_err.h>
-#include <ipmi/ipmi_lan.h>
+#include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_lan.h>
 
 #ifdef DEBUG_MSG
 static void

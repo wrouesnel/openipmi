@@ -34,7 +34,7 @@
 #ifndef _MD2_H__
 #define _MD2_H__
 
-#include <ipmi/ipmi_auth.h>
+#include <OpenIPMI/ipmi_auth.h>
 
 int ipmi_md2_authcode_init(unsigned char *password, ipmi_authdata_t *handle);
 int ipmi_md2_authcode_gen(ipmi_authdata_t handle,

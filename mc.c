@@ -34,17 +34,17 @@
 #include <malloc.h>
 #include <string.h>
 
-#include <ipmi/ipmi_conn.h>
-#include <ipmi/ipmiif.h>
-#include <ipmi/ipmi_mc.h>
-#include <ipmi/ipmi_sdr.h>
-#include <ipmi/ipmi_sel.h>
-#include <ipmi/ipmi_entity.h>
-#include <ipmi/ipmi_sensor.h>
-#include <ipmi/ipmi_msgbits.h>
-#include <ipmi/ipmi_err.h>
-#include <ipmi/ipmi_int.h>
-#include <ipmi/ipmi_oem.h>
+#include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmi_sel.h>
+#include <OpenIPMI/ipmi_entity.h>
+#include <OpenIPMI/ipmi_sensor.h>
+#include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_oem.h>
 
 #include "ilist.h"
 #include "opq.h"

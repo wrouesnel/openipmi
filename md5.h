@@ -34,7 +34,7 @@
 #ifndef _MD5_H__
 #define _MD5_H__
 
-#include <ipmi/ipmi_auth.h>
+#include <OpenIPMI/ipmi_auth.h>
 
 int ipmi_md5_authcode_init(unsigned char *password, ipmi_authdata_t *handle);
 int ipmi_md5_authcode_gen(ipmi_authdata_t handle,

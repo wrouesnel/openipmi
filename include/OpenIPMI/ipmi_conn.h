@@ -35,10 +35,10 @@
 #ifndef _IPMI_CONN_H
 #define _IPMI_CONN_H
 
-#include <ipmi/ipmi_types.h>
-#include <ipmi/ipmi_addr.h>
-#include <ipmi/ipmiif.h>
-#include <ipmi/os_handler.h>
+#include <OpenIPMI/ipmi_types.h>
+#include <OpenIPMI/ipmi_addr.h>
+#include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/os_handler.h>
 
 /* This represents a low-level connection. */
 typedef struct ipmi_con_s ipmi_con_t;
