@@ -521,18 +521,17 @@ sel_handle_reservation(ipmi_mc_t  *mc,
     }
 	
     if (rsp->data[0] != 0) {
-	/* We ignore errors getting reservations, that means the system
-	   probably doesn't support reservations. */
-	sel->reservation = 0;
-    } else {
-	if (rsp->data_len < 3) {
-	    ipmi_log("sel_handle_reservation:"
-		     " got invalid reservation length\n");
-	    fetch_complete(sel, EINVAL);
-	    return;
-	}
-	sel->reservation = ipmi_get_uint16(rsp->data+1);
+	ipmi_log("sel_handle_reservation:"
+		 " Failed getting reservation\n");
+	fetch_complete(sel, ENOSYS);
+    } else if (rsp->data_len < 3) {
+	ipmi_log("sel_handle_reservation:"
+		 " got invalid reservation length\n");
+	fetch_complete(sel, EINVAL);
+	return;
     }
+
+    sel->reservation = ipmi_get_uint16(rsp->data+1);
 
     /* Fetch the repository info. */
     cmd_msg.data = cmd_data;
@@ -553,13 +552,26 @@ start_fetch(ipmi_sel_info_t *sel)
     sel->fetch_state = FETCHING;
     sel->sels_changed = 0;
 
-    /* Get a reservation first. */
-    cmd_msg.data = cmd_data;
-    cmd_msg.netfn = IPMI_STORAGE_NETFN;
-    cmd_msg.cmd = IPMI_RESERVE_SEL_CMD;
-    cmd_msg.data_len = 0;
-    return ipmi_send_command(sel->mc, sel->lun, &cmd_msg,
-			     sel_handle_reservation, sel);
+    if (sel->supports_reserve_sel) {
+	/* Get a reservation first. */
+	cmd_msg.data = cmd_data;
+	cmd_msg.netfn = IPMI_STORAGE_NETFN;
+	cmd_msg.cmd = IPMI_RESERVE_SEL_CMD;
+	cmd_msg.data_len = 0;
+	return ipmi_send_command(sel->mc, sel->lun, &cmd_msg,
+				 sel_handle_reservation, sel);
+    } else {
+	/* Bypass the reservation, it's not supported. */
+	sel->reservation = 0;
+
+	/* Fetch the repository info. */
+	cmd_msg.data = cmd_data;
+	cmd_msg.netfn = IPMI_STORAGE_NETFN;
+	cmd_msg.cmd = IPMI_GET_SEL_INFO_CMD;
+	cmd_msg.data_len = 0;
+	return ipmi_send_command(sel->mc, sel->lun,
+				 &cmd_msg, handle_sel_info, sel);
+    }
 }
 
 int

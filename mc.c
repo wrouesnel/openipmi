@@ -49,6 +49,9 @@
 #include "ilist.h"
 #include "opq.h"
 
+/* Re-query the SEL every 10 seconds. */
+#define IPMI_SEL_QUERY_INTERVAL 10
+
 enum ipmi_con_state_e { DEAD = 0,
 			QUERYING_DEVICE_ID,
 			QUERYING_MAIN_SDRS,
@@ -99,6 +102,9 @@ typedef struct ipmi_bmc_s
 
     /* The system event log, for querying and storing events. */
     ipmi_sel_info_t *sel;
+
+    /* Timer for rescanning the sel periodically. */
+    os_hnd_timer_id_t *sel_timer;
 } ipmi_bmc_t;
 
 struct ipmi_mc_s
@@ -842,13 +848,70 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
 
     return rv;
 }
+
+typedef struct bmc_reread_info_s
+{
+    int cancelled;
+    ipmi_mc_t *bmc;
+} bmc_reread_info_t;
+    
+static void
+bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
+{
+    struct timeval    timeout;
+    bmc_reread_info_t *info = cb_data;
+    ipmi_mc_t         *bmc = info->bmc;
+
+    ipmi_lock(bmc->bmc->mc_list_lock);
+    if (info->cancelled) {
+	free(info);
+	return;
+    }
+
+    ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
+
+    gettimeofday(&timeout, NULL);
+    timeout.tv_sec += IPMI_SEL_QUERY_INTERVAL;
+    bmc->bmc->conn->os_hnd->restart_timer(bmc->bmc->conn->os_hnd,
+					  id,
+					  &timeout);
+    ipmi_unlock(bmc->bmc->mc_list_lock);
+}
+
 static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
+    struct timeval    timeout;
+    bmc_reread_info_t *info;
+    int               rv;
+
     ipmi_detect_bmc_presence_changes(mc, 0);
 
-    /* Fetch the current system event log. */
     ipmi_sel_get(mc->bmc->sel, NULL, NULL);
+
+    /* Fetch the current system event log.  We do this here so we can
+       be sure that the entities are all there before reporting
+       events. */
+    info = malloc(sizeof(*info));
+    if (!info) {
+	ipmi_log("Unable to allocate info for system event log timer."
+		 " System event log will not be queried\n");
+	return;
+    }
+    info->bmc = mc;
+    info->cancelled = 0;
+    gettimeofday(&timeout, NULL);
+    timeout.tv_sec += IPMI_SEL_QUERY_INTERVAL;
+    rv = mc->bmc->conn->os_hnd->add_timer(mc->bmc->conn->os_hnd,
+					  &timeout,
+					  bmc_reread_sel,
+					  info,
+					  &(mc->bmc->sel_timer));
+    if (rv) {
+	free(info);
+	ipmi_log("Unable to start the system event log timer."
+		 " System event log will not be queried\n");
+    }
 }
 
 
@@ -1019,6 +1082,28 @@ start_mc_scan(ipmi_mc_t *bmc)
 }
 
 static void
+set_operational(ipmi_mc_t *mc)
+{
+    /* Report this before we start scanning for entities and
+       sensors so the user can register a callback handler for
+       those. */
+    mc->bmc->state = OPERATIONAL;
+    if (mc->bmc->conn->setup_cb)
+	mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, 0);
+
+    /* Call the OEM setup finish if it is registered. */
+    if (mc->bmc->setup_finished_handler)
+	mc->bmc->setup_finished_handler(mc,
+					mc->bmc->setup_finished_cb_data);
+
+    /* Start an SDR scan. */
+    ipmi_entity_scan_sdrs(mc->bmc->entities, mc->bmc->main_sdrs);
+
+    ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+    start_mc_scan(mc);
+}
+
+static void
 chan_info_rsp_handler(ipmi_mc_t  *mc,
 		      ipmi_msg_t *rsp,
 		      void       *rsp_data)
@@ -1088,15 +1173,8 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
  chan_info_done:
     mc->bmc->msg_int_type = 0xff;
     mc->bmc->event_msg_int_type = 0xff;
-    mc->bmc->state = OPERATIONAL;
 
-    if (mc->bmc->conn->setup_cb)
-	mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, 0);
-
-    ipmi_entity_scan_sdrs(mc->bmc->entities, mc->bmc->main_sdrs);
-
-    ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
-    start_mc_scan(mc);
+    set_operational(mc);
 }
 
 static int
@@ -1163,23 +1241,7 @@ finish_mc_handling(ipmi_mc_t *mc)
 	    mc->bmc->event_msg_int_type = sdr.data[9];
 	}
 
-	/* Report this before we start scanning for entities and
-           sensors so the user can register a callback handler for
-           those. */
-	mc->bmc->state = OPERATIONAL;
-	if (mc->bmc->conn->setup_cb)
-	    mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, 0);
-
-	/* Call the OEM setup finish if it is registered. */
-	if (mc->bmc->setup_finished_handler)
-	    mc->bmc->setup_finished_handler(mc,
-					    mc->bmc->setup_finished_cb_data);
-
-	/* Start an SDR scan. */
-	ipmi_entity_scan_sdrs(mc->bmc->entities, mc->bmc->main_sdrs);
-
-	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
-	start_mc_scan(mc);
+	set_operational(mc);
     }
 
     return rv;
