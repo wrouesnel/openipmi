@@ -1,4 +1,9 @@
 
+2003-04-17 Corey Minyard <cminyard@mvista.com>
+
+	* ui.c: Ignore control values when an error is reported from
+	reading a control.
+
 2003-04-16 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 0.3.0.

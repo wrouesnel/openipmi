@@ -1890,6 +1890,9 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
 			    display_pad_out("\n          ");
 		    }
 		    ipmi_mem_free(normal_control_vals);
+		    normal_control_vals = NULL;
+		} else {
+		    display_pad_out("error reading values");
 		}
 		break;
 		
@@ -1901,6 +1904,9 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
 		    for (i=0; i<id_control_length; i++)
 			display_pad_out("0x%2.2x", id_control_vals[i]);
 		    ipmi_mem_free(id_control_vals);
+		    id_control_vals = NULL;
+		} else {
+		    display_pad_out("error reading values");
 		}
 		break;
 	}
@@ -1939,9 +1945,15 @@ normal_control_val_read(ipmi_control_t *control,
 	}
 	display_pad_refresh();
     } else {
-	normal_control_vals = ipmi_mem_alloc(sizeof(int) * num_vals);
-	if (normal_control_vals) {
-	    memcpy(normal_control_vals, val, sizeof(int) * num_vals);
+	if (err) {
+	    if (normal_control_vals)
+		free(normal_control_vals);
+	    normal_control_vals = NULL;
+	} else {
+	    normal_control_vals = ipmi_mem_alloc(sizeof(int) * num_vals);
+	    if (normal_control_vals) {
+		memcpy(normal_control_vals, val, sizeof(int) * num_vals);
+	    }
 	}
 	display_control(ipmi_control_get_entity(control), control);
     }
@@ -1974,12 +1986,18 @@ identifier_control_val_read(ipmi_control_t *control,
 	}
 	display_pad_refresh();
     } else {
-	id_control_length = length;
-	id_control_vals = ipmi_mem_alloc(sizeof(unsigned char) * length);
-	if (id_control_vals) {
-	    memcpy(id_control_vals, val, sizeof(unsigned char) * length);
+	if (err) {
+	    if (id_control_vals)
+		free(id_control_vals);
+	    id_control_vals = NULL;
+	} else {
+	    id_control_length = length;
+	    id_control_vals = ipmi_mem_alloc(sizeof(unsigned char) * length);
+	    if (id_control_vals) {
+		memcpy(id_control_vals, val, sizeof(unsigned char) * length);
+	    }
+	    display_control(ipmi_control_get_entity(control), control);
 	}
-	display_control(ipmi_control_get_entity(control), control);
     }
 }
 
