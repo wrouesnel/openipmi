@@ -829,6 +829,8 @@ static struct poptOption poptOpts[]=
     }	
 };
 
+void init_oem_force_conn(void);
+
 int
 main(int argc, const char *argv[])
 {
@@ -858,6 +860,9 @@ main(int argc, const char *argv[])
     }
 
     data.config_file = config_file;
+
+    /* Call the OEM init code. */
+    init_oem_force();
 
     memset(&lan, 0, sizeof(lan));
     lan.user_info = &data;

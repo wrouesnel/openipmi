@@ -1,4 +1,15 @@
 
+2003-05-16 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv_oem_force.c, ipmi_oem_force.c: The permissions from
+	Force Computers(tm) came much faster than I expected.  This
+	included some OEM handling for the various Force cards, for
+	switching the cards to/from BMC mode and for fetching the IPMB
+	address.
+	
+	* ipmi.c, lanserv.c, ipmicmd.c: Added calls to initialize the
+	Force OEM code.
+
 2003-05-15 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv.h: Moved to include/OpenIPMI

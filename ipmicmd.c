@@ -55,6 +55,8 @@
 
 #include <OpenIPMI/ipmi_int.h>
 
+void init_oem_force_conn(void);
+
 extern os_handler_t ipmi_ui_cb_handlers;
 
 static char* sOp		= NULL;
@@ -693,11 +695,14 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
+    /* Initialize the OEM handlers. */
     rv = _ipmi_conn_init();
     if (rv) {
 	fprintf(stderr, "Error initializing connections: 0x%x\n", rv);
 	exit(1);
     }
+    init_oem_force_conn();
+
 
     curr_arg = 0;
 
