@@ -242,19 +242,6 @@ ipmi_entity_info_destroy(ipmi_entity_info_t *ents)
 }
 
 static void
-remove_child_cb(ilist_iter_t *iter, void *item, void *cb_data)
-{
-    ipmi_entity_remove_child(item, cb_data);
-}
-
-static void
-remove_parent_cb(ilist_iter_t *iter, void *item, void *cb_data)
-{
-    entity_child_link_t *link = item;
-    ipmi_entity_remove_child(cb_data, link->child);
-}
-
-static void
 cleanup_entity(ipmi_entity_t *ent)
 {
     ilist_iter_t iter;
@@ -272,10 +259,6 @@ cleanup_entity(ipmi_entity_t *ent)
     if (ent->ents->handler)
 	ent->ents->handler(IPMI_DELETED, ent->domain, ent, ent->ents->cb_data);
 
-    /* First destroy the parent/child relationships. */
-    ilist_iter(ent->sub_entities, remove_parent_cb, ent);
-    ilist_iter(ent->parent_entities, remove_child_cb, ent);
-
     /* Remove it from the entities list. */
     ilist_init_iter(&iter, ent->ents->entities);
     ilist_unpositioned(&iter);
@@ -286,8 +269,8 @@ cleanup_entity(ipmi_entity_t *ent)
 	}
     }
 
-    /* The sensor and control lists should be empty now, we can just
-       destroy it. */
+    /* The sensor, control,parent, and child lists should be empty
+       now, we can just destroy it. */
     destroy_entity(NULL, ent, NULL);
 }
 

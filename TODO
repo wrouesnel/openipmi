@@ -2,8 +2,6 @@
 Add sensor SDRs back into the main SDR repository (if they can from
 there).
 
-Add support for FRU access.
-
 Add support for the chassis commands.
 
 Add platform event traps to the LAN code.
