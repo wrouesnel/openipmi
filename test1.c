@@ -457,7 +457,8 @@ sensor_change(enum ipmi_update_e op,
 static void
 entity_presence_handler(ipmi_entity_t *entity,
 			int           present,
-			void          *cb_data)
+			void          *cb_data,
+			ipmi_log_t    *log)
 {
     int id, instance;
 

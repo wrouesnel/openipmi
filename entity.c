@@ -489,12 +489,13 @@ static void presence_parent_handler(ipmi_entity_t *ent,
 
 static void
 presence_changed(ipmi_entity_t *ent,
-		 int           present)
+		 int           present,
+		 ipmi_log_t    *log)
 {
     if (present != ent->present) {
 	ent->present = present;
 	if (ent->presence_handler)
-	    ent->presence_handler(ent, present, ent->presence_cb_data);
+	    ent->presence_handler(ent, present, ent->presence_cb_data, log);
 
 	/* If our presence changes, that can affect parents, too.  So we
 	   rescan them. */
@@ -530,7 +531,7 @@ presence_parent_handler(ipmi_entity_t *ent,
 
     /* If any children are present, then the parent is present. */
     ipmi_entity_iterate_children(parent, presence_child_handler, &present);
-    presence_changed(parent, present);
+    presence_changed(parent, present, NULL);
 }
 
 static void
@@ -541,13 +542,14 @@ presence_sensor_changed(ipmi_sensor_t         *sensor,
 			int                   severity,
 			int		      prev_severity_present,
 			int                   prev_severity,
-			void                  *cb_data)
+			void                  *cb_data,
+			ipmi_log_t            *log)
 {
     ipmi_entity_t *ent = cb_data;
 
     /* zero means the sensor is present, 1 or 2 means it absent or
        disabled */
-    presence_changed(ent, offset == 0);
+    presence_changed(ent, offset == 0, log);
 }
 
 static void
@@ -560,7 +562,7 @@ states_read(ipmi_sensor_t *sensor,
     ipmi_entity_t *ent = cb_data;
 
     if (!err)
-        presence_changed(ent, present);
+        presence_changed(ent, present, NULL);
 }
 
 typedef struct ent_detect_info_s
@@ -588,16 +590,17 @@ detect_states_read(ipmi_sensor_t *sensor,
 
     info->sensor_try_count--;
     if (info->sensor_try_count == 0)
-	presence_changed(info->ent, info->present);
+	presence_changed(info->ent, info->present, NULL);
 }
 
 static void
-detect_reading_read(ipmi_sensor_t *sensor,
-		    int           err,
-		    int           val_present,
-		    double        val,
-		    ipmi_states_t *states,
-		    void          *cb_data)
+detect_reading_read(ipmi_sensor_t             *sensor,
+		    int                       err,
+		    enum ipmi_value_present_e value_present,
+		    unsigned int              raw_val,
+		    double                    val,
+		    ipmi_states_t             *states,
+		    void                      *cb_data)
 {
     ent_active_detect_t *info = cb_data;
 
@@ -606,7 +609,7 @@ detect_reading_read(ipmi_sensor_t *sensor,
 
     info->sensor_try_count--;
     if (info->sensor_try_count == 0)
-	presence_changed(info->ent, info->present);
+	presence_changed(info->ent, info->present, NULL);
 }
 
 static void
@@ -652,7 +655,7 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 
 	/* I couldn't message any sensors, the thing must be done. */
 	if (detect->sensor_try_count == 0) {
-	    presence_changed(ent, detect->present);
+	    presence_changed(ent, detect->present, NULL);
 	}
     } else {
 	/* Maybe it has children that can handle it's presence. */

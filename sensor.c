@@ -2327,7 +2327,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
     int                   rv;
 
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD) {
-	int                         value_present = 0;
+	enum ipmi_value_present_e   value_present;
 	double                      value = 0.0;
 	enum ipmi_thresh_e          threshold;
 	enum ipmi_event_value_dir_e high_low;
@@ -2342,11 +2342,15 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 	if ((log->data[10] >> 6) == 2) {
 	    rv = ipmi_sensor_convert_from_raw(sensor, log->data[11], &value);
 	    if (!rv)
-		value_present = 1;
+		value_present = IPMI_RAW_VALUE_PRESENT;
+	    else
+		value_present = IPMI_BOTH_VALUES_PRESENT;
+	} else {
+	    value_present = IPMI_NO_VALUES_PRESENT;
 	}
 	sensor->threshold_event_handler(sensor, dir, threshold, high_low,
-					value_present, value,
-					sensor->cb_data);
+					value_present, log->data[11], value,
+					sensor->cb_data, log);
     } else {
 	int offset;
 	int severity_present = 0, prev_severity_present = 0;
@@ -2368,7 +2372,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 	sensor->discrete_event_handler(sensor, dir, offset,
 				       severity_present, severity,
 				       prev_severity_present, prev_severity,
-				       sensor->cb_data);
+				       sensor->cb_data, log);
     }
 
     return 0;
@@ -3127,17 +3131,19 @@ reading_get(ipmi_sensor_t *sensor,
 	    ipmi_msg_t    *rsp,
 	    void          *rsp_data)
 {
-    reading_get_info_t *info = rsp_data;
-    ipmi_states_t      states;
-    int                rv;
-    double             val = 0.0;
-    int                val_present = 0;
+    reading_get_info_t        *info = rsp_data;
+    ipmi_states_t             states;
+    int                       rv;
+    double                    val = 0.0;
+    enum ipmi_value_present_e val_present;
 
     ipmi_init_states(&states);
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, 0, 0.0, &states, info->cb_data);
+	    info->done(sensor, err,
+		       IPMI_NO_VALUES_PRESENT, 0, 0.0,
+		       &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -3147,6 +3153,7 @@ reading_get(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
+		       IPMI_NO_VALUES_PRESENT,
 		       0,
 		       0.0,
 		       &states,
@@ -3160,13 +3167,12 @@ reading_get(ipmi_sensor_t *sensor,
 	rv = ipmi_sensor_convert_from_raw(sensor,
 					  rsp->data[1],
 					  &val);
-	if (rv) {
-	    info->done(sensor, rv, 0, 0.0, &states, info->cb_data);
-	    ipmi_sensor_opq_done(sensor);
-	    free(info);
-	    return;
-	}
-	val_present = 1;
+	if (rv)
+	    val_present = IPMI_RAW_VALUE_PRESENT;
+	else
+	    val_present = IPMI_BOTH_VALUES_PRESENT;
+    } else {
+	val_present = IPMI_NO_VALUES_PRESENT;
     }
 
     states.__event_messages_disabled = (rsp->data[2] >> 7) & 1;
@@ -3175,7 +3181,9 @@ reading_get(ipmi_sensor_t *sensor,
     states.__states = rsp->data[3];
 
     if (info->done)
-	info->done(sensor, 0, val_present, val, &states, info->cb_data);
+	info->done(sensor, 0,
+		   val_present, rsp->data[1], val, &states,
+		   info->cb_data);
     ipmi_sensor_opq_done(sensor);
     free(info);
 }
@@ -3193,7 +3201,9 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, 0, 0.0, &states, info->cb_data);
+	    info->done(sensor, err,
+		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
+		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -3210,7 +3220,9 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &(info->sdata), info);
     if (rv) {
 	if (info->done)
-	    info->done(sensor, rv, 0, 0.0, &states, info->cb_data);
+	    info->done(sensor, rv,
+		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
+		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
     }

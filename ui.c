@@ -645,12 +645,13 @@ struct sensor_info {
 };
 
 static void
-read_sensor(ipmi_sensor_t *sensor,
-	    int           err,
-	    int           val_present,
-	    double        val,
-	    ipmi_states_t *states,
-	    void          *cb_data)
+read_sensor(ipmi_sensor_t             *sensor,
+	    int                       err,
+	    enum ipmi_value_present_e value_present,
+	    unsigned int              raw_val,
+	    double                    val,
+	    ipmi_states_t             *states,
+	    void                      *cb_data)
 {
     ipmi_sensor_id_t sensor_id;
 
@@ -666,8 +667,10 @@ read_sensor(ipmi_sensor_t *sensor,
 	return;
     }
 
-    if (val_present)
+    if (value_present == IPMI_BOTH_VALUES_PRESENT)
 	wprintw(display_pad, "%f", val);
+    else if (value_present == IPMI_RAW_VALUE_PRESENT)
+	wprintw(display_pad, "0x%x (RAW)", raw_val);
     else
 	wprintw(display_pad, "unreadable");
     display_pad_refresh();
@@ -1985,9 +1988,11 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 			       enum ipmi_event_dir_e       dir,
 			       enum ipmi_thresh_e          threshold,
 			       enum ipmi_event_value_dir_e high_low,
-			       int                         value_present,
+			       enum ipmi_value_present_e   value_present,
+			       unsigned int                raw_value,
 			       double                      value,
-			       void                        *cb_data)
+			       void                        *cb_data,
+			       ipmi_log_t                  *log)
 {
     int  id, instance, lun, num;
     char name[33];
@@ -2001,9 +2006,13 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 	   ipmi_get_threshold_string(threshold),
 	   ipmi_get_value_dir_string(high_low),
 	   ipmi_get_event_dir_string(dir));
-    if (value_present) {
+    if (value_present == IPMI_BOTH_VALUES_PRESENT) {
 	ui_log("  value is %f\n", value);
+    } else if (value_present == IPMI_RAW_VALUE_PRESENT) {
+	ui_log("  raw value is 0x%x\n", raw_value);
     }
+    if (log)
+	ui_log("Due to log 0x%4.4x\n", log->record_id);
 }
 
 static void
@@ -2014,7 +2023,8 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 			      int                   severity,
 			      int		    prev_severity_present,
 			      int                   prev_severity,
-			      void                  *cb_data)
+			      void                  *cb_data,
+			      ipmi_log_t            *log)
 {
     int  id, instance, lun, num;
     char name[33];
@@ -2031,6 +2041,8 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 	ui_log("  severity is %d\n", severity);
     if (prev_severity_present)
 	ui_log("  prev severity is %d\n", prev_severity);
+    if (log)
+	ui_log("Due to log 0x%4.4x\n", log->record_id);
 }
 
 static void
@@ -2112,13 +2124,16 @@ control_change(enum ipmi_update_e op,
 static void
 entity_presence_handler(ipmi_entity_t *entity,
 			int           present,
-			void          *cb_data)
+			void          *cb_data,
+			ipmi_log_t    *log)
 {
     int id, instance;
 
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
     ui_log("Entity %d.%d, presence is %d\n", id, instance, present);
+    if (log)
+	ui_log("Due to log 0x%4.4x\n", log->record_id);
 }
 
 static void
