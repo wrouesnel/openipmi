@@ -65,13 +65,16 @@ typedef void (*ipmi_sensor_destroy_cb)(ipmi_sensor_t *sensor,
 				       void          *cb_data);
 
 /* Add a sensor for the given MC and put it into the given entity.
-   Note that sensor will NOT appear as owned by the MC, the MC is used
-   for the OS handler and such.  A handler can be supplied if the OEM
-   code wants to be called when the sensor is destroyed, or NULL can
-   be supplied if none is needed. */
+   Note that sensor will NOT appear as owned by the "mc", the "mc" is
+   used for the OS handler and such.  The source_mc is used to show
+   which MC "owns" the creation of the sensor, and may be NULL if the
+   sensor is presumed to come from the "main" SDR repository.  A
+   handler can be supplied if the OEM code wants to be called when the
+   sensor is destroyed, or NULL can be supplied if none is needed. */
 #define NONSTANDARD_SENSOR_LUN 4
 int ipmi_sensor_add_nonstandard(
     ipmi_mc_t              *mc,
+    ipmi_mc_t              *source_mc,
     ipmi_sensor_t          *sensor,
     unsigned int           num,
     ipmi_entity_t          *ent,
@@ -488,8 +491,13 @@ void ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str);
 
-/* Get the MC that the sensor is in. */
+/* Get the MC that the message is sent to for reading and controlling
+   the sensor. */
 ipmi_mc_t *ipmi_sensor_get_mc(ipmi_sensor_t *sensor);
+
+/* Return the MC that held the sensor's SDR (or NULL if the sensor
+   came from the main SDR repository or was synthesized. */
+ipmi_mc_t *ipmi_sensor_get_source_mc(ipmi_sensor_t *sensor);
 
 /* Do a pointer callback but ignore the sequence number in the MC.
    This is primarily for handling incoming events, where the sequence

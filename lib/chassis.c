@@ -300,8 +300,9 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
     ipmi_control_set_callbacks(power_control, &cbs);
     ipmi_control_set_num_elements(power_control, 1);
 
-    /* Add it to the MC and entity. */
-    rv = ipmi_control_add_nonstandard(mc, power_control,
+    /* Add it to the MC and entity.  We presume this comes from the
+       "main" SDR, so set the source_mc to NULL. */
+    rv = ipmi_control_add_nonstandard(mc, NULL, power_control,
 				      IPMI_CHASSIS_POWER_CONTROL,
 				      chassis_ent, NULL, NULL);
     if (rv) {

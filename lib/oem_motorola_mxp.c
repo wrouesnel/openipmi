@@ -1107,7 +1107,7 @@ mxp_finish_sensor(ipmi_mc_t     *mc,
     int rv;
 
     /* Add it to the MC and entity. */
-    rv = ipmi_sensor_add_nonstandard(mc, sensor, num, entity, NULL, NULL);
+    rv = ipmi_sensor_add_nonstandard(mc, mc, sensor, num, entity, NULL, NULL);
     if (rv) {
 	void *hdr;
         hdr = ipmi_sensor_get_oem_info(sensor);
@@ -1550,7 +1550,8 @@ mxp_alloc_control(ipmi_mc_t               *mc,
     ipmi_control_set_callbacks(*control, &cbs);
 
     /* Add it to the MC and entity. */
-    rv = ipmi_control_add_nonstandard(mc, *control, num, entity, NULL, NULL);
+    rv = ipmi_control_add_nonstandard(mc, mc, *control, num, entity,
+				      NULL, NULL);
     if (rv) {
 	ipmi_control_destroy(*control);
 	ipmi_mem_free(hdr);
@@ -4945,16 +4946,16 @@ amc_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 }
 
 static void
-mc_upd_handler(ipmi_domain_t *domain,
-	       int           added,
-	       ipmi_mc_t     *mc,
-	       void          *cb_data)
+mc_upd_handler(enum ipmi_update_e op,
+	       ipmi_domain_t      *domain,
+	       ipmi_mc_t          *mc,
+	       void               *cb_data)
 {
     amc_presence_info_t pinfo;
     int                 i;
     ipmi_sensor_id_t    id;
 
-    pinfo.present = added;
+    pinfo.present = (op == IPMI_ADDED);
 
     if (ipmi_mc_get_channel(mc) != IPMI_BMC_CHANNEL)
 	return;
@@ -6749,7 +6750,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     if (info->con_ch_info)
     	ipmi_domain_remove_con_change_handler(domain,
 					      info->con_ch_info->con_chid);
-    ipmi_domain_remove_mc_upd_handler(domain, info->mc_upd_id);
+    ipmi_domain_remove_mc_update_handler(domain, info->mc_upd_id);
     ipmi_mem_free(info->con_ch_info);
 
  out:
@@ -6853,8 +6854,8 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	    goto out_err;
 	}
 	
-	rv = ipmi_domain_register_mc_upd_handler(domain, mc_upd_handler,
-						 NULL, &info->mc_upd_id);
+	rv = ipmi_domain_register_mc_update_handler(domain, mc_upd_handler,
+						    NULL, &info->mc_upd_id);
 	if (rv)
 	    goto out_err;
     }

@@ -125,10 +125,13 @@ int ipmi_control_destroy(ipmi_control_t *control);
 typedef void (*ipmi_control_destroy_cb)(ipmi_control_t *control,
 					void           *cb_data);
 /* Add a control for the given MC and put it into the given entity.
-   Note that control will NOT appear as owned by the MC, the MC is used
-   for the OS handler and such. */
+   Note that control will NOT appear as owned by the MC, the MC is
+   used for the OS handler and such.  The source_mc is used to show
+   which MC "owns" the creation of the sensor, and may be NULL if the
+   sensor is presumed to come from the "main" SDR repository. */
 int ipmi_control_add_nonstandard(
     ipmi_mc_t               *mc,
+    ipmi_mc_t               *source_mc,
     ipmi_control_t          *control,
     unsigned int            num,
     ipmi_entity_t           *ent,

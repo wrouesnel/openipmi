@@ -572,6 +572,7 @@ ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
 
 int
 ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
+			    ipmi_mc_t              *source_mc,
 			    ipmi_sensor_t          *sensor,
 			    unsigned int           num,
 			    ipmi_entity_t          *ent,
@@ -626,6 +627,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     }
 
     sensor->mc = mc;
+    sensor->source_mc = source_mc;
     sensor->lun = 4;
     sensor->num = num;
     sensor->source_idx = -1;
@@ -1414,8 +1416,9 @@ ipmi_sensor_get_lower_non_recoverable_threshold
 					 lower_non_recoverable_threshold));
 }
 
-int ipmi_sensor_get_lower_critical_threshold(ipmi_sensor_t *sensor,
-					     double *lower_critical_threshold)
+int
+ipmi_sensor_get_lower_critical_threshold(ipmi_sensor_t *sensor,
+					 double *lower_critical_threshold)
 {
     int val, rv;
 
@@ -1464,6 +1467,14 @@ ipmi_sensor_get_mc(ipmi_sensor_t *sensor)
     CHECK_SENSOR_LOCK(sensor);
 
     return sensor->mc;
+}
+
+ipmi_mc_t *
+ipmi_sensor_get_source_mc(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->source_mc;
 }
 
 int

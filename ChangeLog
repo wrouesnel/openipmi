@@ -1,4 +1,23 @@
-2003-11-17 Corey Minyard <cminyard@mvista.com>
+2003-11-30 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_control.h, lib/control.c: Added a way to
+	get the source MC for the control.
+	
+	* include/OpenIPMI/ipmi_sensor.h, lib/sensor.c: Added a way to
+	get the source MC for the sensor.
+
+	* lib/chassis.c, lib/mxp_oem_motorola_mxp.c: Side effects from the
+	above changes.
+
+	* include/ipmi_domain.h, lib/domain.c: Reworked the MC update
+	handler to be more standard.
+
+	* ui/ui.c, ui/basic_ui.c: Fix problems with the reconnect code.
+
+	* ui/ui.c: Added MC update handler registration so new MCs are
+	reported.
+	
+2003-11-28 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmiif.h, lib/ipmi.h: Added parameter parsing
 	code for parsing the various types of connections from argv-type

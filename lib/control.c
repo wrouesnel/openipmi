@@ -66,6 +66,8 @@ struct ipmi_control_s
     unsigned char lun;
     unsigned char num;
 
+    ipmi_mc_t *source_mc;
+
     int destroyed;
 
     int type;
@@ -452,6 +454,7 @@ ipmi_control_alloc_nonstandard(ipmi_control_t **new_control)
 
 int
 ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
+			     ipmi_mc_t               *source_mc,
 			     ipmi_control_t          *control,
 			     unsigned int            num,
 			     ipmi_entity_t           *ent,
@@ -506,6 +509,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     }
 
     control->mc = mc;
+    control->source_mc = source_mc;
     control->lun = 4;
     control->num = num;
     if (! controls->controls_by_idx[num])
@@ -831,6 +835,14 @@ ipmi_control_get_mc(ipmi_control_t *control)
     CHECK_CONTROL_LOCK(control);
 
     return control->mc;
+}
+
+ipmi_mc_t *
+ipmi_control_get_source_mc(ipmi_control_t *control)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    return control->source_mc;
 }
 
 int

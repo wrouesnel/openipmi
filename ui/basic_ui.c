@@ -40,10 +40,12 @@
 #include <OpenIPMI/ipmi_ui.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_conn.h>
 
 static selector_t *selector;
 
 ipmi_args_t *con_parms[2];
+ipmi_con_t  *con[2];
 int         last_con = 0;
 
 /* This is used by the UI to reconnect after a connection has been
@@ -51,10 +53,9 @@ int         last_con = 0;
 void ui_reconnect(void)
 {
     int        rv;
-    ipmi_con_t *con[2];
     int        i;
 
-    for (i=0; i<=last_con; i++) {
+    for (i=0; i<last_con; i++) {
 	rv = ipmi_args_setup_con(con_parms[i],
 				 &ipmi_ui_cb_handlers,
 				 selector,
@@ -65,7 +66,7 @@ void ui_reconnect(void)
 	}
     }
 	
-    rv = ipmi_init_domain(con, last_con+1, ipmi_ui_setup_done,
+    rv = ipmi_init_domain(con, last_con, ipmi_ui_setup_done,
 			  NULL, NULL, NULL);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
@@ -80,7 +81,6 @@ main(int argc, char *argv[])
     int              curr_arg = 1;
     char             *arg;
     int              full_screen = 1;
-    ipmi_con_t       *con[2];
     ipmi_domain_id_t domain_id;
     int              i;
 

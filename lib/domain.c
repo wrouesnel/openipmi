@@ -861,7 +861,10 @@ iterate_mc_upds(ilist_iter_t *iter, void *item, void *cb_data)
     mc_upd_info_t        *info = cb_data;
     ipmi_domain_mc_upd_t *id = item;
 
-    id->handler(info->domain, info->added, info->mc, id->cb_data);
+    if (info->added)
+        id->handler(IPMI_ADDED, info->domain, info->mc, id->cb_data);
+    else
+        id->handler(IPMI_DELETED, info->domain, info->mc, id->cb_data);
 }
 
 static int
@@ -889,10 +892,10 @@ add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 }
 
 int
-ipmi_domain_register_mc_upd_handler(ipmi_domain_t         *domain,
-				    ipmi_domain_mc_upd_cb handler,
-				    void                  *cb_data,
-				    ipmi_domain_mc_upd_t  **id)
+ipmi_domain_register_mc_update_handler(ipmi_domain_t         *domain,
+				       ipmi_domain_mc_upd_cb handler,
+				       void                  *cb_data,
+				       ipmi_domain_mc_upd_t  **id)
 {
     ipmi_domain_mc_upd_t *new_id;
 
@@ -914,8 +917,8 @@ ipmi_domain_register_mc_upd_handler(ipmi_domain_t         *domain,
 }
 
 void
-ipmi_domain_remove_mc_upd_handler(ipmi_domain_t        *domain,
-				  ipmi_domain_mc_upd_t *id)
+ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
+				     ipmi_domain_mc_upd_t *id)
 {
     ilist_iter_t iter;
     int          rv;

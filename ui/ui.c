@@ -78,6 +78,8 @@ static int full_screen;
 struct termios old_termios;
 int old_flags;
 
+static int initialized = 0;
+
 #define STATUS_WIN_LINES 2
 #define STATUS_WIN_COLS COLS
 #define STATUS_WIN_TOP 0
@@ -3652,6 +3654,7 @@ extern void ui_reconnect(void);
 static void
 disconnect_done(void *cb_data)
 {
+    initialized = 0;
     ui_reconnect();
 }
 
@@ -4200,7 +4203,30 @@ entity_change(enum ipmi_update_e op,
     }
 }
 
+static void
+mc_change(enum ipmi_update_e op,
+	  ipmi_domain_t      *domain,
+	  ipmi_mc_t          *mc,
+	  void               *cb_data)
+{
+    int  addr = ipmi_mc_get_address(mc);
+    int  channel = ipmi_mc_get_channel(mc);
+
+    switch (op) {
+	case IPMI_ADDED:
+	    ui_log("MC added: (%d %x)\n", channel, addr);
+	    break;
+	case IPMI_DELETED:
+	    ui_log("MC deleted: (%d %x)\n", channel, addr);
+	    break;
+	case IPMI_CHANGED:
+	    ui_log("MC changed: (%d %x)\n", channel, addr);
+	    break;
+    }
+}
+
 static ipmi_event_handler_id_t *event_handler_id;
+static ipmi_domain_mc_upd_t *mc_update_handler_id;
 
 static void
 event_handler(ipmi_domain_t *domain,
@@ -4263,8 +4289,6 @@ redisplay_timeout(selector_t  *sel,
 	ui_log("Unable to restart redisplay timer: 0x%x\n", rv);
 }
 
-static int initialized = 0;
-
 void
 ipmi_ui_setup_done(ipmi_domain_t *domain,
 		   int           err,
@@ -4306,6 +4330,11 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 	leave_err(rv, "ipmi_domain_enable_events");
 
     rv = ipmi_domain_set_entity_update_handler(domain, entity_change, domain);
+    if (rv)
+	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
+
+    rv = ipmi_domain_register_mc_update_handler(domain, mc_change, domain,
+						&mc_update_handler_id);
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
 }
