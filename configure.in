@@ -50,11 +50,21 @@ AC_ARG_WITH(glib,
 
 tryperl=yes
 AC_ARG_WITH(perl,
-[  --with-perl                     Look for perl.],
+[  --with-perl[=PATH]              Look for perl, with the optional path.],
     if test "x$withval" = "xyes"; then
       tryperl=yes
     elif test "x$withval" = "xno"; then
       tryperl=no
+    elif test -d "$withval"; then
+      perldir="$withval"
+      tryperl=yes
+    fi,
+)
+
+AC_ARG_WITH(perlinstall,
+[  --with-perlinstall=PATH         Look for perl, with the optional path.],
+    if test -d "$withval"; then
+      perlinstalldir="$withval"
     fi,
 )
 
@@ -133,31 +143,41 @@ if test "x$tryperl" != "xno"; then
    AC_PATH_PROG(perlprog, perl)
 fi
 if test "x$perlprog" != "x"; then
-   perldir=`$perlprog -e 'for $i (@INC) { if (-r "$i/CORE/perl.h") { print "$i/CORE"; last; } }'`
+   # Find the place where perl lives.
    if test "x$perldir" == "x"; then
-      perldir=
-   else
-      if echo "$perldir" | grep "UNKNOWN"; then
-	 perldir=
-      else
-         perldir=`echo $perldir | sed 's/^.*,\(\/.*\).;$/\1/'`
-	 if test ! -d $perldir; then
-	    perldir=
-	 fi
+      perldir=`$perlprog -e 'for $i (@INC) { if (-r "$i/CORE/perl.h") { print "$i"; last; } }'`
+   fi
+
+   # Now find a proper installation location.
+   if test "x$perlinstalldir" == "x"; then
+      perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /site_perl\/.+\/.+/) { print "$i"; last; } }'`
+      if test "x$perlinstalldir" == "x" -o ! -d "$perlinstalldir"; then
+	 perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /vendor_perl\/.+\/.+/) { print "$i"; last; } }'`
+      fi
+      if test "x$perlinstalldir" == "x" -o ! -d "$perlinstalldir"; then
+	 perlinstalldir=$perldir
       fi
    fi
 fi
 
 if test "x$perldir" != "x"; then
+   tpprog=`$perlprog -e "\\$p = \"$perlinstalldir\"; \\$u = \"$prefix\"; \\$p =~ s/\\$u//; print \\$p"`
    AC_DEFINE(HAVE_PERL)
    PERL_DIR=perl
-   PERL_CFLAGS="-I $perldir `$perlprog -V:ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
+   PERL_CFLAGS="-I $perldir/CORE `$perlprog -V:ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
+   if test "$pprog" == "$perlinstalldir"; then
+      PERL_INSTALL_DIR="$perlinstalldir"
+   else
+      PERL_INSTALL_DIR="\${prefix}$tpprog"
+   fi
 else
    PERL_DIR=
    PERL_CFLAGS=
+   PERL_INSTALL_DIR=
 fi
 AC_SUBST(PERL_DIR)
 AC_SUBST(PERL_CFLAGS)
+AC_SUBST(PERL_INSTALL_DIR)
 
 # Now check for swig
 swigprog=

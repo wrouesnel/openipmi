@@ -256,10 +256,10 @@
 
  2.19) How do I build the Perl interface?
 
-     The Perl interface uses swig, which is available from
-     http://www.swig.org.  That must be installed and in your patch to
-     build the Perl interface.  You must also have the development
-     libraries for Perl installed, of course.
+     The Perl interface uses swig 1.3.22 or later, which is available
+     from http://www.swig.org.  That must be installed and in your
+     path to build the Perl interface.  You must also have the
+     development libraries for Perl installed, of course.
 
 
  2.20) How do I catch SNMP traps with OpenIPMI?

@@ -2435,7 +2435,7 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 	return EINVAL;
     }
 
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
 
     /* Pend these to be installed when nobody is using them. */
     mc->pending_devid.device_id = rsp_data[1];
@@ -2476,6 +2476,7 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 	mc->devid = mc->pending_devid;
 	mc->pending_devid_data = 0;
 	mc->pending_new_mc = 0;
+	ipmi_unlock(mc->lock);
 
 	/* OEM handlers set the pending data. */
 	rv = check_oem_handlers(mc);
@@ -2485,8 +2486,8 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 	rv = EBUSY; /* Tell the user that they must call the OEM
 		       handlers check later when the MC is
 		       released. */
+	ipmi_unlock(mc->lock);
     }
-    _ipmi_domain_mc_unlock(mc->domain);
 
     return rv;
 }
@@ -2703,10 +2704,10 @@ void
 ipmi_mc_set_provides_device_sdrs(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.provides_device_sdrs = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2720,10 +2721,10 @@ void
 ipmi_mc_set_device_available(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.device_available = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2737,10 +2738,10 @@ void
 ipmi_mc_set_chassis_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.chassis_support = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2754,10 +2755,10 @@ void
 ipmi_mc_set_bridge_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.bridge_support = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2771,10 +2772,10 @@ void
 ipmi_mc_set_ipmb_event_generator_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.IPMB_event_generator_support = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2788,10 +2789,10 @@ void
 ipmi_mc_set_ipmb_event_receiver_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.IPMB_event_receiver_support = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2805,10 +2806,10 @@ void
 ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.FRU_inventory_support = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2822,10 +2823,10 @@ void
 ipmi_mc_set_sel_device_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.SEL_device_support = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2839,10 +2840,10 @@ void
 ipmi_mc_set_sdr_repository_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.SDR_repository_support = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int
@@ -2856,10 +2857,10 @@ void
 ipmi_mc_set_sensor_device_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    _ipmi_domain_mc_lock(mc->domain);
+    ipmi_lock(mc->lock);
     mc->pending_devid.sensor_device_support = val;
     mc->pending_devid_data = 1;
-    _ipmi_domain_mc_unlock(mc->domain);
+    ipmi_unlock(mc->lock);
 }
 
 int

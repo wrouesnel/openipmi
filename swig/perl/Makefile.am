@@ -21,7 +21,8 @@ OpenIPMI_LIB = $(top_builddir)/unix/libOpenIPMIposix.la \
 	       $(top_builddir)/utils/libOpenIPMIutils.la \
 	       $(GLIB_LIB) $(GLIB_LIBS)
 
-EXTRA_DIST = OpenIPMI_perl.c OpenIPMI_lang.i OpenIPMI.h
+EXTRA_DIST = OpenIPMI_perl.c OpenIPMI_lang.i OpenIPMI.h \
+	sample ipmi_powerctl
 
 OpenIPMI.so: $(OpenIPMI_OBJ)
 	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB)
@@ -38,4 +39,9 @@ OpenIPMI_perl.o: OpenIPMI_perl.c OpenIPMI.h
 OpenIPMI_wrap.c OpenIPMI.pm: $(top_srcdir)/swig/OpenIPMI.i
 	swig $(DEFS) -perl5 -o $@ $<
 
-CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI.so OpenIPMI_wrap.c
+CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI.so OpenIPMI_wrap.c OpenIPMI.pm
+
+install-exec-local: OpenIPMI.so OpenIPMI.pm
+	$(INSTALL) -d $(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI
+	$(INSTALL_PROGRAM) OpenIPMI.so $(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI
+	$(INSTALL_PROGRAM) OpenIPMI.pm $(DESTDIR)$(PERL_INSTALL_DIR)

@@ -125,6 +125,7 @@ get the results, etc.  It gives you the full power of OpenIPMI.  It
 can easily be driven with a TCL script or the like.  See the man page
 for more details.
 
+
 Using ipmi_ui
 =============
 
@@ -136,7 +137,26 @@ more.
 Note that ipmi_ui was written primarily for testing.  It does things
 that users generally shouldn't do.  You can use it for examples, but
 it touches things that are considered OpenIPMI internal, so be careful
-what you use.
+what you use.  ipmish and the sample code is a much better example.
+
+
+Perl and OpenIPMI
+=================
+
+OpenIPMI has perl bindings using swig.  The public interface of
+OpenIPMI is available, but the private interfaces are not (and a few
+other things like SNMP trap support, PET, PEF, and LANPARM support).
+It is still somewhat new, but fairly functional.
+
+I was hoping that swig would generate documentation from the comments,
+but it turns out that it does not do that.  You can look at
+swig/OpenIPMI.i for the documentation on all the interfaces, and
+swig/perl/sample for a piece of sample code that uses most of the
+interfaces.
+
+The interface is object-oriented, so you have to know how to do OO
+Perl to use this.  It is like this because that is the most natural
+way to use SWIG (and it makes more OO languages like python easier).
 
 
 OpenIPMI and SNMP
