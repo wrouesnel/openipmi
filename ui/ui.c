@@ -4807,6 +4807,67 @@ get_sel_time_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static void
+mc_reset_done(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    if (err)
+	ui_log("Error resetting mc: %x", err);
+    else
+	ui_log("MC reset");
+}
+
+static void
+mc_reset_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    mccmd_info_t *info = cb_data;
+    int          rv;
+
+    info->found = 1;
+    rv = ipmi_mc_reset(mc, info->msg.cmd, sel_time_fetched, NULL);
+    if (rv)
+	cmd_win_out("Error sending MC reset: %x\n", rv);
+}
+
+static int
+mc_reset_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+    char          *type;
+
+    if (get_mc_id(toks, &info.mc_id))
+	return 0;
+
+    type = strtok_r(NULL, " \n\t", toks);
+    if (!type) {
+	cmd_win_out("No reset type given, must be 'cold' or 'warm'\n");
+	return 0;
+    }
+
+    if (strcmp(type, "warm") == 0) {
+	info.msg.cmd = IPMI_MC_RESET_WARM;
+    } else if (strcmp(type, "cold") == 0) {
+	info.msg.cmd = IPMI_MC_RESET_COLD;
+    } else {
+	cmd_win_out("Invalid reset type given, must be 'cold' or 'warm'\n");
+	return 0;
+    }
+
+    info.found = 0;
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, mc_reset_handler, &info);
+    if (rv) {
+	cmd_win_out("Unable to find MC\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%d %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
 typedef struct sdrs_info_s
 {
     int           found;
@@ -5165,6 +5226,9 @@ static struct {
     { "mc",		mc_cmd,
       " <channel> <mc num>"
       " - Dump info on the given MC"},
+    { "mc_reset",	mc_reset_cmd,
+      " <channel> <mc num> [warm | cold]"
+      " - Do a warm or cold reset on the given MC"},
     { "mccmd",		mccmd_cmd,
       " <channel> <mc num> <LUN> <NetFN> <Cmd> [data...]"
       " - Send the given command"

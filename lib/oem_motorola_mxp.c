@@ -158,6 +158,9 @@
 #define MXP_BOARD_RESET_NUM	1
 #define MXP_BOARD_POWER_NUM	2
 #define MXP_BOARD_BLUE_LED_NUM	3
+#define MXP_BOARD_HW_VER_NUM	4
+#define MXP_BOARD_FW_VER_NUM	5
+#define MXP_BOARD_FPGA_VER_NUM	6
 
 /* Information common to all sensors.  A pointer to this is put into
    the OEM field of the sensor. */
@@ -272,6 +275,9 @@ typedef struct amc_info_s
 
     /* The controls. */
     ipmi_control_t *blue_led;
+    ipmi_control_t *hw_version;
+    ipmi_control_t *fw_version;
+    ipmi_control_t *fpga_version;
 } amc_info_t;
 
 struct mxp_info_s {
@@ -504,6 +510,9 @@ struct mxp_control_info_s
     /* Controls on the MXP can have up to 4 values, we store them here
        for setting. */
     unsigned char                  vals[4];
+
+    /* For use by the specific code. */
+    unsigned long                  misc;
 
     /* Pointer for use by the specific control code, not used in this
        code. */
@@ -1539,8 +1548,10 @@ mxp_alloc_control(ipmi_mc_t               *mc,
     ipmi_control_set_ignore_if_no_entity(*control, 1);
 
     /* Assume we can read and set the value. */
-    ipmi_control_set_settable(*control, 1);
-    ipmi_control_set_readable(*control, 1);
+    if (set_val)
+	ipmi_control_set_settable(*control, 1);
+    if (get_val)
+	ipmi_control_set_readable(*control, 1);
 
     /* Create all the callbacks in the data structure. */
     memset(&cbs, 0, sizeof(cbs));
@@ -2216,6 +2227,8 @@ mxp_add_chassis_sensors(mxp_info_t *info)
     ipmi_control_get_callbacks(info->chassis_id, &control_cbs);
     control_cbs.set_identifier_val = chassis_id_set;
     control_cbs.get_identifier_val = chassis_id_get;
+    ipmi_control_set_settable(info->chassis_id, 1);
+    ipmi_control_set_readable(info->chassis_id, 1);
     ipmi_control_set_callbacks(info->chassis_id, &control_cbs);
 
     /* The Chassis Type. */
@@ -2233,6 +2246,8 @@ mxp_add_chassis_sensors(mxp_info_t *info)
     ipmi_control_get_callbacks(info->chassis_type_control, &control_cbs);
     control_cbs.set_identifier_val = chassis_type_set;
     control_cbs.get_identifier_val = chassis_type_get;
+    ipmi_control_set_settable(info->chassis_type_control, 1);
+    ipmi_control_set_readable(info->chassis_type_control, 1);
     ipmi_control_set_callbacks(info->chassis_type_control, &control_cbs);
 
     /* Now the relays. */
@@ -4709,6 +4724,151 @@ mxp_voltage_reading_get_cb(ipmi_sensor_t        *sensor,
 }
 
 static void
+amc_version_get_cb(ipmi_control_t *control,
+		   int            err,
+		   ipmi_msg_t     *rsp,
+		   void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+
+    if (err) {
+	if (control_info->done_set)
+	    control_info->done_set(control, err, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "amc_version_get_cb: Received IPMI error: %x",
+		 rsp->data[0]);
+	control_info->get_identifier_val(control,
+					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					 NULL, 0,
+					 control_info->cb_data);
+	goto out;
+    }
+    if (rsp->data_len < 12) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "amc_version_get_cb: Received short msg: %d bytes",
+		 rsp->data_len);
+	control_info->get_identifier_val(control,
+					 EINVAL,
+					 NULL, 0,
+					 control_info->cb_data);
+	goto out;
+    }
+
+    control_info->get_identifier_val(control, 0,
+				     rsp->data+control_info->misc, 1,
+				     control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+amc_version_get_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t   *control_info = cb_data;
+    mxp_info_t           *info = control_info->idinfo;
+    int                  rv;
+    ipmi_msg_t           msg;
+    unsigned char        data[3];
+
+    if (err) {
+	if (control_info->done_set)
+	    control_info->done_set(control, err, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    msg.data_len = 3;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    rv = ipmi_control_send_command(control, info->mc, 0,
+				   &msg, amc_version_get_cb,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_set)
+	    control_info->done_set(control, rv, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+amc_hw_version_get(ipmi_control_t                 *control,
+		   ipmi_control_identifier_val_cb handler,
+		   void                           *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_info_t           *info = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(info);
+    if (!control_info)
+	return ENOMEM;
+    control_info->get_identifier_val = handler;
+    control_info->cb_data = cb_data;
+    control_info->misc = 9; /* Offset of the hw version */
+    rv = ipmi_control_add_opq(control, amc_version_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
+static int
+amc_fw_version_get(ipmi_control_t                 *control,
+		   ipmi_control_identifier_val_cb handler,
+		   void                           *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_info_t           *info = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(info);
+    if (!control_info)
+	return ENOMEM;
+    control_info->get_identifier_val = handler;
+    control_info->cb_data = cb_data;
+    control_info->misc = 10; /* Offset of the fw version */
+    rv = ipmi_control_add_opq(control, amc_version_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
+static int
+amc_fpga_version_get(ipmi_control_t                 *control,
+		     ipmi_control_identifier_val_cb handler,
+		     void                           *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_info_t           *info = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(info);
+    if (!control_info)
+	return ENOMEM;
+    control_info->get_identifier_val = handler;
+    control_info->cb_data = cb_data;
+    control_info->misc = 11; /* Offset of the fpga version */
+    rv = ipmi_control_add_opq(control, amc_version_get_start,
+			     &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
+static void
 amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     amc_info_t *info = cb_data;
@@ -4742,6 +4902,7 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_entity_info_t *ents;
     unsigned int       assert, deassert;
     char               *name;
+    ipmi_control_cbs_t control_cbs;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4807,6 +4968,54 @@ amc_board_handler(ipmi_mc_t *mc)
 	goto out_err;
     ipmi_control_light_set_lights(info->blue_led, 1, blue_led);
     ipmi_control_set_hot_swap_indicator(info->blue_led, 1);
+
+    rv = mxp_alloc_control(mc, info->ent,
+			   MXP_BOARD_HW_VER_NUM,
+			   NULL,
+			   IPMI_CONTROL_IDENTIFIER,
+			   "hw version",
+			   NULL,
+			   NULL,
+			   &info->hw_version);
+    if (rv)
+	goto out_err;
+    ipmi_control_identifier_set_max_length(info->hw_version, 1);
+    ipmi_control_get_callbacks(info->hw_version, &control_cbs);
+    control_cbs.get_identifier_val = amc_hw_version_get;
+    ipmi_control_set_readable(info->hw_version, 1);
+    ipmi_control_set_callbacks(info->hw_version, &control_cbs);
+
+    rv = mxp_alloc_control(mc, info->ent,
+			   MXP_BOARD_FW_VER_NUM,
+			   NULL,
+			   IPMI_CONTROL_IDENTIFIER,
+			   "fw version",
+			   NULL,
+			   NULL,
+			   &info->fw_version);
+    if (rv)
+	goto out_err;
+    ipmi_control_identifier_set_max_length(info->fw_version, 1);
+    ipmi_control_get_callbacks(info->fw_version, &control_cbs);
+    control_cbs.get_identifier_val = amc_fw_version_get;
+    ipmi_control_set_readable(info->fw_version, 1);
+    ipmi_control_set_callbacks(info->fw_version, &control_cbs);
+
+    rv = mxp_alloc_control(mc, info->ent,
+			   MXP_BOARD_FPGA_VER_NUM,
+			   NULL,
+			   IPMI_CONTROL_IDENTIFIER,
+			   "fpga version",
+			   NULL,
+			   NULL,
+			   &info->fpga_version);
+    if (rv)
+	goto out_err;
+    ipmi_control_identifier_set_max_length(info->fpga_version, 1);
+    ipmi_control_get_callbacks(info->fpga_version, &control_cbs);
+    control_cbs.get_identifier_val = amc_fpga_version_get;
+    ipmi_control_set_readable(info->fpga_version, 1);
+    ipmi_control_set_callbacks(info->fpga_version, &control_cbs);
 
     /* 5V */
     assert = 0;

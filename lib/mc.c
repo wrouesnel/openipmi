@@ -402,6 +402,68 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 
 /***********************************************************************
  *
+ * Reset routines for MCs.
+ *
+ **********************************************************************/
+
+typedef struct mc_reset_info_s
+{
+    ipmi_mc_done_cb done;
+    void            *cb_data;
+} mc_reset_info_t;
+
+static void
+mc_reset_done(ipmi_mc_t  *mc,
+	      ipmi_msg_t *rsp,
+	      void       *rsp_data)
+{
+    int             err = 0;
+    mc_reset_info_t *info = rsp_data;
+
+    if (rsp->data[0] != 0)
+	err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+
+    if (info->done)
+	info->done(mc, err, info->cb_data);
+
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_reset(ipmi_mc_t       *mc,
+	      int             reset_type,
+	      ipmi_mc_done_cb done,
+	      void            *cb_data)
+{
+    int             rv;
+    ipmi_msg_t      msg;
+    mc_reset_info_t *info;
+
+    CHECK_MC_LOCK(mc);
+
+    if (reset_type == IPMI_MC_RESET_COLD)
+	msg.cmd = IPMI_COLD_RESET_CMD;
+    if (reset_type == IPMI_MC_RESET_WARM)
+	msg.cmd = IPMI_WARM_RESET_CMD;
+    else
+	return EINVAL;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.data = NULL;
+    msg.data_len = 0;
+    rv = ipmi_mc_send_command(mc, 0, &msg, mc_reset_done, info);
+    if (rv)
+	ipmi_mem_free(info);
+
+    return rv;
+}
+
+/***********************************************************************
+ *
  * Event handling.
  *
  **********************************************************************/

@@ -550,7 +550,7 @@ almost all systems.  They are provided as part of OpenIPMI so that OEM
 code has a consistent way to represent these, and so OpenIPMI is ready
 when the IPMI team finally sees the light and adds controls.
 OpenIPMI defines many types of control: lights, relays, displays,
-alarms, reset, power, fan speed, and identifiers.
+alarms, reset, one-shot-reset, power, fan speed, and identifiers.
 
 For all controls except displays and identifiers, the control may
 actually control more than one device.  With some controls, multiple
@@ -558,6 +558,10 @@ device may be controlled together and individual ones cannot be set (ie,
 the same message sets all of them).  For these types of controls,
 OpenIPMI represents them as a single control with multiple devices.
 All the devices are read and set at once.
+
+Reset controls are reset settings that can be turned on and off.
+One-shot-reset controls cause a reset by setting the value to 1; they
+are not readable and setting to zero returns an error.
 
 Lights are on/off colored devices, like an LED.  They may be
 multi-color, but can only show one color at a time.  For instance, if

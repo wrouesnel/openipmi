@@ -11,6 +11,12 @@
 	
 	* ui/ui.c: Added support for the connection activation.
 
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a mc reset command
+	for sending MC cold and warm resets.
+
+	* lib/oem_motorola_mxp.c: Added controls for the version AMC
+	version.
+
 2003-01-08 Jeff Zheng <jeff.zheng@intel.com>
 
 	* lib/pef.c: Various fixes for PEF handling.

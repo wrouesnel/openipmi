@@ -111,6 +111,19 @@ int ipmi_mc_is_active(ipmi_mc_t *mc);
 void _ipmi_mc_set_active(ipmi_mc_t *mc, int val);
 
 
+/* Reset the MC, either a cold or warm reset depending on the type.
+   Note that the effects of a reset are not defined by IPMI, so this
+   might do wierd things.  Some systems do not support resetting the
+   MC.  This is not a standard control because there is no entity to
+   hang if from and you don't want people messing with it unless they
+   really know what they are doing. */
+#define IPMI_MC_RESET_COLD 1
+#define IPMI_MC_RESET_WARM 2
+int ipmi_mc_reset(ipmi_mc_t       *mc,
+		  int             reset_type,
+		  ipmi_mc_done_cb done,
+		  void            *cb_data);
+
 /* Return the domain for the given MC. */
 ipmi_domain_t *ipmi_mc_get_domain(ipmi_mc_t *mc);
 

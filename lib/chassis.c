@@ -62,6 +62,98 @@ typedef struct chassis_set_info_s
 } chassis_set_info_t;
 
 static void
+chassis_reset_set_cb(ipmi_control_t *control,
+		     int            err,
+		     ipmi_msg_t     *rsp,
+		     void           *cb_data)
+{
+    chassis_set_info_t *control_info = cb_data;
+
+    if (err) {
+	if (control_info->handler)
+	    control_info->handler(control, err, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "chassis_reset_set_cb: Received IPMI error: %x",
+		 rsp->data[0]);
+	if (control_info->handler)
+	    control_info->handler(control,
+				  IPMI_IPMI_ERR_VAL(rsp->data[0]),
+				  control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->handler)
+	control_info->handler(control, 0, control_info->cb_data);
+
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+chassis_reset_set_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    chassis_set_info_t *control_info = cb_data;
+    ipmi_msg_t         msg;
+    unsigned char      data[1];
+    ipmi_mc_t	       *mc = ipmi_control_get_mc(control);
+    int                rv;
+
+    if (err) {
+	if (control_info->handler)
+	    control_info->handler(control, err, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = IPMI_CHASSIS_NETFN;
+    msg.cmd = IPMI_CHASSIS_CONTROL_CMD;
+    msg.data_len = 1;
+    msg.data = data;
+    data[0] = 3;
+
+    rv = ipmi_control_send_command(control, mc, 0,
+				   &msg, chassis_reset_set_cb,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->handler)
+	    control_info->handler(control, rv, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+chassis_reset_set(ipmi_control_t     *control,
+		  int                *val,
+		  ipmi_control_op_cb handler,
+		  void               *cb_data)
+{
+    chassis_set_info_t *control_info;
+    int                rv;
+
+    if (val[0] == 0)
+	return EINVAL;
+
+    control_info = ipmi_mem_alloc(sizeof(*control_info));
+    if (!control_info)
+	return ENOMEM;
+    control_info->handler = handler;
+    control_info->cb_data = cb_data;
+    control_info->vals[0] = val[0];
+    rv = ipmi_control_add_opq(control, chassis_reset_set_start,
+			     &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
+static void
 chassis_power_set_cb(ipmi_control_t *control,
 		     int            err,
 		     ipmi_msg_t     *rsp,
@@ -249,7 +341,9 @@ chassis_power_get(ipmi_control_t      *control,
 }
 
 static void
-chassis_mc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+chassis_mc_control_removal_handler(ipmi_domain_t *domain,
+				   ipmi_mc_t     *mc,
+				   void          *cb_data)
 {
     ipmi_control_t *control = cb_data;
 
@@ -263,6 +357,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
     ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
     ipmi_entity_t      *chassis_ent;
     ipmi_control_t     *power_control;
+    ipmi_control_t     *reset_control;
     int                rv;
     ipmi_control_cbs_t cbs;
 
@@ -279,7 +374,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 	goto out;
     }
     
-    /* Allocate the control. */
+    /* Allocate the power control. */
     rv = ipmi_control_alloc_nonstandard(&power_control);
     if (rv) {
 	goto out;
@@ -310,10 +405,49 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 	goto out;
     }
 
-    rv = ipmi_mc_add_oem_removed_handler(mc, chassis_mc_removal_handler,
+    rv = ipmi_mc_add_oem_removed_handler(mc,
+					 chassis_mc_control_removal_handler,
 					 power_control, NULL);
     if (rv) {
 	ipmi_control_destroy(power_control);
+	goto out;
+    }
+
+    /* Allocate the reset control. */
+    rv = ipmi_control_alloc_nonstandard(&reset_control);
+    if (rv) {
+	goto out;
+    }
+
+    ipmi_control_set_type(reset_control, IPMI_CONTROL_ONE_SHOT_RESET);
+    ipmi_control_set_ignore_if_no_entity(reset_control, 0);
+    ipmi_control_set_id(reset_control, "reset", IPMI_ASCII_STR, 5);
+
+    ipmi_control_set_settable(reset_control, 1);
+    ipmi_control_set_readable(reset_control, 0);
+
+    /* Create all the callbacks in the data structure. */
+    memset(&cbs, 0, sizeof(cbs));
+    cbs.set_val = chassis_reset_set;
+
+    ipmi_control_set_callbacks(reset_control, &cbs);
+    ipmi_control_set_num_elements(reset_control, 1);
+
+    /* Add it to the MC and entity.  We presume this comes from the
+       "main" SDR, so set the source_mc to NULL. */
+    rv = ipmi_control_add_nonstandard(mc, NULL, reset_control,
+				      IPMI_CHASSIS_RESET_CONTROL,
+				      chassis_ent, NULL, NULL);
+    if (rv) {
+	ipmi_control_destroy(reset_control);
+	goto out;
+    }
+
+    rv = ipmi_mc_add_oem_removed_handler(mc,
+					 chassis_mc_control_removal_handler,
+					 power_control, NULL);
+    if (rv) {
+	ipmi_control_destroy(reset_control);
 	goto out;
     }
 

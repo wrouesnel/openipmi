@@ -1,11 +1,11 @@
 
-2: Add a one-shot reset control.
+*2: Add a one-shot reset control.
 
-2: Add reset controls for chassis reset, and warm and cold reset on the BMC.
+*2: Add reset controls for chassis reset, and warm and cold reset on the BMC.
 
 2: Add identifier control for the shelf geographic address.
 
-1: Add a way to set active/standby modes of the AMCs.
+*1: Add a way to set active/standby modes of the AMCs.
 
 5: Add a way to set the managed/autonomous mode on the AMCs.
 
@@ -17,7 +17,7 @@
 
 1: Add identifier control for AMC FW version
 
-1: Add identifier control for AMC  FPGA version
+1: Add identifier control for AMC FPGA version
 
 5: Add identifier control for display panel HW version
 
