@@ -3212,6 +3212,18 @@ ipmi_entity_is_present(ipmi_entity_t *ent)
     return ent->present;
 }
 
+static void
+entity_id_is_present_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    *((int *) cb_data) = ipmi_entity_is_present(ent);
+}
+
+int
+ipmi_entity_id_is_present(ipmi_entity_id_t id, int *present)
+{
+    return ipmi_entity_pointer_cb(id, entity_id_is_present_cb, present);
+}
+
 char *
 ipmi_entity_get_entity_id_string(ipmi_entity_t *ent)
 {
@@ -3755,10 +3767,10 @@ ipmi_entity_get_hot_swap_state(ipmi_entity_t           *ent,
 }
 
 int
-ipmi_entity_set_auto_activate(ipmi_entity_t  *ent,
-			      ipmi_timeout_t auto_act,
-			      ipmi_entity_cb done,
-			      void           *cb_data)
+ipmi_entity_set_auto_activate_time(ipmi_entity_t  *ent,
+				   ipmi_timeout_t auto_act,
+				   ipmi_entity_cb done,
+				   void           *cb_data)
 {
     if (!ent->hot_swappable)
 	return ENOSYS;
@@ -3864,6 +3876,313 @@ ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
 	return ENOSYS;
     return ent->hs_cb.get_hot_swap_requester(ent, handler, cb_data);
 }
+
+/***********************************************************************
+ *
+ * Entity ID versions of the hot-swap calls.
+ *
+ **********************************************************************/
+
+typedef struct entity_hot_swap_cb_info_s
+{
+    int                     rv;
+    ipmi_entity_hot_swap_cb handler;
+    void                    *cb_data;
+} entity_hot_swap_cb_info_t;
+
+typedef struct entity_cb_info_s
+{
+    int            rv;
+    ipmi_timeout_t time;
+    int            val;
+    ipmi_entity_cb handler;
+    void           *cb_data;
+} entity_cb_info_t;
+
+typedef struct entity_val_cb_info_s
+{
+    int                rv;
+    ipmi_entity_val_cb handler;
+    void               *cb_data;
+} entity_val_cb_info_t;
+
+typedef struct entity_time_cb_info_s
+{
+    int                 rv;
+    ipmi_entity_time_cb handler;
+    void                *cb_data;
+} entity_time_cb_info_t;
+
+static void
+entity_id_get_hot_swap_state_cb(ipmi_entity_t *entity, void *cb_data)
+{
+    entity_hot_swap_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_get_hot_swap_state(entity, info->handler,
+					      info->cb_data);
+}
+
+int
+ipmi_entity_id_get_hot_swap_state(ipmi_entity_id_t        id,
+				  ipmi_entity_hot_swap_cb handler,
+				  void                    *cb_data)
+{
+    int                       rv;
+    entity_hot_swap_cb_info_t info;
+
+    info.rv = 0;
+    info.handler = handler;
+    info.cb_data = cb_data;
+
+    rv = ipmi_entity_pointer_cb(id, entity_id_get_hot_swap_state_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_get_auto_activate_time_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_time_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_get_auto_activate_time(ent, info->handler,
+						  info->cb_data);
+}
+
+int
+ipmi_entity_id_get_auto_activate_time(ipmi_entity_id_t    id,
+				      ipmi_entity_time_cb handler,
+				      void                *cb_data)
+{
+    entity_time_cb_info_t info;
+    int                   rv;
+
+    info.rv = 0;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_get_auto_activate_time_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_set_auto_activate_time_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_set_auto_activate_time(ent, info->time,
+						  info->handler,
+						  info->cb_data);
+}
+
+int
+ipmi_entity_id_set_auto_activate_time(ipmi_entity_id_t  id,
+				      ipmi_timeout_t    auto_act,
+				      ipmi_entity_cb    done,
+				      void              *cb_data)
+{
+    entity_cb_info_t info;
+    int              rv;
+
+    info.rv = 0;
+    info.time = auto_act;
+    info.handler = done;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_set_auto_activate_time_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_get_auto_deactivate_time_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_time_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_get_auto_deactivate_time(ent, info->handler,
+						    info->cb_data);
+}
+
+int
+ipmi_entity_id_get_auto_deactivate_time(ipmi_entity_id_t    id,
+					ipmi_entity_time_cb handler,
+					void                *cb_data)
+{
+    entity_time_cb_info_t info;
+    int                   rv;
+
+    info.rv = 0;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_get_auto_deactivate_time_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_set_auto_deactivate_time_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_set_auto_deactivate_time(ent, info->time,
+						    info->handler,
+						    info->cb_data);
+}
+
+int
+ipmi_entity_id_set_auto_deactivate_time(ipmi_entity_id_t id,
+					ipmi_timeout_t   auto_deact,
+					ipmi_entity_cb   done,
+					void             *cb_data)
+{
+    entity_cb_info_t info;
+    int              rv;
+
+    info.rv = 0;
+    info.time = auto_deact;
+    info.handler = done;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_set_auto_deactivate_time_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_activate_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_activate(ent, info->handler,
+				    info->cb_data);
+}
+
+int
+ipmi_entity_id_activate(ipmi_entity_id_t id,
+			ipmi_entity_cb   done,
+			void             *cb_data)
+{
+    entity_cb_info_t info;
+    int              rv;
+
+    info.rv = 0;
+    info.handler = done;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_activate_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_deactivate_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_deactivate(ent, info->handler,
+				      info->cb_data);
+}
+
+int
+ipmi_entity_id_deactivate(ipmi_entity_id_t id,
+			  ipmi_entity_cb   done,
+			  void             *cb_data)
+{
+    entity_cb_info_t info;
+    int              rv;
+
+    info.rv = 0;
+    info.handler = done;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_deactivate_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_get_hot_swap_indicator_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_val_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_get_hot_swap_indicator(ent, info->handler,
+						  info->cb_data);
+}
+
+int
+ipmi_entity_id_get_hot_swap_indicator(ipmi_entity_id_t   id,
+				      ipmi_entity_val_cb handler,
+				      void               *cb_data)
+{
+    entity_val_cb_info_t info;
+    int                  rv;
+
+    info.rv = 0;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_get_hot_swap_indicator_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_set_hot_swap_indicator_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_set_hot_swap_indicator(ent, info->val,
+						  info->handler,
+						  info->cb_data);
+}
+
+int
+ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
+				      int              val,
+				      ipmi_entity_cb   done,
+				      void             *cb_data)
+{
+    entity_cb_info_t info;
+    int              rv;
+
+    info.rv = 0;
+    info.val = val;
+    info.handler = done;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_set_hot_swap_indicator_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_get_hot_swap_requester_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_val_cb_info_t *info = cb_data;
+
+    info->rv = ipmi_entity_get_hot_swap_requester(ent, info->handler,
+						  info->cb_data);
+}
+
+int
+ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
+				      ipmi_entity_val_cb handler,
+				      void               *cb_data)
+{
+    entity_val_cb_info_t info;
+    int                  rv;
+
+    info.rv = 0;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_get_hot_swap_requester_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
 
 /***********************************************************************
  *
