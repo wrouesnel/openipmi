@@ -1176,8 +1176,16 @@ handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 {
     session_t *session = sid_to_session(lan, msg->sid);
     int       rv;
+    int       diff;
 
     if (session == NULL)
+	return;
+
+    /* Check that the session sequence number is valid.  We make sure
+       it is within 8 of the last highest received sequence number,
+       per the spec. */
+    diff = msg->seq - session->recv_seq;
+    if ((diff < -8) || (diff > 8))
 	return;
 
     /* The "-6, +7" is cheating a little, but we need the last
@@ -1186,6 +1194,11 @@ handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 		    msg->authcode);
     if (rv)
 	return;
+
+    /* We wait until after the message is authenticated to set the
+       sequence number, to prevent spoofing. */
+    if (msg->seq > session->recv_seq)
+	session->recv_seq = msg->seq;
 
     rv = ipmi_cmd_permitted(session->priv, msg->netfn, msg->cmd);
     switch (rv) {

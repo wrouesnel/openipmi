@@ -14,7 +14,4 @@ In ipmi_lan.c, add reconnecting when a LAN connection goes down.
 
 Time LAN session in lanserv_ipmi.c
 
-Add incoming sequence number handling (to make user the IPMI LAN
-sequence numbers don't get too far out of line) to IPMI LAN.
-
 Add platform event traps to the LAN code.
