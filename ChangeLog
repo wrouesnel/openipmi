@@ -1,6 +1,8 @@
 
 2003-07-22 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Moved to version 1.0.0.
+
 	* everything: Restructured the entire tree and split up everyting
 	into subdirectories.  Hopefully the code is much better structured
 	now.
