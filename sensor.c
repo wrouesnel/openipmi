@@ -2292,43 +2292,43 @@ ipmi_sensor_set_linearization(ipmi_sensor_t *sensor, int linearization)
 void
 ipmi_sensor_set_raw_m(ipmi_sensor_t *sensor, int idx, int val)
 {
-    sensor->conv[idx].m = idx;
+    sensor->conv[idx].m = val;
 }
 
 void
 ipmi_sensor_set_raw_tolerance(ipmi_sensor_t *sensor, int idx, int val)
 {
-    sensor->conv[idx].tolerance = idx;
+    sensor->conv[idx].tolerance = val;
 }
 
 void
 ipmi_sensor_set_raw_b(ipmi_sensor_t *sensor, int idx, int val)
 {
-    sensor->conv[idx].b = idx;
+    sensor->conv[idx].b = val;
 }
 
 void
 ipmi_sensor_set_raw_accuracy(ipmi_sensor_t *sensor, int idx, int val)
 {
-    sensor->conv[idx].accuracy = idx;
+    sensor->conv[idx].accuracy = val;
 }
 
 void
 ipmi_sensor_set_raw_accuracy_exp(ipmi_sensor_t *sensor, int idx, int val)
 {
-    sensor->conv[idx].accuracy_exp = idx;
+    sensor->conv[idx].accuracy_exp = val;
 }
 
 void
 ipmi_sensor_set_raw_r_exp(ipmi_sensor_t *sensor, int idx, int val)
 {
-    sensor->conv[idx].r_exp = idx;
+    sensor->conv[idx].r_exp = val;
 }
 
 void
 ipmi_sensor_set_raw_b_exp(ipmi_sensor_t *sensor, int idx, int val)
 {
-    sensor->conv[idx].b_exp = idx;
+    sensor->conv[idx].b_exp = val;
 }
 
 void
