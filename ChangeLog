@@ -24,6 +24,10 @@
 	* include/OpenIPMI/ipmi_fru.h, lib/fru.h: Added a way to get the
 	offset of a multi-record so it may be written.
 
+	* lib/oem_motorola_mxp.c: Change the entity id selection to use
+	the slot, if it's a switch slot then use the switch entity id,
+	otherwise use the processing blade entity id.
+
 2004-02-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a few problems were callbacks can receive

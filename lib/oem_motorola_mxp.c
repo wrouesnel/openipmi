@@ -8365,6 +8365,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
     int                 product_id;
     ipmi_ipmb_addr_t    addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
     int                 fw_minor = ipmi_mc_minor_fw_revision(mc);
+    int                 entity_id;
 
 
     product_id = ipmi_mc_product_id(mc);
@@ -8406,12 +8407,18 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
     }
     memset(sinfo, 0, sizeof(*sinfo));
 
+    /* If it's in a switch slot, it is a switch. */
+    if ((slave_addr == 0xe4) || (slave_addr == 0xe6))
+	entity_id = IPMI_ENTITY_ID_CONNECTIVITY_SWITCH;
+    else
+	entity_id = IPMI_ENTITY_ID_PROCESSING_BLADE;
+
     ents = ipmi_domain_get_entities(domain);
     rv = ipmi_entity_add(ents, domain,
 			 ipmi_mc_get_channel(mc),
 			 ipmi_mc_get_address(mc),
 			 0,
-			 IPMI_ENTITY_ID_PROCESSING_BLADE,
+			 entity_id,
 			 mxp_addr_to_instance(info, slave_addr),
 			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
