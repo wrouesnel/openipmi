@@ -47,6 +47,12 @@ int ipmi_sensors_alloc(ipmi_mc_t *mc, ipmi_sensor_info_t **new_sensors);
 /* Destroy a sensor repository and all the sensors in it. */
 int ipmi_sensors_destroy(ipmi_sensor_info_t *sensors);
 
+/* Must be called with the _ipmi_domain_entity_lock() held. */
+int _ipmi_sensor_get(ipmi_sensor_t *sensor);
+
+/* Must be called with no locks held. */
+void _ipmi_sensor_put(ipmi_sensor_t *sensor);
+
 /* Return the number of sensors in the data structure. */
 unsigned int ipmi_sensors_get_count(ipmi_sensor_info_t *sensors);
 

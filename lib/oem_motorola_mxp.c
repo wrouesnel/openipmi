@@ -1405,19 +1405,22 @@ mxp_alloc_basic_sensor(void          *data,
 /* Add the sensor to the domain. */
 static int
 mxp_add_sensor(ipmi_mc_t     *mc,
-	       ipmi_sensor_t **sensor,
+	       ipmi_sensor_t **nsensor,
 	       unsigned int  num,
 	       ipmi_entity_t *entity)
 {
     int rv;
+    ipmi_sensor_t *sensor = *nsensor;
 
     /* Add it to the MC and entity. */
-    rv = ipmi_sensor_add_nonstandard(mc, mc, *sensor, num, 0, entity,
+    rv = ipmi_sensor_add_nonstandard(mc, mc, sensor, num, 0, entity,
 				     NULL, NULL);
     if (rv) {
-	ipmi_sensor_destroy(*sensor);
-	*sensor = NULL;
+	ipmi_sensor_destroy(sensor);
+	*nsensor = NULL;
     }
+
+    _ipmi_sensor_put(sensor);
 
     return rv;
 }
@@ -1839,18 +1842,22 @@ mxp_alloc_control(ipmi_mc_t               *mc,
 
 int
 mxp_add_control(ipmi_mc_t      *mc,
-		ipmi_control_t **control,
+		ipmi_control_t **ncontrol,
 		unsigned int   num, 
 		ipmi_entity_t  *entity)
 {
-    int rv;
+    ipmi_control_t *control = *ncontrol;
+    int            rv;
 
-    rv = ipmi_control_add_nonstandard(mc, mc, *control, num, entity,
+    rv = ipmi_control_add_nonstandard(mc, mc, control, num, entity,
 				      NULL, NULL);
     if (rv) {
-	ipmi_control_destroy(*control);
-	*control = NULL;
+	ipmi_control_destroy(control);
+	*ncontrol = NULL;
     }
+
+    _ipmi_control_put(control);
+
     return rv;
 }
 
@@ -1864,11 +1871,12 @@ mxp_alloc_id_control(ipmi_mc_t                          *mc,
 		     int                                size,
 		     ipmi_control_identifier_set_val_cb set_val,
 		     ipmi_control_identifier_get_val_cb get_val,
-		     ipmi_control_t                     **control)
+		     ipmi_control_t                     **ncontrol)
 {
     int                  rv;
     ipmi_control_cbs_t   cbs;
     mxp_control_header_t *hdr;
+    ipmi_control_t       *control;
 
     hdr = ipmi_mem_alloc(sizeof(*hdr));
     if (!hdr)
@@ -1878,40 +1886,42 @@ mxp_alloc_id_control(ipmi_mc_t                          *mc,
     hdr->data = data;
 
     /* Allocate the control. */
-    rv = ipmi_control_alloc_nonstandard(control);
+    rv = ipmi_control_alloc_nonstandard(&control);
     if (rv) {
 	ipmi_mem_free(hdr);
 	return rv;
     }
 
     /* Fill out default values. */
-    ipmi_control_set_oem_info(*control, hdr, mxp_cleanup_control_oem_info);
-    ipmi_control_set_type(*control, control_type);
-    ipmi_control_set_id(*control, id, IPMI_ASCII_STR, strlen(id));
-    ipmi_control_set_ignore_if_no_entity(*control, 1);
+    ipmi_control_set_oem_info(control, hdr, mxp_cleanup_control_oem_info);
+    ipmi_control_set_type(control, control_type);
+    ipmi_control_set_id(control, id, IPMI_ASCII_STR, strlen(id));
+    ipmi_control_set_ignore_if_no_entity(control, 1);
 
     /* Assume we can read and set the value. */
     if (set_val)
-	ipmi_control_set_settable(*control, 1);
+	ipmi_control_set_settable(control, 1);
     if (get_val)
-	ipmi_control_set_readable(*control, 1);
+	ipmi_control_set_readable(control, 1);
 
     /* Create all the callbacks in the data structure. */
     memset(&cbs, 0, sizeof(cbs));
-    ipmi_control_identifier_set_max_length(*control, size);
+    ipmi_control_identifier_set_max_length(control, size);
     cbs.set_identifier_val = set_val;
     cbs.get_identifier_val = get_val;
 
-    ipmi_control_set_callbacks(*control, &cbs);
+    ipmi_control_set_callbacks(control, &cbs);
 
     /* Add it to the MC and entity. */
-    rv = ipmi_control_add_nonstandard(mc, mc, *control, num, entity,
+    rv = ipmi_control_add_nonstandard(mc, mc, control, num, entity,
 				      NULL, NULL);
     if (rv) {
-	ipmi_control_destroy(*control);
+	ipmi_control_destroy(control);
 	ipmi_mem_free(hdr);
-	*control = NULL;
-    }
+    } else 
+	*ncontrol = control;
+
+    _ipmi_control_put(control);
 
     return rv;
 }
@@ -5108,8 +5118,6 @@ mxp_create_entities(ipmi_mc_t  *mc,
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     char               *name;
 
-    ipmi_domain_entity_lock(domain);
-
     ents = ipmi_domain_get_entities(domain);
     name = "Chassis";
     rv = ipmi_entity_add(ents, domain, 0, 0, 0,
@@ -5347,7 +5355,20 @@ mxp_create_entities(ipmi_mc_t  *mc,
     }
 
  out:
-    ipmi_domain_entity_unlock(domain);
+    for (i=0; i<MXP_TOTAL_BOARDS; i++) {
+	if (info->board[i].ent)
+	    _ipmi_entity_put(info->board[i].ent);
+    }
+    for (i=0; i<info->num_power_supplies; i++) {
+	if (info->power_supply[i].ent)
+	    _ipmi_entity_put(info->power_supply[i].ent);
+    }
+    for (i=0; i<info->num_fans; i++) {
+	if (info->fan[i].fan_ent)
+	    _ipmi_entity_put(info->fan[i].fan_ent);
+    }
+    if (info->chassis_ent)
+	_ipmi_entity_put(info->chassis_ent);
     return rv;
 }
 
@@ -6884,6 +6905,8 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_mc_set_oem_data(mc, info);
 
  out_err:
+    if (info->ent)
+	_ipmi_entity_put(info->ent);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
@@ -7884,8 +7907,6 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 	v1_switch = 1;
     }
 
-    ipmi_domain_entity_lock(domain);
-
     bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
     if (bmc
 	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
@@ -8052,7 +8073,6 @@ zynx_switch_handler(ipmi_mc_t     *mc,
  out:
     if (rv && sinfo)
 	zynx_destroyer(mc, sinfo);
-    ipmi_domain_entity_unlock(domain);
     return rv;
 }
 
@@ -8443,8 +8463,6 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 	return zynx_switch_handler(mc, cb_data);
     }
 
-    ipmi_domain_entity_lock(domain);
-
     bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
     if (bmc
 	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
@@ -8517,7 +8535,6 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
  out:
     if (rv && sinfo)
 	mxp_genboard_removal_handler(domain, mc, sinfo);
-    ipmi_domain_entity_unlock(domain);
     return rv;
 }
 

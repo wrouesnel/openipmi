@@ -647,7 +647,7 @@ test_handler_0(ipmi_mc_t *mc,
 {
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
-    ipmi_entity_t      *ent;
+    ipmi_entity_t      *ent = NULL;
     ipmi_control_t     *control;
     int                rv = 0;
     ipmi_control_cbs_t cbs;
@@ -770,6 +770,7 @@ test_handler_0(ipmi_mc_t *mc,
 		 "Could not add the power control: %x",
 		 MC_NAME(mc), rv);
 	ipmi_control_destroy(control);
+	_ipmi_control_put(control);
 	goto out;
     }
 
@@ -782,10 +783,15 @@ test_handler_0(ipmi_mc_t *mc,
 		 "Could not add the power control removal handler: %x",
 		 MC_NAME(mc), rv);
 	ipmi_control_destroy(control);
+	_ipmi_control_put(control);
 	goto out;
     }
 
+    _ipmi_control_put(control);
+
  out:
+    if (ent)
+	_ipmi_entity_put(ent);
     return rv;
 }
 

@@ -241,18 +241,22 @@ atca_alloc_control(ipmi_mc_t                 *mc,
 
 static int
 atca_add_control(ipmi_mc_t      *mc,
-		 ipmi_control_t **control,
+		 ipmi_control_t **ncontrol,
 		 unsigned int   num, 
 		 ipmi_entity_t  *entity)
 {
-    int rv;
+    ipmi_control_t *control = *ncontrol;
+    int            rv;
 
-    rv = ipmi_control_add_nonstandard(mc, mc, *control, num, entity,
+    rv = ipmi_control_add_nonstandard(mc, mc, control, num, entity,
 				      NULL, NULL);
     if (rv) {
-	ipmi_control_destroy(*control);
-	*control = NULL;
+	ipmi_control_destroy(control);
+	*ncontrol = NULL;
     }
+
+    _ipmi_control_put(control);
+
     return rv;
 }
 
@@ -2004,7 +2008,7 @@ atca_find_fru_info(atca_shelf_t *info, ipmi_entity_t *entity)
     if (!minfo) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_find_fru_info): "
-		 "Could find address associated with the FRU: 0x%x",
+		 "Could not find address associated with the FRU: 0x%x",
 		 ENTITY_NAME(entity), ipmb_addr);
 	return NULL;
     }
@@ -2583,13 +2587,17 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 		     "%soem_atca.c(shelf_fru_fetched): "
 		     "Could not add child ipmc: %x",
 		     DOMAIN_NAME(domain), rv);
+	    _ipmi_entity_put(b->frus[0]->entity);
 	    goto out;
 	}
+	_ipmi_entity_put(b->frus[0]->entity);
     }
 
     info->setup = 1;
 
  out:
+    if (info->shelf_entity)
+	_ipmi_entity_put(info->shelf_entity);
     return;
 }
 

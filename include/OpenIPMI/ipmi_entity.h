@@ -47,9 +47,17 @@ int ipmi_entity_info_alloc(ipmi_domain_t      *domain,
 			   ipmi_entity_info_t **new_ents);
 int ipmi_entity_info_destroy(ipmi_entity_info_t *ents);
 
+/* Must be called with the _ipmi_domain_entity_lock() held. */
+int _ipmi_entity_get(ipmi_entity_t *ent);
+
+/* Must be called with no locks held. */
+void _ipmi_entity_put(ipmi_entity_t *ent);
+
 /* Find an entity in the domain's set of entities that has the given
    entity id and entity instance.  The MC is the mc the entity came
-   from, or NULL if from the main SDR repository. */
+   from, or NULL if from the main SDR repository.  Entity will be
+   "gotten", so you must put it with _ipmi_entity_put() after getting
+   it with this call. */
 int ipmi_entity_find(ipmi_entity_info_t *ents,
 		     ipmi_mc_t          *mc,
 		     int                entity_id,
@@ -58,7 +66,9 @@ int ipmi_entity_find(ipmi_entity_info_t *ents,
 
 /* Add an entity to the list of entities in the BMC.  You must
    register a "gen_output" handler, that will be called when the SDRs
-   are output.  This is so an OEM entity can create their own SDRs. */
+   are output.  This is so an OEM entity can create their own SDRs.
+   Entity will be "gotten", so you must put it with _ipmi_entity_put()
+   after getting it with this call. */
 typedef int (*entity_sdr_add_cb)(ipmi_entity_t   *ent,
 				 ipmi_sdr_info_t *sdrs,
 				 void            *cb_data);
@@ -96,45 +106,32 @@ int ipmi_entity_get_subentity(ipmi_entity_t *ent,
 			      int           index,
 			      ipmi_entity_t **sub_ent);
 
-/* This is an internal call used to pre-allocate an internal data
-   structure used by the entity code, used by the next call.  This
-   will return NULL on a failure. */
-void *ipmi_entity_alloc_sensor_link(void);
-void ipmi_entity_free_sensor_link(void *link);
-void *ipmi_entity_alloc_control_link(void);
-void ipmi_entity_free_control_link(void *link);
-
-/* Add a sensor/indicator to the entity.  The "ref" must be allocated with the
-   above call.  This call is guaranteed to succeed. */
-void ipmi_entity_add_sensor(ipmi_entity_t *ent,
-			    ipmi_sensor_t *sensor,
-			    void          *ref);
-void ipmi_entity_add_control(ipmi_entity_t  *ent,
-			     ipmi_control_t *control,
-			     void           *ref);
+/* Add a sensor/indicator to the entity.  This call is guaranteed to
+   succeed, since the link is provided (and must be provided).  Note
+   that the link must be a locked_list_entry_t, although it is taken
+   as a void to avoid namespace pollution.  Note that this must be
+   called with the entity lock held. */
+void ipmi_entity_add_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor,
+			    void *link);
+void ipmi_entity_add_control(ipmi_entity_t  *ent, ipmi_control_t *control,
+			     void *link);
 
 /* Remove a sensor/indicator from an entity.  This call is guaranteed
-   to succeed. */
+   to succeed.  Note that this must be called with the entity lock
+   held. */
 void ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 			       ipmi_sensor_t *sensor);
 void ipmi_entity_remove_control(ipmi_entity_t  *ent,
 				ipmi_control_t *control);
 
-/* A sensor/ind that is attached the entity has had it's information
-   changed by the remote system.  This does NOT mean the sensor's
-   value changed, see the sensor code for that. */
-void ipmi_entity_sensor_changed(ipmi_entity_t *ent,
-				ipmi_mc_t     *mc,
-				int           lun,
-				int           num,
-				ipmi_sensor_t *old,
-				ipmi_sensor_t *new);
-void ipmi_entity_control_changed(ipmi_entity_t  *ent,
-				 ipmi_mc_t      *mc,
-				 int            lun,
-				 int            num,
-				 ipmi_control_t *old,
-				 ipmi_control_t *new);
+/* Used to report when a sensor is added to or removed from an
+   entity. */
+void _ipmi_entity_call_sensor_handlers(ipmi_entity_t      *ent,
+				       ipmi_sensor_t      *sensor, 
+				       enum ipmi_update_e op);
+void _ipmi_entity_call_control_handlers(ipmi_entity_t      *ent,
+					ipmi_control_t     *control, 
+					enum ipmi_update_e op);
 
 /* Create an SDR record for the entity and append it to the set of SDRs. */
 int ipmi_entity_append_to_sdrs(ipmi_entity_info_t *ents,

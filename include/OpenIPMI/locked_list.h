@@ -70,4 +70,24 @@ void locked_list_iterate(locked_list_t          *ll,
 			 locked_list_handler_cb handler,
 			 void                   *cb_data);
 
+/* Return the number of items in the list. */
+unsigned int locked_list_num_entries(locked_list_t *ll);
+
+/* Search for the given item.  Returns true if found, false if not found. */
+int locked_list_search(locked_list_t *ll, void *item1, void *item2);
+
+/* Allocate and free entries for a locked list.  With a pre-allocated
+   entry, the add cannot fail.  This is primarily so you can
+   pre-allocate data for the list and later adds won't fail. */
+typedef struct locked_list_entry_s locked_list_entry_t;
+locked_list_entry_t *locked_list_alloc_entry(void);
+void locked_list_free_entry(locked_list_entry_t *entry);
+
+/* This add will not fail if you supply the entry (non-null, allocated
+   from locked_list_alloc_entry()). Note that once you pass the entry
+   into this function, you may no longer free it or use it for
+   anything else. */
+int locked_list_add_entry(locked_list_t *ll, void *item1, void *item2,
+			  locked_list_entry_t *entry);
+
 #endif /* _LOCKED_LIST_H */

@@ -5971,7 +5971,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	if (rv) {
 	    ipmi_free_args(con_parms[0]);
 	    cmd_win_out("Second connection parms are invalid\n");
-	    return 0;
+	    goto out;
 	}
 	set++;
     }
@@ -5993,6 +5993,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	cmd_win_out("ipmi_init_domain: %s\n", strerror(rv));
 	for (i=0; i<set; i++)
 	    con[i]->close_connection(con[i]);
+	goto out;
     }
 
     cmd_win_out("Domain %d started\n", dnum);

@@ -46,6 +46,12 @@ int ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls);
 /* Destroy a control repository and all the controls in it. */
 int ipmi_controls_destroy(ipmi_control_info_t *controls);
 
+/* Must be called with the _ipmi_domain_entity_lock() held. */
+int _ipmi_control_get(ipmi_control_t *control);
+
+/* Must be called with no locks held. */
+void _ipmi_control_put(ipmi_control_t *control);
+
 /* Return the number of controls in the data structure. */
 unsigned int ipmi_controls_get_count(ipmi_control_info_t *controls);
 
@@ -127,8 +133,8 @@ typedef void (*ipmi_control_destroy_cb)(ipmi_control_t *control,
 /* Add a control for the given MC and put it into the given entity.
    Note that control will NOT appear as owned by the MC, the MC is
    used for the OS handler and such.  The source_mc is used to show
-   which MC "owns" the creation of the sensor, and may be NULL if the
-   sensor is presumed to come from the "main" SDR repository. */
+   which MC "owns" the creation of the control, and may be NULL if the
+   control is presumed to come from the "main" SDR repository. */
 int ipmi_control_add_nonstandard(
     ipmi_mc_t               *mc,
     ipmi_mc_t               *source_mc,

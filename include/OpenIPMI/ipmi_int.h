@@ -201,8 +201,8 @@ extern unsigned int __ipmi_log_mask;
 	__ipmi_log_mask &= ~(DEBUG_CON0_FAIL_BIT << con)
 
 /* Lock/unlock the entities for the given domain. */
-void ipmi_domain_entity_lock(ipmi_domain_t *domain);
-void ipmi_domain_entity_unlock(ipmi_domain_t *domain);
+void _ipmi_domain_entity_lock(ipmi_domain_t *domain);
+void _ipmi_domain_entity_unlock(ipmi_domain_t *domain);
 
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */
@@ -214,8 +214,6 @@ void __ipmi_check_domain_lock(ipmi_domain_t *domain);
 #define CHECK_DOMAIN_LOCK(domain) __ipmi_check_domain_lock(domain)
 void __ipmi_check_entity_lock(ipmi_entity_t *entity);
 #define CHECK_ENTITY_LOCK(entity) __ipmi_check_entity_lock(entity)
-void __ipmi_check_domain_entity_lock(ipmi_domain_t *domain);
-#define CHECK_DOMAIN_ENTITY_LOCK(domain) __ipmi_check_domain_entity_lock(domain)
 void __ipmi_check_sensor_lock(ipmi_sensor_t *sensor);
 #define CHECK_SENSOR_LOCK(sensor) __ipmi_check_sensor_lock(sensor)
 void __ipmi_check_control_lock(ipmi_control_t *control);

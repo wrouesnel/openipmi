@@ -787,17 +787,10 @@ __ipmi_check_domain_lock(ipmi_domain_t *domain)
 	ipmi_report_lock_error(domain->os_hnd,
 			       "domain not locked when it should have been");
 }
-
-void
-__ipmi_check_domain_entity_lock(ipmi_domain_t *domain)
-{
-    ipmi_check_lock(domain->entities_lock,
-		    "Entity not locked when it should have been");
-}
 #endif
 
 void
-ipmi_domain_entity_lock(ipmi_domain_t *domain)
+_ipmi_domain_entity_lock(ipmi_domain_t *domain)
 {
 
     CHECK_DOMAIN_LOCK(domain);
@@ -805,7 +798,7 @@ ipmi_domain_entity_lock(ipmi_domain_t *domain)
 }
 
 void
-ipmi_domain_entity_unlock(ipmi_domain_t *domain)
+_ipmi_domain_entity_unlock(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     ipmi_unlock(domain->entities_lock);
@@ -1391,9 +1384,10 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 
     ipmi_unlock(domain->mc_lock);
 
-    if (found)
+    if (found) {
+	call_mc_upd_handlers(domain, mc, IPMI_DELETED);
 	return 0;
-    else
+    } else
 	return ENODEV;
 }
 
@@ -2913,9 +2907,7 @@ ipmi_detect_domain_presence_changes(ipmi_domain_t *domain, int force)
 
     CHECK_DOMAIN_LOCK(domain);
     
-    ipmi_domain_entity_lock(domain);
     rv = ipmi_detect_ents_presence_changes(domain->entities, force);
-    ipmi_domain_entity_unlock(domain);
     return rv;
 }
 
@@ -3019,9 +3011,7 @@ ipmi_domain_iterate_entities(ipmi_domain_t                   *domain,
 {
     CHECK_DOMAIN_LOCK(domain);
 
-    ipmi_domain_entity_lock(domain);
     ipmi_entities_iterate_entities(domain->entities, handler, cb_data);
-    ipmi_domain_entity_unlock(domain);
     return 0;
 }
 
@@ -3097,6 +3087,7 @@ ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
     return 0;
 }
 
+#if SAVE_SDR_CODE_ENABLE
 typedef struct sdrs_saved_info_s
 {
     ipmi_domain_t  *domain;
@@ -3180,6 +3171,7 @@ ipmi_domain_store_entities(ipmi_domain_t  *domain,
     ipmi_sdr_info_destroy(stored_sdrs, NULL, NULL);
     return rv;
 }
+#endif
 
 /***********************************************************************
  *
@@ -4030,8 +4022,8 @@ ll_con_changed(ipmi_con_t   *ipmi,
     if (still_connected) {
 	domain->con_up[u] = 1;
 	if (domain->connecting) {
-	    /* If we are connecting, report it. */
-	    call_con_change(domain, err, u, port_num, 1);
+	    /* If we are connecting, don't report it, it will be
+	       reported when the connection is finished. */
 	} else if (domain->connection_up) {
 	    /* We already have a connection, just report this. */
 	    call_con_change(domain, err, u, port_num, domain->connection_up);

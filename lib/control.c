@@ -42,6 +42,7 @@
 #include <OpenIPMI/ipmi_control.h>
 #include <OpenIPMI/ilist.h>
 #include <OpenIPMI/opq.h>
+#include <OpenIPMI/locked_list.h>
 
 struct ipmi_control_info_s
 {
@@ -52,6 +53,8 @@ struct ipmi_control_info_s
     /* Size of above control array.  This will be 0 if the LUN has no
        controls. */
     int                      idx_size;
+
+    ipmi_lock_t *idx_lock;
 
     /* Total number of controls we have in this. */
     unsigned int control_count;
@@ -64,6 +67,9 @@ struct ipmi_control_info_s
 #define CONTROL_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + CONTROL_ID_LEN + 5)
 struct ipmi_control_s
 {
+    unsigned int usecount;
+
+    ipmi_domain_t *domain;
     ipmi_mc_t *mc;
     unsigned char lun;
     unsigned char num;
@@ -127,11 +133,38 @@ struct ipmi_control_s
     char name[CONTROL_NAME_LEN];
 };
 
+static void control_final_destroy(ipmi_control_t *control);
+
 /***********************************************************************
  *
  * Control ID handling.
  *
  **********************************************************************/
+
+/* Must be called with the domain entity lock held. */
+int
+_ipmi_control_get(ipmi_control_t *control)
+{
+    if (control->destroyed)
+	return EINVAL;
+    control->usecount++;
+    return 0;
+}
+
+void
+_ipmi_control_put(ipmi_control_t *control)
+{
+    _ipmi_domain_entity_lock(control->domain);
+    if ((control->usecount == 1) && (control->destroyed)
+	&& (!opq_stuff_in_progress(control->waitq)))
+    {
+	_ipmi_domain_entity_unlock(control->domain);
+	control_final_destroy(control);
+	return;
+    }
+    control->usecount--;
+    _ipmi_domain_entity_unlock(control->domain);
+}
 
 ipmi_control_id_t
 ipmi_control_convert_to_id(ipmi_control_t *control)
@@ -161,19 +194,48 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
     mc_cb_info_t        *info = cb_data;
     ipmi_control_info_t *controls;
     ipmi_domain_t       *domain = ipmi_mc_get_domain(mc);
+    ipmi_control_t      *control;
+    ipmi_entity_t       *entity = NULL;
     
-    ipmi_domain_entity_lock(domain);
     controls = _ipmi_mc_get_controls(mc);
-    if (info->id.lun != 4)
+    _ipmi_domain_entity_lock(domain);
+    if (info->id.lun > 4) {
 	info->err = EINVAL;
-    else if (info->id.control_num >= controls->idx_size)
+	goto out_unlock;
+    }
+
+    if (info->id.control_num >= controls->idx_size) {
 	info->err = EINVAL;
-    else if (controls->controls_by_idx[info->id.control_num] == NULL)
+	goto out_unlock;
+    }
+
+    control = controls->controls_by_idx[info->id.control_num];
+    if (!control) {
 	info->err = EINVAL;
-    else
-	info->handler(controls->controls_by_idx[info->id.control_num],
-		      info->cb_data);
-    ipmi_domain_entity_unlock(domain);
+	goto out_unlock;
+    }
+
+    info->err = _ipmi_entity_get(control->entity);
+    if (info->err)
+	goto out_unlock;
+    entity = control->entity;
+
+    info->err = _ipmi_control_get(control);
+    if (info->err)
+	goto out_unlock;
+
+    _ipmi_domain_entity_unlock(domain);
+
+    info->handler(control, info->cb_data);
+
+    _ipmi_control_put(control);
+    _ipmi_entity_put(entity);
+    return;
+
+ out_unlock:
+    _ipmi_domain_entity_unlock(domain);
+    if (entity)
+	_ipmi_entity_put(entity);
 }
 
 int
@@ -304,6 +366,12 @@ control_final_destroy(ipmi_control_t *control)
 
     if (control->waitq)
 	opq_destroy(control->waitq);
+
+    if (control->entity)
+	ipmi_entity_remove_control(control->entity, control);
+
+    _ipmi_entity_call_control_handlers(control->entity, control, IPMI_DELETED);
+
     ipmi_mem_free(control);
 }
 
@@ -312,20 +380,21 @@ ipmi_control_destroy(ipmi_control_t *control)
 {
     ipmi_control_info_t *controls = _ipmi_mc_get_controls(control->mc);
 
+    ipmi_lock(controls->idx_lock);
     if (controls->controls_by_idx[control->num] != control)
 	return EINVAL;
 
-    if (control->entity)
-	ipmi_entity_remove_control(control->entity, control);
+    _ipmi_control_get(control);
 
     controls->control_count--;
     controls->controls_by_idx[control->num] = NULL;
 
     control->mc = NULL;
 
+    ipmi_unlock(controls->idx_lock);
+
     control->destroyed = 1;
-    if (!opq_stuff_in_progress(control->waitq))
-	control_final_destroy(control);
+    _ipmi_control_put(control);
 
     return 0;
 }
@@ -455,7 +524,11 @@ control_rsp_handler(ipmi_mc_t  *mc,
 		 CONTROL_NAME(control));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
-	control_final_destroy(control);
+
+	_ipmi_domain_entity_lock(control->domain);
+	control->usecount++;
+	_ipmi_domain_entity_unlock(control->domain);
+	_ipmi_control_put(control);
 	return;
     }
 
@@ -520,7 +593,11 @@ control_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 DOMAIN_NAME(domain));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
-	control_final_destroy(control);
+
+	_ipmi_domain_entity_lock(control->domain);
+	control->usecount++;
+	_ipmi_domain_entity_unlock(control->domain);
+	_ipmi_control_put(control);
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 
@@ -570,6 +647,7 @@ ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls)
     ipmi_control_info_t *controls;
     ipmi_domain_t       *domain;
     os_handler_t        *os_hnd;
+    int                 rv;
 
     CHECK_MC_LOCK(mc);
 
@@ -585,6 +663,13 @@ ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls)
     if (! controls->control_wait_q) {
 	ipmi_mem_free(controls);
 	return ENOMEM;
+    }
+
+    rv = ipmi_create_lock_os_hnd(os_hnd, &controls->idx_lock);
+    if (rv) {
+	opq_destroy(controls->control_wait_q);
+	ipmi_mem_free(controls);
+	return rv;
     }
 
     *new_controls = controls;
@@ -608,6 +693,7 @@ ipmi_control_alloc_nonstandard(ipmi_control_t **new_control)
 
     memset(control, 0, sizeof(*control));
 
+    control->usecount = 1;
     *new_control = control;
     return 0;
 }
@@ -624,7 +710,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     ipmi_domain_t       *domain;
     os_handler_t        *os_hnd;
     ipmi_control_info_t *controls = _ipmi_mc_get_controls(mc);
-    void                *link;
+    locked_list_entry_t *link;
 
     CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
@@ -634,6 +720,9 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 
     if (num >= 256)
 	return EINVAL;
+
+    _ipmi_domain_entity_lock(domain);
+    ipmi_lock(controls->idx_lock);
 
     if (num >= controls->idx_size) {
 	ipmi_control_t **new_array;
@@ -667,13 +756,16 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	return ENOMEM;
     }
 
-    link = ipmi_entity_alloc_control_link();
+    link = locked_list_alloc_entry();
     if (!link) {
 	opq_destroy(control->waitq);
 	control->waitq = NULL;
+	ilist_twoitem_destroy(control->handler_list);
+	control->handler_list = NULL;
 	return ENOMEM;
     }
 
+    control->domain = domain;
     control->mc = mc;
     control->source_mc = source_mc;
     control->entity = ent;
@@ -686,7 +778,13 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     control->destroy_handler_cb_data = destroy_handler_cb_data;
     control_set_name(control);
 
+    ipmi_unlock(controls->idx_lock);
+
     ipmi_entity_add_control(ent, control, link);
+
+    _ipmi_domain_entity_unlock(domain);
+
+    _ipmi_entity_call_control_handlers(ent, control, IPMI_ADDED);
 
     return 0;
 }
@@ -710,6 +808,8 @@ ipmi_controls_destroy(ipmi_control_info_t *controls)
 
     if (controls->control_wait_q)
 	opq_destroy(controls->control_wait_q);
+    if (controls->idx_lock)
+	ipmi_destroy_lock(controls->idx_lock);
     ipmi_mem_free(controls);
     return 0;
 }
@@ -1692,7 +1792,7 @@ __ipmi_check_control_lock(ipmi_control_t *control)
 	return; /* The control has really been destroyed, just go on. */
     domain = ipmi_mc_get_domain(control->mc);
     __ipmi_check_domain_lock(domain);
-    __ipmi_check_domain_entity_lock(domain);
+    /* FIXME - check entity lock. */
 }
 #endif
 
