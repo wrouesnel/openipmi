@@ -31,6 +31,8 @@
 
 	* ui/ui.c: Added multi-record dumping for FRU info.
 
+	* ui/ui.c: Added support for settings-based lights.
+
 2004-03-31 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c: Added power control, fixed

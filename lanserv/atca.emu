@@ -19,11 +19,12 @@ mc_add_fru_data 20 0 400 \
 		's 't c4 'T 'e 's 't c1 \
 		00 00 00 00 00 00 00 45
 
-# Add a shelf FRU device at 0x10
-# Entity id 0xf2 1
-mc_add 10 0 1 23 9 8 08 1291 f03
+## Add a shelf FRU device at 0x10
+## Entity id 0xf2 1
 main_sdr_add 20 00 00 51 12 0f 10 00 00 08 00 00 00 f2 1 0 c4 'F 'R 'U '1
 atca_set_site 8 2 1
+mc_add 10 0 1 23 9 8 08 1291 f03
+# Board FRU information
 mc_add_fru_data 10 0 400 \
 		01 00 01 03 00 00 00 fb \
 # Chassis info
@@ -35,7 +36,7 @@ mc_add_fru_data 10 0 400 \
 		c4 'T 'e 's 't c4 'T 'e \
 		's 't c4 'T 'e 's 't c1 \
 		00 00 00 00 00 00 00 45
-
+# Shelf FRU information
 mc_add_fru_data 10 1 400 \
 		01 00 01 03 00 08 00 f3 \
 # Chassis info
@@ -54,6 +55,9 @@ mc_add_fru_data 10 1 400 \
 		'1 00 00 00 00 00 00 00 \
 		00 00 00 00 00 00 00 02 \
 		08 01 02 09 01 02 00 00
+# The hot-swap sensor
+
+
 
 # Add a shelf FRU device at 0x12
 # Entity id 0xf2 2

@@ -28,7 +28,6 @@
  */
 
 /* TODO:
- * Add support for redundant FRU device at startup
  * Add support for setting the power up timeout
  */
 
@@ -138,6 +137,7 @@ struct atca_shelf_s
     unsigned char shelf_fru_ipmb;
     unsigned char shelf_fru_device_id;
     ipmi_fru_t    *shelf_fru;
+    int           curr_shelf_fru;
 
     unsigned char        shelf_address[40];
     enum ipmi_str_type_e shelf_address_type;
@@ -769,7 +769,7 @@ led_set_done(ipmi_control_t *control,
     if (control)
 	mc = ipmi_control_get_mc(control);
 
-    if (check_for_msg_err(mc, &err, rsp, 6, "led_set_done")) {
+    if (check_for_msg_err(mc, &err, rsp, 2, "led_set_done")) {
 	if (info->set_handler)
 	    info->set_handler(control, err, info->cb_data);
 	goto out;
@@ -815,7 +815,7 @@ set_led(ipmi_control_t       *control,
 {
     atca_control_info_t *info;
     int                 rv;
-    int                 color, on_time, off_time;
+    int                 color, on_time, off_time, local_control;
     atca_led_t          *l = ipmi_control_get_oem_info(control);
 
     rv = ipmi_light_setting_get_color(settings, 0, &color);
@@ -829,7 +829,11 @@ set_led(ipmi_control_t       *control,
     rv = ipmi_light_setting_get_off_time(settings, 0, &off_time);
     if (rv)
 	return rv;
-    if (color > IPMI_CONTROL_COLOR_BLACK) {
+    rv = ipmi_light_setting_in_local_control(settings, 0, &local_control);
+    if (rv)
+	return rv;
+
+    if (color == IPMI_CONTROL_COLOR_BLACK) {
 	on_time = 0;
 	off_time = 1;
 	color = 0xe;
@@ -850,7 +854,11 @@ set_led(ipmi_control_t       *control,
     info->data[0] = IPMI_PICMG_GRP_EXT;
     info->data[1] = l->fru->fru_id;
     info->data[2] = l->num;
-    if (on_time <= 0) {
+    if (local_control) {
+	info->data[3] = 0xfc;
+	info->data[4] = 0;
+	color = 0xf;
+    } else if (on_time <= 0) {
 	/* Turn the LED off */
 	info->data[3] = 0;
 	info->data[4] = 0;
@@ -906,46 +914,91 @@ led_get_done(ipmi_control_t *control,
 		info->get_handler(control, err, info->settings, info->cb_data);
 	    goto out;
 	}
-	
-    }
 
-    if ((rsp->data[3] >= 0xfb) && (rsp->data[3] <= 0xfe)) {
-	/* Reserved on time field */
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(led_get_done): "
-		 "Invalid on time value: 0x%x",
-		 MC_NAME(mc), rsp->data[3]);
-	if (info->get_handler)
-	    info->get_handler(control, EINVAL, info->settings, info->cb_data);
-	goto out;
-    }
+	if ((rsp->data[6] >= 0xfb) && (rsp->data[6] <= 0xfe)) {
+	    /* Reserved on time field */
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(led_get_done): "
+		     "Invalid on time value: 0x%x",
+		     MC_NAME(mc), rsp->data[6]);
+	    if (info->get_handler)
+		info->get_handler(control, EINVAL, info->settings,
+				  info->cb_data);
+	    goto out;
+	}
 
-    color = rsp->data[5] & 0xf;
-    if ((color == 0) || (color > 6)) {
-	/* Reserved on color value */
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(led_get_done): "
-		 "Invalid color value: %d",
-		 MC_NAME(mc), color);
-	if (info->get_handler)
-	    info->get_handler(control, EINVAL, info->settings, info->cb_data);
-	goto out;
-    }
+	color = rsp->data[8] & 0xf;
+	if ((color == 0) || (color > 6)) {
+	    /* Reserved on color value */
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(led_get_done): "
+		     "Invalid color value: %d",
+		     MC_NAME(mc), color);
+	    if (info->get_handler)
+		info->get_handler(control, EINVAL, info->settings,
+				  info->cb_data);
+	    goto out;
+	}
 
-    ipmi_light_setting_set_color(info->settings,
-				 0,
-				 atca_to_openipmi_color[color]);
-    if (rsp->data[3] == 0) {
-	ipmi_light_setting_set_on_time(info->settings, 0, 0);
-	ipmi_light_setting_set_off_time(info->settings, 0,1);
-    } else if (rsp->data[3] == 0xff) {
-	ipmi_light_setting_set_on_time(info->settings, 0, 1);
-	ipmi_light_setting_set_off_time(info->settings, 0, 0);
+	ipmi_light_setting_set_color(info->settings,
+				     0,
+				     atca_to_openipmi_color[color]);
+	if (rsp->data[6] == 0) {
+	    ipmi_light_setting_set_on_time(info->settings, 0, 0);
+	    ipmi_light_setting_set_off_time(info->settings, 0, 1);
+	} else if (rsp->data[6] == 0xff) {
+	    ipmi_light_setting_set_on_time(info->settings, 0, 1);
+	    ipmi_light_setting_set_off_time(info->settings, 0, 0);
+	} else {
+	    ipmi_light_setting_set_on_time(info->settings, 0,
+					   rsp->data[6] * 10);
+	    ipmi_light_setting_set_off_time(info->settings, 0,
+					    rsp->data[7] * 10);
+	}
     } else {
-	ipmi_light_setting_set_on_time(info->settings, 0, rsp->data[3] * 10);
-	ipmi_light_setting_set_off_time(info->settings, 0, rsp->data[4] * 10);
-    }
+	ipmi_light_setting_set_local_control(info->settings, 0, 1);
 
+	if ((rsp->data[3] >= 0xfb) && (rsp->data[3] <= 0xfe)) {
+	    /* Reserved on time field */
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(led_get_done): "
+		     "Invalid on time value: 0x%x",
+		     MC_NAME(mc), rsp->data[3]);
+	    if (info->get_handler)
+		info->get_handler(control, EINVAL, info->settings,
+				  info->cb_data);
+	    goto out;
+	}
+
+	color = rsp->data[5] & 0xf;
+	if ((color == 0) || (color > 6)) {
+	    /* Reserved on color value */
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(led_get_done): "
+		     "Invalid color value: %d",
+		     MC_NAME(mc), color);
+	    if (info->get_handler)
+		info->get_handler(control, EINVAL, info->settings,
+				  info->cb_data);
+	    goto out;
+	}
+
+	ipmi_light_setting_set_color(info->settings,
+				     0,
+				     atca_to_openipmi_color[color]);
+	if (rsp->data[3] == 0) {
+	    ipmi_light_setting_set_on_time(info->settings, 0, 0);
+	    ipmi_light_setting_set_off_time(info->settings, 0, 1);
+	} else if (rsp->data[3] == 0xff) {
+	    ipmi_light_setting_set_on_time(info->settings, 0, 1);
+	    ipmi_light_setting_set_off_time(info->settings, 0, 0);
+	} else {
+	    ipmi_light_setting_set_on_time(info->settings, 0,
+					   rsp->data[3] * 10);
+	    ipmi_light_setting_set_off_time(info->settings, 0,
+					    rsp->data[4] * 10);
+	}
+    }
     if (info->get_handler)
 	info->get_handler(control, 0, info->settings, info->cb_data);
 
@@ -1163,7 +1216,7 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
 		 MC_NAME(mc));
 	return;
     }
-    memset(finfo->leds, 0, sizeof(atca_led_t) * num_leds);
+    memset(finfo->leds, 0, sizeof(atca_led_t *) * num_leds);
     finfo->num_leds = num_leds;
 
     for (i=0; i<4; i++) {
@@ -1292,7 +1345,7 @@ set_cold_reset_done(ipmi_control_t *control,
     if (control)
 	mc = ipmi_control_get_mc(control);
 
-    if (check_for_msg_err(mc, &err, rsp, 6, "set_cold_reset_done")) {
+    if (check_for_msg_err(mc, &err, rsp, 2, "set_cold_reset_done")) {
 	if (info->handler)
 	    info->handler(control, err, info->cb_data);
 	goto out;
@@ -1305,24 +1358,23 @@ set_cold_reset_done(ipmi_control_t *control,
     ipmi_mem_free(info);
 }
 
-static int
-set_cold_reset(ipmi_control_t     *control,
-	       int                *val,
-	       ipmi_control_op_cb handler,
-	       void               *cb_data)
+static void
+set_cold_reset_start(ipmi_control_t *control, int err, void *cb_data)
 {
-    atca_cold_reset_t *info;
+    atca_cold_reset_t *info = cb_data;
     atca_fru_t        *finfo = ipmi_control_get_oem_info(control);
     ipmi_msg_t        msg;
     unsigned char     data[3];
     int               rv;
 
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
+    if (err) {
+	if (info->handler)
+	    info->handler(control, err, info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(info);
+	return;
+    }
 
-    info->handler = handler;
-    info->cb_data = cb_data;
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
     msg.cmd = IPMI_PICMG_CMD_FRU_CONTROL;
     msg.data = data;
@@ -1333,6 +1385,32 @@ set_cold_reset(ipmi_control_t     *control,
     rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
 				   &msg, set_cold_reset_done,
 				   &info->sdata, info);
+    if (err) {
+	if (info->handler)
+	    info->handler(control, err, info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(info);
+	return;
+    }
+}
+
+static int
+set_cold_reset(ipmi_control_t     *control,
+	       int                *val,
+	       ipmi_control_op_cb handler,
+	       void               *cb_data)
+{
+    atca_cold_reset_t *info;
+    int               rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->handler = handler;
+    info->cb_data = cb_data;
+    rv = ipmi_control_add_opq(control, set_cold_reset_start,
+			      &info->sdata, info);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
@@ -1742,7 +1820,7 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
 			     NULL, &minfo->frus[ipm_fru_id]->entity);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(shelf_fru_fetched): "
+		     "%soem_atca.c(fru_picmg_prop_rsp): "
 		     " Could not add board entity: %x",
 		     DOMAIN_NAME(domain), rv);
 	    return;
@@ -1751,7 +1829,7 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
 				   minfo->frus[ipm_fru_id]->entity);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(shelf_fru_fetched): "
+		     "%soem_atca.c(fru_picmg_prop_rsp): "
 		     "Could not add child ipmc: %x",
 		     DOMAIN_NAME(domain), rv);
 	    return;
@@ -1890,6 +1968,66 @@ atca_iterate_entities(ipmi_entity_t *entity, void *cb_data)
 			       entity, cb_data);
 }
 
+static void shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data);
+
+static void
+alt_shelf_fru_cb(ipmi_domain_t *domain,
+		 ipmi_addr_t   *addr,
+		 unsigned int  addr_len,
+		 ipmi_msg_t    *msg,
+		 void          *rsp_data1,
+		 void          *rsp_data2)
+{
+    atca_shelf_t *info;
+    int          rv;
+
+    info = ipmi_domain_get_oem_data(domain);
+
+    if (!domain)
+	goto out;
+
+    if (msg->data[0] != 0) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(alt_shelf_fru_cb): "
+		 "Error getting alternate FRU information: 0x%x",
+		 DOMAIN_NAME(domain), msg->data[0]);
+	goto out;
+    }
+
+    if (msg->data_len < 8) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(alt_shelf_fru_cb): "
+		 "ATCA get address response not long enough",
+		 DOMAIN_NAME(domain));
+	goto out;
+    }
+
+    info->shelf_fru_ipmb = msg->data[3];
+    info->shelf_fru_device_id = msg->data[5];
+
+    rv = ipmi_fru_alloc(domain,
+			1,
+			info->shelf_fru_ipmb,
+			1,
+			0,
+			0,
+			0,
+			shelf_fru_fetched,
+			info,
+			&info->shelf_fru);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_atca.c(alt_shelf_fru_cb): "
+		 "Error allocating fru information: 0x%x", rv);
+	goto out;
+    }
+
+    return;
+
+ out:
+    info->startup_done(domain, info->startup_done_cb_data);
+}
+
 static void
 shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 {
@@ -1903,11 +2041,49 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     int                rv;
 
     if (err) {
+	ipmi_system_interface_addr_t si;
+	ipmi_msg_t                   msg;
+	unsigned char 		     data[5];
+
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(shelf_fru_fetched): "
 		 "Error getting FRU information: 0x%x",
 		 DOMAIN_NAME(domain), err);
-	goto out;
+
+	ipmi_fru_destroy(info->shelf_fru, NULL, NULL);
+	info->shelf_fru = NULL;
+
+	/* Try 2 shelf FRUs. */
+	info->curr_shelf_fru++;
+	if (info->curr_shelf_fru > 2)
+	    goto out;
+
+	/* Send the ATCA Get Address Info command to get the shelf FRU info. */
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = 0xf;
+	si.lun = 0;
+	msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+	msg.cmd = IPMI_PICMG_CMD_GET_ADDRESS_INFO;
+	data[0] = IPMI_PICMG_GRP_EXT;
+	data[1] = 0; /* Ignored for physical address */
+	data[2] = PICMG_ADDRESS_KEY_PHYSICAL;
+	data[3] = info->curr_shelf_fru; /* Look for the next Shelf FRU */
+	data[4] = PICMG_SITE_TYPE_SHELF_FRU_INFO;
+	msg.data = data;
+	msg.data_len = 5;
+
+	rv = ipmi_send_command_addr(domain,
+				    (ipmi_addr_t *) &si, sizeof(si),
+				    &msg,
+				    alt_shelf_fru_cb, NULL, NULL);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "Error getting alternate FRU information: 0x%x",
+		     DOMAIN_NAME(domain), rv);
+	    goto out;
+	}
+	return;
     }
 
     /* We got the shelf FRU info, now hunt through it for the address
@@ -2082,6 +2258,13 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	goto out;
     }
 
+    info = ipmi_domain_get_oem_data(domain);
+    if (info) {
+	/* We have already initialized this domain, ignore this. */
+	done(domain, done_cb_data);
+	goto out;
+    }
+
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -2099,6 +2282,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     info->shelf_fru_ipmb = get_addr->data[3];
     info->shelf_fru_device_id = get_addr->data[5];
 
+    info->curr_shelf_fru = 1;
     rv = ipmi_fru_alloc(domain,
 			1,
 			info->shelf_fru_ipmb,

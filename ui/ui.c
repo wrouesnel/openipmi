@@ -2469,12 +2469,16 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
 		    if (light_control_val) {
 			ipmi_light_setting_t *setting = light_control_val;
 			for (i=0; i<num_vals; ) {
-			    int color, on, off;
+			    int color, on, off, lc;
 			    ipmi_light_setting_get_color(setting, i, &color);
 			    ipmi_light_setting_get_on_time(setting, i, &on);
 			    ipmi_light_setting_get_off_time(setting, i, &off);
+			    ipmi_light_setting_in_local_control(setting, i,
+								&lc);
 			    wmove(display_pad, value_pos.y+i, value_pos.x);
-			    display_pad_out("0x%x 0x%x 0x%x", color, on, off);
+			    display_pad_out("0x%x 0x%x 0x%x %s",
+					    color, on, off,
+					    lc ? "local cnt": "         ");
 			    i++;
 			    if (i < num_vals)
 				display_pad_out("\n          ");
@@ -2563,12 +2567,15 @@ light_control_val_read(ipmi_control_t       *control,
 	    display_pad_out("?");
 	} else {
 	    for (i=0; i<num_vals; i++) {
-		int color, on, off;
+		int color, on, off, lc;
 		ipmi_light_setting_get_color(setting, i, &color);
 		ipmi_light_setting_get_on_time(setting, i, &on);
 		ipmi_light_setting_get_off_time(setting, i, &off);
+		ipmi_light_setting_in_local_control(setting, i, &lc);
 		wmove(display_pad, value_pos.y+i, value_pos.x);
-		display_pad_out("0x%x 0x%x 0x%x", color, on, off);
+		display_pad_out("0x%x 0x%x 0x%x %s",
+				color, on, off,
+				lc ? "local cnt": "         ");
 	    }
 	}
 	display_pad_refresh();
@@ -5019,22 +5026,27 @@ set_control(ipmi_control_t *control, void *cb_data)
 		    unsigned int val;
 
 		    if (get_uint(toks, &val, "light color"))
-			goto out_bcon;
+			goto out_free_light;
 		    ipmi_light_setting_set_color(setting, i, val);
 
 		    if (get_uint(toks, &val, "light on time"))
-			goto out_bcon;
+			goto out_free_light;
 		    ipmi_light_setting_set_on_time(setting, i, val);
 
 		    if (get_uint(toks, &val, "light off time"))
-			goto out_bcon;
+			goto out_free_light;
 		    ipmi_light_setting_set_off_time(setting, i, val);
+
+		    if (get_uint(toks, &val, "local control"))
+			goto out_free_light;
+		    ipmi_light_setting_set_local_control(setting, i, val);
 		}
 
 		rv = ipmi_control_set_light(control, setting, NULL, NULL);
 		if (rv) {
 		    cmd_win_out("set_control: Returned error 0x%x\n", rv);
 		}
+	    out_free_light:
 		ipmi_free_light_settings(setting);
 		break;
 	    }

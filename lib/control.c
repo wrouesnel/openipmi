@@ -1378,6 +1378,7 @@ typedef struct ipmi_light_s
     int color;
     int on_time;
     int off_time;
+    int local_control;
 } ipmi_light_t;
 
 struct ipmi_light_setting_s
@@ -1390,6 +1391,30 @@ unsigned int
 ipmi_light_setting_get_count(ipmi_light_setting_t *setting)
 {
     return setting->count;
+}
+
+int
+ipmi_light_setting_in_local_control(ipmi_light_setting_t *setting,
+				    int                  num,
+				    int                  *lc)
+{
+    if (num > setting->count)
+	return EINVAL;
+
+    *lc = setting->lights[num].local_control;
+    return 0;
+}
+
+int
+ipmi_light_setting_set_local_control(ipmi_light_setting_t *setting,
+				     int                  num,
+				     int                  lc)
+{
+    if (num > setting->count)
+	return EINVAL;
+
+    setting->lights[num].local_control = lc;
+    return 0;
 }
 
 int

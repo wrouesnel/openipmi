@@ -2800,6 +2800,7 @@ handle_picmg_cmd_fru_control(lmc_data_t    *mc,
     }
 
     /* Nothing to reset. */
+    printf("Fru control set to %d\n", msg->data[2]);
 
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
@@ -2895,10 +2896,16 @@ handle_picmg_cmd_set_fru_led_state(lmc_data_t    *mc,
 
     mc->leds[led] = msg->data[3];
     mc->leds_on_dur[led] = msg->data[4];
-    mc->leds_color[led] = msg->data[5];
+    if (msg->data[5] == 0xf) {
+	if (led == 0)
+	    mc->leds_color[led] = 1;
+	else
+	    mc->leds_color[led] = 2;
+    }else if (msg->data[5] != 0xe)
+	mc->leds_color[led] = msg->data[5];
 
     printf("Setting ATCA LED to %x %x %x\n",
-	   msg->data[3], msg->data[3], msg->data[3]);
+	   msg->data[3], msg->data[4], msg->data[5]);
 
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
@@ -2939,14 +2946,22 @@ handle_picmg_cmd_get_fru_led_state(lmc_data_t    *mc,
 
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
-    rdata[2] = 0x02; /* We only support override state for now. */
-    rdata[3] = 0;
-    rdata[4] = 0;
-    rdata[5] = mc->leds_color[led];
-    rdata[6] = mc->leds[led];
-    rdata[7] = mc->leds_on_dur[led];
-    rdata[8] = mc->leds_color[led];
-    *rdata_len = 9;
+    if (mc->leds[led] == 0xfc) {
+	rdata[2] = 0x00; /* Local control. */
+	rdata[3] = 0; /* LED is always off. */
+	rdata[4] = 0;
+	rdata[5] = 1;
+	*rdata_len = 6;
+    } else {
+	rdata[2] = 0x02; /* override state. */
+	rdata[3] = 0;
+	rdata[4] = 0;
+	rdata[5] = 0;
+	rdata[6] = mc->leds[led];
+	rdata[7] = mc->leds_on_dur[led];
+	rdata[8] = mc->leds_color[led];
+	*rdata_len = 9;
+    }
 }
 
 static void
