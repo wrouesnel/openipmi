@@ -1577,7 +1577,10 @@ TBD
 The Motorola MXP chassis provides a PICMG 2.16 backplane, support for
 dual switch cards, and access via Ethernet.  The chassis supports one or
 two alarm cards (called AMCs), each board/switch can have a management
-controller (called a PM in Motorola terminology).
+controller (called a PM in Motorola terminology).  This section
+describes the quirks of this particular chassis and hardware.
+
+@subsection Dual AMC support
 
 The AMC cards operate in an active/standby configuration, except that
 the standby card is not exactly a standby, it can still do some
@@ -1592,6 +1595,84 @@ directly on the card are provided on those controllers.  The third
 management controller (channel 0 mc 0x20) represents the currently
 active AMC, the chassis controls are attached to that controller.
 
+@subsection MXP LAN Protocol
+
+The MXP does not exactly follow the IPMI LAN protocol, so a special IPMI
+LAN interface is required for it.  See the @file{OpenIPMI/mxp.h} include
+file for a description of that interface.  In particular, the software
+ID settings must be correct.  Each user of the MXP @emph{must} have a
+unique software ID, or the chaos will result.
+
+@subsection SEL support
+
+The SEL protocol also has an unusual property.  It has a sort of
+``lock'', but it does not follow the standard IPMI protocol.  The lock
+also doesn't really provide any locking and will cause problems if you
+have multiple management controllers accessing the SEL.  If you never
+use this lock, it will never be activated, so it doesn't matter.
+However, if you use the lock, it is activated and OpenIPMI will not be
+able to use the SEL any more until the AMC is rebooted.  So @emph{never}
+run any tools from Motorola (or any other tools that might use this
+lock) on your chassis if you want OpenIPMI to keep working.
+
+Also, currently, the SEL on the inactive AMC doesn't work with OpenIPMI.
+The SEL will still provide events, but the ``Get SEL Info'' command
+doesn't work.  OpenIPMI uses the ``Get SEL Info'' command to see if any
+new events have been added to the SEL before a query to avoid any more
+messages if the SEL hasn't been changed.
+
+@subsection Entities
+
+In keeping with IPMI and OpenIPMI, the MXP IPMI interface provides a set
+of entities to represent the various parts of the chassis.  The names of
+the entity ids are all prefixed with @code{IPMI_ENTITY_ID_} for
+standard entity ids or @code{MXP_ENTITY_ID_} for OEM ones in the
+actual code. These entities are:
+
+@table @samp
+@item Chassis & SYSTEM_CHASSIS (23)
+Contains sensors and controls that relate to the entire chassis,
+such as telco relays and voltage for the whole system.
+
+@item Alarm Card & MXP ALARM_CARD (0x90)
+Things specific to the alarm card.  This is an OEM entity id
+because none exist currently for an alarm card.
+
+@item IP Switch & CONNECTIVITY_SWITCH (42)
+Things related to the IP switch.  Currently, these are the same as
+for the board.
+
+@item Power Supply & POWER_SUPPLY (10)
+Things related to the power supply.
+
+@item Fan & FAN_COOLING (29)
+The fans inside the power supply.
+
+@item Board & PROCESSING_BLADE (41)
+Things related to payload boards.
+
+@end table
+
+The specific instance of each entity is identified by the entity
+instance.  So the first board (the one in slot 1) is instance 1, the
+second board is instance 2, etc.  Power supply 1 is instance 1, Power
+supply 2 is instance 2, etc.  The instance numbers are set up to
+correspond to the numbers called out in the documentation, and are not
+zero based.
+
+A section describes each entity.  All the other entities except the
+fans are contained in the chassis entity, and the fans are contained
+inside their power supply entity.  And remember, the entity is
+@emph{the device being measured}, not the controller on which the
+sensor exists.  So if the presence sensor for a power supply is on the
+AMC and you message the AMC to query it, the sensor is still attached
+to the power supply entity.
+
+
+@subsection Known Problems
+SEL
+cooling sensor
+fan presence
 @contents
 
 @bye

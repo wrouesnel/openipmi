@@ -3910,7 +3910,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_CONNECTIVITY_SWITCH,
-			     mxp_addr_to_instance(ipmb_addr),
+			     i+1,
 			     board_entity_str[idx],
 			     mxp_entity_sdr_add,
 			     NULL, &(info->board[idx].ent));
@@ -3943,7 +3943,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_POWER_SUPPLY,
-			     mxp_addr_to_instance(ipmb_addr),
+			     i+1,
 			     ps_entity_str[i],
 			     mxp_entity_sdr_add,
 			     NULL, &(info->power_supply[i].ent));
@@ -3955,7 +3955,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	}
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_FAN_COOLING,
-			     mxp_addr_to_instance(ipmb_addr),
+			     i+1,
 			     fan_entity_str[i],
 			     mxp_entity_sdr_add,
 			     NULL, &(info->power_supply[i].fan_ent));
