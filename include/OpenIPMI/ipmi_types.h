@@ -96,8 +96,8 @@ struct ipmi_entity_id_s
 {
     ipmi_domain_id_t domain_id;
     unsigned int     entity_id       : 8;
-    unsigned int     entity_instance : 4;
-    unsigned int     channel         : 8;
+    unsigned int     entity_instance : 8;
+    unsigned int     channel         : 4;
     unsigned int     address         : 8;
     long             seq;
 };

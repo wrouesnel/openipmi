@@ -775,15 +775,12 @@ static void
 entities_handler(ipmi_entity_t *entity,
 		 void          *cb_data)
 {
-    int  id, instance;
     char *present;
     char name[33];
     enum ipmi_dlr_type_e type;
     static char *ent_types[] = { "unknown", "mc", "fru",
 				 "generic", "invalid" };
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     type = ipmi_entity_get_type(entity);
     if (type > IPMI_ENTITY_GENERIC)
 	type = IPMI_ENTITY_GENERIC + 1;
@@ -795,8 +792,21 @@ entities_handler(ipmi_entity_t *entity,
 	present = "present";
     else
 	present = "not present";
-    display_pad_out("  %d.%d (%s) %s  %s\n", id, instance, name,
-		    ent_types[type], present);
+    if (curr_entity_id.address != 0)
+	/* Device-relative address. */
+	display_pad_out("  r%d.%d.%d.%d (%s) %s  %s\n",
+			curr_entity_id.channel,
+			curr_entity_id.address,
+			curr_entity_id.entity_id,
+			curr_entity_id.entity_instance,
+			name,
+			ent_types[type], present);
+    else
+	display_pad_out("  %d.%d (%s) %s  %s\n",
+			curr_entity_id.entity_id,
+			curr_entity_id.entity_instance,
+			name,
+			ent_types[type], present);
 }
 
 static void
@@ -831,6 +841,7 @@ typedef void (*entity_handler_cb)(ipmi_entity_t *entity,
 				  void          *cb_data);
 struct ent_rec {
     int id, instance, found;
+    int channel, address;
     entity_handler_cb handler;
     char **toks, **toks2;
     void *cb_data;
@@ -840,12 +851,15 @@ static void
 entity_searcher(ipmi_entity_t *entity,
 		void          *cb_data)
 {
-    struct ent_rec *info = cb_data;
-    int    id, instance;
+    struct ent_rec   *info = cb_data;
+    ipmi_entity_id_t id;
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
-    if ((info->id == id) && (info->instance == instance)) {
+    id = ipmi_entity_convert_to_id(entity);
+    if ((info->id == id.entity_id)
+	&& (info->instance == id.entity_instance)
+	&& (info->address == id.address)
+	&& (info->channel == id.channel))
+    {
 	info->found = 1;
 	info->handler(entity, info->toks, info->toks2, info->cb_data);
     }
@@ -873,6 +887,29 @@ entity_finder(char *cmd, char **toks,
 	return EINVAL;
     }
 
+    if (ent_name[0] == 'r') {
+	/* Device-relative address. */
+	char *name;
+	name = strtok_r(ent_name+1, ".", &toks2);
+	info.channel = strtoul(name, &estr, 0);
+	if (*estr != '\0') {
+	    cmd_win_out("Invalid entity channel given\n");
+	    return EINVAL;
+	}
+
+	name = strtok_r(NULL, ".", &toks2);
+	info.address = strtoul(name, &estr, 0);
+	if (*estr != '\0') {
+	    cmd_win_out("Invalid entity address given\n");
+	    return EINVAL;
+	}
+
+	id_name = strtok_r(NULL, ".", &toks2);
+    } else {
+	info.address = 0;
+	info.channel = 0;
+	id_name = strtok_r(ent_name, ".", &toks2);
+    }
     id_name = strtok_r(ent_name, ".", &toks2);
     instance_name = strtok_r(NULL, ".", &toks2);
     if (!instance_name) {
