@@ -35,6 +35,7 @@
 #define _IPMI_TYPES_H
 
 #include <stdint.h>
+#include <OpenIPMI/ipmi_addr.h>
 
 /*
  * These are the main types the user has to deal with.
@@ -96,6 +97,25 @@ typedef struct ipmi_msg
 typedef struct ipmi_msg ipmi_msg_t;
 
 #endif
+
+/* A structure used to hold messages that can be put into a linked
+   list. */
+typedef struct ipmi_msg_item_s
+{
+    ipmi_addr_t   addr;
+    unsigned int  addr_len;
+    ipmi_msg_t    msg;
+    unsigned char data[IPMI_MAX_MSG_LENGTH];
+    struct ipmi_msg_item_s *next;
+    void          *data1;
+    void          *data2;
+    void          *data3;
+    void          *data4;
+} ipmi_msgi_t;
+
+/* Return values for function that take the previous item. */
+#define IPMI_MSG_ITEM_NOT_USED	0
+#define IPMI_MSG_ITEM_USED	1
 
 /* Pay no attention to the contents of these structures... */
 struct ipmi_domain_id_s

@@ -117,15 +117,11 @@ typedef struct ll_msg_s
     ipmi_domain_t                *domain;
     int                          con;
 
-    ipmi_addr_t                  addr;
-    unsigned int                 addr_len;
-
     ipmi_msg_t                   msg;
     unsigned char                msg_data[IPMI_MAX_MSG_LENGTH];
 
     ipmi_addr_response_handler_t rsp_handler;
-    void                         *rsp_data1;
-    void                         *rsp_data2;
+    ipmi_msgi_t                  *rsp_item;
 
     long                         seq;
 
@@ -350,6 +346,20 @@ get_con_num(ipmi_domain_t *domain, ipmi_con_t *ipmi)
     return u;
 }
 
+static void
+deliver_rsp(ipmi_domain_t                *domain, 
+	    ipmi_addr_response_handler_t rsp_handler,
+	    ipmi_msgi_t                  *rspi)
+{
+    int used = IPMI_MSG_ITEM_NOT_USED;
+
+    if (rsp_handler)
+	used = rsp_handler(domain, rspi);
+
+    if (!used)
+	ipmi_mem_free(rspi);
+}
+
 /***********************************************************************
  *
  * Domain data structure creation and destruction
@@ -399,18 +409,18 @@ cleanup_domain(ipmi_domain_t *domain)
 	ilist_init_iter(&iter, domain->cmds);
 	ok = ilist_first(&iter);
 	while (ok) {
-	    ipmi_msg_t    msg;
 	    unsigned char err;
+	    ipmi_msgi_t   *rspi;
 
 	    nmsg = ilist_get(&iter);
+	    rspi = nmsg->rsp_item;
 
-	    msg.netfn = nmsg->msg.netfn | 1;
-	    msg.cmd = nmsg->msg.cmd;
-	    msg.data = &err;
-	    msg.data_len = 1;
+	    rspi->msg.netfn = nmsg->msg.netfn | 1;
+	    rspi->msg.cmd = nmsg->msg.cmd;
+	    rspi->msg.data = &err;
+	    rspi->msg.data_len = 1;
 	    err = IPMI_UNKNOWN_ERR_CC;
-	    nmsg->rsp_handler(NULL, &nmsg->addr, nmsg->addr_len, &msg,
-			      nmsg->rsp_data1, nmsg->rsp_data2);
+	    deliver_rsp(NULL, nmsg->rsp_handler, rspi);
 	    
 	    ilist_delete(&iter);
 	    ipmi_mem_free(nmsg);
@@ -1419,20 +1429,15 @@ find_and_remove_msg(ipmi_domain_t *domain, ll_msg_t *nmsg, long seq)
     return rv;
 }
 
-static void
+static int
 ll_rsp_handler(ipmi_con_t   *ipmi,
-	       ipmi_addr_t  *addr,
-	       unsigned int addr_len,
-	       ipmi_msg_t   *msg,
-	       void         *rsp_data1,
-	       void         *rsp_data2,
-	       void         *rsp_data3,
-	       void         *rsp_data4)
+	       ipmi_msgi_t  *orspi)
 {
-    ipmi_domain_t *domain = rsp_data1;
-    ll_msg_t      *nmsg = rsp_data2;
-    long          seq = (long) rsp_data3;
-    long          conn_seq = (long) rsp_data4;
+    ipmi_msgi_t   *rspi;
+    ipmi_domain_t *domain = orspi->data1;
+    ll_msg_t      *nmsg = orspi->data2;
+    long          seq = (long) orspi->data3;
+    long          conn_seq = (long) orspi->data4;
     int           rv;
 
     ipmi_read_lock();
@@ -1447,48 +1452,57 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
     if (!find_and_remove_msg(domain, nmsg, seq))
 	goto out_unlock;
 
-    if (nmsg->rsp_handler)
-	nmsg->rsp_handler(domain, addr, addr_len, msg,
-			  nmsg->rsp_data1, nmsg->rsp_data2);
+    rspi = nmsg->rsp_item;
+    if (nmsg->rsp_handler) {
+	memcpy(&rspi->addr, &orspi->addr, orspi->addr_len);
+	rspi->addr_len = orspi->addr_len;
+	rspi->msg = orspi->msg;
+	memcpy(rspi->data, orspi->data, orspi->msg.data_len);
+	rspi->msg.data = rspi->data;
+
+	deliver_rsp(domain, nmsg->rsp_handler, rspi);
+    }
+    ipmi_mem_free(rspi);
     ipmi_mem_free(nmsg);
  out_unlock:
     ipmi_read_unlock();
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
-static void
+static int
 ll_si_rsp_handler(ipmi_con_t   *ipmi,
-		  ipmi_addr_t  *addr,
-		  unsigned int addr_len,
-		  ipmi_msg_t   *msg,
-		  void         *rsp_data1,
-		  void         *rsp_data2,
-		  void         *rsp_data3,
-		  void         *rsp_data4)
+		  ipmi_msgi_t  *orspi)
 {
-    ipmi_domain_t                *domain = rsp_data1;
-    ll_msg_t                     *nmsg = rsp_data2;
+    ipmi_msgi_t                  *rspi;
+    ipmi_domain_t                *domain = orspi->data1;
+    ll_msg_t                     *nmsg = orspi->data2;
     int                          rv;
-    ipmi_system_interface_addr_t si;
+    ipmi_system_interface_addr_t *si;
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
-    if (rv) {
-	if (nmsg->rsp_handler)
-	    nmsg->rsp_handler(NULL, NULL, 0, msg,
-			      nmsg->rsp_data1, nmsg->rsp_data2);
+    if (rv)
 	goto out_unlock;
+
+    rspi = nmsg->rsp_item;
+
+    si = (ipmi_system_interface_addr_t *) &rspi->addr;
+    si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si->channel = (long) orspi->data4;
+    si->lun = ipmi_addr_get_lun(&rspi->addr);
+    rspi->addr_len = sizeof(*si);
+
+    if (nmsg->rsp_handler) {
+	rspi->msg = orspi->msg;
+	memcpy(rspi->data, orspi->data, orspi->msg.data_len);
+	rspi->msg.data = rspi->data;
+	deliver_rsp(domain, nmsg->rsp_handler, rspi);
     }
-
-    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-    si.channel = (long) rsp_data4;
-    si.lun = ipmi_addr_get_lun(addr);
-
-    if (nmsg->rsp_handler)
-	nmsg->rsp_handler(domain, (ipmi_addr_t *) &si, sizeof(si), msg,
-			  nmsg->rsp_data1, nmsg->rsp_data2);
- out_unlock:
+    ipmi_mem_free(rspi);
     ipmi_mem_free(nmsg);
+ out_unlock:
     ipmi_read_unlock();
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -1533,6 +1547,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     ipmi_ll_rsp_handler_t        handler;
     void                         *data4;
     int                          is_si = 0;
+    ipmi_msgi_t                  *rspi;
 
     if (addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
@@ -1548,6 +1563,11 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     nmsg = ipmi_mem_alloc(sizeof(*nmsg));
     if (!nmsg)
 	return ENOMEM;
+    nmsg->rsp_item = ipmi_mem_alloc(sizeof(ipmi_msgi_t));
+    if (!nmsg->rsp_item) {
+	ipmi_mem_free(nmsg);
+	return ENOMEM;
+    }     
 
     if (matching_domain_sysaddr(domain, addr, &si)) {
 	/* We have a direct connection to this BMC, so talk directly
@@ -1595,8 +1615,8 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 
     nmsg->domain = domain;
     nmsg->con = u;
-    memcpy(&nmsg->addr, addr, addr_len);
-    nmsg->addr_len = addr_len;
+    memcpy(&nmsg->rsp_item->addr, addr, addr_len);
+    nmsg->rsp_item->addr_len = addr_len;
 
     memcpy(&nmsg->msg, msg, sizeof(nmsg->msg));
     nmsg->msg.data = nmsg->msg_data;
@@ -1604,21 +1624,28 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     memcpy(nmsg->msg.data, msg->data, msg->data_len);
 
     nmsg->rsp_handler = rsp_handler;
-    nmsg->rsp_data1 = rsp_data1;
-    nmsg->rsp_data2 = rsp_data2;
+    nmsg->rsp_item->data1 = rsp_data1;
+    nmsg->rsp_item->data2 = rsp_data2;
 
     ipmi_lock(domain->cmds_lock);
     nmsg->seq = domain->cmds_seq;
     domain->cmds_seq++;
 
+    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    if (!rspi) {
+	rv = ENOMEM;
+	goto out;
+    }
+
+    rspi->data1 = domain;
+    rspi->data2 = nmsg;
+    rspi->data3 = (void *) nmsg->seq;
+    rspi->data4 = data4;
     rv = domain->conn[u]->send_command(domain->conn[u],
 				       addr, addr_len,
 				       msg,
 				       handler,
-				       domain,
-				       nmsg,
-				       (void *) nmsg->seq,
-				       data4);
+				       rspi);
 
     if (rv) {
 	goto out_unlock;
@@ -1632,8 +1659,10 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     ipmi_unlock(domain->cmds_lock);
 
  out:
-    if (rv)
+    if (rv) {
+	ipmi_mem_free(nmsg->rsp_item);
 	ipmi_mem_free(nmsg);
+    }
     return rv;
 }
 
@@ -1655,35 +1684,40 @@ reroute_cmds(ipmi_domain_t *domain, int new_con)
 	if ((!domain->con_active[nmsg->con])
 	    || (!domain->con_up[nmsg->con]))
 	{
+	    ipmi_msgi_t *rspi;
+
 	    nmsg->seq = domain->cmds_seq;
 	    domain->cmds_seq++; /* Make the message unique so a
                                    response from the other connection
                                    will not match. */
 	    nmsg->con = new_con;
 
+	    rspi = ipmi_mem_alloc(sizeof(*rspi));
+	    if (!rspi)
+		goto send_err;
+
+	    rspi->data1 = domain;
+	    rspi->data2 = nmsg;
+	    rspi->data3 = (void *) nmsg->seq;
+	    rspi->data4 = (void *) domain->conn_seq;
 	    rv = domain->conn[new_con]->send_command(domain->conn[new_con],
-						     &nmsg->addr,
-						     nmsg->addr_len,
+						     &nmsg->rsp_item->addr,
+						     nmsg->rsp_item->addr_len,
 						     &nmsg->msg,
 						     ll_rsp_handler,
-						     domain,
-						     nmsg,
-						     (void *) nmsg->seq,
-						     (void *) domain->conn_seq);
+						     rspi);
 	    if (rv) {
+		ipmi_mem_free(rspi);
+	    send_err:
 		/* Couldn't send the message, just fail it. */
 		if (nmsg->rsp_handler) {
-		    ipmi_msg_t    msg;
-		    unsigned char err;
-
-		    msg.netfn = nmsg->msg.netfn | 1;
-		    msg.cmd = nmsg->msg.cmd;
-		    msg.data = &err;
-		    msg.data_len = 1;
-		    err = IPMI_UNKNOWN_ERR_CC;
-		    nmsg->rsp_handler(domain, &nmsg->addr, nmsg->addr_len,
-				      &nmsg->msg,
-				      nmsg->rsp_data1, nmsg->rsp_data2);
+		    rspi = nmsg->rsp_item;
+		    rspi->msg.netfn = nmsg->msg.netfn | 1;
+		    rspi->msg.cmd = nmsg->msg.cmd;
+		    rspi->msg.data = rspi->data;
+		    rspi->msg.data_len = 1;
+		    rspi->data[0] = IPMI_UNKNOWN_ERR_CC;
+		    deliver_rsp(domain, nmsg->rsp_handler, rspi);
 		}
 		rv = ilist_delete(&iter);
 		ipmi_mem_free(nmsg);
@@ -1755,12 +1789,7 @@ remove_bus_scans_running(ipmi_domain_t *domain, mc_ipmb_scan_info_t *info)
 	}
 }
 
-static void devid_bc_rsp_handler(ipmi_domain_t *domain,
-				 ipmi_addr_t   *addr,
-				 unsigned int  addr_len,
-				 ipmi_msg_t    *msg,
-				 void          *rsp_data1,
-				 void          *rsp_data2);
+static int devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi);
 
 static void
 rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
@@ -1786,7 +1815,7 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
     rv = ipmi_domain_validate(domain);
     if (rv) {
 	ipmi_log(IPMI_LOG_INFO,
-		 "%sdomain.c(devid_bc_rsp_handler): "
+		 "%sdomain.c(rescan_timeout_handler): "
 		 "BMC went away while scanning for MCs",
 		 DOMAIN_NAME(domain));
 	ipmi_read_unlock();
@@ -1827,14 +1856,13 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_read_unlock();
 }
 
-static void devid_bc_rsp_handler(ipmi_domain_t *domain,
-				 ipmi_addr_t   *addr,
-				 unsigned int  addr_len,
-				 ipmi_msg_t    *msg,
-				 void          *rsp_data1,
-				 void          *rsp_data2)
+static int
+devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
-    mc_ipmb_scan_info_t *info = rsp_data1;
+    ipmi_msg_t          *msg = &rspi->msg;
+    ipmi_addr_t         *addr = &rspi->addr;
+    unsigned int        addr_len = rspi->addr_len;
+    mc_ipmb_scan_info_t *info = rspi->data1;
     int                 rv;
     ipmi_mc_t           *mc;
     ipmi_ipmb_addr_t    *ipmb;
@@ -1848,7 +1876,7 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 		 "BMC went away while scanning for MCs",
 		 DOMAIN_NAME(domain));
 	ipmi_read_unlock();
-	return;
+	return IPMI_MSG_ITEM_NOT_USED;
     }
 
     ipmi_lock(domain->mc_list_lock);
@@ -1985,6 +2013,7 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 
  out:
     ipmi_read_unlock();
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 void

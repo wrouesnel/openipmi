@@ -4994,14 +4994,10 @@ typedef struct msg_cmd_data_s
     ipmi_msg_t       msg;
 } msg_cmd_data_t;
 
-static void
-mccmd_addr_rsp_handler(ipmi_domain_t *domain,
-		       ipmi_addr_t   *addr,
-		       unsigned int  addr_len,
-		       ipmi_msg_t    *msg,
-		       void          *rsp_data1,
-		       void          *rsp_data2)
+static int
+mccmd_addr_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
+    ipmi_msg_t    *msg = &rspi->msg;
     unsigned int  i;
     unsigned char *data;
 
@@ -5020,6 +5016,7 @@ mccmd_addr_rsp_handler(ipmi_domain_t *domain,
     }
     display_pad_out("\n");
     display_pad_refresh();
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static void

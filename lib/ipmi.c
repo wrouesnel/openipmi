@@ -1385,3 +1385,63 @@ ipmi_openipmi_version(void)
 {
     return OPENIPMI_VERSION;
 }
+
+void
+ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
+			     ipmi_msgi_t           *rspi,
+			     ipmi_addr_t           *addr,
+			     unsigned int          addr_len,
+			     ipmi_msg_t            *msg,
+			     ipmi_ll_rsp_handler_t rsp_handler)
+{
+    int used = IPMI_MSG_ITEM_NOT_USED;
+
+    memcpy(&rspi->addr, addr, addr_len);
+    rspi->addr_len = addr_len;
+    rspi->msg = *msg;
+    memcpy(rspi->data, msg->data, msg->data_len);
+    rspi->msg.data = rspi->data;
+
+    /* call the user handler. */
+    if (rsp_handler)
+	used = rsp_handler(ipmi, rspi);
+
+    if (!used)
+	ipmi_mem_free(rspi);
+}
+
+void
+ipmi_handle_rsp_item_copymsg(ipmi_con_t            *ipmi,
+			     ipmi_msgi_t           *rspi,
+			     ipmi_msg_t            *msg,
+			     ipmi_ll_rsp_handler_t rsp_handler)
+{
+    int used = IPMI_MSG_ITEM_NOT_USED;
+
+    rspi->msg = *msg;
+    memcpy(rspi->data, msg->data, msg->data_len);
+    rspi->msg.data = rspi->data;
+
+    /* call the user handler. */
+    if (rsp_handler)
+	used = rsp_handler(ipmi, rspi);
+
+    if (!used)
+	ipmi_mem_free(rspi);
+}
+
+void
+ipmi_handle_rsp_item(ipmi_con_t            *ipmi,
+		     ipmi_msgi_t           *rspi,
+		     ipmi_ll_rsp_handler_t rsp_handler)
+{
+    int used = IPMI_MSG_ITEM_NOT_USED;
+
+    /* call the user handler. */
+    if (rsp_handler)
+	used = rsp_handler(ipmi, rspi);
+
+    if (!used)
+	ipmi_mem_free(rspi);
+}
+

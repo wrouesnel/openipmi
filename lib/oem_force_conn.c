@@ -38,19 +38,14 @@
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_oem.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_int.h>
 
-static void
-ipmb_handler(ipmi_con_t   *ipmi,
-	     ipmi_addr_t  *addr,
-	     unsigned int addr_len,
-	     ipmi_msg_t   *msg,
-	     void         *rsp_data1,
-	     void         *rsp_data2,
-	     void         *rsp_data3,
-	     void         *rsp_data4)
+static int
+ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
-    ipmi_ll_ipmb_addr_cb handler = rsp_data1;
-    void                 *cb_data = rsp_data2;
+    ipmi_msg_t           *msg = &rspi->msg;
+    ipmi_ll_ipmb_addr_cb handler = rspi->data1;
+    void                 *cb_data = rspi->data2;
     unsigned char        ipmb = 0;
     int                  err = 0;
     
@@ -66,6 +61,7 @@ ipmb_handler(ipmi_con_t   *ipmi,
 
     if (handler)
 	handler(ipmi, err, ipmb, ipmb == 0x20, 0, cb_data);
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -73,6 +69,12 @@ force_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
 {
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
+    int                          rv;
+    ipmi_msgi_t                  *rspi;
+
+    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    if (!rspi)
+	return ENOMEM;
 
     /* Send the OEM command to get the IPMB address. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -83,25 +85,24 @@ force_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
     msg.data = NULL;
     msg.data_len = 0;
 
-    return conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			      ipmb_handler, handler, cb_data, NULL, NULL);
+    rspi->data1 = handler;
+    rspi->data2 = cb_data;
+    rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			    ipmb_handler, rspi);
+    if (rv)
+	ipmi_mem_free(rspi);
+    return rv;
 }
 
-static void
-activate_handler(ipmi_con_t   *ipmi,
-		 ipmi_addr_t  *addr,
-		 unsigned int addr_len,
-		 ipmi_msg_t   *rmsg,
-		 void         *rsp_data1,
-		 void         *rsp_data2,
-		 void         *rsp_data3,
-		 void         *rsp_data4)
+static int
+activate_handler(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 {
-    ipmi_ll_ipmb_addr_cb         handler = rsp_data1;
-    void                         *cb_data = rsp_data2;
-    unsigned char                ipmb = 0;
-    int                          err = 0;
-    int                          rv;
+    ipmi_msg_t           *rmsg = &rspi->msg;
+    ipmi_ll_ipmb_addr_cb handler = rspi->data1;
+    void                 *cb_data = rspi->data2;
+    unsigned char        ipmb = 0;
+    int                  err = 0;
+    int                  rv;
     
     if (rmsg->data[0] != 0) {
 	err = IPMI_IPMI_ERR_VAL(rmsg->data[0]);
@@ -116,6 +117,7 @@ activate_handler(ipmi_con_t   *ipmi,
 		handler(ipmi, rv, ipmb, 0, 0, cb_data);
 	}
     }
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -127,6 +129,12 @@ send_activate(ipmi_con_t           *ipmi,
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
     unsigned char                data[1];
+    int                          rv;
+    ipmi_msgi_t                  *rspi;
+
+    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    if (!rspi)
+	return ENOMEM;
 
     /* Send the OEM command to set the IPMB address. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -141,24 +149,22 @@ send_activate(ipmi_con_t           *ipmi,
     msg.data = data;
     msg.data_len = 1;
 
-    return ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			      activate_handler, handler, cb_data, NULL, NULL);
+    rspi->data1 = handler;
+    rspi->data2 = cb_data;
+    rv = ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			    activate_handler, rspi);
+    if (rv)
+	ipmi_mem_free(rspi);
+    return rv;
 }
 
-static void
-deactivated(ipmi_con_t   *ipmi,
-	    ipmi_addr_t  *addr,
-	    unsigned int addr_len,
-	    ipmi_msg_t   *rmsg,
-	    void         *rsp_data1,
-	    void         *rsp_data2,
-	    void         *rsp_data3,
-	    void         *rsp_data4)
+static int
+deactivated(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 {
-    ipmi_ll_ipmb_addr_cb         handler = rsp_data1;
-    void                         *cb_data = rsp_data2;
-    int                          active = (long) rsp_data3;
-    int                          rv;
+    ipmi_ll_ipmb_addr_cb handler = rspi->data1;
+    void                 *cb_data = rspi->data2;
+    int                  active = (long) rspi->data3;
+    int                  rv;
 
     /* Don't care about errors from the deactivate, if no BMC was
        present then it doesn't really matter. */
@@ -166,6 +172,7 @@ deactivated(ipmi_con_t   *ipmi,
     rv = send_activate(ipmi, active, handler, cb_data);
     if (rv)
 	handler(ipmi, rv, 0, 0, 0, cb_data);
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -181,6 +188,11 @@ force_activate(ipmi_con_t           *conn,
 
     if (active) {
 	/* Deactivate any existing BMCs. */
+	ipmi_msgi_t      *rspi;
+
+	rspi = ipmi_mem_alloc(sizeof(*rspi));
+	if (!rspi)
+	    return ENOMEM;
 
 	ipmb.addr_type = IPMI_IPMB_ADDR_TYPE;
 	ipmb.channel = 0;
@@ -193,10 +205,15 @@ force_activate(ipmi_con_t           *conn,
 	msg.data = data;
 	msg.data_len = 1;
 
+	rspi->data1 = handler;
+	rspi->data2 = cb_data;
+	rspi->data3 = (void *) (long) active;
 	rv = conn->send_command(conn, (ipmi_addr_t *) &ipmb, sizeof(ipmb),
 				&msg,
-				deactivated, handler, cb_data,
-				(void *) (long) active, NULL);
+				deactivated, rspi);
+	if (rv)
+	    ipmi_mem_free(rspi);
+	return rv;
     }
 
     if (rv)

@@ -44,14 +44,8 @@
 typedef struct ipmi_ll_event_handler_id_s ipmi_ll_event_handler_id_t;
 
 /* Called when an IPMI response to a command comes in from the BMC. */
-typedef void (*ipmi_ll_rsp_handler_t)(ipmi_con_t   *ipmi,
-				      ipmi_addr_t  *addr,
-				      unsigned int addr_len,
-				      ipmi_msg_t   *msg,
-				      void         *rsp_data1,
-				      void         *rsp_data2,
-				      void         *rsp_data3,
-				      void         *rsp_data4);
+typedef int (*ipmi_ll_rsp_handler_t)(ipmi_con_t   *ipmi,
+				     ipmi_msgi_t  *rspi);
 
 /* Called when an IPMI event comes in from the BMC.  Note that the
    event may be NULL, meaning that an event came in but did not have
@@ -201,10 +195,7 @@ struct ipmi_con_s
 			unsigned int          addr_len,
 			ipmi_msg_t            *msg,
 			ipmi_ll_rsp_handler_t rsp_handler,
-			void                  *rsp_data1,
-			void                  *rsp_data2,
-			void                  *rsp_data3,
-			void                  *rsp_data4);
+			ipmi_msgi_t           *rspi);
 
     /* Register to receive IPMI events from the interface.  Return a
        handle that can be used for later deregistration. */
@@ -323,5 +314,22 @@ int ipmi_deregister_conn_oem_check(ipmi_conn_oem_check check,
 int ipmi_conn_check_oem_handlers(ipmi_con_t               *conn,
 				 ipmi_conn_oem_check_done done,
 				 void                     *cb_data);
+
+/* Generic message handling */
+void ipmi_handle_rsp_item(ipmi_con_t            *ipmi,
+			  ipmi_msgi_t           *rspi,
+			  ipmi_ll_rsp_handler_t rsp_handler);
+
+void ipmi_handle_rsp_item_copymsg(ipmi_con_t            *ipmi,
+				  ipmi_msgi_t           *rspi,
+				  ipmi_msg_t            *msg,
+				  ipmi_ll_rsp_handler_t rsp_handler);
+
+void ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
+				  ipmi_msgi_t           *rspi,
+				  ipmi_addr_t           *addr,
+				  unsigned int          addr_len,
+				  ipmi_msg_t            *msg,
+				  ipmi_ll_rsp_handler_t rsp_handler);
 
 #endif /* _IPMI_CONN_H */

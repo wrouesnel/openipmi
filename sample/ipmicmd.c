@@ -379,21 +379,15 @@ cmd_handler(ipmi_con_t   *ipmi,
     printf("Command sequence = 0x%lx\n", sequence);
 }
 
-void
-rsp_handler(ipmi_con_t   *ipmi,
-	    ipmi_addr_t  *addr,
-	    unsigned int addr_len,
-	    ipmi_msg_t   *rsp,
-	    void         *data1,
-	    void         *data2,
-	    void         *data3,
-	    void         *data4)
+int
+rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
-    dump_msg_data(rsp, addr, "response");
+    dump_msg_data(&rspi->msg, &rspi->addr, "response");
     if (!interactive) {
     	ipmi->close_connection(ipmi);
 	leave(0);
     }
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 void
@@ -429,17 +423,10 @@ typedef struct timed_data_s
     unsigned int   total_count;
 } timed_data_t;
 
-void
-timed_rsp_handler(ipmi_con_t   *con,
-		  ipmi_addr_t  *addr,
-		  unsigned int addr_len,
-		  ipmi_msg_t   *rsp,
-		  void         *data1,
-		  void         *data2,
-		  void         *data3,
-		  void         *data4)
+int
+timed_rsp_handler(ipmi_con_t *con, ipmi_msgi_t *rspi)
 {
-    timed_data_t *data = data1;
+    timed_data_t *data = rspi->data1;
 
     if (data->count == 0) {
 	unsigned long  diff;
@@ -459,14 +446,14 @@ timed_rsp_handler(ipmi_con_t   *con,
 			       &data->addr,
 			       data->addr_len,
 			       &data->msg,
-			       timed_rsp_handler,
-			       data, NULL, NULL, NULL);
+			       timed_rsp_handler, rspi);
 	data->count--;
 	if (rv) {
 	    printf("Error sending command: %x\n", rv);
 	    free(data);
 	}
     }
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 void
@@ -478,9 +465,17 @@ time_msgs(ipmi_con_t    *con,
 {
     timed_data_t *data;
     int          rv;
+    ipmi_msgi_t  *rspi;
 
     data = malloc(sizeof(*data));
     if (!data) {
+	printf("No memory to perform command\n");
+	return;
+    }
+
+    rspi = malloc(sizeof(*rspi));
+    if (!rspi) {
+	ipmi_mem_free(rspi);
 	printf("No memory to perform command\n");
 	return;
     }
@@ -496,12 +491,12 @@ time_msgs(ipmi_con_t    *con,
     data->count = count;
     data->total_count = count;
 
+    rspi->data1 = data;
     rv = con->send_command(data->con,
 			   &data->addr,
 			   data->addr_len,
 			   &data->msg,
-			   timed_rsp_handler,
-			   data, NULL, NULL, NULL);
+			   timed_rsp_handler, rspi);
     data->count--;
     if (rv) {
 	printf("Error sending command: %x\n", rv);
@@ -710,8 +705,8 @@ process_input_line(char *buf)
 	if (msg.netfn & 1)
 	    rv = con->send_response(con, &addr, addr_len, &msg, seq);
 	else
-	    rv = con->send_command(con, &addr, addr_len, &msg, rsp_handler,
-				   NULL, NULL, NULL, NULL);
+	    rv = con->send_command(con, &addr, addr_len, &msg,
+				   rsp_handler, NULL);
 	if (rv) {
 	    printf("Error sending command: %x\n", rv);
 	}

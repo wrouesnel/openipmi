@@ -8917,23 +8917,17 @@ mxp_handler(ipmi_mc_t *mc,
 
 /* We don't actually fetch the IPMB address, since it is alway 0x20.
    Instead, we get the AMC status to see if we are active or not. */
-static void
-ipmb_handler(ipmi_con_t   *ipmi,
-	     ipmi_addr_t  *addr,
-	     unsigned int addr_len,
-	     ipmi_msg_t   *msg,
-	     void         *rsp_data1,
-	     void         *rsp_data2,
-	     void         *rsp_data3,
-	     void         *rsp_data4)
+static int
+ipmb_handler(ipmi_con_t   *ipmi, ipmi_msgi_t  *rspi)
 {
-    ipmi_ll_ipmb_addr_cb handler = rsp_data1;
-    void                 *cb_data = rsp_data2;
+    ipmi_msg_t           *msg = &rspi->msg;
+    ipmi_ll_ipmb_addr_cb handler = rspi->data1;
+    void                 *cb_data = rspi->data2;
     int                  active = 0;
     int                  err = 0;
     
     if (!ipmi)
-	return;
+	return IPMI_MSG_ITEM_NOT_USED;
 
     if (msg->data[0] != 0)
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
@@ -8951,6 +8945,7 @@ ipmb_handler(ipmi_con_t   *ipmi,
 
     if (handler)
 	handler(ipmi, err, 0x20, active, 0, cb_data);
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -8959,6 +8954,12 @@ mxp_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
     unsigned char		 data[3];
+    int                          rv;
+    ipmi_msgi_t                  *rspi;
+
+    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    if (!rspi)
+	return ENOMEM;
 
     /* Send the OEM command to get the IPMB address. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -8970,25 +8971,24 @@ mxp_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
     msg.data_len = 3;
     add_mxp_mfg_id(data);
 
-    return conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			      ipmb_handler, handler, cb_data, NULL, NULL);
+    rspi->data1 = handler;
+    rspi->data2 = cb_data;
+    rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			    ipmb_handler, rspi);
+    if (rv)
+	ipmi_mem_free(rspi);
+    return rv;
 }
 
-static void
-activate_handler(ipmi_con_t   *ipmi,
-		 ipmi_addr_t  *addr,
-		 unsigned int addr_len,
-		 ipmi_msg_t   *rmsg,
-		 void         *rsp_data1,
-		 void         *rsp_data2,
-		 void         *rsp_data3,
-		 void         *rsp_data4)
+static int
+activate_handler(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 {
-    ipmi_ll_ipmb_addr_cb         handler = rsp_data1;
-    void                         *cb_data = rsp_data2;
-    unsigned char                ipmb = 0;
-    int                          err = 0;
-    int                          rv;
+    ipmi_msg_t           *rmsg = &rspi->msg;
+    ipmi_ll_ipmb_addr_cb handler = rspi->data1;
+    void                 *cb_data = rspi->data2;
+    unsigned char        ipmb = 0;
+    int                  err = 0;
+    int                  rv;
     
     if (rmsg->data[0] != 0) {
 	err = IPMI_IPMI_ERR_VAL(rmsg->data[0]);
@@ -9001,6 +9001,7 @@ activate_handler(ipmi_con_t   *ipmi,
 		handler(ipmi, rv, ipmb, 0, 0, cb_data);
 	}
     }
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -9012,6 +9013,12 @@ mxp_activate(ipmi_con_t           *conn,
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
     unsigned char                data[5];
+    int                          rv;
+    ipmi_msgi_t                  *rspi;
+
+    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    if (!rspi)
+	return ENOMEM;
 
     /* Send the OEM command to set the IPMB address. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -9029,8 +9036,13 @@ mxp_activate(ipmi_con_t           *conn,
 	data[3] = 1; /* Release */
     data[4] = 1; /* Always force it. */
 
-    return conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			      activate_handler, handler, cb_data, NULL, NULL);
+    rspi->data1 = handler;
+    rspi->data2 = cb_data;
+    rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			    activate_handler, rspi);
+    if (rv)
+	ipmi_mem_free(rspi);
+    return rv;
 }
 
 static int
@@ -9043,6 +9055,13 @@ mxp_handle_send_rsp_err(ipmi_con_t *ipmi, ipmi_msg_t *rsp)
     if (rsp->data[0] == 0x82) {
 	/* If we get a 0x82 response from an MXP send, we send an IPMB
 	   auto-isolate command to clean up the bus. */
+	ipmi_msgi_t *rspi;
+	int         rv;
+
+	rspi = ipmi_mem_alloc(sizeof(*rspi));
+	if (!rspi)
+	    goto out_continue;
+
 	msg.netfn = MXP_NETFN_MXP1;
 	msg.cmd = MXP_OEM_SET_AUTO_IPMB_ISOLATE_CMD;
 	msg.data = data;
@@ -9051,10 +9070,13 @@ mxp_handle_send_rsp_err(ipmi_con_t *ipmi, ipmi_msg_t *rsp)
 	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si.channel = 0;
 	si.lun = 0;
-	ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			   NULL, NULL, NULL, NULL, NULL);
+	rv = ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
+				NULL, rspi);
+	if (rv)
+	    ipmi_mem_free(rspi);
 
 	/* Don't handle the message, let a timeout and resend occur. */
+    out_continue:
 	return 1;
     }
 

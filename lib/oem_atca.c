@@ -2590,19 +2590,15 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
     return;
 }
 
-static void
-alt_shelf_fru_cb(ipmi_domain_t *domain,
-		 ipmi_addr_t   *addr,
-		 unsigned int  addr_len,
-		 ipmi_msg_t    *msg,
-		 void          *rsp_data1,
-		 void          *rsp_data2)
+static int
+alt_shelf_fru_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
+    ipmi_msg_t   *msg = &rspi->msg;
     atca_shelf_t *info;
     int          rv;
 
     if (!domain)
-	return;
+	return IPMI_MSG_ITEM_NOT_USED;
 
     info = ipmi_domain_get_oem_data(domain);
 
@@ -2644,10 +2640,11 @@ alt_shelf_fru_cb(ipmi_domain_t *domain,
 	goto out_err;
     }
 
-    return;
+    return IPMI_MSG_ITEM_NOT_USED;
 
  out_err:
     info->startup_done(domain, rv, info->startup_done_cb_data);
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static void
@@ -3168,25 +3165,22 @@ atca_register_fixups(void)
  *
  **********************************************************************/
 
-static void
-check_if_atca_cb(ipmi_domain_t *domain,
-		 ipmi_addr_t   *addr,
-		 unsigned int  addr_len,
-		 ipmi_msg_t    *msg,
-		 void          *rsp_data1,
-		 void          *rsp_data2)
+static int
+check_if_atca_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
-    ipmi_domain_oem_check_done done = rsp_data1;
+    ipmi_msg_t                 *msg = &rspi->msg;
+    ipmi_domain_oem_check_done done = rspi->data1;
 
     if (!domain)
-	return;
+	return IPMI_MSG_ITEM_NOT_USED;
 
     if (msg->data[0] == 0) {
 	/* It's an ATCA system, set it up */
-	set_up_atca_domain(domain, msg, done, rsp_data2);
+	set_up_atca_domain(domain, msg, done, rspi->data2);
     } else {
-	done(domain, ENOSYS, rsp_data2);
+	done(domain, ENOSYS, rspi->data2);
     }
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int

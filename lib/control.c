@@ -505,15 +505,11 @@ ipmi_control_send_command(ipmi_control_t         *control,
     return rv;
 }
 
-static void
-control_addr_response_handler(ipmi_domain_t *domain,
-			      ipmi_addr_t   *addr,
-			      unsigned int  addr_len,
-			      ipmi_msg_t    *msg,
-			      void          *rsp_data1,
-			      void          *rsp_data2)
+static int
+control_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
-    ipmi_control_op_info_t *info = rsp_data1;
+    ipmi_msg_t             *msg = &rspi->msg;
+    ipmi_control_op_info_t *info = rspi->data1;
     int                    rv;
     ipmi_control_t         *control = info->__control;
 
@@ -525,7 +521,7 @@ control_addr_response_handler(ipmi_domain_t *domain,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 	control_final_destroy(control);
-	return;
+	return IPMI_MSG_ITEM_NOT_USED;
     }
 
     /* Call the next stage with the lock held. */
@@ -541,6 +537,7 @@ control_addr_response_handler(ipmi_domain_t *domain,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
     }
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 int

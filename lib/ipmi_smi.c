@@ -86,8 +86,7 @@ typedef struct pending_cmd_s
     ipmi_addr_t           addr;
     unsigned int          addr_len;
     ipmi_ll_rsp_handler_t rsp_handler;
-    void                  *rsp_data;
-    void                  *data2, *data3, *data4;
+    ipmi_msgi_t           *rsp_item;
     int                   use_orig_addr;
     ipmi_addr_t           orig_addr;
     unsigned int          orig_addr_len;
@@ -497,7 +496,7 @@ audit_timeout_handler(void              *cb_data,
 	si.lun = 0;
 	ipmi->send_command(ipmi,
 			   (ipmi_addr_t *) &si, sizeof(si),
-			   &msg, NULL, NULL, NULL, NULL, NULL);
+			   &msg, NULL, NULL);
     }
 
     timeout.tv_sec = SMI_AUDIT_TIMEOUT / 1000000;
@@ -527,11 +526,7 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     smi_data_t            *smi = (smi_data_t *) ipmi->con_data;
     pending_cmd_t         *cmd, *finder;
     ipmi_ll_rsp_handler_t rsp_handler;
-    void                  *rsp_data;
-    void                  *data2, *data3, *data4;
-    ipmi_addr_t           *addr;
-    unsigned int          addr_len;
-    ipmi_addr_t           tmp_addr;
+    ipmi_msgi_t           *rspi;
 
     cmd = (pending_cmd_t *) recv->msgid;
     
@@ -551,10 +546,7 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 
     /* Extract everything we need from the command here. */
     rsp_handler = cmd->rsp_handler;
-    rsp_data = cmd->rsp_data;
-    data2 = cmd->data2;
-    data3 = cmd->data3;
-    data4 = cmd->data4;
+    rspi = cmd->rsp_item;
 
     remove_cmd(ipmi, smi, cmd);
 
@@ -563,21 +555,18 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     if (cmd->use_orig_addr) {
 	/* We did an address translation, make sure the address is the one
 	   that was previously provided. */
-	addr = &tmp_addr;
-	addr_len = cmd->orig_addr_len;
-	memcpy(addr, &cmd->orig_addr, addr_len);
+	memcpy(&rspi->addr, &cmd->orig_addr, cmd->orig_addr_len);
+	rspi->addr_len = cmd->orig_addr_len;
     } else {
-	addr = (ipmi_addr_t *) recv->addr;
-	addr_len = recv->addr_len;
+	memcpy(&rspi->addr, (ipmi_addr_t *) recv->addr, recv->addr_len);
+	rspi->addr_len = recv->addr_len;
     }
 
     ipmi_mem_free(cmd);
     cmd = NULL; /* It's gone after this point. */
 
-    /* call the user handler. */
-    if (rsp_handler)
-	rsp_handler(ipmi, addr, addr_len, &(recv->msg),
-		    rsp_data, data2, data3, data4);
+    ipmi_handle_rsp_item_copymsg(ipmi, rspi, &recv->msg, rsp_handler);
+
     return;
 
  out_unlock:
@@ -825,22 +814,27 @@ smi_send_command(ipmi_con_t            *ipmi,
 		 unsigned int          addr_len,
 		 ipmi_msg_t            *msg,
 		 ipmi_ll_rsp_handler_t rsp_handler,
-		 void                  *rsp_data,
-		 void                  *data2,
-		 void                  *data3,
-		 void                  *data4)
+		 ipmi_msgi_t           *trspi)
 {
     pending_cmd_t *cmd;
     smi_data_t    *smi;
     int           rv;
     ipmi_addr_t   tmp_addr;
+    ipmi_msgi_t   *rspi = trspi;
 
+
+    if (addr_len > sizeof(ipmi_addr_t))
+	return EINVAL;
+
+    if (msg->data_len > IPMI_MAX_MSG_LENGTH)
+	return EINVAL;
 
     smi = (smi_data_t *) ipmi->con_data;
 
-    if (addr_len > sizeof(ipmi_addr_t)) {
-	rv = EINVAL;
-	goto out_unlock2;
+    if (!rspi) {
+	rspi = ipmi_mem_alloc(sizeof(*rspi));
+	if (!rspi)
+	    return ENOMEM;
     }
 
     cmd = ipmi_mem_alloc(sizeof(*cmd));
@@ -878,10 +872,7 @@ smi_send_command(ipmi_con_t            *ipmi,
     /* Put it in the list first. */
     cmd->msg = *msg;
     cmd->rsp_handler = rsp_handler;
-    cmd->rsp_data = rsp_data;
-    cmd->data2 = data2;
-    cmd->data3 = data3;
-    cmd->data4 = data4;
+    cmd->rsp_item = rspi;
 
     ipmi_lock(smi->cmd_lock);
     add_cmd(ipmi, addr, addr_len, msg, smi, cmd);
@@ -889,12 +880,19 @@ smi_send_command(ipmi_con_t            *ipmi,
     rv = smi_send(smi, smi->fd, addr, addr_len, msg, (long) cmd);
     if (rv) {
 	remove_cmd(ipmi, smi, cmd);
+	ipmi_mem_free(cmd->rsp_item);
+	ipmi_mem_free(cmd);
 	goto out_unlock;
     }
 
  out_unlock:
     ipmi_unlock(smi->cmd_lock);
  out_unlock2:
+    if (rv) {
+	/* If we allocated an rspi, free it. */
+	if (!trspi && rspi)
+	    ipmi_mem_free(rspi);
+    }
     return rv;
 }
 
@@ -1110,8 +1108,9 @@ smi_close_connection(ipmi_con_t *ipmi)
 	    cmd->msg.netfn |= 1;
 	    cmd->msg.data = data;
 	    cmd->msg.data_len = 1;
-	    cmd->rsp_handler(NULL, addr, addr_len, &cmd->msg, cmd->rsp_data,
-			     cmd->data2, cmd->data3, cmd->data4);
+	    ipmi_handle_rsp_item_copyall(ipmi, cmd->rsp_item,
+					 addr, addr_len, &cmd->msg,
+					 cmd->rsp_handler);
 	}
 	ipmi_mem_free(cmd);
 	cmd = next_cmd;
@@ -1294,16 +1293,10 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     set_ipmb_in_dev(smi);
 }
 
-static void
-handle_dev_id(ipmi_con_t   *ipmi,
-	      ipmi_addr_t  *addr,
-	      unsigned int addr_len,
-	      ipmi_msg_t   *msg,
-	      void         *rsp_data1,
-	      void         *rsp_data2,
-	      void         *rsp_data3,
-	      void         *rsp_data4)
+static int
+handle_dev_id(ipmi_con_t *ipmi, ipmi_msgi_t *msgi)
 {
+    ipmi_msg_t        *msg = &msgi->msg;
     smi_data_t        *smi = (smi_data_t *) ipmi->con_data;
     int               err;
     unsigned int      manufacturer_id;
@@ -1335,11 +1328,12 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	    goto out_err;
     } else
 	finish_connection(ipmi, smi);
-    return;
+    return IPMI_MSG_ITEM_NOT_USED;
 
  out_err:
     if (smi->con_change_handler)
 	smi->con_change_handler(ipmi, err, 0, 0, smi->con_change_cb_data);
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static void
@@ -1359,7 +1353,7 @@ smi_oem_done(ipmi_con_t *ipmi, void *cb_data)
     si.channel = 0xf;
     si.lun = 0;
     rv = smi_send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			  handle_dev_id, NULL, NULL, NULL, NULL);
+			  handle_dev_id, NULL);
     if (rv) {
 	if (smi->con_change_handler)
 	    smi->con_change_handler(ipmi, rv, 0, 0, smi->con_change_cb_data);

@@ -574,15 +574,11 @@ ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
     return rv;
 }
 
-static void
-sensor_addr_response_handler(ipmi_domain_t *domain,
-			     ipmi_addr_t   *addr,
-			     unsigned int  addr_len,
-			     ipmi_msg_t    *msg,
-			     void          *rsp_data1,
-			     void          *rsp_data2)
+static int
+sensor_addr_response_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
-    ipmi_sensor_op_info_t *info = rsp_data1;
+    ipmi_msg_t            *msg = &rspi->msg;
+    ipmi_sensor_op_info_t *info = rspi->data1;
     int                   rv;
     ipmi_sensor_t         *sensor = info->__sensor;
 
@@ -590,7 +586,7 @@ sensor_addr_response_handler(ipmi_domain_t *domain,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(NULL, ECANCELED, NULL, info->__cb_data);
 	sensor_final_destroy(sensor);
-	return;
+	return IPMI_MSG_ITEM_NOT_USED;
     }
 
     /* Call the next stage with the lock held. */
@@ -606,6 +602,7 @@ sensor_addr_response_handler(ipmi_domain_t *domain,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
     }
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 int

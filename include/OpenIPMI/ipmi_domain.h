@@ -42,12 +42,8 @@
 #include <OpenIPMI/ipmi_addr.h>
 
 /* A response comes back in this format. */
-typedef void (*ipmi_addr_response_handler_t)(ipmi_domain_t *domain,
-					     ipmi_addr_t   *addr,
-					     unsigned int  addr_len,
-					     ipmi_msg_t    *msg,
-					     void          *rsp_data1,
-					     void          *rsp_data2);
+typedef int (*ipmi_addr_response_handler_t)(ipmi_domain_t *domain,
+					    ipmi_msgi_t   *rspi);
 
 /* Like ipmi_send_command, but sends it directly to the address
    specified, not to an MC. */

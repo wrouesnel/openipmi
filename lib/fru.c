@@ -1479,15 +1479,13 @@ static int request_next_data(ipmi_fru_t   *fru,
 			     ipmi_addr_t  *addr,
 			     unsigned int addr_len);
 
-static void
-fru_data_handler(ipmi_domain_t *domain,
-		 ipmi_addr_t   *addr,
-		 unsigned int  addr_len,
-		 ipmi_msg_t    *msg,
-		 void          *rsp_data1,
-		 void          *rsp_data2)
+static int
+fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
-    ipmi_fru_t    *fru = rsp_data1;
+    ipmi_addr_t   *addr = &rspi->addr;
+    unsigned int  addr_len = rspi->addr_len;
+    ipmi_msg_t    *msg = &rspi->msg;
+    ipmi_fru_t    *fru = rspi->data1;
     unsigned char *data = msg->data;
     int           count;
     int           err;
@@ -1569,7 +1567,7 @@ fru_data_handler(ipmi_domain_t *domain,
 
     fru_unlock(fru);
  out:
-    return;
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -1604,15 +1602,13 @@ request_next_data(ipmi_fru_t   *fru,
 				  NULL);
 }
 
-static void
-fru_inventory_area_handler(ipmi_domain_t *domain,
-			   ipmi_addr_t   *addr,
-			   unsigned int  addr_len,
-			   ipmi_msg_t    *msg,
-			   void          *rsp_data1,
-			   void          *rsp_data2)
+static int
+fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
-    ipmi_fru_t    *fru = rsp_data1;
+    ipmi_addr_t   *addr = &rspi->addr;
+    unsigned int  addr_len = rspi->addr_len;
+    ipmi_msg_t    *msg = &rspi->msg;
+    ipmi_fru_t    *fru = rspi->data1;
     unsigned char *data = msg->data;
     int           err;
 
@@ -1675,7 +1671,7 @@ fru_inventory_area_handler(ipmi_domain_t *domain,
 
     fru_unlock(fru);
  out:
-    return;
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int

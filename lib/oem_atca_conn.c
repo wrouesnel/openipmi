@@ -45,18 +45,12 @@ typedef struct atca_conn_info_s
     unsigned int hacks;
 } atca_conn_info_t;
 
-static void
-atca_ipmb_handler(ipmi_con_t   *ipmi,
-		  ipmi_addr_t  *addr,
-		  unsigned int addr_len,
-		  ipmi_msg_t   *msg,
-		  void         *rsp_data1,
-		  void         *rsp_data2,
-		  void         *rsp_data3,
-		  void         *rsp_data4)
+static int
+atca_ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
-    ipmi_ll_ipmb_addr_cb handler = rsp_data1;
-    void                 *cb_data = rsp_data2;
+    ipmi_msg_t           *msg = &rspi->msg;
+    ipmi_ll_ipmb_addr_cb handler = rspi->data1;
+    void                 *cb_data = rspi->data2;
     unsigned char        ipmb = 0;
     int                  err = 0;
     atca_conn_info_t     *info;
@@ -64,7 +58,7 @@ atca_ipmb_handler(ipmi_con_t   *ipmi,
     if (!ipmi) {
 	if (handler)
 	    handler(ipmi, ECANCELED, ipmb, 1, 0, cb_data);
-	return;
+	return IPMI_MSG_ITEM_NOT_USED;
     }
 
     info = ipmi->oem_data;
@@ -85,6 +79,7 @@ atca_ipmb_handler(ipmi_con_t   *ipmi,
 
     if (handler)
 	handler(ipmi, err, ipmb, 1, info->hacks, cb_data);
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -95,6 +90,12 @@ lan_atca_ipmb_fetch(ipmi_con_t           *conn,
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
     unsigned char 		 data[2];
+    int                          rv;
+    ipmi_msgi_t                  *rspi;
+
+    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    if (!rspi)
+	return ENOMEM;
 
     /* Send the ATCA Get Address Info command to get the IPMB address. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -105,10 +106,14 @@ lan_atca_ipmb_fetch(ipmi_con_t           *conn,
     data[0] = 0;	/* PICMG Identifier */
     msg.data = data;
     msg.data_len = 1;
-
-    return conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			      atca_ipmb_handler,
-			      handler, cb_data, NULL, NULL);
+    
+    rspi->data1 = handler;
+    rspi->data2 = cb_data;
+    rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			    atca_ipmb_handler, rspi);
+    if (rv)
+	ipmi_mem_free(rspi);
+    return rv;
 }
 
 static void
@@ -120,18 +125,12 @@ cleanup_atca_oem_data(ipmi_con_t *ipmi)
     }
 }
 
-static void
-atca_oem_finish_check(ipmi_con_t   *ipmi,
-		      ipmi_addr_t  *addr,
-		      unsigned int addr_len,
-		      ipmi_msg_t   *msg,
-		      void         *rsp_data1,
-		      void         *rsp_data2,
-		      void         *rsp_data3,
-		      void         *rsp_data4)
+static int
+atca_oem_finish_check(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
-    ipmi_conn_oem_check_done done = rsp_data1;
-    void                     *cb_data = rsp_data2;
+    ipmi_msg_t               *msg = &rspi->msg;
+    ipmi_conn_oem_check_done done = rspi->data1;
+    void                     *cb_data = rspi->data2;
 
     if (ipmi && (msg->data_len >= 8) && (msg->data[0] == 0)) {
 	atca_conn_info_t *info;
@@ -157,6 +156,7 @@ atca_oem_finish_check(ipmi_con_t   *ipmi,
     }
  out:
     done(ipmi, cb_data);
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static int
@@ -168,6 +168,12 @@ atca_oem_check(ipmi_con_t               *conn,
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
     unsigned char 		 data[2];
+    int                          rv;
+    ipmi_msgi_t                  *rspi;
+
+    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    if (!rspi)
+	return ENOMEM;
 
     /* Send the ATCA Get Address Info command to get the IPMB address. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -179,9 +185,13 @@ atca_oem_check(ipmi_con_t               *conn,
     msg.data = data;
     msg.data_len = 1;
 
-    return conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			      atca_oem_finish_check,
-			      done, done_cb_data, NULL, NULL);
+    rspi->data1 = done;
+    rspi->data2 = done_cb_data;
+    rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			    atca_oem_finish_check, rspi);
+    if (rv)
+	ipmi_mem_free(rspi);
+    return rv;
 }
 
 static int

@@ -1675,15 +1675,13 @@ ipmi_mc_id_is_invalid(ipmi_mcid_t *id)
  *
  **********************************************************************/
 
-static void
-addr_rsp_handler(ipmi_domain_t *domain,
-		 ipmi_addr_t   *addr,
-		 unsigned int  addr_len,
-		 ipmi_msg_t    *msg,
-		 void          *rsp_data1,
-		 void          *rsp_data2)
+static int
+addr_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 {
-    ipmi_mc_response_handler_t rsp_handler = rsp_data2;
+    ipmi_addr_t                *addr = &rspi->addr;
+    unsigned int               addr_len = rspi->addr_len;
+    ipmi_msg_t                 *msg = &rspi->msg;
+    ipmi_mc_response_handler_t rsp_handler = rspi->data2;
     ipmi_mc_t                  *mc;
 
     if (rsp_handler) {
@@ -1691,8 +1689,9 @@ addr_rsp_handler(ipmi_domain_t *domain,
 	    mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
 	else
 	    mc = NULL;
-	rsp_handler(mc, msg, rsp_data1);
+	rsp_handler(mc, msg, rspi->data1);
     }
+    return IPMI_MSG_ITEM_NOT_USED;
 }
 
 int
