@@ -734,7 +734,9 @@ ipmi_posix_thread_get_os_handler(void)
 {
     os_handler_t     *rv;
     pt_os_hnd_data_t *info;
+#if HAVE_GDBM
     int              err;
+#endif
 
     rv = malloc(sizeof(*rv));
     if (!rv)

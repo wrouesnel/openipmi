@@ -856,7 +856,7 @@ static char * ipmi_app_cmds[] =
     "SetUsrPasswd:%02x",	// +38: 0x47
     "ActPayload:%02x",		// +39: 0x48
     "DeactPayload:%02x",	// +40: 0x49
-    "GetPayloadDeactStat:%02x",	// +41: 0x4a
+    "GetPayloadActStat:%02x",	// +41: 0x4a
     "GetPayloadInstInfo:%02x",	// +42: 0x4b
     "SetUserPayloadAcc:%02x",	// +43: 0x4c
     "GetUserPayloadAcc:%02x",	// +44: 0x4d

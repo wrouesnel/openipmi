@@ -1,6 +1,16 @@
+2005-03-21 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: Added IPMI 2.0 as a supported version.
+
+2005-03-21 Darius Davis <darius.davis@cyclades.com>
+
+	* lib/strings.c: Fix misnamed command string for payload activation.
+
 2005-03-17 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Fixed an off-by-one problem when writing FRU data.
+
+	* unix/posix_thread_os_hnd.c: ifdef some gdbm stuff that needed it.
 
 	* include/OpenIPMI/internal/ipmi_utils.h, lib/fru.c: Add a
 	field to the notrack FRU to allow only specific areas to be

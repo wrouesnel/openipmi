@@ -4032,9 +4032,11 @@ got_dev_id(ipmi_mc_t  *mc,
     domain->minor_version = ipmi_mc_minor_version(mc);
     domain->SDR_repository_support = ipmi_mc_sdr_repository_support(mc);
 
-    if ((domain->major_version != 1)
+    if (((domain->major_version < 1) || (domain->major_version > 2))
 	|| ((domain->major_version == 1)
 	    && (domain->minor_version != 5)
+	    && (domain->minor_version != 0))
+	|| ((domain->major_version == 2)
 	    && (domain->minor_version != 0)))
     {
 	ipmi_log(IPMI_LOG_WARNING,
