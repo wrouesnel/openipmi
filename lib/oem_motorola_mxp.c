@@ -2857,10 +2857,15 @@ ps_ps_states_get_cb(ipmi_sensor_t   *sensor,
 		    unsigned char   *data,
 		    ipmi_states_t   *states)
 {
-    /* In the states, offset 13 is feed A failed and offset 14 is feed
-       B failed. */
-    ipmi_set_state(states, 13, data[6] & 0x1);
-    ipmi_set_state(states, 14, (data[6] >> 1) & 0x1);
+    /* Only set the feed failure states on DC power supplies. */
+    if ((data[7] == 0x1) /* 400W DC */
+	|| (data[7] == 0x3)) /* 600W DC */
+    {
+	/* In the states, offset 13 is feed A failed and offset 14 is
+	   feed B failed. */
+	ipmi_set_state(states, 13, data[6] & 0x1);
+	ipmi_set_state(states, 14, (data[6] >> 1) & 0x1);
+    }
 
     /* Presence. */
     ipmi_set_state(states, 0, data[5] & 0x1);

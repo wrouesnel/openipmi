@@ -1,3 +1,13 @@
+2004-02-18 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Reworked SNMP library configuration to check
+	for the include files first, then the libraries.
+
+	* README: Improved quite a bit.
+
+	* lib/oem_motorola_mxp.c: Modified the power supply sensor to only
+	set the power feed failure bits on DC power supplies.
+
 2004-02-17 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_conn.h: Added a "broadcast broken" flag
@@ -10,7 +20,7 @@
 	* lib/oem_motorola_mxp.c: Add setting broadcast broken on the
 	interface to an MXP, removed the domain setting of the same.
 
-	* configure.in: Move to ersion 1.2.11.
+	* configure.in: Move to version 1.2.11.
 
 2004-02-12 Corey Minyard <cminyard@mvista.com> 
 

@@ -1856,15 +1856,16 @@ automatically switch over and use the standard LAN protocol.
 
 @subsection SEL support
 
-The SEL protocol also has an unusual property.  It has a sort of
-``lock'', but it does not follow the standard IPMI protocol.  The lock
-also doesn't really provide any locking and will cause problems if you
-have multiple management controllers accessing the SEL.  If you never
-use this lock, it will never be activated, so it doesn't matter for
-OpenIPMI.  However, if you use the lock, it is activated and OpenIPMI
-will not be able to use the SEL any more until the AMC is rebooted.
-So @emph{never} run any tools that might use this lock on your chassis
-if you want OpenIPMI to keep working.
+In older version of the MXP, the SEL protocol also has an unusual
+property.  It has a sort of ``lock'', but it does not follow the
+standard IPMI protocol.  The lock also doesn't really provide any
+locking and will cause problems if you have multiple management
+controllers accessing the SEL.  If you never use this lock, it will
+never be activated, so it doesn't matter for OpenIPMI.  However, if
+you use the lock, it is activated and OpenIPMI will not be able to use
+the SEL any more until the AMC is rebooted.  So @emph{never} run any
+tools that might use this lock on your chassis if you want OpenIPMI to
+keep working.
 
 On older MXPs, the SELs on the AMCs have a limited size (31 entries),
 are stored in a device with limited write cycles, and the firmware
@@ -1875,6 +1876,9 @@ very many entries, so you don't want to let it fill up very full.
 It's probably best to let the SEL fill up around half-way before
 deleting the events.  Newer versions of the MXP do not have these
 problems.
+
+Current versions of the MXP have a very large SEL and no special
+locking protocol.
 
 @subsection Entities
 
@@ -1902,8 +1906,9 @@ they are not quite correct.  They are not per-AMC, even though the
 sensors are per-AMC.
 
 @item CONNECTIVITY_SWITCH (42)
-Things related to the IP switch.  Currently, these are the same as
-for the board.  The IP switches have instances 1 and 2.
+Things related to the IP switch.  Currently, these are the same as for
+the board.  The IP switches use device-relative entities on newer MXP;
+older MXPs use instances 1 and 2.
 
 @item POWER_SUPPLY (10)
 Things related to the power supply.  These have instances 1, 2, and 3.
@@ -1912,16 +1917,23 @@ Things related to the power supply.  These have instances 1, 2, and 3.
 The fans inside the power supply.  These have instances 1, 2, and 3.
 
 @item PROCESSING_BLADE (41)
-Things related to payload boards.  These have instances 1-18.
+Things related to payload boards.  These use device-relative entities
+on newer MXPs, older MXPs have instances 1-18.
 
 @end table
 
-The specific instance of each entity is identified by the entity
-instance.  So the first board (the one in slot 1) is instance 1, the
-second board is instance 2, etc.  Power supply 1 is instance 1, Power
-supply 2 is instance 2, etc.  The instance numbers are set up to
-correspond to the numbers called out in the documentation, and are not
-zero based.
+Newer MXPs use device-relative entity instances for all their payload
+and switch boards.  They all use a fixed 60h value for either entity
+instance.  OpenIPMI knows how to pick this up and use the management
+controller address as part of the entity.  See the section on
+device-relative entities for more details.
+
+On older MXPs, he specific instance of each entity is identified by
+the entity instance.  So the first board (the one in slot 1) is
+instance 1, the second board is instance 2, etc.  Power supply 1 is
+instance 1, Power supply 2 is instance 2, etc.  The instance numbers
+are set up to correspond to the numbers called out in the
+documentation, and are not zero based.
 
 A section describes each entity.  All the other entities except the
 fans are contained in the chassis entity, and the fans are contained
@@ -1977,6 +1989,13 @@ containing the 1-byte type of chassis, named ``Chassis Type'', and a
 Shelf Geographic Address control names ``Shelf GA''.  These are
 identifier controls.
 
+Each AMC has a ``temp cool led'' control, but only the active AMC can
+have the value set and the AMCs keep their LEDs in sync, so they are
+actually part of the chassis entity.  This control gives access to the
+temperature and cooling LEDs on the AMC.  These cannot be set
+independently, so they are implemented as one control with two LEDs.
+The first LED is the temperature LED, the second is the cooling LED.
+
 Finally, the chassis has the system LED pair.  Unlike other LEDs these
 can only be set together, because they are set in the same message.
 So all LEDs appear in the same control as different LED elements.
@@ -2031,12 +2050,6 @@ Used to light the in-service LED for the board.
 
 @item blue led
 Used to light the blue LED for the board.
-
-@item temp cool led
-This gives access to the temperature and cooling LEDs on the AMC.
-These cannot be set independently, so they are implemented as one
-control with two LEDs.  The first LED is the temperature LED, the
-second is the cooling LED.
 
 @item Last Reset Rsn
 The reason for the last reset of the AMC.  Possible values are:
@@ -2209,10 +2222,14 @@ of a second.
 @end table
 
 @subsubsection Sensors for the cpip5365 card
+
 The 5365 card has some extra sensors that are on the I2C bus but not
 directly available from the PM.  However, you can access them through
-IPMI as raw I2C devices.  When the OEM code detects a 5365 card, it
-will set up these sensors.  These will not generate events.  They are:
+IPMI as raw I2C devices.  When the OEM code detects an older 5365
+card, it will set up these sensors.  These will not generate events.
+On newer 5365 cards with SDRs and real IPMI sensors, the real sensors
+are used and the I2C sensors are not implemented.  The I2C sensors
+are:
 
 @table @samp
 @item Proc Temp
@@ -2250,7 +2267,7 @@ values).
 
 @subsubsection Sensors for the ZYNX switch
 The ZYNX switch has some extra sensors that respond to normal IPMI
-reading commands, but don't have a device SDR.  The MXP OEM code adds
+reading commands, but don't have a device SDRs.  The MXP OEM code adds
 the sensor entries.  They do not seem to generate events.  They are:
 
 @table @samp
@@ -2272,31 +2289,9 @@ Voltage sensor for 5 volts.
 
 @subsubsection Supported Boards
 
-OpenIPMI currently supports the following MXP-specific boards:
-
-@table @samp
-@item CPCI5365
-Full support
-
-@item CPCI5365
-Basic support
-
-@item CPCI805
-Basic support
-
-@item PPRB
-Basic support
-
-@item PVRB
-Basic support
-
-@item 10/100 Zynx Switch (4500)
-Full support
-
-@item 10/100/1000 Zynx Switch (4900)
-Full support
-
-@end table
+OpenIPMI should support all MXP boards, current and future.  It will
+be able to detect these boards and manage the MXP-specific controls
+and sensors.
 
 @subsection Known Problems
 
@@ -2312,7 +2307,7 @@ new events have been added to the SEL before a query to avoid any more
 messages if the SEL hasn't been changed.  So you will get SEL errors
 periodically.
 
-@item SEL (All MXP versions)
+@item SEL (Old MXP versions only)
 Be careful not to send the MXP OEM SEL lock command to the AMC, or
 OpenIPMI will no longer be able to use the SEL on that AMC (a board
 removal and insertion may be required).  Some Motorola tools may do

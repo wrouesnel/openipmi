@@ -1,12 +1,160 @@
 
 This is the OpenIPMI library, a library that makes simplifies building
-complex IPMI systems.
+complex IPMI management software.
 
-Note that most of the OpenIPMI library was designed for building
-complicated systems that continuously monitor IPMI hardware.  It's not
-for little things that simply want to get some information, do
-something, and leave (unless that information is elaborate
-information).
+What is IPMI?
+=============
+
+IPMI is a specification detailing how to detect and manage sensors in
+a system.  It also specifies some chassis-level thing like power control,
+reset, FRU (Field Replaceable Unit) information, and watchdogs.
+
+However, IPMI has become much more than that.  Vendors have added
+extensions to IPMI for doing many thing, including controlling LEDs,
+relays, character displays, and managing hot-swapping components.  In
+general, it has become the "standard" way to handle hardware
+maintenance in a system.
+
+IPMI specifies a set of interconnected intelligent Management
+Controllers (MCs).  Each MC is a small CPU that manages a set of
+sensors and/or output devices.  The "main" MC is called the Baseboard
+Management Controller (BMC); it provides the external interfaces into
+the system.
+
+Each MC may have a set of Sensor Data Records (SDRs).  An SDR details
+information about a sensor.  Some SDR records also have information
+about entities, such as their name, the FRU information, and what
+other entities they are contained in.
+
+Entities are the physical objects in the system (boards, CPUs, fans,
+power supplies, etc.)  A sensor is attached to the entity it monitors;
+the SDR record tell what entity a sensor monitors.
+
+IPMI specifies several external interfaces to the BMC.  One set is
+local interfaces directly to a CPU, a local CPU connections is called
+a system interface.  The other is external interfaces through a LAN,
+serial port, or modem.  The external interfaces allow a system to be
+managed even when it is turned off, since the BMC is always powered
+when the system is plugged in.
+
+IPMI has a strong bent toward complete "chassis" systems, basically a
+box with one main board with CPUs; a BMC, and perhaps a few satellite
+MCs in things like power supplies.  It is being rapidly adopted in
+"shelf" systems, which has a set of slots where you can plug in
+complete single-board computers.  In shelf systems, the BMC becomes a
+central shelf manager that manages all the boards in the shelf.
+Although IPMI was not designed for this, it does a pretty good job of
+extending into this architecture.
+
+
+What is OpenIPMI?
+=================
+
+Notice that in the description above, OpenIPMI was designed to aid
+building "complex IPMI management software".  That's a carefully
+chosen description.  
+
+Most of the OpenIPMI library was designed for building complicated
+systems that continuously monitor IPMI hardware.  It's not for little
+things that simply want to get some information, do something, and
+leave (unless that information is elaborate information).
+
+OpenIPMI will connect with an IPMI controller, detect any management
+controllers on the bus, get their SDRs, manage all the entities in the
+system, manage the event log, and a host of other things.  As you
+might imagine, that is a fairly lengthy process on a complex system.
+
+OpenIPMI is also dynamic and event-driven.  It will come up and start
+discovering things in the managed system.  As it discovers things, it
+will report them to the software using it (assuming the software has
+asked for this reporting).  This process of discovery is never done
+from OpenIPMI's point of view; things can come and go in the system
+and it will report these changes as it detects them.  This can be a
+little confusing to people who want a static view of their system.
+OpenIPMI has no static view (though it does have a current view).
+When you make a connection, it will report when the connection is up;
+but the system will be "empty".  You have to wait for OpenIPMI to
+report the things it finds.
+
+It is possible to use OpenIPMI's low-level connection code if you want
+to do a direct connection to a BMC (through the LAN or system
+interface).  You can see the code in sample/ipmicmd.c for an example
+of how to do this.  Most of the other pieces of OpenIPMI are not
+useful by themselves, though, because they are intrinsically tied
+together.
+
+
+Building and Configuring OpenIPMI
+=================================
+
+OpenIPMI is built with standard autoconf/automake.
+
+You must configure OpenIPMI before you compile it.  To do this, change
+to the main OpenIPMI directory and execute "./configure".  The
+configure script will detect what is available in the system and
+configure itself accordingly.
+
+By default, the configure script will cause OpenIPMI to be installed
+in the "/usr/local" prefix.  This means that the include files go into
+/usr/local/include/OpenIPMI, the libraries go into /usr/local/lib, the
+executables go into /usr/local/bin, etc. If you want to change the
+prefix, use the "--prefix=<prefix>" option to configure.  For
+instance, to install in /opt/OpenIPMI, you would do:
+	  ./configure --prefix=/opt/OpenIPMI
+
+Note that OpenIPMI will attempt to detect and use either the NET SNMP
+or UCD SNMP libraries.  Note that if your NET SNMP or UCD SNMP library
+is in a non-standard location, you will need to use the
+'--with-ucdsnmp=<path>' option with configure to specify the actual
+path to your library.  You also *must* have the development system for
+your SNMP library installed.  If you don't have the development system
+installed, just the runtime libraries, OpenIPMI will not detect or use
+the SNMP libraries.  If you do not want to use the SNMP libraries even
+if they are installed, you can specify '--with-ucdsnmp=no' as a
+configure option.
+
+
+Using ipmi_ui
+=============
+
+ipmi_ui is a cheesy little tool that runs on top of the OpenIPMI
+library.  It provides a command line and text-window based view into
+an IPMI system.  A man page is included for it, if you want to know
+more.
+
+Note that ipmi_ui was written primarily for testing.  It does things
+that users generally shouldn't do.  You can use it for examples, but
+it touches things that are considered OpenIPMI internal, so be careful
+what you use.
+
+
+OpenIPMI and SNMP
+=================
+
+The OpenIPMI ipmi_ui command has an optional trap handler.  It will
+use incoming traps as an indication that something is waiting in the
+SEL for it to fetch and immediately start a fetch.  You have to have
+the UCD snmp library (or something compatible) installed for this to
+work, and you have to start ipmi_ui with the '-snmp' option.  You must
+do this as root, as the SNMP Trap port is 162.
+
+You may ask why the trap is not directly used, why does it just
+trigger an SEL fetch?  Well, that's because the IPMI trap does not
+have enough information to determine the correct sensor (it's missing
+the channel and LUN) and it does not have enough information to
+correlate the SEL entries with the trap (It doesn't have the record ID
+or necessarily the proper timestamp).
+
+Also, OpenIPMI does not directly handle the traps.  Instead, it has an
+interface to report a trap when it has been received.  OpenIPMI does
+not want to assume the SNMP library being used; instead it lets the
+user pick that library.  If you want an example of how to use the UCD
+SNMP or NET SNMP libraries and hook them into OpenIPMI, the
+ui/basic_ui.c file has an example of this.
+
+
+What Else Comes with OpenIPMI?
+==============================
 
 It does include the utility "ipmicmd" which lets you do direct IPMI
 commands to a connection.  ipmicmd can connect using the OpenIPMI
@@ -18,10 +166,40 @@ Note that to work the best, the LAN converter needs at least the v22
 version of the OpenIPMI driver to support setting retries and timeouts
 for messages.
 
+Other sample code for using OpenIPMI is in the "samples" directory.
+
+
+IPMI Documentation
+==================
+
+OpenIPMI includes a texinfo document in the "doc" directory.  It talks
+a little about IPMI, must mostly about OpenIPMI.  It is required
+reading for using OpenIPMI.  Read it carefully.
+
+Unfortunately, the IPMI spec is also currently required reading for
+using OpenIPMI.  Fortunately, you do not need to read the whole spec.
+If you read the OpenIPMI document first, you can probably get by with
+reading the following sections in the 1.5 spec:
+ * 1.6 (overview)
+ * 5.2 (for the error completion codes)
+ * 33-36 (talking about sensors and entities)
+ * 37.1 (talking about the main sensor SDR, mostly for learning about
+   sensor capabilities).
+OpenIPMI should hide the rest from you.
+
+The OpenIPMI document is currently just an overview.  It should point
+you in all the right directions, but it does not contain the actual
+details of most OpenIPMI functions.  Those are currently documented in
+the include files, so you will have to look through the include files
+for how to use the functions.
+
+
+OpenIPMI Source Structure
+=========================
+
 Note that parts of OpenIPMI could be used inside other systems.
 However, the LGPL license may be a restriction.  If you are interested
 in re-licensing parts of OpenIPMI, contact MontaVista software.
-
 
 The source tree here consists of the following directories:
 
@@ -46,19 +224,3 @@ The source tree here consists of the following directories:
   man - The man pages.
 
 
-The OpenIPMI ipmi_ui command has an optional trap handler.  It will
-use incoming traps as an indication that something is waiting in the
-SEL for it to fetch and immediately start a fetch.  You have to have
-the UCD snmp library (or something compatible) installed for this to
-work, and you have to start ipmi_ui with the '-snmp' option.  You must
-do this as root, as the SNMP Trap port is 162.
-
-Note that if you UCD SNMP library is in a non-standard location, you
-will need to use the '-with-ucdsnmp=path' option to configure.
-
-You may ask why the trap is not directly used, why does it just
-trigger an SEL fetch?  Well, that's because the IPMI trap does not
-have enough information to determine the correct sensor (it's missing
-the channel and LUN) and it does not have enough information to
-correlate the SEL entries with the trap (It doesn't have the record ID
-or necessarily the proper timestamp).
