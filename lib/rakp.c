@@ -177,21 +177,11 @@ send_rakp3(ipmi_con_t *ipmi, rakp_info_t *info,
     data[0] = info->msg_tag;
     data[1] = err;
     ipmi_set_uint32(data+4, ipmi_rmcpp_auth_get_mgsys_session_id(info->ainfo));
-    p = ipmi_rmcpp_auth_get_my_rand(info->ainfo, &plen);
-    if (plen < 16)
-	return EINVAL;
-    memcpy(data+8, p, 16);
-    data[24] = ipmi_rmcpp_auth_get_role(info->ainfo);
-    data[27] = ipmi_rmcpp_auth_get_username_len(info->ainfo);
-    if (data[27] > 16)
-	return EINVAL;
-    p = ipmi_rmcpp_auth_get_username(info->ainfo, &plen);
-    memcpy(data+28, p, data[27]);
 
     msg.netfn = IPMI_RMCPP_DUMMY_NETFN;
     msg.cmd = 0;
     msg.data = data;
-    msg.data_len = 28 + data[27];
+    msg.data_len = 8;
     addr.addr_type = IPMI_RMCPP_ADDR_START + IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3;
     rspi->data1 = info;
 

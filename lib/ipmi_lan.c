@@ -4157,7 +4157,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     }
     auth = msg->data[16] & 0x3f;
 
-    if ((msg->data[20] != 0) || (msg->data[23] != 8)) {
+    if ((msg->data[20] != 1) || (msg->data[23] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "Got NULL or invalid integrity payload");
@@ -4166,7 +4166,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     }
     integ = msg->data[24] & 0x3f;
 
-    if ((msg->data[28] != 0) || (msg->data[31] != 8)) {
+    if ((msg->data[28] != 2) || (msg->data[31] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "Got NULL or invalid confidentiality payload");
