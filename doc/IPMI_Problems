@@ -1,0 +1,30 @@
+
+1) Detection of entity presence is far too complicated.  Specifically,
+   the handling of the "FRU device" detection is vague.  Does this
+   mean a management controller is present or not present?  Does it
+   mean that the mangement software should send a FRU inventory
+   message to the FRU device and it gets an error?  If the latter is
+   true, then there should be a standard 8xh return code from the FRU
+   inventory saying that it is not present.
+
+2) The description of the LAN interface is far too vague.  Most
+   systems I have seen send two messages back for one sent.  It
+   doesn't say this anywhere.  A simple diagram with exactly how an
+   IPMB-bridged (and system-interface bridged for that matter) works
+   would make a world of difference.  IMHO, the most efficient and
+   effective method would be one send and one response with the full
+   response carried in the response.  Getting two messages back from
+   the BMC is inefficient and confusing for every piece involved.
+
+3) In a type 1 SDR, byte 21 (Sensor Units 1), the data format of 11b
+   means that it does not return a numeric value.  However, this means
+   that you cannot interpret all the data field that come later, like
+   the minimums and maximums and thresholds.  Does setting the data
+   format to 11b mean that these field are not applicable?  How does
+   this work?
+
+4) There is no reliable way to detect if the IPMI controller has
+   issued an NMI due to a watchdog pretimeout.  You can't send a
+   message to the IPMI controller in an NMI handler; you need a
+   register that you can directly read to tell you this.  This makes
+   using the NMI pretimeout very risky.
