@@ -1,4 +1,9 @@
 
+2003-03-25 Corey Minyard <cminyard@mvista.com>
+
+	* ui.c: The UI will no longer attempt to read unreadable
+	controls.
+
 2003-03-19 Corey Minyard <cminyard@mvista.com>
 
 	* sdr.c: Modified the reservation support handling for device

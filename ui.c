@@ -1867,8 +1867,10 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
     display_pad_out("  value = ");
     getyx(display_pad, value_pos.y, value_pos.x);
 
-    if (control_read_err) {
-	display_pad_out("\n");
+    if (! ipmi_control_is_readable(control)) {
+	display_pad_out("not readable");
+    } else if (control_read_err) {
+	/* Nothing to do. */
     } else {
 	switch (control_type) {
 	    case IPMI_CONTROL_RELAY:
@@ -2040,6 +2042,13 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 	curr_display_type = DISPLAY_CONTROL;
 
 	curr_control_id = ipmi_control_convert_to_id(control);
+
+	if (! ipmi_control_is_readable(control)) {
+	    /* If the control can't be read, then just display it now. */
+	    display_control(entity, control);
+	    return;
+	}
+
 	control_displayed = 0;
 	control_ops_to_read_count = 1;
 
