@@ -1213,7 +1213,11 @@ ipmi_parse_args2(int         *curr_arg,
 	    } else if (strcmp(args[*curr_arg], "-H") == 0) {
 		(*curr_arg)++; CHECK_ARG;
 		if (strcmp(args[*curr_arg], "intelplus") == 0)
-		    p->hacks |= IPMI_CONN_HACK_BROKEN_INTEL_BMC;
+		    p->hacks |= IPMI_CONN_HACK_RAKP3_WRONG_ROLEM;
+		else if (strcmp(args[*curr_arg], "rakp3_wrong_rolem") == 0)
+		    p->hacks |= IPMI_CONN_HACK_RAKP3_WRONG_ROLEM;
+		else if (strcmp(args[*curr_arg], "rmcpp_integ_sik") == 0)
+		    p->hacks |= IPMI_CONN_HACK_RMCPP_INTEG_SIK;
 		/* Ignore unknown hacks. */
 	    } else if (strcmp(args[*curr_arg], "-s") == 0) {
 		p->num_addr = 2;

@@ -63,11 +63,10 @@ hmac_sha1_init(ipmi_con_t       *ipmi,
     if (ipmi_rmcpp_auth_get_sik_len(ainfo) < 20)
 	return EINVAL;
 
-    if (ipmi->hacks & IPMI_CONN_HACK_BROKEN_INTEL_BMC)
-	/* The Intel BMC uses K1 instead of SIK for the key */
-	k = ipmi_rmcpp_auth_get_k1(ainfo, &klen);
-    else
+    if (ipmi->hacks & IPMI_CONN_HACK_RMCPP_INTEG_SIK)
 	k = ipmi_rmcpp_auth_get_sik(ainfo, &klen);
+    else
+	k = ipmi_rmcpp_auth_get_k1(ainfo, &klen);
     if (klen < 20)
 	return EINVAL;
 

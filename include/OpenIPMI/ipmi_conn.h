@@ -102,12 +102,19 @@ typedef void (*ipmi_ll_con_closed_cb)(ipmi_con_t *ipmi, void *cb_data);
 /* Set this bit in the hacks if, even though the connection is to a
    device not at 0x20, the first part of a LAN command should always
    use 0x20. */
-#define IPMI_CONN_HACK_20_AS_MAIN_ADDR	0x00000001
+#define IPMI_CONN_HACK_20_AS_MAIN_ADDR		0x00000001
 
-/* Set this bit in the hacks for an RMCP+ connection to a broken
-   Intel BMC.  Hopefully Intel will fix the problems with their
-   BMC, but this works around the problem for now. */
-#define IPMI_CONN_HACK_BROKEN_INTEL_BMC	0x00000002
+/* Some systems (incorrectly, according to the spec) use only the
+   bottom 4 bits or ROLE(m) for authentication in the RAKP3 message.
+   The spec says to use all 8 bits, but enabling this hack makes
+   OpenIPMI only use the bottom 4 bits. */
+#define IPMI_CONN_HACK_RAKP3_WRONG_ROLEM	0x00000002
+
+/* The spec is vague (perhaps wrong), but the default for RMCP+ seems
+   to be to use K(1) as the integrity key.  That is thus the default
+   of OpenIPMI, but this hack lets you use SIK as it says in one part
+   of the spec. */
+#define IPMI_CONN_HACK_RMCPP_INTEG_SIK		0x00000004
 
 /* The data structure representing a connection.  The low-level handler
    fills this out then calls ipmi_init_con() with the connection. */

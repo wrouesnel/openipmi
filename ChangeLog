@@ -4,6 +4,14 @@
 	same address.  These cannot share lan_fd entries because they
 	cannot be uniquely identified.
 
+	* include/OpenIPMI/ipmi_conn.h: Rework the RMCP+ hacks to make
+	them more generic.
+	* cmdlang/cmd_domain.c: ditto
+	* lib/hmac.c: ditto
+	* lib/rakp.c: ditto
+	* lib/ipmi.c: ditto
+	* man/ipmi_cmdlang.7: ditto
+
 	* all: Release version 2.0.0.
 	
 2005-03-29 Corey Minyard <cminyard@mvista.com> 
