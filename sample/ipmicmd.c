@@ -56,7 +56,8 @@
 
 #include <OpenIPMI/ipmi_int.h>
 
-void init_oem_force_conn(void);
+void ipmi_oem_force_conn_init(void);
+int ipmi_oem_motorola_mxp_init(void);
 
 extern os_handler_t ipmi_ui_cb_handlers;
 
@@ -748,7 +749,8 @@ main(int argc, const char *argv[])
 	fprintf(stderr, "Error initializing connections: 0x%x\n", rv);
 	exit(1);
     }
-    init_oem_force_conn();
+    ipmi_oem_force_conn_init();
+    ipmi_oem_motorola_mxp_init();
 
 
     curr_arg = 0;

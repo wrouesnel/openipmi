@@ -909,7 +909,8 @@ ipmi_check_lock(ipmi_lock_t *lock, char *str)
 }
 #endif
 
-void init_oem_force_conn(void);
+void ipmi_oem_force_conn_init(void);
+int ipmi_oem_motorola_mxp_init(void);
 
 int
 ipmi_init(os_handler_t *handler)
@@ -940,7 +941,8 @@ ipmi_init(os_handler_t *handler)
     _ipmi_mc_init();
 
     /* Call the OEM handlers. */
-    init_oem_force_conn();
+    ipmi_oem_force_conn_init();
+    ipmi_oem_motorola_mxp_init();
 
     return 0;
 

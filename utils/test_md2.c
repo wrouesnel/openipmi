@@ -275,12 +275,18 @@ main(int argc, char *argv[])
     int             i;
     MD2_CTX         ctx2;
     unsigned char   digest[16];
+    char            *filename;
 
     if (memcmp(PI_SUBST, s, 256) != 0) {
 	printf("PI tables don't match\n");
     }
 
-    fd = open(argv[1], O_RDONLY);
+    if (argc > 1)
+	filename = argv[1];
+    else
+	filename = "Makefile";
+
+    fd = open(filename, O_RDONLY);
     if (fd == -1) {
 	perror("open");
 	exit(1);
@@ -311,4 +317,9 @@ main(int argc, char *argv[])
 	printf("%2.2x", digest[i]);
     }
     printf("\n");
+    if (memcmp(csum, digest, 16) != 0) {
+	printf("***Checksums do not compare!!!\n");
+	return 1;
+    }
+    return 0;
 }

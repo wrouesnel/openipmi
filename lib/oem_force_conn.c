@@ -101,8 +101,6 @@ activate_handler(ipmi_con_t   *ipmi,
     void                         *cb_data = rsp_data2;
     unsigned char                ipmb = 0;
     int                          err = 0;
-    ipmi_system_interface_addr_t si;
-    ipmi_msg_t                   msg;
     int                          rv;
     
     if (rmsg->data[0] != 0) {
@@ -111,20 +109,11 @@ activate_handler(ipmi_con_t   *ipmi,
 	    handler(ipmi, err, ipmb, 0, cb_data);
     }
     else {
-	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si.channel = 0xf;
-	si.lun = 0;
-	msg.netfn = 0x30;
-	msg.cmd = 4;
-	msg.data = NULL;
-	msg.data_len = 0;
-
 	/* Now fetch the current state. */
-	rv = ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
-				ipmb_handler, handler, cb_data, NULL, NULL);
+	rv = force_ipmb_fetch(ipmi, handler, cb_data);
 	if (rv) {
 	    if (handler)
-		handler(ipmi, err, ipmb, 0, cb_data);
+		handler(ipmi, rv, ipmb, 0, cb_data);
 	}
     }
 }
@@ -225,7 +214,7 @@ force_oem_conn_handler(ipmi_con_t *conn, void *cb_data)
 }
 
 void
-init_oem_force_conn(void)
+ipmi_oem_force_conn_init(void)
 {
     int rv;
 

@@ -1,5 +1,29 @@
 
+2003-07-23 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_oem_force_conn.c, lib/oem_force_conn.c: Renamed this
+	file to make it more consistent.
+	* lib/Makefile.am: ditto
+
+	* lib/oem_motorola_mxp.c, lib.oem_motorola_mxp_intf.c:  Added
+	support for the Motorola MXP chassis.
+	* include/OpenIPMI/mxp.h: ditto
+	* lib/Makefile.am: ditto
+	* lib/ipmi.c: ditto
+
 2003-07-22 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Moved to version 1.0.1.
+
+	* utils/test_md5.c, utils/test_md2.c: Make the tests run
+	standalone.
+	
+	* lanserv/Makefile.am: Make dependencies for libraries be in
+	the build directory, not the source directory.  This way it will
+	build in a separate object directory.
+	* lib/Makefile.am: ditto
+	* sample/Makefile.am: ditto
+	* ui/Makefile.am: ditto
 
 	* configure.in: Moved to version 1.0.0.
 

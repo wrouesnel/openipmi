@@ -21,7 +21,7 @@ noinst_PROGRAMS = lanserv_emu
 
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 	lanserv_oem_force.c
-libIPMIlanserv_la_LIBADD = $(top_srcdir)/utils/libIPMIutils.a
+libIPMIlanserv_la_LIBADD = $(top_builddir)/utils/libIPMIutils.a
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libIPMIlanserv.map
 
