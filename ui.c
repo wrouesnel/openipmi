@@ -39,6 +39,7 @@
 #include <errno.h>
 #include <ipmi/selector.h>
 #include <ipmi/ipmi_err.h>
+#include <ipmi/ipmi_msgbits.h>
 #include <ipmi/ipmi_mc.h>
 #include <ipmi/ipmiif.h>
 #include <ipmi/ipmi_int.h>
@@ -1783,6 +1784,52 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static void
+clear_sel2(ipmi_mc_t  *mc,
+	   ipmi_msg_t *rsp,
+	   void       *rsp_data)
+{
+    ipmi_msg_t    msg;
+    unsigned char data[6];
+    int           rv;
+
+    if (rsp->data[0]) {
+	data[0] = 0;
+	data[1] = 0;
+    } else {
+	data[0] = rsp->data[1];
+	data[1] = rsp->data[2];
+    }
+
+    data[2] = 'C';
+    data[3] = 'L';
+    data[4] = 'R';
+    data[5] = 0xaa;
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_CLEAR_SEL_CMD;
+    msg.data_len = 6;
+    msg.data = data;
+    rv = ipmi_send_command(bmc, 0, &msg, NULL, NULL);
+    if (rv)
+	ui_log("Could not send sel clear cmd: %x\n", rv);
+}
+
+static int
+clear_sel_cmd(char *cmd, char **toks, void *cb_data)
+{
+    ipmi_msg_t msg;
+    int        rv;
+
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_RESERVE_SEL_CMD;
+    msg.data_len = 0;
+    msg.data = NULL;
+    rv = ipmi_send_command(bmc, 0, &msg, clear_sel2, NULL);
+    if (rv)
+	wprintw(cmd_win, "Could not reserve sel: %x\n", rv);
+    return 0;
+}
+
 static int help_cmd(char *cmd, char **toks, void *cb_data);
 
 static struct {
@@ -1820,6 +1867,8 @@ static struct {
       " <log number> - Delete the given log number" },
     { "debug",		debug_cmd,
       " <type> on|off - Turn the given debugging type on or off." },
+    { "clear_sel",	clear_sel_cmd,
+      " - clear the system event log" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}
