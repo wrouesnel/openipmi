@@ -2875,7 +2875,6 @@ atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
 {
     atca_shelf_t *info = oem_data;
 
-    ipmi_deregister_for_events(domain, atca_event_handler, info);
     if (info->shelf_fru)
 	ipmi_fru_destroy(info->shelf_fru, NULL, NULL);
     if (info->addresses)

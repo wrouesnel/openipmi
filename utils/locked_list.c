@@ -179,7 +179,7 @@ locked_list_add(locked_list_t *ll, void *item1, void *item2)
     } else {
 	/* Room in the list, find a slot. */
 	for (i=0; i<ll->entries->size; i++) {
-	    if (! ll->entries->entries[ll->entries->curr].in_use)
+	    if (! ll->entries->entries[i].in_use)
 		break;
 	}
 

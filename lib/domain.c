@@ -71,12 +71,6 @@ dump_hex(unsigned char *data, int len)
 /* Re-query the SEL every 10 seconds by default. */
 #define IPMI_SEL_QUERY_INTERVAL 10
 
-struct ipmi_domain_mc_upd_s
-{
-    ipmi_domain_mc_upd_cb handler;
-    void                  *cb_data;
-};
-
 /* Timer structure for rescanning the bus. */
 typedef struct audit_domain_info_s
 {
