@@ -9,9 +9,9 @@
 
 5: Add a way to set the managed/autonomous mode on the AMCs.
 
-2: Add identifier control for the slot geographic address.
+!2: Add identifier control for the slot geographic address.
 
-3: Add a way to get the reason for the last AMC reset.
+!3: Add a way to get the reason for the last AMC reset.
 
 *1: Add identifier control for AMC HW version
 
@@ -58,6 +58,9 @@
 
 1: Add code for AMC IPMB auto-isolate
 
+!1: Add control for IPMB isolate of a slot
+    - Write-only control
+
 5: Do an AMC firmware upgrade
 
 5: Do an AMC FPGA upgrade
@@ -67,7 +70,7 @@
 *?: Add an identifier control for power supply revision
    major is byte 1, minor is byte 1
 
-1: Add control for fan I2C enabled state
+!1: Add sensor for fan I2C enabled state
 
 *1: Add control for fan identity
 

@@ -178,6 +178,7 @@
 #define MXP_PS_REVISION_NUM(idx) MXP_PS_CONTROL_NUM(idx, 8)
 #define MXP_FAN_TYPE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 9)
 #define MXP_FAN_REVISION_NUM(idx) MXP_PS_CONTROL_NUM(idx, 10)
+#define MXP_FAN_I2C_ENABLE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 11)
 
 /* Board senors/controls. */
 #define MXP_BOARD_SENSNUM_START 64
@@ -191,6 +192,7 @@
 #define MXP_BOARD_BD_SEL_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 3)
 #define MXP_BOARD_PCI_RESET_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 4)
 #define MXP_SLOT_INIT_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 5)
+#define MXP_SLOT_I2C_ENABLE_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 6)
 
 
 /* Information common to all sensors.  A pointer to this is put into
@@ -254,6 +256,7 @@ typedef struct mxp_power_supply_s
     ipmi_sensor_t *fan;
     ipmi_sensor_t *fan_presence;
     ipmi_sensor_t *cooling;
+    ipmi_sensor_t *fan_i2c_enable;
 
     ipmi_control_t *fan_speed;
     ipmi_control_t *fan_oos_led;
@@ -279,10 +282,11 @@ typedef struct mxp_board_s {
 
     ipmi_control_t *oos_led;
     ipmi_control_t *inserv_led;
-    ipmi_control_t *blue_led;
+//    ipmi_control_t *blue_led;
     ipmi_control_t *bd_sel;
     ipmi_control_t *pci_reset;
     ipmi_control_t *slot_init;
+    ipmi_control_t *i2c_enable;
 } mxp_board_t;
 #define BOARD_HAS_RESET_CONTROL(board) (!((board)->is_amc))
 #define BOARD_HAS_POWER_CONTROL(board) (!((board)->is_amc))
@@ -310,6 +314,7 @@ typedef struct amc_info_s
     ipmi_sensor_t *s3_3v;
     ipmi_sensor_t *s2_5v;
     ipmi_sensor_t *s8v;
+    ipmi_sensor_t *active;
 
     /* The controls. */
     ipmi_control_t *blue_led;
@@ -317,6 +322,7 @@ typedef struct amc_info_s
     ipmi_control_t *fw_version;
     ipmi_control_t *fpga_version;
     ipmi_control_t *temp_cool_led;
+    ipmi_control_t *last_reset_reason;
 } amc_info_t;
 
 struct mxp_info_s {
@@ -571,6 +577,9 @@ struct mxp_control_info_s
        for setting. */
     unsigned char                  vals[4];
 
+    /* The miminum length of the response message. */
+    unsigned int                   min_rsp_length;
+
     /* For use by the specific code. */
     unsigned long                  misc;
 
@@ -656,6 +665,16 @@ mxp_control_get_done(ipmi_control_t *control,
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
 				   NULL, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < control_info->min_rsp_length) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "mxp_control_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 9);
+	if (control_info->done_set)
+	    control_info->done_set(control, EINVAL, control_info->cb_data);
 	goto out;
     }
 
@@ -1710,8 +1729,9 @@ chassis_id_get_cb(ipmi_control_t *control,
     mxp_control_info_t *control_info = cb_data;
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -1719,16 +1739,29 @@ chassis_id_get_cb(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "chassis_id_get_cb: Received IPMI error: %x",
 		 rsp->data[0]);
-	control_info->get_identifier_val(control,
-					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    control_info->get_identifier_val(control, 0,
-				     rsp->data+4, 4,
-				     control_info->cb_data);
+    if (rsp->data_len < 9) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "chassis_id_get_cb: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 9);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0,
+					 rsp->data+4, 4,
+					 control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -1744,8 +1777,9 @@ chassis_id_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char        data[3];
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -1760,8 +1794,9 @@ chassis_id_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, chassis_id_get_cb,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_set)
-	    control_info->done_set(control, rv, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -1862,8 +1897,9 @@ chassis_type_get_cb(ipmi_control_t *control,
     mxp_control_info_t *control_info = cb_data;
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -1871,16 +1907,29 @@ chassis_type_get_cb(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "chassis_type_get_cb: Received IPMI error: %x",
 		 rsp->data[0]);
-	control_info->get_identifier_val(control,
-					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    control_info->get_identifier_val(control, 0,
-				     rsp->data+4, 1,
-				     control_info->cb_data);
+    if (rsp->data_len < 5) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "chassis_type_get_cb: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 5);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+   if (control_info->get_identifier_val)
+       control_info->get_identifier_val(control, 0,
+					rsp->data+4, 1,
+					control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -1896,8 +1945,9 @@ chassis_type_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char        data[3];
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -1912,8 +1962,9 @@ chassis_type_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, chassis_type_get_cb,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_set)
-	    control_info->done_set(control, rv, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }
@@ -2013,25 +2064,39 @@ shelf_ga_get_cb(ipmi_control_t *control,
     mxp_control_info_t *control_info = cb_data;
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-   if (rsp->data[0] != 0) {
+    if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "shelf_ga_get_cb: Received IPMI error: %x",
 		 rsp->data[0]);
-	control_info->get_identifier_val(control,
-					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    control_info->get_identifier_val(control, 0,
-				     rsp->data+4, 1,
-				     control_info->cb_data);
+    if (rsp->data_len < 5) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "shelf_ga_get_cb: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 5);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+   if (control_info->get_identifier_val)
+       control_info->get_identifier_val(control, 0,
+					rsp->data+4, 1,
+					control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -2047,8 +2112,9 @@ shelf_ga_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char        data[3];
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -2063,8 +2129,9 @@ shelf_ga_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, shelf_ga_get_cb,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_set)
-	    control_info->done_set(control, rv, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }
@@ -2327,6 +2394,17 @@ relay_get_done(ipmi_control_t *control,
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
 				   NULL, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 5) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "relay_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 5);
+	if (control_info->done_get)
+	    control_info->done_get(control, EINVAL, NULL,
+				   control_info->cb_data);
 	goto out;
     }
 
@@ -2814,6 +2892,7 @@ ps_enable_get(ipmi_control_t      *control,
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
+    control_info->min_rsp_length = 6;
     control_info->get_val = ps_enable_get_cb;
 
     rv = ipmi_control_add_opq(control, ps_enable_get_start,
@@ -2955,6 +3034,7 @@ ps_led_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = ps_led_get_cb;
+    control_info->min_rsp_length = 5;
 
     rv = ipmi_control_add_opq(control, ps_led_get_start,
 			      &(control_info->sdata), control_info);
@@ -2973,8 +3053,9 @@ ps_type_get_done(ipmi_control_t *control,
     mxp_control_info_t *control_info = cb_data;
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -2982,16 +3063,29 @@ ps_type_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ps_type_get_cb: Received IPMI error: %x",
 		 rsp->data[0]);
-	control_info->get_identifier_val(control,
-					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    control_info->get_identifier_val(control, 0,
-				     rsp->data+7, 1,
-				     control_info->cb_data);
+    if (rsp->data_len < 8) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ps_type_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 8);
+	if (control_info->done_get)
+	    control_info->done_get(control, EINVAL, NULL,
+				   control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0,
+					 rsp->data+7, 1,
+					 control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -3007,8 +3101,9 @@ ps_type_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char      data[5];
 
     if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -3024,8 +3119,9 @@ ps_type_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, ps_type_get_done,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }
@@ -3064,8 +3160,9 @@ ps_revision_get_done(ipmi_control_t *control,
     mxp_control_info_t *control_info = cb_data;
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -3073,16 +3170,29 @@ ps_revision_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ps_revision_get_cb: Received IPMI error: %x",
 		 rsp->data[0]);
-	control_info->get_identifier_val(control,
-					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    control_info->get_identifier_val(control, 0,
-				     rsp->data+8, 2,
-				     control_info->cb_data);
+    if (rsp->data_len < 10) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ps_revision_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 10);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0,
+					 rsp->data+8, 2,
+					 control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -3098,8 +3208,9 @@ ps_revision_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char      data[5];
 
     if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -3115,8 +3226,9 @@ ps_revision_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, ps_revision_get_done,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }
@@ -3229,6 +3341,81 @@ fan_presence_states_get(ipmi_sensor_t       *sensor,
     get_info->min_rsp_length = 6;
 
     rv = ipmi_sensor_add_opq(sensor, fan_presence_states_get_start,
+			     &(get_info->sdata), get_info);
+    if (rv)
+	ipmi_mem_free(get_info);
+
+    return rv;
+}
+
+static void
+fan_i2c_enable_states_get_cb(ipmi_sensor_t   *sensor,
+			   mxp_sens_info_t *sens_info,
+			   unsigned char   *data,
+			   ipmi_states_t   *states)
+{
+    if (data[5] & 2)
+	ipmi_set_state(states, 1, 1); /* enabled */
+    else
+	ipmi_set_state(states, 0, 1); /* disabled */
+}
+
+static void
+fan_i2c_enable_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
+{
+    mxp_sens_info_t    *get_info = cb_data;
+    mxp_power_supply_t *psinfo = get_info->sdinfo;
+    ipmi_states_t      states;
+    ipmi_msg_t         msg;
+    unsigned char      data[4];
+    int                rv;
+
+    ipmi_init_states(&states);
+    ipmi_set_sensor_scanning_enabled(&states, 1);
+
+    if (err) {
+	if (get_info->done)
+	    get_info->done(sensor, err, &states, get_info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(get_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_FAN_STATUS_CMD;
+    msg.data_len = 4;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    data[3] = psinfo->ipmb_addr;
+    rv = ipmi_sensor_send_command(sensor, psinfo->info->mc, 0,
+				  &msg, mxp_sensor_get_done,
+				  &(get_info->sdata), get_info);
+    if (rv) {
+	if (get_info->done)
+	    get_info->done(sensor, rv, &states, get_info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(get_info);
+    }
+}
+
+static int
+fan_i2c_enable_states_get(ipmi_sensor_t       *sensor,
+			ipmi_states_read_cb done,
+			void                *cb_data)
+{
+    mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
+    mxp_power_supply_t  *psinfo = hdr->data;
+    int                 rv;
+    mxp_sens_info_t     *get_info;
+
+
+    get_info = alloc_sens_info(psinfo, done, cb_data);
+    if (!get_info)
+	return ENOMEM;
+    get_info->get_states = fan_i2c_enable_states_get_cb;
+    get_info->min_rsp_length = 6;
+
+    rv = ipmi_sensor_add_opq(sensor, fan_i2c_enable_states_get_start,
 			     &(get_info->sdata), get_info);
     if (rv)
 	ipmi_mem_free(get_info);
@@ -3356,6 +3543,7 @@ fan_speed_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = fan_speed_get_cb;
+    control_info->min_rsp_length = 11;
 
     rv = ipmi_control_add_opq(control, fan_speed_get_start,
 			      &(control_info->sdata), control_info);
@@ -3498,6 +3686,7 @@ fan_led_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = fan_led_get_cb;
+    control_info->min_rsp_length = 5;
 
     rv = ipmi_control_add_opq(control, fan_led_get_start,
 			      &(control_info->sdata), control_info);
@@ -3516,8 +3705,9 @@ fan_type_get_done(ipmi_control_t *control,
     mxp_control_info_t *control_info = cb_data;
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -3525,16 +3715,29 @@ fan_type_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "fan_type_get_cb: Received IPMI error: %x",
 		 rsp->data[0]);
-	control_info->get_identifier_val(control,
-					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    control_info->get_identifier_val(control, 0,
-				     rsp->data+7, 1,
-				     control_info->cb_data);
+    if (rsp->data_len < 8) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fan_type_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 8);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0,
+					 rsp->data+7, 1,
+					 control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -3550,8 +3753,9 @@ fan_type_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char      data[5];
 
     if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -3567,8 +3771,9 @@ fan_type_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, fan_type_get_done,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }
@@ -3607,8 +3812,9 @@ fan_revision_get_done(ipmi_control_t *control,
     mxp_control_info_t *control_info = cb_data;
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -3616,16 +3822,29 @@ fan_revision_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "fan_revision_get_cb: Received IPMI error: %x",
 		 rsp->data[0]);
-	control_info->get_identifier_val(control,
-					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    control_info->get_identifier_val(control, 0,
-				     rsp->data+8, 2,
-				     control_info->cb_data);
+    if (rsp->data_len < 10) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fan_revision_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 10);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0,
+					 rsp->data+8, 2,
+					 control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -3641,8 +3860,9 @@ fan_revision_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char      data[5];
 
     if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -3658,8 +3878,9 @@ fan_revision_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, fan_revision_get_done,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }
@@ -3949,6 +4170,21 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				   fan_presence_states_get,
 				   NULL,
 				   &(ps->fan_presence));
+    if (rv)
+	goto out_err;
+    ipmi_sensor_set_ignore_if_no_entity(ps->fan_presence, 0);
+
+    /* Fan I2C enable sensor */
+    rv = mxp_alloc_discrete_sensor(info->mc, ps->fan_ent,
+				   MXP_FAN_I2C_ENABLE_NUM(ps->idx),
+				   ps, NULL,
+				   IPMI_SENSOR_TYPE_CABLE_INTERCONNECT,
+				   IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE,
+				   "I2C Enable",
+				   0x3, 0,
+				   fan_i2c_enable_states_get,
+				   NULL,
+				   &(ps->fan_i2c_enable));
     if (rv)
 	goto out_err;
     ipmi_sensor_set_ignore_if_no_entity(ps->fan_presence, 0);
@@ -4327,6 +4563,8 @@ board_led_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = board_led_get_cb;
+    control_info->min_rsp_length = 21;
+
     rv = ipmi_control_add_opq(control, board_led_get_start,
 			     &(control_info->sdata), control_info);
     if (rv)
@@ -4453,6 +4691,8 @@ bd_sel_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = bd_sel_get_cb;
+    control_info->min_rsp_length = 21;
+
     rv = ipmi_control_add_opq(control, bd_sel_get_start,
 			     &(control_info->sdata), control_info);
     if (rv)
@@ -4579,6 +4819,8 @@ pci_reset_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = pci_reset_get_cb;
+    control_info->min_rsp_length = 5;
+
     rv = ipmi_control_add_opq(control, pci_reset_get_start,
 			     &(control_info->sdata), control_info);
     if (rv)
@@ -4643,6 +4885,66 @@ slot_init_set(ipmi_control_t     *control,
     control_info->cb_data = cb_data;
     control_info->vals[0] = *val;
     rv = ipmi_control_add_opq(control, slot_init_set_start,
+			     &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
+static void
+i2c_enable_set_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    mxp_board_t        *binfo = control_info->idinfo;
+    ipmi_msg_t         msg;
+    unsigned char      data[5];
+    int                rv;
+
+    if (err) {
+	if (control_info->done_set)
+	    control_info->done_set(control, err, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_SET_IPMB_ISOLATE_CMD;
+    msg.data_len = 5;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    data[3] = binfo->ipmb_addr;
+    data[4] = control_info->vals[0];
+
+    rv = ipmi_control_send_command(control, binfo->info->mc, 0,
+				   &msg, mxp_control_set_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_set)
+	    control_info->done_set(control, rv, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+i2c_enable_set(ipmi_control_t     *control,
+	      int                *val,
+	      ipmi_control_op_cb handler,
+	      void               *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_board_t          *binfo = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(binfo);
+    if (!control_info)
+	return ENOMEM;
+    control_info->done_set = handler;
+    control_info->cb_data = cb_data;
+    control_info->vals[0] = *val;
+    rv = ipmi_control_add_opq(control, i2c_enable_set_start,
 			     &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -4737,6 +5039,19 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->slot_init, 1);
+
+	/* I2C enable control */
+	rv = mxp_alloc_control(board->info->mc, board->ent,
+			       MXP_SLOT_I2C_ENABLE_NUM(board->idx),
+			       board,
+			       IPMI_CONTROL_OUTPUT,
+			       "I2C Enable",
+			       i2c_enable_set,
+			       NULL,
+			       &(board->i2c_enable));
+	if (rv)
+	    goto out_err;
+	ipmi_control_set_num_elements(board->pci_reset, 1);
     }
 
  out_err:
@@ -5092,14 +5407,6 @@ board_reset_set(ipmi_control_t     *control,
     return rv;
 }
 
-static int
-board_reset_get(ipmi_control_t      *control,
-		ipmi_control_val_cb handler,
-		void                *cb_data)
-{
-    return ENOSYS;
-}
-
 static void
 board_power_set_start(ipmi_control_t *control, int err, void *cb_data)
 {
@@ -5211,6 +5518,7 @@ board_power_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = board_power_get_cb;
+    control_info->min_rsp_length = 6;
 
     rv = ipmi_control_add_opq(control, board_power_get_start,
 			      &(control_info->sdata), control_info);
@@ -5406,8 +5714,108 @@ board_blue_led_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = board_blue_led_get_cb;
+    control_info->min_rsp_length = 13;
 
     rv = ipmi_control_add_opq(control, board_blue_led_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
+static void
+slot_ga_get_done(ipmi_control_t *control,
+		 int            err,
+		 ipmi_msg_t     *rsp,
+		 void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    int                val;
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, 0, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "last_reset_reason_get_done: Received IPMI error: %x",
+		 rsp->data[0]);
+	if (control_info->done_get)
+	    control_info->done_get(control,
+				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
+				   NULL, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 9) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "last_reset_reason_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 9);
+	if (control_info->done_get)
+	    control_info->done_get(control, EINVAL, NULL,
+				   control_info->cb_data);
+	goto out;
+    }
+
+    val = rsp->data[8];
+    if (control_info->done_get)
+	control_info->done_get(control, 0, &val, control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+slot_ga_get_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    int                rv;
+    ipmi_msg_t         msg;
+    unsigned char      data[3];
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_SLOT_STATUS_CMD;
+    msg.data_len = 3;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, slot_ga_get_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_get)
+	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+slot_ga_get(ipmi_control_t                 *control,
+	    ipmi_control_identifier_val_cb handler,
+	    void                           *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->get_identifier_val = handler;
+    control_info->cb_data = cb_data;
+
+    rv = ipmi_control_add_opq(control, slot_ga_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -5421,15 +5829,22 @@ typedef struct board_sensor_info_s
     ipmi_control_t *reset;
     ipmi_control_t *power;
     ipmi_control_t *blue_led;
+    ipmi_control_t *slot_ga;
 } board_sensor_info_t;
 
 static void
 destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 {
-    ipmi_sensor_destroy(sinfo->slot);
-    ipmi_control_destroy(sinfo->reset);
-    ipmi_control_destroy(sinfo->power);
-    ipmi_control_destroy(sinfo->blue_led);
+    if (sinfo->slot)
+	ipmi_sensor_destroy(sinfo->slot);
+    if (sinfo->reset)
+	ipmi_control_destroy(sinfo->reset);
+    if (sinfo->power)
+	ipmi_control_destroy(sinfo->power);
+    if (sinfo->blue_led)
+	ipmi_control_destroy(sinfo->blue_led);
+    if (sinfo->slot_ga)
+	ipmi_control_destroy(sinfo->slot_ga);
 }
 
 /*
@@ -5443,13 +5858,15 @@ destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 
 /* Numbers for controls that are on the board (their MC is the board's
    MC). */
-#define MXP_BOARD_RESET_NUM	1
-#define MXP_BOARD_POWER_NUM	2
+#define MXP_BOARD_RESET_NUM	1 /* PM only */
+#define MXP_BOARD_POWER_NUM	2 /* PM only */
 #define MXP_BOARD_BLUE_LED_NUM	3
-#define MXP_BOARD_HW_VER_NUM	4
-#define MXP_BOARD_FW_VER_NUM	5
-#define MXP_BOARD_FPGA_VER_NUM	6
-#define MXP_BOARD_TEMP_COOL_LED_NUM 7
+#define MXP_BOARD_HW_VER_NUM	4 /* AMC only */
+#define MXP_BOARD_FW_VER_NUM	5 /* AMC only */
+#define MXP_BOARD_FPGA_VER_NUM	6 /* AMC only */
+#define MXP_BOARD_TEMP_COOL_LED_NUM 7 /* AMC only */
+#define MXP_BOARD_LAST_RESET_REASON_NUM 8 /* AMC only */
+#define MXP_BOARD_SLOT_GA_NUM	9 /* PM only */
 
 static int
 new_board_sensors(ipmi_mc_t           *mc,
@@ -5457,7 +5874,8 @@ new_board_sensors(ipmi_mc_t           *mc,
 		  mxp_info_t          *info,
 		  board_sensor_info_t *sinfo)
 {
-    int            rv;
+    int                rv;
+    ipmi_control_cbs_t control_cbs;
 
     /* The slot sensor */
     rv = mxp_alloc_discrete_sensor(
@@ -5484,14 +5902,11 @@ new_board_sensors(ipmi_mc_t           *mc,
 			   IPMI_CONTROL_RESET,
 			   "reset",
 			   board_reset_set,
-			   board_reset_get,
+			   NULL,
 			   &(sinfo->reset));
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(sinfo->reset, 1);
-
-    /* The reset control is not readable. */
-    ipmi_control_set_readable(sinfo->reset, 0);
 
     /* Power control */
     rv = mxp_alloc_control(mc, ent,
@@ -5520,6 +5935,23 @@ new_board_sensors(ipmi_mc_t           *mc,
     ipmi_control_light_set_lights(sinfo->blue_led, 1, blue_blinking_led);
     ipmi_control_set_hot_swap_indicator(sinfo->blue_led, 1);
 
+    /* Slot gegraphic address */
+    rv = mxp_alloc_control(mc, ent,
+			   MXP_BOARD_SLOT_GA_NUM,
+			   NULL,
+			   IPMI_CONTROL_IDENTIFIER,
+			   "Geog Addr",
+			   NULL,
+			   NULL,
+			   &sinfo->slot_ga);
+    if (rv)
+	goto out_err;
+    ipmi_control_identifier_set_max_length(sinfo->slot_ga, 1);
+    ipmi_control_get_callbacks(sinfo->slot_ga, &control_cbs);
+    control_cbs.get_identifier_val = slot_ga_get;
+    ipmi_control_set_readable(sinfo->slot_ga, 1);
+    ipmi_control_set_callbacks(sinfo->slot_ga, &control_cbs);
+
  out_err:
     return rv;
 }
@@ -5537,6 +5969,77 @@ new_board_sensors(ipmi_mc_t           *mc,
 #define MXP_3_3V_SENSOR_NUM	3
 #define MXP_2_5V_SENSOR_NUM	4
 #define MXP_8V_SENSOR_NUM	5
+#define MXP_AMC_ACTIVE_NUM      6
+
+static void
+amc_active_get_cb(ipmi_sensor_t   *sensor,
+		  mxp_sens_info_t *sens_info,
+		  unsigned char   *data,
+		  ipmi_states_t   *states)
+{
+    if (data[4] & 1)
+	ipmi_set_state(states, 2, 0); /* Not offline */
+    else
+	ipmi_set_state(states, 2, 1); /* offline */
+}
+
+static void
+amc_active_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
+{
+    mxp_sens_info_t *get_info = cb_data;
+    ipmi_msg_t      msg;
+    unsigned char   data[3];
+    int             rv;
+    ipmi_states_t   states;
+
+    ipmi_init_states(&states);
+    ipmi_set_sensor_scanning_enabled(&states, 1);
+
+    if (err) {
+	if (get_info->done)
+	    get_info->done(sensor, err, &states, get_info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(get_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    msg.data_len = 3;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    rv = ipmi_sensor_send_command(sensor, ipmi_sensor_get_mc(sensor), 0,
+				  &msg, mxp_sensor_get_done,
+				  &(get_info->sdata), get_info);
+    if (rv) {
+	if (get_info->done)
+	    get_info->done(sensor, rv, &states, get_info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(get_info);
+    }
+}
+
+static int
+amc_active_get(ipmi_sensor_t       *sensor,
+	       ipmi_states_read_cb done,
+	       void                *cb_data)
+{
+    int                 rv;
+    mxp_sens_info_t     *get_info;
+
+    get_info = alloc_sens_info(NULL, done, cb_data);
+    if (!get_info)
+	return ENOMEM;
+    get_info->get_states = amc_active_get_cb;
+    get_info->min_rsp_length = 5;
+
+    rv = ipmi_sensor_add_opq(sensor, amc_active_get_start,
+			     &(get_info->sdata), get_info);
+    if (rv)
+	ipmi_mem_free(get_info);
+
+    return rv;
+}
 
 static void
 mxp_voltage_reading_cb(ipmi_sensor_t *sensor,
@@ -5691,8 +6194,9 @@ amc_version_get_cb(ipmi_control_t *control,
     mxp_control_info_t *control_info = cb_data;
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -5700,26 +6204,29 @@ amc_version_get_cb(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "amc_version_get_cb: Received IPMI error: %x",
 		 rsp->data[0]);
-	control_info->get_identifier_val(control,
-					 IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
     if (rsp->data_len < 12) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "amc_version_get_cb: Received short msg: %d bytes",
 		 rsp->data_len);
-	control_info->get_identifier_val(control,
-					 EINVAL,
-					 NULL, 0,
-					 control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     EINVAL,
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    control_info->get_identifier_val(control, 0,
-				     rsp->data+control_info->misc, 1,
-				     control_info->cb_data);
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0,
+					 rsp->data+control_info->misc, 1,
+					 control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -5734,8 +6241,9 @@ amc_version_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char        data[3];
 
     if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -5750,8 +6258,9 @@ amc_version_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, amc_version_get_cb,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_set)
-	    control_info->done_set(control, rv, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }
@@ -5896,12 +6405,23 @@ amc_temp_cool_get_done(ipmi_control_t *control,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_control_get_done: Received IPMI error: %x",
+		 "amc_temp_cool_get_done: Received IPMI error: %x",
 		 rsp->data[0]);
 	if (control_info->done_get)
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
 				   NULL, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 5) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "amc_temp_cool_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 5);
+	if (control_info->done_get)
+	    control_info->done_get(control, EINVAL, NULL,
+				   control_info->cb_data);
 	goto out;
     }
 
@@ -5969,6 +6489,109 @@ amc_temp_cool_led_get(ipmi_control_t      *control,
 }
 
 static void
+amc_last_reset_reason_get_done(ipmi_control_t *control,
+			       int            err,
+			       ipmi_msg_t     *rsp,
+			       void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+
+    if (err) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "last_reset_reason_get_done: Received IPMI error: %x",
+		 rsp->data[0]);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 9) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "last_reset_erason_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 9);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0, rsp->data+8, 1,
+					 control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+amc_last_reset_reason_get_start(ipmi_control_t *control, int err,
+				void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    int                rv;
+    ipmi_msg_t         msg;
+    unsigned char      data[3];
+
+    if (err) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    msg.data_len = 3;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, amc_last_reset_reason_get_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+amc_last_reset_reason_get(ipmi_control_t                 *control,
+			  ipmi_control_identifier_val_cb handler,
+			  void                           *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->get_identifier_val = handler;
+    control_info->cb_data = cb_data;
+
+    rv = ipmi_control_add_opq(control, amc_last_reset_reason_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
+static void
 amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     amc_info_t *info = cb_data;
@@ -5977,16 +6600,30 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	/* It hasn't been initialized, so just free the data structure. */
 	goto out;
 
-    ipmi_sensor_destroy(info->slot);
-    ipmi_sensor_destroy(info->s5v);
-    ipmi_sensor_destroy(info->s3_3v);
-    ipmi_sensor_destroy(info->s2_5v);
-    ipmi_sensor_destroy(info->s8v);
-    ipmi_control_destroy(info->blue_led);
-    ipmi_control_destroy(info->temp_cool_led);
-    ipmi_control_destroy(info->hw_version);
-    ipmi_control_destroy(info->fw_version);
-    ipmi_control_destroy(info->fpga_version);
+    if (info->slot)
+	ipmi_sensor_destroy(info->slot);
+    if (info->s5v)
+	ipmi_sensor_destroy(info->s5v);
+    if (info->s3_3v)
+	ipmi_sensor_destroy(info->s3_3v);
+    if (info->s2_5v)
+	ipmi_sensor_destroy(info->s2_5v);
+    if (info->s8v)
+	ipmi_sensor_destroy(info->s8v);
+    if (info->active)
+	ipmi_sensor_destroy(info->active);
+    if (info->blue_led)
+	ipmi_control_destroy(info->blue_led);
+    if (info->temp_cool_led)
+	ipmi_control_destroy(info->temp_cool_led);
+    if (info->last_reset_reason)
+	ipmi_control_destroy(info->last_reset_reason);
+    if (info->hw_version)
+	ipmi_control_destroy(info->hw_version);
+    if (info->fw_version)
+	ipmi_control_destroy(info->fw_version);
+    if (info->fpga_version)
+	ipmi_control_destroy(info->fpga_version);
 
 out:
     ipmi_mem_free(info);
@@ -6044,6 +6681,7 @@ amc_board_handler(ipmi_mc_t *mc)
     /* The MXP has an SEL. */
     ipmi_mc_set_sel_device_support(mc, 1);
 
+    /* AMC slot sensor */
     rv = mxp_alloc_discrete_sensor(
 	mc, info->ent,
 	MXP_BOARD_SLOT_NUM,
@@ -6060,6 +6698,21 @@ amc_board_handler(ipmi_mc_t *mc)
     /* offset 6 is for hot-swap */
     ipmi_sensor_set_hot_swap_requester(info->slot, 6, 1);
 
+    /* AMC active sensor */
+    rv = mxp_alloc_discrete_sensor(
+	mc, info->ent,
+	MXP_AMC_ACTIVE_NUM,
+	NULL, NULL,
+	IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH,
+	IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+	"AMC Active",
+	0x04, 0x04, /* Management Controller Offline. */
+	amc_active_get,
+	NULL,
+	&info->slot);
+    if (rv)
+	goto out_err;
+
     rv = mxp_alloc_control(mc, info->ent,
 			   MXP_BOARD_BLUE_LED_NUM,
 			   NULL,
@@ -6073,6 +6726,7 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_control_light_set_lights(info->blue_led, 1, blue_led);
     ipmi_control_set_hot_swap_indicator(info->blue_led, 1);
 
+    /* Temperature and cooling LEDs. */
     rv = mxp_alloc_control(mc, info->ent,
 			   MXP_BOARD_TEMP_COOL_LED_NUM,
 			   NULL,
@@ -6084,6 +6738,23 @@ amc_board_handler(ipmi_mc_t *mc)
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(info->temp_cool_led, 2, amc_temp_cool_leds);
+
+    /* Last reset reason. */
+    rv = mxp_alloc_control(mc, info->ent,
+			   MXP_BOARD_LAST_RESET_REASON_NUM,
+			   NULL,
+			   IPMI_CONTROL_IDENTIFIER,
+			   "Last Reset Rsn",
+			   NULL,
+			   NULL,
+			   &info->last_reset_reason);
+    if (rv)
+	goto out_err;
+    ipmi_control_identifier_set_max_length(info->last_reset_reason, 1);
+    ipmi_control_get_callbacks(info->last_reset_reason, &control_cbs);
+    control_cbs.get_identifier_val = amc_last_reset_reason_get;
+    ipmi_control_set_readable(info->last_reset_reason, 1);
+    ipmi_control_set_callbacks(info->last_reset_reason, &control_cbs);
 
     rv = mxp_alloc_control(mc, info->ent,
 			   MXP_BOARD_HW_VER_NUM,
@@ -8055,6 +8726,8 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->power_supply[i].inserv_led);
 	if (info->power_supply[i].fan_presence)
 	    ipmi_sensor_destroy(info->power_supply[i].fan_presence);
+	if (info->power_supply[i].fan_i2c_enable)
+	    ipmi_sensor_destroy(info->power_supply[i].fan_i2c_enable);
 	if (info->power_supply[i].fan)
 	    ipmi_sensor_destroy(info->power_supply[i].fan);
 	if (info->power_supply[i].cooling)
@@ -8083,8 +8756,6 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->board[i].pci_reset);
 	if (info->board[i].slot_init)
 	    ipmi_control_destroy(info->board[i].slot_init);
-	if (info->board[i].blue_led)
-	    ipmi_control_destroy(info->board[i].blue_led);
     }
     
     if (info->chassis_id)
