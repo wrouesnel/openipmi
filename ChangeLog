@@ -3,6 +3,19 @@
 	* lib/sel.c: Fixed a bug where the SEL lock was being held in
 	the SEL fetch done callback.
 
+	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/ipmiif.h.in: Added
+	routines to get the GUID for the system and for each MC.
+	* include/OpenIPMI/internal/ipmi_mc.h: ditto (added set routine)
+	* lib/mc.c: ditto
+	* lib/domain.c: ditto
+	* cmdlang/cmd_mc.c: ditto
+	* cmdlang/cmd_domain.c: ditto
+	* swig/OpenIPMI.i: ditto
+	* man/ipmi_cmdlang.7: ditto
+
+	* lib/ipmi_lan.c, lib/rakp.c: Fixed some broken stuff caused by
+	the last changes to the LAN code.
+
 2005-01-21 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_lan.h: Added a function to payloads to get

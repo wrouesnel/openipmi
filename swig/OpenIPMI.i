@@ -2921,6 +2921,29 @@ int pef_str_to_parm(char *str);
 	return rv;
     }
 
+    %newobject get_guid;
+    /*
+     * Get the system GUID for the domain.  Returns NULL if it is not
+     * supported.
+     */
+    char *get_guid()
+    {
+	char          *str = NULL;
+	unsigned char guid[16];
+
+	if (ipmi_domain_get_guid(self, guid) == 0) {
+	    str = malloc(16 * 3);
+	    if (str) {
+		char *s = str;
+		int  i;
+		s += sprintf(s, "%2.2x", guid[0]);
+		for (i=1; i<16; i++)
+		    s += sprintf(s, " %2.2x", guid[i]);
+	    }
+	}
+	return str;
+    }
+
     /*
      * Shut down the connections to the domain and free it up.
      * If the parameter given, the domain_close_done_cb method for
@@ -4349,6 +4372,28 @@ int pef_str_to_parm(char *str);
 	if (rv)
 	    *rv = ipmi_mc_convert_to_id(self);
 	return rv;
+    }
+
+    %newobject get_guid;
+    /*
+     * Get the GUID for the MC.  Returns NULL if it is not supported.
+     */
+    char *get_guid()
+    {
+	char          *str = NULL;
+	unsigned char guid[16];
+
+	if (ipmi_mc_get_guid(self, guid) == 0) {
+	    str = malloc(16 * 3);
+	    if (str) {
+		char *s = str;
+		int  i;
+		s += sprintf(s, "%2.2x", guid[0]);
+		for (i=1; i<16; i++)
+		    s += sprintf(s, " %2.2x", guid[i]);
+	    }
+	}
+	return str;
     }
 
     /*

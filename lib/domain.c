@@ -3922,17 +3922,46 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 }
 
 static void
-domain_oem_handlers_checked(ipmi_domain_t *domain, int err, void *cb_data)
+got_guid(ipmi_mc_t  *mc,
+	 ipmi_msg_t *rsp,
+	 void       *rsp_data)
 {
-    int rv;
+    ipmi_domain_t *domain = rsp_data;
+    int           rv;
 
-    /* FIXME - handle errors setting up OEM comain information. */
+    if (!mc)
+	return; /* domain went away while processing. */
+
+    if ((rsp->data[0] == 0) && (rsp->data_len >= 17)) {
+	/* We have a GUID, save it */
+	ipmi_mc_set_guid(mc, rsp->data+1);
+    }
 
     if (domain->SDR_repository_support && ipmi_option_SDRs(domain)) {
 	rv = ipmi_sdr_fetch(domain->main_sdrs, sdr_handler, domain);
     } else {
 	rv = get_channels(domain);
     }
+    if (rv)
+	call_con_fails(domain, rv, 0, 0, 0);
+}
+
+static void
+domain_oem_handlers_checked(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    ipmi_msg_t msg;
+    int        rv;
+
+    /* FIXME - handle errors setting up OEM comain information. */
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_SYSTEM_GUID_CMD;
+    msg.data_len = 0;
+    msg.data = NULL;
+
+    _ipmi_mc_get(domain->si_mc);
+    rv = ipmi_mc_send_command(domain->si_mc, 0, &msg, got_guid, domain);
+    _ipmi_mc_put(domain->si_mc);
     if (rv)
 	call_con_fails(domain, rv, 0, 0, 0);
 }
@@ -4730,6 +4759,16 @@ ipmi_domain_get_channel(ipmi_domain_t    *domain,
 
     *chan = domain->chan[index];
     return 0;
+}
+
+int
+ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid)
+{
+    int rv;
+    _ipmi_mc_get(domain->si_mc);
+    rv = ipmi_mc_get_guid(domain->si_mc, guid);
+    _ipmi_mc_put(domain->si_mc);
+    return rv;
 }
 
 int

@@ -416,9 +416,9 @@ open_get_msg_tag(unsigned char *tmsg,
 		 unsigned int  data_len,
 		 unsigned char *tag)
 {
-    if (data_len < 1)
+    if (data_len < 8)
 	return EINVAL;
-    *tag = tmsg[0];
+    *tag = ipmi_get_uint32(tmsg+4) - 1; /* session id */
     return 0;
 }
 
@@ -2990,7 +2990,7 @@ rmcpp_find_ipmi(lan_fd_t      *item,
 	d = data+6;
     }
 
-    mlen = ipmi_get_uint16(data+8);
+    mlen = ipmi_get_uint16(d+8);
     if ((mlen + 10 + (d-data)) > len) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
@@ -3001,21 +3001,27 @@ rmcpp_find_ipmi(lan_fd_t      *item,
     sid = ipmi_get_uint32(d);
     if (payloads[payload]->get_msg_tag) {
 	int rv = payloads[payload]->get_msg_tag(d+10, mlen, &ctag);
-	if (rv)
+	if (rv) {
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+		ipmi_log(IPMI_LOG_DEBUG, "Error getting message tag: %d", rv);
 	    return NULL;
+	}
 	tag = ctag;
     } else
-	tag = sid;
+	tag = sid - 1;
 
     if (tag >= MAX_CONS_PER_FD) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "tag is out of range: %d", tag);
+	return NULL;
     }
 
     ipmi_lock(item->con_lock);
     lan = item->lan[tag];
     if (lan && addr_match_lan(lan, sid, addr, addr_num))
 	ipmi = lan->ipmi;
+    else if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	ipmi_log(IPMI_LOG_DEBUG, "tag doesn't match: %d", tag);
     ipmi_unlock(item->con_lock);
 
     return ipmi;
@@ -4105,7 +4111,7 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
     ipmi_rmcpp_addr_t addr;
 
     memset(data, 0, sizeof(data));
-    data[0] = lan->fd_slot;
+    data[0] = 0; /* Set to seq# by the formatting code. */
     data[1] = lan->cparm.privilege;
     ipmi_set_uint32(data+4, lan->precon_session_id[addr_num]);
     data[8] = 0; /* auth algorithm */
@@ -4158,7 +4164,7 @@ start_rmcpp(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi, int addr_num)
     lan->unauth_in_seq_num[addr_num] = 0;
     /* Use our fd_slot in the fd for the session id, so we can look it
        up quickly. */
-    lan->precon_session_id[addr_num] = lan->fd_slot;
+    lan->precon_session_id[addr_num] = lan->fd_slot + 1;
     lan->working_conf[addr_num] = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
     lan->working_integ[addr_num] = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
 

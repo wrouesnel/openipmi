@@ -78,12 +78,15 @@ domain_info(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     char            domain_name[IPMI_DOMAIN_NAME_LEN];
+    unsigned char   guid[16];
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
     ipmi_cmdlang_out(cmd_info, "Domain", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    if (ipmi_domain_get_guid(domain, guid) == 0)
+	ipmi_cmdlang_out_binary(cmd_info, "GUID", guid, 16);
     ipmi_cmdlang_out(cmd_info, "Type",
 		    ipmi_domain_get_type_string(ipmi_domain_get_type(domain)));
     ipmi_cmdlang_out_int(cmd_info, "SEL Rescan Time",

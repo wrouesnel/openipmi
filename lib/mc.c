@@ -174,6 +174,10 @@ struct ipmi_mc_s
        be set to zero. */
     ipmi_time_t startup_SEL_time;
 
+    /* The MC's GUID. */
+    unsigned int  guid_set : 1;
+    unsigned char guid[16];
+
     void *oem_data;
 
     ipmi_mc_oem_fixup_sdrs_cb fixup_sdrs_handler;
@@ -1769,10 +1773,35 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	_ipmi_put_domain_fully_up(mc->domain);
 }
 
+static void
+got_guid(ipmi_mc_t  *mc,
+	 ipmi_msg_t *rsp,
+	 void       *rsp_data)
+{
+    int rv;
+
+    if (!mc)
+	return; /* domain went away while processing. */
+
+    if ((rsp->data[0] == 0) && (rsp->data_len >= 17)) {
+	/* We have a GUID, save it */
+	ipmi_mc_set_guid(mc, rsp->data+1);
+    }
+
+    if (((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
+	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc))) {
+	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+	if (rv)
+	    sensors_reread(mc, 0, NULL);
+    } else
+	sensors_reread(mc, 0, NULL);
+}
+
 int
 _ipmi_mc_handle_new(ipmi_mc_t *mc)
 {
-    int rv = 0;
+    ipmi_msg_t msg;
+    int        rv = 0;
 
     /* Apply any pending updates now, so we can get things that the
        OEM handler installed. */
@@ -1789,14 +1818,17 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 	    return rv;
     }
 
+    /* FIXME - handle errors setting up OEM comain information. */
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_DEVICE_GUID_CMD;
+    msg.data_len = 0;
+    msg.data = NULL;
+
     _ipmi_get_domain_fully_up(mc->domain);
-    if (((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
-	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc))) {
-	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
-	if (rv)
-	    sensors_reread(mc, 0, NULL);
-    } else
-	sensors_reread(mc, 0, NULL);
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_guid, NULL);
+    if (rv)
+	_ipmi_put_domain_fully_up(mc->domain);
 
     return rv;
 }
@@ -2956,6 +2988,23 @@ ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[])
 {
     CHECK_MC_LOCK(mc);
     memcpy(val, mc->devid.aux_fw_revision, sizeof(mc->devid.aux_fw_revision));
+}
+
+int
+ipmi_mc_get_guid(ipmi_mc_t *mc, unsigned char *guid)
+{
+    CHECK_MC_LOCK(mc);
+    if (!mc->guid_set)
+	return ENOSYS;
+    memcpy(guid, mc->guid, 16);
+    return 0;
+}
+
+void
+ipmi_mc_set_guid(ipmi_mc_t *mc, unsigned char *data)
+{
+    memcpy(mc->guid, data, 16);
+    mc->guid_set = 1;
 }
 
 void

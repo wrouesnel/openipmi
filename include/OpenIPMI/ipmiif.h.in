@@ -216,6 +216,11 @@ enum ipmi_domain_type
 enum ipmi_domain_type ipmi_domain_get_type(ipmi_domain_t *domain);
 const char *ipmi_domain_get_type_string(enum ipmi_domain_type dtype);
 
+/* Return the system GUID for the domain.  The guid must point to an
+   array of 16 characters.  Returns ENOSYS if the domain didn't have a
+   GUID. */
+int ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid);
+
 /* Add and remove a function to be called when the connection or port
    to the domain goes down or back up.  Being down does NOT mean the
    domain has been shutdown, it is still active, and OpenIPMI will

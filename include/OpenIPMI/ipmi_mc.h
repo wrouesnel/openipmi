@@ -92,6 +92,10 @@ int ipmi_mc_manufacturer_id(ipmi_mc_t *mc);
 int ipmi_mc_product_id(ipmi_mc_t *mc);
 void ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[]);
 
+/* Get the GUID (if it is available).  Returns ENOSYS if the GUID is
+   not available.  guid must point to 16 bytes of data. */
+int ipmi_mc_get_guid(ipmi_mc_t *mc, unsigned char *guid);
+
 /* Check to see if the MC is operational in the system.  If this is
    false, then the MC was referred to by an SDR, but it doesn't really
    exist. */

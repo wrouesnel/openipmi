@@ -717,9 +717,9 @@ rakp_get_msg_tag(unsigned char *tmsg,
 		 unsigned int  data_len,
 		 unsigned char *tag)
 {
-    if (data_len < 1)
+    if (data_len < 8)
 	return EINVAL;
-    *tag = tmsg[0];
+    *tag = ipmi_get_uint32(tmsg+4) - 1; /* session id */
     return 0;
 }
 

@@ -83,10 +83,13 @@ mc_list(ipmi_domain_t *domain, void *cb_data)
 static void
 mc_dump(ipmi_mc_t *mc, ipmi_cmd_info_t *cmd_info)
 {
-    unsigned char   vals[4];
-    char            str[100];
+    unsigned char vals[4];
+    char          str[100];
+    unsigned char guid[16];
 
     ipmi_cmdlang_out_bool(cmd_info, "Active", ipmi_mc_is_active(mc));
+    if (ipmi_mc_get_guid(mc, guid) == 0)
+	ipmi_cmdlang_out_binary(cmd_info, "GUID", guid, 16);
     ipmi_cmdlang_out_int(cmd_info, "SEL Rescan Time",
 			 ipmi_mc_get_sel_rescan_time(mc));
     ipmi_cmdlang_out_bool(cmd_info, "provides_device_sdrs",
