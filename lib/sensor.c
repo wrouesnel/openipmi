@@ -1087,8 +1087,17 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 		    }
 		    memcpy(s[p+j], s[p], sizeof(ipmi_sensor_t));
 		    
+		    /* In case of error */
+		    s[p+j]->handler_list = NULL;
+
 		    s[p+j]->waitq = opq_alloc(ipmi_domain_get_os_hnd(domain));
 		    if (!s[p+j]->waitq) {
+			rv = ENOMEM;
+			goto out_err;
+		    }
+
+		    s[p+j]->handler_list = alloc_ilist();
+		    if (! s[p+j]->handler_list) {
 			rv = ENOMEM;
 			goto out_err;
 		    }
