@@ -517,14 +517,16 @@ lan_send_addr(lan_data_t  *lan,
     }
 
     if (DEBUG_RAWMSG) {
+	char buf1[32], buf2[32];
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing %sseq %d\n addr =",
 		 sndmsg, seq);
 	dump_hex((unsigned char *) &(lan->ip_addr[addr_num]),
 		 sizeof(sockaddr_ip_t));
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d.",
-		 ipmi_get_netfn_string(msg->netfn),
-                 ipmi_get_command_string(msg->netfn, msg->cmd), msg->data_len);
+		 ipmi_get_netfn_string(msg->netfn, buf1, 32),
+                 ipmi_get_command_string(msg->netfn, msg->cmd, buf2, 32),
+		 msg->data_len);
 	if (pos) {
 	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	    dump_hex(data, pos);
@@ -1009,12 +1011,14 @@ handle_msg_send(lan_timer_info_t      *info,
     }
 
     if (DEBUG_MSG) {
+	char buf1[32], buf2[32];
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msg to IPMI addr =");
 	dump_hex((unsigned char *) addr, addr_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT,
 		 "\n msg  = netfn=%s cmd=%s data_len=%d",
-		 ipmi_get_netfn_string(msg->netfn),
-		 ipmi_get_command_string(msg->netfn, msg->cmd), msg->data_len);
+		 ipmi_get_netfn_string(msg->netfn, buf1, 32),
+		 ipmi_get_command_string(msg->netfn, msg->cmd, buf2, 32),
+		 msg->data_len);
 	if (msg->data_len) {
 	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
 		     msg->data_len);
@@ -1461,13 +1465,15 @@ data_handler(int            fd,
 	msg.data = tmsg+6;
 	msg.data_len = data_len - 6;
         if (DEBUG_MSG) {
+	    char buf1[32], buf2[32], buf3[32];
 	    ipmi_log(IPMI_LOG_DEBUG_START, "incoming async event\n addr =");
 	    dump_hex((unsigned char *) &ipaddrd, from_len);
             ipmi_log(IPMI_LOG_DEBUG_CONT,
 		     "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
-		     ipmi_get_netfn_string(msg.netfn),
-		     ipmi_get_command_string(msg.netfn, msg.cmd), msg.data_len,
-		     ipmi_get_cc_string(msg.data[0]));
+		     ipmi_get_netfn_string(msg.netfn, buf1, 32),
+		     ipmi_get_command_string(msg.netfn, msg.cmd, buf2, 32),
+		     msg.data_len,
+		     ipmi_get_cc_string(msg.data[0], buf3, 32));
 	    if (msg.data_len) {
 		ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
 			 msg.data_len);
@@ -1608,13 +1614,15 @@ data_handler(int            fd,
     ipmi_unlock(lan->seq_num_lock);
 
     if (DEBUG_MSG) {
+	char buf1[32], buf2[32], buf3[32];
         ipmi_log(IPMI_LOG_DEBUG_START, "incoming msg from IPMB addr =");
         dump_hex((unsigned char *) &addr, addr_len);
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                 "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
-		ipmi_get_netfn_string(msg.netfn),
-                ipmi_get_command_string(msg.netfn, msg.cmd), msg.data_len,
-		ipmi_get_cc_string(msg.data[0]));
+		ipmi_get_netfn_string(msg.netfn, buf1, 32),
+                ipmi_get_command_string(msg.netfn, msg.cmd, buf2, 32),
+		 msg.data_len,
+		ipmi_get_cc_string(msg.data[0], buf3, 32));
 	if (msg.data_len) {
 	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	    dump_hex(msg.data, msg.data_len);

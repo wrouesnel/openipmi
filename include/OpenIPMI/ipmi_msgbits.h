@@ -156,8 +156,23 @@
 #define IPMI_SET_USER_NAME_CMD			0x45
 #define IPMI_GET_USER_NAME_CMD			0x46
 #define IPMI_SET_USER_PASSWORD_CMD		0x47
+#define IPMI_ACTIVATE_PAYLOAD_CMD		0x48
+#define IPMI_DEACTIVATE_PAYLOAD_CMD		0x49
+#define IPMI_GET_PAYLOAD_ACTIVATION_STATUS_CMD	0x4a
+#define IPMI_GET_PAYLOAD_INSTANCE_INFO_CMD	0x4b
+#define IPMI_SET_USER_PAYLOAD_ACCESS_CMD	0x4c
+#define IPMI_GET_USER_PAYLOAD_ACCESS_CMD	0x4d
+#define IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD	0x4e
+#define IPMI_GET_CHANNEL_PAYLOAD_VERSION_CMD	0x4f
+#define IPMI_GET_CHANNEL_OEM_PAYLOAD_INFO_CMD	0x50
 
 #define IPMI_MASTER_READ_WRITE_CMD		0x52
+
+#define IPMI_GET_CHANNEL_CIPHER_SUITES_CMD	0x54
+#define IPMI_SUSPEND_RESUME_PAYLOAD_ENCRYPTION_CMD 0x55
+#define IPMI_SET_CHANNEL_SECURITY_KEY_CMD	0x56
+#define IPMI_GET_SYSTEM_INTERFACE_CAPABILITIES_CMD 0x57
+
 
 /* Storage netfn (0x0a) */
 #define IPMI_GET_FRU_INVENTORY_AREA_INFO_CMD	0x10
@@ -210,8 +225,17 @@
 #define IPMI_SET_USER_CALLBACK_OPTIONS_CMD	0x1a
 #define IPMI_GET_USER_CALLBACK_OPTIONS_CMD	0x1b
 
+#define IPMI_SOL_ACTIVATING_CMD			0x20
+#define IPMI_SET_SOL_CONFIGURATION_PARAMETERS	0x21
+#define IPMI_GET_SOL_CONFIGURATION_PARAMETERS	0x22
+
+/* Convert a netfn/cmd into a string.  You must pass a buffer in (32
+   bytes is good) and the buffer length.  The string will be stored in
+   that buffer and also returned. */
 char *ipmi_get_command_string(unsigned int netfn,
-			      unsigned int cmd);
+			      unsigned int cmd,
+			      char         *buffer,
+			      unsigned int buf_len);
 
 /*
  * NetFNs
@@ -226,6 +250,11 @@ char *ipmi_get_command_string(unsigned int netfn,
 #define IPMI_GROUP_EXTENSION_NETFN	0x2c
 #define IPMI_OEM_GROUP_NETFN		0x2e
 
-char *ipmi_get_netfn_string(unsigned int netfn);
+/* Convert a netfn into a string.  You must pass a buffer in (32
+   bytes is good) and the buffer length.  The string will be stored in
+   that buffer and also returned. */
+char *ipmi_get_netfn_string(unsigned int netfn,
+			    char         *buffer,
+			    unsigned int buf_len);
 
 #endif /* _IPMI_MSGBITS_H */

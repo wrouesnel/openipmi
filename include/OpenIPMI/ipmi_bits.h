@@ -129,6 +129,11 @@ char *ipmi_get_sensor_type_string(unsigned int val);
 #define IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC			0x6f
 char *ipmi_get_event_reading_type_string(unsigned int val);
 
+#define IPMI_SENSOR_DIRECTION_UNSPECIFIED	0
+#define IPMI_SENSOR_DIRECTION_INPUT		1
+#define IPMI_SENSOR_DIRECTION_OUTPUT		2
+char *ipmi_get_sensor_direction_string(unsigned int val);
+
 char *ipmi_get_reading_name(unsigned int event_reading_type,
 			    unsigned int sensor_type,
 			    unsigned int val);
@@ -344,6 +349,12 @@ char *ipmi_get_event_dir_string(enum ipmi_event_dir_e val);
 #define IPMI_ENTITY_ID_IO_MODULE			44
 #define IPMI_ENTITY_ID_PROCESSOR_IO_MODULE		45
 #define IPMI_ENTITY_ID_MGMT_CONTROLLER_FIRMWARE		46
+#define IPMI_ENTITY_ID_IPMI_CHANNEL			47
+#define IPMI_ENTITY_ID_PCI_BUS				48
+#define IPMI_ENTITY_ID_PCI_EXPRESS_BUS			49
+#define IPMI_ENTITY_ID_SCSI_BUS				50
+#define IPMI_ENTITY_ID_SATA_SAS_BUS			51
+#define IPMI_ENTITY_ID_PROCESSOR_FRONT_SIDE_BUS		52
 char *ipmi_get_entity_id_string(unsigned int val);
 
 

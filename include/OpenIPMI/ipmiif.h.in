@@ -1202,6 +1202,9 @@ int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
 /* Returns IPMI_EVENT_READING_TYPE_xxx */
 int ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor);
 
+/* Returns IPMI_SENSOR_DIRECTION_xxx */
+int ipmi_sensor_get_sensor_direction(ipmi_sensor_t *sensor);
+
 /* Sets "val" to if an event is supported for this particular sensor. */
 int ipmi_sensor_threshold_event_supported(
     ipmi_sensor_t               *sensor,

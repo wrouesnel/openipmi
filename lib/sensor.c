@@ -125,6 +125,8 @@ struct ipmi_sensor_s
     unsigned int  threshold_access : 2;
     unsigned int  event_support : 2;
 
+    unsigned int sensor_direction : 2;
+
     int          hot_swap_requester;
     unsigned int hot_swap_requester_val;
 
@@ -171,6 +173,7 @@ struct ipmi_sensor_s
     unsigned char default_thresholds[6];
     unsigned char positive_going_threshold_hysteresis;
     unsigned char negative_going_threshold_hysteresis;
+
 
     unsigned char oem1;
 
@@ -1011,6 +1014,11 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
     int           val;
     int           rv;
     int           i, j;
+    int           share_count;
+    int           id_string_mod_type;
+    int           entity_instance_incr;
+    int           id_string_modifier_offset;
+    
 
     rv = ipmi_get_sdr_count(sdrs, &count);
     if (rv)
@@ -1035,6 +1043,11 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 		incr = sdr.data[18] & 0x0f;
 	    else
 		incr = 1;
+	} else if (sdr.type == 3) {
+	    if (sdr.data[7] & 0x0f)
+		incr = sdr.data[7] & 0x0f;
+	    else
+		incr = 1;
 	} else
 	    continue;
 
@@ -1056,7 +1069,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	if (rv)
 	    goto out_err;
 
-	if ((sdr.type != 1) && (sdr.type != 2))
+	if ((sdr.type != 1) && (sdr.type != 2) && (sdr.type != 3))
 	    continue;
 
 	s[p] = ipmi_mem_alloc(sizeof(*s[p]));
@@ -1091,6 +1104,12 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 						   &(s[p]->mc));
 	if (rv)
 	    goto out_err;
+
+	share_count = 0;
+	id_string_mod_type = 0;
+	entity_instance_incr = 0;
+	id_string_modifier_offset = 0;
+
 	s[p]->usecount = 1;
 	s[p]->domain = domain;
 	s[p]->source_mc = source_mc;
@@ -1104,43 +1123,45 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	s[p]->entity_id = sdr.data[3];
 	s[p]->entity_instance_logical = sdr.data[4] >> 7;
 	s[p]->entity_instance = sdr.data[4] & 0x7f;
-	s[p]->sensor_init_scanning = (sdr.data[5] >> 6) & 1;
-	s[p]->sensor_init_events = (sdr.data[5] >> 5) & 1;
-	s[p]->sensor_init_thresholds = (sdr.data[5] >> 4) & 1;
-	s[p]->sensor_init_hysteresis = (sdr.data[5] >> 3) & 1;
-	s[p]->sensor_init_type = (sdr.data[5] >> 2) & 1;
-	s[p]->sensor_init_pu_events = (sdr.data[5] >> 1) & 1;
-	s[p]->sensor_init_pu_scanning = (sdr.data[5] >> 0) & 1;
-	s[p]->ignore_if_no_entity = (sdr.data[6] >> 7) & 1;
-	s[p]->supports_auto_rearm = (sdr.data[6] >> 6) & 1 ;
-	s[p]->hysteresis_support = (sdr.data[6] >> 4) & 3;
-	s[p]->threshold_access = (sdr.data[6] >> 2) & 3;
-	s[p]->event_support = sdr.data[6] & 3;
-	s[p]->sensor_type = sdr.data[7];
-	s[p]->event_reading_type = sdr.data[8];
+	if ((sdr.type == 1) || (sdr.type == 2)) {
+	    s[p]->sensor_init_scanning = (sdr.data[5] >> 6) & 1;
+	    s[p]->sensor_init_events = (sdr.data[5] >> 5) & 1;
+	    s[p]->sensor_init_thresholds = (sdr.data[5] >> 4) & 1;
+	    s[p]->sensor_init_hysteresis = (sdr.data[5] >> 3) & 1;
+	    s[p]->sensor_init_type = (sdr.data[5] >> 2) & 1;
+	    s[p]->sensor_init_pu_events = (sdr.data[5] >> 1) & 1;
+	    s[p]->sensor_init_pu_scanning = (sdr.data[5] >> 0) & 1;
+	    s[p]->ignore_if_no_entity = (sdr.data[6] >> 7) & 1;
+	    s[p]->supports_auto_rearm = (sdr.data[6] >> 6) & 1 ;
+	    s[p]->hysteresis_support = (sdr.data[6] >> 4) & 3;
+	    s[p]->threshold_access = (sdr.data[6] >> 2) & 3;
+	    s[p]->event_support = sdr.data[6] & 3;
+	    s[p]->sensor_type = sdr.data[7];
+	    s[p]->event_reading_type = sdr.data[8];
 
-	val = ipmi_get_uint16(sdr.data+9);
-	for (j=0; j<16; j++) {
-	    s[p]->mask1[j] = val & 1;
-	    val >>= 1;
-	}
-	val = ipmi_get_uint16(sdr.data+11);
-	for (j=0; j<16; j++) {
-	    s[p]->mask2[j] = val & 1;
-	    val >>= 1;
-	}
-	val = ipmi_get_uint16(sdr.data+13);
-	for (j=0; j<16; j++) {
-	    s[p]->mask3[j] = val & 1;
-	    val >>= 1;
-	}
+	    val = ipmi_get_uint16(sdr.data+9);
+	    for (j=0; j<16; j++) {
+		s[p]->mask1[j] = val & 1;
+		val >>= 1;
+	    }
+	    val = ipmi_get_uint16(sdr.data+11);
+	    for (j=0; j<16; j++) {
+		s[p]->mask2[j] = val & 1;
+		val >>= 1;
+	    }
+	    val = ipmi_get_uint16(sdr.data+13);
+	    for (j=0; j<16; j++) {
+		s[p]->mask3[j] = val & 1;
+		val >>= 1;
+	    }
 
-	s[p]->analog_data_format = (sdr.data[15] >> 6) & 3;
-	s[p]->rate_unit = (sdr.data[15] >> 3) & 7;
-	s[p]->modifier_unit_use = (sdr.data[15] >> 1) & 3;
-	s[p]->percentage = sdr.data[15] & 1;
-	s[p]->base_unit = sdr.data[16];
-	s[p]->modifier_unit = sdr.data[17];
+	    s[p]->analog_data_format = (sdr.data[15] >> 6) & 3;
+	    s[p]->rate_unit = (sdr.data[15] >> 3) & 7;
+	    s[p]->modifier_unit_use = (sdr.data[15] >> 1) & 3;
+	    s[p]->percentage = sdr.data[15] & 1;
+	    s[p]->base_unit = sdr.data[16];
+	    s[p]->modifier_unit = sdr.data[17];
+	}
 
 	if (sdr.type == 1) {
 	    /* A full sensor record. */
@@ -1159,6 +1180,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 		}
 	    }
 
+	    s[p]->sensor_direction = sdr.data[23] & 0x3;
 	    s[p]->normal_min_specified = (sdr.data[25] >> 2) & 1;
 	    s[p]->normal_max_specified = (sdr.data[25] >> 1) & 1;
 	    s[p]->nominal_reading_specified = sdr.data[25] & 1;
@@ -1182,12 +1204,12 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 						  SENSOR_ID_LEN);
 	    if (s[p]->entity)
 		sensor_set_name(s[p]);
-
-	    p++;
-	} else {
+	} else if (sdr.type == 2) {
 	    /* FIXME - make sure this is not a threshold sensor.  The
                question is, what do I do if it is? */
 	    /* A short sensor record. */
+
+	    s[p]->sensor_direction = (sdr.data[18] >> 6) & 0x3;
 
 	    s[p]->positive_going_threshold_hysteresis = sdr.data[20];
 	    s[p]->negative_going_threshold_hysteresis = sdr.data[21];
@@ -1197,16 +1219,43 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 						  s[p]->id, 0, &s[p]->id_type,
 						  SENSOR_ID_LEN);
 
+	    share_count = sdr.data[18] & 0x0f;
+	    if (share_count == 0)
+		share_count = 1;
+	    id_string_mod_type = (sdr.data[18] >> 4) & 0x3;
+	    entity_instance_incr = (sdr.data[19] >> 7) & 0x01;
+	    id_string_modifier_offset = sdr.data[19] & 0x7f;
+	} else {
+	    /* Event-only sensor */
+
+	    s[p]->sensor_type = sdr.data[5];
+	    s[p]->event_reading_type = sdr.data[6];
+	    s[p]->oem1 = sdr.data[10];
+
+	    s[p]->id_len = ipmi_get_device_string(sdr.data+11, sdr.length-11,
+						  s[p]->id, 0, &s[p]->id_type,
+						  SENSOR_ID_LEN);
+
+	    share_count = sdr.data[7] & 0x0f;
+	    if (share_count == 0)
+		share_count = 1;
+	    id_string_mod_type = (sdr.data[7] >> 4) & 0x3;
+	    entity_instance_incr = (sdr.data[8] >> 7) & 0x01;
+	    id_string_modifier_offset = sdr.data[8] & 0x7f;
+	}
+
+	if (share_count) {
 	    /* Duplicate the sensor records for each instance.  Go
 	       backwards to avoid destroying the first one until we
 	       finish the others. */
-	    for (j=(sdr.data[18] & 0x0f)-1; j>=0; j--) {
+	    for (j=share_count-1; j>=0; j--) {
 		int len;
 
 		if (j != 0) {
 		    /* The first one is already allocated, we are
                        using it to copy to the other ones, so this is
-                       not necessary. */
+                       not necessary.  We still have to iterate the
+                       first one to set its string name, though. */
 		    s[p+j] = ipmi_mem_alloc(sizeof(ipmi_sensor_t));
 		    if (!s[p+j]) {
 			rv = ENOMEM;
@@ -1241,16 +1290,16 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 
 		    s[p+j]->num += j;
 
-		    if (sdr.data[19] & 0x80) {
+		    if (entity_instance_incr & 0x80) {
 			s[p+j]->entity_instance += j;
 		    }
 
 		    s[p+j]->source_idx += j;
 		}
 
-		val = (sdr.data[19] & 0x3f) + j;
+		val = id_string_modifier_offset + j;
 		len = s[p+j]->id_len;
-		switch ((sdr.data[18] >> 4) & 0x03) {
+		switch (id_string_mod_type) {
 		    case 0: /* Numeric */
 			if ((val / 10) > 0) {
 			    if (len < SENSOR_ID_LEN) {
@@ -1282,11 +1331,9 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 		    sensor_set_name(s[p+j]);
 	    }
 
-	    if (sdr.data[18] & 0x0f)
-		p += sdr.data[18] & 0x0f;
-	    else
-		p++;
-	}
+	    p += share_count;
+	} else
+	    p++;
     }
 
     *sensors = s;
@@ -2401,6 +2448,14 @@ ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor)
 }
 
 int
+ipmi_sensor_get_sensor_direction(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->sensor_direction;
+}
+
+int
 ipmi_sensor_get_analog_data_format(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -2765,6 +2820,13 @@ ipmi_sensor_set_event_reading_type(ipmi_sensor_t *sensor,
 				   int           event_reading_type)
 {
     sensor->event_reading_type = event_reading_type;
+}
+
+void
+ipmi_sensor_set_direction(ipmi_sensor_t *sensor,
+			  int           direction)
+{
+    sensor->sensor_direction = direction;
 }
 
 void

@@ -32,6 +32,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmiif.h>
@@ -164,6 +165,21 @@ ipmi_get_event_reading_type_string(unsigned int val)
     if (val >= NUM_EVENT_READING_TYPES)
 	return "invalid";
     return event_reading_types[val];
+}
+
+static char *sensor_directions[] =
+{
+    "unspecified",
+    "input",
+    "output",
+};
+#define NUM_SENSOR_DIRECTIONS (sizeof(sensor_directions)/sizeof(char *))
+char *
+ipmi_get_sensor_direction_string(unsigned int val)
+{
+    if (val >= NUM_SENSOR_DIRECTIONS)
+	return "invalid";
+    return sensor_directions[val];
 }
 
 static char *rate_unit_types[] =
@@ -338,7 +354,7 @@ ipmi_get_event_dir_string(enum ipmi_event_dir_e val)
 
 static char *entity_id_types[] =
 {
-    "unspecified",
+    "unspecified",					/* 0 */
     "other",
     "unkown",
     "processor",
@@ -348,7 +364,7 @@ static char *entity_id_types[] =
     "system_board",
     "memory_module",
     "processor_module",
-    "power_supply",
+    "power_supply",					/* 10 */
     "add_in_card",
     "front_panel_board",
     "back_panel_board",
@@ -358,7 +374,7 @@ static char *entity_id_types[] =
     "other_system_board",
     "processor_board",
     "power_unit",
-    "power_module",
+    "power_module",					/* 20 */
     "power_management_board",
     "chassis_back_panel_board",
     "system_chassis",
@@ -368,7 +384,7 @@ static char *entity_id_types[] =
     "peripheral_bay",
     "device_bay",
     "fan_cooling",
-    "cooling_unit",
+    "cooling_unit",					/* 30 */
     "cable_interconnect",
     "memory_device",
     "system_management_software",
@@ -378,13 +394,19 @@ static char *entity_id_types[] =
     "group",
     "remote_mgmt_comm_device",
     "external_environment",
-    "battery",
+    "battery",						/* 40 */
     "processing blade",
     "connectivity switch",
     "processor/memory module",
     "I/O module",
     "processor I/O module",
     "management controller firmware",
+    "ipmi channel",
+    "pci bus",
+    "pci express bus",
+    "scsi bus",						/* 50 */
+    "sata/sas bus",
+    "processor front side bus",
 };
 #define NUM_ENTITY_ID_TYPES (sizeof(entity_id_types)/sizeof(char *))
 char *
@@ -755,14 +777,13 @@ static char *ipmi_netfns[] =
  * Convert a NetFN code into a string
  */
 char *
-ipmi_get_netfn_string(unsigned int  netfn)
+ipmi_get_netfn_string(unsigned int netfn,
+		      char         *buffer,
+		      unsigned int buf_len)
 {
-    int		len;
-    char*	netfn_fs;
-    static char netfn_buffer[32];
-    extern int sprintf(char *str, const char *format, ...);
+    char *netfn_fs;
 
-    netfn &= 0x3f;	/* low 6 bits only thanks! */
+    netfn &= 0x3f;
 
     if ( netfn > 0x2f )
 	netfn_fs = ipmi_netfns[(netfn & 0x01) + 20];
@@ -775,11 +796,9 @@ ipmi_get_netfn_string(unsigned int  netfn)
     else
 	netfn_fs = ipmi_netfns[netfn];
 
-    if ( (len = sprintf(netfn_buffer, netfn_fs, netfn)) > (sizeof(netfn_buffer) - 1))
-	len = sizeof(netfn_buffer) - 1;
-    netfn_buffer[len] = '\0';
+    snprintf(buffer, buf_len, netfn_fs, netfn);
 
-    return(netfn_buffer);
+    return buffer;
 }
 
 static char * ipmi_app_cmds[] =
@@ -822,8 +841,23 @@ static char * ipmi_app_cmds[] =
     "GetUsrAccCmd:%02x",	// +35: 0x44
     "SetUsrName:%02x",		// +36: 0x45
     "GetUsrName:%02x",		// +37: 0x46
-    "SetUsrPasswd:%02x",	// +38: 0x47 (0x48..0x51 unassigned)
-    "MstrWrRd:%02x",		// +39: 0x52
+    "SetUsrPasswd:%02x",	// +38: 0x47
+    "ActPayload:%02x",		// +39: 0x48
+    "DeactPayload:%02x",	// +40: 0x49
+    "GetPayloadDeactStat:%02x",	// +41: 0x4a
+    "GetPayloadInstInfo:%02x",	// +42: 0x4b
+    "SetUserPayloadAcc:%02x",	// +43: 0x4c
+    "GetUserPayloadAcc:%02x",	// +44: 0x4d
+    "GetChanPayloadSup:%02x",	// +45: 0x4e
+    "GetChanPayloadVer:%02x",	// +46: 0x4f
+    "GetChanOEMPayloadInf:%02x",// +47: 0x50
+    "unassigned:%02x",		// +48: 0x51 unassigned
+    "MstrWrRd:%02x",		// +49: 0x52
+    "unassigned:%02x",		// +50: 0x53 unassigned
+    "GetChanCipherSuites:%02x",	// +51: 0x54
+    "SuspResPayloadEnc:%02x",	// +52: 0x55
+    "SetChanSecKey:%02x",	// +53: 0x56
+    "GetSysIntfCap:%02x",	// +54: 0x57
 };
 
 static char * ipmi_chassis_cmds[] =
@@ -925,6 +959,13 @@ static char * ipmi_transport_cmds[] =
     "Callback:%02x",		// +14: 0x19
     "SetUsrCallOpts:%02x",	// +15: 0x1a
     "GetUsrCallOpts:%02x",	// +16: 0x1b
+    "unassigned:%02x",		// +17: 0x1c
+    "unassigned:%02x",		// +18: 0x1d
+    "unassigned:%02x",		// +19: 0x1e
+    "unassigned:%02x",		// +20: 0x1f
+    "SOLActivating:%02x",	// +21: 0x20
+    "SetSOLConfParm:%02x",	// +22: 0x21
+    "GetSOLConfParm:%02x",	// +23: 0x22
 };
 
 static char * ipmi_bridge_cmds[] =
@@ -958,23 +999,22 @@ static char * ipmi_bridge_cmds[] =
     "OEMcommands:%02x",		// +26: 0xc0..0xfe
     "ErrorReport:%02x",		// +27: 0xff
 };
+
 /*
  * Convert a NetFN/Command code into a string
  */
 char *
-ipmi_get_command_string(unsigned int  netfn, unsigned int  cmd)
+ipmi_get_command_string(unsigned int netfn,
+			unsigned int cmd,
+			char         *buffer,
+			unsigned int buf_len)
 {
-    int		len;
-    char**	netfn_table;
-    char*	cmd_fs;
-    static char cmd_buffer[32];
-    extern int sprintf(char *str, const char *format, ...);
+    char **netfn_table;
+    char *cmd_fs = NULL;
+ 
+    netfn &= 0x3f;
 
-    netfn &= 0x3f;	/* low 6 bits only thanks! */
-
-    if ( netfn > 0x0d )
-	cmd_fs = "unknown:%02x";
-    else {
+    if ( netfn <= 0x0d ) {
 	switch ( netfn ) {
 	    case IPMI_CHASSIS_NETFN:
 	    case IPMI_CHASSIS_NETFN | 1:
@@ -984,8 +1024,6 @@ ipmi_get_command_string(unsigned int  netfn, unsigned int  cmd)
 		    cmd_fs = netfn_table[cmd];
 		else if ( cmd == 0x0f )
 		    cmd_fs = netfn_table[11];
-		else
-		    cmd_fs = netfn_table[10];
 		break;
 	    }
 	    case IPMI_BRIDGE_NETFN:
@@ -1002,8 +1040,6 @@ ipmi_get_command_string(unsigned int  netfn, unsigned int  cmd)
 		    cmd_fs = netfn_table[cmd - 0x30 + 20];
 		else if ( (cmd > 0xbf) && (cmd < 0xff) )
 		    cmd_fs = netfn_table[26];
-		else
-		    cmd_fs = netfn_table[27];
 		break;
 	    }
 	    case IPMI_SENSOR_EVENT_NETFN:
@@ -1016,8 +1052,6 @@ ipmi_get_command_string(unsigned int  netfn, unsigned int  cmd)
 		    cmd_fs = netfn_table[cmd - 0x10 + 3];
 		else if ( (cmd > 0x1f) && (cmd < 0x30) )
 		    cmd_fs = netfn_table[cmd - 0x20 + 11];
-		else
-		    cmd_fs = netfn_table[23];
 		break;
 	    }
 	    case IPMI_APP_NETFN:
@@ -1028,12 +1062,8 @@ ipmi_get_command_string(unsigned int  netfn, unsigned int  cmd)
 		    cmd_fs = netfn_table[cmd];
 		else if ( (cmd > 0x21) && (cmd < 0x26) )
 		    cmd_fs = netfn_table[cmd - 0x22 + 9];
-		else if ( (cmd > 0x2d) && (cmd < 0x48) )
+		else if ( (cmd > 0x2d) && (cmd < 0x58) )
 		    cmd_fs = netfn_table[cmd - 0x2e + 13];
-		else if ( cmd == 0x52 )
-		    cmd_fs = netfn_table[39];
-		else
-		    cmd_fs = netfn_table[10];
 		break;
 	    }
 	    case IPMI_FIRMWARE_NETFN:
@@ -1056,8 +1086,6 @@ ipmi_get_command_string(unsigned int  netfn, unsigned int  cmd)
 		    cmd_fs = netfn_table[cmd - 0x40 + 17];
 		else if ( (cmd > 0x59) && (cmd < 0x5c) )
 		    cmd_fs = netfn_table[cmd - 0x5a + 27];
-		else
-		    cmd_fs = netfn_table[0];
 		break;
 	    }
 	    case IPMI_TRANSPORT_NETFN:
@@ -1066,23 +1094,22 @@ ipmi_get_command_string(unsigned int  netfn, unsigned int  cmd)
 		netfn_table=ipmi_transport_cmds;
 		if ( cmd < 0x05 )
 		    cmd_fs = netfn_table[cmd];
-		else if ( (cmd > 0x0f) && (cmd < 0x1c) )
+		else if ( (cmd > 0x0f) && (cmd < 0x23) )
 		    cmd_fs = netfn_table[cmd - 0x10 + 5];
-		else
-		    cmd_fs = netfn_table[0];
 		break;
 	    }
 	}
     }
-    /* Format the command into a human-readable string */
-    if ( (len = sprintf(cmd_buffer, cmd_fs, cmd)) > (sizeof(cmd_buffer) - 1))
-	len = sizeof(cmd_buffer) - 1;
-    cmd_buffer[len] = '\0';
 
-    return(cmd_buffer);
+    if (!cmd_fs)
+	cmd_fs = "unknown:%02x";
+
+    snprintf(buffer, buf_len, cmd_fs, cmd);
+
+    return buffer;
 }
 
-static char * ipmi_ccodes[] =
+static char *ipmi_ccodes[] =
 {
     "Normal:%02x",	// +0 : 0x00 (0x01..0xbf undefined)
     "NodeBusy:%02x",	// +1 : 0xc0
@@ -1108,18 +1135,16 @@ static char * ipmi_ccodes[] =
     "PrivError:%02x",	// +21: 0xd4
     "InvalState:%02x",	// +22: 0xd5 (0xd6..0xfe undefined)
     "Unspecified:%02x",	// +23: 0xff
-    "Unknown:%02x",	// +24: 0x??
 };
 /*
  * Convert a Completion Code into a string
  */
 char *
-ipmi_get_cc_string(unsigned int  cc)
+ipmi_get_cc_string(unsigned int cc,
+		   char         *buffer,
+		   unsigned int buf_len)
 {
-    int		len;
-    char*	cc_fs;
-    static char cc_buffer[32];
-    extern int sprintf(char *str, const char *format, ...);
+    char *cc_fs;
 
     if ( cc == 0x00 )
 	cc_fs = ipmi_ccodes[0];
@@ -1128,13 +1153,11 @@ ipmi_get_cc_string(unsigned int  cc)
     else if ( cc == 0xff )
 	cc_fs = ipmi_ccodes[23];
     else
-	cc_fs = ipmi_ccodes[24];
+	cc_fs = "Unknown:%02x";
 
-    if ( (len = sprintf(cc_buffer, cc_fs, cc)) > (sizeof(cc_buffer) - 1))
-	len = sizeof(cc_buffer) - 1;
-    cc_buffer[len] = '\0';
+    snprintf(buffer, buf_len, cc_fs, cc);
 
-    return(cc_buffer);
+    return buffer;
 }
 
 /* Get a string name fo the hot swap state. */

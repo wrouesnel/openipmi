@@ -85,6 +85,7 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
     int             event_reading_type;
     int             len;
     int             rv;
+    int             val;
 
     event_reading_type = ipmi_sensor_get_event_reading_type(sensor);
 
@@ -99,7 +100,11 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
 			 ipmi_sensor_get_sensor_type(sensor));
     ipmi_cmdlang_out(cmd_info, "Type Name",
 		     ipmi_sensor_get_sensor_type_string(sensor));
-
+    val = ipmi_sensor_get_sensor_direction(sensor);
+    if (val != IPMI_SENSOR_DIRECTION_UNSPECIFIED)
+	ipmi_cmdlang_out(cmd_info, "Direction",
+			 ipmi_get_sensor_direction_string(val));
+    
     event_support = ipmi_sensor_get_event_support(sensor);
     switch (event_support) {
     case IPMI_EVENT_SUPPORT_PER_STATE:
@@ -157,7 +162,6 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
 	enum ipmi_thresh_e          thresh;
 	enum ipmi_event_value_dir_e value_dir;
 	enum ipmi_event_dir_e       dir;
-	int                         val;
 	int                         rv;
 	char                        th_name[50];
 	double                      dval;
@@ -270,7 +274,6 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
 	    ipmi_cmdlang_out(cmd_info, "Percentage", "%");
     } else {
 	int                   event;
-	int                   val;
 	enum ipmi_event_dir_e dir;
 
 	for (event=0; event<15; event++) {
@@ -903,6 +906,7 @@ sensor_get_event_enables_done(ipmi_sensor_t      *sensor,
     ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     char               sensor_name[IPMI_SENSOR_NAME_LEN];
     int                rv;
+    int                val;
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -932,7 +936,6 @@ sensor_get_event_enables_done(ipmi_sensor_t      *sensor,
 	enum ipmi_thresh_e          thresh;
 	enum ipmi_event_value_dir_e value_dir;
 	enum ipmi_event_dir_e       dir;
-	int                         val;
 
 	for (thresh = IPMI_LOWER_NON_CRITICAL;
 	     thresh <= IPMI_UPPER_NON_RECOVERABLE; 
@@ -970,9 +973,8 @@ sensor_get_event_enables_done(ipmi_sensor_t      *sensor,
 	    }
 	}
     } else {
-	int                   offset;
-	int                   val;
-	char                  *str;
+	int  offset;
+	char *str;
 
 	for (offset=0; offset<15; offset++) {
 	    rv = ipmi_discrete_event_readable(sensor, offset, &val);

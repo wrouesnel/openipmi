@@ -184,6 +184,7 @@ void ipmi_sensor_set_hysteresis_support(ipmi_sensor_t *sensor,
 void ipmi_sensor_set_threshold_access(ipmi_sensor_t *sensor,
 				      int           threshold_access);
 void ipmi_sensor_set_event_support(ipmi_sensor_t *sensor, int event_support);
+void ipmi_sensor_set_sensor_direction(ipmi_sensor_t *sensor, int direction);
 void ipmi_sensor_set_sensor_type(ipmi_sensor_t *sensor, int sensor_type);
 void ipmi_sensor_set_event_reading_type(ipmi_sensor_t *sensor,
 					int           event_reading_type);

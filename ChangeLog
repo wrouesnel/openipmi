@@ -1,3 +1,27 @@
+2004-10-14 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h.in, lib/strings.c, lib/sensor.c: Added
+	sensor direction from the 2.0 spec.
+
+	* cmdlang/cmd_sensor.c, man/ipmi_cmdlang.7: Added direction
+	output.
+
+	* include/OpenIPMI/ipmi_bits.h, lib/strings.c: Added some more
+	entity IDs that are new in the 2.0 spec.
+
+	* lib/sensor.c: Added type 3 (event only) sensor support.
+
+	* include/OpenIPMI/ipmi_bits.h, lib/strings.c, lanserv/priv_table.c:
+	Added commands from the 2.0 spec.
+
+	* include/OpenIPMI/ipmi_bits.h, lib/strings.c: The conversion code
+	for commands, netfns, and completion codes was using static
+	buffers.  Convert to using passed-in buffers so it is reentrant.
+	* include/OpenIPMI/ipmi_err.h: ditto
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+
+
 2004-10-12 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Fixed some race conditions with entity creation

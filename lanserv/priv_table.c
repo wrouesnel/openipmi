@@ -46,6 +46,9 @@ typedef unsigned short priv_val;
 #define b 4 /* bmc-only */
 #define h 5 /* special send-message handling is needed. */
 #define i 6 /* Special set system boot options handling. */
+#define b2 7 /* bmc-only, can be sent to a serial channel when serial
+		port sharing is used and actvating the SOL payload
+		causes the serial session to be terminated. */
 
 /* An entry marked with a comment at the beginning has special
    handling. */
@@ -264,17 +267,22 @@ static priv_val app_privs[] =
     PRIV_ENTRY(n,n,n,X), /* IPMI_SET_USER_NAME_CMD			0x45 */
     PRIV_ENTRY(n,n,X,X), /* IPMI_GET_USER_NAME_CMD			0x46 */
     PRIV_ENTRY(n,n,n,X), /* IPMI_SET_USER_PASSWORD_CMD			0x47 */
-    PRIV_ENTRY(n,n,n,X), /*						0x48 */
-    PRIV_ENTRY(n,n,n,X), /*						0x49 */
-    PRIV_ENTRY(n,n,n,X), /*						0x4a */
-    PRIV_ENTRY(n,n,n,X), /*						0x4b */
-    PRIV_ENTRY(n,n,n,X), /*						0x4c */
-    PRIV_ENTRY(n,n,n,X), /*						0x4d */
-    PRIV_ENTRY(n,n,n,X), /*						0x4e */
-    PRIV_ENTRY(n,n,n,X), /*						0x4f */
-    PRIV_ENTRY(n,n,n,X), /*						0x50 */
+    PRIV_ENTRY(X,X,X,X), /* IPMI_ACTIVATE_PAYLOAD_CMD			0x48 */
+    PRIV_ENTRY(X,X,X,X), /* IPMI_DEACTIVATE_PAYLOAD_CMD			0x49 */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_GET_PAYLOAD_ACTIVATION_STATUS_CMD	0x4a */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_GET_PAYLOAD_INSTANCE_INFO_CMD		0x4b */
+    PRIV_ENTRY(n,n,n,X), /* IPMI_SET_USER_PAYLOAD_ACCESS_CMD		0x4c */
+    PRIV_ENTRY(n,n,X,X), /* IPMI_GET_USER_PAYLOAD_ACCESS_CMD		0x4d */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_GET_CHANNEL_PAYLOAD_SUPPORT_CMD	0x4e */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_GET_CHANNEL_PAYLOAD_VERSION_CMD	0x4f */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_GET_CHANNEL_OEM_PAYLOAD_INFO_CMD	0x50 */
     PRIV_ENTRY(n,n,n,X), /*						0x51 */
     PRIV_ENTRY(n,n,X,X), /* IPMI_MASTER_READ_WRITE_CMD			0x52 */
+    PRIV_ENTRY(n,n,n,X), /*						0x53 */
+    PRIV_ENTRY(p,p,p,p), /* IPMI_GET_CHANNEL_CIPHER_SUITES_CMD		0x54 */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_SUSPEND_RESUME_PAYLOAD_ENCRYPTION_CMD	0x55 */
+    PRIV_ENTRY(n,n,n,X), /* IPMI_SET_CHANNEL_SECURITY_KEY_CMD		0x56 */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_GET_SYSTEM_INTERFACE_CAPABILITIES_CMD	0x57 */
 };
 
 /* Firmware netfn (0x08) */
@@ -395,6 +403,13 @@ static priv_val transport_privs[] =
     PRIV_ENTRY(X,n,X,X), /* IPMI_CALLBACK_CMD				0x19 */
     PRIV_ENTRY(n,n,n,X), /* IPMI_SET_USER_CALLBACK_OPTIONS_CMD		0x1a */
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_USER_CALLBACK_OPTIONS_CMD		0x1b */
+    PRIV_ENTRY(n,n,n,X), /*						0x1c */
+    PRIV_ENTRY(n,n,n,X), /*						0x1d */
+    PRIV_ENTRY(n,n,n,X), /*						0x1e */
+    PRIV_ENTRY(n,n,n,X), /*						0x1f */
+    PRIV_ENTRY(b2,b2,b2,b2), /* IPMI_SOL_ACTIVATING_CMD			0x20 */
+    PRIV_ENTRY(n,n,n,X), /* IPMI_SET_SOL_CONFIGURATION_PARAMETERS	0x21 */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_GET_SOL_CONFIGURATION_PARAMETERS	0x22 */
 };
 
 static struct
@@ -446,6 +461,7 @@ ipmi_cmd_permitted(unsigned char priv,
 	case n:
 	case s:
 	case b:
+	case b2:
 	    return 0;
 
 	case p:

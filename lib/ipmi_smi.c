@@ -344,12 +344,14 @@ smi_send(smi_data_t   *smi,
     ipmi_addr_t myaddr;
 
     if (DEBUG_MSG) {
+	char buf1[32], buf2[32];
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msgid=%08lx\n addr =", msgid);
 	dump_hex((unsigned char *) addr, addr_len);
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d.",
-		 ipmi_get_netfn_string(msg->netfn),
-                 ipmi_get_command_string(msg->netfn, msg->cmd), msg->data_len);
+		 ipmi_get_netfn_string(msg->netfn, buf1, 32),
+                 ipmi_get_command_string(msg->netfn, msg->cmd, buf2, 32),
+		 msg->data_len);
 	if ( msg->data_len ) {
 	        ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	        dump_hex((unsigned char *)msg->data, msg->data_len);
@@ -663,14 +665,17 @@ static void
 gen_recv_msg(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     if (DEBUG_MSG) {
+	char buf1[32], buf2[32], buf3[32];
 	ipmi_log(IPMI_LOG_DEBUG_START, "incoming msgid=%08lx\n addr =",
 		 recv->msgid);
 	dump_hex((unsigned char *) recv->addr, recv->addr_len);
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
-		 ipmi_get_netfn_string(recv->msg.netfn),
-                 ipmi_get_command_string(recv->msg.netfn, recv->msg.cmd), recv->msg.data_len,
-		 ipmi_get_cc_string(recv->msg.data[0]));
+		 ipmi_get_netfn_string(recv->msg.netfn, buf1, 32),
+                 ipmi_get_command_string(recv->msg.netfn, recv->msg.cmd,
+					 buf2, 32),
+		 recv->msg.data_len,
+		 ipmi_get_cc_string(recv->msg.data[0], buf3, 32));
 	if (recv->msg.data_len) {
 	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	    dump_hex(recv->msg.data, recv->msg.data_len);

@@ -1,4 +1,10 @@
 
+Fix presence to try to fetch info from the FRU device instead of just
+knowing that the FRU device MC is present.
+
+Add handling of event data for sensors that have defined event data
+information specific to that sensor type.
+
 Add a way to be notified if children or parents are added to an
 entity.
 
