@@ -103,14 +103,38 @@ typedef struct atca_address_s
     unsigned char site_type;
 } atca_address_t;
 
-typedef struct atca_board_s
+typedef struct atca_ipmc_s atca_ipmc_t;
+typedef struct atca_fru_s atca_fru_t;
+
+typedef struct atca_led_s
+{
+    unsigned int   fru_id;
+    unsigned int   num;
+    unsigned int   colors; /* A bitmask, in OpenIPMI numbers. */
+    atca_fru_t     *fru;
+    ipmi_control_t *control;
+} atca_led_t;
+
+struct atca_fru_s
+{
+    atca_ipmc_t   *minfo;
+    unsigned int  fru_id;
+    unsigned int  num_leds;
+    atca_led_t    *leds;
+    ipmi_entity_t *entity;
+};
+
+struct atca_ipmc_s
 {
     atca_info_t   *shelf;
-    int           idx; /* My index in the shelf's boards. */
+    int           idx; /* My index in the shelf's address and ipmc arrays. */
+    unsigned char site_type;
     unsigned char site_num;
     unsigned char ipmb_address;
-    ipmi_entity_t *entity;
-} atca_board_t;
+    unsigned int  num_frus;
+    atca_fru_t    *frus;
+    unsigned int  ipm_fru_id;
+};
 
 struct atca_info_s
 {
@@ -128,8 +152,11 @@ struct atca_info_s
     unsigned int   num_addresses;
     atca_address_t *addresses;
 
-    unsigned int   num_boards;
-    atca_board_t   *boards;
+    unsigned int num_ipmcs;
+    atca_ipmc_t  *ipmcs;
+
+    ipmi_domain_oem_check_done startup_done;
+    void                       *startup_done_cb_data;
 };
 
 #define ATCA_COLOR_BLUE		1
@@ -171,34 +198,6 @@ atca_entity_sdr_add(ipmi_entity_t   *ent,
     /* Don't put the entities into an SDR */
     return 0;
 }
-
-typedef struct atca_mc_s atca_mc_t;
-typedef struct atca_fru_s atca_fru_t;
-
-typedef struct atca_led_s
-{
-    unsigned int   fru_id;
-    unsigned int   num;
-    unsigned int   colors; /* A bitmask, in OpenIPMI numbers. */
-    atca_fru_t     *fru;
-    ipmi_control_t *control;
-} atca_led_t;
-
-struct atca_fru_s
-{
-    atca_mc_t     *minfo;
-    unsigned int  fru_id;
-    unsigned int  num_leds;
-    atca_led_t    *leds;
-    ipmi_entity_t *entity;
-};
-
-struct atca_mc_s
-{
-    unsigned int  num_frus;
-    atca_fru_t    *frus;
-    unsigned int  ipm_fru_id;
-};
 
 /* Information common to all controls. */
 typedef struct atca_control_header_s
@@ -295,28 +294,6 @@ atca_add_control(ipmi_mc_t      *mc,
     return rv;
 }
 
-
-void
-atca_board_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
-{
-    atca_mc_t  *minfo = cb_data;
-    atca_fru_t *finfo;
-    int        i;
-
-    if (minfo->frus) {
-	for (i=0; i<minfo->num_frus; i++) {
-	    finfo = &minfo->frus[i];
-	    if (finfo->leds) {
-		for (i=0; i<finfo->num_leds; i++) {
-		    if (finfo->leds[i].control)
-			ipmi_control_destroy(finfo->leds[i].control);
-		}
-		ipmi_mem_free(finfo->leds);
-	    }
-	}
-	ipmi_mem_free(minfo->frus);
-    }
-}
 
 static int
 check_for_msg_err(ipmi_mc_t *mc, int rv, ipmi_msg_t *msg,
@@ -761,18 +738,61 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
 }
 
 static void
+fetch_fru_leds(ipmi_mc_t *mc, atca_fru_t *finfo)
+{
+    ipmi_msg_t    msg;
+    unsigned char data[2];
+    int           rv;
+
+    /* Now fetch the LED information. */
+    msg.netfn = PICMG_NETFN;
+    msg.cmd = PICMG_CMD_GET_FRU_LED_PROPERTIES;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = PICMG_ID;
+    data[1] = finfo->fru_id;
+    rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_prop_rsp, finfo);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(fru_picmg_prop_rsp): "
+		 "Could not send FRU LED properties command: 0x%x",
+		 MC_NAME(mc), rv);
+	/* Just go on, don't shut down the info. */
+    }
+}
+
+static int
+realloc_frus(atca_ipmc_t *minfo, unsigned int num_frus)
+{
+    atca_fru_t   *old_frus;
+    unsigned int old_num_frus;
+
+    old_num_frus = minfo->num_frus;
+    if (old_num_frus >= num_frus)
+	return 0;
+
+    old_frus = minfo->frus;
+
+    minfo->frus = ipmi_mem_alloc(sizeof(atca_fru_t) * num_frus);
+    if (!minfo->frus) {
+	minfo->frus = old_frus;
+	return ENOMEM;
+    }
+    memset(minfo->frus, 0, sizeof(atca_fru_t) * num_frus);
+    memcpy(minfo->frus, old_frus, sizeof(atca_fru_t) * old_num_frus);
+    return 0;
+}
+
+static void
 fru_picmg_prop_rsp(ipmi_mc_t  *mc,
 		   ipmi_msg_t *rsp,
 		   void       *rsp_data)
 {
-    atca_mc_t          *minfo = rsp_data;
-    int                addr = ipmi_mc_get_address(mc);
-    int                channel = ipmi_mc_get_channel(mc);
+    atca_ipmc_t        *minfo = rsp_data;
+    atca_info_t        *info = minfo->shelf;
     ipmi_entity_info_t *ents;
     int                rv;
     char               *name;
-    ipmi_msg_t         msg;
-    unsigned char      data[2];
     unsigned int       num_frus;
     unsigned int       ipm_fru_id;
     int                i;
@@ -794,15 +814,14 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
     }
     /* Note that the above also checks for num_frus==0. */
 
-    minfo->frus = ipmi_mem_alloc(sizeof(atca_fru_t) * num_frus);
-    if (!minfo->frus) {
+    rv = realloc_frus(minfo, num_frus);
+    if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(fru_picmg_prop_rsp): "
 		 "Could not allocate FRU memory",
 		 MC_NAME(mc));
 	return;
     }
-    memset(minfo->frus, 0, sizeof(atca_fru_t) * num_frus);
 
     for (i=0; i<num_frus; i++) {
 	minfo->frus[i].minfo = minfo;
@@ -811,58 +830,89 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
 
     minfo->ipm_fru_id = ipm_fru_id;
 
-    domain = ipmi_mc_get_domain(mc);
-    ents = ipmi_domain_get_entities(domain);
-    name = "ATCA Board";
-    rv = ipmi_entity_add(ents, domain, channel, addr, 0,
-			 PICMG_ENTITY_ID_FRONT_BOARD,
-			 0x60, /* Always device relative. */
-			 name, IPMI_ASCII_STR, strlen(name),
-			 atca_entity_sdr_add,
-			 NULL, &minfo->frus[ipm_fru_id].entity);
-    if (rv) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_handle_new_mc): "
-		 "Could not create entity: 0x%x",
-		 MC_NAME(mc), rv);
-	return;
+    if (minfo->site_type == PICMG_SITE_TYPE_PICMG_BOARD) {
+	domain = ipmi_mc_get_domain(mc);
+	ents = ipmi_domain_get_entities(domain);
+	name = "ATCA Board";
+	rv = ipmi_entity_add(ents, domain, 0, minfo->ipmb_address, 0,
+			     IPMI_ENTITY_ID_PROCESSING_BLADE,
+			     0x60, /* Always device relative */
+			     name, IPMI_ASCII_STR, strlen(name),
+			     atca_entity_sdr_add,
+			     NULL, &minfo->frus[ipm_fru_id].entity);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     " Could not add board entity: %x",
+		     DOMAIN_NAME(domain), rv);
+	    return;
+	}
+	rv = ipmi_entity_add_child(info->shelf_entity,
+				   minfo->frus[ipm_fru_id].entity);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "Could not add child board: %x",
+		     DOMAIN_NAME(domain), rv);
+	    return;
+	}
     }
+}
 
-    /* Now fetch the LED information. */
-    msg.netfn = PICMG_NETFN;
-    msg.cmd = PICMG_CMD_GET_FRU_LED_PROPERTIES;
-    msg.data = data;
-    msg.data_len = 2;
-    data[0] = PICMG_ID;
-    data[1] = minfo->ipm_fru_id;
-    rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_prop_rsp,
-			      &(minfo->frus[ipm_fru_id]));
-    if (rv) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(fru_picmg_prop_rsp): "
-		 "Could not send FRU LED properties command: 0x%x",
-		 MC_NAME(mc), rv);
-	/* Just go on, don't shut down the info. */
+void
+atca_board_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+{
+    atca_ipmc_t *minfo = cb_data;
+    atca_fru_t  *finfo;
+    int         i;
+
+    if (minfo->frus) {
+	for (i=0; i<minfo->num_frus; i++) {
+	    finfo = &minfo->frus[i];
+	    if (finfo->leds) {
+		for (i=0; i<finfo->num_leds; i++) {
+		    if (finfo->leds[i].control) {
+			ipmi_control_destroy(finfo->leds[i].control);
+			finfo->leds[i].control = NULL;
+		    }
+		}
+		ipmi_mem_free(finfo->leds);
+		finfo->leds = NULL;
+		finfo->num_leds = 0;
+	    }
+	}
+	ipmi_mem_free(minfo->frus);
+	minfo->frus = NULL;
+	minfo->num_frus = 0;
     }
 }
 
 static void
 atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_info_t *info)
 {
-    atca_mc_t     *minfo = NULL;
+    atca_ipmc_t   *minfo = NULL;
     ipmi_msg_t    msg;
     unsigned char data[1];
     int           rv;
+    int           i;
+    unsigned int  ipmb_addr;
 
-    minfo = ipmi_mem_alloc(sizeof(*minfo));
+    info = ipmi_domain_get_oem_data(domain);
+    ipmb_addr = ipmi_mc_get_address(mc);
+
+    for (i=0; i<info->num_ipmcs; i++) {
+	if (ipmb_addr == info->ipmcs[i].ipmb_address) {
+	    minfo = &(info->ipmcs[i]);
+	    break;
+	}
+    }
     if (!minfo) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_handle_new_mc): "
-		 "Could not allocate board sensor info",
+		 "Could not find IPMC info",
 		 MC_NAME(mc));
 	return;
     }
-    memset(minfo, 0, sizeof(*minfo));
 
     rv = ipmi_mc_add_oem_removed_handler(mc, atca_board_removal_handler,
 					 minfo, NULL);
@@ -889,11 +939,8 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_info_t *info)
 	/* Just go on, don't shut down the info. */
     }
 
-    return;
-
  out_err:
-    if (minfo)
-	ipmi_mem_free(minfo);
+    return;
 }
 
 static void
@@ -941,7 +988,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 {
     atca_info_t        *info = cb_data;
     ipmi_domain_t      *domain = info->domain;
-    unsigned int       count;
+    int                count;
     int                found;
     int                i, j;
     ipmi_entity_info_t *ents;
@@ -1054,57 +1101,26 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	goto out;
     }
 
-    count = 0;
-    for (i=0; i<info->num_addresses; i++) {
-	/* Count the number of boards in the system. */
-	if (info->addresses[i].site_type == PICMG_SITE_TYPE_PICMG_BOARD)
-	    count++;
-    }
-    info->boards = ipmi_mem_alloc(sizeof(atca_board_t) * count);
-    if (!info->boards) {
+    info->ipmcs = ipmi_mem_alloc(sizeof(atca_ipmc_t) * info->num_addresses);
+    if (!info->ipmcs) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(shelf_fru_fetched): "
 		 "could not allocate memory for boards",
 		 DOMAIN_NAME(domain));
 	goto out;
     }
-    memset(info->boards, 0, sizeof(atca_board_t) * count);
+    memset(info->ipmcs, 0, sizeof(atca_ipmc_t) * info->num_addresses);
 
-    info->num_boards = count;
-    j = 0;
-    for (i=0; i<info->num_boards; i++) {
-	/* Process each board. */
-	if (info->addresses[i].site_type == PICMG_SITE_TYPE_PICMG_BOARD) {
-	    atca_board_t *b = &(info->boards[j]);
+    info->num_ipmcs = info->num_addresses;
+    for (i=0; i<info->num_addresses; i++) {
+	/* Process each IPMC. */
+	atca_ipmc_t *b = &(info->ipmcs[i]);
 
-	    b->shelf = info;
-	    b->idx = j;
-	    b->ipmb_address = info->addresses[i].hw_address * 2;
-	    b->site_num = info->addresses[i].site_num;
-	    name = "ATCA Board";
-	    rv = ipmi_entity_add(ents, domain, 0, b->ipmb_address, 0,
-				 IPMI_ENTITY_ID_PROCESSING_BLADE,
-				 0x60, /* Always device relative */
-				 name, IPMI_ASCII_STR, strlen(name),
-				 atca_entity_sdr_add,
-				 NULL, &b->entity);
-	    if (rv) {
-		ipmi_log(IPMI_LOG_WARNING,
-			 "%soem_atca.c(shelf_fru_fetched): "
-			 " Could not add board entity: %x",
-			 DOMAIN_NAME(domain), rv);
-		goto out;
-	    }
-	    rv = ipmi_entity_add_child(info->shelf_entity, b->entity);
-	    if (rv) {
-		ipmi_log(IPMI_LOG_WARNING,
-			 "%soem_atca.c(shelf_fru_fetched): "
-			 "Could not add child board: %x",
-			 DOMAIN_NAME(domain), rv);
-		goto out;
-	    }
-	    j++;
-	}
+	b->shelf = info;
+	b->idx = i;
+	b->ipmb_address = info->addresses[i].hw_address * 2;
+	b->site_type = info->addresses[i].site_type;
+	b->site_num = info->addresses[i].site_num;
     }
 
     rv = ipmi_domain_add_entity_update_handler(domain,
@@ -1119,32 +1135,24 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     }
 
  out:
-    return;
+    info->startup_done(domain, info->startup_done_cb_data);
 }
 
 static void
 atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
 {
     atca_info_t *info = oem_data;
-    int         i;
-
-    if (info->boards) {
-	for (i=0; i<info->num_boards; i++) {
-	    atca_board_t *b = &(info->boards[i]);
-	    if (info->shelf_entity && b->entity)
-		ipmi_entity_remove_child(info->shelf_entity, b->entity);
-	}
-    }
 
     if (info->addresses)
 	ipmi_mem_free(info->addresses);
-    if (info->boards)
-	ipmi_mem_free(info->boards);
+    if (info->ipmcs)
+	ipmi_mem_free(info->ipmcs);
     ipmi_mem_free(info);
 }
 
 static void
-set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr)
+set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
+		   ipmi_domain_oem_check_done done, void *done_cb_data)
 {
     atca_info_t *info;
     int         rv;
@@ -1154,6 +1162,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr)
 		 "%soem_atca.c(set_up_atca_domain): "
 		 "ATCA get address response not long enough",
 		 DOMAIN_NAME(domain));
+	done(domain, done_cb_data);
 	goto out;
     }
 
@@ -1163,10 +1172,13 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr)
 		 "%soem_atca.c(set_up_atca_domain): "
 		 "Could not allocate ATCA information structure",
 		 DOMAIN_NAME(domain));
+	done(domain, done_cb_data);
 	goto out;
     }
     memset(info, 0, sizeof(*info));
 
+    info->startup_done = done;
+    info->startup_done_cb_data = done_cb_data;
     info->domain = domain;
     info->shelf_fru_ipmb = get_addr->data[3];
     info->shelf_fru_device_id = get_addr->data[5];
@@ -1186,6 +1198,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr)
 		 "oem_atca.c(set_up_atca_domain): "
 		 "Error allocating fru information: 0x%x", rv);
 	ipmi_mem_free(info);
+	done(domain, done_cb_data);
 	goto out;
     }
 
@@ -1210,9 +1223,10 @@ check_if_atca_cb(ipmi_domain_t *domain,
 
     if (msg->data[0] == 0) {
 	/* It's an ATCA system, set it up */
-	set_up_atca_domain(domain, msg);
+	set_up_atca_domain(domain, msg, done, rsp_data2);
+    } else {
+	done(domain, rsp_data2);
     }
-    done(domain, rsp_data2);
 }
 
 int
