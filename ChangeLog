@@ -1,4 +1,11 @@
 
+2003-04-22 Corey Minyard <cminyard@mvista.com>
+
+	* ipmicmd.c, include/linux/ipmi.h: Added a debug interface to
+	ipmicmd.
+
+	* ui.c: Added a way to dump all an mc's information.
+
 2003-04-17 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Fixed a double free on set_control error conditions.

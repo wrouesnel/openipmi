@@ -513,4 +513,9 @@ struct ipmi_cmdspec
 #define IPMICTL_SET_MY_LUN_CMD		_IOR(IPMI_IOC_MAGIC, 19, unsigned int)
 #define IPMICTL_GET_MY_LUN_CMD		_IOR(IPMI_IOC_MAGIC, 20, unsigned int)
 
+/*
+ * A debug interface, this is mainly for hacking.  It takes two longs.
+ */
+#define IPMICTL_DEBUG_CMD		_IOR(IPMI_IOC_MAGIC, 21, unsigned long)
+
 #endif /* __LINUX_IPMI_H */

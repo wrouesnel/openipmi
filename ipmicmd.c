@@ -75,6 +75,10 @@
 /*** PVCS LOG SECTION ********************************************************
 *
 * $Log: not supported by cvs2svn $
+* Revision 1.2  2003/03/05 15:42:34  cminyard
+* Fixed the description of the ipmi_bmc_add_con_fail_handler() call
+* to be accurate and complete.
+*
 * Revision 1.1  2003/02/21 16:11:20  cminyard
 * Added ipmicmd to this code.
 * Moved to the newest kernel headers.
@@ -165,7 +169,7 @@ int curr_seq = 0;
 
 void printInfo( )
 {
-    printf( "ipmicmd\t$,$Date: 2003-03-05 15:42:34 $,$Author: cminyard $\n");
+    printf( "ipmicmd\t$,$Date: 2003-04-23 13:19:39 $,$Author: cminyard $\n");
     printf( "Kontron Canada Inc.\n");
     printf( "-\n");
     printf( "This little utility is an ipmi command tool ;-)\n");
@@ -405,6 +409,31 @@ process_input_line(char *buf)
 	time_count = strtoul(v, &endptr, 16);
 
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
+    }
+
+    if (strcmp(v, "debug") == 0) {
+	unsigned long val[2];
+	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
+	if (!v) {
+	    printf("No val1 for debug cmd\n");
+	    return -1;
+	}
+	val[0] = strtoul(v, &endptr, 0);
+
+	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
+	if (!v) {
+	    printf("No val2 for debug cmd\n");
+	    return -1;
+	}
+	val[1] = strtoul(v, &endptr, 0);
+
+	rv = ioctl(ipmi_fd, IPMICTL_DEBUG_CMD, val);
+	if (rv == -1) {
+	    printf("Error for debug command: %s\n", strerror(errno));
+	    return -1;
+	}
+	
+	return 0;
     }
 
     while (v != NULL) {

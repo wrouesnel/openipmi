@@ -2244,6 +2244,113 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static char y_or_n(int val)
+{
+    if (val)
+	return 'y';
+    else
+	return 'n';
+}
+
+#define MCCMD_DATA_SIZE 30
+typedef struct mccmd_info_s
+{
+    ipmi_mc_id_t  mc_id;
+    unsigned char lun;
+    ipmi_msg_t    msg;
+    int           found;
+} mccmd_info_t;
+
+void mc_handler(ipmi_mc_t *mc,
+		   void      *cb_data)
+{
+    unsigned char vals[4];
+
+    display_pad_out("MC (%x %x) - %s\n",
+		    ipmi_mc_get_channel(mc),
+		    ipmi_mc_get_address(mc),
+		    ipmi_mc_is_active(mc) ? "active" : "inactive");
+    display_pad_out("    provides_device_sdrs: %c\n",
+		    y_or_n(ipmi_mc_provides_device_sdrs(mc)));
+    display_pad_out("        device_available: %c\n",
+		    y_or_n(ipmi_mc_device_available(mc)));
+    display_pad_out("         chassis_support: %c\n",
+		    y_or_n(ipmi_mc_chassis_support(mc)));
+    display_pad_out("          bridge_support: %c\n",
+		    y_or_n(ipmi_mc_bridge_support(mc)));
+    display_pad_out("    ipmb_event_generator: %c\n",
+		    y_or_n(ipmi_mc_ipmb_event_generator_support(mc)));
+    display_pad_out("     ipmb_event_receiver: %c\n",
+		    y_or_n(ipmi_mc_ipmb_event_receiver_support(mc)));
+    display_pad_out("   fru_inventory_support: %c\n",
+		    y_or_n(ipmi_mc_fru_inventory_support(mc)));
+    display_pad_out("      sel_device_support: %c\n",
+		    y_or_n(ipmi_mc_sel_device_support(mc)));
+    display_pad_out("  sdr_repository_support: %c\n",
+		    y_or_n(ipmi_mc_sdr_repository_support(mc)));
+    display_pad_out("   sensor_device_support: %c\n",
+		    y_or_n(ipmi_mc_sensor_device_support(mc)));
+    display_pad_out("               device_id: %2.2x\n",
+		    ipmi_mc_device_id(mc));
+    display_pad_out("         device_revision: %1.1x\n",
+		    ipmi_mc_device_revision(mc));
+    display_pad_out("             fw_revision: %d.%d%d\n",
+		    ipmi_mc_major_fw_revision(mc),
+		    ipmi_mc_minor_fw_revision(mc)>>4,
+		    ipmi_mc_minor_fw_revision(mc)&0xf);
+    display_pad_out("                 version: %d.%d\n",
+		    ipmi_mc_major_version(mc),
+		    ipmi_mc_minor_version(mc));
+    display_pad_out("         manufacturer_id: %6.6x\n",
+		    ipmi_mc_manufacturer_id(mc));
+    display_pad_out("              product_id: %4.6x\n",
+		    ipmi_mc_product_id(mc));
+    ipmi_mc_aux_fw_revision(mc, vals);
+    display_pad_out("         aux_fw_revision: %2.2x %2.2x %2.2x %2.2x\n",
+		    vals[0], vals[1], vals[2], vals[3]);
+    
+
+}
+
+static void
+mc_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    mccmd_info_t *info = cb_data;
+
+    info->mc_id.bmc = bmc;
+    ipmi_mc_pointer_cb(info->mc_id, mc_handler, cb_data);
+}
+
+int
+mc_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+    unsigned char val;
+
+    if (get_uchar(toks, &val, "MC channel"))
+	return 0;
+    info.mc_id.channel = val;
+
+    if (get_uchar(toks, &val, "MC num"))
+	return 0;
+    info.mc_id.mc_num = val;
+
+    info.found = 0;
+    rv = ipmi_mc_pointer_cb(bmc_id, mc_cmd_bmcer, &info);
+    if (rv) {
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%x %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
 void mcs_handler(ipmi_mc_t *bmc,
 		 ipmi_mc_t *mc,
 		 void      *cb_data)
@@ -2285,15 +2392,6 @@ mcs_cmd(char *cmd, char **toks, void *cb_data)
     display_pad_refresh();
     return 0;
 }
-
-#define MCCMD_DATA_SIZE 30
-typedef struct mccmd_info_s
-{
-    ipmi_mc_id_t  mc_id;
-    unsigned char lun;
-    ipmi_msg_t    msg;
-    int           found;
-} mccmd_info_t;
 
 static void
 mccmd_rsp_handler(ipmi_mc_t  *src,
@@ -3024,6 +3122,9 @@ static struct {
     { "mcs",		mcs_cmd,
       " - List all the management controllers in the system.  They"
       " are listed (<channel>, <mc num>)" },
+    { "mc",		mc_cmd,
+      " <channel> <mc num>"
+      " - Dump info on the given MC"},
     { "mccmd",		mccmd_cmd,
       " <channel> <mc num> <LUN> <NetFN> <Cmd> [data...]"
       " - Send the given command"
