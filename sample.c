@@ -160,7 +160,7 @@ int
 main(int argc, char *argv[])
 {
     int rv;
-    int curr_arg;
+    int curr_arg = 1;
 
     progname = argv[0];
 
