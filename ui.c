@@ -151,48 +151,6 @@ conv_to_spaces(char *name)
     }
 }
 
-static int
-get_uchar(char **toks, unsigned char *val, char *errstr)
-{
-    char *str, *tmpstr;
-
-    str = strtok_r(NULL, " \t\n", toks);
-    if (!str) {
-	if (errstr)
-	    wprintw(cmd_win, "No %s given\n", errstr);
-	return EINVAL;
-    }
-    *val = strtoul(str, &tmpstr, 16);
-    if (*tmpstr != '\0') {
-	if (errstr)
-	    wprintw(cmd_win, "Invalid %s given\n", errstr);
-	return EINVAL;
-    }
-
-    return 0;
-}
-
-static int
-get_uint(char **toks, unsigned int *val, char *errstr)
-{
-    char *str, *tmpstr;
-
-    str = strtok_r(NULL, " \t\n", toks);
-    if (!str) {
-	if (errstr)
-	    wprintw(cmd_win, "No %s given\n", errstr);
-	return EINVAL;
-    }
-    *val = strtoul(str, &tmpstr, 16);
-    if (*tmpstr != '\0') {
-	if (errstr)
-	    wprintw(cmd_win, "Invalid %s given\n", errstr);
-	return EINVAL;
-    }
-
-    return 0;
-}
-
 void
 log_pad_refresh(int newlines)
 {
@@ -214,6 +172,16 @@ log_pad_refresh(int newlines)
 }
 
 void
+log_pad_out(char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vwprintw(log_pad, format, ap);
+    va_end(ap);
+}
+
+void
 display_pad_refresh(void)
 {
     if (display_pad_top_line >= NUM_DISPLAY_LINES)
@@ -227,6 +195,81 @@ display_pad_refresh(void)
 	     DISPLAY_WIN_TOP, DISPLAY_WIN_LEFT,
 	     DISPLAY_WIN_BOTTOM, DISPLAY_WIN_RIGHT);
     wrefresh(cmd_win);
+}
+
+void
+display_pad_clear(void)
+{
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+}
+
+void
+display_pad_out(char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vwprintw(display_pad, format, ap);
+    va_end(ap);
+}
+
+void
+cmd_win_out(char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vwprintw(cmd_win, format, ap);
+    va_end(ap);
+}
+
+void
+cmd_win_refresh(void)
+{
+    wrefresh(cmd_win);
+}
+
+static int
+get_uchar(char **toks, unsigned char *val, char *errstr)
+{
+    char *str, *tmpstr;
+
+    str = strtok_r(NULL, " \t\n", toks);
+    if (!str) {
+	if (errstr)
+	    cmd_win_out("No %s given\n", errstr);
+	return EINVAL;
+    }
+    *val = strtoul(str, &tmpstr, 16);
+    if (*tmpstr != '\0') {
+	if (errstr)
+	    cmd_win_out("Invalid %s given\n", errstr);
+	return EINVAL;
+    }
+
+    return 0;
+}
+
+static int
+get_uint(char **toks, unsigned int *val, char *errstr)
+{
+    char *str, *tmpstr;
+
+    str = strtok_r(NULL, " \t\n", toks);
+    if (!str) {
+	if (errstr)
+	    cmd_win_out("No %s given\n", errstr);
+	return EINVAL;
+    }
+    *val = strtoul(str, &tmpstr, 16);
+    if (*tmpstr != '\0') {
+	if (errstr)
+	    cmd_win_out("Invalid %s given\n", errstr);
+	return EINVAL;
+    }
+
+    return 0;
 }
 
 void
@@ -410,6 +453,8 @@ static int  line_buffer_pos = 0;
 static int
 normal_char(int key, void *cb_data)
 {
+    char out[2];
+
     if (line_buffer_pos >= line_buffer_max) {
 	char *new_line = malloc(line_buffer_max+10+1);
 	if (!new_line)
@@ -423,7 +468,9 @@ normal_char(int key, void *cb_data)
     }
     line_buffer[line_buffer_pos] = key;
     line_buffer_pos++;
-    waddch(cmd_win, key);
+    out[0] = key;
+    out[1] = '\0';
+    cmd_win_out(out);
     return 0;
 }
 
@@ -436,12 +483,12 @@ end_of_line(int key, void *cb_data)
 	return 0;
 
     line_buffer[line_buffer_pos] = '\0';
-    waddch(cmd_win, '\n');
+    cmd_win_out("\n");
     err = command_handle(commands, line_buffer, NULL);
     if (err)
-	wprintw(cmd_win, "Invalid command: %s\n> ", line_buffer);
+	cmd_win_out("Invalid command: %s\n> ", line_buffer);
     else
-	waddstr(cmd_win, "> ");
+	cmd_win_out("> ");
     line_buffer_pos = 0;
     return 0;
 }
@@ -453,7 +500,7 @@ backspace(int key, void *cb_data)
 	return 0;
 
     line_buffer_pos--;
-    waddstr(cmd_win, "\b \b");
+    cmd_win_out("\b \b");
     return 0;
 }
 
@@ -551,15 +598,14 @@ entities_handler(ipmi_entity_t *entity,
 	present = "present";
     else
 	present = "not present";
-    wprintw(display_pad, "  %d.%d (%s) %s\n", id, instance, name, present);
+    display_pad_out("  %d.%d (%s) %s\n", id, instance, name, present);
 }
 
 static void
 entities_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 {
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
-    waddstr(display_pad, "Entities:\n");
+    display_pad_clear();
+    display_pad_out("Entities:\n");
     ipmi_bmc_iterate_entities(bmc, entities_handler, NULL);
     display_pad_refresh();
 }
@@ -570,13 +616,13 @@ entities_cmd(char *cmd, char **toks, void *cb_data)
     int rv;
 
     if (!bmc_ready) {
-	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	cmd_win_out("BMC has not finished setup yet\n");
 	return 0;
     }
 
     rv = ipmi_mc_pointer_cb(bmc_id, entities_cmd_bmcer, NULL);
     if (rv) {
-	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	return 0;
     }
     curr_display_type = DISPLAY_ENTITIES;
@@ -626,30 +672,30 @@ entity_finder(char *cmd, char **toks,
     int            rv;
 
     if (!bmc_ready) {
-	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	cmd_win_out("BMC has not finished setup yet\n");
 	return EAGAIN;
     }
 
     ent_name = strtok_r(NULL, " \t\n", toks);
     if (!ent_name) {
-	waddstr(cmd_win, "No entity given\n");
+	cmd_win_out("No entity given\n");
 	return EINVAL;
     }
 
     id_name = strtok_r(ent_name, ".", &toks2);
     instance_name = strtok_r(NULL, ".", &toks2);
     if (!instance_name) {
-	waddstr(cmd_win, "Invalid entity given\n");
+	cmd_win_out("Invalid entity given\n");
 	return EINVAL;
     }
     info.id = strtoul(id_name, &estr, 0);
     if (*estr != '\0') {
-	waddstr(cmd_win, "Invalid entity id given\n");
+	cmd_win_out("Invalid entity id given\n");
 	return EINVAL;
     }
     info.instance = strtoul(instance_name, &estr, 0);
     if (*estr != '\0') {
-	waddstr(cmd_win, "Invalid entity instance given\n");
+	cmd_win_out("Invalid entity instance given\n");
 	return EINVAL;
     }
     info.found = 0;
@@ -661,7 +707,7 @@ entity_finder(char *cmd, char **toks,
 
     rv = ipmi_mc_pointer_cb(bmc_id, entity_finder_bmcer, &info);
     if (!info.found) {
-	wprintw(cmd_win, "Entity %d.%d not found\n", info.id, info.instance);
+	cmd_win_out("Entity %d.%d not found\n", info.id, info.instance);
 	return EINVAL;
     }
 
@@ -680,7 +726,7 @@ sensors_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
     ipmi_sensor_get_id(sensor, name, 33);
     strcpy(name2, name);
     conv_from_spaces(name2);
-    wprintw(display_pad, "  %d.%d.%s - %s\n", id, instance, name2, name);
+    display_pad_out("  %d.%d.%s - %s\n", id, instance, name2, name);
 }
 
 static void
@@ -694,9 +740,8 @@ found_entity_for_sensors(ipmi_entity_t *entity,
     curr_display_type = DISPLAY_SENSORS;
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
-    wprintw(display_pad, "Sensors for entity %d.%d:\n", id, instance);
+    display_pad_clear();
+    display_pad_out("Sensors for entity %d.%d:\n", id, instance);
     ipmi_entity_iterate_sensors(entity, sensors_handler, NULL);
     display_pad_refresh();
 }
@@ -731,17 +776,17 @@ read_sensor(ipmi_sensor_t             *sensor,
 
     wmove(display_pad, value_pos.y, value_pos.x);
     if (err) {
-	wprintw(display_pad, "unreadable");
+	display_pad_out("unreadable");
 	display_pad_refresh();
 	return;
     }
 
     if (value_present == IPMI_BOTH_VALUES_PRESENT)
-	wprintw(display_pad, "%f", val);
+	display_pad_out("%f", val);
     else if (value_present == IPMI_RAW_VALUE_PRESENT)
-	wprintw(display_pad, "0x%x (RAW)", raw_val);
+	display_pad_out("0x%x (RAW)", raw_val);
     else
-	wprintw(display_pad, "unreadable");
+	display_pad_out("unreadable");
     display_pad_refresh();
 }
 
@@ -768,7 +813,7 @@ read_thresholds(ipmi_sensor_t     *sensor,
 		wmove(display_pad,
 		      threshold_positions[t].value.y,
 		      threshold_positions[t].value.x);
-		wprintw(display_pad, "?");
+		display_pad_out("?");
 	    }
 	}    
     } else {
@@ -779,9 +824,9 @@ read_thresholds(ipmi_sensor_t     *sensor,
 		      threshold_positions[t].value.y,
 		      threshold_positions[t].value.x);
 		if (rv)
-		    wprintw(display_pad, "?", val);
+		    display_pad_out("?", val);
 		else
-		    wprintw(display_pad, "%f", val);
+		    display_pad_out("%f", val);
 	    }
 	}    
     }
@@ -811,19 +856,19 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
     scanning_disable = ipmi_event_state_get_scanning_disabled(states);
     wmove(display_pad, enabled_pos.y, enabled_pos.x);
     if (err)
-	wprintw(display_pad, "?         ");
+	display_pad_out("?         ");
     else if (global_disable)
-	wprintw(display_pad, "disabled");
+	display_pad_out("disabled");
     else
-	wprintw(display_pad, "enabled");
+	display_pad_out("enabled");
 
     wmove(display_pad, scanning_pos.y, scanning_pos.x);
     if (err)
-	wprintw(display_pad, "?         ");
+	display_pad_out("?         ");
     else if (scanning_disable)
-	wprintw(display_pad, "disabled");
+	display_pad_out("disabled");
     else
-	wprintw(display_pad, "enabled");
+	display_pad_out("enabled");
 
     if (ipmi_sensor_get_event_support(sensor)
 	!= IPMI_EVENT_SUPPORT_PER_STATE)
@@ -835,34 +880,34 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 		  threshold_positions[t].enabled.y,
 		  threshold_positions[t].enabled.x);
 	    if (err) {
-		wprintw(display_pad, "?         ");
+		display_pad_out("?         ");
 		continue;
 	    }
-	    wprintw(display_pad, "  ");
+	    display_pad_out("  ");
 	    if (ipmi_is_threshold_event_set(states, t,
 					    IPMI_GOING_LOW,
 					    IPMI_ASSERTION))
-		wprintw(display_pad, "L^");
+		display_pad_out("L^");
 	    else
-		wprintw(display_pad, "  ");
+		display_pad_out("  ");
 	    if (ipmi_is_threshold_event_set(states, t,
 					    IPMI_GOING_LOW,
 					    IPMI_DEASSERTION))
-		wprintw(display_pad, "Lv");
+		display_pad_out("Lv");
 	    else
-		wprintw(display_pad, "  ");
+		display_pad_out("  ");
 	    if (ipmi_is_threshold_event_set(states, t,
 					    IPMI_GOING_HIGH,
 					    IPMI_ASSERTION))
-		wprintw(display_pad, "H^");
+		display_pad_out("H^");
 	    else
-		wprintw(display_pad, "  ");
+		display_pad_out("  ");
 	    if (ipmi_is_threshold_event_set(states, t,
 					    IPMI_GOING_HIGH,
 					    IPMI_DEASSERTION))
-		wprintw(display_pad, "HV");
+		display_pad_out("HV");
 	    else
-		wprintw(display_pad, "  ");
+		display_pad_out("  ");
 	}
     }    
 
@@ -892,19 +937,19 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
 
     wmove(display_pad, enabled_pos.y, enabled_pos.x);
     if (err)
-	wprintw(display_pad, "?         ");
+	display_pad_out("?         ");
     else if (global_disable)
-	wprintw(display_pad, "disabled");
+	display_pad_out("disabled");
     else
-	wprintw(display_pad, "enabled");
+	display_pad_out("enabled");
 
     wmove(display_pad, scanning_pos.y, scanning_pos.x);
     if (err)
-	wprintw(display_pad, "?         ");
+	display_pad_out("?         ");
     else if (scanning_disable)
-	wprintw(display_pad, "disabled");
+	display_pad_out("disabled");
     else
-	wprintw(display_pad, "enabled");
+	display_pad_out("enabled");
 
     if (ipmi_sensor_get_event_support(sensor)
 	!= IPMI_EVENT_SUPPORT_PER_STATE)
@@ -912,19 +957,19 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
 
     if (err) {
 	wmove(display_pad, discr_assert_enab.y, discr_assert_enab.x);
-	wprintw(display_pad, "?");
+	display_pad_out("?");
 	wmove(display_pad, discr_deassert_enab.y, discr_deassert_enab.x);
-	wprintw(display_pad, "?");
+	display_pad_out("?");
     } else {
 	wmove(display_pad, discr_assert_enab.y, discr_assert_enab.x);
 	for (i=0; i<15; i++) {
 	    val = ipmi_is_discrete_event_set(states, i, IPMI_ASSERTION);
-	    wprintw(display_pad, "%d", val != 0);
+	    display_pad_out("%d", val != 0);
 	}    
 	wmove(display_pad, discr_deassert_enab.y, discr_deassert_enab.x);
 	for (i=0; i<15; i++) {
 	    val = ipmi_is_discrete_event_set(states, i, IPMI_DEASSERTION);
-	    wprintw(display_pad, "%d", val != 0);
+	    display_pad_out("%d", val != 0);
 	}    
     }
 
@@ -949,11 +994,11 @@ read_states(ipmi_sensor_t *sensor,
 
     wmove(display_pad, value_pos.y, value_pos.x);
     if (err) {
-	wprintw(display_pad, "?");
+	display_pad_out("?");
     } else {
 	for (i=0; i<15; i++) {
 	    val = ipmi_is_state_set(states, i);
-	    wprintw(display_pad, "%d", val != 0);
+	    display_pad_out("%d", val != 0);
 	}    
     }
     display_pad_refresh();
@@ -973,7 +1018,7 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	&& ipmi_sensor_get_ignore_if_no_entity(sensor))
     {
 	wmove(display_pad, value_pos.y, value_pos.x);
-	wprintw(display_pad, "not present");
+	display_pad_out("not present");
 	return;
     }
 
@@ -1033,29 +1078,28 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	id = ipmi_entity_get_entity_id(entity);
 	instance = ipmi_entity_get_entity_instance(entity);
 
-	werase(display_pad);
-	wmove(display_pad, 0, 0);
+	display_pad_clear();
 
 	conv_from_spaces(name);
-	wprintw(display_pad, "Sensor %d.%d.%s - %s:\n",
+	display_pad_out("Sensor %d.%d.%s - %s:\n",
 		id, instance, name, sinfo->name);
-	wprintw(display_pad, "  value = ");
+	display_pad_out("  value = ");
 	getyx(display_pad, value_pos.y, value_pos.x);
 	if (!ipmi_entity_is_present(entity)
 	    && ipmi_sensor_get_ignore_if_no_entity(sensor))
 	{
-	    wprintw(display_pad, "not present");
+	    display_pad_out("not present");
 	    present = 0;
 	}
-	wprintw(display_pad, "\n  Events = ");
+	display_pad_out("\n  Events = ");
 	getyx(display_pad, enabled_pos.y, enabled_pos.x);
-	wprintw(display_pad, "\n  Scanning = ");
+	display_pad_out("\n  Scanning = ");
 	getyx(display_pad, scanning_pos.y, scanning_pos.x);
-	wprintw(display_pad, "\n");
-	wprintw(display_pad, "  sensor type = %s (0x%2.2x)\n",
+	display_pad_out("\n");
+	display_pad_out("  sensor type = %s (0x%2.2x)\n",
 		ipmi_sensor_get_sensor_type_string(sensor),
 		ipmi_sensor_get_sensor_type(sensor));
-	wprintw(display_pad, "  event/reading type = %s (0x%2.2x)\n",
+	display_pad_out("  event/reading type = %s (0x%2.2x)\n",
 		ipmi_sensor_get_event_reading_type_string(sensor),
 		ipmi_sensor_get_event_reading_type(sensor));
 
@@ -1065,38 +1109,38 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	    enum ipmi_thresh_e t;
 	    double val;
 
-	    wprintw(display_pad, "  units = %s%s",
+	    display_pad_out("  units = %s%s",
 		    ipmi_sensor_get_base_unit_string(sensor),
 		    ipmi_sensor_get_rate_unit_string(sensor));
 	    switch(ipmi_sensor_get_modifier_unit_use(sensor)) {
 		case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
-		    wprintw(display_pad, "/%s",
+		    display_pad_out("/%s",
 			    ipmi_sensor_get_modifier_unit_string(sensor));
 		    break;
 		    
 		case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
-		    wprintw(display_pad, "*%s",
+		    display_pad_out("*%s",
 			    ipmi_sensor_get_modifier_unit_string(sensor));
 		    break;
 	    }
-	    wprintw(display_pad, "\n");
+	    display_pad_out("\n");
 
 	    rv = ipmi_sensor_get_nominal_reading(sensor, &val);
-	    if (!rv) wprintw(display_pad, "  nominal = %f\n", val);
+	    if (!rv) display_pad_out("  nominal = %f\n", val);
 
 	    rv = ipmi_sensor_get_normal_min(sensor, &val);
-	    if (!rv) wprintw(display_pad, "  normal_min = %f\n", val);
+	    if (!rv) display_pad_out("  normal_min = %f\n", val);
 
 	    rv = ipmi_sensor_get_normal_max(sensor, &val);
-	    if (!rv) wprintw(display_pad, "  normal_max = %f\n", val);
+	    if (!rv) display_pad_out("  normal_max = %f\n", val);
 
 	    rv = ipmi_sensor_get_sensor_min(sensor, &val);
-	    if (!rv) wprintw(display_pad, "  sensor_min = %f\n", val);
+	    if (!rv) display_pad_out("  sensor_min = %f\n", val);
 
 	    rv = ipmi_sensor_get_sensor_max(sensor, &val);
-	    if (!rv) wprintw(display_pad, "  sensor_max = %f\n", val);
+	    if (!rv) display_pad_out("  sensor_max = %f\n", val);
 
-	    wprintw(display_pad, "Thresholds:\n");
+	    display_pad_out("Thresholds:\n");
 	    for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++){
 		int settable, readable;
 		int i;
@@ -1116,31 +1160,30 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		    anything_set |= deassert_sup[i];
 		}
 		if (anything_set) {
-		    wprintw(display_pad,
-			    "  %s:", ipmi_get_threshold_string(t));
+		    display_pad_out("  %s:", ipmi_get_threshold_string(t));
 		    threshold_positions[t].set = 1;
-		    wprintw(display_pad, "\n    available: ");
-		    if (readable) wprintw(display_pad, "R");
-		    else wprintw(display_pad, " ");
-		    if (settable) wprintw(display_pad, "W");
-		    else wprintw(display_pad, " ");
-		    if (assert_sup[0]) wprintw(display_pad, "L^");
-		    else wprintw(display_pad, "  ");
-		    if (assert_sup[0]) wprintw(display_pad, "Lv");
-		    else wprintw(display_pad, "  ");
-		    if (assert_sup[1]) wprintw(display_pad, "H^");
-		    else wprintw(display_pad, "  ");
-		    if (assert_sup[1]) wprintw(display_pad, "Hv");
-		    else wprintw(display_pad, "  ");
-		    wprintw(display_pad, "\n      enabled: ");
+		    display_pad_out("\n    available: ");
+		    if (readable) display_pad_out("R");
+		    else display_pad_out(" ");
+		    if (settable) display_pad_out("W");
+		    else display_pad_out(" ");
+		    if (assert_sup[0]) display_pad_out("L^");
+		    else display_pad_out("  ");
+		    if (assert_sup[0]) display_pad_out("Lv");
+		    else display_pad_out("  ");
+		    if (assert_sup[1]) display_pad_out("H^");
+		    else display_pad_out("  ");
+		    if (assert_sup[1]) display_pad_out("Hv");
+		    else display_pad_out("  ");
+		    display_pad_out("\n      enabled: ");
 		    getyx(display_pad,
 			  threshold_positions[t].enabled.y,
 			  threshold_positions[t].enabled.x);
-		    wprintw(display_pad, "\n        value: ");
+		    display_pad_out("\n        value: ");
 		    getyx(display_pad,
 			  threshold_positions[t].value.y,
 			  threshold_positions[t].value.x);
-		    wprintw(display_pad, "\n");
+		    display_pad_out("\n");
 		} else {
 		    threshold_positions[t].set = 0;
 		}
@@ -1175,27 +1218,27 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	    int i;
 
 	    /* A discrete sensor. */
-	    wprintw(display_pad, "\n  Assertion: ");
-	    wprintw(display_pad, "\n    available: ");
+	    display_pad_out("\n  Assertion: ");
+	    display_pad_out("\n    available: ");
 	    getyx(display_pad, discr_assert_avail.y, discr_assert_avail.x);
 	    for (i=0; i<15; i++) {
 		ipmi_sensor_discrete_assertion_event_supported(sensor,
 							       i,
 							       &val);
-		wprintw(display_pad, "%d", val != 0);
+		display_pad_out("%d", val != 0);
 	    }
-	    wprintw(display_pad, "\n      enabled: ");
+	    display_pad_out("\n      enabled: ");
 	    getyx(display_pad, discr_assert_enab.y, discr_assert_enab.x);
-	    wprintw(display_pad, "\n  Deasertion: ");
-	    wprintw(display_pad, "\n    available: ");
+	    display_pad_out("\n  Deasertion: ");
+	    display_pad_out("\n    available: ");
 	    getyx(display_pad, discr_deassert_avail.y, discr_deassert_avail.x);
 	    for (i=0; i<15; i++) {
 		ipmi_sensor_discrete_deassertion_event_supported(sensor,
 								 i,
 								 &val);
-		wprintw(display_pad, "%d", val != 0);
+		display_pad_out("%d", val != 0);
 	    }
-	    wprintw(display_pad, "\n      enabled: ");
+	    display_pad_out("\n      enabled: ");
 	    getyx(display_pad, discr_deassert_enab.y, discr_deassert_enab.x);
 
 	    if (present) {
@@ -1230,7 +1273,7 @@ found_entity_for_sensor(ipmi_entity_t *entity,
 
     sinfo.name = strtok_r(NULL, "", toks2);
     if (!sinfo.name) {
-	waddstr(cmd_win, "Invalid sensor given\n");
+	cmd_win_out("Invalid sensor given\n");
 	return;
     }
     conv_to_spaces(sinfo.name);
@@ -1244,7 +1287,7 @@ found_entity_for_sensor(ipmi_entity_t *entity,
 	instance = ipmi_entity_get_entity_instance(entity);
 
 	conv_from_spaces(sinfo.name);
-	wprintw(cmd_win, "Sensor %d.%d.%s not found\n",
+	cmd_win_out("Sensor %d.%d.%s not found\n",
 		id, instance, sinfo.name);
 	return;
     }
@@ -1269,7 +1312,7 @@ controls_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
     ipmi_control_get_id(control, name, 33);
     strcpy(name2, name);
     conv_from_spaces(name2);
-    wprintw(display_pad, "  %d.%d.%s - %s\n", id, instance, name2, name);
+    display_pad_out("  %d.%d.%s - %s\n", id, instance, name2, name);
 }
 
 static void
@@ -1283,9 +1326,8 @@ found_entity_for_controls(ipmi_entity_t *entity,
     curr_display_type = DISPLAY_CONTROLS;
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
-    wprintw(display_pad, "Controls for entity %d.%d:\n", id, instance);
+    display_pad_clear();
+    display_pad_out("Controls for entity %d.%d:\n", id, instance);
     ipmi_entity_iterate_controls(entity, controls_handler, NULL);
     display_pad_refresh();
 }
@@ -1316,11 +1358,11 @@ normal_control_val_read(ipmi_control_t *control,
 
     if (err) {
 	wmove(display_pad, value_pos.y, value_pos.x);
-	wprintw(display_pad, "?");
+	display_pad_out("?");
     } else {
 	for (i=0; i<num_vals; i++) {
 	    wmove(display_pad, value_pos.y+i, value_pos.x);
-	    wprintw(display_pad, "%d (0x%x)", val[i], val[i]);
+	    display_pad_out("%d (0x%x)", val[i], val[i]);
 	}
     }
     display_pad_refresh();
@@ -1343,11 +1385,11 @@ identifier_control_val_read(ipmi_control_t *control,
 
     if (err) {
 	wmove(display_pad, value_pos.y, value_pos.x);
-	wprintw(display_pad, "?");
+	display_pad_out("?");
     } else {
 	for (i=0; i<length; i++) {
 	    wmove(display_pad, value_pos.y+i, value_pos.x);
-	    wprintw(display_pad, "0x%2.2x", val[i]);
+	    display_pad_out("0x%2.2x", val[i]);
 	}
     }
     display_pad_refresh();
@@ -1367,7 +1409,7 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
 	&& ipmi_control_get_ignore_if_no_entity(control))
     {
 	wmove(display_pad, value_pos.y, value_pos.x);
-	wprintw(display_pad, "not present");
+	display_pad_out("not present");
 	display_pad_refresh();
 	return;
     }
@@ -1418,14 +1460,13 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 	instance = ipmi_entity_get_entity_instance(entity);
 	curr_control_id = ipmi_control_convert_to_id(control);
 
-	werase(display_pad);
-	wmove(display_pad, 0, 0);
+	display_pad_clear();
 
 	conv_from_spaces(name);
-	wprintw(display_pad, "Control %d.%d.%s - %s:\n",
+	display_pad_out("Control %d.%d.%s - %s:\n",
 		id, instance, name, iinfo->name);
 	control_type = ipmi_control_get_type(control);
-	wprintw(display_pad, "  type = %s (%d)\n",
+	display_pad_out("  type = %s (%d)\n",
 		ipmi_control_get_type_string(control), control_type);
 	num_vals = ipmi_control_get_num_vals(control);
 	switch (control_type) {
@@ -1435,14 +1476,14 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 	case IPMI_CONTROL_RESET:
 	case IPMI_CONTROL_POWER:
 	case IPMI_CONTROL_FAN_SPEED:
-	    wprintw(display_pad, "  num entities = %d\n", num_vals);
+	    display_pad_out("  num entities = %d\n", num_vals);
 	    break;
 
 	case IPMI_CONTROL_DISPLAY:
 	case IPMI_CONTROL_IDENTIFIER:
 	    break;
 	}
-	wprintw(display_pad, "  value = ");
+	display_pad_out("  value = ");
 	getyx(display_pad, value_pos.y, value_pos.x);
 
 	switch (control_type) {
@@ -1479,7 +1520,7 @@ found_entity_for_control(ipmi_entity_t *entity,
 
     iinfo.name = strtok_r(NULL, "", toks2);
     if (!iinfo.name) {
-	waddstr(cmd_win, "Invalid control given\n");
+	cmd_win_out("Invalid control given\n");
 	return;
     }
     conv_to_spaces(iinfo.name);
@@ -1493,7 +1534,7 @@ found_entity_for_control(ipmi_entity_t *entity,
 	instance = ipmi_entity_get_entity_instance(entity);
 
 	conv_from_spaces(iinfo.name);
-	wprintw(cmd_win, "Control %d.%d.%s not found\n",
+	cmd_win_out("Control %d.%d.%s not found\n",
 		id, instance, iinfo.name);
 	return;
     }
@@ -1519,7 +1560,7 @@ void mcs_handler(ipmi_mc_t *bmc,
     int addr;
 
     addr = ipmi_mc_get_address(mc);
-    wprintw(display_pad, "  0x%x\n", addr);
+    display_pad_out("  0x%x\n", addr);
 }
 
 static void
@@ -1534,18 +1575,17 @@ mcs_cmd(char *cmd, char **toks, void *cb_data)
     int rv;
 
     if (!bmc_ready) {
-	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	cmd_win_out("BMC has not finished setup yet\n");
 	return 0;
     }
 
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
+    display_pad_clear();
     curr_display_type = DISPLAY_MCS;
-    waddstr(display_pad, "MCs:\n");
-    waddstr(display_pad, "  0x20\n");
+    display_pad_out("MCs:\n");
+    display_pad_out("  0x20\n");
     rv = ipmi_mc_pointer_cb(bmc_id, mcs_cmd_bmcer, NULL);
     if (rv) {
-	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	return 0;
     }
     display_pad_refresh();
@@ -1569,21 +1609,20 @@ mccmd_rsp_handler(ipmi_mc_t  *src,
     unsigned int  i;
     unsigned char *data;
 
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
+    display_pad_clear();
     curr_display_type = DISPLAY_RSP;
-    waddstr(display_pad, "Response:\n");
-    wprintw(display_pad, "  NetFN = 0x%2.2x\n", msg->netfn);
-    wprintw(display_pad, "  Command = 0x%2.2x\n", msg->cmd);
-    wprintw(display_pad, "  Completion code = 0x%2.2x\n", msg->data[0]);
-    wprintw(display_pad, "  data =");
+    display_pad_out("Response:\n");
+    display_pad_out("  NetFN = 0x%2.2x\n", msg->netfn);
+    display_pad_out("  Command = 0x%2.2x\n", msg->cmd);
+    display_pad_out("  Completion code = 0x%2.2x\n", msg->data[0]);
+    display_pad_out("  data =");
     data = msg->data + 1;
     for (i=0; i<msg->data_len-1; i++) {
 	if ((i != 0) && ((i % 8) == 0))
-	    waddstr(display_pad, "\n        ");
-	wprintw(display_pad, " %2.2x", data[i]);
+	    display_pad_out("\n        ");
+	display_pad_out(" %2.2x", data[i]);
     }
-    waddstr(display_pad, "\n");
+    display_pad_out("\n");
     display_pad_refresh();
 }
 
@@ -1601,7 +1640,7 @@ void mccmd_handler(ipmi_mc_t *bmc,
 	rv = ipmi_send_command(mc, info->lun, &(info->msg), mccmd_rsp_handler,
 			       NULL);
 	if (rv)
-	    wprintw(cmd_win, "Send command failure: %x\n", rv);
+	    cmd_win_out("Send command failure: %x\n", rv);
     }
 
 }
@@ -1647,11 +1686,11 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     info.found = 0;
     rv = ipmi_mc_pointer_cb(bmc_id, mccmd_cmd_bmcer, &info);
     if (rv) {
-	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	return 0;
     }
     if (!info.found) {
-	wprintw(cmd_win, "Unable to find MC at address 0x%x\n", info.addr);
+	cmd_win_out("Unable to find MC at address 0x%x\n", info.addr);
     }
     display_pad_refresh();
 
@@ -1679,7 +1718,7 @@ msg_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 				    mccmd_rsp_handler,
 				    NULL);
     if (rv)
-	wprintw(cmd_win, "Send command failure: %x\n", rv);
+	cmd_win_out("Send command failure: %x\n", rv);
 }
 
 static int
@@ -1722,7 +1761,7 @@ msg_cmd(char *cmd, char **toks, void *cb_data)
 
     rv = ipmi_mc_pointer_cb(bmc_id, msg_cmd_bmcer, &info);
     if (rv) {
-	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	return 0;
     }
 
@@ -1755,28 +1794,26 @@ set_control(ipmi_control_t *control, void *cb_data)
 	    num_vals = ipmi_control_get_num_vals(control);
 	    vals = malloc(sizeof(*vals) * num_vals);
 	    if (!vals) {
-		wprintw(cmd_win, "set_control: out of memory\n");
+		cmd_win_out("set_control: out of memory\n");
 		goto out;
 	    }
 	
 	    for (i=0; i<num_vals; i++) {
 		tok = strtok_r(NULL, " \t\n", toks);
 		if (!tok) {
-		    wprintw(cmd_win,
-			    "set_control: Value %d is not present\n",
-			    i);
+		    cmd_win_out("set_control: Value %d is not present\n", i);
 		    goto out;
 		}
 		vals[i] = strtol(tok, &estr, 0);
 		if (*estr != '\0') {
-		    wprintw(cmd_win, "set_control: Value %d is invalid\n", i);
+		    cmd_win_out("set_control: Value %d is invalid\n", i);
 		    goto out;
 		}
 	    }
 
 	    rv = ipmi_control_set_val(control, vals, NULL, NULL);
 	    if (rv) {
-		wprintw(cmd_win, "set_control: Returned error 0x%x\n", rv);
+		cmd_win_out("set_control: Returned error 0x%x\n", rv);
 	    }
 	    break;
 
@@ -1787,21 +1824,19 @@ set_control(ipmi_control_t *control, void *cb_data)
 	    num_vals = ipmi_control_identifier_get_max_length(control);
 	    cvals = malloc(sizeof(*cvals) * num_vals);
 	    if (!cvals) {
-		wprintw(cmd_win, "set_control: out of memory\n");
+		cmd_win_out("set_control: out of memory\n");
 		goto out;
 	    }
 	
 	    for (i=0; i<num_vals; i++) {
 		tok = strtok_r(NULL, " \t\n", toks);
 		if (!tok) {
-		    wprintw(cmd_win,
-			    "set_control: Value %d is not present\n",
-			    i);
+		    cmd_win_out("set_control: Value %d is not present\n", i);
 		    goto out;
 		}
 		cvals[i] = strtol(tok, &estr, 0);
 		if (*estr != '\0') {
-		    wprintw(cmd_win, "set_control: Value %d is invalid\n", i);
+		    cmd_win_out("set_control: Value %d is invalid\n", i);
 		    goto out;
 		}
 	    }
@@ -1809,7 +1844,7 @@ set_control(ipmi_control_t *control, void *cb_data)
 	    rv = ipmi_control_identifier_set_val(control, cvals, num_vals,
 						 NULL, NULL);
 	    if (rv) {
-		wprintw(cmd_win, "set_control: Returned error 0x%x\n", rv);
+		cmd_win_out("set_control: Returned error 0x%x\n", rv);
 	    }
 	    break;
 	}
@@ -1822,15 +1857,13 @@ set_control_cmd(char *cmd, char **toks, void *cb_data)
     int rv;
 
     if (curr_display_type != DISPLAY_CONTROL) {
-	wprintw(cmd_win, "The current displayed item is not a control\n");
+	cmd_win_out("The current displayed item is not a control\n");
 	goto out;
     }
 
     rv = ipmi_control_pointer_cb(curr_control_id, set_control, toks);
     if (rv)
-	wprintw(cmd_win,
-		"set_control: Unable to get control pointer: 0x%x\n",
-		rv);
+	cmd_win_out("set_control: Unable to get control pointer: 0x%x\n", rv);
 
  out:
     return 0;
@@ -1853,7 +1886,7 @@ delevent_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 
     rv = ipmi_bmc_del_event_by_recid(bmc, *record_id, delevent_cb, NULL);
     if (rv)
-	wprintw(cmd_win, "dellog_cmd: error deleting log: %x\n", rv);
+	cmd_win_out("dellog_cmd: error deleting log: %x\n", rv);
 }
 
 static int
@@ -1863,7 +1896,7 @@ delevent_cmd(char *cmd, char **toks, void *cb_data)
     int          rv;
 
     if (!bmc_ready) {
-	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	cmd_win_out("BMC has not finished setup yet\n");
 	return 0;
     }
 
@@ -1872,7 +1905,7 @@ delevent_cmd(char *cmd, char **toks, void *cb_data)
 
     rv = ipmi_mc_pointer_cb(bmc_id, delevent_cmd_bmcer, &record_id);
     if (rv) {
-	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	return 0;
     }
     return 0;
@@ -1887,20 +1920,20 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
 
     type = strtok_r(NULL, " \t\n", toks);
     if (!type) {
-	wprintw(cmd_win, "No debug type specified\n");
+	cmd_win_out("No debug type specified\n");
 	goto out;
     }
 
     on_off = strtok_r(NULL, " \t\n", toks);
     if (!on_off) {
-	wprintw(cmd_win, "on or off not specified\n");
+	cmd_win_out("on or off not specified\n");
 	goto out;
     } else if (strcmp(on_off, "on") == 0) {
 	val = 1;
     } else if (strcmp(on_off, "off") == 0) {
 	val = 0;
     } else {
-	wprintw(cmd_win, "on or off not specified, got '%s'\n", on_off);
+	cmd_win_out("on or off not specified, got '%s'\n", on_off);
 	goto out;
     }
 
@@ -1921,7 +1954,7 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
     } else if (strcmp(type, "con3") == 0) {
 	if (val) DEBUG_CON_FAIL_ENABLE(3); else DEBUG_CON_FAIL_DISABLE(3);
     } else {
-	wprintw(cmd_win, "Invalid debug type specified: '%s'\n", type);
+	cmd_win_out("Invalid debug type specified: '%s'\n", type);
 	goto out;
     }
 
@@ -1951,7 +1984,7 @@ clear_sel_cmd(char *cmd, char **toks, void *cb_data)
 
     rv = ipmi_mc_pointer_cb(bmc_id, clear_sel_cmd_bmcer, NULL);
     if (rv) {
-	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	return 0;
     }
     return 0;
@@ -1964,28 +1997,26 @@ list_sel_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
     ipmi_event_t event;
 
     curr_display_type = EVENTS;
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
-    waddstr(display_pad, "Events:\n");
+    display_pad_clear();
+    display_pad_out("Events:\n");
     rv = ipmi_bmc_first_event(bmc, &event);
     while (!rv) {
-	wprintw(display_pad,
-		"  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
-		" %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
-		event.record_id, event.type,
-		event.data[0],
-		event.data[1],
-		event.data[2],
-		event.data[3],
-		event.data[4],
-		event.data[5],
-		event.data[6],
-		event.data[7],
-		event.data[8],
-		event.data[9],
-		event.data[10],
-		event.data[11],
-		event.data[12]);
+	display_pad_out("  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
+			" %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
+			event.record_id, event.type,
+			event.data[0],
+			event.data[1],
+			event.data[2],
+			event.data[3],
+			event.data[4],
+			event.data[5],
+			event.data[6],
+			event.data[7],
+			event.data[8],
+			event.data[9],
+			event.data[10],
+			event.data[11],
+			event.data[12]);
 	rv = ipmi_bmc_next_event(bmc, &event);
     }
     display_pad_refresh();
@@ -1998,7 +2029,7 @@ list_sel_cmd(char *cmd, char **toks, void *cb_data)
 
     rv = ipmi_mc_pointer_cb(bmc_id, list_sel_cmd_bmcer, NULL);
     if (rv) {
-	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	return 0;
     }
     return 0;
@@ -2031,11 +2062,10 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	goto out;
     }
 
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
+    display_pad_clear();
     curr_display_type = DISPLAY_SDRS;
 
-    wprintw(display_pad, "%s SDRs for MC %x\n",
+    display_pad_out("%s SDRs for MC %x\n",
 	    info->do_sensors ? "device" : "main",
 	    info->mc_addr);
     for (i=0; i<count; i++) {
@@ -2044,17 +2074,17 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
 
 	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
 	if (rv) {
-	    wprintw(display_pad, "*could not get index %d\n", i);
+	    display_pad_out("*could not get index %d\n", i);
 	    continue;
 	}
-	wprintw(display_pad, "%4.4x: type %x, version %d.%d",
+	display_pad_out("%4.4x: type %x, version %d.%d",
 		sdr.record_id, sdr.type, sdr.major_version, sdr.minor_version);
 	for (j=0; j<sdr.length; j++) {
 	    if ((j % 8) == 0)
-		wprintw(display_pad, "\n ");
-	    wprintw(display_pad, " %2.2x", sdr.data[j]);
+		display_pad_out("\n ");
+	    display_pad_out(" %2.2x", sdr.data[j]);
 	}
-	wprintw(display_pad, "\n");
+	display_pad_out("\n");
     }
     display_pad_refresh();
 
@@ -2071,14 +2101,14 @@ start_sdr_dump(ipmi_mc_t *mc, sdrs_info_t *info)
 
     rv = ipmi_sdr_info_alloc(mc, 0, info->do_sensors, &sdrs);
     if (rv) {
-	wprintw(cmd_win, "Unable to alloc sdr info: %x\n", rv);
+	cmd_win_out("Unable to alloc sdr info: %x\n", rv);
 	free(info);
 	return;
     }
 
     rv = ipmi_sdr_fetch(sdrs, sdrs_fetched, info);
     if (rv) {
-	wprintw(cmd_win, "Unable to start SDR fetch: %x\n", rv);
+	cmd_win_out("Unable to start SDR fetch: %x\n", rv);
 	ipmi_sdr_info_destroy(sdrs, NULL, NULL);
 	free(info);
 	return;
@@ -2136,11 +2166,11 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
 
     rv = ipmi_mc_pointer_cb(bmc_id, sdrs_cmd_bmcer, info);
     if (rv) {
-	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	free(info);
     } else {
 	if (!info->found) {
-	    waddstr(cmd_win, "Unable to find that mc\n");
+	    cmd_win_out("Unable to find that mc\n");
 	    free(info);
 	}
     }
@@ -2224,12 +2254,11 @@ help_cmd(char *cmd, char **toks, void *cb_data)
 {
     int i;
 
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
+    display_pad_clear();
     curr_display_type = HELP;
-    waddstr(display_pad, "Welcome to the IPMI UI\n");
+    display_pad_out("Welcome to the IPMI UI\n");
     for (i=0; cmd_list[i].name != NULL; i++) {
-	wprintw(display_pad, "  %s%s\n", cmd_list[i].name, cmd_list[i].help);
+	display_pad_out("  %s%s\n", cmd_list[i].name, cmd_list[i].help);
     }
     display_pad_refresh();
 
@@ -2338,8 +2367,8 @@ init_win(void)
 
     display_pad_refresh();
 
-    waddstr(cmd_win, "> ");
-    wrefresh(cmd_win);
+    cmd_win_out("> ");
+    cmd_win_refresh();
 
     return 0;
 }

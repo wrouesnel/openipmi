@@ -1,6 +1,9 @@
 
 2003-01-22 Corey Minyard <cminyard@mvista.com>
 
+	* ui.c: Rework to abstract the output, getting ready for doing
+	command-line only.
+
 	* mc.c, include/OpenIPMI/ipmi_mc.h: Added support for setting more
 	device support bits.
 
