@@ -321,7 +321,7 @@ ipmi_control_destroy(ipmi_control_t *control)
     controls->control_count--;
     controls->controls_by_idx[control->num] = NULL;
 
-    sensor->mc = NULL;
+    control->mc = NULL;
 
     control->destroyed = 1;
     if (!opq_stuff_in_progress(control->waitq))
