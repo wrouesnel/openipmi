@@ -248,12 +248,15 @@ for the main processor.
 The \ac{SDR} repositories store information about the sensors and
 components of the system.  The \ac{BMC} must have a main \ac{SDR}
 repository; this repository is writable.  There may only be one main
-\ac{SDR} repository in the system.  The device \ac{SDR} repository may
-be on any \ac{MC} in the system; it is a read-only repository.
+\ac{SDR} repository in the system.  Any MC may have a device \ac{SDR}
+repository; these are a read-only repositories.
 
-The event log holds asynchronous events in the system.  Events may be
-forwarded through the system interface or other interfaces, but they
-are always stored in the event log.  The \ac{BMC} must have an event log;
+When a problem or change in the system is detect, the MC handling that
+sensor may issue an event.  This allows management software to detect
+these problems or changes without having to poll every sensor
+constantly.  The events are stored in an event log.  Events may be forwarded
+through the system interface or other interfaces, but they are always
+stored in the event log.  The \ac{BMC} must have an event log;
 generally the other management controllers forward their events to the
 \ac{BMC}.
 
@@ -418,7 +421,7 @@ that can be done to the sensors.
 
 You may register with an entity to be told when it's physical presence
 in the system changes.  Some devices (like power supplies) are
-field-replacable while the system is running, this type of device is
+field-replacable while the system is running; this type of device is
 called a \ac{FRU}.  They may have sensors that monitor them, but those
 sensors may not be active if the device is not physically present in
 the system.
@@ -567,13 +570,11 @@ provides a way for OpenIPMI to register to receive input from devices.
 \item[Timers]
 OpenIPMI times everthing (as it should), thus it needs timers.
 
-\item[Locks]
-OpenIPMI does not require locks, you may leave the operations NULL and
-they won't be used.  However, if you are doing multi-threaded
-operations, you should provide locks.  The locks should be recursive
-(the same lock may be claimed multiple times by the same thread).  You
-need to provide read/write locks operations, although these may be
-normal locks (the system will just be less responsive).
+\item[Locks] OpenIPMI does not require locks, you may leave the
+operations NULL and they won't be used.  However, if you are doing
+multi-threaded operations, you should almost certainly provide locks.
+The locks do not need to be recursive (they used to, but this has
+changed in OpenIPMI 1.4).  Read/write locks are no longer required.
 
 \item[Condition Variables]
 These are condition variables like the ones specified in POSIX threads.
@@ -631,10 +632,9 @@ os_hnd->free_os_handler(os_hnd);
 
 OS handlers are already defined for POSIX systems, both with and
 without threads.  These are defined in the include file
-\verb=ipmi_posix.h=; see that file for more details.  The main
-functions you need to know are the allocation, mainloop, and
-deallocation code.  If you are running in a threaded application, you
-almost certainly should use the threaded version of the OS handlers.
+\verb=ipmi_posix.h=; see that file for more details.  If you are
+running in a threaded application, you almost certainly should use the
+threaded version of the OS handlers.
 
 To allocate a POSIX OS handler, use one of the following:
 
@@ -708,25 +708,31 @@ Locking has changed between OpenIPMI 1.3 and 1.4.  In OpenIPMI 1.3,
 locks were held in user callbacks.  Locking was very course grained
 and the locks were recursive, so this was generally not a problem.
 However, in general it is a bad idea to hold locks in user callbacks.
-The user might have two domains and do things between them, resulting
-in possible deadlocks.  Because of this, locking strategy has changed
+The user might have two domains and cause deadlocks between them.  For
+instance, if the user had one thread in a callback from domain 1 that
+then called a function in domain 2, and another thread in a callback
+from domain 2 that called a function in domain 1, the system can
+deadlock.  This is because the first thread holds locks in domain 1
+that the second thread needs for the function in domain 1, and the
+second thread holds locks in domain 2 that the first thread needs for
+the domain 2 function.  Because of this, locking strategy has changed
 in OpenIPMI 1.4.  The interfaces and basic usage are completely
 unchanged, but the semantics have changed.
 
 \subsubsection{Locking principles}
 
 The basic principle of locking is that if you are in a callback for an
-\acs{IPMI} object (an \acs{IPMI} object is passed in the callback), that object is
-refcounted (marked in-use) and the system cannot delete it.  In any
-callback for an object owned by a particular domain, that object will
-be and anything it belongs to will be marked in-use.  So, for
-instance, in a callback for a sensor, the sensor is in-use, the entity
-the sensor belongs to is in-use, the management controller the sensor
-is on is in-use, and the domain the sensor is in will be in-use.  No
-other sensors, entities, or management controllers will necessarily be
-marked in-use.  Outside of callbacks, the library is free to change
-pointers, change information, add and remove objects, or whatever it
-wants to objects.
+\acs{IPMI} object (an \acs{IPMI} object is passed in the callback),
+that object is refcounted (marked in-use) and the system cannot delete
+it.  In any callback for an object owned by a particular domain, that
+object and anything it belongs to will be marked in-use.  So,
+for instance, in a callback for a sensor, the sensor is in-use, the
+entity the sensor belongs to is in-use, the management controller the
+sensor is on is in-use, and the domain the sensor is in will be
+in-use.  No other sensors, entities, or management controllers will
+necessarily be marked in-use.  Outside of callbacks, the library is
+free to change pointers, change information, add and remove objects,
+or make whatever general changes that are required.
 
 So how do you mark an \acs{IPMI} object in-use?  If you are handling
 incoming \acs{IPMI} callbacks you generally don't have to worry about this.
@@ -840,10 +846,12 @@ check_if_my_entity_present(my_data_t *data)
 
 Most of the data about the various OpenIPMI objects is static, so you
 can pre-collect the information about the objects in the callback
-where there existance is reported.  The only dynamic variable in
-OpenIPMI is entity presence.  Also, many operation require a message
-to the remote system; the ones that take callbacks.  For these
-operation, functions that directly take the id are available.
+where there existance is reported.  Some local information, such as
+entity presence, whether and MC is active, and entity hot-swap state
+is dynamic, but the vast majority of information is not.  Also, many
+operation require a message to the remote system; the ones that take
+callbacks.  For these operation, functions that directly take the id
+are available.
 
 The entity presence code could be rewritten using this to be:
 
@@ -891,29 +899,20 @@ have a single-threaded application that is non-blocking and can
 perform very well.  Plus, single-threaded programs are easier to
 debug, easier to understand and maintain, and more reliable.
 
-\item Do your own locking.  OpenIPMI used to hold locks for the user
-while in callbacks.  As mentioned before, this was a bad idea.
-OpenIPMI does not know what the user is doing.  This can result in
-deadlocks if the user is not careful, and it make it hard for the user
-to handle multiple things\footnote{For instance, if you have two
-callbacks on two sensors, and each of them then did a locking
-operation on the other sensor, you can end up in a deadlock situation
-where one thread holds one lock, another thread holds another lock,
-and they are both waiting for the lock the other is holding}.
-Instead, the user must do their own locking.  For instance, you could
-claim a lock in both the entity iteration and the callback for a new
-entity.  This would prevent the both pieces of code from running at
-the same time.  You are in control of the locks, so you can handle it
-as appropriate.  You have to know what you are doing, but that goes
-without saying when doing multi-threaded programming.
+\item Do your own locking.  For instance, you could claim a lock in
+both the entity iteration and the callback for a new entity.  This
+would prevent the both pieces of code from running at the same time.
+You are in control of the locks, so you can handle it as appropriate.
+You have to know what you are doing, but that goes without saying when
+doing multi-threaded programming.
 \end{itemize}
 
-Note that this may seen abnormal, but it is pretty standard in
-multi-threaded systems.  \ac{HPI}, for instance has the same problem.
-If you have one thread waiting for events from an \ac{HPI} domain, and
-another iterating the RDRs, or you have two threads each doing
-operations on sensors, you have exactly the same situation.  You have
-to protect yourself with locks the same way.
+This it is pretty standard in multi-threaded systems.  \ac{HPI}, for
+instance has the same problem.  If you have one thread waiting for
+events from an \ac{HPI} domain, and another iterating the RDRs, or you
+have two threads each doing operations on sensors, you have exactly
+the same situation.  You have to protect yourself with locks the same
+way.
 
 Note that data about an object (like the device id data, whether the
 \ac{MC} is active, or the entity is present, or whatever) will \emph{not}
@@ -977,7 +976,7 @@ locations in a chassis; it doesn't know ahead of time which one.
 These types of entities are generally device-relative and thsu have an
 entity instance of 60h or larger.  For these types of entities, the
 management controller on which they reside becomes part of the entity.
-In OpenIPMI, the \ac{IPMB} channel number of \ac{IPMB} address are
+In OpenIPMI, the \ac{IPMB} channel number and \ac{IPMB} address are
 part of the entity.  In \verb=ipmi_ui=, these are printed and entered
 as ``r$<$channel$>$.$<$ipmb$>$.$<$entity id$>$.$<$entity instance$>$''.
 
@@ -1159,14 +1158,19 @@ hot-swap there, too.
 Sensor and control update handlers should set up and register for
 events from the sensor.
 
-\subsubsection{Event Based Callbacks}
+\subsubsection{Asynchronous Callbacks}
 
-Event based callbacks tell you when asynchronous things happen in the
+Asynchronous callbacks tell you when asynchronous things happen in the
 system.  For instance, a card gets plugged in and an entity becomes
 present.  You will be told with the present callback on the entity.
 The hot-swap state of an entity changes.  That is reported via the
 hot-swap state callback.  Events because of sensors going out of range
 is another example.
+
+Note that these are usually due to an IPMI event, but do not
+necessarily have to be caused by an IPMI event.  For instance, if,
+during an audit, OpenIPMI discovers that it has the state wrong for
+something, it will report the correct state in a callback.
 
 \subsubsection{Synchronous Callbacks}
 
