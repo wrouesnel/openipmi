@@ -1047,6 +1047,7 @@ domain_oem_check_done(ipmi_domain_t *domain,
 	/* Either we got a success or some error trying to install the
 	   OEM handlers. */
 	check->done(domain, err, check->cb_data);
+	ipmi_mem_free(check);
 	return;
     }
 

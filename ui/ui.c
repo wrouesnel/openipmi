@@ -1455,6 +1455,38 @@ hs_deactivate(char *cmd, char **toks, void *cb_data)
 }
 
 static void
+hs_state_cb(ipmi_entity_t             *ent,
+	    int                       err,
+	    enum ipmi_hot_swap_states state,
+	    void                      *cb_data)
+{
+    if (err)
+	ui_log("Could not get hot-swap state: error 0x%x\n", err);
+    else
+	ui_log("Hot-swap state is %s\n", ipmi_hot_swap_state_name(state));
+}
+
+static void
+hs_state_handler(ipmi_entity_t *entity,
+		 char          **toks,
+		 char          **toks2,
+		 void          *cb_data)
+{
+    int rv;
+
+    rv = ipmi_entity_get_hot_swap_state(entity, hs_state_cb, NULL);
+    if (rv)
+	cmd_win_out("Could not get entity state: error 0x%x\n", rv);
+}
+
+int
+hs_state(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, hs_state_handler, NULL);
+    return 0;
+}
+
+static void
 hs_check_ent(ipmi_entity_t *entity, void *cb_data)
 {
     ipmi_entity_check_hot_swap_state(entity);
@@ -5944,6 +5976,8 @@ static struct {
       " <entity name> - activate the given entity" },
     { "hs_deactivate", hs_deactivate,
       " <entity name> - deactivate the given entity" },
+    { "hs_state", hs_state,
+      " <entity name> - Return the current hot-swap state" },
     { "hs_check", hs_check_cmd,
       " - Check all the entities hot-swap states" },
     { "sensors",	sensors_cmd,
