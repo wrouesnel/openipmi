@@ -455,7 +455,8 @@ domain_iterate_entities_handler(ipmi_entity_t *entity, void *cb_data)
     domain_ref = swig_make_ref(ipmi_entity_get_domain(entity),
 			       "OpenIPMI::ipmi_domain_t");
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    swig_call_cb(cb, "entity_iter_cb", "%p%p", &domain_ref, &entity_ref);
+    swig_call_cb(cb, "domain_iter_entity_cb", "%p%p",
+		 &domain_ref, &entity_ref);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
 }
@@ -467,7 +468,7 @@ ipmb_mc_scan_handler(ipmi_domain_t *domain, int err, void *cb_data)
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    swig_call_cb(cb, "ipmb_mc_scan_cb", "%p%i", &domain_ref, err);
+    swig_call_cb(cb, "domain_ipmb_mc_scan_cb", "%p%d", &domain_ref, err);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -480,7 +481,7 @@ domain_reread_sels_handler(ipmi_domain_t *domain, int err, void *cb_data)
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    swig_call_cb(cb, "reread_sels_cb", "%p%i", &domain_ref, err);
+    swig_call_cb(cb, "domain_reread_sels_cb", "%p%d", &domain_ref, err);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
 }
 
@@ -497,8 +498,9 @@ domain_msg_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
     make_ipmi_addr(addr_str, sizeof(addr_str), addr, addr_len, &lun);
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    swig_call_cb(cb, "addr_cmd_cb", "%p%s%d%d%d%*s", &domain_ref, addr_str,
-		 lun, msg->netfn, msg->cmd, msg->data_len, msg->data);
+    swig_call_cb(cb, "domain_addr_cmd_cb", "%p%s%d%d%d%*s", &domain_ref,
+		 addr_str, lun, msg->netfn, msg->cmd,
+		 msg->data_len, msg->data);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -515,7 +517,7 @@ domain_iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
-    swig_call_cb(cb, "domain_iter_mcs_cb", "%p%p", &domain_ref, &mc_ref);
+    swig_call_cb(cb, "domain_iter_mc_cb", "%p%p", &domain_ref, &mc_ref);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
 }
@@ -594,7 +596,7 @@ entity_presence_handler(ipmi_entity_t *entity,
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
 				       "OpenIPMI::ipmi_event_t");
-    swig_call_cb(cb, "entity_presence_cb", "%p%i%p",
+    swig_call_cb(cb, "entity_presence_cb", "%p%d%p",
 		 &entity_ref, present, &event_ref);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     swig_free_ref(event_ref);
@@ -613,7 +615,7 @@ entity_sensor_update_handler(enum ipmi_update_e op,
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
-    swig_call_cb(cb, "entity_sensor_cb", "%s%p%p",
+    swig_call_cb(cb, "entity_sensor_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &sensor_ref);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
@@ -631,7 +633,7 @@ entity_control_update_handler(enum ipmi_update_e op,
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
-    swig_call_cb(cb, "entity_control_cb", "%s%p%p",
+    swig_call_cb(cb, "entity_control_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &control_ref);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
@@ -687,7 +689,7 @@ entity_get_hot_swap_handler(ipmi_entity_t             *entity,
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%i%s", &entity_ref,
+    swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%d%s", &entity_ref,
 		 err, ipmi_hot_swap_state_name(state));
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     /* One-time call, get rid of the CB. */
@@ -704,7 +706,7 @@ entity_get_hot_swap_time_handler(ipmi_entity_t  *entity,
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    swig_call_cb(cb, "entity_hot_swap_get_time_cb", "%p%i%f", &entity_ref,
+    swig_call_cb(cb, "entity_hot_swap_get_time_cb", "%p%d%f", &entity_ref,
 		 err, ((double) time) / 1000000000.0);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     /* One-time call, get rid of the CB. */
@@ -720,7 +722,7 @@ entity_set_hot_swap_time_handler(ipmi_entity_t  *entity,
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    swig_call_cb(cb, "entity_hot_swap_set_time_cb", "%p%i", &entity_ref, err);
+    swig_call_cb(cb, "entity_hot_swap_set_time_cb", "%p%d", &entity_ref, err);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -735,7 +737,7 @@ entity_activate_handler(ipmi_entity_t  *entity,
     swig_ref    entity_ref;
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    swig_call_cb(cb, "entity_activate_cb", "%p%i", &entity_ref, err);
+    swig_call_cb(cb, "entity_activate_cb", "%p%d", &entity_ref, err);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -761,7 +763,7 @@ mc_active_handler(ipmi_mc_t  *mc,
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
-    swig_call_cb(cb, "mc_active_cb", "%p%i", &mc_ref, active);
+    swig_call_cb(cb, "mc_active_cb", "%p%d", &mc_ref, active);
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
 }
 
@@ -2007,7 +2009,7 @@ wait_io(int timeout)
  * Passing in a reference to an undefined value will cause the handlers
  * to not be called.
  * The domain_up_cb methods is called with the following parmeters:
- * <domain>
+ * <self> <domain>
  * The parameters of the connection change handler are defined in
  * the domain->add_connect_change_handler method.
  */
@@ -2350,7 +2352,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Iterate through all the entities in the object.  The
      * domain_iter_entities_cb method will be called on the first
      * parameter for each entity in the domain.  The parameters it
-     * receives will be: <self>, <domain>, <entity>.
+     * receives will be: <self> <domain> <entity>.
      */
     int iterate_entities(swig_cb handler)
     {
@@ -2388,7 +2390,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Iterate through all the MCs in the object.  The
      * mc_iter_cb method will be called on the first parameter for
      * each mc in the domain.  The parameters it receives will be:
-     * <self>, <domain> <mc>.
+     * <self> <domain> <mc>.
      */
     int iterate_mcs(swig_cb handler)
     {
@@ -2548,7 +2550,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Retrieve the first event from the domain.  Return NULL (undef)
      * if the event does not exist.
      */
-    ipmi_event_t *ipmi_domain_first_event()
+    ipmi_event_t *first_event()
     {
 	return ipmi_domain_first_event(self);
     }
@@ -2557,7 +2559,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Retrieve the last event from the domain.
      */
-    ipmi_event_t *ipmi_domain_last_event()
+    ipmi_event_t *last_event()
     {
 	return ipmi_domain_last_event(self);
     }
@@ -2566,7 +2568,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Retrieve the event after the given event from the domain.
      */
-    ipmi_event_t *ipmi_domain_next_event(ipmi_event_t  *event)
+    ipmi_event_t *next_event(ipmi_event_t  *event)
     {
 	return ipmi_domain_next_event(self, event);
     }
@@ -2575,7 +2577,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Retrieve the event before the given event from the domain.
      */
-    ipmi_event_t *ipmi_domain_prev_event(ipmi_event_t  *event)
+    ipmi_event_t *prev_event(ipmi_event_t  *event)
     {
 	return ipmi_domain_prev_event(self, event);
     }
@@ -2611,11 +2613,11 @@ void set_log_handler(swig_cb handler = NULL);
     }
 
     /*
-     * Reread all SELs in the domain.  The callback (if supplied) will
-     * be called with the following values:
-     * <domain> <error value>
+     * Reread all SELs in the domain.  The domain_reread_sels_cb
+     * method on the first parameter (if supplied) will be called with
+     * the following values: <domain> <error value>
      */
-    int domain_reread_sels(swig_cb handler = NULL)
+    int reread_sels(swig_cb handler = NULL)
     {
 	int            rv;
 	swig_cb_val    handler_val = NULL;
@@ -2787,10 +2789,11 @@ void set_log_handler(swig_cb handler = NULL);
     }
 
     /*
-     * Add a handler to be called when a sensor in the entity is added,
-     * deleted, or updated.  When the sensor changes the entity_sensor_cb
-     * method on the first parameter will be called with the following
-     * parameters: <self> added|deleted|changed <entity> <sensor>.
+     * Add a handler to be called when a sensor in the entity is
+     * added, deleted, or updated.  When the sensor changes the
+     * entity_sensor_update_cb method on the first parameter will be
+     * called with the following parameters: <self>
+     * added|deleted|changed <entity> <sensor>.
      */
     int add_sensor_update_handler(swig_cb handler)
     {
@@ -2806,10 +2809,11 @@ void set_log_handler(swig_cb handler = NULL);
     }
 
     /*
-     * Add a handler to be called when a control in the entity is added,
-     * deleted, or updated.  When the control changes the entity_control_cb
-     * method on the first parameter will be called with the following
-     * parameters: <self> added|deleted|changed <entity> <control>.
+     * Add a handler to be called when a control in the entity is
+     * added, deleted, or updated.  When the control changes the
+     * entity_control_update_cb method on the first parameter will be
+     * called with the following parameters: <self>
+     * added|deleted|changed <entity> <control>.
      */
     int add_control_update_handler(swig_cb handler)
     {
@@ -3733,18 +3737,18 @@ void set_log_handler(swig_cb handler = NULL);
     }
 
     /*
-     * Send a command to a given MC with the given lun
-     * (parm 1), netfn (parm 2), command (parm 3).  Parm 4 is the
-     * message data in an array reference.  Parm 5 is the handler, it
-     * will be called with the response.  The mc_cmd_cb method will
-     * be called on the handler handler; its parameters are:
-     * <mc> <netfn> <cmd> <response data>
+     * Send a command to a given MC with the given lun (parm 1), netfn
+     * (parm 2), command (parm 3).  Parm 4 is the message data in an
+     * array reference.  Parm 5 is the handler, it will be called with
+     * the response.  The mc_cmd_cb method will be called on the
+     * handler handler; its parameters are: <mc> <netfn> <cmd>
+     * <response data>
      */
-    int ipmi_mc_send_command(int       lun,
-			     int       netfn,
-			     int       cmd,
-			     intarray  msg_data,
-			     swig_cb   handler = NULL)
+    int send_command(int       lun,
+		     int       netfn,
+		     int       cmd,
+		     intarray  msg_data,
+		     swig_cb   handler = NULL)
     {
 	int                        rv;
 	swig_cb_val                handler_val = NULL;

@@ -53,6 +53,37 @@ use OpenIPMI;
 	print "\n";
     }
 
+    sub entity_presence_cb {
+	my $self = shift;
+	my $entity = shift;
+	my $present = shift;
+	my $event = shift;
+
+	print "Entity ", $entity->get_name(), " presence is $present\n";
+
+	if (defined $event) {
+	    $self->event_cb($entity->get_domain(), $event);
+	}
+    }
+
+    sub entity_sensor_update_cb {
+	my $self = shift;
+	my $op = shift;
+	my $entity = shift;
+	my $sensor = shift;
+
+	print $op, " sensor ", $sensor->get_name(), "\n";
+    }
+
+    sub entity_control_update_cb {
+	my $self = shift;
+	my $op = shift;
+	my $entity = shift;
+	my $control = shift;
+
+	print $op, " control ", $control->get_name(), "\n";
+    }
+
     sub entity_update_cb {
 	my $self = shift;
 	my $op = shift;
@@ -60,6 +91,9 @@ use OpenIPMI;
 	my $entity = shift;
 
 	print $op, " entity ", $entity->get_name(), "\n";
+	$entity->add_presence_handler($self);
+	$entity->add_sensor_update_handler($self);
+	$entity->add_control_update_handler($self);
     }
 
     sub mc_update_cb {
@@ -69,9 +103,14 @@ use OpenIPMI;
 	my $mc = shift;
 
 	print $op, " MC ", $mc->get_name(), "\n";
+	$rv = $mc->send_command(0, 10, 0x43,
+				[ 0, 0, 0, 0, 0, 0xff ], $self);
+	if ($rv) {
+	    print "Unable to send command: $rv\n";
+	}
     }
 
-    sub addr_cmd_cb {
+    sub domain_addr_cmd_cb {
 	my $self = shift;
 	my $domain = shift;
 	my $addr = shift;
@@ -82,6 +121,21 @@ use OpenIPMI;
 
 	print "Got message from ", $domain->get_name(), "\n";
 	print " addr = $addr\n";
+	print " lun=$lun, netfn=$netfn, cmd=$cmd\n";
+	print " data:";
+	while (defined ($val = shift)) {
+	    printf " %2.2x", $val;
+	}
+	print "\n";
+    }
+
+    sub mc_cmd_cb {
+	my $self = shift;
+	my $mc = shift;
+	my $netfn = shift;
+	my $cmd = shift;
+
+	print "Got message from ", $mc->get_name(), "\n";
 	print " lun=$lun, netfn=$netfn, cmd=$cmd\n";
 	print " data:";
 	while (defined ($val = shift)) {
@@ -142,16 +196,99 @@ use OpenIPMI;
     sub domain_up_cb {
 	my $self = shift;
 	my $domain = shift;
+	my $rv;
+	my $event;
 
 	print "Domain up: ", $domain->get_name(), "\n";
+	print "  type = ", $domain->get_type(), "\n";
+	print "  sel_rescan_type = ", $domain->get_sel_rescan_time(), "\n";
+	print "  ipmb_rescan_type = ", $domain->get_ipmb_rescan_time(), "\n";
+	$domain->set_sel_rescan_time(5);
+	$domain->set_ipmb_rescan_time(20);
+	$rv = $domain->start_ipmb_mc_scan(0, 0x20, 0x20, $self);
+	if ($rv) {
+	    print "Error starting IPMB scan: $rv\n";
+	}
 	$domain->iterate_entities($self);
+	$domain->iterate_mcs($self);
+
+	$event = $domain->first_event();
+	while (defined $event) {
+	    $self->event_cb($domain, $event);
+	    $event = $domain->next_event($event);
+	}
+
+	$rv = $domain->reread_sels($self);
+	if ($rv) {
+	    print "Error starting IPMB scan: $rv\n";
+	}
     }
 
-    sub entity_iter_cb {
+    sub domain_reread_sels_cb {
 	my $self = shift;
+	my $domain = shift;
+	my $err = shift;
+
+	print "SEL rescan done for ", $domain->get_name(), " err=$err\n";
+    }
+
+    sub domain_ipmb_mc_scan_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $err = shift;
+
+	print "IPMB scan done for ", $domain->get_name(), " err=$err\n";
+    }
+
+    sub entity_iter_entities_cb {
+	my $self = shift;
+	my $relative = shift;
+	my $entity = shift;
+
+	print "    ", $entity->get_name(), "\n";
+    }
+
+    sub entity_iter_sensors_cb {
+	my $self = shift;
+	my $entity = shift;
+	my $sensor = shift;
+
+	print "Sensor: ", $sensor->get_name(), "\n";
+    }
+
+    sub entity_iter_controls_cb {
+	my $self = shift;
+	my $entity = shift;
+	my $control = shift;
+
+	print "Control: ", $control->get_name(), "\n";
+    }
+
+    sub domain_iter_entity_cb {
+	my $self = shift;
+	my $domain = shift;
 	my $entity = shift;
 
 	print "Entity: ", $entity->get_name(), "\n";
+	if ($entity->is_child()) {
+	    print "  Parents:\n";
+	    $entity->iterate_parents($self);
+	}
+	if ($entity->is_parent()) {
+	    print "  Children:\n";
+	    $entity->iterate_children($self);
+	}
+
+	$entity->iterate_sensors($self);
+	$entity->iterate_controls($self);
+    }
+
+    sub domain_iter_mc_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $mc = shift;
+
+	print "MC: ", $mc->get_name(), "\n";
     }
 
     sub log {
@@ -169,11 +306,7 @@ $h = Handlers::new("hello");
 
 OpenIPMI::set_log_handler($h);
 
-#@items = ("lan", "localhost", 9000, "md5", "admin", "minyard", "test");
-@items = ("lan", "t-langley-1", 623, "md5", "admin", "minyard", "test");
-#@items = ("smi", "0");
-
-$a = OpenIPMI::open_domain("test", \@items, $h, \undef);
+$a = OpenIPMI::open_domain("test", \@ARGV, $h, $h);
 if (! $a) {
     print "open failed\n";
 }

@@ -123,7 +123,10 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 	    break;
 
 	case 'p':
-	    XPUSHs(va_arg(ap, swig_ref *)->val);
+	    {
+		swig_ref *v = va_arg(ap, swig_ref *);
+		XPUSHs(v->val);
+	    }
 	    break;
 
 	default:
@@ -146,13 +149,18 @@ swig_ref
 swig_make_ref_destruct(void *item, char *class)
 {
     SV *self;
-    SV *obj=newSV(0);
-    HV *hash=newHV();
+    SV *obj;
+    HV *hash;
     HV *stash;
     swig_ref rv;
     HV *hv;
     GV *gv;
- 
+
+    if (!item)
+	return swig_make_ref(item, class);
+	
+    obj=newSV(0);
+    hash=newHV();
     rv.val = newSV(0);
     sv_setref_pv(obj, class, item);
     stash=SvSTASH(SvRV(obj));
