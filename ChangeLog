@@ -16,6 +16,9 @@
 	* lib/entity.c: Added a check for duplicate FRU entries in the SDR
 	DLRs, in case there is one.
 
+	* lib/mc.c: Fixed connection up info to be freed for MCs that
+	never go active.
+
 2004-04-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start

@@ -399,6 +399,8 @@ check_mc_destroy(ipmi_mc_t *mc)
            SDRs that monitor the MC. */
 	_ipmi_remove_mc_from_domain(domain, mc);
 
+	if (mc->conup_info)
+	    ipmi_mem_free(mc->conup_info);
 	if (mc->removed_handlers) {
 	    void *data;
 	    data = ilist_remove_first(mc->removed_handlers);
@@ -478,8 +480,7 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    ipmi_domain_remove_con_change_handler(domain,
 						  mc->conup_info->con_chid);
 	}
-	ipmi_mem_free(mc->conup_info);
-	mc->conup_info = NULL;
+	mc->conup_info->con_chid = NULL;
     }
 
     _ipmi_mc_set_active(mc, 0);
