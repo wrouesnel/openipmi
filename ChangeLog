@@ -1,3 +1,21 @@
+2004-12-23 Corey Minyard <cminyard@mvista.com> 
+
+	* sample/ipmicmd.c: Removed the ipmi_log() func, it was junk
+	and caused problems.
+
+	* lib/mc.c, include/OpenIPMI/ipmi_user.h, cmdlang/cmd_mc.c: Fixed
+	some problems with the user stuff.  Added a way to set the
+	enable/disable of a user (done through the set password command,
+	for some strange reason).
+
+2004-12-22 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h,	include/OpenIPMI/ipmi_user.h:
+	Added handling for users and channel information.
+
+	* lib/cmd_mc.c: converted over to the standard user and channel
+	handling.
+
 2004-12-17 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/lanparm.c, lib/pef.c, lib/pet.c: Fixed some locking and

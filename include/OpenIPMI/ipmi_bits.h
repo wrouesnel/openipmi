@@ -448,6 +448,12 @@ char *ipmi_get_color_string(unsigned int val);
 #define IPMI_TIMEOUT_NOW	0
 #define IPMI_TIMEOUT_FOREVER	LONG_MAX
 
+/* Used when setting data that can be volatile or non-volatile. */
+enum ipmi_set_dest_e {
+    IPMI_SET_DEST_NON_VOLATILE = 1,
+    IPMI_SET_DEST_VOLATILE = 2
+};
+
 #ifdef __cplusplus
 }
 #endif

@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003 MontaVista Software Inc.
+ * Copyright 2002,2003,2004 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -35,6 +35,7 @@
 #define _IPMI_MC_H
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmi_bits.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -220,6 +221,139 @@ int ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_last_addition_timestamp(ipmi_mc_t *mc);
 
+
+/***********************************************************************
+ *
+ * Channel handling for MCs.
+ *
+ ***********************************************************************/
+
+/* 
+ * Fetch channel information.  Note that you cannot keep the channel
+ * info data structure passed to you, you can just use it to extract
+ * the data you want.
+ */
+typedef struct ipmi_channel_info_s ipmi_channel_info_t;
+typedef void (*ipmi_channel_info_cb)(ipmi_mc_t           *mc,
+				     int                 err,
+				     ipmi_channel_info_t *info,
+				     void                *cb_data);
+int ipmi_mc_channel_get_info(ipmi_mc_t            *mc,
+			     unsigned int         channel,
+			     ipmi_channel_info_cb handler,
+			     void                 *cb_data);
+
+/*
+ * Allow the user to keep their own copy of the info data.  Note that
+ * you should *NOT* free the info data you get from the get_info.
+ */
+ipmi_channel_info_t *ipmi_channel_info_copy(ipmi_channel_info_t *info);
+void ipmi_channel_info_free(ipmi_channel_info_t *info);
+
+/*
+ * Extract various data from the channel.
+ */
+int ipmi_channel_info_get_channel(ipmi_channel_info_t *info,
+				  unsigned int        *channel);
+#define IPMI_CHANNEL_MEDIUM_IPMB	1
+#define IPMI_CHANNEL_MEDIUM_ICMB_V10	2
+#define IPMI_CHANNEL_MEDIUM_ICMB_V09	3
+#define IPMI_CHANNEL_MEDIUM_8023_LAN	4
+#define IPMI_CHANNEL_MEDIUM_RS232	5
+#define IPMI_CHANNEL_MEDIUM_OTHER_LAN	6
+#define IPMI_CHANNEL_MEDIUM_PCI_SMBUS	7
+#define IPMI_CHANNEL_MEDIUM_SMBUS_v1	8
+#define IPMI_CHANNEL_MEDIUM_SMBUS_v2	9
+#define IPMI_CHANNEL_MEDIUM_USB_v1	10
+#define IPMI_CHANNEL_MEDIUM_USB_v2	11
+#define IPMI_CHANNEL_MEDIUM_SYS_INTF	12
+int ipmi_channel_info_get_medium(ipmi_channel_info_t *info,
+				 unsigned int        *medium);
+#define IPMI_CHANNEL_PROTOCOL_IPMB	1
+#define IPMI_CHANNEL_PROTOCOL_ICMB	2
+#define IPMI_CHANNEL_PROTOCOL_SMBus	4
+#define IPMI_CHANNEL_PROTOCOL_KCS	5
+#define IPMI_CHANNEL_PROTOCOL_SMIC	6
+#define IPMI_CHANNEL_PROTOCOL_BT_v10	7
+#define IPMI_CHANNEL_PROTOCOL_BT_v15	8
+#define IPMI_CHANNEL_PROTOCOL_TMODE	9
+int ipmi_channel_info_get_protocol_type(ipmi_channel_info_t *info,
+					unsigned int        *prot_type);
+
+#define IPMI_CHANNEL_SESSION_LESS	0
+#define IPMI_CHANNEL_SINGLE_SESSION	1
+#define IPMI_CHANNEL_MULTI_SESSION	2
+#define IPMI_CHANNEL_SESSION_BASED	3
+int ipmi_channel_info_get_session_support(ipmi_channel_info_t *info,
+					  unsigned int        *sup);
+/* Data is 3 bytes long */
+int ipmi_channel_info_get_vendor_id(ipmi_channel_info_t *info,
+				    unsigned char       *data);
+/* Data is 2 bytes long */
+int ipmi_channel_info_get_aux_info(ipmi_channel_info_t *info,
+				   unsigned char       *data);
+
+/*
+ * Get and set the channel access information.  You should generally
+ * get the items you want, modify them, then write them back out.
+ */
+typedef struct ipmi_channel_access_s ipmi_channel_access_t;
+typedef void (*ipmi_channel_access_cb)(ipmi_mc_t             *mc,
+				       int                   err,
+				       ipmi_channel_access_t *info,
+				       void                  *cb_data);
+int ipmi_mc_channel_get_access(ipmi_mc_t              *mc,
+			       unsigned int           channel,
+			       enum ipmi_set_dest_e   dest,
+			       ipmi_channel_access_cb handler,
+			       void                   *cb_data);
+int ipmi_mc_channel_set_access(ipmi_mc_t             *mc,
+			       unsigned int           channel,
+			       enum ipmi_set_dest_e  dest,
+			       ipmi_channel_access_t *access,
+			       ipmi_mc_done_cb       handler,
+			       void                  *cb_data);
+
+/*
+ * Allow the user to keep their own copy of the info data.  Note that
+ * you should *NOT* free the info data you get from the get_access.
+ */
+ipmi_channel_access_t *ipmi_channel_access_copy(ipmi_channel_access_t *access);
+void ipmi_channel_access_free(ipmi_channel_access_t *access);
+
+/*
+ * Get and set various fields in the channel.
+ */
+int ipmi_channel_access_get_channel(ipmi_channel_access_t *access,
+				    unsigned int          *channel);
+int ipmi_channel_access_get_alerting_enabled(ipmi_channel_access_t *access,
+					     unsigned int          *enab);
+int ipmi_channel_access_set_alerting_enabled(ipmi_channel_access_t *access,
+					     unsigned int          enab);
+int ipmi_channel_access_get_per_msg_auth(ipmi_channel_access_t *access,
+					 unsigned int          *msg_auth);
+int ipmi_channel_access_set_per_msg_auth(ipmi_channel_access_t *access,
+					 unsigned int          msg_auth);
+int ipmi_channel_access_get_user_auth(ipmi_channel_access_t *access,
+				      unsigned int          *user_auth);
+int ipmi_channel_access_set_user_auth(ipmi_channel_access_t *access,
+				      unsigned int          user_auth);
+#define IPMI_CHANNEL_ACCESS_MODE_DISABLED	0
+#define IPMI_CHANNEL_ACCESS_MODE_PRE_BOOT	1
+#define IPMI_CHANNEL_ACCESS_MODE_ALWAYS		2
+#define IPMI_CHANNEL_ACCESS_MODE_SHARED		3
+int ipmi_channel_access_get_access_mode(ipmi_channel_access_t *access,
+					unsigned int          *access_mode);
+int ipmi_channel_access_set_access_mode(ipmi_channel_access_t *access,
+					unsigned int          access_mode);
+/* See IPMI_PRIVILEGE_xxx for the values. */
+int ipmi_channel_access_get_priv_limit(ipmi_channel_access_t *access,
+				       unsigned int          *priv_limit);
+int ipmi_channel_access_set_priv_limit(ipmi_channel_access_t *access,
+				       unsigned int          priv_limit);
+/* Normally setting will only set the values you have changed.  This
+   forces all the values to be set. */
+int ipmi_channel_access_setall(ipmi_channel_access_t *access);
 
 /***********************************************************************
  *

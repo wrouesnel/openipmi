@@ -39,6 +39,8 @@
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_user.h>
+#include <OpenIPMI/ipmi_mc.h>
 
 #include <OpenIPMI/internal/locked_list.h>
 #include <OpenIPMI/internal/opq.h>
@@ -3220,3 +3222,1133 @@ __ipmi_check_mc_lock(ipmi_mc_t *mc)
 			       "MC not locked when it should have been");
 	
 }
+
+/***********************************************************************
+ *
+ * Channel handling
+ *
+ **********************************************************************/
+
+struct ipmi_channel_info_s
+{
+    unsigned int channel : 4;
+    unsigned int medium : 7;
+    unsigned int protocol : 5;
+    unsigned int session_support : 2;
+    unsigned char vendor_id[3];
+    unsigned char aux_info[2];
+
+    ipmi_channel_info_cb handler;
+    void                 *cb_data;
+};
+
+static void
+got_chan_info(ipmi_mc_t  *mc,
+	      ipmi_msg_t *rsp,
+	      void       *cb_data)
+{
+    ipmi_channel_info_t *info = cb_data;
+
+    if (rsp->data[0] != 0) {
+	info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info,
+		      info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 10) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(got_chan_info): Channel info response too small",
+		 mc->name);
+	info->handler(mc, EINVAL, info, info->cb_data);
+	goto out;
+    }
+
+    info->channel = rsp->data[1] & 0xf;
+    info->medium = rsp->data[2] & 0x7f;
+    info->protocol = rsp->data[3] & 0x1f;
+    info->session_support = rsp->data[4] >> 6;
+    memcpy(info->vendor_id, rsp->data+5, 3);
+    memcpy(info->aux_info, rsp->data+8, 2);
+    info->handler(mc, 0, info, info->cb_data);
+
+ out:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_channel_get_info(ipmi_mc_t            *mc,
+			 unsigned int         channel,
+			 ipmi_channel_info_cb handler,
+			 void                 *cb_data)
+{
+    int                 rv;
+    ipmi_msg_t          msg;
+    unsigned char       data[1];
+    ipmi_channel_info_t *info;
+
+    if (channel > 15)
+	return EINVAL;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    memset(info, 0, sizeof(*info));
+
+    info->handler = handler;
+    info->cb_data = cb_data;
+
+    data[0] = channel & 0xf;
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_CHANNEL_INFO_CMD;
+    msg.data = data;
+    msg.data_len = 1;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_chan_info, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+ipmi_channel_info_t *
+ipmi_channel_info_copy(ipmi_channel_info_t *info)
+{
+    ipmi_channel_info_t *rv = ipmi_mem_alloc(sizeof(*rv));
+    if (!rv)
+	return NULL;
+    memcpy(rv, info, sizeof(*rv));
+    return rv;
+}
+
+void
+ipmi_channel_info_free(ipmi_channel_info_t *info)
+{
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_channel_info_get_channel(ipmi_channel_info_t *info,
+			      unsigned int        *channel)
+{
+    *channel = info->channel;
+    return 0;
+}
+
+int
+ipmi_channel_info_get_medium(ipmi_channel_info_t *info,
+			     unsigned int        *medium)
+{
+    *medium = info->medium;
+    return 0;
+}
+
+int
+ipmi_channel_info_get_protocol_type(ipmi_channel_info_t *info,
+				    unsigned int        *prot_type)
+{
+    *prot_type = info->protocol;
+    return 0;
+}
+
+int
+ipmi_channel_info_get_session_support(ipmi_channel_info_t *info,
+				      unsigned int        *sup)
+{
+    *sup = info->session_support;
+    return 0;
+}
+
+int
+ipmi_channel_info_get_vendor_id(ipmi_channel_info_t *info,
+				unsigned char       *data)
+{
+    memcpy(data, info->vendor_id, 3);
+    return 0;
+}
+
+int
+ipmi_channel_info_get_aux_info(ipmi_channel_info_t *info,
+			       unsigned char *data)
+{
+    memcpy(data, info->aux_info, 2);
+    return 0;
+}
+
+struct ipmi_channel_access_s
+{
+    unsigned int channel : 4;
+    unsigned int alert_set : 1;
+    unsigned int alert_val : 1;
+    unsigned int msg_auth_set : 1;
+    unsigned int msg_auth_val : 1;
+    unsigned int user_auth_set : 1;
+    unsigned int user_auth_val : 1;
+    unsigned int access_mode_set : 1;
+    unsigned int access_mode_val : 3;
+    unsigned int privilege_set : 1;
+    unsigned int privilege_val : 4;
+
+    ipmi_channel_access_cb handler;
+    ipmi_mc_done_cb        done;
+    void                   *cb_data;
+};
+
+static void
+got_chan_access(ipmi_mc_t  *mc,
+		ipmi_msg_t *rsp,
+		void       *cb_data)
+{
+    ipmi_channel_access_t *info = cb_data;
+
+    if (rsp->data[0] != 0) {
+	info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info,
+		      info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 3) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(got_chan_info): Channel access response too small",
+		 mc->name);
+	info->handler(mc, EINVAL, info, info->cb_data);
+	goto out;
+    }
+
+    info->alert_val = (rsp->data[1] >> 5) & 1;
+    info->msg_auth_val = (rsp->data[1] >> 4) & 1;
+    info->user_auth_val = (rsp->data[1] >> 3) & 1;
+    info->access_mode_val = rsp->data[1] & 0x7;
+    info->privilege_val = rsp->data[2] & 0xf;
+    info->handler(mc, 0, info, info->cb_data);
+ out:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_channel_get_access(ipmi_mc_t              *mc,
+			   unsigned int           channel,
+			   enum ipmi_set_dest_e   dest,
+			   ipmi_channel_access_cb handler,
+			   void                   *cb_data)
+{
+    int                   rv;
+    ipmi_msg_t            msg;
+    unsigned char         data[2];
+    ipmi_channel_access_t *info;
+
+    if (channel > 15)
+	return EINVAL;
+    if ((dest < IPMI_SET_DEST_NON_VOLATILE) || (dest > IPMI_SET_DEST_VOLATILE))
+	return EINVAL;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    memset(info, 0, sizeof(*info));
+
+    info->channel = channel;
+    info->handler = handler;
+    info->cb_data = cb_data;
+
+    data[0] = channel & 0xf;
+    data[1] = dest << 6;
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_CHANNEL_ACCESS_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_chan_access, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+static void
+set_chan_access(ipmi_mc_t  *mc,
+		ipmi_msg_t *rsp,
+		void       *cb_data)
+{
+    ipmi_channel_access_t *info = cb_data;
+
+    if (rsp->data[0] != 0) {
+	info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
+	goto out;
+    }
+
+    info->done(mc, 0, info->cb_data);
+
+ out:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_channel_set_access(ipmi_mc_t             *mc,
+			   unsigned int           channel,
+			   enum ipmi_set_dest_e  dest,
+			   ipmi_channel_access_t *access,
+			   ipmi_mc_done_cb       handler,
+			   void                  *cb_data)
+{
+    ipmi_channel_access_t *info;
+    ipmi_msg_t            msg;
+    unsigned char         data[3];
+    int                   rv;
+
+
+    if (channel > 15)
+	return EINVAL;
+    if ((dest < IPMI_SET_DEST_NON_VOLATILE) || (dest > IPMI_SET_DEST_VOLATILE))
+	return EINVAL;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return EINVAL;
+
+    memcpy(info, access, sizeof(*info));
+    info->channel = channel;
+    info->done = handler;
+    info->cb_data = cb_data;
+
+    data[0] = channel & 0xf;
+
+    data[1] = ((info->alert_val << 5)
+	       | (info->msg_auth_val << 4)
+	       | (info->user_auth_val << 3)
+	       | info->access_mode_val);
+    if (info->alert_set || info->msg_auth_set || info->user_auth_set
+	|| info->access_mode_set)
+    {
+	data[1] |= dest << 6;
+    }
+
+    data[2] = info->privilege_val;
+    if (info->privilege_set)
+	data[2] |= dest << 6;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_CHANNEL_ACCESS_CMD;
+    msg.data = data;
+    msg.data_len = 3;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, set_chan_access, info);
+    if (rv)
+	ipmi_mem_free(info);
+
+    return rv;
+}
+
+ipmi_channel_access_t *
+ipmi_channel_access_copy(ipmi_channel_access_t *access)
+{
+    ipmi_channel_access_t *rv = ipmi_mem_alloc(sizeof(*rv));
+    if (!rv)
+	return NULL;
+    memcpy(rv, access, sizeof(*rv));
+    return rv;
+}
+
+void
+ipmi_channel_access_free(ipmi_channel_access_t *access)
+{
+    ipmi_mem_free(access);
+}
+
+int
+ipmi_channel_access_get_channel(ipmi_channel_access_t *info,
+				unsigned int          *channel)
+{
+    *channel = info->channel;
+    return 0;
+}
+
+int
+ipmi_channel_access_get_alerting_enabled(ipmi_channel_access_t *info,
+					 unsigned int          *enab)
+{
+    *enab = info->alert_val;
+    return 0;
+}
+
+int
+ipmi_channel_access_set_alerting_enabled(ipmi_channel_access_t *info,
+					 unsigned int          enab)
+{
+    info->alert_val = enab;
+    info->alert_set = 1;
+    return 0;
+}
+
+int
+ipmi_channel_access_get_per_msg_auth(ipmi_channel_access_t *info,
+				     unsigned int          *msg_auth)
+{
+    *msg_auth = info->msg_auth_val;
+    return 0;
+}
+
+int
+ipmi_channel_access_set_per_msg_auth(ipmi_channel_access_t *info,
+				     unsigned int          msg_auth)
+{
+    info->msg_auth_val = msg_auth;
+    info->msg_auth_set = 1;
+    return 0;
+}
+
+int
+ipmi_channel_access_get_user_auth(ipmi_channel_access_t *info,
+				  unsigned int          *user_auth)
+{
+    *user_auth = info->user_auth_val;
+    return 0;
+}
+
+int
+ipmi_channel_access_set_user_auth(ipmi_channel_access_t *info,
+				  unsigned int          user_auth)
+{
+    info->user_auth_val = user_auth;
+    info->user_auth_set = 1;
+    return 0;
+}
+
+int
+ipmi_channel_access_get_access_mode(ipmi_channel_access_t *info,
+				    unsigned int          *access_mode)
+{
+    *access_mode = info->access_mode_val;
+    return 0;
+}
+
+int
+ipmi_channel_access_set_access_mode(ipmi_channel_access_t *info,
+				    unsigned int          access_mode)
+{
+    info->access_mode_val = access_mode;
+    info->access_mode_set = 1;
+    return 0;
+}
+
+int
+ipmi_channel_access_get_priv_limit(ipmi_channel_access_t *info,
+				   unsigned int          *priv_limit)
+{
+    *priv_limit = info->privilege_val;
+    return 0;
+}
+
+int
+ipmi_channel_access_set_priv_limit(ipmi_channel_access_t *info,
+				   unsigned int          priv_limit)
+{
+    info->privilege_val = priv_limit;
+    info->privilege_set = 1;
+    return 0;
+}
+
+int
+ipmi_channel_access_setall(ipmi_channel_access_t *info)
+{
+    info->alert_set = 1;
+    info->msg_auth_set = 1;
+    info->user_auth_set = 1;
+    info->access_mode_set = 1;
+    info->privilege_set = 1;
+    return 0;
+}
+
+/***********************************************************************
+ *
+ * User management
+ *
+ **********************************************************************/
+
+struct ipmi_user_s
+{
+    int  num;
+    unsigned int link_enabled_set : 1;
+    unsigned int link_enabled : 1;
+    unsigned int msg_enabled_set : 1;
+    unsigned int msg_enabled : 1;
+    unsigned int privilege_limit_set : 1;
+    unsigned int privilege_limit : 4;
+    unsigned int cb_only_set : 1;
+    unsigned int cb_only : 1;
+    unsigned int session_limit_set : 1;
+    unsigned int session_limit_read : 1;
+    unsigned int session_limit : 4;
+    unsigned int enable_set : 1;
+    unsigned int enable_read : 1;
+    unsigned int enable : 4;
+    unsigned int name_set : 1;
+    char name[17];
+    unsigned int pw_set : 1;
+    unsigned int pw2_set : 1;
+    char pw[20];
+
+    unsigned int channel : 4;
+    ipmi_mc_done_cb handler;
+    void            *cb_data;
+};
+
+struct ipmi_user_list_s
+{
+    int               channel;
+    int               curr;
+    int               max;
+    int               idx;
+    ipmi_user_t       *users;
+
+    ipmi_user_list_cb handler;
+    void              *cb_data;
+};
+
+ipmi_user_list_t *
+ipmi_user_list_copy(ipmi_user_list_t *list)
+{
+    ipmi_user_list_t *rv;
+
+    rv = ipmi_mem_alloc(sizeof(*rv));
+    if (!rv)
+	return NULL;
+    memcpy(rv, list, sizeof(*rv));
+    rv->users = ipmi_mem_alloc(sizeof(ipmi_user_t) * list->idx);
+    if (!rv->users) {
+	ipmi_mem_free(rv);
+	return NULL;
+    }
+    memcpy(rv->users, list->users, sizeof(ipmi_user_t) * list->idx);
+    return rv;
+}
+
+void
+ipmi_user_list_free(ipmi_user_list_t *list)
+{
+    ipmi_mem_free(list->users);
+    ipmi_mem_free(list);
+}
+
+unsigned int
+ipmi_user_list_get_user_count(ipmi_user_list_t *list)
+{
+  return list->idx;
+}
+
+ipmi_user_t *
+ipmi_user_list_get_user(ipmi_user_list_t *list,
+			unsigned int     idx)
+{
+  if (idx >= list->idx)
+      return NULL;
+  return ipmi_user_copy(&list->users[idx]);
+}
+
+int
+ipmi_user_list_get_channel(ipmi_user_list_t *list, unsigned int *channel)
+{
+    *channel = list->channel;
+    return 0;
+}
+
+
+static int list_next_user(ipmi_mc_t *mc, ipmi_user_list_t *list);
+
+static void
+user_list_done(ipmi_mc_t *mc, ipmi_user_list_t *list)
+{
+    list->handler(mc, 0, list, list->cb_data);
+    ipmi_user_list_free(list);
+}
+
+static void
+got_user2(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    ipmi_user_list_t *list = cb_data;
+    int              rv;
+
+    if (rsp->data[0] != 0) {
+	list->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), list,
+		      list->cb_data);
+	goto out_err;
+    }
+
+    if (rsp->data_len < 17) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(got_chan_info): user name response too small",
+		 mc->name);
+	list->handler(mc, EINVAL, list, list->cb_data);
+	goto out_err;
+    }
+
+    memcpy(list->users[list->idx].name, rsp->data+1, 16);
+    list->users[list->idx].name[16] = '\0';
+    list->idx++;
+
+    if (list->curr >= list->max)
+	user_list_done(mc, list);
+    else {
+	list->curr++;
+	rv = list_next_user(mc, list);
+	if (rv) {
+	    list->handler(mc, rv, list, list->cb_data);
+	    goto out_err;
+	}
+    }
+    return;
+
+ out_err:
+    ipmi_mem_free(list);
+}
+
+static void
+got_user1(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    ipmi_user_list_t *list = cb_data;
+    int              rv;
+    int              idx;
+    ipmi_msg_t       msg;
+    unsigned char    data[1];
+
+
+    if (rsp->data[0] != 0) {
+	list->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), list,
+		      list->cb_data);
+	goto out_err;
+    }
+
+    if (rsp->data_len < 5) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(got_chan_info): user access response too small",
+		 mc->name);
+	list->handler(mc, EINVAL, list, list->cb_data);
+	goto out_err;
+    }
+
+    if (! list->users) {
+	if (list->max == 0)
+	    list->max = rsp->data[1] & 0x1f;
+	if (list->max < 1) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%smc.c(got_chan_info): user access num uses is < 1",
+		     mc->name);
+	    list->handler(mc, EINVAL, list, list->cb_data);
+	    goto out_err;
+	}
+	list->users = ipmi_mem_alloc(sizeof(ipmi_user_t)
+				     * (list->max - list->curr + 1));
+	if (!list->users) {
+	    list->handler(mc, EINVAL, list, list->cb_data);
+	    goto out_err;
+	}
+	memset(list->users, 0,
+	       sizeof(ipmi_user_t) * (list->max - list->curr + 1));
+    }
+
+    idx = list->idx;
+    list->users[idx].num = list->curr;
+    list->users[idx].cb_only = (rsp->data[4] >> 6) & 1;
+    list->users[idx].link_enabled = (rsp->data[4] >> 5) & 1;
+    list->users[idx].msg_enabled = (rsp->data[4] >> 4) & 1;
+    list->users[idx].privilege_limit = rsp->data[4] & 0x0f;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_USER_NAME_CMD;
+    msg.data = data;
+    msg.data_len = 1;
+    data[0] = list->curr;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_user2, list);
+    if (rv) {
+	list->handler(mc, rv, list, list->cb_data);
+	goto out_err;
+    }
+    
+    return;
+
+ out_err:
+    ipmi_mem_free(list);
+}
+
+static int
+list_next_user(ipmi_mc_t *mc, ipmi_user_list_t *info)
+{
+    ipmi_msg_t      msg;
+    unsigned char   data[2];
+
+    if ((info->curr > 0x1f) || (info->curr < 1))
+	return EINVAL;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_USER_ACCESS_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = info->channel & 0xf;
+    data[1] = info->curr;
+
+    return ipmi_mc_send_command(mc, 0, &msg, got_user1, info);
+}
+
+int
+ipmi_mc_get_users(ipmi_mc_t         *mc,
+		  unsigned int      channel,
+		  unsigned int      user,
+		  ipmi_user_list_cb handler,
+		  void              *cb_data)
+{
+    int              rv;
+    ipmi_user_list_t *list = NULL;
+
+    if (channel > 15)
+	return EINVAL;
+    if (user > 0x1f)
+	return EINVAL;
+
+    list = ipmi_mem_alloc(sizeof(*list));
+    if (!list)
+	return ENOMEM;
+    memset(list, 0, sizeof(*list));
+
+    list->channel = channel;
+    list->handler = handler;
+    list->cb_data = cb_data;
+    if (user) {
+	list->curr = user;
+	list->max = user;
+    } else {
+	list->curr = 1;
+	list->max = 0;
+    }
+
+    rv = list_next_user(mc, list);
+    if (rv)
+	ipmi_mem_free(list);
+    return rv;
+}
+
+ipmi_user_t *
+ipmi_user_copy(ipmi_user_t *user)
+{
+    ipmi_user_t *rv;
+
+    rv = ipmi_mem_alloc(sizeof(*rv));
+    if (rv)
+	memcpy(rv, user, sizeof(*rv));
+    return rv;
+}
+
+void
+ipmi_user_free(ipmi_user_t *user)
+{
+    ipmi_mem_free(user);
+}
+
+static void
+set_user_done(ipmi_mc_t *mc, int err, ipmi_user_t *user)
+{
+    user->handler(mc, 0, user->cb_data);
+    ipmi_user_free(user);
+}
+
+static void
+set_user5(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    ipmi_user_t     *user = cb_data;
+
+    if (rsp->data[0] != 0) {
+	set_user_done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), user);
+	return;
+    }
+
+    set_user_done(mc, 0, user);
+}
+
+static int set_enable(ipmi_mc_t *mc, ipmi_user_t *user)
+{
+    ipmi_msg_t      msg;
+    unsigned char   data[2];
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_USER_PASSWORD_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+
+
+    data[0] = user->num;
+    if (user->enable)
+	data[1] = 0x01; /* enable */
+    else
+	data[1] = 0x00; /* disable */
+	
+    return ipmi_mc_send_command(mc, 0, &msg, set_user5, user);
+}
+
+static void
+set_user4(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    ipmi_user_t *user = cb_data;
+    int         rv = 0;
+
+    if (rsp->data[0] != 0) {
+	set_user_done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), user);
+	return;
+    }
+
+    if (user->enable_set)
+	rv = set_enable(mc, user);
+    else
+	set_user_done(mc, 0, user);
+
+    if (rv)
+	set_user_done(mc, rv, user);
+}
+
+static int set_pw(ipmi_mc_t *mc, ipmi_user_t *user)
+{
+    ipmi_msg_t      msg;
+    unsigned char   data[22];
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_USER_PASSWORD_CMD;
+    msg.data = data;
+
+
+    data[0] = user->num;
+    data[1] = 0x02; /* set password */
+    if (user->pw2_set) {
+	msg.data_len = 22;
+	memcpy(data+2, user->pw, 20);
+    } else {
+	msg.data_len = 18;
+	memcpy(data+2, user->pw, 16);
+    }
+	
+    return ipmi_mc_send_command(mc, 0, &msg, set_user4, user);
+}
+
+static void
+set_user3(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    ipmi_user_t     *user = cb_data;
+    int             rv = 0;
+
+    if (rsp->data[0] != 0) {
+	set_user_done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), user);
+	return;
+    }
+
+    if (user->pw_set || user->pw2_set)
+	rv = set_pw(mc, user);
+    else if (user->enable_set)
+	rv = set_enable(mc, user);
+    else
+	set_user_done(mc, 0, user);
+
+    if (rv)
+	set_user_done(mc, rv, user);
+}
+
+static int set_name(ipmi_mc_t *mc, ipmi_user_t *user)
+{
+    ipmi_msg_t      msg;
+    unsigned char   data[17];
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_USER_NAME_CMD;
+    msg.data = data;
+    msg.data_len = 17;
+
+
+    data[0] = user->num;
+    memcpy(data+1, user->name, 16);
+	
+    return ipmi_mc_send_command(mc, 0, &msg, set_user3, user);
+}
+
+static void
+set_user2(ipmi_mc_t  *mc,
+	  ipmi_msg_t *rsp,
+	  void       *cb_data)
+{
+    ipmi_user_t     *user = cb_data;
+    int             rv = 0;
+
+    if (rsp->data[0] != 0) {
+	set_user_done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), user);
+	return;
+    }
+
+    if (user->name_set)
+	rv = set_name(mc, user);
+    else if (user->pw_set || user->pw2_set)
+	rv = set_pw(mc, user);
+    else if (user->enable_set)
+	rv = set_enable(mc, user);
+    else
+	set_user_done(mc, 0, user);
+
+    if (rv)
+	set_user_done(mc, rv, user);
+}
+
+static int
+set_user_access(ipmi_mc_t *mc, ipmi_user_t *user)
+{
+    ipmi_msg_t      msg;
+    unsigned char   data[4];
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_USER_ACCESS_CMD;
+    msg.data = data;
+    msg.data_len = 3;
+
+    data[0] = user->channel;
+    if (user->cb_only_set || user->link_enabled_set || user->msg_enabled_set) {
+	data[0] |= user->channel;
+	data[0] |= user->cb_only << 6;
+	data[0] |= user->link_enabled << 5;
+	data[0] |= user->msg_enabled << 4;
+	data[0] |= 0x80;
+    }
+    data[1] = user->num;
+    data[2] = user->privilege_limit;
+    if (user->session_limit_set) {
+	/* Optional value, afaict there is no way to get this value. */
+	data[3] = user->session_limit;
+	msg.data_len++;
+    }
+	
+    return ipmi_mc_send_command(mc, 0, &msg, set_user2, user);
+}
+
+int
+ipmi_mc_set_user(ipmi_mc_t       *mc,
+		 unsigned int    channel,
+		 unsigned int    num,
+		 ipmi_user_t     *iuser,
+		 ipmi_mc_done_cb handler,
+		 void            *cb_data)
+{
+    int             rv = 0;
+    ipmi_user_t     *user;
+
+    if (channel > 15)
+	return EINVAL;
+    if (num > 0x1f)
+	return EINVAL;
+
+    user = ipmi_user_copy(iuser);
+    if (!user)
+	return ENOMEM;
+    user->num = num;
+    user->channel = channel;
+    user->handler = handler;
+    user->cb_data = cb_data;
+
+    if (user->cb_only_set || user->link_enabled_set || user->msg_enabled_set
+	|| user->privilege_limit_set || user->session_limit_set)
+    	rv = set_user_access(mc, user);
+    else if (user->name_set)
+	rv = set_name(mc, user);
+    else if (user->pw_set || user->pw2_set)
+	rv = set_pw(mc, user);
+    else if (user->enable_set)
+	rv = set_enable(mc, user);
+    else {
+	/* Nothing to do. */
+	handler(mc, 0, cb_data);
+	ipmi_mem_free(user);
+    }
+
+    if (rv)
+	ipmi_user_free(user);
+
+    return rv;
+}
+
+int
+ipmi_user_get_channel(ipmi_user_t *user, unsigned int *channel)
+{
+    *channel = user->channel;
+    return 0;
+}
+
+int
+ipmi_user_get_num(ipmi_user_t *user, unsigned int *num)
+{
+    *num = user->num;
+    return 0;
+}
+
+int
+ipmi_user_set_num(ipmi_user_t *user, unsigned int num)
+{
+    if (num > 0x1f)
+	return EINVAL;
+    user->num = num;
+    return 0;
+}
+
+int
+ipmi_user_get_name_len(ipmi_user_t *user, unsigned int *len)
+{
+    *len = 16;
+    return 0;
+}
+
+int
+ipmi_user_get_name(ipmi_user_t *user, char *name, unsigned int *len)
+{
+    if (*len > 17)
+	*len = 17;
+    memcpy(name, user->name, *len);
+    return 0;
+}
+
+int
+ipmi_user_set_name(ipmi_user_t *user, char *name, unsigned int len)
+{
+    if (len > 16)
+	return EINVAL;
+    memcpy(user->name, name, len);
+    user->name_set = 1;
+    return 0;
+}
+
+int
+ipmi_user_set_password(ipmi_user_t *user, char *pw, unsigned int len)
+{
+    if (len > 16)
+	return EINVAL;
+    memcpy(user->pw, pw, len);
+    user->pw_set = 1;
+    return 0;
+}
+
+int
+ipmi_user_set_password2(ipmi_user_t *user, char *pw, unsigned int len)
+{
+    if (len > 20)
+	return EINVAL;
+    memcpy(user->pw, pw, len);
+    user->pw2_set = 1;
+    return 0;
+}
+
+int
+ipmi_user_get_link_auth_enabled(ipmi_user_t *user, unsigned int *val)
+{
+    *val = user->link_enabled;
+    return 0;
+}
+
+int
+ipmi_user_set_link_auth_enabled(ipmi_user_t *user, unsigned int val)
+{
+    user->link_enabled = val;
+    user->link_enabled_set = 1;
+    return 0;
+}
+
+int
+ipmi_user_get_msg_auth_enabled(ipmi_user_t *user, unsigned int *val)
+{
+    *val = user->msg_enabled;
+    return 0;
+}
+
+int
+ipmi_user_set_msg_auth_enabled(ipmi_user_t *user, unsigned int val)
+{
+    user->msg_enabled = val;
+    user->msg_enabled_set = 1;
+    return 0;
+}
+
+int
+ipmi_user_get_access_cb_only(ipmi_user_t *user, unsigned int *val)
+{
+    *val = user->cb_only;
+    return 0;
+}
+
+int
+ipmi_user_set_access_cb_only(ipmi_user_t *user, unsigned int val)
+{
+    user->cb_only = val;
+    user->cb_only_set = 1;
+    return 0;
+}
+
+int
+ipmi_user_get_privilege_limit(ipmi_user_t *user, unsigned int *val)
+{
+    *val = user->privilege_limit;
+    return 0;
+}
+
+int
+ipmi_user_set_privilege_limit(ipmi_user_t *user, unsigned int val)
+{
+    user->privilege_limit = val;
+    user->privilege_limit_set = 1;
+    return 0;
+}
+
+int
+ipmi_user_get_session_limit(ipmi_user_t *user, unsigned int *val)
+{
+    if (!user->session_limit_read)
+	return ENOSYS;
+    *val = user->session_limit;
+    return 0;
+}
+
+int
+ipmi_user_set_session_limit(ipmi_user_t *user, unsigned int val)
+{
+    user->session_limit = val;
+    user->session_limit_set = 1;
+    user->session_limit_read = 1;
+    return 0;
+}
+
+int
+ipmi_user_get_enable(ipmi_user_t *user, unsigned int *val)
+{
+    if (!user->enable_read)
+	return ENOSYS;
+    *val = user->enable;
+    return 0;
+}
+
+int
+ipmi_user_set_enable(ipmi_user_t *user, unsigned int val)
+{
+    user->enable = val;
+    user->enable_set = 1;
+    user->enable_read = 1;
+    return 0;
+}
+
+int
+ipmi_user_set_all(ipmi_user_t *user)
+{
+    user->cb_only_set = 1;
+    user->link_enabled_set = 1;
+    user->msg_enabled_set = 1;
+    user->privilege_limit_set = 1;
+    user->session_limit_set = user->session_limit_read;
+    user->enable_set = user->enable_read;
+    user->name_set = 1;
+    return 0;
+}
+

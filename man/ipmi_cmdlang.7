@@ -1335,6 +1335,8 @@ Channel Access Set
    Link Auth Enabled: <bool>
    Msg Auth Enabled: <bool>
    Access CB Only: <bool>
+   Privilege Limit: <integer>
+   Session Limit: <integer>
   .
   .
 .fi
@@ -1358,6 +1360,8 @@ session_limit <integer>
 name <user name string>
 password <password string, <= 16 characters>
 password2 <password string, <= 20 characters>
+enable
+disable
 .fi
 .RE
 The password is the 16-byte IPMI 1.5 passwords., the password2 is for
@@ -1365,7 +1369,9 @@ The password is the 16-byte IPMI 1.5 passwords., the password2 is for
 zero means there is no session limit.  Also note that some systems
 have a bug where the session limit is not optional (as the spec says
 it is). If you get C7 errors back from this command, you will have to
-always specify the session limit.
+always specify the session limit.  Note that you must enable the
+user for it to work, but there seems to be no way to get if the
+user is enabled or not.
 .TP
 Response:
 .RS

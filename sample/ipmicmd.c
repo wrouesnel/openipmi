@@ -120,18 +120,6 @@ ipmi_read_unlock()
 {
 }
 
-unsigned int __ipmi_log_mask = 0;
-
-void
-ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
-{
-    va_list ap;
-
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
-}
-
 void
 posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {

@@ -2090,7 +2090,6 @@ wait_io(int timeout)
 %constant int ecanceled = ECANCELED;
 %constant int enosys = ENOSYS;
 %constant int eexist = EEXIST;
-%constant int enoent = ENOENT;
 %constant int eagain = EAGAIN;
 %constant int eperm = EPERM;
 
@@ -4412,14 +4411,6 @@ char *color_string(int color);
  * and last chararacter (assertion) for discrete values.
  */
 %extend ipmi_sensor_t {
-    /*
-     * Get the entity the sensor belongs to.
-     */
-    ipmi_entity_t *get_entity()
-    {
-	return ipmi_sensor_get_entity(self);
-    }
-
     %newobject get_name;
     /*
      * Get the name of an sensor.
@@ -5518,14 +5509,6 @@ char *color_string(int color);
  * An control object
  */
 %extend ipmi_control_t {
-
-    /*
-     * Get the entity the control belongs to.
-     */
-    ipmi_entity_t *get_entity()
-    {
-	return ipmi_control_get_entity(self);
-    }
 
     %newobject get_name;
     /*

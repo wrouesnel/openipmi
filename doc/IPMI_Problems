@@ -42,3 +42,8 @@
 
 8) There is no explanation of what "decide is accessed by words" means
    in the FRU inventory device commands.
+
+9) SNMP traps generated as defined by IPMI do not contain enough
+   information to correctly identify the sensor.
+
+10)There is no way to set the SNMP trap destination port.
