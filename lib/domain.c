@@ -631,7 +631,7 @@ setup_domain(ipmi_con_t    *ipmi[],
     domain->os_hnd = ipmi[0]->os_hnd;
 
     domain->valid = 1;
-    domain->in_shutdown = 1;
+    domain->in_shutdown = 0;
 
     for (i=0; i<num_con; i++) {
 	domain->conn[i] = ipmi[i];
@@ -3342,7 +3342,7 @@ ipmi_close_connection(ipmi_domain_t             *domain,
 {
     CHECK_DOMAIN_LOCK(domain);
 
-    if (!domain->in_shutdown)
+    if (domain->in_shutdown)
 	return EINVAL;
 
     domain->in_shutdown = 1;

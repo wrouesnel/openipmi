@@ -887,12 +887,13 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 	sel->in_fetch = 1;
 	sel->sels_changed = 0;
 
+	elem->next = NULL;
+	sel->fetch_handlers = elem;
 	if (!opq_new_op(sel->opq, start_fetch, elem, 0)) {
+	    sel->fetch_handlers = NULL;
 	    elem->rv = ENOMEM;
 	    goto out_unlock;
 	}
-	elem->next = NULL;
-	sel->fetch_handlers = elem;
     } else if (elem->handler) {
 	/* Add it to the list of waiting fetch handlers, if it has a
 	   handler. */
