@@ -1,6 +1,8 @@
 
 2003-03-06 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 0.2.3.
+
 	* mc.c: Added rescanning the entities when a connection comes
 	back.
 
