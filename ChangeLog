@@ -1,4 +1,22 @@
 
+2003-05-28 Corey Minyard <cminyard@mvista.com>
+
+	* ilist.c, ilist.h: Set the malloced variable for the supplied
+	entry automatically.
+
+	* sdr.c: Removed some bogus frees.
+
+	* mc.c: Set the MC active when it is handled as a new MC.
+
+	* ipmiif.h: Removed ipmi_domain_get_user_data, since it doesn't
+	make sense any more.
+
+	* domain.c: Added support for multiple connections to a single
+	IPMB box.
+
+	* ipmi_oem_force_conn.c: Added handling for active and inactive
+	connections.
+
 2003-05-26 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv.c: Fixed the address reading code to increment the

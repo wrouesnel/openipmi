@@ -293,8 +293,8 @@ handle_reservation_check(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
-	ipmi_mem_free(sdrs->working_sdrs);
+		 "SDR info was destroyed while an operation was in"
+		 " progress(1)");
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -401,8 +401,8 @@ handle_sdr_data(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
-	ipmi_mem_free(sdrs->working_sdrs);
+		 "SDR info was destroyed while an operation was in"
+		 " progress(2)");
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -621,7 +621,8 @@ handle_reservation(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
+		 "SDR info was destroyed while an operation was in"
+		 " progress(3)");
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -683,7 +684,8 @@ handle_sdr_info(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
+		 "SDR info was destroyed while an operation was in"
+		 " progress(4)");
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -1321,7 +1323,8 @@ save_complete(ipmi_sdr_info_t *sdrs, int err)
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
+		 "SDR info was destroyed while an operation was in"
+		 " progress(5)");
 	internal_destroy_sdr_info(sdrs);
 	/* The previous call unlocks the lock. */
 	return;
@@ -1395,7 +1398,8 @@ handle_sdr_write(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
+		 "SDR info was destroyed while an operation was in"
+		 " progress(6)");
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -1481,7 +1485,8 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
+		 "SDR info was destroyed while an operation was in"
+		 " progress(7)");
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -1554,7 +1559,8 @@ handle_sdr_clear(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
+		 "SDR info was destroyed while an operation was in"
+		 " progress(8)");
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -1607,7 +1613,8 @@ handle_save_reservation(ipmi_mc_t  *mc,
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
+		 "SDR info was destroyed while an operation was in"
+		 " progress(9)");
 	save_complete(sdrs, ECANCELED);
 	goto out;
     }

@@ -932,8 +932,6 @@ int ipmi_init_domain(ipmi_con_t               *con[],
 /* This will clean up all the memory associated with IPMI. */
 void ipmi_shutdown(void);
 
-void *ipmi_domain_get_user_data(ipmi_domain_t *domain);
-
 /* Close an IPMI connection.  This will free all memory associated
    with the connections, any outstanding responses will be lost, etc.
    All slave MC's will be closed when this is closed. */

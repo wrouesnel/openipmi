@@ -61,7 +61,7 @@ void ipmb_handler(ipmi_con_t   *ipmi,
 	ipmb = msg->data[2];
 
     if (handler)
-	handler(ipmi, err, ipmb, 1, cb_data);
+	handler(ipmi, err, ipmb, ipmb == 0x20, cb_data);
 }
 
 static int
@@ -83,10 +83,79 @@ force_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
 			      ipmb_handler, handler, cb_data, NULL, NULL);
 }
 
+void activate_handler(ipmi_con_t   *ipmi,
+		      ipmi_addr_t  *addr,
+		      unsigned int addr_len,
+		      ipmi_msg_t   *rmsg,
+		      void         *rsp_data1,
+		      void         *rsp_data2,
+		      void         *rsp_data3,
+		      void         *rsp_data4)
+{
+    ipmi_ll_ipmb_addr_cb         handler = rsp_data1;
+    void                         *cb_data = rsp_data2;
+    unsigned char                ipmb = 0;
+    int                          err = 0;
+    ipmi_system_interface_addr_t si;
+    ipmi_msg_t                   msg;
+    int                          rv;
+    
+    if (rmsg->data[0] != 0) {
+	err = IPMI_IPMI_ERR_VAL(rmsg->data[0]);
+	if (handler)
+	    handler(ipmi, err, ipmb, 0, cb_data);
+    }
+    else {
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = 0xf;
+	si.lun = 0;
+	msg.netfn = 0x30;
+	msg.cmd = 4;
+	msg.data = NULL;
+	msg.data_len = 0;
+
+	/* Now fetch the current state. */
+	rv = ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
+				ipmb_handler, handler, cb_data, NULL, NULL);
+	if (rv) {
+	    if (handler)
+		handler(ipmi, err, ipmb, 0, cb_data);
+	}
+    }
+}
+
+static int
+force_activate(ipmi_con_t           *conn,
+	       int                  active,
+	       ipmi_ll_ipmb_addr_cb handler,
+	       void                 *cb_data)
+{
+    ipmi_system_interface_addr_t si;
+    ipmi_msg_t                   msg;
+    unsigned char                data[1];
+
+    /* Send the OEM command to get the IPMB address. */
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = 0xf;
+    si.lun = 0;
+    msg.netfn = 0x30;
+    msg.cmd = 3;
+    if (active)
+	data[0] = 0;
+    else
+	data[0] = 1;
+    msg.data = data;
+    msg.data_len = 1;
+
+    return conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			      activate_handler, handler, cb_data, NULL, NULL);
+}
+
 static int
 force_oem_conn_handler(ipmi_con_t *conn, void *cb_data)
 {
     conn->get_ipmb_addr = force_ipmb_fetch;
+    conn->set_active_state = force_activate;
     return 0;
 }
 

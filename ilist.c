@@ -101,6 +101,7 @@ add_after(ilist_item_t *pos, void *item, ilist_item_t *entry)
 
     if (entry) {
 	new_item = entry;
+	new_item->malloced = 0;
     } else {
 	new_item = ilist_mem_alloc(sizeof(*new_item));
 	if (!new_item)
@@ -123,6 +124,7 @@ add_before(ilist_item_t *pos, void *item, ilist_item_t *entry)
 
     if (entry) {
 	new_item = entry;
+	new_item->malloced = 0;
     } else {
 	new_item = ilist_mem_alloc(sizeof(*new_item));
 	if (!new_item)

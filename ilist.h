@@ -55,7 +55,7 @@ int ilist_empty(ilist_t *list);
 
 /* Return false on failure, true on success.  entry may be NULL,
    meaning you want the ilist code to supply the entry.  If you supply
-   an entry, make sure to set the "malloced" flag correctly. */
+   an entry, the "malloced" flag will be set to zero for you. */
 int ilist_add_head(ilist_t *list, void *item, ilist_item_t *entry);
 int ilist_add_tail(ilist_t *list, void *item, ilist_item_t *entry);
 int ilist_add_before(ilist_iter_t *iter, void *item, ilist_item_t *entry);

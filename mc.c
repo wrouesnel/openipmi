@@ -810,6 +810,7 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 {
     int rv = 0;
 
+    mc->active = 1;
     if (mc->provides_device_sdrs)
 	rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
     else
