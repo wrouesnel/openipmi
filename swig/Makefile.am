@@ -1,3 +1,4 @@
 
 SUBDIRS    = $(PERL_DIR)
 
+EXTRA_DIST = OpenIPMI.i
