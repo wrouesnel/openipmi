@@ -3070,7 +3070,7 @@ threshold_sensor_event_call_handler(void *cb_data, void *item1, void *item2)
 		      info->high_low,
 		      info->value_present,
 		      info->raw_value, info->value,
-		      cb_data, info->event);
+		      item2, info->event);
     if (handled == IPMI_EVENT_HANDLED) {
 	info->handled = handled;
 	info->event = NULL;
@@ -3131,7 +3131,7 @@ discrete_sensor_event_call_handler(void *cb_data, void *item1, void *item2)
     handled = handler(info->sensor, info->dir, info->offset,
 		      info->severity,
 		      info->prev_severity,
-		      cb_data, info->event);
+		      item2, info->event);
     if (handled == IPMI_EVENT_HANDLED) {
 	info->handled = handled;
 	info->event = NULL;

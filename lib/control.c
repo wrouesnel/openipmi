@@ -1122,7 +1122,7 @@ control_val_event_call_handler(void *cb_data, void *item1, void *item2)
     handled = handler(info->control,
 		      info->valid_vals,
 		      info->vals,
-		      cb_data,
+		      item2,
 		      info->event);
     if (handled == IPMI_EVENT_HANDLED) {
 	info->handled = handled;
