@@ -1378,7 +1378,8 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     /* Found one, start the discovery process on it. */
     mc = find_mc_by_addr(info->bmc, addr, addr_len);
     if (msg->data[0] == 0) {
-	mc->missed_responses = 0;
+	if (mc)
+	    mc->missed_responses = 0;
 	if (mc && !mc_device_data_compares(mc, msg)) {
 	    /* The MC was replaced with a new one, so clear the old
                one and add a new one. */
@@ -1422,6 +1423,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
  next_addr:
     ipmi_unlock(info->bmc->bmc->mc_list_lock);
 
+ next_addr_nolock:
     if (info->addr.slave_addr == info->end_addr) {
 	/* We've hit the end, we can quit now. */
 	if (info->done_handler)
@@ -1430,6 +1432,10 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	goto out;
     }
     info->addr.slave_addr += 2;
+    if (info->addr.slave_addr == 0x20) {
+	/* We don't scan the BMC, that would be scary. */
+	goto next_addr_nolock;
+    }
 
  retry_addr:
     rv = info->bmc->bmc->conn->send_command(info->bmc->bmc->conn,
