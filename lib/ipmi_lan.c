@@ -412,6 +412,7 @@ lan_send_addr(lan_data_t  *lan,
 {
     unsigned char data[IPMI_MAX_LAN_LEN];
     unsigned char *tmsg;
+    char          *sndmsg;
     int           pos;
     int           msgstart;
     int           rv;
@@ -452,6 +453,7 @@ lan_send_addr(lan_data_t  *lan,
 	pos = msg->data_len + 6;
 	tmsg[pos] = ipmb_checksum(tmsg+3, pos-3);
 	pos++;
+	sndmsg = "";
     } else {
 	/* It's an IPMB address, route it using a send message
            command. */
@@ -482,6 +484,7 @@ lan_send_addr(lan_data_t  *lan,
 	pos++;
 	tmsg[pos] = ipmb_checksum(tmsg+3, pos-3);
 	pos++;
+	sndmsg = "SndMsg ";
     }
 
     if (lan->working_authtype[addr_num] == 0) {
@@ -507,12 +510,17 @@ lan_send_addr(lan_data_t  *lan,
     }
 
     if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing seq %d\n addr =", seq);
+	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing %sseq %d\n addr =",
+		 sndmsg, seq);
 	dump_hex((unsigned char *) &(lan->ip_addr[lan->curr_ip_addr]),
 		 sizeof(struct sockaddr_in));
+        ipmi_log(IPMI_LOG_DEBUG_CONT,
+                 "\n msg  = netfn=%s cmd=%s data_len=%d.",
+		 ipmi_get_netfn_string(msg->netfn),
+                 ipmi_get_command_string(msg->netfn, msg->cmd), msg->data_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, pos);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
     }
 
     rv = sendto(lan->fd, data, pos, 0,
@@ -1323,7 +1331,7 @@ data_handler(int            fd,
 	    msg.data_len = data_len - 14;
 	}
     } else if (tmsg[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD) {
-	/* It an event from the event buffer. */
+	/* It is an event from the event buffer. */
 	ipmi_system_interface_addr_t *si_addr
 	    = (ipmi_system_interface_addr_t *) &addr;
 
@@ -1343,6 +1351,19 @@ data_handler(int            fd,
 	addr_len = sizeof(ipmi_system_interface_addr_t);
 	msg.data = tmsg+6;
 	msg.data_len = data_len - 6;
+        if (DEBUG_MSG) {
+	    ipmi_log(IPMI_LOG_DEBUG_START, "incoming async event\n addr =");
+	    dump_hex((unsigned char *) &ipaddrd, from_len);
+            ipmi_log(IPMI_LOG_DEBUG_CONT,
+		     "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
+		     ipmi_get_netfn_string(msg.netfn),
+		     ipmi_get_command_string(msg.netfn, msg.cmd), msg.data_len,
+		     ipmi_get_cc_string(msg.data[0]));
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
+		     msg.data_len);
+	    dump_hex(msg.data, msg.data_len);
+	    ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+        }
 	handle_async_event(ipmi, &addr, addr_len, &msg);
 	goto out_unlock2;
     } else {
@@ -1402,21 +1423,36 @@ data_handler(int            fd,
     {
 	if (DEBUG_MSG) {
 	    ipmi_log(IPMI_LOG_DEBUG_START,
-		     "Dropped message netfn/cmd/addr mismatch\n"
-		     "  netfn=%d, exp netfn=%d\n"
-		     "  cmd=%d, exp cmd=%d\n"
-		     "  addr=", 
+                     "Dropped message seq %d - netfn/cmd/addr mismatch\n"
+                     " netfn     = %2.2x, exp netfn = %2.2x\n"
+                     " cmd       = %2.2x, exp cmd   = %2.2x\n"
+                     " addr      =",
+                     seq, msg.netfn, lan->seq_table[seq].msg.netfn | 1,
 		     msg.netfn, lan->seq_table[seq].msg.netfn | 1,
 		     msg.cmd, lan->seq_table[seq].msg.cmd);
 	    dump_hex(&addr, addr_len);
 	    ipmi_log(IPMI_LOG_DEBUG_CONT,
-		     "\n  exp addr=");
+		     "\n exp addr=");
 	    dump_hex(&addr2, lan->seq_table[seq].addr_len);
-	    ipmi_log(IPMI_LOG_DEBUG_END, "");
+            ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data     =\n  ");
+            dump_hex(data, len);
+            ipmi_log(IPMI_LOG_DEBUG_END, "\n");
 	}
 	goto out_unlock;
     }
 
+    if (DEBUG_MSG) {
+        ipmi_log(IPMI_LOG_DEBUG_START, "incoming seq %d\n addr =", seq);
+        dump_hex((unsigned char *) &ipaddrd, from_len);
+        ipmi_log(IPMI_LOG_DEBUG_CONT,
+                "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
+		ipmi_get_netfn_string(msg.netfn),
+                ipmi_get_command_string(msg.netfn, msg.cmd), msg.data_len,
+		ipmi_get_cc_string(msg.data[0]));
+        ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
+        dump_hex(data, len);
+        ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+    }
     /* We got a response from the connection, so reset the failure
        count. */
     ip_num = lan->seq_table[seq].last_ip_num;

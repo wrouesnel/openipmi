@@ -1,4 +1,17 @@
 
+2003-10-07 Tony Griffiths <tonyg@agile.tv>
+
+	* lib/domain.c: Fixed channel scanning to go on if it gets an
+	error from the channel.  That way if channels are not present, it
+	will still find channels beyond the errored channel.
+
+	* lib/strings.c, include/OpenIPMI/ipmi_msgbits.h: Add strings for
+	the netfns, commands, and errors.
+	* include/OpenIPMI/ipmi_err.h: ditto
+
+	* lib/ipmi_lan.c: Convert debugging to clean up the formatting and
+	use the new strings.
+
 2003-10-05 Thomas Kanngieser <Thomas.Kanngieser@fci.com>
 
 	* lib/sensor.c: The binary search converting from float to raw

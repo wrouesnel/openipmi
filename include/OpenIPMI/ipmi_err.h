@@ -79,6 +79,8 @@
 #define IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC	0xD5
 #define IPMI_UNKNOWN_ERR_CC			0xff
 
+char *ipmi_get_cc_string(unsigned int cc);
+
 #include <errno.h>
 
 #endif /* _IPMI_ERR_H */

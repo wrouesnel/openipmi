@@ -210,6 +210,9 @@
 #define IPMI_SET_USER_CALLBACK_OPTIONS_CMD	0x1a
 #define IPMI_GET_USER_CALLBACK_OPTIONS_CMD	0x1b
 
+char *ipmi_get_command_string(unsigned int netfn,
+			      unsigned int cmd);
+
 /*
  * NetFNs
  */
@@ -220,5 +223,7 @@
 #define IPMI_FIRMWARE_NETFN	0x08
 #define IPMI_STORAGE_NETFN	0x0a
 #define IPMI_TRANSPORT_NETFN	0x0c
+
+char *ipmi_get_netfn_string(unsigned int netfn);
 
 #endif /* _IPMI_MSGBITS_H */

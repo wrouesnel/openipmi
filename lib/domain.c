@@ -2677,20 +2677,22 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
 	    domain->chan[0].session_support = 0; /* Session-less */
 	    domain->chan[0].vendor_id = 0x001bf2;
 	    domain->chan[0].aux_info = 0;
-	}
-	goto chan_info_done;
+	} else {
+	    memset(&domain->chan[curr], 0, sizeof(domain->chan[curr]));
+ 	}
+	/* Keep going, there may be more channels. */
+    } else {
+        /* Get the info from the channel info response. */
+        domain->chan[curr].medium = rsp->data[2] & 0x7f;
+	domain->chan[curr].xmit_support = rsp->data[2] >> 7;
+	domain->chan[curr].recv_lun = (rsp->data[2] >> 4) & 0x7;
+	domain->chan[curr].protocol = rsp->data[3] & 0x1f;
+	domain->chan[curr].session_support = rsp->data[4] >> 6;
+	domain->chan[curr].vendor_id = (rsp->data[5]
+					|| (rsp->data[6] << 8)
+					|| (rsp->data[7] << 16));
+	domain->chan[curr].aux_info = rsp->data[8] | (rsp->data[9] << 8);
     }
-
-    /* Get the info from the channel info response. */
-    domain->chan[curr].medium = rsp->data[2] & 0x7f;
-    domain->chan[curr].xmit_support = rsp->data[2] >> 7;
-    domain->chan[curr].recv_lun = (rsp->data[2] >> 4) & 0x7;
-    domain->chan[curr].protocol = rsp->data[3] & 0x1f;
-    domain->chan[curr].session_support = rsp->data[4] >> 6;
-    domain->chan[curr].vendor_id = (rsp->data[5]
-				    || (rsp->data[6] << 8)
-				    || (rsp->data[7] << 16));
-    domain->chan[curr].aux_info = rsp->data[8] | (rsp->data[9] << 8);
 
     curr++;
     if (curr < MAX_IPMI_USED_CHANNELS) {
