@@ -131,10 +131,12 @@ check_pef_response_param(ipmi_pef_t *pef,
     }
 
     if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%s: IPMI error from PEF capabilities fetch: %x",
-		 func_name,
-		 rsp->data[0]);
+	/* Allow optional parameters to return errors without complaining. */
+	if (rsp->data[0] != 0x80)
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%s: IPMI error from PEF capabilities fetch: %x",
+		     func_name,
+		     rsp->data[0]);
 	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
 
@@ -1301,7 +1303,7 @@ got_parm(ipmi_pef_t     *pef,
 	if (pefc->num_event_filters == 0)
 	    pefc->curr_parm = IPMI_PEFPARM_NUM_ALERT_POLICIES;
 	else
-	    pefc->curr_sel = 0;
+	    pefc->curr_sel = 1;
 	break;
 
     case IPMI_PEFPARM_EVENT_FILTER_TABLE:
@@ -1326,7 +1328,7 @@ got_parm(ipmi_pef_t     *pef,
 	if (pefc->num_event_filters == 0)
 	    pefc->curr_parm = IPMI_PEFPARM_NUM_ALERT_STRINGS;
 	else
-	    pefc->curr_sel = 0;
+	    pefc->curr_sel = 1;
 	break;
 
     case IPMI_PEFPARM_ALERT_POLICY_TABLE:

@@ -3141,7 +3141,7 @@ display_pef_config(void)
 
     count = ipmi_pefconfig_get_num_event_filters(pef_config);
     display_pad_out("  num_event_filters: %d\n", count);
-    for (i=0; i<count; i++) {
+    for (i=1; i<count; i++) {
 	display_pad_out("  event filter %d:\n", i);
 	for (j=0; eft_table[j].name != NULL; j++) {
 	    rv = eft_table[i].get(pef_config, j, &val);
@@ -3156,7 +3156,7 @@ display_pef_config(void)
 
     count = ipmi_pefconfig_get_num_alert_policies(pef_config);
     display_pad_out("  num_event_filters: %d\n", count);
-    for (i=0; i<count; i++) {
+    for (i=1; i<count; i++) {
 	display_pad_out("  alert policy %d:\n", i);
 	for (j=0; apt_table[j].name != NULL; j++) {
 	    rv = apt_table[i].get(pef_config, j, &val);
@@ -3216,7 +3216,7 @@ readpef_alloc_handler(ipmi_pef_t *lpef,
 	return;
     }
 
-    if (!ipmi_pef_valid(pef)) {
+    if (!ipmi_pef_valid(lpef)) {
 	display_pad_out("PEF is not valid\n");
 	ipmi_pef_destroy(pef, NULL, NULL);
 	pef = NULL;
@@ -3233,6 +3233,10 @@ readpef_alloc_handler(ipmi_pef_t *lpef,
 void
 readpef_mc_handler(ipmi_mc_t *mc, void *cb_data)
 {
+    mccmd_info_t *info = cb_data;
+
+    info->found = 1;
+
     if (pef) {
 	ipmi_pef_destroy(pef, NULL, NULL);
 	pef = NULL;
@@ -3301,6 +3305,10 @@ void writepef_done(ipmi_pef_t *pef,
 void
 writepef_mc_handler(ipmi_mc_t *mc, void *cb_data)
 {
+    mccmd_info_t *info = cb_data;
+
+    info->found = 1;
+
     if (!pef) {
 	ui_log("No PEF to write\n");
 	return;
