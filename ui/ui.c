@@ -6033,8 +6033,9 @@ event_handler(ipmi_domain_t *domain,
 	pos += snprintf(str+pos, 200-pos, " %2.2x", data[i]);
 
     ui_log("Unknown event from mc (%x %x)\n"
-	   "%4.4x:%2.2x %d: %s\n",
-	   mcid.channel, mcid.mc_num, record_id, type, timestamp, str); 
+	   "%4.4x:%2.2x %lld: %s\n",
+	   mcid.channel, mcid.mc_num, record_id, type, (int64_t) timestamp,
+	   str); 
 }
 
 static void

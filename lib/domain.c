@@ -2150,8 +2150,8 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 	unsigned char *data;
 
 	ipmi_log(IPMI_LOG_DEBUG_START,
-		 "Event recid mc (0x%x):%4.4x type:%2.2x timestamp %llu:\n",
-		 mcid.mc_num, record_id, type, (uint64_t) timestamp);
+		 "Event recid mc (0x%x):%4.4x type:%2.2x timestamp %lld:\n",
+		 mcid.mc_num, record_id, type, (int64_t) timestamp);
 	data = ipmi_event_get_data_ptr(event);
 	dump_hex(data, data_len);
 	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
