@@ -506,7 +506,11 @@ handle_sel_data(ipmi_mc_t  *mc,
     if (rsp->data[0] == IPMI_INVALID_RESERVATION_CC) {
 	/* We lost our reservation, restart the operation.  Only do
            this so many times, in order to guarantee that this
-           completes. */
+           completes.  Note that we do this so many times *per fetch*,
+           we do not reset the counter if we get a successful
+           operation.  This is because if this happens a lot during a
+           fetch, there is heavy contention for the SEL and someone
+           needs to drop out to allow everyone else to continue. */
 	sel->fetch_retry_count++;
 	if (sel->fetch_retry_count > MAX_SEL_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
