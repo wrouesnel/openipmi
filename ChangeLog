@@ -1,3 +1,22 @@
+2004-04-12 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/control.c, lib/sensor.c, lib/entity.c: Reworked the internal
+	naming of these to make them consistent.
+
+	* lib/domain.c: Fixed a nasty bug about MC deletion, basically
+	don't delete MCs from the domain list while processing, because
+	they can be the "next" item in the list and corrupt the list
+	traversal.  Add a delayed delete operation.
+
+	* lib/domain.c: Do the OEM startup check after fetching the MC
+	information for the connection.
+
+	* lib/oem_atca.c: Fix a bunch of problems, add hacks for broken
+	hardware.
+
+	* lib/sensor.c: Destroy the handler list of a sensor on a
+	duplicate sensor entry.
+	
 2004-04-09 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu.h, lanserv/emu_cmd.c: Added

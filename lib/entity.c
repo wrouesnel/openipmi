@@ -266,7 +266,6 @@ struct ipmi_entity_info_s
 
 static void call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op);
 static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
-static void call_presence_handlers(ipmi_entity_t *ent);
 
 /***********************************************************************
  *
@@ -547,9 +546,19 @@ entity_set_name(ipmi_entity_t *entity)
 	length++;
     } else
 	length = 1;
-    length += snprintf(entity->name+length, ENTITY_NAME_LEN-length-3,
-		       "%d.%d", entity->info.entity_id,
-		       entity->info.entity_instance);
+    
+    if (entity->info.entity_instance >= 0x60) {
+	length += snprintf(entity->name+length, ENTITY_NAME_LEN-length-3,
+			   "r%d.%d.%d.%d",
+			   entity->info.device_num.channel,
+			   entity->info.device_num.address,
+			   entity->info.entity_id,
+			   entity->info.entity_instance);
+    } else {
+	length += snprintf(entity->name+length, ENTITY_NAME_LEN-length-3,
+			   "%d.%d", entity->info.entity_id,
+			   entity->info.entity_instance);
+    }
     entity->name[length] = ')';
     length++;
     entity->name[length] = ' ';
@@ -1103,19 +1112,6 @@ static void call_presence_handler(void *data, void *cb_data1, void *cb_data2)
 	info->handled = handled;
 	info->event = NULL;
     }
-}
-
-static void
-call_presence_handlers(ipmi_entity_t *ent)
-{
-    presence_handler_info_t info;
-
-    info.ent = ent;
-    info.present = ent->present;
-    info.event = NULL;
-    info.handled = IPMI_EVENT_NOT_HANDLED;
-    ilist_iter_twoitem(ent->presence_handlers, call_presence_handler,
-		       &info);
 }
 
 static void

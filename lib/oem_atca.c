@@ -1862,6 +1862,7 @@ atca_entity_update_handler(enum ipmi_update_e op,
 			 "Entity mismatch on fru %d, old entity was %s",
 			 ENTITY_NAME(entity), finfo->fru_id,
 			 ENTITY_NAME(finfo->entity));
+		return;
 	    }
 
 	    /* If OEM info is already set, then we don't need to do
@@ -1979,10 +1980,15 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
     if (minfo->frus) {
 	for (i=0; i<minfo->num_frus; i++) {
 	    finfo = minfo->frus[i];
+	    if (!finfo)
+		continue;
+
 	    destroy_fru_controls(finfo);
 	    /* We always leave FRU 0 around until we destroy the domain. */
-	    if (i != 0)
+	    if (i != 0) {
 		ipmi_mem_free(finfo);
+		minfo->frus[i] = NULL;
+	    }
 	}
     }
 }
@@ -2178,7 +2184,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     ipmi_domain_t      *domain = info->domain;
     int                count;
     int                found;
-    int                i, j;
+    int                i, j, k, l;
     ipmi_entity_info_t *ents;
     char               *name;
     int                rv;
@@ -2250,24 +2256,35 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	    continue;
 
 	data = ipmi_mem_alloc(len);
-	if (ipmi_fru_get_multi_record_data(fru, i, data, &len) != 0) {
-	    ipmi_mem_free(data);
+	if (!data) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "could not allocate memory for shelf data",
+		     DOMAIN_NAME(domain));
 	    continue;
+	}
+
+	if (ipmi_fru_get_multi_record_data(fru, i, data, &len) != 0) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "could not fetch shelf data item %d",
+		     DOMAIN_NAME(domain), i);
+	    goto next_data_item;
 	}
 
 	mfg_id = data[0] | (data[1] << 8) | (data[2] << 16);
 	if (mfg_id != PICMG_MFG_ID)
-	    continue;
+	    goto next_data_item;
 
 	if (data[3] != 0x10) /* Address table record id */
-	    continue;
+	    goto next_data_item;
 
 	if (data[4] != 0) /* We only know version 0 */
-	    continue;
+	    goto next_data_item;
 
 	if (len < (27 + (3 * data[26])))
 	    /* length does not meet the minimum possible length. */
-	    continue;
+	    goto next_data_item;
 
 	info->shelf_address_len
 	    = ipmi_get_device_string(data+5, 21,
@@ -2281,18 +2298,46 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 		     "%soem_atca.c(shelf_fru_fetched): "
 		     "could not allocate memory for shelf addresses",
 		     DOMAIN_NAME(domain));
+	    ipmi_mem_free(data);
 	    goto out;
 	}
 	memset(info->addresses, 0, sizeof(atca_address_t) * data[26]);
 
 	info->num_addresses = data[26];
 	p = data+27;
-	for (j=0; j<data[26]; j++, p += 3) {
-	    info->addresses[j].hw_address = p[0];
-	    info->addresses[j].site_num = p[1];
-	    info->addresses[j].site_type = p[2];
+	for (j=0, l=0; l<data[26]; l++, p += 3) {
+	    int skip = 0;
+
+	    /* O(n^2), sigh. */
+	    for (k=0; k<j; k++) {
+		if ((info->addresses[k].hw_address == p[0])
+		    && (info->addresses[k].site_num == p[1])
+		    && (info->addresses[k].site_type == p[2]))
+		{
+		    /* Duplicate entries are bad because they will
+		       have the same entity, and that can cause a
+		       crash at shutdown because the entity will be
+		       destroyed and then the child removal will
+		       happen again. */
+		    ipmi_log(IPMI_LOG_WARNING,
+			     "%soem_atca.c(shelf_fru_fetched): "
+			     "Shelf address entry %d is the same as shelf"
+			     " address entry %d, ignoring second entry",
+			     DOMAIN_NAME(domain), k, j);
+		    skip = 1;
+		}
+	    }
+	    if (skip) {
+		info->num_addresses--;
+	    } else {
+		info->addresses[j].hw_address = p[0];
+		info->addresses[j].site_num = p[1];
+		info->addresses[j].site_type = p[2];
+		j++;
+	    }
 	}
 
+    next_data_item:
 	ipmi_mem_free(data);
     }
 

@@ -841,12 +841,8 @@ sensor_set_name(ipmi_sensor_t *sensor)
     length = 1;
     left = SENSOR_NAME_LEN - length;
     if (sensor->entity) {
-	ipmi_entity_id_t ent_id = ipmi_entity_convert_to_id(sensor->entity);
-	length += snprintf(sensor->name+length, left-3, "%d.%d.%d.%d.",
-			   ent_id.channel,
-			   ent_id.address,
-			   ent_id.entity_id,
-			   ent_id.entity_instance);
+	length += snprintf(sensor->name+length, left-3, "%s.",
+			   _ipmi_entity_name(sensor->entity));
 	left = SENSOR_NAME_LEN - length;
     }
 
@@ -1419,6 +1415,7 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 		if (cmp_sensor(nsensor, osensor)) {
 		    /* They compare, prefer to keep the old data. */
 		    opq_destroy(nsensor->waitq);
+		    ilist_twoitem_destroy(nsensor->handler_list);
 		    ipmi_mem_free(nsensor);
 		    sdr_sensors[i] = osensor;
 		    osensor->source_idx = i;

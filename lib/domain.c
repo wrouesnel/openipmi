@@ -3557,6 +3557,20 @@ get_sdrs(ipmi_domain_t *domain)
 }
 
 static void
+domain_oem_handlers_checked(ipmi_domain_t *domain, void *cb_data)
+{
+    int rv;
+
+    if (domain->SDR_repository_support) {
+	rv = get_sdrs(domain);
+    } else {
+	rv = get_channels(domain);
+    }
+    if (rv)
+	call_con_fails(domain, rv, 0, 0, 0);
+}
+
+static void
 got_dev_id(ipmi_mc_t  *mc,
 	   ipmi_msg_t *rsp,
 	   void       *rsp_data)
@@ -3618,29 +3632,22 @@ got_dev_id(ipmi_mc_t  *mc,
 	return;
     }
 
-    if (domain->SDR_repository_support) {
-	rv = get_sdrs(domain);
-    } else {
-	rv = get_channels(domain);
-    }
+    rv = check_oem_handlers(domain, domain_oem_handlers_checked, NULL);
     if (rv)
 	call_con_fails(domain, rv, 0, 0, 0);
 }
 
-static void
-domain_send_mc_id(ipmi_domain_t *domain, void *cb_data)
+static int
+domain_send_mc_id(ipmi_domain_t *domain)
 {
     ipmi_msg_t msg;
-    int        rv;
 
     msg.netfn = IPMI_APP_NETFN;
     msg.cmd = IPMI_GET_DEVICE_ID_CMD;
     msg.data_len = 0;
     msg.data = NULL;
 
-    rv = ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
-    if (rv)
-	call_con_fails(domain, rv, 0, 0, 0);
+    return ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
 }
 
 static int
@@ -3654,7 +3661,7 @@ start_con_up(ipmi_domain_t *domain)
     domain->connecting = 1;
     ipmi_unlock(domain->con_lock);
 
-    return check_oem_handlers(domain, domain_send_mc_id, NULL);
+    return domain_send_mc_id(domain);
 }
 
 static void start_activate_timer(ipmi_domain_t *domain);
