@@ -4374,7 +4374,7 @@ bd_sel_set_start(ipmi_control_t *control, int err, void *cb_data)
     mxp_control_info_t *control_info = cb_data;
     mxp_board_t        *binfo = control_info->idinfo;
     ipmi_msg_t         msg;
-    unsigned char      data[4];
+    unsigned char      data[5];
     int                rv;
 
     if (err) {
@@ -4387,10 +4387,11 @@ bd_sel_set_start(ipmi_control_t *control, int err, void *cb_data)
 
     msg.netfn = MXP_NETFN_MXP1;
     msg.cmd = MXP_OEM_BDSEL_CMD;
-    msg.data_len = 4;
+    msg.data_len = 5;
     msg.data = data;
     add_mxp_mfg_id(data);
-    data[3] = control_info->vals[0];
+    data[3] = binfo->ipmb_addr;
+    data[4] = control_info->vals[0];
 
     rv = ipmi_control_send_command(control, binfo->info->mc, 0,
 				   &msg, mxp_control_set_done,
@@ -4443,7 +4444,7 @@ bd_sel_get_start(ipmi_control_t *control, int err, void *cb_data)
     mxp_board_t          *binfo = control_info->idinfo;
     int                  rv;
     ipmi_msg_t           msg;
-    unsigned char        data[3];
+    unsigned char        data[4];
 
     if (err) {
 	if (control_info->done_get)
@@ -4455,9 +4456,10 @@ bd_sel_get_start(ipmi_control_t *control, int err, void *cb_data)
 
     msg.netfn = MXP_NETFN_MXP1;
     msg.cmd = ???;
-    msg.data_len = 3;
+    msg.data_len = 4;
     msg.data = data;
     add_mxp_mfg_id(data);
+    data[3] = binfo->ipmb_addr;
     rv = ipmi_control_send_command(control, binfo->info->mc, 0,
 				   &msg, mxp_control_get_done,
 				   &(control_info->sdata), control_info);
@@ -4500,7 +4502,7 @@ pci_reset_set_start(ipmi_control_t *control, int err, void *cb_data)
     mxp_control_info_t *control_info = cb_data;
     mxp_board_t        *binfo = control_info->idinfo;
     ipmi_msg_t         msg;
-    unsigned char      data[4];
+    unsigned char      data[5];
     int                rv;
 
     if (err) {
@@ -4513,10 +4515,11 @@ pci_reset_set_start(ipmi_control_t *control, int err, void *cb_data)
 
     msg.netfn = MXP_NETFN_MXP1;
     msg.cmd = MXP_OEM_PCIRST_CMD;
-    msg.data_len = 4;
+    msg.data_len = 5;
     msg.data = data;
     add_mxp_mfg_id(data);
-    data[3] = control_info->vals[0];
+    data[3] = binfo->ipmb_addr;
+    data[4] = control_info->vals[0];
 
     rv = ipmi_control_send_command(control, binfo->info->mc, 0,
 				   &msg, mxp_control_set_done,
@@ -4569,7 +4572,7 @@ pci_reset_get_start(ipmi_control_t *control, int err, void *cb_data)
     mxp_board_t          *binfo = control_info->idinfo;
     int                  rv;
     ipmi_msg_t           msg;
-    unsigned char        data[3];
+    unsigned char        data[4];
 
     if (err) {
 	if (control_info->done_get)
@@ -4581,9 +4584,10 @@ pci_reset_get_start(ipmi_control_t *control, int err, void *cb_data)
 
     msg.netfn = MXP_NETFN_MXP1;
     msg.cmd = ???;
-    msg.data_len = 3;
+    msg.data_len = 4;
     msg.data = data;
     add_mxp_mfg_id(data);
+    data[3] = binfo->ipmb_addr;
     rv = ipmi_control_send_command(control, binfo->info->mc, 0,
 				   &msg, mxp_control_get_done,
 				   &(control_info->sdata), control_info);
@@ -4642,7 +4646,8 @@ slot_init_set_start(ipmi_control_t *control, int err, void *cb_data)
     msg.data_len = 4;
     msg.data = data;
     add_mxp_mfg_id(data);
-    data[3] = control_info->vals[0];
+    data[3] = binfo->ipmb_addr;
+
 
     rv = ipmi_control_send_command(control, binfo->info->mc, 0,
 				   &msg, mxp_control_set_done,

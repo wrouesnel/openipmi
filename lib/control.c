@@ -556,7 +556,7 @@ ipmi_control_set_val(ipmi_control_t     *control,
 {
     CHECK_CONTROL_LOCK(control);
 
-    if (!control->cbs.get_val)
+    if (!control->cbs.set_val)
 	return ENOSYS;
     return control->cbs.set_val(control, val, handler, cb_data);
 }

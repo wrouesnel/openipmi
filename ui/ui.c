@@ -4837,7 +4837,7 @@ mc_reset_handler(ipmi_mc_t *mc, void *cb_data)
     int          rv;
 
     info->found = 1;
-    rv = ipmi_mc_reset(mc, info->msg.cmd, sel_time_fetched, NULL);
+    rv = ipmi_mc_reset(mc, info->msg.cmd, mc_reset_done, NULL);
     if (rv)
 	cmd_win_out("Error sending MC reset: %x\n", rv);
 }
@@ -5148,7 +5148,6 @@ activate_con_cmder(ipmi_domain_t *domain, void *cb_data)
 {
     int          rv;
     unsigned int *connection = cb_data;
-    unsigned int val;
 
     rv = ipmi_domain_activate_connection(domain, *connection);
     if (rv)
