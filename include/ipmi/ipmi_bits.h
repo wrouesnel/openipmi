@@ -216,6 +216,7 @@ enum ipmi_event_dir_e {
 #define IPMI_IND_LIGHT			1
 #define IPMI_IND_RELAY			2
 #define IPMI_IND_DISPLAY		3
+#define IPMI_IND_ALARM			4
 
 #define IPMI_IND_COLOR_BLACK		0
 #define IPMI_IND_COLOR_WHITE		1

@@ -566,10 +566,9 @@ int ipmi_states_get(ipmi_sensor_t       *sensor,
 
 
 /*
- * Indicators are lights, relays, displays, or other things of that
- * nature.  Basically, output devices.  IPMI does not define these,
- * but they are pretty fundamental for system management.
- */
+ * Indicators are lights, relays, displays, alarms, or other things of
+ * that nature.  Basically, output devices.  IPMI does not define
+ * these, but they are pretty fundamental for system management.  */
 int ipmi_ind_get_type(ipmi_ind_t *ind);
 int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
 void ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
@@ -585,6 +584,7 @@ unsigned int ipmi_ind_get_num_colors(ipmi_ind_t *ind);
 int ipmi_ind_get_color(ipmi_ind_t *ind, unsigned int color_num);
 
 /* RELAY types have no settings. */
+/* ALARM types have no settings. */
 
 /* A general callback for indicator operations that don't received
    any data. */

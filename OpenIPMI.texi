@@ -335,7 +335,7 @@ So how do you obtain a lock for an IPMI object?  If you are handling
 incoming IPMI events you generally don't have to worry about this.  But
 say you are handling outside input, such as a user interface.  What
 then?  If the pointers can change, how do I keep a reference to
-something.
+something?
 
 OpenIPMI provides two identifiers for IPMI objects.  One is a pointer,
 but a pointer is only good inside a callback.  The other is an OpenIPMI
@@ -428,7 +428,10 @@ to change individual characters at will.
 @node    Using OpenIPMI, OpenIPMI Internal Interfaces, OpenIPMI Concepts, Top
 @chapter Using OpenIPMI
 
-This chapter discusses how to use the OpenIPMI library.
+This chapter discusses how to use the OpenIPMI library.  Note that not
+all the details of everything are covered.  See the include files for
+details on the functions and types.  This covers the concepts so you can
+understand the include files.
 
 @menu
 * Include Files::
@@ -473,6 +476,10 @@ Used to access the system event log for the system.
 The os-specific handler types are defined here.  You must implement this
 and supply it to the IPMI code.
 
+@item @file{selector.h}
+For *nix systems, This file a default mechanism for handling many of the
+os-specific handler operations.
+
 @subsection Files dealing with messaging interfaces
 
 @item @file{ipmi_lan.h}
@@ -483,42 +490,112 @@ creating a LAN connection.
 This is the messaging interface for talking to local IPMI interfaces
 (like KCS), this contains the calls for creating an SMI connection.
 
-@subsection Internal files that OEM code or messaging interfaces deal with
+@subsection Internal files that OEM code and messaging interfaces deal with
 
 @item @file{ipmi_addr.h}
 The file holding information about IPMI addresses.
 
 @item @file{ipmi_conn.h}
-This defines the interface for the 
+This defines the interface for the messaging interfaces.
 
 @item @file{ipmi_entity.h}
+This defines internal entity interfaces.
+
 @item @file{ipmi_ind.h}
+This defines internal indicator interfaces.
+
 @item @file{ipmi_int.h}
+This defines other miscellaneous internal interfaces.
 
 @item @file{ipmi_mc.h}
+This defines internal interfaces for the management controllers.
+
 @item @file{ipmi_msgbits.h}
+This defines various IPMI messages.
+
 @item @file{ipmi_oem.h}
+This defines interfaces that OEM code can tie into.
 
 @item @file{ipmi_sdr.h}
-@item @file{ipmi_sensor.h}
+This defines internal interfaces for the sdr repostiory.
 
-@item @file{selector.h}
+@item @file{ipmi_sensor.h}
+This defines internal interfaces for sensors.
 
 @end table
 
 @node    Initialization, The BMC, Include Files, Using OpenIPMI
 @section Initialization
 
-To initialize the OpenIPMI library, you must call
+To initialize the OpenIPMI library, you must call @var{ipmi_init} and
+pass in an @var{os_handler_t} in to it.  OpenIPMI will use this OS
+handler for global operations.  This @emph{must} be done before any
+other OpenIPMI calls.
 
 @node    The BMC, Entities, Initialization, Using OpenIPMI
 @section The BMC
 
+Once OpenIPMI has been initialized, you need to establish connections to
+BMCs.  The connection-establishment call is different for each messaging
+interface due to varying authentication and information requirements.
+See the include file for the messaging interface for details.
+They all take a @var{ipmi_setup_done_t} parameter that will be called
+with the newly created connection when the connection has been
+established.  You may make as many connections as you like (limited by
+available memory and CPU, of course).
+
+The callback gives you an MC type -- the BMC -- that is your main
+messaging interface into the system.  The entities are also attached to
+the BMC, you have mechanisms to iterate over the entities.
+
+When the BMC is given to you, the OpenIPMI library is still scanning the
+IPMB bus to find all the other MCs on the bus.  As it finds them, it
+will scan the sensors on the MC and add them to entities and create new
+entities as necessary.  So when OpenIPMI hands you the BMC, you probably
+don't have everything in the chassis.  In fact, IPMI is dynamic, so you
+have to be ready for changes as they happen.
+
+Events also come in on the BMC interface.  In the setup done callback,
+you should register for events, if you are interested in them.  This
+means that your callback will receive all events that are not attached
+to a sensor.  If an event is attached to a sensor, it will be delivered
+to a callback associated with the sensor.
+
 @node    Entities, Sensors, The BMC, Using OpenIPMI
 @section Entities
 
+Entities are the things that sensors monitor and indicators display
+from.  When a BMC is reported to you, you should register a callback to
+tell you when entities are added or removed.  That way you can know
+about new entities as soon as they are created.  If you wait until later
+to register the callback, entities may have come into existance and you
+will miss them (although you could catch them in an iterator).
+
+Sensors and indicators hang off entities.  OpenIPMI provides iterators
+so you can scan all the sensors and indicators on an entity.  It allows
+you to register callbacks to tell you when sensors and indicators are
+added to or removed from the entity.  You sould do this in the entity
+creation callback so you won't miss any sensors or indicators as they
+are detected.
+
+Entities are hierarchical in nature.  An entity can have children
+entities.  OpenIPMI allows you to create these relationships in the
+local database and push them to the SDR database on the chassis, if you
+like.  The next time it starts, it will pull them from the SDR database
+and recreate the relationships.  If you have multiple power supplies in
+a subchassis, or multiple processors on a board, the entity
+relationships let you create nice containment relationships.
+
+And entity may be present or absent in the system.  If the entity is an
+FRU, this is expected.  OpenIPMI will automatically detect presence or
+absense of an entity and report this to you via a callback.  Like the
+other callbacks, you should register them in the entity creation
+callback.
+
 @node    Sensors, Indicators, Entities, Using OpenIPMI
 @section Sensors
+
+Sensors, of course, are what IPMI is mostly about.
 
 @node    Indicators, , Sensors, Using OpenIPMI
 @section Indicators

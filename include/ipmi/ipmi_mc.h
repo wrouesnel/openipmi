@@ -62,7 +62,8 @@ int ipmi_send_command(ipmi_mc_t               *mc,
 		      void                    *rsp_data);
 
 /*
- * Registration for receiving incoming commands.
+ * Registration for receiving incoming commands.  Not all systems
+ * support this, you will receive an ENOSYS error if that's the case.
  */
 
 /* Called when a registered command comes in. */
@@ -71,9 +72,7 @@ typedef void (*ipmi_command_handler_t)(ipmi_mc_t  *src,
 				       long       sequence,
 				       void       *cmd_data);
 
-/* Note that in command handlers you may NOT register and deregister
-   for commands due to locking concerns, unless the locks you provide
-   are recursive.  If the locks are recursive, you may ONLY deregister
+/* Note that in command handlers you may ONLY deregister
    the command being handled, you may not deregister any other
    commands. */
 
