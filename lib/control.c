@@ -188,6 +188,67 @@ ipmi_control_pointer_cb(ipmi_control_id_t   id,
     return rv;
 }
 
+typedef struct control_find_info_s
+{
+    ipmi_control_id_t id;
+    char              *id_name;
+    int               rv;
+} control_find_info_t;
+
+static void
+control_search_cmp(ipmi_entity_t  *entity,
+		   ipmi_control_t *control,
+		   void           *cb_data)
+{
+    control_find_info_t *info = cb_data;
+    char               id[33];
+    int                rv;
+
+    rv = ipmi_control_get_id(control, id, 33);
+    if (rv) 
+	return;
+    if (strcmp(info->id_name, id) == 0) {
+	info->id = ipmi_control_convert_to_id(control);
+	info->rv = 0;
+    }
+}
+
+static void
+control_search(ipmi_entity_t *entity, void *cb_data)
+{
+    control_find_info_t *info = cb_data;
+
+    ipmi_entity_iterate_controls(entity, control_search_cmp, info);
+}
+
+int
+ipmi_control_find_id(ipmi_domain_id_t domain_id,
+		    int entity_id, int entity_instance,
+		    int channel, int slave_address,
+		    char *id_name,
+		    ipmi_control_id_t *id)
+{
+    int                rv;
+    ipmi_entity_id_t   entity;
+    control_find_info_t info;
+
+    rv = ipmi_entity_find_id(domain_id, entity_id, entity_instance,
+			     channel, slave_address, &entity);
+    if (rv)
+	return rv;
+
+    info.id_name = id_name;
+    info.rv = EINVAL;
+
+    rv = ipmi_entity_pointer_cb(entity, control_search, &info);
+    if (!rv)
+	rv = info.rv;
+    if (!rv)
+	*id = info.id;
+
+    return rv;
+}
+
 static void
 control_final_destroy(ipmi_control_t *control)
 {

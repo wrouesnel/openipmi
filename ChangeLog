@@ -1,5 +1,9 @@
 2004-01-26 Corey Minyard <cminyard@mvista.com> 
 
+	* include/OpenIPMI/ipmiif.h, lib/sensor.c, lib/control.c,
+	lib/entity.c: Added some routines for dealing more directly with
+	ids.
+
 	* configure.in: Move to version 1.2.4.
 
 	* lib/domain.c, lib/sensor.c, lib/mc.c: Fixed some domain shutdown

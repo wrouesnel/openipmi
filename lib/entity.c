@@ -3301,6 +3301,7 @@ typedef struct mc_cb_info_s
     void               *cb_data;
     ipmi_entity_id_t   id;
     int                err;
+    int                ignore_seq;
 } mc_cb_info_t;
 
 static void
@@ -3319,7 +3320,7 @@ domain_cb(ipmi_domain_t *domain, void *cb_data)
 			    info->id.entity_id,
 			    info->id.entity_instance,
 			    &ent); 
-    if (!info->err) {
+    if (!info->ignore_seq && !info->err) {
 	if (ent->seq != info->id.seq)
 	    info->err = EINVAL;
     }
@@ -3341,11 +3342,59 @@ ipmi_entity_pointer_cb(ipmi_entity_id_t   id,
     info.cb_data = cb_data;
     info.id = id;
     info.err = 0;
+    info.ignore_seq = 0;
 
     rv = ipmi_domain_pointer_cb(id.domain_id, domain_cb, &info);
     if (!rv)
 	rv = info.err;
 
+    return rv;
+}
+
+static int
+ipmi_entity_pointer_cb_noseq(ipmi_entity_id_t   id,
+			     ipmi_entity_ptr_cb handler,
+			     void               *cb_data)
+{
+    int          rv;
+    mc_cb_info_t info;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.id = id;
+    info.err = 0;
+    info.ignore_seq = 1;
+
+    rv = ipmi_domain_pointer_cb(id.domain_id, domain_cb, &info);
+    if (!rv)
+	rv = info.err;
+
+    return rv;
+}
+
+static void
+get_seq(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_entity_id_t *id = cb_data;
+
+    *id = ipmi_entity_convert_to_id(entity);
+}
+
+int
+ipmi_entity_find_id(ipmi_domain_id_t domain_id,
+		    int entity_id, int entity_instance,
+		    int channel, int slave_address,
+		    ipmi_entity_id_t *id)
+{
+    int rv;
+
+    id->domain_id = domain_id;
+    id->entity_id = entity_id;
+    id->entity_instance = entity_instance;
+    id->channel = channel;
+    id->address = slave_address;
+
+    rv = ipmi_entity_pointer_cb_noseq(*id, get_seq, id);
     return rv;
 }
 

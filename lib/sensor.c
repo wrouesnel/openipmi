@@ -307,6 +307,65 @@ ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t   id,
     return rv;
 }
 
+typedef struct sensor_find_info_s
+{
+    ipmi_sensor_id_t id;
+    char             *id_name;
+    int              rv;
+} sensor_find_info_t;
+
+static void
+sensor_search_cmp(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_find_info_t *info = cb_data;
+    char               id[33];
+    int                rv;
+
+    rv = ipmi_sensor_get_id(sensor, id, 33);
+    if (rv) 
+	return;
+    if (strcmp(info->id_name, id) == 0) {
+	info->id = ipmi_sensor_convert_to_id(sensor);
+	info->rv = 0;
+    }
+}
+
+static void
+sensor_search(ipmi_entity_t *entity, void *cb_data)
+{
+    sensor_find_info_t *info = cb_data;
+
+    ipmi_entity_iterate_sensors(entity, sensor_search_cmp, info);
+}
+
+int
+ipmi_sensor_find_id(ipmi_domain_id_t domain_id,
+		    int entity_id, int entity_instance,
+		    int channel, int slave_address,
+		    char *id_name,
+		    ipmi_sensor_id_t *id)
+{
+    int                rv;
+    ipmi_entity_id_t   entity;
+    sensor_find_info_t info;
+
+    rv = ipmi_entity_find_id(domain_id, entity_id, entity_instance,
+			     channel, slave_address, &entity);
+    if (rv)
+	return rv;
+
+    info.id_name = id_name;
+    info.rv = EINVAL;
+
+    rv = ipmi_entity_pointer_cb(entity, sensor_search, &info);
+    if (!rv)
+	rv = info.rv;
+    if (!rv)
+	*id = info.id;
+
+    return rv;
+}
+
 /***********************************************************************
  *
  * Various sensor allocation/deallocation/opq/etc.
@@ -4544,6 +4603,409 @@ ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_get_accuracy(sensor, val, accuracy);
 }
+
+
+/***********************************************************************
+ *
+ * Convenience functions that take ids.
+ *
+ **********************************************************************/
+
+typedef struct sensor_id_events_enable_set_s
+{
+    ipmi_event_state_t    *states;
+    ipmi_sensor_done_cb   done;
+    void                  *cb_data;
+    int                   rv;
+} sensor_id_events_enable_set_t;
+
+static void
+sensor_id_events_enable_set_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_events_enable_set_t *info = cb_data;
+
+    info->rv = ipmi_sensor_events_enable_set(sensor, info->states,
+					     info->done, info->cb_data);
+}
+
+int
+ipmi_sensor_id_events_enable_set(ipmi_sensor_id_t      sensor_id,
+				 ipmi_event_state_t    *states,
+				 ipmi_sensor_done_cb   done,
+				 void                  *cb_data)
+{
+    sensor_id_events_enable_set_t info;
+    int                           rv;
+
+    info.states = states;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_events_enable_set_cb,
+				&info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_events_enable_s
+{
+    ipmi_event_state_t    *states;
+    ipmi_sensor_done_cb   done;
+    void                  *cb_data;
+    int                   rv;
+} sensor_id_events_enable_t;
+
+static void
+sensor_id_events_enable_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_events_enable_t *info = cb_data;
+
+    info->rv = ipmi_sensor_events_enable(sensor,
+					 info->states,
+					 info->done,
+					 info->cb_data);
+}
+
+int
+ipmi_sensor_id_events_enable(ipmi_sensor_id_t      sensor_id,
+			     ipmi_event_state_t    *states,
+			     ipmi_sensor_done_cb   done,
+			     void                  *cb_data)
+{
+    sensor_id_events_enable_t info;
+    int                       rv;
+
+    info.states = states;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_events_enable_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_events_disable_s
+{
+    ipmi_event_state_t    *states;
+    ipmi_sensor_done_cb   done;
+    void                  *cb_data;
+    int                   rv;
+} sensor_id_events_disable_t;
+
+static void
+sensor_id_events_disable_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_events_disable_t *info = cb_data;
+
+    info->rv = ipmi_sensor_events_disable(sensor,
+					  info->states,
+					  info->done,
+					  info->cb_data);
+}
+
+int
+ipmi_sensor_id_events_disable(ipmi_sensor_id_t      sensor_id,
+			      ipmi_event_state_t    *states,
+			      ipmi_sensor_done_cb   done,
+			      void                  *cb_data)
+{
+    sensor_id_events_enable_t info;
+    int                       rv;
+
+    info.states = states;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_events_disable_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_events_enable_get_s
+{
+    ipmi_event_enables_get_cb done;
+    void                      *cb_data;
+    int                       rv;
+} sensor_id_events_enable_get_t;
+
+static void
+sensor_id_events_enable_get_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_events_enable_get_t *info = cb_data;
+
+    info->rv = ipmi_sensor_events_enable_get(sensor,
+					     info->done,
+					     info->cb_data);
+}
+
+int
+ipmi_sensor_id_events_enable_get(ipmi_sensor_id_t          sensor_id,
+				 ipmi_event_enables_get_cb done,
+				 void                      *cb_data)
+{
+    sensor_id_events_enable_get_t info;
+    int                           rv;
+
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_events_enable_get_cb,
+				&info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_rearm_s
+{
+    int                 global_enable;
+    ipmi_event_state_t  *state;
+    ipmi_sensor_done_cb done;
+    void                *cb_data;
+    int                 rv;
+} sensor_id_rearm_t;
+
+static void
+sensor_id_rearm_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_rearm_t *info = cb_data;
+
+    info->rv = ipmi_sensor_rearm(sensor,
+				 info->global_enable,
+				 info->state,
+				 info->done,
+				 info->cb_data);
+}
+
+int
+ipmi_sensor_id_rearm(ipmi_sensor_id_t    sensor_id,
+		     int                 global_enable,
+		     ipmi_event_state_t  *state,
+		     ipmi_sensor_done_cb done,
+		     void                *cb_data)
+{
+    sensor_id_rearm_t info;
+    int               rv;
+
+    info.global_enable = global_enable;
+    info.state = state;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_rearm_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_get_hysteresis_s
+{
+    ipmi_hysteresis_get_cb done;
+    void                   *cb_data;
+    int                    rv;
+} sensor_id_get_hysteresis_t;
+
+static void
+sensor_id_get_hysteresis_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_get_hysteresis_t *info = cb_data;
+
+    info->rv = ipmi_sensor_get_hysteresis(sensor,
+					  info->done,
+					  info->cb_data);
+}
+
+int
+ipmi_sensor_id_get_hysteresis(ipmi_sensor_id_t       sensor_id,
+			      ipmi_hysteresis_get_cb done,
+			      void                   *cb_data)
+{
+    sensor_id_get_hysteresis_t info;
+    int                        rv;
+
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_get_hysteresis_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_set_hysteresis_s
+{
+    unsigned int        positive_hysteresis;
+    unsigned int        negative_hysteresis;
+    ipmi_sensor_done_cb done;
+    void                *cb_data;
+    int                 rv;
+} sensor_id_set_hysteresis_t;
+
+static void
+sensor_id_set_hysteresis_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_set_hysteresis_t *info = cb_data;
+
+    info->rv = ipmi_sensor_set_hysteresis(sensor,
+					  info->positive_hysteresis,
+					  info->negative_hysteresis,
+					  info->done,
+					  info->cb_data);
+}
+
+int
+ipmi_sensor_id_set_hysteresis(ipmi_sensor_id_t    sensor_id,
+			      unsigned int        positive_hysteresis,
+			      unsigned int        negative_hysteresis,
+			      ipmi_sensor_done_cb done,
+			      void                *cb_data)
+{
+    sensor_id_set_hysteresis_t info;
+    int                        rv;
+
+    info.positive_hysteresis = positive_hysteresis;
+    info.negative_hysteresis = negative_hysteresis;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_set_hysteresis_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_thresholds_set_s
+{
+    ipmi_thresholds_t   *thresholds;
+    ipmi_sensor_done_cb done;
+    void                *cb_data;
+    int                 rv;
+} sensor_id_thresholds_set_t;
+
+static void
+sensor_id_thresholds_set_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_thresholds_set_t *info = cb_data;
+
+    info->rv = ipmi_thresholds_set(sensor,
+				   info->thresholds,
+				   info->done,
+				   info->cb_data);
+}
+
+int
+ipmi_sensor_id_thresholds_set(ipmi_sensor_id_t    sensor_id,
+			      ipmi_thresholds_t   *thresholds,
+			      ipmi_sensor_done_cb done,
+			      void                *cb_data)
+{
+    sensor_id_thresholds_set_t info;
+    int               rv;
+
+    info.thresholds = thresholds;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_thresholds_set_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_thresholds_get_s
+{
+    ipmi_thresh_get_cb done;
+    void               *cb_data;
+    int                rv;
+} sensor_id_thresholds_get_t;
+
+static void
+sensor_id_thresholds_get_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_thresholds_get_t *info = cb_data;
+
+    info->rv = ipmi_thresholds_get(sensor,
+				   info->done,
+				   info->cb_data);
+}
+
+int
+ipmi_sensor_id_thresholds_get(ipmi_sensor_id_t   sensor_id,
+			      ipmi_thresh_get_cb done,
+			      void               *cb_data)
+{
+    sensor_id_thresholds_get_t info;
+    int                        rv;
+
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_thresholds_get_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_reading_get_s
+{
+    ipmi_reading_done_cb done;
+    void                 *cb_data;
+    int                  rv;
+} sensor_id_reading_get_t;
+
+static void
+sensor_id_reading_get_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_reading_get_t *info = cb_data;
+    
+    info->rv = ipmi_reading_get(sensor,
+				info->done,
+				info->cb_data);
+}
+
+int
+ipmi_sensor_id_reading_get(ipmi_sensor_id_t     sensor_id,
+			   ipmi_reading_done_cb done,
+			   void                 *cb_data)
+{
+    sensor_id_reading_get_t info;
+    int                     rv;
+
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_reading_get_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct sensor_id_states_get_s
+{
+    ipmi_states_read_cb done;
+    void                *cb_data;
+    int                 rv;
+} sensor_id_states_get_t;
+
+static void
+sensor_id_states_get_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sensor_id_states_get_t *info = cb_data;
+
+    info->rv = ipmi_states_get(sensor,
+			       info->done,
+			       info->cb_data);
+}
+
+int
+ipmi_sensor_id_states_get(ipmi_sensor_id_t    sensor_id,
+			  ipmi_states_read_cb done,
+			  void                *cb_data)
+{
+    sensor_id_states_get_t info;
+    int                    rv;
+
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_states_get_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
 
 #ifdef IPMI_CHECK_LOCKS
 void

@@ -115,6 +115,10 @@ typedef void (*ipmi_entity_ptr_cb)(ipmi_entity_t *entity, void *cb_data);
 int ipmi_entity_pointer_cb(ipmi_entity_id_t   id,
 			   ipmi_entity_ptr_cb handler,
 			   void               *cb_data);
+int ipmi_entity_find_id(ipmi_domain_id_t domain_id,
+			int entity_id, int entity_instance,
+			int channel, int slave_address,
+			ipmi_entity_id_t *id);
 
 ipmi_sensor_id_t ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor);
 typedef void (*ipmi_sensor_ptr_cb)(ipmi_sensor_t *sensor, void *cb_data);
@@ -122,6 +126,11 @@ int ipmi_sensor_pointer_cb(ipmi_sensor_id_t   id,
 			   ipmi_sensor_ptr_cb handler,
 			   void               *cb_data);
 int ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2);
+int ipmi_sensor_find_id(ipmi_domain_id_t domain_id,
+			int entity_id, int entity_instance,
+			int channel, int slave_address,
+			char *id_name,
+			ipmi_sensor_id_t *id);
 
 ipmi_control_id_t ipmi_control_convert_to_id(ipmi_control_t *control);
 typedef void (*ipmi_control_ptr_cb)(ipmi_control_t *control, void *cb_data);
@@ -129,6 +138,11 @@ int ipmi_control_pointer_cb(ipmi_control_id_t   id,
 			    ipmi_control_ptr_cb handler,
 			    void                *cb_data);
 int ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2);
+int ipmi_control_find_id(ipmi_domain_id_t domain_id,
+			 int entity_id, int entity_instance,
+			 int channel, int slave_address,
+			 char *id_name,
+			 ipmi_control_id_t *id);
 
 /* Callback used for generic domain reporting. */
 typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
@@ -1130,13 +1144,16 @@ int ipmi_thresholds_init(ipmi_thresholds_t *th);
 
 /* Set a threshold and make it valid in the thresholds data structure.
    If sensor is non-null, it verifies that the given threshold can be
-   set for the sensor. */
+   set for the sensor.  Note that this does not actually set the
+   threshold in the real sensor, just in the "th" data structure. */
 int ipmi_threshold_set(ipmi_thresholds_t  *th,
 		       ipmi_sensor_t      *sensor,
 		       enum ipmi_thresh_e threshold,
 		       double             value);
 /* Return the value of the threshold in the set of thresholds.
-   Returns an error if the threshold is not set. */
+   Returns an error if the threshold is not set.  This does not
+   actually get the threshold from the real sensor, it get the local
+   value in the "th" data structure. */
 int ipmi_threshold_get(ipmi_thresholds_t  *th,
 		       enum ipmi_thresh_e threshold,
 		       double             *value);
@@ -1217,6 +1234,50 @@ typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
 int ipmi_states_get(ipmi_sensor_t       *sensor,
 		    ipmi_states_read_cb done,
 		    void                *cb_data);
+
+/* These are convenience functions that take a sensor id, not a
+   sensor, and set/get remote values from the sensor */
+int ipmi_sensor_id_events_enable_set(ipmi_sensor_id_t      sensor_id,
+				     ipmi_event_state_t    *states,
+				     ipmi_sensor_done_cb   done,
+				     void                  *cb_data);
+int ipmi_sensor_id_events_enable(ipmi_sensor_id_t      sensor_id,
+				 ipmi_event_state_t    *states,
+				 ipmi_sensor_done_cb   done,
+				 void                  *cb_data);
+int ipmi_sensor_id_events_disable(ipmi_sensor_id_t      sensor_id,
+				  ipmi_event_state_t    *states,
+				  ipmi_sensor_done_cb   done,
+				  void                  *cb_data);
+int ipmi_sensor_id_events_enable_get(ipmi_sensor_id_t          sensor_id,
+				     ipmi_event_enables_get_cb done,
+				     void                      *cb_data);
+int ipmi_sensor_id_rearm(ipmi_sensor_id_t    sensor_id,
+			 int                 global_enable,
+			 ipmi_event_state_t  *state,
+			 ipmi_sensor_done_cb done,
+			 void                *cb_data);
+int ipmi_sensor_id_get_hysteresis(ipmi_sensor_id_t       sensor_id,
+				  ipmi_hysteresis_get_cb done,
+				  void                   *cb_data);
+int ipmi_sensor_id_set_hysteresis(ipmi_sensor_id_t    sensor_id,
+				  unsigned int        positive_hysteresis,
+				  unsigned int        negative_hysteresis,
+				  ipmi_sensor_done_cb done,
+				  void                *cb_data);
+int ipmi_sensor_id_thresholds_set(ipmi_sensor_id_t    sensor_id,
+				  ipmi_thresholds_t   *thresholds,
+				  ipmi_sensor_done_cb done,
+				  void                *cb_data);
+int ipmi_sensor_id_thresholds_get(ipmi_sensor_id_t   sensor_id,
+				  ipmi_thresh_get_cb done,
+				  void               *cb_data);
+int ipmi_sensor_id_reading_get(ipmi_sensor_id_t     sensor_id,
+			       ipmi_reading_done_cb done,
+			       void                 *cb_data);
+int ipmi_sensor_id_states_get(ipmi_sensor_id_t    sensor_id,
+			      ipmi_states_read_cb done,
+			      void                *cb_data);
 
 
 /*
