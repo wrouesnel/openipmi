@@ -52,10 +52,13 @@ typedef void (*ipmi_pet_done_cb)(ipmi_pet_t *pet, int err, void *cb_data);
  *      Note that this does *not* need to be unique for different OpenIPMI
  *      instances that are using the same channel, since the configuration
  *      will be exactly the same for all EFT entries using the same
- *      channel.
+ *      channel, assuming they share the same policy number.
+ *  policy_num - The policy number to use for the alert policy.  This
+ *      should be the same for all users of a domain.
  *  apt_sel - The Alert Policy selector to use for this PET destination.
- *      Note that as eft_sel, this does not need to be unique for different
- *      OpenIPMI instances on the same channel.
+ *      Note that as eft_sel, this needs to be unique for each different
+ *      OpenIPMI instance on the same channel, as it specifies the
+ *      destination to use.
  *  lan_dest_sel - The LAN configuration destination selector for this PET
  *      destination.  Unlike eft_sel and apt_sel, this *must* be unique
  *      for each OpenIPMI instance on the same channel.
@@ -71,6 +74,7 @@ int ipmi_pet_create(ipmi_domain_t    *domain,
 		    struct in_addr   ip_addr,
 		    unsigned char    mac_addr[6],
 		    unsigned int     eft_sel,
+		    unsigned int     policy_num,
 		    unsigned int     apt_sel,
 		    unsigned int     lan_dest_sel,
 		    ipmi_pet_done_cb done,

@@ -44,6 +44,7 @@
 
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_lanparm.h>
@@ -83,8 +84,20 @@ typedef struct pet_timer_s {
 typedef struct got_data_s
 {
     unsigned int channel;
-    int          err;
     ipmi_pet_t   *pet;
+    int          pef_err;
+    int          pef_lock_broken;
+    int          lanparm_err;
+    int          lanparm_lock_broken;
+    int          changed;
+
+    int            lanparm_check_pos;
+    ipmi_lanparm_t *lanparm;
+
+    int          pef_check_pos;
+    ipmi_pef_t   *pef;
+    unsigned int pef_channel;
+
 } got_data_t;
 
 #define NUM_PEF_SETTINGS 4
@@ -116,27 +129,13 @@ struct ipmi_pet_s
 
     got_data_t       got_data[IPMI_SELF_CHANNEL];
 
-    /* Current LAN parameters we are working on.  We have one per
-       possible channel that we can be configuring.  Since we can have
-       more than one BMC that we hook to in a domain, we have to be
-       able to configure each one.  We also run all the configuration
-       checks simultaneously.  */
-    int              lanparm_check_pos[IPMI_SELF_CHANNEL];
-    ipmi_lanparm_t   *working_lanparm[IPMI_SELF_CHANNEL];
-
     /* The LAN configuration parameters are the same for every BMC
        that we hook to, so we only need one. */
     parm_check_t     lanparm_check[NUM_LANPARM_SETTINGS];
 
-    /* Current PEF parameters, like the LAN parameters we do them all
-       at once.  We also do them simultaneously (with the LAN
-       parameters and with each other). */
-    int              pef_check_pos[IPMI_SELF_CHANNEL];
-    ipmi_pef_t       *working_pef[IPMI_SELF_CHANNEL];
-
     /* The PEF configuration parameters are mostly the same for every
-       BMC, except for the channel which may vary from BMC to BMC. */
-    unsigned char    channel[IPMI_SELF_CHANNEL];
+       BMC, except for the channel which may vary from BMC to BMC.
+       The channel is in the per-operation info. */
     parm_check_t     pef_check[NUM_PEF_SETTINGS];
 
     /* Timer to check the configuration periodically. */
@@ -305,19 +304,11 @@ static void
 pet_op_done(ipmi_pet_t *pet)
 {
     struct timeval timeout;
-    int            i;
     os_handler_t   *os_hnd = pet->os_hnd;
 
     pet->in_progress--;
 
     if (pet->in_progress == 0) {
-	for (i=0; i<IPMI_SELF_CHANNEL; i++) {
-	    if (pet->working_pef[i])
-		ipmi_pef_destroy(pet->working_pef[i], NULL, NULL);
-	    if (pet->working_lanparm[i])
-		ipmi_lanparm_destroy(pet->working_lanparm[i], NULL, NULL);
-	}
-
 	if (pet->done) {
 	    pet->done(pet, 0, pet->cb_data);
 	    pet->done = NULL;
@@ -338,7 +329,98 @@ pet_op_done(ipmi_pet_t *pet)
     ipmi_unlock(pet->lock);
 }
 
-static void lanparm_got_config(ipmi_lanparm_t *pef,
+static void
+lanparm_unlocked(ipmi_lanparm_t *lanparm,
+		 int            err,
+		 void           *cb_data)
+{
+    got_data_t *info = cb_data;
+    ipmi_pet_t *pet = info->pet;
+
+    ipmi_lock(pet->lock);
+    ipmi_lanparm_destroy(info->lanparm, NULL, NULL);
+    info->lanparm = NULL;
+    pet_op_done(pet);
+}
+
+static void
+lanparm_commited(ipmi_lanparm_t *lanparm,
+		 int            err,
+		 void           *cb_data)
+{
+    got_data_t    *info = cb_data;
+    ipmi_pet_t    *pet = info->pet;
+    int           rv;
+    unsigned char data[1];
+
+    ipmi_lock(pet->lock);
+    if (pet->destroyed) {
+	ipmi_lanparm_destroy(info->lanparm, NULL, NULL);
+	info->lanparm = NULL;
+	pet_op_done(pet);
+	goto out;
+    }
+
+    /* Ignore the error, committing is optional. */
+
+    data[0] = 0; /* clear lock */
+    rv = ipmi_lanparm_set_parm(info->lanparm, 0, data, 1,
+			   lanparm_unlocked, info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "pet.c(lanparm_commited): error clearing lock: 0x%x", rv);
+	ipmi_lanparm_destroy(info->lanparm, NULL, NULL);
+	info->lanparm = NULL;
+	pet_op_done(pet);
+	goto out;
+    }
+    ipmi_unlock(pet->lock);
+ out:
+    return;
+}
+
+/* Must be called locked, this will unlock the PET. */
+static void
+lanparm_op_done(got_data_t *info, int err)
+{
+    ipmi_pet_t    *pet = info->pet;
+    int           rv;
+
+    info->lanparm_err = err;
+    if (info->lanparm_lock_broken) {
+	/* Locking is not supported. */
+	ipmi_lanparm_destroy(info->lanparm, NULL, NULL);
+	info->lanparm = NULL;
+	pet_op_done(pet);
+	goto out;
+    } else {
+	unsigned char data[1];
+
+	if (!info->lanparm_err && info->changed) {
+	    /* Don't commit if an error occurred. */
+	    data[0] = 2; /* commit */
+	    rv = ipmi_lanparm_set_parm(info->lanparm, 0, data, 1,
+				       lanparm_commited, info);
+	} else {
+	    data[0] = 0; /* clear lock */
+	    rv = ipmi_lanparm_set_parm(info->lanparm, 0, data, 1,
+				       lanparm_unlocked, info);
+	}
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "pet.c(lanparm_op_done): error clearing lock: 0x%x", rv);
+	    ipmi_lanparm_destroy(info->lanparm, NULL, NULL);
+	    info->lanparm = NULL;
+	    pet_op_done(pet);
+	    goto out;
+	}
+    }
+    ipmi_unlock(pet->lock);
+ out:
+    return;
+}
+
+static void lanparm_got_config(ipmi_lanparm_t *lanparm,
 			       int            err,
 			       unsigned char  *data,
 			       unsigned int   data_len,
@@ -348,19 +430,18 @@ static int
 lanparm_next_config(got_data_t *info)
 {
     ipmi_pet_t    *pet = info->pet;
-    unsigned int  ch = info->channel;
     parm_check_t  *check;
     int           rv;
 
-    pet->lanparm_check_pos[ch]++;
-    if (pet->lanparm_check_pos[ch] >= NUM_LANPARM_SETTINGS) {
+    info->lanparm_check_pos++;
+    if (info->lanparm_check_pos >= NUM_LANPARM_SETTINGS) {
 	/* Return non-zero, to end the operation. */
 	return 1;
     }
 
-    check = &(pet->lanparm_check[pet->lanparm_check_pos[ch]]);
+    check = &(pet->lanparm_check[info->lanparm_check_pos]);
 
-    rv = ipmi_lanparm_get_parm(pet->working_lanparm[ch],
+    rv = ipmi_lanparm_get_parm(info->lanparm,
 			       check->conf_num, check->set,
 			       0, lanparm_got_config, info);
     if (rv) {
@@ -372,7 +453,7 @@ lanparm_next_config(got_data_t *info)
 }
 
 static void
-lanparm_set_config(ipmi_lanparm_t *pef,
+lanparm_set_config(ipmi_lanparm_t *lanparm,
 		   int            err,
 		   void           *cb_data)
 {
@@ -382,20 +463,20 @@ lanparm_set_config(ipmi_lanparm_t *pef,
 
     ipmi_lock(pet->lock);
     if (pet->destroyed) {
-	pet_op_done(pet);
+	lanparm_op_done(info, ECANCELED);
 	goto out;
     }
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(lanparm_set_config): set failed: 0x%x", err);
-	pet_op_done(pet);
+	lanparm_op_done(info, err);
 	goto out;
     }
 
     rv = lanparm_next_config(info);
     if (rv) {
-	pet_op_done(pet);
+	lanparm_op_done(info, rv);
 	goto out;
     }
     ipmi_unlock(pet->lock);
@@ -412,7 +493,6 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
 {
     got_data_t    *info = cb_data;
     ipmi_pet_t    *pet = info->pet;
-    unsigned int  ch = info->channel;
     unsigned char val[22];
     int           rv;
     int           pos;
@@ -422,18 +502,18 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
 
     ipmi_lock(pet->lock);
     if (pet->destroyed) {
-	pet_op_done(pet);
+	lanparm_op_done(info, ECANCELED);
 	goto out;
     }
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(lanparm_got_config): get failed: 0x%x", err);
-	pet_op_done(pet);
+	lanparm_op_done(info, err);
 	goto out;
     }
 
-    pos = pet->lanparm_check_pos[ch];
+    pos = info->lanparm_check_pos;
     check = &(pet->lanparm_check[pos]);
 
     /* Don't forget to skip the revision number in the length. */
@@ -442,7 +522,7 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
 		 "pet.c(lanparm_got_config): data length too short for"
 		 " config %d, was %d, expected %d", check->conf_num,
 		 data_len, check->data_len);
-	pet_op_done(pet);
+	lanparm_op_done(info, EINVAL);
 	goto out;
     }
 
@@ -467,24 +547,113 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
 	    checkdata = check->data[i];
 	    val[i] = (data[i] & ~check->mask[i]) | checkdata;
 	}
-	rv = ipmi_lanparm_set_parm(pet->working_lanparm[ch],
+	rv = ipmi_lanparm_set_parm(info->lanparm,
 				   check->conf_num, val, check->data_len,
 				   lanparm_set_config, info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "pet.c(lanparm_got_config): sending set: 0x%x",
 		     rv);
-	    pet_op_done(pet);
+	    lanparm_op_done(info, rv);
 	    goto out;
 	}
     } else {
 	rv = lanparm_next_config(info);
 	if (rv) {
-	    pet_op_done(pet);
+	    lanparm_op_done(info, rv);
 	    goto out;
 	}
     }
 
+    ipmi_unlock(pet->lock);
+ out:
+    return;
+}
+
+static void
+pef_unlocked(ipmi_pef_t    *pef,
+	     int           err,
+	     void          *cb_data)
+{
+    got_data_t *info = cb_data;
+    ipmi_pet_t *pet = info->pet;
+
+    ipmi_lock(pet->lock);
+    ipmi_pef_destroy(info->pef, NULL, NULL);
+    info->pef = NULL;
+    pet_op_done(pet);
+}
+
+static void
+pef_commited(ipmi_pef_t    *pef,
+	     int           err,
+	     void          *cb_data)
+{
+    got_data_t    *info = cb_data;
+    ipmi_pet_t    *pet = info->pet;
+    int           rv;
+    unsigned char data[1];
+
+    ipmi_lock(pet->lock);
+    if (pet->destroyed) {
+	ipmi_pef_destroy(info->pef, NULL, NULL);
+	info->pef = NULL;
+	pet_op_done(pet);
+	goto out;
+    }
+
+    /* Ignore the error, committing is optional. */
+
+    data[0] = 0; /* clear lock */
+    rv = ipmi_pef_set_parm(info->pef, 0, data, 1,
+			   pef_unlocked, info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "pet.c(pef_commited): error clearing lock: 0x%x", rv);
+	ipmi_pef_destroy(info->pef, NULL, NULL);
+	info->pef = NULL;
+	pet_op_done(pet);
+	goto out;
+    }
+    ipmi_unlock(pet->lock);
+ out:
+    return;
+}
+
+/* Must be called locked, this will unlock the PET. */
+static void
+pef_op_done(got_data_t *info, int err)
+{
+    ipmi_pet_t    *pet = info->pet;
+    int           rv;
+
+    info->pef_err = err;
+    if (info->pef_lock_broken) {
+	/* Locking is not supported. */
+	ipmi_pef_destroy(info->pef, NULL, NULL);
+	info->pef = NULL;
+	pet_op_done(pet);
+	goto out;
+    } else {
+	unsigned char data[1];
+
+	if (!info->pef_err && info->changed) {
+	    /* Don't commit if an error occurred. */
+	    data[0] = 2; /* commit */
+	    rv = ipmi_pef_set_parm(info->pef, 0, data, 1, pef_commited, info);
+	} else {
+	    data[0] = 0; /* clear lock */
+	    rv = ipmi_pef_set_parm(info->pef, 0, data, 1, pef_unlocked, info);
+	}
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "pet.c(pef_op_done): error clearing lock: 0x%x", rv);
+	    pet_op_done(pet);
+	    ipmi_pef_destroy(info->pef, NULL, NULL);
+	    info->pef = NULL;
+	    goto out;
+	}
+    }
     ipmi_unlock(pet->lock);
  out:
     return;
@@ -500,19 +669,18 @@ static int
 pef_next_config(got_data_t *info)
 {
     ipmi_pet_t    *pet = info->pet;
-    unsigned int  ch = info->channel;
     parm_check_t  *check;
     int           rv;
 
-    pet->pef_check_pos[ch]++;
-    if (pet->pef_check_pos[ch] >= NUM_PEF_SETTINGS) {
+    info->pef_check_pos++;
+    if (info->pef_check_pos >= NUM_PEF_SETTINGS) {
 	/* Return non-zero, to end the operation. */
 	return 1;
     }
 
-    check = &(pet->pef_check[pet->pef_check_pos[ch]]);
+    check = &(pet->pef_check[info->pef_check_pos]);
 
-    rv = ipmi_pef_get_parm(pet->working_pef[ch], check->conf_num, check->set,
+    rv = ipmi_pef_get_parm(info->pef, check->conf_num, check->set,
 			   0, pef_got_config, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
@@ -533,20 +701,20 @@ pef_set_config(ipmi_pef_t    *pef,
 
     ipmi_lock(pet->lock);
     if (pet->destroyed) {
-	pet_op_done(pet);
+	pef_op_done(info, ECANCELED);
 	goto out;
     }
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(pef_got_control): PEF alloc failed: 0x%x", err);
-	pet_op_done(pet);
+	pef_op_done(info, err);
 	goto out;
     }
 
     rv = pef_next_config(info);
     if (rv) {
-	pet_op_done(pet);
+	pef_op_done(info, rv);
 	goto out;
     }
     ipmi_unlock(pet->lock);
@@ -563,7 +731,6 @@ pef_got_config(ipmi_pef_t    *pef,
 {
     got_data_t    *info = cb_data;
     ipmi_pet_t    *pet = info->pet;
-    unsigned int  ch = info->channel;
     unsigned char val[22];
     int           rv;
     int           pos;
@@ -573,18 +740,18 @@ pef_got_config(ipmi_pef_t    *pef,
 
     ipmi_lock(pet->lock);
     if (pet->destroyed) {
-	pet_op_done(pet);
+	pef_op_done(info, ECANCELED);
 	goto out;
     }
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(pef_got_control): PEF alloc failed: 0x%x", err);
-	pet_op_done(pet);
+	pef_op_done(info, err);
 	goto out;
     }
 
-    pos = pet->pef_check_pos[ch];
+    pos = info->pef_check_pos;
     check = &(pet->pef_check[pos]);
 
     /* Don't forget to skip the revision number in the length. */
@@ -593,7 +760,7 @@ pef_got_config(ipmi_pef_t    *pef,
 		 "pet.c(pef_got_cofnfig): PEF data length too short for"
 		 " config %d, was %d, expected %d", check->conf_num,
 		 data_len, check->data_len);
-	pet_op_done(pet);
+	pef_op_done(info, EINVAL);
 	goto out;
     }
 
@@ -606,7 +773,7 @@ pef_got_config(ipmi_pef_t    *pef,
 
 	if ((check->conf_num == IPMI_PEFPARM_ALERT_POLICY_TABLE) && (i == 1))
 	    /* Channel may vary between connections. */
-	    checkdata = pet->channel[ch];
+	    checkdata = (info->pef_channel << 4) | check->data[i];
 	else
 	    checkdata = check->data[i];
 	if ((data[i] & check->mask[i]) != checkdata) {
@@ -622,7 +789,7 @@ pef_got_config(ipmi_pef_t    *pef,
 		&& (i == 1))
 	    {
 		/* Channel may vary between connections. */
-		checkdata = pet->channel[ch];
+		checkdata = info->pef_channel;
 	    } else {
 		checkdata = check->data[i];
 	    }
@@ -634,15 +801,56 @@ pef_got_config(ipmi_pef_t    *pef,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "pet.c(pef_got_config): PEF error sending set: 0x%x",
 		     rv);
-	    pet_op_done(pet);
+	    pef_op_done(info, rv);
 	    goto out;
 	}
     } else {
 	rv = pef_next_config(info);
 	if (rv) {
-	    pet_op_done(pet);
+	    pef_op_done(info, rv);
 	    goto out;
 	}
+    }
+
+    ipmi_unlock(pet->lock);
+ out:
+    return;
+}
+
+static void
+pef_locked(ipmi_pef_t *pef,
+	   int        err,
+	   void       *cb_data)
+{
+    got_data_t    *info = cb_data;
+    ipmi_pet_t    *pet = info->pet;
+    int           rv;
+
+    ipmi_lock(pet->lock);
+    if (pet->destroyed) {
+	pef_op_done(info, ECANCELED);
+	goto out;
+    }
+
+    if (err == 0x80) {
+	/* No support for locking, just set it so and continue. */
+	info->pef_lock_broken = 1;
+    } else if (err) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "pet.c(pef_locked): PEF lock failed: 0x%x", err);
+	pef_op_done(info, err);
+	goto out;
+    }
+
+    /* Start the configuration process. */
+    rv = ipmi_pef_get_parm(info->pef, pet->pef_check[0].conf_num,
+			   pet->pef_check[0].set, 0,
+			   pef_got_config, info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "pet.c(pef_locked): PEF control get err: 0x%x", rv);
+	pef_op_done(info, rv);
+	goto out;
     }
 
     ipmi_unlock(pet->lock);
@@ -655,14 +863,14 @@ got_channel(ipmi_mc_t  *mc,
 	    ipmi_msg_t *msg,
 	    void       *rsp_data)
 {
-    got_data_t   *info = rsp_data;
-    ipmi_pet_t   *pet = info->pet;
-    unsigned int ch = info->channel;
-    int          rv;
+    got_data_t    *info = rsp_data;
+    ipmi_pet_t    *pet = info->pet;
+    int           rv;
+    unsigned char data[1];
 
     ipmi_lock(pet->lock);
     if (pet->destroyed) {
-	pet_op_done(pet);
+	pef_op_done(info, ECANCELED);
 	goto out;
     }
 
@@ -670,27 +878,27 @@ got_channel(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(got_channel): Channel fetch error: 0x%x",
 		 msg->data[0]);
-	pet_op_done(pet);
+	pef_op_done(info, IPMI_IPMI_ERR_VAL(msg->data[0]));
 	goto out;
     }
 
     if (msg->data_len < 2) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(got_channel): Data length too short");
-	pet_op_done(pet);
+	pef_op_done(info, EINVAL);
 	goto out;
     }
 
-    pet->channel[ch] = msg->data[1];
+    info->pef_channel = msg->data[1];
 
     /* Start the configuration process. */
-    rv = ipmi_pef_get_parm(pet->working_pef[ch], pet->pef_check[0].conf_num,
-			   pet->pef_check[0].set, 0,
-			   pef_got_config, info);
+    data[0] = 1; /* Attempt to lock */
+    rv = ipmi_pef_set_parm(info->pef, 0, data, 1,
+			   pef_locked, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(got_channel): PEF control get err: 0x%x", rv);
-	pet_op_done(pet);
+	pef_op_done(info, rv);
 	goto out;
     }
 
@@ -721,7 +929,7 @@ mc_send_chanauth(ipmi_mc_t*mc, void *cb_data)
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "start_pet_setup: Unable to fetch channel: 0x%x", rv);
-	info->err = rv;
+	info->pef_err = rv;
     }	    
 }
 
@@ -735,26 +943,26 @@ pef_alloced(ipmi_pef_t *pef, int err, void *cb_data)
 
     ipmi_lock(pet->lock);
     if (pet->destroyed) {
-	pet_op_done(pet);
+	pef_op_done(info, ECANCELED);
 	goto out;
     }
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(pef_alloced): PEF alloc failed: 0x%x", err);
-	pet_op_done(pet);
+	pef_op_done(info, err);
 	goto out;
     }
 
     mcid = ipmi_pef_get_mc(pef);
-    info->err = 0;
+    info->pef_err = 0;
     rv = ipmi_mc_pointer_cb(mcid, mc_send_chanauth, info);
     if (!rv)
-	rv = info->err;
+	rv = info->pef_err;
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "start_pet_setup: Unable to fetch channel: 0x%x", rv);
-	pet_op_done(pet);
+	pef_op_done(info, rv);
 	goto out;
     }	    
 
@@ -790,26 +998,30 @@ start_pet_setup(ipmi_domain_t *domain,
 	info = &(pet->got_data[i]);
 	info->channel = i;
 	info->pet = pet;
+	info->pef_lock_broken = 0;
+	info->pef_err = 0;
+	info->lanparm_lock_broken = 0;
+	info->lanparm_err = 0;
 
-	pet->pef_check_pos[i] = 0;
-	rv = ipmi_pef_alloc(mc, pef_alloced, info, &(pet->working_pef[i]));
+	info->pef_check_pos = 0;
+	rv = ipmi_pef_alloc(mc, pef_alloced, info, &(info->pef));
 	if (rv) {
-	    ipmi_lanparm_destroy(pet->working_lanparm[i], NULL, NULL);
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "start_pet_setup: Unable to allocate pef: 0x%x", rv);
 	} else {
 	    pet->in_progress++;
 	}
 
-	pet->lanparm_check_pos[i] = 0;
-	rv = ipmi_lanparm_alloc(mc, IPMI_SELF_CHANNEL,
-				&(pet->working_lanparm[i]));
+	info->lanparm_check_pos = 0;
+	rv = ipmi_lanparm_alloc(mc, IPMI_SELF_CHANNEL, &(info->lanparm));
 	if (rv) {
+	    ipmi_pef_destroy(info->pef, NULL, NULL);
+	    info->pef = NULL;
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "start_pet_setup: Unable to allocate lanparm: 0x%x",
 		     rv);
 	} else {
-	    rv = ipmi_lanparm_get_parm(pet->working_lanparm[i],
+	    rv = ipmi_lanparm_get_parm(info->lanparm,
 				       IPMI_LANPARM_DEST_TYPE,
 				       pet->lan_dest_sel,
 				       0,
@@ -819,8 +1031,10 @@ start_pet_setup(ipmi_domain_t *domain,
 		ipmi_log(IPMI_LOG_WARNING,
 			 "start_pet_setup: Unable to get dest type: 0x%x",
 			 rv);
-		ipmi_lanparm_destroy(pet->working_lanparm[i], NULL, NULL);
-		pet->working_lanparm[i] = NULL;
+		ipmi_pef_destroy(info->pef, NULL, NULL);
+		ipmi_lanparm_destroy(info->lanparm, NULL, NULL);
+		info->lanparm = NULL;
+		info->pef = NULL;
 	    } else {
 		pet->in_progress++;
 	    }
@@ -835,6 +1049,7 @@ ipmi_pet_create(ipmi_domain_t    *domain,
 		struct in_addr   ip_addr,
 		unsigned char    mac_addr[6],
 		unsigned int     eft_sel,
+		unsigned int     policy_num,
 		unsigned int     apt_sel,
 		unsigned int     lan_dest_sel,
 		ipmi_pet_done_cb done,
@@ -880,7 +1095,7 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->pef_check[2].data[1] = 0x80;
     pet->pef_check[2].mask[1] = 0x80;
     pet->pef_check[2].data[2] = 0x01;
-    pet->pef_check[2].data[2] = apt_sel;
+    pet->pef_check[2].data[2] = policy_num;
     pet->pef_check[2].mask[3] = 0x0f;
     pet->pef_check[2].data[4] = 0;
     pet->pef_check[3].conf_num = IPMI_PEFPARM_ALERT_POLICY_TABLE;
@@ -888,10 +1103,10 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->pef_check[3].data_len = 3;
     pet->pef_check[3].data[0] = apt_sel;
     pet->pef_check[3].mask[0] = 0x7f;
-    pet->pef_check[3].data[1] = 0x08;
-    pet->pef_check[3].mask[1] = 0x0f;
-    pet->pef_check[3].data[2] = 0x00; /* Channel set when found */
-    pet->pef_check[3].mask[2] = 0x0f;
+    pet->pef_check[3].data[1] = 0x08 | (policy_num << 4);
+    pet->pef_check[3].mask[1] = 0xff;
+    pet->pef_check[3].data[2] = lan_dest_sel; /* Channel set when found */
+    pet->pef_check[3].mask[2] = 0xff;
     pet->pef_check[3].data[3] = 0x00;
     pet->pef_check[3].mask[3] = 0xff;
 

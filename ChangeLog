@@ -12,6 +12,10 @@
 
 	* ui/ui.c: Added LAN and PEF lock clearing.
 
+	* lib/pet.c, include/OpenIPMI/ipmi_pet.h: Reworked the PET to
+	support proper locking and to support the proper setup of the
+	policy number.
+
 2004-01-05 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c, ui/basic_ui.c: Added a way to free things allocated in
