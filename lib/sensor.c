@@ -316,7 +316,7 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
        callbacks with the sensor, so we want the entity to exist until
        this point in time. */
     rv = ipmi_entity_find(ents,
-			  sensor->source_mc,
+			  sensor->mc,
 			  sensor->entity_id,
 			  sensor->entity_instance,
 			  &ent);
@@ -977,14 +977,16 @@ handle_new_sensor(ipmi_domain_t *domain,
 
     /* This can't fail, we have pre-added it while we held the lock. */
     ipmi_entity_find(ents,
-		     sensor->source_mc,
+		     sensor->mc,
 		     sensor->entity_id,
 		     sensor->entity_instance,
 		     &ent);
 
-    if ((! sensor->source_mc)
-	|| (! _ipmi_mc_new_sensor(sensor->source_mc, ent, sensor, link)))
+    if ((sensor->source_mc)
+	&& (_ipmi_mc_new_sensor(sensor->source_mc, ent, sensor, link)))
     {
+        /* Nothing to do, OEM code handled the sensor. */
+    } else {
 	ipmi_entity_add_sensor(ent, sensor, link);
     }
 }
@@ -4579,7 +4581,7 @@ ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
     domain = ipmi_mc_get_domain(sensor->mc);
 
     rv = ipmi_entity_find(ipmi_domain_get_entities(domain),
-			  sensor->source_mc,
+			  sensor->mc,
 			  sensor->entity_id,
 			  sensor->entity_instance,
 			  &ent);

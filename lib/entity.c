@@ -1008,6 +1008,9 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
     if (sensor == ent->presence_sensor) {
 	sens_cmp_info_t info;
 
+	ilist_init_iter(&iter, ent->sensors);
+	ilist_unpositioned(&iter);
+
 	/* See if there is another presence sensor. */
 	ref = ilist_search_iter(&iter, sens_cmp_if_presence, &info);
 
@@ -1078,7 +1081,7 @@ static int control_cmp(void *item, void *cb_data)
     ipmi_control_ref_t *ref1 = item;
     ipmi_control_id_t  *id2 = cb_data;
 
-    return ipmi_cmp_control_id(ref1->control, *id2);
+    return ipmi_cmp_control_id(ref1->control, *id2) == 0;
 }
 
 void
@@ -1237,8 +1240,13 @@ handle_drear(ipmi_entity_info_t *ents,
     entity_child_link_t *link;
     ipmi_device_num_t   device_num;
 
-    device_num.channel = sdr->data[3] >> 4;
-    device_num.address = sdr->data[2] & 0xfe;
+    if (sdr->data[8] >= 0x60) {
+	device_num.channel = sdr->data[3] >> 4;
+	device_num.address = sdr->data[2] & 0xfe;
+    } else {
+	device_num.channel = 0;
+        device_num.address = 0;
+    }
     rv = entity_add(ents, device_num, sdr->data[0], sdr->data[1],
 		    NULL, NULL, &ent, 1);
     if (rv)
@@ -1255,8 +1263,13 @@ handle_drear(ipmi_entity_info_t *ents,
 	    if (sdr->data[pos+2] == 0)
 		/* entity ID 0 means no entry. */
 		continue;
-	    device_num.channel = sdr->data[pos+1] >> 4;
-	    device_num.address = sdr->data[pos] & 0xfe;
+	    if (sdr->data[8] >= 0x60) {
+		device_num.channel = sdr->data[pos+1] >> 4;
+		device_num.address = sdr->data[pos] & 0xfe;
+	    } else {
+		device_num.channel = 0;
+		device_num.address = 0;
+	    }
 	    for (e_num=sdr->data[pos+3];
 		 e_num<=sdr->data[pos+7];
 		 e_num++)
@@ -1283,8 +1296,13 @@ handle_drear(ipmi_entity_info_t *ents,
 	for (pos=5; pos<21; pos+=4) {
 	    if (sdr->data[pos] == 0)
 		continue;
-	    device_num.channel = sdr->data[pos+1] >> 4;
-	    device_num.address = sdr->data[pos] & 0xfe;
+	    if (sdr->data[8] >= 0x60) {
+		device_num.channel = sdr->data[pos+1] >> 4;
+		device_num.address = sdr->data[pos] & 0xfe;
+	    } else {
+		device_num.channel = 0;
+		device_num.address = 0;
+	    }
 	    rv = entity_add(ents,
 			    device_num,
 			    sdr->data[pos+2],
@@ -1345,16 +1363,22 @@ handle_gdlr(ipmi_entity_info_t *ents,
     ipmi_entity_t     *ent;
     int               rv;
 
-    device_num.channel = (sdr->data[2] >> 5) | ((sdr->data[1] << 3) & 0x08);
-    device_num.address = sdr->data[0] & 0xfe;
+    if (sdr->data[8] >= 0x60) {
+	device_num.channel = (sdr->data[2] >> 5) | ((sdr->data[1] << 3)
+						    & 0x08);
+	device_num.address = sdr->data[0] & 0xfe;
+    } else {
+	device_num.channel = 0;
+        device_num.address = 0;
+    }
     rv = entity_add(ents, device_num, sdr->data[7], sdr->data[8],
 		    gdlr_output, NULL, &ent, 1);
     if (rv)
 	return rv;
 
-    ent->access_address = device_num.address; 
+    ent->access_address = sdr->data[0] & 0xfe;
     ent->slave_address = sdr->data[1] & 0xfe;
-    ent->channel = device_num.channel;
+    ent->channel = (sdr->data[2] >> 5) | ((sdr->data[1] << 3) & 0x08);
     ent->lun = (sdr->data[2] >> 3) & 0x3;
     ent->private_bus_id = sdr->data[2] & 0x7;
     ent->address_span = sdr->data[3] & 0x7;
@@ -1404,17 +1428,22 @@ handle_frudlr(ipmi_entity_info_t *ents,
     ipmi_entity_t     *ent;
     int               rv;
 
-    device_num.channel = sdr->data[3] >> 4;
-    device_num.address = sdr->data[0] & 0xfe;
+    if (sdr->data[8] >= 0x60) {
+	device_num.channel = sdr->data[3] >> 4;
+	device_num.address = sdr->data[0] & 0xfe;
+    } else {
+	device_num.channel = 0;
+        device_num.address = 0;
+    }
     rv = entity_add(ents, device_num, sdr->data[7], sdr->data[8],
 		    frudlr_output, NULL, &ent, 1);
     if (rv)
 	return rv;
 
     ent->is_fru = 1;
-    ent->access_address = device_num.address; 
+    ent->access_address = sdr->data[0] & 0xfe;
     ent->slave_address = sdr->data[1] & 0xfe;
-    ent->channel = device_num.channel;
+    ent->channel = sdr->data[3] >> 4;
     ent->is_logical_fru = ((sdr->data[2] & 0x80) == 0x80);
     ent->lun = (sdr->data[2] >> 3) & 0x3;
     ent->private_bus_id = sdr->data[2] & 0x7;
@@ -1473,33 +1502,40 @@ handle_mcdlr(ipmi_entity_info_t *ents,
     ipmi_entity_t     *ent;
     int               rv;
 
-    device_num.channel = sdr->data[1] & 0xf;
-    device_num.address = sdr->data[0] & 0xfe;
-    rv = entity_add(ents, device_num, sdr->data[7], sdr->data[8], 
-		    mcdlr_output, NULL, &ent, 1);
-    if (rv)
-	return rv;
+    if (sdr->data[7]) {
+	if (sdr->data[8] >= 0x60) {
+	    device_num.channel = sdr->data[1] & 0xf;
+	    device_num.address = sdr->data[0] & 0xfe;
+	} else {
+	    device_num.channel = 0;
+	    device_num.address = 0;
+	}
+	rv = entity_add(ents, device_num, sdr->data[7], sdr->data[8], 
+			mcdlr_output, NULL, &ent, 1);
+	if (rv)
+	    return rv;
 
-    ent->is_mc = 1;
-    ent->slave_address = sdr->data[0] & 0xfe;
-    ent->channel = device_num.channel;
+	ent->is_mc = 1;
+	ent->slave_address = sdr->data[0] & 0xfe;
+	ent->channel = sdr->data[1] & 0xf;
 
-    ent->ACPI_system_power_notify_required = (sdr->data[2] >> 7) & 1;
-    ent->ACPI_device_power_notify_required = (sdr->data[2] >> 6) & 1;
-    ent->controller_logs_init_agent_errors = (sdr->data[2] >> 3) & 1;
-    ent->log_init_agent_errors_accessing = (sdr->data[2] >> 2) & 1;
-    ent->global_init = (sdr->data[2] >> 0) & 3;
-    ent->chassis_device = (sdr->data[3] >> 7) & 1;
-    ent->bridge = (sdr->data[3] >> 6) & 1;
-    ent->IPMB_event_generator = (sdr->data[3] >> 5) & 1;
-    ent->IPMB_event_receiver = (sdr->data[3] >> 4) & 1;
-    ent->FRU_inventory_device = (sdr->data[3] >> 3) & 1;
-    ent->SEL_device = (sdr->data[3] >> 2) & 1;
-    ent->SDR_repository_device = (sdr->data[3] >> 1) & 1;
-    ent->sensor_device = (sdr->data[3] >> 0) & 1;
+	ent->ACPI_system_power_notify_required = (sdr->data[2] >> 7) & 1;
+	ent->ACPI_device_power_notify_required = (sdr->data[2] >> 6) & 1;
+	ent->controller_logs_init_agent_errors = (sdr->data[2] >> 3) & 1;
+	ent->log_init_agent_errors_accessing = (sdr->data[2] >> 2) & 1;
+	ent->global_init = (sdr->data[2] >> 0) & 3;
+	ent->chassis_device = (sdr->data[3] >> 7) & 1;
+	ent->bridge = (sdr->data[3] >> 6) & 1;
+	ent->IPMB_event_generator = (sdr->data[3] >> 5) & 1;
+	ent->IPMB_event_receiver = (sdr->data[3] >> 4) & 1;
+	ent->FRU_inventory_device = (sdr->data[3] >> 3) & 1;
+	ent->SEL_device = (sdr->data[3] >> 2) & 1;
+	ent->SDR_repository_device = (sdr->data[3] >> 1) & 1;
+	ent->sensor_device = (sdr->data[3] >> 0) & 1;
 
-    ent->oem = sdr->data[9];
-    ipmi_get_device_string(sdr->data+10, sdr->length-10, ent->id, 32);
+	ent->oem = sdr->data[9];
+	ipmi_get_device_string(sdr->data+10, sdr->length-10, ent->id, 32);
+    }
     return 0;
 }
 

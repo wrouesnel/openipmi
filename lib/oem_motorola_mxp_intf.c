@@ -597,11 +597,13 @@ start_next_msg(ipmi_con_t *ipmi,
 	((lan->num_sends % SENDS_BETWEEN_IP_SWITCHES) == 0))
     {
 	int addr_num = lan->curr_ip_addr + 1;
-	while (addr_num != lan->curr_ip_addr) {
+	for (;;) {
 	    if (addr_num >= lan->num_ip_addr)
 		addr_num = 0;
 	    if (lan->ip_working[addr_num])
 		break;
+	    if (addr_num == lan->curr_ip_addr)
+	        break;
 	    addr_num++;
 	}
 	lan->curr_ip_addr = addr_num;

@@ -1,6 +1,16 @@
 
 2003-07-23 Corey Minyard <cminyard@mvista.com>
 
+	* lib/entity.c: Fixed searching for the next presence sensor when
+	one is deleted.
+
+	* lib/entity.c: Don't set the device num for an entity if the
+	instance is not device-relative.  Also, don't add an mcdlr if no
+	entity id is specified.
+
+	* lib/entity.c: Fix removal of controls from entities to compare
+	properly.
+
 	* lib/ipmi_oem_force_conn.c, lib/oem_force_conn.c: Renamed this
 	file to make it more consistent.
 	* lib/Makefile.am: ditto

@@ -195,8 +195,6 @@ typedef struct mxp_board_s {
     ipmi_sensor_t *presence;
     ipmi_sensor_t *slot;
 
-    ipmi_control_t *reset;
-    ipmi_control_t *power;
     ipmi_control_t *oos_led;
     ipmi_control_t *inserv_led;
     ipmi_control_t *blue_led;
@@ -219,7 +217,6 @@ struct mxp_info_s {
     ipmi_sensor_t *s3_3v;
     ipmi_sensor_t *s2_5v;
     ipmi_sensor_t *s8v;
-    ipmi_sensor_t *chassis_presence;
 
     /* The relays. */
     ipmi_control_t *relays;
@@ -227,7 +224,6 @@ struct mxp_info_s {
     /* Chassis info */
     ipmi_control_t *chassis_id;
     ipmi_control_t *chassis_type_control;
-    ipmi_control_t *sys_oos_led;
     ipmi_control_t *sys_led;
 };
 
@@ -3799,9 +3795,6 @@ mxp_add_board_sensors(mxp_info_t  *info,
 
     /* Special handling for the AMC. */
     if (board->ipmb_addr == 0x20) {
-	ipmi_sensor_t  *sensor;
-	ipmi_control_t *control;
-
 	/* We don't scan the BMC, because scanning the BMC doesn't
 	   work and we have other ways to detect it's presence. */
 	board->presence_read = 1;
@@ -3817,11 +3810,11 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	    0x40, 0x40, /* offset 6 is supported (hot-swap requester). */
 	    board_slot_get,
 	    NULL,
-	    &sensor);
+	    &board->slot);
 	if (rv)
 	    goto out_err;
-	ipmi_sensor_set_hot_swap_requester(sensor, 6, 1); /* offset 6 is for
-							     hot-swap */
+	/* offset 6 is for hot-swap */
+	ipmi_sensor_set_hot_swap_requester(board->slot, 6, 1);
 
 	/* The AMC blue LED is always there. */
 	rv = mxp_alloc_control(board->info->mc, board->ent,
@@ -3831,11 +3824,11 @@ mxp_add_board_sensors(mxp_info_t  *info,
 			       "blue led",
 			       board_blue_led_set,
 			       board_blue_led_get,
-			       &control);
+			       &board->blue_led);
 	if (rv)
 	    goto out_err;
-	ipmi_control_light_set_lights(control, 1, blue_led);
-	ipmi_control_set_hot_swap_indicator(control, 1);
+	ipmi_control_light_set_lights(board->blue_led, 1, blue_led);
+	ipmi_control_set_hot_swap_indicator(board->blue_led, 1);
     }
 
  out_err:
@@ -4729,24 +4722,25 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     }
 
     for (i=0; i<MXP_TOTAL_BOARDS; i++) {
-	ipmi_sensor_destroy(info->board[i].presence);
-	ipmi_sensor_destroy(info->board[i].slot);
-	ipmi_control_destroy(info->board[i].reset);
-	ipmi_control_destroy(info->board[i].power);
-	ipmi_control_destroy(info->board[i].oos_led);
-	ipmi_control_destroy(info->board[i].inserv_led);
-	ipmi_control_destroy(info->board[i].blue_led);
+	if (info->board[i].presence)
+	    ipmi_sensor_destroy(info->board[i].presence);
+	if (info->board[i].slot)
+	    ipmi_sensor_destroy(info->board[i].slot);
+	if (info->board[i].oos_led)
+	    ipmi_control_destroy(info->board[i].oos_led);
+	if (info->board[i].inserv_led)
+	    ipmi_control_destroy(info->board[i].inserv_led);
+	if (info->board[i].blue_led)
+	    ipmi_control_destroy(info->board[i].blue_led);
     }
     
     ipmi_sensor_destroy(info->s5v);
     ipmi_sensor_destroy(info->s3_3v);
     ipmi_sensor_destroy(info->s2_5v);
     ipmi_sensor_destroy(info->s8v);
-    ipmi_sensor_destroy(info->chassis_presence);
     ipmi_control_destroy(info->relays);
     ipmi_control_destroy(info->chassis_id);
     ipmi_control_destroy(info->chassis_type_control);
-    ipmi_control_destroy(info->sys_oos_led);
     ipmi_control_destroy(info->sys_led);
 
  out:
