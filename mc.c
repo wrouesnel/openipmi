@@ -1466,7 +1466,10 @@ mc_sdr_handler(ipmi_sdr_info_t *sdrs,
 	    mc->bmc_mc->bmc->new_mc_handler(mc->bmc_mc, mc,
 					    mc->bmc_mc->bmc->new_mc_cb_data);
 	/* Scan all the sensors and call sensors_reread() when done. */
-	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+	if (mc->provides_device_sdrs)
+	    ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+	else
+	    sensors_reread(mc, 0, NULL);
     }
 }
 
@@ -1529,7 +1532,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 
 	    rv = ipmi_sdr_info_alloc(mc, 0, 1, &(mc->sdrs));
 	    if (!rv) {
-		if (mc->sensor_device_support)
+		if (mc->provides_device_sdrs)
 		    rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
 	        else
 	 	    rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
@@ -1718,7 +1721,11 @@ set_operational(ipmi_mc_t *mc)
     ipmi_sensor_handle_sdrs(mc, NULL, mc->bmc->main_sdrs);
 
     /* Scan all the sensors and call sensors_reread() when done. */
-    ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+    if (mc->provides_device_sdrs)
+	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+    else
+	sensors_reread(mc, 0, NULL);
+
     start_mc_scan(mc);
 
     /* Start the timer to rescan the bus periodically. */
@@ -1959,7 +1966,7 @@ dev_id_rsp_handler(ipmi_mc_t  *mc,
     if (!rv) {
 	if (mc->SDR_repository_support)
 	    rv = ipmi_sdr_fetch(mc->bmc->main_sdrs, sdr_handler, mc);
-	else if (mc->sensor_device_support) {
+	else if (mc->provides_device_sdrs) {
 	    mc->bmc->state = QUERYING_SENSOR_SDRS;
 	    rv = ipmi_sdr_fetch(mc->sdrs, sdr_handler, mc);
 	} else {
@@ -2153,6 +2160,13 @@ ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
     return mc->provides_device_sdrs;
+}
+
+void
+ipmi_mc_set_provides_device_sdrs(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->provides_device_sdrs = val;
 }
 
 int

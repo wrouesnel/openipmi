@@ -134,6 +134,7 @@ void ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[]);
 
 /* Some stupid systems don't have some setting right, this lets the
    OEM code fix it. */
+void ipmi_mc_set_provides_device_sdrs(ipmi_mc_t *mc, int val);
 void ipmi_mc_set_sel_device_support(ipmi_mc_t *mc, int val);
 void ipmi_mc_set_sdr_repository_support(ipmi_mc_t *mc, int val);
 void ipmi_mc_set_sensor_device_support(ipmi_mc_t *mc, int val);
