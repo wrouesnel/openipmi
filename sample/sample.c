@@ -432,15 +432,15 @@ main(int argc, const char *argv[])
     /* We run the select loop here, this shows how you can use
        sel_select.  You could add your own processing in this loop. */
     while (1) {
-	ipmi_posix_sel_select(os_hnd, NULL);
+	os_hnd->perform_one_op(os_hnd, NULL);
     }
 #else
     /* Let the selector code run the select loop. */
-    ipmi_posix_sel_select_loop(os_hnd);
+    os_hnd->operation_loop(os_hnd);
 #endif
 
     /* Technically, we can't get here, but this is an example. */
-    ipmi_posix_cleanup_os_handler(os_hnd);
+    os_hnd->free_os_handler(os_hnd);
 }
 
 void

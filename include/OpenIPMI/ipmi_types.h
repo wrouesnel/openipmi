@@ -34,14 +34,16 @@
 #ifndef _IPMI_TYPES_H
 #define _IPMI_TYPES_H
 
-#if (__GNUC__ > 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 2))
-#define IPMI_FUNC_DEPRECATED __attribute__ ((deprecated))
-#define IPMI_TYPE_DEPRECATED __attribute__ ((deprecated))
-#define IPMI_VAR_DEPRECATED __attribute__ ((deprecated))
-#else
-#define IPMI_FUNC_DEPRECATED
-#define IPMI_TYPE_DEPRECATED
-#define IPMI_VAR_DEPRECATED
+#ifndef IPMI_FUNC_DEPRECATED
+# if (__GNUC__ > 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 2))
+#  define IPMI_FUNC_DEPRECATED __attribute__ ((deprecated))
+#  define IPMI_TYPE_DEPRECATED __attribute__ ((deprecated))
+#  define IPMI_VAR_DEPRECATED __attribute__ ((deprecated))
+# else
+#  define IPMI_FUNC_DEPRECATED
+#  define IPMI_TYPE_DEPRECATED
+#  define IPMI_VAR_DEPRECATED
+# endif
 #endif
 
 #include <stdint.h>

@@ -3540,7 +3540,7 @@ ipmi_entity_set_fru_device_id(ipmi_entity_t *ent, int fru_device_id)
 int
 ipmi_entity_get_is_fru(ipmi_entity_t *ent)
 {
-    int rv = 1;
+    int rv = 0;
     CHECK_ENTITY_LOCK(ent);
 
     ipmi_lock(ent->lock);

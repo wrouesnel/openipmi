@@ -1044,6 +1044,7 @@ ipmi_mc_reread_sel(ipmi_mc_t       *mc,
 	info->handler = handler;
 	info->cb_data = cb_data;
 	info->mcid = ipmi_mc_convert_to_id(mc);
+	info->err = 0;
 
 	rv = ipmi_sel_get(mc->sel, reread_sel_done, info);
 	if (rv)

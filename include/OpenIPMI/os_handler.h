@@ -213,6 +213,29 @@ struct os_handler_s
     /* Should *NOT* be used by the user, this is for the OS handler's
        internal use. */
     void *internal_data;
+
+    /***************************************************************/
+
+    /* These are basic function on the OS handler that are here for
+       convenience to the user.  These are not used by OpenIPMI
+       proper.  Depending on the specific OS handler, these may or may
+       not be implemented.  If you are not sure, check for NULL. */
+
+    /* Free the OS handler passed in.  After this call, the OS handler
+       may not be used any more.  May sure that nothing is using it
+       before this is called. */
+    void (*free_os_handler)(os_handler_t *handler);
+
+    /* Wait up to the amount of time specified in timeout (relative
+       time) to perform one operation (a timeout, file operation,
+       etc.) then return.  This return a standard errno.  If timeout
+       is NULL, then this will wait forever. */
+    int (*perform_one_op)(os_handler_t   *handler,
+			  struct timeval *timeout);
+
+    /* Loop continuously handling operations.  This function does not
+       return. */
+    void (*operation_loop)(os_handler_t *handler);
 };
 
 #endif /* __OS_HANDLER_H */

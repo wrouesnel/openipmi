@@ -271,7 +271,7 @@ thread(void *data)
 
     /* This is the main loop of the event-driven program. 
        Try <CTRL-C> to exit the program */ 
-    ipmi_posix_thread_sel_select_loop(os_hnd);
+    os_hnd->operation_loop(os_hnd);
 }
 
 int
@@ -352,7 +352,7 @@ main(int argc, const char *argv[])
     for (;;)
     	sleep(100);
     /* Note that at cleanup time, you should call
-         ipmi_posix_thread_cleanup_os_handler(os_hnd);
+         os_hnd->free_os_handler(os_hnd);
        but this doesn't have any cleanup.
     */
     return 0;

@@ -255,6 +255,32 @@ sposix_vlog(os_handler_t         *handler,
     posix_vlog(format, log_type, ap);
 }
 
+static int
+perform_one_op(os_handler_t   *os_hnd,
+	       struct timeval *timeout)
+{
+    selector_t *sel = os_hnd->internal_data;
+
+    return sel_select(sel, NULL, 0, NULL, timeout);
+}
+
+static void
+operation_loop(os_handler_t *os_hnd)
+{
+    selector_t *sel = os_hnd->internal_data;
+
+    sel_select_loop(sel, NULL, 0, NULL);
+}
+
+static void
+free_os_handler(os_handler_t *os_hnd)
+{
+    selector_t *sel = os_hnd->internal_data;
+
+    sel_free_selector(sel);
+    ipmi_posix_free_os_handler(os_hnd);
+}
+
 static os_handler_t ipmi_posix_os_handler =
 {
     .add_fd_to_wait_for = add_fd,
@@ -266,6 +292,9 @@ static os_handler_t ipmi_posix_os_handler =
     .get_random = get_random,
     .log = sposix_log,
     .vlog = sposix_vlog,
+    .free_os_handler = free_os_handler,
+    .perform_one_op = perform_one_op,
+    .operation_loop = operation_loop,
 };
 
 os_handler_t *
@@ -322,28 +351,24 @@ ipmi_posix_setup_os_handler(void)
     return os_hnd;
 }
 
+/*
+ * Cruft below, do not use.
+ */
 int
 ipmi_posix_sel_select(os_handler_t   *os_hnd,
 		      struct timeval *timeout)
 {
-    selector_t *sel = os_hnd->internal_data;
-
-    return sel_select(sel, NULL, 0, NULL, timeout);
+    perform_one_op(os_hnd, timeout);
 }
 
 void
 ipmi_posix_sel_select_loop(os_handler_t *os_hnd)
 {
-    selector_t *sel = os_hnd->internal_data;
-
-    sel_select_loop(sel, NULL, 0, NULL);
+    operation_loop(os_hnd);
 }
 
 void
 ipmi_posix_cleanup_os_handler(os_handler_t *os_hnd)
 {
-    selector_t *sel = os_hnd->internal_data;
-
-    sel_free_selector(sel);
-    ipmi_posix_free_os_handler(os_hnd);
+    free_os_handler(os_hnd);
 }

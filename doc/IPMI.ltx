@@ -1,5 +1,5 @@
 \documentclass{book}
-\usepackage{graphicx,moreverb,tabularx}
+\usepackage{graphicx,moreverb,tabularx,acronym}
 \title{IPMI -- A Gentle Introduction\\with OpenIPMI}
 \author{Corey Minyard $<$minyard@acm.org$>$\\
         Montavista Software}
@@ -14,37 +14,59 @@
 \frontmatter
 
 \chapter{Preface}
-This document describes IPMI in great detail; how it works and what it
-does and does not do.  It starts from the basics and moves into
-details.  If you've heard about IPMI and want to find out more, this
-is the document for you.  If you know something about IPMI but wish to
-find out more, you can gloss over the introductory text and dive more
-into the details.
+This document describes \acs{IPMI} in great detail; how it works and
+what it does and does not do.  It starts from the basics and moves
+into details.  If you've heard about IPMI and want to find out more,
+this is the document for you.  If you know something about IPMI but
+wish to find out more, you can gloss over the introductory text and
+dive more into the details.
 
-IPMI stands for Intelligent Platform Management Interface.  Not a
-great name, but not too bad.  It is intelligent (in a manner of
+\acs{IPMI} stands for Intelligent Platform Management Interface.  Not
+a great name, but not too bad.  It is intelligent (in a manner of
 speaking, anyway) because it requires a processor besides the main
 processor that is always on and maintaining the system.  In most
-systems with IPMI, you can monitor and maintain the system even when
+systems with \acs{IPMI}, you can monitor and maintain the system even when
 the main processor is turned off (though the system must generally be
 plugged in).
 
-Platform means that IPMI deals with the platform, not the software
+Platform means that \acs{IPMI} deals with the platform, not the software
 running on the platform.  Software management is mostly out of the
-scope of IPMI
+scope of \acs{IPMI}
 
-Management Interface mains that the management system uses IPMI to
+Management Interface mains that the management system uses \acs{IPMI} to
 talk to the system to monitor and perform manintenance on the
-platform.  IPMI is mostly about monitoring, though it does have a few
+platform.  \acs{IPMI} is mostly about monitoring, though it does have a few
 minor management functions.  However, many companies and organizations
-have built more extensive management control using OEM extensions to
-IPMI.
+have built more extensive management control using \acs{OEM} extensions to
+\acs{IPMI}.
 
 \tableofcontents
 
+\chapter{Acronyms}
+\begin{acronym}
+\acro{IPMI}{Intelligent Platform Mangement Interface}
+\acro{OEM}{Original Equipment Manufacturer}
+\acro{SDR}{Sensor Device Record}
+\acro{FRU}{Field Replacable Unit}
+\acro{KCS}{Keyboard Style Controller}
+\acro{BT}{Block Transfer}
+\acro{SMIC}{Server Management Interface Chip}
+\acro{MC}{Management Controller}
+\acro{BMC}{Baseboard Management Controller}
+\acro{I$^2$C}{Inter Integrated Circuit}
+\acro{SNMP}{Simple Network Management Protocol}
+\acro{HPI}{Hardware Platform Interface}
+\acro{LUN}{Logical Unit Number}
+\acro{NetFN}{Network FuNction}
+\acro{IPMB}{Intelligent Platform Management Bus}
+\acro{EEPROM}{Electronically Erasable Programmable Read Only Memory}
+\acro{LAN}{Local Area Network}
+\acro{SEL}{System Event Log}
+\end{acronym}
+
 \mainmatter
 
-\chapter{Management, Systems, and IPMI}
+\chapter{Management, Systems, and \acs{IPMI}}
 Management will mean different things to different industries.  In
 simple server systems, a management system may only deal with
 controlling power on a few servers and making sure they don't get too
@@ -52,10 +74,10 @@ hot.  In a telecom system, management systems generally control every
 aspect of the system, including startup of all parts of the system,
 full monitoring of all components of the system, detection and
 recovery from software and hardware errors, basic configuration of the
-system, and a host of other things.  IPMI obviously only plays one
-role in this, but it is a roll that must be played.  In the past, the
+system, and a host of other things.  \acs{IPMI} obviously only plays one
+role in this, but it is a role that must be played.  In the past, the
 monitoring and management of hardware has been done with lots of
-proprietary interfaces.  IPMI standardizes this interface.
+proprietary interfaces.  \acs{IPMI} standardizes this interface.
 
 \begin{figure}
 \includegraphics[width=\textwidth]{MgmtIF.eps}
@@ -63,7 +85,7 @@ proprietary interfaces.  IPMI standardizes this interface.
 \end{figure}
 
 Figure \ref{mgmtif} shows a management system and the things it
-manages.  IPMI fits mostly within the ``Hardware'' box, although there
+manages.  \acs{IPMI} fits mostly within the ``Hardware'' box, although there
 may be other hardware interfaces the management interfaces the
 management system must manage.  The management system ties into all
 elements of the system and makes global decisions based upon inputs
@@ -76,7 +98,7 @@ take over the operation, the management system may look at the
 severity of the problem, predict how long the system may survive, and
 let it continue.  These types of decisions are called ``policy''.
 
-In all cases these events are logged to permanent storage.  In an
+In all cases these events are logged to permanent storage.  An
 operator is informed of things that need human attention.  The
 operater may also issue manual operations to configure and override
 the management system as necessary.
@@ -91,13 +113,14 @@ operations unless pre-configured by the management system to do so.
 So the system may perform limited policy decisions, but the management
 system is firmly in control of policy.
 
-\section{IPMI Implementation}
+\section{\acs{IPMI} Implementation}
 
-The Management Controller (MC) sits at the center of an IPMI system.
-It is generally always on when the system is plugged in, even if the
-system is off.  The management system communicates with the management
-controller; the management controller provides a normalized interface
-to all the sensors, events, and FRU data in the system.
+The \ac{MC} sits at the center of an \acs{IPMI} system, providing the
+``intelligence'' of \acs{IPMI}.  It is generally always on when the
+system is plugged in, even if the system is off.  The management
+system communicates with the management controller; the management
+controller provides a normalized interface to all the sensors, events,
+and \ac{FRU} data in the system.
 
 \begin{figure}
 \includegraphics[width=\textwidth]{ManagementController.eps}
@@ -107,44 +130,45 @@ to all the sensors, events, and FRU data in the system.
 Figure \ref{managementcontroller} shows the various parts of the
 management controller.  Note that most everything is optional;
 depending on what a management controller does it may only need some
-things.  The baseboard management controller (BMC) is required to have
-a lot of the items.
+things.  The \ac{BMC} is required to have a lot of the items.
 
-The MC Processor is generally a small, inexpensive, but reliable
+The \ac{MC} Processor is generally a small, inexpensive, but reliable
 microcontroller.  Several companies sell processors that have a lot of
-the IPMI components already implemented and software to help a company
-implement an IPMI system.
+the \acs{IPMI} components already implemented and software to help a company
+implement \acs{IPMI} on their system.
 
 The system interface provides a way for the main processor to
 communicate with the management controller.  Some systems do not have
-this connection and only use external interfaces and/or IPMB
-interfaces.  System interfaces include SMIC, KCS, and BT interfaces.
+this connection and only use external interfaces and/or \ac{IPMB}
+interfaces.  System interfaces include \ac{SMIC}, \ac{KCS}, and
+\ac{BT} interfaces.
 
-An MC (generally the BMC) may have other interfaces to an external
+An \ac{MC} (generally the \ac{BMC}) may have other interfaces to an external
 management system through serial ports or Ethernet.
 
-Generally, sensors sit on an I2C bus since many off-the-shelf sensors
-can sit directly on the bus with no extra logic.  Wherever the sensors
-sit, the MC provides a more abstract interface to the sensors so that
-the management system does not have to know the details of how to talk
-to the sensor.  Sensors may be traditional analog sensors like
+Generally, sensors sit on an \acs{I$^2$C} bus since many off-the-shelf
+sensors can sit directly on the bus with no extra logic.  Wherever the
+sensors sit, the \ac{MC} provides a more abstract interface to the sensors
+so that the management system does not have to know the details of how
+to talk to the sensor.  Sensors may be traditional analog sensors like
 temperature and voltage.  But they may report other things, too, like
 the current BIOS state, whether a device is present or not, or other
 things like that.
 
-FRU data is often stored in I2C EEPROMs on the I2C bus.  FRU data is
-information about a Field Replacable Unit.  This includes things like
-the manufacturer, the serial number, date of manufacture, etc.  A
-system generally has information about the chassis and information
-about each field replacable unit it has.  Field replacable units may
-include power supplies, DIMMs (memory devices), plug-in-boards, or a
-host of other things.
+\ac{FRU} data is often stored in \acs{I$^2$C} \acs{EEPROM}s on the
+\acs{I$^2$C} bus.  \ac{FRU} data is information about a Field
+Replacable Unit.  This includes things like the manufacturer, the
+serial number, date of manufacture, etc.  A system generally has
+information about the chassis and information about each field
+replacable unit it has.  Field replacable units may include power
+supplies, DIMMs (memory devices), plug-in-boards, or a host of other
+things.
 
-Connections to other MCs may be done through an Intelligent Platform
-Management Bus (IPMB).  On an IPMB, each MC is a peer and they
-communicate directly through messages.
+Connections to other \ac{MC}s may be done through an \ac{IPMB}.  On an
+\ac{IPMB}, each MC is a peer and they communicate directly through
+messages.
 
-In addition to IPMB, IPMI systems can be interconnected through an
+In addition to \ac{IPMB}, \acs{IPMI} systems can be interconnected through an
 Intelligent Chassis Management Bus.  This is a serial bus that runs
 between chassis.
 
@@ -152,21 +176,21 @@ A management controller may be able to control various aspects of the
 chassis, such as power and reset.  It may also have a watchdog timer
 for the main processor.
 
-The SDR repositories store information about the sensors and
-components of the system.  The BMC must have a main SDR repository;
-this repository is writable.  There may only be one main SDR
-repository in the system.  The device SDR repository may be on any MC
-in the system; it is a read-only repository.
+The \ac{SDR} repositories store information about the sensors and
+components of the system.  The \ac{BMC} must have a main \ac{SDR}
+repository; this repository is writable.  There may only be one main
+\ac{SDR} repository in the system.  The device \ac{SDR} repository may
+be on any \ac{MC} in the system; it is a read-only repository.
 
 The event log holds asynchronous events in the system.  Events may be
 forwarded through the system interface or other interfaces, but they
-are always stored in the event log.  The BMC must have an event log;
+are always stored in the event log.  The \ac{BMC} must have an event log;
 generally the other management controllers forward their events to the
-BMC.
+\ac{BMC}.
 
 \section{System Types}
 
-Although any arbitrary type of system may use IPMI for platform
+Although any arbitrary type of system may use \acs{IPMI} for platform
 management, systems generally fall into two categories: server systems
 and bus systems.
 
@@ -176,13 +200,12 @@ and bus systems.
 \end{figure}
 
 Figure \ref{typicalserver} shows a typical server system.  It is a
-single stand-alone box that is a single computer.  It has a Baseboard
-Canagement Controller (BMC) that is the main management controller in
-the system.  It controls a number of sensors.  In this
-example, the power supply also has a management controller (MC) with
-it's own sensors.
+single stand-alone box that is a single computer.  It has a \ac{BMC}
+that is the main management controller in the system.  It controls a
+number of sensors.  In this example, the power supply also has a
+\ac{MC} with it's own sensors.
 
-A BMC can have several connections to managing systems.  It may have a
+A \ac{BMC} can have several connections to managing systems.  It may have a
 system interface connection to the main processor.  It may share an
 interface to the ethernet chip so the system may be managed through
 the LAN when the main processor is not working.  System can have
@@ -207,15 +230,15 @@ supplies can be hot-pluggable.
 These systems generally have one or two boards that manage the system;
 this can be on a standard SBC, on another special purpose blade (like
 a blade used as a network switch), or on a standalone board with this
-purpose.  The shelf management controller(s) generally act as the BMC
-in the system; they will have the event log and the SDRs in the
+purpose.  The shelf management controller(s) generally act as the \ac{BMC}
+in the system; they will have the event log and the \ac{SDR}s in the
 system.  A system with two shelf controllers will generally allow the
 system to be managed even if one of the shelf controllers fails.
 
-Bus systems generally use one or more IPMBs (Intelligent Platform
-Management Bus, a sister standard to IPMI) to interconnect the various
-components for management.  IPMB is a modified I$^2$C interface; it
-provides for a somewhat slow but simple communication bus.
+Bus systems generally use one or more \ac{IPMB}s, a sister standard to
+\acs{IPMI}) to interconnect the various components for management.
+\ac{IPMB} is a modified \acs{I$^2$C} interface; it provides for a somewhat
+slow but simple communication bus.
 
 The boards can generally be individually power controlled, so even
 though a board is plugged into the system it may be turned off.  The
@@ -227,8 +250,8 @@ system.
 Individal SBCs vary on whether the local Management Controller is
 connected to the microprocessor on an SBC.  Some are, and some aren't.
 This has some limited usefulness if the software on the SBC wishes to
-obtain local information from the IPMI system or store logs in the
-IPMI event log.
+obtain local information from the \acs{IPMI} system or store logs in the
+\acs{IPMI} event log.
 
 These types of systems are used to achieve high density in places with
 expensive real-estate, like a telco central office.  As you might
@@ -240,28 +263,28 @@ cards, it makes mainenance easier.
 %---------------------------------------------------------------------
 \chapter{OpenIPMI}
 
-So now we've got a BMC, MCs, and things like that.  But how are you
-expected to use raw IPMI?
+So now we've got a \ac{BMC}, \ac{MC}s, and things like that.  But how are you
+expected to use raw \acs{IPMI}?
 
-The first things you must do, of course, it connect to the BMC.  If it's
-a direct SMI connection (A SMIC, KCS, or BT interface, or perhaps a
+The first things you must do, of course, it connect to the \ac{BMC}.  If it's
+a direct SMI connection (A \ac{SMIC}, \ac{KCS}, or \ac{BT} interface, or perhaps a
 non-standard serial interface), you just open the driver on the
 operating system and start messaging.  If it's a LAN-type connection,
 you have to go through an authentication sequence.  One you have a
-connection to the BMC, things are pretty much the same no matter what
+connection to the \ac{BMC}, things are pretty much the same no matter what
 interface you have.  There are a few messaging for doing special
 controls on a LAN interface, but they don't generally matter to the
 user.
 
-Once the connection to the BMC is up, the user should query to see what
-channels the BMC supports.  For 1.5 and later, it gets this from a
-command.  For 1.0, it gets it from the main SDR repository.
+Once the connection to the \ac{BMC} is up, the user should query to see what
+channels the \ac{BMC} supports.  For 1.5 and later, it gets this from a
+command.  For 1.0, it gets it from the main \ac{SDR} repository.
 
-Once you are connected, you should scan the SDRs in the main SDR
+Once you are connected, you should scan the \ac{SDR}s in the main \ac{SDR}
 repository for any entities and sensors.  Sensors and entities may
-also be in the device SDR repository, which should be scanned next.
+also be in the device \ac{SDR} repository, which should be scanned next.
 This allows the user to discover the sensors in the system.  Note that
-the sensors may point to entities that don't have a entry in the SDR
+the sensors may point to entities that don't have a entry in the \ac{SDR}
 that defines them, those entities need to be handled when they are
 detected.
 
@@ -275,8 +298,8 @@ scan the system event log for new events.  (Note that even if it does
 support an event queue, the user should still poll the system event log
 in case the event queue missed any events coming in.)
 
-Also, the user should start scanning the IPMB bus with broadcast get
-device id commands to detect any MCs on the bus.
+Also, the user should start scanning the \ac{IPMB} bus with broadcast get
+device id commands to detect any \ac{MC}s on the bus.
 
 This is what the OpenIPMI library does for you.  Beyond this, it also
 represents the sensors, controls, and entities in a nice OO fashion,
@@ -287,7 +310,7 @@ sensors and entities.
 \section{The User View}
 
 A bunch of acronyms have just been introduced, along with a lot of
-vague concepts, and some description about how to use IPMI.  The nice
+vague concepts, and some description about how to use \acs{IPMI}.  The nice
 thing is that the user of OpenIPMI doesn't really have to know about
 all these things.
 
@@ -302,12 +325,12 @@ from only gives the presence in the database, not physical presence in
 the system.
 
 The user must know about two other OpenIPMI concepts: connections and
-domains.  A connection provides the interface to the IPMI system.  In
-essence, it is the BMC connection.  You must allocate one or more
+domains.  A connection provides the interface to the \acs{IPMI} system.  In
+essence, it is the \ac{BMC} connection.  You must allocate one or more
 connections and create a domain with them.  OpenIPMI supports multple
-connections to a domain in some cases, but currently it requires the OEM
+connections to a domain in some cases, but currently it requires the \acs{OEM}
 plugins exist.  A domain represents a set of devices on a bus (like
-IPMB) whose entities will be unique.  For instance, a chassis with a lot
+\ac{IPMB}) whose entities will be unique.  For instance, a chassis with a lot
 of cards plugged could be a domain, each card could be an entity and
 then create it's own sub-entities, but they will be designed so the
 entity id's don't collide.
@@ -316,7 +339,7 @@ OpenIPMI will automatically manage the connections, activating and
 deactating the proper connections (if the connections support that),
 detecting failures and switching over, etc.
 
-Though the user doesn't have know the inner details of IPMI addressing
+Though the user doesn't have know the inner details of \acs{IPMI} addressing
 and messaging, they do need to know about entities and sensors.
 OpenIPMI mainly focuses on representing the entities and sensors in
 convenient ways.  The user still needs to understand the capabilities of
@@ -326,7 +349,7 @@ that can be done to the sensors.
 You may register with an entity to be told when it's physical presence
 in the system changes.  Some devices (like power supplies) are
 field-replacable while the system is running, these are called Field
-Replacable Units (FRUs).  They may have sensors that monitor them, but
+Replacable Units (\ac{FRU}s).  They may have sensors that monitor them, but
 those sensors may not be active if the device is not physically present
 in the system.
 
@@ -443,7 +466,7 @@ decides what to do next.
 
 The OpenIPMI library is completely event-driven.  It has no internal
 blocking operations, and it expects that anything it calls will not
-block.  IPMI messaging and operating system primitives are provided
+block.  \acs{IPMI} messaging and operating system primitives are provided
 through external plug-in pieces.
 
 If a library function that takes a callback does not return an error,
@@ -454,8 +477,15 @@ the object to the callback, but the \verb=cb_data= will still be valid.
 \subsection{The OS Handler}
 \label{openipmi-os-handlers}
 
-The OS handler provides services for the OpenIPMI library.  These
-services are:
+The OS handler provides services for the OpenIPMI library.  OpenIPMI
+needs some things from the operating system that are not standardized
+by the C language.  The os-handler include file is shown in Appendix
+\ref{os-handler-h}.
+
+\subsubsection{OS Handler Services}
+
+The classes of services required by OpenIPMI are:
+
 \begin{description}
 \item[Input Callbacks]
 The OpenIPMI code uses the ``file descriptor'' concept of *nix, input
@@ -484,39 +514,100 @@ they need not be provided.
 
 \item[Random Data]
 For certain operations, OpenIPMI needs random data.
+
+\item[User Functions]
+Not used by OpenIPMI, but available for the user for special things the
+user will need.
 \end{description}
 
-The os-handler include file is shown in Appendix \ref{os-handler-h}.
+\subsubsection{Standard User Functions in the OS Handler}
+\label{std-func-os-handler}
 
-Note that OS handlers are already defined for POSIX systems, both with
-and without threads.  These are defined in the include file
-\verb=ipmi_posix.h=; see that file for more details.
+OS handlers have some standard functions pointers for the user.  These
+are:
 
-\section{Error Handling}
+\begin{tabularx}{\textwidth}{lX}
+\verb=free_os_handler= &
+Free the OS handler.  Do not use the OS handler after calling this.\\
+
+\verb=perform_one_op= &
+Handle one event (a timer timeout or a file operation) and return.
+This takes a timeout; it will wait up to the amount of time given for
+the event.\\
+
+\verb=operation_loop= &
+Continuously handle events.  This function will not return.\\
+\end{tabularx}
+
+These operations may not be available on all OS handlers, see the
+particular OS handler you are using for more details.
+
+These are part of the OS handler.  As an example on how to use them,
+the following code performs one operation, prints any error it
+returns, then frees the OS handler:
+
+\begin{verbatim}
+struct timeval tv;
+int            rv;
+tv.tv_sec = 10;
+tv.tv_usec = 0;
+rv = os_hnd->perform_one_op(os_hnd, &tv);
+if (rv)
+  printf("Error handling operation: 0x%x", rv);
+os_hnd->free_os_handler(os_hnd);
+\end{verbatim}
+
+\subsubsection{POSIX OS Handlers}
+
+OS handlers are already defined for POSIX systems, both with and
+without threads.  These are defined in the include file
+\verb=ipmi_posix.h=; see that file for more details.  The main
+functions you need to know are the allocation, mainloop, and
+deallocation code.  If you are running in a threaded application, you
+almost certainly should use the threaded version of the OS handlers.
+
+To allocate a POSIX OS handler, use one of the following:
+
+\begin{verbatim}
+os_hnd = ipmi_posix_setup_os_handler();
+
+os_hnd = ipmi_posix_thread_setup_os_handler(wake_sig);
+\end{verbatim}
+
+The \verb=wake_sig= is a signal number that your program is not using
+(usually \verb=SIGUSR1=, \verb=SIGUSR2=, or a real-time signal).  The
+OS handlers uses this signal to send between threads to wake them up
+if they need to be woken.
+
+Freeing and handling the OS handler is done with the standard
+functions in the OS handler, described in section
+\ref{std-func-os-handler}.
+
+\subsection{Error Handling}
 
 Almost all OpenIPMI calls that do anything besides fetch a piece of
 local data will return an integer error value.  A zero means no error.
-Two types of errors are returned, system errors (which are standard Unix
-errno values) and IPMI errors (which are the standard IPMI error codes).
-You can use the macros \verb=IPMI_IS_OS_ERR= and
-\verb=IPMI_IS_IPMI_ERR= to tell the type of error, and
-\verb=IPMI_GET_OS_ERR= and \verb=IPMI_GET_IPMI_ERR= to get
-the actual error values.
+Two types of errors are returned, system errors (which are standard
+Unix errno values) and \acs{IPMI} errors (which are the standard
+\acs{IPMI} error codes).  You can use the macros \verb=IPMI_IS_OS_ERR=
+and \verb=IPMI_IS_IPMI_ERR= to tell the type of error, and
+\verb=IPMI_GET_OS_ERR= and \verb=IPMI_GET_IPMI_ERR= to get the actual
+error values.
 
 Note that if your system doesn't have Unix-type error numbers, you will
 have to provide those for the OpenIPMI library.
 
-If a function returns an error, any callbacks provided to that function
-will \emph{never} be called.  If a function that takes a callback
-returns success, the callback will \emph{always} be called, even if the
-object associated has ceased to exist.  If an object with outstandard
-operations ceases to exist, all the callbacks for outstanding operations
-will be called with ECANCELED as the error.  Errors are passed into many
-callbacks, if an error is present the rest of the data in the callback
-is probably not valid except for the \verb=cb_data= variable you
-provide, and possibly the object the callback is associated with.  The
-object the callback is associated with may be NULL if it has ceased to
-exist.
+If a function returns an error, any callbacks provided to that
+function will \emph{never} be called.  If a function that takes a
+callback returns success, the callback will \emph{always} be called,
+even if the object associated has ceased to exist.  If an object with
+outstandard operations ceases to exist, all the callbacks for
+outstanding operations will be called with \verb=ECANCELED= as the
+error.  Errors are passed into many callbacks, if an error is present
+the rest of the data in the callback is probably not valid except for
+the \verb=cb_data= variable you provide, and possibly the object the
+callback is associated with.  The object the callback is associated
+with may be NULL if it has ceased to exist.
 
 \subsection{Locking}
 
@@ -536,7 +627,7 @@ unchanged, but the semantics have changed.
 \subsubsection{Locking principles}
 
 The basic principle of locking is that if you are in a callback for an
-IPMI object (an IPMI object is passed in the callback), that object is
+\acs{IPMI} object (an \acs{IPMI} object is passed in the callback), that object is
 refcounted (marked in-use) and the system cannot delete it.  In any
 callback for an object owned by a particular domain, that object will
 be and anything it belongs to will be marked in-use.  So, for
@@ -548,13 +639,13 @@ marked in-use.  Outside of callbacks, the library is free to change
 pointers, change information, add and remove objects, or whatever it
 wants to objects.
 
-So how do you mark an IPMI object in-use?  If you are handling
-incoming IPMI callbacks you generally don't have to worry about this.
+So how do you mark an \acs{IPMI} object in-use?  If you are handling
+incoming \acs{IPMI} callbacks you generally don't have to worry about this.
 But say you are handling outside input, such as a user interface.
 What then?  If the pointers can change, how do I keep a reference to
 something?
 
-OpenIPMI provides two identifiers for IPMI objects.  One is a pointer,
+OpenIPMI provides two identifiers for \acs{IPMI} objects.  One is a pointer,
 but a pointer is only good inside a callback.  The other is an
 OpenIPMI id, the id is good outside callbacks.  But the only thing you
 can do with an id is pass it to a function that will call a callback
@@ -723,14 +814,14 @@ multi-threaded programming.
 \end{itemize}
 
 Note that this may seen abnormal, but it is pretty standard in
-multi-threaded systems.  HPI, for instance has the same problem.  If
-you have one thread waiting for events from an HPI domain, and another
-iterating the RDRs, or you have two threads each doing operations on
-sensors, you have exactly the same situation.  You have to protect
-yourself with locks the same way.
+multi-threaded systems.  \ac{HPI}, for instance has the same problem.
+If you have one thread waiting for events from an \ac{HPI} domain, and
+another iterating the RDRs, or you have two threads each doing
+operations on sensors, you have exactly the same situation.  You have
+to protect yourself with locks the same way.
 
 Note that data about an object (like the device id data, whether the
-MC is active, or the entity is present, or whatever) will \emph{not}
+\ac{MC} is active, or the entity is present, or whatever) will \emph{not}
 change while the object is in use.  This data is held until the object
 is no longer in use and then installed (and in the case of activity or
 presence, the callbacks are then called).
@@ -743,7 +834,7 @@ domains, entities, sensors, controls, and events.
 \subsubsection{Connections}
 
 A connection provides the low-level interface to the system.  It is
-usually a connection to a BMC in a system.  It handles getting IPMI
+usually a connection to a \ac{BMC} in a system.  It handles getting \acs{IPMI}
 messages to the proper elements in the system.
 
 \subsubsection{Domains}
@@ -763,20 +854,20 @@ monitor entities, and controls are attached to entities.
 Entities may be grouped inside other entities, thus an entity may have a
 parent (if it is grouped inside another entity) and children (if it
 contains other entities).  These relationships are abstract; you may
-change them if it you like.  A raw system with no SDR data will not have
-any relationships defined.  Relationships are stored in the SDR
+change them if it you like.  A raw system with no \ac{SDR} data will not have
+any relationships defined.  Relationships are stored in the \ac{SDR}
 repository, you may change them and store them back, if you like and if
 the system supports that.
 
-FRU information about the entity is sometimes available.  You can
+\ac{FRU} information about the entity is sometimes available.  You can
 register with an entity to see if/when it becomes available using
 \verb=ipmi_entity_add_fru_update_handler()=.  Once it is available,
-you can fetch the FRU data using the commands defined in the IPMI
+you can fetch the \ac{FRU} data using the commands defined in the \acs{IPMI}
 include file.
 
 \paragraph{Device-Relative vs System-Relative Entities}
 
-In IPMI, entities may be be either in a fixed place in the system, or
+In \acs{IPMI}, entities may be be either in a fixed place in the system, or
 they may be moved about the system.  Fixed entities, are, well, in a
 fixed location in the system.  These are called system relative
 entities.  They have an entity instance less than 60h.
@@ -787,13 +878,13 @@ locations in a chassis; it doesn't know ahead of time which one.
 These types of entities are generally device-relative and have an
 entity instance of 60h or larger.  For these types of entities, the
 management controller on which they reside becomes part of the entity.
-In OpenIPMI, the IPMB channel number of IPMB address are part of the
+In OpenIPMI, the \ac{IPMB} channel number of \ac{IPMB} address are part of the
 entity.  In \verb=ipmi_ui=, these are printed and entered as
 ``r<channel>.<ipmb>.<entity id>.<entity instance>''.
 
 \subsubsection{Sensors}
 
-Sensor monitor something about an object.  IPMI defines many types of
+Sensor monitor something about an object.  \acs{IPMI} defines many types of
 sensors, but groups them into two main categories: Threshold and
 discrete.  Threshold sensors are ``analog'', they have continuous (or
 mostly continuous) readings.  Things like fans speed, voltage, or
@@ -808,10 +899,10 @@ software.
 
 \subsubsection{Controls}
 
-Controls are not part of the IPMI spec, but are necessary items in
-almost all systems.  They are provided as part of OpenIPMI so that OEM
+Controls are not part of the \acs{IPMI} spec, but are necessary items in
+almost all systems.  They are provided as part of OpenIPMI so that \acs{OEM}
 code has a consistent way to represent these, and so OpenIPMI is ready
-when the IPMI team finally sees the light and adds controls.  OpenIPMI
+when the \acs{IPMI} team finally sees the light and adds controls.  OpenIPMI
 defines many types of control: lights, relays, displays, alarms,
 reset, one-shot-reset, power, fan speed, general outputs, one-shot
 outputs, and identifiers.
@@ -891,7 +982,7 @@ As you will discover, OpenIPMI is very callback based.  The callbacks
 are somewhat fined grained; you register for exactly what you want to
 see on individual objects.  This is not as bad as you might imagine
 (even though it may seem somewhat strange).  It does mean that you
-have to do a lot of registering in all the right places, though.  IPMI
+have to do a lot of registering in all the right places, though.  \acs{IPMI}
 has a large number of asyncronous things that it has to inform you
 about.  If it delivered all these through one interface, you would
 have to look at each call and try to figure out what type of things
@@ -904,7 +995,7 @@ Updated callbacks tell you when an object comes into existance, is
 destroyed, or if configuration information about an object has
 changed.  On an entity, for instance, when an entity is first added,
 the entity update handler on the domain will be called with the
-entity.  when an SDR is read and causes a change to the entity, the
+entity.  when an \ac{SDR} is read and causes a change to the entity, the
 updated handler will be called again with the change.  When the entity
 is deleted, it will be called again.
 
@@ -912,7 +1003,7 @@ In general, you should add updated handlers whenever the thing you
 want to register against comes into existance.  So for entities and
 the main event handler, you should register them in the
 \verb=setup_done= callback for the domain.  The entity update handler
-should register the update handlers for sensors, controls, and FRU
+should register the update handlers for sensors, controls, and \ac{FRU}
 information.  It should register the event handlers for presence and
 hot-swap there, too.
 
@@ -943,14 +1034,217 @@ message to do.  If it a result of OpenIPMI's requirement to be able to
 work in non-threaded systems and still be responsive to operations
 while waiting.
 
+\section{OpenIPMI Include Files}
+
+OpenIPMI has a large number of include files.  Most of them deal with
+internals that are only needed for \acs{OEM} code.  The include file
+are classified by need in the sections below.
+
+\subsection{Files the normal user deals with}
+
+\begin{tabularx}{\textwidth}{lX}
+\verb=ipmiif.h= & 
+The main include file for OpenIPMI.  It contains the main functions the
+user must deal with when working with the OpenIPMI library.  Almost
+everything will include this.  It includes \verb=ipmi_types.h= and
+\verb=ipmi_bits.h=, too, so you don't have to include those.\\
+
+\verb=ipmi_auth.h= &
+The file holding information about athentication algorithms.  You need
+this if dealing with an authenticated interface.\\
+
+\verb=ipmi_bits.h= &
+Various values, mostly for sensors, used by the user.  \verb=ipmiif.h=
+includes this file, so you generally don't have to include it explicitly.\\
+
+\verb=ipmi_types.h= &
+Types for the basic IPMI objects.  \verb=ipmiif.h= includes this file,
+so you generally don't have to include it explicitly.\\
+
+\verb=ipmi_err.h= &
+Error values, both IPMI and system, as well as macros for interpreting
+these.\\
+
+\verb=os_handler.h= &
+The os-specific handler types are defined here.  You must implement this
+and supply it to the IPMI code.\\
+
+\verb=selector.h= &
+For *nix systems, This file a default mechanism for handling many of the
+os-specific handler operations.\\
+
+\verb=ipmi_log.h= &
+Holds definitions for the logging interface.\\
+
+\end{tabularx}
+
+\subsection{Files dealing with messaging interfaces}
+
+\begin{tabularx}{\textwidth}{lX}
+\verb=ipmi_lan.h= &
+This is the LAN messaging interface, this contains the calls for
+creating a LAN connection.\\
+
+\verb=ipmi_smi.h= &
+This is the messaging interface for talking to local IPMI interfaces
+(like KCS), this contains the calls for creating an SMI connection.\\
+
+\end{tabularx}
+
+\subsection{File for system configuration}
+
+\begin{tabularx}{\textwidth}{lX}
+\verb=ipmi_pef.h= &
+Contains code for configuring the Platform Event Filter (PEF).\\
+
+\verb=ipmi_lanparm.h= &
+Contains code for configuring the LAN configuration data.\\
+
+\verb=ipmi_pet.h= &
+Contains code that allows the user to easily set up an IPMI LAN
+interface on a BMC to send traps.\\
+
+\end{tabularx}
+
+\subsection{Internal files that OEM code and messaging interfaces deal with}
+
+\begin{tabularx}{\textwidth}{lX}
+\verb=ipmi_addr.h= &
+The file holding information about IPMI addresses.\\
+
+\verb=ipmi_conn.h= &
+This defines the interface for the messaging interfaces.\\
+
+\verb=ipmi_event.h= &
+This defines functions for handling events.\\
+
+\verb=ipmi_entity.h= &
+This defines internal entity interfaces.\\
+
+\verb=ipmi_fru.h= &
+This defines internal FRU interfaces.\\
+
+\verb=ipmi_control.h= &
+This defines internal control interfaces.\\
+
+\verb=ipmi_int.h= &
+This defines other miscellaneous internal interfaces.\\
+
+\verb=ipmi_domain.h= &
+This defines the internal interfaces for dealing with domains.\\
+
+\verb=ipmi_mc.h= &
+This defines internal interfaces for the management controllers.\\
+
+\verb=ipmi_msgbits.h= &
+This defines various IPMI messages.\\
+
+\verb=ipmi_oem.h= &
+This defines interfaces that OEM code can tie into.\\
+
+\verb=ipmi_sel.h= &
+This defines the internal interfaces for the \ac{SEL}.\\
+
+\verb=ipmi_sdr.h= &
+This defines internal interfaces for the \ac{SDR} repostiory.\\
+
+\verb=ipmi_sensor.h= &
+This defines internal interfaces for sensors.\\
+
+\verb=ipmi_locks.h= &
+This defines internal interfaces for locks.\\
+
+\verb=ipmi_posix.h= &
+This defines some POSIX OS handlers.\\
+
+\end{tabularx}
+
+\section{Starting Up OpenIPMI}
+\label{starting-up-openipmi}
+
+Starting up OpenIPMI is relatively easy.  You must allocate an OS
+handler and initialize the library with it.  Then you are free to set
+up connections.  The following code shows this for a non-threaded
+POSIX program:
+
+\begin{verbatim}
+    os_hnd = ipmi_posix_setup_os_handler();
+    if (!os_hnd) {
+	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
+	exit(1);
+    }
+
+    /* Initialize the OpenIPMI library. */
+    ipmi_init(os_hnd);
+\end{verbatim}
+
+The \verb=ipmi_init= function should be done \emph{once} when your
+program starts up.  Generally, you only have one OS handler, but you
+are free to have more if they interwork properly and you have some
+special need.
+
+\section{Creating OpenIPMI Domains}
+\label{creating-openipmi-domains}
+
+If you want to talk to an \acs{IPMI} \ac{BMC}, you must create a
+connection to it.  The connection method depends on the type of
+connection; these are described in Chapter \ref{ipmi-interfaces}.
+
+Once you have a connection, you can open a domain with it.  You do
+this like so:
+
+\begin{verbatim}
+ipmi_con_t       cons[N];
+int              num_cons, rv;
+ipmi_domain_id_t id;
+
+/* Set up connection(s) here */
+
+rv = ipmi_open_domain(cons, num_cons, con_change, user_data, &id);
+\end{verbatim}
+
+Up to two connections are currently supported.  A connection is an
+independent \ac{MC} in the same domain; if two MCs have external
+connections, they can both be used for fault-tolerance.  This
+generally requires some special support for the particular domain
+type, see the appendices ons pecific domain types for more detail.
+The \verb=con_change= function is called whenever the connection
+changes states (a connection is established or lost).  The connection
+change callback looks like:
+
+\begin{verbatim}
+static void
+con_change(ipmi_domain_t *domain,
+	   int           err,
+	   unsigned int  conn_num,
+	   unsigned int  port_num,
+	   int           still_connected,
+	   void          *user_data)
+{
+  ...
+}
+\end{verbatim}
+
+If a connection is established, then \verb=err= will be zero.
+Otherwise it is the error that caused the connection to fail.  The
+\verb=conn_num= parm is the particular connection number (from the
+\verb=cons= array passed into the domain setup).  A connection may
+have specific ports, generally multiple connections to the same
+\ac{MC}.  The \verb=still_connected= parm tells if you still have some
+connection to the domain.
+
+If a connection is down, the connection change callback will be called
+periodically to report the problem as OpenIPMI attempts to
+re-establish the connection.
 
 %---------------------------------------------------------------------
 \chapter{IPMI Interfaces}
+\label{ipmi-interfaces}
 
-IPMI has a large number of interfaces for talking to to management
+\acs{IPMI} has a large number of interfaces for talking to to management
 controllers.  They vary in performance and capability, but the same
 messages work over the top of all of them.  Generally, it does not
-matter how you interface to an IPMI system, the messages will work the
+matter how you interface to an \acs{IPMI} system, the messages will work the
 same.
 
 \section{OpenIPMI Generic Interface}
@@ -970,63 +1264,67 @@ processor of a system and the management controller.  Obviously, this
 interface isn't very useful if the system is turned off, but it allows
 a running system to monitor itself.
 
-The format of a system interface message that is $n$ bytes long is:
+The low-level format of a system interface message that is $n$ bytes
+long is:
 
 \begin{showmsg}
-\msgitem{0}{Bits 0-1 - Destination LUN\\
-	    Bits 2-7 - NetFN}
+\msgitem{0}{Bits 0-1 - Destination \acs{LUN}\\
+	    Bits 2-7 - \acs{NetFN}}
 \msgitem{1}{Command}
 \msgitem{2 - n-1}{Message Data}
 \end{showmsg}
 
-\subsection{SMIC}
-SMIC interfaces have been around a long time, but mostly during a
-period when IPMI was not popular.  SMIC stands for Server Management
-Interface Chip.  This is a low-performance, byte-at-a-time interface
-with no interrupt capability.
+Commands and responses have basically the same format, except that
+responses always have the completion code as the first byte of the
+message data.  See chapter \ref{ipmi-commands} for more details.
 
-\subsection{KCS}
-KCS interfaces are currently the most popular IPMI system interface.
-KCS stands for Keyboard Controller Style; the interface looks much
-like a standard PC keyboard interface.  It was chosen because lots of
-cheap hardware was available for these types of interfaces.  But it is
-still a byte-at-a-time interface and performs poorly.  It has the
-capability for interrupts, but very few systems have working interrupt
-capability with KCS interfaces.
+\subsection{\ac{SMIC}}
+The \ac{SMIC} interface has been around a long time, but mostly during
+a period when \acs{IPMI} was not popular.  This is a low-performance,
+byte-at-a-time interface with no interrupt capability.
 
-\subsection{BT}
-BT interfaces are the newest and best interfaces for IPMI.  BT stands
-for Block Transfer.  Messages are sent a whole message at a time
-through the interface, thus it is a much higher performance interface
-than the other system interfaces.
+\subsection{\ac{KCS}}
+The \ac{KCS} interface is currently the most popular \acs{IPMI} system
+interface.  The \ac{KCS} interface looks much like a standard PC
+keyboard interface.  It was chosen because lots of cheap hardware was
+available for these types of interfaces.  But it is still a
+byte-at-a-time interface and performs poorly.  It has the capability
+for interrupts, but very few systems have working interrupt capability
+with \ac{KCS} interfaces.
+
+\subsection{\ac{BT}}
+The \ac{BT} interface is the newest and best interface for \acs{IPMI}.
+Messages are sent a whole message at a time through the interface,
+thus it is a much higher performance interface than the other system
+interfaces.
 
 \subsection{The OpenIPMI Driver}
 
 The OpenIPMI driver on Linux provides a user interface to all the
-standard IPMI system interfaces.  It does so in a manner that allows
+standard \acs{IPMI} system interfaces.  It does so in a manner that allows
 multiple users to use the driver at the same time, both users in the
 kernel and users in user space.
 
 To do this, the OpenIPMI driver handles all the details of addressing
 and sequencing messages.  Other drivers allowed more direct access to
-the IPMI interface; that means that only one user at a time could use
-the driver.  Since the IPMI can be used for different purposes by
+the \acs{IPMI} interface; that means that only one user at a time could use
+the driver.  Since the \acs{IPMI} can be used for different purposes by
 different users, it is useful to do the multiplexing in the kernel.
 
-The details of configuring the IPMI driver are found in the
+The details of configuring the \acs{IPMI} driver are found in the
 \verb=IPMI.txt= file in the kernel documentation; those details won't
 be discussed here.
 
-To use the IPMI device driver, you open the \verb=/dev/ipmi0= or
-\verb=/dev/ipmidev/0= file.  The driver allows multiple IPMI devices
+To use the \acs{IPMI} device driver, you open the \verb=/dev/ipmi0= or
+\verb=/dev/ipmidev/0= file.  The driver allows multiple \acs{IPMI} devices
 at the same time; you would increment the number to get to successive
 devices.  However, most systems only have one.
 
 The primary interface to the driver is through \verb=ioctl= calls.
-\verb=read= and\verb=write= calls will not work because the IPMI
-driver separates the addressing and data for an IPMI message.
+\verb=read= and\verb=write= calls will not work because the \acs{IPMI}
+driver separates the addressing and data for an \acs{IPMI} message.
 
-The core description of an IPMI message is:
+The core description of an \acs{IPMI} message is:
 
 \begin{verbatim}
 struct ipmi_msg
@@ -1038,9 +1336,9 @@ struct ipmi_msg
 };
 \end{verbatim}
 
-The \verb=netfn= describes the class of message being sent.  IPMI
-messages are grouped into different classes by function.  The
-\verb=cmd= is the command within the class.  Chapter
+The \verb=netfn= describes \ac{NetFN} of the class of message being
+sent.  \acs{IPMI} messages are grouped into different classes by
+function.  The \verb=cmd= is the command within the class.  Chapter
 \ref{ipmi-commands} discusses this is more detail.  The \verb=data=
 and \verb=data_len= fields are the message contents.  This structure
 is used in both sent and received messages.
@@ -1107,7 +1405,7 @@ get the response.  Instead, the response comes back later and can be
 received at that point in time.  This is what makes the \verb=msgid=
 important.
 
-The following example shows sending a get device id request to IPMB
+The following example shows sending a get device id request to \ac{IPMB}
 address 0xb2.
 
 \begin{verbatim}
@@ -1192,8 +1490,8 @@ The \verb=msgid= comes in very handy for this responses, it lets you
 easily correlate commands and responses.  It has no meaning for events.
 
 The \verb=netfn= for a received message have a ``one'' bitwise or-ed
-onto the value.  In IPMI, even NetFNs are always commands and odd
-NetFNs are always responses.
+onto the value.  In \acs{IPMI}, even \acs{NetFN}s are always commands
+and odd \acs{NetFN}s are always responses.
 
 For responses, the address will always be the same as the sent
 address.
@@ -1217,7 +1515,7 @@ events.
 
 \subsubsection{Receiving Commands and Responding}
 \label{recv-cmd-resp}
-Commands sent to LUN two of a management controller will generally be
+Commands sent to \ac{LUN} two of a management controller will generally be
 routed to the driver.  If the driver does not have a registered user
 for that command, it will respond that it does not handle that
 command.
@@ -1253,13 +1551,13 @@ message, sends a response, and exits.  When you response, you must
 supply the \verb=msgid= that came into the command.
 
 \subsubsection{Overriding Default Timing Values}
-Be default, commands over IPMB get resent up to 5 times with a 1
+Be default, commands over \ac{IPMB} get resent up to 5 times with a 1
 second timeout between the sends.  For very select applications, this
 is not suitable.  Primarily, some applications need to only send once,
 they have a higher-level resend mechanism and the OpenIPMI resends
 will only get in the way.
 
-Note that responses over IPMB will not get timed or resent.
+Note that responses over \ac{IPMB} will not get timed or resent.
 
 The user may modify the timing values two different ways.  The user
 can set the default resend and retry times for a file descriptor with
@@ -1313,16 +1611,16 @@ ioctl to perform the request:
 rv = ioctl(fd, IPMICTL_SEND_COMMAND_SETTIME, &req_time);
 \end{verbatim}
 
-\subsubsection{Setting Your Local IPMB Address}
-Unfortunately, IPMI has no standard way to determing your local IPMB
+\subsubsection{Setting Your Local \ac{IPMB} Address}
+Unfortunately, \acs{IPMI} has no standard way to determing your local \ac{IPMB}
 address.  It is usually set to 20h, but especially in bussed systems,
 the local management controller may have a different address.
 
-If you do not set your IPMB address properly, messages out on the IPMB
+If you do not set your \ac{IPMB} address properly, messages out on the \ac{IPMB}
 will not have the proper source address and thus the response will go
 to the wrong place.  To avoid this problem, the OpenIPMI allows the
-user to set the local IPMB address and the local LUN.  The following
-shows how to get and set the IPMB address:
+user to set the local \ac{IPMB} address and the local \ac{LUN}.  The following
+shows how to get and set the \ac{IPMB} address:
 
 \begin{verbatim}
 unsigned int ipmb_addr;
@@ -1339,7 +1637,7 @@ if (rv == -1)
   error handling...
 \end{verbatim}
 
-The driver also has ioctls to get and set the LUN, but you should
+The driver also has ioctls to get and set the \ac{LUN}, but you should
 almost certainly leave that alone.
 
 \subsection{The OpenIPMI System Interface}
@@ -1361,16 +1659,20 @@ handler data to use for the connection (as described in section
 the \verb=user_data= filed in the \verb=ipmi_con_t= data structure.  A
 new connection is returned in \verb=new_con=.
 
-The OpenIPMI library understands how to get the local IPMB address for
-certain sytems.  If it can get the local IPMB address, it will set it
+The OpenIPMI library understands how to get the local \ac{IPMB} address for
+certain sytems.  If it can get the local \ac{IPMB} address, it will set it
 automatically.
+
+Once you have a connection, you can start it and use it directly.
+However, usually you pass this to the domain startup code for creation
+of a domain, as described in section \ref{creating-openipmi-domains}.
 
 \section{Channels}
 
-The IPMI interfaces on a management controller are called
-``channels''.  These are messaging channels.  LAN, IPMB, system
+The \acs{IPMI} interfaces on a management controller are called
+``channels''.  These are messaging channels.  LAN, \ac{IPMB}, system
 interface, and any other messaging interfaces will each have their own
-channel on the MC.
+channel on the \ac{MC}.
 
 Messages directly sent to the local management controller do nor
 require any type of channel information.  When the user sends a
@@ -1381,10 +1683,11 @@ configuration information such as users and passwords.
 \begin{table}
 \begin{tabularx}{\textwidth}{|l|l|X|}
 \hline
-0h & Primary IPMB & Channel 0 is the primary IPMB bus on the system.\\
+0h & Primary \acs{IPMB} & Channel 0 is the primary \acs{IPMB} bus on the
+system.\\
 \hline
 1h-7h & \parbox{1in}{Implementation-specific} & These channel may be any
-type of channel, including IPMB, and LAN interfaces.\\
+type of channel, including \acs{IPMB}, and LAN interfaces.\\
 \hline
 8h-Dh & & Reserved\\
 \hline
@@ -1399,56 +1702,68 @@ really never used.\\
 \caption{\label{channel-list}Channel Numbers}
 \end{table}
 
-\section{IPMB}
+\section{\acs{IPMB}}
 
-IPMB provides the main channel for transferring messages around an
-IPMI system.  It is a message bus that works somewhat like Ethernet,
+\ac{IPMB} provides the main channel for transferring messages around an
+\acs{IPMI} system.  It is a message bus that works somewhat like Ethernet,
 it is a CSMA (carrier-sense multiple access) system.  However, it does
-not have collision detection; so if two MCs attempt to transmit at the
-same time, both messages will be lost.  Because of this, IPMB does not
+not have collision detection; so if two \ac{MC}s attempt to transmit at the
+same time, both messages will be lost.  Because of this, \ac{IPMB} does not
 scale very well; careful use needs to be made of the bandwith on the
 bus.
 
-The format of an IPMB message of $n$ bytes is:
+The format of an \ac{IPMB} message of $n$ bytes is:
 
 \begin{showmsg}
-\msgitem{0}{Destination IPMB address}
-\msgitem{1}{Bits 0-1 - Destination LUN\\
-	    Bits 2-7 - NetFN}
+\msgitem{0}{Destination \acs{IPMB} address}
+\msgitem{1}{Bits 0-1 - Destination \acs{LUN}\\
+	    Bits 2-7 - \acs{NetFN}}
 \msgitem{2}{Checksum for bytes 0-1}
-\msgitem{3}{Source IPMB address}
-\msgitem{4}{Bits 0-1 - Source LUN\\
+\msgitem{3}{Source \acs{IPMB} address}
+\msgitem{4}{Bits 0-1 - Source \acs{LUN}\\
 	    Bits 2-7 - Sequence Number}
 \msgitem{5}{Command}
 \msgitem{6 .. n-2}{Message Contents}
 \msgitem{n-1}{Checksum for the whole message}
 \end{showmsg}
 
-Unfortunately, IPMI does not have any type of routing handling or
-transparency of messages.  To send a message out on the IPMB, you
-encapsulate the entire IPMB message in a \textit{Send Message}
+Unfortunately, \acs{IPMI} does not have any type of routing handling or
+transparency of messages.  To send a message out on the \ac{IPMB}, you
+encapsulate the entire \ac{IPMB} message in a \textit{Send Message}
 command and send it over the proper channel.
 
-One special type of message is the broadcast IPMB message.  This
-message is exactly like a normal IPMB message, but it has a 0 byte
+Since \ac{IPMB} can lose messages, the OpenIPMI device driver
+implements a resend mechanism on commands sent over \ac{IPMB}; if a
+response is not seen withing a given period of time, the command will
+be resent.  This will be done a few times before an error is returned.
+
+\subsection{IPMB Broadcast}
+One special type of message is the broadcast \ac{IPMB} message.  This
+message is exactly like a normal \ac{IPMB} message, but it has a 0 byte
 prepended to the message.  This can only be a \textit{Get Device Id}
 command.  It is used to discover management controllers in the system.
 Broadcast is a really bad name, because it will not actually
-broadcast, it will go to the IPMB address is the second byte of the
+broadcast, it will go to the \ac{IPMB} address is the second byte of the
 message.  This is used for discovery because it will not have any
-effect on I$^2$C devices on the bus, but IPMI devices will do a normal
-response.
+effect on \acs{I$^2$C} devices on the bus, but \acs{IPMI} devices will
+do a normal response.
 
-Since IPMB can lose messages, the OpenIPMI device driver implements a
-resend mechanism on commands sent over IPMB; if a response is not seen
-withing a given period of time, the command will be resent.  This will
-be done a few times before an error is returned.
+Many IPMI systems do not correctly implement broadcast; it seems to be
+an oft ignored part of the spec.
+
+\subsection{OpenIPMI and \acs{IPMB}}
+The OpenIPMI driver and library handle the details of IPMB for the
+user.  To send a message over IPMB, the user create and OpenIPMI
+\ac{IPMB} address as described in section\ref{openipmi-addressing} and
+sends a normal OpenIPMI message.  The library and driver take care of
+selecting the sequence numbers, formatting the messages, tracking and
+decoding the response, and resending messages.
 
 \section{ICMB}
 
 \section{LAN}
 
-\subsection{SNMP Traps}
+\subsection{\acs{SNMP} Traps}
 
 \subsection{LAN Configuration}
 
@@ -1499,7 +1814,7 @@ struct ipmi_system_interface_addr
 The channel should be \verb=IPMI_BMC_CHANNEL= and the lun should
 generally be zero.
 
-An IPMI address routes messages on the IPMB.  The format is:
+An \acs{IPMI} address routes messages on the \ac{IPMB}.  The format is:
 
 \begin{verbatim}
 #define IPMI_IPMB_ADDR_TYPE		...
@@ -1513,30 +1828,30 @@ struct ipmi_ipmb_addr
 };
 \end{verbatim}
 
-The \verb=channel= should be the IPMB bus channel number, the
-\verb=slave_address= should be the IPMB address of the destination,
-and the \verb=lun= should be the destination LUN.  Notice that two
-address types can be used with this command, a normal IPMB message and
-a broadcast IPMB can be sent with this.  Note that if you send a
-broadcast IPMB, you will receive a normal IPMB address in the
+The \verb=channel= should be the \ac{IPMB} bus channel number, the
+\verb=slave_address= should be the \ac{IPMB} address of the destination,
+and the \verb=lun= should be the destination \ac{LUN}.  Notice that two
+address types can be used with this command, a normal \ac{IPMB} message and
+a broadcast \ac{IPMB} can be sent with this.  Note that if you send a
+broadcast \ac{IPMB}, you will receive a normal \ac{IPMB} address in the
 response.
 
 %---------------------------------------------------------------------
-\chapter{IPMI Commands}
+\chapter{\acs{IPMI} Commands}
 \label{ipmi-commands}
 
 %---------------------------------------------------------------------
-\chapter{SDR Repositories}
+\chapter{\acs{SDR} Repositories}
 
 %---------------------------------------------------------------------
 \chapter{Entities}
 
-\section{FRU Data}
+\section{\acs{FRU} Data}
 
 %---------------------------------------------------------------------
 \chapter{Sensors}
 
-  IPMI defines
+  \acs{IPMI} defines
 special types of sensors called Presence Sensors, these report if an
 entity is present in the system.
 
@@ -1546,14 +1861,14 @@ Discrete sensors monitor events or states, like the previously
 introduced presence sensor, software initialization progress, or if
 external power is present to the system.
 
-Threshold sensors report their readings in values from 0-255.  OpenIPMI
-makes every effort to convert this to a floating-point value for you to
-use.  IPMI defines standard ways to convert values using various
-formulas.  OpenIPMI implements all these and provides ways for OEM
-functions to plug in to provide their own converters.  If you have a
-sensor that cannot be represented using the standard mechanisms, you
-need to get the OEM algorithms for this and implement them in an OEM
-plug-in for the sensors.
+Threshold sensors report their readings in values from 0-255.
+OpenIPMI makes every effort to convert this to a floating-point value
+for you to use.  \acs{IPMI} defines standard ways to convert values
+using various formulas.  OpenIPMI implements all these and provides
+ways for \acs{OEM} functions to plug in to provide their own
+converters.  If you have a sensor that cannot be represented using the
+standard mechanisms, you need to get the \acs{OEM} algorithms for this
+and implement them in an \acs{OEM} plug-in for the sensors.
 
 You may enable events on a threshold sensor by specifying values (called
 thresholds) where you want the sensor to report an event.  Then you can
@@ -1587,7 +1902,7 @@ That information may be fetched by the user.
 
 \section{Chassis}
 
-\section{Direct I2C Access}
+\section{Direct \acs{I$^2$C} Access}
 
 %---------------------------------------------------------------------
 \chapter{Events}
@@ -1599,9 +1914,9 @@ That information may be fetched by the user.
 %---------------------------------------------------------------------
 \appendix
 
-\chapter{Comparison with SNMP}
+\chapter{Comparison with \acs{SNMP}}
 
-\chapter{Comparison with HPI}
+\chapter{Comparison with \acs{HPI}}
 
 %---------------------------------------------------------------------
 \chapter{ATCA}

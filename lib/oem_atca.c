@@ -2245,7 +2245,7 @@ atca_sensor_update_handler(enum ipmi_update_e op,
 					       finfo->hs_state,
 					       &event,
 					       &handled);
-	    ipmi_entity_set_hot_swappable(finfo->entity, 0);
+	    ipmi_entity_set_hot_swappable(entity, 0);
 	}
 	break;
 

@@ -1,3 +1,26 @@
+2004-06-23 Michael McMaster <Michael_McMaster@Xiotech.com>
+
+	* lib/mc.c: Initialize info->err in ipmi_mc_reread_sel().
+
+2004-06-23 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/os_handler.h: Add some user functions for
+	performing operations like freeing hte handler, and waiting for
+	events to occur.
+
+	* include/OpenIPMI/ipmi_posix.h: Rework to use the standard
+	functions in the OS handler.
+	* unix/posix_os_hnd.c: ditto
+	* unix/posix_thread_os_hnd.c: ditto
+	* sample/sample.c: ditto
+	* sample/sample2.c: ditto
+
+	* lib/entity.c: Fixed a problem with always fetching FRU data.
+
+2004-06-22 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_atca.c: Fix a race with deleting an MC.
+
 2004-06-18 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in, include/OpenIPMI/ipmi_domain.h:

@@ -54,13 +54,6 @@ void posix_vlog(char *format,
  *********************************************************************/
 /* Allocate and configure an OS handler. */
 os_handler_t *ipmi_posix_setup_os_handler(void);
-/* Cleanup and free an OS handler. */
-void ipmi_posix_cleanup_os_handler(os_handler_t *os_hnd);
-/* Calls sel_select() with the proper data. */
-int ipmi_posix_sel_select(os_handler_t   *os_hnd,
-			   struct timeval *timeout);
-/* Calls sel_select_loop() with the proper data. */
-void ipmi_posix_sel_select_loop(os_handler_t *os_hnd);
 /* Gets the selector associated with the OS handler. */
 selector_t *ipmi_posix_os_handler_get_sel(os_handler_t *os_hnd);
 
@@ -102,15 +95,6 @@ void ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel);
    does not have to be queued); a signal handler will be installed for
    it. */
 os_handler_t *ipmi_posix_thread_setup_os_handler(int wake_sig);
-/* Clean up the threaded selector, including returning the signal to
-   its original state. */
-void ipmi_posix_thread_cleanup_os_handler(os_handler_t *os_hnd);
-/* Calls sel_select() with the proper data.  Note that if you send
-   "wake_sig" to the calling thread, this will return. */
-int ipmi_posix_thread_sel_select(os_handler_t   *os_hnd,
-				 struct timeval *timeout);
-/* Calls sel_select_loop() with the proper data. */
-void ipmi_posix_thread_sel_select_loop(os_handler_t *os_hnd);
 /* Gets the selector associated with the OS handler. */
 selector_t *ipmi_posix_thread_os_handler_get_sel(os_handler_t *os_hnd);
 
@@ -122,5 +106,46 @@ os_handler_t *ipmi_posix_thread_get_os_handler(void);
 void ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd);
 void ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd,
 					  selector_t   *sel);
+
+
+/**********************************************************************
+ * Cruft, do not use these function any more.
+ *********************************************************************/
+
+#ifndef IPMI_FUNC_DEPRECATED
+# if (__GNUC__ > 3) || ((__GNUC__ == 3) && (__GNUC_MINOR__ >= 2))
+#  define IPMI_FUNC_DEPRECATED __attribute__ ((deprecated))
+#  define IPMI_TYPE_DEPRECATED __attribute__ ((deprecated))
+#  define IPMI_VAR_DEPRECATED __attribute__ ((deprecated))
+# else
+#  define IPMI_FUNC_DEPRECATED
+#  define IPMI_TYPE_DEPRECATED
+#  define IPMI_VAR_DEPRECATED
+# endif
+#endif
+
+/* Cleanup and free an OS handler. */
+void ipmi_posix_cleanup_os_handler(os_handler_t *os_hnd)
+     IPMI_FUNC_DEPRECATED;
+/* Calls sel_select() with the proper data. */
+int ipmi_posix_sel_select(os_handler_t   *os_hnd,
+			   struct timeval *timeout)
+     IPMI_FUNC_DEPRECATED;
+/* Calls sel_select_loop() with the proper data. */
+void ipmi_posix_sel_select_loop(os_handler_t *os_hnd)
+     IPMI_FUNC_DEPRECATED;
+
+/* Clean up the threaded selector, including returning the signal to
+   its original state. */
+void ipmi_posix_thread_cleanup_os_handler(os_handler_t *os_hnd)
+     IPMI_FUNC_DEPRECATED;
+/* Calls sel_select() with the proper data.  Note that if you send
+   "wake_sig" to the calling thread, this will return. */
+int ipmi_posix_thread_sel_select(os_handler_t   *os_hnd,
+				 struct timeval *timeout)
+     IPMI_FUNC_DEPRECATED;
+/* Calls sel_select_loop() with the proper data. */
+void ipmi_posix_thread_sel_select_loop(os_handler_t *os_hnd)
+     IPMI_FUNC_DEPRECATED;
 
 #endif /* __IPMI_POSIX_H */
