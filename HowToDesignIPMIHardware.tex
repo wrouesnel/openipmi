@@ -196,6 +196,40 @@ records and for other things that the management system needs.  It
 should not be for anything else.
 
 
+Don't dynamically change the capabilities of an MC
+--------------------------------------------------
+
+In some blade-based systems, one card can ``take on'' the BMC address
+of 0x20.  This is a bad idea (I talk about this later), but it's even
+worse if you change the capabilities of the MC based upon whether it
+is at address 0x20 or not.  If the MC can be an event receiver, it
+should *always* be an event receiver.  Doing otherwise complicates the
+design of the software that uses it, and makes it more difficult to
+design general software for the system.
+
+
+Blade-based system shouldn't have a BMC
+---------------------------------------
+
+In chassis-based systems, it makes sense to have a BMC at address
+0x20.  In blade-based systems, this makes no sense.  First of all, the
+*only* reason to have a BMC at address 0x20 is to have a standard
+place to send events.  However, the standard has a required command
+for event generators that lets you send the eventing address to any
+IPMB address you like.  Use that instead of address 0x20.
+
+Some systems have a way for a blade to take over address 0x20, and
+have a backup BMC.  This is trying to fit a square peg into a round
+hole.  First of all, the configuration for this is non-standard, and
+it makes the management software more complex because it has to manage
+which card is active and which is standby.
+
+Instead, each card should sit at it's own address (as defined by PICMG
+2.9 or whatever).  Management software can pick an interface and use
+the set event receiver command to tell the controllers in the system
+where to send their events.
+
+
 Things currently missing from the standard
 ------------------------------------------
 
@@ -236,13 +270,14 @@ to act as the BMC in the system, for fault-tolerance reasons.  You can
 accomplish this in a number of ways.
 
 The first question to ask is if you *really* need this.  The author
-has worked on a system with a target of seven 9's, and each chassis
-only had one alarm card.  Even on a system where redundant copies of
-the application are in the same chassis, that means the BMC interface
-has to fail and the two redundant cards have to fail.  I think that if
-you do the analysis, you will discover that you don't need the extra
-cost and complexity (don't forget that complexity means reduced
-reliability) that multiple BMC interfaces bring.
+has worked on a system with a target reliability of seven 9's, and
+each chassis only had one alarm card.  Even on a system where
+redundant copies of the application are in the same chassis, that
+means the BMC interface has to fail and the two redundant cards have
+to fail.  I think that if you do the analysis, you will discover that
+you don't need the extra cost and complexity (don't forget that
+complexity means reduced reliability) that multiple BMC interfaces
+bring.
 
 You may think ``Hey what if events get lost''.  Well, if you lose a
 connection to a BMC, you are going to rescan the current state of the
@@ -258,19 +293,23 @@ lot less complicated if the management systems do not have to
 coordinate information between themselves.  They may not even be able
 to do this because they have independent outputs or purposes.
 
-Some systems have BMCs on a normal card in the system.  The management
-system (or perhaps some proxy) runs on the card.  Several cards may be
-able to act as the BMC, the MC on the card has to be told to take over
-management control.  This configuration is ok, if the software running
-on the cards is correct.  The external management system shouldn't
-have to know what card is active.  In effect, the cards should both be
-active.  There can only be one event receiver.  The software on the
-cards should decide which one is the event receiver.  It would be
-really nice if both cards can have active IPMB addresses that don't
-change.  The management system can come in to either card and perform
-operations on the IPMB bus.  If it wants to talk to the BMC, it can
-send a message to IPMB address 0x20.
+Some systems have MCs on a normal card in the system.  The management
+system (or perhaps some proxy) runs on the card.  The external
+management system shouldn't have to know what card is active.  In
+effect, the cards should both be active.  There can only be one event
+receiver.  The management systems can set the event receiver for all
+the MCs in the system using the set event receiver command.  Anything
+listening for events can listen to all the MCs (every MC should be
+capable of being an event receiver), whichever one the event comes in
+on, it doesn't matter.
 
 Systems with external alarm cards should basically be configured the
-same way.  Both cards should be fully active all the time, and they
-should decide between themselves who is the event receiver.
+same way.  Both cards should be fully active all the time, and the
+event receiver should be set by management software.
+
+Multiple external systems can listen for events with this scenario,
+and no coordination is required if they follow a simple protocol.
+Each external system can listen for events.  When an event comes in,
+the systems will start a timer, and after the timer goes off they will
+delete the event.  The timer should be long enough to allow everyone
+to see the events, and everything will work smoothly.
