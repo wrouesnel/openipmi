@@ -711,9 +711,6 @@ static int gae(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
     data++; /* Skip over the revision byte. */
 
     for (i=0; i<5; i++)
-	ipmi_log(IPMI_LOG_DEBUG, "enable %d = %x\n", i, data[i]);
-
-    for (i=0; i<5; i++)
 	GETAUTH(&(lanc->auth_enable[i]), data[i]);
     return 0;
 }
@@ -998,12 +995,6 @@ got_parm(ipmi_lanparm_t    *lanparm,
     ipmi_lan_config_t *lanc = cb_data;
     lanparms_t        *lp = &(lanparms[lanc->curr_parm]);
 
-    if (err == IPMI_IPMI_ERR_VAL(0x82)) {
-	/* We attempted to write a read-only parameter that is not
-	   marked by the spec as read-only.  Just ignore it. */
-	err = 0;
-    }
-
     /* Check the length, and don't forget the revision byte must be added. */
     if ((!err) && (data_len < (lp->length+1))) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -1230,6 +1221,12 @@ set_done(ipmi_lanparm_t *lanparm,
     ipmi_lan_config_t *lanc = cb_data;
     unsigned char     data[MAX_IPMI_DATA_SIZE];
     lanparms_t        *lp = &(lanparms[lanc->curr_parm]);
+
+    if (err == IPMI_IPMI_ERR_VAL(0x82)) {
+	/* We attempted to write a read-only parameter that is not
+	   marked by the spec as read-only.  Just ignore it. */
+	err = 0;
+    }
 
     if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
