@@ -106,7 +106,7 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 enum {
     DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_ENTITY, DISPLAY_SENSORS,
     DISPLAY_CONTROLS, DISPLAY_CONTROL, DISPLAY_ENTITIES, DISPLAY_MCS,
-    DISPLAY_RSP
+    DISPLAY_RSP, HELP
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
 ipmi_control_id_t curr_control_id;
@@ -1774,24 +1774,46 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static int help_cmd(char *cmd, char **toks, void *cb_data);
+
 static struct {
     char          *name;
     cmd_handler_t handler;
+    char          *help;
 } cmd_list[] =
 {
-    { "entities",			entities_cmd },
-    { "sensors",			sensors_cmd },
-    { "sensor",				sensor_cmd },
-    { "enable",				enable_cmd },
-    { "controls",			controls_cmd },
-    { "control",			control_cmd },
-    { "set_control",			set_control_cmd },
-    { "mcs",				mcs_cmd },
-    { "mccmd",				mccmd_cmd },
-    { "msg",				msg_cmd },
-    { "dellog",				dellog_cmd },
-    { "debug",				debug_cmd },
-    { NULL,				NULL}
+    { "entities",	entities_cmd,
+      " - list all the entities the UI knows about" },
+    { "sensors",	sensors_cmd,
+      " <entity name> - list all the sensors that monitor the entity" },
+    { "sensor",		sensor_cmd,
+      " <sensor name> - Pull up all the information on the sensor and start"
+      " monitoring it" },
+    { "enable",		enable_cmd,
+      " - not currently implemented" },
+    { "controls",	controls_cmd,
+      " <entity name> - list all the controls attached to the entity" },
+    { "control",	control_cmd,
+      " <control name> - Pull up all the information on the control and start"
+      " monitoring it" },
+    { "set_control",	set_control_cmd,
+      " <val1> [<val2> ...] - set the value(s) for the control" },
+    { "mcs",		mcs_cmd,
+      " - List all the management controllers in the system" },
+    { "mccmd",		mccmd_cmd,
+      " <IPMB addr> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
+      " to the management controller and display the response" },
+    { "msg",		msg_cmd,
+      " <channel> <IPMB addr> <LUN> <NetFN> <Cmd> [data...] - Send a command"
+      " to the given IPMB address on the given channel and display the"
+      " response" },
+    { "dellog",		dellog_cmd,
+      " <log number> - Delete the given log number" },
+    { "debug",		debug_cmd,
+      " <type> on|off - Turn the given debugging type on or off." },
+    { "help",		help_cmd,
+      " - This output"},
+    { NULL,		NULL}
 };
 int
 init_commands(void)
@@ -1814,6 +1836,23 @@ init_commands(void)
  out_err:
     command_free(commands);
     return err;
+}
+
+static int
+help_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int i;
+
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    curr_display_type = HELP;
+    waddstr(display_pad, "Welcome to the IPMI UI\n");
+    for (i=0; cmd_list[i].name != NULL; i++) {
+	wprintw(display_pad, "  %s%s\n", cmd_list[i].name, cmd_list[i].help);
+    }
+    display_pad_refresh();
+
+    return 0;
 }
 
 int
@@ -1892,8 +1931,6 @@ init_win(void)
     display_pad = newpad(NUM_DISPLAY_LINES, DISPLAY_WIN_COLS);
     if (!display_pad)
 	leave(1, "Could not allocate display window\n");
-
-    waddstr(display_pad, "Welcome to the IPMI UI");
 
     log_pad = newpad(NUM_LOG_LINES, LOG_WIN_COLS);
     if (!log_pad)
