@@ -682,10 +682,18 @@ typedef struct ent_detect_info_s
 
 typedef struct ent_active_detect_s
 {
-    ipmi_entity_t *ent;
-    int           sensor_try_count;
-    int           present;
+    ipmi_entity_id_t ent_id;
+    int              sensor_try_count;
+    int              present;
 } ent_active_detect_t;
+
+static void
+sensor_read_handler(ipmi_entity_t *ent, void *cb_data)
+{
+    ent_active_detect_t *info = cb_data;
+    
+    presence_changed(ent, info->present, NULL);
+}
 
 static void
 detect_states_read(ipmi_sensor_t *sensor,
@@ -700,7 +708,7 @@ detect_states_read(ipmi_sensor_t *sensor,
 
     info->sensor_try_count--;
     if (info->sensor_try_count == 0) {
-	presence_changed(info->ent, info->present, NULL);
+	ipmi_entity_pointer_cb(info->ent_id, sensor_read_handler, info);
 	ipmi_mem_free(info);
     }
 }
@@ -721,7 +729,7 @@ detect_reading_read(ipmi_sensor_t             *sensor,
 
     info->sensor_try_count--;
     if (info->sensor_try_count == 0) {
-	presence_changed(info->ent, info->present, NULL);
+	ipmi_entity_pointer_cb(info->ent_id, sensor_read_handler, info);
 	ipmi_mem_free(info);
     }
 }
@@ -762,7 +770,7 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	if (!detect)
 	    return;
 
-	detect->ent = ent;
+	detect->ent_id = ipmi_entity_convert_to_id(ent);
 	detect->sensor_try_count = 0;
 	detect->present = 0;
 	ipmi_entity_iterate_sensors(ent, sensor_detect_send, detect);

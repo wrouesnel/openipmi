@@ -352,6 +352,11 @@ ipmi_sensor_add_opq(ipmi_sensor_t         *sensor,
 void
 ipmi_sensor_opq_done(ipmi_sensor_t *sensor)
 {
+    /* This gets called on ECANCELLED error cases, if the sensor is
+       already destroyed there is nothing to do. */
+    if (sensor->destroyed)
+	return;
+
     CHECK_SENSOR_LOCK(sensor);
 
     opq_op_done(sensor->waitq);

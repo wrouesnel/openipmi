@@ -1,4 +1,28 @@
 
+2003-05-29 Corey Minyard <cminyard@mvista.com>
+
+	* domain.c: More fixes for supporting multiple connections.
+
+	* entity.c: Fixed the presence handling to use an entity id
+	instead of an entity pointer since the entity can go away.
+
+	* ipmi_lan.c: Modified broadcasts to not retry.
+
+	* ipmi_lan.c: Added timer frees in a few places that needed them.
+
+	* ipmi_oem_force_conn.c: Changed the broadcast of the deactivate
+	to a normal message so it gets retried.
+
+	* include/linux/ipmi.h: Added changes for setting the timing
+	parameters.
+
+	* lanserv.c: Added changes for setting the timing parameters.
+
+	* sdr.c: Fetch sdr 0 to verify the reservation, not the current
+	record.  Also fixed some completion stuff.
+
+	* sensor.c: Fixed a shutdown case.
+
 2003-05-28 Corey Minyard <cminyard@mvista.com>
 
 	* sel.c: Fixed a shutdown double-free.

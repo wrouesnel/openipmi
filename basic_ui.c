@@ -288,8 +288,6 @@ main(int argc, char *argv[])
 	goto out;
     }
 
-printf("****%d, %d\n", argc, curr_arg);
-
     if (argc > 0) {
 	if (last_con == 1) {
 	    fprintf(stderr, "Too many connections\n");

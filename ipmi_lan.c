@@ -179,7 +179,7 @@ typedef struct lan_data_s
 	unsigned int          orig_addr_len;
 	os_hnd_timer_id_t     *timer;
 	lan_timer_info_t      *timer_info;
-	unsigned int          retries;
+	int                   retries_left;
 
 	/* The number of the last IP address sent on. */
 	int                   last_ip_num;
@@ -814,11 +814,12 @@ rsp_timeout_handler(void              *cb_data,
 	}
     }
 
-    lan->seq_table[seq].retries++;
-    if (lan->seq_table[seq].retries <= LAN_RSP_RETRIES)
+    if (lan->seq_table[seq].retries_left > 0)
     {
 	struct timeval timeout;
 	int            rv;
+
+	lan->seq_table[seq].retries_left--;
 
 	/* Note that we will need a new session seq # here, we can't reuse
 	   the old one.  If the message got lost on the way back, the other
@@ -869,6 +870,12 @@ rsp_timeout_handler(void              *cb_data,
 
     check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
+
+    ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
+
+    /* Convert broadcasts back into normal sends. */
+    if (addr.addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	addr.addr_type = IPMI_IPMB_ADDR_TYPE;
 
     if (handler)
 	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3, data4);
@@ -972,7 +979,10 @@ handle_msg_send(lan_timer_info_t      *info,
     lan->seq_table[seq].msg.data = lan->seq_table[seq].data;
     memcpy(lan->seq_table[seq].data, msg->data, msg->data_len);
     lan->seq_table[seq].timer_info = info;
-    lan->seq_table[seq].retries = 0;
+    if (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	lan->seq_table[seq].retries_left = 0;
+    else
+	lan->seq_table[seq].retries_left = LAN_RSP_RETRIES;
     if (orig_addr) {
 	lan->seq_table[seq].use_orig_addr = 1;
 	memcpy(&(lan->seq_table[seq].orig_addr), orig_addr, orig_addr_len);
@@ -1012,6 +1022,10 @@ handle_msg_send(lan_timer_info_t      *info,
            instead let the timeout handle freeing it. */
 	if (err) {
 	    info->cancelled = 1;
+	} else {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd,
+				     lan->seq_table[seq].timer);
+	    lan->seq_table[seq].timer = NULL;
 	}
     }
  out:

@@ -422,6 +422,39 @@ struct ipmi_req
 #define IPMICTL_SEND_COMMAND		_IOR(IPMI_IOC_MAGIC, 13,	\
 					     struct ipmi_req)
 
+/* Messages sent to the interface with timing parameters are this
+   format. */
+struct ipmi_req_settime
+{
+	struct ipmi_req req;
+
+	/* See below for details on these values. */
+	int          retries;
+	unsigned int retry_time_ms;
+};
+/*
+ * Like IPMI_SEND_COMMAND, but lets you specify the number of retries and
+ * the retry time.  The retries is the number of times the message
+ * will be resent if no reply is received.  If set to -1, the default
+ * value will be used.  The retry time is the time in milliseconds
+ * between retries.  If set to zero, the default value will be
+ * used.
+ *
+ * Don't use this unless you *really* have to.  It's primarily for the
+ * IPMI over LAN converter; since the LAN stuff does its own retries,
+ * it makes no sense to do it here.  However, this can be used if you
+ * have unusual requirements.
+ *
+ * Error values are:
+ *   - EFAULT - an address supplied was invalid.
+ *   - EINVAL - The address supplied was not valid, or the command
+ *              was not allowed.
+ *   - EMSGSIZE - The message to was too large.
+ *   - ENOMEM - Buffers could not be allocated for the command.
+ */
+#define IPMICTL_SEND_COMMAND_SETTIME	_IOR(IPMI_IOC_MAGIC, 21,	\
+					     struct ipmi_req_settime)
+
 /* Messages received from the interface are this format. */
 struct ipmi_recv
 {
@@ -514,8 +547,17 @@ struct ipmi_cmdspec
 #define IPMICTL_GET_MY_LUN_CMD		_IOR(IPMI_IOC_MAGIC, 20, unsigned int)
 
 /*
- * A debug interface, this is mainly for hacking.  It takes two longs.
+ * Get/set the default timing values for an interface.  You shouldn't
+ * generally mess with these.
  */
-#define IPMICTL_DEBUG_CMD		_IOR(IPMI_IOC_MAGIC, 21, unsigned long)
+struct ipmi_timing_parms
+{
+	int          retries;
+	unsigned int retry_time_ms;
+};
+#define IPMICTL_SET_TIMING_PARMS_CMD	_IOR(IPMI_IOC_MAGIC, 22, \
+					     struct ipmi_timing_parms)
+#define IPMICTL_GET_TIMING_PARMS_CMD	_IOR(IPMI_IOC_MAGIC, 23, \
+					     struct ipmi_timing_parms)
 
 #endif /* __LINUX_IPMI_H */

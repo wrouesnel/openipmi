@@ -2425,6 +2425,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     ipmi_domain_t *domain = cb_data;
     int           rv;
     int           u;
+    int           to_activate;
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
@@ -2479,39 +2480,37 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 			ll_addr_changed,
 			domain);
 	    }
-	} else {
-	    /* It's no longer active, find a new active one. */
-	    int to_activate = u;
-
-	    /* If no one else is active, activate one. */
-	    for (u=0; u<MAX_CONS; u++) {
-		if (!domain->conn[u]
-		    || !domain->con_up[u])
-		{
-		    continue;
-		}
-		if (domain->con_active[u]) {
-		    to_activate = u;
-		    break;
-		}
-		to_activate = u;
-	    }
-	    u = to_activate;
-
-	    /* If we didn't find an active connection, but we found a
-               working one, activate it.  Note that we may re-activate
-               the connection that just went inactive if it is the
-               only working connection. */
-	    if (! domain->con_active[u]
-		&& (domain->conn[u]->set_active_state))
-	    {
-		domain->conn[u]->set_active_state(
-		    domain->conn[u],
-		    1,
-		    ll_addr_changed,
-		    domain);
-	    }
 	}
+    }
+
+    /* If no one else is active, activate one. */
+    to_activate = -1;
+    for (u=0; u<MAX_CONS; u++) {
+	if (!domain->conn[u]
+	    || !domain->con_up[u])
+	{
+	    continue;
+	}
+	if (domain->con_active[u]) {
+	    to_activate = u;
+	    break;
+	}
+	to_activate = u;
+    }
+    u = to_activate;
+    if ((u != -1)
+	&& ! domain->con_active[u]
+	&& domain->conn[u]->set_active_state)
+    {
+	/* If we didn't find an active connection, but we found a
+	   working one, activate it.  Note that we may re-activate
+	   the connection that just went inactive if it is the
+	   only working connection. */
+	domain->conn[u]->set_active_state(
+	    domain->conn[u],
+	    1,
+	    ll_addr_changed,
+	    domain);
     }
 
  out_unlock:
@@ -2563,6 +2562,14 @@ ll_con_changed(ipmi_con_t   *ipmi,
                process. */
 	    domain->working_conn = u;
 
+	    /* Set the new connection active, if necessary. */
+	    if (domain->conn[u]->set_active_state)
+		domain->conn[u]->set_active_state(
+		    domain->conn[u],
+		    1,
+		    ll_addr_changed,
+		    domain);
+
 	    /* When a connection comes back up, start the process of
 	       getting SDRs, scanning the bus, and the like. */
 	    rv = start_con_up(domain);
@@ -2573,6 +2580,7 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	/* A connection failed, try to find a working connection and
            activate it, if necessary. */
 	domain->con_up[u] = 0;
+	domain->con_active[u] = 0;
 	domain->working_conn = first_working_con(domain);
 	if (domain->working_conn == -1)
 	    domain->connection_up = 0;

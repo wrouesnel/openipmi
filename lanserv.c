@@ -205,7 +205,7 @@ smi_send(lan_data_t *lan, msg_t *msg)
     }
 
     req.msgid = (long) msg;
-    
+
     rv = ioctl(info->smi_fd, IPMICTL_SEND_COMMAND, &req);
     if (rv == -1)
 	return errno;
@@ -266,6 +266,10 @@ handle_msg_ipmi(int smi_fd, lan_data_t *lan)
 	    return;
 	}
     }
+
+    if (rdata[0] == IPMI_TIMEOUT_CC)
+	/* Ignore timeouts, we let the LAN code do the timeouts. */
+	return;
 
     /* We only handle responses. */
     if (rsp.recv_type != IPMI_RESPONSE_RECV_TYPE)
@@ -691,6 +695,20 @@ ipmi_open(char *ipmi_dev)
 
     if (ipmi_fd == -1) {
 	perror("Could not open ipmi device /dev/ipmidev/0 or /dev/ipmi0");
+    } else {
+	/* Set the timing parameters for the connection to no retries
+           and 1 second timeout.  The LAN connection will retry, there
+           is no reason for us to.  If this fails, oh well, the kernel
+           doesn't support it.  It's not the end of the world. */
+	struct ipmi_timing_parms parms;
+	int                      rv;
+
+	parms.retries = 0;
+	parms.retry_time_ms = 1000;
+
+	rv = ioctl(ipmi_fd, IPMICTL_SET_TIMING_PARMS_CMD, &parms);
+	if (rv == -1)
+	    perror("Could not set timing parms");
     }
 
     return ipmi_fd;

@@ -171,6 +171,9 @@ deactivated(ipmi_con_t   *ipmi,
     int                          active = (long) rsp_data3;
     int                          rv;
 
+    /* Don't care about errors from the deactivate, if no BMC was
+       present then it doesn't really matter. */
+
     rv = send_activate(ipmi, active, handler, cb_data);
     if (rv)
 	handler(ipmi, rv, 0, 0, cb_data);
@@ -190,9 +193,7 @@ force_activate(ipmi_con_t           *conn,
     if (active) {
 	/* Deactivate any existing BMCs. */
 
-	/* Send as a broadcast so it goes quickly and only gets sent
-           once. */
-	ipmb.addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
+	ipmb.addr_type = IPMI_IPMB_ADDR_TYPE;
 	ipmb.channel = 0;
 	ipmb.lun = 0;
 	ipmb.slave_addr = 0x20;

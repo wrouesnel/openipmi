@@ -374,7 +374,7 @@ start_reservation_check(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     }
     cmd_msg.data_len = 6;
     ipmi_set_uint16(cmd_msg.data, sdrs->reservation);
-    ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
+    ipmi_set_uint16(cmd_msg.data+2, 0);
     cmd_msg.data[4] = 0;
     cmd_msg.data[5] = 1; /* Only care about the reservation */
     rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
@@ -463,7 +463,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	&& ((rsp->data[0] == IPMI_UNKNOWN_ERR_CC)
 	    || (rsp->data[0] == IPMI_NOT_PRESENT_CC)))
     {
-	/* We got an error fetchding the first SDR, so the repository is
+	/* We got an error fetching the first SDR, so the repository is
 	   probably empty.  Just go on. */
 	start_reservation_check(sdrs, mc);
 	goto out;
@@ -788,7 +788,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	/* Set these so the fetch complete handler will put them back. */
 	sdrs->curr_sdr_num = sdrs->num_sdrs;
 	sdrs->working_sdrs = sdrs->sdrs;
-	start_reservation_check(sdrs, mc);
+	fetch_complete(sdrs, 0);
 	goto out;
     }
 
