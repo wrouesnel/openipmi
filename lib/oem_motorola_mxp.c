@@ -674,7 +674,7 @@ mxp_control_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "mxp_control_get_done: Received invalid msg length: %d,"
 		 " expected %d",
-		 rsp->data_len, 9);
+		 rsp->data_len, control_info->min_rsp_length);
 	if (control_info->done_set)
 	    control_info->done_set(control, EINVAL, control_info->cb_data);
 	goto out;
@@ -4703,7 +4703,7 @@ bd_sel_get(ipmi_control_t      *control,
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = bd_sel_get_cb;
-    control_info->min_rsp_length = 21;
+    control_info->min_rsp_length = 5;
 
     rv = ipmi_control_add_opq(control, bd_sel_get_start,
 			     &(control_info->sdata), control_info);
