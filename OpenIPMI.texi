@@ -10,7 +10,7 @@
 
 @page
 @vskip 0pt plus 1filll
-Copyright @copyright{} 2002 MontaVista Software
+Copyright @copyright{} 2002,2003 MontaVista Software
 @end titlepage
 
 @node    Top,       Intro to IPMI,         , (dir)

@@ -1,4 +1,13 @@
 
+2003-06-07 Corey Minyard <cminyard@mvista.com>
+
+	* Makefile.am: Clean up so that every '.c' is only listed once.
+	When used in multiple programs, create a '.o' in all but one
+	instance.  Still need to figure out how to correctly refer to
+	.a libraries created by a '.la'.
+
+	* all: License updates.
+
 2003-06-06 Corey Minyard <cminyard@mvista.com>
 
 	* sel.c: Modified to not use the state to tell if something is

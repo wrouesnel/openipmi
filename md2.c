@@ -1,5 +1,5 @@
 /* md2.c - MD2 Message-Digest Algorithm
- * Copyright (C) 2002 MontaVista Software.
+ * Copyright (C) 2002,2003 MontaVista Software.
  * Corey Minyard <cminyard@mvista.com>
  *
  * This file is part of the IPMI Interface (IPMIIF).
@@ -292,7 +292,7 @@ md2_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD2 ($Revision: 1.4 $)";
+const char * const gnupgext_version = "MD2 ($Revision: 1.5 $)";
 
 static struct {
     int class;

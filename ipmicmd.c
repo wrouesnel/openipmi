@@ -11,7 +11,7 @@
  * this in the beginning, but not much is left of that work since it
  * has been redone to sit on top of the IPMI connections.
  *
- * Copyright 2002 MontaVista Software Inc.
+ * Copyright 2002,2003 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License as published by the

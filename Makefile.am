@@ -16,7 +16,7 @@ noinst_HEADERS = opq.h ilist.h md5.h md2.h ui_keypad.h ui_command.h heap.h
 
 LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
-lib_LTLIBRARIES = libOpenIPMI.la libOpenIPMIui.la
+lib_LTLIBRARIES = libOpenIPMI.la libOpenIPMIui.la liblanserv.la
 
 bin_PROGRAMS = ipmi_ui ipmicmd ipmilan
 
@@ -34,28 +34,27 @@ libOpenIPMIui_la_LIBADD =
 libOpenIPMIui_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIui.map
 
+liblanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
+	lanserv_oem_force.c
+liblanserv_la_LIBADD =
+liblanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
+	-Wl,-Map -Wl,liblanserv.map
+
 noinst_PROGRAMS = test_heap ipmisample lanserv_emu
 
-ipmisample_SOURCES = sample.c ui_os.c
-ipmisample_LDADD = -lOpenIPMI
+ipmisample_SOURCES = sample.c
+ipmisample_LDADD = libOpenIPMI.la .libs/libOpenIPMIui.a
 
-ipmicmd_SOURCES = ipmicmd.c ipmi_lan.c ipmi_smi.c selector.c ui_os.c \
-	ipmi_malloc.c ipmi_auth.c md2.c md5.c ipmi_utils.c conn.c ilist.c \
-	ipmi_oem_force_conn.c
-ipmicmd_LDADD = -lpopt
+ipmicmd_SOURCES = ipmicmd.c
+ipmicmd_LDADD = -lpopt .libs/libOpenIPMI.a .libs/libOpenIPMIui.a
 ipmicmd_LDFLAGS = -rdynamic
 
-ipmilan_SOURCES = lanserv.c lanserv_ipmi.c lanserv_asf.c \
-	ipmi_auth.c priv_table.c \
-	md5.c md2.c \
-	lanserv_oem_force.c
-ipmilan_LDADD = -lpopt
+ipmilan_SOURCES = lanserv.c
+ipmilan_LDADD = -lpopt liblanserv.la .libs/libOpenIPMI.a
 ipmilan_LDFLAGS = -rdynamic
 
-lanserv_emu_SOURCES = lanserv_emu.c lanserv_ipmi.c lanserv_asf.c \
-	ipmi_auth.c priv_table.c \
-	md5.c md2.c
-lanserv_emu_LDADD = -lpopt
+lanserv_emu_SOURCES = lanserv_emu.c
+lanserv_emu_LDADD = -lpopt liblanserv.la .libs/libOpenIPMI.a
 lanserv_emu_LDFLAGS = -rdynamic
 
 test_heap_SOURCES = test_heap.c

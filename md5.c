@@ -1,7 +1,7 @@
 /* md5.c - MD5 Message-Digest Algorithm
  * Copyright (C) 1995,1996,1998,1999,2001,2002 Free Software Foundation, Inc.
  *
- * Modifications for IPMI are Copyright(C) 2002 MontaVista Software.
+ * Modifications for IPMI are Copyright(C) 2002,2003 MontaVista Software.
  * Corey Minyard <cminyard@mvista.com>
  *
  * This file is part of Libgcrypt.
@@ -451,7 +451,7 @@ md5_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD5 ($Revision: 1.4 $)";
+const char * const gnupgext_version = "MD5 ($Revision: 1.5 $)";
 
 static struct {
     int class;
