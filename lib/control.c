@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_domain.h>
@@ -69,6 +70,8 @@ struct ipmi_control_s
 
     ipmi_mc_t *source_mc;
 
+    ipmi_entity_t *entity;
+
     int destroyed;
 
     int type;
@@ -76,9 +79,6 @@ struct ipmi_control_s
 
     int settable;
     int readable;
-
-    int entity_id;
-    int entity_instance;
 
     unsigned int num_vals;
 
@@ -287,21 +287,12 @@ int
 ipmi_control_destroy(ipmi_control_t *control)
 {
     ipmi_control_info_t *controls = _ipmi_mc_get_controls(control->mc);
-    ipmi_domain_t       *domain = ipmi_mc_get_domain(control->mc);
-    ipmi_entity_info_t  *ents = ipmi_domain_get_entities(domain);
-    ipmi_entity_t       *ent;
-    int                 rv;
 
     if (controls->controls_by_idx[control->num] != control)
 	return EINVAL;
 
-    rv = ipmi_entity_find(ents,
-			  control->mc,
-			  control->entity_id,
-			  control->entity_instance,
-			  &ent);
-    if (!rv)
-	ipmi_entity_remove_control(ent, control);
+    if (control->entity)
+	ipmi_entity_remove_control(control->entity, control);
 
     controls->control_count--;
     controls->controls_by_idx[control->num] = NULL;
@@ -316,20 +307,29 @@ ipmi_control_destroy(ipmi_control_t *control)
 static void
 control_set_name(ipmi_control_t *control)
 {
-    char *mc_name = MC_NAME(control->mc);
-    int  length;
+    int length;
+    int left;
 
     control->name[0] = '(';
-    if (*mc_name != '\0') {
-	length = strlen(mc_name) - 3; /* Remove the "() " */
-	memcpy(control->name+1, mc_name+1, length);
-	length++;
-	control->name[length] = '.';
-	length++;
-    } else
-	length = 1;
-    memcpy(control->name+length, control->id, control->id_len);
-    length += control->id_len;
+    length = 1;
+    left = CONTROL_NAME_LEN - length;
+    if (control->entity) {
+	ipmi_entity_id_t ent_id = ipmi_entity_convert_to_id(control->entity);
+	length += snprintf(control->name+length, left-3, "%d.%d.%d.%d",
+			   ent_id.channel,
+			   ent_id.address,
+			   ent_id.entity_id,
+			   ent_id.entity_instance);
+	left = CONTROL_NAME_LEN - length;
+    }
+
+    if (control->id_len > (left - 3)) {
+	memcpy(control->name+length, control->id, left-3);
+	length += left - 3;
+    } else {
+	memcpy(control->name+length, control->id, control->id_len);
+	length += control->id_len;
+    }
     control->name[length] = ')';
     length++;
     control->name[length] = ' ';
@@ -656,17 +656,16 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     }
 
     control->mc = mc;
-    control_set_name(control);
     control->source_mc = source_mc;
+    control->entity = ent;
     control->lun = 4;
     control->num = num;
     if (! controls->controls_by_idx[num])
 	controls->control_count++;
     controls->controls_by_idx[num] = control;
-    control->entity_id = ipmi_entity_get_entity_id(ent);
-    control->entity_instance = ipmi_entity_get_entity_instance(ent);
     control->destroy_handler = destroy_handler;
     control->destroy_handler_cb_data = destroy_handler_cb_data;
+    control_set_name(control);
 
     ipmi_entity_add_control(ent, control, link);
 
@@ -1153,7 +1152,7 @@ ipmi_control_get_entity_id(ipmi_control_t *control)
 {
     CHECK_CONTROL_LOCK(control);
 
-    return control->entity_id;
+    return ipmi_entity_get_entity_id(control->entity);
 }
 
 int
@@ -1161,26 +1160,13 @@ ipmi_control_get_entity_instance(ipmi_control_t *control)
 {
     CHECK_CONTROL_LOCK(control);
 
-    return control->entity_instance;
+    return ipmi_entity_get_entity_instance(control->entity);
 }
 
 ipmi_entity_t *
 ipmi_control_get_entity(ipmi_control_t *control)
 {
-    int           rv;
-    ipmi_entity_t *ent;
-    ipmi_domain_t *domain = ipmi_mc_get_domain(control->mc);
-
-    CHECK_CONTROL_LOCK(control);
-
-    rv = ipmi_entity_find(ipmi_domain_get_entities(domain),
-			  control->mc,
-			  control->entity_id,
-			  control->entity_instance,
-			  &ent);
-    if (rv)
-	return NULL;
-    return ent;
+    return control->entity;
 }
 
 void

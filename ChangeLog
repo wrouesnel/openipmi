@@ -12,6 +12,10 @@
 	* lib/chassis.c: adjusted for the previous change
 	* lib/sensor.c: adjusted for the previous change
 
+	* lib/control.c, lib/sensor.c: Fixed some problems dealing with
+	non-standard device-relative entities that are actually not on the
+	device we are dealing with.
+
 2004-02-10 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a way to send events

@@ -94,6 +94,8 @@ struct ipmi_sensor_s
        LUN we use for storage. */
     unsigned char send_lun;
 
+    ipmi_entity_t *entity;
+
     unsigned char entity_id;
     unsigned char entity_instance;
 
@@ -382,11 +384,6 @@ static void sensor_set_name(ipmi_sensor_t *sensor);
 static void
 sensor_final_destroy(ipmi_sensor_t *sensor)
 {
-    ipmi_domain_t      *domain = ipmi_mc_get_domain(sensor->mc);
-    ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
-    ipmi_entity_t      *ent;
-    int                rv;
-
     if (sensor->destroy_handler)
 	sensor->destroy_handler(sensor, sensor->destroy_handler_cb_data);
 
@@ -403,13 +400,8 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
        destroying it.  The opq destruction can call a bunch of
        callbacks with the sensor, so we want the entity to exist until
        this point in time. */
-    rv = ipmi_entity_find(ents,
-			  sensor->mc,
-			  sensor->entity_id,
-			  sensor->entity_instance,
-			  &ent);
-    if (!rv)
-	ipmi_entity_remove_sensor(ent, sensor);
+    if (sensor->entity)
+	ipmi_entity_remove_sensor(sensor->entity, sensor);
 
     ipmi_mem_free(sensor);
 }
@@ -736,6 +728,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     if (!sensors->sensors_by_idx[4][num])
 	sensors->sensor_count++;
     sensors->sensors_by_idx[4][num] = sensor;
+    sensor->entity = ent;
     sensor->entity_id = ipmi_entity_get_entity_id(ent);
     sensor->entity_instance = ipmi_entity_get_entity_instance(ent);
     sensor->destroy_handler = destroy_handler;
@@ -798,26 +791,21 @@ ipmi_sensors_destroy(ipmi_sensor_info_t *sensors)
 static void
 sensor_set_name(ipmi_sensor_t *sensor)
 {
-    char *mc_name = MC_NAME(sensor->mc);
-    int  length;
-    int  left;
+    int length;
+    int left;
 
     sensor->name[0] = '(';
-    if (*mc_name != '\0') {
-	length = strlen(mc_name) - 3; /* Remove the "() " */
-	if (length > (sizeof(sensor->name) - 2))
-	    length = sizeof(sensor->name) - 2;
-	memcpy(sensor->name+1, mc_name+1, length);
-	length++;
-	sensor->name[length] = '.';
-	length++;
-    } else
-	length = 1;
-
+    length = 1;
     left = SENSOR_NAME_LEN - length;
-    length += snprintf(sensor->name+length, left, "%d.%d.",
-		       sensor->entity_id, sensor->entity_instance);
-    left = SENSOR_NAME_LEN - length;
+    if (sensor->entity) {
+	ipmi_entity_id_t ent_id = ipmi_entity_convert_to_id(sensor->entity);
+	length += snprintf(sensor->name+length, left-3, "%d.%d.%d.%d",
+			   ent_id.channel,
+			   ent_id.address,
+			   ent_id.entity_id,
+			   ent_id.entity_instance);
+	left = SENSOR_NAME_LEN - length;
+    }
 
     if (sensor->id_len > (left - 3)) {
 	memcpy(sensor->name+length, sensor->id, left-3);
@@ -1137,7 +1125,6 @@ handle_new_sensor(ipmi_domain_t *domain,
 		  void          *link)
 {
     ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
 
 
     /* Call this before the OEM call so the OEM call can replace it. */
@@ -1160,14 +1147,15 @@ handle_new_sensor(ipmi_domain_t *domain,
 		     sensor->mc,
 		     sensor->entity_id,
 		     sensor->entity_instance,
-		     &ent);
+		     &sensor->entity);
 
     if ((sensor->source_mc)
-	&& (_ipmi_mc_new_sensor(sensor->source_mc, ent, sensor, link)))
+	&& (_ipmi_mc_new_sensor(sensor->source_mc, sensor->entity,
+				sensor, link)))
     {
         /* Nothing to do, OEM code handled the sensor. */
     } else {
-	ipmi_entity_add_sensor(ent, sensor, link);
+	ipmi_entity_add_sensor(sensor->entity, sensor, link);
     }
 }
 
@@ -2601,22 +2589,10 @@ ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str)
 ipmi_entity_t *
 ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
 {
-    int           rv;
-    ipmi_entity_t *ent;
-    ipmi_domain_t *domain;
 
     CHECK_SENSOR_LOCK(sensor);
 
-    domain = ipmi_mc_get_domain(sensor->mc);
-
-    rv = ipmi_entity_find(ipmi_domain_get_entities(domain),
-			  sensor->mc,
-			  sensor->entity_id,
-			  sensor->entity_instance,
-			  &ent);
-    if (rv)
-	return NULL;
-    return ent;
+    return sensor->entity;
 }
 
 void
