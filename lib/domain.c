@@ -4205,12 +4205,14 @@ ll_con_changed(ipmi_con_t   *ipmi,
 }
 
 int
-ipmi_open_domain(char                     *name,
-		 ipmi_con_t               *con[],
-		 unsigned int             num_con,
-		 ipmi_domain_con_cb       con_change_handler,
-		 void                     *con_change_cb_data,
-		 ipmi_domain_id_t         *new_domain)
+ipmi_open_domain(char               *name,
+		 ipmi_con_t         *con[],
+		 unsigned int       num_con,
+		 ipmi_domain_con_cb con_change_handler,
+		 void               *con_change_cb_data,
+		 ipmi_open_option_t *options,
+		 unsigned int       num_options,
+		 ipmi_domain_id_t   *new_domain)
 {
     int           rv;
     ipmi_domain_t *domain = NULL;

@@ -6057,9 +6057,9 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
     }
 
     rv = ipmi_open_domain(parms[0], con, set, ipmi_ui_setup_done,
-			  NULL, NULL);
+			  NULL, NULL, 0, NULL);
     if (rv) {
-	cmd_win_out("ipmi_init_domain: %s\n", strerror(rv));
+	cmd_win_out("ipmi_open_domain: %s\n", strerror(rv));
 	for (i=0; i<set; i++)
 	    con[i]->close_connection(con[i]);
 	goto out;

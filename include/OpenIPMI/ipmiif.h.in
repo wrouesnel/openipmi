@@ -1707,15 +1707,27 @@ int ipmi_init(os_handler_t *handler);
    and things of that nature.  The con array is an array of
    connections to use , num_con is the number of connections
    (currently up to two connections are supported, assuming the
-   underlying connections have proper support).  The new domain is
-   returned in the new_domain variable, the id for the connection
-   change handler is return in con_change_id. */
-int ipmi_open_domain(char                     *name,
-		     ipmi_con_t               *con[],
-		     unsigned int             num_con,
-		     ipmi_domain_con_cb       con_change_handler,
-		     void                     *con_change_cb_data,
-		     ipmi_domain_id_t         *new_domain);
+   underlying connections have proper support).  Options is an array
+   of option values of length num_options.  If num_options is 0, then
+   options may be NULL.  The new domain is returned in the new_domain
+   variable, the id for the connection change handler is return in
+   con_change_id. */
+typedef struct ipmi_open_option_s
+{
+    int option;
+    union {
+	long ival;
+	void *pval;
+    };
+} ipmi_open_option_t;
+int ipmi_open_domain(char               *name,
+		     ipmi_con_t         *con[],
+		     unsigned int       num_con,
+		     ipmi_domain_con_cb con_change_handler,
+		     void               *con_change_cb_data,
+		     ipmi_open_option_t *options,
+		     unsigned int       num_options,
+		     ipmi_domain_id_t   *new_domain);
 
 
 /* This will clean up all the memory associated with IPMI. */
