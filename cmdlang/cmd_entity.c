@@ -120,6 +120,10 @@ entity_dump(ipmi_entity_t *entity, ipmi_cmd_info_t *cmd_info)
 			 ipmi_entity_get_presence_sensor_always_there(entity));
     ipmi_cmdlang_out_bool(cmd_info, "Hot swappable",
 			  ipmi_entity_hot_swappable(entity));
+    if (ipmi_entity_hot_swappable(entity)) {
+	ipmi_cmdlang_out_bool(cmd_info, "Supports managed hot swap",
+			      ipmi_entity_supports_managed_hot_swap(entity));
+    }
 
     if (ipmi_entity_get_is_child(entity)) {
 	ipmi_cmdlang_out(cmd_info, "Parents", NULL);

@@ -779,6 +779,12 @@ char *ipmi_hot_swap_state_name(enum ipmi_hot_swap_states state);
 /* Does the entity implement a hot-swap state machine? */
 int ipmi_entity_hot_swappable(ipmi_entity_t *ent);
 
+/* If this returns false but the entity is hot-swappable, then it
+   supports managed hot swap.  If not, is supports only the
+   not-present and active hot-swap states and the changes cannot be
+   managed. */
+int ipmi_entity_supports_managed_hot_swap(ipmi_entity_t *ent);
+
 /* Register to receive the hot-swap state when it changes.  the
    handler returns an integer.  It should return IPMI_EVENT_HANDLED if
    it handled the event, or IPMI_EVENT_NOT_HANDLED if it didn't handle

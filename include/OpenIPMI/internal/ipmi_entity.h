@@ -226,8 +226,9 @@ void ipmi_entity_set_entity_id_string(ipmi_entity_t *ent, char *str);
 /* Fetch the FRUs for this entity. */
 int ipmi_entity_fetch_frus(ipmi_entity_t *ent);
 
-/* Set the entity as hot-swappable. */
+/* Set the entity as hot-swappable and supports managed hot-swap. */
 int ipmi_entity_set_hot_swappable(ipmi_entity_t *ent, int val);
+int ipmi_entity_set_supports_managed_hot_swap(ipmi_entity_t *ent, int val);
 
 /* Hot-swap state callbacks. */
 typedef struct ipmi_entity_hot_swap_s

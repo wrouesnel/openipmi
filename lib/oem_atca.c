@@ -899,6 +899,7 @@ setup_fru_hot_swap(atca_fru_t *finfo, ipmi_sensor_t *sensor)
     finfo->hs_sensor_id = ipmi_sensor_convert_to_id(sensor);
 
     ipmi_entity_set_hot_swappable(finfo->entity, 1);
+    ipmi_entity_set_supports_managed_hot_swap(finfo->entity, 1);
     ipmi_entity_set_hot_swap_control(finfo->entity, &atca_hot_swap_handlers);
 
     rv = ipmi_sensor_add_discrete_event_handler(sensor, hot_swap_state_changed,
@@ -2336,6 +2337,7 @@ atca_sensor_update_handler(enum ipmi_update_e op,
 					       &event,
 					       &handled);
 	    ipmi_entity_set_hot_swappable(entity, 0);
+	    ipmi_entity_set_supports_managed_hot_swap(entity, 0);
 	}
 	break;
 

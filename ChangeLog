@@ -9,6 +9,15 @@
 
 	* cmd_mc.c: Added a way to set the SEL time.
 
+	* include/OpenIPMI/ipmiif.h.in: Added support for a managed
+	  hot-swap call so the user can know if the entities hot-swap
+	  states can be managed.
+	* include/OpenIPMI/internal/ipmi_entity.h: ditto
+	* lib/entity.c: ditto
+	* lib/oem_atca.c: ditto
+	* cmdlang/cmd_entity.c: ditto
+	* man/ipmi_cmdlang.7: ditto
+
 2004-12-03 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a problem where the startup SEL time was not set
