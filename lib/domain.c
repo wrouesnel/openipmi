@@ -60,6 +60,12 @@ struct ipmi_domain_con_change_s
     void               *cb_data;
 };
 
+struct ipmi_domain_mc_upd_s
+{
+    ipmi_domain_mc_upd_cb handler;
+    void                  *cb_data;
+};
+
 /* Timer structure for rescanning the bus. */
 typedef struct rescan_bus_info_s
 {
@@ -72,7 +78,8 @@ typedef struct rescan_bus_info_s
 typedef struct mc_ipbm_scan_info_s mc_ipmb_scan_info_t;
 struct mc_ipbm_scan_info_s
 {
-    ipmi_ipmb_addr_t    addr;
+    ipmi_addr_t         addr;
+    unsigned int        addr_len;
     ipmi_domain_t       *domain;
     ipmi_msg_t          msg;
     unsigned int        end_addr;
@@ -196,6 +203,9 @@ struct ipmi_domain_s
 
     /* A list of connection fail handler, separate from the main one. */
     ilist_t *con_change_handlers;
+
+    /* A list of handlers to call when an MC is added to the domain. */
+    ilist_t *mc_upd_handlers;
 
     /* A list of IPMB addresses to not scan. */
     ilist_t *ipmb_ignores;
@@ -358,6 +368,17 @@ cleanup_domain(ipmi_domain_t *domain)
 	}
 	free_ilist(domain->con_change_handlers);
     }
+    if (domain->mc_upd_handlers) {
+	ilist_iter_t iter;
+	void         *data;
+	ilist_init_iter(&iter, domain->mc_upd_handlers);
+	while (ilist_first(&iter)) {
+	    data = ilist_get(&iter);
+	    ilist_delete(&iter);
+	    ipmi_mem_free(data);
+	}
+	free_ilist(domain->mc_upd_handlers);
+    }
     if (domain->ipmb_ignores) {
 	ilist_iter_t iter;
 	ilist_init_iter(&iter, domain->ipmb_ignores);
@@ -513,6 +534,12 @@ setup_domain(ipmi_con_t    *ipmi[],
 
     domain->con_change_handlers = alloc_ilist();
     if (! domain->con_change_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    domain->mc_upd_handlers = alloc_ilist();
+    if (! domain->mc_upd_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -691,8 +718,10 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
     if (addr_len > sizeof(ipmi_addr_t))
 	return NULL;
 
-    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-	return domain->si_mc;
+    if ((addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+	&& (addr->channel == IPMI_BMC_CHANNEL))
+    {
+	    return domain->si_mc;
     }
 
     memcpy(&(info.addr), addr, addr_len);
@@ -730,6 +759,22 @@ ipmi_domain_add_ipmb_ignore(ipmi_domain_t *domain, unsigned char ipmb_addr)
     return 0;
 }
 
+typedef struct mc_upd_info_s
+{
+    int           added;
+    ipmi_domain_t *domain;
+    ipmi_mc_t     *mc;
+} mc_upd_info_t;
+
+static void
+iterate_mc_upds(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    mc_upd_info_t        *info = cb_data;
+    ipmi_domain_mc_upd_t *id = item;
+
+    id->handler(info->domain, info->added, info->mc, id->cb_data);
+}
+
 static int
 add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
@@ -742,9 +787,60 @@ add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
     success = ilist_add_tail(domain->mc_list, mc, NULL);
     if (!success)
 	rv = ENOMEM;
+    else {
+	mc_upd_info_t info;
+	info.domain = domain;
+	info.added = 1;
+	info.mc = mc;
+	ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
+    }
     ipmi_unlock(domain->mc_list_lock);
 
     return rv;
+}
+
+int
+ipmi_domain_register_mc_upd_handler(ipmi_domain_t         *domain,
+				    ipmi_domain_mc_upd_cb handler,
+				    void                  *cb_data,
+				    ipmi_domain_mc_upd_t  **id)
+{
+    ipmi_domain_mc_upd_t *new_id;
+
+    new_id = ipmi_mem_alloc(sizeof(*new_id));
+    if (!new_id)
+	return ENOMEM;
+
+    new_id->handler = handler;
+    new_id->cb_data = cb_data;
+    if (! ilist_add_tail(domain->mc_upd_handlers, new_id, NULL)) {
+	ipmi_mem_free(new_id);
+	return ENOMEM;
+    }
+
+    if (id)
+	*id = new_id;
+
+    return 0;
+}
+
+void
+ipmi_domain_remove_mc_upd_handler(ipmi_domain_t        *domain,
+				  ipmi_domain_mc_upd_t *id)
+{
+    ilist_iter_t iter;
+    int          rv;
+
+    ilist_init_iter(&iter, domain->mc_upd_handlers);
+    rv = ilist_first(&iter);
+    while (rv) {
+	if (ilist_get(&iter) == id) {
+	    ilist_delete(&iter);
+	    ipmi_mem_free(id);
+	    break;
+	}
+	rv = ilist_next(&iter);
+    }
 }
 
 int
@@ -764,6 +860,13 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 	    break;
 	}
 	rv = ilist_next(&iter);
+    }
+    if (found) {
+	mc_upd_info_t info;
+	info.domain = domain;
+	info.added = 0;
+	info.mc = mc;
+	ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
     }
     ipmi_unlock(domain->mc_list_lock);
 
@@ -853,10 +956,10 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 	       void         *rsp_data3,
 	       void         *rsp_data4)
 {
-    ipmi_domain_t                *domain = rsp_data1;
-    ll_msg_t                     *nmsg = rsp_data2;
-    long                         seq = (long) rsp_data3;
-    int                          rv;
+    ipmi_domain_t *domain = rsp_data1;
+    ll_msg_t      *nmsg = rsp_data2;
+    long          seq = (long) rsp_data3;
+    int           rv;
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
@@ -874,6 +977,38 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
     ipmi_read_unlock();
 }
 
+static void
+ll_si_rsp_handler(ipmi_con_t   *ipmi,
+		  ipmi_addr_t  *addr,
+		  unsigned int addr_len,
+		  ipmi_msg_t   *msg,
+		  void         *rsp_data1,
+		  void         *rsp_data2,
+		  void         *rsp_data3,
+		  void         *rsp_data4)
+{
+    ipmi_domain_t                *domain = rsp_data1;
+    ll_msg_t                     *nmsg = rsp_data2;
+    int                          rv;
+    ipmi_system_interface_addr_t si;
+
+    ipmi_read_lock();
+    rv = ipmi_domain_validate(domain);
+    if (rv)
+	goto out_unlock;
+
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = (long) rsp_data4;
+    si.lun = ipmi_addr_get_lun(addr);
+
+    if (nmsg->rsp_handler)
+	nmsg->rsp_handler(domain, (ipmi_addr_t *) &si, sizeof(si), msg,
+			  nmsg->rsp_data1, nmsg->rsp_data2);
+    ipmi_mem_free(nmsg);
+ out_unlock:
+    ipmi_read_unlock();
+}
+
 int
 ipmi_send_command_addr(ipmi_domain_t                *domain,
 		       ipmi_addr_t		    *addr,
@@ -883,9 +1018,13 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 		       void                         *rsp_data1,
 		       void                         *rsp_data2)
 {
-    int      rv;
-    int      u;
-    ll_msg_t *nmsg;
+    int                          rv;
+    int                          u;
+    ll_msg_t                     *nmsg;
+    ipmi_system_interface_addr_t si;
+    ipmi_ll_rsp_handler_t        handler;
+    void                         *data4;
+    int                          is_si = 0;
 
     if (addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
@@ -899,12 +1038,35 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     if (!nmsg)
 	return ENOMEM;
 
-    u = domain->working_conn;
+    if ((addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+	&& (addr->channel != IPMI_BMC_CHANNEL))
+    {
+	/* Messages to system interface addresses use the channel to
+           choose which system address to message. */
+	if ((addr->channel < 0) || (addr->channel >= MAX_CONS))
+	    return EINVAL;
+	if (!domain->conn[addr->channel])
+	    return EINVAL;
 
-    /* If we don't have any working connection, just use connection
-       zero. */
-    if (u == -1)
-	u = 0;
+	u = addr->channel;
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = IPMI_BMC_CHANNEL;
+	si.lun = ((ipmi_system_interface_addr_t *) addr)->lun;
+	addr = (ipmi_addr_t *) &si;
+	addr_len = sizeof(si);
+	handler = ll_si_rsp_handler;
+	data4 = (void *) (long) u;
+	is_si = 1;
+    } else {
+	u = domain->working_conn;
+
+	/* If we don't have any working connection, just use connection
+	   zero. */
+	if (u == -1)
+	    u = 0;
+	handler = ll_rsp_handler;
+	data4 = NULL;
+    }
 
     nmsg->domain = domain;
     nmsg->con = u;
@@ -927,14 +1089,20 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     rv = domain->conn[u]->send_command(domain->conn[u],
 				       addr, addr_len,
 				       msg,
-				       ll_rsp_handler,
+				       handler,
 				       domain,
 				       nmsg,
 				       (void *) nmsg->seq,
-				       NULL);
+				       data4);
 
-    if (!rv)
+    if (rv) {
+	ipmi_mem_free(nmsg);
+    } else if (!is_si) {
+	/* If it's a system interface we don't add it to the list of
+	   commands running, because it will never need to be
+	   rerouted. */
 	ilist_add_tail(domain->cmds, nmsg, &nmsg->link);
+    }
     ipmi_unlock(domain->cmds_lock);
 
     return rv;
@@ -1067,6 +1235,7 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
     mc_ipmb_scan_info_t *info = rsp_data1;
     int                 rv;
     ipmi_mc_t           *mc;
+    ipmi_ipmb_addr_t    *ipmb;
 
 
     ipmi_read_lock();
@@ -1126,7 +1295,12 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
     } else if (mc && ipmi_mc_is_active(mc)) {
 	/* Didn't get a response.  Maybe the MC has gone away? */
 	info->missed_responses++;
-	if (info->missed_responses >= MAX_MC_MISSED_RESPONSES) {
+
+	/* We fail system interface addresses immediately, since they
+           shouldn't be a timeout problem. */
+	if ((info->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+	    || (info->missed_responses >= MAX_MC_MISSED_RESPONSES))
+	{
 	    _ipmi_cleanup_mc(mc);
 	    goto next_addr;
 	} else {
@@ -1140,7 +1314,9 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
     ipmi_unlock(domain->mc_list_lock);
 
  next_addr_nolock:
-    if (info->addr.slave_addr >= info->end_addr) {
+    ipmb = (ipmi_ipmb_addr_t *) &info->addr;
+    if ((info->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+	|| (ipmb->slave_addr >= info->end_addr)) {
 	/* We've hit the end, we can quit now. */
 	if (info->done_handler)
 	    info->done_handler(domain, 0, info->cb_data);
@@ -1148,15 +1324,15 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 	ipmi_mem_free(info);
 	goto out;
     }
-    info->addr.slave_addr += 2;
+    ipmb->slave_addr += 2;
     info->missed_responses = 0;
-    if (in_ipmb_ignores(domain, info->addr.slave_addr))
+    if (in_ipmb_ignores(domain, ipmb->slave_addr))
 	goto next_addr_nolock;
 
  retry_addr:
     rv = ipmi_send_command_addr(domain,
-				(ipmi_addr_t *) &(info->addr),
-				sizeof(info->addr),
+				&(info->addr),
+				info->addr_len,
 				&(info->msg),
 				devid_bc_rsp_handler,
 				info, NULL);
@@ -1177,6 +1353,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 {
     mc_ipmb_scan_info_t *info;
     int                 rv;
+    ipmi_ipmb_addr_t    *ipmb;
 
     CHECK_DOMAIN_LOCK(domain);
 
@@ -1185,10 +1362,12 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 	return;
 
     info->domain = domain;
-    info->addr.addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
-    info->addr.channel = channel;
-    info->addr.slave_addr = start_addr;
-    info->addr.lun = 0;
+    ipmb = (ipmi_ipmb_addr_t *) &info->addr;
+    ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
+    ipmb->channel = channel;
+    ipmb->slave_addr = start_addr;
+    ipmb->lun = 0;
+    info->addr_len = sizeof(*ipmb);
     info->msg.netfn = IPMI_APP_NETFN;
     info->msg.cmd = IPMI_GET_DEVICE_ID_CMD;
     info->msg.data = NULL;
@@ -1198,20 +1377,59 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     info->cb_data = cb_data;
     info->missed_responses = 0;
     rv = ipmi_send_command_addr(domain,
-				(ipmi_addr_t *) &(info->addr),
-				sizeof(info->addr),
+				&info->addr,
+				info->addr_len,
 				&(info->msg),
 				devid_bc_rsp_handler,
 				info, NULL);
-    while ((rv) && (info->addr.slave_addr < end_addr)) {
-	info->addr.slave_addr += 2;
+    while ((rv) && (ipmb->slave_addr < end_addr)) {
+	ipmb->slave_addr += 2;
 	rv = ipmi_send_command_addr(domain,
-				    (ipmi_addr_t *) &(info->addr),
-				    sizeof(info->addr),
+				    &info->addr,
+				    info->addr_len,
 				    &(info->msg),
 				    devid_bc_rsp_handler,
 				    info, NULL);
     }
+
+    if (rv)
+	ipmi_mem_free(info);
+    else
+	add_bus_scans_running(domain, info);
+}
+
+void
+ipmi_start_si_scan(ipmi_domain_t  *domain,
+		   int            si_num,
+		   ipmi_domain_cb done_handler,
+		   void           *cb_data)
+{
+    mc_ipmb_scan_info_t          *info;
+    ipmi_system_interface_addr_t *si;
+    int                          rv;
+
+    info = ipmi_mem_alloc(sizeof(mc_ipmb_scan_info_t));
+    if (!info) 
+	return;
+
+    info->domain = domain;
+    si = (void *) &info->addr;
+    si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si->channel = si_num;
+    si->lun = 0;
+    info->addr_len = sizeof(*si);
+    info->msg.netfn = IPMI_APP_NETFN;
+    info->msg.cmd = IPMI_GET_DEVICE_ID_CMD;
+    info->msg.data = NULL;
+    info->msg.data_len = 0;
+    info->done_handler = NULL;
+    info->missed_responses = 0;
+    rv = ipmi_send_command_addr(domain,
+				&info->addr,
+				info->addr_len,
+				&(info->msg),
+				devid_bc_rsp_handler,
+				info, NULL);
 
     if (rv)
 	ipmi_mem_free(info);
@@ -1238,6 +1456,15 @@ start_mc_scan(ipmi_domain_t *domain)
 
     domain->scanning_bus = 1;
 
+    /* If a connections supports sysaddress scanning, then scan the
+       system address for that connection. */
+    for (i=0; i<MAX_CONS; i++) {
+	if ((domain->con_up[i]) && domain->conn[i]->scan_sysaddr) {
+	    ipmi_start_si_scan(domain, i, mc_scan_done, NULL);
+	}
+    }
+
+    /* Now start the IPMB scans. */
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (domain->chan[i].medium == 1) /* IPMB */
 	    ipmi_start_ipmb_mc_scan(domain, i, 0x10, 0xf0, mc_scan_done, NULL);
@@ -2260,17 +2487,17 @@ con_up_complete(ipmi_domain_t *domain)
     if (domain->working_conn != -1)
 	domain->con_up[domain->working_conn] = 1;
 
-    ipmi_lock(domain->mc_list_lock);
-    start_mc_scan(domain);
-    ipmi_unlock(domain->mc_list_lock);
-    ipmi_detect_ents_presence_changes(domain->entities, 1);
-
     for (i=0; i<MAX_CONS; i++) {
 	for (j=0; j<MAX_PORTS_PER_CON; j++) {
 	    if (domain->port_up[j][i] == 1)
 		call_con_fails(domain, 0, i, j, 1);
 	}
     }
+
+    ipmi_lock(domain->mc_list_lock);
+    start_mc_scan(domain);
+    ipmi_unlock(domain->mc_list_lock);
+    ipmi_detect_ents_presence_changes(domain->entities, 1);
 
     ipmi_entity_scan_sdrs(domain->entities, domain->main_sdrs);
     ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
@@ -2763,6 +2990,9 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	}
 	call_con_fails(domain, err, u, port_num, domain->connection_up);
     }
+
+    if (!domain->connecting && domain->conn[u]->scan_sysaddr)
+	ipmi_start_si_scan(domain, u, NULL, NULL);
 
  out_unlock:
     ipmi_read_unlock();

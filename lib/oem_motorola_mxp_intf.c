@@ -703,11 +703,7 @@ start_next_msg(ipmi_con_t *ipmi,
 		 lan->msg_queue[msg_num].msg.data_len);
 	ipmi_log(IPMI_LOG_DEBUG_END, "");
     }
-    if ((lan->msg_queue[msg_num].is_ipmb_msg)
-	|| ((lan->msg_queue[msg_num].msg.netfn == IPMI_STORAGE_NETFN)
-	    && (lan->msg_queue[msg_num].msg.cmd >= 0x40)
-	    && (lan->msg_queue[msg_num].msg.cmd <= 0x49)))
-    {
+    if (lan->msg_queue[msg_num].is_ipmb_msg) {
 	/* IPMB messages have to go through the locking mechanism.
 	   Messages that affect the SEL also require locking, but they
 	   have special handling because they lock the SEL lock,
@@ -883,7 +879,6 @@ audit_timeout_handler(void              *cb_data,
 static void
 connection_up(lan_data_t *lan, int addr_num, int new_con)
 {
-    /* The IP is already operational, so ignore this. */
     if (! lan->ip_working[addr_num]) {
 	lan->ip_working[addr_num] = 1;
 
@@ -2071,6 +2066,8 @@ lan_send_command(ipmi_con_t            *ipmi,
 	rv = handle_msg_send(info, -1, addr, addr_len, msg, rsp_handler,
 			     rsp_data, data2, data3, data4);
     } else {
+	ipmi_ipmb_addr_t *ipmb = (void *) addr;
+
 	ipmi_lock(lan->msg_queue_lock);
 	if (QUEUE_NEXT(lan->next_msg) == lan->curr_msg) {
 	    rv = EAGAIN;
@@ -2088,10 +2085,10 @@ lan_send_command(ipmi_con_t            *ipmi,
 	lan->msg_queue[msg_num].addr_len = addr_len;
 	lan->msg_queue[msg_num].use_orig_addr = 0;
 
-	if (((ipmi_ipmb_addr_t *) addr)->slave_addr == lan->slave_addr) {
+	if (ipmb->slave_addr == lan->slave_addr) {
+	    /* We take messages to ourself and route them as a queued
+               message to the system interface. */
 	    ipmi_system_interface_addr_t *si;
-	    /* Most systems don't handle sending to your own slave
-	       address, so we have to translate here. */
 
 	    lan->msg_queue[msg_num].use_orig_addr = 1;
 	    memcpy(&(lan->msg_queue[msg_num].orig_addr), addr, addr_len);
@@ -2108,7 +2105,7 @@ lan_send_command(ipmi_con_t            *ipmi,
 		&lan->msg_queue[msg_num].addr;
 	    si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	    si->channel = IPMI_BMC_CHANNEL;
-	    si->lun = ((ipmi_ipmb_addr_t *) addr)->lun;
+	    si->lun = ipmi_addr_get_lun(addr);
 	    lan->msg_queue[msg_num].addr_len = sizeof(*si);
 
 	    lan->msg_queue[msg_num].lun = si->lun;
@@ -2947,6 +2944,7 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
 	return ENOMEM;
     memset(ipmi, 0, sizeof(*ipmi));
 
+    ipmi->scan_sysaddr = 1;
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
 

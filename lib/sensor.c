@@ -417,8 +417,10 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 				sensor_rsp_handler2,
 				info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Could not convert sensor id to a pointer");
 	if (info->__rsp_handler)
-	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
+	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
     }
 }
 			 

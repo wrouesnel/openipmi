@@ -976,7 +976,7 @@ mc_ptr_cb(ipmi_domain_t *domain, void *cb_data)
 	ipmi_system_interface_addr_t *si = (void *) &addr;
 
 	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si->channel = info->id.channel;
+	si->channel = info->id.mc_num;
 	si->lun = 0;
 	addr_len = sizeof(*si);
     } else {
@@ -1653,8 +1653,11 @@ ipmi_mc_get_address(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
     if (mc->addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
-	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) &(mc->addr);
-	return ipmb_addr->slave_addr;
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) &(mc->addr);
+	return ipmb->slave_addr;
+    } else if (mc->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	ipmi_system_interface_addr_t *si = (void *) &(mc->addr);
+	return si->channel;
     }
 
     /* Address is ignore for other types. */
@@ -1676,7 +1679,10 @@ unsigned int
 ipmi_mc_get_channel(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->addr.channel;
+    if (mc->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+	return IPMI_BMC_CHANNEL;
+    else
+	return mc->addr.channel;
 }
 
 ipmi_domain_t *ipmi_mc_get_domain(ipmi_mc_t *mc)
