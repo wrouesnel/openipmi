@@ -337,7 +337,25 @@ struct lan_data_s
     lan_link_t ip_link[MAX_IP_ADDR];
 
     /* Statistics */
-    void *stat_rcv_packets;
+    void *stat_recv_packets;
+    void *stat_xmit_packets;
+    void *stat_rexmits;
+    void *stat_timed_out;
+    void *stat_invalid_rmcp;
+    void *stat_too_short;
+    void *stat_invalid_auth;
+    void *stat_bad_session_id;
+    void *stat_auth_fail;
+    void *stat_duplicates;
+    void *stat_seq_out_of_range;
+    void *stat_async_events;
+    void *stat_conn_down;
+    void *stat_conn_up;
+    void *stat_bad_size;
+    void *stat_decrypt_fail;
+    void *stat_invalid_payload;
+    void *stat_seq_err;
+    void *stat_rsp_no_cmd;
 };
 
 
@@ -1959,7 +1977,9 @@ lan_remove_con_change_handler(ipmi_con_t             *ipmi,
 static void
 connection_up(lan_data_t *lan, int addr_num, int new_con)
 {
-    /* The IP is already operational, so ignore this. */
+    if (lan->stat_conn_up)
+	lan->ipmi->add_stat(lan->ipmi->user_data, lan->stat_conn_up, 1);
+
     ipmi_lock(lan->ip_lock);
     if ((! lan->ip_working[addr_num]) && new_con) {
 	lan->ip_working[addr_num] = 1;
@@ -2028,6 +2048,9 @@ lost_connection(lan_data_t *lan, int addr_num)
 	ipmi_unlock(lan->ip_lock);
 	return;
     }
+
+    if (lan->stat_conn_down)
+	lan->ipmi->add_stat(lan->ipmi->user_data, lan->stat_conn_down, 1);
 
     lan->ip_working[addr_num] = 0;
 
@@ -2159,6 +2182,9 @@ rsp_timeout_handler(void              *cb_data,
 
 	lan->seq_table[seq].retries_left--;
 
+	if (lan->stat_rexmits)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_rexmits, 1);
+
 	/* Note that we will need a new session seq # here, we can't reuse
 	   the old one.  If the message got lost on the way back, the other
 	   end would silently ignore resends of the seq #. */
@@ -2177,7 +2203,11 @@ rsp_timeout_handler(void              *cb_data,
 			  seq,
 			  &(lan->seq_table[seq].last_ip_num));
 
-	if (!rv) {
+	if (rv) {
+	    /* If we get an error resending the message, report an unknown
+	       error. */
+	    rspi->data[0] = IPMI_UNKNOWN_ERR_CC;
+	} else {
 	    timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
 	    timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
 	    ipmi->os_hnd->start_timer(ipmi->os_hnd,
@@ -2185,17 +2215,15 @@ rsp_timeout_handler(void              *cb_data,
 				      &timeout,
 				      rsp_timeout_handler,
 				      cb_data);
-	}
-	if (rv) {
-	    /* If we get an error resending the message, report an unknown
-	       error. */
-	    rspi->data[0] = IPMI_UNKNOWN_ERR_CC;
-	} else {
+
 	    ipmi_unlock(lan->seq_num_lock);
 	    lan_put(ipmi);
 	    return;
 	}
     } else {
+	if (lan->stat_timed_out)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_timed_out, 1);
+
 	rspi->data[0] = IPMI_TIMEOUT_CC;
     }
 
@@ -2285,6 +2313,9 @@ handle_async_event(ipmi_con_t   *ipmi,
     ipmi_event_t         *event = NULL;
     ipmi_time_t          timestamp;
     call_event_handler_t info;
+
+    if (lan->stat_async_events)
+	ipmi->add_stat(ipmi->user_data, lan->stat_async_events, 1);
 
     if (msg) {
 	unsigned int type = msg->data[2];
@@ -2506,7 +2537,8 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 }
 
 static int
-check_session_seq_num(uint32_t seq, uint32_t *in_seq, uint16_t *map)
+check_session_seq_num(lan_data_t *lan, uint32_t seq,
+		      uint32_t *in_seq, uint16_t *map)
 {
     /* Check the sequence number. */
     if ((seq - *in_seq) <= 8) {
@@ -2520,6 +2552,9 @@ check_session_seq_num(uint32_t seq, uint32_t *in_seq, uint16_t *map)
 	uint8_t bit = 1 << (*in_seq - seq);
 	if (*map & bit) {
 	    /* We've already received the message, so discard it. */
+	    if (lan->stat_duplicates)
+		lan->ipmi->add_stat(lan->ipmi->user_data,
+				    lan->stat_duplicates, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
 	    return EINVAL;
@@ -2529,6 +2564,9 @@ check_session_seq_num(uint32_t seq, uint32_t *in_seq, uint16_t *map)
     } else {
 	/* It's outside the current sequence number range, discard
 	   the packet. */
+	if (lan->stat_seq_out_of_range)
+	    lan->ipmi->add_stat(lan->ipmi->user_data,
+				lan->stat_seq_out_of_range, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message out of seq range");
 	return EINVAL;
@@ -2552,6 +2590,8 @@ handle_payload(ipmi_con_t    *ipmi,
 
     if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE) {
 	if (payload_len < 1) {
+	    if (lan->stat_too_short)
+		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Payload length to short");
 	    goto out;
@@ -2568,6 +2608,8 @@ handle_payload(ipmi_con_t    *ipmi,
 	goto out;
 #endif
     } else if (! payloads[payload_type]) {
+	if (lan->stat_invalid_payload)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_invalid_payload, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Unhandled payload: 0x%x",
 		     payload_type);
@@ -2579,6 +2621,8 @@ handle_payload(ipmi_con_t    *ipmi,
 	    payloads[payload_type]->handle_recv_async(ipmi, tmsg, payload_len);
 	    goto out;
 	} else if (rv) {
+	    if (lan->stat_seq_err)
+		ipmi->add_stat(ipmi->user_data, lan->stat_seq_err, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Error getting sequence: 0x%x",
 			 rv);
@@ -2588,6 +2632,8 @@ handle_payload(ipmi_con_t    *ipmi,
 
     ipmi_lock(lan->seq_num_lock);
     if (! lan->seq_table[seq].inuse) {
+	if (lan->stat_rsp_no_cmd)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_rsp_no_cmd, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
 		     "Dropped message seq not in use: 0x%x",
@@ -2694,6 +2740,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
     session_id = ipmi_get_uint32(tmsg);
     tmsg += 4;
     if (session_id != lan->session_id[addr_num]) {
+	if (lan->stat_bad_session_id)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_bad_session_id, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
 		     "Dropped message not valid session id (2)");
@@ -2708,6 +2756,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 
     header_len = tmsg - data;
     if ((header_len + payload_len) > len) {
+	if (lan->stat_bad_size)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_bad_size, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
 		     "Dropped message payload length doesn't match up");
@@ -2720,6 +2770,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 
 	if (lan->working_integ[addr_num] == IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
 	{
+	    if (lan->stat_invalid_auth)
+		ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Got authenticated msg but authentication not available");
@@ -2732,6 +2784,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 						    header_len + payload_len,
 						    len);
 	if (rv) {
+	    if (lan->stat_auth_fail)
+		ipmi->add_stat(ipmi->user_data, lan->stat_auth_fail, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Integrity failed");
 	    goto out;
@@ -2740,6 +2794,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	/* Remove the integrity padding. */
 	pad_len = tmsg[payload_len-1] + 1;
 	if (pad_len > payload_len) {
+	    if (lan->stat_bad_size)
+		ipmi->add_stat(ipmi->user_data, lan->stat_bad_size, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Padding too large");
 	    goto out;
@@ -2759,18 +2815,21 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
     }
 
     if (authenticated)
-	rv = check_session_seq_num(session_seq,
+	rv = check_session_seq_num(lan, session_seq,
 				   &(lan->inbound_seq_num[addr_num]),
 				   &(lan->recv_msg_map[addr_num]));
     else if (session_id == 0)
 	rv = 0; /* seq num not used for out-of-session messages. */
     else
-	rv = check_session_seq_num(session_seq,
+	rv = check_session_seq_num(lan, session_seq,
 				   &(lan->unauth_in_seq_num[addr_num]),
 				   &(lan->unauth_recv_msg_map[addr_num]));
     ipmi_unlock(lan->ip_lock);
-    if (rv)
+    if (rv) {
+	if (lan->stat_seq_out_of_range)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_seq_out_of_range, 1);
 	goto out;
+    }
 
     /* Message is in sequence, so it's good to deliver after we
        decrypt it. */
@@ -2779,6 +2838,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	if (lan->working_conf[addr_num]
 	    == IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE)
 	{
+	    if (lan->stat_invalid_auth)
+		ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Got encrypted msg but encryption not available");
@@ -2789,6 +2850,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 						    lan->conf_data[addr_num],
 						    &tmsg, &payload_len);
 	if (rv) {
+	    if (lan->stat_decrypt_fail)
+		ipmi->add_stat(ipmi->user_data, lan->stat_decrypt_fail, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Decryption failed");
 	    goto out;
@@ -2815,6 +2878,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 
     if (data[4] == IPMI_AUTHTYPE_NONE) {
 	if (len < 14) { /* Minimum size of an IPMI msg. */
+	    if (lan->stat_too_short)
+		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(1)");
@@ -2824,6 +2889,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	/* No authentication. */
 	if (len < (data[13] + 14)) {
 	    /* Not enough data was supplied, reject the message. */
+	    if (lan->stat_too_short)
+		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(2)");
@@ -2832,6 +2899,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	data_len = data[13];
     } else {
 	if (len < 30) { /* Minimum size of an authenticated IPMI msg. */
+	    if (lan->stat_too_short)
+		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(3)");
@@ -2839,6 +2908,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	}
 	/* authcode in message, add 16 to the above checks. */
 	if (len < (data[29] + 30)) {
+	    if (lan->stat_too_short)
+		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
 	    /* Not enough data was supplied, reject the message. */
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
@@ -2852,6 +2923,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 
     /* Drop if the authtypes are incompatible. */
     if (lan->working_authtype[addr_num] != data[4]) {
+	if (lan->stat_invalid_auth)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype");
 	goto out;
@@ -2860,6 +2933,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
     /* Drop if sessions ID's don't match. */
     sess_id = ipmi_get_uint32(data+9);
     if (sess_id != lan->session_id[addr_num]) {
+	if (lan->stat_bad_session_id)
+	    ipmi->add_stat(ipmi->user_data, lan->stat_bad_session_id, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid session id");
 	goto out;
@@ -2873,6 +2948,8 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13,
 			addr_num);
 	if (rv) {
+	    if (lan->stat_auth_fail)
+		ipmi->add_stat(ipmi->user_data, lan->stat_auth_fail, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message auth fail");
 	    goto out;
@@ -2890,7 +2967,7 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	ipmi_lock(lan->ip_lock);
     }
 
-    rv = check_session_seq_num(seq, &(lan->inbound_seq_num[addr_num]),
+    rv = check_session_seq_num(lan, seq, &(lan->inbound_seq_num[addr_num]),
 			       &(lan->recv_msg_map[addr_num]));
     ipmi_unlock(lan->ip_lock);
     if (rv)
@@ -3135,8 +3212,8 @@ data_handler(int            fd,
 
     lan = ipmi->con_data;
 
-    if (lan->stat_rcv_packets)
-	ipmi->add_stat(ipmi->user_data, lan->stat_rcv_packets, 1);
+    if (lan->stat_recv_packets)
+	ipmi->add_stat(ipmi->user_data, lan->stat_recv_packets, 1);
 
     if (data[4] == IPMI_AUTHTYPE_RMCP_PLUS) {
 	handle_rmcpp_recv(ipmi, lan, addr_num, data, len);
@@ -3485,7 +3562,44 @@ lan_cleanup(ipmi_con_t *ipmi)
     ipmi_unlock(lan->seq_num_lock);
 
     if (ipmi->finished_with_stat) {
-	ipmi->finished_with_stat(ipmi->user_data, lan->stat_rcv_packets);
+	if (lan->stat_recv_packets)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_recv_packets);
+	if (lan->stat_xmit_packets)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_xmit_packets);
+	if (lan->stat_rexmits)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_rexmits);
+	if (lan->stat_timed_out)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_timed_out);
+	if (lan->stat_invalid_rmcp)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_invalid_rmcp);
+	if (lan->stat_too_short)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_too_short);
+	if (lan->stat_invalid_auth)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_invalid_auth);
+	if (lan->stat_bad_session_id)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_bad_session_id);
+	if (lan->stat_auth_fail)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_auth_fail);
+	if (lan->stat_duplicates)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_duplicates);
+	if (lan->stat_seq_out_of_range)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_seq_out_of_range);
+	if (lan->stat_async_events)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_async_events);
+	if (lan->stat_conn_down)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_conn_down);
+	if (lan->stat_conn_up)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_conn_up);
+	if (lan->stat_bad_size)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_bad_size);
+	if (lan->stat_decrypt_fail)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_decrypt_fail);
+	if (lan->stat_invalid_payload)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_invalid_payload);
+	if (lan->stat_seq_err)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_seq_err);
+	if (lan->stat_rsp_no_cmd)
+	    ipmi->finished_with_stat(ipmi->user_data, lan->stat_rsp_no_cmd);
     }
 
     if (ipmi->oem_data_cleanup)
@@ -4579,6 +4693,49 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     return rv;
 }
 
+static void
+reg_stats(ipmi_con_t *ipmi, lan_data_t *lan)
+{
+    ipmi->register_stat(ipmi->user_data, "lan_recv_packets",
+			ipmi->name, &lan->stat_recv_packets);
+    ipmi->register_stat(ipmi->user_data, "lan_xmit_packets",
+			ipmi->name, &lan->stat_xmit_packets);
+    ipmi->register_stat(ipmi->user_data, "lan_rexmits",
+			ipmi->name, &lan->stat_rexmits);
+    ipmi->register_stat(ipmi->user_data, "lan_timed_out",
+			ipmi->name, &lan->stat_timed_out);
+    ipmi->register_stat(ipmi->user_data, "lan_invalid_rmcp",
+			ipmi->name, &lan->stat_invalid_rmcp);
+    ipmi->register_stat(ipmi->user_data, "lan_too_short",
+			ipmi->name, &lan->stat_too_short);
+    ipmi->register_stat(ipmi->user_data, "lan_invalid_auth",
+			ipmi->name, &lan->stat_invalid_auth);
+    ipmi->register_stat(ipmi->user_data, "lan_bad_session_id",
+			ipmi->name, &lan->stat_bad_session_id);
+    ipmi->register_stat(ipmi->user_data, "lan_auth_fail",
+			ipmi->name, &lan->stat_auth_fail);
+    ipmi->register_stat(ipmi->user_data, "lan_duplicates",
+			ipmi->name, &lan->stat_duplicates);
+    ipmi->register_stat(ipmi->user_data, "lan_seq_out_of_range",
+			ipmi->name, &lan->stat_seq_out_of_range);
+    ipmi->register_stat(ipmi->user_data, "lan_async_events",
+			ipmi->name, &lan->stat_async_events);
+    ipmi->register_stat(ipmi->user_data, "lan_conn_down",
+			ipmi->name, &lan->stat_conn_down);
+    ipmi->register_stat(ipmi->user_data, "lan_conn_up",
+			ipmi->name, &lan->stat_conn_up);
+    ipmi->register_stat(ipmi->user_data, "lan_bad_size",
+			ipmi->name, &lan->stat_bad_size);
+    ipmi->register_stat(ipmi->user_data, "lan_decrypt_fail",
+			ipmi->name, &lan->stat_decrypt_fail);
+    ipmi->register_stat(ipmi->user_data, "lan_invalid_payload",
+			ipmi->name, &lan->stat_invalid_payload);
+    ipmi->register_stat(ipmi->user_data, "lan_seq_err",
+			ipmi->name, &lan->stat_seq_err);
+    ipmi->register_stat(ipmi->user_data, "lan_rsp_no_cmd",
+			ipmi->name, &lan->stat_rsp_no_cmd);
+}
+
 static int
 lan_start_con(ipmi_con_t *ipmi)
 {
@@ -4588,10 +4745,8 @@ lan_start_con(ipmi_con_t *ipmi)
     int            i;
 
     /* Register our statistics. */
-    if (ipmi->register_stat) {
-	ipmi->register_stat(ipmi->user_data, "lan_received_packets",
-			    ipmi->name, &lan->stat_rcv_packets);
-    }
+    if (ipmi->register_stat)
+	reg_stats(ipmi, lan);
 
     ipmi_lock(lan->ip_lock);
     if (lan->started) {
