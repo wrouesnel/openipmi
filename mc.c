@@ -115,6 +115,9 @@ typedef struct ipmi_bmc_s
     /* The SEL time when the connection first came up. */
     unsigned long startup_SEL_time;
 
+    /* The handler to call for delete event operations. */
+    ipmi_bmc_del_event_cb sel_del_event_handler;
+
     ipmi_bmc_oem_new_entity_cb new_entity_handler;
     void                       *new_entity_cb_data;
 
@@ -630,6 +633,13 @@ unsigned long
 ipmi_bmc_get_startup_SEL_time(ipmi_mc_t *bmc)
 {
     return bmc->bmc->startup_SEL_time;
+}
+
+void
+ipmi_bmc_set_del_event_handler(ipmi_mc_t             *bmc,
+			       ipmi_bmc_del_event_cb handler)
+{
+    bmc->bmc->sel_del_event_handler = handler;
 }
 
 int
@@ -2512,6 +2522,11 @@ ipmi_bmc_del_event(ipmi_mc_t    *bmc,
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
+
+    /* If we have an OEM handler, call it instead. */
+    if (bmc->bmc->sel_del_event_handler)
+	return bmc->bmc->sel_del_event_handler(bmc, event,
+					       done_handler, cb_data);
 
     info = malloc(sizeof(*info));
     if (!info)

@@ -261,6 +261,15 @@ unsigned long ipmi_bmc_get_startup_SEL_time(ipmi_mc_t *bmc);
    user to be deleted. */
 void ipmi_handle_unhandled_event(ipmi_mc_t *bmc, ipmi_event_t *event);
 
+/* Some OEM boxes may have special SEL delete requirements, so we have
+   a special hook to let the OEM code delete events. */
+typedef int (*ipmi_bmc_del_event_cb)(ipmi_mc_t    *bmc,
+				     ipmi_event_t *event,
+				     ipmi_bmc_cb  done_handler,
+				     void         *cb_data);
+void ipmi_bmc_set_del_event_handler(ipmi_mc_t             *bmc,
+				    ipmi_bmc_del_event_cb handler);
+
 /* Set and get the OEM data pointer in the mc. */
 void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
 void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);

@@ -755,9 +755,11 @@ handle_sel_delete(ipmi_mc_t  *mc,
 
     sel_op_done(data, rv);
 
+ out:
+    return;
+
  out_unlock:
     sel_unlock(sel);
- out:
 }
 
 static int

@@ -1,6 +1,11 @@
 
 2003-01-15 Corey Minyard <cminyard@mvista.com>
 
+	* sel.c: Fixed a locking problem with SEL operations.
+	
+	* mc.c, include/OpenIPMI/ipmi_mc.h: Added a hook for event
+	deletion handling, so OEM code can do its own event deletion.
+
 	* mc.c, include/OpenIPMI/ipmi_mc.h: Added handling for ignoring
 	events (only sending to the unhandled interface) for events that
 	were already in the SEL at startup.
