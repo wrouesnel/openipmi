@@ -4240,9 +4240,10 @@ mxpv1_board_presence_states_get_start(ipmi_sensor_t *sensor, int err,
 	si.lun = 0;
 	mc = _ipmi_find_mc_by_addr(binfo->info->domain,
 				   (ipmi_addr_t *) &si, sizeof(si));
-	if (mc)
+	if (mc) {
 	    binfo->info->amc_present[i] = 1;
-	else 
+	    _ipmi_mc_put(mc);
+	} else 
 	    binfo->info->amc_present[i] = 0;
 
 	if (binfo->info->amc_present[i])
@@ -7060,9 +7061,11 @@ timed_rescan_bus4(ipmi_sensor_t *sensor, void *cb_data)
     domain = ipmi_mc_get_domain(mc);
 
     /* Use the MC presence to know about the entity's presence. */
-    if (_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr))) {
+    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+    if (mc) {
 	offset = 0; /* Board is present. */
 	deoffset = 1; /* Board is present. */
+	_ipmi_mc_put(mc);
     } else {
 	offset = 1; /* Board is absent. */
 	deoffset = 0; /* Board is absent. */
@@ -7900,6 +7903,8 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 	/* Not in an MXP chassis, just give it a generic name. */
 	board_name = "MXP SWTCH";
     }
+    if (bmc)
+	_ipmi_mc_put(bmc);
 
     sinfo = ipmi_mem_alloc(sizeof(*sinfo));
     if (!sinfo) {
@@ -8459,6 +8464,8 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 	/* Not in an MXP chassis, just give it a generic name. */
 	board_name = "MXP board";
     }
+    if (bmc)
+	_ipmi_mc_put(bmc);
     
     sinfo = ipmi_mem_alloc(sizeof(*sinfo));
     if (!sinfo) {

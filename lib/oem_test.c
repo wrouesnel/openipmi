@@ -174,6 +174,8 @@ test_event_handler_0(ipmi_mc_t    *mc,
 	if (!rv)
 	    rv = info.err;
 
+	_ipmi_mc_put(src_mc);
+
 	if (!rv)
 	    return 1;
     }

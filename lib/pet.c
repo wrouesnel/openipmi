@@ -792,6 +792,7 @@ start_pet_setup(ipmi_domain_t *domain,
     rv = 0; /* We continue with the PEF run, even if the lanparm fails. */
 
  out:
+    _ipmi_mc_put(mc);
     return rv;
 }
 
