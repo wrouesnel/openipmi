@@ -6417,7 +6417,7 @@ report_error(char *str, int err)
     }
 }
 
-static void
+static int
 sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 			       enum ipmi_event_dir_e       dir,
 			       enum ipmi_thresh_e          threshold,
@@ -6446,9 +6446,10 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
     }
     if (event)
 	ui_log("Due to event 0x%4.4x\n", ipmi_event_get_record_id(event));
+    return IPMI_EVENT_NOT_HANDLED;
 }
 
-static void
+static int
 sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 			      enum ipmi_event_dir_e dir,
 			      int                   offset,
@@ -6473,6 +6474,7 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 	ui_log("  prev severity is %d\n", prev_severity);
     if (event)
 	ui_log("Due to event 0x%4.4x\n", ipmi_event_get_record_id(event));
+    return IPMI_EVENT_NOT_HANDLED;
 }
 
 static void
@@ -6497,12 +6499,12 @@ sensor_change(enum ipmi_update_e op,
 		   name2, name);
 	    if (ipmi_sensor_get_event_reading_type(sensor)
 		== IPMI_EVENT_READING_TYPE_THRESHOLD)
-		rv = ipmi_sensor_threshold_set_event_handler(
+		rv = ipmi_sensor_add_threshold_event_handler(
 		    sensor,
 		    sensor_threshold_event_handler,
 		    NULL);
 	    else
-		rv = ipmi_sensor_discrete_set_event_handler(
+		rv = ipmi_sensor_add_discrete_event_handler(
 		    sensor,
 		    sensor_discrete_event_handler,
 		    NULL);

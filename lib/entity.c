@@ -130,6 +130,9 @@ struct ipmi_entity_s
     ipmi_domain_id_t domain_id;
     long             seq;
 
+    /* Lock used for protecting misc data. */
+    ipmi_lock_t *lock;
+
     int usecount;
 
     int          destroyed;
@@ -232,6 +235,17 @@ struct ipmi_entity_s
 
     /* Name we use for reporting */
     char name[ENTITY_NAME_LEN];
+
+
+    /* Cruft */
+    ipmi_entity_presence_nd_cb cruft_presence_handler;
+    void                       *cruft_presence_cb_data;
+
+    ipmi_entity_sensor_cb cruft_sensor_handler;
+    void                  *cruft_sensor_cb_data;
+
+    ipmi_entity_control_cb cruft_control_handler;
+    void                   *cruft_control_cb_data;
 };
 
 struct ipmi_entity_info_s
@@ -771,6 +785,10 @@ entity_add(ipmi_entity_info_t *ents,
     if (rv)
 	goto out_err;
 
+    rv = ipmi_create_lock(ent->domain, &ent->lock);
+    if (rv)
+	goto out_err;
+
     rv = ent->os_hnd->alloc_timer(ent->os_hnd, &ent->hot_swap_act_timer);
     if (rv)
 	goto out_err;
@@ -817,6 +835,8 @@ entity_add(ipmi_entity_info_t *ents,
 	ent->os_hnd->free_timer(ent->os_hnd, ent->hot_swap_act_timer);
     if (ent->hot_swap_deact_timer)
 	ent->os_hnd->free_timer(ent->os_hnd, ent->hot_swap_deact_timer);
+    if (ent->lock)
+	ipmi_destroy_lock(ent->lock);
     if (ent->timer_lock)
 	ipmi_destroy_lock(ent->timer_lock);
     if (ent->presence_handlers)
@@ -1149,6 +1169,12 @@ presence_changed(ipmi_entity_t *ent,
 	info.present = present;
 	info.event = event;
 	info.handled = handled;
+	if (ent->cruft_presence_handler) {
+	    ent->cruft_presence_handler(ent, present,
+					ent->cruft_presence_cb_data,
+					event);
+	    info.handled = IPMI_EVENT_HANDLED;
+	}
 	locked_list_iterate(ent->presence_handlers, call_presence_handler,
 			    &info);
 	handled = info.handled;
@@ -6202,3 +6228,71 @@ ipmi_entity_send_command(ipmi_entity_t         *entity,
 	rv = info->__err;
     return rv;
 }
+
+
+/***********************************************************************
+ *
+ * Cruft
+ *
+ **********************************************************************/
+
+int
+ipmi_entity_set_presence_handler(ipmi_entity_t              *ent,
+				 ipmi_entity_presence_nd_cb handler,
+				 void                       *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    ent->cruft_presence_handler = handler;
+    ent->cruft_presence_cb_data = cb_data;
+    return 0;
+}
+
+int
+ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
+				      ipmi_entity_sensor_cb handler,
+				      void                  *cb_data)
+{
+    int rv = 0;
+
+    CHECK_ENTITY_LOCK(ent);
+
+    ipmi_lock(ent->lock);
+    if (ent->cruft_sensor_handler)
+	ipmi_entity_remove_sensor_update_handler
+	    (ent,
+	     ent->cruft_sensor_handler,
+	     ent->cruft_sensor_cb_data);
+
+    ent->cruft_sensor_handler = handler;
+    ent->cruft_sensor_cb_data = cb_data;
+    if (handler)
+	rv = ipmi_entity_add_sensor_update_handler(ent, handler, cb_data);
+    ipmi_unlock(ent->lock);
+    return rv;
+}
+
+int
+ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
+				       ipmi_entity_control_cb handler,
+				       void                   *cb_data)
+{
+    int rv = 0;
+
+    CHECK_ENTITY_LOCK(ent);
+
+    ipmi_lock(ent->lock);
+    if (ent->cruft_control_handler)
+	ipmi_entity_remove_control_update_handler
+	    (ent,
+	     ent->cruft_control_handler,
+	     ent->cruft_control_cb_data);
+
+    ent->cruft_control_handler = handler;
+    ent->cruft_control_cb_data = cb_data;
+    if (handler)
+	rv = ipmi_entity_add_control_update_handler(ent, handler, cb_data);
+    ipmi_unlock(ent->lock);
+    return rv;
+}
+

@@ -290,6 +290,9 @@ struct ipmi_domain_s
     struct ipmi_domain_mc_upd_s     *mc_upd_cruft;
     struct ipmi_event_handler_id_s  *event_cruft;
     struct ipmi_domain_con_change_s *con_change_cruft;
+
+    ipmi_domain_entity_cb cruft_entity_update_handler;
+    void                  *cruft_entity_update_cb_data;
 };
 
 static void domain_audit(void *cb_data, os_hnd_timer_id_t *id);
@@ -4580,6 +4583,32 @@ ipmi_init_domain(ipmi_con_t               *con[],
     remove_known_domain(domain);
     cleanup_domain(domain);
     goto out;
+}
+
+int
+ipmi_domain_entity_update_handler(ipmi_domain_t         *domain,
+				  ipmi_domain_entity_cb handler,
+				  void                  *cb_data)
+{
+    int rv = 0;
+
+    CHECK_DOMAIN_LOCK(domain);
+
+    ipmi_lock(domain->domain_lock);
+    if (domain->cruft_entity_update_handler)
+	ipmi_entity_info_remove_update_handler
+	    (domain->entities,
+	     domain->cruft_entity_update_handler,
+	     domain->cruft_entity_update_cb_data);
+
+    domain->cruft_entity_update_handler = handler;
+    domain->cruft_entity_update_cb_data = cb_data;
+    if (handler)
+	rv = ipmi_entity_info_add_update_handler(domain->entities,
+						 handler,
+						 cb_data);
+    ipmi_unlock(domain->domain_lock);
+    return rv;
 }
 
 static void

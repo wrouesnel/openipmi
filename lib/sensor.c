@@ -180,10 +180,6 @@ struct ipmi_sensor_s
     char *base_unit_string;
     char *modifier_unit_string;
 
-    ipmi_sensor_threshold_event_handler_cb threshold_event_handler;
-    ipmi_sensor_discrete_event_handler_cb  discrete_event_handler;
-    void                         *cb_data;
-
     /* A list of handlers to call when an event for the sensor comes
        in. */
     locked_list_t *handler_list;
@@ -203,6 +199,12 @@ struct ipmi_sensor_s
 
     /* Name we use for reporting */
     char name[SENSOR_NAME_LEN];
+
+
+    /* Cruft. */
+    ipmi_sensor_threshold_event_handler_nd_cb threshold_event_handler;
+    ipmi_sensor_discrete_event_handler_nd_cb  discrete_event_handler;
+    void                         *cb_data;
 };
 
 static void sensor_final_destroy(ipmi_sensor_t *sensor);
@@ -2958,9 +2960,9 @@ ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
 
 int
 ipmi_sensor_threshold_set_event_handler(
-    ipmi_sensor_t                          *sensor,
-    ipmi_sensor_threshold_event_handler_cb handler,
-    void                                   *cb_data)
+    ipmi_sensor_t                             *sensor,
+    ipmi_sensor_threshold_event_handler_nd_cb handler,
+    void                                      *cb_data)
 {
     CHECK_SENSOR_LOCK(sensor);
 
@@ -3000,9 +3002,9 @@ ipmi_sensor_remove_threshold_event_handler(
 
 int
 ipmi_sensor_discrete_set_event_handler(
-    ipmi_sensor_t                         *sensor,
-    ipmi_sensor_discrete_event_handler_cb handler,
-    void                                  *cb_data)
+    ipmi_sensor_t                            *sensor,
+    ipmi_sensor_discrete_event_handler_nd_cb handler,
+    void                                     *cb_data)
 {
     CHECK_SENSOR_LOCK(sensor);
 
