@@ -170,12 +170,12 @@ static int
 send_rakp3(ipmi_con_t *ipmi, rakp_info_t *info,
 	   ipmi_msgi_t *rspi, int addr_num, int err)
 {
-    int                         rv;
-    unsigned char               data[64];
-    ipmi_msg_t                  msg;
-    ipmi_rmcpp_nosession_addr_t addr;
-    const unsigned char         *p;
-    unsigned int                plen;
+    int                 rv;
+    unsigned char       data[64];
+    ipmi_msg_t          msg;
+    ipmi_rmcpp_addr_t   addr;
+    const unsigned char *p;
+    unsigned int        plen;
 
     memset(data, 0, sizeof(data));
     data[1] = err;
@@ -192,10 +192,10 @@ send_rakp3(ipmi_con_t *ipmi, rakp_info_t *info,
     memcpy(data+28, p, data[27]);
 
     msg.netfn = IPMI_RMCPP_DUMMY_NETFN;
-    msg.cmd = IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3;
+    msg.cmd = 0;
     msg.data = data;
     msg.data_len = 28 + data[27];
-    addr.addr_type = IPMI_RMCPP_NOSESSION_ADDR_TYPE;
+    addr.addr_type = IPMI_RMCPP_ADDR_START + IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3;
     rspi->data1 = info;
 
     if (info->set3) {
@@ -289,12 +289,12 @@ static int
 send_rakp1(ipmi_con_t *ipmi, rakp_info_t *info,
 	   ipmi_msgi_t *rspi, int addr_num)
 {
-    int                         rv;
-    unsigned char               data[44];
-    ipmi_msg_t                  msg;
-    ipmi_rmcpp_nosession_addr_t addr;
-    const unsigned char         *p;
-    unsigned int                plen;
+    int                 rv;
+    unsigned char       data[44];
+    ipmi_msg_t          msg;
+    ipmi_rmcpp_addr_t   addr;
+    const unsigned char *p;
+    unsigned int        plen;
 
     memset(data, 0, sizeof(data));
     data[0] = 0;
@@ -313,10 +313,10 @@ send_rakp1(ipmi_con_t *ipmi, rakp_info_t *info,
     memcpy(data+28, p, data[27]);
 
     msg.netfn = IPMI_RMCPP_DUMMY_NETFN;
-    msg.cmd = IPMI_RMCPP_PAYLOAD_TYPE_RAKP_1;
+    msg.cmd = 0;
     msg.data = data;
     msg.data_len = 28 + data[27];
-    addr.addr_type = IPMI_RMCPP_NOSESSION_ADDR_TYPE;
+    addr.addr_type = IPMI_RMCPP_ADDR_START + IPMI_RMCPP_PAYLOAD_TYPE_RAKP_1;
     rspi->data1 = info;
 
     rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
@@ -652,6 +652,7 @@ rakp_format_msg(ipmi_con_t    *ipmi,
 		ipmi_msg_t    *msg,
 		unsigned char *out_data,
 		unsigned int  *out_data_len,
+		int	      *out_of_session,
 		unsigned char seq)
 {
     if (msg->data_len > *out_data_len)
@@ -659,6 +660,7 @@ rakp_format_msg(ipmi_con_t    *ipmi,
 
     memcpy(out_data, msg->data, msg->data_len);
     out_data[0] = seq;
+    *out_of_session = 1;
     *out_data_len = msg->data_len;
     return 0;
 }

@@ -123,19 +123,22 @@ struct ipmi_lan_addr
 
 #endif /* _LINUX_IPMI_H */
 
-/* Used for sending messages that are raw RMCP+ outside a session. */
-#define IPMI_RMCPP_NOSESSION_ADDR_TYPE   0x100
-typedef struct ipmi_rmcpp_nosession_addr
-{
-	int           addr_type;
-} ipmi_rmcpp_nosession_addr_t;
-
 /* RMCP+ address types are in this range.  These map to payloads.  Note
    that 0x100 is specially used; it would be IPMI if there was no
    special handling, but it is used for RMCP messages outside the
    session. */
 #define IPMI_RMCPP_ADDR_START		0x100
 #define IPMI_RMCPP_ADDR_END		0x13f
+typedef struct ipmi_rmcpp_addr
+{
+	int           addr_type;
+
+        /* These fields are only used if this is a type 2 payload
+	   (0x102 for the addr_type).  The IANA comes from the lan
+	   challenge for the other oem payload types (0x20-0x27) */
+	unsigned char oem_iana[3];
+	uint16_t      oem_payload_id;
+} ipmi_rmcpp_addr_t;
 
 /* This is outside the range of normal NETFNs, it is used for
    registering for RMCP things. */

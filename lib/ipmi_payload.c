@@ -74,6 +74,7 @@ ipmi_format_msg(ipmi_con_t    *ipmi,
 		ipmi_msg_t    *msg,
 		unsigned char *out_data,
 		unsigned int  *out_data_len,
+		int           *out_of_session,
 		unsigned char seq)
 {
     unsigned char *tmsg = out_data;

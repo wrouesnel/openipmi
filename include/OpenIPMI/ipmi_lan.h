@@ -256,13 +256,16 @@ typedef struct ipmi_payload_s
        updatated to be the actual length.  The seq is a 6-bit value
        that should be store somewhere so the that response to this
        message can be identified.  If the netfn is odd, the sequence
-       number is not used. */
+       number is not used.  The out_of_session variable is set to zero
+       by default; if the message is meant to be sent out of session,
+       then the formatter should set this value to 1. */
     int (*format_for_xmit)(ipmi_con_t    *conn,
 			   ipmi_addr_t   *addr,
 			   unsigned int  addr_len,
 			   ipmi_msg_t    *msg,
 			   unsigned char *out_data,
 			   unsigned int  *out_data_len,
+			   int           *out_of_session,
 			   unsigned char seq);
 
     /* Get the recv sequence number from the message.  Return ENOSYS
@@ -293,6 +296,15 @@ typedef struct ipmi_payload_s
 
 int ipmi_rmcpp_register_payload(unsigned int   payload_type,
 				ipmi_payload_t *payload);
+
+/* Register a payload to be called when the specific payload type
+   (must be an OEM number) comes in with the iana and payload id or
+   goes out with those values in the address.  The payload id is only
+   used for payload type 2. */
+int ipmi_rmcpp_register_oem_payload(unsigned int   payload_type,
+				    unsigned char  iana[3],
+				    unsigned int   payload_id,
+				    ipmi_payload_t *payload);
 
 /*
  * RMCP+ algorithm handling.
@@ -394,6 +406,11 @@ typedef struct ipmi_rmcpp_authentication_s
 int ipmi_rmcpp_register_authentication(unsigned int                auth_num,
 				       ipmi_rmcpp_authentication_t *auth);
 
+/* Register an OEM auth algorithm, the auth_num must be in the OEM range. */
+int ipmi_rmcpp_register_oem_authentication(unsigned int                auth_num,
+					   unsigned char               iana[3],
+					   ipmi_rmcpp_authentication_t *auth);
+
 typedef struct ipmi_rmcpp_confidentiality_s
 {
     int (*conf_init)(ipmi_con_t        *ipmi,
@@ -436,6 +453,11 @@ typedef struct ipmi_rmcpp_confidentiality_s
 int ipmi_rmcpp_register_confidentiality(unsigned int                 conf_num,
 					ipmi_rmcpp_confidentiality_t *conf);
 
+/* Register an OEM conf algorithm, the conf_num must be in the OEM range. */
+int ipmi_rmcpp_register_oem_confidentiality(unsigned int                  conf_num,
+					    unsigned char                 iana[3],
+					    ipmi_rmcpp_confidentiality_t *conf);
+
 
 typedef struct ipmi_rmcpp_integrity_s
 {
@@ -473,6 +495,11 @@ typedef struct ipmi_rmcpp_integrity_s
 
 int ipmi_rmcpp_register_integrity(unsigned int           integ_num,
 				  ipmi_rmcpp_integrity_t *integ);
+
+/* Register an OEM integ algorithm, the integ_num must be in the OEM range. */
+int ipmi_rmcpp_register_oem_integrity(unsigned int           integ_num,
+				      unsigned char          iana[3],
+				      ipmi_rmcpp_integrity_t *integ);
 
 /* Authentication algorithms should use this to send messages.  Note
    that when yo use this interface, it will always set rspi->data4 to

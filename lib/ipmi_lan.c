@@ -333,10 +333,91 @@ struct lan_data_s
  ***********************************************************************/
 extern ipmi_payload_t _ipmi_payload;
 
+static int
+open_format_msg(ipmi_con_t    *ipmi,
+		ipmi_addr_t   *addr,
+		unsigned int  addr_len,
+		ipmi_msg_t    *msg,
+		unsigned char *out_data,
+		unsigned int  *out_data_len,
+		int           *out_of_session,
+		unsigned char seq)
+{
+    unsigned char *tmsg = out_data;
+
+    if (msg->data_len > *out_data_len)
+	return E2BIG;
+
+    memcpy(tmsg, msg->data, msg->data_len);
+    tmsg[0] = seq; /* We use the message tag for the sequence # */
+    *out_of_session = 1;
+    *out_data_len = msg->data_len;
+    return 0;
+}
+
+static int
+open_get_recv_seq(ipmi_con_t    *ipmi,
+		  unsigned char *data,
+		  unsigned int  data_len,
+		  unsigned char *seq)
+{
+    if (data_len < 1) { /* Minimum size of an IPMI msg. */
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG,
+		     "Dropped message because too small(7)");
+	return EINVAL;
+    }
+    *seq = data[0];
+    return 0;
+}
+
+static int
+open_handle_recv(ipmi_con_t    *ipmi,
+		 ipmi_msgi_t   *rspi,
+		 ipmi_addr_t   *orig_addr,
+		 unsigned int  orig_addr_len,
+		 ipmi_msg_t    *orig_msg,
+		 unsigned char *data,
+		 unsigned int  data_len)
+{
+    if (data_len > sizeof(rspi->data))
+	return E2BIG;
+    memcpy(rspi->data, data, data_len);
+    return 0;
+}
+
+static void
+open_handle_recv_async(ipmi_con_t    *ipmi,
+		       unsigned char *tmsg,
+		       unsigned int  data_len)
+{
+}
+
+static ipmi_payload_t open_payload =
+{ open_format_msg, open_get_recv_seq, open_handle_recv,
+  open_handle_recv_async };
+
 static ipmi_payload_t *payloads[64] =
 {
-    &_ipmi_payload
+    &_ipmi_payload,
+    [IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST] = &open_payload
 };
+
+typedef struct payload_entry_s payload_entry_t;
+struct payload_entry_s
+{
+    unsigned int   payload_type;
+    unsigned char  iana[3];
+    unsigned int   payload_id;
+    ipmi_payload_t *payload;
+
+    payload_entry_t *next;
+};
+
+/* Note that we only add payloads to the head, so no lock is required
+   except for addition. */
+static ipmi_lock_t *lan_payload_lock = NULL;
+payload_entry_t *oem_payload_list = NULL;
 
 int
 ipmi_rmcpp_register_payload(unsigned int   payload_type,
@@ -346,16 +427,72 @@ ipmi_rmcpp_register_payload(unsigned int   payload_type,
 	|| (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT)
 	|| (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST)
 	|| (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE)
-	|| (payload_type >= 64))
+	|| (payload_type >= 64)
+	|| ((payload_type >= 0x20) && (payload_type <= 0x27))) /* No OEM here*/
     {
 	return EINVAL;
     }
-    if (payloads[payload_type] && payload)
+    ipmi_lock(lan_payload_lock);
+    if (payloads[payload_type] && payload) {
+	ipmi_unlock(lan_payload_lock);
 	return EAGAIN;
+    }
 
     payloads[payload_type] = payload;
+    ipmi_unlock(lan_payload_lock);
     return 0;
 }
+
+int
+ipmi_rmcpp_register_oem_payload(unsigned int   payload_type,
+				unsigned char  iana[3],
+				unsigned int   payload_id,
+				ipmi_payload_t *payload)
+{
+    payload_entry_t *e;
+    payload_entry_t *c;
+
+    e = ipmi_mem_alloc(sizeof(*e));
+    if (!e)
+	return ENOMEM;
+    e->payload_type = payload_type;
+    memcpy(e->iana, iana, 3);
+    if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT)
+	e->payload_id = payload_id;
+    else
+	e->payload_id = 0;
+    e->payload = payload;
+
+    ipmi_lock(lan_payload_lock);
+    c = oem_payload_list;
+    while (c) {
+	if ((c->payload_type == payload_type)
+	    && (memcmp(c->iana, iana, 3) == 0)
+	    && (c->payload_id == payload_id))
+	{
+	    ipmi_unlock(lan_payload_lock);
+	    ipmi_mem_free(e);
+	    return EAGAIN;
+	}
+	c = c->next;
+    }
+    e->next = oem_payload_list;
+    oem_payload_list = e;
+    ipmi_unlock(lan_payload_lock);
+    return 0;
+}
+
+static ipmi_lock_t *lan_auth_lock = NULL;
+
+typedef struct auth_entry_s auth_entry_t;
+struct auth_entry_s
+{
+    unsigned int  auth_num;
+    unsigned char iana[3];
+    ipmi_rmcpp_authentication_t *auth;
+    auth_entry_t  *next;
+};
+static auth_entry_t *oem_auth_list = NULL;
 
 static ipmi_rmcpp_authentication_t *auths[64];
 
@@ -372,6 +509,48 @@ ipmi_rmcpp_register_authentication(unsigned int                auth_num,
     return 0;
 }
 
+int
+ipmi_rmcpp_register_oem_authentication(unsigned int                auth_num,
+				       unsigned char               iana[3],
+				       ipmi_rmcpp_authentication_t *auth)
+{
+    auth_entry_t *e;
+    auth_entry_t *c;
+
+    e = ipmi_mem_alloc(sizeof(*e));
+    if (!e)
+	return ENOMEM;
+    e->auth_num = auth_num;
+    memcpy(e->iana, iana, 3);
+    e->auth = auth;
+
+    ipmi_lock(lan_auth_lock);
+    c = oem_auth_list;
+    while (c) {
+	if ((c->auth_num == auth_num)
+	    && (memcmp(c->iana, iana, 3) == 0))
+	{
+	    ipmi_unlock(lan_auth_lock);
+	    ipmi_mem_free(e);
+	    return EAGAIN;
+	}
+    }
+    e->next = oem_auth_list;
+    oem_auth_list = e;
+    ipmi_unlock(lan_auth_lock);
+    return 0;
+}
+
+typedef struct conf_entry_s conf_entry_t;
+struct conf_entry_s
+{
+    unsigned int  conf_num;
+    unsigned char iana[3];
+    ipmi_rmcpp_confidentiality_t *conf;
+    conf_entry_t  *next;
+};
+static conf_entry_t *oem_conf_list = NULL;
+
 ipmi_rmcpp_confidentiality_t *confs[64];
 
 int ipmi_rmcpp_register_confidentiality(unsigned int                 conf_num,
@@ -386,6 +565,48 @@ int ipmi_rmcpp_register_confidentiality(unsigned int                 conf_num,
     return 0;
 }
 
+int
+ipmi_rmcpp_register_oem_confidentiality(unsigned int                 conf_num,
+					unsigned char                iana[3],
+					ipmi_rmcpp_confidentiality_t *conf)
+{
+    conf_entry_t *e;
+    conf_entry_t *c;
+
+    e = ipmi_mem_alloc(sizeof(*e));
+    if (!e)
+	return ENOMEM;
+    e->conf_num = conf_num;
+    memcpy(e->iana, iana, 3);
+    e->conf = conf;
+
+    ipmi_lock(lan_auth_lock);
+    c = oem_conf_list;
+    while (c) {
+	if ((c->conf_num == conf_num)
+	    && (memcmp(c->iana, iana, 3) == 0))
+	{
+	    ipmi_unlock(lan_auth_lock);
+	    ipmi_mem_free(e);
+	    return EAGAIN;
+	}
+    }
+    e->next = oem_conf_list;
+    oem_conf_list = e;
+    ipmi_unlock(lan_auth_lock);
+    return 0;
+}
+
+typedef struct integ_entry_s integ_entry_t;
+struct integ_entry_s
+{
+    unsigned int  integ_num;
+    unsigned char iana[3];
+    ipmi_rmcpp_integrity_t *integ;
+    integ_entry_t  *next;
+};
+static integ_entry_t *oem_integ_list = NULL;
+
 ipmi_rmcpp_integrity_t *integs[64];
 
 int ipmi_rmcpp_register_integrity(unsigned int           integ_num,
@@ -397,6 +618,38 @@ int ipmi_rmcpp_register_integrity(unsigned int           integ_num,
 	return EAGAIN;
     
     integs[integ_num] = integ;
+    return 0;
+}
+
+int
+ipmi_rmcpp_register_oem_integrity(unsigned int           integ_num,
+				  unsigned char          iana[3],
+				  ipmi_rmcpp_integrity_t *integ)
+{
+    integ_entry_t *e;
+    integ_entry_t *c;
+
+    e = ipmi_mem_alloc(sizeof(*e));
+    if (!e)
+	return ENOMEM;
+    e->integ_num = integ_num;
+    memcpy(e->iana, iana, 3);
+    e->integ = integ;
+
+    ipmi_lock(lan_auth_lock);
+    c = oem_integ_list;
+    while (c) {
+	if ((c->integ_num == integ_num)
+	    && (memcmp(c->iana, iana, 3) == 0))
+	{
+	    ipmi_unlock(lan_auth_lock);
+	    ipmi_mem_free(e);
+	    return EAGAIN;
+	}
+    }
+    e->next = oem_integ_list;
+    oem_integ_list = e;
+    ipmi_unlock(lan_auth_lock);
     return 0;
 }
 
@@ -935,12 +1188,15 @@ lan_send_addr(lan_data_t  *lan,
 	      uint8_t     seq,
 	      int         addr_num)
 {
-    unsigned char data[IPMI_MAX_LAN_LEN+IPMI_LAN_MAX_HEADER];
-    unsigned char *tmsg;
-    int           pos;
-    int           rv;
-    int           payload_type;
-    int           in_session = 1;
+    unsigned char  data[IPMI_MAX_LAN_LEN+IPMI_LAN_MAX_HEADER];
+    unsigned char  *tmsg;
+    int            pos;
+    int            rv;
+    int            payload_type;
+    int            out_of_session = 0;
+    ipmi_payload_t *payload = NULL;
+    unsigned char  oem_iana[3] = {0, 0, 0};
+    unsigned int   oem_payload_id = 0;
 
     if ((addr->addr_type >= IPMI_RMCPP_ADDR_START)
 	&& (addr->addr_type <= IPMI_RMCPP_ADDR_END))
@@ -960,30 +1216,54 @@ lan_send_addr(lan_data_t  *lan,
 	}
     }
 
+    if ((payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT)
+	|| ((payload_type >= 0x20) && (payload_type <= 0x27)))
+    {
+	ipmi_rmcpp_addr_t *addr = (ipmi_rmcpp_addr_t *) addr;
+	payload_entry_t *e;
+
+	if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT) {
+	    memcpy(oem_iana, addr->oem_iana, 3);
+	    oem_payload_id = addr->oem_payload_id;
+	} else {
+	    memcpy(oem_iana, lan->oem_iana, 3);
+	    oem_payload_id = 0;
+	}
+
+	/* No lock required, only payload additions are allowed. */
+	e = oem_payload_list;
+	while (e) {
+	    if ((e->payload_type == payload_type)
+		&& (memcmp(e->iana, oem_iana, 3) == 0)
+		&& (e->payload_id == oem_payload_id))
+	    {
+		payload = e->payload;
+		break;
+	    }
+	    e = e->next;
+	}
+    } else {
+	payload = payloads[payload_type];
+    }
+
     tmsg = data + IPMI_LAN_MAX_HEADER;
-    if (addr->addr_type == IPMI_RMCPP_NOSESSION_ADDR_TYPE) {
-	memcpy(tmsg, msg->data, msg->data_len);
-	pos = msg->data_len;
-	payload_type = msg->cmd;
-	in_session = 0;
-	tmsg[0] = seq; /* We use the message tag for the sequence # */
-    } else if (!payloads[payload_type]) {
+    if (!payload) {
 	return ENOSYS;
     } else {
-	pos = IPMI_MAX_LAN_LEN,
-	rv = payloads[payload_type]->format_for_xmit(lan->ipmi, addr, addr_len,
-						     msg, tmsg, &pos,
-						     seq);
+	pos = IPMI_MAX_LAN_LEN;
+	rv = payload->format_for_xmit(lan->ipmi, addr, addr_len,
+				      msg, tmsg, &pos,
+				      &out_of_session, seq);
 	if (rv)
 	    return rv;
     }
 
     if (lan->working_authtype[addr_num] == IPMI_AUTHTYPE_RMCP_PLUS) {
 	rv = rmcpp_format_msg(lan, addr_num,
-			      payload_type, in_session,
+			      payload_type, !out_of_session,
 			      &tmsg, &pos,
 			      IPMI_MAX_LAN_LEN, IPMI_LAN_MAX_HEADER,
-			      NULL, 0);
+			      oem_iana, oem_payload_id);
     } else {
 	rv = lan15_format_msg(lan, addr_num, &tmsg, &pos);
     }
@@ -3062,6 +3342,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     uint32_t    mgsys_session_id;
     int         privilege;
     int         auth, integ, conf;
+    ipmi_rmcpp_authentication_t *authp;
+    ipmi_rmcpp_confidentiality_t *confp;
+    ipmi_rmcpp_integrity_t *integp;
     auth_info_t *info;
     int         rv;
 
@@ -3126,7 +3409,21 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     }
     conf = msg->data[32] & 0x3f;
 
-    if (!auths[auth]) {
+    if (auth >= 0x30) {
+	auth_entry_t *e = oem_auth_list;
+	while (e) {
+	    if ((e->auth_num == auth)
+		&& (memcmp(e->iana, lan->oem_iana, 3) == 0))
+	    {
+		authp = e->auth;
+		break;
+	    }
+	    e = e->next;
+	}
+    } else
+	authp = auths[auth];
+
+    if (!authp) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "BMC returned an auth algorithm that wasn't supported: %d",
@@ -3135,7 +3432,21 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 	goto out;
     }
 
-    if (!confs[conf]) {
+    if (conf >= 0x30) {
+	conf_entry_t *e = oem_conf_list;
+	while (e) {
+	    if ((e->conf_num == conf)
+		&& (memcmp(e->iana, lan->oem_iana, 3) == 0))
+	    {
+		confp = e->conf;
+		break;
+	    }
+	    e = e->next;
+	}
+    } else
+	confp = confs[conf];
+
+    if (!confp) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "BMC returned an conf algorithm that wasn't supported: %d",
@@ -3144,7 +3455,21 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 	goto out;
     }
 
-    if (!integs[integ]) {
+    if (integ >= 0x30) {
+	integ_entry_t *e = oem_integ_list;
+	while (e) {
+	    if ((e->integ_num == integ)
+		&& (memcmp(e->iana, lan->oem_iana, 3) == 0))
+	    {
+		integp = e->integ;
+		break;
+	    }
+	    e = e->next;
+	}
+    } else
+	integp = integs[integ];
+
+    if (!integp) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "BMC returned an integ algorithm that wasn't supported: %d",
@@ -3161,15 +3486,15 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     lan->working_conf[addr_num] = conf;
     lan->working_integ[addr_num] = integ;
-    lan->conf_info[addr_num] = *(confs[conf]);
-    lan->integ_info[addr_num] = *(integs[integ]);
+    lan->conf_info[addr_num] = *confp;
+    lan->integ_info[addr_num] = *integp;
 
     lan->ainfo[addr_num].lan = lan;
     lan->ainfo[addr_num].role = (lan->name_lookup_only << 8) | lan->privilege;
 
-    rv = auths[addr_num]->start_auth(ipmi, addr_num, &(lan->ainfo[addr_num]),
-				     rmcpp_set_info, rmcpp_auth_finished,
-				     info);
+    rv = authp->start_auth(ipmi, addr_num, &(lan->ainfo[addr_num]),
+			   rmcpp_set_info, rmcpp_auth_finished,
+			   info);
     if (rv) {
 	ipmi_mem_free(info);
 	handle_connected(ipmi, rv, addr_num);
@@ -3186,10 +3511,10 @@ static int
 send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
 			int addr_num)
 {
-    int                         rv;
-    unsigned char               data[32];
-    ipmi_msg_t                  msg;
-    ipmi_rmcpp_nosession_addr_t addr;
+    int               rv;
+    unsigned char     data[32];
+    ipmi_msg_t        msg;
+    ipmi_rmcpp_addr_t addr;
 
     memset(data, 0, sizeof(data));
     data[0] = 0;
@@ -3221,7 +3546,8 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
     msg.cmd = IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST;
     msg.data = data;
     msg.data_len = 32;
-    addr.addr_type = IPMI_RMCPP_NOSESSION_ADDR_TYPE;
+    addr.addr_type = (IPMI_RMCPP_ADDR_START
+		      + IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST);
 
     rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
 				       (ipmi_addr_t *) &addr, sizeof(addr),
@@ -4166,6 +4492,15 @@ _ipmi_lan_init(os_handler_t *os_hnd)
     rv = ipmi_create_global_lock(&lan_list_lock);
     if (rv)
 	return rv;
+
+    rv = ipmi_create_global_lock(&lan_payload_lock);
+    if (rv)
+	return rv;
+
+    rv = ipmi_create_global_lock(&lan_auth_lock);
+    if (rv)
+	return rv;
+
     return 0;
 }
 
@@ -4175,5 +4510,33 @@ _ipmi_lan_shutdown(void)
     if (lan_list_lock) {
 	ipmi_destroy_lock(lan_list_lock);
 	lan_list_lock = NULL;
+    }
+    if (lan_payload_lock) {
+	ipmi_destroy_lock(lan_payload_lock);
+	lan_payload_lock = NULL;
+    }
+    while (oem_payload_list) {
+	payload_entry_t *e = oem_payload_list;
+	oem_payload_list = e->next;
+	ipmi_mem_free(e);
+    }
+    if (lan_auth_lock) {
+	ipmi_destroy_lock(lan_auth_lock);
+	lan_auth_lock = NULL;
+    }
+    while (oem_auth_list) {
+	auth_entry_t *e = oem_auth_list;
+	oem_auth_list = e->next;
+	ipmi_mem_free(e);
+    }
+    while (oem_conf_list) {
+	conf_entry_t *e = oem_conf_list;
+	oem_conf_list = e->next;
+	ipmi_mem_free(e);
+    }
+    while (oem_integ_list) {
+	integ_entry_t *e = oem_integ_list;
+	oem_integ_list = e->next;
+	ipmi_mem_free(e);
     }
 }
