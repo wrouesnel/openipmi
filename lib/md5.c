@@ -107,10 +107,8 @@ md5_pad(ipmi_con_t    *ipmi,
 	unsigned int  *payload_len,
 	unsigned int  max_payload_len)
 {
-    md5_info_t     *info = integ_data;
     unsigned char  *p = payload;
     unsigned int   l = *payload_len;
-    int            rv;
     unsigned int   count = 0;
 
     /* We don't authenticate this part of the header. */
@@ -119,7 +117,7 @@ md5_pad(ipmi_con_t    *ipmi,
 
     /* Pad so that when we add two bytes (the pad length and the next
        header) the result is on a multiple of 4 boundary. */
-    while (((l+2) % 4) == 0) {
+    while (((l+2) % 4) != 0) {
 	if (l == max_payload_len)
 	    return E2BIG;
 	p[l] = 0xff;

@@ -116,19 +116,13 @@ hmac_pad(ipmi_con_t    *ipmi,
 	 unsigned int  *payload_len,
 	 unsigned int  max_payload_len)
 {
-    hmac_info_t    *info = integ_data;
     unsigned char  *p = payload;
     unsigned int   l = *payload_len;
-    int            rv;
     unsigned int   count = 0;
-
-    /* We don't authenticate this part of the header. */
-    p += 4;
-    l -= 4;
 
     /* Pad so that when we add two bytes (the pad length and the next
        header) the result is on a multiple of 4 boundary. */
-    while (((l+2) % 4) == 0) {
+    while (((l+2) % 4) != 0) {
 	if (l == max_payload_len)
 	    return E2BIG;
 	p[l] = 0xff;
@@ -151,7 +145,6 @@ hmac_add(ipmi_con_t    *ipmi,
 	 void          *integ_data,
 	 unsigned char *payload,
 	 unsigned int  *payload_len,
-	 unsigned int  *trailer_len,
 	 unsigned int  max_payload_len)
 {
     hmac_info_t   *info = integ_data;
@@ -165,15 +158,11 @@ hmac_add(ipmi_con_t    *ipmi,
     if (l < 4)
 	return E2BIG;
 
-    /* We don't authenticate this part of the header. */
-    p += 4;
-    l -= 4;
-
     p[l] = 0x07; /* Add the next header */
     l++;
 
-    HMAC(info->evp_md, info->k, info->klen, p, l, p+l, &ilen);
-    l += 16;
+    HMAC(info->evp_md, info->k, info->klen, p+4, l-4, p+l, &ilen);
+    l += info->klen;
 
     *payload_len = l;
     return 0;
@@ -202,7 +191,7 @@ hmac_check(ipmi_con_t    *ipmi,
     /* We add 1 to the length because we also check the next header
        field. */
     HMAC(info->evp_md, info->k, info->klen, p, l+1, new_integ, &ilen);
-    if (memcmp(new_integ, p+payload_len+1, info->klen) != 0)
+    if (memcmp(new_integ, p+l+1, info->klen) != 0)
 	return EINVAL;
 
     return 0;

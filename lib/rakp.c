@@ -558,43 +558,7 @@ rakp_hmac_c4(rakp_info_t   *info,
     memcpy(idata+20, p, 16);
 
     p = ipmi_rmcpp_auth_get_sik(info->ainfo, &plen);
-{
-    int _i;
-    unsigned char *_d = idata;
-    unsigned int  _l = 36;
-    printf("DATA:");
-    for (_i=0; _i<_l; _i++) {
-	if ((_i % 8) == 0)
-	    printf("\n ");
-	    printf(" 0x%2.2x", _d[_i]);
-    }
-    printf("\n");
-}
-{
-    int _i;
-    const unsigned char *_d = p;
-    unsigned int  _l = rinfo->key_len;
-    printf("key:");
-    for (_i=0; _i<_l; _i++) {
-	if ((_i % 8) == 0)
-	    printf("\n ");
-	    printf(" 0x%2.2x", _d[_i]);
-    }
-    printf("\n");
-}
     HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 36, integ_data, &ilen);
-{
-    int _i;
-    unsigned char *_d = integ_data;
-    unsigned int  _l = rinfo->key_len;
-    printf("AUTH:");
-    for (_i=0; _i<_l; _i++) {
-	if ((_i % 8) == 0)
-	    printf("\n ");
-	    printf(" 0x%2.2x", _d[_i]);
-    }
-    printf("\n");
-}
     if (memcmp(data+8, integ_data, rinfo->key_len) != 0)
 	return EINVAL;
 

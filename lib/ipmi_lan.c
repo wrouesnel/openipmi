@@ -3623,6 +3623,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     lan->working_conf[addr_num] = conf;
     lan->working_integ[addr_num] = integ;
+printf("A: %d %d\n", lan->working_conf[addr_num], lan->working_integ[addr_num]);
     lan->conf_info[addr_num] = confp;
     lan->integ_info[addr_num] = integp;
 
@@ -3679,7 +3680,7 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
 	data[27] = 0; /* Let the BMC pick */
     else {
 	data[27] = 8;
-	data[28] = lan->requested_integ;
+	data[28] = lan->requested_conf;
     }
 
     msg.netfn = IPMI_RMCPP_DUMMY_NETFN;

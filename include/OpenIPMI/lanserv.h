@@ -171,6 +171,9 @@ typedef struct auth_data_s
     unsigned char k2[20];
     unsigned int  key_len;
     const void    *data;
+    const void    *idata;
+    const void    *ikey;
+    const void    *cdata;
 } auth_data_t;
 
 struct session_s

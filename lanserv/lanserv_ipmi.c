@@ -199,6 +199,10 @@ close_session(lan_data_t *lan, session_t *session)
     session->active = 0;
     if (session->authtype <= 4)
 	ipmi_auths[session->authtype].authcode_cleanup(session->authdata);
+    if (session->integh)
+	session->integh->cleanup(lan, session);
+    if (session->confh)
+	session->confh->cleanup(lan, session);
     lan->active_sessions--;
     if (session->src_addr) {
 	lan->free(lan, session->src_addr);
@@ -356,11 +360,11 @@ return_rmcpp_rsp(lan_data_t *lan, session_t *session, msg_t *msg,
 	len++;
 	if (len == dlen)
 	    return;
-	pos[len] = 0x07; /* Next header */
-	len++;
-    }
-
-    mlen = len;
+	mlen = len;
+	pos[mlen] = 0x07; /* Next header */
+	mlen++;
+    } else
+	mlen = len;
 
     if (payload == 2)
 	s = 22;
@@ -384,7 +388,7 @@ return_rmcpp_rsp(lan_data_t *lan, session_t *session, msg_t *msg,
 	seqp = NULL;
     } else {
 	sid = session->rem_sid;
-	if (session->auth != 0) {
+	if (session->integ != 0) {
 	    seq = session->xmit_seq;
 	    seqp = &session->xmit_seq;
 	    pos[5] |= 0x40;
@@ -2540,7 +2544,6 @@ rakp_hmac_set4(lan_data_t *lan, session_t *session,
 {
     unsigned char       idata[36];
     unsigned int        ilen;
-    user_t              *user = &(lan->users[session->userid]);
     auth_data_t         *a = &session->auth_data;
 
     if (((*data_len) + a->key_len) > max_len)
@@ -2550,43 +2553,7 @@ rakp_hmac_set4(lan_data_t *lan, session_t *session,
     ipmi_set_uint32(idata+16, session->sid);
     memcpy(idata+20, lan->guid, 16);
 
-{
-    int _i;
-    unsigned char *_d = idata;
-    unsigned int  _l = 36;
-    printf("DATA:");
-    for (_i=0; _i<_l; _i++) {
-	if ((_i % 8) == 0)
-	    printf("\n ");
-	    printf(" 0x%2.2x", _d[_i]);
-    }
-    printf("\n");
-}
-{
-    int _i;
-    unsigned char *_d = a->sik;
-    unsigned int  _l = a->key_len;
-    printf("key:");
-    for (_i=0; _i<_l; _i++) {
-	if ((_i % 8) == 0)
-	    printf("\n ");
-	    printf(" 0x%2.2x", _d[_i]);
-    }
-    printf("\n");
-}
     HMAC(a->data, a->sik, a->key_len, idata, 36, data + *data_len, &ilen);
-{
-    int _i;
-    unsigned char *_d = data + *data_len;
-    unsigned int  _l = a->key_len;
-    printf("AUTH:");
-    for (_i=0; _i<_l; _i++) {
-	if ((_i % 8) == 0)
-	    printf("\n ");
-	    printf(" 0x%2.2x", _d[_i]);
-    }
-    printf("\n");
-}
 
     *data_len += a->key_len;
     return 0;
@@ -2609,16 +2576,84 @@ static auth_handlers_t rakp_hmac_md5 =
 };
 #define RAKP_INIT , &rakp_hmac_sha1, &rakp_hmac_md5
 
+static int
+hmac_sha1_init(lan_data_t *lan, session_t *session)
+{
+    session->auth_data.idata = EVP_sha1();
+    session->auth_data.ikey = session->auth_data.sik;
+    return 0;
+}
+
+static int
+hmac_md5_init(lan_data_t *lan, session_t *session)
+{
+    user_t *user = &(lan->users[session->userid]);
+    session->auth_data.idata = EVP_md5();
+    session->auth_data.ikey = user->pw;
+    return 0;
+}
+
+static void
+hmac_cleanup(lan_data_t *lan, session_t *session)
+{
+}
+
+static int 
+hmac_add(lan_data_t *lan, session_t *session,
+	 unsigned char *pos,
+	 unsigned int *data_len, unsigned int data_size)
+{
+    auth_data_t  *a = &session->auth_data;
+    unsigned int ilen;
+
+    if (((*data_len) + a->key_len) > data_size)
+	return E2BIG;
+
+    HMAC(a->idata, a->ikey, a->key_len, pos+4, (*data_len)-4,
+	 pos+(*data_len), &ilen);
+    *data_len += a->key_len;
+    return 0;
+}
+
+static int
+hmac_check(lan_data_t *lan, session_t *session, msg_t *msg)
+{
+    unsigned char integ[20];
+    auth_data_t   *a = &session->auth_data;
+    unsigned int  ilen;
+
+    if ((msg->len-5) < a->key_len)
+	return E2BIG;
+
+    HMAC(a->idata, a->ikey, a->key_len, msg->data, msg->len-a->key_len,
+	 integ, &ilen);
+    if (memcmp(msg->data+msg->len-a->key_len, integ, a->key_len) != 0)
+	return EINVAL;
+    return 0;
+}
+
+static integ_handlers_t hmac_sha1_integ =
+{ hmac_sha1_init, hmac_cleanup, hmac_add, hmac_check };
+static integ_handlers_t hmac_md5_integ =
+{ hmac_md5_init, hmac_cleanup, hmac_add, hmac_check };
+#define HMAC_INIT , &hmac_sha1_integ, &hmac_md5_integ
+#define MD5_INIT
+
 unsigned int default_auth = 1; /* RAKP-HMAC-SHA1 */
 unsigned int default_integ = 1; /* HMAC-SHA1-96 */
 unsigned int default_conf = 1; /* AES-CBC-128 */
 #else
 #define RAKP_INIT
+#define MD5_INIT
+#define HMAC_INIT
 unsigned int default_auth = 0;
 unsigned int default_integ = 0;
 unsigned int default_conf = 0;
 #endif
-integ_handlers_t *integs[64];
+integ_handlers_t *integs[64] =
+{
+    NULL HMAC_INIT MD5_INIT
+};
 conf_handlers_t *confs[64];
 auth_handlers_t *auths[64] =
 {
@@ -2785,8 +2820,22 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
 	session->authh->init(lan, session);
     session->integ = integ;
     session->integh = integs[integ];
+    if (session->integh) {
+	rv = session->integh->init(lan, session);
+	if (rv) {
+	    err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
+	    goto out_err;
+	}
+    }
     session->conf = conf;
     session->confh = confs[conf];
+    if (session->confh) {
+	rv = session->confh->init(lan, session);
+	if (rv) {
+	    err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
+	    goto out_err;
+	}
+    }
 
     session->userid = 0;
     session->time_left = lan->default_session_timeout;
@@ -2808,10 +2857,10 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
     data[16] = auth;
     data[20] = 0;
     data[23] = 8;
-    data[24] = auth;
+    data[24] = integ;
     data[28] = 0;
     data[31] = 8;
-    data[32] = auth;
+    data[32] = conf;
 
     return_rmcpp_rsp(lan, session, msg, 0x11, data, 36, NULL, 0);
     return;
@@ -3010,6 +3059,11 @@ check_message_integrity(lan_data_t *lan, session_t *session, msg_t *msg)
 	    return EINVAL;
 	}
 	return 0;
+    } else if (session->integ == 0) {
+	lan->log(INVALID_MSG, msg,
+		 "Message failure:"
+		 " Authenticated msg on unauthenticated session");
+	return EINVAL;
     }
 
 
@@ -3021,6 +3075,10 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 {
     int       len;
     uint32_t  *seq;
+    msg_t     imsg;
+
+    imsg.data = msg->data-1;
+    imsg.len = msg->len+1;
 
     if (msg->len < 11) {
 	lan->log(LAN_ERR, msg,
@@ -3085,7 +3143,10 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 	    return;
 	}
 
-	rv = check_message_integrity(lan, session, msg);
+	imsg.encrypted = msg->encrypted;
+	imsg.authenticated = msg->authenticated;
+
+	rv = check_message_integrity(lan, session, &imsg);
 	if (rv) {
 	    lan->log(LAN_ERR, msg,
 		     "LAN msg failure:"
