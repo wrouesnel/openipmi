@@ -2618,6 +2618,7 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	ipmi->set_ipmb_addr_handler(ipmi, lan->ipmb_addr_handler,
 				    lan->ipmb_addr_cb_data);
 	lan->ipmb_addr_handler = NULL;
+	lan->real_ipmi_lan_con = NULL;
 
 	/* The old connection is gone, just force it to be closed on
 	   the next audit. */

@@ -2787,13 +2787,14 @@ _ipmi_lan_set_ipmi(ipmi_con_t *old, ipmi_con_t *new)
     os_hnd_fd_id_t *fd_wait_id;
     int            rv;
 
+    old->os_hnd->remove_fd_to_wait_for(old->os_hnd, lan->fd_wait_id);
+    lan->fd_wait_id = NULL;
     rv = old->os_hnd->add_fd_to_wait_for(old->os_hnd,
 					 lan->fd,
 					 data_handler, 
 					 new,
 					 &fd_wait_id);
     if (!rv) {
-	old->os_hnd->remove_fd_to_wait_for(old->os_hnd, lan->fd_wait_id);
 	lan->fd_wait_id = fd_wait_id;
 	lan->ipmi = new;
     }
