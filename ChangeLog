@@ -3,6 +3,15 @@
 	* OpenIPMIcmdlang.pc.in, Makefile.am: Added file for the new
 	cmdlang library.
 
+	* lib/strings.c, cmdlang/cmd_entity.c, cmd/cmdlang.c: Fixed some
+	minor formatting things.
+
+	* cmdlang/cmd_sensor.c: Added number output for sensor types,
+	event readings, and units.
+
+	* man/ipmi_cmdlang.7: Lots of work adding docs.  More formatting
+	work still to do.
+
 2004-10-08 Corey Minyard <cminyard@mvista.com> 
 
 	* doc/IPMI.ltx: Documentation cleanup

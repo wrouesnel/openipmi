@@ -5,24 +5,1832 @@ ipmi_cmdlang \- A command language interface to the IPMI library
 
 .SH DESCRIPTION
 .B ipmi_cmdlang
-is a command language designed to supply the full power of OpenIPMI on a
-command line.  It has a large number of commands and well-formed responses
-to each command.
+is a command language designed to supply the full power of OpenIPMI on
+a command line.  It has a large number of commands and well-formed
+responses to each command.  Note that this assumes some knowledge of
+OpenIPMI and how it works; you can get that from the IPMI document
+that comes with OpenIPMI.
 
 .B ipmish
 starts up with no connections or anything of that nature.  You must
-enter commands to make connections to domains.
+enter commands to make connections to domains.  Then you can enter
+commands to manipulate those domains or objects inside those domains.
+
+Note that you may use quotes, either
+.B ''
+or
+.B ""
+to contain parameters with spaces.
+
+.SH COMMENTS
+
+Lines with a
+.B #
+character in the first column are ignored.
+
+.SH OBJECTS
+
+In the command language, you will deal with various objects like
+sensors, controls, domains, and entities.  Each of these has a name.
+The name of the domain is assigned by the user in the
+.B domain new
+command, all the other names are based on the domain name of the
+domain they belong to and various attributes about the object.  These
+names are all well-formed.  They are
+
+\fI<domain>\fP - A name of a domain.  Each registered domain in a system
+has a name assigned by the user.
+
+\fI<entity>\fP - Entity names are in the form:
+.RS
+[\fI<domain>\fP[(\fI<entity spec>\fP)]]
+.RE
+Notice that the \fI<entity spec>\fP is optional.  If it is not listed,
+then the operation is done on all entities in the domain.  The whole
+thing is optional, too, if nothing is given then the operation is done
+on every entity in every domain.
+
+The \fI<entity spec>\fP is either
+.RS
+\fI<entity id>\fP.\fI<entity instance>\fP
+.RE
+for system-relative entities, or:
+.RS
+r\fI<channel>\fP.\fI<IPMB>\fP.\fI<entity id>\fP.\fI<entity instance-0x60>\fP
+.RE
+for device-relative entities.  In IPMI, device-relative entity
+instances always start at 0x60; the specification suggests that you
+subtract off the 0x60 from the entity instance when displaying these;
+the command language follows this suggestion.
+
+\fI<sensor>\fP -  These come in the form
+.RS
+[\fI<entity>\fP[.\fIname\fP]]
+.RE
+As with entities, only listing a domain will cause the operation to be
+done on every sensor in the domain, just listing an entity will cause
+it to be done to every sensor in that entity.  An empty sensor entry
+will cause an operation to be done on every sensor in every domain.
+
+\fI<control>\fP - These come in the form
+.RS
+[<entity>[.name]]
+.RE
+These work exactly like sensors.
+
+\fI<mc>\fP - A management controller.  These come in the form
+.RS
+[<domain>[(<channel>.<IPMB>)]]
+.RE
+As usual, the parts left empty will cause defaulting to all things in
+the previously specified parts.
+
+\fI<connection>\fP - A connection number, in the form
+.RS
+[<domain>[.<integer>]]
+.RE
+The number is the connection number of the domain.
+
+\fI<pet>\fP - A platform event trap id, in the form
+.RS
+[<domain>[.<integer>]]
+.RE
+The number is arbitrarily assigned by the system.
+
+\fI<lanparm>\fP - A LAN parameter id, in the form
+.RS
+[<domain>[.<integer>]]
+.RE
+The number is arbitrarily assigned by the system.
+
+\fI<pef>\fP - A PEF id, in the form
+.RS
+[<domain>[.<integer>]]
+.RE
+The number is arbitrarily assigned by the system.
+
+In all cases, the object names have parts that are optional, and the
+entire object name is optional.  If a part is left empty, then all
+objects that are part of the specified parts are operated on.  For
+instance, if the system has a sensor named
+.B d1(7.1).temp
+then specifying
+.B d1
+would operation on all sensors in the domain named
+.B d1.
+Specifying
+.B d1(7.1)
+Would operation on all sensors in that entity.  Specifying an empty
+name, either with
+.B ""
+or by just entering nothing if the object is the last thing in the
+command's parameters.
+
+Note this optionality gives a lot of power, but can be very dangerous.
+Entering
+.B domain close
+will close every domain, for instance.
+
+In commands, every object operated on will generate a response for
+that object.  If no object is operated on, the command will produce an
+error.
+
+.SH OTHER PARAMETERS
+
+The commands and displays use a variety of other parameters for
+specifying various IPMI things.
+
+\fI<guid>\fP - a 16-byte globally unique ID, all globbed together in
+one big hexadecimal thing.
+
+\fI<threshold>\fI is a threshold for a sensor; the value it must go
+over/under to generate an event.  It is always displayed as one of
+.B lower non-critical
+.B lower critical
+.B lower non-recoverable
+.B upper non-critical
+.B upper critical
+.B upper non-recoverable.
+It may be entered as one of the above, or as
+.B lnc,
+.B lc,
+.B lnr,
+.B unc,
+.B uc,
+.B unr
+as a short form.
+
+\fI<threshold enable>\fP is the enable for a threshold.  It is like
+\fI<threshold>\fP above, but also has an
+.B assertion
+or
+.B deassertion
+appended to the end of the name.  The short form will have a
+.B a
+or 
+.B d
+appended.
+
+\fI<discrete enable>\fP is the enable or disable for a discrete sensor
+and is specified with the sensor offset.  The long form is
+.B <integer> assertion
+or
+.B <integer> deassertion
+and the short form is
+.B <integer>[ad]
+where the number
+is the offset and
+.B [ad]
+means assertion or deassertion.
+
+\fI<hot-swap state>\fP is one of
+.B not_present,
+.B inactive
+.B activation_requested
+.B activation_in_progress
+.B active
+.B deactivation_requested
+.B deactivation_in_progress
+or
+.B out_of_con.
 
 .SH COMMANDS
 
-.TP
-.B read
-Read and execute commands from the given file.
+The command language is hierarchical, meaning that commands may have
+subcommands, and subcommands may have subsubcommands, etc.  So, for
+instance, the command to create a domain is
+.B domain new.
+The command to list all sensors in a domain named domain1 is
+.B sensor list domain1.
 
+Each command has a reponse for each object operated on, which is
+listed after the command description.  In those responses, anything
+that begins with a
+.B %
+is optional.  Entries of the form
+.B **name**
+refer to object info descriptions that are listed in the object info
+section.
+
+Each section below defines the unique subcommands of a main command.
+
+Help for any command is available with:
+
+.B help command [subcommand [...]]
+- Help for any command.
+
+Some commands are common to almost all subcommands.  These are:
+
+.B list <containing object>
+- List all objects of the specified type that are contained in the
+specified object.  For instance,
+.B control list \fI<entity>\fP
+will list all controls in the given entity.
 .TP
-.B exit
-Quit
-.B ipmish
+Response:
+.RS
+.nf
+<containing object type>
+  Name: <name>
+  .
+  .
+.fi
+.RE
+
+
+.B info <object>
+- List static information about the given object.
+.TP
+Response:
+.RS
+.nf
+<object type>
+  Name: <name>
+  **object info**
+.fi
+.RE
+
+.SS domain
+
+These commands deal with domain objects.
+
+.B new \fI<domain>\fP \fI<options>\fP \fI<parms...>\fP
+- Open a connection to a new domain.
+\fI<parms>\fP are either:
+.RS
+lan \fI<IP>\fP \fI<port>\fP \fI<enc>\fP \fI<auth>\fP \fI<name>\fP
+\fI<password>\fP
+.RE
+for a RMCP LAN connection or
+.RS
+     smi \fI<smi num>\fP
+.RE
+for a system interface connection.
+The \fI<IP>\fP is the IP address or host name of the LAN-capable BMC
+to connect with.  The \fI<port>\fP is generally 623.  \fI<enc>\fP is
+the authentication type, either
+.B md5,
+.B md2,
+.B straight,
+or
+.B none.
+\fI<auth>\fP is the authentication level, either
+.B admin,
+.B operator
+or
+.B user.
+\fI<name>\fP and \fI<password>\fP are the user name and password of
+the IPMI user to use for the connection.
+The <smi num> is the driver number, generally 0.
+Options enable and disable various automitic processing and are:
+.PD 0
+.HP
+.B -[no]all
+- all automatic handling.  This will override the other
+processing options and turn them all on.  This is true by default.
+.HP
+.B -[no]sdrs
+- sdr fetching.  This turns on fetching SDRs when they are found.  This
+is false by default.
+.HP
+.B -[no]frus
+- FRU fetching  This turns on fetching FRU information when it is found.  This
+is false by default.
+.HP
+.B -[no]sel
+- SEL fetching.    This turns on fetching SELs when they are found.  This
+is false by default.
+.HP
+.B -[no]ipmbscan
+- IPMB bus scanning.  This turns on scanning IPMB busses when they are found.
+This is false by default.
+.HP
+.B -[no]oeminit
+- enable or disable special OEM processing (like ATCA).
+.HP
+.B -[no]seteventrcvr
+- setting event receivers.  Note that setting event
+receivers and waiting til up is not affected by the
+.B -all
+option.  If this
+is true (the default) then OpenIPMI will attempt to set the event receiver
+for an MC it finds that does not have it set to a valid destination.
+.HP
+.B -wait_til_up
+- wait until the domain is up before returning
+Note that if you specify this and the domain never comes up,
+you will never get a prompt.  This is not affected by the
+.B -all
+option.
+.PD
+By default -all and -seteventrcvr are true, which turns
+everything on.
+.TP
+Response:
+.RS
+.nf
+Domain Created: <domain>
+.fi
+.RE
+
+.B fru <domain> <is_logical> <device_address> <device_id> <lun> <private_bus> <channel>
+- dump a fru given all it's insundry information.
+.TP
+Response:
+.RS
+.nf
+Domain
+  Name: <domain>
+  FRU
+    **FRU INFO**
+.fi
+.RE
+
+.B msg <domain> <channel> <ipmb> <LUN> <NetFN> <Cmd> [data...]
+- Send a command to the given IPMB address on the given channel and
+display the response.  Note that this does not require the existance
+of an MC in OpenIPMI.
+.TP
+Response:
+.RS
+.nf
+  Domain: <domain>
+  channel: <chan>
+  ipmb: <ipmb>
+  LUN: <lun>
+  NetFN: <netfn>
+  command: <cmd>
+  Data: <data bytes>
+.fi
+.RE
+
+.B scan <domain> <ipmb addr> [ipmb addr]
+- scan an IPMB to add or remove it.
+If a range is given, then scan all IPMBs in the range.
+.TP
+Response:
+.RS
+.nf
+Scan done: <domain>
+.fi
+.RE
+
+.B presence <domain>
+- Audit the presence of all enities in the domain.  Note that this just
+starts the process; it will run in the background.
+.TP
+Response is:
+.RS
+.nf
+Presence check started: <domain>
+.fi
+.RE
+
+.B close <domain>
+- close the given domain.
+.TP
+Response:
+.RS
+.nf
+Domain closed: <domain>
+.fi
+.RE
+
+.B sel_rescan_time <domain> <time in seconds>
+- Set the time between SEL rescans for all SELs in the system.  zero
+disables scans.
+.TP
+Response:
+.RS
+.nf
+Domain SEL rescan time set: <domain>
+.fi
+.RE
+
+.B ipmb_rescan_time <domain> <time in seconds>
+- Set the time between
+IPMB rescans for this domain.  zero disables scans.
+.TP
+Response:
+.RS
+.nf
+Domain IPMB rescan time set: <domain>
+.fi
+.RE
+
+.SS entity
+These commands deal with entity objects.
+
+fru <entity> - Dump the FRU information about the given entity.
+.TP
+Reponse:
+.RS
+.nf
+Entity
+  Name: <entity>
+  FRU
+    **FRU INFO**
+.fi
+.RE
+
+.SS entity hs
+These commands deal with hot-swap of entities.  Note that there is no
+info or list command for this subcommand.
+
+.B get_act_time <entity>
+- Get the hot-swap auto-activate time.
+.TP
+Response:
+.RS
+.nf
+Entity
+  Name: <entity>
+    Auto-Activation Time: <integer>
+.fi
+.RE
+
+.B set_act_time <entity>
+- Set the hot-swap auto-activate time.
+.TP
+Reponse:
+.RS
+.nf
+Set act time: <entity>
+.fi
+.RE
+
+.B get_deact_time <entity>
+- Get the hot-swap auto-deactivate time
+Response:
+.RS
+.nf
+Entity
+  Name: <entity>
+	Auto-Deactivation Time: <integer>
+.fi
+.RE
+
+.B set_deact_time <entity>
+- Set the hot-swap auto-deactivate time
+.TP
+Response:
+.RS
+.nf
+Set deact time: <entity>
+.fi
+.RE
+
+.B activation_request <entity>
+- Act like a user requested an
+activation of the entity.  This is generally equivalent to
+closing the handle latch or something like that.
+.TP
+Response:
+.RS
+.nf
+Activation requested: <entity>
+.fi
+.RE
+
+.B activate <entity>
+- activate the given entity
+.TP
+Response:
+.RS
+.nf
+Activated: <entity>
+.fi
+.RE
+
+.B deactivate <entity>
+- deactivate the given entity
+.TP
+Response:
+.RS
+.nf
+Deactivated: <entity>
+.fi
+.RE
+
+.B state <entity>
+- Return the current hot-swap state of the given
+entity.
+.TP
+Response:
+.RS
+.nf
+Entity
+  Name: <entity>
+    State: <hot-swap state>
+.fi
+.RE
+
+.B check <entity>
+- Audit the entity's hot-swap state
+.TP
+Response:
+.RS
+.nf
+Check started: <entity>
+.fi
+.RE
+
+.SS sensor
+
+.B get <sensor>
+- Get the sensor's current reading.
+.TP
+Response:
+.RS
+.nf
+Sensor
+  Name: <sensor>
+  Event Messages Enabled: true | false
+  Sensor Scanning Enabled: true | false
+  Initial Update In Progress: true | false
+.fi
+.RE
+For sensors of type "threshold", the following will be output:
+.RS
+.nf
+%Value: <double>
+%Raw Value: <integer>
+Threshold
+  Name: <threshold>
+  Out Of Range: true | false
+.fi
+.RE
+For discrete sensors, the following will be output:
+.RS
+.nf
+Event
+  Offset: <integer>
+  %Name: <string name of event offset>
+  Set: true | false
+.fi
+.RE
+The name field may be custom and is not explicitly specified.
+
+.B rearm <sensor> global | <threshold enable> [<threshold enable> ..] | <discrete enable> [<discrete enable> ..]
+- Rearm the sensor.  If global is specified, then rearm
+all events in the sensor.  Otherwise, if it is a threshold sensor, then
+put in a list of threshold enables.  If it is a discrete sensor, then
+put in a list of discrete enables.
+.TP
+Response:  
+.RS
+.nf
+Rearm done: <sensor>
+.fi
+.RE
+
+.B get_thresholds <sensor>
+- Get the sensor's thresholds
+.TP
+Response:
+.RS
+.nf
+Sensor
+  Name: <sensor>
+  Threshold     
+    Name: <threshold>
+    Value: <double>
+.fi
+.RE
+
+.B set_thresholds <sensor> <threshold> <value> ...
+- Set the sensor's
+thresholds to the given values.  If a threshold is not specified,
+it will not be modified.  Thresholds are unc, uc, unr, lnr, lc.
+The u stands for upper, l for lower, nc for non-critical, c for
+critical, and nr for non-recoverable.  The value is floating point.
+.TP
+Response:  
+.RS
+.nf
+Thresholds set: <sensor>
+.fi
+.RE
+
+.B get_hysteresis <sensor>
+- Get the sensor's hysteresis values
+.TP
+Response:
+.RS
+.nf
+Sensor
+  Name: <sensor>
+  Positivie Hysteresis: <integer>
+  Negative Hysteresis: <integer>
+.fi
+.RE
+
+.B set_hysteresis <sensor> <pos hyst> <neg hyst>
+- Set the sensor's
+hysteresis to the given values.  These are raw integer
+value; hystersis is specified as a raw value and it cannot be
+converted to floating point because the function may be
+non-linear.
+.TP
+Response:  
+.RS
+.nf
+Hysteresis set: <sensor>
+.fi
+.RE
+
+.B get_event_enables <sensor>
+- Get the sensor's event enable values
+.TP
+Response:
+.RS
+.nf
+Sensor
+  Name: <sensor>
+  Event Messages Enabled: true | false
+  Sensor Scanning Enabled: true | false
+  Busy: true | false
+.fi
+.RE
+Threshold sensors report:
+.RS
+.nf
+Threshold
+  Name: <threshold>
+  Enabled: true | false
+  .
+  .
+.fi
+.RE
+only supported thresholds are listed.  Discrete sensors report:
+.RS
+.nf
+Event
+  Offset: <integer>
+  Name: <event offset name for sensor>
+  %Assertion Enabled: true | false
+  %Deassertion Enabled: true | false
+.fi
+.RE
+only supported offsets are listed.  The assertion and deassertion
+enables are listed only if the offset support them.
+
+.B set_event_enables <sensor> msg|nomsg scan|noscan [<enable> [<enable> ...]]
+- Set the sensor's event enable values.  This turns sensor messages
+and scanning on and off and will enable all the listed enables and
+disable all over ones.  The enables are either a \fI<threshold
+enable>\fP or a \fI<discrete enable>\fP.
+.TP
+Response:  
+.RS
+.nf
+Event enables set: <sensor>
+.fi
+.RE
+
+.B enable_events <sensor> msg|nomsg scan|noscan [<enable> [<enable> ...]]
+- Enable event enable values.  This turns sensor messages and scanning
+on and off and will enable all the listed enables.  All other enables
+will be left alone.  The enables are either a \fI<threshold enable>\fP
+or a \fI<discrete enable>\fP.
+.TP
+Response:  
+.RS
+.nf
+Event enables set: <sensor>
+.fi
+.RE
+
+.B disable_events <sensor> msg|nomsg scan|noscan [<enable> [<enable> ...]]
+- Disable event enable values.  This turns sensor messages and
+scanning on and off and will disable all the listed enable.  All other
+enables will be left alone.  The enables are either a \fI<threshold
+enable>\fP or a \fI<discrete enable>\fP.
+.TP
+Response:  
+.RS
+.nf
+Event enables set: <sensor>
+.fi
+.RE
+
+.SS control
+Commands dealing with controls.
+
+.B set <control> <value> [<value> ..]
+- Set the value of a control.  The settings depend on control type,
+most take one or more integer values depending on the number of
+physical things the control contains.  An identifier type takes one or
+more unsigned characters.  A light set with settings take the form
+.RS
+.B lc|nolc <color> <on time> <off time>
+.RE
+.B lc
+and
+.B nolc
+turn on or of local control, the over
+values should be obvious.  Note all lights support local control,
+you need to see if it supports the value.
+.TP
+Response:
+.RS
+.nf
+Set done: <control>
+.fi
+.RE
+
+.B get <control>
+- Get the value of a control.  The reponse depends
+on the control type.
+.TP
+Response:
+.RS
+.nf
+Control
+  Name: <control>
+.fi
+.RE
+Response for setting lights is:
+.RS
+.nf
+Light
+  Num: 0
+  Local Control: true | false
+  %Color: black | white | red | green | blue | yellow | orange
+  %On Time: <integer>
+  %Off Time: <integer>
+.fi
+.RE
+Note that multiple lights may be present if the control supports
+multiple lights.  The options values (marked with
+.B %
+) will not be
+present if local control is set to true.  Local control means that
+the LED takes whatever default function it does on the device
+(like disk activity, ethernet activity, hot-swap LED, etc.).
+Response for id control:
+.RS
+.nf
+Data: <byte1> <byte2> ...
+.fi
+.RE
+Response for other controls:
+.RS
+.nf
+Value
+  Num: <integer>
+  Value: <integer>
+.fi
+.RE
+There will be one
+.B Value
+for each value the control supports.
+
+.SS mc
+Commands dealing with MC objects.
+
+.B reset <warm | cold> <mc>
+- Do a warm or cold reset on the given MC
+.TP
+Response:
+.RS
+.nf
+Reset done: <mc>
+.fi
+.RE
+
+.B msg <mc> <LUN> <NetFN> <Cmd> [data...]
+- Send the given command
+to the management controller and display the response.
+.TP
+Response:
+.RS
+.nf
+  MC: <mc>
+  LUN: <lun>
+  NetFN: <netfn>
+  command: <cmd>
+  Data: <data bytes>
+.fi
+.RE
+
+.B set_events_enable <mc> <enable | disable>
+- enables or disables
+events on the MC.
+.TP
+Response:
+.RS
+.nf
+Events enable done: <mc>
+.fi
+.RE
+
+.B get_events_enable <mc>
+- Prints out if the events are enabled for
+the given MC.
+.TP
+Response:
+.RS
+.nf
+Events Enable: true | false
+.fi
+.RE
+
+.B sdrs <mc> <main | sensor>
+- list the SDRs for the mc.  Either gets
+the main SDR repository or the sensor SDR repository.
+.TP
+Response:
+.RS
+.nf
+MC
+  Name: <mc>
+  SDR
+    Record ID: <integer>
+    Type: <integer>
+    Version: <integer>.<integer>
+    Data: <data bytes>
+.fi
+.RE
+One
+.B SDR
+will be present for each SDR in the repository.
+
+.B get_sel_time <mc>
+- Get the time in the SEL for the given MC.
+.TP
+Response:
+.RS
+.nf
+MC
+  Name: <mc>
+  SEL Time: <integer>
+.fi
+.RE
+
+.B sel_info <mc>
+- Dump information about the MC's SEL.
+.TP
+Response:
+.RS
+.nf
+SEL Count: <integer>
+SEL Slots Used: <integer>
+.fi
+.RE
+
+.SS sel
+Commands dealing with the system event log.  Note that there is no
+info command.
+
+.B list <domain>
+- The list command is unique in this object, so it is specified
+explicitly here.  List the local copy of the system event log
+.TP
+Response:
+.RS
+.nf
+Domain
+  Name: <domain>
+  Entries: <integer>
+  Slots in use: <integer>
+  Event
+    **EVENT INFO**
+   .
+   .
+.fi
+.RE
+
+.B delete <mc> <record #>
+- Delete the given event number from the SEL
+.TP
+Response:
+.RS
+.nf
+Event deleted
+  MC: <mc>
+  Record: <integer>
+.fi
+.RE
+
+.B add <mc> <type> <13 bytes of data>
+- Add the
+event data to the SEL.
+.TP
+Response:
+.RS
+.nf
+MC
+  Name: <mc>
+  Record ID: <integer>
+.fi
+.RE
+
+.B clear <domain>
+- clear the system event log
+.TP
+Response:
+.RS
+.nf
+SEL Clear done: <domain>
+.fi
+.RE
+
+.SS con
+Commands dealing with connections.
+
+.B activate <connection>
+- Activate the given connection
+.TP
+Response:
+.RS
+.nf
+Connection activated: <connection>
+.fi
+.RE
+
+.SS pet
+Commands dealing with platform event traps.
+
+.B new <domain> <connection> <channel> <ip addr> <mac_addr> <eft selector>
+<policy num> <apt selector> <lan dest selector>
+- Set up the domain to send PET traps from the given connection
+to the given IP/MAC address over the given channel.
+.TP
+Response:
+.RS
+.nf
+PET Created: <pet>
+.fi
+.RE
+
+.B mcnew <mc> <channel> <ip addr> <mac_addr> <eft selector>
+<policy num> <apt selector> <lan dest selector>
+- Set up the domain to send PET traps from the given connection
+to the given IP/MAC address over the given channel.  This takes
+an MC instead of a connection.
+.TP
+Response:
+.RS
+.nf
+PET Created: <pet>
+.fi
+.RE
+
+.B close <pet>
+- Close the pet.
+.TP
+Response:
+.RS
+.nf
+PET destroyed: <pet>
+.fi
+.RE
+
+.SS pef
+commands dealing with platform even filters.  These are basically
+connections to the PEF configuration parameters in an MC.  You use a
+pef to fetch a pef config, which you can then modify and write back to
+the MC.  Note that when you get a pef config, you claim a lock on the
+MC that must be unlocked.
+
+.B new <mc>
+- Create a pef for the given MC.
+.TP
+Response:
+.RS
+.nf
+PEF: <pef>
+.fi
+.RE
+
+.B unlock_mc <mc>
+- Unlock the PEF lock on the given MC.
+.TP
+Response:
+.RS
+.nf
+PEF unlocked: <mc>
+.fi
+.RE
+
+.B close <pef>
+- Free the given pef
+.TP
+Response:
+.RS
+.nf
+PEF destroyed: <pef>
+.fi
+.RE
+
+.SS pef config
+Commands dealing with PEF configurations.  These are the actual PEF
+data items.
+
+.B get <pef>
+- Fetch the pef data items from the pef
+and create a pef config.
+.TP
+Response:
+.RS
+.nf
+PEF Config
+  Name: <pef config>
+  ** PEF CONFIG **
+.fi
+.RE
+
+.B update <pef config> <parm> [selector] <value>
+- Set the given parameter
+in the pef config to the given value.  If the parameter has
+a selector of some type, the selector must be given, otherwise
+no selector should be given.
+.TP
+Response:
+.RS
+.nf
+PEF config updated: <pef config>
+.fi
+.RE
+
+.B set <pef> <pef config>
+- Write the pef data back
+to the pef.  Note that this must be the same pef used
+to create the config.
+.TP
+Response:
+.RS
+.nf
+PEF config set: <pef config>
+.fi
+.RE
+
+.B unlock <pef> <pef config>
+- Unlock the lock in the
+MC and mark the pef config as unlocked.
+.TP
+Response:
+.RS
+.nf
+PEF config unlocked: <pef config>
+.fi
+.RE
+
+.B close <pef config>
+- Free the pef config.
+.TP
+Response:
+.RS
+.nf
+PEF config destroyed: <pef config>
+.fi
+.RE
+
+.SS lanparm
+Commands dealing with lanparms.  These are basically connections to
+the LAN configuration parameters in an MC.  You use a lanparm to fetch
+a lanparm config, which you can then modify and write back to the MC.
+Note that when you get a lanparm config, you claim a lock on the MC
+that must be unlocked.
+
+.B new <mc> <channel>
+- Create a lanparm for the given MC and
+channel.
+.TP
+Response:
+.RS
+.nf
+LANPARM: <lanparm>
+.fi
+.RE
+
+.B unlock_mc <mc> <channel>
+- Unlock the lanparm lock on the given
+MC and channel.
+.TP
+Response:
+.RS
+.nf
+LANPARM unlocked: <mc>
+.fi
+.RE
+
+.B close <lanparm>
+- Free the given lanparm
+.TP
+Response:
+.RS
+.nf
+LANPARM destroyed: <lanparm>
+.fi
+.RE
+
+.SS lanparm config
+Commands dealing with lanparm configurations.  These are the actual
+lanparm data items.
+
+.B get <lanparm>
+- Fetch the lanparm data items from the lanparm
+and create a lanparm config.
+.TP
+Response:
+.RS
+.nf
+LANPARM Config
+  Name: <lanparm config>
+  ** LANPARM CONFIG **
+.fi
+.RE
+
+.B set <lanparm> <lanparm config>
+- Write the lanparm data back
+to the lanparm.  Note that this must be the same lanparm used
+to create the config.
+.TP
+Response:
+.RS
+.nf
+LANPARM config set: <lanparm config>
+.fi
+.RE
+
+.B unlock <lanparm> <lanparm config>
+- Unlock the lock in the
+MC and mark the lanparm config as unlocked.
+.TP
+Response:
+.RS
+.nf
+LANPARM config unlocked: <lanparm config>
+.fi
+.RE
+
+.B close <lanparm config>
+- Free the lanparm config.
+.TP
+Response:
+.RS
+.nf
+LANPARM config destroyed: <lanparm config>
+.fi
+.RE
+
+.SH OTHER COMMANDS
+A few general commands exist.
+
+.B evinfo true | false
+- Turn on or off dumping object information when an event comes in.
+This is false by default.
+
+.B debug <type> on|off
+- Turn the given debugging type on or off
+
+
+.SH EVENTS
+
+The command language will output events to the console when they
+happen.  Events all occur in the format:
+  Event
+    **EVENT INFO**
+
+The event info varies on the type of events.  The defined events are
+listed.
+
+The following event is output when the domain is completely up and
+operational and finished all it SDR, FRU, and bus scans:
+  EVENT
+    Object Type: Domain
+    Name: <domain>
+    Operation: Domain fully up
+    Connection Number: <integer>
+    Port Number: <integer>
+    Any Connection Up: true | false
+    Error: <integer>
+
+The following comes out when domain connection infomration changes:
+  EVENT
+    Object Type: Domain
+    Name: <domain>
+    Operation: Connection Change
+    
+The following comes out when domains are added:
+  EVENT
+    Object Type: Domain
+    Name: <domain>
+    Operation: Add
+    %**DOMAIN INFO**
+
+The following comes out when domains are destroyed:
+  EVENT
+    Object Type: Domain
+    Name: <domain>
+    Operation: Delete
+
+The following comes out when the domain gets an event that does not
+have a handler:
+  EVENT
+    Object Type: Event
+    **EVENT INFO**
+
+The following comes out when an entity is added:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Add
+    %**ENTITY INFO**
+
+The following comes out when an entity is deleted:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Delete
+
+The following comes out when an entity is changed:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Change
+    %**ENTITY INFO**
+
+The following comes out when an entity's FRU is added:
+  EVENT
+    Object Type: Entity FRU
+    Name: <entity>
+    Operation: Add
+    %**FRU INFO**
+
+The following comes out when an entity's FRU is deleted:
+  EVENT
+    Object Type: Entity FRU
+    Name: <entity>
+    Operation: Delete
+
+The following comes out when an entity's FRU is changed:
+  EVENT
+    Object Type: Entity FRU
+    Name: <entity>
+    Operation: Change
+    %**FRU INFO**
+
+The following comes out when an entity's presence changes:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Presence Change
+    Present: true | false
+    %Event
+      **EVENT INFO**
+
+The following comes out when an entity's hot-swap state changes:
+  EVENT
+    Object Type: Entity
+    Name: <entity>
+    Operation: Hot-Swap Change
+    Last State: not_present | inactive | activation_requested |
+               activation_in_progress | active | deactivation_requested |
+               deactivation_in_progress | out_of_con
+    State: not_present | inactive | activation_requested |
+               activation_in_progress | active | deactivation_requested |
+               deactivation_in_progress | out_of_con
+    %Event
+      **EVENT INFO**
+
+The following comes out when a discrete sensor gets an event:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Event
+    Offset: <integer>
+    Direction: assertion | deassertion
+    Severity: <integer>
+    Previous Severity: <integer>
+    %Event
+      **EVENT INFO**
+    
+The following comes out when a threshold sensor gets an event:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Event
+    Threshold: lower non critical | lower critical | lower non recoverable
+              | upper non critical | upper critical | upper non recoverable
+    High/Low: going high | going low
+    Direction: assertion | deassertion
+    %Value: <double>
+    %Raw Value: <integer>
+    %Event
+      **EVENT INFO**
+    
+The following comes out when a sensor is added:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Add
+    %**SENSOR INFO**
+
+The following comes out when a sensor is deleted:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Delete
+
+The following comes out when a sensor is changed:
+  EVENT
+    Object Type: Sensor
+    Name: <sensor>
+    Operation: Change
+    %**SENSOR INFO**
+
+The following comes out when a control gets an event:
+  EVENT
+    Object Type: Control
+    Name: <control>
+    Operation: Event
+    Value
+      Number: <integer>
+      Value: <integer>
+    %Event
+      **EVENT INFO**
+    
+The following comes out when a control is added:
+  EVENT
+    Object Type: Control
+    Name: <control>
+    Operation: Add
+    %**CONTROL INFO**
+
+The following comes out when a control is deleted:
+  EVENT
+    Object Type: Control
+    Name: <control>
+    Operation: Delete
+
+The following comes out when a control is changed:
+  EVENT
+    Object Type: Control
+    Name: <control>
+    Operation: Change
+    %**CONTROL INFO**
+
+
+.SH OBJECT INFO
+
+**EVENT INFO**
+  MC: <mc>
+  Record ID: <integer>
+  Event type: <integer>
+  Timestamp: <integer>
+  Data: <data bytes>
+
+
+**DOMAIN INFO**
+  Type: <domain type>
+  SEL Rescan Time: <time>
+  IPMB Rescan Time: <time>
+
+
+**ENTITY INFO**
+  Type: unknown | mc | fru | generic
+  Present: true | false
+  Presence sensor always there: true | false
+  Hot swappable: true | false
+  Parents
+    Name: <entity>
+    Name: <entity>
+      .
+      .
+  Children
+    Name: <entity>
+    Name: <entity>
+      .
+      .
+
+Note that Parents and Children fields will not be present if the
+entity has no parents or children.  Each entity type except "unknown"
+will have its own output info.  These are:
+
+mc:
+  Channel: <channel>
+  LUN: <lun>
+  OEM: <oem field from SDR>
+  Slave Address: <ipmb>
+  ACPI_system_power_notify_required: true | false
+  ACPI_device_power_notify_required: true | false
+  controller_logs_init_agent_errors: true | false
+  log_init_agent_errors_accessing: true | false
+  global_init: true | false
+  chassis_device: true | false
+  bridge: true | false
+  IPMB_event_generator: true | false
+  IPMB_event_receiver: true | false
+  FRU_inventory_device: true | false
+  SEL_device: true | false
+  SDR_repository_device: true | false
+  sensor_device: true | false
+
+fru:
+  Channel: <channel>
+  LUN: <lun>
+  OEM: <oem field from SDR>
+  Slave Address: <ipmb>
+  access_address: <ipmb>
+  private_bus_id: <integer>
+  device_type: <integer>
+  device_modifier: <integer>
+  is_logical_fru: true | false
+  fru_device_id: <integer>
+
+generic:
+  Channel: <channel>
+  LUN: <lun>
+  OEM: <oem field from SDR>
+  access_address: <ipmb>
+  private_bus_id: <integer>
+  device_type: <integer>
+  device_modifier: <integer>
+  slave_address: <ipmb>
+  address_span: <integer>
+
+
+**MC INFO **
+  provides_device_sdrs: true | false
+  device_available: true | false
+  chassis_support: true | false
+  bridge_support: true | false
+  ipmb_event_generator: true | false
+  ipmb_event_receiver: true | false
+  fru_inventory_support: true | false
+  sel_device_support: true | false
+  sdr_repository_support: true | false
+  sensor_device_support: true | false
+  device_id: <ipmb>
+  device_revision: <integer>
+  fw_revision: <integer>.<integer>
+  version: <integer>.<integer>
+  manufacturer_id: <integer>
+  product_id: <integer>
+  aux_fw_revision: <integer> <integer> <integer> <integer>
+
+
+*SENSOR INFO**
+  LUN: <integer>
+  Number: <integer>
+  Event Reading Type: <integer>
+  Event Reading Type Name: one of:
+           unspecified threshold discrete_usage discrete_state
+           discrete_predictive_failure discrete_limit_exceeded
+           discrete_performance_met discrete_severity discrete_device_presense
+           discrete_device_enable discrete_availability discrete_redundancy
+           discrete_acpi_power
+
+  Type: <integer>
+  Type Name: <sensor type (a generic string)>
+  %Event Support: per state | entire sensor | global
+  Init Scanning: true | false
+  Init Events: true | false
+  Init Thresholds: true | false
+  Init Hysteresis: true | false
+  Init Type: true | false
+  Init Power Up Events: true | false
+  Init Power Up Scanning: true | false
+  Ignore If No Entity: true | false
+  Auto Rearm: true | false
+  OEM1: <integer>
+  Id: <string>
+
+For sensors of type "threshold", the following exist:
+  Threshold Access: none | readable | settable | fixed
+  Threshold
+    Name: lower non critical | lower critical | lower non recoverable
+          | upper non critical | upper critical | upper non recoverable
+    Readable: true | false
+    Settable: true | false
+    Supports: going high assertion | going low assertion
+              | going high deassertion | going low deassertion
+      .
+      .
+    .
+    .
+    Hysteresis Support: none | readable | settable | fixed
+    %Nominal Reading: <float>
+    %Normal Max: <float>
+    %Normal Min: <float>
+    %Sensor Max: <float>
+    %Sensor Min: <float>
+    Base Unit: <integer>
+    Base Unit Name: <string>
+    %Rate Unit: <integer>
+    %Rate Unit Name: <string>
+    %Modifier Use: / | *
+    %Modifier Unit: <integer>
+    %Modifier Unit Name: <string>
+
+For sensors of type not "threshold", the following exist:
+  Event
+    Offset: <integer>
+    Supports: assertion | deassertion
+      .
+      .
+    .
+    .
+
+Fields marked with % are optional
+
+
+**CONTROL INFO**
+  Type: <control type>
+  Generates Events: true | false
+  Settable: true | false
+  Readable: true | false
+  Num Values: <integer>
+  Id: <string>
+  
+  Controls of type light that are set with settings have the
+  following:
+  Set with: settings
+  Local Control: true | false
+  Color: black | white | red | green | blue | yellow | orange
+    .
+    .
+  One color is listed for each supported color
+
+  Controls of type light that are set with transitions have the
+  following:
+  Light
+    Number: <integer>
+    Num Values: <integer>
+    Value
+      Number: <integer>
+      Num Transitions: <integer>
+      Transition
+        Number: <integer>
+        Color: black | white | red | green | blue | yellow | orange
+        Time: <integer>
+        .
+        .
+      .
+      .
+    .
+    .
+
+  Controls of type identifier have the following:
+  Max Length: <integer>
+
+
+**FRU INFO**
+  %Internal area version: <integer>
+  %Internal area length: <integer>
+  %Internal area data: <data bytes>
+  %Chassis info version: <integer>
+  %Chassis info type: <integer>
+  %Record
+    Name: Chassis info part number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Chassis info serial number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %String Field
+    Name: Chassis info
+    Number: <integer>
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+   .
+   .
+  %Board info version: <integer>
+  %Board info lang code: <integer>
+  %Board info mfg time: <integer>
+  %Record
+    Name: Board info board manufacturer
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Board info board product name
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Board info board serial number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Board info board part number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Board info fru file id
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %String Field
+    Name: Board info
+    Number: <integer>
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+   .
+   .
+  %Product info version: <integer>
+  %Product info lang code: <integer>
+  %Record
+    Name: Product info manufacturer name
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info product name
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info product part model number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info product version
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info product serial number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info asset tag
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info fru file id
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %String Field
+    Name: Product info
+    Number: <integer>
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+   .
+   .
+  %Multi-record
+    Number: <integer>
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+
+
+** LANPARM CONFIG **
+  support_auth_oem: true | false
+  support_auth_straight: true | false
+  support_auth_md5: true | false
+  support_auth_md2: true | false
+  support_auth_none: true | false
+  ip_addr_source: <integer>
+  num_alert_destinations: <integer>
+  %ipv4_ttl: <integer>
+  %ipv4_flags: <integer>
+  %ipv4_precedence: <integer>
+  %ipv4_tos: <integer>
+  %ip_addr: <ip addr>
+  %mac_addr: <mac addr>
+  %subnet_mask: <ip addr>
+  %primary_rmcp_port <integer>
+  %secondary_rmcp_port <integer>
+  %bmc_generated_arps: true | false
+  %bmc_generated_garps: true | false
+  %garp_interval: <integer>
+  %default_gateway_ip_addr: <ip addr>
+  %default_gateway_mac_addr: <mac addr>
+  %backup_gateway_ip_addr: <ip addr>
+  %backup_gateway_mac_addr: <mac addr>
+  community_string: <string>
+  User
+    Name: callback
+    enable_auth_oem: true | false
+    enable_auth_straight: true | false
+    enable_auth_md5: true | false
+    enable_auth_md2: true | false
+    enable_auth_none: true | false
+  User
+    Name: user
+    enable_auth_oem: true | false
+    enable_auth_straight: true | false
+    enable_auth_md5: true | false
+    enable_auth_md2: true | false
+    enable_auth_none: true | false
+  User
+    Name: operator
+    enable_auth_oem: true | false
+    enable_auth_straight: true | false
+    enable_auth_md5: true | false
+    enable_auth_md2: true | false
+    enable_auth_none: true | false
+  User
+    Name: admin
+    enable_auth_oem: true | false
+    enable_auth_straight: true | false
+    enable_auth_md5: true | false
+    enable_auth_md2: true | false
+    enable_auth_none: true | false
+  User
+    Name: oem
+    enable_auth_oem: true | false
+    enable_auth_straight: true | false
+    enable_auth_md5: true | false
+    enable_auth_md2: true | false
+    enable_auth_none: true | false
+  Alert Destination
+    Number: <integer>
+    alert_ack: true | false
+    dest_type: <integer>
+    alert_retry_interval: <integer>
+    max_alert_retries: <integer>
+    dest_format: <integer>
+    gw_to_use: <integer>
+    dest_ip_addr: <ip addr>
+    dest_mac_addr: <mac addr>
+   .
+   .
+   
+
+** PEF CONFIG **
+  alert_startup_delay_enabled: true | false
+  startup_delay_enabled: true | false
+  event_messages_enabled: true | false
+  pef_enabled: true | false
+  diagnostic_interrupt_enabled: true | false
+  oem_action_enabled: true | false
+  power_cycle_enabled: true | false
+  reset_enabled: true | false
+  power_down_enabled: true | false
+  alert_enabled: true | false
+  %startup_delay: <integer>
+  %alert_startup_delay: <integer>
+  guid_enabled: true | false
+  guid_val: <guid>
+  num_event_filters: <integer>
+  num_alert_policies: <integer>
+  num_alert_strings: <integer>
+  Event Filter
+    Number: <integer>
+    enable_filter: true | false
+    filter_type: <integer>
+    diagnostic_interrupt: true | false
+    oem_action: true | false
+    power_cycle: true | false
+    reset: true | false
+    power_down: true | false
+    alert: true | false
+    alert_policy_number: <integer>
+    event_severity: <integer>
+    generator_id_addr: <integer>
+    generator_id_channel_lun: <integer>
+    sensor_type: <integer>
+    sensor_number: <integer>
+    event_trigger: <integer>
+    data1_offset_mask: <integer>
+    data1_mask: <integer>
+    data1_compare1: <integer>
+    data1_compare2: <integer>
+    data2_mask: <integer>
+    data2_compare1: <integer>
+    data2_compare2: <integer>
+    data3_mask: <integer>
+    data3_compare1: <integer>
+    data3_compare2: <integer>
+   .
+   .
+  Alert Policy
+    Number: <integer>
+    policy_num: <integer>
+    enabled: true | false
+    policy: <integer>
+    channel: <integer>
+    destination_selector: <integer>
+    alert_string_event_specific: true | false
+    alert_string_selector: <integer>
+   .
+   .
+  Alert String
+    event_filter: <integer>
+    alert_string_set: <integer>
+    alert_string: <string>
+   .
+   .
+
+**CONNECTION INFO**
+  Active: true | false
+
+**PEF INFO**
+  MC: <mc>
+
+**PET INFO**
+  MC: <mc>
+  Channel: <channel>
+  IP Address: <ip address>
+  MAC Address: <mac address>
+  EFT Selector: <eft selector>
+  Policy Number: <policy number>
+  APT Selector: <apt selector>
+  LAN Dest Selector: <lan dest selector>
+
+**LANPARM INFO**
+  MC: <mc>
+  Channel: <integer>
+
 
 .SH "SEE ALSO"
 ipmish(1)

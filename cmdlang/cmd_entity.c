@@ -972,7 +972,7 @@ static ipmi_cmdlang_init_t cmds_entity[] =
       "<entity> - Dump FRU information about an entity",
       ipmi_cmdlang_entity_handler, fru_info, NULL },
     { "hs", &entity_cmds,
-      "Commands dealing with hot-swap",
+      "- Commands dealing with hot-swap",
       NULL, NULL, &hs_cmds },
     { "get_act_time", &hs_cmds,
       "<entity> - Get the hot-swap auto-activate time",

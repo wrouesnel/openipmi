@@ -91,9 +91,13 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
     ipmi_sensor_get_num(sensor, &lun, &num);
     ipmi_cmdlang_out_int(cmd_info, "LUN", lun);
     ipmi_cmdlang_out_int(cmd_info, "Number", num);
-    ipmi_cmdlang_out(cmd_info, "Event Reading Type",
+    ipmi_cmdlang_out_int(cmd_info, "Event Reading Type",
+		     ipmi_sensor_get_event_reading_type(sensor));
+    ipmi_cmdlang_out(cmd_info, "Event Reading Type Name",
 		     ipmi_sensor_get_event_reading_type_string(sensor));
-    ipmi_cmdlang_out(cmd_info, "Type",
+    ipmi_cmdlang_out_int(cmd_info, "Type",
+			 ipmi_sensor_get_sensor_type(sensor));
+    ipmi_cmdlang_out(cmd_info, "Type Name",
 		     ipmi_sensor_get_sensor_type_string(sensor));
 
     event_support = ipmi_sensor_get_event_support(sensor);
@@ -232,21 +236,30 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
 	if (!rv)
 	    ipmi_cmdlang_out_double(cmd_info, "Sensor Min", dval);
 
-	ipmi_cmdlang_out(cmd_info, "Base Unit",
+	ipmi_cmdlang_out_int(cmd_info, "Base Unit",
+			     ipmi_sensor_get_base_unit(sensor));
+	ipmi_cmdlang_out(cmd_info, "Base Unit Name",
 			 ipmi_sensor_get_base_unit_string(sensor));
 	str = ipmi_sensor_get_rate_unit_string(sensor);
-	if (strlen(str))
-	    ipmi_cmdlang_out(cmd_info, "Rate Unit", str);
+	if (strlen(str)) {
+	    ipmi_cmdlang_out_int(cmd_info, "Rate Unit",
+				 ipmi_sensor_get_rate_unit(sensor));
+	    ipmi_cmdlang_out(cmd_info, "Rate Unit Name", str);
+	}
 	switch (ipmi_sensor_get_modifier_unit_use(sensor)) {
 	case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
 	    ipmi_cmdlang_out(cmd_info, "Modifier Use", "/");
-	    ipmi_cmdlang_out(cmd_info, "Modifier Unit",
+	    ipmi_cmdlang_out_int(cmd_info, "Modifier Unit",
+				 ipmi_sensor_get_modifier_unit(sensor));
+	    ipmi_cmdlang_out(cmd_info, "Modifier Unit Name",
 			     ipmi_sensor_get_modifier_unit_string(sensor));
 	    break;
 		
 	case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
 	    ipmi_cmdlang_out(cmd_info, "Modifier Use", "*");
-	    ipmi_cmdlang_out(cmd_info, "Modifier Unit",
+	    ipmi_cmdlang_out_int(cmd_info, "Modifier Unit",
+				 ipmi_sensor_get_modifier_unit(sensor));
+	    ipmi_cmdlang_out(cmd_info, "Modifier Unit Name",
 			     ipmi_sensor_get_modifier_unit_string(sensor));
 	    break;
 

@@ -164,7 +164,7 @@ The command hierarchy is:
       **ENTITY INFO**
 
   * fru <entity> - Dump the FRU information about the given entity.
-    Reponse is:
+    Response is:
     Entity
       Name: <entity>
       FRU
@@ -179,47 +179,47 @@ The command hierarchy is:
       Response is:
       Entity
         Name: <entity>
-	Auto-Activation Time: <integer>
+        Auto-Activation Time: <integer>
 
     * set_act_time <entity> - Set the hot-swap auto-activate time
-      Reponse is:
+      Response is:
       Set act time: <entity>
 
     * get_deact_time <entity> - Get the hot-swap auto-deactivate time
       Response is:
       Entity
         Name: <entity>
-	Auto-Deactivation Time: <integer>
+        Auto-Deactivation Time: <integer>
 
     * set_deact_time <entity> - Set the hot-swap auto-deactivate time
-      Reponse is:
+      Response is:
       Set deact time: <entity>
 
     * activation_request <entity> Act like a user requested an
       activation of the entity.  This is generally equivalent to
       closing the handle latch or something like that.
-      Reponse is:
+      Response is:
       Activation requested: <entity>
 
     * activate <entity> - activate the given entity
-      Reponse is:
+      Response is:
       Activated: <entity>
 
     * deactivate <entity> - deactivate the given entity
-      Reponse is:
+      Response is:
       Deactivated: <entity>
 
     * state <entity> - Return the current hot-swap state of the given
       entity.
-      Reponse is:
+      Response is:
       Entity
         Name: <entity>
-	State: not_present | inactive | activation_requested |
-	       activation_in_progress | active | deactivation_requested |
-	       deactivation_in_progress | out_of_con
+        State: not_present | inactive | activation_requested |
+               activation_in_progress | active | deactivation_requested |
+               deactivation_in_progress | out_of_con
 
     * check <entity> - Audit the entities hot-swap state
-      Reponse is:
+      Response is:
       Check started: <entity>
 
 * sensor
@@ -230,7 +230,7 @@ The command hierarchy is:
       Name: <entity>
       Sensors
         Name: <sensor1>
-	Name: <sensor2>
+        Name: <sensor2>
         .
         .
 
@@ -419,12 +419,12 @@ The command hierarchy is:
 * mc
 
   * list <domain> - List all MCs
-    Reponse is:
+    Response is:
     Domain
       Name: <domain>
       MCs
         Name: <mc1>
-	Name: <mc2>
+        Name: <mc2>
         .
         .
 
@@ -464,14 +464,14 @@ The command hierarchy is:
       Name: <mc>
       SDR
         Record ID: <integer>
-	Type: <integer>
-	Version: <integer>.<integer>
-	Data: <data bytes>
+        Type: <integer>
+        Version: <integer>.<integer>
+        Data: <data bytes>
       SDR
         Record ID: <integer>
-	Type: <integer>
-	Version: <integer>.<integer>
-	Data: <data bytes>
+        Type: <integer>
+        Version: <integer>.<integer>
+        Data: <data bytes>
       .
       .
      
@@ -481,7 +481,7 @@ The command hierarchy is:
       SEL Time: <integer>
 
   * sel_info <mc> - Dump information about the MC's SEL.
-    Reponse is:
+    Response is:
     SEL Count: <integer>
     SEL Slots Used: <integer>
 
@@ -620,14 +620,14 @@ The command hierarchy is:
       Response is:
       PEF Config
         Name: <pef config>
-	** PEF CONFIG **
+        ** PEF CONFIG **
 
     * get <pef> - Fetch the pef data items from the pef
       and create a pef config.
       Response is:
       PEF Config
         Name: <pef config>
-	** PEF CONFIG **
+        ** PEF CONFIG **
 
     * update <pef config> <parm> [selector] <value> - Set the given parameter
       in the pef config to the given value.  If the parameter has
@@ -704,14 +704,14 @@ The command hierarchy is:
       Response is:
       LANPARM Config
         Name: <lanparm config>
-	** LANPARM CONFIG **
+        ** LANPARM CONFIG **
 
     * get <lanparm> - Fetch the lanparm data items from the lanparm
       and create a lanparm config.
       Response is:
       LANPARM Config
         Name: <lanparm config>
-	** LANPARM CONFIG **
+        ** LANPARM CONFIG **
 
     * set <lanparm> <lanparm config> - Write the lanparm data back
       to the lanparm.  Note that this must be the same lanparm used
@@ -837,11 +837,11 @@ The following comes out when an entity's hot-swap state changes:
     Name: <entity>
     Operation: Hot-Swap Change
     Last State: not_present | inactive | activation_requested |
-	       activation_in_progress | active | deactivation_requested |
-	       deactivation_in_progress | out_of_con
+               activation_in_progress | active | deactivation_requested |
+               deactivation_in_progress | out_of_con
     State: not_present | inactive | activation_requested |
-	       activation_in_progress | active | deactivation_requested |
-	       deactivation_in_progress | out_of_con
+               activation_in_progress | active | deactivation_requested |
+               deactivation_in_progress | out_of_con
     %Event
       **EVENT INFO**
 
@@ -1026,14 +1026,16 @@ generic:
 *SENSOR INFO**
   LUN: <integer>
   Number: <integer>
-  Event Reading Type: one of:
+  Event Reading Type: <integer>
+  Event Reading Type Name: one of:
            unspecified threshold discrete_usage discrete_state
-	   discrete_predictive_failure discrete_limit_exceeded
-	   discrete_performance_met discrete_severity discrete_device_presense
-	   discrete_device_enable discrete_availability discrete_redundancy
-	   discrete_acpi_power
+           discrete_predictive_failure discrete_limit_exceeded
+           discrete_performance_met discrete_severity discrete_device_presense
+           discrete_device_enable discrete_availability discrete_redundancy
+           discrete_acpi_power
 
-  Type: <sensor type (a generic string)>
+  Type: <integer>
+  Type Name: <sensor type (a generic string)>
   %Event Support: per state | entire sensor | global
   Init Scanning: true | false
   Init Events: true | false
@@ -1066,10 +1068,13 @@ For sensors of type "threshold", the following exist:
     %Normal Min: <float>
     %Sensor Max: <float>
     %Sensor Min: <float>
-    Base Unit: <string>
-    %Rate Unit: <string>
+    Base Unit: <integer>
+    Base Unit Name: <string>
+    %Rate Unit: <integer>
+    %Rate Unit Name: <string>
     %Modifier Use: / | *
-    %Modifier Unit: <string>
+    %Modifier Unit: <integer>
+    %Modifier Unit Name: <string>
 
 For sensors of type not "threshold", the following exist:
   Event
@@ -1110,10 +1115,10 @@ Fields marked with % are optional
       Num Transitions: <integer>
       Transition
         Number: <integer>
-	Color: black | white | red | green | blue | yellow | orange
-	Time: <integer>
+        Color: black | white | red | green | blue | yellow | orange
+        Time: <integer>
         .
-	.
+        .
       .
       .
     .
@@ -1355,3 +1360,23 @@ Fields marked with % are optional
     alert_string: <string>
    .
    .
+
+**CONNECTION INFO**
+  Active: true | false
+
+**PEF INFO**
+  MC: <mc>
+
+**PET INFO**
+  MC: <mc>
+  Channel: <channel>
+  IP Address: <ip address>
+  MAC Address: <mac address>
+  EFT Selector: <eft selector>
+  Policy Number: <policy number>
+  APT Selector: <apt selector>
+  LAN Dest Selector: <lan dest selector>
+
+**LANPARM INFO**
+  MC: <mc>
+  Channel: <integer>

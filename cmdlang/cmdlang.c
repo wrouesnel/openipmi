@@ -76,6 +76,9 @@ struct ipmi_cmd_info_s
 
     /* For use by the user commands */
     void *data;
+
+    /* Used to know if the command generated output. */
+    int did_output;
 };
 
 
@@ -1063,12 +1066,19 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
     ipmi_cmd_info_t    *info;
     int                rv;
 
+    if (*str == '#') {
+	/* A comment */
+	cmdlang->done(cmdlang);
+	return;
+    }
+
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
 	cmdlang->errstr = "Out of memory";
 	cmdlang->err = ENOMEM;
 	cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
-	goto done;
+	cmdlang->done(cmdlang);
+	return;
     }
     memset(info, 0, sizeof(*info));
     info->usecount = 1;
@@ -1164,6 +1174,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	}
 
     done_help:
+	info->did_output = 1;
 	cmdlang->help = old_help;
 	goto done;
     }	
@@ -1206,9 +1217,14 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
     }
 
  done:
+    if ((!cmdlang->err) && (!info->did_output)) {
+	cmdlang->errstr = "Specified object not found";
+	cmdlang->err = EINVAL;
+	cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
+	goto done;
+    }
 
-    if (info)
-	ipmi_cmdlang_cmd_info_put(info);
+    ipmi_cmdlang_cmd_info_put(info);
 }
 
 int
@@ -1308,6 +1324,7 @@ ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 		 char            *name,
 		 char            *value)
 {
+    info->did_output = 1;
     info->cmdlang->out(info->cmdlang, name, value);
 }
 
@@ -1824,29 +1841,29 @@ ipmi_cmdlang_get_threshold_ev(char                        *str,
     } else if (vc == 4) {
 	/* Four values, uncompressed form */
 	if (strcasecmp(val[0], "upper") == 0) {
-	    if (strcasecmp(val[1], "noncritical") == 0)
+	    if (strcasecmp(val[1], "non-critical") == 0)
 		thresh = IPMI_UPPER_NON_CRITICAL;
 	    else if (strcasecmp(val[1], "critical") == 0)
 		thresh = IPMI_UPPER_CRITICAL;
-	    else if (strcasecmp(val[1], "nonrecoverable") == 0)
+	    else if (strcasecmp(val[1], "non-recoverable") == 0)
 		thresh = IPMI_UPPER_NON_RECOVERABLE;
 	    else
 		goto out_err;
 	} else if (strcasecmp(val[0], "lower") == 0) {
-	    if (strcasecmp(val[1], "noncritical") == 0)
+	    if (strcasecmp(val[1], "non-critical") == 0)
 		thresh = IPMI_LOWER_NON_CRITICAL;
 	    else if (strcasecmp(val[1], "critical") == 0)
 		thresh = IPMI_LOWER_CRITICAL;
-	    else if (strcasecmp(val[1], "nonrecoverable") == 0)
+	    else if (strcasecmp(val[1], "non-recoverable") == 0)
 		thresh = IPMI_LOWER_NON_RECOVERABLE;
 	    else
 		goto out_err;
 	} else
 	    goto out_err;
 
-	if (strcasecmp(val[2], "goinghigh") == 0)
+	if (strcasecmp(val[2], "going-high") == 0)
 	    value_dir = IPMI_GOING_HIGH;
-	else if (strcasecmp(val[2], "goinglow") == 0)
+	else if (strcasecmp(val[2], "going-low") == 0)
 	    value_dir = IPMI_GOING_LOW;
 	else
 	    goto out_err;

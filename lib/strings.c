@@ -292,12 +292,12 @@ ipmi_get_unit_type_string(unsigned int val)
 
 static char *threshold_types[] =
 {
-    "lower non critical",
+    "lower non-critical",
     "lower critical",
-    "lower non recoverable",
-    "upper non critical",
+    "lower non-recoverable",
+    "upper non-critical",
     "upper critical",
-    "upper non recoverable"
+    "upper non-recoverable"
 };
 #define NUM_THRESHOLD_TYPES (sizeof(threshold_types)/sizeof(char *))
 char *
@@ -310,8 +310,8 @@ ipmi_get_threshold_string(enum ipmi_thresh_e val)
 
 static char *value_dir_types[] =
 {
-    "going low",
-    "going high"
+    "going-low",
+    "going-high"
 };
 #define NUM_VALUE_DIR_TYPES (sizeof(value_dir_types)/sizeof(char *))
 char *
