@@ -714,19 +714,83 @@ other OpenIPMI calls.
 If you need to initialize any OEM libraries, do it right after the call
 to @code{ipmi_init()}.
 
+@example
+/* Initialize the OpenIPMI library. sample_cb_handler is an OS
+   handler */
+ipmi_init(&sample_cb_handlers);
+@end example
+
 @node    The Connection, The Domain, Initialization, Using OpenIPMI
 @section The Connection
 
 The first thing you must do after initialization is create a connection
 to the IPMI system.  The operation for this depends on the type of
 connection, such as a LAN connection, a connection through a local
-device driver, or an OEM connection.  See the information for the
-specific connections for information on the connection.
+device driver, or an OEM connection.
 
 Note that creating a connection does not actually establish a
 connection, it just creates the data structures for the connection.  You
 then hand the connection to a domain.  The domain will establish the
 connection and get things rolling.
+
+Connecting to a system interface (KCS, SMIC, etc.) is relatively simple,
+you need only to supply the interface number, an OS handler and a
+user-defined piece of data, like:
+@example
+    rv = ipmi_smi_setup_con(if_num, &sample_cb_handlers, my_data, &con);
+    if (rv) {
+	printf("ipmi_smi_setup_con: %s", strerror(rv));
+	exit(1);
+    }
+@end example
+
+LAN connections have a lot more parameters due to authentication
+requirements.  The parameters are:
+@table @samp
+@item  ip_addrs
+The IP addresses of the remote BMC.  You may list
+multiple IP addresses in an array, each address @strong{must} be to the
+same BMC.
+@item ports
+The UDP ports to use, one for each address.  It should
+generally be IPMI_LAN_STD_PORT.
+@item num_ip_addrs
+The number of ip addresses (and ports) in the ip_addrs and ports arrays.
+@item authtype
+The authentication type to use, from ipmi_auth.h
+@item privilege
+The privilege level to request for the connection, from
+the set of values in ipmi_auth.h.
+@item username
+The 16-byte max username to use for the connection.
+@item username_len
+The length of username.
+@item password
+The 16-byte max password to use for the connection.
+@item password_len
+The length of password.
+@item handlers
+The set of OS handlers to use for this connection.
+@item user_data
+This will be put into the BMC and may be fetched by the
+user.  The user can use it for anything they like.
+@item new_con
+The new connection is returned here.
+@end table
+
+For example, you may have the following code to set up a single address:
+@example
+	rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
+				IPMI_AUTHTYPE_MD5, IPMI_PRIVILEGE_ADMIN,
+				username, strlen(username),
+				password, strlen(password),
+				&sample_cb_handlers, my_data,
+				&con);
+	if (rv) {
+	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
+	    exit(1);
+	}
+@end example
 
 @node    The Domain, Entities, The Connection, Using OpenIPMI
 @section The Domain
@@ -932,11 +996,11 @@ threshold is out of range, use @code{ipmi_is_threshold_out_of_range()}
 on the states passed in.
 
 The SDR also has information about the accuracy, tolerance, min and max
-values, etc. for the sensor.  Those function calls will return floating
-point values (converted from raw values).  You need to read the IPMI
-spec for the real meanings of all these things (from what little is
-provided there), the functions are under the comment ``Sensor reading
-information from the SDR'' in @file{ipmiif.h}.
+values, etc. for the sensor.  OpenIPMI contains functions that return
+these as floating point values (converted from raw values).  You need to
+read the IPMI spec for the real meanings of all these things (from what
+little is provided there), the functions are under the comment ``Sensor
+reading information from the SDR'' in @file{ipmiif.h}.
 
 OpenIPMI provides string values for many of the values in the SDR, so
 the user doesn't have to provide it.  Note that the string may be set to
@@ -1197,7 +1261,7 @@ The @code{ipmi_register_for_events()} function allows you to get events
 OpenIPMI couldn't correlate to a sensor.  As well, the functions
 @code{ipmi_domain_first_event()}, @code{ipmi_domain_last_event()},
 @code{ipmi_domain_next_event()}, and @code{ipmi_domain_prev_event()} let you
-iterate through the logs in the local representation of the SEL.
+iterate through the events in the local representation of the SEL.
 
 @node    The Sensor Data Record (SDR) Repository, , The System Event Log (SEL), Using OpenIPMI
 @section The Sensor Data Record (SDR) Repository

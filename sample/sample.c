@@ -172,7 +172,7 @@ main(int argc, char *argv[])
     sel_alloc_selector(&ui_sel);
 
     /* Initialize the OpenIPMI library. ipmi_ui_cb_handler is an OS
-       OS handler */
+       handler */
     ipmi_init(&ipmi_ui_cb_handlers);
 
 #if 0
@@ -186,7 +186,7 @@ main(int argc, char *argv[])
        called. */
     rv = ipmi_smi_setup_con(0, &ipmi_ui_cb_handlers, ui_sel, &con);
     if (rv) {
-	printf("ipmi_smi_setup_con", rv);
+	printf("ipmi_smi_setup_con: %s", strerror(rv));
 	exit(1);
     }
 #endif

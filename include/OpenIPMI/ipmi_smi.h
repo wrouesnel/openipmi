@@ -44,9 +44,6 @@
  *  handlers - The set of OS handlers to use for this connection.
  *  user_data - This will be put into the BMC and may be fetched by the
  *     user.  The user can use it for anything they like.
- *  setup_cb - The function to call when the setup of the connection is
- *     complete, or when the connection setup fails.
- *  cb_data - passed to setup_cb when it is called.
  *  new_con - the newly created connection is returned here.
  */
 int ipmi_smi_setup_con(int                if_num,
