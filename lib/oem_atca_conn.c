@@ -51,6 +51,11 @@ atca_ipmb_handler(ipmi_con_t   *ipmi,
     unsigned char        ipmb = 0;
     int                  err = 0;
 
+    if (!ipmi) {
+	err = ECANCELED;
+	goto out_handler;
+    }
+
     if (msg->data[0] != 0) 
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
     else if (msg->data_len < 4)
@@ -63,6 +68,7 @@ atca_ipmb_handler(ipmi_con_t   *ipmi,
     if (!err)
 	ipmi->set_ipmb_addr(ipmi, ipmb, ipmb == 0x20);
 
+ out_handler:
     if (handler)
 	handler(ipmi, err, ipmb, ipmb == 0x20, cb_data);
 }
@@ -104,7 +110,7 @@ atca_oem_finish_check(ipmi_con_t   *ipmi,
     ipmi_conn_oem_check_done done = rsp_data1;
     void                     *cb_data = rsp_data2;
 
-    if ((msg->data_len >= 8) && (msg->data[0] == 0)) {
+    if (ipmi && (msg->data_len >= 8) && (msg->data[0] == 0)) {
 	/* We've got an ATCA system, set up the handler. */
 	ipmi->get_ipmb_addr = lan_atca_ipmb_fetch;
     }

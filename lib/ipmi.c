@@ -1069,6 +1069,7 @@ ipmi_check_lock(ipmi_lock_t *lock, char *str)
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
 int _ipmi_pet_init(void);
+int _ipmi_conn_init(void);
 int ipmi_oem_atca_conn_init(void);
 
 int
@@ -1098,6 +1099,9 @@ ipmi_init(os_handler_t *handler)
     ipmi_os_handler = handler;
     _ipmi_domain_init();
     _ipmi_mc_init();
+    rv = _ipmi_conn_init();
+    if (rv)
+        goto out_err;
     rv = _ipmi_pet_init();
     if (rv)
         goto out_err;
