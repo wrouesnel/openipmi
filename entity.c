@@ -209,12 +209,24 @@ remove_child_cb(ilist_iter_t *iter, void *item, void *cb_data)
 static void
 cleanup_entity(ipmi_entity_t *ent)
 {
+    ilist_iter_t iter;
+
     /* Tell the user I was destroyed. */
     if (ent->ents->handler)
 	ent->ents->handler(IPMI_DELETED, ent->bmc, ent, ent->ents->cb_data);
 
     /* First destroy the parent/child relationships. */
     ilist_iter(ent->parent_entities, remove_child_cb, ent);
+
+    /* Remove it from the entities list. */
+    ilist_init_iter(&iter, ent->ents->entities);
+    ilist_unpositioned(&iter);
+    while (ilist_next(&iter)) {
+	if (ilist_get(&iter) == ent) {
+	    ilist_delete(&iter);
+	    break;
+	}
+    }
 
     /* The sensor and control lists should be empty now, we can just
        destroy it. */
@@ -386,6 +398,7 @@ entity_add(ipmi_entity_info_t *ents,
 	free_ilist(ent->parent_entities);
 	free_ilist(ent->sub_entities);
 	free(ent);
+	return ENOMEM;
     }
 
     if (ents->handler)
@@ -442,6 +455,12 @@ typedef struct entity_child_link_s
     ipmi_entity_t *child;
     unsigned int  in_db : 1;
 } entity_child_link_t;
+
+static int
+search_parent(void *item, void *cb_data)
+{
+    return (item == cb_data);
+}
 
 static int
 search_child(void *item, void *cb_data)
@@ -515,12 +534,18 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
 
     ilist_init_iter(&iter, ent->sub_entities);
 
+    /* Find the child in the parent's list. */
     link = ilist_search_iter(&iter, search_child, child);
     if (link != NULL)
 	return ENODEV;
 
     ilist_delete(&iter);
     free(link);
+
+    /* Find the parent in the child's list. */
+    ilist_init_iter(&iter, child->parent_entities);
+    if (ilist_search_iter(&iter, search_parent, ent))
+	ilist_delete(&iter);
 
     ent->presence_possibly_changed = 1;
 
@@ -826,7 +851,7 @@ typedef struct sens_info_s
 static int sens_cmp(void *item, void *cb_data)
 {
     ipmi_sensor_ref_t *ref1 = item;
-    ipmi_sensor_ref_t *ref2 = cb_data;
+    sens_info_t       *ref2 = cb_data;
 
     return ((ref1->mc == ref2->mc)
 	    && (ref1->lun == ref2->lun)
@@ -977,7 +1002,7 @@ typedef struct control_info_s
 static int control_cmp(void *item, void *cb_data)
 {
     ipmi_control_ref_t *ref1 = item;
-    ipmi_control_ref_t *ref2 = cb_data;
+    control_info_t     *ref2 = cb_data;
 
     return ((ref1->mc == ref2->mc)
 	    && (ref1->lun == ref2->lun)
