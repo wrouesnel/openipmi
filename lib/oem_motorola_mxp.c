@@ -313,7 +313,7 @@ typedef struct amc_info_s
     ipmi_sensor_t *s3_3v;
     ipmi_sensor_t *s2_5v;
     ipmi_sensor_t *s8v;
-    ipmi_sensor_t *active;
+    ipmi_sensor_t *offline;
 
     /* The controls. */
     ipmi_control_t *blue_led;
@@ -5980,13 +5980,13 @@ new_board_sensors(ipmi_mc_t           *mc,
 #define MXP_3_3V_SENSOR_NUM	3
 #define MXP_2_5V_SENSOR_NUM	4
 #define MXP_8V_SENSOR_NUM	5
-#define MXP_AMC_ACTIVE_NUM      6
+#define MXP_AMC_OFFLINE_NUM     6
 
 static void
-amc_active_get_cb(ipmi_sensor_t   *sensor,
-		  mxp_sens_info_t *sens_info,
-		  unsigned char   *data,
-		  ipmi_states_t   *states)
+amc_offline_get_cb(ipmi_sensor_t   *sensor,
+		   mxp_sens_info_t *sens_info,
+		   unsigned char   *data,
+		   ipmi_states_t   *states)
 {
     if (data[4] & 1)
 	ipmi_set_state(states, 2, 0); /* Not offline */
@@ -5995,7 +5995,7 @@ amc_active_get_cb(ipmi_sensor_t   *sensor,
 }
 
 static void
-amc_active_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
+amc_offline_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 {
     mxp_sens_info_t *get_info = cb_data;
     ipmi_msg_t      msg;
@@ -6031,9 +6031,9 @@ amc_active_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-amc_active_get(ipmi_sensor_t       *sensor,
-	       ipmi_states_read_cb done,
-	       void                *cb_data)
+amc_offline_get(ipmi_sensor_t       *sensor,
+		ipmi_states_read_cb done,
+		void                *cb_data)
 {
     int                 rv;
     mxp_sens_info_t     *get_info;
@@ -6041,10 +6041,10 @@ amc_active_get(ipmi_sensor_t       *sensor,
     get_info = alloc_sens_info(NULL, done, cb_data);
     if (!get_info)
 	return ENOMEM;
-    get_info->get_states = amc_active_get_cb;
+    get_info->get_states = amc_offline_get_cb;
     get_info->min_rsp_length = 5;
 
-    rv = ipmi_sensor_add_opq(sensor, amc_active_get_start,
+    rv = ipmi_sensor_add_opq(sensor, amc_offline_get_start,
 			     &(get_info->sdata), get_info);
     if (rv)
 	ipmi_mem_free(get_info);
@@ -6621,8 +6621,8 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_sensor_destroy(info->s2_5v);
     if (info->s8v)
 	ipmi_sensor_destroy(info->s8v);
-    if (info->active)
-	ipmi_sensor_destroy(info->active);
+    if (info->offline)
+	ipmi_sensor_destroy(info->offline);
     if (info->blue_led)
 	ipmi_control_destroy(info->blue_led);
     if (info->temp_cool_led)
@@ -6709,18 +6709,18 @@ amc_board_handler(ipmi_mc_t *mc)
     /* offset 6 is for hot-swap */
     ipmi_sensor_set_hot_swap_requester(info->slot, 6, 1);
 
-    /* AMC active sensor */
+    /* AMC offline sensor */
     rv = mxp_alloc_discrete_sensor(
 	mc, info->ent,
-	MXP_AMC_ACTIVE_NUM,
+	MXP_AMC_OFFLINE_NUM,
 	NULL, NULL,
 	IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH,
 	IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-	"AMC Active",
+	"offline",
 	0x04, 0x04, /* Management Controller Offline. */
-	amc_active_get,
+	amc_offline_get,
 	NULL,
-	&info->active);
+	&info->offline);
     if (rv)
 	goto out_err;
 
@@ -6989,7 +6989,6 @@ typedef struct mc_event_info_s
     ipmi_event_t          *event;
     ipmi_event_t          event_copy;
     int                   handled;
-    int                   val;
 } mc_event_info_t;
 
 static void
@@ -7348,6 +7347,36 @@ mxp_ps_alarm_event(ipmi_sensor_t *sensor, void *cb_data)
 }
 
 static void
+mxp_amc_failover_event(ipmi_sensor_t *sensor, void *cb_data)
+{
+    mc_event_info_t                       *einfo = cb_data;
+    ipmi_sensor_discrete_event_handler_cb handler;
+    void                                  *h_cb_data;
+    enum ipmi_event_dir_e                 assertion;
+    ipmi_event_t                          *event = &(einfo->event_copy);
+
+    ipmi_sensor_discrete_get_event_handler(sensor, &handler, &h_cb_data);
+    if (!handler)
+	return;
+
+    /* The set bits tell if the value has changed.  The assertion bit
+       tells if the value is asserted or not. */
+
+    if (event->data[11])
+	assertion = IPMI_DEASSERTION; /* Taking control */
+    else
+	assertion = IPMI_ASSERTION; /* Loosing control */
+
+    handler(sensor,
+	    assertion,
+	    2,
+	    -1, -1,
+	    h_cb_data,
+	    einfo->event);
+    einfo->event = NULL;
+}
+
+static void
 mc_event(ipmi_mc_t *mc, void *cb_data)
 {
     mc_event_info_t  *einfo = cb_data;
@@ -7389,7 +7418,6 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 	    if (!binfo)
 		return;
 	    id.sensor_num = MXP_BOARD_PRESENCE_NUM(binfo->idx);
-	    einfo->val = 1;
 	    rv = ipmi_sensor_pointer_noseq_cb(id, mxp_board_presence_event,
 					      einfo);
 	    if (!rv)
@@ -7424,8 +7452,22 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 	    /* AMC LAN */
 	    einfo->handled = 1; /* Nothing to do for these. */
 	} else if (event->data[8] == 0x07) {
-	    /* AMC Failover */
-	    einfo->handled = 1; /* Nothing to do for these. */
+	    /* AMC Failover, find the AMC-specific MC */
+	    id.mcid.channel = 0xf;
+	    if (event->data[10] == 0xea)
+		/* AMC 1 */
+		id.mcid.mc_num = 0;
+	    else if (event->data[10] == 0xec)
+		/* AMC 2 */
+		id.mcid.mc_num = 1;
+	    else {
+		break;
+	    }
+	    id.sensor_num = MXP_AMC_OFFLINE_NUM;
+	    rv = ipmi_sensor_pointer_noseq_cb(id, mxp_amc_failover_event,
+					      einfo);
+	    if (!rv)
+		einfo->handled = 1;
 	}
 	break;
 
