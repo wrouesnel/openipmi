@@ -3,7 +3,9 @@
 	* lib/entity.c: Don't subtract 0x60 from device-relative entity
 	instances in the id, just leave it.
 
-	* ui/ui.c: subtract 0x60 from device-relative entity instances on
+	* lib/entity.c: Fix some bugs extracting DLRs from the SDRs.
+
+	* ui/ui.c: Subtract 0x60 from device-relative entity instances on
 	display/input.
 
 2004-02-02 Corey Minyard <cminyard@mvista.com> 
