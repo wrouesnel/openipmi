@@ -2043,8 +2043,13 @@ cleanup_con(ipmi_con_t *ipmi)
 static void
 handle_connected(ipmi_con_t *ipmi, int err)
 {
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t *lan;
     int        i;
+
+    if (!ipmi)
+	return;
+
+    lan = (lan_data_t *) ipmi->con_data;
 
     if (lan->con_change_handler) {
 	if (err) {
@@ -2162,7 +2167,7 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	      void         *rsp_data3,
 	      void         *rsp_data4)
 {
-    lan_data_t   *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t   *lan;
     int          err;
     unsigned int manufacturer_id;
     unsigned int product_id;
@@ -2172,6 +2177,8 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	err = ECANCELED;
 	goto out_err;
     }
+
+    lan = (lan_data_t *) ipmi->con_data;
 
     if (msg->data[0] != 0) {
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
@@ -2254,13 +2261,15 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 				  void         *data3,
 				  void         *data4)
 {
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t *lan;
     int        rv;
 
     if (!ipmi) {
 	handle_connected(ipmi, ECANCELED);
 	return;
     }
+
+    lan = (lan_data_t *) ipmi->con_data;
 
     if (msg->data[0] != 0) {
         handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
@@ -2318,7 +2327,7 @@ static void session_activated(ipmi_con_t   *ipmi,
 			      void         *data3,
 			      void         *data4)
 {
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t *lan;
     int        rv;
     int        addr_num = (long) data4;
 
@@ -2327,6 +2336,8 @@ static void session_activated(ipmi_con_t   *ipmi,
 	handle_connected(ipmi, ECANCELED);
 	return;
     }
+
+    lan = (lan_data_t *) ipmi->con_data;
 
     if (msg->data[0] != 0) {
         handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
@@ -2393,7 +2404,7 @@ static void challenge_done(ipmi_con_t   *ipmi,
 			   void         *data3,
 			   void         *data4)
 {
-    lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t    *lan;
     int           rv;
     int           addr_num = (long) data4;
 
@@ -2402,6 +2413,8 @@ static void challenge_done(ipmi_con_t   *ipmi,
 	handle_connected(ipmi, ECANCELED);
 	return;
     }
+
+    lan = (lan_data_t *) ipmi->con_data;
 
     if (msg->data[0] != 0) {
         handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
@@ -2476,7 +2489,7 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	      void         *data3,
 	      void         *data4)
 {
-    lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t    *lan;
     int           rv;
     int           addr_num = (long) data4;
 
@@ -2485,6 +2498,8 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	handle_connected(ipmi, ECANCELED);
 	return;
     }
+
+    lan = (lan_data_t *) ipmi->con_data;
 
     if ((msg->data[0] != 0) || (msg->data_len < 9)) {
 	handle_connected(ipmi, EINVAL);
