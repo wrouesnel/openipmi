@@ -3,6 +3,8 @@
 
 	* ipmi_lan.c: Got IPMI LAN stuff working again.
 
+	* ui.c: Updates for the new id handling.
+
 2003-05-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv_emu.c: Added an emulator for testing.

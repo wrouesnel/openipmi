@@ -2303,7 +2303,7 @@ void mc_handler(ipmi_mc_t *mc,
 		    ipmi_mc_minor_version(mc));
     display_pad_out("         manufacturer_id: %6.6x\n",
 		    ipmi_mc_manufacturer_id(mc));
-    display_pad_out("              product_id: %4.6x\n",
+    display_pad_out("              product_id: %4.4x\n",
 		    ipmi_mc_product_id(mc));
     ipmi_mc_aux_fw_revision(mc, vals);
     display_pad_out("         aux_fw_revision: %2.2x %2.2x %2.2x %2.2x\n",

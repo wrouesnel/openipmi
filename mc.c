@@ -2713,6 +2713,7 @@ setup_bmc(ipmi_con_t   *ipmi,
 
     mc->bmc_mc = mc;
     mc->valid = 1;
+    mc->active = 1;
 
     mc->seq = ipmi_get_seq();
     mc->bmc = NULL;
