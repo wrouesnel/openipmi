@@ -1,0 +1,267 @@
+
+
+                    How to design IPMI hardware
+
+
+The world of IPMI promises to make things much easier for everyone
+involved in system maintenance, but the world of IPMI has a long way
+to go to reach maturity.  This means that people don't know how to
+build IPMI things properly, and until the tribal knowledge of this
+system develops, things will not run smoothly.
+
+In this document, I attempt to explain how I think the IPMI spec
+should be applied to system design.  I do this as a user, as someone
+who has studied the spec and designed drivers and libraries.  I have
+seen several IPMI designs and seen things done right and wrong, and I
+want things done right.  In other words, I am attempting to kick-start
+the common knowledge of how hardware designers should design IPMI
+systems.
+
+The author of this document does not mean to be condescending.  But
+there are a lot of things that system designers do that save
+themselves a little work but cost a lot of software work.  People who
+write software don't like working on things that don't directly make
+them money.  If you think I am wrong about something, I suggest you
+think very hard about it.  I might be wrong, but I am looking at
+things from a much more user-centric point of view.
+
+I also want to make your job easier.  Let's face it, system design is
+hard work.  Software design is hard work.  Being good at both is close
+to impossible.  Everyone's life will be better if the system designers
+can focus on designing good systems and can leverage the work of
+standards-compliant software.
+
+
+Learn the spec
+--------------
+
+Even though it goes without saying, I'm going to say it because nobody
+does it.  Understand the spec.  Understand the philosophy behind it.
+Read it.  The whole thing.
+
+The spec is not a tool designed to help you understand IPMI.  It does
+a fairly good job of codifying the details of how to accomplish
+things, but it does not do a good job of explaining what IPMI is all
+about.  The Ada specifications include a rationale document that
+explains how the designers of the standard expect the system to be
+used.  It's nice to read.  IPMI has no such document.  The information
+is hidden in the document, but until IPMI matures, it has to be
+extracted by work.
+
+
+Entities and sensors
+--------------------
+
+From the user's point of view, IPMI is all about entities and sensors.
+That's all the user cares about.  They don't care about management
+controllers, or IPMB addresses, or device IDs or anything like that.
+They consider those extraneous details.  They want to know the things
+they are managing, and the state of those things.  It's like IP.  The
+average user doesn't care about Ethernet addresses, or IP addresses,
+or transport protocols.  They care about URLs and content.
+
+Sensors have traditionally been analog measurement devices.  Wisely,
+the designers of IPMI decided to go far beyond that.  IPMI threshold
+sensors take analog measurements.  But another whole class of sensors,
+discrete sensors, sense events, states, and other discrete things.
+For instance, you can have a BIOS sensor that lets you monitor and
+query the current state of the BIOS.  Button sensors let you detect
+when buttons are pressed.  Slot sensor can detect when power is
+applied to a slot and when the user requests that the device be
+removed from the slot.
+
+Presense sensors are one very important type of discrete sensor.  If a
+device can be removed, you should have a presence sensor for it.  That
+way, it's easy and reliable to detect if the device is present or not.
+
+
+Everything through IPMI
+-----------------------
+
+Make every maintenance action available through IPMI, even if you have
+to define OEM commands for it.  For instance, if you have a CompactPCI
+system, don't require the user to light the blue light (or any other
+light, really) through the CompactPCI bus.  Instead, light the blue
+light through IPMI.  In a PICMG 2.16 system, for instance, you won't
+be able to light the blue light at all!  If the maintenance system
+comes in through an external interface such as an IPMI LAN interface
+or an ICMB interface, then it won't be able to control the device.
+Every maintenance operation should be handled through IPMI.
+
+
+As standard as possible
+-----------------------
+
+I've seen many people who decided that a standard wasn't good enough
+and attempted to build something better.  Ironically, nine times out
+of ten they end up with something that is worse than the
+specification.  Although specifications can be ugly, the people who
+design them generally know what they are doing and have reasons for
+seemingly odd decisions.  And it's extraordinarily hard to design an
+interface well.  If someone else has done the design work for you,
+take advantage of it!
+
+Plus, not following standards is a recipe for shooting yourself in the
+foot.  Imagine a computer manufacturer today who decides that IDE,
+SCSI, Fiberchannel, Firewire, none of them are good enough.  They are
+going to design their own disk interface and it will be the best in
+the world.  Those standards all suck.
+
+First of all, they will most likely fail.  The system that was
+supposed to be so much better will really suck much worse than the
+standards.  They will get caught in the mire of all the details they
+they really have no business dealing with.  I've been there, and I
+don't want to be there again unless I have to.
+
+Second of all, nobody will buy their systems.  Even, if by some odd
+chance, it ends up better than the competition, they have sunk untold
+amounts of money in this, and it will cost a lot more.  And the
+customers will not be happy about having a single source of disk
+drives that are non-standard.
+
+Sometimes you do get into situations where standards are not good
+enough.  That should be a decision made with much fear and
+trepidation.  You are journeying into the unknown wilderness, and the
+edge of the world may be near.
+
+In the world of IPMI, the more closely you follow the standard, the
+easier it will be for customers to get off-the-shelf middleware that
+can use it.  This lowers their developement cost and their long-term
+maintenance cost.  They can take software like OpenIPMI and simply
+plug it into their system.
+
+There are, of course, things missing in IPMI.  It (for some bizarre
+reason) doesn't define any output devices like LEDs or relays.  You
+will have to write your own OEM commands to control those devices.
+But be ready to move then the standards are ready.
+
+And don't add extensions that are required beyond the spec to do
+otherwise standard operations.  It's ok to define OEM operations for
+things not specified by the spec, and it's ok to have value-add.  But
+I saw one design that required a special lock on the SEL; it was
+supposed to help with multi-user access.  Not only did the special
+lock not really work, but it required special non-standard code to be
+added to something that should have been completely standard.  It
+meant that standards-compliant software could not use it.
+
+
+IPMB messages from an interface to an MC's local address should work
+--------------------------------------------------------------------
+
+To make things as consistent as possible, when a messages is sent on
+an interface (including SMI, LAN, and the various serial interface) to
+the IPMB address of the MC on that interface, the MC should respond.
+This is not so important in server systems, but in blade-based systems
+it is quite helpful.  This way, a piece of software can talk to
+something on the IPMB bus and doesn't have to have special code to
+know that it is talking directly to the MC that has the address.
+
+Consider, for instance, if you have a blade based system.  One of the
+blades may house the BMC.  If you have software that comes in through
+interfaces and talks to the BMC, you don't have to have any special
+code to detect if you are the BMC.  You just send to address 0x20, and
+you are happy.  Imagine on an IP system if you had to go through
+special code to talk to your own system.  It would be a big pain.  And
+it's not that hard to accomplish.
+
+
+Make a commitment to be current
+-------------------------------
+
+The IPMI spec is currently 1.5.  There is no reason to produce 1.0
+hardware.  Make a commitment to stay current with the spec.  The new
+specs define new sensor types and allow you to remove old,
+OEM-specific sensors.  As the spec moves forward, stay current, or you
+will be left behind.
+
+
+Put all sensors in device SDR
+-----------------------------
+
+Don't put sensors in the main SDR repository.  Put them in device SDR
+repositories.  There are two reasons for this:
+
+1) The main SDR repository is writable.  Something could come in and
+   and destroy the sensor information.  The device SDR repositories
+   are read-only.  The sensors are not going anywhere, so they should
+   be read-only.
+
+2) If you have a hot-swap device, you need to change the entity
+   instance for a sensor.  You can't do this in the main SDR
+   repository, those entries are controlled by the management system.
+
+The main SDR repository should really be for Entity Association
+records and for other things that the management system needs.  It
+should not be for anything else.
+
+
+Things currently missing from the standard
+------------------------------------------
+
+IMHO, the biggest hole in the standard is output devices.  The
+standard should at least define lights, relays, and alarms as output
+devices, and appropriate SDR entries for them.
+
+The second biggest is that there is no way to get your own local IPMB
+address.  For blade-based systems, this is critical.
+
+For blade-based chassis, there is no mapping for entity instances.
+The last errata for the spec defined blades and switches (a welcome
+addition).  PICMG 2.9 defines the Management Controller IPMB
+addresses, but those are really not what the user cares about.  They
+care about the entity instances.
+
+The user cares about this because it gives them a consistent view of
+the system.  The chassis holding the blades should define a slot
+sensor and a presence sensor to monitor the slot.  It would be very
+nice if the sensors on the board itself could use the same entity ID
+and instance.  Sure, you can define an entity association record to
+show the containment, but that's kind of a pain.
+
+
+Multi-access to the same bus
+----------------------------
+
+In blade-oriented systems, some may want multiple devices to be able
+to act as the BMC in the system, for fault-tolerance reasons.  You can
+accomplish this in a number of ways.
+
+The first question to ask is if you *really* need this.  The author
+has worked on a system with a target of seven 9's, and each chassis
+only had one alarm card.  Even on a system where redundant copies of
+the application are in the same chassis, that means the BMC interface
+has to fail and the two redundant cards have to fail.  I think that if
+you do the analysis, you will discover that you don't need the extra
+cost and complexity (don't forget that complexity means reduced
+reliability) that multiple BMC interfaces bring.
+
+You may think ``Hey what if events get lost''.  Well, if you lose a
+connection to a BMC, you are going to rescan the current state of the
+system to be sure your state is correct.  So if you missed any events,
+you will catch the problem in the current state of the system.
+
+But perhaps I am not convincing enough, or you can't convince your
+customers that they really only need one BMC interface.
+
+It's important to remember that the system will generally have
+multiple external management systems talking to it.  It makes things a
+lot less complicated if the management systems do not have to
+coordinate information between themselves.  They may not even be able
+to do this.
+
+Some systems have BMCs on a normal card in the system.  The management
+system (or perhaps some proxy) runs on the card.  Several cards may be
+able to act as the BMC, the MC on the card has to be told to take over
+management control.  This configuration is ok, if the software running
+on the cards is correct.  The external management system shouldn't
+have to know what card is active.  In effect, the cards should both be
+active.  There can only be one event receiver.  The software on the
+cards should decide which one is the event receiver.  It would be
+really nice if both cards can have active IPMB addresses that don't
+change.  The management system can come in to either card and perform
+operations on the IPMB bus.  If it wants to talk to the BMC, it can
+send a message to IPMB address 0x20.
+
+Systems with external alarm cards should basically be configured the
+same way.  Both cards should be fully active all the time, and they
+should decide between themselves who is the event receiver.
