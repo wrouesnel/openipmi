@@ -2832,6 +2832,22 @@ ipmi_entity_get_entity_instance(ipmi_entity_t *ent)
 }
 
 int
+ipmi_entity_get_device_channel(ipmi_entity_t *ent)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    return ent->info.device_num.channel;
+}
+
+int
+ipmi_entity_get_device_address(ipmi_entity_t *ent)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    return ent->info.device_num.address;
+}
+
+int
 ipmi_entity_get_device_type(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);

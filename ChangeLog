@@ -20,6 +20,9 @@
 	from the power supply info to allow different counts of fans and
 	power supplies.
 
+	* lib/entity.c, include/OpenIPMI/ipmiif.h: Added the ability to
+	get the channel and address for a device-relative entity.
+
 2004-02-17 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_conn.h: Added a "broadcast broken" flag

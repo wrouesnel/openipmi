@@ -3366,6 +3366,154 @@ ps_i2c_isolate_get(ipmi_control_t      *control,
     return rv;
 }
 
+static int
+mxp_add_power_supply_sensors(mxp_info_t         *info,
+			     mxp_power_supply_t *ps)
+{
+    int rv;
+
+    /* Power supply presence */
+    rv = mxp_alloc_discrete_sensor(info->mc,
+				   ps, NULL,
+				   IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
+				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+				   "presence",
+				   0x3, 0x3,
+				   ps_presence_states_get,
+				   NULL,
+				   &ps->presence);
+    if (rv)
+	goto out_err;
+    ipmi_sensor_set_ignore_if_no_entity(ps->presence, 0);
+    rv = mxp_add_sensor(info->mc, 
+			&ps->presence,
+			MXP_PS_PRESENCE_NUM(ps->idx),
+			ps->ent);
+    if (rv)
+	goto out_err;
+
+    /* Power supply sensor.  Offset 0 and 1 are standard presence and
+       failure bits.  Offsets 13 and 14 are a-feed and b-feed
+       sensors. */
+    rv = mxp_alloc_discrete_sensor(info->mc,
+				   ps, NULL,
+				   IPMI_SENSOR_TYPE_POWER_SUPPLY,
+				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+				   "Power Supply",
+				   0x6003, 0x6003,
+				   ps_ps_states_get,
+				   ps_ps_reading_name_string,
+				   &ps->ps);
+    if (rv)
+	goto out_err;
+    rv = mxp_add_sensor(info->mc, 
+			&ps->ps,
+			MXP_PS_PS_NUM(ps->idx),
+			ps->ent);
+    if (rv)
+	goto out_err;
+
+    /* Enabled control */
+    rv = mxp_alloc_control(info->mc,
+			   ps,
+			   IPMI_CONTROL_POWER,
+			   "enable",
+			   ps_enable_set,
+			   ps_enable_get,
+			   &(ps->enable));
+    if (rv)
+	goto out_err;
+    ipmi_control_set_num_elements(ps->enable, 1);
+    rv = mxp_add_control(info->mc, 
+			 &ps->enable,
+			 MXP_PS_ENABLE_NUM(ps->idx),	       
+			 ps->ent);
+    if (rv)
+	goto out_err;
+
+    /* LED controls */
+    rv = mxp_alloc_control(info->mc,
+			   ps,
+			   IPMI_CONTROL_LIGHT,
+			   "OOS LED",
+			   ps_led_set,
+			   ps_led_get,
+			   &ps->oos_led);
+    if (rv)
+	goto out_err;
+    ipmi_control_light_set_lights(ps->oos_led, 1, red_led);
+    rv = mxp_add_control(info->mc, 
+			 &ps->oos_led,
+			 MXP_PS_OOS_LED_NUM(ps->idx),	       
+			 ps->ent);
+    if (rv)
+	goto out_err;
+
+    rv = mxp_alloc_control(info->mc,
+			   ps,
+			   IPMI_CONTROL_LIGHT,
+			   "InS LED",
+			   ps_led_set,
+			   ps_led_get,
+			   &ps->inserv_led);
+    if (rv)
+	goto out_err;
+    ipmi_control_light_set_lights(ps->inserv_led, 1, green_led);
+    rv = mxp_add_control(info->mc, 
+			 &ps->inserv_led,
+			 MXP_PS_INS_LED_NUM(ps->idx),	       
+			 ps->ent);
+    if (rv)
+	goto out_err;
+
+    /* Power Supply Type ID */
+    rv = mxp_alloc_id_control(info->mc, ps->ent,
+			      MXP_PS_TYPE_NUM(ps->idx),
+			      ps,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "type",
+			      1,
+			      NULL,
+			      ps_type_get,
+			      &ps->ps_type);
+    if (rv)
+	goto out_err;
+
+    /* Power Supply Revision */
+    rv = mxp_alloc_id_control(info->mc, ps->ent,
+			      MXP_PS_REVISION_NUM(ps->idx),
+			      ps,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "revision",
+			      2,
+			      NULL,
+			      ps_revision_get,
+			      &ps->ps_revision);
+    if (rv)
+	goto out_err;
+
+    /* Power supply I2C isolate control */
+    rv = mxp_alloc_control(info->mc,
+			   ps,
+			   IPMI_CONTROL_OUTPUT,
+			   "I2C Isolate",
+			   ps_i2c_isolate_set,
+			   ps_i2c_isolate_get,
+			   &ps->ps_i2c_isolate);
+    if (rv)
+	goto out_err;
+    ipmi_control_set_num_elements(ps->ps_i2c_isolate, 1);
+    rv = mxp_add_control(info->mc, 
+			 &ps->ps_i2c_isolate,
+			 MXP_PS_I2C_ISOLATE_NUM(ps->idx),	       
+			 ps->ent);
+    if (rv)
+	goto out_err;
+
+ out_err:
+    return rv;
+}
+
 static void
 fan_presence_states_get_cb(ipmi_sensor_t   *sensor,
 			   mxp_sens_info_t *sens_info,
@@ -3785,154 +3933,6 @@ mxp_fan_reading_get_cb(ipmi_sensor_t        *sensor,
     if (rv)
 	ipmi_mem_free(get_info);
 
-    return rv;
-}
-
-static int
-mxp_add_power_supply_sensors(mxp_info_t         *info,
-			     mxp_power_supply_t *ps)
-{
-    int rv;
-
-    /* Power supply presence */
-    rv = mxp_alloc_discrete_sensor(info->mc,
-				   ps, NULL,
-				   IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
-				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-				   "presence",
-				   0x3, 0x3,
-				   ps_presence_states_get,
-				   NULL,
-				   &ps->presence);
-    if (rv)
-	goto out_err;
-    ipmi_sensor_set_ignore_if_no_entity(ps->presence, 0);
-    rv = mxp_add_sensor(info->mc, 
-			&ps->presence,
-			MXP_PS_PRESENCE_NUM(ps->idx),
-			ps->ent);
-    if (rv)
-	goto out_err;
-
-    /* Power supply sensor.  Offset 0 and 1 are standard presence and
-       failure bits.  Offsets 13 and 14 are a-feed and b-feed
-       sensors. */
-    rv = mxp_alloc_discrete_sensor(info->mc,
-				   ps, NULL,
-				   IPMI_SENSOR_TYPE_POWER_SUPPLY,
-				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-				   "Power Supply",
-				   0x6003, 0x6003,
-				   ps_ps_states_get,
-				   ps_ps_reading_name_string,
-				   &ps->ps);
-    if (rv)
-	goto out_err;
-    rv = mxp_add_sensor(info->mc, 
-			&ps->ps,
-			MXP_PS_PS_NUM(ps->idx),
-			ps->ent);
-    if (rv)
-	goto out_err;
-
-    /* Enabled control */
-    rv = mxp_alloc_control(info->mc,
-			   ps,
-			   IPMI_CONTROL_POWER,
-			   "enable",
-			   ps_enable_set,
-			   ps_enable_get,
-			   &(ps->enable));
-    if (rv)
-	goto out_err;
-    ipmi_control_set_num_elements(ps->enable, 1);
-    rv = mxp_add_control(info->mc, 
-			 &ps->enable,
-			 MXP_PS_ENABLE_NUM(ps->idx),	       
-			 ps->ent);
-    if (rv)
-	goto out_err;
-
-    /* LED controls */
-    rv = mxp_alloc_control(info->mc,
-			   ps,
-			   IPMI_CONTROL_LIGHT,
-			   "OOS LED",
-			   ps_led_set,
-			   ps_led_get,
-			   &ps->oos_led);
-    if (rv)
-	goto out_err;
-    ipmi_control_light_set_lights(ps->oos_led, 1, red_led);
-    rv = mxp_add_control(info->mc, 
-			 &ps->oos_led,
-			 MXP_PS_OOS_LED_NUM(ps->idx),	       
-			 ps->ent);
-    if (rv)
-	goto out_err;
-
-    rv = mxp_alloc_control(info->mc,
-			   ps,
-			   IPMI_CONTROL_LIGHT,
-			   "InS LED",
-			   ps_led_set,
-			   ps_led_get,
-			   &ps->inserv_led);
-    if (rv)
-	goto out_err;
-    ipmi_control_light_set_lights(ps->inserv_led, 1, green_led);
-    rv = mxp_add_control(info->mc, 
-			 &ps->inserv_led,
-			 MXP_PS_INS_LED_NUM(ps->idx),	       
-			 ps->ent);
-    if (rv)
-	goto out_err;
-
-    /* Power Supply Type ID */
-    rv = mxp_alloc_id_control(info->mc, ps->ent,
-			      MXP_PS_TYPE_NUM(ps->idx),
-			      ps,
-			      IPMI_CONTROL_IDENTIFIER,
-			      "type",
-			      1,
-			      NULL,
-			      ps_type_get,
-			      &ps->ps_type);
-    if (rv)
-	goto out_err;
-
-    /* Power Supply Revision */
-    rv = mxp_alloc_id_control(info->mc, ps->ent,
-			      MXP_PS_REVISION_NUM(ps->idx),
-			      ps,
-			      IPMI_CONTROL_IDENTIFIER,
-			      "revision",
-			      2,
-			      NULL,
-			      ps_revision_get,
-			      &ps->ps_revision);
-    if (rv)
-	goto out_err;
-
-    /* Power supply I2C isolate control */
-    rv = mxp_alloc_control(info->mc,
-			   ps,
-			   IPMI_CONTROL_OUTPUT,
-			   "I2C Isolate",
-			   ps_i2c_isolate_set,
-			   ps_i2c_isolate_get,
-			   &ps->ps_i2c_isolate);
-    if (rv)
-	goto out_err;
-    ipmi_control_set_num_elements(ps->ps_i2c_isolate, 1);
-    rv = mxp_add_control(info->mc, 
-			 &ps->ps_i2c_isolate,
-			 MXP_PS_I2C_ISOLATE_NUM(ps->idx),	       
-			 ps->ent);
-    if (rv)
-	goto out_err;
-
- out_err:
     return rv;
 }
 
@@ -5153,6 +5153,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
     }
 
     for (i=0; i<info->num_fans; i++) {
+	ipmb_addr = 0x54 + (i*2);
+	info->fan[i].ipmb_addr = ipmb_addr;
+
 	name = fan_entity_str[i];
 	rv = ipmi_entity_add(ents, domain, 0, 0, 0,
 			     IPMI_ENTITY_ID_FAN_COOLING,
