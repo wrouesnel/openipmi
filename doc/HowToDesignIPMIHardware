@@ -209,6 +209,15 @@ server systems, but it doesn't make as much sense for blade-based
 systems.  Plus, there should really be a special SDR for this purpose,
 not a general type.
 
+In fact, I will go so far as to say that the whole concept of a main
+SDR should go away and everything should be in device SDRs.
+Especially in systems with dual alarm cards, the concept of a main SDR
+is rather difficult to implement.  Plus, the function of the main SDR
+is to tell the BMC how to initialize the sensors.  This is a bad idea
+in continuously available systems with hot-swappable alarm cards; the
+management system should be responsible for the configuration of the
+sensors.
+
 
 Don't dynamically change the capabilities of an MC
 --------------------------------------------------
@@ -343,3 +352,22 @@ Each external system can listen for events.  When an event comes in,
 the systems will start a timer, and after the timer goes off they will
 delete the event.  The timer should be long enough to allow everyone
 to see the events, and everything will work smoothly.
+
+
+How to Implement Hot-Swap
+-------------------------
+
+The spec doesn't have a section on how to implement hot-swap.  This is
+unfortunate, because that's a rather important function.
+
+First, how-swap and FRU detection should be done with a slot sensor or
+a presence sensor, preferably a presence sensor.  Hot-swap requests
+should come in via a slot sensor.
+
+Second, hot-swap devices should have a Management Controller Device
+Locator Record or a FRU Device Locator Record in the device SDRs of
+the device that manages hot-swap (see the FRU Information section of
+this document).
+
+Lastly, you must implement some OEM way in IPMI to light the hot-swap
+indicator.
