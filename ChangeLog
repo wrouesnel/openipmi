@@ -1,4 +1,9 @@
 
+2003-10-05 Thomas Kanngieser <Thomas.Kanngieser@fci.com>
+
+	* lib/sensor.c: The binary search converting from float to raw
+	values had the compare backwards.
+
 2003-10-02 Corey Minyard <cminyard@mvista.com>
 
 	* ui/entity.c: Fixed the custom info get function names.

@@ -4093,7 +4093,7 @@ stand_ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 	if (rv)
 	    return rv;
 
-	if (cval > val) {
+	if (cval < val) {
 	    next_raw = ((highraw - raw) / 2) + raw;
 	    lowraw = raw;
 	} else {
