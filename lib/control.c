@@ -315,7 +315,7 @@ control_set_name(ipmi_control_t *control)
     left = CONTROL_NAME_LEN - length;
     if (control->entity) {
 	ipmi_entity_id_t ent_id = ipmi_entity_convert_to_id(control->entity);
-	length += snprintf(control->name+length, left-3, "%d.%d.%d.%d",
+	length += snprintf(control->name+length, left-3, "%d.%d.%d.%d.",
 			   ent_id.channel,
 			   ent_id.address,
 			   ent_id.entity_id,

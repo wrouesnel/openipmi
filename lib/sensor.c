@@ -799,7 +799,7 @@ sensor_set_name(ipmi_sensor_t *sensor)
     left = SENSOR_NAME_LEN - length;
     if (sensor->entity) {
 	ipmi_entity_id_t ent_id = ipmi_entity_convert_to_id(sensor->entity);
-	length += snprintf(sensor->name+length, left-3, "%d.%d.%d.%d",
+	length += snprintf(sensor->name+length, left-3, "%d.%d.%d.%d.",
 			   ent_id.channel,
 			   ent_id.address,
 			   ent_id.entity_id,

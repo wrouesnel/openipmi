@@ -2152,6 +2152,11 @@ A standard slot/connector sensor, it currently has the ejector latch
 and the power implemented.  This sensor generates events for changes
 to these bits.  This sensor is available even if the board is not
 present.
+
+@item healthy
+This reports the setting of the CPCI ``healthy'' line to the board.
+Offset 1 is the ``enable'' bit (the only bit used), it will be set to
+1 if healthy is asserted and zero if healthy is deasserted.
 @end table
 
 Boards have the following controls:

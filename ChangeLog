@@ -16,6 +16,8 @@
 	non-standard device-relative entities that are actually not on the
 	device we are dealing with.
 
+	* lib/oem_motorola_mxp.c: Added a CPCI board healthy sensor.
+
 2004-02-10 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a way to send events

@@ -98,6 +98,9 @@
 /* The alarm card has a custom entity id. */
 #define MXP_ENTITY_ID_ALARM_CARD	0x90
 
+/* The "healthy" sensor for the CPCI healty line is custom. */
+#define MXP_SENSOR_HEALTHY		0x70
+
 /* These are the various MXP OEM commands. */
 #define MXP_NETFN_MXP1		0x30
 #define MXP_OEM_GET_CHASSIS_TYPE_CMD		0x08
@@ -196,6 +199,7 @@
 #define MXP_BOARD_SENSNUM_START 64
 #define MXP_BOARD_SENSOR_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_SENSNUM_START)
 #define MXP_BOARD_PRESENCE_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 1)
+#define MXP_BOARD_HEALTHY_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 2)
 
 #define MXP_BOARD_CONTROLNUM_START 64
 #define MXP_BOARD_CONTROL_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_CONTROLNUM_START)
@@ -290,6 +294,7 @@ typedef struct mxp_board_s {
 
     ipmi_sensor_t *presence;
     ipmi_sensor_t *slot;
+    ipmi_sensor_t *healthy;
 
     ipmi_control_t *oos_led;
     ipmi_control_t *inserv_led;
@@ -4256,36 +4261,25 @@ mxpv1_board_presence_states_get(ipmi_sensor_t       *sensor,
     return rv;
 }
 
-#if 0 /* We tried using healthy, but it's not a reliable indication. */
 static void
-board_presence_states_get_cb(ipmi_sensor_t   *sensor,
-			     mxp_sens_info_t *sens_info,
-			     unsigned char   *data,
-			     ipmi_states_t   *states)
+board_healthy_states_get_cb(ipmi_sensor_t   *sensor,
+			    mxp_sens_info_t *sens_info,
+			    unsigned char   *data,
+			    ipmi_states_t   *states)
 {
-    mxp_board_t *binfo = sens_info->sdinfo;
-
-    if (data[4] & 1) {
-	ipmi_set_state(states, 0, 1); /* present */
-
-	if (!binfo->presence_read) {
-	    binfo->presence_read = 1;
-	    ipmi_start_ipmb_mc_scan(binfo->info->domain, 0,
-				    binfo->ipmb_addr, binfo->ipmb_addr,
-				    NULL, NULL);
-	}
-    } else
-	ipmi_set_state(states, 1, 1); /* absent */
+    if (data[4] & 1)
+	ipmi_set_state(states, 1, 1); /* asserted (board is enabled) */
 }
 
 static void
-board_presence_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
+board_healthy_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 {
-    mxp_sens_info_t    *get_info = cb_data;
-    mxp_board_t        *binfo = get_info->sdinfo;
-    ipmi_msg_t         msg;
-    int                rv;
-    ipmi_states_t      states;
+    mxp_sens_info_t *get_info = cb_data;
+    mxp_board_t     *binfo = get_info->sdinfo;
+    ipmi_msg_t      msg;
+    int             rv;
+    ipmi_states_t   states;
+    unsigned char   data[4];
 
     ipmi_init_states(&states);
     ipmi_set_sensor_scanning_enabled(&states, 1);
@@ -4298,56 +4292,29 @@ board_presence_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	return;
     }
 
-    if (binfo->is_amc) {
-	int i = binfo->idx - MXP_ALARM_CARD_IDX_OFFSET;
-	ipmi_system_interface_addr_t si;
-	ipmi_mc_t                    *mc;
 
-	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si.channel = i;
-	si.lun = 0;
-	mc = _ipmi_find_mc_by_addr(binfo->info->domain,
-				   (ipmi_addr_t *) &si, sizeof(si));
-	if (mc)
-	    binfo->info->amc_present[i] = 1;
-	else 
-	    binfo->info->amc_present[i] = 0;
-
-	if (binfo->info->amc_present[i])
-	    ipmi_set_state(&states, 0, 1); /* present */
-	else
-	    ipmi_set_state(&states, 1, 1); /* absent */
-
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
+    msg.data_len = 4;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    data[3] = binfo->ipmb_addr;
+    rv = ipmi_sensor_send_command(sensor, binfo->info->mc, 0,
+				  &msg, mxp_sensor_get_done,
+				  &(get_info->sdata), get_info);
+    if (rv) {
 	if (get_info->done)
-	    get_info->done(sensor, 0, &states, get_info->cb_data);
+	    get_info->done(sensor, rv, &states, get_info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	ipmi_mem_free(get_info);
-    } else {
-	unsigned char data[4];
-
-	msg.netfn = MXP_NETFN_MXP1;
-	msg.cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
-	msg.data_len = 4;
-	msg.data = data;
-	add_mxp_mfg_id(data);
-	data[3] = binfo->ipmb_addr;
-	rv = ipmi_sensor_send_command(sensor, binfo->info->mc, 0,
-				      &msg, mxp_sensor_get_done,
-				      &(get_info->sdata), get_info);
-	if (rv) {
-	    if (get_info->done)
-		get_info->done(sensor, rv, &states, get_info->cb_data);
-	    ipmi_sensor_opq_done(sensor);
-	    ipmi_mem_free(get_info);
-	    return;
-	}
+	return;
     }
 }
 
 static int
-board_presence_states_get(ipmi_sensor_t       *sensor,
-			  ipmi_states_read_cb done,
-			  void                *cb_data)
+board_healthy_states_get(ipmi_sensor_t       *sensor,
+			 ipmi_states_read_cb done,
+			 void                *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     mxp_board_t         *binfo = hdr->data;
@@ -4359,17 +4326,16 @@ board_presence_states_get(ipmi_sensor_t       *sensor,
     if (!get_info)
 	return ENOMEM;
     get_info->sens_id = ipmi_sensor_convert_to_id(sensor);
-    get_info->get_states = board_presence_states_get_cb;
+    get_info->get_states = board_healthy_states_get_cb;
     get_info->min_rsp_length = 5;
 
-    rv = ipmi_sensor_add_opq(sensor, board_presence_states_get_start,
+    rv = ipmi_sensor_add_opq(sensor, board_healthy_states_get_start,
 			     &(get_info->sdata), get_info);
     if (rv)
 	ipmi_mem_free(get_info);
 
     return rv;
 }
-#endif
 
 static void
 board_led_set_start(ipmi_control_t *control, int err, void *cb_data)
@@ -4833,27 +4799,33 @@ mxp_add_board_sensors(mxp_info_t  *info,
 				   mxpv1_board_presence_states_get,
 				   NULL,
 				   &board->presence);
-#if 0
-    /* Can't use healthy for board presence, because it depends on bd sel */
-    if (info->mxp_version == MXP_V1) {
-    } else {
-	rv = mxp_alloc_discrete_sensor(board->info->mc,
-				       board, NULL,
-				       IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
-				       IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-				       "presence",
-				       0x3, 0x3,
-				       board_presence_states_get,
-				       NULL,
-				       &board->presence);
-    }
-#endif
     if (rv)
 	goto out_err;
     ipmi_sensor_set_ignore_if_no_entity(board->presence, 0);
     rv = mxp_add_sensor(board->info->mc, 
 			&board->presence,
 			MXP_BOARD_PRESENCE_NUM(board->idx),
+			board->ent);
+    if (rv)
+	goto out_err;
+
+    /* The CPCI healthy line sensor. */
+    rv = mxp_alloc_discrete_sensor
+	(board->info->mc,
+	 board, NULL,
+	 MXP_SENSOR_HEALTHY,
+	 IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE,
+	 "healthy",
+	 0x2, 0x2,
+	 board_healthy_states_get,
+	 NULL,
+	 &board->healthy);
+    if (rv)
+	goto out_err;
+    ipmi_sensor_set_ignore_if_no_entity(board->healthy, 0);
+    rv = mxp_add_sensor(board->info->mc, 
+			&board->healthy,
+			MXP_BOARD_HEALTHY_NUM(board->idx),
 			board->ent);
     if (rv)
 	goto out_err;
@@ -7035,6 +7007,26 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
     }
 }
 
+static void
+mxp_board_healthy_event(ipmi_sensor_t *sensor, void *cb_data)
+{
+    mc_event_info_t       *einfo = cb_data;
+    enum ipmi_event_dir_e assertion;
+    ipmi_event_t          *event = &(einfo->event_copy);
+
+    if (event->data[9] & 0x80)
+	assertion = IPMI_DEASSERTION;
+    else
+	assertion = IPMI_ASSERTION;
+
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     assertion,
+					     1,
+					     -1, -1,
+					     &einfo->event,
+					     NULL);
+}
+
 /* Used when the presence/absense is in the assert/deassert field. */
 static void
 mxp_gen_presence_event(ipmi_sensor_t *sensor, void *cb_data)
@@ -7257,6 +7249,14 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 					      einfo);
 	    if (!rv)
 		einfo->handled = 1;
+	    if (event->data[8] == 0x0e) {
+		/* Report healthy events */
+		id.sensor_num = MXP_BOARD_HEALTHY_NUM(binfo->idx);
+		rv = ipmi_sensor_pointer_noseq_cb(id, mxp_board_healthy_event,
+						  einfo);
+		if (!rv)
+		    einfo->handled = 1;
+	    }
 	} else if (event->data[8] == 0x04) {
 	    /* HS Eject */
 	    if (event->data[4] & 1) {
@@ -8425,6 +8425,8 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_sensor_destroy(info->board[i].presence);
 	if (info->board[i].slot)
 	    ipmi_sensor_destroy(info->board[i].slot);
+	if (info->board[i].healthy)
+	    ipmi_sensor_destroy(info->board[i].healthy);
 	if (info->board[i].oos_led)
 	    ipmi_control_destroy(info->board[i].oos_led);
 	if (info->board[i].inserv_led)
