@@ -12,6 +12,9 @@
 	* lib/domain.c: Fixed the system interface address handling to be
 	correct for the individual interfaces.
 
+	* lib/ipmi_lan.c: Removed the bind code, as if you don't bind an
+	address one will be auto-assigned.
+
 2004-01-05 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_int.h, lib/ipmi.c: Added a way for

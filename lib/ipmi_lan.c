@@ -335,52 +335,11 @@ remove_event_handler(lan_data_t                 *lan,
 static int
 open_lan_fd(int pf_family)
 {
-    int                fd;
-    sockaddr_ip_t      addr;
-    int                curr_port;
-    int                rv;
+    int fd;
 
     fd = socket(pf_family, SOCK_DGRAM, IPPROTO_UDP);
-    if (fd == -1)
-	return fd;
 
-    curr_port = 7000;
-    do {
-	curr_port++;
-	switch (pf_family) {
-	   case PF_INET:
-		{
-		    struct sockaddr_in *paddr;
-		    paddr = (struct sockaddr_in *)&addr;
-		    paddr->sin_family = AF_INET;
-		    paddr->sin_port = htons(curr_port);
-		    paddr->sin_addr.s_addr = INADDR_ANY;
-		}
-		break;
-#ifdef PF_INET6
-	   case PF_INET6:
-		{
-		    struct sockaddr_in6 *paddr6;
-		    paddr6 = (struct sockaddr_in6 *)&addr;
-		    paddr6->sin6_family = AF_INET6;
-		    paddr6->sin6_port = htons(curr_port);
-		    paddr6->sin6_addr = in6addr_any;
-		}
-		break;
-#endif
-	   default:
-		return -1;
-	}
-	rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
-    } while ((curr_port < 7100) && (rv == -1));
-
-    if (rv == -1)
-    {
-	int tmp_errno = errno;
-	close(fd);
-	errno = tmp_errno;
-	return -1;
-    }
+    /* Bind is not necessary, we don't care what port we are. */
 
     return fd;
 }
