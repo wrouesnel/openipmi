@@ -169,6 +169,159 @@ ipmi_control_pointer_cb(ipmi_control_id_t id,
     return rv;
 }
 
+static void
+control_final_destroy(ipmi_control_t *control)
+{
+    if (control->destroy_handler)
+	control->destroy_handler(control,
+				 control->destroy_handler_cb_data);
+
+    opq_destroy(control->waitq);
+    free(control);
+}
+
+int
+ipmi_control_destroy(ipmi_control_t *control)
+{
+    ipmi_control_info_t *controls = ipmi_mc_get_controls(control->mc);
+    ipmi_entity_info_t  *ents = ipmi_mc_get_entities(control->mc);
+    ipmi_entity_t       *ent;
+    int                 rv;
+
+    if (controls->controls_by_idx[control->num] != control)
+	return EINVAL;
+
+    rv = ipmi_entity_find(ents,
+			  control->mc,
+			  control->entity_id,
+			  control->entity_instance,
+			  &ent);
+    if (!rv) {
+	if (control->destroy_handler)
+	    control->destroy_handler(control,
+				     control->destroy_handler_cb_data);
+
+	ipmi_entity_remove_control(ent, control->mc,
+				   control->lun, control->num, control);
+    }
+
+    controls->controls_by_idx[control->num] = NULL;
+
+    control->destroyed = 1;
+    if (!opq_stuff_in_progress(control->waitq))
+	control_final_destroy(control);
+
+    return 0;
+}
+
+static void
+control_opq_ready2(ipmi_control_t *control, void *cb_data)
+{
+    ipmi_control_op_info_t *info = cb_data;
+    if (info->__handler)
+	info->__handler(control, 0, info->__cb_data);
+}
+
+static void
+control_opq_ready(void *cb_data, int shutdown)
+{
+    ipmi_control_op_info_t *info = cb_data;
+    int                   rv;
+
+    if (shutdown) {
+	if (info->__handler)
+	    info->__handler(info->__control, ECANCELED, info->__cb_data);
+	return;
+    }
+
+    rv = ipmi_control_pointer_cb(info->__control_id, control_opq_ready2, info);
+    if (rv)
+	if (info->__handler)
+	    info->__handler(info->__control, rv, info->__cb_data);
+}
+
+int
+ipmi_control_add_opq(ipmi_control_t         *control,
+		     ipmi_control_op_cb     handler,
+		     ipmi_control_op_info_t *info,
+		     void                   *cb_data)
+{
+    info->__control = control;
+    info->__control_id = ipmi_control_convert_to_id(control);
+    info->__cb_data = cb_data;
+    info->__handler = handler;
+    if (!opq_new_op(control->waitq, control_opq_ready, info, 0))
+	return ENOMEM;
+    return 0;
+}
+
+void
+ipmi_control_opq_done(ipmi_control_t *control)
+{
+    opq_op_done(control->waitq);
+}
+
+static void
+control_rsp_handler2(ipmi_control_t *control, void *cb_data)
+{
+    ipmi_control_op_info_t *info = cb_data;
+
+    if (info->__rsp_handler)
+	info->__rsp_handler(control, 0, info->__rsp, info->__cb_data);
+}
+
+static void
+control_rsp_handler(ipmi_mc_t  *mc,
+		    ipmi_msg_t *rsp,
+		    void       *rsp_data)
+{
+    ipmi_control_op_info_t *info = rsp_data;
+    int                    rv;
+    ipmi_control_t         *control = info->__control;
+
+    if (control->destroyed) {
+	if (info->__rsp_handler)
+	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
+	control_final_destroy(control);
+	return;
+    }
+
+    if (!mc) {
+	if (info->__rsp_handler)
+	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
+	return;
+    }
+
+    /* Call the next stage with the lock held. */
+    info->__rsp = rsp;
+    rv = ipmi_control_pointer_cb(info->__control_id,
+				control_rsp_handler2,
+				info);
+    if (rv) {
+	if (info->__rsp_handler)
+	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
+    }
+}
+			 
+int
+ipmi_control_send_command(ipmi_control_t        *control,
+			 ipmi_mc_t              *mc,
+			 unsigned int           lun,
+			 ipmi_msg_t             *msg,
+			 ipmi_control_rsp_cb    handler,
+			 ipmi_control_op_info_t *info,
+			 void                   *cb_data)
+{
+    int rv;
+
+    info->__control = control;
+    info->__control_id = ipmi_control_convert_to_id(control);
+    info->__cb_data = cb_data;
+    info->__rsp_handler = handler;
+    rv = ipmi_send_command(mc, lun, msg, control_rsp_handler, info);
+    return rv;
+}
+
 int
 ipmi_find_control(ipmi_mc_t       *mc,
 		  int             lun,
@@ -289,51 +442,6 @@ ipmi_control_add_nonstandard(ipmi_mc_t              *mc,
     control->destroy_handler_cb_data = destroy_handler_cb_data;
 
     ipmi_entity_add_control(ent, mc, control->lun, control->num, control, link);
-
-    return 0;
-}
-
-static void
-control_final_destroy(ipmi_control_t *control)
-{
-    if (control->destroy_handler)
-	control->destroy_handler(control,
-				 control->destroy_handler_cb_data);
-
-    opq_destroy(control->waitq);
-    free(control);
-}
-
-int
-ipmi_control_destroy(ipmi_control_t *control)
-{
-    ipmi_control_info_t *controls = ipmi_mc_get_controls(control->mc);
-    ipmi_entity_info_t  *ents = ipmi_mc_get_entities(control->mc);
-    ipmi_entity_t       *ent;
-    int                 rv;
-
-    if (controls->controls_by_idx[control->num] != control)
-	return EINVAL;
-
-    rv = ipmi_entity_find(ents,
-			  control->mc,
-			  control->entity_id,
-			  control->entity_instance,
-			  &ent);
-    if (!rv) {
-	if (control->destroy_handler)
-	    control->destroy_handler(control,
-				     control->destroy_handler_cb_data);
-
-	ipmi_entity_remove_control(ent, control->mc,
-				   control->lun, control->num, control);
-    }
-
-    controls->controls_by_idx[control->num] = NULL;
-
-    control->destroyed = 1;
-    if (!opq_stuff_in_progress(control->waitq))
-	control_final_destroy(control);
 
     return 0;
 }

@@ -49,6 +49,38 @@ int ipmi_controls_destroy(ipmi_control_info_t *controls);
  * These are for OEM code to create their own controls.
  */
 
+/* Uses ipmi_control_op_cb defined in ipmiif.h. */
+
+typedef void (*ipmi_control_rsp_cb)(ipmi_control_t *control,
+				    int            err,
+				    ipmi_msg_t     *rsp,
+				    void           *cb_data);
+
+typedef struct ipmi_control_op_info_s
+{
+    ipmi_control_id_t   __control_id;
+    ipmi_control_t      *__control;
+    void                *__cb_data;
+    ipmi_control_op_cb  __handler;
+    ipmi_control_rsp_cb __rsp_handler;
+    ipmi_msg_t          *__rsp;
+} ipmi_control_op_info_t;
+
+int ipmi_control_add_opq(ipmi_control_t        *control,
+			ipmi_control_op_cb     handler,
+			ipmi_control_op_info_t *info,
+			void                   *cb_data);
+
+void ipmi_control_opq_done(ipmi_control_t *control);
+
+int ipmi_control_send_command(ipmi_control_t        *control,
+			     ipmi_mc_t              *mc,
+			     unsigned int           lun,
+			     ipmi_msg_t             *msg,
+			     ipmi_control_rsp_cb    handler,
+			     ipmi_control_op_info_t *info,
+			     void                   *cb_data);
+
 /* Call the given callback with the control. */
 int ipmi_find_control(ipmi_mc_t       *mc,
 		      int             lun,
