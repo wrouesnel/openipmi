@@ -792,6 +792,8 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
     if (sensor->source_array)
 	sensor->source_array[sensor->source_idx] = NULL;
 
+    sensor->mc = NULL;
+
     sensors->sensor_count--;
     sensors->sensors_by_idx[sensor->lun][sensor->num] = NULL;
 
@@ -5122,6 +5124,8 @@ void
 __ipmi_check_sensor_lock(ipmi_sensor_t *sensor)
 {
     ipmi_domain_t *domain;
+    if (!sensor->mc)
+	return; /* The sensor has really been destroyed, just go on. */
     domain = ipmi_mc_get_domain(sensor->mc);
     __ipmi_check_domain_lock(domain);
     __ipmi_check_domain_entity_lock(domain);

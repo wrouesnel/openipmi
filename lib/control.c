@@ -321,6 +321,8 @@ ipmi_control_destroy(ipmi_control_t *control)
     controls->control_count--;
     controls->controls_by_idx[control->num] = NULL;
 
+    sensor->mc = NULL;
+
     control->destroyed = 1;
     if (!opq_stuff_in_progress(control->waitq))
 	control_final_destroy(control);
@@ -1675,6 +1677,8 @@ void
 __ipmi_check_control_lock(ipmi_control_t *control)
 {
     ipmi_domain_t *domain;
+    if (!control->mc)
+	return; /* The control has really been destroyed, just go on. */
     domain = ipmi_mc_get_domain(control->mc);
     __ipmi_check_domain_lock(domain);
     __ipmi_check_domain_entity_lock(domain);
