@@ -30,6 +30,12 @@ this is the document for you.  If you know something about IPMI but
 wish to find out more, you can gloss over the introductory text and
 dive more into the details.
 
+This document also describes OpenIPMI and how to use that library.  A
+basic understanding of \acs{IPMI} is required to use OpenIPMI.
+However, OpenIPMI hides the details of \acs{IPMI} like messages and
+data formats; if you do not care about those things you can skip those
+sections.
+
 \acs{IPMI} stands for Intelligent Platform Management Interface.  Not
 a great name, but not too bad.  It is intelligent (in a manner of
 speaking, anyway) because it requires a processor besides the main
@@ -678,16 +684,22 @@ But say you are handling outside input, such as a user interface.
 What then?  If the pointers can change, how do I keep a reference to
 something?
 
-OpenIPMI provides two identifiers for \acs{IPMI} objects.  One is a pointer,
-but a pointer is only good inside a callback.  The other is an
-OpenIPMI id, the id is good outside callbacks.  But the only thing you
-can do with an id is pass it to a function that will call a callback
-for you with the pointer.  You can convert a pointer to an id (inside
-a callback, of course) so you should do that if you need to save a
-reference to the object.  Note that there are some functions that take
-ids that do this for you (such as \verb=ipmi_sensor_id_reading_get()=,
-other sensor functions, hot-swap functions, and a few others); these
-are provided for your convenience.
+OpenIPMI provides two identifiers for \acs{IPMI} objects.  One is a
+pointer, but a pointer is only good inside a callback.  The other is
+an OpenIPMI id, the id is good outside callbacks.  But the only thing
+you can do with an id is pass it to a function that will call a
+callback for you with the pointer.  You can convert a pointer to an id
+(inside a callback, of course) so you should do that if you need to
+save a reference to the object.  Note that there are some functions
+that take ids that do this for you (such as
+\verb=ipmi_sensor_id_reading_get()=, other sensor functions, hot-swap
+functions, and a few others); these are provided for your convenience.
+Almost all sensor, control, and entity functions that you would
+generally call asynchronously support these \verb=ipmi_xxx_id=
+function.  The operation is exactly the same as the same operation
+without the \verb=_id=, it simply takes the id instead of the direct
+pointer.  See the \verb=ipmiif.h= include file to see if the function
+you desire exists.
 
 This mechanism, though a little inconvenient, almost guarantees that
 you will not forget to decrement a use count.  It nicely encapsulates
@@ -5272,7 +5284,216 @@ print_sensors(ipmi_entity_t *entity)
 
 \section{Entity Hot-Swap}
 
-TBD - write this
+OpenIPMI supports the notion of an entity being hot-swapped.  It
+supports a complete state machine that allows insertion to be
+detected, requests to power on the entity and requests to power off
+the entity.  These requests generally come from the user in the form
+of a switch or something of that nature.  It also supports a subset of
+the hot-swap state machine if all these features are not available.
+
+Unfortunately, IPMI does not have this concept, so this must be added
+by OEM code.  Several systems that support hot-swap are available in
+OpenIPMI, including the Motorola MXP (see
+appendix~\vref{app-motorola-mxp}) and chassis that adhere to the PICMG
+ATCA standard (see appendix~\vref{app-atca}).
+
+Not all entities are hot-swappable.  If an entity is hot-swappable,
+the function:
+\begin{verbatim}
+int ipmi_entity_hot_swappable(ipmi_entity_t *ent);
+\end{verbatim}
+will return true.
+
+\subsection{Hot-Swap State}
+OpenIPMI supports eight hot-swap states:
+\begin{itemize}
+\item IPMI\_HOT\_SWAP\_NOT\_PRESENT
+\item IPMI\_HOT\_SWAP\_INACTIVE
+\item IPMI\_HOT\_SWAP\_ACTIVATION\_REQUESTED
+\item IPMI\_HOT\_SWAP\_ACTIVATION\_IN\_PROGRESS
+\item IPMI\_HOT\_SWAP\_ACTIVE
+\item IPMI\_HOT\_SWAP\_DEACTIVATION\_REQUESTED
+\item IPMI\_HOT\_SWAP\_DEACTIVATION\_IN\_PROGRESS
+\item IPMI\_HOT\_SWAP\_OUT\_OF\_CON
+\end{itemize}
+These may be converted to a string name with the function:
+\begin{verbatim}
+char *ipmi_hot_swap_state_name(enum ipmi_hot_swap_states state);
+\end{verbatim}
+
+Figure\~vref{fig-simple-hot-swap-state-machine} shows a simple
+hot-swap state machine for an entity that only supports presence.  In
+effect, the entity is either not present or present.
+\begin{figure}
+\begin{center}
+\includegraphics[width=.4\textwidth]{SimpleHotSwap.eps}
+\end{center}
+\caption{\label{fig-simple-hot-swap-state-machine}Simple Hot-Swap
+  state machine}
+\end{figure}
+
+Figure\~vref{fig-complex-hot-swap-state-machine} shows a more complex
+hot-swap state machine.  This would be used for an entity that
+supported some type of power control (the entity can be present but
+inactive).
+\begin{figure}
+\begin{center}
+\includegraphics[width=\textwidth]{ComplexHotSwap.eps}
+\end{center}
+\caption{\label{fig-complex-hot-swap-state-machine}Complex Hot-Swap
+  state machine}
+\end{figure}
+Upon insertion, the entity will move from not present to inactive.  If
+the entity supports some type of activation request, it will move from
+inactive to activation requested when that occurs.  If it does not
+support an activation request, it will move to either activation in
+progress (if the activation requires some time to occur) or directly
+to active when the entity is activated.  The move from activation
+requested to activation in progress or active occurs when the entity
+is activated.
+
+The entity will move to deactivation requested if the entity supports
+that and the operator requests a deactivation.  In active or
+deactivation requested, the entity will move to deactivation in
+progress (or directly to inactive if deactivation is immediate) upon
+the entity being deactivated.  Although it is not shown in the
+diagram, the activation in progress can go to the deactivation states
+just like the active state; it confused the diagram too much to show
+this.
+
+Note that any state can go to not present.  This is called a suprise
+extraction; it occurs if the operator does not follow the hot-swap
+extraction procedure and just pulls the board.  The state may also go
+from any state to out of communication.  This occurs if the board is
+present (or the board presence cannot be detected) and the system
+looses communication with the entity.  If communication is restored,
+the entity goes to the current state it is in.
+
+When a hot-swap device is inserted, it may or may not be automatically
+activated.  This depends on the policies and capabilities of the
+chassis where the device is inserted.  The device may be deactivated
+automatically upon a request if that policy is supported by the
+system.
+
+The following function will allow the current hot-swap state to be
+fetched:
+\begin{verbatim}
+typedef void (*ipmi_entity_hot_swap_state_cb)(ipmi_entity_t             *ent,
+					      int                       err,
+					      enum ipmi_hot_swap_states state,
+					      void                   *cb_data);
+int ipmi_entity_get_hot_swap_state(ipmi_entity_t                 *ent,
+				   ipmi_entity_hot_swap_state_cb handler,
+				   void                          *cb_data);
+\end{verbatim}
+
+\subsection{Hot-Swap Events}
+
+It is possible to register to receive hot-swap changes when the occur.
+The following functions do the registration and deregistraction of a
+hot-swap handler:
+\begin{verbatim}
+typedef int (*ipmi_entity_hot_swap_cb)(ipmi_entity_t             *ent,
+				       enum ipmi_hot_swap_states last_state,
+				       enum ipmi_hot_swap_states curr_state,
+				       void                      *cb_data,
+				       ipmi_event_t              *event);
+int ipmi_entity_add_hot_swap_handler(ipmi_entity_t           *ent,
+				     ipmi_entity_hot_swap_cb handler,
+				     void                    *cb_data);
+int ipmi_entity_remove_hot_swap_handler(ipmi_entity_t           *ent,
+					ipmi_entity_hot_swap_cb handler,
+					void                    *cb_data);
+\end{verbatim}
+This is a standard event handler as described in
+section~\vref{sec-openipmi-events}
+
+\subsection{Hot-Swap Activation and Deactivation}
+
+Devices that have the ability to control power and request power up or
+removal have some special handling that may be required.  Note that
+some systems may only support a subset of these operations, reference
+the documentation for the system for more details.
+
+When a device is inserted that has these capabilities, there is
+generally some way to signal that the device is ready to be powered
+up.  In ATCA, for instance, the operator will insert the card and the
+entity for the card will go from not present to inactive state.  When
+the operator closes the lock-latch, that signals the system to go to
+activation requested state.
+
+If a device is in the inactive state, the management software using
+OpenIPMI can use the following function to force it into activation
+requested state:
+\begin{verbatim}
+int ipmi_entity_set_activation_requested(ipmi_entity_t  *ent,
+					 ipmi_entity_cb done,
+					 void           *cb_data);
+\end{verbatim}
+This can occur if an entity has been moved to the inactive state by
+the management software then the entity needs to be powered up again.
+If an entity is sitting in the inactive state but does not support
+this, then this call will return \verb=ENOSYS= and the entity can be
+moved directly to active state.
+
+To move an entity to active state (either from inactive or activation
+requested state), use the following function:
+\begin{verbatim}
+int ipmi_entity_activate(ipmi_entity_t  *ent,
+			 ipmi_entity_cb done,
+			 void           *cb_data);
+\end{verbatim}
+This will power the entity up and move it to active state.
+
+Deactivation is similar, but not quite the same.  The operator
+directly working on the device can request a removal using some
+mechanism.  In ATCA, for instance, the operator can open the lock
+latch on the card and the card entity will move from active to
+deactivation requested state.  Note that unlike activation, there is
+no way for system management software to request a move to
+deactivation requested state.  It's not really required, since it can
+request that the entity go directly to inactive state.
+
+To move from either active (or really any state in the activation
+process) or deactivation requested state to inactive state, the
+function:
+\begin{verbatim}
+int ipmi_entity_deactivate(ipmi_entity_t  *ent,
+			   ipmi_entity_cb done,
+			   void           *cb_data);
+\end{verbatim}
+is used.
+
+\subsection{Auto Activation and Deactivation}
+Some systems allow the system management software to specify a policy
+to execute when a device is inserted or a removal is requested.
+Basically, the time from an activate request to when an activation is
+automatically started can be specified.  The time from a deactivate
+request to when an deactivation is automatically started can be
+specified.  The following functions can be used to read and update
+these times:
+\begin{verbatim}
+int ipmi_entity_get_auto_activate_time(ipmi_entity_t       *ent,
+				       ipmi_entity_time_cb handler,
+				       void                *cb_data);
+int ipmi_entity_set_auto_activate_time(ipmi_entity_t  *ent,
+				       ipmi_timeout_t auto_act,
+				       ipmi_entity_cb done,
+				       void           *cb_data);
+int ipmi_entity_get_auto_deactivate_time(ipmi_entity_t       *ent,
+					 ipmi_entity_time_cb handler,
+					 void                *cb_data);
+int ipmi_entity_set_auto_deactivate_time(ipmi_entity_t  *ent,
+					 ipmi_timeout_t auto_deact,
+					 ipmi_entity_cb done,
+					 void           *cb_data);
+\end{verbatim}
+The timeouts are standard OpenIPMI time values, which are in
+nanoseconds.  These will return \verb=ENOSYS= if the operation is not
+supported.  They will return \verb=EINVAL= if the time is out of
+range.  To disable auto-activation and deactiviation, the time may be
+set to \verb=IPMI_TIMEOUT_FOREVER=.  To cause the transitions to occur
+immediately, set the value to \verb=IPMI_TIMEOUT_NOW=.
 
 \section{\acs{FRU} Data}
 
@@ -6517,7 +6738,7 @@ case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
 rate = ipmi_sensor_get_rate_unit_string(sensor);
 
 printf("  value: %lf%s %s%s%s%s\n", val, percent,
-	   base, mod_use, modifier, rate);
+           base, mod_use, modifier, rate);
 \end{verbatim}
 
 The modifier units uses in OpenIPMI are:
@@ -6854,16 +7075,16 @@ tells if a control supports events.
 To register/unregister for control events, use the functions:
 \begin{verbatim}
 typedef int (*ipmi_control_val_event_cb)(ipmi_control_t *control,
-					 int            *valid_vals,
-					 int            *vals,
-					 void           *cb_data,
-					 ipmi_event_t   *event);
+                                         int            *valid_vals,
+                                         int            *vals,
+                                         void           *cb_data,
+                                         ipmi_event_t   *event);
 int ipmi_control_add_val_event_handler(ipmi_control_t            *control,
-				       ipmi_control_val_event_cb handler,
-				       void                      *cb_data);
+                                       ipmi_control_val_event_cb handler,
+                                       void                      *cb_data);
 int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
-					  ipmi_control_val_event_cb handler,
-					  void                      *cb_data);
+                                          ipmi_control_val_event_cb handler,
+                                          void                      *cb_data);
 \end{verbatim}
 In the callback, not all values may be present.  The \verb=valid_vals=
 parameter is an array of booleans telling if specific values are
@@ -6872,6 +7093,7 @@ value in the \verb=vals= array is a valid value.  This is a standard
 event handler as defined in section~\vref{sec-openipmi-events}.
 
 \subsection{Basic Type Controls}
+\label{sec-basic-type-controls}
 This section describes the more ``normal'' controls, that generally
 have a single value that is a binary or some type of direct setting.
 These take an integer value per control for their setting.  These
@@ -6890,36 +7112,256 @@ control types are:
 To set the value of one of these controls, use the following:
 \begin{verbatim}
 int ipmi_control_set_val(ipmi_control_t     *control,
-			 int                *val,
-			 ipmi_control_op_cb handler,
-			 void               *cb_data);
+                         int                *val,
+                         ipmi_control_op_cb handler,
+                         void               *cb_data);
 \end{verbatim}
 Pass in an array of integers for the values, the length of which
 should be the number of values the control supports.  To get the value
 of a control, use:
 \begin{verbatim}
 typedef void (*ipmi_control_val_cb)(ipmi_control_t *control,
-				    int            err,
-				    int            *val,
-				    void           *cb_data);
+                                    int            err,
+                                    int            *val,
+                                    void           *cb_data);
 int ipmi_control_get_val(ipmi_control_t      *control,
-			 ipmi_control_val_cb handler,
-			 void                *cb_data);
+                         ipmi_control_val_cb handler,
+                         void                *cb_data);
 \end{verbatim}
 The \texttt{val} returns is an array of integers, the length is the
 number of values the control supports.
 
 \subsection{Light}
 
-\subsubsection{Light}
+Lights come in two flavors.  Some lights have absolute control of the
+color, on time, and off time.  OpenIPMI call these ``setting'' lights.
+Other lights have fixed functions; they have a few settings that have
+fixed color and on/off values.  OpenIPMI calles these ``transition''
+lights.  Both types are fully supported.
+
+To know if a light control is a setting or transition light, the
+following function returns true for a setting light and false for a
+transition light:
+\begin{verbatim}
+int ipmi_control_light_set_with_setting(ipmi_control_t *control);
+\end{verbatim}
+
+Lights can be different colors, and the interface allows the supported
+colors to be check and set.  The supported colors are:
+\begin{itemize}
+\item IPMI\_CONTROL\_COLOR\_BLACK
+\item IPMI\_CONTROL\_COLOR\_WHITE
+\item IPMI\_CONTROL\_COLOR\_RED
+\item IPMI\_CONTROL\_COLOR\_GREEN
+\item IPMI\_CONTROL\_COLOR\_BLUE
+\item IPMI\_CONTROL\_COLOR\_YELLOW
+\item IPMI\_CONTROL\_COLOR\_ORANGE
+\end{itemize}
+
+\subsubsection{Setting Light}
+
+Setting lights are managed with an abstract data structure:
+\begin{verbatim}
+typedef struct ipmi_light_setting_s ipmi_light_setting_t;
+\end{verbatim}
+This is a standard OpenIPMI opaque data structure.  Like most other
+data structures of this type, this does not directly modify the light,
+this is used to transmit the settings to a light and to receive the
+settings from a light.  To allocate/free these, use the following:
+\begin{verbatim}
+ipmi_light_setting_t *ipmi_alloc_light_settings(unsigned int count);
+void ipmi_free_light_settings(ipmi_light_setting_t *settings);
+\end{verbatim}
+A function is also available to duplicate these objects:
+\begin{verbatim}
+ipmi_light_setting_t *ipmi_light_settings_dup(ipmi_light_setting_t *settings);
+\end{verbatim}
+
+Each light setting has the settings for all lights for the control.
+If you allocate a light setting, you must pass in the number of lights
+the control manages.  You can also fetch this from the setting using:
+\begin{verbatim}
+unsigned int ipmi_light_setting_get_count(ipmi_light_setting_t *setting);
+\end{verbatim}
+
+Setting type lights have the concept of ``local control''.  When a
+light is in local control, the light is managed by the system it runs
+on.  If local control is turned off, then the light can be directly
+managed.  For instance, the system may have an LED that when under
+local control displays disk activity.  However, it may be possible for
+the management system to take over that LED and use it for another
+purpose.  Local control is set and modified in a setting using the
+functions:
+\begin{verbatim}
+int ipmi_light_setting_in_local_control(ipmi_light_setting_t *setting,
+                                        int                  num,
+                                        int                  *lc);
+int ipmi_light_setting_set_local_control(ipmi_light_setting_t *setting,
+                                         int                  num,
+                                         int                  lc);
+\end{verbatim}
+The \verb=num= parameter is the light number to set (which of the
+lights the control managers).  The \verb=lc= parameter is the local
+control control setting.  These return error values if the parameters
+are out of range.  If local control is not supported, this is
+generally ignored.
+
+To know if a light supports a specific color, the function:
+\begin{verbatim}
+int ipmi_control_light_is_color_supported(ipmi_control_t *control,
+                                          unsigned int   color);
+\end{verbatim}
+To set the color in a setting and extract the color from a setting, use:
+\begin{verbatim}
+int ipmi_light_setting_get_color(ipmi_light_setting_t *setting, int num,
+                                 int *color);
+int ipmi_light_setting_set_color(ipmi_light_setting_t *setting, int num,
+                                 int color);
+\end{verbatim}
+
+These types of lights also support on and off times.  The on and off
+times are directly set, so the user has direct control of this.  Note
+that on and off times may be approximate.  To set or get the on and off
+times in a setting, use:
+\begin{verbatim}
+int ipmi_light_setting_get_on_time(ipmi_light_setting_t *setting, int num,
+                                   int *time);
+int ipmi_light_setting_set_on_time(ipmi_light_setting_t *setting, int num,
+                                   int time);
+int ipmi_light_setting_get_off_time(ipmi_light_setting_t *setting, int num,
+                                    int *time);
+int ipmi_light_setting_set_off_time(ipmi_light_setting_t *setting, int num,
+                                    int time);
+\end{verbatim}
+The times are specified in milliseconds.
+
+To fetch the current settings of a light control, use:
+\begin{verbatim}
+typedef void (*ipmi_light_settings_cb)(ipmi_control_t       *control,
+                                       int                  err,
+                                       ipmi_light_setting_t *settings,
+                                       void                 *cb_data);
+int ipmi_control_get_light(ipmi_control_t         *control,
+                           ipmi_light_settings_cb handler,
+                           void                   *cb_data);
+\end{verbatim}
+Once you receive the settings, use the get functions to get the data
+you want from it.  Note that the \verb=settings= parameter is freed by
+the system; if you want to keep the settings around you should
+duplicate them.
+
+To set the settings of a light control, first create and configure a
+light setting object, then pass it to:
+\begin{verbatim}
+int ipmi_control_set_light(ipmi_control_t       *control,
+                           ipmi_light_setting_t *settings,
+                           ipmi_control_op_cb   handler,
+                           void                 *cb_data);
+\end{verbatim}
+
+\subsubsection{Transition Light}
+
+For a transition light control, each control has one or more lights.
+Each light is an lightable device, but all the lights in a control are
+changed together.  To get the number of lights supported by a control,
+use:
+\begin{verbatim}
+int ipmi_control_get_num_vals(ipmi_control_t *control);
+\end{verbatim}
+
+Each light has a number of values that it may be set to.  The value is
+what is passed to \verb=set_control=.  See
+section~\vref{sec-basic-type-controls} for details on how to use
+\verb=set_control=.
+
+Each value of a light has a number of transitions that it may go
+through.  Each transition has a color and a time when that colors
+runs.
+
+This all sounds complicated, but it is really fairly simple.
+Suppose a control has two lights.  Say light 0 is a red led.  Light
+0 has 4 values: off, 100ms on and 900ms off, 900ms on and 100ms
+off, and always on.  For value 0, it will have one transition and the
+color will be black (time is irrelevant with one transition).  For
+value 1, it will have two transitions, the first has a color of
+black and a time of 900 and the second has a color of red and a
+time of 100.  Likewise, value 2 has two transitions, the first is
+black with a time of 100 and the second is red with a value of 900.
+Value 4 has one transition with a red color.
+
+To get the number of transitions in a value, call the function:
+\begin{verbatim}
+int ipmi_control_get_num_light_transitions(ipmi_control_t *control,
+                                           unsigned int   light,
+                                           unsigned int   value);
+\end{verbatim}
+For each transition, use the following functions to fetch the color
+and time for that transition:
+\begin{verbatim}
+int ipmi_control_get_light_color(ipmi_control_t *control,
+                                 unsigned int   light,
+                                 unsigned int   value,
+                                 unsigned int   transition);
+int ipmi_control_get_light_color_time(ipmi_control_t *control,
+                                      unsigned int   light,
+                                      unsigned int   value,
+                                      unsigned int   transition);
+\end{verbatim}
 
 \subsection{Display}
 
+The function of a display is TBD until the author of OpenIPMI gets a
+system that supports one :-).
+
 \subsection{Identifier}
 
+An identifier control holds some type of information about the system,
+the specific type of something, a serial number or other identifier,
+or things of that nature.  They are represented as an array of bytes.
+
+To find the maximum number of bytes a control may be set to or will
+return, use the function:
+\begin{verbatim}
+unsigned int ipmi_control_identifier_get_max_length(ipmi_control_t *control);
+\end{verbatim}
+
+To set and get the value of a control, use:
+\begin{verbatim}
+typedef void (*ipmi_control_identifier_val_cb)(ipmi_control_t *control,
+                                               int            err,
+                                               unsigned char  *val,
+                                               int            length,
+                                               void           *cb_data);
+int ipmi_control_identifier_get_val(ipmi_control_t                 *control,
+                                    ipmi_control_identifier_val_cb handler,
+                                    void                           *cb_data);
+int ipmi_control_identifier_set_val(ipmi_control_t     *control,
+                                    unsigned char      *val,
+                                    int                length,
+                                    ipmi_control_op_cb handler,
+                                    void               *cb_data);
+\end{verbatim}
+
 \subsection{Chassis Controls}
+The \acs{IPMI} standard supports two basic controls if the system
+supports chassis control.  OpenIPMI automatically detects these and
+creates controls for them.  The controls created are created on the
+chassis entity id (id 23.1) and are named:
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+reset & A one-shot reset that can reset the processor in the chassis.\\
+\hline
+power & A binary power control that can turn on and turn off power to a
+        chassis.\\
+\hline
+\end{tabularx}
 
 \section{Watchdog Timer}
+
+TBD - determine if we really need watchdog timer support, write it and
+document it if so.  Currently the OpenIPMI library does not support
+the watchdog timer, but the Linux IPMI driver does support it through
+the standard watchdog timer interface.
 
 \section{Direct \acs{I$^2$C} Access}
 
@@ -6932,7 +7374,7 @@ OpenIPMI automatically sets the event receiver.
 \section{Event Format}
 \label{event-format}
 
-\section{Event Data Information for Events}
+\section{Event Data Information for Specific Events}
 \label{sec-event-data-info-for-events}
 
 \begin{longtable}{|p{0.27\textwidth}|l|p{0.85\textwidth}|}
@@ -7080,9 +7522,11 @@ in.
 
 %---------------------------------------------------------------------
 \chapter{ATCA}
+\label{app-atca}
 
 %---------------------------------------------------------------------
 \chapter{Motorola MXP}
+\label{app-motorola-mxp}
 
 %---------------------------------------------------------------------
 \chapter{Sample Program Showing Basic Operations}

@@ -1529,7 +1529,14 @@ int ipmi_control_get_num_light_settings(ipmi_control_t *control,
    go through a number of transitions.  Each transition is described
    by a color, a time (in milliseconds) that the color is present.
    For non-blinking lights, there will only be one transition.  For
-   blinking lights, there will be one or more transition.. */
+   blinking lights, there will be one or more transitions. */
+
+/* If this returns true, then you set the light with the
+   ipmi_control_set_light() function and get the values with the
+   ipmi_control_get_light() function.  Otherwise you set it with the
+   normal set_control command and use the transitions functions to get
+   what the LED can do. */
+int ipmi_control_light_set_with_setting(ipmi_control_t *control);
 
 /* Handling the settings variable for a settings type light.  Note
    that setting the on time to zero will turn off the LED (the off
@@ -1546,6 +1553,11 @@ int ipmi_light_setting_in_local_control(ipmi_light_setting_t *setting,
 int ipmi_light_setting_set_local_control(ipmi_light_setting_t *setting,
 					 int                  num,
 					 int                  lc);
+
+/* Allows detecting if a light supports a specific color. */
+int ipmi_control_light_is_color_supported(ipmi_control_t *control,
+					  unsigned int   color);
+
 int ipmi_light_setting_get_color(ipmi_light_setting_t *setting, int num,
 				 int *color);
 int ipmi_light_setting_set_color(ipmi_light_setting_t *setting, int num,
@@ -1563,29 +1575,10 @@ ipmi_light_setting_t *ipmi_alloc_light_settings(unsigned int count);
 void ipmi_free_light_settings(ipmi_light_setting_t *settings);
 ipmi_light_setting_t *ipmi_light_settings_dup(ipmi_light_setting_t *settings);
 
-/* If this returns true, then you set the light with the
-   ipmi_control_set_light() function and get the values with the
-   ipmi_control_get_light() function.  Otherwise you set it with the
-   normal set_control command and use the transitions functions to get
-   what the LED can do. */
-int ipmi_control_light_set_with_setting(ipmi_control_t *control);
-
-/* Get the setting for the specific setting.  These return -1 for
-   an invalid num. */
-int ipmi_control_get_num_light_transitions(ipmi_control_t *control,
-					   unsigned int   light,
-					   unsigned int   setting);
-int ipmi_control_get_light_color(ipmi_control_t *control,
-				 unsigned int   light,
-				 unsigned int   setting,
-				 unsigned int   num);
-int ipmi_control_get_light_color_time(ipmi_control_t *control,
-				      unsigned int   light,
-				      unsigned int   setting,
-				      unsigned int   num);
 
 /* Set and get the light's settings.  Note that the settings value you
-   get is */
+   get is freed by the system, if you want to keep it around you must
+   duplicate it. */
 int ipmi_control_set_light(ipmi_control_t       *control,
 			   ipmi_light_setting_t *settings,
 			   ipmi_control_op_cb   handler,
@@ -1597,9 +1590,45 @@ typedef void (*ipmi_light_settings_cb)(ipmi_control_t       *control,
 int ipmi_control_get_light(ipmi_control_t         *control,
 			   ipmi_light_settings_cb handler,
 			   void                   *cb_data);
-int ipmi_control_light_is_color_supported(ipmi_control_t *control,
-					  unsigned int   color);
 		       
+/* Now the functions for a transition based light. */
+
+/* Get the setting for the specific number.  These all return -1 for
+   an invalid number.  Otherwise they return the information.
+
+   Each control has one or more lights.  Each light is an lightable
+   device, but all the lights in a control are changed together.
+
+   Each light has a number of values that it may be set to.  The value
+   is what is passed to set_control().
+
+   Each value of a light has a number of transitions that it may go
+   through.  Each transition has a color and a time when that colors
+   runs.
+
+   This all sounds complicated, but it is really fairly simple.
+   Suppose a control has two lights.  Say light 0 is a red led.  Light
+   0 has 4 values: off, 100ms on and 900ms off, 900ms on and 100ms
+   off, and 100% on.  For value 0, it will have one transition and the
+   color will be black (time is irrelevant with one transition).  For
+   value 1, it will have two transitions, the first has a color of
+   black and a time of 900 and the second has a color of red and a
+   time of 100.  Likewise, value 2 has two transitions, the first is
+   black with a time of 100 and the second is red with a value of 900.
+   Value 4 has one transition with a red color.
+ */
+int ipmi_control_get_num_light_transitions(ipmi_control_t *control,
+					   unsigned int   light,
+					   unsigned int   value);
+int ipmi_control_get_light_color(ipmi_control_t *control,
+				 unsigned int   light,
+				 unsigned int   value,
+				 unsigned int   transition);
+int ipmi_control_get_light_color_time(ipmi_control_t *control,
+				      unsigned int   light,
+				      unsigned int   value,
+				      unsigned int   transition);
+
 
 /* RELAY types have no settings. */
 
