@@ -1,6 +1,9 @@
 
 This package includes preliminary OEM support for Force Computers (TM)
-cards.  This is still somewhat experimental.
+cards.  This is still somewhat experimental.  Note that you NEED the
+v22 version of the OpenIPMI driver to use the dual MC handling code
+for Force, it solves some race conditions between the separate
+interfaces.
 
 This driver includes OEM handling for connections to Force CPCI
 systems.  It will automatically handle setting up the connections for

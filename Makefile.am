@@ -69,7 +69,7 @@ TESTS = test_heap
 info_TEXINFOS = OpenIPMI.texi
 
 man_MANS = ipmi_ui.1 ipmilan.8 ipmicmd.1
-EXTRA_DIST = $(man_MANS) FAQ TODO example_oem.c
+EXTRA_DIST = $(man_MANS) FAQ TODO example_oem.c README.Force
 
 clean:
 	rm -f *.map
