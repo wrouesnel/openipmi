@@ -8982,6 +8982,9 @@ mxp_conn_handler(ipmi_con_t *conn, void *cb_data)
     /* Broadcasting is currently broken on the MXP. */
     conn->broadcast_broken = 1;
 
+    /* Scan the system address on MXP chassis. */
+    conn->scan_sysaddr = 1;
+
     conn->get_ipmb_addr = mxp_ipmb_fetch;
     conn->set_active_state = mxp_activate;
     conn->handle_send_rsp_err = mxp_handle_send_rsp_err;

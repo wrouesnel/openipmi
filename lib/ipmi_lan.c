@@ -2720,11 +2720,6 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 	return ENOMEM;
     memset(ipmi, 0, sizeof(*ipmi));
 
-    /* We scan the system address to create dummy MCs for use by the
-       PET code, so it can correctly find all the system interfaces we
-       hook to and configure them. */
-    ipmi->scan_sysaddr = 1;
-
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
 

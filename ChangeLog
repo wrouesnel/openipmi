@@ -32,6 +32,13 @@
 	event receiver bit (not the SEL bit) and to ignore BMC channels,
 	since their addresses would be bogus.
 
+	* lib/ipmi_lan.c: Removed scanning the system address for general
+	LAN connections.  It will do wierd things, and is only necessary
+	if specific support is required.
+
+	* lib/oem_motorola_mxp.c: Re-added scanning the system address
+	for MXP chassis.
+
 2004-02-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a race condition dealing with an MC going away

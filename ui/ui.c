@@ -6091,7 +6091,7 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
     if (rv)
 	leave_err(rv, "ipmi_domain_enable_events");
 
-    rv = ipmi_domain_set_entity_update_handler(domain, entity_change, domain);
+    rv = ipmi_domain_add_entity_update_handler(domain, entity_change, domain);
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
 
