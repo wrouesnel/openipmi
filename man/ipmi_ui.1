@@ -5,11 +5,15 @@ ipmi_ui \- Crude interface to an IPMI system
 
 .SH SYNOPSIS
 .B ipmiui
-[\-dmsg] [\-dmem] [\-c] smi <smi num>
+[\-dmsg] [\-dmem] [\-c] <connection 1> [<connection 2>]
 
-.B ipmiui
-[\-dmsg] [\-dmem] [\-c] lan <IP addr> <port> [<IP addr 2> <port 2>]
-<auth> <privilege> <username> <password>
+The connections are specified as either:
+
+smi <smi num>
+
+or
+
+lan <IP addr> <port> [<IP addr 2> <port 2>] <auth> <privilege> <username> <password>
 
 .SH DESCRIPTION
 The
@@ -29,8 +33,12 @@ the right window to scroll.
 
 Note that you can put two connection specifications on the command
 line, and ipmi_ui will make two connection.  You can only do this if
-the connections are to the same IPMI domain through difference
-management controllers.
+the connections are to the same IPMI domain through different
+management controllers.  Also, each LAN connection may have two IP
+addresses.  These are two different addresses to the same management
+controller.  So you may have a total of 4 IP addresses to an IPMI
+domain, two management controllers and two IP adresses to each
+management controller.
 
 .SH OPTIONS
 .TP

@@ -3496,23 +3496,25 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     if (rv)
 	goto out_err;
 
-    /* Power supply I2C isolate control */
-    rv = mxp_alloc_control(info->mc,
-			   ps,
-			   IPMI_CONTROL_OUTPUT,
-			   "I2C Isolate",
-			   ps_i2c_isolate_set,
-			   ps_i2c_isolate_get,
-			   &ps->ps_i2c_isolate);
-    if (rv)
-	goto out_err;
-    ipmi_control_set_num_elements(ps->ps_i2c_isolate, 1);
-    rv = mxp_add_control(info->mc, 
-			 &ps->ps_i2c_isolate,
-			 MXP_PS_I2C_ISOLATE_NUM(ps->idx),	       
-			 ps->ent);
-    if (rv)
-	goto out_err;
+    if (info->chassis_config != MXP_CHASSIS_CONFIG_HALFPINT) {
+	/* Power supply I2C isolate control */
+	rv = mxp_alloc_control(info->mc,
+			       ps,
+			       IPMI_CONTROL_OUTPUT,
+			       "I2C Isolate",
+			       ps_i2c_isolate_set,
+			       ps_i2c_isolate_get,
+			       &ps->ps_i2c_isolate);
+	if (rv)
+	    goto out_err;
+	ipmi_control_set_num_elements(ps->ps_i2c_isolate, 1);
+	rv = mxp_add_control(info->mc, 
+			     &ps->ps_i2c_isolate,
+			     MXP_PS_I2C_ISOLATE_NUM(ps->idx),	       
+			     ps->ent);
+	if (rv)
+	    goto out_err;
+    }
 
  out_err:
     return rv;

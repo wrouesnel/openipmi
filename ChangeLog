@@ -1,8 +1,14 @@
 2004-02-22 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_motorola_mxp.c: Added reading the reset control for
-	boards.
+	boards.  Don't create the I2C Isolate controls on the half-pint
+	chassis.
 
+	* man/ipmi_ui.1: Fixed the explanation of connecting using
+	multiple connections and LAN addresses.
+
+	* configure.in: Move to version 1.2.14.
+	
 2004-02-20 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Added multi-record
