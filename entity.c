@@ -519,7 +519,7 @@ presence_changed(ipmi_entity_t *ent,
 	ipmi_entity_iterate_parents(ent, presence_parent_handler, NULL);
     }
 
-    if (!handled)
+    if (event && !handled)
 	ipmi_handle_unhandled_event(ent->bmc, event);
 }
 
