@@ -900,19 +900,13 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 int
 _ipmi_mc_handle_new(ipmi_mc_t *mc)
 {
-    int         rv = 0;
-    ipmi_mcid_t *mcid;
+    int rv = 0;
 
     mc->active = 1;
 
-    if (mc->provides_device_sdrs) {
-	mcid = ipmi_mem_alloc(sizeof(*mcid));
-	if (!mcid)
-	    return ENOMEM;
-	*mcid = _ipmi_mc_convert_to_id(mc);
-
+    if (mc->provides_device_sdrs)
 	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
-    } else
+    else
 	sensors_reread(mc, 0, NULL);
 
     return rv;
