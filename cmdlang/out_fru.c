@@ -99,7 +99,10 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	ipmi_cmdlang_out(cmd_info, "Name", name);
 	if (num != onum) {
 	    ipmi_cmdlang_out_int(cmd_info, "Number", num);
-	    num++;
+	    if (num == -1) {
+		i++;
+		num = 0;
+	    }
 	} else {
 	    i++;
 	    num = 0;

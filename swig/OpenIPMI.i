@@ -4,6 +4,7 @@
 %{
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_posix.h>
@@ -5632,6 +5633,107 @@ void set_log_handler(swig_cb handler = NULL);
  * A FRU object
  */
 %extend ipmi_fru_t {
+    /*
+     * Convert the string to a FRU index.  Use this if you have a specfiic
+     * fru data object you are after.
+     */
+    int str_to_index(char *name)
+    {
+	return ipmi_fru_str_to_index(name);
+    }
+
+    /*
+     * Get a FRU data item.  The first parameter is an index to get,
+     * the second is an integer reference to an item number.  This
+     * returns a string of the particular object with the following:
+     * "<name> <type> <data>".  If the index or number are invalid,
+     * then an undefined value will be returned (NULL, undef, etc).
+     * If the FRU item is not supported for this FRU, only the name
+     * will be filled out and there will be no type or value.
+     *
+     * If the type is integer, a single integer number will follow.
+     * If the type is ascii, an ascii string will follow starting one
+     * space after the type.  If the type is unicode or binary, then
+     * a set of ascii-encoded binary bytes will follow "0x01 0x03 ..."
+     *
+     * The second parameter (the number) is zero based and should be
+     * set to zero when fetching an index for the first time.  It will
+     * be unchanged if the data item does not support multiple items.
+     * If it does support multiple items, then the number will be
+     * changed to the next supported value, or to -1 if this is the
+     * last item.
+     */
+    %newobject get;
+    char *get(int index, int *num)
+    {
+	char                      *name;
+	enum ipmi_fru_data_type_e dtype;
+	int                       intval;
+	time_t                    time;
+	char                      *data;
+	unsigned int              data_len;
+	int                       rv;
+	char                      dummy[1];
+	char                      *str, *s;
+	int                       len;
+	int                       i;
+
+	data = NULL;
+	rv = ipmi_fru_get(self, index, &name, num, &dtype, &intval,
+			  &time, &data, &data_len);
+	if (rv == ENOSYS)
+	    return strdup(name);
+	else if (rv)
+	    return NULL;
+
+	switch(dtype) {
+	case IPMI_FRU_DATA_INT:
+	    len = snprintf(dummy, 1, "%s integer %d", name, intval);
+	    str = malloc(len + 1);
+	    sprintf(str, "%s integer %d", name, intval);
+	    break;
+
+	case IPMI_FRU_DATA_TIME:
+	    len = snprintf(dummy, 1, "%s integer %ld", name, (long) time);
+	    str = malloc(len + 1);
+	    sprintf(str, "%s integer %ld", name, (long) time);
+	    break;
+
+	case IPMI_FRU_DATA_BINARY:
+	    len = snprintf(dummy, 1, "%s binary", name);
+	    len += data_len * 5;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "%s binary", name);
+	    for (i=0; i<data_len; i++)
+		s += sprintf(s, " 0x%2.2x", data[i]);
+	    break;
+
+	case IPMI_FRU_DATA_UNICODE:
+	    len = snprintf(dummy, 1, "%s unicode", name);
+	    len += data_len * 5;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "%s unicode", name);
+	    for (i=0; i<data_len; i++)
+		s += sprintf(s, " 0x%2.2x", data[i]);
+	    break;
+
+	case IPMI_FRU_DATA_ASCII:
+	    len = snprintf(dummy, 1, "%s ascii %s", name, data);
+	    str = malloc(len + 1);
+	    sprintf(str, "%s ascii %s", name, data);
+	    break;
+
+	default:
+	    str = NULL;
+	}
+
+	if (data)
+	    ipmi_fru_data_free(data);
+
+	return str;
+    }
 }
 
 /*

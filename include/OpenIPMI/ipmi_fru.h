@@ -274,8 +274,8 @@ int ipmi_fru_str_to_index(char *name);
  * free the data when you are done with ipmi_fru_data_free().
  *
  * Returns EINVAL if the index is out of range, ENOSYS if the
- * particular index is not supported, or E2BIG if the num is
- * too big.
+ * particular index is not supported (the name will still be set), or
+ * E2BIG if the num is too big (again, the name will be set).
  *
  * Any of the return values may be passed NULL to ignore the data.
  *

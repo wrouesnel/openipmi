@@ -1,0 +1,183 @@
+#!/usr/bin/perl
+
+use OpenIPMI;
+
+{
+    package MC_Nameget;
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	return bless $b;
+    }
+
+    sub mc_cb {
+	my $self = shift;
+	my $mc = shift;
+
+	$$self = $mc->get_name();
+    }
+
+    package Handlers;
+
+    
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	return bless $b;
+    }
+
+
+    sub event_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $event = shift;
+	my $mcid;
+	my $name;
+	my $val;
+	my @data;
+	my $dataref;
+
+	$mcid = $event->get_mc_id();
+
+	$name = MC_Nameget::new("");
+	$mcid->convert_to_mc($name);
+	$dataref = $event->get_data();
+	@data = @$dataref;
+
+	print ("Got event: $$name ", $event->get_record_id(),
+	       " ", $event->get_type(), " ", $event->get_timestamp(), "\n");
+	print "  Data: ";
+	while (defined ($val = shift @data)) {
+	    printf " %2.2x", $val;
+	}
+	print "\n";
+    }
+
+    sub entity_update_cb {
+	my $self = shift;
+	my $op = shift;
+	my $domain = shift;
+	my $entity = shift;
+
+	print $op, " entity ", $entity->get_name(), "\n";
+    }
+
+    sub mc_update_cb {
+	my $self = shift;
+	my $op = shift;
+	my $domain = shift;
+	my $mc = shift;
+
+	print $op, " MC ", $mc->get_name(), "\n";
+    }
+
+    sub addr_cmd_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $addr = shift;
+	my $lun = shift;
+	my $netfn = shift;
+	my $cmd = shift;
+	my $val;
+
+	print "Got message from ", $domain->get_name(), "\n";
+	print " addr = $addr\n";
+	print " lun=$lun, netfn=$netfn, cmd=$cmd\n";
+	print " data:";
+	while (defined ($val = shift)) {
+	    printf " %2.2x", $val;
+	}
+	print "\n";
+    }
+
+    sub conn_change_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $err = shift;
+	my $conn_num = shift;
+	my $port_num = shift;
+	my $still_connected = shift;
+	my $rv;
+	my $i;
+
+	print "Open done ($$self): ", $domain->get_name(), "\n";
+	if ($$self eq "hello") {
+	    $i = new("goodbye");
+	    $rv = $domain->add_connect_change_handler($i);
+	    if ($rv) {
+		print "Unable to add connect change handler: $rv\n";
+	    }
+	    $rv = $domain->remove_connect_change_handler($self);
+	    if ($rv) {
+		print "Unable to remove connect change handler: $rv\n";
+	    }
+
+	    $rv = $domain->add_entity_update_handler($i);
+	    if ($rv) {
+		print "Unable to add entity updated handler: $rv\n";
+	    }
+	    $rv = $domain->add_mc_update_handler($i);
+	    if ($rv) {
+		print "Unable to add mc updated handler: $rv\n";
+	    }
+
+	    $rv = $domain->send_command_addr("smi 15 ", 0, 6, 1, [], $self);
+	    if ($rv) {
+		print "Unable to send command: $rv\n";
+	    }
+
+	    $rv = $domain->add_event_handler($self);
+	    if ($rv) {
+		print "Unable to add event handler: $rv\n";
+	    }
+	} else {
+	    $rv = $domain->send_command_addr("ipmb 0 32", 0, 10, 0x43,
+					     [ 0, 0, 0, 0, 0, 0xff ], $self);
+	    if ($rv) {
+		print "Unable to send command: $rv\n";
+	    }
+	}
+    }
+
+    sub domain_up_cb {
+	my $self = shift;
+	my $domain = shift;
+
+	print "Domain up: ", $domain->get_name(), "\n";
+	$domain->iterate_entities($self);
+    }
+
+    sub entity_iter_cb {
+	my $self = shift;
+	my $entity = shift;
+
+	print "Entity: ", $entity->get_name(), "\n";
+    }
+
+    sub log {
+	my $self = shift;
+	my $level = shift;
+	my $log = shift;
+
+	print $level, ": ", $log, "\n";
+    }
+}
+
+OpenIPMI::init();
+
+$h = Handlers::new("hello");
+
+OpenIPMI::set_log_handler($h);
+
+#@items = ("lan", "localhost", 9000, "md5", "admin", "minyard", "test");
+@items = ("lan", "t-langley-1", 623, "md5", "admin", "minyard", "test");
+#@items = ("smi", "0");
+
+$a = OpenIPMI::open_domain("test", \@items, $h, \undef);
+if (! $a) {
+    print "open failed\n";
+}
+
+while () {
+    OpenIPMI::wait_io(1000);
+}
