@@ -61,12 +61,14 @@ typedef struct ipmi_device_num_s
 typedef struct ipmi_sensor_ref_s
 {
     ipmi_sensor_id_t sensor;
+    ipmi_sensor_t    *sensor_ptr;
     ilist_item_t     list_link;
 } ipmi_sensor_ref_t;
 
 typedef struct ipmi_control_ref_s
 {
     ipmi_control_id_t control;
+    ipmi_control_t    *control_ptr;
     ilist_item_t      list_link;
 } ipmi_control_ref_t;
 
@@ -1823,6 +1825,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
     /* The calling code should check for duplicates, no check done
        here. */
     link->sensor = ipmi_sensor_convert_to_id(sensor);
+    link->sensor_ptr = sensor;
     link->list_link.malloced = 0;
 
     if (is_presence_sensor(sensor) && (ent->presence_sensor == NULL)) {
@@ -1857,9 +1860,9 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 static int sens_cmp(void *item, void *cb_data)
 {
     ipmi_sensor_ref_t *ref1 = item;
-    ipmi_sensor_id_t  *id2 = cb_data;
+    ipmi_sensor_t     *sensor = cb_data;
 
-    return ipmi_cmp_sensor_id(ref1->sensor, *id2) == 0;
+    return ref1->sensor_ptr == sensor;
 }
 
 typedef struct sens_find_presence_s
@@ -1926,6 +1929,10 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
     ilist_iter_t      iter;
     sens_cmp_info_t   info;
 
+    /* Note that you *CANNOT* call ipmi_sensor_convert_to_id() (or any
+       other thing like that) because the MC that the sensor belongs
+       to may have disappeared already.  So be careful. */
+
     CHECK_ENTITY_LOCK(ent);
 
     if (sensor == ent->presence_sensor) {
@@ -1961,8 +1968,6 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	}
 	ent->presence_possibly_changed = 1;
     } else {
-	ipmi_sensor_id_t id = ipmi_sensor_convert_to_id(sensor);
-
 	if (sensor == ent->presence_bit_sensor) {
 	    ilist_init_iter(&iter, ent->sensors);
 	    ilist_unpositioned(&iter);
@@ -1982,7 +1987,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 
 	ilist_init_iter(&iter, ent->sensors);
 	ilist_unpositioned(&iter);
-	ref = ilist_search_iter(&iter, sens_cmp, &id);
+	ref = ilist_search_iter(&iter, sens_cmp, sensor);
 	if (!ref) {
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%sentity.c(ipmi_entity_remove_sensor):"
@@ -2018,6 +2023,7 @@ ipmi_entity_add_control(ipmi_entity_t  *ent,
     /* The calling code should check for duplicates, no check done
        here. */
     link->control = ipmi_control_convert_to_id(control);
+    link->control_ptr = control;
     link->list_link.malloced = 0;
     ilist_add_tail(ent->controls, link, &(link->list_link));
 
@@ -2027,9 +2033,9 @@ ipmi_entity_add_control(ipmi_entity_t  *ent,
 static int control_cmp(void *item, void *cb_data)
 {
     ipmi_control_ref_t *ref1 = item;
-    ipmi_control_id_t  *id2 = cb_data;
+    ipmi_control_t     *control = cb_data;
 
-    return ipmi_cmp_control_id(ref1->control, *id2) == 0;
+    return ref1->control_ptr == control;
 }
 
 void
@@ -2038,7 +2044,10 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
 {
     ipmi_control_ref_t *ref;
     ilist_iter_t       iter;
-    ipmi_control_id_t  id;
+
+    /* Note that you *CANNOT* call ipmi_control_convert_to_id() (or any
+       other thing like that) because the MC that the sensor belongs
+       to may have disappeared already.  So be careful. */
 
     CHECK_ENTITY_LOCK(ent);
 
@@ -2050,8 +2059,7 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     ilist_init_iter(&iter, ent->controls);
     ilist_unpositioned(&iter);
 
-    id = ipmi_control_convert_to_id(control);
-    ref = ilist_search_iter(&iter, control_cmp, &id);
+    ref = ilist_search_iter(&iter, control_cmp, control);
     if (!ref) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(ipmi_entity_remove_control):"

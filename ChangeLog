@@ -1,5 +1,14 @@
 2004-04-02 Corey Minyard <cminyard@mvista.com> 
 
+	* lib/entity.c: Fixed a rather nasty race condition.  Sensors and
+	control may go away after the MC goes away underneath them if the
+	sensor or control has an operation pending.  The entity routine to
+	remove the sensor and control calls ipmi_xxx_convert_to_id(),
+	which requires the MC to exist.  These were converted to use the
+	pointer itself.
+
+2004-04-02 Corey Minyard <cminyard@mvista.com> 
+
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Reworked LED
 	support to better handle ATCA.  Added hot-swap support.
 
