@@ -211,6 +211,26 @@ typedef struct domain_up_info_s
     mxp_info_t		     *info;
 } domain_up_info_t;
 
+/* The AMC MC's store one of these in their OEM data. */
+typedef struct amc_info_s
+{
+    /* This is NULL at startup, and will be calculated on received events. */
+    mxp_info_t    *mxp_info;
+
+    ipmi_mc_t     *mc;
+    ipmi_entity_t *ent;
+
+    /* Now all the sensors. */
+    ipmi_sensor_t *slot;
+    ipmi_sensor_t *s5v;
+    ipmi_sensor_t *s3_3v;
+    ipmi_sensor_t *s2_5v;
+    ipmi_sensor_t *s8v;
+
+    /* The controls. */
+    ipmi_control_t *blue_led;
+} amc_info_t;
+
 struct mxp_info_s {
     unsigned char      chassis_type;
     unsigned char      chassis_config;
@@ -3892,7 +3912,6 @@ typedef struct mc_event_info_s
     ipmi_event_t          event_copy;
     int                   handled;
     int                   val;
-    ipmi_mcid_t           mc_id;
 } mc_event_info_t;
 
 static void
@@ -4261,8 +4280,6 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
     int              rv;
     int              i;
 
-    ipmi_mc_get_oem_data(mc);
-
 ipmi_log(IPMI_LOG_DEBUG, "***B");
     id.mcid = _ipmi_mc_convert_to_id(mc);
     id.mcid.channel = 0;
@@ -4406,6 +4423,34 @@ ipmi_log(IPMI_LOG_DEBUG, "***A");
     }
 }
 
+static void
+amc_get_mxp_info_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    mxp_info_t **mxp_info = cb_data;
+
+    *mxp_info = ipmi_mc_get_oem_data(mc);
+}
+
+/* We are passed in a pointer to an MC in the domain of an MXP sensor,
+   find the mxp_info data structure. */
+static mxp_info_t *
+amc_get_mxp_info(ipmi_mc_t *mc, amc_info_t *ainfo)
+{
+    ipmi_mcid_t mc_id;
+    mxp_info_t  *mxp_info = NULL;
+
+    if (ainfo->mxp_info)
+	return ainfo->mxp_info;
+
+    mc_id = _ipmi_mc_convert_to_id(mc);
+    mc_id.channel = 0;
+    mc_id.mc_num = 0x20;
+    _ipmi_mc_pointer_noseq_cb(mc_id, amc_get_mxp_info_cb, &mxp_info);
+    ainfo->mxp_info = mxp_info;
+
+    return mxp_info;
+}
+
 static int
 mxp_event_handler(ipmi_mc_t    *mc,
 		  ipmi_event_t *event,
@@ -4415,13 +4460,12 @@ mxp_event_handler(ipmi_mc_t    *mc,
     int             rv;
     mc_event_info_t einfo;
     unsigned long   timestamp;
+    amc_info_t      *ainfo = cb_data;
 
-ipmi_log(IPMI_LOG_DEBUG, "***C");
     if ((event->type != 2) && (event->type != 3) && (event->type != 0xc0))
 	/* Not a system event record or MXP event. */
 	return 0;
 
-ipmi_log(IPMI_LOG_DEBUG, "***d");
     if ((event->data[6] != 3) && (event->data[6] != 4))
 	/* Not a 1.5 event version or an MXP event */
 	return 0;
@@ -4431,9 +4475,6 @@ ipmi_log(IPMI_LOG_DEBUG, "***d");
     if (timestamp < ipmi_mc_get_startup_SEL_time(mc))
 	/* It's an old event, ignore it. */
 	return 0;
-ipmi_log(IPMI_LOG_DEBUG, "***e");
-
-    einfo.mcid = mcid;
 
     /* If the low bit of data[4] is set, then it's from the MC,
        otherwise it's from a card.  Power supply messages also come in
@@ -4462,9 +4503,8 @@ ipmi_log(IPMI_LOG_DEBUG, "***e");
     einfo.event = event;
     einfo.event_copy = *event;
     einfo.handled = 0;
-    einfo.info = cb_data;
+    einfo.info = amc_get_mxp_info(mc, ainfo);
 
-ipmi_log(IPMI_LOG_DEBUG, "***f");
     rv = _ipmi_mc_pointer_noseq_cb(mc_id, mc_event, &einfo);
 
     if (rv)
@@ -4696,22 +4736,6 @@ con_up_handler(ipmi_domain_t *domain,
 #define MXP_3_3V_SENSOR_NUM	3
 #define MXP_2_5V_SENSOR_NUM	4
 #define MXP_8V_SENSOR_NUM	5
-
-typedef struct amc_info_s
-{
-    ipmi_mc_t     *mc;
-    ipmi_entity_t *ent;
-
-    /* Now all the sensors. */
-    ipmi_sensor_t *slot;
-    ipmi_sensor_t *s5v;
-    ipmi_sensor_t *s3_3v;
-    ipmi_sensor_t *s2_5v;
-    ipmi_sensor_t *s8v;
-
-    /* The controls. */
-    ipmi_control_t *blue_led;
-} amc_info_t;
 
 static void
 mxp_voltage_reading_cb(ipmi_sensor_t *sensor,
