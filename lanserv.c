@@ -650,6 +650,7 @@ read_config(lan_data_t *lan)
 	    }
 	    err = get_sock_addr(&tokptr, &addr[num_addr], &addr_len[num_addr],
 				&errstr);
+	    num_addr++;
 	} else if (strcmp(tok, "user") == 0) {
 	    err = get_user(&tokptr, lan, &errstr);
 	} else if (strcmp(tok, "guid") == 0) {
@@ -829,7 +830,7 @@ static struct poptOption poptOpts[]=
     }	
 };
 
-void init_oem_force_conn(void);
+void init_oem_force(void);
 
 int
 main(int argc, const char *argv[])

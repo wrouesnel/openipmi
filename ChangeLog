@@ -1,4 +1,9 @@
 
+2003-05-26 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv.c: Fixed the address reading code to increment the
+	address count when it sees an address in the configuration file.
+
 2003-05-19 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c: Modified the event receiver setting code to not modify the
