@@ -237,8 +237,8 @@ void _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
 ipmi_mcid_t _ipmi_mc_convert_to_id(ipmi_mc_t *mc);
 typedef void (*_ipmi_mc_ptr_cb)(ipmi_mc_t *mc, void *cb_data);
 int _ipmi_mc_pointer_cb(ipmi_mcid_t   id,
-		       _ipmi_mc_ptr_cb handler,
-		       void           *cb_data);
+			_ipmi_mc_ptr_cb handler,
+			void           *cb_data);
 int _ipmi_mc_pointer_noseq_cb(ipmi_mcid_t   id,
 			      _ipmi_mc_ptr_cb handler,
 			      void           *cb_data);

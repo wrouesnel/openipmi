@@ -1,4 +1,10 @@
 
+2003-05-19 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Modified the event receiver setting code to not modify the
+	event receiver unless it is pointing to a nonexistant MC or an MC
+	that does not have an event receiver.
+
 2003-05-16 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 0.4.1

@@ -626,8 +626,6 @@ get_event_rcvr_done(ipmi_mc_t  *mc,
 		    ipmi_msg_t *rsp,
 		    void       *rsp_data)
 {
-    unsigned long addr = (long) rsp_data;
-
     if (!mc)
 	return; /* The MC went away, no big deal. */
 
@@ -636,14 +634,34 @@ get_event_rcvr_done(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "Could not get event receiver for MC at 0x%x",
 		 ipmi_addr_get_slave_addr(&mc->addr));
-    } else if (rsp->data[1] != addr) {
-	/* The event receiver doesn't match, so change it. */
-	send_set_event_rcvr(mc, addr);
+    } else if (rsp->data_len < 2) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Get event receiver length invalid for MC at 0x%x",
+		 ipmi_addr_get_slave_addr(&mc->addr));
+    } else {
+	ipmi_domain_t    *domain = ipmi_mc_get_domain(mc);
+	ipmi_mc_t        *destmc;
+	ipmi_ipmb_addr_t ipmb;
+
+	ipmb.addr_type = IPMI_IPMB_ADDR_TYPE;
+	ipmb.channel = ipmi_mc_get_channel(mc);
+	ipmb.slave_addr = rsp->data[1];
+	ipmb.lun = 0;
+
+	destmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &ipmb,
+				       sizeof(ipmb));
+	if (!destmc || !ipmi_mc_ipmb_event_receiver_support(destmc)) {
+	    /* The current event receiver doesn't exist or cannot
+               receive events, change it. */
+	    unsigned int event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
+	    if (event_rcvr)
+		send_set_event_rcvr(mc, event_rcvr);
+	}
     }
 }
 
 static void
-send_get_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
+send_get_event_rcvr(ipmi_mc_t *mc)
 {
     ipmi_msg_t    msg;
     
@@ -651,8 +669,7 @@ send_get_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
     msg.cmd = IPMI_GET_EVENT_RECEIVER_CMD;
     msg.data = NULL;
     msg.data_len = 0;
-    ipmi_mc_send_command(mc, 0, &msg, get_event_rcvr_done,
-			 (void *) (unsigned long) addr);
+    ipmi_mc_send_command(mc, 0, &msg, get_event_rcvr_done, NULL);
     /* No care about return values, if this fails it will be done
        again later. */
 }
@@ -665,8 +682,9 @@ _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc)
 	   events, make sure the event receiver is set properly. */
 	unsigned int event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
 
+	/* Don't bother if we have no possible event receivers.*/
 	if (event_rcvr) {
-	    send_get_event_rcvr(mc, event_rcvr);
+	    send_get_event_rcvr(mc);
 	}
     }
 }

@@ -134,7 +134,7 @@ plug it into their system.
 There are, of course, things missing in IPMI.  It (for some bizarre
 reason) doesn't define any output devices like LEDs or relays.  You
 will have to write your own OEM commands to control those devices.
-But be ready to move then the standards are ready.
+But be ready to move when the standards are ready.
 
 And don't add extensions that are required beyond the spec to do
 otherwise standard operations.  It's ok to define OEM operations for
@@ -187,13 +187,27 @@ repositories.  There are two reasons for this:
    are read-only.  The sensors are not going anywhere, so they should
    be read-only.
 
-2) If you have a hot-swap device, you need to change the entity
-   instance for a sensor.  You can't do this in the main SDR
-   repository, those entries are controlled by the management system.
+2) If you have a removable device, you need to change the entity
+   instance for a sensor.  For instance, in a PICMG 2.16 system, you
+   can plug a card in most any slot.  Each card may have it's own set
+   of sensors, and those sensors will certainly vary from card to
+   card.  You can't really put the sensors in the main SDR repository
+   because they may vary depending on the type of card installed and
+   where it is installed.  All cards cannot use the same entity
+   instances, they will have to change their instances based upon
+   their position.  You can't do this in the main SDR repository,
+   those entries are controlled by the management system.
 
 The main SDR repository should really be for Entity Association
 records and for other things that the management system needs.  It
 should not be for anything else.
+
+Systems may use the main SDR repository to vary the initialization of
+the of the various sensors (the BMC reads it's SDR repository and
+configures the sensors based upon what it finds).  This is fine for
+server systems, but it doesn't make as much sense for blade-based
+systems.  Plus, there should really be a special SDR for this purpose,
+not a general type.
 
 
 Don't dynamically change the capabilities of an MC
@@ -213,16 +227,17 @@ Blade-based system shouldn't have a BMC
 
 In chassis-based systems, it makes sense to have a BMC at address
 0x20.  In blade-based systems, this makes no sense.  First of all, the
-*only* reason to have a BMC at address 0x20 is to have a standard
-place to send events.  However, the standard has a required command
-for event generators that lets you send the eventing address to any
-IPMB address you like.  Use that instead of address 0x20.
+*only* reason the author can see to have a BMC at address 0x20 is to
+have a standard place to send events.  However, the standard has a
+required command for event generators that lets you send the eventing
+address to any IPMB address you like.  Use that instead of address
+0x20.
 
 Some systems have a way for a blade to take over address 0x20, and
 have a backup BMC.  This is trying to fit a square peg into a round
 hole.  First of all, the configuration for this is non-standard, and
 it makes the management software more complex because it has to manage
-which card is active and which is standby.
+which card is active and which is standby.  More on this later, too.
 
 Instead, each card should sit at it's own address (as defined by PICMG
 2.9 or whatever).  Management software can pick an interface and use
@@ -260,10 +275,6 @@ The watchdog timer should be able to run from startup.  That way, if
 the OS hangs before getting to setting up the watchdog timer, the
 system will still be reset.
 
-There should be some way to auto-discover IPMI LAN systems.  Some kind
-of broadcast should periodically be done, and there should be some
-type of broadcast response.
-
 
 Multi-access to the same bus (fault-tolerant IPMI)
 --------------------------------------------------
@@ -294,7 +305,8 @@ It's important to remember that the system will generally have
 multiple external management systems talking to it.  It makes things a
 lot less complicated if the management systems do not have to
 coordinate information between themselves.  They may not even be able
-to do this because they have independent outputs or purposes.
+to do this because they have independent outputs or purposes or are
+independent pieces of software.
 
 Some systems have MCs on a normal card in the system.  The management
 system (or perhaps some proxy) runs on the card.  The external
@@ -302,11 +314,11 @@ management system shouldn't have to know what card is active.  In
 effect, the cards should both be active.  There can only be one event
 receiver.  The management systems can set the event receiver for all
 the MCs in the system using the set event receiver command.  Anything
-listening for events can listen to all the MCs (every MC should be
-capable of being an event receiver), whichever one the event comes in
-on, it doesn't matter.
+listening for events can listen to all the MCs (or any MC capable of
+being an event receiver).  It doesn't matter which MC the event comes
+from.
 
-Systems with external alarm cards should basically be configured the
+Systems with separate alarm cards should basically be configured the
 same way.  Both cards should be fully active all the time, and the
 event receiver should be set by management software.
 

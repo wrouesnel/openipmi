@@ -1,0 +1,152 @@
+A requirements document is a handy thing to have, both before and
+after the fact.  I had no formal one when I started, but this one is a
+collection of the requirements I think exist.
+
+1) General
+
+   1.1) OpenIPMI will support both threaded and non-threaded
+        applications and offer full function to both environments.
+        (Note that this drives the event-driven nature of the
+        interface).
+
+   1.2) OpenIPMI will be written in ANSI-standard C.
+
+   1.3) The main parts of the code will not depend directly on the
+        operating system, but will use an operating-system abstraction
+        layer to make the code portable.
+
+   1.4) For operations that a user initiates, the results will always
+        be returned if the system survives.
+
+   1.5) OpenIPMI will be fully dynamic and support changing system
+        configurations.
+
+   1.6) For the user, all locking will be done with callthroughs
+        (meaning that the user calls a function that then calls a
+        function the user provides, in the user-provided function the
+        lock will be held).  This avoids forgetting to release locks.
+
+   1.7) OpenIPMI will scan the system to determine what is installed
+        and present it to the user.
+
+2) Connections
+
+   2.1) The lower-level connections will be through an abstract type
+        with function pointers, so that different interfaces can be
+        plugged into the system.
+
+   2.2) The connections will be as abstract as reasonably possible, to
+        support LAN, serial, system iterfaces, or proprietary
+        interfaces.
+
+   2.3) A IPMI 1.5 LAN connection using Unix sockets and a system
+        interface using the OpenIPMI device driver will be provided.
+
+   2.4) For LAN connections, the connection will support multiple IP
+        addresses and ports for a single card with automatic
+        failovers, failure detection, and recovery.
+
+   2.5) OpenIPMI will support multiple MC interfaces into the same
+        system (primarily for fault tolerance).  It will support
+        active/active and active/standby configurations with automatic
+        failovers, failure detection, and recovery.
+
+3) User Interface
+
+   3.1) The user will be able to open multiple connections with one
+        library.
+
+   3.2) The user interface will be clearly split into external
+        interface (that are abstract enough to not depend directly on
+        IPMI) and internal interfaces (that are IPMI specific).
+
+   3.3) The external interface will deal only with connections,
+        entities, events (bot not event internals), sensors, and
+        controls.  They will not deal with SDRs, SELs, management
+        controllers, IPMB addresses, event contents, or other
+        low-level concerns of IPMI.
+
+   3.4) All interfaces to data will be through function calls, not
+        through direct access to structure components.
+
+   3.5) The interface will be fully extensible, no arbitrary
+        limitation will be placed on any value in the interface.
+
+   3.6) When raw (unconverted) values come in, the interface will
+        convert them to floating-point values and give the user access
+        to both the raw and floating point value.
+
+   3.7) As system configuration changes, the changes will be reported
+        to the user as they happen.
+
+   3.8) The user will be able to query the current system
+        configuration through iterators.
+
+   3.9) All strings for readings and values will be avaliable to the
+        user.
+
+4) Entities/Sensors/SDRs
+
+   4.1) OpenIPMI will automatically read the SDRs from a system and
+        create entities and sensors.
+
+   4.2) The user will be given full access to all field of the SDRs
+        for a sensor.
+
+   4.3) The user may add entity associations (parent/child
+        relationships for entities).
+
+   4.4) OpenIPMI will support writing the main SDR repository with
+        entity associations and with sensors that came from there.
+
+5) Events
+
+   5.1) All incoming events must be delivered to the user in some
+        manner, so the user can delete them from the SEL.
+
+   5.2) When an event is received for a known sensor with an installed
+        handler, it will be delivered through that sensor's interface
+        with all the information converted as appropriate to the
+        sensor.
+
+   5.3) OpenIPMI will support multiple SEL devices in a chassis.  Any
+        management controller that supports an SEL will be scanned.
+
+   5.4) OpenIPMI will configure the events receivers on all management
+        controllers as necessary.
+
+   5.5) OpenIPMI will support deletion of SELs
+
+   5.6) All events in the SELs before detection of the management
+        controller will not be delivered as sensor events (since their
+        information may be old) but delivered through a generic event
+        interface.
+
+6) Controls
+
+   6.1) OpenIPMI will support controls for output devices.
+
+7) OEM plug-ins
+
+   7.1) OpenIPMI will allow plugins for handling OEM operations on
+        connections.  The plugin will be able to handle active/standby
+        operations and connection IPMI address detection.  It will be
+        given full access to the function pointers for the interface
+        so it can override any operations it needs to handle.
+
+   7.2) OpenIPMI will allow plugs for handling specific management
+        controllers.  The plugin will be able to change any attributes
+        of the management controller it wishes, and be able to
+        intercepts the addition of entities, sensors, and the receipt
+        of events.
+
+   7.3) OEM code will be able to create entities, sensors, and
+        controls and handle the operations for those things so it can
+        simulate real ones.
+
+8) Other Code
+
+   8.1) OpenIPMI will include a direct command interface.
+
+   8.2) OpenIPMI will include an IPMI LAN emulator to convert a system
+        interface into a LAN connection.
