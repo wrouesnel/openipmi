@@ -1,11 +1,15 @@
 
 2003-01-07 Corey Minyard <cminyard@mvista.com>
 
+	* sel.c: Cleaned up the rather broken locking.
+	
 	* sdr.c, include/OpenIPMI/ipmi_sdr.h: Cleaned up the names and
 	cleaned up the rather broken locking.
 	
 	* control.c: Added IPMI logging information.
 	* sdr.c: ditto
+	* sel.c: ditto
+	* sensor.c: ditto
 	
 	* configure.in: Changed to version 0.0.3.
 	

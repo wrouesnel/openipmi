@@ -2626,6 +2626,8 @@ enables_set(ipmi_sensor_t *sensor,
     int                 rv;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error setting sensor enables: %x", err);
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2634,6 +2636,8 @@ enables_set(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error setting sensor enables: %x", rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -2659,6 +2663,8 @@ enables_set(ipmi_sensor_t *sensor,
 				  &cmd_msg, disables_set,
 				  &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending event enable command to clear events: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2675,6 +2681,8 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     int                 rv;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting sensor enables: %x", err);
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2696,6 +2704,8 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
 				  &cmd_msg, enables_set, &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending event enable command: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2742,6 +2752,8 @@ enables_get(ipmi_sensor_t *sensor,
     event_enable_get_info_t *info = cb_data;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error getting sensor enables: %x", err);
 	if (info->done)
 	    info->done(sensor, err, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2750,6 +2762,8 @@ enables_get(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error getting sensor enables: %x", rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -2780,6 +2794,8 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     int                     rv;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting getting sensor enables: %x", err);
 	if (info->done)
 	    info->done(sensor, err, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2796,6 +2812,8 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
 				  &cmd_msg, enables_get, &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending get event enables command: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2839,6 +2857,8 @@ hyst_get(ipmi_sensor_t *sensor,
     hyst_get_info_t *info = cb_data;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error getting hysteresis: %x", err);
 	if (info->done)
 	    info->done(sensor, err, 0, 0, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2847,6 +2867,8 @@ hyst_get(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error getting hysteresis: %x", rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -2877,6 +2899,8 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     int                 rv;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting hysteresis get: %x", err);
 	if (info->done)
 	    info->done(sensor, err, 0, 0, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2894,6 +2918,8 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
 				  &cmd_msg, hyst_get, &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending hysteresis get command: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv, 0, 0, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2944,6 +2970,8 @@ hyst_set(ipmi_sensor_t *sensor,
     hyst_set_info_t *info = cb_data;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error setting hysteresis: %x", err);
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2952,6 +2980,8 @@ hyst_set(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error setting hysteresis: %x", rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -2976,6 +3006,8 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     int             rv;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting hysteresis set: %x", err);
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2995,6 +3027,8 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
 				  &cmd_msg, hyst_set, &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending hysteresis set command: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -3050,6 +3084,8 @@ thresh_get(ipmi_sensor_t *sensor,
     enum ipmi_thresh_e th;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error getting thresholds: %x", err);
 	if (info->done)
 	    info->done(sensor, err, &(info->th), info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -3058,6 +3094,8 @@ thresh_get(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error getting thresholds: %x", rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -3076,6 +3114,8 @@ thresh_get(ipmi_sensor_t *sensor,
 					      rsp->data[th+2],
 					      &(info->th.vals[th].val));
 	    if (rv) {
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "Could not convert raw threshold value: %x", rv);
 		info->done(sensor, rv, &(info->th), info->cb_data);
 		ipmi_sensor_opq_done(sensor);
 		free(info);
@@ -3132,6 +3172,8 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     int               rv;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting threshold get: %x", err);
 	if (info->done)
 	    info->done(sensor, err, &(info->th), info->cb_data);
 	free(info);
@@ -3158,6 +3200,8 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
 				  &cmd_msg, thresh_get, &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending threshold get command: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv, &(info->th), info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -3208,6 +3252,8 @@ thresh_set(ipmi_sensor_t *sensor,
     thresh_set_info_t *info = cb_data;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error setting thresholds: %x", err);
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -3216,6 +3262,8 @@ thresh_set(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error setting thresholds: %x", rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -3241,6 +3289,8 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     enum ipmi_thresh_e th;
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting threshold set: %x", err);
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	free(info);
@@ -3263,6 +3313,8 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 					    info->th.vals[th].val,
 					    &val);
 	    if (rv) {
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "Error converting threshold to raw: %x", rv);
 		info->done(sensor, rv, info->cb_data);
 		free(info);
 		return;
@@ -3274,6 +3326,8 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
 				  &cmd_msg, thresh_set, &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending thresholds set command: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -3331,6 +3385,8 @@ reading_get(ipmi_sensor_t *sensor,
     ipmi_init_states(&states);
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error getting reading: %x", err);
 	if (info->done)
 	    info->done(sensor, err,
 		       IPMI_NO_VALUES_PRESENT, 0, 0.0,
@@ -3341,6 +3397,8 @@ reading_get(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error getting reading: %x", rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -3391,6 +3449,8 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     ipmi_init_states(&states);
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting reading get: %x", err);
 	if (info->done)
 	    info->done(sensor, err,
 		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
@@ -3410,6 +3470,8 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, reading_get,
 				  &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending reading get command: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv,
 		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
@@ -3462,6 +3524,8 @@ states_get(ipmi_sensor_t *sensor,
     ipmi_init_states(&states);
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error getting states: %x", err);
 	if (info->done)
 	    info->done(sensor, err, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -3469,6 +3533,8 @@ states_get(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error getting states: %x", rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -3502,6 +3568,8 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     ipmi_init_states(&states);
 
     if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting states get: %x", err);
 	if (info->done)
 	    info->done(sensor, err, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -3519,6 +3587,8 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, states_get,
 				  &(info->sdata), info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending states get command: %x", rv);
 	if (info->done)
 	    info->done(sensor, rv, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);

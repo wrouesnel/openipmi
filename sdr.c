@@ -143,17 +143,15 @@ ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
     ipmi_sdr_info_t *sdrs = NULL;
     int             rv;
 
+    CHECK_MC_LOCK(mc);
+
     if (lun >= 4)
 	return EINVAL;
-
-    ipmi_read_lock();
-    if ((rv = ipmi_mc_validate(mc)))
-	goto out_unlock;
 
     sdrs = malloc(sizeof(*sdrs));
     if (!sdrs) {
 	rv = ENOMEM;
-	goto out_unlock;
+	goto out;
     }
 
     sdrs->mc = mc;
@@ -189,8 +187,7 @@ ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
     } else {
 	*new_sdrs = sdrs;
     }
- out_unlock:
-    ipmi_read_unlock();
+ out:
     return rv;
 }
 

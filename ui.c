@@ -304,10 +304,20 @@ ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 void
 ui_log(char *format, ...)
 {
+    int y, x;
     va_list ap;
 
     va_start(ap, format);
-    ui_vlog(format, IPMI_LOG_WARNING, ap);
+
+    /* Generate the output to the dummy pad to see how many lines we
+       will use. */
+    vwprintw(dummy_pad, format, ap);
+    getyx(dummy_pad, y, x);
+    wmove(dummy_pad, 0, x);
+
+    vwprintw(log_pad, format, ap);
+    log_pad_refresh(y);
+    wrefresh(cmd_win);
     va_end(ap);
 }
 
