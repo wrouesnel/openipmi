@@ -1,6 +1,10 @@
 
 2003-10-20 Corey Minyard <cminyard@mvista.com>
 
+	* ui/ui.c: Added some code to print the number of SEL entries on
+	an mc (when dumping the MC) and the total number of SEL entries
+	when listing the SEL.
+
 	* lanserv/lanserv.c, lanserv/lanserv_config.c: Restructured the
 	LAN code to make it more flexible and split out more generic
 	functions.

@@ -117,6 +117,7 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 enum {
     DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_SENSORS,
     DISPLAY_CONTROLS, DISPLAY_CONTROL, DISPLAY_ENTITIES, DISPLAY_MCS,
+    DISPLAY_MC,
     DISPLAY_RSP, DISPLAY_SDRS, HELP, EVENTS, DISPLAY_ENTITY, DISPLAY_FRU
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
@@ -2788,6 +2789,7 @@ void mc_handler(ipmi_mc_t *mc, void *cb_data)
     unsigned char vals[4];
     mccmd_info_t  *info = cb_data;
 
+    curr_display_type = DISPLAY_MC;
     info->found = 1;
     display_pad_clear();
     display_pad_out("MC (%x %x) - %s\n",
@@ -2832,6 +2834,9 @@ void mc_handler(ipmi_mc_t *mc, void *cb_data)
     ipmi_mc_aux_fw_revision(mc, vals);
     display_pad_out("         aux_fw_revision: %2.2x %2.2x %2.2x %2.2x\n",
 		    vals[0], vals[1], vals[2], vals[3]);
+
+    display_pad_out("               SEL count: %d entries, %d slots used\n",
+		    _ipmi_mc_sel_count(mc), _ipmi_mc_sel_entries_used(mc));
 }
 
 int
@@ -3346,9 +3351,18 @@ list_sel_cmder(ipmi_domain_t *domain, void *cb_data)
 {
     int          rv;
     ipmi_event_t event;
+    unsigned int count1, count2;
 
     curr_display_type = EVENTS;
     display_pad_clear();
+    rv = ipmi_domain_sel_count(domain, &count1);
+    if (rv)
+      count1 = -1;
+    rv = ipmi_domain_sel_entries_used(domain, &count2);
+    if (rv)
+      count2 = -1;
+    display_pad_out("Event counts: %d entries, %d slots used\n",
+		    count1, count2);
     display_pad_out("Events:\n");
     rv = ipmi_domain_first_event(domain, &event);
     while (!rv) {
