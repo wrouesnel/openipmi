@@ -903,7 +903,7 @@ ipmi_domain_get(ipmi_domain_t *domain)
  out:
     ipmi_unlock(domains_lock);
 
-    return 0;
+    return rv;
 }
 
 static void
@@ -918,7 +918,7 @@ ipmi_domain_put(ipmi_domain_t *domain)
 	return;
     }
 
-    domain->usecount++;
+    domain->usecount--;
 
     ipmi_unlock(domains_lock);
 }
@@ -3289,8 +3289,10 @@ ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
 static void
 real_close_connection(ipmi_domain_t *domain)
 {
-    ipmi_con_t    *ipmi[MAX_CONS];
-    int           i;
+    ipmi_con_t                *ipmi[MAX_CONS];
+    int                       i;
+    ipmi_domain_close_done_cb close_done;
+    void                      *cb_data;
 
     for (i=0; i<MAX_CONS; i++) {
 	ipmi[i] = domain->conn[i];
@@ -3312,10 +3314,13 @@ real_close_connection(ipmi_domain_t *domain)
 	    ipmi[i]->close_connection(ipmi[i]);
     }
 
+    close_done = domain->close_done;
+    cb_data = domain->close_done_cb_data;
+
     cleanup_domain(domain);
 
-    if (domain->close_done)
-	domain->close_done(domain->close_done_cb_data);
+    if (close_done)
+	close_done(cb_data);
 }
 
 int
