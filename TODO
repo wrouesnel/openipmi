@@ -11,4 +11,4 @@ chassis-related commands.
 
 Use GUIDs to tell if an MC has changed.
 
-Rescan the SDRs periodically.
+Improve the granularity of locking.

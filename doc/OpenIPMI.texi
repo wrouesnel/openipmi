@@ -525,13 +525,11 @@ any relationships defined.  Relationships are stored in the SDR
 repository, you may change them and store them back, if you like and if
 the system supports that.
 
-FRU information about the entity is sometimes available.  If so,
-OpenIPMI will attempt to fetch it for you and it will be available
-through the entity.  You can fetch the FRU object from the entity and
-query that object, it is locked along with the entity itself.  To
-understand FRU information, you need to read the FRU Information
-Storage Definition spec; a separate document from the main IPMI
-document.
+FRU information about the entity is sometimes available.  You can
+register with an entity to see if/when it becomes available using
+@code{ipmi_entity_set_fru_update_handler()}.  Once it is available,
+you can fetch the FRU data using the commands defined in the IPMI
+include file.
 
 @subsection Sensors
 

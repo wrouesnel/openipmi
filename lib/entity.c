@@ -3123,9 +3123,9 @@ ipmi_entity_get_ ## name ## _custom_len(ipmi_entity_t *entity,		\
     return ipmi_fru_get_ ## name ## _custom_len(entity->fru, num, length);\
 }									\
 int									\
-ipmi_entity_get_## name ## custom_type(ipmi_entity_t        *entity,	\
-				       unsigned int         num,	\
-				       enum ipmi_str_type_e *type)	\
+ipmi_entity_get_## name ## _custom_type(ipmi_entity_t        *entity,	\
+				        unsigned int         num,	\
+				        enum ipmi_str_type_e *type)	\
 {									\
     CHECK_ENTITY_LOCK(entity);						\
     if (!entity->fru)							\
@@ -3133,10 +3133,10 @@ ipmi_entity_get_## name ## custom_type(ipmi_entity_t        *entity,	\
     return ipmi_fru_get_ ## name ## _custom_type(entity->fru, num, type);\
 }									\
 int									\
-ipmi_entity_get_## name ## custom(ipmi_entity_t        *entity,		\
-			          unsigned int         num,		\
-			          char                 *str,		\
-				  unsigned int         *str_len)	\
+ipmi_entity_get_## name ## _custom(ipmi_entity_t        *entity,	\
+			           unsigned int         num,		\
+			           char                 *str,		\
+				   unsigned int         *str_len)	\
 {									\
     CHECK_ENTITY_LOCK(entity);						\
     if (!entity->fru)							\
@@ -3171,6 +3171,14 @@ FRU_CUSTOM_GET(chassis_info)
 
 FRU_VAL_GET(unsigned char, board_info_version)
 FRU_VAL_GET(unsigned char, board_info_lang_code)
+int ipmi_entity_get_board_info_mfg_time(ipmi_entity_t *entity,
+					time_t        *time)
+{
+    CHECK_ENTITY_LOCK(entity);
+    if (!entity->fru)
+	return ENOSYS;
+    return ipmi_fru_get_board_info_mfg_time(entity->fru, time);
+}
 FRU_VAL_GET(unsigned int,  board_info_board_manufacturer_len)
 FRU_VAL_GET(enum ipmi_str_type_e, board_info_board_manufacturer_type)
 FRU_STR_GET(board_info_board_manufacturer)

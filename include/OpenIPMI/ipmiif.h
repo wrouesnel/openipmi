@@ -87,6 +87,7 @@
  * callbacks.  Just don't do it.
  */
 
+#include <time.h>
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/os_handler.h>
@@ -333,6 +334,8 @@ int ipmi_entity_get_board_info_version(ipmi_entity_t *entity,
 				       unsigned char *version);
 int ipmi_entity_get_board_info_lang_code(ipmi_entity_t *entity,
 					 unsigned char *type);
+int ipmi_entity_get_board_info_mfg_time(ipmi_entity_t *fru,
+					time_t        *time);
 int ipmi_entity_get_board_info_board_manufacturer_len(ipmi_entity_t *entity,
 						      unsigned int  *length);
 int ipmi_entity_get_board_info_board_manufacturer_type

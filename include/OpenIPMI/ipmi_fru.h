@@ -104,6 +104,8 @@ int ipmi_fru_get_board_info_version(ipmi_fru_t    *fru,
 				    unsigned char *version);
 int ipmi_fru_get_board_info_lang_code(ipmi_fru_t    *fru,
 				      unsigned char *type);
+int  ipmi_fru_get_board_info_mfg_time(ipmi_fru_t *fru,
+				      time_t     *time);
 int ipmi_fru_get_board_info_board_manufacturer_len(ipmi_fru_t   *fru,
 						   unsigned int *length);
 int ipmi_fru_get_board_info_board_manufacturer_type(ipmi_fru_t           *fru,

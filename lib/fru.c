@@ -844,6 +844,19 @@ ipmi_fru_get_board_info_lang_code(ipmi_fru_t    *fru,
     return 0;
 }
 
+int 
+ipmi_fru_get_board_info_mfg_time(ipmi_fru_t *fru,
+				 time_t     *time)
+{
+    GET_DATA_PREFIX(board_info, BOARD_INFO);
+    
+    *time = u->mfg_time;
+
+    fru_unlock(fru);
+
+    return 0;
+}
+
 GET_DATA_STR(board_info, BOARD_INFO, board_manufacturer)
 GET_DATA_STR(board_info, BOARD_INFO, board_product_name)
 GET_DATA_STR(board_info, BOARD_INFO, board_serial_number)

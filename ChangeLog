@@ -1,4 +1,25 @@
 
+2003-10-02 Corey Minyard <cminyard@mvista.com>
+
+	* ui/entity.c: Fixed the custom info get function names.
+
+	* ui/ui.c: Fixed a few FRU output problems.
+
+	* sample/sample.c: Fixed the FRU output.
+
+	* ui/entity.c, ui/fru.c: Added board manufacture time function.
+	* include/OpenIPMI/ipmi_fru.h: ditto
+	* include/OpenIPMI/ipmiif.h: ditto
+
+	* ui/ui.c: Converted over all display of entities to do the
+	relative and absolute entity names.
+
+	* lib/sdr.c: The Get Device SDR command stupidly only returns the
+	number of sensors, not the number of SDR entries.  For device
+	SDRs, the SDR array will expand up to 512 entries if it runs
+	out of SDR entries.  256 is the max number of sensors, so this
+	should be safe.
+
 2003-10-02 Thomas Kanngieser <Thomas.Kanngieser@fci.com>
 
 	* lib/sensor.c: The bit shifts for getting the hysteresis and

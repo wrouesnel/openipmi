@@ -87,7 +87,7 @@ struct ipmi_sdr_info_s
     /* LUN we are attached with. */
     int         lun;
 
-    /* Is this for sensor SDRs nor generic SDRs. */
+    /* Is this for sensor SDRs or main SDRs. */
     int         sensor;
 
     /* A lock, primarily for handling race conditions fetching the data. */
@@ -896,7 +896,11 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    break;
 
 	if (sdrs->next_read_offset == sdrs->read_size) {
+	    /* Done with this SDR, time to go to the next. */
 	    if (sdrs->next_read_rec_id == 0xffff) {
+		/* This is the last SDR.  However, we don't go to the
+		   next stage until all the outstanding fetches are
+		   complete. */
 		if (ilist_empty(sdrs->outstanding_fetch)) {
 		    start_reservation_check(sdrs, mc);
 		    goto out;
@@ -905,16 +909,42 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    }
 
 	    if ((sdrs->curr_read_idx+1) >= sdrs->working_num_sdrs) {
-		ipmi_log(IPMI_LOG_ERR_INFO,
-			 "Fetched more SDRs than the info said there were");
+		if (sdrs->sensor && (sdrs->working_num_sdrs < 512)) {
+		    /* The get device SDR command (stupidly) only
+		       reports the number of sensors, not the number
+		       of SDRs.  So we have to be able to expand, but
+		       keep it within reason (thus the "512" check
+		       above). */
+		    int new_num_sdrs = sdrs->working_num_sdrs + 10;
+		    ipmi_sdr_t *new_sdrs;
+
+		    new_sdrs = ipmi_mem_alloc(sizeof(ipmi_sdr_t)
+					      * new_num_sdrs);
+		    if (!new_sdrs) {
+			ipmi_log(IPMI_LOG_ERR_INFO,
+				 "SDR respository had more SDRs than"
+				 " originally thougt, but could not expand"
+				 " the SDR array because out of memory");
+			fetch_complete(sdrs, ENOMEM);
+			goto out;
+		    }
+		    memcpy(new_sdrs, sdrs->working_sdrs,
+			   sdrs->working_num_sdrs * sizeof(ipmi_sdr_t));
+		    ipmi_mem_free(sdrs->working_sdrs);
+		    sdrs->working_sdrs = new_sdrs;
+		    sdrs->working_num_sdrs = new_num_sdrs;
+		} else {
+		    ipmi_log(IPMI_LOG_ERR_INFO,
+			     "Fetched more SDRs than the info said there were");
 		
-		sdrs->fetch_err = EINVAL;
+		    sdrs->fetch_err = EINVAL;
 	    
-		if (!ilist_empty(sdrs->outstanding_fetch))
-		    goto out_unlock;
+		    if (!ilist_empty(sdrs->outstanding_fetch))
+			goto out_unlock;
 	    
-		fetch_complete(sdrs, EINVAL);
-		goto out;
+		    fetch_complete(sdrs, EINVAL);
+		    goto out;
+		}
 	    }
 	}
 

@@ -48,10 +48,6 @@
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_int.h>
-#ifdef WITH_FRU
-#include <OpenIPMI/ipmi_domain.h>
-#include "OpenIPMI/ipmi_fru.h"
-#endif
 
 /* This sample application demostrates a very simple method to use
    OpenIPMI. It just search all sensors in the system.  From this
@@ -118,194 +114,194 @@ sensor_change(enum ipmi_update_e op,
 }
 
 
-#ifdef WITH_FRU
-static void
-print_text_buffer(const char *txt, int rv, ipmi_text_buffer_t *tb)
+static int
+dump_fru_str(ipmi_entity_t *entity,
+	     char          *str,
+	     int (*glen)(ipmi_entity_t *fru,
+			 unsigned int  *length),
+	     int (*gtype)(ipmi_entity_t        *fru,
+			  enum ipmi_str_type_e *type),
+	     int (*gstr)(ipmi_entity_t *fru,
+			 char          *str,
+			 unsigned int  *strlen))
 {
-  printf("%s: ", txt);
+    enum ipmi_str_type_e type;
+    int rv;
+    char buf[128];
+    unsigned int len;
 
-  if (rv) {
-      printf("<error %d>\n", rv);
-      return;
-  }
+    rv = gtype(entity, &type);
+    if (rv) {
+	if (rv != ENOSYS)
+	    printf("  Error fetching type for %s: %x\n", str, rv);
+	return rv;
+    }
 
-  char buffer[255];
+    if (type == IPMI_BINARY_STR) {
+	printf("    %s is in binary\n", str);
+	return 0;
+    } else if (type == IPMI_UNICODE_STR) {
+	printf("    %s is in unicode\n", str);
+	return 0;
+    } else if (type != IPMI_ASCII_STR) {
+	printf("    %s is in unknown format\n", str);
+	return 0;
+    }
 
-  int l = ipmi_text_buffer_to_ascii(tb, buffer, 255);
+    len = sizeof(buf);
+    rv = gstr(entity, buf, &len);
+    if (rv) {
+	printf("    Error fetching string for %s: %x\n", str, rv);
+	return rv;
+    }
 
-  if (l < 0) {
-      printf("<conv error>\n");
-      return;
-  }
-
-  int i;
-
-  for(i = 0; i < l; i++) {
-      if (   buffer[i] != '\t' && buffer[i] != '\r' 
-          && buffer[i] != '\n' && isprint(buffer[i]))
-          printf("%c", buffer[i]);
-      else
-          printf("<0x%02x>", (unsigned int)(unsigned char)buffer[i]);
-  }
-
-  printf("\n");
+    printf("    %s: %s\n", str, buf);
+    return 0;
 }
+
+static int
+dump_fru_custom_str(ipmi_entity_t *entity,
+		    char       *str,
+		    int        num,
+		    int (*glen)(ipmi_entity_t   *entity,
+				unsigned int num,
+				unsigned int *length),
+		    int (*gtype)(ipmi_entity_t           *entity,
+				 unsigned int         num,
+				 enum ipmi_str_type_e *type),
+		    int (*gstr)(ipmi_entity_t   *entity,
+				unsigned int num,
+				char         *str,
+				unsigned int *strlen))
+{
+    enum ipmi_str_type_e type;
+    int rv;
+    char buf[128];
+    unsigned int len;
+
+    rv = gtype(entity, num, &type);
+    if (rv)
+	return rv;
+
+    if (type == IPMI_BINARY_STR) {
+	printf("    %s custom %d is in binary\n", str, num);
+	return 0;
+    } else if (type == IPMI_UNICODE_STR) {
+	printf("    %s custom %d is in unicode\n", str, num);
+	return 0;
+    } else if (type != IPMI_ASCII_STR) {
+	printf("    %s custom %d is in unknown format\n", str, num);
+	return 0;
+    }
+
+    len = sizeof(buf);
+    rv = gstr(entity, num, buf, &len);
+    if (rv) {
+	printf("  Error fetching string for %s custom %d: %x\n",
+			str, num, rv);
+	return rv;
+    }
+
+    printf("    %s custom %d: %s\n", str, num, buf);
+    return 0;
+}
+
+#define DUMP_FRU_STR(name, str) \
+dump_fru_str(entity, str, ipmi_entity_get_ ## name ## _len, \
+             ipmi_entity_get_ ## name ## _type, \
+             ipmi_entity_get_ ## name)
+
+#define DUMP_FRU_CUSTOM_STR(name, str) \
+do {									\
+    int i, _rv;								\
+    for (i=0; ; i++) {							\
+        _rv = dump_fru_custom_str(entity, str, i,			\
+				  ipmi_entity_get_ ## name ## _custom_len, \
+				  ipmi_entity_get_ ## name ## _custom_type, \
+				  ipmi_entity_get_ ## name ## _custom);	\
+	if (_rv)							\
+	    break;							\
+    }									\
+} while (0)
 
 
 static void
 fru_change(enum ipmi_update_e op,
-           ipmi_entity_t     *ent,
-           ipmi_fru_t        *fru,
+           ipmi_entity_t     *entity,
            void              *cb_data)
 {
-  int rv;
+    int id, instance;
+    int rv;
+    unsigned char ucval;
+    unsigned int  uival;
+    time_t        tval;
+    
 
-  if (op == IPMI_ADDED) {
-      if (!fru)
-          return;
+    if (op == IPMI_ADDED) {
+	id = ipmi_entity_get_entity_id(entity);
+	instance = ipmi_entity_get_entity_instance(entity);
 
-      ipmi_fru_record_t *r;
-      ipmi_text_buffer_t *tb = ipmi_text_buffer_alloc();
-      uint8_t ui;
-      int i;
-      int n;
-      time_t t;
-      int id, instance;
+	printf("FRU added for: %d.%d\n", id, instance);
 
-      id = ipmi_entity_get_entity_id(ent);
-      instance = ipmi_entity_get_entity_instance(ent);
+	printf("  internal area info:\n");
+	rv = ipmi_entity_get_internal_use_version(entity, &ucval);
+	if (!rv)
+	    printf("    version: 0x%2.2x\n", ucval);
+	rv = ipmi_entity_get_internal_use_length(entity, &uival);
+	if (!rv)
+	    printf("    length: %d\n", uival);
 
-      printf("FRU added: %d.%d %d\n", id, instance, ipmi_fru_get_id(fru));
+	printf("  chassis area info:\n");
+	rv = ipmi_entity_get_chassis_info_version(entity, &ucval);
+	if (!rv)
+	    printf("    version: 0x%2.2x\n", ucval);
+	rv = ipmi_entity_get_chassis_info_type(entity, &ucval);
+	if (!rv)
+	    printf("    chassis type: %d\n", uival);
+	DUMP_FRU_STR(chassis_info_part_number, "part number");
+	DUMP_FRU_STR(chassis_info_serial_number, "serial number");
+	DUMP_FRU_CUSTOM_STR(chassis_info, "chassis");
 
-      // internal area info
-      r = ipmi_fru_get_internal(fru);
+	printf("  board area info:\n");
+	rv = ipmi_entity_get_board_info_version(entity, &ucval);
+	if (!rv)
+	    printf("    version: 0x%2.2x\n", ucval);
+	rv = ipmi_entity_get_board_info_lang_code(entity, &ucval);
+	if (!rv)
+	    printf("    language: %d\n", uival);
+	rv = ipmi_entity_get_board_info_mfg_time(entity, &tval);
+	if (!rv)
+	    printf("    mfg time: %s\n", ctime(&tval));
+	DUMP_FRU_STR(board_info_board_manufacturer, "manufacturer");
+	DUMP_FRU_STR(board_info_board_product_name, "name");
+	DUMP_FRU_STR(board_info_board_serial_number, "serial number");
+	DUMP_FRU_STR(board_info_board_part_number, "part number");
+	DUMP_FRU_STR(board_info_fru_file_id, "fru file id");
+	DUMP_FRU_CUSTOM_STR(board_info, "board");
 
-      if (ipmi_fru_get_record_type(r) == FTR_INTERNAL_USE_AREA) {
-          printf("\tinternal area info:\n");
+	printf("product area info:\n");
+	rv = ipmi_entity_get_product_info_version(entity, &ucval);
+	if (!rv)
+	    printf("    version: 0x%2.2x\n", ucval);
+	rv = ipmi_entity_get_product_info_lang_code(entity, &ucval);
+	if (!rv)
+	    printf("    language: %d\n", uival);
+	DUMP_FRU_STR(product_info_manufacturer_name,
+		     "manufacturer");
+	DUMP_FRU_STR(product_info_product_name, "product name");
+	DUMP_FRU_STR(product_info_product_part_model_number,
+		     "part model number");
+	DUMP_FRU_STR(product_info_product_version, "product version");
+	DUMP_FRU_STR(product_info_product_serial_number,
+		     "serial number");
+	DUMP_FRU_STR(product_info_asset_tag, "asset tag");
+	DUMP_FRU_STR(product_info_fru_file_id, "fru file id");
+	DUMP_FRU_CUSTOM_STR(product_info, "product info");
 
-          rv = ipmi_fru_get_internal_version(r, &ui);
-          printf("\t\tversion          : 0x%02x\n", ui);
-
-          rv = ipmi_fru_get_internal_length(r, &i);
-          printf("\t\tdata length      : %d\n", i);
-      }
-
-      // chassis area info
-      r = ipmi_fru_get_chassis(fru);
-
-      if (ipmi_fru_get_record_type(r) == FTR_CHASSIS_INFO_AREA) {
-          printf("\tchassis area info:\n");
-
-          rv = ipmi_fru_get_chassis_version(r, &ui);
-          printf("\t\tversion          : 0x%02x\n", ui);
-
-          rv = ipmi_fru_get_chassis_type(r, &ui);
-          printf("\t\tchassis type     : 0x%02x\n", ui);
-
-          rv = ipmi_fru_get_chassis_part_number(r, tb);
-          print_text_buffer("\t\tpart number      ", rv, tb);
-
-          rv = ipmi_fru_get_chassis_serial_number(r, tb);
-          print_text_buffer("\t\tserial number    ", rv, tb);
-          
-          n = ipmi_fru_get_chassis_num_custom_fields(r);
-
-          for(i = 0; i < n; i++) {
-              rv = ipmi_fru_get_chassis_custom_field(r, i, tb);
-              print_text_buffer("\t\tcustom           ", rv, tb);
-          }
-      }
-
-      // board area info
-      r = ipmi_fru_get_board(fru);
-
-      if (ipmi_fru_get_record_type(r) == FTR_BOARD_INFO_AREA) {
-          printf("\tboard area info:\n");
-      
-          rv = ipmi_fru_get_board_version(r, &ui);
-          printf("\t\tversion          : 0x%02x\n", ui);
-
-          rv = ipmi_fru_get_board_language(r, &ui);
-          printf("\t\tlanguage         : %d\n", ui);
-
-          rv = ipmi_fru_get_board_mfg_date(r, &t);
-          printf("\t\tmfg date         : %s", ctime(&t));
-
-          rv = ipmi_fru_get_board_manufacturer(r, tb);
-          print_text_buffer("\t\tmanufacturer     ", rv, tb);
-
-          rv = ipmi_fru_get_board_product_name(r, tb);
-          print_text_buffer("\t\tname             ", rv, tb);
-          
-          rv = ipmi_fru_get_board_serial_number(r, tb);
-          print_text_buffer("\t\tserial number    ", rv, tb);
-          
-          rv = ipmi_fru_get_board_part_number(r, tb);
-          print_text_buffer("\t\tpart number      ", rv, tb);
-          
-          rv = ipmi_fru_get_board_fru_file_id(r, tb);
-          print_text_buffer("\t\tfru file id      ", rv, tb);
-          
-          n = ipmi_fru_get_board_num_custom_fields(r);
-
-          for(i = 0; i < n; i++) {
-              rv = ipmi_fru_get_board_custom_field(r, i, tb);
-              print_text_buffer("\t\tcustom           ", rv, tb);
-          }
-      }
-
-      // product area info
-      r = ipmi_fru_get_product(fru);
-
-      if (ipmi_fru_get_record_type(r) == FTR_PRODUCT_INFO_AREA) {
-          printf("\tproduct area info:\n");
-
-          rv = ipmi_fru_get_product_version(r, &ui);
-          printf("\t\tversion          : 0x%02x\n", ui);
-
-          rv = ipmi_fru_get_product_language(r, &ui);
-          printf("\t\tlanguage         : %d\n", ui);
-
-          rv = ipmi_fru_get_product_manufacturer(r,tb);
-          print_text_buffer("\t\tmanufacturer     ", rv, tb);
-
-          rv = ipmi_fru_get_product_name(r,tb);
-          print_text_buffer("\t\tproduct name     ", rv, tb);
-
-          rv = ipmi_fru_get_product_part_number(r, tb);
-          print_text_buffer("\t\tpart number      ", rv, tb);
-          
-          rv = ipmi_fru_get_product_product_version(r, tb);
-          print_text_buffer("\t\tproduct version  ", rv, tb);
-
-          rv = ipmi_fru_get_product_serial_number(r, tb);
-          print_text_buffer("\t\tserial number    ", rv, tb);
-
-          rv =  ipmi_fru_get_product_asset_tag(r, tb);
-          print_text_buffer("\t\tasser tag        ", rv, tb);
-
-          rv = ipmi_fru_get_product_fru_file_id(r, tb);
-          print_text_buffer("\t\tfru file id      ", rv, tb);
-
-          n = ipmi_fru_get_product_num_custom_fields(r);
-
-          for(i = 0; i < n; i++) {
-              rv = ipmi_fru_get_product_custom_field(r, i, tb);
-              print_text_buffer("\t\tcustom           ", rv, tb);
-          }
-      }
-
-      // multi record
-      r = ipmi_fru_get_multirecord(fru);
-
-      if (ipmi_fru_get_record_type(r) == FTR_MULTI_RECORD_AREA) {
-          printf("\tmultirecord:\n");
-      }
-
-      ipmi_text_buffer_destroy(tb);
-  }
+	/* multi record */
+	/* FIXME - not implemented */
+    }
 }
-#endif
 
 /* Whenever the status of an entity changes, the function is called
    When a new entity is created, we search all sensors that belong 
@@ -333,15 +329,13 @@ entity_change(enum ipmi_update_e op,
 		exit(1);
 	    }
 
-#ifdef WITH_FRU
             rv = ipmi_entity_set_fru_update_handler(entity,
                                                     fru_change,
-                                                    0);
+                                                    NULL);
 	    if (rv) {
 		printf("ipmi_entity_set_fru_update_handler: 0x%x", rv);
 		exit(1);
 	    }
-#endif
     }
 }
 

@@ -771,11 +771,39 @@ key_set_log(int key, void *cb_data)
     return 0;
 }
 
+/* Includes 3 3-byte fields (entity id, entity instance, and slave
+   address) and 1 2-byte field (channel) and three periods and the nil
+   char at the end and possible a leading "r" for device-relative. */
+#define MAX_ENTITY_LOC_SIZE 16
+
+/* Convert an entity to a locator for the entity.  This is either:
+     <num>.<num> for an absolute entity, or
+     r<num>.<num>.<num>.<num> for a device-relative entity. */
+static char *
+get_entity_loc(ipmi_entity_t *entity, char *str, int strlen)
+{
+    ipmi_entity_id_t id;
+
+    id = ipmi_entity_convert_to_id(entity);
+    if (curr_entity_id.address != 0)
+	snprintf(str, strlen, "r%d.%d.%d.%d",
+		 curr_entity_id.channel,
+		 curr_entity_id.address,
+		 curr_entity_id.entity_id,
+		 curr_entity_id.entity_instance);
+    else
+	snprintf(str, strlen, "%d.%d",
+		 curr_entity_id.entity_id,
+		 curr_entity_id.entity_instance);
+    return str;
+}
+
 static void
 entities_handler(ipmi_entity_t *entity,
 		 void          *cb_data)
 {
     char *present;
+    char loc[MAX_ENTITY_LOC_SIZE];
     char name[33];
     enum ipmi_dlr_type_e type;
     static char *ent_types[] = { "unknown", "mc", "fru",
@@ -792,21 +820,10 @@ entities_handler(ipmi_entity_t *entity,
 	present = "present";
     else
 	present = "not present";
-    if (curr_entity_id.address != 0)
-	/* Device-relative address. */
-	display_pad_out("  r%d.%d.%d.%d (%s) %s  %s\n",
-			curr_entity_id.channel,
-			curr_entity_id.address,
-			curr_entity_id.entity_id,
-			curr_entity_id.entity_instance,
-			name,
-			ent_types[type], present);
-    else
-	display_pad_out("  %d.%d (%s) %s  %s\n",
-			curr_entity_id.entity_id,
-			curr_entity_id.entity_instance,
-			name,
-			ent_types[type], present);
+    display_pad_out("  %s (%s) %s  %s\n",
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    name,
+		    ent_types[type], present);
 }
 
 static void
@@ -946,14 +963,14 @@ entity_iterate_handler(ipmi_entity_t *o,
 		       ipmi_entity_t *entity,
 		       void          *cb_data)
 {
-    int  id, instance;
     char name[33];
+    char loc[MAX_ENTITY_LOC_SIZE];
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     ipmi_entity_get_id(entity, name, 32);
 
-    display_pad_out("    %d.%d (%s)\n", id, instance, name);
+    display_pad_out("    %s (%s)\n",
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    name);
 }
 
 static void
@@ -962,16 +979,14 @@ entity_handler(ipmi_entity_t *entity,
 	       char          **toks2,
 	       void          *cb_data)
 {
-    int  id, instance;
     char *present;
     char name[33];
+    char loc[MAX_ENTITY_LOC_SIZE];
     enum ipmi_dlr_type_e type;
     static char *ent_types[] = { "unknown", "mc", "fru",
 				 "generic", "invalid" };
 
     display_pad_clear();
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     type = ipmi_entity_get_type(entity);
     if (type > IPMI_ENTITY_GENERIC)
 	type = IPMI_ENTITY_GENERIC + 1;
@@ -981,7 +996,9 @@ entity_handler(ipmi_entity_t *entity,
 	present = "present";
     else
 	present = "not present";
-    display_pad_out("Entity %d.%d (%s)  %s\n", id, instance, name,  present);
+    display_pad_out("Entity %s (%s)  %s\n", 
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    name,  present);
 
     display_pad_out("  type = %s\n", ent_types[type]);
     display_pad_out("  id name = %s\n",
@@ -1089,16 +1106,16 @@ entity_cmd(char *cmd, char **toks, void *cb_data)
 static void
 sensors_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 {
-    int id, instance;
     char name[33];
     char name2[33];
+    char loc[MAX_ENTITY_LOC_SIZE];
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     ipmi_sensor_get_id(sensor, name, 33);
     strcpy(name2, name);
     conv_from_spaces(name2);
-    display_pad_out("  %d.%d.%s - %s\n", id, instance, name2, name);
+    display_pad_out("  %s.%s - %s\n",
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    name2, name);
 }
 
 static void
@@ -1107,13 +1124,12 @@ found_entity_for_sensors(ipmi_entity_t *entity,
 			 char          **toks2,
 			 void          *cb_data)
 {
-    int id, instance;
+    char loc[MAX_ENTITY_LOC_SIZE];
 
     curr_display_type = DISPLAY_SENSORS;
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     display_pad_clear();
-    display_pad_out("Sensors for entity %d.%d:\n", id, instance);
+    display_pad_out("Sensors for entity %s:\n",
+		    get_entity_loc(entity, loc, sizeof(loc)));
     ipmi_entity_iterate_sensors(entity, sensors_handler, NULL);
     display_pad_refresh();
 }
@@ -1159,7 +1175,7 @@ ipmi_thresholds_t sensor_thresholds;
 static void
 display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 {
-    int  id, instance;
+    char loc[MAX_ENTITY_LOC_SIZE];
     char name[33];
     int  rv;
 
@@ -1173,14 +1189,12 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
     sensor_displayed = 1;
 
     ipmi_sensor_get_id(sensor, name, 33);
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
-
     display_pad_clear();
 
     conv_from_spaces(name);
-    display_pad_out("Sensor %d.%d.%s:\n",
-		    id, instance, name);
+    display_pad_out("Sensor %s.%s:\n",
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    name);
     display_pad_out("  value = ");
     getyx(display_pad, value_pos.y, value_pos.x);
     if (!ipmi_entity_is_present(entity)
@@ -1874,14 +1888,12 @@ found_entity_for_sensor(ipmi_entity_t *entity,
 
     ipmi_entity_iterate_sensors(entity, sensor_handler, &sinfo);
     if (!sinfo.found) {
-	int id, instance;
-
-	id = ipmi_entity_get_entity_id(entity);
-	instance = ipmi_entity_get_entity_instance(entity);
+	char loc[MAX_ENTITY_LOC_SIZE];
 
 	conv_from_spaces(sinfo.name);
-	cmd_win_out("Sensor %d.%d.%s not found\n",
-		id, instance, sinfo.name);
+	cmd_win_out("Sensor %s.%s not found\n",
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    sinfo.name);
 	return;
     }
 }
@@ -1995,16 +2007,16 @@ events_enable_cmd(char *cmd, char **toks, void *cb_data)
 static void
 controls_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 {
-    int id, instance;
+    char loc[MAX_ENTITY_LOC_SIZE];
     char name[33];
     char name2[33];
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     ipmi_control_get_id(control, name, 33);
     strcpy(name2, name);
     conv_from_spaces(name2);
-    display_pad_out("  %d.%d.%s - %s\n", id, instance, name2, name);
+    display_pad_out("  %s.%s - %s\n",
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    name2, name);
 }
 
 static void
@@ -2013,13 +2025,12 @@ found_entity_for_controls(ipmi_entity_t *entity,
 			  char          **toks2,
 			  void          *cb_data)
 {
-    int id, instance;
+    char loc[MAX_ENTITY_LOC_SIZE];
 
     curr_display_type = DISPLAY_CONTROLS;
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     display_pad_clear();
-    display_pad_out("Controls for entity %d.%d:\n", id, instance);
+    display_pad_out("Controls for entity %s:\n",
+		    get_entity_loc(entity, loc, sizeof(loc)));
     ipmi_entity_iterate_controls(entity, controls_handler, NULL);
     display_pad_refresh();
 }
@@ -2041,7 +2052,7 @@ unsigned char *id_control_vals;
 static void
 display_control(ipmi_entity_t *entity, ipmi_control_t *control)
 {
-    int  id, instance;
+    char loc[MAX_ENTITY_LOC_SIZE];
     int  control_type;
     char name[33];
     int  i;
@@ -2057,15 +2068,14 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
     control_displayed = 1;
 
     ipmi_control_get_id(control, name, 33);
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     curr_control_id = ipmi_control_convert_to_id(control);
 
     display_pad_clear();
 
     conv_from_spaces(name);
-    display_pad_out("Control %d.%d.%s:\n",
-		    id, instance, name);
+    display_pad_out("Control %s.%s:\n",
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    name);
     control_type = ipmi_control_get_type(control);
     display_pad_out("  type = %s (%d)\n",
 		    ipmi_control_get_type_string(control), control_type);
@@ -2341,14 +2351,12 @@ found_entity_for_control(ipmi_entity_t *entity,
 
     ipmi_entity_iterate_controls(entity, control_handler, &iinfo);
     if (!iinfo.found) {
-	int id, instance;
-
-	id = ipmi_entity_get_entity_id(entity);
-	instance = ipmi_entity_get_entity_instance(entity);
+	char loc[MAX_ENTITY_LOC_SIZE];
 
 	conv_from_spaces(iinfo.name);
-	cmd_win_out("Control %d.%d.%s not found\n",
-		id, instance, iinfo.name);
+	cmd_win_out("Control %s.%s not found\n",
+		    get_entity_loc(entity, loc, sizeof(loc)),
+		    iinfo.name);
 	return;
     }
 }
@@ -2585,6 +2593,7 @@ dump_fru_info(ipmi_fru_t *fru)
 {
     unsigned char ucval;
     unsigned int  uival;
+    time_t        tval;
     int           rv;
 
     rv = ipmi_fru_get_internal_use_version(fru, &ucval);
@@ -2617,6 +2626,10 @@ dump_fru_info(ipmi_fru_t *fru)
     if (!rv)
 	display_pad_out("  board info lang code: 0x%2.2x\n", ucval);
 
+    rv = ipmi_fru_get_board_info_mfg_time(fru, &tval);
+    if (!rv)
+	display_pad_out("  board info mfg time: %ld\n", (long) tval);
+
     DUMP_FRU_STR(board_info_board_manufacturer,
 		 "board info board manufacturer");
     DUMP_FRU_STR(board_info_board_product_name,
@@ -2644,7 +2657,7 @@ dump_fru_info(ipmi_fru_t *fru)
     DUMP_FRU_STR(product_info_product_version, "product info product version");
     DUMP_FRU_STR(product_info_product_serial_number,
 		 "product info product serial number");
-    DUMP_FRU_STR(product_info_asset_tag, "product info asset_tag");
+    DUMP_FRU_STR(product_info_asset_tag, "product info asset tag");
     DUMP_FRU_STR(product_info_fru_file_id, "product info fru file id");
     DUMP_FRU_CUSTOM_STR(product_info, "product info");
 }
@@ -2655,18 +2668,19 @@ found_entity_for_fru(ipmi_entity_t *entity,
                      char          **toks2,
                      void          *cb_data)
 {
-    int           id = ipmi_entity_get_entity_id(entity);
-    int           instance = ipmi_entity_get_entity_instance(entity);
-    ipmi_fru_t    *fru = ipmi_entity_get_fru(entity);
+    char loc[MAX_ENTITY_LOC_SIZE];
+    ipmi_fru_t *fru = ipmi_entity_get_fru(entity);
 
     display_pad_clear();
 
     if (!fru) {
-        cmd_win_out("No FRU for entity %d.%d\n", id, instance);
+        cmd_win_out("No FRU for entity %s\n",
+		    get_entity_loc(entity, loc, sizeof(loc)));
         return;
     }
 
-    display_pad_out("FRU for entity %d.%d\n", id, instance);
+    display_pad_out("FRU for entity %s\n",
+		    get_entity_loc(entity, loc, sizeof(loc)));
 
     dump_fru_info(fru);
 
@@ -3882,14 +3896,14 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 			       void                        *cb_data,
 			       ipmi_event_t                *event)
 {
-    int  id, instance;
-    char name[33];
+    ipmi_entity_t *entity = ipmi_sensor_get_entity(sensor);
+    char          loc[MAX_ENTITY_LOC_SIZE];
+    char          name[33];
 
-    id = ipmi_sensor_get_entity_id(sensor);
-    instance = ipmi_sensor_get_entity_instance(sensor);
     ipmi_sensor_get_id(sensor, name, 33);
-    ui_log("Sensor %d.%d.%s: %s %s %s\n",
-	   id, instance, name,
+    ui_log("Sensor %s.%s: %s %s %s\n",
+	   get_entity_loc(entity, loc, sizeof(loc)),
+	   name,
 	   ipmi_get_threshold_string(threshold),
 	   ipmi_get_value_dir_string(high_low),
 	   ipmi_get_event_dir_string(dir));
@@ -3911,14 +3925,14 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 			      void                  *cb_data,
 			      ipmi_event_t          *event)
 {
-    int  id, instance;
-    char name[33];
+    ipmi_entity_t *entity = ipmi_sensor_get_entity(sensor);
+    char          loc[MAX_ENTITY_LOC_SIZE];
+    char          name[33];
 
-    id = ipmi_sensor_get_entity_id(sensor);
-    instance = ipmi_sensor_get_entity_instance(sensor);
     ipmi_sensor_get_id(sensor, name, 33);
-    ui_log("Sensor %d.%d.%s: %d %s\n",
-	   id, instance, name,
+    ui_log("Sensor %s.%s: %d %s\n",
+	   get_entity_loc(entity, loc, sizeof(loc)),
+	   name,
 	   offset,
 	   ipmi_get_event_dir_string(dir));
     if (severity != -1)
@@ -3935,20 +3949,20 @@ sensor_change(enum ipmi_update_e op,
 	      ipmi_sensor_t      *sensor,
 	      void               *cb_data)
 {
-    int id, instance;
-    char name[33];
-    char name2[33];
-    int rv;
+    ipmi_entity_t *entity = ipmi_sensor_get_entity(sensor);
+    char          loc[MAX_ENTITY_LOC_SIZE];
+    char          name[33];
+    char          name2[33];
+    int           rv;
 
-    id = ipmi_entity_get_entity_id(ent);
-    instance = ipmi_entity_get_entity_instance(ent);
     ipmi_sensor_get_id(sensor, name, 32);
     strcpy(name2, name);
     conv_from_spaces(name2);
     switch (op) {
 	case IPMI_ADDED:
-	    ui_log("Sensor added: %d.%d.%s (%s)\n",
-		   id, instance, name2, name);
+	    ui_log("Sensor added: %s.%s (%s)\n",
+		   get_entity_loc(entity, loc, sizeof(loc)),
+		   name2, name);
 	    if (ipmi_sensor_get_event_reading_type(sensor)
 		== IPMI_EVENT_READING_TYPE_THRESHOLD)
 		rv = ipmi_sensor_threshold_set_event_handler(
@@ -3964,12 +3978,14 @@ sensor_change(enum ipmi_update_e op,
 		ui_log("Unable to register sensor event handler: 0x%x\n", rv);
 	    break;
 	case IPMI_DELETED:
-	    ui_log("Sensor deleted: %d.%d.%s (%s)\n",
-		   id, instance, name2, name);
+	    ui_log("Sensor deleted: %s.%s (%s)\n",
+		   get_entity_loc(entity, loc, sizeof(loc)),
+		   name2, name);
 	    break;
 	case IPMI_CHANGED:
-	    ui_log("Sensor changed: %d.%d.%s (%s)\n",
-		   id, instance, name2, name);
+	    ui_log("Sensor changed: %s.%s (%s)\n",
+		   get_entity_loc(entity, loc, sizeof(loc)),
+		   name2, name);
 	    break;
     }
 }
@@ -3980,27 +3996,29 @@ control_change(enum ipmi_update_e op,
 	       ipmi_control_t     *control,
 	       void               *cb_data)
 {
-    int id, instance;
-    char name[33];
-    char name2[33];
+    ipmi_entity_t *entity = ipmi_control_get_entity(control);
+    char          loc[MAX_ENTITY_LOC_SIZE];
+    char          name[33];
+    char          name2[33];
 
-    id = ipmi_entity_get_entity_id(ent);
-    instance = ipmi_entity_get_entity_instance(ent);
     ipmi_control_get_id(control, name, 32);
     strcpy(name2, name);
     conv_from_spaces(name2);
     switch (op) {
 	case IPMI_ADDED:
-	    ui_log("Control added: %d.%d.%s (%s)\n",
-		   id, instance, name2, name);
+	    ui_log("Control added: %s.%s (%s)\n",
+		   get_entity_loc(entity, loc, sizeof(loc)),
+		   name2, name);
 	    break;
 	case IPMI_DELETED:
-	    ui_log("Control deleted: %d.%d.%s (%s)\n",
-		   id, instance, name2, name);
+	    ui_log("Control deleted: %s.%s (%s)\n",
+		   get_entity_loc(entity, loc, sizeof(loc)),
+		   name2, name);
 	    break;
 	case IPMI_CHANGED:
-	    ui_log("Control changed: %d.%d.%s (%s)\n",
-		   id, instance, name2, name);
+	    ui_log("Control changed: %s.%s (%s)\n",
+		   get_entity_loc(entity, loc, sizeof(loc)),
+		   name2, name);
 	    break;
     }
 }
@@ -4011,32 +4029,33 @@ entity_presence_handler(ipmi_entity_t *entity,
 			void          *cb_data,
 			ipmi_event_t  *event)
 {
-    int id, instance;
+    char loc[MAX_ENTITY_LOC_SIZE];
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
-    ui_log("Entity %d.%d, presence is %d\n", id, instance, present);
+    ui_log("Entity %s, presence is %d\n",
+	   get_entity_loc(entity, loc, sizeof(loc)),
+	   present);
     if (event)
 	ui_log("Due to event 0x%4.4x\n", event->record_id);
 }
 
 void fru_change(enum ipmi_update_e op,
-		ipmi_entity_t      *ent,
+		ipmi_entity_t      *entity,
 		void               *cb_data)
 {
-    int id, instance;
+    char loc[MAX_ENTITY_LOC_SIZE];
 
-    id = ipmi_entity_get_entity_id(ent);
-    instance = ipmi_entity_get_entity_instance(ent);
     switch (op) {
 	case IPMI_ADDED:
-	    ui_log("FRU added for %d.%d\n", id, instance);
+	    ui_log("FRU added for %s\n",
+		   get_entity_loc(entity, loc, sizeof(loc)));
 	    break;
 	case IPMI_DELETED:
-	    ui_log("FRU deleted for %d.%d\n", id, instance);
+	    ui_log("FRU deleted for %s\n",
+		   get_entity_loc(entity, loc, sizeof(loc)));
 	    break;
 	case IPMI_CHANGED:
-	    ui_log("FRU changed for %d.%d\n", id, instance);
+	    ui_log("FRU changed for %s\n",
+		   get_entity_loc(entity, loc, sizeof(loc)));
 	    break;
     }
 }
@@ -4048,13 +4067,12 @@ entity_change(enum ipmi_update_e op,
 	      void               *cb_data)
 {
     int rv;
-    int id, instance;
+    char loc[MAX_ENTITY_LOC_SIZE];
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
     switch (op) {
 	case IPMI_ADDED:
-	    ui_log("Entity added: %d.%d\n", id, instance);
+	    ui_log("Entity added: %d.%d\n",
+		   get_entity_loc(entity, loc, sizeof(loc)));
 	    rv = ipmi_entity_set_sensor_update_handler(entity,
 						       sensor_change,
 						       entity);
@@ -4084,10 +4102,12 @@ entity_change(enum ipmi_update_e op,
 	    }
 	    break;
 	case IPMI_DELETED:
-	    ui_log("Entity deleted: %d.%d\n", id, instance);
+	    ui_log("Entity deleted: %d.%d\n",
+		   get_entity_loc(entity, loc, sizeof(loc)));
 	    break;
 	case IPMI_CHANGED:
-	    ui_log("Entity changed: %d.%d\n", id, instance);
+	    ui_log("Entity changed: %d.%d\n",
+		   get_entity_loc(entity, loc, sizeof(loc)));
 	    break;
     }
 }
