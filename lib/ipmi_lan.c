@@ -1924,7 +1924,7 @@ lan_close_connection(ipmi_con_t *ipmi)
                this connection.  Sends will fail and receives will not
                validate. */
 	    if (handler)
-		handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3,
+		handler(NULL, &addr, addr_len, &msg, rsp_data, data2, data3,
 			data4);
 
 	    if (rv)
@@ -2207,7 +2207,7 @@ handle_dev_id(ipmi_con_t   *ipmi,
 }
 
 static int
-send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
+send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan)
 {
     ipmi_msg_t			 msg;
     int				 rv;
@@ -2222,11 +2222,22 @@ send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
     msg.data = NULL;
     msg.data_len = 0;
 
-    rv = lan_send_command_forceip(ipmi, addr_num,
-				  (ipmi_addr_t *) &addr, sizeof(addr),
-				  &msg, handle_dev_id,
-				  NULL, NULL, NULL);
+    rv = lan_send_command(ipmi,
+			  (ipmi_addr_t *) &addr, sizeof(addr),
+			  &msg, handle_dev_id,
+			  NULL, NULL, NULL, NULL);
     return rv;
+}
+
+static void
+lan_oem_done(ipmi_con_t *ipmi, void *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        rv;
+
+    rv = send_get_dev_id(ipmi, lan);
+    if (rv)
+        handle_connected(ipmi, rv);
 }
 
 static void session_privilege_set(ipmi_con_t   *ipmi,
@@ -2240,7 +2251,6 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     int        rv;
-    int        addr_num = (long) data4;
 
     if (msg->data[0] != 0) {
         handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
@@ -2258,7 +2268,7 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 	return;
     }
 
-    rv = send_get_dev_id(ipmi, lan, addr_num);
+    rv = ipmi_conn_check_oem_handlers(ipmi, lan_oem_done, NULL);
     if (rv)
         handle_connected(ipmi, rv);
 }

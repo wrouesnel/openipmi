@@ -1,3 +1,24 @@
+2004-01-19 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/conn.c, include/OpenIPMI/ipmi_conn.h: Added a connection
+	handler for testing new connections types (primiarily for ATCA).
+
+	* lib/oem_atca_conn.c, lib/ipmi.c: Added, new code for ATCA
+	connection handler, for getting the IPMB address.
+
+	* lib/domain.c: Fixed a problem in domain OEM callbacks; the
+	iterator used may become invalid during the process of handling
+	the OEM callbacks.
+
+	* lib/ipmi_lan.c: Return NULL for the IPMI in a handler when the
+	connection is shut down.
+
+	* lib/ipmi_lan.c, lib/ipmi_smi.c: Added calls to the OEM
+	connection handler code.
+
+	* lib/ipmi_smi.c: Have the shutdown code call the handler on all
+	outstanding messages.
+
 2004-01-14 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in, ui/basic_ui.c: Added support for net snmp.

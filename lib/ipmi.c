@@ -1069,6 +1069,7 @@ ipmi_check_lock(ipmi_lock_t *lock, char *str)
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
 int _ipmi_pet_init(void);
+int ipmi_oem_atca_conn_init(void);
 
 int
 ipmi_init(os_handler_t *handler)
@@ -1104,6 +1105,7 @@ ipmi_init(os_handler_t *handler)
     /* Call the OEM handlers. */
     ipmi_oem_force_conn_init();
     ipmi_oem_motorola_mxp_init();
+    ipmi_oem_atca_conn_init();
 
     return 0;
 
@@ -1117,7 +1119,9 @@ ipmi_init(os_handler_t *handler)
     return rv;
 }
 
+void ipmi_oem_atca_conn_shutdown(void);
 void _ipmi_pet_shutdown(void);
+
 void
 ipmi_shutdown(void)
 {
@@ -1125,6 +1129,7 @@ ipmi_shutdown(void)
     _ipmi_conn_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
+    ipmi_oem_atca_conn_shutdown();
     if (global_lock)
 	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
     if (seq_lock)

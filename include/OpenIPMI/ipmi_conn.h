@@ -275,4 +275,30 @@ int ipmi_handle_snmp_trap_data(void            *src_addr,
 			       unsigned char   *data,
 			       unsigned int    data_len);
 
+/* These calls deal with OEM-type handlers for connections.  Certain
+   connections can be detected with special means (beyond just the
+   manufacturer and product id) and this allows handlers for these
+   types of connections to be registered.  At the very initial
+   connection of every connection, the handler will be called and it
+   must detect whether this is the specific type of connection or not,
+   do any setup for that connection type, and then call the done
+   routine passed in.  Note that the done routine may be called later,
+   (allowing this handler to send messages and the like) but it *must*
+   be called.  Note that this has no cancellation handler.  It relies
+   on the lower levels returning responses for all the commands with
+   NULL connections. */
+typedef void (*ipmi_conn_oem_check_done)(ipmi_con_t *conn,
+					 void       *cb_data);
+typedef int (*ipmi_conn_oem_check)(ipmi_con_t               *conn,
+				   ipmi_conn_oem_check_done done,
+				   void                     *cb_data);
+int ipmi_register_conn_oem_check(ipmi_conn_oem_check check,
+				 void                *cb_data);
+int ipmi_deregister_conn_oem_check(ipmi_conn_oem_check check,
+				   void                *cb_data);
+/* Should be called by the connection code for any new connection. */
+int ipmi_conn_check_oem_handlers(ipmi_con_t               *conn,
+				 ipmi_conn_oem_check_done done,
+				 void                     *cb_data);
+
 #endif /* _IPMI_CONN_H */

@@ -131,6 +131,216 @@ ipmi_check_oem_conn_handlers(ipmi_con_t   *conn,
     return 0;
 }
 
+/***********************************************************************
+ *
+ * Handle global OEM callbacks new connections.
+ *
+ **********************************************************************/
+typedef struct oem_handlers_s {
+    ipmi_conn_oem_check check;
+    void                *cb_data;
+} oem_handlers_t;
+
+/* FIXME - do we need a lock?  Probably, add it. */
+static ilist_t *oem_handlers;
+
+static int
+oem_handler_cmp(void *item, void *cb_data)
+{
+    oem_handlers_t *hndlr = item;
+    oem_handlers_t *cmp = cb_data;
+
+    return ((hndlr->check == cmp->check)
+	    && (hndlr->cb_data == cmp->cb_data));
+}
+
+int
+ipmi_register_conn_oem_check(ipmi_conn_oem_check check,
+			     void                *cb_data)
+{
+    ilist_iter_t   iter;
+    oem_handlers_t *new_item;
+    oem_handlers_t tmp;
+
+    /* Reject duplicates */
+    tmp.check = check;
+    tmp.cb_data = cb_data;
+    ilist_init_iter(&iter, oem_handlers);
+    ilist_unpositioned(&iter);
+    if (ilist_search_iter(&iter, oem_handler_cmp, &tmp))
+	return EADDRINUSE;
+
+    new_item = ipmi_mem_alloc(sizeof(*new_item));
+    if (!new_item)
+	return ENOMEM;
+
+    new_item->check = check;
+    new_item->cb_data = cb_data;
+
+    if (! ilist_add_tail(oem_handlers, new_item, NULL)) {
+	ipmi_mem_free(new_item);
+	return ENOMEM;
+    }
+
+    return 0;
+}
+
+int
+ipmi_deregister_conn_oem_check(ipmi_conn_oem_check check,
+			       void                *cb_data)
+{
+    oem_handlers_t *hndlr;
+    oem_handlers_t tmp;
+    ilist_iter_t   iter;
+
+    tmp.check = check;
+    tmp.cb_data = cb_data;
+    ilist_init_iter(&iter, oem_handlers);
+    ilist_unpositioned(&iter);
+    hndlr = ilist_search_iter(&iter, oem_handler_cmp, &tmp);
+    if (hndlr) {
+	ilist_delete(&iter);
+	ipmi_mem_free(hndlr);
+	return 0;
+    }
+    return ENOENT;
+}
+
+typedef struct conn_check_oem_s conn_check_oem_t;
+struct conn_check_oem_s
+{
+    ipmi_conn_oem_check_done done;
+    void                     *cb_data;
+    oem_handlers_t           *curr_handler;
+};
+
+static void conn_oem_check_done(ipmi_con_t *conn,
+				void       *cb_data);
+
+static void
+start_oem_conn_check(ipmi_con_t       *conn, 
+		     conn_check_oem_t *check)
+{
+    ilist_iter_t     iter;
+
+    ilist_init_iter(&iter, oem_handlers);
+    if (!ilist_first(&iter)) {
+	/* Empty list, just go on */
+	check->done(conn, check->cb_data);
+	ipmi_mem_free(check);
+	goto out;
+    } else {
+	oem_handlers_t *h = ilist_get(&iter);
+	int            rv = 1;
+
+	while (rv) {
+	    check->curr_handler = h;
+	    rv = h->check(conn, conn_oem_check_done, check);
+	    if (!ilist_next(&iter)) {
+		/* End of list, just go on */
+		check->done(conn, check->cb_data);
+		ipmi_mem_free(check);
+		goto out;
+	    }
+	    h = ilist_get(&iter);
+	}
+	if (rv) {
+	    /* We didn't get a check to start, just give up. */
+	    check->done(conn, check->cb_data);
+	    ipmi_mem_free(check);
+	}
+    }
+ out:
+    return;
+}
+
+static int
+oem_handler_cmp2(void *item, void *cb_data)
+{
+    oem_handlers_t *hndlr = item;
+    oem_handlers_t *cmp = cb_data;
+
+    return (hndlr == cmp);
+}
+
+static void
+next_oem_conn_check(ipmi_con_t       *conn, 
+		    conn_check_oem_t *check)
+{
+    oem_handlers_t *h;
+    ilist_iter_t   iter;
+
+    /* We can't keep an interater in the check, because the list may
+       change during execution. */
+    ilist_init_iter(&iter, oem_handlers);
+    ilist_unpositioned(&iter);
+    h = ilist_search_iter(&iter, oem_handler_cmp2, check->curr_handler);
+    if (!h) {
+	/* The current handler we were working on went away, start over. */
+	start_oem_conn_check(conn, check);
+    } else {
+	int            rv = 1;
+
+	while (rv) {
+	    if (!ilist_next(&iter)) {
+		/* End of list, just go on */
+		check->done(conn, check->cb_data);
+		ipmi_mem_free(check);
+		goto out;
+	    }
+	    h = ilist_get(&iter);
+	    check->curr_handler = h;
+	    rv = h->check(conn, conn_oem_check_done, check);
+	}
+	if (rv) {
+	    /* We didn't get a check to start, just give up. */
+	    check->done(conn, check->cb_data);
+	    ipmi_mem_free(check);
+	}
+    }
+ out:
+    return;
+}
+
+static void
+conn_oem_check_done(ipmi_con_t *conn,
+		    void       *cb_data)
+{
+    conn_check_oem_t *check = cb_data;
+
+    if (!conn) {
+	check->done(NULL, check->cb_data);
+	ipmi_mem_free(check);
+	return;
+    }
+
+    next_oem_conn_check(conn, check);
+}
+
+int
+ipmi_conn_check_oem_handlers(ipmi_con_t               *conn,
+			     ipmi_conn_oem_check_done done,
+			     void                     *cb_data)
+{
+    conn_check_oem_t *check;
+
+    check = ipmi_mem_alloc(sizeof(*check));
+    if (!check)
+	return ENOMEM;
+
+    check->done = done;
+    check->cb_data = cb_data;
+
+    start_oem_conn_check(conn, check);
+
+    return 0;
+}
+
+/***********************************************************************
+ *
+ * Init/shutdown
+ *
+ **********************************************************************/
 int
 _ipmi_conn_init(void)
 {

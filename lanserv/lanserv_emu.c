@@ -435,7 +435,8 @@ main(int argc, const char *argv[])
     lan.debug = debug;
 
     num_addr = MAX_ADDR;
-    if (lanserv_read_config(&lan, data.config_file, addr, addr_len, &num_addr))
+    if (lanserv_read_config(&lan, data.config_file, (sockaddr_ip_t *) addr,
+			    addr_len, &num_addr))
 	exit(1);
 
     if (num_addr == 0) {

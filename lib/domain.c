@@ -841,36 +841,112 @@ ipmi_deregister_domain_oem_check(ipmi_domain_oem_check check,
 struct domain_check_oem_s
 {
     int                        cancelled;
-    ilist_iter_t               iter;
     ipmi_domain_oem_check_done done;
     void                       *cb_data;
+    oem_handlers_t             *curr_handler;
 };
+
+static void domain_oem_check_done(ipmi_domain_t *domain,
+				  void          *cb_data);
+
+static void
+start_oem_domain_check(ipmi_domain_t      *domain, 
+		       domain_check_oem_t *check)
+{
+    ilist_iter_t     iter;
+
+    ilist_init_iter(&iter, oem_handlers);
+    if (!ilist_first(&iter)) {
+	/* Empty list, just go on */
+	check->done(domain, check->cb_data);
+	ipmi_mem_free(check);
+	goto out;
+    } else {
+	oem_handlers_t *h = ilist_get(&iter);
+	int            rv = 1;
+
+	while (rv) {
+	    check->curr_handler = h;
+	    rv = h->check(domain, domain_oem_check_done, check);
+	    if (!ilist_next(&iter)) {
+		/* End of list, just go on */
+		check->done(domain, check->cb_data);
+		ipmi_mem_free(check);
+		goto out;
+	    }
+	    h = ilist_get(&iter);
+	}
+	if (rv) {
+	    /* We didn't get a check to start, just give up. */
+	    check->done(domain, check->cb_data);
+	    ipmi_mem_free(check);
+	}
+    }
+ out:
+    return;
+}
+
+static int
+oem_handler_cmp2(void *item, void *cb_data)
+{
+    oem_handlers_t *hndlr = item;
+    oem_handlers_t *cmp = cb_data;
+
+    return (hndlr == cmp);
+}
+
+static void
+next_oem_domain_check(ipmi_domain_t      *domain, 
+		      domain_check_oem_t *check)
+{
+    oem_handlers_t *h;
+    ilist_iter_t   iter;
+
+    /* We can't keep an interater in the check, because the list may
+       change during execution. */
+    ilist_init_iter(&iter, oem_handlers);
+    ilist_unpositioned(&iter);
+    h = ilist_search_iter(&iter, oem_handler_cmp2, check->curr_handler);
+    if (!h) {
+	/* The current handler we were working on went away, start over. */
+	start_oem_domain_check(domain, check);
+    } else {
+	int            rv = 1;
+
+	while (rv) {
+	    if (!ilist_next(&iter)) {
+		/* End of list, just go on */
+		check->done(domain, check->cb_data);
+		ipmi_mem_free(check);
+		goto out;
+	    }
+	    h = ilist_get(&iter);
+	    check->curr_handler = h;
+	    rv = h->check(domain, domain_oem_check_done, check);
+	}
+	if (rv) {
+	    /* We didn't get a check to start, just give up. */
+	    check->done(domain, check->cb_data);
+	    ipmi_mem_free(check);
+	}
+    }
+ out:
+    return;
+}
 
 static void
 domain_oem_check_done(ipmi_domain_t *domain,
 		      void          *cb_data)
 {
     domain_check_oem_t *check = cb_data;
-    oem_handlers_t     *h;
-    int                rv = -1;
 
     if (check->cancelled) {
-	    check->done(NULL, check->cb_data);
-	    ipmi_mem_free(check);
-	    return;
+	check->done(NULL, check->cb_data);
+	ipmi_mem_free(check);
+	return;
     }
 
-    while (rv) {
-	if (!ilist_next(&check->iter)) {
-	    domain->check = NULL;
-	    check->done(domain, check->cb_data);
-	    ipmi_mem_free(check);
-	    break;
-	} else {
-	    h = ilist_get(&check->iter);
-	    rv = h->check(domain, domain_oem_check_done, check);
-	}
-    }
+    next_oem_domain_check(domain, check);
 }
 
 static int
@@ -878,20 +954,18 @@ check_oem_handlers(ipmi_domain_t              *domain,
 		   ipmi_domain_oem_check_done done,
 		   void                       *cb_data)
 {
-    domain_check_oem_t         *check;
+    domain_check_oem_t *check;
 
     check = ipmi_mem_alloc(sizeof(*check));
     if (!check)
 	return ENOMEM;
 
-    check->cancelled = 0;
     check->done = done;
     check->cb_data = cb_data;
-    ilist_init_iter(&check->iter, oem_handlers);
-    ilist_unpositioned(&check->iter);
-    domain->check = check;
-    domain_oem_check_done(domain, check);
-    
+    check->cancelled = 0;
+
+    start_oem_domain_check(domain, check);
+
     return 0;
 }
 

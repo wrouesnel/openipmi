@@ -81,7 +81,6 @@ typedef struct audit_timer_info_s
 typedef struct pending_cmd_s
 {
     ipmi_con_t            *ipmi;
-    int                   cancelled;
     ipmi_msg_t            msg;
     ipmi_addr_t           addr;
     unsigned int          addr_len;
@@ -836,12 +835,12 @@ smi_send_command(ipmi_con_t            *ipmi,
     }
 
     /* Put it in the list first. */
+    cmd->msg = *msg;
     cmd->rsp_handler = rsp_handler;
     cmd->rsp_data = rsp_data;
     cmd->data2 = data2;
     cmd->data3 = data3;
     cmd->data4 = data4;
-    cmd->cancelled = 0;
 
     ipmi_lock(smi->cmd_lock);
     add_cmd(ipmi, addr, addr_len, msg, smi, cmd);
@@ -1028,7 +1027,7 @@ static int
 smi_close_connection(ipmi_con_t *ipmi)
 {
     smi_data_t                 *smi;
-    pending_cmd_t              *cmd_to_free, *next_cmd;
+    pending_cmd_t              *cmd, *next_cmd;
     cmd_handler_t              *hnd_to_free, *next_hnd;
     ipmi_ll_event_handler_id_t *evt_to_free, *next_evt;
     int                        rv;
@@ -1050,12 +1049,31 @@ smi_close_connection(ipmi_con_t *ipmi)
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
 
-    cmd_to_free = smi->pending_cmds;
+    cmd = smi->pending_cmds;
     smi->pending_cmds = NULL;
-    while (cmd_to_free) {
-	next_cmd = cmd_to_free->next;
-	ipmi_mem_free(cmd_to_free);
-	cmd_to_free = next_cmd;
+    while (cmd) {
+	ipmi_addr_t   *addr;
+	unsigned int  addr_len;
+	unsigned char data[1];
+	next_cmd = cmd->next;
+	if (cmd->rsp_handler) {
+	    if (cmd->use_orig_addr) {
+		addr = &cmd->orig_addr;
+		addr_len = cmd->orig_addr_len;
+	    } else {
+		addr = &cmd->addr;
+		addr_len = cmd->addr_len;
+	    }
+	    data[0] = IPMI_UNKNOWN_ERR_CC;
+	    
+	    cmd->msg.netfn |= 1;
+	    cmd->msg.data = data;
+	    cmd->msg.data_len = 1;
+	    cmd->rsp_handler(NULL, addr, addr_len, &cmd->msg, cmd->rsp_data,
+			     cmd->data2, cmd->data3, cmd->data4);
+	}
+	ipmi_mem_free(cmd);
+	cmd = next_cmd;
     }
 
     hnd_to_free = smi->cmd_handlers;
@@ -1277,13 +1295,35 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	smi->con_change_handler(ipmi, err, 0, 0, smi->con_change_cb_data);
 }
 
+static void
+smi_oem_done(ipmi_con_t *ipmi, void *cb_data)
+{
+    smi_data_t                   *smi = (smi_data_t *) ipmi->con_data;
+    ipmi_msg_t                   msg;
+    ipmi_system_interface_addr_t si;
+    int                          rv;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_DEVICE_ID_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+		
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = 0xf;
+    si.lun = 0;
+    rv = smi_send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			  handle_dev_id, NULL, NULL, NULL, NULL);
+    if (rv) {
+	if (smi->con_change_handler)
+	    smi->con_change_handler(ipmi, rv, 0, 0, smi->con_change_cb_data);
+    }
+}
+
 static int
 smi_start_con(ipmi_con_t *ipmi)
 {
     smi_data_t                   *smi = (smi_data_t *) ipmi->con_data;
     int                          rv;
-    ipmi_msg_t                   msg;
-    ipmi_system_interface_addr_t si;
     struct timeval               timeout;
 
     /* Start the timer to audit the connections. */
@@ -1313,16 +1353,7 @@ smi_start_con(ipmi_con_t *ipmi)
 	goto out_err;
     }
 
-    msg.netfn = IPMI_APP_NETFN;
-    msg.cmd = IPMI_GET_DEVICE_ID_CMD;
-    msg.data = NULL;
-    msg.data_len = 0;
-		
-    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-    si.channel = 0xf;
-    si.lun = 0;
-    rv = smi_send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
-			  handle_dev_id, NULL, NULL, NULL, NULL);
+    rv = ipmi_conn_check_oem_handlers(ipmi, smi_oem_done, NULL);
 
  out_err:
     return rv;
