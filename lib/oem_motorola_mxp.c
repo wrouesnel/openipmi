@@ -4313,9 +4313,18 @@ board_presence_states_get_cb(ipmi_sensor_t   *sensor,
 			     unsigned char   *data,
 			     ipmi_states_t   *states)
 {
-    if (data[4] & 1)
+    mxp_board_t *binfo = sens_info->sdinfo;
+
+    if (data[4] & 1) {
 	ipmi_set_state(states, 0, 1); /* present */
-    else
+
+	if (!binfo->presence_read) {
+	    binfo->presence_read = 1;
+	    ipmi_start_ipmb_mc_scan(binfo->info->domain, 0,
+				    binfo->ipmb_addr, binfo->ipmb_addr,
+				    NULL, NULL);
+	}
+    } else
 	ipmi_set_state(states, 1, 1); /* absent */
 }
 
@@ -5730,7 +5739,6 @@ slot_ga_get_done(ipmi_control_t *control,
 		 void           *cb_data)
 {
     mxp_control_info_t *control_info = cb_data;
-    int                val;
 
     if (err) {
 	if (control_info->get_identifier_val)
