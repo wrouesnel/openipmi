@@ -1,4 +1,17 @@
 
+2003-04-25 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_auth.h: Abstracted the memory allocation
+	so the auth routines don't depend on OpenIPMI.
+	* ipmi_lan.c: ditto
+	* ipmi_auth.c: ditto
+	* md2.c, md2.h: ditto
+	* md5.c, md5.h: ditto
+	* ipmi_lan.c: ditto
+
+	* ipmi_malloc.c, include/OpenIPMI/ipmi_int.h: Made ipmi_mem_alloc
+	take an int size, not a size_t size.
+
 2003-04-24 Corey Minyard <cminyard@mvista.com>
 
 	* strings.c: Fixed a bug in getting the sensor reading name.

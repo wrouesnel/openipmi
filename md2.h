@@ -36,7 +36,11 @@
 
 #include <OpenIPMI/ipmi_auth.h>
 
-int ipmi_md2_authcode_init(unsigned char *password, ipmi_authdata_t *handle);
+int ipmi_md2_authcode_init(unsigned char *password,
+			   ipmi_authdata_t *handle,
+			   void            *info,
+			   void            *(*mem_alloc)(void *info, int size),
+			   void            (*mem_free)(void *info, void *data));
 int ipmi_md2_authcode_gen(ipmi_authdata_t handle,
 			  ipmi_auth_sg_t  data[],
 			  void            *output);

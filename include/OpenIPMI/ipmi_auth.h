@@ -52,7 +52,11 @@ typedef struct ipmi_auth_s
     /* Initialize the authorization engine and return a handle for it.
        You must pass this handle into the other authorization
        calls.  Return 0 on success or an errno on failure. */
-    int (*authcode_init)(unsigned char *password, ipmi_authdata_t *handle);
+    int (*authcode_init)(unsigned char   *password,
+			 ipmi_authdata_t *handle,
+			 void            *info,
+			 void            *(*mem_alloc)(void *info, int size),
+			 void            (*mem_free)(void *info, void *data));
 
     /* Generate a 16-byte authorization code and put it into
        "output". Returns 0 on success and an errno on failure.  */

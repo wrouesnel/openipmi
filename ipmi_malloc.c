@@ -323,7 +323,7 @@ ipmi_debug_malloc_cleanup(void)
 }
 
 void *
-ipmi_mem_alloc(size_t size)
+ipmi_mem_alloc(int size)
 {
     if (DEBUG_MALLOC) {
 	void *tb[TB_SIZE+1];

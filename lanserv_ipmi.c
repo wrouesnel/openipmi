@@ -31,6 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <stdlib.h>
 
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_auth.h>
@@ -39,9 +40,17 @@
 
 #include "lanserv.h"
 
+typedef struct rsp_msg
+{
+    uint8_t        netfn;
+    uint8_t        cmd;
+    unsigned short data_len;
+    uint8_t        *data;
+} rsp_msg_t;
+
 #if 0
 static void
-dump_hex(unsigned char *data, int len)
+dump_hex(uint8_t *data, int len)
 {
     int i;
     for (i=0; i<len; i++) {
@@ -55,20 +64,20 @@ dump_hex(unsigned char *data, int len)
 
 /* Deal with multi-byte data, IPMI (little-endian) style. */
 #if 0 /* These are currently not used. */
-static unsigned int ipmi_get_uint16(unsigned char *data)
+static unsigned int ipmi_get_uint16(uint8_t *data)
 {
     return (data[0]
 	    | (data[1] << 8));
 }
 
-static void ipmi_set_uint16(unsigned char *data, int val)
+static void ipmi_set_uint16(uint8_t *data, int val)
 {
     data[0] = val & 0xff;
     data[1] = (val >> 8) & 0xff;
 }
 #endif
 
-static unsigned int ipmi_get_uint32(unsigned char *data)
+static unsigned int ipmi_get_uint32(uint8_t *data)
 {
     return (data[0]
 	    | (data[1] << 8)
@@ -76,7 +85,7 @@ static unsigned int ipmi_get_uint32(unsigned char *data)
 	    | (data[3] << 24));
 }
 
-static void ipmi_set_uint32(unsigned char *data, int val)
+static void ipmi_set_uint32(uint8_t *data, int val)
 {
     data[0] = val & 0xff;
     data[1] = (val >> 8) & 0xff;
@@ -85,7 +94,7 @@ static void ipmi_set_uint32(unsigned char *data, int val)
 }
 
 static int
-is_authval_null(unsigned char *val)
+is_authval_null(uint8_t *val)
 {
     int i;
     for (i=0; i<16; i++)
@@ -95,7 +104,7 @@ is_authval_null(unsigned char *val)
 }
 
 static void
-cleanup_ascii_16(unsigned char *c)
+cleanup_ascii_16(uint8_t *c)
 {
     int i;
 
@@ -112,7 +121,7 @@ cleanup_ascii_16(unsigned char *c)
 }
 
 static user_t *
-find_user(lan_data_t *lan, unsigned char *user)
+find_user(lan_data_t *lan, uint8_t *user)
 {
     int    i;
     user_t *rv = NULL;
@@ -129,10 +138,10 @@ find_user(lan_data_t *lan, unsigned char *user)
     return rv;
 }
 
-static unsigned char
-ipmb_checksum(unsigned char *data, int size)
+static uint8_t
+ipmb_checksum(uint8_t *data, int size, uint8_t start)
 {
-	unsigned char csum = 0;
+	uint8_t csum = 0;
 	
 	for (; size > 0; size--, data++)
 		csum += *data;
@@ -170,14 +179,19 @@ close_session(lan_data_t *lan, session_t *session)
 
 static int
 auth_gen(session_t     *ses,
-	 unsigned char *out,
-	 unsigned char *data,
-	 unsigned int  data_len)
+	 uint8_t *out,
+	 uint8_t *data1,
+	 int     data1_len,
+	 uint8_t *data2,
+	 int     data2_len,
+	 uint8_t *data3,
+	 int     data3_len)
 {
     int rv;
     ipmi_auth_sg_t l[] =
     { { &ses->sid,              4  },
-      { data,                   data_len },
+      { data1,                  data1_len },
+      { data2,                  data2_len },
       { &ses->xmit_seq,		4 },
       { NULL,                   0 }};
 
@@ -186,11 +200,11 @@ auth_gen(session_t     *ses,
 }
 
 static int
-auth_check(session_t     *ses,
-	   uint32_t      seq,
-	   unsigned char *data,
-	   unsigned int  data_len,
-	   unsigned char *code)
+auth_check(session_t *ses,
+	   uint32_t  seq,
+	   uint8_t   *data,
+	   int       data_len,
+	   uint8_t  *code)
 {
     int rv;
     ipmi_auth_sg_t l[] =
@@ -204,9 +218,9 @@ auth_check(session_t     *ses,
 }
 	 
 static int
-gen_challenge(lan_data_t    *lan,
-	      unsigned char *out,
-	      unsigned int  sid)
+gen_challenge(lan_data_t *lan,
+	      uint8_t    *out,
+	      uint32_t   sid)
 {
     int rv;
 
@@ -219,9 +233,9 @@ gen_challenge(lan_data_t    *lan,
 }
 
 static int
-check_challenge(lan_data_t    *lan,
-		unsigned int  sid,
-		unsigned char *code)
+check_challenge(lan_data_t *lan,
+		uint32_t   sid,
+		uint8_t    *code)
 {
     int rv;
 
@@ -233,14 +247,18 @@ check_challenge(lan_data_t    *lan,
     return rv;
 }
 
+#define IPMI_LAN_MAX_HEADER_SIZE 30
+
 static void
-return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, ipmi_msg_t *rsp)
+return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 {
-    unsigned char data[IPMI_MAX_LAN_LEN];
-    session_t     dummy_session;
-    unsigned char *pos;
-    int           len;
-    int           rv;
+    uint8_t      data[IPMI_LAN_MAX_HEADER_SIZE];
+    struct iovec vec[3];
+    uint8_t      csum;
+    session_t    dummy_session;
+    uint8_t      *pos;
+    int          len;
+    int          rv;
 
     if (msg->sid == 0) {
 	session = &dummy_session;
@@ -254,11 +272,6 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, ipmi_msg_t *rsp)
 	session = sid_to_session(lan, msg->sid);
 	if (!session)
 	    return;
-    }
-
-    if (rsp->data_len > IPMI_MAX_MSG_LENGTH) {
-	rsp->data_len = IPMI_MAX_MSG_LENGTH;
-	rsp->data[0] = IPMI_REQUEST_DATA_TRUNCATED_CC;
     }
 
     data[0] = 6; /* RMCP version. */
@@ -281,32 +294,40 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, ipmi_msg_t *rsp)
 
     pos[0] = msg->rq_addr;
     pos[1] = (rsp->netfn << 2) | msg->rq_lun;
-    pos[2] = ipmb_checksum(pos, 2);
+    pos[2] = ipmb_checksum(pos, 2, 0);
     pos[3] = msg->rs_addr;
     pos[4] = (msg->rq_seq << 2) | msg->rs_lun;
     pos[5] = rsp->cmd;
-    memcpy(msg+6, rsp->data, rsp->data_len);
-    pos[len-1] = ipmb_checksum(pos+3, len-4);
+
+    csum = ipmb_checksum(pos+3, 3, 0);
+    csum = ipmb_checksum(msg->data, msg->len, csum);
+
+    vec[0].iov_base = data;
 
     if (session->authtype == IPMI_AUTHTYPE_NONE)
-	len += 14;
+	vec[0].iov_len = 14;
     else {
-	rv = auth_gen(session, data+13, pos, len);
+	rv = auth_gen(session, data+13, pos, 6, msg->data, msg->len, &csum, 1);
 	if (rv) {
 	    /* FIXME - what to do? */
 	    return;
 	}
-	len += 30;
+	vec[0].iov_len = 30;
     }
 
-    lan->lan_send(lan->lan_info, data, len, msg->src_addr, msg->src_len);
+    vec[1].iov_base = msg->data;
+    vec[1].iov_len = msg->len;
+    vec[2].iov_base = &csum;
+    vec[2].iov_len = 1;
+
+    lan->lan_send(lan, vec, 3, msg->src_addr, msg->src_len);
 }
 
 static void
 return_rsp_data(lan_data_t *lan, msg_t *msg, session_t *session,
-		unsigned char *data, int len)
+		uint8_t *data, int len)
 {
-    ipmi_msg_t rsp;
+    rsp_msg_t rsp;
 
     rsp.netfn = msg->netfn | 1;
     rsp.cmd = msg->cmd;
@@ -317,9 +338,9 @@ return_rsp_data(lan_data_t *lan, msg_t *msg, session_t *session,
 }
 
 static void
-return_err(lan_data_t *lan, msg_t *msg, session_t *session, unsigned char err)
+return_err(lan_data_t *lan, msg_t *msg, session_t *session, uint8_t err)
 {
-    ipmi_msg_t rsp;
+    rsp_msg_t rsp;
 
     rsp.netfn = msg->netfn | 1;
     rsp.cmd = msg->cmd;
@@ -331,7 +352,7 @@ return_err(lan_data_t *lan, msg_t *msg, session_t *session, unsigned char err)
 static void
 handle_get_system_guid(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char data[17];
+    uint8_t data[17];
 
     if (lan->guid) {
 	data[0] = 0;
@@ -345,9 +366,9 @@ handle_get_system_guid(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 {
-    unsigned char data[9];
-    int           chan;
-    int           priv;
+    uint8_t data[9];
+    uint8_t chan;
+    uint8_t priv;
 
     if (msg->len < 2) {
 	return_err(lan, msg, NULL, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -388,11 +409,11 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 static void
 handle_get_session_challenge(lan_data_t *lan, msg_t *msg)
 {
-    unsigned char data[21];
-    user_t        *user;
-    unsigned int  sid;
-    unsigned char authtype;
-    int           rv;
+    uint8_t  data[21];
+    user_t   *user;
+    uint32_t sid;
+    uint8_t  authtype;
+    int      rv;
 
     if (msg->len < 17) {
 	return_err(lan, msg, NULL, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -448,19 +469,33 @@ handle_no_session(lan_data_t *lan, msg_t *msg)
     }
 }
 
+static void *
+ialloc(void *info, int size)
+{
+    lan_data_t *lan = info;
+    return lan->alloc(lan, size);
+}
+
+static void
+ifree(void *info, void *data)
+{
+    lan_data_t *lan = info;
+    lan->free(lan, data);
+}
+
 static void
 handle_temp_session(lan_data_t *lan, msg_t *msg)
 {
-    unsigned char seq_data[4];
-    int           user_idx;
-    user_t        *user;
-    unsigned char auth, priv;
-    session_t     *session = NULL;
-    session_t     dummy_session;
-    int           rv;
-    unsigned int  xmit_seq;
-    unsigned char data[11];
-    int           i;
+    uint8_t   seq_data[4];
+    int       user_idx;
+    user_t    *user;
+    uint8_t   auth, priv;
+    session_t *session = NULL;
+    session_t dummy_session;
+    int       rv;
+    uint32_t  xmit_seq;
+    uint8_t   data[11];
+    int       i;
 
     if (msg->cmd != IPMI_ACTIVATE_SESSION_CMD)
 	return;
@@ -493,7 +528,9 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     dummy_session.sid = msg->sid;
 
     rv = ipmi_auths[msg->authtype].authcode_init(user->pw,
-						 &dummy_session.authdata);
+						 &dummy_session.authdata,
+						 lan,
+						 ialloc, ifree);
     if (rv)
 	return;
 
@@ -532,7 +569,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     session->active = 1;
     session->authtype = auth;
     session->authdata = dummy_session.authdata;
-    lan->gen_rand(seq_data, 4);
+    lan->gen_rand(lan, seq_data, 4);
     session->recv_seq = ipmi_get_uint32(seq_data) & ~1;
     if (!session->recv_seq)
 	session->recv_seq = 2;
@@ -568,13 +605,10 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
 static void
 handle_smi_msg(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    ipmi_addr_t   addr;
-    ipmi_msg_t    imsg;
-    msg_t         *nmsg;
-    int           addr_len;
-    int           rv;
+    msg_t *nmsg;
+    int   rv;
 
-    nmsg = lan->alloc(sizeof(*nmsg)+msg->src_len);
+    nmsg = lan->alloc(lan, sizeof(*nmsg)+msg->src_len+msg->len);
     if (!nmsg) {
 	return_err(lan, msg, NULL, IPMI_UNKNOWN_ERR_CC);
 	return;
@@ -582,48 +616,12 @@ handle_smi_msg(lan_data_t *lan, session_t *session, msg_t *msg)
 
     nmsg->src_addr = ((char *) nmsg) + sizeof(*nmsg);
     memcpy(nmsg->src_addr, msg->src_addr, msg->src_len);
+    nmsg->data  = ((uint8_t *) nmsg->src_addr) + msg->src_len;
+    memcpy(nmsg->data, msg->data, msg->len);
     
-    if (msg->cmd == IPMI_SEND_MSG_CMD) {
-	ipmi_ipmb_addr_t *ipmb = (void *) &addr;
-	int              pos;
-	/* Send message has special handling */
-	
-	if (msg->len < 8) {
-	    return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-	    return;
-	}
-
-	ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
-	ipmb->channel = msg->data[0] & 0xf;
-	pos = 1;
-	if (msg->data[pos] == 0) {
-	    ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
-	    pos++;
-	}
-	ipmb->slave_addr = msg->data[pos];
-	ipmb->lun = msg->data[pos+1] & 0x3;
-	addr_len = sizeof(*ipmb);
-	imsg.netfn = msg->data[pos+1] >> 2;
-	imsg.cmd = msg->data[pos+5];
-	imsg.data = msg->data+pos+6;
-	imsg.data_len = msg->len-(pos + 7); /* Subtract last checksum, too */
-    } else {
-	/* Normal message to the BMC. */
-	ipmi_system_interface_addr_t *si = (void *) &addr;
-
-	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si->channel = 0xf;
-	si->lun = msg->rs_lun;
-	addr_len = sizeof(*si);
-	imsg.netfn = msg->netfn;
-	imsg.cmd = msg->cmd;
-	imsg.data = msg->data;
-	imsg.data_len = msg->len;
-    }
-
-    rv = lan->smi_send(lan->smi_info, &imsg, nmsg, &addr, addr_len);
+    rv = lan->smi_send(lan, nmsg);
     if (rv) {
-	lan->free(nmsg);
+	lan->free(lan, nmsg);
 	return_err(lan, msg, NULL, IPMI_UNKNOWN_ERR_CC);
 	return;
     }
@@ -632,7 +630,7 @@ handle_smi_msg(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_activate_session_cmd(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char data[11];
+    uint8_t data[11];
 
     if (msg->len < 22) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -657,8 +655,8 @@ handle_activate_session_cmd(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_set_session_privilege(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char data[2];
-    unsigned char priv;
+    uint8_t data[2];
+    uint8_t priv;
 
     if (msg->len < 1) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -691,9 +689,8 @@ handle_set_session_privilege(lan_data_t *lan, session_t *session, msg_t *msg)
 static void		
 handle_close_session(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned int sid;
-
-    session_t    *nses = session;
+    uint32_t  sid;
+    session_t *nses = session;
 
     if (msg->len < 4) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -723,9 +720,9 @@ handle_close_session(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char idx;
-    session_t     *nses = NULL;
-    unsigned char data[19];
+    uint8_t   idx;
+    session_t *nses = NULL;
+    uint8_t   data[19];
 
     if (msg->len < 1) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -803,9 +800,9 @@ handle_get_authcode(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char upd1, upd2;
-    int           write_nonv = 0;
-    unsigned int  newv;
+    uint8_t upd1, upd2;
+    int     write_nonv = 0;
+    uint8_t newv;
 
     if (msg->len < 3) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -871,7 +868,7 @@ handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
     }
 
     if (write_nonv)
-	lan->write_config(lan->config_info, lan);
+	lan->write_config(lan);
 
     return_err(lan, msg, session, 0);
 }
@@ -879,9 +876,9 @@ handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_get_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char data[3];
-    unsigned char upd;
-    channel_t     *channel;
+    uint8_t   data[3];
+    uint8_t   upd;
+    channel_t *channel;
 
     if (msg->len < 3) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -914,8 +911,8 @@ handle_get_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_get_channel_info(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char data[10];
-    unsigned char chan;
+    uint8_t data[10];
+    uint8_t chan;
 
     if (msg->len < 1) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -947,10 +944,10 @@ handle_get_channel_info(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_set_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char user;
-    unsigned char priv;
-    unsigned char newv;
-    int           changed = 0;
+    uint8_t user;
+    uint8_t priv;
+    uint8_t newv;
+    int     changed = 0;
 
     if (msg->len < 3) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -1000,7 +997,7 @@ handle_set_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
     }
 
     if (changed)
-	lan->write_config(lan->config_info, lan);
+	lan->write_config(lan);
 
     return_err(lan, msg, session, 0);
 }
@@ -1008,9 +1005,9 @@ handle_set_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_get_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char data[5];
-    int           i;
-    unsigned char user;
+    uint8_t data[5];
+    int     i;
+    uint8_t user;
 
     if (msg->len < 2) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -1049,7 +1046,7 @@ handle_get_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_set_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char user;
+    uint8_t user;
 
     if (msg->len < 17) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -1071,8 +1068,8 @@ handle_set_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_get_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char user;
-    unsigned char data[17];
+    uint8_t user;
+    uint8_t data[17];
 
     if (msg->len < 17) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -1094,8 +1091,8 @@ handle_get_user_name(lan_data_t *lan, session_t *session, msg_t *msg)
 static void
 handle_set_user_password(lan_data_t *lan, session_t *session, msg_t *msg)
 {
-    unsigned char user;
-    unsigned char op;
+    uint8_t user;
+    uint8_t op;
 
     if (msg->len < 2) {
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
@@ -1278,11 +1275,11 @@ handle_normal_session(lan_data_t *lan, msg_t *msg)
 
 void
 ipmi_handle_lan_msg(lan_data_t *lan,
-		    unsigned char *data, int len,
+		    uint8_t *data, int len,
 		    void *from_addr, int from_len)
 {
-    unsigned char *pos;
-    msg_t         msg;
+    uint8_t *pos;
+    msg_t   msg;
 
     if (len < 14)
 	return;
@@ -1313,16 +1310,16 @@ ipmi_handle_lan_msg(lan_data_t *lan,
     len = *pos;
     pos++;
 
-    if ((len < 7) || (len > IPMI_MAX_MSG_LENGTH+7))
+    if (len < 7)
 	return;
 
-    if (ipmb_checksum(pos, 3) != 0)
+    if (ipmb_checksum(pos, 3, 0) != 0)
 	return;
-    if (ipmb_checksum(pos+3, len-3) != 0)
+    if (ipmb_checksum(pos+3, len-3, 0) != 0)
 	return;
     len--; /* Remove the final checksum */
 
-    memcpy(&msg.src_addr, from_addr, from_len);
+    msg.src_addr = from_addr;
     msg.src_len = from_len;
     msg.rs_addr = pos[0];
     msg.netfn = pos[1] >> 2;
@@ -1332,8 +1329,8 @@ ipmi_handle_lan_msg(lan_data_t *lan,
     msg.rq_lun = pos[4] & 0x3;
     msg.cmd = pos[5];
 
-    memcpy(msg.data, pos+6, len-6);
-    msg.len = len;
+    msg.data = pos + 6;
+    msg.len = len - 6;
 
     if (msg.sid == 0) {
 	/* Should be a session challenge, validate everything else. */
@@ -1350,34 +1347,9 @@ ipmi_handle_lan_msg(lan_data_t *lan,
 }
 
 void
-ipmi_handle_smi_msg(lan_data_t  *lan,
-		    ipmi_addr_t *addr,
-		    ipmi_msg_t  *imsg,
-		    void        *cb_data)
+ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
+		    uint8_t *rsp, int rsp_len)
 {
-    msg_t         *msg = cb_data;
-    session_t     *session;
-    unsigned char data[IPMI_MAX_MSG_LENGTH+8];
-
-    session = sid_to_session(lan, msg->sid);
-    if (!session)
-	goto out;
-
-    if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
-	ipmi_ipmb_addr_t *ipmb = (void *) addr; 
-
-	if (imsg->data_len > IPMI_MAX_MSG_LENGTH) {
-	    imsg->data[0] = IPMI_REQUEST_DATA_TRUNCATED_CC;
-	    imsg->data_len = IPMI_MAX_MSG_LENGTH;
-	}
-
-	data[0] = 0;
-	data[1] = (imsg->netfn << 2) | 2;
-	data[2] = ipmb_checksum(data+1, 1);
-	data[3] = ipmb->slave_addr;
-//	data[4] = 
-    }
-
- out:
-    lan->free(msg);
+    return_rsp_data(lan, msg, NULL, rsp, rsp_len);
+    lan->free(lan, msg);
 }

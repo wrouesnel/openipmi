@@ -116,7 +116,7 @@ struct ipmi_states_s
 
 /* IPMI uses this for memory allocation, so it can easily be
    substituted, etc. */
-void *ipmi_mem_alloc(size_t size);
+void *ipmi_mem_alloc(int size);
 void ipmi_mem_free(void *data);
 
 /* If you have debug allocations on, then you should call this to

@@ -409,7 +409,6 @@ ipmi_cmd_permitted(unsigned char priv,
 		   unsigned char netfn,
 		   unsigned char cmd)
 {
-    priv_val entry;
     int      perm;
 
     /* Priviledges */

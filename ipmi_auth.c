@@ -1,7 +1,7 @@
 /*
- * ipmi.c
+ * ipmi_auth.c
  *
- * MontaVista IPMI generic code
+ * MontaVista IPMI authentication
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
@@ -36,35 +36,50 @@
 
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_int.h>
 #include "md2.h"
 #include "md5.h"
 
-static int
-pw_authcode_init(unsigned char *password, ipmi_authdata_t *handle)
+struct ipmi_authdata_s
 {
-    unsigned char *data;
+    void          *info;
+    void          *(*mem_alloc)(void *info, int size);
+    void          (*mem_free)(void *info, void *data);
+    unsigned char data[16];
+};
 
-    data = ipmi_mem_alloc(16);
+static int
+pw_authcode_init(unsigned char   *password,
+		 ipmi_authdata_t *handle,
+		 void            *info,
+		 void            *(*mem_alloc)(void *info, int size),
+		 void            (*mem_free)(void *info, void *data))
+{
+    struct ipmi_authdata_s *data;
+
+    data = mem_alloc(info, sizeof(*data));
     if (!data)
 	return ENOMEM;
 
-    memcpy(data, password, 16);
-    *handle = (ipmi_authdata_t) data;
+    data->info = info;
+    data->mem_alloc = mem_alloc;
+    data->mem_free = mem_free;
+
+    memcpy(data->data, password, 16);
+    *handle = data;
     return 0;
 }
 
 static int
 pw_authcode_gen(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *output)
 {
-    memcpy(output, handle, 16);
+    memcpy(output, handle->data, 16);
     return 0;
 }
 
 static int
 pw_authcode_check(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *code)
 {
-    if (strncmp((unsigned char *) handle, code, 16) != 0)
+    if (strncmp(handle->data, code, 16) != 0)
 	return EINVAL;
     return 0;
 }
@@ -72,11 +87,15 @@ pw_authcode_check(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *code)
 static void
 pw_authcode_cleanup(ipmi_authdata_t handle)
 {
-    ipmi_mem_free(handle);
+    handle->mem_free(handle->info, handle);
 }
 
 static int
-no_authcode_init(unsigned char *password, ipmi_authdata_t *handle)
+no_authcode_init(unsigned char   *password,
+		 ipmi_authdata_t *handle,
+		 void            *info,
+		 void            *(*mem_alloc)(void *info, int size),
+		 void            (*mem_free)(void *info, void *data))
 {
     return 0;
 }

@@ -1095,6 +1095,18 @@ lan_deregister_for_command(ipmi_con_t    *ipmi,
     return ENOSYS;
 }
 
+static void *
+auth_alloc(void *info, int size)
+{
+    return ipmi_mem_alloc(size);
+}
+
+static void
+auth_free(void *info, void *data)
+{
+    ipmi_mem_free(data);
+}
+
 static int
 lan_close_connection(ipmi_con_t *ipmi)
 {
@@ -1683,7 +1695,8 @@ ipmi_lan_setup_con(struct in_addr    addr,
     if (rv)
 	goto out_err;
 
-    rv = ipmi_auths[authtype].authcode_init(lan->password, &(lan->authdata));
+    rv = ipmi_auths[authtype].authcode_init(lan->password, &(lan->authdata),
+					    NULL, auth_alloc, auth_free);
     if (rv)
 	goto out_err;
 

@@ -25,8 +25,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
-#include <OpenIPMI/ipmi_auth.h>
-#include <OpenIPMI/ipmi_int.h>
 #include "md2.h"
 
 typedef uint32_t u32;
@@ -174,18 +172,34 @@ md2_read( MD2_CONTEXT *hd )
     return hd->buf;
 }
 
+struct ipmi_authdata_s
+{
+    void          *info;
+    void          *(*mem_alloc)(void *info, int size);
+    void          (*mem_free)(void *info, void *data);
+    unsigned char data[16];
+};
+
 /* External functions for the IPMI authcode algorithms. */
 int
-ipmi_md2_authcode_init(unsigned char *password, ipmi_authdata_t *handle)
+ipmi_md2_authcode_init(unsigned char   *password,
+		       ipmi_authdata_t *handle,
+		       void            *info,
+		       void            *(*mem_alloc)(void *info, int size),
+		       void            (*mem_free)(void *info, void *data))
 {
-    unsigned char *data;
+    struct ipmi_authdata_s *data;
 
-    data = ipmi_mem_alloc(16);
+    data = mem_alloc(info, sizeof(*data));
     if (!data)
 	return ENOMEM;
 
-    memcpy(data, password, 16);
-    *handle = (ipmi_authdata_t) data;
+    data->info = info;
+    data->mem_alloc = mem_alloc;
+    data->mem_free = mem_free;
+
+    memcpy(data->data, password, 16);
+    *handle = data;
     return 0;
 }
 
@@ -198,11 +212,11 @@ ipmi_md2_authcode_gen(ipmi_authdata_t handle,
     int         i;
 
     md2_init(&ctx);
-    md2_write(&ctx, (byte *) handle, 16);
+    md2_write(&ctx, handle->data, 16);
     for (i=0; data[i].data != NULL; i++) {
 	md2_write(&ctx, data[i].data, data[i].len);
     }
-    md2_write(&ctx, (byte *) handle, 16);
+    md2_write(&ctx, handle->data, 16);
     md2_final(&ctx);
     memcpy(output, md2_read(&ctx), 16);
     return 0;
@@ -217,11 +231,11 @@ ipmi_md2_authcode_check(ipmi_authdata_t handle,
     int         i;
 
     md2_init(&ctx);
-    md2_write(&ctx, (byte *) handle, 16);
+    md2_write(&ctx, handle->data, 16);
     for (i=0; data[i].data != NULL; i++) {
 	md2_write(&ctx, data[i].data, data[i].len);
     }
-    md2_write(&ctx, (byte *) handle, 16);
+    md2_write(&ctx, handle->data, 16);
     md2_final(&ctx);
     if (memcmp(code, md2_read(&ctx), 16) != 0)
 	return EINVAL;
@@ -231,7 +245,8 @@ ipmi_md2_authcode_check(ipmi_authdata_t handle,
 void
 ipmi_md2_authcode_cleanup(ipmi_authdata_t handle)
 {
-    ipmi_mem_free(handle);
+    handle->mem_free(handle->info, handle);
+    handle = NULL;
 }
 
 /* The stuff below is libgcrypt-specific, and does not apply to IPMI.  The
@@ -277,7 +292,7 @@ md2_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD2 ($Revision: 1.3 $)";
+const char * const gnupgext_version = "MD2 ($Revision: 1.4 $)";
 
 static struct {
     int class;

@@ -34,19 +34,24 @@
 #include "lanserv.h"
 
 /* Deal with multi-byte data, RMCP (big-endian) style. */
-unsigned int rmcp_get_uint16(unsigned char *data)
+#if 0 /* These are not currently used. */
+static unsigned int
+rmcp_get_uint16(uint8_t *data)
 {
     return (data[1]
 	    | (data[0] << 8));
 }
 
-void rmcp_set_uint16(unsigned char *data, int val)
+static void
+rmcp_set_uint16(uint8_t *data, int val)
 {
     data[1] = val & 0xff;
     data[0] = (val >> 8) & 0xff;
 }
+#endif
 
-unsigned int rmcp_get_uint32(unsigned char *data)
+static unsigned int
+rmcp_get_uint32(uint8_t *data)
 {
     return (data[3]
 	    | (data[2] << 8)
@@ -54,7 +59,8 @@ unsigned int rmcp_get_uint32(unsigned char *data)
 	    | (data[0] << 24));
 }
 
-void rmcp_set_uint32(unsigned char *data, int val)
+static void
+rmcp_set_uint32(uint8_t *data, int val)
 {
     data[3] = val & 0xff;
     data[2] = (val >> 8) & 0xff;
@@ -65,10 +71,11 @@ void rmcp_set_uint32(unsigned char *data, int val)
 #define ASF_IANA 4542
 void
 handle_asf(lan_data_t *lan,
-	   unsigned char *data, int len,
+	   uint8_t *data, int len,
 	   void *from_addr, int from_len)
 {
-    unsigned char rsp[28];
+    uint8_t      rsp[28];
+    struct iovec vec[1];
 
     if (len < 12)
 	return;
@@ -96,7 +103,9 @@ handle_asf(lan_data_t *lan,
     rsp[21] = 0x0; /* No supported interactions */
     memset(rsp+22, 0, 6); /* Reserved. */
 
-    /* Return the response. */
-    lan->lan_send(lan->lan_info, data, 28, from_addr, from_len);
-}
+    vec[0].iov_base = data;
+    vec[0].iov_len = 28;
 
+    /* Return the response. */
+    lan->lan_send(lan, vec, 1, from_addr, from_len);
+}

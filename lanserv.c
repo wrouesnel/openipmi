@@ -43,33 +43,62 @@
 #include <string.h>
 #include <stdarg.h>
 
+#include <malloc.h>
+
 #include <OpenIPMI/log.h>
 #include <OpenIPMI/ipmi_err.h>
 
 #include "lanserv.h"
 
-int smi_fd;
-int lan_fd;
-
-unsigned int __ipmi_log_mask = 0;
-
-void
-ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
+typedef struct misc_data
 {
-    va_list ap;
+    int lan_fd;
+    int smi_fd;
+} misc_data_t;
 
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
+static void
+handle_msg_ipmi(int smi_fd, lan_data_t *lan)
+{
+    
 }
 
-void
-handle_msg(lan_data_t *lan)
+static void *
+ialloc(lan_data_t *lan, int size)
+{
+    return malloc(size);
+}
+
+static void
+ifree(lan_data_t *lan, void *data)
+{
+    return free(data);
+}
+
+static void
+lan_send(lan_data_t *lan,
+	 struct iovec *data, int vecs,
+	 void *addr, int addr_len)
+{
+}
+
+static int
+smi_send(lan_data_t *lan, msg_t *msg)
+{
+    return 0;
+}
+
+static void
+gen_rand(lan_data_t *lan, void *data, int size)
+{
+}
+
+static void
+handle_msg_lan(int lan_fd, lan_data_t *lan)
 {
     int                len;
     struct sockaddr    from_addr;
     socklen_t          from_len;
-    unsigned char      data[IPMI_MAX_LAN_LEN];
+    unsigned char      data[256];
 
     from_len = sizeof(from_addr);
     len = recvfrom(lan_fd, data, sizeof(data), 0, &from_addr, &from_len);
@@ -97,6 +126,11 @@ handle_msg(lan_data_t *lan)
 	    ipmi_handle_lan_msg(lan, data, len, &from_addr, from_len);
 	    break;
     }
+}
+
+static void
+write_config(lan_data_t *lan)
+{
 }
 
 static int
@@ -149,12 +183,102 @@ open_lan_fd(void)
 int
 main(int argc, char *argv[])
 {
-    lan_data_t lan;
+    lan_data_t  lan;
+    misc_data_t data;
+    int max_fd;
+    int rv;
 
-    smi_fd = ipmi_open();
-    lan_fd = open_lan_fd();
+
+    data.smi_fd = ipmi_open();
+    data.lan_fd = open_lan_fd();
+
+    memset(&lan, 0, sizeof(lan));
+    lan.user_info = &data;
+    lan.alloc = ialloc;
+    lan.free = ifree;
+    lan.lan_send = lan_send;
+    lan.smi_send = smi_send;
+    lan.gen_rand = gen_rand;
+    lan.write_config = write_config;
+
+    if (data.lan_fd > data.smi_fd)
+	max_fd = data.lan_fd + 1;
+    else
+	max_fd = data.smi_fd + 1;
 
     for (;;) {
-	handle_msg(&lan);
+	fd_set readfds;
+
+	FD_ZERO(&readfds);
+	FD_SET(data.smi_fd, &readfds);
+	FD_SET(data.lan_fd, &readfds);
+
+	rv = select(max_fd, &readfds, NULL, NULL, NULL);
+	if ((rv == -1) && (errno == EINTR))
+	    continue;
+
+	if (FD_ISSET(data.smi_fd, &readfds))
+	    handle_msg_ipmi(data.smi_fd, &lan);
+
+	if (FD_ISSET(data.lan_fd, &readfds))
+	    handle_msg_lan(data.lan_fd, &lan);
     }
 }
+
+#if 0
+    ipmi_addr_t   addr;
+    ipmi_msg_t    imsg;
+    if (msg->cmd == IPMI_SEND_MSG_CMD) {
+	ipmi_ipmb_addr_t *ipmb = (void *) &addr;
+	int              pos;
+	/* Send message has special handling */
+	
+	if (msg->len < 8) {
+	    return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
+	    return;
+	}
+
+	ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
+	ipmb->channel = msg->data[0] & 0xf;
+	pos = 1;
+	if (msg->data[pos] == 0) {
+	    ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
+	    pos++;
+	}
+	ipmb->slave_addr = msg->data[pos];
+	ipmb->lun = msg->data[pos+1] & 0x3;
+	addr_len = sizeof(*ipmb);
+	imsg.netfn = msg->data[pos+1] >> 2;
+	imsg.cmd = msg->data[pos+5];
+	imsg.data = msg->data+pos+6;
+	imsg.data_len = msg->len-(pos + 7); /* Subtract last checksum, too */
+    } else {
+	/* Normal message to the BMC. */
+	ipmi_system_interface_addr_t *si = (void *) &addr;
+
+	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si->channel = 0xf;
+	si->lun = msg->rs_lun;
+	addr_len = sizeof(*si);
+	imsg.netfn = msg->netfn;
+	imsg.cmd = msg->cmd;
+	imsg.data = msg->data;
+	imsg.data_len = msg->len;
+    }
+
+    if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
+	ipmi_ipmb_addr_t *ipmb = (void *) addr; 
+
+	if (imsg->data_len > IPMI_MAX_MSG_LENGTH) {
+	    imsg->data[0] = IPMI_REQUEST_DATA_TRUNCATED_CC;
+	    imsg->data_len = IPMI_MAX_MSG_LENGTH;
+	}
+
+	data[0] = 0;
+	data[1] = (imsg->netfn << 2) | 2;
+	data[2] = ipmb_checksum(data+1, 1);
+	data[3] = ipmb->slave_addr;
+//	data[4] = 
+    }
+
+#endif

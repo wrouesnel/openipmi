@@ -2,11 +2,10 @@
 #ifndef __LANSERV_H
 #define __LANSERV_H
 
-#include <OpenIPMI/ipmi_types.h>
-#include <OpenIPMI/ipmi_auth.h>
-#include <OpenIPMI/ipmi_addr.h>
+#include <sys/uio.h> /* for iovec */
+#include <stdint.h>
 
-#define IPMI_MAX_LAN_LEN (IPMI_MAX_MSG_LENGTH + 42 + 7)
+#include <OpenIPMI/ipmi_auth.h>
 
 /*
  * Restrictions: <=64 sessions
@@ -26,8 +25,8 @@ typedef struct msg_s
     void *src_addr;
     int  src_len;
 
-    unsigned int  seq;
-    unsigned int  sid;
+    uint32_t      seq;
+    uint32_t      sid;
     unsigned char *authcode;
     unsigned char authcode_data[16];
     unsigned char authtype;
@@ -40,8 +39,10 @@ typedef struct msg_s
     unsigned char rq_seq;
     unsigned char cmd;
 
-    unsigned char data[IPMI_MAX_MSG_LENGTH];
+    unsigned char *data;
     int           len;
+
+    unsigned long ll_data; /* For use by the low-level code. */
 } msg_t;
 
 #define NUM_PRIV_LEVEL 4
@@ -69,9 +70,9 @@ typedef struct session_s
 
     unsigned char   authtype;
     ipmi_authdata_t authdata;
-    unsigned int    recv_seq;
-    unsigned int    xmit_seq;
-    unsigned int    sid;
+    uint32_t        recv_seq;
+    uint32_t        xmit_seq;
+    uint32_t        sid;
     unsigned char   userid;
 
     unsigned char priv;
@@ -86,13 +87,14 @@ typedef struct user_s
     unsigned char priviledge;
     unsigned char max_sessions;
     unsigned char curr_sessions;
-    unsigned int  allowed_auths;
+    uint16_t      allowed_auths;
 
     /* Set by the user code. */
     int           idx; /* My idx in the table. */
 } user_t;
 
-typedef struct lan_data_s
+typedef struct lan_data_s lan_data_t;
+struct lan_data_s
 {
     /* user 0 is not used. */
     user_t users[MAX_USERS+1];
@@ -106,45 +108,47 @@ typedef struct lan_data_s
     unsigned char *guid;
 
 
-    void *lan_info;
-    void (*lan_send)(void *lan_info, unsigned char *data, int len,
+    void *user_info;
+
+    void (*lan_send)(lan_data_t *lan,
+		     struct iovec *data, int vecs,
 		     void *addr, int addr_len);
 
-    void *smi_info;
-    int (*smi_send)(void *smi, ipmi_msg_t *msg,
-		    void *cb_data, ipmi_addr_t *addr, int addr_len);
+    int (*smi_send)(lan_data_t *lan, msg_t *msg);
 
     /* Generate 'size' bytes of random data into 'data'. */
-    void (*gen_rand)(void *data, int size);
+    void (*gen_rand)(lan_data_t *lan, void *data, int size);
 
     /* Allocate and free data. */
-    void *(*alloc)(int size);
-    void (*free)(void *data);
+    void *(*alloc)(lan_data_t *lan, int size);
+    void (*free)(lan_data_t *lan, void *data);
 
     /* Writethe configuration file (done when a non-volatile
        change is done, or when a user name/password is written. */
-    void *config_info;
-    void (*write_config)(void *config_info, struct lan_data_s *data);
+    void (*write_config)(lan_data_t *lan);
+
 
     /* Don't fill in the below in the user code. */
 
     /* Used to make the sid somewhat unique. */
-    unsigned int sid_seq;
+    uint32_t sid_seq;
 
     unsigned int active_sessions;
 
     ipmi_authdata_t challenge_auth;
     unsigned int next_challenge_seq;
-} lan_data_t;
+};
 
+
+void handle_asf(lan_data_t *lan,
+		unsigned char *data, int len,
+		void *from_addr, int from_len);
 
 void ipmi_handle_lan_msg(lan_data_t *lan,
 			 unsigned char *data, int len,
 			 void *from_addr, int from_len);
 
-void ipmi_handle_smi_msg(lan_data_t  *len,
-			 ipmi_addr_t *addr,
-			 ipmi_msg_t  *imsg,
-			 void        *cb_data);
+void ipmi_handle_smi_rsp(lan_data_t *len, msg_t *msg,
+			 unsigned char *rsp, int rsp_len);
 
 #endif /* __LANSERV_H */
