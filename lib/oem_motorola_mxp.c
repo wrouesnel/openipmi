@@ -2857,7 +2857,7 @@ ps_ps_states_get_cb(ipmi_sensor_t   *sensor,
 		    unsigned char   *data,
 		    ipmi_states_t   *states)
 {
-    /* Only set the feed failure states on DC power supplies. */
+    /* Only set the power feed failure states on DC power supplies. */
     if ((data[7] == 0x1) /* 400W DC */
 	|| (data[7] == 0x3)) /* 600W DC */
     {

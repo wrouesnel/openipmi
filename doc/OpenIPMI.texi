@@ -2083,7 +2083,7 @@ This is a standard power supply sensor with
 two OEM extensions for the A and B feed failure events.  Offset 13 is
 asserted for A feed failures, offset 14 is asserted for B feed
 failures.  The A and B feeds only work on the DC power supply version,
-they will always be asserted for an AC power supply.  Offset 0 is the
+they will always be off for an AC power supply.  Offset 0 is the
 present bit, offset 1 is the power supply
 failure bit, and is used to represent when the power supply fails to
 generate proper output for one or more voltages.
@@ -2341,12 +2341,6 @@ boards.  When this changes, OpenIPMI will switch to using them.
 
 @item Zynx switch ejector latches (Old Zynx switches only)
 The ejector handles on the Zynx switches don't generate events.
-
-@item A/B feeds to AC power supplies
-OpenIPMI doesn't look at the power supply type and always represents the
-A/B feeds, even though they are not present on the AC power supplies.
-OpenIPMI should look at the chassis type and not provide these bits on
-the Power Supply sensor for an AC chassis.
 
 @item Bogus entities (Old MXP versions only)
 The SDRs in the AMC create some bogus entities.  The sensors on them
