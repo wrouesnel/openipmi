@@ -1444,7 +1444,7 @@ data_handler(int            fd,
 
 	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si_addr->channel = 0xf;
-	si_addr->lun = tmsg[1] & 3;
+	si_addr->lun = tmsg[4] & 3;
 
 	msg.netfn = tmsg[1] >> 2;
 	msg.cmd = tmsg[5];
@@ -1500,7 +1500,7 @@ data_handler(int            fd,
 	       message. */
 	    si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	    si_addr->channel = 0xf;
-	    si_addr->lun = tmsg[1] & 3;
+	    si_addr->lun = tmsg[4] & 3;
 	} else {
 	    ipmi_ipmb_addr_t *ipmb_addr	= (ipmi_ipmb_addr_t *) &addr;
 	    ipmi_ipmb_addr_t *ipmb2

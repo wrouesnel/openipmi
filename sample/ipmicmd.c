@@ -838,18 +838,6 @@ main(int argc, const char *oargv[])
 	leave(1);
     }
 
-    /* Initialize the OEM handlers. */
-    rv = _ipmi_conn_init();
-    if (rv) {
-	fprintf(stderr, "Error initializing connections: 0x%x\n", rv);
-	leave(1);
-    }
-    ipmi_oem_force_conn_init();
-    ipmi_oem_motorola_mxp_init();
-
-
-    curr_arg = 0;
-
     /* OS handler allocated first. */
     os_hnd = ipmi_posix_get_os_handler();
     if (!os_hnd) {
@@ -862,6 +850,15 @@ main(int argc, const char *oargv[])
 
     /* The OS handler has to know about the selector. */
     ipmi_posix_os_handler_set_sel(os_hnd, sel);
+
+    /* Initialize the OEM handlers. */
+    rv = ipmi_init(os_hnd);
+    if (rv) {
+	fprintf(stderr, "Error initializing connections: 0x%x\n", rv);
+	leave(1);
+    }
+
+    curr_arg = 0;
 
     rv = ipmi_parse_args(&curr_arg, argc, argv, &args);
     if (rv) {

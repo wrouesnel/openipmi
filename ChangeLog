@@ -39,6 +39,9 @@
 	
 	* configure.in: Move to version 1.4.2
 
+	* lib/ipmi_lan.c: Fixed a problem where the wrong LUN was being
+	looked at in LAN reponses.
+
 2004-09-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/chassis.c: Fixed a problem where the wrong error was being
