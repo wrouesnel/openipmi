@@ -1046,7 +1046,7 @@ domain_oem_check_done(ipmi_domain_t *domain,
     if (err != ENOSYS) {
 	/* Either we got a success or some error trying to install the
 	   OEM handlers. */
-	check->done(NULL, err, check->cb_data);
+	check->done(domain, err, check->cb_data);
 	return;
     }
 
