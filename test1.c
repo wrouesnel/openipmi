@@ -366,7 +366,6 @@ void got_sdrs(ipmi_sdr_info_t *sdr,
     rv = ipmi_sel_get(sel, got_sels, mc);
     if (rv) {
 	report_error("ipmi_sel_get", rv);
-	exit(1);
     }
 }
 
@@ -580,6 +579,7 @@ check_sel(void)
     sel_select_loop(sel);
 }
 
+extern unsigned int __ipmi_log_mask;
 int
 main(int argc, char *argv[])
 {
@@ -587,6 +587,7 @@ main(int argc, char *argv[])
 	fprintf(stderr, "Not enough arguments\n");
 	exit(1);
     }
+__ipmi_log_mask = 0xffffffff;
     if (strcmp(argv[1], "smi") == 0) {
 	if (argc < 3) {
 	    fprintf(stderr, "Not enough arguments\n");

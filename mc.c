@@ -1070,7 +1070,7 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
     }
 
     if ((mc->bmc->state == QUERYING_MAIN_SDRS) 
-	&& (mc->sensor_device_support))
+	&& (mc->provides_device_sdrs))
     {
 	/* Got the main SDRs, now get the device SDRs. */
 	mc->bmc->state = QUERYING_SENSOR_SDRS;

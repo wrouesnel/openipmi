@@ -179,23 +179,17 @@ open_lan_fd(void)
 {
     int                fd;
     struct sockaddr_in addr;
-    int                curr_port;
     int                rv;
 
     fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1)
 	return fd;
 
-    curr_port = 7000;
-    do {
-	curr_port++;
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(curr_port);
-	addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(623);
+    addr.sin_addr.s_addr = INADDR_ANY;
 
-	rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
-    } while ((curr_port < 7100) && (rv == -1));
-
+    rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
     if (rv == -1)
     {
 	int tmp_errno = errno;
@@ -286,10 +280,7 @@ lan_send(lan_data_t  *lan,
     data[4] = lan->working_authtype;
     ipmi_set_uint32(data+5, lan->outbound_seq_num);
     ipmi_set_uint32(data+9, lan->session_id);
-    if (lan->working_authtype == 0)
-	tmsg = data+14;
-    else
-	tmsg = data+30;
+    tmsg = data+30;
 
     if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	/* It's a message straight to the BMC. */
@@ -337,17 +328,11 @@ lan_send(lan_data_t  *lan,
 	pos++;
     }
 
-    if (lan->working_authtype == 0) {
-	/* No authentication, so no authcode. */
-	data[13] = pos;
-	pos += 14; /* Convert to pos in data */
-    } else {
-	data[29] = pos;
-	rv = auth_gen(lan, data+13, tmsg, pos);
-	if (!rv)
-	    return rv;
-	pos += 30; /* Convert to pos in data */
-    }
+    data[29] = pos;
+    rv = auth_gen(lan, data+13, tmsg, pos);
+    if (rv)
+	return rv;
+    pos += 30; /* Convert to pos in data */
 
     /* FIXME - need locks for the sequence numbers. */
 
@@ -360,11 +345,11 @@ lan_send(lan_data_t  *lan,
     }
 
     if (DEBUG_MSG) {
-	printf("outgoing\n addr =");
+	ipmi_log("outgoing\n addr =");
 	dump_hex((unsigned char *) &(lan->addr), sizeof(lan->addr));
-	printf("\n data =\n  ");
+	ipmi_log("\n data =\n  ");
 	dump_hex(data, pos);
-	printf("\n");
+	ipmi_log("\n");
     }
 
     rv = sendto(lan->fd, data, pos, 0,
@@ -534,11 +519,11 @@ data_handler(int            fd,
 	goto out_unlock2;
 
     if (DEBUG_MSG) {
-	printf("incoming\n addr = ");
+	ipmi_log("incoming\n addr = ");
 	dump_hex((unsigned char *) &ipaddrd, from_len);
-	printf("\n data =\n  ");
+	ipmi_log("\n data =\n  ");
 	dump_hex(data, len);
-	printf("\n");
+	ipmi_log("\n");
     }
 
     /* Make sure the source IP matches what we expect the other end to
@@ -547,26 +532,18 @@ data_handler(int            fd,
     if ((ipaddr->sin_port != lan->addr.sin_port)
 	|| (ipaddr->sin_addr.s_addr != lan->addr.sin_addr.s_addr))
 	goto out_unlock2;
-
     /* Validate the length first, so we know that all the data in the
        buffer we will deal with is valid. */
     if (len < 21) /* Minimum size of an IPMI msg. */
 	goto out_unlock2;
-    if (data[4] == 0) {
-	/* No authentication. */
-	if (len < (data[13] + 14))
-	    /* Not enough data was supplied, reject the message. */
-	    goto out_unlock2;
-	data_len = data[13];
-    } else {
-	if (len < 37) /* Minimum size of an authenticated IPMI msg. */
-	    goto out_unlock2;
-	/* authcode in message, add 16 to the above checks. */
-	if (len < (data[29] + 30))
-	    /* Not enough data was supplied, reject the message. */
-	    goto out_unlock2;
-	data_len = data[29];
-    }
+
+    if (len < 37) /* Minimum size of an authenticated IPMI msg. */
+	goto out_unlock2;
+    /* authcode in message, add 16 to the above checks. */
+    if (len < (data[29] + 30))
+	/* Not enough data was supplied, reject the message. */
+	goto out_unlock2;
+    data_len = data[29];
 
     /* Validate the RMCP portion of the message. */
     if ((data[0] != 6)
@@ -586,16 +563,13 @@ data_handler(int            fd,
 	goto out_unlock2;
 
     seq = ipmi_get_uint32(data+5);
-    if (data[4] != 0) {
-	/* Validate the message's authcode.  Do this before checking
-           the session seq num so we know the data is valid. */
-	rv = auth_check(lan, sess_id, seq, data+30, data[29], data+13);
-	if (rv)
-	    goto out_unlock2;
-	tmsg = data + 30;
-    } else {
-	tmsg = data + 14;
-    }
+
+    /* Validate the message's authcode.  Do this before checking
+       the session seq num so we know the data is valid. */
+    rv = auth_check(lan, sess_id, seq, data+30, data[29], data+13);
+    if (rv)
+	goto out_unlock2;
+    tmsg = data + 30;
 
     /* Check the sequence number. */
     if ((seq - lan->inbound_seq_num) <= 8) {
@@ -662,6 +636,7 @@ data_handler(int            fd,
 
 	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si_addr->channel = 0xf;
+	si_addr->lun = 0; /* FIXME - should be tmsg[1] & 3; */
 
 	seq = tmsg[4] >> 2;
 	msg.netfn = tmsg[1] >> 2;
@@ -1198,6 +1173,80 @@ send_challenge(ipmi_con_t *ipmi, lan_data_t *lan)
     return rv;
 }
 
+static void
+auth_cap_done(ipmi_con_t   *ipmi,
+	      ipmi_addr_t  *addr,
+	      unsigned int addr_len,
+	      ipmi_msg_t   *msg,
+	      void         *rsp_data,
+	      void         *data2,
+	      void         *data3)
+{
+    lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
+    int           rv;
+
+
+    if ((msg->data[0] != 0) || (msg->data_len < 9)) {
+        if (lan->authtype != IPMI_AUTHTYPE_NONE) {
+	    ipmi_log("No authentication supported, but an authorization"
+		     " type was requested\n");
+	    if (ipmi->setup_cb)
+	        ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
+	    cleanup_con(ipmi);
+	    return;
+	}
+        /* No authentication capabilities, assume we can just message
+	   the thing directly. */
+        rv = ipmi_init_con(ipmi, addr, addr_len);
+	if (rv) {
+	    if (ipmi->setup_cb)
+	        ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
+	    cleanup_con(ipmi);
+	}
+	return;
+    }
+
+    if (!(msg->data[1] & (1 << lan->authtype))) {
+        ipmi_log("Requested authentication not supported\n");
+	if (ipmi->setup_cb)
+	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
+	cleanup_con(ipmi);
+	return;
+    }
+
+    rv = send_challenge(ipmi, lan);
+    if (rv) {
+        ipmi_log("Unable to send challenge command: 0x%x", rv);
+        if (ipmi->setup_cb)
+	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
+	cleanup_con(ipmi);
+    }
+}
+
+static int
+send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
+{
+    unsigned char                data[IPMI_MAX_MSG_LENGTH];
+    ipmi_msg_t                   msg;
+    ipmi_system_interface_addr_t addr;
+    int                          rv;
+
+    addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    addr.channel = 0xf;
+    addr.lun = 0;
+
+    data[0] = 0;
+    data[1] = lan->privilege;
+    msg.cmd = IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD;
+    msg.netfn = IPMI_APP_NETFN;
+    msg.data = data;
+    msg.data_len = 2;
+
+    rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
+			  &msg, auth_cap_done, NULL, NULL, NULL);
+    return rv;
+}
+
 int
 ipmi_lan_setup_con(struct in_addr    addr,
 		   int               port,
@@ -1305,7 +1354,7 @@ ipmi_lan_setup_con(struct in_addr    addr,
     ipmi_write_unlock();
 
     lan->retries = 0;
-    rv = send_challenge(ipmi, lan);
+    rv = send_auth_cap(ipmi, lan);
     if (rv)
 	goto out_err;
 

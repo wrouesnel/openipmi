@@ -1432,6 +1432,8 @@ setup_done(ipmi_mc_t *mc,
 
     bmc = mc;
 
+    ui_log("Completed setup for the IPMI connection\n");
+
     rv = ipmi_register_for_events(bmc, event_handler, NULL, &event_handler_id);
     if (rv)
 	leave_err(rv, "ipmi_register_for_events");

@@ -1,5 +1,6 @@
 
 #include <errno.h>
+#include <string.h>
 #include <malloc.h>
 #include "ui_keypad.h"
 

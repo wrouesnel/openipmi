@@ -596,6 +596,7 @@ no_authcode_init(unsigned char *password, ipmi_authdata_t *handle)
 static int
 no_authcode_gen(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *output)
 {
+    memset(output, 0, 16);
     return 0;
 }
 
