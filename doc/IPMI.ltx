@@ -88,8 +88,6 @@ The specification for \acs{IPMI} is \cite{ipmi-spec}.
 \acro{NMI}{Non Maskable Interrupt}
 \end{acronym}
 
-\chapter{Documents}
-
 \mainmatter
 
 \chapter{Management, Systems, and \acs{IPMI}}
@@ -1308,11 +1306,15 @@ responses always have the completion code as the first byte of the
 message data.  See chapter \ref{ipmi-commands} for more details.
 
 \subsection{\ac{SMIC}}
+\label{sec-smic}
 The \ac{SMIC} interface has been around a long time, but mostly during
 a period when \acs{IPMI} was not popular.  This is a low-performance,
 byte-at-a-time interface with no interrupt capability.
 
+TBD - describe this interface in detail
+
 \subsection{\ac{KCS}}
+\label{sec-kcs}
 The \ac{KCS} interface is currently the most popular \acs{IPMI} system
 interface.  The \ac{KCS} interface looks much like a standard PC
 keyboard interface.  It was chosen because lots of cheap hardware was
@@ -1321,11 +1323,16 @@ byte-at-a-time interface and performs poorly.  It has the capability
 for interrupts, but very few systems have working interrupt capability
 with \ac{KCS} interfaces.
 
+TBD - describe this interface in detail
+
 \subsection{\ac{BT}}
+\label{sec-bt}
 The \ac{BT} interface is the newest and best interface for \acs{IPMI}.
 Messages are sent a whole message at a time through the interface,
 thus it is a much higher performance interface than the other system
 interfaces.
+
+TBD - describe this interface in detail
 
 \subsection{The OpenIPMI Driver}
 
@@ -1731,15 +1738,655 @@ really never used.\\
 \caption{\label{channel-list}Channel Numbers}
 \end{table}
 
-\section{\acs{IPMB}}
+\section{Bridging}
 
-\ac{IPMB} provides the main channel for transferring messages around an
-\acs{IPMI} system.  It is a message bus that works somewhat like Ethernet,
-it is a CSMA (carrier-sense multiple access) system.  However, it does
-not have collision detection; so if two \ac{MC}s attempt to transmit at the
-same time, both messages will be lost.  Because of this, \ac{IPMB} does not
-scale very well; careful use needs to be made of the bandwith on the
-bus.
+\ac{IPMI} does not have any type of automatic routing.  Instead,
+commands and responses are ``bridged'' between different interfaces
+generally using a ``Send Message'' command.  So you have to know the
+route to the destination when you send the message.  Generally, this
+is not a big deal because only one level is generally bridged (eg
+system interface to \ac{IPMB}, \ac{LAN} interface to \ac{IPMB}).
+
+Note that OpenIPMI handles most of the bridging work for you.  The
+OpenIPMI address described in section \ref{openipmi-addressing} has
+address formats for routing messages to the proper places.  But
+knowing what goes on behind the scenes can be helpful, and some of
+this information is required even with OpenIPMI.
+
+\subsection{Channels}
+
+An interface has the concept of a ``channel''.  A channel is an
+indepedent communication interface.  Each \ac{LAN} interface, serial
+interface, \ac{IPMB} interface, and system interface has its own
+channel number.  Messages are bridged to specific channels.
+
+There are 16 specified channels.  Channel 0 is always the primary
+\ac{IPMB} channel.  Channels 1-7 are for general use, like for
+\ac{LAN}, secondary \ac{IPMB}, \ac{ICMB}, etc.  Channels 8-Dh are
+reserved.  Channel Fh is for the system interface.  Channel Eh is used
+for whatever the present interface.  This is useful because some
+commands take a channel as one of their fields, if you just want to
+use the current channel you can put Eh here.
+
+To discover the channels in a system, the ``Get Channel Info'' command
+shown in table \ref{get-channel-info-cmd} must be sent for each
+possible channel.
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{
+	\begin{description}
+	\item[bits 0-3] - Channel number
+	\item[bits 4-7] - reserved
+	\end{description}}
+\msgtag{Response}
+\msgitem{0}{Completion Code}
+\msgitem{1}{
+	\begin{description}
+	\item[bits 0-3] - Actual channel number (if you put Eh in the
+	  request, the real channel number is returned here)
+	\item[bits 4-7] - reserved
+	\end{description}}
+\msgitem{2}{
+	\begin{description}
+	\item[bits 0-6] - Channel medium type.  Valid values are:
+	  \begin{description}
+	  \item[00h] - reserved
+	  \item[01h] - \acs{IPMB} (\acs{I$^2$C})
+	  \item[02h] - \acs{ICMB} version 1.0
+	  \item[03h] - \acs{ICMB} version 0.9
+	  \item[04h] - 802.3 (Ethernet)
+	  \item[05h] - Async serial/modem (RS-232)
+	  \item[06h] - Other \acs{LAN}
+	  \item[07h] - PCI SMBus
+	  \item[08h] - SMBus Versions 1.0/1.1
+	  \item[09h] - SMBus Version 2.0
+	  \item[0Ah] - reserved for USB 1.x
+	  \item[0Bh] - reserved for USB 2.x
+	  \item[0Ch] - System Interface
+	  \item[60h-7Fh] - \acs{OEM}
+	  \end{description}
+	  All other values are reserved.
+	\item[bit 7] - reserved
+	\end{description}}
+\msgitem{3}{
+	\begin{description}
+	\item[bits 0-4] - Channel protocol type.  Valid values are:
+	  \begin{description}
+	  \item[00h] - reserved
+	  \item[01h] - \acs{IPMB}-1.0, used for acs{IPMB}, serial/modem
+	    basic mode, and \acs{LAN}.
+	  \item[02h] - \acs{ICMB}-1.0, see section \ref{sec-icmb}
+	  \item[03h] - reserved
+	  \item[04h] - \acs{IPMI} over SMBus
+	  \item[05h] - \acs{KCS}, see section \ref{sec-kcs}
+	  \item[06h] - \acs{SMIC}, see section \ref{sec-smic}
+	  \item[07h] - \acs{BT} from IPMI v1.0, see section \ref{sec-bt}
+	  \item[08h] - \acs{BT} from IPMI v1.5, see section \ref{sec-bt}
+	  \item[09h] - Terminal mode, see section \ref{sec-terminal-mode}
+	  \item[1Ch-1Fh] - \acs{OEM}
+	  \end{description}
+	  All other values are reserved.
+	\item[bits 5-7] - reserved
+	\end{description}}
+\msgitem{4}{This field describes session information about the channel.
+	See section \ref{sec-session-support} for details on sessions.
+	\begin{description}
+	\item[bits 0-5] - The number of sessions that have been activated
+	  on a given channel.  This is only valid if the channel has session
+	  support.
+	\item[bits 6-7] - Session support, values are:
+	  \begin{description}
+	  \item[00b] - channel does not support sessions.
+	  \item[01b] - channel is single-session. 
+	  \item[10b] - channel is multi-session.
+	  \item[11b] - channel is sessions based, but may switch
+	    between single and multiple sessions.
+	  \end{description}
+	\end{description}}
+\msgitem{5-7}{Vendor ID, used to specify the IANA number for the organization
+	the defined the protocol.  This should always be the IPMI IANA,
+	which is 7154 (decimal), or F2H, 1Bh, and 00H for these bytes.}
+\msgitem{8-9}{Auxiliary channel info.
+
+	For channel Fh, this is byte 8 is the interrupt for the system
+	interface, byte 9 is the interrupt for the event message buffer
+	interface.  Valid values are:
+	\begin{description}
+	\item[00h-0Fh] - IRQ 0-15
+	\item[10h-13h] - PCI A-D, respectively
+	\item[14h] - SMI
+	\item[15h] - SCI
+	\item[20h-5Fh] - System interrupt 0-62, respecitively
+	\item[60h] - Assigned by ACPI, SMBIOS, or a plug and play mechanism.
+	\item[FFh] - No interrupt or unspecified
+	\end{description}
+	All other values are reserved.
+
+	For \ac{OEM} channel types, this value is OEM defined. These
+	bytes are reserved for all other channel types.}
+\msgcaption{\label{get-channel-info-cmd}Get Channel Info Command,
+  NetFN App (06h), Cmd 42h}
+\end{showmsg}
+
+\subsection{Sending Bridged Message}
+
+Table \ref{send-msg-cmd} shows the format of a Send Message command.
+Note that the spec says the response can have response data for
+non-system interface channels.  However, this is not actually the
+case, response data for \acs{LAN} and serial channels is carried in a
+different manner.
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{Channel information, bits are:
+	\begin{description}
+	\item[0-4] - Channel number
+	\item[4-5] - reserved
+	\item[6-7] - tracking type.  See section \ref{sec-message-tracking}
+	  for more information.  Values are:
+	  \begin{description}
+	  \item[00b] - No tracking
+	  \item[01b] - Track request
+	  \item[10b] - Send raw.  This is a test mechanism or a mechanism
+	    used for transmitting proprietary protocols.  It is optional.
+	  \item[11b] - reserved
+	  \end{description}
+	\end{description}}
+\msgitem{1-n}{Message data.  The format depends on the channel type.  See
+	the section on the specific channel type for more information.}
+\msgtag{Response}
+\msgitem{0}{Completion code.  If transmitting on an \acs{IPMB}, SMBus, or
+	PCI management bus, the following return codes are used to inform
+	the sender of sending problems:
+	\begin{description}
+	\item[81h] - lost arbitration
+	\item[82h] - Bus Error
+	\item[83h] - NAK on Write
+	\end{description}}
+\msgcaption{\label{send-msg-cmd}Send Message Command,
+  NetFN App (06h), Cmd 34h}
+\end{showmsg}
+
+\subsection{Message Tracking}
+\label{sec-message-tracking}
+
+Message tracking is relatively simple, but difficult to understand from
+the spec.  This section should clear that up.
+
+Messages sent from the system interface to the IPMB interface do not
+have to be tracked.  Instead, the sender sets the requester (source)
+LUN to 2.  In the response, the responder will thus set the requester
+(destination) LUN to 2.  If an \ac{MC} receives a message with a destination
+LUN of 2, it will route it back to the system interface.  Simple to do and
+no state is required in the \ac{MC}.
+
+Other channels cannot do this.  They must instead rely on message
+tracking to handle the responding.  With message tracking, the \ac{MC}
+reformats the message with its own information and remembers the
+original message information.  When the response comes back, the
+\ac{MC} will restore the original information in the response.  Note
+that the sender must still format the message properly for the
+destination channel.
+
+\subsection{Receiving Asynchronous Messages on the System Interface}
+\label{sec-recv-async-msg}
+
+Asyncronous messages to the system interfaces (ones with the
+destination \ac{LUN} set to 2), both commands and responses, have no
+direct route to be sent up the system interface.  Instead, they go
+into the receive message queue and the software is informed
+through the system interface that something is in the queue.  The
+software must then fetch the message from the queue using the Get
+Message command described in table \ref{get-msg-cmd}.
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{-}{}
+\msgtag{Response}
+\msgitem{0}{Completion code}
+\msgitem{1}{Channel information, bits are:
+	\begin{description}
+	\item[0-4] - Channel number
+	\item[4-7] - Inferred privilege leel for the message.  Table
+	  \ref{ipmi-priv-levels} describes the privilege levels.
+
+	  If the message is received from a session-oriented channel,
+	  this will generally be set to the maximum privilege level of
+	  the session.
+
+	  If per-message authentication is enabled, this will be set to
+	  User privilege for unauthenticated messages.
+
+	  The privilege will be then lowered based on the privilege
+	  limit set by the Set Session Privilege Level command.
+
+	  For messages from sessionless channels, this will always
+	  be set to ``None''.
+
+	  Privilege levels are:
+	  \begin{description}
+	  \item[0] - None (unspecified)
+	  \item[1] - Callback
+	  \item[2] - User
+	  \item[3] - Operator
+	  \item[4] - Admin
+	  \item[5] - OEM
+	  \end{description}
+	\end{description}}
+\msgitem{2-n}{Message data.  The format depends on the channel type.  See
+	the section on the specific channel type for more information.}
+\msgcaption{\label{get-msg-cmd}Get Message Command,
+  NetFN App (06h), Cmd 33h}
+\end{showmsg}
+
+To know if a message is waiting in the asyncronous queue, the
+interface will generally set some flag so that the user may
+immediately know.  The software will then send a Get Message Flags
+command (table \ref{get-msg-flags}) to know find out what is up.  A
+bit will be set in the response to tell it something is in the queue.
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{-}{}
+\msgtag{Response}
+\msgitem{0}{Completion code}
+\msgitem{1}{Flags.  The bits are:
+	\begin{description}
+	\item[0] - message(s) in the receive message queue.
+	\item[1] - Event message buffer is full
+	\item[2] - reserved
+	\item[3] - Watchdog pre-timeout
+	\item[4] - reserved
+	\item[5] - OEM 0
+	\item[6] - OEM 1
+	\item[7] - OEM 2
+	\end{description}}
+\msgcaption{\label{get-msg-flags}Get Message Flags Command,
+  NetFN App (06h), Cmd 31h}
+\end{showmsg}
+
+\subsection{System Interface to \acs{IPMB} Bridging}
+
+For bridging from a system interface to \ac{IPMB}, format an \ac{IPMB}
+message as described in section \ref{sec-ipmb} and set the requester
+\ac{LUN} to 2.  Then issue a Send Message command with the \ac{IPMB}
+message as the data to the proper IPMB channel; the message will be
+routed out onto the IPMB bus.
+
+The response will come back to the \ac{MC} with the requester \ac{LUN}
+set to 2.  This will route the message back to the system interface,
+where it will be put into the receive message queue.  The
+software running on the system must receive the message from the queue
+using the Get Message command described in section \ref{sec-recv-async-msg}.
+
+The response data will be in the same \ac{IPMB} format.
+
+\subsection{\acs{LAN} to IPMB Bridging}
+
+Unfortunately, the description in the spec of the LAN protocol is very
+confusing.  An errata was introduced that, instead of clearing things
+up, added another possibile interpretation.  Four popular
+interpretations are common.  Fortunately, one piece of software can be
+written to work with three of these possibilities, and the fourth
+possibility is rather broken.  The three main possibilities are:
+
+\begin{itemize}
+\item Response comes back in the Send Message response
+\item Separate Send Message and IPMB responses
+\item Separate Send Message and Translated responses
+\end{itemize}
+
+One might also infer from the spec that you implement the receive
+message queue on the LAN interface and poll it with the Get Message
+command.  It is yet another possible interpretation, but the side
+effects of this are very bad.  This will not be discussed any more.
+
+In the examples below, a Get Device ID is encasulated in a Send
+Message and sent to IPMB address C0h.  For these examples, the RMCP
+headers and authentication information are skipped, we start directly
+with the \ac{IPMI} message.  The sent data is always the same, and is:
+
+\begin{longtable}{|l|l|p{0.7\textwidth}|}
+\hline
+\bfseries{Byte} & \bfseries{Value} & \bfseries{Description}\\
+\hline
+0 & 20h & \acs{LAN} Responder address, this is the BMC's IPMB, generally\\
+\hline
+1 & 18h & \acs{LAN} Responder \acs{LUN} in bits 0-1 (0 in this case),
+	 Send Message \acs{NetFN} in bits 2-7 (6 in this case)\\
+\hline
+2 & C8h & Checksum for the previous two bytes\\
+\hline
+3 & 81h & \acs{LAN} Requester address (this is the value for system managmenet
+	software)\\
+\hline
+4 & B8h & Requester LUN in bits 0-1 (0 in this case), Sequence number
+	in bits 2-7 (2eh in this case).  Note that the sequence number
+	is returned in the response as-is and helps differentiate the
+	messages.\\
+\hline
+5 & 34h & The command, a Send Message for \acs{NetFN} 6.\\
+\hline
+6 & 40h & The channel number in bits 0-4 (0 in this case), and message
+	tracking selection in bits 6-7 (10b in this case, message tracking
+	is on).\\
+\hline
+7 & C0h & The destination \acs{IPMB} address\\
+\hline
+8 & 18h & \acs{IPMB} Responder \acs{LUN} in bits 0-1 (0 in this case),
+	 Get Device ID \acs{NetFN} in bits 2-7 (6 in this case)\\
+\hline
+9 & 28h & Checksum for the previous two bytes\\
+\hline
+10 & 20h & Source address, the IPMB address of the BMC.\\
+\hline
+11 & BEh & Requester LUN in bits 0-1 (2 in this case, although it generally
+	doesn't matter), Sequence number in bits 2-7 (2fh in this case).\\
+\hline
+12 & 01h & The command, a Get Device Id for \acs{NetFN} 6\\
+\hline
+13 & 25h & Checksum for the IPMB message (from bytes 7-12)\\
+\hline
+14 & 49h & Checksum for the whole message\\
+\hline
+\end{longtable}
+
+If you look at this, a lot of the contents seem pretty silly.  The
+addresses in the LAN header, for instance, are pretty useless, but
+probably there for consistency.
+
+\subsubsection{Response comes back in the Send Message response}
+
+In this possibility, the send message response contains the message
+data response.  This seems to be implied in the text of the Send
+Message command, and is certainly the most efficient way to handle
+this.  However, it does not seem to be the accepted way.
+
+As an example, the following shows the response to the Get Device ID
+previously sent:
+
+\begin{longtable}{|l|l|p{0.7\textwidth}|}
+\hline
+\bfseries{Byte} & \bfseries{Value} & \bfseries{Description}\\
+\hline
+0 & 81 & Requester Address\\
+\hline
+1 & 1c & \acs{LAN} Requester \acs{LUN} in bits 0-1 (0 in this case),
+	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+\hline
+2 & 63 & Checksum for the previous two bytes\\
+\hline
+3 & 20 & Responder Address\\
+\hline
+4 & b8 & Responder LUN in bits 0-1 (0 in this case), Sequence number
+	in bits 2-7 (2eh in this case).\\
+\hline
+5 & 34 & The command, a Send Message response in this case.\\
+\hline
+6 & 00 & Completion code\\
+\hline
+7 & 20 & IPMB Destination address (the BMC's IPMB address)\\
+\hline
+8 & 1E & \acs{IPMB} Requester \acs{LUN} in bits 0-1 (2 in this case),
+	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+\hline
+9 & C2 & Checksum for the previous two bytes\\
+\hline
+10 & C0 & Responder IPMB address\\
+\hline
+11 & BC & Requester LUN in bits 0-1 (0 in this case), Sequence number
+	in bits 2-7 (2fh in this case).\\
+\hline
+12 & 01 & Command, a Get Device ID response\\
+\hline
+13 & 00 & message data\\
+\hline
+14 & 00 & message data\\
+\hline
+15 & 00 & message data\\
+\hline
+16 & 01 & message data\\
+\hline
+17 & 05 & message data\\
+\hline
+18 & 51 & message data\\
+\hline
+19 & 29 & message data\\
+\hline
+20 & 57 & message data\\
+\hline
+21 & 01 & message data\\
+\hline
+22 & 00 & message data\\
+\hline
+23 & 00 & message data\\
+\hline
+24 & 09 & message data\\
+\hline
+25 & 01 & message data\\
+\hline
+26 & 01 & message data\\
+\hline
+27 & 00 & message data\\
+\hline
+28 & 00 & message data\\
+\hline
+29 & 94 & Checksum for the entire message\\
+\hline
+\end{longtable}
+
+That's it, the Send Message response contains all the data.
+
+\subsubsection{Separate Send Message and IPMB responses}
+
+In this possibility, a Send Message response comes back with no data
+and the Send Message header data in the response header, then a
+separate message comes back with the IPMB parameters in the header.
+For instance, in the first message the source is the \ac{BMC}, in the
+second message the source is the IPMB sender.
+
+The following is the first message, the Send Message response, from
+this format:
+
+\begin{longtable}{|l|l|p{0.7\textwidth}|}
+\hline
+\bfseries{Byte} & \bfseries{Value} & \bfseries{Description}\\
+\hline
+0 & 81 & Requester Address\\
+\hline
+1 & 1c & \acs{LAN} Requester \acs{LUN} in bits 0-1 (0 in this case),
+	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+\hline
+2 & 63 & Checksum for the previous two bytes\\
+\hline
+3 & 20 & Responder Address\\
+\hline
+4 & b8 & Responder LUN in bits 0-1 (0 in this case), Sequence number
+	in bits 2-7 (2eh in this case).\\
+\hline
+5 & 34 & The command, a Send Message response in this case.\\
+\hline
+6 & 00 & Completion code\\
+\hline
+7 & f4 & Checksum for the whole message.\\
+\hline
+\end{longtable}
+
+The following is the second message, the IPMB response:
+
+\begin{longtable}{|l|l|p{0.7\textwidth}|}
+\hline
+\bfseries{Byte} & \bfseries{Value} & \bfseries{Description}\\
+\hline
+0 & 20 & IPMB Destination address (the BMC's IPMB address)\\
+\hline
+1 & 1E & \acs{IPMB} Requester \acs{LUN} in bits 0-1 (2 in this case),
+	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+\hline
+2 & C2 & Checksum for the previous two bytes\\
+\hline
+3 & C0 & Responder IPMB address\\
+\hline
+4 & BC & Requester LUN in bits 0-1 (0 in this case), Sequence number
+	in bits 2-7 (2fh in this case).\\
+\hline
+5 & 01 & Command, a Get Device ID response\\
+\hline
+6 & 00 & message data\\
+\hline
+7 & 00 & message data\\
+\hline
+8 & 00 & message data\\
+\hline
+9 & 01 & message data\\
+\hline
+10 & 05 & message data\\
+\hline
+11 & 51 & message data\\
+\hline
+12 & 29 & message data\\
+\hline
+13 & 57 & message data\\
+\hline
+14 & 01 & message data\\
+\hline
+15 & 00 & message data\\
+\hline
+16 & 00 & message data\\
+\hline
+17 & 09 & message data\\
+\hline
+18 & 01 & message data\\
+\hline
+19 & 01 & message data\\
+\hline
+20 & 00 & message data\\
+\hline
+21 & 00 & message data\\
+\hline
+22 & a0 & Checksum for the whole message\\
+\hline
+\end{longtable}
+
+Notice that in this second response, the destination address, LUNs,
+sequence numbers, etc. are from the IPMB message, not from the
+original LAN message.
+
+\subsubsection{Separate Send Message and Translated responses}
+
+In this possibility, a Send Message response comes back with no data,
+then a separate message comes back with the data, but the data in the
+second message has the same header information as the first, with a
+different command.  This could be inferred from the errata, but it
+makes things more difficult to track.  For instance, if you
+encapsulated a Send Message command inside a Send Message, the second
+response would have the same command number as the first, so it would
+be harder to tell the first response from the second.
+
+The first response for the Get Device ID would be:
+
+\begin{longtable}{|l|l|p{0.7\textwidth}|}
+\hline
+\bfseries{Byte} & \bfseries{Value} & \bfseries{Description}\\
+\hline
+0 & 81 & Requester Address\\
+\hline
+1 & 1c & \acs{LAN} Requester \acs{LUN} in bits 0-1 (0 in this case),
+	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+\hline
+2 & 63 & Checksum for the previous two bytes\\
+\hline
+3 & 20 & Responder Address\\
+\hline
+4 & b8 & Responder LUN in bits 0-1 (0 in this case), Sequence number
+	in bits 2-7 (2eh in this case).\\
+\hline
+5 & 34 & The command, a Send Message response in this case.\\
+\hline
+6 & 00 & Completion code\\
+\hline
+7 & f4 & Checksum for the whole message.\\
+\hline
+\end{longtable}
+
+This is the same as the previous example.  However, the second
+response would be:
+
+\begin{longtable}{|l|l|p{0.7\textwidth}|}
+\hline
+\bfseries{Byte} & \bfseries{Value} & \bfseries{Description}\\
+\hline
+0 & 81 & Requester Address\\
+\hline
+1 & 1c & \acs{LAN} Requester \acs{LUN} in bits 0-1 (0 in this case),
+	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+\hline
+2 & 63 & Checksum for the previous two bytes\\
+\hline
+3 & 20 & Responder Address\\
+\hline
+4 & b8 & Responder LUN in bits 0-1 (0 in this case), Sequence number
+	in bits 2-7 (2eh in this case).\\
+\hline
+5 & 01 & Command, a Get Device ID response\\
+\hline
+6 & 00 & IPMB completion code\\
+\hline
+7 & 00 & message data\\
+\hline
+8 & 00 & message data\\
+\hline
+9 & 01 & message data\\
+\hline
+10 & 05 & message data\\
+\hline
+11 & 51 & message data\\
+\hline
+12 & 29 & message data\\
+\hline
+13 & 57 & message data\\
+\hline
+14 & 01 & message data\\
+\hline
+15 & 00 & message data\\
+\hline
+16 & 00 & message data\\
+\hline
+17 & 09 & message data\\
+\hline
+18 & 01 & message data\\
+\hline
+19 & 01 & message data\\
+\hline
+20 & 00 & message data\\
+\hline
+21 & 00 & message data\\
+\hline
+22 & 44 & Checksum for the whole message\\
+\hline
+\end{longtable}
+
+Notice that the header information, except for the command, is from
+the LAN header, not from the IPMB header.
+
+\subsection{System Interface to LAN}
+
+TBD - write this, use the formats described in the send/receive
+message commands.
+
+\section{\acs{IPMB}}
+\label{sec-ipmb}
+
+\ac{IPMB} provides the main channel for transferring messages around
+an \acs{IPMI} system.  It is a message bus that works somewhat like
+Ethernet, it is a CSMA (carrier-sense multiple access) system.  It
+does check to see if another sender is transmitting before sending,
+and will wait for that sender to complete before starting to transmit.
+However, it does not have collision detection; so if two \ac{MC}s
+attempt to transmit at the same time, both messages will be lost.
+Because of this, \ac{IPMB} does not scale very well; careful use needs
+to be made of the bandwith on the bus.
 
 The format of an \ac{IPMB} message of $n$ bytes is:
 
@@ -1756,6 +2403,14 @@ The format of an \ac{IPMB} message of $n$ bytes is:
 \msgitem{6 .. n-2}{Message Contents}
 \msgitem{n-1}{Checksum for the whole message}
 \end{showmsg}
+
+Note that for commands, the ``destination \acs{LUN}'' will be called
+the ``responder \acs{LUN}'' and the ``source \acs{LUN}'' will be
+called the ``requester \acs{LUN}.''  For responses, the ``destination
+\acs{LUN}'' will be called the ``requester \acs{LUN}'' and the
+``source \acs{LUN}'' will be called the ``responder \acs{LUN}.''
+\ac{IPMB} is a peer-to-peer protocol, but there is a strong
+master-slave sentiment in \ac{IPMI}.
 
 Unfortunately, \acs{IPMI} does not have any type of routing handling or
 transparency of messages.  To send a message out on the \ac{IPMB}, you
@@ -1790,6 +2445,17 @@ selecting the sequence numbers, formatting the messages, tracking and
 decoding the response, and resending messages.
 
 \section{ICMB}
+\label{sec-icmb}
+
+TBD - write this.
+
+\section{SMBus}
+\label{sec-smbus}
+
+TBD - write this.
+
+\section{Session Support}
+\label{sec-session-support}
 
 TBD - write this.
 
@@ -2132,6 +2798,10 @@ OEM & 192+ &
 
 TBD - write this, include command, talk about config table entries.
 
+\subsection{\acs{LAN} Messaging}
+
+TBD - write this, describe the formatting of LAN messages
+
 \subsection{OpenIPMI \acs{LAN} Configuration}
 OpenIPMI has some support for handling the \acs{LAN} configuration.
 This is defined in the \verb=ipmi_lanparm.h= include file; it has all
@@ -2266,7 +2936,13 @@ defined in section \ref{openipmi-generic-interface}.
 
 \section{Serial}
 
+TBD - OpenIPMI does not support serial interfaces, but this needs to be
+written someday.
+
 \subsection{Direct Serial}
+
+\subsection{Terminal Mode}
+\label{sec-terminal-mode}
 
 \subsection{Serial over \acs{PPP}}
 
@@ -3145,7 +3821,8 @@ struct ipmi_addr
 
 The \verb=addr_type= and \verb=channel= are common to all OpenIPMI
 addresses.  You have to look at the \verb=addr_type= to determine the
-type of address being used and cast it to the proper address.
+type of address being used and cast it to the proper address.  The
+specific messages are overlays on this structure.
 
 A system interface address is used to route the message to the local
 management controller.  It is:
@@ -3185,6 +3862,28 @@ a broadcast \ac{IPMB} can be sent with this.  Note that if you send a
 broadcast \ac{IPMB}, you will receive a normal \ac{IPMB} address in the
 response.
 
+A \acs{LAN} to system interface address is:
+
+\begin{verbatim}
+#define IPMI_LAN_ADDR_TYPE ...
+struct ipmi_lan_addr
+{
+	int           addr_type;
+	short         channel;
+	unsigned char privilege;
+	unsigned char session_handle;
+	unsigned char remote_SWID;
+	unsigned char local_SWID;
+	unsigned char lun;
+};
+\end{verbatim}
+
+This deviates a little from the \ac{IPMI} spec.  In the spec, the
+SWIDs used are the requester SWID and responder SWID.  For this
+message, the remote SWID is other end and the local SWID is this end.
+This way, there is no confusion when sending and receiving messages,
+and no special handling of the SWIDs needs to be done.
+
 %---------------------------------------------------------------------
 \chapter{\acs{IPMI} Commands}
 \label{ipmi-commands}
@@ -3207,12 +3906,176 @@ responses to sensor command (\ac{NetFN} 04h) will use NetFN 05h.
 Table \ref{netfn-codes} shows the \ac{NetFN} values.  All commands
 have even \ac{NetFN}s, and all responses have odd \ac{NetFN}s.
 
-\begin{longtable}{|l|p{0.8\textwidth}
+\begin{longtable}{|l|p{0.15\textwidth}|p{0.6\textwidth}|}
 \caption{\acs{NetFN} codes\label{netfn-codes}}
 \\ \hline
-\bfseries{NetFN} & \bfseries{Description}\\
+\bfseries{NetFN} & \bfseries{Name} & \bfseries{Description}\\
+\hline
+00h, 01h & Chassis & Common chassis control and status functions.\\
+\hline
+02h, 03h & Bridge & Messaging for bridging to another bus, generally
+	ICMB.\\
+\hline
+04h, 05h & Sensor/Event & Handling of sensors and events.\\
+\hline
+06h, 07h & Application & General control and status of a connection
+	and basic operations.  This is the ``catch all'' where things
+	that don't really fit elsewhere fall, too.\\
+\hline
+08h, 09h & Firmware & Used for formware checking and upgrade, generally.
+	The messaging for this is completely proprietary and not defined
+	by the spec.\\
+\hline
+0Ah, 0Bh & Storage & Non-volatile storage handling, the \ac{SDR}s and
+	\ac{SEL}.\\
+\hline
+0Ch, 0Dh & Tranport & Configuration of the \acs{LAN} and serial interfaces.\\
+\hline
+0Eh-2Bh & Reserved & \\
+\hline
+2Ch, 2Dh & Group Extensions & A way for external groups to define their
+	own extensions without conflicting.  The first byte of the
+	command and second byte of the response are a field that
+	identifies the entity defining the messages; these bytes are, in
+	effect, an extension of the \ac{NetFN}.  The external groups
+	are free to define the message outside those bounds.  Current
+	defined external groups are:
+	\begin{description}
+	\item[00h] CompactPCI
+	\item[01h] DMTF Pre-OS Working Group ASF Specification
+	\end{description}
+	All other values are reserved.\\
+\hline
+2Eh, 2Fh & OEM/Group & Basically more group extensions, except that the
+	first three bytes (bytes 0-2) of commands and second three bytes
+	(bytes 1-3) of responses are the IANA enterprise number.  The
+	owner of the IANA enterprise number is free to define these
+	values any way they like.\\
+\hline
+30h-3Fh & OEM & OEMs are free to use these messages any way they like.\\
 \hline
 \end{longtable}
+
+Every response has a one byte error code that is always the first byte
+of the message.  There are a number of error code.  Unfortunately, the
+error responses returned in a response are not bounded per command;
+the implementor is free to return pretty much anything it likes as an
+error response.  Some commands define explicit error return code for
+some situations, but not generally.  Table \ref{error-codes} shows the
+error codes in IPMI.
+
+\begin{longtable}{|l|p{0.15\textwidth}|p{0.6\textwidth}|}
+\caption{\acs{Error} codes\label{error-codes}}
+\\ \hline
+\bfseries{Error} & \bfseries{Name} & \bfseries{Description}\\
+\hline
+00h & & No error, command completed normally\\
+\hline
+01h-7Eh & & OEM error codes.  Implementors may use these error codes for
+	their own commands if a standard error code does not apply.\\
+\hline
+7Fh & & reserved\\
+\hline
+80h-BEh & & Command-specific error codes.  Some commands have specific
+	errors they return that only apply to that command.  These
+	are defined by the command.\\
+\hline
+BFh & & reserved\\
+\hline
+C0h & Node Busy & The command could not complete because command processing
+	resources on the \ac{MC} are temporarily unavailable.\\
+\hline
+C1h & Invalid Command & The \ac{MC} did not support the given \ac{NetFN}
+	and command.\\
+\hline
+C2h & Invalid Command for \acs{LUN} & The given command was not supported
+	on the \ac{LUN} it was sent to.\\
+\hline
+C3h & Timeout & A timeout occurred while processing the command.\\
+\hline
+C4h & Out of Space & There was not enough storage space to perform the
+	given command.\\
+\hline
+C5h & Reservation Invalid & This is for commands that require reservations
+	(like \ac{SEL} and \ac{SDR} commands).  This means the reservation
+	number given was invalid or the reservation was lost.\\
+\hline
+C6h & Data Truncated & The request data was truncated (it is unknown what
+	this means).\\
+\hline
+C7h & Command Length Invalid & The received command was the wrong length
+	for the command.\\
+\hline
+C8h & Command Field Too Long & A field in a command was too long for the
+	given command.\\
+\hline
+C9h & Parameter Out of Range & One or more fields in a command were outside the
+	range of allowed values.  According to the spec, ``This is different
+	from the 'Invalid data field' (CCh) code in that it indicates that
+	the erroneous field(s) has a contiguous range of possible values.''
+	The meaning of that enigmatic statement is unknown.\\
+\hline
+CAh & Too Many Requested Bytes & A request was made for some data, but the
+	requested number of bytes was either beyond the end of the data or
+	too long to fit into the return response.\\
+\hline
+CBh & Invalid Object & The requested sensor, record, or data was not present.
+	The command is supported, but the specific object asked for does
+	not exist.\\
+\hline
+CCh & Invalid Data Field & An invalid data field was in the request.  See
+	error C9h for more details.\\
+\hline
+CDh & Command Invalid for Object & The specific sensor, record, or data
+	does not support the given command.\\
+\hline
+CEh & No Response & The command response could not be provided.  The meaning
+	of this is unknown.\\
+\hline
+CFh & Duplicate Request & A duplicate request was received and ignored.
+	The spec says ``This completion code is for devices which cannot
+	return the response that was returned for the original instance of
+	the request.  Such devices should provide separate commands that
+	allow the completion status of the original request to be determined.
+	An Event Reciever does not use this completion code, but returns
+	the 00h completion code in response to (valid) duplicate requests.''
+	The meaning of this statement is unknown.  However, in general IPMI
+	should be stateless because reponses can be lost and commands
+	retransmitted.  Commands that have intermediate state need to be
+	handled very carefully (and there are none in the main spec).\\
+\hline
+D0h & SDR Respository Being Updated & The SDR repository is currently
+	in update mode so the given command could not be executed.\\
+\hline
+D1h & Firmware Being Updated & The given command could not be executed
+	because firmware on the system is being updated.\\
+\hline
+D2h & \ac{BMC} Initializing & The given command could not be executed because
+	the \ac{BMC} (or probably any \ac{MC}) is currently initializing.\\
+\hline
+D3h & Destination Unavailable & An \ac{MC} could not deliver the command
+	to the given destination.  For instance, if you send a ``Send Message''
+	command to a channel that is not active, it may return this.\\
+\hline
+D4h & Insufficient Privilege & The user does not have sufficient privilege
+	to execute the command.\\
+\hline
+D5h & Invalid State & The given command cannot be supported in the present
+	state.\\
+\hline
+D6h & Subfunction Disabled & The given command cannot be executed because
+	the subfunction required has been disabled.\\
+\hline
+D7h-FEh &  & reserved\\
+\hline
+FFh & Unspecified & Some error occurred, but the true error could not be
+	determined.\\
+\hline
+\end{longtable}
+
+The actual mechanics of sending a message depend on the interface, see
+the interface sections in chapter \ref{ipmi-interfaces} for the
+details of sending over specific interfaces.
 
 \section{Sending Commands in OpenIPMI}
 
