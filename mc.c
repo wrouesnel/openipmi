@@ -49,10 +49,10 @@
 #include "ilist.h"
 #include "opq.h"
 
-/* Rescan the bus for MCs every 10 minutes */
+/* Rescan the bus for MCs every 10 minutes by default. */
 #define IPMI_RESCAN_BUS_INTERVAL 600
 
-/* Re-query the SEL every 10 seconds. */
+/* Re-query the SEL every 10 seconds by default. */
 #define IPMI_SEL_QUERY_INTERVAL 10
 
 /* This is the number of device ID queries that an MC must not respond
@@ -144,10 +144,12 @@ typedef struct ipmi_bmc_s
     ipmi_sel_info_t *sel;
 
     /* Timer for rescanning the bus periodically. */
+    unsigned int          bus_scan_interval; /* seconds between scans */
     os_hnd_timer_id_t     *bus_scan_timer;
     bmc_rescan_bus_info_t *bus_scan_timer_info;
 
     /* Timer for rescanning the sel periodically. */
+    unsigned int      sel_scan_interval; /* seconds between scans */
     os_hnd_timer_id_t *sel_timer;
     bmc_reread_info_t *sel_timer_info;
 
@@ -255,6 +257,38 @@ ipmi_mc_init(void)
     mc_initialized = 1;
 
     return 0;
+}
+
+void
+ipmi_bmc_set_sel_rescan_time(ipmi_mc_t *bmc, unsigned int seconds)
+{
+    CHECK_MC_LOCK(bmc);
+
+    bmc->bmc->sel_scan_interval = seconds;
+}
+
+unsigned int
+ipmi_bmc_get_sel_rescan_time(ipmi_mc_t *bmc)
+{
+    CHECK_MC_LOCK(bmc);
+
+    return bmc->bmc->sel_scan_interval;
+}
+
+void
+ipmi_bmc_set_ipmb_rescan_time(ipmi_mc_t *bmc, unsigned int seconds)
+{
+    CHECK_MC_LOCK(bmc);
+
+    bmc->bmc->bus_scan_interval = seconds;
+}
+
+unsigned int
+ipmi_bmc_get_ipmb_rescan_time(ipmi_mc_t *bmc)
+{
+    CHECK_MC_LOCK(bmc);
+
+    return bmc->bmc->bus_scan_interval;
 }
 
 int
@@ -1345,7 +1379,7 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
 	return;
     }
 
-    timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
+    timeout.tv_sec = bmc->bmc->sel_scan_interval;
     timeout.tv_usec = 0;
     bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
 					bmc->bmc->sel_timer,
@@ -1381,7 +1415,7 @@ start_SEL_timer(ipmi_mc_t *mc)
     struct timeval timeout;
     int            rv;
 
-    timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
+    timeout.tv_sec = mc->bmc->sel_scan_interval;
     timeout.tv_usec = 0;
     rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
 					    mc->bmc->sel_timer,
@@ -1751,7 +1785,7 @@ bmc_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 	ipmi_unlock(bmc->bmc->mc_list_lock);
     }
 
-    timeout.tv_sec = IPMI_RESCAN_BUS_INTERVAL;
+    timeout.tv_sec = bmc->bmc->bus_scan_interval;
     timeout.tv_usec = 0;
     bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
 					id,
@@ -1798,7 +1832,7 @@ set_operational(ipmi_mc_t *mc)
     else {
 	info->bmc = mc;
 	info->cancelled = 0;
-        timeout.tv_sec = IPMI_RESCAN_BUS_INTERVAL;
+        timeout.tv_sec = mc->bmc->bus_scan_interval;
         timeout.tv_usec = 0;
         rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd,
 						&(mc->bmc->bus_scan_timer));
@@ -2094,6 +2128,10 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->bmc->mc_list_lock = NULL;
     mc->bmc->entities_lock = NULL;
     mc->bmc->event_handlers_lock = NULL;
+
+    /* Set the default timer intervals. */
+    mc->bmc->sel_scan_interval = IPMI_SEL_QUERY_INTERVAL;
+    mc->bmc->bus_scan_interval = IPMI_RESCAN_BUS_INTERVAL;
 
     rv = ipmi_create_lock(mc, &mc->bmc->mc_list_lock);
     if (rv)

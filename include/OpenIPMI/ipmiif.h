@@ -139,6 +139,25 @@ int ipmi_bmc_add_con_fail_handler(ipmi_mc_t           *bmc,
 void ipmi_bmc_remove_con_fail_handler(ipmi_mc_t           *bmc,
 				      ipmi_bmc_con_fail_t *id);
 
+/* The BMC has two timers, one for the SEL rescan interval and one for
+   the IPMB bus rescan interval. */
+
+/* The SEL rescan timer is the time between when the SEL will be
+   checked for new events.  This timer is in seconds, and will
+   currently default to 10 seconds.  You need to set this depending on
+   how fast you need to know if events have come in. */
+void ipmi_bmc_set_sel_rescan_time(ipmi_mc_t *bmc, unsigned int seconds);
+unsigned int ipmi_bmc_get_sel_rescan_time(ipmi_mc_t *bmc);
+
+/* The IPMB rescan timer is the time between scans of the IPMB bus to
+   see if new MCs have appeared on the bus.  The timer is in seconds,
+   and defaults to 600 seconds (10 minutes).  The setting of this
+   timer depends on how fast you need to know if new devices have
+   appeared, and if your system has proprietary extensions to detect
+   insertion of devices more quickly.  */
+void ipmi_bmc_set_ipmb_rescan_time(ipmi_mc_t *bmc, unsigned int seconds);
+unsigned int ipmi_bmc_get_ipmb_rescan_time(ipmi_mc_t *bmc);
+
 /* Events come in this format. */
 typedef void (*ipmi_event_handler_t)(ipmi_mc_t    *bmc,
 				     ipmi_event_t *event,

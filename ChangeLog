@@ -1,4 +1,9 @@
 
+2003-01-29 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Added a mechanism for changing the SEL rescan timers and
+	the bus rescan timers.
+
 2003-01-28 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Fixed problems with the previous va_arg problem.
