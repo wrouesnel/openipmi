@@ -74,6 +74,8 @@ struct ipmi_sensor_s
 				 this is stored.  This will be -1 if
 				 it does not have a source index (ie
 				 it's a non-standard sensor) */
+    ipmi_sensor_t **source_array; /* This is the source array where
+                                     the sensor is stored. */
 
     int           destroyed;
 
@@ -553,6 +555,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     sensor->lun = 4;
     sensor->num = num;
     sensor->source_idx = -1;
+    sensor->source_array = NULL;
     sensors->sensors_by_idx[4][num] = sensor;
     sensor->entity_id = ipmi_entity_get_entity_id(ent);
     sensor->entity_instance = ipmi_entity_get_entity_instance(ent);
@@ -569,8 +572,6 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 {
     ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(sensor->mc);
     ipmi_mc_t          *bmc = ipmi_mc_get_bmc(sensor->mc);
-    ipmi_sensor_t      **sdr_sensors;
-    unsigned int       count;
     ipmi_entity_info_t *ents = ipmi_mc_get_entities(bmc);
     ipmi_entity_t      *ent;
     int                rv;
@@ -578,16 +579,8 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
     if (sensor != sensors->sensors_by_idx[sensor->lun][sensor->num])
 	return EINVAL;
 
-    if (sensor->source_idx >= 0) {
-	ipmi_mc_get_sdr_sensors(ipmi_mc_get_bmc(sensor->mc),
-				sensor->source_mc,
-				&sdr_sensors,
-				&count);
-	if (sdr_sensors[sensor->source_idx] != sensor)
-	    return EINVAL;
-
-	sdr_sensors[sensor->source_idx] = NULL;
-    }
+    if (sensor->source_array)
+	sensor->source_array[sensor->source_idx] = NULL;
 
     rv = ipmi_entity_find(ents,
 			  bmc,
@@ -717,6 +710,7 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
 	    goto out_err;
 	s[p]->source_mc = source_mc;
 	s[p]->source_idx = p;
+	s[p]->source_array = s;
 	s[p]->owner = sdr.data[0];
 	s[p]->channel = sdr.data[1] >> 4;
 	s[p]->lun = sdr.data[1] & 0x03;
@@ -1118,8 +1112,6 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 	}
     }
 
-    /* FIXME - find and report duplicate sensors numbers/luns. */
-
     /* After this point, the operation cannot fail. */
 
     ipmi_mc_get_sdr_sensors(bmc, source_mc, &old_sdr_sensors, &old_count);
@@ -1138,16 +1130,30 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 		ipmi_sensor_t *osensor
 		    = sensors->sensors_by_idx[nsensor->lun][nsensor->num];
 
+		if (osensor->source_array == sdr_sensors) {
+		    /* It's from the same SDR repository, log an error
+                       and continue to delete the first one. */
+		    ipmi_log(IPMI_LOG_WARNING,
+			     "Sensor 0x%x is the same as sensor 0x%x in the"
+			     " repository", 
+			     osensor->source_idx,
+			     nsensor->source_idx);
+		}
+
+		/* Delete the sensor from the source array it came
+                   from. */
+		if (osensor->source_array)
+		    osensor->source_array[osensor->source_idx] = NULL;
+
 		if (cmp_sensor(nsensor, osensor)) {
 		    /* They compare, prefer to keep the old data. */
 		    ipmi_mem_free(nsensor);
 		    sdr_sensors[i] = osensor;
-		    old_sdr_sensors[osensor->source_idx] = NULL;
 		    osensor->source_idx = i;
+		    osensor->source_array = sdr_sensors;
 		} else {
 		    /* Destroy the old sensor, add the new one. */
 		    handle_deleted_sensor(bmc, osensor);
-		    old_sdr_sensors[osensor->source_idx] = NULL;
 		    ipmi_mem_free(osensor);
 		    sensors->sensors_by_idx[nsensor->lun][nsensor->num]
 			= nsensor;

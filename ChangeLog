@@ -1,6 +1,16 @@
 
 2003-02-24 Corey Minyard <cminyard@mvista.com>
 
+	* sensor.c: Handle the same sensor received multiple times from
+	the same SDR.  This actually moves the sdr_sensors source array
+	into the sensor itself so it can be deleted regardless of where it
+	came from.
+
+	* sdr.c: The Get Device SDR Info command is optional (even if the
+	device has device SDRs, for some strange reason), so default the
+	information if it's not implemented but the device supports device
+	SDRs.
+
 	* mc.c: Ignore device SDRs if we get an error back from querying
 	them.
 

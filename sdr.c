@@ -83,7 +83,7 @@ struct ipmi_sdr_info_s
     unsigned int supports_reserve_sdr : 1;
     unsigned int supports_get_sdr_repository_allocation : 1;
 
-    /* Information from the GET DEVICDE SDR INFO command, sensor mode
+    /* Information from the GET DEVICE SDR INFO command, sensor mode
        only. */
     unsigned int dynamic_population : 1;
     char lun_has_sensors[4];
@@ -671,13 +671,27 @@ handle_sdr_info(ipmi_mc_t  *mc,
     }
 	
     if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI Error getting SDR info: %x", rsp->data[0]);
-	fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
-	goto out;
-    }
+	if (sdrs->sensor) {
+	    /* The device doesn't support the get device SDR info
+               command, so just assume some defaults. */
+	    sdrs->working_num_sdrs = 256;
+	    sdrs->dynamic_population = 0;
+	    sdrs->supports_reserve_sdr = 0;
 
-    if (sdrs->sensor) {
+	    (sdrs->lun_has_sensors)[0] = 1;
+	    (sdrs->lun_has_sensors)[1] = 0;
+	    (sdrs->lun_has_sensors)[2] = 0;
+	    (sdrs->lun_has_sensors)[3] = 0;
+
+	    add_timestamp = 0;
+	    erase_timestamp = 0;
+	} else {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "IPMI Error getting SDR info: %x", rsp->data[0]);
+	    fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	    goto out;
+	}
+    } else  if (sdrs->sensor) {
 	if (rsp->data_len < 3) {
 	    ipmi_log(IPMI_LOG_ERR_INFO, "SDR info is not long enough");
 	    fetch_complete(sdrs, EINVAL);
@@ -759,7 +773,8 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    sdrs->working_sdrs = ipmi_mem_alloc(sizeof(ipmi_sdr_t) * sdrs->working_num_sdrs);
+    sdrs->working_sdrs = ipmi_mem_alloc(sizeof(ipmi_sdr_t)
+					* sdrs->working_num_sdrs);
     if (!sdrs->working_sdrs) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Could not allocate working SDR information");

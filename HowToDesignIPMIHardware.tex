@@ -70,9 +70,10 @@ when buttons are pressed.  Slot sensor can detect when power is
 applied to a slot and when the user requests that the device be
 removed from the slot.
 
-Presense sensors are one very important type of discrete sensor.  If a
-device can be removed, you should have a presence sensor for it.  That
-way, it's easy and reliable to detect if the device is present or not.
+Entity presense sensors are one very important type of discrete
+sensor.  If an entity can be removed, you should have a presence
+sensor for it.  That way, it's easy and reliable to detect if the
+device is present or not.
 
 
 Everything through IPMI
@@ -218,13 +219,17 @@ nice if the sensors on the board itself could use the same entity ID
 and instance.  Sure, you can define an entity association record to
 show the containment, but that's kind of a pain.
 
-Watchdog running from startup.
+The watchdog timer should be able to run from startup.  That way, if
+the OS hangs before getting to setting up the watchdog timer, the
+system will still be reset.
 
-IPMI LAN system auto-discovery.
+There should be some way to auto-discover IPMI LAN systems.  Some kind
+of broadcast should periodically be done, and there should be some
+type of broadcast response.
 
 
-Multi-access to the same bus
-----------------------------
+Multi-access to the same bus (fault-tolerant IPMI)
+--------------------------------------------------
 
 In blade-oriented systems, some may want multiple devices to be able
 to act as the BMC in the system, for fault-tolerance reasons.  You can
@@ -251,7 +256,7 @@ It's important to remember that the system will generally have
 multiple external management systems talking to it.  It makes things a
 lot less complicated if the management systems do not have to
 coordinate information between themselves.  They may not even be able
-to do this.
+to do this because they have independent outputs or purposes.
 
 Some systems have BMCs on a normal card in the system.  The management
 system (or perhaps some proxy) runs on the card.  Several cards may be
