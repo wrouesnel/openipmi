@@ -275,6 +275,8 @@ main(int argc, const char *argv[])
 	    full_screen = 0;
 	} else if (strcmp(arg, "-dmem") == 0) {
 	    DEBUG_MALLOC_ENABLE();
+	} else if (strcmp(arg, "-drawmsg") == 0) {
+	    DEBUG_RAWMSG_ENABLE();
 	} else if (strcmp(arg, "-dmsg") == 0) {
 	    DEBUG_MSG_ENABLE();
 #ifdef HAVE_UCDSNMP
