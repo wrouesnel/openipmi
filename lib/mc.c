@@ -583,6 +583,69 @@ _ipmi_mc_sel_entries_used(ipmi_mc_t *mc)
 }
 
 int
+_ipmi_mc_sel_get_major_version(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+
+    ipmi_sel_get_major_version(mc->sel, &val);
+    return val;
+}
+
+int 
+_ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+
+    ipmi_sel_get_minor_version(mc->sel, &val);
+    return val;
+}
+
+int 
+_ipmi_mc_sel_get_overflow(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+    
+    ipmi_sel_get_overflow(mc->sel, &val);
+    return val;
+}
+
+int
+_ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+    
+    ipmi_sel_get_supports_delete_sel(mc->sel, &val);
+    return val;
+}
+
+int
+_ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+
+    ipmi_sel_get_supports_partial_add_sel(mc->sel, &val);
+    return val;
+}
+
+int
+_ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+
+    ipmi_sel_get_supports_reserve_sel(mc->sel, &val);
+    return val;
+}
+
+int 
+_ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+
+    ipmi_sel_get_supports_get_sel_allocation(mc->sel, &val);
+    return val;
+}
+
+int
 ipmi_mc_set_oem_event_handler(ipmi_mc_t                 *mc,
 			      ipmi_oem_event_handler_cb handler,
 			      void                      *cb_data)
@@ -657,6 +720,76 @@ mc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
     /* If we couldn't run the SEL get, then restart the timer now. */
     if (rv)
 	sels_fetched_start_timer(mc->sel, 0, 0, 0, info);
+}
+
+typedef struct sel_get_time_s
+{
+    sel_get_time_cb handler;
+    void            *cb_data;
+} sel_get_time_t;
+
+static void
+get_sel_time(ipmi_mc_t  *mc,
+	     ipmi_msg_t *rsp,
+	     void       *rsp_data)
+{
+    sel_get_time_t *info = rsp_data;
+
+    if (!mc) {
+	/* The MC went away, deliver an error. */
+	ipmi_log(IPMI_LOG_ERR_INFO, "MC went away during SEL time fetch.");
+	info->handler(mc, ENXIO, 0, info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	/* Error setting the event receiver, report it. */
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Could not get SEL time for MC at 0x%x",
+		 ipmi_addr_get_slave_addr(&mc->addr));
+	info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), 0, info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 5) {
+	/* Not enough data? */
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Get SEL time response too short for MC at 0x%x",
+		 ipmi_addr_get_slave_addr(&mc->addr));
+	info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), 0, info->cb_data);
+	goto out;
+    }
+
+    info->handler(mc, 0, ipmi_get_uint32(rsp->data+1), info->cb_data);
+
+ out:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
+			     sel_get_time_cb handler,
+			     void            *cb_data)
+{
+    ipmi_msg_t     msg;
+    sel_get_time_t *info;
+    int            rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->handler = handler;
+    info->cb_data = cb_data;
+
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_SET_SEL_TIME_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+    rv = ipmi_mc_send_command(mc, 0, &msg, get_sel_time, NULL);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
 }
 
 

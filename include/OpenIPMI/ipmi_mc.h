@@ -166,8 +166,22 @@ int ipmi_bmc_set_smi_slave_addr_fetcher(
 #endif
 
 /* Return the timestamp that was fetched before the first SEL fetch.
-   This is so that OEM code can properly ignore old events. */
+   This is so that OEM code can properly ignore old events.  Note that
+   this value will be set to zero after the first SEL fetch, it really
+   not good for anything but comparing timestamps to see if the event
+   is old. */
 unsigned long ipmi_mc_get_startup_SEL_time(ipmi_mc_t *bmc);
+
+
+/* Fetch the current time from the SEL. */
+typedef void (*sel_get_time_cb)(ipmi_mc_t     *mc,
+				int           err,
+				unsigned long time,
+				void          *cb_data);
+int ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
+				 sel_get_time_cb handler,
+				 void            *cb_data);
+
 
 typedef void (*ipmi_mc_cb)(ipmi_mc_t *mc, int err, void *cb_data);
 
@@ -202,6 +216,14 @@ int _ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);
 int _ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
 int _ipmi_mc_sel_count(ipmi_mc_t *mc);
 int _ipmi_mc_sel_entries_used(ipmi_mc_t *mc);
+int _ipmi_mc_sel_get_major_version(ipmi_mc_t *mc);
+int _ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc);
+int _ipmi_mc_sel_get_overflow(ipmi_mc_t *mc);
+int _ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc);
+int _ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc);
+int _ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc);
+int _ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc);
+
 int _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
 int _ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
 
