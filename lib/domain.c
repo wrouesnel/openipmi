@@ -65,7 +65,7 @@ dump_hex(unsigned char *data, int len)
 #endif
 
 /* Rescan the bus for MCs every 10 minutes by default. */
-#define IPMI_RESCAN_BUS_INTERVAL 600
+#define IPMI_AUDIT_DOMAIN_INTERVAL 600
 
 /* Re-query the SEL every 10 seconds by default. */
 #define IPMI_SEL_QUERY_INTERVAL 10
@@ -83,12 +83,13 @@ struct ipmi_domain_mc_upd_s
 };
 
 /* Timer structure for rescanning the bus. */
-typedef struct rescan_bus_info_s
+typedef struct audit_domain_info_s
 {
     int           cancelled;
     os_handler_t  *os_hnd;
+    ipmi_lock_t   *lock;
     ipmi_domain_t *domain;
-} rescan_bus_info_t;
+} audit_domain_info_t;
 
 /* Used to keep a record of a bus scan. */
 typedef struct mc_ipbm_scan_info_s mc_ipmb_scan_info_t;
@@ -247,12 +248,12 @@ struct ipmi_domain_s
     int           port_up[MAX_PORTS_PER_CON][MAX_CONS];
 
     /* Should I do a full bus scan for devices on the bus? */
-    int                        do_bus_scan;
+    int           do_bus_scan;
 
     /* Timer for rescanning the bus periodically. */
-    unsigned int      bus_scan_interval; /* seconds between scans */
-    os_hnd_timer_id_t *bus_scan_timer;
-    rescan_bus_info_t *bus_scan_timer_info;
+    unsigned int        audit_domain_interval; /* seconds between checks */
+    os_hnd_timer_id_t   *audit_domain_timer;
+    audit_domain_info_t *audit_domain_timer_info;
 
     /* This is a list of all the bus scans currently happening, so
        they can be properly freed. */
@@ -270,6 +271,7 @@ struct ipmi_domain_s
 
     /* A list of IPMB addresses to not scan. */
     ilist_t *ipmb_ignores;
+    ipmi_lock_t *ipmb_ignores_lock;
 
     /* This is a timer that waits a little while before activating a
        connection if all connections are not active.  It avoids race
@@ -301,7 +303,7 @@ struct ipmi_domain_s
 static int remove_event_handler(ipmi_domain_t           *domain,
 				ipmi_event_handler_id_t *event);
 
-static void domain_rescan_bus(void *cb_data, os_hnd_timer_id_t *id);
+static void domain_audit(void *cb_data, os_hnd_timer_id_t *id);
 
 static void cancel_domain_oem_check(ipmi_domain_t *domain);
 
@@ -511,18 +513,23 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->main_sdrs)
 	ipmi_sdr_info_destroy(domain->main_sdrs, NULL, NULL);
 
-    if (domain->bus_scan_timer_info) {
-	domain->bus_scan_timer_info->cancelled = 1;
+    if (domain->audit_domain_timer_info) {
+	domain->audit_domain_timer_info->cancelled = 1;
+	ipmi_lock(domain->audit_domain_timer_info->lock);
 	rv = domain->os_hnd->stop_timer(domain->os_hnd,
-					domain->bus_scan_timer);
+					domain->audit_domain_timer);
+	ipmi_unlock(domain->audit_domain_timer_info->lock);
 	if (!rv) {
-	    /* If we can stop the timer, free it and it's info.
-	       If we can't stop the timer, that means that the
-	       code is currently in the timer handler, so we let
-	       the "cancelled" value do this for us. */
-	    domain->os_hnd->free_timer(domain->os_hnd,
-				       domain->bus_scan_timer);
-	    ipmi_mem_free(domain->bus_scan_timer_info);
+	    /* If we can stop the timer or it wasn't running, free it
+	       and it's info.  If we can't stop the timer, that means
+	       that the code is currently in the timer handler, so we
+	       let the "cancelled" value do this for us. */
+	    if (domain->audit_domain_timer)
+		domain->os_hnd->free_timer(domain->os_hnd,
+					   domain->audit_domain_timer);
+	    if (domain->audit_domain_timer_info->lock)
+		ipmi_destroy_lock(domain->audit_domain_timer_info->lock);
+	    ipmi_mem_free(domain->audit_domain_timer_info);
 	}
     }
 
@@ -602,6 +609,8 @@ cleanup_domain(ipmi_domain_t *domain)
 	domain->oem_data_destroyer(domain, domain->oem_data);
 
     /* Locks must be last, because they can be used by many things. */
+    if (domain->ipmb_ignores_lock)
+	ipmi_destroy_lock(domain->ipmb_ignores_lock);
     if (domain->mc_list_lock)
 	ipmi_destroy_lock(domain->mc_list_lock);
     if (domain->con_lock)
@@ -653,7 +662,7 @@ setup_domain(ipmi_con_t    *ipmi[],
     domain->default_sel_rescan_time = IPMI_SEL_QUERY_INTERVAL;
 
     /* Set the default timer intervals. */
-    domain->bus_scan_interval = IPMI_RESCAN_BUS_INTERVAL;
+    domain->audit_domain_interval = IPMI_AUDIT_DOMAIN_INTERVAL;
 
     rv = ipmi_create_lock(domain, &domain->mc_list_lock);
     if (rv)
@@ -743,6 +752,10 @@ setup_domain(ipmi_con_t    *ipmi[],
 	goto out_err;
     }
 
+    rv = ipmi_create_lock(domain, &domain->ipmb_ignores_lock);
+    if (rv)
+	goto out_err;
+
     domain->ipmb_ignores = alloc_ilist();
     if (! domain->ipmb_ignores) {
 	rv = ENOMEM;
@@ -751,27 +764,32 @@ setup_domain(ipmi_con_t    *ipmi[],
 
     domain->bus_scans_running = NULL;
 
-    domain->bus_scan_timer_info = ipmi_mem_alloc(sizeof(rescan_bus_info_t));
-    if (!domain->bus_scan_timer_info) {
+    domain->audit_domain_timer_info
+	= ipmi_mem_alloc(sizeof(audit_domain_info_t));
+    if (!domain->audit_domain_timer_info) {
 	rv = ENOMEM;
 	goto out_err;
     }
+    memset(domain->audit_domain_timer_info, 0, sizeof(audit_domain_info_t));
 	
-    domain->bus_scan_timer_info->domain = domain;
-    domain->bus_scan_timer_info->os_hnd = domain->os_hnd;
-    domain->bus_scan_timer_info->cancelled = 0;
+    domain->audit_domain_timer_info->domain = domain;
+    domain->audit_domain_timer_info->os_hnd = domain->os_hnd;
+    domain->audit_domain_timer_info->cancelled = 0;
+    rv = ipmi_create_lock(domain, &domain->audit_domain_timer_info->lock);
+    if (rv)
+	goto out_err;
     rv = domain->os_hnd->alloc_timer(domain->os_hnd,
-				     &(domain->bus_scan_timer));
+				     &(domain->audit_domain_timer));
     if (rv)
 	goto out_err;
 
-    timeout.tv_sec = domain->bus_scan_interval;
+    timeout.tv_sec = domain->audit_domain_interval;
     timeout.tv_usec = 0;
     domain->os_hnd->start_timer(domain->os_hnd,
-				domain->bus_scan_timer,
+				domain->audit_domain_timer,
 				&timeout,
-				domain_rescan_bus,
-				domain->bus_scan_timer_info);
+				domain_audit,
+				domain->audit_domain_timer_info);
 
     rv = ipmi_entity_info_alloc(domain, &(domain->entities));
     if (rv)
@@ -840,7 +858,7 @@ ipmi_domain_entity_unlock(ipmi_domain_t *domain)
  *
  **********************************************************************/
 
-/* A list of all the registered domains. */
+/* A open hash table of all the registered domains. */
 #define DOMAIN_HASH_SIZE 128
 static ipmi_domain_t *domains[DOMAIN_HASH_SIZE];
 static ipmi_lock_t *domains_lock;
@@ -1216,7 +1234,9 @@ in_ipmb_ignores(ipmi_domain_t *domain, unsigned char ipmb_addr)
     unsigned long addr;
     unsigned char first, last;
     ilist_iter_t iter;
+    int          rv = 0;
 
+    ipmi_lock(domain->ipmb_ignores_lock);
     ilist_init_iter(&iter, domain->ipmb_ignores);
     ilist_unpositioned(&iter);
     while (ilist_next(&iter)) {
@@ -1224,21 +1244,25 @@ in_ipmb_ignores(ipmi_domain_t *domain, unsigned char ipmb_addr)
 	first = addr & 0xff;
 	last = (addr >> 8) & 0xff;
 	if ((ipmb_addr >= first) && (ipmb_addr <= last))
-	    return 1;
+	    rv = 1;
     }
+    ipmi_unlock(domain->ipmb_ignores_lock);
 
-    return 0;
+    return rv;
 }
 
 int
 ipmi_domain_add_ipmb_ignore(ipmi_domain_t *domain, unsigned char ipmb_addr)
 {
     unsigned long addr = ipmb_addr | (ipmb_addr << 8);
+    int           rv = 0;
 
+    ipmi_lock(domain->ipmb_ignores_lock);
     if (! ilist_add_tail(domain->ipmb_ignores, (void *) addr, NULL))
-	return ENOMEM;
+	rv = ENOMEM;
+    ipmi_unlock(domain->ipmb_ignores_lock);
 
-    return 0;
+    return rv;
 }
 
 int
@@ -1247,18 +1271,21 @@ ipmi_domain_add_ipmb_ignore_range(ipmi_domain_t *domain,
 				  unsigned char last_ipmb_addr)
 {
     unsigned long addr = first_ipmb_addr | (last_ipmb_addr << 8);
+    int           rv = 0;
 
+    ipmi_lock(domain->ipmb_ignores_lock);
     if (! ilist_add_tail(domain->ipmb_ignores, (void *) addr, NULL))
 	return ENOMEM;
+    ipmi_unlock(domain->ipmb_ignores_lock);
 
-    return 0;
+    return rv;
 }
 
 typedef struct mc_upd_info_s
 {
-    int           added;
-    ipmi_domain_t *domain;
-    ipmi_mc_t     *mc;
+    enum ipmi_update_e op;
+    ipmi_domain_t      *domain;
+    ipmi_mc_t          *mc;
 } mc_upd_info_t;
 
 static void
@@ -1267,10 +1294,7 @@ iterate_mc_upds(ilist_iter_t *iter, void *item, void *cb_data)
     mc_upd_info_t        *info = cb_data;
     ipmi_domain_mc_upd_t *id = item;
 
-    if (info->added)
-        id->handler(IPMI_ADDED, info->domain, info->mc, id->cb_data);
-    else
-        id->handler(IPMI_DELETED, info->domain, info->mc, id->cb_data);
+    id->handler(info->op, info->domain, info->mc, id->cb_data);
 }
 
 static int
@@ -1299,7 +1323,8 @@ add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 }
 
 static void
-call_new_mc_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc)
+call_mc_upd_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc,
+		     enum ipmi_update_e op)
 {
     mc_upd_info_t info;
 
@@ -1307,7 +1332,7 @@ call_new_mc_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc)
     CHECK_MC_LOCK(mc);
 
     info.domain = domain;
-    info.added = 1;
+    info.op = op;
     info.mc = mc;
     ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
 }
@@ -1386,13 +1411,9 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 	}
 	rv = ilist_next(&iter);
     }
-    if (found) {
-	mc_upd_info_t info;
-	info.domain = domain;
-	info.added = 0;
-	info.mc = mc;
-	ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
-    }
+    if (found)
+	call_mc_upd_handlers(domain, mc, IPMI_DELETED);
+
     ipmi_unlock(domain->mc_list_lock);
 
     if (found)
@@ -1449,7 +1470,7 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 	_ipmi_cleanup_mc(mc);
 	return rv;
     }
-    call_new_mc_handlers(domain, mc);
+    call_mc_upd_handlers(domain, mc, IPMI_ADDED);
     ipmi_unlock(domain->mc_list_lock);
 
     if (new_mc)
@@ -1504,6 +1525,8 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 
     rv = ipmi_domain_get(domain);
     if (rv)
+	/* No need to report these to the upper layer, they have
+	   already been delivered in the cleanup code. */
 	return IPMI_MSG_ITEM_NOT_USED;
 
     if (conn_seq != domain->conn_seq)
@@ -1539,11 +1562,16 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
     int                          rv;
     ipmi_system_interface_addr_t *si;
 
-    rv = ipmi_domain_get(domain);
-    if (rv)
-	return IPMI_MSG_ITEM_NOT_USED;
-
     rspi = nmsg->rsp_item;
+
+    rv = ipmi_domain_get(domain);
+    if (rv) {
+	/* Note that since we don't track SI messages, we must report
+	   them to the upper layer through this interface when the
+	   domain goes away. */
+	deliver_rsp(NULL, nmsg->rsp_handler, rspi);
+	return IPMI_MSG_ITEM_NOT_USED;
+    }
 
     si = (ipmi_system_interface_addr_t *) &rspi->addr;
     si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -1804,7 +1832,7 @@ ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain, unsigned int seconds)
 {
     CHECK_DOMAIN_LOCK(domain);
 
-    domain->bus_scan_interval = seconds;
+    domain->audit_domain_interval = seconds;
 }
 
 unsigned int
@@ -1812,7 +1840,7 @@ ipmi_domain_get_ipmb_rescan_time(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
 
-    return domain->bus_scan_interval;
+    return domain->audit_domain_interval;
 }
 
 int
@@ -1982,7 +2010,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    _ipmi_cleanup_mc(mc);
 		    goto out;
 		}
-		call_new_mc_handlers(domain, mc);
+		call_mc_upd_handlers(domain, mc, IPMI_ADDED);
 
 		ipmi_unlock(domain->mc_list_lock);
 
@@ -2281,14 +2309,17 @@ check_main_sdrs(ipmi_domain_t *domain)
 }
 
 static void
-domain_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
+domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 {
-    struct timeval    timeout;
-    rescan_bus_info_t *info = cb_data;
-    ipmi_domain_t     *domain = info->domain;
+    struct timeval      timeout;
+    audit_domain_info_t *info = cb_data;
+    ipmi_domain_t       *domain = info->domain;
 
+    ipmi_lock(info->lock);
     if (info->cancelled) {
+	ipmi_unlock(info->lock);
 	info->os_hnd->free_timer(info->os_hnd, id);
+	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	return;
     }
@@ -2306,13 +2337,14 @@ domain_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 	check_main_sdrs(domain);
     }
 
-    timeout.tv_sec = domain->bus_scan_interval;
+    timeout.tv_sec = domain->audit_domain_interval;
     timeout.tv_usec = 0;
     domain->os_hnd->start_timer(domain->os_hnd,
 				id,
 				&timeout,
-				domain_rescan_bus,
+				domain_audit,
 				info);
+    ipmi_unlock(info->lock);
 }
 
 /***********************************************************************

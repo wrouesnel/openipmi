@@ -477,6 +477,9 @@ ipmi_pef_get_parm(ipmi_pef_t      *pef,
 
     pef_unlock(pef);
 
+    if (rv)
+	ipmi_mem_free(elem);
+
     return rv;
 }
 

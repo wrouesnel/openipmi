@@ -392,6 +392,9 @@ ipmi_lanparm_get_parm(ipmi_lanparm_t      *lanparm,
 
     lanparm_unlock(lanparm);
 
+    if (rv)
+	ipmi_mem_free(elem);
+
     return rv;
 }
 
