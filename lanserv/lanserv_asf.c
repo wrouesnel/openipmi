@@ -104,7 +104,7 @@ handle_asf(lan_data_t *lan,
     rsp[21] = 0x0; /* No supported interactions */
     memset(rsp+22, 0, 6); /* Reserved. */
 
-    vec[0].iov_base = data;
+    vec[0].iov_base = rsp;
     vec[0].iov_len = 28;
 
     /* Return the response. */
