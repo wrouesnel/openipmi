@@ -316,7 +316,7 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	&& (ipmi_sensors_get_count(mc->sensors) == 0))
     {
 	/* There are no sensors associated with this MC, so it's safe
-           to delete it.  If there are sensors that stil reference
+           to delete it.  If there are sensors that still reference
            this MC (such as from another MC's SDR repository, or the
            main SDR repository) we have to leave it inactive but not
            delete it. */
@@ -792,7 +792,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	mc->startup_SEL_time = now.tv_sec;
 	rv = ipmi_mc_send_command(mc, 0, &msg, set_sel_time, NULL);
 	if (rv) {
-	    ipmi_log(IPMI_LOG_DEBUG,
+	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "Unable to start SEL time set due to error: %x\n",
 		     rv);
 	    mc->startup_SEL_time = 0;

@@ -5,6 +5,8 @@
 	going on, but to use the opq.  Deletes don't modify the state, but
 	they may still be in process at deletion.
 
+	* mc.c: Fixed a memory leak.
+
 2003-06-05 Corey Minyard <cminyard@mvista.com>
 
 	* sel.c: Fixed a SEL destruction race condition.

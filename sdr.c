@@ -646,6 +646,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
     }
 
     if (sdrs->destroyed) {
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	if (!ilist_empty(sdrs->outstanding_fetch))
 	    goto out_unlock;
 
