@@ -5926,32 +5926,32 @@ entity_change(enum ipmi_update_e op,
 	case IPMI_ADDED:
 	    ui_log("Entity added: %s\n",
 		   get_entity_loc(entity, loc, sizeof(loc)));
-	    rv = ipmi_entity_set_sensor_update_handler(entity,
+	    rv = ipmi_entity_add_sensor_update_handler(entity,
 						       sensor_change,
 						       entity);
 	    if (rv) {
-		report_error("ipmi_entity_set_sensor_update_handler", rv);
+		report_error("ipmi_entity_add_sensor_update_handler", rv);
 		break;
 	    }
-	    rv = ipmi_entity_set_control_update_handler(entity,
+	    rv = ipmi_entity_add_control_update_handler(entity,
 							control_change,
 							entity);
 	    if (rv) {
-		report_error("ipmi_entity_set_control_update_handler", rv);
+		report_error("ipmi_entity_add_control_update_handler", rv);
 		break;
 	    }
-	    rv = ipmi_entity_set_fru_update_handler(entity,
+	    rv = ipmi_entity_add_fru_update_handler(entity,
 						    fru_change,
 						    entity);
 	    if (rv) {
-		report_error("ipmi_entity_set_control_fru_handler", rv);
+		report_error("ipmi_entity_add_control_fru_handler", rv);
 		break;
 	    }
-	    rv = ipmi_entity_set_presence_handler(entity,
+	    rv = ipmi_entity_add_presence_handler(entity,
 						  entity_presence_handler,
 						  NULL);
 	    if (rv) {
-		report_error("ipmi_entity_set_presence_handler", rv);
+		report_error("ipmi_entity_add_presence_handler", rv);
 	    }
 	    break;
 	case IPMI_DELETED:

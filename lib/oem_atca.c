@@ -918,6 +918,12 @@ atca_entity_update_handler(enum ipmi_update_e op,
 			   ipmi_entity_t      *entity,
 			   void               *cb_data)
 {
+    enum ipmi_dlr_type_e etype = ipmi_entity_get_type(entity);
+
+    /* We only care about FRU entities. */
+    if (etype != IPMI_ENTITY_FRU)
+	return;
+
     switch (op) {
     case IPMI_ADDED:
 	break;
