@@ -1,8 +1,8 @@
 \documentclass{book}
-\usepackage{graphicx}
+\usepackage{graphicx,moreverb}
 \title{IPMI -- A Gentle Introduction\\with OpenIPMI}
 \author{Corey Minyard $<$minyard@acm.org$>$\\
-	Montavista Software}
+        Montavista Software}
 \date{\today}
 \begin{document}
 \maketitle
@@ -447,6 +447,7 @@ associated with goes away.  If it goes away, a NULL may be passed in as
 the object to the callback, but the \verb=cb_data= will still be valid.
 
 \subsection{The OS Handler}
+\label{openipmi-os-handlers}
 
 The OS handler provides services for the OpenIPMI library.  These
 services are:
@@ -586,23 +587,23 @@ ipmi_entity_id_t my_entity_id = IPMI_ENTITY_ID_INVALID;
 
 static void
 entity_change(enum ipmi_update_e op,
-	      ipmi_domain_t      *domain,
-	      ipmi_entity_t      *entity,
-	      void               *cb_data)
+              ipmi_domain_t      *domain,
+              ipmi_entity_t      *entity,
+              void               *cb_data)
 {
     ipmi_entity_id tmp_id;
 
     switch (op) {
-	case IPMI_ADDED:
+        case IPMI_ADDED:
             if (entity_i_care_about(entity))
                 my_entity_id = ipmi_entity_convert_to_id(entity);
-	    break;
+            break;
 
-	case IPMI_DELETED:
+        case IPMI_DELETED:
             tmp_id = ipmi_entity_convert_to_id(entity);
             if (ipmi_cmp_entity_id(my_entity_id, tmp_id) == 0)
                 ipmi_entity_id_set_invalid(&my_entity_id);
-	    break;
+            break;
 
         default:
             break;
@@ -941,6 +942,15 @@ messages work over the top of all of them.  Generally, it does not
 matter how you interface to an IPMI system, the messages will work the
 same.
 
+\section{OpenIPMI Generic Interface}
+The OpenIPMI libary has a generic interface to the various
+connections.  You use a per-interface command to set up the interface,
+but once set up, the interfaces all work the same.  The file shown in
+Appendix \ref{ipmi-conn-h} defines the interface for connections.
+
+Note that not all operations are not available on all interfaces.  LAN
+connections, for instance, cannot receive commands.
+
 \section{System Interfaces}
 
 The most common interface to a management controller is the system
@@ -1001,17 +1011,17 @@ The core description of an IPMI message is:
 \begin{verbatim}
 struct ipmi_msg
 {
-	unsigned char  netfn;
-	unsigned char  cmd;
-	unsigned short data_len;
-	unsigned char  *data;
+        unsigned char  netfn;
+        unsigned char  cmd;
+        unsigned short data_len;
+        unsigned char  *data;
 };
 \end{verbatim}
 
 The \verb=netfn= describes the class of message being sent.  IPMI
 messages are grouped into different classes by function.  The
 \verb=cmd= is the command within the class.  Chapter
-\rev{ipmi-commands} discusses this is more detail.  The \verb=data=
+\ref{ipmi-commands} discusses this is more detail.  The \verb=data=
 and \verb=data_len= fields are the message contents.  This structure
 is used in both sent and received messages.
 
@@ -1027,10 +1037,10 @@ The \verb=req= structure has the following format:
 \begin{verbatim}
 struct ipmi_req
 {
-	unsigned char   *addr;
-	unsigned int    addr_len;
-	long            msgid;
-	struct ipmi_msg msg;
+        unsigned char   *addr;
+        unsigned int    addr_len;
+        long            msgid;
+        struct ipmi_msg msg;
 };
 \end{verbatim}
 
@@ -1110,21 +1120,24 @@ message.  The following data structure is used to receive messages:
 \begin{verbatim}
 struct ipmi_recv
 {
-	int             recv_type;
-	unsigned char   *addr;
-	unsigned int    addr_len;
-	long            msgid;
-	struct ipmi_msg msg;
+        int             recv_type;
+        unsigned char   *addr;
+        unsigned int    addr_len;
+        long            msgid;
+        struct ipmi_msg msg;
 };
 \end{verbatim}
 
 The \verb=recv_type= field can be one of the following values:
 
 \begin{description}
-\item[\verb=IPMI_RESPONSE_RECV_TYPE=] A response to a sent command.
-\item[\verb=IPMI_ASYNC_EVENT_RECV_TYPE=] An asyncronous event.
-\item[\verb=IPMI_CMD_RECV_TYPE=] A command was recevied for the system
+\item[IPMI\_RESPONSE\_RECV\_TYPE] A response to a sent command.
+\item[IPMI\_ASYNC\_EVENT\_RECV\_TYPE] An asyncronous event.
+\item[IPMI\_CMD\_RECV\_TYPE] A command was recevied for the system
 software.
+\item[IPMI\_RESPONSE\_RESPONSE\_TYPE] Responses sent by this
+interface get acked using one of these.  This way you can tell if
+there was an error sending the response.
 \end{description}
 
 Received commands are discussed in section \ref{recv-cmd-resp}.  You
@@ -1132,7 +1145,7 @@ have to fill in the data for the driver to put the received
 information into.  The following shows how to receive a message:
 
 \begin{verbatim}
-unsigned char    data[MAX_IPMI_DATA_SIZE];
+unsigned char    data[IPMI_MAX_MSG_LENGTH];
 struct ipmi_addr addr;
 struct ipmi_recv recv;
 int              rv;
@@ -1152,7 +1165,7 @@ switch (recv.recv_type) {
 case IPMI_RESPONSE_RECV_TYPE: ...
 case IPMI_ASYNC_EVENT_RECV_TYPE: ...
 case IPMI_CMD_RECV_TYPE: ...
-}
+case IPMI_RESPONSE_RESPONSE_TYPE: ...
 \end{verbatim}
 
 The \verb=msgid= comes in very handy for this responses, it lets you
@@ -1165,6 +1178,23 @@ NetFNs are always responses.
 For responses, the address will always be the same as the sent
 address.
 
+A interface will not receive events by default.  You must register to
+receive them with the following:
+
+\begin{verbatim}
+int val = 1;
+rv = ioctl(fd, IPMICTL_SET_GETS_EVENTS_CMD, &val)
+\end{verbatim}
+
+Setting \verb=val= to true turns on events, setting it to false turns
+off events.  Multiple users may register to receive events; they will
+all get all events.  Note that this is for receiving asyncronous
+events through the interface.  The events also go into the event log
+as described in chapter \ref{events}, but that is a different thing.
+If you receive an event through this interface, you will also get it
+in the event log.  Section \ref{event-format} describes the format of
+events.
+
 \subsubsection{Receiving Commands and Responding}
 \label{recv-cmd-resp}
 Commands sent to LUN two of a management controller will generally be
@@ -1173,13 +1203,118 @@ for that command, it will respond that it does not handle that
 command.
 
 If you wish to receive commands, you must register to receive those
-commands.
+commands.  The \verb=cmdspec= structure defines commands the program
+wishes to receive:
+
+\begin{verbatim}
+struct ipmi_cmdspec
+{
+        unsigned char netfn;
+        unsigned char cmd;
+};
+\end{verbatim}
+
+These are registered with the following ioctl:
+
+\begin{verbatim}
+rv = ioctl(fd, IPMICTL_REGISTER_FOR_CMD, &cmdspec);
+\end{verbatim}
+
+To remove a registered command, use the following:
+
+\begin{verbatim}
+rv = ioctl(fd, IPMICTL_UNREGISTER_FOR_CMD, &cmdspec);
+\end{verbatim}
+
+If you receive a message, you must send a response.  The driver makes
+this easy, you can always use the received address to send the
+response to.  The program in Appendix \ref{recv-cmd-prog} receives one
+message, sends a response, and exits.  When you response, you must
+supply the \verb=msgid= that came into the command.
 
 \subsubsection{Overriding Default Timing Values}
+Be default, commands over IPMB get resent up to 5 times with a 1
+second timeout between the sends.  For very select applications, this
+is not suitable.  Primarily, some applications need to only send once,
+they have a higher-level resend mechanism and the OpenIPMI resends
+will only get in the way.
+
+Note that responses over IPMB will not get timed or resent.
+
+The user may modify the timing values two different ways.  The user
+can set the default resend and retry times for a file descriptor with
+the following structure:
+
+\begin{verbatim}
+struct ipmi_timing_parms
+{
+        int          retries;
+        unsigned int retry_time_ms;
+};
+\end{verbatim}
+
+The \verb=retries= parm is the number of times the message will be
+resent.  The \verb=retry_time_ms= is the time in milliseconds between
+resends.  To get and set the parameters, use the following:
+
+\begin{verbatim}
+struct ipmi_timing_parms tparms;
+
+rv = ioctl(fd, IPMICTL_GET_TIMING_PARMS_CMD, &tparms);
+if (rv == -1)
+  error handling...
+
+printf("parms were: %d %d", tparms.retries, tparms.retry_time_ms);
+
+tparms.retries = 0; /* No resends */
+tparms.retry_time = 1000; /* one second */
+rv = ioctl(fd, IPMICTL_SET_TIMING_PARMS_CMD, &tparms);
+if (rv == -1)
+  error handling...
+\end{verbatim}
+
+This will set the timing parameters for all future messages.  You can
+also override the timing on individual messages.
+
+\begin{verbatim}
+struct ipmi_req_settime
+{
+        struct ipmi_req req;
+
+        int          retries;
+        unsigned int retry_time_ms;
+};
+\end{verbatim}
+
+The \verb=req= is the request as shown previously.  Use the following
+ioctl to perform the request:
+
+\begin{verbatim}
+rv = ioctl(fd, IPMICTL_SEND_COMMAND_SETTIME, &req_time);
+\end{verbatim}
 
 \subsection{The OpenIPMI System Interface}
+The OpenIPMI library system interface can be set up with the
+following function:
+
+\begin{verbatim}
+int ipmi_smi_setup_con(int                if_num,
+                       os_handler_t       *handlers,
+                       void               *user_data,
+                       ipmi_con_t         **new_con);
+\end{verbatim}
+
+The \verb=if_num= is the specific interface number.  Generally this is
+\verb=0=, but if a system has more than one system interface then this
+will be the specific interface number.  The \verb=handlers= is the OS
+handler data to use for the connection (as described in section
+\ref{openipmi-os-handlers}).  The \verb=user_data= field is put into
+the \verb=user_data= filed in the \verb=ipmi_con_t= data structure.  A
+new connection is returned in \verb=new_con=.
 
 \section{IPMB}
+
+resends, error recovery, etc.
 
 \section{ICMB}
 
@@ -1270,6 +1405,10 @@ That information may be fetched by the user.
 
 %---------------------------------------------------------------------
 \chapter{Events}
+\label{events}
+
+\section{Event Format}
+\label{event-format}
 
 %---------------------------------------------------------------------
 \appendix
@@ -1280,6 +1419,16 @@ That information may be fetched by the user.
 
 %---------------------------------------------------------------------
 \chapter{ATCA}
+
+%---------------------------------------------------------------------
+\chapter{Command Receiver Program}
+\label{recv-cmd-prog}
+\verbatimtabinput{recv_cmd.c}
+
+%---------------------------------------------------------------------
+\chapter{Connection Handling Interface}
+\label{ipmi-conn-h}
+\verbatimtabinput{../include/OpenIPMI/ipmi_conn.h}
 
 \backmatter
 \end{document}
