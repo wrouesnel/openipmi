@@ -1,5 +1,10 @@
 
-2003-04-30 Corey Minyard <cminyard@mvista.com>
+2003-05-02 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Added a valid field to the MC, right now just for BMCs, to
+	handle shutdown races.
+
+2003-05-01 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_types.h: A restructure of the id's was
 	done to remove the MC validation calls from the rest of the code
@@ -18,6 +23,8 @@
 
 	* include/OpenIPMI/ipmi_int.h, ipmi.c: Added a sequence number
 	allocator.
+
+2003-04-30 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv.c: Modified the server to support two LAN connections
 	specified in the config file, and modified it to always return the

@@ -184,9 +184,6 @@ int ipmi_bmc_get_num_channels(ipmi_mc_t *mc, int *val);
    information. */
 int ipmi_bmc_get_channel(ipmi_mc_t *mc, int index, ipmi_chan_info_t *chan);
 
-/* Validate that the given MC is still valid. */
-int ipmi_mc_validate(ipmi_mc_t *mc);
-
 /* Check to see if the MC is operational in the system.  If this is
    false, then the MC was referred to by an SDR, but it doesn't really
    exist. */

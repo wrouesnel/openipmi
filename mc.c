@@ -181,6 +181,11 @@ struct ipmi_mc_s
     ipmi_addr_t addr;
     int         addr_len;
 
+    /* True if the MC is a valid MC in the system, false if not.
+       Primarily used to handle shutdown races, where the MC still
+       exists in lists but has been shut down. */
+    int valid;
+
     /* If the MC is known to be good in the system, then active is
        true.  If active is false, that means that there are sensors
        that refer to this MC, but the MC is not currently in the
@@ -294,6 +299,9 @@ struct ipmi_mc_s
 
     uint8_t  real_aux_fw_revision[4];
 
+    /* This is kind of cheating, but these links are used to keep a
+       list of known BMCs. */
+    ipmi_mc_t *next_bmc, *prev_bmc;
 };
 
 struct ipmi_event_handler_id_s
@@ -462,13 +470,51 @@ check_oem_handlers(ipmi_mc_t *mc)
     return 0;
 }
 
-int
-ipmi_mc_validate(ipmi_mc_t *mc)
+/* A list of all the registered BMCs. */
+static ipmi_mc_t *bmcs = NULL;
+
+static void
+add_known_bmc(ipmi_mc_t *bmc)
 {
-    int rv;
-    /* FIXME - add more validation. */
-    rv = __ipmi_validate(mc->bmc_mc->bmc->conn);
-    return rv;
+    bmc->prev_bmc = NULL;
+    bmc->next_bmc = bmcs;
+    if (bmcs)
+	bmcs->prev_bmc = bmc;
+    bmcs = bmc;
+}
+
+static void
+remove_known_bmc(ipmi_mc_t *bmc)
+{
+    if (bmc->next_bmc)
+	bmc->next_bmc->prev_bmc = bmc->prev_bmc;
+    if (bmc->prev_bmc)
+	bmc->prev_bmc->next_bmc = bmc->next_bmc;
+    else
+	bmcs = bmc->next_bmc;
+}
+
+/* Validate that the BMC and it's underlying connection is valid.
+   This must be called with the read lock held. */
+static int
+ipmi_bmc_validate(ipmi_mc_t *bmc)
+{
+    ipmi_mc_t *c;
+
+    c = bmcs;
+    while (c != NULL) {
+	if (c == bmc)
+	    break;
+    }
+    if (c == NULL)
+	return EINVAL;
+
+    /* We do this check after we find the BMC in the list, because
+       want to make sure the pointer is good before we do this. */
+    if (!bmc->valid)
+	return EINVAL;
+
+    return __ipmi_validate(bmc->bmc->conn);
 }
 
 int
@@ -664,7 +710,7 @@ ll_con_failed(ipmi_con_t *ipmi,
     int             rv;
 
     ipmi_read_lock();
-    rv = ipmi_mc_validate(bmc);
+    rv = ipmi_bmc_validate(bmc);
     if (rv)
 	/* So the connection failed.  So what, there's no BMC. */
 	goto out_unlock;
@@ -703,7 +749,7 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 
     if (rsp_handler) {
 	ipmi_read_lock();
-	rv = ipmi_mc_validate(bmc);
+	rv = ipmi_bmc_validate(bmc);
 	if (rv)
 	    rsp_handler(NULL, msg, rsp_data);
 	else {
@@ -1228,6 +1274,9 @@ real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
     bmc->bmc->conn->os_hnd->free_timer(bmc->bmc->conn->os_hnd, id);
 
     ipmi_write_lock();
+
+    remove_known_bmc(bmc);
+
     ipmi = bmc->bmc->conn;
 
     ipmi_cleanup_mc(bmc);
@@ -1252,6 +1301,7 @@ ipmi_close_connection(ipmi_mc_t    *bmc,
     struct timeval    timeout;
 
     if (bmc->bmc_mc != bmc)
+	/* You can only shut down BMCs. */
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
@@ -1264,7 +1314,7 @@ ipmi_close_connection(ipmi_mc_t    *bmc,
     if (rv)
 	goto out;
 
-    if ((rv = ipmi_mc_validate(bmc)))
+    if ((rv = ipmi_bmc_validate(bmc)))
 	goto out;
 
     close_info->bmc = bmc;
@@ -1284,6 +1334,8 @@ ipmi_close_connection(ipmi_mc_t    *bmc,
 	    ipmi_mem_free(close_info);
 	if (timer)
 	    bmc->bmc->conn->os_hnd->free_timer(bmc->bmc->conn->os_hnd, timer);
+    } else {
+	bmc->valid = 0;
     }
     return rv;
 }
@@ -2074,7 +2126,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 
 
     ipmi_read_lock();
-    rv = ipmi_mc_validate(info->bmc);
+    rv = ipmi_bmc_validate(info->bmc);
     if (rv) {
 	ipmi_log(IPMI_LOG_INFO,
 		 "BMC went away while scanning for MCs");
@@ -2647,6 +2699,7 @@ setup_bmc(ipmi_con_t   *ipmi,
     memset(mc, 0, sizeof(*mc));
 
     mc->bmc_mc = mc;
+    mc->valid = 1;
 
     mc->seq = ipmi_get_seq();
     mc->bmc = NULL;
@@ -2796,7 +2849,11 @@ ipmi_init_con(ipmi_con_t   *ipmi,
     mc->bmc->setup_done = info->handler;
     mc->bmc->setup_done_cb_data = info->cb_data;
 
+    add_known_bmc(mc);
+
+    ipmi_write_lock();
     ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
+    ipmi_write_unlock();
 
     cmd_msg.netfn = IPMI_APP_NETFN;
     cmd_msg.cmd = IPMI_GET_DEVICE_ID_CMD;
@@ -3315,7 +3372,7 @@ ipmi_mc_pointer_cb(ipmi_mc_id_t id, ipmi_mc_cb handler, void *cb_data)
     ipmi_mc_t *mc;
 
     ipmi_read_lock();
-    rv = ipmi_mc_validate(id.bmc);
+    rv = ipmi_bmc_validate(id.bmc);
     if (rv)
 	goto out_unlock;
     ipmi_lock(id.bmc->bmc->mc_list_lock);
@@ -3349,7 +3406,7 @@ ipmi_mc_pointer_noseq_cb(ipmi_mc_id_t id, ipmi_mc_cb handler, void *cb_data)
     ipmi_mc_t *mc;
 
     ipmi_read_lock();
-    rv = ipmi_mc_validate(id.bmc);
+    rv = ipmi_bmc_validate(id.bmc);
     if (rv)
 	goto out_unlock;
     ipmi_lock(id.bmc->bmc->mc_list_lock);
