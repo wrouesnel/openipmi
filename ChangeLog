@@ -1,5 +1,8 @@
 2004-03-02 Corey Minyard <cminyard@mvista.com> 
 
+	* lib/ipmi_lan.c: Fixed a bug where incoming SNMP traps were
+	compared against the wrong IP address.
+
 	* lib/oem_atca.c: Added the cold reset control.
 
 2004-03-01 Corey Minyard <cminyard@mvista.com> 
@@ -810,7 +813,6 @@
 	* include/OpenIPMI/ipmi_sel.h, lib/sel.h: Add a new function
 	'ipmi_sel_get_event_by_recid'.
 
->>>>>>> 1.239
 2003-12-01 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Renamed some functions to

@@ -2957,7 +2957,7 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 		struct sockaddr_in *src, *dst;
 		src = (struct sockaddr_in *) src_addr;
 		dst = &(elem->ip_addr[i].s_ipsock.s_addr4);
-		if (src->sin_addr.s_addr == src->sin_addr.s_addr) {
+		if (dst->sin_addr.s_addr == src->sin_addr.s_addr) {
 		    /* We have a match, handle it */
 		    snmp_got_match(elem, msg, pet_ack);
 		    found = 1;
@@ -2971,7 +2971,7 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 		struct sockaddr_in6 *src, *dst;
 		src = (struct sockaddr_in6 *) src_addr;
 		dst = &(elem->ip_addr[i].s_ipsock.s_addr6);
-		if (memcmp(src->sin6_addr.s6_addr,
+		if (memcmp(dst->sin6_addr.s6_addr,
 			   src->sin6_addr.s6_addr,
 			   sizeof(struct in6_addr))
 		    == 0)
