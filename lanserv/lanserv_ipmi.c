@@ -2787,7 +2787,7 @@ aes_cbc_encrypt(lan_data_t *lan, session_t *session,
 	free(d);
 	return ENOMEM; /* right? */
     }
-    if (!EVP_EncryptFinal(&ctx, (*pos)+outlen, &tmplen)) {
+    if (!EVP_EncryptFinal_ex(&ctx, (*pos)+outlen, &tmplen)) {
 	free(d);
 	return ENOMEM; /* right? */
     }
@@ -2830,7 +2830,7 @@ aes_cbc_decrypt(lan_data_t *lan, session_t *session, msg_t *msg)
 	free(d);
 	return ENOMEM; /* right? */
     }
-    if (!EVP_DecryptFinal(&ctx, msg->data+16+outlen, &tmplen)) {
+    if (!EVP_DecryptFinal_ex(&ctx, msg->data+16+outlen, &tmplen)) {
 	free(d);
 	return ENOMEM; /* right? */
     }

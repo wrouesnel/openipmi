@@ -71,20 +71,6 @@ aes_cbc_free(ipmi_con_t *ipmi, void *conf_data)
     ipmi_mem_free(info);
 }
 
-static void
-dump_data(const unsigned char *d, int l, const char *n)
-{
-    int i;
-    printf("%s:", n);
-    for (i=0; i<l; i++) {
-	if ((i%16) == 0)
-	    printf("\n ");
-	printf(" %2.2x", d[i]);
-    }
-    printf("\n");
-}
-
-
 static int
 aes_cbc_encrypt(ipmi_con_t    *ipmi,
 		void          *conf_data,
@@ -142,7 +128,7 @@ aes_cbc_encrypt(ipmi_con_t    *ipmi,
 	ipmi_mem_free(d);
 	return ENOMEM; /* right? */
     }
-    if (!EVP_EncryptFinal(&ctx, (*payload)+outlen, &tmplen)) {
+    if (!EVP_EncryptFinal_ex(&ctx, (*payload)+outlen, &tmplen)) {
 	free(d);
 	return ENOMEM; /* right? */
     }
@@ -191,7 +177,7 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
 	ipmi_mem_free(d);
 	return ENOMEM; /* right? */
     }
-    if (!EVP_DecryptFinal(&ctx, p+outlen, &tmplen)) {
+    if (!EVP_DecryptFinal_ex(&ctx, p+outlen, &tmplen)) {
 	ipmi_mem_free(d);
 	return ENOMEM; /* right? */
     }

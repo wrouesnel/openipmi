@@ -1,3 +1,89 @@
+2005-01-12 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Add support for openssl.
+	* cmdlang/Makefile.am: ditto
+	* cmdlang/Makefile.am: ditto
+	* lib/Makefile.am: ditto
+	* sample/Makefile.am: ditto
+
+	* cmdlang/cmd_domain.c: Added support for the new RMCP+ LAN parms.
+
+	* doc/IPMI.ltx: Minor cleanups.
+
+	* include/OpenIPMI/ipmi_addr.h: Added a concept of an RMCP+
+	address.  This allows payloads to be routed using the normal
+	addressing mechanisms.
+
+	* include/OpenIPMI/ipmi_auth.h: Added RMCP+ auth and expanded the
+	user password to 20 bytes.
+
+	* include/OpenIPMI/ipmi_conn.h: Modified ipmi_msgi_t so that it
+	can take external data as well as the internal data and knows how
+	to free it.
+	* lib/domain.c: ditto
+	* lib/ipmi.c: ditto
+	* lib/ipmi_lan.c: ditto
+	* lib/oem_atca_conn.c: ditto
+	* lib/oem_force_conn.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/oem_motorola_mxp_intf.c: ditto
+	* sample/ipmicmd.c: ditto
+
+	* lib/strings.c: Adde RMCP+ auth strings.
+	
+	* include/OpenIPMI/ipmi_conn.h: Added the concept of asynchronous
+	events so that payloads can report asyncronous data coming up.
+	* lib/ipmi_smi.c: ditto
+
+	* include/OpenIPMI/ipmi_conn.h, lib/conn.c: Added connection
+	attributes so that payloads have a place to store data.
+	* lib/ipmi_lan.c: Ditto
+	* lib/ipmi_smi.c: Ditto
+	* lib/oem_motorola_mxp_intf.c: Ditto
+
+	* include/OpenIPMI/ipmi_err.h: Added RMCP+ errors.
+	
+	* include/OpenIPMI/ipmi_lan.h: Added support for RMCP+ payloads,
+	authentication, integrity, and confidentiality handling.  This
+	includes new options for lan connection and the ability to
+	register the various algorithms and payload types.
+
+	* include/OpenIPMI/md5.h, utils/md5.c: Added a way to handle
+	multiple-length passwords with MD5.
+
+	* lib/ipmi_payload.c: Moved IPMI LAN data formatting into a
+	separate file.
+
+	* lib/Makefile.am, lib/ipmi.c: Added support for RMCP+ algorithms.
+	* lib/aes_cbc.c: ditto
+	* lib/hmac.c: ditto
+	* lib/md5.c: ditto
+	* lib/rakp.c: ditto
+
+	* lib/ipmi.c: Add support for the new RMCP+ data options.
+
+	* lib/ipmi_lan.c: Added RMCP+ support.
+
+	* include/OpenIPMI/lanserv.h: Added support for RMCP+ data.
+
+	* lanserv/Makefile.am: Added support for OpenSSL.
+
+	* lanserv/lanserv.c: Fixed the random data routines to work right.
+	* lanserv/lanserv_emu.c: ditto.
+	
+	* lanserv/lanserv_config.c: Added support for some RMCP+ data.
+	
+	* lanserv/lanserv_ipmi.c: Added support for RMCP+.
+
+	* man/ipmi_cmdlang.7: Added info about the RMCP+ LAN parms.
+	
+	* configure.in: Update to version 2.0.0.
+
+2005-01-11 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/internal/Makefile.am: Fixed so it installs in
+	the right place.
+
 2005-01-04 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Added a warning log if the FRU fetch request
