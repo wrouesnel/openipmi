@@ -32,6 +32,7 @@
  */
 
 #include <sys/ioctl.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/poll.h>
@@ -42,6 +43,7 @@
 #include <string.h>
 
 #include <linux/ipmi.h>
+#include <net/af_ipmi.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_int.h>
@@ -113,6 +115,7 @@ struct ipmi_ll_event_handler_id_s
 typedef struct smi_data_s
 {
     ipmi_con_t                 *ipmi;
+    int                        using_socket;
     int                        fd;
     int                        if_num;
     pending_cmd_t              *pending_cmds;
@@ -291,11 +294,26 @@ remove_cmd_registration(ipmi_con_t    *ipmi,
 }
 
 static int
-open_smi_fd(int if_num)
+open_smi_fd(int if_num, int *using_socket)
 {
-    char devname[30];
-    int  fd;
+    char                 devname[30];
+    int                  fd;
+    struct sockaddr_ipmi addr;
+    int                  rv;
 
+    fd = socket(PF_IPMI, SOCK_DGRAM, 0);
+    if (fd == -1)
+	goto try_dev;
+    addr.sipmi_family = AF_IPMI;
+    addr.if_num = if_num;
+    rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
+    if (rv != -1) {
+	*using_socket = 1;
+	goto out;
+    }
+
+    *using_socket = 0;
+ try_dev:
     sprintf(devname, "/dev/ipmidev/%d", if_num);
     fd = open(devname, O_RDWR);
     if (fd == -1) {
@@ -307,6 +325,7 @@ open_smi_fd(int if_num)
 	}
     }
 
+ out:
     return fd;
 }
 
@@ -318,7 +337,7 @@ smi_send(smi_data_t   *smi,
 	 ipmi_msg_t   *msg,
 	 long         msgid)
 {
-    struct ipmi_req req;
+    int rv;
 
     if (DEBUG_MSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing, addr = ");
@@ -328,12 +347,34 @@ smi_send(smi_data_t   *smi,
 	dump_hex(msg->data, msg->data_len);
 	ipmi_log(IPMI_LOG_DEBUG_END, "");
     }
-    req.addr = (unsigned char *) addr;
-    req.addr_len = addr_len;
-    req.msgid = (long) smi;
-    req.msg = *msg;
-    req.msgid = msgid;
-    if (ioctl(fd, IPMICTL_SEND_COMMAND, &req) == -1)
+
+    if (smi->using_socket) {
+	struct sockaddr_ipmi     saddr;
+	struct ipmi_sock_msg     smsg;
+
+	saddr.sipmi_family = AF_IPMI;
+	memcpy(&saddr.ipmi_addr, addr, addr_len);
+
+	smsg.netfn = msg->netfn;
+	smsg.cmd = msg->cmd;
+	smsg.data_len = msg->data_len;
+	smsg.msgid = msgid;
+	memcpy(smsg.data, msg->data, smsg.data_len);
+
+	rv = sendto(fd, &smsg, sizeof(smsg) + msg->data_len, 0,
+		    (struct sockaddr *) &saddr,
+		    addr_len + SOCKADDR_IPMI_OVERHEAD);
+    } else {
+	struct ipmi_req req;
+	req.addr = (unsigned char *) addr;
+	req.addr_len = addr_len;
+	req.msgid = (long) smi;
+	req.msg = *msg;
+	req.msgid = msgid;
+	rv = ioctl(fd, IPMICTL_SEND_COMMAND, &req);
+    }
+
+    if (rv == -1)
 	return errno;
 
     return 0;
@@ -342,12 +383,13 @@ smi_send(smi_data_t   *smi,
 static void
 set_ipmb_in_dev(smi_data_t *smi)
 {
-    unsigned int slave_addr;
+    unsigned int slave_addr = smi->slave_addr;
     int          rv;
 
-    slave_addr = smi->slave_addr;
-
-    rv = ioctl(smi->fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
+    if (smi->using_socket)
+	rv = ioctl(smi->fd, SIOCIPMISETADDR, &slave_addr);
+    else
+	rv = ioctl(smi->fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "Error setting IPMB address: 0x%x", errno);
@@ -581,9 +623,40 @@ handle_incoming_command(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 }
 
 static void
-data_handler(int            fd,
-	     void           *cb_data,
-	     os_hnd_fd_id_t *id)
+gen_recv_msg(ipmi_con_t *ipmi, struct ipmi_recv *recv)
+{
+    if (DEBUG_MSG) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming, addr = ");
+	dump_hex(recv->addr, recv->addr_len);
+	ipmi_log(IPMI_LOG_DEBUG_CONT,
+		 "\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", recv->msg.netfn, 
+		 recv->msg.cmd);
+	dump_hex(recv->msg.data, recv->msg.data_len);
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
+    }
+
+    switch (recv->recv_type) {
+	case IPMI_RESPONSE_RECV_TYPE:
+	    handle_response(ipmi, recv);
+	    break;
+
+	case IPMI_ASYNC_EVENT_RECV_TYPE:
+	    handle_async_event(ipmi, recv);
+	    break;
+
+	case IPMI_CMD_RECV_TYPE:
+	    handle_incoming_command(ipmi, recv);
+	    break;
+
+	default:
+	    break;
+    }
+}
+
+static void
+ipmi_dev_data_handler(int            fd,
+		      void           *cb_data,
+		      os_hnd_fd_id_t *id)
 {
     ipmi_con_t       *ipmi = (ipmi_con_t *) cb_data;
     unsigned char    data[MAX_IPMI_DATA_SIZE];
@@ -613,32 +686,71 @@ data_handler(int            fd,
 	    goto out_unlock2;
     }
 
-    if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "incoming, addr = ");
-	dump_hex(recv.addr, recv.addr_len);
-	ipmi_log(IPMI_LOG_DEBUG_CONT,
-		 "\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", recv.msg.netfn, 
-		 recv.msg.cmd);
-	dump_hex(recv.msg.data, recv.msg.data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+    gen_recv_msg(ipmi, &recv);
+
+ out_unlock2:
+    ipmi_read_unlock();
+}
+
+static void
+ipmi_sock_data_handler(int            fd,
+		       void           *cb_data,
+		       os_hnd_fd_id_t *id)
+{
+    ipmi_con_t           *ipmi = (ipmi_con_t *) cb_data;
+    struct sockaddr_ipmi addr;
+    socklen_t            addr_len;
+    struct ipmi_sock_msg *smsg;
+    unsigned char        data[MAX_IPMI_DATA_SIZE + sizeof(*smsg)];
+    int                  rv;
+    struct ipmi_recv     recv;
+
+    ipmi_read_lock();
+
+    if (!smi_valid_ipmi(ipmi)) {
+	/* We can have due to a race condition, just return and
+           everything should be fine. */
+	goto out_unlock2;
     }
 
-    switch (recv.recv_type) {
-	case IPMI_RESPONSE_RECV_TYPE:
-	    handle_response(ipmi, &recv);
-	    break;
-
-	case IPMI_ASYNC_EVENT_RECV_TYPE:
-	    handle_async_event(ipmi, &recv);
-	    break;
-
-	case IPMI_CMD_RECV_TYPE:
-	    handle_incoming_command(ipmi, &recv);
-	    break;
-
-	default:
-	    break;
+    addr_len = sizeof(addr);
+    rv = recvfrom(fd, data, sizeof(data), 0,
+		  (struct sockaddr *) &addr, &addr_len);
+    if (rv == -1) {
+	/* FIXME - no handling for EMSGSIZE. */
+	if (errno == EINTR) {
+	    goto out_unlock2; /* Try again later. */
+	} else {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "Error receiving message: %s\n", strerror(errno));
+	    goto out_unlock2;
+	}
     }
+
+    if (rv < sizeof(*smsg)) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "Undersized socket message: %d bytes\n", rv);
+	goto out_unlock2;
+    }
+
+    smsg = (struct ipmi_sock_msg *) data;
+    if (rv < (sizeof(*smsg) + smsg->data_len)) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "Got subsized msg, size was %d, data_len was %d\n",
+		 rv, smsg->data_len);
+	return;
+    }
+
+    recv.recv_type = smsg->recv_type;
+    recv.addr = (unsigned char *) &addr.ipmi_addr;
+    recv.addr_len = addr_len - SOCKADDR_IPMI_OVERHEAD;
+    recv.msgid = smsg->msgid;
+    recv.msg.netfn = smsg->netfn;
+    recv.msg.cmd = smsg->cmd;
+    recv.msg.data = smsg->data;
+    recv.msg.data_len = smsg->data_len;
+
+    gen_recv_msg(ipmi, &recv);
 
  out_unlock2:
     ipmi_read_unlock();
@@ -754,7 +866,10 @@ smi_register_for_events(ipmi_con_t                 *ipmi,
 
     if (was_empty) {
 	int val = 1;
-	rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
+	if (smi->using_socket)
+	    rv = ioctl(smi->fd, SIOCIPMIGETEVENT, &val);
+	else
+	    rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
 	if (rv == -1) {
 	    remove_event_handler(smi, entry);
 	    rv = errno;
@@ -789,7 +904,10 @@ smi_deregister_for_events(ipmi_con_t                 *ipmi,
 
     if (smi->event_handlers == NULL) {
 	int val = 0;
-	rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
+	if (smi->using_socket)
+	    rv = ioctl(smi->fd, SIOCIPMIGETEVENT, &val);
+	else
+	    rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
 	if (rv == -1) {
 	    rv = errno;
 	    goto out_unlock;
@@ -841,7 +959,10 @@ smi_register_for_command(ipmi_con_t            *ipmi,
 
     reg.netfn = netfn;
     reg.cmd = cmd;
-    rv = ioctl(smi->fd, IPMICTL_REGISTER_FOR_CMD, &reg);
+    if (smi->using_socket)
+	rv = ioctl(smi->fd, SIOCIPMIREGCMD, &reg);
+    else
+	rv = ioctl(smi->fd, IPMICTL_REGISTER_FOR_CMD, &reg);
     if (rv == -1) {
 	remove_cmd_registration(ipmi, netfn, cmd);
 	return errno;
@@ -864,7 +985,10 @@ smi_deregister_for_command(ipmi_con_t    *ipmi,
 
     reg.netfn = netfn;
     reg.cmd = cmd;
-    rv = ioctl(smi->fd, IPMICTL_UNREGISTER_FOR_CMD, &reg);
+    if (smi->using_socket)
+	rv = ioctl(smi->fd, SIOCIPMIREGCMD, &reg);
+    else
+	rv = ioctl(smi->fd, IPMICTL_UNREGISTER_FOR_CMD, &reg);
     if (rv == -1) {
 	rv = errno;
 	goto out_unlock;
@@ -1225,7 +1349,7 @@ setup(int          if_num,
     smi->event_handlers_lock = NULL;
     smi->fd_wait_id = NULL;
 
-    smi->fd = open_smi_fd(if_num);
+    smi->fd = open_smi_fd(if_num, &smi->using_socket);
     if (smi->fd == -1) {
 	rv = errno;
 	goto out_err;
@@ -1258,11 +1382,19 @@ setup(int          if_num,
     ipmi->deregister_for_command = smi_deregister_for_command;
     ipmi->close_connection = smi_close_connection;
 
-    rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
-				      smi->fd,
-				      data_handler, 
-				      ipmi,
-				      &(smi->fd_wait_id));
+    if (smi->using_socket) {
+	rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
+					  smi->fd,
+					  ipmi_sock_data_handler, 
+					  ipmi,
+					  &(smi->fd_wait_id));
+    } else {
+	rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
+					  smi->fd,
+					  ipmi_dev_data_handler,
+					  ipmi,
+					  &(smi->fd_wait_id));
+    }
     if (rv) {
 	goto out_err;
     }

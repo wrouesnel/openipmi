@@ -1,4 +1,9 @@
 
+2003-07-21 Corey Minyard <cminyard@mvista.com>
+
+	* ipmi_smi.c: Added socket interface handling for the SMI
+	connection.
+
 2003-07-16 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.texi, sensors.c, include/OpenIPMI/ipmiif.h: Added
