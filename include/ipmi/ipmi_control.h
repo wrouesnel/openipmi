@@ -124,6 +124,8 @@ void ipmi_control_set_type(ipmi_control_t *control, int val);
 void ipmi_control_set_settable(ipmi_control_t *control, int val);
 void ipmi_control_set_readable(ipmi_control_t *control, int val);
 
+void ipmi_control_set_hot_swap_indicator(ipmi_control_t *control, int val);
+
 typedef struct ipmi_control_transition_s
 {
     unsigned int color;

@@ -552,6 +552,10 @@ void ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
 int ipmi_sensor_get_assigned_id_length(ipmi_sensor_t *sensor);
 void ipmi_sensor_get_assigned_id(ipmi_sensor_t *sensor, char *id, int length);
 
+/* Returns true if the sensor reports when an operator want to remove
+   the hot-swappable entity from the system. */
+int ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor);
+
 
 /* This is the implementation for a set of thresholds for a
    threshold-based sensor.  Don't directly use the contents of the
@@ -646,6 +650,11 @@ int ipmi_control_is_settable(ipmi_control_t *control);
 int ipmi_control_is_readable(ipmi_control_t *control);
 ipmi_entity_t *ipmi_control_get_entity(ipmi_control_t *ind);
 char *ipmi_control_get_type_string(ipmi_control_t *ind);
+
+/* Returns true if this control is a hot-swap indicator, meaning that
+   is is used to indicate to the operator when it is save to remove a
+   hot-swappable device. */
+int ipmi_control_is_hot_swap_indicator(ipmi_control_t *control);
 
 /* Get the number of values the indicator supports. */
 int ipmi_control_get_num_vals(ipmi_control_t *ind);

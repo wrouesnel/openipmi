@@ -76,6 +76,8 @@ struct ipmi_control_s
 
     unsigned int num_vals;
 
+    int hot_swap_indicator;
+
     /* For light types. */
     ipmi_control_light_t *lights;
 
@@ -683,4 +685,16 @@ ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2)
     if (id1.control_num < id2.control_num)
 	return -1;
     return 0;
+}
+
+void
+ipmi_control_set_hot_swap_indicator(ipmi_control_t *control, int val)
+{
+    control->hot_swap_indicator = val;
+}
+
+int
+ipmi_control_is_hot_swap_indicator(ipmi_control_t *control)
+{
+    return control->hot_swap_indicator;
 }

@@ -87,6 +87,7 @@ struct ipmi_sensor_s
     unsigned int  sensor_init_pu_scanning : 1;
     unsigned int  ignore_if_no_entity : 1;
     unsigned int  supports_rearm : 1;
+    unsigned int  hot_swap_requester : 1;
     unsigned int  hysteresis_support : 2;
     unsigned int  threshold_access : 2;
     unsigned int  event_support : 2;
@@ -4324,4 +4325,16 @@ ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
     if (rv)
 	return NULL;
     return ent;
+}
+
+void
+ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor, int val)
+{
+    sensor->hot_swap_requester = val;
+}
+
+int
+ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor)
+{
+    return sensor->hot_swap_requester;
 }
