@@ -157,7 +157,6 @@ struct ipmi_domain_s
 
     ipmi_entity_info_t    *entities;
     ipmi_lock_t           *entities_lock;
-    ipmi_domain_entity_cb entity_handler;
 
 #define MAX_CONS 2
     int           working_conn;
@@ -481,7 +480,6 @@ setup_domain(ipmi_con_t    *ipmi[],
     domain->oem_event_handler = NULL;
     domain->mc_list = NULL;
     domain->entities = NULL;
-    domain->entity_handler = NULL;
     domain->do_bus_scan = 1;
 
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;

@@ -4739,6 +4739,7 @@ con_up_handler(ipmi_domain_t *domain,
 
     ipmi_domain_remove_con_change_handler(domain, info->con_chid);
     _ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
+    ipmi_mem_free(info);
 }
 
 static int
@@ -4817,7 +4818,8 @@ mxp_handler(ipmi_mc_t *mc,
 	}
 	conup_info->mcid = _ipmi_mc_convert_to_id(mc);
 	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
-						info, &conup_info->con_chid);
+						conup_info,
+					       	&conup_info->con_chid);
 	if (rv)
 	    ipmi_mem_free(info);
     }
