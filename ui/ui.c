@@ -910,7 +910,6 @@ entity_finder(char *cmd, char **toks,
 	info.channel = 0;
 	id_name = strtok_r(ent_name, ".", &toks2);
     }
-    id_name = strtok_r(ent_name, ".", &toks2);
     instance_name = strtok_r(NULL, ".", &toks2);
     if (!instance_name) {
 	cmd_win_out("Invalid entity given\n");
