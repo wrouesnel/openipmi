@@ -1,5 +1,7 @@
 2003-12-03 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 1.1.7
+
 	* lib/ipmi_lan.c: Updated the response format where the send
 	message is include with the response to include the destination
 	IPMB as part of the header.
