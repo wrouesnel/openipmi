@@ -1,4 +1,9 @@
 
+2003-02-25 Todd David <todd.c.davis@intel.com>
+
+	* ipmi.c: Added a check for the lock actually being allocated in
+	ipmi_check_lock().
+
 2003-02-24 Corey Minyard <cminyard@mvista.com>
 
 	* test1.c, Makefile.am: Removed this bogus file.

@@ -1130,7 +1130,7 @@ ipmi_report_lock_error(os_handler_t *handler, char *str)
 void
 ipmi_check_lock(ipmi_lock_t *lock, char *str)
 {
-    if ((!DEBUG_LOCKS) || (!lock))
+    if ((!DEBUG_LOCKS) || (!lock) || (!lock->ll_lock))
 	return;
 
     if (! lock->os_hnd->is_locked(lock->os_hnd, lock->ll_lock))
