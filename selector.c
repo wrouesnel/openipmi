@@ -400,6 +400,150 @@ sel_stop_timer(sel_timer_t *timer)
     return 0;
 }
 
+/* 
+ * Process timers on selector.  The timeout is always set, to a very long
+ * value if no timers are waiting.
+ */
+static void
+process_timers(selector_t	*sel,
+	       struct timeval   *timeout,
+	       int		*num)
+{
+    struct timeval now;
+    sel_timer_t *timer;
+    
+    ipmi_lock(sel->timer_lock);
+    
+    *num = 0;
+    timer = theap_get_top(&sel->timer_heap);
+    gettimeofday(&now, NULL);
+    while (timer && cmp_timeval(&now, &timer->val.timeout) >= 0) {
+	num++;
+	theap_remove(&(sel->timer_heap), timer);
+	timer->val.in_heap = 0;
+	ipmi_unlock(sel->timer_lock);
+	
+	timer->val.handler(sel, timer, timer->val.user_data);
+	
+	ipmi_lock(sel->timer_lock);
+	timer = theap_get_top(&sel->timer_heap);
+    }
+
+    if (timer) {
+	gettimeofday(&now, NULL);   
+	diff_timeval((struct timeval *) timeout,
+		     (struct timeval *) &timer->val.timeout,
+		     &now);
+    } else {
+	/* No timers, just set a long time. */
+	timeout->tv_sec = 100000;
+	timeout->tv_usec = 0;
+    }
+    
+    sel->need_wake_on_change = 1;
+    ipmi_unlock(sel->timer_lock); 
+}
+
+/*
+ * return == 0  when timeout
+ * 	  >  0  when successful 
+ * 	  <  0  when error
+ */
+static int
+process_fds(selector_t	    *sel,
+	    sel_send_sig_cb send_sig,
+	    long            thread_id,
+	    void            *cb_data,
+	    struct timeval  *timeout)
+{
+    fd_set      tmp_read_set;
+    fd_set      tmp_write_set;
+    fd_set      tmp_except_set;
+    int i;
+    int err;
+    
+    ipmi_lock(sel->fd_lock);
+    memcpy(&tmp_read_set, (void *) &sel->read_set, sizeof(tmp_read_set));
+    memcpy(&tmp_write_set, (void *) &sel->write_set, sizeof(tmp_write_set));
+    memcpy(&tmp_except_set, (void *) &sel->except_set, sizeof(tmp_except_set));
+    ipmi_unlock(sel->fd_lock);
+
+    err = select(sel->maxfd+1,
+		 &tmp_read_set,
+		 &tmp_write_set,
+		 &tmp_except_set,
+		 timeout);
+    sel->need_wake_on_change = 0;
+    if (err <= 0)
+	goto out;
+    
+    /* We got some I/O. */
+    for (i=0; i<=sel->maxfd; i++) {
+	if (FD_ISSET(i, &tmp_read_set)) {
+	    ipmi_lock(sel->fd_lock);
+	    if (sel->fds[i].handle_read == NULL) {
+		/* Somehow we don't have a handler for this.
+		   Just shut it down. */
+		sel_set_fd_read_handler(sel, i, SEL_FD_HANDLER_DISABLED);
+	    } else {
+		sel->fds[i].handle_read(i, sel->fds[i].data);
+	    }
+	    ipmi_unlock(sel->fd_lock);
+	}
+	if (FD_ISSET(i, &tmp_write_set)) {
+	    ipmi_lock(sel->fd_lock);
+	    if (sel->fds[i].handle_write == NULL) {
+		/* Somehow we don't have a handler for this.
+                   Just shut it down. */
+		sel_set_fd_write_handler(sel, i, SEL_FD_HANDLER_DISABLED);
+	    } else {
+		sel->fds[i].handle_write(i, sel->fds[i].data);
+	    }
+	    ipmi_unlock(sel->fd_lock);
+	}
+	if (FD_ISSET(i, &tmp_except_set)) {
+	    ipmi_lock(sel->fd_lock);
+	    if (sel->fds[i].handle_except == NULL) {
+		/* Somehow we don't have a handler for this.
+                   Just shut it down. */
+		sel_set_fd_except_handler(sel, i, SEL_FD_HANDLER_DISABLED);
+	    } else {
+	        sel->fds[i].handle_except(i, sel->fds[i].data);
+	    }
+	    ipmi_unlock(sel->fd_lock);
+	}
+    }
+out:
+    return err;
+}
+
+int
+sel_select(selector_t      *sel,
+	   sel_send_sig_cb send_sig,
+	   long            thread_id,
+	   void            *cb_data,
+	   struct timeval  *timeout)
+{
+    int            i;
+    struct timeval *to_time, loc_timeout;
+
+    process_timers(sel, (struct timeval *)(&loc_timeout), &i);
+    if (i) { /* some timer handlers are called */
+	return i; 
+    }    
+    if (timeout) { 
+	if (cmp_timeval((struct timeval *)(&loc_timeout), 
+			timeout) >= 0)
+	    to_time = timeout;
+	else
+	    to_time = (struct timeval *)&loc_timeout; 
+    } else {
+	to_time = (struct timeval *)&loc_timeout;
+    }
+
+    return process_fds(sel, send_sig, thread_id, cb_data, to_time);
+}
+
 /* The main loop for the program.  This will select on the various
    sets, then scan for any available I/O to process.  It also monitors
    the time and call the timeout handlers periodically. */
@@ -409,110 +553,19 @@ sel_select_loop(selector_t      *sel,
 		long            thread_id,
 		void            *cb_data)
 {
-    fd_set      tmp_read_set;
-    fd_set      tmp_write_set;
-    fd_set      tmp_except_set;
-    int         i;
-    int         err;
-    sel_timer_t *timer;
-    volatile struct timeval *to_time = &(sel->timeout);
-    struct timeval now;
+    int i;
+    int err;
 
     for (;;) {
-	ipmi_lock(sel->timer_lock);
-	timer = theap_get_top(&sel->timer_heap);
-	if (timer) {
-	    /* Check for timers to time out. */
-	    gettimeofday(&now, NULL);
-	    while (cmp_timeval(&now, &timer->val.timeout) >= 0) {
-		theap_remove(&(sel->timer_heap), timer);
-
-		timer->val.in_heap = 0;
-		ipmi_unlock(sel->timer_lock);
-		timer->val.handler(sel, timer, timer->val.user_data);
-		ipmi_lock(sel->timer_lock);
-
-		timer = theap_get_top(&sel->timer_heap);
-		if (!timer) {
-		    break;
-		}
-	    }
-	}
-
-	if (timer) {
-	    /* Calculate how long to wait now. */
-	    gettimeofday(&now, NULL);
-	    diff_timeval((struct timeval *) to_time,
-			 (struct timeval *) &timer->val.timeout,
-			 &now);
-	} else {
-	    /* No timers, just set a long time. */
-	    to_time->tv_sec = 100000;
-	    to_time->tv_usec = 0;
-	}
-	sel->need_wake_on_change = 1;
-	ipmi_unlock(sel->timer_lock);
-
-	ipmi_lock(sel->fd_lock);
-	memcpy(&tmp_read_set, (void *) &sel->read_set, sizeof(tmp_read_set));
-	memcpy(&tmp_write_set, (void *) &sel->write_set, sizeof(tmp_write_set));
-	memcpy(&tmp_except_set, (void *) &sel->except_set, sizeof(tmp_except_set));
-	ipmi_unlock(sel->fd_lock);
-
-	err = select(sel->maxfd+1,
-		     &tmp_read_set,
-		     &tmp_write_set,
-		     &tmp_except_set,
-		     (struct timeval *) to_time);
-	sel->need_wake_on_change = 0;
-	if (err == 0) {
-	    /* A timeout occurred. */
-	} else if (err < 0) {
+	process_timers(sel, (struct timeval *)(&sel->timeout), &i);    
+	
+	err = process_fds(sel, send_sig, thread_id, cb_data, 
+			  (struct timeval *)(&sel->timeout));
+    	if ((err < 0) && (errno != EINTR)) {
 	    /* An error occurred. */
-	    if (errno == EINTR) {
-		/* EINTR is ok, just restart the operation. */
-	    } else {
-		/* An error is bad, we need to abort. */
-		syslog(LOG_ERR, "select_loop() - select: %m");
-		exit(1);
-	    }
-	} else {
-	    /* We got some I/O. */
-	    for (i=0; i<=sel->maxfd; i++) {
-		if (FD_ISSET(i, &tmp_read_set)) {
-		    ipmi_lock(sel->fd_lock);
-		    if (sel->fds[i].handle_read == NULL) {
-			/* Somehow we don't have a handler for this.
-                           Just shut it down. */
-			sel_set_fd_read_handler(sel, i, SEL_FD_HANDLER_DISABLED);
-		    } else {
-			sel->fds[i].handle_read(i, sel->fds[i].data);
-		    }
-		    ipmi_unlock(sel->fd_lock);
-		}
-		if (FD_ISSET(i, &tmp_write_set)) {
-		    ipmi_lock(sel->fd_lock);
-		    if (sel->fds[i].handle_write == NULL) {
-			/* Somehow we don't have a handler for this.
-                           Just shut it down. */
-			sel_set_fd_write_handler(sel, i, SEL_FD_HANDLER_DISABLED);
-		    } else {
-			sel->fds[i].handle_write(i, sel->fds[i].data);
-		    }
-		    ipmi_unlock(sel->fd_lock);
-		}
-		if (FD_ISSET(i, &tmp_except_set)) {
-		    ipmi_lock(sel->fd_lock);
-		    if (sel->fds[i].handle_except == NULL) {
-			/* Somehow we don't have a handler for this.
-                           Just shut it down. */
-			sel_set_fd_except_handler(sel, i, SEL_FD_HANDLER_DISABLED);
-		    } else {
-			sel->fds[i].handle_except(i, sel->fds[i].data);
-		    }
-		    ipmi_unlock(sel->fd_lock);
-		}
-	    }
+	    /* An error is bad, we need to abort. */
+	    syslog(LOG_ERR, "select_loop() - select: %m");
+	    exit(1);
 	}
     }
 }

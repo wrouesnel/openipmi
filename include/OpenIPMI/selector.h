@@ -98,6 +98,19 @@ int sel_stop_timer(sel_timer_t *timer);
    passed into sel_select_loop(). */
 typedef void (*sel_send_sig_cb)(long thread_id, void *cb_data);
 
+/*
+ * This is the select interface for program. All handlers on timers and
+ * fds will get chances to be called.
+ * return >0 if sel_select did something (ran a timer or fd)
+ *         0 if timeout
+ *        <0 if error (errno will be set)
+ */
+int sel_select(selector_t      *sel,
+	       sel_send_sig_cb send_sig,
+	       long            thread_id,
+	       void            *cb_data,
+	       struct timeval  *timeout);
+
 /* This is the main loop for the program.  If NULL is passed in to
    send_sig, then the signal sender is not used. */
 void sel_select_loop(selector_t      *sel,

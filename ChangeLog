@@ -1,4 +1,13 @@
 
+2003-04-10 Jeff Zheng <Jeff.Zheng@Intel.com>, Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/selector.h: Added sel_select() to the include
+	file.
+
+	* sample.c: Added an example of using sel_select().
+
+	* selector.c: Some cleanups.
+
 2003-04-03 Duncan Laurie <duncan@sun.com>
 
 	* ipmi_lan.c: Fixups trying to the the lan code working.

@@ -313,8 +313,17 @@ main(int argc, char *argv[])
 #endif
 
     /* This is the main loop of the event-driven program. 
-       Try <CTRL-C> to exit the programe */ 
+       Try <CTRL-C> to exit the program */ 
+#if 1
+    /* We run the select loop here, this shows how you can use
+       sel_select.  You could add your own processing in this loop. */
+    while (1) {
+	sel_select(ui_sel, NULL, 0, NULL, NULL);
+    }
+#else
+    /* Let the selector code run the select loop. */
     sel_select_loop(ui_sel, NULL, 0, NULL);
+#endif
 }
 
 void
