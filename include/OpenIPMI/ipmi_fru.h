@@ -293,7 +293,7 @@ int ipmi_fru_get(ipmi_fru_t                *fru,
 
 /* Free data that comes from ipmi_fru_get if the data return is
    non-NULL. */
-int ipmi_fru_data_free(char *data);
+void ipmi_fru_data_free(char *data);
 
 
 /* More internal stuff.  The average user will not need to be able

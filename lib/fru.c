@@ -2069,7 +2069,7 @@ ipmi_fru_get(ipmi_fru_t                *fru,
     return 0;
 }
 
-int
+void
 ipmi_fru_data_free(char *data)
 {
     ipmi_mem_free(data);
