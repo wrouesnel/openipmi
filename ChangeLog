@@ -15,6 +15,11 @@
 
 	* configure.in: Move to version 1.2.12.
 
+	* lib/oem_motorola_mxp.c: Renumbered the sensors so that five
+	power supplies and fans could fit.  Also split out the fan info
+	from the power supply info to allow different counts of fans and
+	power supplies.
+
 2004-02-17 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_conn.h: Added a "broadcast broken" flag

@@ -86,7 +86,8 @@
 
 /* Various numbers and index offsets.  The indexes are used to index
    into the array of boards. */
-#define MXP_POWER_SUPPLIES 3
+#define MXP_POWER_SUPPLIES 5
+#define MXP_FANS 5
 #define MXP_BOARD_IDX_OFFSET 0
 #define MXP_BOARDS 18
 #define MXP_ALARM_CARD_IDX_OFFSET MXP_BOARDS
@@ -155,11 +156,14 @@
  * The sensor numbers used for the non-standard sensors (and controls)
  * that are global (owned by the AMC(s) are as follows:
  *
- * Chassis sensors/controls: 0-15
- * Power supply sensors/controls: 16-63 (16 each)
- * Board sensors/controls: 64-239 (8 each, 22 boards)
+ * Chassis sensors/controls: 1-6
+ * 7 is currently unused
+ * Power supply sensors/controls: 14-43 (6 each, 5 power supplies)
+ * Fan sensors/controls: 44-63 (4 each, 5 fans)
+ * Board sensors/controls: 64-195 (6 each, 22 boards)
+ * 196-239 are currently unused.
  *
- * Note that 239-255 are reserved for use by OpenIPMI, so we can't use those.
+ * Note that 240-255 are reserved for use by OpenIPMI, so we can't use those.
  *
  */
 
@@ -172,43 +176,48 @@
 #define MXP_TEMP_COOL_LED_NUM		6
 
 /* Power supply and fan sensors */
-#define MXP_PS_SENSNUM_START 16
+#define MXP_PS_SENSNUM_START 14
 #define MXP_PS_SENSOR_NUM(idx, num) (((idx)*16)+(num)+MXP_PS_SENSNUM_START)
-#define MXP_PS_PRESENCE_NUM(idx) MXP_PS_SENSOR_NUM(idx, 1)
-#define MXP_PS_PS_NUM(idx) MXP_PS_SENSOR_NUM(idx, 2)
-#define MXP_FAN_PRESENCE_NUM(idx) MXP_PS_SENSOR_NUM(idx, 3)
-#define MXP_FAN_SPEED_NUM(idx) MXP_PS_SENSOR_NUM(idx, 4)
-#define MXP_FAN_COOLING_NUM(idx) MXP_PS_SENSOR_NUM(idx, 5)
+#define MXP_PS_PRESENCE_NUM(idx) MXP_PS_SENSOR_NUM(idx, 0)
+#define MXP_PS_PS_NUM(idx) MXP_PS_SENSOR_NUM(idx, 1)
+
+#define MXP_FAN_SENSNUM_START 44
+#define MXP_FAN_SENSOR_NUM(idx, num) (((idx)*16)+(num)+MXP_FAN_SENSNUM_START)
+#define MXP_FAN_PRESENCE_NUM(idx) MXP_FAN_SENSOR_NUM(idx, 0)
+#define MXP_FAN_SPEED_NUM(idx) MXP_FAN_SENSOR_NUM(idx, 1)
+#define MXP_FAN_COOLING_NUM(idx) MXP_FAN_SENSOR_NUM(idx, 2)
 
 /* Power supply and fan controls */
-#define MXP_PS_CONTROLNUM_START 16
-#define MXP_PS_CONTROL_NUM(idx, num) (((idx)*16)+(num)+MXP_PS_CONTROLNUM_START)
-#define MXP_PS_ENABLE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 1)
-#define MXP_PS_OOS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 2)
-#define MXP_PS_INS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 3)
-/* fan speed control (4) is now gone and this is free. */
-#define MXP_FAN_OOS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 5)
-#define MXP_FAN_INS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 6)
-#define MXP_PS_TYPE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 7)
-#define MXP_PS_REVISION_NUM(idx) MXP_PS_CONTROL_NUM(idx, 8)
-#define MXP_FAN_TYPE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 9)
-#define MXP_FAN_REVISION_NUM(idx) MXP_PS_CONTROL_NUM(idx, 10)
-#define MXP_PS_I2C_ISOLATE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 11)
+#define MXP_PS_CONTROLNUM_START 14
+#define MXP_PS_CONTROL_NUM(idx, num) (((idx)*6)+(num)+MXP_PS_CONTROLNUM_START)
+#define MXP_PS_ENABLE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 0)
+#define MXP_PS_OOS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 1)
+#define MXP_PS_INS_LED_NUM(idx) MXP_PS_CONTROL_NUM(idx, 2)
+#define MXP_PS_TYPE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 3)
+#define MXP_PS_REVISION_NUM(idx) MXP_PS_CONTROL_NUM(idx, 4)
+#define MXP_PS_I2C_ISOLATE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 5)
+
+#define MXP_FAN_CONTROLNUM_START 44
+#define MXP_FAN_CONTROL_NUM(idx, num) (((idx)*4)+(num)+MXP_FAN_CONTROLNUM_START)
+#define MXP_FAN_OOS_LED_NUM(idx) MXP_FAN_CONTROL_NUM(idx, 0)
+#define MXP_FAN_INS_LED_NUM(idx) MXP_FAN_CONTROL_NUM(idx, 1)
+#define MXP_FAN_TYPE_NUM(idx) MXP_FAN_CONTROL_NUM(idx, 2)
+#define MXP_FAN_REVISION_NUM(idx) MXP_FAN_CONTROL_NUM(idx, 3)
 
 /* Board senors/controls. */
 #define MXP_BOARD_SENSNUM_START 64
 #define MXP_BOARD_SENSOR_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_SENSNUM_START)
-#define MXP_BOARD_PRESENCE_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 1)
-#define MXP_BOARD_HEALTHY_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 2)
+#define MXP_BOARD_PRESENCE_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 0)
+#define MXP_BOARD_HEALTHY_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 1)
 
 #define MXP_BOARD_CONTROLNUM_START 64
-#define MXP_BOARD_CONTROL_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_CONTROLNUM_START)
-#define MXP_BOARD_OOS_LED_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 1)
-#define MXP_BOARD_INS_LED_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 2)
-#define MXP_BOARD_BD_SEL_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 3)
-#define MXP_BOARD_PCI_RESET_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 4)
-#define MXP_SLOT_INIT_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 5)
-#define MXP_SLOT_I2C_ISOLATE_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 6)
+#define MXP_BOARD_CONTROL_NUM(idx,num) (((idx)*6)+(num)+MXP_BOARD_CONTROLNUM_START)
+#define MXP_BOARD_OOS_LED_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 0)
+#define MXP_BOARD_INS_LED_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 1)
+#define MXP_BOARD_BD_SEL_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 2)
+#define MXP_BOARD_PCI_RESET_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 3)
+#define MXP_SLOT_INIT_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 4)
+#define MXP_SLOT_I2C_ISOLATE_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 5)
 
 
 /* Information common to all sensors.  A pointer to this is put into
@@ -258,7 +267,6 @@ typedef struct mxp_power_supply_s
     unsigned int  ipmb_addr;
 
     ipmi_entity_t *ent;
-    ipmi_entity_t *fan_ent;
 
     ipmi_sensor_t *presence;
     ipmi_sensor_t *ps;
@@ -269,16 +277,25 @@ typedef struct mxp_power_supply_s
     ipmi_control_t *ps_type;
     ipmi_control_t *ps_revision;
     ipmi_control_t *ps_i2c_isolate;
+} mxp_power_supply_t;
 
-    ipmi_sensor_t *fan;
+typedef struct mxp_fan_s
+{
+    mxp_info_t    *info;
+    int           idx;
+    unsigned int  ipmb_addr;
+
+    ipmi_entity_t *fan_ent;
+
     ipmi_sensor_t *fan_presence;
+    ipmi_sensor_t *fan;
     ipmi_sensor_t *cooling;
 
     ipmi_control_t *fan_oos_led;
     ipmi_control_t *fan_inserv_led;
     ipmi_control_t *fan_type;
     ipmi_control_t *fan_revision;
-} mxp_power_supply_t;
+} mxp_fan_t;
 
 typedef struct mxp_board_s {
     mxp_info_t    *info;
@@ -352,10 +369,17 @@ struct mxp_info_s {
     ipmi_mc_t          *mc;
     ipmi_entity_t      *chassis_ent;
     mxp_power_supply_t power_supply[MXP_POWER_SUPPLIES];
+    mxp_fan_t          fan[MXP_FANS];
     mxp_board_t        board[MXP_TOTAL_BOARDS];
 
     /* Number of boards in the system */
     unsigned int num_boards;
+
+    /* Number of power supplies that can be installed */
+    unsigned int num_power_supplies;
+
+    /* Number of fans that can be installed */
+    unsigned int num_fans;
 
     /* Chassis info */
     ipmi_control_t *chassis_type_control;
@@ -3371,12 +3395,12 @@ fan_presence_states_err_cb(ipmi_sensor_t   *sensor,
 static void
 fan_presence_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 {
-    mxp_sens_info_t    *get_info = cb_data;
-    mxp_power_supply_t *psinfo = get_info->sdinfo;
-    ipmi_states_t      states;
-    ipmi_msg_t         msg;
-    unsigned char      data[4];
-    int                rv;
+    mxp_sens_info_t *get_info = cb_data;
+    mxp_fan_t       *faninfo = get_info->sdinfo;
+    ipmi_states_t   states;
+    ipmi_msg_t      msg;
+    unsigned char   data[4];
+    int             rv;
 
     ipmi_init_states(&states);
     ipmi_set_sensor_scanning_enabled(&states, 1);
@@ -3394,8 +3418,8 @@ fan_presence_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     msg.data_len = 4;
     msg.data = data;
     add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_sensor_send_command(sensor, psinfo->info->mc, 0,
+    data[3] = faninfo->ipmb_addr;
+    rv = ipmi_sensor_send_command(sensor, faninfo->info->mc, 0,
 				  &msg, mxp_sensor_get_done,
 				  &(get_info->sdata), get_info);
     if (rv) {
@@ -3412,12 +3436,12 @@ fan_presence_states_get(ipmi_sensor_t       *sensor,
 			void                *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
-    mxp_power_supply_t  *psinfo = hdr->data;
+    mxp_fan_t           *faninfo = hdr->data;
     int                 rv;
     mxp_sens_info_t     *get_info;
 
 
-    get_info = alloc_sens_info(psinfo, done, cb_data);
+    get_info = alloc_sens_info(faninfo, done, cb_data);
     if (!get_info)
 	return ENOMEM;
     get_info->get_states = fan_presence_states_get_cb;
@@ -3436,7 +3460,7 @@ static void
 fan_led_set_start(ipmi_control_t *control, int err, void *cb_data)
 {
     mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
+    mxp_fan_t          *faninfo = control_info->idinfo;
     int                rv;
     ipmi_msg_t         msg;
     unsigned char      data[6];
@@ -3454,16 +3478,16 @@ fan_led_set_start(ipmi_control_t *control, int err, void *cb_data)
     msg.data_len = 6;
     msg.data = data;
     add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
+    data[3] = faninfo->ipmb_addr;
 
     /* Set which LED to set. */
-    if (control == psinfo->fan_oos_led)
+    if (control == faninfo->fan_oos_led)
 	data[4] = 1;
     else
 	data[4] = 2;
     data[5] = control_info->vals[0];
 
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
+    rv = ipmi_control_send_command(control, faninfo->info->mc, 0,
 				   &msg, mxp_control_set_done,
 				   &(control_info->sdata), control_info);
     if (rv) {
@@ -3481,11 +3505,11 @@ fan_led_set(ipmi_control_t     *control,
 	    void               *cb_data)
 {
     mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_power_supply_t   *psinfo = hdr->data;
+    mxp_fan_t            *faninfo = hdr->data;
     mxp_control_info_t   *control_info;
     int                  rv;
 
-    control_info = alloc_control_info(psinfo);
+    control_info = alloc_control_info(faninfo);
     if (!control_info)
 	return ENOMEM;
     control_info->done_set = handler;
@@ -3505,10 +3529,10 @@ fan_led_get_cb(ipmi_control_t     *control,
 	       mxp_control_info_t *control_info,
 	       unsigned char      *data)
 {
-    mxp_power_supply_t *psinfo = control_info->idinfo;
+    mxp_fan_t *faninfo = control_info->idinfo;
 
     /* Get the requested LED. */
-    if (control == psinfo->fan_oos_led)
+    if (control == faninfo->fan_oos_led)
 	return data[4] & 1;
     else
 	return (data[4] >> 1) & 1;
@@ -3520,20 +3544,20 @@ fan_led_get(ipmi_control_t      *control,
 	    void                *cb_data)
 {
     mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_power_supply_t   *psinfo = hdr->data;
+    mxp_fan_t            *faninfo = hdr->data;
     mxp_control_info_t   *control_info;
     int                  rv;
 
-    control_info = alloc_control_info(psinfo);
+    control_info = alloc_control_info(faninfo);
     if (!control_info)
 	return ENOMEM;
     control_info->done_get = handler;
     control_info->cb_data = cb_data;
     control_info->get_val = fan_led_get_cb;
     control_info->min_rsp_length = 5;
-    control_info->mc = psinfo->info->mc;
+    control_info->mc = faninfo->info->mc;
     control_info->cmd = MXP_OEM_GET_FAN_STATUS_CMD;
-    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data[0] = faninfo->ipmb_addr;
     control_info->extra_data_len = 1;
 
     rv = ipmi_control_add_opq(control, mxp_control_get_start,
@@ -3550,11 +3574,11 @@ fan_type_get(ipmi_control_t                 *control,
 	     void                           *cb_data)
 {
     mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_power_supply_t   *psinfo = hdr->data;
+    mxp_fan_t            *faninfo = hdr->data;
     mxp_control_info_t   *control_info;
     int                  rv;
 
-    control_info = alloc_control_info(psinfo);
+    control_info = alloc_control_info(faninfo);
     if (!control_info)
 	return ENOMEM;
     control_info->get_identifier_val = handler;
@@ -3562,9 +3586,9 @@ fan_type_get(ipmi_control_t                 *control,
     control_info->min_rsp_length = 8;
     control_info->data_off = 7;
     control_info->data_len = 1;
-    control_info->mc = psinfo->info->mc;
+    control_info->mc = faninfo->info->mc;
     control_info->cmd = MXP_OEM_GET_FAN_STATUS_CMD;
-    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data[0] = faninfo->ipmb_addr;
     control_info->extra_data_len = 1;
     rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
@@ -3580,11 +3604,11 @@ fan_revision_get(ipmi_control_t                 *control,
 		 void                           *cb_data)
 {
     mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_power_supply_t   *psinfo = hdr->data;
+    mxp_fan_t            *faninfo = hdr->data;
     mxp_control_info_t   *control_info;
     int                  rv;
 
-    control_info = alloc_control_info(psinfo);
+    control_info = alloc_control_info(faninfo);
     if (!control_info)
 	return ENOMEM;
     control_info->get_identifier_val = handler;
@@ -3592,9 +3616,9 @@ fan_revision_get(ipmi_control_t                 *control,
     control_info->min_rsp_length = 10;
     control_info->data_off = 8;
     control_info->data_len = 2;
-    control_info->mc = psinfo->info->mc;
+    control_info->mc = faninfo->info->mc;
     control_info->cmd = MXP_OEM_GET_FAN_STATUS_CMD;
-    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data[0] = faninfo->ipmb_addr;
     control_info->extra_data_len = 1;
     rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
@@ -3611,7 +3635,7 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
 		   void          *cb_data)
 {
     mxp_reading_done_t *get_info = cb_data;
-    mxp_power_supply_t *psinfo = get_info->sdinfo;
+    mxp_fan_t          *faninfo = get_info->sdinfo;
     ipmi_states_t      states;
     enum               ipmi_value_present_e pres = IPMI_NO_VALUES_PRESENT;
     unsigned char      raw = 0;
@@ -3662,7 +3686,7 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
 	goto out;
     }
 
-    if (sensor == psinfo->fan) {
+    if (sensor == faninfo->fan) {
 	/* The fan sensor is being queried. */
 	if (rsp->data[6] & 0x04)
 	    /* A fan failure event is present. */
@@ -3700,7 +3724,7 @@ static void
 mxp_fan_reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 {
     mxp_reading_done_t *get_info = cb_data;
-    mxp_power_supply_t *psinfo = get_info->sdinfo;
+    mxp_fan_t          *faninfo = get_info->sdinfo;
     ipmi_msg_t         msg;
     unsigned char      data[4];
     int                rv;
@@ -3724,8 +3748,8 @@ mxp_fan_reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     msg.data_len = 4;
     msg.data = data;
     add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_sensor_send_command(sensor, psinfo->info->mc, 0,
+    data[3] = faninfo->ipmb_addr;
+    rv = ipmi_sensor_send_command(sensor, faninfo->info->mc, 0,
 				  &msg, mxp_fan_reading_cb,
 				  &(get_info->sdata), get_info);
     if (rv) {
@@ -3744,7 +3768,7 @@ mxp_fan_reading_get_cb(ipmi_sensor_t        *sensor,
 		       void                 *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
-    mxp_power_supply_t  *psinfo = hdr->data;
+    mxp_fan_t           *faninfo = hdr->data;
     int                 rv;
     mxp_reading_done_t  *get_info;
 
@@ -3752,7 +3776,7 @@ mxp_fan_reading_get_cb(ipmi_sensor_t        *sensor,
     get_info = ipmi_mem_alloc(sizeof(*get_info));
     if (!get_info)
 	return ENOMEM;
-    get_info->sdinfo = psinfo;
+    get_info->sdinfo = faninfo;
     get_info->done = done;
     get_info->cb_data = cb_data;
 
@@ -3768,8 +3792,7 @@ static int
 mxp_add_power_supply_sensors(mxp_info_t         *info,
 			     mxp_power_supply_t *ps)
 {
-    int          rv;
-    unsigned int assert, deassert;
+    int rv;
 
     /* Power supply presence */
     rv = mxp_alloc_discrete_sensor(info->mc,
@@ -3909,23 +3932,34 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     if (rv)
 	goto out_err;
 
+ out_err:
+    return rv;
+}
+
+static int
+mxp_add_fan_sensors(mxp_info_t *info,
+		    mxp_fan_t  *fan)
+{
+    int          rv;
+    unsigned int assert, deassert;
+
     /* Fan presence sensor */
     rv = mxp_alloc_discrete_sensor(info->mc,
-				   ps, NULL,
+				   fan, NULL,
 				   IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
 				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
 				   "presence",
 				   0x7, 0,
 				   fan_presence_states_get,
 				   NULL,
-				   &ps->fan_presence);
+				   &fan->fan_presence);
     if (rv)
 	goto out_err;
-    ipmi_sensor_set_ignore_if_no_entity(ps->fan_presence, 0);
+    ipmi_sensor_set_ignore_if_no_entity(fan->fan_presence, 0);
     rv = mxp_add_sensor(info->mc, 
-			&ps->fan_presence,
-			MXP_FAN_PRESENCE_NUM(ps->idx),
-			ps->fan_ent);
+			&fan->fan_presence,
+			MXP_FAN_PRESENCE_NUM(fan->idx),
+			fan->fan_ent);
     if (rv)
 	goto out_err;
 
@@ -3933,20 +3967,20 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     assert = 1 << ((IPMI_LOWER_CRITICAL * 2) + IPMI_GOING_LOW);
     deassert = 1 << ((IPMI_LOWER_CRITICAL * 2) + IPMI_GOING_LOW);
     rv = mxp_alloc_threshold_sensor(info->mc,
-				    ps, NULL,
+				    fan, NULL,
 				    IPMI_SENSOR_TYPE_FAN,
 				    IPMI_UNIT_TYPE_RPM,
 				    "speed",
 				    assert, deassert,
 				    mxp_fan_reading_get_cb,
 				    -1, -1, -1,
-				    &ps->fan);
+				    &fan->fan);
     if (rv)
 	goto out_err;
     rv = mxp_add_sensor(info->mc, 
-			&ps->fan,
-			MXP_FAN_SPEED_NUM(ps->idx),
-			ps->fan_ent);
+			&fan->fan,
+			MXP_FAN_SPEED_NUM(fan->idx),
+			fan->fan_ent);
     if (rv)
 	goto out_err;
 
@@ -3956,81 +3990,81 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     deassert = ((1 << ((IPMI_UPPER_NON_CRITICAL * 2) + IPMI_GOING_HIGH))
 		| (1 << ((IPMI_UPPER_CRITICAL * 2) + IPMI_GOING_HIGH)));
     rv = mxp_alloc_threshold_sensor(info->mc,
-				    ps, NULL,
+				    fan, NULL,
 				    IPMI_SENSOR_TYPE_COOLING_DEVICE,
 				    IPMI_UNIT_TYPE_UNSPECIFIED,
 				    "cooling",
 				    assert, deassert,
 				    mxp_fan_reading_get_cb,
 				    -1, -1, -1,
-				    &ps->cooling);
+				    &fan->cooling);
     if (rv)
 	goto out_err;
     rv = mxp_add_sensor(info->mc, 
-			&ps->cooling,
-			MXP_FAN_COOLING_NUM(ps->idx),
-			ps->fan_ent);
+			&fan->cooling,
+			MXP_FAN_COOLING_NUM(fan->idx),
+			fan->fan_ent);
     if (rv)
 	goto out_err;
 
     /* FAN LED controls. */
     rv = mxp_alloc_control(info->mc,
-			   ps,
+			   fan,
 			   IPMI_CONTROL_LIGHT,
 			   "OOS LED",
 			   fan_led_set,
 			   fan_led_get,
-			   &ps->fan_oos_led);
+			   &fan->fan_oos_led);
     if (rv)
 	goto out_err;
-    ipmi_control_light_set_lights(ps->fan_oos_led, 1, red_led);
+    ipmi_control_light_set_lights(fan->fan_oos_led, 1, red_led);
     rv = mxp_add_control(info->mc, 
-			 &ps->fan_oos_led,
-			 MXP_FAN_OOS_LED_NUM(ps->idx),
-			 ps->fan_ent);
+			 &fan->fan_oos_led,
+			 MXP_FAN_OOS_LED_NUM(fan->idx),
+			 fan->fan_ent);
     if (rv)
 	goto out_err;
 
     rv = mxp_alloc_control(info->mc,
-			   ps,
+			   fan,
 			   IPMI_CONTROL_LIGHT,
 			   "InS LED",
 			   fan_led_set,
 			   fan_led_get,
-			   &(ps->fan_inserv_led));
+			   &(fan->fan_inserv_led));
     if (rv)
 	goto out_err;
-    ipmi_control_light_set_lights(ps->fan_inserv_led, 1, red_led);
+    ipmi_control_light_set_lights(fan->fan_inserv_led, 1, red_led);
     rv = mxp_add_control(info->mc, 
-			 &ps->fan_inserv_led,
-			 MXP_FAN_INS_LED_NUM(ps->idx),
-			 ps->fan_ent);
+			 &fan->fan_inserv_led,
+			 MXP_FAN_INS_LED_NUM(fan->idx),
+			 fan->fan_ent);
     if (rv)
 	goto out_err;
 	       
     /* Fan Type ID */
-    rv = mxp_alloc_id_control(info->mc, ps->fan_ent,
-			      MXP_FAN_TYPE_NUM(ps->idx),
-			      ps,
+    rv = mxp_alloc_id_control(info->mc, fan->fan_ent,
+			      MXP_FAN_TYPE_NUM(fan->idx),
+			      fan,
 			      IPMI_CONTROL_IDENTIFIER,
 			      "type",
 			      1,
 			      NULL,
 			      fan_type_get,
-			      &ps->fan_type);
+			      &fan->fan_type);
     if (rv)
 	goto out_err;
 
     /* Fan Revision */
-    rv = mxp_alloc_id_control(info->mc, ps->fan_ent,
-			      MXP_FAN_REVISION_NUM(ps->idx),
-			      ps,
+    rv = mxp_alloc_id_control(info->mc, fan->fan_ent,
+			      MXP_FAN_REVISION_NUM(fan->idx),
+			      fan,
 			      IPMI_CONTROL_IDENTIFIER,
 			      "revision",
 			      1,
 			      NULL,
 			      fan_revision_get,
-			      &ps->fan_revision);
+			      &fan->fan_revision);
     if (rv)
 	goto out_err;
 
@@ -4940,13 +4974,17 @@ static char *ps_entity_str[MXP_POWER_SUPPLIES] =
     "PS 1",
     "PS 2",
     "PS 3",
+    "PS 4",
+    "PS 5",
 };
 
-static char *fan_entity_str[MXP_POWER_SUPPLIES] =
+static char *fan_entity_str[MXP_FANS] =
 {
     "FAN 1",
     "FAN 2",
     "FAN 3",
+    "FAN 4",
+    "FAN 5",
 };
 
 static int
@@ -5076,7 +5114,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    goto out;
     }
 
-    for (i=0; i<MXP_POWER_SUPPLIES; i++) {
+    for (i=0; i<info->num_power_supplies; i++) {
 	ipmb_addr = 0x54 + (i*2);
 	info->power_supply[i].ipmb_addr = ipmb_addr;
 
@@ -5096,20 +5134,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	}
 	ipmi_entity_set_type(info->power_supply[i].ent, IPMI_ENTITY_FRU);
 	/* FIXME - is there FRU information someplace? */
-	name = fan_entity_str[i];
-	rv = ipmi_entity_add(ents, domain, 0, 0, 0,
-			     IPMI_ENTITY_ID_FAN_COOLING,
-			     i+1,
-			     name, IPMI_ASCII_STR, strlen(name),
-			     mxp_entity_sdr_add,
-			     NULL, &(info->power_supply[i].fan_ent));
-	if (rv) {
-	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_motorola_mxp.c(mxp_create_entities): "
-		     "Could not add power supply: %x",
-		     MC_NAME(mc), rv);
-	    goto out;
-	}
+
 	info->power_supply[i].info = info;
 	info->power_supply[i].idx = i;
 
@@ -5122,8 +5147,32 @@ mxp_create_entities(ipmi_mc_t  *mc,
 		     MC_NAME(mc), rv);
 	    goto out;
 	}
-	rv = ipmi_entity_add_child(info->power_supply[i].ent,
-				   info->power_supply[i].fan_ent);
+	rv = mxp_add_power_supply_sensors(info, &(info->power_supply[i]));
+	if (rv)
+	    goto out;
+    }
+
+    for (i=0; i<info->num_fans; i++) {
+	name = fan_entity_str[i];
+	rv = ipmi_entity_add(ents, domain, 0, 0, 0,
+			     IPMI_ENTITY_ID_FAN_COOLING,
+			     i+1,
+			     name, IPMI_ASCII_STR, strlen(name),
+			     mxp_entity_sdr_add,
+			     NULL, &(info->fan[i].fan_ent));
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add power supply: %x",
+		     MC_NAME(mc), rv);
+	    goto out;
+	}
+
+	info->fan[i].info = info;
+	info->fan[i].idx = i;
+
+	rv = ipmi_entity_add_child(info->chassis_ent,
+				   info->fan[i].fan_ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
@@ -5131,7 +5180,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 		     MC_NAME(mc), rv);
 	    goto out;
 	}
-	rv = mxp_add_power_supply_sensors(info, &(info->power_supply[i]));
+	rv = mxp_add_fan_sensors(info, &(info->fan[i]));
 	if (rv)
 	    goto out;
     }
@@ -7252,11 +7301,11 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 	break;
 
     case 0xd2:
-	for (i=0; i<MXP_POWER_SUPPLIES; i++) {
+	for (i=0; i<info->num_power_supplies; i++) {
 	    if (event->data[10] == info->power_supply[i].ipmb_addr)
 		break;
 	}
-	if (i >= MXP_POWER_SUPPLIES)
+	if (i >= info->num_power_supplies)
 	    /* Didn't find it in the power supplies. */
 	    break;
 	
@@ -7278,11 +7327,11 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 	break;
 
     case 0xd3:
-	for (i=0; i<MXP_POWER_SUPPLIES; i++) {
-	    if (event->data[10] == info->power_supply[i].ipmb_addr)
+	for (i=0; i<info->num_fans; i++) {
+	    if (event->data[10] == info->fan[i].ipmb_addr)
 		break;
 	}
-	if (i >= MXP_POWER_SUPPLIES)
+	if (i >= info->num_fans)
 	    /* Didn't find it in the power supplies. */
 	    break;
 	
@@ -8262,6 +8311,8 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 
     info->chassis_type = msg->data[4];
     info->num_boards = MXP_BOARDS;
+    info->num_power_supplies = 3;
+    info->num_fans = 3;
     switch (info->chassis_type) {
     case 1: /* 400W 2.16 */
 	info->chassis_config = MXP_CHASSIS_CONFIG_6U;
@@ -8280,6 +8331,7 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
     case 9: /* HalfPint 2.20 mesh */
 	info->chassis_config = MXP_CHASSIS_CONFIG_HALFPINT;
 	info->num_boards = 8;
+	info->num_power_supplies = 5;
 	break;
 
     default:
@@ -8328,9 +8380,6 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	if (info->power_supply[i].ent)
 	    ipmi_entity_remove_child(info->chassis_ent,
 				     info->power_supply[i].ent);
-	if (info->power_supply[i].fan_ent)
-	    ipmi_entity_remove_child(info->power_supply[i].ent,
-				     info->power_supply[i].fan_ent);
 	if (info->power_supply[i].presence)
 	    ipmi_sensor_destroy(info->power_supply[i].presence);
 	if (info->power_supply[i].ps)
@@ -8347,20 +8396,26 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->power_supply[i].ps_revision);
 	if (info->power_supply[i].ps_i2c_isolate)
 	    ipmi_control_destroy(info->power_supply[i].ps_i2c_isolate);
-	if (info->power_supply[i].fan_presence)
-	    ipmi_sensor_destroy(info->power_supply[i].fan_presence);
-	if (info->power_supply[i].fan_type)
-	    ipmi_control_destroy(info->power_supply[i].fan_type);
-	if (info->power_supply[i].fan_revision)
-	    ipmi_control_destroy(info->power_supply[i].fan_revision);
-	if (info->power_supply[i].fan)
-	    ipmi_sensor_destroy(info->power_supply[i].fan);
-	if (info->power_supply[i].cooling)
-	    ipmi_sensor_destroy(info->power_supply[i].cooling);
-	if (info->power_supply[i].fan_oos_led)
-	    ipmi_control_destroy(info->power_supply[i].fan_oos_led);
-	if (info->power_supply[i].fan_inserv_led)
-	    ipmi_control_destroy(info->power_supply[i].fan_inserv_led);
+    }
+
+    for (i=0; i<MXP_FANS; i++) {
+	if (info->fan[i].fan_ent)
+	    ipmi_entity_remove_child(info->chassis_ent,
+				     info->fan[i].fan_ent);
+	if (info->fan[i].fan_presence)
+	    ipmi_sensor_destroy(info->fan[i].fan_presence);
+	if (info->fan[i].fan_type)
+	    ipmi_control_destroy(info->fan[i].fan_type);
+	if (info->fan[i].fan_revision)
+	    ipmi_control_destroy(info->fan[i].fan_revision);
+	if (info->fan[i].fan)
+	    ipmi_sensor_destroy(info->fan[i].fan);
+	if (info->fan[i].cooling)
+	    ipmi_sensor_destroy(info->fan[i].cooling);
+	if (info->fan[i].fan_oos_led)
+	    ipmi_control_destroy(info->fan[i].fan_oos_led);
+	if (info->fan[i].fan_inserv_led)
+	    ipmi_control_destroy(info->fan[i].fan_inserv_led);
     }
 
     for (i=0; i<MXP_TOTAL_BOARDS; i++) {
