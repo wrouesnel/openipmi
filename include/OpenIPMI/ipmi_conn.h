@@ -76,7 +76,6 @@ typedef void (*ipmi_ll_init_con_done_cb)(ipmi_con_t   *con,
 					 int          rv,
 					 ipmi_addr_t  *mc_addr,
 					 int          mc_addr_len,
-					 unsigned int slave_addr,
 					 void         *cb_data);
 
 /* Called when a low-level connection has failed or come up.  If err
@@ -86,6 +85,16 @@ typedef void (*ipmi_ll_init_con_done_cb)(ipmi_con_t   *con,
 typedef void (*ipmi_ll_con_failed_cb)(ipmi_con_t *ipmi,
 				      int        err,
 				      void       *cb_data);
+
+/* This should be called from OEM code for an SMI, ONLY WHEN THE NEW
+   MC HANDLER IS CALLED, if the slave address of the SMI is not 0x20.
+   This will allow the bmc t know it's own address, which is pretty
+   important.  You pass in a function that the code will call (and
+   pass in it's own function) when it wants the address. */
+typedef void (*ipmi_ll_got_slave_addr_cb)(ipmi_con_t   *ipmi,
+					  int          err,
+					  unsigned int addr,
+					  void         *cb_data);
 
 /* The data structure representing a connection.  The low-level handler
    fills this out then calls ipmi_init_con() with the connection. */
@@ -105,7 +114,10 @@ struct ipmi_con_s
     /* Calls for the interface.  These should all return standard
        "errno" errors if they fail. */
 
-    /* Start processing on a connection. */
+    /* Start processing on a connection.  Note that the handler *must*
+       be called with the global read lock not held, because the
+       handler must write lock the global lock in order to add the MC
+       to the global list. */
     int (*start_con)(ipmi_con_t               *ipmi,
 		     ipmi_ll_init_con_done_cb handler,
 		     void                     *cb_data);
@@ -116,6 +128,15 @@ struct ipmi_con_s
     void (*set_con_fail_handler)(ipmi_con_t            *ipmi,
 				 ipmi_ll_con_failed_cb handler,
 				 void                  *cb_data);
+
+    /* The connection may set this if it has a way to get the current
+       slave address of the interface.  If it is NULL, it will be
+       ignored.  Note that this may immediately call the handler, so
+       the code should be ready before the call (like all other
+       calls). */
+    int (*ipmi_con_slave_addr_fetch)(ipmi_con_t                *ipmi,
+				     ipmi_ll_got_slave_addr_cb handler,
+				     void                      *cb_data);
 
     /* Send an IPMI command (in "msg".  on the "ipmi" connection to
        the given "addr".  When the response comes in or the message

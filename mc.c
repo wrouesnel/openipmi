@@ -715,9 +715,9 @@ ll_con_failed(ipmi_con_t *ipmi,
 	/* So the connection failed.  So what, there's no BMC. */
 	goto out_unlock;
 
-    if (err)
+    if (err) {
 	bmc->bmc->connection_up = 0;
-    else {
+    } else {
 	bmc->bmc->connection_up = 1;
 	/* When a connection comes back up, rescan the bus and do
            entity presence detection. */
@@ -2637,7 +2637,15 @@ got_slave_addr(ipmi_mc_t    *bmc,
 	ipmi_close_connection(bmc, NULL, NULL);
     }
 
-    ipmi_lock(bmc->bmc->mc_list_lock);
+    ipmi_unlock(bmc->bmc->mc_list_lock);
+}
+
+void con_got_slave_addr(ipmi_con_t   *ipmi,
+			int          err,
+			unsigned int addr,
+			void         *cb_data)
+{
+    got_slave_addr(cb_data, err, addr, NULL);
 }
 
 static void
@@ -2662,6 +2670,12 @@ dev_id_rsp_handler(ipmi_mc_t  *bmc,
 	    /* The OEM code added a way to fetch our address.  Call
                it. */
 	    rv = bmc->bmc->slave_addr_fetcher(bmc, got_slave_addr, NULL);
+	} else if (bmc->bmc->conn->ipmi_con_slave_addr_fetch) {
+	    /* The OEM code added a way to fetch our address.  Call
+               it. */
+	    rv = bmc->bmc->conn->ipmi_con_slave_addr_fetch(bmc->bmc->conn,
+							   con_got_slave_addr,
+							   bmc);
 	} else if (bmc->SDR_repository_support)
 	    rv = ipmi_sdr_fetch(bmc->bmc->main_sdrs, sdr_handler, bmc);
 	else if (bmc->provides_device_sdrs) {
@@ -2684,7 +2698,6 @@ static int
 setup_bmc(ipmi_con_t   *ipmi,
 	  ipmi_addr_t  *mc_addr,
 	  int          mc_addr_len,
-	  unsigned int my_slave_addr,
 	  ipmi_mc_t    **new_mc)
 {
     ipmi_mc_t *mc;
@@ -2722,7 +2735,7 @@ setup_bmc(ipmi_con_t   *ipmi,
     }
     memset(mc->bmc, 0, sizeof(*(mc->bmc)));
 
-    mc->bmc->bmc_slave_addr = my_slave_addr;
+    mc->bmc->bmc_slave_addr = 0x20; /* Assume 0x20 until told otherwise */
     mc->bmc->slave_addr_fetcher = NULL;
 
     mc->bmc->conn = ipmi;
@@ -2831,7 +2844,6 @@ ipmi_init_con(ipmi_con_t   *ipmi,
 	      int          err,
 	      ipmi_addr_t  *mc_addr,
 	      int          mc_addr_len,
-	      unsigned int my_slave_addr,
 	      void         *cb_data)
 {
     init_con_info_t *info = cb_data;
@@ -2839,7 +2851,12 @@ ipmi_init_con(ipmi_con_t   *ipmi,
     int             rv = 0;
     ipmi_mc_t       *mc;
 
-    rv = setup_bmc(ipmi, mc_addr, mc_addr_len, my_slave_addr, &mc);
+    if (err) {
+	info->handler(NULL, err, info->cb_data);
+	goto out;
+    }
+
+    rv = setup_bmc(ipmi, mc_addr, mc_addr_len, &mc);
     if (rv) {
 	ipmi->close_connection(ipmi);
 	info->handler(NULL, rv, info->cb_data);
@@ -2882,6 +2899,7 @@ ipmi_init_bmc(ipmi_con_t  *con,
 	      ipmi_bmc_cb handler,
 	      void        *cb_data)
 {
+    int             rv;
     init_con_info_t *info;
 
     info = ipmi_mem_alloc(sizeof(*info));
@@ -2890,7 +2908,10 @@ ipmi_init_bmc(ipmi_con_t  *con,
 
     info->handler = handler;
     info->cb_data = cb_data;
-    return con->start_con(con, ipmi_init_con, info);
+    rv = con->start_con(con, ipmi_init_con, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
 }
 
 int

@@ -1,7 +1,8 @@
 /*
- * lanserv.c
+ * lanserv_emu.c
  *
- * MontaVista IPMI code for creating a LAN interface to an SMI interface.
+ * MontaVista IPMI code for creating a LAN interface to an emulated
+ * SMI interface.
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
@@ -28,8 +29,7 @@
  *
  *  You should have received a copy of the GNU Lesser General Public
  *  License along with this program; if not, write to the Free
- *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- */
+ *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.  */
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -48,19 +48,16 @@
 #include <popt.h> /* Option parsing made easy */
 #include <malloc.h>
 #include <sys/ioctl.h>
-#include <syslog.h>
 
 #include <OpenIPMI/log.h>
 #include <OpenIPMI/ipmi_err.h>
-
-#include <linux/ipmi.h>
+#include <OpenIPMI/ipmi_msgbits.h>
 
 #include "lanserv.h"
 
 typedef struct misc_data
 {
     int lan1_fd, lan2_fd;
-    int smi_fd;
     char *config_file;
 } misc_data_t;
 
@@ -106,59 +103,70 @@ lan_send(lan_data_t *lan,
     }
 }
 
+static void
+handle_invalid_cmd(lan_data_t    *lan,
+		   unsigned char *rdata,
+		   unsigned int  *rdata_len)
+{
+    rdata[0] = IPMI_INVALID_CMD_CC;
+    *rdata_len = 1;
+}
+
+static void
+handle_get_device_id(lan_data_t    *lan,
+		     unsigned char *data,
+		     unsigned int  data_len,
+		     unsigned char *rdata,
+		     unsigned int  *rdata_len)
+{
+    memset(rdata, 0, 12);
+    rdata[5] = 0x51;
+    *rdata_len = 12;
+}
+
+static void
+handle_app_netfn(lan_data_t    *lan,
+		 unsigned int  cmd,
+		 unsigned char *data,
+		 unsigned int  data_len,
+		 unsigned char *rdata,
+		 unsigned int  *rdata_len)
+{
+    switch(cmd) {
+	case IPMI_GET_DEVICE_ID_CMD:
+	    handle_get_device_id(lan, data, data_len, rdata, rdata_len);
+	    break;
+
+	default:
+	    handle_invalid_cmd(lan, rdata, rdata_len);
+	    break;
+    }
+}
+
 static int
 smi_send(lan_data_t *lan, msg_t *msg)
 {
-    struct ipmi_req  req;
-    struct ipmi_addr addr;
-    misc_data_t      *info = lan->user_info;
-    int              rv;
+    unsigned char    data[36];
+    unsigned int     data_len;
 
-    req.addr = (unsigned char *) &addr;
-    
     if (msg->cmd == IPMI_SEND_MSG_CMD) {
-	struct ipmi_ipmb_addr *ipmb = (void *) &addr;
-	int                   pos;
-	/* Send message has special handling */
-	
-	if (msg->len < 8)
-	    return EMSGSIZE;
-
-	ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
-	ipmb->channel = msg->data[0] & 0xf;
-	pos = 1;
-	if (msg->data[pos] == 0) {
-	    ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
-	    pos++;
-	}
-	ipmb->slave_addr = msg->data[pos];
-	ipmb->lun = msg->data[pos+1] & 0x3;
-	req.addr_len = sizeof(*ipmb);
-	req.msg.netfn = msg->data[pos+1] >> 2;
-	req.msg.cmd = msg->data[pos+5];
-	req.msg.data = msg->data+pos+6;
-	req.msg.data_len = msg->len-(pos + 7); /* Subtract last checksum, too */
+	data[0] = IPMI_TIMEOUT_CC;
+	data_len = 1;
     } else {
-	/* Normal message to the BMC. */
-	struct ipmi_system_interface_addr *si = (void *) &addr;
+	switch (msg->netfn) {
+	    case IPMI_APP_NETFN:
+		handle_app_netfn(lan, msg->cmd, msg->data, msg->len,
+				 data, &data_len);
+		break;
 
-	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si->channel = 0xf;
-	si->lun = msg->rs_lun;
-	req.addr_len = sizeof(*si);
-	req.msg.netfn = msg->netfn;
-	req.msg.cmd = msg->cmd;
-	req.msg.data = msg->data;
-	req.msg.data_len = msg->len;
+	    default:
+		handle_invalid_cmd(lan, data, &data_len);
+		break;
+	}
     }
 
-    req.msgid = (long) msg;
-    
-    rv = ioctl(info->smi_fd, IPMICTL_SEND_COMMAND, &req);
-    if (rv == -1)
-	return errno;
-    else
-	return 0;
+    ipmi_handle_smi_rsp(lan, msg, data, data_len);
+    return 0;
 }
 
 static int
@@ -174,74 +182,6 @@ gen_rand(lan_data_t *lan, void *data, int size)
 
     close(fd);
     return rv;
-}
-
-static uint8_t
-ipmb_checksum(uint8_t *data, int size, uint8_t start)
-{
-	uint8_t csum = start;
-	
-	for (; size > 0; size--, data++)
-		csum += *data;
-
-	return -csum;
-}
-
-static void
-handle_msg_ipmi(int smi_fd, lan_data_t *lan)
-{
-    struct ipmi_recv rsp;
-    struct ipmi_addr addr;
-    unsigned char    data[IPMI_MAX_MSG_LENGTH+7];
-    unsigned char    rdata[IPMI_MAX_MSG_LENGTH];
-    int              rv;
-    msg_t            *msg;
-
-    rsp.addr = (char *) &addr;
-    rsp.addr_len = sizeof(addr);
-    rsp.msg.data = rdata;
-    rsp.msg.data_len = sizeof(rdata);
-
-    rv = ioctl(smi_fd, IPMICTL_RECEIVE_MSG_TRUNC, &rsp);
-    if (rv == -1) {
-	if (errno == EINTR)
-	    return; /* Try again later. */
-	if (errno == EMSGSIZE) {
-	    rdata[0] = IPMI_REQUEST_DATA_TRUNCATED_CC;
-	    rsp.msg.data_len = sizeof(rdata);
-	} else {
-	    printf("Error receiving message: %s\n", strerror(errno));
-	    return;
-	}
-    }
-
-    /* We only handle responses. */
-    if (rsp.recv_type != IPMI_RESPONSE_RECV_TYPE)
-	return;
-
-    msg = (msg_t *) rsp.msgid;
-
-    if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-	/* Nothing to do. */
-    } else if (addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
-	struct ipmi_ipmb_addr *ipmb = (void *) &addr; 
-
-	data[0] = 0; /* return code. */
-	data[1] = (rsp.msg.netfn << 2) | 2;
-	data[2] = ipmb_checksum(data+1, 1, 0);
-	data[3] = ipmb->slave_addr;
-	data[4] = (msg->data[4] & 0xfc) | ipmb->lun;
-	data[5] = rsp.msg.cmd;
-	memcpy(data+6, rsp.msg.data, rsp.msg.data_len);
-	rsp.msg.data = data;
-	rsp.msg.data_len += 7;
-	data[rsp.msg.data_len-1] = ipmb_checksum(data+1, rsp.msg.data_len-2, 0);
-    } else {
-	printf("Error!\n");
-	return;
-    }
-
-    ipmi_handle_smi_rsp(lan, msg, rsp.msg.data, rsp.msg.data_len);
 }
 
 static void
@@ -572,28 +512,6 @@ read_config(lan_data_t *lan)
 }
 
 static int
-ipmi_open(char *ipmi_dev)
-{
-    int ipmi_fd;
-
-    if (ipmi_dev) {
-	ipmi_fd = open(ipmi_dev, O_RDWR);
-    } else {
-	ipmi_fd = open("/dev/ipmidev/0", O_RDWR);
-	if (ipmi_fd == -1) {
-	    ipmi_fd = open("/dev/ipmi0", O_RDWR);
-	}
-    }
-
-    if (ipmi_fd == -1) {
-	perror("Could not open ipmi device /dev/ipmidev/0 or /dev/ipmi0");
-	exit(1);
-    }
-
-    return ipmi_fd;
-}
-
-static int
 open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 {
     int                fd;
@@ -658,18 +576,18 @@ log(int logtype, msg_t *msg, char *format, ...)
     timebuf[timelen-1] = '\0'; /* Nuke the '\n'. */
     timelen--;
     if ((timelen + strlen(format) + 2) >= sizeof(fullformat)) {
-	vsyslog(LOG_NOTICE, format, ap);
+	vprintf(format, ap);
     } else {
 	strcpy(fullformat, timebuf);
 	strcat(fullformat, ": ");
 	strcat(fullformat, format);
-	vsyslog(LOG_NOTICE, fullformat, ap);
+	vprintf(fullformat, ap);
     }
+    printf("\n");
     va_end(ap);
 }
 
 static char *config_file = "/etc/ipmi_lan.conf";
-static char *ipmi_dev = NULL;
 static int debug = 0;
 
 static struct poptOption poptOpts[]=
@@ -681,15 +599,6 @@ static struct poptOption poptOpts[]=
 	&config_file,
 	'c',
 	"configuration file",
-	""
-    },
-    {
-	"ipmi-dev",
-	'i',
-	POPT_ARG_STRING,
-	&ipmi_dev,
-	'i',
-	"IPMI device",
 	""
     },
     {
@@ -724,8 +633,6 @@ main(int argc, const char *argv[])
     struct timeval time_next;
     struct timeval time_now;
 
-    openlog(argv[0], LOG_CONS, LOG_DAEMON);
-
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((o = poptGetNextOpt(poptCtx)) >= 0) {
 	switch (o) {
@@ -750,8 +657,6 @@ main(int argc, const char *argv[])
 
     read_config(&lan);
 
-    data.smi_fd = ipmi_open(ipmi_dev);
-
     if (addr1_len == 0) {
 	struct sockaddr_in *addr = (void *) &addr1;
 	addr->sin_family = AF_INET;
@@ -765,22 +670,17 @@ main(int argc, const char *argv[])
     } else {
 	data.lan2_fd = -1;
     }
+
     rv = ipmi_lan_init(&lan);
     if (rv)
 	return 1;
 
-    syslog(LOG_INFO, "%s startup", argv[0]);
+    log(0, NULL, "%s startup", argv[0]);
 
-    if (data.lan1_fd > data.smi_fd) {
-	if (data.lan1_fd > data.lan2_fd)
-	    max_fd = data.lan1_fd + 1;
-	else
-	    max_fd = data.lan2_fd + 1;
-    } else if (data.lan2_fd > data.smi_fd) {
+    if (data.lan1_fd > data.lan2_fd)
+	max_fd = data.lan1_fd + 1;
+    else
 	max_fd = data.lan2_fd + 1;
-    } else {
-	max_fd = data.smi_fd + 1;
-    }
 
     gettimeofday(&time_next, NULL);
     time_next.tv_sec += 10;
@@ -788,7 +688,6 @@ main(int argc, const char *argv[])
 	fd_set readfds;
 
 	FD_ZERO(&readfds);
-	FD_SET(data.smi_fd, &readfds);
 	FD_SET(data.lan1_fd, &readfds);
 	if (data.lan2_fd != -1)
 	    FD_SET(data.lan2_fd, &readfds);
@@ -803,15 +702,11 @@ main(int argc, const char *argv[])
 	    ipmi_lan_tick(&lan, 10);
 	    time_next.tv_sec += 10;
 	} else {
-	    if (FD_ISSET(data.smi_fd, &readfds)) {
-		handle_msg_ipmi(data.smi_fd, &lan);
-	    }
-
 	    if (FD_ISSET(data.lan1_fd, &readfds)) {
 		handle_msg_lan(data.lan1_fd, &lan);
 	    }
 
-	    if (FD_ISSET(data.lan2_fd, &readfds)) {
+	    if ((data.lan2_fd != -1) && FD_ISSET(data.lan2_fd, &readfds)) {
 		handle_msg_lan(data.lan2_fd, &lan);
 	    }
 	}

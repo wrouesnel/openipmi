@@ -1,6 +1,12 @@
 
 2003-05-02 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv_emu.c: Added an emulator for testing.
+
+	* include/OpenIPMI/ipmi_conn.h: Added a way for the interface code
+	to provide the IPMB address.
+	* mc.c, ipmi_lan.c, ipmi_smi.c: ditto
+
 	* mc.c: Added a valid field to the MC, right now just for BMCs, to
 	handle shutdown races.
 

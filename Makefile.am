@@ -34,7 +34,7 @@ libOpenIPMIui_la_LIBADD =
 libOpenIPMIui_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIui.map
 
-noinst_PROGRAMS = test_heap ipmisample
+noinst_PROGRAMS = test_heap ipmisample lanserv_emu
 
 ipmisample_SOURCES = sample.c ui_os.c
 ipmisample_LDADD = -lOpenIPMI
@@ -46,6 +46,11 @@ ipmilan_SOURCES = lanserv.c lanserv_ipmi.c lanserv_asf.c \
 	ipmi_auth.c priv_table.c \
 	md5.c md2.c
 ipmilan_LDADD = -lpopt
+
+lanserv_emu_SOURCES = lanserv_emu.c lanserv_ipmi.c lanserv_asf.c \
+	ipmi_auth.c priv_table.c \
+	md5.c md2.c
+lanserv_emu_LDADD = -lpopt
 
 test_heap_SOURCES = test_heap.c
 test_heap_LDADD = 
