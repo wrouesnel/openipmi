@@ -57,49 +57,6 @@
 # endif
 #endif
 
-static selector_t *selector;
-
-ipmi_args_t *con_parms[2];
-ipmi_con_t  *con[2];
-int         last_con = 0;
-
-void
-ui_shutdown_main(void)
-{
-    int i;
-    for (i=0; i<2; i++) {
-	if (con_parms[i])
-	    ipmi_free_args(con_parms[i]);
-    }
-}
-
-/* This is used by the UI to reconnect after a connection has been
-   disconnected. */
-void
-ui_reconnect(void)
-{
-    int        rv;
-    int        i;
-
-    for (i=0; i<last_con; i++) {
-	rv = ipmi_args_setup_con(con_parms[i],
-				 &ipmi_ui_cb_handlers,
-				 selector,
-				 &con[i]);
-	if (rv) {
-	    fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
-	    exit(1);
-	}
-    }
-	
-    rv = ipmi_init_domain(con, last_con, ipmi_ui_setup_done,
-			  NULL, NULL);
-    if (rv) {
-	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
-	exit(1);
-    }
-}
-
 #ifdef HAVE_UCDSNMP
 #define IPMI_OID_SIZE 9
 static oid ipmi_oid[IPMI_OID_SIZE] = {1,3,6,1,4,1,3183,1,1};
@@ -266,6 +223,12 @@ main(int argc, const char *argv[])
 #ifdef HAVE_UCDSNMP
     int              init_snmp = 0;
 #endif
+    ipmi_args_t      *con_parms[2];
+    ipmi_con_t       *con[2];
+    int              last_con = 0;
+    selector_t       *selector;
+
+
 
     while ((curr_arg < argc) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
@@ -328,14 +291,15 @@ main(int argc, const char *argv[])
 	}
     }
 
+    for (i=0; i<last_con; i++)
+	ipmi_free_args(con_parms[i]);
+
     rv = ipmi_init_domain(con, last_con, ipmi_ui_setup_done,
 			  NULL, &domain_id);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	goto out;
     }
-
-    ipmi_ui_set_domain_id(domain_id);
 
     sel_select_loop(selector, NULL, 0, NULL);
 
