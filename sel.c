@@ -590,7 +590,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 		fetch_complete(sel, 0);
 		goto out;
 	    }
-	    rv = 0;
+	    goto out_unlock;
 	} else {
 	    fetch_complete(sel, 0);
 	    goto out;
@@ -627,6 +627,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 	fetch_complete(sel, rv);
 	goto out;
     }
+ out_unlock:
     sel_unlock(sel);
  out:
 }
