@@ -92,6 +92,9 @@ The specification for \acs{IPMI} is \cite{ipmi-spec}.
 \acro{MCDLR}{Management Controller Device Locator Record}
 \acro{FRUDLR}{Field Replacable Unit Device Locator Record}
 \acro{GDLR}{Generic Device Locator Record}
+\acro{ICMB}{Intelligent Chassis Management Bus}
+\acro{PET}{Platform Event Trap}
+\acro{DMI}{?}
 \end{acronym}
 
 \mainmatter
@@ -3965,8 +3968,8 @@ handle_new_domain(ipmi_domain_t *domain, my_data_t *my_data)
 \end{verbatim}
 
 You should call the function to add an MC updated handler when the
-domain is reported up (or even before); the way you will be able to
-catch all the \acs{MC}s this way.
+domain is reported up (or even before); that way you will not miss
+any \acs{MC}s.
 
 \subsection{\acs{MC} Active}
 
@@ -4163,7 +4166,7 @@ some situations, but not generally.  Table \ref{error-codes} shows the
 error codes in IPMI.
 
 \begin{longtable}{|l|p{0.15\textwidth}|p{0.6\textwidth}|}
-\caption{\acs{Error} codes\label{error-codes}}
+\caption{Error codes\label{error-codes}}
 \\ \hline
 \bfseries{Error} & \bfseries{Name} & \bfseries{Description}\\
 \hline
@@ -4340,7 +4343,12 @@ new device.
 
 The records in these two types of repositories are the same.
 
+\section{\acs{SDR} Reservations}
+
+Both SDR repository types support the concept of a reservation.
+
 \section{The Main \acs{SDR} Repository}
+
 
 \subsection{Modal and Non-Modal \acs{SDR} Repositories}
 
@@ -4448,21 +4456,22 @@ internals directly.
 
 \subsection{Getting an SDR Repository}
 
-If you need to fetch the SDRs for a system, you can get the main SDRs
+If you need access to the SDRs for a system, you can get the main SDRs
 by calling:
 
 \begin{verbatim}
 ipmi_sdr_t *ipmi_domain_get_main_sdrs(ipmi_domain_t *domain);
 \end{verbatim}
 
-You can fetch the SDRs for an MC with the following:
+You can get the \acs{SDR}s for an \acs{MC} with the following:
 
 \begin{verbatim}
 ipmi_sdr_t *ipmi_mc_get_sdrs(ipmi_domain_t *domain);
 \end{verbatim}
 
-You can also fetch your own copy of an SDR repository using the
-following call to create it:
+These are the pre-fetched copies that OpenIPMI holds.  You can also
+fetch your own copy of an \acs{SDR} repository using the following call to
+create it:
 
 \begin{verbatim}
 int ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
@@ -4472,7 +4481,10 @@ int ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 			ipmi_sdr_info_t **new_sdrs);
 \end{verbatim}
 
-And then the following call to fetch it:
+If you want the main \acs{SDR}s held on an MC, set the sensor value to
+false (zero).  If you want the device \acs{SDR}s, set the value to
+true (one).  After you allocate an SDR info structure, you can use the
+following call to fetch it:
 
 \begin{verbatim}
 typedef void (*ipmi_sdrs_fetched_t)(ipmi_sdr_info_t *sdrs,
@@ -4485,8 +4497,8 @@ int ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
 		   void                *cb_data);
 \end{verbatim}
 
-If you create your own SDR repository, you should destroy it when
-you are done with it with the following call:
+If you allocate your own \acs{SDR} info structure, you should destroy
+it when you are done with it with the following call:
 
 \begin{verbatim}
 typedef void (*ipmi_sdr_destroyed_t)(ipmi_sdr_info_t *sdrs, void *cb_data);
@@ -4499,8 +4511,9 @@ Note that you should \emph{not} destroy an SDR repository you fetched
 from the domain or \acs{MC}.  Those are managed by OpenIPMI; if you
 destroy them you will cause problems.
 
-Note that an SDR repository from a \acs{MC} or domain is dynamic; it
-may change.
+Note that an \acs{SDR} repository from a \acs{MC} or domain is
+dynamic; it may change because OpenIPMI rescans the \acs{SDR}s to make
+sure they haven't changed.
 
 \subsection{\acs{SDR} Repository Information}
 
@@ -4542,7 +4555,8 @@ supports\_get\_sdr \_repository \_allocation & If true, the repository allows
 	allocation information to be fetched with the Get SDR Repository
 	Allocation Info command.\\
 \hline
-dynamic\_population & If true, the \emph{system} can dynamically change the
+dynamic\_population & If true, the \acs{IPMI} \emph{system} can dynamically
+	change the
 	contents of the SDR repository.  This may only be true for device
 	SDR repositories.  Although main SDR repositories can dynamically
 	change, it is not the system that does this, it is the user.\\
@@ -4763,6 +4777,62 @@ Entity IDs defined by \ac{IPMI} are:
 \hline
 \end{longtable}
 
+\section{Discovering Entities}
+In OpenIPMI, the entities in a system are part of the domain.  As
+OpenIPMI scans \acs{SDR}s it find, it will create the entities
+referenced in those SDRs.  The user can discover the entities in a
+domain in two ways: iterating or registering callbacks.
+
+Iterating the entities in a domain simply involves calling the
+iterator function with a callback function:
+
+\begin{verbatim}
+static void
+handle_entity(ipmi_domain_t *domain, ipmi_entity_t *entity, void *cb_data)
+{
+  my_data_t *my_data = cb_data;
+  /* Process the entity here */
+}
+
+void
+iterate_entities(ipmi_domain_t *domain, my_data_t *my_data)
+{
+  int rv;
+  rv = ipmi_domain_iterate_entities(domain, handle_entity, my_data);
+  if (rv)
+    handle_error();
+}
+\end{verbatim}
+
+This is relatively simple to do, but you will not be able to know
+immediately when new entities are added to the system.  To know that,
+you must register a callback function as follows:
+
+\begin{verbatim}
+static void
+handle_entity(enum ipmi_update_e op,
+              ipmi_domain_t *domain,
+              ipmi_entity_t *entity,
+              void *cb_data)
+{
+  my_data_t *my_data = cb_data;
+  /* Process the entity here */
+}
+
+void
+handle_new_domain(ipmi_domain_t *domain, my_data_t *my_data)
+{
+  int rv;
+  rv = ipmi_domain_add_entity_update_handler(domain, handle_entity, my_data);
+  if (rv)
+    handle_error();
+}
+\end{verbatim}
+
+You should call the function to add an entity update handler when the
+domain is reported up (or even before); that way you will not miss any
+entities.
+
 \section{Entity Containment and OpenIPMI}
 
 Entities may be contained inside other entities.  For instance, a
@@ -4770,7 +4840,7 @@ chassis may contain a board, and a board may have a processor on it.
 This is expressed in specific entity \acs{SDR}s.  OpenIPMI represents
 this by entities having children and parents.
 
-To discover the parents of a sensor, they may be iterated.  It seems
+To discover the parents of an entity, they may be iterated.  It seems
 possible for an entity to have more than one parent; there is no
 direct prohibition of this in \acs{IPMI}, although it would be a
 little wierd.  To iterate the parents, use the following call:
@@ -4936,10 +5006,240 @@ private\_bus\_id & The FRU information may be on an \acs{EEPROM} device on
 	a private bus.  If so, 
 	&   & x & x &  \\
 \hline
-\_ & 
-	& x & x & x & x\\
+device\_type & The type of \acs{I$^2$C} device.  This is really not very
+	important, but these are defined in the IPMI spec.
+	&   & x & x &  \\
+\hline
+device\_modifier & An extension to the device\_type field to further refine
+	the device type.
+	&   & x & x &  \\
+\hline
+slave\_address & The IPMB address of the device on the IPMB.
+	& x &   & x &  \\
+\hline
+is\_logical\_fru & Tells if the FRU information on the FRU is accessed
+	through an \ac{MC} (value is 1) or is access directly on the
+	IPMB bus as a EEPROM (value is 0).
+	&   & x &   &  \\
+\hline
+ACPI\_system\_power\_notify\_required & If true, ACPI system power state
+	notification is required for the device.
+	& x &   &   &  \\
+\hline
+ACPI\_device\_power\_notify\_required & If true, ACPI device power syste
+	notification is required by the device.
+	& x &   &   &  \\
+\hline
+controller\_logs\_init\_agent\_errors & If true, the \acs{MC} logs
+	initialization errors.
+	& x &   &   &  \\
+\hline
+log\_init\_agent\_errors\_accessing & If this is true, then the
+	initialization agent will log any failures trying to set
+	the event receiver for the device.
+	& x &   &   &  \\
+\hline
+global\_init & Tells the initialization agent whether to initialize
+	the controller's event receiver.  This is a two bit value:
+	\begin{description}
+	\item[00b] - Enable the controller's event receiver.
+	\item[01b] - Disable the controller's event receiver by setting it
+	  to FFh.  This is generally to turn of a rogue controller or
+	  for debugging.
+	\item[10b] - Do not initialize the controller's event receiver.
+	  this is generally for debugging.
+	\item[11b] - reserved
+	\end{description}
+	& x &   &   &  \\
+\hline
+chassis\_device & The controller handles the chassis commands.
+	& x &   &   &  \\
+\hline
+bridge & The controller handles bridge commands.  This generally means it
+	supports \acs{ICMB}.
+	& x &   &   &  \\
+\hline
+IPMB\_event\_generator & The controller generates events on the \acs{IPMB}.
+	& x &   &   &  \\
+\hline
+IPMB\_event\_receiver & The controller can receive events on the \acs{IPMB}.
+	& x &   &   &  \\
+\hline
+FRU\_device\_inventory & The controller supports \acs{FRU} inventory commands.
+	& x &   &   &  \\
+\hline
+SEL\_device & The controller supports a \acs{SEL} device for storing events.
+	& x &   &   &  \\
+\hline
+SDR\_repository\_device & The controller supports a main \acs{SDR} repository.
+	& x &   &   &  \\
+\hline
+sensor\_device & The controller has sensors, it supports the sensor commands.
+	& x &   &   &  \\
+\hline
+get\_address\_span & The number of additional consecutive slave addresses
+	used by the device.  For instance, if the address is C0h and this
+	value is zero, then it is only at C0h.  If this value was one, then
+	it would be at C0h and C2h.
+	&   &   & x &  \\
 \hline
 \end{longtable}
+
+In addition, a string value for the entity id may be fetched.  This is
+not quite the same as the entity id, because \acs{OEM} code may set
+this string to a different value than the default, especially for OEM
+entity ids.  The function is:
+
+\begin{verbatim}
+char *ipmi_entity_get_entity_id_string(ipmi_entity_t *ent);
+\end{verbatim}
+
+The id (the string name in the SDR) can also be fetched using the
+following calls:
+
+\begin{verbatim}
+int ipmi_entity_get_id_length(ipmi_entity_t *ent);
+enum ipmi_str_type_e ipmi_entity_get_id_type(ipmi_entity_t *ent);
+int ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
+\end{verbatim}
+
+See section~\ref{appendix-ipmi-strings} for details on this.
+
+\section{Sensor and Controls in an Entity}
+In OpenIPMI, entities contain sensors and controls.  If a sensor or
+control is associated with an entity, that sensor or control will be
+contained inside the entity in OpenIPMI.
+
+To find the sensors in an entity, you can iterate them using the
+function:
+\begin{verbatim}
+typedef void (*ipmi_entity_iterate_sensor_cb)(ipmi_entity_t *ent,
+					      ipmi_sensor_t *sensor,
+					      void          *cb_data);
+void ipmi_entity_iterate_sensors(ipmi_entity_t                 *ent,
+				 ipmi_entity_iterate_sensor_cb handler,
+				 void                          *cb_data);
+\end{verbatim}
+The ``handler'' function will be called with each sensor in the
+entity.  Controls have a similar function:
+\begin{verbatim}
+typedef void (*ipmi_entity_iterate_control_cb)(ipmi_entity_t  *ent,
+					       ipmi_control_t *control,
+					       void           *cb_data);
+void ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
+				  ipmi_entity_iterate_control_cb handler,
+				  void                           *cb_data);
+\end{verbatim}
+
+So, for instance, if you wanted to print the name and entity id string
+of every sensor in an entity, you might have code that looks like:
+\begin{verbatim}
+static void
+handle_sensor(ipmi_entity_t *ent,
+              ipmi_sensor_t *sensor,
+	      void          *cb_data)
+{
+    char *name;
+    int  length = ipmi_sensor_get_id_length(sensor);
+    int  allocated = 0;
+
+    if (length == 0)
+        name = ``empty name'';
+    else {
+        name = malloc(length+1);
+	if (!name) {
+	    /* Handle error */
+	    return;
+        }
+	allocated = 1;
+	length = ipmi_sensor_get_id(sensor, name, length);
+    }
+    printf("Sensor %s\n", name);
+    if (allocated)
+        free(name);
+}
+
+void
+print_sensors(ipmi_entity_t *entity)
+{
+    ipmi_entity_iterate_sensors(entity, handle_sensor, NULL);
+}
+\end{verbatim}
+
+However, you probably want to know about the sensors and controls as
+soon as they are created or destroyed.  To do this, you can add
+callback functions to the entity to call you whenever a sensor or
+control is added to the entity or deleted from the entity.  The
+following functions allow the user to watch sensors in a domain:
+\begin{verbatim}
+typedef void (*ipmi_entity_sensor_cb)(enum ipmi_update_e op,
+				      ipmi_entity_t      *ent,
+				      ipmi_sensor_t      *sensor,
+				      void               *cb_data);
+int ipmi_entity_add_sensor_update_handler(ipmi_entity_t         *ent,
+					  ipmi_entity_sensor_cb handler,
+					  void                  *cb_data);
+int ipmi_entity_remove_sensor_update_handler(ipmi_entity_t         *ent,
+					     ipmi_entity_sensor_cb handler,
+					     void                  *cb_data);
+\end{verbatim}
+Likewise, the following function are for controls:
+\begin{verbatim}
+typedef void (*ipmi_entity_control_cb)(enum ipmi_update_e op,
+				       ipmi_entity_t      *ent,
+				       ipmi_control_t     *control,
+				       void               *cb_data);
+int ipmi_entity_add_control_update_handler(ipmi_entity_t          *ent,
+					   ipmi_entity_control_cb handler,
+					   void                   *cb_data);
+int ipmi_entity_remove_control_update_handler(ipmi_entity_t          *ent,
+					      ipmi_entity_control_cb handler,
+					      void                   *cb_data);
+\end{verbatim}
+The add functions should generally be called in the callback that
+reports the new entity, that way you will not miss any controls or
+sensors as they are added.  On removal, both the handler and the
+cb\_data values must match the values in the add handler, the cb\_data
+value is not use for a callback but to find the specific item to
+remove.
+
+As an example, the following code reports the sensor name and whether
+it was added, removed, or changed:
+\begin{verbatim}
+static void
+handle_sensor(enum ipmi_update_e op,
+	      ipmi_entity_t      *ent,
+              ipmi_sensor_t      *sensor,
+	      void               *cb_data)
+{
+    char *name;
+    int  length = ipmi_sensor_get_id_length(sensor);
+    int  allocated = 0;
+
+    if (length == 0)
+        name = ``empty name'';
+    else {
+        name = malloc(length+1);
+	if (!name) {
+	    /* Handle error */
+	    return;
+        }
+	allocated = 1;
+	length = ipmi_sensor_get_id(sensor, name, length);
+    }
+    printf("Sensor %s\n", name);
+    if (allocated)
+        free(name);
+}
+
+void
+print_sensors(ipmi_entity_t *entity)
+{
+    ipmi_entity_iterate_sensors(entity, handle_sensor, NULL);
+}
+\end{verbatim}
+
+\section{Entity Hot-Swap}
 
 \section{\acs{FRU} Data}
 
@@ -4949,15 +5249,29 @@ private\_bus\_id & The FRU information may be on an \acs{EEPROM} device on
 %---------------------------------------------------------------------
 \chapter{Sensors}
 
-  \acs{IPMI} defines
-special types of sensors called Presence Sensors, these report if an
-entity is present in the system.
+Sensors, of course, are probably the most interesting part of
+\ac{IPMI}.  Really, everything else is there so the sensors may be
+known and monitored.  Unfortunately, sensors are also the most
+complicated part of \ac{IPMI}.  OpenIPMI is really unable to hide a
+lot of this complexity, it is passed on to the user.
 
-Sensors provide a lot of functions depending on their type.  Threshold
-sensors monitor ``analog'' things like temperature, voltage, or fan speed.
-Discrete sensors monitor events or states, like the previously
-introduced presence sensor, software initialization progress, or if
-external power is present to the system.
+\acs{IPMI} defines two basic different types of sensors.  Threshold
+sensors monitor ``analog'' things like temperature, voltage, or fan
+speed.  Discrete sensors monitor events or states, like entity
+presence, software initialization progress, or if external power is
+present to the system.  Table~\ref{event-reading-type-codes} describes
+the basic types of sensors.
+
+\begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
+\caption{Event/Reading Type Codes\label{event-reading-type-codes}}
+\\ \hline
+\bfseries{Value} & \bfseries{\#} & \bfseries{Description}\\
+\endhead
+\hline
+\end{longtable}
+
+
+\section{Threshold Sensors}
 
 Threshold sensors report their readings in values from 0-255.
 OpenIPMI makes every effort to convert this to a floating-point value
@@ -4987,6 +5301,8 @@ which means that if the speed goes below 150 RPM, then it must go above
 160 RPM for the threshold to be disabled.  Hysteresis may be settable or
 may be fixed for the sensor.
 
+\section{Discrete Sensors}
+
 Discrete sensors report their readings in a 16-bit bitmask, each bit
 representing a dicrete value.  You enable events on the sensor by
 specifying which discrete values you want to generate events.  Like
@@ -5001,6 +5317,150 @@ That information may be fetched by the user.
 \hline
 \end{longtable}
 
+\section{Using Sensors in OpenIPMI}
+As mentioned before, \acs{IPMI} sensors are very complicated.
+OpenIPMI attempts to hide as much of this complexity as it can, but it
+can only do so much.
+
+So starting at the beginning, the first thing you need to know about a
+sensor is it's type.  You fetch that with the function:
+\begin{verbatim}
+int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
+\end{verbatim}
+This returns a value from the following table.  The names in this
+table are shortened, all these begin with
+IPMI\_EVENT\_READING\_TYPE\_.  The values are:
+
+\begin{longtable}{|p{.27\textwidth}|p{0.65\textwidth}|}
+\hline
+THRESHOLD & The sensor monitors an analog value.  All threshold sensors
+	have this value.\\
+\hline
+DISCRETE\_USAGE & These are \acs{DMI}-based usage states.  Valid offsets
+	are:
+	\begin{description}
+	\item[00h] - transition to idle
+	\item[01h] - transition to active
+	\item[02h] - transition to busy
+	\end{description}\\
+\hline
+DISCRETE\_STATE & Monitors the value of a state.  Valid values are:
+	\begin{description}
+	\item[00h] - state deasserted
+	\item[01h] - state asserted
+	\end{description}\\
+\hline
+DISCRETE \_PREDICTIVE \_FAILURE & This is used to know if an entity is
+	about to fail, but is still operations.  Valid values are:
+	\begin{description}
+	\item[00h] - predictive failure deasserted
+	\item[01h] - predictive failure asserted
+	\end{description}\\
+\hline
+DISCRETE\_LIMIT \_EXCEEDED & This is used to tell if a limit has been
+	exceeded.  Valid values are:
+	\begin{description}
+	\item[00h] - limit not exceeded
+	\item[01h] - limit exceeded
+	\end{description}\\
+\hline
+DISCRETE \_PERFORMANCE \_MET & This is used to tell if system performance
+	is meeting expectations.  Valid values are:
+	\begin{description}
+	\item[00h] - performance met
+	\item[01h] - performance not met
+	\end{description}\\
+\hline
+DISCRETE \_SEVERITY & This is used to know if an entity is in trouble
+	or other state information.  Valid values are:
+	\begin{description}
+	\item[00h] - transition to ok
+	\item[01h] - transition to non-critical from ok.
+	\item[02h] - transition to critical from less critical.
+	\item[03h] - transition to non-recoverable from less critical.
+	\item[04h] - transition to non-critical from more critical.
+	\item[05h] - transition to critical from non-recoverable.
+	\item[06h] - transition to non-recoverable.\footnote{This state
+	  seems rather silly and is probably not used.}
+	\item[07h] - monitor
+	\item[08h] - informational
+	\end{description}
+	The actual meaning of these is not defined by the spec.\\
+\hline
+DISCRETE \_DEVICE \_PRESENCE & This is a presence sensor to know when
+	an entity is present or not.  Note that OpenIPMI uses this for
+	entity presence if it is available.  Valid values are:
+	\begin{description}
+	\item[00h] - entity not present
+	\item[01h] - entity present
+	\end{description}\\
+\hline
+DISCRETE \_DEVICE \_ENABLE & This tells if a device is enabled.  Valid
+	values are:
+	\begin{description}
+	\item[00h] - device disabled
+	\item[01h] - device enabled
+	\end{description}\\
+\hline
+DISCRETE \_AVAILABILITY & This tells the current availability state of
+	the device.  Valid values are:
+	\begin{description}
+	\item[00h] - transition to running
+	\item[01h] - transition to in test
+	\item[02h] - transition to power off
+	\item[03h] - transition to on line
+	\item[04h] - transition to off line
+	\item[05h] - transition to off duty
+	\item[06h] - transition to degraded
+	\item[07h] - transition to power save
+	\item[08h] - install error
+	\end{description}\\
+\hline
+DISCRETE \_REDUNDANCY & This shows the redundancy state of an entity.  Valid
+	values are:
+	\begin{description}
+	\item[00h] - Fully redundant, the entity has full redundancy.
+	\item[01h] - Redundancy lost, this is reported if
+	  redundancy has been lost at all.
+	\item[02h] - Redundance degraded, the system is still redundant
+	  but is missing some resources (like the system has four fans
+	  and only two are running).
+	\item[03h] - Transition from fully redundant to non-redundant:
+	  sufficient resource.  The entity
+	  has lost redundancy but has sufficient resources to continue
+	  normal operation.
+	\item[04h] - Transition from non-redundant:sufficient
+	  resources to non-redundant:insufficient resource.  The
+	  entity has lost enough resources to continue normal
+	  operation.
+	\item[05h] - Transition from fully redundant to non-redundant:
+	  sufficient resource.  The entity
+	  has lost redundancy but has sufficient resources to continue
+	  normal operation.
+	\item[06h] - Non-redundant:insufficient resources.  entity has
+	  lost redundancy and lost enough resources to continue normal
+	  operation.
+	\item[07h] - Transition from redundant to redundancy degraded.
+	  The unit has lost some redundancy but is still redundant.
+	\item[08h] - Transition from redundancy lost to redundancy
+	  degraded.  The entity had lost redundancy and has regained
+	  some redundancy, but is not fully redundant.
+	\end{description}\\
+\hline
+DISCRETE\_ACPI \_POWER & The current ACPI power state of the system.  Valid
+	values are:
+	\begin{description}
+	\item[00h] - D0 power state
+	\item[01h] - D1 power state
+	\item[02h] - D2 power state
+	\item[03h] - D3 power state
+	\end{description}\\
+\hline
+SENSOR\_SPECIFIC & This setting means that the offsets in the sensor are
+	dependent on the sensor type.  This is only for discrete sensors.\\
+\hline
+\end{longtable}
+
 \section{Sensor \acs{SDR}s}
 \label{sec-sensor-sdrs}
 
@@ -5012,9 +5472,6 @@ That information may be fetched by the user.
 \section{Chassis}
 
 \section{Direct \acs{I$^2$C} Access}
-
-%---------------------------------------------------------------------
-\chapter{Hot Swap}
 
 %---------------------------------------------------------------------
 \chapter{Events}
@@ -5072,6 +5529,58 @@ dynamic nature of an \ac{IPMI} system dynamically.
 
 %---------------------------------------------------------------------
 \appendix
+
+\chapter{Special \acs{IPMI} Formats}
+
+\section{\acs{IPMI} strings}
+\label{appendix-ipmi-strings}
+
+IPMI uses a special format for storing strings.  It allows data two be
+stored in four different formats.  The first byte describes the type
+and length; the format is:
+\begin{description}
+\item[bits 0-4] - The number of bytes following this byte.  Note that
+this is \emph{not} the number of characters in the string, it is the
+number of bytes following.  The value of 11111b is reserved.
+\item[bit 5] - reserved
+\item[bits 6-7] - The string type.  Valid values are:
+  \begin{description}
+  \item[00h] - Unicode
+  \item[01h] - BCD plus
+  \item[02h] - 6-bit ASCII, packed
+  \item[03h] - 8-bit ASCII and Latin 1.  In this case, a length of one is
+    reserved.  The length may be zero, or it may be from 2 to 30, but may
+    not be 1.
+  \end{description}
+\end{description}
+
+The values and packing are defined in the IPMI spec.
+
+TBD - add character values and packing information
+
+\subsection{OpenIPMI and \acs{IPMI} strings}
+OpenIPMI does most of the work of decoding the \acs{IPMI} strings.
+Generally, to fetch a string, three functions are supported that
+generally look something like:
+\begin{verbatim}
+int ipmi_xxx_get_id_length(ipmi_xxx_t *obj);
+enum ipmi_str_type_e ipmi_xxx_get_id_type(ipmi_xxx_t *obj);
+int ipmi_xxx_get_id(ipmi_xxx_t *obj, char *id, int length);
+\end{verbatim}
+Fetching the type allows you to tell what it is.  The type may be one of:
+\begin{description}
+\item[IPMI\_ASCII\_STR] - The value is in normal ASCII and Latin 1
+\item[IPMI\_UNICODE\_STR] - The value is unicode encoded.
+\item[IPMI\_BINARY\_STR] - The value is raw binary data.
+\end{description}
+Then you can get the length to know how long the value will be.  Then
+fetch the actual id with the get id call; it will store the value in
+the id passed in.  The get id call will return the number of bytes
+copied into into the id string.  The size of the id string should be
+passed in to the ``length'' field.  The number of bytes actually
+copied will be returned by the call.  If the number of bytes is more
+than the length of the id field, then only ``length'' bytes are filled
+in.
 
 \chapter{Comparison with \acs{SNMP}}
 
