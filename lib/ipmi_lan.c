@@ -1759,6 +1759,9 @@ lan_send_addr(lan_data_t  *lan,
 	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
+    if (lan->stat_xmit_packets)
+	lan->ipmi->add_stat(lan->ipmi->user_data, lan->stat_xmit_packets, 1);
+
     rv = sendto(lan->fd->fd, tmsg, pos, 0,
 		(struct sockaddr *) &(lan->cparm.ip_addr[addr_num]),
 		sizeof(sockaddr_ip_t));

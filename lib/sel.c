@@ -846,9 +846,6 @@ handle_sel_info(ipmi_mc_t  *mc,
 	&& (add_timestamp == sel->last_addition_timestamp)
 	&& (erase_timestamp == sel->last_erase_timestamp))
     {
-	if (sel->sel_good_clears)
-	    ipmi_domain_stat_add(sel->sel_good_clears, 1);
-
 	/* If the operation completed successfully and everything in
 	   our SEL is deleted, then clear it with our old reservation.
 	   We also do the clear if the overflow flag is set; on some
