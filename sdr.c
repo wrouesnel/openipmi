@@ -474,9 +474,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    fetch_complete(sdrs, EINVAL);
 	    goto out;
 	}
+	sdrs->next_rec_id = ipmi_get_uint16(rsp->data+1);
 	if ((rsp->data[6] == 1) || (rsp->data[6] == 2)) {
 	    /* It's a sensor SDR, so fetch it. */
-	    sdrs->next_rec_id = ipmi_get_uint16(rsp->data+1);
 	    sdrs->working_sdrs[curr].record_id = ipmi_get_uint16(rsp->data+3);
 	    sdrs->working_sdrs[curr].major_version = rsp->data[5] & 0xf;
 	    sdrs->working_sdrs[curr].minor_version = (rsp->data[5] >> 4) & 0xf;
@@ -486,9 +486,13 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    memcpy(sdrs->working_sdrs[curr].data,
 		   rsp->data + 8,
 		   sdrs->sdr_data_read);
+	} else if (sdrs->next_rec_id == 0xFFFF) {
+	    /* We are at the end, start the next stage. */
+	    start_reservation_check(sdrs);
+	    goto out;
 	} else {
 	    /* Ignore non-sensor SDRs, just go to the next one. */
-	    sdrs->curr_rec_id = ipmi_get_uint16(rsp->data+1);
+	    sdrs->curr_rec_id = sdrs->next_rec_id;
 	    goto restart_this_sdr;
 	}
     } else {

@@ -1,7 +1,27 @@
 
-2003-02-25 Todd David <todd.c.davis@intel.com>
+2003-02-27 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Move to version 0.2.2.
+
+	* entity.c: Cleaned up entity presence detection so it works
+	properly with an entity presence sensor.
+
+	* sdr.c: Fixed a bug where the SDR fetch would go into an infinite
+	loop if the last SDR was not a sensor.
+
+	* ui.c: Fixed things so the "-c" option (not full screen) works
+	ok.
+
+2003-02-26 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/os_handler.h: Added thread functions and moved
+	all the function OpenIPMI does not use to the end.
+
+2003-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 0.2.1.
+
+2003-02-25 Todd David <todd.c.davis@intel.com>
 
 	* ipmi.c: Added a check for the lock actually being allocated in
 	ipmi_check_lock().

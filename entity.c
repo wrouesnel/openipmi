@@ -632,9 +632,12 @@ presence_sensor_changed(ipmi_sensor_t         *sensor,
 {
     ipmi_entity_t *ent = cb_data;
 
-    /* zero means the sensor is present, 1 or 2 means it absent or
-       disabled */
-    presence_changed(ent, offset == 0, event);
+    /* zero offset is the "present" offset, 1 or 2 means it absent or
+       disabled, coupled with the assertion/deassertion. */
+    if (dir == IPMI_ASSERTION)
+	presence_changed(ent, offset == 0, event);
+    else if (dir == IPMI_DEASSERTION)
+	presence_changed(ent, offset != 0, event);
 }
 
 static void
@@ -643,11 +646,23 @@ states_read(ipmi_sensor_t *sensor,
 	    ipmi_states_t *states,
 	    void          *cb_data)
 {
-    int           present = ipmi_is_state_set(states, 0);
+    int           present;
     ipmi_entity_t *ent = cb_data;
+    int           val;
+    int           rv;
 
-    if (!err)
-        presence_changed(ent, present, NULL);
+    if (err)
+	return;
+
+    rv = ipmi_discrete_event_readable(sensor, 0, &val);
+    if (rv || !val)
+	/* The present bit is not supported, so use the not present bit. */
+	present = ! ipmi_is_state_set(states, 1);
+    else
+	/* The present bit is supported. */
+	present = ipmi_is_state_set(states, 0);
+
+    presence_changed(ent, present, NULL);
 }
 
 typedef struct ent_detect_info_s
@@ -833,6 +848,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 		       void          *ref)
 {
     ipmi_sensor_ref_t *link = (ipmi_sensor_ref_t *) ref;
+    int               is_presence = 0;
 
     CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
@@ -843,9 +859,27 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
     link->lun = lun;
     link->num = num;
     link->list_link.malloced = 0;
+
     if ((ipmi_sensor_get_sensor_type(sensor) == 0x25)
 	&& (ent->presence_sensor == NULL))
     {
+	/* If it could possible be a presence sensor for us,
+           double-check. */
+	int val, rv;
+
+	/* Check present bit */
+	rv = ipmi_discrete_event_readable(sensor, 0, &val);
+	if ((!rv) && (val))
+	    is_presence = 1;
+	else {
+	    /* Check absent bit. */
+	    rv = ipmi_discrete_event_readable(sensor, 1, &val);
+	    if ((!rv) && (val))
+		is_presence = 1;
+	}
+    }
+
+    if (is_presence) {
 	/* It's the presence sensor and we don't already have one.  We
 	   keep this special. */
 	ent->presence_sensor = sensor;

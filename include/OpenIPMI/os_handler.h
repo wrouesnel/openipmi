@@ -145,19 +145,6 @@ struct os_handler_s
     int (*is_writelocked)(os_handler_t    *handler,
 			 os_hnd_rwlock_t *id);
 
-    /* Condition variables, like in POSIX Threads. */
-    int (*create_cond)(os_handler_t  *handler,
-		       os_hnd_cond_t **cond);
-    int (*destroy_cond)(os_handler_t  *handler,
-			os_hnd_cond_t *cond);
-    int (*cond_wait)(os_handler_t  *handler,
-		     os_hnd_cond_t *cond,
-		     os_hnd_lock_t *lock);
-    int (*cond_wake)(os_handler_t  *handler,
-		     os_hnd_cond_t *cond);
-    int (*cond_broadcast)(os_handler_t  *handler,
-			  os_hnd_cond_t *cond);
-
     /* Return "len" bytes of random data into "data". */
     int (*get_random)(os_handler_t  *handler,
 		      void          *data,
@@ -177,6 +164,36 @@ struct os_handler_s
 
     /* The user may use this for whatever they like. */
     void *user_data;
+
+
+    /* The rest of these are not used by OpenIPMI proper, but are here
+       for upper layers if they need them.  If your upper layer
+       doesn't use theses, you don't have to provide them. */
+
+    /* Condition variables, like in POSIX Threads. */
+    int (*create_cond)(os_handler_t  *handler,
+		       os_hnd_cond_t **cond);
+    int (*destroy_cond)(os_handler_t  *handler,
+			os_hnd_cond_t *cond);
+    int (*cond_wait)(os_handler_t  *handler,
+		     os_hnd_cond_t *cond,
+		     os_hnd_lock_t *lock);
+    int (*cond_timedwait)(os_handler_t   *handler,
+			  os_hnd_cond_t  *cond,
+			  os_hnd_lock_t  *lock,
+			  struct timeval *timeout);
+    int (*cond_wake)(os_handler_t  *handler,
+		     os_hnd_cond_t *cond);
+    int (*cond_broadcast)(os_handler_t  *handler,
+			  os_hnd_cond_t *cond);
+
+    /* Thread management */
+    int (*create_thread)(os_handler_t       *handler,
+			 int                priority,
+			 void               (*startup)(void *data),
+			 void               *data);
+    /* Terminate the running thread. */
+    int (*thread_exit)(os_handler_t *handler);
 };
 
 #endif /* __OS_HANDLER_H */
