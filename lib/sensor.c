@@ -1691,8 +1691,8 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	    locked_list_destroy(nsensor->handler_list);
 	    ipmi_mem_free(nsensor);
 	    ent_item->sensor = NULL;
+	    sdr_sensors[i] = osensor;
 	    if (osensor) {
-		sdr_sensors[i] = osensor;
 		if (osensor->source_array)
 		    osensor->source_array[osensor->source_idx] = NULL;
 		osensor->source_idx = i;
