@@ -630,7 +630,8 @@ entity_add(ipmi_entity_info_t *ents,
 int
 ipmi_entity_add(ipmi_entity_info_t *ents,
 		ipmi_domain_t      *domain,
-		ipmi_mc_t          *mc,
+		unsigned char      mc_channel,
+		unsigned char      mc_slave_addr,
 		int                lun,
 		int                entity_id,
 		int                entity_instance,
@@ -647,9 +648,9 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
 
     CHECK_DOMAIN_LOCK(domain);
 
-    if (mc && (entity_instance >= 0x60)) {
-	device_num.channel = ipmi_mc_get_channel(mc);
-	device_num.address = ipmi_mc_get_address(mc);
+    if (entity_instance >= 0x60) {
+	device_num.channel = mc_channel;
+	device_num.address = mc_slave_addr;
     } else {
 	device_num.channel = 0;
 	device_num.address = 0;

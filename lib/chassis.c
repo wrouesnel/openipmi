@@ -362,7 +362,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
     int                rv;
     ipmi_control_cbs_t cbs;
 
-    rv = ipmi_entity_add(ents, domain, mc, 0,
+    rv = ipmi_entity_add(ents, domain, 0, 0, 0,
 			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 1,
 			 NULL, IPMI_ASCII_STR, 0,
 			 chassis_entity_sdr_add,

@@ -1,9 +1,16 @@
-2004-02-10 Corey Minyard <cminyard@mvista.com> 
+2004-02-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sensor.c: Reworked sensor naming to include the entity
 	id and instance.
 
 	* lib/oem_atca_conn.c: Made ATCA connections always active.
+
+	* lib/entity.c, include/OpenIPMI/ipmi_entity.h: Revised the
+	entity addition function to take the mc channel and address, not
+	an MC pointer, since the MC pointer is not always available.
+	* lib/oem_motorola_mxp.c: adjusted for the previous change
+	* lib/chassis.c: adjusted for the previous change
+	* lib/sensor.c: adjusted for the previous change
 
 2004-02-10 Corey Minyard <cminyard@mvista.com> 
 

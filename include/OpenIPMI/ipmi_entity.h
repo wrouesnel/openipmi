@@ -64,7 +64,8 @@ typedef int (*entity_sdr_add_cb)(ipmi_entity_t   *ent,
 				 void            *cb_data);
 int ipmi_entity_add(ipmi_entity_info_t *ents,
 		    ipmi_domain_t      *domain,
-		    ipmi_mc_t          *mc, /* SDR repository the MC is from */
+		    unsigned char      mc_channel,
+		    unsigned char      mc_slave_addr,
 		    int                lun,
 		    int                entity_id,
 		    int                entity_instance,
