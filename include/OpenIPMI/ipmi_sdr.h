@@ -57,19 +57,19 @@ typedef struct ipmi_sdr_info_s ipmi_sdr_info_t;
    to do that.  If "sensor" is true, then this will fetch the "sensor"
    SDRs using GET DEVICE SDR.  If not, it will use GET SDR for
    fetching SDRs. */
-int ipmi_sdr_alloc(ipmi_mc_t       *mc,
-		   unsigned int    lun,
-		   int             sensor,
-		   ipmi_sdr_info_t **new_sdr);
+int ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
+			unsigned int    lun,
+			int             sensor,
+			ipmi_sdr_info_t **new_sdrs);
 
 /* Destroy an SDR.  Note that if the SDR is currently fetching SDRs,
    the destroy cannot complete immediatly, it will be marked for
    destruction later.  You can supply a callback that, if not NULL,
    will be called when the sdr is destroyed. */
-typedef void (*ipmi_sdr_destroyed_t)(ipmi_sdr_info_t *sdr, void *cb_data);
-int ipmi_sdr_destroy(ipmi_sdr_info_t      *sdr,
-		     ipmi_sdr_destroyed_t handler,
-		     void                 *cb_data);
+typedef void (*ipmi_sdr_destroyed_t)(ipmi_sdr_info_t *sdrs, void *cb_data);
+int ipmi_sdr_info_destroy(ipmi_sdr_info_t      *sdrs,
+			  ipmi_sdr_destroyed_t handler,
+			  void                 *cb_data);
 
 /* Fetch the remote SDRs, but do not wait until the fetch is complete,
    return immediately.  When the fetch is complete, call the given

@@ -200,14 +200,9 @@ ipmi_control_destroy(ipmi_control_t *control)
 			  control->entity_id,
 			  control->entity_instance,
 			  &ent);
-    if (!rv) {
-	if (control->destroy_handler)
-	    control->destroy_handler(control,
-				     control->destroy_handler_cb_data);
-
+    if (!rv)
 	ipmi_entity_remove_control(ent, control->mc,
 				   control->lun, control->num, control);
-    }
 
     controls->controls_by_idx[control->num] = NULL;
 
@@ -233,6 +228,8 @@ control_opq_ready(void *cb_data, int shutdown)
     int                   rv;
 
     if (shutdown) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Control was destroyed while an operation was in progress");
 	if (info->__handler)
 	    info->__handler(info->__control, ECANCELED, info->__cb_data);
 	return;
@@ -286,6 +283,8 @@ control_rsp_handler(ipmi_mc_t  *mc,
     ipmi_control_t         *control = info->__control;
 
     if (control->destroyed) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Control was destroyed while an operation was in progress");
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 	control_final_destroy(control);
@@ -293,6 +292,8 @@ control_rsp_handler(ipmi_mc_t  *mc,
     }
 
     if (!mc) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "MC was destroyed while a control operation was in progress");
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 	return;
@@ -301,9 +302,11 @@ control_rsp_handler(ipmi_mc_t  *mc,
     /* Call the next stage with the lock held. */
     info->__rsp = rsp;
     rv = ipmi_control_pointer_cb(info->__control_id,
-				control_rsp_handler2,
-				info);
+				 control_rsp_handler2,
+				 info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Could not convert control id to a pointer");
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
     }

@@ -863,7 +863,7 @@ ipmi_close_connection(ipmi_mc_t    *mc,
     free(mc->sensors_in_my_sdr);
 
     if (mc->sdrs)
-	ipmi_sdr_destroy(mc->sdrs, NULL, NULL);
+	ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
 
     if (mc->sensors)
 	ipmi_sensors_destroy(mc->sensors);
@@ -872,7 +872,7 @@ ipmi_close_connection(ipmi_mc_t    *mc,
 	ipmi_controls_destroy(mc->controls);
 
     if (mc->bmc->main_sdrs)
-	ipmi_sdr_destroy(mc->bmc->main_sdrs, NULL, NULL);
+	ipmi_sdr_info_destroy(mc->bmc->main_sdrs, NULL, NULL);
 
     ipmi_lock(mc->bmc->event_handlers_lock);
     while (mc->bmc->event_handlers)
@@ -1190,7 +1190,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    if (rv)
 		goto next_addr;
 
-	    rv = ipmi_sdr_alloc(mc, 0, 1, &(mc->sdrs));
+	    rv = ipmi_sdr_info_alloc(mc, 0, 1, &(mc->sdrs));
 	    if (!rv) {
 		if (mc->sensor_device_support)
 		    rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
@@ -1589,9 +1589,9 @@ dev_id_rsp_handler(ipmi_mc_t  *mc,
     mc->bmc->state = QUERYING_MAIN_SDRS;
 
     if (!rv)
-	rv = ipmi_sdr_alloc(mc, 0, 0, &mc->bmc->main_sdrs);
+	rv = ipmi_sdr_info_alloc(mc, 0, 0, &mc->bmc->main_sdrs);
     if (!rv)
-	rv = ipmi_sdr_alloc(mc, 0, 1, &mc->sdrs);
+	rv = ipmi_sdr_info_alloc(mc, 0, 1, &mc->sdrs);
     if (!rv) {
 	if (mc->SDR_repository_support)
 	    rv = ipmi_sdr_fetch(mc->bmc->main_sdrs, sdr_handler, mc);
@@ -2214,7 +2214,7 @@ ipmi_bmc_store_entities(ipmi_mc_t *bmc, ipmi_bmc_cb done, void *cb_data)
 	return ENOMEM;
 
     /* Create an SDR repository to store. */
-    rv = ipmi_sdr_alloc(bmc, 0, 0, &stored_sdrs);
+    rv = ipmi_sdr_info_alloc(bmc, 0, 0, &stored_sdrs);
     if (rv) {
 	free(info);
 	return rv;
@@ -2260,7 +2260,7 @@ ipmi_bmc_store_entities(ipmi_mc_t *bmc, ipmi_bmc_cb done, void *cb_data)
  out_err:
     if (rv)
 	free(info);
-    ipmi_sdr_destroy(stored_sdrs, NULL, NULL);
+    ipmi_sdr_info_destroy(stored_sdrs, NULL, NULL);
     return rv;
 }
 

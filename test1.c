@@ -342,9 +342,9 @@ void got_sdrs(ipmi_sdr_info_t *sdr,
 	printf("\n");
     }
 
-    rv = ipmi_sdr_destroy(sdr, NULL, NULL);
+    rv = ipmi_sdr_info_destroy(sdr, NULL, NULL);
     if (rv) {
-	report_error("ipmi_sdr_destroy", rv);
+	report_error("ipmi_sdr_ifno_destroy", rv);
 	exit(1);
     }
 
@@ -516,9 +516,9 @@ setup_done(ipmi_mc_t *mc,
 	exit(1);
     }
 
-    rv = ipmi_sdr_alloc(mc, 0, 0, &sdr);
+    rv = ipmi_sdr_info_alloc(mc, 0, 0, &sdr);
     if (rv) {
-	report_error("ipmi_sdr_alloc", rv);
+	report_error("ipmi_sdr_info_alloc", rv);
 	exit(1);
     }
 
