@@ -1316,7 +1316,7 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	/* Presence sensor overrides everything. */
 	rv = ipmi_states_get(ent->presence_sensor, states_read, ent);
     } else if (ent->presence_bit_sensor) {
-	/* Presence sensor overrides everything. */
+	/* Presence bit sensor overrides everything but presence. */
 	rv = ipmi_states_get(ent->presence_bit_sensor, states_bit_read, ent);
     } else if (! ilist_empty(ent->sensors)) {
 	/* It has sensors, try to see if any of those are active. */
@@ -1764,6 +1764,7 @@ typedef struct sens_find_presence_s
     int           is_presence;
     int           bit;
     ipmi_sensor_t *sensor;
+    ipmi_sensor_t *ignore_sensor;
 } sens_cmp_info_t;
 
 static void
@@ -1792,6 +1793,9 @@ static void
 sens_detect_if_presence_bit(ipmi_sensor_t *sensor, void *cb_data)
 {
     sens_cmp_info_t *info = cb_data;
+
+    if (sensor == info->ignore_sensor)
+	return;
 
     info->sensor = sensor;
     info->is_presence = is_presence_bit_sensor(sensor, &info->bit);
@@ -1852,6 +1856,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	    ent->presence_sensor = NULL;
 	    ilist_init_iter(&iter, ent->sensors);
 	    ilist_unpositioned(&iter);
+	    info.ignore_sensor = sensor;
 	    ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
 	    if (ref) {
 		ent->presence_bit_sensor = info.sensor;
