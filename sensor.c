@@ -2303,7 +2303,7 @@ disables_set(ipmi_mc_t  *mc,
 	     void       *rsp_data)
 {
     event_enable_info_t *info = rsp_data;
-    mc_cb_info_t        mc_info;
+    int                 rv;
 
     if (!mc) {
 	if (info->done)
@@ -2323,14 +2323,10 @@ disables_set(ipmi_mc_t  *mc,
 
     /* Call the next stage with the lock held. */
     info->rsp = rsp;
-    mc_info.err = 0;
-    mc_info.id = info->sensor_id;
-    mc_info.cb_data = info;
-    mc_info.handler = disables_set2;
-    mc_cb(mc, &mc_info);
-    if (mc_info.err) {
+    rv = ipmi_sensor_pointer_cb(info->sensor_id, disables_set2, info);
+    if (rv) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, info->cb_data);
+	    info->done(info->sensor, rv, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -2383,7 +2379,7 @@ enables_set(ipmi_mc_t  *mc,
 	    void       *rsp_data)
 {
     event_enable_info_t *info = rsp_data;
-    mc_cb_info_t        mc_info;
+    int                 rv;
 
     if (!mc) {
 	if (info->done)
@@ -2403,14 +2399,10 @@ enables_set(ipmi_mc_t  *mc,
 
     /* Call the next stage with the lock held. */
     info->rsp = rsp;
-    mc_info.err = 0;
-    mc_info.id = info->sensor_id;
-    mc_info.cb_data = info;
-    mc_info.handler = enables_set2;
-    mc_cb(mc, &mc_info);
-    if (mc_info.err) {
+    rv = ipmi_sensor_pointer_cb(info->sensor_id, enables_set2, info);
+    if (rv) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, info->cb_data);
+	    info->done(info->sensor, rv, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -2541,7 +2533,7 @@ enables_get(ipmi_mc_t  *mc,
 	    void       *rsp_data)
 {
     event_enable_get_info_t *info = rsp_data;
-    mc_cb_info_t        mc_info;
+    int                     rv;
 
     if (!mc) {
 	if (info->done)
@@ -2563,15 +2555,10 @@ enables_get(ipmi_mc_t  *mc,
 
     /* Call the next stage with the lock held. */
     info->rsp = rsp;
-    mc_info.err = 0;
-    mc_info.id = info->sensor_id;
-    mc_info.cb_data = info;
-    mc_info.handler = enables_get2;
-    mc_cb(mc, &mc_info);
-    if (mc_info.err) {
+    rv = ipmi_sensor_pointer_cb(info->sensor_id, enables_get2, info);
+    if (rv) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err,
-		       0, 0, info->state, info->cb_data);
+	    info->done(info->sensor, rv, 0, 0, info->state, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -2689,7 +2676,7 @@ hyst_get(ipmi_mc_t  *mc,
 	 void       *rsp_data)
 {
     hyst_get_info_t *info = rsp_data;
-    mc_cb_info_t    mc_info;
+    int             rv;
 
     if (!mc) {
 	if (info->done)
@@ -2709,14 +2696,10 @@ hyst_get(ipmi_mc_t  *mc,
 
     /* Call the next stage with the lock held. */
     info->rsp = rsp;
-    mc_info.err = 0;
-    mc_info.id = info->sensor_id;
-    mc_info.cb_data = info;
-    mc_info.handler = hyst_get2;
-    mc_cb(mc, &mc_info);
-    if (mc_info.err) {
+    rv = ipmi_sensor_pointer_cb(info->sensor_id, hyst_get2, info);
+    if (rv) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, 0, 0, info->cb_data);
+	    info->done(info->sensor, rv, 0, 0, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -2835,7 +2818,7 @@ hyst_set(ipmi_mc_t  *mc,
 	 void       *rsp_data)
 {
     hyst_set_info_t *info = rsp_data;
-    mc_cb_info_t    mc_info;
+    int             rv;
 
     if (!mc) {
 	if (info->done)
@@ -2855,14 +2838,10 @@ hyst_set(ipmi_mc_t  *mc,
 
     /* Call the next stage with the lock held. */
     info->rsp = rsp;
-    mc_info.err = 0;
-    mc_info.id = info->sensor_id;
-    mc_info.cb_data = info;
-    mc_info.handler = hyst_set2;
-    mc_cb(mc, &mc_info);
-    if (mc_info.err) {
+    rv = ipmi_sensor_pointer_cb(info->sensor_id, hyst_set2, info);
+    if (rv) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, info->cb_data);
+	    info->done(info->sensor, rv, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -3010,7 +2989,7 @@ thresh_get(ipmi_mc_t  *mc,
 	   void       *rsp_data)
 {
     thresh_get_info_t *info = rsp_data;
-    mc_cb_info_t      mc_info;
+    int               rv;
 
     if (!mc) {
 	if (info->done)
@@ -3030,14 +3009,10 @@ thresh_get(ipmi_mc_t  *mc,
 
     /* Call the next stage with the lock held. */
     info->rsp = rsp;
-    mc_info.err = 0;
-    mc_info.id = info->sensor_id;
-    mc_info.cb_data = info;
-    mc_info.handler = thresh_get2;
-    mc_cb(mc, &mc_info);
-    if (mc_info.err) {
+    rv = ipmi_sensor_pointer_cb(info->sensor_id, thresh_get2, info);
+    if (rv) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, &(info->th), info->cb_data);
+	    info->done(info->sensor, rv, &(info->th), info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -3194,7 +3169,7 @@ thresh_set(ipmi_mc_t  *mc,
 	 void       *rsp_data)
 {
     thresh_set_info_t *info = rsp_data;
-    mc_cb_info_t    mc_info;
+    int               rv;
 
     if (!mc) {
 	if (info->done)
@@ -3214,14 +3189,10 @@ thresh_set(ipmi_mc_t  *mc,
 
     /* Call the next stage with the lock held. */
     info->rsp = rsp;
-    mc_info.err = 0;
-    mc_info.id = info->sensor_id;
-    mc_info.cb_data = info;
-    mc_info.handler = thresh_set2;
-    mc_cb(mc, &mc_info);
-    if (mc_info.err) {
+    rv = ipmi_sensor_pointer_cb(info->sensor_id, thresh_set2, info);
+    if (rv) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, info->cb_data);
+	    info->done(info->sensor, rv, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -3273,7 +3244,7 @@ static void
 thresh_set_start(void *cb_data, int shutdown)
 {
     thresh_set_info_t *info = cb_data;
-    int                 rv;
+    int               rv;
 
     if (shutdown) {
 	if (info->done)
@@ -3383,8 +3354,8 @@ reading_get(ipmi_mc_t  *mc,
 	    void       *rsp_data)
 {
     reading_get_info_t *info = rsp_data;
-    mc_cb_info_t      mc_info;
     ipmi_states_t     states = {0};
+    int               rv;
 
     if (!mc) {
 	if (info->done)
@@ -3404,15 +3375,10 @@ reading_get(ipmi_mc_t  *mc,
 
     /* Call the next stage with the lock held. */
     info->rsp = rsp;
-    mc_info.err = 0;
-    mc_info.id = info->sensor_id;
-    mc_info.cb_data = info;
-    mc_info.handler = reading_get2;
-    mc_cb(mc, &mc_info);
-    if (mc_info.err) {
+    rv = ipmi_sensor_pointer_cb(info->sensor_id, reading_get2, info);
+    if (rv) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, 0, 0.0, states,
-		       info->cb_data);
+	    info->done(info->sensor, rv, 0, 0.0, states, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }

@@ -475,8 +475,6 @@ system_event_handler(ipmi_mc_t  *bmc,
 	info.log = log;
 	rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
 	if (rv) {
-	    ipmi_log("Got event message from unknown source: %x.%x.%x.%x",
-		     id.mc_num, id.channel, id.lun, id.sensor_num);
 	    rv = info.err;
 	}
     }
