@@ -323,8 +323,67 @@ parse_ipmi_data(intarray data, unsigned char *odata,
 };
 
 %typemap(freearg) char ** {
-        free($1);
+    free($1);
 };
+
+%typemap(in) double * (double dvalue) {
+    SV* tempsv;
+    if (!SvROK($input)) {
+	croak("expected a reference\n");
+    }
+    tempsv = SvRV($input);
+    if ((!SvNOK(tempsv)) && (!SvIOK(tempsv))) {
+	croak("expected a double reference\n");
+    }
+    dvalue = SvNV(tempsv);
+    $1 = &dvalue;
+}
+
+%typemap(argout) double * {
+    SV *tempsv;
+    tempsv = SvRV($input);
+    sv_setnv(tempsv, *$1);
+}
+
+%typemap(in) double * (double dvalue) {
+    SV* tempsv;
+    if (!SvROK($input)) {
+	croak("expected a reference\n");
+    }
+    tempsv = SvRV($input);
+    if ((!SvNOK(tempsv)) && (!SvIOK(tempsv))) {
+	dvalue = 0.0;
+    } else {
+	dvalue = SvNV(tempsv);
+    }
+    $1 = &dvalue;
+}
+
+%typemap(argout) double * {
+    SV *tempsv;
+    tempsv = SvRV($input);
+    sv_setnv(tempsv, *$1);
+}
+
+%typemap(in) int * (int ivalue) {
+    SV* tempsv;
+    if (!SvROK($input)) {
+	croak("expected a reference\n");
+    }
+    tempsv = SvRV($input);
+    if (!SvIOK(tempsv)) {
+	ivalue = 0;
+    } else {
+	ivalue = SvIV(tempsv);
+    }
+    $1 = &ivalue;
+}
+
+%typemap(argout) int * {
+    SV *tempsv;
+    tempsv = SvRV($input);
+    sv_setiv(tempsv, *$1);
+}
 
 %{
 
@@ -440,7 +499,7 @@ domain_close_done(void *cb_data)
 {
     swig_cb_val cb = cb_data;
 
-    swig_call_cb(cb, "close_done_cb", " ");
+    swig_call_cb(cb, "domain_close_done_cb", " ");
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -650,7 +709,7 @@ entity_fru_update_handler(enum ipmi_update_e op,
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     fru_ref = swig_make_ref(ipmi_entity_get_fru, "OpenIPMI::ipmi_fru_t");
-    swig_call_cb(cb, "entity_fru_cb", "%s%p%p",
+    swig_call_cb(cb, "entity_fru_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &fru_ref);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
@@ -845,7 +904,7 @@ mc_sel_get_time_cb(ipmi_mc_t     *mc,
     swig_ref    mc_ref;
 
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
-    swig_call_cb(cb, "mc_reread_sel_cb", "%p%d%ld", &mc_ref, err, time);
+    swig_call_cb(cb, "mc_get_sel_time_cb", "%p%d%ld", &mc_ref, err, time);
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -1825,7 +1884,7 @@ control_val_set_handler(ipmi_control_t *control, int err, void *cb_data)
     swig_ref    control_ref;
 
     control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
-    swig_call_cb(cb, "control_set_val_cb", "%p", &control_ref);
+    swig_call_cb(cb, "control_set_val_cb", "%p%d", &control_ref, err);
     swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
 }
 
@@ -1996,23 +2055,6 @@ wait_io(int timeout)
  * to have to not be in an inline and done the hard way.
  */
 %{
-/*
- * Create a new domain.  The domain will be named with the first parm,
- * the startup arguments are in a list in the second parm (\@args),
- * the third parm is a callback object whose conn_change_cb method
- * will be called when the domain has connected (but it may not be
- * fully up yet).  The fourth parameter's domain_up_cb method will be
- * called when the domain is completely up.  Note that the done method
- * will be kept around and will continue to be called on connection
- * changes.  If you don't want it any more, it must be deregistered
- * with remove_connect_change_handler.
- * Passing in a reference to an undefined value will cause the handlers
- * to not be called.
- * The domain_up_cb methods is called with the following parmeters:
- * <self> <domain>
- * The parameters of the connection change handler are defined in
- * the domain->add_connect_change_handler method.
- */
 ipmi_domain_id_t *
 open_domain(char *name, char **args, swig_cb done, swig_cb up)
 {
@@ -2107,12 +2149,6 @@ open_domain(char *name, char **args, swig_cb done, swig_cb up)
     return nd;
 }
 
-/*
- * Set the handler for OpenIPMI logs.  The logs will be sent to the
- * "log" method of the first parameter.  The log method will receive
- * the following parameters:
- * <self>, <log_level (a string)>, and <log (a string)>.
- */
 void
 set_log_handler(swig_cb handler)
 {
@@ -2126,8 +2162,36 @@ set_log_handler(swig_cb handler)
 }
 %}
 
+/*
+ * Create a new domain.  The domain will be named with the first parm,
+ * the startup arguments are in a list in the second parm (\@args),
+ * the third parm is a callback object whose conn_change_cb method
+ * will be called when the domain has connected (but it may not be
+ * fully up yet).  The fourth parameter's domain_up_cb method will be
+ * called when the domain is completely up.  Note that the done method
+ * will be kept around and will continue to be called on connection
+ * changes.  If you don't want it any more, it must be deregistered
+ * with remove_connect_change_handler.
+ * Passing in a reference to an undefined value will cause the handlers
+ * to not be called.
+ * The domain_up_cb methods is called with the following parmeters:
+ * <self> <domain>
+ * The parameters of the connection change handler are defined in
+ * the domain->add_connect_change_handler method.
+ * The third and fourth parameters are optional, if not provided
+ * or undefined the handler will be ignored.
+ */
 ipmi_domain_id_t *open_domain(char *name, char **args,
 			      swig_cb done = NULL, swig_cb up = NULL);
+
+/*
+ * Set the handler for OpenIPMI logs.  This is a global value and
+ * there is only one, setting it replaces the old one.  The logs will
+ * be sent to the "log" method of the first parameter.  The log method
+ * will receive the following parameters: <self>, <log_level (a
+ * string)>, and <log (a string)>.  If the log method is undefined or
+ * not provided, the current log handler will be removed.
+ */
 void set_log_handler(swig_cb handler = NULL);
 
 
@@ -2220,7 +2284,9 @@ void set_log_handler(swig_cb handler = NULL);
 
     /*
      * Shut down the connections to the domain and free it up.
-     * If the parameter given 
+     * If the parameter given, the domain_close_done_cb method for
+     * the object will be called with the following parameters:
+     * <self>
      */
     int close(swig_cb handler = NULL)
     {
@@ -2417,7 +2483,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Scan all the addresses on the given channel (parm 1) between
      * (and including) start_addr (parm 2) and end_addr (parm 3) and
      * call the "ipmb_mc_scan_cb" method on the handler (parm4) with
-     * the following parms:
+     * the following parms (if the parm is provided and defined):
      * <self>, <domain>, <error val>
      */
     int start_ipmb_mc_scan(int channel, int start_addr, int end_addr,
@@ -2443,8 +2509,9 @@ void set_log_handler(swig_cb handler = NULL);
      * (parm 2), netfn (parm 3), command (parm 4).  Parm 5 is the
      * message data in an array reference.  Parm 6 is the handler, it
      * will be called with the response.  The addr_cmd_cb method will
-     * be called on the handler handler; its parameters are:
-     * <domain> <addr> <lun> <netfn> <cmd> <response data>
+     * be called on the handler handler if it is provided and defined;
+     * its parameters are: <domain> <addr> <lun> <netfn> <cmd>
+     * <response data>
      */
     int send_command_addr(char *addr, int lun, int netfn, int cmd,
 			  intarray msg_data, swig_cb handler = NULL)
@@ -2829,10 +2896,11 @@ void set_log_handler(swig_cb handler = NULL);
     }
 
     /*
-     * Add a handler to be called when the FRU data in the entity is added,
-     * deleted, or updated.  When the FRU data changes the entity_fru_cb
-     * method on the first parameter will be called with the following
-     * parameters: <self> added|deleted|changed <entity> <fru>.
+     * Add a handler to be called when the FRU data in the entity is
+     * added, deleted, or updated.  When the FRU data changes the
+     * entity_fru_update_cb method on the first parameter will be
+     * called with the following parameters: <self>
+     * added|deleted|changed <entity> <fru>.
      */
     int add_fru_update_handler(swig_cb handler)
     {
@@ -3314,7 +3382,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Set the current hot-swap activation time for the entity.  The
      * entity_hot_swap_time_cb handler will be called with the
-     * following parameters: <self> <entity> <err>
+     * following parameters (if it is supplied): <self> <entity> <err>
      */
     int set_auto_activate_time(ipmi_timeout_t auto_act,
 			       swig_cb        handler = NULL)
@@ -3360,7 +3428,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Set the current hot-swap deactivation time for the entity.  The
      * entity_hot_swap_time_cb handler will be called with the
-     * following parameters: <self> <entity> <err>
+     * following parameters (if it is supplied): <self> <entity> <err>
      */
     int set_auto_deactivate_time(ipmi_timeout_t auto_act,
 				 swig_cb        handler = NULL)
@@ -3386,7 +3454,8 @@ void set_log_handler(swig_cb handler = NULL);
      * operation, this will return ENOSYS and you can move straight
      * from INACTIVE to ACTIVE state by calling ipmi_entity_activate.
      * After this is done, the entity_activate_cb handler will be
-     * called with the following parameters: <self> <entity> <err>
+     * called with the following parameters (if it is supplied):
+     * <self> <entity> <err>
      */
     int set_activation_requested(swig_cb handler = NULL)
     {
@@ -3410,7 +3479,7 @@ void set_log_handler(swig_cb handler = NULL);
      * ipmi_entity_set_activation_requested() returns ENOSYS), or from
      * ACTIVATION_REQUESTED to ACTIVE.  After this is done, the
      * entity_activate_cb handler will be called with the following
-     * parameters: <self> <entity> <err>
+     * parameters (if it is supplied): <self> <entity> <err>
      */
     int activate(swig_cb handler = NULL)
     {
@@ -3432,7 +3501,8 @@ void set_log_handler(swig_cb handler = NULL);
      * Attempt to deactivate an entity.  Deactivate will cause a
      * transition from DEACTIVATION_REQUESTED or ACTIVE to INACTIVE.
      * After this is done, the entity_activate_cb handler will be
-     * called with the following parameters: <self> <entity> <err>
+     * called with the following parameters (if it is supplied):
+     * <self> <entity> <err>
      */
     int deactivate(swig_cb handler = NULL)
     {
@@ -3741,7 +3811,7 @@ void set_log_handler(swig_cb handler = NULL);
      * (parm 2), command (parm 3).  Parm 4 is the message data in an
      * array reference.  Parm 5 is the handler, it will be called with
      * the response.  The mc_cmd_cb method will be called on the
-     * handler handler; its parameters are: <mc> <netfn> <cmd>
+     * handler (if it is supplied); its parameters are: <mc> <netfn> <cmd>
      * <response data>
      */
     int send_command(int       lun,
@@ -3784,9 +3854,9 @@ void set_log_handler(swig_cb handler = NULL);
      * support resetting the MC.  This is not a standard control
      * because there is no entity to hang if from and you don't want
      * people messing with it unless they really know what they are
-     * doing.  When the reset is complete the mc_reset_cb will
-     * be called on the second parameter of this call with the
-     * following parameters: <self> <mc> <err>
+     * doing.  When the reset is complete the mc_reset_cb will be
+     * called on the second parameter of this call (if it is
+     * supplied) with the following parameters: <self> <mc> <err>
      */
     int reset(int     reset_type,
 	      swig_cb handler = NULL)
@@ -3818,7 +3888,8 @@ void set_log_handler(swig_cb handler = NULL);
      * passed in as the first parameter is a boolean telling whether
      * to turn events on (true) or off (false).  When the operation
      * completes the mc_events_enable_cb will be called on the handler
-     * with the following parameters: <self> <mc> <err>.
+     * (if it is supplied) with the following parameters: <self> <mc>
+     * <err>.
      */
     int set_events_enable(int     val,
 			  swig_cb handler = NULL)
@@ -3841,7 +3912,9 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Reread all the sensors for a given mc.  This will request the
      * device SDRs for that mc (And only for that MC) and change the
-     * sensors as necessary. */
+     * sensors as necessary.  When the operation completes, the
+     * mc_reread_sensors_cb on the first parameter (if supplied) will
+     * be called with the following parms: <self> <mc> <err>. */
     int reread_sensors(swig_cb handler = NULL)
     {
 	swig_cb_val     handler_val = NULL;
@@ -3862,7 +3935,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Set the time between SEL rescans for the MC (and only that MC).
      * Parm 1 is the time in seconds.
      */
-    void ipmi_mc_set_sel_rescan_time(unsigned int seconds)
+    void set_sel_rescan_time(unsigned int seconds)
     {
 	ipmi_mc_set_sel_rescan_time(self, seconds);
     }
@@ -3875,12 +3948,15 @@ void set_log_handler(swig_cb handler = NULL);
 	return ipmi_mc_get_sel_rescan_time(self);
     }
 
-    /* Reread the sel for the MC.  When the hander is called, all the
-     * events in the SEL have been fetched into the local copy of the SEL
-     * (with the obvious caveat that this is a distributed system and
-     * other things may have come in after the read has finised).
+    /*
+     * Reread the sel for the MC.  When the hander is called, all the
+     * events in the SEL have been fetched into the local copy of the
+     * SEL (with the obvious caveat that this is a distributed system
+     * and other things may have come in after the read has finised).
      * When this completes, the mc_reread_sel_cb method will be called
-     * on the handler (parm 1) with the parameters: <self> <mc> <err>. */
+     * on the handler (parm 1, if it is supplied) with the parameters:
+     * <self> <mc> <err>.
+     */
     int reread_sel(swig_cb handler = NULL)
     {
 	swig_cb_val     handler_val = NULL;
@@ -3897,7 +3973,12 @@ void set_log_handler(swig_cb handler = NULL);
 	return rv;
     }
 
-    /* Fetch the current time from the SEL. */
+    /*
+     * Fetch the current time from the SEL.  When the operation
+     * completes, the mc_get_sel_time_cb method will be called on the
+     * first parameter (if it is supplied) with the following
+     * values: <self> <mc> <err> <time>
+     */
     int get_current_sel_time(swig_cb handler)
     {
 	swig_cb_val     handler_val = NULL;
@@ -3937,7 +4018,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Retrieve the next event from the MC.
      */
-    ipmi_event_t *next_event(ipmi_mc_t *mc, ipmi_event_t *event)
+    ipmi_event_t *next_event(ipmi_event_t *event)
     {
 	return ipmi_mc_next_event(self, event);
     }
@@ -3946,7 +4027,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Retrieve the previous event from the MC.
      */
-    ipmi_event_t *prev_event(ipmi_mc_t *mc, ipmi_event_t *event)
+    ipmi_event_t *prev_event(ipmi_event_t *event)
     {
 	return ipmi_mc_prev_event(self, event);
     }
@@ -3955,8 +4036,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Retrieve the event with the given record id from the MC.
      */
-    ipmi_event_t *event_by_recid(ipmi_mc_t *mc,
-				  int      record_id)
+    ipmi_event_t *event_by_recid(int record_id)
     {
 	return ipmi_mc_event_by_recid(self, record_id);
     }
@@ -4142,9 +4222,9 @@ void set_log_handler(swig_cb handler = NULL);
      * Otherwise, the sensor is discrete and the discrete_event_cb
      * will be called.  The threshold_event_cb method takes the
      * following parameters:
-     * <self> <sensor> <event> <raw_set> <raw> <value_set> <value> <event>
+     * <self> <sensor> <event spec> <raw_set> <raw> <value_set> <value> <event>
      * The discrete_event_cb method takes the following parameters:
-     * <self> <sensor> <event> <severity> <old_severity> <event>
+     * <self> <sensor> <event spec> <severity> <old_severity> <event>
      */
     int add_event_handler(swig_cb handler)
     {
@@ -4175,8 +4255,9 @@ void set_log_handler(swig_cb handler = NULL);
      * states given in the first parameter.  This will first enable
      * the events/thresholds that are set, then disable the
      * events/thresholds that are not set.  When the operation is
-     * done, the sensor_event_enable_cb method on the second parm will
-     * be called with the following parameters: <self> <sensor> <err>
+     * done, the sensor_event_enable_cb method on the second parm (if
+     * it is supplied) will be called with the following parameters:
+     * <self> <sensor> <err>
      */
     int set_event_enables(char *states, swig_cb handler = NULL)
     {
@@ -4205,13 +4286,15 @@ void set_log_handler(swig_cb handler = NULL);
 	return rv;
     }
 
-    /* Enable the event states that are set in the first parameter.  This
-     * will *only* enable those states, it will not disable any
+    /*
+     * Enable the event states that are set in the first parameter.
+     * This will *only* enable those states, it will not disable any
      * states.  It will, however, set the "events" flag and the
      * "scanning" flag for the sensor to the value in the states
      * parameter.  When the operation is done, the
-     * sensor_event_enable_cb method on the second parm will be called
-     * with the following parameters: <self> <sensor> <err>
+     * sensor_event_enable_cb method on the second parm (if it is
+     * supplied) will be called with the following parameters: <self>
+     * <sensor> <err>
      */
     int enable_events(char *states, swig_cb handler = NULL)
     {
@@ -4240,13 +4323,15 @@ void set_log_handler(swig_cb handler = NULL);
 	return rv;
     }
 
-    /* Disable the event states that are set in the first parameter.
+    /*
+     * Disable the event states that are set in the first parameter.
      * This will *only* disable those states, it will not enable any
      * states.  It will, however, set the "events" flag and the
      * "scanning" flag for the sensor to the value in the states
      * parameter.  When the operation is done, the
-     * sensor_event_enable_cb method on the second parm will be called
-     * with the following parameters: <self> <sensor> <err>
+     * sensor_event_enable_cb method on the second parm (if it is
+     * supplied) will be called with the following parameters: <self>
+     * <sensor> <err>
      */
     int disable_events(char *states, swig_cb handler = NULL)
     {
@@ -4275,10 +4360,12 @@ void set_log_handler(swig_cb handler = NULL);
 	return rv;
     }
 
-    /* Get the event enables for the given sensor.  When done, the
+    /*
+     * Get the event enables for the given sensor.  When done, the
      * sensor_get_event_enable_cb method on the first parameter will
      * be called with the following parameters: <self> <sensor> <err>
-     * <event states> */
+     * <event states>
+     */
     int get_event_enables(swig_cb handler)
     {
 	int                          rv;
@@ -4305,8 +4392,8 @@ void set_log_handler(swig_cb handler = NULL);
      * enabled and the state is ignored (and may be NULL).  Otherwise,
      * the events set in the event state (parm 2) are enabled.  When
      * the operation is complete, the sensor_rearm_cb method of the
-     * third parameter will be called with the following parameters:
-     * <self> <sensor> <err>
+     * third parameter (if it is supplied) will be called with the
+     * following parameters: <self> <sensor> <err>
      */
     int rearm(int     global_enable,
 	      char    *states,
@@ -4374,12 +4461,12 @@ void set_log_handler(swig_cb handler = NULL);
      * the cooked values.  The positive hysteresis is the first
      * parameter, the negative hystersis is the second.  When the
      * operation completes, the sensor_set_hysteresis_cb will be
-     * called on the third parameters with the following parms:
-     * <self> <sensor> <err>
+     * called on the third parameter (if it is supplied) with the
+     * following parms: <self> <sensor> <err>
      */
     int set_hysteresis(unsigned int positive_hysteresis,
 		       unsigned int negative_hysteresis,
-		       swig_cb      handler)
+		       swig_cb      handler = NULL)
     {
 	int                 rv;
 	swig_cb_val         handler_val = NULL;
@@ -4398,7 +4485,9 @@ void set_log_handler(swig_cb handler = NULL);
     }
 
     %newobject get_default_thresholds;
-    /* Return the default threshold settings for a sensor. */
+    /*
+     * Return the default threshold settings for a sensor.
+     */
     char *get_default_thresholds()
     {
 	ipmi_thresholds_t *th = malloc(ipmi_thresholds_size());
@@ -4416,11 +4505,12 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Set the thresholds for the given sensor to the threshold values
      * specified in the first parameter.  When the thresholds are set,
-     * the sensor_set_thresholds_cb method on the second parm will be
-     * called with the following parameters: <self> <sensor> <err>
+     * the sensor_set_thresholds_cb method on the second parm (if it
+     * is supplied) will be called with the following parameters:
+     * <self> <sensor> <err>
      */
     int set_thresholds(char    *thresholds,
-		       swig_cb handler)
+		       swig_cb handler = NULL)
     {
 	ipmi_thresholds_t   *th;
 	int                 rv;
@@ -5335,11 +5425,12 @@ void set_log_handler(swig_cb handler = NULL);
      * more than one element, the array reference passed in as the
      * first parameter must match the number of elements the control
      * supports.  All the elements will be set simultaneously.  The
-     * control_set_val_cb method on the second parameter will be called
-     * after the operation completes with.  It will be called with the
-     * following parameters: <self> <contro> <err>
+     * control_set_val_cb method on the second parameter (if it is
+     * supplied) will be called after the operation completes with.
+     * It will be called with the following parameters: <self>
+     * <control> <err>
      */
-    int set_val(intarray val, swig_cb handler)
+    int set_val(intarray val, swig_cb handler = NULL)
     {
 	swig_cb_val        handler_val = NULL;
 	ipmi_control_op_cb done = NULL;
@@ -5469,9 +5560,10 @@ void set_log_handler(swig_cb handler = NULL);
      * "[lc] <color> <on_time> <off time>[:[lc] <color>...]".  The
      * second parm turns on or off local control of the light.  When
      * the operation is complete the control_set_val_cb method on the
-     * second parameter will be called.
+     * second parameter (if it is supplied) will be called with the
+     * following parameters: <self> <control> <err>.
      */
-    int ipmi_control_set_light(char *settings, swig_cb handler)
+    int ipmi_control_set_light(char *settings, swig_cb handler = NULL)
     {
 	ipmi_light_setting_t *s;
 	int                  rv;
@@ -5573,9 +5665,10 @@ void set_log_handler(swig_cb handler = NULL);
      * Set the value of the identifier.  The first parameter is a
      * reference to an array of byte values to se the identifier to.
      * When the setting is complete, the control_set_val_cb method on
-     * the second parameter will be called.
+     * the second parameter (if it is supplied) will be called with
+     * the following parameters: <self> <control> <err>.
      */
-    int identifier_set_val(intarray val, swig_cb handler)
+    int identifier_set_val(intarray val, swig_cb handler = NULL)
     {
 	swig_cb_val        handler_val = NULL;
 	ipmi_control_op_cb done = NULL;

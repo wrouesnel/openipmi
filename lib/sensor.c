@@ -873,6 +873,8 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 static void
 sensor_final_destroy(ipmi_sensor_t *sensor)
 {
+    _ipmi_entity_call_sensor_handlers(sensor->entity, sensor, IPMI_DELETED);
+
     if (sensor->destroy_handler)
 	sensor->destroy_handler(sensor, sensor->destroy_handler_cb_data);
 
@@ -887,8 +889,6 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
 
     if (sensor->entity)
 	ipmi_entity_remove_sensor(sensor->entity, sensor);
-
-    _ipmi_entity_call_sensor_handlers(sensor->entity, sensor, IPMI_DELETED);
 
     ipmi_mem_free(sensor);
 }
