@@ -895,6 +895,32 @@ got_channel(ipmi_mc_t  *mc,
 
     info->pef_channel = msg->data[1];
 
+    /* Now that we have the channel, set up the lan parms. */
+    info->lanparm_check_pos = 0;
+    rv = ipmi_lanparm_alloc(mc, info->pef_channel, &(info->lanparm));
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "start_pet_setup: Unable to allocate lanparm: 0x%x",
+		 rv);
+    } else {
+	rv = ipmi_lanparm_get_parm(info->lanparm,
+				   IPMI_LANPARM_DEST_TYPE,
+				   pet->lan_dest_sel,
+				   0,
+				   lanparm_got_config,
+				   info);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "start_pet_setup: Unable to get dest type: 0x%x",
+		     rv);
+	    ipmi_lanparm_destroy(info->lanparm, NULL, NULL);
+	    info->lanparm = NULL;
+	} else {
+	    pet->in_progress++;
+	}
+    }
+
+
     /* Start the configuration process. */
     data[0] = 1; /* Attempt to lock */
     rv = ipmi_pef_set_parm(info->pef, 0, data, 1,
@@ -1016,33 +1042,7 @@ start_pet_setup(ipmi_domain_t *domain,
 	    pet->in_progress++;
 	}
 
-	info->lanparm_check_pos = 0;
-	rv = ipmi_lanparm_alloc(mc, IPMI_SELF_CHANNEL, &(info->lanparm));
-	if (rv) {
-	    ipmi_pef_destroy(info->pef, NULL, NULL);
-	    info->pef = NULL;
-	    ipmi_log(IPMI_LOG_WARNING,
-		     "start_pet_setup: Unable to allocate lanparm: 0x%x",
-		     rv);
-	} else {
-	    rv = ipmi_lanparm_get_parm(info->lanparm,
-				       IPMI_LANPARM_DEST_TYPE,
-				       pet->lan_dest_sel,
-				       0,
-				       lanparm_got_config,
-				       info);
-	    if (rv) {
-		ipmi_log(IPMI_LOG_WARNING,
-			 "start_pet_setup: Unable to get dest type: 0x%x",
-			 rv);
-		ipmi_pef_destroy(info->pef, NULL, NULL);
-		ipmi_lanparm_destroy(info->lanparm, NULL, NULL);
-		info->lanparm = NULL;
-		info->pef = NULL;
-	    } else {
-		pet->in_progress++;
-	    }
-	}
+	/* Have to wait until we get the channel to set up lanparms. */
     }
  out:
     return rv;
