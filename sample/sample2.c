@@ -348,6 +348,8 @@ main(int argc, const char *argv[])
 
     /* Let the other threads take over. */
 
+    for (;;)
+    	sleep(100);
     /* Note that at cleanup time, you should call
          ipmi_posix_thread_cleanup_os_handler(os_hnd);
        but this doesn't have any cleanup.

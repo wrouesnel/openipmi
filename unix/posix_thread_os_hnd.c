@@ -599,6 +599,7 @@ create_thread(os_handler_t       *handler,
     pthread_attr_t     attr, *pattr = NULL;
     struct sched_param param;
     int                rv;
+    pthread_t          tid;
 
     if (priority) {
 	rv = pthread_attr_init(&attr);
@@ -614,7 +615,7 @@ create_thread(os_handler_t       *handler,
 	pattr = &attr;
     }
 
-    rv = pthread_create(NULL, pattr, (void *(*)(void *)) startup, data);
+    rv = pthread_create(&tid, pattr, (void *(*)(void *)) startup, data);
 
  out:
     if (pattr)
