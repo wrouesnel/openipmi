@@ -1869,12 +1869,16 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	    ui_log("redisplay_sensor: Unable to get sensor reading: 0x%x\n",
 		   rv);
 
-	if (ipmi_sensor_get_threshold_access(sensor)
-	    != IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
+	switch (ipmi_sensor_get_threshold_access(sensor))
 	{
+	case IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE:
+	case IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE:
 	    rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
 	    if (rv)
 		ui_log("Unable to get threshold values: 0x%x\n", rv);
+	    break;
+
+	default:
 	}
 
 	if (ipmi_sensor_get_event_support(sensor) != IPMI_EVENT_SUPPORT_NONE) {
@@ -1929,15 +1933,19 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		if (rv)
 		    ui_log("Unable to get sensor reading: 0x%x\n", rv);
 
-		if (ipmi_sensor_get_threshold_access(sensor)
-		    != IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
+		switch (ipmi_sensor_get_threshold_access(sensor))
 		{
+		case IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE:
+		case IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE:
 		    sensor_ops_to_read_count++;
 		    rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
 		    if (rv)
 			ui_log("Unable to get threshold values: 0x%x\n", rv);
+		    break;
+		    
+		default:
 		}
-	    
+
 		if (ipmi_sensor_get_event_support(sensor)
 		    != IPMI_EVENT_SUPPORT_NONE)
 		{
