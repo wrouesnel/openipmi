@@ -1461,8 +1461,8 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 	rspi->msg.data = rspi->data;
 
 	deliver_rsp(domain, nmsg->rsp_handler, rspi);
-    }
-    ipmi_mem_free(rspi);
+    } else
+	ipmi_mem_free(rspi);
     ipmi_mem_free(nmsg);
  out_unlock:
     ipmi_read_unlock();
@@ -1497,8 +1497,8 @@ ll_si_rsp_handler(ipmi_con_t   *ipmi,
 	memcpy(rspi->data, orspi->data, orspi->msg.data_len);
 	rspi->msg.data = rspi->data;
 	deliver_rsp(domain, nmsg->rsp_handler, rspi);
-    }
-    ipmi_mem_free(rspi);
+    } else
+	ipmi_mem_free(rspi);
     ipmi_mem_free(nmsg);
  out_unlock:
     ipmi_read_unlock();
