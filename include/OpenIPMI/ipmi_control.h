@@ -260,15 +260,15 @@ typedef struct ipmi_control_transition_s
     unsigned int color;
     unsigned int time;
 } ipmi_control_transition_t;
-typedef struct ipmi_control_setting_s
+typedef struct ipmi_control_value_s
 {
     unsigned int          num_transitions;
     ipmi_control_transition_t *transitions;
-} ipmi_control_setting_t;
+} ipmi_control_value_t;
 typedef struct ipmi_control_light_s
 {
-    unsigned int           num_settings;
-    ipmi_control_setting_t *settings;
+    unsigned int         num_values;
+    ipmi_control_value_t *values;
 } ipmi_control_light_t;
 void ipmi_control_light_set_lights(ipmi_control_t       *control,
 				   unsigned int         num_lights,

@@ -632,14 +632,14 @@ static ipmi_control_transition_t blue_led2[] =
 };
 
 
-static ipmi_control_setting_t hs_led_settings[] =
+static ipmi_control_value_t hs_led_values[] =
 {
     { 2, blue_led1 },
     { 1, off_led },
     { 2, blue_led2 },
     { 1, on_blue_led },
 };
-static ipmi_control_light_t hs_led[] = {{ 4, hs_led_settings }};
+static ipmi_control_light_t hs_led[] = {{ 4, hs_led_values }};
 
 static int
 test_handler_0(ipmi_mc_t *mc,

@@ -424,32 +424,32 @@ static ipmi_control_transition_t blue_led1[] =
     { IPMI_CONTROL_COLOR_BLACK, 500 },
 };
 
-static ipmi_control_setting_t blue_blinking_led_set[] =
+static ipmi_control_value_t blue_blinking_led_set[] =
 {
     { 1, off_led },
     { 1, on_blue_led },
     { 2, blue_led1 },
 };
 
-static ipmi_control_setting_t blue_led_set[] =
+static ipmi_control_value_t blue_led_set[] =
 {
     { 1, off_led },
     { 1, on_blue_led },
 };
 
-static ipmi_control_setting_t red_led_set[] =
+static ipmi_control_value_t red_led_set[] =
 {
 	{ 1, off_led },
 	{ 1, on_red_led },
 };
 
-static ipmi_control_setting_t green_led_set[] =
+static ipmi_control_value_t green_led_set[] =
 {
 	{ 1, off_led },
 	{ 1, on_green_led },
 };
 
-static ipmi_control_setting_t yellow_led_set[] =
+static ipmi_control_value_t yellow_led_set[] =
 {
 	{ 1, off_led },
 	{ 1, on_yellow_led },

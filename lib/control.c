@@ -1435,15 +1435,15 @@ ipmi_control_get_num_vals(ipmi_control_t *control)
 }
 
 int
-ipmi_control_get_num_light_settings(ipmi_control_t *control,
-				    unsigned int   light)
+ipmi_control_get_num_light_values(ipmi_control_t *control,
+				  unsigned int   light)
 {
     CHECK_CONTROL_LOCK(control);
 
     if (light >= control->num_vals)
 	return -1;
 
-    return control->lights[light].num_settings;
+    return control->lights[light].num_values;
 }
 
 int
@@ -1455,10 +1455,10 @@ ipmi_control_get_num_light_transitions(ipmi_control_t   *control,
 
     if (light >= control->num_vals)
 	return -1;
-    if (set >= control->lights[light].num_settings)
+    if (set >= control->lights[light].num_values)
 	return -1;
 
-    return control->lights[light].settings[set].num_transitions;
+    return control->lights[light].values[set].num_transitions;
 }
 
 int
@@ -1471,12 +1471,12 @@ ipmi_control_get_light_color(ipmi_control_t   *control,
 
     if (light >= control->num_vals)
 	return -1;
-    if (set >= control->lights[light].num_settings)
+    if (set >= control->lights[light].num_values)
 	return -1;
-    if (num > control->lights[light].settings[set].num_transitions)
+    if (num > control->lights[light].values[set].num_transitions)
 	return -1;
 
-    return control->lights[light].settings[set].transitions[num].color;
+    return control->lights[light].values[set].transitions[num].color;
 }
 
 int
@@ -1489,12 +1489,12 @@ ipmi_control_get_light_color_time(ipmi_control_t   *control,
 
     if (light >= control->num_vals)
 	return -1;
-    if (set >= control->lights[light].num_settings)
+    if (set >= control->lights[light].num_values)
 	return -1;
-    if (num > control->lights[light].settings[set].num_transitions)
+    if (num > control->lights[light].values[set].num_transitions)
 	return -1;
 
-    return control->lights[light].settings[set].transitions[num].time;
+    return control->lights[light].values[set].transitions[num].time;
 }
 
 int
@@ -1815,4 +1815,18 @@ __ipmi_check_control_lock(ipmi_control_t *control)
 			       "control not locked when it should have been");
 }
 #endif
+
+/***********************************************************************
+ *
+ * Crufty backwards-compatible interfaces.  Don't use these as they
+ * are deprecated.
+ *
+ **********************************************************************/
+
+int
+ipmi_control_get_num_light_settings(ipmi_control_t *control,
+				    unsigned int   light)
+{
+    return ipmi_control_get_num_light_settings(control, light);
+}
 

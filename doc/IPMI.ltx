@@ -48,14 +48,16 @@ Platform means that \acs{IPMI} deals with the platform, not the software
 running on the platform.  Software management is mostly out of the
 scope of \acs{IPMI}
 
-Management Interface mains that the management system uses \acs{IPMI} to
+Management Interface means that the management system uses \acs{IPMI} to
 talk to the system to monitor and perform manintenance on the
 platform.  \acs{IPMI} is mostly about monitoring, though it does have a few
 minor management functions.  However, many companies and organizations
 have built more extensive management control using \acs{OEM} extensions to
 \acs{IPMI}.
 
-The specification for \acs{IPMI} is \cite{ipmi-spec}.
+The \acs{IPMI} specification\cite{ipmi-spec}, of course, has the
+details, but they can be obscured..  This document hopefully provides
+an easier to understand introduction to IPMI.
 
 \tableofcontents
 
@@ -124,18 +126,18 @@ proprietary interfaces.  \acs{IPMI} standardizes this interface.
 \end{figure}
 
 Figure \ref{mgmtif} shows a management system and the things it
-manages.  \acs{IPMI} fits mostly within the ``Hardware'' box, although there
-may be other hardware interfaces the management interfaces the
-management system must manage.  The management system ties into all
-elements of the system and makes global decisions based upon inputs
-from all parts of the systems.  For instance, a server may be
-overheating or have a low voltage.  The management system will be
-informed of this through the hardware interfaces.  It may choose to
-move the function of that server to another server and bring that
-server down so it may be repaired.  If no other server is available to
-take over the operation, the management system may look at the
-severity of the problem, predict how long the system may survive, and
-let it continue.  These types of decisions are called ``policy''.
+manages.  \acs{IPMI} fits mostly within the ``Hardware'' box, although
+there may be other hardware interfaces the management system must
+manage.  The management system ties into all elements of the system
+and makes global decisions based upon inputs from all parts of the
+systems.  For instance, a server may be overheating or have a low
+voltage.  The management system will be informed of this through the
+hardware interfaces.  It may choose to move the function of that
+server to another server and bring that server down so it may be
+repaired.  If no other server is available to take over the operation,
+the management system may look at the severity of the problem, predict
+how long the system may survive, and let it continue.  These types of
+decisions are called ``policy''.
 
 In all cases these events are logged to permanent storage.  An
 operator is informed of things that need human attention.  The
@@ -155,7 +157,7 @@ system is firmly in control of policy.
 \section{\acs{IPMI} Implementation}
 
 The \ac{MC} sits at the center of an \acs{IPMI} system, providing the
-``intelligence'' of \acs{IPMI}.  It is generally always on when the
+``intelligence'' of \acs{IPMI}.  It is suppose to be always on when the
 system is plugged in, even if the system is off.  The management
 system communicates with the management controller; the management
 controller provides a normalized interface to all the sensors, events,
@@ -244,13 +246,13 @@ that is the main management controller in the system.  It controls a
 number of sensors.  In this example, the power supply also has a
 \ac{MC} with it's own sensors.
 
-A \ac{BMC} can have several connections to managing systems.  It may have a
-system interface connection to the main processor.  It may share an
-interface to the ethernet chip so the system may be managed through
-the \acs{LAN} when the main processor is not working.  System can have
-serial port connections.  They can even have connections to modems
-where they can dial up a management system when they detect a
-problem, page an operator, or be dialed into by a management system.
+A \ac{BMC} can have several connections to managing systems.  It may
+have a system interface connection to the main processor.  It may
+share an interface to the ethernet chip so the system may be managed
+through the \acs{LAN} when the main processor is not working.  System
+can have serial port connections.  They can even have connections to
+modems where they can dial up a management system or page an operator
+when they detect a problem, or be dialed into by a management system.
 
 \begin{figure}
 \includegraphics[width=\textwidth]{BusSystem.eps}
@@ -274,7 +276,7 @@ in the system; they will have the event log and the \ac{SDR}s in the
 system.  A system with two shelf controllers will generally allow the
 system to be managed even if one of the shelf controllers fails.
 
-Bus systems generally use one or more \ac{IPMB}s, a sister standard to
+Bus systems generally use one or more \ac{IPMB}s (a sister standard to
 \acs{IPMI}) to interconnect the various components for management.
 \ac{IPMB} is a modified \acs{I$^2$C} interface; it provides for a somewhat
 slow but simple communication bus.
@@ -288,9 +290,9 @@ system.
 
 Individal SBCs vary on whether the local Management Controller is
 connected to the microprocessor on an SBC.  Some are, and some aren't.
-This has some limited usefulness if the software on the SBC wishes to
-obtain local information from the \acs{IPMI} system or store logs in the
-\acs{IPMI} event log.
+This connectionhas some limited usefulness if the software on the SBC
+wishes to obtain local information from the \acs{IPMI} system or store
+logs in the \acs{IPMI} event log.
 
 These types of systems are used to achieve high density in places with
 expensive real-estate, like a telco central office.  As you might
@@ -358,21 +360,22 @@ framework for everything sensors and controls.  Sensors monitor
 entities.  Entities may be present or absent.  When you connect to an
 interface, OpenIPMI takes care of detecting the entities in the system
 and reporting them to you.  You may register to be told when entities
-are added or removed from the database.  Note that an entity may be
-present in the database, but not present in the system, the reporting
-from only gives the presence in the database, not physical presence in
-the system.
+are added or removed from the local database.  Note that an entity may
+be present in the \acs{SDR}s, but not present in the system, the
+reporting from only gives the presence in the \acs{SDR}s, not physical
+presence in the system.
 
 The user must know about two other OpenIPMI concepts: connections and
-domains.  A connection provides the interface to the \acs{IPMI} system.  In
-essence, it is the \ac{BMC} connection.  You must allocate one or more
-connections and create a domain with them.  OpenIPMI supports multple
-connections to a domain in some cases, but currently it requires the \acs{OEM}
-plugins exist.  A domain represents a set of devices on a bus (like
-\ac{IPMB}) whose entities will be unique.  For instance, a chassis with a lot
-of cards plugged could be a domain, each card could be an entity and
-then create it's own sub-entities, but they will be designed so the
-entity id's don't collide.
+domains.  A connection provides the interface to the \acs{IPMI}
+system.  In essence, it is the \ac{BMC} connection.  You must allocate
+one or more connections and create a domain with them.  OpenIPMI
+supports multple connections to a domain in some cases, but currently
+it requires some \acs{OEM} support for this.  A domain represents a
+set of devices on a bus (like \ac{IPMB}) whose entities will be
+unique.  For instance, a chassis with a lot of cards plugged could be
+a domain, each card could be an entity and then create it's own
+sub-entities, but they will be designed so the entity id's don't
+collide.
 
 OpenIPMI will automatically manage the connections, activating and
 deactating the proper connections (if the connections support that),
@@ -387,10 +390,10 @@ that can be done to the sensors.
 
 You may register with an entity to be told when it's physical presence
 in the system changes.  Some devices (like power supplies) are
-field-replacable while the system is running, these are called Field
-Replacable Units (\ac{FRU}s).  They may have sensors that monitor them, but
-those sensors may not be active if the device is not physically present
-in the system.
+field-replacable while the system is running, this type of device is
+called a \ac{FRU}.  They may have sensors that monitor them, but those
+sensors may not be active if the device is not physically present in
+the system.
 
 Sensors and controls are also automatically detected and reported.
 This is done through entities, you register with an entity to be told
@@ -469,7 +472,7 @@ makes them much more ``live'', since they are always ready to handle
 user input.
 \item This system can handle multiple simultaneous operations without
 threads.  In general, threaded systems are less reliable and more
-complicated, unless you need priorities or scalability on SMP, why use
+complicated; unless you need priorities or scalability on SMP, why use
 them?  And even if you use them, you can have much better control over
 what is running in the system.
 \item If you are building a redundant system with data replication, this
@@ -841,21 +844,21 @@ have a single-threaded application that is non-blocking and can
 perform very well.  Plus, single-threaded programs are easier to
 debug, easier to understand and maintain, and more reliable.
 
-\item Do your own locking.  OpenIPMI used to hold locks for the user while
-in callbacks.  This is, in general, a bad idea.  OpenIPMI does not
-know what the user is doing.  This can result in deadlocks if the user
-is not careful, and it make it hard for the user to handle multiple
-things\footnote{For instance, if you have two callbacks on two
-sensors, and each of them then did a locking operation on the other
-sensor, you can end up in a deadlock situation where one thread holds
-one lock, another thread holds another lock, and they are both waiting
-for the lock the other is holding}.  Instead, the user must do their
-own locking.  For instance, you could claim a lock in both the entity
-iteration and the callback for a new entity.  This would prevent the
-both pieces of code from running at the same time.  You are in control
-of the locks, so you can handle it as appropriate.  You have to know
-what you are doing, but that goes without saying when doing
-multi-threaded programming.
+\item Do your own locking.  OpenIPMI used to hold locks for the user
+while in callbacks.  As mentioned before, this was a bad idea.
+OpenIPMI does not know what the user is doing.  This can result in
+deadlocks if the user is not careful, and it make it hard for the user
+to handle multiple things\footnote{For instance, if you have two
+callbacks on two sensors, and each of them then did a locking
+operation on the other sensor, you can end up in a deadlock situation
+where one thread holds one lock, another thread holds another lock,
+and they are both waiting for the lock the other is holding}.
+Instead, the user must do their own locking.  For instance, you could
+claim a lock in both the entity iteration and the callback for a new
+entity.  This would prevent the both pieces of code from running at
+the same time.  You are in control of the locks, so you can handle it
+as appropriate.  You have to know what you are doing, but that goes
+without saying when doing multi-threaded programming.
 \end{itemize}
 
 Note that this may seen abnormal, but it is pretty standard in
@@ -920,12 +923,12 @@ entities.  They have an entity instance less than 60h.
 Other entities may not reside in a fixed location.  For instance, a
 power supply or CompactPCI board may be plugged in to one of many
 locations in a chassis; it doesn't know ahead of time which one.
-These types of entities are generally device-relative and have an
+These types of entities are generally device-relative and thsu have an
 entity instance of 60h or larger.  For these types of entities, the
 management controller on which they reside becomes part of the entity.
-In OpenIPMI, the \ac{IPMB} channel number of \ac{IPMB} address are part of the
-entity.  In \verb=ipmi_ui=, these are printed and entered as
-``r<channel>.<ipmb>.<entity id>.<entity instance>''.
+In OpenIPMI, the \ac{IPMB} channel number of \ac{IPMB} address are
+part of the entity.  In \verb=ipmi_ui=, these are printed and entered
+as ``r$<$channel$>$.$<$ipmb$>$.$<$entity id$>$.$<$entity instance$>$''.
 
 \subsubsection{Sensors}
 
@@ -937,10 +940,10 @@ temperature.
 
 Discrete sensors have a set of binary readings that may each be
 independently zero or one.  In some sensors, these may be independent.
-For instance, a power supply may have both an external power failure and
-a predictive failure at the same time.  In other cases they may be
-mutually exclusive, such as the initialization state of a piece of
-software.
+For instance, a power supply may have both an external power failure
+and a predictive failure at the same time.  In other cases they may be
+mutually exclusive: each bit may represent the initialization state of
+a piece of software.
 
 \subsubsection{Controls}
 
@@ -961,16 +964,17 @@ All the devices are read and set at once.
 
 Reset controls are reset settings that can be turned on and off.
 One-shot-reset controls cause a reset by setting the value to 1; they
-are not readable and setting to zero returns an error.
+are not readable and setting them to zero returns an error.
 
 Lights are on/off colored devices, like an LED.  They may be
 multi-color, but can only show one color at a time.  For instance, if
 you work for Kmart, or you are managing a CompactPCI system with
 hot-swap, you will have a blue light in your system.  You can search
 through the controls to find a light that's blue.  Then, if a special
-is on, or you want the operator to remove a card, you can light the blue
-light.  Lights may blink, too.  Each light can have settings.  Each
-setting describes a sequence of one or more transitions the light may go
+is on, or you want the operator to remove a card, you can light the
+blue light.  Lights may blink, too.  Two types of lights are
+available.  Transition light can have a series of transitions.  Each setting
+describes a sequence of one or more transitions the light may go
 through.
 
 Relays are binary outputs.  Most telephony systems have them; they are
@@ -7384,7 +7388,10 @@ int ipmi_control_get_num_vals(ipmi_control_t *control);
 Each light has a number of values that it may be set to.  The value is
 what is passed to \verb=set_control=.  See
 section~\vref{sec-basic-type-controls} for details on how to use
-\verb=set_control=.
+\verb=set_control=.  To find the number of values for a light, use
+\begin{verbatim}
+int ipmi_control_get_num_light_values(ipmi_control_t *control, light);
+\end{verbatim}
 
 Each value of a light has a number of transitions that it may go
 through.  Each transition has a color and a time when that colors

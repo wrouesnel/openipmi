@@ -1,3 +1,12 @@
+2004-08-16 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_controls.c:
+	Renamed the "setting" part of a transition light to "value" to
+	avoid confusion with "setting" type lights.
+	* lib/control.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/oem_test.c: ditto
+
 2004-08-11 Erwan Velu <erwan@mandrakesoft.com>
 
 	* lanserv/lanserv_config.c: Print the line number of errors.
