@@ -6564,6 +6564,10 @@ mc_change(enum ipmi_update_e op,
 	    rv = ipmi_mc_add_active_handler(mc, mc_active, NULL);
 	    if (rv)
 		ui_log("Unable to add MC active handler: 0x%x\n", rv);
+	    if (ipmi_mc_is_active(mc)) {
+		ipmi_mc_set_sdrs_first_read_handler(mc, mc_sdrs_read, NULL);
+		ipmi_mc_set_sels_first_read_handler(mc, mc_sels_read, NULL);
+	    }
 	    ui_log("MC added: (%d %x)\n", channel, addr);
 	    break;
 	case IPMI_DELETED:

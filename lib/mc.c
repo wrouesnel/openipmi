@@ -1335,8 +1335,10 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 	return;
     }
 
-    if (mc->sels_first_read_handler)
+    if (mc->sels_first_read_handler) {
 	mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
+	mc->sels_first_read_handler = NULL;
+    }
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_WARNING,
@@ -1376,8 +1378,10 @@ first_sel_op(ipmi_mc_t *mc)
 			  mc->sel_timer_info);
 	if (rv) {
 	    sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
-	    if (mc->sels_first_read_handler)
+	    if (mc->sels_first_read_handler) {
 		mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
+		mc->sels_first_read_handler = NULL;
+	    }
 	}
     }
 }
@@ -1454,8 +1458,10 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     if (event_rcvr)
 	send_set_event_rcvr(mc, event_rcvr, NULL, NULL);
 
-    if (mc->sdrs_first_read_handler)
+    if (mc->sdrs_first_read_handler) {
 	mc->sdrs_first_read_handler(mc, mc->sdrs_first_read_cb_data);
+	mc->sdrs_first_read_handler = NULL;
+    }
 
     if (mc->SEL_device_support) {
 	mc_reread_sel_t *info;
@@ -1487,8 +1493,10 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	start_sel_ops(mc);
     } else {
     sel_failure:
-	if (mc->sels_first_read_handler)
+	if (mc->sels_first_read_handler) {
 	    mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
+	    mc->sels_first_read_handler = NULL;
+	}
     }
 }
 
