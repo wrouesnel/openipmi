@@ -5292,6 +5292,11 @@ hot_swap_requester_changed(ipmi_sensor_t         *sensor,
     return 0;
 }
 
+static void power_checked(ipmi_control_t *control,
+			  int            err,
+			  int            *val,
+			  void           *cb_data);
+
 static int
 hot_swap_power_changed(ipmi_control_t *control,
 		       int            *valid_vals,
@@ -5305,17 +5310,8 @@ hot_swap_power_changed(ipmi_control_t *control,
     if (!valid_vals[0])
 	return IPMI_EVENT_NOT_HANDLED;
 
-    if (vals[0]) {
-	/* We have power on now */
-	handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, event);
-    } else {
-	/* We have power off now */
-	if (ent->present)
-	    handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, event);
-	else 
-	    handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_NOT_PRESENT,
-					 event);
-    }
+    if (ent->present)
+	power_checked(control, 0, vals, ent);
     
     return handled;
 }
