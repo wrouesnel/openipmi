@@ -843,25 +843,6 @@ int ipmi_entity_deactivate(ipmi_entity_t  *ent,
 			   ipmi_entity_cb done,
 			   void           *cb_data);
 
-/* Set and get the hot-swap indicator.  Note that some systems manage
-   the hot-swap indicator themselves, the set routine will return
-   ENOSYS if this is the case. */
-int ipmi_entity_get_hot_swap_indicator(ipmi_entity_t      *ent,
-				       ipmi_entity_val_cb handler,
-				       void               *cb_data);
-int ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
-				       int            val,
-				       ipmi_entity_cb done,
-				       void           *cb_data);
-
-/* Get the current value of the hot-swap requester, if available.  If
-   not available, this will return ENOSYS.  The hot-swap requester is
-   the thing on the chassis that the operator uses to request a
-   hot-swap of the entity (like the the ejector handle switch). */
-int ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
-				       ipmi_entity_val_cb handler,
-				       void               *cb_data);
-
 /* Check the state of hot-swap for the entity. */
 int ipmi_entity_check_hot_swap_state(ipmi_entity_t *ent);
 
@@ -889,16 +870,6 @@ int ipmi_entity_id_activate(ipmi_entity_id_t id,
 int ipmi_entity_id_deactivate(ipmi_entity_id_t id,
 			      ipmi_entity_cb   done,
 			      void             *cb_data);
-int ipmi_entity_id_get_hot_swap_indicator(ipmi_entity_id_t   id,
-					  ipmi_entity_val_cb handler,
-					  void               *cb_data);
-int ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
-					  int              val,
-					  ipmi_entity_cb   done,
-					  void             *cb_data);
-int ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
-					  ipmi_entity_val_cb handler,
-					  void               *cb_data);
 int ipmi_entity_id_check_hot_swap_state(ipmi_entity_id_t id);
 
 
@@ -2238,5 +2209,34 @@ int ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
 int ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 					   ipmi_domain_cb handler,
 					   void           *cb_data);
+
+/* Allowing user modification of the hot-swap indicator and requester
+   seems to be a bad idea. */
+int ipmi_entity_get_hot_swap_indicator(ipmi_entity_t      *ent,
+				       ipmi_entity_val_cb handler,
+				       void               *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
+				       int            val,
+				       ipmi_entity_cb done,
+				       void           *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
+				       ipmi_entity_val_cb handler,
+				       void               *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_entity_id_get_hot_swap_indicator(ipmi_entity_id_t   id,
+					  ipmi_entity_val_cb handler,
+					  void               *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
+					  int              val,
+					  ipmi_entity_cb   done,
+					  void             *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
+					  ipmi_entity_val_cb handler,
+					  void               *cb_data)
+     IPMI_FUNC_DEPRECATED;
 
 #endif /* __IPMIIF_H */

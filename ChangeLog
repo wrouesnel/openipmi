@@ -1,3 +1,10 @@
+2004-10-24 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h.in, lib/entity.c: Deprectated the
+	ability to directly handle the hot-swap indicators and requesters.
+	In hindsight, this seems like a bad idea.  This should be under
+	the control of the hot-swap state machine.
+
 2004-10-22 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_lan.c: Fix problems with connection failure during

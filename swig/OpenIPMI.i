@@ -684,6 +684,69 @@ entity_get_hot_swap_handler(ipmi_entity_t             *entity,
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
 }
 
+static void
+entity_get_hot_swap_time_handler(ipmi_entity_t  *entity,
+				 int            err,
+				 ipmi_timeout_t time,
+				 void           *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    swig_call_cb(cb, "entity_hot_swap_get_time_cb", "%p%i%f", &entity_ref,
+		 err, ((double) time) / 1000000000.0);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+}
+
+static void
+entity_set_hot_swap_time_handler(ipmi_entity_t  *entity,
+				 int            err,
+				 void           *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    swig_call_cb(cb, "entity_hot_swap_set_time_cb", "%p%i", &entity_ref, err);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+}
+
+static void
+entity_activate_handler(ipmi_entity_t  *entity,
+			int            err,
+			void           *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    swig_call_cb(cb, "entity_activate_cb", "%p%i", &entity_ref, err);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+}
+
+static void
+handle_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "sensor_cb", "%p", &sensor_ref);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+}
+
+static void
+handle_control_cb(ipmi_control_t *control, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    control_ref;
+
+    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    swig_call_cb(cb, "control_cb", "%p", &control_ref);
+    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+}
+
 %}
 
 typedef struct {
@@ -709,6 +772,18 @@ typedef struct {
 
 typedef struct {
 } ipmi_event_t;
+
+typedef struct {
+} ipmi_sensor_t;
+
+typedef struct {
+} ipmi_sensor_id_t;
+
+typedef struct {
+} ipmi_control_t;
+
+typedef struct {
+} ipmi_control_id_t;
 
 %newobject open_domain;
 
@@ -1728,7 +1803,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the channel from the device locator record.  Valid for
      * all entities except unknown.
      */
-    int get_channel(ipmi_entity_t *ent)
+    int get_channel()
     {
 	return ipmi_entity_get_channel(self);
     }
@@ -1737,7 +1812,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the LUN from the device locator record.  Valid for
      * all entities except unknown.
      */
-    int get_lun(ipmi_entity_t *ent)
+    int get_lun()
     {
 	return ipmi_entity_get_lun(self);
     }
@@ -1746,7 +1821,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the OEM byte from the device locator record.  Valid for
      * all entities except unknown.
      */
-    int get_oem(ipmi_entity_t *ent)
+    int get_oem()
     {
 	return ipmi_entity_get_oem(self);
     }
@@ -1755,7 +1830,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the access address from the device locator record.  Valid for
      * FRU and generic entities.
      */
-    int get_access_address(ipmi_entity_t *ent)
+    int get_access_address()
     {
 	return ipmi_entity_get_access_address(self);
     }
@@ -1764,7 +1839,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the private bus id from the device locator record.  Valid for
      * FRU and generic entities.
      */
-    int get_private_bus_id(ipmi_entity_t *ent)
+    int get_private_bus_id()
     {
 	return ipmi_entity_get_private_bus_id(self);
     }
@@ -1773,7 +1848,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the device type from the device locator record.  Valid for
      * FRU and generic entities.
      */
-    int get_device_type(ipmi_entity_t *ent)
+    int get_device_type()
     {
 	return ipmi_entity_get_device_type(self);
     }
@@ -1782,7 +1857,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the device modifier from the device locator record.
      * Valid for FRU and generic entities.
      */
-    int get_device_modifier(ipmi_entity_t *ent)
+    int get_device_modifier()
     {
 	return ipmi_entity_get_device_modifier(self);
     }
@@ -1791,7 +1866,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the slave address from the device locator record.  Valid for
      * MC and generic entities.
      */
-    int get_slave_address(ipmi_entity_t *ent)
+    int get_slave_address()
     {
 	return ipmi_entity_get_slave_address(self);
     }
@@ -1801,7 +1876,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return if the FRU is logical (from the device locator record).
      * Valid for FRU entities.
      */
-    int get_is_logical_fru(ipmi_entity_t *ent)
+    int get_is_logical_fru()
     {
 	return ipmi_entity_get_is_logical_fru(self);
     }
@@ -1810,7 +1885,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the device id from the device locator record.  Valid for
      * FRU entities.
      */
-    int get_fru_device_id(ipmi_entity_t *ent)
+    int get_fru_device_id()
     {
 	return ipmi_entity_get_fru_device_id(self);
     }
@@ -1819,7 +1894,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the ACPI system power notify required bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_ACPI_system_power_notify_required(ipmi_entity_t *ent)
+    int get_ACPI_system_power_notify_required()
     {
 	return ipmi_entity_get_ACPI_system_power_notify_required(self);
     }
@@ -1828,7 +1903,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the ACPI device power notify required bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_ACPI_device_power_notify_required(ipmi_entity_t *ent)
+    int get_ACPI_device_power_notify_required()
     {
 	return ipmi_entity_get_ACPI_device_power_notify_required(self);
     }
@@ -1837,7 +1912,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the controller logs init agent errors bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_controller_logs_init_agent_errors(ipmi_entity_t *ent)
+    int get_controller_logs_init_agent_errors()
     {
 	return ipmi_entity_get_controller_logs_init_agent_errors(self);
     }
@@ -1846,7 +1921,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the log init agent errors accessing bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_log_init_agent_errors_accessing(ipmi_entity_t *ent)
+    int get_log_init_agent_errors_accessing()
     {
 	return ipmi_entity_get_log_init_agent_errors_accessing(self);
     }
@@ -1855,7 +1930,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the global init bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_global_init(ipmi_entity_t *ent)
+    int get_global_init()
     {
 	return ipmi_entity_get_global_init(self);
     }
@@ -1864,7 +1939,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the chassis device bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_chassis_device(ipmi_entity_t *ent)
+    int get_chassis_device()
     {
 	return ipmi_entity_get_chassis_device(self);
     }
@@ -1873,7 +1948,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the !bridge bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_bridge(ipmi_entity_t *ent)
+    int get_bridge()
     {
 	return ipmi_entity_get_bridge(self);
     }
@@ -1882,7 +1957,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the IPMB event generator bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_IPMB_event_generator(ipmi_entity_t *ent)
+    int get_IPMB_event_generator()
     {
 	return ipmi_entity_get_IPMB_event_generator(self);
     }
@@ -1891,7 +1966,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the IPMB event receiver bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_IPMB_event_receiver(ipmi_entity_t *ent)
+    int get_IPMB_event_receiver()
     {
 	return ipmi_entity_get_IPMB_event_receiver(self);
     }
@@ -1900,7 +1975,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the FRU inventory device bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_FRU_inventory_device(ipmi_entity_t *ent)
+    int get_FRU_inventory_device()
     {
 	return ipmi_entity_get_FRU_inventory_device(self);
     }
@@ -1909,7 +1984,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the SEL device bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_SEL_device(ipmi_entity_t *ent)
+    int get_SEL_device()
     {
 	return ipmi_entity_get_SEL_device(self);
     }
@@ -1918,7 +1993,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the SDR repository device bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_SDR_repository_device(ipmi_entity_t *ent)
+    int get_SDR_repository_device()
     {
 	return ipmi_entity_get_SDR_repository_device(self);
     }
@@ -1927,7 +2002,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the sensor device bit from the
      * device locator record.  Valid for MC entities.
      */
-    int get_sensor_device(ipmi_entity_t *ent)
+    int get_sensor_device()
     {
 	return ipmi_entity_get_sensor_device(self);
     }
@@ -1936,7 +2011,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Return the address span from the device locator record.  Valid
      * for generic entities.
      */
-    int get_address_span(ipmi_entity_t *ent)
+    int get_address_span()
     {
 	return ipmi_entity_get_address_span(self);
     }
@@ -1957,7 +2032,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Returns true if the entity is present, false if not.
      */
-    int is_present(ipmi_entity_t *ent)
+    int is_present()
     {
 	return ipmi_entity_is_present(self);
     }
@@ -1965,7 +2040,7 @@ void set_log_handler(swig_cb handler = NULL);
     /*
      * Returns true if the entity is hot-swappable, false if not.
      */
-    int is_hot_swappable(ipmi_entity_t *ent)
+    int is_hot_swappable()
     {
 	return ipmi_entity_hot_swappable(self);
     }
@@ -1999,14 +2074,196 @@ void set_log_handler(swig_cb handler = NULL);
     int get_hot_swap_state(swig_cb handler)
     {
 	swig_cb_val handler_val;
+	int         rv;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_entity_get_hot_swap_state(self,
+					    entity_get_hot_swap_handler,
+					    handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Get the current hot-swap activation time for the entity.  The
+     * entity_hot_swap_time_cb handler will be called with the
+     * following parameters: <self> <entity> <err> <time>
+     */
+    int get_auto_activate_time(swig_cb handler = NULL)
+    {
+	swig_cb_val handler_val;
+	int         rv;
 
 	if (! valid_swig_cb(handler))
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
-	return ipmi_entity_get_hot_swap_state(self,
-					      entity_get_hot_swap_handler,
-					      handler_val);
+	rv = ipmi_entity_get_auto_activate_time
+	    (self,
+	     entity_get_hot_swap_time_handler,
+	     handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set the current hot-swap activation time for the entity.  The
+     * entity_hot_swap_time_cb handler will be called with the
+     * following parameters: <self> <entity> <err>
+     */
+    int set_auto_activate_time(ipmi_timeout_t auto_act,
+			       swig_cb        handler = NULL)
+    {
+	swig_cb_val handler_val;
+	int         rv;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	rv = ipmi_entity_set_auto_activate_time
+	    (self,
+	     auto_act,
+	     entity_set_hot_swap_time_handler,
+	     handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Get the current hot-swap deactivation time for the entity.  The
+     * entity_hot_swap_time_cb handler will be called with the
+     * following parameters: <self> <entity> <err> <time>
+     */
+    int get_auto_deactivate_time(swig_cb handler = NULL)
+    {
+	swig_cb_val handler_val;
+	int         rv;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	rv = ipmi_entity_get_auto_deactivate_time
+	    (self,
+	     entity_get_hot_swap_time_handler,
+	     handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set the current hot-swap deactivation time for the entity.  The
+     * entity_hot_swap_time_cb handler will be called with the
+     * following parameters: <self> <entity> <err>
+     */
+    int set_auto_deactivate_time(ipmi_timeout_t auto_act,
+				 swig_cb        handler = NULL)
+    {
+	swig_cb_val handler_val;
+	int         rv;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	rv = ipmi_entity_set_auto_deactivate_time
+	    (self,
+	     auto_act,
+	     entity_set_hot_swap_time_handler,
+	     handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Cause the entity to move from INACTIVE to ACTIVATION_REQUESTED
+     * state, if possible. If the entity does not support this
+     * operation, this will return ENOSYS and you can move straight
+     * from INACTIVE to ACTIVE state by calling ipmi_entity_activate.
+     * After this is done, the entity_activate_cb handler will be
+     * called with the following parameters: <self> <entity> <err>
+     */
+    int set_activation_requested(swig_cb handler = NULL)
+    {
+	swig_cb_val handler_val;
+	int         rv;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	rv = ipmi_entity_set_activation_requested(self,
+						  entity_activate_handler,
+						  handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Attempt to activate an entity.  Activate will cause a
+     * transition from INACTIVE to ACTIVE (but only if
+     * ipmi_entity_set_activation_requested() returns ENOSYS), or from
+     * ACTIVATION_REQUESTED to ACTIVE.  After this is done, the
+     * entity_activate_cb handler will be called with the following
+     * parameters: <self> <entity> <err>
+     */
+    int activate(swig_cb handler = NULL)
+    {
+	swig_cb_val handler_val;
+	int         rv;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	rv = ipmi_entity_activate(self,
+				  entity_activate_handler,
+				  handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Attempt to deactivate an entity.  Deactivate will cause a
+     * transition from DEACTIVATION_REQUESTED or ACTIVE to INACTIVE.
+     * After this is done, the entity_activate_cb handler will be
+     * called with the following parameters: <self> <entity> <err>
+     */
+    int deactivate(swig_cb handler = NULL)
+    {
+	swig_cb_val handler_val;
+	int         rv;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	rv = ipmi_entity_deactivate(self,
+				    entity_activate_handler,
+				    handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Check the state of hot-swap for the entity.  This causes the
+     * local state to be audited against the actual state.
+     */
+    int check_hot_swap_state()
+    {
+	return ipmi_entity_check_hot_swap_state(self);
     }
 
 }
@@ -2066,6 +2323,124 @@ void set_log_handler(swig_cb handler = NULL);
 	ipmi_mcid_t *rv = malloc(sizeof(*rv));
 	if (rv)
 	    *rv = ipmi_mc_convert_to_id(self);
+	return rv;
+    }
+}
+
+/*
+ * A sensor id object.  This object is guaranteed to be valid and
+ * can be converted into a mc pointer later.
+ */
+%extend ipmi_sensor_id_t {
+    ~ipmi_sensor_id_t()
+    {
+	free(self);
+    }
+
+    /*
+     * Convert a sensor id to a sensor pointer.  The "sensor_cb" method
+     * will be called on the first parameter with the following parameters:
+     * <self> <sensor>
+     */
+    char *convert_to_sensor(swig_cb handler)
+    {
+	int rv;
+
+	if (! valid_swig_cb(handler))
+	    return NULL;
+
+	rv = ipmi_sensor_pointer_cb(*self, handle_sensor_cb,
+				    get_swig_cb(handler));
+	if (rv)
+	    return strerror(rv);
+	return NULL;
+    }
+}
+
+/*
+ * An sensor object
+ */
+%extend ipmi_sensor_t {
+    %newobject get_name;
+    /*
+     * Get the name of an sensor.
+     */
+    char *get_name()
+    {
+	char name[IPMI_SENSOR_NAME_LEN];
+
+	ipmi_sensor_get_name(self, name, sizeof(name));
+	return strdup(name);
+    }
+
+    %newobject get_id;
+    /*
+     * Get the id for the sensor.
+     */
+    ipmi_sensor_id_t *get_id()
+    {
+	ipmi_sensor_id_t *rv = malloc(sizeof(*rv));
+	if (rv)
+	    *rv = ipmi_sensor_convert_to_id(self);
+	return rv;
+    }
+}
+
+/*
+ * A control id object.  This object is guaranteed to be valid and
+ * can be converted into a mc pointer later.
+ */
+%extend ipmi_control_id_t {
+    ~ipmi_control_id_t()
+    {
+	free(self);
+    }
+
+    /*
+     * Convert a control id to a control pointer.  The "control_cb" method
+     * will be called on the first parameter with the following parameters:
+     * <self> <control>
+     */
+    char *convert_to_control(swig_cb handler)
+    {
+	int rv;
+
+	if (! valid_swig_cb(handler))
+	    return NULL;
+
+	rv = ipmi_control_pointer_cb(*self, handle_control_cb,
+				    get_swig_cb(handler));
+	if (rv)
+	    return strerror(rv);
+	return NULL;
+    }
+}
+
+/*
+ * An control object
+ */
+%extend ipmi_control_t {
+    %newobject get_name;
+    /*
+     * Get the name of an control.
+     */
+    char *get_name()
+    {
+	char name[IPMI_CONTROL_NAME_LEN];
+
+	ipmi_control_get_name(self, name, sizeof(name));
+	return strdup(name);
+    }
+
+    %newobject get_id;
+    /*
+     * Get the id for the control.
+     */
+    ipmi_control_id_t *get_id()
+    {
+	ipmi_control_id_t *rv = malloc(sizeof(*rv));
+	if (rv)
+	    *rv = ipmi_control_convert_to_id(self);
 	return rv;
     }
 }
