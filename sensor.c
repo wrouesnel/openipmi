@@ -1691,8 +1691,6 @@ ipmi_sensor_discrete_set_event_readable(ipmi_sensor_t *sensor,
 					int           event,
 					int           val)
 {
-    CHECK_SENSOR_LOCK(sensor);
-
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* A threshold sensor, it doesn't have events. */
 	return;
