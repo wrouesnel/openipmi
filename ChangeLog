@@ -31,6 +31,9 @@
 	numbers in an SDR array.  The new code really works, verses
 	the old code which didn't work any more.
 
+	* lib/mc.c: Apply pending updated to devid data before installing
+	a new MC.
+
 2004-08-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_motorola_mxp.c: Fixed a problem with SDR support.

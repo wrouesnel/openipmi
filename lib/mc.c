@@ -1581,7 +1581,14 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 {
     int rv = 0;
 
-    _ipmi_mc_set_active(mc, 1);
+    /* Apply any pending updates now, so we can get things that the
+       OEM handler installed. */
+    if (mc->pending_devid_data) {
+	mc->pending_devid_data = 0;
+	mc->devid = mc->pending_devid;
+    }
+
+   _ipmi_mc_set_active(mc, 1);
 
     if (mc->devid.chassis_support && (ipmi_mc_get_address(mc) == 0x20)) {
         rv = _ipmi_chassis_create_controls(mc);
