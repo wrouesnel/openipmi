@@ -245,6 +245,7 @@ ipmi_md2_authcode_check(ipmi_authdata_t handle,
 void
 ipmi_md2_authcode_cleanup(ipmi_authdata_t handle)
 {
+    memset(handle->data, 0, sizeof(handle->data));
     handle->mem_free(handle->info, handle);
     handle = NULL;
 }
@@ -292,7 +293,7 @@ md2_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD2 ($Revision: 1.2 $)";
+const char * const gnupgext_version = "MD2 ($Revision: 1.3 $)";
 
 static struct {
     int class;

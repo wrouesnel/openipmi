@@ -87,6 +87,7 @@ pw_authcode_check(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *code)
 static void
 pw_authcode_cleanup(ipmi_authdata_t handle)
 {
+    memset(handle->data, 0, sizeof(handle->data));
     handle->mem_free(handle->info, handle);
 }
 

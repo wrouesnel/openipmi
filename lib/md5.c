@@ -1,7 +1,7 @@
 /*
- * hmac.c
+ * md5.c
  *
- * MontaVista RMCP+ code for doing HMAC, both SHA1 and MD5
+ * MontaVista RMCP+ code for doing MD5 without HMAC.
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
@@ -31,50 +31,45 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+/* Not strictly necessary, but ths is pointless if we don't have ssl */
 #ifdef HAVE_OPENSSL
 
 #include <errno.h>
 #include <string.h>
-#include <openssl/hmac.h>
 #include <OpenIPMI/ipmi_lan.h>
+#include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/internal/ipmi_malloc.h>
 
-typedef struct hmac_info_s
+/* We use our own internal vesion of MD5 over openssl's because ours
+   does scatter/gather. */
+#include <OpenIPMI/internal/md5.h>
+
+typedef struct md5_info_s
 {
-    const EVP_MD *evp_md;
-    unsigned char k[20];
-} hmac_info_t;
+    ipmi_authdata_t authdata;
+} md5_info_t;
 
-static int
-hmac_sha1_init(ipmi_con_t       *ipmi,
-	       ipmi_rmcpp_auth_t *ainfo,
-	       void             **integ_data)
+static void *
+auth_alloc(void *info, int size)
 {
-    hmac_info_t   *info;
-    unsigned int  klen;
+    return ipmi_mem_alloc(size);
+}
 
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
-
-    if (ipmi_rmcpp_auth_get_sik_len(ainfo) < 20)
-	return EINVAL;
-
-    memcpy(info->k, ipmi_rmcpp_auth_get_sik(ainfo, &klen), 20);
-
-    info->evp_md = EVP_sha1();
-    *integ_data = info;
-    return 0;
+static void
+auth_free(void *info, void *data)
+{
+    ipmi_mem_free(data);
 }
 
 static int
-hmac_md5_init(ipmi_con_t       *ipmi,
-	      ipmi_rmcpp_auth_t *ainfo,
-	      void             **integ_data)
+md5_init(ipmi_con_t       *ipmi,
+	 ipmi_rmcpp_auth_t *ainfo,
+	 void              **integ_data)
 {
-    hmac_info_t         *info;
-    const unsigned char *k;
+    md5_info_t          *info;
     unsigned int        klen;
+    const unsigned char *k;
+    int                 rv;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -84,37 +79,42 @@ hmac_md5_init(ipmi_con_t       *ipmi,
     if (klen < 20)
 	return EINVAL;
 
-    memcpy(info->k, k, 20);
+    rv = ipmi_md5_authcode_initl(k, 20, &info->authdata, NULL,
+				 auth_alloc, auth_free);
+    if (rv) {
+	ipmi_mem_free(info);
+	return rv;
+    }
 
-    info->evp_md = EVP_md5();
     *integ_data = info;
     return 0;
 }
 
 static void
-hmac_free(ipmi_con_t *ipmi,
+md5_free(ipmi_con_t *ipmi,
 	  void       *integ_data)
 {
-    hmac_info_t *info = integ_data;
+    md5_info_t *info = integ_data;
 
-    memset(info->k, 0, sizeof(info->k));
+    ipmi_md5_authcode_cleanup(info->authdata);
     ipmi_mem_free(integ_data);
 }
 
 static int
-hmac_add(ipmi_con_t    *ipmi,
+md5_add(ipmi_con_t    *ipmi,
 	 void          *integ_data,
 	 unsigned char *payload,
 	 unsigned int  *payload_len,
 	 unsigned int  *trailer_len,
 	 unsigned int  max_payload_len)
 {
-    hmac_info_t   *info = integ_data;
-    unsigned char *p = payload;
-    unsigned int  l = *payload_len;
-    unsigned int  ilen;
+    md5_info_t     *info = integ_data;
+    unsigned char  *p = payload;
+    unsigned int   l = *payload_len;
+    ipmi_auth_sg_t data[2];
+    int            rv;
 
-    if (l+21 > max_payload_len)
+    if (l+17 > max_payload_len)
 	return E2BIG;
 
     if (l < 4)
@@ -127,72 +127,70 @@ hmac_add(ipmi_con_t    *ipmi,
     p[l] = 0; /* No padding */
     l++;
 
-    HMAC(info->evp_md, info->k, 20, p, l, p+l, &ilen);
+    /* We add 1 to the length because we also check the next header
+       field. */
+    data[0].data = p;
+    data[0].len = l+1;
+    data[1].data = NULL;
+    rv = ipmi_md5_authcode_gen(info->authdata, data, p+l+1);
+    if (rv)
+	return rv;
 
     *payload_len += 1;
-    *trailer_len = 20;
+    *trailer_len = 16;
     return 0;
 }
 
 static int
-hmac_check(ipmi_con_t    *ipmi,
+md5_check(ipmi_con_t    *ipmi,
 	   void          *integ_data,
 	   unsigned char *payload,
 	   unsigned int  payload_len,
 	   unsigned int  total_len)
 {
-    hmac_info_t   *info = integ_data;
-    unsigned char *p = payload;
-    unsigned int  l = payload_len;
-    unsigned int  ilen;
-    unsigned char new_integ[20];
+    md5_info_t     *info = integ_data;
+    unsigned char  *p = payload;
+    unsigned int   l = payload_len;
+    ipmi_auth_sg_t data[2];
+    int            rv;
 
     /* We don't authenticate this part of the header. */
     p += 4;
     l -= 4;
 
-    if ((total_len - payload_len) < 21)
+    if ((total_len - payload_len) < 17)
 	return EINVAL;
 
     /* We add 1 to the length because we also check the next header
        field. */
-    HMAC(info->evp_md, info->k, 20, p, l+1, new_integ, &ilen);
-    if (memcmp(new_integ, p+payload_len+1, 20) != 0)
-	return EINVAL;
+    data[0].data = p;
+    data[0].len = l+1;
+    data[1].data = NULL;
+    rv = ipmi_md5_authcode_check(info->authdata, data, p+l+1);
+    if (rv)
+	return rv;
 
     return 0;
 }
 
-static ipmi_rmcpp_integrity_t hmac_sha1_integ =
+static ipmi_rmcpp_integrity_t md5_integ =
 {
-    .integ_init = hmac_sha1_init,
-    .integ_free = hmac_free,
-    .integ_add = hmac_add,
-    .integ_check = hmac_check
+    .integ_init = md5_init,
+    .integ_free = md5_free,
+    .integ_add = md5_add,
+    .integ_check = md5_check
 };
 
-static ipmi_rmcpp_integrity_t hmac_md5_integ =
-{
-    .integ_init = hmac_md5_init,
-    .integ_free = hmac_free,
-    .integ_add = hmac_add,
-    .integ_check = hmac_check
-};
 #endif /* HAVE_OPENSSL */
 
 int
-_ipmi_hmac_init(void)
+_ipmi_md5_init(void)
 {
 #ifdef HAVE_OPENSSL
     int rv = 0;
 
     rv = ipmi_rmcpp_register_integrity
-	(IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96, &hmac_sha1_integ);
-    if (rv)
-	return rv;
-
-    rv = ipmi_rmcpp_register_integrity
-	(IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128, &hmac_md5_integ);
+	(IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128, &md5_integ);
     if (rv)
 	return rv;
 #endif

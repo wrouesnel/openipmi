@@ -888,6 +888,7 @@ int ipmi_malloc_init(os_handler_t *os_hnd);
 int _ipmi_rakp_init(void);
 int _ipmi_aes_cbc_init(void);
 int _ipmi_hmac_init(void);
+int _ipmi_md5_init(void);
 
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
@@ -943,6 +944,9 @@ ipmi_init(os_handler_t *handler)
     if (rv)
 	goto out_err;
     rv = _ipmi_hmac_init();
+    if (rv)
+	goto out_err;
+    rv = _ipmi_md5_init();
     if (rv)
 	goto out_err;
 

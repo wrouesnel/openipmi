@@ -323,18 +323,23 @@ struct ipmi_authdata_s
     void          *info;
     void          *(*mem_alloc)(void *info, int size);
     void          (*mem_free)(void *info, void *data);
-    unsigned char data[16];
+    unsigned char data[20];
+    unsigned int  datalen;
 };
 
 /* External functions for the IPMI authcode algorithms. */
 int
-ipmi_md5_authcode_init(unsigned char *password,
-		       ipmi_authdata_t *handle,
-		       void            *info,
-		       void            *(*mem_alloc)(void *info, int size),
-		       void            (*mem_free)(void *info, void *data))
+ipmi_md5_authcode_initl(const unsigned char *password,
+			unsigned int        password_len,
+			ipmi_authdata_t     *handle,
+			void                *info,
+			void                *(*mem_alloc)(void *info, int size),
+			void                (*mem_free)(void *info, void *data))
 {
     struct ipmi_authdata_s *data;
+
+    if (password_len > 20)
+	return EINVAL;
 
     data = mem_alloc(info, sizeof(*data));
     if (!data)
@@ -344,9 +349,20 @@ ipmi_md5_authcode_init(unsigned char *password,
     data->mem_alloc = mem_alloc;
     data->mem_free = mem_free;
 
-    memcpy(data->data, password, 16);
+    memcpy(data->data, password, password_len);
+    data->datalen = password_len;
     *handle = data;
     return 0;
+}
+
+int
+ipmi_md5_authcode_init(unsigned char   *password,
+		       ipmi_authdata_t *handle,
+		       void            *info,
+		       void            *(*mem_alloc)(void *info, int size),
+		       void            (*mem_free)(void *info, void *data))
+{
+    return ipmi_md5_authcode_initl(password, 16, handle, info, mem_alloc, mem_free);
 }
 
 int
@@ -358,11 +374,11 @@ ipmi_md5_authcode_gen(ipmi_authdata_t handle,
     int         i;
 
     md5_init(&ctx);
-    md5_write(&ctx, handle->data, 16);
+    md5_write(&ctx, handle->data, handle->datalen);
     for (i=0; data[i].data != NULL; i++) {
 	md5_write(&ctx, data[i].data, data[i].len);
     }
-    md5_write(&ctx, handle->data, 16);
+    md5_write(&ctx, handle->data, handle->datalen);
     md5_final(&ctx);
     memcpy(output, md5_read(&ctx), 16);
     return 0;
@@ -377,11 +393,11 @@ ipmi_md5_authcode_check(ipmi_authdata_t handle,
     int         i;
 
     md5_init(&ctx);
-    md5_write(&ctx, handle->data, 16);
+    md5_write(&ctx, handle->data, handle->datalen);
     for (i=0; data[i].data != NULL; i++) {
 	md5_write(&ctx, data[i].data, data[i].len);
     }
-    md5_write(&ctx, handle->data, 16);
+    md5_write(&ctx, handle->data, handle->datalen);
     md5_final(&ctx);
     if (memcmp(code, md5_read(&ctx), 16) != 0)
 	return EINVAL;
@@ -391,6 +407,7 @@ ipmi_md5_authcode_check(ipmi_authdata_t handle,
 void
 ipmi_md5_authcode_cleanup(ipmi_authdata_t handle)
 {
+    memset(handle->data, 0, sizeof(handle->data));
     handle->mem_free(handle->info, handle);
 }
 
@@ -437,7 +454,7 @@ md5_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD5 ($Revision: 1.3 $)";
+const char * const gnupgext_version = "MD5 ($Revision: 1.4 $)";
 
 static struct {
     int class;
