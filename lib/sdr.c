@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_sdr.h>
@@ -183,6 +184,8 @@ struct ipmi_sdr_info_s
     unsigned int num_sdrs;
     unsigned int sdr_array_size;
     ipmi_sdr_t *sdrs;
+
+    char db_key[32+5];
 };
 
 
@@ -232,6 +235,8 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     fetch_info_t    *info;
     int             i;
     os_handler_t    *os_hnd = ipmi_domain_get_os_hnd(domain);
+    unsigned char   guid[16];
+    char            *s;
 
     CHECK_MC_LOCK(mc);
 
@@ -304,6 +309,59 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     if (! sdrs->sdr_wait_q) {
 	rv = ENOMEM;
 	goto out_done;
+    }
+
+    s = sdrs->db_key;
+    s += sprintf(s, "sdr-");
+    for (i=0; i<16; i++)
+	s += sprintf(s, "%2.2x", guid[i]);
+
+    /* Go ahead and do the database fetch here if we have support. */
+    if (sdrs->os_hnd->database_find && (ipmi_mc_get_guid(mc, guid) == 0))
+    {
+	unsigned char *db_data;
+	unsigned int  db_data_len;
+
+	sdrs->os_hnd->database_find(sdrs->os_hnd,
+				    sdrs->db_key,
+				    &db_data,
+				    &db_data_len);
+	/* If the above fails, no problem, the db_data will be NULL. */
+
+	if (db_data) {
+	    /* Process the db data into SDRs. */
+	    int num;
+	    unsigned char *d = db_data;
+	    unsigned int len = db_data_len;
+
+	    if (len < 9)
+		goto no_db;
+
+	    /* Format# is the last byte. */
+	    d = db_data + len - 1;
+	    if (*d != 1)
+		goto no_db;
+
+	    /* timestamps are the 8 bytes before the format#. */
+	    d -= 8;
+	    sdrs->last_addition_timestamp = ipmi_get_uint32(d);
+	    d += 4;
+	    sdrs->last_erase_timestamp = ipmi_get_uint32(d);
+	    d += 4;
+	    len -= 9;
+	    num = db_data_len / sizeof(ipmi_sdr_t);
+	    /* Allocate 9 extra bytes for storing the timestamps and
+	     * format#. */
+	    sdrs->sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t) * num) + 9);
+	    if (!sdrs->sdrs)
+		goto no_db;
+	    memcpy(sdrs->sdrs, db_data, sizeof(ipmi_sdr_t) * num);
+	    sdrs->num_sdrs = num;
+	    sdrs->sdr_array_size = num;
+
+	no_db:
+	    sdrs->os_hnd->database_free(sdrs->os_hnd, db_data);
+	}
     }
 
  out_done:
@@ -415,6 +473,24 @@ fetch_complete(ipmi_sdr_info_t *sdrs, int err)
 	sdrs->working_sdrs = NULL;
 	if (to_free)
 	    ipmi_mem_free(to_free);
+
+	if (sdrs->os_hnd->database_store) {
+	    unsigned int  len = sdrs->num_sdrs * sizeof(ipmi_sdr_t);
+	    unsigned char *d = ((unsigned char *) sdrs->sdrs) + len;
+
+	    /* We always allocate 9 extra bytes in the SDR data to put
+	       the timestamps and format at the end. */
+	    ipmi_set_uint32(d, sdrs->last_addition_timestamp);
+	    d += 4;
+	    ipmi_set_uint32(d, sdrs->last_erase_timestamp);
+	    d += 4;
+	    *d = 1; /* format # */
+	    len += 9;
+	    sdrs->os_hnd->database_store(sdrs->os_hnd,
+					 sdrs->db_key,
+					 (unsigned char *) sdrs->sdrs,
+					 len);
+	}
     }
     sdrs->fetch_state = HANDLERS;
     sdr_unlock(sdrs);
@@ -969,8 +1045,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 		    int new_num_sdrs = sdrs->working_num_sdrs + 10;
 		    ipmi_sdr_t *new_sdrs;
 
-		    new_sdrs = ipmi_mem_alloc(sizeof(ipmi_sdr_t)
-					      * new_num_sdrs);
+		    /* Allocate 9 extra bytes for the db info. */
+		    new_sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t)
+					       * new_num_sdrs) + 9);
 		    if (!new_sdrs) {
 			ipmi_log(IPMI_LOG_ERR_INFO,
 				 "SDR respository had more SDRs than"
@@ -1261,8 +1338,9 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    sdrs->working_sdrs = ipmi_mem_alloc(sizeof(ipmi_sdr_t)
-					* sdrs->working_num_sdrs);
+    /* Allocate 9 extra bytes for the db info. */
+    sdrs->working_sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t)
+					* sdrs->working_num_sdrs) + 9);
     if (!sdrs->working_sdrs) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Could not allocate working SDR information");
@@ -1452,6 +1530,7 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	info->rv = ENOMEM;
 	return;
     }
+    memset(elem, 0, sizeof(*elem));
 
     elem->sdrs = sdrs;
     elem->handler = info->handler;
@@ -1809,7 +1888,9 @@ ipmi_sdr_add(ipmi_sdr_info_t *sdrs,
     sdr_lock(sdrs);
     if (sdrs->num_sdrs >= sdrs->sdr_array_size) {
 	ipmi_sdr_t *new_array;
-	new_array = ipmi_mem_alloc(sizeof(ipmi_sdr_t) * sdrs->sdr_array_size + 10);
+	/* Allocate 9 extra bytes for the db info. */
+	new_array = ipmi_mem_alloc((sizeof(ipmi_sdr_t)
+				    * (sdrs->sdr_array_size + 10)) + 9);
 	if (!new_array) {
 	    rv = ENOMEM;
 	    goto out_unlock;

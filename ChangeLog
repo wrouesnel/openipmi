@@ -16,6 +16,11 @@
 	* lib/oem_atca.c: Force instance to be 0x60 on all main units that
 	came in as entity id 7 or 0.
 
+	* include/OpenIPMI/os_handler.h: Added a database interface.
+
+	* lib/sdr.h: Added support for storing and retrieving SDR
+	data in the database for client-side caching.
+
 2005-01-30 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/lanparm.c: Allow zero-length parm responses to represent

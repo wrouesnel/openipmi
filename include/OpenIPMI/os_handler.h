@@ -249,7 +249,29 @@ struct os_handler_s
     int (*is_readlocked)(os_handler_t    *handler,
 			 os_hnd_rwlock_t *id);
     int (*is_writelocked)(os_handler_t    *handler,
-			 os_hnd_rwlock_t *id);
+			  os_hnd_rwlock_t *id);
+
+    /* Database storage and retrieval routines.  These are used by
+       things in OpenIPMI to speed up various operations by caching
+       data locally instead of going to the actual system to get them.
+       The key is a arbitrary length character string.  The find
+       routine returns an error on failure, otherwise it allocates a
+       block of data and returns it in data (with the length in
+       data_len).  The data returned should be freed by database_free.
+       Note that these routines are optional and do not need to be
+       here, they simply speed up operation when working correctly.
+       Also, if these routines fail for some reason it is not
+       fatal. */
+    int (*database_store)(os_handler_t  *handler,
+			  char          *key,
+			  unsigned char *data,
+			  unsigned int  data_len);
+    int (*database_find)(os_handler_t  *handler,
+			 char          *key,
+			 unsigned char **data,
+			 unsigned int  *data_len);
+    void (*database_free)(os_handler_t  *handler,
+			  unsigned char *data);
 };
 
 #ifdef __cplusplus
