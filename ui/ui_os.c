@@ -121,15 +121,18 @@ timer_handler(selector_t  *sel,
 	      void        *data)
 {
     os_hnd_timer_id_t *timer_data = (os_hnd_timer_id_t *) data;
+    /* Make a copy of this, because the handler may delete the timer
+       data. */
+    os_handler_t      *os_handler = timer_data->handler;
     void              *cb_data;
     os_timed_out_t    timed_out;
 
-    CHECK_NO_LOCKS(timer_data->handler);
+    CHECK_NO_LOCKS(os_handler);
     timed_out = timer_data->timed_out;
     cb_data = timer_data->cb_data;
     timer_data->running = 0;
     timed_out(cb_data, timer_data);
-    CHECK_NO_LOCKS(timer_data->handler);
+    CHECK_NO_LOCKS(os_handler);
 }
 
 static int

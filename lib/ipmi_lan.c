@@ -446,7 +446,7 @@ lan_send_addr(lan_data_t  *lan,
 	ipmi_system_interface_addr_t *si_addr
 	    = (ipmi_system_interface_addr_t *) addr;
 
-	tmsg[0] = 0x20; /* To the BMC. */
+	tmsg[0] = lan->slave_addr; /* To the BMC. */
 	tmsg[1] = (msg->netfn << 2) | si_addr->lun;
 	tmsg[2] = ipmb_checksum(tmsg, 2);
 	tmsg[3] = 0x81; /* Remote console IPMI Software ID */
@@ -463,7 +463,7 @@ lan_send_addr(lan_data_t  *lan,
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) addr;
 
 	pos = 0;
-	tmsg[pos++] = 0x20; /* BMC is the bridge. */
+	tmsg[pos++] = lan->slave_addr; /* BMC is the bridge. */
 	tmsg[pos++] = (IPMI_APP_NETFN << 2) | 0;
 	tmsg[pos++] = ipmb_checksum(tmsg, 2);
 	tmsg[pos++] = 0x81; /* Remote console IPMI Software ID */
@@ -1320,13 +1320,24 @@ data_handler(int            fd,
 		   payload. */
 		goto out_unlock2;
 
-	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-	    /* This is a hack, but the channel does not come back in the
-	       message.  So we use the channel from the original
-	       instead. */
-	    ipmb_addr->channel = ipmb2->channel;
-	    ipmb_addr->slave_addr = tmsg[9];
-	    ipmb_addr->lun = tmsg[10] & 0x3;
+	    if (tmsg[9] == lan->slave_addr) {
+		ipmi_system_interface_addr_t *si_addr
+		    = (ipmi_system_interface_addr_t *) &addr;
+
+		/* It's directly from the BMC, so it's a system interface
+		   message. */
+		si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+		si_addr->channel = 0xf;
+		si_addr->lun = tmsg[10] & 3;
+	    } else {
+		/* This is a hack, but the channel does not come back in the
+		   message.  So we use the channel from the original
+		   instead. */
+		ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
+		ipmb_addr->channel = ipmb2->channel;
+		ipmb_addr->slave_addr = tmsg[9];
+		ipmb_addr->lun = tmsg[10] & 0x3;
+	    }
 	    msg.netfn = tmsg[7] >> 2;
 	    msg.cmd = tmsg[11];
 	    addr_len = sizeof(ipmi_ipmb_addr_t);

@@ -1,4 +1,15 @@
 
+2003-10-15 Corey Minyard <cminyard@mvista.com>
+
+	* ipmi_lan: Fix the send to the system address to be correct,
+	and handle incoming messages properly.
+
+	* lib/sdr.c: Null a message data (to keep valgrind happy).
+
+	* ui/ui_os.c: Fixed a problem valgrind found, time data may be
+	freed but we still use it in the timer handler after the call to
+	the user's handler..
+
 2003-10-15 Jeff Zheng <jeff.zheng@intel.com>
 
 	* lib/mc.c: Null out some values on removal.

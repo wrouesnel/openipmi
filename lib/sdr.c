@@ -1231,6 +1231,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	    cmd_msg.netfn = IPMI_STORAGE_NETFN;
 	    cmd_msg.cmd = IPMI_RESERVE_SDR_REPOSITORY_CMD;
 	}
+	cmd_msg.data = NULL;
 	cmd_msg.data_len = 0;
 	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
 				  handle_reservation, sdrs);
