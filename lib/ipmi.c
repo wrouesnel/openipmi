@@ -1071,6 +1071,7 @@ int ipmi_oem_motorola_mxp_init(void);
 int _ipmi_pet_init(void);
 int _ipmi_conn_init(void);
 int ipmi_oem_atca_conn_init(void);
+int ipmi_oem_atca_init(void);
 
 int
 ipmi_init(os_handler_t *handler)
@@ -1110,6 +1111,7 @@ ipmi_init(os_handler_t *handler)
     ipmi_oem_force_conn_init();
     ipmi_oem_motorola_mxp_init();
     ipmi_oem_atca_conn_init();
+    ipmi_oem_atca_init();
 
     return 0;
 
@@ -1124,11 +1126,13 @@ ipmi_init(os_handler_t *handler)
 }
 
 void ipmi_oem_atca_conn_shutdown(void);
+void ipmi_oem_atca_shutdown(void);
 void _ipmi_pet_shutdown(void);
 
 void
 ipmi_shutdown(void)
 {
+    ipmi_oem_atca_shutdown();
     ipmi_oem_atca_conn_shutdown();
     _ipmi_pet_shutdown();
     _ipmi_mc_shutdown();

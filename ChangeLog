@@ -19,6 +19,8 @@
 
 	* doc/OpenIPMI.texi: Added some more information about locking.
 
+	* lib/oem_atca.c, lib/ipmi.c: Started work on the ATCA code.
+
 2004-02-18 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Reworked SNMP library configuration to check
