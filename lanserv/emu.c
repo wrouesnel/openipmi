@@ -185,6 +185,12 @@ handle_get_sel_entry(emu_data_t    *emu,
 		     unsigned char *rdata,
 		     unsigned int  *rdata_len)
 {
+    uint16_t    reservation;
+    uint16_t    record_id;
+    int         offset;
+    int         count;
+    sel_entry_t *entry;
+
     if (!(emu->device_support & (1 << 2))) {
 	handle_invalid_cmd(emu, rdata, rdata_len);
 	return;
@@ -193,7 +199,49 @@ handle_get_sel_entry(emu_data_t    *emu,
     if (check_msg_length(msg, 6, rdata, rdata_len))
 	return;
 
-    reservation = msg->data[8]
+    reservation = ipmi_get_uint16(msg->data+0);
+
+    if ((reservation != 0) && (reservation != emu->sel.reservation)) {
+	rdata[0] = IPMI_INVALID_RESERVATION_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    record_id = ipmi_get_uint16(msg->data+2);
+    offset = msg->data[4];
+    count = msg->data[5];
+
+    if (offset >= 16) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    entry = emu->sel.entries;
+    while (entry) {
+	if (record_id == ipmi_get_uint16(entry->data))
+	    break;
+	entry = entry->next;
+    }
+
+    if (entry == NULL) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    if (entry->next)
+	memcpy(rdata+1, entry->next->data, 2);
+    else {
+	rdata[1] = 0xff;
+	rdata[2] = 0xff;
+    }
+
+    if ((offset+count) > 16)
+	count = 16 - offset;
+    memcpy(rdata+3, entry->data+offset, count);
+    *rdata_len = count + 3;
 }
 
 static void
@@ -205,6 +253,14 @@ handle_storage_netfn(emu_data_t    *emu,
     switch(msg->cmd) {
 	case IPMI_GET_SEL_INFO_CMD:
 	    handle_get_sel_info(emu, msg, rdata, rdata_len);
+	    break;
+
+	case IPMI_RESERVE_SEL_CMD:
+	    handle_reserve_sel(emu, msg, rdata, rdata_len);
+	    break;
+
+	case IPMI_GET_SEL_ENTRY_CMD:
+	    handle_get_sel_entry(emu, msg, rdata, rdata_len);
 	    break;
 
 	default:
@@ -273,7 +329,7 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 	unsigned int  data_len;
 	emu_data_t    *semu;
 
-	if (check_msg_length(msg, 8, rdta, rdata_len))
+	if (check_msg_length(msg, 8, rdata, rdata_len))
 	    return;
 	if ((msg->data[0] & 0x3f) != 0) {
 	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
