@@ -2910,6 +2910,43 @@ scan_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+extern void ui_reconnect(void);
+
+static void
+disconnect_done(void *cb_data)
+{
+    ui_reconnect();
+}
+
+static void
+reconnect_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    int rv;
+
+    rv = ipmi_close_connection(bmc, disconnect_done, NULL);
+    if (rv)
+	cmd_win_out("Could not close connection: %x\n", rv);
+}
+
+int
+reconnect_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int rv;
+
+    if (!bmc_ready) {
+	cmd_win_out("BMC has not finished setup yet\n");
+	return 0;
+    }
+
+    rv = ipmi_mc_pointer_cb(bmc_id, reconnect_cmd_bmcer, NULL);
+    if (rv) {
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
+    
+    return 0;
+}
+
 static int help_cmd(char *cmd, char **toks, void *cb_data);
 
 static struct {
@@ -2935,9 +2972,11 @@ static struct {
     { "set_control",	set_control_cmd,
       " <val1> [<val2> ...] - set the value(s) for the control" },
     { "mcs",		mcs_cmd,
-      " - List all the management controllers in the system" },
+      " - List all the management controllers in the system.  They"
+      " are listed (<channel>, <mc num>)" },
     { "mccmd",		mccmd_cmd,
-      " <IPMB addr> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
+      " <channel> <mc num> <LUN> <NetFN> <Cmd> [data...]"
+      " - Send the given command"
       " to the management controller and display the response" },
     { "msg",		msg_cmd,
       " <channel> <IPMB addr> <LUN> <NetFN> <Cmd> [data...] - Send a command"
@@ -2953,7 +2992,8 @@ static struct {
     { "list_sel",	list_sel_cmd,
       " - list the local copy of the system event log" },
     { "sdrs",		sdrs_cmd,
-      " <mc> <do_sensors> - list the SDRs for the mc.  If do_sensors is"
+      " <channel> <mc num> <do_sensors> - list the SDRs for the mc."
+      "  If do_sensors is"
       " 1, then the device SDRs are fetched.  Otherwise the main SDRs are"
       " fetched." },
     { "events_enable",  events_enable_cmd,
@@ -2961,6 +3001,8 @@ static struct {
       " - set the events enable data for the sensor" },
     { "scan",  scan_cmd,
       " <ipmb addr> - scan an IPMB to add or remove it" },
+    { "reconnect",  reconnect_cmd,
+      " - scan an IPMB to add or remove it" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}

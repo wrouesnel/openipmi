@@ -1,6 +1,11 @@
 
 2003-03-06 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c: Cleaned up some naming (use bmc when it is a bmc).
+
+	* ui.c, basic_ui.c: Added a "reconnect" command to disconnect and
+	reconnect to the BMC.
+
 	* configure.in: Move to version 0.2.3.
 
 	* mc.c: Added rescanning the entities when a connection comes

@@ -11,11 +11,54 @@
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_int.h>
 
+static selector_t *selector;
+
+enum con_type_e { SMI, LAN };
+static enum con_type_e con_type;
+
+/* SMI parms. */
+static int smi_intf;
+
+/* LAN parms. */
+static struct in_addr lan_addr;
+static int            lan_port;
+static int            authtype = 0;
+static int            privilege = 0;
+static char           username[17];
+static char           password[17];
+
+/* This is used by the UI to reconnect after a connection has been
+   disconnected. */
+void ui_reconnect(void)
+{
+    int rv;
+
+    if (con_type == SMI) {
+	rv = ipmi_smi_setup_con(smi_intf,
+				&ipmi_ui_cb_handlers, selector,
+				ipmi_ui_setup_done, NULL);
+	if (rv) {
+	    fprintf(stderr, "ipmi_smi_setup_con: %s\n", strerror(rv));
+	    exit(1);
+	}
+    } else if (con_type == LAN) {
+	rv = ipmi_lan_setup_con(lan_addr, lan_port,
+				authtype, privilege,
+				username, strlen(username),
+				password, strlen(password),
+				&ipmi_ui_cb_handlers, selector,
+				ipmi_ui_setup_done, NULL);
+	if (rv) {
+	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
+	    exit(1);
+	}
+    }
+}
+
 int
 main(int argc, char *argv[])
 {
     int        rv;
-    selector_t *selector;
     int        curr_arg = 1;
     char       *arg;
     int        full_screen = 1;
@@ -46,7 +89,7 @@ main(int argc, char *argv[])
     rv = ipmi_ui_init(&selector, full_screen);
 
     if (strcmp(argv[curr_arg], "smi") == 0) {
-	int smi_intf;
+	con_type = SMI;
 
 	if (argc < 3) {
 	    fprintf(stderr, "Not enough arguments\n");
@@ -64,12 +107,6 @@ main(int argc, char *argv[])
 
     } else if (strcmp(argv[curr_arg], "lan") == 0) {
 	struct hostent *ent;
-	struct in_addr lan_addr;
-	int            lan_port;
-	int            authtype = 0;
-	int            privilege = 0;
-	char           username[17];
-	char           password[17];
 
 	if (argc < 8) {
 	    fprintf(stderr, "Not enough arguments\n");

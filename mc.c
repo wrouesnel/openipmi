@@ -1148,22 +1148,22 @@ typedef struct close_info_s
 {
     close_done_t close_done;
     void         *cb_data;
-    ipmi_mc_t    *mc;
+    ipmi_mc_t    *bmc;
 } close_info_t;
 
 static void
 real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
 {
     close_info_t *info = cb_data;
-    ipmi_mc_t    *mc = info->mc;
+    ipmi_mc_t    *bmc = info->bmc;
     ipmi_con_t   *ipmi;
 
-    mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd, id);
+    bmc->bmc->conn->os_hnd->free_timer(bmc->bmc->conn->os_hnd, id);
 
     ipmi_write_lock();
-    ipmi = mc->bmc->conn;
+    ipmi = bmc->bmc->conn;
 
-    ipmi_cleanup_mc(mc);
+    ipmi_cleanup_mc(bmc);
 
     ipmi->close_connection(ipmi);
 
@@ -1175,7 +1175,7 @@ real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
 }
 
 int
-ipmi_close_connection(ipmi_mc_t    *mc,
+ipmi_close_connection(ipmi_mc_t    *bmc,
 		      close_done_t close_done,
 		      void         *cb_data)
 {
@@ -1184,39 +1184,39 @@ ipmi_close_connection(ipmi_mc_t    *mc,
     os_hnd_timer_id_t *timer = NULL;
     struct timeval    timeout;
 
-    if (mc->bmc_mc != mc)
+    if (bmc->bmc_mc != bmc)
 	return EINVAL;
 
-    CHECK_MC_LOCK(mc);
+    CHECK_MC_LOCK(bmc);
 
     close_info = ipmi_mem_alloc(sizeof(*close_info));
     if (!close_info)
 	return ENOMEM;
 
-    rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd, &timer);
+    rv = bmc->bmc->conn->os_hnd->alloc_timer(bmc->bmc->conn->os_hnd, &timer);
     if (rv)
 	goto out;
 
-    if ((rv = ipmi_mc_validate(mc)))
+    if ((rv = ipmi_mc_validate(bmc)))
 	goto out;
 
-    close_info->mc = mc;
+    close_info->bmc = bmc;
     close_info->close_done = close_done;
     close_info->cb_data = cb_data;
 
     timeout.tv_sec = 0;
     timeout.tv_usec = 0;
-    rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
-					    timer,
-					    &timeout,
-					    real_close_connection,
-					    close_info);
+    rv = bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
+					     timer,
+					     &timeout,
+					     real_close_connection,
+					     close_info);
  out:
     if (rv) {
 	if (close_info)
 	    ipmi_mem_free(close_info);
 	if (timer)
-	    mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd, timer);
+	    bmc->bmc->conn->os_hnd->free_timer(bmc->bmc->conn->os_hnd, timer);
     }
     return rv;
 }
