@@ -163,7 +163,7 @@ if test "x$perldir" != "x"; then
    AC_DEFINE(HAVE_PERL)
    PERL_DIR=perl
    PERL_CFLAGS="-I $perldir/CORE `$perlprog -V:ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
-   if test "$pprog" == "$perlinstalldir"; then
+   if test "$tpprog" == "$perlinstalldir"; then
       PERL_INSTALL_DIR="$perlinstalldir"
    else
       PERL_INSTALL_DIR="\${prefix}$tpprog"
