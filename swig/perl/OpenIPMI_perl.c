@@ -45,6 +45,7 @@ swig_call_cb(swig_cb_val cb, char *method_name,
     va_list       ap;
     int           len;
     unsigned char *data;
+    int           *idata;
     dSP ;
 
     sv_bless(ref, SvSTASH(cb));
@@ -83,6 +84,17 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 		while (len > 0) {
 		    XPUSHs(sv_2mortal(newSViv(*data)));
 		    data++;
+		    len--;
+		}
+		break;
+
+	    case 'p':
+		/* An array of integers */
+		len = va_arg(ap, int);
+		idata = va_arg(ap, int *);
+		while (len > 0) {
+		    XPUSHs(sv_2mortal(newSViv(*idata)));
+		    idata++;
 		    len--;
 		}
 		break;

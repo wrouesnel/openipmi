@@ -1057,8 +1057,9 @@ threshold_event_state_to_str(ipmi_event_state_t *events)
 	    }
 	}
     }
+    *s = '\0';
 
-    len = strlen(str);
+    len = s - str;
     if (len > 0)
 	str[len-1] = '\0'; /* Remove the final space */
 
@@ -1158,8 +1159,9 @@ discrete_event_state_to_str(ipmi_event_state_t *events)
 	    s++;
 	}
     }
+    *s = '\0';
 
-    len = strlen(str);
+    len = s - str;
     if (len > 0)
 	str[len-1] = '\0'; /* Remove the final space */
 
@@ -1252,8 +1254,9 @@ threshold_states_to_str(ipmi_states_t *states)
 	*s = ' ';
 	s++;
     }
+    *s = '\0';
 
-    len = strlen(str);
+    len = s - str;
     if (len > 0)
 	str[len-1] = '\0'; /* Remove the final space */
 
@@ -1298,8 +1301,9 @@ discrete_states_to_str(ipmi_states_t *states)
 	*s = ' ';
 	s++;
     }
+    *s = '\0';
 
-    len = strlen(str);
+    len = s - str;
     if (len > 0)
 	str[len-1] = '\0'; /* Remove the final space */
 
@@ -1341,8 +1345,9 @@ thresholds_to_str(ipmi_thresholds_t *t)
 	*s = ' ';
 	s++;
     }
+    *s = '\0';
 
-    len = strlen(str);
+    len = s - str;
     if (len > 0)
 	str[len-1] = '\0'; /* Remove the final : */
 
@@ -1619,6 +1624,186 @@ sensor_get_states_handler(ipmi_sensor_t *sensor,
     free(statestr);
 }
 
+static int
+str_to_color(char *s, int len, int *color)
+{
+    int i;
+
+    for (i=IPMI_CONTROL_COLOR_BLACK; i<=IPMI_CONTROL_COLOR_ORANGE; i++) {
+	if (strncasecmp(s, ipmi_get_color_string(i), len) == 0) {
+	    *color = i;
+	    return 0;
+	}
+    }
+
+    return EINVAL;
+}
+
+static int
+str_to_light_setting(char *s, ipmi_light_setting_t **setting)
+{
+    int                  rv;
+    ipmi_light_setting_t *e;
+    int                  start, next;
+    int                  count;
+
+    count = 0;
+    start = 0;
+    rv = next_colon_parm(s, &start, &next);
+    while (!rv) {
+	start = next;
+	rv = next_colon_parm(s, &start, &next);
+    }
+    if (count == 0)
+	return EINVAL;
+
+    e = ipmi_alloc_light_settings(count);
+
+    count = 0;
+    start = 0;
+    rv = next_colon_parm(s, &start, &next);
+    while (!rv) {
+	int  color, on_time, off_time;
+	char *ms;
+	int  mstart, mnext;
+	char *endstr;
+	char buf[100];
+	int  len = next - start;
+
+	if (len >= 100)
+	    goto out_err;
+
+	memcpy(buf, s+start, len);
+	buf[len] = '\0';
+
+	ms = buf;
+	mstart = 0;
+	rv = next_parm(ms, &mstart, &mnext);
+	if (rv)
+	    goto out_err;
+	len = mnext - mstart;
+	if ((len == 2) && (strncasecmp(ms+mstart, "lc", 2) == 0)) {
+	    rv = ipmi_light_setting_set_local_control(e, count, 1);
+	    if (rv)
+		goto out_err;
+
+	    mstart = mnext;
+	    rv = next_parm(ms, &mstart, &mnext);
+	    if (rv)
+		goto out_err;
+	}
+
+	rv = str_to_color(ms+mstart, mnext-mstart, &color);
+	if (rv)
+	    goto out_err;
+
+	mstart = mnext;
+	rv = next_parm(ms, &mstart, &mnext);
+	if (rv)
+	    goto out_err;
+	on_time = strtoul(ms+mstart, &endstr, 0);
+	if (endstr != (ms+mnext))
+	    goto out_err;
+
+	mstart = mnext;
+	rv = next_parm(ms, &mstart, &mnext);
+	if (rv)
+	    goto out_err;
+	off_time = strtoul(ms+mstart, &endstr, 0);
+	if (endstr != (ms+mnext))
+	    goto out_err;
+
+	rv = ipmi_light_setting_set_color(e, count, color);
+	rv |= ipmi_light_setting_set_on_time(e, count, on_time);
+	rv |= ipmi_light_setting_set_off_time(e, count, off_time);
+	if (rv)
+	    goto out_err;
+
+	count++;
+
+	start = next;
+	rv = next_colon_parm(s, &start, &next);
+    }
+    
+    *setting = e;
+    return 0;
+
+ out_err:
+    ipmi_free_light_settings(e);
+    return EINVAL;
+}
+
+static char *
+light_setting_to_str(ipmi_light_setting_t *e)
+{
+    char *s, *str;
+    int  i;
+    int  count = ipmi_light_setting_get_count(e);
+    char dummy[1];
+    int  size = 0;
+
+    for (i=0; i<count; i++) {
+	int val;
+	size += 1; /* For the colon */
+	val = 0;
+	ipmi_light_setting_in_local_control(e, i, &val);
+	if (val)
+	    size += 3;
+	val = 0;
+	ipmi_light_setting_get_color(e, i, &val);
+	size += strlen(ipmi_get_color_string(val)) + 1;
+	val = 0;
+	ipmi_light_setting_get_on_time(e, i, &val);
+	size += snprintf(dummy, 1, "%d ", val);
+	val = 0;
+	ipmi_light_setting_get_off_time(e, i, &val);
+	size += snprintf(dummy, 1, "%d ", val);
+    }
+
+    str = malloc(size+1);
+    s = str;
+
+    for (i=0; i<count; i++) {
+	int val;
+	char *ov;
+
+	val = 0;
+	ipmi_light_setting_in_local_control(e, i, &val);
+	if (val) {
+	    strcpy(s, "lc ");
+	    s += 3;
+	}
+
+	val = 0;
+	ipmi_light_setting_get_color(e, i, &val);
+	ov = ipmi_get_color_string(val);
+	strcpy(s, ov);
+	s += strlen(ov);
+	*s = ' ';
+	s++;
+
+	val = 0;
+	ipmi_light_setting_get_on_time(e, i, &val);
+	s += sprintf(s, "%d ", val);
+
+	val = 0;
+	ipmi_light_setting_get_off_time(e, i, &val);
+	s += sprintf(s, "%d", val);
+
+	*s = ':';
+	s++;
+    }
+    if (s != str) {
+	/* Remove the final colon. */
+	s--;
+	*s = '\0';
+    } else {
+	*s = '\0';
+    }
+
+    return str;
+}
+
 static void
 handle_control_cb(ipmi_control_t *control, void *cb_data)
 {
@@ -1628,6 +1813,78 @@ handle_control_cb(ipmi_control_t *control, void *cb_data)
     control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
     swig_call_cb(cb, "control_cb", "%p", &control_ref);
     swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+}
+
+static void
+control_val_set_handler(ipmi_control_t *control, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    control_ref;
+
+    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    swig_call_cb(cb, "control_set_val_cb", "%p", &control_ref);
+    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+}
+
+static void
+control_val_get_handler(ipmi_control_t *control, int err, int *val,
+			void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    control_ref;
+
+    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    swig_call_cb(cb, "control_get_val_cb", "%p%d%*p", &control_ref, err,
+		 ipmi_control_get_num_vals(control), val);
+    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+}
+
+static void
+control_val_get_light_handler(ipmi_control_t *control, int err,
+			      ipmi_light_setting_t *val,
+			      void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    control_ref;
+
+    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    swig_call_cb(cb, "control_get_light_cb", "%p%d%s", &control_ref, err,
+		 light_setting_to_str(val));
+    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+}
+
+static void
+control_val_get_id_handler(ipmi_control_t *control, int err,
+			   unsigned char *val, int length,
+			   void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    control_ref;
+
+    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    swig_call_cb(cb, "control_get_id_cb", "%p%d%*s", &control_ref, err,
+		 length, val);
+    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+}
+
+static int
+control_val_event_handler(ipmi_control_t *control, int *valid_vals, int *val,
+			  void *cb_data, ipmi_event_t *event)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    control_ref;
+    swig_ref    event_ref;
+
+    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
+				       "OpenIPMI::ipmi_event_t");
+    swig_call_cb(cb, "control_event_val_cb", "%p%p%*p%*p", &control_ref,
+		 &event_ref,
+		 ipmi_control_get_num_vals(control), valid_vals,
+		 ipmi_control_get_num_vals(control), val);
+    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref(event_ref);
+    return IPMI_EVENT_NOT_HANDLED;
 }
 
 %}
@@ -4959,6 +5216,415 @@ void set_log_handler(swig_cb handler = NULL);
 	if (rv)
 	    *rv = ipmi_control_convert_to_id(self);
 	return rv;
+    }
+
+    /*
+     * Get the string type of control.
+     */
+    char *get_type_string()
+    {
+	return ipmi_control_get_type_string(self);
+    }
+
+#define CONTROL_LIGHT		1
+#define CONTROL_RELAY		2
+#define CONTROL_DISPLAY		3
+#define CONTROL_ALARM		4
+#define CONTROL_RESET		5
+#define CONTROL_POWER		6
+#define CONTROL_FAN_SPEED	7
+#define CONTROL_IDENTIFIER	8
+#define CONTROL_ONE_SHOT_RESET	9
+#define CONTROL_OUTPUT		10
+#define CONTROL_ONE_SHOT_OUTPUT	11
+
+    /*
+     * Get the numeric type of control.
+     */
+    int get_type()
+    {
+	return ipmi_control_get_type(self);
+    }
+
+    /*
+     * Get the entity id for the control's entity.
+     */
+    int get_entity_id()
+    {
+	return ipmi_control_get_entity_id(self);
+    }
+
+    /*
+     * Get the entity instance for the control's entity.
+     */
+    int get_entity_instance()
+    {
+	return ipmi_control_get_entity_instance(self);
+    }
+
+    /*
+     * Get the entity for the control.
+     */
+    ipmi_entity_t *get_entity()
+    {
+	return ipmi_control_get_entity(self);
+    }
+
+    /*
+     * Can the control's value be set?
+     */
+    int is_settable()
+    {
+	return ipmi_control_is_settable(self);
+    }
+
+    /*
+     * Can the control's value be read?
+     */
+    int is_readable()
+    {
+	return ipmi_control_is_readable(self);
+    }
+
+    /*
+     * Should the control be ignored if its entity is not present?
+     */
+    int get_ignore_if_no_entity()
+    {
+	return ipmi_control_get_ignore_if_no_entity(self);
+    }
+
+    %newobject get_control_id;
+    /*
+     * Get the ID string from the control's SDR.
+     */
+    char *get_control_id()
+    {
+	/* FIXME - no unicode handling. */
+	int len = ipmi_control_get_id_length(self) + 1;
+	char *id = malloc(len);
+	ipmi_control_get_id(self, id, len);
+	return id;
+    }
+
+    /*
+     * Returns true if the control can generate events upon change,
+     * and false if not.
+     */
+    int has_events()
+    {
+	return ipmi_control_has_events(self);
+    }
+
+    /*
+     * Get the number of values the control supports.
+     */
+    int get_num_vals()
+    {
+	return ipmi_control_get_num_vals(self);
+    }
+
+
+    /*
+     * Set the value of a control.  Note that an control may support
+     * more than one element, the array reference passed in as the
+     * first parameter must match the number of elements the control
+     * supports.  All the elements will be set simultaneously.  The
+     * control_set_val_cb method on the second parameter will be called
+     * after the operation completes with.  It will be called with the
+     * following parameters: <self> <contro> <err>
+     */
+    int set_val(intarray val, swig_cb handler)
+    {
+	swig_cb_val        handler_val = NULL;
+	ipmi_control_op_cb done = NULL;
+	int                rv;
+
+	if (val.len != ipmi_control_get_num_vals(self))
+	    return EINVAL;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = control_val_set_handler;
+	}
+	rv = ipmi_control_set_val(self, val.val, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Get the setting of an control.  The control_get_val_cb method
+     * on the first parameter will be called with the following
+     * parameters: <self> <control> <err> <val1> [<val2> ...]. The
+     * number of values passed to the handler will be the number of
+     * values the control supports.
+     */
+    int get_val(swig_cb handler)
+    {
+	swig_cb_val        handler_val = NULL;
+	ipmi_control_val_cb done = NULL;
+	int                rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = control_val_get_handler;
+	}
+	rv = ipmi_control_get_val(self, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Register a handler that will be called when the control changes
+     * value.  Note that if the control does not support this
+     * operation, it will return ENOSYS.  When a control event comes
+     * in, the control_event_val_cb method on the first parameter will
+     * be called with the following parameters: <self> <control>
+     * <valid1> [<valid2> ...] val1 [<val2> ...].  The valid fields
+     * tell if a particular value is corrected, the number of these
+     * is the same as what get_num_vals() returns for this control.
+     * the val fields are the actual values, the value is valid only
+     * if the valid field corresponding to it is true.
+     */
+    int add_event_handler(swig_cb handler)
+    {
+	cb_add(control, val_event);
+    }
+
+    /*
+     * Remove a control event handler.
+     */
+    int remove_event_handler(swig_cb handler)
+    {
+	cb_rm(control, val_event);
+    }
+
+#define CONTROL_COLOR_BLACK	0
+#define CONTROL_COLOR_WHITE	1
+#define CONTROL_COLOR_RED	2
+#define CONTROL_COLOR_GREEN	3
+#define CONTROL_COLOR_BLUE	4
+#define CONTROL_COLOR_YELLOW	5
+#define CONTROL_COLOR_ORANGE	6
+
+    /*
+     * This describes a setting for a light.  There are two types of
+     * lights.  One type has a general ability to be set to a color, on
+     * time, and off time.  The other has a pre-defined set of
+     * transitions.  For transition-based lights, each light is defined to
+     * go through a number of transitions.  Each transition is described
+     * by a color, a time (in milliseconds) that the color is present.
+     * For non-blinking lights, there will only be one transition.  For
+     * blinking lights, there will be one or more transitions.
+     */
+
+    /*
+     * If this returns true, then you set the light with the
+     * set_light() function and get the values with the get_light()
+     * function.  Otherwise you get/set it with the normal
+     * get_val/set_valfunctions and use the transitions functions to
+     * get what the LED can do.
+     */
+    int light_set_with_setting()
+    {
+	return ipmi_control_light_set_with_setting(self);
+    }
+
+    /*
+     * Convert the given color to a string.
+     */
+    char *color_string(int color)
+    {
+	return ipmi_get_color_string(color);
+    }
+
+    /*
+     * Allows detecting if a setting light supports a specific
+     * color.
+     */
+    int light_is_color_supported(int color)
+    {
+	return ipmi_control_light_is_color_supported(self, color);
+    }
+
+    /*
+     * Returns true if the light has a local control mode, false if
+     * not.
+     */
+    int light_has_local_control()
+    {
+	return ipmi_control_light_has_local_control(self);
+    }
+
+    /*
+     * Set a setting style light's settings.  The first parm is a
+     * string in the form:
+     * "[lc] <color> <on_time> <off time>[:[lc] <color>...]".  The
+     * second parm turns on or off local control of the light.  When
+     * the operation is complete the control_set_val_cb method on the
+     * second parameter will be called.
+     */
+    int ipmi_control_set_light(char *settings, swig_cb handler)
+    {
+	ipmi_light_setting_t *s;
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_control_op_cb   done = NULL;
+
+	rv = str_to_light_setting(settings, &s);
+	if (rv)
+	    return rv;
+
+	if (ipmi_light_setting_get_count(s)
+	    != ipmi_control_get_num_vals(self))
+	{
+	    free(s);
+	    return EINVAL;
+	}
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = control_val_set_handler;
+	}
+	rv = ipmi_control_set_light(self, s, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	ipmi_free_light_settings(s);
+	return rv;
+    }
+
+    /*
+     * Get the current values of the light.  The control_get_light_cb
+     * method on the first parm will be called with the following
+     * parameters: <self> <err> <light settings>
+     * The light settings is a string with each light separated by
+     * colons with the (optional) local control (lc), color, on, and
+     * off time like this:
+     * "[lc] <color> <on_time> <off time>[:[lc] <color>...]"
+     */
+    int ipmi_control_get_light(swig_cb handler)
+    {
+	swig_cb_val            handler_val = NULL;
+	ipmi_light_settings_cb done = NULL;
+	int                    rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = control_val_get_light_handler;
+	}
+	rv = ipmi_control_get_light(self, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+		       
+    /*
+     * For lights that are transition based, this returns the number
+     * of values for a specific light.  So if you put a 2 in the first
+     * parm, this will return the number of possible settings for the
+     * 3rd light.
+     */
+    int get_num_light_values(int light)
+    {
+	return ipmi_control_get_num_light_values(self, light);
+    }
+
+    /*
+     * For lights that are transition based, return the number of
+     * transitions for the given light and value setting.  So if you
+     * put a 1 and a 3, this returns the number of transitions that
+     * the second light will go through if you set it's value to 3.
+     * Each transition will have a color and duration time and can be
+     * fetched with other values.  Returns -1 if the inputs are
+     * invalid.
+     */
+    int get_num_light_transitions(int light, int value)
+    {
+	return ipmi_control_get_num_light_transitions(self, light, value);
+    }
+
+    /*
+     * For lights that are transition based, return the color of the
+     * given transition.  Returns -1 if the inputs are invalid.
+     */
+    int get_light_color(int light, int value, int transition)
+    {
+	return ipmi_control_get_light_color(self, light, value, transition);
+    }
+
+    /*
+     * For lights that are transition based, return the duration of
+     * the given transition.  Returns -1 if the inputs are invalid.
+     */
+    int get_light_color_time(int light, int value, int transition)
+    {
+	return ipmi_control_get_light_color_time(self, light, value,
+						 transition);
+    }
+
+    /*
+     * Set the value of the identifier.  The first parameter is a
+     * reference to an array of byte values to se the identifier to.
+     * When the setting is complete, the control_set_val_cb method on
+     * the second parameter will be called.
+     */
+    int identifier_set_val(intarray val, swig_cb handler)
+    {
+	swig_cb_val        handler_val = NULL;
+	ipmi_control_op_cb done = NULL;
+	int                rv;
+	unsigned char      *data;
+	int                i;
+
+
+	data = malloc(val.len);
+	for (i=0; i<val.len; i++)
+	    data[i] = val.val[i];
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = control_val_set_handler;
+	}
+	rv = ipmi_control_identifier_set_val(self, data, val.len,
+					     done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	free(data);
+	return rv;
+    }
+
+    /*
+     * Get the value of the identifier control.  The control_get_id_cb
+     * method on the first parameter will be called when the operation
+     * completes.  The values passed to that method will be:
+     * <self> <err> byte1 [<byte2> ...].
+     * The id value is all the bytes after the error value.
+     */
+    int identifier_get_val(swig_cb handler)
+    {
+	swig_cb_val                    handler_val = NULL;
+	ipmi_control_identifier_val_cb done = NULL;
+	int                            rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = control_val_get_id_handler;
+	}
+	rv = ipmi_control_identifier_get_val(self, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Return the maximum possible length of the identifier control's
+     * value.
+     */
+    int identifier_get_max_length()
+    {
+	return ipmi_control_identifier_get_max_length(self);
     }
 }
 
