@@ -3342,9 +3342,9 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     uint32_t    mgsys_session_id;
     int         privilege;
     int         auth, integ, conf;
-    ipmi_rmcpp_authentication_t *authp;
-    ipmi_rmcpp_confidentiality_t *confp;
-    ipmi_rmcpp_integrity_t *integp;
+    ipmi_rmcpp_authentication_t *authp = NULL;
+    ipmi_rmcpp_confidentiality_t *confp = NULL;
+    ipmi_rmcpp_integrity_t *integp = NULL;
     auth_info_t *info;
     int         rv;
 
@@ -4149,7 +4149,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    {
 		if (auth >= 64)
 		    return EINVAL;
-		if (auths[auth])
+		if ((auth < 0x30) && (!auths[auth]))
 		    return ENOSYS;
 	    }
 	    break;
@@ -4160,7 +4160,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    {
 		if (integ >= 64)
 		    return EINVAL;
-		if (integs[integ])
+		if ((integ < 0x30) && (!integs[integ]))
 		    return ENOSYS;
 	    }
 	    break;
@@ -4171,7 +4171,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    {
 		if (conf >= 64)
 		    return EINVAL;
-		if (integs[conf])
+		if ((conf < 0x30) && (!confs[conf]))
 		    return ENOSYS;
 	    }
 	    break;

@@ -42,6 +42,7 @@
 typedef struct hmac_info_s
 {
     const EVP_MD *evp_md;
+    unsigned int  klen;
     unsigned char k[20];
 } hmac_info_t;
 
@@ -50,8 +51,9 @@ hmac_sha1_init(ipmi_con_t       *ipmi,
 	       ipmi_rmcpp_auth_t *ainfo,
 	       void             **integ_data)
 {
-    hmac_info_t   *info;
-    unsigned int  klen;
+    hmac_info_t          *info;
+    static unsigned char *k;
+    unsigned int         klen;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -60,7 +62,12 @@ hmac_sha1_init(ipmi_con_t       *ipmi,
     if (ipmi_rmcpp_auth_get_sik_len(ainfo) < 20)
 	return EINVAL;
 
-    memcpy(info->k, ipmi_rmcpp_auth_get_sik(ainfo, &klen), 20);
+    k = ipmi_rmcpp_auth_get_sik(ainfo, &klen);
+    if (klen < 20)
+	return EINVAL;
+
+    memcpy(info->k, k, 20);
+    info->klen = 20;
 
     info->evp_md = EVP_sha1();
     *integ_data = info;
@@ -81,10 +88,11 @@ hmac_md5_init(ipmi_con_t       *ipmi,
 	return ENOMEM;
 
     k = ipmi_rmcpp_auth_get_password(ainfo, &klen);
-    if (klen < 20)
+    if (klen < 16)
 	return EINVAL;
 
-    memcpy(info->k, k, 20);
+    memcpy(info->k, k, 16);
+    info->klen = 16;
 
     info->evp_md = EVP_md5();
     *integ_data = info;
@@ -114,7 +122,7 @@ hmac_add(ipmi_con_t    *ipmi,
     unsigned int  l = *payload_len;
     unsigned int  ilen;
 
-    if (l+21 > max_payload_len)
+    if (l+info->klen+1 > max_payload_len)
 	return E2BIG;
 
     if (l < 4)
@@ -127,10 +135,10 @@ hmac_add(ipmi_con_t    *ipmi,
     p[l] = 0; /* No padding */
     l++;
 
-    HMAC(info->evp_md, info->k, 20, p, l, p+l, &ilen);
+    HMAC(info->evp_md, info->k, info->klen, p, l, p+l, &ilen);
 
     *payload_len += 1;
-    *trailer_len = 20;
+    *trailer_len = info->klen;
     return 0;
 }
 
@@ -151,13 +159,13 @@ hmac_check(ipmi_con_t    *ipmi,
     p += 4;
     l -= 4;
 
-    if ((total_len - payload_len) < 21)
+    if ((total_len - payload_len) < info->klen+1)
 	return EINVAL;
 
     /* We add 1 to the length because we also check the next header
        field. */
-    HMAC(info->evp_md, info->k, 20, p, l+1, new_integ, &ilen);
-    if (memcmp(new_integ, p+payload_len+1, 20) != 0)
+    HMAC(info->evp_md, info->k, info->klen, p, l+1, new_integ, &ilen);
+    if (memcmp(new_integ, p+payload_len+1, info->klen) != 0)
 	return EINVAL;
 
     return 0;

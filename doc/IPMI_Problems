@@ -7,14 +7,15 @@
     true, then there should be a standard 8xh return code from the FRU
     inventory saying that it is not present.
 
- 2) The description of the LAN interface is far too vague.  Most
-    systems I have seen send two messages back for one sent.  It
-    doesn't say this anywhere.  A simple diagram with exactly how an
-    IPMB-bridged (and system-interface bridged for that matter) works
-    would make a world of difference.  IMHO, the most efficient and
-    effective method would be one send and one response with the full
-    response carried in the response.  Getting two messages back from
-    the BMC is inefficient and confusing for every piece involved.
+ 2) The description of the LAN interface/IPMB bridging is far too
+    vague.  Most systems I have seen send two messages back for one
+    sent.  It doesn't say this anywhere.  A simple diagram with
+    exactly how an IPMB-bridged (and system-interface bridged for that
+    matter) works would make a world of difference.  IMHO, the most
+    efficient and effective method would be one send and one response
+    with the full response carried in the response.  Getting two
+    messages back from the BMC is inefficient and confusing for every
+    piece involved.
 
  3) In a type 1 SDR, byte 21 (Sensor Units 1), the data format of 11b
     means that it does not return a numeric value.  However, this means
@@ -70,3 +71,33 @@
 17) There is no locking of FRU data to support multiple
     readers/writers.
 
+RMCP+ questions
+---------------
+
+* In the authentication and integrity algorithm numbers (section 13.28
+  and 13.28.4), it lists c0h-ffh as the OEM types, but the range of
+  those numbers is from 0-3fh.  I assume the oem range should be
+  30h-3fh (like the encrytion numbers in 13.28.5)
+
+* In the xRC4 algorithm, it is supposed to re-initialize the algorithm
+  if a 0 data offset is received.  What happens if packet with the 0
+  data offset is lost?  That would seem to me to be a very bad thing,
+  the connection would certainly drop if that happened.
+
+* In RMCP+, what are the sequence numbers initialized to?
+
+* What data does the RMCP+ payload length cover?  It seems the most
+  reasonable range is from the confidentiality header up to (and
+  including) the integrity pad length, but it doesn't say.
+
+* For the RMCP+ integrity data, what is the the range of the data for
+  the HMAC algorithms?  The data is stated for MD5-128, but not for
+  the HMAC algorithms.
+
+* After the RAKP algorithm completes, then what?  Do you have to do a
+  set privilege level to start things off?
+
+* For the integrity algorithms, for HMAC-MD5-128 and MD5-128,
+  shouldn't the keys be 128 bits?  Do you truncate the last 4 bytes
+  of the password for MD5-128?  And for generation of SIK, do you
+  truncate the BMC key to 16 bytes for the RAKP-HMAC-MD5?

@@ -425,6 +425,7 @@ static ipmi_rmcpp_authentication_t rakp_none_auth =
 
 typedef struct rakp_hmac_key_s
 {
+    unsigned int key_len;
     const EVP_MD *evp_md;
 } rakp_hmac_key_t;
 
@@ -442,7 +443,7 @@ rakp_hmac_c2(rakp_info_t   *info,
     unsigned char       *k;
     unsigned int        plen;
 
-    if (data_len < 60)
+    if (data_len < 40+rinfo->key_len)
 	return E2BIG;
 
     ipmi_set_uint32(idata+0, ipmi_rmcpp_auth_get_my_session_id(info->ainfo));
@@ -461,10 +462,10 @@ rakp_hmac_c2(rakp_info_t   *info,
     memcpy(idata+58, p, idata[57]);
 
     p = ipmi_rmcpp_auth_get_password(info->ainfo, &plen);
-    if (plen < 20)
+    if (plen < rinfo->key_len)
 	return EINVAL;
-    HMAC(rinfo->evp_md, p, 20, idata, 58+idata[57], integ_data, &ilen);
-    if (memcmp(data+40, integ_data, 20) != 0)
+    HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 58+idata[57], integ_data, &ilen);
+    if (memcmp(data+40, integ_data, rinfo->key_len) != 0)
 	return EINVAL;
 
     /* Now generate the SIK */
@@ -477,28 +478,28 @@ rakp_hmac_c2(rakp_info_t   *info,
     p = ipmi_rmcpp_auth_get_username(info->ainfo, &plen);
     memcpy(idata+34, p, idata[33]);
     p = ipmi_rmcpp_auth_get_bmc_key(info->ainfo, &plen);
-    if (plen < 20)
+    if (plen < rinfo->key_len)
 	return EINVAL;
     memcpy(idata+34, p, idata[33]);
     s = ipmi_rmcpp_auth_get_sik(info->ainfo, &plen);
-    if (plen < 20)
+    if (plen < rinfo->key_len)
 	return EINVAL;
-    HMAC(rinfo->evp_md, p, 20, idata, 34+idata[33], s, &ilen);
-    ipmi_rmcpp_auth_set_sik_len(info->ainfo, 20);
+    HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 34+idata[33], s, &ilen);
+    ipmi_rmcpp_auth_set_sik_len(info->ainfo, rinfo->key_len);
 
     /* Now generate k1 and k2. */
     k = ipmi_rmcpp_auth_get_k1(info->ainfo, &plen);
-    if (plen < 20)
+    if (plen < rinfo->key_len)
 	return EINVAL;
-    memset(idata, 1, 20);
-    HMAC(rinfo->evp_md, s, 20, idata, 20, k, &ilen);
-    ipmi_rmcpp_auth_set_k2_len(info->ainfo, 20);
-    k = ipmi_rmcpp_auth_get_k1(info->ainfo, &plen);
-    if (plen < 20)
+    memset(idata, 1, rinfo->key_len);
+    HMAC(rinfo->evp_md, s, rinfo->key_len, idata, rinfo->key_len, k, &ilen);
+    ipmi_rmcpp_auth_set_k2_len(info->ainfo, rinfo->key_len);
+    k = ipmi_rmcpp_auth_get_k2(info->ainfo, &plen);
+    if (plen < rinfo->key_len)
 	return EINVAL;
-    memset(idata, 2, 20);
-    HMAC(rinfo->evp_md, s, 20, idata, 20, k, &ilen);
-    ipmi_rmcpp_auth_set_k2_len(info->ainfo, 20);
+    memset(idata, 2, rinfo->key_len);
+    HMAC(rinfo->evp_md, s, rinfo->key_len, idata, rinfo->key_len, k, &ilen);
+    ipmi_rmcpp_auth_set_k2_len(info->ainfo, rinfo->key_len);
 
     return 0;
 }
@@ -515,7 +516,7 @@ rakp_hmac_s3(rakp_info_t   *info,
     const unsigned char *p;
     unsigned int        plen;
 
-    if (*data_len+20 < total_len)
+    if (((*data_len)+rinfo->key_len) < total_len)
 	return E2BIG;
 
     p = ipmi_rmcpp_auth_get_mgsys_rand(info->ainfo, &plen);
@@ -529,10 +530,11 @@ rakp_hmac_s3(rakp_info_t   *info,
     memcpy(idata+22, p, idata[21]);
 
     p = ipmi_rmcpp_auth_get_password(info->ainfo, &plen);
-    if (plen < 20)
+    if (plen < rinfo->key_len)
 	return EINVAL;
-    HMAC(rinfo->evp_md, p, 20, idata, 22+idata[21], data+*data_len, &ilen);
-    *data_len += 20;
+    HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 22+idata[21],
+	 data+*data_len, &ilen);
+    *data_len += rinfo->key_len;
     return 0;
 }
 
@@ -548,7 +550,7 @@ rakp_hmac_c4(rakp_info_t   *info,
     const unsigned char *p;
     unsigned int        plen;
 
-    if (data_len < 28)
+    if (data_len < 8+rinfo->key_len)
 	return E2BIG;
 
     p = ipmi_rmcpp_auth_get_my_rand(info->ainfo, &plen);
@@ -560,8 +562,8 @@ rakp_hmac_c4(rakp_info_t   *info,
     memcpy(idata+20, p, 16);
 
     p = ipmi_rmcpp_auth_get_sik(info->ainfo, &plen);
-    HMAC(rinfo->evp_md, p, 20, idata, 36, integ_data, &ilen);
-    if (memcmp(data+40, integ_data, 20) != 0)
+    HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 36, integ_data, &ilen);
+    if (memcmp(data+40, integ_data, rinfo->key_len) != 0)
 	return EINVAL;
 
     return 0;
@@ -584,6 +586,7 @@ rakp_sha1_init(rakp_info_t *info)
     if (!key_data)
 	return ENOMEM;
     key_data->evp_md = EVP_sha1();
+    key_data->key_len = 20;
     return 0;
 }
 
@@ -616,6 +619,7 @@ rakp_md5_init(rakp_info_t *info)
 	return ENOMEM;
     key_data->evp_md = EVP_md5();
     info->key_data = key_data;
+    key_data->key_len = 16;
     return 0;
 }
 
