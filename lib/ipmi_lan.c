@@ -1452,8 +1452,10 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 	&& (lan->ip[addr_num].working_conf
 	    != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE))
     {
+#if 0
 	if (! lan->ip[addr_num].working)
 	    return EAGAIN;
+#endif
 
 	/* Note: This may encrypt the data, the old data will be lost. */
 	rv = lan->ip[addr_num].conf_info->conf_encrypt

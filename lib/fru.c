@@ -408,13 +408,13 @@ fru_encode_fields(ipmi_fru_t        *fru,
     }
     /* Now the end marker */
     data[offset] = 0xc1;
-    offset++;
     /* If the record changed, put out the end marker */
     if (rec->changed && !rec->rewrite) {
 	rv = fru_new_update_rec(fru, offset+rec->offset, 1);
 	if (rv)
 	    return rv;
     }
+    offset++;
     /* We are not adding the checksum, so remove it from the check */
     if (offset != (rec->used_length-1)) {
 	return EBADF;
@@ -1319,7 +1319,7 @@ fru_encode_chassis_info_area(ipmi_fru_t *fru, unsigned char *data)
 	/* Write any zeros that need to be written if the data got
 	   shorter. */
 	if (rec->used_length < rec->orig_used_length) {
-	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length,
+	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length - 1,
 				    rec->orig_used_length - rec->used_length);
 	    if (rv)
 		return rv;
@@ -1560,11 +1560,13 @@ fru_encode_board_info_area(ipmi_fru_t *fru, unsigned char *data)
     rv = fru_encode_fields(fru, rec, &u->fields, data, 6);
     if (rv)
 	return rv;
+    data[rec->length-1] = -checksum(data, rec->length-1);
     if (rec->changed && !rec->rewrite) {
 	/* Write any zeros that need to be written if the data got
-	   shorter. */
+	   shorter.  Subtract off 1 for the checksum since it is in
+	   the used length */
 	if (rec->used_length < rec->orig_used_length) {
-	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length,
+	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length - 1,
 				    rec->orig_used_length - rec->used_length);
 	    if (rv)
 		return rv;
@@ -1574,7 +1576,6 @@ fru_encode_board_info_area(ipmi_fru_t *fru, unsigned char *data)
 	if (rv)
 	    return rv;
     }
-    data[rec->length-1] = -checksum(data, rec->length-1);
     return 0;
 }
 
@@ -1781,9 +1782,10 @@ fru_encode_product_info_area(ipmi_fru_t *fru, unsigned char *data)
 	return rv;
 	/* Write any zeros that need to be written if the data got
 	   shorter. */
+    data[rec->length-1] = -checksum(data, rec->length-1);
     if (rec->changed && !rec->rewrite) {
 	if (rec->used_length < rec->orig_used_length) {
-	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length,
+	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length - 1,
 				    rec->orig_used_length - rec->used_length);
 	    if (rv)
 		return rv;
@@ -1793,7 +1795,6 @@ fru_encode_product_info_area(ipmi_fru_t *fru, unsigned char *data)
 	if (rv)
 	    return rv;
     }
-    data[rec->length-1] = -checksum(data, rec->length-1);
     return 0;
 }
 
@@ -3050,6 +3051,7 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
        is too big. */
     if (((data[0] == IPMI_CANNOT_RETURN_REQ_LENGTH_CC)
 	 || (data[0] == IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC)
+	 || (data[0] == IPMI_REQUEST_DATA_LENGTH_INVALID_CC)
 	 || (data[0] == IPMI_TIMEOUT_CC)
 	 || (data[0] == IPMI_UNKNOWN_ERR_CC))
 	&& (fru->fetch_size > MIN_FRU_DATA_FETCH))
