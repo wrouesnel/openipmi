@@ -1745,6 +1745,7 @@ static struct {
     { "set_control",			set_control_cmd },
     { "mcs",				mcs_cmd },
     { "mccmd",				mccmd_cmd },
+    { "msg",				msg_cmd },
     { "dellog",				dellog_cmd },
     { NULL,				NULL}
 };
