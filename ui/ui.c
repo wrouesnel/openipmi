@@ -2265,6 +2265,13 @@ normal_control_val_read(ipmi_control_t *control,
     int               num_vals;
     int               i;
 
+    if (control == NULL) {
+	/* The control went away, stop the operation. */
+	wmove(display_pad, value_pos.y, value_pos.x);
+	display_pad_out("invalid");
+	curr_display_type = DISPLAY_NONE;
+	return;
+    }
     control_id = ipmi_control_convert_to_id(control);
     if (!((curr_display_type == DISPLAY_CONTROL)
 	  && (ipmi_cmp_control_id(control_id, curr_control_id) == 0)))
@@ -2308,6 +2315,14 @@ identifier_control_val_read(ipmi_control_t *control,
     ipmi_control_id_t control_id;
     int               i;
 
+    if (control == NULL) {
+	/* The control went away, stop the operation. */
+	wmove(display_pad, value_pos.y, value_pos.x);
+	display_pad_out("invalid");
+	curr_display_type = DISPLAY_NONE;
+	return;
+    }
+
     control_id = ipmi_control_convert_to_id(control);
     if (!((curr_display_type == DISPLAY_CONTROL)
 	  && (ipmi_cmp_control_id(control_id, curr_control_id) == 0)))
@@ -2318,9 +2333,11 @@ identifier_control_val_read(ipmi_control_t *control,
 	    wmove(display_pad, value_pos.y, value_pos.x);
 	    display_pad_out("?");
 	} else {
+	    wmove(display_pad, value_pos.y, value_pos.x);
 	    for (i=0; i<length; i++) {
-		wmove(display_pad, value_pos.y+i, value_pos.x);
 		display_pad_out("0x%2.2x", val[i]);
+		if (i < length)
+		    display_pad_out("\n          ");
 	    }
 	}
 	display_pad_refresh();
@@ -5318,9 +5335,11 @@ static struct {
       " - Set the given config item to the value.  The optional selector"
       " is used for items that take a selector" },
     { "pet",		pet_cmd,
-      " <ip addr> <mac_addr> <eft selector> <policy num> <apt selector>"
+      " <connection> <channel> <ip addr> <mac_addr> <eft selector>"
+      " <policy num> <apt selector>"
       " <lan dest selector> - "
-      "Set up the domain to send PET traps to the given IP/MAC address" },
+      "Set up the domain to send PET traps from the given connection"
+      " to the given IP/MAC address over the given channel" },
     { "delevent",	delevent_cmd,
       " <channel> <mc num> <log number> - "
       "Delete the given event number from the SEL" },

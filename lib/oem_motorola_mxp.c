@@ -7071,6 +7071,8 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_control_cbs_t control_cbs;
     int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
 	= ipmi_standard_sensor_cb.ipmi_reading_get;
+    int                v1_amc = ipmi_mc_major_fw_revision(mc) < 5;
+
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -7250,85 +7252,89 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_control_set_readable(info->chassis_id, 1);
     ipmi_control_set_callbacks(info->chassis_id, &control_cbs);
 
-    /* 5V */
-    assert = 0;
-    deassert = 0;
-    rv = mxp_alloc_threshold_sensor(mc, info->ent,
-				    MXP_5V_SENSOR_NUM,
-				    info, NULL,
-				    IPMI_SENSOR_TYPE_VOLTAGE,
-				    IPMI_UNIT_TYPE_VOLTS,
-				    "5V",
-				    assert, deassert,
-				    mxp_voltage_reading_get_cb,
-				    50, 48, 52,
-				    &(info->s5v));
-    if (rv)
-	goto out_err;
-    ipmi_sensor_set_ignore_if_no_entity(info->s5v, 0);
+    /* The SDRS are right for newer AMCs.  We just use those with the
+       proper sensor fixups. */
+    if (v1_amc) {
+	/* 5V */
+	assert = 0;
+	deassert = 0;
+	rv = mxp_alloc_threshold_sensor(mc, info->ent,
+					MXP_5V_SENSOR_NUM,
+					info, NULL,
+					IPMI_SENSOR_TYPE_VOLTAGE,
+					IPMI_UNIT_TYPE_VOLTS,
+					"5V",
+					assert, deassert,
+					mxp_voltage_reading_get_cb,
+					50, 48, 52,
+					&(info->s5v));
+	if (rv)
+	    goto out_err;
+	ipmi_sensor_set_ignore_if_no_entity(info->s5v, 0);
 
-    /* 3.3V */
-    assert = 0;
-    deassert = 0;
-    rv = mxp_alloc_threshold_sensor(mc, info->ent,
-				    MXP_3_3V_SENSOR_NUM,
-				    info, NULL,
-				    IPMI_SENSOR_TYPE_VOLTAGE,
-				    IPMI_UNIT_TYPE_VOLTS,
-				    "3.3V",
-				    assert, deassert,
-				    mxp_voltage_reading_get_cb,
-				    33, 32, 34,
-				    &(info->s3_3v));
-    if (rv)
-	goto out_err;
+	/* 3.3V */
+	assert = 0;
+	deassert = 0;
+	rv = mxp_alloc_threshold_sensor(mc, info->ent,
+					MXP_3_3V_SENSOR_NUM,
+					info, NULL,
+					IPMI_SENSOR_TYPE_VOLTAGE,
+					IPMI_UNIT_TYPE_VOLTS,
+					"3.3V",
+					assert, deassert,
+					mxp_voltage_reading_get_cb,
+					33, 32, 34,
+					&(info->s3_3v));
+	if (rv)
+	    goto out_err;
 
-    /* 2.5V */
-    assert = 0;
-    deassert = 0;
-    rv = mxp_alloc_threshold_sensor(mc, info->ent,
-				    MXP_2_5V_SENSOR_NUM,
-				    info, NULL,
-				    IPMI_SENSOR_TYPE_VOLTAGE,
-				    IPMI_UNIT_TYPE_VOLTS,
-				    "2.5V",
-				    assert, deassert,
-				    mxp_voltage_reading_get_cb,
-				    25, 24, 26,
-				    &(info->s2_5v));
-    if (rv)
-	goto out_err;
-
-    /* 8V */
-    assert = 0;
-    deassert = 0;
-    rv = mxp_alloc_threshold_sensor(mc, info->ent,
-				    MXP_8V_SENSOR_NUM,
-				    info, NULL,
-				    IPMI_SENSOR_TYPE_VOLTAGE,
-				    IPMI_UNIT_TYPE_VOLTS,
-				    "8V",
-				    assert, deassert,
-				    mxp_voltage_reading_get_cb,
-				    80, 76, 84,
-				    &(info->s8v));
-    if (rv)
+	/* 2.5V */
+	assert = 0;
+	deassert = 0;
+	rv = mxp_alloc_threshold_sensor(mc, info->ent,
+					MXP_2_5V_SENSOR_NUM,
+					info, NULL,
+					IPMI_SENSOR_TYPE_VOLTAGE,
+					IPMI_UNIT_TYPE_VOLTS,
+					"2.5V",
+					assert, deassert,
+					mxp_voltage_reading_get_cb,
+					25, 24, 26,
+					&(info->s2_5v));
+	if (rv)
 	goto out_err;
 
-    /* Temperature */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info->ent,
-					       MXP_AMC_TEMP_SENSOR_NUM,
-		   			       info, NULL,
-					       IPMI_SENSOR_TYPE_TEMPERATURE,
-					       IPMI_UNIT_TYPE_DEGREES_C,
-					       "Temp",
-					       0, 0,
-					       get,
-					       -1, -1, -1,
-					       1, 0, 0, 0,
-					       &info->temp);
-    if (rv)
-	goto out_err;
+	/* 8V */
+	assert = 0;
+	deassert = 0;
+	rv = mxp_alloc_threshold_sensor(mc, info->ent,
+					MXP_8V_SENSOR_NUM,
+					info, NULL,
+					IPMI_SENSOR_TYPE_VOLTAGE,
+					IPMI_UNIT_TYPE_VOLTS,
+					"8V",
+					assert, deassert,
+					mxp_voltage_reading_get_cb,
+					80, 76, 84,
+					&(info->s8v));
+	if (rv)
+	    goto out_err;
+
+	/* Temperature */
+	rv = mxp_alloc_semi_stand_threshold_sensor(mc, info->ent,
+						   MXP_AMC_TEMP_SENSOR_NUM,
+						   info, NULL,
+						   IPMI_SENSOR_TYPE_TEMPERATURE,
+						   IPMI_UNIT_TYPE_DEGREES_C,
+						   "Temp",
+						   0, 0,
+						   get,
+						   -1, -1, -1,
+						   1, 0, 0, 0,
+						   &info->temp);
+	if (rv)
+	    goto out_err;
+    }
 
     rv = ipmi_mc_add_oem_removed_handler(mc, amc_removal_handler, info, NULL);
     if (rv) {
@@ -9356,13 +9362,33 @@ mxp_bmc_handler(ipmi_mc_t *mc)
     return rv;
 }
 
+static void
+amc_sensor_fixup(ipmi_mc_t     *mc,
+		 ipmi_sensor_t *sensor,
+		 void          *cb_data)
+{
+    if (ipmi_sensor_get_entity_instance(sensor) == 0) {
+	/* Set the instance to the proper AMC. */
+	ipmi_sensor_set_entity_instance(sensor, ipmi_mc_get_address(mc) + 1);
+    }
+}
+
 static int
 mxp_handler(ipmi_mc_t *mc,
 	    void      *cb_data)
 {
     int           rv;
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+    unsigned int  channel = ipmi_mc_get_channel(mc);
+    unsigned int  addr    = ipmi_mc_get_address(mc);
 
+
+    if ((channel == IPMI_BMC_CHANNEL) && (addr == 0)) {
+	/* It's the SI MC.  Turn off man SDR scanning, but do nothing
+	   else. */
+	ipmi_mc_set_sdr_repository_support(mc, 0);
+	return 0;
+    }
 
     /* The MXP AMC does not support generating events on the IPMB. */
     ipmi_mc_set_ipmb_event_generator_support(mc, 0);
@@ -9370,12 +9396,22 @@ mxp_handler(ipmi_mc_t *mc,
     /* Broadcasting is currently broken on the MXP. */
     ipmi_domain_set_broadcast_broken(domain, 1);
 
-    if (ipmi_mc_get_channel(mc) == IPMI_BMC_CHANNEL) {
+    if (channel == IPMI_BMC_CHANNEL) {
+	/* Treat the main SDRS on the AMCs as device SDRs. */
+	rv = ipmi_mc_set_main_sdrs_as_device(mc);
+	if (rv)
+	    goto out;
+
+	rv = ipmi_mc_set_sensor_fixup_handler(mc, amc_sensor_fixup, NULL);
+	if (rv)
+	    goto out;
+
 	rv = amc_board_handler(mc);
     } else {
 	rv = mxp_bmc_handler(mc);
     }
 
+ out:
     return rv;
 }
 

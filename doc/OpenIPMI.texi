@@ -1917,11 +1917,12 @@ to the power supply entity.
 
 @subsection Sensors and Controls
 
-The MXP has some sensors, but has a large number of sensor-like devices
-that are not standard IPMI sensors.  The MXP IPMI interface makes the
-MXP look as if all these are IPMI sensors.  Controls are also created,
-in OpenIPMI these work much like sensors, they have settable and
-readable values, but do not have events of any type.
+The MXP has some sensors, but has a large number of sensor-like
+devices that are not standard IPMI sensors.  The MXP OpenIPMI
+interface makes the MXP look as if all these are IPMI sensors.
+Controls are also created, in OpenIPMI these work much like sensors,
+they have settable and readable values, but do not have events of any
+type.
 
 Sensors and controls may be identified by their string id and the
 entity they monitor.  The string id for a sensor will be unique so it
@@ -2290,7 +2291,7 @@ This section documents known problems with the AMC code, either with the
 OpenIPMI OEM code or with the MXP firmware.
 
 @table @samp
-@item SEL (Old MXP versions only )
+@item SEL (Old MXP versions only)
 Currently, the SEL on the inactive AMC doesn't work with OpenIPMI.
 The SEL will still provide events, but the ``Get SEL Info'' command
 doesn't work.  OpenIPMI uses the ``Get SEL Info'' command to see if any
@@ -2344,6 +2345,7 @@ The SDRs in the AMC create some bogus entities.  The sensors on them
 seem to be functional, but the entities are not standard and will
 probably go away.  You can safely ignore entities ``0.0'' and
 ``149.26''.
+
 @end table
 
 @contents

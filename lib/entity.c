@@ -1878,7 +1878,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	}
     }
 
-    /* For every item in the  array that are not found, make sure
+    /* For every item in the array that is not found, make sure
        the entities exists and we have them. */
     rv = fill_in_entities(ents, &infos, &eclinks);
     if (rv)

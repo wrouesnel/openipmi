@@ -1596,6 +1596,25 @@ typedef struct sdr_fetch_info_s
     opq_t                    *sensor_wait_q;
 } sdr_fetch_info_t;
 
+int
+ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc)
+{
+    int             rv;
+    ipmi_sdr_info_t *new_sdrs;
+
+    rv = ipmi_sdr_info_alloc(ipmi_mc_get_domain(mc), mc, 0, 0, &new_sdrs);
+    if (rv)
+	return rv;
+
+    if (mc->sdrs)
+	ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
+    mc->sdrs = new_sdrs;
+
+    /* Note that we don't reread the sensors, so this must be done
+       before the sensor read operation. */
+    return 0;
+}
+
 static void
 sdr_reread_done(sdr_fetch_info_t *info, int err)
 {

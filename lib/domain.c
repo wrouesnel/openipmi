@@ -947,8 +947,6 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
     memcpy(&(info.addr), addr, addr_len);
     info.addr_len = addr_len;
     return ilist_search(domain->mc_list, mc_cmp, &info);
-
-    return NULL;
 }
 
 static int
@@ -2768,6 +2766,8 @@ ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 				       ipmi_domain_cb handler,
 				       void           *cb_data)
 {
+    CHECK_DOMAIN_LOCK(domain);
+
     domain->SDRs_read_handler = handler;
     domain->SDRs_read_handler_cb_data = cb_data;
     return 0;
@@ -2775,9 +2775,11 @@ ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 
 int
 ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
-				       ipmi_domain_cb handler,
-				       void           *cb_data)
+				 ipmi_domain_cb handler,
+				 void           *cb_data)
 {
+    CHECK_DOMAIN_LOCK(domain);
+
     domain->bus_scan_handler = handler;
     domain->bus_scan_handler_cb_data = cb_data;
     return 0;
@@ -3174,7 +3176,8 @@ got_dev_id(ipmi_mc_t  *mc,
     ipmi_domain_t *domain = rsp_data;
     int           rv;
 
-    if ((rsp->data[0] != 0) || (rsp->data_len < 12)) {
+    rv = _ipmi_mc_get_device_id_data_from_rsp(mc, rsp);
+    if (rv) {
 	/* At least the get device id has to work. */
 	if ((rsp->data[0] == 0) && (rsp->data_len >= 6)) {
 	    int major_version = rsp->data[5] & 0xf;
@@ -3191,7 +3194,7 @@ got_dev_id(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Invalid return from IPMI Get Device ID, something is"
 		 " seriously wrong with the BMC");
-	call_con_fails(domain, EINVAL, 0, 0, 0);
+	call_con_fails(domain, rv, 0, 0, 0);
 	return;
     }
 
@@ -3207,10 +3210,6 @@ got_dev_id(ipmi_mc_t  *mc,
 		 " supported by OpenIPMI.  It may work, but there may be"
 		 " issues.", domain->major_version, domain->minor_version);
     }
-    domain->SDR_repository_support = (rsp->data[6] & 0x02) == 0x02;
-
-    ipmi_mc_set_sdr_repository_support(domain->si_mc,
-				       domain->SDR_repository_support);
 
     if (domain->major_version < 1) {
 	/* We only support 1.0 and greater. */

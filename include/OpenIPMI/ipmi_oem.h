@@ -42,8 +42,13 @@
 
 /* This registers an OEM handler.  If an MC is detected that has the
    given manufacturer id and product id, the handler will be
-   called. If the IPMI system is shutdown while this is registered, then
-   shutdown will be called (if it is not NULL). */
+   called. If the IPMI system is shutdown while this is registered,
+   then shutdown will be called (if it is not NULL).  Note that this
+   is called with the "dummy" system interface MC (the once created by
+   the domain to talk to the LAN's management controller directly), if
+   the IPMI address is a system interface address and the channel is
+   zero, it is that MC.  That MC does not show up as a normal MC, so
+   you may need special handling for this. */
 typedef int (*ipmi_oem_mc_match_handler_cb)(ipmi_mc_t *mc, void *cb_data);
 typedef int (*ipmi_oem_shutdown_handler_cb)(void *cb_data);
 int ipmi_register_oem_handler(unsigned int                 manufacturer_id,

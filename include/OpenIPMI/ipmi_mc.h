@@ -104,6 +104,12 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 			   ipmi_mc_done_cb done,
 			   void            *done_data);
 
+/* Use the "main" SDR repository as a device SDR repository. This
+   means that any SDRs in the "main" SDR repository on the MC will
+   appear as sensors, etc as if they were in the device SDR
+   repository. */
+int ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc);
+
 /* Check to see if the MC is operational in the system.  If this is
    false, then the MC was referred to by an SDR, but it doesn't really
    exist. */

@@ -1,5 +1,22 @@
 2004-01-14 Corey Minyard <cminyard@mvista.com> 
 
+	* ui/ui.c: Added handling for controls going away when displayed.
+
+	* README.MotorolaMXP: Added.
+
+	* lib/oem_motorola_mxp.c: Modified the handling for custom AMC
+	sensors to only be created if it's an old AMC.  Also added support
+	for handling the sensors from the AMC properly, setting the entity
+	ID properly.
+
+	* lib/domain.c: Have the domain code call the OEM handler for the
+	SI MC.
+
+	* lib/mc.c: Added a way to have an MC's main device repository
+	treated as a device SDR repository.
+
+2004-01-14 Corey Minyard <cminyard@mvista.com> 
+
 	* doc/OpenIPMI.texi: Added some MXP-specific information.
 
 	* lib/oem_motorola_mxp.c: Fixed a few problems, the Chassis ID
