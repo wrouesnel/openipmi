@@ -297,7 +297,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
     ipmi_control_set_num_elements(power_control, 1);
 
     /* Add it to the MC and entity. */
-    rv = ipmi_control_add_nonstandard(mc, power_control, 1,
+    rv = ipmi_control_add_nonstandard(mc, power_control, IPMI_CHASSIS_POWER_CONTROL,
 				      chassis_ent, NULL, NULL);
     if (rv) {
 	ipmi_control_destroy(power_control);

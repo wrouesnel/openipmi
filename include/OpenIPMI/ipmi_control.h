@@ -234,4 +234,8 @@ void ipmi_control_set_callbacks(ipmi_control_t     *control,
 /* Get the MC that the control is in. */
 ipmi_mc_t *ipmi_control_get_mc(ipmi_control_t *control);
 
+/* OpenIPMI defines controls c0-ff for its own use, don't use them for your
+   controls.  Here's some controls it defines. */
+#define IPMI_CHASSIS_POWER_CONTROL	0xc0
+
 #endif /* _IPMI_CONTROL_H */
