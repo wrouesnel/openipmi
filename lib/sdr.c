@@ -988,8 +988,12 @@ handle_reservation(ipmi_mc_t  *mc,
  reservation_set:
     /* Fetch the first part of the SDR. */
     rv = initial_sdr_fetch(sdrs, mc);
-    if (rv)
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "initial SDR fetch failed: %x", rv);
+	fetch_complete(sdrs, EINVAL);
 	goto out;
+    }
 
     sdr_unlock(sdrs);
  out:
