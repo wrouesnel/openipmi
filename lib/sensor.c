@@ -484,6 +484,7 @@ ipmi_sensor_id_add_opq(ipmi_sensor_id_t      sensor_id,
     rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_add_opq_cb, info);
     if (!rv)
 	rv = info->__err;
+    return rv;
 }
 
 void
