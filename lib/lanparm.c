@@ -1272,11 +1272,12 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
 int \
 ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned char     *data, \
-			 unsigned int      data_len) \
+			 unsigned int      *data_len) \
 { \
-    if (data_len < l) \
+    if (*data_len < l) \
         return EMSGSIZE; \
     memcpy(data, lanc->n, l); \
+    *data_len = l; \
     return 0; \
 } \
 int \
@@ -1308,13 +1309,14 @@ LP_ARRAY_PARM(community_string, 18)
 int \
 ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned char     *data, \
-			 unsigned int      data_len) \
+			 unsigned int      *data_len) \
 { \
     if (! lanc->n ## _supported) \
         return ENOTSUP; \
-    if (data_len < l) \
+    if (*data_len < l) \
         return EMSGSIZE; \
     memcpy(data, lanc->n, l); \
+    *data_len = l; \
     return 0; \
 } \
 int \
@@ -1390,13 +1392,14 @@ int \
 ipmi_lanconfig_get_## n(ipmi_lan_config_t *lanc, \
 			unsigned int      set, \
 			unsigned char     *data, \
-			unsigned int      data_len) \
+			unsigned int      *data_len) \
 { \
     if (set > lanc->num_alert_destinations) \
 	return EINVAL; \
-    if (data_len < l) \
+    if (*data_len < l) \
         return EMSGSIZE; \
     memcpy(data, lanc->s[set].n, l); \
+    *data_len = l; \
     return 0; \
 } \
 int \

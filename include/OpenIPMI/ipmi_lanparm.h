@@ -201,34 +201,34 @@ int ipmi_lanconfig_set_enable_auth_none(ipmi_lan_config_t *lanc,
 /* Addressing for the BMC. */
 int ipmi_lanconfig_get_ip_addr(ipmi_lan_config_t *lanc,
 			       unsigned char     *data,
-			       unsigned int      data_len);
+			       unsigned int      *data_len);
 int ipmi_lanconfig_set_ip_addr(ipmi_lan_config_t *lanc,
 			       unsigned char     *data,
 			       unsigned int      data_len);
 
 int ipmi_lanconfig_get_mac_addr(ipmi_lan_config_t *lanc,
 				unsigned char     *data,
-				unsigned int      data_len);
+				unsigned int      *data_len);
 int ipmi_lanconfig_set_mac_addr(ipmi_lan_config_t *lanc,
 				unsigned char     *data,
 				unsigned int      data_len);
 
 int ipmi_lanconfig_get_subnet_mask(ipmi_lan_config_t *lanc,
 				   unsigned char     *data,
-				   unsigned int      data_len);
+				   unsigned int      *data_len);
 int ipmi_lanconfig_set_subnet_mask(ipmi_lan_config_t *lanc,
 				   unsigned char     *data,
 				   unsigned int      data_len);
 
 int ipmi_lanconfig_get_primary_rmcp_port(ipmi_lan_config_t *lanc,
 					 unsigned char     *data,
-					 unsigned int      data_len);
+					 unsigned int      *data_len);
 int ipmi_lanconfig_set_primary_rmcp_port(ipmi_lan_config_t *lanc,
 					 unsigned char     *data,
 					 unsigned int      data_len);
 int ipmi_lanconfig_get_secondary_rmcp_port(ipmi_lan_config_t *lanc,
 					   unsigned char     *data,
-					   unsigned int      data_len);
+					   unsigned int      *data_len);
 int ipmi_lanconfig_set_secondary_rmcp_port(ipmi_lan_config_t *lanc,
 					   unsigned char     *data,
 					   unsigned int      data_len);
@@ -250,25 +250,25 @@ int ipmi_lanconfig_set_garp_interval(ipmi_lan_config_t *lanc,
 /* Gateway handling */
 int ipmi_lanconfig_get_default_gateway_ip_addr(ipmi_lan_config_t *lanc,
 					       unsigned char     *data,
-					       unsigned int      data_len);
+					       unsigned int      *data_len);
 int ipmi_lanconfig_set_default_gateway_ip_addr(ipmi_lan_config_t *lanc,
 					       unsigned char     *data,
 					       unsigned int      data_len);
 int ipmi_lanconfig_get_default_gateway_mac_addr(ipmi_lan_config_t *lanc,
 						unsigned char     *data,
-						unsigned int      data_len);
+						unsigned int      *data_len);
 int ipmi_lanconfig_set_default_gateway_mac_addr(ipmi_lan_config_t *lanc,
 						unsigned char     *data,
 						unsigned int      data_len);
 int ipmi_lanconfig_get_backup_gateway_ip_addr(ipmi_lan_config_t *lanc,
 					      unsigned char     *data,
-					      unsigned int      data_len);
+					      unsigned int      *data_len);
 int ipmi_lanconfig_set_backup_gateway_ip_addr(ipmi_lan_config_t *lanc,
 					      unsigned char     *data,
 					      unsigned int      data_len);
 int ipmi_lanconfig_get_backup_gateway_mac_addr(ipmi_lan_config_t *lanc,
 					       unsigned char     *data,
-					       unsigned int      data_len);
+					       unsigned int      *data_len);
 int ipmi_lanconfig_set_backup_gateway_mac_addr(ipmi_lan_config_t *lanc,
 					       unsigned char     *data,
 					       unsigned int      data_len);
@@ -276,7 +276,7 @@ int ipmi_lanconfig_set_backup_gateway_mac_addr(ipmi_lan_config_t *lanc,
 /* The community string for SNMP traps sent. */
 int ipmi_lanconfig_get_community_string(ipmi_lan_config_t *lanc,
 					unsigned char     *data,
-					unsigned int      data_len);
+					unsigned int      *data_len);
 int ipmi_lanconfig_set_community_string(ipmi_lan_config_t *lanc,
 					unsigned char     *data,
 					unsigned int      data_len);
@@ -322,7 +322,7 @@ int ipmi_lanconfig_set_gw_to_use(ipmi_lan_config_t *lanc,
 int ipmi_lanconfig_get_dest_ip_addr(ipmi_lan_config_t *lanc,
 				    unsigned int      dest,
 				    unsigned char     *data,
-				    unsigned int      data_len);
+				    unsigned int      *data_len);
 int ipmi_lanconfig_set_dest_ip_addr(ipmi_lan_config_t *lanc,
 				    unsigned int      dest,
 				    unsigned char     *data,
@@ -330,7 +330,7 @@ int ipmi_lanconfig_set_dest_ip_addr(ipmi_lan_config_t *lanc,
 int ipmi_lanconfig_get_dest_mac_addr(ipmi_lan_config_t *lanc,
 				     unsigned int      dest,
 				     unsigned char     *data,
-				     unsigned int      data_len);
+				     unsigned int      *data_len);
 int ipmi_lanconfig_set_dest_mac_addr(ipmi_lan_config_t *lanc,
 				     unsigned int      dest,
 				     unsigned char     *data,

@@ -704,7 +704,7 @@ typedef struct ipmi_eft_s
     unsigned char alert_policy_number;
 
     /* Byte 4: Event Severity */
-    unsigned event_severity;
+    unsigned char event_severity;
 
     /* Byte 5 : Generator ID Byte 1 */
     unsigned char generator_id_addr;
@@ -747,8 +747,8 @@ typedef struct ipmi_apt_s
 
 typedef struct ipmi_ask_s
 {
-    unsigned char event_filter;
-    unsigned char alert_string_set;
+    unsigned int event_filter : 4;
+    unsigned int alert_string_set : 4;
 } ipmi_ask_t;
 
 struct ipmi_pef_config_s
@@ -761,8 +761,8 @@ struct ipmi_pef_config_s
     void                   *cb_data;
 
     /* PEF Control */
-    unsigned int alert_startup_delay_disable : 1;
-    unsigned int startup_delay_disable : 1;
+    unsigned int alert_startup_delay_enabled : 1;
+    unsigned int startup_delay_enabled : 1;
     unsigned int event_messages_enabled : 1;
     unsigned int pef_enabled : 1;
 
@@ -817,8 +817,8 @@ static int gctl(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     if (err)
 	return err;
 
-    pefc->alert_startup_delay_disable = (data[0] >> 3) & 1;
-    pefc->startup_delay_disable = (data[0] >> 2) & 1;
+    pefc->alert_startup_delay_enabled = (data[0] >> 3) & 1;
+    pefc->startup_delay_enabled = (data[0] >> 2) & 1;
     pefc->event_messages_enabled = (data[0] >> 2) & 1;
     pefc->pef_enabled = (data[0] >> 0) & 1;
 
@@ -828,8 +828,8 @@ static int gctl(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 static void sctl(ipmi_pef_config_t *pefc, pefparms_t *lp, unsigned char *data,
 		 unsigned int *data_len)
 {
-    data[0] = ((pefc->alert_startup_delay_disable << 3)
-	       || (pefc->startup_delay_disable << 2)
+    data[0] = ((pefc->alert_startup_delay_enabled << 3)
+	       || (pefc->startup_delay_enabled << 2)
 	       || (pefc->event_messages_enabled << 1)
 	       || pefc->pef_enabled);
 }
@@ -1746,4 +1746,204 @@ ipmi_pef_free_config(ipmi_pef_config_t *pefc)
 	ipmi_mem_free(pefc->alert_strings);
     }
     ipmi_mem_free(pefc);
+}
+
+#define PEF_BIT(n) \
+unsigned int \
+ipmi_pefconfig_get_ ## n(ipmi_pef_config_t *pefc) \
+{ \
+    return pefc->n; \
+} \
+int \
+ipmi_pefconfig_set_ ## n(ipmi_pef_config_t *pefc, unsigned int val) \
+{ \
+    pefc->n = (val != 0); \
+    return 0; \
+}
+
+PEF_BIT(alert_startup_delay_enabled)
+PEF_BIT(startup_delay_enabled)
+PEF_BIT(event_messages_enabled)
+PEF_BIT(pef_enabled)
+PEF_BIT(diagnostic_interrupt_enabled)
+PEF_BIT(oem_action_enabled)
+PEF_BIT(power_cycle_enabled)
+PEF_BIT(reset_enabled)
+PEF_BIT(power_down_enabled)
+PEF_BIT(alert_enabled)
+
+#define PEF_BYTE_SUPPORT(n) \
+int \
+ipmi_pefconfig_get_ ## n(ipmi_pef_config_t *pefc, unsigned int *val) \
+{ \
+    if (!pefc->n ## _supported) \
+	return ENOTSUP; \
+    *val = pefc->n; \
+    return 0; \
+} \
+int \
+ipmi_pefconfig_set_ ## n(ipmi_pef_config_t *pefc, unsigned int val) \
+{ \
+    if (!pefc->n ## _supported) \
+	return ENOTSUP; \
+    pefc->n = val; \
+    return 0; \
+}
+
+PEF_BYTE_SUPPORT(startup_delay);
+PEF_BYTE_SUPPORT(alert_startup_delay);
+
+int
+ipmi_pefconfig_get_guid(ipmi_pef_config_t *pefc,
+			unsigned int      *enabled,
+			unsigned char     *data,
+			unsigned int      *data_len)
+{
+    if (*data_len <= 16)
+        return EINVAL;
+    memcpy(data, pefc->guid, 16);
+    *enabled = pefc->guid_enabled;
+    *data_len = 16;
+    return 0;
+}
+
+int
+ipmi_pefconfig_set_guid(ipmi_pef_config_t *pefc, unsigned int enabled,
+			unsigned char *data, unsigned int data_len)
+{
+    if (data_len != 16)
+	return EINVAL;
+    pefc->guid_enabled = enabled;
+    memcpy(pefc->guid, data, 16);
+    return 0;
+}
+
+unsigned int
+ipmi_pefconfig_get_num_event_filters(ipmi_pef_config_t *pefc)
+{
+    return pefc->num_event_filters;
+}
+unsigned int
+ipmi_pefconfig_get_num_alert_policies(ipmi_pef_config_t *pefc)
+{
+    return pefc->num_alert_policies;
+}
+unsigned int
+ipmi_pefconfig_get_num_alert_strings(ipmi_pef_config_t *pefc)
+{
+    return pefc->num_alert_strings;
+}
+
+#define PEF_SUB_BIT(t, c, n) \
+int \
+ipmi_pefconfig_get_ ## n(ipmi_pef_config_t *pefc, unsigned int sel, \
+			 unsigned int *val) \
+{ \
+    if (sel >= pefc->c) \
+	return EINVAL; \
+    *val = pefc->t[sel].n; \
+    return 0; \
+} \
+int \
+ipmi_pefconfig_set_ ## n(ipmi_pef_config_t *pefc, unsigned int sel, \
+			 unsigned int val) \
+{ \
+    if (sel >= pefc->c) \
+	return EINVAL; \
+    pefc->t[sel].n = (val != 0); \
+    return 0; \
+}
+
+#define PEF_SUB_BYTE(t, c, n) \
+int \
+ipmi_pefconfig_get_ ## n(ipmi_pef_config_t *pefc, unsigned int sel, \
+			 unsigned int *val) \
+{ \
+    if (sel >= pefc->c) \
+	return EINVAL; \
+    *val = pefc->t[sel].n; \
+    return 0; \
+} \
+int \
+ipmi_pefconfig_set_ ## n(ipmi_pef_config_t *pefc, unsigned int sel, \
+			 unsigned int val) \
+{ \
+    if (sel >= pefc->c) \
+	return EINVAL; \
+    pefc->t[sel].n = val; \
+    return 0; \
+}
+
+PEF_SUB_BIT(efts, num_event_filters, enable_filter);
+PEF_SUB_BYTE(efts, num_event_filters, filter_type);
+PEF_SUB_BIT(efts, num_event_filters, diagnostic_interrupt);
+PEF_SUB_BIT(efts, num_event_filters, oem_action);
+PEF_SUB_BIT(efts, num_event_filters, power_cycle);
+PEF_SUB_BIT(efts, num_event_filters, reset);
+PEF_SUB_BIT(efts, num_event_filters, power_down);
+PEF_SUB_BIT(efts, num_event_filters, alert);
+PEF_SUB_BYTE(efts, num_event_filters, alert_policy_number);
+PEF_SUB_BYTE(efts, num_event_filters, event_severity);
+PEF_SUB_BYTE(efts, num_event_filters, generator_id_addr);
+PEF_SUB_BYTE(efts, num_event_filters, generator_id_channel_lun);
+PEF_SUB_BYTE(efts, num_event_filters, sensor_type);
+PEF_SUB_BYTE(efts, num_event_filters, sensor_number);
+PEF_SUB_BYTE(efts, num_event_filters, event_trigger);
+PEF_SUB_BYTE(efts, num_event_filters, data1_offset_mask);
+PEF_SUB_BYTE(efts, num_event_filters, data1_mask);
+PEF_SUB_BYTE(efts, num_event_filters, data1_compare1);
+PEF_SUB_BYTE(efts, num_event_filters, data1_compare2);
+PEF_SUB_BYTE(efts, num_event_filters, data2_mask);
+PEF_SUB_BYTE(efts, num_event_filters, data2_compare1);
+PEF_SUB_BYTE(efts, num_event_filters, data2_compare2);
+PEF_SUB_BYTE(efts, num_event_filters, data3_mask);
+PEF_SUB_BYTE(efts, num_event_filters, data3_compare1);
+PEF_SUB_BYTE(efts, num_event_filters, data3_compare2);
+
+PEF_SUB_BYTE(apts, num_alert_policies, policy_num);
+PEF_SUB_BIT(apts, num_alert_policies, enabled);
+PEF_SUB_BYTE(apts, num_alert_policies, policy);
+PEF_SUB_BYTE(apts, num_alert_policies, channel);
+PEF_SUB_BYTE(apts, num_alert_policies, destination_selector);
+PEF_SUB_BIT(apts, num_alert_policies, alert_string_event_specific);
+PEF_SUB_BYTE(apts, num_alert_policies, alert_string_selector);
+
+PEF_SUB_BYTE(asks, num_alert_strings, event_filter);
+PEF_SUB_BYTE(asks, num_alert_strings, alert_string_set);
+
+int
+ipmi_pefconfig_get_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
+				unsigned char *val, unsigned int len)
+{
+    if (sel >= pefc->num_alert_strings)
+	return EINVAL;
+    if (len == 0)
+	return EINVAL;
+    if (! pefc->alert_strings[sel]) {
+	*val = '\0';
+	return 0;
+    }
+    if (strlen((char *) pefc->alert_strings[sel])+1 < len)
+	return EAGAIN;
+    strcpy(val, pefc->alert_strings[sel]);
+    return 0;
+}
+
+int
+ipmi_pefconfig_set_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
+				unsigned char *val)
+{
+    unsigned char *s;
+
+    if (sel >= pefc->num_alert_strings)
+	return EINVAL;
+    s = pefc->alert_strings[sel];
+    pefc->alert_strings[sel] = ipmi_strdup((char *) val);
+    if (! pefc->alert_strings[sel]) {
+	pefc->alert_strings[sel] = s;
+	return ENOMEM;
+    }
+    if (s)
+	ipmi_mem_free(s);
+    return 0;
 }
