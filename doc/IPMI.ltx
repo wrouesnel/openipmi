@@ -6,18 +6,16 @@
 \date{\today}
 %
 \newcommand{\msgitem}[2]{#1&\parbox{0.8\textwidth}{\vspace{.15em}#2\vspace{.15em}} \\ \hline}
-\newenvironment{showmsg}{\noindent\begin{tabular}{|p{.5in}|l|}\hline}{\end{tabular}}
-%\begin{table}
-%\emph{Request}\\
+\newcommand{\msgtag}[1]{\multicolumn{2}{l}{#1}\\ \hline}
+\newcommand{\msgcaption}[1]{\caption{#1}}
+\newenvironment{showmsg}{\noindent\begin{longtable}{|p{.5in}|l|}}{\end{longtable}}
 %\begin{showmsg}
+%\msgtag{Request}
 %\msgitem{}{}
-%\end{showmsg}
-%\\\emph{Response}\\
-%\begin{showmsg}
+%\msgtag{Response}
 %\msgitem{}{}
+%\msgcaption{\label{}, NetFN x (xxh), Cmd xxh}
 %\end{showmsg}
-%\caption{\label{get-lan-conf-cmd}Get \acs{LAN} Configuration Parameters Command}
-%\end{table}
 %
 \begin{document}
 \maketitle
@@ -86,6 +84,8 @@ The specification for \acs{IPMI} is \cite{ipmi-spec}.
 \acro{PEF}{Platform Event Filter}
 \acro{MAC}{Media Access Code?}
 \acro{ARP}{Address Resolution Protocol}
+\acro{GUID}{Globally Unique IDentifier}
+\acro{NMI}{Non Maskable Interrupt}
 \end{acronym}
 
 \chapter{Documents}
@@ -1296,6 +1296,7 @@ The low-level format of a system interface message that is $n$ bytes
 long is:
 
 \begin{showmsg}
+\hline
 \msgitem{0}{Bits 0-1 - Destination \acs{LUN}\\
 	    Bits 2-7 - \acs{NetFN}}
 \msgitem{1}{Command}
@@ -1743,6 +1744,7 @@ bus.
 The format of an \ac{IPMB} message of $n$ bytes is:
 
 \begin{showmsg}
+\hline
 \msgitem{0}{Destination \acs{IPMB} address}
 \msgitem{1}{Bits 0-1 - Destination \acs{LUN}\\
 	    Bits 2-7 - \acs{NetFN}}
@@ -1816,13 +1818,12 @@ Most systems have tools to configure the \ac{IPMI} \acs{LAN}
 interface.  IPMI has a built-in way to do this, too, through a set of
 tables.
 
-To set up these table, the command shown in table
-\ref{set-lan-conf-cmd} is used to set parameters and the command shown
-in table \ref{get-lan-conf-cmd} is used to get the parameters.
+\subsubsection{\acs{LAN} Configuration Commands}
+To set up the \acs{LAN} configuration table, the command shown in table
+\ref{set-lan-conf-cmd} is used to set parameters.
 
-\begin{table}
-\emph{Request}\\
 \begin{showmsg}
+\msgtag{Request}
 \msgitem{0}{Bits 0-3 - Channel Number\\
 	    Bits 4-7 - reserved}
 \msgitem{1}{Parameter Selector.  This selects the entry in the table that you
@@ -1830,21 +1831,21 @@ in table \ref{get-lan-conf-cmd} is used to get the parameters.
 \msgitem{2-n}{The data for the parameter.  You must look up the entry in
 	table \ref{lan-conf-parms} for the exact contents, it depends on
 	which entry you are setting.}
-\end{showmsg}
-\\\emph{Response}\\
-\begin{showmsg}
+\msgtag{Response}
 \msgitem{0}{Completion code.  Standard completion codes, plus:\\
 	80h - Parameter not supported\\
 	81h - Attempt to set the ``set in progress' value (parm 0) when
 		the parameter is not in the free (set complete) state.\\
 	82h - Attempt to write a read-only parameter.}
+\msgcaption{\label{set-lan-conf-cmd}Set \acs{LAN} Configuration Parameters
+  Command, NetFN Transport (0Ch), Cmd 01h}
 \end{showmsg}
-\caption{\label{set-lan-conf-cmd}Set \acs{LAN} Configuration Parameters Command}
-\end{table}
 
-\begin{table}
-\emph{Request}\\
+Table \ref{get-lan-conf-cmd} shows the command used to get \acs{LAN}
+parameters.
+
 \begin{showmsg}
+\msgtag{Request}
 \msgitem{0}{Bits 0-3 - Channel Number\\
 	    Bits 4-6 - reserved\\
 	    Bit 7 - If 1, only get parameter revision}
@@ -1856,11 +1857,9 @@ in table \ref{get-lan-conf-cmd} is used to get the parameters.
 \msgitem{3}{Block Selector.  Some parameters have two levels of arrays
 	(an array inside of the array).  The Set Selector is the first
 	level array specifier, this is the second level.  No standard
-	LAN parameters use this, although OEM ones might.  Set to zero
+	\acs{LAN} parameters use this, although OEM ones might.  Set to zero
 	if the parameter does not have a block selector.}
-\end{showmsg}
-\\\emph{Response}\\
-\begin{showmsg}
+\msgtag{Response}
 \msgitem{0}{Completion code.  Standard codes, plus:\\
 	80h - parameter not supported}
 \msgitem{1}{Parameter revision.  Format is:\\
@@ -1870,11 +1869,12 @@ in table \ref{get-lan-conf-cmd} is used to get the parameters.
 	of the response is set to 1.  The contents of this depends on the
 	particular parameter being fetched, see table \ref{lan-conf-parms}
 	for the	parameters.}
+\msgcaption{\label{get-lan-conf-cmd}Get \acs{LAN} Configuration Parameters
+  Command, NetFN Transport (0Ch), Cmd 02h}
 \end{showmsg}
-\caption{\label{get-lan-conf-cmd}Get \acs{LAN} Configuration Parameters Command}
-\end{table}
 
-The \acs{LAN} configuration table has an unusual locking mechanism
+\subsubsection{The \acs{LAN} Configuration Table}
+The \acs{LAN} Configuration table has an unusual locking mechanism
 (although it is usual for \acs{IPMI}).  Parameter zero is a lock.  If
 you set the value to one, it will only succeed if the value is zero.
 Thus, to lock the table, you set the value to one until it succeeds.
@@ -1891,7 +1891,8 @@ if that fails then write a zero.
 
 All network parameters such as \acs{IP} address, port, and \acs{MAC}
 address are in network order, also called big endian or most
-significant byte first.
+significant byte first.  Unless marked ``volatile'', all of these
+will survive removal of power.
 
 \begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
 \caption{\acs{LAN} Configuration Parameters\label{lan-conf-parms}}
@@ -1899,7 +1900,7 @@ significant byte first.
 \bfseries{Parameter} & \bfseries{\#} & \bfseries{Description}\\
 \endhead
 \hline
-Set In Progress & 0 &
+Set In Progress (volatile) & 0 &
 	Used to indicate that the parameters are being updated.
 	Bits 2-7 are reserved.  Bits 0-1 have the following values:
 	\begin{description}
@@ -2049,8 +2050,10 @@ Destination type & 18 &
 	This is an array of destination types, each 4 bytes long.  The first
 	byte in bits 0-3 is the index into the array, you put the index
 	here when you set the value, and that index gets set.  This index
-	comes from the alert policy entry
-	defined in table \ref{alert-policy-table-entry}. The fields are:
+	comes from the alert policy entry destination field
+	defined in table \ref{alert-policy-table-entry}.  Destination 0 is
+	special and used by the Alert Immediate command as described in
+	section \label{sec-alert-immediate}.  The fields are:
 	\begin{description}
 	\item[byte 0]
 	  \begin{description}
@@ -2087,8 +2090,10 @@ Destination address & 19 &
 	This is an array of destination address, each 13 bytes long.  The
 	first byte in bits 0-3 is the index into the array, you put the index
 	here when you set the value, and that index gets set.  This index
-	comes from the alert policy entry
-	defined in table \ref{alert-policy-table-entry}. The fields are:
+	comes from the alert policy entry destination field
+	defined in table \ref{alert-policy-table-entry}. Destination 0 is
+	special and used by the Alert Immediate command as described in
+	section \label{sec-alert-immediate}.  The fields are:
 	\begin{description}
 	\item[byte 0]
 	  \begin{description}
@@ -2122,39 +2127,9 @@ OEM & 192+ &
 \hline
 \end{longtable}
 
-\subsubsection{ARP control}
+\subsection{ARP control}
 
-\subsection{The \acs{PEF} Table and \acs{SNMP} Traps}
-Many \ac{IPMI} systems can send \acs{SNMP} traps to inform the the
-management system that something has happened.  Generally, it is
-saying that an event has been placed into the event log.  Most of the
-event information is in the SNMP trap, but unfortunately, some key
-information is not there.  It does give the system an immediate
-notification.
-
-To have a system send traps, two tables must be set up.  The \acs{LAN}
-configuration table described in section \ref{lan-config} has
-parameters to set the \acs{SNMP} community string and the trap
-destination addresses available.  The \ac{PEF} table contains
-information about how to filter traps.  Different events can cause
-different traps to be sent to different places.  As well, specific
-events can do other things, such as reset or power off the system.
-The thing we are interested in is the ``Alert'' capability.
-
-Note that alerts can also cause telephone pages, serial dialups and
-things like that to happen.
-
-\begin{table}
-\caption{\label{pef-table-entry}}
-\end{table}
-
-\begin{table}
-\caption{\label{alert-policy-table-entry}}
-\end{table}
-
-\begin{table}
-\caption{\label{pet-ack-cmd}}
-\end{table}
+TBD - write this, include command, talk about config table entries.
 
 \subsection{OpenIPMI \acs{LAN} Configuration}
 OpenIPMI has some support for handling the \acs{LAN} configuration.
@@ -2169,11 +2144,11 @@ int ipmi_lanparm_alloc(ipmi_mc_t      *mc,
                        ipmi_lanparm_t **new_lanparm);
 \end{verbatim}
 
-The channel is the \acs{IPMI} channel number of the LAN port you are
+The channel is the \acs{IPMI} channel number of the \acs{LAN} port you are
 configuring.  Generally, if a server has more than one port, it will
 have a separate channel for each port, you will have to find the
 channel numbers from the manufacturer, although channels 6 and 7 are
-commonly used as the LAN channels.
+commonly used as the \acs{LAN} channels.
 
 Once you have a \verb=lanparm= structure, you can get and set
 individual parms assuming you follow all the rules associated with the
@@ -2233,7 +2208,7 @@ it, the destroy will be delayed until those operations are complete.
 The handler will be called when the actual destroy takes place.
 
 \subsection{The OpenIPMI \acs{LAN} Interface}
-The LAN interface is complicated, but OpenIPMI handles most of the
+The \acs{LAN} interface is complicated, but OpenIPMI handles most of the
 details for the user.  A single function sets up the interface.
 Unfortunately, that function takes a huge number of parameters due to
 the large number of things required to configure a \ac{IPMI} \acs{LAN}
@@ -2288,6 +2263,747 @@ not use it.
 Once you have a connection, it works like a normal connection as 
 defined in section \ref{openipmi-generic-interface}.
 
+\section{Serial}
+
+\subsection{Direct Serial}
+
+\subsection{Serial over \acs{PPP}}
+
+\begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
+\caption{Serial Configuration Parameters\label{serial-conf-parms}}
+\\ \hline
+\bfseries{Parameter} & \bfseries{\#} & \bfseries{Description}\\
+\endhead
+\hline
+\end{longtable}
+
+\section{User Management}
+\label{user-mgmt}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\verb=IPMI_AUTHTYPE_NONE= & No authentication.\\
+\hline
+\verb=IPMI_AUTHTYPE_MD2= & \acs{MD2} style authentication.\\
+\hline
+\verb=IPMI_AUTHTYPE_MD5= & \acs{MD5} style authentication.  This is the
+recommended type of authentication.\\
+\hline
+\verb=IPMI_AUTHTYPE_STRAIGHT= & Puts the password into the message in
+plain text.  Don't use this.\\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-authtypes}Authentication types in IPMI}
+\end{table}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\verb=IPMI_PRIVILEGE_CALLBACK= & The user is only allowed to request
+that the IPMI system call back home.\\
+\hline
+\verb=IPMI_PRIVILEGE_USER= & A ``read-only'' user.  The user can look
+at system state, but not change anything.  For instance, the user can
+fetch \acs{SEL} entries, but not delete them.\\
+\hline
+\verb=IPMI_PRIVILEGE_OPERATOR= & This user can do everything but configuration
+commands.  For instance, they can clear the SEL and configure sensors, but
+they cannot add users or configure \acs{LAN} parameters.\\
+\hline
+\verb=IPMI_PRIVILEGE_ADMIN= & This user can do pretty much anything on an
+IPMI system.\\
+\hline
+\verb=IPMI_PRIVILEGE_OEM= & Undefined by the spec, it's whatever the \acs{OEM}
+wants.\\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-priv-levels}Privilege levels in IPMI}
+\end{table}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+0 & no authentication\\
+\hline
+1 & MD2 authentication\\
+\hline
+2 & MD5 authentication\\
+\hline
+3 & reserved\\
+\hline
+4 & straight password authentication\\
+\hline
+5 & OEM authentication\\
+\hline
+6-7 & reserved\\
+\hline
+\end{tabularx}
+\caption{\label{auth-bitmask}Authentication bitmask often used in \acs{IPMI}}
+\end{table}
+
+\section{The \acs{PEF} Table and \acs{SNMP} Traps}
+
+Many \ac{IPMI} systems can specify that certain operations be done
+when an event comes in.  This can depend on the event's contents;
+different actions can be done for different sets of events.  This is
+done with the \acf{PEF} configuration.  Not all \acs{IPMI} systems can
+do event filtering, but ones that do will work as this section
+describes.
+
+The \ac{PEF} configuration allows several different actions to be
+perform when an IPMI event comes in (or when the BMC powers up and
+there are pending events in its event queue).  Except for sending an
+alert, if multiple event filters match, the higher priority action
+will be done and the lower priority action will be ignores.  The
+actions are:
+
+\begin{tabularx}{\textwidth}{|p{0.2\textwidth}|l|X}
+\hline
+\bfseries{Action} & \bfseries{Priority} & \bfseries{Description}\\
+\hline
+power down & 1 & (optional) Power the system down.\\
+\hline
+power cycle & 2 & (optional) Power off the system, then power it back on.\\
+\hline
+reset & 3 & (mandatory) Reset the main processor in the system.\\
+\hline
+Diagnostic Interrupt & 4 & (optional) Send a system-defined diagnostic
+	interrupt to the main processor in the system.  This is generall
+	an \ac{NMI}.\\
+\hline
+Send Alert & 5 & Send an alert of some type, via an \acs{SNMP} trap,
+	a page, or a modem dialin.  Note that unlike the rest of the
+	actions, this action will still be done if a higher priority
+	action is done.  Alerts can also be prioritized via the
+	Alert Policy Table as described in section \ref{sec-pef-conf-parms}.\\
+\hline
+\acs{OEM} & \acs{OEM} & (optional) Priority is defined by the \acs{OEM}.\\
+\hline
+\end{tabularx}
+
+This sections will mainly focus on sending SNMP traps with alerts,
+although the other parts will also be covered.  The \acs{PEF}
+configuration can specify sending \acs{SNMP} traps to inform the the
+management system that something has happened.  Generally, it is
+saying that an event has been placed into the event log.  Most of the
+event information is in the SNMP trap, but unfortunately, some key
+information is not there.  It does give the system an immediate
+notification.
+
+To have a system send traps, two tables must be set up.  The \acs{LAN}
+configuration table described in section \ref{lan-config} has
+parameters to set the \acs{SNMP} community string and the trap
+destination addresses available.  The \ac{PEF} table contains
+information about how to filter traps.  Different events can cause
+different traps to be sent to different places.  As well, specific
+events can do other things, such as reset or power off the system.
+The thing we are interested in is the ``Alert'' capability.
+
+Note that alerts can also cause telephone pages, serial dialups and
+things like that to happen.  They are pretty flexible, although this
+section will mostly focus on \acs{SNMP} traps.
+
+\subsection{\acs{PEF} and Alerting Commands}
+
+These commands control the \ac{PEF} and alerting capabilities of a
+system.
+
+Table \ref{get-pef-cap-cmd} shows the command used to find out what
+alert capabilities a BMC has.
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{-}{-}
+\msgtag{Response}
+\msgitem{0}{Completion Code}
+\msgitem{1}{\acs{PEF} version, encoded as:
+	\begin{description}
+	\item[bits 0-3] - Major version \#
+	\item[bits 4-7] - Minor version \#
+	\end{description}}
+\msgitem{2}{Supported PEF actions, if the bit is one then the action is
+	supported:
+	\begin{description}
+	\item[bit 0] - alert
+	\item[bit 1] - power down
+	\item[bit 2] - reset
+	\item[bit 3] - power cycle
+	\item[bit 4] - OEM action
+	\item[bit 5] - diagnostic interrupt
+	\item[bits 6-7] - reserved
+	\end{description}}
+\msgitem{3}{Number of entries in teh event filter table}
+\msgcaption{\label{get-pef-cap-cmd}Get \acs{PEF} Capabilities Command,
+  NetFN S/E (04h), Cmd 10h}
+\end{showmsg}
+
+Table \ref{set-pef-conf-cmd} shows the command used to set the
+\acs{PEF} configuration parameters in a BMC.
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{Parameter Selector.  This selects the entry in the table that you
+	want to set.}
+\msgitem{1-n}{The data for the parameter.  You must look up the entry in
+	table \ref{pef-conf-parms} for the exact contents, it depends on
+	which entry you are setting.}
+\msgtag{Response}
+\msgitem{0}{Completion code.  Standard completion codes, plus:\\
+	80h - Parameter not supported\\
+	81h - Attempt to set the ``set in progress' value (parm 0) when
+		the parameter is not in the free (set complete) state.\\
+	82h - Attempt to write a read-only parameter.}
+\msgcaption{\label{set-pef-conf-cmd}Set \acs{PEF} Configuration Parameters
+  Command, NetFN S/E (04h), Cmd 12h}
+\end{showmsg}
+
+Table \ref{get-pef-conf-cmd} shows the command used to get \acs{PEF}
+configuration parameters in a BMC.
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{\begin{description}
+	\item[bits 0-6] - Parameter Selector.  This selects the entry in the
+	  table that you want to get.\\
+	\item[bit 7] - If 1, only get parameter revision
+	\end{description}}
+\msgitem{1}{Set Selector.  Some parameters are in an array, this tells which
+	array element to set.  Set to zero if the parameter does not have a
+	set selector.}
+\msgitem{2}{Block Selector.  Some parameters have two levels of arrays
+	(an array inside of the array).  The Set Selector is the first
+	level array specifier, this is the second level.  Set to zero
+	if the parameter does not have a block selector.}
+\msgtag{Response}
+\msgitem{0}{Completion code.  Standard codes, plus:\\
+	80h - parameter not supported}
+\msgitem{1}{Parameter revision.  Format is:\\
+	Bits 0-3 - Oldest revision parameter is backward compatible with\\
+	Bits 4-7 - Current parameter revision}
+\msgitem{2-n}{Parameter data.  This will not be present if bit 7 of byte 0
+	of the response is set to 1.  The contents of this depends on the
+	particular parameter being fetched, see table \ref{pef-conf-parms}
+	for the	parameters.}
+\msgcaption{\label{get-pef-conf-cmd}Get \acs{PEF} Configuration Parameters
+  Command, NetFN S/E (04h), Cmd 13h}
+\end{showmsg}
+
+Table \ref{pet-ack-cmd} shows the command used to send an acknowledge
+for a received trap.  If the ``Alert Acknowledge'' bit is set in
+``Destination Type'' entry of the \acs{LAN} Configuration Table (Table
+\ref{lan-conf-parms}) or in the `` ``Destination Info'' entry of the
+Serial Configuration Table (Table \ref{serial-conf-parms}), then the
+receiver of the trap must send this message to stop the resends.
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0-1}{Sequence Number, from the field in the \ac{PET} of the trap
+  being acknowledged.  Least significant byte first.}
+\msgitem{2-5}{Local Timestamp, from the field in the \ac{PET} of the trap
+  being acknowledged.  Least significant byte first.}
+\msgitem{6}{Event Source Type, from the field in the \ac{PET} of the trap
+  being acknowledged}
+\msgitem{7}{Sensor Device, from the field in the \ac{PET} of the trap
+  being acknowledged}
+\msgitem{8}{Sensor Number, from the field in the \ac{PET} of the trap
+  being acknowledged}
+\msgitem{9-11}{Event Data 1-3, from the field in the \ac{PET} of the trap
+  being acknowledged}
+\msgtag{Response}
+\msgitem{0}{Completion Code}
+\msgcaption{\label{pet-ack-cmd}\acs{PET} Acknowledge Command,
+  NetFN S/E (04h), Cmd 17h}
+\end{showmsg}
+
+\subsection{The \acs{PEF} Postpone Timer}
+
+TBD - write this.
+
+\subsection{\acs{PEF} Configuration Parameters}
+\label{sec-pef-conf-parms}
+
+The \acs{PEF} Configuration table has an unusual locking mechanism
+(although it is usual for \acs{IPMI}).  Parameter zero is a lock.  If
+you set the value to one, it will only succeed if the value is zero.
+Thus, to lock the table, you set the value to one until it succeeds.
+You then set it to zero when you are done.  This locking mechanism
+leads to problem if the locker dies while it holds the lock, so you
+probably need some way to override the lock if this happens.  The lock
+does not actually keep anyone from changing the data, it is simply a
+common mechanism to mutual exclusion.  Note also that the lock has a
+``commit'' mechanism, writing two to the lock will commit the contents
+if the system supports it.  If the system supports rollback, setting
+the value to zero will rollback and not commit the changes you made.
+So for correctness, you should write a two when you are complete, and
+if that fails then write a zero.
+
+Table \label{perf-conf-parms} has the parameters used to configure the
+event filter. Unless marked ``volatile'', all of these will survive
+removal of power.
+
+\begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
+\caption{\acs{PEF} Configuration Parameters\label{pef-conf-parms}}
+\\ \hline
+\bfseries{Parameter} & \bfseries{\#} & \bfseries{Description}\\
+\endhead
+\hline
+Set In Progress (volatile) & 0 &
+	Used to indicate that the parameters are being updated.
+	Bits 2-7 are reserved.  Bits 0-1 have the following values:
+	\begin{description}
+	\item[00b] - set complete.  This is the state the system comes up in.
+		This means that any user is finished updating the
+		parameters.  If rollback is implemented, setting this
+		value will cause any changes made since last setting
+		this value to ``set in progress'' to be undone.
+	\item[01b] - set in progress.  A user will set this value to inform
+		others that it is updating these parameters.  This value
+		can only be set if the current value is ``set complete''.
+	\item[10b] - commit write (optional).  This will commit any changes
+		that
+		are pending and go to ``set complete'' state.  Some systems
+		may not support this, if setting this returns an error you
+		should set this value to ``set complete'' by hand.
+	\end{description}\\
+\hline
+\acs{PEF} Control & 1 &
+	One byte field global control bits for the \acs{PEF}:
+	\begin{description}
+	\item[bit 0] - Set to one to enable the PEF.
+	\item[bit 1] - Set to one to cause event messages to be sent for
+	  each action triggered by a filter.  These events are send as the
+	  System Event Sensor (12h), offset 04h, see table
+	  \ref{sensor-type-codes}.  Note that these events are subject
+	  to PEF filtering, so be careful not to cause an infinite
+	  event message send.
+	\item[bit 2] - PEF Startup Delay Enable (optional).  When set
+	  to one, this bit enables a PEF startup delay on manual
+	  startup of a chassis and on all system resets.  If this bit
+	  is supported, the spec says that the implementation must
+	  supply a way for the user to diable the PEF in case the filter
+	  entries are causing an infinite loop.  I have no idea what that
+	  means.  If this bit is not implemented, the spec says that there
+	  must always be a startup delay.  Parameter 3 of this table
+	  sets the time.
+	\item[bit 3] - PEF Alert Startup Delay Enable (optional).  When
+	  set to one, this bit enables a delay between startup time and
+	  when alerts are allowed to be sent.  Parameter 4 of this table
+	  sets the time.
+	\item[bits 4-7] - reserved
+	\end{description}\\
+\hline
+\acs{PEF} Action Global Control & 2 &
+	A one byte field for controlling whether specific \acs{PEF} actions
+	are enabled at all.  If the bit is set to one, it is enabled.  The
+	bits are:
+	\begin{description}
+	\item[bit 0] - alert
+	\item[bit 0] - power down
+	\item[bit 0] - reset
+	\item[bit 0] - power cycle
+	\item[bit 0] - OEM
+	\item[bit 0] - diagnostic interrupt
+	\item[bits 6-7] - reserved
+	\end{description}\\
+\hline
+PEF Startup Delay (optional) & 3 &
+	A one byte field giving the \acs{PEF} startup delay, in
+	seconds, 10\% accuracy.  A zero value means no delay.  This
+	goes along with bit 2 of byte 1 of parameter 1 of this table,
+	see that for more details.\\
+\hline
+PEF Alert Startup Delay (optional) & 4 &
+	A one byte field giving the \acs{PEF} Alert startup delay, in
+	seconds, 10\% accuracy.  A zero value means no delay.  This
+	goes along with bit 3 of byte 1 of parameter 1 of this table,
+	see that for more details.\\
+\hline
+Number of Event Filters (read only) & 5 &
+	The number of array entries in the event filter table, parameter
+	6 of this table.  The bits are:
+	\begin{description}
+	\item[bits 0-6] - The number of event filter entries.  A zero
+	  here means that events filters are not supported.
+	\item[bit 7] - reserved
+	\end{description}\\
+\hline
+Event Filter Table & 6 &
+	This is a 21 byte field giving access to the event filter table.
+	\begin{description}
+	\item[byte 0]
+	  \begin{description}
+	  \item[bits 0-6] - The set selector, the array index of which
+	    event filter to set.  00h is reserved and not used and does
+	    not count in the number of event filters.
+	  \item[bit 7] - reserved
+	  \end{description}
+	\item[bytes 1-20] - The filter data for the array element given
+	  by byte 1 of this parameter.  See table \ref{pef-table-entry}
+	  for the contents of this data.
+	\end{description}\\
+\hline
+Event Filter Table Byte 1 & 7 &
+	This is a 2 byte field giving access to the first byte of an
+	event filter table entry.  This makes it convenient to set the
+	first byte without having to read-modify-write the whole entry.
+	\begin{description}
+	\item[byte 0]
+	  \begin{description}
+	  \item[bits 0-6] - The set selector, the array index of which
+	    event filter to set.  00h is reserved and not used and does
+	    not count in the number of event filters.
+	  \item[bit 7] - reserved
+	  \end{description}
+	\item[byte 1] - Byte 1 of the event filter table entry.  See
+	  table \ref{pef-table-entry} for the contents of this data.
+	\end{description}\\
+\hline
+Number of Alert Policies (read only) & 7 &
+	The number of array entries in the alert policy table, parameter
+	9 of this table.  The bits are:
+	\begin{description}
+	\item[bits 0-6] - The number of event filter entries.  A zero
+	  here means that alert policies are not supported.
+	\item[bit 7] - reserved
+	\end{description}\\
+\hline
+Alert Policy Table & 8 &
+	This is a 4 byte field giving access to the alert policy table.
+	\begin{description}
+	\item[byte 0]
+	  \begin{description}
+	  \item[bits 0-6] - The set selector, the array index of which
+	    alert policy to set.  00h is reserved and not used and does
+	    not count in the number of event filters.
+	  \item[bit 7] - reserved
+	  \end{description}
+	\item[bytes 1-3] - The filter data for the array element given
+	  by byte 1 of this parameter.  See table
+	  \ref{alert-policy-table-entry}
+	  for the contents of this data.
+	\end{description}\\
+\hline
+System \acs{GUID} & 9 &
+	A 17 byte field telling how to get the system \acs{GUID} for \acs{PET}
+	traps.
+	\begin{description}
+	\item[byte 0]
+	  \begin{description}
+	  \item[bit 0] - If one, use the value in bytes 1-16 of this field
+	    as the \acs{GUID} in traps.  If not set, use the value returned
+	    from the Get System \acs{GUID} command.
+	  \item[bits 1-7] - reserved
+	  \end{description}
+	\item[bytes 1-16] - The system \acs{GUID}
+	\end{description}\\
+\hline
+Number of Alert String Keys (read only) & 11 &
+	The number of array entries in the alert string keys, parameter
+	12 of this table.  The bits are:
+	\begin{description}
+	\item[bits 0-6] - The number of alert string keys.  A zero
+	  here means that alert policies are not supported.
+	\item[bit 7] - reserved
+	\end{description}\\
+\hline
+Alert String Keys (some parts are volatile) & 12 &
+	Some actions require alert strings for paging an operator.  This
+	key is used in conjunction with the alert policy table (table
+	\ref{alert-policy-table-entry}) in some cases.  If bit 7 of byte
+	3 of an alert policy table entry is set to 1, then it will use
+	the alert string set field from that table and the event filter
+	number from the event being processed to search this table.
+	If it finds a match, it will use the alert string that corresponds
+	with the same index as the entry in this table.
+
+	For instance, if entry 4h of this table has a 3h in byte 1 and
+	a 7h in byte 2, if event filter 4 matches an event and the
+	alert policy used has 87h in byte 3, then the alert string
+	entry 4h of the alert strings are used.
+	\begin{description}
+	\item[byte 0]
+	  \begin{description}
+	  \item[bits 0-6] - The set selector, the array index of which
+	    alert key to set.  Entry 0h is volatile and used by the
+	    Alert Immediate command as described in section
+	    \label{sec-alert-immediate}.  Entries 1h-7h are
+	    non-volatile.  All other entries are reserved.
+	  \item[bit 7] - reserved
+	  \end{description}
+	\item[byte 1]
+	  \begin{description}
+	  \item[bits 0-6] - Event filter number to match
+	  \item[bit 7] - reserved
+	  \end{description}
+	\item[byte 2]
+	  \begin{description}
+	  \item[bits 0-6] - Alert String Set to match
+	  \item[bit 7] - reserved
+	  \end{description}
+	\end{description}\\
+\hline
+Alert Strings (some parts are volatile) & 13 &
+	Some actions require alert strings for paging an operator.
+	This table holds the actual alert strings.  This table is
+	indexed by the alert policy table (table
+	\ref{alert-policy-table-entry}) either directly if bit 7 of
+	byte 3 of an alert policy table entry is set to 0, or indirectly
+	through parameter 12 of this table if that bit is one.
+
+	The meanings of the values in this table are dependend on the
+	alert type and channel.
+
+	For dial paging, this string will have a carraige return
+	automatically appended to the string.
+
+	For TAP paging, this string corresonds to 'Field 2', the pager
+	message.  Note that TAP only supports 7-bit ASCII and the
+	\acs{BMC} will zero the high bit when doing TAP paging.
+
+	\begin{description}
+	\item[byte 0]
+	  \begin{description}
+	  \item[bits 0-6] - The set selector, the array index of which
+	    alert string to set.  Entry 0h is volatile and used by the
+	    Alert Immediate command as described in section
+	    \label{sec-alert-immediate}.  Entries 1h-7h are
+	    non-volatile.  All other entries are reserved.
+	  \item[bit 7] - reserved
+	  \end{description}
+	\item[byte 1] - Block selector.  The strings may be much larger than
+	  can be set in a single message.  This selects which block to
+	  write, in 16-byte increments.  So, a 0 here is the first 16 bytes,
+	  a 1 is the second 16 bytes, and so on.
+	\item[byte 2-n] - The bytes to write into the specific block
+	  If this is less than 16 bytes, then only the given number of
+	  bytes are written.
+	\end{description}\\
+\hline
+OEM Parmeters & 96+ &
+	Parameters 96-127 are allowed for OEM use.  All other parameters
+	are reserved.\\
+\hline
+\end{longtable}
+
+The \ac{PEF} table is read and written as part of the PEF
+Configuration table, parameter 6, but the contents are documented
+separately in table \ref{pef-table-entry}.  When and event comes in,
+it is compared against each filter in order.  If a match occurs on
+multiple filters, then the highest priority action is done and the
+rest except for alerts are ignored.  After the operation is complete,
+any alert operations are done by scanning the alert policy table in
+order.  The order of the alert policy table defines the priority of
+the different alerts.
+
+\begin{longtable}{|l|p{0.2\textwidth}|p{0.65\textwidth}|}
+\caption{\acs{PEF} Table Entry\label{pef-table-entry}}
+\\ \hline
+\bfseries{Byte} & \bfseries{Field} & \bfseries{Description}\\
+\endhead
+\hline
+0 & Filter Configuration &
+	Bits that control the operation of this filter:
+	\begin{description}
+	\item{bits 0-4} - reserved
+	\item{bits 5-6} - filter type
+	  \begin{description}
+	  \item[00b] - Software configurable filter.  A manging system may
+	    configure all parts of this filter.
+	  \item[01b] - reserved
+	  \item[10b] - pre-configured filters.  A managing system should
+	    not modify the contents of this filter, although it may turn
+	    on and off the filter using bit 7 of this field.
+	  \item[11b] - reserved
+	  \end{description}
+	\end{description}\\
+\hline
+1 & Event filter action &
+	These bits set what action this filter will do if it matches.
+	These bits are enable if set to one.
+	\begin{description}
+	\item[bit 0] - alert
+	\item[bit 1] - power off
+	\item[bit 2] - reset
+	\item[bit 3] - power cycle
+	\item[bit 4] - OEM action
+	\item[bit 5] - diagnostic interrupt
+	\item[bits 6-7] - reserved
+	\end{description}\\
+\hline
+2 & Alert Policy Number &
+	\begin{description}
+	\item[bits 0-3] - If alert is selected in byte 1, this chooses the
+	  policy number to use in the alert policy table.
+	\item[bits 4-7] - reserved
+	\end{description}\\
+\hline
+3 & Event Severity &
+	This is the value that will be put into the event severity field
+	of the \ac{PET} trap.  If more than one event filter matches, the
+	highest priority in all event filters will be used.  Valid values
+	are:
+	\begin{description}
+	\item[00h] - unspecified
+	\item[01h] - monitor
+	\item[02h] - information
+	\item[04h] - OK (returned to OK condition)
+	\item[08h] - non-critical condition
+	\item[10h] - critical condition
+	\item[20h] - non-recoverable condition
+	\end{description}\\
+\hline
+4 & Generator ID byte 1 &
+	This matches the slave address or software id in the event.
+	It must be an exact match.  Use FFh to ignore this field when
+	comparing events.\\
+\hline
+5 & Generator ID byte 2 &
+	This matches the channel and LUN in the event.  It must be an
+	exact match.  Use FFh to ignore this field when comparing events.\\
+\hline
+6 & Sensor type &
+	This matches the sensor type field in the event.  It must be an
+	exact match.  Use FFh to ignore this field when comparing events.\\
+\hline
+7 & Sensor Number &
+	This matches the sensor number field in the event.  It must be an
+	exact match.  Use FFh to ignore this field when comparing events.\\
+\hline
+8 & Event Trigger &
+	This matches the event direction and event type byte (byte 13)
+	in the event.  It must be an
+	exact match.  Use FFh to ignore this field when comparing events.\\
+\hline
+9-10 & Event data 1 low nibble values &
+	This field is a bitmask specifying which values in the low 4 bits
+	of the event data 1 field will match.  If a bit is set, then the
+	corresponding value will match for this filter.  For instance, if
+	bits 2 and 7 are set, then a value of 2 or 7 in the low nibble
+	of event data 1 will cause a filter match (if everything else
+	matches too, of course).
+	\begin{description}
+	\item[byte 9] - bit positions 0-7
+	\item[byte 10] - bit positions 8-15
+	\end{description}\\
+\hline
+11 & Event data 1 AND mask &
+	This bit indicates which bits in event data 1 are used for
+	comparison.  If a bit in the mask is zero, then the bit is not
+	used for comparison.  if a bit is one, then the corresponding
+	bit in event data 1 is used for comparison using
+	the next two bytes of the table.\\
+\hline
+12 & Event data 1 compare 1 &
+	This byte tells how the bits in event data 1 are compared.  For
+	every bit set to one in this byte and one in the AND mask, the
+	corresponding bit in event data 1 must exactly match the data
+	in the compare 2 field.  For all bits set to zero in this byte
+	and one in the AND mask, if any of those bits must be set to the
+	same value as the bit in the compare 2 field, it is considered
+	a match for that byte.
+
+	For instance, if the AND mask is 00001111b, the compare 1 field
+	is 00001100b, and the compare 2 field is 00001010b, then the
+	event data 1 byte matches this comparison if:
+	\begin{verbatim}
+	  ((bit0 == 0) || (bit1 == 1))
+	  && (bit2 == 0) && (bit3 == 1)
+	\end{verbatim}
+	Because there are zeroes in bits 4-7, those are not used in the
+	mask.  Exact matches are required in bits 2 and 3 to compare 2,
+	and one of bits 0 and 1 must be set the same as compare 2.
+
+	Setting bytes 11-13 to all zero will cause event data 1 to be
+	ignored for comparison (it will always match).\\
+\hline
+13 & Event data 1 compare 2 &
+	This byte is used to compare the values of event data 1.  See
+	byte 12 for more details on how this works.\\
+\hline
+14-16 & Event data 2 fields &
+	These bytes work the same a bytes 11-13, but apply to event data
+	2.  See those fields for details.\\
+\hline
+17-19 & Event data 3 fields &
+	These bytes work the same a bytes 11-13, but apply to event data
+	3.  See those fields for details.\\
+\hline
+\end{longtable}
+
+The Alert Policy table tells the \acs{BMC} what to do when an event filter
+matches and the alert action is set.  Every matching filter with the
+alert action sets that alert policy to be run.  Once all the filters
+have been checked, the set alert policies are checked and executed in
+order of their policy number.  Depending on the settings in the
+policy, the \acs{BMC} may go to the next alert policy or stop.
+
+\begin{longtable}{|l|p{0.2\textwidth}|p{0.65\textwidth}|}
+\caption{Alert Policy Table Entry\label{alert-policy-table-entry}}
+\\ \hline
+\bfseries{Byte} & \bfseries{Field} & \bfseries{Description}\\
+\endhead
+\hline
+0 & Policy Number and Policy &
+	\begin{description}
+	\item[bits 0-2] - The policy.  Valid values are:
+	  \begin{description}
+	  \item[0h] - Alway do this alert if chosen, even if other
+	    alert policy tables tell the \acs{BMC} to stop.
+	  \item[1h] - If an alert to a previous destination was successful,
+	    do not do this alert.  If no alert has been successful so far,
+	    do this alert.  Then go to the next entry in the policy table.
+	  \item[2h] - If an alert to a previous destination was successful,
+	    do not do this alert.  If no alert has been successful so far,
+	    do this alert.  Then stop processing the policy table (except
+	    for entries with a 0h policy).
+	  \item[3h] - If an alert to a previous destination was successful,
+	    do not do this alert.  If no alert has been successful so far,
+	    do this alert.  Then proceed to the next policy entry that
+	    has a different channel.
+	  \item[4h] - If an alert to a previous destination was successful,
+	    do not do this alert.  If no alert has been successful so far,
+	    do this alert.  Then proceed to the next policy entry that
+	    has a different destination type.
+	  \end{description}
+	\item[bit 3] - Entry enable.  If set to one, the entry is enabled,
+	  if set to zero it is ignored.
+	\item[bits 4-7] - The policy number, the array index of which
+	  policy table entry to set.
+	\end{description}\\
+\hline
+1 & Channel / Destination &
+	\begin{description}
+	\item[bits 0-3] - The destination selector.  For the chosen
+	  channel, this is the specific destination in the channel
+	  to use to send the alert.  See the \acs{LAN} Configuration Table
+	  (table \ref{lan-conf-parms}) or the Serial Configuration Table
+	  (table \ref{serial-conf-parms}) for information on what the
+	  destination selectors can do.
+	\item[bits 4-7] - The channel.  This tells the BMC which channel
+	  to send the alert over.
+	\end{description}\\
+\hline
+2 & Alert String Info &
+	Some types of alerts need a string associated with them, this
+	chooses the string.  The specific strings are stored in the \ac{PEF}
+	configuration parameters 12 and 13 in table \ref{pef-conf-parms}.
+
+	If bit 7 of this byte is one, then the string is dependent on
+	the event filter number that was matched for this alert policy.
+	Bits 0-6 of this byte are the alert string set.
+	The event filter number and the alert string set are looked up in
+	the table in parameter 12 of the \ac{PEF} configuration to choose the
+	alert string to use.  See that parameter for more details on how
+	this works.
+
+	if bit 7 of this byte is zero, then the bits 0-6 of this field
+	are the alert string selector.  The alert string selector is
+	used as a direct index into the alert string table in parameter
+	13 of the \ac{PEF} configuration.\\
+\hline
+\end{longtable}
+
 \subsection{OpenIPMI and \acs{SNMP} Traps}
 
 \subsubsection{Setting Up A System To Send Traps}
@@ -2336,72 +3052,14 @@ data from the \acs{SNMP} \ac{PDU}, and the length of that data is in
 The data in the trap is not enough information to fully decode the
 event, so currently an incoming trap will only cause an SEL fetch on
 the proper \acs{SEL}.
+OpenIPMI will automatically send the \acs{PET} Acknowledge command
+described in Table \ref{pet-ack-cmd}.
 
 Note that \acs{SNMP} traps can only be recieved on one port, and that
 port is privileged, so you must run as root to receive SNMP traps.
 
-\section{Serial}
-
-\subsection{Direct Serial}
-
-\subsection{Serial over \acs{PPP}}
-
-\section{User Management}
-\label{user-mgmt}
-
-\begin{table}
-\begin{tabularx}{\textwidth}{|l|X|}
-\hline
-\verb=IPMI_AUTHTYPE_NONE= & No authentication.\\
-\hline
-\verb=IPMI_AUTHTYPE_MD2= & \acs{MD2} style authentication.\\
-\hline
-\verb=IPMI_AUTHTYPE_MD5= & \acs{MD5} style authentication.  This is the
-recommended type of authentication.\\
-\hline
-\verb=IPMI_AUTHTYPE_STRAIGHT= & Puts the password into the message in
-plain text.  Don't use this.\\
-\hline
-\end{tabularx}
-\caption{\label{ipmi-authtypes}Authentication types in IPMI}
-\end{table}
-
-\begin{table}
-\begin{tabularx}{\textwidth}{|l|X|}
-\hline
-\verb=IPMI_PRIVILEGE_CALLBACK= & The user is only allowed to request
-that the IPMI system call back home.\\
-\hline
-\verb=IPMI_PRIVILEGE_USER= & A ``read-only'' user.  The user can look
-at system state, but not change anything.  For instance, the user can
-fetch \acs{SEL} entries, but not delete them.\\
-\hline
-\verb=IPMI_PRIVILEGE_OPERATOR= & This user can do everything but configuration
-commands.  For instance, they can clear the SEL and configure sensors, but
-they cannot add users or configure LAN parameters.\\
-\hline
-\verb=IPMI_PRIVILEGE_ADMIN= & This user can do pretty much anything on an
-IPMI system.\\
-\hline
-\verb=IPMI_PRIVILEGE_OEM= & Undefined by the spec, it's whatever the \acs{OEM}
-wants.\\
-\hline
-\end{tabularx}
-\caption{\label{ipmi-priv-levels}Privilege levels in IPMI}
-\end{table}
-
-\begin{table}
-\begin{tabularx}{\textwidth}{lX}
-0 & no authentication\\
-1 & MD2 authentication\\
-2 & MD5 authentication\\
-3 & reserved\\
-4 & straight password authentication\\
-5 & OEM authentication\\
-6-7 & reserved\\
-\end{tabularx}
-\caption{\label{auth-bitmask}Authentication bitmask often used in \acs{IPMI}}
-\end{table}
+\subsection{The Alert Immediate Command}
+\label{sec-alert-immediate}
 
 \section{OpenIPMI Addressing}
 \label{openipmi-addressing}
@@ -2522,6 +3180,14 @@ representing a dicrete value.  You enable events on the sensor by
 specifying which discrete values you want to generate events.  Like
 threshold sensors, these events may or may not be user-controllable.
 That information may be fetched by the user.
+
+\begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
+\caption{Sensor Types and Codes\label{sensor-type-codes}}
+\\ \hline
+\bfseries{Parameter} & \bfseries{\#} & \bfseries{Description}\\
+\endhead
+\hline
+\end{longtable}
 
 %---------------------------------------------------------------------
 \chapter{Controls and Miscellany}
