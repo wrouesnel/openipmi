@@ -2884,7 +2884,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 
 	    /* A real DLR, increment the refcount, and copy the info. */
 	    found->ent->ref_count++;
-	    entity_set_name(found->ent);
+
 	    /* Don't fetch FRU information until present. */
 
 	    /* Set up the MC information for the device. */
@@ -2909,6 +2909,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    } else {
 		memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
 	    }
+	    entity_set_name(found->ent);
 
 	    /* If we can use the FRU device presence to detect whether
 	       the entity is present, we register the monitor with the
