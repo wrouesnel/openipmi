@@ -247,6 +247,10 @@ typedef struct lan_data_s
     os_hnd_timer_id_t          *audit_timer;
     audit_timer_info_t         *audit_info;
 
+    /* Handles connection shutdown reporting. */
+    ipmi_ll_con_closed_cb close_done;
+    void                  *close_cb_data;
+
     /* This lock is used to assure that the conn changes occur in
        proper order.  The user code is called with this lock held, but
        it should be harmless to the user as this is the only use for
@@ -2035,6 +2039,9 @@ lan_cleanup(ipmi_con_t *ipmi)
     for (i=0; i<lan->num_ip_addr; i++)
 	send_close_session(ipmi, lan, i);
 
+    if (lan->close_done)
+	lan->close_done(ipmi, lan->close_cb_data);
+
     ipmi_lock(lan->seq_num_lock);
     for (i=0; i<64; i++) {
 	if (lan->seq_table[i].inuse) {
@@ -2145,15 +2152,28 @@ lan_cleanup(ipmi_con_t *ipmi)
 }
 
 static int
-lan_close_connection(ipmi_con_t *ipmi)
+lan_close_connection_done(ipmi_con_t            *ipmi,
+			  ipmi_ll_con_closed_cb handler,
+			  void                  *cb_data)
 {
+    lan_data_t *lan;
     if (! lan_valid_ipmi(ipmi)) {
 	return EINVAL;
     }
 
+    lan = (lan_data_t *) ipmi->con_data;
+    lan->close_done = handler;
+    lan->close_cb_data = cb_data;
+
     lan_put(ipmi);
     lan_put(ipmi);
     return 0;
+}
+
+static int
+lan_close_connection(ipmi_con_t *ipmi)
+{
+    return lan_close_connection_done(ipmi, NULL, NULL);
 }
 
 static void
@@ -2941,6 +2961,7 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
     ipmi->register_for_command = lan_register_for_command;
     ipmi->deregister_for_command = lan_deregister_for_command;
     ipmi->close_connection = lan_close_connection;
+    ipmi->close_connection_done = lan_close_connection_done;
 
     /* Add the waiter last. */
     rv = handlers->add_fd_to_wait_for(handlers,

@@ -138,6 +138,10 @@ typedef struct smi_data_s
     os_hnd_timer_id_t          *audit_timer;
     audit_timer_info_t         *audit_info;
 
+    /* Handles connection shutdown reporting. */
+    ipmi_ll_con_closed_cb close_done;
+    void                  *close_cb_data;
+
     ipmi_ll_con_changed_cb     con_change_handler;
     void                       *con_change_cb_data;
 
@@ -187,6 +191,9 @@ smi_cleanup(ipmi_con_t *ipmi)
     else
 	smi_list = smi->next;
     ipmi_unlock(smi_list_lock);
+
+    if (smi->close_done)
+	smi->close_done(ipmi, smi->close_cb_data);
 
     cmd = smi->pending_cmds;
     smi->pending_cmds = NULL;
@@ -1184,15 +1191,29 @@ smi_deregister_for_command(ipmi_con_t    *ipmi,
 }
 
 static int
-smi_close_connection(ipmi_con_t *ipmi)
+smi_close_connection_done(ipmi_con_t *ipmi,
+			  ipmi_ll_con_closed_cb handler,
+			  void                  *cb_data)
 {
+    smi_data_t *smi;
+
     if (! smi_valid_ipmi(ipmi)) {
 	return EINVAL;
     }
 
+    smi = (smi_data_t *) ipmi->con_data;
+    smi->close_done = handler;
+    smi->close_cb_data = cb_data;
+
     smi_put(ipmi);
     smi_put(ipmi);
     return 0;
+}
+
+static int
+smi_close_connection(ipmi_con_t *ipmi)
+{
+    return smi_close_connection_done(ipmi, NULL, NULL);
 }
 
 static void

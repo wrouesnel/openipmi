@@ -312,6 +312,10 @@ typedef struct lan_data_s
     os_hnd_timer_id_t          *audit_timer;
     audit_timer_info_t         *audit_info;
 
+    /* Handles connection shutdown reporting. */
+    ipmi_ll_con_closed_cb close_done;
+    void                  *close_cb_data;
+
     ipmi_ll_con_changed_cb con_change_handler;
     void                   *con_change_cb_data;
 
@@ -2315,6 +2319,13 @@ lan_cleanup(ipmi_con_t *ipmi)
     for (i=0; i<lan->num_ip_addr; i++)
 	send_close_session(ipmi, lan, i);
 
+    if (lan->real_ipmi_lan_con) {
+	lan->real_ipmi_lan_con->close_connection_done(lan->real_ipmi_lan_con,
+						      lan->close_done,
+						      lan->close_cb_data);
+    } else if (lan->close_done)
+	lan->close_done(ipmi, lan->close_cb_data);
+
     ipmi_lock(lan->msg_queue_lock);
     for (i=lan->curr_msg; i!=lan->next_msg; i=lan->curr_msg) {
 	msg_del_t del;
@@ -2335,8 +2346,6 @@ lan_cleanup(ipmi_con_t *ipmi)
 	}
     }
 
-    if (lan->real_ipmi_lan_con)
-	lan->real_ipmi_lan_con->close_connection(lan->real_ipmi_lan_con);
     if (lan->msg_queue_lock)
 	ipmi_destroy_lock(lan->msg_queue_lock);
     if (lan->seq_num_lock)
@@ -2354,15 +2363,29 @@ lan_cleanup(ipmi_con_t *ipmi)
 }
 
 static int
-lan_close_connection(ipmi_con_t *ipmi)
+lan_close_connection_done(ipmi_con_t *ipmi,
+			  ipmi_ll_con_closed_cb handler,
+			  void                  *cb_data)
 {
+    lan_data_t *lan;
+
     if (! lan_valid_ipmi(ipmi)) {
 	return EINVAL;
     }
 
+    lan = (lan_data_t *) ipmi->con_data;
+    lan->close_done = handler;
+    lan->close_cb_data = cb_data;
+
     lan_put(ipmi);
     lan_put(ipmi);
     return 0;
+}
+
+static int
+lan_close_connection(ipmi_con_t *ipmi)
+{
+    return lan_close_connection_done(ipmi, NULL, NULL);
 }
 
 static void
@@ -3111,6 +3134,7 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
     ipmi->register_for_command = lan_register_for_command;
     ipmi->deregister_for_command = lan_deregister_for_command;
     ipmi->close_connection = lan_close_connection;
+    ipmi->close_connection_done = lan_close_connection_done;
 
     /* Add the waiter last. */
     rv = handlers->add_fd_to_wait_for(handlers,

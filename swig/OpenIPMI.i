@@ -2391,8 +2391,8 @@ char *color_string(int color);
     /*
      * Scan all the addresses on the given channel (parm 1) between
      * (and including) start_addr (parm 2) and end_addr (parm 3) and
-     * call the "ipmb_mc_scan_cb" method on the handler (parm4) with
-     * the following parms (if the parm is provided and defined):
+     * call the "domain_ipmb_mc_scan_cb" method on the handler (parm4)
+     * with the following parms (if the parm is provided and defined):
      * <self>, <domain>, <error val>
      */
     int start_ipmb_mc_scan(int channel, int start_addr, int end_addr,

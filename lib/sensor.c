@@ -875,6 +875,8 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
 {
     _ipmi_entity_call_sensor_handlers(sensor->entity, sensor, IPMI_DELETED);
 
+    sensor->mc = NULL;
+
     if (sensor->destroy_handler)
 	sensor->destroy_handler(sensor, sensor->destroy_handler_cb_data);
 
@@ -906,8 +908,6 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 
     if (sensor->source_array)
 	sensor->source_array[sensor->source_idx] = NULL;
-
-    sensor->mc = NULL;
 
     sensors->sensor_count--;
     sensors->sensors_by_idx[sensor->lun][sensor->num] = NULL;

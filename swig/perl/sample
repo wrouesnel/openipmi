@@ -541,8 +541,11 @@ use OpenIPMI;
 	    $k = $j;
 	    $rv = $fru->get($i, \$j);
 	    while ($rv) {
-		if (split(/ /, $rv) > 1) {
-		    print "  ", $rv, "\n";
+		my $name, $type, $value;
+
+		($name, $type, $value) = split / /, $rv, 3;
+		if (defined $value) {
+		    print "  $name, $type, $value\n";
 		}
 		if ($j != $k) {
 		    if ($j == -1) {
@@ -949,7 +952,9 @@ use OpenIPMI;
     }
 
     sub domain_close_done_cb {
-	exit 0;
+	my $self = shift;
+
+	$$self = "done";
     }
 
     sub domain_ipmb_mc_scan_cb {
@@ -1042,6 +1047,9 @@ if (! $a) {
     exit 1;
 }
 
-while () {
+while ($$h ne "done") {
     OpenIPMI::wait_io(1000);
 }
+
+print "done\n";
+exit 0;

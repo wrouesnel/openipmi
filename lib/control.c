@@ -371,6 +371,8 @@ control_final_destroy(ipmi_control_t *control)
 {
     _ipmi_entity_call_control_handlers(control->entity, control, IPMI_DELETED);
 
+    control->mc = NULL;
+
     if (control->destroy_handler)
 	control->destroy_handler(control,
 				 control->destroy_handler_cb_data);
@@ -405,8 +407,6 @@ ipmi_control_destroy(ipmi_control_t *control)
 
     controls->control_count--;
     controls->controls_by_idx[control->num] = NULL;
-
-    control->mc = NULL;
 
     ipmi_unlock(controls->idx_lock);
 

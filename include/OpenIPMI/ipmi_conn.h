@@ -95,6 +95,10 @@ typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t   *ipmi,
 				     int          active,
 				     unsigned int hacks,
 				     void         *cb_data);
+
+/* Used to handle knowing when the connection shutdown is complete. */
+typedef void (*ipmi_ll_con_closed_cb)(ipmi_con_t *ipmi, void *cb_data);
+
 /* Set this bit in the hacks if, even though the connection is to a
    device not at 0x20, the first part of a LAN command should always
    use 0x20. */
@@ -239,7 +243,6 @@ struct ipmi_con_s
     /* Close an IPMI connection. */
     int (*close_connection)(ipmi_con_t *ipmi);
 
-
     /* This is set by OEM code to handle certain conditions when a
        send message fails.  It is currently only used by the IPMI LAN
        code, if a send messages response is an error, this will be
@@ -256,6 +259,12 @@ struct ipmi_con_s
 
     /* The privilege level of the connection */
     unsigned int priv_level;
+
+    /* Close an IPMI connection and report that it is closed. */
+    int (*close_connection_done)(ipmi_con_t            *ipmi,
+				 ipmi_ll_con_closed_cb handler,
+				 void                  *cb_data);
+
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")

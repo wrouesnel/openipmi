@@ -1,0 +1,208 @@
+#!/usr/bin/perl
+
+# ipmi_powerctl
+#
+# A sample file that powers up a system if it has a power control
+#
+# Author: MontaVista Software, Inc.
+#         Corey Minyard <minyard@mvista.com>
+#         source@mvista.com
+#
+# Copyright 2004 MontaVista Software Inc.
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License
+#  as published by the Free Software Foundation; either version 2 of
+#  the License, or (at your option) any later version.
+#
+#
+#  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+#  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+#  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+#  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+#  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+#  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#  You should have received a copy of the GNU Lesser General Public
+#  License along with this program; if not, write to the Free
+#  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+# To use this, do "ipmi_powerctl on|off <connection>"
+
+use OpenIPMI;
+
+{
+    package CloseDomain;
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	$b = bless $b;
+	return $b;
+    }
+
+    sub domain_cb {
+	my $self = shift;
+	my $domain = shift;
+
+	$domain->close($$self);
+    }
+}
+
+{
+    package Handlers;
+
+    sub new {
+	my $b = { };
+	$b->{err} = 1;
+	$b->{start} = "not up";
+	$b->{done} = 0;
+	$b->{op} = shift;
+	undef $b->{power_control_id};
+	undef $b->{domain_id};
+	return bless \$b;
+    }
+
+    sub domain_up_cb {
+	my $self = shift;
+
+	if (! defined $$self->{power_control_id}) {
+	    print STDERR "System has no power control\n";
+	    $self->close($self);
+	}
+    }
+
+    sub control_set_val_cb {
+	my $self = shift;
+	my $control = shift;
+	my $rv = shift;
+
+	if ($rv) {
+	    print(STDERR "Unable to set control ", $control->get_name(),
+		  " err = $rv\n");
+	} else {
+	    $$self->{err} = 0;
+	}
+	$self->close();
+    }
+
+    sub entity_control_update_cb {
+	my $self = shift;
+	my $op = shift;
+	my $entity = shift;
+	my $control = shift;
+	my $rv;
+
+	if ($op eq "added") {
+	    if ($control->get_type() == $OpenIPMI::CONTROL_POWER) {
+		$$self->{power_control_id} = $control->get_id();
+		$rv = $control->set_val([ $$self->{op} ], $self);
+		if ($rv) {
+		    print STDERR "Unable to set power control value: $rv\n";
+		    $self->close();
+		}
+	    }
+	}
+    }
+
+    sub entity_update_cb {
+	my $self = shift;
+	my $op = shift;
+	my $domain = shift;
+	my $entity = shift;
+	my $rv;
+
+	if ($op eq "added") {
+	    $rv = $entity->add_control_update_handler($self);
+	    if ($rv) {
+		print STDERR "Unable to add control update handler: $rv\n";
+		$self->close();
+	    }
+	}
+    }
+
+    sub conn_change_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $rv;
+
+	if ($$self->{start} eq "not up") {
+	    $$self->{start} = "up";
+	    $$self->{domain_id} = $domain->get_id();
+	    $rv = $domain->add_entity_update_handler($self);
+	    if ($rv) {
+		print STDERR "Unable to add entity updated handler: $rv\n";
+		$self->close();
+	    }
+	}
+    }
+
+    sub domain_close_done_cb {
+	my $self = shift;
+
+	$$self->{done} = 1;
+    }
+
+    sub close {
+	my $self = shift;
+
+	if (defined $$self->{domain_id}) {
+	    my $v = CloseDomain::new($self);
+	    $$self->{domain_id}->convert_to_domain($v);
+	} else {
+	    $$self->{done} = 1;
+	}
+    }
+
+    sub log {
+	my $self = shift;
+	my $level = shift;
+	my $log = shift;
+
+	print $level, ": ", $log, "\n";
+    }
+}
+
+OpenIPMI::init();
+
+$op = shift @ARGV;
+if ($op eq "on") {
+    $op = 1;
+} elsif ($op eq "off") {
+    $op = 0;
+} else {
+    print STDERR "First argument must be either 'on' or 'off'\n";
+    exit 1;
+}
+
+$h = Handlers::new($op);
+
+# Uncomment to get logs.
+#OpenIPMI::set_log_handler($h);
+
+@args = @ARGV;
+
+# Disable everything but what we need.
+unshift @args, "-noall", "-oeminit", "-noseteventrcvr";
+
+$$h->{domain_id} = OpenIPMI::open_domain("power", \@args, $h, $h);
+if (! $$h->{domain_id}) {
+    print STDERR "open failed\n";
+    exit 1;
+}
+
+# allow 20 seconds;
+$time = time() + 20;
+while (! $$h->{done}) {
+    OpenIPMI::wait_io(1000);
+    if (time() > $time) {
+	$time += 1000;
+	$h->close();
+    }
+}
+
+exit $$h->{err};

@@ -290,6 +290,7 @@ struct ipmi_domain_s
        check that is running.  Otherwise it is NULL. */
     domain_check_oem_t *check;
 
+    int                       close_count;
     ipmi_domain_close_done_cb close_done;
     void                      *close_done_cb_data;
 
@@ -2433,11 +2434,25 @@ start_mc_scan(ipmi_domain_t *domain)
     int i;
 
     ipmi_lock(domain->mc_lock);
-    if (!domain->do_bus_scan || (!ipmi_option_IPMB_scan(domain)))
+    if (!domain->do_bus_scan || (!ipmi_option_IPMB_scan(domain))) {
+	/* Always scan the local BMC(s). */
+	int i;
+	for (i=0; i<MAX_CONS; i++) {
+	    if (!domain->conn[i])
+		continue;
+	    _ipmi_get_domain_fully_up(domain);
+	    ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[i],
+				    domain->con_ipmb_addr[i], bmc_scan_done,
+				    NULL);
+	}
+	ipmi_unlock(domain->mc_lock);
 	return;
+    }
 
-    if (domain->scanning_bus)
+    if (domain->scanning_bus) {
+	ipmi_unlock(domain->mc_lock);
 	return;
+    }
 
     domain->scanning_bus = 1;
     ipmi_unlock(domain->mc_lock);
@@ -3506,12 +3521,37 @@ ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
 }
 
 static void
+conn_close(ipmi_con_t *ipmi, void *cb_data)
+{
+    ipmi_domain_close_done_cb close_done;
+    void                      *my_cb_data;
+    ipmi_domain_t             *domain = cb_data;
+    int                       done = 0;
+
+    ipmi_lock(domain->domain_lock);
+    domain->close_count--;
+    done = domain->close_count <= 0;
+    ipmi_unlock(domain->domain_lock);
+
+    if (!done)
+	return;
+
+    remove_known_domain(domain);
+
+    close_done = domain->close_done;
+    my_cb_data = domain->close_done_cb_data;
+
+    cleanup_domain(domain);
+
+    if (close_done)
+	close_done(my_cb_data);
+}
+
+static void
 real_close_connection(ipmi_domain_t *domain)
 {
     ipmi_con_t                *ipmi[MAX_CONS];
     int                       i;
-    ipmi_domain_close_done_cb close_done;
-    void                      *cb_data;
 
     for (i=0; i<MAX_CONS; i++) {
 	ipmi[i] = domain->conn[i];
@@ -3528,20 +3568,17 @@ real_close_connection(ipmi_domain_t *domain)
 	domain->conn[i] = NULL;
     }
 
+    /* No lock needed here, this is single threaded until we start
+       actually closing the connections. */
+    domain->close_count = 0;
     for (i=0; i<MAX_CONS; i++) {
 	if (ipmi[i])
-	    ipmi[i]->close_connection(ipmi[i]);
+	    domain->close_count++;
     }
-
-    remove_known_domain(domain);
-
-    close_done = domain->close_done;
-    cb_data = domain->close_done_cb_data;
-
-    cleanup_domain(domain);
-
-    if (close_done)
-	close_done(cb_data);
+    for (i=0; i<MAX_CONS; i++) {
+	if (ipmi[i])
+	    ipmi[i]->close_connection_done(ipmi[i], conn_close, domain);
+    }
 }
 
 int

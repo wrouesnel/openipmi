@@ -1,3 +1,26 @@
+2004-10-29 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_conn.h: Added another connection close
+	handler that has a callback.  This way, the domain code can know
+	when the connection is really closed.  There were race conditions
+	at shutdowns that this fixes.
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+	* lib/oem_motorola_mxp_intf.c: ditto
+	* lib/domain.c: ditto
+
+	* lib/control.c, lib/sensor.c: Fixed some shutdown ordering
+	problems.
+
+	* lib/oem_atca.c: Don't clean up the MC if it has already been
+	destroyed.
+
+	* swig/OpenIPMI.i, swig/perl/OpenIPMI.h, swig/perl/OpenIPMI_perl.c:
+	Added a perl interface for OpenIPMI.
+	* swig/perl/Makefile: ditto
+	* swig/perl/sample: ditto
+	* swig/perl/ipmi_powerctl: ditto
+	
 2004-10-27 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_lan.c: Fixed race conditions handling sequence numbers

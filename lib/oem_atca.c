@@ -2357,6 +2357,9 @@ add_fru_controls(atca_fru_t *finfo)
 static void
 destroy_fru_controls(atca_fru_t *finfo)
 {
+    if (!finfo->minfo->mc)
+	return;
+
     _ipmi_mc_get(finfo->minfo->mc);
     destroy_fru_leds(finfo);
     destroy_fru_control_handling(finfo);
@@ -2596,6 +2599,8 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
 	    }
 	}
     }
+    ipmi_mc_id_set_invalid(&minfo->mcid);
+    minfo->mc = NULL;
 }
 
 static void
