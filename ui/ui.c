@@ -1553,19 +1553,23 @@ read_sensor(ipmi_sensor_t             *sensor,
     ipmi_sensor_id_t   sensor_id;
     enum ipmi_thresh_e t;
 
+    if (err) {
+	if (sensor_displayed) {
+	    wmove(display_pad, value_pos.y, value_pos.x);
+	    display_pad_out("unreadable: %x", err);
+	    display_pad_refresh();
+	} else {
+	    curr_display_type = DISPLAY_NONE;
+	}
+	return;
+    }
+
     sensor_id = ipmi_sensor_convert_to_id(sensor);
     if (!((curr_display_type == DISPLAY_SENSOR)
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
     if (sensor_displayed) {
-	wmove(display_pad, value_pos.y, value_pos.x);
-	if (err) {
-	    display_pad_out("unreadable");
-	    display_pad_refresh();
-	    return;
-	}
-
 	if (value_present == IPMI_BOTH_VALUES_PRESENT)
 	    display_pad_out("%f", val);
 	else if (value_present == IPMI_RAW_VALUE_PRESENT)

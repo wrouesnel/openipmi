@@ -1962,6 +1962,8 @@ The system 2.5 volt sensor
 @item 8V
 The system 8 volt sensor
 
+@item 
+
 @end table
 
 The AMC also has a ``slot'' sensor that can be used to find the state of

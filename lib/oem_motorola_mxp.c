@@ -315,6 +315,7 @@ typedef struct amc_info_s
     ipmi_sensor_t *s3_3v;
     ipmi_sensor_t *s2_5v;
     ipmi_sensor_t *s8v;
+    ipmi_sensor_t *temp;
     ipmi_sensor_t *offline;
 
     /* The controls. */
@@ -5983,6 +5984,7 @@ new_board_sensors(ipmi_mc_t           *mc,
 #define MXP_2_5V_SENSOR_NUM	4
 #define MXP_8V_SENSOR_NUM	5
 #define MXP_AMC_OFFLINE_NUM     6
+#define MXP_AMC_TEMP_SENSOR_NUM	7
 
 static void
 amc_offline_get_cb(ipmi_sensor_t   *sensor,
@@ -6623,6 +6625,8 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_sensor_destroy(info->s2_5v);
     if (info->s8v)
 	ipmi_sensor_destroy(info->s8v);
+    if (info->temp)
+	ipmi_sensor_destroy(info->temp);
     if (info->offline)
 	ipmi_sensor_destroy(info->offline);
     if (info->blue_led)
@@ -6657,6 +6661,8 @@ amc_board_handler(ipmi_mc_t *mc)
     unsigned int       assert, deassert;
     char               *name;
     ipmi_control_cbs_t control_cbs;
+    int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
+	= ipmi_standard_sensor_cb.ipmi_reading_get;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -6879,6 +6885,21 @@ amc_board_handler(ipmi_mc_t *mc)
 				    mxp_voltage_reading_get_cb,
 				    80, 76, 84,
 				    &(info->s8v));
+    if (rv)
+	goto out_err;
+
+    /* Temperature */
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info->ent,
+					       MXP_AMC_TEMP_SENSOR_NUM,
+		   			       info, NULL,
+					       IPMI_SENSOR_TYPE_TEMPERATURE,
+					       IPMI_UNIT_TYPE_DEGREES_C,
+					       "Temp",
+					       0, 0,
+					       get,
+					       -1, -1, -1,
+					       1, 0, 0, 0,
+					       &info->temp);
     if (rv)
 	goto out_err;
 
@@ -8375,139 +8396,6 @@ mxp_pprb_handler(ipmi_mc_t     *mc,
     return rv;
 }
 
-typedef struct reading_get_info_s
-{
-    ipmi_sensor_op_info_t sdata;
-    ipmi_reading_done_cb  done;
-    void                  *cb_data;
-} reading_get_info_t;
-
-static void
-zynx_reading_fetched(ipmi_sensor_t *sensor,
-		     int           err,
-		     ipmi_msg_t    *rsp,
-		     void          *rsp_data)
-{
-    reading_get_info_t        *info = rsp_data;
-    ipmi_states_t             states;
-    int                       rv;
-    double                    val = 0.0;
-    enum ipmi_value_present_e val_present;
-
-    ipmi_init_states(&states);
-    ipmi_set_sensor_scanning_enabled(&states, 1);
-
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting reading: %x", err);
-	if (info->done)
-	    info->done(sensor, err,
-		       IPMI_NO_VALUES_PRESENT, 0, 0.0,
-		       &states, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error getting reading: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       IPMI_NO_VALUES_PRESENT,
-		       0,
-		       0.0,
-		       &states,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    rv = ipmi_sensor_convert_from_raw(sensor,
-				      rsp->data[1],
-				      &val);
-    if (rv)
-	val_present = IPMI_RAW_VALUE_PRESENT;
-    else
-	val_present = IPMI_BOTH_VALUES_PRESENT;
-
-    if (info->done)
-	info->done(sensor, 0,
-		   val_present, rsp->data[1], val, &states,
-		   info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
-}
-
-static void
-zynx_reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
-{
-    reading_get_info_t *info = cb_data;
-    unsigned char      cmd_data[MAX_IPMI_DATA_SIZE];
-    ipmi_msg_t         cmd_msg;
-    int                rv;
-    ipmi_states_t      states;
-    int                num;
-
-    ipmi_init_states(&states);
-    ipmi_set_sensor_scanning_enabled(&states, 1);
-
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting reading get: %x", err);
-	if (info->done)
-	    info->done(sensor, err,
-		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    cmd_msg.data = cmd_data;
-    cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
-    cmd_msg.cmd = IPMI_GET_SENSOR_READING_CMD;
-    cmd_msg.data_len = 1;
-    cmd_msg.data = cmd_data;
-    ipmi_sensor_get_num(sensor, NULL, &num);
-    cmd_data[0] = num;
-    rv = ipmi_sensor_send_command(sensor, ipmi_sensor_get_mc(sensor), 0,
-				  &cmd_msg, zynx_reading_fetched,
-				  &(info->sdata), info);
-    if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending reading get command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv,
-		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-    }
-}
-
-static int
-zynx_reading_get(ipmi_sensor_t        *sensor,
-		 ipmi_reading_done_cb done,
-		 void                 *cb_data)
-{
-    reading_get_info_t *info;
-    int                rv;
-    
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
-    info->done = done;
-    info->cb_data = cb_data;
-    rv = ipmi_sensor_add_opq(sensor, zynx_reading_get_start, &(info->sdata),
-			     info);
-    if (rv)
-	ipmi_mem_free(info);
-    return rv;
-}
-
 typedef struct zynx_info_s
 {
     board_sensor_info_t board;
@@ -8524,11 +8412,16 @@ zynx_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     zynx_info_t *sinfo = cb_data;
 
     destroy_board_sensors(mc, &(sinfo->board));
-    ipmi_sensor_destroy(sinfo->board_temp);
-    ipmi_sensor_destroy(sinfo->v2_5);
-    ipmi_sensor_destroy(sinfo->v1_8);
-    ipmi_sensor_destroy(sinfo->v3_3);
-    ipmi_sensor_destroy(sinfo->v5);
+    if (sinfo->board_temp)
+	ipmi_sensor_destroy(sinfo->board_temp);
+    if (sinfo->v2_5)
+	ipmi_sensor_destroy(sinfo->v2_5);
+    if (sinfo->v1_8)
+	ipmi_sensor_destroy(sinfo->v1_8);
+    if (sinfo->v3_3)
+	ipmi_sensor_destroy(sinfo->v3_3);
+    if (sinfo->v5)
+	ipmi_sensor_destroy(sinfo->v5);
     ipmi_mem_free(sinfo);
 }
 
@@ -8547,6 +8440,8 @@ zynx_switch_handler(ipmi_mc_t     *mc,
     int                i;
     zynx_info_t        *sinfo = NULL;
     ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
+    int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
+	= ipmi_standard_sensor_cb.ipmi_reading_get;
 
     ipmi_domain_entity_lock(domain);
 
@@ -8595,7 +8490,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       IPMI_UNIT_TYPE_DEGREES_C,
 					       "Board Temp",
 					       0, 0,
-					       zynx_reading_get,
+					       get,
 					       -1, -1, 55,
 					       1, 0, 0, 0,
 					       &(sinfo->board_temp));
@@ -8631,7 +8526,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       IPMI_UNIT_TYPE_VOLTS,
 					       "2.5V",
 					       0, 0,
-					       zynx_reading_get,
+					       get,
 					       157, 150, 165,
 					       159, 0, 0, -4,
 					       &(sinfo->v2_5));
@@ -8643,7 +8538,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       IPMI_UNIT_TYPE_VOLTS,
 					       "1.8V",
 					       0, 0,
-					       zynx_reading_get,
+					       get,
 					       139, 133, 146,
 					       129, 0, 0, -4,
 					       &(sinfo->v1_8));
@@ -8655,7 +8550,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       IPMI_UNIT_TYPE_VOLTS,
 					       "3.3V",
 					       0, 0,
-					       zynx_reading_get,
+					       get,
 					       153, 146, 160,
 					       216, 0, 0, -4,
 					       &(sinfo->v3_3));
@@ -8667,7 +8562,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       IPMI_UNIT_TYPE_VOLTS,
 					       "5V",
 					       0, 0,
-					       zynx_reading_get,
+					       get,
 					       156, 148, 163,
 					       321, 0, 0, -4,
 					       &(sinfo->v5));
@@ -8953,29 +8848,12 @@ mxp_bmc_handler(ipmi_mc_t *mc)
     return rv;
 }
 
-static void
-amc_sensor_fixup(ipmi_mc_t *mc, ipmi_sensor_t *s, void *cb_data)
-{
-    /* Set the entity instance properly based upon the AMC's position */
-    if (ipmi_sensor_get_entity_instance(s) == 0) {
-	int pos = ipmi_mc_get_address(mc);
-
-	if (pos == 0)
-	    ipmi_sensor_set_entity_instance(s, 1);
-	else
-	    ipmi_sensor_set_entity_instance(s, 2);
-    }
-}
-
 static int
 mxp_handler(ipmi_mc_t *mc,
 	    void      *cb_data)
 {
     int           rv;
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
-
-    /* Fixup the SDRs that come in. */
-    ipmi_mc_set_sensor_fixup_handler(mc, amc_sensor_fixup, NULL);
 
     /* The MXP AMC does not support generating events on the IPMB. */
     ipmi_mc_set_ipmb_event_generator_support(mc, 0);
