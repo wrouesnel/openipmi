@@ -53,6 +53,7 @@ typedef struct sel_fetch_handler_s
     struct sel_fetch_handler_s *next;
 } sel_fetch_handler_t;
 
+/* Holds an event in the list of events. */
 typedef struct sel_event_holder_s
 {
     int          deleted;
@@ -107,6 +108,10 @@ struct ipmi_sel_info_s
 
     os_handler_t *os_hnd;
 
+    /* This is the actual list of events and the number of non-deleted
+       events.  Note that events may contain more items than num_sels,
+       num_sels only counts the number of non-deleted events in the
+       list. */
     ilist_t      *events;
     unsigned int num_sels;
 
@@ -466,8 +471,13 @@ handle_sel_data(ipmi_mc_t  *mc,
 	event_is_new = 1;
 	sel->num_sels++;
     } else if (event_cmp(&del_event, &(holder->event)) != 0) {
+	/* It's a new event in an old slot, so overwrite the old
+           event. */
 	holder->event = del_event;
-	holder->deleted = 0;
+	if (holder->deleted) {
+	    holder->deleted = 0;
+	    sel->num_sels++;
+	}
 	event_is_new = 1;
     }
 
@@ -1098,9 +1108,19 @@ ipmi_sel_get_first_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
 	return EINVAL;
     }
     ilist_init_iter(&iter, sel->events);
-    if (ilist_first(&iter))
-	*event = ((sel_event_holder_t *) ilist_get(&iter))->event;
-    else
+    if (ilist_first(&iter)) {
+	sel_event_holder_t *holder = ilist_get(&iter);
+
+	while (holder->deleted) {
+	    if (! ilist_next(&iter)) {
+		rv = ENODEV;
+		break;
+	    }
+	    holder = ilist_get(&iter);
+	}
+	if (!rv)
+	    *event = holder->event;
+    } else
 	rv = ENODEV;
     sel_unlock(sel);
     return rv;
@@ -1118,9 +1138,19 @@ ipmi_sel_get_last_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
 	return EINVAL;
     }
     ilist_init_iter(&iter, sel->events);
-    if (ilist_last(&iter))
-	*event = ((sel_event_holder_t *) ilist_get(&iter))->event;
-    else
+    if (ilist_last(&iter)) {
+	sel_event_holder_t *holder = ilist_get(&iter);
+
+	while (holder->deleted) {
+	    if (! ilist_prev(&iter)) {
+		rv = ENODEV;
+		break;
+	    }
+	    holder = ilist_get(&iter);
+	}
+	if (!rv)
+	    *event = holder->event;
+    } else
 	rv = ENODEV;
     sel_unlock(sel);
     return rv;
@@ -1140,9 +1170,19 @@ ipmi_sel_get_next_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
     ilist_init_iter(&iter, sel->events);
     ilist_unpositioned(&iter);
     if (ilist_search_iter(&iter, recid_search_cmp, &(event->record_id))) {
-	if (ilist_next(&iter))
-	    *event = ((sel_event_holder_t *) ilist_get(&iter))->event;
-	else
+	if (ilist_next(&iter)) {
+	    sel_event_holder_t *holder = ilist_get(&iter);
+
+	    while (holder->deleted) {
+		if (! ilist_next(&iter)) {
+		    rv = ENODEV;
+		    break;
+		}
+		holder = ilist_get(&iter);
+	    }
+	    if (!rv)
+		*event = holder->event;
+	} else
 	    rv = ENODEV;
     } else {
 	rv = EINVAL;
@@ -1165,9 +1205,19 @@ ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
     ilist_init_iter(&iter, sel->events);
     ilist_unpositioned(&iter);
     if (ilist_search_iter(&iter, recid_search_cmp, &(event->record_id))) {
-	if (ilist_prev(&iter))
-	    *event = ((sel_event_holder_t *) ilist_get(&iter))->event;
-	else
+	if (ilist_prev(&iter)) {
+	    sel_event_holder_t *holder = ilist_get(&iter);
+
+	    while (holder->deleted) {
+		if (! ilist_prev(&iter)) {
+		    rv = ENODEV;
+		    break;
+		}
+		holder = ilist_get(&iter);
+	    }
+	    if (!rv)
+		*event = holder->event;
+	} else
 	    rv = ENODEV;
     } else {
 	rv = EINVAL;
@@ -1202,8 +1252,12 @@ int ipmi_get_all_sels(ipmi_sel_info_t *sel,
 	    goto out_unlock;
 	}
 	for (i=0; ; ) {
-	    *array = ((sel_event_holder_t *) ilist_get(&iter))->event;
-	    array++;
+	    sel_event_holder_t *holder = ilist_get(&iter);
+
+	    if (! holder->deleted) {
+		*array = holder->event;
+		array++;
+	    }
 	    i++;
 	    if (i<sel->num_sels) {
 		if (! ilist_next(&iter)) {
@@ -1365,6 +1419,10 @@ ipmi_sel_event_add(ipmi_sel_info_t *sel,
 	sel->num_sels++;
     } else {
 	holder->event = *new_event;
+	if (holder->deleted) {
+	    holder->deleted = 0;
+	    sel->num_sels++;
+	}
     }
 
  out_unlock:

@@ -1930,57 +1930,25 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
 }
 
 static void
-clear_sel2(ipmi_mc_t  *mc,
-	   ipmi_msg_t *rsp,
-	   void       *rsp_data)
-{
-    ipmi_msg_t    msg;
-    unsigned char data[6];
-    int           rv;
-
-    if (rsp->data[0]) {
-	data[0] = 0;
-	data[1] = 0;
-    } else {
-	data[0] = rsp->data[1];
-	data[1] = rsp->data[2];
-    }
-
-    data[2] = 'C';
-    data[3] = 'L';
-    data[4] = 'R';
-    data[5] = 0xaa;
-    msg.netfn = IPMI_STORAGE_NETFN;
-    msg.cmd = IPMI_CLEAR_SEL_CMD;
-    msg.data_len = 6;
-    msg.data = data;
-    rv = ipmi_send_command(mc, 0, &msg, NULL, NULL);
-    if (rv)
-	ui_log("Could not send sel clear cmd: %x\n", rv);
-}
-
-static void
 clear_sel_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 {
-    int        rv;
-    ipmi_msg_t *msg = cb_data;
+    int          rv;
+    ipmi_event_t event, event2;
 
-    rv = ipmi_send_command(bmc, 0, msg, clear_sel2, NULL);
-    if (rv)
-	wprintw(cmd_win, "Could not reserve sel: %x\n", rv);
+    rv = ipmi_bmc_first_event(bmc, &event);
+    while (!rv) {
+	rv = ipmi_bmc_next_event(bmc, &event2);
+	ipmi_bmc_del_event(bmc, &event, NULL, NULL);
+	event = event2;
+    }
 }
 
 static int
 clear_sel_cmd(char *cmd, char **toks, void *cb_data)
 {
-    ipmi_msg_t msg;
-    int        rv;
+    int rv;
 
-    msg.netfn = IPMI_STORAGE_NETFN;
-    msg.cmd = IPMI_RESERVE_SEL_CMD;
-    msg.data_len = 0;
-    msg.data = NULL;
-    rv = ipmi_mc_pointer_cb(bmc_id, clear_sel_cmd_bmcer, &msg);
+    rv = ipmi_mc_pointer_cb(bmc_id, clear_sel_cmd_bmcer, NULL);
     if (rv) {
 	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
 	return 0;
