@@ -1890,6 +1890,7 @@ ipmi_start_si_scan(ipmi_domain_t  *domain,
     info = ipmi_mem_alloc(sizeof(mc_ipmb_scan_info_t));
     if (!info) 
 	return;
+    memset(info, 0, sizeof(*info));
 
     info->domain = domain;
     si = (void *) &info->addr;
@@ -1904,6 +1905,15 @@ ipmi_start_si_scan(ipmi_domain_t  *domain,
     info->done_handler = done_handler;
     info->cb_data = cb_data;
     info->missed_responses = 0;
+    info->os_hnd = domain->os_hnd;
+    rv = info->os_hnd->alloc_timer(info->os_hnd, &info->timer);
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_create_lock(domain, &info->lock);
+    if (rv)
+	goto out_err;
+
     rv = ipmi_send_command_addr(domain,
 				&info->addr,
 				info->addr_len,
@@ -1912,9 +1922,19 @@ ipmi_start_si_scan(ipmi_domain_t  *domain,
 				info, NULL);
 
     if (rv)
-	ipmi_mem_free(info);
+	goto out_err;
     else
 	add_bus_scans_running(domain, info);
+    return;
+
+ out_err:
+    if (info->done_handler)
+	info->done_handler(domain, rv, info->cb_data);
+    if (info->timer)
+	info->os_hnd->free_timer(info->os_hnd, info->timer);
+    if (info->lock)
+	ipmi_destroy_lock(info->lock);
+    ipmi_mem_free(info);
 }
 
 static void
