@@ -3,6 +3,9 @@
 	* lib/event.c: Fixed a problem with the data length when getting
 	data.
 
+	* configure.in, lanserv/Makefile.am, sample/Makefile.am: Added
+	popt library detection and overriding.
+
 2005-01-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sel.c: Fixed a bug where the SEL lock was being held in

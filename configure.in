@@ -31,7 +31,19 @@ AC_ARG_WITH(snmpflags,
 
 AC_ARG_WITH(snmplibs,
 [  --with-snmplibs=libs            Set the libraries to link with SNMP.],
-    SNMPLIBS="$withval",
+    SNMPLIBS="$withval"
+)
+
+POPTCFLAGS=
+AC_ARG_WITH(poptflags,
+[  --with-poptflags=flags          Set the flags to compile with popt.],
+    CPPFLAGS="$withval $CPPFLAGS"
+)
+
+POPTCFLAGS=
+AC_ARG_WITH(poptlibs,
+[  --with-poptlibs=libs            Set the libraries to link with popt.],
+    POPTLIBS="$withval"
 )
 
 # If UCD SNMP requires OpenSSL, this tells where to find the crypto lib
@@ -138,6 +150,23 @@ AC_SUBST(OPENIPMI_VERSION_MAJOR)
 AC_SUBST(OPENIPMI_VERSION_MINOR)
 AC_SUBST(OPENIPMI_VERSION_RELEASE)
 AC_SUBST(OPENIPMI_VERSION_EXTRA)
+
+AC_SUBST(POPTLIBS)
+
+FOUND_POPT_HEADER=no
+AC_CHECK_HEADER(popt.h, FOUND_POPT_HEADER=yes; )
+if test "x$FOUND_POPT_HEADER" != "xyes"; then
+   echo "Could not find headers for the popt library"
+   exit 1
+fi
+
+if test "x$POPTLIBS" = "x"; then
+   AC_CHECK_LIB(popt, poptHelpOptions, POPTLIBS=-lpopt)
+   if test "x$POPTLIBS" = ""; then
+      echo "Could not find the popt library"
+      exit 1
+   fi
+fi
 
 # Find pkg-config
 pkgprog=

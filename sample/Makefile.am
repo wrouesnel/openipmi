@@ -24,7 +24,7 @@ ipmisample3_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(OPENSSLLIBS)
 
 ipmicmd_SOURCES = ipmicmd.c
-ipmicmd_LDADD = -lpopt $(top_builddir)/utils/libOpenIPMIutils.la \
+ipmicmd_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
 		$(OPENSSLLIBS)
