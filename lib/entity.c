@@ -5000,6 +5000,7 @@ ipmi_entity_fetch_frus(ipmi_entity_t *ent)
 				ent->info.lun,
 				ent->info.private_bus_id,
 				ent->info.channel,
+				IPMI_FRU_ALL_AREA_MASK, 
 				fru_fetched_handler,
 				ent_id,
 				NULL);

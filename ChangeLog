@@ -2,6 +2,12 @@
 
 	* lib/fru.c: Fixed an off-by-one problem when writing FRU data.
 
+	* include/OpenIPMI/internal/ipmi_utils.h, lib/fru.c: Add a
+	field to the notrack FRU to allow only specific areas to be
+	processed.
+	* lib/entity.c: ditto
+	* lib/oem_atca.c: ditto, only fetch multi-records.
+
 2005-03-16 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Added IPMI_REQUEST_DATA_LENGTH_INVALID_CC to the

@@ -176,6 +176,8 @@ struct ipmi_fru_s
     unsigned char        private_bus;
     unsigned char        channel;
 
+    unsigned int        fetch_mask;
+
     ipmi_fru_fetched_cb fetched_handler;
     ipmi_fru_cb         domain_fetched_handler;
     void                *fetched_cb_data;
@@ -2701,6 +2703,7 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 			unsigned char       lun,
 			unsigned char       private_bus,
 			unsigned char       channel,
+			unsigned char       fetch_mask,
 			ipmi_fru_fetched_cb fetched_handler,
 			void                *fetched_cb_data,
 			ipmi_fru_t          **new_fru)
@@ -2731,6 +2734,7 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     fru->lun = lun;
     fru->private_bus = private_bus;
     fru->channel = channel;
+    fru->fetch_mask = fetch_mask;
     fru->fetch_size = MAX_FRU_DATA_FETCH;
 
     len = sizeof(fru->name);
@@ -2794,7 +2798,7 @@ ipmi_domain_fru_alloc(ipmi_domain_t *domain,
     locked_list_lock(frul);
     rv = ipmi_fru_alloc_internal(domain, is_logical, device_address,
 				 device_id, lun, private_bus, channel,
-				 NULL, NULL, &nfru);
+				 IPMI_FRU_ALL_AREA_MASK, NULL, NULL, &nfru);
     if (rv) {
 	locked_list_unlock(frul);
 	ipmi_domain_attr_put(attr);
@@ -2852,6 +2856,7 @@ ipmi_fru_alloc(ipmi_domain_t       *domain,
     locked_list_lock(frul);
     rv = ipmi_fru_alloc_internal(domain, is_logical, device_address,
 				 device_id, lun, private_bus, channel,
+				 IPMI_FRU_ALL_AREA_MASK,
 				 fetched_handler, fetched_cb_data, &nfru);
     if (rv) {
 	ipmi_domain_attr_put(attr);
@@ -2885,6 +2890,7 @@ ipmi_fru_alloc_notrack(ipmi_domain_t *domain,
 		       unsigned char lun,
 		       unsigned char private_bus,
 		       unsigned char channel,
+		       unsigned char fetch_mask,
 		       ipmi_ifru_cb  fetched_handler,
 		       void          *fetched_cb_data,
 		       ipmi_fru_t    **new_fru)
@@ -2894,7 +2900,7 @@ ipmi_fru_alloc_notrack(ipmi_domain_t *domain,
 
     rv = ipmi_fru_alloc_internal(domain, is_logical, device_address,
 				 device_id, lun, private_bus, channel,
-				 NULL, NULL, &nfru);
+				 fetch_mask, NULL, NULL, &nfru);
     if (rv)
 	return rv;
     nfru->domain_fetched_handler = fetched_handler;
@@ -2938,6 +2944,10 @@ process_fru_info(ipmi_fru_t *fru)
 
     for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
 	foff[i].type = i;
+	if (! (fru->fetch_mask & (1 << i))) {
+	    foff[i].offset = 0;
+	    continue;
+	}
 	foff[i].offset = data[i+1] * 8;
 	if (foff[i].offset >= data_len) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
