@@ -3,7 +3,7 @@
 
 	* selector.c, heap.h: Split out the heap code into a generic.
 
-	* test_btree.h: Added a test for the heap code.
+	* test_btree.c: Added a test for the heap code.
 
 2003-02-13 Corey Minyard <cminyard@mvista.com>
 
