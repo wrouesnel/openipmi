@@ -124,18 +124,26 @@ typedef int (*ilist_sort_cb)(void *item1, void *item2);
 
 void ilist_sort(ilist_t *list, ilist_sort_cb cmp);
 
-/* A callback list. */
-typedef void (*ilist_handle_cb)(void *data, void *handler, void *cb_data);
+/* A two-item list.  This is useful for managnig list of handlers
+   where you have a callback handler and a data item.  You create it
+   with the given two data items, and when you call
+   ilist_iter_twoitem, it will call the handler you pass in with the
+   two data items you have given. */
+
+typedef void (*ilist_twoitem_cb)(void *data, void *cb_data1, void *cb_data2);
 
 /* Add an entry to the list.  Returns 0 upon failure, 1 if successful.
-   Note that this reject duplicates as a failure. */
-int ilist_add_cb(ilist_t *list, void *handler, void *cb_data);
+   Duplicates are allowed. */
+int ilist_add_twoitem(ilist_t *list, void *cb_data1, void *cb_data2);
 
 /* Remove an entry, returns 1 if present, 0 if not. */
-int ilist_remove_cb(ilist_t *list, void *handler, void *cb_data);
+int ilist_remove_twoitem(ilist_t *list, void *cb_data1, void *cb_data2);
+
+/* Returns 1 if the entry exists in the list, 0 if not. */
+int ilist_twoitem_exists(ilist_t *list, void *cb_data1, void *cb_data2);
 
 /* Call all the callbacks in the list */
-void ilist_call_cbs(ilist_t *ilist, ilist_handle_cb handler, void *data);
+void ilist_iter_twoitem(ilist_t *ilist, ilist_twoitem_cb handler, void *data);
 
 /* Internal data structures, DO NOT USE THESE. */
 

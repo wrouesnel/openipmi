@@ -394,77 +394,86 @@ ilist_remove_item_from_list(ilist_t *list, void *item)
     return 1;
 }
 
-typedef struct ilist_cb_entry_s
+typedef struct ilist_twoitem_entry_s
 {
-    void *handler;
-    void *cb_data;
+    void         *cb_data1;
+    void         *cb_data2;
     ilist_item_t entry;
-} ilist_cb_entry_t;
+} ilist_twoitem_entry_t;
 
-static int cb_cmp(void *item, void *data)
+static int twoitem_cmp(void *item, void *data)
 {
-    ilist_cb_entry_t *e = item;
-    ilist_cb_entry_t *c = data;
+    ilist_twoitem_entry_t *e = item;
+    ilist_twoitem_entry_t *c = data;
 
-    return ((e->handler == c->handler) && (e->cb_data == c->cb_data));
+    return ((e->cb_data1 == c->cb_data1) && (e->cb_data2 == c->cb_data2));
 }
 
 static int
-find_cb(ilist_iter_t *iter, ilist_t *list, void *handler, void *cb_data)
+find_twoitem(ilist_iter_t *iter, ilist_t *list, void *cb_data1, void *cb_data2)
 {
-    ilist_cb_entry_t *val, tmp = { handler, cb_data };
+    ilist_twoitem_entry_t *val, tmp = { cb_data1, cb_data2 };
     ilist_init_iter(iter, list);
     ilist_unpositioned(iter);
-    val = ilist_search_iter(iter, cb_cmp, &tmp);
+    val = ilist_search_iter(iter, twoitem_cmp, &tmp);
     return (val != NULL);
 }
 
 int
-ilist_add_cb(ilist_t *list, void *handler, void *cb_data)
+ilist_add_twoitem(ilist_t *list, void *cb_data1, void *cb_data2)
 {
-    ilist_iter_t     iter;
-    ilist_cb_entry_t *entry;
-
-    if (find_cb(&iter, list, handler, cb_data))
-	return 0;
+    ilist_twoitem_entry_t *entry;
 
     entry = ilist_mem_alloc(sizeof(*entry));
     if (!entry)
 	return 0;
+    entry->cb_data1 = cb_data1;
+    entry->cb_data2 = cb_data2;
 
     ilist_add_tail(list, entry, &entry->entry);
     return 1;
 }
 
 int
-ilist_remove_cb(ilist_t *list, void *handler, void *cb_data)
+ilist_remove_twoitem(ilist_t *list, void *cb_data1, void *cb_data2)
 {
     ilist_iter_t     iter;
 
-    if (! find_cb(&iter, list, handler, cb_data))
+    if (! find_twoitem(&iter, list, cb_data1, cb_data2))
 	return 0;
 
     ilist_delete(&iter);
     return 1;
 }
 
-typedef struct cb_data_s
+int
+ilist_twoitem_exists(ilist_t *list, void *cb_data1, void *cb_data2)
 {
-    ilist_handle_cb handler;
-    void            *data;
-} cb_data_t;
+    ilist_iter_t     iter;
 
-static void cb_iter(ilist_iter_t *iter, void *item, void *cb_data)
+    if (! find_twoitem(&iter, list, cb_data1, cb_data2))
+	return 0;
+
+    return 1;
+}
+
+typedef struct twoitem_data_s
 {
-    ilist_cb_entry_t *entry = item;
-    cb_data_t        *info = cb_data;
+    ilist_twoitem_cb handler;
+    void             *data;
+} twoitem_data_t;
 
-    info->handler(info->data, entry->handler, entry->cb_data);
+static void twoitem_iter(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    ilist_twoitem_entry_t *entry = item;
+    twoitem_data_t        *info = cb_data;
+
+    info->handler(info->data, entry->cb_data1, entry->cb_data2);
 }
 
 void
-ilist_call_cbs(ilist_t *list, ilist_handle_cb handler, void *data)
+ilist_iter_twoitem(ilist_t *list, ilist_twoitem_cb handler, void *data)
 {
-    cb_data_t info = { handler, data };
-    ilist_iter(list, cb_iter, &info);
+    twoitem_data_t info = { handler, data };
+    ilist_iter(list, twoitem_iter, &info);
 }

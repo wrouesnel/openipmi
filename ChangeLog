@@ -6,7 +6,11 @@
 	* include/OpenIPMI/ipmi_entity.h, lib/entity.c: Added hot-swap
 	polymorphic routines.
 
-	* include/OpenIPMI/ilist.h, lib/ilist.c: Added callback list code.
+	* include/OpenIPMI/ilist.h, lib/ilist.c: Added two item list code,
+	primarily for handling callback lists.
+
+	* lib/conn.c: Converted OEM connection callback list to the
+	two item list, and call all the OEM connection callbacks at once.
 
 2004-01-19 Corey Minyard <cminyard@mvista.com> 
 
