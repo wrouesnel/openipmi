@@ -1,5 +1,7 @@
 2004-01-14 Corey Minyard <cminyard@mvista.com> 
 
+	* configure.in, ui/basic_ui.c: Added support for net snmp.
+
 	* configure.in: Move to version 1.2.2
 
 	* ui/ui.c: Added handling for controls going away when displayed.

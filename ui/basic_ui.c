@@ -43,7 +43,10 @@
 #include <OpenIPMI/ipmi_conn.h>
 
 #ifdef HAVE_UCDSNMP
-# ifdef HAVE_ALT_UCDSNMP_DIR
+# ifdef HAVE_NETSNMP
+#  include <net-snmp/net-snmp-config.h>
+#  include <net-snmp/net-snmp-includes.h>
+# elif defined(HAVE_ALT_UCDSNMP_DIR)
 #  include <ucd-snmp/asn1.h>
 #  include <ucd-snmp/snmp_api.h>
 #  include <ucd-snmp/snmp.h>
@@ -110,8 +113,13 @@ int snmp_input(int op,
     uint32_t             specific;
     struct variable_list *var;
 
+#ifdef HAVE_NETSNMP
+    if (op != NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE)
+	goto out;
+#else
     if (op != RECEIVED_MESSAGE)
 	goto out;
+#endif
     if (pdu->command != SNMP_MSG_TRAP)
 	goto out;
     if (snmp_oid_compare(ipmi_oid, IPMI_OID_SIZE,
@@ -149,11 +157,20 @@ int snmp_input(int op,
     return 1;
 }
 
-static
-int snmp_pre_parse(struct snmp_session *session, snmp_ipaddr from)
+#ifdef HAVE_NETSNMP
+static int
+snmp_pre_parse(netsnmp_session * session, netsnmp_transport *transport,
+	       void *transport_data, int transport_data_length)
 {
     return 1;
 }
+#else
+static int
+snmp_pre_parse(struct snmp_session *session, snmp_ipaddr from)
+{
+    return 1;
+}
+#endif
 
 struct snmp_session *snmp_session;
 
@@ -185,7 +202,24 @@ int
 snmp_init(selector_t *sel)
 {
     struct snmp_session session;
+#ifdef HAVE_NETSNMP
+    netsnmp_transport *transport = NULL;
+    static char *snmp_default_port = "udp:162";
 
+    netsnmp_ds_set_boolean(NETSNMP_DS_LIBRARY_ID,
+			   NETSNMP_DS_LIB_MIB_ERRORS,
+			   0);
+
+    init_snmp("ipmi_ui");
+
+    transport = netsnmp_tdomain_transport(snmp_default_port, 1, "udp");
+    if (!transport) {
+        snmp_sess_perror("ipmi_ui", &session);
+	return -1;
+    }
+#else
+    void *transport = NULL;
+#endif
     snmp_sess_init(&session);
     session.peername = SNMP_DEFAULT_PEERNAME;
     session.version = SNMP_DEFAULT_VERSION;
@@ -194,14 +228,18 @@ snmp_init(selector_t *sel)
     session.timeout = SNMP_DEFAULT_TIMEOUT;
     session.local_port = SNMP_TRAP_PORT;
     session.callback = snmp_input;
-    session.callback_magic = NULL;
+    session.callback_magic = transport;
     session.authenticator = NULL;
     session.isAuthoritative = SNMP_SESS_UNKNOWNAUTH;
 
+#ifdef HAVE_NETSNMP
+    snmp_session = snmp_add(&session, transport, snmp_pre_parse, NULL);
+#else
     snmp_session = snmp_open_ex(&session, snmp_pre_parse,
 				NULL, NULL, NULL, NULL);
+#endif
     if (snmp_session == NULL) {
-        snmp_sess_perror("snmptrapd", &session);
+        snmp_sess_perror("ipmi_ui", &session);
 	return -1;
     }
 
@@ -254,7 +292,7 @@ main(int argc, const char *argv[])
 #ifdef HAVE_UCDSNMP
     if (init_snmp) {
 	if (snmp_init(selector) < 0)
-	    return 1;
+	    goto out;
     }
 #endif
 
