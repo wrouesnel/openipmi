@@ -425,11 +425,14 @@ write_unlock(os_handler_t    *handler,
 {
     if (id->write_lock_count == 0)
 	ipmi_log(IPMI_LOG_FATAL, "write lock count went negative");
-    if (id->read_lock_count != 0)
-	ipmi_log(IPMI_LOG_FATAL, "read lock count not zero on write unlock");
+    if (pthread_self() != id->write_owner)
+	ipmi_log(IPMI_LOG_FATAL, "lock release by non-owner");
     id->write_lock_count--;
-    if (id->write_lock_count == 0)
+    if (id->write_lock_count == 0) {
+	if (id->read_lock_count != 0)
+	    ipmi_log(IPMI_LOG_FATAL,"read lock count not zero on write unlock");
 	pthread_rwlock_unlock(&id->rwlock);
+    }
     return 0;
 }
 
