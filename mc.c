@@ -1173,10 +1173,20 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     mc_ipmb_scan_info_t *info = rsp_data;
     int                 rv;
 
+    ipmi_read_lock();
+    rv = ipmi_mc_validate(info->bmc);
+    if (!rv) {
+	ipmi_log(IPMI_LOG_INFO,
+		 "BMC went away while scanning for MCs");
+	ipmi_read_unlock();
+	return;
+    }
+
     if (msg->data[0] == 0) {
 	/* Found one, start the discovery process on it. */
 	ipmi_mc_t *mc;
 
+	ipmi_lock(info->bmc->bmc->mc_list_lock);
 	mc = find_mc_by_addr(info->bmc, addr, addr_len);
 	if (!mc) {
 	    /* It doesn't already exist, so add it. */
@@ -1200,15 +1210,16 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    if (rv)
 		ipmi_cleanup_mc(mc);
 	}
+ next_addr:
+	ipmi_unlock(info->bmc->bmc->mc_list_lock);
     }
 
- next_addr:
     if (info->addr.slave_addr == info->end_addr) {
 	/* We've hit the end, we can quit now. */
 	if (info->done_handler)
 	    info->done_handler(info->bmc, 0, info->cb_data);
 	free(info);
-	return;
+	goto out;
     }
     info->addr.slave_addr += 2;
 
@@ -1230,7 +1241,8 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 
     if (rv)
 	free(info);
-    
+ out:
+    ipmi_read_unlock();
 }
 
 void

@@ -741,13 +741,13 @@ handle_reservation(ipmi_mc_t  *mc,
 	
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting fetch reservation: %x", rsp->data[0]);
+		 "Error getting SDR fetch reservation: %x", rsp->data[0]);
 	fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
 	goto out;
     }
     if (rsp->data_len < 3) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Reservation data not long enough");
+		 "SDR Reservation data not long enough");
 	fetch_complete(sdrs, EINVAL);
 	goto out;
     }
@@ -814,7 +814,8 @@ handle_start_fetch(void *cb_data, int shutdown)
     rv = start_fetch(sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_start_fetch: error requesting reserveration: %x", rv);
+		 "handle_start_fetch: error requesting SDR reserveration: %x",
+		 rv);
 	sdrs->wait_err = rv;
 	fetch_complete(sdrs, rv);
     } else {
