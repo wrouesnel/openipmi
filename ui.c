@@ -387,7 +387,7 @@ ui_log(char *format, ...)
 
     vlog_pad_out(format, ap);
     log_pad_refresh(y);
-    wrefresh(cmd_win);
+    cmd_win_refresh();
     va_end(ap);
 }
 
