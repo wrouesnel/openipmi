@@ -1344,12 +1344,11 @@ mxp_alloc_basic_sensor(void          *data,
     ipmi_sensor_set_event_reading_type(*sensor, reading_type);
     ipmi_sensor_set_id(*sensor, id, IPMI_ASCII_STR, strlen(id));
 
-    ipmi_sensor_set_sensor_type_string(
-				       *sensor,
+    ipmi_sensor_set_sensor_type_string(*sensor,
 				       ipmi_get_sensor_type_string(sensor_type));
-    ipmi_sensor_set_event_reading_type_string(
-					      *sensor,
-					      ipmi_get_event_reading_type_string(reading_type));
+    ipmi_sensor_set_event_reading_type_string
+      (*sensor,
+       ipmi_get_event_reading_type_string(reading_type));
 
     return rv;
 }

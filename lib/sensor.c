@@ -376,6 +376,8 @@ ipmi_sensor_find_id(ipmi_domain_id_t domain_id,
  *
  **********************************************************************/
 
+static void sensor_set_name(ipmi_sensor_t *sensor);
+
 static void
 sensor_final_destroy(ipmi_sensor_t *sensor)
 {
@@ -724,6 +726,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     }
 
     sensor->mc = mc;
+    sensor_set_name(sensor);
     sensor->source_mc = source_mc;
     sensor->lun = 4;
     sensor->send_lun = send_lun;

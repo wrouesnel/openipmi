@@ -656,6 +656,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     }
 
     control->mc = mc;
+    control_set_name(control);
     control->source_mc = source_mc;
     control->lun = 4;
     control->num = num;
