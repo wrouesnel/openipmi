@@ -322,57 +322,54 @@ draw_lines()
 void
 ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
-    int x = 0, y = 0, old_x = 0, old_y = 0;
     int do_nl = 1;
 
     if (full_screen) {
+	int x = 0, y = 0, old_x = 0, old_y = 0;
+	int max_x, max_y, i, j;
+
 	/* Generate the output to the dummy pad to see how many lines we
 	   will use. */
 	getyx(dummy_pad, old_y, old_x);
+	switch(log_type)
+	{
+	    case IPMI_LOG_INFO:
+		wprintw(dummy_pad, "INFO: ");
+		break;
+
+	    case IPMI_LOG_WARNING:
+		wprintw(dummy_pad, "WARN: ");
+		break;
+
+	    case IPMI_LOG_SEVERE:
+		wprintw(dummy_pad, "SEVR: ");
+		break;
+
+	    case IPMI_LOG_FATAL:
+		wprintw(dummy_pad, "FATL: ");
+		break;
+
+	    case IPMI_LOG_ERR_INFO:
+		wprintw(dummy_pad, "EINF: ");
+		break;
+
+	    case IPMI_LOG_DEBUG_START:
+		do_nl = 0;
+		/* FALLTHROUGH */
+	    case IPMI_LOG_DEBUG:
+		wprintw(dummy_pad, "DEBG: ");
+		break;
+
+	    case IPMI_LOG_DEBUG_CONT:
+		do_nl = 0;
+		/* FALLTHROUGH */
+	    case IPMI_LOG_DEBUG_END:
+		break;
+	}
 	vw_printw(dummy_pad, format, ap);
-	getyx(dummy_pad, y, x);
 	if (do_nl)
 	    wprintw(dummy_pad, "\n");
-    }
-
-    switch(log_type)
-    {
-	case IPMI_LOG_INFO:
-	    log_pad_out("INFO: ");
-	    break;
-
-	case IPMI_LOG_WARNING:
-	    log_pad_out("WARN: ");
-	    break;
-
-	case IPMI_LOG_SEVERE:
-	    log_pad_out("SEVR: ");
-	    break;
-
-	case IPMI_LOG_FATAL:
-	    log_pad_out("FATL: ");
-	    break;
-
-	case IPMI_LOG_ERR_INFO:
-	    log_pad_out("EINF: ");
-	    break;
-
-	case IPMI_LOG_DEBUG_START:
-	    do_nl = 0;
-	    /* FALLTHROUGH */
-	case IPMI_LOG_DEBUG:
-	    log_pad_out("DEBG: ");
-	    break;
-
-	case IPMI_LOG_DEBUG_CONT:
-	    do_nl = 0;
-	    /* FALLTHROUGH */
-	case IPMI_LOG_DEBUG_END:
-	    break;
-    }
-
-    if (full_screen) {
-	int max_x, max_y, i, j;
+	getyx(dummy_pad, y, x);
 
 	if (old_y == y) {
 	    for (j=old_x; j<x; j++)
@@ -381,23 +378,58 @@ ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 	    getmaxyx(dummy_pad, max_y, max_x);
 	    for (j=old_x; j<max_x; j++)
 		waddch(log_pad, mvwinch(dummy_pad, old_y, j));
-	    waddch(log_pad, '\n');
 	    for (i=old_y+1; i<y; i++) {
 		for (j=0; j<max_x; j++)
 		    waddch(log_pad, mvwinch(dummy_pad, i, j));
-		waddch(log_pad, '\n');
 	    }
 	    for (j=0; j<x; j++)
 		waddch(log_pad, mvwinch(dummy_pad, y, j));
 	}
 	y -= old_y;
 	wmove(dummy_pad, 0, x);
+	log_pad_refresh(y);
     } else {
+	switch(log_type)
+	{
+	    case IPMI_LOG_INFO:
+		log_pad_out("INFO: ");
+		break;
+
+	    case IPMI_LOG_WARNING:
+		log_pad_out("WARN: ");
+		break;
+
+	    case IPMI_LOG_SEVERE:
+		log_pad_out("SEVR: ");
+		break;
+
+	    case IPMI_LOG_FATAL:
+		log_pad_out("FATL: ");
+		break;
+
+	    case IPMI_LOG_ERR_INFO:
+		log_pad_out("EINF: ");
+		break;
+
+	    case IPMI_LOG_DEBUG_START:
+		do_nl = 0;
+		/* FALLTHROUGH */
+	    case IPMI_LOG_DEBUG:
+		log_pad_out("DEBG: ");
+		break;
+
+	    case IPMI_LOG_DEBUG_CONT:
+		do_nl = 0;
+		/* FALLTHROUGH */
+	    case IPMI_LOG_DEBUG_END:
+		break;
+	}
+
 	vlog_pad_out(format, ap);
 	if (do_nl)
 	    log_pad_out("\n");
+	log_pad_refresh(0);
     }
-    log_pad_refresh(y);
     cmd_win_refresh();
 }
 

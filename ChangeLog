@@ -1,4 +1,8 @@
 
+2003-01-28 Corey Minyard <cminyard@mvista.com>
+
+	* ui.c: Fixed problems with the previous va_arg problem.
+
 2003-01-27 Corey Minyard <cminyard@mvista.com>
 
 	* entity.c: Lots of little cleanup for parent-child relationships
