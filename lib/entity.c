@@ -1859,9 +1859,9 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
     /* Clear out all the temporary found information we use for
        scanning. */
     for (i=0; i<old_infos->next; i++)
-	memset(old_infos->found[i], 0, sizeof(entity_found_t));
+	memset(old_infos->found+i, 0, sizeof(entity_found_t));
     for (i=0; i<infos.next; i++)
-	memset(infos.found[i], 0, sizeof(entity_found_t));
+	memset(infos.found+i, 0, sizeof(entity_found_t));
 
     /* For every item in the new array, try to find it in the old
        array.  This is O(n^2), but these should be small arrays. */
