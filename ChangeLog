@@ -1,6 +1,14 @@
 
 2003-09-30 Corey Minyard <cminyard@mvista.com>
 
+	* lib/sdr.c: Don't refetch SDRs if the population is dynamic.
+
+	* lib/mc.c, lib/domain.c, include/OpenIPMI/ipmi_mc.h: Added an
+	audit to check the SDRs for an MC and for the main SDR repository.
+
+	* lib/mc.c: Was reading the device SDRs twice.  That's why it was
+	so slow at startup.
+
 	* lib/domain.c: Call the connection change function as soon
 	as the connection is up, don't wait to read the SDRs, etc.
 

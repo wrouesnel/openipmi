@@ -255,4 +255,7 @@ int _ipmi_mc_pointer_noseq_cb(ipmi_mcid_t   id,
 int _ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2);
 int _ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2);
 
+/* Used to periodically check that the MC data is current and valid. */
+void _ipmi_mc_check_mc(ipmi_mc_t *mc);
+
 #endif /* _IPMI_MC_H */

@@ -254,6 +254,9 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     sdrs->sensor = sensor;
     sdrs->sdr_wait_q = NULL;
 
+    /* Assume we have a dynamic population until told otherwise. */
+    sdrs->dynamic_population = 1;
+
     rv = ipmi_create_lock(domain, &sdrs->sdr_lock);
     if (rv)
 	goto out_done;
@@ -1401,6 +1404,9 @@ ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
 {
     int              rv;
     sdr_fetch_info_t info;
+
+    if (! sdrs->dynamic_population)
+	return ENOSYS;
 
     info.sdrs = sdrs;
     info.handler = handler;

@@ -897,34 +897,6 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     }
 }
 
-static void
-mc_sdr_mc_handler(ipmi_mc_t *mc, void *cb_data)
-{
-    int err = (long) cb_data;
-
-    if (err) {
-	ipmi_log(IPMI_LOG_WARNING, "Error reading device SDRs from "
-		 "an MC at address 0x%x: %x",
-		 ipmi_mc_get_address(mc), err);
-    }
-
-    /* Scan all the sensors and call sensors_reread() when done. */
-    ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
-}
-
-static void
-mc_sdr_handler(ipmi_sdr_info_t *sdrs,
-	       int             err,
-	       int             changed,
-	       unsigned int    count,
-	       void            *cb_data)
-{
-    ipmi_mcid_t *mcid = cb_data;
-
-    _ipmi_mc_pointer_cb(*mcid, mc_sdr_mc_handler, (void *) (long) err);
-    ipmi_mem_free(mcid);
-}
-
 int
 _ipmi_mc_handle_new(ipmi_mc_t *mc)
 {
@@ -939,7 +911,7 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 	    return ENOMEM;
 	*mcid = _ipmi_mc_convert_to_id(mc);
 
-	rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mcid);
+	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     } else
 	sensors_reread(mc, 0, NULL);
 
@@ -1263,20 +1235,22 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	     void            *cb_data)
 {
     sdr_fetch_info_t   *info = (sdr_fetch_info_t *) cb_data;
-    int                rv;
+    int                rv = 0;
 
     if (err) {
 	sdr_reread_done(info, err);
 	return;
     }
 
-    ipmi_entity_scan_sdrs(info->domain, info->source_mc,
-			  ipmi_domain_get_entities(info->domain),
-			  sdrs);
-    rv = ipmi_sensor_handle_sdrs(info->domain, info->source_mc, sdrs);
+    if (changed) {
+	ipmi_entity_scan_sdrs(info->domain, info->source_mc,
+			      ipmi_domain_get_entities(info->domain),
+			      sdrs);
+	rv = ipmi_sensor_handle_sdrs(info->domain, info->source_mc, sdrs);
 
-    if (!rv)
-	ipmi_detect_domain_presence_changes(info->domain, 0);
+	if (!rv)
+	    ipmi_detect_domain_presence_changes(info->domain, 0);
+    }
 
     sdr_reread_done(info, rv);
 }
@@ -1293,7 +1267,10 @@ sensor_read_handler(void *cb_data, int shutdown)
     }
 
     rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(info->source_mc), sdrs_fetched, info);
-    if (rv)
+    if (rv == ENOSYS)
+	/* ENOSYS means that the sensor population is not dyanmic. */
+	sdr_reread_done(info, 0);
+    else if (rv)
 	sdr_reread_done(info, rv);
 }
 
@@ -1328,6 +1305,23 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 
     return rv;
 }
+
+/***********************************************************************
+ *
+ * Checking for the validity and currentness of MC data.
+ *
+ **********************************************************************/
+
+/* Check the MC, we reread the SDRs and check the event receiver. */
+void
+_ipmi_mc_check_mc(ipmi_mc_t *mc)
+{
+    if (mc->provides_device_sdrs)
+	ipmi_mc_reread_sensors(mc, NULL, NULL);
+    _ipmi_mc_check_event_rcvr(mc);
+}
+
+
 
 /***********************************************************************
  *

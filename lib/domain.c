@@ -1361,8 +1361,8 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 	    } else
 		_ipmi_mc_handle_new(mc);
 	} else {
-	    /* Periodically check the event receiver for existing MCs. */
-	    _ipmi_mc_check_event_rcvr(mc);
+	    /* Periodically check the MCs. */
+	    _ipmi_mc_check_mc(mc);
 	}
     } else if (mc && ipmi_mc_is_active(mc)) {
 	/* Didn't get a response.  Maybe the MC has gone away? */
@@ -1544,6 +1544,29 @@ start_mc_scan(ipmi_domain_t *domain)
 }
 
 static void
+refetch_sdr_handler(ipmi_sdr_info_t *sdrs,
+		    int             err,
+		    int             changed,
+		    unsigned int    count,
+		    void            *cb_data)
+{
+    ipmi_domain_t *domain = cb_data;
+
+    if (changed) {
+	ipmi_entity_scan_sdrs(domain, NULL,
+			      domain->entities, domain->main_sdrs);
+	ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
+	ipmi_detect_ents_presence_changes(domain->entities, 1);
+    }
+}
+
+static void
+check_main_sdrs(ipmi_domain_t *domain)
+{
+    ipmi_sdr_fetch(domain->main_sdrs, refetch_sdr_handler, domain);
+}
+
+static void
 domain_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 {
     struct timeval    timeout;
@@ -1564,6 +1587,9 @@ domain_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 	ipmi_lock(domain->mc_list_lock);
 	start_mc_scan(domain);
 	ipmi_unlock(domain->mc_list_lock);
+
+	/* Also check to see if the SDRs have changed. */
+	check_main_sdrs(domain);
     }
 
     timeout.tv_sec = domain->bus_scan_interval;
