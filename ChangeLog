@@ -1,7 +1,7 @@
 
 2003-09-30 Corey Minyard <cminyard@mvista.com>
 
-	* lib/sdr.c: Don't refetch SDRs if the population is dynamic.
+	* lib/sdr.c: Don't refetch SDRs if the population is not dynamic.
 
 	* lib/mc.c, lib/domain.c, include/OpenIPMI/ipmi_mc.h: Added an
 	audit to check the SDRs for an MC and for the main SDR repository.
