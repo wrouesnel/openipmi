@@ -3,6 +3,9 @@
 
 	* mc.c: Fixed some problems with non-BMC SELs.
 
+	* ui.c: Added a log at startup to tell you to wait until startup
+	is complete.
+
 2003-03-25 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: The UI will no longer attempt to read unreadable

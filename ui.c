@@ -3519,6 +3519,8 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 
     help_cmd(NULL, NULL, NULL);
 
+    ui_log("Starting setup, wait until complete before entering commands.\n");
+
     ipmi_init(&ipmi_ui_cb_handlers);
 
     {
