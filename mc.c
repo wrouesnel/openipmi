@@ -3005,6 +3005,29 @@ ipmi_bmc_prev_event(ipmi_mc_t *bmc, ipmi_event_t *event)
     return ipmi_sel_get_prev_event(bmc->bmc->sel, event);
 }
 
+int
+ipmi_bmc_sel_count(ipmi_mc_t    *bmc,
+		   unsigned int *count)
+{
+    if (!bmc->bmc)
+	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
+
+    return ipmi_get_sel_count(bmc->bmc->sel, count);
+}
+
+int ipmi_bmc_sel_entries_left(ipmi_mc_t    *bmc,
+			      unsigned int *count)
+{
+    if (!bmc->bmc)
+	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
+
+    return ipmi_get_sel_entries_left(bmc->bmc->sel, count);
+}
+
 #ifdef IPMI_CHECK_LOCKS
 void
 __ipmi_check_mc_lock(ipmi_mc_t *mc)

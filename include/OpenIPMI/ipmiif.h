@@ -207,6 +207,18 @@ int ipmi_bmc_last_event(ipmi_mc_t *bmc, ipmi_event_t *event);
 int ipmi_bmc_next_event(ipmi_mc_t *bmc, ipmi_event_t *event);
 int ipmi_bmc_prev_event(ipmi_mc_t *bmc, ipmi_event_t *event);
 
+/* Return the number of non-deleted entries in the local copy of the
+   SEL. */
+int ipmi_bmc_sel_count(ipmi_mc_t    *bmc,
+		       unsigned int *count);
+
+/* Return the number of entries estimated to be available for new
+   events in the real SEL.  If there are deleted event in the local
+   copy of the SEL, they are not necessarily deleted from the real
+   SEL, so this takes that into account. */
+int ipmi_bmc_sel_entries_left(ipmi_mc_t    *bmc,
+			      unsigned int *count);
+
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
 enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };

@@ -109,11 +109,13 @@ struct ipmi_sel_info_s
     os_handler_t *os_hnd;
 
     /* This is the actual list of events and the number of non-deleted
-       events.  Note that events may contain more items than num_sels,
-       num_sels only counts the number of non-deleted events in the
-       list. */
+       events and the number of deleted events.  Note that events may
+       contain more items than num_sels, num_sels only counts the
+       number of non-deleted events in the list.  del_sels+num_sels
+       should be the number of events. */
     ilist_t      *events;
     unsigned int num_sels;
+    unsigned int del_sels;
 
     ipmi_sel_new_event_handler_cb new_event_handler;
     void                          *new_event_cb_data;
@@ -203,6 +205,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
     sel->fetched = 0;
     sel->fetch_state = IDLE;
     sel->num_sels = 0;
+    sel->del_sels = 0;
     sel->destroy_handler = NULL;
     sel->lun = lun;
     sel->fetch_handlers = NULL;
@@ -357,6 +360,7 @@ handle_sel_clear(ipmi_mc_t  *mc,
     if (rsp->data[0] == 0) {
 	/* Success!  We can free the data. */
 	free_deleted_events(sel->events);
+	sel->del_sels = 0;
     }
 
     fetch_complete(sel, 0);
@@ -477,6 +481,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 	if (holder->deleted) {
 	    holder->deleted = 0;
 	    sel->num_sels++;
+	    sel->del_sels--;
 	}
 	event_is_new = 1;
     }
@@ -1020,6 +1025,7 @@ sel_del_event(ipmi_sel_info_t       *sel,
 
     real_holder->deleted = 1;
     sel->num_sels--;
+    sel->del_sels++;
 
     mc = sel->mc;
     lun = sel->lun;
@@ -1096,6 +1102,22 @@ ipmi_get_sel_count(ipmi_sel_info_t *sel,
     }
 
     *count = sel->num_sels;
+
+    sel_unlock(sel);
+    return 0;
+}
+
+int
+ipmi_get_sel_entries_left(ipmi_sel_info_t *sel,
+			  unsigned int    *count)
+{
+    sel_lock(sel);
+    if (sel->destroyed) {
+	sel_unlock(sel);
+	return EINVAL;
+    }
+
+    *count = sel->entries - (sel->num_sels + sel->del_sels);
 
     sel_unlock(sel);
     return 0;
@@ -1427,6 +1449,7 @@ ipmi_sel_event_add(ipmi_sel_info_t *sel,
 	if (holder->deleted) {
 	    holder->deleted = 0;
 	    sel->num_sels++;
+	    sel->del_sels--;
 	}
     }
 
