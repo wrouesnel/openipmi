@@ -39,6 +39,12 @@
 	* lib/oem_motorola_mxp.c: Re-added scanning the system address
 	for MXP chassis.
 
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.c, lib/sensor.c:
+	Changed _ipmi_find_or_create_mc_by_slave_addr() to take a channel
+	as part of the address.
+
+	* configure.in: Move to version 1.2.16.
+
 2004-02-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a race condition dealing with an MC going away
