@@ -1445,7 +1445,7 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     if (ent->hs_cb.get_hot_swap_state == NULL) {
 	/* Set the entity hot-swap capable and use our internal state
 	   machine. */
-	ent->hot_swappable = 1;
+	ipmi_entity_set_hot_swappable(ent, 1);
 	ent->hs_cb = internal_hs_cb;
     }
 }
@@ -1488,7 +1488,7 @@ handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     if (ent->hs_cb.get_hot_swap_state == NULL) {
 	/* Set the entity hot-swap capable and use our internal state
 	   machine. */
-	ent->hot_swappable = 1;
+	ipmi_entity_set_hot_swappable(ent, 1);
 	ent->hs_cb = internal_hs_cb;
     }
 }
@@ -4363,7 +4363,23 @@ ipmi_entity_get_multi_record_data(ipmi_entity_t *entity,
 int
 ipmi_entity_set_hot_swappable(ipmi_entity_t *ent, int val)
 {
+    ent_info_update_handler_info_t info;
+
     ent->hot_swappable = val;
+
+    /* Make sure the user knows of the change. */
+    info.op = IPMI_CHANGED;
+    info.entity = ent;
+    info.domain = ipmi_entity_get_domain(ent);
+    ilist_iter_twoitem(ent->ents->update_handlers,
+		       call_entity_info_update_handler,
+		       &info);
+
+    /* Call the old version handler. */
+    if (ent->ents->handler)
+	ent->ents->handler(IPMI_CHANGED, info.domain, ent,
+			   ent->ents->cb_data);      
+
     return 0;
 }
 

@@ -849,6 +849,9 @@ enum ipmi_hot_swap_states {
     IPMI_HOT_SWAP_OUT_OF_CON = 7,
 };
 
+/* Get a string name for the hot swap state. */
+char *ipmi_hot_swap_state_name(enum ipmi_hot_swap_states state);
+
 /* Does the entity implement a hot-swap state machine? */
 int ipmi_entity_hot_swappable(ipmi_entity_t *ent);
 

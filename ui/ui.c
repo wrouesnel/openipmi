@@ -1216,6 +1216,216 @@ entity_cmd(char *cmd, char **toks, void *cb_data)
 
 
 static void
+hs_get_act_time_cb(ipmi_entity_t  *ent,
+		   int            err,
+		   ipmi_timeout_t val,
+		   void           *cb_data)
+{
+    char loc[MAX_ENTITY_LOC_SIZE];
+
+    if (err) {
+	ui_log("Could not get hot-swap act time: error 0x%x\n", err);
+	return;
+    }
+
+    ui_log("Hot-swap activate time for %s is %lld\n",
+	   get_entity_loc(ent, loc, sizeof(loc)), val);
+}
+
+static void
+hs_get_act_time_handler(ipmi_entity_t *entity,
+			char          **toks,
+			char          **toks2,
+			void          *cb_data)
+{
+    int rv;
+
+    rv = ipmi_entity_get_auto_activate_time(entity, hs_get_act_time_cb, NULL);
+    if (rv)
+	cmd_win_out("Could not get auto-activate: error 0x%x\n", rv);
+}
+
+int
+hs_get_act_time(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, hs_get_act_time_handler, NULL);
+    return 0;
+}
+
+static void
+hs_set_act_time_cb(ipmi_entity_t  *ent,
+		   int            err,
+		   void           *cb_data)
+{
+    if (err)
+	ui_log("Could not get hot-swap act time: error 0x%x\n", err);
+    else
+	ui_log("hot-swap act time set\n");
+}
+
+static void
+hs_set_act_time_handler(ipmi_entity_t *entity,
+			char          **toks,
+			char          **toks2,
+			void          *cb_data)
+{
+    int          rv;
+    unsigned int timeout;
+
+    if (get_uint(toks, &timeout, "Hot swap activate time"))
+	return;
+
+    rv = ipmi_entity_set_auto_activate_time(entity, timeout,
+					    hs_set_act_time_cb, NULL);
+    if (rv)
+	cmd_win_out("Could not set auto-activate: error 0x%x\n", rv);
+}
+
+int
+hs_set_act_time(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, hs_set_act_time_handler, NULL);
+    return 0;
+}
+
+static void
+hs_get_deact_time_cb(ipmi_entity_t  *ent,
+		     int            err,
+		     ipmi_timeout_t val,
+		     void           *cb_data)
+{
+    char loc[MAX_ENTITY_LOC_SIZE];
+
+    if (err) {
+	ui_log("Could not get hot-swap deact time: error 0x%x\n", err);
+	return;
+    }
+
+    ui_log("Hot-swap deactivate time for %s is %lld\n",
+	   get_entity_loc(ent, loc, sizeof(loc)), val);
+}
+
+static void
+hs_get_deact_time_handler(ipmi_entity_t *entity,
+			  char          **toks,
+			  char          **toks2,
+			  void          *cb_data)
+{
+    int rv;
+
+    rv = ipmi_entity_get_auto_deactivate_time(entity, hs_get_deact_time_cb, NULL);
+    if (rv)
+	cmd_win_out("Could not get auto-deactivate: error 0x%x\n", rv);
+}
+
+int
+hs_get_deact_time(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, hs_get_deact_time_handler, NULL);
+    return 0;
+}
+
+static void
+hs_set_deact_time_cb(ipmi_entity_t  *ent,
+		     int            err,
+		     void           *cb_data)
+{
+    if (err)
+	ui_log("Could not get hot-swap deact time: error 0x%x\n", err);
+    else
+	ui_log("hot-swap deact time set\n");
+}
+
+static void
+hs_set_deact_time_handler(ipmi_entity_t *entity,
+			  char          **toks,
+			  char          **toks2,
+			  void          *cb_data)
+{
+    int rv;
+    unsigned int timeout;
+
+    if (get_uint(toks, &timeout, "Hot swap deactivate time"))
+	return;
+
+    rv = ipmi_entity_set_auto_deactivate_time(entity, timeout,
+					      hs_set_deact_time_cb, NULL);
+    if (rv)
+	cmd_win_out("Could not set auto-deactivate: error 0x%x\n", rv);
+}
+
+int
+hs_set_deact_time(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, hs_set_deact_time_handler, NULL);
+    return 0;
+}
+
+static void
+hs_activate_cb(ipmi_entity_t  *ent,
+	       int            err,
+	       void           *cb_data)
+{
+    if (err)
+	ui_log("Could not activate entity: error 0x%x\n", err);
+    else
+	ui_log("entity activated\n");
+}
+
+static void
+hs_activate_handler(ipmi_entity_t *entity,
+		    char          **toks,
+		    char          **toks2,
+		    void          *cb_data)
+{
+    int rv;
+
+    rv = ipmi_entity_activate(entity, hs_activate_cb, NULL);
+    if (rv)
+	cmd_win_out("Could not activate entity: error 0x%x\n", rv);
+}
+
+int
+hs_activate(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, hs_activate_handler, NULL);
+    return 0;
+}
+
+static void
+hs_deactivate_cb(ipmi_entity_t  *ent,
+		 int            err,
+		 void           *cb_data)
+{
+    if (err)
+	ui_log("Could not deactivate entity: error 0x%x\n", err);
+    else
+	ui_log("entity deactivated\n");
+}
+
+static void
+hs_deactivate_handler(ipmi_entity_t *entity,
+		      char          **toks,
+		      char          **toks2,
+		      void          *cb_data)
+{
+    int rv;
+
+    rv = ipmi_entity_deactivate(entity, hs_deactivate_cb, NULL);
+    if (rv)
+	cmd_win_out("Could not deactivate entity: error 0x%x\n", rv);
+}
+
+int
+hs_deactivate(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, hs_deactivate_handler, NULL);
+    return 0;
+}
+
+
+
+static void
 sensors_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 {
     char name[33];
@@ -5478,6 +5688,22 @@ static struct {
       " - list all the entities the UI knows about" },
     { "entity",         entity_cmd,
       " <entity name> - list all the info about an entity" },
+    { "hs_get_act_time", hs_get_act_time,
+      " <entity name>"
+      " - Get the host-swap auto-activate time" },
+    { "hs_set_act_time", hs_set_act_time,
+      " <entity name> <time in nanoseconds>"
+      " - Set the host-swap auto-activate time" },
+    { "hs_get_deact_time", hs_get_deact_time,
+      " <entity name>"
+      " - Get the host-swap auto-deactivate time" },
+    { "hs_set_deact_time", hs_set_deact_time,
+      " <entity name> <time in nanoseconds>"
+      " - Set the host-swap auto-deactivate time" },
+    { "hs_activate", hs_activate,
+      " <entity name> - activate the given entity" },
+    { "hs_deactivate", hs_deactivate,
+      " <entity name> - deactivate the given entity" },
     { "sensors",	sensors_cmd,
       " <entity name> - list all the sensors that monitor the entity" },
     { "sensor",		sensor_cmd,
@@ -5937,6 +6163,22 @@ void fru_change(enum ipmi_update_e op,
     }
 }
 
+static int
+entity_hot_swap_handler(ipmi_entity_t             *ent,
+			enum ipmi_hot_swap_states last_state,
+			enum ipmi_hot_swap_states curr_state,
+			void                      *cb_data,
+			ipmi_event_t              *event)
+{
+    char loc[MAX_ENTITY_LOC_SIZE];
+
+    ui_log("Entity hot swap state changed for %s, was %s, now %s\n",
+	   get_entity_loc(ent, loc, sizeof(loc)),
+	   ipmi_hot_swap_state_name(last_state),
+	   ipmi_hot_swap_state_name(curr_state));
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
 static void
 entity_change(enum ipmi_update_e op,
 	      ipmi_domain_t      *domain,
@@ -5977,6 +6219,12 @@ entity_change(enum ipmi_update_e op,
 	    if (rv) {
 		report_error("ipmi_entity_add_presence_handler", rv);
 	    }
+	    rv = ipmi_entity_add_hot_swap_handler(entity,
+						  entity_hot_swap_handler,
+						  NULL);
+	    if (rv) {
+		report_error("ipmi_entity_add_hot_swap_handler", rv);
+	    }
 	    break;
 	case IPMI_DELETED:
 	    ui_log("Entity deleted: %s\n",
@@ -5987,6 +6235,11 @@ entity_change(enum ipmi_update_e op,
 		   get_entity_loc(entity, loc, sizeof(loc)));
 	    break;
     }
+
+    if (ipmi_entity_hot_swappable(entity))
+	ui_log("Entity is hot swappable\n");
+    else
+	ui_log("Entity is not hot swappable\n");
 }
 
 static void

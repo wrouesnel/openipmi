@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmiif.h>
 
 static char *hysteresis_support_types[] =
 {
@@ -1132,4 +1133,21 @@ ipmi_get_cc_string(unsigned int  cc)
     cc_buffer[len] = '\0';
 
     return(cc_buffer);
+}
+
+/* Get a string name fo the hot swap state. */
+char *
+ipmi_hot_swap_state_name(enum ipmi_hot_swap_states state)
+{
+    switch (state) {
+    case IPMI_HOT_SWAP_NOT_PRESENT: return "not_present";
+    case IPMI_HOT_SWAP_INACTIVE: return "inactive";
+    case IPMI_HOT_SWAP_ACTIVATION_REQUESTED: return "activation_requested";
+    case IPMI_HOT_SWAP_ACTIVATION_IN_PROGRESS: return "activation_in_progress";
+    case IPMI_HOT_SWAP_ACTIVE: return "active";
+    case IPMI_HOT_SWAP_DEACTIVATION_REQUESTED: return "deactivation_requested";
+    case IPMI_HOT_SWAP_DEACTIVATION_IN_PROGRESS: return "deactivation_in_progress";
+    case IPMI_HOT_SWAP_OUT_OF_CON: return "out_of_con";
+    default: return "invalid_state";
+    }
 }
