@@ -108,7 +108,7 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 enum {
     DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_SENSORS,
     DISPLAY_CONTROLS, DISPLAY_CONTROL, DISPLAY_ENTITIES, DISPLAY_MCS,
-    DISPLAY_RSP, HELP, EVENTS
+    DISPLAY_RSP, DISPLAY_SDRS, HELP, EVENTS
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
 ipmi_control_id_t curr_control_id;
@@ -2031,6 +2031,10 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	goto out;
     }
 
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    curr_display_type = DISPLAY_SDRS;
+
     wprintw(display_pad, "%s SDRs for MC %x\n",
 	    info->do_sensors ? "device" : "main",
 	    info->mc_addr);
@@ -2056,6 +2060,29 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
 
  out:
     ipmi_sdr_info_destroy(sdrs, NULL, NULL);
+    free(info);
+}
+
+void
+start_sdr_dump(ipmi_mc_t *mc, sdrs_info_t *info)
+{
+    ipmi_sdr_info_t *sdrs;
+    int             rv;
+
+    rv = ipmi_sdr_info_alloc(mc, 0, info->do_sensors, &sdrs);
+    if (rv) {
+	wprintw(cmd_win, "Unable to alloc sdr info: %x\n", rv);
+	free(info);
+	return;
+    }
+
+    rv = ipmi_sdr_fetch(sdrs, sdrs_fetched, info);
+    if (rv) {
+	wprintw(cmd_win, "Unable to start SDR fetch: %x\n", rv);
+	ipmi_sdr_info_destroy(sdrs, NULL, NULL);
+	free(info);
+	return;
+    }
 }
 
 void
@@ -2063,54 +2090,60 @@ sdrs_mcs_handler(ipmi_mc_t *bmc,
 		 ipmi_mc_t *mc,
 		 void      *cb_data)
 {
-    sdrs_info_t     *info = cb_data;
-    ipmi_sdr_info_t *sdrs;
-    int             rv;
+    sdrs_info_t *info = cb_data;
 
     if (info->mc_addr == ipmi_mc_get_address(mc)) {
 	info->found = 1;
-
-	rv = ipmi_sdr_info_alloc(mc, 0, info->do_sensors, &sdrs);
-	if (rv) {
-	    wprintw(cmd_win, "Unable to alloc sdr info: %x\n", rv);
-	    return;
-	}
-
-	rv = ipmi_sdr_fetch(sdrs, sdrs_fetched, &info);
-	if (rv) {
-	    wprintw(cmd_win, "Unable to start SDR fetch: %x\n", rv);
-	    ipmi_sdr_info_destroy(sdrs, NULL, NULL);
-	    return;
-	}
+	start_sdr_dump(mc, info);
     }
 }
 
 static void
 sdrs_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 {
-    ipmi_bmc_iterate_mcs(bmc, sdrs_mcs_handler, cb_data);
+    sdrs_info_t *info = cb_data;
+
+    if (info->mc_addr == 0x20) {
+	info->found = 1;
+	start_sdr_dump(bmc, info);
+    } else
+	ipmi_bmc_iterate_mcs(bmc, sdrs_mcs_handler, cb_data);
 }
 
 static int
 sdrs_cmd(char *cmd, char **toks, void *cb_data)
 {
     int         rv;
-    sdrs_info_t info;
+    sdrs_info_t *info;
 
-    if (get_uchar(toks, &info.mc_addr, "MC address"))
+    info = malloc(sizeof(*info));
+    if (!info) {
+	ui_log("Could not allocate memory for SDR fetch\n");
 	return 0;
+    }
 
-    if (get_uchar(toks, &info.do_sensors, "do_sensors"))
+    if (get_uchar(toks, &info->mc_addr, "MC address")) {
+	free(info);
 	return 0;
+    }
 
-    info.found = 0;
+    if (get_uchar(toks, &info->do_sensors, "do_sensors")) {
+	free(info);
+	return 0;
+    }
 
-    rv = ipmi_mc_pointer_cb(bmc_id, sdrs_cmd_bmcer, NULL);
-    if (rv)
+    info->found = 0;
+
+    rv = ipmi_mc_pointer_cb(bmc_id, sdrs_cmd_bmcer, info);
+    if (rv) {
 	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
-    else
-	if (!info.found)
+	free(info);
+    } else {
+	if (!info->found) {
 	    waddstr(cmd_win, "Unable to find that mc\n");
+	    free(info);
+	}
+    }
     return 0;
 }
 
