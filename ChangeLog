@@ -1,6 +1,8 @@
 
 2003-01-16 Corey Minyard <cminyard@mvista.com>
 
+	* OpenIPMI.texi: Documented the changes to the SEL code.
+	
 	* mc.c, include/OpenIPMI/ipmi_oem.h: Added an OEM callback for MC
 	removal.
 

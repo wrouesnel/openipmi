@@ -684,17 +684,17 @@ OpenIPMI will rescan the bus for new MCs every 10 minutes.  It is
 expected that OEM handlers can detect new MCs with custom events and add
 the new MC sooner.
 
-Events also come in on the BMC interface.  In the setup done
-callback, you should register for events with
-@code{ipmi_register_for_events()}, if you are interested in them.  This
-means that your callback will receive all events that are not attached
-to a sensor or otherwise handled by something inside OpenIPMI.  If an
-event is attached to a sensor, it will be delivered to a callback
-associated with the sensor.  Note that you may get events on this
-interface even if they are destined for a sensor, if the sensor doesn't
-have a handler, if the event was not delivered to the user by another
-mechanism.  This is so that the user can know the event exists and needs
-to be deleted.
+Events also come in on the BMC interface.  In the setup done callback,
+you should register for events with @code{ipmi_register_for_events()},
+even if you are not interested in them (because you need to delete
+them).  This means that your callback will receive all events that are
+not attached to a sensor or otherwise handled by something inside
+OpenIPMI.  If an event is attached to a sensor, it will be delivered to
+a callback associated with the sensor.  Note that you may get events on
+this interface even if they are destined for a sensor, if the sensor
+doesn't have a handler, if the event was not delivered to the user by
+another mechanism.  This is so that the user can know the event exists
+and needs to be deleted.
 
 @node    Entities, Sensors, The BMC, Using OpenIPMI
 @section Entities
@@ -946,7 +946,8 @@ If an IPMI event (one that will now be in the SEL) caused this event,
 then the event field will point to the event that caused this.  The
 event is not automatically deleted from the SEL, you must do this
 yourself.  This way, you can make sure the event has been properly
-handled before removing it from the SEL.
+handled before removing it from the SEL.  Note that you @emph{must}
+delete the events, or you SEL will fill up.
 
 @node    Hot Swap Sensor, , Sensor Events, Sensors
 @subsection Hot Swap Sensor
@@ -1105,7 +1106,10 @@ BMC.
 OpenIPMI keeps a local copy of the SEL in memory, but it doesn't
 currently use very efficient methods to manage it.  The user should
 receive the events and delete them in a timely manner to keep the SEL
-small.
+small.  Note that if your SEL entity in your system doesn't support
+deleting individual entries, then you must deleted @emph{all} the local
+entries in the local copy of the SEL before OpenIPMI will clear the
+entries from the SEL in the device.
 
 The @code{ipmi_register_for_events()} function allows you to get events
 OpenIPMI couldn't correlate to a sensor.  As well, the functions
