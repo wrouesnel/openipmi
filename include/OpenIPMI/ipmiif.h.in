@@ -1478,11 +1478,44 @@ int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
 int ipmi_control_get_num_light_settings(ipmi_control_t *control,
 					unsigned int   light);
 
-/* This describes a setting for a light.  For each setting each light
-   is defined to go through a number of transitions.  Each transition
-   is described by a color, a time (in milliseconds) that the color is
-   present.  For non-blinking lights, there will only be one transition.
-   For blinking lights, there will be one or more transition.. */
+/* This describes a setting for a light.  There are two types of
+   lights.  One type has a general ability to be set to a color, on
+   time, and off time.  The other has a pre-defined set of
+   transitions.  For transition-based lights, each light is defined to
+   go through a number of transitions.  Each transition is described
+   by a color, a time (in milliseconds) that the color is present.
+   For non-blinking lights, there will only be one transition.  For
+   blinking lights, there will be one or more transition.. */
+
+/* Handling the settings variable for a settings type light.  Note
+   that setting the on time to zero will turn off the LED (the off
+   time should be positive) and setting the off time to zero will turn
+   on the LED (the on time should be positive). */
+typedef struct ipmi_light_setting_s ipmi_light_setting_t;
+unsigned int ipmi_light_setting_get_count(ipmi_light_setting_t *setting);
+int ipmi_light_setting_get_color(ipmi_light_setting_t *setting, int num,
+				 int *color);
+int ipmi_light_setting_set_color(ipmi_light_setting_t *setting, int num,
+				 int color);
+/* Times are in milliseconds. */
+int ipmi_light_setting_get_on_time(ipmi_light_setting_t *setting, int num,
+				   int *time);
+int ipmi_light_setting_set_on_time(ipmi_light_setting_t *setting, int num,
+				   int time);
+int ipmi_light_setting_get_off_time(ipmi_light_setting_t *setting, int num,
+				    int *time);
+int ipmi_light_setting_set_off_time(ipmi_light_setting_t *setting, int num,
+				    int time);
+ipmi_light_setting_t *ipmi_alloc_light_settings(unsigned int count);
+void ipmi_free_light_settings(ipmi_light_setting_t *settings);
+ipmi_light_setting_t *ipmi_light_settings_dup(ipmi_light_setting_t *settings);
+
+/* If this returns true, then you set the light with the
+   ipmi_control_set_light() function and get the values with the
+   ipmi_control_get_light() function.  Otherwise you set it with the
+   normal set_control command and use the transitions functions to get
+   what the LED can do. */
+int ipmi_control_light_set_with_setting(ipmi_control_t *control);
 
 /* Get the setting for the specific setting.  These return -1 for
    an invalid num. */
@@ -1497,6 +1530,23 @@ int ipmi_control_get_light_color_time(ipmi_control_t *control,
 				      unsigned int   light,
 				      unsigned int   setting,
 				      unsigned int   num);
+
+/* Set and get the light's settings.  Note that the settings value you
+   get is */
+int ipmi_control_set_light(ipmi_control_t       *control,
+			   ipmi_light_setting_t *settings,
+			   ipmi_control_op_cb   handler,
+			   void                 *cb_data);
+typedef void (*ipmi_light_settings_cb)(ipmi_control_t       *control,
+				       int                  err,
+				       ipmi_light_setting_t *settings,
+				       void                 *cb_data);
+int ipmi_control_get_light(ipmi_control_t         *control,
+			   ipmi_light_settings_cb handler,
+			   void                   *cb_data);
+int ipmi_control_light_is_color_supported(ipmi_control_t *control,
+					  unsigned int   color);
+		       
 
 /* RELAY types have no settings. */
 
