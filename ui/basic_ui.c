@@ -117,11 +117,11 @@ void ui_reconnect(void)
 int
 main(int argc, char *argv[])
 {
-    int        rv;
-    int        curr_arg = 1;
-    char       *arg;
-    int        full_screen = 1;
-    ipmi_con_t *con[2];
+    int           rv;
+    int           curr_arg = 1;
+    char          *arg;
+    int           full_screen = 1;
+    ipmi_con_t    *con[2];
 
     while ((argc > 1) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
@@ -158,6 +158,7 @@ main(int argc, char *argv[])
 	curr_arg++;
 	if (argc < 1) {
 	    fprintf(stderr, "Not enough arguments\n");
+	    ipmi_ui_shutdown();
 	    exit(1);
 	}
 
@@ -169,6 +170,7 @@ main(int argc, char *argv[])
 				&con[last_con]);
 	if (rv) {
 	    fprintf(stderr, "ipmi_smi_setup_con: %s\n", strerror(rv));
+	    ipmi_ui_shutdown();
 	    exit(1);
 	}
 
@@ -183,12 +185,14 @@ main(int argc, char *argv[])
 
 	if (argc < 6) {
 	    fprintf(stderr, "Not enough arguments\n");
+	    ipmi_ui_shutdown();
 	    exit(1);
 	}
 
 	ent = gethostbyname(argv[curr_arg]);
 	if (!ent) {
 	    fprintf(stderr, "gethostbyname failed: %s\n", strerror(h_errno));
+	    ipmi_ui_shutdown();
 	    exit(1);
 	}
 	curr_arg++;
@@ -212,6 +216,7 @@ main(int argc, char *argv[])
 	} else if (con_parms[last_con].num_addr == 1) {
 	    if (argc < 8) {
 		fprintf(stderr, "Not enough arguments\n");
+		ipmi_ui_shutdown();
 		exit(1);
 	    }
 
@@ -299,12 +304,14 @@ main(int argc, char *argv[])
 
 	if (argc < 7) {
 	    fprintf(stderr, "Not enough arguments\n");
+	    ipmi_ui_shutdown();
 	    exit(1);
 	}
 
 	ent = gethostbyname(argv[curr_arg]);
 	if (!ent) {
 	    fprintf(stderr, "gethostbyname failed: %s\n", strerror(h_errno));
+	    ipmi_ui_shutdown();
 	    exit(1);
 	}
 	curr_arg++;
@@ -328,6 +335,7 @@ main(int argc, char *argv[])
 	} else if (con_parms[last_con].num_addr == 1) {
 	    if (argc < 8) {
 		fprintf(stderr, "Not enough arguments\n");
+		ipmi_ui_shutdown();
 		exit(1);
 	    }
 

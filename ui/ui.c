@@ -3650,6 +3650,16 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
 }
 
+void
+ipmi_ui_domain_ready(ipmi_domain_t *domain,
+		     int           err,
+		     unsigned int  conn_num,
+		     unsigned int  port_num,
+		     int           still_connected,
+		     void          *user_data)
+{
+}
+
 int
 ipmi_ui_init(selector_t **selector, int do_full_screen)
 {

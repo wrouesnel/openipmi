@@ -4710,6 +4710,37 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     ipmi_mem_free(cb_data);
 }
 
+typedef struct domain_up_info_s
+{
+    ipmi_mcid_t              mcid;
+    ipmi_domain_con_change_t *con_chid;
+} domain_up_info_t;
+
+static void
+con_up_mc(ipmi_mc_t *mc, void *cb_data)
+{
+    mxp_info_t *info = ipmi_mc_get_oem_data(mc);
+
+    mxp_setup_finished(mc, info);
+}
+
+static void
+con_up_handler(ipmi_domain_t *domain,
+	       int           err,
+	       unsigned int  conn_num,
+	       unsigned int  port_num,
+	       int           still_connected,
+	       void          *cb_data)
+{
+    domain_up_info_t *info = cb_data;
+
+    if (!still_connected)
+	return;
+
+    ipmi_domain_remove_con_change_handler(domain, info->con_chid);
+    _ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
+}
+
 static int
 mxp_handler(ipmi_mc_t *mc,
 	    void      *cb_data)
@@ -4770,9 +4801,26 @@ mxp_handler(ipmi_mc_t *mc,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "mxp_handler: could not ignore IPMB address 0x58");
 
-    /* Continue when the user is informed I exist. */
-    mxp_setup_finished(mc, info);
-    rv = 0;
+    if (ipmi_domain_con_up(domain)) {
+	/* The domain is already up, just start the process. */
+	mxp_setup_finished(mc, info);
+	rv = 0;
+    } else {
+	/* The domain is not up yet, wait for it to come up then start
+           the process. */
+	domain_up_info_t *conup_info;
+
+	conup_info = ipmi_mem_alloc(sizeof(*conup_info));
+	if (!conup_info) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+	conup_info->mcid = _ipmi_mc_convert_to_id(mc);
+	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
+						info, &conup_info->con_chid);
+	if (rv)
+	    ipmi_mem_free(info);
+    }
 
  out_err:
     if (rv)
