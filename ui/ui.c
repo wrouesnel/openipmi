@@ -3137,6 +3137,7 @@ display_pef_config(void)
 	display_pad_out("  guid:", val);
 	for (i=0; i<len; i++)
 	    display_pad_out(" %2.2x", data[i]);
+	display_pad_out("\n");
     }
 
     count = ipmi_pefconfig_get_num_event_filters(pef_config);
@@ -3144,12 +3145,12 @@ display_pef_config(void)
     for (i=1; i<count; i++) {
 	display_pad_out("  event filter %d:\n", i);
 	for (j=0; eft_table[j].name != NULL; j++) {
-	    rv = eft_table[i].get(pef_config, j, &val);
-	    display_pad_out("    %s: ", eft_table[i].name);
+	    rv = eft_table[j].get(pef_config, i, &val);
+	    display_pad_out("    %s: ", eft_table[j].name);
 	    if (rv)
 		display_pad_out("error %x", rv);
 	    else
-		display_pad_out(eft_table[i].fmt, val);
+		display_pad_out(eft_table[j].fmt, val);
 	    display_pad_out("\n");
 	}
     }
@@ -3159,12 +3160,12 @@ display_pef_config(void)
     for (i=1; i<count; i++) {
 	display_pad_out("  alert policy %d:\n", i);
 	for (j=0; apt_table[j].name != NULL; j++) {
-	    rv = apt_table[i].get(pef_config, j, &val);
-	    display_pad_out("    %s: ", apt_table[i].name);
+	    rv = apt_table[j].get(pef_config, i, &val);
+	    display_pad_out("    %s: ", apt_table[j].name);
 	    if (rv)
 		display_pad_out("error %x", rv);
 	    else
-		display_pad_out(apt_table[i].fmt, val);
+		display_pad_out(apt_table[j].fmt, val);
 	    display_pad_out("\n");
 	}
     }
@@ -3174,12 +3175,12 @@ display_pef_config(void)
     for (i=0; i<count; i++) {
 	display_pad_out("  alert string %d:\n", i);
 	for (j=0; ask_table[j].name != NULL; j++) {
-	    rv = ask_table[i].get(pef_config, j, &val);
-	    display_pad_out("    %s: ", ask_table[i].name);
+	    rv = ask_table[j].get(pef_config, i, &val);
+	    display_pad_out("    %s: ", ask_table[j].name);
 	    if (rv)
 		display_pad_out("error %x", rv);
 	    else
-		display_pad_out(ask_table[i].fmt, val);
+		display_pad_out(ask_table[j].fmt, val);
 	    display_pad_out("\n");
 	}
 	rv = ipmi_pefconfig_get_alert_string(pef_config, i,
