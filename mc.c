@@ -2218,11 +2218,25 @@ ipmi_mc_sdr_repository_support(ipmi_mc_t *mc)
     return mc->SDR_repository_support;
 }
 
+void
+ipmi_mc_set_sdr_repository_support(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->SDR_repository_support = val;
+}
+
 int
 ipmi_mc_sensor_device_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
     return mc->sensor_device_support;
+}
+
+void
+ipmi_mc_set_sensor_device_support(ipmi_mc_t *mc, int val)
+{
+    CHECK_MC_LOCK(mc);
+    mc->sensor_device_support = val;
 }
 
 int
