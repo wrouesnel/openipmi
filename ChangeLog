@@ -1,3 +1,12 @@
+2004-03-30 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/sensor.c: Fix a problem checking the event capabilities
+	on setting the event enables.
+
+	* lanserv/emu.c, lanserv/emu.h, lanserv/emu_cmd.c: Started
+	actually working on a useful simulator.  Added SDR, FRU data, and
+	sensor support.
+
 2004-03-26 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Added calling the entity update handler when the

@@ -27,6 +27,11 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+/* TODO:
+ * Add support for redundant FRU device at startup
+ * Add support for setting the power up timeout
+ */
+
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
