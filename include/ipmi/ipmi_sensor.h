@@ -282,6 +282,15 @@ void ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
 void ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor, int val);
 
 
+/* Allow OEM code to get the event handler so it can call it. */
+void ipmi_sensor_threshold_get_event_handler(
+    ipmi_sensor_t                          *sensor,
+    ipmi_sensor_threshold_event_handler_cb *handler,
+    void                                   **cb_data);
+void ipmi_sensor_discrete_get_event_handler(
+    ipmi_sensor_t                         *sensor,
+    ipmi_sensor_discrete_event_handler_cb *handler,
+    void                                  **cb_data);
 
 /* Typedefs for the sensor polymorphic functions. */
 typedef int (*ipmi_sensor_convert_from_raw_cb)(

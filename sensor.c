@@ -2306,6 +2306,16 @@ ipmi_sensor_threshold_set_event_handler(
     return 0;
 }
 
+void
+ipmi_sensor_threshold_get_event_handler(
+    ipmi_sensor_t                          *sensor,
+    ipmi_sensor_threshold_event_handler_cb *handler,
+    void                                   **cb_data)
+{
+    *handler = sensor->threshold_event_handler;
+    *cb_data = sensor->cb_data;
+}
+
 int
 ipmi_sensor_discrete_set_event_handler(
     ipmi_sensor_t                         *sensor,
@@ -2315,6 +2325,16 @@ ipmi_sensor_discrete_set_event_handler(
     sensor->discrete_event_handler = handler;
     sensor->cb_data = cb_data;
     return 0;
+}
+
+void
+ipmi_sensor_discrete_get_event_handler(
+    ipmi_sensor_t                         *sensor,
+    ipmi_sensor_discrete_event_handler_cb *handler,
+    void                                  **cb_data)
+{
+    *handler = sensor->discrete_event_handler;
+    *cb_data = sensor->cb_data;
 }
 
 int
