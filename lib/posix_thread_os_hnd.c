@@ -267,7 +267,10 @@ struct os_hnd_lock_s
 {
     pthread_mutex_t mutex;
     int             lock_count;
-    pthread_t       owner;
+
+    /* This is volatile and we always set the owner before we set the count.
+       That avoids race conditions checking the count and owner. */
+    volatile pthread_t owner;
 };
 
 static int
@@ -302,6 +305,7 @@ lock(os_handler_t  *handler,
 {
     if ((id->lock_count == 0) || (pthread_self() != id->owner))
 	pthread_mutex_lock(&id->mutex);
+    id->owner = pthread_self();
     id->lock_count++;
     return 0;
 }
@@ -333,7 +337,10 @@ struct os_hnd_rwlock_s
     pthread_mutex_t  read_lock_lock;
     int              read_lock_count;
     int              write_lock_count;
-    pthread_t        write_owner;
+
+    /* This is volatile and we always set the owner before we set the count.
+       That avoids race conditions checking the count and owner. */
+    volatile pthread_t write_owner;
 };
 
 static int
@@ -407,6 +414,7 @@ write_lock(os_handler_t    *handler,
 {
     if ((id->write_lock_count == 0) || (id->write_owner != pthread_self()))
 	pthread_rwlock_wrlock(&id->rwlock);
+    id->write_owner = pthread_self();
     id->write_lock_count++;
     return 0;
 }
