@@ -139,6 +139,8 @@ static char *line_buffer = NULL;
 static int  line_buffer_max = 0;
 static int  line_buffer_pos = 0;
 
+sel_timer_t *redisplay_timer;
+
 static void
 conv_from_spaces(char *name)
 {
@@ -465,6 +467,9 @@ leave(int rv, char *format, ...)
     va_list ap;
 
     ipmi_shutdown();
+
+    sel_stop_timer(redisplay_timer);
+    sel_free_timer(redisplay_timer);
 
     if (full_screen) {
 	endwin();
@@ -2219,7 +2224,8 @@ void mcs_handler(ipmi_mc_t *bmc,
 
     addr = ipmi_mc_get_address(mc);
     channel = ipmi_mc_get_channel(mc);
-    display_pad_out("  (%x %x)\n", channel, addr);
+    display_pad_out("  (%x %x) - %s\n", channel, addr,
+		    ipmi_mc_is_active(mc) ? "active" : "inactive");
 }
 
 static void
@@ -2241,7 +2247,7 @@ mcs_cmd(char *cmd, char **toks, void *cb_data)
     display_pad_clear();
     curr_display_type = DISPLAY_MCS;
     display_pad_out("MCs:\n");
-    display_pad_out("  (15 0x0)\n");
+    display_pad_out("  (f 0) - active\n");
     rv = ipmi_mc_pointer_cb(bmc_id, mcs_cmd_bmcer, NULL);
     if (rv) {
 	cmd_win_out("Unable to convert BMC id to a pointer\n");
@@ -3391,8 +3397,6 @@ event_handler(ipmi_mc_t    *bmc,
 	   event->data[11],
 	   event->data[12]);
 }
-
-sel_timer_t *redisplay_timer;
 
 static void
 redisplay_timeout(selector_t  *sel,

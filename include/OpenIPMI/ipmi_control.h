@@ -45,6 +45,9 @@ int ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls);
 /* Destroy a control repository and all the controls in it. */
 int ipmi_controls_destroy(ipmi_control_info_t *controls);
 
+/* Return the number of controls in the data structure. */
+unsigned int ipmi_controls_get_count(ipmi_control_info_t *controls);
+
 /* Operations and callbacks for control operations.  Operations on a
    control that can be delayed should be serialized (to avoid user
    confusion and for handling multi-part operations properly), thus

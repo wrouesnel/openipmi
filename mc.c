@@ -176,6 +176,12 @@ struct ipmi_mc_s
     ipmi_addr_t addr;
     int         addr_len;
 
+    /* If the MC is known to be good in the system, then active is
+       true.  If active is false, that means that there are sensors
+       that refer to this MC, but the MC is not currently in the
+       system. */
+    int active;
+
     ipmi_bmc_t  *bmc; /* Will be NULL if not a BMC. */
 
     /* The device SDRs on the MC. */
@@ -457,6 +463,12 @@ ipmi_mc_validate(ipmi_mc_t *mc)
     return rv;
 }
 
+int
+ipmi_mc_is_active(ipmi_mc_t *mc)
+{
+    return mc->active;
+}
+
 typedef struct mc_cmp_info_s
 {
     ipmi_addr_t addr;
@@ -517,6 +529,8 @@ ipmi_mc_find_or_create_mc_by_slave_addr(ipmi_mc_t    *bmc,
     rv = ipmi_create_mc(bmc, (ipmi_addr_t *) &addr, sizeof(addr), &mc);
     if (rv)
 	return rv;
+
+    mc->active = 0;
 
     rv = ipmi_add_mc_to_bmc(bmc, mc);
     if (rv) {
@@ -1395,16 +1409,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 		ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
 	}
 	ipmi_mem_free(mc->sensors_in_my_sdr);
+	mc->sensors_in_my_sdr = NULL;
     }
-
-    /* Destroy the device SDR repository, if it exists. */
-    if (mc->sdrs)
-	ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
-	    
-    if (mc->sensors)
-	ipmi_sensors_destroy(mc->sensors);
-    if (mc->controls)
-	ipmi_controls_destroy(mc->controls);
 
     /* Make sure the timer stops. */
     if (mc->sel_timer_info) {
@@ -1420,10 +1426,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 					       mc->sel_timer);
 	    ipmi_mem_free(mc->sel_timer_info);
 	}
+	mc->sel_timer_info = NULL;
     }
-
-    if (mc->sel)
-	ipmi_sel_destroy(mc->sel, NULL, NULL);
 
     /* FIXME - clean up entities that came from this device. */
 
@@ -1434,6 +1438,20 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
     if (mc->bmc) {
 	/* It's a BMC, clean up all the bmc-specific information. */
 
+	/* Delete the sensors from the main SDR repository. */
+	if (mc->bmc->sensors_in_my_sdr) {
+	    for (i=0; i<mc->bmc->sensors_in_my_sdr_count; i++) {
+		if (mc->bmc->sensors_in_my_sdr[i])
+		    ipmi_sensor_destroy(mc->bmc->sensors_in_my_sdr[i]);
+	    }
+	    ipmi_mem_free(mc->bmc->sensors_in_my_sdr);
+	}
+
+	/* We cleanup the MCs twice.  Some MCs may not be destroyed
+           (but only left inactive) in the first pass due to
+           references form other MCs SDR repositories.  The second
+           pass will get them all. */
+	ilist_iter(mc->bmc->mc_list, iterate_cleanup_mc, NULL);
 	ilist_iter(mc->bmc->mc_list, iterate_cleanup_mc, NULL);
 
 	/* Destroy the main SDR repository, if it exists. */
@@ -1453,15 +1471,6 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 						  mc->bmc->bus_scan_timer);
 		ipmi_mem_free(mc->bmc->bus_scan_timer_info);
 	    }
-	}
-
-	/* Delete the sensors from the main SDR repository. */
-	if (mc->bmc->sensors_in_my_sdr) {
-	    for (i=0; i<mc->bmc->sensors_in_my_sdr_count; i++) {
-		if (mc->bmc->sensors_in_my_sdr[i])
-		    ipmi_sensor_destroy(mc->bmc->sensors_in_my_sdr[i]);
-	    }
-	    ipmi_mem_free(mc->bmc->sensors_in_my_sdr);
 	}
 
 	ipmi_lock(mc->bmc->event_handlers_lock);
@@ -1504,25 +1513,59 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 
 	/* Remove all the connection fail handlers. */
 	mc->bmc->conn->set_con_fail_handler(mc->bmc->conn, NULL,  NULL);
-	ipmi_mem_free(mc->bmc);
-    } else if (mc->in_bmc_list) {
-	ilist_iter_t iter;
-	int          rv;
 
-	/* Remove it from the BMC list. */
-	ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
-	ilist_init_iter(&iter, mc->bmc_mc->bmc->mc_list);
-	rv = ilist_first(&iter);
-	while (rv) {
-	    if (ilist_get(&iter) == mc) {
-		ilist_delete(&iter);
-		break;
-	    }
-	    rv = ilist_next(&iter);
-	}
-	ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
+	/* When cleaning up a BMC, we always destroy these. */
+	if (mc->sdrs)
+	    ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
+	if (mc->sel)
+	    ipmi_sel_destroy(mc->sel, NULL, NULL);
+	if (mc->sensors)
+	    ipmi_sensors_destroy(mc->sensors);
+	if (mc->controls)
+	    ipmi_controls_destroy(mc->controls);
+
+	ipmi_mem_free(mc->bmc);
+	ipmi_mem_free(mc);
     }
-    ipmi_mem_free(mc);
+    else if ((ipmi_controls_get_count(mc->controls) == 0)
+	     && (ipmi_sensors_get_count(mc->sensors) == 0))
+    {
+	/* There are no sensors associated with this MC, so it's safe
+           to delete it.  If there are sensors that stil reference
+           this MC (such as from another MC's SDR repository, or the
+           main SDR repository) we have to leave it inactive but not
+           delete it. */
+	if (mc->in_bmc_list) {
+	    ilist_iter_t iter;
+	    int          rv;
+
+	    /* Remove it from the BMC list. */
+	    ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
+	    ilist_init_iter(&iter, mc->bmc_mc->bmc->mc_list);
+	    rv = ilist_first(&iter);
+	    while (rv) {
+		if (ilist_get(&iter) == mc) {
+		    ilist_delete(&iter);
+		    break;
+		}
+		rv = ilist_next(&iter);
+	    }
+	    ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
+	}
+
+	if (mc->sensors)
+	    ipmi_sensors_destroy(mc->sensors);
+	if (mc->controls)
+	    ipmi_controls_destroy(mc->controls);
+	if (mc->sdrs)
+	    ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
+	if (mc->sel)
+	    ipmi_sel_destroy(mc->sel, NULL, NULL);
+
+	ipmi_mem_free(mc);
+    } else {
+	mc->active = 0;
+    }
 }
 
 int
@@ -1543,6 +1586,8 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     memset(mc, 0, sizeof(*mc));
 
     mc->bmc_mc = bmc;
+
+    mc->active = 1;
 
     mc->bmc = NULL;
     mc->sensors = NULL;
@@ -1941,29 +1986,43 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     if (msg->data[0] == 0) {
 	if (mc)
 	    mc->missed_responses = 0;
-	if (mc && !mc_device_data_compares(mc, msg)) {
+	if (mc && mc->active && !mc_device_data_compares(mc, msg)) {
 	    /* The MC was replaced with a new one, so clear the old
                one and add a new one. */
 	    ipmi_cleanup_mc(mc);
 	    mc = NULL;
 	}
-	if (!mc) {
-	    /* It doesn't already exist, so add it. */
-	    rv = ipmi_create_mc(info->bmc, addr, addr_len, &mc);
-	    if (rv) {
-		/* Out of memory, just give up for now. */
-		remove_bus_scans_running(info->bmc, info);
-		ipmi_mem_free(info);
-		ipmi_unlock(info->bmc->bmc->mc_list_lock);
-		goto out;
+	if (!mc || !mc->active) {
+	    /* It doesn't already exist, or it's inactive, so add
+               it. */
+	    if (!mc) {
+		/* If it's not there, then add it.  If it's just not
+                   active, reuse the same data. */
+		rv = ipmi_create_mc(info->bmc, addr, addr_len, &mc);
+		if (rv) {
+		    /* Out of memory, just give up for now. */
+		    remove_bus_scans_running(info->bmc, info);
+		    ipmi_mem_free(info);
+		    ipmi_unlock(info->bmc->bmc->mc_list_lock);
+		    goto out;
+		}
+
+		rv = ipmi_sdr_info_alloc(mc, 0, 1, &(mc->sdrs));
+		if (!rv)
+		    rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
+		if (rv) {
+		    ipmi_cleanup_mc(mc);
+		    goto next_addr;
+		}
 	    }
 	    rv = get_device_id_data_from_rsp(mc, msg);
-	    if (rv)
+	    if (rv) {
+		/* If we couldn't handle the device data, just leave
+                   it inactive. */
+		mc->active = 0;
 		goto next_addr;
+	    }
 
-	    rv = ipmi_sdr_info_alloc(mc, 0, 1, &(mc->sdrs));
-	    if (!rv)
-		rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
 	    if (!rv) {
 		if (mc->provides_device_sdrs)
 		    rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
@@ -1973,7 +2032,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    if (rv)
 		ipmi_cleanup_mc(mc);
 	}
-    } else if (mc) {
+    } else if (mc && mc->active) {
 	/* Didn't get a response.  Maybe the MC has gone away? */
 	mc->missed_responses++;
 	if (mc->missed_responses >= MAX_MC_MISSED_RESPONSES) {

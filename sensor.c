@@ -56,6 +56,9 @@ struct ipmi_sensor_info_s
     int                      idx_size[5];
     /* In the above two, the 5th index is for non-standard sensors. */
 
+    /* Total number of sensors we have in this. */
+    unsigned int sensor_count;
+
     opq_t *sensor_wait_q;
     int  wait_err;
 };
@@ -180,9 +183,6 @@ struct ipmi_sensor_s
     ipmi_sensor_destroy_cb destroy_handler;
     void                   *destroy_handler_cb_data;
 };
-
-static void handle_deleted_sensor(ipmi_mc_t         *bmc,
-				  ipmi_sensor_t     *sensor);
 
 ipmi_sensor_id_t
 ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor)
@@ -478,6 +478,7 @@ ipmi_sensors_alloc(ipmi_mc_t *mc, ipmi_sensor_info_t **new_sensors)
     }
 
     sensors->destroyed = 0;
+    sensors->sensor_count = 0;
     for (i=0; i<5; i++) {
 	sensors->sensors_by_idx[i] = NULL;
 	sensors->idx_size[i] = 0;
@@ -485,6 +486,12 @@ ipmi_sensors_alloc(ipmi_mc_t *mc, ipmi_sensor_info_t **new_sensors)
 
     *new_sensors = sensors;
     return 0;
+}
+
+unsigned int
+ipmi_sensors_get_count(ipmi_sensor_info_t *sensors)
+{
+    return sensors->sensor_count;
 }
 
 int
@@ -559,6 +566,8 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     sensor->num = num;
     sensor->source_idx = -1;
     sensor->source_array = NULL;
+    if (!sensors->sensors_by_idx[4][num])
+	sensors->sensor_count++;
     sensors->sensors_by_idx[4][num] = sensor;
     sensor->entity_id = ipmi_entity_get_entity_id(ent);
     sensor->entity_instance = ipmi_entity_get_entity_instance(ent);
@@ -582,8 +591,6 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
     if (sensor != sensors->sensors_by_idx[sensor->lun][sensor->num])
 	return EINVAL;
 
-    handle_deleted_sensor(bmc, sensor);
-
     if (sensor->source_array)
 	sensor->source_array[sensor->source_idx] = NULL;
 
@@ -596,6 +603,7 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 	ipmi_entity_remove_sensor(ent, sensor->mc,
 				  sensor->lun, sensor->num, sensor);
 
+    sensors->sensor_count--;
     sensors->sensors_by_idx[sensor->lun][sensor->num] = NULL;
 
     sensor->destroyed = 1;
@@ -839,6 +847,8 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
 		    if (sdr.data[19] & 0x80) {
 			s[p+j]->entity_instance += j;
 		    }
+
+		    s[p+j]->source_idx += j;
 		}
 
 		val = (sdr.data[19] & 0x3f) + j;
@@ -1018,25 +1028,6 @@ static int cmp_sensor(ipmi_sensor_t *s1,
 }
 
 static void
-handle_deleted_sensor(ipmi_mc_t         *bmc,
-		      ipmi_sensor_t     *sensor)
-{
-    ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
-    int                rv;
-
-    ents = ipmi_mc_get_entities(bmc);
-
-    rv = ipmi_entity_find(ents,
-			  bmc,
-			  sensor->entity_id,
-			  sensor->entity_instance,
-			  &ent);
-    if (!rv)
-	ipmi_entity_remove_sensor(ent, bmc, sensor->lun, sensor->num, sensor);
-}
-
-static void
 sensor_reread_done(sdr_fetch_info_t *info, int err)
 {
     if (info->done)
@@ -1164,8 +1155,10 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 
 		/* Delete the sensor from the source array it came
                    from. */
-		if (osensor->source_array)
+		if (osensor->source_array) {
 		    osensor->source_array[osensor->source_idx] = NULL;
+		    osensor->source_array = NULL;
+		}
 
 		if (cmp_sensor(nsensor, osensor)) {
 		    /* They compare, prefer to keep the old data. */
@@ -1175,10 +1168,8 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 		    osensor->source_idx = i;
 		    osensor->source_array = sdr_sensors;
 		} else {
-		    /* Destroy the old sensor, add the new one. */
-		    handle_deleted_sensor(bmc, osensor);
-		    opq_destroy(osensor->waitq);
-		    ipmi_mem_free(osensor);
+		    ipmi_sensor_destroy(osensor);
+
 		    sensors->sensors_by_idx[nsensor->lun][nsensor->num]
 			= nsensor;
 		    snext = sref;
@@ -1188,6 +1179,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 	    } else {
 		/* It's a new sensor. */
 		sensors->sensors_by_idx[nsensor->lun][nsensor->num] = nsensor;
+		sensors->sensor_count++;
 		snext = sref;
 		sref = sref->next;
 		handle_new_sensor(bmc, nsensor, snext);
@@ -1203,13 +1195,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 	    if (osensor != NULL) {
 		/* This sensor was not in the new repository, so it must
 		   have been deleted. */
-		
-		ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(osensor->mc);
-		
-		handle_deleted_sensor(bmc, old_sdr_sensors[i]);
-		sensors->sensors_by_idx[osensor->lun][osensor->num] = NULL;
-		opq_destroy(osensor->waitq);
-		ipmi_mem_free(osensor);
+		ipmi_sensor_destroy(osensor);
 	    }
 	}
 	ipmi_mem_free(old_sdr_sensors);

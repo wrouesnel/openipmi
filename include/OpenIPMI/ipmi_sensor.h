@@ -46,6 +46,9 @@ int ipmi_sensors_alloc(ipmi_mc_t *mc, ipmi_sensor_info_t **new_sensors);
 /* Destroy a sensor repository and all the sensors in it. */
 int ipmi_sensors_destroy(ipmi_sensor_info_t *sensors);
 
+/* Return the number of sensors in the data structure. */
+unsigned int ipmi_sensors_get_count(ipmi_sensor_info_t *sensors);
+
 /*
  * These are for OEM code to create their own sensors.
  */

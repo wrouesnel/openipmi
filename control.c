@@ -51,6 +51,9 @@ struct ipmi_control_info_s
        controls. */
     int                      idx_size;
 
+    /* Total number of controls we have in this. */
+    unsigned int control_count;
+
     opq_t *control_wait_q;
     int  wait_err;
 };
@@ -208,6 +211,7 @@ ipmi_control_destroy(ipmi_control_t *control)
 	ipmi_entity_remove_control(ent, control->mc,
 				   control->lun, control->num, control);
 
+    controls->control_count--;
     controls->controls_by_idx[control->num] = NULL;
 
     control->destroyed = 1;
@@ -402,6 +406,7 @@ ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls)
 	return ENOMEM;
     memset(controls, 0, sizeof(*controls));
     controls->control_wait_q = opq_alloc(ipmi_mc_get_os_hnd(mc));
+    controls->control_count = 0;
     if (! controls->control_wait_q) {
 	ipmi_mem_free(controls);
 	return ENOMEM;
@@ -409,6 +414,12 @@ ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls)
 
     *new_controls = controls;
     return 0;
+}
+
+unsigned int
+ipmi_controls_get_count(ipmi_control_info_t *controls)
+{
+    return controls->control_count;
 }
 
 int
@@ -480,6 +491,8 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     control->mc = mc;
     control->lun = 4;
     control->num = num;
+    if (! controls->controls_by_idx[num])
+	controls->control_count++;
     controls->controls_by_idx[num] = control;
     control->entity_id = ipmi_entity_get_entity_id(ent);
     control->entity_instance = ipmi_entity_get_entity_instance(ent);

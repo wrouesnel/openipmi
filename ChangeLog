@@ -1,4 +1,23 @@
 
+2003-03-14 Corey Minyard <cminyard@mvista.com>
+
+	* sensor.c: Yet one more cleanup for compact sensor records,
+	increment the source index properly.
+
+	* sensor.c: Removed handle_deleted_sensor() and always use
+	ipmi_sensor_destroy() to clean up a sensor.
+
+	* control.c, include/OpenIPMI/ipmi_control.h: Added a count
+	for the number of controls in a control repository.
+
+	* sensor.c, include/OpenIPMI/ipmi_sensor.h: Added a count
+	for the number of sensors in a sensor repository.
+
+	* mc.c, include/OpenIPMI/ipmi_mc.h: Added the concept of an
+	MC being active or inactive.  Active MCs are present in the
+	system.  Inactive MCs are not present but referenced by SDRs, so
+	they cannot be deleted.
+
 2003-03-13 Jeff Zheng <Jeff.Zheng@Intel.com>
 
 	* sample.c: Added a simple sample application.

@@ -181,6 +181,11 @@ int ipmi_bmc_get_channel(ipmi_mc_t *mc, int index, ipmi_chan_info_t *chan);
 /* Validate that the given MC is still valid. */
 int ipmi_mc_validate(ipmi_mc_t *mc);
 
+/* Check to see if the MC is operational in the system.  If this is
+   false, then the MC was referred to by an SDR, but it doesn't really
+   exist. */
+int ipmi_mc_is_active(ipmi_mc_t *mc);
+
 /* Return the OS handler used by the mc. */
 os_handler_t *ipmi_mc_get_os_hnd(ipmi_mc_t *mc);
 
