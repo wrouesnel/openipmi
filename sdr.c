@@ -152,6 +152,7 @@ ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
 	rv = ENOMEM;
 	goto out;
     }
+    memset(sdrs, 0, sizeof(*sdrs));
 
     sdrs->mc = mc;
     sdrs->destroyed = 0;
@@ -623,6 +624,15 @@ handle_reservation(ipmi_mc_t  *mc,
     }
 	
     if (rsp->data[0] != 0) {
+	if (sdrs->sensor && (rsp->data[0] == IPMI_INVALID_CMD_CC)) {
+	    /* This is a special case.  We always attempt a
+               reservation with a device SDR (since there is nothing
+               telling us if this is supported), if it fails then we
+               just go on without the reservation. */
+	    sdrs->supports_reserve_sdr = 0;
+	    sdrs->reservation = 0;
+	    goto reservation_set;
+	}
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Error getting SDR fetch reservation: %x", rsp->data[0]);
 	fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
@@ -637,6 +647,7 @@ handle_reservation(ipmi_mc_t  *mc,
 
     sdrs->reservation = ipmi_get_uint16(rsp->data+1);
 
+ reservation_set:
     /* Fetch the first part of the SDR. */
     rv = initial_sdr_fetch(sdrs);
     if (rv)
@@ -680,7 +691,10 @@ handle_sdr_info(ipmi_mc_t  *mc,
                command, so just assume some defaults. */
 	    sdrs->working_num_sdrs = 256;
 	    sdrs->dynamic_population = 0;
-	    sdrs->supports_reserve_sdr = 0;
+
+	    /* Assume it uses reservations, if the reservation returns
+               an error, then say that it doesn't. */
+	    sdrs->supports_reserve_sdr = 1;
 
 	    (sdrs->lun_has_sensors)[0] = 1;
 	    (sdrs->lun_has_sensors)[1] = 0;
@@ -695,7 +709,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	    fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
 	    goto out;
 	}
-    } else  if (sdrs->sensor) {
+    } else if (sdrs->sensor) {
 	if (rsp->data_len < 3) {
 	    ipmi_log(IPMI_LOG_ERR_INFO, "SDR info is not long enough");
 	    fetch_complete(sdrs, EINVAL);
@@ -705,10 +719,9 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	sdrs->working_num_sdrs = rsp->data[1];
 	sdrs->dynamic_population = (rsp->data[2] & 0x80) == 0x80;
 
-	/* The spec's not 100% clear on this, but I'm guessing that if
-           the population is dynamic, the the reserve sdr must be
-           supported. */
-	sdrs->supports_reserve_sdr = sdrs->dynamic_population;
+	/* Assume it uses reservations, if the reservation returns
+	   an error, then say that it doesn't. */
+	sdrs->supports_reserve_sdr = 1;
 
 	(sdrs->lun_has_sensors)[0] = (rsp->data[2] & 0x01) == 0x01;
 	(sdrs->lun_has_sensors)[1] = (rsp->data[2] & 0x01) == 0x02;
@@ -832,6 +845,8 @@ start_fetch(ipmi_sdr_info_t *sdrs)
     sdrs->working_sdrs = NULL;
     sdrs->fetch_state = FETCHING;
     sdrs->sdrs_changed = 0;
+    sdrs->fetch_retry_count = 0;
+
 
     /* Get a reservation first. */
     cmd_msg.data = cmd_data;
@@ -904,9 +919,16 @@ ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
     if ((rv = ipmi_mc_validate(sdrs->mc)))
 	goto out_unlock2;
 
-    if (! ipmi_mc_sdr_repository_support(sdrs->mc)) {
-	rv = ENOSYS;
-	goto out_unlock2;
+    if (sdrs->sensor) {
+	if (! ipmi_mc_provides_device_sdrs(sdrs->mc)) {
+	    rv = ENOSYS;
+	    goto out_unlock2;
+	}
+    } else {
+	if (! ipmi_mc_sdr_repository_support(sdrs->mc)) {
+	    rv = ENOSYS;
+	    goto out_unlock2;
+	}
     }
 
     sdr_lock(sdrs);

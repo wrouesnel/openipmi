@@ -1,4 +1,18 @@
 
+2003-03-19 Corey Minyard <cminyard@mvista.com>
+
+	* sdr.c: Modified the reservation support handling for device
+	SDRs.  Start out assuming that it is supported, and if it returns
+	an invalid command then assume it is not supported.  There is no
+	clear way to determine if reservation is supported on device SDRs.
+
+	* sdr.c: Check the proper MC flag if it is a sensor SDR to see if
+	it supports device SDRs.
+
+2003-03-17 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Updated version to 0.2.5.
+
 2003-03-14 Corey Minyard <cminyard@mvista.com>
 
 	* sensor.c: Yet one more cleanup for compact sensor records,
