@@ -565,13 +565,16 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
 	return ENODEV;
 
     ilist_delete(&iter);
-    ipmi_mem_free(link);
 
     /* Find the parent in the child's list. */
     ilist_init_iter(&iter, child->parent_entities);
     ilist_unpositioned(&iter);
     if (ilist_search_iter(&iter, search_parent, ent))
 	ilist_delete(&iter);
+
+    /* Can't free the link until here, it contains the parent and
+       child list entries. */
+    ipmi_mem_free(link);
 
     ent->presence_possibly_changed = 1;
 
@@ -2030,6 +2033,8 @@ ipmi_sdr_entity_destroy(void *info)
 
 	cleanup_entity(ent);
     }
+
+    ipmi_mem_free(info);
 
     return 0;
 }

@@ -3688,9 +3688,20 @@ reading_get(ipmi_sensor_t *sensor,
 
     ipmi_init_states(&states);
 
+    if (!sensor) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Sensor was destroyed while getting reading");
+	if (info->done)
+	    info->done(sensor, err,
+		       IPMI_NO_VALUES_PRESENT, 0, 0.0,
+		       &states, info->cb_data);
+    }
+
     if (err) {
+	char id[40];
+	ipmi_sensor_get_id(sensor, id, sizeof(id));
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting reading: %x", err);
+		 "Error getting reading for sensor %s: %x", id, err);
 	if (info->done)
 	    info->done(sensor, err,
 		       IPMI_NO_VALUES_PRESENT, 0, 0.0,
@@ -3701,8 +3712,11 @@ reading_get(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0]) {
+	char id[40];
+	ipmi_sensor_get_id(sensor, id, sizeof(id));
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error getting reading: %x", rsp->data[0]);
+		 "IPMI error getting reading for sensor %s: %x",
+		 id, rsp->data[0]);
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),

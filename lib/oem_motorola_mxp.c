@@ -6685,6 +6685,9 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	goto out;
 
     for (i=0; i<MXP_POWER_SUPPLIES; i++) {
+	ipmi_entity_remove_child(info->chassis_ent, info->power_supply[i].ent);
+	ipmi_entity_remove_child(info->chassis_ent,
+		       		 info->power_supply[i].fan_ent);
 	ipmi_sensor_destroy(info->power_supply[i].presence);
 	ipmi_sensor_destroy(info->power_supply[i].ps);
 	ipmi_control_destroy(info->power_supply[i].enable);
@@ -6699,6 +6702,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     }
 
     for (i=0; i<MXP_TOTAL_BOARDS; i++) {
+	ipmi_entity_remove_child(info->chassis_ent, info->board[i].ent);
 	if (info->board[i].presence)
 	    ipmi_sensor_destroy(info->board[i].presence);
 	if (info->board[i].slot)
