@@ -1106,7 +1106,9 @@ static void session_activated(ipmi_con_t   *ipmi,
     lan->session_id = ipmi_get_uint32(msg->data+2);
     lan->outbound_seq_num = ipmi_get_uint32(msg->data+6);
 
-    rv = ipmi_init_con(ipmi, addr, addr_len);
+    /* Assume we are at address 0x20, the OEM code can fix it up if
+       necessary. */
+    rv = ipmi_init_con(ipmi, addr, addr_len, 0x20);
     if (rv) {
 	if (ipmi->setup_cb)
 	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
@@ -1251,7 +1253,9 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	}
         /* No authentication capabilities, assume we can just message
 	   the thing directly. */
-        rv = ipmi_init_con(ipmi, addr, addr_len);
+	/* Assume we are at address 0x20, the OEM code can fix it up
+	   if necessary. */
+        rv = ipmi_init_con(ipmi, addr, addr_len, 0x20);
 	if (rv) {
 	    if (ipmi->setup_cb)
 	        ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);

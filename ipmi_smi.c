@@ -1010,6 +1010,8 @@ ipmi_smi_setup_con(int               if_num,
     ipmi_con_t                   *con;
     int                          err;
     ipmi_system_interface_addr_t addr;
+    unsigned int                 my_slave_addr;
+    smi_data_t                   *smi;
 
     if (!handlers->add_fd_to_wait_for
 	|| !handlers->remove_fd_to_wait_for
@@ -1019,12 +1021,16 @@ ipmi_smi_setup_con(int               if_num,
 
     err = setup(if_num, handlers, user_data, &con);
     if (!err) {
+	smi = con->con_data;
+	err = ioctl(smi->fd, IPMICTL_GET_MY_ADDRESS_CMD, &my_slave_addr);
 	addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	addr.channel = IPMI_BMC_CHANNEL;
 	addr.lun = 0;
 	con->setup_cb = setup_cb;
 	con->setup_cb_data = cb_data;
-	err = ipmi_init_con(con, (ipmi_addr_t *) &addr, sizeof(addr));
+	err = ipmi_init_con(con,
+			    (ipmi_addr_t *) &addr, sizeof(addr),
+			    my_slave_addr);
 	if (err)
 	    cleanup_con(con);
     }

@@ -2291,10 +2291,11 @@ dev_id_rsp_handler(ipmi_mc_t  *bmc,
 }
 
 static int
-setup_bmc(ipmi_con_t  *ipmi,
-	  ipmi_addr_t *mc_addr,
-	  int         mc_addr_len,
-	  ipmi_mc_t   **new_mc)
+setup_bmc(ipmi_con_t   *ipmi,
+	  ipmi_addr_t  *mc_addr,
+	  int          mc_addr_len,
+	  unsigned int my_slave_addr,
+	  ipmi_mc_t    **new_mc)
 {
     ipmi_mc_t *mc;
     int       rv;
@@ -2329,8 +2330,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     }
     memset(mc->bmc, 0, sizeof(*(mc->bmc)));
 
-    /* Assume it's 20, OEM code can change it if necessary. */
-    mc->bmc->bmc_slave_addr = 0x20;
+    mc->bmc->bmc_slave_addr = my_slave_addr;
     mc->bmc->slave_addr_fetcher = NULL;
 
     mc->bmc->conn = ipmi;
@@ -2423,15 +2423,16 @@ setup_bmc(ipmi_con_t  *ipmi,
 }
 
 int
-ipmi_init_con(ipmi_con_t  *ipmi,
-	      ipmi_addr_t *mc_addr,
-	      int         mc_addr_len)
+ipmi_init_con(ipmi_con_t   *ipmi,
+	      ipmi_addr_t  *mc_addr,
+	      int          mc_addr_len,
+	      unsigned int my_slave_addr)
 {
     ipmi_msg_t cmd_msg;
     int        rv = 0;
     ipmi_mc_t  *mc;
 
-    rv = setup_bmc(ipmi, mc_addr, mc_addr_len, &mc);
+    rv = setup_bmc(ipmi, mc_addr, mc_addr_len, my_slave_addr, &mc);
     if (rv)
 	return rv;
 

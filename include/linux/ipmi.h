@@ -437,4 +437,18 @@ typedef struct ipmi_cmdspec_s
    EFAULT - an address supplied was invalid. */
 #define IPMICTL_SET_GETS_EVENTS_CMD	_IOR(IPMI_IOC_MAGIC, 16, int)
 
+        
+/*
+ * Set and get the slave address and LUN that we will use for our
+ * source messages.  Note that this affects the interface, not just
+ * this user, so it will affect all users of this interface.  This is
+ * so some initialization code can come in and do the OEM-specific
+ * things it takes to determine your address (if not the BMC) and set
+ * it for everyone else.  You should probably leave the LUN alone.
+ */ 
+#define IPMICTL_SET_MY_ADDRESS_CMD      _IOR(IPMI_IOC_MAGIC, 17, unsigned int)
+#define IPMICTL_GET_MY_ADDRESS_CMD      _IOR(IPMI_IOC_MAGIC, 18, unsigned int)
+#define IPMICTL_SET_MY_LUN_CMD          _IOR(IPMI_IOC_MAGIC, 19, unsigned int)
+#define IPMICTL_GET_MY_LUN_CMD          _IOR(IPMI_IOC_MAGIC, 20, unsigned int)
+ 
 #endif /* __LINUX_IPMI_H */

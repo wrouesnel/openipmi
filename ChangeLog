@@ -1,6 +1,12 @@
 
 2003-02-19 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c, include/OpenIPMI/ipmi_conn.h: Modified the ipmi_init_con()
+	call to take the slave address.
+	
+	* ipmi_lan.c, ipmi_smi.c: Now pass in the slave address to
+	ipmi_init_con().
+
 	* OpenIPMI.texi: Updated docs for changes.
 
 	* ui.c: Various cleanups for the SMI address and the new SEL

@@ -169,12 +169,14 @@ struct ipmi_con_s
     int (*close_connection)(ipmi_con_t *ipmi);
 };
 
-/* This should be called by the low-level connection code once it has a
-   working channel up to the BMC.  This will continue the registration
-   process. */
-int ipmi_init_con(ipmi_con_t  *con,
-		  ipmi_addr_t *mc_addr,
-		  int         mc_addr_len);
+/* This should be called by the low-level connection code once it has
+   a working channel up to the BMC.  This will continue the
+   registration process.  Make sure to pass in the IPMB address of the
+   BMC as my_slave_addr. */
+int ipmi_init_con(ipmi_con_t   *con,
+		  ipmi_addr_t  *mc_addr,
+		  int          mc_addr_len,
+		  unsigned int my_slave_addr);
 
 /* Different types of low-level handlers must register themselves with
    the IPMI code.  This is currently used so the IPMI code can validate
