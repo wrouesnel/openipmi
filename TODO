@@ -4,4 +4,6 @@ there).
 
 Support for multiple LAN connections to the same box in ipmi_lan.
 
-Fix the logging to support severity levels.
+Add support for FRU access.
+
+Add support for the chassis commands.

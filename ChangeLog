@@ -1,6 +1,8 @@
 
 2003-01-09 Corey Minyard <cminyard@mvista.com>
 
+	* OpenIPMI.texi: More work on docs.
+
 	* control.c: Fixed the calculation size for the non-standard entry
 	array size.
 
