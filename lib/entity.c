@@ -1858,7 +1858,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	    ent->presence_sensor = NULL;
 	    ilist_init_iter(&iter, ent->sensors);
 	    ilist_unpositioned(&iter);
-	    info.ignore_sensor = sensor;
+	    info.ignore_sensor = NULL;
 	    ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
 	    if (ref) {
 		ent->presence_bit_sensor = info.sensor;
@@ -1871,6 +1871,9 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	ipmi_sensor_id_t id = ipmi_sensor_convert_to_id(sensor);
 
 	if (sensor == ent->presence_bit_sensor) {
+	    ilist_init_iter(&iter, ent->sensors);
+	    ilist_unpositioned(&iter);
+	    info.ignore_sensor = sensor;
 	    ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
 	    if (ref) {
 		ent->presence_bit_sensor = info.sensor;
