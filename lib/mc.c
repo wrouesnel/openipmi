@@ -1544,10 +1544,16 @@ startup_got_sel_time(ipmi_mc_t  *mc,
     if (time < now.tv_sec)
 	/* Time is in the past, move it forward. */
 	first_sel_op(mc);
-    else
+    else {
+	struct timeval tv;
 	/* Time is current or in the future, don't move it backwards
 	   as that may mess other things up. */
+        tv.tv_sec = time;
+        tv.tv_usec = 0;
+        mc->startup_SEL_time = ipmi_timeval_to_time(tv);
+
 	ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
+    }
 
     goto out;
 
