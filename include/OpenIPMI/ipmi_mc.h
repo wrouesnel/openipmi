@@ -172,6 +172,13 @@ int ipmi_bmc_set_smi_slave_addr_fetcher(
    is old. */
 unsigned long ipmi_mc_get_startup_SEL_time(ipmi_mc_t *bmc);
 
+/* Reread the sel.  When the hander is called, all the events in the
+   SEL have been fetched into the local copy of the SEL (with the
+   obvious caveat that this is a distributed system and other things
+   may have come in after the read has finised). */
+int ipmi_mc_reread_sel(ipmi_mc_t       *mc,
+		       ipmi_mc_done_cb handler,
+		       void            *cb_data);
 
 /* Fetch the current time from the SEL. */
 typedef void (*sel_get_time_cb)(ipmi_mc_t     *mc,

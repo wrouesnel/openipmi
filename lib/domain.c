@@ -2144,6 +2144,113 @@ ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain)
     return domain->default_sel_rescan_time;
 }
 
+/* Code to explicitly reread all the SELs in the domain. */
+typedef struct sels_reread_s
+{
+    /* The number of pending requests. */
+    int         count;
+
+    /* The actual number of MCs we tried to request from .*/
+    int         tried;
+
+    /* This is the last error that occurred. */
+    int         err;
+
+    ipmi_domain_cb handler;
+    void           *cb_data;
+
+    /* We may have multiple threads going at the data from multiple
+       SEL reads, so we need to protect the data. */
+    ipmi_lock_t *lock;
+} sels_reread_t;
+
+static void
+reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    sels_reread_t *info = cb_data;
+    int           count;
+
+    ipmi_lock(info->lock);
+    info->count--;
+    count = info->count;
+    if (err)
+	info->err = err;
+    ipmi_unlock(info->lock);
+    if (count == 0) {
+	/* We were the last one, call the main handler. */
+	if (info->handler)
+	    info->handler(ipmi_mc_get_domain(mc), info->err, info->cb_data);
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+    }
+}
+
+static void
+reread_sels_handler(ipmi_domain_t *domain,
+		    ipmi_mc_t     *mc,
+		    void          *cb_data)
+{
+    sels_reread_t *info = cb_data;
+    int           rv;
+
+    if (ipmi_mc_sel_device_support(mc)) {
+	info->tried++;
+	rv = ipmi_mc_reread_sel(mc, reread_sel_handler, info);
+	if (rv)
+	    info->err = rv;
+	else
+	    info->count++;
+    }
+}
+
+int
+ipmi_domain_reread_sels(ipmi_domain_t  *domain,
+			ipmi_domain_cb handler,
+			void           *cb_data)
+{
+    sels_reread_t *info;
+    int           rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    rv = ipmi_create_lock(domain, &info->lock);
+    if (!rv) {
+	ipmi_mem_free(info);
+	return rv;
+    }
+    info->count = 0;
+    info->tried = 0;
+    info->err = 0;
+    info->handler = handler;
+    info->cb_data = cb_data;
+    ipmi_lock(info->lock);
+    rv = ipmi_domain_iterate_mcs(domain, reread_sels_handler, info);
+    ipmi_unlock(info->lock);
+    if (rv) {
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	return rv;
+    }
+    if ((info->tried > 0) && (info->count == 0)) {
+	/* We tried to do an SEL fetch, but failed to actually
+	   accomplish any.  Return an error. */
+	rv = info->err;
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	return rv;
+    }
+
+    if (info->count == 0) {
+	/* No requests, so return an error. */
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	return ENOTSUP;
+    }
+
+    return 0;
+}
 
 /***********************************************************************
  *

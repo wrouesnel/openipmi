@@ -1,4 +1,12 @@
 
+2003-10-29 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a way to force
+	rereading the SEL.
+
+	* lib/domain.c, include/OpenIPMI/ipmiif.h: Added a way to force
+	rereading all the SELs in a domain.
+
 2003-10-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sdr.c: Fixed a bug in the random backof of SDR reading.  On

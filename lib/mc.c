@@ -722,6 +722,70 @@ mc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 	sels_fetched_start_timer(mc->sel, 0, 0, 0, info);
 }
 
+typedef struct sel_reread_s
+{
+    ipmi_mc_done_cb handler;
+    void            *cb_data;
+    ipmi_mcid_t     mcid;
+    int             err;
+} sel_reread_t;
+
+static void
+mc_reread_sel_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    sel_reread_t *info = cb_data;
+
+    info->handler(mc, info->err, info->cb_data);
+}
+
+static void
+reread_sel_done(ipmi_sel_info_t *sel,
+		int             err,
+		int             changed,
+		unsigned int    count,
+		void            *cb_data)
+{
+    sel_reread_t *info = cb_data;
+    int          rv;
+
+    if (info->handler) {
+	if (!sel) {
+	    info->handler(NULL, ECANCELED, cb_data);
+	    goto out;
+	}
+
+	rv = _ipmi_mc_pointer_cb(info->mcid, mc_reread_sel_cb, info);
+	if (rv) {
+	    info->handler(NULL, ECANCELED, cb_data);
+	    goto out;
+	}
+    }
+ out:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_reread_sel(ipmi_mc_t       *mc,
+		   ipmi_mc_done_cb handler,
+		   void            *cb_data)
+{
+    sel_reread_t *info;
+    int           rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->handler = handler;
+    info->cb_data = cb_data;
+    info->mcid = _ipmi_mc_convert_to_id(mc);
+
+    rv = ipmi_sel_get(mc->sel, reread_sel_done, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
 typedef struct sel_get_time_s
 {
     sel_get_time_cb handler;

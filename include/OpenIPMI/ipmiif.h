@@ -239,6 +239,12 @@ int ipmi_domain_sel_count(ipmi_domain_t *domain,
 int ipmi_domain_sel_entries_used(ipmi_domain_t *domain,
 				 unsigned int  *count);
 
+/* Force rereading all the SELs in the domain.  The handler will be
+   called after they are all reread. */
+int ipmi_domain_reread_sels(ipmi_domain_t  *domain,
+			    ipmi_domain_cb handler,
+			    void           *cb_data);
+
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
 enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
