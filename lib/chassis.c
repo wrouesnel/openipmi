@@ -3,6 +3,10 @@
  *
  * Code to map chassis messages to controls
  *
+ * Author: MontaVista Software, Inc.
+ *         Corey Minyard <minyard@mvista.com>
+ *         source@mvista.com
+ *
  *  (C) 2003 MontaVista Software, Inc.
  *
  *  This program is free software; you can redistribute it and/or
