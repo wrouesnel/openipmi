@@ -111,5 +111,6 @@ AC_OUTPUT(Makefile
 	  man/Makefile
 	  include/Makefile
 	  include/OpenIPMI/Makefile
+	  include/OpenIPMI/ipmiif.h
 	  include/linux/Makefile
 	  include/net/Makefile)

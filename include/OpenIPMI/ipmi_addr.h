@@ -78,6 +78,22 @@ typedef struct ipmi_ipmb_addr
 	unsigned char lun;
 } ipmi_ipmb_addr_t;
 
+/* A LAN Address.  This is an address to/from a LAN interface bridged
+   by the BMC, not an address actually out on the LAN.  Note that this
+   (like the IPMB address) is set up so you can directly respond to
+   this when you receive it and it will go to the right place. */
+#define IPMI_LAN_ADDR_TYPE		0x04
+typedef struct ipmi_lan_addr
+{
+	int           addr_type;
+	short         channel;
+	unsigned char session_handle;
+	unsigned char dest; /* Destination (really the source on
+			       received messages) */
+	unsigned char src; /* Our id. */
+	unsigned char lun;
+} ipmi_lan_addr_t;
+
 /* Channel for talking directly with the BMC.  When using this
    channel, This is for the system interface address type only.
    FIXME - is this right, or should we use -1? */
@@ -94,6 +110,7 @@ typedef struct ipmi_ipmb_addr
 typedef struct ipmi_addr ipmi_addr_t;
 typedef struct ipmi_system_interface_addr ipmi_system_interface_addr_t;
 typedef struct ipmi_ipmb_addr ipmi_ipmb_addr_t;
+typedef struct ipmi_lan_addr ipmi_lan_addr_t;
 
 #endif /* _LINUX_IPMI_H */
 

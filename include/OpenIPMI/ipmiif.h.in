@@ -34,6 +34,9 @@
 #ifndef __IPMIIF_H
 #define __IPMIIF_H
 
+/* For version detection */
+#define OPENIPMI_VERSION @VERSION@
+
 /*
  * This is the main include file for dealing with IPMI.  It provides
  * an abstract interface to the IPMI system, so you don't have to deal
@@ -1550,5 +1553,9 @@ int ipmi_args_setup_con(ipmi_args_t  *args,
 			os_handler_t *handlers,
 			void         *user_data,
 			ipmi_con_t   **con);
+
+/* Return the version number (ie "1.2.7") of the OpenIPMI library in
+   use. */
+char *ipmi_openipmi_version(void);
 
 #endif /* __IPMIIF_H */

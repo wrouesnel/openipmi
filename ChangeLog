@@ -4,6 +4,15 @@
 
 	* lib/oem_motorola_mxp.c: Add support for MXP half-pint chassis.
 
+	* include/OpenIPMI/ipmiif.h: removed
+	* include/OpenIPMI/ipmiif.h.in: added, with version info
+	* configure.in: Added setting the version info of ipmiif.h
+
+	* include/OpenIPMI/ipmiif.h.in, lib/ipmi.c: Added a version
+	function.
+
+	* include/OpenIPMI/ipmi_addr.h: Added a LAN address type.
+
 2004-02-08 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Don't subtract 0x60 from device-relative entity
