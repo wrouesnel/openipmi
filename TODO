@@ -5,3 +5,10 @@ there).
 Add support for the chassis commands.
 
 Add platform event traps to the LAN code.
+
+Add controls for the GUIDs (system and device) and for the various
+chassis-related commands.
+
+Use GUIDs to tell if an MC has changed.
+
+Rescan the SDRs periodically.

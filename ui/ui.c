@@ -509,7 +509,7 @@ leave(int rv, char *format, ...)
 	full_screen = 0;
     }
     else
-	tcsetattr(0, 0, &old_termios);
+	tcsetattr(0, TCSADRAIN, &old_termios);
 
     if (line_buffer) {
 	ipmi_mem_free(line_buffer);
@@ -620,7 +620,7 @@ normal_char(int key, void *cb_data)
 	    return ENOMEM;
 	line_buffer_max += 10;
 	if (line_buffer) {
-	    strcpy(new_line, line_buffer);
+	    memcpy(new_line, line_buffer, line_buffer_pos);
 	    ipmi_mem_free(line_buffer);
 	}
 	line_buffer = new_line;
@@ -4212,7 +4212,7 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 	new_termios.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
 			         |INLCR|IGNCR|ICRNL|IXON);
 	new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
-	tcsetattr(0, 0,&new_termios);
+	tcsetattr(0, TCSADRAIN, &new_termios);
 	fcntl(0, F_SETFL, O_NONBLOCK);
     }
 

@@ -368,7 +368,7 @@ ipmi_get_device_string(unsigned char        *input,
     if ((force_unicode) && (type == 3))
 	type = 0;
 
-    len = *input & 0x1f;
+    len = *input & 0x3f;
     input++;
     in_len--;
     *stype = IPMI_ASCII_STR;

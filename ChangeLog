@@ -1,4 +1,18 @@
 
+2003-09-30 Corey Minyard <cminyard@mvista.com>
+
+	* ui/ui.c: Added TCSADRAIN to the tcsetattr() calls so that the
+	output wouldn't get chopped off on shutdown of the program.
+
+	* ui/ui.c: Fixed a possible overrun in normal_char, it was using
+	strcpy but the string wasn't necessarily nil terminated.  Change
+	to use memcpy with a length.
+
+2003-09-29 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi.c: The length bits of an IPMI string are the bottom 6
+	bits, no the bottom 5 bits.
+
 2003-09-28 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.1.2.

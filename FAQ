@@ -64,3 +64,132 @@
 
      Certainly.  You can create as many connections and domains as you
      like, the library has no limitiation.
+
+
+  7) I have an xyz computer, does OpenIPMI support it?
+
+     That depends on a lot of things.  Does the box have IPMI?  Most
+     systems do not, it's currently mostly on high-end system.  If the
+     system does have IPMI, OpenIPMI will probably support it.  It may
+     not support the full function of your system though.  Output
+     devices are not defined by the IPMI spec, so they are all OEM and
+     require custom code to control them.  Sensors that do not appear
+     in an SDR repository will not be supported without custom code.
+     Any things custom to the system will probably not be supported.
+
+
+  8) What interfaces does OpenIPMI support?
+
+     OpenIPMI currently supports system interfaces through the
+     OpenIPMI device driver and LAN interfaces.  It does not support
+     serial interfaces or any type of callback devices.
+
+
+  9) Does OpenIPMI support ICMB?
+
+     Not currently, although it shouldn't be hard to add.
+
+
+ 10) How do I learn more about IPMI?
+
+     Not much information currently exists.  The OpenIPMI web site has
+     a pointer to the specs and the documentation that comes with
+     IPMI, but the spec is very hard to read and the documentation is
+     really more marketing level.  The documentation that comes with
+     OpenIPMI provides a more gentle introduction to IPMI (you should
+     certainly read it before you read the spec) but it's more focused
+     on OpenIPMI, not IPMI proper.
+
+     Someone needs to write a book (and it's not going to be me).
+
+
+ 11) What does OpenIPMI do?
+
+     OpenIPMI attempts to handle a lot of the difficult parts of IPMI
+     for the user; as much as it can without making too many policy
+     decisions for the user.  For instance, it:
+     * Fetches all the SDRs and translates them into sensors and
+       entity information.
+     * Manages access to the SEL.
+     * Handles the interface, which is especially hard for LAN
+       connections.
+     * Handles fetching FRU information for entities.
+     * Lets you deal directly with sensors and entities.
+     * Periodically scans all the information it manages to see if
+       it has changed.
+     * Decodes incoming events, correlates them with sensors,
+       translates raw values into useful values, and delivers them
+       with the sensor object.
+     * Allows OEM code to plug in to fix up things and present
+       non-standard devices through standard interfaces.
+     Basically, the user just has to start up the connection and wait
+     for things to happen.  As OpenIPMI finds things, it will report
+     them and the user can take action.  It is designed to remove the
+     low-level details from the user's concern and only present the
+     things the user is really interested in handling.
+
+
+ 12) I don't like the way OpenIPMI does x.
+
+     You may disagree with implementation decisions I have made and
+     that's fine.  You can make suggestions, submit patches, and work
+     with me on this.  Or you may write your own IPMI library.  Or you
+     may pillage OpenIPMI to get what you want.  Like Linus holds
+     final say on what goes into his distribution of Linux, I hold
+     final say on what goes into my distribution of OpenIPMI.  But
+     that doesn't mean you can't do your own work on it.
+
+
+ 13) Why did you write OpenIPMI?
+
+     OpenIPMI was originally written to support a customer who needed
+     an interface for their IPMI platform.  It was also designed with
+     HPI in mind, for something to implement as the base to an HPI
+     library.
+
+
+ 14) I just want to use pieces of OpenIPMI, can I?
+
+     Well, it's open source.  But unfortunately, OpenIPMI is not
+     terribly modular as a whole.  Certain parts (the interface code,
+     for instance) can be used stand-alone.  But SDRs, MC, SELs,
+     domains, sensors, etc. all know about each other.  It's somewhat
+     inescapable, really, the concepts are intertwined.  It would be
+     fairly easy to take any individual piece of the code (the sdr.c
+     code, for instance) and change it to work in a different system,
+     but you would have to change the code to do that.
+
+
+ 15) Why is the OpenIPMI interface the way it is (bad, good, ugly,
+     elegent, simple, obtuse, etc)?
+
+     My basic philosophy of API design is:
+
+     1) Users should only have to deal with the objects they really
+        care about.  You should distill the interface down to what the
+        user really cares about.  Think about it from the user's point
+        of view and implement what they want.
+
+     2) Users (especially me) have a hard time dealing with large
+        numbers of types.  Distill the types down to the essentials.
+        Don't overload types with information that doesn't belong in
+        them, either.  Essentials are essentials; don't go beyond
+        them, though.
+
+     3) Interfaces should be designed with extensibility in mind.  All
+        types should be opaque pointers so that the internal
+        representation and implementation can change without the
+        binary or logical interface changing.  If you make an
+        exception on this, it better be for a really good reason.
+
+     4) Use the basic types of the language as much as possible.  It's
+        better to have more functions than types.
+
+     I'm very picky about this.  I have seen too many bad APIs; ones
+     based on the implementation, not the needs of the user.
+
+
+ 16) My IPMI system has some broken information in it.  Can I fix it?
+
+     Sure.  You can write OEM code that ties in to when objects are
+     added to the system and fix them up as necessary.
