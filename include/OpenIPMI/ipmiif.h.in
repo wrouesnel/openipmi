@@ -243,8 +243,6 @@ typedef void (*ipmi_event_handler_cb)(ipmi_domain_t *domain,
 				      ipmi_event_t  *event,
 				      void          *event_data);
 
-typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
-
 /* Register a handler to receive events.  Multiple handlers may be
    registered, they will all receive all events.  The event_data will
    be passed in with every event received.  This will only catch
@@ -253,11 +251,11 @@ typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
    about, this handler will get it. */
 int ipmi_register_for_events(ipmi_domain_t           *domain,
 			     ipmi_event_handler_cb   handler,
-			     void                    *event_data,
-			     ipmi_event_handler_id_t **id);
+			     void                    *event_data);
 /* Deregister an event handler. */
 int ipmi_deregister_for_events(ipmi_domain_t           *domain,
-			       ipmi_event_handler_id_t *id);
+			       ipmi_event_handler_cb   handler,
+			       void                    *event_data);
 
 /* Globally enable or disable events on the domain's interfaces. */
 int ipmi_domain_enable_events(ipmi_domain_t *domain);

@@ -135,10 +135,6 @@ struct ipmi_pet_s
     pet_timer_t       *timer_info;
     os_hnd_timer_id_t *timer;
 
-    /* Used so we know when MCs are added and can check to see if we
-       need to scan them. */
-    ipmi_domain_mc_upd_t *mc_upd;
-
     ipmi_pet_t       *next;
     ipmi_pet_t       *prev;
 };

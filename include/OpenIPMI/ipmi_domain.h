@@ -136,18 +136,17 @@ int ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
 /* Register a handler to be called when an MC is added to the domain
    or removed from the domain. */
-typedef struct ipmi_domain_mc_upd_s ipmi_domain_mc_upd_t;
 typedef void (*ipmi_domain_mc_upd_cb)(enum ipmi_update_e op,
 				      ipmi_domain_t      *domain,
 				      ipmi_mc_t          *mc,
 				      void               *cb_data);
 int ipmi_domain_register_mc_update_handler(ipmi_domain_t         *domain,
 					   ipmi_domain_mc_upd_cb handler,
-					   void                  *cb_data,
-					   ipmi_domain_mc_upd_t  **id);
+					   void                  *cb_data);
 
 void ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
-					  ipmi_domain_mc_upd_t *id);
+					  ipmi_domain_mc_upd_cb handler,
+					  void                  *cb_data);
 
 /* Call any OEM handlers for the given MC. */
 int _ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);

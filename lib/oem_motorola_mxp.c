@@ -396,8 +396,6 @@ struct mxp_info_s {
 
     domain_up_info_t *con_ch_info;
 
-    ipmi_domain_mc_upd_t *mc_upd_id;
-
     int amc_present[2];
 };
 
@@ -8706,8 +8704,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 					      info->con_ch_info);
 	ipmi_mem_free(info->con_ch_info);
     }
-    if (info->mc_upd_id)
-	ipmi_domain_remove_mc_update_handler(domain, info->mc_upd_id);
+    ipmi_domain_remove_mc_update_handler(domain, mc_upd_handler, NULL);
 
     ipmi_mem_free(info);
 }
@@ -8824,8 +8821,9 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	    goto out_err;
 	}
 
-	rv = ipmi_domain_register_mc_update_handler(domain, mc_upd_handler,
-						    NULL, &info->mc_upd_id);
+	rv = ipmi_domain_register_mc_update_handler(domain,
+						    mc_upd_handler,
+						    NULL);
 	if (rv)
 	    goto out_err;
     }

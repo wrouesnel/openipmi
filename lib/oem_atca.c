@@ -164,8 +164,6 @@ struct atca_shelf_s
     ipmi_domain_oem_check_done startup_done;
     void                       *startup_done_cb_data;
 
-    ipmi_event_handler_id_t *event_handler_id;
-
     /* Hacks for broken implementations. */
 
     /* The shelf address is not on the advertised shelf address
@@ -176,6 +174,10 @@ struct atca_shelf_s
 
 static void setup_from_shelf_fru(ipmi_domain_t *domain,
 				 atca_shelf_t  *info);
+
+static void atca_event_handler(ipmi_domain_t *domain,
+			       ipmi_event_t  *event,
+			       void          *event_data);
 
 /***********************************************************************
  *
@@ -2816,8 +2818,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
        add in our custom sensors. */
     rv = ipmi_domain_register_mc_update_handler(domain,
 						atca_mc_update_handler,
-						info,
-						NULL);
+						info);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_atca.c(shelf_fru_fetched): "
@@ -2852,10 +2853,7 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 {
     atca_shelf_t *info = ipmi_domain_get_oem_data(domain);
 
-    if (info->event_handler_id) {
-	ipmi_deregister_for_events(domain, info->event_handler_id);
-	info->event_handler_id = NULL;
-    }
+    ipmi_deregister_for_events(domain, atca_event_handler, info);
 
     /* Remove all the parent/child relationships we previously
        defined. */
@@ -2877,8 +2875,7 @@ atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
 {
     atca_shelf_t *info = oem_data;
 
-    if (info->event_handler_id)
-	ipmi_deregister_for_events(domain, info->event_handler_id);
+    ipmi_deregister_for_events(domain, atca_event_handler, info);
     if (info->shelf_fru)
 	ipmi_fru_destroy(info->shelf_fru, NULL, NULL);
     if (info->addresses)
@@ -2997,8 +2994,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     if (info->shelf_address_only_on_bmc)
 	info->shelf_fru_ipmb = 0x20;
 
-    rv = ipmi_register_for_events(domain, atca_event_handler, info,
-				  &info->event_handler_id);
+    rv = ipmi_register_for_events(domain, atca_event_handler, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(set_up_atca_domain): "
@@ -3022,7 +3018,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(set_up_atca_domain): "
 		 "Error allocating fru information: 0x%x", rv);
-	ipmi_deregister_for_events(domain, info->event_handler_id);
+	ipmi_deregister_for_events(domain, atca_event_handler, info);
 	ipmi_mem_free(info);
 	done(domain, rv, done_cb_data);
 	goto out;
@@ -3034,8 +3030,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 
     ipmi_domain_register_mc_update_handler(domain,
 					   atca_fix_sel_handler,
-					   info,
-					   NULL);
+					   info);
 
  out:
     return;

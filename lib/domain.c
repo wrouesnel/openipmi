@@ -207,8 +207,7 @@ struct ipmi_domain_s
     long        conn_seq; /* Sequence number for connection switchovers
 			     to avoid handling old messages. */
 
-    ipmi_event_handler_id_t  *event_handlers;
-    ipmi_lock_t              *event_handlers_lock;
+    locked_list_t            *event_handlers;
     ipmi_oem_event_handler_cb oem_event_handler;
     void                      *oem_event_cb_data;
 
@@ -261,7 +260,7 @@ struct ipmi_domain_s
     unsigned char    event_msg_int_type;
 
     /* A list of handlers to call when an MC is added to the domain. */
-    ilist_t *mc_upd_handlers;
+    locked_list_t *mc_upd_handlers;
 
     /* A list of IPMB addresses to not scan. */
     ilist_t     *ipmb_ignores;
@@ -293,9 +292,6 @@ struct ipmi_domain_s
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
 };
-
-static int remove_event_handler(ipmi_domain_t           *domain,
-				ipmi_event_handler_id_t *event);
 
 static void domain_audit(void *cb_data, os_hnd_timer_id_t *id);
 
@@ -527,10 +523,8 @@ cleanup_domain(ipmi_domain_t *domain)
 	}
     }
 
-    ipmi_lock(domain->event_handlers_lock);
-    while (domain->event_handlers)
-	remove_event_handler(domain, domain->event_handlers);
-    ipmi_unlock(domain->event_handlers_lock);
+    if (domain->event_handlers)
+	locked_list_destroy(domain->event_handlers);
 
     if (domain->con_change_handlers)
 	locked_list_destroy(domain->con_change_handlers);
@@ -573,17 +567,9 @@ cleanup_domain(ipmi_domain_t *domain)
 	ipmi_destroy_lock(domain->entities_lock);
 
     /* The MC list should no longer have anything in it. */
-    if (domain->mc_upd_handlers) {
-	ilist_iter_t iter;
-	void         *data;
-	ilist_init_iter(&iter, domain->mc_upd_handlers);
-	while (ilist_first(&iter)) {
-	    data = ilist_get(&iter);
-	    ilist_delete(&iter);
-	    ipmi_mem_free(data);
-	}
-	free_ilist(domain->mc_upd_handlers);
-    }
+    if (domain->mc_upd_handlers)
+	locked_list_destroy(domain->mc_upd_handlers);
+
     if (domain->mc_list)
 	free_ilist(domain->mc_list);
 
@@ -601,8 +587,6 @@ cleanup_domain(ipmi_domain_t *domain)
 	ipmi_destroy_lock(domain->mc_list_lock);
     if (domain->con_lock)
 	ipmi_destroy_lock(domain->con_lock);
-    if (domain->event_handlers_lock)
-	ipmi_destroy_lock(domain->event_handlers_lock);
 
     ipmi_mem_free(domain);
 }
@@ -644,7 +628,6 @@ setup_domain(ipmi_con_t    *ipmi[],
     domain->mc_list_lock = NULL;
     domain->con_lock = NULL;
     domain->entities_lock = NULL;
-    domain->event_handlers_lock = NULL;
     domain->default_sel_rescan_time = IPMI_SEL_QUERY_INTERVAL;
 
     /* Set the default timer intervals. */
@@ -661,10 +644,6 @@ setup_domain(ipmi_con_t    *ipmi[],
 	goto out_err;
 
     rv = ipmi_create_lock(domain, &domain->entities_lock);
-    if (rv)
-	goto out_err;
-
-    rv = ipmi_create_lock(domain, &domain->event_handlers_lock);
     if (rv)
 	goto out_err;
 
@@ -689,12 +668,12 @@ setup_domain(ipmi_con_t    *ipmi[],
     if (rv)
 	goto out_err;
 
-    domain->main_sdrs = NULL;
-    domain->scanning_bus = 0;
-    domain->event_handlers = NULL;
-    domain->oem_event_handler = NULL;
-    domain->mc_list = NULL;
-    domain->entities = NULL;
+    domain->event_handlers = locked_list_alloc(domain->os_hnd);
+    if (!domain->event_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
     domain->do_bus_scan = 1;
 
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -732,7 +711,7 @@ setup_domain(ipmi_con_t    *ipmi[],
 	goto out_err;
     }
 
-    domain->mc_upd_handlers = alloc_ilist();
+    domain->mc_upd_handlers = locked_list_alloc(domain->os_hnd);
     if (! domain->mc_upd_handlers) {
 	rv = ENOMEM;
 	goto out_err;
@@ -1274,13 +1253,14 @@ typedef struct mc_upd_info_s
     ipmi_mc_t          *mc;
 } mc_upd_info_t;
 
-static void
-iterate_mc_upds(ilist_iter_t *iter, void *item, void *cb_data)
+static int
+iterate_mc_upds(void *cb_data, void *item1, void *item2)
 {
-    mc_upd_info_t        *info = cb_data;
-    ipmi_domain_mc_upd_t *id = item;
+    mc_upd_info_t         *info = cb_data;
+    ipmi_domain_mc_upd_cb handler = item1;
 
-    id->handler(info->op, info->domain, info->mc, id->cb_data);
+    handler(info->op, info->domain, info->mc, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static int
@@ -1320,51 +1300,26 @@ call_mc_upd_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc,
     info.domain = domain;
     info.op = op;
     info.mc = mc;
-    ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
+    locked_list_iterate(domain->mc_upd_handlers, iterate_mc_upds, &info);
 }
 
 int
 ipmi_domain_register_mc_update_handler(ipmi_domain_t         *domain,
 				       ipmi_domain_mc_upd_cb handler,
-				       void                  *cb_data,
-				       ipmi_domain_mc_upd_t  **id)
+				       void                  *cb_data)
 {
-    ipmi_domain_mc_upd_t *new_id;
-
-    new_id = ipmi_mem_alloc(sizeof(*new_id));
-    if (!new_id)
+    if (locked_list_add(domain->mc_upd_handlers, handler, cb_data))
+	return 0;
+    else
 	return ENOMEM;
-
-    new_id->handler = handler;
-    new_id->cb_data = cb_data;
-    if (! ilist_add_tail(domain->mc_upd_handlers, new_id, NULL)) {
-	ipmi_mem_free(new_id);
-	return ENOMEM;
-    }
-
-    if (id)
-	*id = new_id;
-
-    return 0;
 }
 
 void
 ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
-				     ipmi_domain_mc_upd_t *id)
+				     ipmi_domain_mc_upd_cb handler,
+				     void                  *cb_data)
 {
-    ilist_iter_t iter;
-    int          rv;
-
-    ilist_init_iter(&iter, domain->mc_upd_handlers);
-    rv = ilist_first(&iter);
-    while (rv) {
-	if (ilist_get(&iter) == id) {
-	    ilist_delete(&iter);
-	    ipmi_mem_free(id);
-	    break;
-	}
-	rv = ilist_next(&iter);
-    }
+    locked_list_remove(domain->mc_upd_handlers, handler, cb_data);
 }
 
 int
@@ -2342,56 +2297,6 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
  *
  **********************************************************************/
 
-struct ipmi_event_handler_id_s
-{
-    ipmi_domain_t         *domain;
-    ipmi_event_handler_cb handler;
-    void                  *event_data;
-
-    ipmi_event_handler_id_t *next, *prev;
-};
-
-/* Must be called with event_lock held. */
-static void
-add_event_handler(ipmi_domain_t           *domain,
-		  ipmi_event_handler_id_t *event)
-{
-    event->domain = domain;
-    event->next = domain->event_handlers;
-    event->prev = NULL;
-    if (domain->event_handlers)
-	domain->event_handlers->prev = event;
-    domain->event_handlers = event;
-}
-
-static int
-remove_event_handler(ipmi_domain_t           *domain,
-		     ipmi_event_handler_id_t *event)
-{
-    ipmi_event_handler_id_t *ev;
-
-    ev = domain->event_handlers;
-    while (ev != NULL) {
-	if (ev == event)
-	    break;
-	ev = ev->next;
-    }
-
-    if (!ev)
-	return EINVAL;
-
-    if (event->next)
-	event->next->prev = event->prev;
-    if (event->prev)
-	event->prev->next = event->next;
-    else
-	domain->event_handlers = event->next;
-
-    ipmi_mem_free(event);
-
-    return 0;
-}
-
 typedef struct event_sensor_info_s
 {
     int          err;
@@ -2554,58 +2459,56 @@ ll_event_handler(ipmi_con_t   *ipmi,
     ipmi_domain_put(domain);
 }
 
+typedef struct call_event_handler_s
+{
+    ipmi_domain_t *domain;
+    ipmi_event_t  *event;
+} call_event_handler_t;
+
+static int
+call_event_handler(void *cb_data, void *item1, void *item2)
+{
+    call_event_handler_t  *info = cb_data;
+    ipmi_event_handler_cb handler = item1;
+
+    handler(info->domain, info->event, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 void
 ipmi_handle_unhandled_event(ipmi_domain_t *domain, ipmi_event_t *event)
 {
-    ipmi_event_handler_id_t *l;
+    call_event_handler_t info;
 
-    ipmi_lock(domain->event_handlers_lock);
-    l = domain->event_handlers;
-    while (l) {
-	l->handler(domain, event, l->event_data);
-	l = l->next;
-    }
-    ipmi_unlock(domain->event_handlers_lock);
+    info.domain = domain;
+    info.event = event;
+    locked_list_iterate(domain->event_handlers, call_event_handler, &info);
 }
 
 int
 ipmi_register_for_events(ipmi_domain_t           *domain,
 			 ipmi_event_handler_cb   handler,
-			 void                    *event_data,
-			 ipmi_event_handler_id_t **id)
+			 void                    *cb_data)
 {
-    ipmi_event_handler_id_t *elem;
-
     CHECK_DOMAIN_LOCK(domain);
 
-    elem = ipmi_mem_alloc(sizeof(*elem));
-    if (!elem)
+    if (locked_list_add(domain->event_handlers, handler, cb_data))
+	return 0;
+    else
 	return ENOMEM;
-    elem->handler = handler;
-    elem->event_data = event_data;
-
-    ipmi_lock(domain->event_handlers_lock);
-    add_event_handler(domain, elem);
-    ipmi_unlock(domain->event_handlers_lock);
-
-    *id = elem;
-
-    return 0;
 }
 
 int
 ipmi_deregister_for_events(ipmi_domain_t           *domain,
-			   ipmi_event_handler_id_t *id)
+			   ipmi_event_handler_cb   handler,
+			   void                    *cb_data)
 {
-    int        rv;
-
     CHECK_DOMAIN_LOCK(domain);
 
-    ipmi_lock(domain->event_handlers_lock);
-    rv = remove_event_handler(domain, id);
-    ipmi_unlock(domain->event_handlers_lock);
-
-    return rv;
+    if (locked_list_remove(domain->event_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 int

@@ -6576,9 +6576,6 @@ mc_change(enum ipmi_update_e op,
     }
 }
 
-static ipmi_event_handler_id_t *event_handler_id;
-static ipmi_domain_mc_upd_t *mc_update_handler_id;
-
 static void
 event_handler(ipmi_domain_t *domain,
 	      ipmi_event_t  *event,
@@ -6670,8 +6667,7 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 
     domain_id = ipmi_domain_convert_to_id(domain);
 
-    rv = ipmi_register_for_events(domain, event_handler,
-				  NULL, &event_handler_id);
+    rv = ipmi_register_for_events(domain, event_handler, NULL);
     if (rv)
 	leave_err(rv, "ipmi_register_for_events");
 
@@ -6683,8 +6679,7 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
 
-    rv = ipmi_domain_register_mc_update_handler(domain, mc_change, domain,
-						&mc_update_handler_id);
+    rv = ipmi_domain_register_mc_update_handler(domain, mc_change, domain);
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
     pef = NULL;
