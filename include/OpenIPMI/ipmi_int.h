@@ -112,10 +112,24 @@ struct ipmi_states_s
 
 /* Various logging stuff (mostly for debugging) */
 extern unsigned int __ipmi_log_mask;
+
+/* Log normal IPMI messages, but not low-level protocol messages. */
 #define DEBUG_MSG_BIT		(1 << 0)
+
+/* Log all messages. */
 #define DEBUG_RAWMSG_BIT	(1 << 1)
+
+/* Attempt to detect locking errors and report them. */
 #define DEBUG_LOCKS_BIT		(1 << 2)
+
+/* Log events that are received. */
 #define DEBUG_EVENTS_BIT	(1 << 3)
+
+/* Force the given connection to no longer work */
+#define DEBUG_CON0_FAIL_BIT	(1 << 4)
+#define DEBUG_CON1_FAIL_BIT	(1 << 5)
+#define DEBUG_CON2_FAIL_BIT	(1 << 6)
+#define DEBUG_CON3_FAIL_BIT	(1 << 7)
 
 #define DEBUG_MSG	(__ipmi_log_mask & DEBUG_MSG_BIT)
 #define DEBUG_MSG_ENABLE() __ipmi_log_mask |= DEBUG_MSG_BIT
@@ -132,6 +146,12 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_EVENTS	(__ipmi_log_mask & DEBUG_EVENTS_BIT)
 #define DEBUG_EVENTS_ENABLE() __ipmi_log_mask |= DEBUG_EVENTS_BIT
 #define DEBUG_EVENTS_DISABLE() __ipmi_log_mask &= ~DEBUG_EVENTS_BIT
+
+#define DEBUG_CON_FAIL(con)    (__ipmi_log_mask & (DEBUG_CON0_FAIL_BIT << con))
+#define DEBUG_CON_FAIL_ENABLE(con) \
+	__ipmi_log_mask |= (DEBUG_CON0_FAIL_BIT << con))
+#define DEBUG_CON_FAIL_DISABLE(con) \
+	__ipmi_log_mask &= ~(DEBUG_CON0_FAIL_BIT << con))
 
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */
