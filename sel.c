@@ -319,7 +319,7 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
     sel_fetch_handler_t *elem, *next;
 
     if (sel->in_destroy)
-	return;
+	goto out;
 
     elem = sel->fetch_handlers;
     sel->fetch_handlers = NULL;
@@ -350,6 +350,7 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
 
     opq_op_done(sel->opq);
 
+ out:
     sel_unlock(sel);
 }
 
@@ -819,6 +820,7 @@ start_fetch(void *cb_data, int shutdown)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "start_fetch: "
 		 "SEL info was destroyed while an operation was in progress");
+	sel_lock(elem->sel);
 	fetch_complete(elem->sel, ECANCELED);
 	return;
     }
@@ -828,6 +830,7 @@ start_fetch(void *cb_data, int shutdown)
     rv = _ipmi_mc_pointer_cb(elem->sel->mc, start_fetch_cb, elem);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO, "start_fetch: MC is not valid");
+	sel_lock(elem->sel);
 	fetch_complete(elem->sel, rv);
     }
 }
@@ -926,6 +929,7 @@ sel_op_done(sel_cb_handler_data_t *data,
 
     if (sel->in_destroy) {
 	/* Nothing to do */
+	sel_unlock(sel);
     } else if (sel->destroyed) {
 	/* This will unlock the lock. */
 	internal_destroy_sel(sel);
