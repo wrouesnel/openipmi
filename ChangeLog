@@ -1,4 +1,8 @@
 
+2003-03-26 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Fixed some problems with non-BMC SELs.
+
 2003-03-25 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: The UI will no longer attempt to read unreadable

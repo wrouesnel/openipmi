@@ -138,9 +138,6 @@ typedef struct ipmi_bmc_s
 
     ipmi_con_t  *conn;
 
-    /* The SEL time when the connection first came up. */
-    unsigned long startup_SEL_time;
-
     ipmi_bmc_oem_new_entity_cb new_entity_handler;
     void                       *new_entity_cb_data;
 
@@ -211,6 +208,9 @@ struct ipmi_mc_s
     /* Timer for rescanning the sel periodically. */
     os_hnd_timer_id_t *sel_timer;
     mc_reread_sel_t   *sel_timer_info;
+
+    /* The SEL time when the connection first came up. */
+    unsigned long startup_SEL_time;
 
 
     /* This is a retry count for missed pings from an MC query. */
@@ -808,21 +808,21 @@ mc_event_cb(ipmi_mc_t *mc, void *cb_data)
 }
 
 void
-ipmi_handle_unhandled_event(ipmi_mc_t *bmc, ipmi_event_t *event)
+ipmi_handle_unhandled_event(ipmi_mc_t *mc, ipmi_event_t *event)
 {
     ipmi_event_handler_id_t *l;
 
-    ipmi_lock(bmc->bmc->event_handlers_lock);
-    l = bmc->bmc->event_handlers;
+    ipmi_lock(mc->bmc_mc->bmc->event_handlers_lock);
+    l = mc->bmc_mc->bmc->event_handlers;
     while (l) {
-	l->handler(bmc, event, l->event_data);
+	l->handler(mc, event, l->event_data);
 	l = l->next;
     }
-    ipmi_unlock(bmc->bmc->event_handlers_lock);
+    ipmi_unlock(mc->bmc_mc->bmc->event_handlers_lock);
 }
 
 static void
-system_event_handler(ipmi_mc_t    *bmc,
+system_event_handler(ipmi_mc_t    *mc,
 		     ipmi_event_t *event)
 {
     int                 rv = 1;
@@ -846,10 +846,11 @@ system_event_handler(ipmi_mc_t    *bmc,
 
     /* Let the OEM handler have a go at it first.  Note that OEM
        handlers must look at the time themselves. */
-    if (bmc->bmc->oem_event_handler) {
-	if (bmc->bmc->oem_event_handler(bmc,
-					event,
-					bmc->bmc->oem_event_cb_data))
+    if (mc->bmc_mc->bmc->oem_event_handler) {
+	if (mc->bmc_mc->bmc->oem_event_handler(
+	    mc,
+	    event,
+	    mc->bmc_mc->bmc->oem_event_cb_data))
 	    return;
     }
 
@@ -859,7 +860,7 @@ system_event_handler(ipmi_mc_t    *bmc,
        later than our startup timestamp. */
     if ((event->type == 0x02)
 	&& ((event->data[4] & 0x01) == 0)
-	&& (timestamp >= bmc->bmc->startup_SEL_time))
+	&& (timestamp >= mc->startup_SEL_time))
     {
 	ipmi_mc_id_t mc_id;
 
@@ -868,7 +869,7 @@ system_event_handler(ipmi_mc_t    *bmc,
 	info.event = event;
 
 	/* See if the MC has an OEM handler for this. */
-	mc_id.bmc = bmc;
+	mc_id.bmc = mc->bmc_mc;
 	if (event->data[6] == 0x03) {
 	    mc_id.channel = 0;
 	} else {
@@ -878,7 +879,7 @@ system_event_handler(ipmi_mc_t    *bmc,
 	ipmi_mc_pointer_cb(mc_id, mc_event_cb, &info);
 
 	/* It's from an MC. */
-	id.bmc = bmc;
+	id.bmc = mc->bmc_mc;
 	if (event->data[6] == 0x03) {
 	    id.channel = 0;
 	} else {
@@ -896,7 +897,7 @@ system_event_handler(ipmi_mc_t    *bmc,
 
     /* It's an event from system software, or the info couldn't be found. */
     if (rv)
-	ipmi_handle_unhandled_event(bmc, event);
+	ipmi_handle_unhandled_event(mc, event);
 }
 
 /* Got a new event in the system event log that we didn't have before. */
@@ -910,9 +911,9 @@ mc_sel_new_event_handler(ipmi_sel_info_t *sel,
 
 
 unsigned long
-ipmi_bmc_get_startup_SEL_time(ipmi_mc_t *bmc)
+ipmi_mc_get_startup_SEL_time(ipmi_mc_t *mc)
 {
-    return bmc->bmc->startup_SEL_time;
+    return mc->startup_SEL_time;
 }
 
 void
@@ -1714,7 +1715,7 @@ sels_fetched(ipmi_sel_info_t *sel,
 
     /* After the first SEL fetch, disable looking at the timestamp, in
        case someone messes with the SEL time. */
-    mc->bmc->startup_SEL_time = 0;
+    mc->startup_SEL_time = 0;
 
     start_SEL_timer(mc);
 }
@@ -1733,13 +1734,13 @@ got_sel_time(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "Unable to fetch the SEL time due to error: %x",
 		 rsp->data[0]);
-	mc->bmc->startup_SEL_time = 0;
+	mc->startup_SEL_time = 0;
     } else if (rsp->data_len < 5) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "Unable to fetch the SEL time message was too short");
-	mc->bmc->startup_SEL_time = 0;
+	mc->startup_SEL_time = 0;
     } else {
-	mc->bmc->startup_SEL_time = ipmi_get_uint32(&(rsp->data[1]));
+	mc->startup_SEL_time = ipmi_get_uint32(&(rsp->data[1]));
     }
 
     ipmi_sel_get(mc->sel, sels_fetched, mc);
@@ -1794,7 +1795,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	    ipmi_log(IPMI_LOG_DEBUG,
 		     "Unable to start SEL time fetch due to error: %x\n",
 		     rv);
-	    mc->bmc->startup_SEL_time = 0;
+	    mc->startup_SEL_time = 0;
 	    ipmi_sel_get(mc->sel, NULL, NULL);
 	}
     }
