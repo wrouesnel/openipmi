@@ -1,5 +1,14 @@
 2004-01-13 Corey Minyard <cminyard@mvista.com> 
 
+	* configure.in: Move to version 1.2.1
+
+	* configure.in, ui/Makefile.am, ui/basic_ui.c: Make the SNMP stack
+	optional.
+
+	* man/ipmi_ui.1: Add docs for the -snmp option
+
+	* doc/OpenIPMI.texi: Added docs for the SNMP trap handling.
+
 	* include/OpenIPMI/ipmi_conn.h, lib/ipmi.c: Added an external SNMP
 	trap handler.
 

@@ -1404,6 +1404,22 @@ to forward SNMP traps to a system.  The interface is described in
 table numbers you provide, and will periodically check it to make sure
 it stays correct.
 
+Note that OpenIPMI does not have any code to receive the traps from a
+socket, since that depends on a lot of things.  You will have to set
+up the socket and receive and parse the traps.  Once you have the data
+extracted from the trap, you can call
+@code{ipmi_handle_snmp_trap_data()} to actually try to interpret the
+trap.  The @file{ui/basic_ui.c} code has an example of how to use the
+UCD SNMP stack to do this.
+
+Currently, OpenIPMI only uses the presence of a trap to trigger a SEL
+fetch.  That's because the IPMI trap does not have enough information
+to determine the correct sensor (it's missing the channel and LUN) and
+it does not have enough information to correlate the SEL entries with
+the trap (It doesn't have the record ID or necessarily the proper
+timestamp).  If you cannot correlate the traps with SEL entries, you
+can get duplicate events, which would be bad.
+
 @node    How to Write OEM Plugins, Debugging Your Application, Using OpenIPMI, Top
 @chapter How to Write OEM Plugins
 

@@ -224,7 +224,9 @@ main(int argc, const char *argv[])
     int              full_screen = 1;
     ipmi_domain_id_t domain_id;
     int              i;
+#ifdef HAVE_UCDSNMP
     int              init_snmp = 0;
+#endif
 
     while ((curr_arg < argc) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
@@ -237,8 +239,10 @@ main(int argc, const char *argv[])
 	    DEBUG_MALLOC_ENABLE();
 	} else if (strcmp(arg, "-dmsg") == 0) {
 	    DEBUG_MSG_ENABLE();
+#ifdef HAVE_UCDSNMP
 	} else if (strcmp(arg, "-snmp") == 0) {
 	    init_snmp = 1;
+#endif
 	} else {
 	    fprintf(stderr, "Unknown option: %s\n", arg);
 	    return 1;

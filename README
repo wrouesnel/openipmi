@@ -44,3 +44,21 @@ The source tree here consists of the following directories:
   doc - The documentation.
 
   man - The man pages.
+
+
+The OpenIPMI ipmi_ui command has an optional trap handler.  It will
+use incoming traps as an indication that something is waiting in the
+SEL for it to fetch and immediately start a fetch.  You have to have
+the UCD snmp library (or something compatible) installed for this to
+work, and you have to start ipmi_ui with the '-snmp' option.  You must
+do this as root, as the SNMP Trap port is 162.
+
+Note that if you UCD SNMP library is in a non-standard location, you
+will need to use the '-with-ucdsnmp=path' option to configure.
+
+You may ask why the trap is not directly used, why does it just
+trigger an SEL fetch?  Well, that's because the IPMI trap does not
+have enough information to determine the correct sensor (it's missing
+the channel and LUN) and it does not have enough information to
+correlate the SEL entries with the trap (It doesn't have the record ID
+or necessarily the proper timestamp).

@@ -42,6 +42,10 @@ Turn on memory debugging, this will cause memory allocation and
 deallocations to be checked.  When the program terminates, it will
 dump all memory that was not properly freed (leaked).
 .TP
+.I "\-snmp"
+Enable the SNMP trap handler.  ipmi_ui must be compiled with SNMP code
+enabled for this option to be available.
+.TP
 .I \-c
 Run the program in command-line mode.  This is useful for scripting.
 All output goes to standard output, there is no windowing.
