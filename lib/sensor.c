@@ -3013,9 +3013,12 @@ sensor_done_check_rsp(ipmi_sensor_t          *sensor,
     }
 
     if (rsp && rsp->data[0]) {
+#if 0
+	/* This is sometimes expected. */
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(%s): Got IPMI error in response: %x",
 		 SENSOR_NAME(sensor), name, rsp->data[0]);
+#endif
 	done(sensor, IPMI_IPMI_ERR_VAL(rsp->data[0]), sinfo);
 	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }

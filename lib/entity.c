@@ -1870,6 +1870,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 	ilist_add_tail(ent->sensors, link, &(link->list_link));
 	
 	call_sensor_handlers(ent, sensor, IPMI_ADDED);
+	ent->presence_possibly_changed = 1;
     }
 }
 
