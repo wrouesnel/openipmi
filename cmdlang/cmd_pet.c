@@ -59,12 +59,9 @@ pet_list_handler(ipmi_pet_t *pet, void *cb_data)
 }
 
 static void
-pet_list(ipmi_cmd_info_t *cmd_info)
+pet_list(ipmi_domain_t *domain, ipmi_cmd_info_t *cmd_info)
 {
-    ipmi_cmdlang_out(cmd_info, "PETs", NULL);
-    ipmi_cmdlang_down(cmd_info);
-    ipmi_pet_iterate_pets(pet_list_handler, cmd_info);
-    ipmi_cmdlang_up(cmd_info);
+    ipmi_pet_iterate_pets(domain, pet_list_handler, cmd_info);
 }
 
 static void
@@ -331,11 +328,13 @@ close_done(ipmi_pet_t *pet, int err, void *cb_data)
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
     if (err) {
+	ipmi_cmdlang_lock(cmd_info);
 	ipmi_pet_get_name(pet, cmdlang->objstr,
 			  cmdlang->objstr_len);
 	cmdlang->errstr = "Error closing PET";
 	cmdlang->err = err;
 	cmdlang->location = "cmd_pet.c(close_done)";
+	ipmi_cmdlang_unlock(cmd_info);
     }
 
     ipmi_cmdlang_cmd_info_put(cmd_info);
@@ -369,7 +368,7 @@ static ipmi_cmdlang_init_t cmds_pet[] =
       NULL, NULL, &pet_cmds},
     { "list", &pet_cmds,
       "- List all the pets in the system",
-      pet_list, NULL,  NULL },
+      ipmi_cmdlang_domain_handler, pet_list,  NULL },
     { "new", &pet_cmds,
       "<domain> <connection> <channel> <ip addr> <mac_addr> <eft selector>"
       " <policy num> <apt selector> <lan dest selector>"

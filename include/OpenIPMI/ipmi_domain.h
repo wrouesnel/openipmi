@@ -305,4 +305,45 @@ int ipmi_option_IPMB_scan(ipmi_domain_t *domain);
 int ipmi_option_OEM_init(ipmi_domain_t *domain);
 int ipmi_option_set_event_rcvr(ipmi_domain_t *domain);
 
+/*
+ * Domain attribute handling.
+ *
+ * An attribute is a string name that is registered with the domain along
+ * with a void data item.  This allows things to be attached to the domain
+ * but not directly coupled to the domain.  Names that begin with "ipmi_"
+ * belong to OpenIPMI, DON'T USE THEM.  OEM names should start with
+ * "oem_<type>_".  Other names are free for use by the application.
+ *
+ * Note that attributes are ummutable after creation and cannot be
+ * destroyed.  Destruction only happens when the domain goes away.
+ */
+
+/* Attr init function.  Return the data item in the data field.  Returns
+   an error value. */
+typedef int (*ipmi_domain_attr_init_cb)(ipmi_domain_t *domain, void *cb_data,
+					void **data);
+
+/* Called when the domain is destroyed for all existing attributes. */
+typedef void (*ipmi_domain_attr_kill_cb)(ipmi_domain_t *domain, void *cb_data,
+					 void *data);
+
+/* Find an attribute for a domain.  If the attribute is not found,
+   register the attribute.  If the registration occurs, the init()
+   function will be called (if non-null); it must return the data item
+   in the data field.  When the domain is destroyed, the destroy
+   function will be called (if not null). */
+int ipmi_domain_register_attribute(ipmi_domain_t            *domain,
+				   char                     *name,
+				   ipmi_domain_attr_init_cb init,
+				   ipmi_domain_attr_kill_cb destroy,
+				   void                     *cb_data,
+				   void                     **data);
+
+/* Find an attribute in an domain.  Returns EINVAL if the name is not
+   registered.  Returns 0 on success, and the data item is
+   returned. */
+int ipmi_domain_find_attribute(ipmi_domain_t            *domain,
+			       char                     *name,
+			       void                     **data);
+
 #endif /* _IPMI_DOMAIN_H */

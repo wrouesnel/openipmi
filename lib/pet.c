@@ -62,7 +62,42 @@
 /* Alerts get retried this many times. */
 #define IPMI_LANPARM_DEFAULT_ALERT_RETRIES 3
 
-static locked_list_t *pets;
+#define IPMI_PET_ATTR_NAME "ipmi_pet"
+
+static int
+pet_attr_init(ipmi_domain_t *domain, void *cb_data, void **data)
+{
+    locked_list_t *pets;
+    
+    pets = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    if (!pets)
+	return ENOMEM;
+
+    *data = pets;
+    return 0;
+}
+
+static int pet_destroy_handler(ipmi_domain_t    *domain,
+			       ipmi_pet_t       *pet,
+			       ipmi_pet_done_cb done,
+			       void             *cb_data);
+
+static int
+destroy_pet(void *cb_data, void *item1, void *item2)
+{
+    pet_destroy_handler(cb_data, item1, NULL, NULL);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+pet_attr_destroy(ipmi_domain_t *domain, void *cb_data, void *data)
+{
+    locked_list_t *pets = data;
+
+    locked_list_iterate(pets, destroy_pet, domain);
+    locked_list_destroy(pets);
+}
+
 
 /* This data structure defines a data/mask setting for a parameter,
    either from the LAN or PEF parms. */
@@ -100,6 +135,7 @@ struct ipmi_pet_s
 
     /* Configuration parameters */
     ipmi_mcid_t      mc;
+    ipmi_domain_id_t domain;
     struct in_addr   ip_addr;
     char             mac_addr[6];
     unsigned int     policy_num;
@@ -141,9 +177,6 @@ struct ipmi_pet_s
     /* Timer to check the configuration periodically. */
     pet_timer_t       *timer_info;
     os_hnd_timer_id_t *timer;
-
-    ipmi_pet_t       *next;
-    ipmi_pet_t       *prev;
 };
 
 static void rescan_pet(void *cb_data, os_hnd_timer_id_t *id);
@@ -837,18 +870,29 @@ ipmi_pet_create_mc(ipmi_mc_t        *mc,
     ipmi_pet_t     *pet;
     int            rv;
     os_handler_t   *os_hnd;
-    char           mc_name[IPMI_MC_NAME_LEN];
+    char           domain_name[IPMI_MC_NAME_LEN];
+    ipmi_domain_t  *domain = ipmi_mc_get_domain(mc);
+    void           *attr_data;
+    locked_list_t  *pets;
+
+    rv = ipmi_domain_register_attribute(domain, IPMI_PET_ATTR_NAME,
+					pet_attr_init, pet_attr_destroy, NULL,
+					&attr_data);
+    if (rv)
+	return rv;
+    pets = attr_data;
 
     pet = ipmi_mem_alloc(sizeof(*pet));
     if (!pet)
 	return ENOMEM;
     memset(pet, 0, sizeof(*pet));
 
-    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
-    snprintf(pet->name, sizeof(pet->name), "%s.%d", mc_name,
-	     ipmi_mc_get_unique_num(mc));
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    snprintf(pet->name, sizeof(pet->name), "%s.%d", domain_name,
+	     ipmi_domain_get_unique_num(domain));
     pet->refcount = 1;
     pet->mc = ipmi_mc_convert_to_id(mc);
+    pet->domain = ipmi_domain_convert_to_id(domain);
     pet->channel = channel;
     pet->ip_addr = ip_addr;
     pet->policy_num = policy_num;
@@ -923,7 +967,7 @@ ipmi_pet_create_mc(ipmi_mc_t        *mc,
     memcpy(pet->lanparm_check[1].data+3, &ip_addr, 4);
     memcpy(pet->lanparm_check[1].data+7, mac_addr, 6);
 
-    os_hnd = ipmi_domain_get_os_hnd(ipmi_mc_get_domain(mc));
+    os_hnd = ipmi_domain_get_os_hnd(domain);
     pet->os_hnd = os_hnd;
 
     /* Start a timer for this PET to periodically check it. */
@@ -1074,12 +1118,21 @@ rescan_pet(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_unlock(timer_info->lock);
 }
 
-int
-ipmi_pet_destroy(ipmi_pet_t       *pet,
-		 ipmi_pet_done_cb done,
-		 void             *cb_data)
-
+static int
+pet_destroy_handler(ipmi_domain_t    *domain,
+		    ipmi_pet_t       *pet,
+		    ipmi_pet_done_cb done,
+		    void             *cb_data)
 {
+    void          *attr_data;
+    locked_list_t *pets;
+    int           rv;
+
+    rv = ipmi_domain_find_attribute(domain, IPMI_PET_ATTR_NAME, &attr_data);
+    if (rv)
+	return rv;
+    pets = attr_data;
+
     if (! locked_list_remove(pets, pet, NULL))
 	/* Not in the list, it's already been removed. */
 	return EINVAL;
@@ -1091,8 +1144,46 @@ ipmi_pet_destroy(ipmi_pet_t       *pet,
     ipmi_unlock(pet->timer_info->lock);
 
     ipmi_pet_put(pet);
-
     return 0;
+}
+
+typedef struct pet_destroy_s
+{
+    int        err;
+    ipmi_pet_t *pet;
+
+    ipmi_pet_done_cb done;
+    void             *cb_data;
+} pet_destroy_t;
+
+static void
+pet_destroy_handler_domain(ipmi_domain_t *domain, void *cb_data)
+{
+    pet_destroy_t *info = cb_data;
+
+    info->err = pet_destroy_handler(domain, info->pet,
+				    info->done, info->cb_data);
+}
+
+int
+ipmi_pet_destroy(ipmi_pet_t       *pet,
+		 ipmi_pet_done_cb done,
+		 void             *cb_data)
+
+{
+    pet_destroy_t info;
+    int           rv;
+
+    info.err = 0;
+    info.pet = pet;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_domain_pointer_cb(pet->domain, pet_destroy_handler_domain,
+				&info);
+    if (!rv)
+	rv = info.err;
+
+    return rv;
 }
 
 int
@@ -1133,10 +1224,20 @@ pets_handler(void *cb_data, void *item1, void *item2)
 }
 
 void
-ipmi_pet_iterate_pets(ipmi_pet_ptr_cb handler,
+ipmi_pet_iterate_pets(ipmi_domain_t   *domain,
+		      ipmi_pet_ptr_cb handler,
 		      void            *cb_data)
 {
     iterate_pets_info_t info;
+    void                *attr_data;
+    locked_list_t       *pets;
+    int                 rv;
+
+    rv = ipmi_domain_find_attribute(domain, IPMI_PET_ATTR_NAME,
+				    &attr_data);
+    if (rv)
+	return;
+    pets = attr_data;
 
     info.handler = handler;
     info.cb_data = cb_data;
@@ -1191,29 +1292,4 @@ unsigned int
 ipmi_pet_get_lan_dest_sel(ipmi_pet_t *pet)
 {
     return pet->lan_dest_sel;
-}
-
-
-int
-_ipmi_pet_init(os_handler_t *os_hnd)
-{
-    pets = locked_list_alloc(os_hnd);
-    if (!pets)
-	return ENOMEM;
-    
-    return 0;
-}
-
-static int
-destroy_pet(void *cb_data, void *item1, void *item2)
-{
-    ipmi_pet_destroy(item1, NULL, NULL);
-    return LOCKED_LIST_ITER_CONTINUE;
-}
-
-void
-_ipmi_pet_shutdown(void)
-{
-    locked_list_iterate(pets, destroy_pet, NULL);
-    locked_list_destroy(pets);
 }

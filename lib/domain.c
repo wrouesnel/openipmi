@@ -290,6 +290,9 @@ struct ipmi_domain_s
     ipmi_domain_close_done_cb close_done;
     void                      *close_done_cb_data;
 
+    /* Anonymous attributes for the domain. */
+    locked_list_t *attr;
+
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
 
@@ -450,6 +453,8 @@ ipmi_domain_set_oem_shutdown_handler(ipmi_domain_t           *domain,
     domain->shutdown_handler = handler;
 }
 
+static int destroy_attr(void *cb_data, void *item1, void *item2);
+
 static void
 cleanup_domain(ipmi_domain_t *domain)
 {
@@ -459,6 +464,11 @@ cleanup_domain(ipmi_domain_t *domain)
     /* This must be first, so that nuking the oustanding messages will
        cause the right thing to happen. */
     cancel_domain_oem_check(domain);
+
+    if (domain->attr) {
+	locked_list_iterate(domain->attr, destroy_attr, domain);
+	locked_list_destroy(domain->attr);
+    }
 
     /* Nuke all outstanding messages. */
     if ((domain->cmds_lock) && (domain->cmds)) {
@@ -778,6 +788,12 @@ setup_domain(char          *name,
 
     domain->event_handlers = locked_list_alloc(domain->os_hnd);
     if (!domain->event_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    domain->attr = locked_list_alloc(domain->os_hnd);
+    if (!domain->attr) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -4588,6 +4604,143 @@ ipmi_domain_get_unique_num(ipmi_domain_t *domain)
     ipmi_unlock(domain->domain_lock);
     return rv;
 }
+
+/***********************************************************************
+ *
+ * Handling anonmymous attributes for domains
+ *
+ **********************************************************************/
+
+typedef struct ipmi_domain_attr_s
+{
+    char *name;
+    void *data;
+
+    ipmi_domain_attr_kill_cb destroy;
+    void                     *cb_data;
+} ipmi_domain_attr_t;
+
+static int
+destroy_attr(void *cb_data, void *item1, void *item2)
+{
+    ipmi_domain_t      *domain = cb_data;
+    ipmi_domain_attr_t *attr = item1;
+
+    if (attr->destroy)
+	attr->destroy(domain, attr->cb_data, attr->data);
+    locked_list_remove(domain->attr, item1, item2);
+    ipmi_mem_free(attr->name);
+    ipmi_mem_free(attr);
+
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct domain_attr_cmp_s
+{
+    char               *name;
+    ipmi_domain_attr_t *attr;
+} domain_attr_cmp_t;
+
+static int
+domain_attr_cmp(void *cb_data, void *item1, void *item2)
+{
+    domain_attr_cmp_t  *info = cb_data;
+    ipmi_domain_attr_t *attr = item1;
+
+    if (strcmp(info->name, attr->name) == 0) {
+	info->attr = attr;
+	return LOCKED_LIST_ITER_STOP;
+    }
+
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+int
+ipmi_domain_register_attribute(ipmi_domain_t            *domain,
+			       char                     *name,
+			       ipmi_domain_attr_init_cb init,
+			       ipmi_domain_attr_kill_cb destroy,
+			       void                     *cb_data,
+			       void                     **data)
+{
+    ipmi_domain_attr_t  *val = NULL;
+    domain_attr_cmp_t   info;
+    int                 rv = 0;
+    locked_list_entry_t *entry;
+
+    info.name = name;
+    info.attr = NULL;
+    ipmi_lock(domain->domain_lock);
+    locked_list_iterate(domain->attr, domain_attr_cmp, &info);
+    if (info.attr) {
+	ipmi_unlock(domain->domain_lock);
+	*data = info.attr->data;
+	goto out_unlock;
+    }
+
+    val = ipmi_mem_alloc(sizeof(*val));
+    if (!val) {
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    val->name = ipmi_strdup(name);
+    if (!val->name) {
+	ipmi_mem_free(val);
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    entry = locked_list_alloc_entry();
+    if (!entry) {
+	ipmi_mem_free(val->name);
+	ipmi_mem_free(val);
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    val->destroy = destroy;
+    val->cb_data = cb_data;
+    val->data = NULL;
+
+    if (init) {
+	rv = init(domain, cb_data, &val->data);
+	if (rv) {
+	    locked_list_free_entry(entry);
+	    ipmi_mem_free(val->name);
+	    ipmi_mem_free(val);
+	    rv = ENOMEM;
+	    goto out_unlock;
+	}
+    }
+
+    locked_list_add_entry(domain->attr, val, NULL, entry);
+
+    *data = val->data;
+
+ out_unlock:
+    ipmi_unlock(domain->domain_lock);
+    return rv;
+}
+			       
+int
+ipmi_domain_find_attribute(ipmi_domain_t            *domain,
+			   char                     *name,
+			   void                     **data)
+{
+    domain_attr_cmp_t   info;
+
+    /* Attributes are immutable, no lock is required. */
+    info.name = name;
+    info.attr = NULL;
+    locked_list_iterate(domain->attr, domain_attr_cmp, &info);
+    if (info.attr) {
+	*data = info.attr->data;
+	return 0;
+    }
+    return EINVAL;
+}
+			       
 
 /***********************************************************************
  *

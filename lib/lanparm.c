@@ -33,6 +33,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_lanparm.h>
@@ -43,14 +44,23 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ilist.h>
 #include <OpenIPMI/opq.h>
+#include <OpenIPMI/locked_list.h>
+
+#define IPMI_LANPARM_ATTR_NAME "ipmi_lanparm"
 
 struct ipmi_lanparm_s
 {
-    ipmi_mcid_t mc;
-    unsigned char channel;
+    ipmi_mcid_t      mc;
+    ipmi_domain_id_t domain;
+    unsigned char    channel;
+
+    int refcount;
+
+    char name[IPMI_LANPARM_NAME_LEN];
 
     unsigned int destroyed : 1;
     unsigned int in_destroy : 1;
+    unsigned int locked : 1;
 
     /* Something to call when the destroy is complete. */
     ipmi_lanparm_done_cb destroy_handler;
@@ -65,6 +75,40 @@ struct ipmi_lanparm_s
     opq_t *opq;
 };
 
+static int
+lanparm_attr_init(ipmi_domain_t *domain, void *cb_data, void **data)
+{
+    locked_list_t *lanparml;
+    
+    lanparml = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    if (!lanparml)
+	return ENOMEM;
+
+    *data = lanparml;
+    return 0;
+}
+
+static int lanparm_destroy_handler(ipmi_domain_t        *domain,
+				   ipmi_lanparm_t       *lanparm,
+				   ipmi_lanparm_done_cb done,
+				   void                 *cb_data);
+
+static int
+destroy_lanparm(void *cb_data, void *item1, void *item2)
+{
+    lanparm_destroy_handler(cb_data, item1, NULL, NULL);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+lanparm_attr_destroy(ipmi_domain_t *domain, void *cb_data, void *data)
+{
+    locked_list_t *lanparml = data;
+
+    locked_list_iterate(lanparml, destroy_lanparm, domain);
+    locked_list_destroy(lanparml);
+}
+
 static void
 lanparm_lock(ipmi_lanparm_t *lanparm)
 {
@@ -77,6 +121,98 @@ lanparm_unlock(ipmi_lanparm_t *lanparm)
 {
     if (lanparm->os_hnd->lock)
 	lanparm->os_hnd->unlock(lanparm->os_hnd, lanparm->lanparm_lock);
+}
+
+static void
+lanparm_get(ipmi_lanparm_t *lanparm)
+{
+    lanparm_lock(lanparm);
+    lanparm->refcount++;
+    lanparm_unlock(lanparm);
+}
+
+static void internal_destroy_lanparm(ipmi_lanparm_t *lanparm);
+
+static void
+lanparm_put(ipmi_lanparm_t *lanparm)
+{
+    lanparm_lock(lanparm);
+    lanparm->refcount--;
+    if (lanparm->refcount == 0) {
+	internal_destroy_lanparm(lanparm);
+	return;
+    }
+    lanparm_unlock(lanparm);
+}
+
+typedef struct iterate_lanparms_info_s
+{
+    ipmi_lanparm_ptr_cb handler;
+    void                *cb_data;
+} iterate_lanparms_info_t;
+
+static int
+lanparms_handler(void *cb_data, void *item1, void *item2)
+{
+    iterate_lanparms_info_t *info = cb_data;
+    info->handler(item1, info->cb_data);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+void
+ipmi_lanparm_iterate_lanparms(ipmi_domain_t       *domain,
+			      ipmi_lanparm_ptr_cb handler,
+			      void                *cb_data)
+{
+    iterate_lanparms_info_t info;
+    void                *attr_data;
+    locked_list_t       *lanparms;
+    int                 rv;
+
+    rv = ipmi_domain_find_attribute(domain, IPMI_LANPARM_ATTR_NAME,
+				    &attr_data);
+    if (rv)
+	return;
+    lanparms = attr_data;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    locked_list_iterate(lanparms, lanparms_handler, &info);
+}
+
+ipmi_mcid_t
+ipmi_lanparm_get_mc_id(ipmi_lanparm_t *lanparm)
+{
+    return lanparm->mc;
+}
+
+unsigned int
+ipmi_lanparm_get_channel(ipmi_lanparm_t *lanparm)
+{
+    return lanparm->channel;
+}
+
+int
+ipmi_lanparm_get_name(ipmi_lanparm_t *lanparm, char *name, int length)
+{
+    int  slen;
+
+    if (length <= 0)
+	return 0;
+
+    /* Never changes, no lock needed. */
+    slen = strlen(lanparm->name);
+    if (slen == 0) {
+	if (name)
+	    *name = '\0';
+	goto out;
+    }
+
+    if (name)
+	memcpy(name, lanparm->name, slen);
+    name[slen] = '\0';
+ out:
+    return slen;
 }
 
 static int
@@ -130,9 +266,21 @@ ipmi_lanparm_alloc(ipmi_mc_t      *mc,
 {
     ipmi_lanparm_t *lanparm = NULL;
     int            rv = 0;
-    ipmi_domain_t  *domain;
+    ipmi_domain_t  *domain = ipmi_mc_get_domain(mc);
+    int            p, len;
+    locked_list_t  *lanparml;
+    void           *attr_data;
 
     CHECK_MC_LOCK(mc);
+
+    rv = ipmi_domain_register_attribute(domain, IPMI_LANPARM_ATTR_NAME,
+					lanparm_attr_init,
+					lanparm_attr_destroy,
+					NULL,
+					&attr_data);
+    if (rv)
+	return rv;
+    lanparml = attr_data;
 
     lanparm = ipmi_mem_alloc(sizeof(*lanparm));
     if (!lanparm) {
@@ -141,8 +289,13 @@ ipmi_lanparm_alloc(ipmi_mc_t      *mc,
     }
     memset(lanparm, 0, sizeof(*lanparm));
 
+    lanparm->refcount = 1;
     lanparm->mc = ipmi_mc_convert_to_id(mc);
-    domain = ipmi_mc_get_domain(mc);
+    lanparm->domain = ipmi_domain_convert_to_id(domain);
+    len = sizeof(lanparm->name);
+    p = ipmi_domain_get_name(domain, lanparm->name, len);
+    len -= p;
+    snprintf(lanparm->name+p, len, ".%d", ipmi_domain_get_unique_num(domain));
     lanparm->os_hnd = ipmi_domain_get_os_hnd(domain);
     lanparm->lanparm_lock = NULL;
     lanparm->channel = channel & 0xf;
@@ -158,6 +311,11 @@ ipmi_lanparm_alloc(ipmi_mc_t      *mc,
 					  &lanparm->lanparm_lock);
 	if (rv)
 	    goto out;
+    }
+
+    if (! locked_list_add(lanparml, lanparm, NULL)) {
+	rv = ENOMEM;
+	goto out;
     }
 
  out:
@@ -199,32 +357,78 @@ internal_destroy_lanparm(ipmi_lanparm_t *lanparm)
     ipmi_mem_free(lanparm);
 }
 
-int
-ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
-		     ipmi_lanparm_done_cb handler,
-		     void                 *cb_data)
+static int
+lanparm_destroy_handler(ipmi_domain_t        *domain,
+			ipmi_lanparm_t       *lanparm,
+			ipmi_lanparm_done_cb handler,
+			void                 *cb_data)
 {
-    /* We don't need the read lock, because the lanparm are stand-alone
-       after they are created (except for fetching SELs, of course). */
+    int           rv;
+    void          *attr_data;
+    locked_list_t *lanparml;
+    
+    rv = ipmi_domain_find_attribute(domain, IPMI_LANPARM_ATTR_NAME,
+				    &attr_data);
+    if (rv)
+	return rv;
+    lanparml = attr_data;
+
+    if (! locked_list_remove(lanparml, lanparm, NULL))
+	/* Not in the list, it's already been removed. */
+	return EINVAL;
+
     lanparm_lock(lanparm);
     if (lanparm->destroyed) {
 	lanparm_unlock(lanparm);
 	return EINVAL;
     }
     lanparm->destroyed = 1;
+    lanparm_unlock(lanparm);
     lanparm->destroy_handler = handler;
     lanparm->destroy_cb_data = cb_data;
-    if (opq_stuff_in_progress(lanparm->opq)) {
-	/* It's currently doing something with callbacks, so let it be
-           destroyed in the handler, since we can't cancel the handler
-           or operation. */
-	lanparm_unlock(lanparm);
-	return 0;
-    }
 
-    /* This unlocks the lock. */
-    internal_destroy_lanparm(lanparm);
+    lanparm_put(lanparm);
     return 0;
+}
+
+typedef struct lanparm_destroy_s
+{
+    int        err;
+    ipmi_lanparm_t *lanparm;
+
+    ipmi_lanparm_done_cb done;
+    void             *cb_data;
+} lanparm_destroy_t;
+
+static void
+lanparm_destroy_handler_domain(ipmi_domain_t *domain, void *cb_data)
+{
+    lanparm_destroy_t *info = cb_data;
+
+    info->err = lanparm_destroy_handler(domain, info->lanparm,
+					info->done, info->cb_data);
+}
+
+int
+ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
+		     ipmi_lanparm_done_cb done,
+		     void                 *cb_data)
+
+{
+    lanparm_destroy_t info;
+    int           rv;
+
+    info.err = 0;
+    info.lanparm = lanparm;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_domain_pointer_cb(lanparm->domain,
+				lanparm_destroy_handler_domain,
+				&info);
+    if (!rv)
+	rv = info.err;
+
+    return rv;
 }
 
 typedef struct lanparm_fetch_handler_s
@@ -253,15 +457,12 @@ fetch_complete(ipmi_lanparm_t *lanparm, int err, lanparm_fetch_handler_t *elem)
 
     ipmi_mem_free(elem);
 
-    if (lanparm->destroyed) {
-	internal_destroy_lanparm(lanparm);
-	return;
-    }
-
-    opq_op_done(lanparm->opq);
+    if (!lanparm->destroyed)
+	opq_op_done(lanparm->opq);
 
  out:
     lanparm_unlock(lanparm);
+    lanparm_put(lanparm);
 }
 
 
@@ -394,6 +595,8 @@ ipmi_lanparm_get_parm(ipmi_lanparm_t      *lanparm,
 
     if (rv)
 	ipmi_mem_free(elem);
+    else
+	lanparm_get(lanparm);
 
     return rv;
 }
@@ -421,15 +624,12 @@ set_complete(ipmi_lanparm_t *lanparm, int err, lanparm_set_handler_t *elem)
 
     ipmi_mem_free(elem);
 
-    if (lanparm->destroyed) {
-	internal_destroy_lanparm(lanparm);
-	return;
-    }
-
-    opq_op_done(lanparm->opq);
+    if (!lanparm->destroyed)
+	opq_op_done(lanparm->opq);
 
  out:
     lanparm_unlock(lanparm);
+    lanparm_put(lanparm);
 }
 
 static void
@@ -441,7 +641,8 @@ lanparm_config_set(ipmi_mc_t  *mc,
     ipmi_lanparm_t        *lanparm = elem->lanparm;
     int               rv;
 
-    rv = check_lanparm_response_param(lanparm, mc, rsp, 1, "lanparm_config_set");
+    rv = check_lanparm_response_param(lanparm, mc, rsp, 1,
+				      "lanparm_config_set");
 
     lanparm_lock(lanparm);
     set_complete(lanparm, rv, elem);
@@ -555,6 +756,8 @@ ipmi_lanparm_set_parm(ipmi_lanparm_t       *lanparm,
 
     if (rv)
 	ipmi_mem_free(elem);
+    else
+	lanparm_get(lanparm);
 
     return rv;
 }
@@ -997,8 +1200,11 @@ err_lock_cleared(ipmi_lanparm_t *lanparm,
 {
     ipmi_lan_config_t *lanc = cb_data;
 
-    lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
+    if (lanc->done)
+	lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
     ipmi_lan_free_config(lanc);
+    lanparm->locked = 0;
+    lanparm_put(lanparm);
 }
 
 static void
@@ -1107,9 +1313,13 @@ got_parm(ipmi_lanparm_t    *lanparm,
 		     err);
 	    lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
 	    ipmi_lan_free_config(lanc);
+	    lanparm->locked = 0;
+	    lanparm_put(lanparm);
 	}
-    } else
+    } else {
 	lanc->done(lanparm, 0, lanc, lanc->cb_data);
+	lanparm_put(lanparm);
+    }
 }
 
 static void 
@@ -1125,8 +1335,9 @@ lock_done(ipmi_lanparm_t *lanparm,
 	lanc->lock_supported = 0;
     } else if (err == IPMI_IPMI_ERR_VAL(0x81)) {
 	/* Someone else has the lock, return EAGAIN. */
-	lanc->done(lanparm, err, NULL, lanc->cb_data);
+	lanc->done(lanparm, EAGAIN, NULL, lanc->cb_data);
 	ipmi_lan_free_config(lanc);
+	lanparm_put(lanparm);
 	return;
     } else if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -1135,10 +1346,12 @@ lock_done(ipmi_lanparm_t *lanparm,
 		 err);
 	lanc->done(lanparm, err, NULL, lanc->cb_data);
 	ipmi_lan_free_config(lanc);
+	lanparm_put(lanparm);
 	return;
+    } else {
+	lanc->lan_locked = 1;
+	lanparm->locked = 1;
     }
-
-    lanc->lan_locked = 1;
 
     rv = ipmi_lanparm_get_parm(lanparm, lanc->curr_parm, lanc->curr_sel, 0,
 			       got_parm, lanc);
@@ -1154,12 +1367,13 @@ lock_done(ipmi_lanparm_t *lanparm,
 	rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1,
 				   err_lock_cleared, lanc);
 	if (rv) {
-	    ipmi_lan_free_config(lanc);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "lanparm.c(lock_done): Error trying to clear lock: %x",
 		     err);
 	    lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
 	    ipmi_lan_free_config(lanc);
+	    lanparm->locked = 0;
+	    lanparm_put(lanparm);
 	}
     }
 }
@@ -1183,11 +1397,15 @@ int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
     lanc->cb_data = cb_data;
     lanc->my_lan = lanparm;
 
+    lanparm_get(lanparm);
+
     /* First grab the lock */
     data[0] = 1; /* Set in progress. */
     rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1, lock_done, lanc);
-    if (rv)
+    if (rv) {
 	ipmi_lan_free_config(lanc);
+	lanparm_put(lanparm);
+    }
 
     return rv;
 }
@@ -1203,6 +1421,8 @@ set_clear(ipmi_lanparm_t *lanparm,
 	err = lanc->err;
     lanc->set_done(lanparm, err, lanc->cb_data);
     ipmi_lan_free_config(lanc);
+    lanparm->locked = 0;
+    lanparm_put(lanparm);
 }
 
 static void 
@@ -1391,6 +1611,7 @@ ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
     } else {
 	/* The old config no longer holds the lock. */
 	olanc->lan_locked = 0;
+	lanparm_get(lanparm);
     }
     return rv;
 }
@@ -1412,6 +1633,8 @@ lock_cleared(ipmi_lanparm_t *lanparm,
     cl->done(lanparm, err, cl->cb_data);
 
     ipmi_mem_free(cl);
+    lanparm->locked = 0;
+    lanparm_put(lanparm);
 }
 
 int
@@ -1442,8 +1665,10 @@ ipmi_lan_clear_lock(ipmi_lanparm_t       *lanparm,
     rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1, lock_cleared, cl);
     if (rv) {
 	ipmi_mem_free(cl);
-    } else if (lanc) {
-	lanc->lan_locked = 0;
+    } else {
+	if (lanc)
+	    lanc->lan_locked = 0;
+	lanparm_get(lanparm);
     }
 
     return rv;

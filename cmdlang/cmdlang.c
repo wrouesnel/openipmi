@@ -46,6 +46,7 @@
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_pet.h>
+#include <OpenIPMI/ipmi_lanparm.h>
 
 
 /*
@@ -243,46 +244,181 @@ for_each_pet_handler(ipmi_pet_t *pet, void *cb_data)
     pet_iter_info_t *info = cb_data;
     ipmi_cmd_info_t *cmd_info = info->cmd_info;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    char name[IPMI_PET_NAME_LEN];
+    char            name[IPMI_PET_NAME_LEN];
+    char            *c;
 
     if (cmdlang->err)
 	return;
 
     ipmi_pet_get_name(pet, name, sizeof(name));
-    if ((! info->cmdstr) || (strcmp(info->cmdstr, name) == 0))
+
+    c = strrchr(name, '.');
+    if (!c)
+	goto out_err;
+    c++;
+    if ((! info->cmdstr) || (strcmp(info->cmdstr, c) == 0))
 	info->handler(pet, info->cb_data);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(name,
+			    "cmdlang.c(for_each_pet_handler)",
+			    "Bad PET name", EINVAL);
+}
+
+static void
+for_each_pet_domain_handler(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_pet_iterate_pets(domain, for_each_pet_handler, cb_data);
 }
 
 static void
 for_each_pet(ipmi_cmd_info_t *cmd_info,
-	     char            *pet_name,
+	     char            *domain,
+	     char            *class,
+	     char            *obj,
 	     ipmi_pet_ptr_cb handler,
 	     void            *cb_data)
 {
     pet_iter_info_t info;
 
-    info.cmdstr = pet_name;
+    if (class) {
+	cmd_info->cmdlang->errstr = "Invalid PET";
+	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_pet)";
+	return;
+    }
+
     info.handler = handler;
     info.cb_data = cb_data;
     info.cmd_info = cmd_info;
-    ipmi_pet_iterate_pets(for_each_pet_handler, &info);
+    info.cmdstr = obj;
+    for_each_domain(cmd_info, domain, NULL, NULL,
+		    for_each_pet_domain_handler, &info);
 }
 
 void
 ipmi_cmdlang_pet_handler(ipmi_cmd_info_t *cmd_info)
 {
-    char *cmdstr;
+    char *domain, *class, *obj;
 
     if (cmd_info->curr_arg >= cmd_info->argc) {
-	cmdstr = NULL;
+	domain = class = obj = NULL;
     } else {
-	cmdstr = cmd_info->argv[cmd_info->curr_arg];
-	if (strlen(cmdstr) == 0)
-	    cmdstr = NULL;
+	domain = cmd_info->argv[cmd_info->curr_arg];
+	class = NULL;
+	obj = strrchr(domain, '.');
+	if (!obj) {
+	    cmd_info->cmdlang->errstr = "Invalid PET";
+	    cmd_info->cmdlang->err = EINVAL;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_pet_handler)";
+	    return;
+	}
+	*obj = '\0';
+	obj++;
 	cmd_info->curr_arg++;
     }
 
-    for_each_pet(cmd_info, cmdstr, cmd_info->handler_data, cmd_info);
+    for_each_pet(cmd_info, domain, class, obj, cmd_info->handler_data,
+		 cmd_info);
+}
+
+/*
+ * Handling for iterating LANPARMs.
+ */
+typedef struct lanparm_iter_info_s
+{
+    char            *cmdstr;
+    ipmi_lanparm_ptr_cb handler;
+    void            *cb_data;
+    ipmi_cmd_info_t *cmd_info;
+} lanparm_iter_info_t;
+
+static void
+for_each_lanparm_handler(ipmi_lanparm_t *lanparm, void *cb_data)
+{
+    lanparm_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            name[IPMI_LANPARM_NAME_LEN];
+    char            *c;
+
+    if (cmdlang->err)
+	return;
+
+    ipmi_lanparm_get_name(lanparm, name, sizeof(name));
+
+    c = strrchr(name, '.');
+    if (!c)
+	goto out_err;
+    c++;
+    if ((! info->cmdstr) || (strcmp(info->cmdstr, c) == 0))
+	info->handler(lanparm, info->cb_data);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(name,
+			    "cmdlang.c(for_each_lanparm_handler)",
+			    "Bad LANPARM name", EINVAL);
+}
+
+static void
+for_each_lanparm_domain_handler(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_lanparm_iterate_lanparms(domain, for_each_lanparm_handler, cb_data);
+}
+
+static void
+for_each_lanparm(ipmi_cmd_info_t *cmd_info,
+	     char            *domain,
+	     char            *class,
+	     char            *obj,
+	     ipmi_lanparm_ptr_cb handler,
+	     void            *cb_data)
+{
+    lanparm_iter_info_t info;
+
+    if (class) {
+	cmd_info->cmdlang->errstr = "Invalid LANPARM";
+	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_lanparm)";
+	return;
+    }
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.cmd_info = cmd_info;
+    info.cmdstr = obj;
+    for_each_domain(cmd_info, domain, NULL, NULL,
+		    for_each_lanparm_domain_handler, &info);
+}
+
+void
+ipmi_cmdlang_lanparm_handler(ipmi_cmd_info_t *cmd_info)
+{
+    char *domain, *class, *obj;
+
+    if (cmd_info->curr_arg >= cmd_info->argc) {
+	domain = class = obj = NULL;
+    } else {
+	domain = cmd_info->argv[cmd_info->curr_arg];
+	class = NULL;
+	obj = strrchr(domain, '.');
+	if (!obj) {
+	    cmd_info->cmdlang->errstr = "Invalid LANPARM";
+	    cmd_info->cmdlang->err = EINVAL;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_lanparm_handler)";
+	    return;
+	}
+	*obj = '\0';
+	obj++;
+	cmd_info->curr_arg++;
+    }
+
+    for_each_lanparm(cmd_info, domain, class, obj, cmd_info->handler_data,
+		 cmd_info);
 }
 
 
@@ -2111,6 +2247,8 @@ int ipmi_cmdlang_domain_init(void);
 int ipmi_cmdlang_entity_init(void);
 int ipmi_cmdlang_mc_init(void);
 int ipmi_cmdlang_pet_init(void);
+int ipmi_cmdlang_lanparm_init(void);
+void ipmi_cmdlang_lanparm_shutdown(void);
 int ipmi_cmdlang_sensor_init(void);
 int ipmi_cmdlang_control_init(void);
 int ipmi_cmdlang_sel_init(void);
@@ -2130,6 +2268,9 @@ ipmi_cmdlang_init(void)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_pet_init();
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_lanparm_init();
     if (rv) return rv;
 
     rv = ipmi_cmdlang_sensor_init();
@@ -2161,6 +2302,7 @@ cleanup_level(ipmi_cmdlang_cmd_t *cmds)
 void
 ipmi_cmdlang_cleanup(void)
 {
+    ipmi_cmdlang_lanparm_shutdown();
     cleanup_level(cmd_list);
 }
 

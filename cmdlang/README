@@ -39,7 +39,7 @@ The commands may take parameters.  Some general ones are:
   [<domain>[(<channel>.<IPMB>)]].  As usual, the optional parts will
   cause defaulting to all things.
 * <connection> - A connection number, in the form: <domain>.<num>
-* <pet> - A platform event trap id, just a string id.
+* <pet> - A platform event trap id, in the form [<domain>][.<integer>]
 
 Note that the domain name and sensor/control name may have spaces in
 them; the names may be bracketed by quotes (' or ").  A backslash (\)

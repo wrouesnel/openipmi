@@ -1,5 +1,17 @@
 2004-10-05 Corey Minyard <cminyard@mvista.com> 
 
+	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added an anonymous
+	attribute that allows external code to tie data into the domain
+	without the domain having direct knowledge of them.
+
+	* lib/pet.c: Converted the PET list to be per domain.
+
+	* include/OpenIPMI/ipmi_lanparm.h, lib/lanparm.c: Rework of the
+	lanparm code to keep track of the lanparms that have been
+	allocated, be able to list them, etc.
+
+2004-10-05 Corey Minyard <cminyard@mvista.com> 
+
 	* include/OpenIPMI/ipmiif.h.in: Renamed a bunch of the sensor
 	functions and types to make their names more consistent  I hope
 	this is the last big rename effort for 1.4.

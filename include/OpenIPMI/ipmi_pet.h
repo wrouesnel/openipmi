@@ -115,7 +115,8 @@ int ipmi_pet_get_name(ipmi_pet_t *pet, char *name, int len);
 
 /* Iterate through all the PETs. */
 typedef void (*ipmi_pet_ptr_cb)(ipmi_pet_t *pet, void *cb_data);
-void ipmi_pet_iterate_pets(ipmi_pet_ptr_cb handler,
+void ipmi_pet_iterate_pets(ipmi_domain_t   *domain,
+			   ipmi_pet_ptr_cb handler,
 			   void            *cb_data);
 
 ipmi_mcid_t ipmi_pet_get_mc_id(ipmi_pet_t *pet);

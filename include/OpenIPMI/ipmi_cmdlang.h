@@ -185,6 +185,9 @@ void ipmi_cmdlang_connection_handler(ipmi_cmd_info_t *cmd_info);
 /* ipmi_pet_ptr_cb */
 void ipmi_cmdlang_pet_handler(ipmi_cmd_info_t *cmd_info);
 
+/* ipmi_lanparm_ptr_cb */
+void ipmi_cmdlang_lanparm_handler(ipmi_cmd_info_t *cmd_info);
+
 
 /* All output from the command language is in name/value pairs.  The
    value field may be NULL. */

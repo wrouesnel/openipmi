@@ -45,6 +45,10 @@ typedef void (*ipmi_lanparm_done_cb)(ipmi_lanparm_t *lanparm,
 				     int            err,
 				     void           *cb_data);
 
+/* Generic callback for iterating. */
+typedef void (*ipmi_lanparm_ptr_cb)(ipmi_lanparm_t *lanparm,
+				    void           *cb_data);
+
 /* Allocate a LANPARM. */
 int ipmi_lanparm_alloc(ipmi_mc_t      *mc,
 		       unsigned int   channel,
@@ -54,6 +58,18 @@ int ipmi_lanparm_alloc(ipmi_mc_t      *mc,
 int ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
 			 ipmi_lanparm_done_cb handler,
 			 void                 *cb_data);
+
+void ipmi_lanparm_iterate_lanparms(ipmi_domain_t       *domain,
+				   ipmi_lanparm_ptr_cb handler,
+				   void                *cb_data);
+
+ipmi_mcid_t ipmi_lanparm_get_mc_id(ipmi_lanparm_t *lanparm);
+unsigned int ipmi_lanparm_get_channel(ipmi_lanparm_t *lanparm);
+
+#define IPMI_LANPARM_NAME_LEN 64
+int ipmi_lanparm_get_name(ipmi_lanparm_t *lanparm, char *name, int length);
+
+
 
 /* Fetch a parameter value from the LANPARM.  The "set" and "block"
    parameters are the set selector and block selectors.  If those are
@@ -185,34 +201,34 @@ int ipmi_lanconfig_set_ipv4_tos(ipmi_lan_config_t *lanc,
 
 /* Authorization enables for the various authentication levels. */
 int ipmi_lanconfig_get_enable_auth_oem(ipmi_lan_config_t *lanc,
-				       unsigned int      auth,
+				       unsigned int      user,
 				       unsigned int      *val);
 int ipmi_lanconfig_get_enable_auth_straight(ipmi_lan_config_t *lanc,
-					    unsigned int      auth,
+					    unsigned int      user,
 					    unsigned int      *val);
 int ipmi_lanconfig_get_enable_auth_md5(ipmi_lan_config_t *lanc,
-				       unsigned int      auth,
+				       unsigned int      user,
 				       unsigned int      *val);
 int ipmi_lanconfig_get_enable_auth_md2(ipmi_lan_config_t *lanc,
-				       unsigned int      auth,
+				       unsigned int      user,
 				       unsigned int      *val);
 int ipmi_lanconfig_get_enable_auth_none(ipmi_lan_config_t *lanc,
-					unsigned int      auth,
+					unsigned int      user,
 					unsigned int      *val);
 int ipmi_lanconfig_set_enable_auth_oem(ipmi_lan_config_t *lanc,
-				       unsigned int      auth,
+				       unsigned int      user,
 				       unsigned int      val);
 int ipmi_lanconfig_set_enable_auth_straight(ipmi_lan_config_t *lanc,
-					    unsigned int      auth,
+					    unsigned int      user,
 					    unsigned int      val);
 int ipmi_lanconfig_set_enable_auth_md5(ipmi_lan_config_t *lanc,
-				       unsigned int      auth,
+				       unsigned int      user,
 				       unsigned int      val);
 int ipmi_lanconfig_set_enable_auth_md2(ipmi_lan_config_t *lanc,
-				       unsigned int      auth,
+				       unsigned int      user,
 				       unsigned int      val);
 int ipmi_lanconfig_set_enable_auth_none(ipmi_lan_config_t *lanc,
-					unsigned int      auth,
+					unsigned int      user,
 					unsigned int      val);
 
 /* Addressing for the BMC. */
