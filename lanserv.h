@@ -152,7 +152,7 @@ struct lan_data_s
        authenticated.  Should return 0 if the standard handling should
        continue, or non-zero if the message should not go through
        normal handling.  This field may be NULL, and it will be
-       ignore. */
+       ignored. */
     int (*oem_handle_msg)(lan_data_t *lan, msg_t *msg);
 
     /* Don't fill in the below in the user code. */

@@ -655,8 +655,10 @@ log(int logtype, msg_t *msg, char *format, ...)
     localtime_r(&tod.tv_sec, &ltime);
     asctime_r(&ltime, timebuf);
     timelen = strlen(timebuf);
-    timebuf[timelen-1] = '\0'; /* Nuke the '\n'. */
-    timelen--;
+    if (timelen > 0) {
+	timebuf[timelen-1] = '\0'; /* Nuke the '\n'. */
+	timelen--;
+    }
     if ((timelen + strlen(format) + 2) >= sizeof(fullformat)) {
 	vsyslog(LOG_NOTICE, format, ap);
     } else {
