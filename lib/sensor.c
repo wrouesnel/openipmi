@@ -795,8 +795,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	s[p]->sensor_init_pu_scanning = (sdr.data[5] >> 0) & 1;
 	s[p]->ignore_if_no_entity = (sdr.data[6] >> 7) & 1;
 	s[p]->supports_auto_rearm = (sdr.data[6] >> 6) & 1 ;
-	s[p]->hysteresis_support = (sdr.data[6] >> 5) & 3;
-	s[p]->threshold_access = (sdr.data[6] >> 3) & 3;
+	s[p]->hysteresis_support = (sdr.data[6] >> 4) & 3;
+	s[p]->threshold_access = (sdr.data[6] >> 2) & 3;
 	s[p]->event_support = sdr.data[6] & 3;
 	s[p]->sensor_type = sdr.data[7];
 	s[p]->event_reading_type = sdr.data[8];
