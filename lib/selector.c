@@ -645,11 +645,11 @@ sel_select_loop(selector_t      *sel,
 }
 
 void
-ipmi_sel_set_add_read_fds_handler(selector_t                 *sel, 
-				  ipmi_sel_add_read_fds_cb   add,
-				  ipmi_sel_check_read_fds_cb handle,
-				  ipmi_sel_check_timeout_cb  timeout,
-				  void                       *cb_data)
+ipmi_sel_set_read_fds_handler(selector_t                 *sel, 
+			      ipmi_sel_add_read_fds_cb   add,
+			      ipmi_sel_check_read_fds_cb handle,
+			      ipmi_sel_check_timeout_cb  timeout,
+			      void                       *cb_data)
 {
     ipmi_lock(sel->fd_lock);
     sel->add_read = add;

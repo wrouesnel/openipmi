@@ -129,8 +129,32 @@ int snmp_pre_parse(struct snmp_session *session, snmp_ipaddr from)
 
 struct snmp_session *snmp_session;
 
+void snmp_add_read_fds(selector_t     *sel,
+		       int            *num_fds,
+		       fd_set         *fdset,
+		       struct timeval *timeout,
+		       int            *timeout_invalid,
+		       void           *cb_data)
+{
+    snmp_select_info(num_fds, fdset, timeout, timeout_invalid);
+}
+
+void snmp_check_read_fds(selector_t *sel,
+			 fd_set     *fds,
+			 void       *cb_data)
+{
+    snmp_read(fds);
+}
+
+void snmp_check_timeout(selector_t *sel,
+			void       *cb_data)
+{
+    snmp_timeout();
+}
+
+
 int
-snmp_init(void)
+snmp_init(selector_t *sel)
 {
     struct snmp_session session;
 
@@ -152,6 +176,12 @@ snmp_init(void)
         snmp_sess_perror("snmptrapd", &session);
 	return -1;
     }
+
+    ipmi_sel_set_read_fds_handler(sel,
+				  snmp_add_read_fds,
+				  snmp_check_read_fds,
+				  snmp_check_timeout,
+				  NULL);
 
     return 0;
 }
@@ -186,12 +216,12 @@ main(int argc, const char *argv[])
 	}
     }
 
+    rv = ipmi_ui_init(&selector, full_screen);
+
     if (init_snmp) {
-	if (snmp_init() < 0)
+	if (snmp_init(selector) < 0)
 	    return 1;
     }
-
-    rv = ipmi_ui_init(&selector, full_screen);
 
  next_con:
     rv = ipmi_parse_args(&curr_arg, argc, argv, &con_parms[last_con]);
