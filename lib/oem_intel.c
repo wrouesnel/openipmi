@@ -3,6 +3,8 @@
  *
  * OEM code to make Intel server systems work better.
  *
+ * 08/19/04 ARCress - handle different bus ids for alarm panel.
+ *
  *  (C) 2004 MontaVista Software, Inc.
  *  (C) 2004 Intel Corp.
  *
@@ -46,6 +48,8 @@
 
 #define INTEL_MANUFACTURER_ID 0x000157
 #define NSC_MANUFACTURER_ID 0x000322
+
+static unsigned char busid = 0x03;   /*default to PRIVATE_BUS_ID;  */
 
 static int get_alarm_control_number(int ipmb)
 {
@@ -118,11 +122,15 @@ alarm_set_start(ipmi_control_t *control, int err, void *cb_data)
 	return;
     }
 
+    if (ipmi_mc_manufacturer_id(mc) == NSC_MANUFACTURER_ID)  
+	 busid = 0x24;  /* PERIPHERAL_BUS_ID */
+    else busid = 0x03;  /* PRIVATE_BUS_ID */
+
     msg.netfn    = IPMI_APP_NETFN;
     msg.cmd      = IPMI_MASTER_READ_WRITE_CMD;
     msg.data     = alloca(4);
     msg.data_len = 4;
-    msg.data[0]  = 0x03; /* PRIVATE_BUS_ID */
+    msg.data[0]  = busid;
     msg.data[1]  = 0x40; /* ALARMS_PANEL_WRITE */
     msg.data[2]  = 1;
     msg.data[3]  = control_info->vals[0];
@@ -229,11 +237,15 @@ alarm_get_start(ipmi_control_t *control, int err, void *cb_data)
 	return;
     }
 
+    if (ipmi_mc_manufacturer_id(mc) == NSC_MANUFACTURER_ID)  
+	 busid = 0x24;  /* PERIPHERAL_BUS_ID */
+    else busid = 0x03;  /* PRIVATE_BUS_ID */
+
     msg.netfn    = IPMI_APP_NETFN;
     msg.cmd      = IPMI_MASTER_READ_WRITE_CMD;
     msg.data     = alloca(3);
     msg.data_len = 3;
-    msg.data[0]  = 0x03; /* PRIVATE_BUS_ID */
+    msg.data[0]  = busid;
     msg.data[1]  = 0x41; /* ALARMS_PANEL_READ */
     msg.data[2]  = 1;
 

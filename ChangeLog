@@ -1,3 +1,7 @@
+2004-08-19 Andrew Cress <andrew.r.cress@intel.com>
+
+	* lib/oem_intel.c: Handle different bus ids for alarm panel.
+
 2004-08-19 Corey Minyard <cminyard@mvista.com> 
 
 	* doc/Makefile: Add new documentation.  Note that this is LaTex
