@@ -815,6 +815,7 @@ ipmi_glib_get_os_handler(int priority)
 	g_free(rv);
 	return NULL;
     }
+    memset(info, 0, sizeof(*info));
 
 #ifdef HAVE_GDBM
     info->gdbm_lock = g_mutex_new();

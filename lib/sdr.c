@@ -537,7 +537,7 @@ fetch_complete(ipmi_sdr_info_t *sdrs, int err)
 	if (to_free)
 	    ipmi_mem_free(to_free);
 
-	if (sdrs->os_hnd->database_store) {
+	if (sdrs->sdrs && sdrs->db_key_set && sdrs->os_hnd->database_store) {
 	    unsigned int  len = sdrs->num_sdrs * sizeof(ipmi_sdr_t);
 	    unsigned char *d = ((unsigned char *) sdrs->sdrs) + len;
 

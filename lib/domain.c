@@ -1006,6 +1006,7 @@ _ipmi_domain_mc_unlock(ipmi_domain_t *domain)
 #define DOMAIN_HASH_SIZE 128
 static ipmi_domain_t *domains[DOMAIN_HASH_SIZE];
 static ipmi_lock_t *domains_lock;
+static int domains_initialized = 0;
 
 static void
 add_known_domain(ipmi_domain_t *domain)
@@ -1048,6 +1049,9 @@ _ipmi_domain_get(ipmi_domain_t *domain)
     unsigned int  hash = ipmi_hash_pointer(domain) % DOMAIN_HASH_SIZE;
     ipmi_domain_t *c;
     int           rv = 0;
+
+    if (!domains_initialized)
+	    return ECANCELED;
 
     ipmi_lock(domains_lock);
 
@@ -5111,12 +5115,16 @@ _ipmi_domain_init(void)
 	return rv;
     }
 
+    domains_initialized = 1;
+
     return 0;
 }
 
 void
 _ipmi_domain_shutdown(void)
 {
+    domains_initialized = 0;
+
     locked_list_destroy(domain_change_handlers);
     locked_list_destroy(domains_list);
     domains_list = NULL;

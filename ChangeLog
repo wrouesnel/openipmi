@@ -7,6 +7,23 @@
 	* glib/Makefile.am: Changed the name of a field to be glib, not
 	posix.
 
+	* glib/glib_os_hnd.c: Clear out the glib info so the gdbmf will be
+	NULL at startup.
+
+	* lib/domain.c: Added a general domains_initialized function to
+	know if the domain lock is valid.  This is because some things can
+	try to do a ipmi_domain_pointer_cb() after the domains have been
+	shut down.
+
+	* lib/sdr.c: Only store the SDRs in the database if we have a
+	valid key for the MC.
+
+	* swig/OpenIPMI.i: Initialize the glib OS handler in the right
+	order.
+
+	* utils/ipmi_malloc.c: Don't free the memory in the alloced list
+	when shutting down.  It may still be in use.
+
 2005-02-02 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/os_handler.h, lib/ipmi.c: Added an interface to

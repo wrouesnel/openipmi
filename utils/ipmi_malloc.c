@@ -337,7 +337,6 @@ ipmi_debug_malloc_cleanup(void)
 			  alloced, NULL, NULL, "Never freed");
 	    to_free = alloced;
 	    alloced = trlr->next;
-	    malloc_os_hnd->mem_free(to_free);
 	}
     }
 }

@@ -2467,8 +2467,8 @@ init_glib(void)
 {
     if (swig_os_hnd)
 	return;
-    swig_os_hnd = ipmi_glib_get_os_handler();
     g_thread_init(NULL);
+    swig_os_hnd = ipmi_glib_get_os_handler();
     ipmi_init(swig_os_hnd);
     g_log_set_handler("OpenIPMI",
 		      G_LOG_LEVEL_ERROR
