@@ -901,7 +901,7 @@ set_sel_time(ipmi_mc_t  *mc,
 
 int
 ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
-			     struct timeval  *time,
+			     const struct timeval  *time,
 			     ipmi_mc_done_cb handler,
 			     void            *cb_data)
 {

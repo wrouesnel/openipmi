@@ -194,7 +194,7 @@ int ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
    time, as it can cause old events to be interpreted as new
    events on this and other systems. */
 int ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
-				 struct timeval  *time,
+				 const struct timeval  *time,
 				 ipmi_mc_done_cb handler,
 				 void            *cb_data);
 

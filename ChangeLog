@@ -1,3 +1,12 @@
+2003-10-31  Louis Zhuang  <louis.zhuang@linux.intel.com>
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Add const qualifier into function
+
+2003-10-30 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_smi.c: Handle data portion of a socket message correctly.
+
+	* sample/ipmicmd.c: Fix error handling.
 
 2003-10-30 Louis Zhuang <louis.zhuang@intel.com>, Corey Minyard <cminyard@mvista.com>
 

@@ -401,8 +401,8 @@ timed_rsp_handler(ipmi_con_t   *con,
 			       timed_rsp_handler,
 			       data, NULL, NULL, NULL);
 	data->count--;
-	if (rv == -1) {
-	    printf("Error sending command: %s\n", strerror(errno));
+	if (rv) {
+	    printf("Error sending command: %x\n", rv);
 	    free(data);
 	}
     }
@@ -442,8 +442,8 @@ time_msgs(ipmi_con_t    *con,
 			   timed_rsp_handler,
 			   data, NULL, NULL, NULL);
     data->count--;
-    if (rv == -1) {
-	printf("Error sending command: %s\n", strerror(errno));
+    if (rv) {
+	printf("Error sending command: %x\n", rv);
 	free(data);
     }
 }
@@ -619,7 +619,7 @@ process_input_line(char *buf)
 	else
 	    rv = con->send_command(con, &addr, addr_len, &msg, rsp_handler,
 				   NULL, NULL, NULL, NULL);
-	if (rv == -1) {
+	if (rv) {
 	    printf("Error sending command: %x\n", rv);
 	}
     }

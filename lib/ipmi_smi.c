@@ -356,20 +356,25 @@ smi_send(smi_data_t   *smi,
 	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
     }
 
+    if (msg->data_len > IPMI_MAX_MSG_LENGTH)
+	return EMSGSIZE;
+
     if (smi->using_socket) {
 	struct sockaddr_ipmi     saddr;
-	struct ipmi_sock_msg     smsg;
+        char                     smsg_data[sizeof(struct ipmi_sock_msg)
+                                           + IPMI_MAX_MSG_LENGTH];
+        struct ipmi_sock_msg     *smsg = (void *) smsg_data;
 
 	saddr.sipmi_family = AF_IPMI;
 	memcpy(&saddr.ipmi_addr, addr, addr_len);
 
-	smsg.netfn = msg->netfn;
-	smsg.cmd = msg->cmd;
-	smsg.data_len = msg->data_len;
-	smsg.msgid = msgid;
-	memcpy(smsg.data, msg->data, smsg.data_len);
+	smsg->netfn = msg->netfn;
+	smsg->cmd = msg->cmd;
+	smsg->data_len = msg->data_len;
+	smsg->msgid = msgid;
+	memcpy(smsg->data, msg->data, smsg->data_len);
 
-	rv = sendto(fd, &smsg, sizeof(smsg) + msg->data_len, 0,
+	rv = sendto(fd, smsg, sizeof(smsg) + msg->data_len, 0,
 		    (struct sockaddr *) &saddr,
 		    addr_len + SOCKADDR_IPMI_OVERHEAD);
     } else {
