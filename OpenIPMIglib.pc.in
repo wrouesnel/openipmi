@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@prefix@
+libdir=@libdir@
+includedir=@includedir@
+ 
+Name: OpenIPMIglib
+Description: GLIB threaded OS handler for OpenIPMI
+Version: @VERSION@
+Requires: 
+Libs: -L${libdir} -lOpenIPMIglib `glib-config --cflags gthread`
+Cflags: -I${includedir} `glib-config --libs gthread`
