@@ -1039,13 +1039,13 @@ reread_sel_done(ipmi_sel_info_t *sel,
 
     if (info->handler) {
 	if (!sel) {
-	    info->handler(NULL, ECANCELED, cb_data);
+	    info->handler(NULL, ECANCELED, info->cb_data);
 	    goto out;
 	}
 
 	rv = ipmi_mc_pointer_cb(info->mcid, mc_reread_sel_cb, info);
 	if (rv) {
-	    info->handler(NULL, ECANCELED, cb_data);
+	    info->handler(NULL, ECANCELED, info->cb_data);
 	    goto out;
 	}
     }
