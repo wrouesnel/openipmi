@@ -1475,6 +1475,32 @@ ll_si_rsp_handler(ipmi_con_t   *ipmi,
     ipmi_read_unlock();
 }
 
+static int
+matching_domain_sysaddr(ipmi_domain_t *domain, ipmi_addr_t *addr,
+			ipmi_system_interface_addr_t *si)
+{
+    if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
+	int              i;
+
+	if (ipmb->channel == 0)
+	    return 0;
+
+	for (i=0; i<MAX_CONS; i++) {
+	    if (domain->con_active[i]
+		&& (domain->con_ipmb_addr[i] == ipmb->slave_addr))
+	    {
+		si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+		si->channel = 0;
+		si->lun = ipmb->lun;
+		return 1;
+	    }
+	}
+    }
+
+    return 0;
+}
+
 int
 ipmi_send_command_addr(ipmi_domain_t                *domain,
 		       ipmi_addr_t		    *addr,
@@ -1507,7 +1533,16 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     if (!nmsg)
 	return ENOMEM;
 
-    if ((addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+    if (matching_domain_sysaddr(domain, addr, &si)) {
+	/* We have a direct connection to this BMC, so talk directly
+	   to it. */
+	u = si.channel;
+	addr = (ipmi_addr_t *) &si;
+	addr_len = sizeof(si);
+	handler = ll_si_rsp_handler;
+	data4 = (void *) (long) u;
+	is_si = 1;
+    } else if ((addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
 	&& (addr->channel != IPMI_BMC_CHANNEL))
     {
 	u = addr->channel;
@@ -3671,6 +3706,7 @@ initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
 		     int          err,
 		     unsigned int ipmb,
 		     int          active,
+		     unsigned int hacks,
 		     void         *cb_data)
 {
     ipmi_domain_t *domain = cb_data;
@@ -3710,6 +3746,7 @@ static void ll_addr_changed(ipmi_con_t   *ipmi,
 			    int          err,
 			    unsigned int ipmb,
 			    int          active,
+			    unsigned int hacks,
 			    void         *cb_data);
 
 static void
@@ -3838,6 +3875,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 		int          err,
 		unsigned int ipmb,
 		int          active,
+		unsigned int hacks,
 		void         *cb_data)
 {
     ipmi_domain_t *domain = cb_data;

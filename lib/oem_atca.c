@@ -31,8 +31,6 @@
  * Add support for setting the power up timeout
  */
 
-#define BROKEN_ATCA
-
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -134,6 +132,8 @@ struct atca_ipmc_s
 
 struct atca_shelf_s
 {
+    int setup;
+
     ipmi_domain_t *domain;
     unsigned char shelf_fru_ipmb;
     unsigned char shelf_fru_device_id;
@@ -154,7 +154,16 @@ struct atca_shelf_s
 
     ipmi_domain_oem_check_done startup_done;
     void                       *startup_done_cb_data;
+
+    /* Hacks for broken implementations. */
+
+    /* The shelf address is not on the advertised shelf address
+       device, it is only on the BMC. */
+    unsigned int shelf_address_only_on_bmc : 1;
 };
+
+static void setup_from_shelf_fru(ipmi_domain_t *domain,
+				 atca_shelf_t  *info);
 
 /***********************************************************************
  *
@@ -2003,6 +2012,11 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
     int           i;
     unsigned int  ipmb_addr;
 
+    /* We wait until here to set up everything for the first time so
+       it will be reported to the user properly. */
+    if (!info->setup)
+	setup_from_shelf_fru(domain, info);
+
     ipmb_addr = ipmi_mc_get_address(mc);
 
     for (i=0; i<info->num_ipmcs; i++) {
@@ -2120,6 +2134,141 @@ atca_iterate_entities(ipmi_entity_t *entity, void *cb_data)
 static void shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data);
 
 static void
+setup_from_shelf_fru(ipmi_domain_t *domain,
+		     atca_shelf_t  *info)
+{
+    ipmi_entity_info_t *ents;
+    char               *name;
+    int                i;
+    int                rv;
+
+    ents = ipmi_domain_get_entities(domain);
+
+    /* Create the main shelf entity. */
+    name = "ATCA Shelf";
+    rv = ipmi_entity_add(ents, domain, 0, 0, 0,
+			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 1,
+			 name, IPMI_ASCII_STR, strlen(name),
+			 atca_entity_sdr_add,
+			 NULL, &info->shelf_entity);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_atca.c(shelf_fru_fetched): "
+		 "Could not add chassis entity: %x",
+		 DOMAIN_NAME(domain), rv);
+	goto out;
+    }
+
+    info->ipmcs = ipmi_mem_alloc(sizeof(atca_ipmc_t) * info->num_addresses);
+    if (!info->ipmcs) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(shelf_fru_fetched): "
+		 "could not allocate memory for ipmcs",
+		 DOMAIN_NAME(domain));
+	goto out;
+    }
+    memset(info->ipmcs, 0, sizeof(atca_ipmc_t) * info->num_addresses);
+
+    info->num_ipmcs = info->num_addresses;
+    for (i=0; i<info->num_addresses; i++) {
+	/* Process each IPMC. */
+	atca_ipmc_t *b = &(info->ipmcs[i]);
+	char        *name;
+	int         entity_id;
+
+	b->shelf = info;
+	b->idx = i;
+	b->ipmb_address = info->addresses[i].hw_address * 2;
+	b->site_type = info->addresses[i].site_type;
+	b->site_num = info->addresses[i].site_num;
+	ipmi_mc_id_set_invalid(&b->mcid);
+
+	ipmi_start_ipmb_mc_scan(domain, 0, b->ipmb_address,
+				b->ipmb_address, NULL, NULL);
+
+	rv = realloc_frus(b, 1); /* Start with 1 FRU for the MC. */
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "Could not allocate FRU memory",
+		     DOMAIN_NAME(domain));
+	    goto out;
+	}
+
+	switch (b->site_type) {
+	case 0:
+	    name = "ATCA Board";
+	    entity_id = 0xa0;
+	    break;
+
+	case 1: /* Power entry module */
+	    name = "Power Unit";
+	    entity_id = 0x0a;
+	    break;
+
+	case 2: /* Shelf FRU info */
+	    name = "Shelf FRU";
+	    entity_id = 0xf2;
+	    break;
+
+	case 3: /* Dedicated ShMC */
+	    name = "ShMC";
+	    entity_id = 0xf0;
+	    break;
+
+	case 4: /* Fan Tray */
+	    name = "Fan Tray";
+	    entity_id = 0x1e;
+	    break;
+
+	case 5: /* Fan Filter Tray */
+	    name = "Fan Filters";
+	    entity_id = 0xf1;
+	    break;
+
+	case 9: /* Rear Transition Module */
+	    name = "RTM";
+	    entity_id = 0xc0;
+	    break;
+
+	case 6: /* Alarm */
+	case 7: /* AdvancedMC Module */
+	case 8: /* PMC */
+	default:
+	    /* Skip adding the entity. */
+	    continue;
+	}
+
+	rv = ipmi_entity_add(ents, domain, 0, b->ipmb_address, 0,
+			     entity_id,
+			     0x60, /* Always device relative */
+			     name, IPMI_ASCII_STR, strlen(name),
+			     atca_entity_sdr_add,
+			     NULL, &b->frus[0]->entity);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     " Could not add board entity: %x",
+		     DOMAIN_NAME(domain), rv);
+	    goto out;
+	}
+	rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "Could not add child ipmc: %x",
+		     DOMAIN_NAME(domain), rv);
+	    goto out;
+	}
+    }
+
+    info->setup = 1;
+
+ out:
+    return;
+}
+
+static void
 alt_shelf_fru_cb(ipmi_domain_t *domain,
 		 ipmi_addr_t   *addr,
 		 unsigned int  addr_len,
@@ -2185,8 +2334,6 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     int                count;
     int                found;
     int                i, j, k, l;
-    ipmi_entity_info_t *ents;
-    char               *name;
     int                rv;
 
     if (err) {
@@ -2341,123 +2488,6 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	ipmi_mem_free(data);
     }
 
-    ents = ipmi_domain_get_entities(domain);
-
-    /* Create the main shelf entity. */
-    name = "ATCA Shelf";
-    rv = ipmi_entity_add(ents, domain, 0, 0, 0,
-			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 1,
-			 name, IPMI_ASCII_STR, strlen(name),
-			 atca_entity_sdr_add,
-			 NULL, &info->shelf_entity);
-    if (rv) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%soem_atca.c(shelf_fru_fetched): "
-		 "Could not add chassis entity: %x",
-		 DOMAIN_NAME(domain), rv);
-	goto out;
-    }
-
-    info->ipmcs = ipmi_mem_alloc(sizeof(atca_ipmc_t) * info->num_addresses);
-    if (!info->ipmcs) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(shelf_fru_fetched): "
-		 "could not allocate memory for ipmcs",
-		 DOMAIN_NAME(domain));
-	goto out;
-    }
-    memset(info->ipmcs, 0, sizeof(atca_ipmc_t) * info->num_addresses);
-
-    info->num_ipmcs = info->num_addresses;
-    for (i=0; i<info->num_addresses; i++) {
-	/* Process each IPMC. */
-	atca_ipmc_t *b = &(info->ipmcs[i]);
-	char        *name;
-	int         entity_id;
-
-	b->shelf = info;
-	b->idx = i;
-	b->ipmb_address = info->addresses[i].hw_address * 2;
-	b->site_type = info->addresses[i].site_type;
-	b->site_num = info->addresses[i].site_num;
-	ipmi_mc_id_set_invalid(&b->mcid);
-
-	rv = realloc_frus(b, 1); /* Start with 1 FRU for the MC. */
-	if (rv) {
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%soem_atca.c(shelf_fru_fetched): "
-		     "Could not allocate FRU memory",
-		     DOMAIN_NAME(domain));
-	    goto out;
-	}
-
-	switch (b->site_type) {
-	case 0:
-	    name = "ATCA Board";
-	    entity_id = 0xa0;
-	    break;
-
-	case 1: /* Power entry module */
-	    name = "Power Unit";
-	    entity_id = 0x0a;
-	    break;
-
-	case 2: /* Shelf FRU info */
-	    name = "Shelf FRU";
-	    entity_id = 0xf2;
-	    break;
-
-	case 3: /* Dedicated ShMC */
-	    name = "ShMC";
-	    entity_id = 0xf0;
-	    break;
-
-	case 4: /* Fan Tray */
-	    name = "Fan Tray";
-	    entity_id = 0x1e;
-	    break;
-
-	case 5: /* Fan Filter Tray */
-	    name = "Fan Filters";
-	    entity_id = 0xf1;
-	    break;
-
-	case 9: /* Rear Transition Module */
-	    name = "RTM";
-	    entity_id = 0xc0;
-	    break;
-
-	case 6: /* Alarm */
-	case 7: /* AdvancedMC Module */
-	case 8: /* PMC */
-	default:
-	    /* Skip adding the entity. */
-	    continue;
-	}
-
-	rv = ipmi_entity_add(ents, domain, 0, b->ipmb_address, 0,
-			     entity_id,
-			     0x60, /* Always device relative */
-			     name, IPMI_ASCII_STR, strlen(name),
-			     atca_entity_sdr_add,
-			     NULL, &b->frus[0]->entity);
-	if (rv) {
-	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(shelf_fru_fetched): "
-		     " Could not add board entity: %x",
-		     DOMAIN_NAME(domain), rv);
-	    goto out;
-	}
-	rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
-	if (rv) {
-	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(shelf_fru_fetched): "
-		     "Could not add child ipmc: %x",
-		     DOMAIN_NAME(domain), rv);
-	    goto out;
-	}
-    }
-
     /* Add a handler for when MCs are added to the domain, so we can
        add in our custom sensors. */
     rv = ipmi_domain_register_mc_update_handler(domain,
@@ -2538,6 +2568,8 @@ static void
 set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 		   ipmi_domain_oem_check_done done, void *done_cb_data)
 {
+    ipmi_system_interface_addr_t saddr;
+    ipmi_mc_t    *mc;
     atca_shelf_t *info;
     int          rv;
 
@@ -2568,6 +2600,24 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     }
     memset(info, 0, sizeof(*info));
 
+    saddr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    saddr.channel = IPMI_BMC_CHANNEL;
+    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &saddr, sizeof(saddr));
+    if (!mc) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(set_up_atca_domain): "
+		 "Could not find system interface MC, assuming this is"
+		 " a valid working ATCA chassis",
+		 DOMAIN_NAME(domain));
+    } else {
+	int mfg_id, prod_id;
+	mfg_id = ipmi_mc_manufacturer_id(mc);
+	prod_id = ipmi_mc_product_id(mc);
+	if ((mfg_id == 0x000157) && (prod_id == 0x0841)) {
+	    //info->shelf_address_only_on_bmc = 1;
+	}
+    }
+
     info->startup_done = done;
     info->startup_done_cb_data = done_cb_data;
     info->domain = domain;
@@ -2575,13 +2625,13 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     info->shelf_fru_device_id = get_addr->data[5];
 
     info->curr_shelf_fru = 1;
+
+    if (info->shelf_address_only_on_bmc)
+	info->shelf_fru_ipmb = 0x20;
+
     rv = ipmi_fru_alloc(domain,
 			1,
-#ifdef BROKEN_ATCA
-			0x20,
-#else
 			info->shelf_fru_ipmb,
-#endif
 			1,
 			0,
 			0,

@@ -162,6 +162,9 @@ typedef struct lan_data_s
     unsigned int               num_ip_addr;
     unsigned int               num_sends;
 
+    /* Hacks reported by OEM code. */
+    unsigned int               hacks;
+
     /* If 0, we don't have a connection to the BMC right now. */
     int                        connected;
 
@@ -444,7 +447,10 @@ lan_send_addr(lan_data_t  *lan,
 	ipmi_system_interface_addr_t *si_addr
 	    = (ipmi_system_interface_addr_t *) addr;
 
-	tmsg[0] = lan->slave_addr; /* To the BMC. */
+	if (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
+	    tmsg[0] = 0x20;
+	else
+	    tmsg[0] = lan->slave_addr; /* To the BMC. */
 	tmsg[1] = (msg->netfn << 2) | si_addr->lun;
 	tmsg[2] = ipmb_checksum(tmsg, 2);
 	tmsg[3] = 0x81; /* Remote console IPMI Software ID */
@@ -461,7 +467,10 @@ lan_send_addr(lan_data_t  *lan,
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) addr;
 
 	pos = 0;
-	tmsg[pos++] = lan->slave_addr; /* BMC is the bridge. */
+	if (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
+	    tmsg[pos++] = 0x20;
+	else
+	    tmsg[pos++] = lan->slave_addr; /* BMC is the bridge. */
 	tmsg[pos++] = (IPMI_APP_NETFN << 2) | 0;
 	tmsg[pos++] = ipmb_checksum(tmsg, 2);
 	tmsg[pos++] = 0x81; /* Remote console IPMI Software ID */
@@ -581,18 +590,22 @@ ipmb_handler(ipmi_con_t   *ipmi,
 	     int          err,
 	     unsigned int ipmb,
 	     int          active,
+	     unsigned int hacks,
 	     void         *cb_data)
 {
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t *lan;
 
     if (err)
 	return;
 
+    lan = (lan_data_t *) ipmi->con_data;
+
     if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
 	lan->slave_addr = ipmb;
 	lan->is_active = active;
+	lan->hacks = hacks;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, err, ipmb, active,
+	    lan->ipmb_addr_handler(ipmi, err, ipmb, active, lan->hacks,
 				   lan->ipmb_addr_cb_data);
     }
 }
@@ -1481,7 +1494,10 @@ data_handler(int            fd,
 	handle_async_event(ipmi, &addr, addr_len, &msg);
 	goto out_unlock2;
     } else if ((addr3->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
-	       && (tmsg[3] == lan->slave_addr))
+	       && (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
+		    && (tmsg[3] == 0x20))
+		   || ((! (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
+		       && (tmsg[3] == lan->slave_addr))))
     {
         /* In some cases, a message from the IPMB looks like it came
 	   from the BMC itself, IMHO a misinterpretation of the
@@ -1499,7 +1515,11 @@ data_handler(int            fd,
     } else {
 	/* It's not encapsulated in a send message response. */
 
-	if (tmsg[3] == lan->slave_addr) {
+	if (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
+	     && (tmsg[3] == 0x20))
+	    || ((!(lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
+		&& (tmsg[3] == lan->slave_addr)))
+	{
 	    ipmi_system_interface_addr_t *si_addr
 		= (ipmi_system_interface_addr_t *) &addr;
 
@@ -2038,6 +2058,8 @@ lan_close_connection(ipmi_con_t *ipmi)
 	evt_to_free = next_evt;
     }
 
+    if (ipmi->oem_data_cleanup)
+	ipmi->oem_data_cleanup(ipmi);
     if (lan->event_handlers_lock)
 	ipmi_destroy_lock(lan->event_handlers_lock);
     if (lan->seq_num_lock)
@@ -2179,15 +2201,19 @@ finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 }
 
 static void
-lan_set_ipmb_addr(ipmi_con_t *ipmi, unsigned char ipmb, int active)
+lan_set_ipmb_addr(ipmi_con_t    *ipmi,
+		  unsigned char ipmb,
+		  int           active,
+		  unsigned int  hacks)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
     if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
 	lan->slave_addr = ipmb;
 	lan->is_active = active;
+	lan->hacks = hacks;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active,
+	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active, lan->hacks,
 				   lan->ipmb_addr_cb_data);
     }
 }
@@ -2197,6 +2223,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 		 int          err,
 		 unsigned int ipmb_addr,
 		 int          active,
+		 unsigned int hacks,
 		 void         *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
@@ -2209,9 +2236,10 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 
     lan->slave_addr = ipmb_addr;
     lan->is_active = active;
+    lan->hacks = hacks;
     finish_connection(ipmi, lan, addr_num);
     if (lan->ipmb_addr_handler)
-	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active,
+	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active, lan->hacks,
 			       lan->ipmb_addr_cb_data);
 }
 

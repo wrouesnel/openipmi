@@ -8947,10 +8947,10 @@ ipmb_handler(ipmi_con_t   *ipmi,
 	active = 1;
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, 0x20, active);
+	ipmi->set_ipmb_addr(ipmi, 0x20, active, 0);
 
     if (handler)
-	handler(ipmi, err, 0x20, active, cb_data);
+	handler(ipmi, err, 0x20, active, 0, cb_data);
 }
 
 static int
@@ -8993,12 +8993,12 @@ activate_handler(ipmi_con_t   *ipmi,
     if (rmsg->data[0] != 0) {
 	err = IPMI_IPMI_ERR_VAL(rmsg->data[0]);
 	if (handler)
-	    handler(ipmi, err, ipmb, 0, cb_data);
+	    handler(ipmi, err, ipmb, 0, 0, cb_data);
     } else {
 	rv = mxp_ipmb_fetch(ipmi, handler, cb_data);
 	if (rv) {
 	    if (handler)
-		handler(ipmi, rv, ipmb, 0, cb_data);
+		handler(ipmi, rv, ipmb, 0, 0, cb_data);
 	}
     }
 }

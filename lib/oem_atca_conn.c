@@ -32,9 +32,18 @@
  */
 
 #include <errno.h>
+#include <string.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_oem.h>
+#include <OpenIPMI/ipmi_int.h>
+
+typedef struct atca_conn_info_s
+{
+    int          dont_use_floating_addr;
+    unsigned int hacks;
+} atca_conn_info_t;
 
 static void
 atca_ipmb_handler(ipmi_con_t   *ipmi,
@@ -50,28 +59,32 @@ atca_ipmb_handler(ipmi_con_t   *ipmi,
     void                 *cb_data = rsp_data2;
     unsigned char        ipmb = 0;
     int                  err = 0;
+    atca_conn_info_t     *info;
 
     if (!ipmi) {
-	err = ECANCELED;
-	goto out_handler;
+	if (handler)
+	    handler(ipmi, ECANCELED, ipmb, 1, 0, cb_data);
+	return;
     }
+
+    info = ipmi->oem_data;
 
     if (msg->data[0] != 0) 
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
     else if (msg->data_len < 4)
 	err = EINVAL;
-    else if (msg->data[7] == 3)
-	ipmb = 0x20; /* This is a Dedicated ShMC*/
+    else if ((msg->data[7] == 3) && (!info->dont_use_floating_addr))
+	ipmb = 0x20; /* This is a Dedicated ShMC and we are not doing
+			dual-ShMC addressing. */
     else
 	ipmb = msg->data[3];
 
     /* Note that there is no "inactive" connection with ATCA. */
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, ipmb, 1);
+	ipmi->set_ipmb_addr(ipmi, ipmb, 1, info->hacks);
 
- out_handler:
     if (handler)
-	handler(ipmi, err, ipmb, 1, cb_data);
+	handler(ipmi, err, ipmb, 1, info->hacks, cb_data);
 }
 
 static int
@@ -99,6 +112,15 @@ lan_atca_ipmb_fetch(ipmi_con_t           *conn,
 }
 
 static void
+cleanup_atca_oem_data(ipmi_con_t *ipmi)
+{
+    if (ipmi->oem_data) {
+	ipmi_mem_free(ipmi->oem_data);
+	ipmi->oem_data = NULL;
+    }
+}
+
+static void
 atca_oem_finish_check(ipmi_con_t   *ipmi,
 		      ipmi_addr_t  *addr,
 		      unsigned int addr_len,
@@ -112,6 +134,19 @@ atca_oem_finish_check(ipmi_con_t   *ipmi,
     void                     *cb_data = rsp_data2;
 
     if (ipmi && (msg->data_len >= 8) && (msg->data[0] == 0)) {
+	atca_conn_info_t *info;
+
+	info = ipmi_mem_alloc(sizeof(*info));
+	if (!info) {
+	    ipmi_log(IPMI_LOG_SEVERE, "oem_atca_conn.c(atca_oem_finish_check):"
+		     "Unable to allocate OEM connection info");
+	    goto out;
+	}
+	memset(info, 0, sizeof(*info));
+
+	ipmi->oem_data = info;
+	ipmi->oem_data_cleanup = cleanup_atca_oem_data;
+
 	/* We've got an ATCA system, set up the handler. */
 	ipmi->get_ipmb_addr = lan_atca_ipmb_fetch;
 	/* Broadcast may or may not be broken on ATCA, but no I2C devices
@@ -120,6 +155,7 @@ atca_oem_finish_check(ipmi_con_t   *ipmi,
 	   so... */
 	ipmi->broadcast_broken = 1;
     }
+ out:
     done(ipmi, cb_data);
 }
 
@@ -148,14 +184,38 @@ atca_oem_check(ipmi_con_t               *conn,
 			      done, done_cb_data, NULL, NULL);
 }
 
+static int
+handle_intel_atca(ipmi_con_t *conn, void *cb_data)
+{
+    atca_conn_info_t *info = conn->oem_data;
+
+    /* This means that we don't advertise 0x20 as our address on the
+       CMM, we use the real address. */
+    info->dont_use_floating_addr = 1;
+    info->hacks = IPMI_CONN_HACK_20_AS_MAIN_ADDR;
+    return 0;
+}
+
 int
 ipmi_oem_atca_conn_init(void)
 {
-    return ipmi_register_conn_oem_check(atca_oem_check, NULL);
+    int rv;
+
+    rv = ipmi_register_conn_oem_check(atca_oem_check, NULL);
+    if (rv)
+	return rv;
+
+    rv = ipmi_register_oem_conn_handler(0x000157, 0x0841,
+					handle_intel_atca, NULL);
+    if (rv)
+	return rv;
+
+    return 0;
 }
 
 void
 ipmi_oem_atca_conn_shutdown(void)
 {
     ipmi_deregister_conn_oem_check(atca_oem_check, NULL);
+    ipmi_deregister_oem_conn_handler(0x000157, 0x0841);
 }

@@ -16,6 +16,29 @@
 
 	* lib/sensor.c: Destroy the handler list of a sensor on a
 	duplicate sensor entry.
+
+	* include/OpenIPMI/ipmi_conn.h: Added hacks to some of the
+	interfaces to support wierd things.
+	* lib/domain.c: ditto
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+	* lib/oem_atca.c: ditto
+	* lib/oem_force_conn.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/oem_motorola_mxp_intf.c: ditto
+
+	* lib/domain.c: Added sending message straight to an interface if
+	it matches the address of an interface.
+
+	* lib/ipmi_lan.c: Added support for a wierd hack where the first
+	IPMI address in a LAN message is 0x20, and the other one is the
+	internal address.
+
+	* lib/oem_atca_conn.c, lib/oem_atca.c: Added some hacks for the
+	current bugs in the Intel ATCA box.
+
+	* lib/oem_atca.c: Reworked the handling of MCs and entity addition
+	to happen after the user is informed of the domain.
 	
 2004-04-09 Corey Minyard <cminyard@mvista.com> 
 

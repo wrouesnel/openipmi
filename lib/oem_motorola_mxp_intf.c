@@ -783,6 +783,7 @@ ipmb_handler(ipmi_con_t   *ipmi,
 	     int          err,
 	     unsigned int ipmb,
 	     int          active,
+	     unsigned int hacks,
 	     void         *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
@@ -794,7 +795,7 @@ ipmb_handler(ipmi_con_t   *ipmi,
 	lan->slave_addr = ipmb;
 	lan->is_active = active;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, err, ipmb, active,
+	    lan->ipmb_addr_handler(ipmi, err, ipmb, active, 0,
 				   lan->ipmb_addr_cb_data);
     }
 }
@@ -2503,7 +2504,10 @@ finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 }
 
 static void
-lan_set_ipmb_addr(ipmi_con_t *ipmi, unsigned char ipmb, int active)
+lan_set_ipmb_addr(ipmi_con_t    *ipmi,
+		  unsigned char ipmb,
+		  int           active,
+		  unsigned int  hacks)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
@@ -2511,7 +2515,7 @@ lan_set_ipmb_addr(ipmi_con_t *ipmi, unsigned char ipmb, int active)
 	lan->slave_addr = ipmb;
 	lan->is_active = active;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active,
+	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active, 0,
 				   lan->ipmb_addr_cb_data);
     }
 }
@@ -2521,6 +2525,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 		 int          err,
 		 unsigned int ipmb_addr,
 		 int          active,
+		 unsigned int hacks,
 		 void         *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
@@ -2535,7 +2540,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     lan->is_active = active;
     finish_connection(ipmi, lan, addr_num);
     if (lan->ipmb_addr_handler)
-	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active,
+	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active, 0,
 			       lan->ipmb_addr_cb_data);
 }
 

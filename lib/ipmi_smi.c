@@ -427,6 +427,7 @@ ipmb_handler(ipmi_con_t   *ipmi,
 	     int          err,
 	     unsigned int ipmb,
 	     int          active,
+	     unsigned int hacks,
 	     void         *cb_data)
 {
     smi_data_t *smi = (smi_data_t *) ipmi->con_data;
@@ -437,7 +438,7 @@ ipmb_handler(ipmi_con_t   *ipmi,
     if (ipmb != smi->slave_addr) {
 	smi->slave_addr = ipmb;
 	if (smi->ipmb_addr_handler)
-	    smi->ipmb_addr_handler(ipmi, err, ipmb, active,
+	    smi->ipmb_addr_handler(ipmi, err, ipmb, active, 0,
 				   smi->ipmb_addr_cb_data);
 
 	set_ipmb_in_dev(smi);
@@ -1143,6 +1144,8 @@ smi_close_connection(ipmi_con_t *ipmi)
 	}
     }
 
+    if (ipmi->oem_data_cleanup)
+	ipmi->oem_data_cleanup(ipmi);
     if (smi->event_handlers_lock)
 	ipmi_destroy_lock(smi->event_handlers_lock);
     if (smi->cmd_handlers_lock)
@@ -1217,14 +1220,17 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 }
 
 static void
-smi_set_ipmb_addr(ipmi_con_t *ipmi, unsigned char ipmb, int active)
+smi_set_ipmb_addr(ipmi_con_t    *ipmi,
+		  unsigned char ipmb,
+		  int           active,
+		  unsigned int  hacks)
 {
     smi_data_t *smi = (smi_data_t *) ipmi->con_data;
 
     if (smi->slave_addr != ipmb) {
 	smi->slave_addr = ipmb;
 	if (smi->ipmb_addr_handler)
-	    smi->ipmb_addr_handler(ipmi, 0, ipmb, active,
+	    smi->ipmb_addr_handler(ipmi, 0, ipmb, active, 0,
 				   smi->ipmb_addr_cb_data);
 
 	set_ipmb_in_dev(smi);
@@ -1268,6 +1274,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 		 int          err,
 		 unsigned int ipmb_addr,
 		 int          active,
+		 unsigned int hacks,
 		 void         *cb_data)
 {
     smi_data_t *smi = (smi_data_t *) ipmi->con_data;
@@ -1281,7 +1288,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     smi->slave_addr = ipmb_addr;
     finish_connection(ipmi, smi);
     if (smi->ipmb_addr_handler)
-	smi->ipmb_addr_handler(ipmi, err, ipmb_addr, active,
+	smi->ipmb_addr_handler(ipmi, err, ipmb_addr, active, 0,
 			       smi->ipmb_addr_cb_data);
 
     set_ipmb_in_dev(smi);

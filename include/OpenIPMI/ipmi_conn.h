@@ -99,7 +99,12 @@ typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t   *ipmi,
 				     int          err,
 				     unsigned int ipmb_addr,
 				     int          active,
+				     unsigned int hacks,
 				     void         *cb_data);
+/* Set this bit in the hacks if, even though the connection is to a
+   device not at 0x20, the first part of a LAN command should always
+   use 0x20. */
+#define IPMI_CONN_HACK_20_AS_MAIN_ADDR	0x00000001
 
 /* The data structure representing a connection.  The low-level handler
    fills this out then calls ipmi_init_con() with the connection. */
@@ -126,6 +131,7 @@ struct ipmi_con_s
 
     /* If OEM code want to attach some data, it can to it here. */
     void *oem_data;
+    void (*oem_data_cleanup)(ipmi_con_t *ipmi);
 
     /* This allows the connection to tell the upper layer that broadcasting
        will not work on this interface. */
@@ -149,8 +155,12 @@ struct ipmi_con_s
 				   void                   *cb_data);
 
     /* If OEM code discovers that an IPMB address has changed, it can
-       use this to change it. */
-    void (*set_ipmb_addr)(ipmi_con_t *ipmi, unsigned char ipmb, int active);
+       use this to change it.  The hacks are the same as the ones in
+       the IPMB address handler. */
+    void (*set_ipmb_addr)(ipmi_con_t    *ipmi,
+			  unsigned char ipmb,
+			  int           active,
+			  unsigned int  hacks);
 
     /* Set the handler that will be called when the IPMB address changes. */
     void (*set_ipmb_addr_handler)(ipmi_con_t           *ipmi,
