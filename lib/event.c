@@ -72,6 +72,7 @@ ipmi_event_alloc(ipmi_mcid_t   mcid,
     rv->record_id = record_id;
     rv->type = type;
     rv->timestamp = timestamp;
+    rv->data_len = data_len;
     memcpy(rv->data, data, data_len);
 
     rv->refcount = 1;
@@ -94,6 +95,7 @@ ipmi_event_free(ipmi_event_t *event)
     event->refcount--;
     if (event->refcount == 0) {
 	ipmi_unlock(event->lock);
+	ipmi_destroy_lock(event->lock);
 	ipmi_mem_free(event);
 	return;
     }
@@ -154,5 +156,5 @@ ipmi_event_get_data(ipmi_event_t *event, char *data,
 unsigned char *
 ipmi_event_get_data_ptr(ipmi_event_t *event)
 {
-    
+    return event->data;
 }

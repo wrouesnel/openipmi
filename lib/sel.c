@@ -145,7 +145,9 @@ static inline void sel_unlock(ipmi_sel_info_t *sel)
 static void
 free_event(ilist_iter_t *iter, void *item, void *cb_data)
 {
-    ipmi_mem_free(item);
+    sel_event_holder_t *holder = item;
+    ipmi_event_free(holder->event);
+    ipmi_mem_free(holder);
 }
 static void
 free_events(ilist_t *events)
@@ -534,7 +536,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 	    fetch_complete(sel, ENOMEM);
 	    goto out;
 	}
-	holder->event = ipmi_event_dup(del_event);
+	holder->event = del_event;
 	holder->deleted = 0;
 	event_is_new = 1;
 	sel->num_sels++;
@@ -550,6 +552,8 @@ handle_sel_data(ipmi_mc_t  *mc,
 	    sel->del_sels--;
 	}
 	event_is_new = 1;
+    } else {
+	ipmi_event_free(del_event);
     }
 
     if (sel->next_rec_id == 0xFFFF) {
