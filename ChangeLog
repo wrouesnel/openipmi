@@ -1,3 +1,8 @@
+2003-11-10 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: Fixed MC scanning to handle a single address
+	properly and fixed some error handling cases.
+	
 2003-10-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c: Fixed MC scanning to skip addresses properly at

@@ -3613,6 +3613,11 @@ typedef struct scan_cmd_info_s
     unsigned char channel;
 } scan_cmd_info_t;
 
+void scan_done(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    log_pad_out("Bus scan done\n");
+}
+
 static void
 scan_cmder(ipmi_domain_t *domain, void *cb_data)
 {
@@ -3620,7 +3625,7 @@ scan_cmder(ipmi_domain_t *domain, void *cb_data)
 
     ipmi_start_ipmb_mc_scan(domain, info->channel,
 			    info->addr, info->addr,
-			    NULL, NULL);
+			    scan_done, NULL);
 }
 
 static int

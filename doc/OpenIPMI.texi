@@ -27,7 +27,6 @@ their special sensors and controls.
 * How to Write OEM Plugins::
 * Internals::
 * Debugging Your Application::
-* Internals::
 * The IPMI LAN Server::
 * Glossary::
 * OEM Specific Information::
@@ -340,7 +339,7 @@ gives you a natural way to hold your data, know when to transfer it over
 to the mate system, and continue an operation on the mate system.
 @item If you track the data, it's easy to monitor every operation
 occuring in the system, stop an operations, or whatever.
-@item It's much easuer to detect and manage overload situations in an
+@item It's much easier to detect and manage overload situations in an
 event driven system.  Event-driven systems have event queues of things
 waiting to be processed.  You can put things in the queue and watch the
 queue length.  If the queue length gets too big, you are in overload,
@@ -1642,7 +1641,19 @@ handling in OpenIPMI.
 @node    Force Computers, Motorola MXP, OEM Specific Information, OEM Specific Information
 @section Force Computers
 
-TBD
+Force Computers CompactPCI system are supported by OpenIPMI, including
+getting and setting the board address.  It's transparent, the only
+thing to remember is that OpenIPMI will force the connection it uses
+to be address 0x20 and will force anything else on the bus back to its
+normal address.
+
+The reason for this is for support for multiple interfaces.  If you
+are running lanserv on two cards in the system, OpenIPMI can connect
+to both of them and will make one of the active and one standby.
+OpenIPMI will automatically switch over on failures.
+
+You can disable this feature by commenting out the appropriate
+sections in oem_force_conn.c.
 
 @node    Motorola MXP, , Force Computers, OEM Specific Information
 @section Motorola MXP
@@ -1674,7 +1685,7 @@ The MXP does not exactly follow the IPMI LAN protocol, so a special IPMI
 LAN interface is required for it.  See the @file{OpenIPMI/mxp.h} include
 file for a description of that interface.  In particular, the software
 ID settings must be correct.  Each user of the MXP @emph{must} have a
-unique software ID, or the chaos will result.
+unique software ID, or chaos will result.
 
 @subsection SEL support
 

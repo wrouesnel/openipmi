@@ -1356,6 +1356,8 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 		rv = _ipmi_create_mc(domain, addr, addr_len, &mc);
 		if (rv) {
 		    /* Out of memory, just give up for now. */
+		    if (info->done_handler)
+			info->done_handler(domain, 0, info->cb_data);
 		    remove_bus_scans_running(domain, info);
 		    ipmi_mem_free(info);
 		    ipmi_unlock(domain->mc_list_lock);
@@ -1472,7 +1474,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 	ipmb->slave_addr += 2;
     }
     rv = -1;
-    while ((rv) && (ipmb->slave_addr < end_addr)) {
+    while ((rv) && (ipmb->slave_addr <= end_addr)) {
 	rv = ipmi_send_command_addr(domain,
 				    &info->addr,
 				    info->addr_len,
@@ -1483,9 +1485,11 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 	    ipmb->slave_addr += 2;
     }
 
-    if (rv)
+    if (rv) {
+	if (info->done_handler)
+	    info->done_handler(domain, rv, info->cb_data);
 	ipmi_mem_free(info);
-    else
+    } else
 	add_bus_scans_running(domain, info);
 }
 
@@ -1513,7 +1517,8 @@ ipmi_start_si_scan(ipmi_domain_t  *domain,
     info->msg.cmd = IPMI_GET_DEVICE_ID_CMD;
     info->msg.data = NULL;
     info->msg.data_len = 0;
-    info->done_handler = NULL;
+    info->done_handler = done_handler;
+    info->cb_data = cb_data;
     info->missed_responses = 0;
     rv = ipmi_send_command_addr(domain,
 				&info->addr,
