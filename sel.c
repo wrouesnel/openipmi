@@ -629,12 +629,22 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
     return rv;
 }
 
+/* Don't do this forever. */
+#define MAX_DEL_RESERVE_RETRIES		10
+
 typedef struct sel_cb_handler_data_s
 {
+    ipmi_mc_t             *mc;
     ipmi_sel_info_t       *sel;
     ipmi_sel_op_done_cb_t handler;
     void                  *cb_data;
+    unsigned int          reservation;
+    unsigned int          record_id;
+    unsigned int          lun;
+    unsigned int          count;
 } sel_cb_handler_data_t;
+
+static int send_reserve_sel(sel_cb_handler_data_t *data);
 
 static void
 handle_sel_delete(ipmi_mc_t  *mc,
@@ -656,7 +666,13 @@ handle_sel_delete(ipmi_mc_t  *mc,
 	/* The SEL is being erased, so by definition the log will be
            gone. */
 	rv = 0;
-    else if (rsp->data[0])
+    else if ((data->count < MAX_DEL_RESERVE_RETRIES)
+	     && (rsp->data[0] == IPMI_INVALID_RESERVATION_CC))
+    {
+	/* Lost our reservation, retry the operation. */
+	data->count++;
+	rv = send_reserve_sel(data);
+    } else if (rsp->data[0])
 	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
 
     if (data->handler)
@@ -666,10 +682,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 }
 
 static int
-send_del_sel(ipmi_mc_t             *mc,
-	     int                   lun,
-	     int                   record_id,
-	     sel_cb_handler_data_t *data)
+send_del_sel(sel_cb_handler_data_t *data)
 {
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
@@ -679,9 +692,71 @@ send_del_sel(ipmi_mc_t             *mc,
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_DELETE_SEL_ENTRY_CMD;
     cmd_msg.data_len = 4;
-    ipmi_set_uint16(cmd_msg.data, 0);
-    ipmi_set_uint16(cmd_msg.data+2, record_id);
-    rv = ipmi_send_command(mc, lun, &cmd_msg, handle_sel_delete, data);
+    ipmi_set_uint16(cmd_msg.data, data->reservation);
+    ipmi_set_uint16(cmd_msg.data+2, data->record_id);
+    rv = ipmi_send_command(data->mc, data->lun,
+			   &cmd_msg, handle_sel_delete, data);
+
+    return rv;
+}
+
+static void
+sel_reserved_for_delete(ipmi_mc_t  *mc,
+			ipmi_msg_t *rsp,
+			void       *rsp_data)
+{
+    sel_cb_handler_data_t *data = rsp_data;
+    int                   rv;
+
+    if (data->sel->destroyed) {
+	free(data);
+	return;
+    }
+
+    if (rsp->data[0] != 0) {
+	if (data->handler)
+	    data->handler(data->sel, data->cb_data,
+			  IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	free(data);
+	return;
+    }
+
+    data->reservation = ipmi_get_uint16(rsp->data+1);
+    rv = send_del_sel(data);
+    if (rv) {
+	if (data->handler)
+	    data->handler(data->sel, data->cb_data, rv);
+	free(data);
+	return;
+    }
+}
+
+static int
+send_reserve_sel(sel_cb_handler_data_t *data)
+{
+    unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
+    ipmi_msg_t      cmd_msg;
+    int             rv;
+
+    cmd_msg.data = cmd_data;
+    cmd_msg.netfn = IPMI_STORAGE_NETFN;
+    cmd_msg.cmd = IPMI_RESERVE_SEL_CMD;
+    cmd_msg.data_len = 0;
+    rv = ipmi_send_command(data->mc, data->lun,
+			   &cmd_msg, sel_reserved_for_delete, data);
+
+    return rv;
+}
+
+static int
+start_del_sel(sel_cb_handler_data_t *data)
+{
+    int rv;
+
+    if (data->sel->supports_reserve_sel)
+	rv = send_reserve_sel(data);
+    else
+	rv = send_del_sel(data);
 
     return rv;
 }
@@ -736,8 +811,12 @@ ipmi_sel_del_log(ipmi_sel_info_t       *sel,
     data->sel = sel;
     data->handler = handler;
     data->cb_data = cb_data;
+    data->mc = mc;
+    data->lun = lun;
+    data->record_id = log->record_id;
+    data->count = 0;
 
-    rv = send_del_sel(mc, lun, log->record_id, data);
+    rv = start_del_sel(data);
 
  out_unlock2:
     ipmi_read_unlock();
@@ -797,8 +876,12 @@ ipmi_sel_del_log_by_recid(ipmi_sel_info_t       *sel,
     data->sel = sel;
     data->handler = handler;
     data->cb_data = cb_data;
+    data->mc = mc;
+    data->lun = lun;
+    data->record_id = record_id;
+    data->count = 0;
 
-    rv = send_del_sel(mc, lun, record_id, data);
+    rv = start_del_sel(data);
 
  out_unlock2:
     ipmi_read_unlock();
