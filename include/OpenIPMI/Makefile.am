@@ -5,4 +5,4 @@ pkginclude_HEADERS = \
 	ipmi_conn.h  ipmi_int.h     ipmi_sdr.h  ipmi_smi.h     os_handler.h	\
 	selector.h   ipmi_auth.h    ipmi_oem.h  ipmi_msgbits.h ipmi_control.h	\
 	ipmi_ui.h    log.h          ipmi_domain.h lanserv.h \
-	opq.h	     ilist.h        md2.h       md5.h
+	opq.h	     ilist.h        md2.h       md5.h	       mxp.h

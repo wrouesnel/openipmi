@@ -1,6 +1,8 @@
 
 2003-08-01 Corey Minyard <cminyard@mvista.com>
 
+	* Changelog: Move to version 1.0.2.
+
 	* lib/sensor.c, lib/control.c: Handle NULL controls and sensors in
 	opq done.  If a sensor is destroyed during an operation, this can
 	be called with NULL.
@@ -30,8 +32,8 @@
 
 2003-07-30 Corey Minyard <cminyard@mvista.com>
 
-	* lib/oem_motorola_mxp.c: Made board entity instances start at one
-	instead of zero.
+	* lib/oem_motorola_mxp.c: Made entity instances start at one
+	for all entities instead of the random smattering that was there.
 
 	* lib/oem_motorola_mxp.c: Fixed power supply events to not use the
 	slave address of the power supply when translating events.

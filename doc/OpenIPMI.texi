@@ -98,13 +98,13 @@ authentication are:
 @item straight - The password is transmitted in plain text over the
 network as part of the packet.  The host and target will not accept a
 packet without the right key.
-@item md2 - The "Message Digest Algorithm 2" is applied to the contents
+@item md2 - The ``Message Digest Algorithm 2'' is applied to the contents
 of the packet using the password, and an authentication code is
 generated.  The host and target will not accept a message who's
 authentication codes do not match.  The password is *not* transmitted
 over the network and it is difficult to find the password or generate
 valid packets by just looking at the data and authentication code.
-@item md5 - Like md2, but uses the "Message Digest Algorithm 5".
+@item md5 - Like md2, but uses the ``Message Digest Algorithm 5''.
 @end enumerate
 
 The use of md5 or md2 is strongly recommended.
@@ -211,7 +211,7 @@ these to the entity directly and uses them to detect the presence of the
 entity.
 
 Sensors provide a lot of functions depending on their type.  Threshold
-sensors monitor "analog" things like temperature, voltage, or fan speed.
+sensors monitor ``analog'' things like temperature, voltage, or fan speed.
 Discrete sensors monitor events or states, like the previously
 introduced presence sensor, software initialization progress, or if
 external power is present to the system.
@@ -734,7 +734,7 @@ connection and get things rolling.
 After you create a connection, you pass it into
 @code{ipmi_init_domain()} to create a domain with the connection.  This
 gives you back a domain that you can work with.  When the domain is
-first created, it is not considered "up" though, you supply a callback
+first created, it is not considered ``up'' though, you supply a callback
 in the @code{ipmi_init_domain()} call which will tell you when the
 connection comes up, the callback will also be used in the future to
 tell you of state changes.  The id of the callback is also returned, you
@@ -1609,17 +1609,20 @@ The SEL protocol also has an unusual property.  It has a sort of
 ``lock'', but it does not follow the standard IPMI protocol.  The lock
 also doesn't really provide any locking and will cause problems if you
 have multiple management controllers accessing the SEL.  If you never
-use this lock, it will never be activated, so it doesn't matter.
-However, if you use the lock, it is activated and OpenIPMI will not be
-able to use the SEL any more until the AMC is rebooted.  So @emph{never}
-run any tools from Motorola (or any other tools that might use this
-lock) on your chassis if you want OpenIPMI to keep working.
+use this lock, it will never be activated, so it doesn't matter for
+OpenIPMI.  However, if you use the lock, it is activated and OpenIPMI
+will not be able to use the SEL any more until the AMC is rebooted.  So
+@emph{never} run any tools from Motorola (or any other tools that might
+use this lock) on your chassis if you want OpenIPMI to keep working.
 
-Also, currently, the SEL on the inactive AMC doesn't work with OpenIPMI.
-The SEL will still provide events, but the ``Get SEL Info'' command
-doesn't work.  OpenIPMI uses the ``Get SEL Info'' command to see if any
-new events have been added to the SEL before a query to avoid any more
-messages if the SEL hasn't been changed.
+The SELs on the AMCs have a limited size (31 entries), are stored in a
+device with limited write cycles, and the firmware does not have wear
+leveling (this information may be old, so double-check with Motorola to
+be sure).  Because of this, managing the SEL is a little tricky.  You
+don't want to immediately delete events because you will wear out the
+first entry in the SEL.  But it doesn't have very many entries, so you
+don't want to let it fill up very full.  It's probably best to let the
+SEL fill up around half-way before deleting the events.
 
 @subsection Entities
 
@@ -1630,25 +1633,25 @@ standard entity ids or @code{MXP_ENTITY_ID_} for OEM ones in the
 actual code. These entities are:
 
 @table @samp
-@item Chassis & SYSTEM_CHASSIS (23)
+@item SYSTEM_CHASSIS (23)
 Contains sensors and controls that relate to the entire chassis,
 such as telco relays and voltage for the whole system.
 
-@item Alarm Card & MXP ALARM_CARD (0x90)
+@item MXP ALARM_CARD (0x90)
 Things specific to the alarm card.  This is an OEM entity id
 because none exist currently for an alarm card.
 
-@item IP Switch & CONNECTIVITY_SWITCH (42)
+@item CONNECTIVITY_SWITCH (42)
 Things related to the IP switch.  Currently, these are the same as
 for the board.
 
-@item Power Supply & POWER_SUPPLY (10)
+@item POWER_SUPPLY (10)
 Things related to the power supply.
 
-@item Fan & FAN_COOLING (29)
+@item FAN_COOLING (29)
 The fans inside the power supply.
 
-@item Board & PROCESSING_BLADE (41)
+@item PROCESSING_BLADE (41)
 Things related to payload boards.
 
 @end table
@@ -1668,11 +1671,307 @@ sensor exists.  So if the presence sensor for a power supply is on the
 AMC and you message the AMC to query it, the sensor is still attached
 to the power supply entity.
 
+@subsection Sensors and Controls
+
+The MXP has some sensors, but has a large number of sensor-like devices
+that are not standard IPMI sensors.  The MXP IPMI interface makes the
+MXP look as if all these are IPMI sensors.  Controls are also created,
+in OpenIPMI these work much like sensors, they have settable and
+readable values, but do not have events of any type.
+
+Sensors and controls may be identified by their string id and the
+entity they monitor.  The string id for a sensor will be unique so it
+can be separated from other sensors that may be similar.
+
+Note that the presence sensors for entities will not appear to the
+user as sensors.  The OpenIPMI system uses them to determine entity
+presence and reports changes using entity presence callbacks per the
+IPMI spec.
+
+@subsubsection The Chassis
+The chassis entity contains the relay controls, the system LED controsl
+and the chassis type and chassis id controls.
+
+The chassis has one relay control that contains the four standard telco
+relays.  The control is named ``Telco Relays'' and the elements of the
+value array are:
+
+@table @samp
+@item 0
+Rack relay
+
+@item 1
+Critical relay
+
+@item 2
+Major relay
+
+@item 3
+Minor relay
+@end table
+
+The chassis also has a chassis id control that contains the unique
+4-byte chassis id, named ``Chassis ID'', and a chassis type control
+containing the 1-byte type of chassis, named ``Chassis Type''.  These
+are identifier controls.
+
+Finally, the chassis has the system LED pair.  Unlike other LEDs these
+can only be set together, because they are set in the same message.
+So all LEDs appear in the same control as different LED elements.
+Element 0 is the out-of-service LED, element 1 is the in-service
+LED, and element 2 is the component out-of-service LED.
+
+@subsubsection The AMC
+
+The AMC has four voltage sensors.  The values of the sensors are
+readable, but they do not generate any events.  The sensors are:
+
+@table @samp
+@item 5V
+The system 5 volt sensor
+
+@item 3.3V
+The system 3.3 volt sensor
+
+@item 2.5V
+The system 2.5 volt sensor
+
+@item 8V
+The system 8 volt sensor
+
+@end table
+
+The AMC also has a ``slot'' sensor that can be used to find the state of
+the hot-swap removal switch.  This does generate events.
+
+@subsubsection The Power Supplies
+Each power supply has the following sensors:
+
+@table @samp
+@item presence
+Used to determine whether the power supply is present.  This is a
+standard IPMI presence sensor.  This sensor generates events for changes.
+
+@item Power Supply
+This is a standard power supply sensor with
+two OEM extensions for the A and B feed failure events.  Offset 13 is
+asserted for A feed failures, offset 14 is asserted for B feed
+failures.  The A and B feeds only work on the DC power supply version,
+they will always be asserted for an AC power supply.  Offset 0 is the
+present bit, offset 1 is the power supply
+failure bit, and is used to represent when the power supply fails to
+generate proper output for one or more voltages.
+
+@end table
+
+It has the following controls:
+
+@table @samp
+@item enable
+Used to turn the output of the power supply on and off.
+
+@item OOS LED
+Used to light the out-of-service LED on the power supply.
+
+@item InS LED
+Used to light the in-service LED on the power supply.
+
+@end table
+
+@subsubsection The Fans
+Each power supply has a fan contained inside it, with the following
+sensors:
+
+@table @samp
+@item presence
+Used to determine if the fan is present in the power supply.  This
+sensor generates events for changes.
+
+@item speed
+Used to determine if the fan is spinning fast enough.  The
+value is not readable, and will only generate an event if the
+fan stops spinning fast enough.  The thresholds are also not
+readable.
+
+
+@item cooling
+Used to determine if the fan is cooling properly.
+This value is not readable.  It has two event thresholds, one
+that is non-critical (the cooling alarm) and one that is
+critical (the cooling fault).  This is primarily an airflow
+sensor to determine if the fan is pushing any air through the
+system.
+@end table
+
+It has the following controls:
+
+@table @samp
+@item speed
+Used to control the fan speed for the fan.  Depending
+on the power supply type, this has different meanings.  It is
+recommended that you leave this alone and let the system
+determine the fan speed automatically.  This is @emph{not} the
+current speed of the fan, this is the set speed.
+
+@item OOS LED
+Used to light the out-of-service LED for the fan.
+
+@item InS LED
+Used to light the in-service LED for the fan.
+@end table
+
+@subsubsection The Boards (including IP switches)
+All boards have the same basic sensors and controls.  Some boards have
+extra sensors.  The board sensors for all boards are:
+
+@table @samp
+@item presence
+Used to determine whether the board is present.  This is a standard IPMI
+presence sensor.  This sensor generates events for changes.
+
+@item slot
+A standard slot/connector sensor, it currently has the ejector latch and
+the power implemented.  This sensor generates events for changes to
+these bits.
+@end table
+
+Boards have the following controls:
+
+@table @samp
+@item reset
+Used to control the reset line on the board.
+
+@item power
+Used to control whether power is turned on for the board.
+
+@item OOS LED
+Used to light the out-of-service LED for the board.
+
+@item InS LED
+Used to light the in-service LED for the board.
+
+@item blue led
+Used to light the blue LED for the board.
+@end table
+
+@subsubsection Sensors for the cpip5365 card
+The 5365 card has some extra sensors that are on the I2C bus but not
+directly available from the PM.  However, you can access them through
+IPMI as raw I2C devices.  When the OEM code detects a 5365 card, it
+will set up these sensors.  These will not generate events.  They are:
+
+@table @samp
+@item Proc Temp
+The temperature of the processor.
+
+@item Board Temp
+The temperature on the board itself.
+
+@item 1.5V
+The value of 1.5V on the card.
+
+@item 3.3V
+The value of 3.3V on the card.
+
+@item 5V
+The value of 5V on the card.
+
+@item 12V
+The value of 12V on the card.
+
+@item -12V
+The value of -12V on the card.
+
+@item Vccp
+The CPU core voltage sensor (1.5V).
+@end table
+
+Note that if you use these, you @emph{cannot} use these sensors from
+the 5365 card itself, or you will mess up their processing.  So don't
+set up these sensors on the cards themselves if you use this software!
+
+These sensors have their max values, min values, and nominal values
+set properly (except for the temperature ones which have only max
+values).
+
+@subsubsection Sensors for the ZYNX switch
+The ZYNX switch has some extra sensors that respond to normal IPMI
+reading commands, but don't have a device SDR.  The MXP OEM code adds
+the sensor entries.  They do not seem to generate events.  They are:
+
+@table @samp
+@item Board Temp
+The temperature on the board itself.
+
+@item 1.8V
+Voltage sensor for 1.8 volts.
+
+@item 2.5V
+Voltage sensor for 2.5 volts.
+
+@item 3.3V
+Voltage sensor for 3.3 volts.
+
+@item 5V
+Voltage sensor for 5 volts.
+@end table
 
 @subsection Known Problems
-SEL
-cooling sensor
-fan presence
+
+This section documents known problems with the AMC code, either with the
+OpenIPMI OEM code or with the MXP firmware.
+
+@table @samp
+@item SEL
+Currently, the SEL on the inactive AMC doesn't work with OpenIPMI.
+The SEL will still provide events, but the ``Get SEL Info'' command
+doesn't work.  OpenIPMI uses the ``Get SEL Info'' command to see if any
+new events have been added to the SEL before a query to avoid any more
+messages if the SEL hasn't been changed.  So you will get SEL errors
+periodically.
+
+@item Cooling sensor
+The cooling sensors on the fans don't seem to work properly in the
+current release of the AMC firmware.  If you block the fan input so the
+fan spins but does not move any air, the MXP will generate a fan speed
+event (although the fan speed sensor itself will not show anything).
+
+@item fan presence
+The fan presence events as documented in the MXP docs do not generate
+events.  Thus the sensor does not work very well.  This is deprecated,
+and the OpenIPMI code needs to switch over to use the power supply
+presence events to generate fan presence events (since the power
+supplies and fans are one unit).
+
+@item Card voltage/temperature sensors
+The card voltage and temperature sensors currently use the devices on
+the I2C bus on the cards.  There are standard sensors on the boards, and
+they do generate events (they are responsible for all the unknown events
+when you turn off and on the power on a board).  However, they are
+not set up correctly yet, and the calibration is unknown, so they are
+not used.  When these sensors are ready, OpenIPMI will convert over to
+using them.  It doesn't cover all the voltages, though, the ones that
+are not covered will stay with the I2C bus.
+
+The temperature sensors are not currently represented by the PM on the
+boards.  When this changes, OpenIPMI will switch to using them.
+
+@item Zynx switch ejector latches
+The ejector handles on the Zynx switches don't generate events.
+
+@item A/B feeds to AC power supplies
+OpenIPMI doesn't look at the power supply type and always represents the
+A/B feeds, even though they are not present on the AC power supplies.
+OpenIPMI should look at the chassis type and not provide these bits on
+the Power Supply sensor for an AC chassis.
+
+@item Bogus entities
+The SDRs in the AMC create some bogus entities.  The sensors on them
+seem to be functional, but the entities are not standard and will
+probably go away.  You can safely ignore entities ``0.0'' and
+``149.26''.
+@end table
+
 @contents
 
 @bye
