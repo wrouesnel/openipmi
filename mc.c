@@ -1441,6 +1441,12 @@ ipmi_mc_sel_device_support(ipmi_mc_t *mc)
     return mc->SEL_device_support;
 }
 
+void
+ipmi_mc_set_sel_device_support(ipmi_mc_t *mc, int val)
+{
+    mc->SEL_device_support = val;
+}
+
 int
 ipmi_mc_sdr_repository_support(ipmi_mc_t *mc)
 {

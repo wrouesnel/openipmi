@@ -122,6 +122,10 @@ int ipmi_mc_manufacturer_id(ipmi_mc_t *mc);
 int ipmi_mc_product_id(ipmi_mc_t *mc);
 void ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[]);
 
+/* Some stupid systems don't have some setting right, this lets the
+   OEM code fix it. */
+void ipmi_mc_set_sel_device_support(ipmi_mc_t *mc, int val)
+
 /* Reread all the sensors for a given mc.  This will request the
    sensor SDRs for that mc (And only for that MC) and change the
    sensors as necessary. */
