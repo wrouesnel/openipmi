@@ -1,4 +1,8 @@
 
+2003-05-05 Corey Minyard <cminyard@mvista.com>
+
+	* ui.c: Added connection retrying.
+
 2003-05-04 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi_lan.c: Got IPMI LAN stuff working again.
