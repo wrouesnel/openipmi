@@ -32,6 +32,7 @@
  */
 
 #include <malloc.h>
+#include <string.h>
 #include <execinfo.h> /* For backtrace() */
 #include <OpenIPMI/ipmi_int.h>
 #include "ilist.h"
