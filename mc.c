@@ -1662,26 +1662,20 @@ mc_sdr_handler(ipmi_sdr_info_t *sdrs,
 	       void            *cb_data)
 {
     ipmi_mc_t  *mc = (ipmi_mc_t *) cb_data;
-    int        rv;
 
     if (err) {
 	ipmi_cleanup_mc(mc);
 	return;
     }
 
-    rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
-    if (rv)
-	ipmi_cleanup_mc(mc);
-    else {
-	if (mc->bmc_mc->bmc->new_mc_handler)
-	    mc->bmc_mc->bmc->new_mc_handler(mc->bmc_mc, mc,
-					    mc->bmc_mc->bmc->new_mc_cb_data);
-	/* Scan all the sensors and call sensors_reread() when done. */
-	if (mc->provides_device_sdrs)
-	    ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
-	else
-	    sensors_reread(mc, 0, NULL);
-    }
+    if (mc->bmc_mc->bmc->new_mc_handler)
+	mc->bmc_mc->bmc->new_mc_handler(mc->bmc_mc, mc,
+					mc->bmc_mc->bmc->new_mc_cb_data);
+    /* Scan all the sensors and call sensors_reread() when done. */
+    if (mc->provides_device_sdrs)
+	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+    else
+	sensors_reread(mc, 0, NULL);
 }
 
 static void
@@ -1758,12 +1752,10 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 		goto next_addr;
 
 	    rv = ipmi_sdr_info_alloc(mc, 0, 1, &(mc->sdrs));
-	    if (!rv) {
-		if (mc->provides_device_sdrs)
-		    rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
-	        else
-	 	    rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
-	    }
+	    if (!rv)
+		rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
+	    if (!rv)
+		rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
 	    if (rv)
 		ipmi_cleanup_mc(mc);
 	}

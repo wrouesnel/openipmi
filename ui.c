@@ -468,8 +468,10 @@ leave(int rv, char *format, ...)
 
     ipmi_shutdown();
 
-    if (full_screen)
+    if (full_screen) {
 	endwin();
+	full_screen = 0;
+    }
     else
 	tcsetattr(0, 0, &old_termios);
 
@@ -1465,6 +1467,105 @@ sensor_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+typedef struct events_enable_info_s
+{
+    ipmi_event_state_t *states;
+} events_enable_info_t;
+
+void
+events_enable_done(ipmi_sensor_t *sensor,
+		   int           err,
+		   void          *cb_data)
+{
+    if (err)
+	ui_log("Error setting events enable: 0x%x", err);
+}
+
+static void
+events_enable(ipmi_sensor_t *sensor, void *cb_data)
+{
+    events_enable_info_t *info = cb_data;
+    int                  rv;
+
+    rv = ipmi_sensor_events_enable_set(sensor, info->states,
+				       events_enable_done, NULL);
+    if (rv)
+	ui_log("Error sending events enable: 0x%x", rv);
+    free(info);
+}
+
+static int
+events_enable_cmd(char *cmd, char **toks, void *cb_data)
+{
+    events_enable_info_t *info;    
+    unsigned char        enable;
+    int                  i;
+    char                 *enptr;
+    int                  rv;
+    
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmd_win_out("Out of memory\n");
+	return 0;
+    }
+
+    info->states = ipmi_mem_alloc(ipmi_event_state_size());
+    if (!info->states) {
+	free(info);
+	cmd_win_out("Out of memory\n");
+	return 0;
+    }
+
+    ipmi_event_state_init(info->states);
+
+    if (get_uchar(toks, &enable, "events"))
+	return 0;
+    ipmi_event_state_set_events_disabled(info->states, !enable);
+
+    if (get_uchar(toks, &enable, "scanning"))
+	return 0;
+    ipmi_event_state_set_scanning_disabled(info->states, !enable);
+
+    enptr = strtok_r(NULL, " \t\n", toks);
+    if (!enptr) {
+	cmd_win_out("No assertion mask given\n");
+	return 0;
+    }
+    for (i=0; enptr[i]!='\0'; i++) {
+	if (enptr[i] == '1')
+	    ipmi_discrete_event_set(info->states, i, IPMI_ASSERTION);
+	else if (enptr[i] == '0')
+	    ipmi_discrete_event_clear(info->states, i, IPMI_ASSERTION);
+	else {
+	    cmd_win_out("Invalid assertion value\n");
+	    return 0;
+	}
+    }
+    
+    enptr = strtok_r(NULL, " \t\n", toks);
+    if (!enptr) {
+	cmd_win_out("No deassertion mask given\n");
+	return 0;
+    }
+    for (i=0; enptr[i]!='\0'; i++) {
+	if (enptr[i] == '1')
+	    ipmi_discrete_event_set(info->states, i, IPMI_DEASSERTION);
+	else if (enptr[i] == '0')
+	    ipmi_discrete_event_clear(info->states, i, IPMI_DEASSERTION);
+	else {
+	    cmd_win_out("Invalid deassertion value\n");
+	    return 0;
+	}
+    }
+    
+    rv = ipmi_sensor_pointer_cb(curr_sensor_id, events_enable, info);
+    if (rv) {
+	cmd_win_out("Unable to get sensor pointer: 0x%x\n", rv);
+	free(info);
+    }
+    return 0;
+}
+
 static void
 controls_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 {
@@ -1677,9 +1778,9 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 
 static void
 found_entity_for_control(ipmi_entity_t *entity,
-		     char          **toks,
-		     char          **toks2,
-		     void          *cb_data)
+			 char          **toks,
+			 char          **toks2,
+			 void          *cb_data)
 {
     struct control_info iinfo;
 
@@ -2388,6 +2489,9 @@ static struct {
       " <mc> <do_sensors> - list the SDRs for the mc.  If do_sensors is"
       " 1, then the device SDRs are fetched.  Otherwise the main SDRs are"
       " fetched." },
+    { "events_enable",  events_enable_cmd,
+      " <events> <scanning> <assertion bitmask> <deassertion bitmask>"
+      " - set the events enable data for the sensor" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}

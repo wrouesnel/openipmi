@@ -1,6 +1,10 @@
 
 2003-02-18 Corey Minyard <cminyard@mvista.com>
 
+	* ui.c: Added a way to set the event enables.
+
+	* sdr.c: Made some of the err info logs unique.
+
 	* mc.c, entity.c: memory leak removals
 	
 	* ilist.c, ilist.h, ipmi.c: Added separate allocation routines

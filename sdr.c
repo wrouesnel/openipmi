@@ -297,7 +297,7 @@ handle_reservation_check(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SDR fetch was in progress(1)");
 	fetch_complete(sdrs, ENXIO);
 	goto out;
     }
@@ -404,7 +404,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SDR fetch was in progress(2)");
 	fetch_complete(sdrs, ENXIO);
 	goto out;
     }
@@ -613,7 +613,7 @@ handle_reservation(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SDR fetch was in progress(3)");
 	fetch_complete(sdrs, ENXIO);
 	goto out;
     }
@@ -665,7 +665,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SDR fetch was in progress(4)");
 	fetch_complete(sdrs, ENXIO);
 	goto out;
     }
@@ -1311,7 +1311,7 @@ handle_sdr_write(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SDR fetch was in progress(5)");
 	save_complete(sdrs, ENXIO);
 	goto out;
     }
@@ -1397,7 +1397,7 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SDR fetch was in progress(6)");
 	save_complete(sdrs, ENXIO);
 	goto out;
     }
@@ -1470,7 +1470,7 @@ handle_sdr_clear(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SDR fetch was in progress(7)");
 	save_complete(sdrs, ENXIO);
 	goto out;
     }
@@ -1523,7 +1523,7 @@ handle_save_reservation(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SDR fetch was in progress(8)");
 	save_complete(sdrs, ENXIO);
 	goto out;
     }
