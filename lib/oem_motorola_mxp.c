@@ -5737,6 +5737,168 @@ board_blue_led_get(ipmi_control_t      *control,
 }
 
 static void
+board_power_config_set_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    int                rv;
+    ipmi_msg_t         msg;
+    unsigned char      data[6];
+
+    if (err) {
+	if (control_info->done_set)
+	    control_info->done_set(control, err, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_SET_POWER_CONFIG_CMD;
+    msg.data_len = 6;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    data[3] = control_info->vals[0];
+    data[4] = control_info->vals[1];
+    data[5] = control_info->vals[2];
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, mxp_control_set_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_set)
+	    control_info->done_set(control, rv, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+board_power_config_set(ipmi_control_t     *control,
+		   int                *val,
+		   ipmi_control_op_cb handler,
+		   void               *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->done_set = handler;
+    control_info->cb_data = cb_data;
+    control_info->vals[0] = val[0];
+    control_info->vals[1] = val[1];
+    control_info->vals[2] = val[2];
+
+    rv = ipmi_control_add_opq(control, board_power_config_set_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
+static void
+board_power_config_get_done(ipmi_control_t *control,
+		       int            err,
+		       ipmi_msg_t     *rsp,
+		       void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    int                val[3];
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, 0, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "board_power_config_get_done: Received IPMI error: %x",
+		 rsp->data[0]);
+	if (control_info->done_get)
+	    control_info->done_get(control,
+				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
+				   NULL, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 9) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "board_power_config_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 5);
+	if (control_info->done_get)
+	    control_info->done_get(control, EINVAL, NULL,
+				   control_info->cb_data);
+	goto out;
+    }
+
+    val[0] = rsp->data[7]; /* MXP/CPCI mode. */
+    val[1] = rsp->data[8]; /* Wait for command */
+    val[2] = rsp->data[6]; /* Power delay */
+    if (control_info->done_get)
+	control_info->done_get(control, 0, val, control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+board_power_config_get_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    int                rv;
+    ipmi_msg_t         msg;
+    unsigned char      data[3];
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_SLOT_HS_STATUS_CMD;
+    msg.data_len = 3;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, board_power_config_get_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_get)
+	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+board_power_config_get(ipmi_control_t      *control,
+		   ipmi_control_val_cb handler,
+		   void                *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->done_get = handler;
+    control_info->cb_data = cb_data;
+
+    rv = ipmi_control_add_opq(control, board_power_config_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
+static void
 slot_ga_get_done(ipmi_control_t *control,
 		 int            err,
 		 ipmi_msg_t     *rsp,
@@ -5845,6 +6007,7 @@ typedef struct board_sensor_info_s
     ipmi_control_t *power;
     ipmi_control_t *blue_led;
     ipmi_control_t *slot_ga;
+    ipmi_control_t *power_config;
 } board_sensor_info_t;
 
 static void
@@ -5860,6 +6023,8 @@ destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 	ipmi_control_destroy(sinfo->blue_led);
     if (sinfo->slot_ga)
 	ipmi_control_destroy(sinfo->slot_ga);
+    if (sinfo->power_config)
+	ipmi_control_destroy(sinfo->power_config);
 }
 
 /*
@@ -5873,15 +6038,16 @@ destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 
 /* Numbers for controls that are on the board (their MC is the board's
    MC). */
-#define MXP_BOARD_RESET_NUM	1 /* PM only */
-#define MXP_BOARD_POWER_NUM	2 /* PM only */
-#define MXP_BOARD_BLUE_LED_NUM	3
-#define MXP_BOARD_HW_VER_NUM	4 /* AMC only */
-#define MXP_BOARD_FW_VER_NUM	5 /* AMC only */
-#define MXP_BOARD_FPGA_VER_NUM	6 /* AMC only */
-#define MXP_BOARD_TEMP_COOL_LED_NUM 7 /* AMC only */
+#define MXP_BOARD_RESET_NUM		1 /* PM only */
+#define MXP_BOARD_POWER_NUM		2 /* PM only */
+#define MXP_BOARD_BLUE_LED_NUM		3
+#define MXP_BOARD_HW_VER_NUM		4 /* AMC only */
+#define MXP_BOARD_FW_VER_NUM		5 /* AMC only */
+#define MXP_BOARD_FPGA_VER_NUM		6 /* AMC only */
+#define MXP_BOARD_TEMP_COOL_LED_NUM	7 /* AMC only */
 #define MXP_BOARD_LAST_RESET_REASON_NUM 8 /* AMC only */
-#define MXP_BOARD_SLOT_GA_NUM	9 /* PM only */
+#define MXP_BOARD_SLOT_GA_NUM		9 /* PM only */
+#define MXP_BOARD_POWER_CONFIG_NUM	10 /* PM only */
 
 static int
 new_board_sensors(ipmi_mc_t           *mc,
@@ -5966,6 +6132,19 @@ new_board_sensors(ipmi_mc_t           *mc,
     control_cbs.get_identifier_val = slot_ga_get;
     ipmi_control_set_readable(sinfo->slot_ga, 1);
     ipmi_control_set_callbacks(sinfo->slot_ga, &control_cbs);
+
+    /* Board power mode */
+    rv = mxp_alloc_control(mc, ent,
+			   MXP_BOARD_POWER_CONFIG_NUM,
+			   NULL,
+			   IPMI_CONTROL_IDENTIFIER,
+			   "Power Config",
+			   board_power_config_set,
+			   board_power_config_get,
+			   &sinfo->power_config);
+    if (rv)
+	goto out_err;
+    ipmi_control_set_num_elements(sinfo->reset, 3);
 
  out_err:
     return rv;

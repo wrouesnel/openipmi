@@ -4320,6 +4320,8 @@ static ipmi_pet_t *pet;
 
 typedef struct pet_info_s
 {
+    unsigned int   connection;
+    unsigned int   channel;
     struct in_addr ip_addr;
     unsigned char  mac_addr[6];
     unsigned int   eft_sel;
@@ -4344,6 +4346,8 @@ pet_domain_cb(ipmi_domain_t *domain, void *cb_data)
     int        rv;
 
     rv = ipmi_pet_create(domain,
+			 info->connection,
+			 info->channel,
 			 info->ip_addr,
 			 info->mac_addr,
 			 info->eft_sel,
@@ -4368,6 +4372,10 @@ pet_cmd(char *cmd, char **toks, void *cb_data)
 	pet = NULL;
     }
 
+    if (get_uint(toks, &info.connection, "connection"))
+	return 0;
+    if (get_uint(toks, &info.channel, "channel"))
+	return 0;
     if (get_ip_addr(toks, &info.ip_addr, "IP address"))
 	return 0;
     if (get_mac_addr(toks, info.mac_addr, "MAC address"))

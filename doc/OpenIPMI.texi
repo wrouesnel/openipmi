@@ -2168,6 +2168,14 @@ A one-shot output that when set to 1 runs a slot-init cycle on the
 board's slot.  (enables the I2C to the board and enables board
 select).  This control is available even if the board is not present.
 
+@item Power Config
+This is the board power configuration, and consists of three items.
+The first is the power mode, a zero means MXP mode (the MXP-specific
+commands control the power).  A one means CPCI mode (board select
+controls the poiwer).  The second byte is a boolean that disables or
+enable a power-up delay.  The third byte is the power delay in tenths
+of a second.
+
 @end table
 
 @subsubsection Sensors for the cpip5365 card

@@ -42,8 +42,11 @@ typedef struct ipmi_pet_s ipmi_pet_t;
 typedef void (*ipmi_pet_done_cb)(ipmi_pet_t *pet, int err, void *cb_data);
 
 /* Create and configure a Platform Event Trap handler for the given
- * domain.  Parameters are: 
+ * channel in the given domain.  Parameters are: 
  *
+ *  channel - The specific channel to configure.  There is not real
+ *      way to know all the channels and what IP addresses should
+ *      be used for each.
  *  ip_addr - The IP address to tell the PET to send messages to, if
  *      applicable for this domain.
  *  mac_addr - The MAC address to tell the PET to send messages to,
@@ -71,6 +74,8 @@ typedef void (*ipmi_pet_done_cb)(ipmi_pet_t *pet, int err, void *cb_data);
  * the same time on the same machine.
  */
 int ipmi_pet_create(ipmi_domain_t    *domain,
+		    unsigned int     connection,
+		    unsigned int     channel,
 		    struct in_addr   ip_addr,
 		    unsigned char    mac_addr[6],
 		    unsigned int     eft_sel,

@@ -1,5 +1,11 @@
 2004-01-12 Corey Minyard <cminyard@mvista.com> 
 
+	* lib/pet.c, include/OpenIPMI/ipmi_pet.h: Modified the PET code to
+	only handle a single channel, and to specify the channel and
+	connection explicitly.  It's really impossible for this code to
+	know automatically what channels to configure and what IP
+	addresses to use for each.
+
 	* configure.in: Update version to 1.2.0.
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/ipm_oem.h:
