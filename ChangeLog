@@ -1,6 +1,8 @@
 
 2003-09-24 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 1.0.4.
+
 	* lib/selector.c: Allow the selector code to be called from
 	multiple threads, and fix a race condition on waking up waiting
 	selectors.
