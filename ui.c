@@ -606,10 +606,35 @@ key_npage(int key, void *cb_data)
     return 0;
 }
 
+static void
+final_leave(void *cb_data)
+{
+    leave(0, "");
+}
+
+static void
+leave_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    int rv;
+
+    rv = ipmi_close_connection(bmc, final_leave, NULL);
+    if (rv)
+	leave(0, "");
+}
+
 static int
 key_leave(int key, void *cb_data)
 {
-    leave(0, "");
+    int rv;
+
+    if (!bmc_ready) {
+	leave(0, "");
+    }
+
+    rv = ipmi_mc_pointer_cb(bmc_id, leave_cmd_bmcer, NULL);
+    if (rv) {
+	leave(0, "");
+    }
     return 0;
 }
 

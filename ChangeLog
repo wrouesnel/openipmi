@@ -1,6 +1,8 @@
 
 2003-01-24 Corey Minyard <cminyard@mvista.com>
 
+	* ui.c: Changed shutdown code to close the connection first.
+	
 	* mc.c: Modified the close connection code to avoid locking
 	problems.
 
