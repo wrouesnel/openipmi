@@ -3113,29 +3113,29 @@ display_pef_config(void)
 
     display_pad_out("  alert_startup_delay_enabled: %d\n",
 		    ipmi_pefconfig_get_alert_startup_delay_enabled(pef_config));
-    display_pad_out("  get_startup_delay_enabled: %d\n",
+    display_pad_out("  startup_delay_enabled: %d\n",
 		    ipmi_pefconfig_get_startup_delay_enabled(pef_config));
-    display_pad_out("  get_event_messages_enabled: %d\n",
+    display_pad_out("  event_messages_enabled: %d\n",
 		    ipmi_pefconfig_get_event_messages_enabled(pef_config));
-    display_pad_out("  get_pef_enabled: %d\n",
+    display_pad_out("  pef_enabled: %d\n",
 		    ipmi_pefconfig_get_pef_enabled(pef_config));
-    display_pad_out("  get_diagnostic_interrupt_enabled: %d\n",
+    display_pad_out("  diagnostic_interrupt_enabled: %d\n",
 		    ipmi_pefconfig_get_diagnostic_interrupt_enabled(pef_config));
-    display_pad_out("  get_oem_action_enabled: %d\n",
+    display_pad_out("  oem_action_enabled: %d\n",
 		    ipmi_pefconfig_get_oem_action_enabled(pef_config));
-    display_pad_out("  get_power_cycle_enabled: %d\n",
+    display_pad_out("  power_cycle_enabled: %d\n",
 		    ipmi_pefconfig_get_power_cycle_enabled(pef_config));
-    display_pad_out("  get_reset_enabled: %d\n",
+    display_pad_out("  reset_enabled: %d\n",
 		    ipmi_pefconfig_get_reset_enabled(pef_config));
-    display_pad_out("  get_power_down_enabled: %d\n",
+    display_pad_out("  power_down_enabled: %d\n",
 		    ipmi_pefconfig_get_power_down_enabled(pef_config));
-    display_pad_out("  get_alert_enabled: %d\n",
+    display_pad_out("  alert_enabled: %d\n",
 		    ipmi_pefconfig_get_alert_enabled(pef_config));
 
     if (ipmi_pefconfig_get_startup_delay(pef_config, &val) == 0)
-	display_pad_out("  get_startup_delay: %d\n", val);
+	display_pad_out("  startup_delay: %d\n", val);
     if (ipmi_pefconfig_get_alert_startup_delay(pef_config, &val) == 0)
-	display_pad_out("  get_alert_startup_delay: %d\n", val);
+	display_pad_out("  alert_startup_delay: %d\n", val);
 
     len = sizeof(data);
     rv = ipmi_pefconfig_get_guid(pef_config, &val, data, &len);
@@ -3535,7 +3535,7 @@ setpef_cmd(char *cmd, char **toks, void *cb_data)
 		if (get_uchar(toks, data+i, NULL))
 		    break;
 	    }
-	    rv = ipmi_pefconfig_set_guid(pef_config, sel, data, i);
+	    rv = ipmi_pefconfig_set_guid(pef_config, (i != 0), data, i);
 	} else if (strcmp(name, "alert_string") == 0) {
 	    if (get_uint(toks, &sel, "selector"))
 		return 0;
@@ -3847,6 +3847,10 @@ void writelanparm_done(ipmi_lanparm_t *lanparm,
 void
 writelanparm_mc_handler(ipmi_mc_t *mc, void *cb_data)
 {
+    mccmd_info_t *info = cb_data;
+
+    info->found = 1;
+
     if (!lanparm) {
 	ui_log("No LANPARM to write\n");
 	return;

@@ -1134,8 +1134,11 @@ set_done(ipmi_lanparm_t *lanparm,
     unsigned char     data[MAX_IPMI_DATA_SIZE];
     lanparms_t        *lp = &(lanparms[lanc->curr_parm]);
 
-    if (err)
+    if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error setting lan parm %d: %x", lanc->curr_parm, err);
 	goto done;
+    }
 
  next_parm:
     switch (lanc->curr_parm) {
@@ -1199,7 +1202,7 @@ set_done(ipmi_lanparm_t *lanparm,
 	sc->err = err;
 	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, set_clear, sc);
     } else {
-	data[0] = 3; /* Commit the parameters. */
+	data[0] = 2; /* Commit the parameters. */
 	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, commit_done, sc);
     }
     if (err) {
@@ -1234,7 +1237,7 @@ ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
     }
     memset(sc->lanc, 0, sizeof(*(sc->lanc)));
 
-    *sc->lanc = *lanc;
+    *(sc->lanc) = *lanc;
     sc->lanc->alert_dest_type = NULL;
     sc->lanc->alert_dest_addr = NULL;
 

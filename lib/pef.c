@@ -1566,8 +1566,11 @@ set_done(ipmi_pef_t *pefparm,
     pefparms_t        *lp = &(pefparms[pefc->curr_parm]);
     unsigned int      length;
 
-    if (err)
+    if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error setting PEF parm %d: %x", pefc->curr_parm, err);
 	goto done;
+    }
 
  next_parm:
     switch (pefc->curr_parm) {
