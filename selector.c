@@ -233,7 +233,7 @@ diff_timeval(struct timeval *dest,
     }
 }
 
-#undef MASSIVE_DEBUG
+#define MASSIVE_DEBUG
 #ifdef MASSIVE_DEBUG
 #include <stdio.h>
 FILE **debug_out = &stderr;
@@ -453,7 +453,11 @@ send_up(sel_timer_t *elem, sel_timer_t **top, sel_timer_t **last)
 
 	parent->up = elem;
 	parent->left = tmp1;
+	if (parent->left)
+	    parent->left->up = parent;
 	parent->right = tmp2;
+	if (parent->right)
+	    parent->right->up = parent;
 
 	if (*last == elem)
 	    *last = parent;
@@ -550,7 +554,7 @@ add_to_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
     sel_timer_t *parent;
 
 #ifdef MASSIVE_DEBUG
-    fprintf(*debug_out, "add_to_head entry\n");
+    fprintf(*debug_out, "add_to_heap entry\n");
     print_tree(*top, *last);
     check_tree(*top, *last);
 #endif
@@ -575,7 +579,7 @@ add_to_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
 
  out:
 #ifdef MASSIVE_DEBUG
-    fprintf(*debug_out, "add_to_head exit\n");
+    fprintf(*debug_out, "add_to_heap exit\n");
     print_tree(*top, *last);
     check_tree(*top, *last);
 #endif

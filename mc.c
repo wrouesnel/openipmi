@@ -1548,7 +1548,14 @@ ipmi_bmc_iterate_mcs(ipmi_mc_t               *bmc,
 		     void                    *cb_data)
 {
     iterate_mc_info_t info = { bmc, handler, cb_data };
+
+    if (bmc->bmc == NULL)
+	/* Not a BMC */
+	return EINVAL;
+
+    ipmi_lock(bmc->bmc->mc_list_lock);
     ilist_iter(bmc->bmc->mc_list, iterate_mcs_handler, &info);
+    ipmi_unlock(bmc->bmc->mc_list_lock);
     return 0;
 }
 

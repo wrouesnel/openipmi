@@ -624,8 +624,8 @@ int ipmi_states_get(ipmi_sensor_t       *sensor,
  * that nature.  Basically, output devices.  IPMI does not define
  * these, but they are pretty fundamental for system management.  */
 int ipmi_ind_get_type(ipmi_ind_t *ind);
-int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
-void ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
+int ipmi_ind_get_id_length(ipmi_ind_t *sensor);
+void ipmi_ind_get_id(ipmi_ind_t *sensor, char *id, int length);
 int ipmi_ind_get_entity_id(ipmi_ind_t *ind);
 int ipmi_ind_get_entity_instance(ipmi_ind_t *ind);
 ipmi_entity_t *ipmi_ind_get_entity(ipmi_ind_t *ind);

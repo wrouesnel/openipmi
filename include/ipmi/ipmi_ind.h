@@ -104,6 +104,10 @@ typedef struct ipmi_ind_cbs_s
 void ipmi_ind_set_id(ipmi_ind_t *ind, char *id);
 void ipmi_ind_set_type(ipmi_ind_t *ind, int val);
 
+int ipmi_ind_get_num(ipmi_ind_t *ind,
+		     int        *lun,
+		     int        *num);
+
 void ipmi_ind_set_oem_info(ipmi_ind_t *ind, void *oem_info);
 void *ipmi_ind_get_oem_info(ipmi_ind_t *ind);
 

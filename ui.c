@@ -76,7 +76,7 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 /* The current thing display in the display pad. */
 enum {
     DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_ENTITY, DISPLAY_SENSORS,
-    DISPLAY_ENTITIES, DISPLAY_MCS, DISPLAY_RSP
+    DISPLAY_INDS, DISPLAY_IND, DISPLAY_ENTITIES, DISPLAY_MCS, DISPLAY_RSP
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
 typedef struct pos_s {int y; int x; } pos_t;
@@ -426,9 +426,14 @@ entities_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+typedef void (*entity_handler_cb)(ipmi_entity_t *entity,
+				  char          **toks,
+				  char          **toks2,
+				  void          *cb_data);
 struct ent_rec {
     int id, instance, found;
-    void (*handler)(ipmi_entity_t *entity, void *cb_data);
+    entity_handler_cb handler;
+    char **toks, **toks2;
     void *cb_data;
 };
 
@@ -442,10 +447,61 @@ entity_searcher(ipmi_entity_t *entity,
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
     if ((info->id == id) && (info->instance == instance)) {
-	curr_display_type = DISPLAY_SENSORS;
 	info->found = 1;
-	info->handler(entity, info->cb_data);
+	info->handler(entity, info->toks, info->toks2, info->cb_data);
     }
+}
+
+int
+entity_finder(char *cmd, char **toks,
+	      entity_handler_cb handler,
+	      void *cb_data)
+{
+    struct ent_rec info;
+    char           *ent_name;
+    char           *id_name, *instance_name, *toks2, *estr;
+
+    if (!bmc) {
+	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	return EAGAIN;
+    }
+
+    ent_name = strtok_r(NULL, " \t\n", toks);
+    if (!ent_name) {
+	waddstr(cmd_win, "No entity given\n");
+	return EINVAL;
+    }
+
+    id_name = strtok_r(ent_name, ".", &toks2);
+    instance_name = strtok_r(NULL, ".", &toks2);
+    if (!instance_name) {
+	waddstr(cmd_win, "Invalid entity given\n");
+	return EINVAL;
+    }
+    info.id = strtoul(id_name, &estr, 0);
+    if (*estr != '\0') {
+	waddstr(cmd_win, "Invalid entity id given\n");
+	return EINVAL;
+    }
+    info.instance = strtoul(instance_name, &estr, 0);
+    if (*estr != '\0') {
+	waddstr(cmd_win, "Invalid entity instance given\n");
+	return EINVAL;
+    }
+    info.found = 0;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.toks = toks;
+    info.toks2 = &toks2;
+
+    ipmi_bmc_iterate_entities(bmc, entity_searcher, &info);
+    if (!info.found) {
+	wprintw(cmd_win, "Entity %d.%d not found\n", info.id, info.instance);
+	return EINVAL;
+    }
+
+    return 0;
 }
 
 static void
@@ -464,10 +520,13 @@ sensors_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 
 static void
 found_entity_for_sensors(ipmi_entity_t *entity,
+			 char          **toks,
+			 char          **toks2,
 			 void          *cb_data)
 {
-    int    id, instance;
+    int id, instance;
 
+    curr_display_type = DISPLAY_SENSORS;
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
     werase(display_pad);
@@ -480,48 +539,46 @@ found_entity_for_sensors(ipmi_entity_t *entity,
 int
 sensors_cmd(char *cmd, char **toks, void *cb_data)
 {
-    struct ent_rec info;
-    char           *ent_name;
-    char           *id_name, *instance_name, *toks2;
+    entity_finder(cmd, toks, found_entity_for_sensors, NULL);
+    return 0;
+}
 
-    if (!bmc) {
-	waddstr(cmd_win, "BMC has not finished setup yet\n");
-	return 0;
-    }
+static void
+inds_handler(ipmi_entity_t *entity, ipmi_ind_t *ind, void *cb_data)
+{
+    int id, instance;
+    int lun, num;
+    char name[33];
 
-    ent_name = strtok_r(NULL, " \t\n", toks);
-    if (!ent_name) {
-	waddstr(cmd_win, "No entity given\n");
-	return 0;
-    }
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    ipmi_ind_get_num(ind, &lun, &num);
+    ipmi_ind_get_id(ind, name, 33);
+    wprintw(display_pad, "  %d.%d.%d.%d - %s\n", id, instance, lun, num, name);
+}
 
-    id_name = strtok_r(ent_name, ".", &toks2);
-    instance_name = strtok_r(NULL, "", &toks2);
-    if (!instance_name) {
-	waddstr(cmd_win, "Invalid entity given\n");
-	return 0;
-    }
-    info.id = strtoul(id_name, &toks2, 0);
-    if (*toks2 != '\0') {
-	waddstr(cmd_win, "Invalid entity id given\n");
-	return 0;
-    }
-    info.instance = strtoul(instance_name, &toks2, 0);
-    if (*toks2 != '\0') {
-	waddstr(cmd_win, "Invalid entity instance given\n");
-	return 0;
-    }
-    info.found = 0;
+static void
+found_entity_for_inds(ipmi_entity_t *entity,
+		      char          **toks,
+		      char          **toks2,
+		      void          *cb_data)
+{
+    int id, instance;
 
-    info.handler = found_entity_for_sensors;
-    info.cb_data = &info;
+    curr_display_type = DISPLAY_INDS;
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    wprintw(display_pad, "Inds for entity %d.%d:\n", id, instance);
+    ipmi_entity_iterate_inds(entity, inds_handler, NULL);
+    display_pad_refresh();
+}
 
-    ipmi_bmc_iterate_entities(bmc, entity_searcher, &info);
-    if (!info.found) {
-	wprintw(cmd_win, "Entity %d.%d not found\n", info.id, info.instance);
-	return 0;
-    }
-
+int
+inds_cmd(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, found_entity_for_inds, NULL);
     return 0;
 }
 
@@ -1052,84 +1109,53 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 
 static void
 found_entity_for_sensor(ipmi_entity_t *entity,
+			char          **toks,
+			char          **toks2,
 			void          *cb_data)
 {
-    ipmi_entity_iterate_sensors(entity, sensor_handler, cb_data);
+    char *lun_name, *num_name;
+    struct sensor_info sinfo;
+    char *estr;
+
+    lun_name = strtok_r(NULL, ".", toks2);
+    if (!lun_name) {
+	waddstr(cmd_win, "Invalid sensor given\n");
+	return;
+    }
+    num_name = strtok_r(NULL, "", toks2);
+    if (!num_name) {
+	waddstr(cmd_win, "Invalid sensor given\n");
+	return;
+    }
+    sinfo.lun = strtoul(lun_name, &estr, 0);
+    if (*estr != '\0') {
+	waddstr(cmd_win, "Invalid sensor lun given\n");
+	return;
+    }
+    sinfo.num = strtoul(num_name, &estr, 0);
+    if (*estr != '\0') {
+	waddstr(cmd_win, "Invalid sensor num given\n");
+	return;
+    }
+    sinfo.found = 0;
+
+    ipmi_entity_iterate_sensors(entity, sensor_handler, &sinfo);
+    if (!sinfo.found) {
+	int id, instance;
+
+	id = ipmi_entity_get_entity_id(entity);
+	instance = ipmi_entity_get_entity_instance(entity);
+
+	wprintw(cmd_win, "Sensor %d.%d.%d.%d not found\n",
+		id, instance, sinfo.lun, sinfo.num);
+	return;
+    }
 }
 
 int
 sensor_cmd(char *cmd, char **toks, void *cb_data)
 {
-    struct ent_rec     info;
-    struct sensor_info sinfo;
-    char               *ent_name;
-    char               *id_name, *instance_name, *lun_name, *num_name, *toks2;
-
-    if (!bmc) {
-	waddstr(cmd_win, "BMC has not finished setup yet\n");
-	return 0;
-    }
-
-    ent_name = strtok_r(NULL, " \t\n", toks);
-    if (!ent_name) {
-	waddstr(cmd_win, "No sensor given\n");
-	return 0;
-    }
-
-    id_name = strtok_r(ent_name, ".", &toks2);
-    instance_name = strtok_r(NULL, ".", &toks2);
-    if (!instance_name) {
-	waddstr(cmd_win, "Invalid sensor given\n");
-	return 0;
-    }
-    lun_name = strtok_r(NULL, ".", &toks2);
-    if (!lun_name) {
-	waddstr(cmd_win, "Invalid sensor given\n");
-	return 0;
-    }
-    num_name = strtok_r(NULL, "", &toks2);
-    if (!num_name) {
-	waddstr(cmd_win, "Invalid sensor given\n");
-	return 0;
-    }
-
-    info.id = strtoul(id_name, &toks2, 0);
-    if (*toks2 != '\0') {
-	waddstr(cmd_win, "Invalid entity id given\n");
-	return 0;
-    }
-    info.instance = strtoul(instance_name, &toks2, 0);
-    if (*toks2 != '\0') {
-	waddstr(cmd_win, "Invalid entity instance given\n");
-	return 0;
-    }
-    sinfo.lun = strtoul(lun_name, &toks2, 0);
-    if (*toks2 != '\0') {
-	waddstr(cmd_win, "Invalid sensor lun given\n");
-	return 0;
-    }
-    sinfo.num = strtoul(num_name, &toks2, 0);
-    if (*toks2 != '\0') {
-	waddstr(cmd_win, "Invalid sensor num given\n");
-	return 0;
-    }
-    info.found = 0;
-    sinfo.found = 0;
-
-    info.handler = found_entity_for_sensor;
-    info.cb_data = &sinfo;
-
-    ipmi_bmc_iterate_entities(bmc, entity_searcher, &info);
-    if (!info.found) {
-	wprintw(cmd_win, "Entity %d.%d not found\n", info.id, info.instance);
-	return 0;
-    }
-    if (!sinfo.found) {
-	wprintw(cmd_win, "Sensor %d.%d.%d.%d not found\n",
-		info.id, info.instance, sinfo.lun, sinfo.num);
-	return 0;
-    }
-
+    entity_finder(cmd, toks, found_entity_for_sensor, NULL);
     return 0;
 }
 
@@ -1181,6 +1207,7 @@ mccmd_rsp_handler(ipmi_mc_t  *src,
 		  void       *rsp_data)
 {
     unsigned int i;
+    char         *data;
 
     werase(display_pad);
     wmove(display_pad, 0, 0);
@@ -1190,10 +1217,11 @@ mccmd_rsp_handler(ipmi_mc_t  *src,
     wprintw(display_pad, "  Command = 0x%2.2x\n", msg->cmd);
     wprintw(display_pad, "  Completion code = 0x%2.2x\n", msg->data[0]);
     wprintw(display_pad, "  data =");
-    for (i=1; i<msg->data_len; i++) {
-	if (((i-1) != 0) && (((i-1) % 8) == 0))
+    data = msg->data + 1;
+    for (i=0; i<msg->data_len-1; i++) {
+	if ((i != 0) && ((i % 8) == 0))
 	    waddstr(display_pad, "\n        ");
-	wprintw(display_pad, " %2.2x", msg->data[i]);
+	wprintw(display_pad, " %2.2x", data[i]);
     }
     waddstr(display_pad, "\n");
     display_pad_refresh();
@@ -1290,6 +1318,7 @@ static struct {
     { "sensors",			sensors_cmd },
     { "sensor",				sensor_cmd },
     { "enable",				enable_cmd },
+    { "inds",				inds_cmd },
     { "mcs",				mcs_cmd },
     { "mccmd",				mccmd_cmd },
     { NULL,				NULL}
@@ -1626,7 +1655,9 @@ main(int argc, char *argv[])
     int            rv;
 
 
+#if 0
     __ipmi_log_mask = DEBUG_MSG_BIT;
+#endif
 
     if (argc < 2) {
 	fprintf(stderr, "Not enough arguments\n");

@@ -494,3 +494,14 @@ ipmi_ind_get_mc(ipmi_ind_t *ind)
     return ind->mc;
 }
 
+int
+ipmi_ind_get_num(ipmi_ind_t *ind,
+		 int        *lun,
+		 int        *num)
+{
+    if (lun)
+	*lun = ind->lun;
+    if (num)
+	*num = ind->num;
+    return 0;
+}
