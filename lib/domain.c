@@ -1746,20 +1746,30 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 		    goto out;
 		}
 
+		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
+		if (rv) {
+		    /* If we couldn't handle the device data, just clean
+		       it up */
+		    _ipmi_cleanup_mc(mc);
+		    goto out;
+		}
+
 		rv = add_mc_to_domain(domain, mc);
 		if (rv) {
 		    _ipmi_cleanup_mc(mc);
 		    goto next_addr;
 		}
-	    }
 
-	    rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
-	    if (rv) {
-		/* If we couldn't handle the device data, just clean
-                   it up */
-		_ipmi_cleanup_mc(mc);
-	    } else
 		_ipmi_mc_handle_new(mc);
+	    } else {
+		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
+		if (rv) {
+		    /* If we couldn't handle the device data, just clean
+		       it up */
+		    _ipmi_cleanup_mc(mc);
+		} else
+		    _ipmi_mc_handle_new(mc);
+	    }
 	} else {
 	    /* Periodically check the MCs. */
 	    _ipmi_mc_check_mc(mc);
