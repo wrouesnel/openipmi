@@ -3892,6 +3892,7 @@ typedef struct mc_event_info_s
     ipmi_event_t          event_copy;
     int                   handled;
     int                   val;
+    ipmi_mcid_t           mc_id;
 } mc_event_info_t;
 
 static void
@@ -4260,6 +4261,9 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
     int              rv;
     int              i;
 
+    ipmi_mc_get_oem_data(mc);
+
+ipmi_log(IPMI_LOG_DEBUG, "***B");
     id.mcid = _ipmi_mc_convert_to_id(mc);
     id.mcid.channel = 0;
     id.mcid.mc_num = 0x20;
@@ -4273,9 +4277,9 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
                absent. */
 	    id.mcid.mc_num = event->data[4];
 	    id.sensor_num = MXP_BOARD_SLOT_NUM;
-	    rv = ipmi_sensor_pointer_cb(id,
-					mxp_board_power_changed_event,
-					einfo);
+	    rv = ipmi_sensor_pointer_noseq_cb(id,
+					      mxp_board_power_changed_event,
+					      einfo);
 	    if (!rv)
 		einfo->handled = 1;
 	} else if ((event->data[8] == 0x03) || (event->data[8] == 0x0e)) {
@@ -4292,17 +4296,27 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 		return;
 	    id.sensor_num = MXP_BOARD_PRESENCE_NUM(binfo->idx);
 	    einfo->val = 1;
-	    rv = ipmi_sensor_pointer_cb(id, mxp_board_presence_event, einfo);
+	    rv = ipmi_sensor_pointer_noseq_cb(id, mxp_board_presence_event,
+					      einfo);
 	    if (!rv)
 		einfo->handled = 1;
 	} else if (event->data[8] == 0x04) {
 	    /* HS Eject */
-	    if ((event->data[4] & 1) == 0)
+	    if (event->data[4] & 1) {
+		if (event->data[10] == 0xea) {
+		    id.mcid.channel = IPMI_BMC_CHANNEL;
+		    id.mcid.mc_num = 0;
+		} else if (event->data[10] == 0xec) {
+		    id.mcid.channel = IPMI_BMC_CHANNEL;
+		    id.mcid.mc_num = 1;
+		}
+	    } else {
 		id.mcid.mc_num = event->data[4];
+	    }
 	    id.sensor_num = MXP_BOARD_SLOT_NUM;
-	    rv = ipmi_sensor_pointer_cb(id,
-					mxp_board_ejector_changed_event,
-					einfo);
+	    rv = ipmi_sensor_pointer_noseq_cb(id,
+					      mxp_board_ejector_changed_event,
+					      einfo);
 	    if (!rv)
 		einfo->handled = 1;
 	} else if (event->data[8] == 0x05) {
@@ -4336,18 +4350,21 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 	} else if (event->data[8] == 0x09) {
 	    /* PS Alarm, for PS faults. */
 	    id.sensor_num = MXP_PS_PS_NUM(i);
-	    rv = ipmi_sensor_pointer_cb(id, mxp_ps_alarm_event, einfo);
+	    rv = ipmi_sensor_pointer_noseq_cb(id, mxp_ps_alarm_event, einfo);
 	} else if (event->data[8] == 0x0a) {
 	    /* PS Present */
 	    id.sensor_num = MXP_PS_PRESENCE_NUM(i);
-	    rv = ipmi_sensor_pointer_cb(id, mxp_gen_presence_event, einfo);
+	    rv = ipmi_sensor_pointer_noseq_cb(id, mxp_gen_presence_event,
+					      einfo);
 	}
 	if (!rv)
 	    einfo->handled = 1;
 	break;
 
     case 0xd3:
+ipmi_log(IPMI_LOG_DEBUG, "***g: %x", event->data[10]);
 	for (i=0; i<MXP_POWER_SUPPLIES; i++) {
+ipmi_log(IPMI_LOG_DEBUG, "***h: %x", info->power_supply[i].ipmb_addr);
 	    if (event->data[10] == info->power_supply[i].ipmb_addr)
 		break;
 	}
@@ -4357,19 +4374,23 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 
 	rv = EINVAL; /* Guilty until proven innocent. */
 	if (event->data[8] == 0x0b) {
+ipmi_log(IPMI_LOG_DEBUG, "***A");
 	    /* Fan Alarm.  This contains alarms for both the fan
                cooling events and for the fan speed, so we have to
                ping both sensors. */
 	    id.sensor_num = MXP_FAN_COOLING_NUM(i);
-	    rv = ipmi_sensor_pointer_cb(id, mxp_fan_cooling_event, einfo);
+	    rv = ipmi_sensor_pointer_noseq_cb(id, mxp_fan_cooling_event,
+					      einfo);
 	    if (!rv) {
 		id.sensor_num = MXP_FAN_SPEED_NUM(i);
-		rv = ipmi_sensor_pointer_cb(id, mxp_fan_speed_event, einfo);
+		rv = ipmi_sensor_pointer_noseq_cb(id, mxp_fan_speed_event,
+						  einfo);
 	    }
 	} else if (event->data[8] == 0x0c) {
 	    /* Fan Present */
 	    id.sensor_num = MXP_FAN_PRESENCE_NUM(i);
-	    rv = ipmi_sensor_pointer_cb(id, mxp_gen_presence_event, einfo);
+	    rv = ipmi_sensor_pointer_noseq_cb(id, mxp_gen_presence_event,
+					      einfo);
 	}
 	if (!rv)
 	    einfo->handled = 1;
@@ -4395,10 +4416,12 @@ mxp_event_handler(ipmi_mc_t    *mc,
     mc_event_info_t einfo;
     unsigned long   timestamp;
 
+ipmi_log(IPMI_LOG_DEBUG, "***C");
     if ((event->type != 2) && (event->type != 3) && (event->type != 0xc0))
 	/* Not a system event record or MXP event. */
 	return 0;
 
+ipmi_log(IPMI_LOG_DEBUG, "***d");
     if ((event->data[6] != 3) && (event->data[6] != 4))
 	/* Not a 1.5 event version or an MXP event */
 	return 0;
@@ -4408,6 +4431,9 @@ mxp_event_handler(ipmi_mc_t    *mc,
     if (timestamp < ipmi_mc_get_startup_SEL_time(mc))
 	/* It's an old event, ignore it. */
 	return 0;
+ipmi_log(IPMI_LOG_DEBUG, "***e");
+
+    einfo.mcid = mcid;
 
     /* If the low bit of data[4] is set, then it's from the MC,
        otherwise it's from a card.  Power supply messages also come in
@@ -4416,17 +4442,29 @@ mxp_event_handler(ipmi_mc_t    *mc,
     if (((event->data[4] & 1) == 0)
 	&& !((event->data[4] == 0x54)
 	     || (event->data[4] == 0x56)
-	     || (event->data[4] == 0x58)))
+	     || (event->data[4] == 0x58)
+	     /* For some reason, events from the AMC ejector handle
+                come in as 1e in this field. */
+	     || (event->data[4] == 0x1e)))
     {
 	mc_id.channel = 0;
         mc_id.mc_num = event->data[4];
+    } else {
+	mc_id.channel = 0;
+        mc_id.mc_num = 0x20;
     }
+
+    /* For some reason, events from the AMC ejector handle sometimes
+       come in as 1e in this field. */
+    if (event->data[4] == 0x1e)
+	event->data[4] = 0x1d;
 
     einfo.event = event;
     einfo.event_copy = *event;
     einfo.handled = 0;
     einfo.info = cb_data;
 
+ipmi_log(IPMI_LOG_DEBUG, "***f");
     rv = _ipmi_mc_pointer_noseq_cb(mc_id, mc_event, &einfo);
 
     if (rv)
@@ -4461,7 +4499,8 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 	    break;
 
 	case 2:
-	case 3:
+        case 3: /* AC Supply */
+        case 4: /* DC supply */
 	    info->chassis_config = MXP_CHASSIS_CONFIG_3U;
 	    break;
 
