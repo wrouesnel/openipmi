@@ -166,6 +166,10 @@ collection of the requirements I think exist.
         controls and handle the operations for those things so it can
         simulate real ones.
 
+   7.4) Multiple OEM plugins will be supported simultaneously, so
+        connections and management controllers from different vendors
+        can be supported at the same time.
+
 8) Other Code
 
    8.1) OpenIPMI will include a direct command interface.

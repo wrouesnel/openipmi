@@ -74,7 +74,7 @@ dump_hex(void *vdata, int len)
 
 /* Number of microseconds of consecutive failures allowed on an IP
    before it is considered failed. */
-#define IP_FAIL_TIME 7000000
+#define IP_FAIL_TIME 3000000
 
 /* Number of consecutive failures that must occur before an IP is
    considered failed. */

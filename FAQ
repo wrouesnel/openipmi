@@ -1,0 +1,66 @@
+
+  1) Why is ipmi_ui so ugly?
+
+     Well, ipmi_ui is a test program that I wrote for my own purposes.
+     I'll try to clean it up in the future and make it into something
+     useful, and it's certainly ugly, but it's primarily for my
+     testing.
+
+     If you want to write something useful to replace it, feel free!
+
+
+  2) What if I just want to send some IPMI commands.
+
+     Then "ipmicmd" is the tools for you.  It can connect to a system
+     interface or to a LAN connection and let you directly enter
+     commands.
+
+
+  3) I'm trying to write a little program that comes up and queries a
+     few things.  Can I use the OpenIPMI library to do that?
+
+     Probably not.  OpenIPMI was designed as a large-scale IPMI
+     interface for programs that stay up and do lots of management
+     work.  It's not really for one-off little tools.
+
+     If you want to do small tools, it's easy enough to just open the
+     device and send the commands (or use the ipmicmd tool).  You have
+     to understand IPMI well to use it at that level, anyway.
+
+
+  4) Why can't I just perform an operation and immediately get the
+     results?  Why all these callbacks?
+
+     Read the documenation for details.  The OpenHPI interface
+     (http://openhpi.sourceforce.net) is expected to sit on top of the
+     OpenIPMI library and provide an interface more like that.  Plus,
+     you can write your own wrappers to do it.  It's not possible to
+     write event-driven wrappers on top of a non-event-driven
+     interface.
+
+
+  5) Can I have multiple OpenIPMI session from different programs to
+     the same interface?
+
+     Certainly.  I do it all the time :-)
+
+     The main problem is the System Event Log (SEL).  Somebody has to
+     delete items from the SEL.  You have a couple of options...
+
+     If you don't care about the SEL, then set the SEL rescan time to
+     zero with ipmi_domain_set_sel_rescan_time().  This will turn off
+     the SEL completely.
+
+     If you do care about SELs on multiple programs, you will have to
+     develop a protocol between all the users.  You have to have a way
+     to let all the listeners get all the SELs, but still delete items
+     from the SEL in a timely manner.  I recommend that you set the
+     SEL rescan time to a value, and for every event receive wait
+     double that value before deleting it.  OpenIPMI will correctly
+     handle multiple things deleting items from the SEL.
+
+
+  6) Can you open more than one IPMI session from OpenIPMI?
+
+     Certainly.  You can create as many connections and domains as you
+     like, the library has no limitiation.

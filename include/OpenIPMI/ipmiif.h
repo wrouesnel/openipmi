@@ -166,7 +166,8 @@ void ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
 /* The SEL rescan timer is the time between when the SEL will be
    checked for new events.  This timer is in seconds, and will
    currently default to 10 seconds.  You need to set this depending on
-   how fast you need to know if events have come in. */
+   how fast you need to know if events have come in.  If you set this
+   value to zero, it will turn off SEL scanning. */
 void ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
 				     unsigned int  seconds);
 unsigned int ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain);

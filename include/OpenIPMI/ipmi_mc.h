@@ -134,6 +134,9 @@ void ipmi_mc_get_ipmi_address(ipmi_mc_t    *mc,
 /* Get the channel for the given MC. */
 unsigned ipmi_mc_get_channel(ipmi_mc_t *mc);
 
+void ipmi_mc_set_sel_rescan_time(ipmi_mc_t *mc, unsigned int seconds);
+unsigned int ipmi_mc_get_sel_rescan_time(ipmi_mc_t *mc);
+
 int _ipmi_create_mc(ipmi_domain_t *domain,
 		    ipmi_addr_t   *addr,
 		    unsigned int  addr_len,

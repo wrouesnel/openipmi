@@ -49,9 +49,6 @@
 #include "ilist.h"
 #include "opq.h"
 
-/* Re-query the SEL every 10 seconds by default. */
-#define IPMI_SEL_QUERY_INTERVAL 10
-
 /* Timer structure for rereading the SEL. */
 typedef struct mc_reread_sel_s
 {
@@ -191,6 +188,12 @@ static void mc_sel_new_event_handler(ipmi_sel_info_t *sel,
 				     ipmi_event_t    *event,
 				     void            *cb_data);
 
+static void sels_fetched_start_timer(ipmi_sel_info_t *sel,
+				     int             err,
+				     int             changed,
+				     unsigned int    count,
+				     void            *cb_data);
+
 /***********************************************************************
  *
  * Routines for creating and destructing MCs.
@@ -228,7 +231,7 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     mc->removed_mc_handler = NULL;
     mc->sel = NULL;
     mc->sel_timer_info = NULL;
-    mc->sel_scan_interval = IPMI_SEL_QUERY_INTERVAL;
+    mc->sel_scan_interval = ipmi_domain_get_sel_rescan_time(domain);
 
     memcpy(&(mc->addr), addr, addr_len);
     mc->addr_len = addr_len;
@@ -398,9 +401,19 @@ ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
 void
 ipmi_mc_set_sel_rescan_time(ipmi_mc_t *mc, unsigned int seconds)
 {
+    unsigned int old_time;
     CHECK_MC_LOCK(mc);
 
+    if (mc->sel_scan_interval == seconds)
+	return;
+
+    old_time = mc->sel_scan_interval;
+
     mc->sel_scan_interval = seconds;
+    if (old_time == 0) {
+	/* The old time was zero, so we must restart the timer. */
+	sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
+    }
 }
 
 unsigned int
@@ -551,13 +564,15 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
 
     os_hnd = mc_get_os_hnd(mc);
 
-    timeout.tv_sec = mc->sel_scan_interval;
-    timeout.tv_usec = 0;
-    os_hnd->start_timer(os_hnd,
-			mc->sel_timer,
-			&timeout,
-			mc_reread_sel,
-			info);
+    if (mc->sel_scan_interval != 0) {
+	timeout.tv_sec = mc->sel_scan_interval;
+	timeout.tv_usec = 0;
+	os_hnd->start_timer(os_hnd,
+			    mc->sel_timer,
+			    &timeout,
+			    mc_reread_sel,
+			    info);
+    }
 }
 
 static void

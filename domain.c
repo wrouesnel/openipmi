@@ -51,6 +51,8 @@
 /* Rescan the bus for MCs every 10 minutes by default. */
 #define IPMI_RESCAN_BUS_INTERVAL 600
 
+/* Re-query the SEL every 10 seconds by default. */
+#define IPMI_SEL_QUERY_INTERVAL 10
 
 struct ipmi_domain_con_change_s
 {
@@ -62,6 +64,7 @@ struct ipmi_domain_con_change_s
 typedef struct rescan_bus_info_s
 {
     int           cancelled;
+    os_handler_t  *os_hnd;
     ipmi_domain_t *domain;
 } rescan_bus_info_t;
 
@@ -79,6 +82,9 @@ struct mc_ipbm_scan_info_s
     unsigned int        missed_responses;
 };
 
+/* This structure tracks messages sent to the domain, it is primarily
+   here so messages can be rerouted to other connections when a
+   connection fails. */
 typedef struct ll_msg_s
 {
     ipmi_domain_t                *domain;
@@ -98,6 +104,15 @@ typedef struct ll_msg_s
 
     ilist_item_t link;
 } ll_msg_t;
+
+typedef struct activate_timer_info_s
+{
+    int           cancelled;
+    ipmi_domain_t *domain;
+    os_handler_t  *os_hnd;
+    ipmi_lock_t   *lock;
+    volatile int  running;
+} activate_timer_info_t;
 
 struct ipmi_domain_s
 {
@@ -186,6 +201,14 @@ struct ipmi_domain_s
     /* A list of IPMB addresses to not scan. */
     ilist_t *ipmb_ignores;
 
+    /* This is a timer that waits a little while before activating a
+       connection if all connections are not active.  It avoids race
+       conditions with activiation. */
+    os_hnd_timer_id_t     *activate_timer;
+    activate_timer_info_t *activate_timer_info;
+
+    unsigned int default_sel_rescan_time;
+
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
 };
@@ -255,6 +278,38 @@ cleanup_domain(ipmi_domain_t *domain)
 		ipmi_sensor_destroy(domain->sensors_in_main_sdr[i]);
 	}
 	ipmi_mem_free(domain->sensors_in_main_sdr);
+    }
+
+    if (domain->activate_timer_info) {
+	if (domain->activate_timer_info->lock) {
+	    ipmi_lock(domain->activate_timer_info->lock);
+	    if (domain->activate_timer) {
+		int arv = 0;
+		if (domain->activate_timer_info->running)
+		    arv = domain->os_hnd->stop_timer(domain->os_hnd,
+						     domain->activate_timer);
+
+		if (!arv) {
+		    /* If we can stop the timer, free it and it's info.
+		       If we can't stop the timer, that means that the
+		       code is currently in the timer handler, so we let
+		       the "cancelled" value do this for us. */
+		    domain->os_hnd->free_timer(domain->os_hnd,
+					       domain->activate_timer);
+		    ipmi_unlock(domain->activate_timer_info->lock);
+		    ipmi_destroy_lock(domain->activate_timer_info->lock);
+		    ipmi_mem_free(domain->activate_timer_info);
+		} else {
+		    domain->activate_timer_info->cancelled = 1;
+		    ipmi_unlock(domain->activate_timer_info->lock);
+		}
+	    } else {
+		ipmi_unlock(domain->activate_timer_info->lock);
+		ipmi_destroy_lock(domain->activate_timer_info->lock);
+	    }
+	} else {
+	    ipmi_mem_free(domain->activate_timer_info);
+	}
     }
 
     /* We cleanup the MCs twice.  Some MCs may not be destroyed (but
@@ -381,6 +436,7 @@ setup_domain(ipmi_con_t    *ipmi[],
     domain->mc_list_lock = NULL;
     domain->entities_lock = NULL;
     domain->event_handlers_lock = NULL;
+    domain->default_sel_rescan_time = IPMI_SEL_QUERY_INTERVAL;
 
     /* Set the default timer intervals. */
     domain->bus_scan_interval = IPMI_RESCAN_BUS_INTERVAL;
@@ -396,6 +452,26 @@ setup_domain(ipmi_con_t    *ipmi[],
 	goto out_err;
 
     rv = ipmi_create_lock(domain, &domain->event_handlers_lock);
+    if (rv)
+	goto out_err;
+
+    domain->activate_timer_info = ipmi_mem_alloc(sizeof(activate_timer_info_t));
+    if (!domain->activate_timer_info) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    domain->activate_timer_info->lock = NULL;
+    domain->activate_timer_info->domain = domain;
+    domain->activate_timer_info->cancelled = 0;
+    domain->activate_timer_info->os_hnd = domain->os_hnd;
+
+    rv = ipmi_create_lock(domain, &domain->activate_timer_info->lock);
+    if (rv)
+	goto out_err;
+
+    rv = domain->os_hnd->alloc_timer(domain->os_hnd,
+				     &(domain->activate_timer));
     if (rv)
 	goto out_err;
 
@@ -452,7 +528,13 @@ setup_domain(ipmi_con_t    *ipmi[],
     domain->bus_scans_running = NULL;
 
     domain->bus_scan_timer_info = ipmi_mem_alloc(sizeof(rescan_bus_info_t));
+    if (!domain->bus_scan_timer_info) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+	
     domain->bus_scan_timer_info->domain = domain;
+    domain->bus_scan_timer_info->os_hnd = domain->os_hnd;
     domain->bus_scan_timer_info->cancelled = 0;
     rv = domain->os_hnd->alloc_timer(domain->os_hnd,
 				     &(domain->bus_scan_timer));
@@ -1172,6 +1254,7 @@ domain_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_domain_t     *domain = info->domain;
 
     if (info->cancelled) {
+	info->os_hnd->free_timer(info->os_hnd, id);
 	ipmi_mem_free(info);
 	return;
     }
@@ -1704,6 +1787,31 @@ int ipmi_domain_sel_entries_used(ipmi_domain_t *domain,
     return 0;
 }
 
+static void
+set_sel_rescan_time(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_mc_set_sel_rescan_time(mc, domain->default_sel_rescan_time);
+}
+
+void
+ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
+				unsigned int  seconds)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    domain->default_sel_rescan_time = seconds;
+    ipmi_domain_iterate_mcs(domain, set_sel_rescan_time, NULL);
+}
+
+unsigned int
+ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    return domain->default_sel_rescan_time;
+}
+
+
 /***********************************************************************
  *
  * Generic handling of entities and MCs.
@@ -2000,14 +2108,14 @@ real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
     for (i=0; i<MAX_CONS; i++)
 	ipmi[i] = domain->conn[i];
 
+    ipmi_write_unlock();
+
     cleanup_domain(domain);
 
     for (i=0; i<MAX_CONS; i++) {
 	if (ipmi[i])
 	    ipmi[i]->close_connection(ipmi[i]);
     }
-
-    ipmi_write_unlock();
 
     if (info->close_done)
 	info->close_done(info->cb_data);
@@ -2415,6 +2523,73 @@ first_working_con(ipmi_domain_t *domain)
     return -1;
 }
 
+static void ll_addr_changed(ipmi_con_t   *ipmi,
+			    int          err,
+			    unsigned int ipmb,
+			    int          active,
+			    void         *cb_data);
+
+static void
+activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
+{
+    activate_timer_info_t *info = cb_data;
+    ipmi_domain_t         *domain = info->domain;
+    int                   to_activate;
+    int                   u;
+    int                   rv;
+
+    ipmi_read_lock();
+    ipmi_lock(info->lock);
+    if (info->cancelled) {
+	info->os_hnd->free_timer(info->os_hnd, id);
+	ipmi_unlock(info->lock);
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	ipmi_read_unlock();
+	return;
+    }
+    info->running = 0;
+
+    rv = ipmi_domain_validate(domain);
+    if (rv)
+	/* Domain is gone, just give up. */
+	goto out_unlock;
+
+    /* If no one is active, activate one. */
+    to_activate = -1;
+    for (u=0; u<MAX_CONS; u++) {
+	if (!domain->conn[u]
+	    || !domain->con_up[u])
+	{
+	    continue;
+	}
+	if (domain->con_active[u]) {
+	    to_activate = u;
+	    break;
+	}
+	to_activate = u;
+    }
+    u = to_activate;
+    if ((u != -1)
+	&& ! domain->con_active[u]
+	&& domain->conn[u]->set_active_state)
+    {
+	/* If we didn't find an active connection, but we found a
+	   working one, activate it.  Note that we may re-activate
+	   the connection that just went inactive if it is the
+	   only working connection. */
+	domain->conn[u]->set_active_state(
+	    domain->conn[u],
+	    1,
+	    ll_addr_changed,
+	    domain);
+    }
+
+ out_unlock:
+    ipmi_unlock(info->lock);
+    ipmi_read_unlock();
+}
+
 static void
 ll_addr_changed(ipmi_con_t   *ipmi,
 		int          err,
@@ -2425,7 +2600,6 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     ipmi_domain_t *domain = cb_data;
     int           rv;
     int           u;
-    int           to_activate;
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
@@ -2483,35 +2657,28 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 	}
     }
 
-    /* If no one else is active, activate one. */
-    to_activate = -1;
-    for (u=0; u<MAX_CONS; u++) {
-	if (!domain->conn[u]
-	    || !domain->con_up[u])
-	{
-	    continue;
-	}
-	if (domain->con_active[u]) {
-	    to_activate = u;
-	    break;
-	}
-	to_activate = u;
+    /* If the activate timer is not running, then start it.  This
+       allows some time for other connections to become active before
+       we go off and start activating things.  We wait a random amount
+       of time so that if we get into a war with another program about
+       who is active, someone will eventually win. */
+    ipmi_lock(domain->activate_timer_info->lock);
+    if (!domain->activate_timer_info->running) {
+	struct timeval tv;
+	domain->os_hnd->get_random(domain->os_hnd,
+				   &tv.tv_sec,
+				   sizeof(tv.tv_sec));
+	/* Wait a random value between 5 and 15 seconds */
+	tv.tv_sec = (tv.tv_sec % 10) + 5;
+	tv.tv_usec = 0;
+	domain->os_hnd->start_timer(domain->os_hnd,
+				    domain->activate_timer,
+				    &tv,
+				    activate_timer_cb,
+				    domain->activate_timer_info);
+	domain->activate_timer_info->running = 1;
     }
-    u = to_activate;
-    if ((u != -1)
-	&& ! domain->con_active[u]
-	&& domain->conn[u]->set_active_state)
-    {
-	/* If we didn't find an active connection, but we found a
-	   working one, activate it.  Note that we may re-activate
-	   the connection that just went inactive if it is the
-	   only working connection. */
-	domain->conn[u]->set_active_state(
-	    domain->conn[u],
-	    1,
-	    ll_addr_changed,
-	    domain);
-    }
+    ipmi_unlock(domain->activate_timer_info->lock);
 
  out_unlock:
     ipmi_read_unlock();

@@ -1,4 +1,20 @@
 
+2003-05-30 Corey Minyard <cminyard@mvista.com>
+
+	* OpenIPMI.texi: Updated docs for handling multiple MCs.
+
+	* domain.c: Add a timer to wait for a while after detecting that
+	everyone is inactive before acting.  This should solve race
+	conditions where something deactivates one and activates another,
+	to avoid an activation war between software devices.
+
+	* domain.c: Reworked some timers so that the handle shutdowns
+	correctly.
+
+	* ipmi_lan.c: Changed the failure timeout to 3 seconds.
+
+	* lanserv.c: Send all output to stdout in non-daemon mode.
+
 2003-05-29 Corey Minyard <cminyard@mvista.com>
 
 	* domain.c: More fixes for supporting multiple connections.

@@ -58,6 +58,7 @@
 
 
 static int debug = 0;
+static int daemonize = 1;
 
 #define MAX_ADDR 4
 
@@ -786,7 +787,7 @@ log(int logtype, msg_t *msg, char *format, ...)
 	strcpy(fullformat, timebuf);
 	strcat(fullformat, ": ");
 	strcat(fullformat, format);
-	if (debug || (logtype == DEBUG)) {
+	if (debug || !daemonize || (logtype == DEBUG)) {
 	    vprintf(fullformat, ap);
 	    printf("\n");
 	}
@@ -798,7 +799,6 @@ log(int logtype, msg_t *msg, char *format, ...)
 
 static char *config_file = "/etc/ipmi_lan.conf";
 static char *ipmi_dev = NULL;
-static int daemonize = 1;
 
 static struct poptOption poptOpts[]=
 {
@@ -926,15 +926,13 @@ main(int argc, const char *argv[])
     if (rv)
 	return 1;
 
-    openlog("ipmilan", LOG_PID | LOG_CONS, LOG_DAEMON);
-
     if (daemonize) {
 	int pid;
 
 	if ((pid = fork()) > 0) {
 	    exit(0);
 	} else if (pid < 0) {
-	    syslog(LOG_ERR, "Error forking first fork");
+	    log(LAN_ERR, NULL, "Error forking first fork");
 	    exit(1);
 	} else {
 	    /* setsid() is necessary if we really want to demonize */
@@ -943,13 +941,13 @@ main(int argc, const char *argv[])
 	    if ((pid = fork()) > 0) {
 		exit(0);
 	    } else if (pid < 0) {
-		syslog(LOG_ERR, "Error forking second fork");
+		log(LAN_ERR, NULL, "Error forking second fork");
 		exit(1);
 	    }
 	}
     }
 
-    syslog(LOG_INFO, "%s startup", argv[0]);
+    log(LAN_ERR, NULL, "%s startup", argv[0]);
 
     max_fd = data.smi_fd;
     for (i=0; i<num_addr; i++) {
