@@ -41,12 +41,18 @@
 #include <OpenIPMI/ipmiif.h>
 
 /* This registers an OEM handler.  If an MC is detected that has the
-   given manufacturer id and product id, the handler will be called. */
+   given manufacturer id and product id, the handler will be
+   called. If the IPMI system is shutdown while this is register, then
+   shutdown will be called (if it is not NULL). */
 typedef int (*ipmi_oem_mc_match_handler_cb)(ipmi_mc_t *mc, void *cb_data);
+typedef int (*ipmi_oem_shutdown_handler_cb)(void *cb_data);
 int ipmi_register_oem_handler(unsigned int                 manufacturer_id,
 			      unsigned int                 product_id,
 			      ipmi_oem_mc_match_handler_cb handler,
+			      ipmi_oem_shutdown_handler_cb shutdown,
 			      void                         *cb_data);
+int ipmi_deregister_oem_handler(unsigned int manufacturer_id,
+				unsigned int product_id);
 
 /* A new sensor has been added, the OEM handlers get first access at
    it.  This is called before it is added to the entity.  If this call

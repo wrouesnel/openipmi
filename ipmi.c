@@ -33,6 +33,8 @@
 
 #include <malloc.h>
 #include <string.h>
+#include <stdio.h>
+#include <execinfo.h> /* For backtrace() */
 
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_mc.h>
@@ -42,6 +44,7 @@
 #include <OpenIPMI/ipmi_err.h>
 #include "md2.h"
 #include "md5.h"
+#include "ilist.h"
 
 static os_hnd_rwlock_t *global_lock;
 static os_handler_t *ipmi_os_handler;
@@ -84,7 +87,7 @@ ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)
     ipmi_lock_t *lock;
     int         rv;
 
-    lock = malloc(sizeof(*lock));
+    lock = ipmi_mem_alloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
 
@@ -92,7 +95,7 @@ ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)
     if (lock->os_hnd && lock->os_hnd->create_lock) {
 	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
 	if (rv) {
-	    free(lock);
+	    ipmi_mem_free(lock);
 	    return rv;
 	}
     } else {
@@ -110,7 +113,7 @@ ipmi_create_global_lock(ipmi_lock_t **new_lock)
     ipmi_lock_t *lock;
     int         rv;
 
-    lock = malloc(sizeof(*lock));
+    lock = ipmi_mem_alloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
 
@@ -118,7 +121,7 @@ ipmi_create_global_lock(ipmi_lock_t **new_lock)
     if (lock->os_hnd && lock->os_hnd->create_lock) {
 	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
 	if (rv) {
-	    free(lock);
+	    ipmi_mem_free(lock);
 	    return rv;
 	}
     } else {
@@ -140,7 +143,7 @@ void ipmi_destroy_lock(ipmi_lock_t *lock)
 {
     if (lock->ll_lock)
 	lock->os_hnd->destroy_lock(lock->os_hnd, lock->ll_lock);
-    free(lock);
+    ipmi_mem_free(lock);
 }
 
 void ipmi_lock(ipmi_lock_t *lock)
@@ -161,7 +164,10 @@ ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
     va_list ap;
 
     va_start(ap, format);
-    ipmi_os_handler->vlog(ipmi_os_handler, log_type, format, ap);
+    if (ipmi_os_handler->vlog)
+	ipmi_os_handler->vlog(ipmi_os_handler, log_type, format, ap);
+    else
+	vfprintf(stderr, format, ap);
     va_end(ap);
 }
 
@@ -583,7 +589,7 @@ pw_authcode_init(unsigned char *password, ipmi_authdata_t *handle)
 {
     unsigned char *data;
 
-    data = malloc(16);
+    data = ipmi_mem_alloc(16);
     if (!data)
 	return ENOMEM;
 
@@ -610,7 +616,7 @@ pw_authcode_check(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *code)
 static void
 pw_authcode_cleanup(ipmi_authdata_t handle)
 {
-    free(handle);
+    ipmi_mem_free(handle);
 }
 
 static int
@@ -667,6 +673,14 @@ ipmi_init(os_handler_t *handler)
     ipmi_os_handler = handler;
     ipmi_mc_init();
     return 0;
+}
+
+void
+ipmi_shutdown(void)
+{
+    ipmi_mc_shutdown();
+    ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    global_lock = NULL;
 }
 
 int ipmi_addr_equal(ipmi_addr_t *addr1,
@@ -1105,3 +1119,317 @@ ipmi_check_lock(ipmi_lock_t *lock, char *str)
 	IPMI_REPORT_LOCK_ERROR(lock->os_hnd, str);
 }
 #endif
+
+#define DBG_ALIGN 16
+
+#define TB_SIZE 6
+
+#define SIGNATURE 0x82c2e45a
+#define FREE_SIGNATURE 0xb981cef1
+#define BYTE_SIGNATURE 0x74
+
+struct dbg_malloc_header
+{
+    unsigned long signature;
+    unsigned long size;
+    void          *tb[TB_SIZE];
+};
+
+struct dbg_malloc_trailer
+{
+    void                     *tb[TB_SIZE];
+    struct dbg_malloc_header *next, *prev;
+};
+
+static struct dbg_malloc_header *free_queue = NULL;
+static struct dbg_malloc_header *free_queue_tail = NULL;
+static int free_queue_len;
+static int max_free_queue = 100;
+
+static struct dbg_malloc_header *alloced = NULL;
+static struct dbg_malloc_header *alloced_tail = NULL;
+
+static size_t
+dbg_align(size_t size)
+{
+    if (size & (DBG_ALIGN-1))
+	size = (size & (~(DBG_ALIGN - 1))) + DBG_ALIGN;
+    return size;
+}
+
+static struct dbg_malloc_trailer *
+trlr_from_hdr(struct dbg_malloc_header *hdr)
+{
+    size_t real_size = dbg_align(hdr->size);
+    return (struct dbg_malloc_trailer *)
+	(((char *) hdr) + sizeof(*hdr) + real_size);
+}
+
+static void *
+ipmi_debug_malloc(size_t size, void **tb)
+{
+    char                      *data;
+    struct dbg_malloc_header  *hdr;
+    struct dbg_malloc_trailer *trlr;
+    struct dbg_malloc_trailer *trlr2;
+    int                       i;
+    size_t                    real_size;
+
+    real_size = dbg_align(size);
+
+    data = malloc(real_size
+		  + sizeof(struct dbg_malloc_header)
+		  + sizeof(struct dbg_malloc_trailer));
+    if (!data)
+	return NULL;
+
+    hdr = (struct dbg_malloc_header *) data;
+    trlr = (struct dbg_malloc_trailer *) (data + real_size + sizeof(*hdr));
+
+    hdr->signature = SIGNATURE;
+    hdr->size = size;
+    memcpy(hdr->tb, tb, sizeof(hdr->tb));
+    for (i=0; i<TB_SIZE; i++) {
+	trlr->tb[i] = (void *) SIGNATURE;
+    }
+
+    data += sizeof(*hdr);
+    for (i=size; i<real_size; i++)
+	data[i] = BYTE_SIGNATURE;
+
+    /* Add it to the alloced list. */
+    trlr->next = NULL;
+    trlr->prev = alloced_tail;
+    if (alloced_tail) {
+	trlr2 = trlr_from_hdr(alloced_tail);
+	trlr2->next = hdr;
+    } else
+	alloced = hdr;
+    alloced_tail = hdr;
+
+    return data;
+}
+
+static void
+mem_debug_log(struct dbg_malloc_header  *hdr,
+	      struct dbg_malloc_trailer *trlr,
+	      void                      **tb,
+	      char                      *text)
+{
+    int  i;
+    char *data = ((char *) hdr) + sizeof(*hdr);
+
+    ipmi_log(IPMI_LOG_DEBUG_START,
+	     "%s of %d bytes at %p, allocated at",
+	     text, hdr->size, data);
+    for (i=0; i<TB_SIZE; i++)
+	ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", hdr->tb[i]);
+    if (trlr) {
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n originally freed at");
+	for (i=0; i<TB_SIZE; i++)
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", trlr->tb[i]);
+    }
+    if (tb) {
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  at");
+	for (i=0; i<TB_SIZE; i++)
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", tb[i]);
+    }
+    ipmi_log(IPMI_LOG_DEBUG_END, "");
+}
+
+static void
+dbg_remove_free_queue(void)
+{
+    struct dbg_malloc_header  *hdr;
+    struct dbg_malloc_trailer *trlr;
+    size_t                    real_size;
+    long                      *dp;
+    int                       i;
+    char                      *data;
+    int                       overwrite;
+	
+    hdr = free_queue;
+    trlr = trlr_from_hdr(hdr);
+    free_queue = trlr->next;
+    if (!free_queue)
+	free_queue_tail = NULL;
+    free_queue_len--;
+
+    if (hdr->signature != FREE_SIGNATURE) {
+	mem_debug_log(hdr, trlr, NULL, "Header overrun");
+	goto out;
+    }
+
+    data = ((char *) hdr) + sizeof(*hdr);
+
+    real_size = dbg_align(hdr->size);
+
+    overwrite = 0;
+    for (i=hdr->size; i<real_size; i++)
+	if (data[i] != BYTE_SIGNATURE)
+	    overwrite = 1;
+    if (overwrite) {
+	mem_debug_log(hdr, trlr, NULL, "Overrun while free");
+	goto out;
+    }
+
+    dp = (long *) data;
+    for (i=0; i<real_size; i+=sizeof(long), dp++)
+	if (*dp != FREE_SIGNATURE)
+	    overwrite = 1;
+    if (overwrite)
+	mem_debug_log(hdr, trlr, NULL, "Write while free");
+
+ out:
+    free(hdr);
+}
+
+static void
+enqueue_dbg_free(struct dbg_malloc_header  *hdr,
+		 struct dbg_malloc_trailer *trlr)
+{
+    while (free_queue_len >= max_free_queue) {
+	dbg_remove_free_queue();
+    }
+
+    trlr->next = NULL;
+    if (free_queue_tail) {
+	struct dbg_malloc_trailer *trlr2;
+
+	trlr2 = trlr_from_hdr(free_queue_tail);
+	trlr2->next = hdr;
+    } else {
+	free_queue = hdr;
+    }
+    free_queue_tail = hdr;
+}
+
+static void
+ipmi_debug_free(void *to_free, void **tb)
+{
+    struct dbg_malloc_header  *hdr;
+    struct dbg_malloc_trailer *trlr;
+    struct dbg_malloc_trailer *trlr2;
+    int                       i;
+    size_t                    real_size;
+    long                      *dp;
+    char                      *data = to_free;
+    int                       overwrite;
+
+    hdr = (struct dbg_malloc_header *) (data - sizeof(*hdr));
+    if ((hdr->signature != SIGNATURE) && (hdr->signature != FREE_SIGNATURE)) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "Free of invalid data at");
+	for (i=0; i<TB_SIZE; i++)
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", tb[i]);
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	return;
+    }
+
+    trlr = trlr_from_hdr(hdr);
+
+    if (hdr->signature == FREE_SIGNATURE) {
+	mem_debug_log(hdr, trlr, tb, "Double free");
+	return;
+    }
+
+    /* Remove it from the alloced list. */
+    if (trlr->next) {
+	trlr2 = trlr_from_hdr(trlr->next);
+	trlr2->prev = trlr->prev;
+    } else {
+	alloced_tail = trlr->prev;
+	trlr2 = trlr_from_hdr(alloced_tail);
+	trlr2->next = NULL;
+    }
+    if (trlr->prev) {
+	trlr2 = trlr_from_hdr(trlr->prev);
+	trlr2->next = trlr->next;
+    } else {
+	alloced = trlr->next;
+	trlr2 = trlr_from_hdr(alloced);
+	trlr2->prev = NULL;
+    }
+
+    real_size = dbg_align(hdr->size);
+
+    /* Check for writes after the end of data. */
+    overwrite = 0;
+    for (i=0; i<TB_SIZE; i++)
+	if (trlr->tb[i] != ((void *) SIGNATURE))
+	    overwrite = 1;
+    for (i=hdr->size; i<real_size; i++)
+	if (data[i] != BYTE_SIGNATURE)
+	    overwrite = 1;
+    if (overwrite) {
+	mem_debug_log(hdr, trlr, tb, "Overwrite");
+    }
+
+    hdr->signature = FREE_SIGNATURE;
+    memcpy(trlr->tb, tb, sizeof(trlr->tb));
+
+    /* Fill the data area with a signature. */
+    dp = (long *) (((char *) hdr) + sizeof(*hdr));
+    for (i=0; i<real_size; i+=sizeof(long), dp++)
+	*dp = FREE_SIGNATURE;
+
+    enqueue_dbg_free(hdr, trlr);
+}
+
+void
+ipmi_debug_malloc_cleanup(void)
+{
+    struct dbg_malloc_trailer *trlr;
+    void                      *to_free;
+
+    if (DEBUG_MALLOC) {
+	/* Check the free queue for any problems. */
+	while (free_queue_len > 0) {
+	    dbg_remove_free_queue();
+	}
+
+	/* Now log everything that was still allocated. */
+	while (alloced) {
+	    trlr = trlr_from_hdr(alloced);
+	    mem_debug_log(alloced, NULL, NULL, "Never freed");
+	    to_free = alloced;
+	    alloced = trlr->next;
+	    free(to_free);
+	}
+    }
+}
+
+void *
+ipmi_mem_alloc(size_t size)
+{
+    if (DEBUG_MALLOC) {
+	void *tb[TB_SIZE+1];
+	memset(tb, 0, sizeof(tb));
+	backtrace(tb, TB_SIZE+1);
+	return ipmi_debug_malloc(size, tb+1);
+    } else
+	return malloc(size);
+}
+
+void
+ipmi_mem_free(void *data)
+{
+    if (DEBUG_MALLOC) {
+	void *tb[TB_SIZE+1];
+	memset(tb, 0, sizeof(tb));
+	backtrace(tb, TB_SIZE+1);
+	ipmi_debug_free(data, tb+1);
+    } else
+	free(data);
+}
+
+void *
+ilist_mem_alloc(size_t size)
+{
+    return ipmi_mem_alloc(size);
+}
+
+void
+ilist_mem_free(void *data)
+{
+    ipmi_mem_free(data);
+}

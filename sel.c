@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <string.h>
 
 #include <OpenIPMI/ipmiif.h>
@@ -136,7 +135,7 @@ static inline void sel_unlock(ipmi_sel_info_t *sel)
 static void
 free_event(ilist_iter_t *iter, void *item, void *cb_data)
 {
-    free(item);
+    ipmi_mem_free(item);
 }
 static void
 free_events(ilist_t *events)
@@ -185,7 +184,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
     if (lun >= 4)
 	return EINVAL;
 
-    sel = malloc(sizeof(*sel));
+    sel = ipmi_mem_alloc(sizeof(*sel));
     if (!sel) {
 	rv = ENOMEM;
 	goto out;
@@ -224,7 +223,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 		free_ilist(sel->events);
 	    if (sel->sel_lock)
 		sel->os_hnd->destroy_lock(sel->os_hnd, sel->sel_lock);
-	    free(sel);
+	    ipmi_mem_free(sel);
 	}
     } else {
 	*new_sel = sel;
@@ -251,7 +250,7 @@ internal_destroy_sel(ipmi_sel_info_t *sel)
     if (sel->destroy_handler)
 	sel->destroy_handler(sel, sel->destroy_cb_data);
 
-    free(sel);
+    ipmi_mem_free(sel);
 }
 
 int
@@ -302,7 +301,7 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
 		          sel->sels_changed,
 		          sel->num_sels,
 		          elem->cb_data);
-	free(elem);
+	ipmi_mem_free(elem);
 	elem = next;
     }
 
@@ -326,7 +325,7 @@ free_deleted_event(ilist_iter_t *iter, void *item, void *cb_data)
 
     if (holder->deleted) {
 	ilist_delete(iter);
-	free(holder);
+	ipmi_mem_free(holder);
     }
 }
 static void
@@ -457,7 +456,7 @@ handle_sel_data(ipmi_mc_t  *mc,
     record_id = ipmi_get_uint16(rsp->data+3);
     holder = find_event(sel->events, record_id);
     if (!holder) {
-	holder = malloc(sizeof(*holder));
+	holder = ipmi_mem_alloc(sizeof(*holder));
 	if (!holder) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "Could not allocate log information for SEL");
@@ -465,7 +464,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 	    goto out;
 	}
 	if (!ilist_add_tail(sel->events, holder, NULL)) {
-	    free(holder);
+	    ipmi_mem_free(holder);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "Could not link log onto the log linked list");
 	    fetch_complete(sel, ENOMEM);
@@ -747,7 +746,7 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
     int                 rv;
 
 
-    elem = malloc(sizeof(*elem));
+    elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_sel_get: could not allocate the sel element");
@@ -790,7 +789,7 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
  out_unlock2:
     ipmi_read_unlock();
     if (rv)
-	free(elem);
+	ipmi_mem_free(elem);
     return rv;
 }
 
@@ -824,7 +823,7 @@ sel_op_done(sel_cb_handler_data_t *data,
 	internal_destroy_sel(sel);
     else
 	sel_unlock(sel);
-    free(data);
+    ipmi_mem_free(data);
 }
 
 static void
@@ -883,7 +882,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 					&(data->record_id));
 	if (real_holder) {
 	    ilist_delete(&iter);
-	    free(real_holder);
+	    ipmi_mem_free(real_holder);
 	    sel->del_sels--;
 	}
     }
@@ -1043,7 +1042,7 @@ sel_del_event(ipmi_sel_info_t       *sel,
 
     if (sel->supports_delete_sel) {
 	/* We can delete the entry immediately, just do it. */
-	data = malloc(sizeof(*data));
+	data = ipmi_mem_alloc(sizeof(*data));
 	if (!data)
 	    /* We will eventually free this anyway, so no need to
                worry. */
@@ -1061,7 +1060,7 @@ sel_del_event(ipmi_sel_info_t       *sel,
            care.  If this fails, it will just be handled later. */
 	rv = start_del_sel(data);
 	if (rv)
-	    free(data);
+	    ipmi_mem_free(data);
 	rv = 0;
     }
 
@@ -1439,7 +1438,7 @@ ipmi_sel_event_add(ipmi_sel_info_t *sel,
 
     holder = find_event(sel->events, new_event->record_id);
     if (!holder) {
-	holder = malloc(sizeof(*holder));
+	holder = ipmi_mem_alloc(sizeof(*holder));
 	if (!holder) {
 	    rv = ENOMEM;
 	    goto out_unlock;

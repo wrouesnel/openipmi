@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <string.h>
 
 #include <OpenIPMI/ipmiif.h>
@@ -148,7 +147,7 @@ ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
     if (lun >= 4)
 	return EINVAL;
 
-    sdrs = malloc(sizeof(*sdrs));
+    sdrs = ipmi_mem_alloc(sizeof(*sdrs));
     if (!sdrs) {
 	rv = ENOMEM;
 	goto out;
@@ -182,7 +181,7 @@ ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
 	if (sdrs) {
 	    if (sdrs->sdr_lock)
 		ipmi_destroy_lock(sdrs->sdr_lock);
-	    free(sdrs);
+	    ipmi_mem_free(sdrs);
 	}
     } else {
 	*new_sdrs = sdrs;
@@ -209,8 +208,8 @@ internal_destroy_sdr_info(ipmi_sdr_info_t *sdrs)
 	sdrs->destroy_handler(sdrs, sdrs->destroy_cb_data);
 
     if (sdrs->sdrs)
-	free(sdrs->sdrs);
-    free(sdrs);
+	ipmi_mem_free(sdrs->sdrs);
+    ipmi_mem_free(sdrs);
 }
 
 int
@@ -249,7 +248,7 @@ fetch_complete(ipmi_sdr_info_t *sdrs, int err)
     sdrs->wait_err = err;
     if (err) {
 	if (sdrs->working_sdrs) {
-	    free(sdrs->working_sdrs);
+	    ipmi_mem_free(sdrs->working_sdrs);
 	    sdrs->working_sdrs = NULL;
 	}
     } else {
@@ -291,7 +290,7 @@ handle_reservation_check(ipmi_mc_t  *mc,
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "SDR info was destroyed while an operation was in progress");
-	free(sdrs->working_sdrs);
+	ipmi_mem_free(sdrs->working_sdrs);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -307,7 +306,7 @@ handle_reservation_check(ipmi_mc_t  *mc,
 	/* We lost our reservation, restart the operation.  Only do
            this so many times, in order to guarantee that this
            completes. */
-	free(sdrs->working_sdrs);
+	ipmi_mem_free(sdrs->working_sdrs);
 	sdrs->fetch_retry_count++;
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -398,7 +397,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
     if (sdrs->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "SDR info was destroyed while an operation was in progress");
-	free(sdrs->working_sdrs);
+	ipmi_mem_free(sdrs->working_sdrs);
 	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
@@ -427,7 +426,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	/* We lost our reservation, restart the operation.  Only do
            this so many times, in order to guarantee that this
            completes. */
-	free(sdrs->working_sdrs);
+	ipmi_mem_free(sdrs->working_sdrs);
 	sdrs->fetch_retry_count++;
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -752,7 +751,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
     if (sdrs->working_num_sdrs == 0) {
 	/* No sdrs, so there's nothing to do. */
 	if (sdrs->sdrs) {
-	    free(sdrs->sdrs);
+	    ipmi_mem_free(sdrs->sdrs);
 	    sdrs->sdrs = NULL;
 	}
 	sdrs->curr_sdr_num = 0;
@@ -760,7 +759,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    sdrs->working_sdrs = malloc(sizeof(ipmi_sdr_t) * sdrs->working_num_sdrs);
+    sdrs->working_sdrs = ipmi_mem_alloc(sizeof(ipmi_sdr_t) * sdrs->working_num_sdrs);
     if (!sdrs->working_sdrs) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Could not allocate working SDR information");
@@ -862,7 +861,7 @@ handle_fetch_done(void *cb_data, int shutdown)
 		  elem->sdrs->sdrs_changed,
 		  elem->sdrs->num_sdrs,
 		  elem->cb_data);
-    free(elem);
+    ipmi_mem_free(elem);
 }
 
 int
@@ -874,7 +873,7 @@ ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
     int                 rv;
 
 
-    elem = malloc(sizeof(*elem));
+    elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem)
 	return ENOMEM;
 
@@ -905,7 +904,7 @@ ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
  out_unlock2:
     ipmi_read_unlock();
     if (rv)
-	free(elem);
+	ipmi_mem_free(elem);
     return rv;
 }
 
@@ -1189,13 +1188,13 @@ ipmi_sdr_add(ipmi_sdr_info_t *sdrs,
     sdr_lock(sdrs);
     if (sdrs->num_sdrs >= sdrs->sdr_array_size) {
 	ipmi_sdr_t *new_array;
-	new_array = malloc(sizeof(ipmi_sdr_t) * sdrs->sdr_array_size + 10);
+	new_array = ipmi_mem_alloc(sizeof(ipmi_sdr_t) * sdrs->sdr_array_size + 10);
 	if (!new_array) {
 	    rv = ENOMEM;
 	    goto out_unlock;
 	}
 	memcpy(new_array, sdrs->sdrs, sizeof(ipmi_sdr_t)*sdrs->sdr_array_size);
-	free(sdrs->sdrs);
+	ipmi_mem_free(sdrs->sdrs);
 	sdrs->sdrs = new_array;
 	sdrs->sdr_array_size += 10;
     }
@@ -1616,7 +1615,7 @@ handle_save_done(void *cb_data, int shutdown)
     elem->handler(elem->sdrs,
 		  elem->sdrs->wait_err,
 		  elem->cb_data);
-    free(elem);
+    ipmi_mem_free(elem);
 }
 
 int
@@ -1628,7 +1627,7 @@ ipmi_sdr_save(ipmi_sdr_info_t  *sdrs,
     int                rv;
 
 
-    elem = malloc(sizeof(*elem));
+    elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem)
 	return ENOMEM;
 
@@ -1659,6 +1658,6 @@ ipmi_sdr_save(ipmi_sdr_info_t  *sdrs,
  out_unlock2:
     ipmi_read_unlock();
     if (rv)
-	free(elem);
+	ipmi_mem_free(elem);
     return rv;
 }

@@ -41,7 +41,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <malloc.h>
 
 #include <OpenIPMI/ipmi_int.h>
 
@@ -81,7 +80,7 @@ add_fd(os_handler_t    *handler,
 {
     os_hnd_fd_id_t *fd_data;
 
-    fd_data = malloc(sizeof(*fd_data));
+    fd_data = ipmi_mem_alloc(sizeof(*fd_data));
     if (!fd_data)
 	return ENOMEM;
 
@@ -103,7 +102,7 @@ remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
     sel_clear_fd_handlers(ui_sel, fd_data->fd);
     sel_set_fd_read_handler(ui_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
-    free(fd_data);
+    ipmi_mem_free(fd_data);
     return 0;
 }
 
@@ -173,7 +172,7 @@ alloc_timer(os_handler_t      *handler,
     os_hnd_timer_id_t *timer_data;
     int               rv;
 
-    timer_data = malloc(sizeof(*timer_data));
+    timer_data = ipmi_mem_alloc(sizeof(*timer_data));
     if (!timer_data)
 	return ENOMEM;
 
@@ -184,7 +183,7 @@ alloc_timer(os_handler_t      *handler,
     rv = sel_alloc_timer(ui_sel, timer_handler, timer_data,
 			 &(timer_data->timer));
     if (rv) {
-	free(timer_data);
+	ipmi_mem_free(timer_data);
 	return rv;
     }
 
@@ -196,7 +195,7 @@ static int
 free_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
     sel_free_timer(timer_data->timer);
-    free(timer_data);
+    ipmi_mem_free(timer_data);
     return 0;
 }
 
@@ -262,7 +261,7 @@ create_lock(os_handler_t  *handler,
 {
     os_hnd_lock_t *lock;
 
-    lock = malloc(sizeof(*lock));
+    lock = ipmi_mem_alloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
     lock->lock_count = 0;
@@ -282,7 +281,7 @@ destroy_lock(os_handler_t  *handler,
 	id->next->prev = id->prev;
 	id->prev->next = id->next;
     }
-    free(id);
+    ipmi_mem_free(id);
     return 0;
 }
 
@@ -339,7 +338,7 @@ create_rwlock(os_handler_t    *handler,
 {
     os_hnd_rwlock_t *lock;
 
-    lock = malloc(sizeof(*lock));
+    lock = ipmi_mem_alloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
     lock->read_lock_count = 0;
@@ -360,7 +359,7 @@ destroy_rwlock(os_handler_t    *handler,
 	id->next->prev = id->prev;
 	id->prev->next = id->next;
     }
-    free(id);
+    ipmi_mem_free(id);
     return 0;
 }
 

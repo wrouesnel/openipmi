@@ -62,8 +62,9 @@ int ilist_add_before(ilist_iter_t *iter, void *item, ilist_item_t *entry);
 int ilist_add_after(ilist_iter_t *iter, void *item, ilist_item_t *entry);
 
 /* Return false on failure, true on success.  This will return a
-   failure if you try to position past the end of the array or try to
-   set first or last on an empty array. */
+   failure (false) if you try to position past the end of the array or
+   try to set first or last on an empty array.  In that case it will
+   leave the iterator unchanged. */
 int ilist_first(ilist_iter_t *iter);
 int ilist_last(ilist_iter_t *iter);
 int ilist_next(ilist_iter_t *iter);
@@ -128,5 +129,9 @@ struct ilist_iter_s
     ilist_item_t *curr;
 };
 
+
+/* You must define these. */
+void *ilist_mem_alloc(size_t size);
+void ilist_mem_free(void *data);
 
 #endif /* _ILIST_H */

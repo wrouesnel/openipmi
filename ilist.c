@@ -31,7 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
+#include <stdlib.h>
 #include <errno.h>
 #include "ilist.h"
 
@@ -40,13 +40,13 @@ alloc_ilist(void)
 {
     ilist_t *rv;
 
-    rv = malloc(sizeof(*rv));
+    rv = ilist_mem_alloc(sizeof(*rv));
     if (!rv)
 	return NULL;
 
-    rv->head = malloc(sizeof(*(rv->head)));
+    rv->head = ilist_mem_alloc(sizeof(*(rv->head)));
     if (!rv->head) {
-	free(rv);
+	ilist_mem_free(rv);
 	return NULL;
     }
 
@@ -63,7 +63,7 @@ alloc_ilist_iter(ilist_t *list)
 {
     ilist_iter_t *rv;
 
-    rv = malloc(sizeof(*rv));
+    rv = ilist_mem_alloc(sizeof(*rv));
     if (!rv)
 	return NULL;
 
@@ -81,17 +81,17 @@ void free_ilist(ilist_t *list)
     while (curr != list->head) {
 	next = curr->next;
 	if (curr->malloced)
-	    free(curr);
+	    ilist_mem_free(curr);
 	curr = next;
     }
-    free(list->head);
-    free(list);
+    ilist_mem_free(list->head);
+    ilist_mem_free(list);
 }
 
 void
 free_ilist_iter(ilist_iter_t *iter)
 {
-    free(iter);
+    ilist_mem_free(iter);
 }
 
 static int
@@ -102,7 +102,7 @@ add_after(ilist_item_t *pos, void *item, ilist_item_t *entry)
     if (entry) {
 	new_item = entry;
     } else {
-	new_item = malloc(sizeof(*new_item));
+	new_item = ilist_mem_alloc(sizeof(*new_item));
 	if (!new_item)
 	    return 0;
 	new_item->malloced = 1;
@@ -124,7 +124,7 @@ add_before(ilist_item_t *pos, void *item, ilist_item_t *entry)
     if (entry) {
 	new_item = entry;
     } else {
-	new_item = malloc(sizeof(*new_item));
+	new_item = ilist_mem_alloc(sizeof(*new_item));
 	if (!new_item)
 	    return 0;
 	new_item->malloced = 1;
@@ -224,7 +224,7 @@ ilist_delete(ilist_iter_t *iter)
     curr->next->prev = curr->prev;
     curr->prev->next = curr->next;
     if (curr->malloced)
-	free(curr);
+	ilist_mem_free(curr);
     return 1;
 }
 

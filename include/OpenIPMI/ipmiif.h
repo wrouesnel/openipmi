@@ -882,6 +882,9 @@ int ipmi_control_get_display_string(ipmi_control_t      *control,
    an OS handler to use for the system. */
 int ipmi_init(os_handler_t *handler);
 
+/* This will clean up all the memory associated with IPMI. */
+void ipmi_shutdown(void);
+
 void *ipmi_get_user_data(ipmi_mc_t *mc);
 
 /* Close an IPMI connection.  This will free all memory associated

@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <string.h>
 #include <math.h>
 
@@ -291,7 +290,7 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
 	sensor->oem_info_cleanup_handler(sensor, sensor->oem_info);
 
     opq_destroy(sensor->waitq);
-    free(sensor);
+    ipmi_mem_free(sensor);
 }
 
 static void
@@ -464,12 +463,12 @@ ipmi_sensors_alloc(ipmi_mc_t *mc, ipmi_sensor_info_t **new_sensors)
 
     CHECK_MC_LOCK(mc);
 
-    sensors = malloc(sizeof(*sensors));
+    sensors = ipmi_mem_alloc(sizeof(*sensors));
     if (!sensors)
 	return ENOMEM;
     sensors->sensor_wait_q = opq_alloc(ipmi_mc_get_os_hnd(mc));
     if (! sensors->sensor_wait_q) {
-	free(sensors);
+	ipmi_mem_free(sensors);
 	return ENOMEM;
     }
 
@@ -488,7 +487,7 @@ ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
 {
     ipmi_sensor_t *sensor;
 
-    sensor = malloc(sizeof(*sensor));
+    sensor = ipmi_mem_alloc(sizeof(*sensor));
     if (!sensor)
 	return ENOMEM;
 
@@ -525,13 +524,13 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 	/* Allocate the array in multiples of 16 (to avoid thrashing malloc
 	   too much). */
 	new_size = ((num / 16) * 16) + 16;
-	new_array = malloc(sizeof(*new_array) * new_size);
+	new_array = ipmi_mem_alloc(sizeof(*new_array) * new_size);
 	if (!new_array)
 	    return ENOMEM;
 	if (sensors->sensors_by_idx[4]) {
 	    memcpy(new_array, sensors->sensors_by_idx[4],
 		   sizeof(*new_array) * (sensors->idx_size[4]));
-	    free(sensors->sensors_by_idx[4]);
+	    ipmi_mem_free(sensors->sensors_by_idx[4]);
 	}
 	for (i=sensors->idx_size[4]; i<new_size; i++)
 	    new_array[i] = NULL;
@@ -623,11 +622,11 @@ ipmi_sensors_destroy(ipmi_sensor_info_t *sensors)
 	    }
 	}
 	if (sensors->sensors_by_idx[i])
-	    free(sensors->sensors_by_idx[i]);
+	    ipmi_mem_free(sensors->sensors_by_idx[i]);
     }
     if (sensors->sensor_wait_q)
 	opq_destroy(sensors->sensor_wait_q);
-    free(sensors);
+    ipmi_mem_free(sensors);
     return 0;
 }
 
@@ -676,7 +675,7 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
     }
 
     /* Setup memory to hold the sensors. */
-    s = malloc(sizeof(*s) * p);
+    s = ipmi_mem_alloc(sizeof(*s) * p);
     if (!s) {
 	rv = ENOMEM;
 	goto out_err;
@@ -693,7 +692,7 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
 	if ((sdr.type != 1) && (sdr.type != 2))
 	    continue;
 
-	s[p] = malloc(sizeof(*s[p]));
+	s[p] = ipmi_mem_alloc(sizeof(*s[p]));
 	if (!s[p]) {
 	    rv = ENOMEM;
 	    goto out_err;
@@ -872,8 +871,8 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
     if (s) {
 	for (i=0; i<s_size; i++)
 	    if (s[i])
-		free(s[i]);
-	free(s);
+		ipmi_mem_free(s[i]);
+	ipmi_mem_free(s);
     }
     return rv;
 }
@@ -1027,7 +1026,7 @@ sensor_reread_done(sdr_fetch_info_t *info, int err)
     if (info->done)
 	info->done(info->bmc, err, info->done_data);
     opq_op_done(info->sensors->sensor_wait_q);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 typedef struct dummy_link_s dummy_link_t;
@@ -1090,7 +1089,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 	    if (nsensor->num >= sensors->idx_size[nsensor->lun]) {
 		ipmi_sensor_t **new_by_idx;
 		unsigned int  new_size = nsensor->num+10;
-		new_by_idx = malloc(sizeof(ipmi_sensor_t *) * new_size);
+		new_by_idx = ipmi_mem_alloc(sizeof(ipmi_sensor_t *) * new_size);
 		if (!new_by_idx) {
 		    rv = ENOMEM;
 		    goto out_err_unlock_free;
@@ -1100,7 +1099,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 			   sensors->sensors_by_idx[nsensor->lun],
 			   (sensors->idx_size[nsensor->lun]
 			    * sizeof(ipmi_sensor_t *)));
-		    free(sensors->sensors_by_idx[nsensor->lun]);
+		    ipmi_mem_free(sensors->sensors_by_idx[nsensor->lun]);
 		}
 		for (j=sensors->idx_size[nsensor->lun]; j<new_size; j++)
 		    new_by_idx[j] = NULL;
@@ -1141,7 +1140,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 
 		if (cmp_sensor(nsensor, osensor)) {
 		    /* They compare, prefer to keep the old data. */
-		    free(nsensor);
+		    ipmi_mem_free(nsensor);
 		    sdr_sensors[i] = osensor;
 		    old_sdr_sensors[osensor->source_idx] = NULL;
 		    osensor->source_idx = i;
@@ -1149,7 +1148,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 		    /* Destroy the old sensor, add the new one. */
 		    handle_deleted_sensor(bmc, osensor);
 		    old_sdr_sensors[osensor->source_idx] = NULL;
-		    free(osensor);
+		    ipmi_mem_free(osensor);
 		    sensors->sensors_by_idx[nsensor->lun][nsensor->num]
 			= nsensor;
 		    snext = sref;
@@ -1179,10 +1178,10 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 		
 		handle_deleted_sensor(bmc, old_sdr_sensors[i]);
 		sensors->sensors_by_idx[osensor->lun][osensor->num] = NULL;
-		free(osensor);
+		ipmi_mem_free(osensor);
 	    }
 	}
-	free(old_sdr_sensors);
+	ipmi_mem_free(old_sdr_sensors);
     }
 
  out_err_unlock_free:
@@ -1242,7 +1241,7 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 
     CHECK_MC_LOCK(mc);
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
 
@@ -1258,7 +1257,7 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 	rv = ENOMEM;
 
     if (rv) {
-	free(info);
+	ipmi_mem_free(info);
     } else {
 	ipmi_detect_bmc_presence_changes(info->bmc, 0);
     }
@@ -2606,7 +2605,7 @@ disables_set(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2616,14 +2615,14 @@ disables_set(ipmi_sensor_t *sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
     if (info->done)
 	info->done(sensor, 0, info->cb_data);
     ipmi_sensor_opq_done(sensor);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -2643,7 +2642,7 @@ enables_set(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2655,7 +2654,7 @@ enables_set(ipmi_sensor_t *sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2680,7 +2679,7 @@ enables_set(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, rv, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -2698,7 +2697,7 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2721,7 +2720,7 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, rv, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -2734,7 +2733,7 @@ stand_ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
     event_enable_info_t *info;
     int                 rv;
     
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->state = *states;
@@ -2743,7 +2742,7 @@ stand_ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
     rv = ipmi_sensor_add_opq(sensor, event_enable_set_start,
 			     &(info->sdata), info);
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -2769,7 +2768,7 @@ enables_get(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, err, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2782,7 +2781,7 @@ enables_get(ipmi_sensor_t *sensor,
 		       &info->state,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2794,7 +2793,7 @@ enables_get(ipmi_sensor_t *sensor,
     if (info->done)
 	info->done(sensor, 0, &info->state, info->cb_data);
     ipmi_sensor_opq_done(sensor);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -2811,7 +2810,7 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, err, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2829,7 +2828,7 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, rv, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -2841,7 +2840,7 @@ stand_ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
     event_enable_get_info_t *info;
     int                     rv;
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->done = done;
@@ -2849,7 +2848,7 @@ stand_ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
     rv = ipmi_sensor_add_opq(sensor, event_enable_get_start,
 			     &(info->sdata), info);
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -2874,7 +2873,7 @@ hyst_get(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, err, 0, 0, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2888,7 +2887,7 @@ hyst_get(ipmi_sensor_t *sensor,
 		       0,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2899,7 +2898,7 @@ hyst_get(ipmi_sensor_t *sensor,
 		   rsp->data[2],
 		   info->cb_data);
     ipmi_sensor_opq_done(sensor);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -2916,7 +2915,7 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, err, 0, 0, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2935,7 +2934,7 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, rv, 0, 0, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -2954,14 +2953,14 @@ stand_ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
     if (sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_READABLE)
 	return ENOTSUP;
     
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->done = done;
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, hyst_get_start, &(info->sdata), info);
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -2987,7 +2986,7 @@ hyst_set(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2999,14 +2998,14 @@ hyst_set(ipmi_sensor_t *sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
     if (info->done)
 	info->done(sensor, 0, info->cb_data);
     ipmi_sensor_opq_done(sensor);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -3023,7 +3022,7 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3044,7 +3043,7 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, rv, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -3065,7 +3064,7 @@ stand_ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
     if (sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_SETTABLE)
 	return ENOTSUP;
     
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->positive = positive_hysteresis;
@@ -3074,7 +3073,7 @@ stand_ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, hyst_set_start, &(info->sdata), info);
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -3101,7 +3100,7 @@ thresh_get(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, err, &(info->th), info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3114,7 +3113,7 @@ thresh_get(ipmi_sensor_t *sensor,
 		       &(info->th),
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
     
@@ -3130,7 +3129,7 @@ thresh_get(ipmi_sensor_t *sensor,
 			 "Could not convert raw threshold value: %x", rv);
 		info->done(sensor, rv, &(info->th), info->cb_data);
 		ipmi_sensor_opq_done(sensor);
-		free(info);
+		ipmi_mem_free(info);
 		return;
 	    }
 	} else {
@@ -3141,7 +3140,7 @@ thresh_get(ipmi_sensor_t *sensor,
     if (info->done)
 	info->done(sensor, 0, &(info->th), info->cb_data);
     ipmi_sensor_opq_done(sensor);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 int
@@ -3188,7 +3187,7 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 		 "Error starting threshold get: %x", err);
 	if (info->done)
 	    info->done(sensor, err, &(info->th), info->cb_data);
-	free(info);
+	ipmi_mem_free(info);
 	ipmi_sensor_opq_done(sensor);
 	return;
     }
@@ -3198,7 +3197,7 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	rv = ipmi_get_default_sensor_thresholds(sensor, 0, &(info->th));
 	if (info->done)
 	    info->done(sensor, rv, &(info->th), info->cb_data);
-	free(info);
+	ipmi_mem_free(info);
 	ipmi_sensor_opq_done(sensor);
 	return;
     }
@@ -3217,7 +3216,7 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, rv, &(info->th), info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -3236,14 +3235,14 @@ stand_ipmi_thresholds_get(ipmi_sensor_t      *sensor,
     if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
 	return ENOTSUP;
     
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->done = done;
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, thresh_get_start, &(info->sdata), info);
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -3269,7 +3268,7 @@ thresh_set(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3281,14 +3280,14 @@ thresh_set(ipmi_sensor_t *sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
     if (info->done)
 	info->done(sensor, 0, info->cb_data);
     ipmi_sensor_opq_done(sensor);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -3305,7 +3304,7 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 		 "Error starting threshold set: %x", err);
 	if (info->done)
 	    info->done(sensor, err, info->cb_data);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3328,7 +3327,7 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 		ipmi_log(IPMI_LOG_ERR_INFO,
 			 "Error converting threshold to raw: %x", rv);
 		info->done(sensor, rv, info->cb_data);
-		free(info);
+		ipmi_mem_free(info);
 		return;
 	    }
 	    cmd_data[th+2] = val;
@@ -3343,7 +3342,7 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, rv, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -3363,7 +3362,7 @@ stand_ipmi_thresholds_set(ipmi_sensor_t       *sensor,
     if (sensor->threshold_access != IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE)
 	return ENOTSUP;
     
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->th = *thresholds;
@@ -3371,7 +3370,7 @@ stand_ipmi_thresholds_set(ipmi_sensor_t       *sensor,
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, thresh_set_start, &(info->sdata), info);
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -3404,7 +3403,7 @@ reading_get(ipmi_sensor_t *sensor,
 		       IPMI_NO_VALUES_PRESENT, 0, 0.0,
 		       &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3420,7 +3419,7 @@ reading_get(ipmi_sensor_t *sensor,
 		       &states,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3446,7 +3445,7 @@ reading_get(ipmi_sensor_t *sensor,
 		   val_present, rsp->data[1], val, &states,
 		   info->cb_data);
     ipmi_sensor_opq_done(sensor);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -3468,7 +3467,7 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3489,7 +3488,7 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -3505,14 +3504,14 @@ stand_ipmi_reading_get(ipmi_sensor_t        *sensor,
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->done = done;
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, reading_get_start, &(info->sdata), info);
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -3541,7 +3540,7 @@ states_get(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor, err, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 
     if (rsp->data[0]) {
@@ -3553,7 +3552,7 @@ states_get(ipmi_sensor_t *sensor,
 		       &states,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3565,7 +3564,7 @@ states_get(ipmi_sensor_t *sensor,
     if (info->done)
 	info->done(sensor, 0, &states, info->cb_data);
     ipmi_sensor_opq_done(sensor);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -3585,7 +3584,7 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, err, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -3604,7 +3603,7 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	if (info->done)
 	    info->done(sensor, rv, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
-	free(info);
+	ipmi_mem_free(info);
     }
 }
 
@@ -3620,14 +3619,14 @@ stand_ipmi_states_get(ipmi_sensor_t       *sensor,
 	/* A threshold sensor, it doesn't have states. */
 	return ENOSYS;
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->done = done;
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, states_get_start, &(info->sdata), info);
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 

@@ -31,8 +31,9 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
+#include <stdlib.h>
 #include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/ipmi_int.h>
 #include "ilist.h"
 #include "opq.h"
 
@@ -77,7 +78,7 @@ opq_alloc(os_handler_t *os_hnd)
     int   rv;
     opq_t *opq;
 
-    opq = malloc(sizeof(*opq));
+    opq = ipmi_mem_alloc(sizeof(*opq));
     if (!opq)
 	return NULL;
 
@@ -85,7 +86,7 @@ opq_alloc(os_handler_t *os_hnd)
     opq->in_handler = 0;
     opq->ops = alloc_ilist();
     if (!(opq->ops)) {
-	free(opq);
+	ipmi_mem_free(opq);
 	return NULL;
     }
 
@@ -93,7 +94,7 @@ opq_alloc(os_handler_t *os_hnd)
 	rv = os_hnd->create_lock(opq->os_hnd, &(opq->lock));
 	if (rv) {
 	    free_ilist(opq->ops);
-	    free(opq);
+	    ipmi_mem_free(opq);
 	    return NULL;
 	}
     } else {
@@ -109,7 +110,7 @@ opq_destroy_item(ilist_iter_t *iter, void *item, void *cb_data)
     opq_elem_t *elem = (opq_elem_t *) item;
 
     elem->handler(elem->handler_data, 1);
-    free(elem);
+    ipmi_mem_free(elem);
 }
 
 void
@@ -119,7 +120,7 @@ opq_destroy(opq_t *opq)
     free_ilist(opq->ops);
     if (opq->lock)
 	opq->os_hnd->destroy_lock(opq->os_hnd, opq->lock);
-    free(opq);
+    ipmi_mem_free(opq);
 }
 
 int
@@ -133,7 +134,7 @@ opq_new_op(opq_t *opq, opq_handler_cb handler, void *cb_data, int nowait)
 	    opq_unlock(opq);
 	    return -1;
 	}
-	elem = malloc(sizeof(*elem));
+	elem = ipmi_mem_alloc(sizeof(*elem));
 	if (!elem)
 	    goto out_err;
 	elem->handler = handler;
@@ -141,7 +142,7 @@ opq_new_op(opq_t *opq, opq_handler_cb handler, void *cb_data, int nowait)
 	elem->handler_data = cb_data;
 	elem->block = 1;
 	if (! ilist_add_tail(opq->ops, elem, NULL)) {
-	    free(elem);
+	    ipmi_mem_free(elem);
 	    goto out_err;
 	}
 	opq->blocked = 0;
@@ -172,7 +173,7 @@ opq_new_op_with_done(opq_t          *opq,
 
     opq_lock(opq);
     if (opq->in_handler) {
-	elem = malloc(sizeof(*elem));
+	elem = ipmi_mem_alloc(sizeof(*elem));
 	if (!elem)
 	    goto out_err;
 	elem->handler = handler;
@@ -181,7 +182,7 @@ opq_new_op_with_done(opq_t          *opq,
 	elem->done_data = done_data;
 	elem->block = opq->blocked;
 	if (! ilist_add_tail(opq->ops, elem, NULL)) {
-	    free(elem);
+	    ipmi_mem_free(elem);
 	    goto out_err;
 	}
 	opq->blocked = 0;
@@ -245,7 +246,7 @@ opq_op_done(opq_t *opq)
 	while (list) {
 	    next = list->next;
 	    list->done(list->done_data, 0);
-	    free(list);
+	    ipmi_mem_free(list);
 	    list = next;
 	}
 
@@ -261,7 +262,7 @@ opq_op_done(opq_t *opq)
 	opq->done_data = elem->done_data;
 	opq_unlock(opq);
 	elem->handler(elem->handler_data, 0);
-	free(elem);
+	ipmi_mem_free(elem);
     } else {
 	/* The list is empty. */
 	opq->in_handler = 0;

@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -206,7 +205,7 @@ add_cmd_registration(ipmi_con_t            *ipmi,
     cmd_handler_t *elem, *finder;
     smi_data_t    *smi = (smi_data_t *) ipmi->con_data;
 
-    elem = malloc(sizeof(*elem));
+    elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem)
 	return ENOMEM;
 
@@ -222,7 +221,7 @@ add_cmd_registration(ipmi_con_t            *ipmi,
     while (finder != NULL) {
 	if ((finder->netfn == netfn) && (finder->cmd == cmd)) {
 	    ipmi_unlock(smi->cmd_handlers_lock);
-	    free(elem);
+	    ipmi_mem_free(elem);
 	    return EEXIST;
 	}
 	finder = finder->next;
@@ -359,7 +358,7 @@ rsp_timeout_handler(void              *cb_data,
  out_unlock2:
     ipmi_read_unlock();
     ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
-    free(cmd);
+    ipmi_mem_free(cmd);
 }
 
 static void
@@ -403,7 +402,7 @@ handle_response(ipmi_con_t *ipmi, ipmi_recv_t *recv)
 	cmd->cancelled = 1;
     else {
 	ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
-	free(cmd);
+	ipmi_mem_free(cmd);
     }
 	
 
@@ -573,7 +572,7 @@ smi_send_command(ipmi_con_t            *ipmi,
 	goto out_unlock2;
     }
 
-    cmd = malloc(sizeof(*cmd));
+    cmd = ipmi_mem_alloc(sizeof(*cmd));
     if (!cmd) {
 	rv = ENOMEM;
 	goto out_unlock2;
@@ -605,7 +604,7 @@ smi_send_command(ipmi_con_t            *ipmi,
     }
     if (rv) {
 	remove_cmd(ipmi, smi, cmd);
-	free(cmd);
+	ipmi_mem_free(cmd);
 	goto out_unlock;
     }
 
@@ -620,7 +619,7 @@ smi_send_command(ipmi_con_t            *ipmi,
            instead let the timeout handle freeing it. */
 	if (!err) {
 	    ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
-	    free(cmd);
+	    ipmi_mem_free(cmd);
 	} else
 	    cmd->cancelled = 1;
 	goto out_unlock;
@@ -646,7 +645,7 @@ smi_register_for_events(ipmi_con_t                 *ipmi,
 
     smi = (smi_data_t *) ipmi->con_data;
 
-    entry = malloc(sizeof(*entry));
+    entry = ipmi_mem_alloc(sizeof(*entry));
     if (!entry) {
 	rv = ENOMEM;
 	goto out_unlock2;
@@ -821,7 +820,7 @@ smi_close_connection(ipmi_con_t *ipmi)
 	    cmd_to_free->cancelled = 1;
 	else {
 	    ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd_to_free->timeout_id);
-	    free(cmd_to_free);
+	    ipmi_mem_free(cmd_to_free);
 	}
 	cmd_to_free = next_cmd;
     }
@@ -830,7 +829,7 @@ smi_close_connection(ipmi_con_t *ipmi)
     smi->cmd_handlers = NULL;
     while (hnd_to_free) {
 	next_hnd = hnd_to_free->next;
-	free(hnd_to_free);
+	ipmi_mem_free(hnd_to_free);
 	hnd_to_free = next_hnd;
     }
 
@@ -839,7 +838,7 @@ smi_close_connection(ipmi_con_t *ipmi)
     while (evt_to_free) {
 	evt_to_free->ipmi = NULL;
 	next_evt = evt_to_free->next;
-	free(evt_to_free);
+	ipmi_mem_free(evt_to_free);
 	evt_to_free = next_evt;
     }
 
@@ -855,8 +854,8 @@ smi_close_connection(ipmi_con_t *ipmi)
     /* Close the fd after we have deregistered it. */
     close(smi->fd);
 
-    free(smi);
-    free(ipmi);
+    ipmi_mem_free(smi);
+    ipmi_mem_free(ipmi);
 
     return 0;
 }
@@ -874,7 +873,7 @@ cleanup_con(ipmi_con_t *ipmi)
     os_handler_t *handlers = ipmi->os_hnd;
 
     if (ipmi) {
-	free(ipmi);
+	ipmi_mem_free(ipmi);
     }
 
     if (smi) {
@@ -888,7 +887,7 @@ cleanup_con(ipmi_con_t *ipmi)
 	    close(smi->fd);
 	if (smi->fd_wait_id)
 	    handlers->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
-	free(smi);
+	ipmi_mem_free(smi);
     }
 }
 
@@ -918,7 +917,7 @@ setup(int          if_num,
     if (if_num >= 100)
 	return EINVAL;
 
-    ipmi = malloc(sizeof(*ipmi));
+    ipmi = ipmi_mem_alloc(sizeof(*ipmi));
     if (!ipmi)
 	return ENOMEM;
     memset(ipmi, 0, sizeof(*ipmi));
@@ -926,7 +925,7 @@ setup(int          if_num,
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
 
-    smi = malloc(sizeof(*smi));
+    smi = ipmi_mem_alloc(sizeof(*smi));
     if (!smi) {
 	rv = ENOMEM;
 	goto out_err;

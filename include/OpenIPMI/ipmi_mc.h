@@ -280,4 +280,7 @@ void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);
 /* Initialize the MC code, called only once at init time. */
 int ipmi_mc_init(void);
 
+/* Clean up the global MC memory. */
+void ipmi_mc_shutdown(void);
+
 #endif /* _IPMI_MC_H */

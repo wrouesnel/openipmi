@@ -137,6 +137,10 @@ pos_t discr_deassert_enab;
 
 ipmi_entity_id_t curr_entity_id;
 
+static char *line_buffer = NULL;
+static int  line_buffer_max = 0;
+static int  line_buffer_pos = 0;
+
 static void
 conv_from_spaces(char *name)
 {
@@ -462,10 +466,18 @@ leave(int rv, char *format, ...)
 {
     va_list ap;
 
+    ipmi_shutdown();
+
     if (full_screen)
 	endwin();
     else
 	tcsetattr(0, 0, &old_termios);
+
+    if (line_buffer) {
+	ipmi_mem_free(line_buffer);
+    }
+    command_free(commands);
+    keypad_free(keymap);
 
     sel_free_selector(ui_sel);
 
@@ -473,6 +485,7 @@ leave(int rv, char *format, ...)
     vfprintf(stderr, format, ap);
     va_end(ap);
 
+    ipmi_debug_malloc_cleanup();
     exit(rv);
 }
 
@@ -495,6 +508,7 @@ leave_err(int err, char *format, ...)
 	fprintf(stderr, ": IPMI Error %2.2x\n",	IPMI_GET_IPMI_ERR(err));
     }
 
+    ipmi_debug_malloc_cleanup();
     exit(1);
 }
 
@@ -555,23 +569,19 @@ user_input_ready(int fd, void *data)
     }
 }
 
-static char *line_buffer = NULL;
-static int  line_buffer_max = 0;
-static int  line_buffer_pos = 0;
-
 static int
 normal_char(int key, void *cb_data)
 {
     char out[2];
 
     if (line_buffer_pos >= line_buffer_max) {
-	char *new_line = malloc(line_buffer_max+10+1);
+	char *new_line = ipmi_mem_alloc(line_buffer_max+10+1);
 	if (!new_line)
 	    return ENOMEM;
 	line_buffer_max += 10;
 	if (line_buffer) {
 	    strcpy(new_line, line_buffer);
-	    free(line_buffer);
+	    ipmi_mem_free(line_buffer);
 	}
 	line_buffer = new_line;
     }
@@ -1947,7 +1957,7 @@ set_control(ipmi_control_t *control, void *cb_data)
 	case IPMI_CONTROL_FAN_SPEED:
 	case IPMI_CONTROL_LIGHT:
 	    num_vals = ipmi_control_get_num_vals(control);
-	    vals = malloc(sizeof(*vals) * num_vals);
+	    vals = ipmi_mem_alloc(sizeof(*vals) * num_vals);
 	    if (!vals) {
 		cmd_win_out("set_control: out of memory\n");
 		goto out;
@@ -1977,7 +1987,7 @@ set_control(ipmi_control_t *control, void *cb_data)
 
 	case IPMI_CONTROL_IDENTIFIER:
 	    num_vals = ipmi_control_identifier_get_max_length(control);
-	    cvals = malloc(sizeof(*cvals) * num_vals);
+	    cvals = ipmi_mem_alloc(sizeof(*cvals) * num_vals);
 	    if (!cvals) {
 		cmd_win_out("set_control: out of memory\n");
 		goto out;
@@ -2246,7 +2256,7 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
 
  out:
     ipmi_sdr_info_destroy(sdrs, NULL, NULL);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 void
@@ -2258,7 +2268,7 @@ start_sdr_dump(ipmi_mc_t *mc, sdrs_info_t *info)
     rv = ipmi_sdr_info_alloc(mc, 0, info->do_sensors, &sdrs);
     if (rv) {
 	cmd_win_out("Unable to alloc sdr info: %x\n", rv);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -2266,7 +2276,7 @@ start_sdr_dump(ipmi_mc_t *mc, sdrs_info_t *info)
     if (rv) {
 	cmd_win_out("Unable to start SDR fetch: %x\n", rv);
 	ipmi_sdr_info_destroy(sdrs, NULL, NULL);
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 }
@@ -2302,19 +2312,19 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
     int         rv;
     sdrs_info_t *info;
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
 	ui_log("Could not allocate memory for SDR fetch\n");
 	return 0;
     }
 
     if (get_uchar(toks, &info->mc_addr, "MC address")) {
-	free(info);
+	ipmi_mem_free(info);
 	return 0;
     }
 
     if (get_uchar(toks, &info->do_sensors, "do_sensors")) {
-	free(info);
+	ipmi_mem_free(info);
 	return 0;
     }
 
@@ -2323,11 +2333,11 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
     rv = ipmi_mc_pointer_cb(bmc_id, sdrs_cmd_bmcer, info);
     if (rv) {
 	cmd_win_out("Unable to convert BMC id to a pointer\n");
-	free(info);
+	ipmi_mem_free(info);
     } else {
 	if (!info->found) {
 	    cmd_win_out("Unable to find that mc\n");
-	    free(info);
+	    ipmi_mem_free(info);
 	}
     }
     return 0;

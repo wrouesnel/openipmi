@@ -113,6 +113,18 @@ struct ipmi_states_s
 };
 
 
+/* IPMI uses this for memory allocation, so it can easily be
+   substituted, etc. */
+void *ipmi_mem_alloc(size_t size);
+void ipmi_mem_free(void *data);
+
+/* If you have debug allocations on, then you should call this to
+   check for data you haven't freed (after you have freed all the
+   data, of course).  It's safe to call even if malloc debugging is
+   turned off. */
+void ipmi_debug_malloc_cleanup(void);
+
+
 /* Various logging stuff (mostly for debugging) */
 extern unsigned int __ipmi_log_mask;
 
@@ -133,6 +145,10 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_CON1_FAIL_BIT	(1 << 5)
 #define DEBUG_CON2_FAIL_BIT	(1 << 6)
 #define DEBUG_CON3_FAIL_BIT	(1 << 7)
+
+/* Debug mallocs.  This should only be set at startup (before
+   ipmi_mem_alloc() is called), and cannot be cleared after that. */
+#define DEBUG_MALLOC_BIT	(1 << 8)
 
 #define DEBUG_MSG	(__ipmi_log_mask & DEBUG_MSG_BIT)
 #define DEBUG_MSG_ENABLE() __ipmi_log_mask |= DEBUG_MSG_BIT
@@ -155,6 +171,9 @@ extern unsigned int __ipmi_log_mask;
 	__ipmi_log_mask |= (DEBUG_CON0_FAIL_BIT << con)
 #define DEBUG_CON_FAIL_DISABLE(con) \
 	__ipmi_log_mask &= ~(DEBUG_CON0_FAIL_BIT << con)
+
+#define DEBUG_MALLOC	(__ipmi_log_mask & DEBUG_MALLOC_BIT)
+#define DEBUG_MALLOC_ENABLE() __ipmi_log_mask |= DEBUG_MALLOC_BIT
 
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */

@@ -1,6 +1,41 @@
 
 2003-02-18 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c, entity.c: memory leak removals
+	
+	* ilist.c, ilist.h, ipmi.c: Added separate allocation routines
+	for the ilist code.
+	
+	* mc.c, include/OpenIPMI/ipmi_oem.h: Added a shutdown callback to
+	the OEM registeration.
+
+	* mc.c, include/OpenIPMI/ipmi_mc.h: Added global shutdown code for
+	the mc.
+
+	* ipmi.c, include/OpenIPMI/ipmiif.h: Added global shutdown code.
+	
+	* ipmi.c, include/OpenIPMI/ipmi_int.h: Added memory debugging
+	code.
+	
+	* basic_ui.c: Converted over to the new memory debugging code.
+	* control.c: ditto
+	* entity.c: ditto
+	* ipmi.c: ditto
+	* ipmi_lan.c: ditto
+	* ipmi_smi.c: ditto
+	* mc.c: ditto
+	* md2.c: ditto
+	* md5.c: ditto
+	* opq.c: ditto
+	* sdr.c: ditto
+	* sel.c: ditto
+	* selector.c: ditto
+	* sensor.c: ditto
+	* ui.c: ditto
+	* ui_command.c: ditto
+	* ui_keypad.c: ditto
+	* ui_os.c: ditto
+
 	* selector.c, heap.h: Split out the heap code into a generic.
 
 	* test_btree.c: Added a test for the heap code.

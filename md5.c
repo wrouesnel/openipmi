@@ -38,6 +38,7 @@
 #include <string.h>
 #include <errno.h>
 #include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_int.h>
 #include "md5.h"
 
 typedef uint32_t u32;
@@ -339,7 +340,7 @@ ipmi_md5_authcode_init(unsigned char *password, ipmi_authdata_t *handle)
 {
     unsigned char *data;
 
-    data = malloc(16);
+    data = ipmi_mem_alloc(16);
     if (!data)
 	return ENOMEM;
 
@@ -390,7 +391,7 @@ ipmi_md5_authcode_check(ipmi_authdata_t handle,
 void
 ipmi_md5_authcode_cleanup(ipmi_authdata_t handle)
 {
-    free(handle);
+    ipmi_mem_free(handle);
 }
 
 /* The stuff below is libgcrypt-specific, and does not apply to IPMI.  The
@@ -436,7 +437,7 @@ md5_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD5 ($Revision: 1.2 $)";
+const char * const gnupgext_version = "MD5 ($Revision: 1.3 $)";
 
 static struct {
     int class;

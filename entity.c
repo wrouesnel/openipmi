@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <string.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_entity.h>
@@ -170,7 +169,7 @@ ipmi_entity_info_alloc(ipmi_mc_t *bmc, ipmi_entity_info_t **new_info)
 {
     ipmi_entity_info_t *ents;
 
-    ents = malloc(sizeof(*ents));
+    ents = ipmi_mem_alloc(sizeof(*ents));
     if (!ents)
 	return ENOMEM;
 
@@ -178,7 +177,7 @@ ipmi_entity_info_alloc(ipmi_mc_t *bmc, ipmi_entity_info_t **new_info)
     ents->handler = NULL;
     ents->entities = alloc_ilist();
     if (! ents->entities) {
-	free(ents);
+	ipmi_mem_free(ents);
 	return ENOMEM;
     }
 
@@ -194,7 +193,9 @@ destroy_entity(ilist_iter_t *iter, void *item, void *cb_data)
 
     free_ilist(ent->parent_entities);
     free_ilist(ent->sub_entities);
-    free(ent);
+    free_ilist(ent->sensors);
+    free_ilist(ent->controls);
+    ipmi_mem_free(ent);
 }
 
 int
@@ -202,7 +203,7 @@ ipmi_entity_info_destroy(ipmi_entity_info_t *ents)
 {
     ilist_iter(ents->entities, destroy_entity, NULL);
     free_ilist(ents->entities);
-    free(ents);
+    ipmi_mem_free(ents);
     return 0;
 }
 
@@ -333,7 +334,7 @@ entity_add(ipmi_entity_info_t *ents,
 	return 0;
     }
 
-    ent = malloc(sizeof(*ent));
+    ent = ipmi_mem_alloc(sizeof(*ent));
     if (!ent)
 	return ENOMEM;
     memset(ent, 0, sizeof(*ent));
@@ -345,14 +346,14 @@ entity_add(ipmi_entity_info_t *ents,
     ent->bmc = ents->bmc;
     ent->sub_entities = alloc_ilist();
     if (!ent->sub_entities) {
-	free(ent);
+	ipmi_mem_free(ent);
 	return ENOMEM;
     }
 
     ent->parent_entities = alloc_ilist();
     if (!ent->parent_entities) {
 	free_ilist(ent->sub_entities);
-	free(ent);
+	ipmi_mem_free(ent);
 	return ENOMEM;
     }
 
@@ -360,7 +361,7 @@ entity_add(ipmi_entity_info_t *ents,
     if (!ent->sensors) {
 	free_ilist(ent->parent_entities);
 	free_ilist(ent->sub_entities);
-	free(ent);
+	ipmi_mem_free(ent);
 	return ENOMEM;
     }
 
@@ -369,7 +370,7 @@ entity_add(ipmi_entity_info_t *ents,
 	free_ilist(ent->sensors);
 	free_ilist(ent->parent_entities);
 	free_ilist(ent->sub_entities);
-	free(ent);
+	ipmi_mem_free(ent);
 	return ENOMEM;
     }
 
@@ -411,7 +412,7 @@ entity_add(ipmi_entity_info_t *ents,
 	free_ilist(ent->sensors);
 	free_ilist(ent->parent_entities);
 	free_ilist(ent->sub_entities);
-	free(ent);
+	ipmi_mem_free(ent);
 	return ENOMEM;
     }
 
@@ -490,14 +491,14 @@ add_child(ipmi_entity_t       *ent,
     if (link != NULL)
 	goto found;
 
-    link = malloc(sizeof(*link));
+    link = ipmi_mem_alloc(sizeof(*link));
     if (!link)
 	return ENOMEM;
 
     link->child = child;
 
     if (! ilist_add_tail(ent->sub_entities, link, NULL)) {
-	free(link);
+	ipmi_mem_free(link);
 	return ENOMEM;
     }
 
@@ -506,7 +507,7 @@ add_child(ipmi_entity_t       *ent,
 	ilist_init_iter(&iter, ent->sub_entities);
 	ilist_last(&iter);
 	ilist_delete(&iter);
-	free(link);
+	ipmi_mem_free(link);
 	return ENOMEM;
     }
 
@@ -549,7 +550,7 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
 	return ENODEV;
 
     ilist_delete(&iter);
-    free(link);
+    ipmi_mem_free(link);
 
     /* Find the parent in the child's list. */
     ilist_init_iter(&iter, child->parent_entities);
@@ -692,8 +693,10 @@ detect_reading_read(ipmi_sensor_t             *sensor,
 	info->present = 1;
 
     info->sensor_try_count--;
-    if (info->sensor_try_count == 0)
+    if (info->sensor_try_count == 0) {
 	presence_changed(info->ent, info->present, NULL);
+	ipmi_mem_free(info);
+    }
 }
 
 static void
@@ -728,7 +731,7 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	rv = ipmi_states_get(ent->presence_sensor, states_read, ent);
     } else if (! ilist_empty(ent->sensors)) {
 	/* It has sensors, try to see if any of those are active. */
-	detect = malloc(sizeof(*detect));
+	detect = ipmi_mem_alloc(sizeof(*detect));
 	if (!detect)
 	    return;
 
@@ -740,6 +743,7 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	/* I couldn't message any sensors, the thing must be done. */
 	if (detect->sensor_try_count == 0) {
 	    presence_changed(ent, detect->present, NULL);
+	    ipmi_mem_free(detect);
 	}
     } else {
 	/* Maybe it has children that can handle it's presence. */
@@ -797,25 +801,25 @@ ipmi_entity_set_presence_handler(ipmi_entity_t           *ent,
 void *
 ipmi_entity_alloc_sensor_link(void)
 {
-    return malloc(sizeof(ipmi_sensor_ref_t));
+    return ipmi_mem_alloc(sizeof(ipmi_sensor_ref_t));
 }
 
 void
 ipmi_entity_free_sensor_link(void *link)
 {
-    free(link);
+    ipmi_mem_free(link);
 }
 
 void *
 ipmi_entity_alloc_control_link(void)
 {
-    return malloc(sizeof(ipmi_control_ref_t));
+    return ipmi_mem_alloc(sizeof(ipmi_control_ref_t));
 }
 
 void
 ipmi_entity_free_control_link(void *link)
 {
-    free(link);
+    ipmi_mem_free(link);
 }
 
 void
@@ -935,7 +939,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 	    handle_new_presence_sensor(ent, info.sensor,
 				       ref->mc, ref->lun, ref->num);
 
-	    free(ref);
+	    ipmi_mem_free(ref);
 	} else {
 	    ent->presence_sensor = NULL;
 	}
@@ -949,7 +953,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 	}
 
 	ilist_delete(&iter);
-	free(ref);
+	ipmi_mem_free(ref);
 
 	if (ent->sensor_handler)
 	    ent->sensor_handler(IPMI_DELETED, ent, sensor, ent->cb_data);
@@ -1044,7 +1048,7 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     }
 
     ilist_delete(&iter);
-    free(ref);
+    ipmi_mem_free(ref);
 
     if (ent->control_handler)
 	ent->control_handler(IPMI_DELETED, ent, control, ent->cb_data);

@@ -319,7 +319,7 @@ sel_alloc_timer(selector_t            *sel,
 {
     sel_timer_t *timer;
 
-    timer = malloc(sizeof(*timer));
+    timer = ipmi_mem_alloc(sizeof(*timer));
     if (!timer)
 	return ENOMEM;
 
@@ -340,7 +340,7 @@ sel_free_timer(sel_timer_t *timer)
 	sel_stop_timer(timer);
     }
     ipmi_unlock(timer->val.sel->timer_lock);
-    free(timer);
+    ipmi_mem_free(timer);
 
     return 0;
 }
@@ -525,7 +525,7 @@ sel_alloc_selector(selector_t **new_selector)
     int        i;
     int        rv;
 
-    sel = malloc(sizeof(*sel));
+    sel = ipmi_mem_alloc(sizeof(*sel));
     if (!sel)
 	return ENOMEM;
     memset(sel, 0, sizeof(*sel));
@@ -558,7 +558,7 @@ sel_alloc_selector(selector_t **new_selector)
 	    ipmi_destroy_lock(sel->timer_lock);
 	if (sel->fd_lock)
 	    ipmi_destroy_lock(sel->fd_lock);
-	free(sel);
+	ipmi_mem_free(sel);
     }
     return rv;
 }
@@ -576,9 +576,10 @@ sel_free_selector(selector_t *sel)
     elem = theap_get_top(&(sel->timer_heap));
     while (elem) {
 	theap_remove(&(sel->timer_heap), elem);
-	free(elem);
+	ipmi_mem_free(elem);
+	elem = theap_get_top(&(sel->timer_heap));
     }
-    free(sel);
+    ipmi_mem_free(sel);
 
     return 0;
 }

@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <string.h>
 
 #include <OpenIPMI/ipmiif.h>
@@ -186,7 +185,7 @@ control_final_destroy(ipmi_control_t *control)
 	control->oem_info_cleanup_handler(control, control->oem_info);
 
     opq_destroy(control->waitq);
-    free(control);
+    ipmi_mem_free(control);
 }
 
 int
@@ -398,13 +397,13 @@ ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls)
 
     CHECK_MC_LOCK(mc);
 
-    controls = malloc(sizeof(*controls));
+    controls = ipmi_mem_alloc(sizeof(*controls));
     if (!controls)
 	return ENOMEM;
     memset(controls, 0, sizeof(*controls));
     controls->control_wait_q = opq_alloc(ipmi_mc_get_os_hnd(mc));
     if (! controls->control_wait_q) {
-	free(controls);
+	ipmi_mem_free(controls);
 	return ENOMEM;
     }
 
@@ -417,7 +416,7 @@ ipmi_control_alloc_nonstandard(ipmi_control_t **new_control)
 {
     ipmi_control_t *control;
 
-    control = malloc(sizeof(*control));
+    control = ipmi_mem_alloc(sizeof(*control));
     if (!control)
 	return ENOMEM;
 
@@ -453,7 +452,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	/* Allocate the array in multiples of 16 (to avoid thrashing malloc
 	   too much). */
 	new_size = ((num / 16) * 16) + 16;
-	new_array = malloc(sizeof(*new_array) * new_size);
+	new_array = ipmi_mem_alloc(sizeof(*new_array) * new_size);
 	if (!new_array)
 	    return ENOMEM;
 	if (controls->controls_by_idx)
@@ -462,7 +461,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 	for (i=controls->idx_size; i<new_size; i++)
 	    new_array[i] = NULL;
 	if (controls->controls_by_idx)
-	    free(controls->controls_by_idx);
+	    ipmi_mem_free(controls->controls_by_idx);
 	controls->controls_by_idx = new_array;
 	controls->idx_size = new_size;
     }
@@ -507,11 +506,11 @@ ipmi_controls_destroy(ipmi_control_info_t *controls)
 	}
     }
     if (controls->controls_by_idx)
-	free(controls->controls_by_idx);
+	ipmi_mem_free(controls->controls_by_idx);
 
     if (controls->control_wait_q)
 	opq_destroy(controls->control_wait_q);
-    free(controls);
+    ipmi_mem_free(controls);
     return 0;
 }
 

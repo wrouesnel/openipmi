@@ -34,7 +34,7 @@
 
 #include <errno.h>
 #include <string.h>
-#include <malloc.h>
+#include <OpenIPMI/ipmi_int.h>
 #include "ui_keypad.h"
 
 
@@ -81,14 +81,14 @@ keypad_bind_key(keypad_t keypad, int key, key_handler_t handler)
     if (find_key(&iter, keypad, key))
 	return EEXIST;
 
-    entry = malloc(sizeof(*entry));
+    entry = ipmi_mem_alloc(sizeof(*entry));
     if (!entry)
 	return ENOMEM;
 
     entry->key = key;
     entry->handler = handler;
     if (!ilist_add_tail(keypad->keys[hash], entry, NULL)) {
-	free(entry);
+	ipmi_mem_free(entry);
 	return ENOMEM;
     }
 
@@ -106,7 +106,7 @@ keypad_unbind_key(keypad_t keypad, int key)
 	return ENOENT;
 
     ilist_delete(&iter);
-    free(entry);
+    ipmi_mem_free(entry);
     return 0;
 }
 
@@ -114,7 +114,7 @@ static void
 del_key_entry(ilist_iter_t *iter, void *item, void *cb_data)
 {
     ilist_delete(iter);
-    free(item);
+    ipmi_mem_free(item);
 }
 
 void
@@ -128,13 +128,13 @@ keypad_free(keypad_t keypad)
 	    free_ilist(keypad->keys[i]);
 	}
     }
-    free(keypad);
+    ipmi_mem_free(keypad);
 }
 
 keypad_t
 keypad_alloc(void)
 {
-    keypad_t nv = malloc(sizeof(*nv));
+    keypad_t nv = ipmi_mem_alloc(sizeof(*nv));
     int      i;
 
     if (nv) {

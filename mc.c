@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <string.h>
 
 #include <OpenIPMI/ipmi_conn.h>
@@ -238,16 +237,17 @@ typedef struct oem_handlers_s {
     unsigned int                 manufacturer_id;
     unsigned int                 product_id;
     ipmi_oem_mc_match_handler_cb handler;
+    ipmi_oem_shutdown_handler_cb shutdown;
     void                         *cb_data;
 } oem_handlers_t;
 /* FIXME - do we need a lock?  Probably, add it. */
 static ilist_t *oem_handlers;
 
+static int mc_initialized = 0;
+
 int
 ipmi_mc_init(void)
 {
-    static int mc_initialized = 0;
-
     if (mc_initialized)
 	return 0;
 
@@ -258,6 +258,29 @@ ipmi_mc_init(void)
     mc_initialized = 1;
 
     return 0;
+}
+
+void
+ipmi_mc_shutdown(void)
+{
+    if (mc_initialized) {
+	oem_handlers_t *hndlr;
+	ilist_iter_t   iter;
+
+	/* Destroy the members of the OEM list. */
+	ilist_init_iter(&iter, oem_handlers);
+	while (ilist_first(&iter)) {
+	    hndlr = ilist_get(&iter);
+	    if (hndlr->shutdown)
+		hndlr->shutdown(hndlr->cb_data);
+	    ilist_delete(&iter);
+	    ipmi_mem_free(hndlr);
+	}
+
+	free_ilist(oem_handlers);
+	oem_handlers = NULL;
+	mc_initialized = 0;
+    }
 }
 
 void
@@ -296,6 +319,7 @@ int
 ipmi_register_oem_handler(unsigned int                 manufacturer_id,
 			  unsigned int                 product_id,
 			  ipmi_oem_mc_match_handler_cb handler,
+			  ipmi_oem_shutdown_handler_cb shutdown,
 			  void                         *cb_data)
 {
     oem_handlers_t *new_item;
@@ -306,17 +330,18 @@ ipmi_register_oem_handler(unsigned int                 manufacturer_id,
     if (rv)
 	return rv;
 
-    new_item = malloc(sizeof(*new_item));
+    new_item = ipmi_mem_alloc(sizeof(*new_item));
     if (!new_item)
 	return ENOMEM;
 
     new_item->manufacturer_id = manufacturer_id;
     new_item->product_id = product_id;
     new_item->handler = handler;
+    new_item->shutdown = shutdown;
     new_item->cb_data = cb_data;
 
     if (! ilist_add_tail(oem_handlers, new_item, NULL)) {
-	free(new_item);
+	ipmi_mem_free(new_item);
 	return ENOMEM;
     }
 
@@ -331,6 +356,24 @@ oem_handler_cmp(void *item, void *cb_data)
 
     return ((hndlr->manufacturer_id == mc->manufacturer_id)
 	    && (hndlr->product_id == mc->product_id));
+}
+
+int
+ipmi_deregister_oem_handler(unsigned int manufacturer_id,
+			    unsigned int product_id)
+{
+    oem_handlers_t *hndlr;
+    ilist_iter_t   iter;
+
+    ilist_init_iter(&iter, oem_handlers);
+    ilist_unpositioned(&iter);
+    hndlr = ilist_search_iter(&iter, oem_handler_cmp, NULL);
+    if (hndlr) {
+	ilist_delete(&iter);
+	ipmi_mem_free(hndlr);
+	return 0;
+    }
+    return ENOENT;
 }
 
 static int
@@ -427,14 +470,14 @@ ipmi_bmc_add_con_fail_handler(ipmi_mc_t           *bmc,
 	/* Not a BMC. */
 	return EINVAL;
 
-    new_id = malloc(sizeof(*new_id));
+    new_id = ipmi_mem_alloc(sizeof(*new_id));
     if (!new_id)
 	return ENOMEM;
 
     new_id->handler = handler;
     new_id->cb_data = cb_data;
     if (! ilist_add_tail(bmc->bmc->con_fail_handlers, new_id, NULL)) {
-	free(new_id);
+	ipmi_mem_free(new_id);
 	return ENOMEM;
     }
 
@@ -457,7 +500,7 @@ ipmi_bmc_remove_con_fail_handler(ipmi_mc_t           *bmc,
     while (rv) {
 	if (ilist_get(&iter) == id) {
 	    ilist_delete(&iter);
-	    free(id);
+	    ipmi_mem_free(id);
 	    break;
 	}
 	rv = ilist_next(&iter);
@@ -835,7 +878,7 @@ ipmi_register_for_events(ipmi_mc_t               *bmc,
 
     CHECK_MC_LOCK(bmc);
 
-    elem = malloc(sizeof(*elem));
+    elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem)
 	return ENOMEM;
     elem->handler = handler;
@@ -865,6 +908,8 @@ ipmi_deregister_for_events(ipmi_mc_t               *bmc,
     ipmi_lock(bmc->bmc->event_handlers_lock);
     rv = remove_event_handler(bmc, id);
     ipmi_unlock(bmc->bmc->event_handlers_lock);
+    if (!rv)
+	ipmi_mem_free(id);
 
     return rv;
 }
@@ -1041,7 +1086,7 @@ real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
 
     if (info->close_done)
 	info->close_done(info->cb_data);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 int
@@ -1059,7 +1104,7 @@ ipmi_close_connection(ipmi_mc_t    *mc,
 
     CHECK_MC_LOCK(mc);
 
-    close_info = malloc(sizeof(*close_info));
+    close_info = ipmi_mem_alloc(sizeof(*close_info));
     if (!close_info)
 	return ENOMEM;
 
@@ -1084,7 +1129,7 @@ ipmi_close_connection(ipmi_mc_t    *mc,
  out:
     if (rv) {
 	if (close_info)
-	    free(close_info);
+	    ipmi_mem_free(close_info);
 	if (timer)
 	    mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd, timer);
     }
@@ -1240,9 +1285,13 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	for (i=0; i<mc->sensors_in_my_sdr_count; i++) {
 	    ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
 	}
-	free(mc->sensors_in_my_sdr);
+	ipmi_mem_free(mc->sensors_in_my_sdr);
     }
 
+    /* Destroy the device SDR repository, if it exists. */
+    if (mc->sdrs)
+	ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
+	    
     if (mc->sensors)
 	ipmi_sensors_destroy(mc->sensors);
     if (mc->controls)
@@ -1252,6 +1301,10 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 
     if (mc->bmc) {
 	ilist_iter(mc->bmc->mc_list, iterate_cleanup_mc, NULL);
+
+	/* Destroy the main SDR repository, if it exists. */
+	if (mc->bmc->main_sdrs)
+	    ipmi_sdr_info_destroy(mc->bmc->main_sdrs, NULL, NULL);
 
 	/* Make sure the timer stop. */
 	if (mc->bmc->sel_timer_info)
@@ -1265,7 +1318,7 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 		if (mc->bmc->sensors_in_my_sdr[i])
 		    ipmi_sensor_destroy(mc->bmc->sensors_in_my_sdr[i]);
 	    }
-	    free(mc->bmc->sensors_in_my_sdr);
+	    ipmi_mem_free(mc->bmc->sensors_in_my_sdr);
 	}
 
 	ipmi_lock(mc->bmc->event_handlers_lock);
@@ -1293,7 +1346,7 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 
 	/* Remove all the connection fail handlers. */
 	mc->bmc->conn->set_con_fail_handler(mc->bmc->conn, NULL,  NULL);
-	free(mc->bmc);
+	ipmi_mem_free(mc->bmc);
     } else if (mc->in_bmc_list) {
 	ilist_iter_t iter;
 	int          rv;
@@ -1311,7 +1364,7 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	}
 	ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
     }
-    free(mc);
+    ipmi_mem_free(mc);
 }
 
 int
@@ -1326,7 +1379,7 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     if (addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
 
-    mc = malloc(sizeof(*mc));
+    mc = ipmi_mem_alloc(sizeof(*mc));
     if (!mc)
 	return ENOMEM;
 
@@ -1376,7 +1429,7 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
     struct timeval    timeout;
 
     if (info->cancelled) {
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -1397,7 +1450,7 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
     int               rv = EINVAL;
 
     if (info->cancelled) {
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -1488,7 +1541,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     ipmi_detect_bmc_presence_changes(mc, 0);
 
     /* Allocate the system event log fetch timer. */
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "Unable to allocate info for system event log timer."
@@ -1500,7 +1553,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd,
 					    &(mc->bmc->sel_timer));
     if (rv) {
-	free(info);
+	ipmi_mem_free(info);
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "Unable to allocate the system event log timer."
 		 " System event log will not be queried");
@@ -1621,7 +1674,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    rv = ipmi_create_mc(info->bmc, addr, addr_len, &mc);
 	    if (rv) {
 		/* Out of memory, just give up for now. */
-		free(info);
+		ipmi_mem_free(info);
 		ipmi_unlock(info->bmc->bmc->mc_list_lock);
 		goto out;
 	    }
@@ -1658,7 +1711,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	/* We've hit the end, we can quit now. */
 	if (info->done_handler)
 	    info->done_handler(info->bmc, 0, info->cb_data);
-	free(info);
+	ipmi_mem_free(info);
 	goto out;
     }
     info->addr.slave_addr += 2;
@@ -1685,7 +1738,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     }
 
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
  out:
     ipmi_read_unlock();
 }
@@ -1703,7 +1756,7 @@ ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
 
     CHECK_MC_LOCK(bmc);
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return;
 
@@ -1736,7 +1789,7 @@ ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
     }
 
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
 }
 
 static void
@@ -1772,7 +1825,7 @@ bmc_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_mc_t             *bmc = info->bmc;
 
     if (info->cancelled) {
-	free(info);
+	ipmi_mem_free(info);
 	return;
     }
 
@@ -1827,7 +1880,7 @@ set_operational(ipmi_mc_t *mc)
     start_mc_scan(mc);
 
     /* Start the timer to rescan the bus periodically. */
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	rv = ENOMEM;
     else {
@@ -2097,7 +2150,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     if (mc_addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
 
-    mc = malloc(sizeof(*mc));
+    mc = ipmi_mem_alloc(sizeof(*mc));
     if (!mc)
 	return ENOMEM;
     memset(mc, 0, sizeof(*mc));
@@ -2116,7 +2169,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->addr_len = mc_addr_len;
     mc->sdrs = NULL;
 
-    mc->bmc = malloc(sizeof(*(mc->bmc)));
+    mc->bmc = ipmi_mem_alloc(sizeof(*(mc->bmc)));
     if (! (mc->bmc)) {
 	rv = ENOMEM;
 	goto out_err;
@@ -2699,7 +2752,7 @@ sdrs_saved(ipmi_sdr_info_t *sdrs, int err, void *cb_data)
     sdrs_saved_info_t *info = cb_data;
 
     info->done(info->bmc, err, info->cb_data);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 int
@@ -2715,14 +2768,14 @@ ipmi_bmc_store_entities(ipmi_mc_t *bmc, ipmi_bmc_cb done, void *cb_data)
 
     CHECK_MC_LOCK(bmc);
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
 
     /* Create an SDR repository to store. */
     rv = ipmi_sdr_info_alloc(bmc, 0, 0, &stored_sdrs);
     if (rv) {
-	free(info);
+	ipmi_mem_free(info);
 	return rv;
     }
 
@@ -2765,7 +2818,7 @@ ipmi_bmc_store_entities(ipmi_mc_t *bmc, ipmi_bmc_cb done, void *cb_data)
 
  out_err:
     if (rv)
-	free(info);
+	ipmi_mem_free(info);
     ipmi_sdr_info_destroy(stored_sdrs, NULL, NULL);
     return rv;
 }
@@ -2926,7 +2979,7 @@ ipmi_bmc_del_event(ipmi_mc_t    *bmc,
 	return bmc->bmc->sel_del_event_handler(bmc, event,
 					       done_handler, cb_data);
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
 
@@ -2950,7 +3003,7 @@ ipmi_bmc_del_event_by_recid(ipmi_mc_t    *bmc,
 
     CHECK_MC_LOCK(bmc);
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
 

@@ -9,6 +9,7 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_lan.h>
+#include <OpenIPMI/ipmi_int.h>
 
 int
 main(int argc, char *argv[])
@@ -19,10 +20,6 @@ main(int argc, char *argv[])
     char       *arg;
     int        full_screen = 1;
 
-#if 0
-    __ipmi_log_mask = DEBUG_MSG_BIT;
-#endif
-
     while ((argc > 1) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
 	curr_arg++;
@@ -31,6 +28,10 @@ main(int argc, char *argv[])
 	    break;
 	} else if (strcmp(arg, "-c") == 0) {
 	    full_screen = 0;
+	} else if (strcmp(arg, "-dmem") == 0) {
+	    DEBUG_MALLOC_ENABLE();
+	} else if (strcmp(arg, "-dmsg") == 0) {
+	    DEBUG_MSG_ENABLE();
 	} else {
 	    fprintf(stderr, "Unknown option: %s\n", arg);
 	    return 1;

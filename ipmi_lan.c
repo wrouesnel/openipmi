@@ -31,7 +31,6 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -474,7 +473,7 @@ rsp_timeout_handler(void              *cb_data,
     ipmi_unlock(lan->seq_num_lock);
  out_unlock2:
     ipmi_read_unlock();
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static void
@@ -702,7 +701,7 @@ data_handler(int            fd,
     else {
 	/* Timer is cancelled, free its data. */
 	ipmi->os_hnd->free_timer(ipmi->os_hnd, lan->seq_table[seq].timer);
-	free(lan->seq_table[seq].timer_info);
+	ipmi_mem_free(lan->seq_table[seq].timer_info);
     }
 
     handler = lan->seq_table[seq].rsp_handler;
@@ -747,7 +746,7 @@ lan_send_command(ipmi_con_t            *ipmi,
     if (msg->data_len > IPMI_MAX_MSG_LENGTH)
 	return EINVAL;
 
-    info = malloc(sizeof(*info));
+    info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
 
@@ -821,7 +820,7 @@ lan_send_command(ipmi_con_t            *ipmi,
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
     if ((rv) && (info))
-	free(info);
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -880,7 +879,7 @@ lan_register_for_events(ipmi_con_t                 *ipmi,
 
     lan = (lan_data_t *) ipmi->con_data;
 
-    entry = malloc(sizeof(*entry));
+    entry = ipmi_mem_alloc(sizeof(*entry));
     if (!entry) {
 	rv = ENOMEM;
 	goto out_unlock2;
@@ -914,7 +913,7 @@ lan_deregister_for_events(ipmi_con_t                 *ipmi,
     ipmi_lock(lan->event_handlers_lock);
     remove_event_handler(lan, id);
     id->ipmi = NULL;
-    free(id);
+    ipmi_mem_free(id);
     ipmi_unlock(lan->event_handlers_lock);
  out_unlock2:
 
@@ -988,7 +987,7 @@ lan_close_connection(ipmi_con_t *ipmi)
 	    else {
 		ipmi->os_hnd->free_timer(ipmi->os_hnd,
 					 lan->seq_table[i].timer);
-		free(lan->seq_table[i].timer_info);
+		ipmi_mem_free(lan->seq_table[i].timer_info);
 	    }
 
 	    lan->seq_table[i].rsp_handler = NULL;
@@ -1001,7 +1000,7 @@ lan_close_connection(ipmi_con_t *ipmi)
     while (evt_to_free) {
 	evt_to_free->ipmi = NULL;
 	next_evt = evt_to_free->next;
-	free(evt_to_free);
+	ipmi_mem_free(evt_to_free);
 	evt_to_free = next_evt;
     }
 
@@ -1017,8 +1016,8 @@ lan_close_connection(ipmi_con_t *ipmi)
     /* Close the fd after we have deregistered it. */
     close(lan->fd);
 
-    free(lan);
-    free(ipmi);
+    ipmi_mem_free(lan);
+    ipmi_mem_free(ipmi);
 
     return 0;
 }
@@ -1036,7 +1035,7 @@ cleanup_con(ipmi_con_t *ipmi)
     os_handler_t *handlers = ipmi->os_hnd;
 
     if (ipmi) {
-	free(ipmi);
+	ipmi_mem_free(ipmi);
     }
 
     if (lan) {
@@ -1061,7 +1060,7 @@ cleanup_con(ipmi_con_t *ipmi)
 	    handlers->remove_fd_to_wait_for(handlers, lan->fd_wait_id);
 	if (lan->authdata)
 	    ipmi_auths[lan->authtype].authcode_cleanup(lan->authdata);
-	free(lan);
+	ipmi_mem_free(lan);
     }
 }
 
@@ -1344,7 +1343,7 @@ ipmi_lan_setup_con(struct in_addr    addr,
     /* Make sure we register before anything else. */
     ipmi_register_ll(&lan_ll_ipmi);
 
-    ipmi = malloc(sizeof(*ipmi));
+    ipmi = ipmi_mem_alloc(sizeof(*ipmi));
     if (!ipmi)
 	return ENOMEM;
     memset(ipmi, 0, sizeof(*ipmi));
@@ -1352,7 +1351,7 @@ ipmi_lan_setup_con(struct in_addr    addr,
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
 
-    lan = malloc(sizeof(*lan));
+    lan = ipmi_mem_alloc(sizeof(*lan));
     if (!lan) {
 	rv = ENOMEM;
 	goto out_err;
