@@ -156,7 +156,15 @@ lanparms_handler(void *cb_data, void *item1, void *item2)
 {
     iterate_lanparms_info_t *info = cb_data;
     info->handler(item1, info->cb_data);
+    lanparm_put(item1);
     return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+lanparms_prefunc(void *cb_data, void *item1, void *item2)
+{
+    ipmi_lanparm_t *lanparm = item1;
+    lanparm_get(lanparm);
 }
 
 void
@@ -177,7 +185,8 @@ ipmi_lanparm_iterate_lanparms(ipmi_domain_t       *domain,
 
     info.handler = handler;
     info.cb_data = cb_data;
-    locked_list_iterate(lanparms, lanparms_handler, &info);
+    locked_list_iterate_prefunc(lanparms, lanparms_prefunc,
+				lanparms_handler, &info);
 }
 
 ipmi_mcid_t

@@ -205,7 +205,7 @@ internal_pet_destroy(ipmi_pet_t *pet)
 }
 
 static void
-ipmi_pet_get(ipmi_pet_t *pet)
+pet_get(ipmi_pet_t *pet)
 {
     ipmi_lock(pet->timer_info->lock);
     pet->refcount++;
@@ -213,7 +213,7 @@ ipmi_pet_get(ipmi_pet_t *pet)
 }
 
 static void
-ipmi_pet_put(ipmi_pet_t *pet)
+pet_put(ipmi_pet_t *pet)
 {
     ipmi_lock(pet->timer_info->lock);
     pet->refcount--;
@@ -1100,7 +1100,7 @@ rescan_pet(void *cb_data, os_hnd_timer_id_t *id)
     }
     pet = timer_info->pet;
     pet->timer_info->running = 0;
-    ipmi_pet_get(pet);
+    pet_get(pet);
 
     timer_info->err = 0;
     rv = ipmi_mc_pointer_cb(pet->mc, rescan_pet_mc, timer_info);
@@ -1145,7 +1145,7 @@ pet_destroy_handler(ipmi_domain_t    *domain,
     pet->destroy_cb_data = cb_data;
     ipmi_unlock(pet->timer_info->lock);
 
-    ipmi_pet_put(pet);
+    pet_put(pet);
     return 0;
 }
 
@@ -1223,6 +1223,14 @@ pets_handler(void *cb_data, void *item1, void *item2)
 {
     iterate_pets_info_t *info = cb_data;
     info->handler(item1, info->cb_data);
+    pet_put(item1);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+pets_prefunc(void *cb_data, void *item1, void *item2)
+{
+    pet_get(item1);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -1244,7 +1252,7 @@ ipmi_pet_iterate_pets(ipmi_domain_t   *domain,
 
     info.handler = handler;
     info.cb_data = cb_data;
-    locked_list_iterate(pets, pets_handler, &info);
+    locked_list_iterate_prefunc(pets, pets_prefunc, pets_handler, &info);
 }
 
 ipmi_mcid_t

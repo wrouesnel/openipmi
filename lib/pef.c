@@ -184,6 +184,14 @@ pefs_handler(void *cb_data, void *item1, void *item2)
 {
     iterate_pefs_info_t *info = cb_data;
     info->handler(item1, info->cb_data);
+    pef_put(item1);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+pefs_prefunc(void *cb_data, void *item1, void *item2)
+{
+    pef_get(item1);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -205,7 +213,7 @@ ipmi_pef_iterate_pefs(ipmi_domain_t       *domain,
 
     info.handler = handler;
     info.cb_data = cb_data;
-    locked_list_iterate(pefs, pefs_handler, &info);
+    locked_list_iterate_prefunc(pefs, pefs_prefunc, pefs_handler, &info);
 }
 
 ipmi_mcid_t

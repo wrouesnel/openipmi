@@ -3380,7 +3380,9 @@ ipmi_sdr_entity_destroy(void *info)
 	{
 	    if (ent->frudev_present) {
 		ipmi_mc_t *mc = ent->frudev_mc;
+		_ipmi_domain_mc_lock(infos->ents->domain);
 		_ipmi_mc_get(mc);
+		_ipmi_domain_mc_unlock(infos->ents->domain);
 		ipmi_mc_remove_active_handler(ent->frudev_mc,
 					      entity_mc_active, ent);
 		_ipmi_mc_release(ent->frudev_mc);
@@ -3402,9 +3404,11 @@ ipmi_sdr_entity_destroy(void *info)
 			 k<=cent2->entity_instance;
 			 k++)
 		    {
+			_ipmi_domain_entity_lock(infos->ents->domain);
 			rv = entity_find(infos->ents, cent1->device_num,
 					 cent1->entity_id, k,
 					 &child);
+			_ipmi_domain_entity_unlock(infos->ents->domain);
 			if (rv)
 			    continue;
 
@@ -3417,9 +3421,11 @@ ipmi_sdr_entity_destroy(void *info)
 		    dlr_ref_t *cent = infos->dlrs[i]->contained_entities+j;
 		    if (cent->entity_id == 0)
 			continue;
+		    _ipmi_domain_entity_lock(infos->ents->domain);
 		    rv = entity_find(infos->ents, cent->device_num,
 				     cent->entity_id, cent->entity_instance,
 				     &child);
+		    _ipmi_domain_entity_unlock(infos->ents->domain);
 		    if (rv)
 			continue;
 		    ipmi_entity_remove_child(ent, child);
