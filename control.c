@@ -385,42 +385,40 @@ ipmi_control_alloc_nonstandard(ipmi_control_t **new_control)
 }
 
 int
-ipmi_control_add_nonstandard(ipmi_mc_t              *mc,
+ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 			     ipmi_control_t          *control,
+			     unsigned int            num,
 			     ipmi_entity_t           *ent,
 			     ipmi_control_destroy_cb destroy_handler,
 			     void                    *destroy_handler_cb_data)
 {
-    int                 i;
-    int                 found = 0;
     ipmi_control_info_t *controls = ipmi_mc_get_controls(mc);
     void                *link;
 
 
-    for (i=0; i<controls->idx_size; i++) {
-	if (!controls->controls_by_idx[i]) {
-	    found = 1;
-	    break;
-	}
-    }
+    if (num >= 256)
+	return EINVAL;
 
-    if (!found) {
+    if (num >= controls->idx_size) {
 	ipmi_control_t **new_array;
+	unsigned int   new_size;
+	int            i;
 
-	if (controls->idx_size >= 256)
-	    return EMFILE;
-	new_array = malloc(sizeof(*new_array) * (controls->idx_size + 16));
+	/* Allocate the array in multiples of 16 (to avoid thrashing malloc
+	   too much). */
+	new_size = ((num % 16) * 16) + 16;
+	new_array = malloc(sizeof(*new_array) * new_size);
 	if (!new_array)
 	    return ENOMEM;
-	memcpy(new_array, controls->controls_by_idx,
-	       sizeof(*new_array) * (controls->idx_size));
-	for (i=controls->idx_size; i<controls->idx_size+16; i++)
+	if (controls->controls_by_idx)
+	    memcpy(new_array, controls->controls_by_idx,
+		   sizeof(*new_array) * (controls->idx_size));
+	for (i=controls->idx_size; i<new_size; i++)
 	    new_array[i] = NULL;
 	if (controls->controls_by_idx)
 	    free(controls->controls_by_idx);
 	controls->controls_by_idx = new_array;
-	i = controls->idx_size;
-	controls->idx_size = i+16;
+	controls->idx_size = new_size;
     }
 
     control->waitq = opq_alloc(ipmi_mc_get_os_hnd(mc));
@@ -436,8 +434,8 @@ ipmi_control_add_nonstandard(ipmi_mc_t              *mc,
 
     control->mc = mc;
     control->lun = 4;
-    control->num = i;
-    controls->controls_by_idx[i] = control;
+    control->num = num;
+    controls->controls_by_idx[num] = control;
     control->entity_id = ipmi_entity_get_entity_id(ent);
     control->entity_instance = ipmi_entity_get_entity_instance(ent);
     control->destroy_handler = destroy_handler;

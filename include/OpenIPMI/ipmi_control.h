@@ -102,6 +102,7 @@ typedef void (*ipmi_control_destroy_cb)(ipmi_control_t *control,
 int ipmi_control_add_nonstandard(
     ipmi_mc_t               *mc,
     ipmi_control_t          *control,
+    unsigned int            num,
     ipmi_entity_t           *ent,
     ipmi_control_destroy_cb destroy_handler,
     void                    *destroy_handler_cb_data);
