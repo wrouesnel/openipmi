@@ -2689,8 +2689,8 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
 	domain->chan[curr].protocol = rsp->data[3] & 0x1f;
 	domain->chan[curr].session_support = rsp->data[4] >> 6;
 	domain->chan[curr].vendor_id = (rsp->data[5]
-					|| (rsp->data[6] << 8)
-					|| (rsp->data[7] << 16));
+					| (rsp->data[6] << 8)
+					| (rsp->data[7] << 16));
 	domain->chan[curr].aux_info = rsp->data[8] | (rsp->data[9] << 8);
     }
 

@@ -1,4 +1,9 @@
 
+2003-10-07 Tony Griffiths <tonyg@agile.tv>
+
+	* lib/domain.c: Fix getting the vendor id from the channel info
+	response.
+
 2003-10-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Changed the max outstanding message default
