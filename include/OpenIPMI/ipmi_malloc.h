@@ -43,6 +43,7 @@ void ipmi_mem_free(void *data);
 
 /* strdup using the above memory allocation routines. */
 char *ipmi_strdup(const char *str);
+char *ipmi_strndup(const char *str, int n);
 
 /* If you have debug allocations on, then you should call this to
    check for data you haven't freed (after you have freed all the

@@ -402,6 +402,26 @@ ipmi_strdup(const char *str)
     return rv;
 }
 
+char *
+ipmi_strndup(const char *str, int n)
+{
+    int  length;
+    char *rv = ipmi_mem_alloc(strlen(str)+1);
+
+    for (length=0; length<n; length++) {
+	if (! str[length])
+	    break;
+    }
+
+    rv = ipmi_mem_alloc(length+1);
+    if (!rv)
+	return NULL;
+
+    memcpy(rv, str, length);
+
+    return rv;
+}
+
 int
 ipmi_malloc_init(os_handler_t *os_hnd)
 {

@@ -1,3 +1,8 @@
+2004-09-08 Corey Minyard <cminyard@mvista.com> 
+
+	* utils/ipmi_malloc.c, include/OpenIPMI/ipmi_malloc.h: Added
+	an ipmi_strndup() function.
+
 2004-09-07 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Added a list of

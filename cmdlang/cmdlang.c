@@ -31,40 +31,55 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <OpenIPMI/ipmiif.h>
+
+typedef struct cmd_info_s cmd_info_t;
 typedef int (*cmd_out_cb)(cmd_info_t *info, char *output);
-typedef int (*cmd_done_cb)(cmd_inf_t *info);
+typedef int (*cmd_done_cb)(cmd_info_t *info);
 
-typedef struct cmd_info_s
-{
-    cmd_out_cb  out;
-    cmd_done_cb done;
-} cmd_info_t;
+typedef int (*objparse_handler_cb)(int argc, char *argv[]);
 
-typedef int (*objparse_handler_cb)(char *rest, int argc, char *argv[]);
 
-/* These are handlers for each type of object. */
-
-typedef struct obj_info_s
+struct cmd_info_s
 {
     cmd_info_t          *info;
     char                *str;
+    int                 strstart, strlen;
+
+    char                *working_str;
+
     int                 argc;
     char                *argv[];
     objparse_handler_cb handler;
-} obj_info_t;
+    unsigned int        level;
 
-static int for_each_domain(cmd_info_t *info, char *str,
-			   int argc, char *argv[],
-			   objparse_handler handler)
+    cmd_out_cb  out;
+    cmd_done_cb done;
+};
+
+static int for_each_domain(cmd_info_t         *info,
+			   ipmi_domain_ptr_cb handler)
 {
-    
+    if (info->strlen == 0) {
+	info->working_str = NULL;
+    } else {
+	info->working_str = strndup(info->str + info->strstart, info->strlen);
+	if (!info->working_str)
+	    return ENOMEM;
+    }
+
+    ipmi_domain_iterate_domains(handler, info);
 }
 
-static int for_each_entity(cmd_info_t *info, char *str,
-			   int argc, char *argv[],
-			   objparse_handler handler)
+static int for_each_entity(cmd_info_t         *info,
+			   ipmi_entity_ptr_cb handler)
 {
-    
+    int  i;
+    char *str = info->str + info->strstart;
+
+    for (i=0, i<info->strlen; i++) {
+	
+    }
 }
 
 static int for_each_sensor(cmd_info_t *info, char *str,
