@@ -856,12 +856,13 @@ presence_changed(ipmi_entity_t *ent,
     presence_handler_info_t info;
 
     if (present != ent->present) {
-	handled = handle_hot_swap_presence(ent, present, event);
-
 	if (handled == IPMI_EVENT_HANDLED)
 	    event = NULL;
 
 	ent->present = present;
+
+	handled = handle_hot_swap_presence(ent, present, event);
+
 	/* When the board becomes present, fetch it's FRUs. */
 	if (present && ipmi_entity_get_is_fru(ent) && (ent->fru == NULL))
 	    ipmi_entity_fetch_frus(ent);
@@ -3828,6 +3829,110 @@ ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
  *
  **********************************************************************/
 
+static int set_hot_swap_state(ipmi_entity_t             *ent,
+			      enum ipmi_hot_swap_states state,
+			      ipmi_event_t              *event);
+
+static void
+hot_swap_power_on(ipmi_control_t *control, int err, void *cb_data)
+{
+    ipmi_entity_t *ent = cb_data;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "entity.c(hot_swap_power_on):"
+		 " Unable to set the hot swap power: %x", err);
+    } else {
+	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
+    }
+}
+
+static void
+indicator_change(ipmi_control_t *control, int err, void *cb_data)
+{
+    if (err)
+	ipmi_log(IPMI_LOG_WARNING,
+		 "entity.c(indicator_change):"
+		 " Unable to set the hot swap indicator: %x", err);
+}
+
+static void hot_swap_act(ipmi_entity_t *ent, void *cb_data)
+{
+    int val;
+    int rv;
+
+    if (ent->hot_swap_state == IPMI_HOT_SWAP_ACTIVATION_REQUESTED) {
+	if (ent->hot_swap_power) {
+	    val = 1;
+	    rv = ipmi_control_set_val(ent->hot_swap_power,
+				      &val,
+				      hot_swap_power_on,
+				      ent);
+	    if (rv)
+		ipmi_log(IPMI_LOG_WARNING,
+			 "entity.c(hot_swap_act):"
+			 " Unable to set the hot swap power: %x", rv);
+	    else
+		set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_IN_PROGRESS,
+				   NULL);
+	}
+    }
+}
+
+static void
+hot_swap_act_timeout(void *cb_data, os_hnd_timer_id_t *timer)
+{
+    ipmi_entity_t    *ent = cb_data;
+    ipmi_entity_id_t entity_id;
+
+    ipmi_lock(ent->timer_lock);
+    ent->running_timer_count--;
+    ent->hot_swap_act_timer_running = 0;
+
+    if (ent->destroyed) {
+	if (ent->running_timer_count == 0) {
+	    ipmi_unlock(ent->timer_lock);
+	    ipmi_mem_free(ent);
+	    return;
+	}
+	ipmi_unlock(ent->timer_lock);
+	return;
+    }
+    entity_id = ipmi_entity_convert_to_id(ent);
+    ipmi_unlock(ent->timer_lock);
+
+    ipmi_entity_pointer_cb(entity_id, hot_swap_act, NULL);
+}
+
+static void
+hot_swap_requester_read(ipmi_sensor_t *sensor,
+			int           err,
+			ipmi_states_t *states,
+			void          *cb_data)
+{
+    ipmi_entity_t *ent = cb_data;
+
+    if (ipmi_is_state_set(states, ent->hot_swap_offset)
+	== ent->hot_swap_requesting_val)
+    {
+	if (ent->hot_swap_power_on) {
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_DEACTIVATION_REQUESTED,
+			       NULL);
+	} else {
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_DEACTIVATION_REQUESTED,
+			       NULL);
+	}
+    } else {
+	if (ent->hot_swap_power_on) {
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_DEACTIVATION_REQUESTED,
+			       NULL);
+	} else {
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
+			       NULL);
+	}
+    }
+}
+
 static int
 set_hot_swap_state(ipmi_entity_t             *ent,
 		   enum ipmi_hot_swap_states state,
@@ -3836,6 +3941,7 @@ set_hot_swap_state(ipmi_entity_t             *ent,
     int                       val;
     int                       set = 1;
     enum ipmi_hot_swap_states old_state;
+    int                       handled = IPMI_EVENT_NOT_HANDLED;
 
     old_state = ent->hot_swap_state;
 
@@ -3847,6 +3953,27 @@ set_hot_swap_state(ipmi_entity_t             *ent,
 
     case IPMI_HOT_SWAP_ACTIVATION_REQUESTED:
 	val = ent->hot_swap_ind_req_act;
+	if (ent->hot_swap_act_timeout != IPMI_TIMEOUT_FOREVER) {
+	    /* Need to time the operation. */
+	    struct timeval timeout;
+
+	    handled = set_hot_swap_state(ent,
+					 IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
+					 event);
+	    timeout.tv_sec = ent->hot_swap_act_timeout / 1000000000;
+	    timeout.tv_usec = (ent->hot_swap_act_timeout % 1000000000) / 1000;
+	    ipmi_lock(ent->timer_lock);
+	    if (!ent->hot_swap_act_timer_running) {
+		ent->os_hnd->start_timer(ent->os_hnd,
+					 ent->hot_swap_act_timer,
+					 &timeout,
+					 hot_swap_act_timeout,
+					 ent);
+		ent->hot_swap_act_timer_running = 1;
+		ent->running_timer_count++;
+	    }
+	    ipmi_unlock(ent->timer_lock);
+	}
 	break;
 
     case IPMI_HOT_SWAP_ACTIVE:
@@ -3868,7 +3995,8 @@ set_hot_swap_state(ipmi_entity_t             *ent,
     if (set && ent->hot_swap_indicator) {
 	int rv;
 
-	rv = ipmi_control_set_val(ent->hot_swap_indicator, &val, NULL, NULL);
+	rv = ipmi_control_set_val(ent->hot_swap_indicator, &val,
+				  indicator_change, NULL);
 	if (rv)
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "entity.c(set_hot_swap_state): Unable to"
@@ -3876,17 +4004,13 @@ set_hot_swap_state(ipmi_entity_t             *ent,
 		     val, rv);
     }
 
-    if (old_state == state) {
-	return IPMI_EVENT_NOT_HANDLED;
-    } else {
-	int handled;
+    if (old_state != state) {
 	ent->hot_swap_state = state;
 	ipmi_entity_call_hot_swap_handlers(ent, state, old_state, &event,
 					   &handled);
-	return handled;
     }
 
-    return IPMI_EVENT_NOT_HANDLED;
+    return handled;
 }
 
 static int
@@ -4055,49 +4179,33 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     }
 
     ipmi_sensor_events_enable_set(sensor, &events, NULL, NULL);
+
+    rv = ipmi_states_get(sensor, hot_swap_requester_read, ent);
+    if (rv)
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "entity.c(handle_new_hot_swap_requester): Unable to"
+		 " request sensor value, error %x",
+		 rv);
 }
 
 static void
-hot_swap_power_on(ipmi_control_t *control,
-		  int            err,
-		  void           *cb_data)
+presence_wait_cb(ipmi_entity_t *ent, void *cb_data)
 {
-    ipmi_entity_t *ent = cb_data;
-
-    if (err) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "entity.c(hot_swap_power_on):"
-		 " Unable to set the hot swap power: %x", err);
+    if ((!ent->hot_swap_power)
+	|| (hot_swap_act_timeout == IPMI_TIMEOUT_NOW))
+    {
+	/* Now power control or immediate timeout, it goes straight
+	   to active. */
+	handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
     } else {
-	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
-    }
-}
-
-static void hot_swap_act(ipmi_entity_t *ent, void *cb_data)
-{
-    int val;
-    int rv;
-
-    if (ent->hot_swap_state == IPMI_HOT_SWAP_ACTIVATION_REQUESTED) {
-	if (ent->hot_swap_power) {
-	    val = 1;
-	    rv = ipmi_control_set_val(ent->hot_swap_power,
-				      &val,
-				      hot_swap_power_on,
-				      ent);
-	    if (rv)
-		ipmi_log(IPMI_LOG_WARNING,
-			 "entity.c(hot_swap_act):"
-			 " Unable to set the hot swap power: %x", rv);
-	    else
-		set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_IN_PROGRESS,
-				   NULL);
-	}
+	handled = set_hot_swap_state(ent,
+				     IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
+				     NULL);
     }
 }
 
 static void
-hot_swap_act_timeout(void *cb_data, os_hnd_timer_id_t *timer)
+presence_wait_done(void *cb_data, os_hnd_timer_id_t *id)
 {
     ipmi_entity_t    *ent = cb_data;
     ipmi_entity_id_t entity_id;
@@ -4118,7 +4226,7 @@ hot_swap_act_timeout(void *cb_data, os_hnd_timer_id_t *timer)
     entity_id = ipmi_entity_convert_to_id(ent);
     ipmi_unlock(ent->timer_lock);
 
-    ipmi_entity_pointer_cb(entity_id, hot_swap_act, NULL);
+    ipmi_entity_pointer_cb(entity_id, presence_wait_cb, NULL);
 }
 
 static int
@@ -4129,35 +4237,25 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
     int handled;
 
     if (present) {
-	if ((!ent->hot_swap_power)
-	    || (hot_swap_act_timeout == IPMI_TIMEOUT_NOW))
-	{
-	    /* Now power control or immediate timeout, it goes straight
-	       to active. */
-	    handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, event);
-	} else if (hot_swap_act_timeout == IPMI_TIMEOUT_FOREVER) {
-	    handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, event);
-	} else {
-	    /* Need to time the operation. */
-	    struct timeval timeout;
+	/* Wait for everything to be created. */
+	struct timeval timeout;
 
-	    handled = set_hot_swap_state(ent,
-					 IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
-					 event);
-	    timeout.tv_sec = ent->hot_swap_act_timeout / 1000000000;
-	    timeout.tv_usec = (ent->hot_swap_act_timeout % 1000000000) / 1000;
-	    ipmi_lock(ent->timer_lock);
-	    if (!ent->hot_swap_act_timer_running) {
-		ent->os_hnd->start_timer(ent->os_hnd,
-					 ent->hot_swap_act_timer,
-					 &timeout,
-					 hot_swap_act_timeout,
-					 ent);
-		ent->hot_swap_act_timer_running = 1;
-		ent->running_timer_count++;
-	    }
-	    ipmi_unlock(ent->timer_lock);
+	handled = set_hot_swap_state(ent,
+				     IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
+				     event);
+	timeout.tv_sec = ent->hot_swap_act_timeout / 1000000000;
+	timeout.tv_usec = (ent->hot_swap_act_timeout % 1000000000) / 1000;
+	ipmi_lock(ent->timer_lock);
+	if (!ent->hot_swap_act_timer_running) {
+	    ent->os_hnd->start_timer(ent->os_hnd,
+				     ent->hot_swap_act_timer,
+				     &timeout,
+				     presence_wait_done,
+				     ent);
+	    ent->hot_swap_act_timer_running = 1;
+	    ent->running_timer_count++;
 	}
+	ipmi_unlock(ent->timer_lock);
     } else {
 	handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_NOT_PRESENT, event);
     }
