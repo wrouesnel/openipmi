@@ -279,7 +279,7 @@ void ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
 
 /* Return the timestamp that was fetched before the first SEL fetch.
    This is so that OEM code can properly ignore old events. */
-unsigned long ipmi_bmc_get_startup_SEL_time(ipmi_mc_t *bmc);
+unsigned long ipmi_mc_get_startup_SEL_time(ipmi_mc_t *bmc);
 
 /* If OEM code gets and event and it doesn't deliver it to the user,
    it should deliver it this way, that way it can be delivered to the
