@@ -3109,7 +3109,7 @@ handle_picmg_cmd_get_fru_led_state(lmc_data_t    *mc,
     rdata[1] = IPMI_PICMG_GRP_EXT;
     rdata[2] = 0x00;
     if (mc->leds[led].loc_cnt_sup)
-	rdata[2] |= 0x04; /* Local control support */
+	rdata[2] |= 0x01; /* Local control support */
 
     if (mc->leds[led].loc_cnt) {
 	rdata[3] = mc->leds[led].off_dur;

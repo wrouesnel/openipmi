@@ -110,6 +110,7 @@ struct ipmi_control_s
     /* For light types. */
     ipmi_control_light_t *lights;
     unsigned int         colors;
+    int                  has_local_control;
 
     /* For display types. */
     unsigned int columns;
@@ -1254,6 +1255,14 @@ ipmi_control_get_id_length(ipmi_control_t *control)
 	return control->id_len;
 }
 
+enum ipmi_str_type_e
+ipmi_control_get_id_type(ipmi_control_t *control)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    return control->id_type;
+}
+
 int
 ipmi_control_get_id(ipmi_control_t *control, char *id, int length)
 {
@@ -1720,6 +1729,20 @@ ipmi_control_light_is_color_supported(ipmi_control_t *control,
     return (control->colors & (1 << color)) != 0;
 }
 
+void
+ipmi_control_light_set_has_local_control(ipmi_control_t *control, int val)
+{
+     control->has_local_control = val;
+}
+
+int
+ipmi_control_light_has_local_control(ipmi_control_t *control)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    return control->has_local_control;
+}
+
 int
 ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2)
 {
@@ -1847,6 +1870,6 @@ int
 ipmi_control_get_num_light_settings(ipmi_control_t *control,
 				    unsigned int   light)
 {
-    return ipmi_control_get_num_light_settings(control, light);
+    return ipmi_control_get_num_light_values(control, light);
 }
 

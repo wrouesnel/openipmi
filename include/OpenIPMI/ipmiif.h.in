@@ -1112,7 +1112,7 @@ int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
    it's current event state if it is out of range.  If
    ipmi_sensor_get_supports_auto_rearm() returns false and you receive
    an event, you have to rearm a sensor manually to get any that event
-   from it.  If global_enable is set, all events are enable and the
+   from it.  If global_enable is set, all events are enabled and the
    state is ignored (and may be NULL).  Otherwise, the events set in
    the state are enabled. */
 int ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
@@ -1517,10 +1517,6 @@ int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
    be set individually, they are controlled as a group, one set
    command will set them all. */
 
-/* Get the number of settings the light supports. */
-int ipmi_control_get_num_light_settings(ipmi_control_t *control,
-					unsigned int   light);
-
 /* This describes a setting for a light.  There are two types of
    lights.  One type has a general ability to be set to a color, on
    time, and off time.  The other has a pre-defined set of
@@ -1537,6 +1533,13 @@ int ipmi_control_get_num_light_settings(ipmi_control_t *control,
    what the LED can do. */
 int ipmi_control_light_set_with_setting(ipmi_control_t *control);
 
+/* Allows detecting if a setting light supports a specific color. */
+int ipmi_control_light_is_color_supported(ipmi_control_t *control,
+					  unsigned int   color);
+
+/* Allows detecting if a setting light supports local control. */
+int ipmi_control_light_has_local_control(ipmi_control_t *control);
+
 /* Handling the settings variable for a settings type light.  Note
    that setting the on time to zero will turn off the LED (the off
    time should be positive) and setting the off time to zero will turn
@@ -1552,10 +1555,6 @@ int ipmi_light_setting_in_local_control(ipmi_light_setting_t *setting,
 int ipmi_light_setting_set_local_control(ipmi_light_setting_t *setting,
 					 int                  num,
 					 int                  lc);
-
-/* Allows detecting if a light supports a specific color. */
-int ipmi_control_light_is_color_supported(ipmi_control_t *control,
-					  unsigned int   color);
 
 int ipmi_light_setting_get_color(ipmi_light_setting_t *setting, int num,
 				 int *color);
@@ -1616,6 +1615,8 @@ int ipmi_control_get_light(ipmi_control_t         *control,
    black with a time of 100 and the second is red with a value of 900.
    Value 4 has one transition with a red color.
  */
+int ipmi_control_get_num_light_values(ipmi_control_t *control,
+				      unsigned int   light);
 int ipmi_control_get_num_light_transitions(ipmi_control_t *control,
 					   unsigned int   light,
 					   unsigned int   value);
@@ -1945,6 +1946,10 @@ int ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
 int ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
 						     int           event,
 						     int           *val)
+     IPMI_FUNC_DEPRECATED;
+
+int ipmi_control_get_num_light_settings(ipmi_control_t *control,
+					unsigned int   light)
      IPMI_FUNC_DEPRECATED;
 
 #endif /* __IPMIIF_H */

@@ -553,6 +553,7 @@ scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 	if (err) {
 	    ipmi_cmdlang_lock(cmd_info);
 	    cmdlang->err = err;
+	    cmdlang->errstr = "Error scanning domain";
 	    ipmi_domain_get_name(domain, cmdlang->objstr,
 				 cmdlang->objstr_len);
 	    cmdlang->location = "cmd_domain.c(scan_done)";

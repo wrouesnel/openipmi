@@ -245,6 +245,7 @@ void ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *info);
 
 /* Helper functions */
 void ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmd_info_t *info);
+void ipmi_cmdlang_get_double(char *str, double *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_uchar(char *str, unsigned char *val,
 			    ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmd_info_t *info);
@@ -252,6 +253,19 @@ void ipmi_cmdlang_get_ip(char *str, struct in_addr *val,
 			 ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_mac(char *str, unsigned char val[6],
 			  ipmi_cmd_info_t *info);
+void ipmi_cmdlang_get_color(char *str, int *val, ipmi_cmd_info_t *info);
+void ipmi_cmdlang_get_threshold_ev(char                        *str,
+				   enum ipmi_thresh_e          *rthresh,
+				   enum ipmi_event_value_dir_e *rvalue_dir,
+				   enum ipmi_event_dir_e       *rdir,
+				   ipmi_cmd_info_t             *info);
+void ipmi_cmdlang_get_discrete_ev(char                  *str,
+				  int                   *roffset,
+				  enum ipmi_event_dir_e *rdir,
+				  ipmi_cmd_info_t       *info);
+void ipmi_cmdlang_get_threshold(char               *str,
+				enum ipmi_thresh_e *rthresh,
+				ipmi_cmd_info_t    *info);
 
 /* Call these to initialize and setup the command interpreter.  init
    should be called after the IPMI library proper is initialized, but

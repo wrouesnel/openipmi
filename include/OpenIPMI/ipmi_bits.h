@@ -346,7 +346,7 @@ char *ipmi_get_entity_id_string(unsigned int val);
 
 
 /*
- * Indicator types.
+ * Control types.
  */
 #define IPMI_CONTROL_LIGHT		1
 #define IPMI_CONTROL_RELAY		2

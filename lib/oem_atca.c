@@ -108,6 +108,7 @@ typedef struct atca_led_s
     unsigned int   fru_id;
     unsigned int   num;
     unsigned int   colors; /* A bitmask, in OpenIPMI numbers. */
+    int            local_control;
     atca_fru_t     *fru;
     ipmi_control_t *control;
 } atca_led_t;
@@ -1044,6 +1045,8 @@ set_led(ipmi_control_t       *control,
     rv = ipmi_light_setting_in_local_control(settings, 0, &local_control);
     if (rv)
 	return rv;
+    if (local_control && !l->local_control)
+	return ENOSYS;
 
     if (color == IPMI_CONTROL_COLOR_BLACK) {
 	on_time = 0;
@@ -1156,6 +1159,10 @@ led_get_done(ipmi_control_t *control,
 				     0,
 				     atca_to_openipmi_color[color]);
 	if (rsp->data[6] == 0) {
+	    /* LED is off, set it to black. */
+	    ipmi_light_setting_set_color(info->settings,
+					 0,
+					 IPMI_CONTROL_COLOR_BLACK);
 	    ipmi_light_setting_set_on_time(info->settings, 0, 0);
 	    ipmi_light_setting_set_off_time(info->settings, 0, 1);
 	} else if (rsp->data[6] == 0xff) {
@@ -1372,6 +1379,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
     ipmi_control_add_light_color_support(l->control,
 					 IPMI_CONTROL_COLOR_BLACK);
     ipmi_control_set_num_elements(l->control, 1);
+    ipmi_control_light_set_has_local_control(l->control, l->local_control);
     rv = atca_add_control(mc, 
 			  &l->control,
 			  num,
@@ -1387,6 +1395,48 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 }
 
 static void
+get_led_capability_2(ipmi_mc_t  *mc,
+		     ipmi_msg_t *rsp,
+		     void       *rsp_data)
+{
+    ipmi_msg_t    msg;
+    unsigned char data[3];
+    int           rv;
+    atca_led_t    *linfo = rsp_data;
+
+    if (linfo->destroyed) {
+	/* The entity or MC was destroyed while the message was in
+	   progress, so the memory was not freed (because this
+	   function needed it).  The control didn't yet exist, so just
+	   free the memory. */
+	ipmi_mem_free(linfo);
+	return;
+    }
+
+    if (check_for_msg_err(mc, NULL, rsp, 3, "get_led_capability_2"))
+	return;
+
+    linfo->local_control = rsp->data[2] & 1;
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_GET_LED_COLOR_CAPABILITIES;
+    msg.data = data;
+    msg.data_len = 3;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = linfo->fru->fru_id;
+    data[2] = linfo->num;
+    linfo->op_in_progress = 1;
+    rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_cap_rsp, linfo);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(get_led_capabilities_2): "
+		 "Could not send FRU LED color capablity command: 0x%x",
+		 MC_NAME(mc), rv);
+	/* Just go on, don't shut down the info. */
+    }
+}
+
+static void
 get_led_capability(ipmi_mc_t *mc, atca_fru_t *finfo, unsigned int num)
 {
     ipmi_msg_t    msg;
@@ -1397,19 +1447,22 @@ get_led_capability(ipmi_mc_t *mc, atca_fru_t *finfo, unsigned int num)
     linfo->num = num;
     linfo->fru = finfo;
 
+    /* First we get the LED state because that is where we know if the
+       LED supports local control.  Too bad it is not in the
+       capabilities. */
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
-    msg.cmd = IPMI_PICMG_CMD_GET_LED_COLOR_CAPABILITIES;
+    msg.cmd = IPMI_PICMG_CMD_GET_FRU_LED_STATE;
     msg.data = data;
     msg.data_len = 3;
     data[0] = IPMI_PICMG_GRP_EXT;
-    data[1] = finfo->fru_id;
-    data[2] = num;
+    data[1] = linfo->fru->fru_id;
+    data[2] = linfo->num;
     linfo->op_in_progress = 1;
-    rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_cap_rsp, linfo);
+    rv = ipmi_mc_send_command(mc, 0, &msg, get_led_capability_2, linfo);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(get_led_capabilities): "
-		 "Could not send FRU LED color capablity command: 0x%x",
+		 "Could not send FRU LED state command: 0x%x",
 		 MC_NAME(mc), rv);
 	/* Just go on, don't shut down the info. */
     }

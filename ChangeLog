@@ -1,3 +1,20 @@
+2004-10-04 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_control.h, lib/control.c: Add the ability
+	to check the local control capability of an LED.
+	* include/OpenIPMI/ipmiif.h.in: ditto
+	* lib/oem_atca.c: ditto
+
+	* lib/control.c: Add missing ipmi_control_get_id_type() function.
+
+	* lib/oem_atca.c: Fixed color reporting to report black when
+	the on time is 0.
+	
+	* lib/domain.c: Minor changes to domain startup reporting so
+	things come in the right order.
+
+	* lanserv/emu.c: Fixed local control support to use the right bit.
+
 2004-10-02 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in, include/OpenIPMI/ipmi_domain.h:

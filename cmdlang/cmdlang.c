@@ -1256,6 +1256,26 @@ ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmd_info_t *info)
 }
 
 void
+ipmi_cmdlang_get_double(char *str, double *val, ipmi_cmd_info_t *info)
+{
+    char   *end;
+    double rv;
+
+    if (info->cmdlang->err)
+	return;
+
+    rv = strtod(str, &end);
+    if (*end != '\0') {
+	info->cmdlang->errstr = "Invalid double";
+	info->cmdlang->err = EINVAL;
+	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_double)";
+	return;
+    }
+
+    *val = rv;
+}
+
+void
 ipmi_cmdlang_get_uchar(char *str, unsigned char *val, ipmi_cmd_info_t *info)
 {
     char *end;
@@ -1268,7 +1288,7 @@ ipmi_cmdlang_get_uchar(char *str, unsigned char *val, ipmi_cmd_info_t *info)
     if (*end != '\0') {
 	info->cmdlang->errstr = "Invalid integer";
 	info->cmdlang->err = EINVAL;
-	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
+	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_uchar)";
 	return;
     }
 
@@ -1386,6 +1406,288 @@ ipmi_cmdlang_get_mac(char *str, unsigned char val[6], ipmi_cmd_info_t *info)
 
  out:
     return;
+}
+
+void
+ipmi_cmdlang_get_color(char *str, int *val, ipmi_cmd_info_t *info)
+{
+    int i;
+
+    for (i=IPMI_CONTROL_COLOR_BLACK; i<IPMI_CONTROL_COLOR_ORANGE; i++){
+	if (strcmp(str, ipmi_get_color_string(i)) == 0) {
+	    *val = i;
+	    return;
+	}
+    }
+
+    info->cmdlang->errstr = "Invalid color";
+    info->cmdlang->err = EINVAL;
+    info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_color)";
+}
+
+static int
+issep(char val)
+{
+    return ((val == ' ')
+	    || (val == '\t')
+	    || (val == '\n')
+	    || (val == '\r'));
+}
+
+void
+ipmi_cmdlang_get_threshold_ev(char                        *str,
+			      enum ipmi_thresh_e          *rthresh,
+			      enum ipmi_event_value_dir_e *rvalue_dir,
+			      enum ipmi_event_dir_e       *rdir,
+			      ipmi_cmd_info_t             *info)
+{
+    enum ipmi_thresh_e          thresh;
+    enum ipmi_event_value_dir_e value_dir;
+    enum ipmi_event_dir_e       dir;
+    char                        val[4][20];
+    int                         len;
+    int                         vc;
+
+
+    vc = 0;
+    for (;;) {
+	char *start, *end;
+
+	while (issep(*str))
+	    str++;
+	if (! *str)
+	    break;
+
+	if (vc == 4)
+	    goto out_err;
+
+	start = str;
+	while (*str && (!issep(*str)))
+	    str++;
+	end = str;
+	len = end - start;
+	if (len >= 20)
+	    goto out_err;
+
+	memcpy(val[vc], start, len);
+	val[vc][len] = '\0';
+	vc++;
+    }
+
+    if (vc == 1) {
+	/* One value, it is a compressed form. */
+	if (strlen(val[0]) != 4)
+	    goto out_err;
+
+	if ((val[0][0] == 'u') || (val[0][0] == 'U')) {
+	    if ((val[0][1] == 'n') || (val[0][1] == 'N'))
+		thresh = IPMI_UPPER_NON_CRITICAL;
+	    else if ((val[0][1] == 'c') || (val[0][1] == 'C'))
+		thresh = IPMI_UPPER_CRITICAL;
+	    else if ((val[0][1] == 'f') || (val[0][1] == 'F'))
+		thresh = IPMI_UPPER_NON_RECOVERABLE;
+	    else if ((val[0][1] == 'r') || (val[0][1] == 'R'))
+		thresh = IPMI_UPPER_NON_RECOVERABLE;
+	    else
+		goto out_err;
+	} else if ((val[0][0] == 'l') || (val[0][0] == 'L')) {
+	    if ((val[0][1] == 'n') || (val[0][1] == 'N'))
+		thresh = IPMI_LOWER_NON_CRITICAL;
+	    else if ((val[0][1] == 'c') || (val[0][1] == 'C'))
+		thresh = IPMI_LOWER_CRITICAL;
+	    else if ((val[0][1] == 'f') || (val[0][1] == 'F'))
+		thresh = IPMI_LOWER_NON_RECOVERABLE;
+	    else if ((val[0][1] == 'r') || (val[0][1] == 'R'))
+		thresh = IPMI_LOWER_NON_RECOVERABLE;
+	    else
+		goto out_err;
+	} else
+	    goto out_err;
+
+	if ((val[0][2] == 'h') || (val[0][2] == 'H'))
+	    value_dir = IPMI_GOING_HIGH;
+	else if ((val[0][2] == 'l') || (val[0][2] == 'L'))
+	    value_dir = IPMI_GOING_LOW;
+	else
+	    goto out_err;
+
+	if ((val[0][3] == 'a') || (val[0][2] == 'A'))
+	    dir = IPMI_ASSERTION;
+	else if ((val[0][3] == 'd') || (val[0][3] == 'D'))
+	    dir = IPMI_DEASSERTION;
+	else
+	    goto out_err;
+    } else if (vc == 4) {
+	/* Four values, uncompressed form */
+	if (strcasecmp(val[0], "upper") == 0) {
+	    if (strcasecmp(val[1], "noncritical") == 0)
+		thresh = IPMI_UPPER_NON_CRITICAL;
+	    else if (strcasecmp(val[1], "critical") == 0)
+		thresh = IPMI_UPPER_CRITICAL;
+	    else if (strcasecmp(val[1], "nonrecoverable") == 0)
+		thresh = IPMI_UPPER_NON_RECOVERABLE;
+	    else
+		goto out_err;
+	} else if (strcasecmp(val[0], "lower") == 0) {
+	    if (strcasecmp(val[1], "noncritical") == 0)
+		thresh = IPMI_LOWER_NON_CRITICAL;
+	    else if (strcasecmp(val[1], "critical") == 0)
+		thresh = IPMI_LOWER_CRITICAL;
+	    else if (strcasecmp(val[1], "nonrecoverable") == 0)
+		thresh = IPMI_LOWER_NON_RECOVERABLE;
+	    else
+		goto out_err;
+	} else
+	    goto out_err;
+
+	if (strcasecmp(val[2], "goinghigh") == 0)
+	    value_dir = IPMI_GOING_HIGH;
+	else if (strcasecmp(val[2], "goinglow") == 0)
+	    value_dir = IPMI_GOING_LOW;
+	else
+	    goto out_err;
+
+	if (strcasecmp(val[3], "assertion") == 0)
+	    dir = IPMI_ASSERTION;
+	else if (strcasecmp(val[3], "deassertion") == 0)
+	    dir = IPMI_DEASSERTION;
+	else
+	    goto out_err;
+    } else
+	goto out_err;
+    if (rdir)
+	*rdir = dir;
+    if (rvalue_dir)
+	*rvalue_dir = value_dir;
+    if (rthresh)
+	*rthresh = thresh;
+    return;
+
+ out_err:
+    info->cmdlang->errstr = "Invalid threshold event";
+    info->cmdlang->err = EINVAL;
+    info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_threshold_ev)";
+}
+
+void
+ipmi_cmdlang_get_threshold(char               *str,
+			   enum ipmi_thresh_e *rthresh,
+			   ipmi_cmd_info_t    *info)
+{
+    enum ipmi_thresh_e thresh;
+
+    for (thresh = IPMI_LOWER_NON_CRITICAL;
+	 thresh <= IPMI_UPPER_NON_RECOVERABLE; 
+	 thresh++)
+    {
+	if (strcmp(str, ipmi_get_threshold_string(thresh)) == 0) {
+	    if (rthresh)
+		*rthresh = thresh;
+	    return;
+	}
+    }
+    if (strcasecmp(str, "unc") == 0)
+	thresh = IPMI_UPPER_NON_CRITICAL;
+    else if (strcasecmp(str, "uc") == 0)
+	thresh = IPMI_UPPER_CRITICAL;
+    else if (strcasecmp(str, "unr") == 0)
+	thresh = IPMI_UPPER_NON_RECOVERABLE;
+    else if (strcasecmp(str, "lnc") == 0)
+	thresh = IPMI_LOWER_NON_CRITICAL;
+    else if (strcasecmp(str, "lc") == 0)
+	thresh = IPMI_LOWER_CRITICAL;
+    else if (strcasecmp(str, "lnr") == 0)
+	thresh = IPMI_LOWER_NON_RECOVERABLE;
+    else
+	goto out_err;
+
+    if (rthresh)
+	*rthresh = thresh;
+    return;
+
+ out_err:
+    info->cmdlang->errstr = "Invalid threshold";
+    info->cmdlang->err = EINVAL;
+    info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_threshold)";
+}
+
+void
+ipmi_cmdlang_get_discrete_ev(char                  *str,
+			     int                   *roffset,
+			     enum ipmi_event_dir_e *rdir,
+			     ipmi_cmd_info_t       *info)
+{
+    int                   offset;
+    enum ipmi_event_dir_e dir;
+    char                  val[4][20];
+    int                   len;
+    int                   vc;
+    char                  *end;
+
+
+    vc = 0;
+    for (;;) {
+	char *start, *end;
+
+	while (issep(*str))
+	    str++;
+	if (! *str)
+	    break;
+
+	if (vc == 4)
+	    goto out_err;
+
+	start = str;
+	while (*str && (!issep(*str)))
+	    str++;
+	end = str;
+	len = end - start;
+	if (len >= 20)
+	    goto out_err;
+
+	memcpy(val[vc], start, len);
+	val[vc][len] = '\0';
+	vc++;
+    }
+
+    if (vc == 1) {
+	/* One value, it is a compressed form. */
+
+	offset = strtoul(val[0], &end, 0);
+	if (end == val[0])
+	    goto out_err;
+	if ((*end == 'd') || (*end == 'D'))
+	    dir = IPMI_DEASSERTION;
+	else if ((*end == 'a') || (*end == 'A'))
+	    dir = IPMI_ASSERTION;
+	else
+	    goto out_err;
+	end++;
+	if (*end != '\0')
+	    goto out_err;
+    } else if (vc == 2) {
+	offset = strtoul(val[0], &end, 0);
+	if ((end == val[0]) || (*end != '\0'))
+	    goto out_err;
+	if (strcasecmp(val[1], "deassertion")  == 0)
+	    dir = IPMI_DEASSERTION;
+	else if (strcasecmp(val[1], "assertion")  == 0)
+	    dir = IPMI_ASSERTION;
+	else
+	    goto out_err;
+    } else
+	goto out_err;
+
+    if (roffset)
+	*roffset = offset;
+    if (rdir)
+	*rdir = dir;
+    return;
+
+ out_err:
+    info->cmdlang->errstr = "Invalid discrete event";
+    info->cmdlang->err = EINVAL;
+    info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_discrete_event)";
 }
 
 typedef struct ipmi_cmdlang_event_entry_s ipmi_cmdlang_event_entry_t;
@@ -1747,6 +2049,7 @@ int ipmi_cmdlang_entity_init(void);
 int ipmi_cmdlang_mc_init(void);
 int ipmi_cmdlang_pet_init(void);
 int ipmi_cmdlang_sensor_init(void);
+int ipmi_cmdlang_control_init(void);
 
 int
 ipmi_cmdlang_init(void)
@@ -1766,6 +2069,9 @@ ipmi_cmdlang_init(void)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_sensor_init();
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_control_init();
     if (rv) return rv;
 
     return 0;
@@ -1808,11 +2114,6 @@ ipmi_cmdlang_get_evinfo(void)
 /*
 The command hierarchy is:
 
-* control
-  * help
-  * list <entity> - List all controls
-  * info <control> 
-  * set <control> <val1> [<val2> ...] - set the value(s) for the control
 * pef
   * read <mc> - read pef information from an MC.  Note the lock is not
     released.

@@ -45,6 +45,15 @@
 /* Don't pollute the namespace iwth ipmi_fru_t. */
 void ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru);
 
+void ipmi_cmdlang_sensor_change(enum ipmi_update_e op,
+				ipmi_entity_t      *entity,
+				ipmi_sensor_t      *sensor,
+				void               *cb_data);
+void ipmi_cmdlang_control_change(enum ipmi_update_e op,
+				 ipmi_entity_t      *entity,
+				 ipmi_control_t      *control,
+				 void               *cb_data);
+
 static void
 entity_list_handler(ipmi_entity_t *entity, void *cb_data)
 {
@@ -224,11 +233,6 @@ fru_info(ipmi_entity_t *entity, void *cb_data)
     ipmi_cmdlang_up(cmd_info);
 }
 
-void ipmi_cmdlang_sensor_change(enum ipmi_update_e op,
-				ipmi_entity_t      *entity,
-				ipmi_sensor_t      *sensor,
-				void               *cb_data);
-
 void fru_change(enum ipmi_update_e op,
 		ipmi_entity_t      *entity,
 		void               *cb_data)
@@ -383,14 +387,15 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 	    errstr = "ipmi_entity_add_presence_handler";
 	    goto out_err;
 	}
-#if 0
-	rv = ipmi_entity_add_control_update_handler(entity,
-						    control_change,
-						    entity);
+	rv = ipmi_entity_add_control_update_handler
+	    (entity,
+	     ipmi_cmdlang_control_change,
+	     entity);
 	if (rv) {
 	    errstr = "ipmi_entity_add_control_update_handler";
 	    goto out_err;
 	}
+#if 0
 	rv = ipmi_entity_add_hot_swap_handler(entity,
 					      entity_hot_swap,
 					      NULL);

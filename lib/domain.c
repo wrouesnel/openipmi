@@ -2228,6 +2228,9 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 
     CHECK_DOMAIN_LOCK(domain);
 
+    if (channel > MAX_IPMI_USED_CHANNELS)
+	return EINVAL;
+
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -2263,7 +2266,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     {
 	ipmb->slave_addr += 2;
     }
-    rv = -1;
+    rv = ENOSYS; /* Return err if no scans done */
     while ((rv) && (ipmb->slave_addr <= end_addr)) {
 	rv = ipmi_send_command_addr(domain,
 				    &info->addr,
@@ -2289,7 +2292,8 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     if (info->lock)
 	ipmi_destroy_lock(info->lock);
     ipmi_mem_free(info);
-    return rv;
+    return 0; /* Since the done handler is always called, always
+		 return true.  Bus scans always succeed. */
 }
 
 void
@@ -3551,8 +3555,6 @@ call_con_fails(ipmi_domain_t *domain,
 	       unsigned int  port_num,
 	       int           still_connected)
 {
-    call_con_change(domain, err, conn_num, port_num, still_connected);
-
     ipmi_lock(domain->con_lock);
     domain->connecting = 0;
     if (domain->in_startup) {
@@ -3563,9 +3565,17 @@ call_con_fails(ipmi_domain_t *domain,
 		     DOMAIN_NAME(domain));
 	}
 	domain->in_startup = 0;
+	ipmi_unlock(domain->con_lock);
+
+	/* We have to call the domain change before we call the
+	   connection change handlers.  This way, the user is informed
+	   of the domain before any OEM handlers get called to start
+	   adding entities and the like. */
 	call_domain_change(domain, IPMI_ADDED);
-    }
-    ipmi_unlock(domain->con_lock);
+    } else
+	ipmi_unlock(domain->con_lock);
+
+    call_con_change(domain, err, conn_num, port_num, still_connected);
 }
 
 static void	

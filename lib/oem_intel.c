@@ -350,8 +350,8 @@ add_tig_alarm_handler(ipmi_mc_t *mc, intel_tig_info_t *info)
             goto out;
     }
 
-    _ipmi_control_put(info->alarm);
     _ipmi_entity_put(ent);
+    _ipmi_control_put(info->alarm);
 
 out:
     return;

@@ -131,16 +131,16 @@ The command hierarchy is:
       .
 
   * info <pet> - Dump information about a pet.
-  Response is:
-  PET
-    MC: <mc>
-    Channel: <channel>
-    IP Address: <ip address>
-    MAC Address: <mac address>
-    EFT Selector: <eft selector>
-    Policy Number: <policy number>
-    APT Selector: <apt selector>
-    LAN Dest Selector: <lan dest selector>
+    Response is:
+    PET
+      MC: <mc>
+      Channel: <channel>
+      IP Address: <ip address>
+      MAC Address: <mac address>
+      EFT Selector: <eft selector>
+      Policy Number: <policy number>
+      APT Selector: <apt selector>
+      LAN Dest Selector: <lan dest selector>
 
   * new <domain> <connection> <channel> <ip addr> <mac_addr> <eft selector>
     <policy num> <apt selector> <lan dest selector>
@@ -187,14 +187,14 @@ The command hierarchy is:
     * check <domain> - Audit all the entity hot-swap states
 
   * fru <entity> - Dump the FRU information about the given entity.
-  Reponse is:
-  Entity
-    Name: <entity>
-    FRU
-      **FRU INFO**
+    Reponse is:
+    Entity
+      Name: <entity>
+      FRU
+        **FRU INFO**
 
-  "FRU" will only be present if the entity can have FRU info.  FRU
-  info may be empty.
+    "FRU" will only be present if the entity can have FRU info.  FRU
+    info may be empty.
 
 * sensor
 
@@ -210,15 +210,119 @@ The command hierarchy is:
     Sensor
       **SENSOR INFO**
 
-  * rearm <sensor> - rearm the current sensor
-  * set_hysteresis - Sets the hysteresis for the current sensor
-  * get_hysteresis - Gets the hysteresis for the current sensor
-  * events_enable <events> <scanning> <assertion bitmask> <deassertion bitmask>
-    - set the events enable data for the sensor
+  * get <sensor> - Get the sensor's current reading.
+    Response is:
+    Sensor
+      Name: <sensor>
+      Event Messages Enabled: true | false
+      Sensor Scanning Enabled: true | false
+      Initial Update In Progress: true | false
+
+    For sensors of type "threshold", the following exist:
+    %Value: <double>
+    %Raw Value: <integer>
+    Threshold
+      Name: lower non critical | lower critical | lower non recoverable
+            | upper non critical | upper critical | upper non recoverable
+      Out Of Range: true | false
+    
+    For discrete sensors, the following exist:
+    Event
+      Offset: <integer>
+      %Name: <string name of event offset>
+      Set: true | false
+
+  * rearm <sensor> global | <thresholds> | <discrete states> -
+      Rearm the sensor.  If global is specified, then rearm
+      all events in the sensor.  If it is a threshold sensor, then
+      put in a list of thresholds of the form '[ul][ncr][hl][ad]
+      where [ul] means upper or lower, [ncr] means non-critical,
+      critical, or non-recoverable, [hl] means going high or going
+      low, and [ad] means assertion or deassertion.  If it is a
+      discrete sensor, then the form is <num>[ad] where the number
+      is the offset and [ad] means assertion or deassertion
+
+  * get_thresholds <sensor> - Get the sensor's thresholds
+    Response is:
+    Sensor
+      Name: <sensor>
+      Threshold     
+        Name: lower non critical | lower critical | lower non recoverable
+              | upper non critical | upper critical | upper non recoverable
+        Value: <double>
+     
+  * set_thresholds <sensor> <threshold> <value> ... - Set the sensor's
+    thresholds to the given values.  If a threshold is not specified,
+    it will not be modified.  Thresholds are unc, uc, unr, lnr, lc.
+    The u stands for upper, l for lower, nc for non-critical, c for
+    critical, and nr for non-recoverable.  The value is floating point.
+      
+  * get_hysteresis <sensor> - Get the sensor's hysteresis values
+    Response is:
+    Sensor
+      Name: <sensor>
+      Positivie Hysteresis: <integer>
+      Negative Hysteresis: <integer>
+
+  * set_hysteresis <sensor> <pos hyst> <neg hyst> - Set the sensor's
+    hysteresis to the given values.  These are raw integer
+    value; hystersis is specified as a raw value and it cannot be
+    converted to floating point because the function may be
+    non-linear.
+
 * control
+
   * list <entity> - List all controls
-  * info <control> 
-  * set <control> <val1> [<val2> ...] - set the value(s) for the control
+    Response is:
+    Name: <control1>
+    Name: <control2>
+      .
+      .
+
+  * info <control>
+    Response is:
+    Control
+      **CONTROL INFO**
+
+  * set <control> <values> - Set the value of a control.  The settings
+    depend on control type, most take one or more integer values.
+    An identifier type takes one or more unsigned characters.  A
+    light set with settings take the form 'lc|nolc <color> <on time>
+    <off time>.  lc and nolc turn on or of local control, the over
+    values should be obvious.  Note all lights support local control,
+    you need to see if it supports the value.
+
+  * get <control> - Get the value of a control.  The reponse depends
+    on the control type.  The main part is:
+    Control
+      Name: <control>
+
+    Response for setting lights is:
+    Light
+      Num: 0
+      Local Control: true | false
+      %Color: black | white | red | green | blue | yellow | orange
+      %On Time: <integer>
+      %Off Time: <integer>
+     .
+     .
+    Note that multiple lights may be present if the control supports
+    multiple lights.  The options values (marked with %) will not be
+    present if local control is set to true.  Local control means that
+    the LED takes whatever default function it does on the device
+    (like disk activity, ethernet activity, hot-swap LED, etc.).
+
+    Response for id control:
+    Data: <byte1> <byte2> ...
+
+    Response for other controls:
+    Value
+      Num: <integer>
+      Value: <integer>
+     .
+     .
+    There will be one Value for each value the control supports.
+
 * mc
 
   * list <domain> - List all MCs
@@ -463,6 +567,47 @@ For sensors of type not "threshold", the following exist:
     .
 
 Fields marked with % are optional
+
+
+**CONTROL INFO**
+  Name: <control>
+  Type: <control type>
+  Generates Events: true | false
+  Settable: true | false
+  Readable: true | false
+  Num Values: <integer>
+  Id: <string>
+  
+  Controls of type light that are set with settings have the
+  following:
+  Set with: settings
+  Local Control: true | false
+  Color: black | white | red | green | blue | yellow | orange
+    .
+    .
+  One color is listed for each supported color
+
+  Controls of type light that are set with transitions have the
+  following:
+  Light
+    Number: <integer>
+    Num Values: <integer>
+    Value
+      Number: <integer>
+      Num Transitions: <integer>
+      Transition
+        Number: <integer>
+	Color: black | white | red | green | blue | yellow | orange
+	Time: <integer>
+        .
+	.
+      .
+      .
+    .
+    .
+
+  Controls of type identifier have the following:
+  Max Length: <integer>
 
 
 **FRU INFO**
