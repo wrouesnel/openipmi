@@ -12,6 +12,8 @@
 	* utils/md5.c: Fixed this to work on big and little endian without
 	special defines.
 
+	* lib/sensor.c: Allow settable hysteresis values to be read, too.
+
 2003-12-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu_cmd.c, lanserv/Makefile.am, lanserv/lanserv_emu.c:

@@ -3254,7 +3254,8 @@ stand_ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
-    if (sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_READABLE)
+    if ((sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_READABLE)
+        && (sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_SETTABLE))
 	return ENOTSUP;
     
     info = ipmi_mem_alloc(sizeof(*info));
