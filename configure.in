@@ -134,4 +134,5 @@ AC_OUTPUT(Makefile
 	  OpenIPMI.pc
 	  OpenIPMIpthread.pc
 	  OpenIPMIposix.pc
+	  OpenIPMIcmdlang.pc
 	  OpenIPMIui.pc)
