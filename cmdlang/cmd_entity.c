@@ -49,9 +49,10 @@ static void
 entity_list_handler(ipmi_entity_t *entity, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     char            entity_name[IPMI_ENTITY_NAME_LEN];
 
-    if (cmd_info->cmdlang->err)
+    if (cmdlang->err)
 	return;
 
     ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
@@ -64,9 +65,10 @@ entity_iterate_handler(ipmi_entity_t *entity, ipmi_entity_t *parent,
 		       void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     char            entity_name[IPMI_ENTITY_NAME_LEN];
 
-    if (cmd_info->cmdlang->err)
+    if (cmdlang->err)
 	return;
 
     ipmi_entity_get_name(parent, entity_name, sizeof(entity_name));
@@ -223,6 +225,7 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
     evi = ipmi_cmdlang_alloc_event_info();
     if (!evi) {
 	rv = ENOMEM;
+	errstr = "Out of memory";
 	goto out_err;
     }
 
@@ -290,12 +293,11 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
     return;
 
  out_err:
-    evi->cmdlang->err = rv;
-    if (errstr)
-	evi->cmdlang->errstr = errstr;
-    evi->cmdlang->location = "cmd_entity.c(entity_change)";
-    strncpy(evi->cmdlang->objstr, entity_name, evi->cmdlang->objstr_len);
-    ipmi_cmdlang_cmd_info_put(evi);
+    ipmi_cmdlang_global_err(entity_name,
+			    "cmd_entity.c(ipmi_cmdlang_entity_change)",
+			    errstr, rv);
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
 }
 
 static ipmi_cmdlang_cmd_t *entity_cmds;

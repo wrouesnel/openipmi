@@ -35,7 +35,6 @@
 #define __IPMI_CMDLANG_H
 
 #include <OpenIPMI/selector.h>
-#include <OpenIPMI/ipmi_int.h>
 
 /* Forward declaration */
 typedef struct ipmi_cmd_info_s ipmi_cmd_info_t;
@@ -179,34 +178,8 @@ void ipmi_cmdlang_mc_handler(ipmi_cmd_info_t *cmd_info);
 /* ipmi_connection_ptr_cb */
 void ipmi_cmdlang_connection_handler(ipmi_cmd_info_t *cmd_info);
 
-
-/*
- * This is the value passed to a command handler.
- */
-struct ipmi_cmd_info_s
-{
-    void               *handler_data; /* From cb_data in the cmd reg */
-    int                curr_arg;      /* Argument you should start at */
-    int                argc;          /* Total number of arguments */
-    char               **argv;        /* The arguments */
-
-    /* Only allow one writer at a time */
-    ipmi_lock_t        *lock;
-
-    /* The cmdlang structure the user passed in.  Use this for output
-       and error reporting. */
-    ipmi_cmdlang_t     *cmdlang;
-
-    /* The matching cmd structure for the command being executed.  May
-       be NULL if no command is being processed. */
-    ipmi_cmdlang_cmd_t *cmd;
-
-    /* Refcount for the structure. */
-    unsigned int       usecount;
-
-    /* For use by the user commands */
-    void *data;
-};
+/* ipmi_pet_ptr_cb */
+void ipmi_cmdlang_pet_handler(ipmi_cmd_info_t *cmd_info);
 
 
 /* All output from the command language is in name/value pairs.  The
@@ -255,14 +228,14 @@ void ipmi_cmdlang_cmd_info_get(ipmi_cmd_info_t *info);
 void ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *info);
 
 /* Helper functions */
-void ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmdlang_t *cmdlang);
+void ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_uchar(char *str, unsigned char *val,
-			    ipmi_cmdlang_t *cmdlang);
-void ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmdlang_t *cmdlang);
+			    ipmi_cmd_info_t *info);
+void ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_ip(char *str, struct in_addr *val,
-			 ipmi_cmdlang_t *cmdlang);
+			 ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_mac(char *str, unsigned char val[6],
-			  ipmi_cmdlang_t *cmdlang);
+			  ipmi_cmd_info_t *info);
 
 /* Call these to initialize and setup the command interpreter.  init
    should be called after the IPMI library proper is initialized, but
@@ -314,5 +287,10 @@ void ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event);
 /* In callbacks, you must use these to lock the cmd_info structure. */
 void ipmi_cmdlang_lock(ipmi_cmd_info_t *info);
 void ipmi_cmdlang_unlock(ipmi_cmd_info_t *info);
+
+int ipmi_cmdlang_get_argc(ipmi_cmd_info_t *info);
+char **ipmi_cmdlang_get_argv(ipmi_cmd_info_t *info);
+int ipmi_cmdlang_get_curr_arg(ipmi_cmd_info_t *info);
+ipmi_cmdlang_t *ipmi_cmdinfo_get_cmdlang(ipmi_cmd_info_t *info);
 
 #endif /* __IPMI_CMDLANG_H */

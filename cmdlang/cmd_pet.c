@@ -43,72 +43,14 @@
 #include <OpenIPMI/ipmi_conn.h>
 
 
-typedef struct pet_iter_info_s
-{
-    char            *cmdstr;
-    ipmi_pet_ptr_cb handler;
-    void            *cb_data;
-    ipmi_cmd_info_t *cmd_info;
-} pet_iter_info_t;
-
-static void
-for_each_pet_handler(ipmi_pet_t *pet, void *cb_data)
-{
-    pet_iter_info_t *info = cb_data;
-    ipmi_cmd_info_t *cmd_info = info->cmd_info;
-    char name[IPMI_PET_NAME_LEN];
-
-    if (cmd_info->cmdlang->err)
-	return;
-
-    ipmi_pet_get_name(pet, name, sizeof(name));
-    if ((! info->cmdstr) || (strcmp(info->cmdstr, name) == 0)) {
-	ipmi_cmdlang_out(cmd_info, "PET", name);
-	ipmi_cmdlang_down(cmd_info);
-	info->handler(pet, info->cb_data);
-	ipmi_cmdlang_up(cmd_info);
-    }
-}
-
-static void
-for_each_pet(ipmi_cmd_info_t *cmd_info,
-	     char            *pet_name,
-	     ipmi_pet_ptr_cb handler,
-	     void            *cb_data)
-{
-    pet_iter_info_t info;
-
-    info.cmdstr = pet_name;
-    info.handler = handler;
-    info.cb_data = cb_data;
-    info.cmd_info = cmd_info;
-    ipmi_pet_iterate_pets(for_each_pet_handler, &info);
-}
-
-static void
-ipmi_cmdlang_pet_handler(ipmi_cmd_info_t *cmd_info)
-{
-    char *cmdstr;
-
-    if (cmd_info->curr_arg >= cmd_info->argc) {
-	cmdstr = NULL;
-    } else {
-	cmdstr = cmd_info->argv[cmd_info->curr_arg];
-	if (strlen(cmdstr) == 0)
-	    cmdstr = NULL;
-	cmd_info->curr_arg++;
-    }
-
-    for_each_pet(cmd_info, cmdstr, cmd_info->handler_data, cmd_info);
-}
-
 static void
 pet_list_handler(ipmi_pet_t *pet, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     char            pet_name[IPMI_PET_NAME_LEN];
 
-    if (cmd_info->cmdlang->err)
+    if (cmdlang->err)
 	return;
 
     ipmi_pet_get_name(pet, pet_name, sizeof(pet_name));
@@ -174,84 +116,79 @@ static void
 pet_new(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    int connection;
-    int channel;
-    struct in_addr ip_addr;
-    unsigned char mac_addr[6];
-    int eft_selector;
-    int policy_num;
-    int apt_selector;
-    int lan_dest_selector;
-    int rv;
-    int curr_arg = cmd_info->curr_arg;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             connection;
+    int             channel;
+    struct in_addr  ip_addr;
+    unsigned char   mac_addr[6];
+    int             eft_selector;
+    int             policy_num;
+    int             apt_selector;
+    int             lan_dest_selector;
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
 
-    if ((cmd_info->argc - curr_arg) < 8) {
+    if ((argc - curr_arg) < 8) {
 	/* Not enough parameters */
-	cmd_info->cmdlang->errstr = "Not enough parameters";
-	cmd_info->cmdlang->err = EINVAL;
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
 	goto out_err;
     }
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &connection, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "connection invalid";
-	goto out_err;
-    }
-    curr_arg++;
-
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &channel, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "channel invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &connection, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "connection invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_ip(cmd_info->argv[curr_arg],
-			&ip_addr, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "ip addr invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_mac(cmd_info->argv[curr_arg],
-			 mac_addr, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "mac addr invalid";
+    ipmi_cmdlang_get_ip(argv[curr_arg],	&ip_addr, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "ip addr invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &eft_selector, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "eft_selector invalid";
+    ipmi_cmdlang_get_mac(argv[curr_arg], mac_addr, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "mac addr invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &policy_num, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "policy num invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &eft_selector, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "eft_selector invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &apt_selector, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "apt selectory invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &policy_num, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "policy num invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &lan_dest_selector, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "lan dest selector invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &apt_selector, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "apt selectory invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &lan_dest_selector, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "lan dest selector invalid";
 	goto out_err;
     }
     curr_arg++;
@@ -271,92 +208,88 @@ pet_new(ipmi_domain_t *domain, void *cb_data)
 			 NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmd_info->cmdlang->errstr = "Error from ipmi_pet_create";
-	cmd_info->cmdlang->err = rv;
+	cmdlang->errstr = "Error from ipmi_pet_create";
+	cmdlang->err = rv;
 	goto out_err;
     }
 
     return;
 
  out_err:
-    ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			 cmd_info->cmdlang->objstr_len);
-    cmd_info->cmdlang->location = "cmd_pet.c(pet_new)";
+    ipmi_domain_get_name(domain, cmdlang->objstr,
+			 cmdlang->objstr_len);
+    cmdlang->location = "cmd_pet.c(pet_new)";
 }
 
 static void
 pet_mcnew(ipmi_mc_t *mc, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    int channel;
-    struct in_addr ip_addr;
-    unsigned char mac_addr[6];
-    int eft_selector;
-    int policy_num;
-    int apt_selector;
-    int lan_dest_selector;
-    int rv;
-    int curr_arg = cmd_info->curr_arg;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             channel;
+    struct in_addr  ip_addr;
+    unsigned char   mac_addr[6];
+    int             eft_selector;
+    int             policy_num;
+    int             apt_selector;
+    int             lan_dest_selector;
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
 
-    if ((cmd_info->argc - curr_arg) < 7) {
+    if ((argc - curr_arg) < 7) {
 	/* Not enough parameters */
-	cmd_info->cmdlang->errstr = "Not enough parameters";
-	cmd_info->cmdlang->err = EINVAL;
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
 	goto out_err;
     }
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &channel, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "channel invalid";
-	goto out_err;
-    }
-    curr_arg++;
-
-    ipmi_cmdlang_get_ip(cmd_info->argv[curr_arg],
-			&ip_addr, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "ip addr invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_mac(cmd_info->argv[curr_arg],
-			 mac_addr, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "mac addr invalid";
+    ipmi_cmdlang_get_ip(argv[curr_arg],	&ip_addr, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "ip addr invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &eft_selector, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "eft_selector invalid";
+    ipmi_cmdlang_get_mac(argv[curr_arg], mac_addr, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "mac addr invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &policy_num, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "policy num invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &eft_selector, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "eft_selector invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &apt_selector, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "apt selectory invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &policy_num, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "policy num invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &lan_dest_selector, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "lan dest selector invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &apt_selector, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "apt selectory invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &lan_dest_selector, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "lan dest selector invalid";
 	goto out_err;
     }
     curr_arg++;
@@ -375,30 +308,31 @@ pet_mcnew(ipmi_mc_t *mc, void *cb_data)
 			    NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmd_info->cmdlang->errstr = "Error from ipmi_pet_create";
-	cmd_info->cmdlang->err = rv;
+	cmdlang->errstr = "Error from ipmi_pet_create";
+	cmdlang->err = rv;
 	goto out_err;
     }
 
     return;
 
  out_err:
-    ipmi_mc_get_name(mc, cmd_info->cmdlang->objstr,
-		     cmd_info->cmdlang->objstr_len);
-    cmd_info->cmdlang->location = "cmd_pet.c(pet_mcnew)";
+    ipmi_mc_get_name(mc, cmdlang->objstr,
+		     cmdlang->objstr_len);
+    cmdlang->location = "cmd_pet.c(pet_mcnew)";
 }
 
 static void
 close_done(ipmi_pet_t *pet, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
     if (err) {
-	ipmi_pet_get_name(pet, cmd_info->cmdlang->objstr,
-			  cmd_info->cmdlang->objstr_len);
-	cmd_info->cmdlang->errstr = "Error closing PET";
-	cmd_info->cmdlang->err = err;
-	cmd_info->cmdlang->location = "cmd_pet.c(close_done)";
+	ipmi_pet_get_name(pet, cmdlang->objstr,
+			  cmdlang->objstr_len);
+	cmdlang->errstr = "Error closing PET";
+	cmdlang->err = err;
+	cmdlang->location = "cmd_pet.c(close_done)";
     }
 
     ipmi_cmdlang_cmd_info_put(cmd_info);
@@ -408,17 +342,18 @@ static void
 pet_close(ipmi_pet_t *pet, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_pet_destroy(pet, close_done, cmd_info);
     if (rv) {
-	ipmi_pet_get_name(pet, cmd_info->cmdlang->objstr,
-			  cmd_info->cmdlang->objstr_len);
+	ipmi_pet_get_name(pet, cmdlang->objstr,
+			  cmdlang->objstr_len);
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmd_info->cmdlang->errstr = "Error closing PET";
-	cmd_info->cmdlang->err = rv;
-	cmd_info->cmdlang->location = "cmd_pet.c(pet_close)";
+	cmdlang->errstr = "Error closing PET";
+	cmdlang->err = rv;
+	cmdlang->location = "cmd_pet.c(pet_close)";
     }
 }
 

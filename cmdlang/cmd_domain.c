@@ -51,9 +51,10 @@ static void
 domain_list_handler(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
-    if (cmd_info->cmdlang->err)
+    if (cmdlang->err)
 	return;
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
@@ -122,7 +123,8 @@ domain_con_change(ipmi_domain_t *domain,
 	ipmi_cmdlang_global_err(domain_name, "cmd_domain.c(domain_con_change)",
 				errstr, rv);
     }
-    ipmi_cmdlang_cmd_info_put(evi);
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
 }
 
 static void
@@ -294,42 +296,39 @@ domain_new_done(ipmi_domain_t *domain,
 static void
 domain_new(ipmi_cmd_info_t *cmd_info)
 {
-    ipmi_args_t  *con_parms[2];
-    int          set = 0;
-    int          i;
-    ipmi_con_t   *con[2];
-    int          rv;
-    char         *name;
-    int          curr_arg = cmd_info->curr_arg;
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    ipmi_args_t    *con_parms[2];
+    int            set = 0;
+    int            i;
+    ipmi_con_t     *con[2];
+    int            rv;
+    char           *name;
+    int            curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int            argc = ipmi_cmdlang_get_argc(cmd_info);
+    char           **argv = ipmi_cmdlang_get_argv(cmd_info);
 
-    if (cmd_info->curr_arg >= cmd_info->argc) {
-	cmd_info->cmdlang->errstr = "No domain name entered";
-	cmd_info->cmdlang->err = EINVAL;
+    if (curr_arg >= argc) {
+	cmdlang->errstr = "No domain name entered";
+	cmdlang->err = EINVAL;
 	goto out;
     }
-    name = cmd_info->argv[curr_arg];
+    name = argv[curr_arg];
     curr_arg++;
 
-    rv = ipmi_parse_args(&curr_arg,
-			 cmd_info->argc,
-			 cmd_info->argv,
-			 &con_parms[set]);
+    rv = ipmi_parse_args(&curr_arg, argc, argv, &con_parms[set]);
     if (rv) {
-	cmd_info->cmdlang->errstr = "First connection parms are invalid";
-	cmd_info->cmdlang->err = rv;
+	cmdlang->errstr = "First connection parms are invalid";
+	cmdlang->err = rv;
 	goto out;
     }
     set++;
 
-    if (curr_arg > cmd_info->argc) {
-	rv = ipmi_parse_args(&curr_arg,
-			     cmd_info->argc,
-			     cmd_info->argv,
-			     &con_parms[set]);
+    if (curr_arg > argc) {
+	rv = ipmi_parse_args(&curr_arg, argc, argv, &con_parms[set]);
 	if (rv) {
 	    ipmi_free_args(con_parms[0]);
-	    cmd_info->cmdlang->errstr = "Second connection parms are invalid";
-	    cmd_info->cmdlang->err = rv;
+	    cmdlang->errstr = "Second connection parms are invalid";
+	    cmdlang->err = rv;
 	    goto out;
 	}
 	set++;
@@ -337,12 +336,12 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 
     for (i=0; i<set; i++) {
 	rv = ipmi_args_setup_con(con_parms[i],
-				 cmd_info->cmdlang->os_hnd,
-				 cmd_info->cmdlang->selector,
+				 cmdlang->os_hnd,
+				 cmdlang->selector,
 				 &con[i]);
 	if (rv) {
-	    cmd_info->cmdlang->errstr = "Unable to setup connection";
-	    cmd_info->cmdlang->err = rv;
+	    cmdlang->errstr = "Unable to setup connection";
+	    cmdlang->err = rv;
 	    for (i=0; i<set; i++)
 		ipmi_free_args(con_parms[i]);
 	    goto out;
@@ -354,8 +353,8 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 			  cmd_info, NULL, 0, NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmd_info->cmdlang->errstr = strerror(rv);
-	cmd_info->cmdlang->err = rv;
+	cmdlang->errstr = strerror(rv);
+	cmdlang->err = rv;
 	for (i=0; i<set; i++) {
 	    ipmi_free_args(con_parms[i]);
 	    con[i]->close_connection(con[i]);
@@ -367,8 +366,8 @@ domain_new(ipmi_cmd_info_t *cmd_info)
       ipmi_free_args(con_parms[i]);
 
  out:
-    if (cmd_info->cmdlang->err)
-	cmd_info->cmdlang->location = "cmd_domain.c(domain_new)";
+    if (cmdlang->err)
+	cmdlang->location = "cmd_domain.c(domain_new)";
 
     return;
 }
@@ -378,17 +377,18 @@ static void
 domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
     ipmi_cmdlang_lock(cmd_info);
 
     if (err) {
 	ipmi_domain_t *domain = ipmi_fru_get_domain(fru);
 
-	cmd_info->cmdlang->errstr = "Error fetching FRU info";
-	cmd_info->cmdlang->err = err;
-	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			     cmd_info->cmdlang->objstr_len);
-	cmd_info->cmdlang->location = "cmd_domain.c(domain_fru_fetched)";
+	cmdlang->errstr = "Error fetching FRU info";
+	cmdlang->err = err;
+	ipmi_domain_get_name(domain, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_domain.c(domain_fru_fetched)";
 	goto out;
     }
 
@@ -405,66 +405,63 @@ static void
 domain_fru(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    int is_logical;
-    int device_addr;
-    int device_id;
-    int lun;
-    int private_bus;
-    int channel;
-    int rv;
-    int curr_arg = cmd_info->curr_arg;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             is_logical;
+    int             device_addr;
+    int             device_id;
+    int             lun;
+    int             private_bus;
+    int             channel;
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
 
-    if ((cmd_info->argc - curr_arg) < 6) {
+    if ((argc - curr_arg) < 6) {
 	/* Not enough parameters */
-	cmd_info->cmdlang->errstr = "Not enough parameters";
-	cmd_info->cmdlang->err = EINVAL;
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
 	goto out_err;
     }
 
-    ipmi_cmdlang_get_bool(cmd_info->argv[curr_arg],
-			  &is_logical, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "is_logical invalid";
-	goto out_err;
-    }
-    curr_arg++;
-
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &device_addr, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "device_address invalid";
+    ipmi_cmdlang_get_bool(argv[curr_arg], &is_logical, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "is_logical invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &device_id, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "device_id invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &device_addr, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "device_address invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &lun, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "lun invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &device_id, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "device_id invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &private_bus, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "private_bus invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &lun, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "lun invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &channel, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "channel invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &private_bus, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "private_bus invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
 	goto out_err;
     }
     curr_arg++;
@@ -482,17 +479,17 @@ domain_fru(ipmi_domain_t *domain, void *cb_data)
 			NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmd_info->cmdlang->errstr = "Error allocating FRU info";
-	cmd_info->cmdlang->err = rv;
+	cmdlang->errstr = "Error allocating FRU info";
+	cmdlang->err = rv;
 	goto out_err;
     }
 
     return;
 
  out_err:
-    ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			 cmd_info->cmdlang->objstr_len);
-    cmd_info->cmdlang->location = "cmd_domain.c(domain_fru)";
+    ipmi_domain_get_name(domain, cmdlang->objstr,
+			 cmdlang->objstr_len);
+    cmdlang->location = "cmd_domain.c(domain_fru)";
 }
 
 static int
@@ -527,91 +524,87 @@ domain_msg_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 static void
 domain_msg(ipmi_domain_t *domain, void *cb_data)
 {
-    ipmi_cmd_info_t *cmd_info = cb_data;
-    int channel;
-    int ipmb;
-    int is_broadcast = 0;
-    int LUN;
-    int NetFN;
-    int command;
-    unsigned char data[100];
-    int rv;
-    int curr_arg = cmd_info->curr_arg;
-    int i;
+    ipmi_cmd_info_t  *cmd_info = cb_data;
+    ipmi_cmdlang_t   *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int              channel;
+    int              ipmb;
+    int              is_broadcast = 0;
+    int              LUN;
+    int              NetFN;
+    int              command;
+    unsigned char    data[100];
+    int              rv;
+    int              i;
     ipmi_ipmb_addr_t addr;
-    ipmi_msg_t msg;
+    ipmi_msg_t       msg;
+    int              curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int              argc = ipmi_cmdlang_get_argc(cmd_info);
+    char             **argv = ipmi_cmdlang_get_argv(cmd_info);
 
 
-    if ((cmd_info->argc - curr_arg) < 5) {
+    if ((argc - curr_arg) < 5) {
 	/* Not enough parameters */
-	cmd_info->cmdlang->errstr = "Not enough parameters";
-	cmd_info->cmdlang->err = EINVAL;
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
 	goto out_err;
     }
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			  &channel, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "channel invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &ipmb, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "ipmb invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &ipmb, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "ipmb invalid";
 	goto out_err;
     }
     curr_arg++;
 
     if (ipmb == 0) {
 	is_broadcast = 1;
-	if ((cmd_info->argc - curr_arg) < 5) {
+	if ((argc - curr_arg) < 5) {
 	    /* Not enough parameters */
-	    cmd_info->cmdlang->errstr = "Not enough parameters";
-	    cmd_info->cmdlang->err = EINVAL;
+	    cmdlang->errstr = "Not enough parameters";
+	    cmdlang->err = EINVAL;
 	    goto out_err;
 	}
-	ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			     &ipmb, cmd_info->cmdlang);
-	if (cmd_info->cmdlang->err) {
-	    cmd_info->cmdlang->errstr = "ipmb invalid";
+	ipmi_cmdlang_get_int(argv[curr_arg], &ipmb, cmd_info);
+	if (cmdlang->err) {
+	    cmdlang->errstr = "ipmb invalid";
 	    goto out_err;
 	}
 	curr_arg++;
     }
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &LUN, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "LUN invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &LUN, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "LUN invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &NetFN, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "NetFN invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &NetFN, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "NetFN invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			 &command, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "command invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &command, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "command invalid";
 	goto out_err;
     }
     curr_arg++;
 
     i = 0;
-    while (curr_arg < cmd_info->argc) {
-	ipmi_cmdlang_get_uchar(cmd_info->argv[curr_arg],
-			       &data[i], cmd_info->cmdlang);
-	if (cmd_info->cmdlang->err) {
-	    cmd_info->cmdlang->errstr = "data invalid";
+    while (curr_arg < argc) {
+	ipmi_cmdlang_get_uchar(argv[curr_arg], &data[i], cmd_info);
+	if (cmdlang->err) {
+	    cmdlang->errstr = "data invalid";
 	    goto out_err;
 	}
 	curr_arg++;
@@ -638,18 +631,18 @@ domain_msg(ipmi_domain_t *domain, void *cb_data)
 				cmd_info, NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmd_info->cmdlang->errstr = "Error sending message";
-	cmd_info->cmdlang->err = rv;
+	cmdlang->errstr = "Error sending message";
+	cmdlang->err = rv;
 	goto out_err;
     }
 
     return;
 
  out_err:
-    if (cmd_info->cmdlang->err) {
-	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			     cmd_info->cmdlang->objstr_len);
-	cmd_info->cmdlang->location = "cmd_domain.c(domain_msg)";
+    if (cmdlang->err) {
+	ipmi_domain_get_name(domain, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_domain.c(domain_msg)";
     }
 }
 
@@ -657,14 +650,15 @@ static void
 scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
 
-    if (! cmd_info->cmdlang->err) {
+    if (! cmdlang->err) {
 	if (err) {
 	    ipmi_cmdlang_lock(cmd_info);
-	    cmd_info->cmdlang->err = err;
-	    ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-				 cmd_info->cmdlang->objstr_len);
-	    cmd_info->cmdlang->location = "cmd_domain.c(scan_done)";
+	    cmdlang->err = err;
+	    ipmi_domain_get_name(domain, cmdlang->objstr,
+				 cmdlang->objstr_len);
+	    cmdlang->location = "cmd_domain.c(scan_done)";
 	    ipmi_cmdlang_unlock(cmd_info);
 	}
     }
@@ -675,39 +669,39 @@ static void
 domain_scan(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    int rv;
-    int channel;
-    int ipmb1, ipmb2;
-    int curr_arg = cmd_info->curr_arg;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    int             channel;
+    int             ipmb1, ipmb2;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
 
-    if ((cmd_info->argc - curr_arg) < 2) {
+    if ((argc - curr_arg) < 2) {
 	/* Not enough parameters */
-	cmd_info->cmdlang->errstr = "Not enough parameters";
-	cmd_info->cmdlang->err = EINVAL;
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
 	goto out_err;
     }
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			  &channel, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "channel invalid";
-	goto out_err;
-    }
-    curr_arg++;
-
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			  &ipmb1, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "ipmb1 invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
 	goto out_err;
     }
     curr_arg++;
 
-    if (curr_arg < cmd_info->argc) {
-	ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			     &ipmb2, cmd_info->cmdlang);
-	if (cmd_info->cmdlang->err) {
-	    cmd_info->cmdlang->errstr = "ipmb2 invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &ipmb1, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "ipmb1 invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    if (curr_arg < argc) {
+	ipmi_cmdlang_get_int(argv[curr_arg], &ipmb2, cmd_info);
+	if (cmdlang->err) {
+	    cmdlang->errstr = "ipmb2 invalid";
 	    goto out_err;
 	}
 	curr_arg++;
@@ -719,16 +713,16 @@ domain_scan(ipmi_domain_t *domain, void *cb_data)
 				 scan_done, cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmd_info->cmdlang->errstr = "Error requesting scan";
-	cmd_info->cmdlang->err = rv;
+	cmdlang->errstr = "Error requesting scan";
+	cmdlang->err = rv;
 	goto out_err;
     }
     
  out_err:
-    if (cmd_info->cmdlang->err) {
-	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			     cmd_info->cmdlang->objstr_len);
-	cmd_info->cmdlang->location = "cmd_domain.c(domain_scan)";
+    if (cmdlang->err) {
+	ipmi_domain_get_name(domain, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_domain.c(domain_scan)";
     }
 }
 
@@ -736,14 +730,15 @@ static void
 domain_presence(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
 
     rv = ipmi_detect_domain_presence_changes(domain, 1);
     if (rv) {
-	cmd_info->cmdlang->err = rv;
-	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			     cmd_info->cmdlang->objstr_len);
-	cmd_info->cmdlang->location = "cmd_domain.c(domain_presence)";
+	cmdlang->err = rv;
+	ipmi_domain_get_name(domain, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_domain.c(domain_presence)";
     }
 }
 
@@ -751,20 +746,22 @@ static void
 domain_sel_rescan_time(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    int time;
-    int curr_arg = cmd_info->curr_arg;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             time;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
 
-    if ((cmd_info->argc - curr_arg) < 1) {
+    if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
-	cmd_info->cmdlang->errstr = "Not enough parameters";
-	cmd_info->cmdlang->err = EINVAL;
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
 	goto out_err;
     }
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			  &time, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "time invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &time, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "time invalid";
 	goto out_err;
     }
     curr_arg++;
@@ -772,10 +769,10 @@ domain_sel_rescan_time(ipmi_domain_t *domain, void *cb_data)
     ipmi_domain_set_sel_rescan_time(domain, time);
 
  out_err:
-    if (cmd_info->cmdlang->err) {
-	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			     cmd_info->cmdlang->objstr_len);
-	cmd_info->cmdlang->location = "cmd_domain.c(domain_sel_rescan_time)";
+    if (cmdlang->err) {
+	ipmi_domain_get_name(domain, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_domain.c(domain_sel_rescan_time)";
     }
 }
 
@@ -784,20 +781,22 @@ static void
 domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    int time;
-    int curr_arg = cmd_info->curr_arg;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             time;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
 
-    if ((cmd_info->argc - curr_arg) < 1) {
+    if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
-	cmd_info->cmdlang->errstr = "Not enough parameters";
-	cmd_info->cmdlang->err = EINVAL;
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
 	goto out_err;
     }
 
-    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
-			  &time, cmd_info->cmdlang);
-    if (cmd_info->cmdlang->err) {
-	cmd_info->cmdlang->errstr = "time invalid";
+    ipmi_cmdlang_get_int(argv[curr_arg], &time, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "time invalid";
 	goto out_err;
     }
     curr_arg++;
@@ -805,10 +804,10 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
     ipmi_domain_set_ipmb_rescan_time(domain, time);
 
  out_err:
-    if (cmd_info->cmdlang->err) {
-	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			     cmd_info->cmdlang->objstr_len);
-	cmd_info->cmdlang->location = "cmd_domain.c(domain_ipmb_rescan_time)";
+    if (cmdlang->err) {
+	ipmi_domain_get_name(domain, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_domain.c(domain_ipmb_rescan_time)";
     }
 }
 
@@ -824,16 +823,17 @@ static void
 domain_close(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_close_connection(domain, final_close, cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmd_info->cmdlang->err = rv;
-	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			     cmd_info->cmdlang->objstr_len);
-	cmd_info->cmdlang->location = "cmd_domain.c(domain_close)";
+	cmdlang->err = rv;
+	ipmi_domain_get_name(domain, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_domain.c(domain_close)";
     }
 }
 

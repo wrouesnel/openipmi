@@ -66,12 +66,13 @@ dump_fru_str(ipmi_cmd_info_t *cmd_info,
 			 char         *str,
 			 unsigned int *strlen))
 {
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     enum ipmi_str_type_e type;
     int          rv = 0;
     char         *buf = NULL;
     unsigned int len;
 
-    if (cmd_info->cmdlang->err)
+    if (cmdlang->err)
 	return;
 
     rv = gtype(fru, &type);
@@ -81,7 +82,7 @@ dump_fru_str(ipmi_cmd_info_t *cmd_info,
 	buf = ipmi_mem_alloc(len);
 	if (!buf) {
 	    rv = ENOMEM;
-	    cmd_info->cmdlang->errstr = "Out of memory";
+	    cmdlang->errstr = "Out of memory";
 	    goto out_err;
 	}
 	rv = gstr(fru, buf, &len);
@@ -90,7 +91,7 @@ dump_fru_str(ipmi_cmd_info_t *cmd_info,
     }
     if (rv) {
 	if (rv != ENOSYS)
-	    cmd_info->cmdlang->errstr = "Error getting FRU info";
+	    cmdlang->errstr = "Error getting FRU info";
 	goto out_err;
     }
 
@@ -103,8 +104,8 @@ dump_fru_str(ipmi_cmd_info_t *cmd_info,
  out_err:
     if (rv) {
 	if (rv != ENOSYS) {
-	    cmd_info->cmdlang->err = rv;
-	    cmd_info->cmdlang->location = "cmd_domain.c(dump_fru_str)";
+	    cmdlang->err = rv;
+	    cmdlang->location = "cmd_domain.c(dump_fru_str)";
 	}
     } else
 	ipmi_mem_free(buf);
@@ -126,13 +127,14 @@ dump_fru_custom_str(ipmi_cmd_info_t *cmd_info,
 				char         *str,
 				unsigned int *strlen))
 {
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     enum ipmi_str_type_e type;
     int          rv = 0;
     char         *buf = NULL;
     unsigned int len;
 
-    if (cmd_info->cmdlang->err)
-	return cmd_info->cmdlang->err;
+    if (cmdlang->err)
+	return cmdlang->err;
 
     rv = gtype(fru, num, &type);
     if (!rv)
@@ -141,7 +143,7 @@ dump_fru_custom_str(ipmi_cmd_info_t *cmd_info,
 	buf = ipmi_mem_alloc(len);
 	if (!buf) {
 	    rv = ENOMEM;
-	    cmd_info->cmdlang->errstr = "Out of memory";
+	    cmdlang->errstr = "Out of memory";
 	    goto out_err;
 	}
 	rv = gstr(fru, num, buf, &len);
@@ -150,7 +152,7 @@ dump_fru_custom_str(ipmi_cmd_info_t *cmd_info,
     }
     if (rv) {
 	if (rv != ENOSYS)
-	    cmd_info->cmdlang->errstr = "Error getting FRU info";
+	    cmdlang->errstr = "Error getting FRU info";
 	goto out_err;
     }
 
@@ -164,8 +166,8 @@ dump_fru_custom_str(ipmi_cmd_info_t *cmd_info,
  out_err:
     if (rv) {
 	if (rv != ENOSYS) {
-	    cmd_info->cmdlang->err = rv;
-	    cmd_info->cmdlang->location = "cmd_domain.c(dump_fru_custom_str)";
+	    cmdlang->err = rv;
+	    cmdlang->location = "cmd_domain.c(dump_fru_custom_str)";
 	}
     } else
 	ipmi_mem_free(buf);
@@ -193,6 +195,7 @@ do {									\
 void
 ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 {
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     unsigned char ucval;
     unsigned int  uival;
     time_t        tval;
@@ -212,8 +215,8 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 
     buf = ipmi_mem_alloc(uival);
     if (!buf) {
-	cmd_info->cmdlang->err = ENOMEM;
-	cmd_info->cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	cmdlang->errstr = "Out of memory";
 	goto out_err;
     }
     ipmi_cmdlang_out_binary(cmd_info, "Internal area data", buf, uival);
@@ -287,8 +290,8 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	if (!rv) {
 	    data = ipmi_mem_alloc(len);
 	    if (!data) {
-		cmd_info->cmdlang->err = ENOMEM;
-		cmd_info->cmdlang->errstr = "Out of memory";
+		cmdlang->err = ENOMEM;
+		cmdlang->errstr = "Out of memory";
 		goto out_err;
 	    }
 	    rv = ipmi_fru_get_multi_record_data(fru, i, data, &len);
@@ -297,8 +300,8 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	}
 
 	if (rv) {
-	    cmd_info->cmdlang->err = rv;
-	    cmd_info->cmdlang->errstr = "Error getting FRU info";
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Error getting FRU info";
 	    goto out_err;
 	}
 
@@ -312,6 +315,6 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 
  out_err:
     ipmi_cmdlang_up(cmd_info);
-    if (cmd_info->cmdlang->err)
-	cmd_info->cmdlang->location = "cmd_domain.c(dump_fru_info)";
+    if (cmdlang->err)
+	cmdlang->location = "cmd_domain.c(dump_fru_info)";
 }

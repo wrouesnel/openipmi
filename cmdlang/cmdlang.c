@@ -45,6 +45,36 @@
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_pet.h>
+
+
+/*
+ * This is the value passed to a command handler.
+ */
+struct ipmi_cmd_info_s
+{
+    void               *handler_data; /* From cb_data in the cmd reg */
+    int                curr_arg;      /* Argument you should start at */
+    int                argc;          /* Total number of arguments */
+    char               **argv;        /* The arguments */
+
+    /* Only allow one writer at a time */
+    ipmi_lock_t        *lock;
+
+    /* The cmdlang structure the user passed in.  Use this for output
+       and error reporting. */
+    ipmi_cmdlang_t     *cmdlang;
+
+    /* The matching cmd structure for the command being executed.  May
+       be NULL if no command is being processed. */
+    ipmi_cmdlang_cmd_t *cmd;
+
+    /* Refcount for the structure. */
+    unsigned int       usecount;
+
+    /* For use by the user commands */
+    void *data;
+};
 
 
 struct ipmi_cmdlang_cmd_s
@@ -197,6 +227,70 @@ ipmi_cmdlang_domain_handler(ipmi_cmd_info_t *cmd_info)
 
     for_each_domain(cmd_info, domain, class, obj,
 		    cmd_info->handler_data, cmd_info);
+}
+
+
+/*
+ * Handling for iterating PETs.
+ */
+typedef struct pet_iter_info_s
+{
+    char            *cmdstr;
+    ipmi_pet_ptr_cb handler;
+    void            *cb_data;
+    ipmi_cmd_info_t *cmd_info;
+} pet_iter_info_t;
+
+static void
+for_each_pet_handler(ipmi_pet_t *pet, void *cb_data)
+{
+    pet_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char name[IPMI_PET_NAME_LEN];
+
+    if (cmdlang->err)
+	return;
+
+    ipmi_pet_get_name(pet, name, sizeof(name));
+    if ((! info->cmdstr) || (strcmp(info->cmdstr, name) == 0)) {
+	ipmi_cmdlang_out(cmd_info, "PET", name);
+	ipmi_cmdlang_down(cmd_info);
+	info->handler(pet, info->cb_data);
+	ipmi_cmdlang_up(cmd_info);
+    }
+}
+
+static void
+for_each_pet(ipmi_cmd_info_t *cmd_info,
+	     char            *pet_name,
+	     ipmi_pet_ptr_cb handler,
+	     void            *cb_data)
+{
+    pet_iter_info_t info;
+
+    info.cmdstr = pet_name;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.cmd_info = cmd_info;
+    ipmi_pet_iterate_pets(for_each_pet_handler, &info);
+}
+
+void
+ipmi_cmdlang_pet_handler(ipmi_cmd_info_t *cmd_info)
+{
+    char *cmdstr;
+
+    if (cmd_info->curr_arg >= cmd_info->argc) {
+	cmdstr = NULL;
+    } else {
+	cmdstr = cmd_info->argv[cmd_info->curr_arg];
+	if (strlen(cmdstr) == 0)
+	    cmdstr = NULL;
+	cmd_info->curr_arg++;
+    }
+
+    for_each_pet(cmd_info, cmdstr, cmd_info->handler_data, cmd_info);
 }
 
 
@@ -1091,19 +1185,19 @@ ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *cmd_info)
 }
 
 void
-ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmdlang_t *cmdlang)
+ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmd_info_t *info)
 {
     char *end;
     int  rv;
 
-    if (cmdlang->err)
+    if (info->cmdlang->err)
 	return;
 
     rv = strtoul(str, &end, 0);
     if (*end != '\0') {
-	cmdlang->errstr = "Invalid integer";
-	cmdlang->err = EINVAL;
-	cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
+	info->cmdlang->errstr = "Invalid integer";
+	info->cmdlang->err = EINVAL;
+	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
 	return;
     }
 
@@ -1111,19 +1205,19 @@ ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmdlang_t *cmdlang)
 }
 
 void
-ipmi_cmdlang_get_uchar(char *str, unsigned char *val, ipmi_cmdlang_t *cmdlang)
+ipmi_cmdlang_get_uchar(char *str, unsigned char *val, ipmi_cmd_info_t *info)
 {
     char *end;
     int  rv;
 
-    if (cmdlang->err)
+    if (info->cmdlang->err)
 	return;
 
     rv = strtoul(str, &end, 0);
     if (*end != '\0') {
-	cmdlang->errstr = "Invalid integer";
-	cmdlang->err = EINVAL;
-	cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
+	info->cmdlang->errstr = "Invalid integer";
+	info->cmdlang->err = EINVAL;
+	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
 	return;
     }
 
@@ -1131,11 +1225,11 @@ ipmi_cmdlang_get_uchar(char *str, unsigned char *val, ipmi_cmdlang_t *cmdlang)
 }
 
 void
-ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmdlang_t *cmdlang)
+ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmd_info_t *info)
 {
     int  rv;
 
-    if (cmdlang->err)
+    if (info->cmdlang->err)
 	return;
 
     if ((strcasecmp(str, "true") == 0)
@@ -1149,9 +1243,9 @@ ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmdlang_t *cmdlang)
     {
 	rv = 0;
     } else {
-	cmdlang->errstr = "Invalid boolean";
-	cmdlang->err = EINVAL;
-	cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_bool)";
+	info->cmdlang->errstr = "Invalid boolean";
+	info->cmdlang->err = EINVAL;
+	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_bool)";
 	return;
     }
 
@@ -1159,14 +1253,16 @@ ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmdlang_t *cmdlang)
 }
 
 void
-ipmi_cmdlang_get_ip(char *str, struct in_addr *val,
-		    ipmi_cmdlang_t *cmdlang)
+ipmi_cmdlang_get_ip(char *str, struct in_addr *val, ipmi_cmd_info_t *info)
 {
 #ifdef HAVE_GETADDRINFO
     struct addrinfo    hints, *res0;
     int                rv;
     struct sockaddr_in *paddr;
  
+    if (info->cmdlang->err)
+	return;
+
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_INET;
     hints.ai_socktype = SOCK_DGRAM;
@@ -1177,15 +1273,18 @@ ipmi_cmdlang_get_ip(char *str, struct in_addr *val,
 	*val = paddr->sin_addr;
 	freeaddrinfo(res0);
     } else
-	cmdlang->err = rv;
+	info->cmdlang->err = rv;
 #else
     /* System does not support getaddrinfo, just for IPv4*/
     struct hostent     *ent;
     struct sockaddr_in *paddr;
 
+    if (info->cmdlang->err)
+	return;
+
     ent = gethostbyname(str);
     if (!ent) {
-	cmdlang->err = EINVAL;
+	info->cmdlang->err = EINVAL;
     } else {
 	paddr = (struct sockaddr_in *) &ent->h_addr_list[0];
 	*val = paddr->sin_addr;
@@ -1195,8 +1294,7 @@ ipmi_cmdlang_get_ip(char *str, struct in_addr *val,
 }
 
 void
-ipmi_cmdlang_get_mac(char *str, unsigned char val[6],
-		     ipmi_cmdlang_t *cmdlang)
+ipmi_cmdlang_get_mac(char *str, unsigned char val[6], ipmi_cmd_info_t *info)
 {
     char          tmp[3];
     char          *tv;
@@ -1205,25 +1303,28 @@ ipmi_cmdlang_get_mac(char *str, unsigned char val[6],
     int           i;
     char          *end;
 
+    if (info->cmdlang->err)
+	return;
+
     for (i=0; i<6; i++) {
 	if (i == 5)
 	    tv = str + strlen(str);
 	else
 	    tv = strchr(str, ':');
 	if (!tv) {
-	    cmdlang->err = EINVAL;
+	    info->cmdlang->err = EINVAL;
 	    goto out;
 	}
 	len = tv-str;
 	if (len > 2) {
-	    cmdlang->err = EINVAL;
+	    info->cmdlang->err = EINVAL;
 	    goto out;
 	}
 	memset(tmp, 0, sizeof(tmp));
 	memcpy(tmp, str, len);
 	tmp_val[i] = strtoul(tmp, &end, 16);
 	if (*end != '\0') {
-	    cmdlang->err = EINVAL;
+	    info->cmdlang->err = EINVAL;
 	    goto out;
 	}
 	str = tv+1;
@@ -1566,6 +1667,29 @@ ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t        *event,
     return 1;
 }
 
+int
+ipmi_cmdlang_get_argc(ipmi_cmd_info_t *info)
+{
+    return info->argc;
+}
+
+char **
+ipmi_cmdlang_get_argv(ipmi_cmd_info_t *info)
+{
+    return info->argv;
+}
+
+int
+ipmi_cmdlang_get_curr_arg(ipmi_cmd_info_t *info)
+{
+    return info->curr_arg;
+}
+
+ipmi_cmdlang_t *
+ipmi_cmdinfo_get_cmdlang(ipmi_cmd_info_t *info)
+{
+    return info->cmdlang;
+}
 
 int ipmi_cmdlang_domain_init(void);
 int ipmi_cmdlang_entity_init(void);
