@@ -261,7 +261,7 @@ sub get_errcount {
 	    if ($rv) {
 		main::reg_err("Error getting privilege_limit");
 	    } elsif ($val != $OpenIPMI::PRIVILEGE_ADMIN) {
-		main::reg_err("privilege_limit not admin");
+		main::reg_err("privilege_limit not admin: $val");
 	    }
 
 	    $self->close();
@@ -365,7 +365,7 @@ sub get_errcount {
 		main::reg_err("Error setting user_auth");
 	    }
 	
-	    $rv = $acc->set_privilege_limit(OpenIPMI::PRIVILEGE_ADMIN);
+	    $rv = $acc->set_privilege_limit($OpenIPMI::PRIVILEGE_ADMIN);
 	    if ($rv) {
 		main::reg_err("Error setting privilege_limit");
 	    }
@@ -411,8 +411,8 @@ sub get_errcount {
 	    $rv = $acc->get_privilege_limit(\$val);
 	    if ($rv) {
 		main::reg_err("Error getting privilege_limit");
-	    } elsif ($val != OpenIPMI::PRIVILEGE_ADMIN) {
-		main::reg_err("privilege_limit not admin");
+	    } elsif ($val != $OpenIPMI::PRIVILEGE_ADMIN) {
+		main::reg_err("privilege_limit not admin: $val");
 	    }
 
 	    $$self->{accmode} = 2;

@@ -1017,17 +1017,17 @@ handle_set_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
 
     upd2 = (msg->data[2] >> 6) & 0x3;
     if ((upd2 == 1) || (upd2 == 2)) {
-	newv = (msg->data[1] >> 0) & 0xf;
+	newv = (msg->data[2] >> 0) & 0xf;
 	if ((newv == 0) || (newv > 4)) {
 	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
 	    return;
 	}
 
 	if (upd2 == 1) {
-	    lan->channel.privilege_limit = newv;
-	} else {
 	    lan->nonv_channel.privilege_limit = newv;
 	    write_nonv = 1;
+	} else {
+	    lan->channel.privilege_limit = newv;
 	}
     } else if (upd2 != 0) {
 	return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);

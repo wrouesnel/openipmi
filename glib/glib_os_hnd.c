@@ -574,12 +574,24 @@ thread_exit(os_handler_t *handler)
 }
 #endif
 
+static gint
+timeout_callback(gpointer data)
+{
+    /* We continually run the timer until it is cancelled. */
+    return TRUE;
+}
 
 static int
 perform_one_op(os_handler_t   *os_hnd,
 	       struct timeval *timeout)
 {
+    /* Note that this is not technically 100% correct in a
+       multi-threaded environment, since another thread may run
+       it, but it is pretty close, I guess. */
+    int   time_ms = (timeout->tv_sec * 1000) + ((timeout->tv_usec+500) / 1000);
+    guint guid = g_timeout_add(time_ms, timeout_callback, NULL);
     g_main_iteration(TRUE);
+    g_source_remove(guid);
     return 0;
 }
 

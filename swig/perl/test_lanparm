@@ -130,7 +130,7 @@ sub get_errcount {
 		$self->close();
 		return;
 	    }
-	    @vals[2] = 0x01;
+	    $vals[2] = 0x01;
 	    $$self->{accmode} = 2;
 	    $rv = $lanparm->set_parm($OpenIPMI::LANPARM_AUTH_TYPE_ENABLES,
 				     join(" ", @vals), $self);
@@ -145,7 +145,7 @@ sub get_errcount {
 		$self->close();
 		return;
 	    }
-	    @vals[4] = 0x04;
+	    $vals[4] = 0x04;
 	    $$self->{accmode} = 3;
 	    $rv = $lanparm->set_parm_array($OpenIPMI::LANPARM_AUTH_TYPE_ENABLES,
 					   \@vals, $self);

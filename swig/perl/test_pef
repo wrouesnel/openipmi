@@ -130,7 +130,7 @@ sub get_errcount {
 		$self->close();
 		return;
 	    }
-	    @vals[6] = 0x31;
+	    $vals[6] = 0x31;
 	    $$self->{accmode} = 2;
 	    $rv = $pef->set_parm($OpenIPMI::PEFPARM_ALERT_STRING,
 				 join(" ", @vals), $self);
@@ -145,7 +145,7 @@ sub get_errcount {
 		$self->close();
 		return;
 	    }
-	    @vals[7] = 0x32;
+	    $vals[7] = 0x32;
 	    $$self->{accmode} = 3;
 	    $rv = $pef->set_parm_array($OpenIPMI::PEFPARM_ALERT_STRING,
 				       \@vals, $self);
@@ -1292,7 +1292,11 @@ sub get_errcount {
 
 	for $i (@config) {
 	    my ($parm, $idx, $nidx, $name, $type, $val) = split /\s+/, $i;
-	    $val = join(" ", split(/%/, $val));
+	    if (defined($val)) {
+		$val = join(" ", split(/%/, $val));
+	    } else {
+		$val = "";
+	    }
 	    my $vidx = int($idx);
 	    my $v = $config->get_val($parm, \$vidx);
 	    my ($vname, $vtype, $vval) = split /\s+/, $v, 3;

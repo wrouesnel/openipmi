@@ -6,6 +6,18 @@
 	* swig/OpenIPMI.i: Added PET support.
 
 	* swig/perl/test_pet, swig/perl/Makefile.am: Added PET perl tests.
+	
+	* glib/glib_os_hnd.c: Fixed the perform_one_op function to
+	time (sort of) properly.
+
+	* swig/perl/test_chan: Fix some problems with the tests.
+
+	* lanserv/lanserv_ipmi.c: Fix bugs handling channel privilege
+	limits.
+
+	* swig/perl/test_pef, swig/perl/test_lanparm: Minor perl cleanups.
+
+	* configure.in: Move to version 1.4.7.
 
 2005-01-01 Corey Minyard <cminyard@mvista.com> 
 

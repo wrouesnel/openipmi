@@ -853,6 +853,11 @@ sub get_errcount {
 
 	for $i (@pef_configs) {
 	    my ($parm, $idx, $nidx, $name, $type, $val) = split /\s+/, $i;
+	    if (defined($val)) {
+		$val = join(" ", split(/%/, $val));
+	    } else {
+		$val = "";
+	    }
 	    $val = join(" ", split(/%/, $val));
 	    my $vidx = int($idx);
 	    my $v = $config->get_val($parm, \$vidx);
