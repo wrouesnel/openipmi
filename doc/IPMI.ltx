@@ -4,6 +4,10 @@
 \author{Corey Minyard $<$minyard@acm.org$>$\\
         Montavista Software}
 \date{\today}
+%
+\newcommand{\msgitem}[2]{#1&#2\\ \hline}
+\newenvironment{showmsg}{\begin{tabular}{|l|l|}\hline}{\end{tabular}}
+%
 \begin{document}
 \maketitle
 
@@ -480,6 +484,12 @@ they need not be provided.
 \item[Random Data]
 For certain operations, OpenIPMI needs random data.
 \end{description}
+
+The os-handler include file is shown in Appendix \ref{os-handler-h}.
+
+Note that OS handlers are already defined for POSIX systems, both with
+and without threads.  These are defined in the include file
+\verb=ipmi_posix.h=; see that file for more details.
 
 \section{Error Handling}
 
@@ -1314,7 +1324,21 @@ new connection is returned in \verb=new_con=.
 
 \section{IPMB}
 
-resends, error recovery, etc.
+IPMB provides the main channel for transferring messages around an
+IPMI system.  It is a message bus that works somewhat like Ethernet,
+it is a CSMA (carrier-sense multiple access) system.  However, it does
+not have collision detection; so if two MCs attempt to transmit at the
+same time, both messages will be lost.  Because of this, IPMB does not
+scale very well; careful use needs to be made of the bandwith on the
+bus.
+
+\begin{showmsg}
+\msgitem{0}{Destination IPMB address}
+\msgitem{1}{\parbox{1in}{Bits 0-1 - LUN\\
+	    Bits 2-7 - NetFN}}
+\end{showmsg}
+
+ resends, error recovery, broadcast
 
 \section{ICMB}
 
@@ -1426,9 +1450,14 @@ That information may be fetched by the user.
 \verbatimtabinput{recv_cmd.c}
 
 %---------------------------------------------------------------------
-\chapter{Connection Handling Interface}
+\chapter{Connection Handling Interface (ipmi\_conn.h)}
 \label{ipmi-conn-h}
 \verbatimtabinput{../include/OpenIPMI/ipmi_conn.h}
+
+%---------------------------------------------------------------------
+\chapter{OS Handler Interface (os\_handler.h)}
+\label{os-handler-h}
+\verbatimtabinput{../include/OpenIPMI/os_handler.h}
 
 \backmatter
 \end{document}
