@@ -8588,9 +8588,6 @@ mxp_handler(ipmi_mc_t *mc,
     /* The MXP AMC does not support generating events on the IPMB. */
     ipmi_mc_set_ipmb_event_generator_support(mc, 0);
 
-    /* Broadcasting is currently broken on the MXP. */
-    ipmi_domain_set_broadcast_broken(domain, 1);
-
     if (channel == IPMI_BMC_CHANNEL) {
 	/* Treat the main SDRS on the AMCs as device SDRs. */
 	rv = ipmi_mc_set_main_sdrs_as_device(mc);
@@ -8759,6 +8756,9 @@ mxp_handle_send_rsp_err(ipmi_con_t *ipmi, ipmi_msg_t *rsp)
 static int
 mxp_conn_handler(ipmi_con_t *conn, void *cb_data)
 {
+    /* Broadcasting is currently broken on the MXP. */
+    conn->broadcast_broken = 1;
+
     conn->get_ipmb_addr = mxp_ipmb_fetch;
     conn->set_active_state = mxp_activate;
     conn->handle_send_rsp_err = mxp_handle_send_rsp_err;

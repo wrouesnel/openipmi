@@ -125,6 +125,10 @@ struct ipmi_con_s
     /* If OEM code want to attach some data, it can to it here. */
     void *oem_data;
 
+    /* This allows the connection to tell the upper layer that broadcasting
+       will not work on this interface. */
+    int broadcast_broken;
+
     /* Calls for the interface.  These should all return standard
        "errno" errors if they fail. */
 

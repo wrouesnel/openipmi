@@ -1,3 +1,17 @@
+2004-02-17 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_conn.h: Added a "broadcast broken" flag
+	to the interface data.
+
+	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Removed the ability
+	to set broadcast broken directly for the domain, instead we get
+	it from the interface data.
+
+	* lib/oem_motorola_mxp.c: Add setting broadcast broken on the
+	interface to an MXP, removed the domain setting of the same.
+
+	* configure.in: Move to ersion 1.2.11.
+
 2004-02-12 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h, lib/entity.c: Added entity-id based

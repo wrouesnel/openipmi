@@ -1548,14 +1548,6 @@ ipmi_domain_set_full_bus_scan(ipmi_domain_t *domain, int val)
     return 0;
 }
 
-void
-ipmi_domain_set_broadcast_broken(ipmi_domain_t *domain, int val)
-{
-    CHECK_DOMAIN_LOCK(domain);
-
-    domain->broadcast_broken = val;
-}
-
 static void
 add_bus_scans_running(ipmi_domain_t *domain, mc_ipmb_scan_info_t *info)
 {
@@ -3794,6 +3786,8 @@ ll_con_changed(ipmi_con_t   *ipmi,
     ipmi_domain_t   *domain = cb_data;
     int             rv;
     int             u;
+    int             i;
+    int             broadcast_broken;
 
     if (port_num >= MAX_PORTS_PER_CON) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -3824,6 +3818,15 @@ ll_con_changed(ipmi_con_t   *ipmi,
     	ipmi_start_si_scan(domain, u, NULL, NULL);
 
     if (still_connected) {
+	/* Check all the broadcast broken flags to see if we can support
+	   broadcast. */
+	broadcast_broken = 0;
+	for (i=0; i<MAX_CONS; i++) {
+	    if (domain->conn[i])
+		broadcast_broken |= domain->conn[i]->broadcast_broken;
+	}
+	domain->broadcast_broken = broadcast_broken;
+
 	domain->con_up[u] = 1;
 	if (domain->connecting) {
 	    /* If we are connecting, report it. */
