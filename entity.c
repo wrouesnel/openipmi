@@ -909,7 +909,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 	ref = ilist_search_iter(&iter, sens_cmp, &info);
 	if (!ref) {
 	    ipmi_log(IPMI_LOG_WARNING, "User requested removal of a sensor"
-		     "from an entity, but the sensor was not there");
+		     " from an entity, but the sensor was not there");
 	    return;
 	}
 
@@ -1004,7 +1004,7 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     ref = ilist_search_iter(&iter, control_cmp, &info);
     if (!ref) {
 	ipmi_log(IPMI_LOG_WARNING, "User requested removal of a control"
-		 "from an entity, but the sensor was not there");
+		 " from an entity, but the control was not there");
 	return;
     }
 

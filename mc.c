@@ -55,6 +55,10 @@
 /* Re-query the SEL every 10 seconds. */
 #define IPMI_SEL_QUERY_INTERVAL 10
 
+/* This is the number of device ID queries that an MC must not respond
+   to in a row to be considered dead. */
+#define MAX_MC_MISSED_RESPONSES 10
+
 enum ipmi_con_state_e { DEAD = 0,
 			QUERYING_DEVICE_ID,
 			QUERYING_MAIN_SDRS,
@@ -200,6 +204,9 @@ struct ipmi_mc_s
 
     ipmi_bmc_oem_removed_mc_cb removed_mc_handler;
     void                       *removed_mc_cb_data;
+
+    /* This is a retry count for missed pings from an MC query. */
+    int missed_responses;
 
     void *oem_data;
 };
@@ -950,35 +957,76 @@ mc_device_data_compares(ipmi_mc_t  *mc,
 	return EINVAL;
     }
 
-    mc->device_id = rsp_data[1];
-    mc->device_revision = rsp_data[2] & 0xf;
-    mc->provides_device_sdrs = (rsp_data[2] & 0x80) == 0x80;
-    mc->device_available = (rsp_data[3] & 0x80) == 0x80;
-    mc->major_fw_revision = rsp_data[3] & 0x7f;
-    mc->minor_fw_revision = rsp_data[4];
-    mc->major_version = rsp_data[5] & 0xf;
-    mc->minor_version = (rsp_data[5] >> 4) & 0xf;
-    mc->chassis_support = (rsp_data[6] & 0x80) == 0x80;
-    mc->bridge_support = (rsp_data[6] & 0x40) == 0x40;
-    mc->IPMB_event_generator_support = (rsp_data[6] & 0x20) == 0x20;
-    mc->IPMB_event_receiver_support = (rsp_data[6] & 0x10) == 0x10;
-    mc->FRU_inventory_support = (rsp_data[6] & 0x08) == 0x08;
-    mc->SEL_device_support = (rsp_data[6] & 0x04) == 0x04;
-    mc->SDR_repository_support = (rsp_data[6] & 0x02) == 0x02;
-    mc->sensor_device_support = (rsp_data[6] & 0x01) == 0x01;
-    mc->manufacturer_id = (rsp_data[7]
-			     | (rsp_data[8] << 8)
-			     | (rsp_data[9] << 16));
-    mc->product_id = rsp_data[10] | (rsp_data[11] << 8);
+    if (mc->device_id != rsp_data[1])
+	return 0;
+
+    if (mc->device_revision != (rsp_data[2] & 0xf))
+	return 0;
+    
+    if (mc->provides_device_sdrs != ((rsp_data[2] & 0x80) == 0x80))
+	return 0;
+
+    if (mc->device_available != ((rsp_data[3] & 0x80) == 0x80))
+	return 0;
+
+    if (mc->major_fw_revision != (rsp_data[3] & 0x7f))
+	return 0;
+
+    if (mc->minor_fw_revision != (rsp_data[4]))
+	return 0;
+
+    if (mc->major_version != (rsp_data[5] & 0xf))
+	return 0;
+
+    if (mc->minor_version != ((rsp_data[5] >> 4) & 0xf))
+	return 0;
+
+    if (mc->chassis_support != ((rsp_data[6] & 0x80) == 0x80))
+	return 0;
+
+    if (mc->bridge_support != ((rsp_data[6] & 0x40) == 0x40))
+	return 0;
+
+    if (mc->IPMB_event_generator_support != ((rsp_data[6] & 0x20) == 0x20))
+	return 0;
+
+    if (mc->IPMB_event_receiver_support != ((rsp_data[6] & 0x10) == 0x10))
+	return 0;
+
+    if (mc->FRU_inventory_support != ((rsp_data[6] & 0x08) == 0x08))
+	return 0;
+
+    if (mc->SEL_device_support != ((rsp_data[6] & 0x04) == 0x04))
+	return 0;
+
+    if (mc->SDR_repository_support != ((rsp_data[6] & 0x02) == 0x02))
+	return 0;
+
+    if (mc->sensor_device_support != ((rsp_data[6] & 0x01) == 0x01))
+	return 0;
+
+    if (mc->manufacturer_id != (rsp_data[7]
+				| (rsp_data[8] << 8)
+				| (rsp_data[9] << 16)))
+	return 0;
+
+    if (mc->product_id != (rsp_data[10] | (rsp_data[11] << 8)))
+	return 0;
 
     if (rsp->data_len < 16) {
-	/* no aux revision. */
-	memset(mc->aux_fw_revision, 0, 4);
+	/* no aux revision, it should be all zeros. */
+	if ((mc->aux_fw_revision[0] != 0)
+	    || (mc->aux_fw_revision[1] != 0)
+	    || (mc->aux_fw_revision[2] != 0)
+	    || (mc->aux_fw_revision[3] != 0))
+	    return 0;
     } else {
-	memcpy(mc->aux_fw_revision, rsp_data + 12, 4);
+	if (memcmp(mc->aux_fw_revision, rsp_data + 12, 4) != 0)
+	    return 0;
     }
 
-    return check_oem_handlers(mc);
+    /* Everything's the same. */
+    return 1;
 }
 
 void
@@ -1330,6 +1378,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     /* Found one, start the discovery process on it. */
     mc = find_mc_by_addr(info->bmc, addr, addr_len);
     if (msg->data[0] == 0) {
+	mc->missed_responses = 0;
 	if (mc && !mc_device_data_compares(mc, msg)) {
 	    /* The MC was replaced with a new one, so clear the old
                one and add a new one. */
@@ -1361,6 +1410,13 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	}
     } else {
 	/* Didn't get a response.  Maybe the MC has gone away? */
+	mc->missed_responses++;
+	if (mc->missed_responses >= MAX_MC_MISSED_RESPONSES) {
+	    ipmi_cleanup_mc(mc);
+	} else {
+	    /* Try again right now. */
+	    goto retry_addr;
+	}
     }
  next_addr:
     ipmi_unlock(info->bmc->bmc->mc_list_lock);
@@ -1374,6 +1430,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     }
     info->addr.slave_addr += 2;
 
+ retry_addr:
     rv = info->bmc->bmc->conn->send_command(info->bmc->bmc->conn,
 					    (ipmi_addr_t *) &(info->addr),
 					    sizeof(info->addr),
