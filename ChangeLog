@@ -21,6 +21,8 @@
 	way to easily set up the platform event trap stuff for just
 	getting all events.
 
+	* ui/ui.c: Added support for the LAN parameter display.
+
 2004-01-02 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_int.h: Added ipmi_strdup for use by

@@ -52,6 +52,7 @@
 #include <OpenIPMI/ipmi_ui.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_pef.h>
+#include <OpenIPMI/ipmi_lanparm.h>
 
 #include "ui_keypad.h"
 #include "ui_command.h"
@@ -76,6 +77,8 @@ ipmi_domain_id_t domain_id;
 extern os_handler_t ipmi_ui_cb_handlers;
 ipmi_pef_t *pef;
 ipmi_pef_config_t *pef_config;
+ipmi_lanparm_t *lanparm;
+ipmi_lan_config_t *lanparm_config;
 
 static int full_screen;
 struct termios old_termios;
@@ -3280,6 +3283,7 @@ viewpef_cmd(char *cmd, char **toks, void *cb_data)
     display_pad_clear();
     display_pef();
     display_pef_config();
+    display_pad_refresh();
     
     return 0;
 }
@@ -3328,6 +3332,322 @@ writepef_cmd(char *cmd, char **toks, void *cb_data)
 
     info.found = 0;
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, writepef_mc_handler, &info);
+    if (rv) {
+	cmd_win_out("Unable to find MC\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%d %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
+static void
+lanparm_out_val(char *name, int rv, char *fmt, unsigned int val)
+{
+    display_pad_out("  %s: ", name);
+    if (rv)
+	display_pad_out("err %x", rv);
+    else
+	display_pad_out(fmt, val);
+    display_pad_out("\n");
+}
+
+static void
+lanparm_out_data(char *name, int rv, unsigned char *data, int len)
+{
+    int i;
+    display_pad_out("  %s: ", name);
+    if (rv)
+	display_pad_out("err %x\n", rv);
+    else {
+	for (i=0; i<len; i++)
+	    display_pad_out("%2.2x", data[i]);
+	display_pad_out("\n");
+    }
+}
+
+void
+display_lanparm_config(void)
+{
+    int           i;
+    unsigned int  val;
+    unsigned int  len;
+    unsigned char data[128];
+    int           rv;
+    unsigned int  count;
+
+    if (!lanparm_config) {
+	display_pad_out("No LANPARM config read, use readlanparm to fetch one\n");
+	return;
+    }
+
+    display_pad_out("  auth supported:");
+    if (ipmi_lanconfig_get_support_auth_oem(lanparm_config))
+	display_pad_out(" oem");
+    if (ipmi_lanconfig_get_support_auth_straight(lanparm_config))
+	display_pad_out(" straight");
+    if (ipmi_lanconfig_get_support_auth_md5(lanparm_config))
+	display_pad_out(" md5");
+    if (ipmi_lanconfig_get_support_auth_md2(lanparm_config))
+	display_pad_out(" md2");
+    if (ipmi_lanconfig_get_support_auth_none(lanparm_config))
+	display_pad_out(" none");
+    display_pad_out("\n");
+
+    display_pad_out("  ip_addr_source: %d\n",
+		    ipmi_lanconfig_get_ip_addr_source(lanparm_config));
+    display_pad_out("  ipv4_ttl: %d\n",
+		    ipmi_lanconfig_get_ipv4_ttl(lanparm_config));
+    display_pad_out("  ipv4_flags: 0x%x\n",
+		    ipmi_lanconfig_get_ipv4_flags(lanparm_config));
+    display_pad_out("  ipv4_precedence: %d\n",
+		    ipmi_lanconfig_get_ipv4_precedence(lanparm_config));
+    display_pad_out("  ipv4_tos: %d\n",
+		    ipmi_lanconfig_get_ipv4_tos(lanparm_config));
+
+    for (i=0; i<5; i++) {
+	display_pad_out("  auth enabled (%d):", i);
+	rv = ipmi_lanconfig_get_enable_auth_oem(lanparm_config, i, &val);
+	if (rv)
+	    display_pad_out(" oemerr%x", rv);
+	else if (val)
+	    display_pad_out(" oem");
+	rv = ipmi_lanconfig_get_enable_auth_straight(lanparm_config, i, &val);
+	if (rv)
+	    display_pad_out(" straighterr%x", rv);
+	else if (val)
+	    display_pad_out(" straight");
+	rv = ipmi_lanconfig_get_enable_auth_md5(lanparm_config, i, &val);
+	if (rv)
+	    display_pad_out(" md5err%x", rv);
+	else if (val)
+	    display_pad_out(" md5");
+	rv = ipmi_lanconfig_get_enable_auth_md2(lanparm_config, i, &val);
+	if (rv)
+	    display_pad_out(" md2err%x", rv);
+	else if (val)
+	    display_pad_out(" md2");
+	rv = ipmi_lanconfig_get_enable_auth_none(lanparm_config, i, &val);
+	if (rv)
+	    display_pad_out(" noneerr%x", rv);
+	else if (val)
+	    display_pad_out(" none");
+	display_pad_out("\n");
+    }
+
+    len = 4;
+    rv = ipmi_lanconfig_get_ip_addr(lanparm_config, data, &len);
+    lanparm_out_data("ip_addr", rv, data, len);
+    len = 6;
+    rv = ipmi_lanconfig_get_mac_addr(lanparm_config, data, &len);
+    lanparm_out_data("mac_addr", rv, data, len);
+    len = 4;
+    rv = ipmi_lanconfig_get_subnet_mask(lanparm_config, data, &len);
+    lanparm_out_data("subnet_mask", rv, data, len);
+    len = 2;
+    rv = ipmi_lanconfig_get_primary_rmcp_port(lanparm_config, data, &len);
+    lanparm_out_data("primary_rmcp_port", rv, data, len);
+    len = 2;
+    rv = ipmi_lanconfig_get_secondary_rmcp_port(lanparm_config, data, &len);
+    lanparm_out_data("secondary_rmcp_port", rv, data, len);
+
+    rv = ipmi_lanconfig_get_bmc_generated_arps(lanparm_config, &val);
+    lanparm_out_val("bmc_generated_arps", rv, "%d", val);
+    rv = ipmi_lanconfig_get_bmc_generated_garps(lanparm_config, &val);
+    lanparm_out_val("bmc_generated_garps", rv, "%d", val);
+    rv = ipmi_lanconfig_get_garp_interval(lanparm_config, &val);
+    lanparm_out_val("garp_interval", rv, "%d", val);
+
+    len = 4;
+    rv = ipmi_lanconfig_get_default_gateway_ip_addr(lanparm_config, data, &len);
+    lanparm_out_data("default_gateway_ip_addr", rv, data, len);
+    len = 6;
+    rv = ipmi_lanconfig_get_default_gateway_mac_addr(lanparm_config, data, &len);
+    lanparm_out_data("default_gateway_mac_addr", rv, data, len);
+    len = 4;
+    rv = ipmi_lanconfig_get_backup_gateway_ip_addr(lanparm_config, data, &len);
+    lanparm_out_data("backup_gateway_ip_addr", rv, data, len);
+    len = 6;
+    rv = ipmi_lanconfig_get_backup_gateway_mac_addr(lanparm_config, data, &len);
+    lanparm_out_data("backup_gateway_mac_addr", rv, data, len);
+
+    len = 18;
+    rv = ipmi_lanconfig_get_community_string(lanparm_config, data, &len);
+    display_pad_out("  community_string: ");
+    if (rv)
+	display_pad_out("err: %x\n", rv);
+    else
+	display_pad_out("%s\n", data);
+
+    count = ipmi_lanconfig_get_num_alert_destinations(lanparm_config);
+    display_pad_out("  num_alert_destinations: %d\n", count);
+    for (i=0; i<count; i++) {
+	display_pad_out("  destination %d:\n", i);
+	rv = ipmi_lanconfig_get_alert_ack(lanparm_config, i, &val);
+	lanparm_out_val("  alert_ack", rv, "%d", val);
+	rv = ipmi_lanconfig_get_dest_type(lanparm_config, i, &val);
+	lanparm_out_val("  dest_type", rv, "%d", val);
+	rv = ipmi_lanconfig_get_alert_retry_interval(lanparm_config, i, &val);
+	lanparm_out_val("  alert_retry_interval", rv, "%d", val);
+	rv = ipmi_lanconfig_get_max_alert_retries(lanparm_config, i, &val);
+	lanparm_out_val("  max_alert_retries", rv, "%d", val);
+	rv = ipmi_lanconfig_get_dest_format(lanparm_config, i, &val);
+	lanparm_out_val("  dest_format", rv, "%d", val);
+	rv = ipmi_lanconfig_get_gw_to_use(lanparm_config, i, &val);
+	lanparm_out_val("  gw_to_use", rv, "%d", val);
+	len = 4;
+	rv = ipmi_lanconfig_get_dest_ip_addr(lanparm_config, i, data, &len);
+	lanparm_out_data("  dest_ip_addr", rv, data, len);
+	len = 6;
+	rv = ipmi_lanconfig_get_dest_mac_addr(lanparm_config, i, data, &len);
+	lanparm_out_data("  dest_mac_addr", rv, data, len);
+    }
+}
+
+typedef struct lanparm_info_s
+{
+    ipmi_mcid_t   mc_id;
+    unsigned char lun;
+    unsigned char channel;
+    ipmi_msg_t    msg;
+    int           found;
+} lanparm_info_t;
+
+void
+readlanparm_getconf_handler(ipmi_lanparm_t    *lanparm,
+			    int               err,
+			    ipmi_lan_config_t *config,
+			    void              *cb_data)
+{
+    if (err) {
+	ui_log("Error reading LANPARM config: %x\n", err);
+	return;
+    }
+
+    lanparm_config = config;
+    display_pad_clear();
+    display_lanparm_config();
+    display_pad_refresh();
+}
+
+void
+readlanparm_mc_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    int            rv;
+    lanparm_info_t *info = cb_data;
+
+    if (lanparm) {
+	ipmi_lanparm_destroy(lanparm, NULL, NULL);
+	lanparm = NULL;
+    }
+    if (lanparm_config) {
+	ipmi_lan_free_config(lanparm_config);
+	lanparm_config = NULL;
+    }
+
+    rv = ipmi_lanparm_alloc(mc, info->channel, &lanparm);
+    if (rv) {
+	cmd_win_out("failed lanparm allocation: %x\n", rv);
+	return;
+    }
+
+    rv = ipmi_lan_get_config(lanparm, readlanparm_getconf_handler, NULL);
+}
+
+int
+readlanparm_cmd(char *cmd, char **toks, void *cb_data)
+{
+    lanparm_info_t info;
+    int            rv;
+    unsigned char  val;
+
+    if (get_uchar(toks, &val, "mc channel"))
+	return 0;
+    info.mc_id.channel = val;
+
+    if (get_uchar(toks, &val, "MC num"))
+	return 0;
+    info.mc_id.mc_num = val;
+
+    if (get_uchar(toks, &val, "lanparm channel"))
+	return 0;
+    info.channel = val;
+
+    info.mc_id.domain_id = domain_id;
+
+    info.found = 0;
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, readlanparm_mc_handler, &info);
+    if (rv) {
+	cmd_win_out("Unable to find MC\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%d %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
+int
+viewlanparm_cmd(char *cmd, char **toks, void *cb_data)
+{
+    display_pad_clear();
+    display_lanparm_config();
+    display_pad_refresh();
+    
+    return 0;
+}
+
+void writelanparm_done(ipmi_lanparm_t *lanparm,
+		   int        err,
+		   void       *cb_data)
+{
+    if (err)
+	ui_log("Error writing LANPARM: %x\n", err);
+    else
+	ui_log("LANPARM written\n");
+}
+
+void
+writelanparm_mc_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    if (!lanparm) {
+	ui_log("No LANPARM to write\n");
+	return;
+    }
+    if (!lanparm_config) {
+	ui_log("No LANPARM config to write\n");
+	return;
+    }
+
+    ipmi_lan_set_config(lanparm, lanparm_config, writelanparm_done, NULL);
+}
+
+int
+writelanparm_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+    unsigned char val;
+
+    if (get_uchar(toks, &val, "mc channel"))
+	return 0;
+    info.mc_id.channel = val;
+
+    if (get_uchar(toks, &val, "MC num"))
+	return 0;
+    info.mc_id.mc_num = val;
+
+    info.mc_id.domain_id = domain_id;
+
+    info.found = 0;
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, writelanparm_mc_handler, &info);
     if (rv) {
 	cmd_win_out("Unable to find MC\n");
 	return 0;
@@ -4131,8 +4451,16 @@ static struct {
     { "viewpef",	viewpef_cmd,
       " - show current pef information " },
     { "writepef",	writepef_cmd,
-      " <channel> <mc num> "
+      " <channel> <mc num>"
       " - write the current PEF information to an MC" },
+    { "readlanparm",	readlanparm_cmd,
+      " <channel> <mc num> <channel>"
+      " - read lanparm information from an MC" },
+    { "viewlanparm",	viewlanparm_cmd,
+      " - show current lanparm information " },
+    { "writelanparm",	writelanparm_cmd,
+      " <channel> <mc num> <channel>"
+      " - write the current LANPARM information to an MC" },
     { "delevent",	delevent_cmd,
       " <channel> <mc num> <log number> - "
       "Delete the given event number from the SEL" },
@@ -4690,6 +5018,7 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
     pef = NULL;
+    lanparm = NULL;
 }
 
 void
