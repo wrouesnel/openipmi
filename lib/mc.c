@@ -1660,7 +1660,7 @@ start_sel_ops(ipmi_mc_t           *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%smc.c(sensors_reread): "
+		 "%smc.c(start_sel_ops): "
 		 "Unable to allocate info for system event log timer."
 		 " System event log will not be queried",
 		 mc->name);
@@ -1676,7 +1676,7 @@ start_sel_ops(ipmi_mc_t           *mc,
     if (rv) {
 	ipmi_mem_free(info);
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%smc.c(sensors_reread): "
+		 "%smc.c(start_sel_ops): "
 		 "Unable to allocate the system event log timer."
 		 " System event log will not be queried",
 		 mc->name);
@@ -2378,9 +2378,10 @@ sensor_read_handler(void *cb_data, int shutdown)
 	sdr_reread_done(info, NULL, ECANCELED, 0);
 }
 
-int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
-			   ipmi_mc_done_cb done,
-			   void            *done_data)
+int
+ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
+		       ipmi_mc_done_cb done,
+		       void            *done_data)
 {
     sdr_fetch_info_t   *info;
     int                rv = 0;

@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003 MontaVista Software Inc.
+ * Copyright 2002,2003,2004,2005 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -354,34 +354,41 @@ static void
 fetch_complete(ipmi_sel_info_t *sel, int err)
 {
     sel_fetch_handler_t *elem, *next;
+    int                 sels_changed;
+    unsigned int        num_sels;
 
     if (sel->in_destroy)
 	goto out;
+
+    sels_changed = sel->sels_changed;
+    num_sels = sel->num_sels;
 
     elem = sel->fetch_handlers;
     sel->fetch_handlers = NULL;
     sel->fetched = 1;
     sel->in_fetch = 0;
+    sel_unlock(sel);
+
     while (elem) {
 	next = elem->next;
 	elem->next = NULL;
 	if (elem->handler)
 	    elem->handler(sel,
 		          err,
-		          sel->sels_changed,
-		          sel->num_sels,
+		          sels_changed,
+		          num_sels,
 		          elem->cb_data);
 	ipmi_mem_free(elem);
 	elem = next;
     }
 
     if (sel->destroyed) {
+	sel_lock(sel);
 	internal_destroy_sel(sel);
 	/* Previous call releases lock. */
 	return;
     }
 
-    sel_unlock(sel);
     opq_op_done(sel->opq);
     return;
 
