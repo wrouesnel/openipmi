@@ -9,6 +9,8 @@
 	* swig/perl/test_chan: Adjusted for the previous changes.
 	* cmdlang/cmd_mc.c, man/ipmi_cmdlang.7: ditto
 
+	* doc/IPMI.ltx: Added info for user and channel management.
+
 2005-01-03 Corey Minyard <cminyard@mvista.com> 
 
 	* Include/OpenIPMI/ipmi_pet.h, lib/pet.c: Added a refcount to the

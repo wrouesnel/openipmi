@@ -3144,6 +3144,9 @@ defined in section \ref{openipmi-generic-interface}.
 TBD - OpenIPMI does not support serial interfaces, but this needs to be
 written someday.
 
+\subsection{Serial Configuration}
+\label{serial-config}
+
 \subsection{Direct Serial}
 
 \subsection{Terminal Mode}
@@ -3214,32 +3217,114 @@ The user number, name, password and enable are global for all channels
 in an BMC.  The link/message authentication enables are done
 per-channel.
 
-\begin{User management in OpenIPMI}
+\subsection{User management in OpenIPMI}
 
 Enabling a user is a complicated process.  The user must have a name
 and password assigned.  It must be set with the proper authentication
 enables.  Then it must be enabled with a separate enable command.
 
-Fortunately, OpenIPMI handles a lot of this process for you.  You may
-get a list of users (or a specific user in a one-user list) with the
-command:
+Fortunately, OpenIPMI handles a lot of this process for you.  The
+functions are found in the \texttt{ipmi\_user.h} include file.  You
+may get a list of users (or a specific user in a one-user list) with
+the command:
 \begin{verbatim}
 typedef void (*ipmi_user_list_cb)(ipmi_mc_t        *mc,
-				  int              err,
-				  ipmi_user_list_t *list,
-				  void             *cb_data);
-#define IPMI_MC_ALL_USERS	0
+                                  int              err,
+                                  ipmi_user_list_t *list,
+                                  void             *cb_data);
+#define IPMI_MC_ALL_USERS       0
 int ipmi_mc_get_users(ipmi_mc_t         *mc,
-		      unsigned int      channel,
-		      unsigned int      user,
-		      ipmi_user_list_cb handler,
-		      void              *cb_data);
+                      unsigned int      channel,
+                      unsigned int      user,
+                      ipmi_user_list_cb handler,
+                      void              *cb_data);
 \end{verbatim}
 Using \verb=IPMI_MC_ALL_USERS= will fetch all users, otherwise the
 user specified will be used.  The channel-specific information will be
 fetched for only the given channel.
 
-\begin{User management commands}
+Once you have the list, you can fetch information from the list:
+\begin{verbatim}
+int ipmi_user_list_get_channel(ipmi_user_list_t *list, unsigned int *channel);
+int ipmi_user_list_get_max_user(ipmi_user_list_t *list, unsigned int *max);
+int ipmi_user_list_get_enabled_users(ipmi_user_list_t *list, unsigned int *e);
+int ipmi_user_list_get_fixed_users(ipmi_user_list_t *list, unsigned int *f);
+\end{verbatim}
+
+You can also fetch individual users from the user list.  Note that if
+you fetch a user this way, you must free it with \verb=ipmi_user_free()=.
+\begin{verbatim}
+unsigned int ipmi_user_list_get_user_count(ipmi_user_list_t *users);
+ipmi_user_t *ipmi_user_list_get_user(ipmi_user_list_t *list,
+                                     unsigned int     idx);
+\end{verbatim}
+
+Once you fetch a user, you can get information from it.  You can also
+set information for the user.  This only sets the local copy, it must
+be written out into the real data to activate it on the BMC.
+\begin{verbatim}
+int ipmi_user_get_channel(ipmi_user_t *user, unsigned int *channel);
+
+/*
+ * Get/set the number for the user.
+ */
+int ipmi_user_get_num(ipmi_user_t *user, unsigned int *num);
+int ipmi_user_set_num(ipmi_user_t *user, unsigned int num);
+
+/*
+ * Get/set the name for the user.  When getting the name, the pointer
+ * to "len" should point to a value of the length of "name".  "len"
+ * will be updated to the actual number of characters copied.  The
+ * password set is for 16-byte passwords, the password2 is for 20-byte
+ * passwords.
+ */
+int ipmi_user_get_name_len(ipmi_user_t *user, unsigned int *len);
+int ipmi_user_get_name(ipmi_user_t *user, char *name, unsigned int *len);
+int ipmi_user_set_name(ipmi_user_t *user, char *name, unsigned int len);
+int ipmi_user_set_password(ipmi_user_t *user, char *pw, unsigned int len);
+int ipmi_user_set_password2(ipmi_user_t *user, char *pw, unsigned int len);
+
+/*
+ * Various bits of information about a user, this is per-channel.
+ */
+int ipmi_user_get_link_auth_enabled(ipmi_user_t *user, unsigned int *val);
+int ipmi_user_set_link_auth_enabled(ipmi_user_t *user, unsigned int val);
+int ipmi_user_get_msg_auth_enabled(ipmi_user_t *user, unsigned int *val);
+int ipmi_user_set_msg_auth_enabled(ipmi_user_t *user, unsigned int val);
+int ipmi_user_get_access_cb_only(ipmi_user_t *user, unsigned int *val);
+int ipmi_user_set_access_cb_only(ipmi_user_t *user, unsigned int val);
+int ipmi_user_get_privilege_limit(ipmi_user_t *user, unsigned int *val);
+int ipmi_user_set_privilege_limit(ipmi_user_t *user, unsigned int val);
+int ipmi_user_get_session_limit(ipmi_user_t *user, unsigned int *val);
+int ipmi_user_set_session_limit(ipmi_user_t *user, unsigned int val);
+
+/*
+ * The enable for the user.  Note that the enable value cannot be
+ * fetched and will return an error unless set.
+ */
+int ipmi_user_get_enable(ipmi_user_t *user, unsigned int *val);
+int ipmi_user_set_enable(ipmi_user_t *user, unsigned int val);
+\end{verbatim}
+
+To actually set the user information on the BMC, the following command
+can be used:
+\begin{verbatim}
+int ipmi_mc_set_user(ipmi_mc_t       *mc,
+                     unsigned int    channel,
+                     unsigned int    num,
+                     ipmi_user_t     *user,
+                     ipmi_mc_done_cb handler,
+                     void            *cb_data);
+\end{verbatim}
+
+Note that OpenIPMI keeps track of what has changed in the user and
+will only write out the changed information.  If you wish to rewrite
+all information in the user (like if you want to write the same
+information to a new user number) you can call
+\verb=ipmi_user_set_all()= with the user to set the changed bits for
+all items.  Then you can write the user out.
+
+\subsection{User management commands}
 
 Table~\vref{set-user-access-cmd} shows the command used to set the
 enables for the user (this is not the same as the user enable).  These
@@ -3250,15 +3335,15 @@ are all per-channel.
         \begin{tightdefs}
         \item[bits 0-3] - channel number
         \item[bit 4] - Enable IPMI messaging for the user.  If this is
-	  not set, the user may not send IPMI messages.
+          not set, the user may not send IPMI messages.
         \item[bit 5] - Enable link authentication for the user.  If
-	  this is not set, the user may not authenticate a link.
+          this is not set, the user may not authenticate a link.
         \item[bit 6] - User restricted to callback only.  If this is
-	  set, the user is restricted to callback authentication in
-	  non-callback situations.  In a callback situation, the
-	  privilege level is determined by the normal setting.
+          set, the user is restricted to callback authentication in
+          non-callback situations.  In a callback situation, the
+          privilege level is determined by the normal setting.
         \item[bit 7] - If this is 1, modify the fields in this byte.
-	  If this is 0, the fields in this byte are ignored.
+          If this is 0, the fields in this byte are ignored.
         \end{tightdefs}}
 \msgitem{1}{User ID:
         \begin{tightdefs}
@@ -3269,15 +3354,15 @@ are all per-channel.
         \begin{tightdefs}
         \item[bits 0-3] - The privilege level, as defined in
           table~\vref{ipmi-priv-levels}.  Putting a value of Fh in this
-	  field will disable access to this channel for the user.
+          field will disable access to this channel for the user.
         \item[bits 4-7] - reserved.
         \end{tightdefs}}
 \msgitem{(3)}{User session limit - optional byte
         \begin{tightdefs}
         \item[bits 0-3] - The user session limit.  If set to 0, then
-	  the limit is the channel's session limit.  There does not
-	  appear to be any way to read this value, so it is a ``write
-	  only'' parameter.
+          the limit is the channel's session limit.  There does not
+          appear to be any way to read this value, so it is a ``write
+          only'' parameter.
         \item[bits 4-7] - reserved
         \end{tightdefs}}
 \msgtag{Response}
@@ -3316,21 +3401,21 @@ table~\vref{get-user-access-cmd}.
 \msgitem{3}{%
         \begin{tightdefs}
         \item[bits 0-5] - Count of user ids with fixed names (that cannot
-	  be changed with the set user name command).  This includes user
-	  1 and must be sequential starting with user 2.
+          be changed with the set user name command).  This includes user
+          1 and must be sequential starting with user 2.
         \item[bits 6-7] - reserved
         \end{tightdefs}}
 \msgitem{1}{Various controls for the user on the channel:
         \begin{tightdefs}
         \item[bits 0-3] - User privilege limit.
         \item[bit 4] - IPMI messaging enabled for the user.  If this is
-	  not set, the user may not send IPMI messages.
+          not set, the user may not send IPMI messages.
         \item[bit 5] - Link authentication enabled for the user.  If
-	  this is not set, the user may not authenticate a link.
+          this is not set, the user may not authenticate a link.
         \item[bits 6] - User restricted to callback only.  If this is
-	  set, the user is restricted to callback authentication in
-	  non-callback situations.  In a callback situation, the
-	  privilege level is determined by the normal setting.
+          set, the user is restricted to callback authentication in
+          non-callback situations.  In a callback situation, the
+          privilege level is determined by the normal setting.
         \item[bits 7] - If reserved.
         \end{tightdefs}}
 \msgcaption{\label{get-user-access-cmd}Get User Access Command,
@@ -3348,7 +3433,7 @@ command defined in table~\vref{get-user-name-cmd}.
         \item[bits 6-7] - reserved
         \end{tightdefs}}
 \msgitem{1-16}{User name - These bytes are ASCII-encoded bytes that
-	define the name of the user.}
+        define the name of the user.}
 \msgtag{Response}
 \msgitem{0}{Completion Code}
 \msgcaption{\label{set-user-name-cmd}Set User Name Command,
@@ -3364,7 +3449,7 @@ command defined in table~\vref{get-user-name-cmd}.
 \msgtag{Response}
 \msgitem{0}{Completion Code}
 \msgitem{1-16}{User name - These bytes are ASCII-encoded bytes that
-	define the name of the user.}
+        define the name of the user.}
 \msgcaption{\label{get-user-name-cmd}Get User Name Command,
   NetFN S/E (06h), Cmd 46h}
 \end{showmsg}
@@ -3384,36 +3469,389 @@ only for RMCP+ authentication.
         \begin{tightdefs}
         \item[bits 0-5] - User number
         \item[bit 6] - If this is 0, then use 16-byte passwords.  If this
-	  is 1, then use 20-byte passwords.
+          is 1, then use 20-byte passwords.
         \item[bit 7] - reserved
         \end{tightdefs}}
 \msgitem{1}{%
         \begin{tightdefs}
         \item[bits 0-1] - Operation:
           \begin{tightdefs}
-	  \item[00b] - disable the user.
-	  \item[01b] - enable the user.
-	  \item[10b] - set the password to the value in this command.
-	  \item[11b] - test the password in this command and return an
-	    error code if it is incorrect.
+          \item[00b] - disable the user.
+          \item[01b] - enable the user.
+          \item[10b] - set the password to the value in this command.
+          \item[11b] - test the password in this command and return an
+            error code if it is incorrect.
           \end{tightdefs}
         \item[bits 2-7] - reserved
         \end{tightdefs}}
 \msgitem{2-17/20}{Password - These bytes are ASCII-encoded bytes that
-	define the name of the user.  This is only present for the
-	set and test password operations.}
+        define the name of the user.  This is only present for the
+        set and test password operations.}
 \msgtag{Response}
 \msgitem{0}{Completion Code.  Special values are:
-	\begin{tightdefs}
-	\item[80h] - Password test failed
-	\item[81h] - Password was the wrong length
-	\end{tightdefs}}
+        \begin{tightdefs}
+        \item[80h] - Password test failed
+        \item[81h] - Password was the wrong length
+        \end{tightdefs}}
 \msgcaption{\label{set-user-password-cmd}Set User Password Command,
   NetFN S/E (06h), Cmd 45h}
 \end{showmsg}
 
 
-\section{Channels and Authentication}
+\section{Channel Configuration}
+
+The channels on an IPMI system are controlled with a channel setting
+command.  In addition, channel information is available.
+
+Channels are numbered 0-7 and Fh.  Channel 0 is generally IPMB.
+Channels 1-7 are used for other IPMB channels, LAN interfaces, serial
+interfaces, and whatnot.  Channel Fh is used for the system interface.
+
+If you specify channel Eh in a command, it will use the channel the
+command comes in on and any returned channel number will be the actual
+channel number of the channel.  This can be used to discover the
+channel number of the current channel.
+
+The channel information contains the channel type, protocol, and other
+detailed information about the channel.
+
+The channel access allows control of how the channel works.  It allows
+alerting to be enabled, it controls whether user and per-message
+authentication are required for the channel, it controls when the
+channel is available and the privilege limit of the channel.  Channel
+access has two separate areas to store the information, a volatile
+area and a non-volatile area.  The volatile area is the area that is
+used in normal operation, setting that modified behaviour immediately.
+This area is lost if power is lost to the system.  The system loads
+the volatile area from the non-volatile area at startup.  The areas
+are set separately.
+
+In addition to this, LAN interfaces have specific configuration
+information as defined in section~\vref{lan-config} and serial
+interfaces have their own information as defined in
+section~\vref{serial-config}.
+
+\subsection{Channel handling in OpenIPMI}
+
+\subsubsection{Channel Information}
+
+OpenIPMI allows the user to get channel information with the following
+command:
+\begin{verbatim}
+typedef struct ipmi_channel_info_s ipmi_channel_info_t;
+typedef void (*ipmi_channel_info_cb)(ipmi_mc_t           *mc,
+                                     int                 err,
+                                     ipmi_channel_info_t *info,
+                                     void                *cb_data);
+int ipmi_mc_channel_get_info(ipmi_mc_t            *mc,
+                             unsigned int         channel,
+                             ipmi_channel_info_cb handler,
+                             void                 *cb_data);
+\end{verbatim}
+The callback gets a channel information structure which can be
+accessed with the following functions:
+\begin{verbatim}
+int ipmi_channel_info_get_channel(ipmi_channel_info_t *info,
+                                  unsigned int        *channel);
+int ipmi_channel_info_get_medium(ipmi_channel_info_t *info,
+                                 unsigned int        *medium);
+int ipmi_channel_info_get_protocol_type(ipmi_channel_info_t *info,
+                                        unsigned int        *prot_type);
+
+int ipmi_channel_info_get_session_support(ipmi_channel_info_t *info,
+                                          unsigned int        *sup);
+/* Data is 3 bytes long */
+int ipmi_channel_info_get_vendor_id(ipmi_channel_info_t *info,
+                                    unsigned char       *data);
+/* Data is 2 bytes long */
+int ipmi_channel_info_get_aux_info(ipmi_channel_info_t *info,
+                                   unsigned char       *data);
+\end{verbatim}
+
+Table~\vref{ipmi-channel-medium} describes the channel mediums defined
+in OpenIPMI.  Table~\vref{ipmi-channel-protocol-types} describes the
+channel protocol types.  Table~\vref{ipmi-channel-session-support}
+describes the channel session support settings.
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_IPMB} (1) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_ICMB\_V10} (2) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_ICMB\_V09} (3) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_8023\_LAN} (4) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_RS232} (5) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_OTHER\_LAN} (6) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_PCI\_SMBUS} (7) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_SMBUS\_v1} (8) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_SMBUS\_v2} (9) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_USB\_v1} (10) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_USB\_v2} (11) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MEDIUM\_SYS\_INTF} (12) & \\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-channel-medium}Channel mediums in IPMI}
+\end{table}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\texttt{IPMI\_CHANNEL\_PROTOCOL\_IPMB} (1) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_PROTOCOL\_ICMB} (2) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_PROTOCOL\_SMBus} (4) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_PROTOCOL\_KCS} (5) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_PROTOCOL\_SMIC} (6) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_PROTOCOL\_BT\_v10} (7) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_PROTOCOL\_BT\_v15} (8) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_PROTOCOL\_TMODE} (9) & \\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-channel-protocol-types}Protocol types in IPMI}
+\end{table}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\texttt{IPMI\_CHANNEL\_SESSION\_LESS} (0) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_SINGLE\_SESSION} (1) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_MULTI\_SESSION} (2) & \\
+\hline
+\texttt{IPMI\_CHANNEL\_SESSION\_BASED} (3) & \\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-channel-session-support}Session support in IPMI}
+\end{table}
+
+\subsubsection{Channel Access}
+
+Channels have access controls that define who may use them, privilege
+limits, and other things of that nature.  These are available to be
+fetched and set with OpenIPMI functions:
+\begin{verbatim}
+typedef struct ipmi_channel_access_s ipmi_channel_access_t;
+typedef void (*ipmi_channel_access_cb)(ipmi_mc_t             *mc,
+                                       int                   err,
+                                       ipmi_channel_access_t *info,
+                                       void                  *cb_data);
+int ipmi_mc_channel_get_access(ipmi_mc_t              *mc,
+                               unsigned int           channel,
+                               enum ipmi_set_dest_e   dest,
+                               ipmi_channel_access_cb handler,
+                               void                   *cb_data);
+int ipmi_mc_channel_set_access(ipmi_mc_t             *mc,
+                               unsigned int           channel,
+                               enum ipmi_set_dest_e  dest,
+                               ipmi_channel_access_t *access,
+                               ipmi_mc_done_cb       handler,
+                               void                  *cb_data);
+\end{verbatim}
+Once you have a channel access type, you can get/set information in it
+with the following functions:
+\begin{verbatim}
+int ipmi_channel_access_get_channel(ipmi_channel_access_t *access,
+                                    unsigned int          *channel);
+int ipmi_channel_access_get_alerting_enabled(ipmi_channel_access_t *access,
+                                             unsigned int          *enab);
+int ipmi_channel_access_set_alerting_enabled(ipmi_channel_access_t *access,
+                                             unsigned int          enab);
+int ipmi_channel_access_get_per_msg_auth(ipmi_channel_access_t *access,
+                                         unsigned int          *msg_auth);
+int ipmi_channel_access_set_per_msg_auth(ipmi_channel_access_t *access,
+                                         unsigned int          msg_auth);
+int ipmi_channel_access_get_user_auth(ipmi_channel_access_t *access,
+                                      unsigned int          *user_auth);
+int ipmi_channel_access_set_user_auth(ipmi_channel_access_t *access,
+                                      unsigned int          user_auth);
+int ipmi_channel_access_get_access_mode(ipmi_channel_access_t *access,
+                                        unsigned int          *access_mode);
+int ipmi_channel_access_set_access_mode(ipmi_channel_access_t *access,
+                                        unsigned int          access_mode);
+int ipmi_channel_access_get_priv_limit(ipmi_channel_access_t *access,
+                                       unsigned int          *priv_limit);
+int ipmi_channel_access_set_priv_limit(ipmi_channel_access_t *access,
+                                       unsigned int          priv_limit);
+\end{verbatim}
+Table~\vref{ipmi-priv-levels} gives the privilege levels that the
+privilege limits used in this command.
+Table~\vref{ipmi-channel-access-mode} gives the modes the channel can
+run in.  Not that not all channel types can support all modes.
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\texttt{IPMI\_CHANNEL\_ACCESS\_MODE\_DISABLED} (0) & Channel is never
+        available.\\
+\hline
+\texttt{IPMI\_CHANNEL\_ACCESS\_MODE\_PRE\_BOOT} (1) & Channel is only available
+        when the firmware is running, not when an OS is running.\\
+\hline
+\texttt{IPMI\_CHANNEL\_ACCESS\_MODE\_ALWAYS} (2) & Channel is always
+        available.\\
+\hline
+\texttt{IPMI\_CHANNEL\_ACCESS\_MODE\_SHARED} (3) & Channel is always available
+        for multiple simultaneous users.\\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-channel-access-mode}Channel access modes in IPMI}
+\end{table}
+
+Note that OpenIPMI tracks what has changed in the channel access and
+only writes out the changed information.  If you wish to force all
+data to be rewritten, you may use the
+\verb=ipmi_channel_access_setall()= function to mark all data as
+changed.
+
+\subsection{Channel handling commands}
+
+Table~\vref{get-channel-info-cmd} gives the command used to fetch the
+channel information.
+
+Channel access is fetched and written with the commands defined in
+table~\vref{set-channel-access-cmd} and
+table~\vref{get-channel-access-cmd}.
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{%
+        \begin{tightdefs}
+        \item[bits 0-3] - Channel
+        \item[bits 4-7] - reserved
+        \end{tightdefs}}
+\msgitem{1}{%
+        \begin{tightdefs}
+        \item[bits 0-2] - Set the channel access mode per
+          table~\vref{ipmi-channel-access-mode}
+        \item[bit 3] - If 1, require authentication for user-level
+          command.  Otherwise authentication is not required for
+          user-level commands.  Note that this has no effect on
+          operator or admin level commands.
+        \item[bit 4] - If 1, require per-message authentication.  If
+          0, no authentication is required per-message.  Note that if
+          this is 0, a session must still be established, but
+          subsequent messages after session establishment do not
+          require authentication.
+        \item[bit 5] - Enable or diable PEF alerting on the channel.
+          Note that if this is 0 (disabled) alert immediate still
+          works.
+        \item[bits 6-7] - Operation:
+          \begin{tightdefs}
+          \item[00b] - Do not modify the values specified in the rest
+            of this byte.
+          \item[01b] - Set the non-volatile area
+          \item[10b] - Set the volatile area.
+          \item[11b] - reserved
+          \end{tightdefs}
+        \end{tightdefs}}
+\msgitem{2}{%
+        \begin{tightdefs}
+        \item[bits 0-3] - Set the privilege limit for the channel per
+          table~\vref{ipmi-priv-levels}.
+        \item[bits 4-5] - reserved
+        \item[bits 6-7] - Operation:
+          \begin{tightdefs}
+          \item[00b] - Do not modify the values specified in the rest
+            of this byte.
+          \item[01b] - Set the non-volatile area
+          \item[10b] - Set the volatile area.
+          \item[11b] - reserved
+          \end{tightdefs}
+        \end{tightdefs}}
+\msgtag{Response}
+\msgitem{0}{Completion Code}
+\msgcaption{\label{set-channel-access-cmd}Set Channel Access Command,
+  NetFN S/E (06h), Cmd 40h}
+\end{showmsg}
+
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{%
+        \begin{tightdefs}
+        \item[bits 0-3] - Channel
+        \item[bits 4-7] - reserved
+        \end{tightdefs}}
+\msgitem{1}{%
+        \begin{tightdefs}
+        \item[bits 0-5] - reserved
+          \begin{tightdefs}
+          \item[00b] - reserved
+          \item[01b] - Get the non-volatile area
+          \item[10b] - Get the volatile area.
+          \item[11b] - reserved
+          \end{tightdefs}
+        \end{tightdefs}}
+\msgtag{Response}
+\msgitem{0}{Completion Code.  The following special return codes are
+        defined:
+        \begin{tightdefs}
+        \item[82h] - The channel is session-less thus does not support
+          this command.
+        \end{tightdefs}}
+\msgitem{1}{%
+        \begin{tightdefs}
+        \item[bits 0-2] - The channel access mode per
+          table~\vref{ipmi-channel-access-mode}
+        \item[bit 3] - If 1, require authentication for user-level
+          command.  Otherwise authentication is not required for
+          user-level commands.  Note that this has no effect on
+          operator or admin level commands.
+        \item[bit 4] - If 1, require per-message authentication.  If
+          0, no authentication is required per-message.  Note that if
+          this is 0, a session must still be established, but
+          subsequent messages after session establishment do not
+          require authentication.
+        \item[bit 5] - Enable or diable PEF alerting on the channel.
+          Note that if this is 0 (disabled) alert immediate still
+          works.
+        \item[bits 6-7] - reserved
+        \end{tightdefs}}
+\msgitem{2}{%
+        \begin{tightdefs}
+        \item[bits 0-3] - The privilege limit for the channel per
+          table~\vref{ipmi-priv-levels}.
+        \item[bits 4-7] - reserved
+        \end{tightdefs}}
+\msgcaption{\label{get-channel-access-cmd}Get Channel Access Command,
+  NetFN S/E (06h), Cmd 41h}
+\end{showmsg}
+
+
+\subsection{Channel Authentication}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\texttt{IPMI\_AUTHTYPE\_NONE} & No authentication.\\
+\hline
+\texttt{IPMI\_AUTHTYPE\_MD2} & \acs{MD2} style authentication.\\
+\hline
+\texttt{IPMI\_AUTHTYPE\_MD5} & \acs{MD5} style authentication.  This is the
+recommended type of authentication.\\
+\hline
+\texttt{IPMI\_AUTHTYPE\_STRAIGHT} & Puts the password into the message in
+plain text.  Don't use this.\\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-authtypes}Authentication types in IPMI}
+\end{table}
 
 \begin{table}
 \begin{tabularx}{\textwidth}{|l|X|}
@@ -3434,23 +3872,6 @@ only for RMCP+ authentication.
 \hline
 \end{tabularx}
 \caption{\label{auth-bitmask}Authentication bitmask often used in \acs{IPMI}}
-\end{table}
-
-\begin{table}
-\begin{tabularx}{\textwidth}{|l|X|}
-\hline
-\texttt{IPMI\_AUTHTYPE\_NONE} & No authentication.\\
-\hline
-\texttt{IPMI\_AUTHTYPE\_MD2} & \acs{MD2} style authentication.\\
-\hline
-\texttt{IPMI\_AUTHTYPE\_MD5} & \acs{MD5} style authentication.  This is the
-recommended type of authentication.\\
-\hline
-\texttt{IPMI\_AUTHTYPE\_STRAIGHT} & Puts the password into the message in
-plain text.  Don't use this.\\
-\hline
-\end{tabularx}
-\caption{\label{ipmi-authtypes}Authentication types in IPMI}
 \end{table}
 
 \section{The \acs{PEF} Table and \acs{SNMP} Traps}
@@ -5969,14 +6390,14 @@ single general function.  It is a necessarily complex interface.
 The function is:
 \begin{verbatim}
 int ipmi_fru_get(ipmi_fru_t                *fru,
-		 int                       index,
-		 char                      **name,
-		 int                       *num,
-		 enum ipmi_fru_data_type_e *dtype,
-		 int                       *intval,
-		 time_t                    *time,
-		 char                      **data,
-		 unsigned int              *data_len);
+                 int                       index,
+                 char                      **name,
+                 int                       *num,
+                 enum ipmi_fru_data_type_e *dtype,
+                 int                       *intval,
+                 time_t                    *time,
+                 char                      **data,
+                 unsigned int              *data_len);
 \end{verbatim}
 The index is a contiguous range from zero that holds every FRU data
 item.  So you can iterate through the indexes from 0 until it returns
@@ -6035,25 +6456,25 @@ the offset of an area (and other areas) to make space.  The following
 functions are for working with areas:
 \begin{verbatim}
 int ipmi_fru_add_area(ipmi_fru_t   *fru,
-		      unsigned int area,
-		      unsigned int offset,
-		      unsigned int length);
+                      unsigned int area,
+                      unsigned int offset,
+                      unsigned int length);
 int ipmi_fru_delete_area(ipmi_fru_t *fru, int area);
 int ipmi_fru_area_get_offset(ipmi_fru_t   *fru,
-			     unsigned int area,
-			     unsigned int *offset);
+                             unsigned int area,
+                             unsigned int *offset);
 int ipmi_fru_area_get_length(ipmi_fru_t   *fru,
-			     unsigned int area,
-			     unsigned int *length);
+                             unsigned int area,
+                             unsigned int *length);
 int ipmi_fru_area_set_offset(ipmi_fru_t   *fru,
-			     unsigned int area,
-			     unsigned int offset);
+                             unsigned int area,
+                             unsigned int offset);
 int ipmi_fru_area_set_length(ipmi_fru_t   *fru,
-			     unsigned int area,
-			     unsigned int length);
+                             unsigned int area,
+                             unsigned int length);
 int ipmi_fru_area_get_used_length(ipmi_fru_t *fru,
-				  unsigned int area,
-				  unsigned int *used_length);
+                                  unsigned int area,
+                                  unsigned int *used_length);
 \end{verbatim}
 The \verb=used_length= variable tells how much of teh length of the
 FRU is actually used.  Note that area offsets and length must be
