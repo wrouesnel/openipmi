@@ -6,7 +6,7 @@ AM_CFLAGS = $(PERL_CFLAGS) \
 	    -I $(top_srcdir)/swig/perl
 
 CC = @CC@ -Wall
-CFLAGS = @CFLAGS@
+CFLAGS = @CFLAGS@ -fPIC
 DEFS = @DEFS@
 
 COMPILE = $(CC) $(DEFS) $(AM_CFLAGS) $(CFLAGS)
