@@ -163,6 +163,7 @@ struct ipmi_domain_s
 
     /* Used to handle shutdown race conditions. */
     int             valid;
+    int             in_shutdown;
 
     /* Is anyone using this domain? */
     unsigned int    usecount;
@@ -630,6 +631,7 @@ setup_domain(ipmi_con_t    *ipmi[],
     domain->os_hnd = ipmi[0]->os_hnd;
 
     domain->valid = 1;
+    domain->in_shutdown = 1;
 
     for (i=0; i<num_con; i++) {
 	domain->conn[i] = ipmi[i];
@@ -799,8 +801,15 @@ setup_domain(ipmi_con_t    *ipmi[],
 void
 __ipmi_check_domain_lock(ipmi_domain_t *domain)
 {
-    ipmi_check_lock(domain->mc_list_lock,
-		    "MC not locked when it should have been");
+    if (!domain)
+	return;
+
+    if (!DEBUG_LOCKS)
+	return;
+
+    if (domain->usecount != 0)
+	ipmi_report_lock_error(domain->os_hnd,
+			       "MC not locked when it should have been");
 }
 
 void
@@ -911,7 +920,7 @@ ipmi_domain_put(ipmi_domain_t *domain)
 {
     ipmi_lock(domains_lock);
 
-    if ((domain->usecount == 1) && (!domain->valid)) {
+    if ((domain->usecount == 1) && (domain->in_shutdown)) {
 	ipmi_unlock(domains_lock);
 	/* The domain has been destroyed, finish the process. */
 	real_close_connection(domain);
@@ -1495,7 +1504,7 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 
     rv = ipmi_domain_get(domain);
     if (rv)
-	return rv;
+	return IPMI_MSG_ITEM_NOT_USED;
 
     if (conn_seq != domain->conn_seq)
 	/* The message has been rerouted, just ignore this response. */
@@ -1532,7 +1541,7 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 
     rv = ipmi_domain_get(domain);
     if (rv)
-	return rv;
+	return IPMI_MSG_ITEM_NOT_USED;
 
     rspi = nmsg->rsp_item;
 
@@ -1605,7 +1614,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     if (msg->data_len > IPMI_MAX_MSG_LENGTH)
 	return EINVAL;
 
-    if (!domain->valid)
+    if (domain->in_shutdown)
 	return EINVAL;
 
     CHECK_DOMAIN_LOCK(domain);
@@ -1617,7 +1626,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     if (!nmsg->rsp_item) {
 	ipmi_mem_free(nmsg);
 	return ENOMEM;
-    }     
+    }
 
     if (matching_domain_sysaddr(domain, addr, &si)) {
 	/* We have a direct connection to this BMC, so talk directly
@@ -1698,6 +1707,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 				       rspi);
 
     if (rv) {
+	ipmi_mem_free(rspi);
 	goto out_unlock;
     } else if (!is_si) {
 	/* If it's a system interface we don't add it to the list of
@@ -3314,6 +3324,8 @@ real_close_connection(ipmi_domain_t *domain)
 	    ipmi[i]->close_connection(ipmi[i]);
     }
 
+    remove_known_domain(domain);
+
     close_done = domain->close_done;
     cb_data = domain->close_done_cb_data;
 
@@ -3330,13 +3342,12 @@ ipmi_close_connection(ipmi_domain_t             *domain,
 {
     CHECK_DOMAIN_LOCK(domain);
 
-    if (!domain->valid)
+    if (!domain->in_shutdown)
 	return EINVAL;
 
-    domain->valid = 0;
+    domain->in_shutdown = 1;
     domain->close_done = close_done;
     domain->close_done_cb_data = cb_data;
-    remove_known_domain(domain);
 
     /* We don't actually do the destroy here, since the domain should
        be locked.  We wait until the usecount goes to zero. */
