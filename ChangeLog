@@ -1,3 +1,7 @@
+2004-01-07 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/fru.c: Added error info logs to tell why a FRU was bad.
+
 2003-01-08 Jeff Zheng <jeff.zheng@intel.com>
 
 	* lib/pef.c: Various fixes for PEF handling.

@@ -206,8 +206,12 @@ fru_decode_string(unsigned char **in,
 	/* The field is not present. */
 	return 0;
 
-    if (skip+1 > *in_len)
+    if (skip+1 > *in_len) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fru.c(fru_decode_string):"
+		 " FRU string is longer than  data length");
 	return EBADMSG;
+    }
 
     force_unicode = !force_english && (lang_code != IPMI_LANG_CODE_ENGLISH);
     out->length = ipmi_get_device_string(*in, *in_len, str, force_unicode,
@@ -659,11 +663,19 @@ fru_decode_chassis_info_area(unsigned char     *data,
 
     version = *data;
     length = (*(data+1)) * 8;
-    if ((length == 0) || (length > data_len))
+    if ((length == 0) || (length > data_len)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fru.c(fru_decode_chassis_info_area):"
+		 " FRU string goes past data length");
 	return EBADMSG;
+    }
 
-    if (checksum(data, length) != 0)
+    if (checksum(data, length) != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fru.c(fru_decode_chassis_info_area):"
+		 " FRU string checksum failed");
 	return EBADMSG;
+    }
 
     data_len--; /* remove the checksum */
 
@@ -775,11 +787,19 @@ fru_decode_board_info_area(unsigned char     *data,
 
     version = *data;
     length = (*(data+1)) * 8;
-    if ((length == 0) || (length > data_len))
+    if ((length == 0) || (length > data_len)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fru.c(fru_decode_board_info_area):"
+		 " FRU string goes past data length");
 	return EBADMSG;
+    }
 
-    if (checksum(data, length) != 0)
+    if (checksum(data, length) != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fru.c(fru_decode_board_info_area):"
+		 " FRU string checksum failed");
 	return EBADMSG;
+    }
 
     data_len--; /* remove the checksum */
 
@@ -919,11 +939,19 @@ fru_decode_product_info_area(unsigned char     *data,
 
     version = *data;
     length = (*(data+1)) * 8;
-    if ((length == 0) || (length > data_len))
+    if ((length == 0) || (length > data_len)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fru.c(fru_decode_product_info_area):"
+		 " FRU string goes past data length");
 	return EBADMSG;
+    }
 
-    if (checksum(data, length) != 0)
+    if (checksum(data, length) != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "fru.c(fru_decode_product_info_area):"
+		 " FRU string checksum failed");
 	return EBADMSG;
+    }
 
     data_len--; /* remove the checksum */
 
@@ -1009,16 +1037,22 @@ process_fru_info(ipmi_fru_t *fru)
     int           i, j;
     int           err = 0;
 
-    if (checksum(data, 8) != 0)
+    if (checksum(data, 8) != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO, "fru.c(process_fru_info):"
+		 " FRU checksum failed");
 	return EBADMSG;
+    }
 
     fru->version = *data;
 
     for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
 	foff[i].type = i;
 	foff[i].offset = data[i+1] * 8;
-	if (foff[i].offset >= data_len)
+	if (foff[i].offset >= data_len) {
+	    ipmi_log(IPMI_LOG_ERR_INFO, "fru.c(process_fru_info):"
+		     " FRU offset exceeds data length");
 	    return EBADMSG;
+	}
     }
 
     /* Sort the field by offset.  Not many fields, so we use a bubble
