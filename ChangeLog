@@ -1,3 +1,12 @@
+2003-12-03 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_lan.c: Updated the response format where the send
+	message is include with the response to include the destination
+	IPMB as part of the header.
+
+	* lanserv/emu.c lanserv/lanserv.c lanserv/lanserv_emu.c: Adjustments
+	for the previous change.
+
 2003-12-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu_cmd.c, lanserv/Makefile.am, lanserv/lanserv_emu.c:

@@ -766,12 +766,13 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 	for (i=*rdata_len-1; i>0; i--)
 	    rdata[i+6] = rdata[i];
 	rdata[0] = 0;
-	rdata[1] = ((msg->netfn | 1) << 2) | (data[4] & 0x3);
-	rdata[2] = ipmb_checksum(rdata+1, 1, 0);
-	rdata[3] = data[0];
-	rdata[4] = (data[4] & 0xfc) | (data[1] & 0x03);
-	rdata[5] = data[5];
-	*rdata_len += 6;
+	rdata[1] = emu->bmc_mc;
+	rdata[2] = ((msg->netfn | 1) << 2) | (data[4] & 0x3);
+	rdata[3] = ipmb_checksum(rdata+1, 2, 0);
+	rdata[4] = data[0];
+	rdata[5] = (data[4] & 0xfc) | (data[1] & 0x03);
+	rdata[6] = data[5];
+	*rdata_len += 7;
 	rdata[*rdata_len] = ipmb_checksum(rdata, *rdata_len, 0);
 	*rdata_len += 1;
     }

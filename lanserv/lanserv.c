@@ -70,6 +70,7 @@ typedef struct misc_data
     int lan_fd[MAX_ADDR];
     int smi_fd;
     char *config_file;
+    unsigned char bmc_ipmb;
 } misc_data_t;
 
 static int
@@ -153,6 +154,7 @@ ipmb_addr_change_dev(lan_data_t    *lan,
     int          rv;
     misc_data_t  *info = lan->user_info;
 
+    info->bmc_ipmb = addr;
     rv = ioctl(info->smi_fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
     if (rv) {
 	lan->log(OS_ERROR, NULL,
@@ -168,6 +170,7 @@ ipmb_addr_change_sock(lan_data_t    *lan,
     int          rv;
     misc_data_t  *info = lan->user_info;
 
+    info->bmc_ipmb = addr;
     rv = ioctl(info->smi_fd, SIOCIPMISETADDR, &slave_addr);
     if (rv) {
 	lan->log(OS_ERROR, NULL,
@@ -353,6 +356,7 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
     unsigned char    rdata[IPMI_MAX_MSG_LENGTH];
     int              rv;
     msg_t            *msg;
+    misc_data_t      *info = lan->user_info;
 
     rsp.addr = (char *) &addr;
     rsp.addr_len = sizeof(addr);
@@ -388,14 +392,15 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 	struct ipmi_ipmb_addr *ipmb = (void *) &addr; 
 
 	data[0] = 0; /* return code. */
-	data[1] = (rsp.msg.netfn << 2) | 2;
-	data[2] = ipmb_checksum(data+1, 1, 0);
-	data[3] = ipmb->slave_addr;
-	data[4] = (msg->data[4] & 0xfc) | ipmb->lun;
-	data[5] = rsp.msg.cmd;
-	memcpy(data+6, rsp.msg.data, rsp.msg.data_len);
+	data[1] = info->bmc_ipmb;
+	data[2] = (rsp.msg.netfn << 2) | 2;
+	data[3] = ipmb_checksum(data+1, 2, 0);
+	data[4] = ipmb->slave_addr;
+	data[5] = (msg->data[4] & 0xfc) | ipmb->lun;
+	data[6] = rsp.msg.cmd;
+	memcpy(data+7, rsp.msg.data, rsp.msg.data_len);
 	rsp.msg.data = data;
-	rsp.msg.data_len += 7;
+	rsp.msg.data_len += 8;
 	data[rsp.msg.data_len-1] = ipmb_checksum(data+1, rsp.msg.data_len-2, 0);
     } else {
 	log(DEBUG, NULL, "Error!\n");
@@ -416,6 +421,7 @@ handle_msg_ipmi_sock(int smi_fd, lan_data_t *lan)
     unsigned char        *dp;
     int                  rv;
     msg_t                *msg;
+    misc_data_t          *info = lan->user_info;
 
     addr_len = sizeof(addr);
     rv = recvfrom(smi_fd, rdata, sizeof(rdata), 0,
@@ -461,14 +467,15 @@ handle_msg_ipmi_sock(int smi_fd, lan_data_t *lan)
 	struct ipmi_ipmb_addr *ipmb = (void *) &addr.ipmi_addr; 
 
 	data[0] = 0; /* return code. */
-	data[1] = (smsg->netfn << 2) | 2;
-	data[2] = ipmb_checksum(data+1, 1, 0);
-	data[3] = ipmb->slave_addr;
-	data[4] = (msg->data[4] & 0xfc) | ipmb->lun;
-	data[5] = smsg->cmd;
-	memcpy(data+6, smsg->data, smsg->data_len);
+	data[1] = info->bmc_ipmb;
+	data[2] = (smsg->netfn << 2) | 2;
+	data[3] = ipmb_checksum(data+1, 2, 0);
+	data[4] = ipmb->slave_addr;
+	data[5] = (msg->data[4] & 0xfc) | ipmb->lun;
+	data[6] = smsg->cmd;
+	memcpy(data+7, smsg->data, smsg->data_len);
 	dp = data;
-	smsg->data_len += 7;
+	smsg->data_len += 8;
 	data[smsg->data_len-1] = ipmb_checksum(data+1, smsg->data_len-2, 0);
     } else {
 	log(DEBUG, NULL, "Error!\n");
@@ -756,6 +763,7 @@ main(int argc, const char *argv[])
 	}
     }
 
+    data.bmc_ipmb = 0x20;
     data.config_file = config_file;
 
     /* Call the OEM init code. */

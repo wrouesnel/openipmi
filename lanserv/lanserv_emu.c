@@ -48,6 +48,7 @@
 #include <popt.h> /* Option parsing made easy */
 #include <malloc.h>
 #include <sys/ioctl.h>
+#include <termios.h>
 
 #include <OpenIPMI/log.h>
 #include <OpenIPMI/ipmi_err.h>

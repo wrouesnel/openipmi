@@ -501,7 +501,7 @@ lan_send_addr(lan_data_t  *lan,
 	tmsg[pos++] = (IPMI_APP_NETFN << 2) | 0;
 	tmsg[pos++] = ipmb_checksum(tmsg, 2);
 	tmsg[pos++] = 0x81; /* Remote console IPMI Software ID */
-	tmsg[pos++] = seq << 2;
+	tmsg[pos++] = (seq << 2) | 0; /* LUN is zero */
 	tmsg[pos++] = IPMI_SEND_MSG_CMD;
 	tmsg[pos++] = ((ipmb_addr->channel & 0xf)
 		       | (1 << 6)); /* Turn on tracking. */
@@ -1382,12 +1382,12 @@ data_handler(int            fd,
 	    msg.data = tmsg + 6;
 	    msg.data_len = 1;
 	} else {
-	    if (data_len < 14)
+	    if (data_len < 15)
 		/* The response to a send message was not carrying the
 		   payload. */
 		goto out_unlock2;
 
-	    if (tmsg[9] == lan->slave_addr) {
+	    if (tmsg[10] == lan->slave_addr) {
 		ipmi_system_interface_addr_t *si_addr
 		    = (ipmi_system_interface_addr_t *) &addr;
 
@@ -1395,21 +1395,21 @@ data_handler(int            fd,
 		   message. */
 		si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 		si_addr->channel = 0xf;
-		si_addr->lun = tmsg[10] & 3;
+		si_addr->lun = tmsg[11] & 3;
 	    } else {
 		/* This is a hack, but the channel does not come back in the
 		   message.  So we use the channel from the original
 		   instead. */
 		ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
 		ipmb_addr->channel = ipmb2->channel;
-		ipmb_addr->slave_addr = tmsg[9];
-		ipmb_addr->lun = tmsg[10] & 0x3;
+		ipmb_addr->slave_addr = tmsg[10];
+		ipmb_addr->lun = tmsg[11] & 0x3;
 	    }
-	    msg.netfn = tmsg[7] >> 2;
-	    msg.cmd = tmsg[11];
+	    msg.netfn = tmsg[8] >> 2;
+	    msg.cmd = tmsg[12];
 	    addr_len = sizeof(ipmi_ipmb_addr_t);
-	    msg.data = tmsg+12;
-	    msg.data_len = data_len - 14;
+	    msg.data = tmsg+13;
+	    msg.data_len = data_len - 15;
 	}
     } else if (tmsg[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD) {
 	/* It is an event from the event buffer. */
