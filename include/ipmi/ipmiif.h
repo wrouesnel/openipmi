@@ -578,8 +578,8 @@ typedef struct ipmi_states_s
 {
     unsigned int __states;
 } ipmi_states_t;
-int is_state_set(ipmi_states_t states,
-		 int           state_num);
+int ipmi_is_state_set(ipmi_states_t *states,
+		      int           state_num);
 
 typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
 				    int           err,

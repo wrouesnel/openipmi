@@ -539,7 +539,7 @@ states_read(ipmi_sensor_t *sensor,
 	    ipmi_states_t states,
 	    void          *cb_data)
 {
-    int present = is_state_set(states, 1);
+    int present = ipmi_is_state_set(&states, 1);
 
     presence_changed(cb_data, present);
 }

@@ -3997,9 +3997,9 @@ int ipmi_threshold_get(ipmi_thresholds_t  *th,
     }
 }
 
-int is_state_set(ipmi_states_t states,
-		 int           state_num)
+int ipmi_is_state_set(ipmi_states_t *states,
+		      int           state_num)
 {
-    return (states.__states & (1 << state_num)) != 0;
+    return (states->__states & (1 << state_num)) != 0;
 }
 

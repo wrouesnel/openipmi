@@ -41,19 +41,19 @@ v *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
 #define IPMI_HYSTERESIS_SUPPORT_READABLE	1
 #define IPMI_HYSTERESIS_SUPPORT_SETTABLE	2
 #define IPMI_HYSTERESIS_SUPPORT_FIXED		3
-char *get_hysteresis_support_string(unsigned int val);
+char *ipmi_get_hysteresis_support_string(unsigned int val);
 
 #define IPMI_THRESHOLD_ACCESS_SUPPORT_NONE	0
 #define IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE	1
 #define IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE	2
 #define IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED	3
-char *get_threshold_access_support_string(unsigned int val);
+char *ipmi_get_threshold_access_support_string(unsigned int val);
 
 #define IPMI_EVENT_SUPPORT_PER_STATE		0
 #define IPMI_EVENT_SUPPORT_ENTIRE_SENSOR	1
 #define IPMI_EVENT_SUPPORT_GLOBAL_DISABLE	2
 #define IPMI_EVENT_SUPPORT_NONE			3
-char *get_event_support_string(unsigned int val);
+char *ipmi_get_event_support_string(unsigned int val);
 
 
 #define IPMI_SENSOR_TYPE_TEMPERATURE			0x01
@@ -97,7 +97,7 @@ char *get_event_support_string(unsigned int val);
 #define IPMI_SENSOR_TYPE_LAN				0x27
 #define IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH	0x28
 #define IPMI_SENSOR_TYPE_BATTERY			0x29
-char *get_sensor_type_string(unsigned int val);
+char *ipmi_get_sensor_type_string(unsigned int val);
 
 #define IPMI_EVENT_READING_TYPE_THRESHOLD			0x01
 #define IPMI_EVENT_READING_TYPE_DISCRETE_USAGE			0x02
@@ -111,7 +111,12 @@ char *get_sensor_type_string(unsigned int val);
 #define IPMI_EVENT_READING_TYPE_DISCRETE_AVAILABILITY		0x0a
 #define IPMI_EVENT_READING_TYPE_DISCRETE_REDUNDANCY		0x0b
 #define IPMI_EVENT_READING_TYPE_DISCRETE_ACPI_POWER		0x0c
-char *get_event_reading_type_string(unsigned int val);
+#define IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC			0x6f
+char *ipmi_get_event_reading_type_string(unsigned int val);
+
+char *ipmi_get_reading_name(unsigned int event_reading_type,
+			    unsigned int sensor_type,
+			    unsigned int val);
 
 #define IPMI_ANALOG_DATA_FORMAT_UNSIGNED   0
 #define IPMI_ANALOG_DATA_FORMAT_1_COMPL    1
@@ -125,9 +130,8 @@ char *get_event_reading_type_string(unsigned int val);
 #define IPMI_RATE_UNIT_MIN	4
 #define IPMI_RATE_UNIT_HOUR	5
 #define IPMI_RATE_UNIT_DAY	6
-char *get_rate_unit_string(unsigned int val);
+char *ipmi_get_rate_unit_string(unsigned int val);
 
-#if 0
 #define IPMI_UNIT_TYPE_UNSPECIFIED	0
 #define IPMI_UNIT_TYPE_DEGREES_C	1
 #define IPMI_UNIT_TYPE_DEGREES_F	2
@@ -171,59 +175,59 @@ char *get_rate_unit_string(unsigned int val);
 #define IPMI_UNIT_TYPE_SERADIANS	40
 #define IPMI_UNIT_TYPE_REVOLUTIONS	41
 #define IPMI_UNIT_TYPE_CYCLES		42
-#define IPMI_UNIT_TYPE_		43
-#define IPMI_UNIT_TYPE_		44
-#define IPMI_UNIT_TYPE_		45
-#define IPMI_UNIT_TYPE_		46
-#define IPMI_UNIT_TYPE_		47
-#define IPMI_UNIT_TYPE_		48
-#define IPMI_UNIT_TYPE_		49
-#define IPMI_UNIT_TYPE_		50
-#define IPMI_UNIT_TYPE_		51
-#define IPMI_UNIT_TYPE_		52
-#define IPMI_UNIT_TYPE_		53
-#define IPMI_UNIT_TYPE_		54
-#define IPMI_UNIT_TYPE_		55
-#define IPMI_UNIT_TYPE_		56
-#define IPMI_UNIT_TYPE_		57
-#define IPMI_UNIT_TYPE_		58
-#define IPMI_UNIT_TYPE_		59
-#define IPMI_UNIT_TYPE_		60
-#define IPMI_UNIT_TYPE_		61
-#define IPMI_UNIT_TYPE_		62
-#define IPMI_UNIT_TYPE_		63
-#define IPMI_UNIT_TYPE_		64
-#define IPMI_UNIT_TYPE_		65
-#define IPMI_UNIT_TYPE_		66
-#define IPMI_UNIT_TYPE_		67
-#define IPMI_UNIT_TYPE_		68
-#define IPMI_UNIT_TYPE_		69
-#define IPMI_UNIT_TYPE_		70
-#define IPMI_UNIT_TYPE_		71
-#define IPMI_UNIT_TYPE_		72
-#define IPMI_UNIT_TYPE_		73
-#define IPMI_UNIT_TYPE_		74
-#define IPMI_UNIT_TYPE_		75
-#define IPMI_UNIT_TYPE_		76
-#define IPMI_UNIT_TYPE_		77
-#define IPMI_UNIT_TYPE_		78
-#define IPMI_UNIT_TYPE_		79
-#define IPMI_UNIT_TYPE_		80
-#define IPMI_UNIT_TYPE_		81
-#define IPMI_UNIT_TYPE_		82
-#define IPMI_UNIT_TYPE_		83
-#define IPMI_UNIT_TYPE_		84
-#define IPMI_UNIT_TYPE_		85
-#define IPMI_UNIT_TYPE_		86
-#define IPMI_UNIT_TYPE_		87
-#define IPMI_UNIT_TYPE_		88
-#define IPMI_UNIT_TYPE_		89
-#define IPMI_UNIT_TYPE_		90
-#endif
+#define IPMI_UNIT_TYPE_GRAVITIES	43
+#define IPMI_UNIT_TYPE_OUNCES		44
+#define IPMI_UNIT_TYPE_POUNDS		45
+#define IPMI_UNIT_TYPE_FOOT_POUNDS	46
+#define IPMI_UNIT_TYPE_OUNCE_INCHES	47
+#define IPMI_UNIT_TYPE_GAUSS		48
+#define IPMI_UNIT_TYPE_GILBERTS		49
+#define IPMI_UNIT_TYPE_HENRIES		50
+#define IPMI_UNIT_TYPE_MHENRIES		51
+#define IPMI_UNIT_TYPE_FARADS		52
+#define IPMI_UNIT_TYPE_UFARADS		53
+#define IPMI_UNIT_TYPE_OHMS		54
+#define IPMI_UNIT_TYPE_SIEMENS		55
+#define IPMI_UNIT_TYPE_MOLES		56
+#define IPMI_UNIT_TYPE_BECQUERELS	57
+#define IPMI_UNIT_TYPE_PPM		58
+#define IPMI_UNIT_TYPE_reserved1	59
+#define IPMI_UNIT_TYPE_DECIBELS		60
+#define IPMI_UNIT_TYPE_DbA		61
+#define IPMI_UNIT_TYPE_DbC		62
+#define IPMI_UNIT_TYPE_GRAYS		63
+#define IPMI_UNIT_TYPE_SIEVERTS		64
+#define IPMI_UNIT_TYPE_COLOR_TEMP_DEG_K	65
+#define IPMI_UNIT_TYPE_BITS		66
+#define IPMI_UNIT_TYPE_KBITS		67
+#define IPMI_UNIT_TYPE_MBITS		68
+#define IPMI_UNIT_TYPE_GBITS		69
+#define IPMI_UNIT_TYPE_BYTES		70
+#define IPMI_UNIT_TYPE_KBYTES		71
+#define IPMI_UNIT_TYPE_MBYTES		72
+#define IPMI_UNIT_TYPE_GBYTES		73
+#define IPMI_UNIT_TYPE_WORDS		74
+#define IPMI_UNIT_TYPE_DWORDS		75
+#define IPMI_UNIT_TYPE_QWORDS		76
+#define IPMI_UNIT_TYPE_LINES		77
+#define IPMI_UNIT_TYPE_HITS		78
+#define IPMI_UNIT_TYPE_MISSES		79
+#define IPMI_UNIT_TYPE_RETRIES		80
+#define IPMI_UNIT_TYPE_RESETS		81
+#define IPMI_UNIT_TYPE_OVERRUNS		82
+#define IPMI_UNIT_TYPE_UNDERRUNS       	83
+#define IPMI_UNIT_TYPE_COLLISIONS	84
+#define IPMI_UNIT_TYPE_PACKETS		85
+#define IPMI_UNIT_TYPE_MESSAGES		86
+#define IPMI_UNIT_TYPE_CHARACTERS	87
+#define IPMI_UNIT_TYPE_ERRORS		88
+#define IPMI_UNIT_TYPE_CORRECTABLE_ERRORS 89
+#define IPMI_UNIT_TYPE_UNCORRECTABLE_ERRORS 90
+char *ipmi_get_unit_type_string(unsigned int val);
 
 #define IPMI_MODIFIER_UNIT_NONE			0
-#define IPMI_MODIFIER_UNIT_BASE_DIV_MOD		0
-#define IPMI_MODIFIER_UNIT_BASE_MULT_MOD	0
+#define IPMI_MODIFIER_UNIT_BASE_DIV_MOD		1
+#define IPMI_MODIFIER_UNIT_BASE_MULT_MOD	2
 
 #define IPMI_LINEARIZATION_LINEAR	0
 #define IPMI_LINEARIZATION_LN		1
@@ -248,19 +252,19 @@ enum ipmi_thresh_e {
     IPMI_UPPER_CRITICAL,
     IPMI_UPPER_NON_RECOVERABLE
 };
-char *get_threshold_string(unsigned int val);
+char *ipmi_get_threshold_string(unsigned int val);
 
 enum ipmi_event_value_dir_e {
     IPMI_GOING_LOW = 0,
     IPMI_GOING_HIGH
 };
-char *get_value_dir_string(unsigned int val);
+char *ipmi_get_value_dir_string(unsigned int val);
 
 enum ipmi_event_dir_e {
     IPMI_ASSERTION = 0,
     IPMI_DEASSERTION
 };
-char *get_event_dir_string(unsigned int val);
+char *ipmi_get_event_dir_string(unsigned int val);
 
 /* Global init field for MC device locator SDR. */
 #define IPMI_GLOBAL_INIT_ENABLE_EVENT_MSG_GENERATION 0
@@ -311,7 +315,7 @@ char *get_event_dir_string(unsigned int val);
 #define IPMI_ENTITY_ID_REMOTE_MGMT_COMM_DEVICE		38
 #define IPMI_ENTITY_ID_EXTERNAL_ENVIRONMENT		39
 #define IPMI_ENTITY_ID_BATTERY				40
-char *get_entity_id_string(unsigned int val);
+char *ipmi_get_entity_id_string(unsigned int val);
 
 
 /*
