@@ -1,3 +1,12 @@
+2004-01-31 Corey Minyard <cminyard@mvista.com> 
+
+	* domain.c: Cleaned up logs, made them include the file and
+	function name.
+	* ipmi_lan.c: Ditto
+
+	* ipmi_lan.c: Modified message logging to separate the raw
+	and normla message logging.
+
 2004-01-29 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_motorola_mxp.c: Move the AMC chassis id and temp cool

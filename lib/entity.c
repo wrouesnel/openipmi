@@ -1401,9 +1401,10 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	ref = ilist_search_iter(&iter, sens_cmp, &id);
 	if (!ref) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "entity.c(ipmi_entity_remove_sensor):"
+		     "%sentity.c(ipmi_entity_remove_sensor):"
 		     " Removal of a sensor from an entity was requested,"
-		     " but the sensor was not there");
+		     " but the sensor was not there",
+		     SENS_DOMAIN_NAME(sensor));
 	    return;
 	}
 
@@ -1470,9 +1471,10 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     ref = ilist_search_iter(&iter, control_cmp, &id);
     if (!ref) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "entity.c(ipmi_entity_remove_control):"
+		 "%sentity.c(ipmi_entity_remove_control):"
 		 " Removal of a control from an entity was requested,"
-		 " but the control was not there");
+		 " but the control was not there",
+		 CONTROL_DOMAIN_NAME(control));
 	return;
     }
 
@@ -3409,8 +3411,9 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	    ent->fru_handler(op, ent, ent->fru_cb_data);
     } else {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "entity.c(fru_fetched_ent_cb):"
+		 "%sentity.c(fru_fetched_ent_cb):"
 		 "Error fetching entity %d.%d FRU: %x\n",
+		 ENT_DOMAIN_NAME(ent),
 		 ent->info.entity_id, ent->info.entity_instance, info->err);
 	if ((ent->fru) && (info->fru))
 	    /* Keep the old FRU on errors. */
@@ -3840,8 +3843,9 @@ hot_swap_power_on(ipmi_control_t *control, int err, void *cb_data)
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "entity.c(hot_swap_power_on):"
-		 " Unable to set the hot swap power: %x", err);
+		 "%sentity.c(hot_swap_power_on):"
+		 " Unable to set the hot swap power: %x",
+		 CONTROL_DOMAIN_NAME(control), err);
     } else {
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
     }
@@ -3862,8 +3866,9 @@ hot_swap_power_on_cb(ipmi_control_t *control, int err, void *cb_data)
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "entity.c(hot_swap_power_on):"
-		 " Unable to set the hot swap power: %x", err);
+		 "%sentity.c(hot_swap_power_on):"
+		 " Unable to set the hot swap power: %x",
+		 CONTROL_DOMAIN_NAME(control), err);
     } else {
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
     }
@@ -3878,8 +3883,9 @@ indicator_change(ipmi_control_t *control, int err, void *cb_data)
 {
     if (err)
 	ipmi_log(IPMI_LOG_WARNING,
-		 "entity.c(indicator_change):"
-		 " Unable to set the hot swap indicator: %x", err);
+		 "%sentity.c(indicator_change):"
+		 " Unable to set the hot swap indicator: %x",
+		 CONTROL_DOMAIN_NAME(control), err);
 }
 
 static int
@@ -3932,8 +3938,9 @@ hot_swap_act_cb(ipmi_entity_t *ent, void *cb_data)
     rv = hot_swap_act(ent, NULL, NULL);
     if (rv && (rv != EAGAIN))
 	ipmi_log(IPMI_LOG_WARNING,
-		 "entity.c(hot_swap_act):"
-		 " Unable to set the hot swap power: %x", rv);
+		 "%sentity.c(hot_swap_act):"
+		 " Unable to set the hot swap power: %x",
+		 ENT_DOMAIN_NAME(ent), rv);
 }
 
 static void
@@ -4009,8 +4016,9 @@ hot_swap_deact_cb(ipmi_entity_t *ent, void *cb_data)
     rv = hot_swap_deact(ent, NULL, NULL);
     if (rv && (rv != EAGAIN))
 	ipmi_log(IPMI_LOG_WARNING,
-		 "entity.c(hot_swap_act):"
-		 " Unable to set the hot swap power: %x", rv);
+		 "%sentity.c(hot_swap_act):"
+		 " Unable to set the hot swap power: %x",
+		 ENT_DOMAIN_NAME(ent), rv);
 }
 
 static void
@@ -4120,8 +4128,9 @@ set_hot_swap_state(ipmi_entity_t             *ent,
 				  indicator_change, NULL);
 	if (rv)
 	    ipmi_log(IPMI_LOG_SEVERE,
-		     "entity.c(set_hot_swap_state): Unable to"
+		     "%sentity.c(set_hot_swap_state): Unable to"
 		     " set control value to %d, error %x",
+		     CONTROL_DOMAIN_NAME(ent->hot_swap_indicator),
 		     val, rv);
     }
 
@@ -4266,9 +4275,9 @@ handle_new_hot_swap_indicator(ipmi_entity_t *ent, ipmi_control_t *control)
     rv = ipmi_control_set_val(control, &val, NULL, NULL);
     if (rv)
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "entity.c(handle_new_hot_swap_indicator): Unable to"
+		 "%sentity.c(handle_new_hot_swap_indicator): Unable to"
 		 " set control value, error %x",
-		 rv);
+		 CONTROL_DOMAIN_NAME(control), rv);
 }
 
 static void
@@ -4282,9 +4291,9 @@ handle_new_hot_swap_power(ipmi_entity_t *ent, ipmi_control_t *control)
 					    ent);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "entity.c(handle_new_hot_swap_power): Unable to"
+		 "%sentity.c(handle_new_hot_swap_power): Unable to"
 		 " add an event handler, error %x",
-		 rv);
+		 CONTROL_DOMAIN_NAME(control), rv);
 	return;
     }
 
@@ -4311,9 +4320,9 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 						ent);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "entity.c(handle_new_hot_swap_requester): Unable to"
+		 "%sentity.c(handle_new_hot_swap_requester): Unable to"
 		 " add an event handler, error %x",
-		 rv);
+		 SENS_DOMAIN_NAME(sensor), rv);
 	return;
     }
 

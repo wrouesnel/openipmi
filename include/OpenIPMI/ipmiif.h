@@ -149,6 +149,22 @@ typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
 
 typedef struct ipmi_domain_con_change_s ipmi_domain_con_change_t;
 
+/* Set and get a "name" for the domain.  This name is used for logging
+   errors, so errors from domains can be separated.  You should set
+   one if you support multiple domains.  The max length is the number
+   of characters, not including the nil at the end.  A longer name
+   will be silently truncated when set.  When getting the name, the
+   actual length of the "name" array must be the max length + 1 to be
+   able to be sure to get the full name.  The actual length of the
+   name array must be put into "len" before calling (the actual length
+   must including the terminating nil), the actual length, including
+   the terminating nil, is put into "len".  This setting should be
+   done very early (before or at the point when the connection comes
+   up), as other things will pull the name and use it. */
+#define IPMI_MAX_DOMAIN_NAME_LEN 32
+void ipmi_domain_set_name(ipmi_domain_t *domain, char *name);
+void ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int *len);
+
 /* Add and remove a function to be called when the connection or port
    to the domain goes down or back up.  Being down does NOT mean the
    domain has been shutdown, it is still active, and OpenIPMI will

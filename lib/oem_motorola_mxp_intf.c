@@ -538,7 +538,7 @@ lan_send_addr(lan_data_t  *lan,
 		 sizeof(struct sockaddr_in));
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, pos);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     rv = sendto(lan->fd, data, pos, 0,
@@ -708,7 +708,7 @@ start_next_msg(ipmi_con_t *ipmi,
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =");
 	dump_hex(lan->msg_queue[msg_num].msg.data,
 		 lan->msg_queue[msg_num].msg.data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
     if (lan->msg_queue[msg_num].is_ipmb_msg) {
 	/* IPMB messages have to go through the locking mechanism.
@@ -1333,7 +1333,7 @@ handle_recv_msg(ipmi_con_t    *ipmi,
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n Cmd = %x", del->msg.cmd);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =");
 	dump_hex(del->msg.data, del->msg.data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     if (lan->msg_queue[msg_num].use_orig_addr)
@@ -1404,7 +1404,7 @@ handle_seq_msg(ipmi_con_t    *ipmi,
 		     msg.netfn, lan->seq_table[seq].msg.netfn | 1,
 		     msg.cmd, lan->seq_table[seq].msg.cmd);
 	    dump_hex(&si_addr, sizeof(si_addr));
-	    ipmi_log(IPMI_LOG_DEBUG_END, "");
+	    ipmi_log(IPMI_LOG_DEBUG_END, " ");
 	}
 	goto out_unlock_err;
     }
@@ -1442,7 +1442,7 @@ handle_seq_msg(ipmi_con_t    *ipmi,
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n Cmd = %x", msg.cmd);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =");
 	dump_hex(msg.data, msg.data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     if (handler)
@@ -1494,7 +1494,7 @@ data_handler(int            fd,
 	dump_hex((unsigned char *) &ipaddrd, from_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     /* Make sure the source IP matches what we expect the other end to

@@ -76,6 +76,7 @@ struct ipmi_fru_record_s
     void                  *data;
 };
 
+#define FRU_NAME_SIZE (IPMI_MAX_DOMAIN_NAME_LEN + 30)
 struct ipmi_fru_s
 {
     int deleted;
@@ -106,7 +107,11 @@ struct ipmi_fru_s
     ipmi_fru_record_t *board_info;
     ipmi_fru_record_t *product_info;
     ipmi_fru_record_t *multi_record;
+
+    char name[FRU_NAME_SIZE];
 };
+
+#define FRU_DOMAIN_NAME(fru) (fru ? fru->name : "")
 
 /***********************************************************************
  *
@@ -192,7 +197,8 @@ typedef struct fru_string_s
 } fru_string_t;
 
 static int
-fru_decode_string(unsigned char **in,
+fru_decode_string(ipmi_fru_t    *fru,
+		  unsigned char **in,
 		  unsigned int  *in_len,
 		  int           lang_code,
 		  int           force_english,
@@ -208,8 +214,9 @@ fru_decode_string(unsigned char **in,
 
     if (skip+1 > *in_len) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fru.c(fru_decode_string):"
-		 " FRU string is longer than  data length");
+		 "%sfru.c(fru_decode_string):"
+		 " FRU string is longer than  data length",
+		 FRU_DOMAIN_NAME(fru));
 	return EBADMSG;
     }
 
@@ -280,7 +287,8 @@ typedef struct fru_variable_s
 } fru_variable_t;
 
 static int
-fru_decode_variable_string(unsigned char  **in,
+fru_decode_variable_string(ipmi_fru_t     *fru,
+			   unsigned char  **in,
 			   unsigned int   *in_len,
 			   int            lang_code,
 			   fru_variable_t *v)
@@ -303,7 +311,8 @@ fru_decode_variable_string(unsigned char  **in,
 	v->len = n_len;
     }
 
-    err = fru_decode_string(in, in_len, lang_code, 0, &v->strings[v->next]);
+    err = fru_decode_string(fru, in, in_len, lang_code, 0,
+			    &v->strings[v->next]);
     if (!err)
 	v->next++;
     return err;
@@ -400,7 +409,7 @@ fru_record_free(ipmi_fru_record_t *rec)
  **********************************************************************/
 
 #define HANDLE_STR_DECODE(fname, force_english) \
-    err = fru_decode_string(&data, &data_len, u->lang_code,	\
+    err = fru_decode_string(fru, &data, &data_len, u->lang_code,\
 			    force_english, &u->fname);		\
     if (err)							\
 	goto out_err
@@ -408,7 +417,7 @@ fru_record_free(ipmi_fru_record_t *rec)
 #define HANDLE_CUSTOM_DECODE() \
 do {									\
     while ((data_len > 0) && (*data != 0xc1)) {				\
-	err = fru_decode_variable_string(&data, &data_len,		\
+	err = fru_decode_variable_string(fru, &data, &data_len,		\
 					 IPMI_LANG_CODE_ENGLISH,	\
 					 &u->custom);			\
 	if (err)							\
@@ -536,7 +545,8 @@ fru_record_handlers_t internal_use_handlers =
 };
 
 static int
-fru_decode_internal_use_area(unsigned char     *data,
+fru_decode_internal_use_area(ipmi_fru_t        *fru,
+			     unsigned char     *data,
 			     unsigned int      data_len,
 			     ipmi_fru_record_t **rrec)
 {
@@ -651,7 +661,8 @@ fru_record_handlers_t chassis_info_handlers =
 };
 
 static int
-fru_decode_chassis_info_area(unsigned char     *data,
+fru_decode_chassis_info_area(ipmi_fru_t        *fru,
+			     unsigned char     *data,
 			     unsigned int      data_len,
 			     ipmi_fru_record_t **rrec)
 {
@@ -665,15 +676,17 @@ fru_decode_chassis_info_area(unsigned char     *data,
     length = (*(data+1)) * 8;
     if ((length == 0) || (length > data_len)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fru.c(fru_decode_chassis_info_area):"
-		 " FRU string goes past data length");
+		 "%sfru.c(fru_decode_chassis_info_area):"
+		 " FRU string goes past data length",
+		 FRU_DOMAIN_NAME(fru));
 	return EBADMSG;
     }
 
     if (checksum(data, length) != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fru.c(fru_decode_chassis_info_area):"
-		 " FRU string checksum failed");
+		 "%sfru.c(fru_decode_chassis_info_area):"
+		 " FRU string checksum failed",
+		 FRU_DOMAIN_NAME(fru));
 	return EBADMSG;
     }
 
@@ -775,7 +788,8 @@ fru_record_handlers_t board_info_handlers =
 };
 
 static int
-fru_decode_board_info_area(unsigned char     *data,
+fru_decode_board_info_area(ipmi_fru_t        *fru,
+			   unsigned char     *data,
 			   unsigned int      data_len,
 			   ipmi_fru_record_t **rrec)
 {
@@ -789,15 +803,17 @@ fru_decode_board_info_area(unsigned char     *data,
     length = (*(data+1)) * 8;
     if ((length == 0) || (length > data_len)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fru.c(fru_decode_board_info_area):"
-		 " FRU string goes past data length");
+		 "%sfru.c(fru_decode_board_info_area):"
+		 " FRU string goes past data length",
+		 FRU_DOMAIN_NAME(fru));
 	return EBADMSG;
     }
 
     if (checksum(data, length) != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fru.c(fru_decode_board_info_area):"
-		 " FRU string checksum failed");
+		 "%sfru.c(fru_decode_board_info_area):"
+		 " FRU string checksum failed",
+		 FRU_DOMAIN_NAME(fru));
 	return EBADMSG;
     }
 
@@ -927,7 +943,8 @@ fru_record_handlers_t product_info_handlers =
 };
 
 static int
-fru_decode_product_info_area(unsigned char     *data,
+fru_decode_product_info_area(ipmi_fru_t        *fru,
+			     unsigned char     *data,
 			     unsigned int      data_len,
 			     ipmi_fru_record_t **rrec)
 {
@@ -941,15 +958,17 @@ fru_decode_product_info_area(unsigned char     *data,
     length = (*(data+1)) * 8;
     if ((length == 0) || (length > data_len)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fru.c(fru_decode_product_info_area):"
-		 " FRU string goes past data length");
+		 "%sfru.c(fru_decode_product_info_area):"
+		 " FRU string goes past data length",
+		 FRU_DOMAIN_NAME(fru));
 	return EBADMSG;
     }
 
     if (checksum(data, length) != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fru.c(fru_decode_product_info_area):"
-		 " FRU string checksum failed");
+		 "%sfru.c(fru_decode_product_info_area):"
+		 " FRU string checksum failed",
+		 FRU_DOMAIN_NAME(fru));
 	return EBADMSG;
     }
 
@@ -1038,8 +1057,10 @@ process_fru_info(ipmi_fru_t *fru)
     int           err = 0;
 
     if (checksum(data, 8) != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "fru.c(process_fru_info):"
-		 " FRU checksum failed");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(process_fru_info):"
+		 " FRU checksum failed",
+		 FRU_DOMAIN_NAME(fru));
 	return EBADMSG;
     }
 
@@ -1049,8 +1070,10 @@ process_fru_info(ipmi_fru_t *fru)
 	foff[i].type = i;
 	foff[i].offset = data[i+1] * 8;
 	if (foff[i].offset >= data_len) {
-	    ipmi_log(IPMI_LOG_ERR_INFO, "fru.c(process_fru_info):"
-		     " FRU offset exceeds data length");
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(process_fru_info):"
+		     " FRU offset exceeds data length",
+		     FRU_DOMAIN_NAME(fru));
 	    return EBADMSG;
 	}
     }
@@ -1084,22 +1107,22 @@ process_fru_info(ipmi_fru_t *fru)
 
 	switch (foff[i].type) {
 	case IPMI_FRU_FTR_INTERNAL_USE_AREA:
-	    err = fru_decode_internal_use_area(data+offset, plen,
+	    err = fru_decode_internal_use_area(fru, data+offset, plen,
 					       &fru->internal_use);
 	    break;
 
 	case IPMI_FRU_FTR_CHASSIS_INFO_AREA:
-	    err = fru_decode_chassis_info_area(data+offset, plen,
+	    err = fru_decode_chassis_info_area(fru, data+offset, plen,
 					       &fru->chassis_info);
 	    break;
 
 	case IPMI_FRU_FTR_BOARD_INFO_AREA:
-	    err = fru_decode_board_info_area(data+offset, plen,
+	    err = fru_decode_board_info_area(fru, data+offset, plen,
 					       &fru->board_info);
 	    break;
 
 	case IPMI_FRU_FTR_PRODUCT_INFO_AREA:
-	    err = fru_decode_product_info_area(data+offset, plen,
+	    err = fru_decode_product_info_area(fru, data+offset, plen,
 					       &fru->product_info);
 	    break;
 
@@ -1201,20 +1224,27 @@ fru_data_handler(ipmi_domain_t *domain,
 	if (fru->curr_pos >= 8) {
 	    /* Some screwy cards give more size in the info than they
 	       really have, if we have enough, try to process it. */
-	    ipmi_log(IPMI_LOG_WARNING, "IPMI error getting FRU data: %x",
-		     data[0]);
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%sfru.c(fru_data_handler): "
+		     "IPMI error getting FRU data: %x",
+		     FRU_DOMAIN_NAME(fru), data[0]);
 	    fru->data_len = fru->curr_pos;
 	    fetch_complete(fru, 0);
 	} else {
-	    ipmi_log(IPMI_LOG_ERR_INFO, "IPMI error getting FRU data: %x",
-		     data[0]);
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_data_handler): "
+		     "IPMI error getting FRU data: %x",
+		     FRU_DOMAIN_NAME(fru), data[0]);
 	    fetch_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
 	}
 	goto out;
     }
 
     if (msg->data_len < 2) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "FRU data response too small");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_data_handler): "
+		 "FRU data response too small",
+		 FRU_DOMAIN_NAME(fru));
 	fetch_complete(fru, EINVAL);
 	goto out;
     }
@@ -1222,14 +1252,19 @@ fru_data_handler(ipmi_domain_t *domain,
     count = data[1] << fru->fetch_by_words;
 
     if (count == 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "FRU got zero-sized data, must make"
-		 " progress!");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_data_handler): "
+		 "FRU got zero-sized data, must make progress!",
+		 FRU_DOMAIN_NAME(fru));
 	fetch_complete(fru, EINVAL);
 	goto out;
     }
 
     if (count > msg->data_len-2) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "FRU data count mismatch");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_data_handler): "
+		 "FRU data count mismatch",
+		 FRU_DOMAIN_NAME(fru));
 	fetch_complete(fru, EINVAL);
 	goto out;
     }
@@ -1241,7 +1276,10 @@ fru_data_handler(ipmi_domain_t *domain,
 	/* More to fetch. */
 	err = request_next_data(fru, addr, addr_len);
 	if (err) {
-	    ipmi_log(IPMI_LOG_ERR_INFO, "Error requesting next FRU data");
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_data_handler): "
+		     "Error requesting next FRU data",
+		     FRU_DOMAIN_NAME(fru));
 	    fetch_complete(fru, err);
 	    goto out;
 	}
@@ -1308,14 +1346,18 @@ fru_inventory_area_handler(ipmi_domain_t *domain,
 
     if (data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_inventory_area_handler): "
 		 "IPMI error getting FRU inventory area: %x",
-		 data[0]);
+		 FRU_DOMAIN_NAME(fru), data[0]);
 	fetch_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
 	goto out;
     }
 
     if (msg->data_len < 4) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "FRU inventory area too small");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_inventory_area_handler): "
+		 "FRU inventory area too small",
+		 FRU_DOMAIN_NAME(fru));
 	fetch_complete(fru, EINVAL);
 	goto out;
     }
@@ -1324,21 +1366,30 @@ fru_inventory_area_handler(ipmi_domain_t *domain,
     fru->fetch_by_words = data[3] & 1;
 
     if (fru->data_len < 8) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "FRU space less than the header");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_inventory_area_handler): "
+		 "FRU space less than the header",
+		 FRU_DOMAIN_NAME(fru));
 	fetch_complete(fru, EMSGSIZE);
 	goto out;
     }
 
     fru->data = ipmi_mem_alloc(fru->data_len);
     if (!fru->data) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "Error allocating FRU data");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_inventory_area_handler): "
+		 "Error allocating FRU data",
+		 FRU_DOMAIN_NAME(fru));
 	fetch_complete(fru, ENOMEM);
 	goto out;
     }
 
     err = request_next_data(fru, addr, addr_len);
     if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "Error requesting next FRU data");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_inventory_area_handler): "
+		 "Error requesting next FRU data",
+		 FRU_DOMAIN_NAME(fru));
 	fetch_complete(fru, err);
 	goto out;
     }
@@ -1415,6 +1466,10 @@ ipmi_fru_alloc(ipmi_domain_t       *domain,
     fru->lun = lun;
     fru->private_bus = private_bus;
     fru->channel = channel;
+
+    snprintf(fru->name, FRU_NAME_SIZE, "%s.%d.%s.%d.%d.%d.%d",
+	     DOMAIN_NAME(domain), is_logical, device_address, device_id, lun,
+	     private_bus, channel);
 
     fru->fetched_handler = fetched_handler;
     fru->fetched_cb_data = fetched_cb_data;

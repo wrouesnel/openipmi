@@ -182,6 +182,16 @@ void ipmi_debug_malloc_cleanup(void);
 
 
 /* Various logging stuff (mostly for debugging) */
+
+/* Internal function to get the name of a domain. */
+char *_ipmi_domain_name(ipmi_domain_t *domain);
+#define DOMAIN_NAME(d) (d ? _ipmi_domain_name(d) : "")
+#define MC_DOMAIN_NAME(m) (m ? DOMAIN_NAME(ipmi_mc_get_domain(m)) : "")
+#define ENT_DOMAIN_NAME(e) (e ? DOMAIN_NAME(ipmi_entity_get_domain(e)) : "")
+#define SENS_DOMAIN_NAME(s) (s ? MC_DOMAIN_NAME(ipmi_sensor_get_mc(s)) : "")
+#define CONTROL_DOMAIN_NAME(c) (c? MC_DOMAIN_NAME(ipmi_control_get_mc(c)) : "")
+
+
 extern unsigned int __ipmi_log_mask;
 
 /* Log normal IPMI messages, but not low-level protocol messages. */

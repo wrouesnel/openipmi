@@ -51,7 +51,7 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_lan.h>
 
-#ifdef DEBUG_MSG
+#if defined(DEBUG_MSG) || defined(DEBUG_RAWMSG)
 static void
 dump_hex(void *vdata, int len)
 {
@@ -509,7 +509,7 @@ lan_send_addr(lan_data_t  *lan,
 	    (lan->outbound_seq_num[addr_num])++;
     }
 
-    if (DEBUG_MSG) {
+    if (DEBUG_RAWMSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing %sseq %d\n addr =",
 		 sndmsg, seq);
 	dump_hex((unsigned char *) &(lan->ip_addr[lan->curr_ip_addr]),
@@ -686,11 +686,17 @@ connection_up(lan_data_t *lan, int addr_num, int new_con)
     if ((! lan->ip_working[addr_num]) && new_con) {
 	lan->ip_working[addr_num] = 1;
 
-	ipmi_log(IPMI_LOG_INFO, "Connection %d to the BMC is up", addr_num);
+	ipmi_log(IPMI_LOG_INFO,
+		 "%sipmi_lan.c(connection_up): "
+		 "Connection %d to the BMC is up",
+		 IPMI_CONN_NAME(lan->ipmi), addr_num);
     }
 
     if (new_con) {
-	ipmi_log(IPMI_LOG_INFO, "Connection to the BMC restored");
+	ipmi_log(IPMI_LOG_INFO,
+		 "%sipmi_lan.c(connection_up): "
+		 "Connection to the BMC restored",
+		 IPMI_CONN_NAME(lan->ipmi));
 	lan->curr_ip_addr = addr_num;
     }
 
@@ -717,7 +723,10 @@ lost_connection(lan_data_t *lan, int addr_num)
     lan->recv_msg_map[addr_num] = 0;
     lan->working_authtype[addr_num] = 0;
 
-    ipmi_log(IPMI_LOG_WARNING, "Connection %d to the BMC is down", addr_num);
+    ipmi_log(IPMI_LOG_WARNING,
+	     "%sipmi_lan.c(lost_connection): "
+	     "Connection %d to the BMC is down",
+	     IPMI_CONN_NAME(lan->ipmi), addr_num);
 
     if (lan->curr_ip_addr == addr_num) {
 	/* Scan to see if any address is operational. */
@@ -730,7 +739,10 @@ lost_connection(lan_data_t *lan, int addr_num)
 
 	if (i >= lan->num_ip_addr) {
 	    /* There were no operational connections, report that. */
-	    ipmi_log(IPMI_LOG_SEVERE, "All connections to the BMC are down");
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%sipmi_lan.c(lost_connection): "
+		     "All connections to the BMC are down",
+		     IPMI_CONN_NAME(lan->ipmi));
 
 	    lan->connected = 0;
 	}
@@ -776,14 +788,13 @@ rsp_timeout_handler(void              *cb_data,
 	goto out_unlock;
     }
 
-    if (DEBUG_MSG) {
+    if (DEBUG_RAWMSG)
 	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d", seq);
-    }
 
     if (! lan->seq_table[seq].inuse)
 	goto out_unlock;
 
-    if (DEBUG_MSG) {
+    if (DEBUG_RAWMSG) {
 	ip_num = lan->seq_table[seq].last_ip_num;
 	ipmi_log(IPMI_LOG_DEBUG,
 		 "Seq #%d\n"
@@ -964,13 +975,28 @@ handle_msg_send(lan_timer_info_t      *info,
 	if (seq == lan->last_seq) {
 	    /* This cannot really happen if max_outstanding_msg_count <= 63. */
 	    ipmi_log(IPMI_LOG_FATAL,
-		     "ipmi_lan: Attempted to start too many messages");
+		     "%sipmi_lan.c(handle_msg_send): "
+		     "ipmi_lan: Attempted to start too many messages",
+		     IPMI_CONN_NAME(lan->ipmi));
 	    abort();
 	}
 
 	seq = (seq + 1) % 64;
 	if (seq == 0)
 	    seq++;
+    }
+
+    if (DEBUG_MSG) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msg to IPMI addr =");
+	dump_hex((unsigned char *) addr, addr_len);
+	ipmi_log(IPMI_LOG_DEBUG_CONT,
+		 "\n msg  = netfn=%s cmd=%s data_len=%d",
+		 ipmi_get_netfn_string(msg->netfn),
+		 ipmi_get_command_string(msg->netfn, msg->cmd), msg->data_len);
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
+		 msg->data_len);
+	dump_hex(msg->data, msg->data_len);
+	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
     }
 
     if ((addr->addr_type == IPMI_IPMB_ADDR_TYPE)
@@ -1087,7 +1113,9 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 	if (rv) {
 	    /* Send an error response to the user. */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "Command was not able to be sent due to error 0x%x", rv);
+		     "%sipmi_lan.c(check_command_queue): "
+		     "Command was not able to be sent due to error 0x%x",
+		     IPMI_CONN_NAME(lan->ipmi), rv);
 	    
 	    q_item->msg.netfn |= 1; /* Convert it to a response. */
 	    q_item->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
@@ -1156,12 +1184,12 @@ data_handler(int            fd,
     if (len < 0)
 	goto out_unlock2;
 
-    if (DEBUG_MSG) {
+    if (DEBUG_RAWMSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr = ");
 	dump_hex((unsigned char *) &ipaddrd, from_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     /* Make sure the source IP matches what we expect the other end to
@@ -1208,7 +1236,7 @@ data_handler(int            fd,
     }
 
     if (recv_addr >= lan->num_ip_addr) {
-	if (DEBUG_MSG)
+	if (DEBUG_RAWMSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message due to invalid IP");
 	goto out_unlock2;
     }
@@ -1216,7 +1244,7 @@ data_handler(int            fd,
     /* Validate the length first, so we know that all the data in the
        buffer we will deal with is valid. */
     if (len < 21) { /* Minimum size of an IPMI msg. */
-	if (DEBUG_MSG)
+	if (DEBUG_RAWMSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message because too small(1)");
 	goto out_unlock2;
     }
@@ -1225,7 +1253,7 @@ data_handler(int            fd,
 	/* No authentication. */
 	if (len < (data[13] + 14)) {
 	    /* Not enough data was supplied, reject the message. */
-	    if (DEBUG_MSG)
+	    if (DEBUG_RAWMSG)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(2)");
 	    goto out_unlock2;
@@ -1233,7 +1261,7 @@ data_handler(int            fd,
 	data_len = data[13];
     } else {
 	if (len < 37) { /* Minimum size of an authenticated IPMI msg. */
-	    if (DEBUG_MSG)
+	    if (DEBUG_RAWMSG)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(3)");
 	    goto out_unlock2;
@@ -1241,7 +1269,7 @@ data_handler(int            fd,
 	/* authcode in message, add 16 to the above checks. */
 	if (len < (data[29] + 30)) {
 	    /* Not enough data was supplied, reject the message. */
-	    if (DEBUG_MSG)
+	    if (DEBUG_RAWMSG)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(4)");
 	    goto out_unlock2;
@@ -1254,7 +1282,7 @@ data_handler(int            fd,
 	|| (data[2] != 0xff)
 	|| (data[3] != 0x07))
     {
-	if (DEBUG_MSG)
+	if (DEBUG_RAWMSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid IPMI/RMCP");
 	goto out_unlock2;
     }
@@ -1263,7 +1291,7 @@ data_handler(int            fd,
 
     /* Drop if the authtypes are incompatible. */
     if (lan->working_authtype[recv_addr] != data[4]) {
-	if (DEBUG_MSG)
+	if (DEBUG_RAWMSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype");
 	goto out_unlock2;
     }
@@ -1271,7 +1299,7 @@ data_handler(int            fd,
     /* Drop if sessions ID's don't match. */
     sess_id = ipmi_get_uint32(data+9);
     if (sess_id != lan->session_id[recv_addr]) {
-	if (DEBUG_MSG)
+	if (DEBUG_RAWMSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid session id");
 	goto out_unlock2;
     }
@@ -1284,7 +1312,7 @@ data_handler(int            fd,
 	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13,
 			recv_addr);
 	if (rv) {
-	    if (DEBUG_MSG)
+	    if (DEBUG_RAWMSG)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message auth fail");
 	    goto out_unlock2;
 	}
@@ -1309,7 +1337,7 @@ data_handler(int            fd,
 	uint8_t bit = 1 << (lan->inbound_seq_num[recv_addr] - seq);
 	if (lan->recv_msg_map[recv_addr] & bit) {
 	    /* We've already received the message, so discard it. */
-	    if (DEBUG_MSG)
+	    if (DEBUG_RAWMSG)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
 	    goto out_unlock2;
 	}
@@ -1318,7 +1346,7 @@ data_handler(int            fd,
     } else {
 	/* It's outside the current sequence number range, discard
 	   the packet. */
-	if (DEBUG_MSG)
+	if (DEBUG_RAWMSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message out of seq range");
 	goto out_unlock2;
     }
@@ -1398,7 +1426,7 @@ data_handler(int            fd,
 
 	if (tmsg[6] != 0) {
 	    /* An error getting the events, just ignore it. */
-	    if (DEBUG_MSG)
+	    if (DEBUG_RAWMSG)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message err getting event");
 	    goto out_unlock2;
 	}
@@ -1478,7 +1506,7 @@ data_handler(int            fd,
     
     ipmi_lock(lan->seq_num_lock);
     if (! lan->seq_table[seq].inuse) {
-	if (DEBUG_MSG)
+	if (DEBUG_RAWMSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message seq not in use");
 	goto out_unlock;
     }
@@ -1495,7 +1523,7 @@ data_handler(int            fd,
 	|| (! ipmi_addr_equal(&addr2, lan->seq_table[seq].addr_len,
 			      &addr, addr_len)))
     {
-	if (DEBUG_MSG) {
+	if (DEBUG_RAWMSG) {
 	    ipmi_log(IPMI_LOG_DEBUG_START,
                      "Dropped message seq %d - netfn/cmd/addr mismatch\n"
                      " netfn     = %2.2x, exp netfn = %2.2x\n"
@@ -1515,18 +1543,6 @@ data_handler(int            fd,
 	goto out_unlock;
     }
 
-    if (DEBUG_MSG) {
-        ipmi_log(IPMI_LOG_DEBUG_START, "incoming seq %d\n addr =", seq);
-        dump_hex((unsigned char *) &ipaddrd, from_len);
-        ipmi_log(IPMI_LOG_DEBUG_CONT,
-                "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
-		ipmi_get_netfn_string(msg.netfn),
-                ipmi_get_command_string(msg.netfn, msg.cmd), msg.data_len,
-		ipmi_get_cc_string(msg.data[0]));
-        ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
-        dump_hex(data, len);
-        ipmi_log(IPMI_LOG_DEBUG_END, "\n");
-    }
     /* We got a response from the connection, so reset the failure
        count. */
     ip_num = lan->seq_table[seq].last_ip_num;
@@ -1560,6 +1576,19 @@ data_handler(int            fd,
 
     check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
+
+    if (DEBUG_MSG) {
+        ipmi_log(IPMI_LOG_DEBUG_START, "incoming msg from IPMB addr =");
+        dump_hex((unsigned char *) &addr, addr_len);
+        ipmi_log(IPMI_LOG_DEBUG_CONT,
+                "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
+		ipmi_get_netfn_string(msg.netfn),
+                ipmi_get_command_string(msg.netfn, msg.cmd), msg.data_len,
+		ipmi_get_cc_string(msg.data[0]));
+        ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
+        dump_hex(msg.data, msg.data_len);
+        ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+    }
 
     if (handler)
 	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3, data4);
@@ -2509,7 +2538,10 @@ auth_cap_done(ipmi_con_t   *ipmi,
     }
 
     if (!(msg->data[2] & (1 << lan->authtype))) {
-        ipmi_log(IPMI_LOG_ERR_INFO, "Requested authentication not supported");
+        ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sipmi_lan.c(auth_cap_done): "
+		 "Requested authentication not supported",
+		 IPMI_CONN_NAME(lan->ipmi));
         handle_connected(ipmi, EINVAL);
 	return;
     }
@@ -2517,7 +2549,9 @@ auth_cap_done(ipmi_con_t   *ipmi,
     rv = send_challenge(ipmi, lan, addr_num);
     if (rv) {
         ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Unable to send challenge command: 0x%x", rv);
+		 "%sipmi_lan.c(auth_cap_done): "
+		 "Unable to send challenge command: 0x%x",
+		 IPMI_CONN_NAME(lan->ipmi), rv);
         handle_connected(ipmi, rv);
     }
 }

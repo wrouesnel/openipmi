@@ -77,8 +77,9 @@ chassis_reset_set_cb(ipmi_control_t *control,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_reset_set_cb: Received IPMI error: %x",
-		 rsp->data[0]);
+		 "%schassis.c(chassis_reset_set_cb): "
+		 "Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
 	if (control_info->handler)
 	    control_info->handler(control,
 				  IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -169,8 +170,8 @@ chassis_power_set_cb(ipmi_control_t *control,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_power_set_cb: Received IPMI error: %x",
-		 rsp->data[0]);
+		 "%schassis.c(chassis_power_set_cb): Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
 	if (control_info->handler)
 	    control_info->handler(control,
 				  IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -269,8 +270,8 @@ chassis_power_get_cb(ipmi_control_t *control,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_power_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
+		 "%schassis.c(chassis_power_get_cb): Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
 	if (control_info->handler)
 	    control_info->handler(control,
 				  IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -368,9 +369,9 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 			 NULL, &chassis_ent);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "_ipmi_chassis_create_controls:"
-		 " Could not add chassis entity: %x",
-		 rv);
+		 "%schassis.c(_ipmi_chassis_create_controls): "
+		 "Could not add chassis entity: %x",
+		 DOMAIN_NAME(domain), rv);
 	goto out;
     }
     

@@ -342,7 +342,7 @@ smi_send(smi_data_t   *smi,
     int rv;
 
     if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msgid=%08x\n addr =", msgid);
+	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msgid=%08lx\n addr =", msgid);
 	dump_hex((unsigned char *) addr, addr_len);
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d.",
@@ -404,7 +404,9 @@ set_ipmb_in_dev(smi_data_t *smi)
 	rv = ioctl(smi->fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "Error setting IPMB address: 0x%x", errno);
+		 "%sipmi_smi.c(set_ipmb_in_dev): "
+		 "Error setting IPMB address: 0x%x",
+		 IPMI_CONN_NAME(smi->ipmi), errno);
     }
 }
 
@@ -638,7 +640,8 @@ static void
 gen_recv_msg(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "incoming msgid=%08x\n addr =", recv->msgid);
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming msgid=%08lx\n addr =",
+		 recv->msgid);
 	dump_hex((unsigned char *) recv->addr, recv->addr_len);
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
@@ -737,7 +740,9 @@ ipmi_sock_data_handler(int            fd,
 	    goto out_unlock2; /* Try again later. */
 	} else {
 	    ipmi_log(IPMI_LOG_SEVERE,
-		     "Error receiving message: %s\n", strerror(errno));
+		     "%sipmi_smi.c(ipmi_sock_data_handler): "
+		     "Error receiving message: %s\n",
+		     IPMI_CONN_NAME(ipmi), strerror(errno));
 	    goto out_unlock2;
 	}
     }
@@ -751,15 +756,18 @@ ipmi_sock_data_handler(int            fd,
 
     if (rv < sizeof(*smsg)) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "Undersized socket message: %d bytes\n", rv);
+		 "%sipmi_smi.c(ipmi_sock_data_handler): "
+		 "Undersized socket message: %d bytes\n",
+		 IPMI_CONN_NAME(ipmi), rv);
 	goto out_unlock2;
     }
 
     smsg = (struct ipmi_sock_msg *) data;
     if (rv < (sizeof(*smsg) + smsg->data_len)) {
 	ipmi_log(IPMI_LOG_SEVERE,
+		 "%sipmi_smi.c(ipmi_sock_data_handler): "
 		 "Got subsized msg, size was %d, data_len was %d\n",
-		 rv, smsg->data_len);
+		 IPMI_CONN_NAME(ipmi), rv, smsg->data_len);
 	return;
     }
 

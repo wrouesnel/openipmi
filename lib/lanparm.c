@@ -88,16 +88,17 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
 {
     if (lanparm->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%s: "
+		 "%slanparm.c(%s): "
 		 "LANPARM was destroyed while an operation was in progress",
-		 func_name);
+		 MC_DOMAIN_NAME(mc), func_name);
 	return ECANCELED;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%s: MC went away while LANPARM op was in progress",
-		 func_name);
+		 "%slanparm.c(%s): "
+		 "MC went away while LANPARM op was in progress",
+		 MC_DOMAIN_NAME(mc), func_name);
 	return ENXIO;
     }
 
@@ -107,16 +108,16 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
 	   extraneous errors. */
 	if ((rsp->data[0] != 0x80) && (rsp->data[0] != 0x82))
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%s: IPMI error from LANPARM capabilities fetch: %x",
-		     func_name,
-		     rsp->data[0]);
+		     "%slanparm.c(%s): "
+		     "IPMI error from LANPARM capabilities fetch: %x",
+		     MC_DOMAIN_NAME(mc), func_name, rsp->data[0]);
 	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
 
     if (rsp->data_len < len) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		"%s: LANPARM capabilities too short",
-		func_name);
+		"%slanparm.c(%s): LANPARM capabilities too short",
+		 MC_DOMAIN_NAME(mc), func_name);
 	return EINVAL;
     }
     return 0;
@@ -296,8 +297,9 @@ start_config_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     lanparm_lock(lanparm);
     if (lanparm->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "start_fetch: "
-		 "LANPARM was destroyed while an operation was in progress");
+		 "%slanparm.c(start_config_fetch_cb): "
+		 "LANPARM was destroyed while an operation was in progress",
+		 MC_DOMAIN_NAME(mc));
 	fetch_complete(lanparm, ECANCELED, elem);
 	goto out;
     }
@@ -314,8 +316,9 @@ start_config_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%slanparm.c(start_config_fetch_cb): "
 		 "LANPARM start_config_fetch: could not send cmd: %x",
-		 rv);
+		 MC_DOMAIN_NAME(mc), rv);
 	fetch_complete(lanparm, ECANCELED, elem);
 	goto out;
     }
@@ -333,7 +336,7 @@ start_config_fetch(void *cb_data, int shutdown)
 
     if (shutdown) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "start_fetch: "
+		 "lanparm.c(start_config_fetch): "
 		 "LANPARM was destroyed while an operation was in progress");
 	lanparm_lock(elem->lanparm);
 	fetch_complete(elem->lanparm, ECANCELED, elem);
@@ -344,7 +347,9 @@ start_config_fetch(void *cb_data, int shutdown)
        deadlock. */
     rv = ipmi_mc_pointer_cb(elem->lanparm->mc, start_config_fetch_cb, elem);
     if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "start_fetch: LANPARM's MC is not valid");
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "lanparm.c(start_config_fetch): "
+		 "LANPARM's MC is not valid");
 	lanparm_lock(elem->lanparm);
 	fetch_complete(elem->lanparm, rv, elem);
     }
@@ -367,7 +372,8 @@ ipmi_lanparm_get_parm(ipmi_lanparm_t      *lanparm,
     elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lanparm_get: could not allocate the lanparm element");
+		 "lanparm.c(ipmi_lanparm_get_parm): "
+		 "could not allocate the lanparm element");
 	return ENOMEM;
     }
 
@@ -449,8 +455,9 @@ start_config_set_cb(ipmi_mc_t *mc, void *cb_data)
     lanparm_lock(lanparm);
     if (lanparm->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "start_set: "
-		 "LANPARM was destroyed while an operation was in progress");
+		 "%slanparm.c(start_config_set_cb): "
+		 "LANPARM was destroyed while an operation was in progress",
+		 MC_DOMAIN_NAME(mc));
 	set_complete(lanparm, ECANCELED, elem);
 	goto out;
     }
@@ -463,8 +470,9 @@ start_config_set_cb(ipmi_mc_t *mc, void *cb_data)
 
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%slanparm.c(start_config_set_cb): "
 		 "LANPARM start_config_set: could not send cmd: %x",
-		 rv);
+		 MC_DOMAIN_NAME(mc), rv);
 	set_complete(lanparm, ECANCELED, elem);
 	goto out;
     }
@@ -482,7 +490,7 @@ start_config_set(void *cb_data, int shutdown)
 
     if (shutdown) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "start_config_set: "
+		 "lanparm.c(start_config_set): "
 		 "LANPARM was destroyed while an operation was in progress");
 	lanparm_lock(elem->lanparm);
 	set_complete(elem->lanparm, ECANCELED, elem);
@@ -494,7 +502,8 @@ start_config_set(void *cb_data, int shutdown)
     rv = ipmi_mc_pointer_cb(elem->lanparm->mc, start_config_set_cb, elem);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "start_config_set: LANPARM's MC is not valid");
+		 "lanparm.c(start_config_set): "
+		 "LANPARM's MC is not valid");
 	lanparm_lock(elem->lanparm);
 	set_complete(elem->lanparm, rv, elem);
     }
@@ -520,7 +529,8 @@ ipmi_lanparm_set_parm(ipmi_lanparm_t       *lanparm,
     elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lanparm_get: could not allocate the lanparm element");
+		 "lanparm.c(ipmi_lanparm_set_parm): "
+		 "could not allocate the lanparm element");
 	return ENOMEM;
     }
 
@@ -998,7 +1008,7 @@ got_parm(ipmi_lanparm_t    *lanparm,
     /* Check the length, and don't forget the revision byte must be added. */
     if ((!err) && (data_len < (lp->length+1))) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lanparm_got_parm:"
+		 "lanparm.c(got_parm): "
 		 " Invalid data length on parm %d was %d, should have been %d",
 		 lanc->curr_parm, data_len, lp->length+1);
 	err = EINVAL;
@@ -1008,7 +1018,8 @@ got_parm(ipmi_lanparm_t    *lanparm,
     err = lp->get_handler(lanc, lp, err, data);
     if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lanparm_got_parm: Error fetching parm %d: %x",
+		 "lanparm.c(got_parm): "
+		 "Error fetching parm %d: %x",
 		 lanc->curr_parm, err);
 	goto done;
     }
@@ -1026,7 +1037,8 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	if ((data[1] & 0xf) != lanc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "ipmi_lanparm_got_parm: Error fetching dest type %d,"
+		     "lanparm.c(got_parm): "
+		     "Error fetching dest type %d,"
 		     " wrong selector came back, expecting %d, was %d",
 		     lanc->curr_parm, lanc->curr_sel, data[1] & 0xf);
 	    err = EINVAL;
@@ -1043,7 +1055,8 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	if ((data[1] & 0xf) != lanc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "ipmi_lanparm_got_parm: Error fetching dest addr %d,"
+		     "lanparm.c(got_parm): "
+		     "Error fetching dest addr %d,"
 		     " wrong selector came back, expecting %d, was %d",
 		     lanc->curr_parm, lanc->curr_sel, data[1] & 0xf);
 	    err = EINVAL;
@@ -1084,7 +1097,7 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	if (err) {
 	    ipmi_lan_free_config(lanc);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "lan.c(got_parm): Error trying to clear lock: %x",
+		     "lanparm.c(got_parm): Error trying to clear lock: %x",
 		     err);
 	    lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
 	    ipmi_lan_free_config(lanc);
@@ -1111,7 +1124,7 @@ lock_done(ipmi_lanparm_t *lanparm,
 	return;
     } else if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "lan.c(lock_done): Error trying to lock the LAN"
+		 "lanparm.c(lock_done): Error trying to lock the LAN"
 		 " parms: %x",
 		 err);
 	lanc->done(lanparm, err, NULL, lanc->cb_data);
@@ -1126,7 +1139,7 @@ lock_done(ipmi_lanparm_t *lanparm,
     if (rv) {
 	unsigned char data[1];
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "lan.c(lock_done): Error trying to get parms: %x",
+		 "lanparm.c(lock_done): Error trying to get parms: %x",
 		 err);
 
 	lanc->err = rv;
@@ -1137,7 +1150,7 @@ lock_done(ipmi_lanparm_t *lanparm,
 	if (rv) {
 	    ipmi_lan_free_config(lanc);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "lan.c(lock_done): Error trying to clear lock: %x",
+		     "lanparm.c(lock_done): Error trying to clear lock: %x",
 		     err);
 	    lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
 	    ipmi_lan_free_config(lanc);
@@ -1206,7 +1219,7 @@ commit_done(ipmi_lanparm_t *lanparm,
     rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1, set_clear, lanc);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "ipmi_lanparm_commit_done: Error trying to clear the set in"
+		 "lanparm.c(commit_done): Error trying to clear the set in"
 		 " progress: %x",
 		 rv);
 	set_clear(lanparm, err, lanc);
@@ -1230,7 +1243,7 @@ set_done(ipmi_lanparm_t *lanparm,
 
     if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error setting lan parm %d sel %d: %x",
+		 "lanparm.c(set_done): Error setting lan parm %d sel %d: %x",
 		 lanc->curr_parm, lanc->curr_sel, err);
 	goto done;
     }
@@ -1298,7 +1311,7 @@ set_done(ipmi_lanparm_t *lanparm,
     }
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "ipmi_lanparm_got_parm: Error trying to clear the set in"
+		 "lanparm.c(set_done): Error trying to clear the set in"
 		 " progress: %x",
 		 err);
 	set_clear(lanparm, err, lanc);

@@ -239,7 +239,12 @@ struct ipmi_con_s
        called first.  If this function returns true, then the IPMI LAN
        code will not do anything with the message. */
     int (*handle_send_rsp_err)(ipmi_con_t *con, ipmi_msg_t *msg);
+
+    /* Name the connection code can use for logging. */
+    char *name;
 };
+
+#define IPMI_CONN_NAME(c) (c->name ? c->name : "")
 
 /* Different types of low-level handlers must register themselves with
    the IPMI code.  This is currently used so the IPMI code can validate

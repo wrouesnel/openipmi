@@ -122,6 +122,12 @@ struct ipmi_control_s
     void                    *destroy_handler_cb_data;
 };
 
+/***********************************************************************
+ *
+ * Control ID handling.
+ *
+ **********************************************************************/
+
 ipmi_control_id_t
 ipmi_control_convert_to_id(ipmi_control_t *control)
 {
@@ -249,6 +255,12 @@ ipmi_control_find_id(ipmi_domain_id_t domain_id,
     return rv;
 }
 
+/***********************************************************************
+ *
+ * Various control allocation/deallocation/opq/etc.
+ *
+ **********************************************************************/
+
 static void
 control_final_destroy(ipmi_control_t *control)
 {
@@ -313,7 +325,9 @@ control_opq_ready(void *cb_data, int shutdown)
 
     if (shutdown) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Control was destroyed while an operation was in progress");
+		 "%scontrol.c(control_opq_ready): "
+		 "Control was destroyed while an operation was in progress",
+		 CONTROL_DOMAIN_NAME(info->__control));
 	if (info->__handler)
 	    info->__handler(info->__control, ECANCELED, info->__cb_data);
 	return;
@@ -373,7 +387,9 @@ control_rsp_handler(ipmi_mc_t  *mc,
 
     if (control->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Control was destroyed while an operation was in progress");
+		 "%scontrol.c(control_rsp_handler): "
+		 "Control was destroyed while an operation was in progress",
+		 CONTROL_DOMAIN_NAME(control));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 	control_final_destroy(control);
@@ -382,6 +398,7 @@ control_rsp_handler(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "control.c(control_rsp_handler): "
 		 "MC was destroyed while a control operation was in progress");
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
@@ -395,7 +412,9 @@ control_rsp_handler(ipmi_mc_t  *mc,
 				 info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Could not convert control id to a pointer");
+		 "%scontrol.c(control_rsp_handler): "
+		 "Could not convert control id to a pointer",
+		 MC_DOMAIN_NAME(mc));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
     }
@@ -437,7 +456,9 @@ control_addr_response_handler(ipmi_domain_t *domain,
 
     if (control->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Control was destroyed while an operation was in progress");
+		 "%scontrol.c(control_addr_response_handler): "
+		 "Control was destroyed while an operation was in progress",
+		 DOMAIN_NAME(domain));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 	control_final_destroy(control);
@@ -451,7 +472,9 @@ control_addr_response_handler(ipmi_domain_t *domain,
 				 info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Could not convert control id to a pointer");
+		 "%scontrol.c(control_addr_response_handler): "
+		 "Could not convert control id to a pointer",
+		 DOMAIN_NAME(domain));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
     }
@@ -631,6 +654,12 @@ ipmi_controls_destroy(ipmi_control_info_t *controls)
     return 0;
 }
 
+/***********************************************************************
+ *
+ * Polymorphic calls to the callback handlers.
+ *
+ **********************************************************************/
+
 int
 ipmi_control_set_val(ipmi_control_t     *control,
 		     int                *val,
@@ -655,6 +684,81 @@ ipmi_control_get_val(ipmi_control_t      *control,
 	return ENOSYS;
     return control->cbs.get_val(control, handler, cb_data);
 }
+
+int
+ipmi_control_set_display_string(ipmi_control_t     *control,
+				unsigned int       start_row,
+				unsigned int       start_column,
+				char               *str,
+				unsigned int       len,
+				ipmi_control_op_cb handler,
+				void               *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (!control->cbs.set_display_string)
+	return ENOSYS;
+    return control->cbs.set_display_string(control,
+					   start_row,
+					   start_column,
+					   str, len,
+					   handler, cb_data);
+}
+				
+int
+ipmi_control_get_display_string(ipmi_control_t      *control,
+				unsigned int        start_row,
+				unsigned int        start_column,
+				unsigned int        len,
+				ipmi_control_str_cb handler,
+				void                *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (!control->cbs.get_display_string)
+	return ENOSYS;
+    return control->cbs.get_display_string(control,
+					   start_row,
+					   start_column,
+					   len,
+					   handler, cb_data);
+}
+
+int
+ipmi_control_identifier_get_val(ipmi_control_t                 *control,
+				ipmi_control_identifier_val_cb handler,
+				void                           *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (!control->cbs.get_identifier_val)
+	return ENOSYS;
+    return control->cbs.get_identifier_val(control, handler, cb_data);
+}
+				
+int
+ipmi_control_identifier_set_val(ipmi_control_t     *control,
+				unsigned char      *val,
+				int                length,
+				ipmi_control_op_cb handler,
+				void               *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (!control->cbs.set_identifier_val)
+	return ENOSYS;
+    return control->cbs.set_identifier_val(control,
+					   val,
+					   length,
+					   handler,
+					   cb_data);
+}
+
+/***********************************************************************
+ *
+ * Polymorphic calls that take control ids.
+ *
+ **********************************************************************/
 
 typedef struct control_id_set_val_s
 {
@@ -725,6 +829,88 @@ ipmi_control_id_get_val(ipmi_control_id_t   control_id,
 	rv = info.rv;
     return rv;
 }
+
+typedef struct control_id_identifier_set_val_s
+{
+    unsigned char      *val;
+    int                length;
+    ipmi_control_op_cb handler;
+    void               *cb_data;
+    int                rv;
+} control_id_identifier_set_val_t;
+
+static void
+control_id_identifier_set_val_cb(ipmi_control_t *control, void *cb_data)
+{
+    control_id_identifier_set_val_t *info = cb_data;
+
+    info->rv = ipmi_control_identifier_set_val(control,
+					       info->val,
+					       info->length,
+					       info->handler,
+					       info->cb_data);
+}
+
+int
+ipmi_control_id_identifier_set_val(ipmi_control_id_t  control_id,
+				   unsigned char      *val,
+				   int                length,
+				   ipmi_control_op_cb handler,
+				   void               *cb_data)
+{
+    control_id_identifier_set_val_t info;
+    int                             rv;
+
+    info.val = val;
+    info.length = length;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_control_pointer_cb(control_id,
+				 control_id_identifier_set_val_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct control_id_identifier_get_val_s
+{
+    ipmi_control_identifier_val_cb handler;
+    void                           *cb_data;
+    int                            rv;
+} control_id_identifier_get_val_t;
+
+static void
+control_id_identifier_get_val_cb(ipmi_control_t *control, void *cb_data)
+{
+    control_id_identifier_get_val_t *info = cb_data;
+
+    info->rv = ipmi_control_identifier_get_val(control,
+					       info->handler,
+					       info->cb_data);
+}
+
+int
+ipmi_control_id_identifier_get_val(ipmi_control_id_t              control_id,
+				   ipmi_control_identifier_val_cb handler,
+				   void                           *cb_data)
+{
+    control_id_identifier_get_val_t info;
+    int                             rv;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_control_pointer_cb(control_id,
+				 control_id_identifier_get_val_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+/***********************************************************************
+ *
+ * Event handling for controls.
+ *
+ **********************************************************************/
 
 void
 ipmi_control_set_has_events(ipmi_control_t *control, int val)
@@ -818,151 +1004,11 @@ int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
     return 0;
 }
 
-int
-ipmi_control_set_display_string(ipmi_control_t     *control,
-				unsigned int       start_row,
-				unsigned int       start_column,
-				char               *str,
-				unsigned int       len,
-				ipmi_control_op_cb handler,
-				void               *cb_data)
-{
-    CHECK_CONTROL_LOCK(control);
-
-    if (!control->cbs.set_display_string)
-	return ENOSYS;
-    return control->cbs.set_display_string(control,
-					   start_row,
-					   start_column,
-					   str, len,
-					   handler, cb_data);
-}
-				
-int
-ipmi_control_get_display_string(ipmi_control_t      *control,
-				unsigned int        start_row,
-				unsigned int        start_column,
-				unsigned int        len,
-				ipmi_control_str_cb handler,
-				void                *cb_data)
-{
-    CHECK_CONTROL_LOCK(control);
-
-    if (!control->cbs.get_display_string)
-	return ENOSYS;
-    return control->cbs.get_display_string(control,
-					   start_row,
-					   start_column,
-					   len,
-					   handler, cb_data);
-}
-
-int
-ipmi_control_identifier_get_val(ipmi_control_t                 *control,
-				ipmi_control_identifier_val_cb handler,
-				void                           *cb_data)
-{
-    CHECK_CONTROL_LOCK(control);
-
-    if (!control->cbs.get_identifier_val)
-	return ENOSYS;
-    return control->cbs.get_identifier_val(control, handler, cb_data);
-}
-				
-int
-ipmi_control_identifier_set_val(ipmi_control_t     *control,
-				unsigned char      *val,
-				int                length,
-				ipmi_control_op_cb handler,
-				void               *cb_data)
-{
-    CHECK_CONTROL_LOCK(control);
-
-    if (!control->cbs.set_identifier_val)
-	return ENOSYS;
-    return control->cbs.set_identifier_val(control,
-					   val,
-					   length,
-					   handler,
-					   cb_data);
-}
-
-typedef struct control_id_identifier_set_val_s
-{
-    unsigned char      *val;
-    int                length;
-    ipmi_control_op_cb handler;
-    void               *cb_data;
-    int                rv;
-} control_id_identifier_set_val_t;
-
-static void
-control_id_identifier_set_val_cb(ipmi_control_t *control, void *cb_data)
-{
-    control_id_identifier_set_val_t *info = cb_data;
-
-    info->rv = ipmi_control_identifier_set_val(control,
-					       info->val,
-					       info->length,
-					       info->handler,
-					       info->cb_data);
-}
-
-int
-ipmi_control_id_identifier_set_val(ipmi_control_id_t  control_id,
-				   unsigned char      *val,
-				   int                length,
-				   ipmi_control_op_cb handler,
-				   void               *cb_data)
-{
-    control_id_identifier_set_val_t info;
-    int                             rv;
-
-    info.val = val;
-    info.length = length;
-    info.handler = handler;
-    info.cb_data = cb_data;
-    rv = ipmi_control_pointer_cb(control_id,
-				 control_id_identifier_set_val_cb, &info);
-    if (!rv)
-	rv = info.rv;
-    return rv;
-}
-
-typedef struct control_id_identifier_get_val_s
-{
-    ipmi_control_identifier_val_cb handler;
-    void                           *cb_data;
-    int                            rv;
-} control_id_identifier_get_val_t;
-
-static void
-control_id_identifier_get_val_cb(ipmi_control_t *control, void *cb_data)
-{
-    control_id_identifier_get_val_t *info = cb_data;
-
-    info->rv = ipmi_control_identifier_get_val(control,
-					       info->handler,
-					       info->cb_data);
-}
-
-int
-ipmi_control_id_identifier_get_val(ipmi_control_id_t              control_id,
-				   ipmi_control_identifier_val_cb handler,
-				   void                           *cb_data)
-{
-    control_id_identifier_get_val_t info;
-    int                             rv;
-
-    info.handler = handler;
-    info.cb_data = cb_data;
-    rv = ipmi_control_pointer_cb(control_id,
-				 control_id_identifier_get_val_cb, &info);
-    if (!rv)
-	rv = info.rv;
-    return rv;
-}
-
+/***********************************************************************
+ *
+ * Get/set various local information about a sensor.
+ *
+ **********************************************************************/
 
 int
 ipmi_control_get_type(ipmi_control_t *control)

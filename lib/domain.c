@@ -125,6 +125,9 @@ typedef struct domain_check_oem_s domain_check_oem_t;
 
 struct ipmi_domain_s
 {
+    /* Used for error reporting. */
+    char name[IPMI_MAX_DOMAIN_NAME_LEN+4];
+
     /* Used to handle shutdown race conditions. */
     int             valid;
 
@@ -294,7 +297,9 @@ get_con_num(ipmi_domain_t *domain, ipmi_con_t *ipmi)
 
     if (u == MAX_CONS) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "Got a connection change from an invalid domain");
+		 "%sdomain.c(get_con_num): "
+		 "Got a connection change from an invalid domain",
+		 DOMAIN_NAME(domain));
 	return -1;
     }
 
@@ -1575,7 +1580,9 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
     rv = ipmi_domain_validate(domain);
     if (rv) {
 	ipmi_log(IPMI_LOG_INFO,
-		 "BMC went away while scanning for MCs");
+		 "%sdomain.c(devid_bc_rsp_handler): "
+		 "BMC went away while scanning for MCs",
+		 DOMAIN_NAME(domain));
 	ipmi_read_unlock();
 	return;
     }
@@ -3250,7 +3257,10 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
     if (err) {
 	/* Just report an error, it shouldn't be a big deal if this
            fails. */
-	ipmi_log(IPMI_LOG_WARNING, "Could not get main SDRs, error 0x%x", err);
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sdomain.c(sdr_handler): "
+		 "Could not get main SDRs, error 0x%x",
+		 DOMAIN_NAME(domain), err);
     }
 
     rv = get_channels(domain);
@@ -3281,15 +3291,18 @@ got_dev_id(ipmi_mc_t  *mc,
 
 	    if (major_version < 1) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "%sdomain.c(got_dev_id): "
 			 "IPMI version of the BMC is %d.%d, which is older"
 			 " than OpenIPMI supports",
-			 major_version, minor_version);
+			 DOMAIN_NAME(domain), major_version, minor_version);
 		return;
 	    }
 	}
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sdomain.c(got_dev_id): "
 		 "Invalid return from IPMI Get Device ID, something is"
-		 " seriously wrong with the BMC");
+		 " seriously wrong with the BMC",
+		 DOMAIN_NAME(domain));
 	call_con_fails(domain, rv, 0, 0, 0);
 	return;
     }
@@ -3306,9 +3319,12 @@ got_dev_id(ipmi_mc_t  *mc,
 	    && (domain->minor_version != 0)))
     {
 	ipmi_log(IPMI_LOG_WARNING,
+		 "%sdomain.c(got_dev_id): "
 		 "IPMI version of the BMC is %d.%d, which is not directly"
 		 " supported by OpenIPMI.  It may work, but there may be"
-		 " issues.", domain->major_version, domain->minor_version);
+		 " issues.",
+		 DOMAIN_NAME(domain),
+		 domain->major_version, domain->minor_version);
     }
 
     if (domain->major_version < 1) {
@@ -3631,9 +3647,10 @@ ll_con_changed(ipmi_con_t   *ipmi,
     int             u;
 
     if (port_num >= MAX_PORTS_PER_CON) {
-	ipmi_log(IPMI_LOG_SEVERE, "domain.c:ll_con_changed: Got port number %d,"
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%sdomain.c(ll_con_changed): Got port number %d,"
 		 " but %d is the max number of ports",
-		 port_num, MAX_PORTS_PER_CON);
+		 DOMAIN_NAME(domain), port_num, MAX_PORTS_PER_CON);
 	return;
     }
 
@@ -3817,6 +3834,69 @@ ipmi_domain_get_event_rcvr(ipmi_domain_t *domain)
 
     ipmi_domain_iterate_mcs(domain, check_event_rcvr, &addr);
     return addr;
+}
+
+char *
+_ipmi_domain_name(ipmi_domain_t *domain)
+{
+    return domain->name;
+}
+
+void
+ipmi_domain_set_name(ipmi_domain_t *domain, char *name)
+{
+    int len;
+    int i;
+
+    if (!name) {
+	domain->name[0] = '\0';
+	return;
+    }
+    len = strlen(name);
+    if (len == 0) {
+	domain->name[0] = '\0';
+	return;
+    }
+    if (len > IPMI_MAX_DOMAIN_NAME_LEN)
+	len = IPMI_MAX_DOMAIN_NAME_LEN;
+    domain->name[0] = '(';
+    memcpy(domain->name+1, name, len);
+    domain->name[len+1] = ')';
+    domain->name[len+2] = ' ';
+    domain->name[len+3] = '\0';
+
+    for (i=0; i<MAX_CONS; i++) {
+	if (domain->conn[i])
+	    domain->conn[i]->name = domain->name;
+    }
+}
+
+void
+ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int *len)
+{
+    int  slen = strlen(domain->name);
+    char *data;
+
+    if (*len <= 0)
+	return;
+
+    if (slen == 0) {
+	*len = 0;
+	if (name)
+	    *name = '\0';
+	return;
+    }
+
+    data = domain->name+1; /* Skip the leading '(' */
+    slen = strlen(data) - 2; /* Remove the trailing ') ' */
+    if (slen >= *len) {
+	slen = *len - 1;
+    }
+
+    if (name)
+	memcpy(name, data, slen);
+    name[slen] = '\0';
+    *len = slen + 1; /* Include the null char */
 }
 
 /***********************************************************************

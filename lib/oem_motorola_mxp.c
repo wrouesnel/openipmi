@@ -432,276 +432,6 @@ static ipmi_control_light_t amc_temp_cool_leds[] =
 
 /***********************************************************************
  *
- * Handling for generic discrete sensor read operations.  For most
- * sensors, the read operation allocates a sens info structure, fills
- * it in, and lets this code handle the rest of the read operation.
- *
- **********************************************************************/
-
-typedef struct mxp_sens_info_s mxp_sens_info_t;
-
-/* Handler for getting the information from a message when no error
-   occurs.  The message is passed in the "data" field, the states
-   should be set by the call (they are initialized for you). */
-typedef void (*mxp_states_get_val_cb)(ipmi_sensor_t   *sensor,
-				      mxp_sens_info_t *sens_info,
-				      unsigned char   *data,
-				      ipmi_states_t   *states);
-
-/* Handler for message errors.  Some message errors are expected and
-   are not actually errors, this routine should fill in the states and
-   return error they wish to report to the user.  Note that the error
-   is the raw IPMI error (0xc3 for timeout, for instance).  This is
-   only called on IPMI errors, not system errors. */
-typedef int (*mxp_states_err_cb)(ipmi_sensor_t   *sensor,
-				 mxp_sens_info_t *sens_info,
-				 int             err,
-				 unsigned char   *data,
-				 ipmi_states_t   *states);
-
-struct mxp_sens_info_s
-{
-    /* See the sensor code for information on this. */
-    ipmi_sensor_op_info_t sdata;
-
-    /* Generic info for use by the specific sensor. */
-    void                  *sdinfo;
-
-    /* The miminum length of the response message. */
-    unsigned int          min_rsp_length;
-
-    /* Routines to handle getting the states from the data.  The
-       err_states routine does not have to be supplied (may be NULL),
-       in that case the error from the message is returned. */
-    mxp_states_get_val_cb get_states;
-    mxp_states_err_cb     err_states;
-
-    /* The user callback info. */
-    ipmi_states_read_cb   done;
-    void                  *cb_data;
-
-    /* Use for board presence. */
-    ipmi_sensor_id_t      sens_id;
-    ipmi_msg_t            *rsp;
-};
-
-static mxp_sens_info_t *
-alloc_sens_info(void *sdinfo, ipmi_states_read_cb done, void *cb_data)
-{
-    mxp_sens_info_t *sens_info;
-
-    sens_info = ipmi_mem_alloc(sizeof(*sens_info));
-    if (!sens_info)
-	return NULL;
-    memset(sens_info, 0, sizeof(*sens_info));
-    sens_info->sdinfo = sdinfo;
-    sens_info->done = done;
-    sens_info->cb_data = cb_data;
-    return sens_info;
-}
-
-static void
-mxp_sensor_get_done(ipmi_sensor_t *sensor,
-		    int           err,
-		    ipmi_msg_t    *rsp,
-		    void          *cb_data)
-{
-    mxp_sens_info_t *sens_info = cb_data;
-    ipmi_states_t   states;
-
-    ipmi_init_states(&states);
-    ipmi_set_sensor_scanning_enabled(&states, 1);
-
-    if (err) {
-	if (sens_info->done)
-	    sens_info->done(sensor, err,
-			    &states, sens_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	/* Check the error handler first, and let it handle the error. */
-	if (sens_info->err_states) {
-	    err = sens_info->err_states(sensor, sens_info, rsp->data[0],
-					rsp->data, &states);
-	    if (!err)
-		goto deliver;
-	}
-
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_sensor_get_done: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (sens_info->done)
-	    sens_info->done(sensor, IPMI_IPMI_ERR_VAL(rsp->data[0]),
-			    &states, sens_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < sens_info->min_rsp_length) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_sensor_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, sens_info->min_rsp_length);
-	if (sens_info->done)
-	    sens_info->done(sensor, EINVAL,
-			    &states, sens_info->cb_data);
-	goto out;
-    }
-
-    sens_info->get_states(sensor, sens_info, rsp->data, &states);
-
- deliver:
-    if (sens_info->done)
-	sens_info->done(sensor, 0, &states, sens_info->cb_data);
- out:
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(sens_info);
-}
-
-/* This data structure is used by a lot of the sensors to hold what
-   they are doing */
-typedef struct mxp_reading_done_s
-{
-    ipmi_sensor_op_info_t sdata;
-    void                  *sdinfo;
-    ipmi_reading_done_cb  done;
-    void                  *cb_data;
-} mxp_reading_done_t;
-
-/***********************************************************************
- *
- * Handling for generic control get/set operations.  A simple control
- * operation can use this code to handle most of the work of reading
- * and setting the control.
- *
- **********************************************************************/
-
-typedef struct mxp_control_info_s mxp_control_info_t;
-
-typedef int (*mxp_control_get_val_cb)(ipmi_control_t     *control,
-				      mxp_control_info_t *control_info,
-				      unsigned char      *data);
-
-struct mxp_control_info_s
-{
-    /* From ipmi_control.h. */
-    ipmi_control_op_info_t         sdata;
-
-    /* Controls on the MXP can have up to 4 values, we store them here
-       for setting. */
-    unsigned char                  vals[4];
-
-    /* The miminum length of the response message. */
-    unsigned int                   min_rsp_length;
-
-    /* For use by the specific code. */
-    unsigned long                  misc;
-
-    /* Pointer for use by the specific control code, not used in this
-       code. */
-    void                           *idinfo;
-
-    /* The user routines to call when we are done. */
-    ipmi_control_op_cb             done_set;
-    ipmi_control_val_cb            done_get;
-    void                           *cb_data;
-
-    /* Routines to get the value from the received message data. */
-    mxp_control_get_val_cb         get_val;
-    ipmi_control_identifier_val_cb get_identifier_val;
-};
-
-static mxp_control_info_t *
-alloc_control_info(void *idinfo)
-{
-    mxp_control_info_t *control_info;
-
-    control_info = ipmi_mem_alloc(sizeof(*control_info));
-    if (!control_info)
-	return NULL;
-    memset(control_info, 0, sizeof(*control_info));
-    control_info->idinfo = idinfo;
-    return control_info;
-}
-
-static void
-mxp_control_set_done(ipmi_control_t *control,
-		     int            err,
-		     ipmi_msg_t     *rsp,
-		     void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_control_set_done: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->done_set)
-	    control_info->done_set(control,
-				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
-				   control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->done_set)
-	control_info->done_set(control, 0, control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-mxp_control_get_done(ipmi_control_t *control,
-		     int            err,
-		     ipmi_msg_t     *rsp,
-		     void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    int                val;
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_control_get_done: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->done_get)
-	    control_info->done_get(control,
-				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
-				   NULL, control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < control_info->min_rsp_length) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_control_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, control_info->min_rsp_length);
-	if (control_info->done_set)
-	    control_info->done_set(control, EINVAL, control_info->cb_data);
-	goto out;
-    }
-
-    val = control_info->get_val(control, control_info, rsp->data);
-    if (control_info->done_get)
-	control_info->done_get(control, 0, &val, control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-/***********************************************************************
- *
  * Generic fixup and data functions used throughout the code.
  *
  **********************************************************************/
@@ -1116,6 +846,431 @@ mxp_sensor_get_accuracy(ipmi_sensor_t *sensor,
 			double        *accuracy)
 {
     return ENOSYS;
+}
+
+/***********************************************************************
+ *
+ * Handling for generic discrete sensor read operations.  For most
+ * sensors, the read operation allocates a sens info structure, fills
+ * it in, and lets this code handle the rest of the read operation.
+ *
+ **********************************************************************/
+
+typedef struct mxp_sens_info_s mxp_sens_info_t;
+
+/* Handler for getting the information from a message when no error
+   occurs.  The message is passed in the "data" field, the states
+   should be set by the call (they are initialized for you). */
+typedef void (*mxp_states_get_val_cb)(ipmi_sensor_t   *sensor,
+				      mxp_sens_info_t *sens_info,
+				      unsigned char   *data,
+				      ipmi_states_t   *states);
+
+/* Handler for message errors.  Some message errors are expected and
+   are not actually errors, this routine should fill in the states and
+   return error they wish to report to the user.  Note that the error
+   is the raw IPMI error (0xc3 for timeout, for instance).  This is
+   only called on IPMI errors, not system errors. */
+typedef int (*mxp_states_err_cb)(ipmi_sensor_t   *sensor,
+				 mxp_sens_info_t *sens_info,
+				 int             err,
+				 unsigned char   *data,
+				 ipmi_states_t   *states);
+
+struct mxp_sens_info_s
+{
+    /* See the sensor code for information on this. */
+    ipmi_sensor_op_info_t sdata;
+
+    /* Generic info for use by the specific sensor. */
+    void                  *sdinfo;
+
+    /* The miminum length of the response message. */
+    unsigned int          min_rsp_length;
+
+    /* Routines to handle getting the states from the data.  The
+       err_states routine does not have to be supplied (may be NULL),
+       in that case the error from the message is returned. */
+    mxp_states_get_val_cb get_states;
+    mxp_states_err_cb     err_states;
+
+    /* The user callback info. */
+    ipmi_states_read_cb   done;
+    void                  *cb_data;
+
+    /* Use for board presence. */
+    ipmi_sensor_id_t      sens_id;
+    ipmi_msg_t            *rsp;
+};
+
+static mxp_sens_info_t *
+alloc_sens_info(void *sdinfo, ipmi_states_read_cb done, void *cb_data)
+{
+    mxp_sens_info_t *sens_info;
+
+    sens_info = ipmi_mem_alloc(sizeof(*sens_info));
+    if (!sens_info)
+	return NULL;
+    memset(sens_info, 0, sizeof(*sens_info));
+    sens_info->sdinfo = sdinfo;
+    sens_info->done = done;
+    sens_info->cb_data = cb_data;
+    return sens_info;
+}
+
+static void
+mxp_sensor_get_done(ipmi_sensor_t *sensor,
+		    int           err,
+		    ipmi_msg_t    *rsp,
+		    void          *cb_data)
+{
+    mxp_sens_info_t *sens_info = cb_data;
+    ipmi_states_t   states;
+
+    ipmi_init_states(&states);
+    ipmi_set_sensor_scanning_enabled(&states, 1);
+
+    if (err) {
+	if (sens_info->done)
+	    sens_info->done(sensor, err,
+			    &states, sens_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	/* Check the error handler first, and let it handle the error. */
+	if (sens_info->err_states) {
+	    err = sens_info->err_states(sensor, sens_info, rsp->data[0],
+					rsp->data, &states);
+	    if (!err)
+		goto deliver;
+	}
+
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%soem_motorol_mxp.c(mxp_sensor_get_done): "
+		 "Received IPMI error: %x",
+		 SENS_DOMAIN_NAME(sensor), rsp->data[0]);
+	if (sens_info->done)
+	    sens_info->done(sensor, IPMI_IPMI_ERR_VAL(rsp->data[0]),
+			    &states, sens_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < sens_info->min_rsp_length) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%soem_motorol_mxp.c(mxp_sensor_get_done): "
+		 "Received invalid msg length: %d, expected %d",
+		 SENS_DOMAIN_NAME(sensor),
+		 rsp->data_len, sens_info->min_rsp_length);
+	if (sens_info->done)
+	    sens_info->done(sensor, EINVAL,
+			    &states, sens_info->cb_data);
+	goto out;
+    }
+
+    sens_info->get_states(sensor, sens_info, rsp->data, &states);
+
+ deliver:
+    if (sens_info->done)
+	sens_info->done(sensor, 0, &states, sens_info->cb_data);
+ out:
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(sens_info);
+}
+
+/* This data structure is used by a lot of the sensors to hold what
+   they are doing */
+typedef struct mxp_reading_done_s
+{
+    ipmi_sensor_op_info_t sdata;
+    void                  *sdinfo;
+    ipmi_reading_done_cb  done;
+    void                  *cb_data;
+} mxp_reading_done_t;
+
+/***********************************************************************
+ *
+ * Handling for generic control get/set operations.  A simple control
+ * operation can use this code to handle most of the work of reading
+ * and setting the control.
+ *
+ **********************************************************************/
+
+typedef struct mxp_control_info_s mxp_control_info_t;
+
+typedef int (*mxp_control_get_val_cb)(ipmi_control_t     *control,
+				      mxp_control_info_t *control_info,
+				      unsigned char      *data);
+
+/* Max amount of data we can append to a command. */
+#define MAX_EXTRA_CMD_DATA 3
+struct mxp_control_info_s
+{
+    /* From ipmi_control.h. */
+    ipmi_control_op_info_t         sdata;
+
+    /* Controls on the MXP can have up to 4 values, we store them here
+       for setting. */
+    unsigned char                  vals[4];
+
+    /* The miminum length of the response message. */
+    unsigned int                   min_rsp_length;
+
+    /* Offset of the data we want from a response, and the data length. */
+    unsigned int          data_off;
+    unsigned int          data_len;
+
+    /* Management control to send the command to, command to send, and
+       and extra data to append to the command. */
+    ipmi_mc_t             *mc;
+    unsigned char         cmd;
+    unsigned char         extra_data[MAX_EXTRA_CMD_DATA];
+    unsigned int          extra_data_len;
+
+    /* For use by the specific code. */
+    unsigned long                  misc;
+
+    /* Pointer for use by the specific control code, not used in this
+       code. */
+    void                           *idinfo;
+
+    /* The user routines to call when we are done. */
+    ipmi_control_op_cb             done_set;
+    ipmi_control_val_cb            done_get;
+    void                           *cb_data;
+
+    /* Routines to get the value from the received message data. */
+    mxp_control_get_val_cb         get_val;
+    ipmi_control_identifier_val_cb get_identifier_val;
+};
+
+static mxp_control_info_t *
+alloc_control_info(void *idinfo)
+{
+    mxp_control_info_t *control_info;
+
+    control_info = ipmi_mem_alloc(sizeof(*control_info));
+    if (!control_info)
+	return NULL;
+    memset(control_info, 0, sizeof(*control_info));
+    control_info->idinfo = idinfo;
+    return control_info;
+}
+
+static void
+mxp_control_set_done(ipmi_control_t *control,
+		     int            err,
+		     ipmi_msg_t     *rsp,
+		     void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+
+    if (err) {
+	if (control_info->done_set)
+	    control_info->done_set(control, err, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%soem_motorola_mxp.c(mxp_control_set_done): "
+		 "Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
+	if (control_info->done_set)
+	    control_info->done_set(control,
+				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
+				   control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->done_set)
+	control_info->done_set(control, 0, control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+mxp_control_get_done(ipmi_control_t *control,
+		     int            err,
+		     ipmi_msg_t     *rsp,
+		     void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    int                val;
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, 0, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%soem_motorola_mxp.c(mxp_control_get_done): "
+		 "Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
+	if (control_info->done_get)
+	    control_info->done_get(control,
+				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
+				   NULL, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < control_info->min_rsp_length) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%soem_motorola_mxp.c(mxp_control_get_done): "
+		 "Received invalid msg length: %d, expected %d",
+		 CONTROL_DOMAIN_NAME(control),
+		 rsp->data_len, control_info->min_rsp_length);
+	if (control_info->done_set)
+	    control_info->done_set(control, EINVAL, control_info->cb_data);
+	goto out;
+    }
+
+    val = control_info->get_val(control, control_info, rsp->data);
+    if (control_info->done_get)
+	control_info->done_get(control, 0, &val, control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+mxp_control_get_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    ipmi_msg_t         msg;
+    unsigned char      data[3+MAX_EXTRA_CMD_DATA];
+    int                rv;
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = control_info->cmd;
+    msg.data_len = 3 + control_info->extra_data_len;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    memcpy(data+3, control_info->extra_data, control_info->extra_data_len);
+    rv = ipmi_control_send_command(control, control_info->mc, 0,
+				   &msg, mxp_control_get_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_get)
+	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+}
+
+static int
+check_identifier_get_rv(mxp_control_info_t *control_info,
+			ipmi_control_t     *control,
+			int                err,
+			ipmi_msg_t         *rsp,
+			unsigned int       min_length,
+			char               *func_name)
+{
+    if (err) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp && rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%soem_motorola_mxp.c(%s): Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), func_name, rsp->data[0]);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp && rsp->data_len < min_length) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%soem_motorola_mxp.c(%s): "
+		 "Received invalid msg length: %d, expected %d",
+		 CONTROL_DOMAIN_NAME(control), func_name,
+		 rsp->data_len, min_length);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    return 0;
+
+ out:
+    return 1;
+}
+
+static void
+gen_id_get_done(ipmi_control_t *control,
+		int            err,
+		ipmi_msg_t     *rsp,
+		void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+
+    if (check_identifier_get_rv(control_info, control, err, rsp,
+				control_info->min_rsp_length,
+				"chassis_type_get_cb"))
+	goto out;
+
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0,
+					 rsp->data+control_info->data_off,
+					 control_info->data_len,
+					 control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+gen_id_get_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t   *control_info = cb_data;
+    int                  rv;
+    ipmi_msg_t           msg;
+    unsigned char        data[3+MAX_EXTRA_CMD_DATA];
+
+    if (err) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = control_info->cmd;
+    msg.data_len = 3 + control_info->extra_data_len;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    memcpy(msg.data+3, control_info->extra_data, control_info->extra_data_len);
+    rv = ipmi_control_send_command(control, control_info->mc, 0,
+				   &msg, gen_id_get_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
 }
 
 /***********************************************************************
@@ -1780,88 +1935,6 @@ chassis_type_set(ipmi_control_t     *control,
     return rv;
 }
 
-static void
-chassis_type_get_cb(ipmi_control_t *control,
-		    int            err,
-		    ipmi_msg_t     *rsp,
-		    void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_type_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 5) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_type_get_cb: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 5);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+4, 1,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-chassis_type_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    mxp_info_t           *info = control_info->idinfo;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[3];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_CHASSIS_TYPE_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, info->mc, 0,
-				   &msg, chassis_type_get_cb,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
 static int
 chassis_type_get(ipmi_control_t                 *control,
 		 ipmi_control_identifier_val_cb handler,
@@ -1877,7 +1950,13 @@ chassis_type_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-    rv = ipmi_control_add_opq(control, chassis_type_get_start,
+    control_info->min_rsp_length = 5;
+    control_info->data_off = 4;
+    control_info->data_len = 1;
+    control_info->mc = info->mc;
+    control_info->cmd = MXP_OEM_GET_CHASSIS_TYPE_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -1947,88 +2026,6 @@ shelf_ga_set(ipmi_control_t     *control,
     return rv;
 }
 
-static void
-shelf_ga_get_cb(ipmi_control_t *control,
-		int            err,
-		ipmi_msg_t     *rsp,
-		void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "shelf_ga_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 5) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "shelf_ga_get_cb: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 5);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+4, 1,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-shelf_ga_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    mxp_info_t           *info = control_info->idinfo;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[3];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_SGA_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, info->mc, 0,
-				   &msg, shelf_ga_get_cb,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
 static int
 shelf_ga_get(ipmi_control_t                 *control,
 	     ipmi_control_identifier_val_cb handler,
@@ -2044,7 +2041,13 @@ shelf_ga_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-    rv = ipmi_control_add_opq(control, shelf_ga_get_start,
+    control_info->min_rsp_length = 5;
+    control_info->data_off = 4;
+    control_info->data_len = 1;
+    control_info->mc = info->mc;
+    control_info->cmd = MXP_OEM_GET_SGA_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -2129,8 +2132,9 @@ sys_led_get_cb(ipmi_control_t *control,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "sys_led_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
+		 "%soem_motorola_mxp.c(sys_led_get_cb): "
+		 "Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
 	if (control_info->done_get)
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -2280,8 +2284,9 @@ relay_get_done(ipmi_control_t *control,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "relay_get_done: Received IPMI error: %x",
-		 rsp->data[0]);
+		 "%soem_motorola_mxp.c(relay_get_done): "
+		 "Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
 	if (control_info->done_get)
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -2291,9 +2296,9 @@ relay_get_done(ipmi_control_t *control,
 
     if (rsp->data_len < 5) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "relay_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 5);
+		 "%soem_motorola_mxp.c(relay_get_done): "
+		 "Received invalid msg length: %d, expected %d",
+		 CONTROL_DOMAIN_NAME(control), rsp->data_len, 5);
 	if (control_info->done_get)
 	    control_info->done_get(control, EINVAL, NULL,
 				   control_info->cb_data);
@@ -3076,41 +3081,6 @@ ps_enable_get_cb(ipmi_control_t     *control,
     return (data[5] >> 1) & 1;
 }
 
-static void
-ps_enable_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    ipmi_msg_t         msg;
-    unsigned char      data[4];
-    int                rv;
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_PS_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-}
-
 static int
 ps_enable_get(ipmi_control_t      *control,
 	      ipmi_control_val_cb handler,
@@ -3128,8 +3098,12 @@ ps_enable_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->min_rsp_length = 6;
     control_info->get_val = ps_enable_get_cb;
+    control_info->mc = psinfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_PS_STATUS_CMD;
+    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data_len = 1;
 
-    rv = ipmi_control_add_opq(control, ps_enable_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -3218,40 +3192,6 @@ ps_led_get_cb(ipmi_control_t     *control,
 	return (data[4] >> 1) & 1;
 }
 
-static void
-ps_led_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[5];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_PS_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
 static int
 ps_led_get(ipmi_control_t      *control,
 	   ipmi_control_val_cb handler,
@@ -3269,96 +3209,17 @@ ps_led_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->get_val = ps_led_get_cb;
     control_info->min_rsp_length = 5;
+    control_info->mc = psinfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_PS_STATUS_CMD;
+    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data_len = 1;
 
-    rv = ipmi_control_add_opq(control, ps_led_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
 
     return rv;
-}
-
-static void
-ps_type_get_done(ipmi_control_t *control,
-		 int            err,
-		 ipmi_msg_t     *rsp,
-		 void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ps_type_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 8) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ps_type_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 8);
-	if (control_info->done_get)
-	    control_info->done_get(control, EINVAL, NULL,
-				   control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+7, 1,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-ps_type_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[5];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_PS_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, ps_type_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
 }
 
 static int
@@ -3376,96 +3237,19 @@ ps_type_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-
-    rv = ipmi_control_add_opq(control, ps_type_get_start,
+    control_info->min_rsp_length = 8;
+    control_info->data_off = 7;
+    control_info->data_len = 1;
+    control_info->mc = psinfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_PS_STATUS_CMD;
+    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data_len = 1;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
 
     return rv;
-}
-
-static void
-ps_revision_get_done(ipmi_control_t *control,
-		     int            err,
-		     ipmi_msg_t     *rsp,
-		     void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ps_revision_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 10) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ps_revision_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 10);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+8, 2,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-ps_revision_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[5];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_PS_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, ps_revision_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
 }
 
 static int
@@ -3483,8 +3267,14 @@ ps_revision_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-
-    rv = ipmi_control_add_opq(control, ps_revision_get_start,
+    control_info->min_rsp_length = 10;
+    control_info->data_off = 8;
+    control_info->data_len = 2;
+    control_info->mc = psinfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_PS_STATUS_CMD;
+    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data_len = 1;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -3566,41 +3356,6 @@ ps_i2c_isolate_get_cb(ipmi_control_t     *control,
 	return 1;
 }
 
-static void
-ps_i2c_isolate_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    ipmi_msg_t         msg;
-    unsigned char      data[4];
-    int                rv;
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_FAN_STATUS_CMD; /* Yes, it is in the fan status */
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-}
-
 static int
 ps_i2c_isolate_get(ipmi_control_t      *control,
 		   ipmi_control_val_cb handler,
@@ -3618,8 +3373,13 @@ ps_i2c_isolate_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->min_rsp_length = 6;
     control_info->get_val = ps_i2c_isolate_get_cb;
+    control_info->mc = psinfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_FAN_STATUS_CMD; /* Yes, it is in the fan
+						       status */
+    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data_len = 1;
 
-    rv = ipmi_control_add_opq(control, ps_i2c_isolate_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -3799,41 +3559,6 @@ fan_led_get_cb(ipmi_control_t     *control,
 	return (data[4] >> 1) & 1;
 }
 
-static void
-fan_led_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[5];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_FAN_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
 static int
 fan_led_get(ipmi_control_t      *control,
 	    ipmi_control_val_cb handler,
@@ -3851,96 +3576,17 @@ fan_led_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->get_val = fan_led_get_cb;
     control_info->min_rsp_length = 5;
+    control_info->mc = psinfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_FAN_STATUS_CMD;
+    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data_len = 1;
 
-    rv = ipmi_control_add_opq(control, fan_led_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
 
     return rv;
-}
-
-static void
-fan_type_get_done(ipmi_control_t *control,
-		  int            err,
-		  ipmi_msg_t     *rsp,
-		  void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fan_type_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 8) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fan_type_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 8);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+7, 1,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-fan_type_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[5];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_FAN_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, fan_type_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
 }
 
 static int
@@ -3958,96 +3604,19 @@ fan_type_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-
-    rv = ipmi_control_add_opq(control, fan_type_get_start,
+    control_info->min_rsp_length = 8;
+    control_info->data_off = 7;
+    control_info->data_len = 1;
+    control_info->mc = psinfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_FAN_STATUS_CMD;
+    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data_len = 1;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
 
     return rv;
-}
-
-static void
-fan_revision_get_done(ipmi_control_t *control,
-		      int            err,
-		      ipmi_msg_t     *rsp,
-		      void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fan_revision_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 10) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "fan_revision_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 10);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+8, 2,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-fan_revision_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    mxp_power_supply_t *psinfo = control_info->idinfo;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[5];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_FAN_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
-				   &msg, fan_revision_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
 }
 
 static int
@@ -4065,8 +3634,14 @@ fan_revision_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-
-    rv = ipmi_control_add_opq(control, fan_revision_get_start,
+    control_info->min_rsp_length = 10;
+    control_info->data_off = 8;
+    control_info->data_len = 2;
+    control_info->mc = psinfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_FAN_STATUS_CMD;
+    control_info->extra_data[0] = psinfo->ipmb_addr;
+    control_info->extra_data_len = 1;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -4102,8 +3677,9 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_fan_reading_cb: Received IPMI error: %x",
-		 rsp->data[0]);
+		 "%soem_motorola_mxp.c(mxp_fan_reading_cb): "
+		 "Received IPMI error: %x",
+		 SENS_DOMAIN_NAME(sensor), rsp->data[0]);
 	if (get_info->done)
 	    get_info->done(sensor,
 			   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -4117,9 +3693,9 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
 
     if (rsp->data_len < 11) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_fan_reading_cb: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 11);
+		 "%soem_motorola_mxp.c(mxp_fan_reading_cb): "
+		 "Received invalid msg length: %d, expected %d",
+		 SENS_DOMAIN_NAME(sensor), rsp->data_len, 11);
 	if (get_info->done)
 	    get_info->done(sensor,
 			   EINVAL,
@@ -4888,40 +4464,6 @@ board_led_get_cb(ipmi_control_t     *control,
 	return (data[idx+10] >> shift) & 0x3;
 }
 
-static void
-board_led_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    mxp_board_t          *binfo = control_info->idinfo;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[3];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_ALL_SLOT_LED_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, binfo->info->mc, 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-}
-
 static int
 board_led_get(ipmi_control_t      *control,
 	      ipmi_control_val_cb handler,
@@ -4939,8 +4481,11 @@ board_led_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->get_val = board_led_get_cb;
     control_info->min_rsp_length = 21;
+    control_info->mc = binfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_ALL_SLOT_LED_CMD;
+    control_info->extra_data_len = 0;
 
-    rv = ipmi_control_add_opq(control, board_led_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -5015,41 +4560,6 @@ bd_sel_get_cb(ipmi_control_t     *control,
     return (data[4] >> 2) & 1;
 }
 
-static void
-bd_sel_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    mxp_board_t          *binfo = control_info->idinfo;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[4];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = binfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, binfo->info->mc, 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-}
-
 static int
 bd_sel_get(ipmi_control_t      *control,
 	   ipmi_control_val_cb handler,
@@ -5067,8 +4577,12 @@ bd_sel_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->get_val = bd_sel_get_cb;
     control_info->min_rsp_length = 5;
+    control_info->mc = binfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
+    control_info->extra_data[0] = binfo->ipmb_addr;
+    control_info->extra_data_len = 1;
 
-    rv = ipmi_control_add_opq(control, bd_sel_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -5143,41 +4657,6 @@ pci_reset_get_cb(ipmi_control_t     *control,
     return (data[4] >> 3) & 1;
 }
 
-static void
-pci_reset_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    mxp_board_t          *binfo = control_info->idinfo;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[4];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = binfo->ipmb_addr;
-    rv = ipmi_control_send_command(control, binfo->info->mc, 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-}
-
 static int
 pci_reset_get(ipmi_control_t      *control,
 	      ipmi_control_val_cb handler,
@@ -5195,8 +4674,12 @@ pci_reset_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->get_val = pci_reset_get_cb;
     control_info->min_rsp_length = 5;
+    control_info->mc = binfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
+    control_info->extra_data[0] = binfo->ipmb_addr;
+    control_info->extra_data_len = 1;
 
-    rv = ipmi_control_add_opq(control, pci_reset_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -5566,8 +5049,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 			 NULL, &(info->chassis_ent));
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_create_entities: Could not add chassis entity: %x",
-		 rv);
+		 "%soem_motorola_mxp.c(mxp_create_entities): "
+		 "Could not add chassis entity: %x",
+		 MC_DOMAIN_NAME(mc), rv);
 	goto out;
     }
     rv = mxp_add_chassis_sensors(info);
@@ -5586,8 +5070,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 			     NULL, &(info->board[idx].ent));
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: Could not add alarm card: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add alarm card: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
@@ -5611,8 +5096,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 				   info->board[idx].ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: add child alarm card: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add child alarm card: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	rv = mxp_add_board_sensors(info, &(info->board[idx]));
@@ -5637,8 +5123,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 			     NULL, &(info->board[idx].ent));
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: Could not add ip switch: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add ip switch: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
@@ -5657,8 +5144,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 				   info->board[idx].ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: add child alarm card: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add child ip switch: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	rv = mxp_add_board_sensors(info, &(info->board[idx]));
@@ -5679,8 +5167,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 			     NULL, &(info->power_supply[i].ent));
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: Could not add power supply: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add power supply: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	ipmi_entity_set_type(info->power_supply[i].ent, IPMI_ENTITY_FRU);
@@ -5694,8 +5183,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 			     NULL, &(info->power_supply[i].fan_ent));
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: Could not add power supply: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add power supply: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	info->power_supply[i].info = info;
@@ -5705,16 +5195,18 @@ mxp_create_entities(ipmi_mc_t  *mc,
 				   info->power_supply[i].ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: add child power supply: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add child power supply: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	rv = ipmi_entity_add_child(info->power_supply[i].ent,
 				   info->power_supply[i].fan_ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: add child fan: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add child fan: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	rv = mxp_add_power_supply_sensors(info, &(info->power_supply[i]));
@@ -5740,8 +5232,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 			     NULL, &(info->board[idx].ent));
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: Could not add board: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add board: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
@@ -5759,8 +5252,9 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	rv = ipmi_entity_add_child(info->chassis_ent, info->board[idx].ent);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "mxp_create_entities: add child board: %x",
-		     rv);
+		     "%soem_motorola_mxp.c(mxp_create_entities): "
+		     "Could not add child board: %x",
+		     MC_DOMAIN_NAME(mc), rv);
 	    goto out;
 	}
 	rv = mxp_add_board_sensors(info, &(info->board[idx]));
@@ -5902,38 +5396,6 @@ board_power_get_cb(ipmi_control_t     *control,
     return data[5];
 }
 
-static void
-board_power_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[3];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_SLOT_HS_STATUS_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
 static int
 board_power_get(ipmi_control_t      *control,
 		ipmi_control_val_cb handler,
@@ -5949,8 +5411,11 @@ board_power_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->get_val = board_power_get_cb;
     control_info->min_rsp_length = 6;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_SLOT_HS_STATUS_CMD;
+    control_info->extra_data_len = 0;
 
-    rv = ipmi_control_add_opq(control, board_power_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -6098,38 +5563,6 @@ board_blue_led_get_cb(ipmi_control_t     *control,
     return data[12];
 }
 
-static void
-board_blue_led_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[3];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_SLOT_HS_STATUS_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
-				   &msg, mxp_control_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
 static int
 board_blue_led_get(ipmi_control_t      *control,
 		   ipmi_control_val_cb handler,
@@ -6145,8 +5578,11 @@ board_blue_led_get(ipmi_control_t      *control,
     control_info->cb_data = cb_data;
     control_info->get_val = board_blue_led_get_cb;
     control_info->min_rsp_length = 13;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_SLOT_HS_STATUS_CMD;
+    control_info->extra_data_len = 0;
 
-    rv = ipmi_control_add_opq(control, board_blue_led_get_start,
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -6232,8 +5668,9 @@ board_power_config_get_done(ipmi_control_t *control,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "board_power_config_get_done: Received IPMI error: %x",
-		 rsp->data[0]);
+		 "%soem_motorola_mxp.c(board_power_config_get_done): "
+		 "Received IPMI error: %x",
+		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
 	if (control_info->done_get)
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -6243,9 +5680,9 @@ board_power_config_get_done(ipmi_control_t *control,
 
     if (rsp->data_len < 9) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "board_power_config_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 5);
+		 "%soem_motorola_mxp.c(board_power_config_get_done): "
+		 "Received invalid msg length: %d, expected %d",
+		 CONTROL_DOMAIN_NAME(control), rsp->data_len, 5);
 	if (control_info->done_get)
 	    control_info->done_get(control, EINVAL, NULL,
 				   control_info->cb_data);
@@ -6316,86 +5753,6 @@ board_power_config_get(ipmi_control_t      *control,
     return rv;
 }
 
-static void
-slot_ga_get_done(ipmi_control_t *control,
-		 int            err,
-		 ipmi_msg_t     *rsp,
-		 void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "last_reset_reason_get_done: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 9) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "last_reset_reason_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 9);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0, rsp->data+8, 1,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-slot_ga_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[3];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_SLOT_STATUS_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
-				   &msg, slot_ga_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
 static int
 slot_ga_get(ipmi_control_t                 *control,
 	    ipmi_control_identifier_val_cb handler,
@@ -6409,8 +5766,13 @@ slot_ga_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-
-    rv = ipmi_control_add_opq(control, slot_ga_get_start,
+    control_info->min_rsp_length = 9;
+    control_info->data_off = 8;
+    control_info->data_len = 1;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_SLOT_STATUS_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -6478,88 +5840,6 @@ chassis_id_set(ipmi_control_t     *control,
     return rv;
 }
 
-static void
-chassis_id_get_cb(ipmi_control_t *control,
-		  int            err,
-		  ipmi_msg_t     *rsp,
-		  void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_id_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 8) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_id_get_cb: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 8);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+4, 4,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-chassis_id_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[3];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_CHASSIS_ID_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
-				   &msg, chassis_id_get_cb,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-}
-
 static int
 chassis_id_get(ipmi_control_t                 *control,
 	       ipmi_control_identifier_val_cb handler,
@@ -6573,7 +5853,13 @@ chassis_id_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-    rv = ipmi_control_add_opq(control, chassis_id_get_start,
+    control_info->min_rsp_length = 8;
+    control_info->data_off = 4;
+    control_info->data_len = 4;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_CHASSIS_ID_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -6888,8 +6174,9 @@ mxp_voltage_reading_cb(ipmi_sensor_t *sensor,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "mxp_voltage_reading_cb: Received IPMI error: %x",
-		 rsp->data[0]);
+		 "%soem_motorola_mxp.c(mxp_voltage_reading_cb): "
+		 "Received IPMI error: %x",
+		 SENS_DOMAIN_NAME(sensor), rsp->data[0]);
 	if (get_info->done)
 	    get_info->done(sensor,
 			   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -6910,7 +6197,10 @@ mxp_voltage_reading_cb(ipmi_sensor_t *sensor,
     else if (sensor == info->s8v)
 	raw_val = rsp->data[19];
     else {
-	ipmi_log(IPMI_LOG_WARNING, "mxp_voltage_reading_cb: Invalid sensor");
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_motorola_mxp.c(mxp_voltage_reading_cb): "
+		 "Invalid sensor",
+		 SENS_DOMAIN_NAME(sensor));
 	if (get_info->done)
 	    get_info->done(sensor,
 			   EINVAL,
@@ -7005,87 +6295,6 @@ mxp_voltage_reading_get_cb(ipmi_sensor_t        *sensor,
     return rv;
 }
 
-static void
-amc_version_get_cb(ipmi_control_t *control,
-		   int            err,
-		   ipmi_msg_t     *rsp,
-		   void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "amc_version_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-    if (rsp->data_len < 12) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "amc_version_get_cb: Received short msg: %d bytes",
-		 rsp->data_len);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     EINVAL,
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+control_info->misc, 1,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-amc_version_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[3];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_AMC_STATUS_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
-				   &msg, amc_version_get_cb,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
 static int
 amc_hw_version_get(ipmi_control_t                 *control,
 		   ipmi_control_identifier_val_cb handler,
@@ -7099,8 +6308,13 @@ amc_hw_version_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-    control_info->misc = 9; /* Offset of the hw version */
-    rv = ipmi_control_add_opq(control, amc_version_get_start,
+    control_info->min_rsp_length = 10;
+    control_info->data_off = 9;
+    control_info->data_len = 1;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -7120,8 +6334,13 @@ amc_fw_version_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-    control_info->misc = 10; /* Offset of the fw version */
-    rv = ipmi_control_add_opq(control, amc_version_get_start,
+    control_info->min_rsp_length = 11;
+    control_info->data_off = 10;
+    control_info->data_len = 1;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -7141,93 +6360,17 @@ amc_fpga_version_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-    control_info->misc = 11; /* Offset of the fpga version */
-    rv = ipmi_control_add_opq(control, amc_version_get_start,
+    control_info->min_rsp_length = 12;
+    control_info->data_off = 11;
+    control_info->data_len = 1;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
     return rv;
-}
-
-static void
-amc_last_reset_reason_get_done(ipmi_control_t *control,
-			       int            err,
-			       ipmi_msg_t     *rsp,
-			       void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "last_reset_reason_get_done: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 9) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "last_reset_erason_get_done: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 9);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0, rsp->data+8, 1,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-amc_last_reset_reason_get_start(ipmi_control_t *control, int err,
-				void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    int                rv;
-    ipmi_msg_t         msg;
-    unsigned char      data[3];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_AMC_STATUS_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
-				   &msg, amc_last_reset_reason_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
 }
 
 static int
@@ -7243,8 +6386,13 @@ amc_last_reset_reason_get(ipmi_control_t                 *control,
 	return ENOMEM;
     control_info->get_identifier_val = handler;
     control_info->cb_data = cb_data;
-
-    rv = ipmi_control_add_opq(control, amc_last_reset_reason_get_start,
+    control_info->min_rsp_length = 9;
+    control_info->data_off = 8;
+    control_info->data_len = 1;
+    control_info->mc = ipmi_control_get_mc(control);
+    control_info->cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    control_info->extra_data_len = 0;
+    rv = ipmi_control_add_opq(control, gen_id_get_start,
 			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
@@ -7316,8 +6464,9 @@ amc_board_handler(ipmi_mc_t *mc)
     rv = ipmi_mc_set_sel_oem_event_handler(mc, mxp_event_handler, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "oem_motorola_mxp.c(amc_board_handler):"
-		 " could not register event handler");
+		 "%soem_motorola_mxp.c(amc_board_handler):"
+		 " could not register event handler",
+		 MC_DOMAIN_NAME(mc));
 	goto out_err;
     }
 
@@ -7335,9 +6484,9 @@ amc_board_handler(ipmi_mc_t *mc)
 			 NULL, &info->ent);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "oem_motorola_mxp.c(amc_board_handler):"
+		 "%soem_motorola_mxp.c(amc_board_handler):"
 		 " Could not add alarm card entity: %x",
-		 rv);
+		 MC_DOMAIN_NAME(mc), rv);
 	goto out_err;
     }
 
@@ -7571,8 +6720,9 @@ amc_board_handler(ipmi_mc_t *mc)
     rv = ipmi_mc_add_oem_removed_handler(mc, amc_removal_handler, info, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "oem_motorola_mxp.c(amc_board_handler):"
-		 " could not register removal handler");
+		 "%soem_motorola_mxp.c(amc_board_handler):"
+		 " could not register removal handler",
+		 MC_DOMAIN_NAME(mc));
 	goto out_err;
     }
 
@@ -7843,7 +6993,9 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_board_presence_event: unable to allocate timer memory");
+		 "%soem_motorola_mxp.c(mxp_board_presence_event): "
+		 "unable to allocate timer memory",
+		 SENS_DOMAIN_NAME(sensor));
 	return;
     }
     hnd = ipmi_domain_get_os_hnd(domain);
@@ -7855,7 +7007,9 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
     if (rv) {
 	ipmi_mem_free(info);
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_board_presence_event: unable to allocate timer");
+		 "%soem_motorola_mxp.c(mxp_board_presence_event): "
+		 "unable to allocate timer",
+		 SENS_DOMAIN_NAME(sensor));
 	return;
     }
     timeout.tv_sec = 3; /* The Zynx switches seem to need 3 seconds to
@@ -7866,7 +7020,9 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 	hnd->free_timer(hnd, timer);
 	ipmi_mem_free(info);
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_board_presence_event: unable to start timer");
+		 "%soem_motorola_mxp.c(mxp_board_presence_event): "
+		 "unable to start timer",
+		 SENS_DOMAIN_NAME(sensor));
 	return;
     }
 }
@@ -8306,8 +7462,9 @@ i2c_write(ipmi_mc_t    *mc,
     rv = ipmi_mc_send_command(mc, 0, &msg, NULL, NULL);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
-		 "Could not to I2C write to %x.%x.%x, error %x\n",
-		 bus, addr, offset, rv);
+		 "%soem_motorola_mxp.c(i2c_write): "
+		 "Could not to I2C write to %x.%x.%x, error %x",
+		 MC_DOMAIN_NAME(mc), bus, addr, offset, rv);
 }
 
 typedef struct i2c_sens_s
@@ -8345,7 +7502,9 @@ i2c_sens_reading_cb(ipmi_sensor_t *sensor,
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "i2c_sens_reading_cb: Received IPMI error: %x",
+		 "%soem_motorola_mxp.c(i2c_sens_reading_cb): "
+		 "Received IPMI error: %x",
+		 SENS_DOMAIN_NAME(sensor),
 		 rsp->data[0]);
 	if (get_info->done)
 	    get_info->done(sensor,
@@ -9133,8 +8292,9 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 
     if (msg->data[0] != 0) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "mxp_chassis_type_rsp: Error getting chassis id: 0x%x",
-		 msg->data[0]);
+		 "%soem_motorola_mxp.c(mxp_chassis_type_rsp): "
+		 "Error getting chassis id: 0x%x",
+		 MC_DOMAIN_NAME(src), msg->data[0]);
 	/* Destroy the MC so it will be detected again late,r and hopefully
 	   will work that time. */
 	_ipmi_cleanup_mc(src);
@@ -9155,8 +8315,9 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 
     default:
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_chassis_type_rsp: Unknown chassis type: 0x%x",
-		 info->chassis_type);
+		 "%soem_motorola_mxp.c(mxp_chassis_type_rsp): "
+		 "Unknown chassis type: 0x%x",
+		 MC_DOMAIN_NAME(src), info->chassis_type);
 
 	/* Default to 3U. */
 	info->chassis_config = MXP_CHASSIS_CONFIG_3U;
@@ -9183,8 +8344,9 @@ mxp_setup_finished(ipmi_mc_t *mc, mxp_info_t *info)
     rv = ipmi_mc_send_command(info->mc, 0, &msg, mxp_chassis_type_rsp, info);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_setup_finished: Error sending chassis type request: %x",
-		 rv);
+		 "%soem_motorola_mxp.c(mxp_setup_finished): "
+		 "Error sending chassis type request: %x",
+		 MC_DOMAIN_NAME(mc), rv);
 }
 
 static void
@@ -9333,14 +8495,18 @@ mxp_bmc_handler(ipmi_mc_t *mc)
     rv = ipmi_mc_add_oem_removed_handler(mc, mxp_removal_handler, info, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "mxp_handler: could not register removal handler");
+		 "%soem_motorola_mxp.c(mxp_handler): "
+		 "could not register removal handler",
+		 MC_DOMAIN_NAME(mc));
 	goto out_err;
     }
 
     rv = ipmi_mc_set_oem_new_sensor_handler(mc, mxp_new_sensor, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "mxp_handler: could not register new sensor handler");
+		 "%soem_motorola_mxp.c(mxp_handler): "
+		 "could not register new sensor handler",
+		 MC_DOMAIN_NAME(mc));
 	goto out_err;
     }
 
@@ -9348,15 +8514,21 @@ mxp_bmc_handler(ipmi_mc_t *mc)
     rv = ipmi_domain_add_ipmb_ignore(domain, 0x54);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_handler: could not ignore IPMB address 0x54");
+		 "%soem_motorola_mxp.c(mxp_handler): "
+		 "could not ignore IPMB address 0x54",
+		 MC_DOMAIN_NAME(mc));
     rv = ipmi_domain_add_ipmb_ignore(domain, 0x56);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_handler: could not ignore IPMB address 0x56");
+		 "%soem_motorola_mxp.c(mxp_handler): "
+		 "could not ignore IPMB address 0x56",
+		 MC_DOMAIN_NAME(mc));
     rv = ipmi_domain_add_ipmb_ignore(domain, 0x58);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
-		 "mxp_handler: could not ignore IPMB address 0x58");
+		 "%soem_motorola_mxp.c(mxp_handler): "
+		 "could not ignore IPMB address 0x58",
+		 MC_DOMAIN_NAME(mc));
 
     if (ipmi_domain_con_up(domain)) {
 	/* The domain is already up, just start the process. */

@@ -139,7 +139,7 @@ mem_debug_log(void                      *data,
     ipmi_log(IPMI_LOG_DEBUG_START, "%s", text);
     if (hdr) {
 	ipmi_log(IPMI_LOG_DEBUG_CONT,
-		 " %d bytes at %p, allocated at",
+		 " %ld bytes at %p, allocated at",
 		 hdr->size, data);
 	for (i=0; i<TB_SIZE; i++)
 	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", hdr->tb[i]);
@@ -156,7 +156,7 @@ mem_debug_log(void                      *data,
 	for (i=0; i<TB_SIZE; i++)
 	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", tb[i]);
     }
-    ipmi_log(IPMI_LOG_DEBUG_END, "");
+    ipmi_log(IPMI_LOG_DEBUG_END, " ");
 }
 
 static void
