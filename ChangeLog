@@ -15,6 +15,9 @@
 	individual AMCs.
 	* lib/oem_motorola_mxp_intf.c: ditto
 
+	* lib/oem_motorola_mxp.c: Made the board entity instances
+	one-based instead of zero based.
+
 2003-07-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_motorola_mxp.c: Made board entity instances start at one

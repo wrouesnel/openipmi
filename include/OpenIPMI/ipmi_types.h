@@ -58,7 +58,7 @@ typedef struct ipmi_sensor_s ipmi_sensor_t;
 typedef struct ipmi_sensor_id_s ipmi_sensor_id_t;
 
 /*
- * An indicator is an output device, such as a light, relay, or display.
+ * A control is an output device, such as a light, relay, or display.
  */
 typedef struct ipmi_control_s ipmi_control_t;
 typedef struct ipmi_control_id_s ipmi_control_id_t;
@@ -102,7 +102,16 @@ struct ipmi_entity_id_s
     long             seq;
 };
 
-/* These are internal, don't use them. */
+/* This structure is kind of a cheap hack.  It's internal and
+   definately *NOT* for use by the user.  It can represent two
+   different types of addresses.  An IPMI will have a normal channel
+   number (usually 0 or 1) and the IPMB address will be in "mc_num".
+   A direct connection to a system interface (KCS, LAN, etc.) is
+   represented as IPMI_BMC_CHANNEL in the channel number and the
+   interface number in mc_num.  Multiple interface numbers are used
+   because you can have more than one connection to a domain; the
+   first connection will be mc_num 0, the second will be mc_num 1,
+   etc. */
 typedef struct ipmi_mcid_s
 {
     ipmi_domain_id_t domain_id;
