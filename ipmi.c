@@ -38,10 +38,7 @@
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
-#include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
-#include "md2.h"
-#include "md5.h"
 
 static os_hnd_rwlock_t *global_lock;
 static os_handler_t *ipmi_os_handler;
@@ -580,80 +577,6 @@ ipmi_set_device_string(char          *input,
 	ipmi_set_8_bit_ascii(input, output, out_len);
     }
 }
-
-static int
-pw_authcode_init(unsigned char *password, ipmi_authdata_t *handle)
-{
-    unsigned char *data;
-
-    data = ipmi_mem_alloc(16);
-    if (!data)
-	return ENOMEM;
-
-    memcpy(data, password, 16);
-    *handle = (ipmi_authdata_t) data;
-    return 0;
-}
-
-static int
-pw_authcode_gen(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *output)
-{
-    memcpy(output, handle, 16);
-    return 0;
-}
-
-static int
-pw_authcode_check(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *code)
-{
-    if (strncmp((unsigned char *) handle, code, 16) != 0)
-	return EINVAL;
-    return 0;
-}
-
-static void
-pw_authcode_cleanup(ipmi_authdata_t handle)
-{
-    ipmi_mem_free(handle);
-}
-
-static int
-no_authcode_init(unsigned char *password, ipmi_authdata_t *handle)
-{
-    return 0;
-}
-
-static int
-no_authcode_gen(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *output)
-{
-    memset(output, 0, 16);
-    return 0;
-}
-
-static int
-no_authcode_check(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *code)
-{
-    return 0;
-}
-
-static void
-no_authcode_cleanup(ipmi_authdata_t handle)
-{
-}
-
-
-ipmi_auth_t ipmi_auths[MAX_IPMI_AUTHS] =
-{
-    { no_authcode_init,  no_authcode_gen,
-      no_authcode_check, no_authcode_cleanup },
-    { ipmi_md2_authcode_init,  ipmi_md2_authcode_gen,
-      ipmi_md2_authcode_check, ipmi_md2_authcode_cleanup },
-    { ipmi_md5_authcode_init,  ipmi_md5_authcode_gen,
-      ipmi_md5_authcode_check, ipmi_md5_authcode_cleanup },
-    { NULL, NULL, NULL, NULL },
-    { pw_authcode_init,  pw_authcode_gen,
-      pw_authcode_check, pw_authcode_cleanup },
-    { NULL, NULL, NULL, NULL },
-};
 
 int
 ipmi_init(os_handler_t *handler)

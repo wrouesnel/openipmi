@@ -1,4 +1,11 @@
 
+2003-04-23 Corey Minyard <cminyard@mvista.com>
+
+	* ipmi.c, ipmi_auth.c: Created ipmi_auth.c from some stuff in
+	ipmi.c
+
+	* include/OpenIPMI/ipmi_msgbits.h: Added a bunch of message ids.
+
 2003-04-22 Corey Minyard <cminyard@mvista.com>
 
 	* ipmicmd.c, include/linux/ipmi.h: Added a debug interface to

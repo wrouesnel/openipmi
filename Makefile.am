@@ -20,11 +20,11 @@ LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
 lib_LTLIBRARIES = libOpenIPMI.la libOpenIPMIui.la
 
-bin_PROGRAMS = ipmi_ui ipmicmd
+bin_PROGRAMS = ipmi_ui ipmicmd ipmilan
 
 libOpenIPMI_la_SOURCES = entity.c ipmi.c mc.c sdr.c selector.c control.c \
 	ilist.c ipmi_smi.c opq.c sel.c sensor.c ipmi_lan.c md5.c md2.c \
-	strings.c ipmi_malloc.c
+	strings.c ipmi_malloc.c ipmi_auth.c
 libOpenIPMI_la_LIBADD = -lm
 libOpenIPMI_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMI.map
@@ -41,6 +41,8 @@ ipmisample_LDADD = -lOpenIPMI
 
 ipmicmd_SOURCES = ipmicmd.c
 ipmicmd_LDADD = -lpopt
+
+ipmilan_SOURCES = lanserv.c ipmi_auth.c md5.c md2.c ipmi_malloc.c
 
 test_heap_SOURCES = test_heap.c
 test_heap_LDADD = 
