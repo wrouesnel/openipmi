@@ -1,3 +1,16 @@
+2004-03-31 Corey Minyard <cminyard@mvista.com> 
+
+	* lanserv/emu.c, lanserv/emu_cmd.c: Added power control, fixed
+	some problems with getting the event state.
+
+	* lib/oem_test.c, lib/ipmi.c: Added some test code for testing
+	things inside OpenIPMI.
+
+	* lib/chassis.c: Added tests to make sure the response is
+	long enough in power controls.
+
+	* lib/entity.c: More work on the hot-swap state machine.
+
 2004-03-30 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sensor.c: Fix a problem checking the event capabilities

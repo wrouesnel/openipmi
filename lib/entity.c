@@ -727,6 +727,9 @@ entity_add(ipmi_entity_info_t *ents,
     ent->present = 0;
     ent->presence_possibly_changed = 1;
 
+    ent->hot_swap_act_timeout = IPMI_TIMEOUT_FOREVER;
+    ent->hot_swap_deact_timeout = IPMI_TIMEOUT_FOREVER;
+
     ent->ents = ents;
 
     ent->info.type = IPMI_ENTITY_UNKNOWN;
@@ -4440,7 +4443,7 @@ ipmi_entity_call_hot_swap_handlers(ipmi_entity_t             *ent,
     info.last_state = last_state;
     info.curr_state = curr_state;
     info.event = *event;
-    info.handled = 0;
+    info.handled = IPMI_EVENT_NOT_HANDLED;
     ilist_iter_twoitem(ent->hot_swap_handlers, call_hot_swap_handler, &info);
     if (handled)
 	*handled = info.handled;
@@ -4901,6 +4904,21 @@ hot_swap_power_on(ipmi_control_t *control, int err, void *cb_data)
     }
 }
 
+static void
+hot_swap_power_off(ipmi_control_t *control, int err, void *cb_data)
+{
+    ipmi_entity_t *ent = cb_data;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sentity.c(hot_swap_power_off):"
+		 " Unable to set the hot swap power: %x",
+		 CONTROL_NAME(control), err);
+    } else {
+	set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
+    }
+}
+
 typedef struct power_cb_info_s
 {
     ipmi_entity_t  *ent;
@@ -4916,11 +4934,31 @@ hot_swap_power_on_cb(ipmi_control_t *control, int err, void *cb_data)
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "%sentity.c(hot_swap_power_on):"
+		 "%sentity.c(hot_swap_power_on_cb):"
 		 " Unable to set the hot swap power: %x",
 		 CONTROL_NAME(control), err);
     } else {
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
+    }
+
+    if (info->handler)
+	info->handler(info->ent, err, info->cb_data);
+    ipmi_mem_free(info);
+}
+
+static void
+hot_swap_power_off_cb(ipmi_control_t *control, int err, void *cb_data)
+{
+    power_cb_info_t *info = cb_data;
+    ipmi_entity_t   *ent = info->ent;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sentity.c(hot_swap_power_off_cb):"
+		 " Unable to set the hot swap power: %x",
+		 CONTROL_NAME(control), err);
+    } else {
+	set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
     }
 
     if (info->handler)
@@ -4965,8 +5003,8 @@ hot_swap_act(ipmi_entity_t *ent, ipmi_entity_cb handler, void *cb_data)
 	    val = 1;
 	    rv = ipmi_control_set_val(ent->hot_swap_power,
 				      &val,
-				      hot_swap_power_on,
-				      ent);
+				      cb,
+				      cb_data);
 	    if (!rv)
 		set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_IN_PROGRESS,
 				   NULL);
@@ -4988,7 +5026,7 @@ hot_swap_act_cb(ipmi_entity_t *ent, void *cb_data)
     rv = hot_swap_act(ent, NULL, NULL);
     if (rv && (rv != EAGAIN))
 	ipmi_log(IPMI_LOG_WARNING,
-		 "%sentity.c(hot_swap_act):"
+		 "%sentity.c(hot_swap_act_cb):"
 		 " Unable to set the hot swap power: %x",
 		 ENTITY_NAME(ent), rv);
 }
@@ -5024,13 +5062,13 @@ hot_swap_deact(ipmi_entity_t *ent, ipmi_entity_cb handler, void *cb_data)
     if (ent->hot_swap_state == IPMI_HOT_SWAP_DEACTIVATION_REQUESTED) {
 	if (ent->hot_swap_power) {
 	    if (handler == NULL) {
-		cb = hot_swap_power_on;
+		cb = hot_swap_power_off;
 		cb_data = ent;
 	    } else {
 		info = ipmi_mem_alloc(sizeof(*info));
 		if (!info)
 		    return ENOMEM;
-		cb = hot_swap_power_on_cb;
+		cb = hot_swap_power_off_cb;
 		info->ent = ent;
 		info->handler = handler;
 		info->cb_data = cb_data;
@@ -5061,7 +5099,7 @@ hot_swap_deact_cb(ipmi_entity_t *ent, void *cb_data)
     rv = hot_swap_deact(ent, NULL, NULL);
     if (rv && (rv != EAGAIN))
 	ipmi_log(IPMI_LOG_WARNING,
-		 "%sentity.c(hot_swap_act):"
+		 "%sentity.c(hot_swap_deact_cb):"
 		 " Unable to set the hot swap power: %x",
 		 ENTITY_NAME(ent), rv);
 }
@@ -5208,6 +5246,10 @@ hot_swap_requester_changed(ipmi_sensor_t         *sensor,
 	    break;
 
 	case IPMI_HOT_SWAP_ACTIVATION_REQUESTED:
+	    handled = set_hot_swap_state
+		(ent, IPMI_HOT_SWAP_INACTIVE, event);
+	    break;
+
 	case IPMI_HOT_SWAP_ACTIVATION_IN_PROGRESS:
 	    handled = set_hot_swap_state
 		(ent, IPMI_HOT_SWAP_DEACTIVATION_IN_PROGRESS, event);
@@ -5230,12 +5272,16 @@ hot_swap_requester_changed(ipmi_sensor_t         *sensor,
 		(ent, IPMI_HOT_SWAP_ACTIVE, event);
 	    break;
 
+	case IPMI_HOT_SWAP_INACTIVE:
+	    handled = set_hot_swap_state
+		(ent, IPMI_HOT_SWAP_ACTIVATION_REQUESTED, event);
+	    break;
+
 	case IPMI_HOT_SWAP_ACTIVATION_REQUESTED:
 	case IPMI_HOT_SWAP_ACTIVATION_IN_PROGRESS:
 	case IPMI_HOT_SWAP_ACTIVE:
 	case IPMI_HOT_SWAP_DEACTIVATION_IN_PROGRESS:
 	case IPMI_HOT_SWAP_OUT_OF_CON:
-	case IPMI_HOT_SWAP_INACTIVE:
 	case IPMI_HOT_SWAP_NOT_PRESENT:
 	default:
 	    break;
@@ -5280,7 +5326,6 @@ handle_new_hot_swap_indicator(ipmi_entity_t *ent, ipmi_control_t *control)
     int val = 0;
     int rv;
 
-ipmi_log(IPMI_LOG_DEBUG, "New hot swap indicator");
     ipmi_control_is_hot_swap_indicator(control,
 				       &ent->hot_swap_ind_req_act,
 				       &ent->hot_swap_ind_act,
@@ -5322,11 +5367,75 @@ ipmi_log(IPMI_LOG_DEBUG, "New hot swap indicator");
 }
 
 static void
+requester_checked(ipmi_sensor_t *sensor,
+		  int           err,
+		  ipmi_states_t *states,
+		  void          *cb_data)
+{
+    ipmi_entity_t *ent = cb_data;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%sentity.c(requester_chedked): Unable to"
+		 " get requester value, error %x",
+		 SENSOR_NAME(sensor), err);
+	return;
+    }
+
+    if (ipmi_is_state_set(states, ent->hot_swap_offset)
+	== ent->hot_swap_requesting_val)
+    {
+	/* requester is requesting, change the state. */
+	if (ent->hot_swap_state == IPMI_HOT_SWAP_ACTIVE)
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_DEACTIVATION_REQUESTED,
+			       NULL);
+    } else {
+	if (ent->hot_swap_state == IPMI_HOT_SWAP_INACTIVE)
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
+			       NULL);
+    }
+}
+
+static void
+power_checked(ipmi_control_t *control,
+	      int            err,
+	      int            *val,
+	      void           *cb_data)
+{
+    int           rv;
+    ipmi_entity_t *ent = cb_data;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%sentity.c(power_chedked): Unable to"
+		 " get power value, error %x",
+		 CONTROL_NAME(control), err);
+	return;
+    }
+
+    if (val[0])
+	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
+    else
+	set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
+
+    if (ent->hot_swap_requester) {
+	rv = ipmi_states_get(ent->hot_swap_requester,
+			     requester_checked,
+			     ent);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%sentity.c(power_checked): Unable to"
+		     " request requester status, error %x",
+		     SENSOR_NAME(ent->hot_swap_requester), rv);
+	}
+    }
+}
+
+static void
 handle_new_hot_swap_power(ipmi_entity_t *ent, ipmi_control_t *control)
 {
     int rv;
   
-ipmi_log(IPMI_LOG_DEBUG, "New hot swap power");
     /* Add our own event handler. */
     rv = ipmi_control_add_val_event_handler(control,
 					    hot_swap_power_changed,
@@ -5340,6 +5449,17 @@ ipmi_log(IPMI_LOG_DEBUG, "New hot swap power");
     }
 
     ent->hot_swap_power = control;
+
+    if (ent->hot_swappable) {
+	rv = ipmi_control_get_val(ent->hot_swap_power, power_checked,
+				  ent);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%sentity.c(handle_new_hot_swap_power): Unable to"
+		     " request power status, error %x",
+		     CONTROL_NAME(ent->hot_swap_power), rv);
+	}
+    }
 }
 
 static void
@@ -5350,7 +5470,6 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     int                rv;
     int                val;
 
-ipmi_log(IPMI_LOG_DEBUG, "New hot swap reqeuster");
     ipmi_sensor_is_hot_swap_requester(sensor,
 				      &ent->hot_swap_offset,
 				      &ent->hot_swap_requesting_val);
@@ -5373,7 +5492,7 @@ ipmi_log(IPMI_LOG_DEBUG, "New hot swap reqeuster");
 
     /* Nothing to do, events will just be on. */
     if (event_support == IPMI_EVENT_SUPPORT_GLOBAL_ENABLE)
-	return;
+	goto out;
 
     /* Turn events and scanning on. */
     ipmi_event_state_init(&events);
@@ -5399,6 +5518,21 @@ ipmi_log(IPMI_LOG_DEBUG, "New hot swap reqeuster");
     }
 
     ipmi_sensor_events_enable_set(sensor, &events, NULL, NULL);
+
+    if (ent->hot_swappable) {
+	rv = ipmi_states_get(ent->hot_swap_requester,
+			     requester_checked,
+			     ent);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%sentity.c(handle_new_hot_swap_requester): Unable to"
+		     " request requester status, error %x",
+		     SENSOR_NAME(ent->hot_swap_requester), rv);
+	}
+    }
+
+ out:
+    return;
 }
 
 static int
@@ -5406,7 +5540,8 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
 			 int            present,
 			 ipmi_event_t   *event)
 {
-    int handled;
+    int handled = IPMI_EVENT_NOT_HANDLED;
+    int rv;
 
     if (present) {
 	if ((!ent->hot_swap_power)
@@ -5414,11 +5549,16 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
 	{
 	    /* No power control or immediate timeout, it goes straight
 	       to active. */
-	    handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
+	    handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, event);
 	} else {
-	    handled = set_hot_swap_state(ent,
-					 IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
-					 NULL);
+	    rv = ipmi_control_get_val(ent->hot_swap_power, power_checked,
+				      ent);
+	    if (rv) {
+		ipmi_log(IPMI_LOG_SEVERE,
+			 "%sentity.c(handle_hot_swap_presence): Unable to"
+			 " request power status, error %x",
+			 CONTROL_NAME(ent->hot_swap_power), rv);
+	    }
 	}
     } else {
 	handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_NOT_PRESENT, event);
@@ -5606,10 +5746,11 @@ e_set_hot_swap_indicator(ipmi_entity_t  *ent,
     return rv;
 }
 
-static void got_hot_swap_req(ipmi_sensor_t *sensor,
-			     int           err,
-			     ipmi_states_t *states,
-			     void          *cb_data)
+static void
+got_hot_swap_req(ipmi_sensor_t *sensor,
+		 int           err,
+		 ipmi_states_t *states,
+		 void          *cb_data)
 {
     get_hot_swap_info_t *info = cb_data;
     int                 val = 0;

@@ -98,6 +98,8 @@ int ipmi_mc_add_sensor(lmc_data_t    *mc,
 		       unsigned char type,
 		       unsigned char event_reading_code);
 
+int ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_int);
+
 void ipmi_emu_set_device_id(lmc_data_t *emu, unsigned char device_id);
 unsigned char ipmi_emu_get_device_id(lmc_data_t *emu);
 void ipmi_set_has_device_sdrs(lmc_data_t *emu, unsigned char has_device_sdrs);

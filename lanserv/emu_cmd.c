@@ -463,6 +463,24 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static void
+mc_set_power(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    unsigned char power;
+    unsigned char gen_int;
+    int           rv;
+
+    if (get_uchar(toks, &power, "Power", 0))
+	return;
+
+    if (get_uchar(toks, &gen_int, "Gen int", 0))
+	return;
+
+    rv = ipmi_mc_set_power(mc, power, gen_int);
+    if (rv)
+	printf("Unable to set power, error 0x%x\n", rv);
+}
+
+static void
 mc_setbmc(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     unsigned char ipmb;
@@ -524,6 +542,7 @@ static struct {
     { "sensor_set_hysteresis", MC,      sensor_set_hysteresis },
     { "sensor_set_threshold", MC,       sensor_set_threshold },
     { "sensor_set_event_support", MC,   sensor_set_event_support },
+    { "mc_set_power",   MC,		mc_set_power },
     { "mc_add",		NOMC,		mc_add },
     { "mc_setbmc",      NOMC,		mc_setbmc },
     { "read_cmds",	NOMC,		read_cmds },

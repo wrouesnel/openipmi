@@ -255,9 +255,9 @@ typedef struct chassis_get_info_s
 
 static void
 chassis_power_get_cb(ipmi_control_t *control,
-	       int            err,
-	       ipmi_msg_t     *rsp,
-	       void           *cb_data)
+		     int            err,
+		     ipmi_msg_t     *rsp,
+		     void           *cb_data)
 {
     chassis_get_info_t *control_info = cb_data;
     int                val[1];
@@ -275,6 +275,16 @@ chassis_power_get_cb(ipmi_control_t *control,
 	if (control_info->handler)
 	    control_info->handler(control,
 				  IPMI_IPMI_ERR_VAL(rsp->data[0]),
+				  NULL, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 2) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%schassis.c(chassis_power_get_cb): response too short: %d",
+		 CONTROL_NAME(control), rsp->data_len);
+	if (control_info->handler)
+	    control_info->handler(control, EINVAL,
 				  NULL, control_info->cb_data);
 	goto out;
     }

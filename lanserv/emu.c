@@ -185,6 +185,8 @@ struct lmc_data_s
     uint32_t sensor_population_change_time;
 
     fru_data_t frus[255];
+
+    unsigned char power_value;
 };
 
 struct emu_data_s
@@ -2323,7 +2325,8 @@ handle_get_sensor_reading(lmc_data_t    *mc,
     rdata[2] = ((sensor->events_enabled << 7)
 		| (sensor->scanning_enabled << 6));
     e = 0;
-    for (i=3; i<4; i++) {
+    for (i=3; i<=4; i++) {
+	rdata[i] = 0;
 	for (j=0; j<8; j++, e++)
 	    rdata[i] |= sensor->event_status[e] << j;
     }
@@ -2544,6 +2547,95 @@ handle_sensor_event_netfn(lmc_data_t    *mc,
     }
 }
 
+int
+ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_event)
+{
+    lmc_data_t    *dest_mc;
+    unsigned char data[13];
+    int           rv;
+
+    if (mc->power_value == power)
+	return 0;
+
+    mc->power_value = power;
+
+    if ((mc->event_receiver == 0)
+	|| (!gen_event))
+	return 0;
+
+    rv = ipmi_emu_get_mc_by_addr(mc->emu, mc->event_receiver, &dest_mc);
+    if (rv)
+	return 0;
+
+    /* Timestamp is ignored. */
+    data[0] = 0;
+    data[1] = 0;
+    data[2] = 0;
+    data[3] = 0;
+
+    data[4] = 0x20; /* These come from 0x20. */
+    data[5] = 0;
+    data[6] = 0x01; /* Version 1. */
+    data[7] = 0;
+    data[8] = 0; /* Control number 0. */
+    data[9] = 0;
+    data[10] = power;
+    data[11] = 0;
+    data[12] = 0;
+
+    ipmi_mc_add_to_sel(dest_mc, 0xc0, data);
+	
+    return 0;
+}
+
+static void
+handle_set_power(lmc_data_t    *mc,
+		 ipmi_msg_t    *msg,
+		 unsigned char *rdata,
+		 unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 1, rdata, rdata_len))
+	return;
+
+    ipmi_mc_set_power(mc, msg->data[0], 1);
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void
+handle_get_power(lmc_data_t    *mc,
+		 ipmi_msg_t    *msg,
+		 unsigned char *rdata,
+		 unsigned int  *rdata_len)
+{
+    rdata[0] = 0;
+    rdata[1] = mc->power_value;
+    *rdata_len = 2;
+}
+
+static void
+handle_oem0_netfn(lmc_data_t    *mc,
+		  unsigned char lun,
+		  ipmi_msg_t    *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len)
+{
+    switch(msg->cmd) {
+    case 0x01:
+	handle_set_power(mc, msg, rdata, rdata_len);
+	break;
+
+    case 0x02:
+	handle_get_power(mc, msg, rdata, rdata_len);
+	break;
+
+    default:
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	break;
+    }
+}
+
 static uint8_t
 ipmb_checksum(uint8_t *data, int size, uint8_t start)
 {
@@ -2627,6 +2719,10 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 
     case IPMI_STORAGE_NETFN:
 	handle_storage_netfn(mc, lun, msg, rdata, rdata_len);
+	break;
+
+    case 0x30:
+	handle_oem0_netfn(mc, lun, msg, rdata, rdata_len);
 	break;
 
     default:

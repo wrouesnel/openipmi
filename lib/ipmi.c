@@ -913,6 +913,7 @@ int _ipmi_pet_init(void);
 int _ipmi_conn_init(void);
 int ipmi_oem_atca_conn_init(void);
 int ipmi_oem_atca_init(void);
+int init_oem_test(void);
 
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_atca_shutdown(void);
@@ -960,6 +961,7 @@ ipmi_init(os_handler_t *handler)
     ipmi_oem_motorola_mxp_init();
     ipmi_oem_atca_conn_init();
     ipmi_oem_atca_init();
+    init_oem_test();
 
     return 0;
 
