@@ -1096,7 +1096,13 @@ presence_changed(ipmi_entity_t *ent,
 
 	ent->present = present;
 
-	handled = handle_hot_swap_presence(ent, present, event);
+	if (ent->hot_swappable
+	    &&(ent->hs_cb.get_hot_swap_state == e_get_hot_swap_state))
+	{
+	    /* Do internal presence handling if we have the internal
+	       hot-swap machine installed. */
+	    handled = handle_hot_swap_presence(ent, present, event);
+	}
 
 	/* When the entity becomes present or absent, fetch or destroy
 	   its FRU info. */
@@ -5199,7 +5205,7 @@ set_hot_swap_state(ipmi_entity_t             *ent,
 
     if (old_state != state) {
 	ent->hot_swap_state = state;
-	ipmi_entity_call_hot_swap_handlers(ent, state, old_state, &event,
+	ipmi_entity_call_hot_swap_handlers(ent, old_state, state, &event,
 					   &handled);
     }
 
@@ -5303,6 +5309,7 @@ handle_new_hot_swap_indicator(ipmi_entity_t *ent, ipmi_control_t *control)
     int val = 0;
     int rv;
 
+ipmi_log(IPMI_LOG_DEBUG, "New hot swap indicator");
     ipmi_control_is_hot_swap_indicator(control,
 				       &ent->hot_swap_ind_req_act,
 				       &ent->hot_swap_ind_act,
@@ -5347,7 +5354,8 @@ static void
 handle_new_hot_swap_power(ipmi_entity_t *ent, ipmi_control_t *control)
 {
     int rv;
-
+  
+ipmi_log(IPMI_LOG_DEBUG, "New hot swap power");
     /* Add our own event handler. */
     rv = ipmi_control_add_val_event_handler(control,
 					    hot_swap_power_changed,
@@ -5371,6 +5379,7 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     int                rv;
     int                val;
 
+ipmi_log(IPMI_LOG_DEBUG, "New hot swap reqeuster");
     ipmi_sensor_is_hot_swap_requester(sensor,
 				      &ent->hot_swap_offset,
 				      &ent->hot_swap_requesting_val);

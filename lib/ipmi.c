@@ -959,9 +959,7 @@ ipmi_init(os_handler_t *handler)
     ipmi_oem_force_conn_init();
     ipmi_oem_motorola_mxp_init();
     ipmi_oem_atca_conn_init();
-#if 0 /* Until we get it working. */
     ipmi_oem_atca_init();
-#endif
 
     return 0;
 
@@ -978,9 +976,7 @@ ipmi_init(os_handler_t *handler)
 void
 ipmi_shutdown(void)
 {
-#if 0 /* Until we get it working. */
     ipmi_oem_atca_shutdown();
-#endif
     ipmi_oem_atca_conn_shutdown();
     _ipmi_pet_shutdown();
     _ipmi_mc_shutdown();

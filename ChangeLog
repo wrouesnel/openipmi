@@ -10,6 +10,11 @@
 
  	* ui/ui.c: Turn off nonblocking mode on the write fd.
 
+	* lib/entity.c: Some hot-swap fixes.
+
+	* lib/oem_motorola_mxp.c: Turned on the hot-swap indicator and
+	hot-swap requester.
+
 2004-03-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Always rescan FRU info on an entity presence change
