@@ -1,4 +1,8 @@
 
+2003-08-13  Louis Zhuang  <louis.zhuang@linux.intel.com>
+
+	* lib/selector.c: Fixed a trivial bug in process_timers
+
 2003-08-12 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sdr.c: Added code to the SDR so that it will wait until

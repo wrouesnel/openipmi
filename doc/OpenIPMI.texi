@@ -148,7 +148,7 @@ If the interface supports an event queue, the user will have to poll it
 interface doesn't support an event queue the user should periodically
 scan the system event log for new events.  (Note that even if it does
 support an event queue, the user should still poll the system event log
-in case they missed any events coming in.)
+in case the event queue missed any events coming in.)
 
 Also, the user should start scanning the IPMB bus with broadcast get
 device id commands to detect any MCs on the bus.
@@ -199,7 +199,7 @@ You may register with an entity to be told when it's physical presence
 in the system changes.  Some devices (like power supplies) are
 field-replacable while the system is running, these are called Field
 Replacable Units (FRUs).  They may have sensors that monitor them, but
-those sensors may not be active if the device s not physically present
+those sensors may not be active if the device is not physically present
 in the system.
 
 Sensors are also automatically detected and reported.  This is done
@@ -229,12 +229,12 @@ You may enable events on a threshold sensor by specifying values (called
 thresholds) where you want the sensor to report an event.  Then you can
 enable the events for the specific thresholds.  Not all sensors support
 all thresholds, some cannot have their events enabled and others cannot
-have them disabled.  The capabilities of a sensor may all be fetched
+have them disabled.  The capabilities of a sensor may all be queried
 by the user to determine what it can do.
 
-Threshold sensors may have hysteresis, meaning that when the sensor goes on
-above or below the specified value, the transition point where the
-threshold goes off is somewhat below or above the given value.  For
+Threshold sensors may have hysteresis, meaning that when the threshold
+goes on above or below the specified value, the transition point where
+the threshold goes off is somewhat below or above the given value.  For
 instance, if you want a fan speed sensor to go off when it goes below
 150 RPM, if the fan is hanging right around 150 RPM, the sensor may be
 constantly sending you events as it goes slightly above and slightly
@@ -373,8 +373,8 @@ through external plug-in pieces.
 
 If a library function that takes a callback does not return an error,
 the callback is guaranteed to be called, even if the object the call is
-associated with goes away.  If it goes away, a NULL may be passed to the
-callback, but the @code{cb_data} will still be valid.
+associated with goes away.  If it goes away, a NULL may be passed in as
+the object to the callback, but the @code{cb_data} will still be valid.
 
 @node    The OS Handler, Messaging Interfaces, Event-Driven Systems, OpenIPMI Concepts
 @section The OS Handler
@@ -386,8 +386,8 @@ services are:
 The OpenIPMI code uses the ``file descriptor'' concept of *nix, input
 devices are numbered.  This is not used internally in the library, but
 it is used by the messaging interfaces, so the messaging interfaces and
-OS handler may implement their own conventions for these numbers.  But
-this provides a way to register to receive input from devices.
+OS handler may implement their own conventions for these numbers.  This
+provides a way for OpenIPMI to register to receive input from devices.
 
 @item Timers
 OpenIPMI times everthing (as it should), thus it needs timers.
@@ -535,8 +535,8 @@ temperature.
 
 Discrete sensors have a set of binary readings that may each be
 independently zero or one.  In some sensors, these may be independent.
-For instance, a power supply may have both an external power failure
-and a predictive failure at the same time.  In other, they may be
+For instance, a power supply may have both an external power failure and
+a predictive failure at the same time.  In other cases they may be
 mutually exclusive, such as the initialization state of a piece of
 software.
 

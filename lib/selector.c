@@ -418,7 +418,7 @@ process_timers(selector_t	*sel,
     timer = theap_get_top(&sel->timer_heap);
     gettimeofday(&now, NULL);
     while (timer && cmp_timeval(&now, &timer->val.timeout) >= 0) {
-	num++;
+	(*num)++;
 	theap_remove(&(sel->timer_heap), timer);
 	timer->val.in_heap = 0;
 	ipmi_unlock(sel->timer_lock);
