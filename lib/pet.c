@@ -1099,7 +1099,8 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->pef_check[2].data[1] = 0x80;
     pet->pef_check[2].mask[1] = 0x80;
     pet->pef_check[2].data[2] = 0x01;
-    pet->pef_check[2].data[2] = policy_num;
+    pet->pef_check[2].mask[2] = 0x3f;
+    pet->pef_check[2].data[3] = policy_num;
     pet->pef_check[2].mask[3] = 0x0f;
     pet->pef_check[2].data[4] = 0;
     pet->pef_check[3].conf_num = IPMI_PEFPARM_ALERT_POLICY_TABLE;
