@@ -1230,7 +1230,8 @@ set_done(ipmi_lanparm_t *lanparm,
 
     if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error setting lan parm %d: %x", lanc->curr_parm, err);
+		 "Error setting lan parm %d sel %d: %x",
+		 lanc->curr_parm, lanc->curr_sel, err);
 	goto done;
     }
 
@@ -1254,13 +1255,6 @@ set_done(ipmi_lanparm_t *lanparm,
 	break;
 
     case IPMI_LANPARM_DEST_ADDR:
-	if ((data[0] & 0xf) != lanc->curr_sel) {
-	    /* Yikes, wrong selector came back! */
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "ipmi_lanparm_got_parm: Error fetching dest addr %d,"
-		     " wrong selector came back, expecting %d, was %d",
-		     lanc->curr_parm, lanc->curr_sel, data[0] & 0xf);
-	}
 	lanc->curr_sel++;
 	if (lanc->curr_sel >= lanc->num_alert_destinations)
 	    goto done;
@@ -1289,7 +1283,12 @@ set_done(ipmi_lanparm_t *lanparm,
     return;
 
  done:
-    if (err) {
+    if (!lanc->lock_supported) {
+	/* No lock support, just finish the operation. */
+	set_clear(lanparm, err, lanc);
+	return;
+    }
+    else if (err) {
 	data[0] = 0; /* Don't commit the parameters. */
 	lanc->err = err;
 	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, set_clear, lanc);
@@ -1354,7 +1353,7 @@ ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
 	    goto out;
 	}
 	memcpy(lanc->alert_dest_addr, olanc->alert_dest_addr, 
-	       sizeof(alert_dest_type_t) * lanc->num_alert_destinations);
+	       sizeof(alert_dest_addr_t) * lanc->num_alert_destinations);
     }
 
     lanc->curr_parm = 2;
