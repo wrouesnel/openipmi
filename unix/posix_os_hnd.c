@@ -43,12 +43,7 @@
 #include <string.h>
 
 #include <OpenIPMI/ipmi_int.h>
-
-/* This must be provided by the user. */
-void (*ipmi_threaded_posix_vlog)(char *format,
-				 enum ipmi_log_type_e log_type,
-				 va_list ap);
-
+#include <OpenIPMI/ipmi_posix.h>
 
 struct os_hnd_fd_id_s
 {
@@ -247,8 +242,7 @@ sposix_log(os_handler_t         *handler,
     va_list ap;
 
     va_start(ap, format);
-    if (ipmi_threaded_posix_vlog)
-	ipmi_threaded_posix_vlog(format, log_type, ap);
+    posix_vlog(format, log_type, ap);
     va_end(ap);
 }
 
@@ -258,8 +252,8 @@ sposix_vlog(os_handler_t         *handler,
 	    char                 *format,
 	    va_list              ap)
 {
-    if (ipmi_threaded_posix_vlog)
-	ipmi_threaded_posix_vlog(format, log_type, ap);
+    if (posix_vlog)
+	posix_vlog(format, log_type, ap);
 }
 
 static os_handler_t ipmi_posix_os_handler =
@@ -289,7 +283,68 @@ ipmi_posix_get_os_handler(void)
 }
 
 void
+ipmi_posix_free_os_handler(os_handler_t *os_hnd)
+{
+}
+
+void
 ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel)
 {
     os_hnd->internal_data = sel;
+}
+
+selector_t *
+ipmi_posix_os_handler_get_sel(os_handler_t *os_hnd)
+{
+    return os_hnd->internal_data;
+}
+
+os_handler_t *
+ipmi_posix_setup_os_handler(void)
+{
+    os_handler_t *os_hnd;
+    selector_t   *sel;
+    int          rv;
+
+    os_hnd = ipmi_posix_get_os_handler();
+    if (!os_hnd)
+	return NULL;
+
+    rv = sel_alloc_selector(os_hnd, &sel);
+    if (rv) {
+	ipmi_posix_free_os_handler(os_hnd);
+	os_hnd = NULL;
+	goto out;
+    }
+
+    os_hnd->internal_data = sel;
+
+ out:
+    return os_hnd;
+}
+
+int
+ipmi_posix_sel_select(os_handler_t   *os_hnd,
+		      struct timeval *timeout)
+{
+    selector_t *sel = os_hnd->internal_data;
+
+    return sel_select(sel, NULL, 0, NULL, timeout);
+}
+
+void
+ipmi_posix_sel_select_loop(os_handler_t *os_hnd)
+{
+    selector_t *sel = os_hnd->internal_data;
+
+    sel_select_loop(sel, NULL, 0, NULL);
+}
+
+void
+ipmi_posix_cleanup_os_handler(os_handler_t *os_hnd)
+{
+    selector_t *sel = os_hnd->internal_data;
+
+    sel_free_selector(sel);
+    ipmi_posix_free_os_handler(os_hnd);
 }

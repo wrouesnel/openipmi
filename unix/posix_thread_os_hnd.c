@@ -45,13 +45,17 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <string.h>
+#include <signal.h>
 
 #include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_posix.h>
 
-/* This must be provided by the user. */
-void (*ipmi_threaded_posix_vlog)(char *format,
-				 enum ipmi_log_type_e log_type,
-				 va_list ap);
+typedef struct pt_os_hnd_data_s
+{
+    selector_t       *sel;
+    int              wake_sig;
+    struct sigaction oldact;
+} pt_os_hnd_data_t;
 
 
 struct os_hnd_fd_id_s
@@ -97,9 +101,10 @@ add_fd(os_handler_t       *handler,
        os_fd_data_freed_t freed,
        os_hnd_fd_id_t     **id)
 {
-    os_hnd_fd_id_t *fd_data;
-    int            rv;
-    selector_t     *posix_sel = handler->internal_data;
+    os_hnd_fd_id_t   *fd_data;
+    int              rv;
+    pt_os_hnd_data_t *info = handler->internal_data;
+    selector_t       *posix_sel = info->sel;
 
     fd_data = ipmi_mem_alloc(sizeof(*fd_data));
     if (!fd_data)
@@ -127,7 +132,8 @@ add_fd(os_handler_t       *handler,
 static int
 remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
-    selector_t *posix_sel = handler->internal_data;
+    pt_os_hnd_data_t *info = handler->internal_data;
+    selector_t       *posix_sel = info->sel;
 
     sel_set_fd_read_handler(posix_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
     sel_clear_fd_handlers(posix_sel, fd_data->fd);
@@ -201,7 +207,8 @@ alloc_timer(os_handler_t      *handler,
 {
     os_hnd_timer_id_t *timer_data;
     int               rv;
-    selector_t        *posix_sel = handler->internal_data;
+    pt_os_hnd_data_t  *info = handler->internal_data;
+    selector_t        *posix_sel = info->sel;
 
     timer_data = ipmi_mem_alloc(sizeof(*timer_data));
     if (!timer_data)
@@ -254,8 +261,7 @@ sposix_log(os_handler_t         *handler,
     va_list ap;
 
     va_start(ap, format);
-    if (ipmi_threaded_posix_vlog)
-	ipmi_threaded_posix_vlog(format, log_type, ap);
+    posix_vlog(format, log_type, ap);
     va_end(ap);
 }
 
@@ -265,8 +271,8 @@ sposix_vlog(os_handler_t         *handler,
 	    char                 *format,
 	    va_list              ap)
 {
-    if (ipmi_threaded_posix_vlog)
-	ipmi_threaded_posix_vlog(format, log_type, ap);
+    if (posix_vlog)
+	posix_vlog(format, log_type, ap);
 }
 
 struct os_hnd_lock_s
@@ -669,11 +675,115 @@ ipmi_posix_thread_get_os_handler(void)
 	return NULL;
 
     memcpy(rv, &ipmi_posix_thread_os_handler, sizeof(*rv));
+
+    rv->internal_data = ipmi_mem_alloc(sizeof(pt_os_hnd_data_t));
+    if (! rv->internal_data) {
+	ipmi_mem_free(rv);
+	rv = NULL;
+    }
     return rv;
+}
+
+void
+ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd)
+{
+    ipmi_mem_free(os_hnd->internal_data);
+    ipmi_mem_free(os_hnd);
 }
 
 void
 ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel)
 {
-    os_hnd->internal_data = sel;
+    pt_os_hnd_data_t  *info = os_hnd->internal_data;
+
+    info->sel = sel;
+}
+
+selector_t *
+ipmi_posix_thread_os_handler_get_sel(os_handler_t *os_hnd)
+{
+    pt_os_hnd_data_t  *info = os_hnd->internal_data;
+
+    return info->sel;
+}
+
+static void
+posix_thread_sighandler(int sig)
+{
+    /* Nothing to do, sending the sig just wakes up select(). */
+}
+
+os_handler_t *
+ipmi_posix_thread_setup_os_handler(int wake_sig)
+{
+    os_handler_t     *os_hnd;
+    pt_os_hnd_data_t *info;
+    struct sigaction act;
+    int              rv;
+
+    os_hnd = ipmi_posix_thread_get_os_handler();
+    if (!os_hnd)
+	return NULL;
+
+    info = os_hnd->internal_data;
+    info->wake_sig = wake_sig;
+
+    rv = sel_alloc_selector(os_hnd, &info->sel);
+    if (rv) {
+	ipmi_posix_thread_free_os_handler(os_hnd);
+	os_hnd = NULL;
+	goto out;
+    }
+
+    act.sa_handler = posix_thread_sighandler;
+    sigemptyset(&act.sa_mask);
+    act.sa_flags = 0;
+    rv = sigaction(wake_sig, &act, &info->oldact);
+    if (rv) {
+	ipmi_posix_thread_free_os_handler(os_hnd);
+	os_hnd = NULL;
+	goto out;
+    }
+
+ out:
+    return os_hnd;
+}
+
+static void
+posix_thread_send_sig(long thread_id, void *cb_data)
+{
+    pthread_t        *id = (void *) thread_id;
+    pt_os_hnd_data_t *info = cb_data;
+
+    pthread_kill(*id, info->wake_sig);
+}
+
+int
+ipmi_posix_thread_sel_select(os_handler_t   *os_hnd,
+			     struct timeval *timeout)
+{
+    pthread_t        self = pthread_self();
+    pt_os_hnd_data_t *info = os_hnd->internal_data;
+
+    return sel_select(info->sel, posix_thread_send_sig, (long) &self, info,
+		      timeout);
+}
+
+void
+ipmi_posix_thread_sel_select_loop(os_handler_t *os_hnd)
+{
+    pthread_t        self = pthread_self();
+    pt_os_hnd_data_t *info = os_hnd->internal_data;
+
+    sel_select_loop(info->sel, posix_thread_send_sig, (long) &self, info);
+}
+
+void
+ipmi_posix_thread_cleanup_os_handler(os_handler_t *os_hnd)
+{
+    pt_os_hnd_data_t *info = os_hnd->internal_data;
+
+    sigaction(info->wake_sig, &info->oldact, NULL);
+    sel_free_selector(info->sel);
+    ipmi_posix_thread_free_os_handler(os_hnd);
 }

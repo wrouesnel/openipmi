@@ -45,32 +45,76 @@ void posix_vlog(char *format,
 		enum ipmi_log_type_e log_type,
 		va_list ap);
 
-/* Allocate an OS handler.  The selector is not set yet, you must set
-   it with the x_set_sel() call.  It is something like this:
+/* Non-threaded os handler operations */
 
-    os_hnd = ipmi_posix_get_os_handler();
-    if (!os_hnd) {
-	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
-	exit(1);
-    }
+/**********************************************************************
+ * Allocate and set up an OS handler and selector for non-threaded
+ * use.  This is the one you should use unless you have special needs
+ * for the selector.
+ *********************************************************************/
+/* Allocate and configure an OS handler. */
+os_handler_t *ipmi_posix_setup_os_handler(void);
+/* Cleanup and free an OS handler. */
+void ipmi_posix_cleanup_os_handler(os_handler_t *os_hnd);
+/* Calls sel_select() with the proper data. */
+int ipmi_posix_sel_select(os_handler_t   *os_hnd,
+			   struct timeval *timeout);
+/* Calls sel_select_loop() with the proper data. */
+void ipmi_posix_sel_select_loop(os_handler_t *os_hnd);
+/* Gets the selector associated with the OS handler. */
+selector_t *ipmi_posix_os_handler_get_sel(os_handler_t *os_hnd);
 
-    sel_alloc_selector(os_hnd, &sel);
 
-    ipmi_posix_os_handler_set_sel(os_hnd, sel);
-
-    ipmi_init(os_hnd);
-
-   I would prefer a cleaner implementation, but the selector code needs
-   locks that the OS handler provides, the OS handler needs the selector
-   services, and the user may need to allocate their own selector for
-   handling some things.
-*/
-
+/**********************************************************************
+ * Allocate and free an OS handler that uses non-threaded POSIX calls.
+ * These are required if you need to know about your selector ahead of
+ * time.  To use this, do something like:
+ *   os_hnd = ipmi_posix_get_os_handler();
+ *   if (!os_hnd) {
+ *	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
+ *	exit(1);
+ *  }
+ *
+ *  rv = sel_alloc_selector(os_hnd, &sel);
+ *  if (rv)
+ *      handle_error();
+ *
+ *  ipmi_posix_os_handler_set_sel(os_hnd, sel);
+ *
+ *  ipmi_init(os_hnd);
+ *
+ * You only really need to use this in special circumstances.
+ *********************************************************************/
 os_handler_t *ipmi_posix_get_os_handler(void);
+void ipmi_posix_free_os_handler(os_handler_t *os_hnd);
+/* You MUST set the SEL you alloc in the OS handler before you do
+   anything else with the OS handler. */
 void ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel);
 
+
+/**********************************************************************
+ * Allocate and set up an OS handler and selector for hreaded use.
+ * This is the one you should use unless you have special needs for
+ * the selector.
+ *********************************************************************/
+/* Set up a selector.  wake_sig is used to wake up selects when things
+   change and they need to wake up.  It must be some unused signal (it
+   does not have to be queued); a signal handler will be installed for
+   it. */
+os_handler_t *ipmi_posix_thread_setup_os_handler(int wake_sig);
+/* Clean up the threaded selector, including returning the signal to
+   its original state. */
+void ipmi_posix_thread_cleanup_os_handler(os_handler_t *os_hnd);
+/* Calls sel_select() with the proper data. */
+int ipmi_posix_thread_sel_select(os_handler_t   *os_hnd,
+				 struct timeval *timeout);
+/* Calls sel_select_loop() with the proper data. */
+void ipmi_posix_thread_sel_select_loop(os_handler_t *os_hnd);
+/* Gets the selector associated with the OS handler. */
+selector_t *ipmi_posix_thread_os_handler_get_sel(os_handler_t *os_hnd);
+
 os_handler_t *ipmi_posix_thread_get_os_handler(void);
+void ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd);
 void ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd,
 					  selector_t   *sel);
-
 #endif /* __IPMI_POSIX_H */

@@ -13,7 +13,8 @@ ipmisample_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 ipmisample2_SOURCES = sample2.c
 ipmisample2_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
-		$(top_builddir)/unix/libOpenIPMIposix.la
+		$(top_builddir)/unix/libOpenIPMIpthread.la \
+		-lpthread
 
 ipmicmd_SOURCES = ipmicmd.c
 ipmicmd_LDADD = -lpopt $(top_builddir)/utils/libOpenIPMIutils.la \

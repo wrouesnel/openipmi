@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
+#include <signal.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -43,7 +44,6 @@
    every 5 seconds. */
 
 static os_handler_t *os_hnd;
-static selector_t *sel;
 
 static const char *progname;
 
@@ -283,17 +283,11 @@ main(int argc, const char *argv[])
     control_name = argv[3];
 
     /* OS handler allocated first. */
-    os_hnd = ipmi_posix_get_os_handler();
+    os_hnd = ipmi_posix_thread_setup_os_handler(SIGUSR1);
     if (!os_hnd) {
 	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
 	exit(1);
     }
-
-    /* Create selector with os handler. */
-    sel_alloc_selector(os_hnd, &sel);
-
-    /* The OS handler has to know about the selector. */
-    ipmi_posix_os_handler_set_sel(os_hnd, sel);
 
     /* Initialize the OpenIPMI library. */
     ipmi_init(os_hnd);
@@ -306,7 +300,7 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    rv = ipmi_args_setup_con(args, os_hnd, sel, &con);
+    rv = ipmi_args_setup_con(args, os_hnd, NULL, &con);
     if (rv) {
         fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
 	exit(1);
@@ -332,15 +326,15 @@ main(int argc, const char *argv[])
 
     /* This is the main loop of the event-driven program. 
        Try <CTRL-C> to exit the program */ 
-    /* We run the select loop here, this shows how you can use
-       sel_select.  You could add your own processing in this loop. */
-    while (1) {
-	sel_select(sel, NULL, 0, NULL, NULL);
-    }
+    ipmi_posix_thread_sel_select_loop(os_hnd);
+
+    /* Technically, we can't get here, but this is an example. */
+    ipmi_posix_thread_cleanup_os_handler(os_hnd);
+    return 0;
 }
 
 void
-ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
+posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     int do_nl = 1;
 

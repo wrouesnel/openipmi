@@ -1,3 +1,18 @@
+2004-04-30 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_posix.c: Reworked the POSIX os handler to
+	make it easier to use and add helper code for handling threaded
+	wakeups.
+	* unix/posix_os_hnd: ditto
+	* unix/posix_thread_os_hnd: ditto
+
+	* sample/sample1.c: Reworked for the POSIX os handler changes.
+
+	* sample/sample2.c: Reworked for the POSIX os handler changes, and
+	made it multi-threaded.
+
+	* doc/OpenIPMI.texi: Reworked the docs on locking.
+
 2004-04-29 Corey Minyard <cminyard@mvista.com> 
 
 	* everything: A massive rework of the internals.  Basically,

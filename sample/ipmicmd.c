@@ -133,7 +133,7 @@ ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
 }
 
 void
-ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
+posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     vfprintf(stderr, format, ap);
 }

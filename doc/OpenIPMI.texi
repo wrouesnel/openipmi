@@ -457,23 +457,25 @@ However, in general it is a bad idea to hold locks in user callbacks.
 The user might have two domains and do things between them, resulting
 in possible deadlocks.  Because of this, locking strategy has changed
 in OpenIPMI 1.4.  The interfaces and basic usage are completely
-unchanged, but some of the semantics have changed.
+unchanged, but the semantics have changed.
+
+@subsection Locking principles
 
 The basic principle of locking is that if you are in a callback for an
 IPMI object (an IPMI object is passed in the callback), that object is
-refcounted (marked inuse) and the system cannot delete it.  In any
+refcounted (marked in-use) and the system cannot delete it.  In any
 callback for an object owned by a particular domain, that object will
-be and anything it belongs to will be marked in use.  So, for
-instance, in a callback for a sensor, the sensor is in use, the entity
-the sensor belongs to is in use, the management controller the sensor
-is on is in use, and the domain the sensor is in will be in use.  No
+be and anything it belongs to will be marked in-use.  So, for
+instance, in a callback for a sensor, the sensor is in-use, the entity
+the sensor belongs to is in-use, the management controller the sensor
+is on is in-use, and the domain the sensor is in will be in-use.  No
 other sensors, entities, or management controllers will necessarily be
-marked in use.  Outside of callbacks, the library is free to change
+marked in-use.  Outside of callbacks, the library is free to change
 pointers, change information, add and remove objects, or whatever it
 wants to objects.
 
-So how do you mark an IPMI object in use?  If you are handling
-incoming IPMI events you generally don't have to worry about this.
+So how do you mark an IPMI object in-use?  If you are handling
+incoming IPMI callbacks you generally don't have to worry about this.
 But say you are handling outside input, such as a user interface.
 What then?  If the pointers can change, how do I keep a reference to
 something?
@@ -498,7 +500,7 @@ return from the function unless you exit, longjmp, or throw an
 exception that falls through the callback, and you shouldn't do those
 things.
 
-You must do this whether you are using locking or not, because the
+You @emph{must} do this whether you are using locking or not, because the
 library uses this mechanism to determine whether the id you are holding
 is good.  Once it converts the id to the pointer, your pointer is
 guaranteed to be good until the function returns.
@@ -510,6 +512,8 @@ immediately in the same thread of execution, this callback is not
 delayed or spawned off to another thread.  So, for instance, you can
 use data on the stack of the calling function and pass it to the
 callback function to use.
+
+@subsection Locking example
 
 For instance, suppose you have a callback registered with the domain
 for finding when new entities are ready, and you are looking for a
@@ -544,7 +548,7 @@ entity_change(enum ipmi_update_e op,
 @}
 @end example
 
-In this example, the entity is in use in this call, because you have
+In this example, the entity is in-use in this call, because you have
 received a pointer to the entity in the callback.
 
 However, suppose you want to use the entity id later because the user
@@ -601,6 +605,56 @@ check_if_my_entity_present(my_data_t *data)
 
 So, it is recommended that you collect all the static information that
 you need from an object when it is reported to you.
+
+@subsection Locking semantics
+
+As mentioned before, OpenIPMI will not delete an object you have a
+pointer to while in a callback, but in multi-threaded systems it is
+free to do pretty much anything else to the object, including call
+callbacks on it.  This means, for instance, that you can be iterating
+over the entities in the system and a new entity can be added, have
+the entity update callback called on it, and be added to the list.
+There is no guarantee or order between the adding of entities to the
+list and the callback.  So the new entity might be iterated, it might
+not, the iteration might be before or after the the callback, etc.
+
+How can you avoid this?  You have a few options:
+
+@enumerate
+@item Ignore the problem.  I strongly recommend that you do not take this
+option.
+
+@item Single-thread your program.  If you don't need be able to take
+advantage of multiple CPUs in an SMP system, and you have no need for
+priorities, single-threading is a good option.  With OpenIPMI, you can
+have a single-threaded application that is non-blocking and can
+perform very well.  Plus, single-threaded programs are easier to
+debug, easier to understand and maintain, and more reliable.
+
+@item Do your own locking.  OpenIPMI used to hold locks for the user while
+in callbacks.  This is, in general, a bad idea.  OpenIPMI does not
+know what the user is doing.  This can result in deadlocks if the user
+is not careful, and it make it hard for the user to handle multiple
+things@footnote{For instance, if you have two callbacks on two
+sensors, and each of them then did a locking operation on the other
+sensor, you can end up in a deadlock situation where one thread holds
+one lock, another thread holds another lock, and they are both waiting
+for the lock the other is holding}.  Instead, the user must do their
+own locking.  For instance, you could claim a lock in both the entity
+iteration and the callback for a new entity.  This would prevent the
+both pieces of code from running at the same time.  You are in control
+of the locks, so you can handle it as appropriate.  You have to know
+what you are doing, but that goes without saying when doing
+multi-threaded programming.
+
+@end enumerate
+
+Note that this may seen abnormal, but it is pretty standard in
+multi-threaded systems.  HPI, for instance has the same problem.  If
+you have one thread waiting for events from an HPI domain, and another
+iterating the RDRs, or you have two threads each doing operations on
+sensors, you have exactly the same situation.  You have to protect
+yourself with locks the same way.
 
 @node    OpenIPMI Objects, Callbacks, Locking, OpenIPMI Concepts
 @section OpenIPMI Objects
@@ -1996,7 +2050,7 @@ made more fine grained in recent releases.
 Usecounts on objects are what drives most of the locking in the code.
 A lock is claimed, a usecount is incremented, and the object cannot be
 deleted until the usecount goes to zero.  The usecount keeps the
-object from going away while in use.
+object from going away while in-use.
 
 OpenIPMI has one global domains lock that is used to find and modify
 the usecount of domains.  Every domain has an @var{mc_list_lock}, that
