@@ -398,6 +398,7 @@ fetch_complete(ipmi_sdr_info_t *sdrs, int err)
 	sdrs->num_sdrs = sdrs->curr_read_idx+1;
 	sdrs->sdr_array_size = sdrs->num_sdrs;
 	sdrs->sdrs = sdrs->working_sdrs;
+	sdrs->working_sdrs = NULL;
     }
     sdrs->fetch_state = HANDLERS;
     sdr_unlock(sdrs);
@@ -861,6 +862,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
     pinfo.sdrs = sdrs;
     check_and_process_info(NULL, info, &pinfo);
     if (pinfo.processed) {
+	/* Since we may have processed a previous one, check the ones
+	   we have already received that were received out of
+	   order. */
 	ilist_iter(sdrs->process_fetch, check_and_process_info, &pinfo);
     } else {
 	ilist_iter_t iter;
@@ -1272,6 +1276,8 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
 	return 0;
     }
 
+    sdrs->waiting_start_fetch = 0;
+
     if (delay) {
 	/* Start the fetch operation after a random delay. */
 	struct timeval tv;
@@ -1287,22 +1293,21 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
 				  &tv,
 				  restart_timer_cb,
 				  sdrs);
-    }
-
-    sdrs->waiting_start_fetch = 0;
-
-    /* Get a reservation first. */
-    cmd_msg.data = cmd_data;
-    if (sdrs->sensor) {
-	cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
-	cmd_msg.cmd = IPMI_GET_DEVICE_SDR_INFO_CMD;
+	return 0;
     } else {
-	cmd_msg.netfn = IPMI_STORAGE_NETFN;
-	cmd_msg.cmd = IPMI_GET_SDR_REPOSITORY_INFO_CMD;
+	/* Get a reservation first. */
+	cmd_msg.data = cmd_data;
+	if (sdrs->sensor) {
+	    cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+	    cmd_msg.cmd = IPMI_GET_DEVICE_SDR_INFO_CMD;
+	} else {
+	    cmd_msg.netfn = IPMI_STORAGE_NETFN;
+	    cmd_msg.cmd = IPMI_GET_SDR_REPOSITORY_INFO_CMD;
+	}
+	cmd_msg.data_len = 0;
+	return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				    handle_sdr_info, sdrs);
     }
-    cmd_msg.data_len = 0;
-    return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
-				handle_sdr_info, sdrs);
 }
 
 static void

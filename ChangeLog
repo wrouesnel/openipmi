@@ -1,6 +1,14 @@
 
 2003-10-23 Corey Minyard <cminyard@mvista.com>
 
+	* lib/sdr.c: Fixed a bug in the random backof of SDR reading.  On
+	a random backoff, it would also start one immediately, too.  This
+	was bad because it didn't avoid the contention and it was possible
+	to have two SDR readings going on at the same time in the same SDR
+	structure.
+	
+2003-10-23 Corey Minyard <cminyard@mvista.com>
+
 	* lib/domain.c: If a BMC reports through its channels that is does
 	not have an IPMB bus, then force scanning the system address so we
 	will find something useful.
