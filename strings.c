@@ -375,6 +375,12 @@ static char *entity_id_types[] =
     "remote_mgmt_comm_device",
     "external_environment",
     "battery",
+    "processing blade",
+    "connectivity switch",
+    "processor/memory module",
+    "I/O module",
+    "processor I/O module",
+    "management controller firmware",
 };
 #define NUM_ENTITY_ID_TYPES (sizeof(entity_id_types)/sizeof(char *))
 char *
