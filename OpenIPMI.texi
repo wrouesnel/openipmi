@@ -676,7 +676,11 @@ callback, you should register for events with
 means that your callback will receive all events that are not attached
 to a sensor or otherwise handled by something inside OpenIPMI.  If an
 event is attached to a sensor, it will be delivered to a callback
-associated with the sensor.
+associated with the sensor.  Note that you may get events on this
+interface even if they are destined for a sensor, if the sensor doesn't
+have a handler, if the event was not delivered to the user by another
+mechanism.  This is so that the user can know the event exists and needs
+to be deleted.
 
 @node    Entities, Sensors, The BMC, Using OpenIPMI
 @section Entities
@@ -1241,6 +1245,11 @@ handle all events that come through the BMC.  If these functions return
 1, that means the function handled the event and no more handling should
 occur on the event.  If these function return 0, the code will continue
 event handling.
+
+Note that if the OEM code handles an event but doesn't deliver it to the
+user, it should call @code{ipmi_handle_unhandled_event()} so that the
+user can be informed of the event (and thus can delete it if they
+like).
 
 @node    Using IDs in OEM Code, Sensor and Control Operation Queues, Events, How to Write OEM Plugins
 @section Using IDs in OEM Code
