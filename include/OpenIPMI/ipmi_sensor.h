@@ -380,9 +380,12 @@ void ipmi_sensor_get_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs);
 void ipmi_sensor_set_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs);
 
 /* The standard callbacks.  This is read-only, don't change them. */
-extern ipmi_sensor_cbs_t ipmi_standard_sensor_cb;
+extern const ipmi_sensor_cbs_t ipmi_standard_sensor_cb;
 
-void ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info);
+typedef void (*ipmi_sensor_cleanup_oem_info_cb)(ipmi_sensor_t *sensor,
+						void          *oem_info);
+void ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info,
+			      ipmi_sensor_cleanup_oem_info_cb cleanup_handler);
 void *ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor);
 
 /* Operations and callbacks for sensor operations.  Operations on a
@@ -419,13 +422,22 @@ typedef struct ipmi_sensor_op_info_s
     ipmi_msg_t         *__rsp;
 } ipmi_sensor_op_info_t;
 
+/* Add an operation to the sensor operation queue.  If nothing is in
+   the operation queue, the handler will be performed immediately.  If
+   something else is currently being operated on, the operation will
+   be queued until other operations before it have been completed.
+   Then the handler will be called. */
 int ipmi_sensor_add_opq(ipmi_sensor_t         *sensor,
 			ipmi_sensor_op_cb     handler,
 			ipmi_sensor_op_info_t *info,
 			void                  *cb_data);
 
+/* When an operation is completed (even if it fails), this *MUST* be
+   called to cause the next operation to run. */
 void ipmi_sensor_opq_done(ipmi_sensor_t *sensor);
 
+/* Send an IPMI command to a specific MC.  The response handler will
+   be called with the sensor locked. */
 int ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
 			     ipmi_mc_t             *mc,
 			     unsigned int          lun,
@@ -434,6 +446,10 @@ int ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
 			     ipmi_sensor_op_info_t *info,
 			     void                  *cb_data);
 
+/* Send an IPMI command to a specific address on the BMC.  This way,
+   if you don't have an MC to represent the address, you can still
+   send the command.  The response handler will be called with the
+   sensor locked. */
 int ipmi_sensor_send_command_addr(ipmi_mc_t             *bmc,
 				  ipmi_sensor_t         *sensor,
 				  ipmi_addr_t           *addr,
@@ -443,6 +459,7 @@ int ipmi_sensor_send_command_addr(ipmi_mc_t             *bmc,
 				  ipmi_sensor_op_info_t *info,
 				  void                  *cb_data);
 
+/* Custom sensor strings. */
 void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,
 					       char          *str);

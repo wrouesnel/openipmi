@@ -2303,11 +2303,16 @@ ipmi_bmc_oem_new_sensor(ipmi_mc_t     *mc,
 			ipmi_sensor_t *sensor,
 			void          *link)
 {
+    int rv = 0;
+
     CHECK_MC_LOCK(mc);
+
+    ipmi_entity_lock(ent);
     if (mc->new_sensor_handler)
-	return mc->new_sensor_handler(mc, ent, sensor, link,
-				      mc->new_sensor_cb_data);
-    return 0;
+	rv = mc->new_sensor_handler(mc, ent, sensor, link,
+				    mc->new_sensor_cb_data);
+    ipmi_entity_unlock(ent);
+    return rv;
 }
 
 int
@@ -2325,9 +2330,12 @@ void
 ipmi_bmc_oem_new_entity(ipmi_mc_t *bmc, ipmi_entity_t *ent)
 {
     CHECK_MC_LOCK(bmc);
+
+    ipmi_entity_lock(ent);
     if (bmc->bmc->new_entity_handler)
-	return bmc->bmc->new_entity_handler(bmc, ent,
-					    bmc->bmc->new_entity_cb_data);
+	bmc->bmc->new_entity_handler(bmc, ent,
+				     bmc->bmc->new_entity_cb_data);
+    ipmi_entity_unlock(ent);
 }
 
 int

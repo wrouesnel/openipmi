@@ -45,11 +45,20 @@ int ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls);
 /* Destroy a control repository and all the controls in it. */
 int ipmi_controls_destroy(ipmi_control_info_t *controls);
 
-/*
- * These are for OEM code to create their own controls.
- */
-
-/* Uses ipmi_control_op_cb defined in ipmiif.h. */
+/* Operations and callbacks for control operations.  Operations on a
+   control that can be delayed should be serialized (to avoid user
+   confusion and for handling multi-part operations properly), thus
+   each control has an operation queue, only one operation at a time
+   may be running.  If you want to do an operation that requires
+   sending a message and getting a response, you must put that
+   operation into the opq.  When the handler you registered in the opq
+   is called, you can actually perform the operation.  When your
+   operation completes (no matter what, you must call it, even if the
+   operation fails), you must call ipmi_control_opq_done.  The control
+   will be locked properly for your callback.  To handle the control
+   locking for you for command responses, you can send the message
+   with ipmi_control_send_command, it will return the response when it
+   comes in to your handler with the control locked. */
 
 typedef void (*ipmi_control_rsp_cb)(ipmi_control_t *control,
 				    int            err,
@@ -66,13 +75,22 @@ typedef struct ipmi_control_op_info_s
     ipmi_msg_t          *__rsp;
 } ipmi_control_op_info_t;
 
+/* Add an operation to the control operation queue.  If nothing is in
+   the operation queue, the handler will be performed immediately.  If
+   something else is currently being operated on, the operation will
+   be queued until other operations before it have been completed.
+   Then the handler will be called. */
 int ipmi_control_add_opq(ipmi_control_t        *control,
 			ipmi_control_op_cb     handler,
 			ipmi_control_op_info_t *info,
 			void                   *cb_data);
 
+/* When an operation is completed (even if it fails), this *MUST* be
+   called to cause the next operation to run. */
 void ipmi_control_opq_done(ipmi_control_t *control);
 
+/* Send an IPMI command to a specific MC.  The response handler will
+   be called with the control locked. */
 int ipmi_control_send_command(ipmi_control_t        *control,
 			     ipmi_mc_t              *mc,
 			     unsigned int           lun,
@@ -80,6 +98,19 @@ int ipmi_control_send_command(ipmi_control_t        *control,
 			     ipmi_control_rsp_cb    handler,
 			     ipmi_control_op_info_t *info,
 			     void                   *cb_data);
+
+/* Send an IPMI command to a specific address on the BMC.  This way,
+   if you don't have an MC to represent the address, you can still
+   send the command.  The response handler will be called with the
+   control locked. */
+int ipmi_control_send_command_addr(ipmi_mc_t              *bmc,
+				   ipmi_control_t         *control,
+				   ipmi_addr_t            *addr,
+				   unsigned int           addr_len,
+				   ipmi_msg_t             *msg,
+				   ipmi_control_rsp_cb    handler,
+				   ipmi_control_op_info_t *info,
+				   void                   *cb_data);
 
 /* Call the given callback with the control. */
 int ipmi_find_control(ipmi_mc_t       *mc,
@@ -189,7 +220,10 @@ int ipmi_control_get_num(ipmi_control_t *control,
 			 int            *lun,
 			 int            *num);
 
-void ipmi_control_set_oem_info(ipmi_control_t *control, void *oem_info);
+typedef void (*ipmi_control_cleanup_oem_info_cb)(ipmi_control_t *control,
+						 void           *oem_info);
+void ipmi_control_set_oem_info(ipmi_control_t *control, void *oem_info,
+			       ipmi_control_cleanup_oem_info_cb cleanup_handler);
 void *ipmi_control_get_oem_info(ipmi_control_t *control);
 
 /* Can be used by OEM code to replace some or all of the callbacks for

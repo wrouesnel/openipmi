@@ -50,20 +50,22 @@ high-level view of how IPMI is expected to be used.
 @section Things in IPMI
 
 IPMI is a specification for system monitoring.  It monitors entities in
-your system with sensors.  Sensors can generate events, which may be
-stored in a System Event Log (SEL) and forwarded to listening parties.
-Information about the system may be stored in Sensor Data Records
-(SDRs), which hold information about a whole lot more things than
-sensors.  Various Management Controllers (MCs) may exist in the system,
-these are the intelligent devices that control the sensors in the
-system.  The main MC is the Baseboard Management Controller (BMC), it is
-what what the external software interacts with directly, either through
-a system interface, a LAN connection, a serial connection, etc.
+your system with sensors.  Sensors can generate events such as state
+changes or out of range conditions which may be stored in a System Event
+Log (SEL) and forwarded to listening parties.  Information about the
+system may be stored in Sensor Data Records (SDRs), which hold
+information about a whole lot more things than sensors.  Various
+Management Controllers (MCs) may exist in the system, these are the
+intelligent devices that handle the sensors in the system.  The main MC
+is the Baseboard Management Controller (BMC), it is what what the
+external software interacts with directly, through a system
+interface, a LAN connection, a serial connection, etc.  Messages to
+other MCs in the system go through the BMC.
 
 Note that a sensor may be something you don't traditionally think of as
 a sensor.  Beyond standard analog sensors, there are sensors for the
-presence of entities, sensors from buttons, sensors for predictive
-values, and a host of other things.  An MC may generate events as the
+presence of entities, sensors for buttons, sensors for predictive
+failures, and a host of other things.  An MC may generate events as the
 BIOS on the board it's on goes through it's processing.  In general, a
 sensor may be attached to anything that can be sensed or monitored.
 
@@ -96,10 +98,19 @@ entity may be present in the database, but not present in the system,
 the reporting from the BMC only gives the presence in the database, not
 physical presence in the system.
 
+Though the user doesn't have know the inner details of IPMI addressing
+and messaging, they do need to know about entities and sensors.
+OpenIPMI mainly focuses on representing the entities and sensors in
+convenient ways.  The user still needs to understand the capabilities of
+sensors, how the sensors advertise those capabilties, and the things
+that can be done to the sensors.
+
 You may register with an entity to be told when it's physical presence
 in the system changes.  Some devices (like power supplies) are
 field-replacable while the system is running, these are called Field
-Replacable Units (FRUs).
+Replacable Units (FRUs).  They may have sensors that monitor them, but
+those sensors may not be active if the device s not physically present
+in the system.
 
 Sensors are also automatically detected and reported.  This is done
 through entities, you register with an entity to be told when a sensor
@@ -1037,8 +1048,175 @@ iterate through the logs in the local representation of the SEL.
 @node    OpenIPMI Internal Interfaces, How to Write OEM Plugins, Using OpenIPMI, Top
 @chapter OpenIPMI Internal Interfaces
 
+There are a large number of include files that provide internal
+interfaces into OpenIPMI, primarily for OEM code.  The include files are
+described in @xref{Include Files}.
+
+Most of these are described in the OEM code and are relatively simple.
+However, as described in @xref{Sensors}, operations on sensors (and
+controls) are serialized.
+
+Each sensor and control has an operation queue, or opq.  The OEM code
+should use this opq to perform operations that do messaging.  OpenIPMI
+handles the locking for the sensors and controls, so this actually makes
+it more convenient to use.
+
+If OEM code needs to send a command for a sensor, it should use the
+functions defined to do that for sensors and controls.  That way,
+OpenIPMI can handle the locking of the sensor or control for the OEM
+code.
+
+The section in @file{ipmi_sensor.h} named ``Operations and callbacks for
+sensor operations'' and the section in @file{ipmi_control.h} named
+``Operations and callbacks for control operations'' describes this in
+detail.
+
 @node    How to Write OEM Plugins, Debugging Your Application, OpenIPMI Internal Interfaces, Top
 @chapter How to Write OEM Plugins
+
+Many things need to be represented that are not currently part of IPMI.
+That's life, no standard can do everything.  Thus, OEM code needs to be
+written for handling specific MCs.  In general, the MC is the primary
+place that OEM code ties in.
+
+An OEM handler should register itself with the
+@code{ipmi_register_oem_handler()} function.  It registers with a
+manufacturer id and product id.  When an MC with those values is
+detected, the OEM handler supplied in the function is called.  Then the
+OEM handler can perform the functions it needs to do for that MC.
+
+@menu
+* Fixups::
+* Non-Standard Sensors::
+* OEM Controls::
+* Special Strings::
+* Data Conversion::
+* Events::
+* Using IDs in OEM Code::
+@end menu
+
+@node    Fixups, Non-Standard Sensors, How to Write OEM Plugins, How to Write OEM Plugins
+@section Fixups
+
+Well, it happens.  Some bit is set wrong in the MC, or in a sensor SDR,
+and that screws things up.  OEM code can directly fix values in the MC
+using the calls in @file{ipmi_mc.h}.
+
+For sensors, the OEM code can register to be told when new sensors are
+added via the @code{ipmi_mc_set_oem_new_sensor_handler()} function.  It
+should do this in the main OEM callback.  Every sensor that comes from
+that MC will be supplied as it is detected from the device SDRs.  The
+OEM code can then fix values in the code.  Note that any sensors from
+the main SDR repository that are not for the BMC will not be called this
+way, since they will already exist.  If these exist, the OEM code will
+have to scan the existing sensors and fix them up.
+
+Entities and entity relationships, as well, may need fixups.  You can
+register with a BMC to be told when new entities are added with the
+@code{ipmi_bmc_set_oem_new_entity_handler()} function.
+
+You can also register with a bmc to be told when new MCs are added to
+the system.  As OpenIPMI scans the IPMB (assuming that the OEM code
+hasn't turned off bus scanning with @code{ipmi_bmc_set_full_bus_scan()})
+it will detect MCs and start scanning them for entities and sensors.
+The function @code{ipmi_bmc_set_oem_new_mc_handler()} lets the OEM code
+get a first shot at new MCs.
+
+@node    Non-Standard Sensors, OEM Controls, Fixups, How to Write OEM Plugins
+@section Non-Standard Sensors
+
+Some sensors may not be properly represented in the SDR, or perhaps
+there's some sensor on the I2C bus that doesn't have an MC managing it,
+or perhaps a sensor that is accessed in a non-standard way.  Although
+this is not how IPMI is supposed to work, OEM code can handle this and
+represent these sensors as though they were standard IPMI sensors.
+
+During the process of adding sensors and entities, the OEM code should
+claim the entity lock in the MC using @code{ipmi_mc_entity_lock()}, and
+unlock it with @code{ipmi_mc_entity_unlock()} to keep the entity list from
+changin while this is happening.
+
+If the entity that holds the sensor doesn't exist, you will need to
+create it with @code{ipmi_entity_add()}.  It should create any
+parent-child relationships as required using
+@code{ipmi_entity_add_child()}.  If the entity already exists, it needs
+to be found, and a lock for the entity needs to be held.
+
+OEM code can allocate a sensor using
+@code{ipmi_sensor_alloc_nonstandard()}, then fill in all the values for
+the sensor.  Sensor functions that need to send messages are
+polymorphic, the @var{ipmi_sensor_cbs_t} structure defines all the
+functions for a sensor.  You can fetch the current callbacks with
+@code{ipmi_sensor_get_callbacks()}, change them, then set them with
+@code{ipmi_sensor_set_callbacks()}.  The sensor will keep a copy of the
+callbacks, so you don't have to allocate or manage this data.  This way,
+you can supply your own version of these callbacks and override the
+standard functions.
+
+Sensors have an OEM pointer that the OEM code can use, the functions
+@code{ipmi_sensor_set_oem_info()} and @code{ipmi_sensor_get_oem_info()}
+set and retrieve this value.  A cleanup handler may be provided, if not
+NULL this will be called with the sensor and OEM info when the sensor is
+destroyed.
+
+After the sensor has been set up, it can be added to the MC with
+@code{ipmi_sensor_add_nonstandard()}.  These sensors are added in as LUN
+4 to separate them from the normal sensors.  You must provide the entity
+for the sensor, the MC it belongs to, and a sensor number.  The sensor
+number is important, if you need to create an ID for the sensor (as
+described in @xref{Using IDs in OEM Code}.) you need to be able to
+determine the number for the sensor.  You may also provide a handler to
+be called when the sensor is destroyed.
+
+@node    OEM Controls, Special Strings, Non-Standard Sensors, How to Write OEM Plugins
+@section OEM Controls
+
+Because IPMI doesn't define output devices, all controls are
+non-standard.  But they still need to be represented.  Controls work
+just like sensors as defined in @xref{Non-Standard Sensors}, see that
+for details on how to add your own sensors.
+
+@node    Special Strings, Data Conversion, OEM Controls, How to Write OEM Plugins
+@section Special Strings
+
+As described in @xref{Fixups}, sensors can be detected as they are added
+to the local database.  If the sensor is an OEM type, has it's own
+units, or whatever, they can set their own strings for
+these values.  The functions are defined in ``Custom sensor strings''.
+
+Also, custom offsets may also have their own strings defined.  You must
+override the @var{ipmi_sensor_reading_name_string} in the sensor
+callbacks and provde you own function to convert the readings to
+strings.
+
+@node    Data Conversion, Events, Special Strings, How to Write OEM Plugins
+@section Data Conversion
+
+As described in @xref{Fixups}, sensors can be detected as they are added
+to the local database.  If a sensor has a custom data conversion
+function, it can provide a converter by overriding the
+@var{ipmi_sensor_convert_from_raw} and @var{ipmi_sensor_convert_to_raw}
+variables in the sensor callbacks.
+
+@node    Events, Using IDs in OEM Code, Data Conversion, How to Write OEM Plugins
+@section Events
+
+An MC may also send custom events that might need to be handled.  The
+@code{ipmi_mc_set_oem_event_handler()} will receive events that come
+from the MC.  The call @code{ipmi_bmc_set_oem_event_handler()} will
+handle all events that come through the BMC.  If these functions return
+1, that means the function handled the event and no more handling should
+occur on the event.  If these function return 0, the code will continue
+event handling.
+
+@node    Using IDs in OEM Code, , Events, How to Write OEM Plugins
+@section Using IDs in OEM Code
+
+OEM code may need to be able to create your own IDs to lock an entity.
+For instance, if a custom even comes in and a lock need to be claimed
+for an object, it may fill in an id structure.  The @file{ipmi_types.h}
+file holds the definitions for these structures, they need to be filled
+out completely.
 
 @node    Debugging Your Application, Internals, How to Write OEM Plugins, Top
 @chapter Debugging Your Application

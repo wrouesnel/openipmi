@@ -2362,6 +2362,18 @@ ipmi_entity_pointer_cb(ipmi_entity_id_t id,
     return rv;
 }
 
+void
+ipmi_entity_lock(ipmi_entity_t *ent)
+{
+    ipmi_mc_entity_lock(ent->bmc);
+}
+
+void
+ipmi_entity_unlock(ipmi_entity_t *ent)
+{
+    ipmi_mc_entity_unlock(ent->bmc);
+}
+
 #ifdef IPMI_CHECK_LOCKS
 void
 __ipmi_check_entity_lock(ipmi_entity_t *entity)

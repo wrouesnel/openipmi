@@ -1,4 +1,23 @@
 
+2003-01-09 Corey Minyard <cminyard@mvista.com>
+
+	* OpenIPMI.texi: More work on docs.
+	* include/OpenIPMI/ipmi_control.h: ditto
+	* include/OpenIPMI/ipmi_sensor.h: ditto
+
+	* include/OpenIPMI/ipmi_control.h, control.c: Added a missing
+	ipmi_control_send_command_addr() function.
+
+	* include/OpenIPMI/ipmi_control.h, control.c: Added a cleanup
+	handler for the OEM info.
+	* include/OpenIPMI/ipmi_sensor.h, sensor.c: ditto
+
+	* entity.c, mc.c: Added an entity-specific lock, and used it where
+	entities were specifically being locked.
+
+	* ipmi_sensor.c, sensor.c: Made the sensor callbacks const.
+	
+
 2003-01-08 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.texi: More work on docs.

@@ -173,7 +173,8 @@ struct ipmi_sensor_s
     ipmi_sensor_cbs_t cbs;
 
     /* OEM info */
-    void *oem_info;
+    void                            *oem_info;
+    ipmi_sensor_cleanup_oem_info_cb oem_info_cleanup_handler;
 
     ipmi_sensor_destroy_cb destroy_handler;
     void                   *destroy_handler_cb_data;
@@ -285,6 +286,9 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
 {
     if (sensor->destroy_handler)
 	sensor->destroy_handler(sensor, sensor->destroy_handler_cb_data);
+
+    if (sensor->oem_info_cleanup_handler)
+	sensor->oem_info_cleanup_handler(sensor, sensor->oem_info);
 
     opq_destroy(sensor->waitq);
     free(sensor);
@@ -3884,7 +3888,7 @@ stand_ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset)
 				 offset);
 }
 
-ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
+const ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
 {
     .ipmi_sensor_events_enable_set = stand_ipmi_sensor_events_enable_set,
     .ipmi_sensor_events_enable_get = stand_ipmi_sensor_events_enable_get,
@@ -4086,9 +4090,11 @@ ipmi_sensor_set_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs)
 }
 
 void
-ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info)
+ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info,
+			 ipmi_sensor_cleanup_oem_info_cb cleanup_handler)
 {
     sensor->oem_info = oem_info;
+    sensor->oem_info_cleanup_handler = cleanup_handler;
 }
 
 void *

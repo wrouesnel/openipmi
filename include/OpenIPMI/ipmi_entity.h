@@ -206,4 +206,8 @@ void ipmi_entity_set_sensor_device(ipmi_entity_t *ent,
 				   int           val);
 void ipmi_entity_set_entity_id_string(ipmi_entity_t *ent, char *str);
 
+/* Locks for the entity. */
+void ipmi_entity_lock(ipmi_entity_t *ent);
+void ipmi_entity_unlock(ipmi_entity_t *ent);
+
 #endif /* _IPMI_ENTITY_H */

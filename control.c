@@ -95,7 +95,9 @@ struct ipmi_control_s
     ipmi_control_cbs_t cbs;
     opq_t *waitq;
 
-    void *oem_info;
+    void                             *oem_info;
+    ipmi_control_cleanup_oem_info_cb oem_info_cleanup_handler;
+
     ipmi_control_destroy_cb destroy_handler;
     void                    *destroy_handler_cb_data;
 };
@@ -179,6 +181,9 @@ control_final_destroy(ipmi_control_t *control)
     if (control->destroy_handler)
 	control->destroy_handler(control,
 				 control->destroy_handler_cb_data);
+
+    if (control->oem_info_cleanup_handler)
+	control->oem_info_cleanup_handler(control, control->oem_info);
 
     opq_destroy(control->waitq);
     free(control);
@@ -313,7 +318,7 @@ control_rsp_handler(ipmi_mc_t  *mc,
 }
 			 
 int
-ipmi_control_send_command(ipmi_control_t        *control,
+ipmi_control_send_command(ipmi_control_t         *control,
 			  ipmi_mc_t              *mc,
 			  unsigned int           lun,
 			  ipmi_msg_t             *msg,
@@ -331,6 +336,30 @@ ipmi_control_send_command(ipmi_control_t        *control,
     info->__cb_data = cb_data;
     info->__rsp_handler = handler;
     rv = ipmi_send_command(mc, lun, msg, control_rsp_handler, info);
+    return rv;
+}
+
+int
+ipmi_control_send_command_addr(ipmi_mc_t              *bmc,
+			       ipmi_control_t         *control,
+			       ipmi_addr_t            *addr,
+			       unsigned int           addr_len,
+			       ipmi_msg_t             *msg,
+			       ipmi_control_rsp_cb    handler,
+			       ipmi_control_op_info_t *info,
+			       void                   *cb_data)
+{
+    int rv;
+
+    CHECK_MC_LOCK(bmc);
+    CHECK_CONTROL_LOCK(control);
+
+    info->__control = control;
+    info->__control_id = ipmi_control_convert_to_id(control);
+    info->__cb_data = cb_data;
+    info->__rsp_handler = handler;
+    rv = ipmi_bmc_send_command_addr(bmc, addr, addr_len,
+				    msg, control_rsp_handler, info);
     return rv;
 }
 
@@ -686,9 +715,11 @@ ipmi_control_get_entity(ipmi_control_t *control)
 }
 
 void
-ipmi_control_set_oem_info(ipmi_control_t *control, void *oem_info)
+ipmi_control_set_oem_info(ipmi_control_t *control, void *oem_info,
+			  ipmi_control_cleanup_oem_info_cb cleanup_handler)
 {
     control->oem_info = oem_info;
+    control->oem_info_cleanup_handler = cleanup_handler;
 }
 
 void *
