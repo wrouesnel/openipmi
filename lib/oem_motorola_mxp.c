@@ -225,6 +225,7 @@ struct mxp_info_s {
     ipmi_control_t *chassis_id;
     ipmi_control_t *chassis_type_control;
     ipmi_control_t *sys_led;
+    ipmi_control_t *relays;
 
     domain_up_info_t *con_ch_info;
 
@@ -417,7 +418,7 @@ mxp_3u_to_6u_addr(mxp_info_t *mxpinfo, int addr)
 }
 
 static int
-fix_led_addr(mxp_info_t *mxpinfo, int addr)
+fix_led_addr(mxp_info_t *mxpinfo, int addr, int amc_idx)
 {
     /* For the 6U chassis, the IPMB addresses used for setting LED
        values are wrong and we have to recalculate it. */
@@ -434,7 +435,7 @@ fix_led_addr(mxp_info_t *mxpinfo, int addr)
 	else
 	    addr -= 6;
     } else if (addr == 0x20) {
-	addr = 0xea;
+	addr = 0xea + (amc_idx * 2);
     }
 
     return addr;
@@ -1837,10 +1838,164 @@ sys_led_get(ipmi_control_t      *control,
     return rv;
 }
 
+static void
+relay_set_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    mxp_info_t         *info = control_info->idinfo;
+    ipmi_msg_t         msg;
+    unsigned char      data[4];
+    int                rv;
+
+    if (err) {
+	if (control_info->done_set)
+	    control_info->done_set(control, err, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_SET_RELAYS_CMD;
+    msg.data_len = 4;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    data[3] = control_info->vals[0];
+
+    rv = ipmi_control_send_command(control, info->mc, 0,
+				   &msg, mxp_control_set_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+relay_set(ipmi_control_t     *control,
+	  int                *val,
+	  ipmi_control_op_cb handler,
+	  void               *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_info_t           *info = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = ipmi_mem_alloc(sizeof(*control_info));
+    if (!control_info)
+	return ENOMEM;
+    control_info->idinfo = info;
+    control_info->done_set = handler;
+    control_info->cb_data = cb_data;
+    control_info->vals[0] = ((val[0] & 1) | ((val[1] & 1) << 1)
+			     | ((val[2] & 1) << 2) | ((val[3] & 1) << 3));
+    rv = ipmi_control_add_opq(control, relay_set_start,
+			     &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
+static void
+relay_get_done(ipmi_control_t *control,
+	       int            err,
+	       ipmi_msg_t     *rsp,
+	       void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    int                val[4];
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, 0, control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "relay_get_done: Received IPMI error: %x",
+		 rsp->data[0]);
+	if (control_info->done_get)
+	    control_info->done_get(control,
+				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
+				   NULL, control_info->cb_data);
+	goto out;
+    }
+
+    val[0] = (rsp->data[4] >> 0) & 0x1;
+    val[1] = (rsp->data[4] >> 1) & 0x1;
+    val[2] = (rsp->data[4] >> 2) & 0x1;
+    val[3] = (rsp->data[4] >> 3) & 0x1;
+    if (control_info->done_get)
+	control_info->done_get(control, 0, val, control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+relay_get_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_info_t           *info = hdr->data;
+    mxp_control_info_t   *control_info = cb_data;
+    int                  rv;
+    ipmi_msg_t           msg;
+    unsigned char        data[3];
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, 0, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_RELAYS_CMD;
+    msg.data_len = 3;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    rv = ipmi_control_send_command(control, info->mc, 0,
+				   &msg, relay_get_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_get)
+	    control_info->done_get(control, rv, 0, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+relay_get(ipmi_control_t      *control,
+	  ipmi_control_val_cb handler,
+	  void                *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_info_t           *info = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = ipmi_mem_alloc(sizeof(*control_info));
+    if (!control_info)
+	return ENOMEM;
+    control_info->idinfo = info;
+    control_info->done_get = handler;
+    control_info->cb_data = cb_data;
+    rv = ipmi_control_add_opq(control, relay_get_start,
+			     &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
 /* Control numbers for the MC number field. */
 #define MXP_SYS_LED_CONTROL_NUM		1
 #define MXP_CHASSIS_ID_CONTROL_NUM	2
 #define MXP_CHASSIS_TYPE_CONTROL_NUM	3
+#define MXP_RELAY_CONTROL_NUM	        4
 
 static int
 mxp_add_chassis_sensors(mxp_info_t *info)
@@ -1895,6 +2050,19 @@ mxp_add_chassis_sensors(mxp_info_t *info)
     control_cbs.set_identifier_val = chassis_type_set;
     control_cbs.get_identifier_val = chassis_type_get;
     ipmi_control_set_callbacks(info->chassis_type_control, &control_cbs);
+
+    /* Now the relays. */
+    rv = mxp_alloc_control(info->mc, info->chassis_ent,
+			   MXP_RELAY_CONTROL_NUM,
+			   info,
+			   IPMI_CONTROL_RELAY,
+			   "Telco Relays",
+			   relay_set,
+			   relay_get,
+			   &(info->relays));
+    if (rv)
+	goto out_err;
+    ipmi_control_set_num_elements(info->relays, 4);
 
  out_err:
     return rv;
@@ -3144,6 +3312,19 @@ board_presence_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 
     if (binfo->is_amc) {
 	int i = binfo->idx - MXP_ALARM_CARD_IDX_OFFSET;
+	ipmi_system_interface_addr_t si;
+	ipmi_mc_t                    *mc;
+
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = i;
+	si.lun = 0;
+	mc = _ipmi_find_mc_by_addr(binfo->info->domain,
+				   (ipmi_addr_t *) &si, sizeof(si));
+	if (mc)
+	    binfo->info->amc_present[i] = 1;
+	else 
+	    binfo->info->amc_present[i] = 0;
+	
 	if (binfo->info->amc_present[i])
 	    ipmi_set_state(&states, 0, 1); /* present */
 	else
@@ -3224,7 +3405,8 @@ board_led_set_start(ipmi_control_t *control, int err, void *cb_data)
     msg.data_len = 6;
     msg.data = data;
     add_mfg_id(data, binfo->info);
-    data[3] = fix_led_addr(info, binfo->ipmb_addr);
+    data[3] = fix_led_addr(info, binfo->ipmb_addr,
+			   binfo->idx - MXP_ALARM_CARD_IDX_OFFSET);
     if (control == binfo->oos_led)
 	data[4] = 1;
     else
@@ -3684,8 +3866,13 @@ mxp_find_board_by_addr(mxp_info_t *info, unsigned int slave_addr)
     int i;
 
     if (slave_addr == 0xea) {
-	/* The BMC reports itself as 0xea */
+	/* The amc1 reports itself as 0xea */
 	return &(info->board[MXP_ALARM_CARD_IDX_OFFSET]);
+    }
+
+    if (slave_addr == 0xec) {
+	/* The amc2 reports itself as 0xec */
+	return &(info->board[MXP_ALARM_CARD_IDX_OFFSET+1]);
     }
 
     for (i=0; i<MXP_TOTAL_BOARDS; i++) {
@@ -4351,6 +4538,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     
     ipmi_control_destroy(info->chassis_id);
     ipmi_control_destroy(info->chassis_type_control);
+    ipmi_control_destroy(info->relays);
     ipmi_control_destroy(info->sys_led);
 
     ipmi_domain_remove_con_change_handler(domain, info->con_ch_info->con_chid);
@@ -4371,7 +4559,8 @@ static void
 amc_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
-    mxp_info_t          *info = hdr->data;
+    mxp_board_t         *binfo = hdr->data;
+    mxp_info_t          *info = binfo->info;
     amc_presence_info_t                   *pinfo = cb_data;
     ipmi_sensor_discrete_event_handler_cb handler;
     void                                  *h_cb_data;
@@ -4469,9 +4658,6 @@ con_up_handler(ipmi_domain_t *domain,
 #define MXP_2_5V_SENSOR_NUM	4
 #define MXP_8V_SENSOR_NUM	5
 
-/* Controls for the AMC.  These come after normal board controls. */
-#define MXP_RELAY_CONTROL_NUM	4
-
 typedef struct amc_info_s
 {
     ipmi_mc_t     *mc;
@@ -4486,7 +4672,6 @@ typedef struct amc_info_s
 
     /* The controls. */
     ipmi_control_t *blue_led;
-    ipmi_control_t *relays;
 } amc_info_t;
 
 static void
@@ -4634,158 +4819,6 @@ mxp_voltage_reading_get_cb(ipmi_sensor_t        *sensor,
 }
 
 static void
-relay_set_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    amc_info_t         *info = control_info->idinfo;
-    ipmi_msg_t         msg;
-    unsigned char      data[4];
-    int                rv;
-
-    if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_SET_RELAYS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = control_info->vals[0];
-
-    rv = ipmi_control_send_command(control, info->mc, 0,
-				   &msg, mxp_control_set_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
-static int
-relay_set(ipmi_control_t     *control,
-	  int                *val,
-	  ipmi_control_op_cb handler,
-	  void               *cb_data)
-{
-    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    amc_info_t           *info = hdr->data;
-    mxp_control_info_t   *control_info;
-    int                  rv;
-
-    control_info = ipmi_mem_alloc(sizeof(*control_info));
-    if (!control_info)
-	return ENOMEM;
-    control_info->idinfo = info;
-    control_info->done_set = handler;
-    control_info->cb_data = cb_data;
-    control_info->vals[0] = ((val[0] & 1) | ((val[1] & 1) << 1)
-			     | ((val[2] & 1) << 2) | ((val[3] & 1) << 3));
-    rv = ipmi_control_add_opq(control, relay_set_start,
-			     &(control_info->sdata), control_info);
-    if (rv)
-	ipmi_mem_free(control_info);
-    return rv;
-}
-
-static void
-relay_get_done(ipmi_control_t *control,
-	       int            err,
-	       ipmi_msg_t     *rsp,
-	       void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-    int                val[4];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "relay_get_done: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->done_get)
-	    control_info->done_get(control,
-				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
-				   NULL, control_info->cb_data);
-	goto out;
-    }
-
-    val[0] = (rsp->data[4] >> 0) & 0x1;
-    val[1] = (rsp->data[4] >> 1) & 0x1;
-    val[2] = (rsp->data[4] >> 2) & 0x1;
-    val[3] = (rsp->data[4] >> 3) & 0x1;
-    if (control_info->done_get)
-	control_info->done_get(control, 0, val, control_info->cb_data);
- out:
-    ipmi_mem_free(control_info);
-}
-
-static void
-relay_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    amc_info_t           *info = hdr->data;
-    mxp_control_info_t   *control_info = cb_data;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[3];
-
-    if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_RELAYS_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, info->mc, 0,
-				   &msg, relay_get_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, 0, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
-static int
-relay_get(ipmi_control_t      *control,
-	  ipmi_control_val_cb handler,
-	  void                *cb_data)
-{
-    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    amc_info_t           *info = hdr->data;
-    mxp_control_info_t   *control_info;
-    int                  rv;
-
-    control_info = ipmi_mem_alloc(sizeof(*control_info));
-    if (!control_info)
-	return ENOMEM;
-    control_info->idinfo = info;
-    control_info->done_get = handler;
-    control_info->cb_data = cb_data;
-    rv = ipmi_control_add_opq(control, relay_get_start,
-			     &(control_info->sdata), control_info);
-    if (rv)
-	ipmi_mem_free(control_info);
-    return rv;
-}
-
-static void
 amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     amc_info_t *info = cb_data;
@@ -4799,7 +4832,6 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     ipmi_sensor_destroy(info->s3_3v);
     ipmi_sensor_destroy(info->s2_5v);
     ipmi_sensor_destroy(info->s8v);
-    ipmi_control_destroy(info->relays);
     ipmi_control_destroy(info->blue_led);
 
 out:
@@ -4944,19 +4976,6 @@ amc_board_handler(ipmi_mc_t *mc)
 				    &(info->s8v));
     if (rv)
 	goto out_err;
-
-    /* Now the relays. */
-    rv = mxp_alloc_control(mc, info->ent,
-			   MXP_RELAY_CONTROL_NUM,
-			   info,
-			   IPMI_CONTROL_RELAY,
-			   "Telco Relays",
-			   relay_set,
-			   relay_get,
-			   &(info->relays));
-    if (rv)
-	goto out_err;
-    ipmi_control_set_num_elements(info->relays, 4);
 
     rv = ipmi_mc_set_oem_removed_handler(mc, amc_removal_handler, info);
     if (rv) {

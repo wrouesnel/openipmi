@@ -129,6 +129,21 @@ int ipmi_add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
 /* Remove an MC from the list of MCs in the domain. */
 int ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
+/* Register a handler to be called when an MC is added to the domain
+   or removed from the domain. */
+typedef struct ipmi_domain_mc_upd_s ipmi_domain_mc_upd_t;
+typedef void (*ipmi_domain_mc_upd_cb)(ipmi_domain_t *domain,
+				      int           added,
+				      ipmi_mc_t     *mc,
+				      void          *cb_data);
+int ipmi_domain_register_mc_upd_handler(ipmi_domain_t         *domain,
+					ipmi_domain_mc_upd_cb handler,
+					void                  *cb_data,
+					ipmi_domain_mc_upd_t  **id);
+
+void ipmi_domain_remove_mc_upd_handler(ipmi_domain_t        *domain,
+				       ipmi_domain_mc_upd_t *id);
+
 /* Call any OEM handlers for the given MC. */
 int _ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
@@ -140,6 +155,12 @@ void ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 			     unsigned int   end_addr,
                              ipmi_domain_cb done_handler,
 			     void           *cb_data);
+
+/* Scan a system interface address for an MC. */
+void ipmi_start_si_scan(ipmi_domain_t *domain,
+			int            si_num,
+			ipmi_domain_cb done_handler,
+			void           *cb_data);
 
 /* Add an IPMB address to a list of addresses to not scan.  This way,
    if you have weak puny devices in IPMB that will break if you do

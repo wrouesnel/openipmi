@@ -100,6 +100,14 @@ typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t   *ipmi,
    fills this out then calls ipmi_init_con() with the connection. */
 struct ipmi_con_s
 {
+    /* If this is zero, the domain handling code will not attempt to
+       scan the system interface address of the connection.  If 1, it
+       will.  Generally, if the system interface will respond on a
+       IPMB address, you should set this to zero.  If it does not
+       respond on an IPMB, you should set this to one if it is a
+       management controller. */
+    int scan_sysaddr;
+
     /* The low-level handler should provide one of these for doing os-type
        things (locks, random numbers, etc.) */
     os_handler_t *os_hnd;

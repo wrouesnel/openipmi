@@ -3088,6 +3088,30 @@ reconnect_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static void
+presence_cmder(ipmi_domain_t *domain, void *cb_data)
+{
+    int rv;
+
+    rv = ipmi_detect_domain_presence_changes(domain, 1);
+    if (rv)
+	cmd_win_out("domain presence detect error: %x\n", rv);
+}
+
+int
+presence_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int rv;
+
+    rv = ipmi_domain_pointer_cb(domain_id, presence_cmder, NULL);
+    if (rv) {
+	cmd_win_out("Unable to convert domain id to a pointer\n");
+	return 0;
+    }
+    
+    return 0;
+}
+
 static int
 quit_cmd(char *cmd, char **toks, void *cb_data)
 {
@@ -3173,6 +3197,8 @@ static struct {
       " <ipmb addr> - scan an IPMB to add or remove it" },
     { "quit",  quit_cmd,
       " - leave the program" },
+    { "check_presence", presence_cmd,
+      " - Check the presence of entities" },
     { "reconnect",  reconnect_cmd,
       " - scan an IPMB to add or remove it" },
     { "display_win",  display_win_cmd,

@@ -1,4 +1,39 @@
 
+2003-07-31 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Added a way to
+	monitor management controllers as they are added and deleted.
+
+	* lib/domain.c: Minor cleanups for handling the new MXP style of
+	addressing.
+
+	* lib/oem_motorola_mxp.c: Added monitoring for the AMC card.
+
+	* lib/oem_motorola_mxp.c: Split the AMC card handling up to
+	completely rework the way the AMCs are handled.  The 0x20 address
+	points to the current AMC.  Addresses (f 0) and (f 1) point to the
+	individual AMCs.
+	* lib/oem_motorola_mxp_intf.c: ditto
+
+2003-07-30 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_motorola_mxp.c: Made board entity instances start at one
+	instead of zero.
+
+	* lib/oem_motorola_mxp.c: Fixed power supply events to not use the
+	slave address of the power supply when translating events.
+
+	* lib/ipmi_lan.c, lib/oem_motorola_mxp_intf.c: Modified the lan
+	connections to make a connection for each IP address instead of
+	sharing a connection between IP addresses.  Not all boxes support
+	sharing a connection between IP addresses.
+
+	* lib/domain.c: Fixed a problem handling 
+	
+	* lib/ipmi_lan.c, lib/oem_motorola_mxp_intf.c: Fixed a problem
+	where the connection state wouldn't change if only the active
+	value changed and not the IPMB address.
+
 2003-07-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_motorola_mxp.c: Fixed a few little things required
