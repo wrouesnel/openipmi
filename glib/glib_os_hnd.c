@@ -237,13 +237,23 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
 {
 #if GLIB_MAJOR_VERSION < 2
     int fd = open("/dev/urandom", O_RDONLY);
-    int rv;
+    int rv = 0;
 
     if (fd == -1)
 	return errno;
 
-    rv = read(fd, data, len);
+    while (len > 0) {
+	rv = read(fd, data, len);
+	if (rv < 0) {
+	    rv = errno;
+	    goto out;
+	}
+	len -= rv;
+    }
 
+    rv = 0;
+
+ out:
     close(fd);
     return rv;
 #else
@@ -296,6 +306,11 @@ get_vlog_data(void)
 	rv = g_malloc(sizeof(*rv));
 	if (rv) {
 	    memset(rv, 0, sizeof(*rv));
+	    rv->data = g_malloc(1024);
+	    if (rv->data)
+		rv->len = 1024;
+	    else
+		rv->len = 0;
 	    g_static_private_set(&vlog_private, rv, vlog_data_destroy);
 	}
     }
@@ -316,7 +331,7 @@ add_vlog_data(vlog_data_t *info,
 	int  new_size;
 
 	new_size = info->len + 64;
-	while (new_size < (info->curr + info->len))
+	while (new_size < (len + info->curr))
 	    new_size += 64;
 
 	nd = g_malloc(new_size);
@@ -325,8 +340,9 @@ add_vlog_data(vlog_data_t *info,
 	if (info->data) {
 	    memcpy(nd, info->data, info->curr);
 	    g_free(info->data);
-	    info->data = nd;
 	}
+	info->data = nd;
+	info->len = new_size;
 	len = vsnprintf(info->data+info->curr, info->len-info->curr,
 			format, ap);
     }

@@ -2523,7 +2523,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 
 /* A hack, don't want this in include files. */
 int _ipmi_lan_set_ipmi(ipmi_con_t *old, ipmi_con_t *new);
-void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv);
+void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv, int addr_num);
 
 static void
 switchover_con_finish(void *cb_data, os_hnd_timer_id_t *id)
@@ -2608,7 +2608,7 @@ handle_dev_id(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
 	err = ipmi->start_con(ipmi);
 	if (err)
-	    _ipmi_lan_handle_connected(ipmi, err);
+	    _ipmi_lan_handle_connected(ipmi, err, addr_num);
 	goto out;
     } else {
 	/* It's an old MXP, stick with the old connection. */

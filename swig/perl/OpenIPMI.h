@@ -40,3 +40,7 @@ typedef struct swig_ref
 
 swig_ref swig_make_ref(void *item, char *name);
 void swig_free_ref(swig_ref ref);
+
+/* Make a reference whose destructor will be called when everything
+   is done with it. */
+swig_ref swig_make_ref_destruct(void *item, char *class);

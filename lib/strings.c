@@ -37,6 +37,17 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmiif.h>
 
+char *
+ipmi_update_e_string(enum ipmi_update_e val)
+{
+    switch (val) {
+    case IPMI_ADDED: return "added";
+    case IPMI_DELETED: return "deleted";
+    case IPMI_CHANGED: return "changed";
+    default: return "invalid";
+    }
+}
+
 static char *hysteresis_support_types[] =
 {
     "none",

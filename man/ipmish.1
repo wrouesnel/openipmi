@@ -21,30 +21,30 @@ enter commands to make connections to domains.
 
 .SH OPTIONS
 .TP
-.B "\-dmsg"
+.B "\--dmsg"
 Turn on message debugging, this will dump all messages to debug log output.
 .TP
-.B "\-drawmsg"
+.B "\--drawmsg"
 Turn on raw message debugging, this will dump all low-level messages to
 debug log output.  This differes from normal message debugging in that all
 protocol messages are also dumped, not just IPMI messages.
 .TP
-.B "\-dmem"
+.B "\--dmem"
 Turn on memory debugging, this will cause memory allocation and
 deallocations to be checked.  When the program terminates, it will
 dump all memory that was not properly freed (leaked).
 .TP
-.B "\-dlock"
+.B "\--dlock"
 Turn on lock debugging, this will check lock operations to make sure
 that locks are help in all the proper places and make sure that locks
 are properly nested.
 .TP
-.B "\-snmp"
+.B "\--snmp"
 Enable the SNMP trap handler.
 .B ipmish
 must be compiled with SNMP code enabled for this option to be available.
 .TP
-.B "\-help"
+.B "\--help"
 Help output
 
 .SH COMMANDS
@@ -66,10 +66,16 @@ Read and execute commands from the given file.
 .TP
 .B exit
 Quit
+
+.TP
+.B redisp_cmd on|off
+Normally, ipmish redisplays the command line when an event comes in.  This
+is nice for interactive use, but bad for scripting.  This lets you turn
+that function on and off.
 .B ipmish
 
 .SH "SEE ALSO"
-ipmi_cmdlang(3), ipmi_ui(1)
+ipmi_cmdlang(7), ipmi_ui(1)
 
 .SH "KNOWN PROBLEMS"
 None

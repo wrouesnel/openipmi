@@ -233,8 +233,18 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
     if (fd == -1)
 	return errno;
 
-    rv = read(fd, data, len);
+    while (len > 0) {
+	rv = read(fd, data, len);
+	if (rv < 0) {
+	    rv = errno;
+	    goto out;
+	}
+	len -= rv;
+    }
 
+    rv = 0;
+
+ out:
     close(fd);
     return rv;
 }

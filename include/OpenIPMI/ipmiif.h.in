@@ -436,7 +436,7 @@ int ipmi_domain_num_connection_ports(ipmi_domain_t *domain,
 				     unsigned int  connection,
 				     unsigned int  *ports);
 
-/* Number of ports in the connection? */
+/* Is a specific port in the connection up? */
 int ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
 				      unsigned int  connection,
 				      unsigned int  port,

@@ -39,6 +39,7 @@
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
 enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
+char *ipmi_update_e_string(enum ipmi_update_e val);
 
 /*
  * When dealing with strings, they can be unicode or ASCII, and some

@@ -445,9 +445,8 @@ Domain closed: <domain>
 .RE
 
 .B sel_rescan_time <domain> <time in seconds>
-- Set the time between SEL rescans for all newly created SELs.  It
-does not affect old SELs that are already created.  Zero disables
-scans.
+- Set the time between SEL rescans for all.  It affects all current SELs
+and SELs that are discovered in the future.  Zero disables scans.
 .TP
 Response:
 .RS

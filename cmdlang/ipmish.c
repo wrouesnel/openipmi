@@ -80,13 +80,18 @@ static int handling_input = 0;
 static char *line_buffer;
 static int  line_buffer_max = 0;
 static int  line_buffer_pos = 0;
+static int cmd_redisp = 1;
 
 static void user_input_ready(int fd, void *data, os_hnd_fd_id_t *id);
 
 static void
-redraw_cmdline(void)
+redraw_cmdline(int force)
 {
-    if (!done && handling_input) {
+    int redisp = cmd_redisp;
+
+    if (force)
+	redisp = 1;
+    if (!done && handling_input && redisp) {
 	fputs("> ", stdout);
 	fwrite(line_buffer, 1, line_buffer_pos, stdout);
 	fflush(stdout);
@@ -101,7 +106,7 @@ posix_vlog(char *format,
     int do_nl = 1;
     static int last_was_cont = 0;
 
-    if (handling_input && !last_was_cont && !done) 
+    if (handling_input && !last_was_cont && !done && cmd_redisp) 
 	fputc('\n', stdout);
 
     last_was_cont = 0;
@@ -145,7 +150,7 @@ posix_vlog(char *format,
     vprintf(format, ap);
     if (do_nl) {
 	printf("\n");
-	redraw_cmdline();
+	redraw_cmdline(0);
     }
 }
 void
@@ -177,6 +182,7 @@ void glib_handle_log(const gchar *log_domain,
     else if (log_level & G_LOG_LEVEL_DEBUG)
 	pfx = "DEBG: ";
     printf("%s%s\n", pfx, message);
+    redraw_cmdline(0);
 }
 #endif
 
@@ -539,7 +545,7 @@ cmd_done(ipmi_cmdlang_t *info)
 	*done_ptr = 1;
     } else {
 	handling_input = 1;
-	redraw_cmdline();
+	redraw_cmdline(1);
 	enable_term_fd(info);
 	fflush(out_data->stream);
     }
@@ -551,7 +557,7 @@ ipmi_cmdlang_global_err(char *objstr,
 			char *errstr,
 			int  errval)
 {
-    if (handling_input && !done)
+    if (handling_input && !done && cmd_redisp)
 	fputc('\n', stdout);
     if (objstr)
 	fprintf(stderr, "global error: %s %s: %s (0x%x)", location, objstr,
@@ -560,7 +566,7 @@ ipmi_cmdlang_global_err(char *objstr,
 	fprintf(stderr, "global error: %s: %s (0x%x)", location,
 		errstr, errval);
     evcount = 0;
-    redraw_cmdline();
+    redraw_cmdline(0);
 }
 
 void
@@ -572,7 +578,7 @@ ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
     int                         indent2;
     int                         i;
 
-    if (handling_input && !done)
+    if (handling_input && !done && cmd_redisp)
 	fputc('\n', stdout);
     ipmi_cmdlang_event_restart(event);
     printf("Event\n");
@@ -603,7 +609,7 @@ ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
 	}
     }
     evcount = 0;
-    redraw_cmdline();
+    redraw_cmdline(0);
 }
 
 static void
@@ -632,7 +638,7 @@ user_input_ready(int fd, void *data, os_hnd_fd_id_t *id)
 
     case 12: /* ^l */
 	fputc('\n', out_data->stream);
-	redraw_cmdline();
+	redraw_cmdline(1);
 	break;
 
     case '\r': case '\n':
@@ -735,6 +741,37 @@ setup_term(os_handler_t *os_hnd)
 }
 
 static void
+redisp_cmd(ipmi_cmd_info_t *cmd_info)
+{
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int             redisp;
+
+    if ((argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_bool(argv[curr_arg], &redisp, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "redisp setting invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    cmd_redisp = redisp;
+
+    ipmi_cmdlang_out(cmd_info, "redisp set", NULL);
+
+ out_err:
+    cmdlang->location = "ipmish.c(redisp_cmd)";
+}
+
+static void
 exit_cmd(ipmi_cmd_info_t *cmd_info)
 {
     done = 1;
@@ -794,8 +831,7 @@ read_cmd(ipmi_cmd_info_t *cmd_info)
     }
     fclose(s);
 
-    done_ptr = saved_done_ptr
-;
+    done_ptr = saved_done_ptr;
     read_nest--;
     if (!read_nest) {
 	handling_input = 1;
@@ -814,6 +850,17 @@ static void
 setup_cmds(void)
 {
     int rv;
+
+    rv = ipmi_cmdlang_reg_cmd(NULL,
+			      "redisp_cmd",
+			      "on|off - If an asynchronous event comes in,"
+			      " redisplay the current working command.  This"
+			      " is on by default.",
+			      redisp_cmd, NULL, NULL);
+    if (rv) {
+	fprintf(stderr, "Error adding exit command: 0x%x\n", rv);
+	exit(1);
+    }
 
     rv = ipmi_cmdlang_reg_cmd(NULL,
 			      "exit",

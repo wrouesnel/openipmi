@@ -1108,7 +1108,7 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       ipmi_cmdlang_domain_handler, domain_presence, NULL },
     { "sel_rescan_time", &domain_cmds,
       "<domain> <time in seconds> - Set the time between SEL rescans"
-      " for newly created SELs in the system.  Zero disables scans.",
+      " for all SELs in the domain.  Zero disables scans.",
       ipmi_cmdlang_domain_handler, domain_sel_rescan_time, NULL },
     { "rescan_sels", &domain_cmds,
       "<domain> - Rescan all the SELs in the domain",

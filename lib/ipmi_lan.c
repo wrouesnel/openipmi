@@ -2130,46 +2130,27 @@ cleanup_con(ipmi_con_t *ipmi)
 }
 
 static void
-handle_connected(ipmi_con_t *ipmi, int err)
+handle_connected(ipmi_con_t *ipmi, int err, int addr_num)
 {
     lan_data_t *lan;
-    int        i;
 
     if (!ipmi)
 	return;
 
     lan = (lan_data_t *) ipmi->con_data;
 
-    if (lan->con_change_handler) {
-	if (err) {
-	    /* Report everything that is down. */
-	    for (i=0; i<lan->num_ip_addr; i++)
-	    {
-		if (!lan->ip_working[i])
-		    lan->con_change_handler(ipmi, err, i, lan->connected,
-					    lan->con_change_cb_data);
-	    }
-	} else {
-	    /* Report everything that is up. */
-	    for (i=0; i<lan->num_ip_addr; i++)
-	    {
-		if (lan->ip_working[i])
-		    lan->con_change_handler(ipmi, err, i, lan->connected,
-					    lan->con_change_cb_data);
-	    }
-	}
+    /* Make sure session data is reset on an error. */
+    if (err) {
+	lan->outbound_seq_num[addr_num] = 0;
+	lan->inbound_seq_num[addr_num] = 0;
+	lan->session_id[addr_num] = 0;
+	lan->recv_msg_map[addr_num] = 0;
+	lan->working_authtype[addr_num] = 0;
     }
-}
 
-static void
-finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
-{
-    ipmi_con_t *ipmi = cb_data;
-
-    if (lan_valid_ipmi(ipmi)) {
-	ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
-	handle_connected(ipmi, 0);
-	lan_put(ipmi);
+    if (lan->con_change_handler) {
+	lan->con_change_handler(ipmi, err, addr_num, lan->connected,
+				lan->con_change_cb_data);
     }
 }
 
@@ -2179,32 +2160,8 @@ finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
     lan->connected = 1;
     connection_up(lan, addr_num, 1);
     if (! lan->initialized) {
-	struct timeval    timeout;
-	os_hnd_timer_id_t *timer;
-	int               rv;
-
 	lan->initialized = 1;
-
-	/* Schedule this to run in a timeout, so we are not holding
-           the read lock. */
-	rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &timer);
-	if (rv) {
-	    handle_connected(ipmi, rv);
-	    return;
-	}
-
-	timeout.tv_sec = 0;
-	timeout.tv_usec = 0;
-	rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
-				       timer,
-				       &timeout,
-				       finish_start_con,
-				       ipmi);
-	if (rv) {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, timer);
-	    handle_connected(ipmi, rv);
-	    return;
-	}
+	handle_connected(ipmi, 0, addr_num);
     }
 }
 
@@ -2238,7 +2195,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     int        addr_num = (long) cb_data;
 
     if (err) {
-	handle_connected(ipmi, err);
+	handle_connected(ipmi, err, addr_num);
 	return;
     }
 
@@ -2255,7 +2212,7 @@ static int
 handle_dev_id(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
     ipmi_msg_t   *msg = &rspi->msg;
-    lan_data_t   *lan;
+    lan_data_t   *lan = NULL;
     int          err;
     unsigned int manufacturer_id;
     unsigned int product_id;
@@ -2303,7 +2260,7 @@ handle_dev_id(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     return IPMI_MSG_ITEM_NOT_USED;
 
  out_err:
-    handle_connected(ipmi, err);
+    handle_connected(ipmi, err, addr_num);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -2340,7 +2297,7 @@ lan_oem_done(ipmi_con_t *ipmi, void *cb_data)
 
     rv = send_get_dev_id(ipmi, lan, addr_num, rspi);
     if (rv) {
-        handle_connected(ipmi, rv);
+        handle_connected(ipmi, rv, addr_num);
 	ipmi_mem_free(rspi);
     }
 }
@@ -2351,33 +2308,34 @@ session_privilege_set(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     ipmi_msg_t *msg = &rspi->msg;
     lan_data_t *lan;
     int        rv;
+    int        addr_num = (long) rspi->data4;
 
     if (!ipmi) {
-	handle_connected(ipmi, ECANCELED);
+	handle_connected(ipmi, ECANCELED, addr_num);
 	goto out;
     }
 
     lan = (lan_data_t *) ipmi->con_data;
 
     if (msg->data[0] != 0) {
-        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
+        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]), addr_num);
 	goto out;
     }
 
     if (msg->data_len < 2) {
-        handle_connected(ipmi, EINVAL);
+        handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
 
     if (lan->privilege != (msg->data[1] & 0xf)) {
 	/* Requested privilege level did not match. */
-        handle_connected(ipmi, EINVAL);
+        handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
 
     rv = ipmi_conn_check_oem_handlers(ipmi, lan_oem_done, rspi);
     if (rv) {
-        handle_connected(ipmi, rv);
+        handle_connected(ipmi, rv, addr_num);
 	goto out;
     }
 
@@ -2423,19 +2381,19 @@ session_activated(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
 
     if (!ipmi) {
-	handle_connected(ipmi, ECANCELED);
+	handle_connected(ipmi, ECANCELED, addr_num);
 	goto out;
     }
 
     lan = (lan_data_t *) ipmi->con_data;
 
     if (msg->data[0] != 0) {
-        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
+        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]), addr_num);
 	goto out;
     }
 
     if (msg->data_len < 11) {
-        handle_connected(ipmi, EINVAL);
+        handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
 
@@ -2444,7 +2402,7 @@ session_activated(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 	&& (lan->working_authtype[addr_num] != lan->authtype))
     {
 	/* Eh?  It didn't return a valid authtype. */
-        handle_connected(ipmi, EINVAL);
+        handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
 
@@ -2453,7 +2411,7 @@ session_activated(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     rv = send_set_session_privilege(ipmi, lan, addr_num, rspi);
     if (rv) {
-        handle_connected(ipmi, rv);
+        handle_connected(ipmi, rv, addr_num);
 	goto out;
     }
 
@@ -2502,19 +2460,19 @@ challenge_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
 
     if (!ipmi) {
-	handle_connected(ipmi, ECANCELED);
+	handle_connected(ipmi, ECANCELED, addr_num);
 	goto out;
     }
 
     lan = (lan_data_t *) ipmi->con_data;
 
     if (msg->data[0] != 0) {
-        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
+        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]), addr_num);
 	goto out;
     }
 
     if (msg->data_len < 21) {
-        handle_connected(ipmi, EINVAL);
+        handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
 
@@ -2530,8 +2488,8 @@ challenge_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     while (lan->inbound_seq_num[addr_num] == 0) {
 	rv = ipmi->os_hnd->get_random(ipmi->os_hnd,
 				      &(lan->inbound_seq_num[addr_num]), 4);
-	if (!rv) {
-	    handle_connected(ipmi, rv);
+	if (rv) {
+	    handle_connected(ipmi, rv, addr_num);
 	    goto out;
 	}
     }
@@ -2539,7 +2497,7 @@ challenge_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     lan->retries = 0;
     rv = send_activate_session(ipmi, lan, addr_num, rspi);
     if (rv) {
-        handle_connected(ipmi, rv);
+        handle_connected(ipmi, rv, addr_num);
 	goto out;
     }
 
@@ -2586,14 +2544,14 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
 
     if (!ipmi) {
-	handle_connected(ipmi, ECANCELED);
+	handle_connected(ipmi, ECANCELED, addr_num);
 	goto out;
     }
 
     lan = (lan_data_t *) ipmi->con_data;
 
     if ((msg->data[0] != 0) || (msg->data_len < 9)) {
-	handle_connected(ipmi, EINVAL);
+	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
 
@@ -2602,7 +2560,7 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 		 "%sipmi_lan.c(auth_cap_done): "
 		 "Requested authentication not supported",
 		 IPMI_CONN_NAME(lan->ipmi));
-        handle_connected(ipmi, EINVAL);
+        handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
 
@@ -2612,7 +2570,7 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 		 "%sipmi_lan.c(auth_cap_done): "
 		 "Unable to send challenge command: 0x%x",
 		 IPMI_CONN_NAME(lan->ipmi), rv);
-        handle_connected(ipmi, rv);
+        handle_connected(ipmi, rv, addr_num);
 	goto out;
     }
 
@@ -2959,9 +2917,9 @@ _ipmi_lan_set_ipmi(ipmi_con_t *old, ipmi_con_t *new)
 }
 
 /* Another cheap hack so the MXP code can call this. */
-void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv)
+void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv, int addr_num)
 {
-    handle_connected(ipmi, rv);
+    handle_connected(ipmi, rv, addr_num);
 }
 
 static void

@@ -79,26 +79,49 @@ AC_SUBST(OPENIPMI_VERSION_MINOR)
 AC_SUBST(OPENIPMI_VERSION_RELEASE)
 AC_SUBST(OPENIPMI_VERSION_EXTRA)
 
+# Find pkg-config
+pkgprog=
+AC_PATH_PROG(pkgprog, pkg-config)
+
 # Handle GLIB support
 glibprog=
 if test "x$tryglib" != "xno"; then
-   AC_PATH_PROG(glibprog, glib-config)
+   if test "x$pkgprog" != "x"; then
+      glibprog=$pkgprog
+   else
+      AC_PATH_PROG(glibprog, glib-config)
+   fi
 fi
+GLIB_CFLAGS=
+GLIB_LIBS=
 if test "x$glibprog" != "x"; then
+   # Try 2.0 first
+   GLIB_CFLAGS=`$glibprog --cflags gthread-2.0 2>/dev/null`
+   if test $? = 0; then
+      GLIB_VERSION='2.0'
+      GLIB_LIBS=`$glibprog --libs gthread-2.0 2>/dev/null`
+   else
+      # Now try 1.2
+      GLIB_CFLAGS=`$glibprog --cflags gthread`
+      if test $? = 0; then
+	 GLIB_VERSION='1.2'
+	 GLIB_LIBS=`$glibprog --libs gthread`
+      fi
+   fi
+fi
+   
+if test "x$GLIB_CFLAGS" != "x"; then
    AC_DEFINE(HAVE_GLIB)
    GLIB_DIR=glib
-   GLIB_CFLAGS=`$glibprog --cflags gthread`
-   GLIB_LIBS="`$glibprog --libs gthread`"
    GLIB_LIB='$(top_builddir)/glib/libOpenIPMIglib.la'
    GLIB_PKGCONF=OpenIPMIglib.pc
 else
    GLIB_DIR=
-   GLIB_CFLAGS=
-   GLIB_LIBS=
    GLIB_LIB=
    GLIB_PKGCONF=
 fi
 AC_SUBST(GLIB_DIR)
+AC_SUBST(GLIB_VERSION)
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 AC_SUBST(GLIB_LIB)
