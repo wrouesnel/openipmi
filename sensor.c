@@ -3877,11 +3877,11 @@ stand_ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy)
 }
 
 static char *
-stand_ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int val)
+stand_ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset)
 {
     return ipmi_get_reading_name(sensor->event_reading_type,
 				 sensor->sensor_type,
-				 val);
+				 offset);
 }
 
 ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
@@ -4015,13 +4015,13 @@ ipmi_states_get(ipmi_sensor_t       *sensor,
 }
 
 char *
-ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int val)
+ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset)
 {
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_sensor_reading_name_string)
 	return NULL;
-    return sensor->cbs.ipmi_sensor_reading_name_string(sensor, val);
+    return sensor->cbs.ipmi_sensor_reading_name_string(sensor, offset);
 }
 
 int

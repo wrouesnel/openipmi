@@ -467,10 +467,16 @@ int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
    they will be the correct strings even for OEM values. */
 char *ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor);
-char *ipmi_sensor_get_reading_name_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor);
+
+/* This call is a little different from the other string calls.  For a
+   discrete sensor, you can pass the offset into this call and it will
+   return the string associated with the reading.  This way, OEM
+   sensors can supply their own strings as necessary for the various
+   offsets. */
+char *ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset);
 
 /* Get the entity the sensor is hooked to. */
 int ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor);
@@ -488,43 +494,80 @@ int ipmi_sensor_get_sensor_init_pu_events(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_sensor_init_pu_scanning(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_ignore_if_no_entity(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_supports_rearm(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_THRESHOLD_ACCESS_SUPPORT_xxx */
 int ipmi_sensor_get_threshold_access(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_HYSTERESIS_SUPPORT_xxx */
+int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_EVENT_SUPPORT_xxx */
 int ipmi_sensor_get_event_support(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_SENSOR_TYPE_xxx */
 int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_EVENT_READING_TYPE_xxx */
 int ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_analog_data_format(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_modifier_unit_use(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_percentage(ipmi_sensor_t *sensor);
+
+/* Returns if an assertion event is supported for this particular sensor. */
 int ipmi_sensor_threshold_assertion_event_supported(
     ipmi_sensor_t               *sensor,
     enum ipmi_thresh_e          event,
     enum ipmi_event_value_dir_e dir,
     int                         *val);
+
+/* Returns if a deassertion event is supported for this particular sensor. */
 int ipmi_sensor_threshold_deassertion_event_supported(
     ipmi_sensor_t               *sensor,
     enum ipmi_thresh_e          event,
     enum ipmi_event_value_dir_e dir,
     int                         *val);
+
+/* Returns if a specific threshold can be set. */
 int ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
 				   enum ipmi_thresh_e event,
 				   int                *val);
+
+/* Returns if a specific threshold can be read. */
 int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 				   enum ipmi_thresh_e event,
 				   int                *val);
+
+/* Returns if the assertion of a specific event can send an event */
 int ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
 						   int           event,
 						   int           *val);
+
+/* Returns if the deassertion of a specific event can send an event */
 int ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
 						     int           event,
 						     int           *val);
+
+/* Returns if the specific event can be read (is supported). */
 int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 				 int           event,
 				 int           *val);
+
+/* Returns IPMI_ANALOG_DATA_FORMAT_xxx */
+int ipmi_sensor_get_analog_data_format(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_RATE_UNIT_xxx */
+int ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_MODIFIER_UNIT_xxx */
+int ipmi_sensor_get_modifier_unit_use(ipmi_sensor_t *sensor);
+
+/* Returns if the value is a percentage. */
+int ipmi_sensor_get_percentage(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_UNIT_TYPE_xxx */
 int ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_UNIT_TYPE_xxx */
 int ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_linearization(ipmi_sensor_t *sensor);
+
+/* Sensor reading information from the SDR. */
 int ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
 			      int           val,
 			      double        *tolerance);
@@ -538,7 +581,10 @@ int ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max);
 int ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min);
 int ipmi_sensor_get_sensor_max(ipmi_sensor_t *sensor, double *sensor_max);
 int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
+
 int ipmi_sensor_get_oem1(ipmi_sensor_t *sensor);
+
+/* The ID string from the SDR. */
 int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
 void ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
 
@@ -604,21 +650,30 @@ typedef struct ipmi_states_s ipmi_states_t;
 unsigned int ipmi_states_size(void);
 void ipmi_copy_states(ipmi_states_t *dest, ipmi_states_t *src);
 
-void ipmi_init_states(ipmi_states_t *states);
+/* Various global values in the states value.  See the IPMI "Get
+   Sensor Readings" command in the IPMI spec for details on the
+   meanings of these. */
 int ipmi_is_event_messages_disabled(ipmi_states_t *states);
 int ipmi_is_sensor_scanning_disabled(ipmi_states_t *states);
 int ipmi_is_initial_update_in_progress(ipmi_states_t *states);
+
+/* Use to tell if a discrete offset is set in the states. */
+int ipmi_is_state_set(ipmi_states_t *states,
+		      int           state_num);
+
+/* Use to tell if a threshold is out of range in a threshold sensor. */
+int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
+				   enum ipmi_thresh_e thresh);
+
+/* The following functions allow you to create and modify your own
+   states structure. */
+void ipmi_init_states(ipmi_states_t *states);
 void ipmi_set_event_messages_disabled(ipmi_states_t *states, int val);
 void ipmi_set_sensor_scanning_disabled(ipmi_states_t *states, int val);
 void ipmi_set_initial_update_in_progress(ipmi_states_t *states, int val);
-/* Read the current states from the discrete sensor. */
-int ipmi_is_state_set(ipmi_states_t *states,
-		      int           state_num);
 void ipmi_set_state(ipmi_states_t *states,
 		    int           state_num,
 		    int           val);
-int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
-				   enum ipmi_thresh_e thresh);
 void ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 				     enum ipmi_thresh_e thresh,
 				     int                val);

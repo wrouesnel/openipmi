@@ -94,6 +94,7 @@ int ipmi_sensor_get_channel(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_entity_instance(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_entity_instance_logical(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_linearization(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_raw_m(ipmi_sensor_t *sensor, int val);
 int ipmi_sensor_get_raw_tolerance(ipmi_sensor_t *sensor, int val);
 int ipmi_sensor_get_raw_b(ipmi_sensor_t *sensor, int val);

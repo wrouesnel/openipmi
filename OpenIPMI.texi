@@ -319,11 +319,16 @@ Note that if your system doesn't have Unix-type error numbers, you will
 have to provide those for the OpenIPMI library.
 
 If a function returns an error, any callbacks provided to that function
-will NEVER be called.  Errors are passed into many callbacks, if an
-error is present the rest of the data in the callback is probably not
-valid except for the @code{cb_data} variable you provide, and possibly
-the object the callback is associated with.  The object the callback is
-associated with may be NULL if it has ceased to exist.
+will @emph{never} be called.  If a function that takes a callback
+returns success, the callback will @emph{always} be called, even if the
+object associated has ceased to exist.  If an object with outstandard
+operations ceases to exist, all the callbacks for outstanding operations
+will be called with ECANCELED as the error.  Errors are passed into many
+callbacks, if an error is present the rest of the data in the callback
+is probably not valid except for the @code{cb_data} variable you
+provide, and possibly the object the callback is associated with.  The
+object the callback is associated with may be NULL if it has ceased to
+exist.
 
 @node    Locking, OpenIPMI Objects, Error Handling, OpenIPMI Concepts
 @section Locking
@@ -679,8 +684,7 @@ sensor easier for the user.
 * Threshold Sensors::
 * Discrete Sensors::
 * Sensor Events::
-* Hot Swap::
-* Strings for Sensor Data Types::
+* Hot Swap Sensor::
 @end menu
 
 @node    Threshold Sensors, Discrete Sensors, Sensors, Sensors
@@ -715,10 +719,10 @@ Some sensors support thresholds.  See below for more details.
 
 @item Hysteresis
 Some sensors have hysteresis values.  The function
-@code{ipmi_sensor_get_sensor_init_events()} will tell you if you need to
-initialize the hysteresis value for the sensor.  The
+@code{ipmi_sensor_get_sensor_init_hysteresis()} will tell you if you
+need to initialize the hysteresis value for the sensor.  The
 @code{ipmi_sensor_get_hysteresis support()} tells you what type of
-hysteresis (if any) the sensor supports.  
+hysteresis (if any) the sensor supports.
 
 @end table
 
@@ -742,21 +746,49 @@ high-going threshold) or below the given threshold (a low-going
 threshold).  This may seem redundant with the upper and lower
 thresholds, but that's what the spec says.
 
-Of course, few sensors support all these possible values, and you must
-be able to tell what they support.  You use the
-@var{ipmi_sensor_threshold_assertion_event_supported} and
-@var{ipmi_sensor_threshold_deassertion_event_supported} functions to
+The @code{ipmi_sensor_get_event_support()} tells what type of event
+support the sensor has.  The sensor may support no events, only global
+(per-MC) event enable and disable, event enable and disable for the
+whole sensor, or event enable and disable per-threshold.  If the sensor
+supports per-thresholds enables, it will also support enable for the
+whole sensor.  All sensors that support events will support global
+enables.
+
+Of course, few sensors support all possible threshold values, and you
+must be able to tell what they support.  You use the
+@code{ipmi_sensor_threshold_assertion_event_supported()} and
+@code{ipmi_sensor_threshold_deassertion_event_supported()} functions to
 tell if the sensor supports a given threshold event.  The thresholds may
 or may not be readable and settable, use the
-@var{ipmi_sensor_threshold_settable} and
-@var{ipmi_sensor_threshold_readable} to tell if a threshold can be set
-or read.
+@code{ipmi_sensor_threshold_settable()} and
+@code{ipmi_sensor_threshold_readable()} to tell if a threshold can be
+set or read.
 
 To turn on and off thresholds and support for events and to set the
 thresholds, you must first fill out an @var{ipmi_event_state_t}
 structure using the various calls defined to do this.  Then call
-@var{ipmi_sensor_events_enable_set} to set the values.  The current
-values may be fetched with @var{ipmi_sensor_events_enable_get}.
+@code{ipmi_sensor_events_enable_set()} to set the values.  The current
+values may be fetched with @code{ipmi_sensor_events_enable_get()}.
+
+To fetch the current value for a threshold sensor, use the
+@code{ipmi_reading_get()} function.  The callback also returns the
+current states of the various thresholds.  To see if a specific
+threshold is out of range, use @code{ipmi_is_threshold_out_of_range()}
+on the states passed in.
+
+The SDR also has information about the accuracy, tolerance, min and max
+values, etc. for the sensor.  Those function calls will return floating
+point values (converted from raw values).  You need to read the IPMI
+spec for the real meanings of all these things (from what little is
+provided there), the functions are under the comment ``Sensor reading
+information from the SDR'' in @file{ipmiif.h}.
+
+OpenIPMI provides string values for many of the values in the SDR, so
+the user doesn't have to provide it.  Note that the string may be set to
+a valid value even if the numeric value in the SDR is an invalid or OEM
+one, OEM code may update the string.  The string values are provided by
+functions under ``Strings for various values for a sensor'' in
+@file{ipmiif.h}.
 
 @node    Discrete Sensors, Sensor Events, Threshold Sensors, Sensors
 @subsection Discrete Sensors
@@ -764,61 +796,93 @@ values may be fetched with @var{ipmi_sensor_events_enable_get}.
 IPMI represents discrete sensors as a bitmask, each bit representing a
 possible discrete state.  One bit is reserved for other use.  This
 limits you to 15 possible states for each sensor, but that's generally
-not a big deal
+not a big deal.  These are called ``offsets'' or ``states'' by the IPMI
+spec, and are numbered from 0 to 14.
 
-The meanings of the readings are specified one of two ways.  This is
-specified by the @var{ipmi_sensor_get_event_reading_type}.  A value of
-one means a threshold sensor.  A value of 0x6f means the reading depends
-on the sensor type.  Values 0x2-0xc are generic readings that can apply
-no matter what the sensor type, and are specified in the IPMI spec.
+To get a reading from a discrete sensor, use the
+@code{ipmi_states_get()} function.  The callback gives a variable
+of @var{ipmi_states_t} type, use the @code{ipmi_is_state_set()} function
+to tell if a specific discrete state is set.
 
-When the reading depends on the sensor type, you must call
-@code{ipmi_sensor_get_sensor_type()} to retrieve the sensor type.  You can
-use this to tell what the reading means.
+The meanings of the reading's offsets are specified one of two ways.
+This is specified by the @code{ipmi_sensor_get_event_reading_type()}.  A
+value of @var{IPMI_EVENT_READING_TYPE_THRESHOLD} means a threshold
+sensor.  A value of @var{IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC} means
+the reading depends on the sensor type.  Values 0x2-0xc are generic
+readings that can apply no matter what the sensor type, and are
+specified in the IPMI spec.
 
-@node    Sensor Events, Hot Swap, Discrete Sensors, Sensors
+If the reading offset meaning depends on the sensor type, you must call
+@code{ipmi_sensor_get_sensor_type()} to retrieve the sensor type.  You
+can use this to tell what the reading means.
+
+You can also pass the offset of a reading (the state number that is set)
+info @code{ipmi_sensor_reading_name_string()} to get string values for
+the offsets.  This works for generic and for sensor-specific reading
+types.  The string values may be valid even if the sensor is OEM or has
+OEM values, because the OEM code can put there own strings in here.
+
+@node    Sensor Events, Hot Swap Sensor, Discrete Sensors, Sensors
 @subsection Sensor Events
 
 Both threshold and discrete sensors support events, and they work about
 the same for both, if you think of a threshold as a discrete state.
 Individual discrete states may be armed to generate events.  However,
 not all sensors support events, you need to use the
-@var{ipmi_sensor_threshold_assertion_event_supported}, 
-@var{ipmi_sensor_threshold_deassertion_event_supported}, 
-@var{ipmi_sensor_discrete_assertion_event_supported}, and
-@var{ipmi_sensor_discrete_deassertion_event_supported} calls to tell if
-the particular sensor supports events on the given threshold or state.
+@code{ipmi_sensor_threshold_assertion_event_supported()},
+@code{ipmi_sensor_threshold_deassertion_event_supported()},
+@code{ipmi_sensor_discrete_assertion_event_supported()}, and
+@code{ipmi_sensor_discrete_deassertion_event_supported()} calls to tell
+if the particular sensor supports events on the given threshold or
+state.
 
 You can turn event generation on and off for sensors that support it
 using the status field of @var{ipmi_event_state_t} by setting or
 clearing @var{IPMI_SENSOR_EVENTS_ENABLED} in the bitmask.  You must
 first initialize the structure with @var{ipmi_event_state_init}, then
 set the specific events you are interested in using the
-@var{ipmi_threshold_event_set}, @var{ipmi_threshld_event_clear},
-@var{ipmi_discrete_event_set}, and @var{ipmi_discrete_event_clear}, then
-call @var{ipmi_sensor_events_enable_set} to set the thresholds.  You can
-use @var{ipmi_sensor_events_enable_get} to fetch the current events
-setting. You have to use @var{ipmi_sensor_get_sensor_init_events}
+@code{ipmi_threshold_event_set()}, @code{ipmi_threshld_event_clear()},
+@code{ipmi_discrete_event_set()}, and
+@code{ipmi_discrete_event_clear()}, then call
+@code{ipmi_sensor_events_enable_set()} to set the thresholds.  You can use
+@code{ipmi_sensor_events_enable_get()} to fetch the current events
+setting. You have to use @code{ipmi_sensor_get_sensor_init_events()}
 function to tell if you need to initialize the events.  The
-@var{ipmi_sensor_get_event_support} function returns the support for
+@code{ipmi_sensor_get_event_support()} function returns the support for
 events.
 
 You register to receive events for a sensor with
-@var{ipmi_sensor_set_event_handler}, which sets a callback that gets
+@code{ipmi_sensor_set_event_handler()}, which sets a callback that gets
 called when an event comes in from the given sensor.  When the callback
 comes in, the information from the event is presented, depending on the
 sensor type.
 
 For all sensor types, the direction (whether the state causing the event
 is being asserted or deasserted) is present.  The offset specifies the
-specific state or threshold that caused the event to be asserted.  If
-@var{value_present} is true, then the value was passed in the 
+specific state or threshold that caused the event to be asserted.  The
+@var{value_present} tells if a value is present, and whether it's raw or
+cooked.
 
-@node    Hot Swap, Strings for Sensor Data Types, Sensor Events, Sensors
-@subsection Hot Swap
+If an IPMI event (one that will now be in the SEL) caused this event,
+then the event field will point to the event that caused this.  The
+event is not automatically deleted from the SEL, you must do this
+yourself.  This way, you can make sure the event has been properly
+handled before removing it from the SEL.
 
-@node Strings for Sensor Data Types, , Hot Swap, Sensors
-@subsection Strings for Sensor Data Types
+@node    Hot Swap Sensor, , Sensor Events, Sensors
+@subsection Hot Swap Sensor
+
+A discrete sensor for an entity may be a hot-swap requester, meaning
+that it is a sensor that detects when the user wants to remove a board.
+The @code{ipmi_sensor_is_hot_swap_requester()} call will return true if
+the sensor passed in has the hot-swap requester.  It also returns the
+offset for the hot-swap sensor, and whether the value will be asserted
+when requested or not asserted when requested.
+
+This way, upper-level software can detect if a sensor is a hot-swap
+sensor and handle it properly.  Note that a sensor (such as a standard
+slot sensor) may have more things in it than just the hot-swap
+requester.
 
 @node    Controls, The System Event Log (SEL), Sensors, Using OpenIPMI
 @section Controls
@@ -860,6 +924,7 @@ thus represented specially.
 * Fan Speed::
 * Identifiers::
 * Displays::
+* Hot Swap Control::
 @end menu
 
 @node    Simple Controls, Lights, Controls, Controls
@@ -887,18 +952,18 @@ more transitions the light will go through.  Each transition has a color
 and duration.  And, of course, more than one light may be supported in a
 single control.
 
-The @var{ipmi_control_get_num_light_settings} function returns the
+The @code{ipmi_control_get_num_light_settings()} function returns the
 number of settings a specific light has.  These are defined to be
 continuous, if it reports 6, for instance, then the light will have
 settings 0-5.
 
-The @var{ipmi_control_get_num_light_transitions} function returns the
+The @code{ipmi_control_get_num_light_transitions()} function returns the
 number of transitions for a setting.
 
-The @var{ipmi_control_get_light_color} function returns the color a
+The @code{ipmi_control_get_light_color()} function returns the color a
 light will be at a specific setting.
 
-The @var{ipmi_control_get_light_color_time} function returns the time in
+The @code{ipmi_control_get_light_color_time()} function returns the time in
 milliseconds the transition is valid, before it goes to the next
 transition.  This is used to represent blinking modes.  For instance, if
 an LED in setting 4 blinks red for 100ms, green for 200ms, then off for
@@ -925,17 +990,25 @@ identifiers.  These are represented as an array of unsigned characters,
 as some identifiers may be very large.  The length may be variable,
 too.
 
-The function @var{ipmi_control_identifier_get_val} and
-@var{ipmi_control_identifier_set_val} let you read and (optionally)
+The function @code{ipmi_control_identifier_get_val()} and
+@code{ipmi_control_identifier_set_val()} let you read and (optionally)
 change the value of an identifier.  If you need to know the maximum
-length, the function @var{ipmi_control_identifier_get_max_length}
+length, the function @code{ipmi_control_identifier_get_max_length()}
 returns that.  The actual length is returned in the reading when you get
 it.
 
-@node    Displays, , Identifiers, Controls
+@node    Displays, Hot Swap Control, Identifiers, Controls
 @subsection Displays
 
 FIXME - displays are TBD.
+
+@node    Hot Swap Control, , Displays, Controls
+@subsection Hot Swap Control
+
+A control may be the indicator used to tell the user it's safe to remove
+a hot-swap device (like the blue LED in Compact PCI).  If an indicator
+is the hot-swap indicator, it should be a single LED, and the function
+@code{ipmi_control_is_hot_swap_indicator()} will return true for it.
 
 @node    The System Event Log (SEL), , Controls, Using OpenIPMI
 @section The System Event Log (SEL)
@@ -955,11 +1028,11 @@ currently use very efficient methods to manage it.  The user should
 receive the events and delete them in a timely manner to keep the SEL
 small.
 
-The @var{ipmi_register_for_events} function allows you to get the event
+The @code{ipmi_register_for_events()} function allows you to get events
 OpenIPMI couldn't correlate to a sensor.  As well, the functions
-@var{ipmi_bmc_first_log}, @var{ipmi_bmc_last_log},
-@var{ipmi_bmc_next_log}, and @var{ipmi_bmc_prev_log} let you iterate
-through the logs in the local representation of the SEL.
+@code{ipmi_bmc_first_event()}, @code{ipmi_bmc_last_event()},
+@code{ipmi_bmc_next_event()}, and @code{ipmi_bmc_prev_event()} let you
+iterate through the logs in the local representation of the SEL.
 
 @node    OpenIPMI Internal Interfaces, How to Write OEM Plugins, Using OpenIPMI, Top
 @chapter OpenIPMI Internal Interfaces
@@ -1009,7 +1082,7 @@ the file Makefile.am.
 @node    Seeing IPMI Messages, , Debugging Locking, Debugging Your Application
 @section Seeing IPMI Messages
 
-Two flags control message traceing.  Setting the MSG flag will turn on
+Two flags control message tracing.  Setting the MSG flag will turn on
 message tracing of IPMI messages.  If you turn on RAWMSG, it will trace
 low-level messaging, such as LAN resends and any other protocol-type
 messages.  This depends on the interface, some interfaces don't
