@@ -1,4 +1,13 @@
 
+2003-06-02 Corey Minyard <cminyard@mvista.com>
+
+	* sensor.c: Moved the removal of the sensor from the entity to the
+	place of its final destruction, so the entity will exist during
+	callbacks related to destruction of the sensor.
+
+	* ipmi_lan.c: Send a close session command when the connection is
+	closed.
+
 2003-05-30 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.texi: Updated docs for handling multiple MCs.

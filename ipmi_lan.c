@@ -74,7 +74,7 @@ dump_hex(void *vdata, int len)
 
 /* Number of microseconds of consecutive failures allowed on an IP
    before it is considered failed. */
-#define IP_FAIL_TIME 3000000
+#define IP_FAIL_TIME 7000000
 
 /* Number of consecutive failures that must occur before an IP is
    considered failed. */
@@ -1610,13 +1610,33 @@ auth_free(void *info, void *data)
     ipmi_mem_free(data);
 }
 
+/* Send the final close session to shut the connection down. */
+static void
+send_close_session(ipmi_con_t *ipmi, lan_data_t *lan)
+{
+    ipmi_msg_t                   msg;
+    unsigned char                data[4];
+    ipmi_system_interface_addr_t si;
+
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = 0xf;
+    si.lun = 0;
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_CLOSE_SESSION_CMD;
+    msg.data_len = 4;
+    msg.data = data;
+    ipmi_set_uint32(data, lan->session_id);
+    lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0,
+		  lan->curr_ip_addr);
+}
+
 static int
 lan_close_connection(ipmi_con_t *ipmi)
 {
-    lan_data_t                 *lan;
-    ipmi_ll_event_handler_id_t *evt_to_free, *next_evt;
-    int                        rv;
-    int                        i;
+    lan_data_t                   *lan;
+    ipmi_ll_event_handler_id_t   *evt_to_free, *next_evt;
+    int                          rv;
+    int                          i;
 
     if (! lan_valid_ipmi(ipmi)) {
 	return EINVAL;
@@ -1636,6 +1656,8 @@ lan_close_connection(ipmi_con_t *ipmi)
 
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
+
+    send_close_session(ipmi, lan);
 
     ipmi_lock(lan->seq_num_lock);
     for (i=0; i<64; i++) {

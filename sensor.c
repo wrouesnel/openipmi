@@ -298,6 +298,11 @@ ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t   id,
 static void
 sensor_final_destroy(ipmi_sensor_t *sensor)
 {
+    ipmi_domain_t      *domain = ipmi_mc_get_domain(sensor->mc);
+    ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
+    ipmi_entity_t      *ent;
+    int                rv;
+
     if (sensor->destroy_handler)
 	sensor->destroy_handler(sensor, sensor->destroy_handler_cb_data);
 
@@ -305,6 +310,19 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
 	sensor->oem_info_cleanup_handler(sensor, sensor->oem_info);
 
     opq_destroy(sensor->waitq);
+
+    /* This is were we remove the sensor from the entity, possibly
+       destroying it.  The opq destruction can call a bunch of
+       callbacks with the sensor, so we want the entity to exist until
+       this point in time. */
+    rv = ipmi_entity_find(ents,
+			  sensor->source_mc,
+			  sensor->entity_id,
+			  sensor->entity_instance,
+			  &ent);
+    if (!rv)
+	ipmi_entity_remove_sensor(ent, sensor);
+
     ipmi_mem_free(sensor);
 }
 
@@ -613,10 +631,6 @@ int
 ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 {
     ipmi_sensor_info_t *sensors = _ipmi_mc_get_sensors(sensor->mc);
-    ipmi_domain_t      *domain = ipmi_mc_get_domain(sensor->mc);
-    ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
-    ipmi_entity_t      *ent;
-    int                rv;
 
     if (sensor != sensors->sensors_by_idx[sensor->lun][sensor->num])
 	return EINVAL;
@@ -624,16 +638,12 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
     if (sensor->source_array)
 	sensor->source_array[sensor->source_idx] = NULL;
 
-    rv = ipmi_entity_find(ents,
-			  sensor->source_mc,
-			  sensor->entity_id,
-			  sensor->entity_instance,
-			  &ent);
-    if (!rv)
-	ipmi_entity_remove_sensor(ent, sensor);
-
     sensors->sensor_count--;
     sensors->sensors_by_idx[sensor->lun][sensor->num] = NULL;
+
+    /* We don't remove the sensor from the entity until we have called
+       all the callbacks, so the entity will still be valid when we
+       pass the sensor to the callback. */
 
     sensor->destroyed = 1;
     if (!opq_stuff_in_progress(sensor->waitq))
