@@ -1907,17 +1907,17 @@ ipmi_cmdlang_get_threshold(char               *str,
 	    return;
 	}
     }
-    if (strcasecmp(str, "unc") == 0)
+    if (strcasecmp(str, "un") == 0)
 	thresh = IPMI_UPPER_NON_CRITICAL;
     else if (strcasecmp(str, "uc") == 0)
 	thresh = IPMI_UPPER_CRITICAL;
-    else if (strcasecmp(str, "unr") == 0)
+    else if (strcasecmp(str, "ur") == 0)
 	thresh = IPMI_UPPER_NON_RECOVERABLE;
-    else if (strcasecmp(str, "lnc") == 0)
+    else if (strcasecmp(str, "ln") == 0)
 	thresh = IPMI_LOWER_NON_CRITICAL;
     else if (strcasecmp(str, "lc") == 0)
 	thresh = IPMI_LOWER_CRITICAL;
-    else if (strcasecmp(str, "lnr") == 0)
+    else if (strcasecmp(str, "lr") == 0)
 	thresh = IPMI_LOWER_NON_RECOVERABLE;
     else
 	goto out_err;

@@ -143,7 +143,7 @@ specifying various IPMI things.
 \fI<guid>\fP - a 16-byte globally unique ID, all globbed together in
 one big hexadecimal thing.
 
-\fI<threshold>\fI is a threshold for a sensor; the value it must go
+\fI<threshold>\fP is a threshold for a sensor; the value it must go
 over/under to generate an event.  It is always displayed as one of
 .B lower non-critical
 .B lower critical
@@ -152,24 +152,34 @@ over/under to generate an event.  It is always displayed as one of
 .B upper critical
 .B upper non-recoverable.
 It may be entered as one of the above, or as
-.B lnc,
+.B ln,
 .B lc,
-.B lnr,
-.B unc,
+.B lr,
+.B un,
 .B uc,
-.B unr
+.B ur
 as a short form.
 
 \fI<threshold enable>\fP is the enable for a threshold.  It is like
-\fI<threshold>\fP above, but also has an
+\fI<threshold>\fP above, but also has a
+.B going-high
+or
+.B going-low
+and an
 .B assertion
 or
 .B deassertion
 appended to the end of the name.  The short form will have a
+.B l
+or 
+.B h
+for going-low and going high and then a
 .B a
 or 
 .B d
-appended.
+appended for assertion and deassertion  So for instance,
+.B urld
+is upper non-recoverable going-low deassertion.
 
 \fI<discrete enable>\fP is the enable or disable for a discrete sensor
 and is specified with the sensor offset.  The long form is
@@ -194,6 +204,33 @@ means assertion or deassertion.
 or
 .B out_of_con.
 
+\fI<color>\fP is one of
+.B black,
+.B white,
+.B red,
+.B green
+.B blue
+.B yellow
+or
+.B orange.
+
+\fI<bool>\fP is one of
+.B true,
+.B on,
+.B t,
+or
+.B 1
+for true and one of
+.B false,
+.B off,
+.B f,
+or
+.B 0
+for false.  Output is always
+.B true
+or
+.B false.
+
 .SH COMMANDS
 
 The command language is hierarchical, meaning that commands may have
@@ -210,7 +247,8 @@ that begins with a
 is optional.  Entries of the form
 .B **name**
 refer to object info descriptions that are listed in the object info
-section.
+section.  If an entry has two '.' indented one space below it, then
+that entry may occur zero or more times.
 
 Each section below defines the unique subcommands of a main command.
 
@@ -232,8 +270,8 @@ Response:
 .nf
 <containing object type>
   Name: <name>
-  .
-  .
+   .
+   .
 .fi
 .RE
 
@@ -545,19 +583,19 @@ Response:
 .nf
 Sensor
   Name: <sensor>
-  Event Messages Enabled: true | false
-  Sensor Scanning Enabled: true | false
-  Initial Update In Progress: true | false
+  Event Messages Enabled: <bool>
+  Sensor Scanning Enabled: <bool>
+  Initial Update In Progress: <bool>
 .fi
 .RE
-For sensors of type "threshold", the following will be output:
+For threshold sensors, the following will be output:
 .RS
 .nf
 %Value: <double>
 %Raw Value: <integer>
 Threshold
   Name: <threshold>
-  Out Of Range: true | false
+  Out Of Range: <bool>
 .fi
 .RE
 For discrete sensors, the following will be output:
@@ -566,7 +604,7 @@ For discrete sensors, the following will be output:
 Event
   Offset: <integer>
   %Name: <string name of event offset>
-  Set: true | false
+  Set: <bool>
 .fi
 .RE
 The name field may be custom and is not explicitly specified.
@@ -647,9 +685,9 @@ Response:
 .nf
 Sensor
   Name: <sensor>
-  Event Messages Enabled: true | false
-  Sensor Scanning Enabled: true | false
-  Busy: true | false
+  Event Messages Enabled: <bool>
+  Sensor Scanning Enabled: <bool>
+  Busy: <bool>
 .fi
 .RE
 Threshold sensors report:
@@ -657,9 +695,9 @@ Threshold sensors report:
 .nf
 Threshold
   Name: <threshold>
-  Enabled: true | false
-  .
-  .
+  Enabled: <bool>
+   .
+   .
 .fi
 .RE
 only supported thresholds are listed.  Discrete sensors report:
@@ -668,8 +706,8 @@ only supported thresholds are listed.  Discrete sensors report:
 Event
   Offset: <integer>
   Name: <event offset name for sensor>
-  %Assertion Enabled: true | false
-  %Deassertion Enabled: true | false
+  %Assertion Enabled: <bool>
+  %Deassertion Enabled: <bool>
 .fi
 .RE
 only supported offsets are listed.  The assertion and deassertion
@@ -755,8 +793,8 @@ Response for setting lights is:
 .nf
 Light
   Num: 0
-  Local Control: true | false
-  %Color: black | white | red | green | blue | yellow | orange
+  Local Control: <bool>
+  %Color: <color>
   %On Time: <integer>
   %Off Time: <integer>
 .fi
@@ -832,7 +870,7 @@ the given MC.
 Response:
 .RS
 .nf
-Events Enable: true | false
+Events Enable: <bool>
 .fi
 .RE
 
@@ -1037,7 +1075,7 @@ Response:
 .nf
 PEF Config
   Name: <pef config>
-  ** PEF CONFIG **
+  **PEF CONFIG**
 .fi
 .RE
 
@@ -1139,7 +1177,7 @@ Response:
 .nf
 LANPARM Config
   Name: <lanparm config>
-  ** LANPARM CONFIG **
+  **LANPARM CONFIG**
 .fi
 .RE
 
@@ -1179,11 +1217,11 @@ LANPARM config destroyed: <lanparm config>
 .SH OTHER COMMANDS
 A few general commands exist.
 
-.B evinfo true | false
+.B evinfo <bool>
 - Turn on or off dumping object information when an event comes in.
 This is false by default.
 
-.B debug <type> on|off
+.B debug <type> <bool>
 - Turn the given debugging type on or off
 
 
@@ -1191,112 +1229,205 @@ This is false by default.
 
 The command language will output events to the console when they
 happen.  Events all occur in the format:
+.RS
+.nf
   Event
     **EVENT INFO**
+.fi
+.RE
 
 The event info varies on the type of events.  The defined events are
-listed.
+listed below.  Note that the output of some events depends on the
+setting of the
+.B evinfo
+command; the information about the object itself may or may not be
+output.
+
+Some events have another event container; this is the IPMI event that
+caused the event to be output.
 
 The following event is output when the domain is completely up and
 operational and finished all it SDR, FRU, and bus scans:
+.RS
+.nf
   EVENT
     Object Type: Domain
     Name: <domain>
     Operation: Domain fully up
     Connection Number: <integer>
     Port Number: <integer>
-    Any Connection Up: true | false
+    Any Connection Up: <bool>
     Error: <integer>
+.fi
+.RE
 
 The following comes out when domain connection infomration changes:
+.RS
+.nf
   EVENT
     Object Type: Domain
     Name: <domain>
     Operation: Connection Change
-    
+.fi
+.RE
+
 The following comes out when domains are added:
+.RS
+.nf
   EVENT
     Object Type: Domain
     Name: <domain>
     Operation: Add
     %**DOMAIN INFO**
+.fi
+.RE
 
 The following comes out when domains are destroyed:
+.RS
+.nf
   EVENT
     Object Type: Domain
     Name: <domain>
     Operation: Delete
+.fi
+.RE
 
 The following comes out when the domain gets an event that does not
 have a handler:
+.RS
+.nf
   EVENT
     Object Type: Event
     **EVENT INFO**
+.fi
+.RE
 
 The following comes out when an entity is added:
+.RS
+.nf
   EVENT
     Object Type: Entity
     Name: <entity>
     Operation: Add
     %**ENTITY INFO**
+.fi
+.RE
 
 The following comes out when an entity is deleted:
+.RS
+.nf
   EVENT
     Object Type: Entity
     Name: <entity>
     Operation: Delete
+.fi
+.RE
 
 The following comes out when an entity is changed:
+.RS
+.nf
   EVENT
     Object Type: Entity
     Name: <entity>
     Operation: Change
     %**ENTITY INFO**
+.fi
+.RE
 
 The following comes out when an entity's FRU is added:
+.RS
+.nf
   EVENT
     Object Type: Entity FRU
     Name: <entity>
     Operation: Add
     %**FRU INFO**
+.fi
+.RE
 
 The following comes out when an entity's FRU is deleted:
+.RS
+.nf
   EVENT
     Object Type: Entity FRU
     Name: <entity>
     Operation: Delete
+.fi
+.RE
 
 The following comes out when an entity's FRU is changed:
+.RS
+.nf
   EVENT
     Object Type: Entity FRU
     Name: <entity>
     Operation: Change
     %**FRU INFO**
+.fi
+.RE
 
 The following comes out when an entity's presence changes:
+.RS
+.nf
   EVENT
     Object Type: Entity
     Name: <entity>
     Operation: Presence Change
-    Present: true | false
+    Present: <bool>
     %Event
       **EVENT INFO**
+.fi
+.RE
 
 The following comes out when an entity's hot-swap state changes:
+.RS
+.nf
   EVENT
     Object Type: Entity
     Name: <entity>
     Operation: Hot-Swap Change
-    Last State: not_present | inactive | activation_requested |
-               activation_in_progress | active | deactivation_requested |
-               deactivation_in_progress | out_of_con
-    State: not_present | inactive | activation_requested |
-               activation_in_progress | active | deactivation_requested |
-               deactivation_in_progress | out_of_con
+    Last State: <hot-swap state>
+    State: <hot-swap state>
     %Event
       **EVENT INFO**
+.fi
+.RE
+
+The following comes out when an MC is added:
+.RS
+.nf
+  EVENT
+    Object Type: MC
+    Name: <mc>
+    Operation: Add
+    %**MC INFO**
+.fi
+.RE
+
+The following comes out when an MC is removed:
+.RS
+.nf
+  EVENT
+    Object Type: MC
+    Name: <mc>
+    Operation: Delete
+.fi
+.RE
+
+The following comes out when an MC is changed:
+.RS
+.nf
+  EVENT
+    Object Type: MC
+    Name: <mc>
+    Operation: Change
+    %**MC INFO**
+.fi
+.RE
 
 The following comes out when a discrete sensor gets an event:
+.RS
+.nf
   EVENT
     Object Type: Sensor
     Name: <sensor>
@@ -1307,42 +1438,61 @@ The following comes out when a discrete sensor gets an event:
     Previous Severity: <integer>
     %Event
       **EVENT INFO**
-    
+.fi
+.RE
+
 The following comes out when a threshold sensor gets an event:
+.RS
+.nf
   EVENT
     Object Type: Sensor
     Name: <sensor>
     Operation: Event
-    Threshold: lower non critical | lower critical | lower non recoverable
-              | upper non critical | upper critical | upper non recoverable
-    High/Low: going high | going low
+    Threshold: <threshold>
+    High/Low: going-high | going-low
     Direction: assertion | deassertion
     %Value: <double>
     %Raw Value: <integer>
     %Event
       **EVENT INFO**
-    
+.fi
+.RE
+
 The following comes out when a sensor is added:
+.RS
+.nf
   EVENT
     Object Type: Sensor
     Name: <sensor>
     Operation: Add
     %**SENSOR INFO**
+.fi
+.RE
 
 The following comes out when a sensor is deleted:
+.RS
+.nf
   EVENT
     Object Type: Sensor
     Name: <sensor>
     Operation: Delete
+.fi
+.RE
 
 The following comes out when a sensor is changed:
+.RS
+.nf
   EVENT
     Object Type: Sensor
     Name: <sensor>
     Operation: Change
     %**SENSOR INFO**
+.fi
+.RE
 
 The following comes out when a control gets an event:
+.RS
+.nf
   EVENT
     Object Type: Control
     Name: <control>
@@ -1352,84 +1502,118 @@ The following comes out when a control gets an event:
       Value: <integer>
     %Event
       **EVENT INFO**
-    
+.fi
+.RE
+
 The following comes out when a control is added:
+.RS
+.nf
   EVENT
     Object Type: Control
     Name: <control>
     Operation: Add
     %**CONTROL INFO**
+.fi
+.RE
 
 The following comes out when a control is deleted:
+.RS
+.nf
   EVENT
     Object Type: Control
     Name: <control>
     Operation: Delete
+.fi
+.RE
 
 The following comes out when a control is changed:
+.RS
+.nf
   EVENT
     Object Type: Control
     Name: <control>
     Operation: Change
     %**CONTROL INFO**
+.fi
+.RE
 
 
 .SH OBJECT INFO
 
-**EVENT INFO**
+Many of the command responses and events contain information about an
+objects.  The definitions of this information output is done here.
+
+.SS **EVENT INFO**
+.RS
+.nf
   MC: <mc>
   Record ID: <integer>
   Event type: <integer>
   Timestamp: <integer>
   Data: <data bytes>
+.fi
+.RE
 
-
-**DOMAIN INFO**
+.SS **DOMAIN INFO**
+.RS
+.nf
   Type: <domain type>
   SEL Rescan Time: <time>
   IPMB Rescan Time: <time>
+.fi
+.RE
 
-
-**ENTITY INFO**
+.SS **ENTITY INFO**
+.RS
+.nf
   Type: unknown | mc | fru | generic
-  Present: true | false
-  Presence sensor always there: true | false
-  Hot swappable: true | false
+  Present: <bool>
+  Presence sensor always there: <bool>
+  Hot swappable: <bool>
   Parents
     Name: <entity>
     Name: <entity>
-      .
-      .
+     .
+     .
   Children
     Name: <entity>
     Name: <entity>
-      .
-      .
+     .
+     .
+.fi
+.RE
 
 Note that Parents and Children fields will not be present if the
-entity has no parents or children.  Each entity type except "unknown"
+entity has no parents or children.  Each entity type except
+.B unknown
 will have its own output info.  These are:
 
-mc:
+.B mc
+.RS
+.nf
   Channel: <channel>
   LUN: <lun>
   OEM: <oem field from SDR>
   Slave Address: <ipmb>
-  ACPI_system_power_notify_required: true | false
-  ACPI_device_power_notify_required: true | false
-  controller_logs_init_agent_errors: true | false
-  log_init_agent_errors_accessing: true | false
-  global_init: true | false
-  chassis_device: true | false
-  bridge: true | false
-  IPMB_event_generator: true | false
-  IPMB_event_receiver: true | false
-  FRU_inventory_device: true | false
-  SEL_device: true | false
-  SDR_repository_device: true | false
-  sensor_device: true | false
+  ACPI_system_power_notify_required: <bool>
+  ACPI_device_power_notify_required: <bool>
+  controller_logs_init_agent_errors: <bool>
+  log_init_agent_errors_accessing: <bool>
+  global_init: <bool>
+  chassis_device: <bool>
+  bridge: <bool>
+  IPMB_event_generator: <bool>
+  IPMB_event_receiver: <bool>
+  FRU_inventory_device: <bool>
+  SEL_device: <bool>
+  SDR_repository_device: <bool>
+  sensor_device: <bool>
+.fi
+.RE
 
-fru:
+.B fru
+.RS
+.nf
   Channel: <channel>
   LUN: <lun>
   OEM: <oem field from SDR>
@@ -1438,10 +1622,14 @@ fru:
   private_bus_id: <integer>
   device_type: <integer>
   device_modifier: <integer>
-  is_logical_fru: true | false
+  is_logical_fru: <bool>
   fru_device_id: <integer>
+.fi
+.RE
 
-generic:
+.B generic
+.RS
+.nf
   Channel: <channel>
   LUN: <lun>
   OEM: <oem field from SDR>
@@ -1451,19 +1639,22 @@ generic:
   device_modifier: <integer>
   slave_address: <ipmb>
   address_span: <integer>
+.fi
+.RE
 
-
-**MC INFO **
-  provides_device_sdrs: true | false
-  device_available: true | false
-  chassis_support: true | false
-  bridge_support: true | false
-  ipmb_event_generator: true | false
-  ipmb_event_receiver: true | false
-  fru_inventory_support: true | false
-  sel_device_support: true | false
-  sdr_repository_support: true | false
-  sensor_device_support: true | false
+.SS **MC INFO**
+.RS
+.nf
+  provides_device_sdrs: <bool>
+  device_available: <bool>
+  chassis_support: <bool>
+  bridge_support: <bool>
+  ipmb_event_generator: <bool>
+  ipmb_event_receiver: <bool>
+  fru_inventory_support: <bool>
+  sel_device_support: <bool>
+  sdr_repository_support: <bool>
+  sensor_device_support: <bool>
   device_id: <ipmb>
   device_revision: <integer>
   fw_revision: <integer>.<integer>
@@ -1471,9 +1662,12 @@ generic:
   manufacturer_id: <integer>
   product_id: <integer>
   aux_fw_revision: <integer> <integer> <integer> <integer>
+.fi
+.RE
 
-
-*SENSOR INFO**
+.SS *SENSOR INFO**
+.RS
+.nf
   LUN: <integer>
   Number: <integer>
   Event Reading Type: <integer>
@@ -1483,80 +1677,91 @@ generic:
            discrete_performance_met discrete_severity discrete_device_presense
            discrete_device_enable discrete_availability discrete_redundancy
            discrete_acpi_power
-
   Type: <integer>
   Type Name: <sensor type (a generic string)>
   %Event Support: per state | entire sensor | global
-  Init Scanning: true | false
-  Init Events: true | false
-  Init Thresholds: true | false
-  Init Hysteresis: true | false
-  Init Type: true | false
-  Init Power Up Events: true | false
-  Init Power Up Scanning: true | false
-  Ignore If No Entity: true | false
-  Auto Rearm: true | false
+  Init Scanning: <bool>
+  Init Events: <bool>
+  Init Thresholds: <bool>
+  Init Hysteresis: <bool>
+  Init Type: <bool>
+  Init Power Up Events: <bool>
+  Init Power Up Scanning: <bool>
+  Ignore If No Entity: <bool>
+  Auto Rearm: <bool>
   OEM1: <integer>
   Id: <string>
+.fi
+.RE
 
-For sensors of type "threshold", the following exist:
+For threshold sensors, the following exist:
+.RS
+.nf
   Threshold Access: none | readable | settable | fixed
   Threshold
-    Name: lower non critical | lower critical | lower non recoverable
-          | upper non critical | upper critical | upper non recoverable
-    Readable: true | false
-    Settable: true | false
+    Name: <threshold>
+    Readable: <bool>
+    Settable: <bool>
     Supports: going high assertion | going low assertion
               | going high deassertion | going low deassertion
-      .
-      .
-    .
-    .
-    Hysteresis Support: none | readable | settable | fixed
-    %Nominal Reading: <float>
-    %Normal Max: <float>
-    %Normal Min: <float>
-    %Sensor Max: <float>
-    %Sensor Min: <float>
-    Base Unit: <integer>
-    Base Unit Name: <string>
-    %Rate Unit: <integer>
-    %Rate Unit Name: <string>
-    %Modifier Use: / | *
-    %Modifier Unit: <integer>
-    %Modifier Unit Name: <string>
+   .
+   .
+  Hysteresis Support: none | readable | settable | fixed
+  %Nominal Reading: <float>
+  %Normal Max: <float>
+  %Normal Min: <float>
+  %Sensor Max: <float>
+  %Sensor Min: <float>
+  Base Unit: <integer>
+  Base Unit Name: <string>
+  %Rate Unit: <integer>
+  %Rate Unit Name: <string>
+  %Modifier Use: / | *
+  %Modifier Unit: <integer>
+  %Modifier Unit Name: <string>
+.fi
+.RE
 
-For sensors of type not "threshold", the following exist:
+For discrete sensors, the following exist:
+.RS
+.nf
   Event
     Offset: <integer>
     Supports: assertion | deassertion
-      .
-      .
-    .
-    .
+   .
+   .
+.fi
+.RE
 
-Fields marked with % are optional
-
-
-**CONTROL INFO**
+.SS **CONTROL INFO**
+.RS
+.nf
   Type: <control type>
-  Generates Events: true | false
-  Settable: true | false
-  Readable: true | false
+  Generates Events: <bool>
+  Settable: <bool>
+  Readable: <bool>
   Num Values: <integer>
   Id: <string>
-  
-  Controls of type light that are set with settings have the
-  following:
-  Set with: settings
-  Local Control: true | false
-  Color: black | white | red | green | blue | yellow | orange
-    .
-    .
-  One color is listed for each supported color
+.fi
+.RE
 
-  Controls of type light that are set with transitions have the
-  following:
+Controls of type light that are set with settings have the
+following:
+.RS
+.nf
+  Set with: settings
+  Local Control: <bool>
+  Color: <color>
+   .
+   .
+.fi
+.RE
+One color is listed for each supported color
+
+Controls of type light that are set with transitions have the
+following:
+.RS
+.nf
   Light
     Number: <integer>
     Num Values: <integer>
@@ -1565,20 +1770,25 @@ Fields marked with % are optional
       Num Transitions: <integer>
       Transition
         Number: <integer>
-        Color: black | white | red | green | blue | yellow | orange
+        Color: <color>
         Time: <integer>
-        .
-        .
-      .
-      .
-    .
-    .
+       .
+       .
+     .
+     .
+.fi
+.RE
 
-  Controls of type identifier have the following:
+Controls of type identifier have the following:
+.RS
+.nf
   Max Length: <integer>
+.fi
+.RE
 
-
-**FRU INFO**
+.SS **FRU INFO**
+.RS
+.nf
   %Internal area version: <integer>
   %Internal area length: <integer>
   %Internal area data: <data bytes>
@@ -1670,14 +1880,17 @@ Fields marked with % are optional
     Number: <integer>
     Type: binary | ascii | unicode
     Data: <data in the above format>
+.fi
+.RE
 
-
-** LANPARM CONFIG **
-  support_auth_oem: true | false
-  support_auth_straight: true | false
-  support_auth_md5: true | false
-  support_auth_md2: true | false
-  support_auth_none: true | false
+.SS **LANPARM CONFIG**
+.RS
+.nf
+  support_auth_oem: <bool>
+  support_auth_straight: <bool>
+  support_auth_md5: <bool>
+  support_auth_md2: <bool>
+  support_auth_none: <bool>
   ip_addr_source: <integer>
   num_alert_destinations: <integer>
   %ipv4_ttl: <integer>
@@ -1689,8 +1902,8 @@ Fields marked with % are optional
   %subnet_mask: <ip addr>
   %primary_rmcp_port <integer>
   %secondary_rmcp_port <integer>
-  %bmc_generated_arps: true | false
-  %bmc_generated_garps: true | false
+  %bmc_generated_arps: <bool>
+  %bmc_generated_garps: <bool>
   %garp_interval: <integer>
   %default_gateway_ip_addr: <ip addr>
   %default_gateway_mac_addr: <mac addr>
@@ -1699,42 +1912,42 @@ Fields marked with % are optional
   community_string: <string>
   User
     Name: callback
-    enable_auth_oem: true | false
-    enable_auth_straight: true | false
-    enable_auth_md5: true | false
-    enable_auth_md2: true | false
-    enable_auth_none: true | false
+    enable_auth_oem: <bool>
+    enable_auth_straight: <bool>
+    enable_auth_md5: <bool>
+    enable_auth_md2: <bool>
+    enable_auth_none: <bool>
   User
     Name: user
-    enable_auth_oem: true | false
-    enable_auth_straight: true | false
-    enable_auth_md5: true | false
-    enable_auth_md2: true | false
-    enable_auth_none: true | false
+    enable_auth_oem: <bool>
+    enable_auth_straight: <bool>
+    enable_auth_md5: <bool>
+    enable_auth_md2: <bool>
+    enable_auth_none: <bool>
   User
     Name: operator
-    enable_auth_oem: true | false
-    enable_auth_straight: true | false
-    enable_auth_md5: true | false
-    enable_auth_md2: true | false
-    enable_auth_none: true | false
+    enable_auth_oem: <bool>
+    enable_auth_straight: <bool>
+    enable_auth_md5: <bool>
+    enable_auth_md2: <bool>
+    enable_auth_none: <bool>
   User
     Name: admin
-    enable_auth_oem: true | false
-    enable_auth_straight: true | false
-    enable_auth_md5: true | false
-    enable_auth_md2: true | false
-    enable_auth_none: true | false
+    enable_auth_oem: <bool>
+    enable_auth_straight: <bool>
+    enable_auth_md5: <bool>
+    enable_auth_md2: <bool>
+    enable_auth_none: <bool>
   User
     Name: oem
-    enable_auth_oem: true | false
-    enable_auth_straight: true | false
-    enable_auth_md5: true | false
-    enable_auth_md2: true | false
-    enable_auth_none: true | false
+    enable_auth_oem: <bool>
+    enable_auth_straight: <bool>
+    enable_auth_md5: <bool>
+    enable_auth_md2: <bool>
+    enable_auth_none: <bool>
   Alert Destination
     Number: <integer>
-    alert_ack: true | false
+    alert_ack: <bool>
     dest_type: <integer>
     alert_retry_interval: <integer>
     max_alert_retries: <integer>
@@ -1744,36 +1957,39 @@ Fields marked with % are optional
     dest_mac_addr: <mac addr>
    .
    .
-   
+.fi
+.RE
 
-** PEF CONFIG **
-  alert_startup_delay_enabled: true | false
-  startup_delay_enabled: true | false
-  event_messages_enabled: true | false
-  pef_enabled: true | false
-  diagnostic_interrupt_enabled: true | false
-  oem_action_enabled: true | false
-  power_cycle_enabled: true | false
-  reset_enabled: true | false
-  power_down_enabled: true | false
-  alert_enabled: true | false
+.SS **PEF CONFIG**
+.RS
+.nf
+  alert_startup_delay_enabled: <bool>
+  startup_delay_enabled: <bool>
+  event_messages_enabled: <bool>
+  pef_enabled: <bool>
+  diagnostic_interrupt_enabled: <bool>
+  oem_action_enabled: <bool>
+  power_cycle_enabled: <bool>
+  reset_enabled: <bool>
+  power_down_enabled: <bool>
+  alert_enabled: <bool>
   %startup_delay: <integer>
   %alert_startup_delay: <integer>
-  guid_enabled: true | false
+  guid_enabled: <bool>
   guid_val: <guid>
   num_event_filters: <integer>
   num_alert_policies: <integer>
   num_alert_strings: <integer>
   Event Filter
     Number: <integer>
-    enable_filter: true | false
+    enable_filter: <bool>
     filter_type: <integer>
-    diagnostic_interrupt: true | false
-    oem_action: true | false
-    power_cycle: true | false
-    reset: true | false
-    power_down: true | false
-    alert: true | false
+    diagnostic_interrupt: <bool>
+    oem_action: <bool>
+    power_cycle: <bool>
+    reset: <bool>
+    power_down: <bool>
+    alert: <bool>
     alert_policy_number: <integer>
     event_severity: <integer>
     generator_id_addr: <integer>
@@ -1796,11 +2012,11 @@ Fields marked with % are optional
   Alert Policy
     Number: <integer>
     policy_num: <integer>
-    enabled: true | false
+    enabled: <bool>
     policy: <integer>
     channel: <integer>
     destination_selector: <integer>
-    alert_string_event_specific: true | false
+    alert_string_event_specific: <bool>
     alert_string_selector: <integer>
    .
    .
@@ -1810,14 +2026,26 @@ Fields marked with % are optional
     alert_string: <string>
    .
    .
+.fi
+.RE
 
-**CONNECTION INFO**
-  Active: true | false
+.SS **CONNECTION INFO**
+.RS
+.nf
+  Active: <bool>
+.fi
+.RE
 
-**PEF INFO**
+.SS **PEF INFO**
+.RS
+.nf
   MC: <mc>
+.fi
+.RE
 
-**PET INFO**
+.SS **PET INFO**
+.RS
+.nf
   MC: <mc>
   Channel: <channel>
   IP Address: <ip address>
@@ -1826,10 +2054,16 @@ Fields marked with % are optional
   Policy Number: <policy number>
   APT Selector: <apt selector>
   LAN Dest Selector: <lan dest selector>
+.fi
+.RE
 
-**LANPARM INFO**
+.SS **LANPARM INFO**
+.RS
+.nf
   MC: <mc>
   Channel: <integer>
+.fi
+.RE
 
 
 .SH "SEE ALSO"

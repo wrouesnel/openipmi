@@ -1,3 +1,12 @@
+2004-10-10 Corey Minyard <cminyard@mvista.com> 
+
+	* man/ipmi_cmdlang.7: Finished this document.
+
+	* cmdlang/cmdlang.c: Renamed the three-character short form
+	thresholds to be two characters to make them consistant.
+
+	* configure.in: Move to version 1.4.3
+
 2004-10-09 Corey Minyard <cminyard@mvista.com> 
 
 	* OpenIPMIcmdlang.pc.in, Makefile.am: Added file for the new
@@ -50,8 +59,6 @@
 
 	* man/ipmi_cmdlang.7: Started man page.
 	
-	* configure.in: Move to version 1.4.3
-
 2004-10-07 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixes some problems found by a static analysis
