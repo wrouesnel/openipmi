@@ -4219,7 +4219,7 @@ setlanparm_cmd(char *cmd, char **toks, void *cb_data)
     unsigned char data[30];
     char          *name;
     char          *str;
-    int           i;
+    int           i, j;
     int           rv = 0;
 
     if (!lanparm_config) {
@@ -4254,11 +4254,11 @@ setlanparm_cmd(char *cmd, char **toks, void *cb_data)
 	    return 0;
 	rv = lan_conf[i].set_val(lanparm_config, val);
     } else if (lan_conf[i].set_data) {
-	for (i=0; i<sizeof(data); i++) {
-	    if (get_uchar(toks, data+i, NULL))
+	for (j=0; j<sizeof(data); j++) {
+	    if (get_uchar(toks, data+j, NULL))
 		break;
 	}
-	rv = lan_conf[i].set_data(lanparm_config, data, i);
+	rv = lan_conf[i].set_data(lanparm_config, data, j);
     } else if (lan_conf[i].set_val_sel) {
 	if (get_uint(toks, &sel, "selector"))
 	    return 0;
@@ -4268,11 +4268,11 @@ setlanparm_cmd(char *cmd, char **toks, void *cb_data)
     } else if (lan_conf[i].set_data_sel) {
 	if (get_uint(toks, &sel, "selector"))
 	    return 0;
-	for (i=0; i<sizeof(data); i++) {
-	    if (get_uchar(toks, data+i, NULL))
+	for (j=0; j<sizeof(data); j++) {
+	    if (get_uchar(toks, data+j, NULL))
 		break;
 	}
-	rv = lan_conf[i].set_data_sel(lanparm_config, sel, data, i);
+	rv = lan_conf[i].set_data_sel(lanparm_config, sel, data, j);
     }
     if (rv)
 	cmd_win_out("Error setting parm: 0x%x\n", rv);
