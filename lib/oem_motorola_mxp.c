@@ -378,7 +378,9 @@ typedef void (*mxp_states_get_val_cb)(ipmi_sensor_t   *sensor,
 
 /* Handler for message errors.  Some message errors are expected and
    are not actually errors, this routine should fill in the states and
-   return error they wish to report to the user. */
+   return error they wish to report to the user.  Note that the error
+   is the raw IPMI error (0xc3 for timeout, for instance).  This is
+   only called on IPMI errors, not system errors. */
 typedef int (*mxp_states_err_cb)(ipmi_sensor_t   *sensor,
 				 mxp_sens_info_t *sens_info,
 				 int             err,
@@ -436,13 +438,6 @@ mxp_sensor_get_done(ipmi_sensor_t *sensor,
     ipmi_set_sensor_scanning_enabled(&states, 1);
 
     if (err) {
-	/* Check the error handler first, and let it handle the error. */
-	if (sens_info->err_states) {
-	    err = sens_info->err_states(sensor, sens_info, err,
-					rsp->data, &states);
-	    if (!err)
-		goto deliver;
-	}
 	if (sens_info->done)
 	    sens_info->done(sensor, err,
 			    &states, sens_info->cb_data);
@@ -450,6 +445,14 @@ mxp_sensor_get_done(ipmi_sensor_t *sensor,
     }
 
     if (rsp->data[0] != 0) {
+	/* Check the error handler first, and let it handle the error. */
+	if (sens_info->err_states) {
+	    err = sens_info->err_states(sensor, sens_info, rsp->data[0],
+					rsp->data, &states);
+	    if (!err)
+		goto deliver;
+	}
+
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "mxp_sensor_get_done: Received IPMI error: %x",
 		 rsp->data[0]);

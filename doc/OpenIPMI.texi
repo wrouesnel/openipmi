@@ -1589,8 +1589,8 @@ OpenIPMI.  To talk to the individual cards, there are two system
 managment addresses provided (channel 0xf mc 0, channel 0xf mc 1) to
 talk directly to the cards.  The various sensors and controls that are
 directly on the card are provided on those controllers.  The third
-management controller represents the currently active AMC, the chassis
-controls are attached to that controller.
+management controller (channel 0 mc 0x20) represents the currently
+active AMC, the chassis controls are attached to that controller.
 
 @contents
 
