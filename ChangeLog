@@ -1,3 +1,7 @@
+2004-09-13 Corey Minyard <cminyard@mvista.com> 
+
+	* FAQ: Added some information about the driver.
+
 2004-09-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain, include/OpenIPMI/ipmiif.h.in: Added options

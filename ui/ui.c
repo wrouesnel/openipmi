@@ -6001,7 +6001,6 @@ static int
 new_domain_cmd(char *cmd, char **toks, void *cb_data)
 {
     char         *parms[30];
-    const char   **argv = (const char **) parms;
     int          num_parms;
     unsigned int curr_parm;
     ipmi_args_t  *con_parms[2];
@@ -6028,7 +6027,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
     }
 
     curr_parm = 1;
-    rv = ipmi_parse_args(&curr_parm, num_parms, argv, &con_parms[set]);
+    rv = ipmi_parse_args(&curr_parm, num_parms, parms, &con_parms[set]);
     if (rv) {
 	cmd_win_out("First connection parms are invalid\n");
 	return 0;
@@ -6036,7 +6035,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
     set++;
 
     if (curr_parm > num_parms) {
-	rv = ipmi_parse_args(&curr_parm, num_parms, argv, &con_parms[set]);
+	rv = ipmi_parse_args(&curr_parm, num_parms, parms, &con_parms[set]);
 	if (rv) {
 	    ipmi_free_args(con_parms[0]);
 	    cmd_win_out("Second connection parms are invalid\n");

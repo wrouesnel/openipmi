@@ -108,6 +108,8 @@ parse_ipmi_objstr(char *str,
 
     if (str[i])
 	*obj = str + i + 1;
+    else
+	*obj = NULL;
 
     return 0;
 }
@@ -120,25 +122,31 @@ parse_ipmi_objstr(char *str,
 typedef struct domain_iter_info_s
 {
     char               *cmpstr;
-    int                found;
     ipmi_domain_ptr_cb handler;
     void               *cb_data;
+    ipmi_cmd_info_t    *cmd_info;
 } domain_iter_info_t;
 
 static void
 for_each_domain_handler(ipmi_domain_t *domain, void *cb_data)
 {
     domain_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t    *cmd_info = info->cmd_info;
     char               domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    if (cmd_info->cmdlang->err)
+	return;
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
     if ((!info->cmpstr) || (strcmp(info->cmpstr, domain_name) == 0)) {
-	info->found = 1;
+	ipmi_cmdlang_out(cmd_info, "Domain", domain_name);
+	ipmi_cmdlang_down(cmd_info);
 	info->handler(domain, info->cb_data);
+	ipmi_cmdlang_up(cmd_info);
     }
 }
 
-static int
+static void
 for_each_domain(ipmi_cmd_info_t    *cmd_info,
 		char               *domain,
 		char               *class,
@@ -149,23 +157,19 @@ for_each_domain(ipmi_cmd_info_t    *cmd_info,
     domain_iter_info_t info;
 
     if (class || obj) {
-	cmd_info->cmdlang->err = "Invalid domain";
-	return EINVAL;
+	cmd_info->cmdlang->errstr = "Invalid domain";
+	cmd_info->cmdlang->err = EINVAL;
+	return;
     }
 
     info.cmpstr = domain;
-    info.found = 0;
     info.handler = handler;
     info.cb_data = cb_data;
+    info.cmd_info = cmd_info;
     ipmi_domain_iterate_domains(for_each_domain_handler, &info);
-    if (!info.found) {
-	cmd_info->cmdlang->err = "domain not found";
-	return ENOENT;
-    }
-    return 0;
 }
 
-int
+void
 ipmi_cmdlang_domain_handler(ipmi_cmd_info_t *cmd_info)
 {
     char *domain, *class, *obj;
@@ -177,14 +181,15 @@ ipmi_cmdlang_domain_handler(ipmi_cmd_info_t *cmd_info)
 	rv = parse_ipmi_objstr(cmd_info->argv[cmd_info->curr_arg],
 			       &domain, &class, &obj);
 	if (rv) {
-	    cmd_info->cmdlang->err = "Invalid domain";
-	    return rv;
+	    cmd_info->cmdlang->errstr = "Invalid domain";
+	    cmd_info->cmdlang->err = rv;
+	    return;
 	}
 	cmd_info->curr_arg++;
     }
 
-    return for_each_domain(cmd_info, domain, class, obj,
-			   cmd_info->handler_data, cmd_info);
+    for_each_domain(cmd_info, domain, class, obj,
+		    cmd_info->handler_data, cmd_info);
 }
 
 
@@ -194,21 +199,27 @@ ipmi_cmdlang_domain_handler(ipmi_cmd_info_t *cmd_info)
 typedef struct entity_iter_info_s
 {
     char               *cmpstr;
-    int                found;
     ipmi_entity_ptr_cb handler;
     void               *cb_data;
+    ipmi_cmd_info_t    *cmd_info;
 } entity_iter_info_t;
 
 static void
 for_each_entity_handler(ipmi_entity_t *entity, void *cb_data)
 {
     entity_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t    *cmd_info = info->cmd_info;
     char               entity_name[IPMI_ENTITY_NAME_LEN];
+
+    if (cmd_info->cmdlang->err)
+	return;
 
     ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
     if ((!info->cmpstr) || (strcmp(info->cmpstr, entity_name) == 0)) {
-	info->found = 1;
+	ipmi_cmdlang_out(cmd_info, "Entity", entity_name);
+	ipmi_cmdlang_down(cmd_info);
 	info->handler(entity, info->cb_data);
+	ipmi_cmdlang_up(cmd_info);
     }
 }
 
@@ -218,7 +229,7 @@ for_each_entity_domain_handler(ipmi_domain_t *domain, void *cb_data)
     ipmi_domain_iterate_entities(domain, for_each_entity_handler, cb_data);
 }
 
-static int
+static void
 for_each_entity(ipmi_cmd_info_t    *cmd_info,
 		char               *domain,
 		char               *class,
@@ -227,29 +238,22 @@ for_each_entity(ipmi_cmd_info_t    *cmd_info,
 		void               *cb_data)
 {
     entity_iter_info_t info;
-    int                rv;
 
     if (obj) {
-	cmd_info->cmdlang->err = "Invalid entity";
-	return EINVAL;
+	cmd_info->cmdlang->errstr = "Invalid entity";
+	cmd_info->cmdlang->err = EINVAL;
+	return;
     }
 
     info.cmpstr = class;
-    info.found = 0;
     info.handler = handler;
     info.cb_data = cb_data;
-    rv = for_each_domain(cmd_info, domain, NULL, NULL,
-			 for_each_entity_domain_handler, &info);
-    if (rv)
-	return rv;
-    if (!info.found) {
-	cmd_info->cmdlang->err = "entity not found";
-	return ENOENT;
-    }
-    return 0;
+    info.cmd_info = cmd_info;
+    for_each_domain(cmd_info, domain, NULL, NULL,
+		    for_each_entity_domain_handler, &info);
 }
 
-int
+void
 ipmi_cmdlang_entity_handler(ipmi_cmd_info_t *cmd_info)
 {
     char *domain, *class, *obj;
@@ -261,14 +265,15 @@ ipmi_cmdlang_entity_handler(ipmi_cmd_info_t *cmd_info)
 	rv = parse_ipmi_objstr(cmd_info->argv[cmd_info->curr_arg],
 			       &domain, &class, &obj);
 	if (rv) {
-	    cmd_info->cmdlang->err = "Invalid entity";
-	    return rv;
+	    cmd_info->cmdlang->errstr = "Invalid entity";
+	    cmd_info->cmdlang->err = rv;
+	    return;
 	}
 	cmd_info->curr_arg++;
     }
 
-    return for_each_entity(cmd_info, domain, class, obj,
-			   cmd_info->handler_data, cmd_info);
+    for_each_entity(cmd_info, domain, class, obj,
+		    cmd_info->handler_data, cmd_info);
 }
 
 
@@ -278,9 +283,9 @@ ipmi_cmdlang_entity_handler(ipmi_cmd_info_t *cmd_info)
 typedef struct sensor_iter_info_s
 {
     char               *cmpstr;
-    int                found;
     ipmi_sensor_ptr_cb handler;
     void               *cb_data;
+    ipmi_cmd_info_t    *cmd_info;
 } sensor_iter_info_t;
 
 static void
@@ -289,12 +294,15 @@ for_each_sensor_handler(ipmi_entity_t *entity,
 			void          *cb_data)
 {
     sensor_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t    *cmd_info = info->cmd_info;
     char               sensor_name[IPMI_SENSOR_NAME_LEN];
 
     ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
     if ((!info->cmpstr) || (strcmp(info->cmpstr, sensor_name) == 0)) {
-	info->found = 1;
+	ipmi_cmdlang_out(cmd_info, "Sensor", sensor_name);
+	ipmi_cmdlang_down(cmd_info);
 	info->handler(sensor, info->cb_data);
+	ipmi_cmdlang_up(cmd_info);
     }
 }
 
@@ -304,7 +312,7 @@ for_each_sensor_entity_handler(ipmi_entity_t *entity, void *cb_data)
     ipmi_entity_iterate_sensors(entity, for_each_sensor_handler, cb_data);
 }
 
-static int
+static void
 for_each_sensor(ipmi_cmd_info_t    *cmd_info,
 		char               *domain,
 		char               *class,
@@ -313,24 +321,16 @@ for_each_sensor(ipmi_cmd_info_t    *cmd_info,
 		void               *cb_data)
 {
     sensor_iter_info_t info;
-    int                rv;
 
     info.cmpstr = class;
-    info.found = 0;
     info.handler = handler;
     info.cb_data = cb_data;
-    rv = for_each_entity(cmd_info, domain, class, NULL,
-			 for_each_sensor_entity_handler, &info);
-    if (rv)
-	return rv;
-    if (!info.found) {
-	cmd_info->cmdlang->err = "sensor not found";
-	return ENOENT;
-    }
-    return 0;
+    info.cmd_info = cmd_info;
+    for_each_entity(cmd_info, domain, class, NULL,
+		    for_each_sensor_entity_handler, &info);
 }
 
-int
+void
 ipmi_cmdlang_sensor_handler(ipmi_cmd_info_t *cmd_info)
 {
     char *domain, *class, *obj;
@@ -342,14 +342,15 @@ ipmi_cmdlang_sensor_handler(ipmi_cmd_info_t *cmd_info)
 	rv = parse_ipmi_objstr(cmd_info->argv[cmd_info->curr_arg],
 			       &domain, &class, &obj);
 	if (rv) {
-	    cmd_info->cmdlang->err = "Invalid sensor";
-	    return rv;
+	    cmd_info->cmdlang->errstr = "Invalid sensor";
+	    cmd_info->cmdlang->err = rv;
+	    return;
 	}
 	cmd_info->curr_arg++;
     }
 
-    return for_each_sensor(cmd_info, domain, class, obj,
-			   cmd_info->handler_data, cmd_info);
+    for_each_sensor(cmd_info, domain, class, obj,
+		    cmd_info->handler_data, cmd_info);
 }
 
 
@@ -359,9 +360,9 @@ ipmi_cmdlang_sensor_handler(ipmi_cmd_info_t *cmd_info)
 typedef struct control_iter_info_s
 {
     char                *cmpstr;
-    int                 found;
     ipmi_control_ptr_cb handler;
     void                *cb_data;
+    ipmi_cmd_info_t     *cmd_info;
 } control_iter_info_t;
 
 static void
@@ -370,12 +371,15 @@ for_each_control_handler(ipmi_entity_t  *entity,
 			 void           *cb_data)
 {
     control_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t     *cmd_info = info->cmd_info;
     char                control_name[IPMI_CONTROL_NAME_LEN];
 
     ipmi_control_get_name(control, control_name, sizeof(control_name));
     if ((!info->cmpstr) || (strcmp(info->cmpstr, control_name) == 0)) {
-	info->found = 1;
+	ipmi_cmdlang_out(cmd_info, "Control", control_name);
+	ipmi_cmdlang_down(cmd_info);
 	info->handler(control, info->cb_data);
+	ipmi_cmdlang_up(cmd_info);
     }
 }
 
@@ -385,7 +389,7 @@ for_each_control_entity_handler(ipmi_entity_t *entity, void *cb_data)
     ipmi_entity_iterate_controls(entity, for_each_control_handler, cb_data);
 }
 
-static int
+static void
 for_each_control(ipmi_cmd_info_t     *cmd_info,
 		 char                *domain,
 		 char                *class,
@@ -394,24 +398,16 @@ for_each_control(ipmi_cmd_info_t     *cmd_info,
 		 void                *cb_data)
 {
     control_iter_info_t info;
-    int                 rv;
 
     info.cmpstr = class;
-    info.found = 0;
     info.handler = handler;
     info.cb_data = cb_data;
-    rv = for_each_entity(cmd_info, domain, class, NULL,
-			 for_each_control_entity_handler, &info);
-    if (rv)
-	return rv;
-    if (!info.found) {
-	cmd_info->cmdlang->err = "control not found";
-	return ENOENT;
-    }
-    return 0;
+    info.cmd_info = cmd_info;
+    for_each_entity(cmd_info, domain, class, NULL,
+		    for_each_control_entity_handler, &info);
 }
 
-int
+void
 ipmi_cmdlang_control_handler(ipmi_cmd_info_t *cmd_info)
 {
     char *domain, *class, *obj;
@@ -423,14 +419,15 @@ ipmi_cmdlang_control_handler(ipmi_cmd_info_t *cmd_info)
 	rv = parse_ipmi_objstr(cmd_info->argv[cmd_info->curr_arg],
 			       &domain, &class, &obj);
 	if (rv) {
-	    cmd_info->cmdlang->err = "Invalid control";
-	    return rv;
+	    cmd_info->cmdlang->errstr = "Invalid control";
+	    cmd_info->cmdlang->err = rv;
+	    return;
 	}
 	cmd_info->curr_arg++;
     }
 
-    return for_each_control(cmd_info, domain, class, obj,
-			    cmd_info->handler_data, cmd_info);
+    for_each_control(cmd_info, domain, class, obj,
+		     cmd_info->handler_data, cmd_info);
 }
 
 
@@ -439,22 +436,25 @@ ipmi_cmdlang_control_handler(ipmi_cmd_info_t *cmd_info)
  */
 typedef struct mc_iter_info_s
 {
-    char           *cmpstr;
-    int            found;
-    ipmi_mc_ptr_cb handler;
-    void           *cb_data;
+    char            *cmpstr;
+    ipmi_mc_ptr_cb  handler;
+    void            *cb_data;
+    ipmi_cmd_info_t *cmd_info;
 } mc_iter_info_t;
 
 static void
 for_each_mc_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    mc_iter_info_t *info = cb_data;
-    char           mc_name[IPMI_MC_NAME_LEN];
+    mc_iter_info_t  *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    char            mc_name[IPMI_MC_NAME_LEN];
 
     ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
     if ((!info->cmpstr) || (strcmp(info->cmpstr, mc_name) == 0)) {
-	info->found = 1;
+	ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+	ipmi_cmdlang_down(cmd_info);
 	info->handler(mc, info->cb_data);
+	ipmi_cmdlang_up(cmd_info);
     }
 }
 
@@ -464,7 +464,7 @@ for_each_mc_domain_handler(ipmi_domain_t *domain, void *cb_data)
     ipmi_domain_iterate_mcs(domain, for_each_mc_handler, cb_data);
 }
 
-static int
+static void
 for_each_mc(ipmi_cmd_info_t *cmd_info,
 	    char            *domain,
 	    char            *class,
@@ -473,29 +473,22 @@ for_each_mc(ipmi_cmd_info_t *cmd_info,
 	    void            *cb_data)
 {
     mc_iter_info_t info;
-    int            rv;
 
     if (obj) {
-	cmd_info->cmdlang->err = "Invalid MC";
-	return EINVAL;
+	cmd_info->cmdlang->errstr = "Invalid MC";
+	cmd_info->cmdlang->err = EINVAL;
+	return;
     }
 
     info.cmpstr = class;
-    info.found = 0;
     info.handler = handler;
     info.cb_data = cb_data;
-    rv = for_each_domain(cmd_info, domain, NULL, NULL,
-			 for_each_mc_domain_handler, &info);
-    if (rv)
-	return rv;
-    if (!info.found) {
-	cmd_info->cmdlang->err = "MC not found";
-	return ENOENT;
-    }
-    return 0;
+    info.cmd_info = cmd_info;
+    for_each_domain(cmd_info, domain, NULL, NULL,
+		    for_each_mc_domain_handler, &info);
 }
 
-int
+void
 ipmi_cmdlang_mc_handler(ipmi_cmd_info_t *cmd_info)
 {
     char *domain, *class, *obj;
@@ -507,14 +500,15 @@ ipmi_cmdlang_mc_handler(ipmi_cmd_info_t *cmd_info)
 	rv = parse_ipmi_objstr(cmd_info->argv[cmd_info->curr_arg],
 			       &domain, &class, &obj);
 	if (rv) {
-	    cmd_info->cmdlang->err = "Invalid MC";
-	    return rv;
+	    cmd_info->cmdlang->errstr = "Invalid MC";
+	    cmd_info->cmdlang->err = rv;
+	    return;
 	}
 	cmd_info->curr_arg++;
     }
 
-    return for_each_mc(cmd_info, domain, class, obj, cmd_info->handler_data,
-		       cmd_info);
+    for_each_mc(cmd_info, domain, class, obj, cmd_info->handler_data,
+		cmd_info);
 }
 
 
@@ -524,19 +518,22 @@ ipmi_cmdlang_mc_handler(ipmi_cmd_info_t *cmd_info)
 typedef struct conn_iter_info_s
 {
     int                    conn;
-    int                    found;
     ipmi_connection_ptr_cb handler;
     void                   *cb_data;
+    ipmi_cmd_info_t        *cmd_info;
 } conn_iter_info_t;
 
 static void
 for_each_conn_handler(ipmi_domain_t *domain, int conn, void *cb_data)
 {
-    conn_iter_info_t       *info = cb_data;
+    conn_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t  *cmd_info = info->cmd_info;
 
     if ((info->conn == -1) || (info->conn == conn)) {
-	info->found = 1;
+	ipmi_cmdlang_out_int(cmd_info, "Connection", info->conn);
+	ipmi_cmdlang_down(cmd_info);
 	info->handler(domain, conn, info->cb_data);
+	ipmi_cmdlang_up(cmd_info);
     }
 }
 
@@ -546,7 +543,7 @@ for_each_conn_domain_handler(ipmi_domain_t *domain, void *cb_data)
     ipmi_domain_iterate_connections(domain, for_each_conn_handler, cb_data);
 }
 
-static int
+static void
 for_each_connection(ipmi_cmd_info_t        *cmd_info,
 		    char                   *domain,
 		    char                   *class,
@@ -556,37 +553,36 @@ for_each_connection(ipmi_cmd_info_t        *cmd_info,
 {
     conn_iter_info_t info;
     char             *endptr;
-    int              rv;
 
     if (class) {
-	cmd_info->cmdlang->err = "Invalid domain";
-	return EINVAL;
+	cmd_info->cmdlang->errstr = "Invalid connection";
+	cmd_info->cmdlang->err = EINVAL;
+	return;
     }
 
     if (obj) {
-	if (!isdigit(obj[0]))
-	    return EINVAL;
+	if (!isdigit(obj[0])) {
+	    cmd_info->cmdlang->errstr = "Invalid connection number";
+	    cmd_info->cmdlang->err = EINVAL;
+	    return;
+	}
 	info.conn = strtoul(class, &endptr, 0);
-	if (*endptr != '\0')
-	    return EINVAL;
+	if (*endptr != '\0') {
+	    cmd_info->cmdlang->errstr = "Invalid connection number";
+	    cmd_info->cmdlang->err = EINVAL;
+	    return;
+	}
     } else {
 	info.conn = -1;
     }
-    info.found = 0;
     info.handler = handler;
     info.cb_data = cb_data;
-    rv = for_each_domain(cmd_info, domain, NULL, NULL,
-			 for_each_conn_domain_handler, &info);
-    if (rv)
-	return rv;
-    if (!info.found) {
-	cmd_info->cmdlang->err = "Connection not found";
-	return ENOENT;
-    }
-    return 0;
+    info.cmd_info = cmd_info;
+    for_each_domain(cmd_info, domain, NULL, NULL,
+		    for_each_conn_domain_handler, &info);
 }
 
-int
+void
 ipmi_cmdlang_connection_handler(ipmi_cmd_info_t *cmd_info)
 {
     char *domain, *class, *obj;
@@ -598,15 +594,16 @@ ipmi_cmdlang_connection_handler(ipmi_cmd_info_t *cmd_info)
 	rv = parse_ipmi_objstr(cmd_info->argv[cmd_info->curr_arg],
 			       &domain, &class, &obj);
 	if (rv) {
-	    cmd_info->cmdlang->err = "Invalid connection";
-	    return rv;
+	    cmd_info->cmdlang->errstr = "Invalid connection";
+	    cmd_info->cmdlang->err = rv;
+	    return;
 	}
 	cmd_info->curr_arg++;
     }
 
-    return for_each_connection(cmd_info,
-			       domain, class, obj, cmd_info->handler_data,
-			       cmd_info);
+    for_each_connection(cmd_info,
+			domain, class, obj, cmd_info->handler_data,
+			cmd_info);
 }
 
 
@@ -615,6 +612,7 @@ parse_next_str(char **tok, char **istr)
 {
     char *str = *istr;
     char *tstr;
+    char *start;
     char quote = 0;
 
     while (isspace(*str))
@@ -626,6 +624,8 @@ parse_next_str(char **tok, char **istr)
 	quote = *str;
 	str++;
     }
+
+    start = str;
 
     while (*str) {
 	if (quote) {
@@ -645,8 +645,8 @@ parse_next_str(char **tok, char **istr)
 		*tstr = *(tstr+1);
 		tstr++;
 	    }
-	    *str++;
 	}
+	*str++;
     }
 
     if (*str) {
@@ -655,6 +655,7 @@ parse_next_str(char **tok, char **istr)
     } else {
 	*istr = str;
     }
+    *tok = start;
 
     return 0;
 }
@@ -662,30 +663,41 @@ parse_next_str(char **tok, char **istr)
 static ipmi_cmdlang_cmd_t *cmd_list;
 
 #define MAXARGS 100
-int
+void
 ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 {
     int                argc;
     char               *argv[MAXARGS];
     int                curr_arg;
     ipmi_cmdlang_cmd_t *cmd;
-    ipmi_cmd_info_t    info;
+    ipmi_cmd_info_t    *info;
     int                rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto done;
+    }
+    memset(info, 0, sizeof(*info));
+    info->usecount = 1;
+    info->cmdlang = cmdlang;
 
     for (argc=0; argc<MAXARGS; argc++) {
 	rv = parse_next_str(&argv[argc], &str);
 	if (rv) {
 	    if (rv == ENOENT)
 		break;
-	    cmdlang->err = "Invalid string";
+	    cmdlang->errstr = "Invalid string";
+	    cmdlang->err = rv;
 	    goto done;
 	}
     }
 
     if (*str) {
 	/* Too many arguments */
-	cmdlang->err = "Too many arguments";
-	rv = E2BIG;
+	cmdlang->errstr = "Too many arguments";
+	cmdlang->err = E2BIG;
 	goto done;
     }
 
@@ -694,8 +706,8 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
     cmd = cmd_list;
 
     if (argc == curr_arg) {
-	cmdlang->err = "No command";
-	rv = ENOMSG;
+	cmdlang->errstr = "No command";
+	cmdlang->err = ENOMSG;
 	goto done;
     }
     if (strcmp(argv[curr_arg], "help") == 0) {
@@ -708,51 +720,52 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	    if (argc == curr_arg) {
 		rv = 0;
 		if (parent)
-		    rv = cmdlang->out(cmdlang, parent->name, parent->help);
+		    cmdlang->out(cmdlang, parent->name, parent->help);
 		else
-		    rv = cmdlang->out(cmdlang, "help", NULL);
-		if (rv)
-		    goto done;
+		    cmdlang->out(cmdlang, "help", NULL);
+		if (cmdlang->err)
+		    goto done_help;
+		cmdlang->down(cmdlang);
 		while (cmd) {
-		    rv = cmdlang->out(cmdlang, cmd->name, cmd->help);
-		    if (rv)
-			goto done;
+		    cmdlang->out(cmdlang, cmd->name, cmd->help);
+		    if (cmdlang->err) {
+			cmdlang->up(cmdlang);
+			goto done_help;
+		    }
 		    cmd = cmd->next;
 		}
+		cmdlang->up(cmdlang);
 		break;
 	    }
 	    if (!cmd) {
-		cmdlang->err = "Command not found";
-		rv = ENOSYS;
-		goto done;
+		cmdlang->errstr = "Command not found";
+		cmdlang->err = ENOSYS;
+		goto done_help;
 	    }
 
 	    while (cmd) {
 		if (strcmp(cmd->name, argv[curr_arg]) == 0) {
-		    if (cmd->subcmds) {
-			parent = cmd;
-			cmd = cmd->subcmds;
-			curr_arg++;
-			goto next_help;
-		    } else {
-			parent = cmd;
-			cmd = NULL;
-			goto next_help;
-		    }
+		    curr_arg++;
+		    parent = cmd;
+		    cmd = cmd->subcmds;
+		    goto next_help;
 		}
+		cmd = cmd->next;
 	    }
 
-	    rv = ENOSYS;
-	    goto done;
+	    cmdlang->errstr = "Command not found";
+	    cmdlang->err = ENOSYS;
+	    goto done_help;
 	}
 
+    done_help:
 	goto done;
     }	
 
     for (;;) {
 	if (argc == curr_arg) {
-	    cmdlang->err = "Missing commands";
-	    rv = ENOMSG;
+	    cmdlang->errstr = "Missing command";
+	    cmdlang->err = ENOMSG;
 	    goto done;
 	}
 
@@ -765,31 +778,29 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 		    break;
 		} else {
 		    curr_arg++;
-		    info.handler_data = cmd->handler_data;
-		    info.curr_arg = curr_arg;
-		    info.argc = argc;
-		    info.argv = argv;
-		    info.cmdlang = cmdlang;
-		    info.cmd = cmd;
-		    rv = cmd->handler(&info);
+		    info->handler_data = cmd->handler_data;
+		    info->curr_arg = curr_arg;
+		    info->argc = argc;
+		    info->argv = argv;
+		    info->cmd = cmd;
+		    cmd->handler(info);
 		    goto done;
 		}
 	    }
+	    cmd = cmd->next;
 	}
 
 	if (!cmd) {
-	    cmdlang->err = "Command not found";
-	    rv = ENOSYS;
+	    cmdlang->errstr = "Command not found";
+	    cmdlang->err = ENOSYS;
 	    goto done;
 	}
     }
 
  done:
 
-    if (rv)
-	cmdlang->done(cmdlang);
-
-    return rv;
+    if (info)
+	ipmi_cmdlang_cmd_info_put(info);
 }
 
 int
@@ -811,6 +822,7 @@ ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
     while (cmd) {
 	if (strcmp(cmd->name, name) == 0)
 	    return EEXIST;
+	cmd = cmd->next;
     }
 
     rv = ipmi_mem_alloc(sizeof(*rv));
@@ -848,15 +860,15 @@ ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
     return 0;
 }
 
-int
+void
 ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 		 char            *name,
 		 char            *value)
 {
-    return info->cmdlang->out(info->cmdlang, name, value);
+    info->cmdlang->out(info->cmdlang, name, value);
 }
 
-int
+void
 ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
 		     char            *name,
 		     int             value)
@@ -864,28 +876,50 @@ ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
     char sval[20];
 
     sprintf(sval, "%d", value);
-    return ipmi_cmdlang_out(info, name, sval);
+    ipmi_cmdlang_out(info, name, sval);
 }
 
-int
+void
+ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
+		     char            *name,
+		     int             value)
+{
+    char sval[20];
+
+    sprintf(sval, "0x%x", value);
+    ipmi_cmdlang_out(info, name, sval);
+}
+
+void
 ipmi_cmdlang_down(ipmi_cmd_info_t *info)
 {
-    return info->cmdlang->down(info->cmdlang);
+    info->cmdlang->down(info->cmdlang);
 }
 
-int
+void
 ipmi_cmdlang_up(ipmi_cmd_info_t *info)
 {
-    return info->cmdlang->up(info->cmdlang);
+    info->cmdlang->up(info->cmdlang);
 }
 
-int
-ipmi_cmdlang_done(ipmi_cmd_info_t *info)
+void
+ipmi_cmdlang_cmd_info_get(ipmi_cmd_info_t *cmd_info)
 {
-    return info->cmdlang->done(info->cmdlang);
+    cmd_info->usecount++;
+}
+
+void
+ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *cmd_info)
+{
+    cmd_info->usecount--;
+    if (cmd_info->usecount == 0) {
+	cmd_info->cmdlang->done(cmd_info->cmdlang);
+	ipmi_mem_free(cmd_info);
+    }
 }
 
 int ipmi_cmdlang_domain_init(void);
+int ipmi_cmdlang_entity_init(void);
 
 int
 ipmi_cmdlang_init(void)
@@ -896,7 +930,31 @@ ipmi_cmdlang_init(void)
     if (rv)
 	return rv;
 
+    rv = ipmi_cmdlang_entity_init();
+    if (rv)
+	return rv;
+
     return 0;
+}
+
+static void
+cleanup_level(ipmi_cmdlang_cmd_t *cmds)
+{
+    ipmi_cmdlang_cmd_t *cmd;
+
+    while (cmds) {
+	cmd = cmds;
+	cmds = cmd->next;
+	if (cmd->subcmds)
+	    cleanup_level(cmd->subcmds);
+	ipmi_mem_free(cmd);
+    }
+}
+
+void
+ipmi_cmdlang_cleanup(void)
+{
+    cleanup_level(cmd_list);
 }
 
 /*

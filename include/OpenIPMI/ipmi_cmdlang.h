@@ -48,14 +48,13 @@ typedef struct ipmi_cmdlang_s ipmi_cmdlang_t;
 
 /* Output is done in name:value pairs.  If you don't have a value,
    pass in NULL. */
-typedef int (*cmd_out_cb)(ipmi_cmdlang_t *info, char *name, char *value);
+typedef void (*cmd_out_cb)(ipmi_cmdlang_t *info, char *name, char *value);
 
 /* Command-specific info. */
-typedef int (*cmd_info_cb)(ipmi_cmdlang_t *info);
+typedef void (*cmd_info_cb)(ipmi_cmdlang_t *info);
 
 struct ipmi_cmdlang_s
 {
-    int          xml_mode; /* Generate xml output? */
     cmd_out_cb   out;	   /* Generate output with this. */
     cmd_info_cb  down;     /* Go down a level (new indention or
 			      nesting) */
@@ -69,14 +68,17 @@ struct ipmi_cmdlang_s
     os_handler_t *os_hnd;
     selector_t   *selector;
 
-    char         *err;     /* If non-NULL, an error occurred and this
+    int          err;      /* If non-zero, the errno code of the error
+			      that occurred. */
+    char         *errstr;  /* If non-NULL, an error occurred and this
 			      is the error info. */
 
     void         *user_data; /* User data for anything the user wants */
 };
 
-/* Parse and handle the given command string. */
-int ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str);
+/* Parse and handle the given command string.  This always calls the
+   done function when complete. */
+void ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str);
 
 
 /*
@@ -84,7 +86,7 @@ int ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str);
  */
 typedef struct ipmi_cmdlang_cmd_s ipmi_cmdlang_cmd_t;
 
-typedef int (*ipmi_cmdlang_handler_cb)(ipmi_cmd_info_t *cmd_info);
+typedef void (*ipmi_cmdlang_handler_cb)(ipmi_cmd_info_t *cmd_info);
 
 /* Register a command as a subcommand of the parent, or into the main
    command list if parent is NULL.  The command will have the given
@@ -120,22 +122,22 @@ int ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
 */
 
 /* ipmi_domain_ptr_cb */
-int ipmi_cmdlang_domain_handler(ipmi_cmd_info_t *cmd_info);
+void ipmi_cmdlang_domain_handler(ipmi_cmd_info_t *cmd_info);
 
 /* ipmi_entity_ptr_cb */
-int ipmi_cmdlang_entity_handler(ipmi_cmd_info_t *cmd_info);
+void ipmi_cmdlang_entity_handler(ipmi_cmd_info_t *cmd_info);
 
 /* ipmi_sensor_ptr_cb */
-int ipmi_cmdlang_sensor_handler(ipmi_cmd_info_t *cmd_info);
+void ipmi_cmdlang_sensor_handler(ipmi_cmd_info_t *cmd_info);
 
 /* ipmi_control_ptr_cb */
-int ipmi_cmdlang_control_handler(ipmi_cmd_info_t *cmd_info);
+void ipmi_cmdlang_control_handler(ipmi_cmd_info_t *cmd_info);
 
 /* ipmi_mc_ptr_cb */
-int ipmi_cmdlang_mc_handler(ipmi_cmd_info_t *cmd_info);
+void ipmi_cmdlang_mc_handler(ipmi_cmd_info_t *cmd_info);
 
 /* ipmi_connection_ptr_cb */
-int ipmi_cmdlang_connection_handler(ipmi_cmd_info_t *cmd_info);
+void ipmi_cmdlang_connection_handler(ipmi_cmd_info_t *cmd_info);
 
 
 /*
@@ -150,23 +152,29 @@ struct ipmi_cmd_info_s
     ipmi_cmdlang_t     *cmdlang;      /* The cmdlang structure to use */
     ipmi_cmdlang_cmd_t *cmd;          /* The matching cmd structure. */
 
+    unsigned int       usecount;
+
     /* For use by the user commands */
-    int err;
     void *data;
 };
 
 
-int ipmi_cmdlang_out(ipmi_cmd_info_t *info,
-		     char            *name,
-		     char            *value);
-int ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
-			 char            *name,
-			 int             value);
-int ipmi_cmdlang_down(ipmi_cmd_info_t *info);
-int ipmi_cmdlang_up(ipmi_cmd_info_t *info);
-int ipmi_cmdlang_done(ipmi_cmd_info_t *info);
+void ipmi_cmdlang_out(ipmi_cmd_info_t *info,
+		      char            *name,
+		      char            *value);
+void ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
+			  char            *name,
+			  int             value);
+void ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
+			  char            *name,
+			  int             value);
+void ipmi_cmdlang_down(ipmi_cmd_info_t *info);
+void ipmi_cmdlang_up(ipmi_cmd_info_t *info);
+void ipmi_cmdlang_cmd_info_get(ipmi_cmd_info_t *info);
+void ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *info);
 
 
 int ipmi_cmdlang_init(void);
+void ipmi_cmdlang_cleanup(void);
 
 #endif /* __IPMI_CMDLANG_H */

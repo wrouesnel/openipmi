@@ -49,27 +49,24 @@ domain_list_handler(ipmi_domain_t *domain, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
-    if (cmd_info->err)
+    if (cmd_info->cmdlang->err)
 	return;
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
-    cmd_info->err = ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
 }
 
-static int
+static void
 domain_list(ipmi_cmd_info_t *cmd_info)
 {
-    cmd_info->err = 0;
     ipmi_cmdlang_out(cmd_info, "Domains", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_domain_iterate_domains(domain_list_handler, cmd_info);
     ipmi_cmdlang_up(cmd_info);
-    ipmi_cmdlang_done(cmd_info);
-    return cmd_info->err;
 }
 
-static int
+static void
 domain_info(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
@@ -77,17 +74,12 @@ domain_info(ipmi_domain_t *domain, void *cb_data)
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
-    ipmi_cmdlang_out(cmd_info, "Domain", domain_name);
-    ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Type",
 		    ipmi_domain_get_type_string(ipmi_domain_get_type(domain)));
     ipmi_cmdlang_out_int(cmd_info, "SEL Rescan Time",
 			 ipmi_domain_get_sel_rescan_time(domain));
     ipmi_cmdlang_out_int(cmd_info, "IPMB Rescan Time",
 			 ipmi_domain_get_ipmb_rescan_time(domain));
-    ipmi_cmdlang_up(cmd_info);
-    ipmi_cmdlang_done(cmd_info);
-    return 0;
 }
 
 void
@@ -98,9 +90,12 @@ domain_new_done(ipmi_domain_t *domain,
 		int           still_connected,
 		void          *cb_data)
 {
+    ipmi_cmd_info_t *cmd_info = cb_data;
+
+    ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
-static int
+static void
 domain_new(ipmi_cmd_info_t *cmd_info)
 {
     ipmi_args_t  *con_parms[2];
@@ -111,18 +106,21 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     char         *name;
 
     if (cmd_info->curr_arg >= cmd_info->argc) {
-	cmd_info->cmdlang->err = "No domain name entered";
-	return EINVAL;
+	cmd_info->cmdlang->errstr = "No domain name entered";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out;
     }
     name = cmd_info->argv[cmd_info->curr_arg];
+    cmd_info->curr_arg++;
 
     rv = ipmi_parse_args(&cmd_info->curr_arg,
 			 cmd_info->argc,
 			 cmd_info->argv,
 			 &con_parms[set]);
     if (rv) {
-	cmd_info->cmdlang->err = "First connection parms are invalid";
-	return rv;
+	cmd_info->cmdlang->errstr = "First connection parms are invalid";
+	cmd_info->cmdlang->err = rv;
+	goto out;
     }
     set++;
 
@@ -133,8 +131,9 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 			     &con_parms[set]);
 	if (rv) {
 	    ipmi_free_args(con_parms[0]);
-	    cmd_info->cmdlang->err = "Second connection parms are invalid";
-	    return rv;
+	    cmd_info->cmdlang->errstr = "Second connection parms are invalid";
+	    cmd_info->cmdlang->err = rv;
+	    goto out;
 	}
 	set++;
     }
@@ -145,25 +144,33 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 				 cmd_info->cmdlang->selector,
 				 &con[i]);
 	if (rv) {
-	    cmd_info->cmdlang->err = "Unable to setup connection";
+	    cmd_info->cmdlang->errstr = "Unable to setup connection";
+	    cmd_info->cmdlang->err = rv;
 	    for (i=0; i<set; i++)
 		ipmi_free_args(con_parms[i]);
-	    return rv;
+	    goto out;
 	}
     }
 
+    ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_open_domain(name, con, set, domain_new_done,
-			  NULL, NULL, 0, NULL);
+			  cmd_info, NULL, 0, NULL);
     if (rv) {
-	cmd_info->cmdlang->err = strerror(rv);
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmd_info->cmdlang->errstr = strerror(rv);
+	cmd_info->cmdlang->err = rv;
 	for (i=0; i<set; i++) {
 	    ipmi_free_args(con_parms[i]);
 	    con[i]->close_connection(con[i]);
 	}
-	return rv;
+	goto out;
     }
 
-    return 0;
+    for (i=0; i<set; i++)
+      ipmi_free_args(con_parms[i]);
+
+ out:
+    return;
 }
 
 static ipmi_cmdlang_cmd_t *domain_cmds;

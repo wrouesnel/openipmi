@@ -4277,7 +4277,14 @@ static int
 iterate_domains(void *cb_data, void *item1, void *item2)
 {
     domains_iter_t *info = cb_data;
-    info->handler(item1, info->cb_data);
+    ipmi_domain_t  *domain = item1;
+    int            rv;
+    
+    rv = _ipmi_domain_get(domain);
+    if (!rv) {
+	info->handler(item1, info->cb_data);
+	_ipmi_domain_put(domain);
+    }
     return LOCKED_LIST_ITER_CONTINUE;
 }
 

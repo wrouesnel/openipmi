@@ -155,19 +155,19 @@ mem_debug_log(void                      *data,
 	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT,
 		 " %ld bytes at %p, allocated at",
 		 hdr->size, data);
-	for (i=0; i<TB_SIZE; i++)
+	for (i=0; i<TB_SIZE && hdr->tb[i]; i++)
 	    ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " %p", hdr->tb[i]);
     } else if (data) {
 	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " at %p", data);
     }
     if (trlr) {
 	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, "\n originally freed at");
-	for (i=0; i<TB_SIZE; i++)
+	for (i=0; i<TB_SIZE && trlr->tb[i]; i++)
 	    ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " %p", trlr->tb[i]);
     }
     if (tb) {
 	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, "\n  at");
-	for (i=0; i<TB_SIZE; i++)
+	for (i=0; i<TB_SIZE && tb[i]; i++)
 	    ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " %p", tb[i]);
     }
     ipmi_malloc_log(IPMI_LOG_DEBUG_END, " ");

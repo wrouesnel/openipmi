@@ -1,5 +1,31 @@
 
-  1) Why is ipmi_ui so ugly?
+1) Questions about the driver
+
+  1.1) I'm trying to do a send message command, but it fails.  Why
+       can't I do this?
+
+     You know too much about IPMI :-).  OpenIPMI does all this work
+     for you.  To send a message out on IPMB, you set up an IPMB
+     address and send the message to that address (without all that
+     nasty send message stuff).  It's much easier.  Try it, you'll
+     like it.
+
+  1.2) I *really* want to do a send message command.  How do I do it?
+
+     Sorry, you can't.  It's not that I have it out for you, it has to
+     do with the technical details of IPMI.  If you have multiple
+     users of an IPMI system, you have to have a central mechanism to
+     manage information.  You have sequence numbers that have to be
+     assigned and managed; if the same applications used the same
+     sequence numbers then chaos would ensue.  Since the OpenIPMI
+     driver allows multiple users (and has users both inside and
+     outside the kernel) it can't allow users to directly do send
+     message commands.
+
+
+2) Questions about the library.
+
+  2.1) Why is ipmi_ui so ugly?
 
      Well, ipmi_ui is a test program that I wrote for my own purposes.
      I'll try to clean it up in the future and make it into something
@@ -9,14 +35,14 @@
      If you want to write something useful to replace it, feel free!
 
 
-  2) What if I just want to send some IPMI commands.
+  2.2) What if I just want to send some IPMI commands.
 
      Then "ipmicmd" is the tools for you.  It can connect to a system
      interface or to a LAN connection and let you directly enter
      commands.
 
 
-  3) I'm trying to write a little program that comes up and queries a
+  2.3) I'm trying to write a little program that comes up and queries a
      few things.  Can I use the OpenIPMI library to do that?
 
      Probably not.  OpenIPMI was designed as a large-scale IPMI
@@ -28,7 +54,7 @@
      to understand IPMI well to use it at that level, anyway.
 
 
-  4) Why can't I just perform an operation and immediately get the
+  2.4) Why can't I just perform an operation and immediately get the
      results?  Why all these callbacks?
 
      Read the documenation for details.  The OpenHPI interface
@@ -39,7 +65,7 @@
      interface.
 
 
-  5) Can I have multiple OpenIPMI session from different programs to
+  2.5) Can I have multiple OpenIPMI session from different programs to
      the same interface?
 
      Certainly.  I do it all the time :-)
@@ -60,13 +86,13 @@
      handle multiple things deleting items from the SEL.
 
 
-  6) Can you open more than one IPMI session from OpenIPMI?
+  2.6) Can you open more than one IPMI session from OpenIPMI?
 
      Certainly.  You can create as many connections and domains as you
      like, the library has no limitiation.
 
 
-  7) I have an xyz computer, does OpenIPMI support it?
+  2.7) I have an xyz computer, does OpenIPMI support it?
 
      That depends on a lot of things.  Does the box have IPMI?  Most
      systems do not, it's currently mostly on high-end system.  If the
@@ -78,19 +104,19 @@
      Any things custom to the system will probably not be supported.
 
 
-  8) What interfaces does OpenIPMI support?
+  2.8) What interfaces does OpenIPMI support?
 
      OpenIPMI currently supports system interfaces through the
      OpenIPMI device driver and LAN interfaces.  It does not support
      serial interfaces or any type of callback devices.
 
 
-  9) Does OpenIPMI support ICMB?
+  2.9) Does OpenIPMI support ICMB?
 
      Not currently, although it shouldn't be hard to add.
 
 
- 10) How do I learn more about IPMI?
+ 2.10) How do I learn more about IPMI?
 
      Not much information currently exists.  The OpenIPMI web site has
      a pointer to the specs and the documentation that comes with
@@ -103,7 +129,7 @@
      Someone needs to write a book (and it's not going to be me).
 
 
- 11) What does OpenIPMI do?
+ 2.11) What does OpenIPMI do?
 
      OpenIPMI attempts to handle a lot of the difficult parts of IPMI
      for the user; as much as it can without making too many policy
@@ -129,7 +155,7 @@
      things the user is really interested in handling.
 
 
- 12) I don't like the way OpenIPMI does x.
+ 2.12) I don't like the way OpenIPMI does x.
 
      You may disagree with implementation decisions I have made and
      that's fine.  You can make suggestions, submit patches, and work
@@ -140,7 +166,7 @@
      that doesn't mean you can't do your own work on it.
 
 
- 13) Why did you write OpenIPMI?
+ 2.13) Why did you write OpenIPMI?
 
      OpenIPMI was originally written to support a customer who needed
      an interface for their IPMI platform.  It was also designed with
@@ -148,7 +174,7 @@
      library.
 
 
- 14) I just want to use pieces of OpenIPMI, can I?
+ 2.14) I just want to use pieces of OpenIPMI, can I?
 
      Well, it's open source.  But unfortunately, OpenIPMI is not
      terribly modular as a whole.  Certain parts (the interface code,
@@ -160,7 +186,7 @@
      but you would have to change the code to do that.
 
 
- 15) Why is the OpenIPMI interface the way it is (bad, good, ugly,
+ 2.15) Why is the OpenIPMI interface the way it is (bad, good, ugly,
      elegent, simple, obtuse, etc)?
 
      My basic philosophy of API design is:
@@ -189,13 +215,14 @@
      based on the implementation, not the needs of the user.
 
 
- 16) My IPMI system has some broken information in it.  Can I fix it?
+ 2.16) My IPMI system has some broken information in it.  Can I fix it
+     in OpenIPMI?
 
      Sure.  You can write OEM code that ties in to when objects are
      added to the system and fix them up as necessary.
 
 
- 17) It takes a long time to find all the information about a system
+ 2.17) It takes a long time to find all the information about a system
      on IPMB.  What's the deal?
 
      Unfortunately, the base library can't really know what exists or
@@ -203,7 +230,7 @@
      You can write an OEM plugin or scan the addresses you are
      interested in by hand.
 
- 18) I want to know when OpenIPMI is done finding everything in the
+ 2.18) I want to know when OpenIPMI is done finding everything in the
      system.
 
      Unfortunately, there is no concept of "done" in IPMI.  IPMI
