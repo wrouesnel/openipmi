@@ -13,6 +13,9 @@
 
 	* ui.c: Added a total bytes in SDR count.
 
+	* sdr.c: Added a pipeline to the SDR fetch, to speed it up for
+	high-latency links.
+
 2003-06-03 Corey Minyard <cminyard@mvista.com>
 
 	* ipmicmd.c: Added the latency testing code back in.
