@@ -174,17 +174,40 @@ The command hierarchy is:
       **ENTITY INFO**
 
   * hs - hot-swap control
-    * get_act_time <entity> - Get the host-swap auto-activate time
-    * set_act_time <entity> - Set the host-swap auto-activate time
-    * get_deact_time <entity> - Get the host-swap auto-deactivate time
-    * set_deact_time <entity> - Set the host-swap auto-deactivate time
+    * get_act_time <entity> - Get the hot-swap auto-activate time
+      Response is:
+      Entity
+        Name: <entity>
+	Auto-Activation Time: <integer>
+
+    * set_act_time <entity> - Set the hot-swap auto-activate time
+
+    * get_deact_time <entity> - Get the hot-swap auto-deactivate time
+      Response is:
+      Entity
+        Name: <entity>
+	Auto-Deactivation Time: <integer>
+
+    * set_deact_time <entity> - Set the hot-swap auto-deactivate time
+
     * activation_request <entity> Act like a user requested an
       activation of the entity.  This is generally equivalent to
       closing the handle latch or something like that.
+
     * activate <entity> - activate the given entity
+
     * deactivate <entity> - deactivate the given entity
-    * state <entity> - Return the current hot-swap state of the given entity
-    * check <domain> - Audit all the entity hot-swap states
+
+    * state <entity> - Return the current hot-swap state of the given
+      entity.
+      Reponse is:
+      Entity
+        Name: <entity>
+	State: not_present | inactive | activation_requested |
+	       activation_in_progress | active | deactivation_requested |
+	       deactivation_in_progress | out_of_con
+
+    * check <entity> - Audit the entities hot-swap state
 
   * fru <entity> - Dump the FRU information about the given entity.
     Reponse is:
@@ -269,6 +292,53 @@ The command hierarchy is:
     value; hystersis is specified as a raw value and it cannot be
     converted to floating point because the function may be
     non-linear.
+
+  * get_event_enables <sensor> - Get the sensor's event enable values
+    Response is:
+    Sensor
+      Name: <sensor>
+      Event Messages Enabled: true | false
+      Sensor Scanning Enabled: true | false
+      Busy: true | false
+
+    Threshold sensors report:
+    Threshold
+      Name: <threshold name>
+      Enabled: true | false
+     .
+     .
+    only supported thresholds are listed
+
+    Discrete sensors report:
+    Event
+      Offset: <integer>
+      Name: <event offset name for sensor>
+      %Assertion Enabled: true | false
+      %Deassertion Enabled: true | false
+    only supported offsets are listed.  The assertion and deassertion
+    enables are listed only if the offset support them.
+
+
+  * set_event_enables <sensor> msg|nomsg scan|noscan [<event> [<event> ...]]
+    - Set the sensor's event enable values.  This turns sensor messages and
+    scanning on and off and will enable all the listed events and
+    disable all over events.  The events are in the same format as
+    the rearm subcommand and depend on the sensor type.  See the
+    rearm command for details.
+
+  * enable_events <sensor> msg|nomsg scan|noscan [<event> [<event> ...]]
+    - Enable event enable values.  This turns sensor messages and
+    scanning on and off and will enable all the listed events.  The
+    events are in the same format as the rearm subcommand and depend
+    on the sensor type.  See the rearm command for details.  This will
+    only enable the given events, the other events will be left alone.
+
+  * disable_events <sensor> msg|nomsg scan|noscan [<event> [<event> ...]]
+    - Disable event enable values.  This turns sensor messages and
+    scanning on and off and will disable all the listed events.  The
+    events are in the same format as the rearm subcommand and depend
+    on the sensor type.  See the rearm command for details.  This will
+    only disable the given events, the other events will be left alone.
 
 * control
 
@@ -380,6 +450,33 @@ The command hierarchy is:
       Name: <mc>
       SEL Time: <integer>
 
+* sel
+
+  * list <domain> - list the local copy of the system event log
+    Response is:
+    Domain
+      Name: <domain>
+      Entries: <integer>
+      Slots in use: <integer>
+      Event
+        Object Type: Event
+        MC: <mc>
+        Record ID: <integer>
+        Event type: <integer>
+        Timestamp: <time>
+        Data: <data bytes>
+       .
+       .
+
+  * delevent <mc> <record #> - Delete the given event number from the SEL
+  * addevent <mc> <record id> <type> <13 bytes of data> - Add the
+    event data to the SEL.
+  * clear <domain> - clear the system event log
+
+* con
+  * active <connection> - print out if the given connection is active or not
+  * activate <connection> - Activate the given connection
+
 * pef
   * read <mc> - read pef information from an MC.  Note the lock is not
     released.
@@ -398,15 +495,6 @@ The command hierarchy is:
     - write the LANPARM information to an MC.  Every value given will be
     written atomically and the lock will be released.  Note that
     you must do a read before doing this command.
-* con
-  * active <connection> - print out if the given connection is active or not
-  * activate <connection> - Activate the given connection
-* sel
-  * delevent <mc> <log #> - Delete the given event number from the SEL
-  * addevent <mc> <record id> <type> <13 bytes of data> - Add the
-    event data to the SEL.
-  * clear <domain> - clear the system event log
-  * list <domain> - list the local copy of the system event log
 * general
   * debug <type> on|off - Turn the given debugging type on or off
   * xml on|off - enable or disable XML-style output
@@ -611,3 +699,94 @@ Fields marked with % are optional
 
 
 **FRU INFO**
+  %Internal area version: <integer>
+  %Internal area length: <integer>
+  %Internal area data: <data bytes>
+  %Chassis info version: <integer>
+  %Chassis info type: <integer>
+  %Record
+    Name: Chassis info part number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Chassis info serial number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %String Field
+    Name: Chassis info
+    Number: <integer>
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+   .
+   .
+  %Board info version: <integer>
+  %Board info lang code: <integer>
+  %Board info mfg time: <integer>
+  %Record
+    Name: Board info board manufacturer
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Board info board product name
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Board info board serial number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Board info board part number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Board info fru file id
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %String Field
+    Name: Board info
+    Number: <integer>
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+   .
+   .
+  %Product info version: <integer>
+  %Product info lang code: <integer>
+  %Record
+    Name: Product info manufacturer name
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info product name
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info product part model number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info product version
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info product serial number
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info asset tag
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %Record
+    Name: Product info fru file id
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+  %String Field
+    Name: Product info
+    Number: <integer>
+    Type: binary | ascii | unicode
+    Data: <data in the above format>
+   .
+   .
+  %Multi-record
+    Number: <integer>
+    Type: binary | ascii | unicode
+    Data: <data in the above format>

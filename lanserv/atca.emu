@@ -62,7 +62,7 @@ mc_add_fru_data 10 1 400 \
 sensor_add 10 0 0 f0 6f
 sensor_set_event_support 10 0 0 1 1 0 \
 	000000011111111 000000000000000 000000011111111 000000000000000
-sensor_set_bit_clr_rest 10 0 0 0 1
+sensor_set_bit_clr_rest 10 0 0 1 1
 device_sdr_add 10 0 \
 	       00 00 51 02 22 \
 	       10 00 00 f2 60 ff c0 f0 6f ff 00 ff 00 ff 00 00 \
@@ -112,7 +112,7 @@ mc_add_fru_data 12 1 400 \
 sensor_add 12 0 0 f0 6f
 sensor_set_event_support 12 0 0 1 1 0 \
 	000000011111111 000000000000000 000000011111111 000000000000000
-sensor_set_bit_clr_rest 12 0 0 0 1
+sensor_set_bit_clr_rest 12 0 0 1 1
 device_sdr_add 12 0 \
 	       00 00 51 02 22 \
 	       12 00 00 f2 60 ff c0 f0 6f ff 00 ff 00 ff 00 00 \
@@ -143,7 +143,7 @@ mc_add_fru_data 82 0 400 \
 sensor_add 82 0 0 f0 6f
 sensor_set_event_support 82 0 0 1 1 0 \
 	000000011111111 000000000000000 000000011111111 000000000000000
-sensor_set_bit_clr_rest 82 0 0 0 1
+sensor_set_bit_clr_rest 82 0 0 1 1
 device_sdr_add 82 0 \
 	       00 00 51 02 22 \
 	       82 00 00 a0 60 ff c0 f0 6f ff 00 ff 00 ff 00 00 \

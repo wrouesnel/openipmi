@@ -398,9 +398,9 @@ int ipmi_entity_get_internal_use_version(ipmi_entity_t *entity,
 					 unsigned char *version);
 int ipmi_entity_get_internal_use_length(ipmi_entity_t *entity,
 					unsigned int  *length);
-int  ipmi_entity_get_internal_use_data(ipmi_entity_t *entity,
-				       unsigned char *data,
-				       unsigned int  *max_len);
+int ipmi_entity_get_internal_use_data(ipmi_entity_t *entity,
+				      unsigned char *data,
+				      unsigned int  *max_len);
 
 int ipmi_entity_get_chassis_info_version(ipmi_entity_t *entity,
 					 unsigned char *version);
@@ -893,7 +893,7 @@ int ipmi_entity_set_auto_deactivate_time(ipmi_entity_t  *ent,
 /* Cause the entity to move from INACTIVE to ACTIVATION_REQUESTED
    state, if possible. If the entity does not support this operation,
    this will return ENOSYS and you can move straight from INACTIVE to
-   ACTIVE state by calling ipmi_entity_active. */
+   ACTIVE state by calling ipmi_entity_activate. */
 int ipmi_entity_set_activation_requested(ipmi_entity_t  *ent,
 					 ipmi_entity_cb done,
 					 void           *cb_data);

@@ -686,7 +686,6 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
     char            **argv = ipmi_cmdlang_get_argv(cmd_info);
 
     if ((argc - curr_arg) < 1) {
-	/* Not enough parameters */
 	cmdlang->errstr = "Not enough parameters";
 	cmdlang->err = EINVAL;
 	goto out_err;
@@ -923,8 +922,8 @@ ipmi_cmdlang_event_out(ipmi_event_t    *event,
     ipmi_cmdlang_out_int(cmd_info, "Record ID",
 			 ipmi_event_get_record_id(event));
     ipmi_cmdlang_out_int(cmd_info, "Event type", ipmi_event_get_type(event));
-    ipmi_cmdlang_out_long(cmd_info, "Timestamp",
-			  (long) ipmi_event_get_timestamp(event));
+    ipmi_cmdlang_out_time(cmd_info, "Timestamp",
+			  ipmi_event_get_timestamp(event));
     len = ipmi_event_get_data_len(event);
     if (len) {
 	ipmi_cmdlang_out_binary(cmd_info, "Data",

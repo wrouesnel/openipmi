@@ -154,7 +154,7 @@ sensor_info(ipmi_sensor_t *sensor, void *cb_data)
 	enum ipmi_event_dir_e       dir;
 	int                         val;
 	int                         rv;
-	char                        th_name[40];
+	char                        th_name[50];
 	double                      dval;
 
 	ipmi_cmdlang_out(cmd_info, "Threshold Access",
@@ -870,6 +870,13 @@ sensor_get_event_enables_done(ipmi_sensor_t      *sensor,
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", sensor_name);
 
+    ipmi_cmdlang_out_bool(cmd_info, "Event Messages Enabled",
+			  ipmi_event_state_get_events_enabled(states));
+    ipmi_cmdlang_out_bool(cmd_info, "Sensor Scanning Enabled",
+			  ipmi_event_state_get_scanning_enabled(states));
+    ipmi_cmdlang_out_bool(cmd_info, "Busy",
+			  ipmi_event_state_get_busy(states));
+
     if (ipmi_sensor_get_event_reading_type(sensor)
 	== IPMI_EVENT_READING_TYPE_THRESHOLD)
     {
@@ -890,7 +897,7 @@ sensor_get_event_enables_done(ipmi_sensor_t      *sensor,
 		     dir <= IPMI_DEASSERTION;
 		     dir++)
 		{
-		    char th_name[40];
+		    char th_name[50];
 
 		    rv = ipmi_sensor_threshold_event_supported(sensor,
 							       thresh,
@@ -977,6 +984,164 @@ sensor_get_event_enables(ipmi_sensor_t *sensor, void *cb_data)
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_sensor.c(sensor_get_event_enables)";
     }
+}
+
+static void
+sensor_set_event_enables_done(ipmi_sensor_t *sensor,
+			      int           err,
+			      void          *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error setting event enables";
+	cmdlang->err = err;
+	ipmi_sensor_get_name(sensor, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(sensor_set_event_enables_done)";
+    }
+
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+enum ev_en_kind { ev_en_set, ev_en_enable, ev_en_disable };
+
+static void
+mod_event_enables(ipmi_sensor_t *sensor, void *cb_data, enum ev_en_kind kind)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int                rv;
+    int                curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int                argc = ipmi_cmdlang_get_argc(cmd_info);
+    char               **argv = ipmi_cmdlang_get_argv(cmd_info);
+    ipmi_event_state_t *s = NULL;
+
+    if ((argc - curr_arg) < 2) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    s = ipmi_mem_alloc(ipmi_states_size());
+    if (!s) {
+	cmdlang->errstr = "Out of memory";
+	cmdlang->err = ENOMEM;
+	goto out_err;
+    }
+    ipmi_event_state_init(s);
+
+    if (strcmp(argv[curr_arg], "msg") == 0)
+	ipmi_event_state_set_events_enabled(s, 1);
+    else if (strcmp(argv[curr_arg], "nomsg") == 0)
+	ipmi_event_state_set_events_enabled(s, 0);
+    else {
+	cmdlang->errstr = "Invalid message enable setting";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+    curr_arg++;
+
+    if (strcmp(argv[curr_arg], "scan") == 0)
+	ipmi_event_state_set_scanning_enabled(s, 1);
+    else if (strcmp(argv[curr_arg], "noscan") == 0)
+	ipmi_event_state_set_scanning_enabled(s, 0);
+    else {
+	cmdlang->errstr = "Invalid scanning enable setting";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+    curr_arg++;
+
+    if (ipmi_sensor_get_event_reading_type(sensor)
+	== IPMI_EVENT_READING_TYPE_THRESHOLD)
+    {
+	while (curr_arg < argc) {
+	    enum ipmi_thresh_e          thresh;
+	    enum ipmi_event_value_dir_e value_dir;
+	    enum ipmi_event_dir_e       dir;
+
+	    ipmi_cmdlang_get_threshold_ev(argv[curr_arg], &thresh,
+					  &value_dir, &dir, cmd_info);
+	    if (cmdlang->err) {
+		goto out_err;
+	    }
+	    ipmi_threshold_event_set(s, thresh, value_dir, dir);
+	    curr_arg++;
+	}
+    } else {
+	while (curr_arg < argc) {
+	    int                   offset;
+	    enum ipmi_event_dir_e dir;
+
+	    ipmi_cmdlang_get_discrete_ev(argv[curr_arg], &offset,
+					 &dir, cmd_info);
+	    if (cmdlang->err) {
+		goto out_err;
+	    }
+	    ipmi_discrete_event_set(s, offset, dir);
+	    curr_arg++;
+	}
+    }
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    switch (kind) {
+    case ev_en_set:
+	rv = ipmi_sensor_set_event_enables(sensor, s,
+					   sensor_set_event_enables_done,
+					   cmd_info);
+	break;
+    case ev_en_enable:
+	rv = ipmi_sensor_enable_events(sensor, s,
+				       sensor_set_event_enables_done,
+				       cmd_info);
+	break;
+    case ev_en_disable:
+	rv = ipmi_sensor_disable_events(sensor, s,
+					sensor_set_event_enables_done,
+					cmd_info);
+	break;
+    default:
+	rv = EINVAL;
+    }
+
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error setting event enables";
+	goto out_err;
+    }
+    ipmi_mem_free(s);
+    return;
+
+ out_err:
+    ipmi_sensor_get_name(sensor, cmdlang->objstr,
+			 cmdlang->objstr_len);
+    cmdlang->location = "cmd_sensor.c(sensor_set_event_enables)";
+    if (s)
+	ipmi_mem_free(s);
+}
+
+static void
+sensor_set_event_enables(ipmi_sensor_t *sensor, void *cb_data)
+{
+    mod_event_enables(sensor, cb_data, ev_en_set);
+}
+
+static void
+sensor_enable_events(ipmi_sensor_t *sensor, void *cb_data)
+{
+    mod_event_enables(sensor, cb_data, ev_en_enable);
+}
+
+static void
+sensor_disable_events(ipmi_sensor_t *sensor, void *cb_data)
+{
+    mod_event_enables(sensor, cb_data, ev_en_disable);
 }
 
 static int
@@ -1206,6 +1371,30 @@ static ipmi_cmdlang_init_t cmds_sensor[] =
     { "get_event_enables", &sensor_cmds,
       "<sensor> - Get the sensor's event enable values",
       ipmi_cmdlang_sensor_handler, sensor_get_event_enables, NULL },
+    { "set_event_enables", &sensor_cmds,
+      "<sensor> msg|nomsg scan|noscan [<event> [<event> ...]]- Set the"
+      " sensor's event enable values.  This turns sensor messages and"
+      " scanning on and off and will enable all the listed events and"
+      " disable all over events.  The"
+      " events are in the same format as the rearm subcommand and depend"
+      " on the sensor type.  See the rearm command for details.",
+      ipmi_cmdlang_sensor_handler, sensor_set_event_enables, NULL },
+    { "enable_events", &sensor_cmds,
+      "<sensor> msg|nomsg scan|noscan [<event> [<event> ...]]- Enable"
+      " event enable values.  This turns sensor messages and"
+      " scanning on and off and will enable all the listed events.  The"
+      " events are in the same format as the rearm subcommand and depend"
+      " on the sensor type.  See the rearm command for details.  This will"
+      " only enable the given events, the other events will be left alone.",
+      ipmi_cmdlang_sensor_handler, sensor_enable_events, NULL },
+    { "disable_events", &sensor_cmds,
+      "<sensor> msg|nomsg scan|noscan [<event> [<event> ...]]- Disable"
+      " event enable values.  This turns sensor messages and"
+      " scanning on and off and will disable all the listed events.  The"
+      " events are in the same format as the rearm subcommand and depend"
+      " on the sensor type.  See the rearm command for details.  This will"
+      " only disable the given events, the other events will be left alone.",
+      ipmi_cmdlang_sensor_handler, sensor_disable_events, NULL },
 };
 #define CMDS_SENSOR_LEN (sizeof(cmds_sensor)/sizeof(ipmi_cmdlang_init_t))
 
@@ -1214,10 +1403,3 @@ ipmi_cmdlang_sensor_init(void)
 {
     return ipmi_cmdlang_reg_table(cmds_sensor, CMDS_SENSOR_LEN);
 }
-
-#if 0
-* sensor
-  * get_events_enable <sensor> - get the events enable data for the sensor
-  * set_events_enable <events> <scanning> <assertion bitmask> <deassertion bitmask>
-    - set the events enable data for the sensor
-#endif

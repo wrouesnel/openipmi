@@ -75,7 +75,8 @@ ipmi_event_alloc(ipmi_mcid_t   mcid,
     rv->type = type;
     rv->timestamp = timestamp;
     rv->data_len = data_len;
-    memcpy(rv->data, data, data_len);
+    if (data_len)
+	memcpy(rv->data, data, data_len);
 
     rv->refcount = 1;
     return rv;
@@ -187,18 +188,18 @@ static void
 del_event_handler(ipmi_mc_t *mc, void *cb_data)
 {
     del_event_info_t *info = cb_data;
-    int              rv;
+    del_event_info_t *ninfo;
 
-    rv = ipmi_mc_del_event(mc, info->event, mc_del_event_done, info);
-    if (rv) {
-	if (info->done_handler) {
-	    ipmi_domain_t *domain = NULL;
-	    if (mc)
-		domain = ipmi_mc_get_domain(mc);
-	    info->done_handler(domain, rv, info->cb_data);
-	}
-	ipmi_mem_free(info);
+    ninfo = ipmi_mem_alloc(sizeof(*ninfo));
+    if (!ninfo) {
+	info->rv = ENOMEM;
+	return;
     }
+    *ninfo = *info;
+
+    info->rv = ipmi_mc_del_event(mc, info->event, mc_del_event_done, ninfo);
+    if (info->rv)
+	ipmi_mem_free(ninfo);
 }
 
 int
@@ -207,22 +208,16 @@ ipmi_event_delete(ipmi_event_t   *event,
 		  void           *cb_data)
 {
     int              rv;
-    del_event_info_t *info;
+    del_event_info_t info;
     ipmi_mcid_t      mcid = ipmi_event_get_mcid(event);
 
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
-
-    info->event = event;
-    info->done_handler = done_handler;
-    info->cb_data = cb_data;
-    info->rv = 0;
-    rv = ipmi_mc_pointer_cb(mcid, del_event_handler, info);
-    if (rv)
-	ipmi_mem_free(info);
-    else
-	rv = info->rv;
+    info.event = event;
+    info.done_handler = done_handler;
+    info.cb_data = cb_data;
+    info.rv = 0;
+    rv = ipmi_mc_pointer_cb(mcid, del_event_handler, &info);
+    if (!rv)
+	rv = info.rv;
 
     return rv;
 }

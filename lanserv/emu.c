@@ -299,7 +299,8 @@ ipmi_mc_enable_sel(lmc_data_t    *mc,
 int
 ipmi_mc_add_to_sel(lmc_data_t    *mc,
 		   unsigned char record_type,
-		   unsigned char event[13])
+		   unsigned char event[13],
+		   unsigned int  *recid)
 {
     sel_entry_t    *e;
     struct timeval t;
@@ -352,6 +353,9 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
     mc->sel.count++;
 
     mc->sel.last_add_time = t.tv_sec + mc->sel.time_offset;
+
+    if (recid)
+      *recid = e->record_id;
     return 0;
 }
 
@@ -535,7 +539,8 @@ handle_add_sel_entry(lmc_data_t    *mc,
 		     unsigned char *rdata,
 		     unsigned int  *rdata_len)
 {
-    int rv;
+    int          rv;
+    unsigned int r;
 
     if (!(mc->device_support & IPMI_DEVID_SEL_DEVICE)) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
@@ -545,19 +550,16 @@ handle_add_sel_entry(lmc_data_t    *mc,
     if (check_msg_length(msg, 16, rdata, rdata_len))
 	return;
 
-    if (msg->data[2] < 0xe0)
-	rv = ipmi_mc_add_to_sel(mc, msg->data[2], msg->data+6);
-    else
-	rv = ipmi_mc_add_to_sel(mc, msg->data[2], msg->data+3);
-
+    rv = ipmi_mc_add_to_sel(mc, msg->data[2], msg->data+3, &r);
     if (rv == EAGAIN) {
 	rdata[0] = IPMI_OUT_OF_SPACE_CC;
     } else if (rv) {
 	rdata[0] = IPMI_UNKNOWN_ERR_CC;
     } else {
 	rdata[0] = 0;
+	ipmi_set_uint16(rdata+1, r);
     }
-    *rdata_len = 1;
+    *rdata_len = 3;
 }
 
 static void
@@ -1993,7 +1995,7 @@ do_event(lmc_data_t    *mc,
     data[11] = byte2;
     data[12] = byte3;
 
-    ipmi_mc_add_to_sel(dest_mc, 0x02, data);
+    ipmi_mc_add_to_sel(dest_mc, 0x02, data, NULL);
 }
 
 static void
@@ -2691,7 +2693,7 @@ ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_event)
     data[11] = 0;
     data[12] = 0;
 
-    ipmi_mc_add_to_sel(dest_mc, 0xc0, data);
+    ipmi_mc_add_to_sel(dest_mc, 0xc0, data, NULL);
 	
     return 0;
 }

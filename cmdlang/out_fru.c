@@ -42,7 +42,7 @@ fru_out_data(ipmi_cmd_info_t *cmd_info, unsigned char type,
 {
     if (type == IPMI_BINARY_STR) {
 	ipmi_cmdlang_out(cmd_info, "Type", "binary");
-	ipmi_cmdlang_out_binary(cmd_info, "Binary Data", buf, len);
+	ipmi_cmdlang_out_binary(cmd_info, "Data", buf, len);
     } else if (type == IPMI_UNICODE_STR) {
 	ipmi_cmdlang_out(cmd_info, "Type", "unicode");
 	ipmi_cmdlang_out_unicode(cmd_info, "Data", buf, len);
@@ -231,9 +231,9 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
     if (!rv)
 	ipmi_cmdlang_out_int(cmd_info, "Chassis info type", ucval);
 
-    DUMP_FRU_STR(chassis_info_part_number, "chassis info part number");
-    DUMP_FRU_STR(chassis_info_serial_number, "chassis info serial number");
-    DUMP_FRU_CUSTOM_STR(chassis_info, "chassis info");
+    DUMP_FRU_STR(chassis_info_part_number, "Chassis info part number");
+    DUMP_FRU_STR(chassis_info_serial_number, "Chassis info serial number");
+    DUMP_FRU_CUSTOM_STR(chassis_info, "Chassis info");
 
     rv = ipmi_fru_get_board_info_version(fru, &ucval);
     if (!rv)
@@ -248,35 +248,40 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	ipmi_cmdlang_out_long(cmd_info, "Board info mfg time", (long) tval);
 
     DUMP_FRU_STR(board_info_board_manufacturer,
-		 "board info board manufacturer");
+		 "Board info board manufacturer");
     DUMP_FRU_STR(board_info_board_product_name,
-		 "board info board product name");
+		 "Board info board product name");
     DUMP_FRU_STR(board_info_board_serial_number,
-		 "board info board serial number");
+		 "Board info board serial number");
     DUMP_FRU_STR(board_info_board_part_number,
-		 "board info board part number");
-    DUMP_FRU_STR(board_info_fru_file_id, "board info fru file id");
-    DUMP_FRU_CUSTOM_STR(board_info, "board info");
+		 "Board info board part number");
+    DUMP_FRU_STR(board_info_fru_file_id,
+		 "Board info fru file id");
+    DUMP_FRU_CUSTOM_STR(board_info, "Board info");
 
     rv = ipmi_fru_get_product_info_version(fru, &ucval);
     if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "product info version", ucval);
+	ipmi_cmdlang_out_int(cmd_info, "Product info version", ucval);
 
     rv = ipmi_fru_get_product_info_lang_code(fru, &ucval);
     if (!rv)
-	ipmi_cmdlang_out_int(cmd_info, "product info lang code", ucval);
+	ipmi_cmdlang_out_int(cmd_info, "Product info lang code", ucval);
 
     DUMP_FRU_STR(product_info_manufacturer_name,
-		 "product info manufacturer name");
-    DUMP_FRU_STR(product_info_product_name, "product info product name");
+		 "Product info manufacturer name");
+    DUMP_FRU_STR(product_info_product_name,
+		 "Product info product name");
     DUMP_FRU_STR(product_info_product_part_model_number,
-		 "product info product part model number");
-    DUMP_FRU_STR(product_info_product_version, "product info product version");
+		 "Product info product part model number");
+    DUMP_FRU_STR(product_info_product_version,
+		 "Product info product version");
     DUMP_FRU_STR(product_info_product_serial_number,
-		 "product info product serial number");
-    DUMP_FRU_STR(product_info_asset_tag, "product info asset tag");
-    DUMP_FRU_STR(product_info_fru_file_id, "product info fru file id");
-    DUMP_FRU_CUSTOM_STR(product_info, "product info");
+		 "Product info product serial number");
+    DUMP_FRU_STR(product_info_asset_tag,
+		 "Product info asset tag");
+    DUMP_FRU_STR(product_info_fru_file_id,
+		 "Product info fru file id");
+    DUMP_FRU_CUSTOM_STR(product_info, "Product info");
     num_multi = ipmi_fru_get_num_multi_records(fru);
     for (i=0; i<num_multi; i++) {
 	unsigned char type, ver;

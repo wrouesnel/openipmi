@@ -704,7 +704,7 @@ sel_op_done(ipmi_sel_info_t *sel,
 {
     sel_op_done_info_t *info = cb_data;
 
-    /* No need to lock, the domain/mc should already be locked. */
+    /* No need to refcount, the domain/mc should already be locked. */
     if (info->done)
         info->done(info->mc, err, info->cb_data);
     ipmi_mem_free(info);

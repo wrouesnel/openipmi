@@ -225,6 +225,12 @@ void ipmi_cmdlang_out_mac(ipmi_cmd_info_t *info,
 void ipmi_cmdlang_out_bool(ipmi_cmd_info_t *info,
 			   char            *name,
 			   int             value);
+void ipmi_cmdlang_out_time(ipmi_cmd_info_t *info,
+			   char            *name,
+			   ipmi_time_t     value);
+void ipmi_cmdlang_out_timeout(ipmi_cmd_info_t *info,
+			      char            *name,
+			      ipmi_timeout_t  value);
 
 /* Generate info for an event. */
 void ipmi_cmdlang_event_out(ipmi_event_t    *event,
@@ -248,6 +254,9 @@ void ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_double(char *str, double *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_uchar(char *str, unsigned char *val,
 			    ipmi_cmd_info_t *info);
+void ipmi_cmdlang_get_time(char *str, ipmi_time_t *val, ipmi_cmd_info_t *info);
+void ipmi_cmdlang_get_timeout(char *str, ipmi_timeout_t *val,
+			      ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_ip(char *str, struct in_addr *val,
 			 ipmi_cmd_info_t *info);

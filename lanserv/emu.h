@@ -47,9 +47,11 @@ int ipmi_emu_get_mc_by_addr(emu_data_t    *emu,
 int ipmi_mc_enable_sel(lmc_data_t    *emu,
 		       int           max_entries,
 		       unsigned char flags);
+
 int ipmi_mc_add_to_sel(lmc_data_t    *emu,
 		       unsigned char record_type,
-		       unsigned char event[13]);
+		       unsigned char event[13],
+		       unsigned int  *recid);
 
 int ipmi_mc_add_main_sdr(lmc_data_t    *mc,
 			 unsigned char *data,

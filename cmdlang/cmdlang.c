@@ -1166,6 +1166,28 @@ ipmi_cmdlang_out_bool(ipmi_cmd_info_t *info,
 }
 
 void
+ipmi_cmdlang_out_time(ipmi_cmd_info_t *info,
+		      char            *name,
+		      ipmi_time_t     value)
+{
+    char sval[40];
+
+    sprintf(sval, "%lld", value);
+    ipmi_cmdlang_out(info, name, sval);
+}
+
+void
+ipmi_cmdlang_out_timeout(ipmi_cmd_info_t *info,
+			 char            *name,
+			 ipmi_timeout_t  value)
+{
+    char sval[40];
+
+    sprintf(sval, "%lld", value);
+    ipmi_cmdlang_out(info, name, sval);
+}
+
+void
 ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
 		    char            *name,
 		    struct in_addr  *ip_addr)
@@ -1245,6 +1267,47 @@ ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmd_info_t *info)
 	return;
 
     rv = strtoul(str, &end, 0);
+    if (*end != '\0') {
+	info->cmdlang->errstr = "Invalid integer";
+	info->cmdlang->err = EINVAL;
+	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
+	return;
+    }
+
+    *val = rv;
+}
+
+void
+ipmi_cmdlang_get_time(char *str, ipmi_time_t *val, ipmi_cmd_info_t *info)
+{
+    char        *end;
+    ipmi_time_t rv;
+
+    if (info->cmdlang->err)
+	return;
+
+    rv = strtoull(str, &end, 0);
+    if (*end != '\0') {
+	info->cmdlang->errstr = "Invalid integer";
+	info->cmdlang->err = EINVAL;
+	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
+	return;
+    }
+
+    *val = rv;
+}
+
+void
+ipmi_cmdlang_get_timeout(char *str, ipmi_timeout_t *val,
+			 ipmi_cmd_info_t *info)
+{
+    char           *end;
+    ipmi_timeout_t rv;
+
+    if (info->cmdlang->err)
+	return;
+
+    rv = strtoull(str, &end, 0);
     if (*end != '\0') {
 	info->cmdlang->errstr = "Invalid integer";
 	info->cmdlang->err = EINVAL;
@@ -2050,6 +2113,7 @@ int ipmi_cmdlang_mc_init(void);
 int ipmi_cmdlang_pet_init(void);
 int ipmi_cmdlang_sensor_init(void);
 int ipmi_cmdlang_control_init(void);
+int ipmi_cmdlang_sel_init(void);
 
 int
 ipmi_cmdlang_init(void)
@@ -2072,6 +2136,9 @@ ipmi_cmdlang_init(void)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_control_init();
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_sel_init();
     if (rv) return rv;
 
     return 0;

@@ -233,6 +233,439 @@ fru_info(ipmi_entity_t *entity, void *cb_data)
     ipmi_cmdlang_up(cmd_info);
 }
 
+static void
+entity_hs_get_act_time_done(ipmi_entity_t  *entity,
+			    int            err,
+			    ipmi_timeout_t val,
+			    void           *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char               entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error reading entity hot-swap activate time";
+	cmdlang->err = err;
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(entity_hs_get_act_time_done)";
+	goto out;
+    }
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    ipmi_cmdlang_out_timeout(cmd_info, "Auto-Activation Time", val);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+entity_hs_get_act_time(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_entity_get_auto_activate_time(entity,
+					    entity_hs_get_act_time_done,
+					    cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error getting auto activate time";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_get_act_time)";
+    }
+}
+
+static void
+entity_hs_set_act_time_done(ipmi_entity_t  *entity,
+			    int            err,
+			    void           *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error setting entity hot-swap activate time";
+	cmdlang->err = err;
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(entity_hs_set_act_time_done)";
+    }
+
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+entity_hs_set_act_time(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    ipmi_timeout_t  val;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+
+    if ((argc - curr_arg) < 1) {
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_timeout(argv[curr_arg], &val, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "time invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_entity_set_auto_activate_time(entity,
+					    val,
+					    entity_hs_set_act_time_done,
+					    cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error setting auto activate time";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_set_act_time)";
+    }
+    return;
+
+ out_err:
+    ipmi_entity_get_name(entity, cmdlang->objstr,
+			 cmdlang->objstr_len);
+    cmdlang->location = "cmd_entity.c(entity_hs_set_act_time)";
+}
+
+static void
+entity_hs_get_deact_time_done(ipmi_entity_t  *entity,
+			      int            err,
+			      ipmi_timeout_t val,
+			      void           *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char               entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error reading entity hot-swap deactivate time";
+	cmdlang->err = err;
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(entity_hs_get_deact_time_done)";
+	goto out;
+    }
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    ipmi_cmdlang_out_timeout(cmd_info, "Auto-Deactivation Time", val);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+entity_hs_get_deact_time(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_entity_get_auto_deactivate_time(entity,
+					    entity_hs_get_deact_time_done,
+					    cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error getting auto deactivate time";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_get_deact_time)";
+    }
+}
+
+static void
+entity_hs_set_deact_time_done(ipmi_entity_t  *entity,
+			      int            err,
+			      void           *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error setting entity hot-swap deactivate time";
+	cmdlang->err = err;
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(entity_hs_set_deact_time_done)";
+    }
+
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+entity_hs_set_deact_time(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    ipmi_timeout_t  val;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+
+    if ((argc - curr_arg) < 1) {
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_timeout(argv[curr_arg], &val, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "time invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_entity_set_auto_deactivate_time(entity,
+					      val,
+					      entity_hs_set_deact_time_done,
+					      cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error setting auto deactivate time";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_set_deact_time)";
+    }
+    return;
+
+ out_err:
+    ipmi_entity_get_name(entity, cmdlang->objstr,
+			 cmdlang->objstr_len);
+    cmdlang->location = "cmd_entity.c(entity_hs_set_deact_time)";
+}
+
+static void
+entity_hs_activation_request_done(ipmi_entity_t  *entity,
+				  int            err,
+				  void           *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error from entity hot-swap activation request";
+	cmdlang->err = err;
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(entity_hs_activation_request_done)";
+    }
+
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+entity_hs_activation_request(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_entity_set_activation_requested
+	(entity,
+	 entity_hs_activation_request_done,
+	 cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error sending activation request";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_activation_request)";
+    }
+}
+
+static void
+entity_hs_activate_done(ipmi_entity_t  *entity,
+				int            err,
+				void           *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error from entity hot-swap activate";
+	cmdlang->err = err;
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(entity_hs_activate_done)";
+    }
+
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+entity_hs_activate(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_entity_activate(entity,
+			      entity_hs_activate_done,
+			      cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error sending activate";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_activate)";
+    }
+}
+
+static void
+entity_hs_deactivate_done(ipmi_entity_t  *entity,
+				int            err,
+				void           *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error from entity hot-swap deactivate";
+	cmdlang->err = err;
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(entity_hs_deactivate_done)";
+    }
+
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+entity_hs_deactivate(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_entity_deactivate(entity,
+				entity_hs_deactivate_done,
+				cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error sending deactivate";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_deactivate)";
+    }
+}
+
+static void
+entity_hs_state_done(ipmi_entity_t             *entity,
+		     int                       err,
+		     enum ipmi_hot_swap_states state,
+		     void                      *cb_data)
+{
+    ipmi_cmd_info_t    *cmd_info = cb_data;
+    ipmi_cmdlang_t     *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char               entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error reading hot-swap state";
+	cmdlang->err = err;
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_sensor.c(entity_hs_state_done)";
+	goto out;
+    }
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    ipmi_cmdlang_out(cmd_info, "State", ipmi_hot_swap_state_name(state));
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+entity_hs_state(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_entity_get_hot_swap_state(entity,
+					entity_hs_state_done,
+					cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error getting hot-swap state";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_get_state)";
+    }
+}
+
+static void
+entity_hs_check(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    rv = ipmi_entity_check_hot_swap_state(entity);
+    if (rv) {
+	cmdlang->err = rv;
+	cmdlang->errstr = "Error checking hot-swap state";
+	ipmi_entity_get_name(entity, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_entity.c(entity_hs_check)";
+    }
+}
+
+
 void fru_change(enum ipmi_update_e op,
 		ipmi_entity_t      *entity,
 		void               *cb_data)
@@ -335,6 +768,50 @@ presence_change(ipmi_entity_t *entity,
     return IPMI_EVENT_NOT_HANDLED;
 }
 
+static int
+entity_hot_swap(ipmi_entity_t             *entity,
+		enum ipmi_hot_swap_states last_state,
+		enum ipmi_hot_swap_states curr_state,
+		void                      *cb_data,
+		ipmi_event_t              *event)
+{
+    char            *errstr;
+    int             rv;
+    ipmi_cmd_info_t *evi;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "Entity");
+    ipmi_cmdlang_out(evi, "Name", entity_name);
+    ipmi_cmdlang_out(evi, "Operation", "Hot-Swap Change");
+    ipmi_cmdlang_out(evi, "Last State", 
+		     ipmi_hot_swap_state_name(last_state));
+    ipmi_cmdlang_out(evi, "State", ipmi_hot_swap_state_name(curr_state));
+
+    if (event)
+	ipmi_cmdlang_event_out(event, evi);
+
+    ipmi_cmdlang_cmd_info_put(evi);
+    return IPMI_EVENT_HANDLED;
+
+ out_err:
+    ipmi_cmdlang_global_err(entity_name,
+			    "cmd_entity.c(presence_change)",
+			    errstr, rv);
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
 void
 ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 			   ipmi_domain_t      *domain,
@@ -395,7 +872,6 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 	    errstr = "ipmi_entity_add_control_update_handler";
 	    goto out_err;
 	}
-#if 0
 	rv = ipmi_entity_add_hot_swap_handler(entity,
 					      entity_hot_swap,
 					      NULL);
@@ -403,7 +879,6 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 	    errstr = "ipmi_entity_add_hot_swap_handler";
 	    goto out_err;
 	}
-#endif
 	break;
 
 	case IPMI_DELETED:
@@ -431,7 +906,7 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 	ipmi_cmdlang_cmd_info_put(evi);
 }
 
-static ipmi_cmdlang_cmd_t *entity_cmds;
+static ipmi_cmdlang_cmd_t *entity_cmds, *hs_cmds;
 
 static ipmi_cmdlang_init_t cmds_entity[] =
 {
@@ -447,6 +922,40 @@ static ipmi_cmdlang_init_t cmds_entity[] =
     { "fru", &entity_cmds,
       "<entity> - Dump FRU information about an entity",
       ipmi_cmdlang_entity_handler, fru_info, NULL },
+    { "hs", &entity_cmds,
+      "Commands dealing with hot-swap",
+      NULL, NULL, &hs_cmds },
+    { "get_act_time", &hs_cmds,
+      "<entity> - Get the hot-swap auto-activate time",
+      ipmi_cmdlang_entity_handler, entity_hs_get_act_time, NULL },
+    { "set_act_time", &hs_cmds,
+      "<entity> - Set the hot-swap auto-activate time",
+      ipmi_cmdlang_entity_handler, entity_hs_set_act_time, NULL },
+    { "get_deact_time", &hs_cmds,
+      "<entity> - Get the hot-swap auto-deactivate time",
+      ipmi_cmdlang_entity_handler, entity_hs_get_deact_time, NULL },
+    { "set_deact_time", &hs_cmds,
+      "<entity> - Set the hot-swap auto-deactivate time",
+      ipmi_cmdlang_entity_handler, entity_hs_set_deact_time, NULL },
+    { "activation_request", &hs_cmds,
+      "<entity> Act like a user requested an"
+      " activation of the entity.  This is generally equivalent to"
+      " closing the handle latch or something like that.",
+      ipmi_cmdlang_entity_handler, entity_hs_activation_request, NULL },
+    { "activate", &hs_cmds,
+      "<entity> - activate the given entity",
+      ipmi_cmdlang_entity_handler, entity_hs_activate, NULL },
+    { "deactivate", &hs_cmds,
+      "<entity> - deactivate the given entity",
+      ipmi_cmdlang_entity_handler, entity_hs_deactivate, NULL },
+    { "state", &hs_cmds,
+      "<entity> - Return the current hot-swap state of the given entity",
+      ipmi_cmdlang_entity_handler, entity_hs_state, NULL },
+    { "check", &hs_cmds,
+      "<entity> - Check the hot-swap state of the entity.  This will"
+      " not return anything, but will generate an event if the state"
+      " is wrong",
+      ipmi_cmdlang_entity_handler, entity_hs_check, NULL },
 };
 #define CMDS_ENTITY_LEN (sizeof(cmds_entity)/sizeof(ipmi_cmdlang_init_t))
 
@@ -455,20 +964,3 @@ ipmi_cmdlang_entity_init(void)
 {
     return ipmi_cmdlang_reg_table(cmds_entity, CMDS_ENTITY_LEN);
 }
-
-#if 0
-* entity
-  * hs - hot-swap control
-    * get_act_time <entity> - Get the host-swap auto-activate time
-    * set_act_time <entity> - Set the host-swap auto-activate time
-    * get_deact_time <entity> - Get the host-swap auto-deactivate time
-    * set_deact_time <entity> - Set the host-swap auto-deactivate time
-    * activation_request <entity> Act like a user requested an
-      activation of the entity.  This is generally equivalent to
-      closing the handle latch or something like that.
-    * activate <entity> - activate the given entity
-    * deactivate <entity> - deactivate the given entity
-    * state <entity> - Return the current hot-swap state of the given entity
-      FIXME - combine this in with the entity info.
-    * check <domain> - Audit all the entity hot-swap states
-#endif

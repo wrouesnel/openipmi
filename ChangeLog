@@ -10,7 +10,12 @@
 	* lib/sensor.c: ditto
 	* sample/sample3.c: ditto
 	* ui/ui.c: ditto
-	
+
+	* lanserv/emu.c, lanserv/emu.h, lanserv/emu_cmd.c: Fixed problems
+	with SEL handling.
+
+	* lib/mc.c, lib/sel.c, lib/event.c: Fixed some problem with
+	handling errors from SEL deletes.
 
 2004-10-04 Corey Minyard <cminyard@mvista.com> 
 

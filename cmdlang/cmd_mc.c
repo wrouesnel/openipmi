@@ -350,7 +350,6 @@ mc_msg(ipmi_mc_t *mc, void *cb_data)
 
 
     if ((argc - curr_arg) < 3) {
-	/* Not enough parameters */
 	cmdlang->errstr = "Not enough parameters";
 	cmdlang->err = EINVAL;
 	goto out_err;

@@ -1447,11 +1447,10 @@ sel_del_event_cb(ipmi_mc_t *mc, void *cb_data)
     } else {
 	/* Don't really delete the event, but report is as done. */
 	info->handler(sel, info->cb_data, 0);
+	ipmi_event_free(event);
     }
 
  out_unlock:
-    if (event)
-	ipmi_event_free(event);
     sel_unlock(sel);
 }
 

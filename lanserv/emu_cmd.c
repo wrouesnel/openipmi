@@ -171,6 +171,7 @@ sel_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
     int           rv;
     unsigned char record_type;
     unsigned char data[13];
+    unsigned int  r;
 
     rv = get_uchar(toks, &record_type, "record type", 0);
     if (rv)
@@ -182,9 +183,11 @@ sel_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	    return rv;
     }
 
-    rv = ipmi_mc_add_to_sel(mc, record_type, data);
+    rv = ipmi_mc_add_to_sel(mc, record_type, data, &r);
     if (rv)
 	printf("**Unable to add to sel, error 0x%x\n", rv);
+    else
+	printf("Added record %d\n", r);
     return rv;
 }
 
