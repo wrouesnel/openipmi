@@ -1,4 +1,9 @@
 
+2003-07-11 Louis Zhuang <louis.zhuang@linux.co.intel.com>
+
+	* ipmi_lan.c, lanserv_asf.c, lanserv_ipmi.c: Cleanups to
+	remove some warnings.
+
 2003-07-03 Corey Minyard <cminyard@mvista.com>
 
 	* sdr.c: When handling SDR data, be sure to check that the MC is
