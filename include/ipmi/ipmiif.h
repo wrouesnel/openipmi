@@ -594,9 +594,17 @@ typedef struct ipmi_states_s
     unsigned int __states;
 } ipmi_states_t;
 
+static inline void ipmi_init_states(ipmi_states_t *states)
+{
+    states->__states = 0;
+}
+
 /* Read the current value of the given threshold sensor. */
 int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
 				   enum ipmi_thresh_e thresh);
+void ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
+				     enum ipmi_thresh_e thresh,
+				     int                val);
 typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t *sensor,
 				     int           err,
 				     int           val_present,
@@ -610,6 +618,9 @@ int ipmi_reading_get(ipmi_sensor_t        *sensor,
 /* Read the current states from the discrete sensor. */
 int ipmi_is_state_set(ipmi_states_t *states,
 		      int           state_num);
+void ipmi_set_state(ipmi_states_t *states,
+		    int           state_num,
+		    int           val);
 typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
 				    int           err,
 				    ipmi_states_t states,
@@ -630,6 +641,10 @@ int ipmi_ind_get_entity_id(ipmi_ind_t *ind);
 int ipmi_ind_get_entity_instance(ipmi_ind_t *ind);
 ipmi_entity_t *ipmi_ind_get_entity(ipmi_ind_t *ind);
 
+/* A general callback for indicator operations that don't received
+   any data. */
+typedef void (*ipmi_ind_op_cb)(ipmi_ind_t *ind, int err, void *cb_data);
+
 /* For LIGHT types.  */
 /* Get the number of colors the light supports (1 for 1-color leds and
    such, 2 for bicolor leds, etc. */
@@ -638,12 +653,30 @@ unsigned int ipmi_ind_get_num_colors(ipmi_ind_t *ind);
    color, etc. */
 int ipmi_ind_get_color(ipmi_ind_t *ind, unsigned int color_num);
 
-/* RELAY types have no settings. */
+/* RELAY types have no settings.  Relays are a bitmask of entries,
+   where each bit represents one relay starting with bit zero being
+   relay 1, bit 1 being relay 2, etc. */
+
+/* Get the number of relays supported by the relay indicator. */
+unsigned int ipmi_ind_get_num_relays(ipmi_ind_t *ind);
+
 /* ALARM types have no settings. */
 
-/* A general callback for indicator operations that don't received
-   any data. */
-typedef void (*ipmi_ind_op_cb)(ipmi_ind_t *ind, int err, void *cb_data);
+/* IDENTIFIER types are represented as arrays of unsigned data. */
+typedef void (*ipmi_ind_identifier_val_cb)(ipmi_ind_t    *ind,
+					   int           err,
+					   unsigned char *val,
+					   int           length,
+					   void          *cb_data);
+int ipmi_ind_identifier_get_val(ipmi_ind_t                 *ind,
+				ipmi_ind_identifier_val_cb handler,
+				void                       *cb_data);
+int ipmi_ind_identifier_set_val(ipmi_ind_t     *ind,
+				ipmi_ind_op_cb handler,
+				unsigned char  *val,
+				int            length,
+				void           *cb_data);
+unsigned int ipmi_ind_identifier_get_max_length(ipmi_ind_t *ind);
 
 /* Set the setting of an indicator. */
 int ipmi_ind_set_val(ipmi_ind_t     *ind,

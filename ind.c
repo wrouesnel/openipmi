@@ -78,6 +78,12 @@ struct ipmi_ind_s
     unsigned int columns;
     unsigned int rows;
 
+    /* For relay types. */
+    unsigned int num_relays;
+
+    /* For identifier types. */
+    unsigned int identifier_length;
+
     char id[IND_ID_LENGTH+1];
 
     ipmi_ind_cbs_t cbs;
@@ -361,6 +367,8 @@ ipmi_ind_set_display_string(ipmi_ind_t     *ind,
 			    ipmi_ind_op_cb handler,
 			    void           *cb_data)
 {
+    if (!ind->cbs.set_display_string)
+	return ENOSYS;
     return ind->cbs.set_display_string(ind,
 				       start_row,
 				       start_column,
@@ -376,11 +384,35 @@ ipmi_ind_get_display_string(ipmi_ind_t      *ind,
 			    ipmi_ind_str_cb handler,
 			    void            *cb_data)
 {
+    if (!ind->cbs.get_display_string)
+	return ENOSYS;
     return ind->cbs.get_display_string(ind,
 				       start_row,
 				       start_column,
 				       len,
 				       handler, cb_data);
+}
+
+int
+ipmi_ind_identifier_get_val(ipmi_ind_t                 *ind,
+				ipmi_ind_identifier_val_cb handler,
+				void                       *cb_data)
+{
+    if (!ind->cbs.get_identifier_val)
+	return ENOSYS;
+    return ind->cbs.get_identifier_val(ind, handler, cb_data);
+}
+				
+int
+ipmi_ind_identifier_set_val(ipmi_ind_t     *ind,
+			    ipmi_ind_op_cb handler,
+			    unsigned char  *val,
+			    int            length,
+			    void           *cb_data)
+{
+    if (!ind->cbs.set_identifier_val)
+	return ENOSYS;
+    return ind->cbs.set_identifier_val(ind, handler, val, length, cb_data);
 }
 
 int
@@ -474,6 +506,30 @@ void ipmi_ind_get_display_dimensions(ipmi_ind_t   *ind,
 {
     *columns = ind->columns;
     *rows = ind->rows;
+}
+
+unsigned int
+ipmi_ind_get_num_relays(ipmi_ind_t *ind)
+{
+    return ind->num_relays;
+}
+
+void
+ipmi_ind_set_num_relays(ipmi_ind_t *ind, unsigned int val)
+{
+    ind->num_relays = val;
+}
+
+unsigned int
+ipmi_ind_identifier_get_max_length(ipmi_ind_t *ind)
+{
+    return ind->identifier_length;
+}
+
+void
+ipmi_ind_identifier_set_max_length(ipmi_ind_t *ind, unsigned int val)
+{
+    ind->identifier_length = val;
 }
 
 void

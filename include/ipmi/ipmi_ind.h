@@ -92,6 +92,16 @@ typedef int (*ipmi_ind_get_display_string_cb)(ipmi_ind_t      *ind,
 					      unsigned int    len,
 					      ipmi_ind_str_cb handler,
 					      void            *cb_data);
+typedef int (*ipmi_ind_identifier_get_val_cb)(
+    ipmi_ind_t                 *ind,
+    ipmi_ind_identifier_val_cb handler,
+    void                       *cb_data);
+
+typedef int (*ipmi_ind_identifier_set_val_cb)(ipmi_ind_t     *ind,
+					      ipmi_ind_op_cb handler,
+					      unsigned char  *val,
+					      int            length,
+					      void           *cb_data);
 
 typedef struct ipmi_ind_cbs_s
 {
@@ -99,10 +109,16 @@ typedef struct ipmi_ind_cbs_s
     ipmi_ind_get_val_cb		   get_val;
     ipmi_ind_set_display_string_cb set_display_string;
     ipmi_ind_get_display_string_cb get_display_string;
+    ipmi_ind_identifier_get_val_cb get_identifier_val;
+    ipmi_ind_identifier_set_val_cb set_identifier_val;
 } ipmi_ind_cbs_t;
+
+void ipmi_ind_identifier_set_max_length(ipmi_ind_t *ind, unsigned int val);
 
 void ipmi_ind_set_id(ipmi_ind_t *ind, char *id);
 void ipmi_ind_set_type(ipmi_ind_t *ind, int val);
+
+void ipmi_ind_set_num_relays(ipmi_ind_t *ind, unsigned int val);
 
 int ipmi_ind_get_num(ipmi_ind_t *ind,
 		     int        *lun,
