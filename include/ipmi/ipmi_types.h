@@ -65,6 +65,16 @@ typedef struct ipmi_sensor_id_s ipmi_sensor_id_t;
 typedef struct ipmi_control_s ipmi_control_t;
 typedef struct ipmi_control_id_s ipmi_control_id_t;
 
+/* Maximum amount of data allowed in a SEL. */
+#define IPMI_MAX_SEL_DATA 13
+/* An entry from the system event log. */
+typedef struct ipmi_log_s
+{
+    unsigned int  record_id;
+    unsigned int  type;
+    unsigned char data[IPMI_MAX_SEL_DATA];
+} ipmi_log_t;
+
 #ifndef __LINUX_IPMI_H /* Don't include this is we are including the kernel */
 
 #define IPMI_MAX_MSG_LENGTH	80

@@ -125,7 +125,7 @@ int ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2);
 
 /* Events come in this format. */
 typedef void (*ipmi_event_handler_t)(ipmi_mc_t  *bmc,
-				     ipmi_msg_t *event,
+				     ipmi_log_t *log,
 				     void       *event_data);
 
 typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;

@@ -41,6 +41,7 @@
 #include <ipmi/ipmi_err.h>
 #include <ipmi/ipmi_int.h>
 #include "opq.h"
+#include "ilist.h"
 
 #define MAX_SEL_FETCH_RETRIES 10
 
@@ -91,9 +92,6 @@ struct ipmi_sel_info_s
     int                    curr_rec_id;
     int                    next_rec_id;
     unsigned int           reservation;
-    int                    curr_sel_num; /* Current array index. */
-    int                    working_num_sels;
-    ipmi_sel_t             *working_sels;
     int                    sels_changed;
     int                    fetch_retry_count;
     sel_fetch_handler_t    *fetch_handlers;
@@ -103,9 +101,11 @@ struct ipmi_sel_info_s
 
     os_handler_t *os_hnd;
 
-    ipmi_sel_t *sels;
-    int        num_sels;
+    ilist_t      *logs;
+    unsigned int num_sels;
 
+    ipmi_sel_new_log_handler_cb new_log_handler;
+    void                        *new_log_cb_data;
 };
 
 static inline void sel_lock(ipmi_sel_info_t *sel)
@@ -118,6 +118,45 @@ static inline void sel_unlock(ipmi_sel_info_t *sel)
 {
     if (sel->os_hnd->lock)
 	sel->os_hnd->unlock(sel->os_hnd, sel->sel_lock);
+}
+
+static void
+free_log(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    free(item);
+}
+static void
+free_logs(ilist_t *logs)
+{
+    ilist_iter(logs, free_log, NULL);
+}
+
+static int
+recid_search_cmp(void *item, void *cb_data)
+{
+    ipmi_log_t   *log = item;
+    unsigned int recid = *((int *) cb_data);
+
+    return log->record_id == recid;
+}
+static ipmi_log_t *
+find_log(ilist_t *list, unsigned int recid)
+{
+    return ilist_search(list, recid_search_cmp, &recid);
+}
+
+static int
+log_cmp(ipmi_log_t *log1, ipmi_log_t *log2)
+{
+    if (log1->record_id > log2->record_id)
+	return 1;
+    if (log1->record_id < log2->record_id)
+	return -1;
+    if (log1->type > log2->type)
+	return 1;
+    if (log1->type < log2->type)
+	return -1;
+    return memcmp(log1->data, log2->data, 13);
 }
 
 int
@@ -140,6 +179,13 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 	rv = ENOMEM;
 	goto out_unlock;
     }
+    memset(sel, 0, sizeof(*sel));
+
+    sel->logs = alloc_ilist();
+    if (!sel->logs) {
+	rv = ENOMEM;
+	goto out_unlock;
+    }
 
     sel->mc = mc;
     sel->destroyed = 0;
@@ -147,12 +193,11 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
     sel->sel_lock = NULL;
     sel->fetched = 0;
     sel->fetch_state = IDLE;
-    sel->sels = NULL;
     sel->num_sels = 0;
     sel->destroy_handler = NULL;
     sel->lun = lun;
     sel->fetch_handlers = NULL;
-    sel->working_sels = NULL;
+    sel->new_log_handler = NULL;
 
     if (sel->os_hnd->create_lock) {
 	rv = sel->os_hnd->create_lock(sel->os_hnd, &sel->sel_lock);
@@ -163,6 +208,8 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
  out_unlock:
     if (rv) {
 	if (sel) {
+	    if (sel->logs)
+		free_ilist(sel->logs);
 	    if (sel->sel_lock)
 		sel->os_hnd->destroy_lock(sel->os_hnd, sel->sel_lock);
 	    free(sel);
@@ -181,6 +228,10 @@ internal_destroy_sel(ipmi_sel_info_t *sel)
        designed to live after the ipmi has been destroyed. */
     sel_unlock(sel);
 
+    free_logs(sel->logs);
+    if (sel->logs)
+	free_ilist(sel->logs);
+
     if (sel->sel_lock)
 	sel->os_hnd->destroy_lock(sel->os_hnd, sel->sel_lock);
 
@@ -189,8 +240,6 @@ internal_destroy_sel(ipmi_sel_info_t *sel)
     if (sel->destroy_handler)
 	sel->destroy_handler(sel, sel->destroy_cb_data);
 
-    if (sel->sels)
-	free(sel->sels);
     free(sel);
 }
 
@@ -228,15 +277,6 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
     sel_fetch_handler_t *elem, *next;
 
     sel_lock(sel);
-    if (err) {
-	if (sel->working_sels) {
-	    free(sel->working_sels);
-	    sel->working_sels = NULL;
-	}
-    } else {
-	sel->num_sels = sel->curr_sel_num;
-	sel->sels = sel->working_sels;
-    }
 
     elem = sel->fetch_handlers;
     sel->fetch_handlers = NULL;
@@ -278,12 +318,14 @@ handle_sel_data(ipmi_mc_t  *mc,
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
     int             rv;
-    int             curr;
+    int             log_is_new = 0;
+    ipmi_log_t      *log;
+    ipmi_log_t      del_log;
+    unsigned int    record_id;
 
 
     if (sel->destroyed) {
 	fetch_complete(sel, ECANCELED);
-	free(sel->working_sels);
 	free(sel);
 	return;
     }
@@ -297,7 +339,6 @@ handle_sel_data(ipmi_mc_t  *mc,
 	/* We lost our reservation, restart the operation.  Only do
            this so many times, in order to guarantee that this
            completes. */
-	free(sel->working_sels);
 	sel->fetch_retry_count++;
 	if (sel->fetch_retry_count > MAX_SEL_FETCH_RETRIES) {
 	    fetch_complete(sel, EBUSY);
@@ -313,23 +354,45 @@ handle_sel_data(ipmi_mc_t  *mc,
 	return;
     }
 
-    curr = sel->curr_sel_num;
-
     sel->next_rec_id = ipmi_get_uint16(rsp->data+1);
-    sel->working_sels[curr].record_id = ipmi_get_uint16(rsp->data+3);
-    sel->working_sels[curr].type = rsp->data[5];
-    memcpy(sel->working_sels[curr].data, rsp->data+6, 13);
 
-    sel->curr_sel_num++;
+    del_log.record_id = ipmi_get_uint16(rsp->data+3);
+    del_log.type = rsp->data[5];
+    memcpy(del_log.data, rsp->data+6, 13);
+
+    sel_lock(sel);
+    record_id = ipmi_get_uint16(rsp->data+3);
+    log = find_log(sel->logs, record_id);
+    if (!log) {
+	log = malloc(sizeof(*log));
+	if (!log) {
+	    sel_unlock(sel);
+	    fetch_complete(sel, ENOMEM);
+	    return;
+	}
+	if (!ilist_add_tail(sel->logs, log, NULL)) {
+	    free(log);
+	    sel_unlock(sel);
+	    fetch_complete(sel, ENOMEM);
+	    return;
+	}
+	*log = del_log;
+	log_is_new = 1;
+	sel->num_sels++;
+    } else if (log_cmp(&del_log, log) != 0) {
+	*log = del_log;
+	log_is_new = 1;
+    }
+    sel_unlock(sel);
+
     if (sel->next_rec_id == 0xFFFF) {
 	fetch_complete(sel, 0);
 	return;
     }
-    if (sel->curr_sel_num >= sel->working_num_sels) {
-	fetch_complete(sel, EINVAL);
-	return;
-    }
     sel->curr_rec_id = sel->next_rec_id;
+
+    if (log_is_new)
+	sel->new_log_handler(sel, &del_log, sel->new_log_cb_data);
 
     /* Request some more data. */
     cmd_msg.data = cmd_data;
@@ -356,6 +419,7 @@ handle_sel_info(ipmi_mc_t  *mc,
     int             rv;
     int32_t         add_timestamp;
     int32_t         erase_timestamp;
+    int             fetched_num_sels;
 
 
     if (sel->destroyed) {
@@ -383,7 +447,7 @@ handle_sel_info(ipmi_mc_t  *mc,
     sel_lock(sel);
     sel->major_version = rsp->data[1] & 0xf;
     sel->major_version = (rsp->data[1] >> 4) & 0xf;
-    sel->working_num_sels = ipmi_get_uint16(rsp->data+2);
+    fetched_num_sels = ipmi_get_uint16(rsp->data+2);
     sel->overflow = (rsp->data[14] & 0x80) == 0x80;
     sel->supports_delete_sel = (rsp->data[14] & 0x08) == 0x08;
     sel->supports_partial_add_sel = (rsp->data[14] & 0x04) == 0x04;
@@ -408,25 +472,14 @@ handle_sel_info(ipmi_mc_t  *mc,
 
     sel->sels_changed = 1;
 
-    if (sel->working_num_sels == 0) {
+    if (fetched_num_sels == 0) {
 	/* No sels, so there's nothing to do. */
-	if (sel->sels) {
-	    free(sel->sels);
-	    sel->sels = NULL;
-	}
 	fetch_complete(sel, 0);
-	return;
-    }
-
-    sel->working_sels = malloc(sizeof(ipmi_sel_t) * sel->working_num_sels);
-    if (!sel->working_sels) {
-	fetch_complete(sel, ENOMEM);
 	return;
     }
 
     sel->next_rec_id = 0;
     sel->curr_rec_id = 0;
-    sel->curr_sel_num = 0;
 
     /* Fetch the first SEL entry. */
     cmd_msg.data = cmd_data;
@@ -443,9 +496,9 @@ handle_sel_info(ipmi_mc_t  *mc,
 }
 
 static void
-handle_reservation(ipmi_mc_t  *mc,
-		   ipmi_msg_t *rsp,
-		   void       *rsp_data)
+sel_handle_reservation(ipmi_mc_t  *mc,
+		       ipmi_msg_t *rsp,
+		       void       *rsp_data)
 {
     ipmi_sel_info_t *sel = (ipmi_sel_info_t *) rsp_data;
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
@@ -465,15 +518,18 @@ handle_reservation(ipmi_mc_t  *mc,
     }
 	
     if (rsp->data[0] != 0) {
-	fetch_complete(sel, IPMI_IPMI_ERR_VAL(rsp->data[0]));
-	return;
+	/* We ignore errors getting reservations, that means the system
+	   probably doesn't support reservations. */
+	sel->reservation = 0;
+    } else {
+	if (rsp->data_len < 3) {
+	    ipmi_log("sel_handle_reservation:"
+		     " got invalid reservation length\n");
+	    fetch_complete(sel, EINVAL);
+	    return;
+	}
+	sel->reservation = ipmi_get_uint16(rsp->data+1);
     }
-    if (rsp->data_len < 3) {
-	fetch_complete(sel, EINVAL);
-	return;
-    }
-
-    sel->reservation = ipmi_get_uint16(rsp->data+1);
 
     /* Fetch the repository info. */
     cmd_msg.data = cmd_data;
@@ -491,7 +547,6 @@ start_fetch(ipmi_sel_info_t *sel)
     unsigned char       cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t          cmd_msg;
 
-    sel->working_sels = NULL;
     sel->fetch_state = FETCHING;
     sel->sels_changed = 0;
 
@@ -501,7 +556,7 @@ start_fetch(ipmi_sel_info_t *sel)
     cmd_msg.cmd = IPMI_RESERVE_SEL_CMD;
     cmd_msg.data_len = 0;
     return ipmi_send_command(sel->mc, sel->lun, &cmd_msg,
-			     handle_reservation, sel);
+			     sel_handle_reservation, sel);
 }
 
 int
@@ -558,8 +613,6 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
     return rv;
 }
 
-
-
 typedef struct sel_cb_handler_data_s
 {
     ipmi_sel_info_t       *sel;
@@ -584,7 +637,9 @@ handle_sel_delete(ipmi_mc_t  *mc,
     if (rsp->data[0] == 0x80)
 	rv = ENOSYS;
     else if (rsp->data[0] == 0x81)
-	rv = EBUSY;
+	/* The SEL is being erased, so by definition the log will be
+           gone. */
+	rv = 0;
     else if (rsp->data[0])
 	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
 
@@ -594,10 +649,10 @@ handle_sel_delete(ipmi_mc_t  *mc,
 }
 
 static int
-del_sel(ipmi_mc_t             *mc,
-	ipmi_sel_info_t       *sel,
-	int                   index,
-	sel_cb_handler_data_t *data)
+send_del_sel(ipmi_mc_t             *mc,
+	     int                   lun,
+	     int                   record_id,
+	     sel_cb_handler_data_t *data)
 {
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
@@ -607,35 +662,29 @@ del_sel(ipmi_mc_t             *mc,
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_DELETE_SEL_ENTRY_CMD;
     cmd_msg.data_len = 4;
-    ipmi_set_uint16(cmd_msg.data, sel->reservation);
-    ipmi_set_uint16(cmd_msg.data+2, sel->sels[index].record_id);
-    rv = ipmi_send_command(sel->mc, sel->lun, &cmd_msg, handle_sel_delete, data);
+    ipmi_set_uint16(cmd_msg.data, 0);
+    ipmi_set_uint16(cmd_msg.data+2, record_id);
+    rv = ipmi_send_command(mc, lun, &cmd_msg, handle_sel_delete, data);
 
     return rv;
 }
 
 int
-ipmi_sel_delete_by_recid(ipmi_sel_info_t       *sel,
-			 unsigned int          recid,
-			 ipmi_sel_op_done_cb_t handler,
-			 void                  *cb_data)
+ipmi_sel_del_log(ipmi_sel_info_t       *sel,
+		 ipmi_log_t            *log,
+		 ipmi_sel_op_done_cb_t handler,
+		 void                  *cb_data)
 {
     int                   rv;
     sel_cb_handler_data_t *data;
-    int                   i;
-
+    ipmi_log_t            *real_log;
+    ilist_iter_t          iter;
+    ipmi_mc_t             *mc;
+    int                   lun;
 
     data = malloc(sizeof(*data));
     if (!data)
 	return ENOMEM;
-
-    data->sel = sel;
-    data->handler = handler;
-    data->cb_data = cb_data;
-
-    ipmi_read_lock();
-    if ((rv = ipmi_mc_validate(sel->mc)))
-	goto out_unlock2;
 
     sel_lock(sel);
     if (sel->destroyed) {
@@ -643,70 +692,46 @@ ipmi_sel_delete_by_recid(ipmi_sel_info_t       *sel,
 	goto out_unlock;
     }
 
-    rv = EINVAL;
-    for (i=0; i<sel->num_sels; i++) {
-	if (sel->sels[i].record_id == recid) {
-	    rv = 0;
-	    break;
-	}
+    ilist_init_iter(&iter, sel->logs);
+    real_log = ilist_search_iter(&iter, recid_search_cmp, &(log->record_id));
+    if (!real_log) {
+	rv = EINVAL;
+	goto out_unlock;
     }
 
-    if (rv)
+    if (log_cmp(log, real_log) != 0) {
+	rv = EINVAL;
 	goto out_unlock;
+    }
 
-    rv = del_sel(sel->mc, sel, i, data);
+    ilist_delete(&iter);
+    sel->num_sels--;
 
- out_unlock:
+    mc = sel->mc;
+    lun = sel->lun;
     sel_unlock(sel);
- out_unlock2:
-    if (rv)
-	free(data);
-    ipmi_read_unlock();
-    return rv;
-}
-
-int
-ipmi_sel_delete_by_index(ipmi_sel_info_t       *sel,
-			 int                   index,
-			 ipmi_sel_op_done_cb_t handler,
-			 void                  *cb_data)
-{
-    int                   rv;
-    sel_cb_handler_data_t *data;
-
-
-    data = malloc(sizeof(*data));
-    if (!data)
-	return ENOMEM;
-
-    data->sel = sel;
-    data->handler = handler;
-    data->cb_data = cb_data;
 
     ipmi_read_lock();
     if ((rv = ipmi_mc_validate(sel->mc)))
 	goto out_unlock2;
 
-    sel_lock(sel);
-    if (sel->destroyed) {
-	rv = EINVAL;
-	goto out_unlock;
-    }
+    data->sel = sel;
+    data->handler = handler;
+    data->cb_data = cb_data;
 
-    if (index >= sel->num_sels) {
-	rv = EINVAL;
-	goto out_unlock;
-    }
+    rv = send_del_sel(mc, lun, log->record_id, data);
 
-    rv = del_sel(sel->mc, sel, index, data);
+ out_unlock2:
+    ipmi_read_unlock();
+
+ out:
+    if (rv)
+	free(data);
+    return rv;
 
  out_unlock:
     sel_unlock(sel);
- out_unlock2:
-    if (rv)
-	free(data);
-    ipmi_read_unlock();
-    return rv;
+    goto out;
 }
 
 int
@@ -726,81 +751,96 @@ ipmi_get_sel_count(ipmi_sel_info_t *sel,
 }
 
 int
-ipmi_get_sel_by_recid(ipmi_sel_info_t *sel,
-		      unsigned int    recid,
-		      ipmi_sel_t      *return_sel)
+ipmi_sel_get_first_log(ipmi_sel_info_t *sel, ipmi_log_t *log)
 {
-    int i;
-    int rv = ENOENT;
+    ilist_iter_t iter;
+    int          rv = 0;
 
     sel_lock(sel);
     if (sel->destroyed) {
 	sel_unlock(sel);
 	return EINVAL;
     }
-
-    for (i=0; i<sel->num_sels; i++) {
-	if (sel->sels[i].record_id == recid) {
-	    rv = 0;
-	    *return_sel = sel->sels[i];
-	    break;
-	}
-    }
-
+    ilist_init_iter(&iter, sel->logs);
+    if (ilist_first(&iter))
+	*log = *((ipmi_log_t *) ilist_get(&iter));
+    else
+	rv = ENODEV;
     sel_unlock(sel);
     return rv;
 }
 
 int
-ipmi_get_sel_by_type(ipmi_sel_info_t *sel,
-		     int             type,
-		     ipmi_sel_t      *return_sel)
+ipmi_sel_get_last_log(ipmi_sel_info_t *sel, ipmi_log_t *log)
 {
-    int i;
-    int rv = ENOENT;
+    ilist_iter_t iter;
+    int          rv = 0;
 
     sel_lock(sel);
     if (sel->destroyed) {
 	sel_unlock(sel);
 	return EINVAL;
     }
-
-    for (i=0; i<sel->num_sels; i++) {
-	if (sel->sels[i].type == type) {
-	    rv = 0;
-	    *return_sel = sel->sels[i];
-	    break;
-	}
-    }
-
+    ilist_init_iter(&iter, sel->logs);
+    if (ilist_last(&iter))
+	*log = *((ipmi_log_t *) ilist_get(&iter));
+    else
+	rv = ENODEV;
     sel_unlock(sel);
     return rv;
 }
 
-int ipmi_get_sel_by_index(ipmi_sel_info_t *sel,
-			  int             index,
-			  ipmi_sel_t      *return_sel)
+int
+ipmi_sel_get_next_log(ipmi_sel_info_t *sel, ipmi_log_t *log)
 {
-    int rv = 0;
+    ilist_iter_t iter;
+    int          rv = 0;
 
     sel_lock(sel);
     if (sel->destroyed) {
 	sel_unlock(sel);
 	return EINVAL;
     }
+    ilist_init_iter(&iter, sel->logs);
+    if (ilist_search_iter(&iter, recid_search_cmp, &(log->record_id))) {
+	if (ilist_next(&iter))
+	    *log = *((ipmi_log_t *) ilist_get(&iter));
+	else
+	    rv = ENODEV;
+    } else {
+	rv = EINVAL;
+    }
+    sel_unlock(sel);
+    return rv;
+}
 
-    if (index >= sel->num_sels)
-	rv = ENOENT;
-    else
-	*return_sel = sel->sels[index];
+int
+ipmi_sel_get_prev_log(ipmi_sel_info_t *sel, ipmi_log_t *log)
+{
+    ilist_iter_t iter;
+    int          rv = 0;
 
+    sel_lock(sel);
+    if (sel->destroyed) {
+	sel_unlock(sel);
+	return EINVAL;
+    }
+    ilist_init_iter(&iter, sel->logs);
+    if (ilist_search_iter(&iter, recid_search_cmp, &(log->record_id))) {
+	if (ilist_prev(&iter))
+	    *log = *((ipmi_log_t *) ilist_get(&iter));
+	else
+	    rv = ENODEV;
+    } else {
+	rv = EINVAL;
+    }
     sel_unlock(sel);
     return rv;
 }
 
 int ipmi_get_all_sels(ipmi_sel_info_t *sel,
 		      int             *array_size,
-		      ipmi_sel_t      *array)
+		      ipmi_log_t      *array)
 {
     int i;
     int rv = 0;
@@ -813,14 +853,32 @@ int ipmi_get_all_sels(ipmi_sel_info_t *sel,
 
     if (*array_size < sel->num_sels) {
 	rv = E2BIG;
+    } else if (sel->num_sels == 0) {
+	rv = 0;
     } else {
-	for (i=0; i<sel->num_sels; i++) {
-	    *array = sel->sels[i];
+	ilist_iter_t iter;
+
+	ilist_init_iter(&iter, sel->logs);
+	if (! ilist_first(&iter)) {
+	    rv = EINVAL;
+	    goto out_unlock;
+	}
+	for (i=0; ; ) {
+	    *array = *((ipmi_log_t *) ilist_get(&iter));
 	    array++;
+	    i++;
+	    if (i<sel->num_sels) {
+		if (! ilist_next(&iter)) {
+		    rv = EINVAL;
+		    goto out_unlock;
+		}
+	    } else
+		break;
 	}
 	*array_size = sel->num_sels;
     }
 
+ out_unlock:
     sel_unlock(sel);
     return rv;
 }
@@ -901,4 +959,49 @@ ipmi_sel_get_supports_get_sel_allocation(ipmi_sel_info_t *sel,
 
     sel_unlock(sel);
     return 0;
+}
+
+int
+ipmi_sel_set_new_log_handler(ipmi_sel_info_t             *sel,
+			     ipmi_sel_new_log_handler_cb handler,
+			     void                        *cb_data)
+{
+    sel->new_log_handler = handler;
+    sel->new_log_cb_data = cb_data;
+    return 0;
+}
+
+int
+ipmi_sel_log_add(ipmi_sel_info_t *sel,
+		 ipmi_log_t      *new_log)
+{
+    int        rv = 0;
+    ipmi_log_t *log;
+
+    sel_lock(sel);
+    if (sel->destroyed) {
+	sel_unlock(sel);
+	return EINVAL;
+    }
+
+    log = find_log(sel->logs, new_log->record_id);
+    if (!log) {
+	log = malloc(sizeof(*log));
+	if (!log) {
+	    rv = ENOMEM;
+	    goto out_unlock;
+	}
+	if (!ilist_add_tail(sel->logs, log, NULL)) {
+	    rv = ENOMEM;
+	    goto out_unlock;
+	}
+	*log = *new_log;
+	sel->num_sels++;
+    } else {
+	*log = *new_log;
+    }
+
+ out_unlock:
+    sel_unlock(sel);
+    return rv;
 }

@@ -38,6 +38,7 @@
 #include <ipmi/ipmiif.h>
 #include <ipmi/ipmi_mc.h>
 #include <ipmi/ipmi_sdr.h>
+#include <ipmi/ipmi_sel.h>
 #include <ipmi/ipmi_entity.h>
 #include <ipmi/ipmi_sensor.h>
 #include <ipmi/ipmi_msgbits.h>
@@ -95,6 +96,9 @@ typedef struct ipmi_bmc_s
 
     /* Should I do a full bus scan for devices on the bus? */
     int                        do_bus_scan;
+
+    /* The system event log, for querying and storing events. */
+    ipmi_sel_info_t *sel;
 } ipmi_bmc_t;
 
 struct ipmi_mc_s
@@ -370,14 +374,14 @@ remove_event_handler(ipmi_mc_t               *mc,
 typedef struct event_sensor_info_s
 {
     int        err;
-    ipmi_msg_t *event;
+    ipmi_log_t *log;
 } event_sensor_info_t;
 void event_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     event_sensor_info_t *info = cb_data;
 
     /* It's an event for a specific sensor, and the sensor exists. */
-    info->err = ipmi_sensor_event(sensor, info->event);
+    info->err = ipmi_sensor_event(sensor, info->log);
 }
 
 int
@@ -394,15 +398,10 @@ ipmi_bmc_set_oem_event_handler(ipmi_mc_t                 *bmc,
 }
 
 static void
-ll_event_handler(ipmi_con_t   *ipmi,
-		 ipmi_addr_t  *addr,
-		 unsigned int addr_len,
-		 ipmi_msg_t   *event,
-		 void         *event_data,
-		 void         *data2)
+system_event_handler(ipmi_mc_t  *bmc,
+		     ipmi_log_t *log)
 {
     ipmi_event_handler_id_t *l;
-    ipmi_mc_t               *bmc = data2;
     int                     rv = 1;
     ipmi_sensor_id_t        id;
     event_sensor_info_t     info;
@@ -410,26 +409,26 @@ ll_event_handler(ipmi_con_t   *ipmi,
     /* Let the OEM handler have a go at it first. */
     if (bmc->bmc->oem_event_handler) {
 	if (bmc->bmc->oem_event_handler(bmc,
-					event,
+					log,
 					bmc->bmc->oem_event_cb_data))
 	    return;
     }
 
     /* It's a system event record from an MC. */
-    if ((event->data[2] == 0x02) && ((event->data[7] & 0x01) == 0)) {
+    if ((log->type == 0x02) && ((log->data[4] & 0x01) == 0)) {
 	/* It's from an MC. */
 	id.bmc = bmc;
-	if (event->data[8] == 0x03) {
+	if (log->data[6] == 0x03) {
 	    id.channel = 0;
 	} else {
-	    id.channel = event->data[8] >> 4;
+	    id.channel = log->data[4] >> 4;
 	}
-	id.mc_num = event->data[7];
-	id.lun = event->data[8] & 0x3;
-	id.sensor_num = event->data[11];
+	id.mc_num = log->data[7];
+	id.lun = log->data[8] & 0x3;
+	id.sensor_num = log->data[8];
 
 	info.err = 0;
-	info.event = event;
+	info.log = log;
 	rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
 	if (rv) {
 	    ipmi_log("Got event message from unknown source: %x.%x.%x.%x",
@@ -443,11 +442,53 @@ ll_event_handler(ipmi_con_t   *ipmi,
 	ipmi_lock(bmc->bmc->event_handlers_lock);
 	l = bmc->bmc->event_handlers;
 	while (l) {
-	    l->handler(bmc, event, l->event_data);
+	    l->handler(bmc, log, l->event_data);
 	    l = l->next;
 	}
 	ipmi_unlock(bmc->bmc->event_handlers_lock);
     }
+}
+
+/* Got a new event in the system event log that we didn't have before. */
+static void
+bmc_sel_new_log_handler(ipmi_sel_info_t *sel,
+			ipmi_log_t      *log,
+			void            *cb_data)
+{
+    system_event_handler(cb_data, log);
+}
+
+
+int
+ipmi_bmc_rescan_events(ipmi_mc_t *bmc)
+{
+    if (bmc->bmc == NULL)
+	/* It's not the BMC. */
+	return EINVAL;
+
+    return ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
+}
+
+static void
+ll_event_handler(ipmi_con_t   *ipmi,
+		 ipmi_addr_t  *addr,
+		 unsigned int addr_len,
+		 ipmi_msg_t   *event,
+		 void         *event_data,
+		 void         *data2)
+{
+    ipmi_log_t log;
+    ipmi_mc_t  *bmc = data2;
+
+    log.record_id = ipmi_get_uint16(event->data);
+    log.type = event->data[2];
+    memcpy(log.data, event+3, IPMI_MAX_SEL_DATA);
+
+    /* Add it to the system event log. */
+    ipmi_sel_log_add(bmc->bmc->sel, &log);
+
+    /* Call the handler on it. */
+    system_event_handler(bmc, &log);
 }
 
 int
@@ -729,6 +770,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    ipmi_destroy_lock(mc->bmc->event_handlers_lock);
 	if (mc->bmc->entities)
 	    ipmi_entity_info_destroy(mc->bmc->entities);
+	if (mc->bmc->sel)
+	    ipmi_sel_destroy(mc->bmc->sel, NULL, NULL);
 	if (mc->bmc->entities_lock)
 	    ipmi_destroy_lock(mc->bmc->entities_lock);
 	if (mc->bmc->ll_event_id)
@@ -803,6 +846,9 @@ static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
     ipmi_detect_bmc_presence_changes(mc, 0);
+
+    /* Fetch the current system event log. */
+    ipmi_sel_get(mc->bmc->sel, NULL, NULL);
 }
 
 
@@ -1124,10 +1170,12 @@ finish_mc_handling(ipmi_mc_t *mc)
 	if (mc->bmc->conn->setup_cb)
 	    mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, 0);
 
+	/* Call the OEM setup finish if it is registered. */
 	if (mc->bmc->setup_finished_handler)
 	    mc->bmc->setup_finished_handler(mc,
 					    mc->bmc->setup_finished_cb_data);
 
+	/* Start an SDR scan. */
 	ipmi_entity_scan_sdrs(mc->bmc->entities, mc->bmc->main_sdrs);
 
 	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
@@ -1253,6 +1301,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->bmc->mc_list = NULL;
     mc->bmc->mc_list_lock = NULL;
     mc->bmc->entities = NULL;
+    mc->bmc->sel = NULL;
     mc->bmc->entities_lock = NULL;
     mc->bmc->entity_handler = NULL;
     mc->bmc->new_entity_handler = NULL;
@@ -1269,6 +1318,12 @@ setup_bmc(ipmi_con_t  *ipmi,
     rv = ipmi_entity_info_alloc(mc, &(mc->bmc->entities));
     if (rv)
 	goto out_err;
+
+    rv = ipmi_sel_alloc(mc, 0, &(mc->bmc->sel));
+    if (rv)
+	goto out_err;
+    /* When we get new logs, handle them. */
+    ipmi_sel_set_new_log_handler(mc->bmc->sel, bmc_sel_new_log_handler, mc);
 
     rv = ipmi_create_lock(mc, &mc->bmc->mc_list_lock);
     if (rv)

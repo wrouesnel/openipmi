@@ -1986,11 +1986,27 @@ static ipmi_event_handler_id_t *event_handler_id;
 
 static void
 event_handler(ipmi_mc_t  *bmc,
-	      ipmi_msg_t *event,
+	      ipmi_log_t *log,
 	      void       *event_data)
 {
     /* FIXME - fill this out. */
     ui_log("Unknown event\n");
+    ui_log("  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
+	   " %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
+	   log->record_id, log->type,
+	   log->data[0],
+	   log->data[1],
+	   log->data[2],
+	   log->data[3],
+	   log->data[4],
+	   log->data[5],
+	   log->data[6],
+	   log->data[7],
+	   log->data[8],
+	   log->data[9],
+	   log->data[10],
+	   log->data[11],
+	   log->data[12]);
 }
 
 sel_timer_t *redisplay_timer;

@@ -2287,7 +2287,7 @@ ipmi_sensor_discrete_set_event_handler(
 }
 
 int
-ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_msg_t *event)
+ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 {
     enum ipmi_event_dir_e dir;
     int                   rv;
@@ -2301,12 +2301,12 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_msg_t *event)
 	if (!sensor->threshold_event_handler)
 	    return EINVAL;
 
-	dir = event->data[12] >> 7;
-	threshold = (event->data[13] >> 1) & 0x07;
-	high_low = event->data[13] & 1;
+	dir = log->data[9] >> 7;
+	threshold = (log->data[10] >> 1) & 0x07;
+	high_low = log->data[10] & 1;
 
-	if ((event->data[13] >> 6) == 2) {
-	    rv = ipmi_sensor_convert_from_raw(sensor, event->data[14], &value);
+	if ((log->data[10] >> 6) == 2) {
+	    rv = ipmi_sensor_convert_from_raw(sensor, log->data[11], &value);
 	    if (!rv)
 		value_present = 1;
 	}
@@ -2321,11 +2321,11 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_msg_t *event)
 	if (!sensor->discrete_event_handler)
 	    return EINVAL;
 
-	dir = event->data[12] >> 7;
-	offset = event->data[13] & 0x0f;
-	if ((event->data[13] >> 6) == 2) {
-	    severity = event->data[14] >> 4;
-	    prev_severity = event->data[14] & 0xf;
+	dir = log->data[9] >> 7;
+	offset = log->data[10] & 0x0f;
+	if ((log->data[10] >> 6) == 2) {
+	    severity = log->data[11] >> 4;
+	    prev_severity = log->data[11] & 0xf;
 	    if (severity != 0xf)
 		severity_present = 1;
 	    if (prev_severity != 0xf)

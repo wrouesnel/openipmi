@@ -268,6 +268,7 @@ os_handler_t ipmi_cb_handlers =
 
 ipmi_mc_t *cb_mc;
 
+#if 0
 void got_sels(ipmi_sel_info_t *sel,
 	      int             err,
 	      int             changed,
@@ -284,7 +285,7 @@ void got_sels(ipmi_sel_info_t *sel,
 
     printf("SEL Changed = %d, count = %d\n", changed, count);
     for (i=0; i<count; i++) {
-	ipmi_sel_t rsel;
+	ipmi_log_t rsel;
 
 	rv = ipmi_get_sel_by_index(sel, i, &rsel);
 	if (rv) {
@@ -313,6 +314,7 @@ void got_sels(ipmi_sel_info_t *sel,
     }
 #endif
 }
+#endif
 
 void got_sdrs(ipmi_sdr_info_t *sdr,
 	      int             err,
@@ -363,10 +365,12 @@ void got_sdrs(ipmi_sdr_info_t *sdr,
 	exit(1);
     }
 
+#if 0
     rv = ipmi_sel_get(sel, got_sels, mc);
     if (rv) {
 	report_error("ipmi_sel_get", rv);
     }
+#endif
 }
 
 static void
