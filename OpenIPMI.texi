@@ -26,6 +26,7 @@ their special sensors and controls.
 * Using OpenIPMI::
 * OpenIPMI Internal Interfaces::
 * How to Write OEM Plugins::
+* Internals::
 * Glossary::
 @end menu
 
@@ -400,7 +401,7 @@ the system supports that.
 @subsection Sensors
 
 Sensor monitor something about an object.  IPMI defines many types of
-sensors, but groups them into two main categories: Threhold and
+sensors, but groups them into two main categories: Threshold and
 discrete.  Threshold sensors are ``analog'', they have continuous (or
 mostly continuous) readings.  Things like fans speed, voltage, or
 temperature.
@@ -928,10 +929,44 @@ through the logs in the local representation of the SEL.
 @node    OpenIPMI Internal Interfaces, How to Write OEM Plugins, Using OpenIPMI, Top
 @chapter OpenIPMI Internal Interfaces
 
-@node    How to Write OEM Plugins, Concept Index, OpenIPMI Internal Interfaces, Top
+@node    How to Write OEM Plugins, Internals, OpenIPMI Internal Interfaces, Top
 @chapter How to Write OEM Plugins
 
-@node    Concept Index, Glossary,  How to Write OEM Plugins, Top
+@node    Internals, Concept Index, How to Write OEM Plugins, Top
+@chapter Internals
+
+This section describes the internals of OpenIPMI.  These details are
+subject to change, so don't depend on them for writing portable
+software.
+
+@menu
+* How Locking Works::
+@end menu
+
+@node    How Locking Works, , Internals, Internals
+@section How Locking Works
+
+The locking in OpenIPMI is currently rather course-grained, for
+simplicity.  In the future, it will probably be more fine-grained.
+
+The system has one read/write lock that protects access to the list of
+BMCs.  Every operation locks this lock read (except for the ones that
+modify it, which lock it write).  This prevents a BMC from going away
+while it's in use.
+
+Every BMC has an @var{mc_list_lock}, that lock is used to lock anything
+on the BMC or any MC's in the BMC.  As well, there is an
+@var{entities_lock} in the BMC, it is locked for any entities in the
+BMC.
+
+SDRs, since they may stand alone after their underpinnings have been
+destroyed, have their own lock.
+
+The various interfaces have their own locks, too, for handling sequence
+numbering and the like.  These are interface-dependent and should not
+concern the user since they shouldn't be held during user calls.
+
+@node    Concept Index, Glossary,  Internals, Top
 @unnumbered Concept Index
 
 @printindex cp
