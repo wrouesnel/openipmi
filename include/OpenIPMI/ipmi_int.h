@@ -107,8 +107,8 @@ struct ipmi_thresholds_s
 
 struct ipmi_states_s
 {
-    int          __event_messages_disabled;
-    int          __sensor_scanning_disabled;
+    int          __event_messages_enabled;
+    int          __sensor_scanning_enabled;
     int          __initial_update_in_progress;
     unsigned int __states;
 };

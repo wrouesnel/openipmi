@@ -3435,8 +3435,8 @@ reading_get(ipmi_sensor_t *sensor,
 	val_present = IPMI_NO_VALUES_PRESENT;
     }
 
-    states.__event_messages_disabled = (rsp->data[2] >> 7) & 1;
-    states.__sensor_scanning_disabled = (rsp->data[2] >> 6) & 1;
+    states.__event_messages_enabled = (rsp->data[2] >> 7) & 1;
+    states.__sensor_scanning_enabled = (rsp->data[2] >> 6) & 1;
     states.__initial_update_in_progress = (rsp->data[2] >> 5) & 1;
     states.__states = rsp->data[3];
 
@@ -3556,8 +3556,8 @@ states_get(ipmi_sensor_t *sensor,
 	return;
     }
 
-    states.__event_messages_disabled = (rsp->data[2] >> 7) & 1;
-    states.__sensor_scanning_disabled = (rsp->data[2] >> 6) & 1;
+    states.__event_messages_enabled = (rsp->data[2] >> 7) & 1;
+    states.__sensor_scanning_enabled = (rsp->data[2] >> 6) & 1;
     states.__initial_update_in_progress = (rsp->data[2] >> 5) & 1;
     states.__states = (rsp->data[4] << 8) | rsp->data[3];
 

@@ -1861,6 +1861,44 @@ send_set_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
     data[0] = addr;
     data[1] = 0; /* LUN is 0 per the spec (section 7.2 of 1.5 spec). */
     ipmi_send_command(mc, 0, &msg, set_event_rcvr_done, NULL);
+    /* No care about return values, if this fails it will be done
+       again later. */
+}
+
+static void
+get_event_rcvr_done(ipmi_mc_t  *mc,
+		    ipmi_msg_t *rsp,
+		    void       *rsp_data)
+{
+    unsigned long addr = (long) rsp_data;
+
+    if (!mc)
+	return; /* The MC went away, no big deal. */
+
+    if (rsp->data[0] != 0) {
+	/* Error getting the event receiver, report it. */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Could not get event receiver for MC at 0x%x",
+		 ipmi_addr_get_slave_addr(&mc->addr));
+    } else if (rsp->data[1] != addr) {
+	/* The event receiver doesn't match, so change it. */
+	send_set_event_rcvr(mc, addr);
+    }
+}
+
+static void
+send_get_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
+{
+    ipmi_msg_t    msg;
+    
+    msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+    msg.cmd = IPMI_GET_EVENT_RECEIVER_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+    ipmi_send_command(mc, 0, &msg, get_event_rcvr_done,
+		      (void *) (unsigned long) addr);
+    /* No care about return values, if this fails it will be done
+       again later. */
 }
 
 static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
@@ -1942,7 +1980,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	unsigned int event_rcvr = find_event_rcvr(info->bmc);
 
 	if (event_rcvr) {
-	    send_set_event_rcvr(mc, event_rcvr);
+	    send_get_event_rcvr(mc, event_rcvr);
 	}
     }
 

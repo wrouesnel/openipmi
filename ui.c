@@ -1004,8 +1004,8 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 {
     ipmi_sensor_id_t   sensor_id;
     enum ipmi_thresh_e t;
-    int                global_disable;
-    int                scanning_disable;
+    int                global_enable;
+    int                scanning_enable;
 
     if (err)
 	return;
@@ -1015,23 +1015,23 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
-    global_disable = ipmi_event_state_get_events_disabled(states);
-    scanning_disable = ipmi_event_state_get_scanning_disabled(states);
+    global_enable = ipmi_event_state_get_events_enabled(states);
+    scanning_enable = ipmi_event_state_get_scanning_enabled(states);
     wmove(display_pad, enabled_pos.y, enabled_pos.x);
     if (err)
 	display_pad_out("?         ");
-    else if (global_disable)
-	display_pad_out("disabled");
-    else
+    else if (global_enable)
 	display_pad_out("enabled");
+    else
+	display_pad_out("disabled");
 
     wmove(display_pad, scanning_pos.y, scanning_pos.x);
     if (err)
 	display_pad_out("?         ");
-    else if (scanning_disable)
-	display_pad_out("disabled");
-    else
+    else if (scanning_enable)
 	display_pad_out("enabled");
+    else
+	display_pad_out("disabled");
 
     if (ipmi_sensor_get_event_support(sensor)
 	!= IPMI_EVENT_SUPPORT_PER_STATE)
@@ -1087,32 +1087,32 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
     ipmi_sensor_id_t sensor_id;
     int              i;
     int              val;
-    int              global_disable;
-    int              scanning_disable;
+    int              global_enable;
+    int              scanning_enable;
 
     sensor_id = ipmi_sensor_convert_to_id(sensor);
     if (!((curr_display_type == DISPLAY_SENSOR)
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
-    global_disable = ipmi_event_state_get_events_disabled(states);
-    scanning_disable = ipmi_event_state_get_scanning_disabled(states);
+    global_enable = ipmi_event_state_get_events_enabled(states);
+    scanning_enable = ipmi_event_state_get_scanning_enabled(states);
 
     wmove(display_pad, enabled_pos.y, enabled_pos.x);
     if (err)
 	display_pad_out("?         ");
-    else if (global_disable)
-	display_pad_out("disabled");
-    else
+    else if (global_enable)
 	display_pad_out("enabled");
+    else
+	display_pad_out("disabled");
 
     wmove(display_pad, scanning_pos.y, scanning_pos.x);
     if (err)
 	display_pad_out("?         ");
-    else if (scanning_disable)
-	display_pad_out("disabled");
-    else
+    else if (scanning_enable)
 	display_pad_out("enabled");
+    else
+	display_pad_out("disabled");
 
     if (ipmi_sensor_get_event_support(sensor)
 	!= IPMI_EVENT_SUPPORT_PER_STATE)
@@ -1520,11 +1520,11 @@ events_enable_cmd(char *cmd, char **toks, void *cb_data)
 
     if (get_uchar(toks, &enable, "events"))
 	return 0;
-    ipmi_event_state_set_events_disabled(info->states, !enable);
+    ipmi_event_state_set_events_enabled(info->states, enable);
 
     if (get_uchar(toks, &enable, "scanning"))
 	return 0;
-    ipmi_event_state_set_scanning_disabled(info->states, !enable);
+    ipmi_event_state_set_scanning_enabled(info->states, enable);
 
     enptr = strtok_r(NULL, " \t\n", toks);
     if (!enptr) {

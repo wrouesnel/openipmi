@@ -670,7 +670,7 @@ detect_states_read(ipmi_sensor_t *sensor,
 {
     ent_active_detect_t *info = cb_data;
 
-    if (!err && !ipmi_is_sensor_scanning_disabled(states))
+    if (!err && ipmi_is_sensor_scanning_enabled(states))
 	info->present = 1;
 
     info->sensor_try_count--;
@@ -691,7 +691,7 @@ detect_reading_read(ipmi_sensor_t             *sensor,
 {
     ent_active_detect_t *info = cb_data;
 
-    if (!err && !ipmi_is_sensor_scanning_disabled(states))
+    if (!err && ipmi_is_sensor_scanning_enabled(states))
 	info->present = 1;
 
     info->sensor_try_count--;
@@ -779,8 +779,8 @@ handle_new_presence_sensor(ipmi_entity_t *ent,
 
     /* Configure the sensor per our liking (enable the proper events). */
     ipmi_event_state_init(&events);
-    ipmi_event_state_set_events_disabled(&events, 0);
-    ipmi_event_state_set_scanning_disabled(&events, 0);
+    ipmi_event_state_set_events_enabled(&events, 1);
+    ipmi_event_state_set_scanning_enabled(&events, 1);
     ipmi_discrete_event_set(&events, 0, IPMI_ASSERTION);
     ipmi_discrete_event_set(&events, 1, IPMI_ASSERTION);
     ipmi_sensor_events_enable_set(sensor, &events, NULL, NULL);

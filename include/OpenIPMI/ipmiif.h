@@ -424,10 +424,10 @@ unsigned int ipmi_event_state_size(void);
 void ipmi_copy_event_state(ipmi_event_state_t *dest, ipmi_event_state_t *src);
 
 /* Routines to init, clear, set, and query values in the event state. */
-void ipmi_event_state_set_events_disabled(ipmi_event_state_t *events, int val);
-int ipmi_event_state_get_events_disabled(ipmi_event_state_t *events);
-void ipmi_event_state_set_scanning_disabled(ipmi_event_state_t *events,int val);
-int ipmi_event_state_get_scanning_disabled(ipmi_event_state_t *events);
+void ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val);
+int ipmi_event_state_get_events_enabled(ipmi_event_state_t *events);
+void ipmi_event_state_set_scanning_enabled(ipmi_event_state_t *events,int val);
+int ipmi_event_state_get_scanning_enabled(ipmi_event_state_t *events);
 void ipmi_event_state_set_busy(ipmi_event_state_t *events, int val);
 int ipmi_event_state_get_busy(ipmi_event_state_t *events);
 void ipmi_event_state_set_enable_events(ipmi_event_state_t *events, int val);
@@ -691,8 +691,8 @@ void ipmi_copy_states(ipmi_states_t *dest, ipmi_states_t *src);
 /* Various global values in the states value.  See the IPMI "Get
    Sensor Readings" command in the IPMI spec for details on the
    meanings of these. */
-int ipmi_is_event_messages_disabled(ipmi_states_t *states);
-int ipmi_is_sensor_scanning_disabled(ipmi_states_t *states);
+int ipmi_is_event_messages_enabled(ipmi_states_t *states);
+int ipmi_is_sensor_scanning_enabled(ipmi_states_t *states);
 int ipmi_is_initial_update_in_progress(ipmi_states_t *states);
 
 /* Use to tell if a discrete offset is set in the states. */
@@ -706,8 +706,8 @@ int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
 /* The following functions allow you to create and modify your own
    states structure. */
 void ipmi_init_states(ipmi_states_t *states);
-void ipmi_set_event_messages_disabled(ipmi_states_t *states, int val);
-void ipmi_set_sensor_scanning_disabled(ipmi_states_t *states, int val);
+void ipmi_set_event_messages_enabled(ipmi_states_t *states, int val);
+void ipmi_set_sensor_scanning_enabled(ipmi_states_t *states, int val);
 void ipmi_set_initial_update_in_progress(ipmi_states_t *states, int val);
 void ipmi_set_state(ipmi_states_t *states,
 		    int           state_num,

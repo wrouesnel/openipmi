@@ -51,7 +51,7 @@ char *ipmi_get_threshold_access_support_string(unsigned int val);
 
 #define IPMI_EVENT_SUPPORT_PER_STATE		0
 #define IPMI_EVENT_SUPPORT_ENTIRE_SENSOR	1
-#define IPMI_EVENT_SUPPORT_GLOBAL_DISABLE	2
+#define IPMI_EVENT_SUPPORT_GLOBAL_ENABLE	2
 #define IPMI_EVENT_SUPPORT_NONE			3
 char *ipmi_get_event_support_string(unsigned int val);
 

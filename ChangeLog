@@ -3,6 +3,21 @@
 
 	* configure.in: Moved to version 0.2.0.
 
+	* include/OpenIPMI/ipmiif.h: The spec was very confusing in
+	section 29.11 and 29.14 (1.5 spec) about the event messages and
+	scanning enable/disable.  After studying the spec more, I'm pretty
+	sure that 1 means enabled and 0 means disabled.  I think the spec
+	is saying that 0 means disabled in the way it presents this.
+	* include/OpenIPMI/ipmi_int.h: ditto
+	* sensor.c: ditto
+	* entity.c: ditto
+	* ipmi.c: ditto
+	* mc.c: ditto
+	* ui.c: ditto
+
+	* mc.c: Changed setting the event receiver for an MC to only do it
+	if the event receiver was set incorrectly.
+
 	* sel.c: Fixed a missing unlock.
 
 	* sel.c: Modified the way individual record deletes occur and
