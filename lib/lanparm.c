@@ -1458,7 +1458,7 @@ ipmi_lanconfig_get_enable_auth_ ## n(ipmi_lan_config_t *lanc, \
 { \
     if (user >= 5) \
 	return EINVAL; \
-    *val = lanc->auth_support.n; \
+    *val = lanc->auth_enable[user].n; \
     return 0; \
 } \
 int \
@@ -1468,7 +1468,7 @@ ipmi_lanconfig_set_enable_auth_ ## n(ipmi_lan_config_t *lanc, \
 { \
     if (user >= 5) \
 	return EINVAL; \
-    lanc->auth_support.n = (val != 0); \
+    lanc->auth_enable[user].n = (val != 0); \
     return 0; \
 }
 
