@@ -57,7 +57,9 @@ int ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
 
 /* Fetch a parameter value from the LANPARM.  The "set" and "block"
    parameters are the set selector and block selectors.  If those are
-   not relevant for the given parm, then set them to zero. */
+   not relevant for the given parm, then set them to zero.  Note that
+   on the return data, the first byte (byte 0) is the revision number,
+   the data starts in the second byte. */
 typedef void (*ipmi_lanparm_get_cb)(ipmi_lanparm_t    *lanparm,
 				    int               err,
 				    unsigned char     *data,

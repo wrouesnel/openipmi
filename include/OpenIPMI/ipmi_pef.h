@@ -60,7 +60,9 @@ int ipmi_pef_destroy(ipmi_pef_t       *pef,
 
 /* Fetch a parameter value from the PEF.  The "set" and "block"
    parameters are the set selector and block selectors.  If those are
-   not relevant for the given parm, then set them to zero. */
+   not relevant for the given parm, then set them to zero.  On the
+   return data, the parameter version is the first byte, followed by
+   the data. */
 typedef void (*ipmi_pef_get_cb)(ipmi_pef_t    *pef,
 				int           err,
 				unsigned char *data,
@@ -192,6 +194,12 @@ int ipmi_pefconfig_set_guid(ipmi_pef_config_t *pefc, unsigned int enabled,
 
 /*
  * The following is for the event filter table entries.
+ *
+ * NOTE! The event filter table in IPMI is one-based (entry zero is not
+ * used, entry 1 is the first entry).  This might make Ada programmers
+ * happy, but to make it so C programmers are not confused, this
+ * implementation converts it to be zero-based (entry zero *is* the
+ * first entry)
  */
 unsigned int ipmi_pefconfig_get_num_event_filters(ipmi_pef_config_t *pefc);
 int ipmi_pefconfig_get_enable_filter(ipmi_pef_config_t *pefc,
@@ -376,6 +384,12 @@ int ipmi_pefconfig_set_data3_compare2(ipmi_pef_config_t *pefc,
 
 /*
  * Values from the alert policy table.
+ *
+ * NOTE! The event filter table in IPMI is one-based (entry zero is not
+ * used, entry 1 is the first entry).  This might make Ada programmers
+ * happy, but to make it so C programmers are not confused, this
+ * implementation converts it to be zero-based (entry zero *is* the
+ * first entry)
  */
 unsigned int ipmi_pefconfig_get_num_alert_policies(ipmi_pef_config_t *pefc);
 int ipmi_pefconfig_get_policy_num(ipmi_pef_config_t *pefc,

@@ -363,8 +363,8 @@ pef_config_fetched(ipmi_mc_t  *mc,
     rv = check_pef_response_param(pef, mc, rsp, 2, "pef_config_fetched");
 
     /* Skip the revision number. */
-    elem->data = rsp->data + 2;
-    elem->data_len = rsp->data_len - 2;
+    elem->data = rsp->data + 1;
+    elem->data_len = rsp->data_len - 1;
 
     pef_lock(pef);
     fetch_complete(pef, rv, elem);
@@ -828,6 +828,8 @@ static int gctl(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     if (err)
 	return err;
 
+    data++; /* Skip the revision byte. */
+
     pefc->alert_startup_delay_enabled = (data[0] >> 3) & 1;
     pefc->startup_delay_enabled = (data[0] >> 2) & 1;
     pefc->event_messages_enabled = (data[0] >> 2) & 1;
@@ -851,6 +853,8 @@ static int gagc(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 {
     if (err)
 	return err;
+
+    data++; /* Skip the revision byte. */
 
     pefc->diagnostic_interrupt_enabled = (data[0] >> 5) & 1;
     pefc->oem_action_enabled = (data[0] >> 4) & 1;
@@ -882,6 +886,8 @@ static int gsd(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	return 0;
     }
 
+    data++; /* Skip the revision byte. */
+
     pefc->startup_delay_supported = 1;
     pefc->startup_delay = data[0] & 0x7f;
 
@@ -903,6 +909,8 @@ static int gasd(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	return 0;
     }
 
+    data++; /* Skip the revision byte. */
+
     pefc->alert_startup_delay_supported = 1;
     pefc->alert_startup_delay = data[0] & 0x7f;
 
@@ -923,6 +931,8 @@ static int gnef(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 
     if (err)
 	return err;
+
+    data++; /* Skip the revision byte. */
 
     pefc->num_event_filters = 0;
     num = data[0] & 0x7f;
@@ -953,6 +963,9 @@ static int geft(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	return err;
     if (pos > pefc->num_event_filters)
 	return 0; /* Another error check will get this later. */
+
+    pos--; /* Make it zero-based. */
+    data++; /* Skip the revision byte. */
 
     t = &(pefc->efts[pos]);
     t->enable_filter = (data[1] >> 7) & 0x1;
@@ -989,7 +1002,11 @@ static void seft(ipmi_pef_config_t *pefc, pefparms_t *lp, unsigned char *data,
 		 unsigned int *data_len)
 {
     int        pos = data[0] & 0x7f;
-    ipmi_eft_t *t = &(pefc->efts[pos]);
+    ipmi_eft_t *t;
+
+    pos--; /* Make it zero-based. */
+
+    t = &(pefc->efts[pos]);
 
     data[1] = (t->enable_filter << 7) | (t->filter_type << 5);
     data[2] = ((t->diagnostic_interrupt << 5)
@@ -1027,6 +1044,8 @@ static int gnap(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     if (err)
 	return err;
 
+    data++; /* Skip the revision byte. */
+
     pefc->num_alert_policies = 0;
     num = data[0] & 0x7f;
     if (pefc->apts)
@@ -1057,6 +1076,9 @@ static int gapt(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     if (pos > pefc->num_alert_policies)
 	return 0; /* Another error check will get this later. */
 
+    pos--; /* Make it zero-based. */
+    data++; /* Skip the revision byte. */
+
     t = &(pefc->apts[pos]);
     t->policy_num = (data[1] >> 4) & 0xf;
     t->enabled = (data[1] >> 3) & 0x1;
@@ -1074,7 +1096,11 @@ static void sapt(ipmi_pef_config_t *pefc, pefparms_t *lp, unsigned char *data,
 		 unsigned int *data_len)
 {
     int        pos = data[0] & 0x7f;
-    ipmi_apt_t *t = &(pefc->apts[pos]);
+    ipmi_apt_t *t;
+
+    pos--; /* Make it zero-based. */
+
+    t = &(pefc->apts[pos]);
 
     data[1] = ((t->policy_num << 4)
 	       | (t->enabled << 3)
@@ -1089,6 +1115,8 @@ static int gsg(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 {
     if (err)
 	return err;
+
+    data++; /* Skip the revision byte. */
 
     pefc->guid_enabled = data[0] & 1;
     memcpy(pefc->guid, data+1, 16);
@@ -1110,6 +1138,8 @@ static int gnas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     int           num = pefc->num_alert_strings;
     int           i;
     unsigned char ddata[1];
+
+    data++; /* Skip the revision byte. */
 
     if (err == IPMI_IPMI_ERR_VAL(0x80)) {
 	/* If it's unsupported, then just set it to zero. */
@@ -1157,12 +1187,16 @@ static int gask(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 		unsigned char *data, unsigned int data_len)
 {
     int        pos = data[0] & 0x7f;
-    ipmi_ask_t *t = &(pefc->asks[pos]);
+    ipmi_ask_t *t;
 
     if (err)
 	return err;
-    if (pos > pefc->num_alert_strings)
+    if (pos >= pefc->num_alert_strings)
 	return 0; /* Another error check will get this later. */
+
+    data++; /* Skip the revision byte. */
+
+    t = &(pefc->asks[pos]);
 
     t->event_filter = data[1] & 0x7f;
     t->alert_string_set = data[2] & 0x7f;
@@ -1192,17 +1226,20 @@ static int gas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 
     if (err)
 	return err;
-    if (pos > pefc->num_alert_strings)
+    if (pos >= pefc->num_alert_strings)
 	return 0; /* Another error check will get this later. */
-    if (data_len-2 == 0)
+    if (data_len-3 == 0)
 	return 0;
+
+    data++; /* Skip the revision byte. */
 
     data += 2;
     data_len -= 2;
 
     /* We fetch the blocks successively, so just appending is all that
-       is necessary.  The string in nil terminated (per the spec), so
-       no worries about zeros, either. */
+       is necessary.  The actual block check is done later.  The
+       string in nil terminated (per the spec), so no worries about
+       zeros, either. */
     s1 = *t;
     if (s1)
 	len = strlen(s1);
@@ -1285,11 +1322,12 @@ got_parm(ipmi_pef_t     *pef,
     ipmi_pef_config_t *pefc = cb_data;
     pefparms_t        *lp = &(pefparms[pefc->curr_parm]);
 
-    if ((!err) && data_len < lp->length) {
+    /* Check the length, and don't forget the revision byte must be added. */
+    if ((!err) && (data_len < (lp->length+1))) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_pefparm_got_parm:"
 		 " Invalid data length on parm %d was %d, should have been %d",
-		 pefc->curr_parm, data_len, lp->length);
+		 pefc->curr_parm, data_len, lp->length+1);
 	err = EINVAL;
 	goto done;
     }

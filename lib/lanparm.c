@@ -275,9 +275,9 @@ lanparm_config_fetched(ipmi_mc_t  *mc,
     rv = check_lanparm_response_param(lanparm, mc, rsp, 2,
 				      "lanparm_config_fetched");
 
-    /* Skip over the completion code and the revision. */
-    elem->data = rsp->data + 2;
-    elem->data_len = rsp->data_len - 2;
+    /* Skip over the completion code. */
+    elem->data = rsp->data + 1;
+    elem->data_len = rsp->data_len - 1;
 
     lanparm_lock(lanparm);
     fetch_complete(lanparm, rv, elem);
@@ -641,6 +641,8 @@ static int gba(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	return err;
     }
 
+    data++; /* Skip over the revision byte. */
+
     if (opt)
 	*opt = 1;
 
@@ -674,6 +676,8 @@ static int gas(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
     if (err)
 	return err;
 
+    data++; /* Skip over the revision byte. */
+
     GETAUTH(&lanc->auth_support, *data);
     return 0;
 }
@@ -686,6 +690,8 @@ static int gae(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 
     if (err)
 	return err;
+
+    data++; /* Skip over the revision byte. */
 
     for (i=0; i<5; i++)
 	GETAUTH(&(lanc->auth_enable[i]), data[i]);
@@ -716,6 +722,8 @@ static int ghp(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	}
 	return err;
     }
+
+    data++; /* Skip over the revision byte. */
 
     if (opt)
 	*opt = 1;
@@ -751,6 +759,8 @@ static int gga(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	return err;
     }
 
+    data++; /* Skip over the revision byte. */
+
     if (opt)
 	*opt = 1;
 
@@ -772,6 +782,8 @@ static int gnd(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 
     if (err)
 	return err;
+
+    data++; /* Skip over the revision byte. */
 
     lanc->num_alert_destinations = 0;
     num = data[0] & 0xf;
@@ -807,6 +819,8 @@ static int gdt(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 
     if (err)
 	return err;
+
+    data++; /* Skip over the revision byte. */
 
     sel = data[0] & 0xf;
     if (sel > lanc->num_alert_destinations)
@@ -844,6 +858,8 @@ static int gda(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 
     if (err)
 	return err;
+
+    data++; /* Skip over the revision byte. */
 
     sel = data[0] & 0xf;
     if (sel > lanc->num_alert_destinations)
@@ -951,11 +967,12 @@ got_parm(ipmi_lanparm_t    *lanparm,
     ipmi_lan_config_t *lanc = cb_data;
     lanparms_t        *lp = &(lanparms[lanc->curr_parm]);
 
-    if ((!err) && data_len < lp->length) {
+    /* Check the length, and don't forget the revision byte must be added. */
+    if ((!err) && (data_len < (lp->length+1))) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lanparm_got_parm:"
 		 " Invalid data length on parm %d was %d, should have been %d",
-		 lanc->curr_parm, data_len, lp->length);
+		 lanc->curr_parm, data_len, lp->length+1);
 	err = EINVAL;
 	goto done;
     }
