@@ -8776,11 +8776,15 @@ amc_sdrs_fixup(ipmi_mc_t       *mc,
 	case IPMI_SDR_FULL_SENSOR_RECORD:
 	    if ((sdr.data[4] & 0x7f) == 0)
 		sdr.data[4] |= ipmi_mc_get_address(mc) + 1;
+	    sdr.data[0] = ipmi_mc_get_address(mc);
+	    sdr.data[1] = 0xf << 4;
 	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
 	    break;
 	case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
 	    if (sdr.data[8] == 0)
 		sdr.data[8] = ipmi_mc_get_address(mc) + 1;
+	    sdr.data[0] = ipmi_mc_get_address(mc);
+	    sdr.data[1] = 0xf;
 	    sprintf(str, "AMC%d", ipmi_mc_get_address(mc) + 1);
 	    len = 16;
 	    ipmi_set_device_string(str, IPMI_ASCII_STR, strlen(str),

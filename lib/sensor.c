@@ -928,6 +928,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	s[p]->destroy_handler = NULL;
 
 	rv = _ipmi_find_or_create_mc_by_slave_addr(domain,
+						   sdr.data[1] >> 4,
 						   sdr.data[0],
 						   &(s[p]->mc));
 	if (rv)

@@ -1216,6 +1216,7 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 
 int
 _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
+				      unsigned int  channel,
 				      unsigned int  slave_addr,
 				      ipmi_mc_t     **new_mc)
 {
@@ -1224,7 +1225,7 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
     int              rv;
 
     addr.addr_type = IPMI_IPMB_ADDR_TYPE;
-    addr.channel = 0;
+    addr.channel = channel;
     addr.lun = 0;
     addr.slave_addr = slave_addr;
 
