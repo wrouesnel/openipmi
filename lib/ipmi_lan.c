@@ -315,9 +315,6 @@ struct lan_data_s
     /* List of messages waiting to be sent. */
     lan_wait_queue_t *wait_q, *wait_q_tail;
 
-    unsigned int               retries;
-    os_hnd_timer_id_t          *timer;
-
     locked_list_t              *event_handlers;
 
     os_hnd_timer_id_t          *audit_timer;
@@ -1691,7 +1688,11 @@ lan_send(lan_data_t  *lan,
     int curr_ip_addr;
 
     ipmi_lock(lan->ip_lock);
-    if (lan->connected) {
+    if (msg->netfn & 1) {
+	/* For unacknowledged packets, don't switch addresses.  They
+	   don't contribute to detecting that the link is down. */
+	curr_ip_addr = lan->curr_ip_addr;
+    } else if (lan->connected) {
 	lan->num_sends++;
 
 	/* We periodically switch between IP addresses, just to make sure
@@ -4321,7 +4322,6 @@ challenge_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	}
     }
 
-    lan->retries = 0;
     rv = send_activate_session(ipmi, lan, addr_num, rspi);
     if (rv) {
         handle_connected(ipmi, rv, addr_num);
@@ -5008,8 +5008,6 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     /* Add it to the list of valid IPMIs so it will validate.  This
        must be done last, after a point where it cannot fail. */
     lan_add_con(lan);
-
-    lan->retries = 0;
 
     *new_con = ipmi;
 

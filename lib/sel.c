@@ -660,6 +660,20 @@ handle_sel_data(ipmi_mc_t  *mc,
     return;
 }
 
+/* Cheap hacks for broken hardware. */
+static void
+sel_fixups(ipmi_mc_t *mc, ipmi_sel_info_t *sel)
+{
+    unsigned int mfg_id, product_id;
+
+    /* Fixups */
+    mfg_id = ipmi_mc_manufacturer_id(mc);
+    product_id = ipmi_mc_product_id(mc);
+    if ((mfg_id == 0x157) && (product_id = 0x841))
+	/* Intel ATCA CMM mistakenly reports that it supports delete SEL */
+	sel->supports_delete_sel = 0;
+}
+
 static void
 handle_sel_info(ipmi_mc_t  *mc,
 		ipmi_msg_t *rsp,
@@ -723,6 +737,8 @@ handle_sel_info(ipmi_mc_t  *mc,
     
     add_timestamp = ipmi_get_uint32(rsp->data + 6);
     erase_timestamp = ipmi_get_uint32(rsp->data + 10);
+
+    sel_fixups(mc, sel);
 
     /* If the timestamps still match, no need to re-fetch the repository */
     if (sel->fetched

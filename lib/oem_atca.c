@@ -162,6 +162,9 @@ struct atca_shelf_s
     ipmi_fru_t    *shelf_fru;
     int           curr_shelf_fru;
 
+    unsigned int mfg_id;
+    unsigned int prod_id;
+
     unsigned char        shelf_address[40];
     enum ipmi_str_type_e shelf_address_type;
     unsigned int         shelf_address_len;
@@ -2781,7 +2784,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 			 NULL, &info->shelf_entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "%soem_atca.c(shelf_fru_fetched): "
+		 "%soem_atca.c(setup_from_shelf_fru): "
 		 "Could not add chassis entity: %x",
 		 DOMAIN_NAME(domain), rv);
 	goto out;
@@ -2790,7 +2793,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
     info->ipmcs = ipmi_mem_alloc(sizeof(atca_ipmc_t) * info->num_addresses);
     if (!info->ipmcs) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(shelf_fru_fetched): "
+		 "%soem_atca.c(setup_from_shelf_fru): "
 		 "could not allocate memory for ipmcs",
 		 DOMAIN_NAME(domain));
 	goto out;
@@ -2823,7 +2826,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	rv = realloc_frus(b, 1); /* Start with 1 FRU for the MC. */
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%soem_atca.c(shelf_fru_fetched): "
+		     "%soem_atca.c(setup_from_shelf_fru): "
 		     "Could not allocate FRU memory",
 		     DOMAIN_NAME(domain));
 	    goto out;
@@ -2881,7 +2884,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 			     NULL, &b->frus[0]->entity);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(shelf_fru_fetched): "
+		     "%soem_atca.c(setup_from_shelf_fru): "
 		     " Could not add board entity: %x",
 		     DOMAIN_NAME(domain), rv);
 	    goto out;
@@ -2894,7 +2897,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(shelf_fru_fetched): "
+		     "%soem_atca.c(setup_from_shelf_fru): "
 		     "Could not add child ipmc: %x",
 		     DOMAIN_NAME(domain), rv);
 	    _ipmi_entity_put(b->frus[0]->entity);
@@ -3086,7 +3089,8 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	str = data + 5;
 	info->shelf_address_len
 	    = ipmi_get_device_string(&str, 21,
-				     info->shelf_address, IPMI_STR_FRU_SEMANTICS, 0,
+				     info->shelf_address,
+				     IPMI_STR_FRU_SEMANTICS, 0,
 				     &info->shelf_address_type,
 				     sizeof(info->shelf_address));
 
@@ -3324,10 +3328,9 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 		 " a valid working ATCA chassis",
 		 DOMAIN_NAME(domain));
     } else {
-	int mfg_id, prod_id;
-	mfg_id = ipmi_mc_manufacturer_id(mc);
-	prod_id = ipmi_mc_product_id(mc);
-	if ((mfg_id == 0x000157) && (prod_id == 0x0841)) {
+	info->mfg_id = ipmi_mc_manufacturer_id(mc);
+	info->prod_id = ipmi_mc_product_id(mc);
+	if ((info->mfg_id == 0x000157) && (info->prod_id == 0x0841)) {
 	    /* info->shelf_address_only_on_bmc = 1; */
 	    /* info->allow_sel_on_any = 1; */
 	}
@@ -3495,6 +3498,54 @@ add_inst(inst_list_t *inst, int *curr,
     *curr = i+1;
 }
 
+/*
+ * This function gets the sensor id ane looks for "CPU".  IF it finds it
+ * and a number, it assigns the entity to be CPU and the proper instance.
+ */
+static void
+sensor_fixup(ipmi_mc_t *mc, ipmi_sdr_t *sdr)
+{
+    char name[33];
+    int  name_len = 0;
+    enum ipmi_str_type_e type;
+    char *cpustart;
+    unsigned char *str;
+
+    if (sdr->data[3] != 0xa0)
+	/* Only do this fixup for boards. */
+	return;
+
+    switch (sdr->type) {
+    case IPMI_SDR_FULL_SENSOR_RECORD:
+	    str = sdr->data+42,
+	    name_len = ipmi_get_device_string(&str, sdr->length-42,
+			    		      name, IPMI_STR_SDR_SEMANTICS, 0,
+					      &type, 32);
+	    break;
+
+    case IPMI_SDR_COMPACT_SENSOR_RECORD:
+	    str = sdr->data+26,
+	    name_len = ipmi_get_device_string(&str, sdr->length-26,
+			    		      name, IPMI_STR_SDR_SEMANTICS, 0,
+					      &type, 32);
+	    break;
+    }
+    name[name_len] = '\0';
+    cpustart = strstr(name, "CPU");
+    if (!cpustart)
+	return;
+    cpustart += 3;
+    while (isspace(*cpustart))
+	cpustart++;
+    if (*cpustart == '1') {
+	sdr->data[3] = 3;
+	sdr->data[4] = 0x61;
+    } else if (*cpustart == '2') {
+	sdr->data[3] = 3;
+	sdr->data[4] = 0x62;
+    }
+}
+
 static void
 misc_sdrs_fixup(ipmi_mc_t       *mc,
 		ipmi_sdr_info_t *sdrs,
@@ -3536,6 +3587,7 @@ misc_sdrs_fixup(ipmi_mc_t       *mc,
 	case IPMI_SDR_COMPACT_SENSOR_RECORD:
 	    /* Make it device relative. */
 	    atca_entity_fixup(mc, &sdr.data[3], &sdr.data[4]);
+	    sensor_fixup(mc, &sdr);
 	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
 	    entity_id = sdr.data[3];
 	    entity_instance = sdr.data[4];
@@ -3619,6 +3671,12 @@ atca_register_fixups(void)
     ipmi_register_oem_handler(0x000157, 0x0841,
 			      misc_sdrs_fixup_reg, NULL, NULL);
     ipmi_register_oem_handler(0x000157, 0x080a,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0x000157, 0x0850,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0x000157, 0x0870,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0x0009e9, 0x0000,
 			      misc_sdrs_fixup_reg, NULL, NULL);
 }
 

@@ -10,6 +10,13 @@
 	lock on opq_done() operations, since the lock may not be held due
 	to shutdown races.
 
+	* lib/ipmi_lan.c: Removed an unecessary "retries" and "timer"
+	variables from the LAN structure.
+
+	* lib/oem_atca.c: More hacks for broken hardware.
+
+	* lib/sel.c: Hacks for broken hardware.
+
 2005-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Some more fixups for the Intel chassis.
