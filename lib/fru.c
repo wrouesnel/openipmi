@@ -1143,7 +1143,6 @@ ipmi_fru_destroy(ipmi_fru_t            *fru,
 		 ipmi_fru_destroyed_cb handler,
 		 void                  *cb_data)
 {
-    /* FIXME - handle callbacks. */
     fru_lock(fru);
     if (fru->fetch_in_progress) {
 	fru->deleted = 1;
@@ -1384,16 +1383,16 @@ start_physical_fru_fetch(ipmi_fru_t *fru)
 }
 
 int
-ipmi_fru_alloc(ipmi_domain_t *domain,
-	       unsigned char is_logical,
-	       unsigned char device_address,
-	       unsigned char device_id,
-	       unsigned char lun,
-	       unsigned char private_bus,
-	       unsigned char channel,
+ipmi_fru_alloc(ipmi_domain_t       *domain,
+	       unsigned char       is_logical,
+	       unsigned char       device_address,
+	       unsigned char       device_id,
+	       unsigned char       lun,
+	       unsigned char       private_bus,
+	       unsigned char       channel,
 	       ipmi_fru_fetched_cb fetched_handler,
 	       void                *fetched_cb_data,
-	       ipmi_fru_t    **new_fru)
+	       ipmi_fru_t          **new_fru)
 {
     ipmi_fru_t *fru;
     int        err;

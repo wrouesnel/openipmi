@@ -484,17 +484,7 @@ cleanup_domain(ipmi_domain_t *domain)
 	ipmi_destroy_lock(domain->con_lock);
     if (domain->event_handlers_lock)
 	ipmi_destroy_lock(domain->event_handlers_lock);
-    for (i=0; i<MAX_CONS; i++) {
-	if (!domain->conn[i])
-	    continue;
 
-	if (domain->ll_event_id[i])
-	    domain->conn[i]->deregister_for_events(domain->conn[i],
-						   domain->ll_event_id[i]);
-
-	/* Remove the connection fail handler. */
-	domain->conn[i]->set_con_change_handler(domain->conn[i], NULL,  NULL);
-    }
     /* Destroy the entities last, since sensors and controls may
        refer to them. */
     if (domain->entities)
@@ -1325,8 +1315,8 @@ ll_si_rsp_handler(ipmi_con_t   *ipmi,
     if (nmsg->rsp_handler)
 	nmsg->rsp_handler(domain, (ipmi_addr_t *) &si, sizeof(si), msg,
 			  nmsg->rsp_data1, nmsg->rsp_data2);
-    ipmi_mem_free(nmsg);
  out_unlock:
+    ipmi_mem_free(nmsg);
     ipmi_read_unlock();
 }
 
@@ -2901,8 +2891,19 @@ real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
 
     remove_known_domain(domain);
 
-    for (i=0; i<MAX_CONS; i++)
+    for (i=0; i<MAX_CONS; i++) {
 	ipmi[i] = domain->conn[i];
+
+	if (!domain->conn[i])
+	    continue;
+
+	if (domain->ll_event_id[i])
+	    domain->conn[i]->deregister_for_events(domain->conn[i],
+						   domain->ll_event_id[i]);
+
+	/* Remove the connection fail handler. */
+	domain->conn[i]->set_con_change_handler(domain->conn[i], NULL,  NULL);
+    }
 
     ipmi_write_unlock();
 
