@@ -360,7 +360,7 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 
     if (!mc) {
 	if (info->__rsp_handler)
-	    info->__rsp_handler(sensor, ECANCELED, NULL, info->__cb_data);
+	    info->__rsp_handler(sensor, ENXIO, rsp, info->__cb_data);
 	return;
     }
 
