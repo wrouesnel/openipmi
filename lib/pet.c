@@ -118,7 +118,8 @@ struct ipmi_pet_s
     int          pef_lock_broken;
     int          lanparm_err;
     int          lanparm_lock_broken;
-    int          changed;
+    int          changed_lanparm;
+    int          changed_pef;
 
     int            lanparm_check_pos;
     ipmi_lanparm_t *lanparm;
@@ -231,6 +232,18 @@ pet_put(ipmi_pet_t *pet)
     pet_unlock(pet);
 }
 
+void
+ipmi_pet_ref(ipmi_pet_t *pet)
+{
+    pet_get(pet);
+}
+
+void
+ipmi_pet_deref(ipmi_pet_t *pet)
+{
+    pet_put(pet);
+}
+
 static int
 pet_attr_init(ipmi_domain_t *domain, void *cb_data, void **data)
 {
@@ -280,8 +293,12 @@ pet_op_done(ipmi_pet_t *pet)
 	}
 
 	if (pet->done) {
-	    pet->done(pet, 0, pet->cb_data);
+	    ipmi_pet_done_cb done = pet->done;
+	    void             *cb_data = pet->cb_data;
 	    pet->done = NULL;
+	    pet_unlock(pet);
+	    done(pet, 0, cb_data);
+	    pet_lock(pet);
 	}
 
 	if (pet->destroyed) {
@@ -353,6 +370,10 @@ lanparm_op_done(ipmi_pet_t *pet, int err)
 {
     int           rv;
 
+    /* Cheap hack, -1 means stop. */
+    if (err == -1)
+	err = 0;
+
     pet->lanparm_err = err;
     if (pet->lanparm_lock_broken) {
 	/* Locking is not supported. */
@@ -361,7 +382,7 @@ lanparm_op_done(ipmi_pet_t *pet, int err)
     } else {
 	unsigned char data[1];
 
-	if (!pet->lanparm_err && pet->changed) {
+	if (!pet->lanparm_err && pet->changed_lanparm) {
 	    /* Don't commit if an error occurred. */
 	    data[0] = 2; /* commit */
 	    rv = ipmi_lanparm_set_parm(pet->lanparm, 0, data, 1,
@@ -400,7 +421,7 @@ lanparm_next_config(ipmi_pet_t *pet)
     pet->lanparm_check_pos++;
     if (pet->lanparm_check_pos >= NUM_LANPARM_SETTINGS) {
 	/* Return non-zero, to end the operation. */
-	return 1;
+	return -1;
     }
 
     check = &(pet->lanparm_check[pet->lanparm_check_pos]);
@@ -522,6 +543,7 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
 	    lanparm_op_done(pet, rv);
 	    goto out;
 	}
+	pet->changed_lanparm = 1;
     } else {
 	rv = lanparm_next_config(pet);
 	if (rv) {
@@ -589,6 +611,10 @@ pef_op_done(ipmi_pet_t *pet, int err)
 {
     int           rv;
 
+    /* Cheap hack, -1 means stop. */
+    if (err == -1)
+	err = 0;
+
     pet->pef_err = err;
     if (pet->pef_lock_broken) {
 	/* Locking is not supported. */
@@ -599,7 +625,7 @@ pef_op_done(ipmi_pet_t *pet, int err)
     } else {
 	unsigned char data[1];
 
-	if (!pet->pef_err && pet->changed) {
+	if (!pet->pef_err && pet->changed_pef) {
 	    /* Don't commit if an error occurred. */
 	    data[0] = 2; /* commit */
 	    rv = ipmi_pef_set_parm(pet->pef, 0, data, 1, pef_commited, pet);
@@ -636,7 +662,7 @@ pef_next_config(ipmi_pet_t *pet)
     pet->pef_check_pos++;
     if (pet->pef_check_pos >= NUM_PEF_SETTINGS) {
 	/* Return non-zero, to end the operation. */
-	return 1;
+	return -1;
     }
 
     check = &(pet->pef_check[pet->pef_check_pos]);
@@ -747,6 +773,7 @@ pef_got_config(ipmi_pef_t    *pef,
 	    pef_op_done(pet, rv);
 	    goto out;
 	}
+	pet->changed_pef = 1;
     } else {
 	rv = pef_next_config(pet);
 	if (rv) {
@@ -852,8 +879,10 @@ start_pet_setup(ipmi_mc_t  *mc,
     pet->pet = pet;
     pet->pef_lock_broken = 0;
     pet->pef_err = 0;
+    pet->changed_pef = 0;
     pet->lanparm_lock_broken = 0;
     pet->lanparm_err = 0;
+    pet->changed_lanparm = 0;
 
     pet->pef_check_pos = 0;
     pet->in_progress++;
@@ -1044,6 +1073,9 @@ ipmi_pet_create_mc(ipmi_mc_t        *mc,
     rv = start_pet_setup(mc, pet);
     if (rv)
 	goto out_err;
+
+    if (ret_pet)
+	*ret_pet = pet;
 
     return 0;
 

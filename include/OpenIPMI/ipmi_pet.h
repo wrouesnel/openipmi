@@ -112,6 +112,14 @@ int ipmi_pet_destroy(ipmi_pet_t       *pet,
 		     ipmi_pet_done_cb done,
 		     void             *cb_data);
 
+/* Used to track references to a pet.  You can use this instead of
+   ipmi_pet_destroy, but use of the destroy function is
+   recommended.  This is primarily here to help reference-tracking
+   garbage collection systems like what is in Perl to be able to
+   automatically destroy pets when they are done. */
+void ipmi_pet_ref(ipmi_pet_t *pet);
+void ipmi_pet_deref(ipmi_pet_t *pet);
+
 /* Get the "name" for the PET.  Returns the length of the string
    (minus the closing \0).  PET names are auto-assigned. */
 #define IPMI_PET_NAME_LEN 64

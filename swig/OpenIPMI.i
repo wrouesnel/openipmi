@@ -45,6 +45,7 @@
 #include <OpenIPMI/ipmi_user.h>
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_pef.h>
+#include <OpenIPMI/ipmi_pet.h>
 
 /* For ipmi_debug_malloc_cleanup() */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -247,6 +248,72 @@ parse_raw_str_data(char *str, unsigned int *length)
     return NULL;
 }
 
+static int
+parse_ip_addr(char *str, struct in_addr *addr)
+#ifdef HAVE_GETADDRINFO
+{
+    struct addrinfo    hints, *res0, *s;
+    struct sockaddr_in *paddr;
+    int                rv;
+ 
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    rv = getaddrinfo(str, "100", &hints, &res0);
+    if (rv) {
+	return EINVAL;
+    }
+    /* Only get the first ipv4 */
+    s = res0;
+    while (s) {
+	if (s->ai_family == PF_INET)
+	    break;
+	s = s->ai_next;
+    }
+    if (!s) {
+	freeaddrinfo(res0);
+	return EINVAL;
+    }
+    paddr = (struct sockaddr_in *) s->ai_addr;
+    *addr = paddr->sin_addr;
+    freeaddrinfo(res0);
+    return 0;
+}
+#else
+/* System does not support getaddrinfo, just for IPv4*/
+{
+    struct hostent *ent;
+    ent = gethostbyname(str);
+    if (!ent)
+	return EINVAL;
+    memcpy(&addr->s_addr, ent->h_addr_list[0], 4);
+    return 0;
+}
+#endif
+
+static int
+parse_mac_addr(char *str, unsigned char *addr)
+{
+    char *s;
+    int  i;
+    char *endstr;
+
+    s = str;
+    while (isspace(*s))
+	s++;
+    if (! isxdigit(*s))
+	return EINVAL;
+    for (i=0; i<5; i++) {
+	addr[i] = strtoul(s, &endstr, 16);
+	if (*endstr != ':')
+	    return EINVAL;
+	s = endstr+1;
+    }
+    addr[i] = strtoul(s, &endstr, 16);
+    if (*endstr != '\0')
+	return EINVAL;
+    return 0;
+}
 %}
 
 %import "OpenIPMI_lang.i"
@@ -2102,10 +2169,13 @@ lanparm_set_parm(ipmi_lanparm_t *lanparm,
     swig_cb_val cb = cb_data;
     swig_ref    lanparm_ref;
 
-    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
-    swig_call_cb(cb, "lanparm_set_parm_cb", "%p%d", &lanparm_ref, err);
-    /* One-time call, get rid of the CB. */
-    deref_swig_cb_val(cb);
+    if (cb) {
+	lanparm_ref = swig_make_ref_destruct(lanparm,
+					     "OpenIPMI::ipmi_lanparm_t");
+	swig_call_cb(cb, "lanparm_set_parm_cb", "%p%d", &lanparm_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+    }
     swig_free_ref(lanparm_ref);
 }
 
@@ -2137,10 +2207,13 @@ lanparm_set_config(ipmi_lanparm_t    *lanparm,
     swig_cb_val cb = cb_data;
     swig_ref    lanparm_ref;
 
-    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
-    swig_call_cb(cb, "lanparm_set_config_cb", "%p%d", &lanparm_ref, err);
-    /* One-time call, get rid of the CB. */
-    deref_swig_cb_val(cb);
+    if (cb) {
+	lanparm_ref = swig_make_ref_destruct(lanparm,
+					     "OpenIPMI::ipmi_lanparm_t");
+	swig_call_cb(cb, "lanparm_set_config_cb", "%p%d", &lanparm_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+    }
     swig_free_ref(lanparm_ref);
 }
 
@@ -2152,10 +2225,13 @@ lanparm_clear_lock(ipmi_lanparm_t    *lanparm,
     swig_cb_val cb = cb_data;
     swig_ref    lanparm_ref;
 
-    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
-    swig_call_cb(cb, "lanparm_clear_lock_cb", "%p%d", &lanparm_ref, err);
-    /* One-time call, get rid of the CB. */
-    deref_swig_cb_val(cb);
+    if (cb) {
+	lanparm_ref = swig_make_ref_destruct(lanparm,
+					     "OpenIPMI::ipmi_lanparm_t");
+	swig_call_cb(cb, "lanparm_clear_lock_cb", "%p%d", &lanparm_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+    }
     swig_free_ref(lanparm_ref);
 }
 
@@ -2198,10 +2274,12 @@ pef_set_parm(ipmi_pef_t *pef,
     swig_cb_val cb = cb_data;
     swig_ref    pef_ref;
 
-    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
-    swig_call_cb(cb, "pef_set_parm_cb", "%p%d", &pef_ref, err);
-    /* One-time call, get rid of the CB. */
-    deref_swig_cb_val(cb);
+    if (cb) {
+	pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+	swig_call_cb(cb, "pef_set_parm_cb", "%p%d", &pef_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+    }
     swig_free_ref(pef_ref);
 }
 
@@ -2233,10 +2311,12 @@ pef_set_config(ipmi_pef_t    *pef,
     swig_cb_val cb = cb_data;
     swig_ref    pef_ref;
 
-    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
-    swig_call_cb(cb, "pef_set_config_cb", "%p%d", &pef_ref, err);
-    /* One-time call, get rid of the CB. */
-    deref_swig_cb_val(cb);
+    if (cb) {
+	pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+	swig_call_cb(cb, "pef_set_config_cb", "%p%d", &pef_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+    }
     swig_free_ref(pef_ref);
 }
 
@@ -2248,11 +2328,28 @@ pef_clear_lock(ipmi_pef_t    *pef,
     swig_cb_val cb = cb_data;
     swig_ref    pef_ref;
 
-    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
-    swig_call_cb(cb, "pef_clear_lock_cb", "%p%d", &pef_ref, err);
-    /* One-time call, get rid of the CB. */
-    deref_swig_cb_val(cb);
+    if (cb) {
+	pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+	swig_call_cb(cb, "pef_clear_lock_cb", "%p%d", &pef_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+    }
     swig_free_ref(pef_ref);
+}
+
+static void
+get_pet(ipmi_pet_t *pet, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    pet_ref;
+
+    if (cb) {
+	pet_ref = swig_make_ref_destruct(pet, "OpenIPMI::ipmi_pet_t");
+	swig_call_cb(cb, "got_pet_cb", "%p%d", &pet_ref, err);
+	/* One-time call, get rid of the CB. */
+	deref_swig_cb_val(cb);
+    }
+    swig_free_ref(pet_ref);
 }
 
 %}
@@ -2313,6 +2410,9 @@ typedef struct {
 
 typedef struct {
 } ipmi_pef_config_t;
+
+typedef struct {
+} ipmi_pet_t;
 
 %inline %{
 void enable_debug_malloc()
@@ -3280,6 +3380,65 @@ int pef_str_to_parm(char *str);
 	}
 
 	return fru;
+    }
+
+    /*
+     * Allocate a pet object for the domain over the given connection.
+     * The pet is returned.  The ninth parameter is an optional
+     * callback object, the got_pet_cb method will be called on it
+     * when the PET fetch is complete.  It will have the following
+     * parameters: <self> <pet> <err>.  The parameters are:
+     *   int connection: the connection to the domain to set up the PET for
+     *   int channel: the channel number to set the PET for
+     *   char ip_addr: the address to send the traps to
+     *   char mac_addr: the mac address to send the traps to
+     * The rest are the selectors in the various tables, you have to
+     * read the spec and know your system to know how to set them.
+     *   int eft_sel:
+     *   int policy_num:
+     *   int apt_sel:
+     *   int lan_dest_sel:
+     *
+     * Note that you must keep a reference to the pet around, or it will
+     * be automatically destroyed by the garbage collector.
+     */
+    %newobject get_pet;
+    ipmi_pet_t *get_pet(int     connection,
+			int     channel,
+			char    *ip_addr,
+			char    *mac_addr,
+			int     eft_sel,
+			int     policy_num,
+			int     apt_sel,
+			int     lan_dest_sel,
+			swig_cb handler = NULL)
+    {
+	int              rv;
+	ipmi_pet_t       *pet = NULL;
+	swig_cb_val      handler_val = NULL;
+	struct in_addr   ip;
+	unsigned char    mac[6];
+
+        rv = parse_ip_addr(ip_addr, &ip);
+	if (rv)
+	    return NULL;
+
+        rv = parse_mac_addr(mac_addr, mac);
+	if (rv)
+	    return NULL;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	}
+	ipmi_pet_ref(pet);
+	rv = ipmi_pet_create(self, connection, channel, ip, mac, eft_sel,
+			     policy_num, apt_sel, lan_dest_sel, get_pet,
+			     handler_val, &pet);
+	if (rv) {
+	    deref_swig_cb_val(handler_val);
+	    ipmi_pet_deref(pet);
+	}
+	return pet;
     }
 }
 
@@ -4893,11 +5052,12 @@ int pef_str_to_parm(char *str);
     }
 
     /*
-     * Allocate a pef object for the MC.  The lanparm is returned.  The
-     * first parameter is an optional callback object, the got_pef_cb
-     * method will be called on it when the PEF fetch is complete.  It
-     * will have the following parameters: <self> <pef> <err>.  Note
-     * that you cannot use the PEF until the fetch is complete.
+     * Allocate a pef object for the MC.  The pef object is returned.
+     * The first parameter is an optional callback object, the
+     * got_pef_cb method will be called on it when the PEF fetch is
+     * complete.  It will have the following parameters: <self> <pef>
+     * <err>.  Note that you cannot use the PEF until the fetch is
+     * complete.
      */
     %newobject get_pef;
     ipmi_pef_t *get_pef(swig_cb handler = NULL)
@@ -4914,9 +5074,66 @@ int pef_str_to_parm(char *str);
 	rv = ipmi_pef_alloc(self, done, handler_val, &pef);
 	if (rv)
 	    deref_swig_cb_val(handler_val);
-	else
+	else if (done)
+	    /* Only ref the value if we have a callback. */
 	    ipmi_pef_ref(pef);
 	return pef;
+    }
+
+    /*
+     * Allocate a pet object for the MC.  The pet is returned.  The
+     * eighth parameter is an optional callback object, the got_pet_cb
+     * method will be called on it when the PET fetch is complete.  It
+     * will have the following parameters: <self> <pet> <err>.
+     * The parameters are:
+     *   int channel: the channel number to set the PET for
+     *   char ip_addr: the address to send the traps to
+     *   char mac_addr: the mac address to send the traps to
+     * The rest are the selectors in the various tables, you have to
+     * read the spec and know your system to know how to set them.
+     *   int eft_sel:
+     *   int policy_num:
+     *   int apt_sel:
+     *   int lan_dest_sel:
+     *
+     * Note that you must keep a reference to the pet around, or it will
+     * be automatically destroyed by the garbage collector.
+     */
+    %newobject get_pet;
+    ipmi_pet_t *get_pet(int     channel,
+			char    *ip_addr,
+			char    *mac_addr,
+			int     eft_sel,
+			int     policy_num,
+			int     apt_sel,
+			int     lan_dest_sel,
+			swig_cb handler = NULL)
+    {
+	int              rv;
+	ipmi_pet_t       *pet = NULL;
+	swig_cb_val      handler_val = NULL;
+	struct in_addr   ip;
+	unsigned char    mac[6];
+
+        rv = parse_ip_addr(ip_addr, &ip);
+	if (rv)
+	    return NULL;
+
+        rv = parse_mac_addr(mac_addr, mac);
+	if (rv)
+	    return NULL;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	}
+	rv = ipmi_pet_create_mc(self, channel, ip, mac, eft_sel, policy_num,
+				apt_sel, lan_dest_sel, get_pet, handler_val,
+				&pet);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	else
+	    ipmi_pet_ref(pet);
+	return pet;
     }
 }
 
@@ -7533,7 +7750,6 @@ int pef_str_to_parm(char *str);
     {
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
-	ipmi_lanparm_done_cb done = NULL;
 	unsigned char        *data;
 	unsigned int         length;
 
@@ -7542,13 +7758,12 @@ int pef_str_to_parm(char *str);
 	    return ENOMEM;
 
 	if (valid_swig_cb(handler)) {
-	    done = lanparm_set_parm;
 	    handler_val = ref_swig_cb(handler);
 	}
 
 	ipmi_lanparm_ref(self);
 	rv = ipmi_lanparm_set_parm(self, parm, data, length,
-				   done, handler_val);
+				   lanparm_set_parm, handler_val);
 	free(data);
 	if (rv)
 	    ipmi_lanparm_deref(self);
@@ -7571,7 +7786,6 @@ int pef_str_to_parm(char *str);
     {
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
-	ipmi_lanparm_done_cb done = NULL;
 	unsigned char        *data;
 	unsigned int         length = value.len;
 
@@ -7584,13 +7798,12 @@ int pef_str_to_parm(char *str);
 	parse_ipmi_data(value, data, length, &length);
 
 	if (valid_swig_cb(handler)) {
-	    done = lanparm_set_parm;
 	    handler_val = ref_swig_cb(handler);
 	}
 
 	ipmi_lanparm_ref(self);
 	rv = ipmi_lanparm_set_parm(self, parm, data, length,
-				   done, handler_val);
+				   lanparm_set_parm, handler_val);
 	free(data);
 	if (rv)
 	    ipmi_lanparm_deref(self);
@@ -7637,15 +7850,14 @@ int pef_str_to_parm(char *str);
     {
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
-	ipmi_lanparm_done_cb done = NULL;
 
 	if (valid_swig_cb(handler)) {
-	    done = lanparm_set_config;
 	    handler_val = ref_swig_cb(handler);
 	}
 
 	ipmi_lanparm_ref(self);
-	rv = ipmi_lan_set_config(self, config, done, handler_val);
+	rv = ipmi_lan_set_config(self, config,
+				 lanparm_set_config, handler_val);
 	if (rv)
 	    ipmi_lanparm_deref(self);
 	if (rv && handler_val)
@@ -7665,15 +7877,14 @@ int pef_str_to_parm(char *str);
     {
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
-	ipmi_lanparm_done_cb done = NULL;
 
 	if (valid_swig_cb(handler)) {
-	    done = lanparm_clear_lock;
 	    handler_val = ref_swig_cb(handler);
 	}
 
 	ipmi_lanparm_ref(self);
-	rv = ipmi_lan_clear_lock(self, config, done, handler_val);
+	rv = ipmi_lan_clear_lock(self, config,
+				 lanparm_clear_lock, handler_val);
 	if (rv)
 	    ipmi_lanparm_deref(self);
 	if (rv && handler_val)
@@ -7855,81 +8066,30 @@ int pef_str_to_parm(char *str);
 	    break;
 
 	case IPMI_LANCONFIG_IP:
-	    if (strcmp(type, "ip") != 0)
-		return EINVAL;
-	    dval = malloc(4);
-#ifdef HAVE_GETADDRINFO
 	    {
-		struct addrinfo hints, *res0, *s;
-		struct sockaddr_in *paddr;
- 
-		memset(&hints, 0, sizeof(hints));
-		hints.ai_family = PF_UNSPEC;
-		hints.ai_socktype = SOCK_DGRAM;
-		rv = getaddrinfo(value, "100", &hints, &res0);
-		if (rv) {
-		    free(dval);
+		struct in_addr addr;
+		if (strcmp(type, "ip") != 0)
 		    return EINVAL;
-		}
-		/* Only get the first ipv4 */
-		s = res0;
-		while (s) {
-		    if (s->ai_family == PF_INET)
-			break;
-		    s = s->ai_next;
-		}
-		if (!s) {
-		    free(dval);
-		    freeaddrinfo(res0);
-		    return EINVAL;
-		}
-		paddr = (struct sockaddr_in *) s->ai_addr;
-		memcpy(dval, &paddr->sin_addr, 4);
-		freeaddrinfo(res0);
+		rv = parse_ip_addr(value, &addr);
+		if (rv)
+		    return rv;
+		dval = malloc(4);
+		memcpy(dval, &addr.s_addr, 4);
+		dval_len = 4;
 	    }
-#else
-	    /* System does not support getaddrinfo, just for IPv4*/
-	    {
-		struct hostent *ent;
-		ent = gethostbyname(value);
-		if (!ent)
-		    return EINVAL;
-		memcpy(dval, ent->h_addr_list[0], 4);
-	    }
-#endif
-	    dval_len = 4;
 	    break;
 
 	case IPMI_LANCONFIG_MAC:
-	{
-	    int  i;
-	    char *s;
-	    char *endstr;
-
 	    if (strcmp(type, "mac") != 0)
 		return EINVAL;
-	    s = value;
-	    while (isspace(*s))
-		s++;
-	    if (! isxdigit(*s))
-		return EINVAL;
 	    dval = malloc(6);
-	    for (i=0; i<5; i++) {
-		dval[i] = strtoul(s, &endstr, 16);
-		if (*endstr != ':') {
-		    free(dval);
-		    return EINVAL;
-		}
-		s = endstr+1;
-	    }
-	    dval[i] = strtoul(s, &endstr, 16);
-	    if (*endstr != '\0') {
+	    rv = parse_mac_addr(value, dval);
+	    if (rv) {
 		free(dval);
-		return EINVAL;
+		return rv;
 	    }
 	    dval_len = 6;
 	    break;
-	}
 	}
 
 	rv = ipmi_lanconfig_set_val(self, parm, idx, ival, dval, dval_len);
@@ -8008,7 +8168,6 @@ int pef_str_to_parm(char *str);
     {
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
-	ipmi_pef_done_cb done = NULL;
 	unsigned char        *data;
 	unsigned int         length;
 
@@ -8017,13 +8176,12 @@ int pef_str_to_parm(char *str);
 	    return ENOMEM;
 
 	if (valid_swig_cb(handler)) {
-	    done = pef_set_parm;
 	    handler_val = ref_swig_cb(handler);
 	}
 
 	ipmi_pef_ref(self);
 	rv = ipmi_pef_set_parm(self, parm, data, length,
-				   done, handler_val);
+			       pef_set_parm, handler_val);
 	free(data);
 	if (rv)
 	    ipmi_pef_deref(self);
@@ -8046,7 +8204,6 @@ int pef_str_to_parm(char *str);
     {
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
-	ipmi_pef_done_cb done = NULL;
 	unsigned char        *data;
 	unsigned int         length = value.len;
 
@@ -8059,13 +8216,12 @@ int pef_str_to_parm(char *str);
 	parse_ipmi_data(value, data, length, &length);
 
 	if (valid_swig_cb(handler)) {
-	    done = pef_set_parm;
 	    handler_val = ref_swig_cb(handler);
 	}
 
 	ipmi_pef_ref(self);
 	rv = ipmi_pef_set_parm(self, parm, data, length,
-				   done, handler_val);
+			       pef_set_parm, handler_val);
 	free(data);
 	if (rv)
 	    ipmi_pef_deref(self);
@@ -8138,17 +8294,15 @@ int pef_str_to_parm(char *str);
      */
     int clear_lock(ipmi_pef_config_t *config = NULL, swig_cb handler = NULL)
     {
-	int                  rv;
-	swig_cb_val          handler_val = NULL;
-	ipmi_pef_done_cb done = NULL;
+	int         rv;
+	swig_cb_val handler_val = NULL;
 
 	if (valid_swig_cb(handler)) {
-	    done = pef_clear_lock;
 	    handler_val = ref_swig_cb(handler);
 	}
 
 	ipmi_pef_ref(self);
-	rv = ipmi_pef_clear_lock(self, config, done, handler_val);
+	rv = ipmi_pef_clear_lock(self, config, pef_clear_lock, handler_val);
 	if (rv)
 	    ipmi_pef_deref(self);
 	if (rv && handler_val)
@@ -8328,5 +8482,77 @@ int pef_str_to_parm(char *str);
 	if (dval)
 	    free(dval);
 	return rv;
+    }
+}
+
+%extend ipmi_pet_t {
+    ~ipmi_pet_t()
+    {
+	ipmi_pet_deref(self);
+    }
+
+    %newobject get_mc_id;
+    ipmi_mcid_t *get_mc_id()
+    {
+	ipmi_mcid_t *rv = malloc(sizeof(*rv));
+	if (rv)
+	    *rv = ipmi_pet_get_mc_id(self);
+	return rv;
+    }
+
+    int get_channel()
+    {
+	return ipmi_pet_get_channel(self);
+    }
+
+    %newobject get_ip_addr;
+    char *get_ip_addr()
+    {
+	struct in_addr ip;
+	char           *dval = malloc(16);
+	unsigned char  d[4];
+
+	if (!dval)
+	    return NULL;
+	ipmi_pet_get_ip_addr(self, &ip);
+	d[0] = (ip.s_addr >> 24) & 0xff;
+	d[1] = (ip.s_addr >> 16) & 0xff;
+	d[2] = (ip.s_addr >> 8) & 0xff;
+	d[3] = (ip.s_addr >> 0) & 0xff;
+	sprintf(dval, "%d.%d.%d.%d", d[0], d[1], d[2], d[3]);
+	return dval;
+    }
+
+    %newobject get_mac_addr;
+    char *get_mac_addr()
+    {
+	char          *dval = malloc(18);
+	unsigned char d[6];
+
+	if (!dval)
+	    return NULL;
+	ipmi_pet_get_mac_addr(self, d);
+	sprintf(dval, "%d:%d:%d:%d:%d:%d", d[0], d[1], d[2], d[3], d[4], d[5]);
+	return dval;
+    }
+
+    int get_eft_sel()
+    {
+	return ipmi_pet_get_eft_sel(self);
+    }
+
+    int get_policy_num()
+    {
+	return ipmi_pet_get_policy_num(self);
+    }
+    
+    int get_apt_sel()
+    {
+	return ipmi_pet_get_apt_sel(self);
+    }
+    
+    int get_lan_dest_sel()
+    {
+	return ipmi_pet_get_lan_dest_sel(self);
     }
 }

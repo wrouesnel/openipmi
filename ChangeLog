@@ -1,3 +1,12 @@
+2005-01-03 Corey Minyard <cminyard@mvista.com> 
+
+	* Include/OpenIPMI/ipmi_pet.h, lib/pet.c: Added a refcount to the
+	PET external interface and fixed some problems with PET handling.
+
+	* swig/OpenIPMI.i: Added PET support.
+
+	* swig/perl/test_pet, swig/perl/Makefile.am: Added PET perl tests.
+
 2005-01-01 Corey Minyard <cminyard@mvista.com> 
 
 	* swig/perl/test_pef: Add PEF tests.
