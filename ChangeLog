@@ -3,6 +3,9 @@
 	* cmdlang/cmd_entity.c: Add an "entity tree" command to dump
 	the list of entities in a tree structure.
 
+	* lib/fru.c: Add a new error to handle auto-resizing of FRU
+	fetches with.
+
 2005-02-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_utils.c, include/OpenIPMI/ipmi_addr.h: Add an address

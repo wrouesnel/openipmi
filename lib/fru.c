@@ -3049,6 +3049,7 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
        some broken systems just don't return anything if the response
        is too big. */
     if (((data[0] == IPMI_CANNOT_RETURN_REQ_LENGTH_CC)
+	 || (data[0] == IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC)
 	 || (data[0] == IPMI_TIMEOUT_CC)
 	 || (data[0] == IPMI_UNKNOWN_ERR_CC))
 	&& (fru->fetch_size > MIN_FRU_DATA_FETCH))
