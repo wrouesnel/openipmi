@@ -71,6 +71,67 @@ entity_iterate_handler(ipmi_entity_t *entity, ipmi_entity_t *parent,
 }
 
 static void
+entity_child_handler(ipmi_entity_t *parent, ipmi_entity_t *entity,
+		     void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    if (cmdlang->err)
+	return;
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    if (ipmi_entity_get_is_parent(entity)) {
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_entity_iterate_children(entity, entity_child_handler, cmd_info);
+	ipmi_cmdlang_up(cmd_info);
+    }
+}
+
+static void
+entity_tree_handler(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    if (cmdlang->err)
+	return;
+
+    if (ipmi_entity_get_is_child(entity))
+	return;
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    if (ipmi_entity_get_is_parent(entity)) {
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_entity_iterate_children(entity, entity_child_handler, cmd_info);
+	ipmi_cmdlang_up(cmd_info);
+    }
+}
+
+static void
+entity_tree(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    ipmi_cmdlang_out(cmd_info, "Entities", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_domain_iterate_entities(domain, entity_tree_handler, cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_up(cmd_info);
+}
+
+static void
 entity_list_handler(ipmi_entity_t *entity, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
@@ -987,6 +1048,9 @@ static ipmi_cmdlang_init_t cmds_entity[] =
     { "list", &entity_cmds,
       "- List all the entities in the system",
       ipmi_cmdlang_domain_handler, entity_list, NULL },
+    { "tree", &entity_cmds,
+      "- List all the entities in the system in their tree structure",
+      ipmi_cmdlang_domain_handler, entity_tree, NULL },
     { "info", &entity_cmds,
       "<entity> - Dump information about an entity",
       ipmi_cmdlang_entity_handler, entity_info, NULL },

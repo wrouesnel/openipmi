@@ -1,3 +1,8 @@
+2005-02-18 Corey Minyard <cminyard@mvista.com> 
+
+	* cmdlang/cmd_entity.c: Add an "entity tree" command to dump
+	the list of entities in a tree structure.
+
 2005-02-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_utils.c, include/OpenIPMI/ipmi_addr.h: Add an address
