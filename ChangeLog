@@ -1,3 +1,10 @@
+
+2003-10-15 Jeff Zheng <jeff.zheng@intel.com>
+
+	* lib/mc.c: Null out some values on removal.
+
+	* lib/fru.c: Calculate the end of the FRU data correctly.
+
 2003-10-09 Thomas Kanngieser <Thomas.Kanngieser@fci.com>
 
 	* lanserv/lanserv_asf.c: Send the right data for an RMCP ping.

@@ -1042,7 +1042,7 @@ process_fru_info(ipmi_fru_t *fru)
 	if (offset == 0)
 	    continue;
 
-	if (i == IPMI_FRU_FTR_NUMBER)
+	if (i == (IPMI_FRU_FTR_NUMBER - 1))
 	    next_off = data_len;
 	else
 	    next_off = foff[i+1].offset;

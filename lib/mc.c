@@ -330,6 +330,7 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     if (mc->removed_handlers) {
 	ilist_iter(mc->removed_handlers, call_removed_handler, mc);
 	free_ilist(mc->removed_handlers);
+	mc->removed_handlers = NULL;
     }
     
 
@@ -359,6 +360,7 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	       code is currently in the timer handler, so we let
 	       the "cancelled" value do this for us. */
 	    os_hnd->free_timer(os_hnd, mc->sel_timer);
+	    mc->sel_timer = NULL;
 	    ipmi_mem_free(mc->sel_timer_info);
 	}
 	mc->sel_timer_info = NULL;
@@ -370,6 +372,7 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 						  mc->conup_info->con_chid);
 	}
 	ipmi_mem_free(mc->conup_info);
+	mc->conup_info = NULL;
     }
 
     if ((ipmi_controls_get_count(mc->controls) == 0)
