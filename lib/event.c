@@ -86,6 +86,8 @@ ipmi_event_alloc(ipmi_mcid_t   mcid,
 ipmi_event_t *
 ipmi_event_dup(ipmi_event_t *event)
 {
+    if (!event)
+	return NULL;
     ipmi_lock(event->lock);
     event->refcount++;
     ipmi_unlock(event->lock);
@@ -95,6 +97,8 @@ ipmi_event_dup(ipmi_event_t *event)
 void
 ipmi_event_free(ipmi_event_t *event)
 {
+    if (!event)
+	return;
     ipmi_lock(event->lock);
     event->refcount--;
     if (event->refcount == 0) {

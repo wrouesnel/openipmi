@@ -125,6 +125,20 @@ next_parm(char *s, int *start, int *next)
 }
 
 static int
+next_colon_parm(char *s, int *start, int *next)
+{
+    while (s[*start] && (s[*start] == ':'))
+	(*start)++;
+    if (!s[*start])
+	return EINVAL;
+
+    *next = *start;
+    while (s[*next] && (s[*next] != ':'))
+	(*next)++;
+    return 0;
+}
+
+static int
 num_parm(char *s, int len, int *rval)
 {
     char numstr[10];
@@ -454,6 +468,8 @@ ipmb_mc_scan_handler(ipmi_domain_t *domain, int err, void *cb_data)
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     swig_call_cb(cb, "ipmb_mc_scan_cb", "%p%i", &domain_ref, err);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -483,6 +499,8 @@ domain_msg_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     swig_call_cb(cb, "addr_cmd_cb", "%p%s%d%d%d%*s", &domain_ref, addr_str,
 		 lun, msg->netfn, msg->cmd, msg->data_len, msg->data);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
     
     return IPMI_MSG_ITEM_NOT_USED;
 }
@@ -498,17 +516,6 @@ domain_iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
     swig_call_cb(cb, "domain_iter_mcs_cb", "%p%p", &domain_ref, &mc_ref);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
-}
-
-static void
-handle_mc_cb(ipmi_mc_t *mc, void *cb_data)
-{
-    swig_cb_val cb = cb_data;
-    swig_ref    mc_ref;
-
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
-    swig_call_cb(cb, "mc_cb", "%p", &mc_ref);
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
 }
 
@@ -586,8 +593,8 @@ entity_presence_handler(ipmi_entity_t *entity,
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
 				       "OpenIPMI::ipmi_event_t");
-    swig_call_cb(cb, "entity_presence_cb", "%p%i",
-		 &entity_ref, present);
+    swig_call_cb(cb, "entity_presence_cb", "%p%i%p",
+		 &entity_ref, present, &event_ref);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
     swig_free_ref(event_ref);
     return IPMI_EVENT_NOT_HANDLED;
@@ -614,7 +621,7 @@ entity_sensor_update_handler(enum ipmi_update_e op,
 static void
 entity_control_update_handler(enum ipmi_update_e op,
 			      ipmi_entity_t      *entity,
-			      ipmi_control_t      *control,
+			      ipmi_control_t     *control,
 			      void               *cb_data)
 {
     swig_cb_val cb = cb_data;
@@ -682,6 +689,8 @@ entity_get_hot_swap_handler(ipmi_entity_t             *entity,
     swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%i%s", &entity_ref,
 		 err, ipmi_hot_swap_state_name(state));
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -697,6 +706,8 @@ entity_get_hot_swap_time_handler(ipmi_entity_t  *entity,
     swig_call_cb(cb, "entity_hot_swap_get_time_cb", "%p%i%f", &entity_ref,
 		 err, ((double) time) / 1000000000.0);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -710,6 +721,8 @@ entity_set_hot_swap_time_handler(ipmi_entity_t  *entity,
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     swig_call_cb(cb, "entity_hot_swap_set_time_cb", "%p%i", &entity_ref, err);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -723,6 +736,116 @@ entity_activate_handler(ipmi_entity_t  *entity,
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     swig_call_cb(cb, "entity_activate_cb", "%p%i", &entity_ref, err);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+handle_mc_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_cb", "%p", &mc_ref);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+}
+
+static void
+mc_active_handler(ipmi_mc_t  *mc,
+		  int        active,
+		  void       *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_active_cb", "%p%i", &mc_ref, active);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+}
+
+static void
+mc_msg_cb(ipmi_mc_t  *mc,
+	  ipmi_msg_t *msg,
+	  void       *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_cmd_cb", "%p%d%d%*s", &mc_ref,
+		 msg->netfn, msg->cmd, msg->data_len, msg->data);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_reset_handler(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_reset_cb", "%p%d", &mc_ref, err);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_events_enable_handler(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_events_enable_cb", "%p%d", &mc_ref, err);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_reread_sensors_handler(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_reread_sensors_cb", "%p%d", &mc_ref, err);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_reread_sel_cb", "%p%d", &mc_ref, err);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_sel_get_time_cb(ipmi_mc_t     *mc,
+		   int           err,
+		   unsigned long time,
+		   void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_reread_sel_cb", "%p%d%ld", &mc_ref, err, time);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -734,6 +857,725 @@ handle_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
     sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
     swig_call_cb(cb, "sensor_cb", "%p", &sensor_ref);
     swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+}
+
+static char *
+threshold_str(char *s, enum ipmi_thresh_e thresh)
+{
+    if (thresh == IPMI_UPPER_NON_CRITICAL) {
+	*s = 'u'; s++; *s = 'n'; s++;
+    } else if (thresh == IPMI_UPPER_CRITICAL) {
+	*s = 'u'; s++; *s = 'c'; s++;
+    } else if (thresh == IPMI_UPPER_NON_RECOVERABLE) {
+	*s = 'u'; s++; *s = 'r'; s++;
+    } else if (thresh == IPMI_UPPER_NON_CRITICAL) {
+	*s = 'l'; s++; *s = 'n'; s++;
+    } else if (thresh == IPMI_UPPER_CRITICAL) {
+	*s = 'l'; s++; *s = 'c'; s++;
+    } else if (thresh == IPMI_UPPER_NON_RECOVERABLE) {
+	*s = 'l'; s++; *s = 'r'; s++;
+    }
+    return s;
+}
+
+static char *
+threshold_event_str(char                        *s, 
+		    enum ipmi_thresh_e          thresh,
+		    enum ipmi_event_value_dir_e value_dir,
+		    enum ipmi_event_dir_e       dir)
+{
+    s = threshold_str(s, thresh);
+    if (value_dir == IPMI_GOING_HIGH) {
+	*s = 'h'; s++;
+    } else {
+	*s = 'l'; s++;
+    }
+    if (dir == IPMI_ASSERTION) {
+	*s = 'a'; s++;
+    } else {
+	*s = 'd'; s++;
+    }
+    return s;
+}
+
+static char *
+discrete_event_str(char                   *s, 
+		   int                    offset,
+		    enum ipmi_event_dir_e dir)
+{
+    if (offset >= 100)
+	offset = 99;
+    if (offset < 0)
+	offset = 0;
+    sprintf(s, "%d", offset);
+    s += 2;
+    if (dir == IPMI_ASSERTION) {
+	*s = 'a'; s++;
+    } else {
+	*s = 'd'; s++;
+    }
+    return s;
+}
+
+static char *
+threshold_event_state_to_str(ipmi_event_state_t *events)
+{
+    int                         len = 0;
+    char                        *str;
+    enum ipmi_thresh_e          thresh;
+    enum ipmi_event_value_dir_e value_dir;
+    enum ipmi_event_dir_e       dir;
+    char                        *s;
+
+    if (ipmi_event_state_get_events_enabled(events))
+	len += strlen("events ");
+    if (ipmi_event_state_get_scanning_enabled(events))
+	len += strlen("scanning ");
+    if (ipmi_event_state_get_busy(events))
+	len += strlen("busy ");
+
+    for (thresh = IPMI_LOWER_NON_CRITICAL;
+	 thresh <= IPMI_UPPER_NON_RECOVERABLE; 
+	 thresh++)
+    {
+	for (value_dir = IPMI_GOING_LOW;
+	     value_dir <= IPMI_GOING_HIGH;
+	     value_dir++)
+	{
+	    for (dir = IPMI_ASSERTION;
+		 dir <= IPMI_DEASSERTION;
+		 dir++)
+	    {
+		if (ipmi_is_threshold_event_set(events,thresh, value_dir, dir))
+		    len += 5;
+	    }
+	}
+    }
+
+    str = malloc(len+1);
+    
+    if (ipmi_event_state_get_events_enabled(events))
+	strcat("events ", str);
+    if (ipmi_event_state_get_scanning_enabled(events))
+	strcat("scanning ", str);
+    if (ipmi_event_state_get_busy(events))
+	strcat("busy ", str);
+    s = str + strlen(str);
+
+    for (thresh = IPMI_LOWER_NON_CRITICAL;
+	 thresh <= IPMI_UPPER_NON_RECOVERABLE; 
+	 thresh++)
+    {
+	for (value_dir = IPMI_GOING_LOW;
+	     value_dir <= IPMI_GOING_HIGH;
+	     value_dir++)
+	{
+	    for (dir = IPMI_ASSERTION;
+		 dir <= IPMI_DEASSERTION;
+		 dir++)
+	    {
+		if (!ipmi_is_threshold_event_set(events,thresh,value_dir,dir))
+		    continue;
+
+		s = threshold_event_str(s, thresh, value_dir, dir);
+		*s = ' ';
+		s++;
+	    }
+	}
+    }
+
+    len = strlen(str);
+    if (len > 0)
+	str[len-1] = '\0'; /* Remove the final space */
+
+    return str;
+}
+
+static int
+str_to_threshold_event_state(char               *str,
+			     ipmi_event_state_t **events)
+{
+    enum ipmi_thresh_e          thresh;
+    enum ipmi_event_value_dir_e value_dir;
+    enum ipmi_event_dir_e       dir;
+    ipmi_event_state_t          *e;
+    int                         start, next;
+    int                         rv;
+
+    e = malloc(ipmi_event_state_size());
+    ipmi_event_state_init(e);
+
+    start = 0;
+    rv = next_parm(str, &start, &next);
+    while (!rv) {
+	char *s = str+start;
+	int  len = next - start;
+	if (strncasecmp(s, "events", len) == 0)
+	    ipmi_event_state_set_events_enabled(e, 1);
+	else if (strncasecmp(s, "scanning", len) == 0)
+	    ipmi_event_state_set_scanning_enabled(e, 1);
+	else if (strncasecmp(s, "busy", len) == 0)
+	    ipmi_event_state_set_busy(e, 1);
+	else if (len != 4)
+	    goto out_err;
+	else {
+	    if (strncasecmp(s, "un", 2) == 0)
+		thresh = IPMI_UPPER_NON_CRITICAL;
+	    else if (strncasecmp(s, "uc", 2) == 0)
+		thresh = IPMI_UPPER_CRITICAL;
+	    else if (strncasecmp(s, "ur", 2) == 0)
+		thresh = IPMI_UPPER_NON_RECOVERABLE;
+	    else if (strncasecmp(s, "ln", 2) == 0)
+		thresh = IPMI_LOWER_NON_CRITICAL;
+	    else if (strncasecmp(s, "lc", 2) == 0)
+		thresh = IPMI_LOWER_CRITICAL;
+	    else if (strncasecmp(s, "lr", 2) == 0)
+		thresh = IPMI_LOWER_NON_RECOVERABLE;
+	    else
+		goto out_err;
+	    s += 2;
+	    if (*s == 'l')
+		value_dir = IPMI_GOING_LOW;
+	    else if (*s == 'h')
+		value_dir = IPMI_GOING_HIGH;
+	    else
+		goto out_err;
+	    s++;
+	    if (*s == 'a')
+		dir = IPMI_ASSERTION;
+	    else if (*s == 'd')
+		dir = IPMI_DEASSERTION;
+	    else
+		goto out_err;
+	    ipmi_threshold_event_set(e, thresh, value_dir, dir);
+	}
+	start = next;
+	rv = next_parm(str, &start, &next);
+    }
+
+    return 0;
+
+ out_err:
+    free(e);
+    return EINVAL;
+}
+
+static char *
+discrete_event_state_to_str(ipmi_event_state_t *events)
+{
+    int                   len = 0;
+    char                  *str;
+    int                   offset;
+    enum ipmi_event_dir_e dir;
+    char                  *s;
+
+    if (ipmi_event_state_get_events_enabled(events))
+	len += strlen("events ");
+    if (ipmi_event_state_get_scanning_enabled(events))
+	len += strlen("scanning ");
+    if (ipmi_event_state_get_busy(events))
+	len += strlen("busy ");
+
+    for (offset=0; offset<15; offset++) {
+	for (dir = IPMI_ASSERTION;
+	     dir <= IPMI_DEASSERTION;
+	     dir++)
+	{
+	    if (ipmi_is_discrete_event_set(events, offset, dir))
+		    len += 4;
+	}
+    }
+
+    str = malloc(len+1);
+    
+    if (ipmi_event_state_get_events_enabled(events))
+	strcat("events ", str);
+    if (ipmi_event_state_get_scanning_enabled(events))
+	strcat("scanning ", str);
+    if (ipmi_event_state_get_busy(events))
+	strcat("busy ", str);
+    s = str + strlen(str);
+
+    for (offset=0; offset<15; offset++) {
+	for (dir = IPMI_ASSERTION;
+	     dir <= IPMI_DEASSERTION;
+	     dir++)
+	{
+	    if (! ipmi_is_discrete_event_set(events, offset, dir))
+		continue;
+
+	    s = discrete_event_str(s, offset, dir);
+	    *s = ' ';
+	    s++;
+	}
+    }
+
+    len = strlen(str);
+    if (len > 0)
+	str[len-1] = '\0'; /* Remove the final space */
+
+    return str;
+}
+
+static int
+str_to_discrete_event_state(char               *str,
+			    ipmi_event_state_t **events)
+{
+    int                   offset;
+    enum ipmi_event_dir_e dir;
+    ipmi_event_state_t    *e;
+    int                   start, next;
+    int                   rv;
+
+    e = malloc(ipmi_event_state_size());
+    ipmi_event_state_init(e);
+
+    start = 0;
+    rv = next_parm(str, &start, &next);
+    while (!rv) {
+	char *s = str+start;
+	int  len = next - start;
+	if (strncasecmp(s, "events", len) == 0)
+	    ipmi_event_state_set_events_enabled(e, 1);
+	else if (strncasecmp(s, "scanning", len) == 0)
+	    ipmi_event_state_set_scanning_enabled(e, 1);
+	else if (strncasecmp(s, "busy", len) == 0)
+	    ipmi_event_state_set_busy(e, 1);
+	else if ((len < 2) || (len > 3))
+	    goto out_err;
+	else {
+	    offset = strtoul(s, &s, 0);
+	    if (offset >= 15)
+		goto out_err;
+	    if (*s == 'a')
+		dir = IPMI_ASSERTION;
+	    else if (*s == 'd')
+		dir = IPMI_DEASSERTION;
+	    else
+		goto out_err;
+	    ipmi_discrete_event_set(e, offset, dir);
+	}
+	start = next;
+	rv = next_parm(str, &start, &next);
+    }
+
+    *events = e;
+    return 0;
+
+ out_err:
+    free(e);
+    return EINVAL;
+}
+
+static char *
+threshold_states_to_str(ipmi_states_t *states)
+{
+    int                len = 0;
+    char               *str;
+    enum ipmi_thresh_e thresh;
+    char               *s;
+
+    if (ipmi_is_event_messages_enabled(states))
+	len += strlen("events ");
+    if (ipmi_is_sensor_scanning_enabled(states))
+	len += strlen("scanning ");
+    if (ipmi_is_initial_update_in_progress(states))
+	len += strlen("busy ");
+
+    for (thresh = IPMI_LOWER_NON_CRITICAL;
+	 thresh <= IPMI_UPPER_NON_RECOVERABLE; 
+	 thresh++)
+    {
+	if (ipmi_is_threshold_out_of_range(states, thresh))
+	    len += 3;
+    }
+
+    str = malloc(len+1);
+    
+    if (ipmi_is_event_messages_enabled(states))
+	strcat("events ", str);
+    if (ipmi_is_sensor_scanning_enabled(states))
+	strcat("scanning ", str);
+    if (ipmi_is_initial_update_in_progress(states))
+	strcat("busy ", str);
+    s = str + strlen(str);
+
+    for (thresh = IPMI_LOWER_NON_CRITICAL;
+	 thresh <= IPMI_UPPER_NON_RECOVERABLE; 
+	 thresh++)
+    {
+	if (!ipmi_is_threshold_out_of_range(states, thresh))
+	    continue;
+
+	s = threshold_str(s, thresh);
+	*s = ' ';
+	s++;
+    }
+
+    len = strlen(str);
+    if (len > 0)
+	str[len-1] = '\0'; /* Remove the final space */
+
+    return str;
+}
+
+static char *
+discrete_states_to_str(ipmi_states_t *states)
+{
+    int  len = 0;
+    char *str;
+    int  offset;
+    char *s;
+
+    if (ipmi_is_event_messages_enabled(states))
+	len += strlen("events ");
+    if (ipmi_is_sensor_scanning_enabled(states))
+	len += strlen("scanning ");
+    if (ipmi_is_initial_update_in_progress(states))
+	len += strlen("busy ");
+
+    for (offset=0; offset<15; offset++) {
+	if (ipmi_is_state_set(states, offset))
+	    len += 3;
+    }
+
+    str = malloc(len+1);
+    
+    if (ipmi_is_event_messages_enabled(states))
+	strcat("events ", str);
+    if (ipmi_is_sensor_scanning_enabled(states))
+	strcat("scanning ", str);
+    if (ipmi_is_initial_update_in_progress(states))
+	strcat("busy ", str);
+    s = str + strlen(str);
+
+    for (offset=0; offset<15; offset++) {
+	if (! ipmi_is_state_set(states, offset))
+	    continue;
+
+	s += sprintf(s, "%d", offset);
+	*s = ' ';
+	s++;
+    }
+
+    len = strlen(str);
+    if (len > 0)
+	str[len-1] = '\0'; /* Remove the final space */
+
+    return str;
+}
+
+static char *
+thresholds_to_str(ipmi_thresholds_t *t)
+{
+    int                len = 0;
+    char               *str;
+    enum ipmi_thresh_e thresh;
+    char               dummy[3];
+    char               *s;
+    double             val;
+
+    for (thresh = IPMI_LOWER_NON_CRITICAL;
+	 thresh <= IPMI_UPPER_NON_RECOVERABLE; 
+	 thresh++)
+    {
+	if (ipmi_threshold_get(t, thresh, &val) == 0)
+	    len += snprintf(dummy, 1, "aa %f:", val);
+    }
+
+    str = malloc(len+1);
+    s = str;
+    
+    len = 0;
+    for (thresh = IPMI_LOWER_NON_CRITICAL;
+	 thresh <= IPMI_UPPER_NON_RECOVERABLE; 
+	 thresh++)
+    {
+	if (ipmi_threshold_get(t, thresh, &val) != 0)
+	    continue;
+
+	threshold_str(dummy, thresh);
+
+	s += sprintf(s, "%s %f:", dummy, val);
+	*s = ' ';
+	s++;
+    }
+
+    len = strlen(str);
+    if (len > 0)
+	str[len-1] = '\0'; /* Remove the final : */
+
+    return str;
+}
+
+static int
+str_to_thresholds(char              *str,
+		  ipmi_thresholds_t **thresholds)
+{
+    enum ipmi_thresh_e thresh;
+    ipmi_thresholds_t  *t;
+    int                start, next;
+    int                rv;
+    double             val;
+
+    t = malloc(ipmi_thresholds_size());
+    ipmi_thresholds_init(t);
+
+    start = 0;
+    rv = next_colon_parm(str, &start, &next);
+    while (!rv) {
+	char *s = str+start;
+	char *endstr;
+	int  len = next - start;
+	if (len < 4)
+	    goto out_err;
+
+	if (strncasecmp(s, "un ", 3) == 0)
+	    thresh = IPMI_UPPER_NON_CRITICAL;
+	else if (strncasecmp(s, "uc ", 3) == 0)
+	    thresh = IPMI_UPPER_CRITICAL;
+	else if (strncasecmp(s, "ur ", 3) == 0)
+	    thresh = IPMI_UPPER_NON_RECOVERABLE;
+	else if (strncasecmp(s, "ln ", 3) == 0)
+	    thresh = IPMI_LOWER_NON_CRITICAL;
+	else if (strncasecmp(s, "lc ", 3) == 0)
+	    thresh = IPMI_LOWER_CRITICAL;
+	else if (strncasecmp(s, "lr ", 3) == 0)
+	    thresh = IPMI_LOWER_NON_RECOVERABLE;
+	else
+	    goto out_err;
+	    
+	val = strtod(s+3, &endstr);
+	if (*endstr != ':')
+	    goto out_err;
+
+	start = next;
+	rv = next_parm(str, &start, &next);
+    }
+
+    *thresholds = t;
+    return 0;
+
+ out_err:
+    free(t);
+    return EINVAL;
+}
+
+static int
+sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
+			       enum ipmi_event_dir_e       dir,
+			       enum ipmi_thresh_e          threshold,
+			       enum ipmi_event_value_dir_e high_low,
+			       enum ipmi_value_present_e   value_present,
+			       unsigned int                raw_value,
+			       double                      value,
+			       void                        *cb_data,
+			       ipmi_event_t                *event)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+    char        eventstr[5];
+    int         raw_set = 0;
+    int         value_set = 0;
+    swig_ref    event_ref;
+
+    if (value_present == IPMI_RAW_VALUE_PRESENT)
+	raw_set = 1;
+    if (value_present == IPMI_BOTH_VALUES_PRESENT) {
+	raw_set = 1;
+	value_set = 1;
+    }
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    threshold_event_str(eventstr, threshold, high_low, dir);
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
+				       "OpenIPMI::ipmi_event_t");
+    swig_call_cb(cb, "threshold_event_cb", "%p%s%d%d%d%f%p", &sensor_ref,
+		 eventstr, raw_set, raw_value, value_set, value, &event_ref);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref(event_ref);
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
+static int
+sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
+			      enum ipmi_event_dir_e dir,
+			      int                   offset,
+			      int                   severity,
+			      int                   prev_severity,
+			      void                  *cb_data,
+			      ipmi_event_t          *event)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+    char        eventstr[5];
+    swig_ref    event_ref;
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    discrete_event_str(eventstr, offset, dir);
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
+				       "OpenIPMI::ipmi_event_t");
+    swig_call_cb(cb, "threshold_event_cb", "%p%s%d%d%p", &sensor_ref,
+		 eventstr, severity, prev_severity, &event_ref);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref(event_ref);
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
+/* A generic callback for a lot of things. */
+static void
+sensor_event_enable_handler(ipmi_sensor_t *sensor,
+			    int           err,
+			    void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "sensor_event_enable_cb", "%p%d", &sensor_ref, err);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+}
+
+static void
+sensor_get_event_enables_handler(ipmi_sensor_t      *sensor,
+				 int                err,
+				 ipmi_event_state_t *states,
+				 void               *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+    char        *st;
+
+    if (ipmi_sensor_get_event_reading_type(sensor)
+	== IPMI_EVENT_READING_TYPE_THRESHOLD)
+    {
+	st = threshold_event_state_to_str(states);
+    } else {
+	st = discrete_event_state_to_str(states);
+    }
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "sensor_get_event_enable_cb", "%p%d%s",
+		 &sensor_ref, err, st);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    free(st);
+}
+
+static void
+sensor_rearm_handler(ipmi_sensor_t      *sensor,
+		     int                err,
+		     void               *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "sensor_rearm_cb", "%p%d", &sensor_ref, err);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+}
+
+static void
+sensor_get_hysteresis_handler(ipmi_sensor_t *sensor,
+			      int           err,
+			      unsigned int  positive_hysteresis,
+			      unsigned int  negative_hysteresis,
+			      void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "sensor_get_hysteresis_cb", "%p%d%d%d", &sensor_ref, err,
+		 positive_hysteresis, negative_hysteresis);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+}
+
+static void
+sensor_set_hysteresis_handler(ipmi_sensor_t      *sensor,
+			      int                err,
+			      void               *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "sensor_set_hysteresis_cb", "%p%d", &sensor_ref, err);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+}
+
+static void
+sensor_set_thresholds_handler(ipmi_sensor_t      *sensor,
+			      int                err,
+			      void               *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "sensor_set_thresholds_cb", "%p%d", &sensor_ref, err);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+}
+
+static void sensor_get_thresholds_handler(ipmi_sensor_t     *sensor,
+					  int               err,
+					  ipmi_thresholds_t *th,
+					  void              *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+    char        *thstr = thresholds_to_str(th);
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "sensor_get_thresholds_cb", "%p%d%s", &sensor_ref, err,
+		 thstr);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    free(thstr);
+}
+
+static void
+sensor_get_reading_handler(ipmi_sensor_t             *sensor,
+			   int                       err,
+			   enum ipmi_value_present_e value_present,
+			   unsigned int              raw_value,
+			   double                    value,
+			   ipmi_states_t             *states,
+			   void                      *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+    int         raw_set = 0;
+    int         value_set = 0;
+    char        *statestr;
+
+    if (value_present == IPMI_RAW_VALUE_PRESENT)
+	raw_set = 1;
+    if (value_present == IPMI_BOTH_VALUES_PRESENT) {
+	raw_set = 1;
+	value_set = 1;
+    }
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    statestr = threshold_states_to_str(states);
+    swig_call_cb(cb, "threshold_reading_cb", "%p%d%d%d%f%s", &sensor_ref,
+		 raw_set, raw_value, value_set, value, statestr);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    free(statestr);
+}
+
+static void
+sensor_get_states_handler(ipmi_sensor_t *sensor,
+			  int           err,
+			  ipmi_states_t *states,
+			  void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    sensor_ref;
+    char        *statestr;
+
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    statestr = discrete_states_to_str(states);
+    swig_call_cb(cb, "discrete_states_cb", "%p%d%s", &sensor_ref,
+		 err, statestr);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    free(statestr);
 }
 
 static void
@@ -1286,7 +2128,7 @@ void set_log_handler(swig_cb handler = NULL);
 
 	if (valid_swig_cb(handler)) {
 	    domain_cb = ipmb_mc_scan_handler;
-	    handler_val = get_swig_cb(handler);
+	    handler_val = ref_swig_cb(handler);
 	}
 	rv = ipmi_start_ipmb_mc_scan(self, channel, start_addr, end_addr,
 				     domain_cb, handler_val);
@@ -1329,7 +2171,7 @@ void set_log_handler(swig_cb handler = NULL);
 
 	if (valid_swig_cb(handler)) {
 	    msg_cb = domain_msg_cb;
-	    handler_val = get_swig_cb(handler);
+	    handler_val = ref_swig_cb(handler);
 	}
 	rv = ipmi_send_command_addr(self, &iaddr, addr_len, &msg,
 				    msg_cb, handler_val, NULL);
@@ -1404,7 +2246,8 @@ void set_log_handler(swig_cb handler = NULL);
 
     %newobject ipmi_domain_first_event;
     /*
-     * Retrieve the first event from the domain.
+     * Retrieve the first event from the domain.  Return NULL (undef)
+     * if the event does not exist.
      */
     ipmi_event_t *ipmi_domain_first_event()
     {
@@ -1481,7 +2324,7 @@ void set_log_handler(swig_cb handler = NULL);
 
 	if (valid_swig_cb(handler)) {
 	    domain_cb = domain_reread_sels_handler;
-	    handler_val = get_swig_cb(handler);
+	    handler_val = ref_swig_cb(handler);
 	}
 	rv = ipmi_domain_reread_sels(self, domain_cb, handler_val);
 	if (rv && handler_val)
@@ -2093,7 +2936,7 @@ void set_log_handler(swig_cb handler = NULL);
      * entity_hot_swap_time_cb handler will be called with the
      * following parameters: <self> <entity> <err> <time>
      */
-    int get_auto_activate_time(swig_cb handler = NULL)
+    int get_auto_activate_time(swig_cb handler)
     {
 	swig_cb_val handler_val;
 	int         rv;
@@ -2101,7 +2944,7 @@ void set_log_handler(swig_cb handler = NULL);
 	if (! valid_swig_cb(handler))
 	    return EINVAL;
 
-	handler_val = get_swig_cb(handler);
+	handler_val = ref_swig_cb(handler);
 	rv = ipmi_entity_get_auto_activate_time
 	    (self,
 	     entity_get_hot_swap_time_handler,
@@ -2119,19 +2962,17 @@ void set_log_handler(swig_cb handler = NULL);
     int set_auto_activate_time(ipmi_timeout_t auto_act,
 			       swig_cb        handler = NULL)
     {
-	swig_cb_val handler_val;
-	int         rv;
+	swig_cb_val    handler_val = NULL;
+	ipmi_entity_cb done = NULL;
+	int            rv;
 
-	if (! valid_swig_cb(handler))
-	    return EINVAL;
-
-	handler_val = get_swig_cb(handler);
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = entity_set_hot_swap_time_handler;
+	}
 	rv = ipmi_entity_set_auto_activate_time
-	    (self,
-	     auto_act,
-	     entity_set_hot_swap_time_handler,
-	     handler_val);
-	if (rv)
+	    (self, auto_act, done, handler_val);
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
 	return rv;
     }
@@ -2141,7 +2982,7 @@ void set_log_handler(swig_cb handler = NULL);
      * entity_hot_swap_time_cb handler will be called with the
      * following parameters: <self> <entity> <err> <time>
      */
-    int get_auto_deactivate_time(swig_cb handler = NULL)
+    int get_auto_deactivate_time(swig_cb handler)
     {
 	swig_cb_val handler_val;
 	int         rv;
@@ -2149,7 +2990,7 @@ void set_log_handler(swig_cb handler = NULL);
 	if (! valid_swig_cb(handler))
 	    return EINVAL;
 
-	handler_val = get_swig_cb(handler);
+	handler_val = ref_swig_cb(handler);
 	rv = ipmi_entity_get_auto_deactivate_time
 	    (self,
 	     entity_get_hot_swap_time_handler,
@@ -2167,19 +3008,17 @@ void set_log_handler(swig_cb handler = NULL);
     int set_auto_deactivate_time(ipmi_timeout_t auto_act,
 				 swig_cb        handler = NULL)
     {
-	swig_cb_val handler_val;
-	int         rv;
+	swig_cb_val    handler_val = NULL;
+	ipmi_entity_cb done = NULL;
+	int            rv;
 
-	if (! valid_swig_cb(handler))
-	    return EINVAL;
-
-	handler_val = get_swig_cb(handler);
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = entity_set_hot_swap_time_handler;
+	}
 	rv = ipmi_entity_set_auto_deactivate_time
-	    (self,
-	     auto_act,
-	     entity_set_hot_swap_time_handler,
-	     handler_val);
-	if (rv)
+	    (self, auto_act, done, handler_val);
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
 	return rv;
     }
@@ -2194,17 +3033,16 @@ void set_log_handler(swig_cb handler = NULL);
      */
     int set_activation_requested(swig_cb handler = NULL)
     {
-	swig_cb_val handler_val;
-	int         rv;
+	swig_cb_val    handler_val = NULL;
+	ipmi_entity_cb done = NULL;
+	int            rv;
 
-	if (! valid_swig_cb(handler))
-	    return EINVAL;
-
-	handler_val = get_swig_cb(handler);
-	rv = ipmi_entity_set_activation_requested(self,
-						  entity_activate_handler,
-						  handler_val);
-	if (rv)
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = entity_activate_handler;
+	}
+	rv = ipmi_entity_set_activation_requested(self, done, handler_val);
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
 	return rv;
     }
@@ -2219,17 +3057,16 @@ void set_log_handler(swig_cb handler = NULL);
      */
     int activate(swig_cb handler = NULL)
     {
-	swig_cb_val handler_val;
-	int         rv;
+	swig_cb_val    handler_val = NULL;
+	ipmi_entity_cb done = NULL;
+	int            rv;
 
-	if (! valid_swig_cb(handler))
-	    return EINVAL;
-
-	handler_val = get_swig_cb(handler);
-	rv = ipmi_entity_activate(self,
-				  entity_activate_handler,
-				  handler_val);
-	if (rv)
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = entity_activate_handler;
+	}
+	rv = ipmi_entity_activate(self, done, handler_val);
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
 	return rv;
     }
@@ -2242,17 +3079,16 @@ void set_log_handler(swig_cb handler = NULL);
      */
     int deactivate(swig_cb handler = NULL)
     {
-	swig_cb_val handler_val;
+	swig_cb_val    handler_val = NULL;
+	ipmi_entity_cb done = NULL;
 	int         rv;
 
-	if (! valid_swig_cb(handler))
-	    return EINVAL;
-
-	handler_val = get_swig_cb(handler);
-	rv = ipmi_entity_deactivate(self,
-				    entity_activate_handler,
-				    handler_val);
-	if (rv)
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = entity_activate_handler;
+	}
+	rv = ipmi_entity_deactivate(self, done, handler_val);
+	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
 	return rv;
     }
@@ -2325,6 +3161,546 @@ void set_log_handler(swig_cb handler = NULL);
 	    *rv = ipmi_mc_convert_to_id(self);
 	return rv;
     }
+
+    /*
+     * Return the domain the MC is in.
+     */
+    ipmi_domain_t *get_domain()
+    {
+	return ipmi_mc_get_domain(self);
+    }
+
+    /*
+     * Get the provides_device_sdrs from the get device id response
+     * from the MC.
+     */
+    int provides_device_sdrs()
+    {
+	return ipmi_mc_provides_device_sdrs(self);
+    }
+
+    /*
+     * Get the device_available bit from the get device id response
+     * from the MC.
+     */
+    int device_available()
+    {
+	return ipmi_mc_device_available(self);
+    }
+
+    /*
+     * Get the chassis_support bit from the get device id response
+     * from the MC.
+     */
+    int chassis_support()
+    {
+	return ipmi_mc_chassis_support(self);
+    }
+
+    /*
+     * Get the bridge_support bit from the get device id response
+     * from the MC.
+     */
+    int bridge_support()
+    {
+	return ipmi_mc_bridge_support(self);
+    }
+
+    /*
+     * Get the ipmb_event_generator_support bit from the get device id response
+     * from the MC.
+     */
+    int ipmb_event_generator_support()
+    {
+	return ipmi_mc_ipmb_event_generator_support(self);
+    }
+
+    /*
+     * Get the ipmb_event_receiver_support bit from the get device id response
+     * from the MC.
+     */
+    int ipmb_event_receiver_support()
+    {
+	return ipmi_mc_ipmb_event_receiver_support(self);
+    }
+
+    /*
+     * Get the fru_inventory_support bit from the get device id response
+     * from the MC.
+     */
+    int fru_inventory_support()
+    {
+	return ipmi_mc_fru_inventory_support(self);
+    }
+
+    /*
+     * Get the sel_device_support bit from the get device id response
+     * from the MC.
+     */
+    int sel_device_support()
+    {
+	return ipmi_mc_sel_device_support(self);
+    }
+
+    /*
+     * Get the sdr_repository_support bit from the get device id response
+     * from the MC.
+     */
+    int sdr_repository_support()
+    {
+	return ipmi_mc_sdr_repository_support(self);
+    }
+
+    /*
+     * Get the sensor_device_support bit from the get device id response
+     * from the MC.
+     */
+    int sensor_device_support()
+    {
+	return ipmi_mc_sensor_device_support(self);
+    }
+
+    /*
+     * Get the device_id from the get device id response
+     * from the MC.
+     */
+    int device_id()
+    {
+	return ipmi_mc_device_id(self);
+    }
+
+    /*
+     * Get the device_revision from the get device id response
+     * from the MC.
+     */
+    int device_revision()
+    {
+	return ipmi_mc_device_revision(self);
+    }
+
+    /*
+     * Get the major_fw_revision from the get device id response
+     * from the MC.
+     */
+    int major_fw_revision()
+    {
+	return ipmi_mc_major_fw_revision(self);
+    }
+
+    /*
+     * Get the minor_fw_revision from the get device id response
+     * from the MC.
+     */
+    int minor_fw_revision()
+    {
+	return ipmi_mc_minor_fw_revision(self);
+    }
+
+    /*
+     * Get the major_version from the get device id response
+     * from the MC.
+     */
+    int major_version()
+    {
+	return ipmi_mc_major_version(self);
+    }
+
+    /*
+     * Get the minor_version from the get device id response
+     * from the MC.
+     */
+    int minor_version()
+    {
+	return ipmi_mc_minor_version(self);
+    }
+
+    /*
+     * Get the manufacturer_id from the get device id response
+     * from the MC.
+     */
+    int manufacturer_id()
+    {
+	return ipmi_mc_manufacturer_id(self);
+    }
+
+    /*
+     * Get the product_id from the get device id response
+     * from the MC.
+     */
+    int product_id()
+    {
+	return ipmi_mc_product_id(self);
+    }
+
+    /*
+     * Get the auxiliary firmware revision.  This returns a string
+     * with four bytes set.
+     */
+    %newobject aux_fw_revision;
+    char *aux_fw_revision()
+    {
+	char *str;
+	unsigned char data[4];
+
+	str = malloc(28);
+	ipmi_mc_aux_fw_revision(self, data);
+	snprintf(str, 28,
+		 "0x%2.2x 0x%2.2x 0x%2.2x 0x%2.2x",
+		 data[0], data[1], data[2], data[3]);
+	return str;
+    }
+
+    /*
+     * Check to see if the MC is operational in the system.  If this
+     * is return sfalse, then the MC was referred to by an SDR, but it
+     * doesn't really exist (at least not yet).
+     */
+    int is_active()
+    {
+	return ipmi_mc_is_active(self);
+    }
+
+    /*
+     * Add a handler to be called when an mc's active state
+     * changes. When the active state changes the mc_active_cb
+     * method on the first parameter will be called with the following
+     * parameters: <self> <mc> <active (boolean integer)>.
+     */
+    int add_active_handler(swig_cb handler)
+    {
+	cb_add(mc, active);
+    }
+
+    /*
+     * Remove the presence handler.
+     */
+    int remove_active_handler(swig_cb handler)
+    {
+	cb_rm(mc, active);
+    }
+
+    /*
+     * Send a command to a given MC with the given lun
+     * (parm 1), netfn (parm 2), command (parm 3).  Parm 4 is the
+     * message data in an array reference.  Parm 5 is the handler, it
+     * will be called with the response.  The mc_cmd_cb method will
+     * be called on the handler handler; its parameters are:
+     * <mc> <netfn> <cmd> <response data>
+     */
+    int ipmi_mc_send_command(int       lun,
+			     int       netfn,
+			     int       cmd,
+			     intarray  msg_data,
+			     swig_cb   handler = NULL)
+    {
+	int                        rv;
+	swig_cb_val                handler_val = NULL;
+	ipmi_mc_response_handler_t msg_cb = NULL;
+	ipmi_msg_t                 msg;
+	unsigned char              data[MAX_IPMI_DATA_SIZE];
+	unsigned int               data_len;
+
+	msg.netfn = netfn;
+	msg.cmd = cmd;
+	msg.data = data;
+	rv = parse_ipmi_data(msg_data, data, sizeof(data), &data_len);
+	msg.data_len = data_len;
+	if (rv)
+	    return rv;
+
+	if (valid_swig_cb(handler)) {
+	    msg_cb = mc_msg_cb;
+	    handler_val = ref_swig_cb(handler);
+	}
+	rv = ipmi_mc_send_command(self, lun, &msg, msg_cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+#define IPMI_MC_RESET_COLD 1
+#define IPMI_MC_RESET_WARM 2
+    /*
+     * Reset the MC, either a cold or warm reset depending on the
+     * first parm.  Note that the effects of a reset are not defined
+     * by IPMI, so this might do wierd things.  Some systems do not
+     * support resetting the MC.  This is not a standard control
+     * because there is no entity to hang if from and you don't want
+     * people messing with it unless they really know what they are
+     * doing.  When the reset is complete the mc_reset_cb will
+     * be called on the second parameter of this call with the
+     * following parameters: <self> <mc> <err>
+     */
+    int reset(int     reset_type,
+	      swig_cb handler = NULL)
+    {
+	swig_cb_val     handler_val = NULL;
+	ipmi_mc_done_cb done = NULL;
+	int             rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = mc_reset_handler;
+	}
+	rv = ipmi_mc_reset(self, reset_type, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /* Get the setting to enable events for the entire MC.  The value
+       returned by the get function is a boolean telling whether
+       events are enabled. */
+    int get_events_enable()
+    {
+	return ipmi_mc_get_events_enable(self);
+    }
+
+    /*
+     * Set the setting to enable events for the entire MC.  The "val"
+     * passed in as the first parameter is a boolean telling whether
+     * to turn events on (true) or off (false).  When the operation
+     * completes the mc_events_enable_cb will be called on the handler
+     * with the following parameters: <self> <mc> <err>.
+     */
+    int set_events_enable(int     val,
+			  swig_cb handler = NULL)
+    {
+	swig_cb_val     handler_val = NULL;
+	ipmi_mc_done_cb done = NULL;
+	int             rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = mc_events_enable_handler;
+	}
+	rv = ipmi_mc_set_events_enable(self, val, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+
+    /*
+     * Reread all the sensors for a given mc.  This will request the
+     * device SDRs for that mc (And only for that MC) and change the
+     * sensors as necessary. */
+    int reread_sensors(swig_cb handler = NULL)
+    {
+	swig_cb_val     handler_val = NULL;
+	ipmi_mc_done_cb done = NULL;
+	int             rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = mc_reread_sensors_handler;
+	}
+	rv = ipmi_mc_reread_sensors(self, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set the time between SEL rescans for the MC (and only that MC).
+     * Parm 1 is the time in seconds.
+     */
+    void ipmi_mc_set_sel_rescan_time(unsigned int seconds)
+    {
+	ipmi_mc_set_sel_rescan_time(self, seconds);
+    }
+
+    /*
+     * Return the current SEL rescan time for the MC.
+     */
+    int get_sel_rescan_time()
+    {
+	return ipmi_mc_get_sel_rescan_time(self);
+    }
+
+    /* Reread the sel for the MC.  When the hander is called, all the
+     * events in the SEL have been fetched into the local copy of the SEL
+     * (with the obvious caveat that this is a distributed system and
+     * other things may have come in after the read has finised).
+     * When this completes, the mc_reread_sel_cb method will be called
+     * on the handler (parm 1) with the parameters: <self> <mc> <err>. */
+    int reread_sel(swig_cb handler = NULL)
+    {
+	swig_cb_val     handler_val = NULL;
+	ipmi_mc_done_cb done = NULL;
+	int             rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = mc_reread_sel_handler;
+	}
+	rv = ipmi_mc_reread_sel(self, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /* Fetch the current time from the SEL. */
+    int get_current_sel_time(swig_cb handler)
+    {
+	swig_cb_val     handler_val = NULL;
+	sel_get_time_cb done = NULL;
+	int             rv;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = mc_sel_get_time_cb;
+	}
+	rv = ipmi_mc_get_current_sel_time(self, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    %newobject first_event;
+    /*
+     * Retrieve the first event from the MC.  Return NULL (undef)
+     * if the event does not exist.
+     */
+    ipmi_event_t *first_event()
+    {
+	return ipmi_mc_first_event(self);
+    }
+
+    %newobject last_event;
+    /*
+     * Retrieve the last event from the MC.
+     */
+    ipmi_event_t *last_event()
+    {
+	return ipmi_mc_last_event(self);
+    }
+
+    %newobject next_event;
+    /*
+     * Retrieve the next event from the MC.
+     */
+    ipmi_event_t *next_event(ipmi_mc_t *mc, ipmi_event_t *event)
+    {
+	return ipmi_mc_next_event(self, event);
+    }
+
+    %newobject prev_event;
+    /*
+     * Retrieve the previous event from the MC.
+     */
+    ipmi_event_t *prev_event(ipmi_mc_t *mc, ipmi_event_t *event)
+    {
+	return ipmi_mc_prev_event(self, event);
+    }
+
+    %newobject event_by_recid;
+    /*
+     * Retrieve the event with the given record id from the MC.
+     */
+    ipmi_event_t *event_by_recid(ipmi_mc_t *mc,
+				  int      record_id)
+    {
+	return ipmi_mc_event_by_recid(self, record_id);
+    }
+
+    /*
+     * The number of live items in the local copy of the MC's SEL.
+     */
+    int sel_count()
+    {
+	return ipmi_mc_sel_count(self);
+    }
+
+    /*
+     * Number of entries in the the remote SEL.  If an entry has been
+     * deleted in the local copy of the SEL but has not yet finished
+     * being deleted in the remote copy, it will be counted here.
+     */
+    int sel_entries_used()
+    {
+	return ipmi_mc_sel_entries_used(self);
+    }
+
+    /*
+     * The major version of the MC's SEL.
+     */
+    int sel_get_major_version()
+    {
+	return ipmi_mc_sel_get_major_version(self);
+    }
+
+    /*
+     * The minor version of the MC's SEL.
+     */
+    int sel_get_minor_version()
+    {
+	return ipmi_mc_sel_get_minor_version(self);
+    }
+
+    /*
+     * The number of entries available in the MC's SEL.
+     */
+    int sel_get_num_entries()
+    {
+	return ipmi_mc_sel_get_num_entries(self);
+    }
+
+    /*
+     * The number of free bytes available in the MC's SEL.
+     */
+    int sel_get_free_bytes()
+    {
+	return ipmi_mc_sel_get_free_bytes(self);
+    }
+
+    /*
+     * Has an overflow occurred since the last SEL operation?
+     */
+    int sel_get_overflow()
+    {
+	return ipmi_mc_sel_get_overflow(self);
+    }
+
+    /*
+     * Does the SEL support individual deletes of entries?
+     */
+    int sel_get_supports_delete_sel()
+    {
+	return ipmi_mc_sel_get_supports_delete_sel(self);
+    }
+
+    /*
+     * Does the SEL support partial adds of entries?
+     */
+    int sel_get_supports_partial_add_sel()
+    {
+	return ipmi_mc_sel_get_supports_partial_add_sel(self);
+    }
+
+    /*
+     * Does the SEL support the reserve protocol?
+     */
+    int sel_get_supports_reserve_sel()
+    {
+	return ipmi_mc_sel_get_supports_reserve_sel(self);
+    }
+
+    /*
+     * Does the SEL support getting the SEL allocastion?
+     */
+    int sel_get_supports_get_sel_allocation()
+    {
+	return ipmi_mc_sel_get_supports_get_sel_allocation(self);
+    }
+
+    /*
+     * The timestamp of the last time something was added to the SEL.
+     */
+    int sel_get_last_addition_timestamp()
+    {
+	return ipmi_mc_sel_get_last_addition_timestamp(self);
+    }
 }
 
 /*
@@ -2358,7 +3734,24 @@ void set_log_handler(swig_cb handler = NULL);
 }
 
 /*
- * An sensor object
+ * An sensor object.  Sensor operations take several different types
+ * of objects.  These are mostly strings that are a list of values.
+ *
+ * Event states are represented as a string with value separated by
+ * spaces.  These value are settings and the events.  The strings
+ * "events", "scanning", and "busy" are settings for the full sensor
+ * event states.  For threshold sensor, the other values in the string
+ * are 4 characters with: 1st character: u for upper or l for lower.
+ * 2nd character: n for non-critical, c for critical, and r for
+ * non-recoverable.  3rd character: h for going high and l for going
+ * low.  4th character: a for assertion and d for deassertion.  For
+ * discrete sensors, the other values are a 1 or 2-digit number
+ * representing the offset and then a for assertion and d for
+ * deassertion.
+ *
+ * A states structure is similar to event status, but does not have
+ * the last two characters (direction and assertion) for thresholds
+ * and last chararacter (assertion) for discrete values.
  */
 %extend ipmi_sensor_t {
     %newobject get_name;
@@ -2384,6 +3777,536 @@ void set_log_handler(swig_cb handler = NULL);
 	    *rv = ipmi_sensor_convert_to_id(self);
 	return rv;
     }
+
+    /*
+     * Register a handler to be called when an event comes from the
+     * sensor.  If the sensor is a threshold sensor, the
+     * threshold_event_cb method will be called on the sensor.
+     * Otherwise, the sensor is discrete and the discrete_event_cb
+     * will be called.  The threshold_event_cb method takes the
+     * following parameters:
+     * <self> <sensor> <event> <raw_set> <raw> <value_set> <value> <event>
+     * The discrete_event_cb method takes the following parameters:
+     * <self> <sensor> <event> <severity> <old_severity> <event>
+     */
+    int add_event_handler(swig_cb handler)
+    {
+	if (ipmi_sensor_get_event_reading_type(self)
+	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	{
+	    cb_add(sensor, threshold_event);
+	} else {
+	    cb_add(sensor, discrete_event);
+	}
+    }
+
+    /*
+     * Remove the event handler from the sensor
+     */
+    int remove_event_handler(swig_cb handler)
+    {
+	if (ipmi_sensor_get_event_reading_type(self)
+	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	{
+	    cb_rm(sensor, threshold_event);
+	} else {
+	    cb_rm(sensor, discrete_event);
+	}
+    }
+
+    /* Set the event enables for the given sensor to exactly the event
+     * states given in the first parameter.  This will first enable
+     * the events/thresholds that are set, then disable the
+     * events/thresholds that are not set.  When the operation is
+     * done, the sensor_event_enable_cb method on the second parm will
+     * be called with the following parameters: <self> <sensor> <err>
+     */
+    int set_event_enables(char *states, swig_cb handler = NULL)
+    {
+	int                 rv;
+	swig_cb_val         handler_val = NULL;
+	ipmi_sensor_done_cb sensor_cb = NULL;
+	ipmi_event_state_t  *st;
+
+	if (ipmi_sensor_get_event_reading_type(self)
+	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	{
+	    rv = str_to_threshold_event_state(states, &st);
+	} else {
+	    rv = str_to_discrete_event_state(states, &st);
+	}
+	if (rv)
+	    return rv;
+	if (valid_swig_cb(handler)) {
+	    sensor_cb = sensor_event_enable_handler;
+	    handler_val = ref_swig_cb(handler);
+	}
+	rv = ipmi_sensor_set_event_enables(self, st, sensor_cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	free(st);
+	return rv;
+    }
+
+    /* Enable the event states that are set in the first parameter.  This
+     * will *only* enable those states, it will not disable any
+     * states.  It will, however, set the "events" flag and the
+     * "scanning" flag for the sensor to the value in the states
+     * parameter.  When the operation is done, the
+     * sensor_event_enable_cb method on the second parm will be called
+     * with the following parameters: <self> <sensor> <err>
+     */
+    int enable_events(char *states, swig_cb handler = NULL)
+    {
+	int                 rv;
+	swig_cb_val         handler_val = NULL;
+	ipmi_sensor_done_cb sensor_cb = NULL;
+	ipmi_event_state_t  *st;
+
+	if (ipmi_sensor_get_event_reading_type(self)
+	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	{
+	    rv = str_to_threshold_event_state(states, &st);
+	} else {
+	    rv = str_to_discrete_event_state(states, &st);
+	}
+	if (rv)
+	    return rv;
+	if (valid_swig_cb(handler)) {
+	    sensor_cb = sensor_event_enable_handler;
+	    handler_val = ref_swig_cb(handler);
+	}
+	rv = ipmi_sensor_enable_events(self, st, sensor_cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	free(st);
+	return rv;
+    }
+
+    /* Disable the event states that are set in the first parameter.
+     * This will *only* disable those states, it will not enable any
+     * states.  It will, however, set the "events" flag and the
+     * "scanning" flag for the sensor to the value in the states
+     * parameter.  When the operation is done, the
+     * sensor_event_enable_cb method on the second parm will be called
+     * with the following parameters: <self> <sensor> <err>
+     */
+    int disable_events(char *states, swig_cb handler = NULL)
+    {
+	int                 rv;
+	swig_cb_val         handler_val = NULL;
+	ipmi_sensor_done_cb sensor_cb = NULL;
+	ipmi_event_state_t  *st;
+
+	if (ipmi_sensor_get_event_reading_type(self)
+	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	{
+	    rv = str_to_threshold_event_state(states, &st);
+	} else {
+	    rv = str_to_discrete_event_state(states, &st);
+	}
+	if (rv)
+	    return rv;
+	if (valid_swig_cb(handler)) {
+	    sensor_cb = sensor_event_enable_handler;
+	    handler_val = ref_swig_cb(handler);
+	}
+	rv = ipmi_sensor_disable_events(self, st, sensor_cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	free(st);
+	return rv;
+    }
+
+    /* Get the event enables for the given sensor.  When done, the
+     * sensor_get_event_enable_cb method on the first parameter will
+     * be called with the following parameters: <self> <sensor> <err>
+     * <event states> */
+    int get_event_enables(swig_cb handler)
+    {
+	int                          rv;
+	swig_cb_val                  handler_val = NULL;
+	ipmi_sensor_event_enables_cb sensor_cb = NULL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+
+	sensor_cb = sensor_get_event_enables_handler;
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_sensor_get_event_enables(self, sensor_cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Rearm the current sensor.  This will cause the sensor to resend
+     * it's current event state if it is out of range.  If
+     * get_supports_auto_rearm() returns false and you receive an
+     * event, you have to rearm a sensor manually to get another event
+     * from it.  If global_enable (parm 1) is set, all events are
+     * enabled and the state is ignored (and may be NULL).  Otherwise,
+     * the events set in the event state (parm 2) are enabled.  When
+     * the operation is complete, the sensor_rearm_cb method of the
+     * third parameter will be called with the following parameters:
+     * <self> <sensor> <err>
+     */
+    int rearm(int     global_enable,
+	      char    *states,
+	      swig_cb handler = NULL)
+    {
+	int                 rv;
+	swig_cb_val         handler_val = NULL;
+	ipmi_sensor_done_cb sensor_cb = NULL;
+	ipmi_event_state_t  *st = NULL;
+
+	if (!global_enable) {
+	    if (!states)
+		return EINVAL;
+	    if (ipmi_sensor_get_event_reading_type(self)
+		== IPMI_EVENT_READING_TYPE_THRESHOLD)
+	    {
+		rv = str_to_threshold_event_state(states, &st);
+	    } else {
+		rv = str_to_discrete_event_state(states, &st);
+	    }
+	    if (rv)
+		return rv;
+	}
+	if (valid_swig_cb(handler)) {
+	    sensor_cb = sensor_rearm_handler;
+	    handler_val = ref_swig_cb(handler);
+	}
+	rv = ipmi_sensor_rearm(self, global_enable, st,
+			       sensor_cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	if (st)
+	    free(st);
+	return rv;
+    }
+
+    /*
+     * Get the hysteresis values for the given sensor.  These are the
+     * raw values, there doesn't seem to be an easy way to calculate
+     * the cooked values.  The sensr_get_hysteresis_cb method on the
+     * first parameter will be called with the values.  It's
+     * parameters are: <self> <sensor> <err> <positive hysteresis>
+     * <negative hysteresis>
+     */
+    int get_hysteresis(swig_cb handler)
+    {
+	int                       rv;
+	swig_cb_val               handler_val = NULL;
+	ipmi_sensor_hysteresis_cb sensor_cb = NULL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+
+	sensor_cb = sensor_get_hysteresis_handler;
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_sensor_get_hysteresis(self, sensor_cb, handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set the hysteresis values for the given sensor.  These are the
+     * raw values, there doesn't seem to be an easy way to calculate
+     * the cooked values.  The positive hysteresis is the first
+     * parameter, the negative hystersis is the second.  When the
+     * operation completes, the sensor_set_hysteresis_cb will be
+     * called on the third parameters with the following parms:
+     * <self> <sensor> <err>
+     */
+    int set_hysteresis(unsigned int positive_hysteresis,
+		       unsigned int negative_hysteresis,
+		       swig_cb      handler)
+    {
+	int                 rv;
+	swig_cb_val         handler_val = NULL;
+	ipmi_sensor_done_cb sensor_cb = NULL;
+
+	if (valid_swig_cb(handler)) {
+	    sensor_cb = sensor_set_hysteresis_handler;
+	    handler_val = ref_swig_cb(handler);
+	}
+	rv = ipmi_sensor_set_hysteresis(self, positive_hysteresis,
+					negative_hysteresis,
+					sensor_cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    %newobject get_default_thresholds;
+    /* Return the default threshold settings for a sensor. */
+    char *get_default_thresholds()
+    {
+	ipmi_thresholds_t *th = malloc(ipmi_thresholds_size());
+	char              *str = NULL;
+	int               rv;
+
+	rv = ipmi_get_default_sensor_thresholds(self, th);
+	if (!rv) {
+	    str = thresholds_to_str(th);
+	}
+	free(th);
+	return str;
+    }
+
+    /*
+     * Set the thresholds for the given sensor to the threshold values
+     * specified in the first parameter.  When the thresholds are set,
+     * the sensor_set_thresholds_cb method on the second parm will be
+     * called with the following parameters: <self> <sensor> <err>
+     */
+    int set_thresholds(char    *thresholds,
+		       swig_cb handler)
+    {
+	ipmi_thresholds_t   *th;
+	int                 rv;
+	swig_cb_val         handler_val = NULL;
+	ipmi_sensor_done_cb sensor_cb = NULL;
+
+	rv = str_to_thresholds(thresholds, &th);
+	if (rv)
+	    return rv;
+
+	if (valid_swig_cb(handler)) {
+	    sensor_cb = sensor_set_thresholds_handler;
+	    handler_val = ref_swig_cb(handler);
+	}
+	rv = ipmi_sensor_set_thresholds(self, th, sensor_cb, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Fetch the thresholds for the given sensor.  When the thresholds
+     * are received, the sensor_get_thresholds_cb method on the second
+     * parm will be called with the following parameters: <self>
+     * <sensor> <err> <thresholds>
+     */
+    int get_thresholds(swig_cb handler)
+    {
+	int                       rv;
+	swig_cb_val               handler_val = NULL;
+	ipmi_sensor_thresholds_cb sensor_cb = NULL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+
+	sensor_cb = sensor_get_thresholds_handler;
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_sensor_get_thresholds(self, sensor_cb, handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /* Read the current value of the given sensor.  If this is a
+       discrete sensor, the discrete_states_cb method of the first
+       parameter will be called with the following parameters: <self>
+       <sensor> <err> <states>.  If this is a threshold sensor, the
+       threshold_reading_cb method of the first parameter will be
+       called with the following parameters: <self> <sensor> <err>
+       <raw_set> <raw> <value_set> <value> <states>. */
+    int get_value(swig_cb handler)
+    {
+	int                    rv;
+	swig_cb_val            handler_val = NULL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = ref_swig_cb(handler);
+	if (ipmi_sensor_get_event_reading_type(self)
+	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	{
+	    ipmi_sensor_reading_cb sensor_cb;
+
+	    sensor_cb = sensor_get_reading_handler;
+	    rv = ipmi_sensor_get_reading(self, sensor_cb, handler_val);
+	} else {
+	    ipmi_sensor_states_cb sensor_cb;
+
+	    sensor_cb = sensor_get_states_handler;
+	    rv = ipmi_sensor_get_states(self, sensor_cb, handler_val);
+	}
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /* 
+     * Return the LUN for the sensor (with respect to the MC).
+     */
+    int get_lun()
+    {
+	int lun = 0;
+	ipmi_sensor_get_num(self, &lun, NULL);
+	return lun;
+    }
+
+    /* 
+     * Return the number for the sensor (The number in the MC/LUN).
+     */
+    int get_num()
+    {
+	int num = 0;
+	ipmi_sensor_get_num(self, NULL, &num);
+	return num;
+    }
+
+#if 0
+    /* Strings for various values for a sensor.  We put them in here, and
+       they will be the correct strings even for OEM values. */
+    char *get_sensor_type_string()
+    {
+	return ipmi_sensor_get_sensor_type_string(self);
+    }
+
+    char *get_event_reading_type_string()
+    {
+	return ipmi_sensor_get_event_reading_type_string(self);
+    }
+
+    char *get_rate_unit_string()
+    {
+	return ipmi_sensor_get_rate_unit_string(self);
+    }
+
+    char *get_base_unit_string()
+    {
+	return ipmi_sensor_get_base_unit_string(self);
+    }
+
+    char *get_modifier_unit_string()
+    {
+	return ipmi_sensor_get_modifier_unit_string(self);
+    }
+
+
+/* This call is a little different from the other string calls.  For a
+   discrete sensor, you can pass the offset into this call and it will
+   return the string associated with the reading.  This way, OEM
+   sensors can supply their own strings as necessary for the various
+   offsets. */
+char *ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset);
+
+/* Get the entity the sensor is hooked to. */
+int ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_entity_instance(ipmi_sensor_t *sensor);
+ipmi_entity_t *ipmi_sensor_get_entity(ipmi_sensor_t *sensor);
+
+/* Information about a sensor from it's SDR.  These are things that
+   are specified by IPMI, see the spec for more details. */
+int ipmi_sensor_get_sensor_init_scanning(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_events(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_thresholds(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_hysteresis(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_type(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_pu_events(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_pu_scanning(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_ignore_if_no_entity(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_supports_auto_rearm(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_THRESHOLD_ACCESS_SUPPORT_xxx */
+int ipmi_sensor_get_threshold_access(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_HYSTERESIS_SUPPORT_xxx */
+int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_EVENT_SUPPORT_xxx */
+int ipmi_sensor_get_event_support(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_SENSOR_TYPE_xxx */
+int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_EVENT_READING_TYPE_xxx */
+int ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_SENSOR_DIRECTION_xxx */
+int ipmi_sensor_get_sensor_direction(ipmi_sensor_t *sensor);
+
+/* Sets "val" to if an event is supported for this particular sensor. */
+int ipmi_sensor_threshold_event_supported(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_thresh_e          event,
+    enum ipmi_event_value_dir_e value_dir,
+    enum ipmi_event_dir_e       dir,
+    int                         *val);
+
+/* Sets "val" to if a specific threshold can be set. */
+int ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
+				   enum ipmi_thresh_e threshold,
+				   int                *val);
+
+/* Sets "val" to if a specific threshold can be read. */
+int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
+				   enum ipmi_thresh_e threshold,
+				   int                *val);
+
+/* Sets "val" to if a specific threshold has its reading returned when
+   reading the value of the threshold sensor. */
+int ipmi_sensor_threshold_reading_supported(ipmi_sensor_t      *sensor,
+					    enum ipmi_thresh_e thresh,
+					    int                *val);
+
+/* Sets "val" to if the specific event can send an event */
+int ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
+					 int                   offset,
+					 enum ipmi_event_dir_e dir,
+					 int                   *val);
+
+/* Sets "val" to if the specific event can be read (is supported). */
+int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
+				 int           event,
+				 int           *val);
+
+/* Returns IPMI_RATE_UNIT_xxx */
+enum ipmi_rate_unit_e ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_MODIFIER_UNIT_xxx */
+enum ipmi_modifier_unit_use_e ipmi_sensor_get_modifier_unit_use(
+    ipmi_sensor_t *sensor);
+
+/* Returns if the value is a percentage. */
+int ipmi_sensor_get_percentage(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_UNIT_TYPE_xxx */
+enum ipmi_unit_type_e ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_UNIT_TYPE_xxx */
+enum ipmi_unit_type_e ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor);
+
+/* Sensor reading information from the SDR. */
+int ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
+			      int           val,
+			      double        *tolerance);
+int ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy);
+int ipmi_sensor_get_normal_min_specified(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_normal_max_specified(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_nominal_reading_specified(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
+				    double *nominal_reading);
+int ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max);
+int ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min);
+int ipmi_sensor_get_sensor_max(ipmi_sensor_t *sensor, double *sensor_max);
+int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
+
+int ipmi_sensor_get_oem1(ipmi_sensor_t *sensor);
+
+/* The ID string from the SDR. */
+int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
+enum ipmi_str_type_e ipmi_sensor_get_id_type(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
+
+
+#endif
 }
 
 /*

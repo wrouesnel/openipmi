@@ -167,8 +167,6 @@ int ipmi_mc_reread_sel(ipmi_mc_t       *mc,
 		       ipmi_mc_done_cb handler,
 		       void            *cb_data);
 
-typedef void (*ipmi_mc_cb)(ipmi_mc_t *mc, int err, void *cb_data);
-
 /* Fetch the current time from the SEL. */
 typedef void (*sel_get_time_cb)(ipmi_mc_t     *mc,
 				int           err,

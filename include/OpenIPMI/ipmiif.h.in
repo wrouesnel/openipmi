@@ -942,13 +942,13 @@ unsigned int ipmi_event_state_size(void);
 void ipmi_copy_event_state(ipmi_event_state_t *dest, ipmi_event_state_t *src);
 
 /* Routines to init, clear, set, and query values in the event state. */
+void ipmi_event_state_init(ipmi_event_state_t *events);
 void ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val);
 int ipmi_event_state_get_events_enabled(ipmi_event_state_t *events);
 void ipmi_event_state_set_scanning_enabled(ipmi_event_state_t *events,int val);
 int ipmi_event_state_get_scanning_enabled(ipmi_event_state_t *events);
 void ipmi_event_state_set_busy(ipmi_event_state_t *events, int val);
 int ipmi_event_state_get_busy(ipmi_event_state_t *events);
-void ipmi_event_state_init(ipmi_event_state_t *events);
 void ipmi_threshold_event_clear(ipmi_event_state_t          *events,
 				enum ipmi_thresh_e          threshold,
 				enum ipmi_event_value_dir_e value_dir,
@@ -1017,7 +1017,7 @@ int ipmi_sensor_get_event_enables(ipmi_sensor_t                *sensor,
 /* Rearm the current sensor.  This will cause the sensor to resend
    it's current event state if it is out of range.  If
    ipmi_sensor_get_supports_auto_rearm() returns false and you receive
-   an event, you have to rearm a sensor manually to get any that event
+   an event, you have to rearm a sensor manually to get another event
    from it.  If global_enable is set, all events are enabled and the
    state is ignored (and may be NULL).  Otherwise, the events set in
    the state are enabled. */
