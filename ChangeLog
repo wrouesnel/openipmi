@@ -1,6 +1,8 @@
 
 2003-09-26 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 1.1.1.
+
 	* lib/ipmi_malloc.c: Fill debug malloced memory with junk to help
 	catch usage before initialization.  Also cleaned up some error
 	messages.
