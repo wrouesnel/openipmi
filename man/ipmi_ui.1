@@ -105,6 +105,9 @@ List all the entities in the system.  The output is the entity
 specifier, followed by an optional entity name in parenthesis,
 followed by "present" or "not present".
 
+.SS check_presence
+For the check of presence for all entities.
+
 .SS fru <entity>
 List the FRU information associated with the entity.
 
@@ -211,6 +214,9 @@ if you do this and quit immediately it may not be complete.
 List all events in the local copy of the SELs.  This is only the local
 copy, if the copies in the actual have change, this won't be reflected.
 
+.SS get_sel_time <channel> <mc num>
+Get the time in the SEL for the given MC.
+
 
 .SH MANAGMENT CONTROLLERS (MCs)
 
@@ -236,6 +242,11 @@ to do this.
 .SS mc_reset <channel> <mc addr> [warm | cold]
 Send a warm or cold reset command to the given MC.  The action the MC
 takes is system-specific.
+
+.SS scan <channel> <mc addr>
+Scan for an MC at the given address.  If the MC exists but OpenIPMI
+didn't know about it, it will be added.  If the MC no longer exists,
+then it will be removed.
 
 
 .SH LAN Parameter Configuration
@@ -272,14 +283,30 @@ Note that the PEF parameters have a lock that OpenIPMI attempts to
 use.  If you read the PEF parameters, they will be locked until you
 either write them or clear the lock.
 
-  readpef <channel> <mc num> - read pef information from an MC
-  clearpeflock [<channel> <mc num>] - Clear a PEF lock.  If the MC is given, then the PEF is directly cleared.  If not given, then the current PEF is cleared
-  viewpef - show current pef information
-  writepef <channel> <mc num> - write the current PEF information to an MC
-  setpef <config> [<selector>] <value> - Set the given config item to the value.  The optional selector is used for items that take a selector
+.SS readpef <channel> <mc num>
+Read the PEF information from an MC.
 
-  pet <connection> <channel> <ip addr> <mac_addr> <eft selector> <policy num> <apt selector> <lan dest selector> - Set up the domain to send PET traps from the
-given connection to the given IP/MAC address over the given channel
+.SS clearpeflock [<channel> <mc num>]
+Clear a PEF lock.  If the MC is given, then the PEF lock on that MC is
+directly cleared.  If no MC is given, then the current PEF's lock is
+cleared.
+
+.SS viewpef
+Show current pef information in the display window.
+
+.SS writepef <channel> <mc num>
+Write the current PEF information to an MC.
+
+.SS setpef <config> [<selector>] <value>
+Set the given config item to the value.  The optional selector is used
+for items that take a selector, like anything in the event filters,
+alert policies, or alert strings.
+
+.SS pet <connection> <channel> <ip addr> <mac_addr> <eft selector> <policy num> <apt selector> <lan dest selector>
+Set up the connection for the domain to send PET traps from the given
+connection to the given IP/MAC address over the given channel.  This
+does all the LAN and PEF configuration required to configure a system
+to send event traps.
 
 
 .SH OTHER COMMANDS

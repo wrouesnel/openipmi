@@ -3,6 +3,8 @@
 	* lib/lanparm.c: Initialize the callback data when cleaning
 	the lan parm lock.
 
+	* man/ipmicmd.1, man/ipmi_ui.1: Update to make current.
+
 2004-02-18 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Reworked SNMP library configuration to check
