@@ -553,6 +553,7 @@ setup_domain(ipmi_con_t    *ipmi[],
     domain->activate_timer_info->domain = domain;
     domain->activate_timer_info->cancelled = 0;
     domain->activate_timer_info->os_hnd = domain->os_hnd;
+    domain->activate_timer_info->running = 0;
 
     rv = ipmi_create_lock(domain, &domain->activate_timer_info->lock);
     if (rv)

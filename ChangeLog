@@ -1,6 +1,9 @@
 
 2003-09-30 Corey Minyard <cminyard@mvista.com>
 
+	* lib/domain.c: Initialize the running field of the
+	activate_timer_info data.
+
 	* ui/ui.c: Added TCSADRAIN to the tcsetattr() calls so that the
 	output wouldn't get chopped off on shutdown of the program.  Also
 	properly restored the flags for the output terminal.
