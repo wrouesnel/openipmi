@@ -261,6 +261,11 @@ ipmi_control_add_opq(ipmi_control_t         *control,
 void
 ipmi_control_opq_done(ipmi_control_t *control)
 {
+    /* Protect myself from NULL controls.  This way, it doesn't have to
+       be done in each call. */
+    if (!control)
+	return;
+
     CHECK_CONTROL_LOCK(control);
 
     opq_op_done(control->waitq);

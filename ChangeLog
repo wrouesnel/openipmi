@@ -1,4 +1,14 @@
 
+2003-08-01 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c, lib/control.c: Handle NULL controls and sensors in
+	opq done.  If a sensor is destroyed during an operation, this can
+	be called with NULL.
+
+	* lib/oem_motorola_mxp.c: Removed some debugging cruft.
+
+	* lib/oem_motorola_mxp_intf.c: Cleaned up the debug dump output.
+
 2003-07-31 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Added a way to

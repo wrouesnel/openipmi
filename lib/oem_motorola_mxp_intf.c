@@ -54,7 +54,7 @@
 #define MXP_NETFN_MXP1		0x30
 #define MXP_OEM_SET_QUEUE_LOCK_CMD		0x3e
 
-#ifdef DEBUG_MSG
+#if defined(DEBUG_MSG) || defined(DEBUG_RAWMSG)
 static void
 dump_hex(void *vdata, int len)
 {
@@ -527,7 +527,8 @@ lan_send_addr(lan_data_t  *lan,
 	    (lan->outbound_seq_num[addr_num])++;
     }
 
-    if (DEBUG_MSG) {
+    if (DEBUG_RAWMSG) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing raw\n addr =");
 	dump_hex((unsigned char *) &(lan->ip_addr[lan->curr_ip_addr]),
 		 sizeof(struct sockaddr_in));
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
@@ -1425,6 +1426,16 @@ handle_seq_msg(ipmi_con_t    *ipmi,
 
     ipmi_unlock(lan->seq_num_lock);
 
+    if (DEBUG_MSG) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr =");
+	dump_hex((unsigned char *) &si_addr, sizeof(si_addr));
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n NetFN = %x", msg.netfn);
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n Cmd = %x", msg.cmd);
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =");
+	dump_hex(msg.data, msg.data_len);
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
+    }
+
     if (handler)
 	handler(ipmi, (ipmi_addr_t *) &si_addr, sizeof(si_addr),
 		&msg, rsp_data, data2, data3, data4);
@@ -1469,8 +1480,8 @@ data_handler(int            fd,
     if (len < 0)
 	goto out_unlock2;
 
-    if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr = ");
+    if (DEBUG_RAWMSG) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming raw\n addr = ");
 	dump_hex((unsigned char *) &ipaddrd, from_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, len);

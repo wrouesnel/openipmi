@@ -30,6 +30,7 @@ their special sensors and controls.
 * Internals::
 * The IPMI LAN Server::
 * Glossary::
+* OEM Specific Information::
 @end menu
 
 @node    Intro to IPMI, OpenIPMI Concepts, Top,      Top
@@ -1533,7 +1534,7 @@ that for more details.
 
 @printindex cp
 
-@node    Glossary,       , Concept Index, Top
+@node    Glossary, OEM Specific Information, Concept Index, Top
 BMC
 domain
 connection
@@ -1552,5 +1553,45 @@ SEL
 slave address
 threshold
 threshold sensor
+
+@node    OEM Specific Information, , Glossary, Top
+@chapter OEM Specific Information
+
+This chapter describes the workings of OEM-specific code, you should
+read the chapters of interest if using hardware that has OEM-specific
+handling in OpenIPMI.
+
+@menu
+* Force Computers::
+* Motorola MXP::
+@end menu
+
+@node    Force Computers, Motorola MXP, OEM Specific Information, OEM Specific Information
+@section Force Computers
+
+TBD
+
+@node    Motorola MXP, , Force Computers, OEM Specific Information
+@section Motorola MXP
+
+The Motorola MXP chassis provides a PICMG 2.16 backplane, support for
+dual switch cards, and access via Ethernet.  The chassis supports one or
+two alarm cards (called AMCs), each board/switch can have a management
+controller (called a PM in Motorola terminology).
+
+The AMC cards operate in an active/standby configuration, except that
+the standby card is not exactly a standby, it can still do some
+operations and needs some management.  The active card is the only card
+that has access to the IPMB bus and to the various chassis controls.
+
+To make this work, the AMC cards have three management controllers in
+OpenIPMI.  To talk to the individual cards, there are two system
+managment addresses provided (channel 0xf mc 0, channel 0xf mc 1) to
+talk directly to the cards.  The various sensors and controls that are
+directly on the card are provided on those controllers.  The third
+management controller represents the currently active AMC, the chassis
+controls are attached to that controller.
+
 @contents
+
 @bye

@@ -5303,7 +5303,6 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
     int              rv;
     int              i;
 
-ipmi_log(IPMI_LOG_DEBUG, "***B");
     id.mcid = _ipmi_mc_convert_to_id(mc);
     id.mcid.channel = 0;
     id.mcid.mc_num = 0x20;
@@ -5402,9 +5401,7 @@ ipmi_log(IPMI_LOG_DEBUG, "***B");
 	break;
 
     case 0xd3:
-ipmi_log(IPMI_LOG_DEBUG, "***g: %x", event->data[10]);
 	for (i=0; i<MXP_POWER_SUPPLIES; i++) {
-ipmi_log(IPMI_LOG_DEBUG, "***h: %x", info->power_supply[i].ipmb_addr);
 	    if (event->data[10] == info->power_supply[i].ipmb_addr)
 		break;
 	}
@@ -5414,7 +5411,6 @@ ipmi_log(IPMI_LOG_DEBUG, "***h: %x", info->power_supply[i].ipmb_addr);
 
 	rv = EINVAL; /* Guilty until proven innocent. */
 	if (event->data[8] == 0x0b) {
-ipmi_log(IPMI_LOG_DEBUG, "***A");
 	    /* Fan Alarm.  This contains alarms for both the fan
                cooling events and for the fan speed, so we have to
                ping both sensors. */
