@@ -1,3 +1,23 @@
+2003-12-04 Jeff Zheng <jeff.zheng@intel.com>, Corey Minyard <cminyard@mvista.com>
+
+	* sample/ipmicmd.c: Actually close the IPMI connection at quit.
+
+2003-12-04 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmiif.h: Use "const" properly to get rid of
+	warnings.
+	* lib/ipmi.c: ditto
+	* sample/ipmicmd.c: ditto
+	* sample/sample.c: ditto
+	* ui/basic_ui.c: ditto
+
+2003-12-03 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c: Allow settable hysteresis values to be read, too.
+
+	* include/OpenIPMI/ipmi_bits.h: Added some docs on the confusing
+	names of the hysteresis values.
+
 2003-12-03 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.1.7
@@ -11,11 +31,6 @@
 
 	* utils/md5.c: Fixed this to work on big and little endian without
 	special defines.
-
-	* lib/sensor.c: Allow settable hysteresis values to be read, too.
-
-	* include/OpenIPMI/ipmi_bits.h: Added some docs on the confusing
-	names of the hysteresis values.
 
 2003-12-02 Corey Minyard <cminyard@mvista.com>
 

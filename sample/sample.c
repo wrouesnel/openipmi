@@ -61,7 +61,7 @@
 extern os_handler_t ipmi_ui_cb_handlers;
 selector_t *ui_sel;
 
-static char *progname;
+static const char *progname;
 
 static void
 usage(void)
@@ -370,7 +370,7 @@ setup_done(ipmi_domain_t *domain,
 }
 
 int
-main(int argc, char *argv[])
+main(int argc, const char *argv[])
 {
     int         rv;
     int         curr_arg = 1;

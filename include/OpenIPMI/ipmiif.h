@@ -1222,7 +1222,9 @@ typedef struct ipmi_args_s ipmi_args_t;
    value.  Note that on an error, a non-zero value is returned and
    curr_arg will be set to the argument that had the error.  You must
    use ipmi_free_args() to free the value returned in iargs. */
-int ipmi_parse_args(int *curr_arg, int arg_count, char *args[],
+int ipmi_parse_args(int         *curr_arg,
+		    int         arg_count,
+		    const char  **args,
 		    ipmi_args_t **iargs);
 
 /* Free an argument structure. */

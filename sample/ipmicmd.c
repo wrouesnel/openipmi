@@ -229,6 +229,46 @@ void ipmi_destroy_lock(ipmi_lock_t *lock)
     ipmi_mem_free(lock);
 }
 
+static void
+real_quit(selector_t *sel, sel_timer_t *timer, void *data)
+{
+    int rv = (int)(*(int *)data);
+    sel_free_timer(timer);
+    if (con && con->close_connection) 
+	con->close_connection(con);
+    if (ui_sel)
+	sel_free_selector(ui_sel);
+    exit(rv);
+}
+
+void
+leave(int ret)
+{
+    int               rv;
+    sel_timer_t *timer = NULL;
+    struct timeval    timeout;
+    static int ret_code;
+
+    ret_code = ret;
+    rv = sel_alloc_timer(ui_sel, real_quit, &ret_code, &timer);
+    if (rv) {
+	/* Cannot allocate timer, exit anyway */
+        if (ui_sel)
+	    sel_free_selector(ui_sel);
+	exit(1);
+    }
+
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+    rv = sel_start_timer(timer, &timeout);
+    if (rv) {
+	sel_free_timer(timer);
+        if (ui_sel)
+	    sel_free_selector(ui_sel);
+	exit(1);
+    }
+}
+
 void printInfo( )
 {
     printf("ipmicmd\n");
@@ -341,7 +381,7 @@ rsp_handler(ipmi_con_t   *ipmi,
     dump_msg_data(rsp, addr, "response");
     if (!interactive) {
     	ipmi->close_connection(ipmi);
-	exit(0);
+	leave(0);
     }
 }
 
@@ -482,6 +522,11 @@ process_input_line(char *buf)
 	printf("  test_lat <count> <command> - Send the command and wait for\n"
 	       "      the response <count> times and measure the average\n"
 	       "      time.\n");
+	return 0;
+    }
+
+    if (strcmp(v, "quit") == 0) {
+	leave(0);
 	return 0;
     }
 
@@ -639,13 +684,13 @@ user_input_ready(int fd, void *data)
     if (count < 0) {
 	perror("input read");
     	con->close_connection(con);
-	exit(1);
+	leave(1);
     }
     if (count == 0) {
 	if( interactive)
 	    printf("\n"); 
     	con->close_connection(con);
-	exit(0);
+	leave(0);
     }
     
     for (i=0; count > 0; i++, count--) {
@@ -685,7 +730,7 @@ con_changed_handler(ipmi_con_t   *ipmi,
     if (!interactive) {
 	if (err) {
 	    fprintf(stderr, "Unable to setup connection: %x\n", err);
-	    exit(1);
+	    leave(1);
 	}
 	process_input_line(buf);
     } else {
@@ -700,7 +745,7 @@ con_changed_handler(ipmi_con_t   *ipmi,
 }
 
 int
-main(int argc, char *argv[])
+main(int argc, const char *oargv[])
 {
     int         rv;
     int         pos;
@@ -708,9 +753,10 @@ main(int argc, char *argv[])
     char        *bufline = NULL;
     int         curr_arg;
     ipmi_args_t *args;
+    const char  **argv;
 
 
-    poptContext poptCtx = poptGetContext("ipmicmd", argc, argv,poptOpts,0);
+    poptContext poptCtx = poptGetContext("ipmicmd", argc, oargv,poptOpts,0);
 
     while (( o = poptGetNextOpt(poptCtx)) >= 0)
     {   
@@ -724,12 +770,12 @@ main(int argc, char *argv[])
 
 	    case 'v':
 		printInfo();
-		exit(0);
+		leave(0);
 		break;
 
 	    default:
 		poptPrintUsage(poptCtx, stderr, 0);
-		exit(1);
+		leave(1);
 		break;
 	}
     }
@@ -738,7 +784,7 @@ main(int argc, char *argv[])
 
     if (!argv) {
 	fprintf(stderr, "Not enough arguments\n");
-	exit(1);
+	leave(1);
     }
 
     for (argc=0; argv[argc]!= NULL; argc++)
@@ -746,14 +792,14 @@ main(int argc, char *argv[])
 
     if (argc < 1) {
 	fprintf(stderr, "Not enough arguments\n");
-	exit(1);
+	leave(1);
     }
 
     /* Initialize the OEM handlers. */
     rv = _ipmi_conn_init();
     if (rv) {
 	fprintf(stderr, "Error initializing connections: 0x%x\n", rv);
-	exit(1);
+	leave(1);
     }
     ipmi_oem_force_conn_init();
     ipmi_oem_motorola_mxp_init();
@@ -764,14 +810,14 @@ main(int argc, char *argv[])
     rv = sel_alloc_selector(&ui_sel);
     if (rv) {
 	fprintf(stderr, "Could not allocate selector\n");
-	exit(1);
+	leave(1);
     }
 
     rv = ipmi_parse_args(&curr_arg, argc, argv, &args);
     if (rv) {
 	fprintf(stderr, "Error parsing command arguments, argument %d: %s\n",
 		curr_arg, strerror(rv));
-	exit(1);
+	leave(1);
     }
 
     rv = ipmi_args_setup_con(args,
@@ -780,7 +826,7 @@ main(int argc, char *argv[])
 			     &con);
     if (rv) {
         fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
-	exit(1);
+	leave(1);
     }
 
     if (interactive) {
@@ -798,7 +844,7 @@ main(int argc, char *argv[])
     rv = con->start_con(con);
     if (rv) {
 	fprintf(stderr, "Could not start connection: %x\n", rv);
-	exit(1);
+	leave(1);
     }
 
     pos = 0;

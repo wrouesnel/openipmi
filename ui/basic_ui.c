@@ -75,11 +75,11 @@ void ui_reconnect(void)
 }
     
 int
-main(int argc, char *argv[])
+main(int argc, const char *argv[])
 {
     int              rv;
     int              curr_arg = 1;
-    char             *arg;
+    const char       *arg;
     int              full_screen = 1;
     ipmi_domain_id_t domain_id;
     int              i;

@@ -1020,7 +1020,7 @@ ipmi_shutdown(void)
 }
 
 char *
-ipmi_strdup(char *str)
+ipmi_strdup(const char *str)
 {
     char *rv = ipmi_mem_alloc(strlen(str)+1);
 
@@ -1061,7 +1061,9 @@ struct ipmi_args_s
     } while(0)
 
 int
-ipmi_parse_args(int *curr_arg, int arg_count, char *args[],
+ipmi_parse_args(int         *curr_arg,
+		int         arg_count,
+		const char  **args,
 		ipmi_args_t **iargs)
 {
     ipmi_args_t *p;
