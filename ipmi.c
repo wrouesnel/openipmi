@@ -89,7 +89,7 @@ ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)
 	return ENOMEM;
 
     lock->os_hnd = os_hnd;
-    if (lock->os_hnd->create_lock) {
+    if (lock->os_hnd && lock->os_hnd->create_lock) {
 	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
 	if (rv) {
 	    free(lock);
@@ -115,7 +115,7 @@ ipmi_create_global_lock(ipmi_lock_t **new_lock)
 	return ENOMEM;
 
     lock->os_hnd = ipmi_os_handler;
-    if (lock->os_hnd->create_lock) {
+    if (lock->os_hnd && lock->os_hnd->create_lock) {
 	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
 	if (rv) {
 	    free(lock);
