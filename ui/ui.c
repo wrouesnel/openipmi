@@ -6667,7 +6667,7 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 
     domain_id = ipmi_domain_convert_to_id(domain);
 
-    rv = ipmi_register_for_events(domain, event_handler, NULL);
+    rv = ipmi_domain_add_event_handler(domain, event_handler, NULL);
     if (rv)
 	leave_err(rv, "ipmi_register_for_events");
 
@@ -6679,7 +6679,7 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
 
-    rv = ipmi_domain_register_mc_update_handler(domain, mc_change, domain);
+    rv = ipmi_domain_add_mc_updated_handler(domain, mc_change, domain);
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
     pef = NULL;

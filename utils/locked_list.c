@@ -36,6 +36,8 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/locked_list.h>
 
+#define LOCKED_LIST_ENTRIES_INCREMENT 5
+
 typedef struct ll_entry_s
 {
     int in_use;
@@ -85,7 +87,10 @@ locked_list_alloc(os_handler_t *os_hnd)
 	return NULL;
     }
 
-    ll->entries->entries = ipmi_mem_alloc(sizeof(ll_entry_t) * 10);
+    ll->entries->size = LOCKED_LIST_ENTRIES_INCREMENT;
+
+    ll->entries->entries = ipmi_mem_alloc(sizeof(ll_entry_t)
+					  * ll->entries->size);
     if (!ll->entries->entries) {
 	ipmi_mem_free(ll->entries);
 	ilist_twoitem_destroy(ll->list);
@@ -94,7 +99,6 @@ locked_list_alloc(os_handler_t *os_hnd)
 	return NULL;
     }
 
-    ll->entries->size = 10;
     ll->entries->curr = 0;
 
     for (i=0; i<ll->entries->size; i++)
@@ -151,15 +155,16 @@ locked_list_add(locked_list_t *ll, void *item1, void *item2)
 	    rv = 0;
 	    goto out_unlock;
 	}
-	new_entries->entries = ipmi_mem_alloc(sizeof(ll_entry_t)
-					      * ll->entries->size + 10);
+	new_entries->entries = ipmi_mem_alloc
+	    (sizeof(ll_entry_t)
+	     * (ll->entries->size + LOCKED_LIST_ENTRIES_INCREMENT));
 	if (!new_entries->entries) {
 	    ipmi_mem_free(new_entries);
 	    rv = 0;
 	    goto out_unlock;
 	}
 
-	new_entries->size = ll->entries->size + 10;
+	new_entries->size = ll->entries->size + LOCKED_LIST_ENTRIES_INCREMENT;
 	new_entries->curr = ll->entries->curr;
 	memcpy(new_entries->entries, ll->entries->entries,
 	       sizeof(ll_entry_t) * ll->entries->size);

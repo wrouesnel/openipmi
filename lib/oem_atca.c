@@ -28,6 +28,7 @@
  */
 
 /* TODO:
+ * Add a control for getting the slot type and physical slot number
  * Add support for setting the power up timeout
  */
 
@@ -2816,9 +2817,9 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 
     /* Add a handler for when MCs are added to the domain, so we can
        add in our custom sensors. */
-    rv = ipmi_domain_register_mc_update_handler(domain,
-						atca_mc_update_handler,
-						info);
+    rv = ipmi_domain_add_mc_updated_handler(domain,
+					    atca_mc_update_handler,
+					    info);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_atca.c(shelf_fru_fetched): "
@@ -2853,7 +2854,7 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 {
     atca_shelf_t *info = ipmi_domain_get_oem_data(domain);
 
-    ipmi_deregister_for_events(domain, atca_event_handler, info);
+    ipmi_domain_remove_event_handler(domain, atca_event_handler, info);
 
     /* Remove all the parent/child relationships we previously
        defined. */
@@ -2993,7 +2994,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     if (info->shelf_address_only_on_bmc)
 	info->shelf_fru_ipmb = 0x20;
 
-    rv = ipmi_register_for_events(domain, atca_event_handler, info);
+    rv = ipmi_domain_add_event_handler(domain, atca_event_handler, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(set_up_atca_domain): "
@@ -3017,7 +3018,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(set_up_atca_domain): "
 		 "Error allocating fru information: 0x%x", rv);
-	ipmi_deregister_for_events(domain, atca_event_handler, info);
+	ipmi_domain_remove_event_handler(domain, atca_event_handler, info);
 	ipmi_mem_free(info);
 	done(domain, rv, done_cb_data);
 	goto out;
@@ -3027,9 +3028,9 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     ipmi_domain_set_oem_shutdown_handler(domain,
 					 atca_oem_domain_shutdown_handler);
 
-    ipmi_domain_register_mc_update_handler(domain,
-					   atca_fix_sel_handler,
-					   info);
+    ipmi_domain_add_mc_updated_handler(domain,
+				       atca_fix_sel_handler,
+				       info);
 
  out:
     return;
@@ -3150,6 +3151,8 @@ atca_register_fixups(void)
     ipmi_register_oem_handler(0xf00157, 0x0808,
 			      misc_sdrs_fixup_reg, NULL, NULL);
     ipmi_register_oem_handler(0x000157, 0x0841,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0x000157, 0x080a,
 			      misc_sdrs_fixup_reg, NULL, NULL);
 }
 

@@ -103,3 +103,5 @@
   systems besides IPMI have no persistent event log, and can only
   deliver events.  In reality, all the event log stuff should go away,
   and events should just be delivered to the application.
+
+11. There is no "physical slot" indicator in HPI.

@@ -493,9 +493,9 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     }
 
     if (mc->conup_info) {
-	ipmi_domain_remove_con_change_handler(domain,
-					      con_up_handler,
-					      mc->conup_info);
+	ipmi_domain_remove_connect_change_handler(domain,
+						  con_up_handler,
+						  mc->conup_info);
     }
 
     _ipmi_mc_set_active(mc, 0);
@@ -1408,9 +1408,9 @@ con_up_handler(ipmi_domain_t *domain,
     if (!still_connected)
 	return;
 
-    ipmi_domain_remove_con_change_handler(domain,
-					  con_up_handler,
-					  info);
+    ipmi_domain_remove_connect_change_handler(domain,
+					      con_up_handler,
+					      info);
     ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
 }
 
@@ -1427,8 +1427,8 @@ start_sel_ops(ipmi_mc_t *mc)
 	/* The domain is not up yet, wait for it to come up then start
            the process. */
 	mc->conup_info->mcid = ipmi_mc_convert_to_id(mc);
-	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
-						mc->conup_info);
+	rv = ipmi_domain_add_connect_change_handler(domain, con_up_handler,
+						    mc->conup_info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "Unable to add a connection change handler for the"

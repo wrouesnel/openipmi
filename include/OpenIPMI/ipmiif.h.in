@@ -208,13 +208,22 @@ typedef void (*ipmi_domain_con_cb)(ipmi_domain_t *domain,
 				   unsigned int  port_num,
 				   int           still_connected,
 				   void          *cb_data);
-int ipmi_domain_add_con_change_handler(ipmi_domain_t      *domain,
-				       ipmi_domain_con_cb handler,
-				       void               *cb_data);
-void ipmi_domain_remove_con_change_handler(ipmi_domain_t      *domain,
+int ipmi_domain_add_connect_change_handler(ipmi_domain_t      *domain,
 					   ipmi_domain_con_cb handler,
 					   void               *cb_data);
-					   
+int ipmi_domain_remove_connect_change_handler(ipmi_domain_t      *domain,
+					      ipmi_domain_con_cb handler,
+					      void               *cb_data);
+
+/* The old backwards compatible interfaces.  DON'T USE THESE!! */
+typedef struct ipmi_domain_con_change_s ipmi_domain_con_change_t;
+int ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
+				       ipmi_domain_con_cb       handler,
+				       void                     *cb_data,
+				       ipmi_domain_con_change_t **id);
+void ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
+					   ipmi_domain_con_change_t *id);
+
 
 /* The domain has two timers, one for the SEL rescan interval and one for
    the IPMB bus rescan interval. */
@@ -249,13 +258,22 @@ typedef void (*ipmi_event_handler_cb)(ipmi_domain_t *domain,
    events that are not sent to a sensor, so if you get a system
    software event or an event from a sensor the software doesn't know
    about, this handler will get it. */
+int ipmi_domain_add_event_handler(ipmi_domain_t           *domain,
+				  ipmi_event_handler_cb   handler,
+				  void                    *event_data);
+/* Deregister an event handler. */
+int ipmi_domain_remove_event_handler(ipmi_domain_t           *domain,
+				     ipmi_event_handler_cb   handler,
+				     void                    *event_data);
+
+/* The old interfaces (for backwards compatability).  DON'T USE THESE!! */
+typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
 int ipmi_register_for_events(ipmi_domain_t           *domain,
 			     ipmi_event_handler_cb   handler,
-			     void                    *event_data);
-/* Deregister an event handler. */
+			     void                    *event_data,
+			     ipmi_event_handler_id_t **id);
 int ipmi_deregister_for_events(ipmi_domain_t           *domain,
-			       ipmi_event_handler_cb   handler,
-			       void                    *event_data);
+			       ipmi_event_handler_id_t *id);
 
 /* Globally enable or disable events on the domain's interfaces. */
 int ipmi_domain_enable_events(ipmi_domain_t *domain);

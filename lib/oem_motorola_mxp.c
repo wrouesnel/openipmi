@@ -8700,11 +8700,11 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_control_destroy(info->sys_led);
 
     if (info->con_ch_info) {
-	ipmi_domain_remove_con_change_handler(domain, con_up_handler,
-					      info->con_ch_info);
+	ipmi_domain_remove_connect_change_handler(domain, con_up_handler,
+						  info->con_ch_info);
 	ipmi_mem_free(info->con_ch_info);
     }
-    ipmi_domain_remove_mc_update_handler(domain, mc_upd_handler, NULL);
+    ipmi_domain_remove_mc_updated_handler(domain, mc_upd_handler, NULL);
 
     ipmi_mem_free(info);
 }
@@ -8814,16 +8814,16 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	info->con_ch_info->up = 0;
 	info->con_ch_info->mcid = ipmi_mc_convert_to_id(mc);
 	info->con_ch_info->info = info;
-	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
-						info->con_ch_info);
+	rv = ipmi_domain_add_connect_change_handler(domain, con_up_handler,
+						    info->con_ch_info);
 	if (rv) {
 	    ipmi_mem_free(info->con_ch_info);
 	    goto out_err;
 	}
 
-	rv = ipmi_domain_register_mc_update_handler(domain,
-						    mc_upd_handler,
-						    NULL);
+	rv = ipmi_domain_add_mc_updated_handler(domain,
+						mc_upd_handler,
+						NULL);
 	if (rv)
 	    goto out_err;
     }
