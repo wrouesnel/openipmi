@@ -563,13 +563,90 @@ handle_sdr_data(ipmi_mc_t  *mc,
  out:
 }
 
+static int
+initial_sdr_fetch(ipmi_sdr_info_t *sdrs)
+{
+    unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
+    ipmi_msg_t      cmd_msg;
+    int             rv;
+
+    cmd_msg.data = cmd_data;
+    if (sdrs->sensor) {
+	cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+	cmd_msg.cmd = IPMI_GET_DEVICE_SDR_CMD;
+    } else {
+	cmd_msg.netfn = IPMI_STORAGE_NETFN;
+	cmd_msg.cmd = IPMI_GET_SDR_CMD;
+    }
+    cmd_msg.data_len = 6;
+    ipmi_set_uint16(cmd_msg.data, sdrs->reservation);
+    ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
+    cmd_msg.data[4] = 0;
+    cmd_msg.data[5] = MAX_SDR_FETCH;
+    rv = ipmi_send_command(sdrs->mc, sdrs->lun, &cmd_msg,
+			   handle_sdr_data, sdrs);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "initial_sdr_fetch: Couldn't send first SDR fetch: %x", rv);
+	fetch_complete(sdrs, rv);
+    }
+    return rv;
+}
+
+static void
+handle_reservation(ipmi_mc_t  *mc,
+		   ipmi_msg_t *rsp,
+		   void       *rsp_data)
+{
+    ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) rsp_data;
+    int             rv;
+
+
+    sdr_lock(sdrs);
+    if (sdrs->destroyed) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "SDR info was destroyed while an operation was in progress");
+	fetch_complete(sdrs, ECANCELED);
+	goto out;
+    }
+
+    if (!mc) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "MC went away while SDR fetch was in progress");
+	fetch_complete(sdrs, ENXIO);
+	goto out;
+    }
+	
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error getting SDR fetch reservation: %x", rsp->data[0]);
+	fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	goto out;
+    }
+    if (rsp->data_len < 3) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "SDR Reservation data not long enough");
+	fetch_complete(sdrs, EINVAL);
+	goto out;
+    }
+
+    sdrs->reservation = ipmi_get_uint16(rsp->data+1);
+
+    /* Fetch the first part of the SDR. */
+    rv = initial_sdr_fetch(sdrs);
+    if (rv)
+	goto out;
+
+    sdr_unlock(sdrs);
+ out:
+}
+
 static void
 handle_sdr_info(ipmi_mc_t  *mc,
 		ipmi_msg_t *rsp,
 		void       *rsp_data)
 {
     ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) rsp_data;
-    unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
     int             rv;
     int32_t         add_timestamp;
@@ -607,6 +684,12 @@ handle_sdr_info(ipmi_mc_t  *mc,
 
 	sdrs->working_num_sdrs = rsp->data[1];
 	sdrs->dynamic_population = (rsp->data[2] & 0x80) == 0x80;
+
+	/* The spec's not 100% clear on this, but I'm guessing that if
+           the population is dynamic, the the reserve sdr must be
+           supported. */
+	sdrs->supports_reserve_sdr = sdrs->dynamic_population;
+
 	(sdrs->lun_has_sensors)[0] = (rsp->data[2] & 0x01) == 0x01;
 	(sdrs->lun_has_sensors)[1] = (rsp->data[2] & 0x01) == 0x02;
 	(sdrs->lun_has_sensors)[2] = (rsp->data[2] & 0x01) == 0x04;
@@ -687,90 +770,32 @@ handle_sdr_info(ipmi_mc_t  *mc,
     sdrs->curr_sdr_num = 0;
     sdrs->sdr_data_read = 0;
 
-    /* Fetch the first part of the SDR. */
-    cmd_msg.data = cmd_data;
-    if (sdrs->sensor) {
-	cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
-	cmd_msg.cmd = IPMI_GET_DEVICE_SDR_CMD;
+    if (sdrs->supports_reserve_sdr) {
+	/* Now get the reservation. */
+	if (sdrs->sensor) {
+	    cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+	    cmd_msg.cmd = IPMI_RESERVE_DEVICE_SDR_REPOSITORY_CMD;
+	} else {
+	    cmd_msg.netfn = IPMI_STORAGE_NETFN;
+	    cmd_msg.cmd = IPMI_RESERVE_SDR_REPOSITORY_CMD;
+	}
+	cmd_msg.data_len = 0;
+	rv = ipmi_send_command(sdrs->mc, sdrs->lun, &cmd_msg,
+			       handle_reservation, sdrs);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "handle_sdr_info: Couldn't send SDR reservation: %x", rv);
+	    fetch_complete(sdrs, rv);
+	    goto out;
+	}
     } else {
-	cmd_msg.netfn = IPMI_STORAGE_NETFN;
-	cmd_msg.cmd = IPMI_GET_SDR_CMD;
-    }
-    cmd_msg.data_len = 6;
-    ipmi_set_uint16(cmd_msg.data, sdrs->reservation);
-    ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
-    cmd_msg.data[4] = 0;
-    cmd_msg.data[5] = MAX_SDR_FETCH;
-    rv = ipmi_send_command(sdrs->mc, sdrs->lun, &cmd_msg,
-			   handle_sdr_data, sdrs);
-    if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_sdr_info: Couldn't send first SDR fetch: %x", rv);
-	fetch_complete(sdrs, rv);
-	goto out;
-    }
-    sdr_unlock(sdrs);
- out:
-}
+	/* No reservation support, just go on and start fetching. */
+	sdrs->reservation = 0;
 
-static void
-handle_reservation(ipmi_mc_t  *mc,
-		   ipmi_msg_t *rsp,
-		   void       *rsp_data)
-{
-    ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) rsp_data;
-    unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
-    ipmi_msg_t      cmd_msg;
-    int             rv;
-
-
-    sdr_lock(sdrs);
-    if (sdrs->destroyed) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR info was destroyed while an operation was in progress");
-	fetch_complete(sdrs, ECANCELED);
-	goto out;
-    }
-
-    if (!mc) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
-	fetch_complete(sdrs, ENXIO);
-	goto out;
-    }
-	
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting SDR fetch reservation: %x", rsp->data[0]);
-	fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
-	goto out;
-    }
-    if (rsp->data_len < 3) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SDR Reservation data not long enough");
-	fetch_complete(sdrs, EINVAL);
-	goto out;
-    }
-
-    sdrs->reservation = ipmi_get_uint16(rsp->data+1);
-
-    /* Fetch the repository info. */
-    cmd_msg.data = cmd_data;
-    if (sdrs->sensor) {
-	cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
-	cmd_msg.cmd = IPMI_GET_DEVICE_SDR_INFO_CMD;
-    } else {
-	cmd_msg.netfn = IPMI_STORAGE_NETFN;
-	cmd_msg.cmd = IPMI_GET_SDR_REPOSITORY_INFO_CMD;
-    }
-    cmd_msg.data_len = 0;
-    rv = ipmi_send_command(sdrs->mc, sdrs->lun, &cmd_msg,
-			   handle_sdr_info, sdrs);
-    if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_reservation: Couldn't send SDR info get: %x", rv);
-	fetch_complete(sdrs, rv);
-	goto out;
+	/* Fetch the first part of the SDR. */
+	rv = initial_sdr_fetch(sdrs);
+	if (rv)
+	    goto out;
     }
     sdr_unlock(sdrs);
  out:
@@ -790,14 +815,14 @@ start_fetch(ipmi_sdr_info_t *sdrs)
     cmd_msg.data = cmd_data;
     if (sdrs->sensor) {
 	cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
-	cmd_msg.cmd = IPMI_RESERVE_DEVICE_SDR_REPOSITORY_CMD;
+	cmd_msg.cmd = IPMI_GET_DEVICE_SDR_INFO_CMD;
     } else {
 	cmd_msg.netfn = IPMI_STORAGE_NETFN;
-	cmd_msg.cmd = IPMI_RESERVE_SDR_REPOSITORY_CMD;
+	cmd_msg.cmd = IPMI_GET_SDR_REPOSITORY_INFO_CMD;
     }
     cmd_msg.data_len = 0;
     return ipmi_send_command(sdrs->mc, sdrs->lun, &cmd_msg,
-			     handle_reservation, sdrs);
+			     handle_sdr_info, sdrs);
 }
 
 static void

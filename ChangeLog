@@ -1,6 +1,11 @@
 
 2003-01-22 Corey Minyard <cminyard@mvista.com>
 
+	* ui.c: Added a command to dump the SDRs.
+	
+	* sdr.c: Reworked the fetching of SDRs to get the SDR info first,
+	then to do the reservation if it is required.
+
 	* sensor.c: Fixed the sensor calculation values to be the right
 	signedness.
 	

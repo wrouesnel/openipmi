@@ -2004,6 +2004,116 @@ list_sel_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+typedef struct sdrs_info_s
+{
+    int found;
+    unsigned char mc_addr;
+    unsigned char do_sensors;
+} sdrs_info_t;
+
+void sdrs_fetched(ipmi_sdr_info_t *sdrs,
+		  int             err,
+		  int             changed,
+		  unsigned int    count,
+		  void            *cb_data)
+{
+    sdrs_info_t *info = cb_data;
+    int         i;
+    int         rv;
+
+    if (err) {
+	ui_log("Error fetching sdrs: %x\n", err);
+	goto out;
+    }
+
+    if (!sdrs) {
+	ui_log("sdrs went away during fetch\n");
+	goto out;
+    }
+
+    wprintw(display_pad, "%s SDRs for MC %x\n",
+	    info->do_sensors ? "device" : "main",
+	    info->mc_addr);
+    for (i=0; i<count; i++) {
+	ipmi_sdr_t sdr;
+	int        j;
+
+	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
+	if (rv) {
+	    wprintw(display_pad, "*could not get index %d\n", i);
+	    continue;
+	}
+	wprintw(display_pad, "%4.4x: type %x, version %d.%d",
+		sdr.record_id, sdr.type, sdr.major_version, sdr.minor_version);
+	for (j=0; j<sdr.length; j++) {
+	    if ((j % 8) == 0)
+		wprintw(display_pad, "\n ");
+	    wprintw(display_pad, " %2.2x", sdr.data[j]);
+	}
+	wprintw(display_pad, "\n");
+    }
+    display_pad_refresh();
+
+ out:
+    ipmi_sdr_info_destroy(sdrs, NULL, NULL);
+}
+
+void
+sdrs_mcs_handler(ipmi_mc_t *bmc,
+		 ipmi_mc_t *mc,
+		 void      *cb_data)
+{
+    sdrs_info_t     *info = cb_data;
+    ipmi_sdr_info_t *sdrs;
+    int             rv;
+
+    if (info->mc_addr == ipmi_mc_get_address(mc)) {
+	info->found = 1;
+
+	rv = ipmi_sdr_info_alloc(mc, 0, info->do_sensors, &sdrs);
+	if (rv) {
+	    wprintw(cmd_win, "Unable to alloc sdr info: %x\n", rv);
+	    return;
+	}
+
+	rv = ipmi_sdr_fetch(sdrs, sdrs_fetched, &info);
+	if (rv) {
+	    wprintw(cmd_win, "Unable to start SDR fetch: %x\n", rv);
+	    ipmi_sdr_info_destroy(sdrs, NULL, NULL);
+	    return;
+	}
+    }
+}
+
+static void
+sdrs_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    ipmi_bmc_iterate_mcs(bmc, sdrs_mcs_handler, cb_data);
+}
+
+static int
+sdrs_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int         rv;
+    sdrs_info_t info;
+
+    if (get_uchar(toks, &info.mc_addr, "MC address"))
+	return 0;
+
+    if (get_uchar(toks, &info.do_sensors, "do_sensors"))
+	return 0;
+
+    info.found = 0;
+
+    rv = ipmi_mc_pointer_cb(bmc_id, sdrs_cmd_bmcer, NULL);
+    if (rv)
+	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+    else
+	if (!info.found)
+	    waddstr(cmd_win, "Unable to find that mc\n");
+    return 0;
+}
+
 static int help_cmd(char *cmd, char **toks, void *cb_data);
 
 static struct {
@@ -2045,6 +2155,10 @@ static struct {
       " - clear the system event log" },
     { "list_sel",	list_sel_cmd,
       " - list the local copy of the system event log" },
+    { "sdrs",		sdrs_cmd,
+      " <mc> <do_sensors> - list the SDRs for the mc.  If do_sensors is"
+      " 1, then the device SDRs are fetched.  Otherwise the main SDRs are"
+      " fetched." },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}
