@@ -1008,7 +1008,7 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
     ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
 
     if (smi->con_change_handler)
-	smi->con_change_handler(ipmi, 0, 1, 0, smi->con_change_cb_data);
+	smi->con_change_handler(ipmi, 0, 1, 1, smi->con_change_cb_data);
 }
 
 static void

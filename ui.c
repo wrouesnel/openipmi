@@ -3005,7 +3005,7 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
 
     info->found = 0;
 
-    rv = _ipmi_mc_pointer_cb(info->mc_id, sdrs_mcs_handler, info);
+    rv = _ipmi_mc_pointer_noseq_cb(info->mc_id, sdrs_mcs_handler, info);
     if (rv) {
 	cmd_win_out("Unable to find MC\n");
 	ipmi_mem_free(info);

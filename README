@@ -2,12 +2,17 @@ This is the OpenIPMI library, a library that makes simplifies building
 complex IPMI systems.
 
 Note that most of the OpenIPMI library was designed for building
-complicated systems that come up and continuously monitor IPMI
-hardware.  It's not for little things that simply want to get some
-information, do something, and leave (unless that information is
-elaborate information).
+complicated systems that continuously monitor IPMI hardware.  It's not
+for little things that simply want to get some information, do
+something, and leave (unless that information is elaborate
+information).
 
-It does include the utility "ipmicmd" which lets 
+It does include the utility "ipmicmd" which lets you do direct IPMI
+commands to a connection.  ipmicmd can connect using the OpenIPMI
+driver or via IPMI LAN.
+
+OpenIPMI also includes a LAN to system interface converter, it can sit
+on top of an OpenIPMI driver and supply a LAN connection to the BMC.
 
 Note that parts of OpenIPMI could be used inside other systems.
 However, the LGPL license may be a restriction.  If you are interested

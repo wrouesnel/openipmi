@@ -1,0 +1,107 @@
+.TH ipmicmd 8 05/13/03 OpenIPMI "An IPMI Command Interface"
+
+.SH NAME
+ipmicmd \- An IPMI Command Interface
+
+.SH SYNOPSIS
+.B ipmicmd
+[\-k entry to execute] smi <smi num>
+
+.B ipmicmd
+[\-k entry to execute] lan <ip addr> <port> [<ip addr2> <port 2>] 
+<auth> <privilege> <username> <password>
+
+.SH DESCRIPTION
+The
+.BR ipmicmd
+program allows a user to execute direct IPMI commands.  It can work
+with direct interface with the OpenIPMI driver or with IPMI LAN
+interfaces.
+
+.SH OPTIONS
+.TP
+.I "\-k entry-to-execute"
+Execute a single command an exit.
+
+.TP
+.I "smi <num>"
+The SMI number to connect to, for systems with more than on system
+interface.  Generally, this is '0'.
+
+.TP
+.I "IP addr"
+The IP address of the LAN interface.
+
+.TP
+.I "port"
+The UDP port of the LAN interface, general 623.
+
+.TP
+.I "ip addr 2"
+Some systems support multiple IP connections, this specified the
+second address and is optional.  If specified, OpenIPMI will use both
+IP addresses and fail over to the working one if one of them fails.
+
+.TP
+.I "port 2"
+The port for the second IP connection, generally 623.
+
+.TP
+.I "auth"
+The authorization to use for the connection, either "none",
+"straight", "md5", or "md2".
+
+.TP
+.I "privilege"
+The privilege to use for the connection, either "callback", "user",
+"operator", or "admin".  Note that some IPMI operations will fail
+without the correct privilege.
+
+.TP
+.I "username"
+The user name to use for the connection.  If using this anonymous
+user, this should be the empty string "".
+
+.TP
+.I "password"
+The password to use for the connection.
+
+
+.SH COMMANDS
+
+Once up, you can execute commands in the user interface.  Note that
+commands and responses are asynchronous, you issue a command and the
+interface returns immediately.  When the response comes back, it will
+be dumped on your console.  That's a little strange looking, but IPMI
+is ansychronous underneath.  Note that the \-k option is synchronous,
+it will wait for the response or a timeout before returning.
+
+.SS 0f <netfn> <lun> <cmd> [data1 [data2 ...]]
+Send a command to the BMC you are connected to.
+
+.SS <channel> <IPMB addr> <netfn> <lun> <cmd> [data1 [data2 ...]]
+Send a command to a device on the IPMB bus.
+
+.SS <channel> 00 <IPMB addr> <netfn> <lun> <cmd> [data1 [data2 ...]]
+Send a broadcast command to a device on the IPMB bus.
+
+.SS help
+Display some help.
+
+.SS regcmd <netfn> <cmd>
+Register to receive the given command.  If the driver receives an
+external command, it will print it out.  This only works with system
+interface connections, it will not work on LAN connections.
+
+.SS unregcmd <netfn> <cmd>
+Remove a command registration.
+
+.SH "SEE ALSO"
+ipmi_ui(1), ipmilan(8)
+
+.SH "KNOWN PROBLEMS"
+The asychronous nature of the program can be annoying.
+
+.SH AUTHOR
+.PP
+Corey Minyard <cminyard@mvista.org>

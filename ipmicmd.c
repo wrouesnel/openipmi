@@ -7,6 +7,10 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
+ * Note that F.Isabelle of Kontron did a significant amount of work on
+ * this in the beginning, but not much is left of that work since it
+ * has been redone to sit on top of the IPMI connections.
+ *
  * Copyright 2002 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -28,91 +32,11 @@
  *
  *  You should have received a copy of the GNU General Public License along
  *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  675 Mass Ave, Cambridge, MA 02139, USA.
- */
+ *  675 Mass Ave, Cambridge, MA 02139, USA.  */
 
 
 /* To use the program, run it, and you will receive a prompt.  Then enter
-   ipmi commands.
-
-   Commands are entered in two formats:
-
-   0x0f <netfn> <lun> <cmd> <data....>
-     - This will send messages to the BMC directly.
-
-   <channel> <slave addr> <slave lun> <netfn> <lun> <cmd> <data....>
-     - This will send messages on an IPMB channel.
-
-   <channel> 00 <slave addr> <slave lun> <netfn> <lun> <cmd> <data....>
-     - This will send broadcast messages on an IPMB channel.
-
-   There's no support for anything but IPMB channels and the direct BMC
-   interface right now.
-*/
-
-
-
-/*** DESCRIPTION SECTION *****************************************************
-*
-*  File Name:     ipmicmd.c
-*  Creation Date: 2002-10-10 10:00
-*  Programmer:    F.Isabelle
-*  Description:   ipmicmd , user space command line tool for ipmi commands
-*
-*
-*  This file as been renamed to ipmicmd.c in order to implement a command similar
-*   to ipmitool or ipmi_ctl, able to run non-interactively.
-*
-*   ipmicmd is going to be use in that way:
-*
-*   ipmicmd -k "0x0f <netfn> <lun> <cmd> <data...>" or
-*  or 
-*   ipmicmd -k "<channel> <slave addr> <netfn> <lun> <cmd> <data...> or"
-*   
-*
-*
-*****************************************************************************/
-/*** PVCS LOG SECTION ********************************************************
-*
-* $Log: not supported by cvs2svn $
-* Revision 1.6  2003/05/15 20:38:43  cminyard
-* Lots of rework, see changelog.
-*
-* Revision 1.5  2003/05/14 18:03:00  cminyard
-* Work on connection handling for IPMB handling.
-* Added a lot of OEM handling to lanserv.
-*
-* Revision 1.4  2003/05/14 03:24:07  cminyard
-* Added connection info stuff.
-* Added LAN info to the docs.
-*
-* Revision 1.3  2003/04/23 13:19:39  cminyard
-* Added a debug interface
-* Added dumping an mc's information.
-*
-* Revision 1.2  2003/03/05 15:42:34  cminyard
-* Fixed the description of the ipmi_bmc_add_con_fail_handler() call
-* to be accurate and complete.
-*
-* Revision 1.1  2003/02/21 16:11:20  cminyard
-* Added ipmicmd to this code.
-* Moved to the newest kernel headers.
-**
- * 
- *    Rev 1.5   16 Oct 2002 09:20:36   Isabellf
- *  - make it work with patch v7 of the driver
- * 
- *    Rev 1.4   10 Oct 2002 16:44:08   Isabellf
- *   - added exit status for process_input_line to avoid stalls
- * 
- *    Rev 1.2   10 Oct 2002 10:30:52   Isabellf
- *  - added command line parsing initial support
- * 
- *    Rev 1.1   10 Oct 2002 10:10:46   Isabellf
- *   - started modification to non - interactive tool
-*
-*****************************************************************************/
-
+   ipmi commands.  Type "help" for more details. */
 
 #include <stdio.h>
 #include <fcntl.h>
@@ -145,24 +69,6 @@ struct poptOption poptOpts[]=
 	&sOp,
 	'k',
 	"Command string to be send",
-	""
-    },
-    {
-	"interactive",
-	'I',
-	POPT_ARG_NONE,
-	NULL,
-	'I',
-	"Set in interactive mode",
-	""
-    },
-    {
-	"slaveaddr",
-	's',
-	POPT_ARG_STRING,
-	NULL,
-	's',
-	"Set the slave address for this KCS",
 	""
     },
     {
@@ -320,12 +226,10 @@ void ipmi_destroy_lock(ipmi_lock_t *lock)
 
 void printInfo( )
 {
-    printf( "ipmicmd\t$,$Date: 2003-05-15 21:34:10 $,$Author: cminyard $\n");
-    printf( "Kontron Canada Inc.\n");
-    printf( "-\n");
-    printf( "This little utility is an ipmi command tool ;-)\n");
-    printf( "It can be used to send commands to an IPMI interface\n");
-    printf( "It uses popt for command line parsing, type -? for usage info.\n");
+    printf("ipmicmd\n");
+    printf("This little utility is an ipmi command tool ;-)\n");
+    printf("It can be used to send commands to an IPMI interface\n");
+    printf("It uses popt for command line parsing, type -? for usage info.\n");
     printf("Enjoy!\n");
 }
 
@@ -517,15 +421,17 @@ process_input_line(char *buf)
 	printf("  regcmd <netfn> <cmd> - Register to receive this cmd\n");
 	printf("  unregcmd <netfn> <cmd> - Unregister to receive this cmd\n");
 	printf("  help - This help\n");
-	printf("  0f <netfn> <lun> <cmd> <data.....> - send a command\n");
+	printf("  0f <lun> <netfn> <cmd> <data.....> - send a command\n");
 	printf("      to the local BMC\n");
-	printf("  <channel> <dest addr> <netfn> <lun> <cmd> <data...> -\n");
+	printf("  <channel> <dest addr> <lun> <netfn> <cmd> <data...> -\n");
 	printf("      send a command on the channel.\n");
-	printf("  <channel> 00 <dest addr> <netfn> <lun> <cmd> <data...> -\n");
+	printf("  <channel> 00 <dest addr> <lun> <netfn> <cmd> <data...> -\n");
 	printf("      broadcast a command on the channel.\n");
+#if 0
 	printf("  test_lat <count> <command> - Send the command and wait for\n"
 	       "      the response <count> times and measure the average\n"
 	       "      time.\n");
+#endif
 	return 0;
     }
 
@@ -613,10 +519,10 @@ process_input_line(char *buf)
 	    printf("No IPMB address specified\n");
 	    return -1;
 	}
+	si->lun = outbuf[start]; start++;
 	msg.netfn = outbuf[start]; start++;
 	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si->channel = IPMI_BMC_CHANNEL;
-	si->lun = outbuf[start]; start++;
 	addr_len = sizeof(*si);
     } else {
 	struct ipmi_ipmb_addr *ipmb = (void *) &addr;
@@ -634,8 +540,8 @@ process_input_line(char *buf)
 	}
 	ipmb->slave_addr = outbuf[start]; start++;
 	ipmb->channel = channel;
-	msg.netfn = outbuf[start]; start++;
 	ipmb->lun = outbuf[start]; start++;
+	msg.netfn = outbuf[start]; start++;
 	addr_len = sizeof(*ipmb);
     }
 
@@ -706,7 +612,7 @@ user_input_ready(int fd, void *data)
     if (pos >= 255) {
 	printf("Input line too long\n");
 	pos = 0;
-	if ( interactive )
+	if (interactive)
 	    printf("=> ");
 	fflush(stdout);
     }
@@ -745,7 +651,6 @@ main(int argc, const char *argv[])
     int          pos;
     int          o;
     char         *bufline = NULL;
-    unsigned int slave_addr = 0;
     int          curr_arg;
 
 
@@ -755,18 +660,10 @@ main(int argc, const char *argv[])
     {   
 	switch( o )
 	{
-	    case 'I':
-		interactive = 1;
-		break;
-
 	    case 'k':
 		strcpy( buf, poptGetOptArg(poptCtx) );
 		bufline = buf;
 		interactive = 0;
-		break;
-
-	    case 's':
-		slave_addr = strtoul(poptGetOptArg(poptCtx), NULL, 0);
 		break;
 
 	    case 'v':
@@ -929,16 +826,6 @@ main(int argc, const char *argv[])
 	rv = EINVAL;
 	goto out;
     }
-
-#if 0
-    if (slave_addr) {
-	rv = ioctl(ipmi_fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
-	if (err) {
-	    perror("Could not set slave address");
-	    exit(1);
-	}
-    }
-#endif
 
     if (interactive) {
 	rv = con->register_for_events(con, event_handler, NULL, NULL, NULL);

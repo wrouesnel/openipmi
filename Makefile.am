@@ -68,7 +68,7 @@ TESTS = test_heap
 
 info_TEXINFOS = OpenIPMI.texi
 
-man_MANS = ipmi_ui.1 ipmilan.8
+man_MANS = ipmi_ui.1 ipmilan.8 ipmicmd.1
 
 clean:
 	rm -f *.map
