@@ -2626,6 +2626,22 @@ con_up_complete(ipmi_domain_t *domain)
 {
     int i, j;
 
+    /* This is an unusual looking piece of code, but is required for
+       systems that do not have an IPMB.  If they don't have an IPMB,
+       then we won't scan them and thus won't find anything.  So we
+       force scanning the sysaddr (which is the right thing to use in
+       this case, anyway) if no IPMBs are present. */
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (domain->chan[i].medium == 1)
+	    break;
+    }
+    if (i == MAX_IPMI_USED_CHANNELS) {
+	for (i=0; i<MAX_CONS; i++) {
+	    if (domain->conn[i])
+		domain->con[i].scan_sysaddr = 1
+	}
+    }
+
     domain->connection_up = 1;
 
     if (domain->working_conn != -1)
@@ -2705,7 +2721,7 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
 	cmd_msg.data_len = 1;
 	cmd_data[0] = curr;
 
-	rv = ipmi_mc_send_command(mc, 0 ,&cmd_msg, chan_info_rsp_handler,
+	rv = ipmi_mc_send_command(mc, 0, &cmd_msg, chan_info_rsp_handler,
 				  (void *) curr);
     } else {
 	goto chan_info_done;

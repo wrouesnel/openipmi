@@ -3834,7 +3834,7 @@ help_cmd(char *cmd, char **toks, void *cb_data)
 
     display_pad_clear();
     curr_display_type = HELP;
-    display_pad_out("Welcome to the IPMI UI\n");
+    display_pad_out("Welcome to the IPMI UI version %s\n", VERSION);
     for (i=0; cmd_list[i].name != NULL; i++) {
 	display_pad_out("  %s%s\n", cmd_list[i].name, cmd_list[i].help);
     }

@@ -1,4 +1,10 @@
 
+2003-10-23 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: If a BMC reports through its channels that is does
+	not have an IPMB bus, then force scanning the system address so we
+	will find something useful.
+
 2003-10-20 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Added some code to print the number of SEL entries on
