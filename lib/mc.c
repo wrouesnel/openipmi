@@ -329,11 +329,8 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     /* Call the OEM handlers for removal, if it has been registered. */
     if (mc->removed_handlers) {
 	ilist_iter(mc->removed_handlers, call_removed_handler, mc);
-	free_ilist(mc->removed_handlers);
-	mc->removed_handlers = NULL;
     }
     
-
     /* First the device SDR sensors, since they can be there for any
        MC. */
     if (mc->sensors_in_my_sdr) {
@@ -385,6 +382,11 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
            delete it. */
 	_ipmi_remove_mc_from_domain(domain, mc);
 
+	if (mc->removed_handlers) {
+	    free_ilist(mc->removed_handlers);
+	    mc->removed_handlers = NULL;
+	}
+    
 	if (mc->sensors)
 	    ipmi_sensors_destroy(mc->sensors);
 	if (mc->controls)

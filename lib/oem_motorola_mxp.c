@@ -5734,8 +5734,9 @@ slot_ga_get_done(ipmi_control_t *control,
     int                val;
 
     if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, 0, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -5743,10 +5744,11 @@ slot_ga_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "last_reset_reason_get_done: Received IPMI error: %x",
 		 rsp->data[0]);
-	if (control_info->done_get)
-	    control_info->done_get(control,
-				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
-				   NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
@@ -5755,15 +5757,15 @@ slot_ga_get_done(ipmi_control_t *control,
 		 "last_reset_reason_get_done: Received invalid msg length: %d,"
 		 " expected %d",
 		 rsp->data_len, 9);
-	if (control_info->done_get)
-	    control_info->done_get(control, EINVAL, NULL,
-				   control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
 	goto out;
     }
 
-    val = rsp->data[8];
-    if (control_info->done_get)
-	control_info->done_get(control, 0, &val, control_info->cb_data);
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0, rsp->data+8, 1,
+					 control_info->cb_data);
  out:
     ipmi_control_opq_done(control);
     ipmi_mem_free(control_info);
@@ -5778,8 +5780,9 @@ slot_ga_get_start(ipmi_control_t *control, int err, void *cb_data)
     unsigned char      data[3];
 
     if (err) {
-	if (control_info->done_get)
-	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
 	return;
@@ -5794,8 +5797,9 @@ slot_ga_get_start(ipmi_control_t *control, int err, void *cb_data)
 				   &msg, slot_ga_get_done,
 				   &(control_info->sdata), control_info);
     if (rv) {
-	if (control_info->done_get)
-	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
 	ipmi_control_opq_done(control);
 	ipmi_mem_free(control_info);
     }
