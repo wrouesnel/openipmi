@@ -458,6 +458,54 @@ int ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
 				      unsigned int  *up);
 
 
+/* Domain statistics are used to track information about things
+   happening in the low-level code.  Each statistic has a name and an
+   instance.  The name is general (it, "MC", the instance is the
+   specific instance of the name. */
+typedef struct ipmi_domain_stat_s ipmi_domain_stat_t;
+typedef void (*ipmi_stat_cb)(ipmi_domain_t *domain, ipmi_domain_stat_t *stat,
+			     void *cb_data);
+
+/* Create a new statistic or return an existing one if the name and
+   instance already exists.  You must put() the statistic when you are
+   done with it. */
+int ipmi_domain_stat_register(ipmi_domain_t      *domain,
+			      char               *name,
+			      char               *instance,
+			      ipmi_domain_stat_t **stat);
+
+/* Find a statistic by name and instance.  You must put() the
+   statistic when you are done with it. */
+int ipmi_domain_find_stat(ipmi_domain_t      *domain,
+			  char               *name,
+			  char               *instance,
+			  ipmi_domain_stat_t **stat);
+
+/* Say you are done with a statistic. */
+void ipmi_domain_stat_put(ipmi_domain_stat_t *stat);
+
+/* Increment the value of a statistic by the given amount.  Negative
+   values are ok. */
+void ipmi_domain_stat_add(ipmi_domain_stat_t *stat, int amount);
+
+/* Get the value of the statistic. */
+unsigned int ipmi_domain_stat_get(ipmi_domain_stat_t *stat);
+
+/* Atomically get the value of the statistic and set it to zero. */
+unsigned int ipmi_domain_stat_get_and_zero(ipmi_domain_stat_t *stat);
+
+/* Get the name and instance of the statistic.  DON'T CHANGE THESE! */
+const char *ipmi_domain_stat_get_name(ipmi_domain_stat_t *stat);
+const char *ipmi_domain_stat_get_instance(ipmi_domain_stat_t *stat);
+
+/* Iterate through all the statistics. */
+void ipmi_domain_stat_iterate(ipmi_domain_t *domain,
+			      char          *name,
+			      char          *instance,
+			      ipmi_stat_cb  handler,
+			      void          *cb_data);
+
+
 /************************************************************************
  * 
  * Events

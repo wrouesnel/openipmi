@@ -767,7 +767,6 @@ ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
     memset(sensor, 0, sizeof(*sensor));
 
     sensor->hot_swap_requester = -1;
-    sensor->ignore_if_no_entity = 1;
     sensor->usecount = 1;
 
     *new_sensor = sensor;
@@ -4567,14 +4566,18 @@ states_get(ipmi_sensor_t *sensor,
 {
     states_get_info_t *info = cb_data;
 
-    if (sensor_done_check_rsp(sensor, err, rsp, 5, "states_get",
+    if (sensor_done_check_rsp(sensor, err, rsp, 3, "states_get",
 			      states_get_done_handler, info))
 	return;
 
     info->states.__event_messages_enabled = (rsp->data[2] >> 7) & 1;
     info->states.__sensor_scanning_enabled = (rsp->data[2] >> 6) & 1;
     info->states.__initial_update_in_progress = (rsp->data[2] >> 5) & 1;
-    info->states.__states = (rsp->data[4] << 8) | rsp->data[3];
+
+    if (rsp->data_len >= 4)
+	info->states.__states |= rsp->data[3];
+    if (rsp->data_len >= 5)
+	info->states.__states |= rsp->data[4] << 8;
 
     states_get_done_handler(sensor, 0, info);
 }

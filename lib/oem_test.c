@@ -697,7 +697,7 @@ test_handler_0(ipmi_mc_t *mc,
     }
 
     ipmi_control_set_type(control, IPMI_CONTROL_POWER);
-    ipmi_control_set_ignore_if_no_entity(control, 0);
+    ipmi_control_set_ignore_if_no_entity(control, 1);
     ipmi_control_set_id(control, "power", IPMI_ASCII_STR, 5);
     ipmi_control_set_hot_swap_power(control, 1);
 
@@ -745,7 +745,7 @@ test_handler_0(ipmi_mc_t *mc,
     }
 
     ipmi_control_set_type(control, IPMI_CONTROL_LIGHT);
-    ipmi_control_set_ignore_if_no_entity(control, 0);
+    ipmi_control_set_ignore_if_no_entity(control, 1);
     ipmi_control_set_id(control, "Hotswap LED", IPMI_ASCII_STR, 11);
     ipmi_control_light_set_lights(control, 1, hs_led);
     ipmi_control_set_hot_swap_indicator(control, 1, 0, 1, 2, 3);

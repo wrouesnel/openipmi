@@ -1208,6 +1208,10 @@ cleanup_con(ipmi_con_t *ipmi)
     if (ipmi) {
 	ipmi_con_attr_cleanup(ipmi);
 	ipmi_mem_free(ipmi);
+	if (ipmi->name) {
+	    ipmi_mem_free(ipmi->name);
+	    ipmi->name = NULL;
+	}
     }
 
     if (smi) {

@@ -45,9 +45,11 @@ typedef struct locked_list_s locked_list_t;
 
 /* The callback to the locked list iterator.  If it returns the
    CONTINUE value, iteration will continue.  If it returns the STOP
-   value, iteration will not continue. */
+   value, iteration will not continue.  SKIP is only valid from
+   a prefunc, it tells the code to skip this value. */
 #define LOCKED_LIST_ITER_CONTINUE	0
 #define LOCKED_LIST_ITER_STOP		1
+#define LOCKED_LIST_ITER_SKIP		2
 typedef int (*locked_list_handler_cb)(void *cb_data,
 				      void *item1,
 				      void *item2);

@@ -3406,7 +3406,6 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				   &ps->presence);
     if (rv)
 	goto out_err;
-    ipmi_sensor_set_ignore_if_no_entity(ps->presence, 0);
     rv = mxp_add_sensor(info->mc, 
 			&ps->presence,
 			MXP_PS_PRESENCE_NUM(ps->idx),
@@ -4024,7 +4023,6 @@ mxp_add_fan_sensors(mxp_info_t *info,
 				   &fan->fan_presence);
     if (rv)
 	goto out_err;
-    ipmi_sensor_set_ignore_if_no_entity(fan->fan_presence, 0);
     rv = mxp_add_sensor(info->mc, 
 			&fan->fan_presence,
 			MXP_FAN_PRESENCE_NUM(fan->idx),
@@ -4896,7 +4894,6 @@ mxp_add_board_sensors(mxp_info_t  *info,
 				   &board->presence);
     if (rv)
 	goto out_err;
-    ipmi_sensor_set_ignore_if_no_entity(board->presence, 0);
     rv = mxp_add_sensor(board->info->mc, 
 			&board->presence,
 			MXP_BOARD_PRESENCE_NUM(board->idx),
@@ -4915,7 +4912,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(board->oos_led, 1, red_led);
-    ipmi_control_set_ignore_if_no_entity(board->oos_led, 0);
+    ipmi_control_set_ignore_if_no_entity(board->oos_led, 1);
     rv = mxp_add_control(board->info->mc, 
 			 &board->oos_led,
 			 MXP_BOARD_OOS_LED_NUM(board->idx),
@@ -4934,7 +4931,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(board->inserv_led, 1, green_led);
-    ipmi_control_set_ignore_if_no_entity(board->inserv_led, 0);
+    ipmi_control_set_ignore_if_no_entity(board->inserv_led, 1);
     rv = mxp_add_control(board->info->mc, 
 			 &board->inserv_led,
 			 MXP_BOARD_INS_LED_NUM(board->idx),
@@ -4956,7 +4953,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	     &board->healthy);
 	if (rv)
 	    goto out_err;
-	ipmi_sensor_set_ignore_if_no_entity(board->healthy, 0);
+	ipmi_sensor_set_ignore_if_no_entity(board->healthy, 1);
 	rv = mxp_add_sensor(board->info->mc, 
 			    &board->healthy,
 			    MXP_BOARD_HEALTHY_NUM(board->idx),
@@ -4975,7 +4972,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->bd_sel, 1);
-        ipmi_control_set_ignore_if_no_entity(board->bd_sel, 0);
+        ipmi_control_set_ignore_if_no_entity(board->bd_sel, 1);
 	rv = mxp_add_control(board->info->mc, 
 			     &board->bd_sel,
 			     MXP_BOARD_BD_SEL_NUM(board->idx),
@@ -4994,7 +4991,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->pci_reset, 1);
-        ipmi_control_set_ignore_if_no_entity(board->pci_reset, 0);
+        ipmi_control_set_ignore_if_no_entity(board->pci_reset, 1);
 	rv = mxp_add_control(board->info->mc, 
 			     &board->pci_reset,
 			     MXP_BOARD_PCI_RESET_NUM(board->idx),
@@ -5014,7 +5011,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->slot_init, 1);
-        ipmi_control_set_ignore_if_no_entity(board->slot_init, 0);
+        ipmi_control_set_ignore_if_no_entity(board->slot_init, 1);
 	rv = mxp_add_control(board->info->mc, 
 			     &board->slot_init,
 			     MXP_SLOT_INIT_NUM(board->idx),
@@ -5033,7 +5030,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->i2c_isolate, 1);
-        ipmi_control_set_ignore_if_no_entity(board->i2c_isolate, 0);
+        ipmi_control_set_ignore_if_no_entity(board->i2c_isolate, 1);
 	rv = mxp_add_control(board->info->mc, 
 			     &board->i2c_isolate,
 			     MXP_SLOT_I2C_ISOLATE_NUM(board->idx),

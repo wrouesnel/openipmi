@@ -202,7 +202,9 @@ handle_intel_atca(ipmi_con_t *conn, void *cb_data)
 
     /* This means that we don't advertise 0x20 as our address on the
        CMM, we use the real address. */
+#if 0
     info->dont_use_floating_addr = 1;
+#endif
     info->hacks = IPMI_CONN_HACK_20_AS_MAIN_ADDR;
     return 0;
 }

@@ -715,8 +715,6 @@ ipmi_control_alloc_nonstandard(ipmi_control_t **new_control)
 	return ENOMEM;
 
     memset(control, 0, sizeof(*control));
-    /* By default we ignore if no entity. */
-    ipmi_control_set_ignore_if_no_entity(control, 1);
 
     control->usecount = 1;
     *new_control = control;

@@ -292,15 +292,18 @@ locked_list_iterate_prefunc_nolock(locked_list_t          *ll,
 	if (!entry->destroyed)
 	{
 	    void *item1, *item2;
+	    int  process = 1;
 
 	    item1 = entry->item1;
 	    item2 = entry->item2;
 	    if (prefunc) {
 		rv = prefunc(cb_data, item1, item2);
-		if (rv)
+		if (rv == LOCKED_LIST_ITER_SKIP)
+		    process = 0;
+		else if (rv)
 		    break;
 	    }
-	    if (handler) {
+	    if (process && handler) {
 		ll->unlock(ll->lock_cb_data);
 		rv = handler(cb_data, item1, item2);
 		ll->lock(ll->lock_cb_data);

@@ -1,3 +1,34 @@
+2005-02-24 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/entity.c: Ignore controls and sensors for presence if they
+	are supposed to be ignored when the entity is not present.  I
+	think I previously misunderstood this bit (not like it is well
+	explained, anyway).
+	
+	* lib/sensor.c, lib/control.c: Make oem sensors and controls not
+	ignored when the entity is not present.
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/oem_test.c: ditto
+	* lib/oem_intel.c: ditto
+
+	* lib/oem_atca.c: Set address controls to be ignored if the entity
+	is not present.
+
+	* lib/sensor.c: Fix a problem with handling sensor state fetches
+	that didn't have optional bytes.
+
+	* lib/oem_atca.c, lib/oem_atca_conn.c: Modify fetching the shelf
+	FRU to try the ECN 1.1 version first.  Commented out some
+	Intel-specific hacks as the shelf gets better.
+
+	* include/OpenIPMI/internal/locked_list.h, util/locked_list.c:
+	Added a way for the prefunc to tell it to skip an item.
+
+	* include/OpenIPMI/ipmiif.h, lib/domain.c: Added support for
+	domain statistics.
+
+	* include/OpenIPMI/ipmi_conn.h: Added a statistics interface.
+
 2005-02-23 Tariq Shureih <tariq@linux.intel.com>, Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Added a physical slot number attribute for

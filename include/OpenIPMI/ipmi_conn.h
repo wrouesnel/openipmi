@@ -252,7 +252,10 @@ struct ipmi_con_s
        code will not do anything with the message. */
     int (*handle_send_rsp_err)(ipmi_con_t *con, ipmi_msg_t *msg);
 
-    /* Name the connection code can use for logging. */
+    /* Name the connection code can use for logging and instance names
+       for statistics.  Must be dynamically allocated with
+       ipmi_mem_alloc().  The connection code will free this.  May be
+       NULL. */
     char *name;
 
     /* The connection code may put a string here to identify
@@ -286,6 +289,13 @@ struct ipmi_con_s
        call ipmi_con_attr_init() when the connection is created and
        ipmi_con_attr_cleanup() when the connection is destroyed. */
     void *attr;
+
+    /* Statistics interfaces.  These may be NULL if the user doesn't
+       want statistics.  They pass in the user data field. */
+    int (*register_stat)(void *user_data, char *name,
+			 char *instance,  void **stat);
+    void (*add_stat)(void *user_data, void *stat, int value);
+    void (*finished_with_stat)(void *user_data, void *stat);
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")

@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmiif.h>
@@ -295,6 +296,9 @@ struct ipmi_domain_s
     /* Anonymous attributes for the domain. */
     locked_list_t *attr;
 
+    /* Statistics for the domain. */
+    locked_list_t *stats;
+
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
 
@@ -507,6 +511,7 @@ ipmi_domain_set_oem_shutdown_handler(ipmi_domain_t           *domain,
 }
 
 static int destroy_attr(void *cb_data, void *item1, void *item2);
+static int destroy_stat(void *cb_data, void *item1, void *item2);
 
 static void
 cleanup_domain(ipmi_domain_t *domain)
@@ -522,6 +527,12 @@ cleanup_domain(ipmi_domain_t *domain)
 	locked_list_iterate(domain->attr, destroy_attr, domain);
 	locked_list_destroy(domain->attr);
 	domain->attr = NULL;
+    }
+
+    if (domain->stats) {
+	locked_list_iterate(domain->stats, destroy_stat, domain);
+	locked_list_destroy(domain->stats);
+	domain->stats = NULL;
     }
 
     /* Nuke all outstanding messages. */
@@ -787,6 +798,10 @@ setup_domain(char          *name,
 	domain->con_ipmb_addr[i] = 0x20; /* Assume this until told othersize */
 	domain->con_active[i] = 1;
 	domain->con_up[i] = 0;
+	ipmi[i]->name = ipmi_mem_alloc(10);
+	if (ipmi[i]->name)
+	    snprintf(ipmi[i]->name, 10, "%d", i);
+	ipmi[i]->user_data = domain;
 
 	for (j=0; j<MAX_PORTS_PER_CON; j++)
 	    domain->port_up[j][i] = -1;
@@ -845,6 +860,12 @@ setup_domain(char          *name,
 
     domain->attr = locked_list_alloc(domain->os_hnd);
     if (!domain->attr) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    domain->stats = locked_list_alloc(domain->os_hnd);
+    if (!domain->stats) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -5076,6 +5097,272 @@ ipmi_domain_id_find_attribute(ipmi_domain_id_t   domain_id,
     if (!rv)
 	rv = info.rv;
     return rv;
+}
+
+/***********************************************************************
+ *
+ * Statistics
+ *
+ **********************************************************************/
+
+struct ipmi_domain_stat_s
+{
+    char               *name;
+    char               *instance;
+    ipmi_lock_t        *lock;
+    unsigned int       count;
+    ipmi_domain_stat_t *stat;
+    unsigned int       refcount;
+};
+
+static int
+destroy_stat(void *cb_data, void *item1, void *item2)
+{
+    ipmi_domain_t      *domain = cb_data;
+    ipmi_domain_stat_t *stat = item1;
+
+    locked_list_remove(domain->stats, item1, item2);
+    ipmi_domain_stat_put(stat);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct domain_stat_cmp_s
+{
+    char               *name;
+    char               *instance;
+    ipmi_domain_stat_t *stat;
+} domain_stat_cmp_t;
+
+static int
+domain_stat_cmp(void *cb_data, void *item1, void *item2)
+{
+    domain_stat_cmp_t  *info = cb_data;
+    ipmi_domain_stat_t *stat = item1;
+
+    if ((strcmp(info->name, stat->name) == 0)
+	&& (strcmp(info->instance, stat->instance) == 0))
+    {
+	info->stat = stat;
+	return LOCKED_LIST_ITER_STOP;
+    }
+
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+int
+ipmi_domain_stat_register(ipmi_domain_t      *domain,
+			  char               *name,
+			  char               *instance,
+			  ipmi_domain_stat_t **stat)
+{
+    ipmi_domain_stat_t  *val = NULL;
+    domain_stat_cmp_t   info;
+    int                 rv = 0;
+    locked_list_entry_t *entry;
+
+    info.name = name;
+    info.instance = instance;
+    info.stat = NULL;
+    locked_list_lock(domain->stats);
+    locked_list_iterate_nolock(domain->stats, domain_stat_cmp, &info);
+    if (info.stat) {
+	ipmi_lock(info.stat->lock);
+	info.stat->refcount++;
+	ipmi_unlock(info.stat->lock);
+	*stat = info.stat;
+	goto out_unlock;
+    }
+
+    val = ipmi_mem_alloc(sizeof(*val));
+    if (!val) {
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    val->name = ipmi_strdup(name);
+    if (!val->name) {
+	ipmi_mem_free(val);
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    val->instance = ipmi_strdup(name);
+    if (!val->instance) {
+	ipmi_mem_free(val->name);
+	ipmi_mem_free(val);
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    entry = locked_list_alloc_entry();
+    if (!entry) {
+	ipmi_mem_free(val->instance);
+	ipmi_mem_free(val->name);
+	ipmi_mem_free(val);
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    rv = ipmi_create_lock(domain, &val->lock);
+    if (rv) {
+	locked_list_free_entry(entry);
+	ipmi_mem_free(val->instance);
+	ipmi_mem_free(val->name);
+	ipmi_mem_free(val);
+	goto out_unlock;
+    }
+
+    val->refcount = 2;
+    val->count = 0;
+
+    locked_list_add_entry_nolock(domain->stats, val, NULL, entry);
+
+    *stat = val;
+
+ out_unlock:    
+    locked_list_unlock(domain->stats);
+    return 0;
+}
+
+int
+ipmi_domain_find_stat(ipmi_domain_t      *domain,
+		      char               *name,
+		      char               *instance,
+		      ipmi_domain_stat_t **stat)
+{
+    domain_stat_cmp_t   info;
+    int                 rv = ENOENT;
+
+    info.name = name;
+    info.instance = instance;
+    info.stat = NULL;
+    locked_list_lock(domain->stats);
+    locked_list_iterate_nolock(domain->stats, domain_stat_cmp, &info);
+    if (info.stat) {
+	ipmi_lock(info.stat->lock);
+	info.stat->refcount++;
+	ipmi_unlock(info.stat->lock);
+	*stat = info.stat;
+	rv = 0;
+    }
+    locked_list_unlock(domain->stats);
+
+    return rv;
+}
+
+void
+ipmi_domain_stat_put(ipmi_domain_stat_t *stat)
+{
+    ipmi_lock(stat->lock);
+    stat->refcount--;
+    if (stat->refcount > 0) {
+	ipmi_unlock(stat->lock);
+	return;
+    }
+    ipmi_unlock(stat->lock);
+    ipmi_destroy_lock(stat->lock);
+    ipmi_mem_free(stat->name);
+    ipmi_mem_free(stat->instance);
+    ipmi_mem_free(stat);
+}
+
+void
+ipmi_domain_stat_add(ipmi_domain_stat_t *stat, int amount)
+{
+    ipmi_lock(stat->lock);
+    stat->count += amount;
+    ipmi_unlock(stat->lock);
+}
+
+unsigned int
+ipmi_domain_stat_get(ipmi_domain_stat_t *stat)
+{
+    unsigned int rv;
+    ipmi_lock(stat->lock);
+    rv = stat->count;
+    ipmi_unlock(stat->lock);
+    return rv;
+}
+
+unsigned int
+ipmi_domain_stat_get_and_zero(ipmi_domain_stat_t *stat)
+{
+    unsigned int rv;
+    ipmi_lock(stat->lock);
+    rv = stat->count;
+    stat->count = 0;
+    ipmi_unlock(stat->lock);
+    return rv;
+}
+
+const char *
+ipmi_domain_stat_get_name(ipmi_domain_stat_t *stat)
+{
+    return stat->name;
+}
+
+const char *
+ipmi_domain_stat_get_instance(ipmi_domain_stat_t *stat)
+{
+    return stat->instance;
+}
+
+typedef struct stat_iterate_s
+{
+    ipmi_domain_t *domain;
+    char          *name;
+    char          *instance;
+    ipmi_stat_cb  handler;
+    void          *cb_data;
+} stat_iterate_t;
+
+static int
+domain_stat_iter_pre(void *cb_data, void *item1, void *item2)
+{
+    stat_iterate_t     *info = cb_data;
+    ipmi_domain_stat_t *stat = item1;
+
+    if (info->name && (strcmp(info->name, stat->name) != 0))
+	return LOCKED_LIST_ITER_SKIP;
+    if (info->instance && (strcmp(info->instance, stat->instance) != 0))
+	return LOCKED_LIST_ITER_SKIP;
+
+    ipmi_lock(stat->lock);
+    stat->refcount++;
+    ipmi_unlock(stat->lock);
+
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+domain_stat_iter(void *cb_data, void *item1, void *item2)
+{
+    stat_iterate_t     *info = cb_data;
+    ipmi_domain_stat_t *stat = item1;
+
+    /* Prefunc already matched, this is a good one. */
+    info->handler(info->domain, stat, info->cb_data);
+    ipmi_domain_stat_put(stat);
+
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+void
+ipmi_domain_stat_iterate(ipmi_domain_t *domain,
+			 char          *name,
+			 char          *instance,
+			 ipmi_stat_cb  handler,
+			 void          *cb_data)
+{
+    stat_iterate_t info;
+
+    info.domain = domain;
+    info.name = name;
+    info.instance = instance;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    locked_list_iterate_prefunc(domain->stats, domain_stat_iter_pre,
+				domain_stat_iter, &info);
 }
 
 /***********************************************************************

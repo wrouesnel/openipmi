@@ -1814,6 +1814,10 @@ control_detect_send(ipmi_entity_t  *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
+    if (ipmi_control_get_ignore_if_no_entity(control))
+	/* Control should be ignored for presence. */
+	return;
+
     info->try_count++;
     ipmi_unlock(info->lock);
 
@@ -1936,6 +1940,10 @@ sensor_detect_send(ipmi_entity_t *ent,
 {
     ent_active_detect_t *info = cb_data;
     int                 rv;
+
+    if (ipmi_sensor_get_ignore_if_no_entity(sensor))
+	/* Sensor should be ignored for presence. */
+	return;
 
     info->try_count++;
     ipmi_unlock(info->lock);

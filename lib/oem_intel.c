@@ -322,7 +322,6 @@ add_tig_alarm_handler(ipmi_mc_t *mc, intel_tig_info_t *info)
     }
 
     ipmi_control_set_type(info->alarm, IPMI_CONTROL_ALARM);
-    ipmi_control_set_ignore_if_no_entity(info->alarm, 0);
     ipmi_control_set_id(info->alarm, "alarm", IPMI_ASCII_STR, 5);
 
     ipmi_control_set_settable(info->alarm, 1);
