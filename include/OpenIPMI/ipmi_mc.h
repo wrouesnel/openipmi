@@ -189,6 +189,15 @@ int ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
 				 sel_get_time_cb handler,
 				 void            *cb_data);
 
+/* Set the time for the SEL.  Note that this function is rather
+   dangerous to do, especially if you don't set it to the current
+   time, as it can cause old events to be interpreted as new
+   events on this and other systems. */
+int ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
+				 struct timeval  *time,
+				 ipmi_mc_done_cb handler,
+				 void            *cb_data);
+
 
 typedef void (*ipmi_mc_cb)(ipmi_mc_t *mc, int err, void *cb_data);
 

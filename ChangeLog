@@ -1,4 +1,13 @@
 
+2003-10-30 Louis Zhuang <louis.zhuang@intel.com>, Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Add a function to set the
+	SEL time for an MC.
+
+2003-10-30 Corey Minyard <cminyard@mvista.com>
+
+	* lib/selector.c: Allow a NULL send_sig handler.
+
 2003-10-30 Jarrod Johnson <jbj-taway@ura.dnsalias.org>
 
 	* sample/ipmicmd.c: Close the connection when done.

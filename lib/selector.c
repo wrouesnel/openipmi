@@ -177,12 +177,14 @@ wake_sel_thread(selector_t *sel)
 {
     sel_wait_list_t *item;
 
-    item = sel->wait_list.next;
-    while (item != &sel->wait_list) {
-	item->timeout->tv_sec = 0;
-	item->timeout->tv_usec = 0;
-	sel->send_sig(item->thread_id, sel->send_sig_cb_data);
-	item = item->next;
+    if (sel->send_sig) {
+	item = sel->wait_list.next;
+	while (item != &sel->wait_list) {
+	    item->timeout->tv_sec = 0;
+	    item->timeout->tv_usec = 0;
+	    sel->send_sig(item->thread_id, sel->send_sig_cb_data);
+	    item = item->next;
+	}
     }
 }
 

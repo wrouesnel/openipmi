@@ -802,7 +802,8 @@ get_sel_time(ipmi_mc_t  *mc,
     if (!mc) {
 	/* The MC went away, deliver an error. */
 	ipmi_log(IPMI_LOG_ERR_INFO, "MC went away during SEL time fetch.");
-	info->handler(mc, ENXIO, 0, info->cb_data);
+	if (info->handler)
+	    info->handler(mc, ENXIO, 0, info->cb_data);
 	goto out;
     }
 
@@ -811,7 +812,9 @@ get_sel_time(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Could not get SEL time for MC at 0x%x",
 		 ipmi_addr_get_slave_addr(&mc->addr));
-	info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), 0, info->cb_data);
+	if (info->handler)
+	    info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), 0,
+			  info->cb_data);
 	goto out;
     }
 
@@ -820,11 +823,13 @@ get_sel_time(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Get SEL time response too short for MC at 0x%x",
 		 ipmi_addr_get_slave_addr(&mc->addr));
-	info->handler(mc, EINVAL, 0, info->cb_data);
+	if (info->handler)
+	    info->handler(mc, EINVAL, 0, info->cb_data);
 	goto out;
     }
 
-    info->handler(mc, 0, ipmi_get_uint32(rsp->data+1), info->cb_data);
+    if (info->handler)
+	info->handler(mc, 0, ipmi_get_uint32(rsp->data+1), info->cb_data);
 
  out:
     ipmi_mem_free(info);
@@ -851,6 +856,75 @@ ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
     msg.data = NULL;
     msg.data_len = 0;
     rv = ipmi_mc_send_command(mc, 0, &msg, get_sel_time, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+typedef struct set_sel_time_s
+{
+    ipmi_mc_done_cb handler;
+    void            *cb_data;
+} set_sel_time_t;
+
+static void
+set_sel_time(ipmi_mc_t  *mc,
+	     ipmi_msg_t *rsp,
+	     void       *rsp_data)
+{
+    set_sel_time_t *info = rsp_data;
+
+    if (!mc) {
+	/* The MC went away, deliver an error. */
+	ipmi_log(IPMI_LOG_ERR_INFO, "MC went away during SEL time fetch.");
+	if (info->handler)
+	    info->handler(mc, ENXIO, info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	/* Error setting the event receiver, report it. */
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Could not get SEL time for MC at 0x%x",
+		 ipmi_addr_get_slave_addr(&mc->addr));
+	if (info->handler)
+	    info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
+	goto out;
+    }
+
+    if (info->handler)
+	info->handler(mc, 0, info->cb_data);
+
+ out:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
+			     struct timeval  *time,
+			     ipmi_mc_done_cb handler,
+			     void            *cb_data)
+{
+    ipmi_msg_t     msg;
+    int            rv;
+    unsigned char  data[4];
+    set_sel_time_t *info;
+
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->handler = handler;
+    info->cb_data = cb_data;
+
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_SET_SEL_TIME_CMD;
+    msg.data = data;
+    msg.data_len = 4;
+    ipmi_set_uint32(data, time->tv_sec);
+    mc->startup_SEL_time = time->tv_sec;
+    rv = ipmi_mc_send_command(mc, 0, &msg, set_sel_time, NULL);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
@@ -965,9 +1039,9 @@ _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc)
 }
 
 static void
-set_sel_time(ipmi_mc_t  *mc,
-	     ipmi_msg_t *rsp,
-	     void       *rsp_data)
+startup_set_sel_time(ipmi_mc_t  *mc,
+		     ipmi_msg_t *rsp,
+		     void       *rsp_data)
 {
     if (!mc) {
 	ipmi_log(IPMI_LOG_WARNING, "MC went away during SEL time set");
@@ -987,23 +1061,22 @@ set_sel_time(ipmi_mc_t  *mc,
 static void
 first_sel_op(ipmi_mc_t *mc)
 {
-    struct timeval now;
     ipmi_msg_t     msg;
     int            rv;
     unsigned char  data[4];
-
+    struct timeval now;
 
     /* Set the current system event log time.  We do this here so
        we can be sure that the entities are all there before
        reporting events. */
-    gettimeofday(&now, NULL);
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_SET_SEL_TIME_CMD;
     msg.data = data;
     msg.data_len = 4;
+    gettimeofday(&now, NULL);
     ipmi_set_uint32(data, now.tv_sec);
     mc->startup_SEL_time = now.tv_sec;
-    rv = ipmi_mc_send_command(mc, 0, &msg, set_sel_time, NULL);
+    rv = ipmi_mc_send_command(mc, 0, &msg, startup_set_sel_time, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Unable to start SEL time set due to error: %x\n",
