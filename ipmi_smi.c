@@ -76,7 +76,6 @@ typedef struct pending_cmd_s
     void                  *rsp_data;
     void                  *data2, *data3;
     struct pending_cmd_s  *next, *prev;
-    os_hnd_timer_id_t     *timeout_id;
 } pending_cmd_t;
 
 typedef struct cmd_handler_s
@@ -319,54 +318,10 @@ smi_send(smi_data_t   *smi,
 }
 
 static void
-rsp_timeout_handler(void              *cb_data,
-		    os_hnd_timer_id_t *id)
-{
-    pending_cmd_t         *cmd = (pending_cmd_t *) cb_data;
-    ipmi_con_t            *ipmi = cmd->ipmi;
-    smi_data_t            *smi;
-    ipmi_msg_t            msg;
-    unsigned char         data[1];
-
-    ipmi_read_lock();
-
-    /* If we were cancelled, just free the data and ignore it. */
-    if (cmd->cancelled) {
-	goto out_unlock2;
-    }
-
-    if (!smi_valid_ipmi(ipmi)) {
-	goto out_unlock2;
-    }
-
-    smi = (smi_data_t *) ipmi->con_data;
-
-    ipmi_lock(smi->cmd_lock);
-    remove_cmd(ipmi, smi, cmd);
-
-    data[0] = IPMI_TIMEOUT_CC;
-    msg.netfn = cmd->msg.netfn | 1;
-    msg.cmd = cmd->msg.cmd;
-    msg.data = data;
-    msg.data_len = 1;
-    ipmi_unlock(smi->cmd_lock);
-
-    /* call the user handler. */
-    cmd->rsp_handler(ipmi, &(cmd->addr), cmd->addr_len, &msg,
-		     cmd->rsp_data, cmd->data2, cmd->data3);
-
- out_unlock2:
-    ipmi_read_unlock();
-    ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
-    ipmi_mem_free(cmd);
-}
-
-static void
 handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     smi_data_t            *smi = (smi_data_t *) ipmi->con_data;
     pending_cmd_t         *cmd, *finder;
-    int                   rv;
     ipmi_ll_rsp_handler_t rsp_handler;
     void                  *rsp_data;
     void                  *data2, *data3;
@@ -395,17 +350,7 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 
     remove_cmd(ipmi, smi, cmd);
 
-    rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, cmd->timeout_id);
-    if (rv)
-	/* Can't cancel the timer, so the timer will run, let the timer
-	   free the command when that happens. */
-	cmd->cancelled = 1;
-    else {
-	ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
-	ipmi_mem_free(cmd);
-    }
-	
-
+    ipmi_mem_free(cmd);
     cmd = NULL; /* It's gone after this point. */
 
     ipmi_unlock(smi->cmd_lock);
@@ -559,10 +504,9 @@ smi_send_command(ipmi_con_t            *ipmi,
 		 void                  *data2,
 		 void                  *data3)
 {
-    pending_cmd_t  *cmd;
-    smi_data_t     *smi;
-    struct timeval timeout;
-    int            rv;
+    pending_cmd_t *cmd;
+    smi_data_t    *smi;
+    int           rv;
 
 
     smi = (smi_data_t *) ipmi->con_data;
@@ -588,40 +532,9 @@ smi_send_command(ipmi_con_t            *ipmi,
     ipmi_lock(smi->cmd_lock);
     add_cmd(ipmi, addr, addr_len, msg, smi, cmd);
 
-    timeout.tv_sec = SMI_TIMEOUT / 1000;
-    timeout.tv_usec = (SMI_TIMEOUT % 1000) * 1000;
-    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd,
-				   &(cmd->timeout_id));
-    if (!rv) {
-	rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
-				       cmd->timeout_id,
-				       &timeout,
-				       rsp_timeout_handler,
-				       cmd);
-	if (rv)
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd,
-				     cmd->timeout_id);
-    }
-    if (rv) {
-	remove_cmd(ipmi, smi, cmd);
-	ipmi_mem_free(cmd);
-	goto out_unlock;
-    }
-
     rv = smi_send(smi, smi->fd, addr, addr_len, msg, (long) cmd);
     if (rv) {
-	int err;
-
 	remove_cmd(ipmi, smi, cmd);
-	err = ipmi->os_hnd->stop_timer(ipmi->os_hnd, cmd->timeout_id);
-	/* Special handling, if we can't remove the timer, then it
-           will time out on us, so we need to not free the command and
-           instead let the timeout handle freeing it. */
-	if (!err) {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
-	    ipmi_mem_free(cmd);
-	} else
-	    cmd->cancelled = 1;
 	goto out_unlock;
     }
 
@@ -792,7 +705,6 @@ smi_close_connection(ipmi_con_t *ipmi)
     pending_cmd_t              *cmd_to_free, *next_cmd;
     cmd_handler_t              *hnd_to_free, *next_hnd;
     ipmi_ll_event_handler_id_t *evt_to_free, *next_evt;
-    int                        rv;
 
     if (! smi_valid_ipmi(ipmi)) {
 	return EINVAL;
@@ -815,13 +727,7 @@ smi_close_connection(ipmi_con_t *ipmi)
     smi->pending_cmds = NULL;
     while (cmd_to_free) {
 	next_cmd = cmd_to_free->next;
-	rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, cmd_to_free->timeout_id);
-	if (rv)
-	    cmd_to_free->cancelled = 1;
-	else {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd_to_free->timeout_id);
-	    ipmi_mem_free(cmd_to_free);
-	}
+	ipmi_mem_free(cmd_to_free);
 	cmd_to_free = next_cmd;
     }
 

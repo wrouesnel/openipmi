@@ -1,4 +1,14 @@
 
+2003-03-27 Corey Minyard <cminyard@mvista.com>
+
+	* ipmi_smi.c: Removed the timing of commands, because the
+	low-level driver does it, and it introduced some race conditions.
+	Specifically, if OpenIPMI timed out the command and the memory
+	address got reused before the message came back in, then the
+	message would be delivered to the wrong place.  It generally only
+	happened when sitting for a long time in the debugger (so a whole
+	slew of things happened at once).
+
 2003-03-26 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c: Fixed some problems with non-BMC SELs.
