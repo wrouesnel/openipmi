@@ -193,3 +193,12 @@
 
      Sure.  You can write OEM code that ties in to when objects are
      added to the system and fix them up as necessary.
+
+
+ 17) It takes a long time to find all the information about a system
+     on IPMB.  What's the deal?
+
+     Unfortunately, the base library can't really know what exists or
+     where it should exist, so it has to scan everything on the bus.
+     You can write an OEM plugin or scan the addresses you are
+     interested in by hand.
