@@ -31,6 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include <OpenIPMI/ipmi_conn.h>
@@ -68,6 +69,7 @@ struct ipmi_mc_removed_s
     void                   *cb_data;
 };
 
+#define MC_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
 struct ipmi_mc_s
 {
     ipmi_domain_t *domain;
@@ -207,6 +209,8 @@ struct ipmi_mc_s
     uint16_t real_product_id;
 
     uint8_t  real_aux_fw_revision[4];
+
+    char name[MC_NAME_LEN];
 };
 
 static void mc_sel_new_event_handler(ipmi_sel_info_t *sel,
@@ -225,6 +229,38 @@ static void sels_fetched_start_timer(ipmi_sel_info_t *sel,
  * Routines for creating and destructing MCs.
  *
  **********************************************************************/
+
+static void
+mc_set_name(ipmi_mc_t *mc)
+{
+    char        *dname = DOMAIN_NAME(mc->domain);
+    int         length;
+    ipmi_mcid_t id = ipmi_mc_convert_to_id(mc);
+
+    mc->name[0] = '(';
+    if (*dname != '\0') {
+	length = strlen(dname) - 3; /* Remove the "() " */
+	memcpy(mc->name+1, dname+1, length);
+	length++;
+	mc->name[length] = '.';
+	length++;
+    } else
+	length = 1;
+    length += snprintf(mc->name+length, MC_NAME_LEN-length-3, "%x.%x",
+		       id.channel, id.mc_num);
+    mc->name[length] = ')';
+    length++;
+    mc->name[length] = ' ';
+    length++;
+    mc->name[length] = '\0';
+    length++;
+}
+
+char *
+_ipmi_mc_name(ipmi_mc_t *mc)
+{
+    return mc->name;
+}
 
 int
 _ipmi_create_mc(ipmi_domain_t *domain,
@@ -296,6 +332,7 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 				   mc_sel_new_event_handler,
 				   domain);
 
+    mc_set_name(mc);
  out_err:
     if (rv)
 	_ipmi_cleanup_mc(mc);

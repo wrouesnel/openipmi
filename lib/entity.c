@@ -32,6 +32,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_entity.h>
 #include <OpenIPMI/ipmi_bits.h>
@@ -133,6 +134,7 @@ typedef struct dlr_info_s
     dlr_ref_t contained_entities[4];
 } dlr_info_t;
 
+#define ENTITY_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
 struct ipmi_entity_s
 {
     ipmi_domain_t    *domain;
@@ -212,6 +214,9 @@ struct ipmi_entity_s
     ilist_t                 *presence_handlers;
     ipmi_entity_presence_cb presence_handler;
     void                    *presence_cb_data;
+
+    /* Name we use for reporting */
+    char name[ENTITY_NAME_LEN];
 };
 
 typedef struct entity_child_link_s
@@ -406,6 +411,38 @@ cleanup_entity(ipmi_entity_t *ent)
        now, we can just destroy it. */
     destroy_entity(NULL, ent, NULL);
     return 1;
+}
+
+static void
+entity_set_name(ipmi_entity_t *entity)
+{
+    char *dname = DOMAIN_NAME(entity->domain);
+    int  length;
+
+    entity->name[0] = '(';
+    if (*dname != '\0') {
+	length = strlen(dname) - 3; /* Remove the "() " */
+	memcpy(entity->name+1, dname+1, length);
+	length++;
+	entity->name[length] = '.';
+	length++;
+    } else
+	length = 1;
+    length += snprintf(entity->name+length, ENTITY_NAME_LEN-length-3,
+		       "%d.%d", entity->info.entity_id,
+		       entity->info.entity_instance);
+    entity->name[length] = ')';
+    length++;
+    entity->name[length] = ' ';
+    length++;
+    entity->name[length] = '\0';
+    length++;
+}
+
+char *
+_ipmi_entity_name(ipmi_entity_t *entity)
+{
+    return entity->name;
 }
 
 /***********************************************************************
@@ -1404,7 +1441,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 		     "%sentity.c(ipmi_entity_remove_sensor):"
 		     " Removal of a sensor from an entity was requested,"
 		     " but the sensor was not there",
-		     SENS_DOMAIN_NAME(sensor));
+		     SENSOR_NAME(sensor));
 	    return;
 	}
 
@@ -1474,7 +1511,7 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
 		 "%sentity.c(ipmi_entity_remove_control):"
 		 " Removal of a control from an entity was requested,"
 		 " but the control was not there",
-		 CONTROL_DOMAIN_NAME(control));
+		 CONTROL_NAME(control));
 	return;
     }
 
@@ -3413,7 +3450,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(fru_fetched_ent_cb):"
 		 "Error fetching entity %d.%d FRU: %x\n",
-		 ENT_DOMAIN_NAME(ent),
+		 ENTITY_NAME(ent),
 		 ent->info.entity_id, ent->info.entity_instance, info->err);
 	if ((ent->fru) && (info->fru))
 	    /* Keep the old FRU on errors. */
@@ -3845,7 +3882,7 @@ hot_swap_power_on(ipmi_control_t *control, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(hot_swap_power_on):"
 		 " Unable to set the hot swap power: %x",
-		 CONTROL_DOMAIN_NAME(control), err);
+		 CONTROL_NAME(control), err);
     } else {
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
     }
@@ -3868,7 +3905,7 @@ hot_swap_power_on_cb(ipmi_control_t *control, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(hot_swap_power_on):"
 		 " Unable to set the hot swap power: %x",
-		 CONTROL_DOMAIN_NAME(control), err);
+		 CONTROL_NAME(control), err);
     } else {
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
     }
@@ -3885,7 +3922,7 @@ indicator_change(ipmi_control_t *control, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(indicator_change):"
 		 " Unable to set the hot swap indicator: %x",
-		 CONTROL_DOMAIN_NAME(control), err);
+		 CONTROL_NAME(control), err);
 }
 
 static int
@@ -3940,7 +3977,7 @@ hot_swap_act_cb(ipmi_entity_t *ent, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(hot_swap_act):"
 		 " Unable to set the hot swap power: %x",
-		 ENT_DOMAIN_NAME(ent), rv);
+		 ENTITY_NAME(ent), rv);
 }
 
 static void
@@ -4018,7 +4055,7 @@ hot_swap_deact_cb(ipmi_entity_t *ent, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(hot_swap_act):"
 		 " Unable to set the hot swap power: %x",
-		 ENT_DOMAIN_NAME(ent), rv);
+		 ENTITY_NAME(ent), rv);
 }
 
 static void
@@ -4130,7 +4167,7 @@ set_hot_swap_state(ipmi_entity_t             *ent,
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sentity.c(set_hot_swap_state): Unable to"
 		     " set control value to %d, error %x",
-		     CONTROL_DOMAIN_NAME(ent->hot_swap_indicator),
+		     CONTROL_NAME(ent->hot_swap_indicator),
 		     val, rv);
     }
 
@@ -4277,7 +4314,7 @@ handle_new_hot_swap_indicator(ipmi_entity_t *ent, ipmi_control_t *control)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%sentity.c(handle_new_hot_swap_indicator): Unable to"
 		 " set control value, error %x",
-		 CONTROL_DOMAIN_NAME(control), rv);
+		 CONTROL_NAME(control), rv);
 }
 
 static void
@@ -4293,7 +4330,7 @@ handle_new_hot_swap_power(ipmi_entity_t *ent, ipmi_control_t *control)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%sentity.c(handle_new_hot_swap_power): Unable to"
 		 " add an event handler, error %x",
-		 CONTROL_DOMAIN_NAME(control), rv);
+		 CONTROL_NAME(control), rv);
 	return;
     }
 
@@ -4322,7 +4359,7 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%sentity.c(handle_new_hot_swap_requester): Unable to"
 		 " add an event handler, error %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	return;
     }
 

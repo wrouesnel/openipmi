@@ -36,6 +36,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <stdint.h>
@@ -76,7 +77,7 @@ struct ipmi_fru_record_s
     void                  *data;
 };
 
-#define FRU_NAME_SIZE (IPMI_MAX_DOMAIN_NAME_LEN + 30)
+#define FRU_NAME_SIZE (IPMI_MAX_DOMAIN_NAME_LEN + 31)
 struct ipmi_fru_s
 {
     int deleted;
@@ -1467,7 +1468,7 @@ ipmi_fru_alloc(ipmi_domain_t       *domain,
     fru->private_bus = private_bus;
     fru->channel = channel;
 
-    snprintf(fru->name, FRU_NAME_SIZE, "%s.%d.%s.%d.%d.%d.%d",
+    snprintf(fru->name, FRU_NAME_SIZE, "%s.%d.%x.%d.%d.%d.%d ",
 	     DOMAIN_NAME(domain), is_logical, device_address, device_id, lun,
 	     private_bus, channel);
 

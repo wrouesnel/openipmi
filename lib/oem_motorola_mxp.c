@@ -947,9 +947,9 @@ mxp_sensor_get_done(ipmi_sensor_t *sensor,
 	}
 
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%soem_motorol_mxp.c(mxp_sensor_get_done): "
+		 "%soem_motorola_mxp.c(mxp_sensor_get_done): "
 		 "Received IPMI error: %x",
-		 SENS_DOMAIN_NAME(sensor), rsp->data[0]);
+		 SENSOR_NAME(sensor), rsp->data[0]);
 	if (sens_info->done)
 	    sens_info->done(sensor, IPMI_IPMI_ERR_VAL(rsp->data[0]),
 			    &states, sens_info->cb_data);
@@ -958,9 +958,9 @@ mxp_sensor_get_done(ipmi_sensor_t *sensor,
 
     if (rsp->data_len < sens_info->min_rsp_length) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%soem_motorol_mxp.c(mxp_sensor_get_done): "
+		 "%soem_motorola_mxp.c(mxp_sensor_get_done): "
 		 "Received invalid msg length: %d, expected %d",
-		 SENS_DOMAIN_NAME(sensor),
+		 SENSOR_NAME(sensor),
 		 rsp->data_len, sens_info->min_rsp_length);
 	if (sens_info->done)
 	    sens_info->done(sensor, EINVAL,
@@ -1075,7 +1075,7 @@ mxp_control_set_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(mxp_control_set_done): "
 		 "Received IPMI error: %x",
-		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
+		 CONTROL_NAME(control), rsp->data[0]);
 	if (control_info->done_set)
 	    control_info->done_set(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -1109,7 +1109,7 @@ mxp_control_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(mxp_control_get_done): "
 		 "Received IPMI error: %x",
-		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
+		 CONTROL_NAME(control), rsp->data[0]);
 	if (control_info->done_get)
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -1121,7 +1121,7 @@ mxp_control_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(mxp_control_get_done): "
 		 "Received invalid msg length: %d, expected %d",
-		 CONTROL_DOMAIN_NAME(control),
+		 CONTROL_NAME(control),
 		 rsp->data_len, control_info->min_rsp_length);
 	if (control_info->done_set)
 	    control_info->done_set(control, EINVAL, control_info->cb_data);
@@ -1188,7 +1188,7 @@ check_identifier_get_rv(mxp_control_info_t *control_info,
     if (rsp && rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(%s): Received IPMI error: %x",
-		 CONTROL_DOMAIN_NAME(control), func_name, rsp->data[0]);
+		 CONTROL_NAME(control), func_name, rsp->data[0]);
 	if (control_info->get_identifier_val)
 	    control_info->get_identifier_val(control,
 					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -1201,7 +1201,7 @@ check_identifier_get_rv(mxp_control_info_t *control_info,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(%s): "
 		 "Received invalid msg length: %d, expected %d",
-		 CONTROL_DOMAIN_NAME(control), func_name,
+		 CONTROL_NAME(control), func_name,
 		 rsp->data_len, min_length);
 	if (control_info->get_identifier_val)
 	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
@@ -2134,7 +2134,7 @@ sys_led_get_cb(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(sys_led_get_cb): "
 		 "Received IPMI error: %x",
-		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
+		 CONTROL_NAME(control), rsp->data[0]);
 	if (control_info->done_get)
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -2286,7 +2286,7 @@ relay_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(relay_get_done): "
 		 "Received IPMI error: %x",
-		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
+		 CONTROL_NAME(control), rsp->data[0]);
 	if (control_info->done_get)
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -2298,7 +2298,7 @@ relay_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(relay_get_done): "
 		 "Received invalid msg length: %d, expected %d",
-		 CONTROL_DOMAIN_NAME(control), rsp->data_len, 5);
+		 CONTROL_NAME(control), rsp->data_len, 5);
 	if (control_info->done_get)
 	    control_info->done_get(control, EINVAL, NULL,
 				   control_info->cb_data);
@@ -3679,7 +3679,7 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(mxp_fan_reading_cb): "
 		 "Received IPMI error: %x",
-		 SENS_DOMAIN_NAME(sensor), rsp->data[0]);
+		 SENSOR_NAME(sensor), rsp->data[0]);
 	if (get_info->done)
 	    get_info->done(sensor,
 			   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -3695,7 +3695,7 @@ mxp_fan_reading_cb(ipmi_sensor_t *sensor,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(mxp_fan_reading_cb): "
 		 "Received invalid msg length: %d, expected %d",
-		 SENS_DOMAIN_NAME(sensor), rsp->data_len, 11);
+		 SENSOR_NAME(sensor), rsp->data_len, 11);
 	if (get_info->done)
 	    get_info->done(sensor,
 			   EINVAL,
@@ -5051,7 +5051,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_create_entities): "
 		 "Could not add chassis entity: %x",
-		 MC_DOMAIN_NAME(mc), rv);
+		 MC_NAME(mc), rv);
 	goto out;
     }
     rv = mxp_add_chassis_sensors(info);
@@ -5072,7 +5072,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add alarm card: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
@@ -5098,7 +5098,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add child alarm card: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	rv = mxp_add_board_sensors(info, &(info->board[idx]));
@@ -5125,7 +5125,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add ip switch: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
@@ -5146,7 +5146,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add child ip switch: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	rv = mxp_add_board_sensors(info, &(info->board[idx]));
@@ -5169,7 +5169,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add power supply: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	ipmi_entity_set_type(info->power_supply[i].ent, IPMI_ENTITY_FRU);
@@ -5185,7 +5185,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add power supply: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	info->power_supply[i].info = info;
@@ -5197,7 +5197,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add child power supply: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	rv = ipmi_entity_add_child(info->power_supply[i].ent,
@@ -5206,7 +5206,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add child fan: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	rv = mxp_add_power_supply_sensors(info, &(info->power_supply[i]));
@@ -5234,7 +5234,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add board: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
@@ -5254,7 +5254,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%soem_motorola_mxp.c(mxp_create_entities): "
 		     "Could not add child board: %x",
-		     MC_DOMAIN_NAME(mc), rv);
+		     MC_NAME(mc), rv);
 	    goto out;
 	}
 	rv = mxp_add_board_sensors(info, &(info->board[idx]));
@@ -5670,7 +5670,7 @@ board_power_config_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(board_power_config_get_done): "
 		 "Received IPMI error: %x",
-		 CONTROL_DOMAIN_NAME(control), rsp->data[0]);
+		 CONTROL_NAME(control), rsp->data[0]);
 	if (control_info->done_get)
 	    control_info->done_get(control,
 				   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -5682,7 +5682,7 @@ board_power_config_get_done(ipmi_control_t *control,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(board_power_config_get_done): "
 		 "Received invalid msg length: %d, expected %d",
-		 CONTROL_DOMAIN_NAME(control), rsp->data_len, 5);
+		 CONTROL_NAME(control), rsp->data_len, 5);
 	if (control_info->done_get)
 	    control_info->done_get(control, EINVAL, NULL,
 				   control_info->cb_data);
@@ -6176,7 +6176,7 @@ mxp_voltage_reading_cb(ipmi_sensor_t *sensor,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(mxp_voltage_reading_cb): "
 		 "Received IPMI error: %x",
-		 SENS_DOMAIN_NAME(sensor), rsp->data[0]);
+		 SENSOR_NAME(sensor), rsp->data[0]);
 	if (get_info->done)
 	    get_info->done(sensor,
 			   IPMI_IPMI_ERR_VAL(rsp->data[0]),
@@ -6200,7 +6200,7 @@ mxp_voltage_reading_cb(ipmi_sensor_t *sensor,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_voltage_reading_cb): "
 		 "Invalid sensor",
-		 SENS_DOMAIN_NAME(sensor));
+		 SENSOR_NAME(sensor));
 	if (get_info->done)
 	    get_info->done(sensor,
 			   EINVAL,
@@ -6466,7 +6466,7 @@ amc_board_handler(ipmi_mc_t *mc)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(amc_board_handler):"
 		 " could not register event handler",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 	goto out_err;
     }
 
@@ -6486,7 +6486,7 @@ amc_board_handler(ipmi_mc_t *mc)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(amc_board_handler):"
 		 " Could not add alarm card entity: %x",
-		 MC_DOMAIN_NAME(mc), rv);
+		 MC_NAME(mc), rv);
 	goto out_err;
     }
 
@@ -6722,7 +6722,7 @@ amc_board_handler(ipmi_mc_t *mc)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(amc_board_handler):"
 		 " could not register removal handler",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 	goto out_err;
     }
 
@@ -6995,7 +6995,7 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_board_presence_event): "
 		 "unable to allocate timer memory",
-		 SENS_DOMAIN_NAME(sensor));
+		 SENSOR_NAME(sensor));
 	return;
     }
     hnd = ipmi_domain_get_os_hnd(domain);
@@ -7009,7 +7009,7 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_board_presence_event): "
 		 "unable to allocate timer",
-		 SENS_DOMAIN_NAME(sensor));
+		 SENSOR_NAME(sensor));
 	return;
     }
     timeout.tv_sec = 3; /* The Zynx switches seem to need 3 seconds to
@@ -7022,7 +7022,7 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_board_presence_event): "
 		 "unable to start timer",
-		 SENS_DOMAIN_NAME(sensor));
+		 SENSOR_NAME(sensor));
 	return;
     }
 }
@@ -7464,7 +7464,7 @@ i2c_write(ipmi_mc_t    *mc,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(i2c_write): "
 		 "Could not to I2C write to %x.%x.%x, error %x",
-		 MC_DOMAIN_NAME(mc), bus, addr, offset, rv);
+		 MC_NAME(mc), bus, addr, offset, rv);
 }
 
 typedef struct i2c_sens_s
@@ -7504,7 +7504,7 @@ i2c_sens_reading_cb(ipmi_sensor_t *sensor,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_motorola_mxp.c(i2c_sens_reading_cb): "
 		 "Received IPMI error: %x",
-		 SENS_DOMAIN_NAME(sensor),
+		 SENSOR_NAME(sensor),
 		 rsp->data[0]);
 	if (get_info->done)
 	    get_info->done(sensor,
@@ -8294,7 +8294,7 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(mxp_chassis_type_rsp): "
 		 "Error getting chassis id: 0x%x",
-		 MC_DOMAIN_NAME(src), msg->data[0]);
+		 MC_NAME(src), msg->data[0]);
 	/* Destroy the MC so it will be detected again late,r and hopefully
 	   will work that time. */
 	_ipmi_cleanup_mc(src);
@@ -8317,7 +8317,7 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_chassis_type_rsp): "
 		 "Unknown chassis type: 0x%x",
-		 MC_DOMAIN_NAME(src), info->chassis_type);
+		 MC_NAME(src), info->chassis_type);
 
 	/* Default to 3U. */
 	info->chassis_config = MXP_CHASSIS_CONFIG_3U;
@@ -8346,7 +8346,7 @@ mxp_setup_finished(ipmi_mc_t *mc, mxp_info_t *info)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_setup_finished): "
 		 "Error sending chassis type request: %x",
-		 MC_DOMAIN_NAME(mc), rv);
+		 MC_NAME(mc), rv);
 }
 
 static void
@@ -8497,7 +8497,7 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(mxp_handler): "
 		 "could not register removal handler",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 	goto out_err;
     }
 
@@ -8506,7 +8506,7 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(mxp_handler): "
 		 "could not register new sensor handler",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 	goto out_err;
     }
 
@@ -8516,19 +8516,19 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_handler): "
 		 "could not ignore IPMB address 0x54",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
     rv = ipmi_domain_add_ipmb_ignore(domain, 0x56);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_handler): "
 		 "could not ignore IPMB address 0x56",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
     rv = ipmi_domain_add_ipmb_ignore(domain, 0x58);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_handler): "
 		 "could not ignore IPMB address 0x58",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 
     if (ipmi_domain_con_up(domain)) {
 	/* The domain is already up, just start the process. */

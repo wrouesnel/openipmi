@@ -59,7 +59,8 @@ struct ipmi_control_info_s
     int  wait_err;
 };
 
-#define CONTROL_ID_LENGTH 32
+#define CONTROL_ID_LEN 32
+#define CONTROL_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + CONTROL_ID_LEN + 5)
 struct ipmi_control_s
 {
     ipmi_mc_t *mc;
@@ -110,7 +111,7 @@ struct ipmi_control_s
     /* Note that this is *not* nil terminated. */
     enum ipmi_str_type_e id_type;
     unsigned int id_len;
-    char id[CONTROL_ID_LENGTH];
+    char id[CONTROL_ID_LEN];
 
     ipmi_control_cbs_t cbs;
     opq_t *waitq;
@@ -120,6 +121,9 @@ struct ipmi_control_s
 
     ipmi_control_destroy_cb destroy_handler;
     void                    *destroy_handler_cb_data;
+
+    /* Name we use for reporting */
+    char name[CONTROL_NAME_LEN];
 };
 
 /***********************************************************************
@@ -310,6 +314,43 @@ ipmi_control_destroy(ipmi_control_t *control)
 }
 
 static void
+control_set_name(ipmi_control_t *control)
+{
+    char *mc_name = MC_NAME(control->mc);
+    int  length;
+
+    control->name[0] = '(';
+    if (*mc_name != '\0') {
+	length = strlen(mc_name) - 3; /* Remove the "() " */
+	memcpy(control->name+1, mc_name+1, length);
+	length++;
+	control->name[length] = '.';
+	length++;
+    } else
+	length = 1;
+    memcpy(control->name+length, control->id, control->id_len);
+    length += control->id_len;
+    control->name[length] = ')';
+    length++;
+    control->name[length] = ' ';
+    length++;
+    control->name[length] = '\0';
+    length++;
+}
+
+char *
+_ipmi_control_name(ipmi_control_t *control)
+{
+    return control->name;
+}
+
+/***********************************************************************
+ *
+ * Control message handling.
+ *
+ **********************************************************************/
+
+static void
 control_opq_ready2(ipmi_control_t *control, void *cb_data)
 {
     ipmi_control_op_info_t *info = cb_data;
@@ -327,7 +368,7 @@ control_opq_ready(void *cb_data, int shutdown)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%scontrol.c(control_opq_ready): "
 		 "Control was destroyed while an operation was in progress",
-		 CONTROL_DOMAIN_NAME(info->__control));
+		 CONTROL_NAME(info->__control));
 	if (info->__handler)
 	    info->__handler(info->__control, ECANCELED, info->__cb_data);
 	return;
@@ -389,7 +430,7 @@ control_rsp_handler(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%scontrol.c(control_rsp_handler): "
 		 "Control was destroyed while an operation was in progress",
-		 CONTROL_DOMAIN_NAME(control));
+		 CONTROL_NAME(control));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 	control_final_destroy(control);
@@ -414,7 +455,7 @@ control_rsp_handler(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%scontrol.c(control_rsp_handler): "
 		 "Could not convert control id to a pointer",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
     }
@@ -1006,7 +1047,7 @@ int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
 
 /***********************************************************************
  *
- * Get/set various local information about a sensor.
+ * Get/set various local information about a control.
  *
  **********************************************************************/
 
@@ -1069,12 +1110,13 @@ void
 ipmi_control_set_id(ipmi_control_t *control, char *id,
 		    enum ipmi_str_type_e type, int length)
 {
-    if (length > CONTROL_ID_LENGTH)
-	length = CONTROL_ID_LENGTH;
+    if (length > CONTROL_ID_LEN)
+	length = CONTROL_ID_LEN;
     
     memcpy(control->id, id, length);
     control->id_type = type;
     control->id_len = length;
+    control_set_name(control);
 }
 
 int

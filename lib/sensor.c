@@ -65,6 +65,7 @@ struct ipmi_sensor_info_s
 };
 
 #define SENSOR_ID_LEN 32 /* 16 bytes are allowed for a sensor. */
+#define SENSOR_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + SENSOR_ID_LEN + 5)
 struct ipmi_sensor_s
 {
     ipmi_mc_t     *mc; /* My owner, NOT the SMI mc (unless that
@@ -189,6 +190,9 @@ struct ipmi_sensor_s
 
     ipmi_sensor_destroy_cb destroy_handler;
     void                   *destroy_handler_cb_data;
+
+    /* Name we use for reporting */
+    char name[SENSOR_NAME_LEN];
 };
 
 /***********************************************************************
@@ -506,7 +510,7 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(sensor_rsp_handler):"
 		 " Could not convert sensor id to a pointer",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 	if (info->__rsp_handler)
 	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
     }
@@ -787,6 +791,37 @@ ipmi_sensors_destroy(ipmi_sensor_info_t *sensors)
     return 0;
 }
 
+static void
+sensor_set_name(ipmi_sensor_t *sensor)
+{
+    char *mc_name = MC_NAME(sensor->mc);
+    int  length;
+
+    sensor->name[0] = '(';
+    if (*mc_name != '\0') {
+	length = strlen(mc_name) - 3; /* Remove the "() " */
+	memcpy(sensor->name+1, mc_name+1, length);
+	length++;
+	sensor->name[length] = '.';
+	length++;
+    } else
+	length = 1;
+    memcpy(sensor->name+length, sensor->id, sensor->id_len);
+    length += sensor->id_len;
+    sensor->name[length] = ')';
+    length++;
+    sensor->name[length] = ' ';
+    length++;
+    sensor->name[length] = '\0';
+    length++;
+}
+
+char *
+_ipmi_sensor_name(ipmi_sensor_t *sensor)
+{
+    return sensor->name;
+}
+
 /***********************************************************************
  *
  * Sensor SDR handlnig
@@ -972,6 +1007,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->id_len = ipmi_get_device_string(sdr.data+42, sdr.length-42,
 						  s[p]->id, 0, &s[p]->id_type,
 						  SENSOR_ID_LEN);
+	    sensor_set_name(s[p]);
 
 	    p++;
 	} else {
@@ -982,7 +1018,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->negative_going_threshold_hysteresis = sdr.data[21];
 	    s[p]->oem1 = sdr.data[25];
 
-	    s[i]->id_len = ipmi_get_device_string(sdr.data+26, sdr.length-26,
+	    s[p]->id_len = ipmi_get_device_string(sdr.data+26, sdr.length-26,
 						  s[p]->id, 0, &s[p]->id_type,
 						  SENSOR_ID_LEN);
 
@@ -1048,6 +1084,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 		    /* FIXME - unicode handling? */
 		}
 		s[p+j]->id_len = len;
+		sensor_set_name(s[p+j]);
 	    }
 
 	    if (sdr.data[18] & 0x0f)
@@ -1305,7 +1342,7 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 			     "%ssensor.c(ipmi_sensor_handle_sdrs):"
 			     " Sensor 0x%x is the same as sensor 0x%x in the"
 			     " repository",
-			     SENS_DOMAIN_NAME(nsensor),
+			     SENSOR_NAME(nsensor),
 			     osensor->source_idx,
 			     nsensor->source_idx);
 		}
@@ -2453,6 +2490,7 @@ ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id,
     memcpy(sensor->id, id, length);
     sensor->id_type = type;
     sensor->id_len = length;
+    sensor_set_name(sensor);
 }
 
 void
@@ -2910,7 +2948,7 @@ sensor_done_check_rsp(ipmi_sensor_t          *sensor,
     if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(%s): Got error: %x",
-		 SENS_DOMAIN_NAME(sensor), name, err);
+		 SENSOR_NAME(sensor), name, err);
 	done(sensor, err, sinfo);
 	return err;
     }
@@ -2918,7 +2956,7 @@ sensor_done_check_rsp(ipmi_sensor_t          *sensor,
     if (!sensor) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(%s): Sensor when away during operation",
-		 SENS_DOMAIN_NAME(sensor), name);
+		 SENSOR_NAME(sensor), name);
 	done(sensor, ECANCELED, sinfo);
 	return ECANCELED;
     }
@@ -2926,7 +2964,7 @@ sensor_done_check_rsp(ipmi_sensor_t          *sensor,
     if (rsp && rsp->data[0]) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(%s): Got IPMI error in response: %x",
-		 SENS_DOMAIN_NAME(sensor), name, rsp->data[0]);
+		 SENSOR_NAME(sensor), name, rsp->data[0]);
 	done(sensor, IPMI_IPMI_ERR_VAL(rsp->data[0]), sinfo);
 	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
@@ -2934,7 +2972,7 @@ sensor_done_check_rsp(ipmi_sensor_t          *sensor,
     if (rsp && (rsp->data_len < min_length)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(%s): Response was too short, got %d, expected %d",
-		 SENS_DOMAIN_NAME(sensor), name, rsp->data_len, min_length);
+		 SENSOR_NAME(sensor), name, rsp->data_len, min_length);
 	done(sensor, EINVAL, sinfo);
 	return EINVAL;
     }
@@ -3013,7 +3051,7 @@ enables_set(ipmi_sensor_t *sensor,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%ssensors.c(enables_set):"
 		     " Error sending event enable command to clear events: %x",
-		     SENS_DOMAIN_NAME(sensor), rv);
+		     SENSOR_NAME(sensor), rv);
 	    enables_done_handler(sensor, rv, info);
 	}
     } else {
@@ -3083,7 +3121,7 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(event_enable_set_start):"
 		 " Error sending event enable command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	enables_done_handler(sensor, rv, info);
     }
 }
@@ -3279,7 +3317,7 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(event_enable_get_start):"
 		 " Error sending get event enables command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	enables_get_done_handler(sensor, rv, info);
     }
 }
@@ -3377,7 +3415,7 @@ sensor_rearm_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(sensor_rearm_start):"
 		 " Error sending rearm command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	sensor_rearm_done_handler(sensor, rv, info);
     }
 }
@@ -3472,7 +3510,7 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(hyst_get_start):"
 		 " Error sending hysteresis get command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	hyst_get_done_handler(sensor, rv, info);
     }
 }
@@ -3567,7 +3605,7 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(hyst_set_start):"
 		 " Error sending hysteresis set command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	hyst_set_done_handler(sensor, rv, info);
     }
 }
@@ -3647,7 +3685,7 @@ thresh_get(ipmi_sensor_t *sensor,
 		ipmi_log(IPMI_LOG_ERR_INFO,
 			 "%ssensor.c(thresh_get):"
 			 " Could not convert raw threshold value: %x",
-			 SENS_DOMAIN_NAME(sensor), rv);
+			 SENSOR_NAME(sensor), rv);
 		thresh_get_done_handler(sensor, rv, info);
 		return;
 	    }
@@ -3720,7 +3758,7 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(thresh_get_start):"
 		 " Error sending threshold get command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	thresh_get_done_handler(sensor, rv, info);
     }
 }
@@ -3818,7 +3856,7 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 		ipmi_log(IPMI_LOG_ERR_INFO,
 			 "%ssensor.c(thresh_set_start):"
 			 "Error converting threshold to raw: %x",
-			 SENS_DOMAIN_NAME(sensor), rv);
+			 SENSOR_NAME(sensor), rv);
 		thresh_set_done_handler(sensor, rv, info);
 		return;
 	    }
@@ -3832,7 +3870,7 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(thresh_set_start):"
 		 "Error sending thresholds set command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	thresh_set_done_handler(sensor, rv, info);
     }
 }
@@ -3950,7 +3988,7 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(reading_get_start):"
 		 "Error sending reading get command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	reading_get_done_handler(sensor, rv, info);
     }
 }
@@ -4048,7 +4086,7 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%sstates.c(states_get_start):"
 		 " Error sending states get command: %x",
-		 SENS_DOMAIN_NAME(sensor), rv);
+		 SENSOR_NAME(sensor), rv);
 	states_get_done_handler(sensor, 0, info);
     }
 }

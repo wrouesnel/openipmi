@@ -90,7 +90,7 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%slanparm.c(%s): "
 		 "LANPARM was destroyed while an operation was in progress",
-		 MC_DOMAIN_NAME(mc), func_name);
+		 MC_NAME(mc), func_name);
 	return ECANCELED;
     }
 
@@ -98,7 +98,7 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%slanparm.c(%s): "
 		 "MC went away while LANPARM op was in progress",
-		 MC_DOMAIN_NAME(mc), func_name);
+		 MC_NAME(mc), func_name);
 	return ENXIO;
     }
 
@@ -110,14 +110,14 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%slanparm.c(%s): "
 		     "IPMI error from LANPARM capabilities fetch: %x",
-		     MC_DOMAIN_NAME(mc), func_name, rsp->data[0]);
+		     MC_NAME(mc), func_name, rsp->data[0]);
 	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
 
     if (rsp->data_len < len) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		"%slanparm.c(%s): LANPARM capabilities too short",
-		 MC_DOMAIN_NAME(mc), func_name);
+		 MC_NAME(mc), func_name);
 	return EINVAL;
     }
     return 0;
@@ -299,7 +299,7 @@ start_config_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%slanparm.c(start_config_fetch_cb): "
 		 "LANPARM was destroyed while an operation was in progress",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 	fetch_complete(lanparm, ECANCELED, elem);
 	goto out;
     }
@@ -318,7 +318,7 @@ start_config_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%slanparm.c(start_config_fetch_cb): "
 		 "LANPARM start_config_fetch: could not send cmd: %x",
-		 MC_DOMAIN_NAME(mc), rv);
+		 MC_NAME(mc), rv);
 	fetch_complete(lanparm, ECANCELED, elem);
 	goto out;
     }
@@ -457,7 +457,7 @@ start_config_set_cb(ipmi_mc_t *mc, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%slanparm.c(start_config_set_cb): "
 		 "LANPARM was destroyed while an operation was in progress",
-		 MC_DOMAIN_NAME(mc));
+		 MC_NAME(mc));
 	set_complete(lanparm, ECANCELED, elem);
 	goto out;
     }
@@ -472,7 +472,7 @@ start_config_set_cb(ipmi_mc_t *mc, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%slanparm.c(start_config_set_cb): "
 		 "LANPARM start_config_set: could not send cmd: %x",
-		 MC_DOMAIN_NAME(mc), rv);
+		 MC_NAME(mc), rv);
 	set_complete(lanparm, ECANCELED, elem);
 	goto out;
     }
