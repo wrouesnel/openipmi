@@ -132,7 +132,7 @@ command.  For 1.0, it gets it from the main SDR repository.
 Once you are connected, you should scan the SDRs in the main SDR
 repository for any entities.  I would not expect there to be any sensors
 there, though, because it doesn't make sense to put sensors there.
-There may be some though.  This is theh place where entities and entity
+There may be some though.  This is the place where entities and entity
 relationships are documented.
 
 Sensors should be in the device SDR repository, which should be scanned
@@ -525,6 +525,14 @@ any relationships defined.  Relationships are stored in the SDR
 repository, you may change them and store them back, if you like and if
 the system supports that.
 
+FRU information about the entity is sometimes available.  If so,
+OpenIPMI will attempt to fetch it for you and it will be available
+through the entity.  You can fetch the FRU object from the entity and
+query that object, it is locked along with the entity itself.  To
+understand FRU information, you need to read the FRU Information
+Storage Definition spec; a separate document from the main IPMI
+document.
+
 @subsection Sensors
 
 Sensor monitor something about an object.  IPMI defines many types of
@@ -673,6 +681,9 @@ This defines the interface for the messaging interfaces.
 
 @item @file{ipmi_entity.h}
 This defines internal entity interfaces.
+
+@item @file{ipmi_fru.h}
+This defines internal FRU interfaces.
 
 @item @file{ipmi_control.h}
 This defines internal control interfaces.
