@@ -109,6 +109,12 @@ The number is arbitrarily assigned by the system.
 .RE
 The number is arbitrarily assigned by the system.
 
+\fI<fru>\fP - A FRU id, in the form
+.RS
+[<domain>[.<integer>]]
+.RE
+The number is arbitrarily assigned by the system.
+
 In all cases, the object names have parts that are optional, and the
 entire object name is optional.  If a part is left empty, then all
 objects that are part of the specified parts are operated on.  For
@@ -573,10 +579,145 @@ Domain IPMB rescan time set: <domain>
 .fi
 .RE
 
+.SS fru
+
+These commands deal with FRU objects.  Note that FRU objects are allocated
+by the domain fru command, and are not allocated here.
+
+.B list
+- List all the frus in the system
+.TP
+Response:
+.RS
+.nf
+Domain
+  Name: <domain>
+  FRUs
+    Name: <fru>
+   .
+   .
+ .
+ .
+.fi
+.RE
+
+.B info <fru>
+- Dump information about a FRU
+.TP
+Response:
+.RS
+.nf
+**FRU INFO**
+.fi
+.RE
+
+.B areainfo <fru>
+- Dump the info about the FRU's areas
+.TP
+Response:
+.RS
+.nf
+FRU
+  Name: <fru>
+  FRU Length: <integer>
+  Area
+    Name: <area name>
+    Number: <integer>
+    Offset: <integer>
+    Length: <integer>
+    Used Length: <Integer>
+   .
+   .
+.fi
+.RE
+
+.B write <fru>
+- Write the local FRU data out into the FRU
+.TP
+Response:
+.RS
+.nf
+FRU written: <fru>
+.fi
+.RE
+
+.B close <fru>
+- Delete the FRU
+.TP
+Response:
+.RS
+.nf
+FRU deleted: <fru>
+.fi
+.RE
+
+.B setval <fru> <name> [num] value
+- Set the value of a FRU element.  The
+name is the record name, or multi-record.  The number is required
+for fields that need it (custom and multi-record).  The value is
+an a single value for integers.  For strings it is a string
+type (either binary, ascii, or unicode) and the info.  Binary and
+unicode data is specified as numbers.  ascii data is specified in
+a string.  Note that setting a ascii value with no string will
+clear the value.  Zero length strings and data is valid.
+.TP
+Response:
+.RS
+.nf
+FRU value set: <fru>
+.fi
+.RE
+
+.B area_offset <fru> <area name> <offset>
+- Set the offset of the given area
+to the given value.  Area names are internal_data, chassis_info,
+board_info, product_info, and multi_record.
+.TP
+Response:
+.RS
+.nf
+FRU area offset set: <fru>
+.fi
+.RE
+
+area_length <fru> <area name> <length>
+- Set the length of the given area
+to the given value.  Area names are internal_data, chassis_info
+board_info, product_info, and multi_record
+.TP
+Response:
+.RS
+.nf
+FRU area length set: <fru>
+.fi
+.RE
+
+area_add <fru> <area name> <offset> <length>
+- Add the given area to the FRU.
+.TP
+Response:
+.RS
+.nf
+FRU area added: <fru>
+.fi
+.RE
+
+area_delete <fru> <area name>
+- Delete the given area from the FRU
+.TP
+Response:
+.RS
+.nf
+FRU area deleted: <fru>
+.fi
+.RE
+
+
 .SS entity
 These commands deal with entity objects.
 
-list <entity> - List all the entities that meed the criteria
+.B list <entity>
+- List all the entities that meed the criteria
 .TP
 Response:
 .RS
@@ -592,7 +733,8 @@ Domain
 .fi
 .RE
 
-info <entity> - Dump information about an entity.
+.B info <entity>
+- Dump information about an entity.
 .TP
 Reponse:
 .RS
@@ -605,7 +747,8 @@ Entity
 .fi
 .RE
 
-fru <entity> - Dump the FRU information about the given entity.
+.B fru <entity>
+- Dump the FRU information about the given entity.
 .TP
 Reponse:
 .RS
@@ -2139,6 +2282,7 @@ Controls of type identifier have the following:
 .SS **FRU INFO**
 .RS
 .nf
+  Name: <fru>
   record
     Name: <name>
     Type: binary | ascii | unicode | integer

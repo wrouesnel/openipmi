@@ -509,6 +509,7 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->attr) {
 	locked_list_iterate(domain->attr, destroy_attr, domain);
 	locked_list_destroy(domain->attr);
+	domain->attr = NULL;
     }
 
     /* Nuke all outstanding messages. */
@@ -4929,6 +4930,9 @@ ipmi_domain_find_attribute(ipmi_domain_t            *domain,
 			   void                     **data)
 {
     domain_attr_cmp_t   info;
+
+    if (!domain->attr)
+	return EINVAL;
 
     /* Attributes are immutable, no lock is required. */
     info.name = name;

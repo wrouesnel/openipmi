@@ -51,6 +51,7 @@
 #include <OpenIPMI/internal/ipmi_sensor.h>
 #include <OpenIPMI/internal/ipmi_control.h>
 #include <OpenIPMI/internal/ipmi_entity.h>
+#include <OpenIPMI/internal/ipmi_utils.h>
 
 /* Uncomment this if you *really* want direct power control.  Note
    that I think this is a bad idea, you should *really* use the
@@ -2933,16 +2934,16 @@ alt_shelf_fru_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     info->shelf_fru_ipmb = msg->data[3];
     info->shelf_fru_device_id = msg->data[5];
 
-    rv = ipmi_fru_alloc(domain,
-			1,
-			info->shelf_fru_ipmb,
-			1,
-			0,
-			0,
-			0,
-			shelf_fru_fetched,
-			info,
-			&info->shelf_fru);
+    rv = ipmi_fru_alloc_notrack(domain,
+				1,
+				info->shelf_fru_ipmb,
+				1,
+				0,
+				0,
+				0,
+				shelf_fru_fetched,
+				info,
+				&info->shelf_fru);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(alt_shelf_fru_cb): "
@@ -3026,6 +3027,8 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	unsigned char *data;
 	unsigned int  mfg_id;
 	unsigned char *p;
+	unsigned char *str;
+
 	    
 	if ((ipmi_fru_get_multi_record_type(fru, i, &type) != 0)
 	    || (ipmi_fru_get_multi_record_format_version(fru, i, &ver) != 0)
@@ -3066,8 +3069,9 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	    /* length does not meet the minimum possible length. */
 	    goto next_data_item;
 
+	str = data + 5;
 	info->shelf_address_len
-	    = ipmi_get_device_string(data+5, 21,
+	    = ipmi_get_device_string(&str, 21,
 				     info->shelf_address, 0,
 				     &info->shelf_address_type,
 				     sizeof(info->shelf_address));
@@ -3321,16 +3325,16 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	goto out;
     }
 
-    rv = ipmi_fru_alloc(domain,
-			1,
-			info->shelf_fru_ipmb,
-			1,
-			0,
-			0,
-			0,
-			shelf_fru_fetched,
-			info,
-			&info->shelf_fru);
+    rv = ipmi_fru_alloc_notrack(domain,
+				1,
+				info->shelf_fru_ipmb,
+				1,
+				0,
+				0,
+				0,
+				shelf_fru_fetched,
+				info,
+				&info->shelf_fru);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(set_up_atca_domain): "

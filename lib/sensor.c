@@ -1019,6 +1019,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
     int           id_string_mod_type;
     int           entity_instance_incr;
     int           id_string_modifier_offset;
+    unsigned char *str;
+
     
 
     rv = ipmi_get_sdr_count(sdrs, &count);
@@ -1200,7 +1202,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->negative_going_threshold_hysteresis = sdr.data[38];
 	    s[p]->oem1 = sdr.data[41];
 
-	    s[p]->id_len = ipmi_get_device_string(sdr.data+42, sdr.length-42,
+	    str = sdr.data + 42;
+	    s[p]->id_len = ipmi_get_device_string(&str, sdr.length-42,
 						  s[p]->id, 0, &s[p]->id_type,
 						  SENSOR_ID_LEN);
 	    if (s[p]->entity)
@@ -1216,7 +1219,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->negative_going_threshold_hysteresis = sdr.data[21];
 	    s[p]->oem1 = sdr.data[25];
 
-	    s[p]->id_len = ipmi_get_device_string(sdr.data+26, sdr.length-26,
+	    str = sdr.data + 26;
+	    s[p]->id_len = ipmi_get_device_string(&str, sdr.length-26,
 						  s[p]->id, 0, &s[p]->id_type,
 						  SENSOR_ID_LEN);
 
@@ -1233,7 +1237,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->event_reading_type = sdr.data[6];
 	    s[p]->oem1 = sdr.data[10];
 
-	    s[p]->id_len = ipmi_get_device_string(sdr.data+11, sdr.length-11,
+	    str = sdr.data + 11;
+	    s[p]->id_len = ipmi_get_device_string(&str, sdr.length-11,
 						  s[p]->id, 0, &s[p]->id_type,
 						  SENSOR_ID_LEN);
 

@@ -36,3 +36,9 @@
 
 6) There is no way to read the user session limit (set by the set user
    access command)
+
+7) Although IPMI supports unicode names, there doesn't seem to be a
+   way to get the language that the data is in.
+
+8) There is no explanation of what "decide is accessed by words" means
+   in the FRU inventory device commands.

@@ -108,11 +108,13 @@ void ipmi_set_uint16(unsigned char *data, int val);
 
 /* Fetch an IPMI device string as defined in section 37.14 of the IPMI
    version 1.5 manual.  The in_len is the number of input bytes in the
-   string, including the type/length byte.  The max_out_len is the
-   maximum number of characters to output, including the nil.  The
-   type will be set to either unicode or ASCII.  The number of bytes
-   put into the output string is returned. */
-unsigned int ipmi_get_device_string(unsigned char        *input,
+   string, including the type/length byte.  It may be longer than the
+   actual length.  The max_out_len is the maximum number of characters
+   to output, including the nil.  The type will be set to either
+   unicode or ASCII.  The number of bytes put into the output string
+   is returned.  The input pointer will be updated to point to the
+   character after the used data. */
+unsigned int ipmi_get_device_string(unsigned char        **input,
 				    unsigned int         in_len,
 				    char                 *output,
 				    int                  force_unicode,

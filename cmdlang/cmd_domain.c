@@ -428,8 +428,6 @@ domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 
  out:
     ipmi_cmdlang_unlock(cmd_info);
-    if (err != ECANCELED)
-	ipmi_fru_destroy(fru, NULL, NULL);
     ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 

@@ -46,6 +46,7 @@
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/internal/ipmi_entity.h>
 #include <OpenIPMI/internal/locked_list.h>
+#include <OpenIPMI/internal/ipmi_utils.h>
 
 /* These are the versions of IPMI we write to the SDR repository */
 #define IPMI_MAJOR_NUM_SDR 1
@@ -2493,6 +2494,8 @@ static int
 decode_gdlr(ipmi_sdr_t         *sdr,
 	    dlr_info_t         *info)
 {
+    unsigned char *str;
+
     memset(info, 0, sizeof(*info));
 
     info->type = IPMI_ENTITY_GENERIC;
@@ -2519,7 +2522,8 @@ decode_gdlr(ipmi_sdr_t         *sdr,
     info->entity_id = sdr->data[7];
     info->entity_instance = sdr->data[8];
     info->oem = sdr->data[9];
-    info->id_len = ipmi_get_device_string(sdr->data+10, sdr->length-10,
+    str = sdr->data + 10;
+    info->id_len = ipmi_get_device_string(&str, sdr->length-10,
 					  info->id, 0,
 					  &info->id_type, ENTITY_ID_LEN);
 
@@ -2565,6 +2569,8 @@ static int
 decode_frudlr(ipmi_sdr_t         *sdr,
 	      dlr_info_t         *info)
 {
+    unsigned char *str;
+
     memset(info, 0, sizeof(*info));
 
     info->type = IPMI_ENTITY_FRU;
@@ -2589,7 +2595,8 @@ decode_frudlr(ipmi_sdr_t         *sdr,
     info->oem = sdr->data[9];
     info->entity_id = sdr->data[7];
     info->entity_instance = sdr->data[8];
-    info->id_len = ipmi_get_device_string(sdr->data+10,
+    str = sdr->data + 10;
+    info->id_len = ipmi_get_device_string(&str,
 					  sdr->length-10,
 					  info->id, 0,
 					  &info->id_type, ENTITY_ID_LEN);
@@ -2646,6 +2653,7 @@ decode_mcdlr(ipmi_sdr_t *sdr,
 	     dlr_info_t *info)
 {
     unsigned char *data;
+    unsigned char *str;
 
 
     memset(info, 0, sizeof(*info));
@@ -2696,7 +2704,8 @@ decode_mcdlr(ipmi_sdr_t *sdr,
     info->entity_instance = sdr->data[8];
 
     info->oem = sdr->data[9];
-    info->id_len = ipmi_get_device_string(sdr->data+10,
+    str = sdr->data + 10;
+    info->id_len = ipmi_get_device_string(&str,
 					  sdr->length-10,
 					  info->id, 0,
 					  &info->id_type, ENTITY_ID_LEN);
@@ -4562,16 +4571,16 @@ ipmi_entity_fetch_frus(ipmi_entity_t *ent)
     *ent_id = ipmi_entity_convert_to_id(ent);
 
     /* fetch the FRU information. */
-    rv = ipmi_fru_alloc(ent->domain,
-			ent->info.is_logical_fru,
-			ent->info.access_address,
-			ent->info.fru_device_id,
-			ent->info.lun,
-			ent->info.private_bus_id,
-			ent->info.channel,
-			fru_fetched_handler,
-			ent_id,
-			NULL);
+    rv = ipmi_fru_alloc_notrack(ent->domain,
+				ent->info.is_logical_fru,
+				ent->info.access_address,
+				ent->info.fru_device_id,
+				ent->info.lun,
+				ent->info.private_bus_id,
+				ent->info.channel,
+				fru_fetched_handler,
+				ent_id,
+				NULL);
     if (rv)
 	ipmi_mem_free(ent_id);
     else

@@ -1,3 +1,38 @@
+2004-12-10 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/internal/ipmi_int.h, lib/ipmi.c: Fixes
+	to the IPMI string encoding/decoding routines.
+	* lib/fru.c: ditto
+	* lib/entity.c: ditto
+	* lib/oem_atca.c: ditto
+	* lib/sensor.c: ditto
+
+	* include/OpenIPMI/ipmi_fru.h, lib/fru.c: Added the capability
+	to modify FRU info and write FRU data back to the FRU.
+
+	* lib/fru.c: Added tracking of FRUs in the system.
+	
+	* include/OpenIPMI/internal/ipmi_utils.c, lib/fru.c: Added an
+	interface for FRUs so internal stuff can allocate untracked FRU
+	information.  This way, user's can't delete internal FRU data.
+	* lib/entity.c: ditto
+	* lib/oem_atca.c: ditto
+	* lib/sensor.c: ditto
+
+	* cmdlang/cmd_fru.c, cmdlang/cmdlang.c, cmdlang/Makefile: Added
+	FRU handling routines:
+	* include/OpenIPMI/ipmi_cmdlang.h: ditto
+	* man/ipmi_cmdlang.7: ditto
+
+	* cmdlang/cmd_domain.c: Don't deleted FRUs after they are fetched.
+
+	* cmdlang/ipmish.c: Fix unicode handling.
+
+	* cmdlang/out_fru.c: Minor FRU data handling updates.
+
+	* lib/domain.c: Minor fixes for attribute handling, make sure
+	things are cleared out correctly.
+	
 2004-12-07 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in, lib/mc.c, lib/domain.c,	lib/ipmi.c:

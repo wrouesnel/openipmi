@@ -72,9 +72,12 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
     char                      *data;
     unsigned int              data_len;
     unsigned int              num_multi;
+    char                      fru_name[IPMI_FRU_NAME_LEN];
 
     ipmi_cmdlang_out(cmd_info, "FRU", NULL);
     ipmi_cmdlang_down(cmd_info);
+    ipmi_fru_get_name(fru, fru_name, sizeof(fru_name));
+    ipmi_cmdlang_out(cmd_info, "Name", fru_name);
 
     num = 0;
     for (i=0; ;) {
@@ -98,7 +101,7 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	ipmi_cmdlang_down(cmd_info);
 	ipmi_cmdlang_out(cmd_info, "Name", name);
 	if (num != onum) {
-	    ipmi_cmdlang_out_int(cmd_info, "Number", num);
+	    ipmi_cmdlang_out_int(cmd_info, "Number", onum);
 	    if (num == -1) {
 		i++;
 		num = 0;
@@ -174,8 +177,9 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 
 	ipmi_cmdlang_out(cmd_info, "Multi-record", NULL);
 	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_out_int(cmd_info, "Type", type);
 	ipmi_cmdlang_out_int(cmd_info, "Number", i);
-	fru_out_data(cmd_info, type, data, len);
+	fru_out_data(cmd_info, IPMI_BINARY_STR, data, len);
 	ipmi_cmdlang_up(cmd_info);
 	ipmi_mem_free(data);
     }

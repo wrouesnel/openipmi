@@ -461,15 +461,7 @@ out_binary(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
 static void
 out_unicode(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
 {
-    out_data_t *out_data = info->user_data;
-    char *sep = ":";
-
-    if (info->help)
-      sep = "";
-
-    fprintf(out_data->stream, "%*s%s%s %s\n", out_data->indent*2, "",
-	    name, sep, "Unicode!");
-    fflush(out_data->stream);
+    out_binary(info, name, value, len);
 }
 
 static void

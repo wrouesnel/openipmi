@@ -36,6 +36,8 @@
 
 #include <OpenIPMI/ipmi_types.h>
 
+#define IPMI_FRU_NAME_LEN 64
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -222,15 +224,6 @@ int ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 				   unsigned char *data,
 				   unsigned int  *length);
 
-/* Get the start offset in the FRU of the multi-record data.  This
-   includes the multi-record header.  This is here to allow the
-   offsets of data in multi-record areas to be computed so that values
-   can be modified. */
-int ipmi_fru_get_multi_record_data_offset(ipmi_fru_t    *fru,
-					  unsigned int  num,
-					  unsigned int  *offset);
-
-
 /*
  * This interface lets you get the FRU data by name.
  */
@@ -309,6 +302,9 @@ void ipmi_fru_data_free(char *data);
 /* The the domain the FRU uses.  For internal use only. */
 ipmi_domain_t *ipmi_fru_get_domain(ipmi_fru_t *fru);
 
+/* Name of the FRU. */
+int ipmi_fru_get_name(ipmi_fru_t *fru, char *name, int length);
+
 typedef void (*ipmi_fru_fetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
 int ipmi_fru_alloc(ipmi_domain_t       *domain,
 		   unsigned char       is_logical,
@@ -329,6 +325,205 @@ typedef void (*ipmi_fru_destroyed_cb)(ipmi_fru_t *fru, void *cb_data);
 int ipmi_fru_destroy(ipmi_fru_t            *fru,
 		     ipmi_fru_destroyed_cb handler,
 		     void                  *cb_data);
+
+/* Generic callback for iterating. */
+typedef void (*ipmi_fru_ptr_cb)(ipmi_fru_t *fru,
+				void       *cb_data);
+void ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
+			   ipmi_fru_ptr_cb handler,
+			   void            *cb_data);
+
+/* Return the length of the data in the FRU.  Note that this will be
+   non-zero if the FRU information was fetched, even if there was an
+   error reading the data.  So if this is non-zero, even if the FRU is
+   corrupt, you can create areas and fields and write out to the
+   FRU. */
+unsigned int ipmi_fru_get_data_length(ipmi_fru_t *fru);
+
+/*
+ * Create and destroy FRU areas and get information about them.  Note
+ * that these set the version to 1, which is all we support for now.
+ * The offset is from the beginning of the FRU, and may not be zero.
+ * The length is the total length of the area; the actual FRU information
+ * may use less.  The used_length is the actual amount of bytes used
+ * in the FRU area, the free space in the area is length - used_length.
+ * Note that offsets must be multiples of 8 and <= 2040.  Lengths will
+ * be truncated to a multiple of 8.
+ */
+#define IPMI_FRU_FTR_INTERNAL_USE_AREA 0
+#define IPMI_FRU_FTR_CHASSIS_INFO_AREA 1
+#define IPMI_FRU_FTR_BOARD_INFO_AREA   2
+#define IPMI_FRU_FTR_PRODUCT_INFO_AREA 3
+#define IPMI_FRU_FTR_MULTI_RECORD_AREA 4
+#define IPMI_FRU_FTR_NUMBER            (IPMI_FRU_FTR_MULTI_RECORD_AREA + 1)
+
+/* Note that the length for adding multi-records is ignored, it will
+   calculate it to the end of the data. */
+
+int ipmi_fru_add_area(ipmi_fru_t   *fru,
+		      unsigned int area,
+		      unsigned int offset,
+		      unsigned int length);
+int ipmi_fru_delete_area(ipmi_fru_t *fru, int area);
+int ipmi_fru_area_get_offset(ipmi_fru_t   *fru,
+			     unsigned int area,
+			     unsigned int *offset);
+int ipmi_fru_area_get_length(ipmi_fru_t   *fru,
+			     unsigned int area,
+			     unsigned int *length);
+int ipmi_fru_area_set_offset(ipmi_fru_t   *fru,
+			     unsigned int area,
+			     unsigned int offset);
+int ipmi_fru_area_set_length(ipmi_fru_t   *fru,
+			     unsigned int area,
+			     unsigned int length);
+int ipmi_fru_area_get_used_length(ipmi_fru_t *fru,
+				  unsigned int area,
+				  unsigned int *used_length);
+
+/*
+ * Set the values for the FRU data.  Old data will be freed and new
+ * data added if the data already exists.  For custom records (and
+ * multi-records, too), setting a number larger than the current
+ * number of records will cause a new record to be added onto the end.
+ * It will *not* use the specified number in this case.  If you use a
+ * number <= the last one, it will replace the given number.
+ *
+ * When setting an ASCII string type, the len value *does not* include
+ * the terminating NIL character.  It is not stored, so is not necessary.
+ *
+ * Passing in a "NULL" for the data of a custom string field or a
+ * multi-record to zero will cause it to be deleted.  This will
+ * renumber the fields/records, so be careful.  Also, if you have no
+ * multi-records, no multi-record fields will be written and the area
+ * will be deleted automatically.
+ */
+int ipmi_fru_set_internal_use(ipmi_fru_t    *fru,
+			      unsigned char *data,
+			      unsigned int  len);
+
+int ipmi_fru_set_chassis_info_type(ipmi_fru_t    *fru,
+				   unsigned char type);
+int ipmi_fru_set_chassis_info_part_number(ipmi_fru_t   *fru,
+					  enum ipmi_str_type_e type,
+					  char         *str,
+					  unsigned int len);
+int ipmi_fru_set_chassis_info_serial_number(ipmi_fru_t   *fru,
+					    enum ipmi_str_type_e type,
+					    char         *str,
+					    unsigned int len);
+int ipmi_fru_set_chassis_info_custom(ipmi_fru_t   *fru,
+				     unsigned int num,
+				     enum ipmi_str_type_e type,
+				     char         *str,
+				     unsigned int len);
+
+int ipmi_fru_set_board_info_lang_code(ipmi_fru_t    *fru,
+				      unsigned char type);
+int ipmi_fru_set_board_info_mfg_time(ipmi_fru_t   *fru,
+				     time_t       time);
+int ipmi_fru_set_board_info_board_manufacturer(ipmi_fru_t   *fru,
+					       enum ipmi_str_type_e type,
+					       char         *str,
+					       unsigned int len);
+int ipmi_fru_set_board_info_board_product_name(ipmi_fru_t   *fru,
+					       enum ipmi_str_type_e type,
+					       char         *str,
+					       unsigned int len);
+int ipmi_fru_set_board_info_board_serial_number(ipmi_fru_t   *fru,
+						enum ipmi_str_type_e type,
+						char         *str,
+						unsigned int len);
+int ipmi_fru_set_board_info_board_part_number(ipmi_fru_t   *fru,
+					      enum ipmi_str_type_e type,
+					      char         *str,
+					      unsigned int len);
+int ipmi_fru_set_board_info_fru_file_id(ipmi_fru_t   *fru,
+					enum ipmi_str_type_e type,
+					char         *str,
+					unsigned int len);
+int ipmi_fru_set_board_info_custom(ipmi_fru_t   *fru,
+				   unsigned int num,
+				   enum ipmi_str_type_e type,
+				   char         *str,
+				   unsigned int len);
+
+int ipmi_fru_set_product_info_lang_code(ipmi_fru_t    *fru,
+					unsigned char type);
+int ipmi_fru_set_product_info_manufacturer_name(ipmi_fru_t   *fru,
+						enum ipmi_str_type_e type,
+						char         *str,
+						unsigned int len);
+int ipmi_fru_set_product_info_product_name(ipmi_fru_t   *fru,
+					   enum ipmi_str_type_e type,
+					   char         *str,
+					   unsigned int len);
+int ipmi_fru_set_product_info_product_part_model_number(ipmi_fru_t   *fru,
+							enum ipmi_str_type_e type,
+							char         *str,
+							unsigned int len);
+int ipmi_fru_set_product_info_product_version(ipmi_fru_t   *fru,
+					      enum ipmi_str_type_e type,
+					      char         *str,
+					      unsigned int len);
+int ipmi_fru_set_product_info_product_serial_number(ipmi_fru_t   *fru,
+						    enum ipmi_str_type_e type,
+						    char         *str,
+						    unsigned int len);
+int ipmi_fru_set_product_info_asset_tag(ipmi_fru_t   *fru,
+					enum ipmi_str_type_e type,
+					char         *str,
+					unsigned int len);
+int ipmi_fru_set_product_info_fru_file_id(ipmi_fru_t   *fru,
+					  enum ipmi_str_type_e type,
+					  char         *str,
+					  unsigned int len);
+int ipmi_fru_set_product_info_custom(ipmi_fru_t   *fru,
+				     unsigned int num,
+				     enum ipmi_str_type_e type,
+				     char         *str,
+				     unsigned int len);
+
+int ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
+				   unsigned int  num,
+				   unsigned char type,
+				   unsigned char version,
+				   unsigned char *data,
+				   unsigned int  length);
+
+/*
+ * A generic interface for setting values by index.  The function to use
+ * depends on the data type.  If the data type does not match, these will
+ * return an error.  Note that the "num" field is ignored if the data
+ * is not a custom.  Also, multi-records are not settable through this
+ * interface.  Also note that the "version" fields are note settable
+ * and are always set to 1 (per the spec).
+ */
+int ipmi_fru_set_int_val(ipmi_fru_t *fru,
+			 int        index,
+			 int        num,
+			 int        val);
+int ipmi_fru_set_time_val(ipmi_fru_t *fru,
+			  int        index,
+			  int        num,
+			  time_t     time);
+int ipmi_fru_set_data_val(ipmi_fru_t                *fru,
+			  int                       index,
+			  int                       num,
+			  enum ipmi_fru_data_type_e dtype,
+			  char                      *data,
+			  unsigned int              len);
+
+
+/*
+ * Write the information in the FRU back out.  Note that only the modified
+ * data is written, any unchanged data will not be written.  This is an
+ * extremely dangerous operation and should only be done with the utmost
+ * care.  There are no locks for the FRU data.  This means that two writers
+ * can be simultaneously writing the FRU data without knowing about it,
+ * resulting in corruptions.  Be careful.
+ */
+int ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data);
 
 /************************************************************************
  *

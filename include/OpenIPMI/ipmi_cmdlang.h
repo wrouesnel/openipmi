@@ -194,6 +194,9 @@ void ipmi_cmdlang_pet_handler(ipmi_cmd_info_t *cmd_info);
 /* ipmi_lanparm_ptr_cb */
 void ipmi_cmdlang_lanparm_handler(ipmi_cmd_info_t *cmd_info);
 
+/* ipmi_fru_ptr_cb */
+void ipmi_cmdlang_fru_handler(ipmi_cmd_info_t *cmd_info);
+
 /* ipmi_pef_ptr_cb */
 void ipmi_cmdlang_pef_handler(ipmi_cmd_info_t *cmd_info);
 

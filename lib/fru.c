@@ -47,43 +47,106 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 
+#include <OpenIPMI/internal/locked_list.h>
 #include <OpenIPMI/internal/ipmi_domain.h>
 #include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/ipmi_utils.h>
 
 #define IPMI_LANG_CODE_ENGLISH	25
 
 #define MAX_FRU_DATA_FETCH 16
+#define MAX_FRU_DATA_WRITE 16
+#define MAX_FRU_WRITE_RETRIES 30
 
-/* record types */
-#define IPMI_FRU_FTR_UNDEFINED        -1
-#define IPMI_FRU_FTR_INTERNAL_USE_AREA 0
-#define IPMI_FRU_FTR_CHASSIS_INFO_AREA 1
-#define IPMI_FRU_FTR_BOARD_INFO_AREA   2
-#define IPMI_FRU_FTR_PRODUCT_INFO_AREA 3
-#define IPMI_FRU_FTR_MULTI_RECORD_AREA 4
-#define IPMI_FRU_FTR_NUMBER            (IPMI_FRU_FTR_MULTI_RECORD_AREA + 1)
+#define IPMI_FRU_ATTR_NAME "ipmi_fru"
 
-
+/* Records used to hold the FRU. */
 typedef struct ipmi_fru_record_s ipmi_fru_record_t;
 
-typedef struct fru_record_handlers_s
+typedef struct fru_string_s
 {
-    void (*free)(ipmi_fru_record_t *item);
-} fru_record_handlers_t;
+    enum ipmi_str_type_e type;
+    unsigned short       length;
+    char                 *str;
+
+    /* The raw offset from the start of the area, and the raw length
+       of this string.  This is the offset and length in the raw FRU
+       data. */
+    unsigned short       offset;
+    unsigned short       raw_len;
+    unsigned char        *raw_data;
+
+    /* Has this value been changed locally since it has been read?
+       Use to know that this needs to be written. */
+    char                 changed;
+} fru_string_t;
+
+typedef struct fru_variable_s
+{
+    unsigned short len;
+    unsigned short next;
+    fru_string_t   *strings;
+} fru_variable_t;
+
+typedef struct fru_area_info_s {
+    unsigned short num_fixed_fields;
+    unsigned short field_start;
+    unsigned short empty_length;
+    fru_variable_t *(*get_fields)(ipmi_fru_record_t *rec);
+    void (*free)(ipmi_fru_record_t *rec);
+    unsigned short extra_len;
+    int (*decode)(ipmi_fru_t        *fru,
+		  unsigned char     *data,
+		  unsigned int      data_len,
+		  ipmi_fru_record_t **rrec);
+    int (*encode)(ipmi_fru_t *fru, unsigned char *data);
+} fru_area_info_t;
+
+extern fru_area_info_t fru_area_info[IPMI_FRU_FTR_NUMBER];
 
 struct ipmi_fru_record_s
 {
-    int                   type;
-    fru_record_handlers_t *handlers;
+    fru_area_info_t       *handlers;
     void                  *data;
+
+    /* Where does this area start in the FRU and how much memory is
+       available? */
+    unsigned int          offset;
+    unsigned int          length;
+
+    /* How much of the area is currently used? */
+    unsigned int          used_length;
+
+    /* Length of the used length in the  */
+    unsigned int          orig_used_length;
+
+    /* Has this value been changed locally since it has been read?
+       Use to know that something in the record needs to be written,
+       the header needs to be rewritten, and the checksum needs to be
+       recalculated. */
+    char                  changed;
+
+    /* Does the whole area require a rewrite?  This would be true if
+       the position changed or the length was increased. */
+    char                 rewrite;
 };
 
-#define FRU_NAME_SIZE (IPMI_DOMAIN_NAME_LEN + 31)
+/* Record used for FRU writing. */
+typedef struct fru_update_s fru_update_t;
+struct fru_update_s
+{
+    unsigned short offset;
+    unsigned short length;
+    fru_update_t   *next;
+};
+
 struct ipmi_fru_s
 {
+    char name[IPMI_FRU_NAME_LEN+1];
     int deleted;
 
     ipmi_lock_t *lock;
+    int         doing_write;
 
     ipmi_domain_t        *domain;
     unsigned char        is_logical;
@@ -96,24 +159,41 @@ struct ipmi_fru_s
     ipmi_fru_fetched_cb fetched_handler;
     void                *fetched_cb_data;
 
-    int          fetch_in_progress;
-    int          fetch_by_words;
-    void         *data;
-    unsigned int data_len;
-    unsigned int curr_pos;
+    ipmi_fru_destroyed_cb destroy_handler;
+    void                  *destroy_cb_data;
+
+    int           fetch_in_progress;
+    int           access_by_words;
+    unsigned char *data;
+    unsigned int  data_len;
+    unsigned int  curr_pos;
+
+    /* Is this in the list of FRUs? */
+    int in_frulist;
 
     unsigned char version;
 
-    ipmi_fru_record_t *internal_use;
-    ipmi_fru_record_t *chassis_info;
-    ipmi_fru_record_t *board_info;
-    ipmi_fru_record_t *product_info;
-    ipmi_fru_record_t *multi_record;
+    /* Has an offset changed (thus causing the header to need to be
+       rewritten)? */
+    char header_changed;
 
-    char name[FRU_NAME_SIZE];
+    /* The records for writing. */
+    fru_update_t *update_recs;
+    fru_update_t *update_recs_tail;
+
+    /* The last send command for writing */
+    unsigned char last_cmd[MAX_FRU_DATA_WRITE+4];
+    unsigned int  last_cmd_len;
+    unsigned int  retry_count;
+
+    ipmi_fru_record_t *recs[IPMI_FRU_FTR_NUMBER];
+
+    char iname[IPMI_FRU_NAME_LEN+1];
 };
 
-#define FRU_DOMAIN_NAME(fru) (fru ? fru->name : "")
+static void fru_record_destroy(ipmi_fru_record_t *rec);
+
+#define FRU_DOMAIN_NAME(fru) (fru ? fru->iname : "")
 
 /***********************************************************************
  *
@@ -146,19 +226,21 @@ checksum(unsigned char *data, unsigned int length)
     return sum;
 }
 
+/* 820476000 is seconds between 1970.01.01 00:00:00 and 1996.01.01 00:00:00 */
+#define FRU_TIME_TO_UNIX_TIME(t) (((t) * 60) + 820476000)
+#define UNIX_TIME_TO_FRU_TIME(t) ((((t) - 820476000) + 30) / 60)
+
 static int
 read_fru_time(unsigned char **data,
 	      unsigned int  *len,
 	      time_t        *time)
 {
-    time_t        t;
-    struct tm     tm;
+    unsigned int  t;
     unsigned char *d = *data;
 
     if (*len < 3)
 	return ENODATA;
 
-    /* minutes since 1996.01.01 00:00:00 */
     t = *d++ * 256 * 256;
     t += *d++ * 256;
     t += *d++;
@@ -166,76 +248,273 @@ read_fru_time(unsigned char **data,
     *len -= 3;
     *data += 3;
 
-    /* Convert to seconds. */
-    t *= 60;
+    *time = FRU_TIME_TO_UNIX_TIME(t);
+    return 0;
+}
 
-    /* FIXME - we shouldn't depend on using mktime. */
+static void
+write_fru_time(unsigned char *d, time_t time)
+{
+    unsigned int t;
 
-    /* create date offset */
-    tm.tm_sec = 0;
-    tm.tm_min = 0;
-    tm.tm_hour = 0;
-    tm.tm_mday = 1;
-    tm.tm_mon = 0;
-    tm.tm_year = 96;
-    tm.tm_isdst = 0;
+    t = UNIX_TIME_TO_FRU_TIME(time);
 
-    *time = t + mktime(&tm);
+    *d++ = t & 0xff;
+    t >>= 8;
+    *d++ = t & 0xff;
+    t >>= 8;
+    *d++ = t & 0xff;
+    t >>= 8;
+}
 
+static int
+fru_new_update_rec(ipmi_fru_t *fru, unsigned int offset, unsigned int length)
+{
+    fru_update_t *urec;
+
+    urec = ipmi_mem_alloc(sizeof(*urec));
+    if (!urec)
+	return ENOMEM;
+    if (fru->access_by_words) {
+	/* This handled the (really stupid) word access mode.  If the
+	   address is odd, back it up one.  If the length is odd,
+	   increment by one. */
+	if (offset & 1) {
+	    offset -= 1;
+	    length += 1;
+	}
+	urec->offset = offset;
+	if (length & 1) {
+	    length += 1;
+	}
+	urec->length = length;
+    } else {
+	urec->offset = offset;
+	urec->length = length;
+    }
+    urec->next = NULL;
+    if (fru->update_recs)
+	fru->update_recs_tail->next = urec;
+    else
+	fru->update_recs = urec;
+    fru->update_recs_tail = urec;
+    return 0;
+}
+
+static int
+fru_encode_fields(ipmi_fru_t        *fru,
+		  ipmi_fru_record_t *rec,
+		  fru_variable_t    *v,
+		  unsigned char     *data,
+		  unsigned int      offset)
+{
+    int i;
+    int rv;
+
+    for (i=0; i<v->next; i++) {
+	fru_string_t *s = v->strings + i;
+	int          len;
+
+	if (offset != s->offset)
+	    /* Bug in the FRU code.  Return a unique error code so it
+	       can be identified, but don't pass it to the user. */
+	    return EBADMSG;
+
+	if (s->changed) {
+	    len = IPMI_MAX_STR_LEN;
+	    ipmi_set_device_string(s->str, s->type, s->length,
+				   data+offset, 1, &len);
+	    if (s->raw_data) {
+		ipmi_mem_free(s->raw_data);
+		s->raw_data = NULL;
+	    }
+	} else if (s->raw_data) {
+	    memcpy(data+offset, s->raw_data, s->raw_len);
+	    len = s->raw_len;
+	} else if (s->str) {
+	    len = IPMI_MAX_STR_LEN;
+	    ipmi_set_device_string(s->str, s->type, s->length,
+				   data+offset, 1, &len);
+	} else {
+	    data[offset] = 0xc0;
+	    len = 1;
+	}
+	if (s->changed && !rec->rewrite) {
+	    rv = fru_new_update_rec(fru, offset+rec->offset, len);
+	    if (rv)
+		return rv;
+	}
+	offset += len;
+    }
+    /* Now the end marker */
+    data[offset] = 0xc1;
+    /* If the record changed, put out the end marker */
+    if (rec->changed && !rec->rewrite) {
+	rv = fru_new_update_rec(fru, offset+rec->offset, 1);
+	if (rv)
+	    return rv;
+    }
+    offset += 1;
+    if (offset != rec->used_length)
+	return EBADMSG;
     return 0;
 }
 
 /***********************************************************************
  *
- * Basic string handling for FRUs.
+ * Custom field handling for FRUs.  This is a variable-length array
+ * of strings.
  *
  **********************************************************************/
 
-typedef struct fru_string_s
+static int
+fru_setup_min_field(ipmi_fru_record_t *rec, int area, int changed)
 {
-    enum ipmi_str_type_e type;
-    unsigned short       length;
-    char                 *str;
-} fru_string_t;
+    int            i;
+    unsigned int   min;
+    unsigned int   start_offset;
+    fru_variable_t *v;
+
+    if (!fru_area_info[area].get_fields)
+	return 0;
+
+    v = fru_area_info[area].get_fields(rec);
+    min = fru_area_info[area].num_fixed_fields;
+    start_offset = fru_area_info[area].field_start;
+
+    if (min == 0)
+	return 0;
+
+    v->strings = ipmi_mem_alloc(min * sizeof(fru_string_t));
+    if (!v->strings)
+	return ENOMEM;
+    memset(v->strings, 0, min * sizeof(fru_string_t));
+    for (i=0; i<min; i++) {
+	v->strings[i].changed = changed;
+	v->strings[i].offset = start_offset;
+	start_offset++;
+	v->strings[i].raw_len = 1;
+    }
+    v->len = min;
+    v->next = min;
+    return 0;
+}
 
 static int
-fru_decode_string(ipmi_fru_t    *fru,
-		  unsigned char **in,
-		  unsigned int  *in_len,
-		  int           lang_code,
-		  int           force_english,
-		  fru_string_t  *out)
+fru_string_set(enum ipmi_str_type_e type,
+	       char                 *str,
+	       unsigned int         len,
+	       ipmi_fru_record_t    *rec,
+	       fru_variable_t       *vals,
+	       unsigned int         num,
+	       int                  is_custom)
+{
+    char         *newval;
+    fru_string_t *val = vals->strings + num;
+    unsigned char tstr[IPMI_MAX_STR_LEN+1];
+    int           raw_len = sizeof(tstr);
+    int           raw_diff;
+    int           i;
+
+    if (str) {
+	/* First calculate if it will fit into the record area. */
+	ipmi_set_device_string(str, type, len, tstr, 1, &raw_len);
+	raw_diff = raw_len - val->raw_len;
+	if ((raw_diff > 0) && (rec->used_length+raw_diff > rec->length))
+	    return ENOMEM;
+	if (len == 0)
+	    newval = ipmi_mem_alloc(1);
+	else
+	    newval = ipmi_mem_alloc(len);
+	if (!newval)
+	    return ENOMEM;
+	memcpy(newval, str, len);
+    } else {
+	newval = NULL;
+	len = 0;
+	raw_diff = 1 - val->raw_len;
+    }
+
+    if (val->str)
+	ipmi_mem_free(val->str);
+    if (val->raw_data) {
+	ipmi_mem_free(val->raw_data);
+	val->raw_data = NULL;
+    }
+
+    if (!is_custom || newval) {
+	/* Either it's not a custom value (and thus is always there)
+	   or there is a value to put in.  Modify the length and
+	   reduce the offset of all the following strings. */
+	val->str = newval;
+	val->length = len;
+	val->type = type;
+	val->raw_len += raw_diff;
+	val->changed = 1;
+	if (raw_diff) {
+	    for (i=num+1; i<vals->next; i++) {
+		vals->strings[i].offset += raw_diff;
+		vals->strings[i].changed = 1;
+	    }
+	}
+    } else {
+	/* A custom value that is being cleared.  Nuke it by moving
+	   all the strings following this back. */
+	raw_diff = -val->raw_len;
+	vals->next--;
+	for (i=num; i<vals->next; i++) {
+	    vals->strings[i] = vals->strings[i+1];
+	    vals->strings[i].offset += raw_diff;
+	    vals->strings[i].changed = 1;
+	}
+    }
+
+    rec->used_length += raw_diff;
+    rec->changed |= 1;
+
+    return 0;
+}
+
+static int
+fru_decode_string(ipmi_fru_t     *fru,
+		  unsigned char  *start_pos,
+		  unsigned char  **in,
+		  unsigned int   *in_len,
+		  int            lang_code,
+		  int            force_english,
+		  fru_variable_t *strs,
+		  unsigned int   num)
 {
     unsigned char str[IPMI_MAX_STR_LEN+1];
     int           force_unicode;
-    unsigned int  skip = **in & 0x3f;
+    fru_string_t  *out = strs->strings + num;
+    unsigned char *in_start;
 
-    if (**in == 0xc1)
-	/* The field is not present. */
-	return 0;
-
-    if (skip+1 > *in_len) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(fru_decode_string):"
-		 " FRU string is longer than  data length",
-		 FRU_DOMAIN_NAME(fru));
-	return EBADMSG;
-    }
-
+    out->offset = *in - start_pos;
+    in_start = *in;
     force_unicode = !force_english && (lang_code != IPMI_LANG_CODE_ENGLISH);
-    out->length = ipmi_get_device_string(*in, *in_len, str, force_unicode,
+    out->length = ipmi_get_device_string(in, *in_len, str, force_unicode,
 					 &out->type, sizeof(str));
-
-    *in += skip+1;
-    in_len -= skip+1;
+    out->raw_len = *in - in_start;
+    in_len -= out->raw_len;
+    out->raw_data = ipmi_mem_alloc(out->raw_len);
+    if (!out->raw_data)
+	return ENOMEM;
+    memcpy(out->raw_data, in_start, out->raw_len);
 
     if (out->length != 0) {
 	out->str = ipmi_mem_alloc(out->length);
-	if (!out->str)
+	if (!out->str) {
+	    ipmi_mem_free(out->raw_data);
 	    return ENOMEM;
+	}
 	memcpy(out->str, str, out->length);
     } else {
-	out->str = NULL;
+	out->str = ipmi_mem_alloc(1);
+	if (!out->str) {
+	    ipmi_mem_free(out->raw_data);
+	    return ENOMEM;
+	}
     }
     return 0;
 }
@@ -272,24 +551,70 @@ fru_free_string(fru_string_t *str)
 {
     if (str->str)
 	ipmi_mem_free(str->str);
+    if (str->raw_data)
+	ipmi_mem_free(str->raw_data);
 }
 
 
-/***********************************************************************
- *
- * Custom field handling for FRUs.  This is a variable-length array
- * of strings.
- *
- **********************************************************************/
-typedef struct fru_variable_s
+static int
+fru_variable_string_set(ipmi_fru_record_t    *rec,
+			fru_variable_t       *val,
+			unsigned int         first_custom,
+			unsigned int         num,
+			enum ipmi_str_type_e type,
+			char                 *str,
+			unsigned int         len,
+			int                  is_custom)
 {
-    unsigned short len;
-    unsigned short next;
-    fru_string_t   *strings;
-} fru_variable_t;
+    int rv;
+
+    if (is_custom) {
+	/* Renumber to get the custom fields.  We do this a little
+	   strangly to avoid overflows if the user passes in MAX_INT
+	   for the num. */
+	if (num > val->next - first_custom)
+	    num = val->next;
+	else
+	    num += first_custom;
+    }
+    if (num >= val->next) {
+	if (len == 0) {
+	    /* Don't expand if we are deleting an invalid field,
+	       return an error. */
+	    return EINVAL;
+	}
+	num = val->next;
+	/* If not enough room, expand the array by a set amount (to
+	   keep from thrashing memory when adding lots of things). */
+	if (val->next >= val->len) {
+	    fru_string_t *newval;
+	    unsigned int alloc_num = val->len + 16;
+
+	    newval = ipmi_mem_alloc(sizeof(fru_string_t) * alloc_num);
+	    if (!newval)
+		return ENOMEM;
+	    memset(newval, 0, sizeof(fru_string_t) * alloc_num);
+	    if (val->strings) {
+		memcpy(newval, val->strings, sizeof(fru_string_t) * val->next);
+		ipmi_mem_free(val->strings);
+	    }
+	    val->strings = newval;
+	    val->len = alloc_num;
+	    if (num > 0) {
+		val->strings[num].offset
+		    = val->strings[num-1].offset + val->strings[num-1].raw_len;
+	    }
+	}
+	val->next++;
+    }
+
+    rv = fru_string_set(type, str, len, rec, val, num, is_custom);
+    return rv;
+}
 
 static int
 fru_decode_variable_string(ipmi_fru_t     *fru,
+			   unsigned char  *start_pos,
 			   unsigned char  **in,
 			   unsigned int   *in_len,
 			   int            lang_code,
@@ -313,16 +638,18 @@ fru_decode_variable_string(ipmi_fru_t     *fru,
 	v->len = n_len;
     }
 
-    err = fru_decode_string(fru, in, in_len, lang_code, 0,
-			    &v->strings[v->next]);
+    err = fru_decode_string(fru, start_pos, in, in_len, lang_code, 0,
+			    v, v->next);
     if (!err)
 	v->next++;
     return err;
 }
 
 static int
-fru_variable_string_to_out(char *out, unsigned int *length,
-			   fru_variable_t *in, unsigned int num)
+fru_variable_string_to_out(fru_variable_t *in,
+			   unsigned int   num,
+			   char           *out,
+			   unsigned int   *length)
 {
     if (num >= in->next)
 	return E2BIG;
@@ -377,18 +704,18 @@ fru_free_variable_string(fru_variable_t *v)
  **********************************************************************/
 
 static ipmi_fru_record_t *
-fru_record_alloc(int type, fru_record_handlers_t *handlers, int extra_len)
+fru_record_alloc(int area)
 {
     ipmi_fru_record_t *rec;
+    unsigned short    extra_len = fru_area_info[area].extra_len;
 
-    rec = ipmi_mem_alloc(sizeof(ipmi_fru_record_t)+extra_len);
+    rec = ipmi_mem_alloc(sizeof(ipmi_fru_record_t) + extra_len);
     if (!rec)
 	return NULL;
 
     memset(rec, 0, sizeof(ipmi_fru_record_t)+extra_len);
 
-    rec->type = type;
-    rec->handlers = handlers;
+    rec->handlers = fru_area_info + area;
     rec->data = ((char *) rec) + sizeof(ipmi_fru_record_t);
 
     return rec;
@@ -413,18 +740,19 @@ fru_record_free(ipmi_fru_record_t *rec)
  *
  **********************************************************************/
 
-#define HANDLE_STR_DECODE(fname, force_english) \
-    err = fru_decode_string(fru, &data, &data_len, u->lang_code,\
-			    force_english, &u->fname);		\
+#define HANDLE_STR_DECODE(ucname, fname, force_english) \
+    err = fru_decode_string(fru, orig_data, &data, &data_len, u->lang_code, \
+			    force_english, &u->fields,		\
+			    ucname ## _ ## fname);		\
     if (err)							\
 	goto out_err
 
-#define HANDLE_CUSTOM_DECODE() \
+#define HANDLE_CUSTOM_DECODE(ucname) \
 do {									\
     while ((data_len > 0) && (*data != 0xc1)) {				\
-	err = fru_decode_variable_string(fru, &data, &data_len,		\
-					 IPMI_LANG_CODE_ENGLISH,	\
-					 &u->custom);			\
+	err = fru_decode_variable_string(fru, orig_data, &data, &data_len, \
+					 u->lang_code,			\
+					 &u->fields);			\
 	if (err)							\
 	    goto out_err;						\
     }									\
@@ -432,46 +760,39 @@ do {									\
 
 #define GET_DATA_PREFIX(lcname, ucname) \
     ipmi_fru_ ## lcname ## _area_t *u;				\
+    ipmi_fru_record_t              *rec;			\
     fru_lock(fru);						\
-    if (!fru->lcname) {						\
+    rec = fru->recs[IPMI_FRU_FTR_## ucname ## _AREA];		\
+    if (!rec) {							\
 	fru_unlock(fru);					\
 	return ENOSYS;						\
     }								\
-    u = fru_record_get_data(fru->lcname);			\
-    if (fru->lcname->type != IPMI_FRU_FTR_## ucname ## _AREA) {	\
-	fru_unlock(fru);					\
-	return EINVAL;						\
-    }
+    u = fru_record_get_data(rec);
 
 #define GET_DATA_STR(lcname, ucname, fname) \
 int									\
 ipmi_fru_get_ ## lcname ## _ ## fname ## _len(ipmi_fru_t   *fru,	\
 					      unsigned int *length)	\
 {									\
+    int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    if (!u->fname.str) {						\
-	fru_unlock(fru);						\
-	return ENOSYS;							\
-    }									\
-    if (u->fname.type == IPMI_ASCII_STR)				\
-	*length = u->fname.length + 1;					\
-    else								\
-	*length = u->fname.length;					\
+    rv = fru_variable_string_length(&u->fields,				\
+				    ucname ## _ ## fname,		\
+                                    length);				\
     fru_unlock(fru);							\
-    return 0;								\
+    return rv;								\
 }									\
 int									\
 ipmi_fru_get_ ## lcname ## _ ## fname ## _type(ipmi_fru_t           *fru,\
 					       enum ipmi_str_type_e *type)\
 {									\
+    int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    if (!u->fname.str) {						\
-	fru_unlock(fru);						\
-	return ENOSYS;							\
-    }									\
-    *type = u->fname.type;						\
+    rv = fru_variable_string_type(&u->fields,				\
+				  ucname ## _ ## fname,			\
+                                  type);				\
     fru_unlock(fru);							\
-    return 0;								\
+    return rv;								\
 }									\
 int									\
 ipmi_fru_get_ ## lcname ## _ ## fname(ipmi_fru_t	*fru,		\
@@ -480,7 +801,24 @@ ipmi_fru_get_ ## lcname ## _ ## fname(ipmi_fru_t	*fru,		\
 {									\
     int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    rv = fru_string_to_out(str, strlen, &u->fname);			\
+    rv = fru_variable_string_to_out(&u->fields,				\
+				    ucname ## _ ## fname,		\
+                                    str, strlen);			\
+    fru_unlock(fru);							\
+    return rv;								\
+}									\
+int									\
+ipmi_fru_set_ ## lcname ## _ ## fname(ipmi_fru_t	   *fru,	\
+				      enum ipmi_str_type_e type,	\
+				      char                 *str,	\
+				      unsigned int         len)		\
+{									\
+    int rv;								\
+    GET_DATA_PREFIX(lcname, ucname);					\
+    rv = fru_variable_string_set(rec,					\
+				 &u->fields,				\
+				 0, ucname ## _ ## fname,		\
+                                 type, str, len, 0);			\
     fru_unlock(fru);							\
     return rv;								\
 }
@@ -493,7 +831,9 @@ ipmi_fru_get_ ## lcname ## _ ## custom ## _len(ipmi_fru_t   *fru,	\
 {									\
     int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    rv = fru_variable_string_length(&u->custom, num, length);		\
+    rv = fru_variable_string_length(&u->fields,				\
+				    ucname ## _ ## custom_start + num,	\
+                                    length);				\
     fru_unlock(fru);							\
     return rv;								\
 }									\
@@ -504,7 +844,9 @@ ipmi_fru_get_ ## lcname ## _ ## custom ## _type(ipmi_fru_t   *fru,	\
 {									\
     int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    rv = fru_variable_string_type(&u->custom, num, type);		\
+    rv = fru_variable_string_type(&u->fields,				\
+				  ucname ## _ ## custom_start + num,	\
+                                  type);				\
     fru_unlock(fru);							\
     return rv;								\
 }									\
@@ -516,12 +858,28 @@ ipmi_fru_get_ ## lcname ## _ ## custom(ipmi_fru_t	 *fru,		\
 {									\
     int rv;								\
     GET_DATA_PREFIX(lcname, ucname);					\
-    rv = fru_variable_string_to_out(str, strlen, &u->custom, num);	\
+    rv = fru_variable_string_to_out(&u->fields,				\
+				    ucname ## _ ## custom_start + num,	\
+                                    str, strlen);			\
+    fru_unlock(fru);							\
+    return rv;								\
+}									\
+int									\
+ipmi_fru_set_ ## lcname ## _ ## custom(ipmi_fru_t	    *fru,	\
+				       unsigned int         num,	\
+				       enum ipmi_str_type_e type,	\
+				       char                 *str,	\
+				       unsigned int         len)	\
+{									\
+    int rv;								\
+    GET_DATA_PREFIX(lcname, ucname);					\
+    rv = fru_variable_string_set(rec,					\
+				 &u->fields,				\
+				 ucname ## _ ## custom_start, num,	\
+                                 type, str, len, 1);			\
     fru_unlock(fru);							\
     return rv;								\
 }
-
-
 
 /***********************************************************************
  *
@@ -531,8 +889,6 @@ ipmi_fru_get_ ## lcname ## _ ## custom(ipmi_fru_t	 *fru,		\
 
 typedef struct ipmi_fru_internal_use_area_s
 {
-    unsigned int   offset;
-
     /* version bit 7-4 reserved (0000), bit 3-0 == 0001 */
     unsigned char  version;
     unsigned short length;
@@ -541,7 +897,7 @@ typedef struct ipmi_fru_internal_use_area_s
 
 
 static void
-fru_internal_use_area_free(ipmi_fru_record_t *rec)
+internal_use_area_free(ipmi_fru_record_t *rec)
 {
     ipmi_fru_internal_use_area_t *u = fru_record_get_data(rec);
 
@@ -549,30 +905,25 @@ fru_internal_use_area_free(ipmi_fru_record_t *rec)
     fru_record_free(rec);
 }
 
-fru_record_handlers_t internal_use_handlers =
-{
-    .free = fru_internal_use_area_free,
-};
-
 static int
 fru_decode_internal_use_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
 			     unsigned int      data_len,
-			     unsigned int      start_offset,
 			     ipmi_fru_record_t **rrec)
 {
     ipmi_fru_internal_use_area_t *u;
     ipmi_fru_record_t            *rec;
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_INTERNAL_USE_AREA,
-			   &internal_use_handlers,
-			   sizeof(ipmi_fru_internal_use_area_t));
+    rec = fru_record_alloc(IPMI_FRU_FTR_INTERNAL_USE_AREA);
     if (!rec)
 	return ENOMEM;
 
+    rec->length = data_len;
+    rec->used_length = data_len;
+    rec->orig_used_length = data_len;
+
     u = fru_record_get_data(rec);
 
-    u->offset = start_offset;
     u->version = *data;
     u->length = data_len-1;
     u->data = ipmi_mem_alloc(u->length);
@@ -599,6 +950,12 @@ ipmi_fru_get_internal_use_version(ipmi_fru_t    *fru,
     fru_unlock(fru);
 
     return 0;
+}
+
+static int
+ipmi_fru_set_internal_use_version(ipmi_fru_t *fru, unsigned char data)
+{
+    return EINVAL;
 }
 
 int 
@@ -637,7 +994,59 @@ ipmi_fru_get_internal_use(ipmi_fru_t    *fru,
     return 0;
 }
 
+int
+ipmi_fru_set_internal_use(ipmi_fru_t *fru, unsigned char *data,
+			  unsigned int len)
+{
+    unsigned char *new_val;
 
+    GET_DATA_PREFIX(internal_use, INTERNAL_USE);
+
+    if (len > rec->length-1) {
+	fru_unlock(fru);
+	return E2BIG;
+    }
+
+    new_val = ipmi_mem_alloc(len);
+    if (!new_val) {
+	fru_unlock(fru);
+	return ENOMEM;
+    }
+    ipmi_mem_free(u->data);
+    u->data = new_val;
+    memcpy(u->data, data, len);
+    u->length = len;
+    rec->changed = 1;
+    rec->used_length = len + 1;
+    rec->orig_used_length = rec->used_length;
+    
+    fru_unlock(fru);
+
+    return 0;
+}
+
+static int
+fru_encode_internal_use_area(ipmi_fru_t *fru, unsigned char *data)
+{
+    ipmi_fru_record_t *rec = fru->recs[IPMI_FRU_FTR_INTERNAL_USE_AREA];
+    ipmi_fru_internal_use_area_t *u;
+    int               rv;
+
+    if (!rec)
+	return 0;
+
+    u = fru_record_get_data(rec);
+    data += rec->offset;
+    memset(data, 0, rec->length);
+    data[0] = 1; /* Version */
+    memcpy(data+1, u->data, u->length);
+    if (rec->changed && !rec->rewrite) {
+	rv = fru_new_update_rec(fru, rec->offset, u->length+1);
+	if (rv)
+	    return rv;
+    }
+    return 0;
+}
 
 /***********************************************************************
  *
@@ -645,40 +1054,40 @@ ipmi_fru_get_internal_use(ipmi_fru_t    *fru,
  *
  **********************************************************************/
 
+#define CHASSIS_INFO_part_number	0
+#define CHASSIS_INFO_serial_number	1
+#define CHASSIS_INFO_custom_start	2
+
 typedef struct ipmi_fru_chassis_info_area_s
 {
-    unsigned int   offset;
-
     /* version bit 7-4 reserved (0000), bit 3-0 == 0001 */
     unsigned char  version;
     unsigned char  type;  /* chassis type CT_xxxx */
     unsigned char  lang_code;
-    fru_string_t   part_number;
-    fru_string_t   serial_number;
-    fru_variable_t custom;
+    fru_variable_t fields;
 } ipmi_fru_chassis_info_area_t;
 
 static void
-fru_chassis_info_area_free(ipmi_fru_record_t *rec)
+chassis_info_area_free(ipmi_fru_record_t *rec)
 {
     ipmi_fru_chassis_info_area_t *u = fru_record_get_data(rec);
 
-    fru_free_string(&u->part_number);
-    fru_free_string(&u->serial_number);
-    fru_free_variable_string(&u->custom);
+    fru_free_variable_string(&u->fields);
     fru_record_free(rec);
 }
 
-fru_record_handlers_t chassis_info_handlers =
+static fru_variable_t *
+chassis_info_get_fields(ipmi_fru_record_t *rec)
 {
-    .free = fru_chassis_info_area_free,
-};
+    ipmi_fru_chassis_info_area_t *u;
+    u = fru_record_get_data(rec);
+    return &u->fields;
+}
 
 static int
 fru_decode_chassis_info_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
 			     unsigned int      data_len,
-			     unsigned int      start_offset,
 			     ipmi_fru_record_t **rrec)
 {
     ipmi_fru_chassis_info_area_t *u;
@@ -686,6 +1095,7 @@ fru_decode_chassis_info_area(ipmi_fru_t        *fru,
     int                          err;
     unsigned char                version;
     unsigned char                length;
+    unsigned char                *orig_data = data;
 
     version = *data;
     length = (*(data+1)) * 8;
@@ -707,30 +1117,37 @@ fru_decode_chassis_info_area(ipmi_fru_t        *fru,
 
     data_len--; /* remove the checksum */
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_CHASSIS_INFO_AREA,
-			   &chassis_info_handlers,
-			   sizeof(*u));
+    rec = fru_record_alloc(IPMI_FRU_FTR_CHASSIS_INFO_AREA);
     if (!rec)
 	return ENOMEM;
 
+    err = fru_setup_min_field(rec, IPMI_FRU_FTR_CHASSIS_INFO_AREA, 0);
+    if (err)
+	goto out_err;
+
+    rec->length = length; /* add 1 for the checksum */
+
     u = fru_record_get_data(rec);
 
-    u->offset = start_offset;
     u->version = version;
-    data += 2; data_len -= 2;
+    data += 2;
+    data_len -= 2;
     u->type = *data;
-    data++; data_len--;
+    data++;
+    data_len--;
     u->lang_code = IPMI_LANG_CODE_ENGLISH;
-    HANDLE_STR_DECODE(part_number, 1);
-    HANDLE_STR_DECODE(serial_number, 1);
-    HANDLE_CUSTOM_DECODE();
+    HANDLE_STR_DECODE(CHASSIS_INFO, part_number, 1);
+    HANDLE_STR_DECODE(CHASSIS_INFO, serial_number, 1);
+    HANDLE_CUSTOM_DECODE(CHASSIS_INFO);
+    rec->used_length = data - orig_data + 1; /* add 1 for the checksum */
+    rec->orig_used_length = rec->used_length;
 
     *rrec = rec;
 
     return 0;
 
  out_err:
-    fru_chassis_info_area_free(rec);
+    chassis_info_area_free(rec);
     return err;
 }
 
@@ -747,6 +1164,12 @@ ipmi_fru_get_chassis_info_version(ipmi_fru_t    *fru,
     return 0;
 }
 
+static int
+ipmi_fru_set_chassis_info_version(ipmi_fru_t *fru, unsigned char data)
+{
+    return EINVAL;
+}
+
 int 
 ipmi_fru_get_chassis_info_type(ipmi_fru_t    *fru,
 			       unsigned char *type)
@@ -760,9 +1183,65 @@ ipmi_fru_get_chassis_info_type(ipmi_fru_t    *fru,
     return 0;
 }
 
+int 
+ipmi_fru_set_chassis_info_type(ipmi_fru_t    *fru,
+			       unsigned char type)
+{
+    GET_DATA_PREFIX(chassis_info, CHASSIS_INFO);
+
+    rec->changed |= u->type != type;
+    u->type = type;
+
+    fru_unlock(fru);
+
+    return 0;
+}
+
 GET_DATA_STR(chassis_info, CHASSIS_INFO, part_number)
 GET_DATA_STR(chassis_info, CHASSIS_INFO, serial_number)
 GET_CUSTOM_STR(chassis_info, CHASSIS_INFO)
+
+static int
+fru_encode_chassis_info_area(ipmi_fru_t *fru, unsigned char *data)
+{
+    ipmi_fru_record_t *rec = fru->recs[IPMI_FRU_FTR_CHASSIS_INFO_AREA];
+    ipmi_fru_chassis_info_area_t *u;
+    int               rv;
+
+    if (!rec)
+	return 0;
+
+    u = fru_record_get_data(rec);
+    data += rec->offset;
+    memset(data, 0, rec->length);
+    data[0] = 1; /* Version */
+    data[1] = rec->length / 8;
+    data[2] = u->type;
+    if (rec->changed && !rec->rewrite) {
+	rv = fru_new_update_rec(fru, rec->offset, 3);
+	if (rv)
+	    return rv;
+    }
+    rv = fru_encode_fields(fru, rec, &u->fields, data, 3);
+    if (rv)
+	return rv;
+    data[rec->length-1] = -checksum(data, rec->length-1);
+    if (rec->changed && !rec->rewrite) {
+	/* Write any zeros that need to be written if the data got
+	   shorter. */
+	if (rec->used_length < rec->orig_used_length) {
+	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length,
+				    rec->orig_used_length - rec->used_length);
+	    if (rv)
+		return rv;
+	}
+	/* Write the checksum */
+	rv = fru_new_update_rec(fru, rec->offset+rec->length-1, 1);
+	if (rv)
+	    return rv;
+    }
+    return 0;
+}
 
 /***********************************************************************
  *
@@ -770,53 +1249,51 @@ GET_CUSTOM_STR(chassis_info, CHASSIS_INFO)
  *
  **********************************************************************/
 
+#define BOARD_INFO_board_manufacturer	0
+#define BOARD_INFO_board_product_name	1
+#define BOARD_INFO_board_serial_number	2
+#define BOARD_INFO_board_part_number	3
+#define BOARD_INFO_fru_file_id		4
+#define BOARD_INFO_custom_start		5
+
 typedef struct ipmi_fru_board_info_area_s
 {
-    unsigned int   offset;
-
     /* version bit 7-4 reserved (0000), bit 3-0 == 0001 */
     unsigned char  version;
     unsigned char  lang_code;
     time_t         mfg_time;
-    fru_string_t   board_manufacturer;
-    fru_string_t   board_product_name;
-    fru_string_t   board_serial_number;
-    fru_string_t   board_part_number;
-    fru_string_t   fru_file_id;
-    fru_variable_t custom;
+    fru_variable_t fields;
 } ipmi_fru_board_info_area_t;
 
 static void
-fru_board_info_area_free(ipmi_fru_record_t *rec)
+board_info_area_free(ipmi_fru_record_t *rec)
 {
     ipmi_fru_board_info_area_t *u = fru_record_get_data(rec);
 
-    fru_free_string(&u->board_manufacturer);
-    fru_free_string(&u->board_product_name);
-    fru_free_string(&u->board_serial_number);
-    fru_free_string(&u->board_part_number);
-    fru_free_string(&u->fru_file_id);
-    fru_free_variable_string(&u->custom);
+    fru_free_variable_string(&u->fields);
     fru_record_free(rec);
 }
 
-fru_record_handlers_t board_info_handlers =
+static fru_variable_t *
+board_info_get_fields(ipmi_fru_record_t *rec)
 {
-    .free = fru_board_info_area_free,
-};
+    ipmi_fru_board_info_area_t *u;
+    u = fru_record_get_data(rec);
+    return &u->fields;
+}
 
 static int
 fru_decode_board_info_area(ipmi_fru_t        *fru,
 			   unsigned char     *data,
 			   unsigned int      data_len,
-			   unsigned int      start_offset,
 			   ipmi_fru_record_t **rrec)
 {
     ipmi_fru_board_info_area_t *u;
-    ipmi_fru_record_t            *rec;
-    int                          err;
-    unsigned char                version;
-    unsigned char                length;
+    ipmi_fru_record_t          *rec;
+    int                        err;
+    unsigned char              version;
+    unsigned char              length;
+    unsigned char              *orig_data = data;
 
     version = *data;
     length = (*(data+1)) * 8;
@@ -838,39 +1315,46 @@ fru_decode_board_info_area(ipmi_fru_t        *fru,
 
     data_len--; /* remove the checksum */
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_BOARD_INFO_AREA,
-			   &board_info_handlers,
-			   sizeof(*u));
+    rec = fru_record_alloc(IPMI_FRU_FTR_BOARD_INFO_AREA);
     if (!rec)
 	return ENOMEM;
 
+    err = fru_setup_min_field(rec, IPMI_FRU_FTR_BOARD_INFO_AREA, 0);
+    if (err)
+	goto out_err;
+
+    rec->length = length;
+
     u = fru_record_get_data(rec);
 
-    u->offset = start_offset;
     u->version = version;
-    data += 2; data_len -= 2;
+    data += 2;
+    data_len -= 2;
     u->lang_code = *data;
     if (u->lang_code == 0)
 	u->lang_code = IPMI_LANG_CODE_ENGLISH;
-    data++; data_len--;
+    data++;
+    data_len--;
 
     err = read_fru_time(&data, &data_len, &u->mfg_time);
     if (err)
 	goto out_err;
 
-    HANDLE_STR_DECODE(board_manufacturer, 0);
-    HANDLE_STR_DECODE(board_product_name, 0);
-    HANDLE_STR_DECODE(board_serial_number, 1);
-    HANDLE_STR_DECODE(board_part_number, 1);
-    HANDLE_STR_DECODE(fru_file_id, 1);
-    HANDLE_CUSTOM_DECODE();
+    HANDLE_STR_DECODE(BOARD_INFO, board_manufacturer, 0);
+    HANDLE_STR_DECODE(BOARD_INFO, board_product_name, 0);
+    HANDLE_STR_DECODE(BOARD_INFO, board_serial_number, 1);
+    HANDLE_STR_DECODE(BOARD_INFO, board_part_number, 1);
+    HANDLE_STR_DECODE(BOARD_INFO, fru_file_id, 1);
+    HANDLE_CUSTOM_DECODE(BOARD_INFO);
+    rec->used_length = data - orig_data + 1; /* add 1 for the checksum */
+    rec->orig_used_length = rec->used_length;
 
     *rrec = rec;
 
     return 0;
 
  out_err:
-    fru_board_info_area_free(rec);
+    board_info_area_free(rec);
     return err;
 }
 
@@ -887,6 +1371,12 @@ ipmi_fru_get_board_info_version(ipmi_fru_t    *fru,
     return 0;
 }
 
+static int
+ipmi_fru_set_board_info_version(ipmi_fru_t *fru, unsigned char data)
+{
+    return EINVAL;
+}
+
 int 
 ipmi_fru_get_board_info_lang_code(ipmi_fru_t    *fru,
 				  unsigned char *type)
@@ -894,6 +1384,20 @@ ipmi_fru_get_board_info_lang_code(ipmi_fru_t    *fru,
     GET_DATA_PREFIX(board_info, BOARD_INFO);
     
     *type = u->lang_code;
+
+    fru_unlock(fru);
+
+    return 0;
+}
+
+int 
+ipmi_fru_set_board_info_lang_code(ipmi_fru_t    *fru,
+				  unsigned char lang)
+{
+    GET_DATA_PREFIX(board_info, BOARD_INFO);
+
+    rec->changed |= u->lang_code != lang;
+    u->lang_code = lang;
 
     fru_unlock(fru);
 
@@ -913,6 +1417,20 @@ ipmi_fru_get_board_info_mfg_time(ipmi_fru_t *fru,
     return 0;
 }
 
+int 
+ipmi_fru_set_board_info_mfg_time(ipmi_fru_t *fru,
+				 time_t     time)
+{
+    GET_DATA_PREFIX(board_info, BOARD_INFO);
+    
+    rec->changed |= u->mfg_time != time;
+    u->mfg_time = time;
+
+    fru_unlock(fru);
+
+    return 0;
+}
+
 GET_DATA_STR(board_info, BOARD_INFO, board_manufacturer)
 GET_DATA_STR(board_info, BOARD_INFO, board_product_name)
 GET_DATA_STR(board_info, BOARD_INFO, board_serial_number)
@@ -920,55 +1438,93 @@ GET_DATA_STR(board_info, BOARD_INFO, board_part_number)
 GET_DATA_STR(board_info, BOARD_INFO, fru_file_id)
 GET_CUSTOM_STR(board_info, BOARD_INFO)
 
+static int
+fru_encode_board_info_area(ipmi_fru_t *fru, unsigned char *data)
+{
+    ipmi_fru_record_t *rec = fru->recs[IPMI_FRU_FTR_BOARD_INFO_AREA];
+    ipmi_fru_board_info_area_t *u;
+    int               rv;
+
+    if (!rec)
+	return 0;
+
+    u = fru_record_get_data(rec);
+    data += rec->offset;
+    data[0] = 1; /* Version */
+    data[1] = rec->length / 8;
+    data[2] = u->lang_code;
+    write_fru_time(data+3, u->mfg_time);
+    
+    if (rec->changed && !rec->rewrite) {
+	rv = fru_new_update_rec(fru, rec->offset, 6);
+	if (rv)
+	    return rv;
+    }
+    rv = fru_encode_fields(fru, rec, &u->fields, data, 6);
+    if (rv)
+	return rv;
+    if (rec->changed && !rec->rewrite) {
+	/* Write any zeros that need to be written if the data got
+	   shorter. */
+	if (rec->used_length < rec->orig_used_length) {
+	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length,
+				    rec->orig_used_length - rec->used_length);
+	    if (rv)
+		return rv;
+	}
+	/* Write the checksum */
+	rv = fru_new_update_rec(fru, rec->offset+rec->length-1, 1);
+	if (rv)
+	    return rv;
+    }
+    data[rec->length-1] = -checksum(data, rec->length-1);
+    return 0;
+}
+
 /***********************************************************************
  *
  * Handling for FRU product info areas
  *
  **********************************************************************/
 
+#define PRODUCT_INFO_manufacturer_name		0
+#define PRODUCT_INFO_product_name		1
+#define PRODUCT_INFO_product_part_model_number	2
+#define PRODUCT_INFO_product_version		3
+#define PRODUCT_INFO_product_serial_number	4
+#define PRODUCT_INFO_asset_tag			5
+#define PRODUCT_INFO_fru_file_id		6
+#define PRODUCT_INFO_custom_start		7
+
 typedef struct ipmi_fru_product_info_area_s
 {
-    unsigned int   offset;
-
     /* version bit 7-4 reserved (0000), bit 3-0 == 0001 */
     unsigned char  version;
     unsigned char  lang_code;
-    fru_string_t   manufacturer_name;
-    fru_string_t   product_name;
-    fru_string_t   product_part_model_number;
-    fru_string_t   product_version;
-    fru_string_t   product_serial_number;
-    fru_string_t   asset_tag;
-    fru_string_t   fru_file_id;
-    fru_variable_t custom;
+    fru_variable_t fields;
 } ipmi_fru_product_info_area_t;
 
 static void
-fru_product_info_area_free(ipmi_fru_record_t *rec)
+product_info_area_free(ipmi_fru_record_t *rec)
 {
     ipmi_fru_product_info_area_t *u = fru_record_get_data(rec);
 
-    fru_free_string(&u->manufacturer_name);
-    fru_free_string(&u->product_name);
-    fru_free_string(&u->product_part_model_number);
-    fru_free_string(&u->product_version);
-    fru_free_string(&u->product_serial_number);
-    fru_free_string(&u->asset_tag);
-    fru_free_string(&u->fru_file_id);
-    fru_free_variable_string(&u->custom);
+    fru_free_variable_string(&u->fields);
     fru_record_free(rec);
 }
 
-fru_record_handlers_t product_info_handlers =
+static fru_variable_t *
+product_info_get_fields(ipmi_fru_record_t *rec)
 {
-    .free = fru_product_info_area_free,
-};
+    ipmi_fru_product_info_area_t *u;
+    u = fru_record_get_data(rec);
+    return &u->fields;
+}
 
 static int
 fru_decode_product_info_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
 			     unsigned int      data_len,
-			     unsigned int      start_offset,
 			     ipmi_fru_record_t **rrec)
 {
     ipmi_fru_product_info_area_t *u;
@@ -976,6 +1532,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
     int                          err;
     unsigned char                version;
     unsigned char                length;
+    unsigned char                *orig_data = data;
 
     version = *data;
     length = (*(data+1)) * 8;
@@ -997,36 +1554,43 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
 
     data_len--; /* remove the checksum */
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_PRODUCT_INFO_AREA,
-			   &product_info_handlers,
-			   sizeof(*u));
+    rec = fru_record_alloc(IPMI_FRU_FTR_PRODUCT_INFO_AREA);
     if (!rec)
 	return ENOMEM;
 
+    err = fru_setup_min_field(rec, IPMI_FRU_FTR_PRODUCT_INFO_AREA, 0);
+    if (err)
+	goto out_err;
+
+    rec->length = length; /* add 1 for the checksum */
+
     u = fru_record_get_data(rec);
 
-    u->offset = start_offset;
     u->version = version;
-    data += 2; data_len -= 2;
+    data += 2;
+    data_len -= 2;
     u->lang_code = *data;
     if (u->lang_code == 0)
 	u->lang_code = IPMI_LANG_CODE_ENGLISH;
-    data++; data_len--;
-    HANDLE_STR_DECODE(manufacturer_name, 0);
-    HANDLE_STR_DECODE(product_name, 0);
-    HANDLE_STR_DECODE(product_part_model_number, 0);
-    HANDLE_STR_DECODE(product_version, 0);
-    HANDLE_STR_DECODE(product_serial_number, 1);
-    HANDLE_STR_DECODE(asset_tag, 0);
-    HANDLE_STR_DECODE(fru_file_id, 1);
-    HANDLE_CUSTOM_DECODE();
+    data++;
+    data_len--;
+    HANDLE_STR_DECODE(PRODUCT_INFO, manufacturer_name, 0);
+    HANDLE_STR_DECODE(PRODUCT_INFO, product_name, 0);
+    HANDLE_STR_DECODE(PRODUCT_INFO, product_part_model_number, 0);
+    HANDLE_STR_DECODE(PRODUCT_INFO, product_version, 0);
+    HANDLE_STR_DECODE(PRODUCT_INFO, product_serial_number, 1);
+    HANDLE_STR_DECODE(PRODUCT_INFO, asset_tag, 0);
+    HANDLE_STR_DECODE(PRODUCT_INFO, fru_file_id, 1);
+    HANDLE_CUSTOM_DECODE(PRODUCT_INFO);
+    rec->used_length = data - orig_data + 1; /* add 1 for the checksum */
+    rec->orig_used_length = rec->used_length;
 
     *rrec = rec;
 
     return 0;
 
  out_err:
-    fru_product_info_area_free(rec);
+    product_info_area_free(rec);
     return err;
 }
 
@@ -1043,6 +1607,12 @@ ipmi_fru_get_product_info_version(ipmi_fru_t    *fru,
     return 0;
 }
 
+static int
+ipmi_fru_set_product_info_version(ipmi_fru_t *fru, unsigned char data)
+{
+    return EINVAL;
+}
+
 int 
 ipmi_fru_get_product_info_lang_code(ipmi_fru_t    *fru,
 				    unsigned char *type)
@@ -1050,6 +1620,20 @@ ipmi_fru_get_product_info_lang_code(ipmi_fru_t    *fru,
     GET_DATA_PREFIX(product_info, PRODUCT_INFO);
     
     *type = u->lang_code;
+
+    fru_unlock(fru);
+
+    return 0;
+}
+
+int 
+ipmi_fru_set_product_info_lang_code(ipmi_fru_t    *fru,
+				    unsigned char lang)
+{
+    GET_DATA_PREFIX(product_info, PRODUCT_INFO);
+    
+    rec->changed |= u->lang_code != lang;
+    u->lang_code = lang;
 
     fru_unlock(fru);
 
@@ -1065,9 +1649,63 @@ GET_DATA_STR(product_info, PRODUCT_INFO, asset_tag)
 GET_DATA_STR(product_info, PRODUCT_INFO, fru_file_id)
 GET_CUSTOM_STR(product_info, PRODUCT_INFO)
 
+static int
+fru_encode_product_info_area(ipmi_fru_t *fru, unsigned char *data)
+{
+    ipmi_fru_record_t *rec = fru->recs[IPMI_FRU_FTR_PRODUCT_INFO_AREA];
+    ipmi_fru_product_info_area_t *u;
+    int               rv;
+
+    if (!rec)
+	return 0;
+
+    u = fru_record_get_data(rec);
+    data += rec->offset;
+    memset(data, 0, rec->length);
+    data[0] = 1; /* Version */
+    data[1] = rec->length / 8;
+    data[2] = u->lang_code;
+    
+    if (rec->changed && !rec->rewrite) {
+	rv = fru_new_update_rec(fru, rec->offset, 3);
+	if (rv)
+	    return rv;
+    }
+    rv = fru_encode_fields(fru, rec, &u->fields, data, 3);
+    if (rv)
+	return rv;
+	/* Write any zeros that need to be written if the data got
+	   shorter. */
+    if (rec->changed && !rec->rewrite) {
+	if (rec->used_length < rec->orig_used_length) {
+	    rv = fru_new_update_rec(fru, rec->offset + rec->used_length,
+				    rec->orig_used_length - rec->used_length);
+	    if (rv)
+		return rv;
+	}
+	/* Write the checksum */
+	rv = fru_new_update_rec(fru, rec->offset+rec->length-1, 1);
+	if (rv)
+	    return rv;
+    }
+    data[rec->length-1] = -checksum(data, rec->length-1);
+    return 0;
+}
+
+/***********************************************************************
+ *
+ * Handling for FRU multi-records
+ *
+ **********************************************************************/
 typedef struct ipmi_fru_record_elem_s
 {
+    /* Where relative to the beginning of the record area does this
+       record start? */
     unsigned int  offset;
+
+    /* Has this record been changed (needs to be written)? */
+    char          changed;
+
     unsigned char type;
     unsigned char format_version;
     unsigned char length;
@@ -1076,17 +1714,22 @@ typedef struct ipmi_fru_record_elem_s
 
 typedef struct ipmi_fru_multi_record_s
 {
-    unsigned int           offset;
+    /* Actual length of the array. */
+    unsigned int           rec_len;
 
+    /* Number of used elements in the array */
     unsigned int           num_records;
     ipmi_fru_record_elem_t *records;
-} ipmi_fru_multi_record_t;
+
+    /* Dummy field to keep the macros happy */
+    int                    version;
+} ipmi_fru_multi_record_area_t;
 
 static void
-fru_multi_record_area_free(ipmi_fru_record_t *rec)
+multi_record_area_free(ipmi_fru_record_t *rec)
 {
-    ipmi_fru_multi_record_t *u = fru_record_get_data(rec);
-    int                     i;
+    ipmi_fru_multi_record_area_t *u = fru_record_get_data(rec);
+    int                          i;
 
     if (u->records) {
 	for (i=0; i<u->num_records; i++) {
@@ -1098,16 +1741,10 @@ fru_multi_record_area_free(ipmi_fru_record_t *rec)
     fru_record_free(rec);
 }
 
-fru_record_handlers_t multi_record_handlers =
-{
-    .free = fru_multi_record_area_free,
-};
-
 static int
 fru_decode_multi_record_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
 			     unsigned int      data_len,
-			     unsigned int      start_offset,
 			     ipmi_fru_record_t **rrec)
 {
     ipmi_fru_record_t       *rec;
@@ -1116,10 +1753,11 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
     unsigned int            num_records;
     unsigned char           *orig_data = data;
     unsigned int            orig_data_len = data_len;
-    ipmi_fru_multi_record_t *u;
+    ipmi_fru_multi_record_area_t *u;
     ipmi_fru_record_elem_t  *r;
     unsigned char           sum;
     unsigned int            length;
+    unsigned int            start_offset = 0;
 
     /* First scan for the number of records. */
     num_records = 0;
@@ -1167,15 +1805,17 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	data += length + 5;
     }
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_MULTI_RECORD_AREA,
-			   &multi_record_handlers,
-			   sizeof(ipmi_fru_multi_record_t));
+    rec = fru_record_alloc(IPMI_FRU_FTR_MULTI_RECORD_AREA);
     if (!rec)
 	return ENOMEM;
 
+    rec->length = data_len;
+    rec->used_length = data - orig_data + 2; /* Add 2 for the end marker */
+    rec->orig_used_length = rec->used_length;
+
     u = fru_record_get_data(rec);
-    u->offset = start_offset;
     u->num_records = num_records;
+    u->rec_len = num_records;
     u->records = ipmi_mem_alloc(sizeof(ipmi_fru_record_elem_t) * num_records);
     if (!u->records) {
 	err = ENOMEM;
@@ -1211,10 +1851,10 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	}
 
 	memcpy(r->data, data+5, length);
-	r->offset = start_offset;
 	r->length = length;
 	r->type = data[0];
 	r->format_version = data[1] & 0xf;
+	r->offset = start_offset;
 
 	data += length + 5;
 	start_offset += length + 5;
@@ -1225,20 +1865,26 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
     return 0;
 
  out_err:
-    fru_multi_record_area_free(rec);
+    multi_record_area_free(rec);
     return err;
 }
 
 unsigned int
 ipmi_fru_get_num_multi_records(ipmi_fru_t *fru)
 {
-    ipmi_fru_multi_record_t *u;
+    ipmi_fru_multi_record_area_t *u;
+    unsigned int                 num;
 
-    if (!fru->multi_record)
+    fru_lock(fru);
+    if (!fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
+	fru_unlock(fru);
 	return 0;
+    }
 
-    u = fru_record_get_data(fru->multi_record);
-    return u->num_records;
+    u = fru_record_get_data(fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    num = u->num_records;
+    fru_unlock(fru);
+    return num;
 }
 
 int
@@ -1246,14 +1892,20 @@ ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
 			       unsigned int  num,
 			       unsigned char *type)
 {
-    ipmi_fru_multi_record_t *u;
+    ipmi_fru_multi_record_area_t *u;
 
-    if (!fru->multi_record)
+    fru_lock(fru);
+    if (!fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
+	fru_unlock(fru);
 	return ENOSYS;
-    u = fru_record_get_data(fru->multi_record);
-    if (num >= u->num_records)
+    }
+    u = fru_record_get_data(fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    if (num >= u->num_records) {
+	fru_unlock(fru);
 	return E2BIG;
+    }
     *type = u->records[num].type;
+    fru_unlock(fru);
     return 0;
 }
 
@@ -1262,14 +1914,20 @@ ipmi_fru_get_multi_record_format_version(ipmi_fru_t    *fru,
 					 unsigned int  num,
 					 unsigned char *ver)
 {
-    ipmi_fru_multi_record_t *u;
+    ipmi_fru_multi_record_area_t *u;
 
-    if (!fru->multi_record)
+    fru_lock(fru);
+    if (!fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
+	fru_unlock(fru);
 	return ENOSYS;
-    u = fru_record_get_data(fru->multi_record);
-    if (num >= u->num_records)
+    }
+    u = fru_record_get_data(fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    if (num >= u->num_records) {
+	fru_unlock(fru);
 	return E2BIG;
+    }
     *ver = u->records[num].format_version;
+    fru_unlock(fru);
     return 0;
 }
 
@@ -1278,14 +1936,20 @@ ipmi_fru_get_multi_record_data_len(ipmi_fru_t   *fru,
 				   unsigned int num,
 				   unsigned int *len)
 {
-    ipmi_fru_multi_record_t *u;
+    ipmi_fru_multi_record_area_t *u;
 
-    if (!fru->multi_record)
+    fru_lock(fru);
+    if (!fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
+	fru_unlock(fru);
 	return ENOSYS;
-    u = fru_record_get_data(fru->multi_record);
-    if (num >= u->num_records)
+    }
+    u = fru_record_get_data(fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    if (num >= u->num_records) {
+	fru_unlock(fru);
 	return E2BIG;
+    }
     *len = u->records[num].length;
+    fru_unlock(fru);
     return 0;
 }
 
@@ -1295,37 +1959,688 @@ ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 			       unsigned char *data,
 			       unsigned int  *length)
 {
-    ipmi_fru_multi_record_t *u;
+    ipmi_fru_multi_record_area_t *u;
 
-    if (!fru->multi_record)
+    fru_lock(fru);
+    if (!fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
+	fru_unlock(fru);
 	return ENOSYS;
-    u = fru_record_get_data(fru->multi_record);
-    if (num >= u->num_records)
+    }
+    u = fru_record_get_data(fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    if (num >= u->num_records) {
+	fru_unlock(fru);
 	return E2BIG;
-    if (*length < u->records[num].length)
+    }
+    if (*length < u->records[num].length) {
+	fru_unlock(fru);
 	return EINVAL;
+    }
     memcpy(data, u->records[num].data, u->records[num].length);
     *length = u->records[num].length;
+    fru_unlock(fru);
     return 0;
 }
 
 int
-ipmi_fru_get_multi_record_data_offset(ipmi_fru_t    *fru,
-				      unsigned int  num,
-				      unsigned int  *offset)
+ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
+			       unsigned int  num,
+			       unsigned char type,
+			       unsigned char version,
+			       unsigned char *data,
+			       unsigned int  length)
 {
-    ipmi_fru_multi_record_t *u;
+    ipmi_fru_multi_record_area_t *u;
+    unsigned char                *new_data;
+    ipmi_fru_record_t            *rec;
+    int                          raw_diff;
+    int                          i;
 
-    if (!fru->multi_record)
+    fru_lock(fru);
+    rec = fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
+    if (!rec) {
+	fru_unlock(fru);
 	return ENOSYS;
-    u = fru_record_get_data(fru->multi_record);
-    if (num >= u->num_records)
-	return E2BIG;
-    *offset = u->records[num].offset;
+    }
+
+    u = fru_record_get_data(rec);
+
+    if (num >= u->num_records) {
+	if (!data) {
+	    /* Don't expand if we are deleting an invalid field,
+	       return an error. */
+	    fru_unlock(fru);
+	    return EINVAL;
+	}
+
+	num = u->num_records;
+	/* If not enough room, expand the array by a set amount (to
+	   keep from thrashing memory when adding lots of things). */
+	if (u->num_records >= u->rec_len) {
+	    unsigned int           new_len = u->rec_len + 16;
+	    ipmi_fru_record_elem_t *new_recs;
+
+	    new_recs = ipmi_mem_alloc(new_len * sizeof(*new_recs));
+	    if (!new_recs) {
+		fru_unlock(fru);
+		return ENOMEM;
+	    }
+	    memset(new_recs, 0, new_len * sizeof(*new_recs));
+	    memcpy(new_recs, u->records, u->rec_len * sizeof(*new_recs));
+	    ipmi_mem_free(u->records);
+	    u->records = new_recs;
+	    u->rec_len = new_len;
+	}
+	u->num_records++;
+    }
+
+    if (data) {
+	/* Modifying the record. */
+	if (length == 0)
+	    new_data = ipmi_mem_alloc(1);
+	else
+	    new_data = ipmi_mem_alloc(length);
+	if (!new_data) {
+	    fru_unlock(fru);
+	    return ENOMEM;
+	}
+	raw_diff = length - u->records[num].length;
+	memcpy(new_data, data, length);
+	if (u->records[num].data)
+	    ipmi_mem_free(u->records[num].data);
+	u->records[num].data = new_data;
+	u->records[num].type = type;
+	u->records[num].format_version = version;
+	u->records[num].length = length;
+	if (raw_diff) {
+	    for (i=num; i<u->num_records; i++) {
+		u->records[i].offset += raw_diff;
+		u->records[i].changed = 1;
+	    }
+	}
+    } else {
+	/* Deleting the record. */
+	if (u->records[num].data)
+	    ipmi_mem_free(u->records[num].data);
+	u->num_records--;
+	raw_diff = 5 + u->records[num].length;
+	for (i=num; i<u->num_records; i++) {
+	    u->records[i] = u->records[i+1];
+	    u->records[i].changed = 1;
+	}
+	if (u->num_records == 0)
+	    /* Need to write "0" for the multi-records. */
+	    fru->header_changed = 1;
+    }
+
+    rec->used_length += raw_diff;
+    rec->changed |= 1;
+    fru_unlock(fru);
+    return 0;
+}
+
+static int
+fru_encode_multi_record(ipmi_fru_t             *fru,
+			ipmi_fru_record_t      *rec,
+			ipmi_fru_multi_record_area_t *u,
+			int                    idx,
+			unsigned char          *data,
+			unsigned int           *offset)
+{
+    unsigned int           o = *offset;
+    ipmi_fru_record_elem_t *elem = u->records + idx;
+    int                    rv;
+
+    if (o != elem->offset)
+	return EBADMSG;
+
+    if (!elem->changed)
+	goto out;
+
+    data += o;
+    data[0] = elem->type;
+    data[1] = 2; /* Version */
+    if (idx+1 == u->num_records)
+	data[1] |= 0x80; /* Last record */
+    data[2] = elem->length;
+    data[3] = -checksum(elem->data, elem->length);
+    data[4] = -checksum(data, 4);
+    memcpy(data+5, elem->data, elem->length);
+
+    if (!rec->rewrite) {
+	rv = fru_new_update_rec(fru, rec->offset+elem->offset, elem->length+5);
+	if (rv)
+	    return rv;
+    }
+
+ out:
+    *offset = o + elem->length + 5;
+    return 0;
+}
+
+static int
+fru_encode_multi_record_area(ipmi_fru_t *fru, unsigned char *data)
+{
+    ipmi_fru_record_t *rec = fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA];
+    ipmi_fru_multi_record_area_t *u;
+    int               rv;
+    int               i;
+    unsigned int      offset;
+
+    if (!rec)
+	return 0;
+
+    u = fru_record_get_data(rec);
+    data += rec->offset;
+    memset(data, 0, rec->length);
+
+    if (u->num_records == 0)
+	return 0;
+    
+    offset = 0;
+    for (i=0; i<u->num_records; i++) {
+	rv = fru_encode_multi_record(fru, rec, u, i, data, &offset);
+	if (rv)
+	    return rv;
+    }
     return 0;
 }
 
 
+/***********************************************************************
+ *
+ * Area processing
+ *
+ **********************************************************************/
+
+static fru_area_info_t fru_area_info[IPMI_FRU_FTR_NUMBER] = 
+{
+    { 0, 0,  1, NULL,                    internal_use_area_free,
+      sizeof(ipmi_fru_internal_use_area_t),
+      fru_decode_internal_use_area, fru_encode_internal_use_area },
+    { 2, 3,  7, chassis_info_get_fields, chassis_info_area_free,
+      sizeof(ipmi_fru_chassis_info_area_t),
+      fru_decode_chassis_info_area, fru_encode_chassis_info_area },
+    { 5, 6, 13, board_info_get_fields,   board_info_area_free,
+      sizeof(ipmi_fru_board_info_area_t),
+      fru_decode_board_info_area, fru_encode_board_info_area },
+    { 7, 3, 12, product_info_get_fields, product_info_area_free,
+      sizeof(ipmi_fru_product_info_area_t),
+      fru_decode_product_info_area, fru_encode_product_info_area },
+    { 0, 0,  0, NULL,                    multi_record_area_free,
+      sizeof(ipmi_fru_multi_record_area_t),
+      fru_decode_multi_record_area, fru_encode_multi_record_area },
+};
+
+static int
+check_rec_position(ipmi_fru_t   *fru,
+		   int          recn,
+		   unsigned int offset,
+		   unsigned int length)
+{
+    int pos;
+    int max_start = fru->data_len - 8;
+
+    /* Zero is invalid, and it must be a multiple of 8. */
+    if ((offset == 0) || ((offset % 8) != 0))
+	return EINVAL;
+
+    /* FRU data record starts cannot exceed 2040 bytes.  The offsets
+       are in multiples of 8 and the sizes are 8-bits, thus 8 *
+       255.  The end of the data can go till the end of the FRU. */
+    if (max_start > 2040)
+	max_start = 2040;
+    if ((offset > max_start) || ((offset + length) > fru->data_len))
+	return EINVAL;
+
+    /* Check that this is not in the previous record's space. */
+    pos = recn - 1;
+    while ((pos >= 0) && !fru->recs[pos])
+	pos--;
+    if (pos >= 0) {
+	if (offset < (fru->recs[pos]->offset + fru->recs[pos]->length))
+	    return EFAULT;
+    }
+
+    /* Check that this is not in the next record's space. */
+    pos = recn + 1;
+    while ((pos < IPMI_FRU_FTR_NUMBER) && !fru->recs[pos])
+	pos++;
+    if (pos < IPMI_FRU_FTR_NUMBER) {
+	if (offset < (fru->recs[pos]->offset + fru->recs[pos]->length))
+	    return EFAULT;
+    }
+
+    return 0;
+}
+
+int
+ipmi_fru_add_area(ipmi_fru_t   *fru,
+		  unsigned int area,
+		  unsigned int offset,
+		  unsigned int length)
+{
+    ipmi_fru_record_t  *rec;
+    int                rv;
+
+    if (area >= IPMI_FRU_FTR_NUMBER)
+	return EINVAL;
+
+    /* Truncate the length to a multiple of 8. */
+    length = length & ~(8-1);
+
+    fru_lock(fru);
+    if (fru->recs[area]) {
+	fru_unlock(fru);
+	return EEXIST;
+    }
+
+    rv = check_rec_position(fru, area, offset, length);
+    if (rv) {
+	fru_unlock(fru);
+	return rv;
+    }
+
+    rec = fru_record_alloc(area);
+    if (!rec) {
+	fru_unlock(fru);
+	return ENOMEM;
+    }
+    rec->changed = 1;
+    rec->rewrite = 1;
+    rec->used_length = fru_area_info[area].empty_length;
+    fru->header_changed = 1;
+
+    rv = fru_setup_min_field(rec, area, 1);
+    if (!rv) {
+	fru_unlock(fru);
+	return rv;
+    }
+
+    fru->recs[area] = rec;
+    fru_unlock(fru);
+    return 0;
+}
+
+int
+ipmi_fru_delete_area(ipmi_fru_t *fru, int area)
+{
+    if (area >= IPMI_FRU_FTR_NUMBER)
+	return EINVAL;
+
+    fru_lock(fru);
+    fru_record_destroy(fru->recs[area]); 
+    fru->recs[area] = NULL;
+    fru_unlock(fru);
+    return 0;
+}
+
+int
+ipmi_fru_area_get_offset(ipmi_fru_t   *fru,
+			 unsigned int area,
+			 unsigned int *offset)
+{
+    if (area >= IPMI_FRU_FTR_NUMBER)
+	return EINVAL;
+    fru_lock(fru);
+    if (!fru->recs[area]) {
+	fru_unlock(fru);
+	return ENOENT;
+    }
+
+    *offset = fru->recs[area]->offset;
+
+    fru_unlock(fru);
+    return 0;
+}
+
+int
+ipmi_fru_area_get_length(ipmi_fru_t   *fru,
+			 unsigned int area,
+			 unsigned int *length)
+{
+    if (area >= IPMI_FRU_FTR_NUMBER)
+	return EINVAL;
+    fru_lock(fru);
+    if (!fru->recs[area]) {
+	fru_unlock(fru);
+	return ENOENT;
+    }
+
+    *length = fru->recs[area]->length;
+
+    fru_unlock(fru);
+    return 0;
+}
+
+int
+ipmi_fru_area_set_offset(ipmi_fru_t   *fru,
+			 unsigned int area,
+			 unsigned int offset)
+{
+    int rv;
+
+    if (area >= IPMI_FRU_FTR_NUMBER)
+	return EINVAL;
+    fru_lock(fru);
+    if (!fru->recs[area]) {
+	fru_unlock(fru);
+	return ENOENT;
+    }
+
+    if (fru->recs[area]->offset == offset) {
+	fru_unlock(fru);
+	return 0;
+    }
+
+    rv = check_rec_position(fru, area, offset, fru->recs[area]->length);
+    if (!rv) {
+	fru->recs[area]->offset = offset;
+	fru->recs[area]->changed = 1;
+	fru->recs[area]->rewrite = 1;
+	fru->header_changed = 1;
+    }
+
+    fru_unlock(fru);
+    return rv;
+}
+
+int
+ipmi_fru_area_set_length(ipmi_fru_t   *fru,
+			 unsigned int area,
+			 unsigned int length)
+{
+    int rv;
+
+    /* Truncate the length to a multiple of 8. */
+    length = length & ~(8-1);
+
+    if (area >= IPMI_FRU_FTR_NUMBER)
+	return EINVAL;
+    fru_lock(fru);
+    if (!fru->recs[area]) {
+	fru_unlock(fru);
+	return ENOENT;
+    }
+
+    if (fru->recs[area]->length == length) {
+	fru_unlock(fru);
+	return 0;
+    }
+
+    rv = check_rec_position(fru, area, fru->recs[area]->offset, length);
+    if (!rv) {
+	if (length > fru->recs[area]->length)
+	    /* Only need to rewrite the whole record (to get the zeroes
+	       into the unused area) if we increase the length. */
+	    fru->recs[area]->rewrite = 1;
+	fru->recs[area]->length = length;
+	fru->recs[area]->changed = 1;
+    }
+
+    fru_unlock(fru);
+    return rv;
+}
+
+int
+ipmi_fru_area_get_used_length(ipmi_fru_t *fru,
+			      unsigned int area,
+			      unsigned int *used_length)
+{
+    if (area >= IPMI_FRU_FTR_NUMBER)
+	return EINVAL;
+    fru_lock(fru);
+    if (!fru->recs[area]) {
+	fru_unlock(fru);
+	return ENOENT;
+    }
+
+    *used_length = fru->recs[area]->used_length;
+
+    fru_unlock(fru);
+    return 0;
+}
+
+
+/***********************************************************************
+ *
+ * FRU allocation and destruction
+ *
+ **********************************************************************/
+static void
+fru_record_destroy(ipmi_fru_record_t *rec)
+{
+    if (rec)
+	rec->handlers->free(rec);
+}
+
+static void
+final_fru_destroy(ipmi_fru_t *fru)
+{
+    int i;
+
+    if (fru->destroy_handler)
+	fru->destroy_handler(fru, fru->destroy_cb_data);
+
+    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++)
+	fru_record_destroy(fru->recs[i]);
+    while (fru->update_recs) {
+	fru_update_t *to_free = fru->update_recs;
+	fru->update_recs = to_free->next;
+	ipmi_mem_free(to_free);
+    }
+    fru_unlock(fru);
+    ipmi_destroy_lock(fru->lock);
+    ipmi_mem_free(fru);
+}
+
+int
+ipmi_fru_destroy(ipmi_fru_t            *fru,
+		 ipmi_fru_destroyed_cb handler,
+		 void                  *cb_data)
+{
+    void          *attr_data;
+    locked_list_t *frul;
+    int           rv;
+
+    if (fru->in_frulist) {
+	rv = ipmi_domain_find_attribute(fru->domain, IPMI_FRU_ATTR_NAME,
+					&attr_data);
+	if (!rv) {
+	    frul = attr_data;
+	    locked_list_remove(frul, fru, NULL);
+	}
+    }
+
+    fru_lock(fru);
+    fru->destroy_handler = handler;
+    fru->destroy_cb_data = cb_data;
+    if (fru->fetch_in_progress || fru->doing_write) {
+	fru->deleted = 1;
+	fru_unlock(fru);
+    } else {
+	final_fru_destroy(fru);
+    }
+    return 0;
+}
+
+static int start_logical_fru_fetch(ipmi_fru_t *fru);
+static int start_physical_fru_fetch(ipmi_fru_t *fru);
+
+static int
+destroy_fru(void *cb_data, void *item1, void *item2)
+{
+    ipmi_fru_destroy(item1, NULL, NULL);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+fru_attr_destroy(ipmi_domain_t *domain, void *cb_data, void *data)
+{
+    locked_list_t *frul = data;
+
+    locked_list_iterate(frul, destroy_fru, domain);
+    locked_list_destroy(frul);
+}
+
+static int
+fru_attr_init(ipmi_domain_t *domain, void *cb_data, void **data)
+{
+    locked_list_t *frul;
+    
+    frul = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    if (!frul)
+	return ENOMEM;
+
+    *data = frul;
+    return 0;
+}
+
+static int
+ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
+			unsigned char       is_logical,
+			unsigned char       device_address,
+			unsigned char       device_id,
+			unsigned char       lun,
+			unsigned char       private_bus,
+			unsigned char       channel,
+			ipmi_fru_fetched_cb fetched_handler,
+			void                *fetched_cb_data,
+			ipmi_fru_t          **new_fru)
+{
+    ipmi_fru_t    *fru;
+    int           err;
+    int           len, p;
+
+    fru = ipmi_mem_alloc(sizeof(*fru));
+    if (!fru)
+	return ENOMEM;
+    memset(fru, 0, sizeof(*fru));
+
+    err = ipmi_create_lock(domain, &fru->lock);
+    if (err) {
+	ipmi_mem_free(fru);
+	return err;
+    }
+
+    fru->domain = domain;
+    fru->is_logical = is_logical;
+    fru->device_address = device_address;
+    fru->device_id = device_id;
+    fru->lun = lun;
+    fru->private_bus = private_bus;
+    fru->channel = channel;
+
+    len = sizeof(fru->name);
+    p = ipmi_domain_get_name(domain, fru->name, len);
+    len -= p;
+    snprintf(fru->name+p, len, ".%d", ipmi_domain_get_unique_num(domain));
+
+    snprintf(fru->iname, sizeof(fru->iname), "%s.%d.%x.%d.%d.%d.%d ",
+	     DOMAIN_NAME(domain), is_logical, device_address, device_id, lun,
+	     private_bus, channel);
+
+    fru->fetched_handler = fetched_handler;
+    fru->fetched_cb_data = fetched_cb_data;
+
+    fru->deleted = 0;
+    fru->fetch_in_progress++;
+
+    fru_lock(fru);
+    if (fru->is_logical)
+	err = start_logical_fru_fetch(fru);
+    else
+	err = start_physical_fru_fetch(fru);
+    if (err) {
+	fru_unlock(fru);
+	ipmi_destroy_lock(fru->lock);
+	ipmi_mem_free(fru);
+	return err;
+    }
+
+    *new_fru = fru;
+    return 0;
+}
+
+int
+ipmi_fru_alloc(ipmi_domain_t       *domain,
+	       unsigned char       is_logical,
+	       unsigned char       device_address,
+	       unsigned char       device_id,
+	       unsigned char       lun,
+	       unsigned char       private_bus,
+	       unsigned char       channel,
+	       ipmi_fru_fetched_cb fetched_handler,
+	       void                *fetched_cb_data,
+	       ipmi_fru_t          **new_fru)
+{
+    ipmi_fru_t    *nfru;
+    int           rv;
+    void          *attr_data;
+    locked_list_t *frul;
+
+    rv = ipmi_domain_register_attribute(domain, IPMI_FRU_ATTR_NAME,
+					fru_attr_init,
+					fru_attr_destroy,
+					NULL,
+					&attr_data);
+    if (rv)
+	return rv;
+    frul = attr_data;
+
+    rv = ipmi_fru_alloc_internal(domain, is_logical, device_address,
+				 device_id, lun, private_bus, channel,
+				 fetched_handler, fetched_cb_data, &nfru);
+    if (rv) {
+	fru_unlock(nfru);
+	return rv;
+    }
+
+    if (! locked_list_add(frul, nfru, NULL)) {
+	ipmi_fru_destroy(nfru, NULL, NULL);
+	nfru->fetched_handler = NULL;
+	fru_unlock(nfru);
+	return ENOMEM;
+    }
+    nfru->in_frulist = 1;
+    fru_unlock(nfru);
+
+    if (new_fru)
+	*new_fru = nfru;
+    return 0;
+}
+
+int
+ipmi_fru_alloc_notrack(ipmi_domain_t       *domain,
+		       unsigned char       is_logical,
+		       unsigned char       device_address,
+		       unsigned char       device_id,
+		       unsigned char       lun,
+		       unsigned char       private_bus,
+		       unsigned char       channel,
+		       ipmi_fru_ifetched_cb fetched_handler,
+		       void                *fetched_cb_data,
+		       ipmi_fru_t          **new_fru)
+{
+    ipmi_fru_t *nfru;
+    int        rv;
+
+    rv = ipmi_fru_alloc_internal(domain, is_logical, device_address,
+				 device_id, lun, private_bus, channel,
+				 fetched_handler, fetched_cb_data, &nfru);
+    fru_unlock(nfru);
+    if (rv)
+	return rv;
+
+    if (new_fru)
+	*new_fru = nfru;
+    return 0;
+}
+
+/***********************************************************************
+ *
+ * FRU reading
+ *
+ **********************************************************************/
 typedef struct fru_offset_s
 {
     int type;
@@ -1363,103 +2678,58 @@ process_fru_info(ipmi_fru_t *fru)
 	}
     }
 
-    /* Sort the field by offset.  Not many fields, so we use a bubble
-       sort.  We sort these so we can find the start of the next
-       area and know the size of the current area. */
-    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
-	for (j=0; j<IPMI_FRU_FTR_NUMBER-1; j++) {
-	    fru_offset_t tmp;
-	    if (foff[j].offset > foff[j+1].offset) {
-		tmp = foff[j];
-		foff[j] = foff[j+1];
-		foff[j+1] = tmp;
-	    }
+    /* Fields are *supposed* to occur in the specified order.  Verify
+       this. */
+    for (i=0, j=1; j<IPMI_FRU_FTR_NUMBER; i=j, j++) {
+	if (foff[i].offset == 0)
+	    continue;
+	while (foff[j].offset == 0) {
+	    j++;
+	    if (j >= IPMI_FRU_FTR_NUMBER)
+	        goto check_done;
+	}
+	if (foff[i].offset >= foff[j].offset) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(process_fru_info):"
+		     " FRU fields did not occur in the correct order",
+		     FRU_DOMAIN_NAME(fru));
+	    return EBADMSG;
 	}
     }
+ check_done:
 
     for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
 	int plen, next_off, offset;
+	ipmi_fru_record_t *rec;
 
 	offset = foff[i].offset;
 	if (offset == 0)
 	    continue;
 
-	if (i == (IPMI_FRU_FTR_NUMBER - 1))
+	for (j=i+1; j<IPMI_FRU_FTR_NUMBER; j++) {
+	    if (foff[j].offset)
+		break;
+	}
+	
+	if (j >= IPMI_FRU_FTR_NUMBER)
 	    next_off = data_len;
 	else
-	    next_off = foff[i+1].offset;
+	    next_off = foff[j].offset;
 	plen = next_off - offset;
 
-	switch (foff[i].type) {
-	case IPMI_FRU_FTR_INTERNAL_USE_AREA:
-	    err = fru_decode_internal_use_area(fru, data+offset, plen, offset,
-					       &fru->internal_use);
-	    break;
-
-	case IPMI_FRU_FTR_CHASSIS_INFO_AREA:
-	    err = fru_decode_chassis_info_area(fru, data+offset, plen, offset,
-					       &fru->chassis_info);
-	    break;
-
-	case IPMI_FRU_FTR_BOARD_INFO_AREA:
-	    err = fru_decode_board_info_area(fru, data+offset, plen, offset,
-					       &fru->board_info);
-	    break;
-
-	case IPMI_FRU_FTR_PRODUCT_INFO_AREA:
-	    err = fru_decode_product_info_area(fru, data+offset, plen, offset,
-					       &fru->product_info);
-	    break;
-
-	case IPMI_FRU_FTR_MULTI_RECORD_AREA:
-	    err = fru_decode_multi_record_area(fru, data+offset, plen, offset,
-					       &fru->multi_record);
-	    break;
-	}
-
+	rec = NULL;
+	err = fru_area_info[i].decode(fru, data+offset, plen, &fru->recs[i]);
 	if (err)
 	    goto out_err;
+
+	if (fru->recs[i])
+	    fru->recs[i]->offset = offset;
     }
 
     return 0;
 
  out_err:
     return err;
-}
-
-static void
-fru_record_destroy(ipmi_fru_record_t *rec)
-{
-    if (rec)
-	rec->handlers->free(rec);
-}
-
-static void
-final_fru_destroy(ipmi_fru_t *fru)
-{
-    fru_record_destroy(fru->internal_use);
-    fru_record_destroy(fru->chassis_info);
-    fru_record_destroy(fru->board_info);
-    fru_record_destroy(fru->product_info);
-    fru_record_destroy(fru->multi_record);
-    fru_unlock(fru);
-    ipmi_destroy_lock(fru->lock);
-    ipmi_mem_free(fru);
-}
-
-int
-ipmi_fru_destroy(ipmi_fru_t            *fru,
-		 ipmi_fru_destroyed_cb handler,
-		 void                  *cb_data)
-{
-    fru_lock(fru);
-    if (fru->fetch_in_progress) {
-	fru->deleted = 1;
-	fru_unlock(fru);
-    } else {
-	final_fru_destroy(fru);
-    }
-    return 0;
 }
 
 void
@@ -1536,7 +2806,7 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    count = data[1] << fru->fetch_by_words;
+    count = data[1] << fru->access_by_words;
 
     if (count == 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -1596,9 +2866,8 @@ request_next_data(ipmi_fru_t   *fru,
 	to_read = MAX_FRU_DATA_FETCH;
 
     cmd_data[0] = fru->device_id;
-    ipmi_set_uint16(cmd_data+1, fru->curr_pos >> fru->fetch_by_words);
-    cmd_data[3] = to_read >> fru->fetch_by_words;
-    msg.data = cmd_data;
+    ipmi_set_uint16(cmd_data+1, fru->curr_pos >> fru->access_by_words);
+    cmd_data[3] = to_read >> fru->access_by_words;
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_READ_FRU_DATA_CMD;
     msg.data = cmd_data;
@@ -1648,7 +2917,7 @@ fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     }
 
     fru->data_len = ipmi_get_uint16(data+1);
-    fru->fetch_by_words = data[3] & 1;
+    fru->access_by_words = data[3] & 1;
 
     if (fru->data_len < 8) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -1718,70 +2987,370 @@ start_physical_fru_fetch(ipmi_fru_t *fru)
     return ENOSYS;
 }
 
-int
-ipmi_fru_alloc(ipmi_domain_t       *domain,
-	       unsigned char       is_logical,
-	       unsigned char       device_address,
-	       unsigned char       device_id,
-	       unsigned char       lun,
-	       unsigned char       private_bus,
-	       unsigned char       channel,
-	       ipmi_fru_fetched_cb fetched_handler,
-	       void                *fetched_cb_data,
-	       ipmi_fru_t          **new_fru)
+/***********************************************************************
+ *
+ * FRU writing
+ *
+ **********************************************************************/
+
+static int next_fru_write(ipmi_fru_t *fru, ipmi_addr_t *addr,
+			  unsigned int addr_len);
+
+void
+write_complete(ipmi_fru_t *fru, int err)
 {
-    ipmi_fru_t *fru;
-    int        err;
+    int i;
 
-    fru = ipmi_mem_alloc(sizeof(*fru));
-    if (!fru)
-	return ENOMEM;
-    memset(fru, 0, sizeof(*fru));
-
-    err = ipmi_create_lock(domain, &fru->lock);
-    if (err) {
-	ipmi_mem_free(fru);
-	return err;
+    if (!err) {
+	/* If we succeed, set everything unchanged. */
+	for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
+	    ipmi_fru_record_t *rec = fru->recs[i];
+	    if (rec) {
+		rec->rewrite = 0;
+		rec->changed = 0;
+		rec->orig_used_length = rec->used_length;
+		if (rec->handlers->get_fields) {
+		    fru_variable_t *f = rec->handlers->get_fields(rec);
+		    int j;
+		    for (j=0; j<f->next; j++)
+			f->strings[i].changed = 0;
+		}
+	    }
+	}
     }
+    fru_unlock(fru);
 
-    fru->domain = domain;
-    fru->is_logical = is_logical;
-    fru->device_address = device_address;
-    fru->device_id = device_id;
-    fru->lun = lun;
-    fru->private_bus = private_bus;
-    fru->channel = channel;
+    if (fru->fetched_handler)
+	fru->fetched_handler(fru, err, fru->fetched_cb_data);
 
-    snprintf(fru->name, FRU_NAME_SIZE, "%s.%d.%x.%d.%d.%d.%d ",
-	     DOMAIN_NAME(domain), is_logical, device_address, device_id, lun,
-	     private_bus, channel);
+    fru_lock(fru);
+    fru->doing_write = 0;
 
-    fru->fetched_handler = fetched_handler;
-    fru->fetched_cb_data = fetched_cb_data;
+    if (fru->data)
+	ipmi_mem_free(fru->data);
+    fru->data = NULL;
 
-    fru->deleted = 0;
-    fru->fetch_in_progress++;
-
-    if (fru->is_logical)
-	err = start_logical_fru_fetch(fru);
+    if (fru->deleted)
+	final_fru_destroy(fru);
     else
-	err = start_physical_fru_fetch(fru);
-    if (err) {
-	ipmi_destroy_lock(fru->lock);
-	ipmi_mem_free(fru);
-	return err;
-    }
-
-    if (new_fru)
-	*new_fru = fru;
-    return 0;
+	fru_unlock(fru);
 }
 
+static int
+fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
+{
+    ipmi_addr_t   *addr = &rspi->addr;
+    unsigned int  addr_len = rspi->addr_len;
+    ipmi_msg_t    *msg = &rspi->msg;
+    ipmi_fru_t    *fru = rspi->data1;
+    unsigned char *data = msg->data;
+    int           rv;
+
+    fru_lock(fru);
+
+    /* Note that for safety, we do not stop a fru write on deletion. */
+
+    if (data[0] == 0x81) {
+	ipmi_msg_t msg;
+	/* Got a busy response.  Try again if we haven't run out of
+	   retries. */
+	if (fru->retry_count >= MAX_FRU_WRITE_RETRIES) {
+	    write_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
+	    goto out;
+	}
+	fru->retry_count++;
+	msg.netfn = IPMI_STORAGE_NETFN;
+	msg.cmd = IPMI_WRITE_FRU_DATA_CMD;
+	msg.data = fru->last_cmd;
+	msg.data_len = fru->last_cmd_len;
+	rv = ipmi_send_command_addr(fru->domain,
+				    addr, addr_len,
+				    &msg,
+				    fru_data_handler,
+				    fru,
+				    NULL);
+	if (rv) {
+	    write_complete(fru, rv);
+	    goto out;
+	}
+	goto out_cmd;
+    } else if (data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_write_handler): "
+		 "IPMI error writing FRU data: %x",
+		 FRU_DOMAIN_NAME(fru), data[0]);
+	write_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
+	goto out;
+    }
+
+    if (msg->data_len < 2) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(fru_write_handler): "
+		 "FRU write response too small",
+		 FRU_DOMAIN_NAME(fru));
+	write_complete(fru, EINVAL);
+	goto out;
+    }
+
+    if ((data[1] << fru->access_by_words) != (fru->last_cmd_len - 3)) {
+	/* Write was incomplete for some reason.  Just go on but issue
+	   a warning. */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sfru.c(fru_write_handler): "
+		 "Incomplete writing FRU data, write %d, expected %d",
+		 FRU_DOMAIN_NAME(fru),
+		 data[1] << fru->access_by_words, fru->last_cmd_len-3);
+    }
+
+    if (fru->update_recs) {
+	/* More to do. */
+	rv = next_fru_write(fru, addr, addr_len);
+	if (rv) {
+	    write_complete(fru, rv);
+	    goto out;
+	}
+    } else {
+	write_complete(fru, 0);
+	goto out;
+    }
+
+ out_cmd:
+    fru_unlock(fru);
+ out:
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static int
+next_fru_write(ipmi_fru_t *fru, ipmi_addr_t *addr, unsigned int addr_len)
+{
+    unsigned char *data = fru->last_cmd;
+    int           offset, length = 0, left, noff, tlen;
+    ipmi_msg_t    msg;
+
+    noff = fru->update_recs->offset;
+    offset = noff;
+    left = MAX_FRU_DATA_WRITE;
+    while (fru->update_recs
+	   && (left > 0)
+	   && (noff == fru->update_recs->offset))
+    {
+	if (left < fru->update_recs->length)
+	    tlen = left;
+	else
+	    tlen = fru->update_recs->length;
+
+	noff += tlen;
+	length += tlen;
+	left -= tlen;
+	fru->update_recs->length -= tlen;
+	if (fru->update_recs->length > 0) {
+	    fru->update_recs->offset += tlen;
+	} else {
+	    fru_update_t *to_free = fru->update_recs;
+	    fru->update_recs = to_free->next;
+	    ipmi_mem_free(to_free);
+	}
+    }
+
+    fru->retry_count = 0;
+    data[0] = fru->device_id;
+    ipmi_set_uint16(data+1, offset >> fru->access_by_words);
+    memcpy(data+3, fru->data+offset, length);
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_WRITE_FRU_DATA_CMD;
+    msg.data = data;
+    msg.data_len = length + 3;
+    fru->last_cmd_len = msg.data_len;
+
+    return ipmi_send_command_addr(fru->domain,
+				  addr, addr_len,
+				  &msg,
+				  fru_write_handler,
+				  fru,
+				  NULL);
+}
+
+int
+ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
+{
+    int              rv;
+    ipmi_ipmb_addr_t ipmb;
+    int              i;
+
+    fru_lock(fru);
+    if (fru->doing_write || fru->fetch_in_progress) {
+	fru_unlock(fru);
+	return EAGAIN;
+    }
+    fru->doing_write = 1;
+
+    /* We allocate and format the entire FRU data.  We do this because
+       of the stupid word access capability, which means we cannot
+       necessarily do byte-aligned writes.  Because of that, we might
+       have to have the byte before or after the actual one being
+       written, and it may come from a different data field. */
+    fru->data = ipmi_mem_alloc(fru->data_len);
+    memset(fru->data, 0, fru->data_len);
+    fru->data[0] = 1; /* Version */
+    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
+	if (fru->recs[i])
+	    fru->data[i+1] = fru->recs[i]->offset / 8;
+	else
+	    fru->data[i+1] = 0;
+    }
+    fru->data[6] = 0;
+    fru->data[7] = -checksum(fru->data, 7);
+
+    if (fru->header_changed) {
+	rv = fru_new_update_rec(fru, 0, 8);
+	if (rv)
+	    goto out_err;
+    }
+
+    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
+	ipmi_fru_record_t *rec = fru->recs[i];
+
+	if (rec) {
+	    rv = rec->handlers->encode(fru, fru->data);
+	    if (rv)
+		goto out_err;
+	    if (rec->rewrite) {
+		rv = fru_new_update_rec(fru, rec->offset, rec->length);
+		if (rv)
+		    goto out_err;
+		
+	    }
+	}
+    }    
+
+    if (!fru->update_recs) {
+	/* No data changed, no write is needed. */
+	ipmi_mem_free(fru->data);
+	fru->data = NULL;
+	fru->doing_write = 0;
+	fru_unlock(fru);
+
+	done(fru, 0, cb_data);
+	return 0;
+    }
+
+    ipmb.addr_type = IPMI_IPMB_ADDR_TYPE;
+    ipmb.channel = fru->channel;
+    ipmb.slave_addr = fru->device_address;
+    ipmb.lun = fru->lun;
+
+    /* Data is fully encoded and the update records are in place.
+       Start the write process. */
+    rv = next_fru_write(fru, (ipmi_addr_t *) &ipmb, sizeof(ipmb));
+    if (rv)
+	goto out_err;
+
+    fru->fetched_handler = done;
+    fru->fetched_cb_data = cb_data;
+
+    fru_unlock(fru);
+    return 0;
+
+ out_err:
+    while (fru->update_recs) {
+	fru_update_t *to_free = fru->update_recs;
+	fru->update_recs = to_free->next;
+	ipmi_mem_free(to_free);
+    }
+    ipmi_mem_free(fru->data);
+    fru->data = NULL;
+    fru->doing_write = 0;
+    fru_unlock(fru);
+    return rv;
+}
+
+/***********************************************************************
+ *
+ * Misc stuff.
+ *
+ **********************************************************************/
 ipmi_domain_t *
 ipmi_fru_get_domain(ipmi_fru_t *fru)
 {
     return fru->domain;
 }
+
+void
+ipmi_fru_data_free(char *data)
+{
+    ipmi_mem_free(data);
+}
+
+unsigned int
+ipmi_fru_get_data_length(ipmi_fru_t *fru)
+{
+    return fru->data_len;
+}
+
+int
+ipmi_fru_get_name(ipmi_fru_t *fru, char *name, int length)
+{
+    int  slen;
+
+    if (length <= 0)
+	return 0;
+
+    /* Never changes, no lock needed. */
+    slen = strlen(fru->name);
+    if (slen == 0) {
+	if (name)
+	    *name = '\0';
+	goto out;
+    }
+
+    if (name) {
+	memcpy(name, fru->name, slen);
+	name[slen] = '\0';
+    }
+ out:
+    return slen;
+}
+
+typedef struct iterate_frus_info_s
+{
+    ipmi_fru_ptr_cb handler;
+    void            *cb_data;
+} iterate_frus_info_t;
+
+static int
+frus_handler(void *cb_data, void *item1, void *item2)
+{
+    iterate_frus_info_t *info = cb_data;
+    info->handler(item1, info->cb_data);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+void
+ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
+		      ipmi_fru_ptr_cb handler,
+		      void            *cb_data)
+{
+    iterate_frus_info_t info;
+    void                *attr_data;
+    locked_list_t       *frus;
+    int                 rv;
+
+    rv = ipmi_domain_find_attribute(domain, IPMI_FRU_ATTR_NAME,
+				    &attr_data);
+    if (rv)
+	return;
+    frus = attr_data;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    locked_list_iterate(frus, frus_handler, &info);
+}
+
+/***********************************************************************
+ *
+ * Handling for FRU generic interface.
+ *
+ **********************************************************************/
 
 typedef struct fru_data_rep_s
 {
@@ -1792,20 +3361,26 @@ typedef struct fru_data_rep_s
     union {
 	struct {
 	    int (*fetch_uchar)(ipmi_fru_t *fru, unsigned char *data);
+	    int (*set_uchar)(ipmi_fru_t *fru, unsigned char data);
 	} inttype;
 
 	struct {
 	    int (*fetch_uchar)(ipmi_fru_t *fru, unsigned int num,
 			       unsigned char *data);
+	    int (*set_uchar)(ipmi_fru_t *fru, unsigned int num,
+			     unsigned char data);
 	} intnumtype;
 
 	struct {
 	    int (*fetch)(ipmi_fru_t *fru, time_t *data);
+	    int (*set)(ipmi_fru_t *fru, time_t data);
 	} timetype;
 
 	struct {
 	    int (*fetch)(ipmi_fru_t *fru, unsigned int num,
 			 time_t *data);
+	    int (*set)(ipmi_fru_t *fru, unsigned int num,
+		       time_t data);
 	} timenumtype;
 
 	struct {
@@ -1813,6 +3388,8 @@ typedef struct fru_data_rep_s
 	    int (*fetch_type)(ipmi_fru_t *fru, enum ipmi_str_type_e *type);
 	    int (*fetch_data)(ipmi_fru_t *fru, char *data,
 			      unsigned int *max_len);
+	    int (*set)(ipmi_fru_t *fru, enum ipmi_str_type_e type,
+		       char *data, unsigned int len);
 	} strtype;
 
 	struct {
@@ -1822,12 +3399,17 @@ typedef struct fru_data_rep_s
 			      enum ipmi_str_type_e *type);
 	    int (*fetch_data)(ipmi_fru_t *fru, unsigned int num,
 			      char *data, unsigned int *max_len);
+	    int (*set)(ipmi_fru_t *fru, unsigned int num,
+		       enum ipmi_str_type_e type, char *data,
+		       unsigned int len);
 	} strnumtype;
 
 	struct {
 	    int (*fetch_len)(ipmi_fru_t *fru, unsigned int *len);
 	    int (*fetch_data)(ipmi_fru_t *fru, unsigned char *data,
 			      unsigned int *max_len);
+	    int (*set)(ipmi_fru_t *fru, unsigned char *data,
+		       unsigned int len);
 	} bintype;
 
 	struct {
@@ -1835,37 +3417,47 @@ typedef struct fru_data_rep_s
 			     unsigned int *len);
 	    int (*fetch_data)(ipmi_fru_t *fru, unsigned intnum,
 			      unsigned char *data, unsigned int *max_len);
+	    int (*set)(ipmi_fru_t *fru, unsigned int num,
+		       unsigned char *data, unsigned int len);
 	} binnumtype;
     } u;
 } fru_data_rep_t;
 
 #define F_UCHAR(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 0, \
-		     .u = { .inttype = { .fetch_uchar = ipmi_fru_get_ ## x }}}
+		     .u = { .inttype = { .fetch_uchar = ipmi_fru_get_ ## x, \
+					 .set_uchar = ipmi_fru_set_ ## x }}}
 #define F_NUM_UCHAR(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 1, \
 		         .u = { .intnumtype = {				     \
-				 .fetch_uchar = ipmi_fru_get_ ## x }}}
+				 .fetch_uchar = ipmi_fru_get_ ## x,	     \
+				 .set_uchar = ipmi_fru_set_ ## x }}}
 #define F_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_TIME, .hasnum = 0, \
-		    .u = { .timetype = { .fetch = ipmi_fru_get_ ## x }}}
-#define F_NUM_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 1, \
-		        .u = { .timenumtype = { .fetch = ipmi_fru_get_ ## x }}}
+		    .u = { .timetype = { .fetch = ipmi_fru_get_ ## x,    \
+					 .set = ipmi_fru_set_ ## x }}}
+#define F_NUM_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_TIME, .hasnum = 1, \
+		        .u = { .timenumtype = { .fetch = ipmi_fru_get_ ## x, \
+					        .set = ipmi_fru_set_ ## x }}}
 #define F_STR(x) { .name = #x, .type = IPMI_FRU_DATA_ASCII, .hasnum = 0, \
 		   .u = { .strtype = {					     \
 			  .fetch_len = ipmi_fru_get_ ## x ## _len, \
 		          .fetch_type = ipmi_fru_get_ ## x ## _type, \
-		          .fetch_data = ipmi_fru_get_ ## x }}}
+		          .fetch_data = ipmi_fru_get_ ## x, \
+			  .set = ipmi_fru_set_ ## x }}}
 #define F_NUM_STR(x) { .name = #x, .type = IPMI_FRU_DATA_ASCII, .hasnum = 1, \
 		       .u = { .strnumtype = {                                \
 			      .fetch_len = ipmi_fru_get_ ## x ## _len, \
 		              .fetch_type = ipmi_fru_get_ ## x ## _type,\
-		              .fetch_data = ipmi_fru_get_ ## x }}}
+		              .fetch_data = ipmi_fru_get_ ## x, \
+			      .set = ipmi_fru_set_ ## x }}}
 #define F_BIN(x) { .name = #x, .type = IPMI_FRU_DATA_BINARY, .hasnum = 0, \
 		   .u = { .bintype = {					     \
 			  .fetch_len = ipmi_fru_get_ ## x ## _len, \
-		   	  .fetch_data = ipmi_fru_get_ ## x }}}
+		   	  .fetch_data = ipmi_fru_get_ ## x, \
+			  .set = ipmi_fru_set_ ## x }}}
 #define F_NUM_BIN(x) { .name = #x, .type = IPMI_FRU_DATA_BINARY, .hasnum = 1, \
 		       .u = { .binnumtype = {				      \
 			      .fetch_len = ipmi_fru_get_ ## x ## _len, \
-		       	      .fetch_data = ipmi_fru_get_ ## x }}}
+		       	      .fetch_data = ipmi_fru_get_ ## x, \
+			      .set = ipmi_fru_set_ ## x }}}
 static fru_data_rep_t frul[] =
 {
     F_UCHAR(internal_use_version),
@@ -2074,10 +3666,109 @@ ipmi_fru_get(ipmi_fru_t                *fru,
     return 0;
 }
 
-void
-ipmi_fru_data_free(char *data)
+int
+ipmi_fru_set_int_val(ipmi_fru_t *fru,
+		     int        index,
+		     int        num,
+		     int        val)
 {
-    ipmi_mem_free(data);
+    fru_data_rep_t *p;
+    int            rv;
+
+    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+	return EINVAL;
+
+    p = frul + index;
+
+    if (p->type != IPMI_FRU_DATA_INT)
+	return EINVAL;
+
+    if (! p->hasnum) {
+	rv = p->u.inttype.set_uchar(fru, val);
+    } else {
+	rv = p->u.intnumtype.set_uchar(fru, num, val);
+    }
+
+    return rv;
+}
+
+int
+ipmi_fru_set_time_val(ipmi_fru_t *fru,
+		      int        index,
+		      int        num,
+		      time_t     val)
+{
+    fru_data_rep_t *p;
+    int            rv;
+    
+
+    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+	return EINVAL;
+
+    p = frul + index;
+
+    if (p->type != IPMI_FRU_DATA_TIME)
+	return EINVAL;
+
+    if (! p->hasnum) {
+	rv = p->u.timetype.set(fru, val);
+    } else {
+	rv = p->u.timenumtype.set(fru, num, val);
+    }
+
+    return rv;
+}
+
+int
+ipmi_fru_set_data_val(ipmi_fru_t                *fru,
+		      int                       index,
+		      int                       num,
+		      enum ipmi_fru_data_type_e dtype,
+		      char                      *data,
+		      unsigned int              len)
+{
+    fru_data_rep_t       *p;
+    int                  rv;
+    enum ipmi_str_type_e stype;
+    
+
+    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+	return EINVAL;
+
+    p = frul + index;
+
+    switch (dtype) {
+    case IPMI_FRU_DATA_UNICODE: stype = IPMI_UNICODE_STR; break;
+    case IPMI_FRU_DATA_BINARY: stype = IPMI_BINARY_STR; break;
+    case IPMI_FRU_DATA_ASCII: stype = IPMI_ASCII_STR; break;
+    default:
+	return EINVAL;
+    }
+
+    switch (p->type)
+    {
+    case IPMI_FRU_DATA_UNICODE:
+    case IPMI_FRU_DATA_ASCII:
+	if (! p->hasnum) {
+	    rv = p->u.strtype.set(fru, stype, data, len);
+	} else {
+	    rv = p->u.strnumtype.set(fru, num, stype, data, len);
+	}
+	break;
+
+    case IPMI_FRU_DATA_BINARY:
+	if (! p->hasnum) {
+	    rv = p->u.bintype.set(fru, data, len);
+	} else {
+	    rv = p->u.binnumtype.set(fru, num, data, len);
+	}
+	break;
+
+    default:
+	return EINVAL;
+    }
+
+    return rv;
 }
 
 /************************************************************************

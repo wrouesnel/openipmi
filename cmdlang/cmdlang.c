@@ -44,6 +44,7 @@
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_lanparm.h>
+#include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_debug.h>
@@ -524,6 +525,104 @@ ipmi_cmdlang_pef_handler(ipmi_cmd_info_t *cmd_info)
     }
 
     for_each_pef(cmd_info, domain, class, obj, cmd_info->handler_data,
+		 cmd_info);
+}
+
+
+/*
+ * Handling for iterating FRUs.
+ */
+typedef struct fru_iter_info_s
+{
+    char            *cmdstr;
+    ipmi_fru_ptr_cb handler;
+    void            *cb_data;
+    ipmi_cmd_info_t *cmd_info;
+} fru_iter_info_t;
+
+static void
+for_each_fru_handler(ipmi_fru_t *fru, void *cb_data)
+{
+    fru_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            name[IPMI_FRU_NAME_LEN];
+    char            *c;
+
+    if (cmdlang->err)
+	return;
+
+    ipmi_fru_get_name(fru, name, sizeof(name));
+
+    c = strrchr(name, '.');
+    if (!c)
+	goto out_err;
+    c++;
+    if ((! info->cmdstr) || (strcmp(info->cmdstr, c) == 0))
+	info->handler(fru, info->cb_data);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(name,
+			    "cmdlang.c(for_each_fru_handler)",
+			    "Bad FRU name", EINVAL);
+}
+
+static void
+for_each_fru_domain_handler(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_fru_iterate_frus(domain, for_each_fru_handler, cb_data);
+}
+
+static void
+for_each_fru(ipmi_cmd_info_t *cmd_info,
+	     char            *domain,
+	     char            *class,
+	     char            *obj,
+	     ipmi_fru_ptr_cb handler,
+	     void            *cb_data)
+{
+    fru_iter_info_t info;
+
+    if (class) {
+	cmd_info->cmdlang->errstr = "Invalid FRU";
+	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_fru)";
+	return;
+    }
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.cmd_info = cmd_info;
+    info.cmdstr = obj;
+    for_each_domain(cmd_info, domain, NULL, NULL,
+		    for_each_fru_domain_handler, &info);
+}
+
+void
+ipmi_cmdlang_fru_handler(ipmi_cmd_info_t *cmd_info)
+{
+    char *domain, *class, *obj;
+
+    if (cmd_info->curr_arg >= cmd_info->argc) {
+	domain = class = obj = NULL;
+    } else {
+	domain = cmd_info->argv[cmd_info->curr_arg];
+	class = NULL;
+	obj = strrchr(domain, '.');
+	if (!obj) {
+	    cmd_info->cmdlang->errstr = "Invalid FRU";
+	    cmd_info->cmdlang->err = EINVAL;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_fru_handler)";
+	    return;
+	}
+	*obj = '\0';
+	obj++;
+	cmd_info->curr_arg++;
+    }
+
+    for_each_fru(cmd_info, domain, class, obj, cmd_info->handler_data,
 		 cmd_info);
 }
 
@@ -2512,6 +2611,7 @@ int ipmi_cmdlang_entity_init(os_handler_t *os_hnd);
 int ipmi_cmdlang_mc_init(os_handler_t *os_hnd);
 int ipmi_cmdlang_pet_init(os_handler_t *os_hnd);
 int ipmi_cmdlang_lanparm_init(os_handler_t *os_hnd);
+int ipmi_cmdlang_fru_init(os_handler_t *os_hnd);
 void ipmi_cmdlang_lanparm_shutdown();
 int ipmi_cmdlang_pef_init(os_handler_t *os_hnd);
 void ipmi_cmdlang_pef_shutdown();
@@ -2540,6 +2640,9 @@ ipmi_cmdlang_init(os_handler_t *os_hnd)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_lanparm_init(os_hnd);
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_fru_init(os_hnd);
     if (rv) return rv;
 
     rv = ipmi_cmdlang_pef_init(os_hnd);
