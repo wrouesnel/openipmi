@@ -83,6 +83,7 @@ parse_ipmi_objstr(char *str,
 	    if (class_start) {
 		/* a ')' only means something after a '('. */
 		class_end = str + i;
+		i++;
 		break;
 	    }
 	}
@@ -216,12 +217,18 @@ for_each_entity_handler(ipmi_entity_t *entity, void *cb_data)
     entity_iter_info_t *info = cb_data;
     ipmi_cmd_info_t    *cmd_info = info->cmd_info;
     char               entity_name[IPMI_ENTITY_NAME_LEN];
+    char               *c, *c2;
 
     if (cmd_info->cmdlang->err)
 	return;
 
     ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
-    if ((!info->cmpstr) || (strcmp(info->cmpstr, entity_name) == 0)) {
+    c = strchr(entity_name, '(');
+    c++;
+    c2 = strchr(c, ')');
+    *c2 = '\0';
+    if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0)) {
+	*c2 = ')';
 	ipmi_cmdlang_out(cmd_info, "Entity", entity_name);
 	ipmi_cmdlang_down(cmd_info);
 	info->handler(entity, info->cb_data);
@@ -305,9 +312,12 @@ for_each_sensor_handler(ipmi_entity_t *entity,
     sensor_iter_info_t *info = cb_data;
     ipmi_cmd_info_t    *cmd_info = info->cmd_info;
     char               sensor_name[IPMI_SENSOR_NAME_LEN];
+    char               *c;
 
     ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
-    if ((!info->cmpstr) || (strcmp(info->cmpstr, sensor_name) == 0)) {
+    c = strchr(sensor_name, '.');
+    c++;
+    if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0)) {
 	ipmi_cmdlang_out(cmd_info, "Sensor", sensor_name);
 	ipmi_cmdlang_down(cmd_info);
 	info->handler(sensor, info->cb_data);
@@ -384,9 +394,12 @@ for_each_control_handler(ipmi_entity_t  *entity,
     control_iter_info_t *info = cb_data;
     ipmi_cmd_info_t     *cmd_info = info->cmd_info;
     char                control_name[IPMI_CONTROL_NAME_LEN];
+    char               *c;
 
     ipmi_control_get_name(control, control_name, sizeof(control_name));
-    if ((!info->cmpstr) || (strcmp(info->cmpstr, control_name) == 0)) {
+    c = strchr(control_name, '.');
+    c++;
+    if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0)) {
 	ipmi_cmdlang_out(cmd_info, "Control", control_name);
 	ipmi_cmdlang_down(cmd_info);
 	info->handler(control, info->cb_data);
@@ -461,9 +474,15 @@ for_each_mc_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     mc_iter_info_t  *info = cb_data;
     ipmi_cmd_info_t *cmd_info = info->cmd_info;
     char            mc_name[IPMI_MC_NAME_LEN];
+    char            *c, *c2;
 
     ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
-    if ((!info->cmpstr) || (strcmp(info->cmpstr, mc_name) == 0)) {
+    c = strchr(mc_name, '(');
+    c++;
+    c2 = strchr(c, ')');
+    *c2 = '\0';
+    if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0)) {
+	*c2 = ')';
 	ipmi_cmdlang_out(cmd_info, "MC", mc_name);
 	ipmi_cmdlang_down(cmd_info);
 	info->handler(mc, info->cb_data);
@@ -704,6 +723,13 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
     memset(info, 0, sizeof(*info));
     info->usecount = 1;
     info->cmdlang = cmdlang;
+    rv = ipmi_create_lock_os_hnd(cmdlang->os_hnd, &info->lock);
+    if (rv) {
+	cmdlang->errstr = "Could not allocate lock";
+	cmdlang->err = rv;
+	cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
+	goto done;
+    }
 
     for (argc=0; argc<MAXARGS; argc++) {
 	rv = parse_next_str(&argv[argc], &str);
@@ -913,6 +939,18 @@ ipmi_cmdlang_reg_table(ipmi_cmdlang_init_t *table, int len)
 }
 
 void
+ipmi_cmdlang_lock(ipmi_cmd_info_t *info)
+{
+    ipmi_lock(info->lock);
+}
+
+void
+ipmi_cmdlang_unlock(ipmi_cmd_info_t *info)
+{
+    ipmi_unlock(info->lock);
+}
+
+void
 ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 		 char            *name,
 		 char            *value)
@@ -972,6 +1010,17 @@ ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
 }
 
 void
+ipmi_cmdlang_out_bool(ipmi_cmd_info_t *info,
+		      char            *name,
+		      int             value)
+{
+    if (value)
+	ipmi_cmdlang_out(info, name, "true");
+    else
+	ipmi_cmdlang_out(info, name, "false");
+}
+
+void
 ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
 		    char            *name,
 		    struct in_addr  *ip_addr)
@@ -1021,17 +1070,24 @@ ipmi_cmdlang_up(ipmi_cmd_info_t *info)
 void
 ipmi_cmdlang_cmd_info_get(ipmi_cmd_info_t *cmd_info)
 {
+    ipmi_cmdlang_lock(cmd_info);
     cmd_info->usecount++;
+    ipmi_cmdlang_unlock(cmd_info);
 }
 
 void
 ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *cmd_info)
 {
+    ipmi_cmdlang_lock(cmd_info);
     cmd_info->usecount--;
     if (cmd_info->usecount == 0) {
 	cmd_info->cmdlang->done(cmd_info->cmdlang);
+	ipmi_cmdlang_unlock(cmd_info);
+	if (cmd_info->lock)
+	    ipmi_destroy_lock(cmd_info->lock);
 	ipmi_mem_free(cmd_info);
-    }
+    } else
+	ipmi_cmdlang_unlock(cmd_info);
 }
 
 void
@@ -1184,7 +1240,9 @@ typedef struct ipmi_cmdlang_event_entry_s ipmi_cmdlang_event_entry_t;
 struct ipmi_cmdlang_event_entry_s
 {
     char *name;
+    enum ipmi_cmdlang_out_types type;
     char *value;
+    unsigned int len;
     int  level;
     ipmi_cmdlang_event_entry_t *next;
 };
@@ -1197,7 +1255,8 @@ struct ipmi_cmdlang_event_s
     ipmi_cmdlang_event_entry_t *curr;
 };
 
-void event_out(ipmi_cmdlang_t *cmdlang, char *name, char *value)
+void
+event_out(ipmi_cmdlang_t *cmdlang, char *name, char *value)
 {
     ipmi_cmdlang_event_entry_t *entry;
     ipmi_cmdlang_event_t       *event = cmdlang->user_data;
@@ -1215,15 +1274,20 @@ void event_out(ipmi_cmdlang_t *cmdlang, char *name, char *value)
 	goto out_nomem;
     }
 
+    entry->type = IPMI_CMDLANG_STRING;
+
     if (value) {
+	entry->len = strlen(value);
 	entry->value = ipmi_strdup(value);
 	if (!entry->value) {
 	    ipmi_mem_free(entry->name);
 	    ipmi_mem_free(entry);
 	    goto out_nomem;
 	}
-    } else
+    } else {
+	entry->len = 0;
 	entry->value = NULL;
+    }
 
     entry->level = event->curr_level;
 
@@ -1244,7 +1308,114 @@ void event_out(ipmi_cmdlang_t *cmdlang, char *name, char *value)
     cmdlang->location = "cmdlang.c(event_out)";
 }
 
-void event_up(ipmi_cmdlang_t *cmdlang)
+static void
+event_out_binary(ipmi_cmdlang_t *cmdlang, char *name,
+		 char *value, unsigned int len)
+{
+    ipmi_cmdlang_event_entry_t *entry;
+    ipmi_cmdlang_event_t       *event = cmdlang->user_data;
+
+    if (cmdlang->err)
+	return;
+
+    entry = ipmi_mem_alloc(sizeof(*entry));
+    if (!entry)
+	goto out_nomem;
+
+    entry->name = ipmi_strdup(name);
+    if (!entry->name) {
+	ipmi_mem_free(entry);
+	goto out_nomem;
+    }
+
+    entry->type = IPMI_CMDLANG_BINARY;
+
+    entry->len = len;
+    if (len > 0) {
+	entry->value = ipmi_mem_alloc(len);
+	if (!entry->value) {
+	    ipmi_mem_free(entry->name);
+	    ipmi_mem_free(entry);
+	    goto out_nomem;
+	}
+	memcpy(entry->value, value, len);
+    } else
+	entry->value = NULL;
+
+    entry->level = event->curr_level;
+
+    entry->next = NULL;
+    if (event->head) {
+	event->tail->next = entry;
+	event->tail = entry;
+    } else {
+	event->head = entry;
+	event->tail = entry;
+    }
+
+    return;
+
+ out_nomem:
+    cmdlang->err = ENOMEM;
+    cmdlang->errstr = "Out of memory";
+    cmdlang->location = "cmdlang.c(event_out_binary)";
+}
+
+static void
+event_out_unicode(ipmi_cmdlang_t *cmdlang, char *name,
+		  char *value, unsigned int len)
+{
+    ipmi_cmdlang_event_entry_t *entry;
+    ipmi_cmdlang_event_t       *event = cmdlang->user_data;
+
+    if (cmdlang->err)
+	return;
+
+    entry = ipmi_mem_alloc(sizeof(*entry));
+    if (!entry)
+	goto out_nomem;
+
+    entry->name = ipmi_strdup(name);
+    if (!entry->name) {
+	ipmi_mem_free(entry);
+	goto out_nomem;
+    }
+
+    entry->type = IPMI_CMDLANG_UNICODE;
+
+    entry->len = len;
+    if (len > 0) {
+	entry->value = ipmi_mem_alloc(len);
+	if (!entry->value) {
+	    ipmi_mem_free(entry->name);
+	    ipmi_mem_free(entry);
+	    goto out_nomem;
+	}
+	memcpy(entry->value, value, len);
+    } else
+	entry->value = NULL;
+
+    entry->level = event->curr_level;
+
+    entry->next = NULL;
+    if (event->head) {
+	event->tail->next = entry;
+	event->tail = entry;
+    } else {
+	event->head = entry;
+	event->tail = entry;
+    }
+
+    return;
+
+ out_nomem:
+    cmdlang->err = ENOMEM;
+    cmdlang->errstr = "Out of memory";
+    cmdlang->location = "cmdlang.c(event_out_binary)";
+}
+
+void
+event_up(ipmi_cmdlang_t *cmdlang)
 {
     ipmi_cmdlang_event_t *event = cmdlang->user_data;
 
@@ -1254,7 +1425,8 @@ void event_up(ipmi_cmdlang_t *cmdlang)
     event->curr_level++;
 }
 
-void event_down(ipmi_cmdlang_t *cmdlang)
+void
+event_down(ipmi_cmdlang_t *cmdlang)
 {
     ipmi_cmdlang_event_t *event = cmdlang->user_data;
 
@@ -1264,7 +1436,8 @@ void event_down(ipmi_cmdlang_t *cmdlang)
     event->curr_level--;
 }
 
-void event_done(ipmi_cmdlang_t *cmdlang)
+void
+event_done(ipmi_cmdlang_t *cmdlang)
 {
     ipmi_cmdlang_event_entry_t *entry;
     ipmi_cmdlang_event_t       *event = cmdlang->user_data;
@@ -1302,10 +1475,12 @@ void event_done(ipmi_cmdlang_t *cmdlang)
     ipmi_mem_free(event);
 }
 
-ipmi_cmd_info_t *ipmi_cmdlang_alloc_event_info(void)
+ipmi_cmd_info_t *
+ipmi_cmdlang_alloc_event_info(void)
 {
     ipmi_cmd_info_t      *cmdinfo = NULL;
     ipmi_cmdlang_event_t *event;
+    int                  rv;
 
     cmdinfo = ipmi_mem_alloc(sizeof(*cmdinfo));
     if (!cmdinfo)
@@ -1313,8 +1488,15 @@ ipmi_cmd_info_t *ipmi_cmdlang_alloc_event_info(void)
     memset(cmdinfo, 0, sizeof(*cmdinfo));
     cmdinfo->usecount = 1;
 
+    rv = ipmi_create_global_lock(&cmdinfo->lock);
+    if (rv) {
+	ipmi_mem_free(cmdinfo);
+	return NULL;
+    }
+
     cmdinfo->cmdlang = ipmi_mem_alloc(sizeof(*cmdinfo->cmdlang));
     if (!cmdinfo->cmdlang) {
+	ipmi_destroy_lock(cmdinfo->lock);
 	ipmi_mem_free(cmdinfo);
 	return NULL;
     }
@@ -1323,6 +1505,7 @@ ipmi_cmd_info_t *ipmi_cmdlang_alloc_event_info(void)
     cmdinfo->cmdlang->objstr = ipmi_mem_alloc(IPMI_MAX_NAME_LEN);
     if (!cmdinfo->cmdlang->objstr) {
 	ipmi_mem_free(cmdinfo->cmdlang);
+	ipmi_destroy_lock(cmdinfo->lock);
 	ipmi_mem_free(cmdinfo);
 	return NULL;
     }
@@ -1333,6 +1516,7 @@ ipmi_cmd_info_t *ipmi_cmdlang_alloc_event_info(void)
     if (!cmdinfo->cmdlang->user_data) {
 	ipmi_mem_free(cmdinfo->cmdlang->objstr);
 	ipmi_mem_free(cmdinfo->cmdlang);
+	ipmi_destroy_lock(cmdinfo->lock);
 	ipmi_mem_free(cmdinfo);
 	return NULL;
     }
@@ -1343,6 +1527,8 @@ ipmi_cmd_info_t *ipmi_cmdlang_alloc_event_info(void)
 
     cmdinfo->cmdlang->out = event_out;
     cmdinfo->cmdlang->down = event_down;
+    cmdinfo->cmdlang->out_binary = event_out_binary;
+    cmdinfo->cmdlang->out_unicode = event_out_unicode;
     cmdinfo->cmdlang->up = event_up;
     cmdinfo->cmdlang->done = event_done;
 
@@ -1350,16 +1536,20 @@ ipmi_cmd_info_t *ipmi_cmdlang_alloc_event_info(void)
 }
 
 /* Move to the first field. */
-void ipmi_cmdlang_event_restart(ipmi_cmdlang_event_t *event)
+void
+ipmi_cmdlang_event_restart(ipmi_cmdlang_event_t *event)
 {
     event->curr = event->head;
 }
 
 /* Returns true if successful, false if no more fields left. */
-int ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t *event,
-				  unsigned int         *level,
-				  char                 **name,
-				  char                 **value)
+int
+ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t        *event,
+			      unsigned int                *level,
+			      enum ipmi_cmdlang_out_types *type,
+			      char                        **name,
+			      unsigned int                *len,
+			      char                        **value)
 {
     ipmi_cmdlang_event_entry_t *curr = event->curr;
 
@@ -1369,6 +1559,8 @@ int ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t *event,
     *level = curr->level;
     *name = curr->name;
     *value = curr->value;
+    *type = curr->type;
+    *len = curr->len;
 
     event->curr = curr->next;
     return 1;
@@ -1377,6 +1569,7 @@ int ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t *event,
 
 int ipmi_cmdlang_domain_init(void);
 int ipmi_cmdlang_entity_init(void);
+int ipmi_cmdlang_mc_init(void);
 int ipmi_cmdlang_pet_init(void);
 
 int
@@ -1388,6 +1581,9 @@ ipmi_cmdlang_init(void)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_entity_init();
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_mc_init();
     if (rv) return rv;
 
     rv = ipmi_cmdlang_pet_init();

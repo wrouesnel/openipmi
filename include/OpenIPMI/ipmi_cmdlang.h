@@ -35,6 +35,7 @@
 #define __IPMI_CMDLANG_H
 
 #include <OpenIPMI/selector.h>
+#include <OpenIPMI/ipmi_int.h>
 
 /* Forward declaration */
 typedef struct ipmi_cmd_info_s ipmi_cmd_info_t;
@@ -189,6 +190,9 @@ struct ipmi_cmd_info_s
     int                argc;          /* Total number of arguments */
     char               **argv;        /* The arguments */
 
+    /* Only allow one writer at a time */
+    ipmi_lock_t        *lock;
+
     /* The cmdlang structure the user passed in.  Use this for output
        and error reporting. */
     ipmi_cmdlang_t     *cmdlang;
@@ -233,6 +237,9 @@ void ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
 void ipmi_cmdlang_out_mac(ipmi_cmd_info_t *info,
 			  char            *name,
 			  unsigned char   mac_addr[6]);
+void ipmi_cmdlang_out_bool(ipmi_cmd_info_t *info,
+			   char            *name,
+			   int             value);
 
 /* The output from the command language is done at a nesting level.
    When you start outputting data for a new thing, you should "down"
@@ -276,11 +283,19 @@ typedef struct ipmi_cmdlang_event_s ipmi_cmdlang_event_t;
 /* Move to the first field. */
 void ipmi_cmdlang_event_restart(ipmi_cmdlang_event_t *event);
 
+enum ipmi_cmdlang_out_types {
+    IPMI_CMDLANG_STRING,
+    IPMI_CMDLANG_BINARY,
+    IPMI_CMDLANG_UNICODE
+};
+
 /* Returns true if successful, false if no more fields left. */
-int ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t *event,
-				  unsigned int         *level,
-				  char                 **name,
-				  char                 **value);
+int ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t        *event,
+				  unsigned int                *level,
+				  enum ipmi_cmdlang_out_types *type,
+				  char                        **name,
+				  unsigned int                *len,
+				  char                        **value);
 
 /* Supplied by the user, used to report global errors (ones that don't
    deal with a specific command invocation).  The objstr is the name
@@ -295,5 +310,9 @@ void ipmi_cmdlang_global_err(char *objstr,
 
 /* Supplied by the user to report events. */
 void ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event);
+
+/* In callbacks, you must use these to lock the cmd_info structure. */
+void ipmi_cmdlang_lock(ipmi_cmd_info_t *info);
+void ipmi_cmdlang_unlock(ipmi_cmd_info_t *info);
 
 #endif /* __IPMI_CMDLANG_H */

@@ -401,16 +401,39 @@ ipmi_cmdlang_global_err(char *objstr,
 void
 ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
 {
-    unsigned int level;
-    char         *name, *value;
+    unsigned int                level, len;
+    enum ipmi_cmdlang_out_types type;
+    char                        *name, *value;
+    int                         indent2;
+    int                         i;
 
     ipmi_cmdlang_event_restart(event);
     printf("Event\n");
-    while (ipmi_cmdlang_event_next_field(event, &level, &name, &value)) {
-	if (value)
-	    printf("  %*s%s: %s\n", level*2, "", name, value);
-	else
-	    printf("  %*s%s\n", level*2, "", name);
+    while (ipmi_cmdlang_event_next_field(event, &level, &type, &name, &len,
+					 &value))
+    {
+	switch (type) {
+	case IPMI_CMDLANG_STRING:
+	    if (value)
+		printf("  %*s%s: %s\n", level*2, "", name, value);
+	    else
+		printf("  %*s%s\n", level*2, "", name);
+	    break;
+
+	case IPMI_CMDLANG_BINARY:
+	case IPMI_CMDLANG_UNICODE:
+	    indent2 = (level * 2) + strlen(name) + 1;
+	    printf("  %*s%s:", level*2, "", name);
+	    for (i=0; i<len; i++) {
+		if ((i != 0) && ((i % 8) == 0))
+		    printf("\n  %*s", indent2, "");
+		printf(" 0x%2.2x", value[i]);
+	    }
+	    printf("\n");
+    
+	    fflush(stdout);
+	    break;
+	}
     }
 }
 

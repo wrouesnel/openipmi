@@ -192,14 +192,14 @@ domain_event_handler(ipmi_domain_t *domain,
 	ipmi_cmdlang_cmd_info_put(evi);
 }
 
-void entity_change(enum ipmi_update_e op,
-		   ipmi_domain_t      *domain,
-		   ipmi_entity_t      *entity,
-		   void               *cb_data);
-void mc_change(enum ipmi_update_e op,
-	       ipmi_domain_t      *domain,
-	       ipmi_mc_t          *mc,
-	       void               *cb_data);
+void ipmi_cmdlang_entity_change(enum ipmi_update_e op,
+				ipmi_domain_t      *domain,
+				ipmi_entity_t      *entity,
+				void               *cb_data);
+void ipmi_cmdlang_mc_change(enum ipmi_update_e op,
+			    ipmi_domain_t      *domain,
+			    ipmi_mc_t          *mc,
+			    void               *cb_data);
 
 void
 domain_new_done(ipmi_domain_t *domain,
@@ -252,18 +252,23 @@ domain_new_done(ipmi_domain_t *domain,
 	goto out_err;
     }
 
-    rv = ipmi_domain_add_entity_update_handler(domain, entity_change, domain);
+    rv = ipmi_domain_add_entity_update_handler(domain,
+					       ipmi_cmdlang_entity_change,
+					       domain);
     if (rv) {
 	errstr = "ipmi_bmc_set_entity_update_handler";
 	goto out_err;
     }
 
-    rv = ipmi_domain_add_mc_updated_handler(domain, mc_change, domain);
+    rv = ipmi_domain_add_mc_updated_handler(domain,
+					    ipmi_cmdlang_mc_change,
+					    domain);
     if (rv) {
 	errstr = "ipmi_bmc_set_entity_update_handler";
 	goto out_err;
     }
 
+    ipmi_cmdlang_lock(cmd_info);
     ipmi_cmdlang_out(cmd_info, "New Domain", NULL);
     ipmi_cmdlang_out(cmd_info, "Name", domain_name);
     ipmi_cmdlang_down(cmd_info);
@@ -272,6 +277,7 @@ domain_new_done(ipmi_domain_t *domain,
     ipmi_cmdlang_out_int(cmd_info, "Any Connection Up", still_connected);
     ipmi_cmdlang_out_int(cmd_info, "Error", err);
     ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_unlock(cmd_info);
 
     ipmi_cmdlang_cmd_info_put(cmd_info);
     return;
@@ -373,6 +379,8 @@ domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
 
+    ipmi_cmdlang_lock(cmd_info);
+
     if (err) {
 	ipmi_domain_t *domain = ipmi_fru_get_domain(fru);
 
@@ -387,6 +395,7 @@ domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     ipmi_cmdlang_dump_fru_info(cmd_info, fru);
 
  out:
+    ipmi_cmdlang_unlock(cmd_info);
     if (err != ECANCELED)
 	ipmi_fru_destroy(fru, NULL, NULL);
     ipmi_cmdlang_cmd_info_put(cmd_info);
@@ -492,9 +501,14 @@ domain_msg_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_msg_t       *msg = &rspi->msg;
     ipmi_ipmb_addr_t *addr = (ipmi_ipmb_addr_t *) &rspi->addr;
     ipmi_cmd_info_t  *cmd_info = rspi->data1;
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+
+    ipmi_cmdlang_lock(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Response", NULL);
     ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Domain", domain_name);
     ipmi_cmdlang_out_int(cmd_info, "channel", addr->channel);
     ipmi_cmdlang_out_hex(cmd_info, "ipmb", addr->slave_addr);
     ipmi_cmdlang_out_int(cmd_info, "LUN", addr->lun);
@@ -502,6 +516,7 @@ domain_msg_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_cmdlang_out_int(cmd_info, "command", msg->cmd);
     if (msg->data_len)
 	ipmi_cmdlang_out_binary(cmd_info, "Data", msg->data, msg->data_len);
+    ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_up(cmd_info);
 
     ipmi_cmdlang_cmd_info_put(cmd_info);
@@ -611,7 +626,7 @@ domain_msg(ipmi_domain_t *domain, void *cb_data)
     addr.lun = LUN;
     msg.netfn = NetFN;
     msg.cmd = command;
-    msg.data_len = 1;
+    msg.data_len = i;
     msg.data = data;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
@@ -645,10 +660,12 @@ scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 
     if (! cmd_info->cmdlang->err) {
 	if (err) {
+	    ipmi_cmdlang_lock(cmd_info);
 	    cmd_info->cmdlang->err = err;
 	    ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
 				 cmd_info->cmdlang->objstr_len);
 	    cmd_info->cmdlang->location = "cmd_domain.c(scan_done)";
+	    ipmi_cmdlang_unlock(cmd_info);
 	}
     }
     ipmi_cmdlang_cmd_info_put(cmd_info);

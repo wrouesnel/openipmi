@@ -35,34 +35,479 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
 
-void
-mc_change(enum ipmi_update_e op,
-	  ipmi_domain_t      *domain,
-	  ipmi_mc_t          *mc,
-	  void               *cb_data)
+static void
+mc_list_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    if (cmd_info->cmdlang->err)
+	return;
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    ipmi_cmdlang_out(cmd_info, "Name", mc_name);
+}
+
+static void
+mc_list(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+
+    ipmi_domain_iterate_mcs(domain, mc_list_handler, cmd_info);
+}
+
+static void
+mc_info(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    unsigned char vals[4];
+    char          str[100];
+
+    ipmi_cmdlang_out_bool(cmd_info, "provides_device_sdrs",
+			  ipmi_mc_provides_device_sdrs(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "device_available",
+			  ipmi_mc_device_available(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "chassis_support",
+			  ipmi_mc_chassis_support(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "bridge_support",
+			  ipmi_mc_bridge_support(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "ipmb_event_generator",
+			  ipmi_mc_ipmb_event_generator_support(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "ipmb_event_receiver",
+			  ipmi_mc_ipmb_event_receiver_support(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "fru_inventory_support",
+			  ipmi_mc_fru_inventory_support(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "sel_device_support",
+			  ipmi_mc_sel_device_support(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "sdr_repository_support",
+			  ipmi_mc_sdr_repository_support(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "sensor_device_support",
+			  ipmi_mc_sensor_device_support(mc));
+    ipmi_cmdlang_out_hex(cmd_info, "device_id", ipmi_mc_device_id(mc));
+    ipmi_cmdlang_out_int(cmd_info, "device_revision",
+			 ipmi_mc_device_revision(mc));
+    snprintf(str, sizeof(str), "%d.%d%d",
+	     ipmi_mc_major_fw_revision(mc),
+	     ipmi_mc_minor_fw_revision(mc)>>4,
+	     ipmi_mc_minor_fw_revision(mc)&0xf);
+    ipmi_cmdlang_out(cmd_info, "fw_revision", str);
+    snprintf(str, sizeof(str), "%d.%d",
+	     ipmi_mc_major_version(mc),
+	     ipmi_mc_minor_version(mc));
+    ipmi_cmdlang_out(cmd_info, "version", str);
+    ipmi_cmdlang_out_hex(cmd_info, "manufacturer_id",
+			 ipmi_mc_manufacturer_id(mc));
+    ipmi_cmdlang_out_hex(cmd_info, "product_id", ipmi_mc_product_id(mc));
+    ipmi_mc_aux_fw_revision(mc, vals);
+    ipmi_cmdlang_out_binary(cmd_info, "aux_fw_revision", vals, sizeof(vals));
+}
+
+static void
+reset_done(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+
+    if (err) {
+	ipmi_cmdlang_lock(cmd_info);
+	cmd_info->cmdlang->errstr = "Error resetting MC";
+	cmd_info->cmdlang->err = err;
+	ipmi_mc_get_name(mc, cmd_info->cmdlang->objstr,
+			 cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_mc.c(reset_done)";
+	ipmi_cmdlang_unlock(cmd_info);
+    }
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+mc_reset(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int             cmd;
+    int             curr_arg = cmd_info->curr_arg;
+    int             rv;
+
+    if ((cmd_info->argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmd_info->cmdlang->errstr = "Not enough parameters";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    if (strcasecmp(cmd_info->argv[curr_arg], "warm") == 0)
+	cmd = IPMI_MC_RESET_WARM;
+    else if (strcasecmp(cmd_info->argv[curr_arg], "cold") == 0)
+	cmd = IPMI_MC_RESET_COLD;
+    else {
+	cmd_info->cmdlang->errstr = "reset type not 'warm' or 'cold'";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_reset(mc, cmd, reset_done, cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmd_info->cmdlang->errstr = "Error from ipmi_mc_reset";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+ out_err:
+    if (cmd_info->cmdlang->err) {
+	ipmi_mc_get_name(mc, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_mc.c(mc_reset)";
+    }
+}
+
+static void
+set_events_enabled_done(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+
+    if (err) {
+	ipmi_cmdlang_lock(cmd_info);
+	cmd_info->cmdlang->errstr = "Error setting events enable";
+	cmd_info->cmdlang->err = err;
+	ipmi_mc_get_name(mc, cmd_info->cmdlang->objstr,
+			 cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_mc.c(set_events_enable_done)";
+	ipmi_cmdlang_unlock(cmd_info);
+    }
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+mc_set_events_enabled(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int             enable;
+    int             curr_arg = cmd_info->curr_arg;
+    int             rv;
+
+    if ((cmd_info->argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmd_info->cmdlang->errstr = "Not enough parameters";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    if (strcasecmp(cmd_info->argv[curr_arg], "enable") == 0)
+	enable = 1;
+    else if (strcasecmp(cmd_info->argv[curr_arg], "disable") == 0)
+	enable = 0;
+    else {
+	cmd_info->cmdlang->errstr = "enable type not 'enable' or 'disable'";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_set_events_enable(mc, enable, set_events_enabled_done,
+				   cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmd_info->cmdlang->errstr = "Error from ipmi_mc_set_events_enable";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+ out_err:
+    if (cmd_info->cmdlang->err) {
+	ipmi_mc_get_name(mc, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_mc.c(mc_set_events_enable)";
+    }
+}
+
+static void
+mc_get_events_enabled(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    
+    ipmi_cmdlang_out_bool(cmd_info, "Events Enable",
+			  ipmi_mc_get_events_enable(mc));
+}
+
+static void
+mc_sel_info(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    
+    ipmi_cmdlang_out_int(cmd_info, "SEL Count", ipmi_mc_sel_count(mc));
+    ipmi_cmdlang_out_int(cmd_info, "SEL Slots Used",
+			 ipmi_mc_sel_entries_used(mc));
+}
+
+static void
+get_sel_time_handler(ipmi_mc_t *mc, int err, unsigned long time, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmd_info->cmdlang->errstr = "Error getting SEL time";
+	cmd_info->cmdlang->err = err;
+	ipmi_mc_get_name(mc, cmd_info->cmdlang->objstr,
+			 cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_mc.c(get_sel_time_handler)";
+    } else {
+	ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+	ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_out_long(cmd_info, "SEL Time", time);
+	ipmi_cmdlang_up(cmd_info);
+    }
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+mc_get_sel_time(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_get_current_sel_time(mc, get_sel_time_handler, cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmd_info->cmdlang->errstr = "Error from ipmi_mc_get_current_sel_time";
+	cmd_info->cmdlang->err = EINVAL;
+	ipmi_mc_get_name(mc, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_mc.c(mc_get_sel_time)";
+    }
+}
+
+static void
+mc_msg_handler(ipmi_mc_t *mc, ipmi_msg_t *msg, void *cb_data)
+{
+    ipmi_cmd_info_t  *cmd_info = cb_data;
+    char             mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    ipmi_cmdlang_lock(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Response", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+    ipmi_cmdlang_out_int(cmd_info, "NetFN", msg->netfn);
+    ipmi_cmdlang_out_int(cmd_info, "command", msg->cmd);
+    if (msg->data_len)
+	ipmi_cmdlang_out_binary(cmd_info, "Data", msg->data, msg->data_len);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_unlock(cmd_info);
+
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+mc_msg(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int LUN;
+    int NetFN;
+    int command;
+    unsigned char data[100];
+    int rv;
+    int curr_arg = cmd_info->curr_arg;
+    int i;
+    ipmi_msg_t msg;
+
+
+    if ((cmd_info->argc - curr_arg) < 3) {
+	/* Not enough parameters */
+	cmd_info->cmdlang->errstr = "Not enough parameters";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
+			 &LUN, cmd_info->cmdlang);
+    if (cmd_info->cmdlang->err) {
+	cmd_info->cmdlang->errstr = "LUN invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
+			 &NetFN, cmd_info->cmdlang);
+    if (cmd_info->cmdlang->err) {
+	cmd_info->cmdlang->errstr = "NetFN invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
+			 &command, cmd_info->cmdlang);
+    if (cmd_info->cmdlang->err) {
+	cmd_info->cmdlang->errstr = "command invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    i = 0;
+    while (curr_arg < cmd_info->argc) {
+	ipmi_cmdlang_get_uchar(cmd_info->argv[curr_arg],
+			       &data[i], cmd_info->cmdlang);
+	if (cmd_info->cmdlang->err) {
+	    cmd_info->cmdlang->errstr = "data invalid";
+	    goto out_err;
+	}
+	curr_arg++;
+    }
+
+    msg.netfn = NetFN;
+    msg.cmd = command;
+    msg.data_len = i;
+    msg.data = data;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_send_command(mc,
+			      LUN,
+			      &msg,
+			      mc_msg_handler,
+			      cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmd_info->cmdlang->errstr = "Error sending message";
+	cmd_info->cmdlang->err = rv;
+	goto out_err;
+    }
+
+    return;
+
+ out_err:
+    if (cmd_info->cmdlang->err) {
+	ipmi_mc_get_name(mc, cmd_info->cmdlang->objstr,
+			 cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_mc.c(mc_msg)";
+    }
+}
+
+void
+ipmi_cmdlang_mc_change(enum ipmi_update_e op,
+		       ipmi_domain_t      *domain,
+		       ipmi_mc_t          *mc,
+		       void               *cb_data)
+{
+    char            *errstr = NULL;
+    int             rv;
+    ipmi_cmd_info_t *evi;
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "MC");
+    ipmi_cmdlang_out(evi, "Name", mc_name);
+
+    switch (op) {
+    case IPMI_ADDED:
+	ipmi_cmdlang_out(evi, "Operation", "Add");
+	ipmi_cmdlang_down(evi);
+	mc_info(mc, evi);
+	ipmi_cmdlang_up(evi);
+#if 0
+	if (ipmi_mc_is_active(mc)) {
+	    ipmi_mc_set_sdrs_first_read_handler(mc, mc_sdrs_read, NULL);
+	    ipmi_mc_set_sels_first_read_handler(mc, mc_sels_read, NULL);
+	}
+#endif
+	break;
+
+	case IPMI_DELETED:
+	    ipmi_cmdlang_out(evi, "Operation", "Delete");
+	    break;
+
+	case IPMI_CHANGED:
+	    ipmi_cmdlang_out(evi, "Operation", "Change");
+	    ipmi_cmdlang_down(evi);
+	    mc_info(mc, evi);
+	    ipmi_cmdlang_up(evi);
+	    break;
+    }
+
+    ipmi_cmdlang_cmd_info_put(evi);
+    return;
+
+ out_err:
+    evi->cmdlang->err = rv;
+    if (errstr)
+	evi->cmdlang->errstr = errstr;
+    evi->cmdlang->location = "cmd_mc.c(mc_change)";
+    strncpy(evi->cmdlang->objstr, mc_name, evi->cmdlang->objstr_len);
+    ipmi_cmdlang_cmd_info_put(evi);
+}
+
+static ipmi_cmdlang_cmd_t *mc_cmds;
+
+static ipmi_cmdlang_init_t cmds_mc[] =
+{
+    { "mc", NULL,
+      "Commands dealing with MCs",
+      NULL, NULL, &mc_cmds },
+    { "list", &mc_cmds,
+      "- List all the entities in the system",
+      ipmi_cmdlang_domain_handler, mc_list, NULL },
+    { "info", &mc_cmds,
+      "<mc> - Dump information about an mc",
+      ipmi_cmdlang_mc_handler, mc_info, NULL },
+    { "reset", &mc_cmds,
+      "<mc> <warm | cold> - Do a warm or cold reset on the given MC.  Note"
+      " that this does *not* reset the main processor, and the effects of"
+      " this are implementation-defined",
+      ipmi_cmdlang_mc_handler, mc_reset, NULL },
+    { "set_events_enabled", &mc_cmds,
+      "<mc> <enable | disable> - Sets if the events are enabled or disabled"
+      " for an MC",
+      ipmi_cmdlang_mc_handler, mc_set_events_enabled, NULL },
+    { "get_events_enabled", &mc_cmds,
+      "<mc> - Returns if the events are enabled or disabled"
+      " for an MC",
+      ipmi_cmdlang_mc_handler, mc_get_events_enabled, NULL },
+    { "sel_info", &mc_cmds,
+      "<mc> - Returns information about the SEL on the MC",
+      ipmi_cmdlang_mc_handler, mc_sel_info, NULL },
+    { "get_sel_time", &mc_cmds,
+      "<mc> - Returns SEL time on the MC",
+      ipmi_cmdlang_mc_handler, mc_get_sel_time, NULL },
+    { "msg", &mc_cmds,
+      "<mc> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
+      " to the management controller and display the response.",
+      ipmi_cmdlang_mc_handler, mc_msg, NULL },
+};
+#define CMDS_MC_LEN (sizeof(cmds_mc)/sizeof(ipmi_cmdlang_init_t))
+
+int
+ipmi_cmdlang_mc_init(void)
+{
+    return ipmi_cmdlang_reg_table(cmds_mc, CMDS_MC_LEN);
 }
 
 #if 0
 /*
 * mc
-  * list <domain> - List all MCs
-  * info <mc> 
-  * reset <warm | cold> <mc> - Do a warm or cold reset on the given MC
   * cmd <mc> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
     to the management controller and display the response.
-  * set_events_enable <enable | disable> <mc> - enables or disables
-    events on the MC.
-  * get_events_enabled <mc> - Prints out if the events are enabled for
-    the given MC.
   * sdrs <mc> <main | sensor> - list the SDRs for the mc.  Either gets
     the main SDR repository or the sensor SDR repository.
-  * get_sel_time <mc> - Get the time in the SEL for the given MC
 */
 #endif

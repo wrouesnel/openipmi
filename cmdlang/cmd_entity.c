@@ -208,10 +208,10 @@ fru_info(ipmi_entity_t *entity, void *cb_data)
 }
 
 void
-entity_change(enum ipmi_update_e op,
-	      ipmi_domain_t      *domain,
-	      ipmi_entity_t      *entity,
-	      void               *cb_data)
+ipmi_cmdlang_entity_change(enum ipmi_update_e op,
+			   ipmi_domain_t      *domain,
+			   ipmi_entity_t      *entity,
+			   void               *cb_data)
 {
     char            *errstr = NULL;
     int             rv;
@@ -227,11 +227,11 @@ entity_change(enum ipmi_update_e op,
     }
 
     ipmi_cmdlang_out(evi, "Object Type", "Entity");
+    ipmi_cmdlang_out(evi, "Name", entity_name);
 
     switch (op) {
     case IPMI_ADDED:
 	ipmi_cmdlang_out(evi, "Operation", "Add");
-	ipmi_cmdlang_out(evi, "Name", entity_name);
 	ipmi_cmdlang_down(evi);
 	entity_info(entity, evi);
 	ipmi_cmdlang_up(evi);
@@ -276,12 +276,10 @@ entity_change(enum ipmi_update_e op,
 
 	case IPMI_DELETED:
 	    ipmi_cmdlang_out(evi, "Operation", "Delete");
-	    ipmi_cmdlang_out(evi, "Name", entity_name);
 	    break;
 
 	case IPMI_CHANGED:
 	    ipmi_cmdlang_out(evi, "Operation", "Change");
-	    ipmi_cmdlang_out(evi, "Name", entity_name);
 	    ipmi_cmdlang_down(evi);
 	    entity_info(entity, evi);
 	    ipmi_cmdlang_up(evi);
@@ -293,7 +291,8 @@ entity_change(enum ipmi_update_e op,
 
  out_err:
     evi->cmdlang->err = rv;
-    evi->cmdlang->errstr = errstr;
+    if (errstr)
+	evi->cmdlang->errstr = errstr;
     evi->cmdlang->location = "cmd_entity.c(entity_change)";
     strncpy(evi->cmdlang->objstr, entity_name, evi->cmdlang->objstr_len);
     ipmi_cmdlang_cmd_info_put(evi);
