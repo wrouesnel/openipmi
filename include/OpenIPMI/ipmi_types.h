@@ -73,13 +73,18 @@ typedef struct ipmi_control_id_s ipmi_control_id_t;
    commands and responses.  The completion code is always the first
    byte of data in the response (as the spec shows the messages laid
    out). */
-typedef struct ipmi_msg_s
+typedef struct ipmi_msg
 {
     unsigned char  netfn;
     unsigned char  cmd;
     unsigned short data_len;
     unsigned char  *data;
 } ipmi_msg_t;
+
+#else
+
+/* Generate a type for the kernel version of this. */
+typedef struct ipmi_msg ipmi_msg_t;
 
 #endif
 

@@ -45,7 +45,7 @@
    determine the actual address type.  This is kind of like addresses
    work for sockets. */
 #define IPMI_MAX_ADDR_SIZE 32
-typedef struct ipmi_addr_s
+typedef struct ipmi_addr
 {
 	 /* Try to take these from the "Channel Medium Type" table
 	    in section 6.5 of the IPMI 1.5 manual. */
@@ -58,7 +58,7 @@ typedef struct ipmi_addr_s
    The channel is the BMC's channel number for the channel (usually
    0), or IPMC_BMC_CHANNEL if communicating directly with the BMC. */
 #define IPMI_SYSTEM_INTERFACE_ADDR_TYPE	0xc
-typedef struct ipmi_system_interface_addr_s
+typedef struct ipmi_system_interface_addr
 {
 	int           addr_type;
 	short         channel;
@@ -70,7 +70,7 @@ typedef struct ipmi_system_interface_addr_s
 /* Used for broadcast get device id as described in section 17.9 of the
    IPMI 1.5 manual. */
 #define IPMI_IPMB_BROADCAST_ADDR_TYPE   0x41
-typedef struct ipmi_ipmb_addr_s
+typedef struct ipmi_ipmb_addr
 {
 	int           addr_type;
 	short         channel;
@@ -83,6 +83,13 @@ typedef struct ipmi_ipmb_addr_s
    FIXME - is this right, or should we use -1? */
 #define IPMI_BMC_CHANNEL  0xf
 #define IPMI_NUM_CHANNELS 0x10
+
+#else /* _LINUX_IPMI_H */
+
+/* Generate types for the kernel versions of these. */
+typedef struct ipmi_addr ipmi_addr_t;
+typedef struct ipmi_system_interface_addr ipmi_system_interface_addr_t;
+typedef struct ipmi_ipmb_addr ipmi_ipmb_addr_t;
 
 #endif /* _LINUX_IPMI_H */
 

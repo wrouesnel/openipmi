@@ -297,7 +297,7 @@ smi_send(smi_data_t   *smi,
 	 ipmi_msg_t   *msg,
 	 long         msgid)
 {
-    ipmi_req_t     req;
+    struct ipmi_req req;
 
     if (DEBUG_MSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing, addr = ");
@@ -362,7 +362,7 @@ rsp_timeout_handler(void              *cb_data,
 }
 
 static void
-handle_response(ipmi_con_t *ipmi, ipmi_recv_t *recv)
+handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     smi_data_t            *smi = (smi_data_t *) ipmi->con_data;
     pending_cmd_t         *cmd, *finder;
@@ -421,7 +421,7 @@ handle_response(ipmi_con_t *ipmi, ipmi_recv_t *recv)
 }
 
 static void
-handle_async_event(ipmi_con_t *ipmi, ipmi_recv_t *recv)
+handle_async_event(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     smi_data_t                 *smi = (smi_data_t *) ipmi->con_data;
     ipmi_ll_event_handler_id_t *elem, *next;
@@ -444,7 +444,7 @@ handle_async_event(ipmi_con_t *ipmi, ipmi_recv_t *recv)
 }
 
 static void
-handle_incoming_command(ipmi_con_t *ipmi, ipmi_recv_t *recv)
+handle_incoming_command(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     smi_data_t    *smi = (smi_data_t *) ipmi->con_data;
     cmd_handler_t *elem;
@@ -490,11 +490,11 @@ data_handler(int            fd,
 	     void           *cb_data,
 	     os_hnd_fd_id_t *id)
 {
-    ipmi_con_t    *ipmi = (ipmi_con_t *) cb_data;
-    unsigned char data[MAX_IPMI_DATA_SIZE];
-    ipmi_addr_t   addr;
-    ipmi_recv_t   recv;
-    int           rv;
+    ipmi_con_t       *ipmi = (ipmi_con_t *) cb_data;
+    unsigned char    data[MAX_IPMI_DATA_SIZE];
+    ipmi_addr_t      addr;
+    struct ipmi_recv recv;
+    int              rv;
 
     ipmi_read_lock();
 
@@ -737,9 +737,9 @@ smi_register_for_command(ipmi_con_t            *ipmi,
 			 void                  *data2,
 			 void                  *data3)
 {
-    smi_data_t     *smi;
-    ipmi_cmdspec_t reg;
-    int            rv;
+    smi_data_t          *smi;
+    struct ipmi_cmdspec reg;
+    int                 rv;
 
     smi = (smi_data_t *) ipmi->con_data;
 
@@ -764,9 +764,9 @@ smi_deregister_for_command(ipmi_con_t    *ipmi,
 			   unsigned char netfn,
 			   unsigned char cmd)
 {
-    smi_data_t     *smi;
-    ipmi_cmdspec_t reg;
-    int            rv;
+    smi_data_t          *smi;
+    struct ipmi_cmdspec reg;
+    int                 rv;
 
     smi = (smi_data_t *) ipmi->con_data;
 
