@@ -1,6 +1,9 @@
 
 2003-09-02 Corey Minyard <cminyard@mvista.com>
 
+	* lib/mc.c: Fixed process to continue when the SDR fetch
+	fails.
+
 	* lib/entity.c, include/OpenIPMI/ipmiif.h: Added a way to force
 	entity presence detection.
 
