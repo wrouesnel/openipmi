@@ -198,6 +198,9 @@ typedef struct lan_data_s
     /* If 0, we have not yet initialized */
     int                        initialized;
 
+    /* If 0, the OEM handlers have not been called. */
+    int                        oem_conn_handlers_called;
+
     unsigned int               authtype;
     unsigned int               privilege;
     unsigned char              username[IPMI_USERNAME_MAX];
@@ -205,13 +208,16 @@ typedef struct lan_data_s
     unsigned char              password[IPMI_PASSWORD_MAX];
     unsigned int               password_len;
     unsigned char              challenge_string[16];
-
-    unsigned int               working_authtype;
     ipmi_authdata_t            authdata;
-    uint32_t                   outbound_seq_num;
-    uint32_t                   session_id;
-    uint32_t                   inbound_seq_num;
-    uint16_t                   recv_msg_map;
+
+
+    /* We keep a session on each LAN connection.  I don't think all
+       systems require that, but it's safer because some do. */
+    unsigned int               working_authtype[MAX_IP_ADDR];
+    uint32_t                   outbound_seq_num[MAX_IP_ADDR];
+    uint32_t                   session_id[MAX_IP_ADDR];
+    uint32_t                   inbound_seq_num[MAX_IP_ADDR];
+    uint16_t                   recv_msg_map[MAX_IP_ADDR];
 
     /* The following structure is a message queue holding messages
        that must use the MXP message protocol.  Basically, any message
@@ -272,6 +278,10 @@ typedef struct lan_data_s
 	lan_timer_info_t      *timer_info;
 	int                   retries_left;
 
+	/* If -1, just use the normal algorithm.  If not -1, force to
+           this address. */
+	int                   addr_num;
+
 	/* The number of the last IP address sent on. */
 	int                   last_ip_num;
     } seq_table[64];
@@ -314,7 +324,7 @@ typedef struct lan_data_s
 
 #define QUEUE_NEXT(x) (((x) + 1) % 64)
 
-static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan);
+static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num);
 
 static lan_data_t *lan_list = NULL;
 
@@ -423,7 +433,8 @@ auth_gen(lan_data_t    *lan,
 	 uint8_t       *ses_id,
 	 uint8_t       *seq,
 	 unsigned char *data,
-	 unsigned int  data_len)
+	 unsigned int  data_len,
+	 int           addr_num)
 {
     int rv;
     ipmi_auth_sg_t l[] =
@@ -432,7 +443,8 @@ auth_gen(lan_data_t    *lan,
       { seq,    4 },
       { NULL,   0 }};
 
-    rv = ipmi_auths[lan->working_authtype].authcode_gen(lan->authdata, l, out);
+    rv = ipmi_auths[lan->working_authtype[addr_num]]
+	.authcode_gen(lan->authdata, l, out);
     return rv;
 }
 
@@ -442,7 +454,8 @@ auth_check(lan_data_t    *lan,
 	   uint8_t       *seq,
 	   unsigned char *data,
 	   unsigned int  data_len,
-	   unsigned char *code)
+	   unsigned char *code,
+	   int           addr_num)
 {
     int rv;
     ipmi_auth_sg_t l[] =
@@ -451,9 +464,8 @@ auth_check(lan_data_t    *lan,
       { seq,    4 },
       { NULL,   0 }};
 
-    rv = ipmi_auths[lan->working_authtype].authcode_check(lan->authdata,
-							  l,
-							  code);
+    rv = ipmi_auths[lan->working_authtype[addr_num]]
+	.authcode_check(lan->authdata, l, code);
     return rv;
 }
 	 
@@ -474,10 +486,10 @@ lan_send_addr(lan_data_t  *lan,
     data[1] = 0;
     data[2] = 0xff;
     data[3] = 0x07;
-    data[4] = lan->working_authtype;
-    ipmi_set_uint32(data+5, lan->outbound_seq_num);
-    ipmi_set_uint32(data+9, lan->session_id);
-    if (lan->working_authtype == 0)
+    data[4] = lan->working_authtype[addr_num];
+    ipmi_set_uint32(data+5, lan->outbound_seq_num[addr_num]);
+    ipmi_set_uint32(data+9, lan->session_id[addr_num]);
+    if (lan->working_authtype[addr_num] == 0)
 	tmsg = data+14;
     else
 	tmsg = data+30;
@@ -493,13 +505,13 @@ lan_send_addr(lan_data_t  *lan,
     tmsg[pos] = ipmb_checksum(tmsg+3, pos-3);
     pos++;
 
-    if (lan->working_authtype == 0) {
+    if (lan->working_authtype[addr_num] == 0) {
 	/* No authentication, so no authcode. */
 	data[13] = pos;
 	pos += 14; /* Convert to pos in data */
     } else {
 	data[29] = pos;
-	rv = auth_gen(lan, data+13, data+9, data+5, tmsg, pos);
+	rv = auth_gen(lan, data+13, data+9, data+5, tmsg, pos, addr_num);
 	if (rv)
 	    return rv;
 	pos += 30; /* Convert to pos in data */
@@ -509,10 +521,10 @@ lan_send_addr(lan_data_t  *lan,
 
     /* Increment the outbound number, but make sure it's not zero.  If
        it's already zero, ignore it, we are in pre-setup. */
-    if (lan->outbound_seq_num != 0) {
-	(lan->outbound_seq_num)++;
-	if (lan->outbound_seq_num == 0)
-	    (lan->outbound_seq_num)++;
+    if (lan->outbound_seq_num[addr_num] != 0) {
+	(lan->outbound_seq_num[addr_num])++;
+	if (lan->outbound_seq_num[addr_num] == 0)
+	    (lan->outbound_seq_num[addr_num])++;
     }
 
     if (DEBUG_MSG) {
@@ -819,21 +831,12 @@ audit_timeout_handler(void              *cb_data,
 
     lan = ipmi->con_data;
 
-    if (! lan->connected) {
-	send_auth_cap(ipmi, lan);
-    } else {
-	/* Send message to all addresses we think are down.  If the
-           connection is down, this will bring it up, otherwise it
-           will keep it alive. */
-	for (i=0; i<lan->num_ip_addr; i++) {
-	    if (! lan->ip_working[i]) {
-		msg.netfn = IPMI_APP_NETFN;
-		msg.cmd = IPMI_GET_DEVICE_ID_CMD;
-		msg.data = NULL;
-		msg.data_len = 0;
-		
-		lan_send_addr(lan, 0, 0, &msg, i);
-	    }
+    /* Send message to all addresses we think are down.  If the
+       connection is down, this will bring it up, otherwise it
+       will keep it alive. */
+    for (i=0; i<lan->num_ip_addr; i++) {
+	if (! lan->ip_working[i]) {
+	    send_auth_cap(ipmi, lan, i);
 	}
     }
 
@@ -908,6 +911,13 @@ lost_connection(lan_data_t *lan, int addr_num)
 
     lan->ip_working[addr_num] = 0;
 
+    /* reset the session data. */
+    lan->outbound_seq_num[addr_num] = 0;
+    lan->inbound_seq_num[addr_num] = 0;
+    lan->session_id[addr_num] = 0;
+    lan->recv_msg_map[addr_num] = 0;
+    lan->working_authtype[addr_num] = 0;
+
     ipmi_log(IPMI_LOG_WARNING, "Connection %d to the BMC is down", addr_num);
 
     if (lan->curr_ip_addr == addr_num) {
@@ -924,13 +934,6 @@ lost_connection(lan_data_t *lan, int addr_num)
 	    ipmi_log(IPMI_LOG_SEVERE, "All connections to the BMC are down");
 
 	    lan->connected = 0;
-
-	    /* reset the session data. */
-	    lan->outbound_seq_num = 0;
-	    lan->inbound_seq_num = 0;
-	    lan->session_id = 0;
-	    lan->recv_msg_map = 0;
-	    lan->working_authtype = 0;
 	}
     }
 
@@ -1197,11 +1200,18 @@ rsp_timeout_handler(void              *cb_data,
 	/* Note that we will need a new session seq # here, we can't reuse
 	   the old one.  If the message got lost on the way back, the other
 	   end would silently ignore resends of the seq #. */
-	rv = lan_send(lan,
-		      ipmi_addr_get_lun(&lan->seq_table[seq].addr),
-		      seq,
-		      &lan->seq_table[seq].msg,
-		      &lan->seq_table[seq].last_ip_num);
+	if (lan->seq_table[seq].addr_num >= 0)
+	    rv = lan_send_addr(lan,
+			       ipmi_addr_get_lun(&lan->seq_table[seq].addr),
+			       seq,
+			       &(lan->seq_table[seq].msg),
+			       lan->seq_table[seq].addr_num);
+	else
+	    rv = lan_send(lan,
+			  ipmi_addr_get_lun(&lan->seq_table[seq].addr),
+			  seq,
+			  &(lan->seq_table[seq].msg),
+			  &(lan->seq_table[seq].last_ip_num));
 
 	if (!rv) {
 	    timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
@@ -1538,7 +1548,7 @@ data_handler(int            fd,
     /* FIXME - need a lock on the session data. */
 
     /* Drop if the authtypes are incompatible. */
-    if (lan->working_authtype != data[4]) {
+    if (lan->working_authtype[recv_addr] != data[4]) {
 	if (DEBUG_MSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype");
 	goto out_unlock2;
@@ -1546,7 +1556,7 @@ data_handler(int            fd,
 
     /* Drop if sessions ID's don't match. */
     sess_id = ipmi_get_uint32(data+9);
-    if (sess_id != lan->session_id) {
+    if (sess_id != lan->session_id[recv_addr]) {
 	if (DEBUG_MSG)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid session id");
 	goto out_unlock2;
@@ -1557,7 +1567,8 @@ data_handler(int            fd,
     if (data[4] != 0) {
 	/* Validate the message's authcode.  Do this before checking
            the session seq num so we know the data is valid. */
-	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13);
+	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13,
+			recv_addr);
 	if (rv) {
 	    if (DEBUG_MSG)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message auth fail");
@@ -1573,23 +1584,23 @@ data_handler(int            fd,
 	connection_up(lan, recv_addr, 0);
 
     /* Check the sequence number. */
-    if ((seq - lan->inbound_seq_num) <= 8) {
+    if ((seq - lan->inbound_seq_num[recv_addr]) <= 8) {
 	/* It's after the current sequence number, but within 8.  We
            move the sequence number forward. */
-	lan->recv_msg_map <<= seq - lan->inbound_seq_num;
-	lan->recv_msg_map |= 1;
-	lan->inbound_seq_num = seq;
-    } else if ((lan->inbound_seq_num - seq) <= 8) {
+	lan->recv_msg_map[recv_addr] <<= seq - lan->inbound_seq_num[recv_addr];
+	lan->recv_msg_map[recv_addr] |= 1;
+	lan->inbound_seq_num[recv_addr] = seq;
+    } else if ((lan->inbound_seq_num[recv_addr] - seq) <= 8) {
 	/* It's before the current sequence number, but within 8. */
-	uint8_t bit = 1 << (lan->inbound_seq_num - seq);
-	if (lan->recv_msg_map & bit) {
+	uint8_t bit = 1 << (lan->inbound_seq_num[recv_addr] - seq);
+	if (lan->recv_msg_map[recv_addr] & bit) {
 	    /* We've already received the message, so discard it. */
 	    if (DEBUG_MSG)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
 	    goto out_unlock2;
 	}
 
-	lan->recv_msg_map |= bit;
+	lan->recv_msg_map[recv_addr] |= bit;
     } else {
 	/* It's outside the current sequence number range, discard
 	   the packet. */
@@ -1850,6 +1861,7 @@ data_handler(int            fd,
 
 static int
 handle_msg_send(lan_timer_info_t      *info,
+		int                   addr_num,
 		ipmi_addr_t           *addr,
 		unsigned int          addr_len,
 		ipmi_msg_t            *msg,
@@ -1885,6 +1897,7 @@ handle_msg_send(lan_timer_info_t      *info,
 
     info->seq = seq;
     lan->seq_table[seq].inuse = 1;
+    lan->seq_table[seq].addr_num = addr_num;
     lan->seq_table[seq].rsp_handler = rsp_handler;
     lan->seq_table[seq].rsp_data = rsp_data;
     lan->seq_table[seq].data2 = data2;
@@ -1913,8 +1926,13 @@ handle_msg_send(lan_timer_info_t      *info,
 
     lan->last_seq = seq;
 
-    rv = lan_send(lan, ipmi_addr_get_lun(addr), seq, msg,
-		  &lan->seq_table[seq].last_ip_num);
+    if (addr_num >= 0) {
+	rv = lan_send_addr(lan, ipmi_addr_get_lun(addr), seq, msg, addr_num);
+	lan->seq_table[seq].last_ip_num = addr_num;
+    } else {
+	rv = lan_send(lan, ipmi_addr_get_lun(addr), seq, msg,
+		      &(lan->seq_table[seq].last_ip_num));
+    }
     if (rv) {
 	int err;
 
@@ -1934,6 +1952,65 @@ handle_msg_send(lan_timer_info_t      *info,
     }
  out:
     ipmi_unlock(lan->seq_num_lock);
+    return rv;
+}
+
+static int
+lan_send_command_forceip(ipmi_con_t            *ipmi,
+			 int                   addr_num,
+			 ipmi_addr_t           *addr,
+			 unsigned int          addr_len,
+			 ipmi_msg_t            *msg,
+			 ipmi_ll_rsp_handler_t rsp_handler,
+			 void                  *rsp_data,
+			 void                  *data2,
+			 void                  *data3)
+{
+    lan_timer_info_t *info;
+    lan_data_t       *lan;
+    int              rv;
+    /* We store the address number in data4. */
+    void             *data4 = (void *) (long) addr_num;
+
+
+    lan = (lan_data_t *) ipmi->con_data;
+
+    if (addr_len > sizeof(ipmi_addr_t))
+	return EINVAL;
+
+    if (msg->data_len > IPMI_MAX_MSG_LENGTH)
+	return EINVAL;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    /* Put it in the list first. */
+    info->ipmi = ipmi;
+    info->cancelled = 0;
+
+    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(info->timer));
+    if (rv) {
+	ipmi_mem_free(info);
+	return rv;
+    }
+
+    ipmi_lock(lan->seq_num_lock);
+
+    rv = handle_msg_send(info, addr_num, addr, addr_len, msg, rsp_handler,
+			 rsp_data, data2, data3, data4);
+    if (rv) {
+	if (info->cancelled)
+	    /* The timer couldn't be stopped, so don't let the data be
+	       freed. */
+	    info = NULL;
+	else
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+    }
+
+    ipmi_unlock(lan->seq_num_lock);
+    if ((info) && (rv))
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -1991,8 +2068,8 @@ lan_send_command(ipmi_con_t            *ipmi,
 	    return rv;
 	}
 
-	rv = handle_msg_send(info, addr, addr_len, msg, rsp_handler, rsp_data,
-			     data2, data3, data4);
+	rv = handle_msg_send(info, -1, addr, addr_len, msg, rsp_handler,
+			     rsp_data, data2, data3, data4);
     } else {
 	ipmi_lock(lan->msg_queue_lock);
 	if (QUEUE_NEXT(lan->next_msg) == lan->curr_msg) {
@@ -2199,7 +2276,7 @@ auth_free(void *info, void *data)
 
 /* Send the final close session to shut the connection down. */
 static void
-send_close_session(ipmi_con_t *ipmi, lan_data_t *lan)
+send_close_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     ipmi_msg_t                   msg;
     unsigned char                data[4];
@@ -2208,8 +2285,8 @@ send_close_session(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.cmd = IPMI_CLOSE_SESSION_CMD;
     msg.data_len = 4;
     msg.data = data;
-    ipmi_set_uint32(data, lan->session_id);
-    lan_send_addr(lan, 0, 0, &msg, lan->curr_ip_addr);
+    ipmi_set_uint32(data, lan->session_id[addr_num]);
+    lan_send_addr(lan, 0, 0, &msg, addr_num);
 }
 
 static int
@@ -2238,7 +2315,8 @@ lan_close_connection(ipmi_con_t *ipmi)
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
 
-    send_close_session(ipmi, lan);
+    for (i=0; i<lan->num_ip_addr; i++)
+	send_close_session(ipmi, lan, i);
 
     ipmi_lock(lan->msg_queue_lock);
     for (i=lan->curr_msg; i!=lan->next_msg; i=lan->curr_msg) {
@@ -2327,12 +2405,22 @@ handle_connected(ipmi_con_t *ipmi, int err)
     int        i;
 
     if (lan->con_change_handler) {
-	/* Report everything up. */
-	for (i=0; i<lan->num_ip_addr; i++)
-	{
-	    if (lan->ip_working[i])
-		lan->con_change_handler(ipmi, err, i, lan->connected,
-					lan->con_change_cb_data);
+	if (err) {
+	    /* Report everything that is down. */
+	    for (i=0; i<lan->num_ip_addr; i++)
+	    {
+		if (!lan->ip_working[i])
+		    lan->con_change_handler(ipmi, err, i, lan->connected,
+					    lan->con_change_cb_data);
+	    }
+	} else {
+	    /* Report everything that is up. */
+	    for (i=0; i<lan->num_ip_addr; i++)
+	    {
+		if (lan->ip_working[i])
+		    lan->con_change_handler(ipmi, err, i, lan->connected,
+					    lan->con_change_cb_data);
+	    }
 	}
     }
 }
@@ -2351,7 +2439,7 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 }
 
 static void
-finish_connection(ipmi_con_t *ipmi, lan_data_t *lan)
+finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     lan->connected = 1;
     if (! lan->initialized) {
@@ -2382,7 +2470,7 @@ finish_connection(ipmi_con_t *ipmi, lan_data_t *lan)
 	    return;
 	}
     } else {
-	connection_up(lan, lan->curr_ip_addr, 1);
+	connection_up(lan, addr_num, 1);
     }
 }
 
@@ -2408,6 +2496,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 		 void         *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        addr_num = (long) cb_data;
 
     if (err) {
 	handle_connected(ipmi, err);
@@ -2416,7 +2505,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 
     lan->slave_addr = ipmb_addr;
     lan->is_active = active;
-    finish_connection(ipmi, lan);
+    finish_connection(ipmi, lan, addr_num);
     if (lan->ipmb_addr_handler)
 	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active,
 			       lan->ipmb_addr_cb_data);
@@ -2432,10 +2521,11 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	      void         *rsp_data3,
 	      void         *rsp_data4)
 {
-    lan_data_t        *lan = (lan_data_t *) ipmi->con_data;
-    int               err;
-    unsigned int      manufacturer_id;
-    unsigned int      product_id;
+    lan_data_t   *lan = (lan_data_t *) ipmi->con_data;
+    int          err;
+    unsigned int manufacturer_id;
+    unsigned int product_id;
+    int          addr_num = (long) rsp_data4;
 
     if (msg->data[0] != 0) {
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
@@ -2452,17 +2542,23 @@ handle_dev_id(ipmi_con_t   *ipmi,
 		       | (msg->data[9] << 16));
     product_id = msg->data[10] | (msg->data[11] << 8);
 
-    err = ipmi_check_oem_conn_handlers(ipmi, manufacturer_id, product_id);
-    if (err)
-	goto out_err;
-
-    if (ipmi->get_ipmb_addr) {
-	/* We have a way to fetch the IPMB address, do so. */
-	err = ipmi->get_ipmb_addr(ipmi, handle_ipmb_addr, NULL);
+    if (!lan->oem_conn_handlers_called) {
+	lan->oem_conn_handlers_called = 1;
+	err = ipmi_check_oem_conn_handlers(ipmi, manufacturer_id, product_id);
 	if (err)
 	    goto out_err;
-    } else
-	finish_connection(ipmi, lan);
+
+	if (ipmi->get_ipmb_addr) {
+	    /* We have a way to fetch the IPMB address, do so. */
+	    err = ipmi->get_ipmb_addr(ipmi, handle_ipmb_addr,
+				      (void *) (long) addr_num);
+	    if (err)
+		goto out_err;
+	} else
+	    finish_connection(ipmi, lan, addr_num);
+    } else {
+	finish_connection(ipmi, lan, addr_num);
+    }
     return;
 
  out_err:
@@ -2470,7 +2566,7 @@ handle_dev_id(ipmi_con_t   *ipmi,
 }
 
 static int
-send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan)
+send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     ipmi_msg_t			 msg;
     int				 rv;
@@ -2485,9 +2581,10 @@ send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.data = NULL;
     msg.data_len = 0;
 
-    rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, handle_dev_id,
-			  NULL, NULL, NULL, NULL);
+    rv = lan_send_command_forceip(ipmi, addr_num,
+				  (ipmi_addr_t *) &addr, sizeof(addr),
+				  &msg, handle_dev_id,
+				  NULL, NULL, NULL);
     return rv;
 }
 
@@ -2502,6 +2599,7 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     int        rv;
+    int        addr_num = (long) data4;
 
     if (msg->data[0] != 0) {
         handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
@@ -2519,13 +2617,13 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 	return;
     }
 
-    rv = send_get_dev_id(ipmi, lan);
+    rv = send_get_dev_id(ipmi, lan, addr_num);
     if (rv)
         handle_connected(ipmi, rv);
 }
 
 static int
-send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan)
+send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     unsigned char		 data[IPMI_MAX_MSG_LENGTH];
     ipmi_msg_t			 msg;
@@ -2543,9 +2641,10 @@ send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.data = data;
     msg.data_len = 1;
 
-    rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, session_privilege_set,
-			  NULL, NULL, NULL, NULL);
+    rv = lan_send_command_forceip(ipmi, addr_num,
+				  (ipmi_addr_t *) &addr, sizeof(addr),
+				  &msg, session_privilege_set,
+				  NULL, NULL, NULL);
     return rv;
 }
 
@@ -2560,6 +2659,7 @@ static void session_activated(ipmi_con_t   *ipmi,
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     int        rv;
+    int        addr_num = (long) data4;
 
 
     if (msg->data[0] != 0) {
@@ -2572,25 +2672,25 @@ static void session_activated(ipmi_con_t   *ipmi,
 	return;
     }
 
-    lan->working_authtype = msg->data[1] & 0xf;
-    if ((lan->working_authtype != 0)
-	&& (lan->working_authtype != lan->authtype))
+    lan->working_authtype[addr_num] = msg->data[1] & 0xf;
+    if ((lan->working_authtype[addr_num] != 0)
+	&& (lan->working_authtype[addr_num] != lan->authtype))
     {
 	/* Eh?  It didn't return a valid authtype. */
         handle_connected(ipmi, EINVAL);
 	return;
     }
 
-    lan->session_id = ipmi_get_uint32(msg->data+2);
-    lan->outbound_seq_num = ipmi_get_uint32(msg->data+6);
+    lan->session_id[addr_num] = ipmi_get_uint32(msg->data+2);
+    lan->outbound_seq_num[addr_num] = ipmi_get_uint32(msg->data+6);
 
-    rv = send_set_session_privilege(ipmi, lan);
+    rv = send_set_session_privilege(ipmi, lan, addr_num);
     if (rv)
         handle_connected(ipmi, rv);
 }
 
 static int
-send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan)
+send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     unsigned char                data[IPMI_MAX_MSG_LENGTH];
     ipmi_msg_t                   msg;
@@ -2604,16 +2704,17 @@ send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan)
     data[0] = lan->authtype;
     data[1] = lan->privilege;
     memcpy(data+2, lan->challenge_string, 16);
-    ipmi_set_uint32(data+18, lan->inbound_seq_num);
+    ipmi_set_uint32(data+18, lan->inbound_seq_num[addr_num]);
 
     msg.cmd = IPMI_ACTIVATE_SESSION_CMD;
     msg.netfn = IPMI_APP_NETFN;
     msg.data = data;
     msg.data_len = 22;
 
-    rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, session_activated,
-			  NULL, NULL, NULL, NULL);
+    rv = lan_send_command_forceip(ipmi, addr_num,
+				  (ipmi_addr_t *) &addr, sizeof(addr),
+				  &msg, session_activated,
+				  NULL, NULL, NULL);
     return rv;
 }
 
@@ -2626,8 +2727,9 @@ static void challenge_done(ipmi_con_t   *ipmi,
 			   void         *data3,
 			   void         *data4)
 {
-    lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
-    int           rv;
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        rv;
+    int        addr_num = (long) data4;
 
 
     if (msg->data[0] != 0) {
@@ -2641,24 +2743,24 @@ static void challenge_done(ipmi_con_t   *ipmi,
     }
 
     /* Get the temporary session id. */
-    lan->session_id = ipmi_get_uint32(msg->data+1);
+    lan->session_id[addr_num] = ipmi_get_uint32(msg->data+1);
 
-    lan->outbound_seq_num = 0;
-    lan->working_authtype = lan->authtype;
+    lan->outbound_seq_num[addr_num] = 0;
+    lan->working_authtype[addr_num] = lan->authtype;
     memcpy(lan->challenge_string, msg->data+5, 16);
 
     /* Get a random number of the other end to start sending me sequence
        numbers at, but don't let it be zero. */
-    while (lan->inbound_seq_num == 0) {
+    while (lan->inbound_seq_num[addr_num] == 0) {
 	rv = ipmi->os_hnd->get_random(ipmi->os_hnd,
-				      &(lan->inbound_seq_num), 4);
+				      &(lan->inbound_seq_num[addr_num]), 4);
 	if (!rv) {
 	    handle_connected(ipmi, rv);
 	    return;
 	}
     }
 
-    rv = send_activate_session(ipmi, lan);
+    rv = send_activate_session(ipmi, lan, addr_num);
     if (rv) {
         handle_connected(ipmi, rv);
 	return;
@@ -2667,7 +2769,7 @@ static void challenge_done(ipmi_con_t   *ipmi,
 }
 
 static int
-send_challenge(ipmi_con_t *ipmi, lan_data_t *lan)
+send_challenge(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     unsigned char                data[IPMI_MAX_MSG_LENGTH];
     ipmi_msg_t                   msg;
@@ -2686,8 +2788,9 @@ send_challenge(ipmi_con_t *ipmi, lan_data_t *lan)
     memcpy(data+1, lan->username, IPMI_USERNAME_MAX);
     msg.data_len += IPMI_USERNAME_MAX;
 
-    rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, challenge_done, NULL, NULL, NULL, NULL);
+    rv = lan_send_command_forceip(ipmi, addr_num,
+				  (ipmi_addr_t *) &addr, sizeof(addr),
+				  &msg, challenge_done, NULL, NULL, NULL);
     return rv;
 }
 
@@ -2701,8 +2804,9 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	      void         *data3,
 	      void         *data4)
 {
-    lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
-    int           rv;
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        rv;
+    int        addr_num = (long) data4;
 
 
     if ((msg->data[0] != 0) || (msg->data_len < 9)) {
@@ -2716,7 +2820,7 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	return;
     }
 
-    rv = send_challenge(ipmi, lan);
+    rv = send_challenge(ipmi, lan, addr_num);
     if (rv) {
         ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Unable to send challenge command: 0x%x", rv);
@@ -2725,7 +2829,7 @@ auth_cap_done(ipmi_con_t   *ipmi,
 }
 
 static int
-send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
+send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     unsigned char                data[IPMI_MAX_MSG_LENGTH];
     ipmi_msg_t                   msg;
@@ -2743,8 +2847,9 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.data = data;
     msg.data_len = 2;
 
-    rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, auth_cap_done, NULL, NULL, NULL, NULL);
+    rv = lan_send_command_forceip(ipmi, addr_num,
+				  (ipmi_addr_t *) &addr, sizeof(addr),
+				  &msg, auth_cap_done, NULL, NULL, NULL);
     return rv;
 }
 
@@ -2765,6 +2870,7 @@ lan_start_con(ipmi_con_t *ipmi)
     lan_data_t     *lan = (lan_data_t *) ipmi->con_data;
     int            rv;
     struct timeval timeout;
+    int            i;
 
     /* Start the timer to audit the connections. */
     lan->audit_info = ipmi_mem_alloc(sizeof(*(lan->audit_info)));
@@ -2793,9 +2899,11 @@ lan_start_con(ipmi_con_t *ipmi)
 	goto out_err;
     }
 
-    rv = send_auth_cap(ipmi, lan);
-    if (rv)
-	goto out_err;
+    for (i=0; i<lan->num_ip_addr; i++) {
+	rv = send_auth_cap(ipmi, lan, i);
+	if (rv)
+	    goto out_err;
+    }
 
  out_err:
     return rv;
