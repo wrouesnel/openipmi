@@ -8,6 +8,8 @@
 	enable/disable of a user (done through the set password command,
 	for some strange reason).
 
+	* lib/sensor.c: Fix a missing sensor in a callback.
+
 2004-12-22 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h,	include/OpenIPMI/ipmi_user.h:

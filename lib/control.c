@@ -572,7 +572,7 @@ control_rsp_handler(ipmi_mc_t  *mc,
 		 "Could not convert control id to a pointer",
 		 MC_NAME(mc));
 	if (info->__rsp_handler)
-	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
+	    info->__rsp_handler(control, rv, NULL, info->__cb_data);
     }
 }
 			 
