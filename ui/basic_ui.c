@@ -48,9 +48,20 @@ ipmi_args_t *con_parms[2];
 ipmi_con_t  *con[2];
 int         last_con = 0;
 
+void
+ui_shutdown_main(void)
+{
+    int i;
+    for (i=0; i<2; i++) {
+	if (con_parms[i])
+	    ipmi_free_args(con_parms[i]);
+    }
+}
+
 /* This is used by the UI to reconnect after a connection has been
    disconnected. */
-void ui_reconnect(void)
+void
+ui_reconnect(void)
 {
     int        rv;
     int        i;

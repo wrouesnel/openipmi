@@ -760,6 +760,8 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->cb_data = cb_data;
     pet->in_progress = 0;
 
+    /* Set up all the data we want in the PEF and LANPARMs
+       configuration. */
     pet->pef_check[0].conf_num = IPMI_PEFPARM_CONTROL;
     pet->pef_check[0].data_len = 1;
     pet->pef_check[0].data[0] = 1;

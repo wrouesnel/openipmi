@@ -1,5 +1,10 @@
 2004-01-05 Corey Minyard <cminyard@mvista.com> 
 
+	* ui/ui.c, ui/basic_ui.c: Added a way to free things allocated in
+	the main routine.
+
+2004-01-05 Corey Minyard <cminyard@mvista.com> 
+
 	* include/OpenIPMI/ipmi_int.h, lib/ipmi.c: Added a way for
 	internal code to fetch the global OS handler.
 

@@ -504,6 +504,8 @@ ui_log(char *format, ...)
     va_end(ap);
 }
 
+void ui_shutdown_main(void);
+
 void
 leave(int rv, char *format, ...)
 {
@@ -534,6 +536,8 @@ leave(int rv, char *format, ...)
     va_start(ap, format);
     vfprintf(stderr, format, ap);
     va_end(ap);
+
+    ui_shutdown_main();
 
     ipmi_debug_malloc_cleanup();
     exit(rv);
