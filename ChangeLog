@@ -1,4 +1,14 @@
 
+2003-02-21 Corey Minyard <cminyard@mvista.com>
+
+	* sel.c: Fixed a missing unlock.
+
+	* sel.c: Modified the way individual record deletes occur and
+	fetches occur to use an opq.  This way, reservations won't get
+	mixed up.  Also modified individual deletes to check the value of
+	the event before they actually delete it, to make 100% sure they
+	are deleting the right event.
+
 2003-02-20 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Fixed a memory leak with controls.
