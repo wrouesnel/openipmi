@@ -44,6 +44,28 @@
 void posix_vlog(char *format,
 		enum ipmi_log_type_e log_type,
 		va_list ap);
+
+/* Allocate an OS handler.  The selector is not set yet, you must set
+   it with the x_set_sel() call.  It is something like this:
+
+    os_hnd = ipmi_posix_get_os_handler();
+    if (!os_hnd) {
+	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
+	exit(1);
+    }
+
+    sel_alloc_selector(os_hnd, &sel);
+
+    ipmi_posix_os_handler_set_sel(os_hnd, sel);
+
+    ipmi_init(os_hnd);
+
+   I would prefer a cleaner implementation, but the selector code needs
+   locks that the OS handler provides, the OS handler needs the selector
+   services, and the user may need to allocate their own selector for
+   handling some things.
+*/
+
 os_handler_t *ipmi_posix_get_os_handler(void);
 void ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel);
 

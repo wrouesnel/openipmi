@@ -799,7 +799,7 @@ and supply it to the IPMI code.
 For *nix systems, This file a default mechanism for handling many of the
 os-specific handler operations.
 
-@item @file{log.h}
+@item @file{ipmi_log.h}
 Holds definitions for the logging interface.
 
 @end table
@@ -877,6 +877,12 @@ This defines internal interfaces for the sdr repostiory.
 @item @file{ipmi_sensor.h}
 This defines internal interfaces for sensors.
 
+@item @file{ipmi_locks.h}
+This defines internal interfaces for locks.
+
+@item @file{ipmi_posix.h}
+This defines some POSIX OS handlers.
+
 @end table
 
 @node    Initialization, The Connection, Include Files, Using OpenIPMI
@@ -886,6 +892,11 @@ To initialize the OpenIPMI library, you must call @code{ipmi_init()} and
 pass in an @var{os_handler_t} in to it.  OpenIPMI will use this OS
 handler for global operations.  This @emph{must} be done before any
 other OpenIPMI calls.
+
+Several OS handlers are pre-defined for you.  You can use the handlers
+defined in @file{ipmi_posix.h} on POSIX-compliant systems.  A handler
+is defined for unthreaded systems and another for threaded systems.
+These use the selector code defined in @file{selector.h}.
 
 If you need to initialize any OEM libraries, do it right after the call
 to @code{ipmi_init()}.
