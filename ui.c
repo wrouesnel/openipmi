@@ -1883,7 +1883,6 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
     char         *type;
     char         *on_off;
     int          val;
-    unsigned int mask;
 
     type = strtok_r(NULL, " \t\n", toks);
     if (!type) {
@@ -1905,18 +1904,18 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
     }
 
     if (strcmp(type, "msg") == 0) {
-	mask = DEBUG_MSG_BIT;
+	if (val) DEBUG_MSG_ENABLE(); else DEBUG_MSG_DISABLE();
     } else if (strcmp(type, "rawmsg") == 0) {
-	mask = DEBUG_RAWMSG_BIT;
+	if (val) DEBUG_RAWMSG_ENABLE(); else DEBUG_RAWMSG_DISABLE();
+    } else if (strcmp(type, "locks") == 0) {
+	if (val) DEBUG_LOCKS_ENABLE(); else DEBUG_LOCKS_DISABLE();
+    } else if (strcmp(type, "events") == 0) {
+	if (val) DEBUG_EVENTS_ENABLE(); else DEBUG_EVENTS_DISABLE();
     } else {
 	wprintw(cmd_win, "Invalid debug type specified: '%s'\n", type);
 	goto out;
     }
 
-    if (val)
-	__ipmi_log_mask |= mask;
-    else
-	__ipmi_log_mask &= ~mask;
  out:
     return 0;
 }

@@ -115,18 +115,23 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_MSG_BIT		(1 << 0)
 #define DEBUG_RAWMSG_BIT	(1 << 1)
 #define DEBUG_LOCKS_BIT		(1 << 2)
+#define DEBUG_EVENTS_BIT	(1 << 3)
 
 #define DEBUG_MSG	(__ipmi_log_mask & DEBUG_MSG_BIT)
-#define DEBUG_MSG_ENABLE() __ipmi_log_msg |= DEBUG_MSG
-#define DEBUG_MSG_DISABLE() __ipmi_log_msg &= ~DEBUG_MSG
+#define DEBUG_MSG_ENABLE() __ipmi_log_mask |= DEBUG_MSG
+#define DEBUG_MSG_DISABLE() __ipmi_log_mask &= ~DEBUG_MSG
 
 #define DEBUG_RAWMSG	(__ipmi_log_mask & DEBUG_RAWMSG_BIT)
-#define DEBUG_RAWMSG_ENABLE() __ipmi_log_msg |= DEBUG_RAWMSG
-#define DEBUG_RAWMSG_DISABLE() __ipmi_log_msg &= ~DEBUG_RAWMSG
+#define DEBUG_RAWMSG_ENABLE() __ipmi_log_mask |= DEBUG_RAWMSG
+#define DEBUG_RAWMSG_DISABLE() __ipmi_log_mask &= ~DEBUG_RAWMSG
 
 #define DEBUG_LOCKS	(__ipmi_log_mask & DEBUG_LOCKS_BIT)
-#define DEBUG_LOCKS_ENABLE() __ipmi_log_msg |= DEBUG_LOCKS
-#define DEBUG_LOCKS_DISABLE() __ipmi_log_msg &= ~DEBUG_LOCKS
+#define DEBUG_LOCKS_ENABLE() __ipmi_log_mask |= DEBUG_LOCKS
+#define DEBUG_LOCKS_DISABLE() __ipmi_log_mask &= ~DEBUG_LOCKS
+
+#define DEBUG_EVENTS	(__ipmi_log_mask & DEBUG_LOCKS_BIT)
+#define DEBUG_EVENTS_ENABLE() __ipmi_log_mask |= DEBUG_LOCKS
+#define DEBUG_EVENTS_DISABLE() __ipmi_log_mask &= ~DEBUG_LOCKS
 
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */

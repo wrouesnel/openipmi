@@ -531,6 +531,19 @@ system_event_handler(ipmi_mc_t    *bmc,
     ipmi_sensor_id_t        id;
     event_sensor_info_t     info;
 
+    if (DEBUG_EVENTS) {
+	ipmi_log(IPMI_LOG_DEBUG,
+		 "Event recid:%4.4x type:%2.2x:"
+		 " %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
+		 " %2.2x %2.2x %2.2x %2.2x %2.2x",
+		 event->record_id, event->type,
+		 event->data[0], event->data[1], event->data[2],
+		 event->data[3], event->data[4], event->data[5],
+		 event->data[6], event->data[7], event->data[8],
+		 event->data[9], event->data[10], event->data[11],
+		 event->data[12]);
+    }
+
     /* Let the OEM handler have a go at it first. */
     if (bmc->bmc->oem_event_handler) {
 	if (bmc->bmc->oem_event_handler(bmc,
