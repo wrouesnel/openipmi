@@ -165,7 +165,11 @@ int ipmi_bmc_del_log_by_recid(ipmi_mc_t    *bmc,
 			      ipmi_bmc_cb  done_handler,
 			      void         *cb_data);
 
-/* You can also scan the current set of logs stored in the system. */
+/* You can also scan the current set of logs stored in the system.
+   They return an error if the SEL is empty, or if you try to go past
+   the last or before the first log.  The first and last function
+   return the log, the next and prev function take the current log in
+   "log" and return the next or previous log in "log". */
 int ipmi_bmc_first_log(ipmi_mc_t *bmc, ipmi_log_t *log);
 int ipmi_bmc_last_log(ipmi_mc_t *bmc, ipmi_log_t *log);
 int ipmi_bmc_next_log(ipmi_mc_t *bmc, ipmi_log_t *log);
@@ -680,7 +684,8 @@ int ipmi_states_get(ipmi_sensor_t       *sensor,
 /*
  * Controls are lights, relays, displays, alarms, or other things of
  * that nature.  Basically, output devices.  IPMI does not define
- * these, but they are pretty fundamental for system management.  */
+ * these, but they are pretty fundamental for system management.
+ */
 int ipmi_control_get_type(ipmi_control_t *control);
 int ipmi_control_get_id_length(ipmi_control_t *control);
 void ipmi_control_get_id(ipmi_control_t *control, char *id, int length);

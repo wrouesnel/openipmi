@@ -15,9 +15,13 @@ Copyright @copyright{} 2002 MontaVista Software
 
 @node    Top,       Intro to IPMI,         , (dir)
 
+This document describes OpenIPMI, and IPMI abstraction layer that makes
+IPMI easier to use, and allows OEM vendors to supply plugins to support
+their special sensors and controls.
+
 @menu
 * Intro to IPMI::     A little about IPMI
-* Concept Index::     This index has two entries.
+* Concept Index::     
 * OpenIPMI Concepts::
 * Using OpenIPMI::
 * OpenIPMI Internal Interfaces::
@@ -464,6 +468,7 @@ understand the include files.
 * Entities::
 * Sensors::
 * Controls::
+* The System Event Log (SEL)::
 @end menu
 
 @node    Include Files, Initialization, Using OpenIPMI, Using OpenIPMI
@@ -479,7 +484,8 @@ everything will include this.  It includes @file{ipmi_types.h} and
 @file{ipmi_bits.h}, too, so you don't have to include those.
 
 @item @file{ipmi_auth.h}
-The file holding information about athentication algorithms.
+The file holding information about athentication algorithms.  You need
+this if dealing with an authenticated interface.
 
 @item @file{ipmi_bits.h}
 Various values, mostly for sensors, used by the user.  @file{ipmiif.h}
@@ -492,9 +498,6 @@ so you generally don't have to include it explicitly.
 @item @file{ipmi_err.h}
 Error values, both IPMI and system, as well as macros for interpreting
 these.
-
-@item @file{ipmi_sel.h}
-Used to access the system event log for the system.
 
 @item @file{os_handler.h}
 The os-specific handler types are defined here.  You must implement this
@@ -539,6 +542,9 @@ This defines various IPMI messages.
 
 @item @file{ipmi_oem.h}
 This defines interfaces that OEM code can tie into.
+
+@item @file{ipmi_sel.h}
+This defines the internal interfaces for the SEL.
 
 @item @file{ipmi_sdr.h}
 This defines internal interfaces for the sdr repostiory.
@@ -621,7 +627,14 @@ callback.
 
 Sensors, of course, are what IPMI is mostly about.  A sensor monitors
 a characteristic of an entity.  IPMI specifies two main classes of
-entities: threshold and discrete.
+entities: threshold and discrete, described individually later.
+
+It is important to note that all operations on a sensor are serialized,
+each sensor has a queue of operations to perform, and it will only
+perform one operation at a time on a sensor.  This is important, some
+operations may require multiple messages to complete, and if you
+intermix them it could cause confusion.  It also makes management of the
+sensor easier for the user.
 
 @menu
 * Threshold Sensors::
@@ -640,7 +653,8 @@ Then a threshold is exceeded, some sensors can send an event to the BMC.
 Threshold sensors, unfortunately, are exceedingly complicated.  They
 have a large number of settings, many options for conversion between the
 discrete values and real values, and may support many optional
-settings.
+settings.  OpenIPMI attempts to hide much of this complexity, but it can
+only go so far.
 
 IPMI threshold sensors have the following settings:
 @table @samp
@@ -759,8 +773,146 @@ is being asserted or deasserted) is present.  The offset specifies the
 specific state or threshold that caused the event to be asserted.  If
 @var{value_present} is true, then the value was passed in the 
 
-@node    Controls, , Sensors, Using OpenIPMI
+@node    Controls, The System Event Log (SEL), Sensors, Using OpenIPMI
 @section Controls
+
+As mentioned before, the IPMI standard does not currently define any way
+to control output devices.  Of course, this is a huge hole, and is
+likely to be filled in the future.  Until then, OpenIPMI defines an
+abstraction for handling output devices.  This abstraction is hopefully
+good enough for whatever the IPMI committee comes up with in the future,
+but there will certainly be changes when it is specified.
+
+Controls are input/output devices.  They currently do not generate any
+type of events, they are values which can be set and (optionally) read.
+These are relatively simple devices currently, although the IPMI
+committee is sure to complicate things in the future.
+
+It is important to note that all operations on a control are serialized,
+each control has a queue of operations to perform, and it will only
+perform one operation at a time on a control.  This is important, some
+operations may require multiple messages to complete, and if you
+intermix them it could cause confusion.  It also makes management of the
+control easier for the user.
+
+Unfortunately, some hardware does not have individually settable
+devices, a set of devices may all be set at once.  This sometimes makes
+sense, but usually makes things difficult for the user.  There's not
+much OpenIPMI can do about this but pass the difficulty on up to the
+user.  Thus, each control may have one or more instances of a device it
+controls.  All these devices must be set at once, you cannot
+individually set the devices inside one control.
+
+Most controls have individually settable values that are integers.  Some
+controls, namely displays and identifiers, have special needs and are
+thus represented specially.
+
+@menu
+* Simple Controls::
+* Lights::
+* Fan Speed::
+* Identifiers::
+* Displays::
+@end menu
+
+@node    Simple Controls, Lights, Controls, Controls
+@subsection Simple Controls
+
+Simple controls are on/off devices, the values provided are binary
+values.  They are different because they control different types of
+devices.  These are:
+
+@table @samp
+@item Relays - Generally telco relays on a chassis, but any type of relay.
+@item Alarms - Visual or audible devices to get a user's attention.
+@item Reset - The reset line on a board or device.
+@item Power - The power output from a power supply, or power input to a
+        device.
+@end table
+
+@node    Lights, Fan Speed, Simple Controls, Controls
+@subsection Lights
+
+Lights are slightly more complicated than simple devices.  Lights have
+colors and blinking settings that must be represented.  Each setting is
+represented by a single integer value, and a setting is a series of one or
+more transitions the light will go through.  Each transition has a color
+and duration.  And, of course, more than one light may be supported in a
+single control.
+
+The @var{ipmi_control_get_num_light_settings} function returns the
+number of settings a specific light has.  These are defined to be
+continuous, if it reports 6, for instance, then the light will have
+settings 0-5.
+
+The @var{ipmi_control_get_num_light_transitions} function returns the
+number of transitions for a setting.
+
+The @var{ipmi_control_get_light_color} function returns the color a
+light will be at a specific setting.
+
+The @var{ipmi_control_get_light_color_time} function returns the time in
+milliseconds the transition is valid, before it goes to the next
+transition.  This is used to represent blinking modes.  For instance, if
+an LED in setting 4 blinks red for 100ms, green for 200ms, then off for
+a second, then setting 4 will have 3 transitions, the first will be red
+with 100, the second will be green with 200, the last will be black with
+1000.
+
+If this seems complicated, well, it is.  Sorry, there's a lot to
+represent here.
+
+@node    Fan Speed, Identifiers, Lights, Controls
+@subsection Fan Speed
+
+Fan speed allows the user to control the speed of a fan.  FIXME - This
+is still TBD, need ways to find the min/max values and number of
+settings.
+
+@node    Identifiers, Displays, Fan Speed, Controls
+@subsection Identifiers
+
+Identifiers are things on a device that identify characteristics of that
+device.  For instance, a unique serial number or a device type would be
+identifiers.  These are represented as an array of unsigned characters,
+as some identifiers may be very large.  The length may be variable,
+too.
+
+The function @var{ipmi_control_identifier_get_val} and
+@var{ipmi_control_identifier_set_val} let you read and (optionally)
+change the value of an identifier.  If you need to know the maximum
+length, the function @var{ipmi_control_identifier_get_max_length}
+returns that.  The actual length is returned in the reading when you get
+it.
+
+@node    Displays, , Identifiers, Controls
+@subsection Displays
+
+FIXME - displays are TBD.
+
+@node    The System Event Log (SEL), , Controls, Using OpenIPMI
+@section The System Event Log (SEL)
+
+The SEL on a system receives all the events from a system and stores
+them in a non-volatile store.  Depending on the capabilities of the BMC,
+these may also have been received via an event message from the system
+event queue.  OpenIPMI manages the received events, scans the SEL
+periodically, and delivers the messages.  It discards duplicates.
+Events that OpenIPMI can correlate to a specific sensor or control will
+be delivered to the user through that sensor/control.  Events it cannot
+interpret properly will be delivered through a generic interface for the
+BMC.
+
+OpenIPMI keeps a local copy of the SEL in memory, but it doesn't
+currently use very efficient methods to manage it.  The user should
+receive the events and delete them in a timely manner to keep the SEL
+small.
+
+The @var{ipmi_register_for_events} function allows you to get the event
+OpenIPMI couldn't correlate to a sensor.  As well, the functions
+@var{ipmi_bmc_first_log}, @var{ipmi_bmc_last_log},
+@var{ipmi_bmc_next_log}, and @var{ipmi_bmc_prev_log} let you iterate
+through the logs in the local representation of the SEL.
 
 @node    OpenIPMI Internal Interfaces, How to Write OEM Plugins, Using OpenIPMI, Top
 @chapter OpenIPMI Internal Interfaces
