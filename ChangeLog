@@ -1,6 +1,8 @@
 
 2003-06-02 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 0.4.2.
+
 	* sensor.c: Moved the removal of the sensor from the entity to the
 	place of its final destruction, so the entity will exist during
 	callbacks related to destruction of the sensor.

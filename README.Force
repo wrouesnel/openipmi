@@ -1,0 +1,40 @@
+
+This package includes preliminary OEM support for Force Computers (TM)
+cards.  This is still somewhat experimental.
+
+This driver includes OEM handling for connections to Force CPCI
+systems.  It will automatically handle setting up the connections for
+you, you do not need to set up a card as the BMC any more.
+
+I have done most of my testing with the LAN server running on Force
+card over ethernet to my host machine, hooking to two card running the
+LAN server.
+
+The Force handling of BMCs is different than other systems.  You can
+set the MC on a Force card to be a BMC at address 0x20 or a "normal"
+MC.  The capabilities of the MC change depending on if it is a BMC or
+not.  Only the BMC can be an event receiver or SDR repository, for
+instance.  Any you can only have on BMC in a system at a time.
+
+OpenIPMI can automatically manage setting one of the Force cards to a
+BMC (OpenIPMI calls that "activating" the connection) upon connection,
+and when the "active" connection fails.  However, this means that the
+addresses changes from the PICMG specified address to the BMC address
+(and the card that becomes inactive will be set from the BMC address
+back to the PICMG address, if it is still active), and the
+capabilities will change, so the OpenIPMI MC will be destroyed and
+re-created (along with all the sensors and entities) for both the old
+and the new active connections.
+
+If Force ever allows a non-BMC device to be an event receiver and SDR
+repository, I'll change it to be an active-active connection, since
+the current kind of connection is difficult for OpenIPMI to handle
+properly.  I haven't thought of a nice "smooth" way to handle this
+type of interface.
+
+If you have a single connection to a Force system, it's not big deal,
+of course.  Your connection will be set to the BMC and everything will
+be happy.  This only affects dual connections.  Of course, if you
+connect two different OpenIPMI connections to two different cards,
+they will get into a war about who's connection is active, so you
+shouldn't do this.
