@@ -7,6 +7,7 @@
 	the ability to get the other information from the get user access
 	command.
 	* swig/perl/test_chan: Adjusted for the previous changes.
+	* cmdlang/cmd_mc.c, man/ipmi_cmdlang.7: ditto
 
 2005-01-03 Corey Minyard <cminyard@mvista.com> 
 

@@ -1417,6 +1417,15 @@ got_users(ipmi_mc_t        *mc,
     ipmi_cmdlang_lock(cmd_info);
     ipmi_cmdlang_out(cmd_info, "MC", mc_name);
     ipmi_cmdlang_out_int(cmd_info, "Channel", channel);
+    rv = ipmi_user_list_get_max_user(list, &val);
+    if (!rv)
+	ipmi_cmdlang_out_int(cmd_info, "Max User", val);
+    rv = ipmi_user_list_get_enabled_users(list, &val);
+    if (!rv)
+	ipmi_cmdlang_out_int(cmd_info, "Enabled Users", val);
+    rv = ipmi_user_list_get_fixed_users(list, &val);
+    if (!rv)
+	ipmi_cmdlang_out_int(cmd_info, "Fixed Users", val);
     for (i=0; i<count; i++) {
 	user = ipmi_user_list_get_user(list, i);
 	if (!user)
