@@ -1,4 +1,9 @@
-2004-06-16 Corey Minyard <cminyard@mvista.com> 
+2004-06-17 Philipp Matthias Hahn <pmhahn@titan.lahn.de>
+
+	* man/ipmi_ui.1, man/ipmicmd.1, man/ipmilan.8: Cleanups for the
+	man pages.
+
+2004-06-17 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c, lib/mc.c: Don't check the OEM handlers if the MC
 	is in used, wait until the MC is no longer in use and apply the

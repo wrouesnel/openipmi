@@ -5,11 +5,17 @@ ipmicmd \- An IPMI Command Interface
 
 .SH SYNOPSIS
 .B ipmicmd
-[\-k entry to execute] smi <smi num>
+.RB [ \-k
+.IR "entry-to-execute" ]
+.BI smi\  smi-num
 
 .B ipmicmd
-[\-k entry to execute] lan <ip addr> <port> [<ip addr2> <port 2>] 
-<auth> <privilege> <username> <password>
+.RB [ \-k
+.IR "entry-to-execute" ]
+.BI lan\  IP-addr
+.IR port\  [ IP-addr-2
+.IR port-2 ] 
+.I auth privilege username password
 
 .SH DESCRIPTION
 The
@@ -20,41 +26,41 @@ interfaces.
 
 .SH OPTIONS
 .TP
-.I "\-k entry-to-execute"
+.BI \-k\  entry-to-execute
 Execute a single command an exit.
 
 .TP
-.I "smi <num>"
+.I "smi-num"
 The SMI number to connect to, for systems with more than on system
-interface.  Generally, this is '0'.
+interface.  Generally, this is '\fB0\fP'.
 
 .TP
-.I "IP addr"
+.I "IP-addr"
 The IP address of the LAN interface.
 
 .TP
 .I "port"
-The UDP port of the LAN interface, general 623.
+The UDP port of the LAN interface, general \fB623\fP.
 
 .TP
-.I "ip addr 2"
+.I "IP-addr-2"
 Some systems support multiple IP connections, this specified the
 second address and is optional.  If specified, OpenIPMI will use both
 IP addresses and fail over to the working one if one of them fails.
 
 .TP
-.I "port 2"
-The port for the second IP connection, generally 623.
+.I "port-2"
+The port for the second IP connection, generally \fB623\fP.
 
 .TP
 .I "auth"
-The authorization to use for the connection, either "none",
-"straight", "md5", or "md2".
+The authorization to use for the connection, either "\fBnone\fP",
+"\fBstraight\fP", "\fBmd5\fP", or "\fBmd2\fP".
 
 .TP
 .I "privilege"
-The privilege to use for the connection, either "callback", "user",
-"operator", or "admin".  Note that some IPMI operations will fail
+The privilege to use for the connection, either "\fBcallback\fP", "\fBuser\fP",
+"\fBoperator\fP", or "\fBadmin\fP".  Note that some IPMI operations will fail
 without the correct privilege.
 
 .TP
@@ -73,41 +79,50 @@ Once up, you can execute commands in the user interface.  Note that
 commands and responses are asynchronous, you issue a command and the
 interface returns immediately.  When the response comes back, it will
 be dumped on your console.  That's a little strange looking, but IPMI
-is ansychronous underneath.  Note that the \-k option is synchronous,
+is ansychronous underneath.  Note that the \fB\-k\fP option is synchronous,
 it will wait for the response or a timeout before returning.
 
-.SS 0f <lun> <netfn> <cmd> [data1 [data2 ...]]
+.TP
+\fB0f\fP \fIlun\fP \fInetfn\fP \fIcmd\fP [\fIdata1\fP [\fIdata2\fP ...]]
 Send a command to the BMC you are connected to.
 
-.SS <channel> [ipmb] <IPMB addr> <lun> <netfn> <cmd> [data1 [data2 ...]]
-Send a command to a device on the IPMB bus.  The "ipmb" string is optional.
+.TP
+\fIchannel\fP [\fBipmb\fP] \fIIPMB-addr\fP \fIlun\fP \fInetfn\fP \fIcmd\fP [\fIdata1\fP [\fIdata2\fP ...]]
+Send a command to a device on the IPMB bus.  The "\fBipmb\fP" string is optional.
 
-.SS <channel> 00 <IPMB addr> <lun> <netfn> <cmd> [data1 [data2 ...]]
+.TP
+\fIchannel\fP \fB00\fP \fIIPMB-addr\fP \fIlun\fP \fInetfn\fP \fIcmd\fP [\fIdata1\fP [\fIdata2\fP ...]]
 Send a broadcast command to a device on the IPMB bus.
 
-.SS <channel> lan <handle> <remote swid> <local swid> <lun> <netfn> <cmd> [data1 [data2 ...]]
+.TP
+\fIchannel\fP \fBlan\fP \fIhandle\fP \fIremote-swid\fP \fIlocal-swid\fP \fIlun\fP \fInetfn\fP \fIcmd\fP [\fIdata1\fP [\fIdata\fP ...]]
 Send a command to a device over a LAN channel.  Note that this not the
 same as a LAN connection.  This sends a message through a local BMC to
 a remote system that is hooked up with a LAN connection.
 
-.SS test_lat <count> <command>
-Executes the given commands (one of the previous commands) count times
-and gives the average time per command to execute.  Note that "count"
+.TP
+\fBtest_lat\fP \fIcount\fP \fIcommand\fP
+Executes the given \fIcommands\fP (one of the previous commands) \fIcount\fP times
+and gives the average time per command to execute.  Note that "\fIcount\fP"
 is hexadecimal.
 
-.SS help
+.TP
+.B help
 Display some help.
 
-.SS regcmd <netfn> <cmd>
+.TP
+\fBregcmd\fP \fInetfn\fP \fIcmd\fP
 Register to receive the given command.  If the driver receives an
 external command, it will print it out.  This only works with system
 interface connections, it will not work on LAN connections.
 
-.SS unregcmd <netfn> <cmd>
+.TP
+\fBunregcmd\fP \fInetfn\fP \fIcmd\fP
 Remove a command registration.
 
 .SH "SEE ALSO"
-ipmi_ui(1), ipmilan(8)
+.BR ipmi_ui (1),
+.BR ipmilan (8)
 
 .SH "KNOWN PROBLEMS"
 The asychronous nature of the program can be annoying.
