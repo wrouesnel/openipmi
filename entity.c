@@ -526,7 +526,9 @@ presence_sensor_changed(ipmi_sensor_t         *sensor,
 {
     ipmi_entity_t *ent = cb_data;
 
-    presence_changed(ent, offset);
+    /* zero means the sensor is present, 1 or 2 means it absent or
+       disabled */
+    presence_changed(ent, offset == 0);
 }
 
 static void
@@ -718,7 +720,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
     link->lun = lun;
     link->num = num;
     link->list_link.malloced = 0;
-    if ((ipmi_sensor_get_event_reading_type(sensor) == 0x08)
+    if ((ipmi_sensor_get_sensor_type(sensor) == 0x25)
 	&& (ent->presence_sensor == NULL))
     {
 	/* It's the presence sensor and we don't already have one.  We

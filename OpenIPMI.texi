@@ -171,7 +171,7 @@ code like this:
   @}
 @end example
 This is fairly straightforward, but it has some problems.  What if
-another, more important input, comes in while you are waiting for the
+another more important input comes in while you are waiting for the
 results of @code{perform_op1()}?  Now @code{wait_for_op1_results()} will
 have to handle input, too, and somehow return and say something is
 happening.  The loop will then have to somehow handle multiple
@@ -257,7 +257,7 @@ services are:
 @item Input Callbacks
 The OpenIPMI code uses the ``file descriptor'' concept of *nix, input
 devices are numbered.  This is not used internally in the library, but
-it is used by the messaging interfaces, so they messaging interfaces and
+it is used by the messaging interfaces, so the messaging interfaces and
 OS handler may implement their own conventions for these numbers.  But
 this provides a way to register to receive input from devices.
 
@@ -339,9 +339,9 @@ something?
 
 OpenIPMI provides two identifiers for IPMI objects.  One is a pointer,
 but a pointer is only good inside a callback.  The other is an OpenIPMI
-id, the id is good outside callback.  But the only thing you can do with
+id, the id is good outside callbacks.  But the only thing you can do with
 an id is pass it to a function that will call a callback for you with
-the pointer.  You can convert a pointer to an id (in a callback, of
+the pointer.  You can convert a pointer to an id (using a callback, of
 course) so you should do that if you need to save a reference to the
 object.
 
@@ -418,7 +418,7 @@ through the indicators to find a light that's blue.  Then, if a special
 is on, or you want the operator to remove a card, you can light the blue
 light.
 
-Relays are binary outputs.  Most telephony systems have them, they are
+Relays are binary outputs.  Most telephony systems have them; they are
 required by telephony specs.  They are simple on/off devices.
 
 Displays are two-dimensional arrays of characters.  OpenIPMI allows you
@@ -595,7 +595,139 @@ callback.
 @node    Sensors, Indicators, Entities, Using OpenIPMI
 @section Sensors
 
-Sensors, of course, are what IPMI is mostly about.
+Sensors, of course, are what IPMI is mostly about.  A sensor monitors
+a characteristic of an entity.  IPMI specifies two main classes of
+entities: threshold and discrete.
+
+@menu
+* Threshold Sensors::
+* Discrete Sensors::
+* Sensor Events::
+@end menu
+
+@node    Threshold Sensors, Discrete Sensors, Sensors, Sensors
+@subsection Threshold Sensors
+
+Threshold sensors measure ``continuous'' data, data that generally
+measure physical constants like voltage, temperature, etc.  IPMI calls
+them ``threshold'' sensors because you can set thresholds for them.
+Then a threshold is exceeded, some sensors can send an event to the BMC.
+
+Threshold sensors, unfortunately, are exceedingly complicated.  They
+have a large number of settings, many options for conversion between the
+discrete values and real values, and may support many optional
+settings.
+
+IPMI threshold sensors have the following settings:
+@table @samp
+@item Scanning
+The sensor can be turned on and off using the status field of
+@var{ipmi_thresholds_t} by setting or clearing
+@var{IPMI_SENSOR_SCANNING_ENABLED} in the bitmask.  You have to use
+@var{ipmi_sensor_get_sensor_init_scanning} function to tell if you
+need to turn scanning on or off.
+
+@item Events
+Some sensors can generate events, some can't.  See @xref{Sensor Events}
+for details on events.
+
+@item Thresholds
+Some sensors support thresholds.  See below for more details.
+
+@item Hysteresis
+Some sensors have hysteresis values.  The function
+@var{ipmi_sensor_get_sensor_init_events} will tell you if you need to
+initialize the hysteresis value for the sensor.  The
+@var{ipmi_sensor_get_hysteresis support} tells you what type of
+hysteresis (if any) the sensor supports.  
+
+@end table
+
+IPMI specifies the following thresholds:
+@table @samp
+@item non-recoverable
+@item critical
+@item non-critical
+@end table
+
+Their meanings are not really defined by IPMI, but they should be
+obvious.  Each of these can have an upper and lower type, so for
+instance you can have a critical upper and critical lower voltage
+threshold.  As well, each of these may support an assertion and
+deassertion event (an event when the value goes beyond the given range,
+and another event when the value goes back within the given range, with
+possible hysteresis).
+
+In addition, the sensor may detect going above the given threshold (a
+high-going threshold) or below the given threshold (a low-going
+threshold).  This may seem redundant with the upper and lower
+thresholds, but that's what the spec says.
+
+Of course, few sensors support all these possible values, and you must
+be able to tell what they support.  You use the
+@var{ipmi_sensor_threshold_assertion_event_supported} and
+@var{ipmi_sensor_threshold_deassertion_event_supported} functions to
+tell if the sensor supports a given threshold event.  The thresholds may
+or may not be readable and settable, use the
+@var{ipmi_sensor_threshold_settable} and
+@var{ipmi_sensor_threshold_readable} to tell if a threshold can be set
+or read.
+
+To turn on and off thresholds and support for events and to set the
+thresholds, you must first fill out an @var{ipmi_event_state_t}
+structure using the various calls defined to do this.  Then call
+@var{ipmi_sensor_events_enable_set} to set the values.  The current
+values may be fetched with @var{ipmi_sensor_events_enable_get}.
+
+@node    Discrete Sensors, Sensor Events, Threshold Sensors, Sensors
+@subsection Discrete Sensors
+
+IPMI represents discrete sensors as a bitmask, each bit representing a
+possible discrete state.  One bit is reserved for other use.  This
+limits you to 15 possible states for each sensor, but that's generally
+not a big deal
+
+The readings are specified one of two ways.  This is specified by the
+@var{ipmi_sensor_get_event_reading_type}.  A value of one means a
+threshold sensor.  A value of 0x6f means the reading depends on the
+sensor type.  Values 0x2-0xc are generic are generic readings that can
+apply no matter what the sensor type, and are specified in the IPMI
+spec.
+
+When the reading depends on the sensor type, you must do an
+@var{ipmi_sensor_get_sensor_type} to retrieve the sensor type.  You can
+use this to tell what the reading mean.
+
+@node    Sensor Events, , Discrete Sensors, Sensors
+@subsection Sensor Events
+
+Both threshold and discrete sensors support events, and they work about
+the same for both, if you think of a threshold as a discrete state.
+Individual discrete states may be armed to generate events.  However,
+not all sensors support events, you need to use the
+@var{ipmi_sensor_threshold_assertion_event_supported}, 
+@var{ipmi_sensor_threshold_deassertion_event_supported}, 
+@var{ipmi_sensor_discrete_assertion_event_supported}, and
+@var{ipmi_sensor_discrete_deassertion_event_supported} calls to tell if
+the particular sensor supports events on the given threshold or state.
+
+You can turn event generation on and off for sensors that support it
+using the status field of @var{ipmi_event_state_t} by setting or
+clearing @var{IPMI_SENSOR_EVENTS_ENABLED} in the bitmask.  You must
+first initialize the structure with @var{ipmi_event_state_init}, then
+set the specific events you are interested in using the
+@var{ipmi_threshold_event_set}, @var{ipmi_threshld_event_clear},
+@var{ipmi_discrete_event_set}, and @var{ipmi_discrete_event_clear}, then
+call @var{ipmi_sensor_events_enable_set} to set the thresholds.  You can
+use @var{ipmi_sensor_events_enable_get} to fetch the current events
+setting. You have to use @var{ipmi_sensor_get_sensor_init_events}
+function to tell if you need to initialize the events.  The
+@var{ipmi_sensor_get_event_support} function returns the support for
+events.
+
+You register to receive events for a sensor with
+@var{ipmi_sensor_set_event_handler}, which sets a callback that gets
+called when an event comes in from the given sensor.
 
 @node    Indicators, , Sensors, Using OpenIPMI
 @section Indicators

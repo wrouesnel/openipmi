@@ -431,7 +431,8 @@ int ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 			       ipmi_sensor_done_cb done,
 			       void                *cb_data);
 
-/* Get the LUN and sensor number for the sensor. */
+/* Get the LUN and sensor number for the sensor, as viewed from its
+   management controller. */
 int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 			int           *lun,
 			int           *num);
@@ -472,12 +473,12 @@ int ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
 int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 				   enum ipmi_thresh_e event,
 				   int                *val);
-int ipmi_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
-					    int           event,
-					    int           *val);
-int ipmi_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
-					      int           event,
-					      int           *val);
+int ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
+						   int           event,
+						   int           *val);
+int ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
+						     int           event,
+						     int           *val);
 int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 				 int           event,
 				 int           *val);
@@ -509,8 +510,7 @@ typedef struct ipmi_thresholds_s
 {
     /* Pay no attention to the implementation here. */
     struct {
-	/* IPMI_SENSOR_EVENTS_ENABLED IPMI_SENSOR_SCANNING_ENABLED */
-	unsigned int status;
+	unsigned int status; /* Is this threshold enabled? */
 	double       val;
     } vals[6];
 } ipmi_thresholds_t;

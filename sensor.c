@@ -1393,9 +1393,9 @@ ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 }
 
 int
-ipmi_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
-					int           event,
-					int           *val)
+ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
+					       int           event,
+					       int           *val)
 {
     if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
@@ -1409,9 +1409,9 @@ ipmi_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
 }
 
 int
-ipmi_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
-					  int           event,
-					  int           *val)
+ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
+						 int           event,
+						 int           *val)
 {
     if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
@@ -2118,6 +2118,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_msg_t *event)
     if (!sensor->event_handler)
 	return EINVAL;
 
+    /* FIXME - this needs a lot of work. */
     dir = event->data[12] >> 7;
     offset = event->data[12] & 0x0f;
     if (sensor->event_reading_type == IPMI_EVENT_TYPE_THRESHOLD) {
@@ -2898,19 +2899,32 @@ thresh_get(ipmi_mc_t  *mc,
 }
 
 static int
-get_default_sensor_val(ipmi_sensor_t      *sensor,
-		       enum ipmi_thresh_e thnum,
-		       int                raw,
-		       ipmi_thresholds_t  *th)
+get_default_sensor_vals(ipmi_sensor_t      *sensor,
+			int                raw,
+			ipmi_thresholds_t  *th)
 {
-    int val;
+    int                val;
+    enum ipmi_thresh_e thnum;
+    int                rv = 0;
 
-    ipmi_sensor_threshold_readable(sensor, IPMI_LOWER_NON_CRITICAL, &val);
-    if (val) {
-	th->vals[thnum].status = IPMI_SENSOR_EVENTS_ENABLED;
-	return ipmi_sensor_convert_from_raw(sensor, raw, &(th->vals[thnum].val));
+    for (thnum = IPMI_LOWER_NON_CRITICAL;
+	 thnum <= IPMI_UPPER_NON_RECOVERABLE;
+	 thnum++)
+    {
+	ipmi_sensor_threshold_readable(sensor, thnum, &val);
+	if (val) {
+	    th->vals[thnum].status = IPMI_SENSOR_EVENTS_ENABLED;
+	    rv = ipmi_sensor_convert_from_raw(sensor,
+					      raw,
+					      &(th->vals[thnum].val));
+	    if (rv)
+		goto out;
+	} else {
+	    th->vals[thnum].status = 0;
+	}
     }
-    return 0;
+ out:
+    return rv;
 }
 
 static void
@@ -2924,35 +2938,9 @@ thresh_get_start2(ipmi_sensor_t *sensor, void *cb_data)
     if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED) {
 	/* Thresholds are fixed, pull them from the SDR. */
 	ipmi_thresholds_init(&(info->th));
-	rv = get_default_sensor_val(sensor,
-				    IPMI_LOWER_NON_CRITICAL,
-				    sensor->lower_non_critical_threshold,
-				    &(info->th));
-	if (!rv)
-	    rv = get_default_sensor_val(sensor,
-					IPMI_LOWER_CRITICAL,
-					sensor->lower_critical_threshold,
-					&(info->th));
-	if (!rv)
-	    rv = get_default_sensor_val(sensor,
-					IPMI_LOWER_NON_RECOVERABLE,
-					sensor->lower_non_recoverable_threshold,
-					&(info->th));
-	if (!rv)
-	    rv = get_default_sensor_val(sensor,
-					IPMI_UPPER_NON_CRITICAL,
-					sensor->upper_non_critical_threshold,
-					&(info->th));
-	if (!rv)
-	    rv = get_default_sensor_val(sensor,
-					IPMI_UPPER_CRITICAL,
-					sensor->upper_critical_threshold,
-					&(info->th));
-	if (!rv)
-	    rv = get_default_sensor_val(sensor,
-					IPMI_UPPER_NON_RECOVERABLE,
-					sensor->upper_non_recoverable_threshold,
-					&(info->th));
+	rv = get_default_sensor_vals(sensor,
+				     sensor->lower_non_critical_threshold,
+				     &(info->th));
 	if (info->done)
 	    info->done(sensor, rv, &(info->th), info->cb_data);
 	opq_op_done(info->sensor->waitq);

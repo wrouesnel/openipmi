@@ -195,6 +195,10 @@ int ipmi_mc_get_address(ipmi_mc_t *mc);
 /* Get the channel for the given MC. */
 int ipmi_mc_get_channel(ipmi_mc_t *mc);
 
+/* Should the BMC do a full bus scan at startup?  This is so OEM
+   code can turn this function off.  The value is a boolean. */
+int ipmi_bmc_set_full_bus_scan(ipmi_mc_t *bmc, int val);
+
 /* Initialize the MC code, called only once at init time. */
 int ipmi_mc_init(void);
 

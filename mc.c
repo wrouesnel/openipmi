@@ -87,6 +87,9 @@ typedef struct ipmi_bmc_s
 
     ipmi_bmc_oem_new_mc_cb     new_mc_handler;
     void                       *new_mc_cb_data;
+
+    /* Should I do a full bus scan for devices on the bus? */
+    int                        do_bus_scan;
 } ipmi_bmc_t;
 
 struct ipmi_mc_s
@@ -870,6 +873,10 @@ static void
 start_mc_scan(ipmi_mc_t *bmc)
 {
     int i;
+
+    if (!bmc->bmc->do_bus_scan)
+	return;
+
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (bmc->bmc->chan[i].medium == 1) /* IPMB */
 	    start_ipmb_mc_scan(bmc, i);
@@ -957,39 +964,11 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
     start_mc_scan(mc);
 }
 
-static void
-sdr_handler(ipmi_sdr_info_t *sdrs,
-	    int             err,
-	    int             changed,
-	    unsigned int    count,
-	    void            *cb_data)
+static int
+finish_mc_handling(ipmi_mc_t *mc)
 {
-    ipmi_mc_t  *mc = (ipmi_mc_t *) cb_data;
-    int        rv;
-    int        i;
-    int        major, minor;
-
-    if (err) {
-	if (mc->bmc->conn->setup_cb)
-	    mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, err);
-	ipmi_close_connection(mc, NULL, NULL);
-	ipmi_sdr_destroy(sdrs, NULL, NULL);
-	return;
-    }
-
-    if (mc->bmc->state == QUERYING_MAIN_SDRS) {
-	/* Got the main SDRs, now get the device SDRs. */
-	mc->bmc->state = QUERYING_SENSOR_SDRS;
-
-	rv = ipmi_sdr_alloc(mc, 0, 1, &mc->sdrs);
-	if (!rv)
-	    rv = ipmi_sdr_fetch(mc->sdrs, sdr_handler, mc);
-	if (rv)
-	    goto out_err;
-	return;
-    }
-
-    /* Got the device SDRs, go on. */
+    int major, minor;
+    int rv = 0;
 
     major = ipmi_mc_major_version(mc);
     minor = ipmi_mc_minor_version(mc);
@@ -1008,8 +987,6 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 
 	rv = ipmi_send_command(mc, 0, &cmd_msg, chan_info_rsp_handler,
 			       (void *) 0);
-	if (rv)
-	    goto out_err;
     } else {
 	ipmi_sdr_t sdr;
 
@@ -1030,7 +1007,10 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 	    mc->bmc->chan[0].aux_info = 0;
 	    mc->bmc->msg_int_type = 0xff;
 	    mc->bmc->event_msg_int_type = 0xff;
+	    rv = 0;
 	} else {
+	    int i;
+
 	    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
 		int protocol = sdr.data[i] & 0xf;
 		
@@ -1059,8 +1039,42 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 
 	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
 	start_mc_scan(mc);
-
     }
+
+    return rv;
+}
+
+static void
+sdr_handler(ipmi_sdr_info_t *sdrs,
+	    int             err,
+	    int             changed,
+	    unsigned int    count,
+	    void            *cb_data)
+{
+    ipmi_mc_t  *mc = (ipmi_mc_t *) cb_data;
+    int        rv;
+
+    if (err) {
+	rv = err;
+	goto out_err;
+    }
+
+    if ((mc->bmc->state == QUERYING_MAIN_SDRS) 
+	&& (mc->sensor_device_support))
+    {
+	/* Got the main SDRs, now get the device SDRs. */
+	mc->bmc->state = QUERYING_SENSOR_SDRS;
+
+	rv = ipmi_sdr_fetch(mc->sdrs, sdr_handler, mc);
+	if (rv)
+	    goto out_err;
+	return;
+    }
+
+    rv = finish_mc_handling(mc);
+    if (rv)
+	goto out_err;
+
     return;
 
  out_err:
@@ -1080,10 +1094,20 @@ dev_id_rsp_handler(ipmi_mc_t  *mc,
 
     mc->bmc->state = QUERYING_MAIN_SDRS;
 
-//    if (!rv)
+    if (!rv)
 	rv = ipmi_sdr_alloc(mc, 0, 0, &mc->bmc->main_sdrs);
     if (!rv)
-	rv = ipmi_sdr_fetch(mc->bmc->main_sdrs, sdr_handler, mc);
+	rv = ipmi_sdr_alloc(mc, 0, 0, &mc->sdrs);
+    if (!rv) {
+	if (mc->SDR_repository_support)
+	    rv = ipmi_sdr_fetch(mc->bmc->main_sdrs, sdr_handler, mc);
+	else if (mc->sensor_device_support) {
+	    mc->bmc->state = QUERYING_SENSOR_SDRS;
+	    rv = ipmi_sdr_fetch(mc->sdrs, sdr_handler, mc);
+	} else {
+	    rv = finish_mc_handling(mc);
+	}
+    }
 
     if (rv) {
 	if (mc->bmc->conn->setup_cb)
@@ -1135,6 +1159,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->bmc->entities_lock = NULL;
     mc->bmc->entity_handler = NULL;
     mc->bmc->new_entity_handler = NULL;
+    mc->bmc->do_bus_scan = 1;
 
     mc->bmc->mc_list = alloc_ilist();
     if (! mc->bmc->mc_list) {
@@ -1630,5 +1655,16 @@ ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
 
     bmc->bmc->new_mc_handler = handler;
     bmc->bmc->new_mc_cb_data = cb_data;
+    return 0;
+}
+
+int
+ipmi_bmc_set_full_bus_scan(ipmi_mc_t *bmc, int val)
+{
+    /* Make sure it's an SMI mc. */
+    if (bmc->bmc_mc != bmc)
+	return EINVAL;
+
+    bmc->bmc->do_bus_scan = val;
     return 0;
 }
