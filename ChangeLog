@@ -26,6 +26,8 @@
 	length for normal messages is 12 bytes for SHA1-96, not 20 bytes.
 	The integrity length for RAKP4 messages was 12 bytes, not 20
 	bytes.
+
+	* all: Release version 2.0.0.
 	
 2005-03-29 Darius Davis <darius.davis@cyclades.com>, Corey Minyard <cminyard@mvista.com> 
 
