@@ -17,6 +17,9 @@
 	can go away before the operation returns, but the info is used
 	after the operation returns.
 
+	* lib/sensor.c: Fix the hysteresis setting to send a message that
+	is the right size.
+
 2004-04-15 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_intel.c: More work on getting the various Intel servers

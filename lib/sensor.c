@@ -3923,7 +3923,7 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
     cmd_msg.cmd = IPMI_SET_SENSOR_HYSTERESIS_CMD;
-    cmd_msg.data_len = 2;
+    cmd_msg.data_len = 4;
     cmd_msg.data = cmd_data;
     cmd_data[0] = sensor->num;
     cmd_data[1] = 0xff;
