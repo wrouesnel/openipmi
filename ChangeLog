@@ -1,6 +1,18 @@
 
 2003-02-20 Corey Minyard <cminyard@mvista.com>
 
+	* include/OpenIPMI/ipmi_msgbits.h: Added event receiver commands.
+
+	* mc.c: Fixed a memory leak deleting logs.
+
+	* ui.c: Added a command to scan an IPMB address.
+
+	* mc.c: Added code to set the event receiver for MCs to whatever
+	the current event receiver device is.
+
+	* ipmi.c, include/OpenIPMI/ipmi_addr.h: Added a way to get the
+	slave address for an address.
+
 	* mc.c: Since the OEM code can change the values from get device
 	id, the comparison code (to tell if an MC has changed) was changed
 	to used a real copy of the values from the get device id, instead

@@ -1810,6 +1810,59 @@ remove_bus_scans_running(ipmi_mc_t *bmc, mc_ipmb_scan_info_t *info)
 	}
 }
 
+static void
+check_event_rcvr(ipmi_mc_t *bmc, ipmi_mc_t *mc, void *cb_data)
+{
+    if (mc->SEL_device_support) {
+	unsigned int *addr = cb_data;
+	*addr = ipmi_addr_get_slave_addr(&mc->addr);
+    }
+}
+
+/* Find a valid event receiver in the system. */
+static unsigned int
+find_event_rcvr(ipmi_mc_t *bmc)
+{
+    unsigned int addr = 0;
+
+    if (bmc->SEL_device_support) {
+	return bmc->bmc->bmc_slave_addr;
+    }
+    ipmi_bmc_iterate_mcs(bmc, check_event_rcvr, &addr);
+    return addr;
+}
+
+static void
+set_event_rcvr_done(ipmi_mc_t  *mc,
+		    ipmi_msg_t *rsp,
+		    void       *rsp_data)
+{
+    if (!mc)
+	return; /* The MC went away, no big deal. */
+
+    if (rsp->data[0] != 0) {
+	/* Error setting the event receiver, report it. */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Could not set event receiver for MC at 0x%x",
+		 ipmi_addr_get_slave_addr(&mc->addr));
+    }
+}
+
+static void
+send_set_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
+{
+    ipmi_msg_t    msg;
+    unsigned char data[2];
+    
+    msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+    msg.cmd = IPMI_SET_EVENT_RECEIVER_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+    data[0] = addr;
+    data[1] = 0; /* LUN is 0 per the spec (section 7.2 of 1.5 spec). */
+    ipmi_send_command(mc, 0, &msg, set_event_rcvr_done, NULL);
+}
+
 static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 				 ipmi_addr_t  *addr,
 				 unsigned int addr_len,
@@ -1875,12 +1928,24 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	mc->missed_responses++;
 	if (mc->missed_responses >= MAX_MC_MISSED_RESPONSES) {
 	    ipmi_cleanup_mc(mc);
+	    goto next_addr;
 	} else {
 	    /* Try again right now. */
 	    ipmi_unlock(info->bmc->bmc->mc_list_lock);
 	    goto retry_addr;
 	}
     }
+
+    if (mc && mc->IPMB_event_generator_support) {
+	/* We have an MC that is live (or still live) and generates
+	   events, make sure the event receiver is set properly. */
+	unsigned int event_rcvr = find_event_rcvr(info->bmc);
+
+	if (event_rcvr) {
+	    send_set_event_rcvr(mc, event_rcvr);
+	}
+    }
+
  next_addr:
     ipmi_unlock(info->bmc->bmc->mc_list_lock);
 
@@ -3214,6 +3279,7 @@ sel_op_done(ipmi_sel_info_t *sel,
     /* No need to lock, the BMC should already be locked. */
     if (info->done)
         info->done(info->mc->bmc_mc, err, info->cb_data);
+    ipmi_mem_free(info);
 }
 
 typedef struct del_event_info_s

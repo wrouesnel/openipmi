@@ -680,10 +680,11 @@ ipmi_shutdown(void)
     global_lock = NULL;
 }
 
-int ipmi_addr_equal(ipmi_addr_t *addr1,
-		    int         addr1_len,
-		    ipmi_addr_t *addr2,
-		    int         addr2_len)
+int
+ipmi_addr_equal(ipmi_addr_t *addr1,
+		int         addr1_len,
+		ipmi_addr_t *addr2,
+		int         addr2_len)
 {
     if (addr1_len != addr2_len)
 	return 0;
@@ -719,7 +720,8 @@ int ipmi_addr_equal(ipmi_addr_t *addr1,
     }
 }
 
-unsigned int ipmi_addr_get_lun(ipmi_addr_t *addr)
+unsigned int
+ipmi_addr_get_lun(ipmi_addr_t *addr)
 {
     switch (addr->addr_type)
     {
@@ -743,7 +745,8 @@ unsigned int ipmi_addr_get_lun(ipmi_addr_t *addr)
     }
 }
 
-int ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun)
+int
+ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun)
 {
     if (lun >= 4)
 	return EINVAL;
@@ -772,6 +775,24 @@ int ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun)
     }
 
     return 0;
+}
+
+/* Returns 0 if the address doesn't have a slave address. */
+unsigned int
+ipmi_addr_get_slave_addr(ipmi_addr_t *addr)
+{
+    switch (addr->addr_type)
+    {
+	case IPMI_IPMB_ADDR_TYPE:
+	{
+	    ipmi_ipmb_addr_t *iaddr = (ipmi_ipmb_addr_t *) addr;
+
+	    return iaddr->slave_addr;
+	}
+
+	default:
+	    return 0;
+    }
 }
 
 void

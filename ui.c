@@ -1828,7 +1828,7 @@ void mcs_handler(ipmi_mc_t *bmc,
 
     addr = ipmi_mc_get_address(mc);
     channel = ipmi_mc_get_channel(mc);
-    display_pad_out("  (%d 0x%x)\n", channel, addr);
+    display_pad_out("  (%x %x)\n", channel, addr);
 }
 
 static void
@@ -1957,7 +1957,7 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
 	return 0;
     }
     if (!info.found) {
-	cmd_win_out("Unable to find MC (%d 0x%x)\n",
+	cmd_win_out("Unable to find MC (%x %x)\n",
 		    info.mc_id.channel, info.mc_id.mc_num);
     }
     display_pad_refresh();
@@ -2302,7 +2302,7 @@ list_sel_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
     display_pad_out("Events:\n");
     rv = ipmi_bmc_first_event(bmc, &event);
     while (!rv) {
-	display_pad_out("  (%d 0x%x) %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
+	display_pad_out("  (%x %x) %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
 			" %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
 			event.mc_id.channel, event.mc_id.mc_num,
 			event.record_id, event.type,
@@ -2367,7 +2367,7 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
     display_pad_clear();
     curr_display_type = DISPLAY_SDRS;
 
-    display_pad_out("%s SDRs for MC (%d 0x%x)\n",
+    display_pad_out("%s SDRs for MC (%x %x)\n",
 	    info->do_sensors ? "device" : "main",
 	    info->mc_id.channel, info->mc_id.mc_num);
     for (i=0; i<count; i++) {
@@ -2481,6 +2481,41 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+typedef struct scan_cmd_info_s
+{
+    unsigned char addr;
+    unsigned char channel;
+} scan_cmd_info_t;
+
+static void
+scan_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    scan_cmd_info_t *info = cb_data;
+
+    ipmi_start_ipmb_mc_scan(bmc, info->channel,
+			    info->addr, info->addr,
+			    NULL, NULL);
+}
+
+static int
+scan_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int             rv;
+    scan_cmd_info_t info;
+
+    if (get_uchar(toks, &info.channel, "channel"))
+	return 0;
+
+    if (get_uchar(toks, &info.addr, "IPMB address"))
+	return 0;
+
+    rv = ipmi_mc_pointer_cb(bmc_id, scan_cmd_bmcer, &info);
+    if (rv) {
+	cmd_win_out("Unable to convert BMC id to a pointer\n");
+    }
+    return 0;
+}
+
 static int help_cmd(char *cmd, char **toks, void *cb_data);
 
 static struct {
@@ -2515,7 +2550,8 @@ static struct {
       " to the given IPMB address on the given channel and display the"
       " response" },
     { "delevent",	delevent_cmd,
-      " <log number> - Delete the given event number from the SEL" },
+      " <channel> <mc num> <log number> - "
+      "Delete the given event number from the SEL" },
     { "debug",		debug_cmd,
       " <type> on|off - Turn the given debugging type on or off." },
     { "clear_sel",	clear_sel_cmd,
@@ -2529,6 +2565,8 @@ static struct {
     { "events_enable",  events_enable_cmd,
       " <events> <scanning> <assertion bitmask> <deassertion bitmask>"
       " - set the events enable data for the sensor" },
+    { "scan",  scan_cmd,
+      " <ipmb addr> - scan an IPMB to add or remove it" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}
@@ -2898,7 +2936,7 @@ event_handler(ipmi_mc_t    *bmc,
 	      void         *event_data)
 {
     /* FIXME - fill this out. */
-    ui_log("Unknown event from mc (%d 0x%x)\n",
+    ui_log("Unknown event from mc (%x %x)\n",
 	   event->mc_id.channel, event->mc_id.mc_num);
     ui_log("  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
 	   " %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
