@@ -1,4 +1,10 @@
 
+2003-02-18 Corey Minyard <cminyard@mvista.com>
+
+	* selector.c, heap.h: Split out the heap code into a generic.
+
+	* test_btree.h: Added a test for the heap code.
+
 2003-02-13 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Moved to version 0.1.4.
