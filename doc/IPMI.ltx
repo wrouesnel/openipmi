@@ -1063,6 +1063,31 @@ handle a \verb=NULL= event in all your event handlers.  A \verb=NULL=
 may also be passed to an event handler if the callback was not due to
 an event.
 
+\subsubsection{Where OpenIPMI Gets Its Data}
+
+OpenIPMI generally gets all of its data from the IPMI system, either
+from SDRs, the event log, or via commands.  OpenIPMI will pull in
+anything it can recognize.  Note that some data in an IPMI system is
+duplicated; if the data is not consistent it will continue to be
+inconsistent in OpenIPMI.
+
+For instance, OpenIPMI gets all the information about a management
+controller from the ``Get Device Id'' command.  However, the system
+may have a record in the SDR repository describing an entity that
+represents the management controller.  If the data from the command
+and the SDR repository is inconsistent, OpenIPMI will happily provide
+the data from the SDR repository when looking at the entity, and the
+data from the ``Get Device Id'' command when looking at the MC.
+
+If the system has OEM controls and sensors, they may have been created
+by OEM code and may not have come from SDRs (thus the phrase
+``generally'' in the first sentance of this section).  This is a major
+reason not to use direct IPMI messaging with OpenIPMI.  OpenIPMI
+provides an abstraction for the sensors and controls and thus multiple
+implementations can sit below it.  If software bypasses the
+abstraction, it will loose the ability to talk to non-standard sensors
+and controls that use the same abstraction.
+
 \subsection{Callbacks}
 
 As you will discover, OpenIPMI is very callback based.  The callbacks
@@ -7755,6 +7780,63 @@ passed in to the ``length'' field.  The number of bytes actually
 copied will be returned by the call.  If the number of bytes is more
 than the length of the id field, then only ``length'' bytes are filled
 in.
+
+\chapter{The Perl Interface}
+
+OpenIPMI has interface code that let's Perl programs use OpenIPMI.
+The interface works much like the C interface.  Some things are
+simplified, but in general it is very similar.
+
+The interface uses object-oriented programming in Perl, so you must
+know how to do that in Perl.  It's pretty simple, really, but it's
+somewhat strange if you already know another OO programming language.
+
+As an example, to create a domain connection, you might use the
+following code:
+
+\begin{verbatim}
+{
+    package Conh;
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	return bless $b;
+    }
+
+    sub conn_change_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $err = shift;
+	my $conn_num = shift;
+	my $port_num = shift;
+	my $still_connected = shift;
+
+	# Handle connection being up but the domain not being fully up yet.
+    }
+
+    package Uph;
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	return bless $b;
+    }
+
+    sub domain_up_cb {
+        my $self = shift;
+        my $domain = shift;
+    }
+}
+
+$conh = Conh::new();
+$uph = Uph::new();
+
+@args = ("-noall", "-sel", "smi", "0");
+$domain_id = OpenIPMI::open_domain("test1", \@args, $conh, $uph);
+while (1) {
+    OpenIPMI::wait_io(1000);
+}
+
+\end{verbatim}
 
 \chapter{Comparison with \acs{SNMP}}
 

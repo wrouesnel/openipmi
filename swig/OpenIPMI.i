@@ -2070,14 +2070,14 @@ color_string(int color)
 %newobject open_domain;
 /*
  * Create a new domain.  The domain will be named with the first parm,
- * the startup arguments are in a list in the second parm (\@args),
- * the third parm is a callback object whose conn_change_cb method
- * will be called when the domain has connected (but it may not be
- * fully up yet).  The fourth parameter's domain_up_cb method will be
- * called when the domain is completely up.  Note that the done method
- * will be kept around and will continue to be called on connection
- * changes.  If you don't want it any more, it must be deregistered
- * with remove_connect_change_handler.
+ * the startup arguments are in a reference to a list in the second
+ * parm (\@args), the third parm is a callback object whose
+ * conn_change_cb method will be called when the domain has connected
+ * (but it may not be fully up yet).  The fourth parameter's
+ * domain_up_cb method will be called when the domain is completely up
+ * Note that the done method will be kept around and will continue to
+ * be called on connection changes.  If you don't want it any more,
+ * it must be deregistered with remove_connect_change_handler.
  * Passing in a reference to an undefined value will cause the handlers
  * to not be called.
  * The domain_up_cb methods is called with the following parmeters:
@@ -2086,6 +2086,12 @@ color_string(int color)
  * the domain->add_connect_change_handler method.
  * The third and fourth parameters are optional, if not provided
  * or undefined the handler will be ignored.
+ *
+ * The format of the arguments is the same as described in the
+ * ipmi_cmdlang.7 man page for domain open, except the -wait_til_up
+ * option is not supported.  See that for more details.  These options
+ * allow you to turn on and off various automatic operations that
+ * OpenIPMI does, such as scanning SDRs, fetching the SEL, etc.
  */
 ipmi_domain_id_t *open_domain(char *name, char **args,
 			      swig_cb done = NULL, swig_cb up = NULL);

@@ -292,18 +292,29 @@ Response:
 
 These commands deal with domain objects.
 
-.B new \fI<domain>\fP \fI<options>\fP \fI<parms...>\fP
+.B new \fI<domain>\fP \fI<options>\fP \fI<parms>\fP [\fI<parms>\fP]
 - Open a connection to a new domain.
 \fI<parms>\fP are either:
 .RS
-lan \fI<IP>\fP \fI<port>\fP \fI<enc>\fP \fI<auth>\fP \fI<name>\fP
+lan \fI<IP>\fP \fI<port>\fP [\fI<IP>\fP \fI<port>\fP] \fI<enc>\fP \fI<auth>\fP \fI<name>\fP
 \fI<password>\fP
 .RE
 for a RMCP LAN connection or
 .RS
      smi \fI<smi num>\fP
 .RE
-for a system interface connection.
+for a system interface connection.  Note that \fI<parms>\fP is listed
+twice (second one is optional); if the system support it you can make
+two connections to two independent management controllers in the
+system.  Note that this is not for multiple IP addresses to the same
+BMC.  For that, notice that the LAN connection has an options extra IP
+and port for the second IP address.  OpenIPMI supports these IP
+addresses and connection, detecting failures, switching between
+addresses, and other fault-tolerant things.  It does this
+transparently to the user.  Mutiple connections may require special
+OEM support, read the documentation about your specific system if you
+need this.
+
 The \fI<IP>\fP is the IP address or host name of the LAN-capable BMC
 to connect with.  The \fI<port>\fP is generally 623.  \fI<enc>\fP is
 the authentication type, either
