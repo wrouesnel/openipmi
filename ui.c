@@ -1594,7 +1594,9 @@ void mccmd_handler(ipmi_mc_t *bmc,
     mccmd_info_t *info = cb_data;
     int          rv;
 
-    if (info->addr == ipmi_mc_get_address(mc)) {
+    if (((info->addr == 0x20) && (bmc == mc))
+	|| (info->addr == ipmi_mc_get_address(mc)))
+    {
 	info->found = 1;
 	rv = ipmi_send_command(mc, info->lun, &(info->msg), mccmd_rsp_handler,
 			       NULL);

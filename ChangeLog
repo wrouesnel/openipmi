@@ -1,4 +1,8 @@
 
+2003-01-14 Corey Minyard <cminyard@mvista.com>
+
+	* ui.c: Added a fix for handling local interface BMCs.
+
 2003-01-13 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move version to 0.1.0.
