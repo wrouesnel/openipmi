@@ -90,8 +90,19 @@ int ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
 /* The handler should return 0 if it didn't handle the event, or 1
    if it did. */
 typedef int (*ipmi_oem_event_handler_cb)(ipmi_mc_t  *bmc,
-					 ipmi_msg_t *event);
+					 ipmi_msg_t *event,
+					 void       *cb_data);
 int ipmi_bmc_set_oem_event_handler(ipmi_mc_t                 *bmc,
-				   ipmi_oem_event_handler_cb handler);
+				   ipmi_oem_event_handler_cb handler,
+				   void                      *cb_data);
 
+/* Handler that is called after the setup complete has been reported
+   to the user.  The OEM code should install it's non-standard
+   entities, sensors, etc. in this callback. */
+typedef void (*ipmi_oem_setup_finished_cb)(ipmi_mc_t *bmc,
+					   void      *cb_data);
+int ipmi_bmc_set_oem_setup_finished_handler(
+    ipmi_mc_t                  *bmc,
+    ipmi_oem_setup_finished_cb handler,
+    void                       *cb_data);
 #endif /* IPMI_OEM_H */

@@ -1225,7 +1225,7 @@ identifier_control_val_read(ipmi_control_t *control,
     } else {
 	for (i=0; i<length; i++) {
 	    wmove(display_pad, value_pos.y+i, value_pos.x);
-	    wprintw(display_pad, "0x%x", val[i]);
+	    wprintw(display_pad, "0x%2.2x", val[i]);
 	}
     }
     display_pad_refresh();

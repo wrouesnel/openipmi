@@ -74,6 +74,7 @@ typedef struct ipmi_bmc_s
     ipmi_event_handler_id_t  *event_handlers;
     ipmi_lock_t              *event_handlers_lock;
     ipmi_oem_event_handler_cb oem_event_handler;
+    void                      *oem_event_cb_data;
 
     ipmi_entity_info_t *entities;
     ipmi_lock_t        *entities_lock;
@@ -88,6 +89,9 @@ typedef struct ipmi_bmc_s
 
     ipmi_bmc_oem_new_mc_cb     new_mc_handler;
     void                       *new_mc_cb_data;
+
+    ipmi_oem_setup_finished_cb setup_finished_handler;
+    void                       *setup_finished_cb_data;
 
     /* Should I do a full bus scan for devices on the bus? */
     int                        do_bus_scan;
@@ -378,12 +382,14 @@ void event_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
 
 int
 ipmi_bmc_set_oem_event_handler(ipmi_mc_t                 *bmc,
-			       ipmi_oem_event_handler_cb handler)
+			       ipmi_oem_event_handler_cb handler,
+			       void                      *cb_data)
 {
     if (bmc->bmc == NULL)
 	return EINVAL;
 
     bmc->bmc->oem_event_handler = handler;
+    bmc->bmc->oem_event_cb_data = cb_data;
     return 0;
 }
 
@@ -403,7 +409,9 @@ ll_event_handler(ipmi_con_t   *ipmi,
 
     /* Let the OEM handler have a go at it first. */
     if (bmc->bmc->oem_event_handler) {
-	if (bmc->bmc->oem_event_handler(bmc, event))
+	if (bmc->bmc->oem_event_handler(bmc,
+					event,
+					bmc->bmc->oem_event_cb_data))
 	    return;
     }
 
@@ -1116,6 +1124,10 @@ finish_mc_handling(ipmi_mc_t *mc)
 	if (mc->bmc->conn->setup_cb)
 	    mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, 0);
 
+	if (mc->bmc->setup_finished_handler)
+	    mc->bmc->setup_finished_handler(mc,
+					    mc->bmc->setup_finished_cb_data);
+
 	ipmi_entity_scan_sdrs(mc->bmc->entities, mc->bmc->main_sdrs);
 
 	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
@@ -1213,6 +1225,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc = malloc(sizeof(*mc));
     if (!mc)
 	return ENOMEM;
+    memset(mc, 0, sizeof(*mc));
 
     mc->bmc_mc = mc;
 
@@ -1230,6 +1243,7 @@ setup_bmc(ipmi_con_t  *ipmi,
 	rv = ENOMEM;
 	goto out_err;
     }
+    memset(mc->bmc, 0, sizeof(*(mc->bmc)));
 
     mc->bmc->main_sdrs = NULL;
     mc->bmc->conn = ipmi;
@@ -1242,6 +1256,8 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->bmc->entities_lock = NULL;
     mc->bmc->entity_handler = NULL;
     mc->bmc->new_entity_handler = NULL;
+    mc->bmc->new_mc_handler = NULL;
+    mc->bmc->setup_finished_handler = NULL;
     mc->bmc->do_bus_scan = 1;
 
     mc->bmc->mc_list = alloc_ilist();
@@ -1784,5 +1800,19 @@ ipmi_bmc_set_full_bus_scan(ipmi_mc_t *bmc, int val)
 	return EINVAL;
 
     bmc->bmc->do_bus_scan = val;
+    return 0;
+}
+
+int
+ipmi_bmc_set_oem_setup_finished_handler(ipmi_mc_t                  *bmc,
+					ipmi_oem_setup_finished_cb handler,
+					void                       *cb_data)
+{
+    /* Make sure it's an SMI mc. */
+    if (bmc->bmc_mc != bmc)
+	return EINVAL;
+
+    bmc->bmc->setup_finished_handler = handler;
+    bmc->bmc->setup_finished_cb_data = cb_data;
     return 0;
 }
