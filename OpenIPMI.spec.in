@@ -1,0 +1,120 @@
+%define prefix /usr/local
+
+Name: OpenIPMI
+Summary: %{name} - shared library implementation of IPMI specification
+Version: @OPENIPMI_VERSION_MAJOR@.@OPENIPMI_VERSION_MINOR@.@OPENIPMI_VERSION_RELEASE@
+Release: 1
+License: BSD
+URL: http://openipmi.sourceforge.net
+Group: Utilities
+Vendor: OpenIPMI Project
+Packager: Tariq Shureih <tariq.shureih@intel.com>
+Source: %{name}-@VERSION@.tar.gz
+Buildroot: /var/tmp/%{name}-root
+BuildRequires: pkgconfig 
+Summary: IPMI Library
+Group: Utilities
+AutoReq: yes
+Requires: libc.so.6 libglib-1.2.so.0 libpthread.so.0
+
+%package devel
+Summary: Development files for OpenIPMI
+Group: Utilities
+AutoReq: yes
+Requires: OpenIPMI = @OPENIPMI_VERSION_MAJOR@.@OPENIPMI_VERSION_MINOR@.@OPENIPMI_VERSION_RELEASE@
+Requires: pkgconfig
+
+%package ui
+Summary: User Interface (ui)
+Group: Utilities
+AutoReq: yes
+Requires: OpenIPMI = @OPENIPMI_VERSION_MAJOR@.@OPENIPMI_VERSION_MINOR@.@OPENIPMI_VERSION_RELEASE@
+
+%package LanServ
+Summary: Emulates an IPMI network listern
+Group: Utilities
+Autoreq: yes
+Requires: OpenIPMI = @OPENIPMI_VERSION_MAJOR@.@OPENIPMI_VERSION_MINOR@.@OPENIPMI_VERSION_RELEASE@
+
+%description 
+This package contains a shared library implementation of IPMI
+
+%description ui
+This package contains a user interface
+
+%description devel
+Contains additional files need for a developer to create applications
+and/or middleware that depends on libOpenIPMI
+
+
+%description LanServ
+This package contains a network IPMI listener.
+
+###################################################
+%prep
+###################################################
+
+###################################################
+%setup
+###################################################
+
+###################################################
+%build
+###################################################
+./configure
+make -j 2
+
+###################################################
+%install
+###################################################
+if
+  [ ! -z "${RPM_BUILD_ROOT}"  -a "${RPM_BUILD_ROOT}" != "/" ]
+then
+  rm -rf $RPM_BUILD_ROOT
+fi
+make DESTDIR=$RPM_BUILD_ROOT install
+mkdir -p $RPM_BUILD_ROOT/etc/
+#install -m 644 examples/openhpi.conf.example $RPM_BUILD_ROOT/etc/@HPI_PKG@/@HPI_PKG@.conf
+%post
+
+###################################################
+%files
+###################################################
+%defattr(-,root,root)
+%{prefix}/lib/libOpenIPMI*
+%{prefix}/info/*
+%{prefix}/man/man1/*
+%{prefix}/man/man8/*
+
+###################################################
+%files devel
+###################################################
+%defattr(-,root,root)
+%dir %{prefix}/include/OpenIPMI
+%{prefix}/include/OpenIPMI/*h
+%{prefix}/lib/pkgconfig/OpenIPMI*pc
+
+
+###################################################
+%files ui
+###################################################
+%defattr(-,root,root)
+%{prefix}/bin/ipmi_ui
+%{prefix}/bin/ipmicmd
+
+###################################################
+%files LanServ
+###################################################
+%defattr(-,root,root)
+%{prefix}/bin/ipmilan
+%{prefix}/lib/libIPMI*
+
+###################################################
+%clean
+###################################################
+if
+    [ -z "${RPM_BUILD_ROOT}"  -a "${RPM_BUILD_ROOT}" != "/" ]
+then
+    rm -rf $RPM_BUILD_ROOT
+fi
+rm -rf $RPM_BUILD_DIR/%{name}-@VERSION@

@@ -1,7 +1,13 @@
 2004-07-13 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_domain.h: Fixed a misnamed parm.
-	
+
+	* Makefile.am, configure.in, OpenIPMI.spec.in: Added support
+	for building RPMs for OpenIPMI.
+
+	* bootstrap: Added a helper shell script for starting up a
+	raw CVS checkout.
+
 2004-06-28 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a theoretical race condition in fetching
