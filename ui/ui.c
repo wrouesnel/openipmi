@@ -6025,13 +6025,16 @@ event_handler(ipmi_domain_t *domain,
     unsigned int  data_len = ipmi_event_get_data_len(event);
     unsigned char *data = ipmi_event_get_data_ptr(event);
     int           i;
+    char          str[200];
+    int           pos;
+
+    pos = 0;
+    for (i=0; i<data_len; i++)
+	pos += snprintf(str+pos, 200-pos, " %2.2x", data[i]);
 
     ui_log("Unknown event from mc (%x %x)\n"
-	   "%4.4x:%2.2x %d:",
-	   mcid.channel, mcid.mc_num, record_id, type, timestamp); 
-    for (i=0; i<data_len; i++)
-	ui_log(" %2.2x", data[i]);
-    display_pad_out("\n");
+	   "%4.4x:%2.2x %d: %s\n",
+	   mcid.channel, mcid.mc_num, record_id, type, timestamp, str); 
 }
 
 static void
