@@ -9383,7 +9383,7 @@ mxp_handler(ipmi_mc_t *mc,
     unsigned int  addr    = ipmi_mc_get_address(mc);
 
 
-    if ((channel == IPMI_BMC_CHANNEL) && (addr == 0)) {
+    if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
 	/* It's the SI MC.  Turn off man SDR scanning, but do nothing
 	   else. */
 	ipmi_mc_set_sdr_repository_support(mc, 0);

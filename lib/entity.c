@@ -456,7 +456,8 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
     rv = entity_add(ents, device_num, entity_id, entity_instance,
 		    sdr_gen_output, sdr_gen_cb_data, &ent);
     if (!rv) {
-	ipmi_entity_set_id(ent, id, id_type, id_len);
+        if (!ent->info.id_len)
+	    ipmi_entity_set_id(ent, id, id_type, id_len);
 	if (new_ent)
 	    *new_ent = ent;
     }

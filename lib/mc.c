@@ -146,6 +146,9 @@ struct ipmi_mc_s
        before events are fetched. */
     domain_up_info_t *conup_info;
 
+    /* Set if we are treating main SDRs like device SDRs. */
+    int treat_main_as_device_sdrs;
+
     /* The rest is the actual data from the get device id and SDRs.
        There's the real version and the normal version, the real
        version is the one from the get device id response, the normal
@@ -1288,7 +1291,7 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 	    return rv;
     }
 
-    if (mc->provides_device_sdrs)
+    if ((mc->provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
 	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     else
 	sensors_reread(mc, 0, NULL);
@@ -1606,6 +1609,7 @@ ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc)
     if (rv)
 	return rv;
 
+    mc->treat_main_as_device_sdrs = 1;
     if (mc->sdrs)
 	ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
     mc->sdrs = new_sdrs;
@@ -1713,7 +1717,7 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 void
 _ipmi_mc_check_mc(ipmi_mc_t *mc)
 {
-    if (mc->provides_device_sdrs)
+    if ((mc->provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
 	ipmi_mc_reread_sensors(mc, NULL, NULL);
     _ipmi_mc_check_event_rcvr(mc);
 }
