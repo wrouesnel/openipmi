@@ -350,8 +350,8 @@ add_tig_alarm_handler(ipmi_mc_t *mc, intel_tig_info_t *info)
             goto out;
     }
 
-    _ipmi_entity_put(ent);
     _ipmi_control_put(info->alarm);
+    _ipmi_entity_put(ent);
 
 out:
     return;
@@ -384,8 +384,24 @@ tig_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     intel_tig_info_t *info = cb_data;
 
-    if (info->alarm)
-	ipmi_control_destroy(info->alarm);
+    if (info->alarm) {
+	ipmi_entity_t      *ent;
+	ipmi_entity_info_t *ents = ipmi_domain_get_entities(domain);
+	int                rv;
+
+	rv = ipmi_entity_find(ents, domain,
+			      IPMI_ENTITY_ID_FRONT_PANEL_BOARD, 1,
+			      &ent);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_intel.c(tig_removal_handler): "
+		     "could not find alarm entity",
+		     MC_NAME(mc));
+	} else {
+	    ipmi_control_destroy(info->alarm);
+	    _ipmi_entity_put(ent);
+	}
+    }
     ipmi_domain_remove_connect_change_handler(domain, con_up_handler, info);
     ipmi_mem_free(info);
 }
@@ -446,7 +462,7 @@ tig_handler(ipmi_mc_t *mc,
 	rv = ipmi_mc_add_oem_removed_handler(mc, tig_removal_handler, info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%soem_motorola_mxp.c(mxp_handler): "
+		     "%soem_intel.c(tig_handler): "
 		     "could not register removal handler",
 		     MC_NAME(mc));
 	    ipmi_mem_free(info);

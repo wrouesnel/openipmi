@@ -42,6 +42,8 @@ The commands may take parameters.  Some general ones are:
 * <pet> - A platform event trap id, in the form [<domain>][.<integer>]
 * <lanparm> - A LAN parameter id, in the form [<domain>][.<integer>]
 * <pef> - A PEF id, in the form [<domain>][.<integer>]
+* <guid> - a 16-byte globally unique ID, all globbed together in
+  on big hexidecimal thing.
 
 Note that the domain name and sensor/control name may have spaces in
 them; the names may be bracketed by quotes (' or ").  A backslash (\)
@@ -445,7 +447,19 @@ The command hierarchy is:
   * clear <domain> - clear the system event log
 
 * con
-  * active <connection> - print out if the given connection is active or not
+  * list <domain> - List all the connections in the domain.
+    Response is:
+    Name: <connection>
+    Name: <connection>
+      .
+      .
+
+  * info <connection> 
+    Response is:
+    Connection
+      Name: <connection>
+      Active: true | false
+
   * activate <connection> - Activate the given connection
 
 * pet
@@ -931,6 +945,7 @@ Fields marked with % are optional
   %default_gateway_mac_addr: <mac addr>
   %backup_gateway_ip_addr: <ip addr>
   %backup_gateway_mac_addr: <mac addr>
+  community_string: <string>
   User
     Name: callback
     enable_auth_oem: true | false
@@ -979,3 +994,68 @@ Fields marked with % are optional
    .
    .
    
+
+** PEF CONFIG **
+  alert_startup_delay_enabled: true | false
+  startup_delay_enabled: true | false
+  event_messages_enabled: true | false
+  pef_enabled: true | false
+  diagnostic_interrupt_enabled: true | false
+  oem_action_enabled: true | false
+  power_cycle_enabled: true | false
+  reset_enabled: true | false
+  power_down_enabled: true | false
+  alert_enabled: true | false
+  %startup_delay: <integer>
+  %alert_startup_delay: <integer>
+  guid_enabled: true | false
+  guid_val: <guid>
+  num_event_filters: <integer>
+  num_alert_policies: <integer>
+  num_alert_strings: <integer>
+  Event Filter
+    Number: <integer>
+    enable_filter: true | false
+    filter_type: <integer>
+    diagnostic_interrupt: true | false
+    oem_action: true | false
+    power_cycle: true | false
+    reset: true | false
+    power_down: true | false
+    alert: true | false
+    alert_policy_number: <integer>
+    event_severity: <integer>
+    generator_id_addr: <integer>
+    generator_id_channel_lun: <integer>
+    sensor_type: <integer>
+    sensor_number: <integer>
+    event_trigger: <integer>
+    data1_offset_mask: <integer>
+    data1_mask: <integer>
+    data1_compare1: <integer>
+    data1_compare2: <integer>
+    data2_mask: <integer>
+    data2_compare1: <integer>
+    data2_compare2: <integer>
+    data3_mask: <integer>
+    data3_compare1: <integer>
+    data3_compare2: <integer>
+   .
+   .
+  Alert Policy
+    Number: <integer>
+    policy_num: <integer>
+    enabled: true | false
+    policy: <integer>
+    channel: <integer>
+    destination_selector: <integer>
+    alert_string_event_specific: true | false
+    alert_string_selector: <integer>
+   .
+   .
+  Alert String
+    event_filter: <integer>
+    alert_string_set: <integer>
+    alert_string: <string>
+   .
+   .

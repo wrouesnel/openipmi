@@ -427,7 +427,7 @@ static struct lps_s
     F(alert_enabled, retbool),
     F(startup_delay, int),
     F(alert_startup_delay, int),
-    F(guid_enabled, bool),
+    F(guid_enabled, retbool),
     F(guid_val, guid),
     FR(num_event_filters, retint),
     FR(num_alert_policies, retint),

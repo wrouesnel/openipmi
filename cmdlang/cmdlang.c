@@ -2342,6 +2342,7 @@ ipmi_cmdinfo_get_cmdlang(ipmi_cmd_info_t *info)
 }
 
 int ipmi_cmdlang_domain_init(void);
+int ipmi_cmdlang_con_init(void);
 int ipmi_cmdlang_entity_init(void);
 int ipmi_cmdlang_mc_init(void);
 int ipmi_cmdlang_pet_init(void);
@@ -2359,6 +2360,9 @@ ipmi_cmdlang_init(void)
     int rv;
 
     rv = ipmi_cmdlang_domain_init();
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_con_init();
     if (rv) return rv;
 
     rv = ipmi_cmdlang_entity_init();

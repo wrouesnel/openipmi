@@ -60,6 +60,9 @@
 # endif
 #endif
 
+selector_t *debug_sel;
+extern os_handler_t ipmi_debug_os_handlers;
+
 void
 posix_vlog(char *format,
 	   enum ipmi_log_type_e log_type,
@@ -105,6 +108,13 @@ posix_vlog(char *format,
     vprintf(format, ap);
     if (do_nl)
 	printf("\n");
+}
+void
+debug_vlog(char *format,
+	   enum ipmi_log_type_e log_type,
+	   va_list ap)
+{
+    posix_vlog(format, log_type, ap);
 }
 
 #ifdef HAVE_UCDSNMP
@@ -651,6 +661,7 @@ main(int argc, const char *argv[])
 #endif
     os_handler_t     *os_hnd;
     selector_t       *sel;
+    int              use_debug_os = 0;
 
 
     while ((curr_arg < argc) && (argv[curr_arg][0] == '-')) {
@@ -662,6 +673,7 @@ main(int argc, const char *argv[])
 	    full_screen = 0;
 	} else if (strcmp(arg, "-dlock") == 0) {
 	    DEBUG_LOCKS_ENABLE();
+	    use_debug_os = 1;
 	} else if (strcmp(arg, "-dmem") == 0) {
 	    DEBUG_MALLOC_ENABLE();
 	} else if (strcmp(arg, "-drawmsg") == 0) {
@@ -678,13 +690,24 @@ main(int argc, const char *argv[])
 	}
     }
 
-    os_hnd = ipmi_posix_setup_os_handler();
-    if (!os_hnd) {
-	fprintf(stderr, "ipmi_smi_setup_con: Unable to allocate os handler\n");
-	return 1;
-    }
+    if (use_debug_os) {
+	os_hnd = &ipmi_debug_os_handlers;
+	rv = sel_alloc_selector(os_hnd, &sel);
+	if (rv) {
+	    fprintf(stderr, "Could not allocate selector\n");
+	    return 1;
+	}
+	debug_sel = sel;
+    } else {
+	os_hnd = ipmi_posix_setup_os_handler();
+	if (!os_hnd) {
+	    fprintf(stderr,
+		    "ipmi_smi_setup_con: Unable to allocate os handler\n");
+	    return 1;
+	}
 
-    sel = ipmi_posix_os_handler_get_sel(os_hnd);
+	sel = ipmi_posix_os_handler_get_sel(os_hnd);
+    }
 
     /* Initialize the OpenIPMI library. */
     ipmi_init(os_hnd);

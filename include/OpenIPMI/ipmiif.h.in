@@ -1703,11 +1703,6 @@ int ipmi_control_id_identifier_set_val(ipmi_control_id_t  control_id,
 				       ipmi_control_op_cb handler,
 				       void               *cb_data);
 
-/* This must be called before calling any other IPMI functions.  It
-   sets a mutex and mutex operations for the smi.  You must provide
-   an OS handler to use for the system. */
-int ipmi_init(os_handler_t *handler);
-
 /* Create a new domain with the given IPMI connections.  The name is
    the name to give to the domain that is used by OpenIPMI for logs
    and things of that nature.  The con array is an array of
@@ -1762,9 +1757,6 @@ int ipmi_open_domain(char               *name,
 #define IPMI_OPEN_OPTION_SET_EVENT_RCVR	7
 
 
-/* This will clean up all the memory associated with IPMI. */
-void ipmi_shutdown(void);
-
 /* Close an IPMI connection.  This will free all memory associated
    with the connections, any outstanding responses will be lost, etc.
    All slave MC's will be closed when this is closed. */
@@ -1788,6 +1780,16 @@ int ipmi_domain_remove_domain_change_handler(ipmi_domain_change_cb handler,
 
 /* This type holds the arguments for a standard IPMI connection. */
 typedef struct ipmi_args_s ipmi_args_t;
+
+
+/* This must be called before calling any other IPMI functions.  It
+   sets a mutex and mutex operations for the smi.  You must provide
+   an OS handler to use for the system. */
+int ipmi_init(os_handler_t *handler);
+
+/* This will clean up all the memory associated with IPMI. */
+void ipmi_shutdown(void);
+
 
 /* Parse the arguments.  curr_arg should be passed in as the current
    argument, it will be set to one after the last argument parsed.

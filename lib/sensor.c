@@ -348,8 +348,8 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
 
     info->handler(sensor, info->cb_data);
 
-    _ipmi_entity_put(entity);
     _ipmi_sensor_put(sensor);
+    _ipmi_entity_put(entity);
     return;
 
  out_unlock:
@@ -1737,10 +1737,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     while (del_sensors) {
 	ent_item = del_sensors;
 	del_sensors = del_sensors->next;
-	if (ent_item->ent)
-	    _ipmi_entity_put(ent_item->ent);
 	if (ent_item->sensor)
 	    _ipmi_sensor_put(ent_item->sensor);
+	if (ent_item->ent)
+	    _ipmi_entity_put(ent_item->ent);
 	if (ent_item->mc)
 	    _ipmi_mc_put(ent_item->mc);
 	ipmi_mem_free(ent_item);
@@ -1753,10 +1753,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 
 	if (ent_item->ent && ent_item->sensor)
 	    ent_item->sensor->add_pending = 1;
-	if (ent_item->ent)
-	    _ipmi_entity_put(ent_item->ent);
 	if (ent_item->sensor)
 	    _ipmi_sensor_put(ent_item->sensor);
+	if (ent_item->ent)
+	    _ipmi_entity_put(ent_item->ent);
 	if (ent_item->mc)
 	    _ipmi_mc_put(ent_item->mc);
 	ipmi_mem_free(ent_item);
@@ -1777,10 +1777,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     while (del_sensors) {
 	ent_item = del_sensors;
 	del_sensors = del_sensors->next;
-	if (ent_item->ent)
-	    _ipmi_entity_put(ent_item->ent);
 	if (ent_item->sensor)
 	    _ipmi_sensor_put(ent_item->sensor);
+	if (ent_item->ent)
+	    _ipmi_entity_put(ent_item->ent);
 	if (ent_item->mc)
 	    _ipmi_mc_put(ent_item->mc);
 	ipmi_mem_free(ent_item);
@@ -1788,10 +1788,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     while (new_sensors) {
 	ent_item = new_sensors;
 	new_sensors = new_sensors->next;
-	if (ent_item->ent)
-	    _ipmi_entity_put(ent_item->ent);
 	if (ent_item->sensor)
 	    _ipmi_sensor_put(ent_item->sensor);
+	if (ent_item->ent)
+	    _ipmi_entity_put(ent_item->ent);
 	if (ent_item->mc)
 	    _ipmi_mc_put(ent_item->mc);
 	ipmi_mem_free(ent_item);

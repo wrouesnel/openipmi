@@ -2133,8 +2133,26 @@ add_address_control(atca_shelf_t *info, atca_ipmc_t *ipmc)
 static void
 destroy_address_control(atca_ipmc_t *ipmc)
 {
+    ipmi_system_interface_addr_t si;
+    ipmi_mc_t                    *si_mc;
+
     if (ipmc->address_control) {
 	ipmi_control_t *control = ipmc->address_control;
+
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = 0xf;
+	si.lun = 0;
+
+	si_mc = _ipmi_find_mc_by_addr(ipmc->shelf->domain,
+				      (ipmi_addr_t *) &si,
+				      sizeof(si));
+	if (!si_mc) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(add_address_control): "
+		     "Could not find system interface mc",
+		     ENTITY_NAME(ipmc->frus[0]->entity));
+	    return;
+	}
 
 	/* We *HAVE* to clear the value first, destroying this can
 	   cause something else to be destroyed and end up in the
@@ -2142,6 +2160,7 @@ destroy_address_control(atca_ipmc_t *ipmc)
 	   ipmi_control_destroy(). */
 	ipmc->address_control = NULL;
 	ipmi_control_destroy(control);
+	_ipmi_mc_put(si_mc);
     }
 }
 
@@ -2336,11 +2355,13 @@ add_fru_controls(atca_fru_t *finfo)
 static void
 destroy_fru_controls(atca_fru_t *finfo)
 {
+    _ipmi_mc_get(finfo->minfo->mc);
     destroy_fru_leds(finfo);
     destroy_fru_control_handling(finfo);
 #ifdef POWER_CONTROL_AVAILABLE
     destroy_power_handling(finfo);
 #endif
+    _ipmi_mc_put(finfo->minfo->mc);
 }
 
 static int

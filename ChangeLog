@@ -21,6 +21,15 @@
 	* include/OpenIPMI/ipmi_bits.h, lib/strings.c: Added fatal
 	error and gram unit types.
 
+	* lib/sensor.c: Fixed sensor reporting order so locks are
+	properly held.
+
+	* lib/oem_atca.c: Fixed some problems with holding the proper
+	refcounts on object during callbacks.
+
+	* lib/oem_intel.c: Fixed some problems with holding the proper
+	refcounts on object during callbacks.
+
 2004-10-06 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added an anonymous
