@@ -56,7 +56,37 @@ typedef struct mc_reread_sel_s
     ipmi_mc_t     *mc;
     ipmi_domain_t *domain;
 } mc_reread_sel_t;
-    
+
+typedef struct mc_devid_data_s
+{    
+    uint8_t device_id;
+
+    uint8_t device_revision;
+
+    unsigned int provides_device_sdrs : 1;
+    unsigned int device_available : 1;
+
+    unsigned int chassis_support : 1;
+    unsigned int bridge_support : 1;
+    unsigned int IPMB_event_generator_support : 1;
+    unsigned int IPMB_event_receiver_support : 1;
+    unsigned int FRU_inventory_support : 1;
+    unsigned int SEL_device_support : 1;
+    unsigned int SDR_repository_support : 1;
+    unsigned int sensor_device_support : 1;
+
+    uint8_t major_fw_revision;
+    uint8_t minor_fw_revision;
+
+    uint8_t major_version;
+    uint8_t minor_version;
+
+    uint32_t manufacturer_id;
+    uint16_t product_id;
+
+    uint8_t  aux_fw_revision[4];
+} mc_devid_data_t;
+
 typedef struct domain_up_info_s
 {
     ipmi_mcid_t mcid;
@@ -88,6 +118,13 @@ struct ipmi_mc_s
        that refer to this MC, but the MC is not currently in the
        system. */
     int active;
+
+    /* This is the "real" current active value.  We wait until the MC
+       is not in use to change the active value, this keeps track of
+       the current value and the number of times is has changed while
+       the mc was in use. */
+    int curr_active;
+    unsigned int active_transitions;
 
     /* The device SDRs on the MC. */
     ipmi_sdr_info_t *sdrs;
@@ -165,63 +202,18 @@ struct ipmi_mc_s
     int treat_main_as_device_sdrs;
 
     /* The rest is the actual data from the get device id and SDRs.
-       There's the real version and the normal version, the real
-       version is the one from the get device id response, the normal
-       version may have been adjusted by the OEM code. */
+       There's the normal version, the pending version, and the
+       version.  The real version is the one from the get device id
+       response, and normal version may have been adjusted by the OEM
+       code.  The pending version is used to hold the data until the
+       usecount goes to 0; we don't change the user data until no one
+       else is using it. */
 
-    uint8_t device_id;
+    mc_devid_data_t devid;
+    mc_devid_data_t real_devid;
+    mc_devid_data_t pending_devid;
+    int pending_devid_data;
 
-    uint8_t device_revision;
-
-    unsigned int provides_device_sdrs : 1;
-    unsigned int device_available : 1;
-
-    unsigned int chassis_support : 1;
-    unsigned int bridge_support : 1;
-    unsigned int IPMB_event_generator_support : 1;
-    unsigned int IPMB_event_receiver_support : 1;
-    unsigned int FRU_inventory_support : 1;
-    unsigned int SEL_device_support : 1;
-    unsigned int SDR_repository_support : 1;
-    unsigned int sensor_device_support : 1;
-
-    uint8_t major_fw_revision;
-    uint8_t minor_fw_revision;
-
-    uint8_t major_version;
-    uint8_t minor_version;
-
-    uint32_t manufacturer_id;
-    uint16_t product_id;
-
-    uint8_t  aux_fw_revision[4];
-
-    uint8_t real_device_id;
-
-    uint8_t real_device_revision;
-
-    unsigned int real_provides_device_sdrs : 1;
-    unsigned int real_device_available : 1;
-
-    unsigned int real_chassis_support : 1;
-    unsigned int real_bridge_support : 1;
-    unsigned int real_IPMB_event_generator_support : 1;
-    unsigned int real_IPMB_event_receiver_support : 1;
-    unsigned int real_FRU_inventory_support : 1;
-    unsigned int real_SEL_device_support : 1;
-    unsigned int real_SDR_repository_support : 1;
-    unsigned int real_sensor_device_support : 1;
-
-    uint8_t real_major_fw_revision;
-    uint8_t real_minor_fw_revision;
-
-    uint8_t real_major_version;
-    uint8_t real_minor_version;
-
-    uint32_t real_manufacturer_id;
-    uint16_t real_product_id;
-
-    uint8_t  real_aux_fw_revision[4];
 
     char name[MC_NAME_LEN];
 };
@@ -243,6 +235,8 @@ static void con_up_handler(ipmi_domain_t *domain,
 			   unsigned int  port_num,
 			   int           still_connected,
 			   void          *cb_data);
+
+static void call_active_handlers(ipmi_mc_t *mc);
 
 /***********************************************************************
  *
@@ -501,6 +495,8 @@ cleanup_mc(ipmi_mc_t *mc)
 						  mc->conup_info);
     }
 
+    mc->cleanup = 0;
+
     _ipmi_mc_set_active(mc, 0);
 }
 
@@ -691,7 +687,7 @@ ipmi_mc_del_event(ipmi_mc_t                 *mc,
     sel_op_done_info_t *sel_info;
     int                rv;
 
-    if (!mc->SEL_device_support)
+    if (!mc->devid.SEL_device_support)
 	return EINVAL;
 
     /* If we have an OEM handler, call it instead. */
@@ -744,7 +740,7 @@ ipmi_mc_add_event_to_sel(ipmi_mc_t                 *mc,
     sel_add_op_done_info_t *sel_info;
     int                    rv;
 
-    if (!mc->SEL_device_support)
+    if (!mc->devid.SEL_device_support)
 	return EINVAL;
 
     /* If we have an OEM handler, call it instead. */
@@ -1340,7 +1336,7 @@ send_get_event_rcvr(ipmi_mc_t *mc)
 void
 _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc)
 {
-    if (mc && mc->IPMB_event_generator_support) {
+    if (mc && mc->devid.IPMB_event_generator_support) {
 	/* We have an MC that is live (or still live) and generates
 	   events, make sure the event receiver is set properly. */
 	unsigned int event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
@@ -1479,7 +1475,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     /* We set the event receiver here, so that we know all the SDRs
        are installed.  That way any incoming events from the device
        will have the proper sensor set. */
-    if (mc->IPMB_event_generator_support)
+    if (mc->devid.IPMB_event_generator_support)
 	event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
 
     if (event_rcvr)
@@ -1490,7 +1486,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	mc->sdrs_first_read_handler = NULL;
     }
 
-    if (mc->SEL_device_support) {
+    if (mc->devid.SEL_device_support) {
 	mc_reread_sel_t *info;
 	int             rv;
 	os_handler_t    *os_hnd = mc_get_os_hnd(mc);
@@ -1535,13 +1531,13 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 
     _ipmi_mc_set_active(mc, 1);
 
-    if (mc->chassis_support && (ipmi_mc_get_address(mc) == 0x20)) {
+    if (mc->devid.chassis_support && (ipmi_mc_get_address(mc) == 0x20)) {
         rv = _ipmi_chassis_create_controls(mc);
 	if (rv)
 	    return rv;
     }
 
-    if ((mc->provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
+    if ((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
 	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     else
 	sensors_reread(mc, 0, NULL);
@@ -1580,13 +1576,42 @@ _ipmi_mc_get(ipmi_mc_t *mc)
 void
 _ipmi_mc_put(ipmi_mc_t *mc)
 {
+    _ipmi_domain_mc_lock(mc->domain);
     if (mc->usecount == 1) {
+	/* Install any pending change from device id changes. */
+	if (mc->pending_devid_data) {
+	    mc->devid = mc->pending_devid;
+	    mc->pending_devid_data = 0;
+	}
+
+	/* If we need to cleanup the MC, do so. */
 	if (mc->cleanup)
 	    cleanup_mc(mc);
+
+	/* Do as many active transitions as necessary to bring the MC
+	   to the proper state. */
+	while (mc->active_transitions != 0) {
+	    mc->active_transitions--;
+	    mc->active = !mc->active;
+	    _ipmi_domain_mc_unlock(mc->domain);
+	    call_active_handlers(mc);
+	    _ipmi_domain_mc_lock(mc->domain);
+
+	    /* Something grabbed the MC while we were out, don't do
+	       any more transitions. */
+	    if (mc->usecount != 1)
+		goto out;
+	}
+
+	/* Destroy the MC if it is ready.  Note that if this actually
+	   does the destroy, it will release the MC lock and return
+	   true, so we can just return. */
 	if (check_mc_destroy(mc))
 	    return;
     }
+ out:
     mc->usecount--;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 ipmi_mcid_t
@@ -1953,9 +1978,9 @@ check_oem_handlers(ipmi_mc_t *mc)
     handler_cmp_t  tmp;
 
     tmp.rv = 0;
-    tmp.manufacturer_id = mc->manufacturer_id;
-    tmp.first_product_id = mc->product_id;
-    tmp.last_product_id = mc->product_id;
+    tmp.manufacturer_id = mc->devid.manufacturer_id;
+    tmp.first_product_id = mc->devid.product_id;
+    tmp.last_product_id = mc->devid.product_id;
     tmp.mc = mc;
     locked_list_iterate(oem_handlers, oem_handler_call, &tmp);
     return tmp.rv;
@@ -2127,7 +2152,7 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 void
 _ipmi_mc_check_mc(ipmi_mc_t *mc)
 {
-    if ((mc->provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
+    if ((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
 	ipmi_mc_reread_sensors(mc, NULL, NULL);
     _ipmi_mc_check_event_rcvr(mc);
 }
@@ -2161,7 +2186,7 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 			 " which is older"
 			 " than OpenIPMI supports",
 			 ipmi_addr_get_slave_addr(&mc->addr),
-			 mc->major_version, minor_version);
+			 major_version, minor_version);
 		return EINVAL;
 	    }
 	}
@@ -2172,60 +2197,53 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 	return EINVAL;
     }
 
-    ipmi_lock(mc->lock);
-    mc->device_id = rsp_data[1];
-    mc->device_revision = rsp_data[2] & 0xf;
-    mc->provides_device_sdrs = (rsp_data[2] & 0x80) == 0x80;
-    mc->device_available = (rsp_data[3] & 0x80) == 0x80;
-    mc->major_fw_revision = rsp_data[3] & 0x7f;
-    mc->minor_fw_revision = rsp_data[4];
-    mc->major_version = rsp_data[5] & 0xf;
-    mc->minor_version = (rsp_data[5] >> 4) & 0xf;
-    mc->chassis_support = (rsp_data[6] & 0x80) == 0x80;
-    mc->bridge_support = (rsp_data[6] & 0x40) == 0x40;
-    mc->IPMB_event_generator_support = (rsp_data[6] & 0x20) == 0x20;
-    mc->IPMB_event_receiver_support = (rsp_data[6] & 0x10) == 0x10;
-    mc->FRU_inventory_support = (rsp_data[6] & 0x08) == 0x08;
-    mc->SEL_device_support = (rsp_data[6] & 0x04) == 0x04;
-    mc->SDR_repository_support = (rsp_data[6] & 0x02) == 0x02;
-    mc->sensor_device_support = (rsp_data[6] & 0x01) == 0x01;
-    mc->manufacturer_id = (rsp_data[7]
-			     | (rsp_data[8] << 8)
-			     | (rsp_data[9] << 16));
-    mc->product_id = rsp_data[10] | (rsp_data[11] << 8);
+    _ipmi_domain_mc_lock(mc->domain);
+
+    /* Pend these to be installed when nobody is using them. */
+    mc->pending_devid.device_id = rsp_data[1];
+    mc->pending_devid.device_revision = rsp_data[2] & 0xf;
+    mc->pending_devid.provides_device_sdrs = (rsp_data[2] & 0x80) == 0x80;
+    mc->pending_devid.device_available = (rsp_data[3] & 0x80) == 0x80;
+    mc->pending_devid.major_fw_revision = rsp_data[3] & 0x7f;
+    mc->pending_devid.minor_fw_revision = rsp_data[4];
+    mc->pending_devid.major_version = rsp_data[5] & 0xf;
+    mc->pending_devid.minor_version = (rsp_data[5] >> 4) & 0xf;
+    mc->pending_devid.chassis_support = (rsp_data[6] & 0x80) == 0x80;
+    mc->pending_devid.bridge_support = (rsp_data[6] & 0x40) == 0x40;
+    mc->pending_devid.IPMB_event_generator_support
+	= (rsp_data[6] & 0x20) == 0x20;
+    mc->pending_devid.IPMB_event_receiver_support
+	= (rsp_data[6] & 0x10) == 0x10;
+    mc->pending_devid.FRU_inventory_support = (rsp_data[6] & 0x08) == 0x08;
+    mc->pending_devid.SEL_device_support = (rsp_data[6] & 0x04) == 0x04;
+    mc->pending_devid.SDR_repository_support = (rsp_data[6] & 0x02) == 0x02;
+    mc->pending_devid.sensor_device_support = (rsp_data[6] & 0x01) == 0x01;
+    mc->pending_devid.manufacturer_id = (rsp_data[7]
+				 | (rsp_data[8] << 8)
+				 | (rsp_data[9] << 16));
+    mc->pending_devid.product_id = rsp_data[10] | (rsp_data[11] << 8);
 
     if (rsp->data_len < 16) {
 	/* no aux revision. */
-	memset(mc->aux_fw_revision, 0, 4);
+	memset(mc->pending_devid.aux_fw_revision, 0, 4);
     } else {
-	memcpy(mc->aux_fw_revision, rsp_data + 12, 4);
+	memcpy(mc->pending_devid.aux_fw_revision, rsp_data + 12, 4);
     }
 
     /* Copy these to the version we use for comparison. */
+    mc->real_devid = mc->pending_devid;
 
-    mc->real_device_id = mc->device_id;
-    mc->real_device_revision = mc->device_revision;
-    mc->real_provides_device_sdrs = mc->provides_device_sdrs;
-    mc->real_device_available = mc->device_available;
-    mc->real_chassis_support = mc->chassis_support;
-    mc->real_bridge_support = mc->bridge_support;
-    mc->real_IPMB_event_generator_support = mc->IPMB_event_generator_support;
-    mc->real_IPMB_event_receiver_support = mc->IPMB_event_receiver_support;
-    mc->real_FRU_inventory_support = mc->FRU_inventory_support;
-    mc->real_SEL_device_support = mc->SEL_device_support;
-    mc->real_SDR_repository_support = mc->SDR_repository_support;
-    mc->real_sensor_device_support = mc->sensor_device_support;
-    mc->real_major_fw_revision = mc->major_fw_revision;
-    mc->real_minor_fw_revision = mc->minor_fw_revision;
-    mc->real_major_version = mc->major_version;
-    mc->real_minor_version = mc->minor_version;
-    mc->real_manufacturer_id = mc->manufacturer_id;
-    mc->real_product_id = mc->product_id;
-    memcpy(mc->real_aux_fw_revision, mc->aux_fw_revision,
-	   sizeof(mc->real_aux_fw_revision));
-
+    /* OEM handlers set the pending data. */
     rv = check_oem_handlers(mc);
-    ipmi_unlock(mc->lock);
+
+    /* Either copy it or mark it to be copied. */
+    if (mc->usecount == 1) {
+	mc->devid = mc->pending_devid;
+	mc->pending_devid_data = 0;
+    } else
+	mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
+
     return rv;
 }
 
@@ -2239,71 +2257,74 @@ _ipmi_mc_device_data_compares(ipmi_mc_t  *mc,
 	return EINVAL;
     }
 
-    if (mc->real_device_id != rsp_data[1])
+    if (mc->real_devid.device_id != rsp_data[1])
 	return 0;
 
-    if (mc->real_device_revision != (rsp_data[2] & 0xf))
+    if (mc->real_devid.device_revision != (rsp_data[2] & 0xf))
 	return 0;
     
-    if (mc->real_provides_device_sdrs != ((rsp_data[2] & 0x80) == 0x80))
+    if (mc->real_devid.provides_device_sdrs != ((rsp_data[2] & 0x80) == 0x80))
 	return 0;
 
-    if (mc->real_device_available != ((rsp_data[3] & 0x80) == 0x80))
+    if (mc->real_devid.device_available != ((rsp_data[3] & 0x80) == 0x80))
 	return 0;
 
-    if (mc->real_major_fw_revision != (rsp_data[3] & 0x7f))
+    if (mc->real_devid.major_fw_revision != (rsp_data[3] & 0x7f))
 	return 0;
 
-    if (mc->real_minor_fw_revision != (rsp_data[4]))
+    if (mc->real_devid.minor_fw_revision != (rsp_data[4]))
 	return 0;
 
-    if (mc->real_major_version != (rsp_data[5] & 0xf))
+    if (mc->real_devid.major_version != (rsp_data[5] & 0xf))
 	return 0;
 
-    if (mc->real_minor_version != ((rsp_data[5] >> 4) & 0xf))
+    if (mc->real_devid.minor_version != ((rsp_data[5] >> 4) & 0xf))
 	return 0;
 
-    if (mc->real_chassis_support != ((rsp_data[6] & 0x80) == 0x80))
+    if (mc->real_devid.chassis_support != ((rsp_data[6] & 0x80) == 0x80))
 	return 0;
 
-    if (mc->real_bridge_support != ((rsp_data[6] & 0x40) == 0x40))
+    if (mc->real_devid.bridge_support != ((rsp_data[6] & 0x40) == 0x40))
 	return 0;
 
-    if (mc->real_IPMB_event_generator_support != ((rsp_data[6] & 0x20)==0x20))
+    if (mc->real_devid.IPMB_event_generator_support
+	!= ((rsp_data[6] & 0x20)==0x20))
 	return 0;
 
-    if (mc->real_IPMB_event_receiver_support != ((rsp_data[6] & 0x10) == 0x10))
+    if (mc->real_devid.IPMB_event_receiver_support
+	!= ((rsp_data[6] & 0x10) == 0x10))
 	return 0;
 
-    if (mc->real_FRU_inventory_support != ((rsp_data[6] & 0x08) == 0x08))
+    if (mc->real_devid.FRU_inventory_support != ((rsp_data[6] & 0x08) == 0x08))
 	return 0;
 
-    if (mc->real_SEL_device_support != ((rsp_data[6] & 0x04) == 0x04))
+    if (mc->real_devid.SEL_device_support != ((rsp_data[6] & 0x04) == 0x04))
 	return 0;
 
-    if (mc->real_SDR_repository_support != ((rsp_data[6] & 0x02) == 0x02))
+    if (mc->real_devid.SDR_repository_support
+	!= ((rsp_data[6] & 0x02) == 0x02))
 	return 0;
 
-    if (mc->real_sensor_device_support != ((rsp_data[6] & 0x01) == 0x01))
+    if (mc->real_devid.sensor_device_support != ((rsp_data[6] & 0x01) == 0x01))
 	return 0;
 
-    if (mc->real_manufacturer_id != (rsp_data[7]
-				     | (rsp_data[8] << 8)
-				     | (rsp_data[9] << 16)))
+    if (mc->real_devid.manufacturer_id != (rsp_data[7]
+					   | (rsp_data[8] << 8)
+					   | (rsp_data[9] << 16)))
 	return 0;
 
-    if (mc->real_product_id != (rsp_data[10] | (rsp_data[11] << 8)))
+    if (mc->real_devid.product_id != (rsp_data[10] | (rsp_data[11] << 8)))
 	return 0;
 
     if (rsp->data_len < 16) {
 	/* no aux revision, it should be all zeros. */
-	if ((mc->real_aux_fw_revision[0] != 0)
-	    || (mc->real_aux_fw_revision[1] != 0)
-	    || (mc->real_aux_fw_revision[2] != 0)
-	    || (mc->real_aux_fw_revision[3] != 0))
+	if ((mc->real_devid.aux_fw_revision[0] != 0)
+	    || (mc->real_devid.aux_fw_revision[1] != 0)
+	    || (mc->real_devid.aux_fw_revision[2] != 0)
+	    || (mc->real_devid.aux_fw_revision[3] != 0))
 	    return 0;
     } else {
-	if (memcmp(mc->real_aux_fw_revision, rsp_data + 12, 4) != 0)
+	if (memcmp(mc->real_devid.aux_fw_revision, rsp_data + 12, 4) != 0)
 	    return 0;
     }
 
@@ -2351,7 +2372,7 @@ int
 ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->provides_device_sdrs;
+    return mc->devid.provides_device_sdrs;
 }
 
 int
@@ -2426,206 +2447,247 @@ ipmi_mc_is_active(ipmi_mc_t *mc)
 void
 _ipmi_mc_set_active(ipmi_mc_t *mc, int val)
 {
-    if (mc->active != val) {
-	mc->active = val;
-	call_active_handlers(mc);
+    ipmi_lock(mc->lock);
+    if (mc->curr_active != val) {
+	mc->curr_active = val;
+	mc->active_transitions++;
     }
+    ipmi_unlock(mc->lock);
+}
+
+void
+_ipmi_mc_clear_active_call(ipmi_mc_t *mc)
+{
+    ipmi_lock(mc->lock);
+    mc->active = mc->curr_active;
+    mc->active_transitions = 0;
+    ipmi_unlock(mc->lock);
 }
 
 void
 ipmi_mc_set_provides_device_sdrs(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->provides_device_sdrs = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.provides_device_sdrs = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_device_available(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->device_available;
+    return mc->devid.device_available;
 }
 
 void
 ipmi_mc_set_device_available(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->device_available = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.device_available = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_chassis_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->chassis_support;
+    return mc->devid.chassis_support;
 }
 
 void
 ipmi_mc_set_chassis_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->chassis_support = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.chassis_support = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_bridge_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->bridge_support;
+    return mc->devid.bridge_support;
 }
 
 void
 ipmi_mc_set_bridge_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->bridge_support = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.bridge_support = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_ipmb_event_generator_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->IPMB_event_generator_support;
+    return mc->devid.IPMB_event_generator_support;
 }
 
 void
 ipmi_mc_set_ipmb_event_generator_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->IPMB_event_generator_support = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.IPMB_event_generator_support = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_ipmb_event_receiver_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->IPMB_event_receiver_support;
+    return mc->devid.IPMB_event_receiver_support;
 }
 
 void
 ipmi_mc_set_ipmb_event_receiver_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->IPMB_event_receiver_support = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.IPMB_event_receiver_support = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_fru_inventory_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->FRU_inventory_support;
+    return mc->devid.FRU_inventory_support;
 }
 
 void
 ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->FRU_inventory_support = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.FRU_inventory_support = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_sel_device_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->SEL_device_support;
+    return mc->devid.SEL_device_support;
 }
 
 void
 ipmi_mc_set_sel_device_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->SEL_device_support = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.SEL_device_support = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_sdr_repository_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->SDR_repository_support;
+    return mc->devid.SDR_repository_support;
 }
 
 void
 ipmi_mc_set_sdr_repository_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->SDR_repository_support = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.SDR_repository_support = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_sensor_device_support(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->sensor_device_support;
+    return mc->devid.sensor_device_support;
 }
 
 void
 ipmi_mc_set_sensor_device_support(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);
-    mc->sensor_device_support = val;
+    _ipmi_domain_mc_lock(mc->domain);
+    mc->pending_devid.sensor_device_support = val;
+    mc->pending_devid_data = 1;
+    _ipmi_domain_mc_unlock(mc->domain);
 }
 
 int
 ipmi_mc_device_id(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->device_id;
+    return mc->devid.device_id;
 }
 
 int
 ipmi_mc_device_revision(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->device_revision;
+    return mc->devid.device_revision;
 }
 
 int
 ipmi_mc_major_fw_revision(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->major_fw_revision;
+    return mc->devid.major_fw_revision;
 }
 
 int
 ipmi_mc_minor_fw_revision(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->minor_fw_revision;
+    return mc->devid.minor_fw_revision;
 }
 
 int
 ipmi_mc_major_version(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->major_version;
+    return mc->devid.major_version;
 }
 
 int
 ipmi_mc_minor_version(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->minor_version;
+    return mc->devid.minor_version;
 }
 
 int
 ipmi_mc_manufacturer_id(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->manufacturer_id;
+    return mc->devid.manufacturer_id;
 }
 
 int
 ipmi_mc_product_id(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
-    return mc->product_id;
+    return mc->devid.product_id;
 }
 
 void
 ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[])
 {
     CHECK_MC_LOCK(mc);
-    memcpy(val, mc->aux_fw_revision, sizeof(mc->aux_fw_revision));
+    memcpy(val, mc->devid.aux_fw_revision, sizeof(mc->devid.aux_fw_revision));
 }
 
 void

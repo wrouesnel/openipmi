@@ -443,9 +443,11 @@ cleanup_domain(ipmi_domain_t *domain)
 		ipmi_entity_t *entity = ipmi_sensor_get_entity(sensor);
 		ipmi_mc_t     *mc = ipmi_sensor_get_mc(sensor);
 		_ipmi_entity_get(entity);
-		_ipmi_mc_get(mc);
 		_ipmi_sensor_get(sensor);
 		_ipmi_domain_entity_unlock(domain);
+		_ipmi_domain_mc_lock(domain);
+		_ipmi_mc_get(mc);
+		_ipmi_domain_mc_unlock(domain);
 		ipmi_sensor_destroy(domain->sensors_in_main_sdr[i]);
 		_ipmi_sensor_put(sensor);
 		_ipmi_mc_put(mc);
@@ -826,6 +828,21 @@ _ipmi_domain_entity_unlock(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     ipmi_unlock(domain->entities_lock);
+}
+
+void
+_ipmi_domain_mc_lock(ipmi_domain_t *domain)
+{
+
+    CHECK_DOMAIN_LOCK(domain);
+    ipmi_lock(domain->mc_lock);
+}
+
+void
+_ipmi_domain_mc_unlock(ipmi_domain_t *domain)
+{
+    CHECK_DOMAIN_LOCK(domain);
+    ipmi_unlock(domain->mc_lock);
 }
 
 /***********************************************************************
@@ -1347,6 +1364,7 @@ call_mc_upd_handlers(ipmi_domain_t      *domain,
     info.op = op;
     info.mc = mc;
     locked_list_iterate(domain->mc_upd_handlers, iterate_mc_upds, &info);
+    _ipmi_mc_clear_active_call(mc);
 }
 
 int
@@ -1371,6 +1389,8 @@ ipmi_domain_remove_mc_updated_handler(ipmi_domain_t        *domain,
 	return EINVAL;
 }
 
+/* Must be called with the domain MC lock held.  It will be
+   released. */
 int
 _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
@@ -1380,8 +1400,6 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 
     ipmi_mc_get_ipmi_address(mc, &addr, &addr_len);
     
-    ipmi_lock(domain->mc_lock);
-
     if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	if ((addr.channel < SYS_INTF_MCS)
 	    && (mc == domain->sys_intf_mcs[addr.channel]))
@@ -2009,7 +2027,9 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		}
 
 		mc_added = 1;
+		_ipmi_mc_handle_new(mc);
 	    } else {
+		/* It was inactive, activate it. */
 		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
 		if (rv) {
 		    /* If we couldn't handle the device data, just clean
@@ -2061,10 +2081,8 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
  next_addr:
     ipmi_unlock(domain->mc_lock);
 
-    if (mc_added) {
+    if (mc_added)
 	call_mc_upd_handlers(domain, mc, IPMI_ADDED);
-	_ipmi_mc_handle_new(mc);
-    }
 
  next_addr_nolock:
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;
@@ -2315,6 +2333,7 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
     struct timeval      timeout;
     audit_domain_info_t *info = cb_data;
     ipmi_domain_t       *domain = info->domain;
+    int                 rv;
 
     ipmi_lock(info->lock);
     if (info->cancelled) {
@@ -2324,6 +2343,10 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 	ipmi_mem_free(info);
 	return;
     }
+
+    rv = _ipmi_domain_get(domain);
+    if (rv)
+	goto out;
 
     /* Only operate if we know a connection is up. */
     if (domain->connection_up) {
@@ -2345,6 +2368,8 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 				&timeout,
 				domain_audit,
 				info);
+    _ipmi_domain_put(domain);
+ out:
     ipmi_unlock(info->lock);
 }
 

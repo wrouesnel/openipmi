@@ -143,6 +143,15 @@ struct ipmi_entity_s
     /* Info from the DLR. */
     dlr_info_t info;
 
+    /* We don't install DLR info while the entity is in use, we hold
+       it here until the usecount goes to zero. */
+    dlr_info_t pending_info;
+    int pending_info_ready;
+
+    /* If the entity has changed and needs to be reported when the
+       entity is no longer in use, mark it here. */
+    int changed;
+
     /* Number of users of this entity (not including sensors, this is
        mainly for other SDRs that reference this entity). */
     unsigned int ref_count;
@@ -170,6 +179,12 @@ struct ipmi_entity_s
     int           presence_possibly_changed;
     unsigned int  presence_event_count; /* Changed when presence
 					   events are reported. */
+
+    /* If the presence changes while the entity is in use, we store it
+       in here and the count instead of actually changing it.  Then we
+       fix it up when the entity is set not in use. */
+    int           curr_present;
+    int           present_change_count;
 
     /* Lock used by all timers and a counter so we know if timers are
        running. */
@@ -261,6 +276,8 @@ struct ipmi_entity_info_s
 
 static void call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op);
 static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
+static int call_presence_handlers(ipmi_entity_t *ent, int present,
+				  int handled, ipmi_event_t **event);
 
 /***********************************************************************
  *
@@ -608,9 +625,44 @@ _ipmi_entity_put(ipmi_entity_t *ent)
     ipmi_domain_t *domain = ent->domain;
     _ipmi_domain_entity_lock(domain);
     if (ent->usecount == 1) {
+	if (ent->pending_info_ready) {
+	    ent->info = ent->pending_info;
+	    entity_set_name(ent);
+	    ent->pending_info_ready = 0;
+	}
+
+	/* If the entity has changed, report it to the user. */
+	if (ent->changed) {
+	    ent->changed = 0;
+	    _ipmi_domain_entity_unlock(domain);
+	    call_entity_update_handlers(ent, IPMI_CHANGED);
+	    _ipmi_domain_entity_lock(domain);
+
+	    /* Something grabbed the entity while the lock wasn't
+	       held, don't attempt the cleanup. */
+	    if (ent->usecount != 1)
+		goto out;
+	}
+
+	while (ent->present_change_count) {
+	    int present;
+	    ent->present = !ent->present;
+	    present = ent->present;
+	    ent->present_change_count--;
+	    _ipmi_domain_entity_unlock(domain);
+	    call_presence_handlers(ent, present, IPMI_EVENT_NOT_HANDLED, NULL);
+	    _ipmi_domain_entity_lock(domain);
+
+	    /* Something grabbed the entity while the lock wasn't
+	       held, don't attempt the cleanup. */
+	    if (ent->usecount != 1)
+		goto out;
+	}
+
 	if (cleanup_entity(ent))
 	    return;
     }
+ out:
     ent->usecount--;
     _ipmi_domain_entity_unlock(domain);
 }
@@ -957,10 +1009,10 @@ ipmi_entity_add_child(ipmi_entity_t       *ent,
 
     add_child(ent, child, entry1, entry2);
 
-    _ipmi_domain_entity_unlock(ent->domain);
+    ent->changed = 1;
+    child->changed = 1;
 
-    call_entity_update_handlers(ent, IPMI_CHANGED);
-    call_entity_update_handlers(child, IPMI_CHANGED);
+    _ipmi_domain_entity_unlock(ent->domain);
 
     return 0;
 
@@ -989,8 +1041,8 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
     _ipmi_domain_entity_unlock(ent->domain);
 
     if (!rv) {
-	call_entity_update_handlers(ent, IPMI_CHANGED);
-	call_entity_update_handlers(child, IPMI_CHANGED);
+	ent->changed = 1;
+	child->changed = 1;
     }
 
     return rv;
@@ -1132,23 +1184,44 @@ call_presence_handler(void *cb_data, void *item1, void *item2)
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
+static int
+call_presence_handlers(ipmi_entity_t *ent, int present,
+		       int handled, ipmi_event_t **event)
+{
+    presence_handler_info_t info;
+
+    info.ent = ent;
+    info.present = present;
+    info.event = *event;
+    info.handled = handled;
+    ipmi_lock(ent->lock);
+    if (ent->cruft_presence_handler) {
+	ipmi_entity_presence_nd_cb handler = ent->cruft_presence_handler;
+	void                       *cb_data = ent->cruft_presence_cb_data;
+	ipmi_unlock(ent->lock);
+	handler(ent, info.present, cb_data, info.event);
+	info.handled = IPMI_EVENT_HANDLED;
+    } else
+	ipmi_unlock(ent->lock);
+    locked_list_iterate(ent->presence_handlers, call_presence_handler,
+			&info);
+    *event = info.event;
+    return info.handled;
+}
+
 static void
 presence_changed(ipmi_entity_t *ent,
 		 int           present,
 		 ipmi_event_t  *event)
 {
     int                     handled = IPMI_EVENT_NOT_HANDLED;
-    presence_handler_info_t info;
     ipmi_fru_t              *fru;
     ipmi_domain_t           *domain = ent->domain;
 
     ent->presence_event_count++;
 
-    if (present != ent->present) {
-	if (handled == IPMI_EVENT_HANDLED)
-	    event = NULL;
-
-	ent->present = present;
+    if (present != ent->curr_present) {
+	ent->curr_present = present;
 
 	if (ent->hot_swappable
 	    &&(ent->hs_cb.get_hot_swap_state == e_get_hot_swap_state))
@@ -1171,24 +1244,28 @@ presence_changed(ipmi_entity_t *ent,
 		call_fru_handlers(ent, IPMI_DELETED);
 	    }
 	}
-	
-	info.ent = ent;
-	info.present = present;
-	info.event = event;
-	info.handled = handled;
-	ipmi_lock(ent->lock);
-	if (ent->cruft_presence_handler) {
-	    ipmi_entity_presence_nd_cb handler = ent->cruft_presence_handler;
-	    void                       *cb_data = ent->cruft_presence_cb_data;
-	    ipmi_unlock(ent->lock);
-	    handler(ent, present, cb_data, event);
-	    info.handled = IPMI_EVENT_HANDLED;
-	} else
-	    ipmi_unlock(ent->lock);
-	locked_list_iterate(ent->presence_handlers, call_presence_handler,
-			    &info);
-	handled = info.handled;
-	event = info.event;
+
+	/* Subtle stuff, we only report presence if no one else is
+	   using the entity.  If someone else is, we save it for
+	   later. */
+	_ipmi_domain_entity_lock(domain);
+	if (ent->usecount == 1) {
+	    ent->present = !ent->present;
+	    _ipmi_domain_entity_unlock(domain);
+	    handled = call_presence_handlers(ent, present, handled, &event);
+	    _ipmi_domain_entity_lock(domain);
+	    while ((ent->usecount == 1) && (ent->present_change_count)) {
+		ent->present = !ent->present;
+		present = ent->present;
+		ent->present_change_count--;
+		_ipmi_domain_entity_unlock(domain);
+		call_presence_handlers(ent, present, handled, NULL);
+		_ipmi_domain_entity_lock(domain);
+	    }
+	} else {
+	    ent->present_change_count++;
+	}
+	_ipmi_domain_entity_unlock(domain);
 
 	/* If our presence changes, that can affect parents, too.  So we
 	   rescan them. */
@@ -2878,6 +2955,8 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    uint8_t ipmb    = 0xff;
 	    int     channel = -1;
 
+	    found->ent->changed = 1;
+
 	    /* A real DLR, increment the refcount, and copy the info. */
 	    found->ent->ref_count++;
 
@@ -2887,25 +2966,25 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    if (infos.dlrs[i]->type == IPMI_ENTITY_FRU) {
 		channel = infos.dlrs[i]->channel;
 		ipmb = infos.dlrs[i]->slave_address;
-		ipmi_lock(found->ent->lock);
-		memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
-		ipmi_unlock(found->ent->lock);
+		memcpy(&found->ent->pending_info, infos.dlrs[i],
+		       sizeof(dlr_info_t));
+		found->ent->pending_info_ready = 1;		
 	    }
 	    else if (infos.dlrs[i]->type == IPMI_ENTITY_MC)
 	    {
 		if (infos.dlrs[i]->FRU_inventory_device) {
 		    channel = infos.dlrs[i]->channel;
 		    ipmb = infos.dlrs[i]->access_address;
-		    ipmi_lock(found->ent->lock);
-		    memcpy(&found->ent->info, infos.dlrs[i],
+		    memcpy(&found->ent->pending_info, infos.dlrs[i],
 			   sizeof(dlr_info_t));
-		    ipmi_unlock(found->ent->lock);
+		    found->ent->pending_info_ready = 1;		
 		} else {
 		    if (!found->ent->info.FRU_inventory_device) {
 			/* We prefer to only keep the information from the
 			   FRU inventory device MCDLR. */
-			memcpy(&found->ent->info, infos.dlrs[i],
+			memcpy(&found->ent->pending_info, infos.dlrs[i],
 			       sizeof(dlr_info_t));
+			found->ent->pending_info_ready = 1;		
 		    }
 
 		    /* Go ahead and scan the MC if we don't do
@@ -2916,11 +2995,10 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 					    NULL, NULL);
 		}
 	    } else {
-		ipmi_lock(found->ent->lock);
-		memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
-		ipmi_unlock(found->ent->lock);
+		memcpy(&found->ent->pending_info, infos.dlrs[i],
+		       sizeof(dlr_info_t));
+		found->ent->pending_info_ready = 1;		
 	    }
-	    entity_set_name(found->ent);
 
 	    /* If we can use the FRU device presence to detect whether
 	       the entity is present, we register the monitor with the
@@ -2976,6 +3054,8 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 		entry = entries;
 		entries = entry->next->next;
 		add_child(found->ent, found->cent[j], entry, entry->next);
+		found->ent->changed = 1;
+		found->cent[j]->changed = 1;
 	    }
 	}
     }
@@ -2983,20 +3063,6 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
     infos.ents = ents;
 
     _ipmi_domain_entity_unlock(domain);
-
-    /* Now go through the new dlrs to call the updated handler on
-       them. */
-    for (i=0; i<infos.next; i++) {
-	found = infos.found + i;
-	if (found->found)
-	    continue;
-
-	/* Call the update handler list. */
-	call_entity_update_handlers(found->ent, IPMI_CHANGED);
-
-	for (j=0; j<found->cent_next; j++)
-	    call_entity_update_handlers(found->cent[j], IPMI_CHANGED);
-    }
 
     put_entities(&infos);
     put_entities(old_infos);
@@ -4516,7 +4582,7 @@ ipmi_entity_set_hot_swappable(ipmi_entity_t *ent, int val)
     ent->hot_swappable = val;
 
     /* Make sure the user knows of the change. */
-    call_entity_update_handlers(ent, IPMI_CHANGED);
+    ent->changed = 1;
 
     return 0;
 }

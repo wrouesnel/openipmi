@@ -202,9 +202,11 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_CON_FAIL_DISABLE(con) \
 	__ipmi_log_mask &= ~(DEBUG_CON0_FAIL_BIT << con)
 
-/* Lock/unlock the entities for the given domain. */
+/* Lock/unlock the entities/mcs for the given domain. */
 void _ipmi_domain_entity_lock(ipmi_domain_t *domain);
 void _ipmi_domain_entity_unlock(ipmi_domain_t *domain);
+void _ipmi_domain_mc_lock(ipmi_domain_t *domain);
+void _ipmi_domain_mc_unlock(ipmi_domain_t *domain);
 
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */

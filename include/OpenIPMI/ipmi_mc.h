@@ -144,6 +144,9 @@ int ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc);
    exist. */
 int ipmi_mc_is_active(ipmi_mc_t *mc);
 void _ipmi_mc_set_active(ipmi_mc_t *mc, int val);
+/* Clear the active call count, so the active handlers will not be
+   called on the MC. */
+void _ipmi_mc_clear_active_call(ipmi_mc_t *mc);
 
 /* Used to monitor when the MC goes active or inactive. */
 typedef void (*ipmi_mc_active_cb)(ipmi_mc_t *mc,

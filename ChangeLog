@@ -20,6 +20,16 @@
 	* lib/domain.c, lib/mc.c, lib/entities.c: More work on locking,
 	making sure locks are held in the proper places.
 
+	* lib/domain.c, lib/mc.c, include/OpenIPMI/ipmi_int.h: Rework the
+	locking on MCs so that the device id data and the active
+	indications are not changed until no one is using the MC.
+
+	* lib/entity.c: Rework the locking on entities so that the DLR
+	data does not change until no one is using the entity, and the
+	changed indications are not reported until the entity is not in
+	use.  Presence is also change to work this way, but it may need
+	some more thinking.
+
 2004-04-29 Corey Minyard <cminyard@mvista.com> 
 
 	* everything: A massive rework of the internals.  Basically,

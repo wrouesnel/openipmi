@@ -656,6 +656,12 @@ iterating the RDRs, or you have two threads each doing operations on
 sensors, you have exactly the same situation.  You have to protect
 yourself with locks the same way.
 
+Note that data about an object (like the device id data, whether the
+MC is active, or the entity is present, or whatever) will @emph{not}
+change while the object is in use.  This data is held until the object
+is no longer in use and then installed (and in the case of activity or
+presence, the callbacks are then called).
+
 @node    OpenIPMI Objects, Callbacks, Locking, OpenIPMI Concepts
 @section OpenIPMI Objects
 
