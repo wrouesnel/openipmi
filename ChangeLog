@@ -1,3 +1,19 @@
+2005-01-19 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_lanparm.h: Added the RMCP+ and VLAN
+	lanparms.
+	* lib/lanparm.c: ditto
+	* cmdlang/cmd_lanparm.c: ditto
+	* swig/perl/test_lanparm: ditto
+	* include/OpenIPMI/lanserv.h: ditto
+	* lanserv/lanserv_ipmi.c: ditto
+
+	* lanserv/lanserv_ipmi.c: Fix a bug where the dummy session wasn't
+	being zeroed when handling temporary session messages.
+
+	* lib/ipmi_lan.c: Use the right size when comparing the bmc_key in
+	the options.  Also remove some debugging cruft.
+
 2005-01-17 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_mc.h:

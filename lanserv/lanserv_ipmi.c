@@ -807,6 +807,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
 
     xmit_seq = ipmi_get_uint32(msg->data+18);
 
+    memset(&dummy_session, 0, sizeof(dummy_session));
     dummy_session.active = 1;
     dummy_session.authtype = msg->authtype;
     dummy_session.xmit_seq = xmit_seq;
@@ -1565,6 +1566,8 @@ handle_ipmi_set_lan_config_parms(lan_data_t *lan,
 
     case 1:
     case 17:
+    case 22:
+    case 23:
 	err = 0x82; /* Read-only data */
 	break;
 
@@ -1712,6 +1715,41 @@ handle_ipmi_set_lan_config_parms(lan_data_t *lan,
 	else {
 	    memcpy(lan->lanparm.dest[idx].addr, msg->data+2, 13);
 	    lan->lanparm.changed.dest_addr[idx] = 1;
+	}
+	break;
+
+    case 20:
+	if (msg->len < 4)
+	    err = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.vlan_id, msg->data+2, 2);
+	    lan->lanparm.changed.vlan_id = 1;
+	}
+	break;
+
+    case 21:
+	lan->lanparm.vlan_priority = msg->data[2];
+	lan->lanparm.changed.vlan_priority = 1;
+	break;
+
+    case 24:
+	if (msg->len < 11)
+	    err = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else {
+	    memcpy(lan->lanparm.max_priv_for_cipher_suite, msg->data+2, 9);
+	    lan->lanparm.changed.max_priv_for_cipher_suite = 1;
+	}
+	break;
+
+    case 25:
+	idx = msg->data[2] & 0xf;
+	if (msg->len < 6)
+	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	else if (idx > lan->lanparm.num_destinations)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else {
+	    memcpy(lan->lanparm.dest[idx].vlan, msg->data+2, 4);
+	    lan->lanparm.changed.dest_vlan[idx] = 1;
 	}
 	break;
 
@@ -1874,6 +1912,40 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
 	} else {
 	    data = lan->lanparm.dest[idx].addr;
 	    length = 13;
+	}
+	break;
+
+    case 20:
+	data = lan->lanparm.vlan_id;
+	length = 2;
+	break;
+
+    case 21:
+	databyte = lan->lanparm.vlan_priority;
+	break;
+
+    case 22:
+	databyte = lan->lanparm.num_cipher_suites;
+	break;
+
+    case 23:
+	data = lan->lanparm.cipher_suite_entry;
+	length = 17;
+	break;
+
+    case 24:
+	data = lan->lanparm.max_priv_for_cipher_suite;
+	length = 9;
+	break;
+
+    case 25:
+	idx = msg->data[2] & 0xf;
+	if (idx > lan->lanparm.num_destinations) {
+	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	    return;
+	} else {
+	    data = lan->lanparm.dest[idx].vlan;
+	    length = 4;
 	}
 	break;
 
@@ -3641,7 +3713,12 @@ ipmi_lan_init(lan_data_t *lan)
     for (i=0; i<16; i++) {
 	lan->lanparm.dest[i].addr[0] = i;
 	lan->lanparm.dest[i].type[0] = i;
+	lan->lanparm.dest[i].vlan[0] = i;
     }
+
+    lan->lanparm.num_cipher_suites = 15;
+    for (i=0; i<17; i++)
+	lan->lanparm.cipher_suite_entry[i] = i;
 
     lan->pef.num_event_filters = MAX_EVENT_FILTERS;
     for (i=0; i<MAX_EVENT_FILTERS; i++) {

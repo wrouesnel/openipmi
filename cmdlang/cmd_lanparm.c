@@ -555,6 +555,9 @@ static struct lps_s
     F(backup_gateway_ip_addr, ip),
     F(backup_gateway_mac_addr, mac),
     F(community_string, str),
+    F(vlan_id_enable, bool),
+    F(vlan_id, int),
+    F(vlan_priority, int),
     { NULL }
 };
 
@@ -730,6 +733,15 @@ static struct ulps_s alps[] =
     F(gw_to_use, uint),
     F(dest_ip_addr, uip),
     F(dest_mac_addr, umac),
+    F(dest_vlan_tag_type, uint),
+    F(dest_vlan_tag, uint),
+    { NULL }
+};
+
+static struct ulps_s clps[] =
+{
+    F(cipher_suite_entry, uint),
+    F(max_priv_for_cipher_suite, uint),
     { NULL }
 };
 
@@ -770,6 +782,19 @@ config_info(ipmi_cmd_info_t *cmd_info, ipmi_lan_config_t *config)
 	for (i=0; alps[i].name; i++) {
 	    ulp_item_t *lp = alps[i].lpi;
 	    lp->out(cmd_info, user, alps[i].name, config, alps[i].get_func);
+	}
+	ipmi_cmdlang_up(cmd_info);
+    }
+
+    /* per-cipher-suite items */
+    num = ipmi_lanconfig_get_num_cipher_suites(config);
+    for (user=0; user<num; user++) {
+	ipmi_cmdlang_out(cmd_info, "Cipher Suite", NULL);
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_out_int(cmd_info, "Number", user);
+	for (i=0; clps[i].name; i++) {
+	    ulp_item_t *lp = clps[i].lpi;
+	    lp->out(cmd_info, user, clps[i].name, config, clps[i].get_func);
 	}
 	ipmi_cmdlang_up(cmd_info);
     }

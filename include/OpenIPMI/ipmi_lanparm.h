@@ -129,6 +129,12 @@ int ipmi_lanparm_set_parm(ipmi_lanparm_t       *lanparm,
 #define IPMI_LANPARM_NUM_DESTINATIONS		17
 #define IPMI_LANPARM_DEST_TYPE			18
 #define IPMI_LANPARM_DEST_ADDR			19
+#define IPMI_LANPARM_VLAN_ID			20
+#define IPMI_LANPARM_VLAN_PRIORITY		21
+#define IPMI_LANPARM_NUM_CIPHER_SUITE_ENTRIES	22
+#define IPMI_LANPARM_CIPHER_SUITE_ENTRY_SUPPORT	23
+#define IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV	24
+#define IPMI_LANPARM_DEST_VLAN_TAG		25
 
 /* A full LAN configuration.  Note that you cannot allocate one of
    these, you can only fetch them, modify them, set them, and free
@@ -444,6 +450,48 @@ int ipmi_lanconfig_set_dest_mac_addr(ipmi_lan_config_t *lanc,
 				     unsigned int      dest,
 				     unsigned char     *data,
 				     unsigned int      data_len);
+int ipmi_lanconfig_get_dest_vlan_tag_type(ipmi_lan_config_t *lanc,
+					  unsigned int      dest,
+					  unsigned int      *val);
+int ipmi_lanconfig_set_dest_vlan_tag_type(ipmi_lan_config_t *lanc,
+					  unsigned int      dest,
+					  unsigned int      val);
+int ipmi_lanconfig_get_dest_vlan_tag(ipmi_lan_config_t *lanc,
+				     unsigned int      dest,
+				     unsigned int      *val);
+int ipmi_lanconfig_set_dest_vlan_tag(ipmi_lan_config_t *lanc,
+				     unsigned int      dest,
+				     unsigned int      val);
+
+/* VLAN support */
+int ipmi_lanconfig_get_vlan_id(ipmi_lan_config_t *lanc,
+			       unsigned int      *val);
+int ipmi_lanconfig_set_vlan_id(ipmi_lan_config_t *lanc,
+			       unsigned int      val);
+int ipmi_lanconfig_get_vlan_id_enable(ipmi_lan_config_t *lanc,
+				      unsigned int      *val);
+int ipmi_lanconfig_set_vlan_id_enable(ipmi_lan_config_t *lanc,
+				      unsigned int      val);
+int ipmi_lanconfig_get_vlan_priority(ipmi_lan_config_t *lanc,
+				     unsigned int      *val);
+int ipmi_lanconfig_set_vlan_priority(ipmi_lan_config_t *lanc,
+				     unsigned int      val);
+
+/* Cipher Suites */
+unsigned int ipmi_lanconfig_get_num_cipher_suites(ipmi_lan_config_t *lanc);
+					   
+int ipmi_lanconfig_get_cipher_suite_entry(ipmi_lan_config_t *lanc,
+					  unsigned int      entry,
+					  unsigned int      *val);
+int ipmi_lanconfig_set_cipher_suite_entry(ipmi_lan_config_t *lanc,
+					  unsigned int      entry,
+					  unsigned int      val);
+int ipmi_lanconfig_get_max_priv_for_cipher_suite(ipmi_lan_config_t *lanc,
+						 unsigned int      entry,
+						 unsigned int      *val);
+int ipmi_lanconfig_set_max_priv_for_cipher_suite(ipmi_lan_config_t *lanc,
+						 unsigned int      entry,
+						 unsigned int      val);
 
 #ifdef __cplusplus
 }

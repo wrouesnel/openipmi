@@ -812,6 +812,9 @@ typedef struct alert_dest_addr_s
     unsigned char gw_to_use;
     unsigned char dest_ip_addr[4];
     unsigned char dest_mac_addr[6];
+
+    unsigned char  dest_vlan_tag_type;
+    unsigned short dest_vlan_tag;
 } alert_dest_addr_t;
 
 struct ipmi_lan_config_s
@@ -865,7 +868,19 @@ struct ipmi_lan_config_s
     unsigned char backup_gateway_mac_addr_supported;
     unsigned char community_string[18];
 
+    unsigned char  vlan_id_supported;
+    unsigned short vlan_id;
+    unsigned char  vlan_id_enable;
+
+    unsigned char  vlan_priority_supported;
+    unsigned char  vlan_priority;
+
+    unsigned char  num_cipher_suites;
+    unsigned char  cipher_suite_entries[16];
+    unsigned char  max_priv_for_cipher_suite[16];
+
     unsigned char num_alert_destinations;
+    unsigned char  vlan_tag_supported;
     alert_dest_type_t *alert_dest_type;
     alert_dest_addr_t *alert_dest_addr;
 };
@@ -1154,10 +1169,179 @@ static void sda(ipmi_lan_config_t *lanc, lanparms_t *lp, unsigned char *data)
     memcpy(data+7, da->dest_mac_addr, 6);
 }
 
+/* IPMI_LANPARM_VLAN_ID */
+static int gvi(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
+	       unsigned char *data)
+{
+    unsigned char *opt;
+
+    opt = ((unsigned char *) lanc) + lp->optional_offset;
+    if (err) {
+	if (err == IPMI_IPMI_ERR_VAL(0x80)) {
+	    *opt = 0;
+	    return 0;
+	}
+	return err;
+    }
+
+    if (opt)
+	*opt = 1;
+
+    data++; /* Skip over the revision byte. */
+
+    lanc->vlan_id_enable = (data[1] >> 7) & 1;
+    lanc->vlan_id = ((data[1] & 0xf) << 8) | data[0];
+    return 0;
+}
+
+static void svi(ipmi_lan_config_t *lanc, lanparms_t *lp, unsigned char *data)
+{
+    data[0] = lanc->vlan_id & 0xff;
+    data[1] = (lanc->vlan_id_enable << 7) | ((lanc->vlan_id >> 8) & 0xf);
+}
+
+/* IPMI_LANPARM_VLAN_PRIORITY */
+static int gvp(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
+	       unsigned char *data)
+{
+    unsigned char *opt;
+
+    opt = ((unsigned char *) lanc) + lp->optional_offset;
+    if (err) {
+	if (err == IPMI_IPMI_ERR_VAL(0x80)) {
+	    *opt = 0;
+	    return 0;
+	}
+	return err;
+    }
+
+    if (opt)
+	*opt = 1;
+
+    data++; /* Skip over the revision byte. */
+
+    lanc->vlan_priority = data[0] & 0x07;
+    return 0;    
+}
+
+static void svp(ipmi_lan_config_t *lanc, lanparms_t *lp, unsigned char *data)
+{
+    data[0] = lanc->vlan_priority & 0x7;
+}
+
+/* IPMI_LANPARM_NUM_CIPHER_SUITE_ENTRIES */
+static int gnc(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
+	       unsigned char *data)
+{
+    if (err) {
+	if (err == IPMI_IPMI_ERR_VAL(0x80)) {
+	    lanc->num_cipher_suites = 0;
+	    return 0;
+	}
+	return err;
+    }
+
+    data++; /* Skip over the revision byte. */
+
+    lanc->num_cipher_suites = (data[0] & 0xf) + 1;
+    return 0;    
+}
+
+/* IPMI_LANPARM_CIPHER_SUITE_ENTRY_SUPPORT */
+static int gcs(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
+	       unsigned char *data)
+{
+    if (err)
+	return err;
+
+    data++; /* Skip over the revision byte. */
+
+    memcpy(lanc->cipher_suite_entries, data+1, 16);
+    return 0;
+}
+
+/* IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV */
+static int gcp(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
+	       unsigned char *data)
+{
+    int i, j;
+
+    if (err)
+	return err;
+
+    data++; /* Skip over the revision byte. */
+    data++; /* Skip over reserved byte */
+
+    for (i=0, j=0; i<16; i+=2, j++) {
+	lanc->max_priv_for_cipher_suite[i] = data[j] & 0xf;
+	lanc->max_priv_for_cipher_suite[i+1] = (data[j] >> 4) & 0xf;
+    }
+    return 0;
+}
+
+static void scp(ipmi_lan_config_t *lanc, lanparms_t *lp, unsigned char *data)
+{
+    int i, j;
+
+    data[0] = 0;
+    for (i=0, j=1; i<16; i+=2, j++) {
+	data[j] = ((lanc->max_priv_for_cipher_suite[i] & 0xf)
+		   | ((lanc->max_priv_for_cipher_suite[i+1] & 0xf) << 4));
+    }
+}
+
+/* IPMI_LANPARM_DEST_VLAN_TAG */
+static int gvt(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
+	       unsigned char *data)
+{
+    int               sel;
+    alert_dest_addr_t *da;
+    unsigned char     *opt;
+
+    opt = ((unsigned char *) lanc) + lp->optional_offset;
+    if (err) {
+	if (err == IPMI_IPMI_ERR_VAL(0x80)) {
+	    *opt = 0;
+	    return 0;
+	}
+	return err;
+    }
+
+    if (opt)
+	*opt = 1;
+
+    data++; /* Skip over the revision byte. */
+
+    sel = data[0] & 0xf;
+    if (sel > lanc->num_alert_destinations)
+	return 0; /* Another error check will get this later. */
+
+    da = lanc->alert_dest_addr + sel;
+
+    da->dest_vlan_tag_type = (data[1] >> 4) & 0x0f;
+    da->dest_vlan_tag = (data[3] << 8) | data[2];
+    return 0;
+}
+
+static void svt(ipmi_lan_config_t *lanc, lanparms_t *lp, unsigned char *data)
+{
+    int               sel;
+    alert_dest_addr_t *da;
+
+    sel = data[0] & 0xf;
+    da = lanc->alert_dest_addr + sel;
+
+    data[1] = da->dest_vlan_tag_type << 4;
+    data[2] = da->dest_vlan_tag & 0xff;
+    data[3] = (da->dest_vlan_tag >> 8) & 0xff;
+}
+
+
+
 #define OFFSET_OF(x) (((unsigned char *) &(((ipmi_lan_config_t *) NULL)->x)) \
                       - ((unsigned char *) NULL))
 
-#define NUM_LANPARMS 20
+#define NUM_LANPARMS 26
 static lanparms_t lanparms[NUM_LANPARMS] =
 {
     { 0, 0, 0, 0, NULL, NULL }, /* IPMI_LANPARM_SET_IN_PROGRESS		     */
@@ -1220,6 +1404,18 @@ static lanparms_t lanparms[NUM_LANPARMS] =
     { 1, 0, 1, 0, gnd,  NULL }, /* IPMI_LANPARM_NUM_DESTINATIONS	     */
     { 1, 0, 4, 0, gdt,  sdt  }, /* IPMI_LANPARM_DEST_TYPE		     */
     { 1, 0, 13, 0, gda, sda  }, /* IPMI_LANPARM_DEST_ADDR		     */
+#undef S
+#define S OFFSET_OF(vlan_id_supported)
+    { 1, S, 2, 0, gvi, svi   }, /* IPMI_LANPARM_VLAN_ID                      */
+#undef S
+#define S OFFSET_OF(vlan_priority_supported)
+    { 1, S, 1, 0, gvp, svp   }, /* IPMI_LANPARM_VLAN_PRIORITY                */
+    { 1, 0, 1, 0, gnc, NULL  }, /* IPMI_LANPARM_NUM_CIPHER_SUITE_ENTRIES     */
+    { 1, 0, 17, 0, gcs, NULL }, /* IPMI_LANPARM_CIPHER_SUITE_ENTRY_SUPPORT   */
+    { 1, 0, 9, 0, gcp, scp   }, /* IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV      */
+#undef S
+#define S OFFSET_OF(vlan_tag_supported)
+    { 1, S, 4, 0, gvt, svt   }, /* IPMI_LANPARM_DEST_VLAN_TAG                */
 };
 
 static void
@@ -1268,10 +1464,12 @@ got_parm(ipmi_lanparm_t    *lanparm,
  next_parm:
     switch (lanc->curr_parm) {
     case IPMI_LANPARM_NUM_DESTINATIONS:
-	lanc->curr_parm++;
 	if (lanc->num_alert_destinations == 0)
-	    goto done;
-	lanc->curr_sel = 0;
+	    lanc->curr_parm = IPMI_LANPARM_VLAN_ID;
+	else {
+	    lanc->curr_parm++;
+	    lanc->curr_sel = 0;
+	}
 	break;
 
     case IPMI_LANPARM_DEST_TYPE:
@@ -1298,6 +1496,31 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "lanparm.c(got_parm): "
 		     "Error fetching dest addr %d,"
+		     " wrong selector came back, expecting %d, was %d",
+		     lanc->curr_parm, lanc->curr_sel, data[1] & 0xf);
+	    err = EINVAL;
+	    goto done;
+	}
+	lanc->curr_sel++;
+	if (lanc->curr_sel >= lanc->num_alert_destinations)
+	    lanc->curr_parm = IPMI_LANPARM_VLAN_ID;
+	break;
+
+    case IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV:
+	if (lanc->num_alert_destinations == 0)
+	    goto done;
+	else {
+	    lanc->curr_parm++;
+	    lanc->curr_sel = 0;
+	}
+	break;
+
+    case IPMI_LANPARM_DEST_VLAN_TAG:
+	if ((data[1] & 0xf) != lanc->curr_sel) {
+	    /* Yikes, wrong selector came back! */
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "lanparm.c(got_parm): "
+		     "Error fetching dest type %d,"
 		     " wrong selector came back, expecting %d, was %d",
 		     lanc->curr_parm, lanc->curr_sel, data[1] & 0xf);
 	    err = EINVAL;
@@ -1509,8 +1732,10 @@ set_done(ipmi_lanparm_t *lanparm,
     switch (lanc->curr_parm) {
     case IPMI_LANPARM_NUM_DESTINATIONS:
 	lanc->curr_parm++;
-	if (lanc->num_alert_destinations == 0)
-	    goto done;
+	if (lanc->num_alert_destinations == 0) {
+	    lanc->curr_parm = IPMI_LANPARM_VLAN_ID;
+	    goto next_parm;
+	}
 	lanc->curr_sel = 0;
 	data[0] = lanc->curr_sel;
 	break;
@@ -1525,6 +1750,23 @@ set_done(ipmi_lanparm_t *lanparm,
 	break;
 
     case IPMI_LANPARM_DEST_ADDR:
+	lanc->curr_sel++;
+	if (lanc->curr_sel >= lanc->num_alert_destinations) {
+	    lanc->curr_parm++;
+	    lanc->curr_sel = 0;
+	}
+	data[0] = lanc->curr_sel;
+	break;
+
+    case IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV:
+	lanc->curr_parm++;
+	if (lanc->num_alert_destinations == 0)
+	    goto done;
+	lanc->curr_sel = 0;
+	data[0] = lanc->curr_sel;
+	break;
+
+    case IPMI_LANPARM_DEST_VLAN_TAG:
 	lanc->curr_sel++;
 	if (lanc->curr_sel >= lanc->num_alert_destinations)
 	    goto done;
@@ -1756,7 +1998,7 @@ AUTH_ENAB(md5)
 AUTH_ENAB(md2)
 AUTH_ENAB(none)
 
-#define LP_BYTE_PARM(n) \
+#define LP_INT_PARM(n) \
 unsigned int \
 ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc) \
 { \
@@ -1796,7 +2038,7 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
 }
 
 LP_ARRAY_PARM(ip_addr, 4)
-LP_BYTE_PARM(ip_addr_source);
+LP_INT_PARM(ip_addr_source);
 LP_ARRAY_PARM(mac_addr, 6)
 LP_ARRAY_PARM(subnet_mask, 4)
 LP_ARRAY_PARM(default_gateway_ip_addr, 4)
@@ -1892,7 +2134,7 @@ ipmi_lanconfig_set_port_rmcp_secondary(ipmi_lan_config_t *lanc,
 }
 
 
-#define LP_BYTE_PARM_SUP(n, s) \
+#define LP_INT_PARM_SUP(n, s) \
 int \
 ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned int      *data) \
@@ -1912,13 +2154,18 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
     return 0; \
 }
 
-LP_BYTE_PARM_SUP(ipv4_ttl, ipv4_header_parms_supported);
-LP_BYTE_PARM_SUP(ipv4_flags, ipv4_header_parms_supported);
-LP_BYTE_PARM_SUP(ipv4_precedence, ipv4_header_parms_supported);
-LP_BYTE_PARM_SUP(ipv4_tos, ipv4_header_parms_supported);
-LP_BYTE_PARM_SUP(bmc_generated_arps, arp_control_supported)
-LP_BYTE_PARM_SUP(bmc_generated_garps, arp_control_supported)
-LP_BYTE_PARM_SUP(garp_interval, garp_interval_supported)
+LP_INT_PARM_SUP(ipv4_ttl, ipv4_header_parms_supported);
+LP_INT_PARM_SUP(ipv4_flags, ipv4_header_parms_supported);
+LP_INT_PARM_SUP(ipv4_precedence, ipv4_header_parms_supported);
+LP_INT_PARM_SUP(ipv4_tos, ipv4_header_parms_supported);
+LP_INT_PARM_SUP(bmc_generated_arps, arp_control_supported)
+LP_INT_PARM_SUP(bmc_generated_garps, arp_control_supported)
+LP_INT_PARM_SUP(garp_interval, garp_interval_supported)
+
+LP_INT_PARM_SUP(vlan_id, vlan_id_supported)
+LP_INT_PARM_SUP(vlan_id_enable, vlan_id_supported)
+
+LP_INT_PARM_SUP(vlan_priority, vlan_priority_supported)
 
 unsigned int
 ipmi_lanconfig_get_num_alert_destinations(ipmi_lan_config_t *lanc)
@@ -1926,7 +2173,7 @@ ipmi_lanconfig_get_num_alert_destinations(ipmi_lan_config_t *lanc)
     return lanc->num_alert_destinations;
 }
 
-#define LP_BYTE_TAB(s, n) \
+#define LP_INT_TAB(s, n) \
 int \
 ipmi_lanconfig_get_## n(ipmi_lan_config_t *lanc, \
 			unsigned int      set, \
@@ -1979,15 +2226,69 @@ ipmi_lanconfig_set_## n(ipmi_lan_config_t *lanc, \
     return 0; \
 }
 
-LP_BYTE_TAB(alert_dest_type, alert_ack)
-LP_BYTE_TAB(alert_dest_type, dest_type)
-LP_BYTE_TAB(alert_dest_type, alert_retry_interval)
-LP_BYTE_TAB(alert_dest_type, max_alert_retries)
+LP_INT_TAB(alert_dest_type, alert_ack)
+LP_INT_TAB(alert_dest_type, dest_type)
+LP_INT_TAB(alert_dest_type, alert_retry_interval)
+LP_INT_TAB(alert_dest_type, max_alert_retries)
 
-LP_BYTE_TAB(alert_dest_addr, dest_format)
-LP_BYTE_TAB(alert_dest_addr, gw_to_use)
+LP_INT_TAB(alert_dest_addr, dest_format)
+LP_INT_TAB(alert_dest_addr, gw_to_use)
 LP_ARRAY_TAB(alert_dest_addr, dest_ip_addr, 4)
 LP_ARRAY_TAB(alert_dest_addr, dest_mac_addr, 6)
+
+LP_INT_TAB(alert_dest_addr, dest_vlan_tag_type)
+LP_INT_TAB(alert_dest_addr, dest_vlan_tag)
+
+unsigned int
+ipmi_lanconfig_get_num_cipher_suites(ipmi_lan_config_t *lanc)
+{
+    return lanc->num_cipher_suites;
+}
+
+int
+ipmi_lanconfig_get_cipher_suite_entry(ipmi_lan_config_t *lanc,
+				      unsigned int      entry,
+				      unsigned int      *val)
+{
+    if (entry >= lanc->num_cipher_suites)
+	return EINVAL;
+    *val = lanc->cipher_suite_entries[entry];
+    return 0;
+}
+
+int
+ipmi_lanconfig_set_cipher_suite_entry(ipmi_lan_config_t *lanc,
+				      unsigned int      entry,
+				      unsigned int      val)
+{
+    if (entry >= lanc->num_cipher_suites)
+	return EINVAL;
+    lanc->cipher_suite_entries[entry] = val;
+    return 0;
+}
+
+int
+ipmi_lanconfig_get_max_priv_for_cipher_suite(ipmi_lan_config_t *lanc,
+					     unsigned int      entry,
+					     unsigned int      *val)
+{
+    if (entry >= lanc->num_cipher_suites)
+	return EINVAL;
+    *val = lanc->max_priv_for_cipher_suite[entry];
+    return 0;
+}
+
+int
+ipmi_lanconfig_set_max_priv_for_cipher_suite(ipmi_lan_config_t *lanc,
+					     unsigned int      entry,
+					     unsigned int      val)
+{
+    if (entry >= lanc->num_cipher_suites)
+	return EINVAL;
+    lanc->max_priv_for_cipher_suite[entry] = val;
+    return 0;
+}
+
 
 typedef struct lanparm_gendata_s
 {
@@ -2113,7 +2414,15 @@ static lanparm_gendata_t gdata[] =
     F_INTIV(dest_format, ipmi_lanconfig_get_num_alert_destinations),
     F_INTIV(gw_to_use, ipmi_lanconfig_get_num_alert_destinations),
     F_IPIV(dest_ip_addr, ipmi_lanconfig_get_num_alert_destinations), /* 35 */
-    F_MACIV(dest_mac_addr, ipmi_lanconfig_get_num_alert_destinations)
+    F_MACIV(dest_mac_addr, ipmi_lanconfig_get_num_alert_destinations),
+    F_INTIV(dest_vlan_tag_type, ipmi_lanconfig_get_num_alert_destinations),
+    F_INTIV(dest_vlan_tag, ipmi_lanconfig_get_num_alert_destinations),
+    F_BOOLV(vlan_id_enable),
+    F_INTV(vlan_id),					/* 40 */
+    F_INTV(vlan_priority),
+    F_INTR(num_cipher_suites),
+    F_INTIV(cipher_suite_entry, ipmi_lanconfig_get_num_cipher_suites),
+    F_INTIV(max_priv_for_cipher_suite, ipmi_lanconfig_get_num_cipher_suites)
 };
 #define NUM_GDATA_ENTRIES (sizeof(gdata) / sizeof(lanparm_gendata_t))
 

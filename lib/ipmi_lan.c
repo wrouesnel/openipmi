@@ -4529,7 +4529,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    break;
 
 	case IPMI_LANP_BMC_KEY:
-	    if (parms[i].parm_data_len > sizeof(cparm.username))
+	    if (parms[i].parm_data_len > sizeof(cparm.bmc_key))
 		return EINVAL;
 	    memcpy(cparm.bmc_key, parms[i].parm_data, parms[i].parm_data_len);
 	    cparm.bmc_key_len = parms[i].parm_data_len;
@@ -4597,7 +4597,6 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
        if we alreay have one that matches. */
     lan = find_matching_lan(&cparm);
     if (lan) {
-printf("***REusing connection!\n");
 	*new_con = lan->ipmi;
 	return 0;
     }

@@ -241,6 +241,7 @@ typedef struct lanparm_dest_data_s
 {
     unsigned char type[4];
     unsigned char addr[13];
+    unsigned char vlan[4];
 } lanparm_dest_data_t;
 
 typedef struct lanparm_data_s lanparm_data_t;
@@ -268,6 +269,12 @@ struct lanparm_data_s
     unsigned char backup_gw_mac_addr[6];
     unsigned char community_string[18];
 
+    unsigned char vlan_id[2];
+    unsigned char vlan_priority;
+    unsigned int  num_cipher_suites : 4;
+    unsigned char cipher_suite_entry[17];
+    unsigned char max_priv_for_cipher_suite[9];
+
     /* Tells what has changed, so the commit can do something about it. */
     struct {
 	unsigned int ip_addr_src : 1;
@@ -285,8 +292,12 @@ struct lanparm_data_s
 	unsigned int backup_gw_ip_addr : 1;
 	unsigned int backup_gw_mac_addr : 1;
 	unsigned int community_string : 1;
+	unsigned int vlan_id : 1;
+	unsigned int vlan_priority : 1;
+	unsigned int max_priv_for_cipher_suite : 1;
 	unsigned char dest_type[16];
 	unsigned char dest_addr[16];
+	unsigned char dest_vlan[16];
     } changed;
 };
 
