@@ -503,6 +503,7 @@ handle_no_session(lan_data_t *lan, msg_t *msg)
 
 	case IPMI_GET_SESSION_CHALLENGE_CMD:
 	    handle_get_session_challenge(lan, msg);
+	    break;
 
 	default:
 	    lan->log(INVALID_MSG, msg,
@@ -1443,9 +1444,6 @@ handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 		break;
 
 	    default:
-		lan->log(INVALID_MSG, msg,
-			 "Normal session message failure: Invalid cmd: 0x%x",
-			 msg->cmd);
 		handle_smi_msg(lan, session, msg);
 	}
     } else if (msg->netfn == IPMI_TRANSPORT_NETFN) {

@@ -658,7 +658,7 @@ main(int argc, const char *argv[])
     struct timeval time_next;
     struct timeval time_now;
 
-    openlog(argv[0], 0, LOG_DAEMON);
+    openlog(argv[0], LOG_CONS, LOG_DAEMON);
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((o = poptGetNextOpt(poptCtx)) >= 0)
@@ -676,12 +676,15 @@ main(int argc, const char *argv[])
     lan.smi_send = smi_send;
     lan.gen_rand = gen_rand;
     lan.write_config = write_config;
+    lan.log = log;
 
     read_config(&lan);
 
     rv = ipmi_lan_init(&lan);
     if (rv)
 	return 1;
+
+    syslog(LOG_INFO, "%s startup", argv[0]);
 
     if (data.lan_fd > data.smi_fd)
 	max_fd = data.lan_fd + 1;
