@@ -283,6 +283,12 @@ address.  For blade-based systems, this is critical.
 There is no standard way to map an event/presence sensor to the
 existance of an MC.  A standard mapping would be very nice.
 
+There is no way to send an arbitrary event types as events.  You can
+only send "standard" events with the "Platform Event Message Command",
+it would be very handy to be able to send any event type you wanted,
+so you could generate OEM events and the like.  You can add it to the
+SEL directly, but that's kind of a pain.
+
 For blade-based chassis, there is no mapping for entity instances.
 The last errata for the spec defined blades and switches (a welcome
 addition).  PICMG 2.9 defines the Management Controller IPMB

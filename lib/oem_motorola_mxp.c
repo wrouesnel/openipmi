@@ -5088,7 +5088,7 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 	/* It's from the board, the address is the generator. */
 	addr = event->data[4];
 
-    /* Schedule an MC query for the board in 1 second, to give it time to
+    /* Schedule an MC query for the board in 3 seconds, to give it time to
        come up. */
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {

@@ -796,6 +796,16 @@ ipmi_detect_ents_presence_changes(ipmi_entity_info_t *ents, int force)
     return 0;
 }
 
+int
+ipmi_detect_entity_presence_change(ipmi_entity_t *entity, int force)
+{
+    ent_detect_info_t info;
+
+    info.force = force;
+    ent_detect_presence(entity, &info);
+    return 0;
+}
+
 static void
 handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 {
