@@ -44,6 +44,7 @@
  *  Entities - These are things that sensors monitor, they can be
  *             FRUs, or whatnot.
  *  Sensors - These are monitors for FRUs.
+ *  Controls - These are output devices
  *
  * You don't have to deal with Management Controllers (MCs), IPMI
  * addressing, or anything like that.  This software will go out onto
@@ -175,7 +176,10 @@ int ipmi_bmc_last_log(ipmi_mc_t *bmc, ipmi_log_t *log);
 int ipmi_bmc_next_log(ipmi_mc_t *bmc, ipmi_log_t *log);
 int ipmi_bmc_prev_log(ipmi_mc_t *bmc, ipmi_log_t *log);
 
+/* Used in various operations to tell what has happened to a sensor,
+   control, entity, or whatever. */
 enum ipmi_update_e { ADDED, DELETED, CHANGED };
+
 /* A callback that will be called when entities are added to and
    removed from the BMC, and when their presence changes. */
 typedef void (*ipmi_bmc_entity_cb)(enum ipmi_update_e op,
@@ -197,7 +201,9 @@ int ipmi_bmc_iterate_entities(ipmi_mc_t                       *bmc,
 			      ipmi_entities_iterate_entity_cb handler,
 			      void                            *cb_data);
 
-/* Store all the information I have locally into the SDR repository. */
+/* Store all the information I have locally into the SDR repository.
+   This is a moderately dangerous operation, as it can wipe out your
+   SDR repository if you are not careful. */
 int ipmi_bmc_store_entities(ipmi_mc_t *bmc, ipmi_bmc_cb done, void *cb_data);
 
 /* For the given entity, iterate over all the children of the entity,
@@ -357,95 +363,42 @@ ipmi_sensor_discrete_set_event_handler(
    for discrete events.  Use the provided functions to initialize,
    read, and modify an event state, sense the internals of the event
    state structure are subject to change. */
-#define IPMI_SENSOR_EVENTS_ENABLED	0x80
-#define IPMI_SENSOR_SCANNING_ENABLED	0x40
-#define IPMI_SENSOR_BUSY		0x20
 typedef struct ipmi_event_state_s ipmi_event_state_t;
-struct ipmi_event_state_s
-{
-    int          status;
-    /* Pay no attention to the implementation. */
-    unsigned int __assertion_events;
-    unsigned int __deassertion_events;
-};
-static inline void
-ipmi_event_state_init(ipmi_event_state_t *events)
-{
-    events->status = 0;
-    events->__assertion_events = 0;
-    events->__deassertion_events = 0;
-}
-static inline void
-ipmi_threshold_event_clear(ipmi_event_state_t          *events,
-			   enum ipmi_thresh_e          type,
-			   enum ipmi_event_value_dir_e value_dir,
-			   enum ipmi_event_dir_e       dir)
-{
-    if (dir == IPMI_ASSERTION) {
-	events->__assertion_events &= ~(1 << (type*2+value_dir));
-    } else {
-	events->__deassertion_events &= ~(1 << (type*2+value_dir));
-    }
-}
-static inline void
-ipmi_threshold_event_set(ipmi_event_state_t          *events,
-			 enum ipmi_thresh_e          type,
-			 enum ipmi_event_value_dir_e value_dir,
-			 enum ipmi_event_dir_e       dir)
-{
-    if (dir == IPMI_ASSERTION) {
-	events->__assertion_events |= 1 << (type*2+value_dir);
-    } else {
-	events->__deassertion_events |= 1 << (type*2+value_dir);
-    }
-}
 
-static inline int
-ipmi_is_threshold_event_set(ipmi_event_state_t          *events,
-			    enum ipmi_thresh_e          type,
-			    enum ipmi_event_value_dir_e value_dir,
-			    enum ipmi_event_dir_e       dir)
-{
-    if (dir == IPMI_ASSERTION) {
-	return (events->__assertion_events & (1 << (type*2+value_dir))) != 0;
-    } else {
-	return (events->__deassertion_events & (1 << (type*2+value_dir))) != 0;
-    }
-}
+/* Return the size of an event state data structure, so you can
+   allocate your own. */
+unsigned int ipmi_event_state_size(void);
 
-static inline void
-ipmi_discrete_event_clear(ipmi_event_state_t    *events,
-			  int                   event_offset,
-			  enum ipmi_event_dir_e dir)
-{
-    if (dir == IPMI_ASSERTION) {
-	events->__assertion_events &= ~(1 << event_offset);
-    } else {
-	events->__deassertion_events &= ~(1 << event_offset);
-    }
-}
-static inline void
-ipmi_discrete_event_set(ipmi_event_state_t    *events,
-			int                   event_offset,
-			enum ipmi_event_dir_e dir)
-{
-    if (dir == IPMI_ASSERTION) {
-	events->__assertion_events |= 1 << event_offset;
-    } else {
-	events->__deassertion_events |= 1 << event_offset;
-    }
-}
-static inline int
-ipmi_is_discrete_event_set(ipmi_event_state_t    *events,
-			   int                   event_offset,
-			   enum ipmi_event_dir_e dir)
-{
-    if (dir == IPMI_ASSERTION) {
-	return (events->__assertion_events & (1 << event_offset)) != 0;
-    } else {
-	return (events->__deassertion_events & (1 << event_offset)) != 0;
-    }
-}
+/* Routines to init, clear, set, and query values in the event state. */
+void ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val);
+int ipmi_event_state_get_events_enabled(ipmi_event_state_t *events);
+void ipmi_event_state_set_scanning_enabled(ipmi_event_state_t *events,int val);
+int ipmi_event_state_get_scanning_enabled(ipmi_event_state_t *events);
+void ipmi_event_state_set_busy(ipmi_event_state_t *events, int val);
+int ipmi_event_state_get_busy(ipmi_event_state_t *events);
+void ipmi_event_state_set_enable_events(ipmi_event_state_t *events, int val);
+void ipmi_event_state_init(ipmi_event_state_t *events);
+void ipmi_threshold_event_clear(ipmi_event_state_t          *events,
+				enum ipmi_thresh_e          type,
+				enum ipmi_event_value_dir_e value_dir,
+				enum ipmi_event_dir_e       dir);
+void ipmi_threshold_event_set(ipmi_event_state_t          *events,
+			      enum ipmi_thresh_e          type,
+			      enum ipmi_event_value_dir_e value_dir,
+			      enum ipmi_event_dir_e       dir);
+int ipmi_is_threshold_event_set(ipmi_event_state_t          *events,
+				enum ipmi_thresh_e          type,
+				enum ipmi_event_value_dir_e value_dir,
+				enum ipmi_event_dir_e       dir);
+void ipmi_discrete_event_clear(ipmi_event_state_t    *events,
+			       int                   event_offset,
+			       enum ipmi_event_dir_e dir);
+void ipmi_discrete_event_set(ipmi_event_state_t    *events,
+			     int                   event_offset,
+			     enum ipmi_event_dir_e dir);
+int ipmi_is_discrete_event_set(ipmi_event_state_t    *events,
+			       int                   event_offset,
+			       enum ipmi_event_dir_e dir);
 
 /* A generic callback for a lot of things. */
 typedef void (*ipmi_sensor_done_cb)(ipmi_sensor_t *sensor,
@@ -463,7 +416,7 @@ typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,
 					  int                err,
 					  int                global_enable,
 					  int                scanning_enabled,
-					  ipmi_event_state_t states,
+					  ipmi_event_state_t *states,
 					  void               *cb_data);
 int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
 				  ipmi_event_enables_get_cb done,
@@ -584,24 +537,23 @@ int ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor);
 
 
 /* This is the implementation for a set of thresholds for a
-   threshold-based sensor.  Don't directly use the contents of the
-   structure, use the helper functions to initialize, read, and modify
-   this structure. */
-typedef struct ipmi_thresholds_s
-{
-    /* Pay no attention to the implementation here. */
-    struct {
-	unsigned int status; /* Is this threshold enabled? */
-	double       val;
-    } vals[6];
-} ipmi_thresholds_t;
+   threshold-based sensor. */
+typedef struct ipmi_thresholds_s ipmi_thresholds_t;
+
+/* Return the size of a threshold data structure, so you can allocate
+   your own. */
+unsigned int ipmi_thresholds_size(void);
+
 int ipmi_thresholds_init(ipmi_thresholds_t *th);
-/* Is sensor is non-null, it verifies that the given threshold can be set
-   for the sensor. */
+
+/* Set a threshold and make t valid in the thresholds data structure.
+   If sensor is non-null, it verifies that the given threshold can be
+   set for the sensor. */
 int ipmi_threshold_set(ipmi_thresholds_t  *th,
 		       ipmi_sensor_t      *sensor,
 		       enum ipmi_thresh_e threshold,
 		       double             value);
+
 int ipmi_threshold_get(ipmi_thresholds_t  *th,
 		       enum ipmi_thresh_e threshold,
 		       double             *value);
@@ -622,34 +574,22 @@ int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 			void               *cb_data);
 
 /* Discrete states, or threshold status. */
-typedef struct ipmi_states_s
-{
-    int          __event_messages_disabled;
-    int          __sensor_scanning_disabled;
-    int          __initial_update_in_progress;
-    unsigned int __states;
-} ipmi_states_t;
+typedef struct ipmi_states_s ipmi_states_t;
 
-static inline void ipmi_init_states(ipmi_states_t *states)
-{
-    states->__event_messages_disabled = 0;
-    states->__sensor_scanning_disabled = 0;
-    states->__initial_update_in_progress = 0;
-    states->__states = 0;
-}
+/* Get the size of ipmi_states_t, so you can allocate your own. */
+unsigned int ipmi_states_size(void);
 
-static inline int ipmi_is_event_messages_disabled(ipmi_states_t *states)
-{
-    return states->__event_messages_disabled;
-}
-static inline int ipmi_is_sensor_scanning_disabled(ipmi_states_t *states)
-{
-    return states->__sensor_scanning_disabled;
-}
-static inline int ipmi_is_initial_update_in_progress(ipmi_states_t *states)
-{
-    return states->__initial_update_in_progress;
-}
+void ipmi_init_states(ipmi_states_t *states);
+int ipmi_is_event_messages_disabled(ipmi_states_t *states);
+int ipmi_is_sensor_scanning_disabled(ipmi_states_t *states);
+int ipmi_is_initial_update_in_progress(ipmi_states_t *states);
+/* Read the current states from the discrete sensor. */
+int ipmi_is_state_set(ipmi_states_t *states,
+		      int           state_num);
+void ipmi_set_state(ipmi_states_t *states,
+		    int           state_num,
+		    int           val);
+
 /* Read the current value of the given threshold sensor. */
 int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
 				   enum ipmi_thresh_e thresh);
@@ -660,21 +600,15 @@ typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t *sensor,
 				     int           err,
 				     int           val_present,
 				     double        val,
-				     ipmi_states_t states,
+				     ipmi_states_t *states,
 				     void          *cb_data);
 int ipmi_reading_get(ipmi_sensor_t        *sensor,
 		     ipmi_reading_done_cb done,
 		     void                 *cb_data);
 
-/* Read the current states from the discrete sensor. */
-int ipmi_is_state_set(ipmi_states_t *states,
-		      int           state_num);
-void ipmi_set_state(ipmi_states_t *states,
-		    int           state_num,
-		    int           val);
 typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
 				    int           err,
-				    ipmi_states_t states,
+				    ipmi_states_t *states,
 				    void          *cb_data);
 int ipmi_states_get(ipmi_sensor_t       *sensor,
 		    ipmi_states_read_cb done,

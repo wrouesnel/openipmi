@@ -736,3 +736,172 @@ int ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun)
 
     return 0;
 }
+
+void
+ipmi_event_state_init(ipmi_event_state_t *events)
+{
+    events->status = 0;
+    events->__assertion_events = 0;
+    events->__deassertion_events = 0;
+}
+
+void
+ipmi_threshold_event_clear(ipmi_event_state_t          *events,
+			   enum ipmi_thresh_e          type,
+			   enum ipmi_event_value_dir_e value_dir,
+			   enum ipmi_event_dir_e       dir)
+{
+    if (dir == IPMI_ASSERTION) {
+	events->__assertion_events &= ~(1 << (type*2+value_dir));
+    } else {
+	events->__deassertion_events &= ~(1 << (type*2+value_dir));
+    }
+}
+
+void
+ipmi_threshold_event_set(ipmi_event_state_t          *events,
+			 enum ipmi_thresh_e          type,
+			 enum ipmi_event_value_dir_e value_dir,
+			 enum ipmi_event_dir_e       dir)
+{
+    if (dir == IPMI_ASSERTION) {
+	events->__assertion_events |= 1 << (type*2+value_dir);
+    } else {
+	events->__deassertion_events |= 1 << (type*2+value_dir);
+    }
+}
+
+int
+ipmi_is_threshold_event_set(ipmi_event_state_t          *events,
+			    enum ipmi_thresh_e          type,
+			    enum ipmi_event_value_dir_e value_dir,
+			    enum ipmi_event_dir_e       dir)
+{
+    if (dir == IPMI_ASSERTION) {
+	return (events->__assertion_events & (1 << (type*2+value_dir))) != 0;
+    } else {
+	return (events->__deassertion_events & (1 << (type*2+value_dir))) != 0;
+    }
+}
+
+void
+ipmi_discrete_event_clear(ipmi_event_state_t    *events,
+			  int                   event_offset,
+			  enum ipmi_event_dir_e dir)
+{
+    if (dir == IPMI_ASSERTION) {
+	events->__assertion_events &= ~(1 << event_offset);
+    } else {
+	events->__deassertion_events &= ~(1 << event_offset);
+    }
+}
+
+void
+ipmi_discrete_event_set(ipmi_event_state_t    *events,
+			int                   event_offset,
+			enum ipmi_event_dir_e dir)
+{
+    if (dir == IPMI_ASSERTION) {
+	events->__assertion_events |= 1 << event_offset;
+    } else {
+	events->__deassertion_events |= 1 << event_offset;
+    }
+}
+
+int
+ipmi_is_discrete_event_set(ipmi_event_state_t    *events,
+			   int                   event_offset,
+			   enum ipmi_event_dir_e dir)
+{
+    if (dir == IPMI_ASSERTION) {
+	return (events->__assertion_events & (1 << event_offset)) != 0;
+    } else {
+	return (events->__deassertion_events & (1 << event_offset)) != 0;
+    }
+}
+
+#define IPMI_SENSOR_EVENTS_ENABLED	0x80
+#define IPMI_SENSOR_SCANNING_ENABLED	0x40
+#define IPMI_SENSOR_BUSY		0x20
+
+unsigned int ipmi_event_state_size(void)
+{
+    return sizeof(ipmi_event_state_t);
+}
+
+void
+ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val)
+{
+    if (val)
+	events->status |= IPMI_SENSOR_EVENTS_ENABLED;
+    else
+	events->status &= ~IPMI_SENSOR_EVENTS_ENABLED;
+}
+
+int
+ipmi_event_state_get_events_enabled(ipmi_event_state_t *events)
+{
+    return (events->status >> 7) & 1;
+}
+
+void
+ipmi_event_state_set_scanning_enabled(ipmi_event_state_t *events, int val)
+{
+    if (val)
+	events->status |= IPMI_SENSOR_SCANNING_ENABLED;
+    else
+	events->status &= ~IPMI_SENSOR_SCANNING_ENABLED;
+}
+
+int
+ipmi_event_state_get_scanning_enabled(ipmi_event_state_t *events)
+{
+    return (events->status >> 6) & 1;
+}
+
+void
+ipmi_event_state_set_busy(ipmi_event_state_t *events, int val)
+{
+    if (val)
+	events->status |= IPMI_SENSOR_BUSY;
+    else
+	events->status &= ~IPMI_SENSOR_BUSY;
+}
+
+int
+ipmi_event_state_get_busy(ipmi_event_state_t *events)
+{
+    return (events->status >> 5) & 1;
+}
+
+unsigned int ipmi_states_size(void)
+{
+    return sizeof(ipmi_states_t);
+}
+
+void
+ipmi_init_states(ipmi_states_t *states)
+{
+    states->__event_messages_disabled = 0;
+    states->__sensor_scanning_disabled = 0;
+    states->__initial_update_in_progress = 0;
+    states->__states = 0;
+}
+
+int
+ipmi_is_event_messages_disabled(ipmi_states_t *states)
+{
+    return states->__event_messages_disabled;
+}
+
+int
+ipmi_is_sensor_scanning_disabled(ipmi_states_t *states)
+{
+    return states->__sensor_scanning_disabled;
+}
+
+int
+ipmi_is_initial_update_in_progress(ipmi_states_t *states)
+{
+    return states->__initial_update_in_progress;
+}

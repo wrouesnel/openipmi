@@ -2545,7 +2545,7 @@ enables_get(ipmi_sensor_t *sensor,
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, 0, 0, info->state, info->cb_data);
+	    info->done(sensor, err, 0, 0, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -2556,7 +2556,7 @@ enables_get(ipmi_sensor_t *sensor,
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
 		       0, 0,
-		       info->state,
+		       &info->state,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
@@ -2573,7 +2573,7 @@ enables_get(ipmi_sensor_t *sensor,
     if (info->done)
 	info->done(sensor, 0,
 		   global_enable, scanning_enabled,
-		   info->state, info->cb_data);
+		   &info->state, info->cb_data);
     ipmi_sensor_opq_done(sensor);
     free(info);
 }
@@ -2588,7 +2588,7 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, 0, 0, info->state, info->cb_data);
+	    info->done(sensor, err, 0, 0, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -2604,7 +2604,7 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, enables_get, &(info->sdata), info);
     if (rv) {
 	if (info->done)
-	    info->done(sensor, rv, 0, 0, info->state, info->cb_data);
+	    info->done(sensor, rv, 0, 0, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
     }
@@ -2878,7 +2878,7 @@ thresh_get(ipmi_sensor_t *sensor,
     for (th=IPMI_LOWER_NON_CRITICAL; th<=IPMI_UPPER_NON_RECOVERABLE; th++) {
 	int rv;
 	if (rsp->data[1] & (1 << th)) {
-	    info->th.vals[th].status = IPMI_SENSOR_EVENTS_ENABLED;
+	    info->th.vals[th].status = 1;
 	    rv = ipmi_sensor_convert_from_raw(sensor,
 					      rsp->data[th+2],
 					      &(info->th.vals[th].val));
@@ -2914,7 +2914,7 @@ ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
     {
 	ipmi_sensor_threshold_readable(sensor, thnum, &val);
 	if (val) {
-	    th->vals[thnum].status = IPMI_SENSOR_EVENTS_ENABLED;
+	    th->vals[thnum].status = 1;
 	    rv = ipmi_sensor_convert_from_raw(sensor,
 					      raw,
 					      &(th->vals[thnum].val));
@@ -3060,7 +3060,7 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_data[0] = sensor->num;
     cmd_data[1] = 0;
     for (th=IPMI_LOWER_NON_CRITICAL; th<=IPMI_UPPER_NON_RECOVERABLE; th++) {
-	if (info->th.vals[th].status & IPMI_SENSOR_EVENTS_ENABLED) {
+	if (info->th.vals[th].status) {
 	    int val;
 	    cmd_data[1] |= (1 << th);
 	    rv = ipmi_sensor_convert_to_raw(sensor,
@@ -3128,14 +3128,16 @@ reading_get(ipmi_sensor_t *sensor,
 	    void          *rsp_data)
 {
     reading_get_info_t *info = rsp_data;
-    ipmi_states_t      states = {0};
+    ipmi_states_t      states;
     int                rv;
     double             val = 0.0;
     int                val_present = 0;
 
+    ipmi_init_states(&states);
+
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, 0, 0.0, states, info->cb_data);
+	    info->done(sensor, err, 0, 0.0, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -3147,7 +3149,7 @@ reading_get(ipmi_sensor_t *sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
 		       0,
 		       0.0,
-		       states,
+		       &states,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
@@ -3159,7 +3161,7 @@ reading_get(ipmi_sensor_t *sensor,
 					  rsp->data[1],
 					  &val);
 	if (rv) {
-	    info->done(sensor, rv, 0, 0.0, states, info->cb_data);
+	    info->done(sensor, rv, 0, 0.0, &states, info->cb_data);
 	    ipmi_sensor_opq_done(sensor);
 	    free(info);
 	    return;
@@ -3173,7 +3175,7 @@ reading_get(ipmi_sensor_t *sensor,
     states.__states = rsp->data[3];
 
     if (info->done)
-	info->done(sensor, 0, val_present, val, states, info->cb_data);
+	info->done(sensor, 0, val_present, val, &states, info->cb_data);
     ipmi_sensor_opq_done(sensor);
     free(info);
 }
@@ -3185,11 +3187,13 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     unsigned char      cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t         cmd_msg;
     int                rv;
-    ipmi_states_t      states = {0};
+    ipmi_states_t      states;
+
+    ipmi_init_states(&states);
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, 0, 0.0, states, info->cb_data);
+	    info->done(sensor, err, 0, 0.0, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -3206,7 +3210,7 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &(info->sdata), info);
     if (rv) {
 	if (info->done)
-	    info->done(sensor, rv, 0, 0.0, states, info->cb_data);
+	    info->done(sensor, rv, 0, 0.0, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
     }
@@ -3250,11 +3254,13 @@ states_get(ipmi_sensor_t *sensor,
 	   void          *cb_data)
 {
     states_get_info_t *info = cb_data;
-    ipmi_states_t     states = {0};
+    ipmi_states_t     states;
+
+    ipmi_init_states(&states);
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, states, info->cb_data);
+	    info->done(sensor, err, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
     }
@@ -3263,7 +3269,7 @@ states_get(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       states,
+		       &states,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
@@ -3276,7 +3282,7 @@ states_get(ipmi_sensor_t *sensor,
     states.__states = (rsp->data[4] << 8) | rsp->data[3];
 
     if (info->done)
-	info->done(sensor, 0, states, info->cb_data);
+	info->done(sensor, 0, &states, info->cb_data);
     ipmi_sensor_opq_done(sensor);
     free(info);
 }
@@ -3288,11 +3294,13 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     unsigned char     cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t        cmd_msg;
     int               rv;
-    ipmi_states_t     states = {0};
+    ipmi_states_t     states;
+
+    ipmi_init_states(&states);
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, states, info->cb_data);
+	    info->done(sensor, err, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -3309,7 +3317,7 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &(info->sdata), info);
     if (rv) {
 	if (info->done)
-	    info->done(sensor, rv, states, info->cb_data);
+	    info->done(sensor, rv, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
     }
@@ -3794,6 +3802,11 @@ ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor)
     return sensor->oem_info;
 }
 
+unsigned int ipmi_thresholds_size(void)
+{
+    return sizeof(ipmi_thresholds_t);
+}
+
 int ipmi_thresholds_init(ipmi_thresholds_t *th)
 {
     int i;
@@ -3821,7 +3834,7 @@ int ipmi_threshold_set(ipmi_thresholds_t  *th,
 	    return ENOTSUP;
     }
 
-    th->vals[threshold].status |= IPMI_SENSOR_EVENTS_ENABLED;
+    th->vals[threshold].status = 1;
     th->vals[threshold].val = value;
     return 0;
 }
@@ -3833,7 +3846,7 @@ int ipmi_threshold_get(ipmi_thresholds_t  *th,
     if (threshold > IPMI_UPPER_NON_RECOVERABLE)
 	return EINVAL;
 
-    if (th->vals[threshold].status & IPMI_SENSOR_EVENTS_ENABLED) {
+    if (th->vals[threshold].status) {
 	*value = th->vals[threshold].val;
 	return 0;
     } else {

@@ -649,7 +649,7 @@ read_sensor(ipmi_sensor_t *sensor,
 	    int           err,
 	    int           val_present,
 	    double        val,
-	    ipmi_states_t states,
+	    ipmi_states_t *states,
 	    void          *cb_data)
 {
     ipmi_sensor_id_t sensor_id;
@@ -721,7 +721,7 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 			  int                err,
 			  int                global_enable,
 			  int                scanning_enabled,
-			  ipmi_event_state_t states,
+			  ipmi_event_state_t *states,
 			  void               *cb_data)
 {
     ipmi_sensor_id_t   sensor_id;
@@ -762,25 +762,25 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 		continue;
 	    }
 	    wprintw(display_pad, "  ");
-	    if (ipmi_is_threshold_event_set(&states, t,
+	    if (ipmi_is_threshold_event_set(states, t,
 					    IPMI_GOING_LOW,
 					    IPMI_ASSERTION))
 		wprintw(display_pad, "L^");
 	    else
 		wprintw(display_pad, "  ");
-	    if (ipmi_is_threshold_event_set(&states, t,
+	    if (ipmi_is_threshold_event_set(states, t,
 					    IPMI_GOING_LOW,
 					    IPMI_DEASSERTION))
 		wprintw(display_pad, "Lv");
 	    else
 		wprintw(display_pad, "  ");
-	    if (ipmi_is_threshold_event_set(&states, t,
+	    if (ipmi_is_threshold_event_set(states, t,
 					    IPMI_GOING_HIGH,
 					    IPMI_ASSERTION))
 		wprintw(display_pad, "H^");
 	    else
 		wprintw(display_pad, "  ");
-	    if (ipmi_is_threshold_event_set(&states, t,
+	    if (ipmi_is_threshold_event_set(states, t,
 					    IPMI_GOING_HIGH,
 					    IPMI_DEASSERTION))
 		wprintw(display_pad, "HV");
@@ -798,7 +798,7 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
 			    int                err,
 			    int                global_enable,
 			    int                scanning_enabled,
-			    ipmi_event_state_t states,
+			    ipmi_event_state_t *states,
 			    void               *cb_data)
 {
     ipmi_sensor_id_t sensor_id;
@@ -838,12 +838,12 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
     } else {
 	wmove(display_pad, discr_assert_enab.y, discr_assert_enab.x);
 	for (i=0; i<15; i++) {
-	    val = ipmi_is_discrete_event_set(&states, i, IPMI_ASSERTION);
+	    val = ipmi_is_discrete_event_set(states, i, IPMI_ASSERTION);
 	    wprintw(display_pad, "%d", val != 0);
 	}    
 	wmove(display_pad, discr_deassert_enab.y, discr_deassert_enab.x);
 	for (i=0; i<15; i++) {
-	    val = ipmi_is_discrete_event_set(&states, i, IPMI_DEASSERTION);
+	    val = ipmi_is_discrete_event_set(states, i, IPMI_DEASSERTION);
 	    wprintw(display_pad, "%d", val != 0);
 	}    
     }
@@ -855,7 +855,7 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
 static void
 read_states(ipmi_sensor_t *sensor,
 	    int           err,
-	    ipmi_states_t states,
+	    ipmi_states_t *states,
 	    void          *cb_data)
 {
     ipmi_sensor_id_t sensor_id;
@@ -872,7 +872,7 @@ read_states(ipmi_sensor_t *sensor,
 	wprintw(display_pad, "?");
     } else {
 	for (i=0; i<15; i++) {
-	    val = ipmi_is_state_set(&states, i);
+	    val = ipmi_is_state_set(states, i);
 	    wprintw(display_pad, "%d", val != 0);
 	}    
     }

@@ -553,10 +553,10 @@ presence_sensor_changed(ipmi_sensor_t         *sensor,
 static void
 states_read(ipmi_sensor_t *sensor,
 	    int           err,
-	    ipmi_states_t states,
+	    ipmi_states_t *states,
 	    void          *cb_data)
 {
-    int           present = ipmi_is_state_set(&states, 0);
+    int           present = ipmi_is_state_set(states, 0);
     ipmi_entity_t *ent = cb_data;
 
     if (!err)
@@ -578,12 +578,12 @@ typedef struct ent_active_detect_s
 static void
 detect_states_read(ipmi_sensor_t *sensor,
 		   int           err,
-		   ipmi_states_t states,
+		   ipmi_states_t *states,
 		   void          *cb_data)
 {
     ent_active_detect_t *info = cb_data;
 
-    if (!err && !ipmi_is_sensor_scanning_disabled(&states))
+    if (!err && !ipmi_is_sensor_scanning_disabled(states))
 	info->present = 1;
 
     info->sensor_try_count--;
@@ -596,12 +596,12 @@ detect_reading_read(ipmi_sensor_t *sensor,
 		    int           err,
 		    int           val_present,
 		    double        val,
-		    ipmi_states_t states,
+		    ipmi_states_t *states,
 		    void          *cb_data)
 {
     ent_active_detect_t *info = cb_data;
 
-    if (!err && !ipmi_is_sensor_scanning_disabled(&states))
+    if (!err && !ipmi_is_sensor_scanning_disabled(states))
 	info->present = 1;
 
     info->sensor_try_count--;
@@ -686,7 +686,8 @@ handle_new_presence_sensor(ipmi_entity_t *ent,
 
     /* Configure the sensor per our liking (enable the proper events). */
     ipmi_event_state_init(&events);
-    events.status = IPMI_SENSOR_EVENTS_ENABLED | IPMI_SENSOR_SCANNING_ENABLED;
+    ipmi_event_state_set_events_enabled(&events, 1);
+    ipmi_event_state_set_scanning_enabled(&events, 1);
     ipmi_discrete_event_set(&events, 0, IPMI_ASSERTION);
     ipmi_discrete_event_set(&events, 1, IPMI_ASSERTION);
     ipmi_sensor_events_enable_set(sensor, &events, NULL, NULL);

@@ -83,6 +83,33 @@ int ipmi_bmc_oem_new_sensor(ipmi_mc_t     *mc,
    it has registered for this. */
 void ipmi_bmc_oem_new_entity(ipmi_mc_t *bmc, ipmi_entity_t *ent);
 
+/* The event state data structure. */
+struct ipmi_event_state_s
+{
+    unsigned int status;
+    /* Pay no attention to the implementation. */
+    unsigned int __assertion_events;
+    unsigned int __deassertion_events;
+};
+
+struct ipmi_thresholds_s
+{
+    /* Pay no attention to the implementation here. */
+    struct {
+	unsigned int status; /* Is this threshold enabled? */
+	double       val;
+    } vals[6];
+};
+
+struct ipmi_states_s
+{
+    int          __event_messages_disabled;
+    int          __sensor_scanning_disabled;
+    int          __initial_update_in_progress;
+    unsigned int __states;
+};
+
+
 /* Various logging stuff (mostly for debugging) */
 extern unsigned int __ipmi_log_mask;
 #define DEBUG_MSG_BIT	(1 << 0)
