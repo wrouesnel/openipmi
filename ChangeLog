@@ -6,6 +6,9 @@
 	operation.  Also added a random timer to restart SDR operations
 	when the reservation was lost.
 
+	* lib/domain.c: Reworked the code to not start the connection up
+	process on an inactive connection.
+
 2003-08-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sdr.c: Fixed a locking bug in the SDR code.

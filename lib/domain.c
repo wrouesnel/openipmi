@@ -229,6 +229,53 @@ static void domain_rescan_bus(void *cb_data, os_hnd_timer_id_t *id);
 
 /***********************************************************************
  *
+ * Some general utilities
+ *
+ **********************************************************************/
+
+static int
+first_working_con(ipmi_domain_t *domain)
+{
+    int i;
+
+    for (i=0; i<MAX_CONS; i++)
+	if (domain->con_up[i])
+	    return i;
+    return -1;
+}
+
+static int
+first_active_con(ipmi_domain_t *domain)
+{
+    int i;
+
+    for (i=0; i<MAX_CONS; i++)
+	if (domain->con_up[i] && domain->con_active[i])
+	    return i;
+    return -1;
+}
+
+static int
+get_con_num(ipmi_domain_t *domain, ipmi_con_t *ipmi)
+{
+    int u;
+
+    for (u=0; u<MAX_CONS; u++) {
+	if (ipmi == domain->conn[u])
+	    break;
+    }
+
+    if (u == MAX_CONS) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "Got a connection change from an invalid domain");
+	return -1;
+    }
+
+    return u;
+}
+
+/***********************************************************************
+ *
  * Domain data structure creation and destruction
  *
  **********************************************************************/
@@ -2718,34 +2765,45 @@ start_con_up(ipmi_domain_t *domain)
     return ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
 }
 
-static int
-get_con_num(ipmi_domain_t *domain, ipmi_con_t *ipmi)
-{
-    int u;
+static void start_activate_timer(ipmi_domain_t *domain);
 
-    for (u=0; u<MAX_CONS; u++) {
-	if (ipmi == domain->conn[u])
-	    break;
+static void
+initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
+		     int          err,
+		     unsigned int ipmb,
+		     int          active,
+		     void         *cb_data)
+{
+    ipmi_domain_t *domain = cb_data;
+    int           u;
+    int           rv;
+
+    ipmi_read_lock();
+    rv = ipmi_domain_validate(domain);
+    if (rv)
+	/* So the connection failed.  So what, there's nothing to talk to. */
+	goto out_unlock;
+
+    u = get_con_num(domain, ipmi);
+    if (u == -1)
+	goto out_unlock;
+
+    if (err) {
+	call_con_fails(domain, err, u, 0, domain->connection_up);
+	goto out_unlock;
     }
 
-    if (u == MAX_CONS) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "Got a connection change from an invalid domain");
-	return -1;
+    if (active) {
+	rv = start_con_up(domain);
+	if (rv)
+	    call_con_fails(domain, rv, u, 0, domain->connection_up);
+    } else {
+	/* Start the timer to activate the connection, if necessary. */
+	start_activate_timer(domain);
     }
 
-    return u;
-}
-
-static int
-first_working_con(ipmi_domain_t *domain)
-{
-    int i;
-
-    for (i=0; i<MAX_CONS; i++)
-	if (domain->con_up[i])
-	    return i;
-    return -1;
+ out_unlock:
+    ipmi_read_unlock();
 }
 
 static void ll_addr_changed(ipmi_con_t   *ipmi,
@@ -2881,6 +2939,14 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[u],
 			    domain->con_ipmb_addr[u], NULL, NULL);
 
+    if (active && (first_active_con(domain) == -1)) {
+	/* We now have an active connection and we didn't before,
+           attempt to start up the connection. */
+	rv = start_con_up(domain);
+	if (rv)
+	    call_con_fails(domain, rv, u, 0, domain->connection_up);
+    }
+
     if (domain->con_active[u] != active) {
 	domain->con_active[u] = active;
 	if (active) {
@@ -2966,13 +3032,17 @@ ll_con_changed(ipmi_con_t   *ipmi,
                process. */
 	    domain->working_conn = u;
 
-	    /* Start the timer to activate the connection, if necessary. */
-	    if (domain->conn[u]->set_active_state)
-		start_activate_timer(domain);
+	    if (domain->conn[u]->get_ipmb_addr)
+		/* If we can fetch the IPMB address, see if this is an
+                   active connection first. */
+		rv = domain->conn[u]->get_ipmb_addr(domain->conn[u],
+						    initial_ipmb_addr_cb,
+						    domain);
+	    else
+		/* When a connection comes back up, start the process of
+		   getting SDRs, scanning the bus, and the like. */
+		rv = start_con_up(domain);
 
-	    /* When a connection comes back up, start the process of
-	       getting SDRs, scanning the bus, and the like. */
-	    rv = start_con_up(domain);
 	    if (rv)
 		call_con_fails(domain, rv, u, port_num, domain->connection_up);
 	}
