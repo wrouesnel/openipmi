@@ -2321,32 +2321,33 @@ init_keypad(void)
     if (!err)
       err = keypad_bind_key(keymap, 8, backspace);
     if (!err)
-      err = keypad_bind_key(keymap, KEY_BACKSPACE, backspace);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_DC, backspace);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_UP, key_up);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_DOWN, key_down);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_RIGHT, key_right);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_LEFT, key_left);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_NPAGE, key_npage);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_PPAGE, key_ppage);
-    if (!err)
 	err = keypad_bind_key(keymap, 4, key_leave);
     if (!err)
 	err = keypad_bind_key(keymap, 10, end_of_line);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_RESIZE, key_resize);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_F(1), key_set_display);
-    if (!err)
-	err = keypad_bind_key(keymap, KEY_F(2), key_set_log);
-
+    if (full_screen) {
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_BACKSPACE, backspace);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_DC, backspace);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_UP, key_up);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_DOWN, key_down);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_RIGHT, key_right);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_LEFT, key_left);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_NPAGE, key_npage);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_PPAGE, key_ppage);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_RESIZE, key_resize);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_F(1), key_set_display);
+	if (!err)
+	    err = keypad_bind_key(keymap, KEY_F(2), key_set_log);
+    }
     if (err)
 	goto out_err;
 
@@ -2723,13 +2724,13 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 	exit(1);
     }
 
-    if (full_screen) {
-	rv = init_keypad();
-	if (rv) {
-	    fprintf(stderr, "Could not initialize keymap\n");
-	    exit(1);
-	}
+    rv = init_keypad();
+    if (rv) {
+	fprintf(stderr, "Could not initialize keymap\n");
+	exit(1);
+    }
 
+    if (full_screen) {
 	rv = init_win();
 	if (rv) {
 	    fprintf(stderr, "Could not initialize curses\n");
