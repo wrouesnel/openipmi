@@ -4707,7 +4707,50 @@ mxp_setup_finished(ipmi_mc_t *mc, mxp_info_t *info)
 static void
 mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    ipmi_mem_free(cb_data);
+    mxp_info_t *info = cb_data;
+    int        i;
+
+    if (!info->s5v)
+	/* It hasn't been initialized, so just free the data structure. */
+	goto out;
+
+    for (i=0; i<MXP_POWER_SUPPLIES; i++) {
+	ipmi_sensor_destroy(info->power_supply[i].presence);
+	ipmi_sensor_destroy(info->power_supply[i].ps);
+	ipmi_control_destroy(info->power_supply[i].enable);
+	ipmi_control_destroy(info->power_supply[i].oos_led);
+	ipmi_control_destroy(info->power_supply[i].inserv_led);
+	ipmi_sensor_destroy(info->power_supply[i].fan_presence);
+	ipmi_sensor_destroy(info->power_supply[i].fan);
+	ipmi_sensor_destroy(info->power_supply[i].cooling);
+	ipmi_control_destroy(info->power_supply[i].fan_speed);
+	ipmi_control_destroy(info->power_supply[i].fan_oos_led);
+	ipmi_control_destroy(info->power_supply[i].fan_inserv_led);
+    }
+
+    for (i=0; i<MXP_TOTAL_BOARDS; i++) {
+	ipmi_sensor_destroy(info->board[i].presence);
+	ipmi_sensor_destroy(info->board[i].slot);
+	ipmi_control_destroy(info->board[i].reset);
+	ipmi_control_destroy(info->board[i].power);
+	ipmi_control_destroy(info->board[i].oos_led);
+	ipmi_control_destroy(info->board[i].inserv_led);
+	ipmi_control_destroy(info->board[i].blue_led);
+    }
+    
+    ipmi_sensor_destroy(info->s5v);
+    ipmi_sensor_destroy(info->s3_3v);
+    ipmi_sensor_destroy(info->s2_5v);
+    ipmi_sensor_destroy(info->s8v);
+    ipmi_sensor_destroy(info->chassis_presence);
+    ipmi_control_destroy(info->relays);
+    ipmi_control_destroy(info->chassis_id);
+    ipmi_control_destroy(info->chassis_type_control);
+    ipmi_control_destroy(info->sys_oos_led);
+    ipmi_control_destroy(info->sys_led);
+
+ out:
+    ipmi_mem_free(info);
 }
 
 typedef struct domain_up_info_s
