@@ -2721,6 +2721,11 @@ changing it requires updating the FRU data, and there are a bunch of
 race conditions with setting FRU data because there are no locks for
 that data.
 
+@item addressing
+There is an ``address'' identifier control on each major FRU entity.
+This control contains four bytes that are (in order): site type, site
+number, hardware address, ipmb address.
+
 @end table
 
 @contents

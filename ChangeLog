@@ -11,6 +11,9 @@
 	* include/OpenIPMI/ipmiif.h.in, lib/strings.h: Added strings for
 	the domain type.
 
+	* lib/oem_atca.c: Add setting the entity id string into the entity
+	fixup callback.
+
 2004-06-17 Philipp Matthias Hahn <pmhahn@titan.lahn.de>
 
 	* man/ipmi_ui.1, man/ipmicmd.1, man/ipmilan.8: Cleanups for the

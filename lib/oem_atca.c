@@ -2300,6 +2300,27 @@ atca_entity_update_handler(enum ipmi_update_e op,
     enum ipmi_dlr_type_e etype = ipmi_entity_get_type(entity);
     int                  rv;
 
+    if (op == IPMI_ADDED) {
+	/* Set meaningful entity id strings. */
+	switch (ipmi_entity_get_entity_id(entity)) {
+	case 0xa0:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA Board");
+	    break;
+	case 0xc0:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA RTM");
+	    break;
+	case 0xf0:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA ShMC");
+	    break;
+	case 0xf1:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA Filtration Unit");
+	    break;
+	case 0xf2:
+	    ipmi_entity_set_entity_id_string(entity, "ATCA Shelf FRU");
+	    break;
+	}
+    }
+
     /* We only care about FRU and MC entities. */
     if (etype == IPMI_ENTITY_FRU)
 	finfo = atca_find_fru_info(info, entity);
@@ -2659,7 +2680,6 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	atca_ipmc_t *b = &(info->ipmcs[i]);
 	char        *name;
 	int         entity_id;
-	char        *entity_id_str;
 
 	b->shelf = info;
 	b->idx = i;
@@ -2690,43 +2710,36 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	case 0:
 	    name = "ATCA Board";
 	    entity_id = 0xa0;
-	    entity_id_str = name;
 	    break;
 
 	case 1: /* Power entry module */
 	    name = "Power Unit";
 	    entity_id = 0x0a;
-	    entity_id_str = "ATCA Power Unit";
 	    break;
 
 	case 2: /* Shelf FRU info */
 	    name = "Shelf FRU";
 	    entity_id = 0xf2;
-	    entity_id_str = "ATCA Shelf FRU";
 	    break;
 
 	case 3: /* Dedicated ShMC */
 	    name = "ShMC";
 	    entity_id = 0xf0;
-	    entity_id_str = "ATCA ShMC";
 	    break;
 
 	case 4: /* Fan Tray */
 	    name = "Fan Tray";
 	    entity_id = 0x1e;
-	    entity_id_str = "ATCA Fan Tray";
 	    break;
 
 	case 5: /* Fan Filter Tray */
 	    name = "Fan Filters";
 	    entity_id = 0xf1;
-	    entity_id_str = "ATCA Fan Filters";
 	    break;
 
 	case 9: /* Rear Transition Module */
 	    name = "RTM";
 	    entity_id = 0xc0;
-	    entity_id_str = "ATCA RTM";
 	    break;
 
 	case 6: /* Alarm */
@@ -2750,7 +2763,6 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 		     DOMAIN_NAME(domain), rv);
 	    goto out;
 	}
-	ipmi_entity_set_entity_id_string(b->frus[0]->entity, entity_id_str);
 	rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,
@@ -3257,12 +3269,12 @@ atca_entity_fixup(ipmi_mc_t *mc, unsigned char *id, unsigned char *instance)
 
     case 6:
 	*id = 0xf0;
-	inst += 0x60;
+	inst = 0x60;
 	break;
 
     case 3:
 	if (inst < 0x60)
-	    inst += 0x60;
+	    inst = 0x60;
 	break;
 
     case 23:
