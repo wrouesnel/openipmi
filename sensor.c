@@ -3700,10 +3700,10 @@ stand_ipmi_sensor_convert_from_raw(ipmi_sensor_t *sensor,
 
     val &= 0xff;
 
-    m = sign_extend(sensor->conv[val].m, 10);
-    b = sign_extend(sensor->conv[val].b, 10);
-    r_exp = sign_extend(sensor->conv[val].r_exp, 4);
-    b_exp = sign_extend(sensor->conv[val].b_exp, 4);
+    m = sensor->conv[val].m;
+    b = sensor->conv[val].b;
+    r_exp = sensor->conv[val].r_exp;
+    b_exp = sensor->conv[val].b_exp;
 
     switch(sensor->analog_data_format) {
 	case IPMI_ANALOG_DATA_FORMAT_UNSIGNED:
