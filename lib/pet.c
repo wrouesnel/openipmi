@@ -336,7 +336,8 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
     pos = pet->lanparm_check_pos[ch];
     check = &(pet->lanparm_check[pos]);
 
-    if (data_len < check->data_len) {
+    /* Don't forget to skip the revision number in the length. */
+    if (data_len < (check->data_len+1)) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(lanparm_got_config): data length too short for"
 		 " config %d, was %d, expected %d", check->conf_num,
@@ -344,6 +345,8 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
 	pet_op_done(pet);
 	goto out;
     }
+
+    data++; /* Skip the revision number */
 
     /* Check the config item we got and make sure it matches.  If it
        does not match, send the proper data for it. */
@@ -484,6 +487,7 @@ pef_got_config(ipmi_pef_t    *pef,
     pos = pet->pef_check_pos[ch];
     check = &(pet->pef_check[pos]);
 
+    /* Don't forget to skip the revision number in the length. */
     if (data_len < check->data_len) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "pet.c(pef_got_cofnfig): PEF data length too short for"
@@ -492,6 +496,8 @@ pef_got_config(ipmi_pef_t    *pef,
 	pet_op_done(pet);
 	goto out;
     }
+
+    data++; /* Skip the revision number */
 
     /* Check the config item we got and make sure it matches.  If it
        does not match, send the proper data for it. */
