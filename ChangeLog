@@ -1,4 +1,9 @@
 
+2003-04-30 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Modified the SEL time code to set the time on the SEL,
+	not get the time, so the SEL time will be correct.
+
 2003-04-29 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi_lan.c, include/OpenIPMI/ipmi_lan.h: Added multiple IP

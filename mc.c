@@ -1783,26 +1783,20 @@ sels_fetched(ipmi_sel_info_t *sel,
 }
 
 static void
-got_sel_time(ipmi_mc_t  *mc,
+set_sel_time(ipmi_mc_t  *mc,
 	     ipmi_msg_t *rsp,
 	     void       *rsp_data)
 {
     if (!mc) {
-	ipmi_log(IPMI_LOG_WARNING, "MC went away during SEL time fetch");
+	ipmi_log(IPMI_LOG_WARNING, "MC went away during SEL time set");
 	return;
     }
 
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "Unable to fetch the SEL time due to error: %x",
+		 "Unable to set the SEL time due to error: %x",
 		 rsp->data[0]);
 	mc->startup_SEL_time = 0;
-    } else if (rsp->data_len < 5) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "Unable to fetch the SEL time message was too short");
-	mc->startup_SEL_time = 0;
-    } else {
-	mc->startup_SEL_time = ipmi_get_uint32(&(rsp->data[1]));
     }
 
     ipmi_sel_get(mc->sel, sels_fetched, mc);
@@ -1918,6 +1912,9 @@ do_event_rcvr(ipmi_mc_t *mc)
 static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
+    unsigned char  data[4];
+    struct timeval now;
+
     /* See if any presence has changed with the new sensors. */ 
     ipmi_detect_bmc_presence_changes(mc, 0);
 
@@ -1973,17 +1970,20 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	    mc->sel_timer_info = info;
 	}
 
-	/* Fetch the current system event log.  We do this here so we can
-	   be sure that the entities are all there before reporting
-	   events. */
+	/* Set the current system event log time.  We do this here so
+	   we can be sure that the entities are all there before
+	   reporting events. */
+	gettimeofday(&now, NULL);
 	msg.netfn = IPMI_STORAGE_NETFN;
-	msg.cmd = IPMI_GET_SEL_TIME_CMD;
-	msg.data = NULL;
-	msg.data_len = 0;
-	rv = ipmi_send_command(mc, 0, &msg, got_sel_time, NULL);
+	msg.cmd = IPMI_SET_SEL_TIME_CMD;
+	msg.data = data;
+	msg.data_len = 4;
+	ipmi_set_uint32(data, now.tv_sec);
+	mc->startup_SEL_time = now.tv_sec;
+	rv = ipmi_send_command(mc, 0, &msg, set_sel_time, NULL);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_DEBUG,
-		     "Unable to start SEL time fetch due to error: %x\n",
+		     "Unable to start SEL time set due to error: %x\n",
 		     rv);
 	    mc->startup_SEL_time = 0;
 	    ipmi_sel_get(mc->sel, NULL, NULL);
