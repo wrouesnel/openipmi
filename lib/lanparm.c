@@ -265,8 +265,8 @@ fetch_complete(ipmi_lanparm_t *lanparm, int err, lanparm_fetch_handler_t *elem)
 
 static void
 lanparm_config_fetched(ipmi_mc_t  *mc,
-		   ipmi_msg_t *rsp,
-		   void       *rsp_data)
+		       ipmi_msg_t *rsp,
+		       void       *rsp_data)
 {
     lanparm_fetch_handler_t *elem = rsp_data;
     ipmi_lanparm_t          *lanparm = elem->lanparm;

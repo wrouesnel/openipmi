@@ -841,8 +841,8 @@ struct domain_check_oem_s
 };
 
 static void
-domain_oem_check_done(ipmi_domain_t              *domain,
-		      void                       *cb_data)
+domain_oem_check_done(ipmi_domain_t *domain,
+		      void          *cb_data)
 {
     domain_check_oem_t *check = cb_data;
     oem_handlers_t     *h;
