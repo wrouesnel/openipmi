@@ -874,8 +874,9 @@ remove_known_domain(ipmi_domain_t *domain)
 static int
 ipmi_domain_get(ipmi_domain_t *domain)
 {
-    unsigned int hash = ipmi_hash_pointer(domain) % DOMAIN_HASH_SIZE;
+    unsigned int  hash = ipmi_hash_pointer(domain) % DOMAIN_HASH_SIZE;
     ipmi_domain_t *c;
+    int           rv = 0;
 
     ipmi_lock(domains_lock);
 
@@ -885,16 +886,21 @@ ipmi_domain_get(ipmi_domain_t *domain)
 	    break;
 	c = c->next;
     }
-    if (c == NULL)
-	return EINVAL;
+    if (c == NULL) {
+	rv = EINVAL;
+	goto out;
+    }
 
     /* We do this check after we find the domain in the list, because
        want to make sure the pointer is good before we do this. */
-    if (!domain->valid)
-	return EINVAL;
+    if (!domain->valid) {
+	rv = EINVAL;
+	goto out;
+    }
 
     domain->usecount++;
 
+ out:
     ipmi_unlock(domains_lock);
 
     return 0;
