@@ -139,9 +139,9 @@ int ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
    AES_CBC_128 for the best mandatory security. */
 #define IPMI_LANP_AUTHENTICATION_ALGORITHM	7
 #define IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK		(~0)
-#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_NONE		0
-#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_SHA1	1
-#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_MD5	2
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE		0
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1	1
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5	2
 #define IPMI_LANP_INTEGRITY_ALGORITHM		8
 #define IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK			(~0)
 #define IPMI_LANP_INTEGRITY_ALGORITHM_NONE			0
@@ -467,17 +467,25 @@ typedef struct ipmi_rmcpp_integrity_s
     void (*integ_free)(ipmi_con_t *ipmi,
 		       void       *integ_data);
 
-    /* This adds the integrity trailer after the payload data.  It
-       should add any padding after the payload and update the payload
-       length.  It should set the trailer length to the amount of data
-       it used (after the payload and padding).  The payload_len plus
-       the trailer_len should not exceed max_payload_len.  The payload
-       starts at beginning of the user message (the RMCP version). */
+    /* This adds the integrity trailer padding after the payload data.
+       It should add any padding after the payload and update the
+       payload length.  The payload_len should not exceed
+       max_payload_len.  The payload starts at beginning of the user
+       message (the RMCP version). */
+    int (*integ_pad)(ipmi_con_t    *ipmi,
+		     void          *integ_data,
+		     unsigned char *payload,
+		     unsigned int  *payload_len,
+		     unsigned int  max_payload_len);
+
+    /* This adds the integrity trailer after the payload data (and
+       padding).  The payload_len should not exceed max_payload_len.
+       The payload starts at beginning of the user message (the RMCP
+       version). */
     int (*integ_add)(ipmi_con_t    *ipmi,
 		     void          *integ_data,
 		     unsigned char *payload,
 		     unsigned int  *payload_len,
-		     unsigned int  *trailer_len,
 		     unsigned int  max_payload_len);
 
     /* Verify the integrity of the given data.  The payload starts at

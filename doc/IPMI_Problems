@@ -101,3 +101,10 @@ RMCP+ questions
   shouldn't the keys be 128 bits?  Do you truncate the last 4 bytes
   of the password for MD5-128?  And for generation of SIK, do you
   truncate the BMC key to 16 bytes for the RAKP-HMAC-MD5?
+
+* What should one do with an unencrypted message recieved on an
+  encrypted channel?  The integrity has a setting whether to accept
+  these, but the encryption does not.
+
+* In the session id, there are two sessions ids, but it is not
+  indicated which session id is used in the message header.

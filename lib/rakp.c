@@ -95,7 +95,6 @@ check_rakp_rsp(ipmi_con_t   *ipmi,
 	       int          addr_num)
 {
     if (!ipmi) {
-	rakp_done(info, ipmi, addr_num, ECANCELED);
 	return ECANCELED;
     }
 
@@ -103,21 +102,18 @@ check_rakp_rsp(ipmi_con_t   *ipmi,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "rakp.c(%s): Message data too short: %d",
 		 caller, msg->data_len);
-	rakp_done(info, ipmi, addr_num, EINVAL);
 	return EINVAL;
     }
 
     if (msg->data[1]) {
 	/* Got an RMCP+ error. */
-	rakp_done(info, ipmi, addr_num, IPMI_RMCPP_ERR_VAL(msg->data[1]));
-	return EINVAL;
+	return IPMI_RMCPP_ERR_VAL(msg->data[1]);
     }
 
     if (msg->data_len < min_length) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "rakp.c(%s): Message data too short: %d",
 		 caller, msg->data_len);
-	rakp_done(info, ipmi, addr_num, EINVAL);
 	return EINVAL;
     }
 
@@ -136,16 +132,14 @@ handle_rakp4(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     /* In this function, there's not way to report the error to the
        managed system, just report it locally. */
 
-    rv = check_rakp_rsp(ipmi, info, msg, "handle_rakp2", 40, addr_num);
+    rv = check_rakp_rsp(ipmi, info, msg, "handle_rakp4", 8, addr_num);
     if (rv)
 	goto out;
 
     if (info->check4) {
 	rv = info->check4(info, msg->data, msg->data_len);
-	if (rv) {
-	    rakp_done(info, ipmi, addr_num, rv);
+	if (rv)
 	    goto out;
-	}
     }
 
     session_id = ipmi_get_uint32(msg->data+4);
@@ -154,7 +148,7 @@ handle_rakp4(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 		 "rakp.c(handle_rakp4): "
 		 " Got wrong session id: 0x%x",
 		 session_id);
-	rakp_done(info, ipmi, addr_num, EINVAL);
+	rv = EINVAL;
 	goto out;
     }
 
@@ -162,7 +156,7 @@ handle_rakp4(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     return IPMI_MSG_ITEM_NOT_USED;
 
  out:
-    ipmi_mem_free(info);
+    rakp_done(info, ipmi, addr_num, rv);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -186,7 +180,7 @@ send_rakp3(ipmi_con_t *ipmi, rakp_info_t *info,
     memcpy(data+8, p, 16);
     data[24] = ipmi_rmcpp_auth_get_role(info->ainfo);
     data[27] = ipmi_rmcpp_auth_get_username_len(info->ainfo);
-    if (data[27] < 16)
+    if (data[27] > 16)
 	return EINVAL;
     p = ipmi_rmcpp_auth_get_username(info->ainfo, &plen);
     memcpy(data+28, p, data[27]);
@@ -227,27 +221,7 @@ handle_rakp2(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     rv = check_rakp_rsp(ipmi, info, msg, "handle_rakp2", 40, addr_num);
     if (rv) {
-	err = IPMI_RMCPP_ILLEGAL_PARAMTER;
-	goto out;
-    }
-
-    if (info->check2) {
-	rv = info->check2(info, msg->data, msg->data_len);
-	if (rv) {
-	    rakp_done(info, ipmi, addr_num, rv);
-	    err = IPMI_RMCPP_INVALID_INTEGRITY_CHECK_VALUE;
-	    goto out;
-	}
-    }
-
-    session_id = ipmi_get_uint32(msg->data+4);
-    if (session_id != ipmi_rmcpp_auth_get_my_session_id(info->ainfo)) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "rakp.c(handle_rakp2): "
-		 " Got wrong session id: 0x%x",
-		 session_id);
-	rakp_done(info, ipmi, addr_num, EINVAL);
-	err = IPMI_RMCPP_INVALID_SESSION_ID;
+	err = IPMI_RMCPP_ILLEGAL_PARAMETER;
 	goto out;
     }
 
@@ -263,17 +237,39 @@ handle_rakp2(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     memcpy(p, msg->data+24, 16);
     ipmi_rmcpp_auth_set_mgsys_guid_len(info->ainfo, 16);
 
+    session_id = ipmi_get_uint32(msg->data+4);
+    if (session_id != ipmi_rmcpp_auth_get_my_session_id(info->ainfo)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "rakp.c(handle_rakp2): "
+		 " Got wrong session id: 0x%x",
+		 session_id);
+	err = IPMI_RMCPP_INVALID_SESSION_ID;
+	goto out;
+    }
+
+    if (info->check2) {
+	rv = info->check2(info, msg->data, msg->data_len);
+	if (rv) {
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+		ipmi_log(IPMI_LOG_DEBUG, "Integrity check fail for rakp 2");
+	    err = IPMI_RMCPP_INVALID_INTEGRITY_CHECK_VALUE;
+	    goto out;
+	}
+    }
+
     rv = info->set(ipmi, addr_num, info->ainfo, info->cb_data);
     if (rv) {
-	rakp_done(info, ipmi, addr_num, rv);
-	err = IPMI_RMCPP_INSUFFICENT_RESOURCES_FOR_SESSION;
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG, "Error setting values from rakp 2");
+	err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
 	goto out;
     }
 
     rv = send_rakp3(ipmi, info, rspi, addr_num, 0);
     if (rv) {
-	rakp_done(info, ipmi, addr_num, rv);
-	err = IPMI_RMCPP_INSUFFICENT_RESOURCES_FOR_SESSION;
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG, "Error sending rakp 3");
+	err = IPMI_RMCPP_INSUFFICIENT_RESOURCES_FOR_SESSION;
 	goto out;
     }
 
@@ -281,7 +277,7 @@ handle_rakp2(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
  out:
     send_rakp3(ipmi, info, rspi, addr_num, err);
-    ipmi_mem_free(info);
+    rakp_done(info, ipmi, addr_num, rv);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -480,7 +476,6 @@ rakp_hmac_c2(rakp_info_t   *info,
     p = ipmi_rmcpp_auth_get_bmc_key(info->ainfo, &plen);
     if (plen < rinfo->key_len)
 	return EINVAL;
-    memcpy(idata+34, p, idata[33]);
     s = ipmi_rmcpp_auth_get_sik(info->ainfo, &plen);
     if (plen < rinfo->key_len)
 	return EINVAL;
@@ -516,7 +511,7 @@ rakp_hmac_s3(rakp_info_t   *info,
     const unsigned char *p;
     unsigned int        plen;
 
-    if (((*data_len)+rinfo->key_len) < total_len)
+    if (((*data_len)+rinfo->key_len) > total_len)
 	return E2BIG;
 
     p = ipmi_rmcpp_auth_get_mgsys_rand(info->ainfo, &plen);
@@ -532,6 +527,7 @@ rakp_hmac_s3(rakp_info_t   *info,
     p = ipmi_rmcpp_auth_get_password(info->ainfo, &plen);
     if (plen < rinfo->key_len)
 	return EINVAL;
+
     HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 22+idata[21],
 	 data+*data_len, &ilen);
     *data_len += rinfo->key_len;
@@ -562,8 +558,44 @@ rakp_hmac_c4(rakp_info_t   *info,
     memcpy(idata+20, p, 16);
 
     p = ipmi_rmcpp_auth_get_sik(info->ainfo, &plen);
+{
+    int _i;
+    unsigned char *_d = idata;
+    unsigned int  _l = 36;
+    printf("DATA:");
+    for (_i=0; _i<_l; _i++) {
+	if ((_i % 8) == 0)
+	    printf("\n ");
+	    printf(" 0x%2.2x", _d[_i]);
+    }
+    printf("\n");
+}
+{
+    int _i;
+    const unsigned char *_d = p;
+    unsigned int  _l = rinfo->key_len;
+    printf("key:");
+    for (_i=0; _i<_l; _i++) {
+	if ((_i % 8) == 0)
+	    printf("\n ");
+	    printf(" 0x%2.2x", _d[_i]);
+    }
+    printf("\n");
+}
     HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 36, integ_data, &ilen);
-    if (memcmp(data+40, integ_data, rinfo->key_len) != 0)
+{
+    int _i;
+    unsigned char *_d = integ_data;
+    unsigned int  _l = rinfo->key_len;
+    printf("AUTH:");
+    for (_i=0; _i<_l; _i++) {
+	if ((_i % 8) == 0)
+	    printf("\n ");
+	    printf(" 0x%2.2x", _d[_i]);
+    }
+    printf("\n");
+}
+    if (memcmp(data+8, integ_data, rinfo->key_len) != 0)
 	return EINVAL;
 
     return 0;
@@ -587,6 +619,7 @@ rakp_sha1_init(rakp_info_t *info)
 	return ENOMEM;
     key_data->evp_md = EVP_sha1();
     key_data->key_len = 20;
+    info->key_data = key_data;
     return 0;
 }
 
@@ -618,8 +651,8 @@ rakp_md5_init(rakp_info_t *info)
     if (!key_data)
 	return ENOMEM;
     key_data->evp_md = EVP_md5();
-    info->key_data = key_data;
     key_data->key_len = 16;
+    info->key_data = key_data;
     return 0;
 }
 
@@ -691,9 +724,12 @@ rakp_handle_recv(ipmi_con_t    *ipmi,
 		 unsigned char *data,
 		 unsigned int  data_len)
 {
+    ipmi_msg_t *msg = &(rspi->msg);
     if (data_len > sizeof(rspi->data))
 	return E2BIG;
     memcpy(rspi->data, data, data_len);
+    msg->data = rspi->data;
+    msg->data_len = data_len;
     return 0;
 }
 
@@ -714,20 +750,20 @@ _ipmi_rakp_init(void)
     int rv;
 
     rv = ipmi_rmcpp_register_authentication
-	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_NONE,
+	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE,
 	 &rakp_none_auth);
     if (rv)
 	return rv;
 
 #ifdef HAVE_OPENSSL
     rv = ipmi_rmcpp_register_authentication
-	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_SHA1,
+	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1,
 	 &rakp_hmac_sha1_auth);
     if (rv)
 	return rv;
 
     rv = ipmi_rmcpp_register_authentication
-	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_MD5,
+	(IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5,
 	 &rakp_hmac_md5_auth);
     if (rv)
 	return rv;

@@ -136,16 +136,16 @@ get_uint(char **tokptr, unsigned int *rval, char **err)
 }
 
 static void
-cleanup_ascii_16(uint8_t *c)
+cleanup_ascii(uint8_t *c, unsigned int len)
 {
     int i;
 
     i = 0;
-    while ((i < 16) && (*c != 0)) {
+    while ((i < len) && (*c != 0)) {
 	c++;
 	i++;
     }
-    while (i < 16) {
+    while (i < len) {
 	*c = 0;
 	c++;
 	i++;
@@ -153,7 +153,7 @@ cleanup_ascii_16(uint8_t *c)
 }
 
 static int
-read_16(char **tokptr, unsigned char *data, char **err)
+read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 {
     char *tok = strtok_r(NULL, " \t\n", tokptr);
     char *end;
@@ -172,8 +172,8 @@ read_16(char **tokptr, unsigned char *data, char **err)
 	    return -1;
 	}
 	tok[end] = '\0';
-	strncpy(data, tok, 16);
-	cleanup_ascii_16(data);
+	strncpy(data, tok, len);
+	cleanup_ascii(data, len);
     } else {
 	int  i;
 	char c[3];
@@ -183,7 +183,7 @@ read_16(char **tokptr, unsigned char *data, char **err)
 	    return -1;
 	}
 	c[2] = '\0';
-	for (i=0; i<16; i++) {
+	for (i=0; i<len; i++) {
 	    c[0] = *tok;
 	    tok++;
 	    c[1] = *tok;
@@ -220,11 +220,11 @@ get_user(char **tokptr, lan_data_t *lan, char **err)
 	return rv;
     lan->users[num].valid = val;
 
-    rv = read_16(tokptr, lan->users[num].username, err);
+    rv = read_bytes(tokptr, lan->users[num].username, err, 16);
     if (rv)
 	return rv;
 
-    rv = read_16(tokptr, lan->users[num].pw, err);
+    rv = read_bytes(tokptr, lan->users[num].pw, err, 20);
     if (rv)
 	return rv;
 
@@ -382,7 +382,17 @@ lanserv_read_config(lan_data_t    *lan,
 		lan->guid = malloc(16);
 	    if (!lan->guid)
 		return -1;
-	    err = read_16(&tokptr, lan->guid, &errstr);
+	    err = read_bytes(&tokptr, lan->guid, &errstr, 16);
+	    if (err) {
+	        fprintf(stderr, "Error on line %d: %s\n", line, errstr);
+		return err;
+	    }	
+	} else if (strcmp(tok, "bmc_key") == 0) {
+	    if (!lan->bmc_key)
+		lan->bmc_key = malloc(20);
+	    if (!lan->bmc_key)
+		return -1;
+	    err = read_bytes(&tokptr, lan->bmc_key, &errstr, 20);
 	    if (err) {
 	        fprintf(stderr, "Error on line %d: %s\n", line, errstr);
 		return err;

@@ -9,7 +9,7 @@ VERSION_CURRENT = $(wordlist 1, 1, $(SPACE_VERSION))
 VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
 VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
 
-AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
+AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS $(OPENSSLINCS)
 
 LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
@@ -23,18 +23,19 @@ noinst_HEADERS = emu.h
 
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 	lanserv_oem_force.c lanserv_config.c
-libIPMIlanserv_la_LIBADD = $(top_builddir)/utils/libOpenIPMIutils.la
+libIPMIlanserv_la_LIBADD = $(top_builddir)/utils/libOpenIPMIutils.la \
+	 $(OPENSSLLIBS)
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libIPMIlanserv.map
 
 ipmi_checksum_SOURCES = ipmi_checksum.c
 
 ipmilan_SOURCES = lanserv.c
-ipmilan_LDADD = -lpopt libIPMIlanserv.la
+ipmilan_LDADD = -lpopt libIPMIlanserv.la $(OPENSSLLIBS)
 ipmilan_LDFLAGS = -rdynamic
 
 lanserv_emu_SOURCES = lanserv_emu.c emu.c emu_cmd.c
-lanserv_emu_LDADD = -lpopt libIPMIlanserv.la
+lanserv_emu_LDADD = -lpopt libIPMIlanserv.la $(OPENSSLLIBS)
 lanserv_emu_LDFLAGS = -rdynamic
 
 EXTRA_DIST = atca.emu README.emulator

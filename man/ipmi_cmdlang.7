@@ -392,8 +392,10 @@ Domain Created: <domain>
 \fI<parms>\fP are either:
 .RS
 lan [-U \fI<username>\fP] [-P \fI<password>\fP] [-A \fI<authtype>\fP] [-L \fI<privilege>\fP] [-s] [-p[2] \fI<port number>\fP] \fI<IP>\fP [\fI<IP>\fP]
+  [-Ra \fI<auth alg>\fP] [-Ri \fI<integ alg>\fP] [-Rc \fI<conf algo>\fP]
+  [-Rl] [-Rk \fI<bmc key>\fP]
 .RE
-for a RMCP LAN connection or
+for a RMCP/RMCP+ LAN connection or
 .RS
 smi \fI<smi num>\fP
 .RE
@@ -423,10 +425,21 @@ It defaults to the best authentication supported by the server.
 .B operator
 or
 .B user.
-It defaults to admin.
-\fI<username>\fP and \fI<password>\fP are the user name and password of
-the IPMI user to use for the connection.
-The <smi num> is the driver number, generally 0.
+It defaults to admin.  \fI<username>\fP and \fI<password>\fP are the
+user name and password of the IPMI user to use for the connection.
+For RMCP+ connections, the authentication algorithms supported (-Ra)
+are: bmcpick, rakp_none, rakp_hmac_sha1, and rakp_hmac_md5.  The
+integrity algorithms (-Ri) supported are: bmcpick, none, hmac_sha1,
+hmac_md5, and md5.  The confidentiality algorithms (-Rc) are: bmcpick,
+aes_cbc_128, xrc4_128, and xrc_40.  The defaults are rackp_hmac_sha1,
+hmac_sha1, and aes_cb_128.  -Rl turns on lookup up names by the name
+and the privilege level (allowing the same name with different
+privileges and different passwords), the default is straight name
+lookup.  -Rk sets the BMC key, needed if the system does two-key
+lookups.
+
+For SMI types, the <smi num> is the driver number, generally 0.
+
 Options enable and disable various automitic processing and are:
 .PD 0
 .HP

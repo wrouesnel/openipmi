@@ -59,6 +59,9 @@ extern "C" {
 
 #define MAIN_CHANNEL	0x7
 
+typedef struct session_s session_t;
+typedef struct lan_data_s lan_data_t;
+
 typedef struct msg_s
 {
     void *src_addr;
@@ -67,11 +70,22 @@ typedef struct msg_s
     long oem_data; /* For use by OEM handlers.  This will be set to
                       zero by the calling code. */
 
+    unsigned char authtype;
     uint32_t      seq;
     uint32_t      sid;
+
+    /* RMCP parms */
     unsigned char *authcode;
     unsigned char authcode_data[16];
-    unsigned char authtype;
+
+    /* RMCP+ parms */
+    unsigned char payload;
+    unsigned char encrypted;
+    unsigned char authenticated;
+    unsigned char iana[3];
+    uint16_t      payload_id;
+    unsigned char *authdata;
+    unsigned int  authdata_len;
 
     unsigned char netfn;
     unsigned char rs_addr;
@@ -112,18 +126,81 @@ typedef struct channel_s
     } priv_info[NUM_PRIV_LEVEL];
 } channel_t;
 
-typedef struct session_s
+typedef struct integ_handlers_s
+{
+    int (*init)(lan_data_t *lan, session_t *session);
+    void (*cleanup)(lan_data_t *lan, session_t *session);
+    int (*add)(lan_data_t *lan, session_t *session,
+	       unsigned char *pos,
+	       unsigned int *data_len, unsigned int data_size);
+    int (*check)(lan_data_t *lan, session_t *session, msg_t *msg);
+} integ_handlers_t;
+
+typedef struct conf_handlers_s
+{
+    int (*init)(lan_data_t *lan, session_t *session);
+    void (*cleanup)(lan_data_t *lan, session_t *session);
+    int (*encrypt)(lan_data_t *lan, session_t *session,
+		   unsigned char **pos, unsigned int *hdr_left,
+		   unsigned int *data_len, unsigned int *data_size);
+    int (*decrypt)(lan_data_t *lan, session_t *session, msg_t *msg);
+} conf_handlers_t;
+
+typedef struct auth_handlers_s
+{
+    int (*init)(lan_data_t *lan, session_t *session);
+    int (*set2)(lan_data_t *lan, session_t *session,
+		unsigned char *data, unsigned int *data_len,
+		unsigned int max_len);
+    int (*check3)(lan_data_t *lan, session_t *session,
+		  unsigned char *data, unsigned int *data_len);
+    int (*set4)(lan_data_t *lan, session_t *session,
+		unsigned char *data, unsigned int *data_len,
+		unsigned int max_len);
+} auth_handlers_t;
+
+typedef struct auth_data_s
+{
+    unsigned char rand[16];
+    unsigned char rem_rand[16];
+    unsigned char role;
+    unsigned char username_len;
+    unsigned char username[16];
+    unsigned char sik[20];
+    unsigned char k1[20];
+    unsigned char k2[20];
+    unsigned int  key_len;
+    const void    *data;
+} auth_data_t;
+
+struct session_s
 {
     unsigned int active : 1;
+    unsigned int in_startup : 1;
+    unsigned int rmcpplus : 1;
 
     int           idx; /* My idx in the table. */
 
-    unsigned char   authtype;
-    ipmi_authdata_t authdata;
     uint32_t        recv_seq;
     uint32_t        xmit_seq;
     uint32_t        sid;
     unsigned char   userid;
+
+    /* RMCP data */
+    unsigned char   authtype;
+    ipmi_authdata_t authdata;
+
+    /* RMCP+ data */
+    uint32_t        unauth_recv_seq;
+    uint32_t        unauth_xmit_seq;
+    uint32_t        rem_sid;
+    unsigned int    auth;
+    unsigned int    conf;
+    unsigned int    integ;
+    integ_handlers_t *integh;
+    conf_handlers_t  *confh;
+    auth_handlers_t  *authh;
+    auth_data_t      auth_data;
 
     unsigned char priv;
     unsigned char max_priv;
@@ -134,7 +211,7 @@ typedef struct session_s
     /* Address of the message that started the sessions. */
     void *src_addr;
     int  src_len;
-} session_t;
+};
 
 typedef struct user_s
 {
@@ -142,7 +219,7 @@ typedef struct user_s
     unsigned char link_auth;
     unsigned char cb_only;
     unsigned char username[16];
-    unsigned char pw[16];
+    unsigned char pw[20];
     unsigned char privilege;
     unsigned char max_sessions;
     unsigned char curr_sessions;
@@ -151,8 +228,6 @@ typedef struct user_s
     /* Set by the user code. */
     int           idx; /* My idx in the table. */
 } user_t;
-
-typedef struct lan_data_s lan_data_t;
 
 typedef struct lanparm_dest_data_s
 {
@@ -259,6 +334,7 @@ struct lan_data_s
     unsigned int default_session_timeout;
 
     unsigned char *guid;
+    unsigned char *bmc_key;
 
     void *user_info;
 

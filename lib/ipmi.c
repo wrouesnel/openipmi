@@ -1008,8 +1008,20 @@ struct ipmi_args_s
     char            username[16];
     unsigned int    username_len;
     int             password_set;
-    char            password[16];
+    char            password[20];
     unsigned int    password_len;
+
+    int             auth_alg_set;
+    unsigned int    auth_alg;
+    int             integ_alg_set;
+    unsigned int    integ_alg;
+    int		    conf_alg_set;
+    unsigned int    conf_alg;
+    int             name_lookup_only_set;
+    int             name_lookup_only;
+    int             bmc_key_set;
+    char            bmc_key[20];
+    unsigned int    bmc_key_len;
 
     unsigned char   swid;
     struct in_addr  lan_addr[2];
@@ -1076,6 +1088,8 @@ ipmi_parse_args(int         *curr_arg,
 	    p->authtype = IPMI_AUTHTYPE_MD5;
 	} else if (strcmp(args[*curr_arg], "straight") == 0) {
 	    p->authtype = IPMI_AUTHTYPE_STRAIGHT;
+	} else if (strcmp(args[*curr_arg], "rmcp+") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_RMCP_PLUS;
 	} else if (p->num_addr == 1) {
 	    p->num_addr++;
 	    p->str_addr[1] = ipmi_strdup(args[*curr_arg]);
@@ -1269,8 +1283,8 @@ ipmi_parse_args2(int         *curr_arg,
 	    } else if (strcmp(args[*curr_arg], "-P") == 0) {
 		(*curr_arg)++; CHECK_ARG;
 		len = strlen(args[*curr_arg]);
-		if (len > 16)
-		    len = 16;
+		if (len > 20)
+		    len = 20;
 		memcpy(p->password, args[*curr_arg], len);
 		p->password_set = 1;
 		p->password_len = len;
@@ -1286,6 +1300,8 @@ ipmi_parse_args2(int         *curr_arg,
 		    p->authtype = IPMI_AUTHTYPE_MD5;
 		} else if (strcmp(args[*curr_arg], "straight") == 0) {
 		    p->authtype = IPMI_AUTHTYPE_STRAIGHT;
+		} else if (strcmp(args[*curr_arg], "rmcp+") == 0) {
+		    p->authtype = IPMI_AUTHTYPE_RMCP_PLUS;
 		} else {
 		    rv = EINVAL;
 		    goto out_err;
@@ -1323,6 +1339,69 @@ ipmi_parse_args2(int         *curr_arg,
 		    rv = ENOMEM;
 		    goto out_err;
 		}
+	    } else if (strcmp(args[*curr_arg], "-Ra") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+
+		if (strcmp(args[*curr_arg], "bmcpick") == 0) {
+		    p->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK;
+		} else if (strcmp(args[*curr_arg], "rakp_none") == 0) {
+		    p->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_NONE;
+		} else if (strcmp(args[*curr_arg], "rakp_hmac_sha1") == 0) {
+		    p->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
+		} else if (strcmp(args[*curr_arg], "rakp_hmac_md5") == 0) {
+		    p->auth_alg = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_MD5;
+		} else {
+		    rv = EINVAL;
+		    goto out_err;
+		}
+		p->auth_alg_set = 1;
+	    } else if (strcmp(args[*curr_arg], "-Ri") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+
+		if (strcmp(args[*curr_arg], "bmcpick") == 0) {
+		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK;
+		} else if (strcmp(args[*curr_arg], "none") == 0) {
+		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
+		} else if (strcmp(args[*curr_arg], "hmac_sha1") == 0) {
+		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
+		} else if (strcmp(args[*curr_arg], "hmac_md5") == 0) {
+		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128;
+		} else if (strcmp(args[*curr_arg], "md5") == 0) {
+		    p->integ_alg = IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128;
+		} else {
+		    rv = EINVAL;
+		    goto out_err;
+		}
+		p->integ_alg_set = 1;
+	    } else if (strcmp(args[*curr_arg], "-Rc") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+
+		if (strcmp(args[*curr_arg], "bmcpick") == 0) {
+		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK;
+		} else if (strcmp(args[*curr_arg], "none") == 0) {
+		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
+		} else if (strcmp(args[*curr_arg], "aes_cbc_128") == 0) {
+		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
+		} else if (strcmp(args[*curr_arg], "xrc4_128") == 0) {
+		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_128;
+		} else if (strcmp(args[*curr_arg], "xrc4_40") == 0) {
+		    p->conf_alg = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_40;
+		} else {
+		    rv = EINVAL;
+		    goto out_err;
+		}
+		p->conf_alg_set = 1;
+	    } else if (strcmp(args[*curr_arg], "-Rl") == 0) {
+		p->name_lookup_only = 0;
+		p->name_lookup_only_set = 1;
+	    } else if (strcmp(args[*curr_arg], "-Rk") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+		len = strlen(args[*curr_arg]);
+		if (len > 20)
+		    len = 20;
+		memcpy(p->bmc_key, args[*curr_arg], len);
+		p->bmc_key_set = 1;
+		p->bmc_key_len = len;
 	    }
 	    (*curr_arg)++;
 	}
@@ -1441,7 +1520,7 @@ ipmi_args_setup_con(ipmi_args_t  *args,
     case LAN:
     {
 	int              i;
-	ipmi_lanp_parm_t parms[6];
+	ipmi_lanp_parm_t parms[11];
 
 	i = 0;
 	parms[i].parm_id = IPMI_LANP_PARMID_ADDRS;
@@ -1472,6 +1551,32 @@ ipmi_args_setup_con(ipmi_args_t  *args,
 	    parms[i].parm_id = IPMI_LANP_PARMID_PASSWORD;
 	    parms[i].parm_data = args->password;
 	    parms[i].parm_data_len = args->password_len;
+	    i++;
+	}
+	if (args->auth_alg_set) {
+	    parms[i].parm_id = IPMI_LANP_AUTHENTICATION_ALGORITHM;
+	    parms[i].parm_val = args->auth_alg;
+	    i++;
+	}
+	if (args->integ_alg_set) {
+	    parms[i].parm_id = IPMI_LANP_INTEGRITY_ALGORITHM;
+	    parms[i].parm_val = args->integ_alg;
+	    i++;
+	}
+	if (args->conf_alg_set) {
+	    parms[i].parm_id = IPMI_LANP_CONFIDENTIALITY_ALGORITHM;
+	    parms[i].parm_val = args->conf_alg;
+	    i++;
+	}
+	if (args->name_lookup_only_set) {
+	    parms[i].parm_id = IPMI_LANP_NAME_LOOKUP_ONLY;
+	    parms[i].parm_val = args->name_lookup_only;
+	    i++;
+	}
+	if (args->bmc_key_set) {
+	    parms[i].parm_id = IPMI_LANP_BMC_KEY;
+	    parms[i].parm_data = args->bmc_key;
+	    parms[i].parm_data_len = args->bmc_key_len;
 	    i++;
 	}
 	return ipmi_lanp_setup_con(parms, i, handlers, user_data, con);

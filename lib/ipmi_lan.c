@@ -248,10 +248,14 @@ struct lan_data_s
     unsigned int               bmc_key_len;
     ipmi_rmcpp_auth_t          ainfo[MAX_IP_ADDR];
 
-    ipmi_rmcpp_confidentiality_t conf_info[MAX_IP_ADDR];
+    /* Used to hold the session id before the connection is up. */
+    uint32_t                   precon_session_id[MAX_IP_ADDR];
+    uint32_t                   precon_mgsys_session_id[MAX_IP_ADDR];
+
+    ipmi_rmcpp_confidentiality_t *conf_info[MAX_IP_ADDR];
     void                         *conf_data[MAX_IP_ADDR];
 
-    ipmi_rmcpp_integrity_t       integ_info[MAX_IP_ADDR];
+    ipmi_rmcpp_integrity_t       *integ_info[MAX_IP_ADDR];
     void                         *integ_data[MAX_IP_ADDR];
 
 
@@ -380,9 +384,12 @@ open_handle_recv(ipmi_con_t    *ipmi,
 		 unsigned char *data,
 		 unsigned int  data_len)
 {
+    ipmi_msg_t *msg = &(rspi->msg);
     if (data_len > sizeof(rspi->data))
 	return E2BIG;
     memcpy(rspi->data, data, data_len);
+    msg->data = rspi->data;
+    msg->data_len = data_len;
     return 0;
 }
 
@@ -400,7 +407,8 @@ static ipmi_payload_t open_payload =
 static ipmi_payload_t *payloads[64] =
 {
     &_ipmi_payload,
-    [IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST] = &open_payload
+    [IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST] = &open_payload,
+    [IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE] = &open_payload
 };
 
 typedef struct payload_entry_s payload_entry_t;
@@ -551,12 +559,49 @@ struct conf_entry_s
 };
 static conf_entry_t *oem_conf_list = NULL;
 
-ipmi_rmcpp_confidentiality_t *confs[64];
+static int
+conf_none_init(ipmi_con_t *ipmi, ipmi_rmcpp_auth_t *ainfo, void **conf_data)
+{
+    *conf_data = NULL;
+    return 0;
+}
+
+static void
+conf_none_free(ipmi_con_t *ipmi, void *conf_data)
+{
+}
+
+static int
+conf_none_encrypt(ipmi_con_t    *ipmi,
+		  void          *conf_data,
+		  unsigned char **payload,
+		  unsigned int  *header_len,
+		  unsigned int  *payload_len,
+		  unsigned int  max_payload_len)
+{
+    return 0;
+}
+
+static int
+conf_none_decrypt(ipmi_con_t    *ipmi,
+		  void          *conf_data,
+		  unsigned char **payload,
+		  unsigned int  *payload_len)
+{
+    return 0;
+}
+static ipmi_rmcpp_confidentiality_t conf_none =
+{ conf_none_init, conf_none_free, conf_none_encrypt, conf_none_decrypt};
+
+static ipmi_rmcpp_confidentiality_t *confs[64] =
+{
+    &conf_none
+};
 
 int ipmi_rmcpp_register_confidentiality(unsigned int                 conf_num,
 					ipmi_rmcpp_confidentiality_t *conf)
 {
-    if (conf_num >= 64)
+    if ((conf_num == 0) || (conf_num >= 64))
 	return EINVAL;
     if (confs[conf_num] && conf)
 	return EAGAIN;
@@ -607,12 +652,64 @@ struct integ_entry_s
 };
 static integ_entry_t *oem_integ_list = NULL;
 
-ipmi_rmcpp_integrity_t *integs[64];
+static int
+integ_none_init(ipmi_con_t       *ipmi,
+		ipmi_rmcpp_auth_t *ainfo,
+		void             **integ_data)
+{
+    *integ_data = NULL;
+    return 0;
+}
+
+static void
+integ_none_free(ipmi_con_t *ipmi,
+		void       *integ_data)
+{
+}
+
+static int
+integ_none_pad(ipmi_con_t    *ipmi,
+	       void          *integ_data,
+	       unsigned char *payload,
+	       unsigned int  *payload_len,
+	       unsigned int  max_payload_len)
+{
+    return 0;
+}
+
+static int
+integ_none_add(ipmi_con_t    *ipmi,
+	       void          *integ_data,
+	       unsigned char *payload,
+	       unsigned int  *payload_len,
+	       unsigned int  max_payload_len)
+{
+    return 0;
+}
+
+static int
+integ_none_check(ipmi_con_t    *ipmi,
+		 void          *integ_data,
+		 unsigned char *payload,
+		 unsigned int  payload_len,
+		 unsigned int  total_len)
+{
+    return 0;
+}
+
+static ipmi_rmcpp_integrity_t integ_none =
+{ integ_none_init, integ_none_free, integ_none_pad, integ_none_add,
+  integ_none_check };
+
+static ipmi_rmcpp_integrity_t *integs[64] =
+{
+    &integ_none
+};
 
 int ipmi_rmcpp_register_integrity(unsigned int           integ_num,
 				  ipmi_rmcpp_integrity_t *integ)
 {
-    if (integ_num >= 64)
+    if ((integ_num == 0) || (integ_num >= 64))
 	return EINVAL;
     if (integs[integ_num] && integ)
 	return EAGAIN;
@@ -656,13 +753,13 @@ ipmi_rmcpp_register_oem_integrity(unsigned int           integ_num,
 uint32_t
 ipmi_rmcpp_auth_get_my_session_id(ipmi_rmcpp_auth_t *ainfo)
 {
-    return ainfo->lan->session_id[ainfo->addr_num];
+    return ainfo->lan->precon_session_id[ainfo->addr_num];
 }
 
 uint32_t
 ipmi_rmcpp_auth_get_mgsys_session_id(ipmi_rmcpp_auth_t *ainfo)
 {
-    return ainfo->lan->mgsys_session_id[ainfo->addr_num];
+    return ainfo->lan->precon_mgsys_session_id[ainfo->addr_num];
 }
 
 uint8_t
@@ -1041,35 +1138,38 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 {
     unsigned char *tmsg;
     int           rv;
-    unsigned int  l;
-    unsigned char *lenptr;
+    unsigned int  header_used;
     unsigned char *data;
-    unsigned int  trailer_len;
-    unsigned int  header_len_start = header_len;
+    unsigned int  payload_len;
+    uint32_t      *seqp;
 
     if (in_session
 	&& (lan->working_conf[addr_num]
 	    != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE))
     {
 	/* Note: This may encrypt the data, the old data will be lost. */
-	rv = lan->conf_info[addr_num].conf_encrypt(lan->ipmi,
-						   lan->conf_data[addr_num],
-						   msgdata,
-						   &header_len, data_len,
-						   max_data_len);
+	rv = lan->conf_info[addr_num]->conf_encrypt(lan->ipmi,
+						    lan->conf_data[addr_num],
+						    msgdata,
+						    &header_len, data_len,
+						    max_data_len);
 	if (rv)
 	    return rv;
     }
 
-    if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT)
-	l = 22;
-    else
-	l = 16;
+    payload_len = *data_len;
 
-    if (l > header_len)
+    if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT)
+	header_used = 22;
+    else
+	header_used = 16;
+
+    if (header_used > header_len)
 	return E2BIG;
 
-    data = *msgdata - l;
+    data = *msgdata - header_used;
+    *data_len += header_used;
+    max_data_len += header_used;
 
     data[0] = 6; /* RMCP version 1.0. */
     data[1] = 0;
@@ -1093,42 +1193,60 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 	    data[5] |= 0x80;
 	}
 	if (lan->working_integ[addr_num] != IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
+	{
+	    seqp = &(lan->outbound_seq_num[addr_num]);
 	    data[5] |= 0x40;
-	ipmi_set_uint32(tmsg, lan->session_id[addr_num]);
+	} else {
+	    seqp = &(lan->unauth_out_seq_num[addr_num]);
+	}
+	ipmi_set_uint32(tmsg, lan->mgsys_session_id[addr_num]);
 	tmsg += 4;
-	if (lan->working_integ[addr_num] == IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
-	    ipmi_set_uint32(tmsg, lan->unauth_out_seq_num[addr_num]);
-	else
-	    ipmi_set_uint32(tmsg, lan->outbound_seq_num[addr_num]);
+	ipmi_set_uint32(tmsg, *seqp);
 	tmsg += 4;
     } else {
 	ipmi_set_uint32(tmsg, 0); /* session id */
 	tmsg += 4;
 	ipmi_set_uint32(tmsg, 0); /* session sequence number */
 	tmsg += 4;
+	seqp = NULL;
     }
-    lenptr = tmsg;
-    tmsg += 2; /* skip payload length */
 
-    trailer_len = 0;
     if (in_session
-	&& (lan->working_conf[addr_num]
-	    != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE))
+	&& (lan->working_integ[addr_num]
+	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE))
     {
-	/* The max data will change as we add headers (msgdata moves
-	   backwards), make sure we account for it in the max
-	   length. */
-	max_data_len += header_len_start - header_len;
-	rv = lan->integ_info[addr_num].integ_add(lan->ipmi,
-						 lan->integ_data[addr_num],
-						 data, data_len, &trailer_len,
-						 max_data_len);
+	unsigned int orig_data_len = *data_len;
+	rv = lan->integ_info[addr_num]->integ_pad(lan->ipmi,
+						  lan->integ_data[addr_num],
+						  data, data_len,
+						  max_data_len);
+	if (rv)
+	    return rv;
+	payload_len += *data_len - orig_data_len;
+    }
+
+    /* Now that we have all the padding in, we can add the length. */
+    ipmi_set_uint16(tmsg, payload_len);
+
+    if (in_session
+	&& (lan->working_integ[addr_num]
+	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE))
+    {
+	rv = lan->integ_info[addr_num]->integ_add(lan->ipmi,
+						  lan->integ_data[addr_num],
+						  data, data_len,
+						  max_data_len);
 	if (rv)
 	    return rv;
     }
 
-    ipmi_set_uint16(lenptr, *data_len);
-    *data_len += trailer_len;
+    if (seqp) {
+	(*seqp)++;
+	if (*seqp == 0)
+	    *seqp = 1;
+    }
+
+    *msgdata = data;
 
     return 0;
 }
@@ -1499,21 +1617,25 @@ reset_session_data(lan_data_t *lan, int addr_num)
     lan->inbound_seq_num[addr_num] = 0;
     lan->session_id[addr_num] = 0;
     lan->mgsys_session_id[addr_num] = 0;
+    lan->precon_session_id[addr_num] = 0;
+    lan->precon_mgsys_session_id[addr_num] = 0;
     lan->recv_msg_map[addr_num] = 0;
     lan->unauth_recv_msg_map[addr_num] = 0;
     lan->working_authtype[addr_num] = 0;
     lan->unauth_out_seq_num[addr_num] = 0;
     lan->unauth_in_seq_num[addr_num] = 0;
     if (lan->conf_data[addr_num]) {
-	lan->conf_info[addr_num].conf_free(lan->ipmi,
-					   lan->conf_data[addr_num]);
+	lan->conf_info[addr_num]->conf_free(lan->ipmi,
+					    lan->conf_data[addr_num]);
 	lan->conf_data[addr_num] = NULL;
     }
+    lan->conf_info[addr_num] = NULL;
     if (lan->integ_data[addr_num]) {
-	lan->integ_info[addr_num].integ_free(lan->ipmi,
-					     lan->integ_data[addr_num]);
+	lan->integ_info[addr_num]->integ_free(lan->ipmi,
+					      lan->integ_data[addr_num]);
 	lan->integ_data[addr_num] = NULL;
     }
+    lan->integ_info[addr_num] = NULL;
     lan->working_conf[addr_num] = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
     lan->working_integ[addr_num] = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
 }
@@ -2197,11 +2319,11 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    goto out;
 	}
 
-	rv = lan->integ_info[addr_num].integ_check(ipmi,
-						   lan->integ_data[addr_num],
-						   data,
-						   header_len + payload_len,
-						   len);
+	rv = lan->integ_info[addr_num]->integ_check(ipmi,
+						    lan->integ_data[addr_num],
+						    data,
+						    header_len + payload_len,
+						    len);
 	if (rv) {
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Integrity failed");
@@ -2233,6 +2355,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	rv = check_session_seq_num(session_seq,
 				   &(lan->inbound_seq_num[addr_num]),
 				   &(lan->recv_msg_map[addr_num]));
+    else if (session_id == 0)
+	rv = 0; /* seq num not used for out-of-session messages. */
     else
 	rv = check_session_seq_num(session_seq,
 				   &(lan->unauth_in_seq_num[addr_num]),
@@ -2254,9 +2378,9 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    goto out;
 	}
 
-	rv = lan->conf_info[addr_num].conf_decrypt(ipmi,
-						   lan->conf_data[addr_num],
-						   &tmsg, &payload_len);
+	rv = lan->conf_info[addr_num]->conf_decrypt(ipmi,
+						    lan->conf_data[addr_num],
+						    &tmsg, &payload_len);
 	if (rv) {
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Decryption failed");
@@ -2759,7 +2883,10 @@ send_close_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
     msg.cmd = IPMI_CLOSE_SESSION_CMD;
     msg.data_len = 4;
     msg.data = data;
-    ipmi_set_uint32(data, lan->session_id[addr_num]);
+    if (lan->working_authtype[addr_num] == IPMI_AUTHTYPE_RMCP_PLUS)
+	ipmi_set_uint32(data, lan->mgsys_session_id[addr_num]);
+    else
+	ipmi_set_uint32(data, lan->session_id[addr_num]);
     lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0, addr_num);
 }
 
@@ -2896,9 +3023,9 @@ lan_cleanup(ipmi_con_t *ipmi)
 	ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
     for (i=0; i<MAX_IP_ADDR; i++) {
 	if (lan->conf_data[i])
-	    lan->conf_info[i].conf_free(ipmi, lan->conf_data[i]);
+	    lan->conf_info[i]->conf_free(ipmi, lan->conf_data[i]);
 	if (lan->integ_data[i])
-	    lan->integ_info[i].integ_free(ipmi, lan->integ_data[i]);
+	    lan->integ_info[i]->integ_free(ipmi, lan->integ_data[i]);
     }
     /* paranoia */
     memset(lan->password, 0, sizeof(lan->password));
@@ -2976,9 +3103,9 @@ cleanup_con(ipmi_con_t *ipmi)
 	    ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
 	for (i=0; i<MAX_IP_ADDR; i++) {
 	    if (lan->conf_data[i])
-		lan->conf_info[i].conf_free(ipmi, lan->conf_data[i]);
+		lan->conf_info[i]->conf_free(ipmi, lan->conf_data[i]);
 	    if (lan->integ_data[i])
-		lan->integ_info[i].integ_free(ipmi, lan->integ_data[i]);
+		lan->integ_info[i]->integ_free(ipmi, lan->integ_data[i]);
 	}
 	ipmi_mem_free(lan);
     }
@@ -3296,6 +3423,13 @@ rmcpp_auth_finished(ipmi_con_t    *ipmi,
 	goto out;
     }
 
+    lan->session_id[addr_num] = lan->precon_session_id[addr_num];
+    lan->mgsys_session_id[addr_num] = lan->precon_mgsys_session_id[addr_num];
+    lan->inbound_seq_num[addr_num] = 1;
+    lan->outbound_seq_num[addr_num] = 1;
+    lan->unauth_in_seq_num[addr_num] = 1;
+    lan->unauth_out_seq_num[addr_num] = 1;
+
     /* We're up!.  Start the session stuff. */
     rv = send_set_session_privilege(ipmi, lan, addr_num, info->rspi);
     if (rv) {
@@ -3320,13 +3454,13 @@ rmcpp_set_info(ipmi_con_t        *ipmi,
     lan_data_t  *lan = info->lan;
     int         rv;
 
-    rv = lan->conf_info[addr_num].conf_init(ipmi, ainfo,
-					    &(lan->conf_data[addr_num]));
+    rv = lan->conf_info[addr_num]->conf_init(ipmi, ainfo,
+					     &(lan->conf_data[addr_num]));
     if (rv)
 	goto out;
 
-    rv = lan->integ_info[addr_num].integ_init(ipmi, ainfo,
-					      &(lan->integ_data[addr_num]));
+    rv = lan->integ_info[addr_num]->integ_init(ipmi, ainfo,
+					       &(lan->integ_data[addr_num]));
     if (rv)
 	goto out;
 
@@ -3366,7 +3500,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     }
 
     session_id = ipmi_get_uint32(msg->data+4);
-    if (session_id != lan->session_id[addr_num]) {
+    if (session_id != lan->precon_session_id[addr_num]) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 " Got wrong session id: 0x%x",
@@ -3383,6 +3517,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
+    lan->precon_mgsys_session_id[addr_num] = mgsys_session_id;
 
     if ((msg->data[12] != 0) || (msg->data[15] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -3451,7 +3586,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     if (!confp) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 "BMC returned an conf algorithm that wasn't supported: %d",
+		 "BMC returned a conf algorithm that wasn't supported: %d",
 		 conf);
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
@@ -3488,11 +3623,14 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     lan->working_conf[addr_num] = conf;
     lan->working_integ[addr_num] = integ;
-    lan->conf_info[addr_num] = *confp;
-    lan->integ_info[addr_num] = *integp;
+    lan->conf_info[addr_num] = confp;
+    lan->integ_info[addr_num] = integp;
 
     lan->ainfo[addr_num].lan = lan;
-    lan->ainfo[addr_num].role = (lan->name_lookup_only << 8) | lan->privilege;
+    lan->ainfo[addr_num].role = (lan->name_lookup_only << 4) | lan->privilege;
+
+    info->lan = lan;
+    info->rspi = rspi;
 
     rv = authp->start_auth(ipmi, addr_num, &(lan->ainfo[addr_num]),
 			   rmcpp_set_info, rmcpp_auth_finished,
@@ -3521,7 +3659,7 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
     memset(data, 0, sizeof(data));
     data[0] = 0;
     data[1] = lan->privilege;
-    ipmi_set_uint32(data+4, lan->session_id[addr_num]);
+    ipmi_set_uint32(data+4, lan->precon_session_id[addr_num]);
     data[8] = 0; /* auth algorithm */
     if (lan->requested_auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
 	data[11] = 0; /* Let the BMC pick */
@@ -3570,7 +3708,7 @@ start_rmcpp(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi, int addr_num)
     lan->unauth_out_seq_num[addr_num] = 0;
     lan->inbound_seq_num[addr_num] = 0;
     lan->unauth_in_seq_num[addr_num] = 0;
-    lan->session_id[addr_num] = 1; /* Use session 1, don't really care. */
+    lan->precon_session_id[addr_num] = 1; /* Use session 1, don't really care. */
     lan->working_conf[addr_num] = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
     lan->working_integ[addr_num] = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
 
@@ -4105,7 +4243,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     /* Pick algorithms that are mandatory and secure. */
     unsigned int conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
     unsigned int integ = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
-    unsigned int auth = IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_SHA1;
+    unsigned int auth = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
     int          name_lookup_only = 1;
     void         *bmc_key = NULL;
     unsigned int bmc_key_len = 0;
@@ -4162,7 +4300,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    {
 		if (integ >= 64)
 		    return EINVAL;
-		if ((integ < 0x30) && (!integs[integ]))
+		if (integ && ((integ < 0x30) && (!integs[integ])))
 		    return ENOSYS;
 	    }
 	    break;
@@ -4173,7 +4311,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    {
 		if (conf >= 64)
 		    return EINVAL;
-		if ((conf < 0x30) && (!confs[conf]))
+		if (conf && ((conf < 0x30) && (!confs[conf])))
 		    return ENOSYS;
 	    }
 	    break;

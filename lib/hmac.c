@@ -110,6 +110,43 @@ hmac_free(ipmi_con_t *ipmi,
 }
 
 static int
+hmac_pad(ipmi_con_t    *ipmi,
+	 void          *integ_data,
+	 unsigned char *payload,
+	 unsigned int  *payload_len,
+	 unsigned int  max_payload_len)
+{
+    hmac_info_t    *info = integ_data;
+    unsigned char  *p = payload;
+    unsigned int   l = *payload_len;
+    int            rv;
+    unsigned int   count = 0;
+
+    /* We don't authenticate this part of the header. */
+    p += 4;
+    l -= 4;
+
+    /* Pad so that when we add two bytes (the pad length and the next
+       header) the result is on a multiple of 4 boundary. */
+    while (((l+2) % 4) == 0) {
+	if (l == max_payload_len)
+	    return E2BIG;
+	p[l] = 0xff;
+	l++;
+	count++;
+    }
+
+    /* Add the padding length.  The next header gets added later. */
+    if (l == max_payload_len)
+	return E2BIG;
+    p[l] = count;
+    l++;
+
+    *payload_len = l;
+    return 0;
+}
+
+static int
 hmac_add(ipmi_con_t    *ipmi,
 	 void          *integ_data,
 	 unsigned char *payload,
@@ -132,13 +169,13 @@ hmac_add(ipmi_con_t    *ipmi,
     p += 4;
     l -= 4;
 
-    p[l] = 0; /* No padding */
+    p[l] = 0x07; /* Add the next header */
     l++;
 
     HMAC(info->evp_md, info->k, info->klen, p, l, p+l, &ilen);
+    l += 16;
 
-    *payload_len += 1;
-    *trailer_len = info->klen;
+    *payload_len = l;
     return 0;
 }
 
@@ -175,6 +212,7 @@ static ipmi_rmcpp_integrity_t hmac_sha1_integ =
 {
     .integ_init = hmac_sha1_init,
     .integ_free = hmac_free,
+    .integ_pad = hmac_pad,
     .integ_add = hmac_add,
     .integ_check = hmac_check
 };
@@ -183,6 +221,7 @@ static ipmi_rmcpp_integrity_t hmac_md5_integ =
 {
     .integ_init = hmac_md5_init,
     .integ_free = hmac_free,
+    .integ_pad = hmac_pad,
     .integ_add = hmac_add,
     .integ_check = hmac_check
 };

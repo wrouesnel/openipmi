@@ -101,12 +101,48 @@ md5_free(ipmi_con_t *ipmi,
 }
 
 static int
+md5_pad(ipmi_con_t    *ipmi,
+	void          *integ_data,
+	unsigned char *payload,
+	unsigned int  *payload_len,
+	unsigned int  max_payload_len)
+{
+    md5_info_t     *info = integ_data;
+    unsigned char  *p = payload;
+    unsigned int   l = *payload_len;
+    int            rv;
+    unsigned int   count = 0;
+
+    /* We don't authenticate this part of the header. */
+    p += 4;
+    l -= 4;
+
+    /* Pad so that when we add two bytes (the pad length and the next
+       header) the result is on a multiple of 4 boundary. */
+    while (((l+2) % 4) == 0) {
+	if (l == max_payload_len)
+	    return E2BIG;
+	p[l] = 0xff;
+	l++;
+	count++;
+    }
+
+    /* Add the padding length.  The next header gets added later. */
+    if (l == max_payload_len)
+	return E2BIG;
+    p[l] = count;
+    l++;
+
+    *payload_len = l;
+    return 0;
+}
+
+static int
 md5_add(ipmi_con_t    *ipmi,
-	 void          *integ_data,
-	 unsigned char *payload,
-	 unsigned int  *payload_len,
-	 unsigned int  *trailer_len,
-	 unsigned int  max_payload_len)
+	void          *integ_data,
+	unsigned char *payload,
+	unsigned int  *payload_len,
+	unsigned int  max_payload_len)
 {
     md5_info_t     *info = integ_data;
     unsigned char  *p = payload;
@@ -124,20 +160,18 @@ md5_add(ipmi_con_t    *ipmi,
     p += 4;
     l -= 4;
 
-    p[l] = 0; /* No padding */
+    p[l] = 0x07; /* Next header */
     l++;
 
-    /* We add 1 to the length because we also check the next header
-       field. */
     data[0].data = p;
-    data[0].len = l+1;
+    data[0].len = l;
     data[1].data = NULL;
-    rv = ipmi_md5_authcode_gen(info->authdata, data, p+l+1);
+    rv = ipmi_md5_authcode_gen(info->authdata, data, p+l);
     if (rv)
 	return rv;
+    l += 16;
 
-    *payload_len += 1;
-    *trailer_len = 16;
+    *payload_len += l;
     return 0;
 }
 
@@ -177,6 +211,7 @@ static ipmi_rmcpp_integrity_t md5_integ =
 {
     .integ_init = md5_init,
     .integ_free = md5_free,
+    .integ_pad = md5_pad,
     .integ_add = md5_add,
     .integ_check = md5_check
 };
