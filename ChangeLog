@@ -1,3 +1,28 @@
+2004-10-20 Corey Minyard <cminyard@mvista.com> 
+
+	* Makefile.am: Added glib OS handler.
+	* configure.in: ditto
+	* glib/Makefile.am: ditto
+	* glib/glib_os_hnd.c: ditto
+
+	* cmdlang/cmd_domain.c, include/OpenIPMI/ipmi_cmdlang.h: Remove
+	selector stuff from cmdlang.
+	* cmdlang/ipmish.c: ditto
+
+	* cmdlang/os_debug.c: Removed rwlocks from OpenIPMI.
+	* include/OpenIPMI/ipmi_conn.h: ditto
+	* include/OpenIPMI/os_handler.h: ditto
+	* include/OpenIPMI/internal/ipmi_int.h: ditto
+	* lib/conn.c: ditto
+	* lib/ipmi.c: ditto
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+	* lib/oem_motorola_mxp_intf.c: ditto
+	* lib/sdr.c: ditto
+	* unix/posix_thread_os_hnd.c: ditto
+	
+	* ui/ui.c: Add internal MC include file.
+	
 2004-10-19 Corey Minyard <cminyard@mvista.com> 
 
 	* cmdlang/cmd_conn.c: Renamed IPMI_MAX_DOMAIN_NAME_LEN to

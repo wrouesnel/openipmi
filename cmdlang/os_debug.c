@@ -335,140 +335,12 @@ unlock(os_handler_t  *handler,
     return 0;
 }
 
-static int
-is_locked(os_handler_t  *handler,
-	  os_hnd_lock_t *id)
-{
-    return id->lock_count != 0;
-}
-
-struct os_hnd_rwlock_s
-{
-    os_hnd_rwlock_t *next, *prev;
-    int read_lock_count;
-    int write_lock_count;
-};
-
-static os_hnd_rwlock_t rwlocks = { &rwlocks, &rwlocks, 0 };
-
-static int
-create_rwlock(os_handler_t    *handler,
-	      os_hnd_rwlock_t **id)
-{
-    os_hnd_rwlock_t *lock;
-
-    lock = ipmi_mem_alloc(sizeof(*lock));
-    if (!lock)
-	return ENOMEM;
-    lock->read_lock_count = 0;
-    lock->write_lock_count = 0;
-    lock->next = NULL;
-    lock->prev = NULL;
-    *id = lock;
-    return 0;
-}
-
-static int
-destroy_rwlock(os_handler_t    *handler,
-	       os_hnd_rwlock_t *id)
-{
-    if ((id->read_lock_count != 0) || (id->write_lock_count != 0)) {
-	IPMI_REPORT_LOCK_ERROR(handler,
-			       "Release of rwlock when count is not zero\n");
-	id->next->prev = id->prev;
-	id->prev->next = id->next;
-    }
-    ipmi_mem_free(id);
-    return 0;
-}
-
-static int
-read_lock(os_handler_t    *handler,
-	  os_hnd_rwlock_t *id)
-{
-    if ((id->read_lock_count == 0) && (id->write_lock_count == 0)) {
-	id->next = rwlocks.next;
-	id->prev = &rwlocks;
-	id->next->prev = id;
-	rwlocks.next = id;
-    }
-    id->read_lock_count++;
-    return 0;
-}
-
-static int
-read_unlock(os_handler_t    *handler,
-	    os_hnd_rwlock_t *id)
-{
-    if (id->read_lock_count <= 0)
-	IPMI_REPORT_LOCK_ERROR(handler,
-			       "read lock count went negative\n");
-    id->read_lock_count--;
-    if ((id->read_lock_count == 0) && (id->write_lock_count == 0)) {
-	id->next->prev = id->prev;
-	id->prev->next = id->next;
-	id->next = NULL;
-	id->prev = NULL;
-    }
-    return 0;
-}
-
-static int
-write_lock(os_handler_t    *handler,
-	   os_hnd_rwlock_t *id)
-{
-    if ((id->read_lock_count == 0) && (id->write_lock_count == 0)) {
-	id->next = rwlocks.next;
-	id->prev = &rwlocks;
-	id->next->prev = id;
-	rwlocks.next = id;
-    }
-
-    if (id->read_lock_count != 0)
-	IPMI_REPORT_LOCK_ERROR(handler,
-			       "Write lock attempted when read lock held\n");
-    id->write_lock_count++;
-    return 0;
-}
-
-static int
-write_unlock(os_handler_t    *handler,
-	     os_hnd_rwlock_t *id)
-{
-    if (id->write_lock_count <= 0)
-	IPMI_REPORT_LOCK_ERROR(handler,
-			       "write lock count went negative\n");
-    id->write_lock_count--;
-    if ((id->read_lock_count == 0) && (id->write_lock_count == 0)) {
-	id->next->prev = id->prev;
-	id->prev->next = id->next;
-	id->next = NULL;
-	id->prev = NULL;
-    }
-    return 0;
-}
-
-static int
-is_readlocked(os_handler_t    *handler,
-	      os_hnd_rwlock_t *id)
-{
-    return ((id->write_lock_count != 0) || (id->read_lock_count != 0));
-}
-
-static int
-is_writelocked(os_handler_t    *handler,
-	       os_hnd_rwlock_t *id)
-{
-    return (id->write_lock_count != 0);
-}
-
 static void
 check_no_locks(os_handler_t *handler)
 {
-    if ((locks.next != &locks) || (rwlocks.next != &rwlocks))
+    if (locks.next != &locks)
 	IPMI_REPORT_LOCK_ERROR(handler,
 			       "Locks held when all should be free\n");
-	
 }
 #endif
 
@@ -515,31 +387,13 @@ os_handler_t ipmi_debug_os_handlers =
 #ifdef IPMI_CHECK_LOCKS
     .create_lock = create_lock,
     .destroy_lock = destroy_lock,
-    .is_locked = is_locked,
     .lock = lock,
     .unlock = unlock,
-    .create_rwlock = create_rwlock,
-    .destroy_rwlock = destroy_rwlock,
-    .read_lock = read_lock,
-    .write_lock = write_lock,
-    .read_unlock = read_unlock,
-    .write_unlock = write_unlock,
-    .is_readlocked = is_readlocked,
-    .is_writelocked = is_writelocked,
 #else
     .create_lock = NULL,
     .destroy_lock = NULL,
-    .is_locked = NULL,
     .lock = NULL,
     .unlock = NULL,
-    .create_rwlock = NULL,
-    .destroy_rwlock = NULL,
-    .read_lock = NULL,
-    .write_lock = NULL,
-    .read_unlock = NULL,
-    .write_unlock = NULL,
-    .is_readlocked = NULL,
-    .is_writelocked = NULL,
 #endif
     .get_random = get_random,
     .perform_one_op = perform_one_op,

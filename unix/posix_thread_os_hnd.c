@@ -68,20 +68,16 @@ struct os_hnd_fd_id_s
     os_fd_data_freed_t freed;
 };
 
-static pthread_mutex_t fd_lock = PTHREAD_MUTEX_INITIALIZER;
-
 static void
 fd_handler(int fd, void *data)
 {
     os_hnd_fd_id_t *fd_data = (os_hnd_fd_id_t *) data;
     void            *cb_data;
-    os_handler_t    *handler;
+    os_data_ready_t handler;
 
-    pthread_mutex_lock(&fd_lock);
-    handler = fd_data->handler;
+    handler = fd_data->data_ready;
     cb_data = fd_data->cb_data;
-    pthread_mutex_unlock(&fd_lock);
-    fd_data->data_ready(fd, fd_data->cb_data, fd_data);
+    handler(fd, cb_data, fd_data);
 }
 
 static void
@@ -355,169 +351,6 @@ unlock(os_handler_t  *handler,
     return 0;
 }
 
-static int
-is_locked(os_handler_t  *handler,
-	  os_hnd_lock_t *id)
-{
-    return id->lock_count != 0;
-}
-
-struct os_hnd_rwlock_s
-{
-    pthread_rwlock_t rwlock;
-    pthread_mutex_t  read_lock_lock;
-    int              read_lock_count;
-    int              write_lock_count;
-
-    /* This is volatile and we always set the owner before we set the count.
-       That avoids race conditions checking the count and owner. */
-    volatile pthread_t write_owner;
-};
-
-static int
-create_rwlock(os_handler_t    *handler,
-	      os_hnd_rwlock_t **id)
-{
-    os_hnd_rwlock_t *lock;
-    int             rv;
-
-    lock = malloc(sizeof(*lock));
-    if (!lock)
-	return ENOMEM;
-    rv = pthread_rwlock_init(&lock->rwlock, NULL);
-    if (rv) {
-	free(lock);
-	return rv;
-    }
-    rv = pthread_mutex_init(&lock->read_lock_lock, NULL);
-    if (rv) {
-	pthread_rwlock_destroy(&lock->rwlock);
-	free(lock);
-	return rv;
-    }
-    lock->read_lock_count = 0;
-    lock->write_lock_count = 0;
-    *id = lock;
-    return 0;
-}
-
-static int
-destroy_rwlock(os_handler_t    *handler,
-	       os_hnd_rwlock_t *id)
-{
-    int rv;
-
-    if ((id->read_lock_count != 0) || (id->write_lock_count != 0))
-	ipmi_log(IPMI_LOG_FATAL, "Release of rwlock when count is not zero");
-    rv = pthread_rwlock_destroy(&id->rwlock);
-    if (rv)
-	return rv;
-    pthread_mutex_destroy(&id->read_lock_lock);
-    free(id);
-    return 0;
-}
-
-static int
-read_lock(os_handler_t    *handler,
-	  os_hnd_rwlock_t *id)
-{
-    int rv;
-
-    if ((id->write_lock_count > 0) && (id->write_owner == pthread_self())) {
-	id->read_lock_count++;
-	return 0;
-    }
-
-    rv = pthread_rwlock_rdlock(&id->rwlock);
-    if (rv)
-	return rv;
-    pthread_mutex_lock(&id->read_lock_lock);
-    id->read_lock_count++;
-    pthread_mutex_unlock(&id->read_lock_lock);
-    return 0;
-}
-
-static int
-read_unlock(os_handler_t    *handler,
-	    os_hnd_rwlock_t *id)
-{
-    int rv;
-
-    if ((id->write_lock_count > 0) && (id->write_owner == pthread_self())) {
-	if (id->read_lock_count == 0)
-	    ipmi_log(IPMI_LOG_FATAL, "read lock count went negative");
-	id->read_lock_count--;
-	return 0;
-    }
-
-    pthread_mutex_lock(&id->read_lock_lock);
-    if (id->read_lock_count == 0)
-	ipmi_log(IPMI_LOG_FATAL, "read lock count went negative");
-    id->read_lock_count--;
-    pthread_mutex_unlock(&id->read_lock_lock);
-    rv = pthread_rwlock_unlock(&id->rwlock);
-    if (rv) {
-	pthread_mutex_lock(&id->read_lock_lock);
-	id->read_lock_count++;
-	pthread_mutex_unlock(&id->read_lock_lock);
-	return rv;
-    }
-    return 0;
-}
-
-static int
-write_lock(os_handler_t    *handler,
-	   os_hnd_rwlock_t *id)
-{
-    int rv;
-
-    if ((id->write_lock_count == 0) || (id->write_owner != pthread_self())) {
-	rv = pthread_rwlock_wrlock(&id->rwlock);
-	if (rv)
-	    return rv;
-    }
-    id->write_owner = pthread_self();
-    id->write_lock_count++;
-    return 0;
-}
-
-static int
-write_unlock(os_handler_t    *handler,
-	     os_hnd_rwlock_t *id)
-{
-    int rv;
-
-    if (id->write_lock_count == 0)
-	ipmi_log(IPMI_LOG_FATAL, "write lock count went negative");
-    if (pthread_self() != id->write_owner)
-	ipmi_log(IPMI_LOG_FATAL, "lock release by non-owner");
-    id->write_lock_count--;
-    if (id->write_lock_count == 0) {
-	if (id->read_lock_count != 0)
-	    ipmi_log(IPMI_LOG_FATAL,"read lock count not zero on write unlock");
-	rv = pthread_rwlock_unlock(&id->rwlock);
-	if (rv) {
-	    id->write_lock_count++;
-	    return rv;
-	}
-    }
-    return 0;
-}
-
-static int
-is_readlocked(os_handler_t    *handler,
-	      os_hnd_rwlock_t *id)
-{
-    return ((id->write_lock_count != 0) || (id->read_lock_count != 0));
-}
-
-static int
-is_writelocked(os_handler_t    *handler,
-	       os_hnd_rwlock_t *id)
-{
-    return (id->write_lock_count != 0);
-}
-
 struct os_hnd_cond_s
 {
     pthread_cond_t cond;
@@ -528,12 +361,21 @@ create_cond(os_handler_t  *handler,
 	    os_hnd_cond_t **new_cond)
 {
     os_hnd_cond_t *cond;
+    int           rv;
 
     cond = malloc(sizeof(*cond));
     if (!cond)
 	return ENOMEM;
 
-    return pthread_cond_init(&cond->cond, NULL);
+    rv = pthread_cond_init(&cond->cond, NULL);
+
+    if (rv) {
+	free(cond);
+	return rv;
+    }
+
+    *new_cond = cond;
+    return 0;
 }
 
 static int
@@ -722,17 +564,8 @@ static os_handler_t ipmi_posix_thread_os_handler =
     .free_timer = free_timer,
     .create_lock = create_lock,
     .destroy_lock = destroy_lock,
-    .is_locked = is_locked,
     .lock = lock,
     .unlock = unlock,
-    .create_rwlock = create_rwlock,
-    .destroy_rwlock = destroy_rwlock,
-    .read_lock = read_lock,
-    .write_lock = write_lock,
-    .read_unlock = read_unlock,
-    .write_unlock = write_unlock,
-    .is_readlocked = is_readlocked,
-    .is_writelocked = is_writelocked,
     .get_random = get_random,
     .log = sposix_log,
     .vlog = sposix_vlog,

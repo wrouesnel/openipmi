@@ -118,6 +118,7 @@ AC_OUTPUT(Makefile
 	  utils/Makefile
 	  lib/Makefile
 	  unix/Makefile
+	  glib/Makefile
 	  ui/Makefile
 	  lanserv/Makefile
 	  sample/Makefile

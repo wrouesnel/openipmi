@@ -56,6 +56,7 @@
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_debug.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
 
 #include <OpenIPMI/internal/ipmi_malloc.h>
 #include <OpenIPMI/internal/ipmi_event.h>

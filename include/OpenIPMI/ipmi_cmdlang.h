@@ -70,11 +70,10 @@ struct ipmi_cmdlang_s
     cmd_out_b_cb out_binary; /* Generate binary output with this. */
     cmd_out_b_cb out_unicode; /* Generate unicode output with this. */
 
-    /* OS handler and selector to use for the commands.  Note that
-       these may be set to NULL if not required, don't depend on them
-       except in certain circumstances. */
+    /* OS handler to use for the commands.  Note that this may be set
+       to NULL if not required, don't depend on them except in certain
+       circumstances. */
     os_handler_t *os_hnd;
-    selector_t   *selector;
 
     /* Tells if we are outputting help. */
     int         help;

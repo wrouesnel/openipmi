@@ -2264,7 +2264,6 @@ sdr_save_cb(ipmi_mc_t *mc, void *cb_data)
     sdr_unlock(sdrs);
 
  out:
-    ipmi_read_unlock();
     if (info->rv)
 	ipmi_mem_free(elem);
 }

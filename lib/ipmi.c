@@ -64,34 +64,9 @@ dump_hex(void *vdata, int len)
     }
 }
 #endif
-static os_hnd_rwlock_t *global_lock;
 static os_handler_t *ipmi_os_handler;
 
 unsigned int __ipmi_log_mask = 0;
-
-void ipmi_read_lock(void)
-{
-    if (global_lock)
-	ipmi_os_handler->read_lock(ipmi_os_handler, global_lock);
-}
-
-void ipmi_read_unlock(void)
-{
-    if (global_lock)
-	ipmi_os_handler->read_unlock(ipmi_os_handler, global_lock);
-}
-
-void ipmi_write_lock(void)
-{
-    if (global_lock)
-	ipmi_os_handler->write_lock(ipmi_os_handler, global_lock);
-}
-
-void ipmi_write_unlock(void)
-{
-    if (global_lock)
-	ipmi_os_handler->write_unlock(ipmi_os_handler, global_lock);
-}
 
 os_handler_t *
 ipmi_get_global_os_handler(void)
@@ -111,18 +86,6 @@ ipmi_create_lock(ipmi_domain_t *domain, ipmi_lock_t **new_lock)
     return ipmi_create_lock_os_hnd(ipmi_domain_get_os_hnd(domain), new_lock);
 }
 
-int
-ipmi_create_global_rwlock(ipmi_rwlock_t **new_lock)
-{
-    return ipmi_create_rwlock_os_hnd(ipmi_os_handler, new_lock);
-}
-
-int
-ipmi_create_rwlock(ipmi_domain_t *domain, ipmi_rwlock_t **new_lock)
-{
-    return ipmi_create_rwlock_os_hnd(ipmi_domain_get_os_hnd(domain), new_lock);
-}
-
 void
 ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
 {
@@ -134,40 +97,6 @@ ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
     else
 	vfprintf(stderr, format, ap);
     va_end(ap);
-}
-
-static ll_ipmi_t *ipmi_ll = NULL;
-
-void
-ipmi_register_ll(ll_ipmi_t *ll)
-{
-    if (ll->registered)
-	return;
-
-    ipmi_write_lock();
-    if (! ll->registered) {
-	ll->registered = 1;
-	ll->next = ipmi_ll;
-	ipmi_ll = ll;
-    }
-    ipmi_write_unlock();
-}
-
-/* Must be called with the read or write lock held. */
-int
-__ipmi_validate(ipmi_con_t *ipmi)
-{
-    ll_ipmi_t *elem;
-
-    elem = ipmi_ll;
-    while (elem) {
-	if (elem->valid_ipmi(ipmi)) {
-	    return 0;
-	}
-	elem = elem->next;
-    }
-
-    return EINVAL;
 }
 
 static unsigned int
@@ -911,20 +840,27 @@ ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
 int ipmi_oem_intel_init(void);
-int _ipmi_conn_init(void);
 int ipmi_oem_atca_conn_init(void);
 int ipmi_oem_atca_init(void);
 int init_oem_test(void);
+int _ipmi_smi_init(os_handler_t *os_hnd);
+int _ipmi_lan_init(os_handler_t *os_hnd);
+int _ipmi_mxp_init(os_handler_t *os_hnd);
+int ipmi_malloc_init(os_handler_t *os_hnd);
 
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
 void ipmi_oem_atca_shutdown(void);
-int ipmi_malloc_init(os_handler_t *os_hnd);
+int _ipmi_smi_shutdown(void);
+int _ipmi_lan_shutdown(void);
+int _ipmi_mxp_shutdown(void);
 
 int
 ipmi_init(os_handler_t *handler)
 {
     int rv;
+
+    ipmi_os_handler = handler;
 
     /* Set up memory allocation first */
     ipmi_malloc_init(handler);
@@ -932,17 +868,9 @@ ipmi_init(os_handler_t *handler)
     /* Set up logging in malloc code. */
     ipmi_malloc_log = ipmi_log;
 
-    rv = _ipmi_conn_init();
+    rv = _ipmi_conn_init(handler);
     if (rv)
 	return rv;
-
-    if (handler->create_rwlock) {
-	rv = handler->create_rwlock(handler, &global_lock);
-	if (rv)
-	    return rv;
-    } else {
-	global_lock = NULL;
-    }
 
     if (handler->create_lock) {
 	rv = handler->create_lock(handler, &seq_lock);
@@ -951,12 +879,21 @@ ipmi_init(os_handler_t *handler)
     } else {
 	seq_lock = NULL;
     }
-    ipmi_os_handler = handler;
+
+    rv = _ipmi_smi_init(handler);
+    if (rv)
+	goto out_err;
+
+    rv = _ipmi_lan_init(handler);
+    if (rv)
+	goto out_err;
+
+    rv = _ipmi_mxp_init(handler);
+    if (rv)
+	goto out_err;
+
     _ipmi_domain_init();
     _ipmi_mc_init();
-    rv = _ipmi_conn_init();
-    if (rv)
-        goto out_err;
 
     /* Call the OEM handlers. */
     ipmi_oem_force_conn_init();
@@ -969,30 +906,32 @@ ipmi_init(os_handler_t *handler)
     return 0;
 
  out_err:
+    _ipmi_mxp_shutdown();
+    _ipmi_smi_shutdown();
+    _ipmi_lan_shutdown();
     ipmi_oem_intel_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
-    if (global_lock)
-	handler->destroy_rwlock(ipmi_os_handler, global_lock);
     if (seq_lock)
 	handler->destroy_lock(ipmi_os_handler, seq_lock);
+    ipmi_os_handler = NULL;
     return rv;
 }
 
 void
 ipmi_shutdown(void)
 {
+    _ipmi_mxp_shutdown();
+    _ipmi_lan_shutdown();
+    _ipmi_smi_shutdown();
     ipmi_oem_atca_shutdown();
     ipmi_oem_atca_conn_shutdown();
     ipmi_oem_intel_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
     _ipmi_conn_shutdown();
-    if (global_lock)
-	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
     if (seq_lock)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
-    global_lock = NULL;
 }
 
 enum con_type_e { SMI, LAN, MXP };

@@ -87,13 +87,13 @@ struct os_handler_s
        to be called when data is ready to be read on the given file
        descriptor.  I know, it's kind of wierd, a callback to register
        a callback, but it's the best way I could think of to do this.
-       This call should return an id that can then be used to cancel
+       This call will return an id that can then be used to cancel
        the wait.  The called code should register that whenever data
        is ready to be read from the given file descriptor, data_ready
        should be called with the given cb_data.  If this is NULL, you
        may only call the commands ending in "_wait", the event-driven
        code will return errors.  You also may not receive commands or
-       event.  Note that these calls may NOT block. */
+       events.  Note that these calls may NOT block. */
     int (*add_fd_to_wait_for)(os_handler_t       *handler,
 			      int                fd,
 			      os_data_ready_t    data_ready,
@@ -133,8 +133,9 @@ struct os_handler_s
 
     /* Used to implement locking primitives for multi-threaded access.
        If these are NULL, then the code will assume that the system is
-       single-threaded and doesn't need locking.  Note that these must
-       be recursive locks. */
+       single-threaded and doesn't need locking.  Note that these no
+       longer have to be recursive locks, they may be normal
+       non-recursive locks. */
     int (*create_lock)(os_handler_t  *handler,
 		       os_hnd_lock_t **id);
     int (*destroy_lock)(os_handler_t  *handler,
@@ -143,27 +144,6 @@ struct os_handler_s
 		os_hnd_lock_t *id);
     int (*unlock)(os_handler_t  *handler,
 		  os_hnd_lock_t *id);
-    /* Return 1 if locked, 0 if not locked. */
-    int (*is_locked)(os_handler_t  *handler,
-		     os_hnd_lock_t *id);
-    int (*create_rwlock)(os_handler_t  *handler,
-			 os_hnd_rwlock_t **id);
-    int (*destroy_rwlock)(os_handler_t  *handler,
-			  os_hnd_rwlock_t *id);
-    int (*read_lock)(os_handler_t  *handler,
-		     os_hnd_rwlock_t *id);
-    int (*read_unlock)(os_handler_t  *handler,
-		       os_hnd_rwlock_t *id);
-    int (*write_lock)(os_handler_t  *handler,
-		      os_hnd_rwlock_t *id);
-    int (*write_unlock)(os_handler_t  *handler,
-			os_hnd_rwlock_t *id);
-    /* Return 1 if read or write locked, 0 if not locked. */
-    int (*is_readlocked)(os_handler_t    *handler,
-			 os_hnd_rwlock_t *id);
-    /* Return 1 if write locked, 0 if not locked or only read locked. */
-    int (*is_writelocked)(os_handler_t    *handler,
-			 os_hnd_rwlock_t *id);
 
     /* Return "len" bytes of random data into "data". */
     int (*get_random)(os_handler_t  *handler,
@@ -242,6 +222,30 @@ struct os_handler_s
     /* Loop continuously handling operations.  This function does not
        return. */
     void (*operation_loop)(os_handler_t *handler);
+
+
+    /* The following are no longer implemented because they are
+       race-prone, unneeded, and/or difficult to implement.  You may
+       safely set these to NULL, but they are here for backwards
+       compatability with old os handlers. */
+    int (*is_locked)(os_handler_t  *handler,
+		     os_hnd_lock_t *id);
+    int (*create_rwlock)(os_handler_t  *handler,
+			 os_hnd_rwlock_t **id);
+    int (*destroy_rwlock)(os_handler_t  *handler,
+			  os_hnd_rwlock_t *id);
+    int (*read_lock)(os_handler_t  *handler,
+		     os_hnd_rwlock_t *id);
+    int (*read_unlock)(os_handler_t  *handler,
+		       os_hnd_rwlock_t *id);
+    int (*write_lock)(os_handler_t  *handler,
+		      os_hnd_rwlock_t *id);
+    int (*write_unlock)(os_handler_t  *handler,
+			os_hnd_rwlock_t *id);
+    int (*is_readlocked)(os_handler_t    *handler,
+			 os_hnd_rwlock_t *id);
+    int (*is_writelocked)(os_handler_t    *handler,
+			 os_hnd_rwlock_t *id);
 };
 
 #endif /* __OS_HANDLER_H */

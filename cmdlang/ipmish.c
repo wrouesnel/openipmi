@@ -64,8 +64,10 @@
 # endif
 #endif
 
-selector_t *debug_sel;
 extern os_handler_t ipmi_debug_os_handlers;
+selector_t *debug_sel;
+
+os_hnd_fd_id_t *term_fd_id;
 
 static int done = 0;
 static int evcount = 0;
@@ -73,6 +75,8 @@ static int handling_input = 0;
 static char *line_buffer;
 static int  line_buffer_max = 0;
 static int  line_buffer_pos = 0;
+
+static void user_input_ready(int fd, void *data, os_hnd_fd_id_t *id);
 
 static void
 redraw_cmdline(void)
@@ -145,6 +149,37 @@ debug_vlog(char *format,
 	   va_list ap)
 {
     posix_vlog(format, log_type, ap);
+}
+
+static void
+enable_term_fd(ipmi_cmdlang_t *cmdlang)
+{
+    int rv;
+
+    rv = cmdlang->os_hnd->add_fd_to_wait_for(cmdlang->os_hnd, 0, 
+					     user_input_ready,
+					     cmdlang,
+					     NULL, &term_fd_id);
+    if (rv) {
+	fprintf(stderr, "error enabling terminal handler, giving up\n");
+	exit(1);
+    }
+}
+
+static void
+disable_term_fd(ipmi_cmdlang_t *cmdlang)
+{
+    int rv;
+
+    if (!term_fd_id)
+	return;
+
+    rv = cmdlang->os_hnd->remove_fd_to_wait_for(cmdlang->os_hnd, term_fd_id);
+    if (rv) {
+	fprintf(stderr, "error removing terminal handler, giving up\n");
+	exit(1);
+    }
+    term_fd_id = NULL;
 }
 
 #ifdef HAVE_UCDSNMP
@@ -433,7 +468,6 @@ static ipmi_cmdlang_t cmdlang =
     .done = cmd_done,
 
     .os_hnd = NULL,
-    .selector = NULL,
 
     .user_data = &lout_data,
 
@@ -474,8 +508,7 @@ cmd_done(ipmi_cmdlang_t *info)
     } else {
 	handling_input = 1;
 	redraw_cmdline();
-	sel_set_fd_read_handler(info->selector, 0, SEL_FD_HANDLER_ENABLED);
-	out_data->indent = 0;
+	enable_term_fd(info);
 	fflush(out_data->stream);
     }
 }
@@ -542,7 +575,7 @@ ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
 }
 
 static void
-user_input_ready(int fd, void *data)
+user_input_ready(int fd, void *data, os_hnd_fd_id_t *id)
 {
     ipmi_cmdlang_t *info = data;
     out_data_t *out_data = info->user_data;
@@ -579,8 +612,7 @@ user_input_ready(int fd, void *data)
 	    /* Ignore blank lines. */
 	    if (line_buffer[i] != '\0') {
 		/* Turn off input processing. */
-		sel_set_fd_read_handler(info->selector, 0,
-					SEL_FD_HANDLER_DISABLED);
+		disable_term_fd(info);
 
 		cmdlang.err = 0;
 		cmdlang.errstr = NULL;
@@ -630,13 +662,13 @@ static int term_setup;
 struct termios old_termios;
 
 static void
-cleanup_term(os_handler_t *os_hnd, selector_t *sel)
+cleanup_term(void)
 {
     if (line_buffer) {
 	ipmi_mem_free(line_buffer);
 	line_buffer = NULL;
     }
-    sel_clear_fd_handlers(sel, 0);
+    disable_term_fd(&cmdlang);
 
     if (!term_setup)
 	return;
@@ -649,7 +681,7 @@ cleanup_term(os_handler_t *os_hnd, selector_t *sel)
 static void cleanup_sig(int sig);
 
 static void
-setup_term(os_handler_t *os_hnd, selector_t *sel)
+setup_term(os_handler_t *os_hnd)
 {
     struct termios new_termios;
 
@@ -668,10 +700,8 @@ setup_term(os_handler_t *os_hnd, selector_t *sel)
     lout_data.stream = stdout;
 
     cmdlang.os_hnd = os_hnd;
-    cmdlang.selector = sel;
 
-    sel_set_fd_handlers(sel, 0, &cmdlang, user_input_ready, NULL, NULL, NULL);
-    sel_set_fd_read_handler(sel, 0, SEL_FD_HANDLER_DISABLED);
+    enable_term_fd(&cmdlang);
 }
 
 static void
@@ -715,7 +745,7 @@ read_cmd(ipmi_cmd_info_t *cmd_info)
 
     if (!read_nest) {
 	handling_input = 0;
-	sel_set_fd_read_handler(cmdlang->selector, 0, SEL_FD_HANDLER_DISABLED);
+	disable_term_fd(cmdlang);
     }
     read_nest++;
     saved_done_ptr = done_ptr;
@@ -739,7 +769,7 @@ read_cmd(ipmi_cmd_info_t *cmd_info)
     read_nest--;
     if (!read_nest) {
 	handling_input = 1;
-	sel_set_fd_read_handler(cmdlang->selector, 0, SEL_FD_HANDLER_ENABLED);
+	enable_term_fd(cmdlang);
     }
 
     ipmi_cmdlang_out(cmd_info, "File read", fname);
@@ -801,7 +831,7 @@ cleanup_sig(int sig)
     ipmi_domain_iterate_domains(shutdown_domain_handler, &done);
     while (done)
 	cmdlang.os_hnd->perform_one_op(cmdlang.os_hnd, NULL);
-    cleanup_term(cmdlang.os_hnd, cmdlang.selector);
+    cleanup_term();
     exit(1);
 }
 
@@ -863,9 +893,9 @@ main(int argc, char *argv[])
     const char       *arg;
 #ifdef HAVE_UCDSNMP
     int              init_snmp = 0;
+    selector_t       *sel;
 #endif
     os_handler_t     *os_hnd;
-    selector_t       *sel;
     int              use_debug_os = 0;
     char             *colstr;
 
@@ -917,12 +947,14 @@ main(int argc, char *argv[])
 
     if (use_debug_os) {
 	os_hnd = &ipmi_debug_os_handlers;
-	rv = sel_alloc_selector(os_hnd, &sel);
+	rv = sel_alloc_selector(os_hnd, &debug_sel);
 	if (rv) {
 	    fprintf(stderr, "Could not allocate selector\n");
 	    return 1;
 	}
-	debug_sel = sel;
+#ifdef HAVE_UCDSNMP
+	sel = debug_sel;
+#endif
     } else {
 	os_hnd = ipmi_posix_setup_os_handler();
 	if (!os_hnd) {
@@ -930,8 +962,9 @@ main(int argc, char *argv[])
 		    "ipmi_smi_setup_con: Unable to allocate os handler\n");
 	    return 1;
 	}
-
+#ifdef HAVE_UCDSNMP
 	sel = ipmi_posix_os_handler_get_sel(os_hnd);
+#endif
     }
 
     /* Initialize the OpenIPMI library. */
@@ -952,7 +985,7 @@ main(int argc, char *argv[])
 
     setup_cmds();
 
-    setup_term(os_hnd, sel);
+    setup_term(os_hnd);
 
     while (execs) {
 	exec_list_t *e = execs;
@@ -978,7 +1011,7 @@ main(int argc, char *argv[])
     while (!done)
 	os_hnd->perform_one_op(os_hnd, NULL);
 
-    cleanup_term(os_hnd, sel);
+    cleanup_term();
 
     /* Shut down all existing domains. */
     

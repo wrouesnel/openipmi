@@ -119,6 +119,8 @@ struct ipmi_ll_event_handler_id_s
 
 typedef struct smi_data_s
 {
+    int                        refcount;
+
     ipmi_con_t                 *ipmi;
     int                        using_socket;
     int                        fd;
@@ -145,6 +147,7 @@ typedef struct smi_data_s
     struct smi_data_s *next, *prev;
 } smi_data_t;
 
+static ipmi_lock_t *smi_list_lock = NULL;
 static smi_data_t *smi_list = NULL;
 
 /* Must be called with the ipmi read or write lock. */
@@ -152,12 +155,125 @@ static int smi_valid_ipmi(ipmi_con_t *ipmi)
 {
     smi_data_t *elem;
 
+    ipmi_lock(smi_list_lock);
     elem = smi_list;
     while ((elem) && (elem->ipmi != ipmi)) {
 	elem = elem->next;
     }
+    if (elem)
+	elem->refcount++;
+    ipmi_unlock(smi_list_lock);
 
     return (elem != NULL);
+}
+
+static void
+smi_cleanup(ipmi_con_t *ipmi)
+{
+    smi_data_t                 *smi;
+    pending_cmd_t              *cmd, *next_cmd;
+    cmd_handler_t              *hnd_to_free, *next_hnd;
+    ipmi_ll_event_handler_id_t *evt_to_free, *next_evt;
+    int                        rv;
+
+    /* First order of business is to remove it from the SMI list. */
+    smi = (smi_data_t *) ipmi->con_data;
+
+    ipmi_lock(smi_list_lock);
+    if (smi->next)
+	smi->next->prev = smi->prev;
+    if (smi->prev)
+	smi->prev->next = smi->next;
+    else
+	smi_list = smi->next;
+    ipmi_unlock(smi_list_lock);
+
+    cmd = smi->pending_cmds;
+    smi->pending_cmds = NULL;
+    while (cmd) {
+	ipmi_addr_t   *addr;
+	unsigned int  addr_len;
+	unsigned char data[1];
+	next_cmd = cmd->next;
+	if (cmd->rsp_handler) {
+	    if (cmd->use_orig_addr) {
+		addr = &cmd->orig_addr;
+		addr_len = cmd->orig_addr_len;
+	    } else {
+		addr = &cmd->addr;
+		addr_len = cmd->addr_len;
+	    }
+	    data[0] = IPMI_UNKNOWN_ERR_CC;
+	    
+	    cmd->msg.netfn |= 1;
+	    cmd->msg.data = data;
+	    cmd->msg.data_len = 1;
+	    ipmi_handle_rsp_item_copyall(ipmi, cmd->rsp_item,
+					 addr, addr_len, &cmd->msg,
+					 cmd->rsp_handler);
+	}
+	ipmi_mem_free(cmd);
+	cmd = next_cmd;
+    }
+
+    hnd_to_free = smi->cmd_handlers;
+    smi->cmd_handlers = NULL;
+    while (hnd_to_free) {
+	next_hnd = hnd_to_free->next;
+	ipmi_mem_free(hnd_to_free);
+	hnd_to_free = next_hnd;
+    }
+
+    evt_to_free = smi->event_handlers;
+    smi->event_handlers = NULL;
+    while (evt_to_free) {
+	evt_to_free->ipmi = NULL;
+	next_evt = evt_to_free->next;
+	ipmi_mem_free(evt_to_free);
+	evt_to_free = next_evt;
+    }
+
+    if (smi->audit_info) {
+	rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, smi->audit_timer);
+	if (rv)
+	    smi->audit_info->cancelled = 1;
+	else {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, smi->audit_timer);
+	    ipmi_mem_free(smi->audit_info);
+	}
+    }
+
+    if (ipmi->oem_data_cleanup)
+	ipmi->oem_data_cleanup(ipmi);
+    if (smi->event_handlers_lock)
+	ipmi_destroy_lock(smi->event_handlers_lock);
+    if (smi->cmd_handlers_lock)
+	ipmi_destroy_lock(smi->cmd_handlers_lock);
+    if (smi->cmd_lock)
+	ipmi_destroy_lock(smi->cmd_lock);
+    if (smi->fd_wait_id)
+	ipmi->os_hnd->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
+
+    /* Close the fd after we have deregistered it. */
+    close(smi->fd);
+
+    ipmi_mem_free(smi);
+    ipmi_mem_free(ipmi);
+}
+
+static void
+smi_put(ipmi_con_t *ipmi)
+{
+    smi_data_t *elem = ipmi->con_data;
+    int        done;
+
+    ipmi_lock(smi_list_lock);
+    elem->refcount--;
+    done = elem->refcount == 0;
+    ipmi_unlock(smi_list_lock);
+
+    if (done)
+	smi_cleanup(ipmi);
 }
 
 /* Must be called with cmd_lock held. */
@@ -477,10 +593,8 @@ audit_timeout_handler(void              *cb_data,
 	goto out_done;
     }
 
-    ipmi_read_lock();
-
     if (!smi_valid_ipmi(ipmi)) {
-	goto out_unlock_done;
+	goto out_done;
     }
 
     smi = ipmi->con_data;
@@ -515,8 +629,8 @@ audit_timeout_handler(void              *cb_data,
     /* Make sure the timer info doesn't get freed. */
     info = NULL;
 
- out_unlock_done:
-    ipmi_read_unlock();
+    smi_put(ipmi);
+
  out_done:
     if (info) {
 	ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
@@ -714,12 +828,10 @@ ipmi_dev_data_handler(int            fd,
     struct ipmi_recv recv;
     int              rv;
 
-    ipmi_read_lock();
-
     if (!smi_valid_ipmi(ipmi)) {
 	/* We can have due to a race condition, just return and
            everything should be fine. */
-	goto out_unlock2;
+	return;
     }
 
     recv.msg.data = data;
@@ -733,13 +845,13 @@ ipmi_dev_data_handler(int            fd,
 	    data[0] = IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC;
 	    rv = 0;
 	} else
-	    goto out_unlock2;
+	    goto out;
     }
 
     gen_recv_msg(ipmi, &recv);
 
- out_unlock2:
-    ipmi_read_unlock();
+ out:
+    smi_put(ipmi);
 }
 
 static void
@@ -755,12 +867,10 @@ ipmi_sock_data_handler(int            fd,
     int                  rv;
     struct ipmi_recv     recv;
 
-    ipmi_read_lock();
-
     if (!smi_valid_ipmi(ipmi)) {
 	/* We can have due to a race condition, just return and
            everything should be fine. */
-	goto out_unlock2;
+	return;
     }
 
     addr_len = sizeof(addr);
@@ -769,13 +879,13 @@ ipmi_sock_data_handler(int            fd,
     if (rv == -1) {
 	/* FIXME - no handling for EMSGSIZE. */
 	if (errno == EINTR) {
-	    goto out_unlock2; /* Try again later. */
+	    goto out; /* Try again later. */
 	} else {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sipmi_smi.c(ipmi_sock_data_handler): "
 		     "Error receiving message: %s",
 		     IPMI_CONN_NAME(ipmi), strerror(errno));
-	    goto out_unlock2;
+	    goto out;
 	}
     }
     if (DEBUG_MSG) {
@@ -793,7 +903,7 @@ ipmi_sock_data_handler(int            fd,
 		 "%sipmi_smi.c(ipmi_sock_data_handler): "
 		 "Undersized socket message: %d bytes",
 		 IPMI_CONN_NAME(ipmi), rv);
-	goto out_unlock2;
+	goto out;
     }
 
     smsg = (struct ipmi_sock_msg *) data;
@@ -802,7 +912,7 @@ ipmi_sock_data_handler(int            fd,
 		 "%sipmi_smi.c(ipmi_sock_data_handler): "
 		 "Got subsized msg, size was %d, data_len was %d",
 		 IPMI_CONN_NAME(ipmi), rv, smsg->data_len);
-	return;
+	goto out;
     }
 
     recv.recv_type = smsg->recv_type;
@@ -816,8 +926,8 @@ ipmi_sock_data_handler(int            fd,
 
     gen_recv_msg(ipmi, &recv);
 
- out_unlock2:
-    ipmi_read_unlock();
+ out:
+    smi_put(ipmi);
 }
 
 static int
@@ -1076,109 +1186,14 @@ smi_deregister_for_command(ipmi_con_t    *ipmi,
 static int
 smi_close_connection(ipmi_con_t *ipmi)
 {
-    smi_data_t                 *smi;
-    pending_cmd_t              *cmd, *next_cmd;
-    cmd_handler_t              *hnd_to_free, *next_hnd;
-    ipmi_ll_event_handler_id_t *evt_to_free, *next_evt;
-    int                        rv;
-
     if (! smi_valid_ipmi(ipmi)) {
 	return EINVAL;
     }
 
-    /* First order of business is to remove it from the SMI list. */
-    smi = (smi_data_t *) ipmi->con_data;
-
-    if (smi->next)
-	smi->next->prev = smi->prev;
-    if (smi->prev)
-	smi->prev->next = smi->next;
-    else
-	smi_list = smi->next;
-
-    /* After this point no other operations can occur on this ipmi
-       interface, so it's safe. */
-
-    cmd = smi->pending_cmds;
-    smi->pending_cmds = NULL;
-    while (cmd) {
-	ipmi_addr_t   *addr;
-	unsigned int  addr_len;
-	unsigned char data[1];
-	next_cmd = cmd->next;
-	if (cmd->rsp_handler) {
-	    if (cmd->use_orig_addr) {
-		addr = &cmd->orig_addr;
-		addr_len = cmd->orig_addr_len;
-	    } else {
-		addr = &cmd->addr;
-		addr_len = cmd->addr_len;
-	    }
-	    data[0] = IPMI_UNKNOWN_ERR_CC;
-	    
-	    cmd->msg.netfn |= 1;
-	    cmd->msg.data = data;
-	    cmd->msg.data_len = 1;
-	    ipmi_handle_rsp_item_copyall(ipmi, cmd->rsp_item,
-					 addr, addr_len, &cmd->msg,
-					 cmd->rsp_handler);
-	}
-	ipmi_mem_free(cmd);
-	cmd = next_cmd;
-    }
-
-    hnd_to_free = smi->cmd_handlers;
-    smi->cmd_handlers = NULL;
-    while (hnd_to_free) {
-	next_hnd = hnd_to_free->next;
-	ipmi_mem_free(hnd_to_free);
-	hnd_to_free = next_hnd;
-    }
-
-    evt_to_free = smi->event_handlers;
-    smi->event_handlers = NULL;
-    while (evt_to_free) {
-	evt_to_free->ipmi = NULL;
-	next_evt = evt_to_free->next;
-	ipmi_mem_free(evt_to_free);
-	evt_to_free = next_evt;
-    }
-
-    if (smi->audit_info) {
-	rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, smi->audit_timer);
-	if (rv)
-	    smi->audit_info->cancelled = 1;
-	else {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, smi->audit_timer);
-	    ipmi_mem_free(smi->audit_info);
-	}
-    }
-
-    if (ipmi->oem_data_cleanup)
-	ipmi->oem_data_cleanup(ipmi);
-    if (smi->event_handlers_lock)
-	ipmi_destroy_lock(smi->event_handlers_lock);
-    if (smi->cmd_handlers_lock)
-	ipmi_destroy_lock(smi->cmd_handlers_lock);
-    if (smi->cmd_lock)
-	ipmi_destroy_lock(smi->cmd_lock);
-    if (smi->fd_wait_id)
-	ipmi->os_hnd->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
-
-    /* Close the fd after we have deregistered it. */
-    close(smi->fd);
-
-    ipmi_mem_free(smi);
-    ipmi_mem_free(ipmi);
-
+    smi_put(ipmi);
+    smi_put(ipmi);
     return 0;
 }
-
-static ll_ipmi_t smi_ll_ipmi =
-{
-    .valid_ipmi = smi_valid_ipmi,
-    .registered = 0
-};
 
 static void
 cleanup_con(ipmi_con_t *ipmi)
@@ -1421,9 +1436,6 @@ setup(int          if_num,
     smi_data_t *smi = NULL;
     int        rv;
 
-    /* Make sure we register before anything else. */
-    ipmi_register_ll(&smi_ll_ipmi);
-
     /* Keep things sane. */
     if (if_num >= 100)
 	return EINVAL;
@@ -1447,6 +1459,7 @@ setup(int          if_num,
 
     ipmi->con_data = smi;
 
+    smi->refcount = 1;
     smi->ipmi = ipmi;
     smi->slave_addr = 0x20; /* Assume this until told otherwise. */
     smi->pending_cmds = NULL;
@@ -1510,13 +1523,13 @@ setup(int          if_num,
     }
 
     /* Now it's valid, add it to the smi list. */
-    ipmi_write_lock();
+    ipmi_lock(smi_list_lock);
     if (smi_list)
 	smi_list->prev = smi;
     smi->next = smi_list;
     smi->prev = NULL;
     smi_list = smi;
-    ipmi_write_unlock();
+    ipmi_unlock(smi_list_lock);
 
     *new_con = ipmi;
 
@@ -1543,4 +1556,24 @@ ipmi_smi_setup_con(int               if_num,
 
     err = setup(if_num, handlers, user_data, new_con);
     return err;
+}
+
+int
+_ipmi_smi_init(os_handler_t *os_hnd)
+{
+    int rv;
+
+    rv = ipmi_create_global_lock(&smi_list_lock);
+    if (rv)
+	return rv;
+    return 0;
+}
+
+void
+_ipmi_smi_shutdown(void)
+{
+    if (smi_list_lock) {
+	ipmi_destroy_lock(smi_list_lock);
+	smi_list_lock = NULL;
+    }
 }

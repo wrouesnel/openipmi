@@ -260,26 +260,8 @@ struct ipmi_con_s
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")
 
-/* Different types of low-level handlers must register themselves with
-   the IPMI code.  This is currently used so the IPMI code can validate
-   that a connection is a good working connection. */
-typedef struct ll_ipmi_s
-{
-    /* Validate that the given connection is a good connection. */
-    int (*valid_ipmi)(ipmi_con_t *ipmi);
-
-    /* Stuff below here is used internally by the IPMI code.  Set the
-       values to zero or NULL. */
-    volatile int registered;
-    struct ll_ipmi_s *next;
-} ll_ipmi_t;
-void ipmi_register_ll(ll_ipmi_t *ll);
-
-/* Called by the IPMI code in various places to validate a connection. */
-int __ipmi_validate(ipmi_con_t *ipmi);
-
 /* Initialization code for the initialization the connection code. */
-int _ipmi_conn_init(void);
+int _ipmi_conn_init(os_handler_t *os_hnd);
 void _ipmi_conn_shutdown(void);
 
 

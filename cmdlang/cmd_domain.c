@@ -251,7 +251,7 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     for (i=0; i<set; i++) {
 	rv = ipmi_args_setup_con(con_parms[i],
 				 cmdlang->os_hnd,
-				 cmdlang->selector,
+				 NULL,
 				 &con[i]);
 	if (rv) {
 	    cmdlang->errstr = "Unable to setup connection";

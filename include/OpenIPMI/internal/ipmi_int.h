@@ -47,24 +47,11 @@
 /* Get the "global" OS handlers used for non-domain operations. */
 os_handler_t *ipmi_get_global_os_handler(void);
 
-/* There is a global read/write lock that protects the addition and
-   removal of MCs and high-level information that doesn't change very
-   much.  Grabbing the read lock keep anything from adding or removing
-   MCs.  Grabbing the write lock give exclusive access to the MCs.  It's
-   also used for protecting a few other things, too. */
-void ipmi_read_lock(void);
-void ipmi_read_unlock(void);
-void ipmi_write_lock(void);
-void ipmi_write_unlock(void);
-
 /* Create a lock, using the OS handlers for the given MC. */
 int ipmi_create_lock(ipmi_domain_t *mc, ipmi_lock_t **lock);
 
 /* Create a lock using the main os handler registered with ipmi_init(). */
 int ipmi_create_global_lock(ipmi_lock_t **new_lock);
-
-int ipmi_create_global_rwlock(ipmi_rwlock_t **new_lock);
-int ipmi_create_rwlock(ipmi_domain_t *domain, ipmi_rwlock_t **new_lock);
 
 /* Get a globally unique sequence number. */
 long ipmi_get_seq(void);

@@ -146,6 +146,8 @@ typedef struct sockaddr_ip_s {
 
 typedef struct lan_data_s
 {
+    int			       refcount;
+
     ipmi_con_t                 *ipmi;
     int                        fd;
 
@@ -251,6 +253,7 @@ typedef struct lan_data_s
 static void check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan);
 static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num);
 
+static ipmi_lock_t *lan_list_lock = NULL;
 static lan_data_t *lan_list = NULL;
 
 static inline int
@@ -300,12 +303,33 @@ static int lan_valid_ipmi(ipmi_con_t *ipmi)
 {
     lan_data_t *elem;
 
+    ipmi_lock(lan_list_lock);
     elem = lan_list;
     while ((elem) && (elem->ipmi != ipmi)) {
 	elem = elem->next;
     }
+    if (elem)
+	elem->refcount++;
+    ipmi_unlock(lan_list_lock);
 
     return (elem != NULL);
+}
+
+static void lan_cleanup(ipmi_con_t *ipmi);
+
+static void
+lan_put(ipmi_con_t *ipmi)
+{
+    lan_data_t *elem = ipmi->con_data;
+    int        done;
+
+    ipmi_lock(lan_list_lock);
+    elem->refcount--;
+    done = elem->refcount == 0;
+    ipmi_unlock(lan_list_lock);
+
+    if (done)
+	lan_cleanup(ipmi);
 }
 
 /* Must be called with event_lock held. */
@@ -638,10 +662,8 @@ audit_timeout_handler(void              *cb_data,
 	goto out_done;
     }
 
-    ipmi_read_lock();
-
     if (!lan_valid_ipmi(ipmi)) {
-	goto out_unlock_done;
+	goto out_done;
     }
 
     lan = ipmi->con_data;
@@ -684,8 +706,8 @@ audit_timeout_handler(void              *cb_data,
     /* Make sure the timer info doesn't get freed. */
     info = NULL;
 
- out_unlock_done:
-    ipmi_read_unlock();
+    lan_put(ipmi);
+
  out_done:
     if (info) {
 	ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
@@ -780,10 +802,8 @@ rsp_timeout_handler(void              *cb_data,
     ipmi_msgi_t           *rspi;
     int                   ip_num;
 
-    ipmi_read_lock();
-
     if (!lan_valid_ipmi(ipmi)) {
-	goto out_unlock2;
+	return;
     }
 
     lan = ipmi->con_data;
@@ -793,14 +813,14 @@ rsp_timeout_handler(void              *cb_data,
 
     /* If we were cancelled, just free the data and ignore it. */
     if (info->cancelled) {
-	goto out_unlock;
+	goto out;
     }
 
     if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d", seq);
 
     if (! lan->seq_table[seq].inuse)
-	goto out_unlock;
+	goto out;
 
     if (DEBUG_RAWMSG) {
 	ip_num = lan->seq_table[seq].last_ip_num;
@@ -889,7 +909,7 @@ rsp_timeout_handler(void              *cb_data,
 	    rspi->data[0] = IPMI_UNKNOWN_ERR_CC;
 	} else {
 	    ipmi_unlock(lan->seq_num_lock);
-	    ipmi_read_unlock();
+	    lan_put(ipmi);
 	    return;
 	}
     } else {
@@ -920,12 +940,9 @@ rsp_timeout_handler(void              *cb_data,
 	rspi->addr.addr_type = IPMI_IPMB_ADDR_TYPE;
 
     ipmi_handle_rsp_item(ipmi, rspi, handler);
-    goto out_unlock2;
 
- out_unlock:
-    ipmi_unlock(lan->seq_num_lock);
- out_unlock2:
-    ipmi_read_unlock();
+ out:
+    lan_put(ipmi);
     ipmi_mem_free(info);
 }
 
@@ -1189,12 +1206,10 @@ data_handler(int            fd,
     ipmi_ll_rsp_handler_t handler;
     ipmi_msgi_t           *rspi;
 
-    ipmi_read_lock();
-
     if (!lan_valid_ipmi(ipmi))
 	/* We can have due to a race condition, just return and
            everything should be fine. */
-	goto out_unlock2;
+	return;
 
     lan = ipmi->con_data;
 
@@ -1202,7 +1217,7 @@ data_handler(int            fd,
     len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 
 		    &from_len);
     if (len < 0)
-	goto out_unlock2;
+	goto out;
 
     if (DEBUG_RAWMSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr = ");
@@ -1255,7 +1270,7 @@ data_handler(int            fd,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "ipmi_lan: Unknown protocol family: 0x%x",
 		     paddr->sin_family);
-	    goto out_unlock2;
+	    goto out;
             break;
     }
 
@@ -1263,7 +1278,7 @@ data_handler(int            fd,
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
 		     "ipmi_lan: Dropped message due to invalid IP");
-	goto out_unlock2;
+	goto out;
     }
 
     /* Validate the length first, so we know that all the data in the
@@ -1271,7 +1286,7 @@ data_handler(int            fd,
     if (len < 21) { /* Minimum size of an IPMI msg. */
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message because too small(1)");
-	goto out_unlock2;
+	goto out;
     }
 
     if (data[4] == 0) {
@@ -1281,7 +1296,7 @@ data_handler(int            fd,
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(2)");
-	    goto out_unlock2;
+	    goto out;
 	}
 	data_len = data[13];
     } else {
@@ -1289,7 +1304,7 @@ data_handler(int            fd,
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(3)");
-	    goto out_unlock2;
+	    goto out;
 	}
 	/* authcode in message, add 16 to the above checks. */
 	if (len < (data[29] + 30)) {
@@ -1297,7 +1312,7 @@ data_handler(int            fd,
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(4)");
-	    goto out_unlock2;
+	    goto out;
 	}
 	data_len = data[29];
     }
@@ -1309,7 +1324,7 @@ data_handler(int            fd,
     {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid IPMI/RMCP");
-	goto out_unlock2;
+	goto out;
     }
 
     /* FIXME - need a lock on the session data. */
@@ -1318,7 +1333,7 @@ data_handler(int            fd,
     if (lan->working_authtype[recv_addr] != data[4]) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype");
-	goto out_unlock2;
+	goto out;
     }
 
     /* Drop if sessions ID's don't match. */
@@ -1326,7 +1341,7 @@ data_handler(int            fd,
     if (sess_id != lan->session_id[recv_addr]) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid session id");
-	goto out_unlock2;
+	goto out;
     }
 
     seq = ipmi_get_uint32(data+5);
@@ -1339,7 +1354,7 @@ data_handler(int            fd,
 	if (rv) {
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message auth fail");
-	    goto out_unlock2;
+	    goto out;
 	}
 	tmsg = data + 30;
     } else {
@@ -1364,7 +1379,7 @@ data_handler(int            fd,
 	    /* We've already received the message, so discard it. */
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
-	    goto out_unlock2;
+	    goto out;
 	}
 
 	lan->recv_msg_map[recv_addr] |= bit;
@@ -1373,7 +1388,7 @@ data_handler(int            fd,
 	   the packet. */
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message out of seq range");
-	goto out_unlock2;
+	goto out;
     }
 
     /* Now we have an authentic in-sequence message. */
@@ -1385,7 +1400,7 @@ data_handler(int            fd,
     if (seq == 0)
 	/* We use sequence zero for messages that don't care about a
 	   response. */
-	goto out_unlock2;
+	goto out;
     addr3 = &lan->seq_table[seq].addr;
 
     if ((tmsg[5] == IPMI_SEND_MSG_CMD)
@@ -1410,13 +1425,13 @@ data_handler(int            fd,
 	    msg.data_len = 1;
 	    if (ipmi->handle_send_rsp_err) {
 		if (ipmi->handle_send_rsp_err(ipmi, &msg))
-		    goto out_unlock2;
+		    goto out;
 	    }
 	} else {
 	    if (data_len < 15)
 		/* The response to a send message was not carrying the
 		   payload. */
-		goto out_unlock2;
+		goto out;
 
 	    if (tmsg[10] == lan->slave_addr) {
 		ipmi_system_interface_addr_t *si_addr
@@ -1453,7 +1468,7 @@ data_handler(int            fd,
 	    /* An error getting the events, just ignore it. */
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message err getting event");
-	    goto out_unlock2;
+	    goto out;
 	}
 
 	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -1483,7 +1498,7 @@ data_handler(int            fd,
 	    ipmi_log(IPMI_LOG_DEBUG_END, " ");
         }
 	handle_async_event(ipmi, &addr, addr_len, &msg);
-	goto out_unlock2;
+	goto out;
     } else if ((addr3->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
 	       && (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 		    && (tmsg[3] == 0x20))
@@ -1633,12 +1648,13 @@ data_handler(int            fd,
 
     ipmi_handle_rsp_item_copyall(ipmi, rspi, &addr, addr_len, &msg, handler);
     
- out_unlock2:
-    ipmi_read_unlock();
+ out:
+    lan_put(ipmi);
     return;
+
  out_unlock:
+    lan_put(ipmi);
     ipmi_unlock(lan->seq_num_lock);
-    ipmi_read_unlock();
 }
 
 /* Note that this puts the address number in data4 of the rspi. */
@@ -1934,29 +1950,25 @@ send_close_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
     lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0, addr_num);
 }
 
-static int
-lan_close_connection(ipmi_con_t *ipmi)
+static void
+lan_cleanup(ipmi_con_t *ipmi)
 {
     lan_data_t                   *lan;
     ipmi_ll_event_handler_id_t   *evt_to_free, *next_evt;
     int                          rv;
     int                          i;
 
-    if (! lan_valid_ipmi(ipmi)) {
-	return EINVAL;
-    }
-
     /* First order of business is to remove it from the LAN list. */
     lan = (lan_data_t *) ipmi->con_data;
 
-    ipmi_write_lock();
+    ipmi_lock(lan_list_lock);
     if (lan->next)
 	lan->next->prev = lan->prev;
     if (lan->prev)
 	lan->prev->next = lan->next;
     else
 	lan_list = lan->next;
-    ipmi_write_unlock();
+    ipmi_unlock(lan_list_lock);
 
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
@@ -2067,15 +2079,19 @@ lan_close_connection(ipmi_con_t *ipmi)
 
     ipmi_mem_free(lan);
     ipmi_mem_free(ipmi);
-
-    return 0;
 }
 
-static ll_ipmi_t lan_ll_ipmi =
+static int
+lan_close_connection(ipmi_con_t *ipmi)
 {
-    .valid_ipmi = lan_valid_ipmi,
-    .registered = 0
-};
+    if (! lan_valid_ipmi(ipmi)) {
+	return EINVAL;
+    }
+
+    lan_put(ipmi);
+    lan_put(ipmi);
+    return 0;
+}
 
 static void
 cleanup_con(ipmi_con_t *ipmi)
@@ -2090,14 +2106,14 @@ cleanup_con(ipmi_con_t *ipmi)
     if (lan) {
 	lan = (lan_data_t *) ipmi->con_data;
 
-	ipmi_write_lock();
+	ipmi_lock(lan_list_lock);
 	if (lan->next)
 	    lan->next->prev = lan->prev;
 	if (lan->prev)
 	    lan->prev->next = lan->next;
 	else
 	    lan_list = lan->next;
-	ipmi_write_unlock();
+	ipmi_unlock(lan_list_lock);
 
 	if (lan->event_handlers_lock)
 	    ipmi_destroy_lock(lan->event_handlers_lock);
@@ -2150,12 +2166,11 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 {
     ipmi_con_t *ipmi = cb_data;
 
-    ipmi_write_lock();
     if (lan_valid_ipmi(ipmi)) {
 	ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
 	handle_connected(ipmi, 0);
+	lan_put(ipmi);
     }
-    ipmi_write_unlock();
 }
 
 static void
@@ -2770,9 +2785,6 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
     if ((num_ip_addrs < 1) || (num_ip_addrs > MAX_IP_ADDR))
 	return EINVAL;
 
-    /* Make sure we register before anything else. */
-    ipmi_register_ll(&lan_ll_ipmi);
-
     ipmi = ipmi_mem_alloc(sizeof(*ipmi));
     if (!ipmi)
 	return ENOMEM;
@@ -2791,6 +2803,7 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
     memset(lan, 0, sizeof(*lan));
     ipmi->con_data = lan;
 
+    lan->refcount = 1;
     lan->ipmi = ipmi;
     lan->slave_addr = 0x20; /* Assume this until told otherwise */
     lan->is_active = 1;
@@ -2900,13 +2913,13 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 	goto out_err;
 
     /* Add it to the list of valid IPMIs so it will validate. */
-    ipmi_write_lock();
+    ipmi_lock(lan_list_lock);
     if (lan_list)
 	lan_list->prev = lan;
     lan->next = lan_list;
     lan->prev = NULL;
     lan_list = lan;
-    ipmi_write_unlock();
+    ipmi_unlock(lan_list_lock);
 
     lan->retries = 0;
 
@@ -2981,7 +2994,7 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
     int        i;
     int        found = 0;
 
-    ipmi_read_lock();
+    ipmi_lock(lan_list_lock);
     elem = lan_list;
     while (elem) {
 	for (i=0; i<elem->num_ip_addr; i++) {
@@ -3029,6 +3042,26 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 	elem = elem->next;
     }
  out_unlock:
-    ipmi_read_unlock();
+    ipmi_unlock(lan_list_lock);
     return found;
+}
+
+int
+_ipmi_lan_init(os_handler_t *os_hnd)
+{
+    int rv;
+
+    rv = ipmi_create_global_lock(&lan_list_lock);
+    if (rv)
+	return rv;
+    return 0;
+}
+
+void
+_ipmi_lan_shutdown(void)
+{
+    if (lan_list_lock) {
+	ipmi_destroy_lock(lan_list_lock);
+	lan_list_lock = NULL;
+    }
 }
