@@ -293,10 +293,18 @@ void ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
 					enum ipmi_thresh_e thresh,
 					int                val);
 
+/* Returns true if the sensor reports when an operator want to remove
+   the hot-swappable entity from the system.  If this returns true,
+   the offset will be set to the offset in the sensor of the hot-swap
+   request value.  val_when_requesting will be set to the value (1 or
+   0) that corresponds to the sensor requesting a hot-swap.  This
+   should generally be a slot sensor (sensor type 21h). */
+int ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
+				      unsigned int  *offset,
+				      unsigned int  *val_when_requesting);
 void ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
 					unsigned int  offset,
 					unsigned int  val_when_requesting);
-
 
 /* Allow OEM code to get the event handler so it can call it. */
 void ipmi_sensor_threshold_get_event_handler(

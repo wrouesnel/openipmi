@@ -590,6 +590,11 @@ int ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
 /* Is the entity currently present? */
 int ipmi_entity_is_present(ipmi_entity_t *ent);
 
+/* A generic callback for entities. */
+typedef void (*ipmi_entity_cb)(ipmi_entity_t *ent,
+			       int           err,
+			       void          *cb_data);
+
 /* Register a handler that will be called fru information is added,
    deleted, or modified.  If you call this in the entity added
    callback for the domain, you are guaranteed to get this set before
@@ -624,6 +629,67 @@ typedef void (*ipmi_entity_control_cb)(enum ipmi_update_e op,
 int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 					   ipmi_entity_control_cb handler,
 					   void                   *cb_data);
+
+/* Hot-swap is done on entities.  We have a hot-swap model defined
+   here that controls basic hot-swap operation on an entity. */
+
+/* The hot-swap states are:
+
+   NOT_PRESENT - the device is not physically present in the system.
+   INACTIVE - The device is present, but turned off.
+   INSERTION_PENDING - The device is going through the insertion
+       process, but it not yet ready.
+   ACTIVE - The device is operational.
+   EXTRACTION_PENDING - The device is being disabled.
+
+   The basic state machine goes in order of the states, except that
+   INACTIVE normally occurs afer EXTRACTION_PENDING.  NOT_PRESENT can
+   occur after any state on an unmanaged extraction.
+
+   A device may also implement an abbreviated state machine, with
+   NOT_PRESENT, optionally INACTIVE, and ACTIVE.  You would do this if
+   the device has no insertion or removal states.
+
+   The state machine may also go from INSERTION_PENDING to INACTIVE and
+   from EXTRACTION_PENDING to ACTIVE.
+*/
+enum ipmi_hot_swap_states {
+    IPMI_HOT_SWAP_NOT_PRESENT = 0,
+    IPMI_HOT_SWAP_INACTIVE = 1,
+    IPMI_HOT_SWAP_INSERTION_PENDING = 2,
+    IPMI_HOT_SWAP_ACTIVE = 3,
+    IPMI_HOT_SWAP_EXTRACTION_PENDING = 4,
+};
+
+/* Does the entity implement the hot-swap state machine? */
+int ipmi_entity_hot_swappable(ipmi_entity_t *ent);
+
+/* Register to receive the hot-swap state when it changes. */
+typedef void (*ipmi_entity_hot_swap_cb)(ipmi_entity_t             *ent,
+					enum ipmi_hot_swap_states state,
+					void                      *cb_data);
+int ipmi_entity_register_hot_swap_events(ipmi_entity_t           *ent,
+					 ipmi_entity_hot_swap_cb handler,
+					 void                    *cb_data);
+
+/* Get the current hot-swap state. */
+int ipmi_entity_get_hot_swap_state(ipmi_entity_ t            *ent,
+				   enum ipmi_hot_swap_states *state);
+
+/* Thses set whether the device will automatically be activated and
+   deactivated by the hardware or OpenIPMI.  By default devices will
+   automatically be activated/deactivated. */
+int ipmi_entity_set_auto_activate(ipmi_entity_t *ent, int val);
+int ipmi_entity_set_auto_deactivate(ipmi_entity_t *ent, int val);
+
+/* Attempt to activate or deactivate an entity.  */
+int ipmi_entity_activate(ipmi_entity_t  *ent,
+			 ipmi_entity_cb *done,
+			 void           *cb_data);
+int ipmi_entity_deactivate(ipmi_entity_t  *ent,
+			   ipmi_entity_cb *done,
+			   void           *cb_data);
+
 
 /* Handles events from the given sensor with the handler.  Only one
    handler may be registered against a sensor, if you call this again
@@ -931,16 +997,6 @@ int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
 enum ipmi_str_type_e ipmi_sensor_get_id_type(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
 
-/* Returns true if the sensor reports when an operator want to remove
-   the hot-swappable entity from the system.  If this returns true,
-   the offset will be set to the offset in the sensor of the hot-swap
-   request value.  val_when_requesting will be set to the value (1 or
-   0) that corresponds to the sensor requesting a hot-swap.  This
-   should generally be a slot sensor (sensor type 21h). */
-int ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
-				      unsigned int  *offset,
-				      unsigned int  *val_when_requesting);
-
 
 /* This is the implementation for a set of thresholds for a
    threshold-based sensor. */
@@ -1060,11 +1116,6 @@ int ipmi_control_is_settable(ipmi_control_t *control);
 int ipmi_control_is_readable(ipmi_control_t *control);
 ipmi_entity_t *ipmi_control_get_entity(ipmi_control_t *control);
 char *ipmi_control_get_type_string(ipmi_control_t *control);
-
-/* Returns true if this control is a hot-swap indicator, meaning that
-   is is used to indicate to the operator when it is save to remove a
-   hot-swappable device. */
-int ipmi_control_is_hot_swap_indicator(ipmi_control_t *control);
 
 /* Get the number of values the control supports. */
 int ipmi_control_get_num_vals(ipmi_control_t *control);

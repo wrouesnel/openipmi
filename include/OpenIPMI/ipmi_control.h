@@ -194,6 +194,10 @@ int ipmi_control_get_ignore_if_no_entity(ipmi_control_t *control);
 void ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
 				          int            ignore_if_no_entity);
 
+/* Returns true if this control is a hot-swap indicator, meaning that
+   is is used to indicate to the operator when it is save to remove a
+   hot-swappable device. */
+int ipmi_control_is_hot_swap_indicator(ipmi_control_t *control);
 void ipmi_control_set_hot_swap_indicator(ipmi_control_t *control, int val);
 
 typedef struct ipmi_control_transition_s
