@@ -369,6 +369,8 @@ ipmi_control_find_id(ipmi_domain_id_t domain_id,
 static void
 control_final_destroy(ipmi_control_t *control)
 {
+    _ipmi_entity_call_control_handlers(control->entity, control, IPMI_DELETED);
+
     if (control->destroy_handler)
 	control->destroy_handler(control,
 				 control->destroy_handler_cb_data);
@@ -384,8 +386,6 @@ control_final_destroy(ipmi_control_t *control)
 
     if (control->entity)
 	ipmi_entity_remove_control(control->entity, control);
-
-    _ipmi_entity_call_control_handlers(control->entity, control, IPMI_DELETED);
 
     ipmi_mem_free(control);
 }
@@ -1468,6 +1468,8 @@ ipmi_control_get_num_light_values(ipmi_control_t *control,
 {
     CHECK_CONTROL_LOCK(control);
 
+    if (!control->lights)
+	return -1;
     if (light >= control->num_vals)
 	return -1;
 
@@ -1481,6 +1483,8 @@ ipmi_control_get_num_light_transitions(ipmi_control_t   *control,
 {
     CHECK_CONTROL_LOCK(control);
 
+    if (!control->lights)
+	return -1;
     if (light >= control->num_vals)
 	return -1;
     if (set >= control->lights[light].num_values)
@@ -1497,6 +1501,8 @@ ipmi_control_get_light_color(ipmi_control_t   *control,
 {
     CHECK_CONTROL_LOCK(control);
 
+    if (!control->lights)
+	return -1;
     if (light >= control->num_vals)
 	return -1;
     if (set >= control->lights[light].num_values)
@@ -1515,6 +1521,8 @@ ipmi_control_get_light_color_time(ipmi_control_t   *control,
 {
     CHECK_CONTROL_LOCK(control);
 
+    if (!control->lights)
+	return -1;
     if (light >= control->num_vals)
 	return -1;
     if (set >= control->lights[light].num_values)

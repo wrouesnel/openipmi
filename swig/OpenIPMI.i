@@ -2055,7 +2055,7 @@ wait_io(int timeout)
  * to have to not be in an inline and done the hard way.
  */
 %{
-ipmi_domain_id_t *
+static ipmi_domain_id_t *
 open_domain(char *name, char **args, swig_cb done, swig_cb up)
 {
     int                i, j;
@@ -2149,7 +2149,7 @@ open_domain(char *name, char **args, swig_cb done, swig_cb up)
     return nd;
 }
 
-void
+static void
 set_log_handler(swig_cb handler)
 {
     swig_cb_val old_handler = swig_log_handler;
@@ -2160,6 +2160,13 @@ set_log_handler(swig_cb handler)
     if (old_handler)
 	deref_swig_cb_val(old_handler);
 }
+
+static char *
+color_string(int color)
+{
+    return ipmi_get_color_string(color);
+}
+
 %}
 
 /*
@@ -2194,6 +2201,11 @@ ipmi_domain_id_t *open_domain(char *name, char **args,
  */
 void set_log_handler(swig_cb handler = NULL);
 
+
+/*
+ * Convert the given color to a string.
+ */
+char *color_string(int color);
 
 /* These two defines simplify the functions that do addition/removal
    of callbacks.  The type is the object type (domain, entity, etc)
@@ -5504,6 +5516,7 @@ void set_log_handler(swig_cb handler = NULL);
 #define CONTROL_COLOR_BLUE	4
 #define CONTROL_COLOR_YELLOW	5
 #define CONTROL_COLOR_ORANGE	6
+#define CONTROL_NUM_COLORS	7
 
     /*
      * This describes a setting for a light.  There are two types of
@@ -5526,14 +5539,6 @@ void set_log_handler(swig_cb handler = NULL);
     int light_set_with_setting()
     {
 	return ipmi_control_light_set_with_setting(self);
-    }
-
-    /*
-     * Convert the given color to a string.
-     */
-    char *color_string(int color)
-    {
-	return ipmi_get_color_string(color);
     }
 
     /*
@@ -5697,7 +5702,7 @@ void set_log_handler(swig_cb handler = NULL);
      * Get the value of the identifier control.  The control_get_id_cb
      * method on the first parameter will be called when the operation
      * completes.  The values passed to that method will be:
-     * <self> <err> byte1 [<byte2> ...].
+     * <self> <control> <err> byte1 [<byte2> ...].
      * The id value is all the bytes after the error value.
      */
     int identifier_get_val(swig_cb handler)
