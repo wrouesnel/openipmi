@@ -4819,7 +4819,13 @@ i2c_isolate_get_cb(ipmi_control_t     *control,
 		   mxp_control_info_t *control_info,
 		   unsigned char      *data)
 {
-    return (data[4] >> 1) & 1;
+    /* The bit from the slot signal status command is an "I2C Enabled"
+       bit, but the sensor is an "I2C Isolate" one.  So invert the
+       sense of the bit. */
+    if ((data[4] >> 1) & 1)
+	return 0;
+    else
+	return 1;
 }
 
 static int
