@@ -1435,6 +1435,25 @@ int ipmi_control_get_display_string(ipmi_control_t      *control,
 				    ipmi_control_str_cb handler,
 				    void                *cb_data);
 
+/* These are convenience functions that take a control id, not a
+   control, and set/get remote values from the control. */
+int ipmi_control_id_set_val(ipmi_control_id_t  control_id,
+			    int                *val,
+			    ipmi_control_op_cb handler,
+			    void               *cb_data);
+int ipmi_control_id_get_val(ipmi_control_id_t   control_id,
+			    ipmi_control_val_cb handler,
+			    void                *cb_data);
+int ipmi_control_id_identifier_get_val
+(ipmi_control_id_t              control_id,
+ ipmi_control_identifier_val_cb handler,
+ void                           *cb_data);
+int ipmi_control_id_identifier_set_val(ipmi_control_id_t  control_id,
+				       unsigned char      *val,
+				       int                length,
+				       ipmi_control_op_cb handler,
+				       void               *cb_data);
+
 /* This must be called before calling any other IPMI functions.  It
    sets a mutex and mutex operations for the smi.  You must provide
    an OS handler to use for the system. */

@@ -656,6 +656,76 @@ ipmi_control_get_val(ipmi_control_t      *control,
     return control->cbs.get_val(control, handler, cb_data);
 }
 
+typedef struct control_id_set_val_s
+{
+    int                *val;
+    ipmi_control_op_cb handler;
+    void               *cb_data;
+    int                rv;
+} control_id_set_val_t;
+
+static void
+control_id_set_val_cb(ipmi_control_t *control, void *cb_data)
+{
+    control_id_set_val_t *info = cb_data;
+
+    info->rv = ipmi_control_set_val(control,
+				    info->val,
+				    info->handler,
+				    info->cb_data);
+}
+
+int
+ipmi_control_id_set_val(ipmi_control_id_t  control_id,
+			int                *val,
+			ipmi_control_op_cb handler,
+			void               *cb_data)
+{
+    control_id_set_val_t info;
+    int                  rv;
+
+    info.val = val;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_control_pointer_cb(control_id, control_id_set_val_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct control_id_get_val_s
+{
+    ipmi_control_val_cb handler;
+    void                *cb_data;
+    int                 rv;
+} control_id_get_val_t;
+
+static void
+control_id_get_val_cb(ipmi_control_t *control, void *cb_data)
+{
+    control_id_get_val_t *info = cb_data;
+
+    info->rv = ipmi_control_get_val(control,
+				    info->handler,
+				    info->cb_data);
+}
+
+int
+ipmi_control_id_get_val(ipmi_control_id_t   control_id,
+			ipmi_control_val_cb handler,
+			void                *cb_data)
+{
+    control_id_get_val_t info;
+    int                  rv;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_control_pointer_cb(control_id, control_id_get_val_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
 void
 ipmi_control_set_has_events(ipmi_control_t *control, int val)
 {
@@ -815,6 +885,83 @@ ipmi_control_identifier_set_val(ipmi_control_t     *control,
 					   handler,
 					   cb_data);
 }
+
+typedef struct control_id_identifier_set_val_s
+{
+    unsigned char      *val;
+    int                length;
+    ipmi_control_op_cb handler;
+    void               *cb_data;
+    int                rv;
+} control_id_identifier_set_val_t;
+
+static void
+control_id_identifier_set_val_cb(ipmi_control_t *control, void *cb_data)
+{
+    control_id_identifier_set_val_t *info = cb_data;
+
+    info->rv = ipmi_control_identifier_set_val(control,
+					       info->val,
+					       info->length,
+					       info->handler,
+					       info->cb_data);
+}
+
+int
+ipmi_control_id_identifier_set_val(ipmi_control_id_t  control_id,
+				   unsigned char      *val,
+				   int                length,
+				   ipmi_control_op_cb handler,
+				   void               *cb_data)
+{
+    control_id_identifier_set_val_t info;
+    int                             rv;
+
+    info.val = val;
+    info.length = length;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_control_pointer_cb(control_id,
+				 control_id_identifier_set_val_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+typedef struct control_id_identifier_get_val_s
+{
+    ipmi_control_identifier_val_cb handler;
+    void                           *cb_data;
+    int                            rv;
+} control_id_identifier_get_val_t;
+
+static void
+control_id_identifier_get_val_cb(ipmi_control_t *control, void *cb_data)
+{
+    control_id_identifier_get_val_t *info = cb_data;
+
+    info->rv = ipmi_control_identifier_get_val(control,
+					       info->handler,
+					       info->cb_data);
+}
+
+int
+ipmi_control_id_identifier_get_val(ipmi_control_id_t              control_id,
+				   ipmi_control_identifier_val_cb handler,
+				   void                           *cb_data)
+{
+    control_id_identifier_get_val_t info;
+    int                             rv;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_control_pointer_cb(control_id,
+				 control_id_identifier_get_val_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
 
 int
 ipmi_control_get_type(ipmi_control_t *control)
