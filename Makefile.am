@@ -9,8 +9,6 @@ VERSION_CURRENT = $(wordlist 1, 1, $(SPACE_VERSION))
 VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
 VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
 
-EXTRA_DIST = TODO example_oem.c
-
 AM_CFLAGS = -Wall -I$(srcdir)/include -DIPMI_CHECK_LOCKS
 SUBDIRS = include
 
@@ -69,6 +67,7 @@ TESTS = test_heap
 info_TEXINFOS = OpenIPMI.texi
 
 man_MANS = ipmi_ui.1 ipmilan.8 ipmicmd.1
+EXTRA_DIST = $(man_MANS) TODO example_oem.c
 
 clean:
 	rm -f *.map

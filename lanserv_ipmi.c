@@ -36,9 +36,9 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/lanserv.h>
 #include "md5.h"
 
-#include "lanserv.h"
 
 #if 0
 static void

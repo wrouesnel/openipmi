@@ -1,6 +1,20 @@
 
 2003-05-15 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv.h: Moved to include/OpenIPMI
+	
+	* lanserv.c: Handled move of lanserv.h
+	* lanserv_asf.c: ditto
+	* lanserv_ipmi.c: ditto
+	* lanserv_emu.c: ditto
+
+	* configure.in: Move to version 0.4.0
+	
+	* ipmicmd.c: Changed the order of the lun and netfn to make it
+	consistent with ipmi_ui.
+
+	* ipmicmd.1: Wrote some docs for ipmicmd.
+
 	* include/OpenIPMI/ipmi_conn.h: Reworked the connection reporting,
 	changed "fail" to "change" everywhere to make it more accurate,
 	and report all connection changes through the same interface.

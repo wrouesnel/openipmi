@@ -52,8 +52,7 @@
 #include <OpenIPMI/log.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-
-#include "lanserv.h"
+#include <OpenIPMI/lanserv.h>
 
 typedef struct misc_data
 {

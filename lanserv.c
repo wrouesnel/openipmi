@@ -52,10 +52,10 @@
 
 #include <OpenIPMI/log.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/lanserv.h>
 
 #include <linux/ipmi.h>
 
-#include "lanserv.h"
 
 static int debug = 0;
 

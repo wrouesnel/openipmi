@@ -31,7 +31,7 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include "lanserv.h"
+#include <OpenIPMI/lanserv.h>
 
 /* Deal with multi-byte data, RMCP (big-endian) style. */
 #if 0 /* These are not currently used. */
