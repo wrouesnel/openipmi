@@ -68,7 +68,7 @@ The command hierarchy is:
     Domain
       **DOMAIN INFO**
 
-  * new <domain> <parms...> - Open a connection to a new domain
+  * new <domain> <options> <parms...> - Open a connection to a new domain
     Parms are either:
      lan <IP> <port> <enc> <auth> <name> <password>"
     or
@@ -77,6 +77,17 @@ The command hierarchy is:
     or "none".  <auth> is the authentication level, either "admin",
     "operator", or "user".  The <port> is generally 623.
     The <smi num> is the driver number, generally 0.
+    Options enable and disable various automitic processing and are:
+      -[no]all - all automatic handling
+      -[no]sdrs - sdr fetching
+      -[no]frus - FRU fetching
+      -[no]sel - SEL fetching,"
+      -[no]ipmbscan - IPMB bus scanning
+      -[no]oeminit - special OEM processing (like ATCA)
+      -[no]seteventrcvr - setting event receivers
+    Note that setting event receivers it not affected by the -all
+    option.  By default -all -seteventrcvr is true, which turns
+    everything on.
 
   * fru <domain> <is_logical> <device_address> <device_id> <lun> <private_bus>
     <channel> - dump a fru given all it's insundry information.

@@ -945,7 +945,13 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "<domain> - Dump information about a domain",
       ipmi_cmdlang_domain_handler, domain_info, NULL },
     { "new", &domain_cmds,
-      "<domain parms> - Set up a new domain",
+      "[<options>] <domain parms> - Set up a new domain.  Options enable"
+      " and disable various automitic processing and are: "
+      " -[no]all - all automatic handling, -[no]sdrs - sdr fetching,"
+      " -[no]frus - FRU fetching, -[no]sel - SEL fetching,"
+      " -[no]ipmbscan - IPMB bus scanning,"
+      " -[no]oeminit - special OEM processing (like ATCA),"
+      " -[no]seteventrcvr - setting event receivers.",
       domain_new, NULL, NULL },
     { "close", &domain_cmds,
       "<domain> - Close the domain",
