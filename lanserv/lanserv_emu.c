@@ -261,6 +261,7 @@ log(int logtype, msg_t *msg, char *format, ...)
 
 static char *config_file = "/etc/ipmi_lan.conf";
 static char *command_string = NULL;
+static char *command_file = NULL;
 static int debug = 0;
 
 static struct poptOption poptOpts[]=
@@ -281,6 +282,15 @@ static struct poptOption poptOpts[]=
 	&command_string,
 	'x',
 	"command string",
+	""
+    },
+    {
+	"command-file",
+	'f',
+	POPT_ARG_STRING,
+	&command_file,
+	'f',
+	"command file",
 	""
     },
     {
@@ -475,6 +485,22 @@ main(int argc, const char *argv[])
 
     if (command_string) {
 	ipmi_emu_cmd(emu, command_string);
+    }
+
+    if (command_file) {
+	FILE *f = fopen(command_file, "r");
+
+	if (!f) {
+	    fprintf(stderr, "Unable to open command file '%s'\n",
+		    command_file);
+	} else {
+	    char buffer[1024];
+	    while (fgets(buffer, sizeof(buffer), f)) {
+		printf("%s", buffer);
+		ipmi_emu_cmd(emu, buffer);
+	    }
+	    fclose(f);
+	}
     }
 
     gettimeofday(&time_next, NULL);

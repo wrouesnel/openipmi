@@ -731,6 +731,14 @@ free_sdr(sdr_t *sdr)
     free(sdr);
 }
 
+int
+ipmi_mc_add_sdr(lmc_data_t    *mc,
+		unsigned int  recnum,
+		unsigned char *data,
+		unsigned int  data_len)
+{
+}
+
 static void
 handle_get_sdr_repository_info(lmc_data_t    *mc,
 			       ipmi_msg_t    *msg,
@@ -1669,6 +1677,8 @@ ipmi_emu_get_mc_by_addr(emu_data_t *emu, unsigned char ipmb, lmc_data_t **mc)
 {
     if (ipmb & 1)
 	return EINVAL;
+    if (!emu->ipmb[ipmb >> 1])
+	return ENOSYS;
     *mc = emu->ipmb[ipmb >> 1];
     return 0;
 }
