@@ -483,11 +483,11 @@ get_sock_addr(char **tokptr, struct sockaddr *addr, socklen_t *len)
 
     s = strtok_r(NULL, " \t\n", tokptr);
     if (s) {
-	a->sin_port = strtoul(s, &end, 0);
+	a->sin_port = htons(strtoul(s, &end, 0));
 	if (*end != '\0')
 	    return -1;
     } else {
-	a->sin_port = 623;
+	a->sin_port = htons(623);
     }
 
     *len = sizeof(*a);

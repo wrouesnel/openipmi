@@ -122,8 +122,6 @@ typedef struct lan_wait_queue_s
 #define MAX_IP_ADDR 2
 #define SENDS_BETWEEN_IP_SWITCHES 8
 
-enum con_state_e {ACTIVE_STANDBY, ACTIVE_ACTIVE};
-
 typedef struct lan_data_s
 {
     ipmi_con_t                 *ipmi;
@@ -1616,7 +1614,7 @@ handle_connected(ipmi_con_t *ipmi, int err)
 	addr.channel = IPMI_BMC_CHANNEL;
 	addr.lun = 0;
 
-	lan->start_con_handler(ipmi, 0,
+	lan->start_con_handler(ipmi, err,
 			       (ipmi_addr_t *) &addr, sizeof(addr),
 			       lan->start_con_cb_data);
 	lan->start_con_handler = NULL;
