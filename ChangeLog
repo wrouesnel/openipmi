@@ -11,6 +11,8 @@
 
 	* configure.in: Move to version 1.3.1.
 
+	* doc/OpenIPMI.texi: Added some docs on ATCA.
+
 2004-04-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start

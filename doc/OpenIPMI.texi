@@ -1996,6 +1996,7 @@ handling in OpenIPMI.
 @menu
 * Force Computers::
 * Motorola MXP::
+* ATCA::
 @end menu
 
 @node    Force Computers, Motorola MXP, OEM Specific Information, OEM Specific Information
@@ -2015,7 +2016,7 @@ OpenIPMI will automatically switch over on failures.
 You can disable this feature by commenting out the appropriate
 sections in oem_force_conn.c.
 
-@node    Motorola MXP, , Force Computers, OEM Specific Information
+@node    Motorola MXP, ATCA, Force Computers, OEM Specific Information
 @section Motorola MXP
 
 The Motorola MXP chassis provides a PICMG 2.16 backplane, support for
@@ -2549,6 +2550,37 @@ The SDRs in the AMC create some bogus entities.  The sensors on them
 seem to be functional, but the entities are not standard and will
 probably go away.  You can safely ignore entities ``0.0'' and
 ``149.26''.
+
+@end table
+
+@node    ATCA, , Motorola MXP, OEM Specific Information
+@section ATCA
+
+OpenIPMI has a significant start at ATCA support.  It supports the
+following:
+
+@table @samp
+@item Shelf Address FRU
+The shelf address FRU data will be read at startup and configuration
+for every FRU will be done.
+
+@item LEDs
+LEDs should be detected and fully supported as ``Setting'' LEDs.  You
+can set local control mode and all the blinking modes.  You cannot set
+lamp test, though.
+
+@item cold reset
+You can do the cold reset function on the payload; it appears as a
+one-shot reset control.  The other functions are not yet implemented
+because there is no way to tell if they exist.
+
+@item hot-swap
+The ATCA hot-swap sensor and state machine are implemented.  There is
+currently no way to get or set the auto-activation capability.  The
+getting can be done fairly easily.  Setting is a problem because
+changing it requires updating the FRU data, and there are a bunch of
+race conditions with setting FRU data because there are no locks for
+that data.
 
 @end table
 
