@@ -1047,7 +1047,7 @@ handle_get_channel_access(lan_data_t *lan, session_t *session, msg_t *msg)
     uint8_t   upd;
     channel_t *channel;
 
-    if (msg->len < 3) {
+    if (msg->len < 2) {
 	lan->log(INVALID_MSG, msg,
 		 "Get channel access failure: message too short");
 	return_err(lan, msg, session, IPMI_REQUEST_DATA_LENGTH_INVALID_CC);

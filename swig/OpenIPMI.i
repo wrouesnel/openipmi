@@ -42,6 +42,7 @@
 #include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/ipmi_glib.h>
 #include <OpenIPMI/ipmi_debug.h>
+#include <OpenIPMI/ipmi_user.h>
 
 /* For ipmi_debug_malloc_cleanup() */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -893,6 +894,118 @@ mc_sel_get_time_cb(ipmi_mc_t     *mc,
 
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
     swig_call_cb(cb, "mc_get_sel_time_cb", "%p%d%ld", &mc_ref, err, time);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_channel_get_info(ipmi_mc_t           *mc,
+		    int                 err,
+		    ipmi_channel_info_t *info,
+		    void                *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+    swig_ref    info_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    info_ref = swig_make_ref(info, "OpenIPMI::ipmi_channel_info_t");
+    swig_call_cb(cb, "mc_channel_got_info_cb", "%p%d%p", &mc_ref, err,
+		 &info_ref);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref(info_ref);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_channel_get_access(ipmi_mc_t             *mc,
+		      int                   err,
+		      ipmi_channel_access_t *info,
+		      void                  *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+    swig_ref    info_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    info_ref = swig_make_ref(info, "OpenIPMI::ipmi_channel_access_t");
+    swig_call_cb(cb, "mc_channel_got_access_cb", "%p%d%p", &mc_ref, err,
+		 &info_ref);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref(info_ref);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_channel_set_access(ipmi_mc_t *mc,
+		      int       err,
+		      void      *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_channel_set_access_cb", "%p%d", &mc_ref, err);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_channel_got_users(ipmi_mc_t        *mc,
+		     int              err,
+		     ipmi_user_list_t *info,
+		     void             *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+    swig_ref    *info_ref;
+    int         count;
+    swig_ref    dummy;
+    int         i;
+
+    if (info) {
+	count = ipmi_user_list_get_user_count(info);
+	info_ref = ipmi_mem_alloc(count * sizeof(swig_ref *));
+	if (!info_ref) {
+	    count = 0;
+	    info_ref = &dummy;
+	}
+    } else {
+	count = 0;
+	info_ref = &dummy;
+    }
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    for (i=0; i<count; i++) {
+	ipmi_user_t *user = ipmi_user_list_get_user(info, i);
+	if (user)
+	    user = ipmi_user_copy(user);
+	info_ref[i] = swig_make_ref(user, "OpenIPMI::ipmi_user_t");
+    }
+    swig_call_cb(cb, "mc_channel_got_users_cb", "%p%d%*o", &mc_ref, err,
+		 count, &info_ref);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    for (i=0; i<count; i++)
+	swig_free_ref(info_ref[i]);
+    ipmi_mem_free(info_ref);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_channel_set_user(ipmi_mc_t *mc,
+		    int       err,
+		    void      *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    swig_call_cb(cb, "mc_channel_set_user_cb", "%p%d", &mc_ref, err);
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -1974,6 +2087,15 @@ typedef struct {
 
 typedef struct {
 } ipmi_control_id_t;
+
+typedef struct {
+} ipmi_channel_info_t;
+
+typedef struct {
+} ipmi_channel_access_t;
+
+typedef struct {
+} ipmi_user_t;
 
 %inline %{
 void enable_debug_malloc()
@@ -4357,6 +4479,497 @@ char *color_string(int color);
     int sel_get_last_addition_timestamp()
     {
 	return ipmi_mc_sel_get_last_addition_timestamp(self);
+    }
+
+    /*
+     * Get the info for a channel on the MC.  The first parm is the
+     * integer channel number.  The second is the handler object,
+     * the mc_channel_got_info_cb method will be called on it with the
+     * following parameters: <self> <mc> <err> <chan_info>
+     * where chan_info is ipmi_channel_info_t.
+     */
+    int channel_get_info(int channel, swig_cb handler)
+    {
+	int         rv;
+	swig_cb_val handler_val = NULL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_mc_channel_get_info(self, channel,
+				      mc_channel_get_info, handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Get the access info for a channel on the MC.  The first parm is
+     * the integer channel number.  The second parm is the type to
+     * set, either "volatile" or "nonvolatile".  The third is the
+     * handler object, the mc_channel_got_access_cb method will be
+     * called on it with the following parameters: <self> <mc> <err>
+     * <access_info> where access_info is ipmi_channel_access_t.
+     */
+    int channel_get_access(int channel, char *type, swig_cb handler)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	enum ipmi_set_dest_e dest;
+
+	if (strcmp(type, "nonvolatile") == 0)
+	    dest = IPMI_SET_DEST_NON_VOLATILE;
+	else if (strcmp(type, "volatile") == 0)
+	    dest = IPMI_SET_DEST_VOLATILE;
+	else
+	    return EINVAL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_mc_channel_get_access(self, channel, dest,
+					mc_channel_get_access, handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set the access info for a channel on the MC, generally from one
+     * that you have previously fetched.  The first parameter is the
+     * access object you with to set the channel to.  The second parm
+     * is the integer channel number.  The third parm is the type to
+     * set, either "volatile" or "nonvolatile".  The forth is the
+     * handler object, the mc_channel_set_access_cb method will be
+     * called on it with the following parameters: <self> <mc> <err>.
+     */
+    int channel_set_access(ipmi_channel_access_t *access,
+			   int                   channel,
+			   char                  *type,
+			   swig_cb               handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_mc_done_cb      done = NULL;
+	enum ipmi_set_dest_e dest;
+
+	if (strcmp(type, "nonvolatile") == 0)
+	    dest = IPMI_SET_DEST_NON_VOLATILE;
+	else if (strcmp(type, "volatile") == 0)
+	    dest = IPMI_SET_DEST_VOLATILE;
+	else
+	    return EINVAL;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = mc_channel_set_access;
+	}
+	rv = ipmi_mc_channel_set_access(self, channel, dest, access,
+					done, handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Get the user info for a channel on the MC.  The first parameter
+     * is the channel.  The second is the user number; if a valid user
+     * number is passed in, then that user is the only one fetched.
+     * If -1 is passed for the user number, then all users are
+     * fetched.  The third is the handler object, the
+     * mc_channel_got_users_cb method will be called on it with the
+     * following parameters: <self> <mc> <err> <user1> [<user2> ...]
+     * where the users are ipmi_user_t objects.
+     */
+    int get_users(int channel, int user, swig_cb handler)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_mc_get_users(self, channel, user,
+			       mc_channel_got_users, handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set the user info for a channel on the MC.  The first parameter
+     * is the ipmi_user_t object.  The second parameter is the
+     * channel.  The third is the user number; if a valid user number
+     * is passed in, then that user is the only one fetched.  The
+     * fourth is the handler object, the mc_channel_got_users_cb
+     * method will be called on it with the following parameters:
+     * <self> <mc> <err> <user1> [<user2> ...]  where the users are
+     * ipmi_user_t objects.  Note that some info is channel-specific.
+     * Just the name and password are global to the MC.
+     */
+    int set_user(ipmi_user_t *userinfo,
+		 int         channel,
+		 int         usernum,
+		 swig_cb     handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_mc_done_cb      done = NULL;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = mc_channel_set_user;
+	}
+	rv = ipmi_mc_set_user(self, channel, usernum, userinfo,
+			      done, handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+}
+
+%extend ipmi_channel_info_t {
+    ~ipmi_channel_info_t()
+    {
+	ipmi_channel_info_free(self);
+    }
+
+    %newobject copy;
+    ipmi_channel_info_t *copy()
+    {
+	return ipmi_channel_info_copy(self);
+    }
+
+    int get_channel(int *channel)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_info_get_channel(self, &val);
+	*channel = val;
+	return rv;
+    }
+
+#define CHANNEL_MEDIUM_IPMB	1
+#define CHANNEL_MEDIUM_ICMB_V10	2
+#define CHANNEL_MEDIUM_ICMB_V09	3
+#define CHANNEL_MEDIUM_8023_LAN	4
+#define CHANNEL_MEDIUM_RS232	5
+#define CHANNEL_MEDIUM_OTHER_LAN	6
+#define CHANNEL_MEDIUM_PCI_SMBUS	7
+#define CHANNEL_MEDIUM_SMBUS_v1	8
+#define CHANNEL_MEDIUM_SMBUS_v2	9
+#define CHANNEL_MEDIUM_USB_v1	10
+#define CHANNEL_MEDIUM_USB_v2	11
+#define CHANNEL_MEDIUM_SYS_INTF	12
+    int get_medium(int *medium)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_info_get_medium(self, &val);
+	*medium = val;
+	return rv;
+    }
+
+#define CHANNEL_PROTOCOL_IPMB	1
+#define CHANNEL_PROTOCOL_ICMB	2
+#define CHANNEL_PROTOCOL_SMBus	4
+#define CHANNEL_PROTOCOL_KCS	5
+#define CHANNEL_PROTOCOL_SMIC	6
+#define CHANNEL_PROTOCOL_BT_v10	7
+#define CHANNEL_PROTOCOL_BT_v15	8
+#define CHANNEL_PROTOCOL_TMODE	9
+    int get_protocol_type(int *prot_type)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_info_get_protocol_type(self, &val);
+	*prot_type = val;
+	return rv;
+    }
+
+
+#define CHANNEL_SESSION_LESS	0
+#define CHANNEL_SINGLE_SESSION	1
+#define CHANNEL_MULTI_SESSION	2
+#define CHANNEL_SESSION_BASED	3
+    int get_session_support(int *sup)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_info_get_session_support(self, &val);
+	*sup = val;
+	return rv;
+    }
+
+    /* Data is 3 bytes long */
+    %newobject get_vendor_id;
+    char *get_vendor_id()
+    {
+	unsigned char data[3];
+	int           rv;
+	char          *rdata = malloc(15);
+
+	if (!rdata)
+	    return NULL;
+	rv = ipmi_channel_info_get_vendor_id(self, data);
+	if (rv)
+	    return NULL;
+	sprintf(rdata, "0x%2.2x 0x%2.2x 0x%2.2x", data[0], data[1], data[2]);
+	return rdata;
+    }
+
+    /* Data is 2 bytes long */
+    %newobject get_aux_info;
+    char *get_aux_info()
+    {
+	unsigned char data[2];
+	int           rv;
+	char          *rdata = malloc(10);
+
+	if (!rdata)
+	    return NULL;
+	rv = ipmi_channel_info_get_aux_info(self, data);
+	if (rv)
+	    return NULL;
+	sprintf(rdata, "0x%2.2x 0x%2.2x", data[0], data[1]);
+	return rdata;
+    }
+}
+
+%extend ipmi_channel_access_t {
+    ~ipmi_channel_access_t()
+    {
+	ipmi_channel_access_free(self);
+    }
+
+    int get_channel(int *channel)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_access_get_channel(self, &val);
+	*channel = val;
+	return rv;
+    }
+
+    int get_alerting_enabled(int *enab)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_access_get_alerting_enabled(self, &val);
+	*enab = val;
+	return rv;
+    }
+
+    int set_alerting_enabled(int enab)
+    {
+	return ipmi_channel_access_set_alerting_enabled(self, enab);
+    }
+
+    int get_per_msg_auth(int *msg_auth)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_access_get_per_msg_auth(self, &val);
+	*msg_auth = val;
+	return rv;
+    }
+
+    int set_per_msg_auth(int msg_auth)
+    {
+	return ipmi_channel_access_set_per_msg_auth(self, msg_auth);
+    }
+
+    int get_user_auth(int *user_auth)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_access_get_user_auth(self, &val);
+	*user_auth = val;
+	return rv;
+    }
+
+    int set_user_auth(int user_auth)
+    {
+	return ipmi_channel_access_set_user_auth(self, user_auth);
+    }
+
+#define CHANNEL_ACCESS_MODE_DISABLED	0
+#define CHANNEL_ACCESS_MODE_PRE_BOOT	1
+#define CHANNEL_ACCESS_MODE_ALWAYS		2
+#define CHANNEL_ACCESS_MODE_SHARED		3
+    int get_access_mode(int *access_mode)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_access_get_access_mode(self, &val);
+	*access_mode = val;
+	return rv;
+    }
+
+    int set_access_mode(int access_mode)
+    {
+	return ipmi_channel_access_set_access_mode(self, access_mode);
+    }
+
+#define PRIVILEGE_CALLBACK		1
+#define PRIVILEGE_USER		2
+#define PRIVILEGE_OPERATOR		3
+#define PRIVILEGE_ADMIN		4
+#define PRIVILEGE_OEM		5
+    int get_privilege_limit(int *priv_limit)
+    {
+	unsigned int val;
+	int rv = ipmi_channel_access_get_priv_limit(self, &val);
+	*priv_limit = val;
+	return rv;
+    }
+
+    int set_privilege_limit(int priv_limit)
+    {
+	return ipmi_channel_access_set_priv_limit(self, priv_limit);
+    }
+
+    /* Normally setting will only set the values you have changed.  This
+       forces all the values to be set. */
+    int setall() {
+	return ipmi_channel_access_setall(self);
+    }
+}
+
+%extend ipmi_user_t {
+    ~ipmi_user_t()
+    {
+	ipmi_user_free(self);
+    }
+
+    int get_channel(int *channel)
+    {
+	unsigned int val;
+	int rv = ipmi_user_get_channel(self, &val);
+	*channel = val;
+	return rv;
+    }
+
+    int get_num(int *num)
+    {
+	unsigned int val;
+	int rv = ipmi_user_get_num(self, &val);
+	*num = val;
+	return rv;
+    }
+
+    int set_num(int num)
+    {
+	return ipmi_user_set_num(self, num);
+    }
+
+    char *get_name()
+    {
+	unsigned int len;
+	int rv;
+	char *name;
+
+	rv = ipmi_user_get_name_len(self, &len);
+	if (rv)
+	    return NULL;
+	name = malloc(len+1);
+	if (!name)
+	    return NULL;
+	rv = ipmi_user_get_name(self, name, &len);
+	if (rv) {
+	    free(name);
+	    return NULL;
+	}
+	return name;
+    }
+
+    int set_name(char *name)
+    {
+	return ipmi_user_set_name(self, name, strlen(name));
+    }
+
+    int set_password(char *pw)
+    {
+	return ipmi_user_set_password(self, pw, strlen(pw));
+    }
+
+    int set_password2(char *pw)
+    {
+	return ipmi_user_set_password2(self, pw, strlen(pw));
+    }
+
+    int get_enable(int *enable)
+    {
+	unsigned int val;
+	int rv = ipmi_user_get_enable(self, &val);
+	*enable = val;
+	return rv;
+    }
+
+    int set_enable(int val)
+    {
+	return ipmi_user_set_enable(self, val);
+    }
+
+    int get_link_auth_enabled(int *enable)
+    {
+	unsigned int val;
+	int rv = ipmi_user_get_link_auth_enabled(self, &val);
+	*enable = val;
+	return rv;
+    }
+
+    int set_link_auth_enabled(int val)
+    {
+	return ipmi_user_set_link_auth_enabled(self, val);
+    }
+
+    int get_msg_auth_enabled(int *enable)
+    {
+	unsigned int val;
+	int rv = ipmi_user_get_msg_auth_enabled(self, &val);
+	*enable = val;
+	return rv;
+    }
+
+    int set_msg_auth_enabled(int val)
+    {
+	return ipmi_user_set_msg_auth_enabled(self, val);
+    }
+
+    int get_access_cb_only(int *cb)
+    {
+	unsigned int val;
+	int rv = ipmi_user_get_access_cb_only(self, &val);
+	*cb = val;
+	return rv;
+    }
+
+    int set_access_cb_only(int val)
+    {
+	return ipmi_user_set_access_cb_only(self, val);
+    }
+
+    int get_privilege_limit(int *limit)
+    {
+	unsigned int val;
+	int rv = ipmi_user_get_privilege_limit(self, &val);
+	*limit = val;
+	return rv;
+    }
+
+    int set_privilege_limit(int val)
+    {
+	return ipmi_user_set_privilege_limit(self, val);
+    }
+
+    int get_session_limit(int *limit)
+    {
+	unsigned int val;
+	int rv = ipmi_user_get_session_limit(self, &val);
+	*limit = val;
+	return rv;
+    }
+
+    int set_session_limit(int val)
+    {
+	return ipmi_user_set_session_limit(self, val);
+    }
+
+    int set_all()
+    {
+	return ipmi_user_set_all(self);
     }
 }
 

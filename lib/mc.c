@@ -3413,9 +3413,12 @@ got_chan_access(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    info->alert_val = (rsp->data[1] >> 5) & 1;
-    info->msg_auth_val = (rsp->data[1] >> 4) & 1;
-    info->user_auth_val = (rsp->data[1] >> 3) & 1;
+    /* For these, the values in the message are the inverse of their
+       boolean value. */
+    info->alert_val = !((rsp->data[1] >> 5) & 1);
+    info->msg_auth_val = !((rsp->data[1] >> 4) & 1);
+    info->user_auth_val = !((rsp->data[1] >> 3) & 1);
+
     info->access_mode_val = rsp->data[1] & 0x7;
     info->privilege_val = rsp->data[2] & 0xf;
     info->handler(mc, 0, info, info->cb_data);
@@ -3510,9 +3513,9 @@ ipmi_mc_channel_set_access(ipmi_mc_t             *mc,
 
     data[0] = channel & 0xf;
 
-    data[1] = ((info->alert_val << 5)
-	       | (info->msg_auth_val << 4)
-	       | (info->user_auth_val << 3)
+    data[1] = ((!info->alert_val << 5)
+	       | (!info->msg_auth_val << 4)
+	       | (!info->user_auth_val << 3)
 	       | info->access_mode_val);
     if (info->alert_set || info->msg_auth_set || info->user_auth_set
 	|| info->access_mode_set)
@@ -3854,6 +3857,7 @@ got_user1(ipmi_mc_t  *mc,
     list->users[idx].link_enabled = (rsp->data[4] >> 5) & 1;
     list->users[idx].msg_enabled = (rsp->data[4] >> 4) & 1;
     list->users[idx].privilege_limit = rsp->data[4] & 0x0f;
+    list->users[idx].channel = list->channel;
 
     if (list->curr == 1) {
 	/* User 1 does not have a name, don't try to fetch it. */

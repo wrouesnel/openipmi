@@ -131,6 +131,20 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 		}
 		break;
 
+	    case 'o':
+		/* An array of objects */
+		{
+		    swig_ref **list;
+		    len = va_arg(ap, int);
+		    list = va_arg(ap, swig_ref **);
+		    while (len > 0) {
+			XPUSHs((*list)->val);
+			list++;
+			len--;
+		    }
+		}
+		break;
+
 	    default:
 		break;
 	    }

@@ -1062,6 +1062,9 @@ $lanserv->cmd("mc_add_fru_data 20 1 400 01");
 
 $lanserv->cmd("mc_enable 20");
 
+sleep 1;
+
+#OpenIPMI::enable_debug_msg();
 OpenIPMI::enable_debug_malloc();
 
 # Now start OpenIPMI

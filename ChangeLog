@@ -1,3 +1,14 @@
+2004-12-26 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/mc.c: Invert the values from get/set channel access so they
+	are logical for the user.
+
+	* swig/OpenIPMI.i: Added user/channel access.
+
+	* swig/perl/test_fru: Fixed a timing problem.
+
+	* swig/perl/test_chan: Added channel/user testing.
+
 2004-12-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed some minor bugs in user handling.
