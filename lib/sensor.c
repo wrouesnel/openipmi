@@ -1908,13 +1908,14 @@ ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 }
 
 int
-ipmi_sensor_threshold_assertion_event_supported(
-    ipmi_sensor_t               *sensor,
-    enum ipmi_thresh_e          event,
-    enum ipmi_event_value_dir_e dir,
-    int                         *val)
+ipmi_sensor_threshold_event_supported(ipmi_sensor_t               *sensor,
+				      enum ipmi_thresh_e          event,
+				      enum ipmi_event_value_dir_e value_dir,
+				      enum ipmi_event_dir_e       dir,
+				      int                         *val)
 {
     int idx;
+    unsigned char *mask;
 
     CHECK_SENSOR_LOCK(sensor);
 
@@ -1922,11 +1923,18 @@ ipmi_sensor_threshold_assertion_event_supported(
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
-    idx = (event * 2) + dir;
+    if (dir == IPMI_ASSERTION)
+	mask = sensor->mask1;
+    else if (dir == IPMI_DEASSERTION)
+	mask = sensor->mask2;
+    else
+	return EINVAL;
+
+    idx = (event * 2) + value_dir;
     if (idx > 11)
 	return EINVAL;
 
-    *val = sensor->mask1[idx];
+    *val = mask[idx];
     return 0;
 }
 
@@ -1944,29 +1952,6 @@ ipmi_sensor_set_threshold_assertion_event_supported(
 	return;
 
     sensor->mask1[idx] = val;
-}
-
-int
-ipmi_sensor_threshold_deassertion_event_supported(
-    ipmi_sensor_t               *sensor,
-    enum ipmi_thresh_e          event,
-    enum ipmi_event_value_dir_e dir,
-    int                         *val)
-{
-    int idx;
-
-    CHECK_SENSOR_LOCK(sensor);
-
-    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
-	/* Not a threshold sensor, it doesn't have readings. */
-	return ENOSYS;
-
-    idx = (event * 2) + dir;
-    if (idx > 11)
-	return 0;
-
-    *val = sensor->mask2[idx];
-    return 0;
 }
 
 void
@@ -2052,20 +2037,30 @@ ipmi_sensor_threshold_set_readable(ipmi_sensor_t      *sensor,
 }
 
 int
-ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
-					       int           event,
-					       int           *val)
+ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
+				     int                   event,
+				     enum ipmi_event_dir_e dir,
+				     int                   *val)
 {
+    unsigned char *mask;
+
     CHECK_SENSOR_LOCK(sensor);
 
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* A threshold sensor, it doesn't have events. */
 	return ENOSYS;
 
+    if (dir == IPMI_ASSERTION)
+	mask = sensor->mask1;
+    else if (dir == IPMI_DEASSERTION)
+	mask = sensor->mask2;
+    else
+	return EINVAL;
+
     if (event > 14)
 	return EINVAL;
 
-    *val = sensor->mask1[event];
+    *val = mask[event];
     return 0;
 }
 
@@ -2078,24 +2073,6 @@ ipmi_sensor_set_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
 	return;
 
     sensor->mask1[event] = val;
-}
-
-int
-ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
-						 int           event,
-						 int           *val)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
-	/* A threshold sensor, it doesn't have events. */
-	return ENOSYS;
-
-    if (event > 14)
-	return EINVAL;
-
-    *val = sensor->mask2[event];
-    return 0;
 }
 
 void
@@ -5446,3 +5423,91 @@ __ipmi_check_sensor_lock(ipmi_sensor_t *sensor)
 			       "sensor not locked when it should have been");
 }
 #endif
+
+/***********************************************************************
+ *
+ * Cruft
+ *
+ **********************************************************************/
+
+int
+ipmi_sensor_threshold_assertion_event_supported(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_thresh_e          event,
+    enum ipmi_event_value_dir_e dir,
+    int                         *val)
+{
+    int idx;
+
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* Not a threshold sensor, it doesn't have readings. */
+	return ENOSYS;
+
+    idx = (event * 2) + dir;
+    if (idx > 11)
+	return EINVAL;
+
+    *val = sensor->mask1[idx];
+    return 0;
+}
+
+int
+ipmi_sensor_threshold_deassertion_event_supported(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_thresh_e          event,
+    enum ipmi_event_value_dir_e dir,
+    int                         *val)
+{
+    int idx;
+
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* Not a threshold sensor, it doesn't have readings. */
+	return ENOSYS;
+
+    idx = (event * 2) + dir;
+    if (idx > 11)
+	return 0;
+
+    *val = sensor->mask2[idx];
+    return 0;
+}
+
+int
+ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
+					       int           event,
+					       int           *val)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* A threshold sensor, it doesn't have events. */
+	return ENOSYS;
+
+    if (event > 14)
+	return EINVAL;
+
+    *val = sensor->mask1[event];
+    return 0;
+}
+
+int
+ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
+						 int           event,
+						 int           *val)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* A threshold sensor, it doesn't have events. */
+	return ENOSYS;
+
+    if (event > 14)
+	return EINVAL;
+
+    *val = sensor->mask2[event];
+    return 0;
+}

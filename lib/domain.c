@@ -4226,7 +4226,7 @@ ipmi_open_domain(ipmi_con_t               *con[],
  *
  **********************************************************************/
 
-ipmi_sdr_t *
+ipmi_sdr_info_t *
 ipmi_domain_get_main_sdrs(ipmi_domain_t *domain)
 {
     return domain->main_sdrs;

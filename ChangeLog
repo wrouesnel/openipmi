@@ -1,3 +1,14 @@
+2004-08-03 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h.in, lib/sensor.c: Added more
+	consistent functions for checking if threshold and discrete
+	events are supported.  Deprecated old functions.
+	* lib/entity.c: adjust for above change
+	* ui/ui.c: ditto
+
+	* sample/sample3.c, sample/Makefile.am: Added a new sample
+	file to show something about event settings.
+
 2004-08-02 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in: Renamed some parameters to be more

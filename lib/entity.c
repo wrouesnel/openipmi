@@ -1638,16 +1638,20 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 
     if (event_support == IPMI_EVENT_SUPPORT_PER_STATE) {
 	/* Turn on all the event enables that we can. */
-	rv = ipmi_sensor_discrete_assertion_event_supported(sensor, 0, &val);
+	rv = ipmi_sensor_discrete_event_supported(sensor, 0, IPMI_ASSERTION,
+						  &val);
 	if ((!rv) && (val))
 	    ipmi_discrete_event_set(&events, 0, IPMI_ASSERTION);
-	rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, 0, &val);
+	rv = ipmi_sensor_discrete_event_supported(sensor, 0, IPMI_DEASSERTION,
+						  &val);
 	if ((!rv) && (val))
 	    ipmi_discrete_event_set(&events, 0, IPMI_DEASSERTION);
-	rv = ipmi_sensor_discrete_assertion_event_supported(sensor, 1, &val);
+	rv = ipmi_sensor_discrete_event_supported(sensor, 1, IPMI_ASSERTION,
+						  &val);
 	if ((!rv) && (val))
 	    ipmi_discrete_event_set(&events, 1, IPMI_ASSERTION);
-	rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, 1, &val);
+	rv = ipmi_sensor_discrete_event_supported(sensor, 1, IPMI_DEASSERTION,
+						  &val);
 	if ((!rv) && (val))
 	    ipmi_discrete_event_set(&events, 1, IPMI_DEASSERTION);
     }
@@ -1693,13 +1697,13 @@ handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 	int val;
 	int rv;
 	/* Turn on the event enables. */
-	rv = ipmi_sensor_discrete_assertion_event_supported
-	    (sensor, ent->presence_bit_offset, &val);
+	rv = ipmi_sensor_discrete_event_supported
+	    (sensor, ent->presence_bit_offset, IPMI_ASSERTION, &val);
 	if (!rv && val)
 	    ipmi_discrete_event_set(&events, ent->presence_bit_offset,
 				    IPMI_ASSERTION);
-	rv = ipmi_sensor_discrete_deassertion_event_supported
-	    (sensor, ent->presence_bit_offset, &val);
+	rv = ipmi_sensor_discrete_event_supported
+	    (sensor, ent->presence_bit_offset, IPMI_DEASSERTION, &val);
 	if (!rv && val)
 	    ipmi_discrete_event_set(&events, ent->presence_bit_offset,
 				    IPMI_DEASSERTION);

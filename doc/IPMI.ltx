@@ -1,5 +1,5 @@
 \documentclass{book}
-\usepackage{graphicx,moreverb,tabularx,acronym,longtable,alltt}
+\usepackage{graphicx,moreverb,tabularx,acronym,longtable,alltt,varioref}
 \title{IPMI -- A Gentle Introduction\\with OpenIPMI}
 \author{Corey Minyard $<$minyard@acm.org$>$\\
         Montavista Software}
@@ -6128,6 +6128,10 @@ int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
 				  void                      *cb_data);
 \end{verbatim}
 
+Appendex~\vref{app-sample-prog-event-setup} contains a program that
+demonstrates how to use many of the functions described in this
+section.
+
 \subsubsection{Rearm in OpenIPMI}
 
 TBD - write this.
@@ -6242,6 +6246,11 @@ The specific threshold values in the enumeration are:
 \item IPMI\_UPPER\_CRITICAL
 \item IPMI\_UPPER\_NON\_RECOVERABLE
 \end{itemize}
+The function
+\begin{verbatim}
+char *ipmi_get_threshold_string(unsigned int val);
+\end{verbatim}
+converts the value to a string.
 
 To actually get and set the thresholds for a sensor, a threshold data
 structure is used.  This data structure is opaque.
@@ -6302,25 +6311,32 @@ int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 To find out which thresholds support events, the following can be used
 to tell if a specific thresholds support a specific event:
 \begin{verbatim}
-int ipmi_sensor_threshold_assertion_event_supported(
+int ipmi_sensor_threshold_event_supported(
     ipmi_sensor_t               *sensor,
     enum ipmi_thresh_e          threshold,
-    enum ipmi_event_value_dir_e dir,
-    int                         *val);
-int ipmi_sensor_threshold_deassertion_event_supported(
-    ipmi_sensor_t               *sensor,
-    enum ipmi_thresh_e          threshold,
-    enum ipmi_event_value_dir_e dir,
+    enum ipmi_event_value_dir_e value_dir,
+    enum ipmi_event_dir_e       dir,
     int                         *val);
 \end{verbatim}
-The \texttt{dir} parameter specifies if the ``going low'' or ``going
+The \texttt{value\_dir} parameter specifies if the ``going low'' or ``going
 high'' events are being queried.  Value for this are:
 \begin{itemize}
-\item IPMI_GOING_LOW
-\item IPMI_GOING_HIGH
+\item IPMI\_GOING\_LOW
+\item IPMI\_GOING\_HIGH
+\end{itemize}
+The \texttt{dir} parameter specifies if the ``assertion'' or ``deassertion''
+ events are being queried.  Value for this are:
+\begin{itemize}
+\item IPMI\_ASSERTION
+\item IPMI\_DEASSERTION
 \end{itemize}
 Using these, all the thresholds and directions may be iterated through
-to find out what the sensor supports.
+to find out what the sensor supports.  The functions
+\begin{verbatim}
+char *ipmi_get_value_dir_string(unsigned int val);
+char *ipmi_get_event_dir_string(unsigned int val);
+\end{verbatim}
+converts the \texttt{value\_dir} and \texttt{dir} values to strings.
 
 To actually enable or disable individual events for a sensor, an event
 state structure must be created.  An event state structure is passed
@@ -6343,14 +6359,6 @@ int ipmi_is_threshold_event_set(ipmi_event_state_t          *events,
 				enum ipmi_event_value_dir_e value_dir,
 				enum ipmi_event_dir_e       dir);
 \end{verbatim}
-The \texttt{dir} parameter tells whether the assertion or deassertion
-event is generated.  Valid values are:
-\begin{itemize}
-\item IPMI_ASSERTION
-\item IPMI_DEASSERTION
-\end{itemize}
-The \texttt{value\_dir} parameter tells if this is the going low or
-going high event.
 
 \subsubsection{Threshold Sensor Units in OpenIPMI}
 
@@ -6404,15 +6412,11 @@ int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
 \subsection{Discrete Sensors in OpenIPMI}
 
 \begin{verbatim}
-/* Returns if the assertion of a specific event can send an event */
-int ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
-						   int           event,
-						   int           *val);
-
-/* Returns if the deassertion of a specific event can send an event */
-int ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
-						     int           event,
-						     int           *val);
+/* Returns if the bit can send an event */
+int ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
+					 int                   offset,
+					 enum ipmi_event_dir_e dir,
+					 int                   *val);
 
 /* Returns if the specific event can be read (is supported). */
 int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
@@ -6597,6 +6601,22 @@ in.
 
 %---------------------------------------------------------------------
 \chapter{Motorola MXP}
+
+%---------------------------------------------------------------------
+\chapter{Sample Program Showing Basic Operations}
+\label{app-sample-prog-basic}
+The following program shows basic setup, registration, and registering
+to handle new entitys, sensors, and controls as they are created.
+Some basic information is dumped.
+
+\verbatimtabinput{../sample/sample.c}
+
+%---------------------------------------------------------------------
+\chapter{Sample Program Showing Event Setup}
+\label{app-sample-prog-event-setup}
+The following program show how to set up events.  For every sensor
+that is detected, it will turn on all events that the sensor supports.
+\verbatimtabinput{../sample/sample3.c}
 
 %---------------------------------------------------------------------
 \chapter{Command Receiver Program}

@@ -1192,18 +1192,12 @@ int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
 /* Returns IPMI_EVENT_READING_TYPE_xxx */
 int ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor);
 
-/* Returns if an assertion event is supported for this particular sensor. */
-int ipmi_sensor_threshold_assertion_event_supported(
+/* Returns if an event is supported for this particular sensor. */
+int ipmi_sensor_threshold_event_supported(
     ipmi_sensor_t               *sensor,
-    enum ipmi_thresh_e          threshold,
-    enum ipmi_event_value_dir_e dir,
-    int                         *val);
-
-/* Returns if a deassertion event is supported for this particular sensor. */
-int ipmi_sensor_threshold_deassertion_event_supported(
-    ipmi_sensor_t               *sensor,
-    enum ipmi_thresh_e          threshold,
-    enum ipmi_event_value_dir_e dir,
+    enum ipmi_thresh_e          event,
+    enum ipmi_event_value_dir_e value_dir,
+    enum ipmi_event_dir_e       dir,
     int                         *val);
 
 /* Returns if a specific threshold can be set. */
@@ -1216,19 +1210,11 @@ int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 				   enum ipmi_thresh_e threshold,
 				   int                *val);
 
-/* Return the default threshold settings for a sensor. */
-int ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
-				       ipmi_thresholds_t *th);
-
-/* Returns if the assertion of a specific event can send an event */
-int ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
-						   int           event,
-						   int           *val);
-
-/* Returns if the deassertion of a specific event can send an event */
-int ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
-						     int           event,
-						     int           *val);
+/* Returns if the specific event can send an event */
+int ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
+					 int                   event,
+					 enum ipmi_event_dir_e dir,
+					 int                   *val);
 
 /* Returns if the specific event can be read (is supported). */
 int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
@@ -1302,6 +1288,10 @@ int ipmi_threshold_get(ipmi_thresholds_t  *th,
 		       double             *value);
 
 		       
+/* Return the default threshold settings for a sensor. */
+int ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
+				       ipmi_thresholds_t *th);
+
 /* Set the thresholds for the given sensor. */
 int ipmi_thresholds_set(ipmi_sensor_t       *sensor,
 			ipmi_thresholds_t   *thresholds,
@@ -1826,6 +1816,30 @@ int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 int ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
 				       ipmi_entity_fru_cb handler,
 				       void              *cb_data)
+     IPMI_FUNC_DEPRECATED;
+
+int ipmi_sensor_threshold_assertion_event_supported(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_thresh_e          threshold,
+    enum ipmi_event_value_dir_e dir,
+    int                         *val)
+     IPMI_FUNC_DEPRECATED;
+
+int ipmi_sensor_threshold_deassertion_event_supported(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_thresh_e          threshold,
+    enum ipmi_event_value_dir_e dir,
+    int                         *val)
+     IPMI_FUNC_DEPRECATED;
+
+int ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
+						   int           event,
+						   int           *val)
+     IPMI_FUNC_DEPRECATED;
+
+int ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
+						     int           event,
+						     int           *val)
      IPMI_FUNC_DEPRECATED;
 
 #endif /* __IPMIIF_H */

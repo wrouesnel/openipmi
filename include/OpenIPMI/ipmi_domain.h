@@ -220,7 +220,7 @@ int ipmi_domain_is_connection_active(ipmi_domain_t *domain,
 
 /* Returns the main SDR repository for the domain, or NULL if there is
    not one. */
-ipmi_sdr_t *ipmi_domain_get_main_sdrs(ipmi_domain_t *domain);
+ipmi_sdr_info_t *ipmi_domain_get_main_sdrs(ipmi_domain_t *domain);
 
 /* Get the number of channels the domain supports. */
 int ipmi_domain_get_num_channels(ipmi_domain_t *domain, int *val);

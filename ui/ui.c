@@ -1733,11 +1733,11 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	    ipmi_sensor_threshold_readable(sensor, t, &readable);
 	    anything_set |= readable;
 	    for (i=0; i<=1; i++) {
-		ipmi_sensor_threshold_assertion_event_supported(
-		    sensor, t, i, &(assert_sup[i]));
+		ipmi_sensor_threshold_event_supported(
+		    sensor, t, i, IPMI_ASSERTION, &(assert_sup[i]));
 		anything_set |= assert_sup[i];
-		ipmi_sensor_threshold_deassertion_event_supported(
-		    sensor, t, i, &(deassert_sup[i]));
+		ipmi_sensor_threshold_event_supported(
+		    sensor, t, i, IPMI_DEASSERTION, &(deassert_sup[i]));
 		anything_set |= deassert_sup[i];
 	    }
 	    if (anything_set) {
@@ -1826,9 +1826,10 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	display_pad_out("\n  Assertion: ");
 	display_pad_out("\n    available: ");
 	for (i=0; i<15; i++) {
-	    ipmi_sensor_discrete_assertion_event_supported(sensor,
-							   i,
-							   &val);
+	    ipmi_sensor_discrete_event_supported(sensor,
+						 i,
+						 IPMI_ASSERTION,
+						 &val);
 	    display_pad_out("%d", val != 0);
 	}
 	display_pad_out("\n      enabled: ");
@@ -1846,9 +1847,10 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	display_pad_out("\n  Deasertion: ");
 	display_pad_out("\n    available: ");
 	for (i=0; i<15; i++) {
-	    ipmi_sensor_discrete_deassertion_event_supported(sensor,
-							     i,
-							     &val);
+	    ipmi_sensor_discrete_event_supported(sensor,
+						 i,
+						 IPMI_DEASSERTION,
+						 &val);
 	    display_pad_out("%d", val != 0);
 	}
 	display_pad_out("\n      enabled: ");
