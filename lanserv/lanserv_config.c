@@ -383,8 +383,10 @@ lanserv_read_config(lan_data_t    *lan,
 	    if (!lan->guid)
 		return -1;
 	    err = read_16(&tokptr, lan->guid, &errstr);
-	    if (err)
+	    if (err) {
+	        fprintf(stderr, "Error on line %d: %s\n", line, errstr);
 		return err;
+	    }	
 	} else {
 	    errstr = "Invalid configuration option";
 	    err = -1;

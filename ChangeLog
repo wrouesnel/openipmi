@@ -1,3 +1,7 @@
+2004-08-11 Erwan Velu <erwan@mandrakesoft.com>
+
+	* lanserv/lanserv_config.c: Print the line number of errors.
+
 2004-08-10 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Added support for displaying the one-shot reset and
