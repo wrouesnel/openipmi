@@ -220,7 +220,7 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     }
     set++;
 
-    if (curr_arg > argc) {
+    if (curr_arg < argc) {
 	rv = ipmi_parse_args(&curr_arg, argc, argv, &con_parms[set]);
 	if (rv) {
 	    ipmi_free_args(con_parms[0]);
@@ -239,7 +239,7 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmdlang->errstr = "Unable to setup connection";
 	    cmdlang->err = rv;
-	    for (j=0; j<i; j++)
+	    for (j=0; j<set; j++)
 		ipmi_free_args(con_parms[j]);
 	    goto out;
 	}

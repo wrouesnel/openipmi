@@ -1036,7 +1036,7 @@ parse_next_str(char **tok, char **istr)
 		tstr++;
 	    }
 	}
-	*str++;
+	str++;
     }
 
     if (*str) {

@@ -96,6 +96,7 @@ con_activate(ipmi_domain_t *domain, int conn, void *cb_data)
     ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
 
+printf("**a");
     rv = ipmi_domain_activate_connection(domain, conn);
     if (rv) {
 	cmdlang->errstr = "Unable to activate connection";
