@@ -3532,7 +3532,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     int           rv;
     int           u;
     int           start_connection;
-
+    unsigned char old_addr;
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
@@ -3547,19 +3547,24 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     if (u == -1)
 	goto out_unlock;
 
-    if (ipmb != domain->con_ipmb_addr[u]) {
-	/* First scan the old address to remove it. */
-	if (domain->con_ipmb_addr[u] != 0)
-	    ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[u],
-				    domain->con_ipmb_addr[u], NULL, NULL);
-    }
+    old_addr = domain->con_ipmb_addr[u];
 
     domain->con_ipmb_addr[u] = ipmb;
 
-    /* Scan the new address.  Even though the address may not have
-       changed, it may have changed modes and need to be rescanned. */
-    ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[u],
-			    domain->con_ipmb_addr[u], NULL, NULL);
+    if (!domain->in_startup) {
+	/* Only scan the IPMBs if we are not in startup.  Otherwise things
+	   get reported before we are ready. */
+	if (ipmb != old_addr) {
+	    /* First scan the old address to remove it. */
+	    if (domain->con_ipmb_addr[u] != 0)
+		ipmi_start_ipmb_mc_scan(domain, 0, old_addr, old_addr,
+			       		NULL, NULL);
+	}
+
+	/* Scan the new address.  Even though the address may not have
+	   changed, it may have changed modes and need to be rescanned. */
+	ipmi_start_ipmb_mc_scan(domain, 0, ipmb, ipmb, NULL, NULL);
+    }
 
     start_connection = (active && (first_active_con(domain) == -1));
 
