@@ -1732,6 +1732,48 @@ dellog_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static int
+debug_cmd(char *cmd, char **toks, void *cb_data)
+{
+    char         *type;
+    char         *on_off;
+    int          val;
+    unsigned int mask;
+
+    type = strtok_r(NULL, " \t\n", toks);
+    if (!type) {
+	wprintw(cmd_win, "No debug type specified\n");
+	goto out;
+    }
+
+    on_off = strtok_r(NULL, " \t\n", toks);
+    if (!on_off) {
+	wprintw(cmd_win, "on or off not specified\n");
+	goto out;
+    } else if (strcmp(on_off, "on") == 0) {
+	val = 1;
+    } else if (strcmp(on_off, "off") == 0) {
+	val = 0;
+    } else {
+	wprintw(cmd_win, "on or off not specified, got '%s'\n", on_off);
+	goto out;
+    }
+
+    if (strcmp(type, "msg") == 0) {
+	mask = DEBUG_MSG_BIT;
+    } else {
+	wprintw(cmd_win, "Invalid debug type specified: '%s'\n", type);
+	goto out;
+    }
+
+    if (val)
+	__ipmi_log_mask |= mask;
+    else
+	__ipmi_log_mask &= ~mask;
+ out:
+    return 0;
+}
+
 static struct {
     char          *name;
     cmd_handler_t handler;
@@ -1748,6 +1790,7 @@ static struct {
     { "mccmd",				mccmd_cmd },
     { "msg",				msg_cmd },
     { "dellog",				dellog_cmd },
+    { "debug",				debug_cmd },
     { NULL,				NULL}
 };
 int

@@ -585,6 +585,10 @@ entities as necessary.  So when OpenIPMI hands you the BMC, you probably
 don't have everything in the chassis.  In fact, IPMI is dynamic, so you
 have to be ready for changes as they happen.
 
+OpenIPMI will rescan the bus for new MCs every 10 minutes.  It is
+expected that OEM handlers can detect new MCs with custom events and add
+the new MC sooner.
+
 Events also come in on the BMC interface.  In the setup done callback,
 you should register for events, if you are interested in them.  This
 means that your callback will receive all events that are not attached
