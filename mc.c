@@ -1184,6 +1184,12 @@ mc_device_data_compares(ipmi_mc_t  *mc,
     return 1;
 }
 
+static void
+iterate_cleanup_mc(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    ipmi_cleanup_mc(item);
+}
+
 void
 ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
@@ -1210,6 +1216,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
     /* FIXME - clean up entities that came from this device. */
 
     if (mc->bmc) {
+	ilist_iter(mc->bmc->mc_list, iterate_cleanup_mc, NULL);
+
 	/* Make sure the timer stop. */
 	if (mc->bmc->sel_timer_info)
 	    mc->bmc->sel_timer_info->cancelled = 1;

@@ -268,16 +268,16 @@ ilist_search(ilist_t *list, ilist_search_cb cmp, void *cb_data)
 void
 ilist_iter(ilist_t *list, ilist_iter_cb handler, void *cb_data)
 {
-    ilist_item_t *curr;
+    ilist_item_t *curr, *next;
     ilist_iter_t iter;
 
     iter.list = list;
     iter.curr = list->head->next;
     while (iter.curr != list->head) {
 	curr = iter.curr;
+	next = curr->next;
 	handler(&iter, curr->item, cb_data);
-	if (iter.curr == curr)
-	    iter.curr = curr->next;
+	iter.curr = next;
     }
 }
 
