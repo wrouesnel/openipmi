@@ -1857,18 +1857,19 @@ sensor_change(enum ipmi_update_e op,
 	      void               *cb_data)
 {
     int id, instance;
-    int lun, num;
     char name[33];
+    char name2[33];
     int rv;
 
     id = ipmi_entity_get_entity_id(ent);
     instance = ipmi_entity_get_entity_instance(ent);
-    ipmi_sensor_get_num(sensor, &lun, &num);
+    ipmi_sensor_get_id(sensor, name, 32);
+    strcpy(name2, name);
+    conv_from_spaces(name2);
     switch (op) {
 	case ADDED:
-	    ipmi_sensor_get_id(sensor, name, 33);
-	    ui_log("Sensor added: %d.%d.%d.%d (%s)\n",
-		   id, instance, lun, num, name);
+	    ui_log("Sensor added: %d.%d.%s (%s)\n",
+		   id, instance, name2, name);
 	    if (ipmi_sensor_get_event_reading_type(sensor)
 		== IPMI_EVENT_READING_TYPE_THRESHOLD)
 		rv = ipmi_sensor_threshold_set_event_handler(
@@ -1884,14 +1885,43 @@ sensor_change(enum ipmi_update_e op,
 		ui_log("Unable to register sensor event handler: 0x%x\n", rv);
 	    break;
 	case DELETED:
-	    ipmi_sensor_get_id(sensor, name, 33);
-	    ui_log("Sensor deleted: %d.%d.%d.%d (%s)\n",
-		   id, instance, lun, num, name);
+	    ui_log("Sensor deleted: %d.%d.%s (%s)\n",
+		   id, instance, name2, name);
 	    break;
 	case CHANGED:
-	    ipmi_sensor_get_id(sensor, name, 33);
-	    ui_log("Sensor changed: %d.%d.%d.%d (%s)\n",
-		   id, instance, lun, num, name);
+	    ui_log("Sensor changed: %d.%d.%s (%s)\n",
+		   id, instance, name2, name);
+	    break;
+    }
+}
+
+static void
+control_change(enum ipmi_update_e op,
+	       ipmi_entity_t      *ent,
+	       ipmi_control_t     *control,
+	       void               *cb_data)
+{
+    int id, instance;
+    char name[33];
+    char name2[33];
+
+    id = ipmi_entity_get_entity_id(ent);
+    instance = ipmi_entity_get_entity_instance(ent);
+    ipmi_control_get_id(control, name, 32);
+    strcpy(name2, name);
+    conv_from_spaces(name2);
+    switch (op) {
+	case ADDED:
+	    ui_log("Control added: %d.%d.%s (%s)\n",
+		   id, instance, name2, name);
+	    break;
+	case DELETED:
+	    ui_log("Control deleted: %d.%d.%s (%s)\n",
+		   id, instance, name2, name);
+	    break;
+	case CHANGED:
+	    ui_log("Control changed: %d.%d.%s (%s)\n",
+		   id, instance, name2, name);
 	    break;
     }
 }
@@ -1927,6 +1957,13 @@ entity_change(enum ipmi_update_e op,
 						       entity);
 	    if (rv) {
 		report_error("ipmi_entity_set_sensor_update_handler", rv);
+		break;
+	    }
+	    rv = ipmi_entity_set_control_update_handler(entity,
+							control_change,
+							entity);
+	    if (rv) {
+		report_error("ipmi_entity_set_control_update_handler", rv);
 		break;
 	    }
 	    rv = ipmi_entity_set_presence_handler(entity,
