@@ -710,6 +710,7 @@ ipmi_sel_del_log(ipmi_sel_info_t       *sel,
     }
 
     ilist_init_iter(&iter, sel->logs);
+    ilist_unpositioned(&iter);
     real_log = ilist_search_iter(&iter, recid_search_cmp, &(log->record_id));
     if (!real_log) {
 	rv = EINVAL;
@@ -775,6 +776,7 @@ ipmi_sel_del_log_by_recid(ipmi_sel_info_t       *sel,
     }
 
     ilist_init_iter(&iter, sel->logs);
+    ilist_unpositioned(&iter);
     real_log = ilist_search_iter(&iter, recid_search_cmp, &record_id);
     if (!real_log) {
 	rv = EINVAL;
@@ -879,6 +881,7 @@ ipmi_sel_get_next_log(ipmi_sel_info_t *sel, ipmi_log_t *log)
 	return EINVAL;
     }
     ilist_init_iter(&iter, sel->logs);
+    ilist_unpositioned(&iter);
     if (ilist_search_iter(&iter, recid_search_cmp, &(log->record_id))) {
 	if (ilist_next(&iter))
 	    *log = *((ipmi_log_t *) ilist_get(&iter));
@@ -903,6 +906,7 @@ ipmi_sel_get_prev_log(ipmi_sel_info_t *sel, ipmi_log_t *log)
 	return EINVAL;
     }
     ilist_init_iter(&iter, sel->logs);
+    ilist_unpositioned(&iter);
     if (ilist_search_iter(&iter, recid_search_cmp, &(log->record_id))) {
 	if (ilist_prev(&iter))
 	    *log = *((ipmi_log_t *) ilist_get(&iter));

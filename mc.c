@@ -1955,7 +1955,8 @@ sel_op_done(ipmi_sel_info_t *sel,
     sel_op_done_info_t *info = cb_data;
 
     /* No need to lock, the BMC should already be locked. */
-    info->done(info->bmc, err, info->cb_data);
+    if (info->done)
+        info->done(info->bmc, err, info->cb_data);
 }
 
 int

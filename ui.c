@@ -1658,7 +1658,16 @@ set_control_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
-int
+static void
+dellog_cb(ipmi_mc_t *bmc, int err, void *cb_data)
+{
+    if (err)
+	ui_log("Error deleting log: %x\n", err);
+    else
+	ui_log("log deleted\n");
+}
+
+static int
 dellog_cmd(char *cmd, char **toks, void *cb_data)
 {
     unsigned int record_id;
@@ -1672,7 +1681,7 @@ dellog_cmd(char *cmd, char **toks, void *cb_data)
     if (get_uint(toks, &record_id, "record id"))
 	return 0;
 
-    rv = ipmi_bmc_del_log_by_recid(bmc, record_id, NULL, NULL);
+    rv = ipmi_bmc_del_log_by_recid(bmc, record_id, dellog_cb, NULL);
     if (rv)
 	wprintw(cmd_win, "dellog_cmd: error deleting log: %x\n", rv);
 
