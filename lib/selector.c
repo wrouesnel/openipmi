@@ -113,6 +113,21 @@ heap_cmp_key(heap_val_t *v1, heap_val_t *v2)
 
 #include "heap.h"
 
+/* Used to build a list of threads that may need to be woken if a
+   timer on the top of the heap changes, or an FD is added/removed.
+   See wake_sel_thread() for more info. */
+typedef struct sel_wait_list_s
+{
+    /* The thread to wake up. */
+    long            thread_id;
+
+    /* This is the memory used to hold the timeout for select
+       operation. */
+    volatile struct timeval *timeout;
+
+    struct sel_wait_list_s *next, *prev;
+} sel_wait_list_t;
+
 struct selector_s
 {
     /* This is an array of all the file descriptors possible.  This is
@@ -138,38 +153,58 @@ struct selector_s
 
     /* The timeout */
     sel_send_sig_cb send_sig;
-    long            thread_id;
     void            *send_sig_cb_data;
 
-    /* This is the memory used to hold the timeout for select
-       operation. */
-    volatile struct timeval timeout;
-
-    /* If we need to be woken up for an FD or timer head change, this
-       will be true. */
-    volatile int need_wake_on_change;
+    /* This is a list of items waiting to be woken up because they are
+       sitting in a select.  See wake_sel_thread() for more info. */
+    sel_wait_list_t wait_list;
 };
 
 /* This function will wake the SEL thread.  It must be called with the
    timer lock held, because it messes with timeout.
 
    The operation is is subtle, but it does work.  The timeout in the
-   selector is the data passed in as the timeout to select.  When we
-   want to wake the select, we set the timeout to zero first.  That
-   way, if the select has calculated the timeout but has not yet
-   called select, then this will set it to zero (causing it to wait
-   zero time).  If select has already been called, then the signal
-   send should wake it up.  We only need to do this after we have
-   calculated the timeout, but before we have called select, thus the
-   need_wake_on_change is only set in that range. */
+   selector is the data passed in (must be the actual data) as the
+   timeout to select.  When we want to wake the select, we set the
+   timeout to zero first.  That way, if the select has calculated the
+   timeout but has not yet called select, then this will set it to
+   zero (causing it to wait zero time).  If select has already been
+   called, then the signal send should wake it up.  We only need to do
+   this after we have calculated the timeout, but before we have
+   called select, thus only things in the wait list matter. */
 static void
 wake_sel_thread(selector_t *sel)
 {
-    if (sel->need_wake_on_change && sel->send_sig) {
-	sel->timeout.tv_sec = 0;
-	sel->timeout.tv_usec = 0;
-	sel->send_sig(sel->thread_id, sel->send_sig_cb_data);
+    sel_wait_list_t *item;
+
+    item = sel->wait_list.next;
+    while (item != &sel->wait_list) {
+	item->timeout->tv_sec = 0;
+	item->timeout->tv_usec = 0;
+	sel->send_sig(item->thread_id, sel->send_sig_cb_data);
+	item = item->next;
     }
+}
+
+/* Wait list management.  These *must* be called with the timer list
+   locked, and the values in the item *must not* change while in the
+   list. */
+static void
+add_sel_wait_list(selector_t *sel, sel_wait_list_t *item,
+		  long thread_id, volatile struct timeval *timeout)
+{
+    item->thread_id = thread_id;
+    item->timeout = timeout;
+    item->next = sel->wait_list.next;
+    item->prev = &sel->wait_list;
+    sel->wait_list.next->prev = item;
+    sel->wait_list.next = item;
+}
+static void
+remove_sel_wait_list(selector_t *sel, sel_wait_list_t *item)
+{
+    item->next->prev = item->prev;
+    item->prev->next = item->next;
 }
 
 static void
@@ -401,24 +436,23 @@ sel_stop_timer(sel_timer_t *timer)
 }
 
 /* 
- * Process timers on selector.  The timeout is always set, to a very long
- * value if no timers are waiting.
+ * Process timers on selector.  The timeout is always set, to a very
+ * long value if no timers are waiting.  Note that this *must* be
+ * called with sel->timer_lock held.  Note that if this processes
+ * any timers, the timeout will be set to { 0,0 }.
  */
 static void
-process_timers(selector_t	*sel,
-	       struct timeval   *timeout,
-	       int		*num)
+process_timers(selector_t	       *sel,
+	       volatile struct timeval *timeout)
 {
     struct timeval now;
-    sel_timer_t *timer;
+    sel_timer_t    *timer;
+    int            called = 0;
     
-    ipmi_lock(sel->timer_lock);
-    
-    *num = 0;
     timer = theap_get_top(&sel->timer_heap);
     gettimeofday(&now, NULL);
     while (timer && cmp_timeval(&now, &timer->val.timeout) >= 0) {
-	(*num)++;
+	called = 1;
 	theap_remove(&(sel->timer_heap), timer);
 	timer->val.in_heap = 0;
 	ipmi_unlock(sel->timer_lock);
@@ -429,7 +463,11 @@ process_timers(selector_t	*sel,
 	timer = theap_get_top(&sel->timer_heap);
     }
 
-    if (timer) {
+    if (called) {
+	/* If called, set the timeout to zero. */
+	timeout->tv_sec = 0;
+	timeout->tv_usec = 0;
+    } else if (timer) {
 	gettimeofday(&now, NULL);   
 	diff_timeval((struct timeval *) timeout,
 		     (struct timeval *) &timer->val.timeout,
@@ -439,9 +477,6 @@ process_timers(selector_t	*sel,
 	timeout->tv_sec = 100000;
 	timeout->tv_usec = 0;
     }
-    
-    sel->need_wake_on_change = 1;
-    ipmi_unlock(sel->timer_lock); 
 }
 
 /*
@@ -450,11 +485,11 @@ process_timers(selector_t	*sel,
  * 	  <  0  when error
  */
 static int
-process_fds(selector_t	    *sel,
-	    sel_send_sig_cb send_sig,
-	    long            thread_id,
-	    void            *cb_data,
-	    struct timeval  *timeout)
+process_fds(selector_t	            *sel,
+	    sel_send_sig_cb         send_sig,
+	    long                    thread_id,
+	    void                    *cb_data,
+	    volatile struct timeval *timeout)
 {
     fd_set      tmp_read_set;
     fd_set      tmp_write_set;
@@ -472,8 +507,7 @@ process_fds(selector_t	    *sel,
 		 &tmp_read_set,
 		 &tmp_write_set,
 		 &tmp_except_set,
-		 timeout);
-    sel->need_wake_on_change = 0;
+		 (struct timeval *) timeout);
     if (err <= 0)
 	goto out;
     
@@ -524,24 +558,25 @@ sel_select(selector_t      *sel,
 	   void            *cb_data,
 	   struct timeval  *timeout)
 {
-    int            i;
-    struct timeval *to_time, loc_timeout;
+    int             err;
+    struct timeval  loc_timeout;
+    sel_wait_list_t wait_entry;
 
-    process_timers(sel, (struct timeval *)(&loc_timeout), &i);
-    if (i) { /* some timer handlers are called */
-	return i; 
-    }    
+    ipmi_lock(sel->timer_lock);
+    process_timers(sel, (struct timeval *)(&loc_timeout));
     if (timeout) { 
-	if (cmp_timeval((struct timeval *)(&loc_timeout), 
-			timeout) >= 0)
-	    to_time = timeout;
-	else
-	    to_time = (struct timeval *)&loc_timeout; 
-    } else {
-	to_time = (struct timeval *)&loc_timeout;
+	if (cmp_timeval((struct timeval *)(&loc_timeout), timeout) >= 0)
+	    memcpy(&loc_timeout, timeout, sizeof(loc_timeout));
     }
+    add_sel_wait_list(sel, &wait_entry, thread_id, &loc_timeout);
+    ipmi_unlock(sel->timer_lock); 
 
-    return process_fds(sel, send_sig, thread_id, cb_data, to_time);
+    err = process_fds(sel, send_sig, thread_id, cb_data, &loc_timeout);
+
+    ipmi_lock(sel->timer_lock);
+    remove_sel_wait_list(sel, &wait_entry);
+    ipmi_unlock(sel->timer_lock); 
+    return err;
 }
 
 /* The main loop for the program.  This will select on the various
@@ -553,14 +588,22 @@ sel_select_loop(selector_t      *sel,
 		long            thread_id,
 		void            *cb_data)
 {
-    int i;
-    int err;
+    int             err;
+    sel_wait_list_t wait_entry;
+    struct timeval  loc_timeout;
 
     for (;;) {
-	process_timers(sel, (struct timeval *)(&sel->timeout), &i);    
+	ipmi_lock(sel->timer_lock);
+    	process_timers(sel, &loc_timeout);
+	add_sel_wait_list(sel, &wait_entry, thread_id, &loc_timeout);
+	ipmi_unlock(sel->timer_lock); 
 	
-	err = process_fds(sel, send_sig, thread_id, cb_data, 
-			  (struct timeval *)(&sel->timeout));
+	err = process_fds(sel, send_sig, thread_id, cb_data, &loc_timeout);
+
+	ipmi_lock(sel->timer_lock);
+	remove_sel_wait_list(sel, &wait_entry);
+	ipmi_unlock(sel->timer_lock); 
+
     	if ((err < 0) && (errno != EINTR)) {
 	    err = errno;
 	    /* An error occurred. */
@@ -584,7 +627,9 @@ sel_alloc_selector(selector_t **new_selector)
 	return ENOMEM;
     memset(sel, 0, sizeof(*sel));
 
-    sel->need_wake_on_change = 0;
+    /* The list is initially empty. */
+    sel->wait_list.next = &sel->wait_list;
+    sel->wait_list.prev = &sel->wait_list;
 
     rv = ipmi_create_global_lock(&(sel->timer_lock));
     if (rv)
