@@ -18,10 +18,12 @@
 	* lib/oem_motorola_mxp.c: Renumbered the sensors so that five
 	power supplies and fans could fit.  Also split out the fan info
 	from the power supply info to allow different counts of fans and
-	power supplies.
+	power supplies.  Fixed the fan IPMB for half-pint to be 0x30-0x34.
 
 	* lib/entity.c, include/OpenIPMI/ipmiif.h: Added the ability to
 	get the channel and address for a device-relative entity.
+
+	* configure.in: Move to version 1.2.13.
 
 2004-02-17 Corey Minyard <cminyard@mvista.com> 
 

@@ -1885,7 +1885,6 @@ sel_add_event_cb(ipmi_mc_t *mc, void *cb_data)
     ipmi_event_t              *event = &info->event;
     unsigned char             data[16];
     ipmi_msg_t                msg;
-    int                       rv;
 
     msg.netfn = IPMI_STORAGE_NETFN;
     msg.cmd = IPMI_ADD_SEL_ENTRY_CMD;
@@ -1898,8 +1897,6 @@ sel_add_event_cb(ipmi_mc_t *mc, void *cb_data)
 
     info->rv = ipmi_mc_send_command(mc, sel->lun, &msg, sel_add_event_done,
 				    info);
- out:
-    return;
 }
 
 static void

@@ -380,8 +380,10 @@ struct mxp_info_s {
     /* Number of power supplies that can be installed */
     unsigned int num_power_supplies;
 
-    /* Number of fans that can be installed */
+    /* Number of fans that can be installed, and the starting IPMB
+       address */
     unsigned int num_fans;
+    unsigned char start_fan_ipmb;
 
     /* Chassis info */
     ipmi_control_t *chassis_type_control;
@@ -5155,7 +5157,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
     }
 
     for (i=0; i<info->num_fans; i++) {
-	ipmb_addr = 0x54 + (i*2);
+	ipmb_addr = info->start_fan_ipmb + (i*2);
 	info->fan[i].ipmb_addr = ipmb_addr;
 
 	name = fan_entity_str[i];
@@ -8318,6 +8320,7 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
     info->num_boards = MXP_BOARDS;
     info->num_power_supplies = 3;
     info->num_fans = 3;
+    info->start_fan_ipmb = 0x54;
     switch (info->chassis_type) {
     case 1: /* 400W 2.16 */
 	info->chassis_config = MXP_CHASSIS_CONFIG_6U;
@@ -8337,6 +8340,7 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 	info->chassis_config = MXP_CHASSIS_CONFIG_HALFPINT;
 	info->num_boards = 8;
 	info->num_power_supplies = 5;
+	info->start_fan_ipmb = 0x30;
 	break;
 
     default:
