@@ -49,7 +49,7 @@ static int search_key(void *item, void *cb_data)
 static struct key_entry *
 find_key(ilist_iter_t *iter, keypad_t keypad, int key)
 {
-    int              hash = key % NUM_KEY_ENTRIES;
+    int              hash = ((unsigned int) key) % NUM_KEY_ENTRIES;
     struct key_entry *entry;
 
     ilist_init_iter(iter, keypad->keys[hash]);
@@ -74,7 +74,7 @@ keypad_handle_key(keypad_t keypad, int key, void *cb_data)
 int
 keypad_bind_key(keypad_t keypad, int key, key_handler_t handler)
 {
-    int              hash = key % NUM_KEY_ENTRIES;
+    int              hash = ((unsigned int) key) % NUM_KEY_ENTRIES;
     ilist_iter_t     iter;
     struct key_entry *entry;
 

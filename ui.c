@@ -39,6 +39,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <termios.h>
+#include <fcntl.h>
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -254,6 +255,8 @@ cmd_win_refresh(void)
 {
     if (full_screen)
 	wrefresh(cmd_win);
+    else
+	fflush(stdout);
 }
 
 static int
@@ -485,11 +488,10 @@ user_input_ready(int fd, void *data)
 	int count;
 
 	count = read(0, &rc, 1);
-	if (count == 0)
-	    c = -1;
-	else
-	    c = rc;
-	handle_user_char(c);
+	while (count > 0) {
+	    handle_user_char(rc);
+	    count = read(0, &rc, 1);
+	}
     }
 }
 
@@ -518,6 +520,7 @@ normal_char(int key, void *cb_data)
     out[0] = key;
     out[1] = '\0';
     cmd_win_out(out);
+    cmd_win_refresh();
     return 0;
 }
 
@@ -537,6 +540,7 @@ end_of_line(int key, void *cb_data)
     else
 	cmd_win_out("> ");
     line_buffer_pos = 0;
+    cmd_win_refresh();
     return 0;
 }
 
@@ -548,6 +552,7 @@ backspace(int key, void *cb_data)
 
     line_buffer_pos--;
     cmd_win_out("\b \b");
+    cmd_win_refresh();
     return 0;
 }
 
@@ -2337,6 +2342,8 @@ init_keypad(void)
 	err = keypad_bind_key(keymap, 4, key_leave);
     if (!err)
 	err = keypad_bind_key(keymap, 10, end_of_line);
+    if (!err)
+	err = keypad_bind_key(keymap, 13, end_of_line);
     if (full_screen) {
 	if (!err)
 	    err = keypad_bind_key(keymap, KEY_BACKSPACE, backspace);
@@ -2754,10 +2761,14 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 	}
     } else {
 	struct termios new_termios;
+
 	tcgetattr(0, &old_termios);
 	new_termios = old_termios;
-	cfmakeraw(&new_termios);
+	new_termios.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
+			         |INLCR|IGNCR|ICRNL|IXON);
+	new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
 	tcsetattr(0, 0,&new_termios);
+	fcntl(0, F_SETFL, O_NONBLOCK);
     }
 
     help_cmd(NULL, NULL, NULL);
