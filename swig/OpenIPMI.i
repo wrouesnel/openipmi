@@ -603,14 +603,16 @@ entity_fru_update_handler(enum ipmi_update_e op,
     swig_cb_val cb = cb_data;
     swig_ref    entity_ref;
     swig_ref    fru_ref;
+    ipmi_fru_t  *fru;
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    fru_ref = swig_make_ref(ipmi_entity_get_fru(entity),
-			    "OpenIPMI::ipmi_fru_t");
+    fru = ipmi_entity_get_fru(entity);
+    fru_ref = swig_make_ref(fru, "OpenIPMI::ipmi_fru_t");
     swig_call_cb(cb, "entity_fru_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &fru_ref);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
-    swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
+    if (fru)
+	swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
 }
 
 static int
@@ -5673,7 +5675,7 @@ char *color_string(int color);
 	unsigned int              data_len;
 	int                       rv;
 	char                      dummy[1];
-	char                      *str, *s;
+	char                      *str = NULL, *s;
 	int                       len;
 	int                       i;
 
@@ -5705,7 +5707,7 @@ char *color_string(int color);
 	    s = str;
 	    s += sprintf(s, "%s binary", name);
 	    for (i=0; i<data_len; i++)
-		s += sprintf(s, " 0x%2.2x", data[i]);
+		s += sprintf(s, " 0x%2.2x", (unsigned char) data[i]);
 	    break;
 
 	case IPMI_FRU_DATA_UNICODE:
@@ -5715,7 +5717,7 @@ char *color_string(int color);
 	    s = str;
 	    s += sprintf(s, "%s unicode", name);
 	    for (i=0; i<data_len; i++)
-		s += sprintf(s, " 0x%2.2x", data[i]);
+		s += sprintf(s, " 0x%2.2x", (unsigned char) data[i]);
 	    break;
 
 	case IPMI_FRU_DATA_ASCII:

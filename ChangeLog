@@ -18,6 +18,11 @@
 	* lib/mc.c, lib/entity.c: Fixed deadlocks.
 
 	* swig/Makefile.am, swig/OpenIPMI.i: Minor build cleanups.
+
+	* swig/OpenIPMI.i: Fixed some problems with handling FRU
+	data.
+
+	* swig/perl/sample.c: Fixed some problems with events.
 	
 	* configure.in: Move to version 1.4.4
 

@@ -111,6 +111,7 @@ use OpenIPMI;
 	my $value_set = shift;
 	my $value = shift;
 	my $event = shift;
+	my $entity = $sensor->get_entity();
 
 	print "Sensor ", $sensor->get_name(), " got event $event_spec\n";
 	if ($raw_set) {
@@ -131,6 +132,7 @@ use OpenIPMI;
 	my $severity = shift;
 	my $old_severity = shift;
 	my $event = shift;
+	my $entity = $sensor->get_entity();
 
 	print "Sensor ", $sensor->get_name(), " got event $event_spec\n";
 	print "  severity = $severity, was = $old_severity\n";
