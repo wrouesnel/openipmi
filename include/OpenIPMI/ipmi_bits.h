@@ -47,6 +47,9 @@ enum ipmi_str_type_e {
 /*
  * Sensor bits
  */
+
+/* Note that a sensor with a settable hysteresis value can also be
+   read, but a fixed value cannot be read (it's in the SDR). */
 #define IPMI_HYSTERESIS_SUPPORT_NONE		0
 #define IPMI_HYSTERESIS_SUPPORT_READABLE	1
 #define IPMI_HYSTERESIS_SUPPORT_SETTABLE	2
