@@ -125,13 +125,13 @@ struct ipmi_sensor_s
     unsigned char linearization;
 
     struct {
-	unsigned int m : 10;
+	int m : 10;
 	unsigned int tolerance : 6;
-	unsigned int b : 10;
-	unsigned int r_exp : 4;
+	int b : 10;
+	int r_exp : 4;
 	unsigned int accuracy_exp : 2;
-	unsigned int accuracy : 10;
-	unsigned int b_exp : 4;
+	int accuracy : 10;
+	int b_exp : 4;
     } conv[256];
 
     unsigned int  normal_min_specified : 1;

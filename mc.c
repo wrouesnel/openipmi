@@ -1263,14 +1263,40 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     return rv;
 }
 
+static void bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id);
+
+static void
+sels_fetched_start_timer(ipmi_sel_info_t *sel,
+			 int             err,
+			 int             changed,
+			 unsigned int    count,
+			 void            *cb_data)
+{
+    bmc_reread_info_t *info = cb_data;
+    ipmi_mc_t         *bmc = info->bmc;
+    struct timeval    timeout;
+
+    if (info->cancelled) {
+	free(info);
+	return;
+    }
+
+    timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
+    timeout.tv_usec = 0;
+    bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
+					bmc->bmc->sel_timer,
+					&timeout,
+					bmc_reread_sel,
+					info);
+}
+
 static void
 bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 {
-    struct timeval    timeout;
     bmc_reread_info_t *info = cb_data;
     ipmi_mc_t         *bmc = info->bmc;
+    int               rv = EINVAL;
 
-    ipmi_lock(bmc->bmc->mc_list_lock);
     if (info->cancelled) {
 	free(info);
 	return;
@@ -1278,16 +1304,11 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 
     /* Only fetch the SEL if we know the connection is up. */
     if (bmc->bmc->connection_up)
-	ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
+	rv = ipmi_sel_get(bmc->bmc->sel, sels_fetched_start_timer, info);
 
-    timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
-    timeout.tv_usec = 0;
-    bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
-					id,
-					&timeout,
-					bmc_reread_sel,
-					info);
-    ipmi_unlock(bmc->bmc->mc_list_lock);
+    /* If we couldn't run the SEL get, then restart the timer now. */
+    if (rv)
+	sels_fetched_start_timer(bmc->bmc->sel, 0, 0, 0, info);
 }
 
 static void
