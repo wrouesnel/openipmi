@@ -35,20 +35,18 @@
 #include <string.h>
 #include <errno.h>
 
-#include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_sdr.h>
-#include <OpenIPMI/ipmi_sel.h>
-#include <OpenIPMI/ipmi_entity.h>
-#include <OpenIPMI/ipmi_sensor.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ipmi_oem.h>
-#include <OpenIPMI/locked_list.h>
-#include <OpenIPMI/opq.h>
+
+#include <OpenIPMI/internal/locked_list.h>
+#include <OpenIPMI/internal/opq.h>
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
+#include <OpenIPMI/internal/ipmi_sel.h>
+#include <OpenIPMI/internal/ipmi_oem.h>
+#include <OpenIPMI/internal/ipmi_int.h>
 
 /* Timer structure for rereading the SEL. */
 typedef struct mc_reread_sel_s

@@ -35,16 +35,17 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
-#include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/selector.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 
-/* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_debug.h>
+
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 extern selector_t *debug_sel;
 

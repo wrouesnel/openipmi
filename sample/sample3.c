@@ -45,7 +45,6 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_posix.h>
-#include <OpenIPMI/ipmi_event.h>
 
 /* This sample application demostrates some general handling of sensors,
    like reading values, setting up events, and things of that nature.

@@ -36,19 +36,21 @@
 #include <errno.h>
 #include <math.h>
 #include <stdio.h> /* For sprintf */
+
 #include <OpenIPMI/ipmi_conn.h>
-#include <OpenIPMI/ipmi_oem.h>
-#include <OpenIPMI/ipmi_mc.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_sensor.h>
-#include <OpenIPMI/ipmi_control.h>
-#include <OpenIPMI/ipmi_entity.h>
 #include <OpenIPMI/ipmi_addr.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_picmg.h>
+
+#include <OpenIPMI/internal/ipmi_event.h>
+#include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/ipmi_oem.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_sensor.h>
+#include <OpenIPMI/internal/ipmi_control.h>
+#include <OpenIPMI/internal/ipmi_entity.h>
 
 /* Uncomment this if you *really* want direct power control.  Note
    that I think this is a bad idea, you should *really* use the

@@ -36,12 +36,13 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/opq.h>
-#include <OpenIPMI/ilist.h>
+
+#include <OpenIPMI/internal/opq.h>
+#include <OpenIPMI/internal/ilist.h>
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
+#include <OpenIPMI/internal/ipmi_int.h>
 
 /* Max bytes to try to get at a time. */
 #define MAX_SDR_FETCH 20

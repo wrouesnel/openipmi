@@ -38,7 +38,8 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/lanserv.h>
-#include <OpenIPMI/md5.h>
+
+#include <OpenIPMI/internal/md5.h>
 
 
 #if 0

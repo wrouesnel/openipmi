@@ -35,11 +35,12 @@
 #define _IPMI_DOMAIN_H
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/ipmi_entity.h>
-#include <OpenIPMI/ipmi_sensor.h>
-#include <OpenIPMI/ipmi_control.h>
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_addr.h>
+
+#include <OpenIPMI/internal/ipmi_entity.h>
+#include <OpenIPMI/internal/ipmi_sensor.h>
+#include <OpenIPMI/internal/ipmi_control.h>
 
 /* Handle validation and usecounts on domains. */
 int _ipmi_domain_get(ipmi_domain_t *domain);
@@ -122,12 +123,6 @@ void ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
 
 /* Call any OEM handlers for the given MC. */
 int _ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);
-
-/* Set a handler that will be called when bus is scanned.  This is 
-   primarily here for OpenHPI to meet their requirements */
-int ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
-				     ipmi_domain_cb handler,
-				     void           *cb_data);
 
 /* Scan a system interface address for an MC. */
 void ipmi_start_si_scan(ipmi_domain_t *domain,

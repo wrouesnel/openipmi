@@ -33,35 +33,19 @@
 
 #ifndef _IPMI_FRU_H
 #define _IPMI_FRU_H
-#include <OpenIPMI/ipmiif.h>
+
 #include <OpenIPMI/ipmi_types.h>
 
-typedef void (*ipmi_fru_fetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
-int ipmi_fru_alloc(ipmi_domain_t       *domain,
-		   unsigned char       is_logical,
-		   unsigned char       device_address,
-		   unsigned char       device_id,
-		   unsigned char       lun,
-		   unsigned char       private_bus,
-		   unsigned char       channel,
-		   ipmi_fru_fetched_cb fetched_handler,
-		   void                *fetched_cb_data,
-		   ipmi_fru_t          **new_fru);
+/* The following functions get boatloads of information from the FRU.
+   These all will return ENOSYS if the information is not available.
+   All these function return error, not lengths.
 
-/* Destroy an FRU.  Note that if the FRU is currently fetching SDRs,
-   the destroy cannot complete immediatly, it will be marked for
-   destruction later.  You can supply a callback that, if not NULL,
-   will be called when the sdr is destroyed. */
-typedef void (*ipmi_fru_destroyed_cb)(ipmi_fru_t *fru, void *cb_data);
-int ipmi_fru_destroy(ipmi_fru_t            *fru,
-		     ipmi_fru_destroyed_cb handler,
-		     void                  *cb_data);
-
-/* The the domain the FRU uses.  For internal use only. */
-ipmi_domain_t *ipmi_fru_get_domain(ipmi_fru_t *fru);
-
-/* NOTE! - do not use the functions from portable programs, use the
-   entity functions to fetch these. */
+   The string return functions allow you to fetch the type and length.
+   The length returns for ASCII strings does include the nil
+   character, and it will be put on to the end of the get string.
+   Also, when fetching the string, you must set the max_len variable
+   to the maximum length of the returned data.  The actual length
+   copied into the output string is returned in max_len. */
 int ipmi_fru_get_internal_use_version(ipmi_fru_t    *fru,
 				      unsigned char *version);
 int ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
@@ -243,7 +227,34 @@ int ipmi_fru_get_multi_record_data_offset(ipmi_fru_t    *fru,
 					  unsigned int  *offset);
 
 
+/* More internal stuff.  The average user will not need to be able
+   to use the following functions, but they are here just in case. */
+
 /* FIXME - for OEM code (if ever necessary) add a way to create an
    empty FRU, fill it with data, and put it into an entity. */
+
+/* The the domain the FRU uses.  For internal use only. */
+ipmi_domain_t *ipmi_fru_get_domain(ipmi_fru_t *fru);
+
+typedef void (*ipmi_fru_fetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
+int ipmi_fru_alloc(ipmi_domain_t       *domain,
+		   unsigned char       is_logical,
+		   unsigned char       device_address,
+		   unsigned char       device_id,
+		   unsigned char       lun,
+		   unsigned char       private_bus,
+		   unsigned char       channel,
+		   ipmi_fru_fetched_cb fetched_handler,
+		   void                *fetched_cb_data,
+		   ipmi_fru_t          **new_fru);
+
+/* Destroy an FRU.  Note that if the FRU is currently fetching SDRs,
+   the destroy cannot complete immediatly, it will be marked for
+   destruction later.  You can supply a callback that, if not NULL,
+   will be called when the sdr is destroyed. */
+typedef void (*ipmi_fru_destroyed_cb)(ipmi_fru_t *fru, void *cb_data);
+int ipmi_fru_destroy(ipmi_fru_t            *fru,
+		     ipmi_fru_destroyed_cb handler,
+		     void                  *cb_data);
 
 #endif /* _IPMI_FRU_H */

@@ -39,9 +39,10 @@
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_bits.h>
-#include <OpenIPMI/ipmi_malloc.h>
-#include <OpenIPMI/ipmi_locks.h>
 #include <OpenIPMI/ipmi_log.h>
+
+#include <OpenIPMI/internal/ipmi_malloc.h>
+#include <OpenIPMI/internal/ipmi_locks.h>
 
 /* Get the "global" OS handlers used for non-domain operations. */
 os_handler_t *ipmi_get_global_os_handler(void);

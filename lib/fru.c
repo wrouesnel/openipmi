@@ -44,10 +44,11 @@
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_fru.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_domain.h>
+
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_int.h>
 
 #define IPMI_LANG_CODE_ENGLISH	25
 

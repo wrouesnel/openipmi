@@ -34,9 +34,10 @@
 #include <errno.h>
 
 #include <OpenIPMI/ipmi_conn.h>
-#include <OpenIPMI/ipmi_oem.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ilist.h>
+
+#include <OpenIPMI/internal/ilist.h>
+#include <OpenIPMI/internal/ipmi_oem.h>
+#include <OpenIPMI/internal/ipmi_int.h>
 
 /***********************************************************************
  *

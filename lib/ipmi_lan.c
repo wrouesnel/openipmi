@@ -45,12 +45,13 @@
 #include <netdb.h>
 
 #include <OpenIPMI/ipmi_conn.h>
-#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_lan.h>
+
+#include <OpenIPMI/internal/ipmi_event.h>
+#include <OpenIPMI/internal/ipmi_int.h>
 
 #if defined(DEBUG_MSG) || defined(DEBUG_RAWMSG)
 static void

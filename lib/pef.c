@@ -46,13 +46,13 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ilist.h>
-#include <OpenIPMI/opq.h>
-#include <OpenIPMI/locked_list.h>
+
+#include <OpenIPMI/internal/opq.h>
+#include <OpenIPMI/internal/locked_list.h>
+#include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
 
 #define IPMI_PEF_ATTR_NAME "ipmi_pef"
 

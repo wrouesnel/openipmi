@@ -25,7 +25,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
-#include <OpenIPMI/md2.h>
+#include <OpenIPMI/internal/md2.h>
 
 typedef uint32_t u32;
 typedef uint8_t  byte;
@@ -292,7 +292,7 @@ md2_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD2 ($Revision: 1.1 $)";
+const char * const gnupgext_version = "MD2 ($Revision: 1.2 $)";
 
 static struct {
     int class;

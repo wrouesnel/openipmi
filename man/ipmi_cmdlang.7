@@ -413,6 +413,16 @@ Scan done: <domain>
 .fi
 .RE
 
+.B rescan_sels <domain> 
+- Rescan all the SELs in the domain.
+.TP
+Response:
+.RS
+.nf
+SEL Rescan done: <domain>
+.fi
+.RE
+
 .B presence <domain>
 - Audit the presence of all enities in the domain.  Note that this just
 starts the process; it will run in the background.
@@ -435,8 +445,9 @@ Domain closed: <domain>
 .RE
 
 .B sel_rescan_time <domain> <time in seconds>
-- Set the time between SEL rescans for all SELs in the system.  zero
-disables scans.
+- Set the time between SEL rescans for all newly created SELs.  It
+does not affect old SELs that are already created.  Zero disables
+scans.
 .TP
 Response:
 .RS
@@ -906,14 +917,43 @@ MC
 .fi
 .RE
 
+.B rescan_sel <mc> 
+- Rescan the SEL in the MC.
+.TP
+Response:
+.RS
+.nf
+SEL Rescan done: <mc>
+.fi
+.RE
+
+.B sel_rescan_time <mc> <time in seconds>
+- Set the time between SEL rescans for the SEL on this MC.  Zero
+disables scans.
+.TP
+Response:
+.RS
+.nf
+MC SEL rescan time set: <domain>
+.fi
+.RE
+
 .B sel_info <mc>
 - Dump information about the MC's SEL.
 .TP
 Response:
 .RS
 .nf
+SEL Version: <integer>.<integer>
 SEL Count: <integer>
 SEL Slots Used: <integer>
+SEL Free Bytes: <integer>
+SEL Last Addition Timestamp: <integer>
+SEL overflow: <bool>
+SEL Supports Delete: <bool>
+SEL Supports Partial Add: <bool>
+SEL Supports Reserve: <bool>
+SEL Supports Get SEL Allocation: <bool>
 .fi
 .RE
 
@@ -923,13 +963,31 @@ info command.
 
 .B list <domain>
 - The list command is unique in this object, so it is specified
-explicitly here.  List the local copy of the system event log
+explicitly here.  List the local copy of the system event log for
+the entire domain.
 .TP
 Response:
 .RS
 .nf
 Domain
   Name: <domain>
+  Entries: <integer>
+  Slots in use: <integer>
+  Event
+    **EVENT INFO**
+   .
+   .
+.fi
+.RE
+
+.B mc_list <domain>
+- List the local copy of the system event log on the given MC.
+.TP
+Response:
+.RS
+.nf
+MC
+  Name: <mc>
   Entries: <integer>
   Slots in use: <integer>
   Event
@@ -1657,6 +1715,7 @@ will have its own output info.  These are:
 .RS
 .nf
   Active: <bool>
+  SEL Rescan Time: <integer>
   provides_device_sdrs: <bool>
   device_available: <bool>
   chassis_support: <bool>

@@ -39,10 +39,11 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
+#include <OpenIPMI/ipmi_mc.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_malloc.h>
-#include <OpenIPMI/locked_list.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
+#include <OpenIPMI/internal/locked_list.h>
 
 static locked_list_t *lancs;
 

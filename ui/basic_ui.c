@@ -39,8 +39,10 @@
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_ui.h>
 #include <OpenIPMI/ipmi_auth.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_debug.h>
+
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 #ifdef HAVE_UCDSNMP
 # ifdef HAVE_NETSNMP

@@ -38,11 +38,11 @@
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
+#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_sdr.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_sdr.h>
-#include <OpenIPMI/ipmi_malloc.h>
-#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 static void
 mc_list_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
@@ -83,6 +83,8 @@ mc_dump(ipmi_mc_t *mc, ipmi_cmd_info_t *cmd_info)
     char            str[100];
 
     ipmi_cmdlang_out_bool(cmd_info, "Active", ipmi_mc_is_active(mc));
+    ipmi_cmdlang_out_int(cmd_info, "SEL Rescan Time",
+			 ipmi_mc_get_sel_rescan_time(mc));
     ipmi_cmdlang_out_bool(cmd_info, "provides_device_sdrs",
 			  ipmi_mc_provides_device_sdrs(mc));
     ipmi_cmdlang_out_bool(cmd_info, "device_available",
@@ -290,10 +292,29 @@ static void
 mc_sel_info(ipmi_mc_t *mc, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
+    char            str[20];
     
+    snprintf(str, sizeof(str), "%d.%d", 
+	     ipmi_mc_sel_get_major_version(mc),
+	     ipmi_mc_sel_get_num_entries(mc));
+    ipmi_cmdlang_out(cmd_info, "SEL Version", str);
     ipmi_cmdlang_out_int(cmd_info, "SEL Count", ipmi_mc_sel_count(mc));
     ipmi_cmdlang_out_int(cmd_info, "SEL Slots Used",
 			 ipmi_mc_sel_entries_used(mc));
+    ipmi_cmdlang_out_int(cmd_info, "SEL Free Bytes",
+			 ipmi_mc_sel_get_free_bytes(mc));
+    ipmi_cmdlang_out_int(cmd_info, "SEL Last Addition Timestamp",
+			 ipmi_mc_sel_get_last_addition_timestamp(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "SEL overflow",
+			  ipmi_mc_sel_get_overflow(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "SEL Supports Delete",
+			  ipmi_mc_sel_get_supports_delete_sel(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "SEL Supports Partial Add",
+			  ipmi_mc_sel_get_supports_partial_add_sel(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "SEL Supports Reserve",
+			  ipmi_mc_sel_get_supports_reserve_sel(mc));
+    ipmi_cmdlang_out_bool(cmd_info, "SEL Supports Get SEL Allocation",
+			  ipmi_mc_sel_get_supports_get_sel_allocation(mc));
 }
 
 static void
@@ -340,6 +361,96 @@ mc_get_sel_time(ipmi_mc_t *mc, void *cb_data)
 	cmdlang->location = "cmd_mc.c(mc_get_sel_time)";
     }
 }
+
+static void
+mc_rescan_sel_done(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	if (! cmdlang->err) {
+	    cmdlang->err = err;
+	    cmdlang->errstr = "Error scanning SELs";
+	    ipmi_mc_get_name(mc, cmdlang->objstr,
+				 cmdlang->objstr_len);
+	    cmdlang->location = "cmd_mc.c(sel_rescan_done)";
+	}
+	goto out;
+    }
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "SEL Rescan done", mc_name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+mc_rescan_sels(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_reread_sel(mc, mc_rescan_sel_done, cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->errstr = "Error requesting SEL rescan";
+	cmdlang->err = rv;
+	goto out_err;
+    }
+    
+ out_err:
+    if (cmdlang->err) {
+	ipmi_mc_get_name(mc, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_mc.c(mc_rescan_sels)";
+    }
+}
+
+static void
+mc_sel_rescan_time(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             time;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    if ((argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &time, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "time invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_mc_set_sel_rescan_time(mc, time);
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "MC SEL rescan time set", mc_name);
+
+ out_err:
+    if (cmdlang->err) {
+	ipmi_mc_get_name(mc, cmdlang->objstr,
+			 cmdlang->objstr_len);
+	cmdlang->location = "cmd_mc.c(mc_sel_rescan_time)";
+    }
+}
+
 
 static void
 mc_msg_handler(ipmi_mc_t *mc, ipmi_msg_t *msg, void *cb_data)
@@ -707,6 +818,13 @@ static ipmi_cmdlang_init_t cmds_mc[] =
     { "get_sel_time", &mc_cmds,
       "<mc> - Returns SEL time on the MC",
       ipmi_cmdlang_mc_handler, mc_get_sel_time, NULL },
+    { "sel_rescan_time", &mc_cmds,
+      "<mc> <time in seconds> - Set the time between SEL rescans"
+      " for the MC.  Zero disables scans.",
+      ipmi_cmdlang_mc_handler, mc_sel_rescan_time, NULL },
+    { "rescan_sel", &mc_cmds,
+      "<mc> - Rescan the SEL in the MC",
+      ipmi_cmdlang_mc_handler, mc_rescan_sels, NULL },
     { "msg", &mc_cmds,
       "<mc> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
       " to the management controller and display the response.",

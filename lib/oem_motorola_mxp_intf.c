@@ -45,11 +45,12 @@
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/mxp.h>
+
+#include <OpenIPMI/internal/ipmi_int.h>
 
 #define MXP_NETFN_MXP1		0x30
 #define MXP_OEM_SET_QUEUE_LOCK_CMD		0x3e

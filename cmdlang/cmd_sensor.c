@@ -40,7 +40,7 @@
 #include <OpenIPMI/ipmi_cmdlang.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 static void
 sensor_list_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor,

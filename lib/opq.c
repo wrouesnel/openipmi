@@ -33,10 +33,12 @@
 
 #include <stdlib.h>
 #include <string.h>
+
 #include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ilist.h>
-#include <OpenIPMI/opq.h>
+
+#include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/ilist.h>
+#include <OpenIPMI/internal/opq.h>
 
 typedef struct opq_elem_s
 {

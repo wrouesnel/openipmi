@@ -34,6 +34,8 @@
 #ifndef _IPMI_DEBUG_H
 #define _IPMI_DEBUG_H
 
+#include <OpenIPMI/os_handler.h>
+
 extern unsigned int __ipmi_log_mask;
 
 /* Log normal IPMI messages, but not low-level protocol messages. */

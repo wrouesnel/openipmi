@@ -44,10 +44,10 @@
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
+#include <OpenIPMI/ipmi_debug.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_debug.h>
-#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 #ifdef HAVE_UCDSNMP
 # ifdef HAVE_NETSNMP

@@ -36,8 +36,8 @@
 
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/md2.h>
-#include <OpenIPMI/md5.h>
+#include <OpenIPMI/internal/md2.h>
+#include <OpenIPMI/internal/md5.h>
 
 struct ipmi_authdata_s
 {

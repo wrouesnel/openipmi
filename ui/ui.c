@@ -43,20 +43,22 @@
 #include <time.h>
 #include <sys/time.h>
 #include <ctype.h>
+
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_ui.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_debug.h>
+
+#include <OpenIPMI/internal/ipmi_malloc.h>
+#include <OpenIPMI/internal/ipmi_event.h>
 
 #include "ui_keypad.h"
 #include "ui_command.h"
@@ -1574,15 +1576,15 @@ unsigned int              sensor_raw_val;
 double                    sensor_val;
 
 /* Values from ipmi_states_get and ipmi_reading_get. */
-ipmi_states_t sensor_states;
+ipmi_states_t *sensor_states;
 
 /* Values from ipmi_sensor_event_enables_get. */
 int                sensor_event_states_err;
-ipmi_event_state_t sensor_event_states;
+ipmi_event_state_t *sensor_event_states;
 
 /* Values from ipmi_thresholds_get */
 int               sensor_read_thresh_err;
-ipmi_thresholds_t sensor_thresholds;
+ipmi_thresholds_t *sensor_thresholds;
 
 static void
 display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
@@ -1633,7 +1635,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	    int i;
 	    for (i=0; i<15; i++) {
 		int val;
-		val = ipmi_is_state_set(&sensor_states, i);
+		val = ipmi_is_state_set(sensor_states, i);
 		display_pad_out("%d", val != 0);
 	    }    
 	}
@@ -1644,8 +1646,8 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	display_pad_out("?         ");
     else {
 	int global_enable;
-	global_enable = ipmi_event_state_get_events_enabled(
-	    &sensor_event_states);
+	global_enable = ipmi_event_state_get_events_enabled
+	    (sensor_event_states);
 	if (global_enable)
 	    display_pad_out("enabled");
 	else
@@ -1657,8 +1659,8 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	display_pad_out("?         ");
     else {
 	int scanning_enable;
-	scanning_enable = ipmi_event_state_get_scanning_enabled(
-	    &sensor_event_states);
+	scanning_enable = ipmi_event_state_get_scanning_enabled
+	    (sensor_event_states);
 	if (scanning_enable)
 	    display_pad_out("enabled");
 	else
@@ -1762,25 +1764,25 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 		if (sensor_event_states_err)
 		    display_pad_out("?         ");
 		else {
-		    if (ipmi_is_threshold_event_set(&sensor_event_states, t,
+		    if (ipmi_is_threshold_event_set(sensor_event_states, t,
 						    IPMI_GOING_LOW,
 						    IPMI_ASSERTION))
 			display_pad_out("L^");
 		    else
 			display_pad_out("  ");
-		    if (ipmi_is_threshold_event_set(&sensor_event_states, t,
+		    if (ipmi_is_threshold_event_set(sensor_event_states, t,
 						    IPMI_GOING_LOW,
 						    IPMI_DEASSERTION))
 			display_pad_out("Lv");
 		    else
 			display_pad_out("  ");
-		    if (ipmi_is_threshold_event_set(&sensor_event_states, t,
+		    if (ipmi_is_threshold_event_set(sensor_event_states, t,
 						    IPMI_GOING_HIGH,
 						    IPMI_ASSERTION))
 			display_pad_out("H^");
 		    else
 			display_pad_out("  ");
-		    if (ipmi_is_threshold_event_set(&sensor_event_states, t,
+		    if (ipmi_is_threshold_event_set(sensor_event_states, t,
 						    IPMI_GOING_HIGH,
 						    IPMI_DEASSERTION))
 			display_pad_out("HV");
@@ -1796,7 +1798,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 		    display_pad_out("?");
 		else {
 		    double val;
-		    rv = ipmi_threshold_get(&sensor_thresholds, t, &val);
+		    rv = ipmi_threshold_get(sensor_thresholds, t, &val);
 		    if (rv)
 			display_pad_out("?", val);
 		    else
@@ -1807,7 +1809,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 		      threshold_positions[t].oor.y,
 		      threshold_positions[t].oor.x);
 		if (!sensor_read_err) {
-		    if (ipmi_is_threshold_out_of_range(&sensor_states, t))
+		    if (ipmi_is_threshold_out_of_range(sensor_states, t))
 			display_pad_out("true ");
 		    else
 			display_pad_out("false");
@@ -1837,7 +1839,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	    display_pad_out("?");
 	else {
 	    for (i=0; i<15; i++) {
-		val = ipmi_is_discrete_event_set(&sensor_event_states,
+		val = ipmi_is_discrete_event_set(sensor_event_states,
 						 i, IPMI_ASSERTION);
 		display_pad_out("%d", val != 0);
 	    }
@@ -1858,7 +1860,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	    display_pad_out("?");
 	else {
 	    for (i=0; i<15; i++) {
-		val = ipmi_is_discrete_event_set(&sensor_event_states,
+		val = ipmi_is_discrete_event_set(sensor_event_states,
 						 i, IPMI_DEASSERTION);
 		display_pad_out("%d", val != 0);
 	    }
@@ -1924,7 +1926,7 @@ read_sensor(ipmi_sensor_t             *sensor,
 	sensor_raw_val = raw_val;
 	sensor_val = val;
 	if (states)
-	    ipmi_copy_states(&sensor_states, states);
+	    ipmi_copy_states(sensor_states, states);
 	display_sensor(ipmi_sensor_get_entity(sensor), sensor);
     }
 }
@@ -1975,7 +1977,7 @@ read_thresholds(ipmi_sensor_t     *sensor,
     } else {
 	sensor_read_thresh_err = err;
 	if (th)
-	    ipmi_copy_thresholds(&sensor_thresholds, th);
+	    ipmi_copy_thresholds(sensor_thresholds, th);
 	display_sensor(ipmi_sensor_get_entity(sensor), sensor);
     }
 }
@@ -2064,7 +2066,7 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
     } else {
 	sensor_event_states_err = err;
 	if (states)
-	    ipmi_copy_event_state(&sensor_event_states, states);
+	    ipmi_copy_event_state(sensor_event_states, states);
 	display_sensor(ipmi_sensor_get_entity(sensor), sensor);
     }
 }
@@ -2132,7 +2134,7 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
     } else {
 	sensor_event_states_err = err;
 	if (states)
-	    ipmi_copy_event_state(&sensor_event_states, states);
+	    ipmi_copy_event_state(sensor_event_states, states);
 	display_sensor(ipmi_sensor_get_entity(sensor), sensor);
     }
 }
@@ -2166,7 +2168,7 @@ read_states(ipmi_sensor_t *sensor,
     } else {
 	sensor_read_err = err;
 	if (states)
-	    ipmi_copy_states(&sensor_states, states);
+	    ipmi_copy_states(sensor_states, states);
 	display_sensor(ipmi_sensor_get_entity(sensor), sensor);
     }
 }
@@ -6946,7 +6948,7 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 
     full_screen = do_full_screen;
 
-    rv = sel_alloc_selector(ipmi_get_global_os_handler(), &ui_sel);
+    rv = sel_alloc_selector(&ipmi_ui_cb_handlers, &ui_sel);
     if (rv) {
 	fprintf(stderr, "Could not allocate selector\n");
 	exit(1);
@@ -6960,6 +6962,24 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
     /* This is a dummy allocation just to make sure that the malloc
        debugger is working. */
     ipmi_mem_alloc(10);
+
+    sensor_states = ipmi_mem_alloc(ipmi_states_size());
+    if (!sensor_states) {
+	fprintf(stderr, "Could not allocate sensor states\n");
+	exit(1);
+    }
+
+    sensor_event_states = ipmi_mem_alloc(ipmi_event_state_size());
+    if (!sensor_event_states) {
+	fprintf(stderr, "Could not allocate sensor event states\n");
+	exit(1);
+    }
+
+    sensor_thresholds = ipmi_mem_alloc(ipmi_thresholds_size());
+    if (!sensor_thresholds) {
+	fprintf(stderr, "Could not allocate sensor thresholds\n");
+	exit(1);
+    }
 
     rv = init_commands();
     if (rv) {
@@ -7017,5 +7037,11 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 void
 ipmi_ui_shutdown(void)
 {
+    ipmi_mem_free(sensor_states);
+    sensor_states = NULL;
+    ipmi_mem_free(sensor_event_states);
+    sensor_event_states = NULL;
+    ipmi_mem_free(sensor_thresholds);
+    sensor_thresholds = NULL;
     leave(0, "");
 }

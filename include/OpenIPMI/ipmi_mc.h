@@ -35,26 +35,116 @@
 #define _IPMI_MC_H
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_sdr.h>
-#include <OpenIPMI/ipmi_sensor.h>
-#include <OpenIPMI/ipmi_control.h>
 
-/* Allow entities to keep information that came from an MC in the MC
-   itself so that when the MC is destroyed, it can be cleaned up. */
-void *_ipmi_mc_get_sdr_entities(ipmi_mc_t *mc);
-void _ipmi_mc_set_sdr_entities(ipmi_mc_t *mc, void *entities);
+/* MCs are mostly internal items in OpenIPMI, but they are here because
+   they are sometimes useful.  It is at least theoretically possible to
+   put a non-IPMI system under OpenIPMI, and if you do the MCs won't
+   be very useful.  You generally shouldn't need them anyway. */
 
-/* Some stupid systems don't have some settings right, this lets the
-   OEM code fix it. */
-void ipmi_mc_set_provides_device_sdrs(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_sel_device_support(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_sdr_repository_support(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_sensor_device_support(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_device_available(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_chassis_support(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_bridge_support(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_ipmb_event_generator_support(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_ipmb_event_receiver_support(ipmi_mc_t *mc, int val);
-void ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val);
+ipmi_mcid_t ipmi_mc_convert_to_id(ipmi_mc_t *mc);
+typedef void (*ipmi_mc_ptr_cb)(ipmi_mc_t *mc, void *cb_data);
+int ipmi_mc_pointer_cb(ipmi_mcid_t    id,
+		       ipmi_mc_ptr_cb handler,
+		       void           *cb_data);
+int ipmi_mc_pointer_noseq_cb(ipmi_mcid_t    id,
+			     ipmi_mc_ptr_cb handler,
+			     void           *cb_data);
+int ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2);
+int ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2);
+void ipmi_mc_id_set_invalid(ipmi_mcid_t *id);
+/* Is it the invalid MCID? */
+int ipmi_mc_id_is_invalid(ipmi_mcid_t *id);
+
+
+/* Generic callback type for MCs */
+typedef void (*ipmi_mc_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
+
+/* Get the name of an MC. */
+#define IPMI_MC_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
+int ipmi_mc_get_name(ipmi_mc_t *mc, char *name, int length);
+
+/* Return the domain for the given MC. */
+ipmi_domain_t *ipmi_mc_get_domain(ipmi_mc_t *mc);
+
+/* Basic information about a MC.  */
+int ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc);
+int ipmi_mc_device_available(ipmi_mc_t *mc);
+int ipmi_mc_chassis_support(ipmi_mc_t *mc);
+int ipmi_mc_bridge_support(ipmi_mc_t *mc);
+int ipmi_mc_ipmb_event_generator_support(ipmi_mc_t *mc);
+int ipmi_mc_ipmb_event_receiver_support(ipmi_mc_t *mc);
+int ipmi_mc_fru_inventory_support(ipmi_mc_t *mc);
+int ipmi_mc_sel_device_support(ipmi_mc_t *mc);
+int ipmi_mc_sdr_repository_support(ipmi_mc_t *mc);
+int ipmi_mc_sensor_device_support(ipmi_mc_t *mc);
+int ipmi_mc_device_id(ipmi_mc_t *mc);
+int ipmi_mc_device_revision(ipmi_mc_t *mc);
+int ipmi_mc_major_fw_revision(ipmi_mc_t *mc);
+int ipmi_mc_minor_fw_revision(ipmi_mc_t *mc);
+int ipmi_mc_major_version(ipmi_mc_t *mc);
+int ipmi_mc_minor_version(ipmi_mc_t *mc);
+int ipmi_mc_manufacturer_id(ipmi_mc_t *mc);
+int ipmi_mc_product_id(ipmi_mc_t *mc);
+void ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[]);
+
+/* Check to see if the MC is operational in the system.  If this is
+   false, then the MC was referred to by an SDR, but it doesn't really
+   exist. */
+int ipmi_mc_is_active(ipmi_mc_t *mc);
+
+/* Used to monitor when the MC goes active or inactive. */
+typedef void (*ipmi_mc_active_cb)(ipmi_mc_t *mc,
+				  int       active,
+				  void      *cb_data);
+int ipmi_mc_add_active_handler(ipmi_mc_t         *mc,
+			       ipmi_mc_active_cb handler,
+			       void              *cb_data);
+int ipmi_mc_remove_active_handler(ipmi_mc_t         *mc,
+				  ipmi_mc_active_cb handler,
+				  void              *cb_data);
+
+/* Send the command in "msg" and register a handler to handle the
+   response.  This will return without blocking; when the response
+   comes back the handler will be called.  The handler may be NULL;
+   then the response is ignored.  Note that if non-NULL the response
+   handler will always be called; if no response is received in time
+   the code will return a timeout response. rsp_data is passed to the
+   response handler, it may contain anything the user likes.  Note
+   that if the mc goes away between the time the command is sent and
+   the response comes back, this callback WILL be called, but the MC
+   value will be NULL.  You must handle that. */
+typedef void (*ipmi_mc_response_handler_t)(ipmi_mc_t  *src,
+					   ipmi_msg_t *msg,
+					   void       *rsp_data);
+int ipmi_mc_send_command(ipmi_mc_t                  *mc,
+			 unsigned int               lun,
+			 ipmi_msg_t                 *cmd,
+			 ipmi_mc_response_handler_t rsp_handler,
+			 void                       *rsp_data);
+
+/* Reset the MC, either a cold or warm reset depending on the type.
+   Note that the effects of a reset are not defined by IPMI, so this
+   might do wierd things.  Some systems do not support resetting the
+   MC.  This is not a standard control because there is no entity to
+   hang if from and you don't want people messing with it unless they
+   really know what they are doing. */
+#define IPMI_MC_RESET_COLD 1
+#define IPMI_MC_RESET_WARM 2
+int ipmi_mc_reset(ipmi_mc_t       *mc,
+		  int             reset_type,
+		  ipmi_mc_done_cb done,
+		  void            *cb_data);
+
+/* Get and set the setting to enable events for the entire MC.  The
+   value returned by the get function is a boolean telling whether
+   events are enabled.  The "val" passed in to the set function is a
+   boolean telling whether to turn events on (true) or off (false). */
+int ipmi_mc_get_events_enable(ipmi_mc_t *mc);
+int ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
+			      int             val,
+			      ipmi_mc_done_cb done,
+			      void            *cb_data);
+
 
 /* Reread all the sensors for a given mc.  This will request the
    device SDRs for that mc (And only for that MC) and change the
@@ -63,92 +153,11 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 			   ipmi_mc_done_cb done,
 			   void            *done_data);
 
-/* Use the "main" SDR repository as a device SDR repository. This
-   means that any SDRs in the "main" SDR repository on the MC will
-   appear as sensors, etc as if they were in the device SDR
-   repository. */
-int ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc);
-
-void _ipmi_mc_set_active(ipmi_mc_t *mc, int val);
-
-/* A monitor to tell when the SDRs and SELs for an MC are read for the
-   first time and are finished being processed.  Setting the handler
-   to NULL disables it.  Note this only works for the first time, it
-   will not be called on subsequent SDR and SEL reads and checks. */
-int ipmi_mc_set_sdrs_first_read_handler(ipmi_mc_t      *mc,
-					ipmi_mc_ptr_cb handler,
-					void           *cb_data);
-int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
-					ipmi_mc_ptr_cb handler,
-					void           *cb_data);
-
-/* Return the domain for the given MC. */
-ipmi_domain_t *ipmi_mc_get_domain(ipmi_mc_t *mc);
-
-/* Get the sensors that the given MC owns. */
-ipmi_sensor_info_t *_ipmi_mc_get_sensors(ipmi_mc_t *mc);
-
-/* Get the controls that the given MC owns. */
-ipmi_control_info_t *_ipmi_mc_get_controls(ipmi_mc_t *mc);
-
-/* Get the device SDRs for the given MC. */
-ipmi_sdr_info_t *ipmi_mc_get_sdrs(ipmi_mc_t *mc);
-
-/* Get the IPMI slave address of the given MC. */
-unsigned ipmi_mc_get_address(ipmi_mc_t *mc);
-
-/* Get the MC's full IPMI address. */
-void ipmi_mc_get_ipmi_address(ipmi_mc_t    *mc,
-			      ipmi_addr_t  *addr,
-			      unsigned int *addr_len);
-
-/* Get the channel for the given MC. */
-unsigned ipmi_mc_get_channel(ipmi_mc_t *mc);
-
+/*
+ * SEL support for the MC
+ */
 void ipmi_mc_set_sel_rescan_time(ipmi_mc_t *mc, unsigned int seconds);
 unsigned int ipmi_mc_get_sel_rescan_time(ipmi_mc_t *mc);
-
-int _ipmi_create_mc(ipmi_domain_t *domain,
-		    ipmi_addr_t   *addr,
-		    unsigned int  addr_len,
-		    ipmi_mc_t     **new_mc);
-
-/* Destroy an MC. */
-void _ipmi_cleanup_mc(ipmi_mc_t *mc);
-
-/* These are called to claim and release the use of an MC.  An MC will
-   not change while it has been gotten.  Must be holding the
-   domain->mc_lock to call these. */
-int _ipmi_mc_get(ipmi_mc_t *mc);
-void _ipmi_mc_put(ipmi_mc_t *mc);
-
-
-#if 0
-/* FIXME - need to handle this somehow. */
-/* This should be called from OEM code for an SMI, ONLY WHEN THE NEW
-   MC HANDLER IS CALLED, if the slave address of the SMI is not 0x20.
-   This will allow the bmc t know it's own address, which is pretty
-   important.  You pass in a function that the code will call (and
-   pass in it's own function) when it wants the address. */
-typedef void (*ipmi_mc_got_slave_addr_cb)(ipmi_mc_t    *bmc,
-					  int          err,
-					  unsigned int addr,
-					  void         *cb_data);
-typedef int (*ipmi_mc_slave_addr_fetch_cb)(
-    ipmi_mc_t                 *bmc,
-    ipmi_mc_got_slave_addr_cb handler,
-    void                      *cb_data);
-int ipmi_bmc_set_smi_slave_addr_fetcher(
-    ipmi_mc_t                   *bmc,
-    ipmi_mc_slave_addr_fetch_cb handler);
-#endif
-
-/* Return the timestamp that was fetched before the first SEL fetch.
-   This is so that OEM code can properly ignore old events.  Note that
-   this value will be set to zero after the first SEL fetch, it really
-   not good for anything but comparing timestamps to see if the event
-   is old. */
-ipmi_time_t ipmi_mc_get_startup_SEL_time(ipmi_mc_t *bmc);
 
 /* Reread the sel.  When the hander is called, all the events in the
    SEL have been fetched into the local copy of the SEL (with the
@@ -158,6 +167,8 @@ int ipmi_mc_reread_sel(ipmi_mc_t       *mc,
 		       ipmi_mc_done_cb handler,
 		       void            *cb_data);
 
+typedef void (*ipmi_mc_cb)(ipmi_mc_t *mc, int err, void *cb_data);
+
 /* Fetch the current time from the SEL. */
 typedef void (*sel_get_time_cb)(ipmi_mc_t     *mc,
 				int           err,
@@ -166,24 +177,6 @@ typedef void (*sel_get_time_cb)(ipmi_mc_t     *mc,
 int ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
 				 sel_get_time_cb handler,
 				 void            *cb_data);
-
-/* Set the time for the SEL.  Note that this function is rather
-   dangerous to do, especially if you don't set it to the current
-   time, as it can cause old events to be interpreted as new
-   events on this and other systems. */
-int ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
-				 const struct timeval  *time,
-				 ipmi_mc_done_cb handler,
-				 void            *cb_data);
-
-
-typedef void (*ipmi_mc_cb)(ipmi_mc_t *mc, int err, void *cb_data);
-
-typedef void (ipmi_mc_del_event_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
-int ipmi_mc_del_event(ipmi_mc_t                 *mc,
-		      ipmi_event_t              *event, 
-		      ipmi_mc_del_event_done_cb handler,
-		      void                      *cb_data);
 
 /* Add an event to the real SEL.  This does not directly put it into
    the internal copy of the SEL. */
@@ -195,32 +188,6 @@ int ipmi_mc_add_event_to_sel(ipmi_mc_t                 *mc,
 			     ipmi_event_t              *event,
 			     ipmi_mc_add_event_done_cb handler,
 			     void                      *cb_data);
-
-/* Some OEM boxes may have special SEL delete requirements, so we have
-   a special hook to let the OEM code delete events on an MC with SEL
-   support. */
-typedef int (*ipmi_mc_del_event_cb)(ipmi_mc_t    *mc,
-				    ipmi_event_t *event,
-				    ipmi_mc_cb   done_handler,
-				    void         *cb_data);
-void ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
-				   ipmi_mc_del_event_cb handler);
-typedef int (*ipmi_mc_add_event_cb)(ipmi_mc_t                 *mc,
-				    ipmi_event_t              *event,
-				    ipmi_mc_add_event_done_cb done_handler,
-				    void                      *cb_data);
-void ipmi_mc_set_add_event_handler(ipmi_mc_t            *mc,
-				   ipmi_mc_add_event_cb handler);
-
-/* Check the event receiver for the MC. */
-void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
-
-
-int _ipmi_mc_init(void);
-void _ipmi_mc_shutdown(void);
-
-/* Returns EEXIST if the event is already there. */
-int _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
 
 ipmi_event_t *ipmi_mc_first_event(ipmi_mc_t *mc);
 ipmi_event_t *ipmi_mc_last_event(ipmi_mc_t *mc);
@@ -241,57 +208,23 @@ int ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_last_addition_timestamp(ipmi_mc_t *mc);
 
-int _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
-int _ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
 
-/* Set and get the OEM data pointer in the mc. */
-void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
-void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);
+/***********************************************************************
+ *
+ * Crufty backwards-compatible interfaces.  Don't use these as they
+ * are deprecated.
+ *
+ **********************************************************************/
 
-/* Used by the sensor code to report a new sensor to the MC.  The new
-   sensor call should return 1 if the sensor code should not add the
-   sensor to its database. */
-void _ipmi_mc_fixup_sensor(ipmi_mc_t     *mc,
-			   ipmi_sensor_t *sensor);
-int _ipmi_mc_new_sensor(ipmi_mc_t     *mc,
-			ipmi_entity_t *ent,
-			ipmi_sensor_t *sensor,
-			void          *link);
-
-/* This should be called with a new device id for an MC we don't have
-   active in the system (it may be inactive). */
-int _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp);
-
-/* Compares the data in a get device id response (in rsp) with the
-   data in the MC, returns true if they are the same and false if
-   not.  Must be called with an error-free message. */
-int _ipmi_mc_device_data_compares(ipmi_mc_t *mc, ipmi_msg_t *rsp);
-
-/* Called when a new MC has been added to the system, to kick of
-   processing it. */
-int _ipmi_mc_handle_new(ipmi_mc_t *mc);
-
-/* Allow sensors to keep information that came from an MC in the MC
-   itself so that when the MC is destroyed, it can be cleaned up. */
-void _ipmi_mc_get_sdr_sensors(ipmi_mc_t     *mc,
-			      ipmi_sensor_t ***sensors,
-			      unsigned int  *count);
-void _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
-			      ipmi_sensor_t **sensors,
-			      unsigned int  count);
-
-/* Used to create external references to an MC so it won't go away
-   even if it is released. */
-void _ipmi_mc_use(ipmi_mc_t *mc);
-void _ipmi_mc_release(ipmi_mc_t *mc);
-
-/* Used to periodically check that the MC data is current and valid. */
-void _ipmi_mc_check_mc(ipmi_mc_t *mc);
-
-/* Create chassis conrols for an MC. */
-int _ipmi_chassis_create_controls(ipmi_mc_t *mc);
-
-/* Generate a unique number for the MC. */
-unsigned int ipmi_mc_get_unique_num(ipmi_mc_t *mc);
+/* A monitor to tell when the SDRs and SELs for an MC are read for the
+   first time and are finished being processed.  Setting the handler
+   to NULL disables it.  Note this only works for the first time, it
+   will not be called on subsequent SDR and SEL reads and checks. */
+int ipmi_mc_set_sdrs_first_read_handler(ipmi_mc_t      *mc,
+					ipmi_mc_ptr_cb handler,
+					void           *cb_data);
+int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
+					ipmi_mc_ptr_cb handler,
+					void           *cb_data);
 
 #endif /* _IPMI_MC_H */

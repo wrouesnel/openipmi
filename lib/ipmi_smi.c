@@ -44,13 +44,15 @@
 
 #include <linux/ipmi.h>
 #include <net/af_ipmi.h>
+
 #include <OpenIPMI/ipmi_conn.h>
-#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_auth.h>
+
+#include <OpenIPMI/internal/ipmi_event.h>
+#include <OpenIPMI/internal/ipmi_int.h>
 
 /* We time the SMI messages, but we have a long timer. */
 #define SMI_TIMEOUT 60000

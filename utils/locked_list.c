@@ -32,9 +32,10 @@
  */
 
 #include <string.h>
-#include <OpenIPMI/ipmi_locks.h>
-#include <OpenIPMI/ipmi_malloc.h>
-#include <OpenIPMI/locked_list.h>
+
+#include <OpenIPMI/internal/ipmi_locks.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
+#include <OpenIPMI/internal/locked_list.h>
 
 #define LOCKED_LIST_ENTRIES_INCREMENT 5
 

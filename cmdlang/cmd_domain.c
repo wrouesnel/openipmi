@@ -37,13 +37,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_event.h>
+#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_fru.h>
+#include <OpenIPMI/ipmi_conn.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_conn.h>
-#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
+#include <OpenIPMI/internal/ipmi_event.h>
 
 /* Don't pollute the namespace iwth ipmi_fru_t. */
 void ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru);
@@ -712,6 +713,57 @@ domain_scan(ipmi_domain_t *domain, void *cb_data)
 }
 
 static void
+domain_rescan_sels_done(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	if (! cmdlang->err) {
+	    cmdlang->err = err;
+	    cmdlang->errstr = "Error scanning SELs";
+	    ipmi_domain_get_name(domain, cmdlang->objstr,
+				 cmdlang->objstr_len);
+	    cmdlang->location = "cmd_domain.c(sel_rescan_done)";
+	}
+	goto out;
+    }
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+    ipmi_cmdlang_out(cmd_info, "SEL Rescan done", domain_name);
+
+ out:
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+domain_rescan_sels(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_domain_reread_sels(domain, domain_rescan_sels_done, cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->errstr = "Error requesting SEL rescan";
+	cmdlang->err = rv;
+	goto out_err;
+    }
+    
+ out_err:
+    if (cmdlang->err) {
+	ipmi_domain_get_name(domain, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	cmdlang->location = "cmd_domain.c(domain_rescan_sels)";
+    }
+}
+
+static void
 domain_presence(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
@@ -1108,8 +1160,11 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       ipmi_cmdlang_domain_handler, domain_presence, NULL },
     { "sel_rescan_time", &domain_cmds,
       "<domain> <time in seconds> - Set the time between SEL rescans"
-      " for all SELs in the system.  zero disables scans.",
+      " for newly created SELs in the system.  Zero disables scans.",
       ipmi_cmdlang_domain_handler, domain_sel_rescan_time, NULL },
+    { "rescan_sels", &domain_cmds,
+      "<domain> - Rescan all the SELs in the domain",
+      ipmi_cmdlang_domain_handler, domain_rescan_sels, NULL },
     { "ipmb_rescan_time", &domain_cmds,
       "<domain> <time in seconds> - Set the time between IPMB rescans"
       " for this domain.  zero disables scans.",

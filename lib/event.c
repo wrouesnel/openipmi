@@ -34,10 +34,11 @@
 #include <string.h>
 #include <errno.h>
 
-#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ipmi_mc.h>
+
+#include <OpenIPMI/internal/ipmi_event.h>
+#include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
 
 struct ipmi_event_s
 {

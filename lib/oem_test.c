@@ -36,14 +36,15 @@
 #include <errno.h>
 
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_oem.h>
-#include <OpenIPMI/ipmi_sensor.h>
-#include <OpenIPMI/ipmi_control.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
-#include <OpenIPMI/ipmi_event.h>
+
+#include <OpenIPMI/internal/ipmi_event.h>
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
+#include <OpenIPMI/internal/ipmi_oem.h>
+#include <OpenIPMI/internal/ipmi_sensor.h>
+#include <OpenIPMI/internal/ipmi_control.h>
+#include <OpenIPMI/internal/ipmi_int.h>
 
 /* We use a block of MontaVista's private enterprise IDs for our own
    purposes. */

@@ -33,10 +33,11 @@
 
 #include <string.h>
 #include <execinfo.h> /* For backtrace() */
-#include <OpenIPMI/ipmi_malloc.h>
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/ilist.h>
+
+#include <OpenIPMI/internal/ipmi_malloc.h>
+#include <OpenIPMI/internal/ilist.h>
 
 void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type, char *format, ...)
 #if __GNUC__ > 2

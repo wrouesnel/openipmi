@@ -46,11 +46,12 @@
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_debug.h>
+#include <OpenIPMI/ipmi_mc.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_locks.h>
-#include <OpenIPMI/ipmi_malloc.h>
-#include <OpenIPMI/ipmi_debug.h>
+#include <OpenIPMI/internal/ipmi_locks.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 /*
  * This is the value passed to a command handler.

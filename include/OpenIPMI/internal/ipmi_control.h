@@ -212,7 +212,6 @@ void ipmi_control_set_id(ipmi_control_t *control, char *id,
 void ipmi_control_set_type(ipmi_control_t *control, int val);
 void ipmi_control_set_settable(ipmi_control_t *control, int val);
 void ipmi_control_set_readable(ipmi_control_t *control, int val);
-int ipmi_control_get_ignore_if_no_entity(ipmi_control_t *control);
 void ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
 				          int            ignore_if_no_entity);
 

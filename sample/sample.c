@@ -46,11 +46,6 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_posix.h>
-#include <OpenIPMI/ipmi_event.h>
-
-/* This file should not normally be included by the user, but is here
-   to demonstrate an internal domain function. */
-#include <OpenIPMI/ipmi_domain.h>
 
 /* This sample application demostrates a very simple method to use
    OpenIPMI. It just search all sensors in the system.  From this
@@ -408,22 +403,6 @@ entity_change(enum ipmi_update_e op,
     }
 }
 
-static void reread_sels_done(ipmi_domain_t *domain, int err, void *cb_data)
-{
-    int count;
-    ipmi_domain_sel_entries_used(domain, &count);
-    printf("reread sel done. entries = %d\n", count);
-}
-
-static void bus_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
-{
-    int count;
-    ipmi_domain_reread_sels(domain, reread_sels_done, &count);
-    printf("bus scan done.\n");
-    return;
-}
-
-
 /* After we have established connection to domain, this function get called
    At this time, we can do whatever things we want to do. Herr we want to
    search all entities in the system */ 
@@ -445,12 +424,6 @@ setup_done(ipmi_domain_t *domain,
 	return;
     }
 
-    rv = ipmi_domain_set_bus_scan_handler(domain, bus_scan_done, NULL);
-    if (rv) {
-	printf("ipmi_domain_set_bus_scan_handler return error: %d\n", rv);
-	return;
-    }
-    
 }
 
 static os_handler_t *os_hnd;

@@ -37,12 +37,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
+#include <OpenIPMI/ipmi_mc.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_malloc.h>
-#include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/internal/ipmi_event.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 static void
 sel_list(ipmi_domain_t *domain, void *cb_data)
@@ -74,6 +74,36 @@ sel_list(ipmi_domain_t *domain, void *cb_data)
 	ipmi_cmdlang_event_out(event, cmd_info);
 	ipmi_cmdlang_up(cmd_info);
 	event2 = ipmi_domain_next_event(domain, event);
+	ipmi_event_free(event);
+	event = event2;
+    }
+    ipmi_cmdlang_up(cmd_info);
+}
+
+static void
+mc_sel_list(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            mc_name[IPMI_MC_NAME_LEN];
+    int             rv;
+    ipmi_event_t    *event, *event2;
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    ipmi_cmdlang_out(cmd_info, "MC", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", mc_name);
+    ipmi_cmdlang_out_int(cmd_info, "Entries", ipmi_mc_sel_count(mc));
+    ipmi_cmdlang_out_int(cmd_info, "Slots in use",
+			 ipmi_mc_sel_entries_used(mc));
+
+    event = ipmi_mc_first_event(mc);
+    while (event) {
+	ipmi_cmdlang_out(cmd_info, "Event", NULL);
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_event_out(event, cmd_info);
+	ipmi_cmdlang_up(cmd_info);
+	event2 = ipmi_mc_next_event(mc, event);
 	ipmi_event_free(event);
 	event = event2;
     }
@@ -303,6 +333,9 @@ static ipmi_cmdlang_init_t cmds_sel[] =
     { "list", &sel_cmds,
       "<domain> - List all the events in the domain",
       ipmi_cmdlang_domain_handler, sel_list, NULL },
+    { "mc_list", &sel_cmds,
+      "<domain> - List all the events in the given MC's SEL",
+      ipmi_cmdlang_mc_handler, mc_sel_list, NULL },
     { "delete", &sel_cmds,
       "<mc> <record id> - Delete the given event.",
       ipmi_cmdlang_mc_handler, sel_delete, NULL },

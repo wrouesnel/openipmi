@@ -32,11 +32,12 @@
  */
 
 #include <errno.h>
+#include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 static void
 fru_out_data(ipmi_cmd_info_t *cmd_info, unsigned char type,

@@ -35,8 +35,9 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <OpenIPMI/ipmi_int.h>
 #include "ui_command.h"
+
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 static int search_cmd(void *item, void *cb_data)
 {

@@ -34,9 +34,10 @@
 
 #include <errno.h>
 #include <string.h>
-#include <OpenIPMI/ipmi_int.h>
 #include "ui_keypad.h"
 
+#include <OpenIPMI/internal/ilist.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 static int search_key(void *item, void *cb_data)
 {

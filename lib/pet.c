@@ -44,15 +44,16 @@
 #include <stdio.h>
 
 #include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
-#include <OpenIPMI/locked_list.h>
+
+#include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/locked_list.h>
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
 
 /* Recheck the PET config every 10 minutes. */
 #define PET_TIMEOUT_SEC 600

@@ -37,8 +37,6 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
-#include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/selector.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -47,8 +45,11 @@
 #include <string.h>
 #include <signal.h>
 
-#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_posix.h>
+
+#include <OpenIPMI/internal/ipmi_int.h>
 
 typedef struct pt_os_hnd_data_s
 {

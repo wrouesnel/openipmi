@@ -31,11 +31,13 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <OpenIPMI/ipmi_malloc.h>
-#include <OpenIPMI/ipmi_locks.h>
-#include <OpenIPMI/ipmi_debug.h>
 #include <stdlib.h>
 #include <errno.h>
+
+#include <OpenIPMI/ipmi_debug.h>
+
+#include <OpenIPMI/internal/ipmi_malloc.h>
+#include <OpenIPMI/internal/ipmi_locks.h>
 
 struct ipmi_lock_s
 {

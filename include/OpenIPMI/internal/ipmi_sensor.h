@@ -36,8 +36,8 @@
 
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_addr.h>
-#include <OpenIPMI/opq.h>
-#include <OpenIPMI/ipmiif.h>
+
+#include <OpenIPMI/internal/opq.h>
 
 /* The abstract type for sensors. */
 typedef struct ipmi_sensor_info_s ipmi_sensor_info_t;

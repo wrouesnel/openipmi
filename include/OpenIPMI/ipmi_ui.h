@@ -34,8 +34,9 @@
 #ifndef _IPMI_UI_H
 #define _IPMI_UI_H
 
-#include <OpenIPMI/ipmi_mc.h>
-#include <OpenIPMI/ipmi_domain.h>
+#include <OpenIPMI/ipmi_types.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/selector.h>
 
 extern os_handler_t ipmi_ui_cb_handlers;
 

@@ -33,7 +33,8 @@
 
 #include <stdlib.h>
 #include <errno.h>
-#include <OpenIPMI/ilist.h>
+
+#include <OpenIPMI/internal/ilist.h>
 
 ilist_t *
 alloc_ilist(void)

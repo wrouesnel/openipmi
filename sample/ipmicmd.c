@@ -48,15 +48,15 @@
 #include <popt.h> /* Option parsing made easy */
 
 #include <OpenIPMI/ipmi_conn.h>
-#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/mxp.h>
+#include <OpenIPMI/ipmi_posix.h>
 
-#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/internal/ipmi_event.h>
 
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
@@ -136,97 +136,6 @@ void
 posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     vfprintf(stderr, format, ap);
-}
-
-void
-ipmi_report_lock_error(os_handler_t *handler, char *str)
-{
-}
-
-void
-ipmi_check_lock(ipmi_lock_t *lock, char *str)
-{
-}
-
-void
-ipmi_register_ll(ll_ipmi_t *ll)
-{
-}
-
-struct ipmi_lock_s
-{
-    os_hnd_lock_t *ll_lock;
-    os_handler_t  *os_hnd;
-};
-int
-ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)
-{
-    ipmi_lock_t *lock;
-    int         rv;
-
-    lock = ipmi_mem_alloc(sizeof(*lock));
-    if (!lock)
-	return ENOMEM;
-
-    lock->os_hnd = os_hnd;
-    if (lock->os_hnd && lock->os_hnd->create_lock) {
-	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
-	if (rv) {
-	    ipmi_mem_free(lock);
-	    return rv;
-	}
-    } else {
-	lock->ll_lock = NULL;
-    }
-
-    *new_lock = lock;
-
-    return 0;
-}
-
-int
-ipmi_create_global_lock(ipmi_lock_t **new_lock)
-{
-    ipmi_lock_t *lock;
-    int         rv;
-
-    lock = ipmi_mem_alloc(sizeof(*lock));
-    if (!lock)
-	return ENOMEM;
-
-    lock->os_hnd = os_hnd;
-    if (lock->os_hnd && lock->os_hnd->create_lock) {
-	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
-	if (rv) {
-	    ipmi_mem_free(lock);
-	    return rv;
-	}
-    } else {
-	lock->ll_lock = NULL;
-    }
-
-    *new_lock = lock;
-
-    return 0;
-}
-
-void ipmi_lock(ipmi_lock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->lock(lock->os_hnd, lock->ll_lock);
-}
-
-void ipmi_unlock(ipmi_lock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->unlock(lock->os_hnd, lock->ll_lock);
-}
-
-void ipmi_destroy_lock(ipmi_lock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->destroy_lock(lock->os_hnd, lock->ll_lock);
-    ipmi_mem_free(lock);
 }
 
 static void
@@ -475,7 +384,7 @@ time_msgs(ipmi_con_t    *con,
 
     rspi = malloc(sizeof(*rspi));
     if (!rspi) {
-	ipmi_mem_free(rspi);
+	free(rspi);
 	printf("No memory to perform command\n");
 	return;
     }

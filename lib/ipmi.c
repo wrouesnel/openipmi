@@ -37,17 +37,18 @@
 #include <netdb.h>
 
 #include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_oem.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/mxp.h>
+
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
+#include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/ipmi_oem.h>
 
 #if defined(DEBUG_MSG) || defined(DEBUG_RAWMSG)
 static void

@@ -1138,9 +1138,10 @@ while waiting.
 
 \section{OpenIPMI Include Files}
 
-OpenIPMI has a large number of include files.  Most of them deal with
-internals that are only needed for \acs{OEM} code.  The include file
-are classified by need in the sections below.
+OpenIPMI has a large number of include files.  The ones dealing with
+internals are in the internal directory and are only needed for
+\acs{OEM} code.  The include file are classified by need in the
+sections below.
 
 \subsection{Files the normal user deals with}
 
@@ -1150,6 +1151,9 @@ The main include file for OpenIPMI.  It contains the main functions the
 user must deal with when working with the OpenIPMI library.  Almost
 everything will include this.  It includes \texttt{ipmi\_types.h} and
 \texttt{ipmi\_bits.h}, too, so you don't have to include those.\\
+
+\texttt{ipmi\_fru.h} &
+Interface for \ac{FRU} data.\\
 
 \texttt{ipmi\_auth.h} &
 The file holding information about athentication algorithms.  You need
@@ -1174,6 +1178,9 @@ and supply it to the IPMI code.\\
 \texttt{selector.h} &
 For *nix systems, This file a default mechanism for handling many of the
 os-specific handler operations.\\
+
+\texttt{ipmi\_posix.h} &
+This defines some POSIX OS handlers.\\
 
 \texttt{ipmi\_log.h} &
 Holds definitions for the logging interface.\\
@@ -1208,56 +1215,29 @@ interface on a BMC to send \ac{SNMP} traps.\\
 
 \end{tabularx}
 
-\subsection{Internal files that OEM code and messaging interfaces deal with}
+\subsection{Semi-internal includes}
+These files expose the more IPMI-ish parts of OpenIPMI; things that
+are more-or-less raw IPMI.  You shouldn't use these unless you really
+need them.
 
 \begin{tabularx}{\textwidth}{lX}
+\texttt{ipmi\_mc.h} &
+This defines interfaces for the management controllers.\\
+
 \texttt{ipmi\_addr.h} &
 The file holding information about IPMI addresses.\\
 
 \texttt{ipmi\_conn.h} &
 This defines the interface for the messaging interfaces.\\
 
-\texttt{ipmi\_event.h} &
-This defines functions for handling events.\\
-
-\texttt{ipmi\_entity.h} &
-This defines internal entity interfaces.\\
-
-\texttt{ipmi\_fru.h} &
-This defines internal \ac{FRU} interfaces.\\
-
-\texttt{ipmi\_control.h} &
-This defines internal control interfaces.\\
-
-\texttt{ipmi\_int.h} &
-This defines other miscellaneous internal interfaces.\\
-
-\texttt{ipmi\_domain.h} &
-This defines the internal interfaces for dealing with domains.\\
-
-\texttt{ipmi\_mc.h} &
-This defines internal interfaces for the management controllers.\\
-
 \texttt{ipmi\_msgbits.h} &
 This defines various IPMI messages.\\
 
-\texttt{ipmi\_oem.h} &
-This defines interfaces that OEM code can tie into.\\
-
-\texttt{ipmi\_sel.h} &
-This defines the internal interfaces for the \ac{SEL}.\\
+\texttt{ipmi\_picmg.h} &
+This defines various PIGMC messages.\\
 
 \texttt{ipmi\_sdr.h} &
 This defines internal interfaces for the \ac{SDR} repostiory.\\
-
-\texttt{ipmi\_sensor.h} &
-This defines internal interfaces for sensors.\\
-
-\texttt{ipmi\_locks.h} &
-This defines internal interfaces for locks.\\
-
-\texttt{ipmi\_posix.h} &
-This defines some POSIX OS handlers.\\
 
 \end{tabularx}
 

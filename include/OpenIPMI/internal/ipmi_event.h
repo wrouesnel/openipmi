@@ -53,31 +53,6 @@ ipmi_event_t *ipmi_event_alloc(ipmi_mcid_t   mcid,
    one-time thing done in the domain code. */
 void ipmi_event_set_mcid(ipmi_event_t *event, ipmi_mcid_t mcid);
 
-/* Return the management controller that "owns" the event (where the
-   event is stored). */
-ipmi_mcid_t ipmi_event_get_mcid(ipmi_event_t *event);
-
-/* Return a unique (in the MC) record identifier for the event. */
-unsigned int ipmi_event_get_record_id(ipmi_event_t *event);
-
-#define OPENIPMI_OEM_EVENT_START	0x10000
-/* Return the event type.  Normal IPMI events should be in the
-   000-0xff range.  Other events should start at
-   OPENIPMI_OEM_EVENT_START and higher.*/
-unsigned int ipmi_event_get_type(ipmi_event_t *event);
-
-/* Get the timestamp for the event.  This will be IPMI_INVALID_TIME if
-   the timestamp is invalid. */
-ipmi_time_t ipmi_event_get_timestamp(ipmi_event_t *event);
-
-/* Get the length of the data attached to the event. */
-unsigned int ipmi_event_get_data_len(ipmi_event_t *event);
-
-/* Copy some of the data attached to the event, starting at the given
-   offset to an array.  Copy "len" bytes. */
-unsigned int ipmi_event_get_data(ipmi_event_t *event, unsigned char *data,
-				 unsigned int offset, unsigned int len);
-
 /* Get a pointer to the event's data.  Note that this pointer will be
    valid only as long as the event is valid. */
 unsigned char *ipmi_event_get_data_ptr(ipmi_event_t *event);

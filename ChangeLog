@@ -1,3 +1,16 @@
+2004-10-18 Corey Minyard <cminyard@mvista.com> 
+
+	* Practically_everything: More work on the include files, moved
+	the internal/OEM include files to an "internal" directory, more
+	restructure to make thing easier to use and make more clean
+	definitions of what is and is not supported.
+
+	This means that if you were naughty and used internal interfaces,
+	you will have to change your code.
+
+	* cmdlang/cmd_mc.c, cmdlang/cmd_domain.c, man/ipmi_cmdlang.7:
+	Added beter support for the SELs.
+
 2004-10-14 Corey Minyard <cminyard@mvista.com> 
 
 	* Practically_everything: A restructure of the include files

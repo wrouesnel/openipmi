@@ -38,6 +38,7 @@
 #include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_pet.h>
+#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 
 

@@ -35,14 +35,16 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
-#include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/selector.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/selector.h>
+
+#include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 extern selector_t *ui_sel;
 

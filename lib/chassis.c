@@ -35,14 +35,15 @@
 #include <string.h>
 
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_entity.h>
-#include <OpenIPMI/ipmi_control.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_oem.h>
+
+#include <OpenIPMI/internal/ipmi_domain.h>
+#include <OpenIPMI/internal/ipmi_oem.h>
+#include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/ipmi_entity.h>
+#include <OpenIPMI/internal/ipmi_control.h>
+#include <OpenIPMI/internal/ipmi_mc.h>
 
 static int
 chassis_entity_sdr_add(ipmi_entity_t   *ent,

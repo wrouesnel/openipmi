@@ -32,7 +32,8 @@
  */
 
 #include <errno.h>
-#include <OpenIPMI/ipmi_int.h>
+
+#include <OpenIPMI/internal/ipmi_int.h>
 
 unsigned int ipmi_get_uint32(unsigned char *data)
 {

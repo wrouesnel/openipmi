@@ -36,9 +36,10 @@
 #include <errno.h>
 
 #include <OpenIPMI/ipmi_conn.h>
-#include <OpenIPMI/ipmi_oem.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/ipmi_int.h>
+
+#include <OpenIPMI/internal/ipmi_oem.h>
+#include <OpenIPMI/internal/ipmi_int.h>
 
 static int
 ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
