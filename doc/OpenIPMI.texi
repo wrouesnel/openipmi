@@ -590,8 +590,8 @@ you need from an object when it is reported to you.
 @node    OpenIPMI Objects, , Locking, OpenIPMI Concepts
 @section OpenIPMI Objects
 
-In OpenIPMI, the user deals with five basic objects: connections,
-domains, entities, sensors, and control.
+In OpenIPMI, the user deals with six basic objects: connections,
+domains, entities, sensors, controls, and events.
 
 @subsection Connections
 
@@ -715,6 +715,28 @@ zero returns an error.
 
 Identifier controls hold identification information for a system, such
 as a chassis id, chassis type, geographic address, or whatever.
+
+@subsection Events
+
+When an external event comes into OpenIPMI, the user will always
+receive that event in some manner (unless they do not register with a
+generic event handler, but they should always do that).  The event may
+come through a callback for a sensor, control, entity, or other
+callback.
+
+All the callbacks you should be using return a value telling whether
+the handler has ``handled'' the event.  Handling the event means that
+the callback is going to manage the event.  Primarily, this means that
+it is responsible for deleting the event from the event log with
+ipmi_event_delete().  If no callback handles the event, then it will
+be delivered to the main event handler(s).  This allows calls to
+receive events but the events to be managed in a single location.
+
+If a callback handles the event, then all future callbacks called due
+to the event will receive a @var{NULL} for the event.  So be ready to
+handle a @var{NULL} event in all your event handlers.  A @var{NULL}
+may also be passed to an event handler if the callback was not due to
+an event.
 
 @c **********************************************************************
 @node    Using OpenIPMI, How to Write OEM Plugins, OpenIPMI Concepts, Top
@@ -961,7 +983,7 @@ can remove the callback with
 @code{ipmi_domain_remove_con_fail_handler()}, and you can add more
 callbacks with @code{ipmi_domain_add_con_fail_handler()}.
 
-When the domain is given to you, the OpenIPMI library starts scanning
+After the connection comes up, the OpenIPMI library starts scanning
 the IPMB bus to find all MCs on the bus.  As it finds them, it will scan
 the sensors on the MC and add them to entities and create new entities
 as necessary.  So when OpenIPMI hands you the domain, you probably don't
@@ -972,17 +994,18 @@ OpenIPMI will rescan the bus for new MCs every 10 minutes.  It is
 expected that OEM handlers can detect new MCs with custom events and add
 the new MC sooner.
 
-Events also come in through the domain.  In the setup done callback, you
-should register for events with @code{ipmi_register_for_events()}, even
-if you are not interested in them, because you need to delete them.
-This means that your callback will receive all events that are not
-attached to a sensor or otherwise handled by something inside OpenIPMI.
-If an event is attached to a sensor, it will be delivered to a callback
-associated with the sensor.  Note that you may get events on this
-interface even if they are destined for a sensor, if the sensor doesn't
-have a handler or if the event was not delivered to the user by another
-mechanism.  This is so that the user can know the event exists and needs
-to be deleted.
+Events come in through the domain.  In the setup done callback, you
+should register for events with @code{ipmi_register_for_events()},
+even if you are not interested in them, because you need to delete
+them.  This means that your callback will receive all events that are
+not attached to a sensor or otherwise handled by something inside
+OpenIPMI.  If an event is attached to a sensor, it will be delivered
+to a callback associated with the sensor.  Note that you may get
+events on this interface even if they are destined for a sensor, if
+the sensor doesn't have a handler, the sensor event handler did not
+``handler'' the event, or if the event was not delivered to the user
+by another mechanism.  This is so that the user can know the event
+exists and needs to be deleted.
 
 @node    Events, Entities, The Domain, Using OpenIPMI
 @section Events
@@ -990,16 +1013,17 @@ to be deleted.
 Events in OpenIPMI are opaque refcounted structures.  Events generally
 come from the system and are given to you via callbacks.  The event
 given to you in a callback @emph{may not} be kept by you, although you
-can use it in the callback function.  To keep the event for later use,
-you must create a duplicate of the event using
+can use it inside the callback function.  To keep the event for later
+use, you must create a duplicate of the event using
 @code{ipmi_event_dup()}.  If you duplicate an event this way, you must
 free it with @code{ipmi_event_free()}.  If you do not free your
 events, you will leak memory.
 
-The events are kept in the system event log (SEL).  You have to manage
-the SEL yourself, if you don't then it will fill up and you will run
-out of memory.  To delete events from the SEL, use
-@code{ipmi_domain_del_event()} when you wish to delete the event.  You
+The events are kept in the remotely in the IPMI system event log (SEL)
+and locally in a copy of the SEL.  You have to manage the SEL
+yourself, if you don't then it will fill up and you will run out of
+memory.  To delete events from the SEL, use
+@code{ipmi_event_delete()} when you wish to delete the event.  You
 can use the original event from a callback, or a duplicate you kept,
 or an event fetched from the SEL.
 
@@ -1024,31 +1048,35 @@ by an event handler will be delivered to the functions registered with
 Entities are the things that sensors monitor and controls can change
 things on.  When a domain is first reported to you as operational, you
 should register a callback using
-@code{ipmi_domain_set_entity_update_handler()} to tell you when entities
-are added or removed.  That way you can know about new entities as soon
-as they are created.  If you wait until later to register the callback,
-entities may have come into existance and you will miss them (although
-you could find them after the fact using
-@code{ipmi_domain_iterate_entities()}).
+@code{ipmi_domain_add_entity_update_handler()} to tell you when
+entities are added or removed.  To deregister the call, use
+@code{ipmi_domain_remove_entity_update_handler()}.  That way you can
+know about new entities as soon as they are created.  If you wait
+until later to register the callback, entities may have come into
+existance and you will miss them (although you could find them after
+the fact using @code{ipmi_domain_iterate_entities()}).
 
-As mentioned before, entities may be present or absent.  IPMI defines a
-rather convoluted algorithm to detect this, but you don't have to worry
-about that.  Instead, you can use the
-@code{ipmi_entity_set_presence_handler()} call to register a function to
-be called whenever the presence of the entity changes.  You can use
-@code{ipmi_entity_is_present()} to determine the current presence of the
-entity.  Like the other callbacks, you should register the presence
-callback in the entity creation callback.
+As mentioned before, entities may be present or absent.  IPMI defines
+a rather convoluted algorithm to detect this, but you don't have to
+worry about that.  Instead, you can use the
+@code{ipmi_entity_add_presence_handler()} call to register a function
+to be called whenever the presence of the entity changes.  Use
+@code{ipmi_entity_add_presence_handler()} to remove the presence
+handler.  You can use @code{ipmi_entity_is_present()} to determine the
+current presence of the entity.  Like the other callbacks, you should
+register the presence callback in the entity creation callback.
 
-Sensors and controls hang off entities.  OpenIPMI provides iterators so
-you can scan all the sensors and controls on an entity.  It allows you
-to register callbacks to tell you when sensors and controls are added to
-or removed from the entity, using either
-@code{ipmi_entity_set_sensor_update_handler()} or
-@code{ipmi_entity_set_control_update_handler()}.  You sould do this in
+Sensors and controls hang off entities.  OpenIPMI provides iterators
+so you can scan all the sensors and controls on an entity.  It allows
+you to register callbacks to tell you when sensors and controls are
+added to or removed from the entity, using either
+@code{ipmi_entity_add_sensor_update_handler()} or
+@code{ipmi_entity_add_control_update_handler()}.  The handlers can be
+removed with @code{ipmi_entity_remove_sensor_update_handler()} or
+@code{ipmi_entity_remove_control_update_handler()}. You should do this in
 the entity creation callback so you won't miss any sensors or controls
-as they are detected.  You can also iterate over the current sensors and
-controls using @code{ipmi_entity_iterate_sensors()} and
+as they are detected.  You can also iterate over the current sensors
+and controls using @code{ipmi_entity_iterate_sensors()} and
 @code{ipmi_entity_iterate_controls()}.
 
 Entities are hierarchical in nature.  An entity can have children
@@ -1303,8 +1331,8 @@ abstraction for handling output devices.  This abstraction is hopefully
 good enough for whatever the IPMI committee comes up with in the future,
 but there will certainly be changes when it is specified.
 
-Controls are input/output devices.  They currently do not generate any
-type of events, they are values which can be set and (optionally) read.
+Controls are input/output devices.  They may generate events, they
+have values which can be (optionally) set and (optionally) read.
 These are relatively simple devices currently, although the IPMI
 committee is sure to complicate things in the future.
 
@@ -1363,11 +1391,24 @@ devices.  These are:
 @subsection Lights
 
 Lights are slightly more complicated than simple devices.  Lights have
-colors and blinking settings that must be represented.  Each setting is
-represented by a single integer value, and a setting is a series of one or
-more transitions the light will go through.  Each transition has a color
-and duration.  And, of course, more than one light may be supported in a
-single control.
+colors and blinking settings that must be represented.
+
+Two types of lights exist, ones that have a fixed number of settings
+(blink and color), called a transition light, and ones that can have
+their blink and color set to arbitrary values, called a setting light.
+
+The function ipmi_control_light_set_with_setting() returns true if the
+light is a setting light and false if it is a transition light.
+
+If this seems complicated, well, it is.  Sorry, there's a lot to
+represent here.
+
+@subsubsection Transition Lights
+
+For transition lights, each setting is represented by a single integer
+value, and a setting is a series of one or more transitions the light
+will go through.  Each transition has a color and duration.  And, of
+course, more than one light may be supported in a single control.
 
 The @code{ipmi_control_get_num_light_settings()} function returns the
 number of settings a specific light has.  These are defined to be
@@ -1388,8 +1429,12 @@ a second, then setting 4 will have 3 transitions, the first will be red
 with 100, the second will be green with 200, the last will be black with
 1000.
 
-If this seems complicated, well, it is.  Sorry, there's a lot to
-represent here.
+@subsubsection Setting Lights
+
+For setting lights, you can determine if a specific color is supported
+with @code{ipmi_control_light_color_is_supported()}.  You get the
+light setting with @code{ipmi_control_get_light()} and set the light setting
+with @code{ipmi_control_set_light()}.
 
 @node    Fan Speed, Identifiers, Lights, Controls
 @subsection Fan Speed

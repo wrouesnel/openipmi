@@ -5,6 +5,9 @@
 	* lib/ipmi_lan.c: ditto
 	* lib/ipmi_smi.c: ditto
 
+	* doc/OpenIPMI.texi: Added some more documentation and cleaned
+	things upa little.
+
 2004-03-02 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_lan.c: Fixed a bug where incoming SNMP traps were
