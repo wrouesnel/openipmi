@@ -1,12 +1,13 @@
 /*
  * ipmi_fru.h
  *
- * IPMI interface for SDRs
+ * IPMI interface for FRUs
  *
- * Author: FORCE Computer
- *         Thomas Kanngieser <thomas.kanngieser@fci.com>
+ * Author: MontaVista Software, Inc.
+ *         Corey Minyard <minyard@mvista.com>
+ *         source@mvista.com
  *
- * Copyright 2003 FORCE Computer
+ * Copyright 2003 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License

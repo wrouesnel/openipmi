@@ -168,20 +168,13 @@ void ipmi_entities_iterate_entities(ipmi_entity_info_t              *ent,
    or SDRs, you probably want to call this. */
 int ipmi_detect_ents_presence_changes(ipmi_entity_info_t *ents, int force);
 
-/* Fetch various entity-related IPMI information. */
-enum ipmi_dlr_type_e { IPMI_DLR_UNKNOWN = 0,
-		       IPMI_DLR_MC,
-		       IPMI_DLR_FRU,
-		       IPMI_DLR_GENERIC,
-		       IPMI_DLR_EAR,
-		       IPMI_DLR_DREAR };
-
 void ipmi_entity_set_access_address(ipmi_entity_t *ent, int access_address);
 void ipmi_entity_set_slave_address(ipmi_entity_t *ent, int slave_address);
 void ipmi_entity_set_channel(ipmi_entity_t *ent, int channel);
 void ipmi_entity_set_lun(ipmi_entity_t *ent, int lun);
 void ipmi_entity_set_private_bus_id(ipmi_entity_t *ent, int private_bus_id);
 void ipmi_entity_set_is_logical_fru(ipmi_entity_t *ent, int is_logical_fru);
+void ipmi_entity_set_fru_device_id(ipmi_entity_t *ent, int fru_device_id);
 void ipmi_entity_set_type(ipmi_entity_t *ent, enum ipmi_dlr_type_e type);
 void ipmi_entity_set_device_type(ipmi_entity_t *ent, int device_type);
 void ipmi_entity_set_device_modifier(ipmi_entity_t *ent, int device_modifier);
@@ -224,6 +217,9 @@ void ipmi_entity_set_sensor_device(ipmi_entity_t *ent,
    static string here, which should always be doable, I think.  If
    not, a management interface needs to be added for this. */
 void ipmi_entity_set_entity_id_string(ipmi_entity_t *ent, char *str);
+
+/* Fetch the FRUs for the given entity. */
+int ipmi_entity_fetch_frus(ipmi_entity_t *ent);
 
 /* Locks for the entity. */
 void ipmi_entity_lock(ipmi_entity_t *ent);

@@ -500,23 +500,49 @@ int ipmi_entity_set_presence_handler(ipmi_entity_t           *ent,
    to detect the current presence of the entity. */
 int ipmi_detect_entity_presence_change(ipmi_entity_t *entity, int force);
 
+/* Type of entities.  Note that you will never see EAR and DREAR
+   entities, so don't worry about those. */
+enum ipmi_dlr_type_e { IPMI_ENTITY_UNKNOWN = 0,
+		       IPMI_ENTITY_MC,
+		       IPMI_ENTITY_FRU,
+		       IPMI_ENTITY_GENERIC,
+		       IPMI_ENTITY_EAR,
+		       IPMI_ENTITY_DREAR };
+
 /* Get information about an entity.  Most of this is IPMI specific. */
-ipmi_domain_t *ipmi_entity_get_domain(ipmi_entity_t *ent);
-int ipmi_entity_get_access_address(ipmi_entity_t *ent);
-int ipmi_entity_get_slave_address(ipmi_entity_t *ent);
-int ipmi_entity_get_channel(ipmi_entity_t *ent);
-int ipmi_entity_get_lun(ipmi_entity_t *ent);
-int ipmi_entity_get_private_bus_id(ipmi_entity_t *ent);
-int ipmi_entity_get_is_logical_fru(ipmi_entity_t *ent);
+
+/* The entity type.  Depending on the return value from this,
+   different field will be valid as marked below. */
+enum ipmi_dlr_type_e ipmi_entity_get_type(ipmi_entity_t *ent);
+
+/* These are valid for all entities. */
 int ipmi_entity_get_is_fru(ipmi_entity_t *ent);
+ipmi_domain_t *ipmi_entity_get_domain(ipmi_entity_t *ent);
 int ipmi_entity_get_entity_id(ipmi_entity_t *ent);
 int ipmi_entity_get_entity_instance(ipmi_entity_t *ent);
+int ipmi_entity_get_presence_sensor_always_there(ipmi_entity_t *ent);
+int ipmi_entity_get_is_child(ipmi_entity_t *ent);
+int ipmi_entity_get_is_parent(ipmi_entity_t *ent);
+
+/* Valid for all entities except unknown. */
+int ipmi_entity_get_channel(ipmi_entity_t *ent);
+int ipmi_entity_get_lun(ipmi_entity_t *ent);
+int ipmi_entity_get_oem(ipmi_entity_t *ent);
+
+/* Valid for FRU and Generic */
+int ipmi_entity_get_access_address(ipmi_entity_t *ent);
+int ipmi_entity_get_private_bus_id(ipmi_entity_t *ent);
 int ipmi_entity_get_device_type(ipmi_entity_t *ent);
 int ipmi_entity_get_device_modifier(ipmi_entity_t *ent);
-int ipmi_entity_get_oem(ipmi_entity_t *ent);
-int ipmi_entity_get_presense_sensor_always_there(ipmi_entity_t *ent);
-int ipmi_entity_get_in_sdr_db(ipmi_entity_t *ent);
-int ipmi_entity_get_is_child(ipmi_entity_t *ent);
+
+/* Valid for MC and Generic */
+int ipmi_entity_get_slave_address(ipmi_entity_t *ent);
+
+/* Valid for FRU only. */
+int ipmi_entity_get_is_logical_fru(ipmi_entity_t *ent);
+int ipmi_entity_get_fru_device_id(ipmi_entity_t *ent);
+
+/* Valid for MC only */
 int ipmi_entity_get_ACPI_system_power_notify_required(ipmi_entity_t *ent);
 int ipmi_entity_get_ACPI_device_power_notify_required(ipmi_entity_t *ent);
 int ipmi_entity_get_controller_logs_init_agent_errors(ipmi_entity_t *ent);
@@ -531,7 +557,10 @@ int ipmi_entity_get_SEL_device(ipmi_entity_t *ent);
 int ipmi_entity_get_SDR_repository_device(ipmi_entity_t *ent);
 int ipmi_entity_get_sensor_device(ipmi_entity_t *ent);
 
-/* You shouldn't use this as it won't work with Unicode. */
+/* Valid for Generic only */
+int ipmi_entity_get_address_span(ipmi_entity_t *ent);
+
+/* Get the string name for the entity ID. */
 char *ipmi_entity_get_entity_id_string(ipmi_entity_t *ent);
 
 /* The ID from the SDR. */

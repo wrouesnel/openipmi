@@ -85,20 +85,20 @@ typedef struct dlr_info_s
     ipmi_device_num_t device_num;
 
     /* Key fields. */
-    uint8_t access_address;
-    uint8_t fru_device_id;
-    uint8_t is_logical_fru;
-    uint8_t lun;
-    uint8_t private_bus_id;
-    uint8_t channel;
-    uint8_t slave_address;
+    uint8_t access_address; /* Valid for FRU and Generic */
+    uint8_t fru_device_id;  /* Valid for FRU */
+    uint8_t is_logical_fru; /* Valid for FRU */
+    uint8_t lun;	    /* Valid for FRU, MC, and Generic */
+    uint8_t private_bus_id; /* Valid for FRU and Generic */
+    uint8_t channel;        /* Valid for FRU, MC, and Generic */
+    uint8_t slave_address;  /* Valid for MC and Generic. */
 
     /* General record fields. */
     uint8_t oem;
     uint8_t entity_id;
     uint8_t entity_instance;
-    uint8_t device_type;
-    uint8_t device_type_modifier;
+    uint8_t device_type;	  /* Not in MC */
+    uint8_t device_type_modifier; /* Not in MC */
 
     /* Note that the id is *not* nil terminated. */
     unsigned int id_len;
@@ -388,7 +388,7 @@ entity_add(ipmi_entity_info_t *ents,
 
     ent->ents = ents;
 
-    ent->info.type = IPMI_DLR_UNKNOWN;
+    ent->info.type = IPMI_ENTITY_UNKNOWN;
     ent->info.device_num = device_num;
     ent->info.entity_id = entity_id;
     ent->info.entity_instance = entity_instance;
@@ -577,6 +577,9 @@ presence_changed(ipmi_entity_t *ent,
 
     if (present != ent->present) {
 	ent->present = present;
+	/* When the board becomes present, fetch it's FRUs. */
+	if (present && ipmi_entity_get_is_fru(ent) && (ent->fru == NULL))
+	    ipmi_entity_fetch_frus(ent);
 	if (ent->presence_handler) {
 	    ent->presence_handler(ent, present, ent->presence_cb_data, event);
 	    handled = 1;
@@ -1134,6 +1137,18 @@ ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 }
 
 int
+ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
+				   ipmi_entity_fru_cb handler,
+				   void              *cb_data)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    ent->fru_handler = handler;
+    ent->fru_cb_data = cb_data;
+    return 0;
+}
+
+int
 ipmi_entity_set_update_handler(ipmi_entity_info_t    *ents,
 			       ipmi_domain_entity_cb handler,
 			       void                  *cb_data)
@@ -1167,8 +1182,15 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	if (ent->fru_handler)
 	    ent->fru_handler(op, ent, ent->fru, ent->fru_cb_data);
     } else {
-	ipmi_log(IPMI_LOG_WARNING, "Error fetching entity FRU: %x\n",
-		 info->err);
+	ipmi_log(IPMI_LOG_WARNING, "Error fetching entity %d.%d FRU: %x\n",
+		 ent->info.entity_id, ent->info.entity_instance, info->err);
+	if ((ent->fru) && (info->fru))
+	    /* Keep the old FRU on errors. */
+	    ipmi_fru_destroy(info->fru, NULL, NULL);
+	else
+	    /* Keep it if we got it, it might have some useful
+	       information. */
+	    ent->fru = info->fru;
     }
 }
 
@@ -1177,11 +1199,15 @@ fru_fetched_handler(ipmi_fru_t *fru, int err, void *cb_data)
 {
     ipmi_entity_id_t *ent_id = cb_data;
     fru_ent_info_t   info;
+    int              rv;
 
     info.fru = fru;
     info.err = err;
 
-    ipmi_entity_pointer_cb(*ent_id, fru_fetched_ent_cb, &info);
+    rv = ipmi_entity_pointer_cb(*ent_id, fru_fetched_ent_cb, &info);
+    if (rv)
+	/* If we can't put the fru someplace, just destroy it. */
+	ipmi_fru_destroy(fru, NULL, NULL);
 
     ipmi_mem_free(ent_id);
 }
@@ -1195,7 +1221,7 @@ decode_ear(ipmi_sdr_t *sdr,
 
     memset(info, 0, sizeof(*info));
 
-    info->type = IPMI_DLR_EAR;
+    info->type = IPMI_ENTITY_EAR;
     info->output_handler = NULL;
 
     info->device_num.channel = 0;
@@ -1225,7 +1251,7 @@ decode_drear(ipmi_sdr_t *sdr,
 
     memset(info, 0, sizeof(*info));
 
-    info->type = IPMI_DLR_DREAR;
+    info->type = IPMI_ENTITY_DREAR;
     info->output_handler = NULL;
 
     info->entity_id = sdr->data[0];
@@ -1294,7 +1320,7 @@ decode_gdlr(ipmi_sdr_t         *sdr,
 {
     memset(info, 0, sizeof(*info));
 
-    info->type = IPMI_DLR_GENERIC;
+    info->type = IPMI_ENTITY_GENERIC;
     info->output_handler = gdlr_output;
 
     if (sdr->data[8] >= 0x60) {
@@ -1366,7 +1392,7 @@ decode_frudlr(ipmi_sdr_t         *sdr,
 {
     memset(info, 0, sizeof(*info));
 
-    info->type = IPMI_DLR_FRU;
+    info->type = IPMI_ENTITY_FRU;
     info->output_handler = frudlr_output;
 
     if (sdr->data[8] >= 0x60) {
@@ -1450,7 +1476,7 @@ decode_mcdlr(ipmi_sdr_t         *sdr,
 
     memset(info, 0, sizeof(*info));
 
-    info->type = IPMI_DLR_MC;
+    info->type = IPMI_ENTITY_MC;
     info->output_handler = mcdlr_output;
 
     if (sdr->data[8] >= 0x60) {
@@ -1654,8 +1680,8 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 	if (rv)
 	    goto out_err;
 
-	if ((infos->dlrs[i]->type != IPMI_DLR_EAR)
-	    && (infos->dlrs[i]->type != IPMI_DLR_DREAR))
+	if ((infos->dlrs[i]->type != IPMI_ENTITY_EAR)
+	    && (infos->dlrs[i]->type != IPMI_ENTITY_DREAR))
 	    continue;
 
 	if (infos->dlrs[i]->is_ranges) {
@@ -1720,6 +1746,35 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 	eclinks = eclink->tlink;
 	ipmi_mem_free(eclinks);
     }
+    return rv;
+}
+
+int
+ipmi_entity_fetch_frus(ipmi_entity_t *ent)
+{
+    ipmi_entity_id_t *ent_id;
+    int              rv;
+
+    ent_id = ipmi_mem_alloc(sizeof(*ent_id));
+    if (!ent_id)
+	return ENOMEM;
+
+    *ent_id = ipmi_entity_convert_to_id(ent);
+
+    /* fetch the FRU information. */
+    rv = ipmi_fru_alloc(ent->domain,
+			ent->info.is_logical_fru,
+			ent->info.access_address,
+			ent->info.fru_device_id,
+			ent->info.lun,
+			ent->info.private_bus_id,
+			ent->info.channel,
+			fru_fetched_handler,
+			ent_id,
+			NULL);
+    if (rv)
+	ipmi_mem_free(ent_id);
+
     return rv;
 }
 
@@ -1839,8 +1894,8 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	if (found->found)
 	    continue;
 
-	if ((old_infos->dlrs[i]->type != IPMI_DLR_EAR)
-	    && (old_infos->dlrs[i]->type != IPMI_DLR_DREAR))
+	if ((old_infos->dlrs[i]->type != IPMI_ENTITY_EAR)
+	    && (old_infos->dlrs[i]->type != IPMI_ENTITY_DREAR))
 	{
 	    /* A real DLR, decrement the refcount, and destroy the info. */
 	    found->ent->ref_count--;
@@ -1858,38 +1913,19 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	if (found->found)
 	    continue;
 
-	if ((infos.dlrs[i]->type != IPMI_DLR_EAR)
-	    && (infos.dlrs[i]->type != IPMI_DLR_DREAR))
+	if ((infos.dlrs[i]->type != IPMI_ENTITY_EAR)
+	    && (infos.dlrs[i]->type != IPMI_ENTITY_DREAR))
 	{
 	    /* A real DLR, increment the refcount, and copy the info. */
 	    found->ent->ref_count++;
-	    memcpy(&found->ent->info, infos.dlrs+i, sizeof(dlr_info_t));
+	    memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
 
-	    if ((infos.dlrs[i]->type == IPMI_DLR_MC)
-		|| (infos.dlrs[i]->type == IPMI_DLR_FRU))
+	    if ((infos.dlrs[i]->type == IPMI_ENTITY_MC)
+		|| (infos.dlrs[i]->type == IPMI_ENTITY_FRU))
 	    {
-		ipmi_entity_id_t *ent_id;
-
-		ent_id = ipmi_mem_alloc(sizeof(*ent_id));
-		if (ent_id) {
-		    *ent_id = ipmi_entity_convert_to_id(found->ent);
-
-		    /* fetch the FRU information. */
-		    rv = ipmi_fru_alloc(domain,
-					infos.dlrs[i]->is_logical_fru,
-					infos.dlrs[i]->access_address,
-					infos.dlrs[i]->fru_device_id,
-					infos.dlrs[i]->lun,
-					infos.dlrs[i]->private_bus_id,
-					infos.dlrs[i]->channel,
-					fru_fetched_handler,
-					ent_id,
-					NULL);
-		    if (rv)
-			ipmi_mem_free(ent_id);
-		    /* No worry on error, an audit will pick it up. */
-		    /* FIXME - write the audit. */
-		}
+		ipmi_entity_fetch_frus(found->ent);
+		/* No worry on error, an audit will pick it up. */
+		/* FIXME - write the audit. */
 	    }
 	} else {
 	    /* It's an EAR, so handling adding the children. */
@@ -1972,8 +2008,8 @@ ipmi_sdr_entity_destroy(void *info)
 	if (rv)
 	    continue;
 
-	if ((infos->dlrs[i]->type != IPMI_DLR_EAR)
-	    && (infos->dlrs[i]->type != IPMI_DLR_DREAR))
+	if ((infos->dlrs[i]->type != IPMI_ENTITY_EAR)
+	    && (infos->dlrs[i]->type != IPMI_ENTITY_DREAR))
 	{
 	    ent->ref_count--;
 	} else {
@@ -2017,7 +2053,7 @@ ipmi_sdr_entity_destroy(void *info)
 	cleanup_entity(ent);
     }
 
-    ipmi_mem_free(info);
+    destroy_sdr_info(info);
 
     return 0;
 }
@@ -2335,13 +2371,29 @@ ipmi_entity_set_is_logical_fru(ipmi_entity_t *ent, int is_logical_fru)
 }
 
 int
+ipmi_entity_get_fru_device_id(ipmi_entity_t *ent)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    return ent->info.fru_device_id;
+}
+
+void
+ipmi_entity_set_fru_device_id(ipmi_entity_t *ent, int fru_device_id)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    ent->info.fru_device_id = fru_device_id;
+}
+
+int
 ipmi_entity_get_is_fru(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    if (ent->info.type == IPMI_DLR_FRU)
+    if (ent->info.type == IPMI_ENTITY_FRU)
 	return 1;
-    if ((ent->info.type == IPMI_DLR_MC) && (ent->info.FRU_inventory_device))
+    if ((ent->info.type == IPMI_ENTITY_MC) && (ent->info.FRU_inventory_device))
 	return 1;
     return 0;
 }
@@ -2351,7 +2403,15 @@ ipmi_entity_get_is_mc(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.type == IPMI_DLR_MC;
+    return ent->info.type == IPMI_ENTITY_MC;
+}
+
+enum ipmi_dlr_type_e
+ipmi_entity_get_type(ipmi_entity_t *ent)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    return ent->info.type;
 }
 
 void
@@ -2534,7 +2594,7 @@ ipmi_entity_get_ACPI_device_power_notify_required(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.ACPI_device_power_notify_required;
 }
 
 void
@@ -2543,7 +2603,7 @@ ipmi_entity_set_ACPI_device_power_notify_required(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.ACPI_device_power_notify_required = val;
 }
 
 int
@@ -2551,7 +2611,7 @@ ipmi_entity_get_controller_logs_init_agent_errors(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.controller_logs_init_agent_errors;
 }
 
 void
@@ -2560,7 +2620,7 @@ ipmi_entity_set_controller_logs_init_agent_errors(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.controller_logs_init_agent_errors = val;
 }
 
 int
@@ -2568,7 +2628,7 @@ ipmi_entity_get_log_init_agent_errors_accessing(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.log_init_agent_errors_accessing;
 }
 
 void
@@ -2577,7 +2637,7 @@ ipmi_entity_set_log_init_agent_errors_accessing(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.log_init_agent_errors_accessing = val;
 }
 
 int
@@ -2585,7 +2645,7 @@ ipmi_entity_get_global_init(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.global_init;
 }
 
 void
@@ -2594,7 +2654,7 @@ ipmi_entity_set_global_init(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.global_init = val;
 }
 
 int
@@ -2602,7 +2662,7 @@ ipmi_entity_get_chassis_device(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.chassis_device;
 }
 
 void
@@ -2611,7 +2671,7 @@ ipmi_entity_set_chassis_device(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.chassis_device = val;
 }
 
 int
@@ -2619,7 +2679,7 @@ ipmi_entity_get_bridge(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.bridge;
 }
 
 void
@@ -2628,7 +2688,7 @@ ipmi_entity_set_bridge(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.bridge = val;
 }
 
 int
@@ -2636,7 +2696,7 @@ ipmi_entity_get_IPMB_event_generator(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.IPMB_event_generator;
 }
 
 void
@@ -2645,7 +2705,7 @@ ipmi_entity_set_IPMB_event_generator(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.IPMB_event_generator = val;
 }
 
 int
@@ -2653,7 +2713,7 @@ ipmi_entity_get_IPMB_event_receiver(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.IPMB_event_receiver;
 }
 
 void
@@ -2662,7 +2722,7 @@ ipmi_entity_set_IPMB_event_receiver(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.IPMB_event_receiver = val;
 }
 
 int
@@ -2670,7 +2730,7 @@ ipmi_entity_get_FRU_inventory_device(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.FRU_inventory_device;
 }
 
 void
@@ -2679,7 +2739,7 @@ ipmi_entity_set_FRU_inventory_device(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.FRU_inventory_device = val;
 }
 
 int
@@ -2687,7 +2747,7 @@ ipmi_entity_get_SEL_device(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.SEL_device;
 }
 
 void
@@ -2696,7 +2756,7 @@ ipmi_entity_set_SEL_device(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.SEL_device = val;
 }
 
 int
@@ -2704,7 +2764,7 @@ ipmi_entity_get_SDR_repository_device(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.SDR_repository_device;
 }
 
 void
@@ -2713,7 +2773,7 @@ ipmi_entity_set_SDR_repository_device(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.SDR_repository_device = val;
 }
 
 int
@@ -2721,7 +2781,7 @@ ipmi_entity_get_sensor_device(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.ACPI_system_power_notify_required;
+    return ent->info.sensor_device;
 }
 
 void
@@ -2730,7 +2790,7 @@ ipmi_entity_set_sensor_device(ipmi_entity_t *ent,
 {
     CHECK_ENTITY_LOCK(ent);
 
-    ent->info.ACPI_system_power_notify_required = val;
+    ent->info.sensor_device = val;
 }
 
 
@@ -2740,6 +2800,14 @@ ipmi_entity_get_is_child(ipmi_entity_t *ent)
     CHECK_ENTITY_LOCK(ent);
 
     return ! ilist_empty(ent->parent_entities);
+}
+
+int
+ipmi_entity_get_is_parent(ipmi_entity_t *ent)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    return ! ilist_empty(ent->sub_entities);
 }
 
 int
@@ -2784,8 +2852,9 @@ typedef struct iterate_child_info_s
 static void
 iterate_child_handler(ilist_iter_t *iter, void *item, void *cb_data)
 {
+    entity_child_link_t *link = item;
     iterate_child_info_t *info = cb_data;
-    info->handler(info->ent, item, info->cb_data);
+    info->handler(info->ent, link->child, info->cb_data);
 }
 
 void

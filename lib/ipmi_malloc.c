@@ -136,14 +136,15 @@ mem_debug_log(void                      *data,
 {
     int  i;
 
+    ipmi_log(IPMI_LOG_DEBUG_START, "%s", text);
     if (hdr) {
-	ipmi_log(IPMI_LOG_DEBUG_START,
-		 "%s of %d bytes at %p, allocated at",
-		 text, hdr->size, data);
+	ipmi_log(IPMI_LOG_DEBUG_CONT,
+		 "of %d bytes at %p, allocated at",
+		 hdr->size, data);
 	for (i=0; i<TB_SIZE; i++)
 	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", hdr->tb[i]);
-    } else {
-	ipmi_log(IPMI_LOG_DEBUG_START, "%s at %p", text, data);
+    } else if (data) {
+	ipmi_log(IPMI_LOG_DEBUG_CONT, " at %p", data);
     }
     if (trlr) {
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n originally freed at");

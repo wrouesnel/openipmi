@@ -3874,7 +3874,6 @@ mxp_create_entities(ipmi_mc_t  *mc,
     if (rv)
 	goto out;
 
-    /* FIXME - what about the second alarm card? */
     for (i=0; i<MXP_ALARM_CARDS; i++) {
 	int idx = MXP_ALARM_CARD_IDX_OFFSET + i;
 	ipmb_addr = 0x20;
@@ -3891,6 +3890,15 @@ mxp_create_entities(ipmi_mc_t  *mc,
 		     rv);
 	    goto out;
 	}
+	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
+	ipmi_entity_set_FRU_inventory_device(info->board[idx].ent, 1);
+	ipmi_entity_set_is_logical_fru(info->board[idx].ent, 1);
+	ipmi_entity_set_access_address(info->board[idx].ent, ipmb_addr);
+	ipmi_entity_set_fru_device_id(info->board[idx].ent, 0);
+	ipmi_entity_set_lun(info->board[idx].ent, 0);
+	ipmi_entity_set_private_bus_id(info->board[idx].ent, 0);
+	ipmi_entity_set_channel(info->board[idx].ent, 0);
+	ipmi_entity_fetch_frus(info->board[idx].ent);
 	info->board[idx].info = info;
 	info->board[idx].idx = idx;
 	info->board[idx].is_amc = 1;
@@ -3933,6 +3941,14 @@ mxp_create_entities(ipmi_mc_t  *mc,
 		     rv);
 	    goto out;
 	}
+	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
+	ipmi_entity_set_FRU_inventory_device(info->board[idx].ent, 1);
+	ipmi_entity_set_is_logical_fru(info->board[idx].ent, 1);
+	ipmi_entity_set_access_address(info->board[idx].ent, ipmb_addr);
+	ipmi_entity_set_fru_device_id(info->board[idx].ent, 0);
+	ipmi_entity_set_lun(info->board[idx].ent, 0);
+	ipmi_entity_set_private_bus_id(info->board[idx].ent, 0);
+	ipmi_entity_set_channel(info->board[idx].ent, 0);
 	info->board[idx].info = info;
 	info->board[idx].idx = idx;
 	info->board[idx].is_amc = 0;
@@ -3967,6 +3983,8 @@ mxp_create_entities(ipmi_mc_t  *mc,
 		     rv);
 	    goto out;
 	}
+	ipmi_entity_set_type(info->power_supply[i].ent, IPMI_ENTITY_FRU);
+	/* FIXME - is there FRU information someplace? */
 	name = fan_entity_str[i];
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_FAN_COOLING,
@@ -4026,6 +4044,14 @@ mxp_create_entities(ipmi_mc_t  *mc,
 		     rv);
 	    goto out;
 	}
+	ipmi_entity_set_type(info->board[idx].ent, IPMI_ENTITY_MC);
+	ipmi_entity_set_FRU_inventory_device(info->board[idx].ent, 1);
+	ipmi_entity_set_is_logical_fru(info->board[idx].ent, 1);
+	ipmi_entity_set_access_address(info->board[idx].ent, ipmb_addr);
+	ipmi_entity_set_fru_device_id(info->board[idx].ent, 0);
+	ipmi_entity_set_lun(info->board[idx].ent, 0);
+	ipmi_entity_set_private_bus_id(info->board[idx].ent, 0);
+	ipmi_entity_set_channel(info->board[idx].ent, 0);
 	info->board[idx].info = info;
 	info->board[idx].idx = idx;
 	info->board[idx].is_amc = 0;

@@ -202,6 +202,13 @@ fru_decode_string(unsigned char **in,
     int           force_unicode;
     unsigned int  skip = **in & 0x3f;
 
+    if (**in == 0xc1)
+	/* The field is not present. */
+	return 0;
+
+    if (skip+1 > *in_len)
+	return EBADMSG;
+
     force_unicode = !force_english && (lang_code != IPMI_LANG_CODE_ENGLISH);
     out->length = ipmi_get_device_string(*in, *in_len, str, force_unicode,
 					 &out->type, sizeof(str));
@@ -340,7 +347,8 @@ fru_free_variable_string(fru_variable_t *v)
     for (i=0; i<v->next; i++)
 	fru_free_string(&v->strings[i]);
 
-    ipmi_mem_free(v->strings);
+    if (v->strings)
+	ipmi_mem_free(v->strings);
 }
 
 
@@ -1167,9 +1175,17 @@ fru_data_handler(ipmi_domain_t *domain,
 
     count = data[1] << fru->fetch_by_words;
 
+    if (count == 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO, "FRU got zero-sized data, must make"
+		 " progress!");
+	fetch_complete(fru, EINVAL);
+	goto out;
+    }
+
     if (count > msg->data_len-2) {
 	ipmi_log(IPMI_LOG_ERR_INFO, "FRU data count mismatch");
 	fetch_complete(fru, EINVAL);
+	goto out;
     }
 
     memcpy(fru->data+fru->curr_pos, data+2, count);

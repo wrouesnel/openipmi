@@ -1,4 +1,34 @@
 
+2003-09-25 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_entity: Moved
+	entity type definitions to the public part and renamed them, and
+	allow getting and setting the type
+	* lib/entity.c: ditto
+
+	* include/OpenIPMI/entity.h, lib/entity.c: Reworked the FRU
+	handling to be more flexible.
+
+	* include/OpenIPMI/ipmiif.h: Reworked the entity information to
+	make it more understandable.
+
+	* lib/entity.c: Lots of little cleanups for FRU handling and
+	handling of SDR records.
+
+	* lib/fru.c: Fixed handling of some data type to find some types
+	of errors.
+
+	* lib/ipmi_lan.c: Modified the handling of tunnelling IPMB over
+	LAN to work with Intel boxes.  It seems their interpretation of
+	the spec is different than mine, but the code should now work with
+	both interpretations.
+
+	* lib/ipmi_malloc.c: Don't print some data that we don't have.
+
+	* lib/oem_motorola_mxp.c: Updated for FRU handling.
+
+	* ui/ui.c: Added better entity output and FRU change handling.
+	
 2003-09-24 Corey Minyard <cminyard@mvista.com>
 
 	* ui/ui.c: Added some FRU handling commands.

@@ -464,7 +464,8 @@ lan_send_addr(lan_data_t  *lan,
 	tmsg[pos++] = 0x81; /* Remote console IPMI Software ID */
 	tmsg[pos++] = seq << 2;
 	tmsg[pos++] = IPMI_SEND_MSG_CMD;
-	tmsg[pos++] = ipmb_addr->channel & 0xf;
+	tmsg[pos++] = ((ipmb_addr->channel & 0xf)
+		       | (1 << 6)); /* Turn on tracking. */
 	if (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
 	    tmsg[pos++] = 0; /* Do a broadcast. */
 	msgstart = pos;
@@ -472,8 +473,8 @@ lan_send_addr(lan_data_t  *lan,
 	tmsg[pos++] = (msg->netfn << 2) | ipmb_addr->lun;
 	tmsg[pos++] = ipmb_checksum(tmsg+msgstart, 2);
 	msgstart = pos;
-	tmsg[pos++] = 0x81;
-	tmsg[pos++] = seq << 2;
+	tmsg[pos++] = lan->slave_addr;
+	tmsg[pos++] = (seq << 2) | 2; /* add 2 as the SMS LUN */
 	tmsg[pos++] = msg->cmd;
 	memcpy(tmsg+pos, msg->data, msg->data_len);
 	pos += msg->data_len;
@@ -787,7 +788,8 @@ rsp_timeout_handler(void              *cb_data,
 		 lan->ip_failure_time[ip_num].tv_usec);
     }
 
-    if (lan->seq_table[seq].addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+    if (lan->seq_table[seq].addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+    {
 	/* We only count timeouts on messages to the system interface.
            Otherwise, if we sent a bunch of messages to the IPMB that
            timed out, we might trigger this code accidentally. */
@@ -1302,6 +1304,11 @@ data_handler(int            fd,
 	    msg.data = tmsg + 6;
 	    msg.data_len = 1;
 	} else {
+	    if (data_len < 14)
+		/* The response to a send message was not carrying the
+		   payload. */
+		goto out_unlock2;
+
 	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
 	    /* This is a hack, but the channel does not come back in the
 	       message.  So we use the channel from the original
@@ -1339,13 +1346,32 @@ data_handler(int            fd,
 	handle_async_event(ipmi, &addr, addr_len, &msg);
 	goto out_unlock2;
     } else {
-	/* It's a response directly from the BMC. */
-	ipmi_system_interface_addr_t *si_addr
-	    = (ipmi_system_interface_addr_t *) &addr;
+	/* It's not encapsulated in a send message response. */
 
-	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si_addr->channel = 0xf;
-	si_addr->lun = tmsg[1] & 3;
+	if (tmsg[3] == lan->slave_addr) {
+	    ipmi_system_interface_addr_t *si_addr
+		= (ipmi_system_interface_addr_t *) &addr;
+
+	    /* It's directly from the BMC, so it's a system interface
+	       message. */
+	    si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	    si_addr->channel = 0xf;
+	    si_addr->lun = tmsg[1] & 3;
+	} else {
+	    ipmi_ipmb_addr_t *ipmb_addr	= (ipmi_ipmb_addr_t *) &addr;
+	    ipmi_ipmb_addr_t *ipmb2
+		= (ipmi_ipmb_addr_t *) &lan->seq_table[seq].addr;
+
+	    /* It's directly from the BMC, so it's a system interface
+	       message. */
+	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
+	    /* This is a hack, but the channel does not come back in the
+	       message.  So we use the channel from the original
+	       instead. */
+	    ipmb_addr->channel = ipmb2->channel;
+	    ipmb_addr->slave_addr = tmsg[3];
+	    ipmb_addr->lun = tmsg[4] & 0x3;
+	}
 
 	msg.netfn = tmsg[1] >> 2;
 	msg.cmd = tmsg[5];
@@ -2482,7 +2508,7 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     lan->initialized = 0;
 
     lan->outstanding_msg_count = 0;
-    lan->max_outstanding_msg_count = 10;
+    lan->max_outstanding_msg_count = 4;
     lan->wait_q = NULL;
     lan->wait_q_tail = NULL;
 

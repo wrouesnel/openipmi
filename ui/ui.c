@@ -116,7 +116,7 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 enum {
     DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_SENSORS,
     DISPLAY_CONTROLS, DISPLAY_CONTROL, DISPLAY_ENTITIES, DISPLAY_MCS,
-    DISPLAY_RSP, DISPLAY_SDRS, HELP, EVENTS
+    DISPLAY_RSP, DISPLAY_SDRS, HELP, EVENTS, DISPLAY_ENTITY, DISPLAY_FRU
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
 ipmi_control_id_t curr_control_id;
@@ -227,6 +227,15 @@ void
 display_pad_clear(void)
 {
     display_pad_top_line = 0;
+    if (full_screen) {
+	werase(display_pad);
+	wmove(display_pad, 0, 0);
+    }
+}
+
+void
+display_pad_clear_nomove(void)
+{
     if (full_screen) {
 	werase(display_pad);
 	wmove(display_pad, 0, 0);
@@ -763,22 +772,34 @@ entities_handler(ipmi_entity_t *entity,
     int  id, instance;
     char *present;
     char name[33];
+    enum ipmi_dlr_type_e type;
+    static char *ent_types[] = { "unknown", "mc", "fru",
+				 "generic", "invalid" };
 
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
+    type = ipmi_entity_get_type(entity);
+    if (type > IPMI_ENTITY_GENERIC)
+	type = IPMI_ENTITY_GENERIC + 1;
     curr_entity_id = ipmi_entity_convert_to_id(entity);
     ipmi_entity_get_id(entity, name, 32);
+    if (strlen(name) == 0)
+	strncpy(name, ipmi_entity_get_entity_id_string(entity), 33);
     if (ipmi_entity_is_present(entity))
 	present = "present";
     else
 	present = "not present";
-    display_pad_out("  %d.%d (%s) %s\n", id, instance, name, present);
+    display_pad_out("  %d.%d (%s) %s  %s\n", id, instance, name,
+		    ent_types[type], present);
 }
 
 static void
 entities_cmder(ipmi_domain_t *domain, void *cb_data)
 {
-    display_pad_clear();
+    if (cb_data)
+	display_pad_clear_nomove();
+    else
+	display_pad_clear();
     display_pad_out("Entities:\n");
     ipmi_domain_iterate_entities(domain, entities_handler, NULL);
     display_pad_refresh();
@@ -877,6 +898,151 @@ entity_finder(char *cmd, char **toks,
 
     return 0;
 }
+
+static void
+entity_iterate_handler(ipmi_entity_t *o,
+		       ipmi_entity_t *entity,
+		       void          *cb_data)
+{
+    int  id, instance;
+    char name[33];
+
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    ipmi_entity_get_id(entity, name, 32);
+
+    display_pad_out("    %d.%d (%s)\n", id, instance, name);
+}
+
+static void
+entity_handler(ipmi_entity_t *entity,
+	       char          **toks,
+	       char          **toks2,
+	       void          *cb_data)
+{
+    int  id, instance;
+    char *present;
+    char name[33];
+    enum ipmi_dlr_type_e type;
+    static char *ent_types[] = { "unknown", "mc", "fru",
+				 "generic", "invalid" };
+
+    display_pad_clear();
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    type = ipmi_entity_get_type(entity);
+    if (type > IPMI_ENTITY_GENERIC)
+	type = IPMI_ENTITY_GENERIC + 1;
+    curr_entity_id = ipmi_entity_convert_to_id(entity);
+    ipmi_entity_get_id(entity, name, 32);
+    if (ipmi_entity_is_present(entity))
+	present = "present";
+    else
+	present = "not present";
+    display_pad_out("Entity %d.%d (%s)  %s\n", id, instance, name,  present);
+
+    display_pad_out("  type = %s\n", ent_types[type]);
+    display_pad_out("  id name = %s\n",
+		    ipmi_entity_get_entity_id_string(entity));
+    display_pad_out("  is%s fru\n",
+		    ipmi_entity_get_is_fru(entity) ? "" : " not");
+    display_pad_out("  present sensor%s always there\n",
+		    ipmi_entity_get_presence_sensor_always_there(entity)
+		    ? "" : " not");
+    if (ipmi_entity_get_is_child(entity)) {
+	display_pad_out("  Parents:\n");
+	ipmi_entity_iterate_parents(entity, entity_iterate_handler, NULL);
+    }
+    if (ipmi_entity_get_is_parent(entity)) {
+	display_pad_out("  Children:\n");
+	ipmi_entity_iterate_children(entity, entity_iterate_handler, NULL);
+    }
+
+    switch (type) {
+    case IPMI_ENTITY_MC:
+	display_pad_out("  channel = 0x%x\n", ipmi_entity_get_channel(entity));
+	display_pad_out("  lun = 0x%x\n", ipmi_entity_get_lun(entity));
+	display_pad_out("  oem = 0x%x\n", ipmi_entity_get_oem(entity));
+	display_pad_out("  slave_address = 0x%x\n",
+			ipmi_entity_get_slave_address(entity));
+	display_pad_out("  ACPI_system_power_notify_required = 0x%x\n",
+			ipmi_entity_get_ACPI_system_power_notify_required(entity));
+	display_pad_out("  ACPI_device_power_notify_required = 0x%x\n",
+			ipmi_entity_get_ACPI_device_power_notify_required(entity));
+	display_pad_out("  controller_logs_init_agent_errors = 0x%x\n",
+			ipmi_entity_get_controller_logs_init_agent_errors(entity));
+	display_pad_out("  log_init_agent_errors_accessing = 0x%x\n",
+			ipmi_entity_get_log_init_agent_errors_accessing(entity));
+	display_pad_out("  global_init = 0x%x\n",
+			ipmi_entity_get_global_init(entity));
+	display_pad_out("  chassis_device = 0x%x\n",
+			ipmi_entity_get_chassis_device(entity));
+	display_pad_out("  bridge = 0x%x\n",
+			ipmi_entity_get_bridge(entity));
+	display_pad_out("  IPMB_event_generator = 0x%x\n",
+			ipmi_entity_get_IPMB_event_generator(entity));
+	display_pad_out("  IPMB_event_receiver = 0x%x\n",
+			ipmi_entity_get_IPMB_event_receiver(entity));
+	display_pad_out("  FRU_inventory_device = 0x%x\n",
+			ipmi_entity_get_FRU_inventory_device(entity));
+	display_pad_out("  SEL_device = 0x%x\n",
+			ipmi_entity_get_SEL_device(entity));
+	display_pad_out("  SDR_repository_device = 0x%x\n",
+			ipmi_entity_get_SDR_repository_device(entity));
+	display_pad_out("  sensor_device = 0x%x\n",
+			ipmi_entity_get_sensor_device(entity));
+	break;
+
+    case IPMI_ENTITY_FRU:
+	display_pad_out("  channel = 0x%x\n", ipmi_entity_get_channel(entity));
+	display_pad_out("  lun = 0x%x\n", ipmi_entity_get_lun(entity));
+	display_pad_out("  oem = 0x%x\n", ipmi_entity_get_oem(entity));
+	display_pad_out("  access_address = 0x%x\n",
+			ipmi_entity_get_access_address(entity));
+	display_pad_out("  private_bus_id = 0x%x\n",
+			ipmi_entity_get_private_bus_id(entity));
+	display_pad_out("  device_type = 0x%x\n",
+			ipmi_entity_get_device_type(entity));
+	display_pad_out("  device_modifier = 0x%x\n",
+			ipmi_entity_get_device_modifier(entity));
+	display_pad_out("  is_logical_fru = 0x%x\n",
+			ipmi_entity_get_is_logical_fru(entity));
+	display_pad_out("  fru_device_id = 0x%x\n",
+			ipmi_entity_get_fru_device_id(entity));
+	break;
+
+    case IPMI_ENTITY_GENERIC:
+	display_pad_out("  channel = 0x%x\n", ipmi_entity_get_channel(entity));
+	display_pad_out("  lun = 0x%x\n", ipmi_entity_get_lun(entity));
+	display_pad_out("  oem = 0x%x\n", ipmi_entity_get_oem(entity));
+	display_pad_out("  access_address = 0x%x\n",
+			ipmi_entity_get_access_address(entity));
+	display_pad_out("  private_bus_id = 0x%x\n",
+			ipmi_entity_get_private_bus_id(entity));
+	display_pad_out("  device_type = 0x%x\n",
+			ipmi_entity_get_device_type(entity));
+	display_pad_out("  device_modifier = 0x%x\n",
+			ipmi_entity_get_device_modifier(entity));
+	display_pad_out("  slave_address = 0x%x\n",
+			ipmi_entity_get_slave_address(entity));
+	display_pad_out("  address_span = 0x%x\n",
+			ipmi_entity_get_address_span(entity));
+	break;
+
+    default:
+	break;
+    }
+    display_pad_refresh();
+}
+
+int
+entity_cmd(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, entity_handler, NULL);
+    curr_display_type = DISPLAY_ENTITY;
+    return 0;
+}
+
 
 static void
 sensors_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
@@ -2469,6 +2635,7 @@ static int
 fru_cmd(char *cmd, char **toks, void *cb_data)
 {
     entity_finder(cmd, toks, found_entity_for_fru, NULL);
+    curr_display_type = DISPLAY_ENTITY;
     return 0;
 }
 
@@ -2537,6 +2704,8 @@ dump_fru_cmd(char *cmd, char **toks, void *cb_data)
     rv = ipmi_domain_pointer_cb(domain_id, dump_fru_cmder, &info);
     if (rv)
 	cmd_win_out("Unable to convert domain id to a pointer\n");
+    else 
+	curr_display_type = DISPLAY_ENTITY;
 
     return 0;
 }
@@ -3426,8 +3595,14 @@ static struct {
     char          *help;
 } cmd_list[] =
 {
+    { "display_win",  display_win_cmd,
+      " - Sets the display window (left window) for scrolling" },
+    { "log_win",  log_win_cmd,
+      " - Sets the log window (right window) for scrolling" },
     { "entities",	entities_cmd,
       " - list all the entities the UI knows about" },
+    { "entity",         entity_cmd,
+      " <entity name> - list all the info about an entity" },
     { "sensors",	sensors_cmd,
       " <entity name> - list all the sensors that monitor the entity" },
     { "sensor",		sensor_cmd,
@@ -3486,10 +3661,6 @@ static struct {
       " - Check the presence of entities" },
     { "reconnect",  reconnect_cmd,
       " - scan an IPMB to add or remove it" },
-    { "display_win",  display_win_cmd,
-      " - Sets the display window (left window) for scrolling" },
-    { "log_win",  log_win_cmd,
-      " - Sets the log window (right window) for scrolling" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}
@@ -3807,6 +3978,28 @@ entity_presence_handler(ipmi_entity_t *entity,
 	ui_log("Due to event 0x%4.4x\n", event->record_id);
 }
 
+void fru_change(enum ipmi_update_e op,
+		ipmi_entity_t      *ent,
+		ipmi_fru_t         *fru,
+		void               *cb_data)
+{
+    int id, instance;
+
+    id = ipmi_entity_get_entity_id(ent);
+    instance = ipmi_entity_get_entity_instance(ent);
+    switch (op) {
+	case IPMI_ADDED:
+	    ui_log("FRU added for %d.%d\n", id, instance);
+	    break;
+	case IPMI_DELETED:
+	    ui_log("FRU deleted for %d.%d\n", id, instance);
+	    break;
+	case IPMI_CHANGED:
+	    ui_log("FRU changed for %d.%d\n", id, instance);
+	    break;
+    }
+}
+
 static void
 entity_change(enum ipmi_update_e op,
 	      ipmi_domain_t      *domain,
@@ -3833,6 +4026,13 @@ entity_change(enum ipmi_update_e op,
 							entity);
 	    if (rv) {
 		report_error("ipmi_entity_set_control_update_handler", rv);
+		break;
+	    }
+	    rv = ipmi_entity_set_fru_update_handler(entity,
+						    fru_change,
+						    entity);
+	    if (rv) {
+		report_error("ipmi_entity_set_control_fru_handler", rv);
 		break;
 	    }
 	    rv = ipmi_entity_set_presence_handler(entity,
@@ -3891,7 +4091,7 @@ redisplay_timeout(selector_t  *sel,
 	return;
 
     if (curr_display_type == DISPLAY_ENTITIES) {
-	rv = ipmi_domain_pointer_cb(domain_id, entities_cmder, NULL);
+	rv = ipmi_domain_pointer_cb(domain_id, entities_cmder, &rv);
 	if (rv)
 	    ui_log("redisplay_timeout:"
 		   " Unable to convert BMC id to a pointer\n");
