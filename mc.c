@@ -969,8 +969,8 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
 		      ipmi_msg_t *rsp,
 		      void       *rsp_data)
 {
-    int rv = 0;
-    int curr = (int) rsp_data;
+    int  rv = 0;
+    long curr = (long) rsp_data;
 
     if (rsp->data[0] != 0) {
 	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
