@@ -391,7 +391,7 @@ ipmi_get_entity_id_string(unsigned int val)
     return entity_id_types[val];
 }
 
-static char *event_reading_states[256][15] =
+static char *event_reading_states[256][16] =
 {
     { },
     { "lower non-critical - going low",
@@ -445,7 +445,7 @@ static char *event_reading_states[256][15] =
       "D3 power state" }
 };
 
-static char *sensor_states[256][15] =
+static char *sensor_states[256][16] =
 {
     {}, /* 0x00 */
     {}, /* 0x01 */
@@ -666,9 +666,9 @@ ipmi_get_reading_name(unsigned int event_reading_type,
 {
     char *rv;
     if (event_reading_type == IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC) {
-	if ((event_reading_type > 255) || (val > 15))
+	if ((sensor_type > 255) || (val > 15))
 	    return "invalid";
-	rv = sensor_states[event_reading_type][val];
+	rv = sensor_states[sensor_type][val];
     } else {
 	if ((event_reading_type > 255) || (val > 15))
 	    return "invalid";

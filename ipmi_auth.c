@@ -36,6 +36,7 @@
 
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_int.h>
 #include "md2.h"
 #include "md5.h"
 

@@ -1,6 +1,8 @@
 
 2003-04-24 Corey Minyard <cminyard@mvista.com>
 
+	* strings.c: Fixed a bug in getting the sensor reading name.
+
 	* priv_table.c, include/OpenIPMI/ipmi_auth.h: Added a table and
 	handling for figuring out if a message is permitted for a certain
 	priviledge level.

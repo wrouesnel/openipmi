@@ -415,9 +415,7 @@ ipmi_cmd_permitted(unsigned char priv,
     /* Priviledges */
     priv--;
     if (priv >= 4)
-	return PRIV_INVALID;
-
-	return PRIV_INVALID;
+	return IPMI_PRIV_INVALID;
 
     if ((netfn > IPMI_TRANSPORT_NETFN)
 	|| (cmd >= priv_table[netfn>>1].size))
@@ -425,9 +423,9 @@ ipmi_cmd_permitted(unsigned char priv,
 	/* All things not in the table are assumed to take
            administrator priviledge. */
 	if (priv == 4)
-	    return PRIV_PERMITTED;
+	    return IPMI_PRIV_PERMITTED;
 	else
-	    return PRIV_DENIED;
+	    return IPMI_PRIV_DENIED;
     }
 
     perm = priv_table[netfn>>1].vals[cmd];
@@ -443,14 +441,14 @@ ipmi_cmd_permitted(unsigned char priv,
 
 	case p:
 	case X:
-	    return 1;
+	    return IPMI_PRIV_PERMITTED;
 
 	case h:
-	    return PRIV_SEND;
+	    return IPMI_PRIV_SEND;
 
 	case i:
-	    return PRIV_BOOT;
+	    return IPMI_PRIV_BOOT;
     }
 
-    return PRIV_DENIED;
+    return IPMI_PRIV_DENIED;
 }

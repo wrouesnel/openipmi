@@ -93,11 +93,11 @@ extern ipmi_auth_t ipmi_auths[MAX_IPMI_AUTHS];
 
 /* Tell if a specific command is permitted for the given priviledge
    level.  Returns one of the following. */
-#define PRIV_INVALID	-1
-#define PRIV_DENIED	0
-#define PRIV_PERMITTED	1
-#define PRIV_SEND	2 /* Special send message handling needed. */
-#define PRIV_BOOT	3 /* Special set system boot options handling. */
+#define IPMI_PRIV_INVALID	-1
+#define IPMI_PRIV_DENIED	0
+#define IPMI_PRIV_PERMITTED	1
+#define IPMI_PRIV_SEND		2 /* Special send message handling needed. */
+#define IPMI_PRIV_BOOT		3 /* Special set system boot options handling.*/
 
 int ipmi_cmd_permitted(unsigned char priv,
 		       unsigned char netfn,
