@@ -722,12 +722,12 @@ main(int argc, char *argv[])
 
 	    case 'v':
 		printInfo();
-		leave(0);
+		exit(0);
 		break;
 
 	    default:
 		poptPrintUsage(poptCtx, stderr, 0);
-		leave(1);
+		exit(1);
 		break;
 	}
     }
@@ -736,7 +736,7 @@ main(int argc, char *argv[])
 
     if (!argv) {
 	fprintf(stderr, "Not enough arguments\n");
-	leave(1);
+	exit(1);
     }
 
     for (argc=0; argv[argc]!= NULL; argc++)
@@ -744,7 +744,7 @@ main(int argc, char *argv[])
 
     if (argc < 1) {
 	fprintf(stderr, "Not enough arguments\n");
-	leave(1);
+	exit(1);
     }
 
     /* OS handler allocated first. */
@@ -764,7 +764,7 @@ main(int argc, char *argv[])
     rv = ipmi_init(os_hnd);
     if (rv) {
 	fprintf(stderr, "Error initializing connections: 0x%x\n", rv);
-	leave(1);
+	exit(1);
     }
 
     curr_arg = 0;
@@ -773,13 +773,13 @@ main(int argc, char *argv[])
     if (rv) {
 	fprintf(stderr, "Error parsing command arguments, argument %d: %s\n",
 		curr_arg, strerror(rv));
-	leave(1);
+	exit(1);
     }
 
     rv = ipmi_args_setup_con(args, os_hnd, sel, &con);
     if (rv) {
-        fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
-	leave(1);
+        fprintf(stderr, "ipmi_ip_setup_con: %s\n", strerror(rv));
+	exit(1);
     }
 
     if (interactive) {
@@ -798,7 +798,7 @@ main(int argc, char *argv[])
     rv = con->start_con(con);
     if (rv) {
 	fprintf(stderr, "Could not start connection: %x\n", rv);
-	leave(1);
+	exit(1);
     }
 
     pos = 0;

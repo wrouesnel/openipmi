@@ -47,7 +47,7 @@
 #define IPMI_IPMI_ERR_TOP	0x01000000
 #define IPMI_IS_OS_ERR(E)	(((E) & 0xffffff00) == IPMI_OS_ERR_TOP)
 #define IPMI_GET_OS_ERR(E)	((E) & 0xff)
-#define IPMI_OS_ERR_VAL(v)	((v) | IMPI_OS_ERR_TOP)
+#define IPMI_OS_ERR_VAL(v)	((v) | IPMI_OS_ERR_TOP)
 #define IPMI_IS_IPMI_ERR(E)	(((E) & 0xffffff00) == IPMI_IPMI_ERR_TOP)
 #define IPMI_GET_IPMI_ERR(E)	((E) & 0xff)
 #define IPMI_IPMI_ERR_VAL(v)	((v) | IPMI_IPMI_ERR_TOP)

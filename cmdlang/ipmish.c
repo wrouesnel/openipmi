@@ -933,10 +933,9 @@ add_exec_str(char *str)
     e->next = NULL;
     if (execs)
 	execs_tail->next = e;
-    else {
+    else
 	execs = e;
-	execs_tail = e;
-    }
+    execs_tail = e;
 }
 
 static char *usage_str =

@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmiif.h>
 
 char *
@@ -1202,4 +1203,42 @@ ipmi_domain_get_type_string(enum ipmi_domain_type dtype)
     if ((dtype < 0) || (dtype >= NUM_DOMAIN_TYPES))
 	return "invalid";
     return domain_types[dtype];
+}
+
+char *
+ipmi_authtype_string(int authtype)
+{
+    switch(authtype) {
+    case IPMI_AUTHTYPE_DEFAULT:
+	return "default";
+    case IPMI_AUTHTYPE_NONE:
+	return "none";
+    case IPMI_AUTHTYPE_MD2:
+	return "md2";
+    case IPMI_AUTHTYPE_MD5:
+	return "md5";
+    case IPMI_AUTHTYPE_STRAIGHT:
+	return "straight";
+    default:
+	return "invalid";
+    }
+}
+
+char *
+ipmi_privilege_string(int privilege)
+{
+    switch(privilege) {
+    case IPMI_PRIVILEGE_CALLBACK:
+	return "callback";
+    case IPMI_PRIVILEGE_USER:
+	return "user";
+    case IPMI_PRIVILEGE_OPERATOR:
+	return "operator";
+    case IPMI_PRIVILEGE_ADMIN:
+	return "admin";
+    case IPMI_PRIVILEGE_OEM:
+	return "oem";
+    default:
+	return "invalid";
+    }
 }

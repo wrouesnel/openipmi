@@ -40,6 +40,9 @@
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_auth.h>
 
 /* Internal includes, do not use in your programs */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -293,7 +296,12 @@ mc_sel_info(ipmi_mc_t *mc, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     char            str[20];
-    
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "MC", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", mc_name);
     snprintf(str, sizeof(str), "%d.%d", 
 	     ipmi_mc_sel_get_major_version(mc),
 	     ipmi_mc_sel_get_num_entries(mc));
@@ -315,6 +323,7 @@ mc_sel_info(ipmi_mc_t *mc, void *cb_data)
 			  ipmi_mc_sel_get_supports_reserve_sel(mc));
     ipmi_cmdlang_out_bool(cmd_info, "SEL Supports Get SEL Allocation",
 			  ipmi_mc_sel_get_supports_get_sel_allocation(mc));
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -695,6 +704,621 @@ mc_sdrs(ipmi_mc_t *mc, void *cb_data)
 	ipmi_mem_free(info);
 }
 
+void
+got_chan_info(ipmi_mc_t  *mc,
+	      ipmi_msg_t *rsp,
+	      void       *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            mc_name[IPMI_MC_NAME_LEN];
+    char            *str;
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error getting channel info";
+	goto out_err;
+    }
+
+    if (rsp->data_len < 10) {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "Channel info response too small";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_lock(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Channel Info", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+    ipmi_cmdlang_out_int(cmd_info, "Number", rsp->data[1] & 0xf);
+    ipmi_cmdlang_out_int(cmd_info, "Medium", rsp->data[2] & 0x7f);
+    ipmi_cmdlang_out_int(cmd_info, "Protocol Type", rsp->data[3] & 0x1f);
+    switch (rsp->data[4] >> 6) {
+    case 0: str = "session-less"; break;
+    case 1: str = "single-session"; break;
+    case 2: str = "multi-session"; break;
+    case 3: str = "session-based"; break;
+    default: str = "unknown";
+    }
+    ipmi_cmdlang_out(cmd_info, "Session Support", str);
+    ipmi_cmdlang_out_binary(cmd_info, "Vendor ID", rsp->data+5, 3);
+    ipmi_cmdlang_out_binary(cmd_info, "Aux Info", rsp->data+8, 2);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_unlock(cmd_info);
+
+ out_err:
+    if (cmdlang->err) {
+	cmdlang->location = "cmd_mc.c(got_chan_info)";
+    }
+
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+mc_get_chan_info(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    ipmi_msg_t      msg;
+    unsigned char   data[1];
+    int             channel;
+
+
+    if ((argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    data[0] = channel & 0xf;
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_CHANNEL_INFO_CMD;
+    msg.data = data;
+    msg.data_len = 1;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_chan_info, cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Could not send command";
+	goto out_err;
+    }
+
+    return;
+
+ out_err:
+    ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
+    cmdlang->location = "cmd_mc.c(mc_get_chan_info)";
+}
+
+typedef struct get_chan_info_s
+{
+    char            *type;
+    ipmi_cmd_info_t *cmd_info;
+    int             channel;
+} get_chan_info_t;
+
+void
+got_chan_access(ipmi_mc_t  *mc,
+		ipmi_msg_t *rsp,
+		void       *cb_data)
+{
+    get_chan_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            mc_name[IPMI_MC_NAME_LEN];
+    char            *str;
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error getting channel access info";
+	goto out_err;
+    }
+
+    if (rsp->data_len < 3) {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "Channel access response too small";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_lock(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Channel Access", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+    ipmi_cmdlang_out_int(cmd_info, "Channel", info->channel);
+    ipmi_cmdlang_out(cmd_info, "Type", info->type);
+    ipmi_cmdlang_out_bool(cmd_info, "Alerting Enabled", rsp->data[1] & 0x20);
+    ipmi_cmdlang_out_bool(cmd_info, "Per-Message Auth", rsp->data[1] & 0x10);
+    ipmi_cmdlang_out_bool(cmd_info, "User Auth", rsp->data[1] & 0x08);
+    switch (rsp->data[1] & 0x7) {
+    case 0: str = "disabled"; break;
+    case 1: str = "pre-boot"; break;
+    case 2: str = "always"; break;
+    case 3: str = "shared"; break;
+    default: str = "unknown";
+    }
+    ipmi_cmdlang_out(cmd_info, "Access Mode", str);
+    ipmi_cmdlang_out(cmd_info, "Privilege Limit",
+		     ipmi_privilege_string(rsp->data[2] & 0xf));
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_unlock(cmd_info);
+
+ out_err:
+    if (cmdlang->err) {
+	cmdlang->location = "cmd_mc.c(got_chan_access)";
+    }
+
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static void
+mc_get_chan_access(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    ipmi_msg_t      msg;
+    unsigned char   data[2];
+    int             channel;
+    get_chan_info_t *present = NULL;
+    get_chan_info_t *non_volatile = NULL;
+
+
+    if ((argc - curr_arg) < 2) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    if (strcmp(argv[curr_arg], "non-volatile") == 0) {
+	non_volatile = ipmi_mem_alloc(sizeof(*non_volatile));
+	if (!non_volatile) {
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	}
+    } else if (strcmp(argv[curr_arg], "present") == 0) {
+	present = ipmi_mem_alloc(sizeof(*present));
+	if (!present) {
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	}
+    } else if (strcmp(argv[curr_arg], "both") == 0) {
+	non_volatile = ipmi_mem_alloc(sizeof(*non_volatile));
+	if (!non_volatile) {
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	}
+	present = ipmi_mem_alloc(sizeof(*present));
+	if (!present) {
+	    ipmi_mem_free(non_volatile);
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	}
+    } else {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "fetch type invalid";
+	goto out_err;
+    }
+
+    if (present) {
+	present->type = "present";
+	present->cmd_info = cmd_info;
+	present->channel = channel;
+	data[0] = channel & 0xf;
+	data[1] = 0x80;
+	msg.netfn = IPMI_APP_NETFN;
+	msg.cmd = IPMI_GET_CHANNEL_ACCESS_CMD;
+	msg.data = data;
+	msg.data_len = 2;
+
+	ipmi_cmdlang_cmd_info_get(cmd_info);
+	rv = ipmi_mc_send_command(mc, 0, &msg, got_chan_access, present);
+	if (rv) {
+	    ipmi_cmdlang_cmd_info_put(cmd_info);
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Could not send command to get present value";
+	    ipmi_mem_free(present);
+	}
+    }
+
+    if (non_volatile) {
+	non_volatile->type = "non-volatile";
+	non_volatile->cmd_info = cmd_info;
+	non_volatile->channel = channel;
+	data[0] = channel & 0xf;
+	data[1] = 0x40;
+	msg.netfn = IPMI_APP_NETFN;
+	msg.cmd = IPMI_GET_CHANNEL_ACCESS_CMD;
+	msg.data = data;
+	msg.data_len = 2;
+
+	ipmi_cmdlang_cmd_info_get(cmd_info);
+	rv = ipmi_mc_send_command(mc, 0, &msg, got_chan_access, non_volatile);
+	if (rv) {
+	    ipmi_cmdlang_cmd_info_put(cmd_info);
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Could not send command to get non-volatile"
+		" value";
+	    ipmi_mem_free(non_volatile);
+	}
+    }
+
+    return;
+
+ out_err:
+    ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
+    cmdlang->location = "cmd_mc.c(mc_get_chan_access)";
+}
+
+typedef struct set_chan_parm_s
+{
+    int alert_set;
+    int alert_val;
+    int msg_auth_set;
+    int msg_auth_val;
+    int user_auth_set;
+    int user_auth_val;
+    int access_mode_set;
+    int access_mode_val;
+    int privilege_set;
+    int privilege_val;
+} set_chan_parm_t;
+
+typedef struct set_chan_info_s
+{
+    char            *type;
+    int             set_type;
+    ipmi_cmd_info_t *cmd_info;
+    set_chan_parm_t parms;
+    int             channel;
+} set_chan_info_t;
+
+void
+set_chan_access2(ipmi_mc_t  *mc,
+		 ipmi_msg_t *rsp,
+		 void       *cb_data)
+{
+    set_chan_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error getting channel info";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_lock(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Channel Access Set", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+    ipmi_cmdlang_out_int(cmd_info, "Channel", info->channel);
+    ipmi_cmdlang_up(cmd_info);
+    ipmi_cmdlang_unlock(cmd_info);
+
+ out_err:
+    if (cmdlang->err) {
+	cmdlang->location = "cmd_mc.c(set_chan_access2)";
+    }
+
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+void
+set_chan_access1(ipmi_mc_t  *mc,
+		 ipmi_msg_t *rsp,
+		 void       *cb_data)
+{
+    set_chan_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            mc_name[IPMI_MC_NAME_LEN];
+    ipmi_msg_t      msg;
+    unsigned char   data[3];
+    int             rv;
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    if (rsp->data[0] != 0) {
+	cmdlang->err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+	cmdlang->errstr = "Error getting channel info";
+	goto out_err;
+    }
+
+    if (rsp->data_len < 3) {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "Channel access info response too small";
+	goto out_err;
+    }
+
+    data[0] = info->channel & 0xf;
+    data[1] = info->set_type | (rsp->data[1] & 0x3f);
+    data[2] = info->set_type | (rsp->data[2] & 0x0f);
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_CHANNEL_ACCESS_CMD;
+    msg.data = data;
+    msg.data_len = 3;
+
+    if (info->parms.alert_set)
+	data[1] = (data[1] & ~0x20) | info->parms.alert_val;
+    if (info->parms.msg_auth_set)
+	data[1] = (data[1] & ~0x10) | info->parms.msg_auth_val;
+    if (info->parms.user_auth_set)
+	data[1] = (data[1] & ~0x08) | info->parms.user_auth_val;
+    if (info->parms.access_mode_set)
+	data[1] = (data[1] & ~0x07) | info->parms.access_mode_val;
+    if (info->parms.privilege_set)
+	data[2] = (data[2] & ~0x0f) | info->parms.privilege_val;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, set_chan_access2, info);
+    if (rv) {
+	cmdlang->err = rv;
+	cmdlang->errstr = "Could not send command to get present value";
+	goto out_err;
+    }
+
+    return;
+
+ out_err:
+    if (cmdlang->err) {
+	cmdlang->location = "cmd_mc.c(set_chan_access1)";
+    }
+
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static void
+mc_set_chan_access(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    ipmi_msg_t      msg;
+    unsigned char   data[2];
+    int             channel;
+    set_chan_info_t *present = NULL;
+    set_chan_info_t *non_volatile = NULL;
+    set_chan_parm_t parms;
+
+    if ((argc - curr_arg) < 2) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(argv[curr_arg], &channel, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "channel invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    if (strcmp(argv[curr_arg], "non-volatile") == 0) {
+	non_volatile = ipmi_mem_alloc(sizeof(*non_volatile));
+	if (!non_volatile) {
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	}
+    } else if (strcmp(argv[curr_arg], "present") == 0) {
+	present = ipmi_mem_alloc(sizeof(*present));
+	if (!present) {
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	}
+    } else if (strcmp(argv[curr_arg], "both") == 0) {
+	non_volatile = ipmi_mem_alloc(sizeof(*non_volatile));
+	if (!non_volatile) {
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	}
+	present = ipmi_mem_alloc(sizeof(*present));
+	if (!present) {
+	    ipmi_mem_free(non_volatile);
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	}
+    } else {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "fetch type invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    memset(&parms, 0, sizeof(parms));
+
+    while (curr_arg < argc) {
+	if (strcmp(argv[curr_arg], "alert") == 0) {
+	    parms.alert_set = 0x20;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no alert value";
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_bool(argv[curr_arg], &parms.alert_val, cmd_info);
+	    if (cmdlang->err) {
+		cmdlang->errstr = "invalid alert value";
+		goto out_err;
+	    }
+	    parms.alert_val <<= 5;
+	} else if (strcmp(argv[curr_arg], "msg_auth") == 0) {
+	    parms.msg_auth_set = 0x20;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no msg_auth value";
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_bool(argv[curr_arg], &parms.msg_auth_val,
+				  cmd_info);
+	    if (cmdlang->err) {
+		cmdlang->errstr = "invalid msg_auth value";
+		goto out_err;
+	    }
+	    parms.msg_auth_val <<= 4;
+	} else if (strcmp(argv[curr_arg], "user_auth") == 0) {
+	    parms.user_auth_set = 0x08;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no user_auth value";
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_bool(argv[curr_arg], &parms.user_auth_val,
+				  cmd_info);
+	    if (cmdlang->err) {
+		cmdlang->errstr = "invalid user_auth value";
+		goto out_err;
+	    }
+	    parms.user_auth_val <<= 3;
+	} else if (strcmp(argv[curr_arg], "access_mode") == 0) {
+	    parms.access_mode_set = 0x7;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no access_mode value";
+		goto out_err;
+	    }
+	    if (strcmp(argv[curr_arg], "disabled") == 0) {
+		parms.access_mode_val = 0;
+	    } else if (strcmp(argv[curr_arg], "pre-boot") == 0) {
+		parms.access_mode_val = 1;
+	    } else if (strcmp(argv[curr_arg], "always") == 0) {
+		parms.access_mode_val = 2;
+	    } else if (strcmp(argv[curr_arg], "shared") == 0) {
+		parms.access_mode_val = 3;
+	    } else {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "invalid access_mode value";
+		goto out_err;
+	    }
+	} else if (strcmp(argv[curr_arg], "privilege_limit") == 0) {
+	    parms.privilege_set = 0xf;
+	    curr_arg++;
+	    if (curr_arg >= argc) {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "no privilege_limit value";
+		goto out_err;
+	    }
+	    if (strcmp(argv[curr_arg], "callback") == 0) {
+		parms.privilege_val = IPMI_PRIVILEGE_CALLBACK;
+	    } else if (strcmp(argv[curr_arg], "user") == 0) {
+		parms.privilege_val = IPMI_PRIVILEGE_USER;
+	    } else if (strcmp(argv[curr_arg], "operator") == 0) {
+		parms.privilege_val = IPMI_PRIVILEGE_OPERATOR;
+	    } else if (strcmp(argv[curr_arg], "admin") == 0) {
+		parms.privilege_val = IPMI_PRIVILEGE_ADMIN;
+	    } else if (strcmp(argv[curr_arg], "oem") == 0) {
+		parms.privilege_val = IPMI_PRIVILEGE_OEM;
+	    } else {
+		cmdlang->err = EINVAL;
+		cmdlang->errstr = "invalid privilege_limit value";
+		goto out_err;
+	    }
+	} else {
+	    cmdlang->err = EINVAL;
+	    cmdlang->errstr = "invalid setting";
+	    goto out_err;
+	}
+	curr_arg++;
+    }
+
+    if (present) {
+	present->type = "present";
+	present->cmd_info = cmd_info;
+	present->parms = parms;
+	present->channel = channel;
+	present->set_type = 0x80;
+	data[0] = channel & 0xf;
+	data[1] = 0x80;
+	msg.netfn = IPMI_APP_NETFN;
+	msg.cmd = IPMI_GET_CHANNEL_ACCESS_CMD;
+	msg.data = data;
+	msg.data_len = 2;
+
+	ipmi_cmdlang_cmd_info_get(cmd_info);
+	rv = ipmi_mc_send_command(mc, 0, &msg, set_chan_access1, present);
+	if (rv) {
+	    ipmi_cmdlang_cmd_info_put(cmd_info);
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Could not send command to get present value";
+	    ipmi_mem_free(present);
+	}
+    }
+
+    if (non_volatile) {
+	non_volatile->type = "non-volatile";
+	non_volatile->cmd_info = cmd_info;
+	non_volatile->parms = parms;
+	non_volatile->set_type = 0x40;
+	non_volatile->channel = channel;
+	data[0] = channel & 0xf;
+	data[1] = 0x40;
+	msg.netfn = IPMI_APP_NETFN;
+	msg.cmd = IPMI_GET_CHANNEL_ACCESS_CMD;
+	msg.data = data;
+	msg.data_len = 2;
+
+	ipmi_cmdlang_cmd_info_get(cmd_info);
+	rv = ipmi_mc_send_command(mc, 0, &msg, set_chan_access1, non_volatile);
+	if (rv) {
+	    ipmi_cmdlang_cmd_info_put(cmd_info);
+	    cmdlang->err = rv;
+	    cmdlang->errstr = "Could not send command to get non-volatile"
+		" value";
+	    ipmi_mem_free(non_volatile);
+	}
+    }
+
+    return;
+
+ out_err:
+    if (non_volatile)
+	ipmi_mem_free(non_volatile);
+    if (present)
+	ipmi_mem_free(present);
+    ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
+    cmdlang->location = "cmd_mc.c(mc_get_chan_access)";
+}
+
 static void
 mc_active(ipmi_mc_t *mc, int active, void *cb_data)
 {
@@ -787,6 +1411,7 @@ ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 }
 
 static ipmi_cmdlang_cmd_t *mc_cmds;
+static ipmi_cmdlang_cmd_t *mc_chan_cmds;
 
 static ipmi_cmdlang_init_t cmds_mc[] =
 {
@@ -833,6 +1458,20 @@ static ipmi_cmdlang_init_t cmds_mc[] =
       "<mc> <main | sensor> - fetch either the main or sensor"
       " SDRs from the given MC.",
       ipmi_cmdlang_mc_handler, mc_sdrs, NULL },
+    { "chan", &mc_cmds,
+      " Control and information for channels",
+      NULL, NULL, &mc_chan_cmds },
+    { "info", &mc_chan_cmds,
+      "<mc> <channel> - Get information about the channel on the MC.",
+      ipmi_cmdlang_mc_handler, mc_get_chan_info, NULL },
+    { "get_access", &mc_chan_cmds,
+      "<mc> <channel> nonvolatile|present|both - Get access info about the"
+      " channel on the MC.  Get either the the non-volatile settings,"
+      " the current (volatile) settings, or both.",
+      ipmi_cmdlang_mc_handler, mc_get_chan_access, NULL },
+    { "set_access", &mc_chan_cmds,
+      "<mc> <channel> - Set access info about the channel on the MC.",
+      ipmi_cmdlang_mc_handler, mc_set_chan_access, NULL },
 };
 #define CMDS_MC_LEN (sizeof(cmds_mc)/sizeof(ipmi_cmdlang_init_t))
 

@@ -296,12 +296,11 @@ These commands deal with domain objects.
 - Open a connection to a new domain.
 \fI<parms>\fP are either:
 .RS
-lan \fI<IP>\fP \fI<port>\fP [\fI<IP>\fP \fI<port>\fP] \fI<enc>\fP \fI<auth>\fP \fI<name>\fP
-\fI<password>\fP
+lan \fI<IP>\fP \fI<port>\fP [\fI<IP>\fP \fI<port>\fP] \fI<enc>\fP \fI<auth>\fP \fI<name>\fP \fI<password>\fP
 .RE
 for a RMCP LAN connection or
 .RS
-     smi \fI<smi num>\fP
+smi \fI<smi num>\fP
 .RE
 for a system interface connection.  Note that \fI<parms>\fP is listed
 twice (second one is optional); if the system support it you can make
@@ -329,6 +328,97 @@ or
 or
 .B user.
 \fI<name>\fP and \fI<password>\fP are the user name and password of
+the IPMI user to use for the connection.
+The <smi num> is the driver number, generally 0.
+Options enable and disable various automitic processing and are:
+.PD 0
+.HP
+.B -[no]all
+- all automatic handling.  This will override the other
+processing options and turn them all on.  This is true by default.
+.HP
+.B -[no]sdrs
+- sdr fetching.  This turns on fetching SDRs when they are found.  This
+is false by default.
+.HP
+.B -[no]frus
+- FRU fetching  This turns on fetching FRU information when it is found.  This
+is false by default.
+.HP
+.B -[no]sel
+- SEL fetching.    This turns on fetching SELs when they are found.  This
+is false by default.
+.HP
+.B -[no]ipmbscan
+- IPMB bus scanning.  This turns on scanning IPMB busses when they are found.
+This is false by default.
+.HP
+.B -[no]oeminit
+- enable or disable special OEM processing (like ATCA).
+.HP
+.B -[no]seteventrcvr
+- setting event receivers.  Note that setting event
+receivers and waiting til up is not affected by the
+.B -all
+option.  If this
+is true (the default) then OpenIPMI will attempt to set the event receiver
+for an MC it finds that does not have it set to a valid destination.
+.HP
+.B -wait_til_up
+- wait until the domain is up before returning
+Note that if you specify this and the domain never comes up,
+you will never get a prompt.  This is not affected by the
+.B -all
+option.
+.PD
+By default -all and -seteventrcvr are true, which turns
+everything on.
+.TP
+Response:
+.RS
+.nf
+Domain Created: <domain>
+.fi
+.RE
+
+.B open \fI<domain>\fP \fI<options>\fP \fI<parms>\fP [\fI<parms>\fP]
+- Open a connection to a new domain.
+\fI<parms>\fP are either:
+.RS
+lan [-u \fI<username>\fP] [-P \fI<password>\fP] [-A \fI<authtype>\fP] [-L \fI<privilege>\fP] [-s] [-p[2] \fI<port number>\fP] \fI<IP>\fP [\fI<IP>\fP]
+.RE
+for a RMCP LAN connection or
+.RS
+smi \fI<smi num>\fP
+.RE
+for a system interface connection.  Note that \fI<parms>\fP is listed
+twice (second one is optional); if the system support it you can make
+two connections to two independent management controllers in the
+system.  Note that this is not for multiple IP addresses to the same
+BMC.  For that, use the -s option and the second IP (and -p2)
+for the second IP address.  OpenIPMI supports these IP
+addresses and connections, detecting failures, switching between
+addresses, and other fault-tolerant things.  It does this
+transparently to the user.  Mutiple connections may require special
+OEM support, read the documentation about your specific system if you
+need this.
+
+The \fI<IP>\fP is the IP address or host name of the LAN-capable BMC
+to connect with.  The \fI<port>\fP defaults 623.  \fI<authtype>\fP is
+the authentication type, either
+.B md5,
+.B md2,
+.B straight,
+or
+.B none.
+It defaults to the best authentication supported by the server.
+\fI<auth>\fP is the authentication level, either
+.B admin,
+.B operator
+or
+.B user.
+It defaults to admin.
+\fI<username>\fP and \fI<password>\fP are the user name and password of
 the IPMI user to use for the connection.
 The <smi num> is the driver number, generally 0.
 Options enable and disable various automitic processing and are:

@@ -4,6 +4,7 @@
  * OEM code to make Intel server systems work better.
  *
  * 08/19/04 ARCress - handle different bus ids for alarm panel.
+ * 10/13/04 ARCress - add simple/hsbp logic
  *
  *  (C) 2004 MontaVista Software, Inc.
  *  (C) 2004 Intel Corp.
@@ -384,26 +385,6 @@ tig_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 }
 
 static int
-tsrlt2_handler(ipmi_mc_t *mc,
-	       void      *cb_data)
-{
-    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
-    unsigned int  channel = ipmi_mc_get_channel(mc);
-    unsigned int  addr    = ipmi_mc_get_address(mc);
-
-    if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
-	/* It's the SI MC, which we detect at startup.  Set up the MCs
-	   for the domain to scan. */
-	/* We scan 0x20 and 0x28 */
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1f);
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0x27);
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xff);
-    }
-
-    return 0;
-}
-
-static int
 tig_event_handler(ipmi_mc_t    *mc,
 		  ipmi_event_t *log,
 		  void         *cb_data)
@@ -427,6 +408,7 @@ tig_event_handler(ipmi_mc_t    *mc,
 
 static int
 tig_handler(ipmi_mc_t *mc,
+	    int    do_hsbp,
 	    void      *cb_data)
 {
     ipmi_domain_t    *domain = ipmi_mc_get_domain(mc);
@@ -438,11 +420,15 @@ tig_handler(ipmi_mc_t *mc,
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
 	/* It's the SI MC, which we detect at startup.  Set up the MCs
 	   for the domain to scan. */
-	/* We scan 0x20, 0x28, and 0xc0 */
+	/* We scan 0x20, 0x28 (and 0xc0 for some machines) */
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1f);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0x27);
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xbf);
-	ipmi_domain_add_ipmb_ignore_range(domain, 0xc1, 0xff);
+	if (do_hsbp) {
+	    ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xbf);
+	    ipmi_domain_add_ipmb_ignore_range(domain, 0xc1, 0xff);
+	} else {
+	    ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xff);
+	}
     } else if ((channel == 0) && (addr == 0x20)) {
 	/* The MC at address 0x28 has exactly the same product id as
 	   the one at 0x20.  We only want one alarm thingy, so only
@@ -488,6 +474,20 @@ tig_handler(ipmi_mc_t *mc,
     return 0;
 }
 
+static int
+simple_handler(ipmi_mc_t *mc,
+	       void      *cb_data)
+{
+	return(tig_handler(mc, 0, cb_data));
+}
+
+static int
+hsbp_handler(ipmi_mc_t *mc,
+	       void      *cb_data)
+{
+	return(tig_handler(mc, 1, cb_data));
+}
+
 int
 ipmi_oem_intel_init(void)
 {
@@ -495,7 +495,7 @@ ipmi_oem_intel_init(void)
 
     rv = ipmi_register_oem_handler(INTEL_MANUFACTURER_ID,
 				   0x000c,
-				   tsrlt2_handler,
+				   simple_handler,
 				   NULL,
 				   NULL);
     if (rv)
@@ -503,7 +503,7 @@ ipmi_oem_intel_init(void)
 
     rv = ipmi_register_oem_handler(INTEL_MANUFACTURER_ID,
 				   0x001b,
-				   tig_handler,
+				   hsbp_handler,
 				   NULL,
 				   NULL);
     if (rv)
@@ -511,7 +511,7 @@ ipmi_oem_intel_init(void)
 
     rv = ipmi_register_oem_handler(INTEL_MANUFACTURER_ID,
 				   0x0103,
-				   tig_handler,
+				   simple_handler,
 				   NULL,
 				   NULL);
     if (rv)
@@ -519,7 +519,7 @@ ipmi_oem_intel_init(void)
 
     rv = ipmi_register_oem_handler(NSC_MANUFACTURER_ID,
 				   0x4311,
-				   tig_handler,
+				   simple_handler,
 				   NULL,
 				   NULL);
     if (rv)

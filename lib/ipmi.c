@@ -1149,6 +1149,134 @@ ipmi_parse_args(int         *curr_arg,
     return rv;
 }
 
+int
+ipmi_parse_args2(int         *curr_arg,
+		 int         arg_count,
+		 char        * const *args,
+		 ipmi_args_t **iargs)
+{
+    ipmi_args_t *p;
+    int rv;
+    
+    p = ipmi_mem_alloc(sizeof(*p));
+    if (!p)
+	return ENOMEM;
+    memset(p, 0, sizeof(*p));
+
+    /* Initialize some defaults that are not zero. */
+    p->authtype = IPMI_AUTHTYPE_DEFAULT;
+    p->privilege = IPMI_PRIVILEGE_ADMIN;
+
+    CHECK_ARG;
+
+    if (strcmp(args[*curr_arg], "smi") == 0) {
+	(*curr_arg)++; CHECK_ARG;
+
+	p->con_type = SMI;
+
+	p->smi_intf = atoi(args[*curr_arg]);
+	(*curr_arg)++;
+    } else if (strcmp(args[*curr_arg], "lan") == 0) {
+	int i;
+
+	(*curr_arg)++; CHECK_ARG;
+
+	p->con_type = LAN;
+	p->num_addr = 1;
+
+	while (*curr_arg < arg_count) {
+	    if (args[*curr_arg][0] != '-') {
+		break;
+	    }
+
+	    if (strcmp(args[*curr_arg], "-U") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+		strncpy(p->username, args[*curr_arg], 16);
+		p->username[16] = '\0';
+	    } else if (strcmp(args[*curr_arg], "-P") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+		strncpy(p->password, args[*curr_arg], 16);
+		p->password[16] = '\0';
+	    } else if (strcmp(args[*curr_arg], "-s") == 0) {
+		p->num_addr = 2;
+	    } else if (strcmp(args[*curr_arg], "-A") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+		if (strcmp(args[*curr_arg], "none") == 0) {
+		    p->authtype = IPMI_AUTHTYPE_NONE;
+		} else if (strcmp(args[*curr_arg], "md2") == 0) {
+		    p->authtype = IPMI_AUTHTYPE_MD2;
+		} else if (strcmp(args[*curr_arg], "md5") == 0) {
+		    p->authtype = IPMI_AUTHTYPE_MD5;
+		} else if (strcmp(args[*curr_arg], "straight") == 0) {
+		    p->authtype = IPMI_AUTHTYPE_STRAIGHT;
+		} else {
+		    rv = EINVAL;
+		    goto out_err;
+		}
+	    } else if (strcmp(args[*curr_arg], "-L") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+
+		if (strcmp(args[*curr_arg], "callback") == 0) {
+		    p->privilege = IPMI_PRIVILEGE_CALLBACK;
+		} else if (strcmp(args[*curr_arg], "user") == 0) {
+		    p->privilege = IPMI_PRIVILEGE_USER;
+		} else if (strcmp(args[*curr_arg], "operator") == 0) {
+		    p->privilege = IPMI_PRIVILEGE_OPERATOR;
+		} else if (strcmp(args[*curr_arg], "admin") == 0) {
+		    p->privilege = IPMI_PRIVILEGE_ADMIN;
+		} else if (strcmp(args[*curr_arg], "oem") == 0) {
+		    p->privilege = IPMI_PRIVILEGE_OEM;
+		} else {
+		    rv = EINVAL;
+		    goto out_err;
+		}
+	    } else if (strcmp(args[*curr_arg], "-p") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+		p->str_port[0] = ipmi_strdup(args[*curr_arg]);
+		if (p->str_port[0] == NULL) {
+		    rv = ENOMEM;
+		    goto out_err;
+		}
+	    } else if (strcmp(args[*curr_arg], "-p2") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+		p->str_port[2] = ipmi_strdup(args[*curr_arg]);
+		if (p->str_port[2] == NULL) {
+		    rv = ENOMEM;
+		    goto out_err;
+		}
+	    }
+	    (*curr_arg)++;
+	}
+
+	for (i=0; i<p->num_addr; i++) {
+	    CHECK_ARG;
+	    p->str_addr[i] = ipmi_strdup(args[*curr_arg]);
+	    if (p->str_addr[0] == NULL) {
+		rv = ENOMEM;
+		goto out_err;
+	    }
+	    (*curr_arg)++;
+	    if (! p->str_port[i]) {
+		p->str_port[i] = ipmi_strdup("623");
+		if (p->str_port[0] == NULL) {
+		    rv = ENOMEM;
+		    goto out_err;
+		}
+	    }
+	}
+    } else {
+	rv = EINVAL;
+	goto out_err;
+    }
+
+    *iargs = p;
+    return 0;
+
+ out_err:
+    ipmi_free_args(p);
+    return rv;
+}
+
 void
 ipmi_free_args(ipmi_args_t *args)
 {

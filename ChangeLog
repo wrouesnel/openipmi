@@ -1,3 +1,50 @@
+2004-11-15 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_auth.h, lib/ipmi_lan.c: Added the
+	ability to have a "default" auth type that will pick the
+	best authentication type available.
+	
+	* include/OpenIPMI/ipmi_auth.h, lib/strings.c: Added strings
+	for the auth and privilege values.
+
+	* lib/ipmi.c: Added a new parameter parsing function that should
+	be easier to use.
+	
+	* cmdlang/cmd_domain.c: Added support for a "domain open"
+	command using the new parameter parsing.
+
+	* cmdlang/cmd_mc.c: Added support for the channel info
+	and access control commands.
+
+	* cmdlang/cmd_mc.c: Fixed a bug where the MC was not
+	printed when dumping SEL info.
+
+	* include/OpenIPMI/ipmi_err.h: Fixed a bug in the IPMI_OS_ERR_VAL
+	macro.
+
+	* lib/ipmi_lan.c: Fixed a bug where a timer might be freed
+	twice on an error.
+
+2004-11-10 Corey Minyard <cminyard@mvista.com> 
+
+	* cmdlang/ipmish.c: Fixes a problem with the --execute command
+	line option where only the first and last command would be
+	executed.
+
+2004-11-09 Corey Minyard <cminyard@mvista.com> 
+
+	* OpenIPMI.spec.in: Changes to compile on Redhat.
+
+	* configure.in: Move to version 1.4.5.
+
+2004-11-09 Andrew Cress <andrew.r.cress@intel.com>
+
+	* lib/oem_intel.c: Minor fixups for the alarm control.
+
+2004-11-09 Kevin Gao <kevin.gao@intel.com>
+
+	* sample/ipmicmd.c: Don't segv when given bad parms.
+
 2004-11-05 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Another fix to the perl installation dir.

@@ -180,7 +180,8 @@ typedef struct lan_data_s
     /* If 0, the OEM handlers have not been called. */
     int                        oem_conn_handlers_called;
 
-    unsigned int               authtype;
+    unsigned int               specified_authtype;
+    unsigned int               chosen_authtype;
     unsigned int               privilege;
     unsigned char              username[IPMI_USERNAME_MAX];
     unsigned int               username_len;
@@ -1157,6 +1158,10 @@ handle_msg_send(lan_timer_info_t      *info,
 				   info);
     if (rv) {
 	lan->seq_table[seq].inuse = 0;
+	ipmi->os_hnd->free_timer(ipmi->os_hnd,
+				 lan->seq_table[seq].timer);
+	lan->seq_table[seq].timer = NULL;
+	ipmi_mem_free(info);
 	goto out;
     }
 
@@ -1184,6 +1189,7 @@ handle_msg_send(lan_timer_info_t      *info,
 	    ipmi->os_hnd->free_timer(ipmi->os_hnd,
 				     lan->seq_table[seq].timer);
 	    lan->seq_table[seq].timer = NULL;
+	    ipmi_mem_free(info);
 	}
     }
  out:
@@ -1218,13 +1224,10 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 	    q_item->msg.netfn |= 1; /* Convert it to a response. */
 	    q_item->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
 	    q_item->msg.data_len = 1;
+	    q_item->info = NULL;
 	    ipmi_handle_rsp_item_copyall(ipmi, q_item->rsp_item,
 					 &q_item->addr, q_item->addr_len,
 					 &q_item->msg, q_item->rsp_handler);
-	    if (! q_item->info->cancelled) {
-		ipmi->os_hnd->free_timer(ipmi->os_hnd, q_item->info->timer);
-		ipmi_mem_free(q_item->info);
-	    }
 	} else {
 	    /* We successfully sent a message, break out of the loop. */
 	    started = 1;
@@ -1769,16 +1772,10 @@ lan_send_command_forceip(ipmi_con_t            *ipmi,
     rspi->data4 = (void *) (long) addr_num;
     rv = handle_msg_send(info, addr_num, addr, addr_len, msg,
 			 rsp_handler, rspi);
-    if (rv) {
-	if (info->cancelled)
-	    /* The timer couldn't be stopped, so don't let the data be
-	       freed. */
-	    info = NULL;
-	else
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
-    } else {
+    /* handle_msg_send handles freeing the timer and info on an error */
+    info = NULL;
+    if (! rv)
 	lan->outstanding_msg_count++;
-    }
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
@@ -1870,16 +1867,10 @@ lan_send_command(ipmi_con_t            *ipmi,
 
     rv = handle_msg_send(info, -1, addr, addr_len, msg,
 			 rsp_handler, rspi);
-    if (rv) {
-	if (info->cancelled)
-	    /* The timer couldn't be stopped, so don't let the data be
-	       freed. */
-	    info = NULL;
-	else
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
-    } else {
+    /* handle_msg_send handles freeing the timer and info on an error */
+    info = NULL;
+    if (!rv)
 	lan->outstanding_msg_count++;
-    }
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
@@ -2142,7 +2133,7 @@ lan_cleanup(ipmi_con_t *ipmi)
     if (lan->fd_wait_id)
 	ipmi->os_hnd->remove_fd_to_wait_for(ipmi->os_hnd, lan->fd_wait_id);
     if (lan->authdata)
-	ipmi_auths[lan->authtype].authcode_cleanup(lan->authdata);
+	ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
 
     /* Close the fd after we have deregistered it. */
     close(lan->fd);
@@ -2211,7 +2202,7 @@ cleanup_con(ipmi_con_t *ipmi)
 	if (lan->fd_wait_id)
 	    handlers->remove_fd_to_wait_for(handlers, lan->fd_wait_id);
 	if (lan->authdata)
-	    ipmi_auths[lan->authtype].authcode_cleanup(lan->authdata);
+	    ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
 	ipmi_mem_free(lan);
     }
 }
@@ -2496,7 +2487,7 @@ session_activated(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 
     lan->working_authtype[addr_num] = msg->data[1] & 0xf;
     if ((lan->working_authtype[addr_num] != 0)
-	&& (lan->working_authtype[addr_num] != lan->authtype))
+	&& (lan->working_authtype[addr_num] != lan->chosen_authtype))
     {
 	/* Eh?  It didn't return a valid authtype. */
         handle_connected(ipmi, EINVAL, addr_num);
@@ -2531,7 +2522,7 @@ send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     addr.channel = 0xf;
     addr.lun = 0;
 
-    data[0] = lan->authtype;
+    data[0] = lan->chosen_authtype;
     data[1] = lan->privilege;
     memcpy(data+2, lan->challenge_string, 16);
     ipmi_set_uint32(data+18, lan->inbound_seq_num[addr_num]);
@@ -2577,7 +2568,7 @@ challenge_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     lan->session_id[addr_num] = ipmi_get_uint32(msg->data+1);
 
     lan->outbound_seq_num[addr_num] = 0;
-    lan->working_authtype[addr_num] = lan->authtype;
+    lan->working_authtype[addr_num] = lan->chosen_authtype;
     memcpy(lan->challenge_string, msg->data+5, 16);
 
     /* Get a random number of the other end to start sending me sequence
@@ -2617,7 +2608,7 @@ send_challenge(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     addr.channel = 0xf;
     addr.lun = 0;
 
-    data[0] = lan->authtype;
+    data[0] = lan->chosen_authtype;
     msg.cmd = IPMI_GET_SESSION_CHALLENGE_CMD;
     msg.netfn = IPMI_APP_NETFN;
     msg.data = data;
@@ -2652,12 +2643,51 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    if (!(msg->data[2] & (1 << lan->authtype))) {
+    if (lan->authdata) {
+	ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
+	lan->authdata = NULL;
+    }
+
+    if (lan->specified_authtype == IPMI_AUTHTYPE_DEFAULT) {
+	/* Pick the most secure authentication type. */
+	if (msg->data[2] & (1 << IPMI_AUTHTYPE_MD5)) {
+	    lan->chosen_authtype = IPMI_AUTHTYPE_MD5;
+	} else if (msg->data[2] & (1 << IPMI_AUTHTYPE_MD2)) {
+	    lan->chosen_authtype = IPMI_AUTHTYPE_MD2;
+	} else if (msg->data[2] & (1 << IPMI_AUTHTYPE_STRAIGHT)) {
+	    lan->chosen_authtype = IPMI_AUTHTYPE_STRAIGHT;
+	} else if (msg->data[2] & (1 << IPMI_AUTHTYPE_NONE)) {
+	    lan->chosen_authtype = IPMI_AUTHTYPE_NONE;
+	} else {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sipmi_lan.c(auth_cap_done): "
+		     "No valid authentication supported",
+		     IPMI_CONN_NAME(lan->ipmi));
+	    handle_connected(ipmi, EINVAL, addr_num);
+	    goto out;
+	}
+    } else {
+	if (!(msg->data[2] & (1 << lan->specified_authtype))) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sipmi_lan.c(auth_cap_done): "
+		     "Requested authentication not supported",
+		     IPMI_CONN_NAME(lan->ipmi));
+	    handle_connected(ipmi, EINVAL, addr_num);
+	    goto out;
+	}
+	lan->chosen_authtype = lan->specified_authtype;
+    }
+
+    rv = ipmi_auths[lan->chosen_authtype].authcode_init(lan->password,
+							&(lan->authdata),
+							NULL, auth_alloc,
+							auth_free);
+    if (rv) {
         ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%sipmi_lan.c(auth_cap_done): "
-		 "Requested authentication not supported",
-		 IPMI_CONN_NAME(lan->ipmi));
-        handle_connected(ipmi, EINVAL, addr_num);
+		 "Unable to initialize authentication data: 0x%x",
+		 IPMI_CONN_NAME(lan->ipmi), rv);
+        handle_connected(ipmi, rv, addr_num);
 	goto out;
     }
 
@@ -2836,8 +2866,9 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 	return EINVAL;
     if (password_len > IPMI_PASSWORD_MAX)
 	return EINVAL;
-    if ((authtype >= MAX_IPMI_AUTHS)
-	|| (ipmi_auths[authtype].authcode_init == NULL))
+    if ((authtype != IPMI_AUTHTYPE_DEFAULT)
+	&& ((authtype >= MAX_IPMI_AUTHS)
+	    || (ipmi_auths[authtype].authcode_init == NULL)))
 	return EINVAL;
     if ((num_ip_addrs < 1) || (num_ip_addrs > MAX_IP_ADDR))
 	return EINVAL;
@@ -2864,7 +2895,8 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
     lan->ipmi = ipmi;
     lan->slave_addr = 0x20; /* Assume this until told otherwise */
     lan->is_active = 1;
-    lan->authtype = authtype;
+    lan->specified_authtype = authtype;
+    lan->chosen_authtype = IPMI_AUTHTYPE_DEFAULT;
     lan->privilege = privilege;
     count = 0;
 #ifdef HAVE_GETADDRINFO
@@ -2970,11 +3002,6 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 				      ipmi,
 				      NULL,
 				      &(lan->fd_wait_id));
-    if (rv)
-	goto out_err;
-
-    rv = ipmi_auths[authtype].authcode_init(lan->password, &(lan->authdata),
-					    NULL, auth_alloc, auth_free);
     if (rv)
 	goto out_err;
 

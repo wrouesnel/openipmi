@@ -294,6 +294,113 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 
 
 static void
+domain_open(ipmi_cmd_info_t *cmd_info)
+{
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    ipmi_args_t    *con_parms[2];
+    int            set = 0;
+    int            i, j;
+    ipmi_con_t     *con[2];
+    int            rv;
+    char           *name;
+    int            curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int            argc = ipmi_cmdlang_get_argc(cmd_info);
+    char           **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int            num_options = 0;
+    ipmi_open_option_t options[10];
+    int            wait_til_up = 0;
+    void           *up_info = NULL;
+    void           *con_info = NULL;
+
+    if (curr_arg >= argc) {
+	cmdlang->errstr = "No domain name entered";
+	cmdlang->err = EINVAL;
+	goto out;
+    }
+    name = argv[curr_arg];
+    curr_arg++;
+
+    while ((curr_arg < argc) && argv[curr_arg][0] == '-') {
+	if (num_options >= 10) {
+	    cmdlang->errstr = "Too many options";
+	    cmdlang->err = EINVAL;
+	    goto out;
+	}
+
+	if (! ipmi_parse_options(options+num_options, argv[curr_arg]))
+	    num_options++;
+	else if (strcmp(argv[curr_arg], "-wait_til_up") == 0)
+	    wait_til_up = 1;
+	else
+	    break;
+	curr_arg++;
+    }
+
+    rv = ipmi_parse_args2(&curr_arg, argc, argv, &con_parms[set]);
+    if (rv) {
+	cmdlang->errstr = "First connection parms are invalid";
+	cmdlang->err = rv;
+	goto out;
+    }
+    set++;
+
+    if (curr_arg < argc) {
+	rv = ipmi_parse_args2(&curr_arg, argc, argv, &con_parms[set]);
+	if (rv) {
+	    ipmi_free_args(con_parms[0]);
+	    cmdlang->errstr = "Second connection parms are invalid";
+	    cmdlang->err = rv;
+	    goto out;
+	}
+	set++;
+    }
+
+    for (i=0; i<set; i++) {
+	rv = ipmi_args_setup_con(con_parms[i],
+				 cmdlang->os_hnd,
+				 NULL,
+				 &con[i]);
+	if (rv) {
+	    cmdlang->errstr = "Unable to setup connection";
+	    cmdlang->err = rv;
+	    for (j=0; j<set; j++)
+		ipmi_free_args(con_parms[j]);
+	    goto out;
+	}
+    }
+
+    if (wait_til_up)
+	up_info = cmd_info;
+    else
+	con_info = cmd_info;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_open_domain(name, con, set, domain_new_done, con_info,
+			  domain_fully_up, up_info,
+			  options, num_options, NULL);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->errstr = strerror(rv);
+	cmdlang->err = rv;
+	for (i=0; i<set; i++) {
+	    ipmi_free_args(con_parms[i]);
+	    con[i]->close_connection(con[i]);
+	}
+	goto out;
+    }
+
+    for (i=0; i<set; i++)
+      ipmi_free_args(con_parms[i]);
+
+ out:
+    if (cmdlang->err)
+	cmdlang->location = "cmd_domain.c(domain_open)";
+
+    return;
+}
+
+
+static void
 domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
@@ -1075,7 +1182,7 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "<domain> - Dump information about a domain",
       ipmi_cmdlang_domain_handler, domain_info, NULL },
     { "new", &domain_cmds,
-      "<domain (name)> [<options>] <domain parms> - Set up a new domain."
+      "<domain name> [<options>] <domain parms> - Set up a new domain."
       "  Options enable and disable various automatic processing and are:\n"
       "-[no]all - all automatic handling\n"
       "-[no]sdrs - sdr fetching\n"
@@ -1086,6 +1193,29 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "-[no]seteventrcvr - setting event receivers\n"
       "-wait_til_up - wait until the domain is up before returning",
       domain_new, NULL, NULL },
+    { "open", &domain_cmds,
+      "<domain name> [<options>] <domain parms> - Set up a new domain using."
+      " a different style argument parser.  Format for SMI connections is:\n"
+      " smi <num>\n"
+      "where the number is the IPMI device number to connect to.  LAN parms"
+      " are:"
+      " lan [-U <username>] [-P <password>] [-p[2] port] [-A <authtype>]\n"
+      "     [-L <privilege>] [-s] <host1> [<host2>]\n"
+      " If -s is supplied, then two host names are taken (the second port"
+      " may be specified with -p2).  Otherwise, only one hostname is"
+      " taken.  The defaults are an empty username and password (anonyous),"
+      " port 623, admin privilege, and authtype defaulting to the most"
+      "   secure one available."
+      " Options enable and disable various automatic processing and are:\n"
+      "-[no]all - all automatic handling\n"
+      "-[no]sdrs - sdr fetching\n"
+      "-[no]frus - FRU fetching\n"
+      "-[no]sel - SEL fetching\n"
+      "-[no]ipmbscan - IPMB bus scanning\n"
+      "-[no]oeminit - special OEM processing (like ATCA)\n"
+      "-[no]seteventrcvr - setting event receivers\n"
+      "-wait_til_up - wait until the domain is up before returning",
+      domain_open, NULL, NULL },
     { "close", &domain_cmds,
       "<domain> - Close the domain",
       ipmi_cmdlang_domain_handler, domain_close, NULL },
