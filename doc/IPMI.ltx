@@ -1039,7 +1039,8 @@ address of the management controller to receive message.  The
 \verb=msg= field itself gives the message to send.  The msgid is a
 field for the user; the user may put any value they want in this
 field.  When the response comes back for the command, it will contain
-the message id.
+the message id.  Since it is a long value, it can be used to hold a
+pointer value.
 
 The driver guarantees that the user will receive a response for every
 message that is successfully sent.  If the message times out or is
@@ -1062,8 +1063,8 @@ si.lun = 0;
 req.addr = (void *) &si;
 req.addr_len = sizeof(si);
 req.msgid = 0x1234;
-req.msg.netfn = 0x04 /* Sensor/Event netfn */
-req.msg.cmd = 0x2d /* Get sensor reading */
+req.msg.netfn = 0x04; /* Sensor/Event netfn */
+req.msg.cmd = 0x2d; /* Get sensor reading */
 req.msg.data = data;
 req.msg.data_len = 1;
 data[1] = 10; /* Read sensor 10 */
@@ -1076,10 +1077,105 @@ get the response.  Instead, the response comes back later and can be
 received at that point in time.  This is what makes the \verb=msgid=
 important.
 
+The following example shows sending a get device id request to IPMB
+address 0xb2.
+
+\begin{verbatim}
+struct ipmi_req       req;
+struct ipmi_ipmb_addr si;
+
+/* Format the address. */
+si.addr_type = IPMI_IPMB_ADDR_TYPE;
+si.channel = 0;
+si.lun = 0;
+si.slave_addr = 0xb2;
+
+req.addr = (void *) &si;
+req.addr_len = sizeof(si);
+req.msgid = 0x1234;
+req.msg.netfn = 0x06; /* App netfn */
+req.msg.cmd = 0x01; /* Get device id */
+req.msg.data = NULL;
+req.msg.data_len = 0;
+
+rv = ioctl(fd, IPMICTL_SEND_COMMAND, &req);
+\end{verbatim}
+
 \subsubsection{Receiving Responses and Events}
+As mentioned before, the responses to commands come back in later.
+You can use standard \verb=select= and \verb=poll= calls to wait for
+messages to come in.  However, you cannot use \verb=read= to get the
+message.  The following data structure is used to receive messages:
+
+\begin{verbatim}
+struct ipmi_recv
+{
+	int             recv_type;
+	unsigned char   *addr;
+	unsigned int    addr_len;
+	long            msgid;
+	struct ipmi_msg msg;
+};
+\end{verbatim}
+
+The \verb=recv_type= field can be one of the following values:
+
+\begin{description}
+\item[\verb=IPMI_RESPONSE_RECV_TYPE=] A response to a sent command.
+\item[\verb=IPMI_ASYNC_EVENT_RECV_TYPE=] An asyncronous event.
+\item[\verb=IPMI_CMD_RECV_TYPE=] A command was recevied for the system
+software.
+\end{description}
+
+Received commands are discussed in section \ref{recv-cmd-resp}.  You
+have to fill in the data for the driver to put the received
+information into.  The following shows how to receive a message:
+
+\begin{verbatim}
+unsigned char    data[MAX_IPMI_DATA_SIZE];
+struct ipmi_addr addr;
+struct ipmi_recv recv;
+int              rv;
+
+recv.msg.data = data;
+recv.msg.data_len = sizeof(data);
+recv.addr = (unsigned char *) &addr;
+recv.addr_len = sizeof(addr);
+rv = ioctl(fd, IPMICTL_RECEIVE_MSG_TRUNC, &recv);
+if (rv == -1) {
+    if (errno == EMSGSIZE) {
+        /* The message was truncated, handle it as such. */
+        ...
+    }
+}
+switch (recv.recv_type) {
+case IPMI_RESPONSE_RECV_TYPE: ...
+case IPMI_ASYNC_EVENT_RECV_TYPE: ...
+case IPMI_CMD_RECV_TYPE: ...
+}
+\end{verbatim}
+
+The \verb=msgid= comes in very handy for this responses, it lets you
+easily correlate commands and responses.  It has no meaning for events.
+
+The \verb=netfn= for a received message have a ``one'' bitwise or-ed
+onto the value.  In IPMI, even NetFNs are always commands and odd
+NetFNs are always responses.
+
+For responses, the address will always be the same as the sent
+address.
 
 \subsubsection{Receiving Commands and Responding}
+\label{recv-cmd-resp}
+Commands sent to LUN two of a management controller will generally be
+routed to the driver.  If the driver does not have a registered user
+for that command, it will respond that it does not handle that
+command.
 
+If you wish to receive commands, you must register to receive those
+commands.
+
+\subsubsection{Overriding Default Timing Values}
 
 \subsection{The OpenIPMI System Interface}
 
