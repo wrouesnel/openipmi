@@ -4368,7 +4368,6 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
 					 IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
 					 NULL);
 	}
-	ipmi_unlock(ent->timer_lock);
     } else {
 	handled = set_hot_swap_state(ent, IPMI_HOT_SWAP_NOT_PRESENT, event);
     }

@@ -6289,8 +6289,10 @@ new_board_sensors(ipmi_mc_t           *mc,
 				   &sinfo->slot);
     if (rv)
 	goto out_err;
+#if 0 /* Maybe later */
     ipmi_sensor_set_hot_swap_requester(sinfo->slot, 6, 1); /* offset 6 is for
 							      hot-swap */
+#endif
     rv = mxp_add_sensor(mc, 
 			&sinfo->slot,
 			MXP_BOARD_SLOT_NUM,
@@ -6346,7 +6348,9 @@ new_board_sensors(ipmi_mc_t           *mc,
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(sinfo->blue_led, 1, blue_blinking_led);
+#if 0 /* Maybe later */
     ipmi_control_set_hot_swap_indicator(sinfo->blue_led, 1, 1, 0, 2, 1);
+#endif
     rv = mxp_add_control(mc, 
 			 &sinfo->blue_led,
 			 MXP_BOARD_BLUE_LED_NUM,
@@ -7149,7 +7153,9 @@ amc_board_handler(ipmi_mc_t *mc)
     if (rv)
 	goto out_err;
     /* offset 6 is for hot-swap */
+#if 0 /* Maybe later */
     ipmi_sensor_set_hot_swap_requester(info->slot, 6, 1);
+#endif
     rv = mxp_add_sensor(mc, 
 			&info->slot,
 			MXP_BOARD_SLOT_NUM,
@@ -7187,7 +7193,9 @@ amc_board_handler(ipmi_mc_t *mc)
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(info->blue_led, 1, blue_led);
+#if 0 /* Maybe later */
     ipmi_control_set_hot_swap_indicator(info->blue_led, 1, 1, 0, 2, 1);
+#endif
     rv = mxp_add_control(mc, 
 			 &info->blue_led,
 			 MXP_BOARD_BLUE_LED_NUM,
