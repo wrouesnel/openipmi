@@ -446,7 +446,8 @@ lanparm_next_config(got_data_t *info)
 			       0, lanparm_got_config, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "pet.c(lanparm_got_config): get err: 0x%x", rv);
+		 "pet.c(lanparm_next_config): get err for %d: 0x%x",
+		 info->lanparm_check_pos, rv);
     }
 
     return rv;
@@ -469,7 +470,8 @@ lanparm_set_config(ipmi_lanparm_t *lanparm,
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "pet.c(lanparm_set_config): set failed: 0x%x", err);
+		 "pet.c(lanparm_set_config): set failed for %d: 0x%x",
+		 info->lanparm_check_pos, err);
 	lanparm_op_done(info, err);
 	goto out;
     }
@@ -508,7 +510,8 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "pet.c(lanparm_got_config): get failed: 0x%x", err);
+		 "pet.c(lanparm_got_config): get failed for %d: 0x%x",
+		 info->lanparm_check_pos, err);
 	lanparm_op_done(info, err);
 	goto out;
     }
@@ -684,7 +687,7 @@ pef_next_config(got_data_t *info)
 			   0, pef_got_config, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "pet.c(pef_got_control): PEF get err: 0x%x", rv);
+		 "pet.c(pef_next_config): PEF get err: 0x%x", rv);
     }
 
     return rv;
@@ -707,7 +710,8 @@ pef_set_config(ipmi_pef_t    *pef,
 
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "pet.c(pef_got_control): PEF alloc failed: 0x%x", err);
+		 "pet.c(pef_set_config): PEF set failed for %d: 0x%x",
+		 info->pef_check_pos, err);
 	pef_op_done(info, err);
 	goto out;
     }
@@ -1142,9 +1146,11 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     }
 
     ipmi_rwlock_write_lock(pet_lock);
+#if 0
     rv = open_pet_socket();
     if (rv)
 	goto out_unlock_err;
+#endif
 
     /* Start a timer for this PET to periodically check it. */
     pet->timer_info = ipmi_mem_alloc(sizeof(*(pet->timer_info)));

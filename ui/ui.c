@@ -4344,6 +4344,7 @@ pet_cmd(char *cmd, char **toks, void *cb_data)
     rv = ipmi_domain_pointer_cb(domain_id, pet_domain_cb, &info);
     if (rv)
 	cmd_win_out("Error converting domain");
+    return 0;
 }
 
 typedef struct msg_cmd_data_s
