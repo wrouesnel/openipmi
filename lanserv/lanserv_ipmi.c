@@ -2814,11 +2814,14 @@ aes_cbc_encrypt(lan_data_t *lan, session_t *session,
     unsigned int   l = *data_len;
     unsigned char  *d;
     unsigned char  *iv;
-    unsigned int   e;
+    unsigned int   i;
     EVP_CIPHER_CTX ctx;
     int            rv;
     unsigned int   outlen;
     unsigned int   tmplen;
+    unsigned char  *padpos;
+    unsigned char  padval;
+    unsigned int   padlen;
 
     if (*hdr_left < 16)
 	return E2BIG;
@@ -2826,49 +2829,59 @@ aes_cbc_encrypt(lan_data_t *lan, session_t *session,
     /* Calculate the number of padding bytes -> e.  Note that the pad
        length byte is included, thus the +1.  We don't add the pad,
        AES does, but we need to know what it is. */
-    e = 16 -((l+1) % 16);
-    if (e == 16)
-	e = 0;
-    l += e+1;
+    /* Calculate the number of padding bytes -> e.  Note that the pad
+       length byte is included, thus the +1.  We then do the padding. */
+    padlen = 15 - (l % 16);
+    l += padlen + 1;
     if (l > *data_size)
 	return E2BIG;
 
     /* We store the unencrypted data here, then crypt into the real
        data. */
-    d = malloc(*data_len);
+    d = malloc(l);
     if (!d)
 	return ENOMEM;
 
+    memcpy(d, *pos, *data_len);
+
+    /* Now add the padding. */
+    padpos = d + *data_len;
+    padval = 1;
+    for (i=0; i<padlen; i++, padpos++, padval++)
+	*padpos = padval;
+    *padpos = padlen;
+
+    /* Now create the initialization vector, including making room for it. */
     iv = (*pos) - 16;
     rv = lan->gen_rand(lan, iv, 16);
     if (rv) {
 	free(d);
 	return rv;
     }
-
-    memcpy(d, *pos, *data_len);
-
-    /* Make room for the initialization vector. */
     *hdr_left -= 16;
     *data_size += 16;
 
     /* Ok, we're set to do the crypt operation. */
     EVP_CIPHER_CTX_init(&ctx);
     EVP_EncryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, a->ckey, iv);
-    if (!EVP_EncryptUpdate(&ctx, *pos, &outlen, d, *data_len)) {
-	free(d);
-	return ENOMEM; /* right? */
+    EVP_CIPHER_CTX_set_padding(&ctx, 0);
+    if (!EVP_EncryptUpdate(&ctx, *pos, &outlen, d, l)) {
+	rv = ENOMEM;
+	goto out_cleanup;
     }
-    if (!EVP_EncryptFinal_ex(&ctx, (*pos)+outlen, &tmplen)) {
-	free(d);
-	return ENOMEM; /* right? */
+    if (!EVP_EncryptFinal_ex(&ctx, (*pos) + outlen, &tmplen)) {
+	rv = ENOMEM; /* right? */
+	goto out_cleanup;
     }
     outlen += tmplen;
 
     *pos = iv;
     *data_len = outlen + 16;
+
+ out_cleanup:
+    EVP_CIPHER_CTX_cleanup(&ctx);
     free(d);
-    return 0;
+    return rv;
 }
 
 static int
@@ -2879,7 +2892,9 @@ aes_cbc_decrypt(lan_data_t *lan, session_t *session, msg_t *msg)
     unsigned char  *d;
     EVP_CIPHER_CTX ctx;
     unsigned int   outlen;
-    unsigned int   tmplen;
+    unsigned char  *pad;
+    unsigned int   padlen;
+    int            rv = 0;
 
     if (l < 32)
 	/* Not possible with this algorithm. */
@@ -2896,22 +2911,44 @@ aes_cbc_decrypt(lan_data_t *lan, session_t *session, msg_t *msg)
 
     /* Ok, we're set to do the decrypt operation. */
     EVP_CIPHER_CTX_init(&ctx);
-    EVP_CIPHER_CTX_set_padding(&ctx, 0);
     EVP_DecryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, a->k2, msg->data);
+    EVP_CIPHER_CTX_set_padding(&ctx, 0);
     if (!EVP_DecryptUpdate(&ctx, msg->data+16, &outlen, d, l)) {
-	free(d);
-	return ENOMEM; /* right? */
+	rv = EINVAL;
+	goto out_cleanup;
     }
-    if (!EVP_DecryptFinal_ex(&ctx, msg->data+16+outlen, &tmplen)) {
-	free(d);
-	return ENOMEM; /* right? */
-    }
-    outlen += tmplen;
 
-    msg->data += 16;
+    if (outlen < 16) {
+	rv = EINVAL;
+	goto out_cleanup;
+    }
+
+    /* Now remove the padding */
+    pad = msg->data + 16 + outlen - 1;
+    padlen = *pad;
+    if (padlen >= 16) {
+	rv = EINVAL;
+	goto out_cleanup;
+    }
+    outlen--;
+    pad--;
+    while (padlen) {
+	if (*pad != padlen) {
+	    rv = EINVAL;
+	    goto out_cleanup;
+	}
+	outlen--;
+	pad--;
+	padlen--;
+    }
+    
+    msg->data += 16; /* Remove the init vector */
     msg->len = outlen;
+
+ out_cleanup:
+    EVP_CIPHER_CTX_cleanup(&ctx);
     free(d);
-    return 0;
+    return rv;
 }
 
 static conf_handlers_t aes_cbc_conf =

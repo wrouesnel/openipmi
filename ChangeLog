@@ -1,3 +1,12 @@
+2005-03-24 Corey Minyard <cminyard@mvista.com> 
+
+	* cmdlang/cmdlang.c: Cast ipmi_time_t to long long when outputting
+	the data to avoid compiler warning.
+
+	* lib/aes_cbc.c, lanserv/lanserv_ipmi.c: Don't use the padding
+	from openssl, as it is incorrect for IPMI.  Add our own padding
+	and turn openssl padding off.
+
 2005-03-24 Darius Davis <dariusd@users.sourceforge.net>
 
 	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Moved #include<time.h>

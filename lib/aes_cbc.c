@@ -82,62 +82,77 @@ aes_cbc_encrypt(ipmi_con_t    *ipmi,
     aes_cbc_info_t *info = conf_data;
     unsigned char  *iv;
     unsigned int   l = *payload_len;
-    unsigned int   e;
+    unsigned int   i;
     unsigned char  *d;
     EVP_CIPHER_CTX ctx;
     int            rv;
     unsigned int   outlen;
     unsigned int   tmplen;
+    unsigned char  *padpos;
+    unsigned char  padval;
+    unsigned int   padlen;
 
+    /* Check for init vector room. */
     if (*header_len < 16)
 	return E2BIG;
 
     /* Calculate the number of padding bytes -> e.  Note that the pad
-       length byte is included, thus the +1.  We assume AES does the
-       padding, but we need to know how much. */
-    e = 16 -((l+1) % 16);
-    if (e == 16)
-	e = 0;
-    l += e+1;
+       length byte is included, thus the +1.  We then do the padding. */
+    padlen = 15 - (l % 16);
+    l += padlen + 1;
     if (l > *max_payload_len)
 	return E2BIG;
 
     /* We store the unencrypted data here, then crypt into the real
        data. */
-    d = ipmi_mem_alloc(*payload_len);
+    d = ipmi_mem_alloc(l);
     if (!d)
 	return ENOMEM;
-    iv = (*payload)-16;
 
+    memcpy(d, *payload, *payload_len);
+
+    /* Now add the padding. */
+    padpos = d + *payload_len;
+    padval = 1;
+    for (i=0; i<padlen; i++, padpos++, padval++)
+	*padpos = padval;
+    *padpos = padlen;
+
+    /* Now create the initialization vector, including making room for it. */
+    iv = (*payload)-16;
     rv = ipmi->os_hnd->get_random(ipmi->os_hnd, iv, 16);
     if (rv) {
 	ipmi_mem_free(d);
 	return rv;
     }
-
-    memcpy(d, *payload, *payload_len);
-
-    /* Make room for the initialization vector. */
     *header_len -= 16;
     *max_payload_len += 16;
 
     /* Ok, we're set to do the crypt operation. */
     EVP_CIPHER_CTX_init(&ctx);
     EVP_EncryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, info->k2, iv);
-    if (!EVP_EncryptUpdate(&ctx, *payload, &outlen, d, *payload_len)) {
-	ipmi_mem_free(d);
-	return ENOMEM; /* right? */
+    EVP_CIPHER_CTX_set_padding(&ctx, 0);
+    if (!EVP_EncryptUpdate(&ctx, *payload, &outlen, d, l)) {
+	rv = ENOMEM; /* right? */
+	goto out_cleanup;
     }
-    if (!EVP_EncryptFinal_ex(&ctx, (*payload)+outlen, &tmplen)) {
-	free(d);
-	return ENOMEM; /* right? */
+    if (!EVP_EncryptFinal_ex(&ctx, (*payload) + outlen, &tmplen)) {
+	rv = ENOMEM; /* right? */
+	goto out_cleanup;
     }
     outlen += tmplen;
 
+    /* Don't call EncryptFinal_ex, it adds 16 bytes of useless data.
+       We have already 16-byte aligned the data, no need for it. */
+
     *payload = iv;
     *payload_len = outlen + 16;
+
+ out_cleanup:
+    EVP_CIPHER_CTX_cleanup(&ctx);
     ipmi_mem_free(d);
-    return 0;
+
+    return rv;
 }
 
 static int
@@ -152,7 +167,9 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
     unsigned char  *p;
     EVP_CIPHER_CTX ctx;
     unsigned int   outlen;
-    unsigned int   tmplen;
+    int            rv = 0;
+    unsigned char  *pad;
+    unsigned int   padlen;
 
     if (l < 32)
 	/* Not possible with this algorithm. */
@@ -171,22 +188,44 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
 
     /* Ok, we're set to do the decrypt operation. */
     EVP_CIPHER_CTX_init(&ctx);
-    EVP_CIPHER_CTX_set_padding(&ctx, 0);
     EVP_DecryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, info->k2, *payload);
+    EVP_CIPHER_CTX_set_padding(&ctx, 0);
     if (!EVP_DecryptUpdate(&ctx, p, &outlen, d, l)) {
-	ipmi_mem_free(d);
-	return ENOMEM; /* right? */
+	rv = EINVAL;
+	goto out_cleanup;
     }
-    if (!EVP_DecryptFinal_ex(&ctx, p+outlen, &tmplen)) {
-	ipmi_mem_free(d);
-	return ENOMEM; /* right? */
-    }
-    outlen += tmplen;
 
+    if (outlen < 16) {
+	rv = EINVAL;
+	goto out_cleanup;
+    }
+
+    /* Now remove the padding */
+    pad = p + outlen - 1;
+    padlen = *pad;
+    if (padlen >= 16) {
+	rv = EINVAL;
+	goto out_cleanup;
+    }
+    outlen--;
+    pad--;
+    while (padlen) {
+	if (*pad != padlen) {
+	    rv = EINVAL;
+	    goto out_cleanup;
+	}
+	outlen--;
+	pad--;
+	padlen--;
+    }
+    
     *payload = p;
     *payload_len = outlen;
+
+ out_cleanup:
+    EVP_CIPHER_CTX_cleanup(&ctx);
     ipmi_mem_free(d);
-    return 0;
+    return rv;
 }
 
 static ipmi_rmcpp_confidentiality_t aes_conf =

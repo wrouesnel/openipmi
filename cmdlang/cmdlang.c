@@ -1525,7 +1525,7 @@ ipmi_cmdlang_out_time(ipmi_cmd_info_t *info,
 {
     char sval[40];
 
-    sprintf(sval, "%lld", value);
+    sprintf(sval, "%lld", (long long) value);
     ipmi_cmdlang_out(info, name, sval);
 }
 
@@ -1536,7 +1536,7 @@ ipmi_cmdlang_out_timeout(ipmi_cmd_info_t *info,
 {
     char sval[40];
 
-    sprintf(sval, "%lld", value);
+    sprintf(sval, "%lld", (long long) value);
     ipmi_cmdlang_out(info, name, sval);
 }
 
