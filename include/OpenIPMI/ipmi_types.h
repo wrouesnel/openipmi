@@ -33,6 +33,9 @@
 
 #ifndef _IPMI_TYPES_H
 #define _IPMI_TYPES_H
+
+#include <stdint.h>
+
 /*
  * These are the main types the user has to deal with.
  */
@@ -62,6 +65,8 @@ typedef struct ipmi_sensor_id_s ipmi_sensor_id_t;
  */
 typedef struct ipmi_control_s ipmi_control_t;
 typedef struct ipmi_control_id_s ipmi_control_id_t;
+
+typedef int64_t ipmi_timeout_t;
 
 #ifndef __LINUX_IPMI_H /* Don't include this is we are including the kernel */
 

@@ -231,27 +231,34 @@ int ipmi_entity_set_hot_swappable(ipmi_entity_t *ent, int val);
 /* Hot-swap state callbacks. */
 typedef struct ipmi_entity_hot_swap_s
 {
+    /* Fetch the value of the current hot-swap state for the entity. */
     int (*get_hot_swap_state)(ipmi_entity_t           *ent,
 			      ipmi_entity_hot_swap_cb handler,
 			      void                    *cb_data);
 
+    /* Set the auto-activate value for the entity.  If auto_act is
+       larger than can be timed with this mechanism, this routine
+       should return EINVAL.  */
     int (*set_auto_activate)(ipmi_entity_t  *ent,
-			     int            auto_act,
+			     ipmi_timeout_t auto_act,
 			     ipmi_entity_cb done,
 			     void           *cb_data);
 
-    int (*get_auto_activate)(ipmi_entity_t      *ent,
-			     ipmi_entity_val_cb handler,
-			     void               *cb_data);
+    int (*get_auto_activate)(ipmi_entity_t       *ent,
+			     ipmi_entity_time_cb handler,
+			     void                *cb_data);
 
+    /* Set the auto-deactivate value for the entity.  If auto_deact is
+       larger than can be timed with this mechanism, this routine
+       should return EINVAL  */
     int (*set_auto_deactivate)(ipmi_entity_t  *ent,
-			       int            auto_act,
+			       ipmi_timeout_t auto_act,
 			       ipmi_entity_cb done,
 			       void           *cb_data);
 
-    int (*get_auto_deactivate)(ipmi_entity_t      *ent,
-			       ipmi_entity_val_cb handler,
-			       void               *cb_data);
+    int (*get_auto_deactivate)(ipmi_entity_t       *ent,
+			       ipmi_entity_time_cb handler,
+			       void                *cb_data);
 
     int (*activate)(ipmi_entity_t  *ent,
 		    ipmi_entity_cb done,
@@ -275,6 +282,13 @@ typedef struct ipmi_entity_hot_swap_s
 				  void               *cb_data);
 } ipmi_entity_hot_swap_t;
 
+/* Call all the hot-swap handlers associated with the entity */
+void ipmi_entity_call_hot_swap_handlers(ipmi_entity_t             *ent,
+					enum ipmi_hot_swap_states last_state,
+					enum ipmi_hot_swap_states curr_state,
+					ipmi_event_t              **event,
+					int                       *handled);
+
 /* Set the hot-swap control state machine. */
 void ipmi_entity_set_hot_swap_control(ipmi_entity_t          *ent,
 				      ipmi_entity_hot_swap_t *cbs);
@@ -293,6 +307,9 @@ void ipmi_entity_set_hot_swap_control(ipmi_entity_t          *ent,
    even if the entity is not present:
    * A presence sensor
    * A power control with "ipmi_control_is_hot_swap_power" returning true
+   If a power control is present, the initial setting of the power control
+   will depend on the auto-activate setting.  If it is not zero
+   (IPMI_TIMEOUT_NOW) then the power will be set off.
 
    If the following are present, then the extraction pending state will
    be used:
@@ -300,6 +317,8 @@ void ipmi_entity_set_hot_swap_control(ipmi_entity_t          *ent,
    * A discrete sensor with "ipmi_sensor_is_hot_swap_requester" returning
      true.
    This sensor may appear later, it does not have to always be present.
+   Also, if this is present or becomes available while in insertion-pending
+   state, an opposite transition will disable the value.
 
    If a hot-swap indicator appears (an LED control with one LED for
    which "ipmi_control_is_hot_swap_indicator" returns true, it will be

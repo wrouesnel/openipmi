@@ -34,6 +34,8 @@
 #ifndef _IPMI_BITS_H
 #define _IPMI_BITS_H
 
+#include <limits.h>
+
 /*
  * When dealing with strings, they can be unicode or ASCII, and some
  * can be binary.
@@ -408,5 +410,8 @@ char *ipmi_get_color_string(unsigned int val);
  */
 #define IPMI_EVENT_HANDLED     0
 #define IPMI_EVENT_NOT_HANDLED 1
+
+#define IPMI_TIMEOUT_NOW	0
+#define IPMI_TIMEOUT_FOREVER	LONG_MAX
 
 #endif /* _IPMI_BITS_H */

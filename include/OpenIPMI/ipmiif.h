@@ -527,6 +527,24 @@ int ipmi_entity_set_presence_handler(ipmi_entity_t           *ent,
 				     ipmi_entity_presence_cb handler,
 				     void                    *cb_data);
 
+/* Like the above, but it allows multiple handlers to be attached to
+   the entity.  It should return IPMI_EVENT_HANDLED if it handled the
+   event, or IPMI_EVENT_NOT_HANDLED if it didn't handle the event.
+   "Handling" the event means that is will manage the event (delete it
+   when it is time).  If no sensor handles the event, then it will be
+   delivered to the "main" unhandled event handler for the domain. */
+typedef int (*ipmi_entity_presence_change_cb)(ipmi_entity_t *entity,
+					      int           present,
+					      void          *cb_data,
+					      ipmi_event_t  *event);
+int ipmi_entity_add_presence_handler(ipmi_entity_t                  *ent,
+				     ipmi_entity_presence_change_cb handler,
+				     void                           *cb_data);
+int ipmi_entity_remove_presence_handler
+(ipmi_entity_t                  *ent,
+ ipmi_entity_presence_change_cb handler,
+ void                           *cb_data);
+
 /* Detect if the presence of an entity has changed.  If "force" is zero,
    then it will only do this if OpenIPMI has some reason to think the
    presence has changed.  If "force" is non-zero, it will force OpenIPMI
@@ -612,6 +630,10 @@ typedef void (*ipmi_entity_val_cb)(ipmi_entity_t *ent,
 				   int           err,
 				   int           val,
 				   void          *cb_data);
+typedef void (*ipmi_entity_time_cb)(ipmi_entity_t  *ent,
+				    int            err,
+				    ipmi_timeout_t val,
+				    void           *cb_data);
 
 /* Register a handler that will be called fru information is added,
    deleted, or modified.  If you call this in the entity added
@@ -722,26 +744,28 @@ int ipmi_entity_get_hot_swap_state(ipmi_entity_t           *ent,
 /* Thses set whether the device will automatically be activated and
    deactivated by the hardware or OpenIPMI.  Both values are get/set
    together.  By default devices will automatically be
-   activated/deactivated and this value is set to true (upon
-   insertion, they will transition directly to active state.  Upon a
-   removal request, it will transition directly to inactive.  If this
-   is set to false, then the state machine will stop in the
-   inactive/removal pending state and the user must call the activate
-   or deactivate routines below to push it out of those states. */
-int ipmi_entity_get_auto_activate(ipmi_entity_t      *ent,
-				  ipmi_entity_val_cb handler,
-				  void               *cb_data);
-int ipmi_entity_set_auto_activate(ipmi_entity_t  *ent,
-				  int            auto_act,
-				  ipmi_entity_cb done,
-				  void           *cb_data);
-int ipmi_entity_get_auto_deactivate(ipmi_entity_t      *ent,
-				    ipmi_entity_val_cb handler,
-				    void               *cb_data);
-int ipmi_entity_set_auto_deactivate(ipmi_entity_t  *ent,
-				    int            auto_deact,
-				    ipmi_entity_cb done,
-				    void           *cb_data);
+   activated/deactivated and this value is set to zero, or
+   IPMI_TIMEOUT_NOW (upon insertion, they will transition directly to
+   active state.  Upon a removal request, it will transition directly
+   to inactive).  If this is set to IPMI_TIMEOUT_FOREVER, then the
+   state machine will stop in the inactive/removal pending state and
+   the user must call the activate or deactivate routines below to
+   push it out of those states.  Otherwise, the timeout is the time in
+   nanoseconds for the operation. */
+int ipmi_entity_get_auto_activate_time(ipmi_entity_t       *ent,
+				       ipmi_entity_time_cb handler,
+				       void                *cb_data);
+int ipmi_entity_set_auto_activate_time(ipmi_entity_t  *ent,
+				       ipmi_timeout_t auto_act,
+				       ipmi_entity_cb done,
+				       void           *cb_data);
+int ipmi_entity_get_auto_deactivate_time(ipmi_entity_t       *ent,
+					 ipmi_entity_time_cb handler,
+					 void                *cb_data);
+int ipmi_entity_set_auto_deactivate_time(ipmi_entity_t  *ent,
+					 ipmi_timeout_t auto_deact,
+					 ipmi_entity_cb done,
+					 void           *cb_data);
 
 /* Attempt to activate or deactivate an entity.  Activate will cause a
    transition from INACTIVE to ACTIVE, or from EXTRACTION_PENDING to

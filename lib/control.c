@@ -756,14 +756,15 @@ control_val_event_call_handler(void *data, void *ihandler, void *cb_data)
     control_event_info_t      *info = data;
     int                       handled;
 
-    handled = ! handler(info->control,
-			info->valid_vals,
-			info->vals,
-			cb_data,
-			info->event);
-    if (!info->handled && handled)
-	info->handled = 1;
-    info->event = NULL;
+    handled = handler(info->control,
+		      info->valid_vals,
+		      info->vals,
+		      cb_data,
+		      info->event);
+    if (handled == IPMI_EVENT_HANDLED) {
+	info->handled = handled;
+	info->event = NULL;
+    }
 }
 
 void
@@ -779,7 +780,7 @@ ipmi_control_call_val_event_handlers(ipmi_control_t *control,
     info.valid_vals = valid_vals;
     info.vals = vals;
     info.event = *event;
-    info.handled = 0;
+    info.handled = IPMI_EVENT_NOT_HANDLED;
 
     ilist_iter_twoitem(control->handler_list,
 		       control_val_event_call_handler, &info);

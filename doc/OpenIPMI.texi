@@ -2020,7 +2020,7 @@ Used to light the blue LED for the board.
 This gives access to the temperature and cooling LEDs on the AMC.
 These cannot be set independently, so they are implemented as one
 control with two LEDs.  The first LED is the temperature LED, the
-second in the cooling LED.
+second is the cooling LED.
 
 @item Last Reset Rsn
 The reason for the last reset of the AMC.  Possible values are:
