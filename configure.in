@@ -1,5 +1,6 @@
 AC_INIT(README.Force)
 AC_CANONICAL_TARGET
+OPENIPMI_PKG_NAME=OpenIPMI
 OPENIPMI_VERSION_MAJOR=1
 OPENIPMI_VERSION_MINOR=4
 OPENIPMI_VERSION_RELEASE=0
@@ -127,6 +128,7 @@ AC_OUTPUT(Makefile
 	  include/OpenIPMI/ipmiif.h
 	  include/linux/Makefile
 	  include/net/Makefile
+	  OpenIPMI.spec
 	  OpenIPMIutils.pc
 	  OpenIPMI.pc
 	  OpenIPMIpthread.pc
