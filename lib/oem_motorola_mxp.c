@@ -6686,7 +6686,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 
     for (i=0; i<MXP_POWER_SUPPLIES; i++) {
 	ipmi_entity_remove_child(info->chassis_ent, info->power_supply[i].ent);
-	ipmi_entity_remove_child(info->chassis_ent,
+	ipmi_entity_remove_child(info->power_supply[i].ent,
 		       		 info->power_supply[i].fan_ent);
 	ipmi_sensor_destroy(info->power_supply[i].presence);
 	ipmi_sensor_destroy(info->power_supply[i].ps);
