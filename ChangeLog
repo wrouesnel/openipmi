@@ -1,4 +1,9 @@
-2003-12-05  Louis Zhuang  <louis.zhuang@linux.intel.com>
+2003-12-09  Louis Zhuang  <louis.zhuang@linux.intel.com>
+
+	* lib/ilist.c: Fix a bug in the routine to go to the previous
+	item.
+
+2003-12-05 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c: Work on SDR emulation.
 
@@ -64,6 +69,7 @@
 	* include/OpenIPMI/ipmi_sel.h, lib/sel.h: Add a new function
 	'ipmi_sel_get_event_by_recid'.
 
+>>>>>>> 1.239
 2003-12-01 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Renamed some functions to
@@ -76,6 +82,7 @@
 	* lib/control.c: ditto
 	* lib/oem_motorola_mxp.c: ditto
 	* ui/ui.c: ditto
+	
 2003-11-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_control.h, lib/control.c: Added a way to

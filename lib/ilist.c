@@ -202,7 +202,7 @@ ilist_prev(ilist_iter_t *iter)
 {
     if (iter->curr->prev == iter->list->head)
 	return 0;
-    iter->curr = iter->curr->next;
+    iter->curr = iter->curr->prev;
     return 1;
 }
 
