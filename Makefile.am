@@ -22,7 +22,8 @@ lib_LTLIBRARIES = libOpenIPMI.la libOpenIPMIui.la
 
 bin_PROGRAMS = ipmi_ui ipmicmd ipmilan
 
-libOpenIPMI_la_SOURCES = entity.c ipmi.c mc.c sdr.c selector.c control.c \
+libOpenIPMI_la_SOURCES = entity.c ipmi.c domain.c mc.c sdr.c selector.c \
+	control.c \
 	ilist.c ipmi_smi.c opq.c sel.c sensor.c ipmi_lan.c md5.c md2.c \
 	strings.c ipmi_malloc.c ipmi_auth.c
 libOpenIPMI_la_LIBADD = -lm
@@ -61,6 +62,8 @@ ipmi_ui_LDADD = libOpenIPMIui.la libOpenIPMI.la -lncurses
 TESTS = test_heap
 
 info_TEXINFOS = OpenIPMI.texi
+
+man_MANS = ipmi_ui.1 ipmilan.8
 
 clean:
 	rm -f *.map

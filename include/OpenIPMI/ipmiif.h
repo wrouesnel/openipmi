@@ -40,7 +40,7 @@
  * with all the nitty-gritty details of IPMI.  You only deal with
  * four things:
  *
- *  The BMC - This is the main interface to the IPMI system.
+ *  Domain - This is the main interface to the IPMI system.
  *  Entities - These are things that sensors monitor, they can be
  *             FRUs, or whatnot.
  *  Sensors - These are monitors for FRUs.
@@ -64,7 +64,7 @@
  * through a callback.  These are provided for each type.  This is a
  * little inconvenient, but it's a lot faster than copying a lot of
  * data around all the time or re-validating an ID on every operation.
- * If a callback gives you a pointer to a sensor, entity, or mc, the
+ * If a callback gives you a pointer to a sensor, entity, or domain, the
  * lock for that things will be held while you are in the callback.
  *
  * This interface is completely event-driven, meaning that a call will
@@ -82,11 +82,10 @@
  * callback with a NULL sensor.  The same goes for controls, entities,
  * or anything else.
  *
- * You should NEVER block in a callback.  Locks are held in callbacks,
- * so you will constipate the system if you block in callbacks.  Just
- * don't do it.
- *
- * asdf */
+ * You should NEVER block or exit in a callback.  Locks are held in
+ * callbacks, so you will constipate the system if you block in
+ * callbacks.  Just don't do it.
+ */
 
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_bits.h>
@@ -101,60 +100,65 @@
    you will hold the locks so the item you are using will not change.
    It's kind of a pain, but it improves reliability.  This way, you
    cannot "forget" to release the lock for something. */
-ipmi_mc_id_t ipmi_mc_convert_to_id(ipmi_mc_t *mc);
-typedef void (*ipmi_mc_cb)(ipmi_mc_t *mc, void *cb_data);
-int ipmi_mc_pointer_cb(ipmi_mc_id_t id, ipmi_mc_cb handler, void *cb_data);
-int ipmi_cmp_mc_id(ipmi_mc_id_t id1, ipmi_mc_id_t id2);
+/* The comparisons below return -1 if id1<id2, 0 if id1==id2, and 1 if
+   id1>id2. */
+ipmi_domain_id_t ipmi_domain_convert_to_id(ipmi_domain_t *domain);
+typedef void (*ipmi_domain_ptr_cb)(ipmi_domain_t *domain, void *cb_data);
+int ipmi_domain_pointer_cb(ipmi_domain_id_t   id,
+			   ipmi_domain_ptr_cb handler,
+			   void               *cb_data);
+int ipmi_cmp_domain_id(ipmi_domain_id_t id1, ipmi_domain_id_t id2);
 
 ipmi_entity_id_t ipmi_entity_convert_to_id(ipmi_entity_t *ent);
-typedef void (*ipmi_entity_cb)(ipmi_entity_t *entity, void *cb_data);
-int ipmi_entity_pointer_cb(ipmi_entity_id_t id,
-			   ipmi_entity_cb   handler,
-			   void             *cb_data);
+typedef void (*ipmi_entity_ptr_cb)(ipmi_entity_t *entity, void *cb_data);
+int ipmi_entity_pointer_cb(ipmi_entity_id_t   id,
+			   ipmi_entity_ptr_cb handler,
+			   void               *cb_data);
 
 ipmi_sensor_id_t ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor);
-typedef void (*ipmi_sensor_cb)(ipmi_sensor_t *sensor, void *cb_data);
-int ipmi_sensor_pointer_cb(ipmi_sensor_id_t id,
-			   ipmi_sensor_cb   handler,
-			   void             *cb_data);
+typedef void (*ipmi_sensor_ptr_cb)(ipmi_sensor_t *sensor, void *cb_data);
+int ipmi_sensor_pointer_cb(ipmi_sensor_id_t   id,
+			   ipmi_sensor_ptr_cb handler,
+			   void               *cb_data);
 int ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2);
 
 ipmi_control_id_t ipmi_control_convert_to_id(ipmi_control_t *control);
-typedef void (*ipmi_control_cb)(ipmi_control_t *control, void *cb_data);
-int ipmi_control_pointer_cb(ipmi_control_id_t id,
-			    ipmi_control_cb   handler,
-			    void              *cb_data);
+typedef void (*ipmi_control_ptr_cb)(ipmi_control_t *control, void *cb_data);
+int ipmi_control_pointer_cb(ipmi_control_id_t   id,
+			    ipmi_control_ptr_cb handler,
+			    void                *cb_data);
 int ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2);
 
-/* Callback used for generic BMC reporting. */
-typedef void (*ipmi_bmc_cb)(ipmi_mc_t *bmc, int err, void *cb_data);
+/* Callback used for generic domain reporting. */
+typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
 
-typedef struct ipmi_bmc_con_fail_s ipmi_bmc_con_fail_t;
+typedef struct ipmi_domain_con_fail_s ipmi_domain_con_fail_t;
 
 /* Add and remove a function to be called when the connection to the
-   BMC goes down or back up.  Being down does NOT mean the BMC has
+   domain goes down or back up.  Being down does NOT mean the domain has
    been shutdown, it is still active, and OpenIPMI will continue to
-   attempt to reconnect to the BMC.  When the connection goes down,
+   attempt to reconnect to the domain.  When the connection goes down,
    The "err" value in the callback will be non-zero to report the
    reason for the failure.  When the connection goes up, the "err"
    value will be zero reporting that the connection is now
    available. */
-int ipmi_bmc_add_con_fail_handler(ipmi_mc_t           *bmc,
-				  ipmi_bmc_cb         handler,
-				  void                *cb_data,
-				  ipmi_bmc_con_fail_t **id);
-void ipmi_bmc_remove_con_fail_handler(ipmi_mc_t           *bmc,
-				      ipmi_bmc_con_fail_t *id);
+int ipmi_domain_add_con_fail_handler(ipmi_domain_t          *domain,
+				     ipmi_domain_cb         handler,
+				     void                   *cb_data,
+				     ipmi_domain_con_fail_t **id);
+void ipmi_domain_remove_con_fail_handler(ipmi_domain_t          *domain,
+					 ipmi_domain_con_fail_t *id);
 
-/* The BMC has two timers, one for the SEL rescan interval and one for
+/* The domain has two timers, one for the SEL rescan interval and one for
    the IPMB bus rescan interval. */
 
 /* The SEL rescan timer is the time between when the SEL will be
    checked for new events.  This timer is in seconds, and will
    currently default to 10 seconds.  You need to set this depending on
    how fast you need to know if events have come in. */
-void ipmi_bmc_set_sel_rescan_time(ipmi_mc_t *bmc, unsigned int seconds);
-unsigned int ipmi_bmc_get_sel_rescan_time(ipmi_mc_t *bmc);
+void ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
+				     unsigned int  seconds);
+unsigned int ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain);
 
 /* The IPMB rescan timer is the time between scans of the IPMB bus to
    see if new MCs have appeared on the bus.  The timer is in seconds,
@@ -162,94 +166,97 @@ unsigned int ipmi_bmc_get_sel_rescan_time(ipmi_mc_t *bmc);
    timer depends on how fast you need to know if new devices have
    appeared, and if your system has proprietary extensions to detect
    insertion of devices more quickly.  */
-void ipmi_bmc_set_ipmb_rescan_time(ipmi_mc_t *bmc, unsigned int seconds);
-unsigned int ipmi_bmc_get_ipmb_rescan_time(ipmi_mc_t *bmc);
+void ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain,
+				      unsigned int  seconds);
+unsigned int ipmi_domain_get_ipmb_rescan_time(ipmi_domain_t *domain);
 
 /* Events come in this format. */
-typedef void (*ipmi_event_handler_t)(ipmi_mc_t    *bmc,
-				     ipmi_event_t *event,
-				     void         *event_data);
+typedef void (*ipmi_event_handler_cb)(ipmi_domain_t *domain,
+				      ipmi_event_t  *event,
+				      void          *event_data);
 
 typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
 
 /* Register a handler to receive events.  Multiple handlers may be
    registered, they will all receive all events.  The event_data will
-   be passed in with every event received.  The MC must be the BMC MC.
-   This will only catch events that are not sent to a sensor, so if
-   you get a system software event or an event from a sensor the
-   software doesn't know about, this handler will get it. */
-int ipmi_register_for_events(ipmi_mc_t               *bmc,
-			     ipmi_event_handler_t    handler,
+   be passed in with every event received.  This will only catch
+   events that are not sent to a sensor, so if you get a system
+   software event or an event from a sensor the software doesn't know
+   about, this handler will get it. */
+int ipmi_register_for_events(ipmi_domain_t           *domain,
+			     ipmi_event_handler_cb   handler,
 			     void                    *event_data,
 			     ipmi_event_handler_id_t **id);
 /* Deregister an event handler. */
-int ipmi_deregister_for_events(ipmi_mc_t               *bmc,
+int ipmi_deregister_for_events(ipmi_domain_t           *domain,
 			       ipmi_event_handler_id_t *id);
 
-/* Globally enable or disable events on the BMC. */
-int ipmi_bmc_enable_events(ipmi_mc_t *bmc);
-int ipmi_bmc_disable_events(ipmi_mc_t *bmc);
+/* Globally enable or disable events on the mc. */
+int ipmi_domain_enable_events(ipmi_domain_t *domain);
+int ipmi_domain_disable_events(ipmi_domain_t *domain);
 
 /* When you are done with an event, you should delete it.  This frees up
    the internal store for the event and removes it from the external
    system event event. */
 /* Delete a specific event. */
-int ipmi_bmc_del_event(ipmi_mc_t    *bmc,
-		       ipmi_event_t *event,
-		       ipmi_bmc_cb  done_handler,
-		       void         *cb_data);
+int ipmi_domain_del_event(ipmi_domain_t  *domain,
+			  ipmi_event_t   *event,
+			  ipmi_domain_cb done_handler,
+			  void           *cb_data);
 
 /* You can also scan the current set of events stored in the system.
    They return an error if the SEL is empty, or if you try to go past
    the last or before the first event.  The first and last function
    return the event, the next and prev function take the current event in
    "event" and return the next or previous event in "event". */
-int ipmi_bmc_first_event(ipmi_mc_t *bmc, ipmi_event_t *event);
-int ipmi_bmc_last_event(ipmi_mc_t *bmc, ipmi_event_t *event);
-int ipmi_bmc_next_event(ipmi_mc_t *bmc, ipmi_event_t *event);
-int ipmi_bmc_prev_event(ipmi_mc_t *bmc, ipmi_event_t *event);
+int ipmi_domain_first_event(ipmi_domain_t *domain, ipmi_event_t *event);
+int ipmi_domain_last_event(ipmi_domain_t *domain, ipmi_event_t *event);
+int ipmi_domain_next_event(ipmi_domain_t *domain, ipmi_event_t *event);
+int ipmi_domain_prev_event(ipmi_domain_t *domain, ipmi_event_t *event);
 
 /* Return the number of non-deleted entries in the local copy of the
    SEL. */
-int ipmi_bmc_sel_count(ipmi_mc_t    *bmc,
-		       unsigned int *count);
+int ipmi_domain_sel_count(ipmi_domain_t *domain,
+			  unsigned int  *count);
 
 /* Return the number of entries estimated to be used in the real SEL.
    If there are deleted event in the local copy of the SEL, they are
    not necessarily deleted from the real SEL, so this takes that into
    account. */
-int ipmi_bmc_sel_entries_used(ipmi_mc_t    *bmc,
-			      unsigned int *count);
+int ipmi_domain_sel_entries_used(ipmi_domain_t *domain,
+				 unsigned int  *count);
 
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
 enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
 
 /* A callback that will be called when entities are added to and
-   removed from the BMC, and when their presence changes. */
-typedef void (*ipmi_bmc_entity_cb)(enum ipmi_update_e op,
-				   ipmi_mc_t          *bmc,
-				   ipmi_entity_t      *entity,
-				   void               *cb_data);
+   removed from the domain, and when their presence changes. */
+typedef void (*ipmi_domain_entity_cb)(enum ipmi_update_e op,
+				      ipmi_domain_t      *domain,
+				      ipmi_entity_t      *entity,
+				      void               *cb_data);
 
 /* Set the handler to be called when an entity is added or deleted. */
-int ipmi_bmc_set_entity_update_handler(ipmi_mc_t          *bmc,
-				       ipmi_bmc_entity_cb handler,
-				       void               *cb_data);
+int ipmi_domain_set_entity_update_handler(ipmi_domain_t         *domain,
+					  ipmi_domain_entity_cb handler,
+					  void                  *cb_data);
 
-/* Iterate over all the entities in the bmc, calling the given
+/* Iterate over all the entities in the domain, calling the given
    function with each entity.  The entities will not change while this
    is happening. */
 typedef void (*ipmi_entities_iterate_entity_cb)(ipmi_entity_t *entity,
 						void          *cb_data);
-int ipmi_bmc_iterate_entities(ipmi_mc_t                       *bmc,
-			      ipmi_entities_iterate_entity_cb handler,
-			      void                            *cb_data);
+int ipmi_domain_iterate_entities(ipmi_domain_t                   *domain,
+				 ipmi_entities_iterate_entity_cb handler,
+				 void                            *cb_data);
 
 /* Store all the information I have locally into the SDR repository.
    This is a moderately dangerous operation, as it can wipe out your
    SDR repository if you are not careful. */
-int ipmi_bmc_store_entities(ipmi_mc_t *bmc, ipmi_bmc_cb done, void *cb_data);
+int ipmi_domain_store_entities(ipmi_domain_t  *domain,
+			       ipmi_domain_cb done,
+			       void           *cb_data);
 
 /* For the given entity, iterate over all the children of the entity,
    calling the given handler with each child.  The children will not
@@ -301,7 +308,7 @@ int ipmi_entity_set_presence_handler(ipmi_entity_t           *ent,
 				     void                    *cb_data);
 
 /* Get information about an entity.  Most of this is IPMI specific. */
-ipmi_mc_t *ipmi_entity_get_bmc(ipmi_entity_t *ent);
+ipmi_domain_t *ipmi_entity_get_domain(ipmi_entity_t *ent);
 int ipmi_entity_get_access_address(ipmi_entity_t *ent);
 int ipmi_entity_get_slave_address(ipmi_entity_t *ent);
 int ipmi_entity_get_channel(ipmi_entity_t *ent);
@@ -341,7 +348,7 @@ int ipmi_entity_is_present(ipmi_entity_t *ent);
 
 /* Register a handler that will be called when a sensor that monitors
    this entity is added, deleted, or modified.  If you call this in
-   the entity added callback for the BMC, you are guaranteed to get
+   the entity added callback for the domain, you are guaranteed to get
    this set before any sensors exist. */
 typedef void (*ipmi_entity_sensor_cb)(enum ipmi_update_e op,
 				      ipmi_entity_t      *ent,
@@ -353,7 +360,7 @@ int ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
 
 /* Register a handler that will be called when an control on
    this entity is added, deleted, or modified.  If you call this in
-   the entity added callback for the BMC, you are guaranteed to get
+   the entity added callback for the domain, you are guaranteed to get
    this set before any sensors exist. */
 typedef void (*ipmi_entity_control_cb)(enum ipmi_update_e op,
 				       ipmi_entity_t      *ent,
@@ -897,25 +904,28 @@ int ipmi_control_get_display_string(ipmi_control_t      *control,
    an OS handler to use for the system. */
 int ipmi_init(os_handler_t *handler);
 
-/* Create a new bmc with the given IPMI connection. */
-int ipmi_init_bmc(ipmi_con_t  *con,
-		  ipmi_bmc_cb handler,
-		  void        *cb_data);
+/* Create a new domain with the given IPMI connection.  The new domain
+   is returned in the new_domain variable, the id for the connection
+   fail handler is return in con_fail_id. */
+int ipmi_init_domain(ipmi_con_t             *con,
+		     ipmi_domain_cb         con_fail_handler,
+		     void                   *con_fail_cb_data,
+		     ipmi_domain_con_fail_t **con_fail_id,
+		     ipmi_domain_id_t       *new_domain);
 
 
 /* This will clean up all the memory associated with IPMI. */
 void ipmi_shutdown(void);
 
-void *ipmi_get_user_data(ipmi_mc_t *mc);
+void *ipmi_domain_get_user_data(ipmi_domain_t *domain);
 
 /* Close an IPMI connection.  This will free all memory associated
    with the connections, any outstanding responses will be lost, etc.
-   The passed in MC must be a SMI MC.  All slave MC's will also be
-   closed when this is closed. */
+   All slave MC's will be closed when this is closed. */
 typedef void (*close_done_t)(void *cb_data);
-int ipmi_close_connection(ipmi_mc_t    *mc,
-			  close_done_t close_done,
-			  void         *cb_data);
+int ipmi_close_connection(ipmi_domain_t *domain,
+			  close_done_t  close_done,
+			  void          *cb_data);
 
 /* Extract a 32-bit integer from the data, IPMI (little-endian) style. */
 unsigned int ipmi_get_uint32(unsigned char *data);

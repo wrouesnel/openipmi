@@ -53,10 +53,6 @@ unsigned int ipmi_sensors_get_count(ipmi_sensor_info_t *sensors);
  * These are for OEM code to create their own sensors.
  */
 
-/* Call the given callback with the sensor. */
-int ipmi_find_sensor(ipmi_mc_t *mc, int lun, int num,
-		     ipmi_sensor_cb handler, void *cb_data);
-
 /* Allocate a sensor, it will not be associated with anything yet. */
 int ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor);
 
@@ -80,7 +76,7 @@ int ipmi_sensor_add_nonstandard(
 /* Extract the sensors from the given SDRs.  The SDRs should have come
    from the source_mc, or if from the main SDR repository, source_mc
    should be NULL. */
-int ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
+int ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 			    ipmi_mc_t       *source_mc,
 			    ipmi_sdr_info_t *sdrs);
 
@@ -460,11 +456,11 @@ int ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
 			     ipmi_sensor_op_info_t *info,
 			     void                  *cb_data);
 
-/* Send an IPMI command to a specific address on the BMC.  This way,
+/* Send an IPMI command to a specific address in the domain.  This way,
    if you don't have an MC to represent the address, you can still
    send the command.  The response handler will be called with the
    sensor locked. */
-int ipmi_sensor_send_command_addr(ipmi_mc_t             *bmc,
+int ipmi_sensor_send_command_addr(ipmi_domain_t         *domain,
 				  ipmi_sensor_t         *sensor,
 				  ipmi_addr_t           *addr,
 				  unsigned int          addr_len,
@@ -490,8 +486,8 @@ ipmi_mc_t *ipmi_sensor_get_mc(ipmi_sensor_t *sensor);
 /* Do a pointer callback but ignore the sequence number in the MC.
    This is primarily for handling incoming events, where the sequence
    number doesn't matter. */
-int ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t id,
-				 ipmi_sensor_cb   handler,
-				 void             *cb_data);
+int ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t   id,
+				 ipmi_sensor_ptr_cb handler,
+				 void               *cb_data);
 
 #endif /* _IPMI_SENSOR_H */

@@ -51,8 +51,9 @@
 
 #ifdef DEBUG_MSG
 static void
-dump_hex(unsigned char *data, int len)
+dump_hex(void *vdata, int len)
 {
+    unsigned char *data = vdata;
     int i;
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 16) == 0)) {
@@ -77,7 +78,7 @@ dump_hex(unsigned char *data, int len)
 
 /* Number of consecutive failures that must occur before an IP is
    considered failed. */
-#define IP_FAIL_COUNT 3
+#define IP_FAIL_COUNT 6
 
 
 struct ipmi_ll_event_handler_id_s
@@ -115,6 +116,7 @@ typedef struct lan_wait_queue_s
     void                  *rsp_data;
     void                  *data2;
     void                  *data3;
+    void                  *data4;
 
     struct lan_wait_queue_s *next;
 } lan_wait_queue_t;
@@ -126,6 +128,8 @@ typedef struct lan_data_s
 {
     ipmi_con_t                 *ipmi;
     int                        fd;
+
+    unsigned char              slave_addr;
 
     int                        curr_ip_addr;
     struct sockaddr_in         ip_addr[MAX_IP_ADDR];
@@ -166,6 +170,10 @@ typedef struct lan_data_s
 	void                  *rsp_data;
 	void                  *data2;
 	void                  *data3;
+	void                  *data4;
+	int                   use_orig_addr;
+	ipmi_addr_t           orig_addr;
+	unsigned int          orig_addr_len;
 	os_hnd_timer_id_t     *timer;
 	lan_timer_info_t      *timer_info;
 	unsigned int          retries;
@@ -202,9 +210,6 @@ typedef struct lan_data_s
 
     lan_report_con_failure_cb lan_con_fail_handler;
     void                      *lan_con_fail_cb_data;
-
-    ipmi_ll_init_con_done_cb start_con_handler;
-    void                     *start_con_cb_data;
 
     struct lan_data_s *next, *prev;
 } lan_data_t;
@@ -591,7 +596,7 @@ audit_timeout_handler(void              *cb_data,
     si.lun = 0;
     ipmi->send_command(ipmi,
 		       (ipmi_addr_t *) &si, sizeof(si),
-		       &msg, NULL, NULL, NULL, NULL);
+		       &msg, NULL, NULL, NULL, NULL, NULL);
 
     timeout.tv_sec = LAN_AUDIT_TIMEOUT / 1000000;
     timeout.tv_usec = LAN_AUDIT_TIMEOUT % 1000000;
@@ -697,6 +702,7 @@ rsp_timeout_handler(void              *cb_data,
     void                  *rsp_data;
     void                  *data2;
     void                  *data3;
+    void                  *data4;
     int                   ip_num;
 
     ipmi_read_lock();
@@ -715,29 +721,51 @@ rsp_timeout_handler(void              *cb_data,
 	goto out_unlock;
     }
 
+    if (DEBUG_MSG) {
+	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d", seq);
+    }
+
     if (! lan->seq_table[seq].inuse)
 	goto out_unlock;
 
-    ip_num = lan->seq_table[seq].last_ip_num;
-    if (lan->ip_working[ip_num]) {
-	if (lan->consecutive_ip_failures[ip_num] == 0) {
-	    /* Set the time when the connection will be considered failed. */
-	    gettimeofday(&(lan->ip_failure_time[ip_num]), NULL);
-	    lan->ip_failure_time[ip_num].tv_sec += IP_FAIL_TIME / 1000000;
-	    lan->ip_failure_time[ip_num].tv_usec += IP_FAIL_TIME % 1000000;
-	    if (lan->ip_failure_time[ip_num].tv_usec > 1000000) {
-		lan->ip_failure_time[ip_num].tv_sec += 1;
-		lan->ip_failure_time[ip_num].tv_usec -= 1000000;
-	    }
-	    lan->consecutive_ip_failures[ip_num] = 1;
-	} else {
-	    lan->consecutive_ip_failures[ip_num]++;
-	    if (lan->consecutive_ip_failures[ip_num] >= IP_FAIL_COUNT) {
-		struct timeval now;
-		gettimeofday(&now, NULL);
-		if (cmp_timeval(&now, &lan->ip_failure_time[ip_num]) > 0)
-		{
-		    lost_connection(lan, ip_num);
+    if (DEBUG_MSG) {
+	ip_num = lan->seq_table[seq].last_ip_num;
+	ipmi_log(IPMI_LOG_DEBUG,
+		 "Seq #%d\n"
+		 "  addr_type=%d, ip_num=%d, fails=%d\n"
+		 "  fail_start_time=%ld.%6.6ld",
+		 seq, lan->seq_table[seq].addr.addr_type,
+		 lan->seq_table[seq].last_ip_num, ip_num,
+		 lan->ip_failure_time[ip_num].tv_sec,
+		 lan->ip_failure_time[ip_num].tv_usec);
+    }
+
+    if (lan->seq_table[seq].addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	/* We only count timeouts on messages to the system interface.
+           Otherwise, if we sent a bunch of messages to the IPMB that
+           timed out, we might trigger this code accidentally. */
+	ip_num = lan->seq_table[seq].last_ip_num;
+	if (lan->ip_working[ip_num]) {
+	    if (lan->consecutive_ip_failures[ip_num] == 0) {
+		/* Set the time when the connection will be considered
+                   failed. */
+		gettimeofday(&(lan->ip_failure_time[ip_num]), NULL);
+		lan->ip_failure_time[ip_num].tv_sec += IP_FAIL_TIME / 1000000;
+		lan->ip_failure_time[ip_num].tv_usec += IP_FAIL_TIME % 1000000;
+		if (lan->ip_failure_time[ip_num].tv_usec > 1000000) {
+		    lan->ip_failure_time[ip_num].tv_sec += 1;
+		    lan->ip_failure_time[ip_num].tv_usec -= 1000000;
+		}
+		lan->consecutive_ip_failures[ip_num] = 1;
+	    } else {
+		lan->consecutive_ip_failures[ip_num]++;
+		if (lan->consecutive_ip_failures[ip_num] >= IP_FAIL_COUNT) {
+		    struct timeval now;
+		    gettimeofday(&now, NULL);
+		    if (cmp_timeval(&now, &lan->ip_failure_time[ip_num]) > 0)
+		    {
+			lost_connection(lan, ip_num);
+		    }
 		}
 	    }
 	}
@@ -792,6 +820,7 @@ rsp_timeout_handler(void              *cb_data,
     rsp_data = lan->seq_table[seq].rsp_data;
     data2 = lan->seq_table[seq].data2;
     data3 = lan->seq_table[seq].data3;
+    data4 = lan->seq_table[seq].data4;
 
     lan->seq_table[seq].inuse = 0;
 
@@ -799,7 +828,7 @@ rsp_timeout_handler(void              *cb_data,
     ipmi_unlock(lan->seq_num_lock);
 
     if (handler)
-	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
+	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3, data4);
     goto out_unlock2;
 
  out_unlock:
@@ -842,7 +871,8 @@ handle_msg_send(lan_timer_info_t      *info,
 		ipmi_ll_rsp_handler_t rsp_handler,
 		void                  *rsp_data,
 		void                  *data2,
-		void                  *data3)
+		void                  *data3,
+		void                  *data4)
 
 {
     ipmi_con_t     *ipmi = info->ipmi;
@@ -850,6 +880,9 @@ handle_msg_send(lan_timer_info_t      *info,
     unsigned int   seq;
     struct timeval timeout;
     int            rv;
+    ipmi_addr_t    tmp_addr;
+    ipmi_addr_t    *orig_addr = NULL;
+    unsigned int   orig_addr_len = 0;
 
     seq = (lan->last_seq + 1) % 64;
     while (lan->seq_table[seq].inuse) {
@@ -863,12 +896,33 @@ handle_msg_send(lan_timer_info_t      *info,
 	seq = (seq + 1) % 64;
     }
 
+    if ((addr->addr_type == IPMI_IPMB_ADDR_TYPE)
+	|| (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE))
+    {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
+
+	if (ipmb->slave_addr == lan->slave_addr) {
+	    ipmi_system_interface_addr_t *si = (void *) &tmp_addr;
+	    /* Most systems don't handle sending to your own slave
+               address, so we have to translate here. */
+
+	    si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	    si->channel = IPMI_BMC_CHANNEL;
+	    si->lun = ipmb->lun;
+	    orig_addr = addr;
+	    orig_addr_len = addr_len;
+	    addr = &tmp_addr;
+	    addr_len = sizeof(*si);
+	}
+    }
+
     info->seq = seq;
     lan->seq_table[seq].inuse = 1;
     lan->seq_table[seq].rsp_handler = rsp_handler;
     lan->seq_table[seq].rsp_data = rsp_data;
     lan->seq_table[seq].data2 = data2;
     lan->seq_table[seq].data3 = data3;
+    lan->seq_table[seq].data4 = data4;
     memcpy(&(lan->seq_table[seq].addr), addr, addr_len);
     lan->seq_table[seq].addr_len = addr_len;
     lan->seq_table[seq].msg = *msg;
@@ -876,6 +930,16 @@ handle_msg_send(lan_timer_info_t      *info,
     memcpy(lan->seq_table[seq].data, msg->data, msg->data_len);
     lan->seq_table[seq].timer_info = info;
     lan->seq_table[seq].retries = 0;
+    if (orig_addr) {
+	lan->seq_table[seq].use_orig_addr = 1;
+	memcpy(&(lan->seq_table[seq].orig_addr), orig_addr, orig_addr_len);
+	lan->seq_table[seq].orig_addr_len = orig_addr_len;
+
+	/* In case it's a broadcast. */
+	lan->seq_table[seq].orig_addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+    } else {
+	lan->seq_table[seq].use_orig_addr = 0;
+    }
 
     timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
     timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
@@ -889,6 +953,8 @@ handle_msg_send(lan_timer_info_t      *info,
 	lan->seq_table[seq].inuse = 0;
 	goto out;
     }
+
+    lan->last_seq = seq;
 
     rv = lan_send(lan, addr, addr_len, msg, seq,
 		  &(lan->seq_table[seq].last_ip_num));
@@ -926,7 +992,8 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 
 	rv = handle_msg_send(q_item->info, &q_item->addr, q_item->addr_len,
 			     &(q_item->msg), q_item->rsp_handler,
-			     q_item->rsp_data, q_item->data2, q_item->data3);
+			     q_item->rsp_data, q_item->data2,
+			     q_item->data3, q_item->data4);
 	if (rv) {
 	    /* Send an error response to the user. */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -938,7 +1005,8 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 	    if (q_item->rsp_handler)
 		q_item->rsp_handler(ipmi, &q_item->addr, q_item->addr_len,
 				    &q_item->msg, q_item->rsp_data,
-				    q_item->data2, q_item->data3);
+				    q_item->data2, q_item->data3,
+				    q_item->data4);
 	    if (! q_item->info->cancelled) {
 		ipmi->os_hnd->free_timer(ipmi->os_hnd, q_item->info->timer);
 		ipmi_mem_free(q_item->info);
@@ -981,6 +1049,7 @@ data_handler(int            fd,
     void                  *rsp_data;
     void                  *data2;
     void                  *data3;
+    void                  *data4;
 
     ipmi_read_lock();
 
@@ -1001,7 +1070,7 @@ data_handler(int            fd,
 	dump_hex((unsigned char *) &ipaddrd, from_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	ipmi_log(IPMI_LOG_DEBUG_END, "");
     }
 
     /* Make sure the source IP matches what we expect the other end to
@@ -1015,27 +1084,45 @@ data_handler(int            fd,
 	    break;
 	}
     }
-    if (recv_addr >= lan->num_ip_addr)
+    if (recv_addr >= lan->num_ip_addr) {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message due to invalid IP");
 	goto out_unlock2;
+    }
 
     /* Validate the length first, so we know that all the data in the
        buffer we will deal with is valid. */
-    if (len < 21) /* Minimum size of an IPMI msg. */
+    if (len < 21) { /* Minimum size of an IPMI msg. */
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message because too small(1)");
 	goto out_unlock2;
+    }
 
     if (data[4] == 0) {
 	/* No authentication. */
-	if (len < (data[13] + 14))
+	if (len < (data[13] + 14)) {
 	    /* Not enough data was supplied, reject the message. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG,
+			 "Dropped message because too small(2)");
 	    goto out_unlock2;
+	}
 	data_len = data[13];
     } else {
-	if (len < 37) /* Minimum size of an authenticated IPMI msg. */
+	if (len < 37) { /* Minimum size of an authenticated IPMI msg. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG,
+			 "Dropped message because too small(3)");
 	    goto out_unlock2;
+	}
 	/* authcode in message, add 16 to the above checks. */
-	if (len < (data[29] + 30))
+	if (len < (data[29] + 30)) {
 	    /* Not enough data was supplied, reject the message. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG,
+			 "Dropped message because too small(4)");
 	    goto out_unlock2;
+	}
 	data_len = data[29];
     }
 
@@ -1043,18 +1130,28 @@ data_handler(int            fd,
     if ((data[0] != 6)
 	|| (data[2] != 0xff)
 	|| (data[3] != 0x07))
+    {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid IPMI/RMCP");
 	goto out_unlock2;
+    }
 
     /* FIXME - need a lock on the session data. */
 
     /* Drop if the authtypes are incompatible. */
-    if (lan->working_authtype != data[4])
+    if (lan->working_authtype != data[4]) {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype");
 	goto out_unlock2;
+    }
 
     /* Drop if sessions ID's don't match. */
     sess_id = ipmi_get_uint32(data+9);
-    if (sess_id != lan->session_id)
+    if (sess_id != lan->session_id) {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid session id");
 	goto out_unlock2;
+    }
 
     seq = ipmi_get_uint32(data+5);
 
@@ -1063,6 +1160,8 @@ data_handler(int            fd,
            the session seq num so we know the data is valid. */
 	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13);
 	if (rv) {
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG, "Dropped message auth fail");
 	    goto out_unlock2;
 	}
 	tmsg = data + 30;
@@ -1086,6 +1185,8 @@ data_handler(int            fd,
 	uint8_t bit = 1 << (lan->inbound_seq_num - seq);
 	if (lan->recv_msg_map & bit) {
 	    /* We've already received the message, so discard it. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
 	    goto out_unlock2;
 	}
 
@@ -1093,6 +1194,8 @@ data_handler(int            fd,
     } else {
 	/* It's outside the current sequence number range, discard
 	   the packet. */
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message out of seq range");
 	goto out_unlock2;
     }
 
@@ -1140,9 +1243,12 @@ data_handler(int            fd,
 	ipmi_system_interface_addr_t *si_addr
 	    = (ipmi_system_interface_addr_t *) &addr;
 
-	if (tmsg[6] != 0)
+	if (tmsg[6] != 0) {
 	    /* An error getting the events, just ignore it. */
+	    if (DEBUG_MSG)
+		ipmi_log(IPMI_LOG_DEBUG, "Dropped message err getting event");
 	    goto out_unlock2;
+	}
 
 	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si_addr->channel = 0xf;
@@ -1173,8 +1279,11 @@ data_handler(int            fd,
     }
     
     ipmi_lock(lan->seq_num_lock);
-    if (! lan->seq_table[seq].inuse)
+    if (! lan->seq_table[seq].inuse) {
+	if (DEBUG_MSG)
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message seq not in use");
 	goto out_unlock;
+    }
 
     /* Convert broadcast addresses to regular IPMB addresses, since
        they come back that way. */
@@ -1188,6 +1297,20 @@ data_handler(int            fd,
 	|| (! ipmi_addr_equal(&addr2, lan->seq_table[seq].addr_len,
 			      &addr, addr_len)))
     {
+	if (DEBUG_MSG) {
+	    ipmi_log(IPMI_LOG_DEBUG_START,
+		     "Dropped message netfn/cmd/addr mismatch\n"
+		     "  netfn=%d, exp netfn=%d\n"
+		     "  cmd=%d, exp cmd=%d\n"
+		     "  addr=", 
+		     msg.netfn, lan->seq_table[seq].msg.netfn | 1,
+		     msg.cmd, lan->seq_table[seq].msg.cmd);
+	    dump_hex(&addr, addr_len);
+	    ipmi_log(IPMI_LOG_DEBUG_CONT,
+		     "\n  exp addr=");
+	    dump_hex(&addr2, lan->seq_table[seq].addr_len);
+	    ipmi_log(IPMI_LOG_DEBUG_END, "");
+	}
 	goto out_unlock;
     }
 
@@ -1212,13 +1335,21 @@ data_handler(int            fd,
     rsp_data = lan->seq_table[seq].rsp_data;
     data2 = lan->seq_table[seq].data2;
     data3 = lan->seq_table[seq].data3;
+    data4 = lan->seq_table[seq].data4;
     lan->seq_table[seq].inuse = 0;
+
+    if (lan->seq_table[seq].use_orig_addr) {
+	/* We did an address translation, so translate back. */
+	memcpy(&addr, &lan->seq_table[seq].orig_addr,
+	       lan->seq_table[seq].orig_addr_len);
+	addr_len = lan->seq_table[seq].orig_addr_len;
+    }
 
     check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
 
     if (handler)
-	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
+	handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3, data4);
     
  out_unlock2:
     ipmi_read_unlock();
@@ -1236,7 +1367,8 @@ lan_send_command(ipmi_con_t            *ipmi,
 		 ipmi_ll_rsp_handler_t rsp_handler,
 		 void                  *rsp_data,
 		 void                  *data2,
-		 void                  *data3)
+		 void                  *data3,
+		 void                  *data4)
 {
     lan_timer_info_t *info;
     lan_data_t       *lan;
@@ -1287,6 +1419,7 @@ lan_send_command(ipmi_con_t            *ipmi,
 	q_item->rsp_data = rsp_data;
 	q_item->data2 = data2;
 	q_item->data3 = data3;
+	q_item->data4 = data4;
 
 	/* Add it to the end of the queue. */
 	q_item->next = NULL;
@@ -1301,7 +1434,7 @@ lan_send_command(ipmi_con_t            *ipmi,
     }
 
     rv = handle_msg_send(info, addr, addr_len, msg, rsp_handler, rsp_data,
-			 data2, data3);
+			 data2, data3, data4);
     if (rv) {
 	ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
     }
@@ -1456,6 +1589,7 @@ lan_close_connection(ipmi_con_t *ipmi)
 	    void                  *rsp_data;
 	    void                  *data2;
 	    void                  *data3;
+	    void                  *data4;
 	    lan_timer_info_t      *info;
 	    unsigned char         data[0];
 	    ipmi_msg_t            msg;
@@ -1470,6 +1604,7 @@ lan_close_connection(ipmi_con_t *ipmi)
 	    rsp_data = lan->seq_table[i].rsp_data;
 	    data2 = lan->seq_table[i].data2;
 	    data3 = lan->seq_table[i].data3;
+	    data4 = lan->seq_table[i].data4;
 	    info = lan->seq_table[i].timer_info;
 
 	    msg.netfn = lan->seq_table[i].msg.netfn | 1;
@@ -1487,7 +1622,8 @@ lan_close_connection(ipmi_con_t *ipmi)
                this connection.  Sends will fail and receives will not
                validate. */
 	    if (handler)
-		handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
+		handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3,
+			data4);
 
 	    if (rv)
 		info->cancelled = 1;
@@ -1515,7 +1651,7 @@ lan_close_connection(ipmi_con_t *ipmi)
 	if (q_item->rsp_handler)
 	    q_item->rsp_handler(ipmi, &q_item->addr, q_item->addr_len,
 				&q_item->msg, q_item->rsp_data, q_item->data2,
-				q_item->data3);
+				q_item->data3, q_item->data4);
 
 	ipmi_lock(lan->seq_num_lock);
 
@@ -1607,18 +1743,8 @@ handle_connected(ipmi_con_t *ipmi, int err)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
-    if (lan->start_con_handler) {
-	ipmi_system_interface_addr_t addr;
-
-	addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	addr.channel = IPMI_BMC_CHANNEL;
-	addr.lun = 0;
-
-	lan->start_con_handler(ipmi, err,
-			       (ipmi_addr_t *) &addr, sizeof(addr),
-			       lan->start_con_cb_data);
-	lan->start_con_handler = NULL;
-    }
+    if (lan->con_fail_handler)
+	lan->con_fail_handler(ipmi, err, lan->con_fail_cb_data);
 }
 
 static void
@@ -1637,7 +1763,8 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 				  ipmi_msg_t   *msg,
 				  void         *rsp_data,
 				  void         *data2,
-				  void         *data3)
+				  void         *data3,
+				  void         *data4)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
@@ -1711,7 +1838,7 @@ send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan)
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
 			  &msg, session_privilege_set,
-			  NULL, NULL, NULL);
+			  NULL, NULL, NULL, NULL);
     return rv;
 }
 
@@ -1721,7 +1848,8 @@ static void session_activated(ipmi_con_t   *ipmi,
 			      ipmi_msg_t   *msg,
 			      void         *rsp_data,
 			      void         *data2,
-			      void         *data3)
+			      void         *data3,
+			      void         *data4)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
     int        rv;
@@ -1779,7 +1907,7 @@ send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan)
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
 			  &msg, session_activated,
-			  NULL, NULL, NULL);
+			  NULL, NULL, NULL, NULL);
     return rv;
 }
 
@@ -1789,7 +1917,8 @@ static void challenge_done(ipmi_con_t   *ipmi,
 			   ipmi_msg_t   *msg,
 			   void         *rsp_data,
 			   void         *data2,
-			   void         *data3)
+			   void         *data3,
+			   void         *data4)
 {
     lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
     int           rv;
@@ -1853,7 +1982,7 @@ send_challenge(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.data_len += IPMI_USERNAME_MAX;
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, challenge_done, NULL, NULL, NULL);
+			  &msg, challenge_done, NULL, NULL, NULL, NULL);
     return rv;
 }
 
@@ -1864,7 +1993,8 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	      ipmi_msg_t   *msg,
 	      void         *rsp_data,
 	      void         *data2,
-	      void         *data3)
+	      void         *data3,
+	      void         *data4)
 {
     lan_data_t    *lan = (lan_data_t *) ipmi->con_data;
     int           rv;
@@ -1909,7 +2039,7 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.data_len = 2;
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
-			  &msg, auth_cap_done, NULL, NULL, NULL);
+			  &msg, auth_cap_done, NULL, NULL, NULL, NULL);
     return rv;
 }
 
@@ -1935,16 +2065,11 @@ default_lan_slave_addr_fetcher(ipmi_con_t                *ipmi,
 }
 
 static int
-lan_start_con(ipmi_con_t               *ipmi,
-	      ipmi_ll_init_con_done_cb handler,
-	      void                     *cb_data)
+lan_start_con(ipmi_con_t *ipmi)
 {
     lan_data_t     *lan = (lan_data_t *) ipmi->con_data;
     int            rv;
     struct timeval timeout;
-
-    lan->start_con_handler = handler;
-    lan->start_con_cb_data = cb_data;
 
     /* Start the timer to audit the connections. */
     lan->audit_info = ipmi_mem_alloc(sizeof(*(lan->audit_info)));
@@ -2032,6 +2157,7 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     ipmi->con_data = lan;
 
     lan->ipmi = ipmi;
+    lan->slave_addr = 0x20; /* Assume this until told otherwise */
     lan->authtype = authtype;
     lan->privilege = privilege;
 

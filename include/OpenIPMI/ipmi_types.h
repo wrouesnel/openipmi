@@ -38,13 +38,11 @@
  */
 
 /*
- * This represents an intelligent entity on the IPMI bus, called a
- * "Management Controller" (MC).  The first one reported for a
- * registered device is the "SMI" one.  You can query the SMI MC for
- * the satellite devices.
+ * This represents IPMI system, called a "domain".  A domain is where
+ * a set of entities reside.
  */
-typedef struct ipmi_mc_s ipmi_mc_t;
-typedef struct ipmi_mc_id_s ipmi_mc_id_t;
+typedef struct ipmi_domain_s ipmi_domain_t;
+typedef struct ipmi_domain_id_s ipmi_domain_id_t;
 
 /*
  * An entity is a physical device that can be monitored or controlled.
@@ -89,34 +87,42 @@ typedef struct ipmi_msg ipmi_msg_t;
 #endif
 
 /* Pay no attention to the contents of these structures... */
-struct ipmi_mc_id_s
+struct ipmi_domain_id_s
 {
-    ipmi_mc_t    *bmc;
-    unsigned int mc_num  : 8;
-    unsigned int channel : 4;
-    long         seq;
+    ipmi_domain_t *domain;
 };
 
 struct ipmi_entity_id_s
 {
-    ipmi_mc_id_t bmc_id;
-    unsigned int entity_id       : 8;
-    unsigned int entity_instance : 4;
-    unsigned int channel         : 8;
-    unsigned int address         : 8;
-    long         seq;
+    ipmi_domain_id_t domain_id;
+    unsigned int     entity_id       : 8;
+    unsigned int     entity_instance : 4;
+    unsigned int     channel         : 8;
+    unsigned int     address         : 8;
+    long             seq;
 };
+
+/* These are internal, don't use them. */
+typedef struct ipmi_mcid_s
+{
+    ipmi_domain_id_t domain_id;
+    unsigned char    mc_num;
+    unsigned char    channel;
+    long             seq;
+} ipmi_mcid_t;
+
+typedef struct ipmi_mc_s ipmi_mc_t;
 
 struct ipmi_sensor_id_s
 {
-    ipmi_mc_id_t mc_id;
+    ipmi_mcid_t  mcid;
     unsigned int lun        : 3;
     unsigned int sensor_num : 8;
 };
 
 struct ipmi_control_id_s
 {
-    ipmi_mc_id_t mc_id;
+    ipmi_mcid_t  mcid;
     unsigned int lun         : 3;
     unsigned int control_num : 8;
 };
@@ -126,7 +132,7 @@ struct ipmi_control_id_s
 /* An entry from the system event log. */
 typedef struct ipmi_event_s
 {
-    ipmi_mc_id_t  mc_id; /* The MC that this event came from. */
+    ipmi_mcid_t   mcid; /* The MC this event is stored in. */
 
     unsigned int  record_id;
     unsigned int  type;
@@ -135,5 +141,21 @@ typedef struct ipmi_event_s
 
 /* This represents a low-level connection. */
 typedef struct ipmi_con_s ipmi_con_t;
+
+/*
+ * Channel information for a connection.
+ */
+typedef struct ipmi_chan_info_s
+{
+    unsigned int medium : 7;
+    unsigned int xmit_support : 1;
+    unsigned int recv_lun : 3;
+    unsigned int protocol : 5;
+    unsigned int session_support : 2;
+    unsigned int vendor_id : 24;
+    unsigned int aux_info : 16;
+} ipmi_chan_info_t;
+
+#define MAX_IPMI_USED_CHANNELS 8
 
 #endif /* _IPMI_TYPES_H */

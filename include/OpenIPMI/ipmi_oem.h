@@ -54,6 +54,18 @@ int ipmi_register_oem_handler(unsigned int                 manufacturer_id,
 int ipmi_deregister_oem_handler(unsigned int manufacturer_id,
 				unsigned int product_id);
 
+/* Used to report that an mc as been removed to the OEM handler.  The
+   OEM handler may not refuse to allow the mc to be removed. This is
+   so the OEM handler can free data if necessary.  This is registered
+   against the MC itself, not the BMC, and must be called on each MC
+   that needs it. */
+typedef void (*ipmi_mc_oem_removed_cb)(ipmi_domain_t *domain,
+				       ipmi_mc_t     *mc,
+				       void          *cb_data);
+int ipmi_mc_set_oem_removed_handler(ipmi_mc_t              *mc,
+				    ipmi_mc_oem_removed_cb handler,
+				    void                   *cb_data);
+
 /* A new sensor has been added, the OEM handlers get first access at
    it.  This is called before it is added to the entity.  If this call
    returns true, the sensor will NOT be added to the entity, the OEM
@@ -73,60 +85,24 @@ int ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
 				       ipmi_mc_oem_new_sensor_cb handler,
 				       void                      *cb_data);
 
-/* Used to report a new entity to the OEM handler.  The OEM handler
-   may not refuse to allow the entity to be added, but it can fetch
-   information from the entity and modify it. */
-typedef void (*ipmi_bmc_oem_new_entity_cb)(ipmi_mc_t     *bmc,
-					   ipmi_entity_t *ent,
-					   void          *cb_data);
-int ipmi_bmc_set_oem_new_entity_handler(ipmi_mc_t                  *bmc,
-					ipmi_bmc_oem_new_entity_cb handler,
-					void                       *cb_data);
-
-/* Used to report a new mc to the OEM handler.  The OEM handler
-   may not refuse to allow the mc to be added, but it can fetch
-   information from the mc and modify it. */
-typedef void (*ipmi_bmc_oem_new_mc_cb)(ipmi_mc_t *bmc,
-				       ipmi_mc_t *mc,
-				       void      *cb_data);
-int ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
-				    ipmi_bmc_oem_new_mc_cb handler,
-				    void                   *cb_data);
-
-/* Used to report that an mc as been removed to the OEM handler.  The
-   OEM handler may not refuse to allow the mc to be removed. This is
-   so the OEM handler can free data if necessary.  This is registered
-   against the MC itself, not the BMC, and must be called on each MC
-   that needs it. */
-typedef void (*ipmi_mc_oem_removed_cb)(ipmi_mc_t *bmc,
-				       ipmi_mc_t *mc,
-				       void      *cb_data);
-int ipmi_mc_set_oem_removed_handler(ipmi_mc_t              *mc,
-				    ipmi_mc_oem_removed_cb handler,
-				    void                   *cb_data);
-
 /* The handler should return 0 if it didn't handle the event, or 1
    if it did.  If the call handles the event, OpenIPMI will not deliver
    the event anywhere else. */
-typedef int (*ipmi_oem_event_handler_cb)(ipmi_mc_t    *bmc,
+typedef int (*ipmi_oem_event_handler_cb)(ipmi_mc_t    *mc,
 					 ipmi_event_t *log,
 					 void         *cb_data);
-/* Set a handler for when an event comes in from a specific MC. */
+/* Set a handler for when an event comes in from a specific MC.  This
+   is so the code can handle custom messages or broken events. */
 int ipmi_mc_set_oem_event_handler(ipmi_mc_t                 *mc,
 				  ipmi_oem_event_handler_cb handler,
 				  void                      *cb_data);
-/* Set a handler for all events that come in, this gets first dibs. */
-int ipmi_bmc_set_oem_event_handler(ipmi_mc_t                 *bmc,
-				   ipmi_oem_event_handler_cb handler,
-				   void                      *cb_data);
+/* Set a handler for when an event comes from the SEL of a specific
+   MC.  Note that the message may be from another MC, but it was
+   stored in the given MC's SEL.  This handler gets first dibs at the
+   message, and must parse the time itself.  This is so OEM code can
+   handle broken or custom SELs. */
+int ipmi_mc_set_sel_oem_event_handler(ipmi_mc_t                 *mc,
+				      ipmi_oem_event_handler_cb handler,
+				      void                      *cb_data);
 
-/* Handler that is called after the setup complete has been reported
-   to the user.  The OEM code should install it's non-standard
-   entities, sensors, etc. in this callback. */
-typedef void (*ipmi_oem_setup_finished_cb)(ipmi_mc_t *bmc,
-					   void      *cb_data);
-int ipmi_bmc_set_oem_setup_finished_handler(
-    ipmi_mc_t                  *bmc,
-    ipmi_oem_setup_finished_cb handler,
-    void                       *cb_data);
 #endif /* IPMI_OEM_H */

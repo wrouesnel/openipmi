@@ -1,0 +1,183 @@
+.TH ipmilan 8 05/13/03 OpenIPMI "IPMI LAN to System Interface Converter"
+
+.SH NAME
+ipmilan \- IPMI LAN to System Interface Converter
+
+.SH SYNOPSIS
+.B ipmilan
+[\-c configfile] [\-i ipmidevice] [\-d] [\-n]
+
+.SH DESCRIPTION
+The
+.BR ipmilan
+daemon allows an IPMI system interface using the OpenIPMI device
+driver to be accessed using the IPMI 1.5 LAN protocol.
+
+.BR ipmilan
+supports the full authentication capabilities of the IPMI LAN
+protocol.
+
+.BR ipmilan
+supports multiple IP addresses for fault-tolerance.  Note that
+messages coming in on an address are always sent back out on the same
+address they came in.
+
+.SH OPTIONS
+.TP
+.I "\-c config\-file"
+Set the configuration file to one other than the default of
+.BR "/etc/ipmi_lan.conf"
+.TP
+.I \-n
+Stops  the  daemon  from  forking  and  detaching  from the controlling
+terminal. This is useful for running from init.
+.TP
+.I \-d
+Turns on debugging to standard output.  You generally have to use
+\-n with this.
+
+
+.SH CONFIGURATION
+Configuration is accomplished through the file
+.BR /etc/ipmi_lan.conf .
+A file with another name or path may be specified using the
+.I \-c
+option.
+
+The following fields are used in many commands:
+
+.I "boolean"
+May be "true", "false", "on" or "off".
+
+.I "priv"
+An IPMI privilege level.  This may be "callback", "user", "operator",
+or "admin".
+
+.I "auth"
+An IPMI authorization type.  This may be "none" for no authentication,
+"straight" for straight, in-the-clear password authentication, "md2"
+for use MD2 message digest authentication, or "md5" for using MD5
+message digest authentication.
+
+
+.SS addr <IP address> [<UDP port>]
+.I "IP Address"
+The IP address to use for an IP port.  Up to 4 addresses may be
+specified.  If no address is specified, it defaults to one port at
+0.0.0.0 (for every address on the machine) at port 623.
+
+.I "UDP port"
+An optional port to listen on.  It defaults to 623 (the standard port).
+
+.SS PEF_alerting <boolean>
+.I "boolean"
+Turn PEF alerting on or off (not currently supported).
+
+.SS per_msg_auth <boolean>
+.I "boolean"
+Turn per-message authentication on or off.
+
+.SS priv_limit <priv>
+.I "priv"
+The maximum privilege allowed on this interface.
+
+.SS allowed_auths_callback [<auth> [<auth> [...]]]
+.I "auth"
+An allowed authorization level for the callback privilege level.  Only
+the levels specified on this line are allowed for the authorization
+level.  If this line is not present, callback authorization cannot be
+used.
+
+.SS allowed_auths_user [<auth> [<auth> [...]]]
+.I "auth"
+An allowed authorization level for the user privilege level.  Only
+the levels specified on this line are allowed for the authorization
+level.  If this line is not present, user authorization cannot be
+used.
+
+.SS allowed_auths_operator [<auth> [<auth> [...]]]
+.I "auth"
+An allowed authorization level for the operator privilege level.  Only
+the levels specified on this line are allowed for the authorization
+level.  If this line is not present, operator authorization cannot be
+used.
+
+.SS allowed_auths_admin [<auth> [<auth> [...]]]
+.I "auth"
+An allowed authorization level for the admin privilege level.  Only
+the levels specified on this line are allowed for the authorization
+level.  If this line is not present, user authorization cannot be
+used.
+
+.SS user <usernum> <enabled> <username> <password> <max priv> <max session> [<auth> [<auth> [...]]]
+.I "usernum"
+The user number for the user.  Note that user number 0 is
+invalid, and user number 1 is the special "anonymous" user, whose
+username is ignored.  This value may be up to 63, the maximum possible
+IPMI user.  If you want anonymous access, you
+.B must
+have a user number 1.
+
+.I "enabled"
+A boolean that specified whether the user is enabled or not.
+
+.I "username"
+The name of the user, specified as a name.
+
+.I "password"
+The password of the user, specified as a name.
+
+.I "max priv"
+The maximum privilege level allowed for the user.
+
+.I "max sessions"
+The maximum number of session the user may open.
+
+.I "auth"
+The allowed authorization types for the user.  Only the specified ones
+are allowed, so if none are specified, the user will be disabled.
+
+.SS guid <name>
+Allows the 16-byte GUID for the IPMI LAN connection to be specified.
+If this is not specified, then the GUID command is not supported.
+
+.PP
+Blank lines and lines starting with `#' are ignored.
+
+.SH SECURITY
+.BR ipmilan
+implements normal IPMI security.  The default is no access for anyone,
+so the default is pretty safe, but be careful what you add, because
+this is access to control your box.  "straight" and "none"
+authorizations are not recommended, you should probably stick with md2
+or md5.
+
+.SH "SIGNALS"
+.TP 0.5i
+.B SIGHUP
+.BR ipmilan
+should handle SIGHUP and reread it's configuration files.  However, it
+doesn't right now.  It might in the future, for now you will have to
+kill it and restart it.  Clients should handle reconnecting in this
+case.  If they don't, they are broken.
+
+.SH "ERROR OUTPUT"
+At startup, all error output goes to stderr.  After that, all error
+output goes to syslog.
+
+.SH "FILES"
+/etc/ipmi_lan.conf
+
+.SH "SEE ALSO"
+ipmi_ui(1)
+
+.SH "KNOWN PROBLEMS"
+Currently,
+.BR ipmilan
+does not implement writing the config file.  IPMI commands to change
+configuration options are accepted, but the permanent writing of the
+changes does not currently work.
+
+.SH AUTHOR
+.PP
+Corey Minyard <cminyard@mvista.org>

@@ -90,9 +90,10 @@ int ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
 
 /* This callback will be called when a new event is added to the SEL. */
 typedef void (*ipmi_sel_new_event_handler_cb)(ipmi_sel_info_t *sel,
+					      ipmi_mc_t       *mc,
 					      ipmi_event_t    *event,
 					      void            *cb_data);
-int ipmi_sel_set_new_event_handler(ipmi_sel_info_t             *sel,
+int ipmi_sel_set_new_event_handler(ipmi_sel_info_t               *sel,
 				   ipmi_sel_new_event_handler_cb handler,
 				   void                          *cb_data);
 
@@ -132,6 +133,6 @@ int ipmi_sel_get_supports_get_sel_allocation(ipmi_sel_info_t *sel,
 
 /* Add a event to the internal representation of the system event log. */
 int ipmi_sel_event_add(ipmi_sel_info_t *sel,
-		       ipmi_event_t      *new_event);
+		       ipmi_event_t    *new_event);
 
 #endif /* _IPMI_SEL_H */

@@ -56,9 +56,9 @@ void ui_reconnect(void)
 	}
     }
 
-    rv = ipmi_init_bmc(con, ipmi_ui_setup_done, NULL);
+    rv = ipmi_init_domain(con, ipmi_ui_setup_done, NULL, NULL, NULL);
     if (rv) {
-	fprintf(stderr, "ipmi_init_bmc: %s\n", strerror(rv));
+	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	exit(1);
     }
 
@@ -146,7 +146,7 @@ main(int argc, char *argv[])
 	} else if (strcmp(argv[curr_arg], "straight") == 0) {
 	    authtype = IPMI_AUTHTYPE_STRAIGHT;
 	} else if (num_addr == 1) {
-	    if (argc < 8) {
+	    if (argc < 10) {
 		fprintf(stderr, "Not enough arguments\n");
 		exit(1);
 	    }
@@ -212,9 +212,9 @@ main(int argc, char *argv[])
 	goto out;
     }
 
-    rv = ipmi_init_bmc(con, ipmi_ui_setup_done, NULL);
+    rv = ipmi_init_domain(con, ipmi_ui_setup_done, NULL, NULL, NULL);
     if (rv) {
-	fprintf(stderr, "ipmi_init_bmc: %s\n", strerror(rv));
+	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	goto out;
     }
 

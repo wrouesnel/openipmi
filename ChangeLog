@@ -1,4 +1,11 @@
 
+2003-05-13 Corey Minyard <cminyard@mvista.com>
+
+	* everything: Added the concept of an IPMI domain, and replaced
+	the "BMC" with the "domain".  This was not a huge change from a
+	usage point of view, but was a big restructure internally.  This
+	way, we can support multiple BMC connections into a domain.
+
 2003-05-05 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Added connection retrying.

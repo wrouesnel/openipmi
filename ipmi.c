@@ -35,6 +35,7 @@
 #include <stdio.h>
 
 #include <OpenIPMI/os_handler.h>
+#include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
@@ -128,9 +129,9 @@ ipmi_create_global_lock(ipmi_lock_t **new_lock)
 }
 
 int
-ipmi_create_lock(ipmi_mc_t *mc, ipmi_lock_t **new_lock)
+ipmi_create_lock(ipmi_domain_t *domain, ipmi_lock_t **new_lock)
 {
-    return ipmi_create_lock_os_hnd(ipmi_mc_get_os_hnd(mc), new_lock);
+    return ipmi_create_lock_os_hnd(ipmi_domain_get_os_hnd(domain), new_lock);
 }
 
 void ipmi_destroy_lock(ipmi_lock_t *lock)
@@ -616,21 +617,27 @@ ipmi_init(os_handler_t *handler)
 	seq_lock = NULL;
     }
     ipmi_os_handler = handler;
-    ipmi_mc_init();
+    _ipmi_domain_init();
+    _ipmi_mc_init();
     return 0;
 
  out_err:
     if (global_lock)
 	handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    if (seq_lock)
+	handler->destroy_lock(ipmi_os_handler, seq_lock);
     return rv;
 }
 
 void
 ipmi_shutdown(void)
 {
-    ipmi_mc_shutdown();
+    _ipmi_domain_shutdown();
+    _ipmi_mc_shutdown();
     if (global_lock)
 	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    if (seq_lock)
+	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
     global_lock = NULL;
 }
 

@@ -36,6 +36,7 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
@@ -56,7 +57,7 @@ enum fetch_state_e { IDLE, FETCHING, HANDLERS };
 struct ipmi_sdr_info_s
 {
     /* The thing holding the SDR repository. */
-    ipmi_mc_id_t mc;
+    ipmi_mcid_t mc;
 
     /* LUN we are attached with. */
     int         lun;
@@ -135,7 +136,8 @@ static inline void sdr_unlock(ipmi_sdr_info_t *sdrs)
 }
 
 int
-ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
+ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
+		    ipmi_mc_t       *mc,
 		    unsigned int    lun,
 		    int             sensor,
 		    ipmi_sdr_info_t **new_sdrs)
@@ -155,7 +157,7 @@ ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
     }
     memset(sdrs, 0, sizeof(*sdrs));
 
-    sdrs->mc = ipmi_mc_convert_to_id(mc);
+    sdrs->mc = _ipmi_mc_convert_to_id(mc);
     sdrs->destroyed = 0;
     sdrs->sdr_lock = NULL;
     sdrs->fetched = 0;
@@ -168,11 +170,11 @@ ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
     sdrs->sensor = sensor;
     sdrs->sdr_wait_q = NULL;
 
-    rv = ipmi_create_lock(mc, &sdrs->sdr_lock);
+    rv = ipmi_create_lock(domain, &sdrs->sdr_lock);
     if (rv)
 	goto out_done;
 
-    sdrs->sdr_wait_q = opq_alloc(ipmi_mc_get_os_hnd(mc));
+    sdrs->sdr_wait_q = opq_alloc(ipmi_domain_get_os_hnd(domain));
     if (! sdrs->sdr_wait_q) {
 	rv = ENOMEM;
 	goto out_done;
@@ -372,8 +374,8 @@ start_reservation_check(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
     cmd_msg.data[4] = 0;
     cmd_msg.data[5] = 1; /* Only care about the reservation */
-    rv = ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			   handle_reservation_check, sdrs);
+    rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+			      handle_reservation_check, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Could not send command to get an SDR: %x", rv);
@@ -562,8 +564,8 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	else
 	    cmd_msg.data[5] = to_read;
     }
-    rv = ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			   handle_sdr_data, sdrs);
+    rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+			      handle_sdr_data, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_sdr_data: Couldn't send next SDR fetch: %x", rv);
@@ -597,8 +599,8 @@ initial_sdr_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
     cmd_msg.data[4] = 0;
     cmd_msg.data[5] = SDR_HEADER_SIZE;
-    rv = ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			   handle_sdr_data, sdrs);
+    rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+			      handle_sdr_data, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "initial_sdr_fetch: Couldn't send first SDR fetch: %x", rv);
@@ -823,8 +825,8 @@ handle_sdr_info(ipmi_mc_t  *mc,
 	    cmd_msg.cmd = IPMI_RESERVE_SDR_REPOSITORY_CMD;
 	}
 	cmd_msg.data_len = 0;
-	rv = ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			       handle_reservation, sdrs);
+	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				  handle_reservation, sdrs);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "handle_sdr_info: Couldn't send SDR reservation: %x", rv);
@@ -867,8 +869,8 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
 	cmd_msg.cmd = IPMI_GET_SDR_REPOSITORY_INFO_CMD;
     }
     cmd_msg.data_len = 0;
-    return ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			     handle_sdr_info, sdrs);
+    return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				handle_sdr_info, sdrs);
 }
 
 static void
@@ -900,7 +902,7 @@ handle_start_fetch(void *cb_data, int shutdown)
     if (shutdown)
 	return;
 
-    rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_fetch_cb, sdrs);
+    rv = _ipmi_mc_pointer_cb(sdrs->mc, handle_start_fetch_cb, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_start_fetch: error finding MC: %x",
@@ -990,7 +992,7 @@ ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
     info.rv = 0;
 
     /* Convert the mc id to an mc. */
-    rv = ipmi_mc_pointer_cb(sdrs->mc, sdr_fetch_cb, &info);
+    rv = _ipmi_mc_pointer_cb(sdrs->mc, sdr_fetch_cb, &info);
     if (rv)
 	return rv;
     return info.rv;
@@ -1366,15 +1368,15 @@ start_sdr_write(ipmi_sdr_info_t *sdrs,
 	cmd_msg.data[5] = 1;
 	memcpy(cmd_msg.data+11, sdr->data, sdr->length);
 	cmd_msg.data_len = 11 + sdr->length;
-	return ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-				 handle_sdr_write_done, sdr);
+	return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				    handle_sdr_write_done, sdr);
     } else {
 	cmd_msg.data[5] = 0;
 	memcpy(cmd_msg.data+11, sdr->data, (MAX_SDR_FETCH - 5));
 	cmd_msg.data_len = 11 + (MAX_SDR_FETCH - 5);
 	sdrs->sdr_data_read = MAX_SDR_FETCH - 5;
-	return ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-				 handle_sdr_write, sdr);
+	return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				    handle_sdr_write, sdr);
     }
 }
 
@@ -1444,15 +1446,15 @@ handle_sdr_write(ipmi_mc_t  *mc,
 	cmd_msg.data[5] = 1;
 	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_read, wleft);
 	cmd_msg.data_len = 6 + wleft;
-	rv = ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			       handle_sdr_write_done, sdr);
+	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				  handle_sdr_write_done, sdr);
     } else {
 	cmd_msg.data[5] = 0;
 	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_read, MAX_SDR_FETCH);
 	cmd_msg.data_len = 6 + MAX_SDR_FETCH;
 	sdrs->sdr_data_read += MAX_SDR_FETCH;
-	rv = ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			       handle_sdr_write, sdr);
+	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				  handle_sdr_write, sdr);
     }
 
     if (rv) {
@@ -1644,8 +1646,8 @@ handle_save_reservation(ipmi_mc_t  *mc,
     cmd_data[4] = 'R';
     cmd_data[5] = 0xaa;
     cmd_msg.data_len = 6;
-    rv = ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			   handle_sdr_clear, sdrs);
+    rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+			      handle_sdr_clear, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_save_reservation: Couldn't send SDR clear: %x", rv);
@@ -1670,8 +1672,8 @@ start_save(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_RESERVE_SDR_REPOSITORY_CMD;
     cmd_msg.data_len = 0;
-    return ipmi_send_command(mc, sdrs->lun, &cmd_msg,
-			     handle_save_reservation, sdrs);
+    return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
+				handle_save_reservation, sdrs);
 }
 
 static void
@@ -1702,7 +1704,7 @@ handle_start_save(void *cb_data, int shutdown)
     if (shutdown)
 	return;
 
-    rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_save_cb, sdrs);
+    rv = _ipmi_mc_pointer_cb(sdrs->mc, handle_start_save_cb, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_start_fetch: error finding MC: %x",
@@ -1785,7 +1787,7 @@ ipmi_sdr_save(ipmi_sdr_info_t  *sdrs,
     info.rv = 0;
 
     /* Convert the mc id to an mc. */
-    rv = ipmi_mc_pointer_cb(sdrs->mc, sdr_save_cb, &info);
+    rv = _ipmi_mc_pointer_cb(sdrs->mc, sdr_save_cb, &info);
     if (rv)
 	return rv;
     return info.rv;

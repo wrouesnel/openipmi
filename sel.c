@@ -36,6 +36,7 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_sel.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
@@ -65,7 +66,7 @@ enum fetch_state_e { IDLE, FETCHING, HANDLERS };
 
 struct ipmi_sel_info_s
 {
-    ipmi_mc_id_t mc;
+    ipmi_mcid_t mc;
 
     /* LUN we are attached with. */
     int         lun;
@@ -168,7 +169,7 @@ event_cmp(ipmi_event_t *event1, ipmi_event_t *event2)
 {
     int rv;
 
-    rv = ipmi_cmp_mc_id(event1->mc_id, event2->mc_id);
+    rv = _ipmi_cmp_mc_id(event1->mcid, event2->mcid);
     if (rv)
 	return rv;
     if (event1->record_id > event2->record_id)
@@ -189,8 +190,11 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 {
     ipmi_sel_info_t *sel = NULL;
     int             rv = 0;
+    ipmi_domain_t   *domain;
 
     CHECK_MC_LOCK(mc);
+
+    domain = ipmi_mc_get_domain(mc);
 
     if (lun >= 4)
 	return EINVAL;
@@ -208,9 +212,9 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 	goto out;
     }
 
-    sel->mc = ipmi_mc_convert_to_id(mc);
+    sel->mc = _ipmi_mc_convert_to_id(mc);
     sel->destroyed = 0;
-    sel->os_hnd = ipmi_mc_get_os_hnd(mc);
+    sel->os_hnd = ipmi_domain_get_os_hnd(domain);
     sel->sel_lock = NULL;
     sel->fetched = 0;
     sel->fetch_state = IDLE;
@@ -409,8 +413,8 @@ send_sel_clear(sel_fetch_handler_t *elem, ipmi_mc_t *mc)
     cmd_msg.data[4] = 'R';
     cmd_msg.data[5] = 0xaa;
 
-    return ipmi_send_command(mc, sel->lun, &cmd_msg,
-			     handle_sel_clear, elem);
+    return ipmi_mc_send_command(mc, sel->lun, &cmd_msg,
+				handle_sel_clear, elem);
 }
 
 static void start_fetch(void *cb_data, int shutdown);
@@ -473,7 +477,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 
     sel->next_rec_id = ipmi_get_uint16(rsp->data+1);
 
-    del_event.mc_id = ipmi_mc_convert_to_id(mc);
+    del_event.mcid = _ipmi_mc_convert_to_id(mc);
     del_event.record_id = ipmi_get_uint16(rsp->data+3);
     del_event.type = rsp->data[5];
     memcpy(del_event.data, rsp->data+6, 13);
@@ -519,6 +523,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 	if (event_is_new)
 	    if (sel->new_event_handler)
 		sel->new_event_handler(sel,
+				       mc,
 				       &del_event,
 				       sel->new_event_cb_data);
 	/* If the operation completed successfully and everything in
@@ -550,7 +555,7 @@ handle_sel_data(ipmi_mc_t  *mc,
     ipmi_set_uint16(cmd_msg.data+2, sel->curr_rec_id);
     cmd_msg.data[4] = 0;
     cmd_msg.data[5] = 0xff;
-    rv = ipmi_send_command(mc, sel->lun, &cmd_msg, handle_sel_data, elem);
+    rv = ipmi_mc_send_command(mc, sel->lun, &cmd_msg, handle_sel_data, elem);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_sel_data: Could not send SEL fetch command: %x", rv);
@@ -560,7 +565,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 
     if (event_is_new)
 	if (sel->new_event_handler)
-	    sel->new_event_handler(sel, &del_event, sel->new_event_cb_data);
+	    sel->new_event_handler(sel, mc, &del_event, sel->new_event_cb_data);
  out_unlock:
     sel_unlock(sel);
  out:
@@ -669,7 +674,7 @@ handle_sel_info(ipmi_mc_t  *mc,
     ipmi_set_uint16(cmd_msg.data+2, sel->curr_rec_id);
     cmd_msg.data[4] = 0;
     cmd_msg.data[5] = 0xff;
-    rv = ipmi_send_command(mc, sel->lun, &cmd_msg, handle_sel_data, elem);
+    rv = ipmi_mc_send_command(mc, sel->lun, &cmd_msg, handle_sel_data, elem);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_sel_info: Could not send first SEL fetch command: %x",
@@ -730,7 +735,7 @@ sel_handle_reservation(ipmi_mc_t  *mc,
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_GET_SEL_INFO_CMD;
     cmd_msg.data_len = 0;
-    rv = ipmi_send_command(mc, sel->lun, &cmd_msg, handle_sel_info, elem);
+    rv = ipmi_mc_send_command(mc, sel->lun, &cmd_msg, handle_sel_info, elem);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "sel_handle_reservation: "
@@ -767,8 +772,8 @@ start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	cmd_msg.netfn = IPMI_STORAGE_NETFN;
 	cmd_msg.cmd = IPMI_RESERVE_SEL_CMD;
 	cmd_msg.data_len = 0;
-	rv = ipmi_send_command(mc, sel->lun, &cmd_msg,
-			       sel_handle_reservation, elem);
+	rv = ipmi_mc_send_command(mc, sel->lun, &cmd_msg,
+				  sel_handle_reservation, elem);
     } else {
 	/* Bypass the reservation, it's not supported. */
 	sel->reservation = 0;
@@ -778,8 +783,8 @@ start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	cmd_msg.netfn = IPMI_STORAGE_NETFN;
 	cmd_msg.cmd = IPMI_GET_SEL_INFO_CMD;
 	cmd_msg.data_len = 0;
-	rv = ipmi_send_command(mc, sel->lun,
-			       &cmd_msg, handle_sel_info, elem);
+	rv = ipmi_mc_send_command(mc, sel->lun,
+				  &cmd_msg, handle_sel_info, elem);
     }
 
     if (rv) {
@@ -811,7 +816,7 @@ start_fetch(void *cb_data, int shutdown)
 
     /* The read lock must be claimed before the sel lock to avoid
        deadlock. */
-    rv = ipmi_mc_pointer_cb(elem->sel->mc, start_fetch_cb, elem);
+    rv = _ipmi_mc_pointer_cb(elem->sel->mc, start_fetch_cb, elem);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO, "start_fetch: MC is not valid");
 	fetch_complete(elem->sel, rv);
@@ -876,7 +881,7 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
     elem->sel = sel;
     elem->rv = 0;
 
-    rv = ipmi_mc_pointer_cb(sel->mc, ipmi_sel_get_cb, elem);
+    rv = _ipmi_mc_pointer_cb(sel->mc, ipmi_sel_get_cb, elem);
     if (!rv)
 	rv = elem->rv;
     if (rv)
@@ -1009,8 +1014,8 @@ send_del_sel(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
     cmd_msg.data_len = 4;
     ipmi_set_uint16(cmd_msg.data, data->reservation);
     ipmi_set_uint16(cmd_msg.data+2, data->record_id);
-    rv = ipmi_send_command(mc, data->lun,
-			   &cmd_msg, handle_sel_delete, data);
+    rv = ipmi_mc_send_command(mc, data->lun,
+			      &cmd_msg, handle_sel_delete, data);
 
     return rv;
 }
@@ -1055,7 +1060,7 @@ handle_sel_check(ipmi_mc_t  *mc,
     } else {
 	ipmi_event_t ch_event;
 
-	ch_event.mc_id = ipmi_mc_convert_to_id(mc);
+	ch_event.mcid = _ipmi_mc_convert_to_id(mc);
 	ch_event.record_id = ipmi_get_uint16(rsp->data+3);
 	ch_event.type = rsp->data[5];
 	memcpy(ch_event.data, rsp->data+6, 13);
@@ -1097,8 +1102,8 @@ send_check_sel(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
     ipmi_set_uint16(cmd_msg.data+2, data->record_id);
     cmd_msg.data[4] = 0;
     cmd_msg.data[5] = 0xff;
-    rv = ipmi_send_command(mc, data->lun,
-			   &cmd_msg, handle_sel_check, data);
+    rv = ipmi_mc_send_command(mc, data->lun,
+			      &cmd_msg, handle_sel_check, data);
 
     return rv;
 }
@@ -1158,8 +1163,8 @@ send_reserve_sel(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
     cmd_msg.cmd = IPMI_RESERVE_SEL_CMD;
     cmd_msg.data_len = 0;
-    rv = ipmi_send_command(mc, data->lun,
-			   &cmd_msg, sel_reserved_for_delete, data);
+    rv = ipmi_mc_send_command(mc, data->lun,
+			      &cmd_msg, sel_reserved_for_delete, data);
 
     return rv;
 }
@@ -1213,7 +1218,7 @@ start_del_sel(void *cb_data, int shutdown)
 	return;
     }
 
-    rv = ipmi_mc_pointer_cb(sel->mc, start_del_sel_cb, data);
+    rv = _ipmi_mc_pointer_cb(sel->mc, start_del_sel_cb, data);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "start_del_sel: MC went away during delete");
@@ -1319,7 +1324,7 @@ sel_del_event(ipmi_sel_info_t       *sel,
     info.cb_data = cb_data;
     info.cmp_event = cmp_event;
     info.rv = 0;
-    rv = ipmi_mc_pointer_cb(sel->mc, sel_del_event_cb, &info);
+    rv = _ipmi_mc_pointer_cb(sel->mc, sel_del_event_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;

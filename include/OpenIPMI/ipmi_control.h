@@ -106,7 +106,7 @@ int ipmi_control_send_command(ipmi_control_t        *control,
    if you don't have an MC to represent the address, you can still
    send the command.  The response handler will be called with the
    control locked. */
-int ipmi_control_send_command_addr(ipmi_mc_t              *bmc,
+int ipmi_control_send_command_addr(ipmi_domain_t          *domain,
 				   ipmi_control_t         *control,
 				   ipmi_addr_t            *addr,
 				   unsigned int           addr_len,
@@ -114,13 +114,6 @@ int ipmi_control_send_command_addr(ipmi_mc_t              *bmc,
 				   ipmi_control_rsp_cb    handler,
 				   ipmi_control_op_info_t *info,
 				   void                   *cb_data);
-
-/* Call the given callback with the control. */
-int ipmi_find_control(ipmi_mc_t       *mc,
-		      int             lun,
-		      int             num,
-		      ipmi_control_cb handler,
-		      void            *cb_data);
 
 /* Allocate a control, it will not be associated with anything yet. */
 int ipmi_control_alloc_nonstandard(ipmi_control_t **new_control);

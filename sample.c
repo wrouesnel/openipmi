@@ -116,7 +116,7 @@ sensor_change(enum ipmi_update_e op,
    to the entity */
 static void
 entity_change(enum ipmi_update_e op,
-	      ipmi_mc_t          *bmc,
+	      ipmi_domain_t      *domain,
 	      ipmi_entity_t      *entity,
 	      void               *cb_data)
 {
@@ -139,21 +139,21 @@ entity_change(enum ipmi_update_e op,
     }
 }
 
-/* After we have established connection to BMC, this function get called
+/* After we have established connection to domain, this function get called
    At this time, we can do whatever things we want to do. Herr we want to
    search all entities in the system */ 
 void
-setup_done(ipmi_mc_t *mc,
-	   int       err,
-	   void      *user_data)
+setup_done(ipmi_domain_t *domain,
+	   int           err,
+	   void          *user_data)
 {
     int rv;
 
     /* Register a callback functin entity_change. When a new entities 
        is created, entity_change is called */
-    rv = ipmi_bmc_set_entity_update_handler(mc, entity_change, mc);
+    rv = ipmi_domain_set_entity_update_handler(domain, entity_change, domain);
     if (rv) 
-	printf("ipmi_bmc_iterate_entities return error\n");
+	printf("ipmi_domain_iterate_entities return error\n");
 }
 
 int
@@ -175,11 +175,12 @@ main(int argc, char *argv[])
 #if 0
     /* If all you need is an SMI connection, this is all the code you
        need. */
-    /* Establish connections to BMC through system interface.  
-       This function connect BMC, selector and OS handler together.
-       When there is response message from BMC, the status of file descriptor
-       in selector is changed and predefined callback is called. After the
-       connection is established, setup_done will be called. */
+    /* Establish connections to domain through system interface.  This
+       function connect domain, selector and OS handler together.
+       When there is response message from domain, the status of file
+       descriptor in selector is changed and predefined callback is
+       called. After the connection is established, setup_done will be
+       called. */
     rv = ipmi_smi_setup_con(0, &ipmi_ui_cb_handlers, ui_sel, &con);
     if (rv) {
 	printf("ipmi_smi_setup_con", rv);
@@ -313,9 +314,9 @@ main(int argc, char *argv[])
     }
 #endif
 
-    rv = ipmi_init_bmc(con, setup_done, NULL);
+    rv = ipmi_init_domain(con, setup_done, NULL, NULL, NULL);
     if (rv) {
-	fprintf(stderr, "ipmi_init_bmc: %s\n", strerror(rv));
+	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	exit(1);
     }
 

@@ -57,7 +57,8 @@ typedef struct ipmi_sdr_info_s ipmi_sdr_info_t;
    to do that.  If "sensor" is true, then this will fetch the "sensor"
    SDRs using GET DEVICE SDR.  If not, it will use GET SDR for
    fetching SDRs. */
-int ipmi_sdr_info_alloc(ipmi_mc_t       *mc,
+int ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
+			ipmi_mc_t       *mc,
 			unsigned int    lun,
 			int             sensor,
 			ipmi_sdr_info_t **new_sdrs);

@@ -48,9 +48,10 @@ typedef void (*ipmi_ll_rsp_handler_t)(ipmi_con_t   *ipmi,
 				      ipmi_addr_t  *addr,
 				      unsigned int addr_len,
 				      ipmi_msg_t   *msg,
-				      void         *rsp_data,
-				      void         *data2,
-				      void         *data3);
+				      void         *rsp_data1,
+				      void         *rsp_data2,
+				      void         *rsp_data3,
+				      void         *rsp_data4);
 
 /* Called when an IPMI event comes in from the BMC. */
 typedef void (*ipmi_ll_evt_handler_t)(ipmi_con_t   *ipmi,
@@ -117,10 +118,9 @@ struct ipmi_con_s
     /* Start processing on a connection.  Note that the handler *must*
        be called with the global read lock not held, because the
        handler must write lock the global lock in order to add the MC
-       to the global list. */
-    int (*start_con)(ipmi_con_t               *ipmi,
-		     ipmi_ll_init_con_done_cb handler,
-		     void                     *cb_data);
+       to the global list.  This will report success/failure with the
+       con_fail_handler, so set that up first. */
+    int (*start_con)(ipmi_con_t *ipmi);
 
     /* Set the callback to call when the connection goes down or up.
        There is only one of these handlers, changing it overwrites it.
@@ -140,7 +140,7 @@ struct ipmi_con_s
 
     /* Send an IPMI command (in "msg".  on the "ipmi" connection to
        the given "addr".  When the response comes in or the message
-       times out, rsp_handler will be called with the following three
+       times out, rsp_handler will be called with the following four
        data items.  Note that the lower layer MUST guarantee that the
        reponse handler is called, even if it fails or the message is
        dropped. */
@@ -149,9 +149,10 @@ struct ipmi_con_s
 			unsigned int          addr_len,
 			ipmi_msg_t            *msg,
 			ipmi_ll_rsp_handler_t rsp_handler,
-			void                  *rsp_data,
-			void                  *data2,
-			void                  *data3);
+			void                  *rsp_data1,
+			void                  *rsp_data2,
+			void                  *rsp_data3,
+			void                  *rsp_data4);
 
     /* Register to receive IPMI events from the interface.  Return a
        handle that can be used for later deregistration. */

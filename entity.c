@@ -36,9 +36,14 @@
 #include <OpenIPMI/ipmi_entity.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_mc.h>
+#include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
 #include "ilist.h"
+
+/* These are the versions of IPMI we write to the SDR repository */
+#define IPMI_MAJOR_NUM_SDR 1
+#define IPMI_MINOR_NUM_SDR 5
 
 /* Uniquely identifies a device in the system.  If all the values are
    zero, then it is not used (it's in the system-relative range). */
@@ -50,25 +55,21 @@ typedef struct ipmi_device_num_s
 
 typedef struct ipmi_sensor_ref_s
 {
-    ipmi_mc_t    *mc;
-    char	 lun;
-    short        num;
-    ilist_item_t list_link;
+    ipmi_sensor_id_t sensor;
+    ilist_item_t     list_link;
 } ipmi_sensor_ref_t;
 
 typedef struct ipmi_control_ref_s
 {
-    ipmi_mc_t    *mc;
-    char	 lun;
-    short        num;
-    ilist_item_t list_link;
+    ipmi_control_id_t control;
+    ilist_item_t      list_link;
 } ipmi_control_ref_t;
 
 struct ipmi_entity_s
 {
-    ipmi_mc_t    *bmc;
-    ipmi_mc_id_t bmc_id;
-    long         seq;
+    ipmi_domain_t    *domain;
+    ipmi_domain_id_t domain_id;
+    long             seq;
 
     /* Key fields */
     uint8_t access_address;
@@ -160,15 +161,15 @@ typedef struct entity_child_link_s
 
 struct ipmi_entity_info_s
 {
-    ipmi_bmc_entity_cb handler;
-    void               *cb_data;
-    ipmi_mc_t          *bmc;
-    ipmi_mc_id_t       bmc_id;
-    ilist_t            *entities;
+    ipmi_domain_entity_cb handler;
+    void                  *cb_data;
+    ipmi_domain_t         *domain;
+    ipmi_domain_id_t      domain_id;
+    ilist_t               *entities;
 };
 
 int
-ipmi_entity_info_alloc(ipmi_mc_t *bmc, ipmi_entity_info_t **new_info)
+ipmi_entity_info_alloc(ipmi_domain_t *domain, ipmi_entity_info_t **new_info)
 {
     ipmi_entity_info_t *ents;
 
@@ -176,8 +177,8 @@ ipmi_entity_info_alloc(ipmi_mc_t *bmc, ipmi_entity_info_t **new_info)
     if (!ents)
 	return ENOMEM;
 
-    ents->bmc = bmc;
-    ents->bmc_id = ipmi_mc_convert_to_id(bmc);
+    ents->domain = domain;
+    ents->domain_id = ipmi_domain_convert_to_id(domain);
     ents->handler = NULL;
     ents->entities = alloc_ilist();
     if (! ents->entities) {
@@ -231,7 +232,7 @@ cleanup_entity(ipmi_entity_t *ent)
 
     /* Tell the user I was destroyed. */
     if (ent->ents->handler)
-	ent->ents->handler(IPMI_DELETED, ent->bmc, ent, ent->ents->cb_data);
+	ent->ents->handler(IPMI_DELETED, ent->domain, ent, ent->ents->cb_data);
 
     /* First destroy the parent/child relationships. */
     ilist_iter(ent->sub_entities, remove_parent_cb, ent);
@@ -298,10 +299,10 @@ ipmi_entity_find(ipmi_entity_info_t *ents,
 {
     ipmi_device_num_t device_num;
 
-    CHECK_MC_LOCK(mc);
-    CHECK_MC_ENTITY_LOCK(mc);
+    CHECK_DOMAIN_LOCK(ents->domain);
+    CHECK_DOMAIN_ENTITY_LOCK(ents->domain);
 
-    if (entity_instance >= 0x60) {
+    if (mc && entity_instance >= 0x60) {
 	device_num.channel = ipmi_mc_get_channel(mc);
 	device_num.address = ipmi_mc_get_address(mc);
 	entity_instance -= 0x60;
@@ -347,8 +348,8 @@ entity_add(ipmi_entity_info_t *ents,
     ent->sdr_gen_cb_data = sdr_gen_cb_data;
     ent->came_from_SDR = came_from_SDR;
 
-    ent->bmc = ents->bmc;
-    ent->bmc_id = ents->bmc_id;
+    ent->domain = ents->domain;
+    ent->domain_id = ents->domain_id;
     ent->seq = ipmi_get_seq();
     ent->sub_entities = alloc_ilist();
     if (!ent->sub_entities) {
@@ -411,8 +412,6 @@ entity_add(ipmi_entity_info_t *ents,
 
     ent->entity_id_string = ipmi_get_entity_id_string(entity_id);
 
-    ipmi_bmc_oem_new_entity(ents->bmc, ent);
-
     if (!ilist_add_tail(ents->entities, ent, NULL)) {
 	free_ilist(ent->controls);
 	free_ilist(ent->sensors);
@@ -423,7 +422,7 @@ entity_add(ipmi_entity_info_t *ents,
     }
 
     if (ents->handler)
-	ents->handler(IPMI_ADDED, ent->bmc, ent, ents->cb_data);
+	ents->handler(IPMI_ADDED, ent->domain, ent, ents->cb_data);
 
     if (new_ent)
 	*new_ent = ent;
@@ -433,6 +432,7 @@ entity_add(ipmi_entity_info_t *ents,
 
 int
 ipmi_entity_add(ipmi_entity_info_t *ents,
+		ipmi_domain_t      *domain,
 		ipmi_mc_t          *mc,
 		int                lun,
 		int                entity_id,
@@ -446,9 +446,9 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
     int               rv;
     ipmi_entity_t     *ent;
 
-    CHECK_MC_LOCK(mc);
+    CHECK_DOMAIN_LOCK(domain);
 
-    if (entity_instance >= 0x60) {
+    if (mc && (entity_instance >= 0x60)) {
 	device_num.channel = ipmi_mc_get_channel(mc);
 	device_num.address = ipmi_mc_get_address(mc);
 	entity_instance -= 0x60;
@@ -456,7 +456,9 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
 	device_num.channel = 0;
 	device_num.address = 0;
     }
-    ipmi_mc_entity_lock(mc);
+
+    ipmi_domain_entity_lock(domain);
+
     rv = entity_add(ents, device_num, entity_id, entity_instance,
 		    sdr_gen_output, sdr_gen_cb_data, &ent, 0);
     if (!rv) {
@@ -467,7 +469,9 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
 	if (new_ent)
 	    *new_ent = ent;
     }
-    ipmi_mc_entity_unlock(mc);
+
+    ipmi_domain_entity_unlock(domain);
+
     return 0;
 }
 
@@ -593,7 +597,7 @@ presence_changed(ipmi_entity_t *ent,
     }
 
     if (event && !handled)
-	ipmi_handle_unhandled_event(ent->bmc, event);
+	ipmi_handle_unhandled_event(ent->domain, event);
 }
 
 static void
@@ -785,11 +789,7 @@ ipmi_detect_ents_presence_changes(ipmi_entity_info_t *ents, int force)
 }
 
 static void
-handle_new_presence_sensor(ipmi_entity_t *ent,
-			   ipmi_sensor_t *sensor,
-			   ipmi_mc_t     *mc,
-			   int           lun,
-			   int           sensor_num)
+handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 {
     ipmi_event_state_t events;
 
@@ -847,23 +847,17 @@ ipmi_entity_free_control_link(void *link)
 
 void
 ipmi_entity_add_sensor(ipmi_entity_t *ent,
-		       ipmi_mc_t     *mc,
-		       int           lun,
-		       int           num,
 		       ipmi_sensor_t *sensor,
 		       void          *ref)
 {
     ipmi_sensor_ref_t *link = (ipmi_sensor_ref_t *) ref;
     int               is_presence = 0;
 
-    CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
 
     /* The calling code should check for duplicates, no check done
        here. */
-    link->mc = mc;
-    link->lun = lun;
-    link->num = num;
+    link->sensor = ipmi_sensor_convert_to_id(sensor);
     link->list_link.malloced = 0;
 
     if ((ipmi_sensor_get_sensor_type(sensor) == 0x25)
@@ -889,7 +883,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 	/* It's the presence sensor and we don't already have one.  We
 	   keep this special. */
 	ent->presence_sensor = sensor;
-	handle_new_presence_sensor(ent, sensor, mc, lun, num);
+	handle_new_presence_sensor(ent, sensor);
 	ipmi_entity_free_sensor_link(link);
     } else {
 	ilist_add_tail(ent->sensors, link, &(link->list_link));
@@ -898,21 +892,12 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
     }
 }
 
-typedef struct sens_info_s
-{
-    ipmi_mc_t *mc;
-    int       lun;
-    int       num;
-} sens_info_t;
-
 static int sens_cmp(void *item, void *cb_data)
 {
     ipmi_sensor_ref_t *ref1 = item;
-    sens_info_t       *ref2 = cb_data;
+    ipmi_sensor_id_t  *id2 = cb_data;
 
-    return ((ref1->mc == ref2->mc)
-	    && (ref1->lun == ref2->lun)
-	    && (ref1->num == ref2->num));
+    return ipmi_cmp_sensor_id(ref1->sensor, *id2) == 0;
 }
 
 typedef struct sens_cmp_info_s
@@ -938,8 +923,7 @@ static int sens_cmp_type(void *item, void *cb_data)
     sens_cmp_info_t   *info = cb_data;
     int               rv;
 
-    rv = ipmi_find_sensor(ref->mc, ref->lun, ref->num,
-			  sens_get_reading_type, info);
+    rv = ipmi_sensor_pointer_cb(ref->sensor, sens_get_reading_type, info);
     if (rv)
 	return 0;
     
@@ -947,21 +931,14 @@ static int sens_cmp_type(void *item, void *cb_data)
 }
 
 void
-ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
-			  ipmi_mc_t         *mc,
-			  int               lun,
-			  int               num,
-			  ipmi_sensor_t     *sensor)
+ipmi_entity_remove_sensor(ipmi_entity_t *ent,
+			  ipmi_sensor_t *sensor)
 {
     ipmi_sensor_ref_t *ref;
     ilist_iter_t      iter;
-    sens_info_t       info = { mc, lun, num };
 
-    CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
 
-    ilist_init_iter(&iter, ent->sensors);
-    ilist_unpositioned(&iter);
     if (sensor == ent->presence_sensor) {
 	sens_cmp_info_t info;
 
@@ -979,8 +956,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 				    ent->cb_data);
 
 	    ent->presence_sensor = info.sensor;
-	    handle_new_presence_sensor(ent, info.sensor,
-				       ref->mc, ref->lun, ref->num);
+	    handle_new_presence_sensor(ent, info.sensor);
 
 	    ipmi_mem_free(ref);
 	} else {
@@ -988,7 +964,10 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 	}
 	ent->presence_possibly_changed = 1;
     } else {
-	ref = ilist_search_iter(&iter, sens_cmp, &info);
+	ipmi_sensor_id_t id = ipmi_sensor_convert_to_id(sensor);
+	ilist_init_iter(&iter, ent->sensors);
+	ilist_unpositioned(&iter);
+	ref = ilist_search_iter(&iter, sens_cmp, &id);
 	if (!ref) {
 	    ipmi_log(IPMI_LOG_WARNING, "User requested removal of a sensor"
 		     " from an entity, but the sensor was not there");
@@ -1011,79 +990,47 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
     }
 }
 
-void ipmi_entity_sensor_changed(ipmi_entity_t *ent,
-				ipmi_mc_t     *mc,
-				int           lun,
-				int           num,
-				ipmi_sensor_t *old,
-				ipmi_sensor_t *new)
-{
-    CHECK_MC_LOCK(mc);
-    CHECK_ENTITY_LOCK(ent);
-
-    if (ent->sensor_handler)
-	ent->sensor_handler(IPMI_CHANGED, ent, new, ent->cb_data);
-}
-
 void
 ipmi_entity_add_control(ipmi_entity_t  *ent,
-			ipmi_mc_t      *mc,
-			int            lun,
-			int            num,
 			ipmi_control_t *control,
 			void           *ref)
 {
     ipmi_control_ref_t *link = (ipmi_control_ref_t *) ref;
 
-    CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
 
     /* The calling code should check for duplicates, no check done
        here. */
-    link->mc = mc;
-    link->lun = lun;
-    link->num = num;
+    link->control = ipmi_control_convert_to_id(control);
     link->list_link.malloced = 0;
     ilist_add_tail(ent->controls, link, &(link->list_link));
     if (ent->control_handler)
 	ent->control_handler(IPMI_ADDED, ent, control, ent->cb_data);
 }
 
-typedef struct control_info_s
-{
-    ipmi_mc_t *mc;
-    int       lun;
-    int       num;
-} control_info_t;
-
 static int control_cmp(void *item, void *cb_data)
 {
     ipmi_control_ref_t *ref1 = item;
-    control_info_t     *ref2 = cb_data;
+    ipmi_control_id_t  *id2 = cb_data;
 
-    return ((ref1->mc == ref2->mc)
-	    && (ref1->lun == ref2->lun)
-	    && (ref1->num == ref2->num));
+    return ipmi_cmp_control_id(ref1->control, *id2);
 }
 
 void
 ipmi_entity_remove_control(ipmi_entity_t  *ent,
-			   ipmi_mc_t      *mc,
-			   int            lun,
-			   int            num,
 			   ipmi_control_t *control)
 {
     ipmi_control_ref_t *ref;
     ilist_iter_t       iter;
-    control_info_t     info = { mc, lun, num };
+    ipmi_control_id_t  id;
 
-    CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
 
     ilist_init_iter(&iter, ent->controls);
     ilist_unpositioned(&iter);
 
-    ref = ilist_search_iter(&iter, control_cmp, &info);
+    id = ipmi_control_convert_to_id(control);
+    ref = ilist_search_iter(&iter, control_cmp, &id);
     if (!ref) {
 	ipmi_log(IPMI_LOG_WARNING, "User requested removal of a control"
 		 " from an entity, but the control was not there");
@@ -1103,20 +1050,6 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     {
 	cleanup_entity(ent);
     }
-}
-
-void ipmi_entity_control_changed(ipmi_entity_t  *ent,
-				 ipmi_mc_t      *mc,
-				 int            lun,
-				 int            num,
-				 ipmi_control_t *old,
-				 ipmi_control_t *new)
-{
-    CHECK_MC_LOCK(mc);
-    CHECK_ENTITY_LOCK(ent);
-
-    if (ent->control_handler)
-	ent->control_handler(IPMI_CHANGED, ent, new, ent->cb_data);
 }
 
 int
@@ -1144,9 +1077,9 @@ ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 }
 
 int
-ipmi_entity_set_update_handler(ipmi_entity_info_t *ents,
-			       ipmi_bmc_entity_cb handler,
-			       void               *cb_data)
+ipmi_entity_set_update_handler(ipmi_entity_info_t    *ents,
+			       ipmi_domain_entity_cb handler,
+			       void                  *cb_data)
 {
     ents->handler = handler;
     ents->cb_data = cb_data;
@@ -1316,8 +1249,8 @@ gdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 
     memset(&sdr, 0, sizeof(sdr));
 
-    sdr.major_version = ipmi_mc_major_version(ent->bmc);
-    sdr.minor_version = ipmi_mc_minor_version(ent->bmc);
+    sdr.major_version = IPMI_MAJOR_NUM_SDR;
+    sdr.minor_version = IPMI_MINOR_NUM_SDR;
     sdr.type = 0x10; /* Generic Device Locator */
     sdr.length = 10; /* We'll fix it later. */
     sdr.data[0] = ent->access_address;
@@ -1375,8 +1308,8 @@ frudlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 
     memset(&sdr, 0, sizeof(sdr));
 
-    sdr.major_version = ipmi_mc_major_version(ent->bmc);
-    sdr.minor_version = ipmi_mc_minor_version(ent->bmc);
+    sdr.major_version = IPMI_MAJOR_NUM_SDR;
+    sdr.minor_version = IPMI_MINOR_NUM_SDR;
     sdr.type = 0x11; /* FRU Device Locator */
     sdr.length = 10; /* We'll fix it later. */
     sdr.data[0] = ent->access_address;
@@ -1435,8 +1368,8 @@ mcdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
 
     memset(&sdr, 0, sizeof(sdr));
 
-    sdr.major_version = ipmi_mc_major_version(ent->bmc);
-    sdr.minor_version = ipmi_mc_minor_version(ent->bmc);
+    sdr.major_version = IPMI_MAJOR_NUM_SDR;
+    sdr.minor_version = IPMI_MINOR_NUM_SDR;
     sdr.type = 0x12; /* MC Device Locator */
     sdr.length = 10; /* We'll fix it later. */
     sdr.data[0] = ent->slave_address;
@@ -1683,8 +1616,8 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
 
     memset(&sdr, 0, sizeof(sdr));
 
-    sdr.major_version = ipmi_mc_major_version(ent->bmc);
-    sdr.minor_version = ipmi_mc_minor_version(ent->bmc);
+    sdr.major_version = IPMI_MAJOR_NUM_SDR;
+    sdr.minor_version = IPMI_MINOR_NUM_SDR;
     sdr.data[0] = ent->entity_id;
     sdr.data[1] = ent->entity_instance;
 
@@ -1789,12 +1722,12 @@ ipmi_entity_append_to_sdrs(ipmi_entity_info_t *ents,
     return info.err;
 }
 
-ipmi_mc_t *
-ipmi_entity_get_bmc(ipmi_entity_t *ent)
+ipmi_domain_t *
+ipmi_entity_get_domain(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->bmc;
+    return ent->domain;
 }
 
 int
@@ -2380,7 +2313,7 @@ iterate_sensor_handler(ilist_iter_t *iter, void *item, void *cb_data)
 {
     ipmi_sensor_ref_t *ref = item;
 
-    ipmi_find_sensor(ref->mc, ref->lun, ref->num, sens_iter_cb, cb_data);
+    ipmi_sensor_pointer_cb(ref->sensor, sens_iter_cb, cb_data);
 }
 
 void
@@ -2416,7 +2349,7 @@ iterate_control_handler(ilist_iter_t *iter, void *item, void *cb_data)
 {
     ipmi_control_ref_t *ref = item;
 
-    ipmi_find_control(ref->mc, ref->lun, ref->num, control_iter_cb, cb_data);
+    ipmi_control_pointer_cb(ref->control, control_iter_cb, cb_data);
 }
 
 void
@@ -2461,35 +2394,36 @@ ipmi_entity_convert_to_id(ipmi_entity_t *ent)
 
     CHECK_ENTITY_LOCK(ent);
 
-    val.bmc_id = ent->bmc_id;
+    val.domain_id = ent->domain_id;
     val.entity_id = ent->entity_id;
     val.entity_instance = ent->entity_instance;
     val.channel = ent->device_num.channel;
     val.address = ent->device_num.address;
+    val.seq = ent->seq;
 
     return val;
 }
 
 typedef struct mc_cb_info_s
 {
-    ipmi_entity_cb   handler;
-    void             *cb_data;
-    ipmi_entity_id_t id;
-    int              err;
+    ipmi_entity_ptr_cb handler;
+    void               *cb_data;
+    ipmi_entity_id_t   id;
+    int                err;
 } mc_cb_info_t;
 
 static void
-bmc_cb(ipmi_mc_t *bmc, void *cb_data)
+domain_cb(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_device_num_t device_num;
     ipmi_entity_t     *ent;
     mc_cb_info_t      *info = cb_data;
 
-    ipmi_mc_entity_lock(bmc);
+    ipmi_domain_entity_lock(domain);
 
     device_num.channel = info->id.channel;
     device_num.address = info->id.address;
-    info->err = entity_find(ipmi_mc_get_entities(bmc),
+    info->err = entity_find(ipmi_domain_get_entities(domain),
 			    device_num,
 			    info->id.entity_id,
 			    info->id.entity_instance,
@@ -2501,13 +2435,13 @@ bmc_cb(ipmi_mc_t *bmc, void *cb_data)
     if (!info->err)
 	info->handler(ent, info->cb_data);
 
-    ipmi_mc_entity_unlock(bmc);
+    ipmi_domain_entity_unlock(domain);
 }
 
 int
-ipmi_entity_pointer_cb(ipmi_entity_id_t id,
-		       ipmi_entity_cb   handler,
-		       void             *cb_data)
+ipmi_entity_pointer_cb(ipmi_entity_id_t   id,
+		       ipmi_entity_ptr_cb handler,
+		       void               *cb_data)
 {
     int          rv;
     mc_cb_info_t info;
@@ -2517,7 +2451,7 @@ ipmi_entity_pointer_cb(ipmi_entity_id_t id,
     info.id = id;
     info.err = 0;
 
-    rv = ipmi_mc_pointer_cb(id.bmc_id, bmc_cb, &info);
+    rv = ipmi_domain_pointer_cb(id.domain_id, domain_cb, &info);
     if (!rv)
 	rv = info.err;
 
@@ -2527,19 +2461,19 @@ ipmi_entity_pointer_cb(ipmi_entity_id_t id,
 void
 ipmi_entity_lock(ipmi_entity_t *ent)
 {
-    ipmi_mc_entity_lock(ent->bmc);
+    ipmi_domain_entity_lock(ent->domain);
 }
 
 void
 ipmi_entity_unlock(ipmi_entity_t *ent)
 {
-    ipmi_mc_entity_unlock(ent->bmc);
+    ipmi_domain_entity_unlock(ent->domain);
 }
 
 #ifdef IPMI_CHECK_LOCKS
 void
 __ipmi_check_entity_lock(ipmi_entity_t *entity)
 {
-    __ipmi_check_mc_entity_lock(entity->bmc);
+    __ipmi_check_domain_entity_lock(entity->domain);
 }
 #endif

@@ -41,8 +41,8 @@ extern os_handler_t ipmi_ui_cb_handlers;
 int ipmi_ui_init(selector_t **selector, int full_screen);
 void ipmi_ui_shutdown(void);
 
-void ipmi_ui_setup_done(ipmi_mc_t *mc,
-			int       err,
-			void      *user_data);
+void ipmi_ui_setup_done(ipmi_domain_t *mc,
+			int           err,
+			void          *user_data);
 
 #endif /* _IPMI_UI_H */

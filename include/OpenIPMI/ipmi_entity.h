@@ -42,13 +42,15 @@ typedef struct ipmi_entity_info_s ipmi_entity_info_t;
 
 /* Allocate and destroy an entity.  This should be used by OEM code
    that needs to create it's own entities. */
-int ipmi_entity_info_alloc(ipmi_mc_t *mc, ipmi_entity_info_t **new_ents);
+int ipmi_entity_info_alloc(ipmi_domain_t      *domain,
+			   ipmi_entity_info_t **new_ents);
 int ipmi_entity_info_destroy(ipmi_entity_info_t *ents);
 
-/* Find an entity in the bmc's set of entities that has the given
-   entity id and entity instance. */
+/* Find an entity in the domain's set of entities that has the given
+   entity id and entity instance.  The MC is the mc the entity came
+   from, or NULL if from the main SDR repository. */
 int ipmi_entity_find(ipmi_entity_info_t *ents,
-		     ipmi_mc_t          *bmc,
+		     ipmi_mc_t          *mc,
 		     int                entity_id,
 		     int                entity_instance,
 		     ipmi_entity_t      **found_ent);
@@ -60,7 +62,8 @@ typedef int (*entity_sdr_add_cb)(ipmi_entity_t   *ent,
 				 ipmi_sdr_info_t *sdrs,
 				 void            *cb_data);
 int ipmi_entity_add(ipmi_entity_info_t *ents,
-		    ipmi_mc_t          *bmc,
+		    ipmi_domain_t      *domain,
+		    ipmi_mc_t          *mc, /* SDR repository the MC is from */
 		    int                lun,
 		    int                entity_id,
 		    int                entity_instance,
@@ -95,30 +98,18 @@ void ipmi_entity_free_control_link(void *link);
 /* Add a sensor/indicator to the entity.  The "ref" must be allocated with the
    above call.  This call is guaranteed to succeed. */
 void ipmi_entity_add_sensor(ipmi_entity_t *ent,
-			    ipmi_mc_t     *mc,
-			    int           lun,
-			    int           num,
 			    ipmi_sensor_t *sensor,
 			    void          *ref);
 void ipmi_entity_add_control(ipmi_entity_t  *ent,
-			     ipmi_mc_t      *mc,
-			     int            lun,
-			     int            num,
-			     ipmi_control_t *ind,
+			     ipmi_control_t *control,
 			     void           *ref);
 
 /* Remove a sensor/indicator from an entity.  This call is guaranteed
    to succeed. */
 void ipmi_entity_remove_sensor(ipmi_entity_t *ent,
-			       ipmi_mc_t     *mc,
-			       int           lun,
-			       int           num,
 			       ipmi_sensor_t *sensor);
 void ipmi_entity_remove_control(ipmi_entity_t  *ent,
-				ipmi_mc_t      *mc,
-				int            lun,
-				int            num,
-				ipmi_control_t *ind);
+				ipmi_control_t *control);
 
 /* A sensor/ind that is attached the entity has had it's information
    changed by the remote system.  This does NOT mean the sensor's
@@ -146,12 +137,12 @@ int ipmi_entity_append_to_sdrs(ipmi_entity_info_t *ents,
 int ipmi_entity_scan_sdrs(ipmi_entity_info_t *ents,
 			  ipmi_sdr_info_t    *sdrs);
 
-/* Sets a handler that will be called when and entity in the list
+/* Sets a handler that will be called when an entity in the list
    changes.  User's should not normally call this, they should call
    the BMC version .*/
-int ipmi_entity_set_update_handler(ipmi_entity_info_t *ents,
-				   ipmi_bmc_entity_cb handler,
-				   void               *cb_data);
+int ipmi_entity_set_update_handler(ipmi_entity_info_t    *ents,
+				   ipmi_domain_entity_cb handler,
+				   void                  *cb_data);
 
 /* Iterate over all the entities in the entity info. */
 void ipmi_entities_iterate_entities(ipmi_entity_info_t              *ent,
