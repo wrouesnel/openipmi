@@ -885,6 +885,9 @@ int _ipmi_smi_init(os_handler_t *os_hnd);
 int _ipmi_lan_init(os_handler_t *os_hnd);
 int _ipmi_mxp_init(os_handler_t *os_hnd);
 int ipmi_malloc_init(os_handler_t *os_hnd);
+int _ipmi_rakp_init(void);
+int _ipmi_aes_cbc_init(void);
+int _ipmi_hmac_init(void);
 
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
@@ -932,6 +935,16 @@ ipmi_init(os_handler_t *handler)
 
     _ipmi_domain_init();
     _ipmi_mc_init();
+
+    rv = _ipmi_rakp_init();
+    if (rv)
+	goto out_err;
+    rv = _ipmi_aes_cbc_init();
+    if (rv)
+	goto out_err;
+    rv = _ipmi_hmac_init();
+    if (rv)
+	goto out_err;
 
     /* Call the OEM handlers. */
     ipmi_oem_force_conn_init();

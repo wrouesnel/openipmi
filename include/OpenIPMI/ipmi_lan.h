@@ -163,6 +163,11 @@ int ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
  */
 #define IPMI_LANP_NAME_LOOKUP_ONLY		10
 
+/* Set the BMC key for the connection (RMCP+ only).  If not specified,
+   all zeros will be used.  The key is in the parm_data, the parm_val
+   is not used. */
+#define IPMI_LANP_BMC_KEY			11
+
 /*
  * Set up an IPMI LAN connection.  The boatload of parameters are:
  *
@@ -299,33 +304,79 @@ int ipmi_rmcpp_register_payload(unsigned int   payload_type,
  * places for its own and you wouldn't be able to change those copies.
  */
 
-typedef struct ipmi_rmcpp_auth_info_s
-{
-    /* Filled in by the base RMCP code before calling the auth algorithm. */
-    uint32_t      session_id;
-    uint32_t      mgsys_session_id;
-    uint8_t       role;
-    unsigned char username[16];
-    unsigned int  username_len;
-    unsigned char password[20];
-    unsigned int  password_len;
-    int           use_two_keys;
-    unsigned char bmc_key[20];
+/* The auth data structure.  The one passed to the algorithm is
+   guaranteed to be valid until the free function is called on the
+   algorithm.  For authentication, an error value will be returned
+   from ipmi_lan_send_command_forceip() (you are using that, right?)
+   before the data goes away.  The auth algorithm should fill in the
+   data it is defined to set.  Note that this returns pointers to the
+   actual data and returns the full length of the data.  Be careful
+   not to overrun it when setting things.  The password and bmc_key
+   values will be filled out to zeros to the max_length.  Note that
+   the LAN code will make sure to zero the sensitive values upon
+   shutdown. */
+typedef struct ipmi_rmcpp_auth_s ipmi_rmcpp_auth_t;
 
-    /* Filled in by the auth algorithm. */
-    unsigned char my_rand_num[16];
-    unsigned char mgsys_rand_num[16];
-    unsigned char mgsys_guid[16];
-} ipmi_rmcpp_auth_info_t;
+uint32_t ipmi_rmcpp_auth_get_my_session_id(ipmi_rmcpp_auth_t *ainfo);
+uint32_t ipmi_rmcpp_auth_get_mgsys_session_id(ipmi_rmcpp_auth_t *ainfo);
+uint8_t ipmi_rmcpp_auth_get_role(ipmi_rmcpp_auth_t *ainfo);
+const unsigned char *ipmi_rmcpp_auth_get_username(ipmi_rmcpp_auth_t *ainfo,
+						  unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_username_len(ipmi_rmcpp_auth_t *ainfo);
+const unsigned char *ipmi_rmcpp_auth_get_password(ipmi_rmcpp_auth_t *ainfo,
+						  unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_password_len(ipmi_rmcpp_auth_t *ainfo);
+int ipmi_rmcpp_auth_get_use_two_keys(ipmi_rmcpp_auth_t *ainfo);
+const unsigned char *ipmi_rmcpp_auth_get_bmc_key(ipmi_rmcpp_auth_t *ainfo,
+						 unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_bmc_key_len(ipmi_rmcpp_auth_t *ainfo);
+
+/* From the get channel auth. */
+const unsigned char *ipmi_rmcpp_auth_get_oem_iana(ipmi_rmcpp_auth_t *ainfo,
+						  unsigned int      *len);
+unsigned char ipmi_rmcpp_auth_get_oem_aux(ipmi_rmcpp_auth_t *ainfo);
+
+/* Should be filled in by the auth algorithm. */
+unsigned char *ipmi_rmcpp_auth_get_my_rand(ipmi_rmcpp_auth_t *ainfo,
+					   unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_my_rand_len(ipmi_rmcpp_auth_t *ainfo);
+void ipmi_rmcpp_auth_set_my_rand_len(ipmi_rmcpp_auth_t *ainfo,
+				     unsigned int      length);
+unsigned char *ipmi_rmcpp_auth_get_mgsys_rand(ipmi_rmcpp_auth_t *ainfo,
+					      unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_mgsys_rand_len(ipmi_rmcpp_auth_t *ainfo);
+void ipmi_rmcpp_auth_set_mgsys_rand_len(ipmi_rmcpp_auth_t *ainfo,
+					unsigned int      length);
+unsigned char *ipmi_rmcpp_auth_get_mgsys_guid(ipmi_rmcpp_auth_t *ainfo,
+					      unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_mgsys_guid_len(ipmi_rmcpp_auth_t *ainfo);
+void ipmi_rmcpp_auth_set_mgsys_guid_len(ipmi_rmcpp_auth_t *ainfo,
+					unsigned int      length);
+unsigned char *ipmi_rmcpp_auth_get_sik(ipmi_rmcpp_auth_t *ainfo,
+				       unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_sik_len(ipmi_rmcpp_auth_t *ainfo);
+void ipmi_rmcpp_auth_set_sik_len(ipmi_rmcpp_auth_t *ainfo,
+				 unsigned int      length);
+unsigned char *ipmi_rmcpp_auth_get_k1(ipmi_rmcpp_auth_t *ainfo,
+				      unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_k1_len(ipmi_rmcpp_auth_t *ainfo);
+void ipmi_rmcpp_auth_set_k1_len(ipmi_rmcpp_auth_t *ainfo,
+				unsigned int      length);
+unsigned char *ipmi_rmcpp_auth_get_k2(ipmi_rmcpp_auth_t *ainfo,
+				      unsigned int      *max_len);
+unsigned int ipmi_rmcpp_auth_get_k2_len(ipmi_rmcpp_auth_t *ainfo);
+void ipmi_rmcpp_auth_set_k2_len(ipmi_rmcpp_auth_t *ainfo,
+				unsigned int      length);
+
 
 typedef void (*ipmi_rmcpp_finish_auth_cb)(ipmi_con_t    *ipmi,
 					  int           err,
 					  int           addr_num,
 					  void          *cb_data);
-typedef int (*ipmi_rmcpp_set_info_cb)(ipmi_con_t             *ipmi,
-				      int                    addr_num,
-				      ipmi_rmcpp_auth_info_t *ainfo,
-				      void                   *cb_data);
+typedef int (*ipmi_rmcpp_set_info_cb)(ipmi_con_t        *ipmi,
+				      int               addr_num,
+				      ipmi_rmcpp_auth_t *ainfo,
+				      void              *cb_data);
 
 typedef struct ipmi_rmcpp_authentication_s
 {
@@ -334,7 +385,7 @@ typedef struct ipmi_rmcpp_authentication_s
        if the lan code cannot set up the data. */
     int (*start_auth)(ipmi_con_t                *ipmi,
 		      int                       addr_num,
-		      ipmi_rmcpp_auth_info_t    *ainfo,
+		      ipmi_rmcpp_auth_t         *ainfo,
 		      ipmi_rmcpp_set_info_cb    set,
 		      ipmi_rmcpp_finish_auth_cb done,
 		      void                      *cb_data);
@@ -345,8 +396,11 @@ int ipmi_rmcpp_register_authentication(unsigned int                auth_num,
 
 typedef struct ipmi_rmcpp_confidentiality_s
 {
-    int (*conf_init)(ipmi_rmcpp_auth_info_t *ainfo, void **conf_data);
-    void (*conf_free)(void *conf_data);
+    int (*conf_init)(ipmi_con_t        *ipmi,
+		     ipmi_rmcpp_auth_t *ainfo,
+		     void              **conf_data);
+    void (*conf_free)(ipmi_con_t *ipmi,
+		     void        *conf_data);
 
     /* This adds the confidentiality header and trailer.  The payload
        points to a pointer to the payload data itself.  The header
@@ -356,13 +410,15 @@ typedef struct ipmi_rmcpp_confidentiality_s
        payload, update the payload to point to the start of the
        header, update the header length to remove the data it used for
        its header, and update the payload length for any trailer used.
-       It should not exceed the max_payload_len for the trailer nor
-       should header_len go negative. */
-    int (*conf_add)(void          *conf_data,
-		    unsigned char **payload,
-		    unsigned int  *header_len,
-		    unsigned int  *payload_len,
-		    unsigned int  max_payload_len);
+       The original payload_len value plus the trailer data should not
+       exceed the max_payload_len for the trailer nor should
+       header_len go negative. */
+    int (*conf_encrypt)(ipmi_con_t    *ipmi,
+			void          *conf_data,
+			unsigned char **payload,
+			unsigned int  *header_len,
+			unsigned int  *payload_len,
+			unsigned int  max_payload_len);
 
 
     /* Decrypt the given data (in place).  The payload starts at
@@ -370,9 +426,10 @@ typedef struct ipmi_rmcpp_confidentiality_s
        includes the confidentiality trailer.  This function should
        update the payload to remove the header and the payload_len to
        remove any headers and trailers, including all padding. */
-    int (*conf_check)(void          *conf_data,
-		      unsigned char **payload,
-		      unsigned int  *payload_len);
+    int (*conf_decrypt)(ipmi_con_t    *ipmi,
+			void          *conf_data,
+			unsigned char **payload,
+			unsigned int  *payload_len);
 
 } ipmi_rmcpp_confidentiality_t;
 
@@ -382,8 +439,11 @@ int ipmi_rmcpp_register_confidentiality(unsigned int                 conf_num,
 
 typedef struct ipmi_rmcpp_integrity_s
 {
-    int (*integ_init)(ipmi_rmcpp_auth_info_t *ainfo, void **integ_data);
-    void (*integ_free)(void *integ_data);
+    int (*integ_init)(ipmi_con_t       *ipmi,
+		     ipmi_rmcpp_auth_t *ainfo,
+		      void             **integ_data);
+    void (*integ_free)(ipmi_con_t *ipmi,
+		       void       *integ_data);
 
     /* This adds the integrity trailer after the payload data.  It
        should add any padding after the payload and update the payload
@@ -391,7 +451,8 @@ typedef struct ipmi_rmcpp_integrity_s
        it used (after the payload and padding).  The payload_len plus
        the trailer_len should not exceed max_payload_len.  The payload
        starts at beginning of the user message (the RMCP version). */
-    int (*integ_add)(void          *integ_data,
+    int (*integ_add)(ipmi_con_t    *ipmi,
+		     void          *integ_data,
 		     unsigned char *payload,
 		     unsigned int  *payload_len,
 		     unsigned int  *trailer_len,
@@ -402,7 +463,8 @@ typedef struct ipmi_rmcpp_integrity_s
        length is the length including any integrity padding but not
        the next header or authcode data. The total length includes all
        the data, including the autocode data. */
-    int (*integ_check)(void          *integ_data,
+    int (*integ_check)(ipmi_con_t    *ipmi,
+		       void          *integ_data,
 		       unsigned char *payload,
 		       unsigned int  payload_len,
 		       unsigned int  total_len);

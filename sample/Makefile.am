@@ -8,23 +8,26 @@ noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3
 ipmisample_SOURCES = sample.c
 ipmisample_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
-		$(top_builddir)/unix/libOpenIPMIposix.la
+		$(top_builddir)/unix/libOpenIPMIposix.la \
+		$(OPENSSLLIBS)
 
 ipmisample2_SOURCES = sample2.c
 ipmisample2_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIpthread.la \
-		-lpthread
+		-lpthread $(OPENSSLLIBS)
 
 ipmisample3_SOURCES = sample3.c
 ipmisample3_LDADD = $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
-		$(top_builddir)/unix/libOpenIPMIposix.la
+		$(top_builddir)/unix/libOpenIPMIposix.la \
+		$(OPENSSLLIBS)
 
 ipmicmd_SOURCES = ipmicmd.c
 ipmicmd_LDADD = -lpopt $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
-		$(top_builddir)/unix/libOpenIPMIposix.la
+		$(top_builddir)/unix/libOpenIPMIposix.la \
+		$(OPENSSLLIBS)
 ipmicmd_LDFLAGS = -rdynamic
 
 EXTRA_DIST = example_oem.c
