@@ -42,9 +42,17 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
 
-#include <ucd-snmp/asn1.h>
-#include <ucd-snmp/snmp_api.h>
-#include <ucd-snmp/snmp.h>
+#ifdef HAVE_UCDSNMP
+# ifdef HAVE_ALT_UCDSNMP_DIR
+#  include <ucd-snmp/asn1.h>
+#  include <ucd-snmp/snmp_api.h>
+#  include <ucd-snmp/snmp.h>
+# else
+#  include <asn1.h>
+#  include <snmp_api.h>
+#  include <snmp.h>
+# endif
+#endif
 
 static selector_t *selector;
 
@@ -89,6 +97,7 @@ ui_reconnect(void)
     }
 }
 
+#ifdef HAVE_UCDSNMP
 #define IPMI_OID_SIZE 9
 static oid ipmi_oid[IPMI_OID_SIZE] = {1,3,6,1,4,1,3183,1,1};
 int snmp_input(int op,
@@ -204,6 +213,7 @@ snmp_init(selector_t *sel)
 
     return 0;
 }
+#endif /* HAVE_UCDSNMP */
     
 int
 main(int argc, const char *argv[])
@@ -237,10 +247,12 @@ main(int argc, const char *argv[])
 
     rv = ipmi_ui_init(&selector, full_screen);
 
+#ifdef HAVE_UCDSNMP
     if (init_snmp) {
 	if (snmp_init(selector) < 0)
 	    return 1;
     }
+#endif
 
  next_con:
     rv = ipmi_parse_args(&curr_arg, argc, argv, &con_parms[last_con]);

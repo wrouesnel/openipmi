@@ -1,11 +1,75 @@
 AC_INIT(README.Force)
 AC_CANONICAL_TARGET
-AM_INIT_AUTOMAKE(OpenIPMI, 1.2.0)
+AM_INIT_AUTOMAKE(OpenIPMI, 1.2.1)
+
+SNMPLIBS=
+
+# Where do we find the UCD SNMP includes and libs
+tryucdsnmp=yes
+AC_ARG_WITH(ucdsnmp,
+[  --with-ucdsnmp=PATH             Look for ucdsnmp in PATH.],
+    if test "x$withval" = "xyes"; then
+      tryucdsnmp=yes
+    elif test "x$withval" = "xno"; then
+      tryucdsnmp=no
+    elif test -d "$withval"; then
+      CPPFLAGS="-I$withval/include $CPPFLAGS"
+      SNMPLIBS="-L$withval/lib $SNMPLIBS"
+      tryucdsnmp=yes
+    fi,
+)
+
+# If UCD SNMP requires OpenSSL, this tells where to find the crypto lib
+tryopenssl=yes
+AC_ARG_WITH(openssl,
+[  --with-openssl=PATH             Look for openssl in PATH.],
+    if test "x$withval" = "xyes"; then
+      tryopenssl=yes
+    elif test "x$withval" = "xno"; then
+      tryopenssl=no
+    elif test -d "$withval"; then
+      SNMPLIBS="-L$withval/lib $SNMPLIBS"
+      tryopenssl=yes
+    fi,
+)
 
 AC_PROG_CC
 AM_PROG_LIBTOOL
 AC_STDC_HEADERS
 AC_CHECK_FUNCS(getaddrinfo)
+
+AC_SUBST(SNMPLIBS)
+
+if test "x$tryucdsnmp" != "xno"; then
+   HAVE_UCDSNMP=no
+   AC_CHECK_LIB(snmp, snmp_open_ex, 
+		SNMPLIBS="-lsnmp $SNMPLIBS"
+		AC_DEFINE(HAVE_UCDSNMP)
+		HAVE_UCDSNMP=yes,
+	        ,
+		$SNMPLIBS)
+   if test "x$HAVE_UCDSNMP" == "xno"; then
+     # Try with the crypto lib
+     AC_CHECK_LIB(snmp, snmp_sess_perror, 
+		  SNMPLIBS="-lsnmp -lcrypto $SNMPLIBS"
+		  AC_DEFINE(HAVE_UCDSNMP)
+		  HAVE_UCDSNMP=yes,
+	          ,
+		  -lcrypto $SNMPLIBS)
+   fi
+
+   if test "x$HAVE_UCDSNMP" == "xyes"; then
+      FOUND_SNMPINCL=no
+      AC_CHECK_HEADER(snmp_api.h, FOUND_SNMPINCL=yes; )
+      if test "x$FOUND_SNMPINCL" == "xno"; then
+        AC_CHECK_HEADER(ucd-snmp/snmp_api.h,
+	                FOUND_SNMPINCL=yes; AC_DEFINE(HAVE_ALT_UCDSNMP_DIR))
+      fi
+      if test "x$FOUND_SNMPINCL" == "xno"; then
+        AC_MSG_ERROR([Unable to find UCD SNMP include files.])
+      fi
+   fi
+fi
 
 AC_OUTPUT(Makefile
 	  utils/Makefile

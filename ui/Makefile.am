@@ -9,6 +9,8 @@ VERSION_CURRENT = $(wordlist 1, 1, $(SPACE_VERSION))
 VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
 VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
 
+SNMPLIBS=@SNMPLIBS@
+
 AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
 bin_PROGRAMS = ipmi_ui
@@ -25,7 +27,7 @@ libOpenIPMIui_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIui.map
 
 ipmi_ui_SOURCES = basic_ui.c
-ipmi_ui_LDADD = libOpenIPMIui.la $(top_builddir)/lib/libOpenIPMI.la -lncurses -lsnmp -lucdagent -lucdmibs -lcrypto -ldl
+ipmi_ui_LDADD = libOpenIPMIui.la $(top_builddir)/lib/libOpenIPMI.la -lncurses $(SNMPLIBS)
 
 clean:
 	rm -f *.map

@@ -25,11 +25,11 @@
 
 5: Add a way to get/set slot atonomous/managed mode
 
-!2: Add control for board power mode
+*2: Add control for board power mode
 
-!4: Add control for board power wait for command
+*4: Add control for board power wait for command
 
-!4: Add control for board power delay
+*4: Add control for board power delay
 
 *1: Add control for slot bd_sel
 
@@ -79,7 +79,7 @@
 
 *1: Add sensor for current AMC active/standby state
 
-!2: Auto-switch to old MXP LAN protocol based on version
+*2: Auto-switch to old MXP LAN protocol based on version
 
 *1: In the PET code, Handle the fact that the different IP addresses on
    the AMC have different channels.
