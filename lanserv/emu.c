@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <sys/time.h>
+#include <stdio.h>
 
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -187,6 +188,7 @@ struct lmc_data_s
     fru_data_t frus[255];
 
     unsigned char power_value;
+    unsigned char hs_led_value;
 };
 
 struct emu_data_s
@@ -2577,7 +2579,7 @@ ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_event)
     data[5] = 0;
     data[6] = 0x01; /* Version 1. */
     data[7] = 0;
-    data[8] = 0; /* Control number 0. */
+    data[8] = (mc->ipmb >> 1) - 0x40; /* Control number. */
     data[9] = 0;
     data[10] = power;
     data[11] = 0;
@@ -2615,6 +2617,34 @@ handle_get_power(lmc_data_t    *mc,
 }
 
 static void
+handle_set_hs_led(lmc_data_t    *mc,
+		  ipmi_msg_t    *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 1, rdata, rdata_len))
+	return;
+
+    mc->hs_led_value = msg->data[0];
+
+    printf("Setting hotswap LED to %d\n", msg->data[0]);
+
+    rdata[0] = 0;
+    *rdata_len = 1;
+}
+
+static void
+handle_get_hs_led(lmc_data_t    *mc,
+		  ipmi_msg_t    *msg,
+		  unsigned char *rdata,
+		  unsigned int  *rdata_len)
+{
+    rdata[0] = 0;
+    rdata[1] = mc->hs_led_value;
+    *rdata_len = 2;
+}
+
+static void
 handle_oem0_netfn(lmc_data_t    *mc,
 		  unsigned char lun,
 		  ipmi_msg_t    *msg,
@@ -2628,6 +2658,14 @@ handle_oem0_netfn(lmc_data_t    *mc,
 
     case 0x02:
 	handle_get_power(mc, msg, rdata, rdata_len);
+	break;
+
+    case 0x03:
+	handle_set_hs_led(mc, msg, rdata, rdata_len);
+	break;
+
+    case 0x04:
+	handle_get_hs_led(mc, msg, rdata, rdata_len);
 	break;
 
     default:

@@ -3,6 +3,8 @@
 	* lanserv/emu.c, lanserv/emu_cmd.c: Added power control, fixed
 	some problems with getting the event state.
 
+	* lanserv/emu.c: Added the hot-swap LED control.
+
 	* lib/oem_test.c, lib/ipmi.c: Added some test code for testing
 	things inside OpenIPMI.
 
