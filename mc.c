@@ -464,9 +464,7 @@ ll_con_failed(ipmi_con_t *ipmi,
     else
 	bmc->bmc->connection_up = 1;
 
-    ipmi_lock(bmc->bmc->mc_list_lock);
-    ilist_iter(bmc->bmc->mc_list, iterate_con_fails, &info);
-    ipmi_unlock(bmc->bmc->mc_list_lock);
+    ilist_iter(bmc->bmc->con_fail_handlers, iterate_con_fails, &info);
 
  out_unlock:
     ipmi_read_unlock();
