@@ -1,4 +1,16 @@
 
+2003-07-16 Corey Minyard <cminyard@mvista.com>
+
+	* OpenIPMI.texi, sensors.c, include/OpenIPMI/ipmiif.h: Added
+	support for just enabling or disabling sensor event (instead of
+	directly setting them), added a bunch of error checking to the
+	enabling and disabling of sensors to make sure the sensor supports
+	the requested capability.
+	* include/OpenIPMI/ipmi_sensor.c: ditto
+
+	* entity.c: Reworked the presence sensor code to take into account
+	the sensor capabilities.
+
 2003-07-11 Louis Zhuang <louis.zhuang@linux.co.intel.com>
 
 	* ipmi_lan.c, lanserv_asf.c, lanserv_ipmi.c: Cleanups to

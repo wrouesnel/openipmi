@@ -893,8 +893,13 @@ set or read.
 To turn on and off thresholds and support for events and to set the
 thresholds, you must first fill out an @var{ipmi_event_state_t}
 structure using the various calls defined to do this.  Then call
-@code{ipmi_sensor_events_enable_set()} to set the values.  The current
-values may be fetched with @code{ipmi_sensor_events_enable_get()}.
+@code{ipmi_sensor_events_enable_set()} to set the values to exactly the
+given settings.  The current values may be fetched with
+@code{ipmi_sensor_events_enable_get()}.  If you just want to enable or
+disable specific events without affecting the states of other events,
+you can use @code{ipmi_sensor_events_enable()} and
+@code{ipmi_sensor_events_disable()} to enable and disable specific
+events.
 
 To fetch the current value for a threshold sensor, use the
 @code{ipmi_reading_get()} function.  The callback also returns the

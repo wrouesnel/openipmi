@@ -2651,6 +2651,8 @@ typedef struct event_enable_info_s
     ipmi_event_state_t    state;
     ipmi_sensor_done_cb   done;
     void                  *cb_data;
+    int                   do_enable;
+    int                   do_disable;
 } event_enable_info_t;
 
 static void
@@ -2718,26 +2720,35 @@ enables_set(ipmi_sensor_t *sensor,
 	return;
     }
 
-    /* Enables were set, now disable all the other ones. */
-    cmd_msg.data = cmd_data;
-    cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
-    cmd_msg.cmd = IPMI_SET_SENSOR_EVENT_ENABLE_CMD;
-    cmd_msg.data_len = 6;
-    cmd_msg.data = cmd_data;
-    cmd_data[0] = sensor->num;
-    cmd_data[1] = (info->state.status & 0xc0) | (0x02 << 4);
-    cmd_data[2] = ~(info->state.__assertion_events & 0xff);
-    cmd_data[3] = ~(info->state.__assertion_events >> 8);
-    cmd_data[4] = ~(info->state.__deassertion_events & 0xff);
-    cmd_data[5] = ~(info->state.__deassertion_events >> 8);
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
-				  &cmd_msg, disables_set,
-				  &(info->sdata), info);
-    if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending event enable command to clear events: %x", rv);
+    if (info->do_disable) {
+	/* Enables were set, now disable all the other ones. */
+	cmd_msg.data = cmd_data;
+	cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+	cmd_msg.cmd = IPMI_SET_SENSOR_EVENT_ENABLE_CMD;
+	cmd_msg.data_len = 6;
+	cmd_msg.data = cmd_data;
+	cmd_data[0] = sensor->num;
+	cmd_data[1] = (info->state.status & 0xc0) | (0x02 << 4);
+	cmd_data[2] = ~(info->state.__assertion_events & 0xff);
+	cmd_data[3] = ~(info->state.__assertion_events >> 8);
+	cmd_data[4] = ~(info->state.__deassertion_events & 0xff);
+	cmd_data[5] = ~(info->state.__deassertion_events >> 8);
+	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+				      &cmd_msg, disables_set,
+				      &(info->sdata), info);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "Error sending event enable command to clear events: %x",
+		     rv);
+	    if (info->done)
+		info->done(sensor, rv, info->cb_data);
+	    ipmi_sensor_opq_done(sensor);
+	    ipmi_mem_free(info);
+	}
+    } else {
+	/* Just doing enables, we are done. */
 	if (info->done)
-	    info->done(sensor, rv, info->cb_data);
+	    info->done(sensor, 0, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	ipmi_mem_free(info);
     }
@@ -2749,6 +2760,7 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     event_enable_info_t *info = cb_data;
     unsigned char       cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t          cmd_msg;
+    int                 event_support;
     int                 rv;
 
     if (err) {
@@ -2761,19 +2773,50 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	return;
     }
 
+    event_support = ipmi_sensor_get_event_support(sensor);
+
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
     cmd_msg.cmd = IPMI_SET_SENSOR_EVENT_ENABLE_CMD;
-    cmd_msg.data_len = 6;
     cmd_msg.data = cmd_data;
     cmd_data[0] = sensor->num;
-    cmd_data[1] = (info->state.status & 0xc0) | (0x01 << 4);
-    cmd_data[2] = info->state.__assertion_events & 0xff;
-    cmd_data[3] = info->state.__assertion_events >> 8;
-    cmd_data[4] = info->state.__deassertion_events & 0xff;
-    cmd_data[5] = info->state.__deassertion_events >> 8;
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
-				  &cmd_msg, enables_set, &(info->sdata), info);
+    if (event_support == IPMI_EVENT_SUPPORT_ENTIRE_SENSOR) {
+	/* We can only turn on/off the entire sensor, just pass the
+           status to the sensor. */
+	cmd_data[1] = info->state.status & 0xc0;
+	cmd_msg.data_len = 2;
+	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+				      &cmd_msg, disables_set, &(info->sdata),
+				      info);
+    } else if (info->do_enable) {
+	/* Start by first setting the enables, then set the disables
+           in a second operation.  We do this because enables and
+           disables cannot both be set at the same time, and it's
+           safer to first enable the new events then to disable the
+           events we want disabled.  It would be *really* nice if IPMI
+           had a way to do this in one operation, such as using 11b in
+           the request byte 2 bits 5:4 to say "set the events to
+           exactly this state". */
+	cmd_data[1] = (info->state.status & 0xc0) | (0x01 << 4);
+	cmd_data[2] = info->state.__assertion_events & 0xff;
+	cmd_data[3] = info->state.__assertion_events >> 8;
+	cmd_data[4] = info->state.__deassertion_events & 0xff;
+	cmd_data[5] = info->state.__deassertion_events >> 8;
+	cmd_msg.data_len = 6;
+	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+				      &cmd_msg, enables_set, &(info->sdata),
+				      info);
+    } else {
+	/* We are only doing disables. */
+	cmd_data[1] = (info->state.status & 0xc0) | (0x02 << 4);
+	cmd_data[2] = info->state.__assertion_events & 0xff;
+	cmd_data[3] = info->state.__assertion_events >> 8;
+	cmd_data[4] = info->state.__deassertion_events & 0xff;
+	cmd_data[5] = info->state.__deassertion_events >> 8;
+	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+				      &cmd_msg, disables_set,
+				      &(info->sdata), info);
+    }
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Error sending event enable command: %x", rv);
@@ -2785,6 +2828,47 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
+check_events_capability(ipmi_sensor_t      *sensor,
+			ipmi_event_state_t *states)
+{
+    int event_support;
+
+    event_support = ipmi_sensor_get_event_support(sensor);
+    if ((event_support == IPMI_EVENT_SUPPORT_NONE)
+	|| (event_support == IPMI_EVENT_SUPPORT_GLOBAL_ENABLE))
+    {
+	/* We don't support setting events for this sensor. */
+	return EINVAL;
+    }
+
+    if ((event_support == IPMI_EVENT_SUPPORT_ENTIRE_SENSOR)
+	&& ((states->__assertion_events != 0)
+	    || (states->__deassertion_events != 0)))
+    {
+	/* This sensor does not support individual event states, but
+           the user is trying to set them. */
+	return EINVAL;
+    }
+
+    if (event_support == IPMI_EVENT_SUPPORT_PER_STATE) {
+	int i;
+	for (i=0; i<16; i++) {
+	    unsigned int bit = 1 << i;
+
+	    if (((!sensor->mask1[i]) && (bit & states->__assertion_events))
+		|| ((sensor->mask2[i]) && (bit & states->__deassertion_events)))
+	    {
+		/* The user is attempting to set a state that the
+                   sensor does not support. */
+		return EINVAL;
+	    }
+	}
+    }
+
+    return 0;
+}
+
+static int
 stand_ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 				    ipmi_event_state_t    *states,
 				    ipmi_sensor_done_cb   done,
@@ -2792,13 +2876,75 @@ stand_ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 {
     event_enable_info_t *info;
     int                 rv;
-    
+
+    rv = check_events_capability(sensor, states);
+    if (rv)
+	return rv;
+
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
     info->state = *states;
     info->done = done;
     info->cb_data = cb_data;
+    info->do_enable = 1;
+    info->do_disable = 1;
+    rv = ipmi_sensor_add_opq(sensor, event_enable_set_start,
+			     &(info->sdata), info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+static int
+stand_ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+				ipmi_event_state_t    *states,
+				ipmi_sensor_done_cb   done,
+				void                  *cb_data)
+{
+    event_enable_info_t *info;
+    int                 rv;
+
+    rv = check_events_capability(sensor, states);
+    if (rv)
+	return rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    info->state = *states;
+    info->done = done;
+    info->cb_data = cb_data;
+    info->do_enable = 1;
+    info->do_disable = 0;
+    rv = ipmi_sensor_add_opq(sensor, event_enable_set_start,
+			     &(info->sdata), info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+static int
+stand_ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+				 ipmi_event_state_t    *states,
+				 ipmi_sensor_done_cb   done,
+				 void                  *cb_data)
+{
+    event_enable_info_t *info;
+    int                 rv;
+
+    rv = check_events_capability(sensor, states);
+    if (rv)
+	return rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    info->state = *states;
+    info->done = done;
+    info->cb_data = cb_data;
+    info->do_enable = 0;
+    info->do_disable = 1;
     rv = ipmi_sensor_add_opq(sensor, event_enable_set_start,
 			     &(info->sdata), info);
     if (rv)
@@ -4085,6 +4231,8 @@ const ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
 {
     .ipmi_sensor_events_enable_set = stand_ipmi_sensor_events_enable_set,
     .ipmi_sensor_events_enable_get = stand_ipmi_sensor_events_enable_get,
+    .ipmi_sensor_events_enable     = stand_ipmi_sensor_events_enable,
+    .ipmi_sensor_events_disable    = stand_ipmi_sensor_events_disable,
     .ipmi_sensor_rearm             = stand_ipmi_sensor_rearm,
 
     .ipmi_sensor_convert_from_raw  = stand_ipmi_sensor_convert_from_raw,
@@ -4115,6 +4263,38 @@ ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 						     states,
 						     done,
 						     cb_data);
+}
+
+int
+ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+			  ipmi_event_state_t    *states,
+			  ipmi_sensor_done_cb   done,
+			  void                  *cb_data)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (!sensor->cbs.ipmi_sensor_events_enable)
+	return ENOSYS;
+    return sensor->cbs.ipmi_sensor_events_enable(sensor,
+						 states,
+						 done,
+						 cb_data);
+}
+
+int
+ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+			   ipmi_event_state_t    *states,
+			   ipmi_sensor_done_cb   done,
+			   void                  *cb_data)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (!sensor->cbs.ipmi_sensor_events_disable)
+	return ENOSYS;
+    return sensor->cbs.ipmi_sensor_events_disable(sensor,
+						  states,
+						  done,
+						  cb_data);
 }
 
 int

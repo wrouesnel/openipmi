@@ -800,18 +800,43 @@ static void
 handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 {
     ipmi_event_state_t events;
+    int                event_support;
+    int                rv;
+    int                val;
+
+
+    event_support = ipmi_sensor_get_event_support(sensor);
 
     /* Add our own event handler. */
     ipmi_sensor_discrete_set_event_handler(sensor,
 					   presence_sensor_changed,
 					   ent);
 
-    /* Configure the sensor per our liking (enable the proper events). */
+    /* Nothing to do, it will just be on. */
+    if (event_support == IPMI_EVENT_SUPPORT_GLOBAL_ENABLE)
+	return;
+
+    /* Turn events and scanning on. */
     ipmi_event_state_init(&events);
     ipmi_event_state_set_events_enabled(&events, 1);
     ipmi_event_state_set_scanning_enabled(&events, 1);
-    ipmi_discrete_event_set(&events, 0, IPMI_ASSERTION);
-    ipmi_discrete_event_set(&events, 1, IPMI_ASSERTION);
+
+    if (event_support == IPMI_EVENT_SUPPORT_PER_STATE) {
+	/* Turn on all the event enables that we can. */
+	rv = ipmi_sensor_discrete_assertion_event_supported(sensor, 0, &val);
+	if ((!rv) && (val))
+	    ipmi_discrete_event_set(&events, 0, IPMI_ASSERTION);
+	rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, 0, &val);
+	if ((!rv) && (val))
+	    ipmi_discrete_event_set(&events, 0, IPMI_DEASSERTION);
+	rv = ipmi_sensor_discrete_assertion_event_supported(sensor, 1, &val);
+	if ((!rv) && (val))
+	    ipmi_discrete_event_set(&events, 1, IPMI_ASSERTION);
+	rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, 1, &val);
+	if ((!rv) && (val))
+	    ipmi_discrete_event_set(&events, 1, IPMI_DEASSERTION);
+    }
+
     ipmi_sensor_events_enable_set(sensor, &events, NULL, NULL);
 
     ent->presence_possibly_changed = 1;
@@ -853,13 +878,67 @@ ipmi_entity_free_control_link(void *link)
     ipmi_mem_free(link);
 }
 
+static int
+is_presence_sensor(ipmi_sensor_t *sensor)
+{
+    int val, rv;
+    int supports_present = 0;
+    int supports_absent = 0;
+    int assert_present = 0;
+    int deassert_present = 0;
+    int assert_absent = 0;
+    int deassert_absent = 0;
+
+    /* Is it the right type (a presence sensor)? */
+    if (ipmi_sensor_get_sensor_type(sensor) != 0x25)
+	return 0;
+
+    /* Presense sensors that don't generate events are kind of useless. */
+    if (ipmi_sensor_get_event_support(sensor) == IPMI_EVENT_SUPPORT_NONE)
+	return 0;
+
+    /* Check present bit */
+    rv = ipmi_discrete_event_readable(sensor, 0, &val);
+    if ((!rv) && (val))
+	supports_present = 1;
+    /* Check absent bit. */
+    rv = ipmi_discrete_event_readable(sensor, 1, &val);
+    if ((!rv) && (val))
+	supports_absent = 1;
+
+    /* What good is this?  No support for the proper bits, I need to
+       be able to read them. */
+    if ((!supports_present) && (!supports_absent))
+	return 0;
+
+    rv = ipmi_sensor_discrete_assertion_event_supported(sensor, 0, &val);
+    if ((!rv) && (val))
+	assert_present = 1;
+    rv = ipmi_sensor_discrete_assertion_event_supported(sensor, 1, &val);
+    if ((!rv) && (val))
+	deassert_present = 1;
+    rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, 0, &val);
+    if ((!rv) && (val))
+	assert_absent = 1;
+    rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, 1, &val);
+    if ((!rv) && (val))
+	deassert_absent = 1;
+
+    /* We have to have the right combination of assertion support to
+       use this as a presence sensor. */
+    return ((assert_present && deassert_present)
+	    || (assert_absent && deassert_absent)
+	    || (assert_absent && deassert_absent)
+	    || (assert_absent && assert_present)
+	    || (deassert_absent && deassert_present));
+}
+
 void
 ipmi_entity_add_sensor(ipmi_entity_t *ent,
 		       ipmi_sensor_t *sensor,
 		       void          *ref)
 {
     ipmi_sensor_ref_t *link = (ipmi_sensor_ref_t *) ref;
-    int               is_presence = 0;
 
     CHECK_ENTITY_LOCK(ent);
 
@@ -868,26 +947,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
     link->sensor = ipmi_sensor_convert_to_id(sensor);
     link->list_link.malloced = 0;
 
-    if ((ipmi_sensor_get_sensor_type(sensor) == 0x25)
-	&& (ent->presence_sensor == NULL))
-    {
-	/* If it could possible be a presence sensor for us,
-           double-check. */
-	int val, rv;
-
-	/* Check present bit */
-	rv = ipmi_discrete_event_readable(sensor, 0, &val);
-	if ((!rv) && (val))
-	    is_presence = 1;
-	else {
-	    /* Check absent bit. */
-	    rv = ipmi_discrete_event_readable(sensor, 1, &val);
-	    if ((!rv) && (val))
-		is_presence = 1;
-	}
-    }
-
-    if (is_presence) {
+    if (is_presence_sensor(sensor) && (ent->presence_sensor == NULL)) {
 	/* It's the presence sensor and we don't already have one.  We
 	   keep this special. */
 	ent->presence_sensor = sensor;
@@ -908,34 +968,32 @@ static int sens_cmp(void *item, void *cb_data)
     return ipmi_cmp_sensor_id(ref1->sensor, *id2) == 0;
 }
 
-typedef struct sens_cmp_info_s
+typedef struct sens_find_presence_s
 {
-    int           equal;
-    int           reading_type;
+    int           is_presence;
     ipmi_sensor_t *sensor;
 } sens_cmp_info_t;
 
 static void
-sens_get_reading_type(ipmi_sensor_t *sensor, void *cb_data)
+sens_detect_if_presence(ipmi_sensor_t *sensor, void *cb_data)
 {
     sens_cmp_info_t *info = cb_data;
 
     info->sensor = sensor;
-    info->equal
-	= (info->reading_type == ipmi_sensor_get_event_reading_type(sensor));
+    info->is_presence = is_presence_sensor(sensor);
 }
 
-static int sens_cmp_type(void *item, void *cb_data)
+static int sens_cmp_if_presence(void *item, void *cb_data)
 {
     ipmi_sensor_ref_t *ref = item;
     sens_cmp_info_t   *info = cb_data;
     int               rv;
 
-    rv = ipmi_sensor_pointer_cb(ref->sensor, sens_get_reading_type, info);
+    rv = ipmi_sensor_pointer_cb(ref->sensor, sens_detect_if_presence, info);
     if (rv)
 	return 0;
     
-    return info->equal;
+    return info->is_presence;
 }
 
 void
@@ -951,8 +1009,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	sens_cmp_info_t info;
 
 	/* See if there is another presence sensor. */
-	info.reading_type = 0x08;
-	ref = ilist_search_iter(&iter, sens_cmp_type, &info);
+	ref = ilist_search_iter(&iter, sens_cmp_if_presence, &info);
 
 	if (ref) {
 	    /* There is one, delete it from the list and from the

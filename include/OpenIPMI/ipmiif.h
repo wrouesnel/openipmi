@@ -484,11 +484,34 @@ typedef void (*ipmi_sensor_done_cb)(ipmi_sensor_t *sensor,
 				    int           err,
 				    void          *cb_data);
 
-/* Set the event enables for the given sensor. */
+/* Set the event enables for the given sensor to exactly the states
+   given in the "states" parameter.  This will first enable the
+   events/thresholds that are set, then disable the events/thresholds
+   that are not set. */
 int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 				  ipmi_event_state_t    *states,
 				  ipmi_sensor_done_cb   done,
 				  void                  *cb_data);
+
+/* Enable the states that are set in the "states" parameter.  This
+   will *only* enable those states, it will not disable any states.
+   It will, however, set the "events_enabled" flag and the
+   "scanning_enabled" flag for the sensor to the value in the states
+   parameter. */
+int ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+			      ipmi_event_state_t    *states,
+			      ipmi_sensor_done_cb   done,
+			      void                  *cb_data);
+
+/* Disable the states that are set in the "states" parameter.  This
+   will *only* disable those states, it will not enable any states.
+   It will, however, set the "events_enabled" flag and the
+   "scanning_enabled" flag for the sensor to the value in the states
+   parameter. */
+int ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+			       ipmi_event_state_t    *states,
+			       ipmi_sensor_done_cb   done,
+			       void                  *cb_data);
 
 /* Get the event enables for the given sensor. */
 typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,

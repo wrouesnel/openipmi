@@ -366,6 +366,8 @@ typedef struct ipmi_sensor_cbs_s
 {
     ipmi_sensor_events_enable_set_cb ipmi_sensor_events_enable_set;
     ipmi_sensor_events_enable_get_cb ipmi_sensor_events_enable_get;
+    ipmi_sensor_events_enable_set_cb ipmi_sensor_events_enable;
+    ipmi_sensor_events_enable_set_cb ipmi_sensor_events_disable;
     ipmi_sensor_rearm_cb             ipmi_sensor_rearm;
 
     /* These are for threshold sensors only. */
