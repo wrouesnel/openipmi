@@ -1,6 +1,8 @@
 
 2003-05-16 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 0.4.1
+	
 	* lanserv_oem_force.c, ipmi_oem_force.c: The permission from
 	Force Computers(tm) came much faster than I expected.  This
 	included some OEM handling for the various Force cards, for
