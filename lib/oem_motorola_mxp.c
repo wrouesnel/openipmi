@@ -6137,14 +6137,14 @@ new_board_sensors(ipmi_mc_t           *mc,
     rv = mxp_alloc_control(mc, ent,
 			   MXP_BOARD_POWER_CONFIG_NUM,
 			   NULL,
-			   IPMI_CONTROL_IDENTIFIER,
+			   IPMI_CONTROL_OUTPUT,
 			   "Power Config",
 			   board_power_config_set,
 			   board_power_config_get,
 			   &sinfo->power_config);
     if (rv)
 	goto out_err;
-    ipmi_control_set_num_elements(sinfo->reset, 3);
+    ipmi_control_set_num_elements(sinfo->power_config, 3);
 
  out_err:
     return rv;
