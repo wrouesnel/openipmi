@@ -816,9 +816,9 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 
     ipmi_unlock(controls->idx_lock);
 
-    ipmi_entity_add_control(ent, control, link);
-
     _ipmi_domain_entity_unlock(domain);
+
+    ipmi_entity_add_control(ent, control, link);
 
     control->add_pending = 1;
 

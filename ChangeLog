@@ -1,3 +1,26 @@
+2004-11-01 Corey Minyard <cminyard@mvista.com> 
+
+	* FAQ: Added some useful information
+
+	* OpenIPMI.spec.in: Cleaned up the spec file andmake it correct,
+	added the new stuff.
+
+	* README: Added Perl info.
+
+	* configure.in, swig/perl/Makefile.am: Improved the Perl detection
+	support, added handling for Perl module installation.
+
+	* cmdlang/out_fru.c: Fix compiler warning.
+
+	* lib/fru.c: Modified initialization to work with older C
+	compilers.
+
+	* lib/mc.c, lib/entity.c: Fixed deadlocks.
+
+	* swig/Makefile.am, swig/OpenIPMI.i: Minor build cleanups.
+	
+	* configure.in: Move to version 1.4.4
+
 2004-10-29 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_conn.h: Added another connection close

@@ -861,9 +861,9 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 
     ipmi_unlock(sensors->idx_lock);
 
-    ipmi_entity_add_sensor(ent, sensor, link);
-
     _ipmi_domain_entity_unlock(domain);
+
+    ipmi_entity_add_sensor(ent, sensor, link);
 
     sensor->add_pending = 1;
 
