@@ -145,7 +145,9 @@
  *
  * Chassis sensors/controls: 0-15
  * Power supply sensors/controls: 16-63 (16 each)
- * Board sensors/controls: 64-207 (8 each)
+ * Board sensors/controls: 64-239 (8 each, 22 boards)
+ *
+ * Note that 239-255 are reserved for use by OpenIPMI, so we can't use those.
  *
  */
 
@@ -4260,7 +4262,7 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 	goto out_err;
     ipmi_control_light_set_lights(ps->fan_inserv_led, 1, red_led);
 		       
-    /* Power Supply Type ID */
+    /* Fan Type ID */
     rv = mxp_alloc_control(info->mc, ps->fan_ent,
 			   MXP_FAN_TYPE_NUM(ps->idx),
 			   ps,
@@ -4277,7 +4279,7 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     ipmi_control_set_readable(ps->fan_type, 1);
     ipmi_control_set_callbacks(ps->fan_type, &control_cbs);
 
-    /* Power Supply Revision */
+    /* Fan Revision */
     rv = mxp_alloc_control(info->mc, ps->fan_ent,
 			   MXP_FAN_REVISION_NUM(ps->idx),
 			   ps,
@@ -7453,7 +7455,7 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 	    einfo->handled = 1; /* Nothing to do for these. */
 	} else if (event->data[8] == 0x07) {
 	    /* AMC Failover, find the AMC-specific MC */
-	    id.mcid.channel = 0xf;
+	    id.mcid.channel = IPMI_BMC_CHANNEL;
 	    if (event->data[10] == 0xea)
 		/* AMC 1 */
 		id.mcid.mc_num = 0;
