@@ -1567,8 +1567,6 @@ ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
 				   enum ipmi_thresh_e event,
 				   int                val)
 {
-    CHECK_SENSOR_LOCK(sensor);
-
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return;
