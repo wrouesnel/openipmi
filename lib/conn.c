@@ -236,6 +236,8 @@ start_oem_conn_check(ipmi_con_t       *conn,
 	while (rv) {
 	    check->curr_handler = h;
 	    rv = h->check(conn, conn_oem_check_done, check);
+	    if (!rv)
+		break;
 	    if (!ilist_next(&iter)) {
 		/* End of list, just go on */
 		check->done(conn, check->cb_data);
