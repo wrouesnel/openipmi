@@ -4731,6 +4731,7 @@ mxp_handler(ipmi_mc_t *mc,
 
     info->mc = mc;
     info->mfg_id = MXP_MANUFACTURER_ID;
+    info->domain = domain;
 
     ipmi_mc_set_oem_data(mc, info);
 

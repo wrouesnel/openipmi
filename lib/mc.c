@@ -309,8 +309,10 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     }
 
     /* Call the OEM handler for removal, if it has been registered. */
-    if (mc->removed_mc_handler)
+    if (mc->removed_mc_handler) {
 	mc->removed_mc_handler(domain, mc, mc->removed_mc_cb_data);
+	mc->removed_mc_handler = NULL;
+    }
 
     if ((ipmi_controls_get_count(mc->controls) == 0)
 	&& (ipmi_sensors_get_count(mc->sensors) == 0))

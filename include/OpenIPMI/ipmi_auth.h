@@ -93,6 +93,7 @@ extern ipmi_auth_t ipmi_auths[MAX_IPMI_AUTHS];
 #define IPMI_PRIVILEGE_USER		2
 #define IPMI_PRIVILEGE_OPERATOR		3
 #define IPMI_PRIVILEGE_ADMIN		4
+#define IPMI_PRIVILEGE_OEM		5
 
 
 /* Tell if a specific command is permitted for the given priviledge

@@ -248,6 +248,8 @@ main(int argc, char *argv[])
 	    con_parms[last_con].privilege = IPMI_PRIVILEGE_OPERATOR;
 	} else if (strcmp(argv[curr_arg], "admin") == 0) {
 	    con_parms[last_con].privilege = IPMI_PRIVILEGE_ADMIN;
+	} else if (strcmp(argv[curr_arg], "oem") == 0) {
+	    con_parms[last_con].privilege = IPMI_PRIVILEGE_OEM;
 	} else {
 	    fprintf(stderr, "Invalid privilege: %s\n", argv[curr_arg]);
 	    rv = EINVAL;
@@ -362,6 +364,8 @@ main(int argc, char *argv[])
 	    con_parms[last_con].privilege = IPMI_PRIVILEGE_OPERATOR;
 	} else if (strcmp(argv[curr_arg], "admin") == 0) {
 	    con_parms[last_con].privilege = IPMI_PRIVILEGE_ADMIN;
+	} else if (strcmp(argv[curr_arg], "oem") == 0) {
+	    con_parms[last_con].privilege = IPMI_PRIVILEGE_OEM;
 	} else {
 	    fprintf(stderr, "Invalid privilege: %s\n", argv[curr_arg]);
 	    rv = EINVAL;

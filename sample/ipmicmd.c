@@ -850,6 +850,8 @@ main(int argc, const char *argv[])
 	    privilege = IPMI_PRIVILEGE_OPERATOR;
 	} else if (strcmp(argv[curr_arg], "admin") == 0) {
 	    privilege = IPMI_PRIVILEGE_ADMIN;
+	} else if (strcmp(argv[curr_arg], "oem") == 0) {
+	    privilege = IPMI_PRIVILEGE_OEM;
 	} else {
 	    fprintf(stderr, "Invalid privilege: %s\n", argv[curr_arg]);
 	    rv = EINVAL;
@@ -956,6 +958,8 @@ main(int argc, const char *argv[])
 	    privilege = IPMI_PRIVILEGE_OPERATOR;
 	} else if (strcmp(argv[curr_arg], "admin") == 0) {
 	    privilege = IPMI_PRIVILEGE_ADMIN;
+	} else if (strcmp(argv[curr_arg], "oem") == 0) {
+	    privilege = IPMI_PRIVILEGE_OEM;
 	} else {
 	    fprintf(stderr, "Invalid privilege: %s\n", argv[curr_arg]);
 	    rv = EINVAL;
@@ -1001,7 +1005,6 @@ main(int argc, const char *argv[])
 	rv = con->register_for_events(con, event_handler, NULL, NULL, NULL);
 	if (rv) {
 	    fprintf(stderr, "Could not set to get events: %x\n", rv);
-	    exit(1);
 	}
 
 	sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL);

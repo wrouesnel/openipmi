@@ -428,7 +428,7 @@ lan_send_addr(lan_data_t  *lan,
     tmsg[0] = 0x20; /* To the BMC. */
     tmsg[1] = (msg->netfn << 2) | lun;
     tmsg[2] = ipmb_checksum(tmsg, 2);
-    tmsg[3] = 0x81; /* Remote console IPMI Software ID */
+    tmsg[3] = lan->swid;
     tmsg[4] = 0x0;
     tmsg[5] = msg->cmd;
     memcpy(tmsg+6, msg->data, msg->data_len);
@@ -1558,6 +1558,12 @@ lan_send_command(ipmi_con_t            *ipmi,
 	memcpy(&(lan->msg_queue[msg_num].orig_addr), addr, addr_len);
 	lan->msg_queue[msg_num].orig_addr_len = addr_len;
 
+	if (lan->msg_queue[msg_num].orig_addr.addr_type == 
+	    IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	{
+	    lan->msg_queue[msg_num].orig_addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+	}
+
 	si = (ipmi_system_interface_addr_t *) &lan->msg_queue[msg_num].addr;
 	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si->channel = IPMI_BMC_CHANNEL;
@@ -1672,14 +1678,15 @@ lan_register_for_events(ipmi_con_t                 *ipmi,
 			void                       *data2,
 			ipmi_ll_event_handler_id_t **id)
 {
-    return ENOSYS;
+    *id = 0;
+    return 0;
 }
 
 static int
 lan_deregister_for_events(ipmi_con_t                 *ipmi,
 			  ipmi_ll_event_handler_id_t *id)
 {
-    return ENOSYS;
+    return 0;
 }
 
 static int
@@ -1771,9 +1778,8 @@ lan_close_connection(ipmi_con_t *ipmi)
     for (i=lan->curr_msg; i!=lan->next_msg; i=lan->curr_msg) {
 	msg_del_t del;
 
-	lan->curr_msg = QUEUE_NEXT(i);
-	ipmi_unlock(lan->msg_queue_lock);
 	handle_recv_err(ipmi, lan, IPMI_UNKNOWN_ERR_CC, &del);
+	ipmi_unlock(lan->msg_queue_lock);
 	deliver(ipmi, &del);
 	ipmi_lock(lan->msg_queue_lock);
     }
