@@ -3852,8 +3852,8 @@ stand_ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
 
     val &= 0xff;
 
-    m = sign_extend(sensor->conv[val].m, 10);
-    r_exp = sign_extend(sensor->conv[val].r_exp, 4);
+    m = sensor->conv[val].m;
+    r_exp = sensor->conv[val].r_exp;
 
     fval = sign_extend(val, 8);
 
