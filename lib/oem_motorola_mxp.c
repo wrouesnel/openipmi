@@ -3787,6 +3787,9 @@ mxp_fan_speed_convert_from_raw(ipmi_sensor_t *sensor,
 {
     double dval = val;
 
+    if (val == 0)
+	return EINVAL;
+
     *result = 468750.0 / dval;
     return 0;
 }
@@ -3811,6 +3814,9 @@ mxp_fan_speed_convert_to_raw(ipmi_sensor_t     *sensor,
 	val = floor(val);
 	break;
     }
+
+    if (val == 0.0)
+	return EINVAL;
 
     *result = 468750.0 / val;
     return 0;
@@ -4021,6 +4027,8 @@ mxp_add_fan_sensors(mxp_info_t *info,
     ipmi_sensor_get_callbacks(fan->fan, &cbs);
     cbs.ipmi_sensor_convert_from_raw = mxp_fan_speed_convert_from_raw;
     cbs.ipmi_sensor_convert_to_raw = mxp_fan_speed_convert_to_raw;
+    ipmi_sensor_set_raw_sensor_max(fan->fan, 1);
+    ipmi_sensor_set_raw_sensor_min(fan->fan, 0xff);
     ipmi_sensor_set_callbacks(fan->fan, &cbs);
     rv = mxp_add_sensor(info->mc, 
 			&fan->fan,
