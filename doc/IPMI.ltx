@@ -77,14 +77,14 @@ running on the platform.  Software management is mostly out of the
 scope of \acs{IPMI}
 
 Management Interface means that the management system uses \acs{IPMI} to
-talk to the system to monitor and perform manintenance on the
+talk to the system to monitor and perform maintenance on the
 platform.  \acs{IPMI} is mostly about monitoring, though it does have a few
 minor management functions.  However, many companies and organizations
 have built more extensive management control using \acs{OEM} extensions to
 \acs{IPMI}.
 
 The \acs{IPMI} specification\cite{ipmi-spec}, of course, has the
-details, but they can be obscured..  This document hopefully provides
+details, but they can be obscure.  This document hopefully provides
 an easier to understand introduction to IPMI.
 
 \tableofcontents
@@ -98,6 +98,7 @@ an easier to understand introduction to IPMI.
 \acro{KCS}{Keyboard Style Controller}
 \acro{BT}{Block Transfer}
 \acro{SMIC}{Server Management Interface Chip}
+\acro{SSIF}{SMBus System InterFace}
 \acro{MC}{Management Controller}
 \acro{BMC}{Baseboard Management Controller}
 \acro{I$^2$C}{Inter Integrated Circuit}
@@ -251,7 +252,7 @@ repository; this repository is writable.  There may only be one main
 \ac{SDR} repository in the system.  Any MC may have a device \ac{SDR}
 repository; these are a read-only repositories.
 
-When a problem or change in the system is detect, the MC handling that
+When a problem or change in the system is detected, the MC handling that
 sensor may issue an event.  This allows management software to detect
 these problems or changes without having to poll every sensor
 constantly.  The events are stored in an event log.  Events may be forwarded
@@ -280,7 +281,7 @@ number of sensors.  In this example, the power supply also has a
 A \ac{BMC} can have several connections to managing systems.  It may
 have a system interface connection to the main processor.  It may
 share an interface to the ethernet chip so the system may be managed
-through the \acs{LAN} when the main processor is not working.  System
+through the \acs{LAN} when the main processor is not working.  Systems
 can have serial port connections.  They can even have connections to
 modems where they can dial up a management system or page an operator
 when they detect a problem, or be dialed into by a management system.
@@ -321,7 +322,7 @@ system.
 
 Individal SBCs vary on whether the local Management Controller is
 connected to the microprocessor on an SBC.  Some are, and some aren't.
-This connectionhas some limited usefulness if the software on the SBC
+This connection has some limited usefulness if the software on the SBC
 wishes to obtain local information from the \acs{IPMI} system or store
 logs in the \acs{IPMI} event log.
 
@@ -330,7 +331,7 @@ expensive real-estate, like a telco central office.  As you might
 imagine, you can pack a lot of processing power into a small space
 with a system like this.  Since they are generally designed for
 hot-swap, and can have I/O come out the back of the system on separate
-cards, it makes mainenance easier.
+cards; it makes mainenance easier.
 
 %---------------------------------------------------------------------
 \chapter{OpenIPMI}
@@ -338,7 +339,7 @@ cards, it makes mainenance easier.
 So now we've got a \ac{BMC}, \ac{MC}s, and things like that.  But how are you
 expected to use raw \acs{IPMI}?
 
-The first things you must do, of course, it connect to the \ac{BMC}.
+The first things you must do, of course, is connect to the \ac{BMC}.
 If it's a direct SMI connection (A \ac{SMIC}, \ac{KCS}, or \ac{BT}
 interface, or perhaps a non-standard serial interface), you just open
 the driver on the operating system and start messaging.  If it's a
@@ -387,14 +388,15 @@ thing is that the user of OpenIPMI doesn't really have to know about
 all these things.
 
 From the user's point of view, the entity provides the central
-framework for everything sensors and controls.  Sensors monitor
-entities.  Entities may be present or absent.  When you connect to an
-interface, OpenIPMI takes care of detecting the entities in the system
-and reporting them to you.  You may register to be told when entities
-are added or removed from the local database.  Note that an entity may
-be present in the \acs{SDR}s, but not present in the system, the
-reporting from only gives the presence in the \acs{SDR}s, not physical
-presence in the system.
+framework for sensors and controls.  Sensors monitor entities.
+Entities may be present or absent.  When you connect to an interface,
+OpenIPMI takes care of detecting the entities in the system and
+reporting them to you.  You may register to be told when entities are
+added or removed from the local database.  Note that an entity may be
+in the \acs{SDR}s but not physically present in the system; the
+reporting from only gives the existance in the \acs{SDR}s, not
+physical presence in the system.  Physical presence it handled through
+a separate interface.
 
 The user must know about two other OpenIPMI concepts: connections and
 domains.  A connection provides the interface to the \acs{IPMI}
@@ -422,9 +424,9 @@ that can be done to the sensors.
 You may register with an entity to be told when it's physical presence
 in the system changes.  Some devices (like power supplies) are
 field-replacable while the system is running; this type of device is
-called a \ac{FRU}.  They may have sensors that monitor them, but those
-sensors may not be active if the device is not physically present in
-the system.
+called a hot-swappable \ac{FRU}.  They may have sensors that monitor
+them, but those sensors may not be active if the device is not
+physically present in the system.
 
 Sensors and controls are also automatically detected and reported.
 This is done through entities, you register with an entity to be told
@@ -1376,7 +1378,7 @@ re-establish the connection.
 The \verb=domain_fully_up= callback will be called after the domain
 has been fully scanned, all SDRs fetched, all FRUs fetched, and all
 SELs read for the first time.  This gives you an indication that the
-domain is completely ``up'', although there realy is no concept of
+domain is completely ``up'', although there really is no concept of
 completely ``up'' in IPMI since the system may dynamically change.  It
 is useful for some things, though (and people complained a lot about
 not having it in the past) so it is now available.  The callback is in
@@ -1536,10 +1538,22 @@ TBD - describe this interface in detail
 
 \subsection{\ac{BT}}
 \label{sec-bt}
-The \ac{BT} interface is the newest and best interface for \acs{IPMI}.
+The \ac{BT} interface is the best interface for \acs{IPMI}.
 Messages are sent a whole message at a time through the interface,
 thus it is a much higher performance interface than the other system
 interfaces.
+
+TBD - describe this interface in detail
+
+\subsection{\ac{SSIF}}
+\label{sec-ssif}
+The \ac{SSIF} interface was added in the 2.0 spec.  It provides an
+interface over an \ac{I$^2$C} interface using the SMBus protocol.
+This is very cost effective interface; most systems generally already
+have an \ac{I$^2$C} bus, so no new interfaces to processor busses are
+required.  However, \ac{I$^2$C} busses are not very fast and the
+interfaces from the processor to the \ac{I$^2$C} bus tends to perform
+poorly.
 
 TBD - describe this interface in detail
 
