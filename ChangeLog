@@ -1,3 +1,14 @@
+2004-12-13 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/internal/locked_list.h, utils/locked_list.h:
+	Added the ability for the user to use their own lock with locked
+	lists.  This avoids multiple locking in areas that already have
+	locks.
+
+	* lib/entity.c: Converted over the entity, child, parent, sensor,
+	and control lists to use the main domain lock as their lock, since
+	that lock was always claimed anyway.
+
 2004-12-10 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/internal/ipmi_int.h, lib/ipmi.c: Fixes

@@ -57,24 +57,28 @@ locked_list_t *locked_list_alloc(os_handler_t *os_hnd);
 void locked_list_destroy(locked_list_t *ll);
 
 /* Add an item to the locked list.  If the item is a duplicate, this
-   operation will be ignored.  It returns true if successful or false
-   if memory could not be allocated. */
+   operation will be ignored but a value of "2" will be returned.  It
+   returns true if successful or false if memory could not be
+   allocated. */
 int locked_list_add(locked_list_t *ll, void *item1, void *item2);
 
 /* Remove an item from the locked list.  It returns true if the item
    was found on the list and false if not. */
 int locked_list_remove(locked_list_t *ll, void *item, void *item2);
 
-/* Iterate over the items of the list. */
+/* Iterate over the items of the list.  The prefunc version has a
+   function that can be called before the lock is removed.  This allows
+   the refcount on an object to be incremented or whatnot. */
 void locked_list_iterate(locked_list_t          *ll,
 			 locked_list_handler_cb handler,
 			 void                   *cb_data);
+void locked_list_iterate_prefunc(locked_list_t          *ll,
+				 locked_list_handler_cb prefunc,
+				 locked_list_handler_cb handler,
+				 void                   *cb_data);
 
 /* Return the number of items in the list. */
 unsigned int locked_list_num_entries(locked_list_t *ll);
-
-/* Search for the given item.  Returns true if found, false if not found. */
-int locked_list_search(locked_list_t *ll, void *item1, void *item2);
 
 /* Allocate and free entries for a locked list.  With a pre-allocated
    entry, the add cannot fail.  This is primarily so you can
@@ -89,5 +93,25 @@ void locked_list_free_entry(locked_list_entry_t *entry);
    anything else. */
 int locked_list_add_entry(locked_list_t *ll, void *item1, void *item2,
 			  locked_list_entry_t *entry);
+
+/* These functions are like the previous functions, but allow the user
+   to have their own lock function.  The nolock functions must be
+   called with the lock already held.  */
+typedef void (*locked_list_lock_cb)(void *cb_data);
+locked_list_t *locked_list_alloc_my_lock(locked_list_lock_cb lock_func,
+					 locked_list_lock_cb unlock_func,
+					 void              *lock_func_cb_data);
+int locked_list_add_nolock(locked_list_t *ll, void *item1, void *item2);
+int locked_list_add_entry_nolock(locked_list_t *ll, void *item1, void *item2,
+				 locked_list_entry_t *entry);
+int locked_list_remove_nolock(locked_list_t *ll, void *item, void *item2);
+void locked_list_iterate_nolock(locked_list_t          *ll,
+				locked_list_handler_cb handler,
+				void                   *cb_data);
+void locked_list_iterate_prefunc_nolock(locked_list_t          *ll,
+					locked_list_handler_cb prefunc,
+					locked_list_handler_cb handler,
+					void                   *cb_data);
+unsigned int locked_list_num_entries_nolock(locked_list_t *ll);
 
 #endif /* _LOCKED_LIST_H */

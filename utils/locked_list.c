@@ -51,24 +51,74 @@ struct locked_list_s
 {
     unsigned int        destroyed;
     unsigned int        cb_count;
-    ipmi_lock_t         *lock;
+    locked_list_lock_cb lock, unlock;
+    void                *lock_cb_data;
     unsigned int        count;
     locked_list_entry_t head;
     locked_list_entry_t *destroy_list;
 };
+
+static void
+ll_std_lock(void *cb_data)
+{
+    ipmi_lock_t *lock = cb_data;
+
+    ipmi_lock(lock);
+}
+
+static void
+ll_std_unlock(void *cb_data)
+{
+    ipmi_lock_t *lock = cb_data;
+
+    ipmi_unlock(lock);
+}
 
 locked_list_t *
 locked_list_alloc(os_handler_t *os_hnd)
 {
     locked_list_t *ll;
     int           rv;
+    ipmi_lock_t   *lock;
 
     ll = ipmi_mem_alloc(sizeof(*ll));
-    rv = ipmi_create_lock_os_hnd(os_hnd, &ll->lock);
+    if (!ll)
+	return NULL;
+    memset(ll, 0, sizeof(*ll));
+    rv = ipmi_create_lock_os_hnd(os_hnd, &lock);
     if (rv) {
 	ipmi_mem_free(ll);
 	return NULL;
     }
+    ll->lock = ll_std_lock;
+    ll->unlock = ll_std_unlock;
+    ll->lock_cb_data = lock;
+
+    ll->destroyed = 0;
+    ll->cb_count = 0;
+    ll->count = 0;
+    ll->destroy_list = NULL;
+    ll->head.next = &ll->head;
+    ll->head.prev = &ll->head;
+
+    return ll;
+}
+
+locked_list_t *
+locked_list_alloc_my_lock(locked_list_lock_cb lock_func,
+			  locked_list_lock_cb unlock_func,
+			  void                *lock_func_cb_data)
+{
+    locked_list_t *ll;
+
+    ll = ipmi_mem_alloc(sizeof(*ll));
+    if (!ll)
+	return NULL;
+    memset(ll, 0, sizeof(*ll));
+
+    ll->lock = lock_func;
+    ll->unlock = unlock_func;
+    ll->lock_cb_data = lock_func_cb_data;
 
     ll->destroyed = 0;
     ll->cb_count = 0;
@@ -91,7 +141,8 @@ locked_list_destroy(locked_list_t *ll)
 	ipmi_mem_free(entry);
 	entry = next;
     }
-    ipmi_destroy_lock(ll->lock);
+    if (ll->lock == ll_std_lock)
+	ipmi_destroy_lock(ll->lock_cb_data);
     ipmi_mem_free(ll);
 }
 
@@ -118,17 +169,18 @@ int
 locked_list_add_entry(locked_list_t *ll, void *item1, void *item2,
 		      locked_list_entry_t *entry)
 {
-
+    int rv = 1;
     if (!entry)
 	entry = ipmi_mem_alloc(sizeof(*entry));
     if (!entry)
 	return 0;
 
-    ipmi_lock(ll->lock);
+    ll->lock(ll->lock_cb_data);
 
     /* We don't allow duplicates. */
     if (internal_find(ll, item1, item2)) {
 	ipmi_mem_free(entry);
+	rv = 2;
 	goto out_unlock;
     }
 
@@ -142,28 +194,57 @@ locked_list_add_entry(locked_list_t *ll, void *item1, void *item2,
     ll->count++;
 
  out_unlock:
-    ipmi_unlock(ll->lock);
-    return 1;
+    ll->unlock(ll->lock_cb_data);
+    return rv;
 }
 
 int
 locked_list_add(locked_list_t *ll, void *item1, void *item2)
 {
-    locked_list_entry_t *entry = ipmi_mem_alloc(sizeof(*entry));
-
-    if (!entry)
-	return 0;
-    locked_list_add_entry(ll, item1, item2, entry);
-    return 1;
+    return locked_list_add_entry(ll, item1, item2, NULL);
 }
 
 int
-locked_list_remove(locked_list_t *ll, void *item1, void *item2)
+locked_list_add_entry_nolock(locked_list_t *ll, void *item1, void *item2,
+			     locked_list_entry_t *entry)
+{
+    int rv = 1;
+    if (!entry)
+	entry = ipmi_mem_alloc(sizeof(*entry));
+    if (!entry)
+	return 0;
+
+    /* We don't allow duplicates. */
+    if (internal_find(ll, item1, item2)) {
+	ipmi_mem_free(entry);
+	rv = 2;
+	goto out;
+    }
+
+    entry->item1 = item1;
+    entry->item2 = item2;
+    entry->destroyed = 0;
+    entry->next = &ll->head;
+    entry->prev = ll->head.prev;
+    entry->prev->next = entry;
+    entry->next->prev = entry;
+    ll->count++;
+
+ out:
+    return rv;
+}
+
+int
+locked_list_add_nolock(locked_list_t *ll, void *item1, void *item2)
+{
+    return locked_list_add_entry_nolock(ll, item1, item2, NULL);
+}
+
+int
+locked_list_remove_nolock(locked_list_t *ll, void *item1, void *item2)
 {
     int                 rv;
     locked_list_entry_t *entry;
-
-    ipmi_lock(ll->lock);
 
     entry = internal_find(ll, item1, item2);
     if (!entry) {
@@ -183,20 +264,27 @@ locked_list_remove(locked_list_t *ll, void *item1, void *item2)
 	    ipmi_mem_free(entry);
 	}
     }
+    return rv;
+}
 
-    ipmi_unlock(ll->lock);
+int
+locked_list_remove(locked_list_t *ll, void *item1, void *item2)
+{
+    int rv;
+    ll->lock(ll->lock_cb_data);
+    rv = locked_list_remove_nolock(ll, item1, item2);
+    ll->unlock(ll->lock_cb_data);
     return rv;
 }
 
 void
-locked_list_iterate(locked_list_t          *ll,
-		    locked_list_handler_cb handler,
-		    void                   *cb_data)
+locked_list_iterate_prefunc_nolock(locked_list_t          *ll,
+				   locked_list_handler_cb prefunc,
+				   locked_list_handler_cb handler,
+				   void                   *cb_data)
 {
     int                 rv;
     locked_list_entry_t *entry;
-
-    ipmi_lock(ll->lock);
 
     ll->cb_count++;
     entry = ll->head.next;
@@ -207,11 +295,18 @@ locked_list_iterate(locked_list_t          *ll,
 
 	    item1 = entry->item1;
 	    item2 = entry->item2;
-	    ipmi_unlock(ll->lock);
-	    rv = handler(cb_data, item1, item2);
-	    ipmi_lock(ll->lock);
-	    if (rv)
-		break;
+	    if (prefunc) {
+		rv = prefunc(cb_data, item1, item2);
+		if (rv)
+		    break;
+	    }
+	    if (handler) {
+		ll->unlock(ll->lock_cb_data);
+		rv = handler(cb_data, item1, item2);
+		ll->lock(ll->lock_cb_data);
+		if (rv)
+		    break;
+	    }
 	}
 	entry = entry->next;
     }
@@ -228,8 +323,35 @@ locked_list_iterate(locked_list_t          *ll,
 	    ipmi_mem_free(entry);
 	}
     }
+}
 
-    ipmi_unlock(ll->lock);
+void
+locked_list_iterate_prefunc(locked_list_t          *ll,
+			    locked_list_handler_cb prefunc,
+			    locked_list_handler_cb handler,
+			    void                   *cb_data)
+{
+    ll->lock(ll->lock_cb_data);
+    locked_list_iterate_prefunc_nolock(ll, prefunc, handler, cb_data);
+    ll->unlock(ll->lock_cb_data);
+}
+
+void
+locked_list_iterate(locked_list_t          *ll,
+		    locked_list_handler_cb handler,
+		    void                   *cb_data)
+{
+    ll->lock(ll->lock_cb_data);
+    locked_list_iterate_prefunc_nolock(ll, NULL, handler, cb_data);
+    ll->unlock(ll->lock_cb_data);
+}
+
+void
+locked_list_iterate_nolock(locked_list_t          *ll,
+			   locked_list_handler_cb handler,
+			   void                   *cb_data)
+{
+    locked_list_iterate_prefunc_nolock(ll, NULL, handler, cb_data);
 }
 
 unsigned int
@@ -237,22 +359,16 @@ locked_list_num_entries(locked_list_t *ll)
 {
     unsigned int rv;
 
-    ipmi_lock(ll->lock);
+    ll->lock(ll->lock_cb_data);
     rv = ll->count;
-    ipmi_unlock(ll->lock);
+    ll->unlock(ll->lock_cb_data);
     return rv;
 }
 
-int
-locked_list_search(locked_list_t *ll, void *item1, void *item2)
+unsigned int
+locked_list_num_entries_nolock(locked_list_t *ll)
 {
-    int rv = 1;
-
-    ipmi_lock(ll->lock);
-    if (! internal_find(ll, item1, item2))
-	rv = 0;
-    ipmi_lock(ll->lock);
-    return rv;
+    return ll->count;
 }
 
 locked_list_entry_t *

@@ -362,6 +362,34 @@ static ipmi_entity_hot_swap_t internal_hs_cb =
 
 /***********************************************************************
  *
+ * Entity iteration helpers
+ *
+ **********************************************************************/
+static void
+entities_lock(void *cb_data)
+{
+    ipmi_domain_t *domain = cb_data;
+    _ipmi_domain_entity_lock(domain);
+}
+
+static void
+entities_unlock(void *cb_data)
+{
+    ipmi_domain_t *domain = cb_data;
+    _ipmi_domain_entity_unlock(domain);
+}
+
+static int
+iterate_entity_prefunc(void *cb_data, void *item1, void *item2)
+{
+    ipmi_entity_t *ent = item1;
+
+    _ipmi_entity_get(ent);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+/***********************************************************************
+ *
  * Entity allocation/destruction
  *
  **********************************************************************/
@@ -376,7 +404,9 @@ ipmi_entity_info_alloc(ipmi_domain_t *domain, ipmi_entity_info_t **new_info)
 
     ents->domain = domain;
     ents->domain_id = ipmi_domain_convert_to_id(domain);
-    ents->entities = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    ents->entities = locked_list_alloc_my_lock(entities_lock,
+					       entities_unlock,
+					       domain);
     if (! ents->entities) {
 	ipmi_mem_free(ents);
 	return ENOMEM;
@@ -515,7 +545,7 @@ int
 ipmi_entity_info_destroy(ipmi_entity_info_t *ents)
 {
     locked_list_destroy(ents->update_handlers);
-    locked_list_iterate(ents->entities, destroy_entity, NULL);
+    locked_list_iterate_nolock(ents->entities, destroy_entity, NULL);
     locked_list_destroy(ents->entities);
     ipmi_mem_free(ents);
     return 0;
@@ -560,10 +590,10 @@ cleanup_entity(ipmi_entity_t *ent)
     /* First see if the entity is ready for cleanup. */
     if ((ent->ref_count)
 	|| opq_stuff_in_progress(ent->waitq)
-	|| (locked_list_num_entries(ent->child_entities) != 0)
-	|| (locked_list_num_entries(ent->parent_entities) != 0)
-	|| (locked_list_num_entries(ent->sensors) != 0)
-	|| (locked_list_num_entries(ent->controls) != 0))
+	|| (locked_list_num_entries_nolock(ent->child_entities) != 0)
+	|| (locked_list_num_entries_nolock(ent->parent_entities) != 0)
+	|| (locked_list_num_entries_nolock(ent->sensors) != 0)
+	|| (locked_list_num_entries_nolock(ent->controls) != 0))
     {
 	return 0;
     }
@@ -583,7 +613,7 @@ cleanup_entity(ipmi_entity_t *ent)
 	   unless it has remained destroyed. */
 
 	/* Remove it from the entities list. */
-	locked_list_remove(ent->ents->entities, ent, NULL);
+	locked_list_remove_nolock(ent->ents->entities, ent, NULL);
 
 	/* The sensor, control, parent, and child lists should be empty
 	   now, we can just destroy it. */
@@ -833,7 +863,7 @@ entity_find(ipmi_entity_info_t *ents,
     search_info_t info = {device_num, entity_id, entity_instance, NULL};
     int           rv = 0;
 
-    locked_list_iterate(ents->entities, search_entity, &info);
+    locked_list_iterate_nolock(ents->entities, search_entity, &info);
     if (info.ent == NULL) {
 	rv = ENODEV;
     } else {
@@ -923,19 +953,27 @@ entity_add(ipmi_entity_info_t *ents,
     ent->os_hnd = ipmi_domain_get_os_hnd(ent->domain);
     ent->domain_id = ents->domain_id;
     ent->seq = ipmi_get_seq();
-    ent->child_entities = locked_list_alloc(os_hnd);
+    ent->child_entities = locked_list_alloc_my_lock(entities_lock,
+						    entities_unlock,
+						    ents->domain);
     if (!ent->child_entities)
 	goto out_err;
 
-    ent->parent_entities = locked_list_alloc(os_hnd);
+    ent->parent_entities = locked_list_alloc_my_lock(entities_lock,
+						     entities_unlock,
+						     ents->domain);
     if (!ent->parent_entities)
 	goto out_err;
 
-    ent->sensors = locked_list_alloc(os_hnd);
+    ent->sensors = locked_list_alloc_my_lock(entities_lock,
+					     entities_unlock,
+					     ents->domain);
     if (!ent->sensors)
 	goto out_err;
 
-    ent->controls = locked_list_alloc(os_hnd);
+    ent->controls = locked_list_alloc_my_lock(entities_lock,
+					      entities_unlock,
+					      ents->domain);
     if (!ent->controls)
 	goto out_err;
 
@@ -997,7 +1035,7 @@ entity_add(ipmi_entity_info_t *ents,
 
     entity_set_name(ent);
 
-    if (! locked_list_add(ents->entities, ent, NULL))
+    if (! locked_list_add_nolock(ents->entities, ent, NULL))
 	goto out_err;
 
     _ipmi_domain_entity_unlock(ent->domain);
@@ -1094,8 +1132,8 @@ add_child(ipmi_entity_t       *ent,
 	  locked_list_entry_t *entry1,
 	  locked_list_entry_t *entry2)
 {
-    locked_list_add_entry(ent->child_entities, child, NULL, entry1);
-    locked_list_add_entry(child->parent_entities, ent, NULL, entry2);
+    locked_list_add_entry_nolock(ent->child_entities, child, NULL, entry1);
+    locked_list_add_entry_nolock(child->parent_entities, ent, NULL, entry2);
 
     ent->presence_possibly_changed = 1;
 }
@@ -1150,9 +1188,9 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
 
     _ipmi_domain_entity_lock(ent->domain);
 
-    if (! locked_list_remove(ent->child_entities, child, NULL))
+    if (! locked_list_remove_nolock(ent->child_entities, child, NULL))
 	rv = EINVAL;
-    locked_list_remove(child->parent_entities, ent, NULL);
+    locked_list_remove_nolock(child->parent_entities, ent, NULL);
 
     ent->presence_possibly_changed = 1;
 
@@ -1178,16 +1216,9 @@ iterate_child_handler(void *cb_data, void *item1, void *item2)
 {
     iterate_child_info_t *info = cb_data;
     ipmi_entity_t         *ent = item1;
-    int                   rv;
 
-    rv = _ipmi_entity_get(ent);
-    if (rv)
-	goto out;
-    _ipmi_domain_entity_unlock(ent->domain);
     info->handler(info->ent, item1, info->cb_data);
     _ipmi_entity_put(ent);
-    _ipmi_domain_entity_lock(ent->domain);
- out:
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -1198,9 +1229,8 @@ ipmi_entity_iterate_children(ipmi_entity_t                *ent,
 {
     iterate_child_info_t info = { ent, handler, cb_data };
 
-    _ipmi_domain_entity_lock(ent->domain);
-    locked_list_iterate(ent->child_entities, iterate_child_handler, &info);
-    _ipmi_domain_entity_unlock(ent->domain);
+    locked_list_iterate_prefunc(ent->child_entities, iterate_entity_prefunc,
+				iterate_child_handler, &info);
 }
 
 typedef struct iterate_parent_info_s
@@ -1215,16 +1245,9 @@ iterate_parent_handler(void *cb_data, void *item1, void *item2)
 {
     iterate_parent_info_t *info = cb_data;
     ipmi_entity_t         *ent = item1;
-    int                   rv;
 
-    rv = _ipmi_entity_get(ent);
-    if (rv)
-	goto out;
-    _ipmi_domain_entity_unlock(ent->domain);
     info->handler(info->ent, item1, info->cb_data);
     _ipmi_entity_put(ent);
-    _ipmi_domain_entity_lock(ent->domain);
- out:
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -1237,9 +1260,8 @@ ipmi_entity_iterate_parents(ipmi_entity_t                 *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    _ipmi_domain_entity_lock(ent->domain);
-    locked_list_iterate(ent->parent_entities, iterate_parent_handler, &info);
-    _ipmi_domain_entity_unlock(ent->domain);
+    locked_list_iterate_prefunc(ent->parent_entities, iterate_entity_prefunc,
+				iterate_parent_handler, &info);
 }
 
 /***********************************************************************
@@ -2290,10 +2312,11 @@ typedef struct iterate_sensor_info_s
     ipmi_entity_t                 *ent;
     ipmi_entity_iterate_sensor_cb handler;
     void                          *cb_data;
+    int                           got_failed;
 } iterate_sensor_info_t;
 
 static int
-iterate_sensor_handler(void *cb_data, void *item1, void *item2)
+iterate_sensor_prefunc(void *cb_data, void *item1, void *item2)
 {
     iterate_sensor_info_t *info = cb_data;
     ipmi_sensor_t         *sensor = item1;
@@ -2301,20 +2324,35 @@ iterate_sensor_handler(void *cb_data, void *item1, void *item2)
     ipmi_mc_t             *mc = ipmi_sensor_get_mc(sensor);
 
     if (!mc)
-	goto out;
+	goto out_err;
     rv = _ipmi_mc_get(mc);
     if (rv)
-	goto out;
+	goto out_err;
     rv = _ipmi_sensor_get(sensor);
     if (rv) {
 	_ipmi_mc_put(mc);
-	goto out;
+	goto out_err;
     }
-    _ipmi_domain_entity_unlock(info->ent->domain);
+    info->got_failed = 0;
+    return LOCKED_LIST_ITER_CONTINUE;
+
+ out_err:
+    info->got_failed = 1;
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+iterate_sensor_handler(void *cb_data, void *item1, void *item2)
+{
+    iterate_sensor_info_t *info = cb_data;
+    ipmi_sensor_t         *sensor = item1;
+    ipmi_mc_t             *mc = ipmi_sensor_get_mc(sensor);
+
+    if (info->got_failed)
+	goto out;
     info->handler(info->ent, item1, info->cb_data);
     _ipmi_sensor_put(sensor);
     _ipmi_mc_put(mc);
-    _ipmi_domain_entity_lock(info->ent->domain);
  out:
     return LOCKED_LIST_ITER_CONTINUE;
 }
@@ -2328,9 +2366,8 @@ ipmi_entity_iterate_sensors(ipmi_entity_t                 *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    _ipmi_domain_entity_lock(ent->domain);
-    locked_list_iterate(ent->sensors, iterate_sensor_handler, &info);
-    _ipmi_domain_entity_unlock(ent->domain);
+    locked_list_iterate_prefunc(ent->sensors, iterate_sensor_prefunc,
+				iterate_sensor_handler, &info);
 }
 
 
@@ -2339,10 +2376,11 @@ typedef struct iterate_control_info_s
     ipmi_entity_t                  *ent;
     ipmi_entity_iterate_control_cb handler;
     void                           *cb_data;
+    int                            got_failed;
 } iterate_control_info_t;
 
 static int
-iterate_control_handler(void *cb_data, void *item1, void *item2)
+iterate_control_prefunc(void *cb_data, void *item1, void *item2)
 {
     iterate_control_info_t *info = cb_data;
     ipmi_control_t         *control = item1;
@@ -2350,20 +2388,35 @@ iterate_control_handler(void *cb_data, void *item1, void *item2)
     ipmi_mc_t             *mc = ipmi_control_get_mc(control);
 
     if (!mc)
-	goto out;
+	goto out_err;
     rv = _ipmi_mc_get(mc);
     if (rv)
-	goto out;
+	goto out_err;
     rv = _ipmi_control_get(control);
     if (rv) {
 	_ipmi_mc_put(mc);
-	goto out;
+	goto out_err;
     }
-    _ipmi_domain_entity_unlock(info->ent->domain);
+    info->got_failed = 0;
+    return LOCKED_LIST_ITER_CONTINUE;
+
+ out_err:
+    info->got_failed = 1;
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+iterate_control_handler(void *cb_data, void *item1, void *item2)
+{
+    iterate_control_info_t *info = cb_data;
+    ipmi_control_t         *control = item1;
+    ipmi_mc_t             *mc = ipmi_control_get_mc(control);
+
+    if (info->got_failed)
+	goto out;
     info->handler(info->ent, item1, info->cb_data);
     _ipmi_control_put(control);
     _ipmi_mc_put(mc);
-    _ipmi_domain_entity_lock(info->ent->domain);
  out:
     return LOCKED_LIST_ITER_CONTINUE;
 }
@@ -2377,9 +2430,8 @@ ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
 
     CHECK_ENTITY_LOCK(ent);
 
-    _ipmi_domain_entity_lock(ent->domain);
-    locked_list_iterate(ent->controls, iterate_control_handler, &info);
-    _ipmi_domain_entity_unlock(ent->domain);
+    locked_list_iterate_prefunc(ent->controls, iterate_control_prefunc,
+				iterate_control_handler, &info);
 }
 
 /***********************************************************************
@@ -4232,11 +4284,8 @@ iterate_entity_handler(void *cb_data, void *item1, void *item2)
     iterate_entity_info_t *info = cb_data;
     ipmi_entity_t         *ent = item1;
 
-    _ipmi_entity_get(ent);
-    _ipmi_domain_entity_unlock(ent->domain);
     info->handler(ent, info->cb_data);
     _ipmi_entity_put(ent);
-    _ipmi_domain_entity_lock(ent->domain);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -4246,9 +4295,8 @@ ipmi_entities_iterate_entities(ipmi_entity_info_t              *ents,
 			       void                            *cb_data)
 {
     iterate_entity_info_t info = { ents, handler, cb_data };
-    _ipmi_domain_entity_lock(ents->domain);
-    locked_list_iterate(ents->entities, iterate_entity_handler, &info);
-    _ipmi_domain_entity_unlock(ents->domain);
+    locked_list_iterate_prefunc(ents->entities, iterate_entity_prefunc,
+				iterate_entity_handler, &info);
 }
 
 ipmi_entity_id_t
