@@ -18,6 +18,9 @@
 	* lib/sensor.c: Alloc a handler_list for each sensor for type 2
 	sensors records.
 
+	* lib/entity.c: Added a slot sensor as one that has a bit presence
+	detector.
+
 2004-03-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Always rescan FRU info on an entity presence change
