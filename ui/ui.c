@@ -2852,21 +2852,30 @@ void mc_handler(ipmi_mc_t *mc, void *cb_data)
 }
 
 int
+get_mc_id(char **toks, ipmi_mcid_t *mc_id)
+{
+    unsigned char val;
+
+    if (get_uchar(toks, &val, "mc channel"))
+	return 1;
+    mc_id->channel = val;
+
+    if (get_uchar(toks, &val, "MC num"))
+	return 1;
+    mc_id->mc_num = val;
+
+    mc_id->domain_id = domain_id;
+    return 0;
+}
+
+int
 mc_cmd(char *cmd, char **toks, void *cb_data)
 {
     mccmd_info_t  info;
     int           rv;
-    unsigned char val;
 
-    if (get_uchar(toks, &val, "mc channel"))
+    if (get_mc_id(toks, &info.mc_id))
 	return 0;
-    info.mc_id.channel = val;
-
-    if (get_uchar(toks, &val, "MC num"))
-	return 0;
-    info.mc_id.mc_num = val;
-
-    info.mc_id.domain_id = domain_id;
 
     info.found = 0;
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, mc_handler, &info);
@@ -2964,16 +2973,10 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     unsigned char data[MCCMD_DATA_SIZE];
     unsigned int  data_len;
     int           rv;
-    unsigned char val;
 
-    if (get_uchar(toks, &val, "mc channel"))
+    
+    if (get_mc_id(toks, &info.mc_id))
 	return 0;
-    info.mc_id.channel = val;
-
-    if (get_uchar(toks, &val, "MC num"))
-	return 0;
-    info.mc_id.mc_num = val;
-    info.mc_id.domain_id = domain_id;
 
     if (get_uchar(toks, &info.lun, "LUN"))
 	return 0;
@@ -3260,17 +3263,9 @@ readpef_cmd(char *cmd, char **toks, void *cb_data)
 {
     mccmd_info_t  info;
     int           rv;
-    unsigned char val;
 
-    if (get_uchar(toks, &val, "mc channel"))
+    if (get_mc_id(toks, &info.mc_id))
 	return 0;
-    info.mc_id.channel = val;
-
-    if (get_uchar(toks, &val, "MC num"))
-	return 0;
-    info.mc_id.mc_num = val;
-
-    info.mc_id.domain_id = domain_id;
 
     info.found = 0;
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, readpef_mc_handler, &info);
@@ -3332,17 +3327,9 @@ writepef_cmd(char *cmd, char **toks, void *cb_data)
 {
     mccmd_info_t  info;
     int           rv;
-    unsigned char val;
 
-    if (get_uchar(toks, &val, "mc channel"))
+    if (get_mc_id(toks, &info.mc_id))
 	return 0;
-    info.mc_id.channel = val;
-
-    if (get_uchar(toks, &val, "MC num"))
-	return 0;
-    info.mc_id.mc_num = val;
-
-    info.mc_id.domain_id = domain_id;
 
     info.found = 0;
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, writepef_mc_handler, &info);
@@ -3586,19 +3573,12 @@ readlanparm_cmd(char *cmd, char **toks, void *cb_data)
     int            rv;
     unsigned char  val;
 
-    if (get_uchar(toks, &val, "mc channel"))
+    if (get_mc_id(toks, &info.mc_id))
 	return 0;
-    info.mc_id.channel = val;
-
-    if (get_uchar(toks, &val, "MC num"))
-	return 0;
-    info.mc_id.mc_num = val;
 
     if (get_uchar(toks, &val, "lanparm channel"))
 	return 0;
     info.channel = val;
-
-    info.mc_id.domain_id = domain_id;
 
     info.found = 0;
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, readlanparm_mc_handler, &info);
@@ -3655,17 +3635,9 @@ writelanparm_cmd(char *cmd, char **toks, void *cb_data)
 {
     mccmd_info_t  info;
     int           rv;
-    unsigned char val;
 
-    if (get_uchar(toks, &val, "mc channel"))
+    if (get_mc_id(toks, &info.mc_id))
 	return 0;
-    info.mc_id.channel = val;
-
-    if (get_uchar(toks, &val, "MC num"))
-	return 0;
-    info.mc_id.mc_num = val;
-
-    info.mc_id.domain_id = domain_id;
 
     info.found = 0;
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, writelanparm_mc_handler, &info);
@@ -3933,15 +3905,9 @@ delevent_cmd(char *cmd, char **toks, void *cb_data)
 {
     delevent_info_t info;
     int             rv;
-    unsigned int    val;
 
-    if (get_uint(toks, &val, "mc channel"))
+    if (get_mc_id(toks, &info.mc_id))
 	return 0;
-    info.mc_id.channel = val;
-
-    if (get_uint(toks, &val, "mc number"))
-	return 0;
-    info.mc_id.mc_num = val;
 
     if (get_uint(toks, &info.record_id, "record id"))
 	return 0;
@@ -4126,17 +4092,9 @@ get_sel_time_cmd(char *cmd, char **toks, void *cb_data)
 {
     mccmd_info_t  info;
     int           rv;
-    unsigned char val;
 
-    if (get_uchar(toks, &val, "mc channel"))
+    if (get_mc_id(toks, &info.mc_id))
 	return 0;
-    info.mc_id.channel = val;
-
-    if (get_uchar(toks, &val, "MC num"))
-	return 0;
-    info.mc_id.mc_num = val;
-
-    info.mc_id.domain_id = domain_id;
 
     info.found = 0;
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, get_sel_time_handler, &info);
@@ -4252,7 +4210,6 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
 {
     int           rv;
     sdrs_info_t   *info;
-    unsigned char val;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
@@ -4260,19 +4217,10 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
 	return 0;
     }
 
-    if (get_uchar(toks, &val, "MC channel")) {
+    if (get_mc_id(toks, &info->mc_id)) {
 	ipmi_mem_free(info);
 	return 0;
     }
-    info->mc_id.channel = val;
-
-    if (get_uchar(toks, &val, "MC num")) {
-	ipmi_mem_free(info);
-	return 0;
-    }
-    info->mc_id.mc_num = val;
-
-    info->mc_id.domain_id = domain_id;
 
     if (get_uchar(toks, &info->do_sensors, "do_sensors")) {
 	ipmi_mem_free(info);

@@ -1451,9 +1451,11 @@ data_handler(int            fd,
     } else if ((addr3->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
 	       && (tmsg[3] == lan->slave_addr))
     {
-        /* IPMIv1_5_rev1_1_0926 markup, section 6.12.4, didn't clear
-	   things up at all.  Some manufacturers have interpreted it
-	   this way, but IMHO it is incorrect. */
+        /* In some cases, a message from the IPMB looks like it came
+	   from the BMC itself, IMHO a misinterpretation of the
+	   errata.  IPMIv1_5_rev1_1_0926 markup, section 6.12.4,
+	   didn't clear things up at all.  Some manufacturers have
+	   interpreted it this way, but IMHO it is incorrect. */
         memcpy(&addr, &lan->seq_table[seq].addr, lan->seq_table[seq].addr_len);
         addr_len = lan->seq_table[seq].addr_len;
         msg.netfn = tmsg[1] >> 2;
@@ -1477,8 +1479,7 @@ data_handler(int            fd,
 	    ipmi_ipmb_addr_t *ipmb2
 		= (ipmi_ipmb_addr_t *) &lan->seq_table[seq].addr;
 
-	    /* It's directly from the BMC, so it's a system interface
-	       message. */
+	    /* A message from the IPMB. */
 	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
 	    /* This is a hack, but the channel does not come back in the
 	       message.  So we use the channel from the original

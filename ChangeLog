@@ -3,6 +3,15 @@
 	* ui/ui.c, ui/basic_ui.c: Added a way to free things allocated in
 	the main routine.
 
+	* lib/ipmi.c, include/OpenIPMI/ipmi_int.h: Added an IPMI rwlock.
+
+	* lib/pet.c: Converted the main pet lock to a rwlock.
+
+	* ui/ui.c: Consolidate MC reading.
+
+	* lib/domain.c: Fixed the system interface address handling to be
+	correct for the individual interfaces.
+
 2004-01-05 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_int.h, lib/ipmi.c: Added a way for

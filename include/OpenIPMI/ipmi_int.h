@@ -76,6 +76,17 @@ void ipmi_lock(ipmi_lock_t *lock);
 /* Release the lock. */
 void ipmi_unlock(ipmi_lock_t *lock);
 
+/* Like the above locks, but read/write locks. */
+typedef struct ipmi_rwlock_s ipmi_rwlock_t;
+int ipmi_create_rwlock_os_hnd(os_handler_t *os_hnd, ipmi_rwlock_t **new_lock);
+int ipmi_create_global_rwlock(ipmi_rwlock_t **new_lock);
+int ipmi_create_rwlock(ipmi_domain_t *domain, ipmi_rwlock_t **new_lock);
+void ipmi_destroy_rwlock(ipmi_rwlock_t *lock);
+void ipmi_rwlock_read_lock(ipmi_rwlock_t *lock);
+void ipmi_rwlock_read_unlock(ipmi_rwlock_t *lock);
+void ipmi_rwlock_write_lock(ipmi_rwlock_t *lock);
+void ipmi_rwlock_write_unlock(ipmi_rwlock_t *lock);
+
 /* Get a globally unique sequence number. */
 long ipmi_get_seq(void);
 

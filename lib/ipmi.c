@@ -77,18 +77,18 @@ void ipmi_write_unlock(void)
 	ipmi_os_handler->write_unlock(ipmi_os_handler, global_lock);
 }
 
-struct ipmi_lock_s
-{
-    os_hnd_lock_t *ll_lock;
-    os_handler_t  *os_hnd;
-};
-
 os_handler_t *
 ipmi_get_global_os_handler(void)
 {
     return ipmi_os_handler;
 }
     
+struct ipmi_lock_s
+{
+    os_hnd_lock_t *ll_lock;
+    os_handler_t  *os_hnd;
+};
+
 int
 ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)
 {
@@ -164,6 +164,101 @@ void ipmi_unlock(ipmi_lock_t *lock)
 {
     if (lock->ll_lock)
 	lock->os_hnd->unlock(lock->os_hnd, lock->ll_lock);
+}
+
+struct ipmi_rwlock_s
+{
+    os_hnd_rwlock_t *ll_lock;
+    os_handler_t  *os_hnd;
+};
+
+int
+ipmi_create_rwlock_os_hnd(os_handler_t *os_hnd, ipmi_rwlock_t **new_lock)
+{
+    ipmi_rwlock_t *lock;
+    int         rv;
+
+    lock = ipmi_mem_alloc(sizeof(*lock));
+    if (!lock)
+	return ENOMEM;
+
+    lock->os_hnd = os_hnd;
+    if (lock->os_hnd && lock->os_hnd->create_lock) {
+	rv = lock->os_hnd->create_rwlock(lock->os_hnd, &(lock->ll_lock));
+	if (rv) {
+	    ipmi_mem_free(lock);
+	    return rv;
+	}
+    } else {
+	lock->ll_lock = NULL;
+    }
+
+    *new_lock = lock;
+
+    return 0;
+}
+
+int
+ipmi_create_global_rwlock(ipmi_rwlock_t **new_lock)
+{
+    ipmi_rwlock_t *lock;
+    int           rv;
+
+    lock = ipmi_mem_alloc(sizeof(*lock));
+    if (!lock)
+	return ENOMEM;
+
+    lock->os_hnd = ipmi_os_handler;
+    if (lock->os_hnd && lock->os_hnd->create_lock) {
+	rv = lock->os_hnd->create_rwlock(lock->os_hnd, &(lock->ll_lock));
+	if (rv) {
+	    ipmi_mem_free(lock);
+	    return rv;
+	}
+    } else {
+	lock->ll_lock = NULL;
+    }
+
+    *new_lock = lock;
+
+    return 0;
+}
+
+int
+ipmi_create_rwlock(ipmi_domain_t *domain, ipmi_rwlock_t **new_lock)
+{
+    return ipmi_create_rwlock_os_hnd(ipmi_domain_get_os_hnd(domain), new_lock);
+}
+
+void ipmi_destroy_rwlock(ipmi_rwlock_t *lock)
+{
+    if (lock->ll_lock)
+	lock->os_hnd->destroy_rwlock(lock->os_hnd, lock->ll_lock);
+    ipmi_mem_free(lock);
+}
+
+void ipmi_rwlock_read_lock(ipmi_rwlock_t *lock)
+{
+    if (lock->ll_lock)
+	lock->os_hnd->read_lock(lock->os_hnd, lock->ll_lock);
+}
+
+void ipmi_rwlock_read_unlock(ipmi_rwlock_t *lock)
+{
+    if (lock->ll_lock)
+	lock->os_hnd->read_unlock(lock->os_hnd, lock->ll_lock);
+}
+
+void ipmi_rwlock_write_lock(ipmi_rwlock_t *lock)
+{
+    if (lock->ll_lock)
+	lock->os_hnd->write_lock(lock->os_hnd, lock->ll_lock);
+}
+
+void ipmi_rwlock_write_unlock(ipmi_rwlock_t *lock)
+{
+    if (lock->ll_lock)
+	lock->os_hnd->write_unlock(lock->os_hnd, lock->ll_lock);
 }
 
 void
