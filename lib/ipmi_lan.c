@@ -1490,6 +1490,8 @@ data_handler(int            fd,
 	   interpreted it this way, but IMHO it is incorrect. */
         memcpy(&addr, &lan->seq_table[seq].addr, lan->seq_table[seq].addr_len);
         addr_len = lan->seq_table[seq].addr_len;
+	if (addr.addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
         msg.netfn = tmsg[1] >> 2;
         msg.cmd = tmsg[5];
         msg.data = tmsg+6;
