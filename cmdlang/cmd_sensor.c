@@ -435,9 +435,9 @@ sensor_get(ipmi_sensor_t *sensor, void *cb_data)
     if (ipmi_sensor_get_event_reading_type(sensor)
 	== IPMI_EVENT_READING_TYPE_THRESHOLD)
     {
-	rv = ipmi_reading_get(sensor, read_sensor, cmd_info);
+	rv = ipmi_sensor_get_reading(sensor, read_sensor, cmd_info);
     } else {
-	rv = ipmi_states_get(sensor, read_sensor_states, cmd_info);
+	rv = ipmi_sensor_get_states(sensor, read_sensor_states, cmd_info);
     }
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
@@ -615,7 +615,8 @@ sensor_get_thresholds(ipmi_sensor_t *sensor, void *cb_data)
     int                rv;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_thresholds_get(sensor, sensor_get_thresholds_done, cmd_info);
+    rv = ipmi_sensor_get_thresholds(sensor, sensor_get_thresholds_done,
+				    cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->err = rv;
@@ -696,7 +697,8 @@ sensor_set_thresholds(ipmi_sensor_t *sensor, void *cb_data)
     }
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_thresholds_set(sensor, th, sensor_set_thresholds_done, cmd_info);
+    rv = ipmi_sensor_set_thresholds(sensor, th, sensor_set_thresholds_done,
+				    cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->err = rv;
@@ -965,7 +967,7 @@ sensor_get_event_enables(ipmi_sensor_t *sensor, void *cb_data)
     int                rv;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_sensor_events_enable_get(sensor, sensor_get_event_enables_done,
+    rv = ipmi_sensor_get_event_enables(sensor, sensor_get_event_enables_done,
 				       cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);

@@ -408,7 +408,7 @@ got_events(ipmi_sensor_t      *sensor,
 	}
     }
 
-    rv = ipmi_sensor_events_enable_set(sensor, sdata->es,
+    rv = ipmi_sensor_set_event_enables(sensor, sdata->es,
 				       event_set_done, sdata);
     if (rv) {
 	printf("Error 0x%x enabling events for sensor %s\n", err, sdata->name);
@@ -483,7 +483,7 @@ got_thresholds(ipmi_sensor_t     *sensor,
 	goto out_err;
     }
 
-    rv = ipmi_thresholds_set(sensor, sdata->th, thresholds_set, sdata);
+    rv = ipmi_sensor_set_thresholds(sensor, sdata->th, thresholds_set, sdata);
     if (rv) {
 	printf("Error 0x%x setting thresholds for sensor %s\n",
 	       rv, sdata->name);
@@ -521,7 +521,7 @@ sensor_change(enum ipmi_update_e op,
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	{
 	    use_sdata(sdata);
-	    rv = ipmi_reading_get(sensor, got_thresh_reading, sdata);
+	    rv = ipmi_sensor_get_reading(sensor, got_thresh_reading, sdata);
 	    if (rv) {
 		printf("ipmi_reading_get returned error 0x%x for sensor %s\n",
 		       rv, sdata->name);
@@ -529,7 +529,7 @@ sensor_change(enum ipmi_update_e op,
 	    }
 	} else {
 	    use_sdata(sdata);
-	    rv = ipmi_states_get(sensor, got_discrete_states, sdata);
+	    rv = ipmi_sensor_get_states(sensor, got_discrete_states, sdata);
 	    if (rv) {
 		printf("ipmi_states_get returned error 0x%x for sensor %s\n",
 		       rv, sdata->name);
@@ -549,7 +549,7 @@ sensor_change(enum ipmi_update_e op,
 	}
 
 	use_sdata(sdata);
-	rv = ipmi_sensor_events_enable_get(sensor, got_events, sdata);
+	rv = ipmi_sensor_get_event_enables(sensor, got_events, sdata);
 	if (rv) {
 	    printf("ipmi_sensor_events_enable_get returned error 0x%x"
 		   " for sensor %s\n",
@@ -579,7 +579,7 @@ sensor_change(enum ipmi_update_e op,
 	}
 
 	use_sdata(sdata);
-	rv = ipmi_thresholds_get(sensor, got_thresholds, sdata);
+	rv = ipmi_sensor_get_thresholds(sensor, got_thresholds, sdata);
 	if (rv) {
 	    printf("ipmi_thresholds_get returned error 0x%x"
 		   " for sensor %s\n",

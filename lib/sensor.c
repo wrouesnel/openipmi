@@ -3594,7 +3594,7 @@ check_events_capability(ipmi_sensor_t      *sensor,
 }
 
 static int
-stand_ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
+stand_ipmi_sensor_set_event_enables(ipmi_sensor_t         *sensor,
 				    ipmi_event_state_t    *states,
 				    ipmi_sensor_done_cb   done,
 				    void                  *cb_data)
@@ -3622,7 +3622,7 @@ stand_ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 }
 
 static int
-stand_ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+stand_ipmi_sensor_enable_events(ipmi_sensor_t         *sensor,
 				ipmi_event_state_t    *states,
 				ipmi_sensor_done_cb   done,
 				void                  *cb_data)
@@ -3650,7 +3650,7 @@ stand_ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
 }
 
 static int
-stand_ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+stand_ipmi_sensor_disable_events(ipmi_sensor_t         *sensor,
 				 ipmi_event_state_t    *states,
 				 ipmi_sensor_done_cb   done,
 				 void                  *cb_data)
@@ -3679,10 +3679,10 @@ stand_ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
 
 typedef struct event_enable_get_info_s
 {
-    ipmi_sensor_op_info_t     sdata;
-    ipmi_event_state_t        state;
-    ipmi_event_enables_get_cb done;
-    void                      *cb_data;
+    ipmi_sensor_op_info_t        sdata;
+    ipmi_event_state_t           state;
+    ipmi_sensor_event_enables_cb done;
+    void                         *cb_data;
 } event_enable_get_info_t;
 
 static void enables_get_done_handler(ipmi_sensor_t *sensor,
@@ -3749,9 +3749,9 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-stand_ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
-				    ipmi_event_enables_get_cb done,
-				    void                      *cb_data)
+stand_ipmi_sensor_get_event_enables(ipmi_sensor_t                *sensor,
+				    ipmi_sensor_event_enables_cb done,
+				    void                         *cb_data)
 {
     event_enable_get_info_t *info;
     int                     rv;
@@ -3875,11 +3875,11 @@ stand_ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
 
 typedef struct hyst_get_info_s
 {
-    ipmi_sensor_op_info_t  sdata;
-    ipmi_hysteresis_get_cb done;
-    void                   *cb_data;
-    unsigned int           positive;
-    unsigned int           negative;
+    ipmi_sensor_op_info_t     sdata;
+    ipmi_sensor_hysteresis_cb done;
+    void                      *cb_data;
+    unsigned int              positive;
+    unsigned int              negative;
 } hyst_get_info_t;
 
 static void hyst_get_done_handler(ipmi_sensor_t *sensor,
@@ -3942,9 +3942,9 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-stand_ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
-				 ipmi_hysteresis_get_cb done,
-				 void                   *cb_data)
+stand_ipmi_sensor_get_hysteresis(ipmi_sensor_t             *sensor,
+				 ipmi_sensor_hysteresis_cb done,
+				 void                      *cb_data)
 {
     hyst_get_info_t *info;
     int             rv;
@@ -4068,11 +4068,10 @@ stand_ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 
 typedef struct thresh_get_info_s
 {
-    ipmi_sensor_op_info_t sdata;
-    ipmi_thresholds_t     th;
-    ipmi_thresh_get_cb    done;
-    void                  *cb_data;
-    
+    ipmi_sensor_op_info_t     sdata;
+    ipmi_thresholds_t         th;
+    ipmi_sensor_thresholds_cb done;
+    void                      *cb_data;
 } thresh_get_info_t;
 
 static void thresh_get_done_handler(ipmi_sensor_t *sensor,
@@ -4190,9 +4189,9 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-stand_ipmi_thresholds_get(ipmi_sensor_t      *sensor,
-			  ipmi_thresh_get_cb done,
-			  void               *cb_data)
+stand_ipmi_sensor_get_thresholds(ipmi_sensor_t             *sensor,
+				 ipmi_sensor_thresholds_cb done,
+				 void                      *cb_data)
 {
     thresh_get_info_t *info;
     int               rv;
@@ -4302,10 +4301,10 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-stand_ipmi_thresholds_set(ipmi_sensor_t       *sensor,
-			  ipmi_thresholds_t   *thresholds,
-			  ipmi_sensor_done_cb done,
-			  void                *cb_data)
+stand_ipmi_sensor_set_thresholds(ipmi_sensor_t       *sensor,
+				 ipmi_thresholds_t   *thresholds,
+				 ipmi_sensor_done_cb done,
+				 void                *cb_data)
 {
     thresh_set_info_t *info;
     int               rv;
@@ -4331,13 +4330,13 @@ stand_ipmi_thresholds_set(ipmi_sensor_t       *sensor,
 
 typedef struct reading_get_info_s
 {
-    ipmi_sensor_op_info_t     sdata;
-    ipmi_reading_done_cb      done;
-    void                      *cb_data;
-    ipmi_states_t             states;
-    enum ipmi_value_present_e value_present;
-    double                    raw_val;
-    double                    cooked_val;
+    ipmi_sensor_op_info_t      sdata;
+    ipmi_sensor_reading_cb     done;
+    void                       *cb_data;
+    ipmi_states_t              states;
+    enum ipmi_value_present_e  value_present;
+    double                     raw_val;
+    double                     cooked_val;
 } reading_get_info_t;
 
 static void reading_get_done_handler(ipmi_sensor_t *sensor,
@@ -4420,9 +4419,9 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-stand_ipmi_reading_get(ipmi_sensor_t        *sensor,
-		       ipmi_reading_done_cb done,
-		       void                 *cb_data)
+stand_ipmi_sensor_get_reading(ipmi_sensor_t          *sensor,
+			      ipmi_sensor_reading_cb done,
+			      void                   *cb_data)
 {
     reading_get_info_t *info;
     int                rv;
@@ -4450,7 +4449,7 @@ stand_ipmi_reading_get(ipmi_sensor_t        *sensor,
 typedef struct states_get_info_s
 {
     ipmi_sensor_op_info_t sdata;
-    ipmi_states_read_cb   done;
+    ipmi_sensor_states_cb done;
     void                  *cb_data;
     ipmi_states_t         states;
 } states_get_info_t;
@@ -4518,9 +4517,9 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-stand_ipmi_states_get(ipmi_sensor_t       *sensor,
-		      ipmi_states_read_cb done,
-		      void                *cb_data)
+stand_ipmi_sensor_get_states(ipmi_sensor_t         *sensor,
+			     ipmi_sensor_states_cb done,
+			     void                  *cb_data)
 {
     states_get_info_t *info;
     int               rv;
@@ -4830,10 +4829,10 @@ stand_ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset)
 
 const ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
 {
-    .ipmi_sensor_events_enable_set = stand_ipmi_sensor_events_enable_set,
-    .ipmi_sensor_events_enable_get = stand_ipmi_sensor_events_enable_get,
-    .ipmi_sensor_events_enable     = stand_ipmi_sensor_events_enable,
-    .ipmi_sensor_events_disable    = stand_ipmi_sensor_events_disable,
+    .ipmi_sensor_set_event_enables = stand_ipmi_sensor_set_event_enables,
+    .ipmi_sensor_get_event_enables = stand_ipmi_sensor_get_event_enables,
+    .ipmi_sensor_enable_events     = stand_ipmi_sensor_enable_events,
+    .ipmi_sensor_disable_events    = stand_ipmi_sensor_disable_events,
     .ipmi_sensor_rearm             = stand_ipmi_sensor_rearm,
 
     .ipmi_sensor_convert_from_raw  = stand_ipmi_sensor_convert_from_raw,
@@ -4842,11 +4841,11 @@ const ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
     .ipmi_sensor_get_tolerance     = stand_ipmi_sensor_get_tolerance,
     .ipmi_sensor_get_hysteresis    = stand_ipmi_sensor_get_hysteresis,
     .ipmi_sensor_set_hysteresis    = stand_ipmi_sensor_set_hysteresis,
-    .ipmi_thresholds_set           = stand_ipmi_thresholds_set,
-    .ipmi_thresholds_get           = stand_ipmi_thresholds_get,
-    .ipmi_reading_get              = stand_ipmi_reading_get,
+    .ipmi_sensor_set_thresholds    = stand_ipmi_sensor_set_thresholds,
+    .ipmi_sensor_get_thresholds    = stand_ipmi_sensor_get_thresholds,
+    .ipmi_sensor_get_reading       = stand_ipmi_sensor_get_reading,
 
-    .ipmi_states_get               = stand_ipmi_states_get,
+    .ipmi_sensor_get_states        = stand_ipmi_sensor_get_states,
     .ipmi_sensor_reading_name_string = stand_ipmi_sensor_reading_name_string,
 };
 
@@ -4869,7 +4868,7 @@ ipmi_sensor_set_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs)
  **********************************************************************/
 
 int
-ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
+ipmi_sensor_set_event_enables(ipmi_sensor_t         *sensor,
 			      ipmi_event_state_t    *states,
 			      ipmi_sensor_done_cb   done,
 			      void                  *cb_data)
@@ -4879,16 +4878,16 @@ ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
       
     CHECK_SENSOR_LOCK(sensor);
 
-    if (!sensor->cbs.ipmi_sensor_events_enable_set)
+    if (!sensor->cbs.ipmi_sensor_set_event_enables)
 	return ENOSYS;
-    return sensor->cbs.ipmi_sensor_events_enable_set(sensor,
+    return sensor->cbs.ipmi_sensor_set_event_enables(sensor,
 						     states,
 						     done,
 						     cb_data);
 }
 
 int
-ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+ipmi_sensor_enable_events(ipmi_sensor_t         *sensor,
 			  ipmi_event_state_t    *states,
 			  ipmi_sensor_done_cb   done,
 			  void                  *cb_data)
@@ -4898,16 +4897,16 @@ ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
       
     CHECK_SENSOR_LOCK(sensor);
 
-    if (!sensor->cbs.ipmi_sensor_events_enable)
+    if (!sensor->cbs.ipmi_sensor_enable_events)
 	return ENOSYS;
-    return sensor->cbs.ipmi_sensor_events_enable(sensor,
+    return sensor->cbs.ipmi_sensor_enable_events(sensor,
 						 states,
 						 done,
 						 cb_data);
 }
 
 int
-ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+ipmi_sensor_disable_events(ipmi_sensor_t         *sensor,
 			   ipmi_event_state_t    *states,
 			   ipmi_sensor_done_cb   done,
 			   void                  *cb_data)
@@ -4917,9 +4916,9 @@ ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
       
     CHECK_SENSOR_LOCK(sensor);
 
-    if (!sensor->cbs.ipmi_sensor_events_disable)
+    if (!sensor->cbs.ipmi_sensor_disable_events)
 	return ENOSYS;
-    return sensor->cbs.ipmi_sensor_events_disable(sensor,
+    return sensor->cbs.ipmi_sensor_disable_events(sensor,
 						  states,
 						  done,
 						  cb_data);
@@ -4947,26 +4946,26 @@ ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
 }
 
 int
-ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
-			      ipmi_event_enables_get_cb done,
-			      void                      *cb_data)
+ipmi_sensor_get_event_enables(ipmi_sensor_t                *sensor,
+			      ipmi_sensor_event_enables_cb done,
+			      void                         *cb_data)
 {
     if (sensor->destroyed)
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
 
-    if (!sensor->cbs.ipmi_sensor_events_enable_get)
+    if (!sensor->cbs.ipmi_sensor_get_event_enables)
 	return ENOSYS;
-    return sensor->cbs.ipmi_sensor_events_enable_get(sensor,
+    return sensor->cbs.ipmi_sensor_get_event_enables(sensor,
 						     done,
 						     cb_data);
 }
 
 int
-ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
-			   ipmi_hysteresis_get_cb done,
-			   void                   *cb_data)
+ipmi_sensor_get_hysteresis(ipmi_sensor_t             *sensor,
+			   ipmi_sensor_hysteresis_cb done,
+			   void                      *cb_data)
 {
     if (sensor->destroyed)
 	return ECANCELED;
@@ -5002,64 +5001,65 @@ ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 }
 
 int
-ipmi_thresholds_get(ipmi_sensor_t      *sensor,
-		    ipmi_thresh_get_cb done,
-		    void               *cb_data)
+ipmi_sensor_get_thresholds(ipmi_sensor_t             *sensor,
+			   ipmi_sensor_thresholds_cb done,
+			   void                      *cb_data)
 {
     if (sensor->destroyed)
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
 
-    if (!sensor->cbs.ipmi_thresholds_get)
+    if (!sensor->cbs.ipmi_sensor_get_thresholds)
 	return ENOSYS;
-    return sensor->cbs.ipmi_thresholds_get(sensor, done, cb_data);
+    return sensor->cbs.ipmi_sensor_get_thresholds(sensor, done, cb_data);
 }
 
 int
-ipmi_thresholds_set(ipmi_sensor_t       *sensor,
-		    ipmi_thresholds_t   *thresholds,
-		    ipmi_sensor_done_cb done,
-		    void                *cb_data)
+ipmi_sensor_set_thresholds(ipmi_sensor_t       *sensor,
+			   ipmi_thresholds_t   *thresholds,
+			   ipmi_sensor_done_cb done,
+			   void                *cb_data)
 {
     if (sensor->destroyed)
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
 
-    if (!sensor->cbs.ipmi_thresholds_set)
+    if (!sensor->cbs.ipmi_sensor_set_thresholds)
 	return ENOSYS;
-    return sensor->cbs.ipmi_thresholds_set(sensor, thresholds, done, cb_data);
+    return sensor->cbs.ipmi_sensor_set_thresholds(sensor, thresholds,
+						  done, cb_data);
 }
 
 int
-ipmi_reading_get(ipmi_sensor_t        *sensor,
-		 ipmi_reading_done_cb done,
-		 void                 *cb_data)
+ipmi_sensor_get_reading(ipmi_sensor_t          *sensor,
+			ipmi_sensor_reading_cb done,
+			void                   *cb_data)
 {
     if (sensor->destroyed)
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
 
-    if (!sensor->cbs.ipmi_reading_get)
+    if (!sensor->cbs.ipmi_sensor_get_reading)
 	return ENOSYS;
-    return sensor->cbs.ipmi_reading_get(sensor, done, cb_data);
+    return sensor->cbs.ipmi_sensor_get_reading(sensor, done, cb_data);
 }
 
 int
-ipmi_states_get(ipmi_sensor_t       *sensor,
-		ipmi_states_read_cb done,
-		void                *cb_data)
+ipmi_sensor_get_states(ipmi_sensor_t         *sensor,
+		       ipmi_sensor_states_cb done,
+		       void                  *cb_data)
 {
     if (sensor->destroyed)
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
 
-    if (!sensor->cbs.ipmi_states_get)
+    if (!sensor->cbs.ipmi_sensor_get_states)
 	return ENOSYS;
-    return sensor->cbs.ipmi_states_get(sensor, done, cb_data);
+    return sensor->cbs.ipmi_sensor_get_states(sensor, done, cb_data);
 }
 
 char *
@@ -5137,16 +5137,16 @@ typedef struct sensor_id_events_enable_set_s
 } sensor_id_events_enable_set_t;
 
 static void
-sensor_id_events_enable_set_cb(ipmi_sensor_t *sensor, void *cb_data)
+sensor_id_set_event_enables_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     sensor_id_events_enable_set_t *info = cb_data;
 
-    info->rv = ipmi_sensor_events_enable_set(sensor, info->states,
+    info->rv = ipmi_sensor_set_event_enables(sensor, info->states,
 					     info->done, info->cb_data);
 }
 
 int
-ipmi_sensor_id_events_enable_set(ipmi_sensor_id_t      sensor_id,
+ipmi_sensor_id_set_event_enables(ipmi_sensor_id_t      sensor_id,
 				 ipmi_event_state_t    *states,
 				 ipmi_sensor_done_cb   done,
 				 void                  *cb_data)
@@ -5157,7 +5157,7 @@ ipmi_sensor_id_events_enable_set(ipmi_sensor_id_t      sensor_id,
     info.states = states;
     info.done = done;
     info.cb_data = cb_data;
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_events_enable_set_cb,
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_set_event_enables_cb,
 				&info);
     if (!rv)
 	rv = info.rv;
@@ -5173,18 +5173,18 @@ typedef struct sensor_id_events_enable_s
 } sensor_id_events_enable_t;
 
 static void
-sensor_id_events_enable_cb(ipmi_sensor_t *sensor, void *cb_data)
+sensor_id_enable_events_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     sensor_id_events_enable_t *info = cb_data;
 
-    info->rv = ipmi_sensor_events_enable(sensor,
+    info->rv = ipmi_sensor_enable_events(sensor,
 					 info->states,
 					 info->done,
 					 info->cb_data);
 }
 
 int
-ipmi_sensor_id_events_enable(ipmi_sensor_id_t      sensor_id,
+ipmi_sensor_id_enable_events(ipmi_sensor_id_t      sensor_id,
 			     ipmi_event_state_t    *states,
 			     ipmi_sensor_done_cb   done,
 			     void                  *cb_data)
@@ -5195,7 +5195,7 @@ ipmi_sensor_id_events_enable(ipmi_sensor_id_t      sensor_id,
     info.states = states;
     info.done = done;
     info.cb_data = cb_data;
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_events_enable_cb, &info);
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_enable_events_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;
@@ -5210,18 +5210,18 @@ typedef struct sensor_id_events_disable_s
 } sensor_id_events_disable_t;
 
 static void
-sensor_id_events_disable_cb(ipmi_sensor_t *sensor, void *cb_data)
+sensor_id_disable_events_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     sensor_id_events_disable_t *info = cb_data;
 
-    info->rv = ipmi_sensor_events_disable(sensor,
+    info->rv = ipmi_sensor_disable_events(sensor,
 					  info->states,
 					  info->done,
 					  info->cb_data);
 }
 
 int
-ipmi_sensor_id_events_disable(ipmi_sensor_id_t      sensor_id,
+ipmi_sensor_id_disable_events(ipmi_sensor_id_t      sensor_id,
 			      ipmi_event_state_t    *states,
 			      ipmi_sensor_done_cb   done,
 			      void                  *cb_data)
@@ -5232,7 +5232,7 @@ ipmi_sensor_id_events_disable(ipmi_sensor_id_t      sensor_id,
     info.states = states;
     info.done = done;
     info.cb_data = cb_data;
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_events_disable_cb, &info);
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_disable_events_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;
@@ -5240,32 +5240,32 @@ ipmi_sensor_id_events_disable(ipmi_sensor_id_t      sensor_id,
 
 typedef struct sensor_id_events_enable_get_s
 {
-    ipmi_event_enables_get_cb done;
-    void                      *cb_data;
-    int                       rv;
+    ipmi_sensor_event_enables_cb done;
+    void                         *cb_data;
+    int                          rv;
 } sensor_id_events_enable_get_t;
 
 static void
-sensor_id_events_enable_get_cb(ipmi_sensor_t *sensor, void *cb_data)
+sensor_id_get_event_enables_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     sensor_id_events_enable_get_t *info = cb_data;
 
-    info->rv = ipmi_sensor_events_enable_get(sensor,
+    info->rv = ipmi_sensor_get_event_enables(sensor,
 					     info->done,
 					     info->cb_data);
 }
 
 int
-ipmi_sensor_id_events_enable_get(ipmi_sensor_id_t          sensor_id,
-				 ipmi_event_enables_get_cb done,
-				 void                      *cb_data)
+ipmi_sensor_id_get_event_enables(ipmi_sensor_id_t             sensor_id,
+				 ipmi_sensor_event_enables_cb done,
+				 void                         *cb_data)
 {
     sensor_id_events_enable_get_t info;
     int                           rv;
 
     info.done = done;
     info.cb_data = cb_data;
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_events_enable_get_cb,
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_get_event_enables_cb,
 				&info);
     if (!rv)
 	rv = info.rv;
@@ -5315,9 +5315,9 @@ ipmi_sensor_id_rearm(ipmi_sensor_id_t    sensor_id,
 
 typedef struct sensor_id_get_hysteresis_s
 {
-    ipmi_hysteresis_get_cb done;
-    void                   *cb_data;
-    int                    rv;
+    ipmi_sensor_hysteresis_cb done;
+    void                      *cb_data;
+    int                       rv;
 } sensor_id_get_hysteresis_t;
 
 static void
@@ -5331,9 +5331,9 @@ sensor_id_get_hysteresis_cb(ipmi_sensor_t *sensor, void *cb_data)
 }
 
 int
-ipmi_sensor_id_get_hysteresis(ipmi_sensor_id_t       sensor_id,
-			      ipmi_hysteresis_get_cb done,
-			      void                   *cb_data)
+ipmi_sensor_id_get_hysteresis(ipmi_sensor_id_t          sensor_id,
+			      ipmi_sensor_hysteresis_cb done,
+			      void                      *cb_data)
 {
     sensor_id_get_hysteresis_t info;
     int                        rv;
@@ -5396,18 +5396,18 @@ typedef struct sensor_id_thresholds_set_s
 } sensor_id_thresholds_set_t;
 
 static void
-sensor_id_thresholds_set_cb(ipmi_sensor_t *sensor, void *cb_data)
+sensor_id_set_thresholds_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     sensor_id_thresholds_set_t *info = cb_data;
 
-    info->rv = ipmi_thresholds_set(sensor,
-				   info->thresholds,
-				   info->done,
-				   info->cb_data);
+    info->rv = ipmi_sensor_set_thresholds(sensor,
+					  info->thresholds,
+					  info->done,
+					  info->cb_data);
 }
 
 int
-ipmi_sensor_id_thresholds_set(ipmi_sensor_id_t    sensor_id,
+ipmi_sensor_id_set_thresholds(ipmi_sensor_id_t    sensor_id,
 			      ipmi_thresholds_t   *thresholds,
 			      ipmi_sensor_done_cb done,
 			      void                *cb_data)
@@ -5418,7 +5418,7 @@ ipmi_sensor_id_thresholds_set(ipmi_sensor_id_t    sensor_id,
     info.thresholds = thresholds;
     info.done = done;
     info.cb_data = cb_data;
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_thresholds_set_cb, &info);
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_set_thresholds_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;
@@ -5426,32 +5426,32 @@ ipmi_sensor_id_thresholds_set(ipmi_sensor_id_t    sensor_id,
 
 typedef struct sensor_id_thresholds_get_s
 {
-    ipmi_thresh_get_cb done;
-    void               *cb_data;
-    int                rv;
+    ipmi_sensor_thresholds_cb done;
+    void                      *cb_data;
+    int                       rv;
 } sensor_id_thresholds_get_t;
 
 static void
-sensor_id_thresholds_get_cb(ipmi_sensor_t *sensor, void *cb_data)
+sensor_id_get_thresholds_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     sensor_id_thresholds_get_t *info = cb_data;
 
-    info->rv = ipmi_thresholds_get(sensor,
-				   info->done,
-				   info->cb_data);
+    info->rv = ipmi_sensor_get_thresholds(sensor,
+					  info->done,
+					  info->cb_data);
 }
 
 int
-ipmi_sensor_id_thresholds_get(ipmi_sensor_id_t   sensor_id,
-			      ipmi_thresh_get_cb done,
-			      void               *cb_data)
+ipmi_sensor_id_get_thresholds(ipmi_sensor_id_t          sensor_id,
+			      ipmi_sensor_thresholds_cb done,
+			      void                      *cb_data)
 {
     sensor_id_thresholds_get_t info;
     int                        rv;
 
     info.done = done;
     info.cb_data = cb_data;
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_thresholds_get_cb, &info);
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_get_thresholds_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;
@@ -5459,32 +5459,32 @@ ipmi_sensor_id_thresholds_get(ipmi_sensor_id_t   sensor_id,
 
 typedef struct sensor_id_reading_get_s
 {
-    ipmi_reading_done_cb done;
-    void                 *cb_data;
-    int                  rv;
+    ipmi_sensor_reading_cb done;
+    void                   *cb_data;
+    int                    rv;
 } sensor_id_reading_get_t;
 
 static void
-sensor_id_reading_get_cb(ipmi_sensor_t *sensor, void *cb_data)
+sensor_id_get_reading_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     sensor_id_reading_get_t *info = cb_data;
     
-    info->rv = ipmi_reading_get(sensor,
-				info->done,
-				info->cb_data);
+    info->rv = ipmi_sensor_get_reading(sensor,
+				       info->done,
+				       info->cb_data);
 }
 
 int
-ipmi_sensor_id_reading_get(ipmi_sensor_id_t     sensor_id,
-			   ipmi_reading_done_cb done,
-			   void                 *cb_data)
+ipmi_sensor_id_get_reading(ipmi_sensor_id_t       sensor_id,
+			   ipmi_sensor_reading_cb done,
+			   void                   *cb_data)
 {
     sensor_id_reading_get_t info;
     int                     rv;
 
     info.done = done;
     info.cb_data = cb_data;
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_reading_get_cb, &info);
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_get_reading_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;
@@ -5492,32 +5492,32 @@ ipmi_sensor_id_reading_get(ipmi_sensor_id_t     sensor_id,
 
 typedef struct sensor_id_states_get_s
 {
-    ipmi_states_read_cb done;
-    void                *cb_data;
-    int                 rv;
+    ipmi_sensor_states_cb done;
+    void                  *cb_data;
+    int                   rv;
 } sensor_id_states_get_t;
 
 static void
-sensor_id_states_get_cb(ipmi_sensor_t *sensor, void *cb_data)
+sensor_id_get_states_cb(ipmi_sensor_t *sensor, void *cb_data)
 {
     sensor_id_states_get_t *info = cb_data;
 
-    info->rv = ipmi_states_get(sensor,
-			       info->done,
-			       info->cb_data);
+    info->rv = ipmi_sensor_get_states(sensor,
+				      info->done,
+				      info->cb_data);
 }
 
 int
-ipmi_sensor_id_states_get(ipmi_sensor_id_t    sensor_id,
-			  ipmi_states_read_cb done,
-			  void                *cb_data)
+ipmi_sensor_id_get_states(ipmi_sensor_id_t      sensor_id,
+			  ipmi_sensor_states_cb done,
+			  void                  *cb_data)
 {
     sensor_id_states_get_t info;
     int                    rv;
 
     info.done = done;
     info.cb_data = cb_data;
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_states_get_cb, &info);
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_get_states_cb, &info);
     if (!rv)
 	rv = info.rv;
     return rv;
@@ -5629,4 +5629,139 @@ ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
 
     *val = sensor->mask2[event];
     return 0;
+}
+
+int
+ipmi_sensor_events_enable_get(ipmi_sensor_t                *sensor,
+			      ipmi_sensor_event_enables_cb done,
+			      void                         *cb_data)
+{
+    return ipmi_sensor_get_event_enables(sensor, done, cb_data);
+}
+
+int
+ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+			   ipmi_event_state_t    *states,
+			   ipmi_sensor_done_cb   done,
+			   void                  *cb_data)
+{
+    return ipmi_sensor_disable_events(sensor, states, done, cb_data);
+}
+
+int
+ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+			  ipmi_event_state_t    *states,
+			  ipmi_sensor_done_cb   done,
+			  void                  *cb_data)
+{
+    return ipmi_sensor_enable_events(sensor, states, done, cb_data);
+}
+
+int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
+				  ipmi_event_state_t    *states,
+				  ipmi_sensor_done_cb   done,
+				  void                  *cb_data)
+{
+    return ipmi_sensor_set_event_enables(sensor, states, done, cb_data);
+}
+
+int
+ipmi_sensor_id_events_enable_set(ipmi_sensor_id_t      sensor_id,
+				 ipmi_event_state_t    *states,
+				 ipmi_sensor_done_cb   done,
+				 void                  *cb_data)
+{
+    return ipmi_sensor_id_set_event_enables(sensor_id, states, done, cb_data);
+}
+
+int
+ipmi_sensor_id_events_enable(ipmi_sensor_id_t      sensor_id,
+			     ipmi_event_state_t    *states,
+			     ipmi_sensor_done_cb   done,
+			     void                  *cb_data)
+{
+    return ipmi_sensor_id_enable_events(sensor_id, states, done, cb_data);
+}
+
+int
+ipmi_sensor_id_events_disable(ipmi_sensor_id_t      sensor_id,
+			      ipmi_event_state_t    *states,
+			      ipmi_sensor_done_cb   done,
+			      void                  *cb_data)
+{
+    return ipmi_sensor_id_disable_events(sensor_id, states, done, cb_data);
+}
+
+int
+ipmi_sensor_id_events_enable_get(ipmi_sensor_id_t             sensor_id,
+				 ipmi_sensor_event_enables_cb done,
+				 void                         *cb_data)
+{
+    return ipmi_sensor_id_get_event_enables(sensor_id, done, cb_data);
+}
+
+int
+ipmi_states_get(ipmi_sensor_t         *sensor,
+		ipmi_sensor_states_cb done,
+		void                  *cb_data)
+{
+    return ipmi_sensor_get_states(sensor, done, cb_data);
+}
+
+int
+ipmi_reading_get(ipmi_sensor_t          *sensor,
+		 ipmi_sensor_reading_cb done,
+		 void                   *cb_data)
+{
+    return ipmi_sensor_get_reading(sensor, done, cb_data);
+}
+
+int
+ipmi_thresholds_set(ipmi_sensor_t       *sensor,
+		    ipmi_thresholds_t   *thresholds,
+		    ipmi_sensor_done_cb done,
+		    void                *cb_data)
+{
+    return ipmi_sensor_set_thresholds(sensor, thresholds, done, cb_data);
+}
+
+int
+ipmi_thresholds_get(ipmi_sensor_t             *sensor,
+		    ipmi_sensor_thresholds_cb done,
+		    void                      *cb_data)
+{
+    return ipmi_sensor_get_thresholds(sensor, done, cb_data);
+}
+
+int
+ipmi_sensor_id_thresholds_set(ipmi_sensor_id_t    sensor_id,
+			      ipmi_thresholds_t   *thresholds,
+			      ipmi_sensor_done_cb done,
+			      void                *cb_data)
+{
+    return ipmi_sensor_id_set_thresholds(sensor_id, thresholds, done, cb_data);
+}
+
+int
+ipmi_sensor_id_thresholds_get(ipmi_sensor_id_t          sensor_id,
+			      ipmi_sensor_thresholds_cb done,
+			      void                      *cb_data)
+{
+    return ipmi_sensor_id_get_thresholds(sensor_id, done, cb_data);
+}
+
+int
+ipmi_sensor_id_reading_get(ipmi_sensor_id_t       sensor_id,
+			   ipmi_sensor_reading_cb done,
+			   void                   *cb_data)
+{
+    return ipmi_sensor_id_get_reading(sensor_id, done, cb_data);
+}
+
+int
+ipmi_sensor_id_states_get(ipmi_sensor_id_t      sensor_id,
+			  ipmi_sensor_states_cb done,
+			  void                  *cb_data)
+{
+    return ipmi_sensor_id_get_states(sensor_id, done, cb_data);
 }

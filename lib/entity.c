@@ -1524,9 +1524,9 @@ sensor_detect_send(ipmi_entity_t *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
-    rv = ipmi_reading_get(sensor, detect_reading_read, info);
+    rv = ipmi_sensor_get_reading(sensor, detect_reading_read, info);
     if (rv)
-	rv = ipmi_states_get(sensor, detect_states_read, info);
+	rv = ipmi_sensor_get_states(sensor, detect_states_read, info);
 
     if (!rv)
 	info->sensor_try_count++;
@@ -1548,11 +1548,11 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 
     if (ent->presence_sensor) {
 	/* Presence sensor overrides everything. */
-	rv = ipmi_sensor_id_states_get(ent->presence_sensor_id,
+	rv = ipmi_sensor_id_get_states(ent->presence_sensor_id,
 		       		       states_read, ent);
     } else if (ent->presence_bit_sensor) {
 	/* Presence bit sensor overrides everything but a presence sensor. */
-	rv = ipmi_sensor_id_states_get(ent->presence_bit_sensor_id,
+	rv = ipmi_sensor_id_get_states(ent->presence_bit_sensor_id,
 		       		       states_bit_read, ent);
     } else if ((ent->frudev_present) && (ent->frudev_active)) {
 	/* Even though the spec lists the frudev check last, since
@@ -1678,7 +1678,7 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 	    ipmi_discrete_event_set(&events, 1, IPMI_DEASSERTION);
     }
 
-    ipmi_sensor_events_enable_set(sensor, &events, NULL, NULL);
+    ipmi_sensor_set_event_enables(sensor, &events, NULL, NULL);
 
  out:
     ent->presence_possibly_changed = 1;
@@ -1731,7 +1731,7 @@ handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 				    IPMI_DEASSERTION);
     }
 
-    ipmi_sensor_events_enable(sensor, &events, NULL, NULL);
+    ipmi_sensor_enable_events(sensor, &events, NULL, NULL);
 
  out:
     ent->presence_possibly_changed = 1;
@@ -5796,7 +5796,7 @@ power_checked(ipmi_control_t *control,
 	set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
 
     if (ent->hot_swap_requester) {
-	rv = ipmi_sensor_id_states_get(ent->hot_swap_requester_id,
+	rv = ipmi_sensor_id_get_states(ent->hot_swap_requester_id,
 			               requester_checked,
 			               ent);
 	if (rv) {
@@ -5903,10 +5903,10 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 				    IPMI_DEASSERTION);
     }
 
-    ipmi_sensor_events_enable_set(sensor, &events, NULL, NULL);
+    ipmi_sensor_set_event_enables(sensor, &events, NULL, NULL);
 
     if (ent->hot_swappable) {
-	rv = ipmi_sensor_id_states_get(ent->hot_swap_requester_id,
+	rv = ipmi_sensor_id_get_states(ent->hot_swap_requester_id,
 			               requester_checked,
 			               ent);
 	if (rv) {
@@ -6212,7 +6212,7 @@ e_get_hot_swap_requester(ipmi_entity_t      *ent,
     info->ent = ent;
     info->handler = handler;
     info->cb_data = cb_data;
-    rv = ipmi_sensor_id_states_get(id, got_hot_swap_req, &info);
+    rv = ipmi_sensor_id_get_states(id, got_hot_swap_req, &info);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
@@ -6287,7 +6287,7 @@ check_power(ipmi_control_t *control,
 
     ipmi_lock(ent->lock);
     if (ent->hot_swap_requester) {
-	rv = ipmi_sensor_id_states_get(ent->hot_swap_requester_id,
+	rv = ipmi_sensor_id_get_states(ent->hot_swap_requester_id,
 			               check_requester,
 			               info);
 	if (rv) {
@@ -6323,7 +6323,7 @@ e_check_hot_swap_state(ipmi_entity_t *ent)
     if (ent->hot_swap_power)
 	ipmi_control_id_get_val(ent->hot_swap_power_id, check_power, info);
     else if (ent->hot_swap_requester)
-	ipmi_sensor_id_states_get(ent->hot_swap_requester_id, check_requester,
+	ipmi_sensor_id_get_states(ent->hot_swap_requester_id, check_requester,
 		       		  info);
     else
 	ipmi_mem_free(info);

@@ -302,91 +302,89 @@ void ipmi_sensor_call_discrete_event_handlers
  int                   *handled);
 
 /* Typedefs for the sensor polymorphic functions. */
-typedef int (*ipmi_sensor_convert_from_raw_cb)(
-    ipmi_sensor_t *sensor,
-    int           val,
-    double        *result);
-typedef int (*ipmi_sensor_convert_to_raw_cb)(
-    ipmi_sensor_t     *sensor,
-    enum ipmi_round_e rounding,
-    double            val,
-    int               *result);
-typedef int (*ipmi_sensor_get_tolerance_cb)(ipmi_sensor_t *sensor,
-					    int           val,
-					    double        *tolerance);
-typedef int (*ipmi_sensor_get_accuracy_cb)(ipmi_sensor_t *sensor,
-					   int           val,
-					   double        *accuracy);
+typedef int (*ipmi_sensor_convert_from_raw_func)
+     (ipmi_sensor_t *sensor,
+      int           val,
+      double        *result);
+typedef int (*ipmi_sensor_convert_to_raw_func)
+     (ipmi_sensor_t     *sensor,
+      enum ipmi_round_e rounding,
+      double            val,
+      int               *result);
+typedef int (*ipmi_sensor_get_tolerance_func)(ipmi_sensor_t *sensor,
+					      int           val,
+					      double        *tolerance);
+typedef int (*ipmi_sensor_get_accuracy_func)(ipmi_sensor_t *sensor,
+					     int           val,
+					     double        *accuracy);
 
-typedef int (*ipmi_sensor_events_enable_set_cb)(
-    ipmi_sensor_t         *sensor,
-    ipmi_event_state_t    *states,
-    ipmi_sensor_done_cb   done,
-    void                  *cb_data);
-typedef int (*ipmi_sensor_events_enable_get_cb)(
-    ipmi_sensor_t             *sensor,
-    ipmi_event_enables_get_cb done,
-    void                      *cb_data);
-typedef int (*ipmi_sensor_rearm_cb)(
-    ipmi_sensor_t       *sensor,
-    int                 global_enable,
-    ipmi_event_state_t  *state,
-    ipmi_sensor_done_cb done,
-    void                *cb_data);
+typedef int (*ipmi_sensor_set_event_enables_func)
+     (ipmi_sensor_t         *sensor,
+      ipmi_event_state_t    *states,
+      ipmi_sensor_done_cb   done,
+      void                  *cb_data);
+typedef int (*ipmi_sensor_get_event_enables_func)
+     (ipmi_sensor_t                *sensor,
+      ipmi_sensor_event_enables_cb done,
+      void                         *cb_data);
+typedef int (*ipmi_sensor_rearm_func)
+     (ipmi_sensor_t       *sensor,
+      int                 global_enable,
+      ipmi_event_state_t  *state,
+      ipmi_sensor_done_cb done,
+      void                *cb_data);
 
-typedef int (*ipmi_sensor_get_hysteresis_cb)(
-    ipmi_sensor_t           *sensor,
-    ipmi_hysteresis_get_cb done,
-    void                   *cb_data);
-typedef int (*ipmi_sensor_set_hysteresis_cb)(
-    ipmi_sensor_t       *sensor,
-    unsigned int        positive_hysteresis,
-    unsigned int        negative_hysteresis,
-    ipmi_sensor_done_cb done,
-    void                *cb_data);
+typedef int (*ipmi_sensor_get_hysteresis_func)
+     (ipmi_sensor_t             *sensor,
+      ipmi_sensor_hysteresis_cb done,
+      void                      *cb_data);
+typedef int (*ipmi_sensor_set_hysteresis_func)
+     (ipmi_sensor_t       *sensor,
+      unsigned int        positive_hysteresis,
+      unsigned int        negative_hysteresis,
+      ipmi_sensor_done_cb done,
+      void                *cb_data);
 
-typedef int (*ipmi_thresholds_set_cb)(
-    ipmi_sensor_t       *sensor,
-    ipmi_thresholds_t   *thresholds,
-    ipmi_sensor_done_cb done,
-    void                *cb_data);
-typedef int (*ipmi_thresholds_get_cb)(
-    ipmi_sensor_t      *sensor,
-    ipmi_thresh_get_cb done,
-    void               *cb_data);
+typedef int (*ipmi_sensor_set_thresholds_func)(ipmi_sensor_t       *sensor,
+					       ipmi_thresholds_t   *thresholds,
+					       ipmi_sensor_done_cb done,
+					       void                *cb_data);
+typedef int (*ipmi_sensor_get_thresholds_func)
+     (ipmi_sensor_t             *sensor,
+      ipmi_sensor_thresholds_cb done,
+      void                      *cb_data);
 
-typedef int (*ipmi_reading_get_cb)(
-    ipmi_sensor_t        *sensor,
-    ipmi_reading_done_cb done,
-    void                 *cb_data);
-typedef int (*ipmi_states_get_cb)(ipmi_sensor_t       *sensor,
-				  ipmi_states_read_cb done,
-				  void                *cb_data);
-typedef char *(*ipmi_sensor_reading_name_string_cb)(
-    ipmi_sensor_t *sensor, int val);
+typedef int (*ipmi_sensor_get_reading_func)(ipmi_sensor_t          *sensor,
+					    ipmi_sensor_reading_cb done,
+					    void                   *cb_data);
+typedef int (*ipmi_sensor_get_states_func)(ipmi_sensor_t         *sensor,
+					   ipmi_sensor_states_cb done,
+					   void                  *cb_data);
+typedef char *(*ipmi_sensor_reading_name_string_func)
+     (ipmi_sensor_t *sensor, int val);
 
 typedef struct ipmi_sensor_cbs_s
 {
-    ipmi_sensor_events_enable_set_cb ipmi_sensor_events_enable_set;
-    ipmi_sensor_events_enable_get_cb ipmi_sensor_events_enable_get;
-    ipmi_sensor_events_enable_set_cb ipmi_sensor_events_enable;
-    ipmi_sensor_events_enable_set_cb ipmi_sensor_events_disable;
-    ipmi_sensor_rearm_cb             ipmi_sensor_rearm;
+    ipmi_sensor_set_event_enables_func ipmi_sensor_set_event_enables;
+    ipmi_sensor_get_event_enables_func ipmi_sensor_get_event_enables;
+    ipmi_sensor_set_event_enables_func ipmi_sensor_enable_events;
+    ipmi_sensor_set_event_enables_func ipmi_sensor_disable_events;
+    ipmi_sensor_rearm_func             ipmi_sensor_rearm;
 
     /* These are for threshold sensors only. */
-    ipmi_sensor_convert_from_raw_cb  ipmi_sensor_convert_from_raw;
-    ipmi_sensor_convert_to_raw_cb    ipmi_sensor_convert_to_raw;
-    ipmi_sensor_get_accuracy_cb      ipmi_sensor_get_accuracy;
-    ipmi_sensor_get_tolerance_cb     ipmi_sensor_get_tolerance;
-    ipmi_sensor_get_hysteresis_cb    ipmi_sensor_get_hysteresis;
-    ipmi_sensor_set_hysteresis_cb    ipmi_sensor_set_hysteresis;
-    ipmi_thresholds_set_cb           ipmi_thresholds_set;
-    ipmi_thresholds_get_cb           ipmi_thresholds_get;
-    ipmi_reading_get_cb              ipmi_reading_get;
+    ipmi_sensor_convert_from_raw_func  ipmi_sensor_convert_from_raw;
+    ipmi_sensor_convert_to_raw_func    ipmi_sensor_convert_to_raw;
+    ipmi_sensor_get_accuracy_func      ipmi_sensor_get_accuracy;
+    ipmi_sensor_get_tolerance_func     ipmi_sensor_get_tolerance;
+    ipmi_sensor_get_hysteresis_func    ipmi_sensor_get_hysteresis;
+    ipmi_sensor_set_hysteresis_func    ipmi_sensor_set_hysteresis;
+    ipmi_sensor_get_thresholds_func    ipmi_sensor_get_thresholds;
+    ipmi_sensor_set_thresholds_func    ipmi_sensor_set_thresholds;
+    ipmi_sensor_get_reading_func       ipmi_sensor_get_reading;
 
     /* This is for a discrete sensor. */
-    ipmi_states_get_cb               ipmi_states_get;
-    ipmi_sensor_reading_name_string_cb ipmi_sensor_reading_name_string;
+    ipmi_sensor_get_states_func          ipmi_sensor_get_states;
+    ipmi_sensor_reading_name_string_func ipmi_sensor_reading_name_string;
 } ipmi_sensor_cbs_t;
 
 /* Can be used by OEM code to replace some or all of the callbacks for

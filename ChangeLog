@@ -1,3 +1,17 @@
+2004-10-05 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h.in: Renamed a bunch of the sensor
+	functions and types to make their names more consistent  I hope
+	this is the last big rename effort for 1.4.
+	* include/OpenIPMI/ipmi_sensor.h: ditto
+	* lib/entity.c: ditto
+	* lib/oem_atca.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/sensor.c: ditto
+	* sample/sample3.c: ditto
+	* ui/ui.c: ditto
+	
+
 2004-10-04 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_control.h, lib/control.c: Add the ability

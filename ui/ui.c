@@ -2192,7 +2192,7 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
     if (ipmi_sensor_get_event_reading_type(sensor)
 	== IPMI_EVENT_READING_TYPE_THRESHOLD)
     {
-	rv = ipmi_reading_get(sensor, read_sensor, NULL);
+	rv = ipmi_sensor_get_reading(sensor, read_sensor, NULL);
 	if (rv)
 	    ui_log("redisplay_sensor: Unable to get sensor reading: 0x%x\n",
 		   rv);
@@ -2201,7 +2201,7 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	{
 	case IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE:
 	case IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE:
-	    rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
+	    rv = ipmi_sensor_get_thresholds(sensor, read_thresholds, NULL);
 	    if (rv)
 		ui_log("Unable to get threshold values: 0x%x\n", rv);
 	    break;
@@ -2214,7 +2214,7 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	{
 	case IPMI_EVENT_SUPPORT_PER_STATE:
 	case IPMI_EVENT_SUPPORT_ENTIRE_SENSOR:
-	    rv = ipmi_sensor_events_enable_get(sensor,
+	    rv = ipmi_sensor_get_event_enables(sensor,
 					       read_thresh_event_enables,
 					       NULL);
 	    if (rv)
@@ -2225,7 +2225,7 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	    break;
 	}
     } else {
-	rv = ipmi_states_get(sensor, read_states, NULL);
+	rv = ipmi_sensor_get_states(sensor, read_states, NULL);
 	if (rv)
 	    ui_log("Unable to get sensor reading: 0x%x\n", rv);
 	
@@ -2233,7 +2233,7 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	{
 	case IPMI_EVENT_SUPPORT_PER_STATE:
 	case IPMI_EVENT_SUPPORT_ENTIRE_SENSOR:
-	    rv = ipmi_sensor_events_enable_get(sensor,
+	    rv = ipmi_sensor_get_event_enables(sensor,
 					       read_discrete_event_enables,
 					       NULL);
 	    if (rv)
@@ -2272,7 +2272,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	{
 	    if (present) {
 		sensor_ops_to_read_count++;
-		rv = ipmi_reading_get(sensor, read_sensor, NULL);
+		rv = ipmi_sensor_get_reading(sensor, read_sensor, NULL);
 		if (rv)
 		    ui_log("Unable to get sensor reading: 0x%x\n", rv);
 
@@ -2281,7 +2281,8 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		case IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE:
 		case IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE:
 		    sensor_ops_to_read_count++;
-		    rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
+		    rv = ipmi_sensor_get_thresholds(sensor, read_thresholds,
+						    NULL);
 		    if (rv)
 			ui_log("Unable to get threshold values: 0x%x\n", rv);
 		    break;
@@ -2295,7 +2296,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		case IPMI_EVENT_SUPPORT_PER_STATE:
 		case IPMI_EVENT_SUPPORT_ENTIRE_SENSOR:
 		    sensor_ops_to_read_count++;
-		    rv = ipmi_sensor_events_enable_get
+		    rv = ipmi_sensor_get_event_enables
 			(sensor,
 			 read_thresh_event_enables,
 			 NULL);
@@ -2310,7 +2311,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	} else {
 	    if (present) {
 		sensor_ops_to_read_count++;
-		rv = ipmi_states_get(sensor, read_states, NULL);
+		rv = ipmi_sensor_get_states(sensor, read_states, NULL);
 		if (rv)
 		    ui_log("Unable to get sensor reading: 0x%x\n", rv);
 
@@ -2319,7 +2320,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		case IPMI_EVENT_SUPPORT_PER_STATE:
 		case IPMI_EVENT_SUPPORT_ENTIRE_SENSOR:
 		    sensor_ops_to_read_count++;
-		    rv = ipmi_sensor_events_enable_get
+		    rv = ipmi_sensor_get_event_enables
 			(sensor,
 			 read_discrete_event_enables,
 			 NULL);
@@ -2393,7 +2394,7 @@ events_enable(ipmi_sensor_t *sensor, void *cb_data)
     events_enable_info_t *info = cb_data;
     int                  rv;
 
-    rv = ipmi_sensor_events_enable_set(sensor, info->states,
+    rv = ipmi_sensor_set_event_enables(sensor, info->states,
 				       events_enable_done, NULL);
     if (rv)
 	ui_log("Error sending events enable: 0x%x", rv);

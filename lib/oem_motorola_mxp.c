@@ -775,7 +775,7 @@ mxp_new_sensor(ipmi_mc_t     *mc,
 
 /* No MXP sensor supports modifying event enables. */
 static int
-mxp_events_enable_set(ipmi_sensor_t         *sensor,
+mxp_set_event_enables(ipmi_sensor_t         *sensor,
 		      ipmi_event_state_t    *states,
 		      ipmi_sensor_done_cb   done,
 		      void                  *cb_data)
@@ -784,9 +784,9 @@ mxp_events_enable_set(ipmi_sensor_t         *sensor,
 }
 
 static int
-mxp_events_enable_get(ipmi_sensor_t             *sensor,
-		      ipmi_event_enables_get_cb done,
-		      void                      *cb_data)
+mxp_get_event_enables(ipmi_sensor_t                *sensor,
+		      ipmi_sensor_event_enables_cb done,
+		      void                         *cb_data)
 {
     ipmi_event_state_t  state;
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
@@ -840,9 +840,9 @@ mxp_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 }
 
 static int
-mxp_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
-			  ipmi_hysteresis_get_cb done,
-			  void                   *cb_data)
+mxp_sensor_get_hysteresis(ipmi_sensor_t             *sensor,
+			  ipmi_sensor_hysteresis_cb done,
+			  void                      *cb_data)
 {
     return ENOSYS;
 }
@@ -858,9 +858,9 @@ mxp_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 }
 
 static int
-mxp_thresholds_get(ipmi_sensor_t      *sensor,
-		   ipmi_thresh_get_cb done,
-		   void               *cb_data)
+mxp_thresholds_get(ipmi_sensor_t             *sensor,
+		   ipmi_sensor_thresholds_cb done,
+		   void                      *cb_data)
 {
     ipmi_thresholds_t th;
     int               rv;
@@ -943,7 +943,7 @@ struct mxp_sens_info_s
     mxp_states_err_cb     err_states;
 
     /* The user callback info. */
-    ipmi_states_read_cb   done;
+    ipmi_sensor_states_cb done;
     void                  *cb_data;
 
     /* Use for board presence. */
@@ -952,7 +952,7 @@ struct mxp_sens_info_s
 };
 
 static mxp_sens_info_t *
-alloc_sens_info(void *sdinfo, ipmi_states_read_cb done, void *cb_data)
+alloc_sens_info(void *sdinfo, ipmi_sensor_states_cb done, void *cb_data)
 {
     mxp_sens_info_t *sens_info;
 
@@ -1030,10 +1030,10 @@ mxp_sensor_get_done(ipmi_sensor_t *sensor,
    they are doing */
 typedef struct mxp_reading_done_s
 {
-    ipmi_sensor_op_info_t sdata;
-    void                  *sdinfo;
-    ipmi_reading_done_cb  done;
-    void                  *cb_data;
+    ipmi_sensor_op_info_t  sdata;
+    void                   *sdinfo;
+    ipmi_sensor_reading_cb done;
+    void                   *cb_data;
 } mxp_reading_done_t;
 
 /***********************************************************************
@@ -1427,17 +1427,17 @@ mxp_add_sensor(ipmi_mc_t     *mc,
 
 static int
 mxp_alloc_discrete_sensor
-(ipmi_mc_t                          *mc,
- void                               *data,
- void			           (*data_freer)(void *),
- unsigned int                       sensor_type,
- unsigned int                       reading_type,
- char                               *id,
- unsigned int                       assert_events,
- unsigned int                       deassert_events,
- ipmi_states_get_cb                 states_get,
- ipmi_sensor_reading_name_string_cb sensor_reading_name_string,
- ipmi_sensor_t                      **sensor)
+(ipmi_mc_t                            *mc,
+ void                                 *data,
+ void			              (*data_freer)(void *),
+ unsigned int                         sensor_type,
+ unsigned int                         reading_type,
+ char                                 *id,
+ unsigned int                         assert_events,
+ unsigned int                         deassert_events,
+ ipmi_sensor_get_states_func          states_get,
+ ipmi_sensor_reading_name_string_func sensor_reading_name_string,
+ ipmi_sensor_t                        **sensor)
 {
     int                 rv;
     ipmi_sensor_cbs_t   cbs;
@@ -1469,11 +1469,11 @@ mxp_alloc_discrete_sensor
 
     /* Create all the callbacks in the data structure. */
     memset(&cbs, 0, sizeof(cbs));
-    cbs.ipmi_sensor_events_enable_set = mxp_events_enable_set;
-    cbs.ipmi_sensor_events_enable = mxp_events_enable_set;
-    cbs.ipmi_sensor_events_disable = mxp_events_enable_set;
-    cbs.ipmi_sensor_events_enable_get = mxp_events_enable_get;
-    cbs.ipmi_states_get = states_get;
+    cbs.ipmi_sensor_set_event_enables = mxp_set_event_enables;
+    cbs.ipmi_sensor_enable_events = mxp_set_event_enables;
+    cbs.ipmi_sensor_disable_events = mxp_set_event_enables;
+    cbs.ipmi_sensor_get_event_enables = mxp_get_event_enables;
+    cbs.ipmi_sensor_get_states = states_get;
 
     /* If ths user supply a function to get the name strings, use it.
        Otherwise use the standard one. */
@@ -1500,7 +1500,7 @@ mxp_alloc_threshold_sensor
  char                               *id,
  unsigned int                       assert_events,
  unsigned int                       deassert_events,
- ipmi_reading_get_cb                reading_get,
+ ipmi_sensor_get_reading_func       reading_get,
  int                                raw_nominal, /* -1 disables. */
  int                                raw_normal_min, /* -1 disables. */
  int                                raw_normal_max, /* -1 disables. */
@@ -1612,17 +1612,17 @@ mxp_alloc_threshold_sensor
 
     /* Create all the callbacks in the data structure. */
     memset(&cbs, 0, sizeof(cbs));
-    cbs.ipmi_sensor_events_enable_set = mxp_events_enable_set;
-    cbs.ipmi_sensor_events_enable_get = mxp_events_enable_get;
+    cbs.ipmi_sensor_set_event_enables = mxp_set_event_enables;
+    cbs.ipmi_sensor_get_event_enables = mxp_get_event_enables;
     cbs.ipmi_sensor_convert_from_raw = mxp_sensor_convert_from_raw;
     cbs.ipmi_sensor_convert_to_raw = mxp_sensor_convert_to_raw;
     cbs.ipmi_sensor_get_accuracy = mxp_sensor_get_accuracy;
     cbs.ipmi_sensor_get_tolerance = mxp_sensor_get_tolerance;
     cbs.ipmi_sensor_get_hysteresis = mxp_sensor_get_hysteresis;
     cbs.ipmi_sensor_set_hysteresis = mxp_sensor_set_hysteresis;
-    cbs.ipmi_thresholds_set = mxp_thresholds_set;
-    cbs.ipmi_thresholds_get = mxp_thresholds_get;
-    cbs.ipmi_reading_get = reading_get;
+    cbs.ipmi_sensor_get_thresholds = mxp_thresholds_get;
+    cbs.ipmi_sensor_set_thresholds = mxp_thresholds_set;
+    cbs.ipmi_sensor_get_reading = reading_get;
     ipmi_sensor_set_callbacks(*sensor, &cbs);
 
     return 0;
@@ -1641,7 +1641,7 @@ mxp_alloc_semi_stand_threshold_sensor
  char                               *id,
  unsigned int                       assert_events,
  unsigned int                       deassert_events,
- ipmi_reading_get_cb                reading_get,
+ ipmi_sensor_get_reading_func       reading_get,
  int                                raw_nominal, /* -1 disables. */
  int                                raw_normal_min, /* -1 disables. */
  int                                raw_normal_max, /* -1 disables. */
@@ -1757,8 +1757,8 @@ mxp_alloc_semi_stand_threshold_sensor
 
     /* Create all the callbacks in the data structure. */
     memset(&cbs, 0, sizeof(cbs));
-    cbs.ipmi_sensor_events_enable_set = mxp_events_enable_set;
-    cbs.ipmi_sensor_events_enable_get = mxp_events_enable_get;
+    cbs.ipmi_sensor_set_event_enables = mxp_set_event_enables;
+    cbs.ipmi_sensor_get_event_enables = mxp_get_event_enables;
     cbs.ipmi_sensor_convert_from_raw
 	= ipmi_standard_sensor_cb.ipmi_sensor_convert_from_raw;
     cbs.ipmi_sensor_convert_to_raw
@@ -1767,9 +1767,9 @@ mxp_alloc_semi_stand_threshold_sensor
     cbs.ipmi_sensor_get_tolerance = mxp_sensor_get_tolerance;
     cbs.ipmi_sensor_get_hysteresis = mxp_sensor_get_hysteresis;
     cbs.ipmi_sensor_set_hysteresis = mxp_sensor_set_hysteresis;
-    cbs.ipmi_thresholds_set = mxp_thresholds_set;
-    cbs.ipmi_thresholds_get = mxp_thresholds_get;
-    cbs.ipmi_reading_get = reading_get;
+    cbs.ipmi_sensor_get_thresholds = mxp_thresholds_get;
+    cbs.ipmi_sensor_set_thresholds = mxp_thresholds_set;
+    cbs.ipmi_sensor_get_reading = reading_get;
     ipmi_sensor_set_callbacks(*sensor, &cbs);
 
     return 0;
@@ -2875,9 +2875,9 @@ ps_presence_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-ps_presence_states_get(ipmi_sensor_t       *sensor,
-		       ipmi_states_read_cb done,
-		       void                *cb_data)
+ps_presence_states_get(ipmi_sensor_t         *sensor,
+		       ipmi_sensor_states_cb done,
+		       void                  *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     mxp_power_supply_t  *psinfo = hdr->data;
@@ -2977,9 +2977,9 @@ ps_ps_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-ps_ps_states_get(ipmi_sensor_t       *sensor,
-		 ipmi_states_read_cb done,
-		 void                *cb_data)
+ps_ps_states_get(ipmi_sensor_t         *sensor,
+		 ipmi_sensor_states_cb done,
+		 void                  *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     mxp_power_supply_t  *psinfo = hdr->data;
@@ -3604,9 +3604,9 @@ fan_presence_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-fan_presence_states_get(ipmi_sensor_t       *sensor,
-			ipmi_states_read_cb done,
-			void                *cb_data)
+fan_presence_states_get(ipmi_sensor_t         *sensor,
+			ipmi_sensor_states_cb done,
+			void                  *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     mxp_fan_t           *faninfo = hdr->data;
@@ -3978,9 +3978,9 @@ mxp_fan_reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-mxp_fan_reading_get_cb(ipmi_sensor_t        *sensor,
-		       ipmi_reading_done_cb done,
-		       void                 *cb_data)
+mxp_fan_reading_get_cb(ipmi_sensor_t          *sensor,
+		       ipmi_sensor_reading_cb done,
+		       void                   *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     mxp_fan_t           *faninfo = hdr->data;
@@ -4291,9 +4291,9 @@ mxpv1_board_presence_states_get_start(ipmi_sensor_t *sensor, int err,
 }
 
 static int
-mxpv1_board_presence_states_get(ipmi_sensor_t       *sensor,
-				ipmi_states_read_cb done,
-				void                *cb_data)
+mxpv1_board_presence_states_get(ipmi_sensor_t         *sensor,
+				ipmi_sensor_states_cb done,
+				void                  *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     mxp_board_t         *binfo = hdr->data;
@@ -4365,9 +4365,9 @@ board_healthy_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-board_healthy_states_get(ipmi_sensor_t       *sensor,
-			 ipmi_states_read_cb done,
-			 void                *cb_data)
+board_healthy_states_get(ipmi_sensor_t         *sensor,
+			 ipmi_sensor_states_cb done,
+			 void                  *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     mxp_board_t         *binfo = hdr->data;
@@ -5617,9 +5617,9 @@ board_slot_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-board_slot_get(ipmi_sensor_t       *sensor,
-	       ipmi_states_read_cb done,
-	       void                *cb_data)
+board_slot_get(ipmi_sensor_t         *sensor,
+	       ipmi_sensor_states_cb done,
+	       void                  *cb_data)
 {
     int                 rv;
     mxp_sens_info_t     *get_info;
@@ -6275,9 +6275,9 @@ amc_offline_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-amc_offline_get(ipmi_sensor_t       *sensor,
-		ipmi_states_read_cb done,
-		void                *cb_data)
+amc_offline_get(ipmi_sensor_t         *sensor,
+		ipmi_sensor_states_cb done,
+		void                  *cb_data)
 {
     int                 rv;
     mxp_sens_info_t     *get_info;
@@ -6421,9 +6421,9 @@ mxp_voltage_reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-mxp_voltage_reading_get_cb(ipmi_sensor_t        *sensor,
-			   ipmi_reading_done_cb done,
-			   void                 *cb_data)
+mxp_voltage_reading_get_cb(ipmi_sensor_t          *sensor,
+			   ipmi_sensor_reading_cb done,
+			   void                   *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     amc_info_t          *info = hdr->data;
@@ -6636,8 +6636,8 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_entity_info_t *ents;
     unsigned int       assert, deassert;
     char               *name;
-    int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
-	= ipmi_standard_sensor_cb.ipmi_reading_get;
+    int (*get)(ipmi_sensor_t *, ipmi_sensor_reading_cb, void *)
+	= ipmi_standard_sensor_cb.ipmi_sensor_get_reading;
     int                v1_amc = ipmi_mc_device_revision(mc) < 2;
 
 
@@ -7835,9 +7835,9 @@ i2c_sens_get_reading_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 }
 
 static int
-i2c_sens_get_reading(ipmi_sensor_t        *sensor,
-		     ipmi_reading_done_cb done,
-		     void                 *cb_data)
+i2c_sens_get_reading(ipmi_sensor_t          *sensor,
+		     ipmi_sensor_reading_cb done,
+		     void                   *cb_data)
 {
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     i2c_sens_t           *info = hdr->data;
@@ -7915,8 +7915,8 @@ zynx_switch_handler(ipmi_mc_t     *mc,
     int                i;
     zynx_info_t        *sinfo = NULL;
     ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
-    int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
-	= ipmi_standard_sensor_cb.ipmi_reading_get;
+    int (*get)(ipmi_sensor_t *, ipmi_sensor_reading_cb, void *)
+	= ipmi_standard_sensor_cb.ipmi_sensor_get_reading;
     int                v1_switch;
 
     if ((ipmi_mc_manufacturer_id(mc) == ZYNX_MANUFACTURER_ID)

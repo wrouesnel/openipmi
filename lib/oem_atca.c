@@ -451,7 +451,7 @@ atca_get_hot_swap_state_start(ipmi_entity_t *entity, int err, void *cb_data)
 	return;
     }
 
-    rv = ipmi_sensor_id_states_get(finfo->hs_sensor_id,
+    rv = ipmi_sensor_id_get_states(finfo->hs_sensor_id,
 				   atca_get_hot_swap_state_done,
 				   hs_info);
     if (rv) {
@@ -908,7 +908,7 @@ setup_fru_hot_swap(atca_fru_t *finfo, ipmi_sensor_t *sensor)
 		     SENSOR_NAME(sensor), rv);
     }
 
-    rv = ipmi_states_get(sensor, fetched_hot_swap_state, finfo);
+    rv = ipmi_sensor_get_states(sensor, fetched_hot_swap_state, finfo);
     if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%soem_atca.c(setup_fru_hot_swap): "

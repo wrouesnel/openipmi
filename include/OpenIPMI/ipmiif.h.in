@@ -1074,7 +1074,7 @@ typedef void (*ipmi_sensor_done_cb)(ipmi_sensor_t *sensor,
    given in the "states" parameter.  This will first enable the
    events/thresholds that are set, then disable the events/thresholds
    that are not set. */
-int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
+int ipmi_sensor_set_event_enables(ipmi_sensor_t         *sensor,
 				  ipmi_event_state_t    *states,
 				  ipmi_sensor_done_cb   done,
 				  void                  *cb_data);
@@ -1084,7 +1084,7 @@ int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
    It will, however, set the "events_enabled" flag and the
    "scanning_enabled" flag for the sensor to the value in the states
    parameter. */
-int ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+int ipmi_sensor_enable_events(ipmi_sensor_t         *sensor,
 			      ipmi_event_state_t    *states,
 			      ipmi_sensor_done_cb   done,
 			      void                  *cb_data);
@@ -1094,19 +1094,19 @@ int ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
    It will, however, set the "events_enabled" flag and the
    "scanning_enabled" flag for the sensor to the value in the states
    parameter. */
-int ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+int ipmi_sensor_disable_events(ipmi_sensor_t         *sensor,
 			       ipmi_event_state_t    *states,
 			       ipmi_sensor_done_cb   done,
 			       void                  *cb_data);
 
 /* Get the event enables for the given sensor. */
-typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,
-					  int                err,
-					  ipmi_event_state_t *states,
-					  void               *cb_data);
-int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
-				  ipmi_event_enables_get_cb done,
-				  void                      *cb_data);
+typedef void (*ipmi_sensor_event_enables_cb)(ipmi_sensor_t      *sensor,
+					     int                err,
+					     ipmi_event_state_t *states,
+					     void               *cb_data);
+int ipmi_sensor_get_event_enables(ipmi_sensor_t                *sensor,
+				  ipmi_sensor_event_enables_cb done,
+				  void                         *cb_data);
 
 /* Rearm the current sensor.  This will cause the sensor to resend
    it's current event state if it is out of range.  If
@@ -1124,14 +1124,15 @@ int ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
 /* Get the hysteresis values for the given sensor.
    FIXME - these are currently the raw values, how do I get the
    cooked values?  There doesn't seem to be an easy way to calculate them. */
-typedef void (*ipmi_hysteresis_get_cb)(ipmi_sensor_t *sensor,
-				       int           err,
-				       unsigned int  positive_hysteresis,
-				       unsigned int  negative_hysteresis,
-				       void          *cb_data);
-int ipmi_sensor_get_hysteresis(ipmi_sensor_t           *sensor,
-			       ipmi_hysteresis_get_cb done,
-			       void                   *cb_data);
+typedef void (*ipmi_sensor_hysteresis_cb)
+     (ipmi_sensor_t *sensor,
+      int           err,
+      unsigned int  positive_hysteresis,
+      unsigned int  negative_hysteresis,
+      void          *cb_data);
+int ipmi_sensor_get_hysteresis(ipmi_sensor_t             *sensor,
+			       ipmi_sensor_hysteresis_cb done,
+			       void                      *cb_data);
 
 /* Set the hysteresis values for the given sensor.
    FIXME - these are currently the raw values, how do I handle the
@@ -1309,19 +1310,19 @@ int ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
 				       ipmi_thresholds_t *th);
 
 /* Set the thresholds for the given sensor. */
-int ipmi_thresholds_set(ipmi_sensor_t       *sensor,
-			ipmi_thresholds_t   *thresholds,
-			ipmi_sensor_done_cb done,
-			void                *cb_data);
+int ipmi_sensor_set_thresholds(ipmi_sensor_t       *sensor,
+			       ipmi_thresholds_t   *thresholds,
+			       ipmi_sensor_done_cb done,
+			       void                *cb_data);
 
 /* Fetch the thresholds from the given sensor. */
-typedef void (*ipmi_thresh_get_cb)(ipmi_sensor_t     *sensor,
-				   int               err,
-				   ipmi_thresholds_t *th,
-				   void              *cb_data);
-int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
-			ipmi_thresh_get_cb done,
-			void               *cb_data);
+typedef void (*ipmi_sensor_thresholds_cb)(ipmi_sensor_t     *sensor,
+					  int               err,
+					  ipmi_thresholds_t *th,
+					  void              *cb_data);
+int ipmi_sensor_get_thresholds(ipmi_sensor_t             *sensor,
+			       ipmi_sensor_thresholds_cb done,
+			       void                      *cb_data);
 
 /* Discrete states, or threshold status.  This is the set of states or
    thresholds that the sensor has enabled event for, and the global
@@ -1363,70 +1364,71 @@ void ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 
 /* Read the current value of the given threshold sensor.  It also
    returns the states of all the thresholds. */
-typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t             *sensor,
-				     int                       err,
-				     enum ipmi_value_present_e value_present,
-				     unsigned int              raw_value,
-				     double                    val,
-				     ipmi_states_t             *states,
-				     void                      *cb_data);
-int ipmi_reading_get(ipmi_sensor_t        *sensor,
-		     ipmi_reading_done_cb done,
-		     void                 *cb_data);
+typedef void (*ipmi_sensor_reading_cb)(ipmi_sensor_t             *sensor,
+				       int                       err,
+				       enum ipmi_value_present_e value_present,
+				       unsigned int              raw_value,
+				       double                    val,
+				       ipmi_states_t             *states,
+				       void                      *cb_data);
+int ipmi_sensor_get_reading(ipmi_sensor_t          *sensor,
+			    ipmi_sensor_reading_cb done,
+			    void                   *cb_data);
 
 /* Read the current value of the given threshold sensor, returning the
    set of states that are active. */
-typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
-				    int           err,
-				    ipmi_states_t *states,
-				    void          *cb_data);
-int ipmi_states_get(ipmi_sensor_t       *sensor,
-		    ipmi_states_read_cb done,
-		    void                *cb_data);
+typedef void (*ipmi_sensor_states_cb)(ipmi_sensor_t *sensor,
+				      int           err,
+				      ipmi_states_t *states,
+				      void          *cb_data);
+int ipmi_sensor_get_states(ipmi_sensor_t         *sensor,
+			   ipmi_sensor_states_cb done,
+			   void                  *cb_data);
+
 
 /* These are convenience functions that take a sensor id, not a
    sensor, and set/get remote values from the sensor */
-int ipmi_sensor_id_events_enable_set(ipmi_sensor_id_t      sensor_id,
+int ipmi_sensor_id_set_event_enables(ipmi_sensor_id_t      sensor_id,
 				     ipmi_event_state_t    *states,
 				     ipmi_sensor_done_cb   done,
 				     void                  *cb_data);
-int ipmi_sensor_id_events_enable(ipmi_sensor_id_t      sensor_id,
+int ipmi_sensor_id_enable_events(ipmi_sensor_id_t      sensor_id,
 				 ipmi_event_state_t    *states,
 				 ipmi_sensor_done_cb   done,
 				 void                  *cb_data);
-int ipmi_sensor_id_events_disable(ipmi_sensor_id_t      sensor_id,
+int ipmi_sensor_id_disable_events(ipmi_sensor_id_t      sensor_id,
 				  ipmi_event_state_t    *states,
 				  ipmi_sensor_done_cb   done,
 				  void                  *cb_data);
-int ipmi_sensor_id_events_enable_get(ipmi_sensor_id_t          sensor_id,
-				     ipmi_event_enables_get_cb done,
-				     void                      *cb_data);
+int ipmi_sensor_id_get_event_enables(ipmi_sensor_id_t             sensor_id,
+				     ipmi_sensor_event_enables_cb done,
+				     void                         *cb_data);
 int ipmi_sensor_id_rearm(ipmi_sensor_id_t    sensor_id,
 			 int                 global_enable,
 			 ipmi_event_state_t  *state,
 			 ipmi_sensor_done_cb done,
 			 void                *cb_data);
-int ipmi_sensor_id_get_hysteresis(ipmi_sensor_id_t       sensor_id,
-				  ipmi_hysteresis_get_cb done,
-				  void                   *cb_data);
+int ipmi_sensor_id_get_hysteresis(ipmi_sensor_id_t          sensor_id,
+				  ipmi_sensor_hysteresis_cb done,
+				  void                      *cb_data);
 int ipmi_sensor_id_set_hysteresis(ipmi_sensor_id_t    sensor_id,
 				  unsigned int        positive_hysteresis,
 				  unsigned int        negative_hysteresis,
 				  ipmi_sensor_done_cb done,
 				  void                *cb_data);
-int ipmi_sensor_id_thresholds_set(ipmi_sensor_id_t    sensor_id,
+int ipmi_sensor_id_set_thresholds(ipmi_sensor_id_t    sensor_id,
 				  ipmi_thresholds_t   *thresholds,
 				  ipmi_sensor_done_cb done,
 				  void                *cb_data);
-int ipmi_sensor_id_thresholds_get(ipmi_sensor_id_t   sensor_id,
-				  ipmi_thresh_get_cb done,
-				  void               *cb_data);
-int ipmi_sensor_id_reading_get(ipmi_sensor_id_t     sensor_id,
-			       ipmi_reading_done_cb done,
-			       void                 *cb_data);
-int ipmi_sensor_id_states_get(ipmi_sensor_id_t    sensor_id,
-			      ipmi_states_read_cb done,
-			      void                *cb_data);
+int ipmi_sensor_id_get_thresholds(ipmi_sensor_id_t          sensor_id,
+				  ipmi_sensor_thresholds_cb done,
+				  void                      *cb_data);
+int ipmi_sensor_id_get_reading(ipmi_sensor_id_t       sensor_id,
+			       ipmi_sensor_reading_cb done,
+			       void                   *cb_data);
+int ipmi_sensor_id_get_states(ipmi_sensor_id_t      sensor_id,
+			      ipmi_sensor_states_cb done,
+			      void                  *cb_data);
 
 
 /*
@@ -1951,5 +1953,109 @@ int ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
 int ipmi_control_get_num_light_settings(ipmi_control_t *control,
 					unsigned int   light)
      IPMI_FUNC_DEPRECATED;
+
+typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,
+					  int                err,
+					  ipmi_event_state_t *states,
+					  void               *cb_data)
+     IPMI_TYPE_DEPRECATED;
+int ipmi_sensor_events_enable_get(ipmi_sensor_t                *sensor,
+				  ipmi_sensor_event_enables_cb done,
+				  void                         *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+			       ipmi_event_state_t    *states,
+			       ipmi_sensor_done_cb   done,
+			       void                  *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+			      ipmi_event_state_t    *states,
+			      ipmi_sensor_done_cb   done,
+			      void                  *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
+				  ipmi_event_state_t    *states,
+				  ipmi_sensor_done_cb   done,
+				  void                  *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_id_events_enable_set(ipmi_sensor_id_t      sensor_id,
+				     ipmi_event_state_t    *states,
+				     ipmi_sensor_done_cb   done,
+				     void                  *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_id_events_enable(ipmi_sensor_id_t      sensor_id,
+				 ipmi_event_state_t    *states,
+				 ipmi_sensor_done_cb   done,
+				 void                  *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_id_events_disable(ipmi_sensor_id_t      sensor_id,
+				  ipmi_event_state_t    *states,
+				  ipmi_sensor_done_cb   done,
+				  void                  *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_id_events_enable_get(ipmi_sensor_id_t             sensor_id,
+				     ipmi_sensor_event_enables_cb done,
+				     void                         *cb_data)
+     IPMI_FUNC_DEPRECATED;
+
+typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
+				    int           err,
+				    ipmi_states_t *states,
+				    void          *cb_data)
+     IPMI_TYPE_DEPRECATED;
+int ipmi_states_get(ipmi_sensor_t         *sensor,
+		    ipmi_sensor_states_cb done,
+		    void                  *cb_data)
+     IPMI_FUNC_DEPRECATED;
+typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t             *sensor,
+				     int                       err,
+				     enum ipmi_value_present_e value_present,
+				     unsigned int              raw_value,
+				     double                    val,
+				     ipmi_states_t             *states,
+				     void                      *cb_data)
+     IPMI_TYPE_DEPRECATED;
+int ipmi_reading_get(ipmi_sensor_t          *sensor,
+		     ipmi_sensor_reading_cb done,
+		     void                   *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_thresholds_set(ipmi_sensor_t       *sensor,
+			ipmi_thresholds_t   *thresholds,
+			ipmi_sensor_done_cb done,
+			void                *cb_data)
+     IPMI_FUNC_DEPRECATED;
+typedef void (*ipmi_thresh_get_cb)(ipmi_sensor_t     *sensor,
+				   int               err,
+				   ipmi_thresholds_t *th,
+				   void              *cb_data)
+     IPMI_TYPE_DEPRECATED;
+int ipmi_thresholds_get(ipmi_sensor_t             *sensor,
+			ipmi_sensor_thresholds_cb done,
+			void                      *cb_data)
+     IPMI_FUNC_DEPRECATED;
+
+int ipmi_sensor_id_thresholds_set(ipmi_sensor_id_t    sensor_id,
+				  ipmi_thresholds_t   *thresholds,
+				  ipmi_sensor_done_cb done,
+				  void                *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_id_thresholds_get(ipmi_sensor_id_t          sensor_id,
+				  ipmi_sensor_thresholds_cb done,
+				  void                      *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_id_reading_get(ipmi_sensor_id_t       sensor_id,
+			       ipmi_sensor_reading_cb done,
+			       void                   *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_sensor_id_states_get(ipmi_sensor_id_t      sensor_id,
+			      ipmi_sensor_states_cb done,
+			      void                  *cb_data)
+     IPMI_FUNC_DEPRECATED;
+typedef void (*ipmi_hysteresis_get_cb)(ipmi_sensor_t *sensor,
+				       int           err,
+				       unsigned int  positive_hysteresis,
+				       unsigned int  negative_hysteresis,
+				       void          *cb_data)
+     IPMI_TYPE_DEPRECATED;
 
 #endif /* __IPMIIF_H */
