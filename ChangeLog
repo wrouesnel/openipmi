@@ -28,6 +28,10 @@
 	a domain.
 	* lib/domain.c, include/OpenIPMI/ipmiif.h: ditto
 
+	* lib/domain.c: Modified finding the event reciever to use the
+	event receiver bit (not the SEL bit) and to ignore BMC channels,
+	since their addresses would be bogus.
+
 2004-02-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a race condition dealing with an MC going away

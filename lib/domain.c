@@ -4021,8 +4021,13 @@ static void
 check_event_rcvr(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     unsigned int *addr = cb_data;
-    if ((*addr == 0) && ipmi_mc_sel_device_support(mc))
-	*addr = ipmi_mc_get_address(mc);
+    if (*addr)
+	return;
+    if (!ipmi_mc_ipmb_event_receiver_support(mc))
+	return;
+    if (ipmi_mc_get_channel(mc) == IPMI_BMC_CHANNEL)
+	return;
+    *addr = ipmi_mc_get_address(mc);
 }
 
 int

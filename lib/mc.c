@@ -2579,6 +2579,11 @@ ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
 {
     int rv;
 
+    CHECK_MC_LOCK(mc);
+
+    if (!ipmi_mc_ipmb_event_generator_support(mc))
+	return ENOTSUP;
+
     val = val != 0;
 
     if (val == mc->events_enabled) {
