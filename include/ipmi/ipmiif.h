@@ -245,6 +245,7 @@ int ipmi_entity_get_FRU_inventory_device(ipmi_entity_t *ent);
 int ipmi_entity_get_SEL_device(ipmi_entity_t *ent);
 int ipmi_entity_get_SDR_repository_device(ipmi_entity_t *ent);
 int ipmi_entity_get_sensor_device(ipmi_entity_t *ent);
+char *ipmi_sensor_get_entity_id_string(ipmi_entity_t *ent);
 
 /* The ID from the device SDR. */
 int ipmi_entity_get_id_length(ipmi_entity_t *ent);
@@ -472,7 +473,6 @@ int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 
 /* Strings for various values for a sensor.  We put them in here, and
    they will be the correct strings even for OEM values. */
-char *ipmi_sensor_get_entity_id_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_reading_name_string(ipmi_sensor_t *sensor);

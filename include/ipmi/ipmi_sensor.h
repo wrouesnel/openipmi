@@ -317,11 +317,15 @@ typedef struct ipmi_sensor_cbs_s
 void ipmi_sensor_get_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs);
 void ipmi_sensor_set_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs);
 
-void ipmi_sensor_set_entity_id_string(ipmi_sensor_t *sensor, char *str);
+/* The standard callbacks.  This is read-only, don't change them. */
+extern ipmi_sensor_cbs_t ipmi_standard_sensor_cb;
+
+void ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info);
+void *ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor);
+
 void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,
 					       char          *str);
-void ipmi_sensor_set_reading_name_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str);

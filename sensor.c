@@ -147,7 +147,6 @@ struct ipmi_sensor_s
     char id[SENSOR_ID_LEN+1]; /* The ID from the device SDR. */
     char assigned_id[SENSOR_ID_LEN+1]; /* The ID from the main SDR. */
 
-    char *entity_id_string;
     char *sensor_type_string;
     char *event_reading_type_string;
     char *rate_unit_string;
@@ -163,6 +162,9 @@ struct ipmi_sensor_s
 
     /* Polymorphic functions. */
     ipmi_sensor_cbs_t cbs;
+
+    /* OEM info */
+    void *oem_info;
 };
 
 ipmi_sensor_id_t
@@ -731,8 +733,6 @@ handle_new_sensor(ipmi_mc_t     *mc,
 
     /* Call this before the OEM call so the OEM call can replace it. */
     sensor->cbs = standard_sensor_cb;
-    sensor->entity_id_string
-	= ipmi_get_entity_id_string(sensor->entity_id);
     sensor->sensor_type_string
 	= ipmi_get_sensor_type_string(sensor->sensor_type);
     sensor->event_reading_type_string
@@ -2499,8 +2499,8 @@ enables_get2(ipmi_sensor_t *sensor,
 				      | (info->rsp->data[3] << 8));
     info->state.__deassertion_events = (info->rsp->data[4]
 					| (info->rsp->data[5] << 8));
-    global_enable = (info->rsp->data[1] >> 7) & 1;
-    scanning_enabled = (info->rsp->data[1] >> 6) & 1;
+    global_enable = ! ((info->rsp->data[1] >> 7) & 1);
+    scanning_enabled = ! ((info->rsp->data[1] >> 6) & 1);
     if (info->done)
 	info->done(sensor, 0,
 		   global_enable, scanning_enabled,
@@ -3881,7 +3881,7 @@ stand_ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int val)
 				 val);
 }
 
-static ipmi_sensor_cbs_t standard_sensor_cb =
+ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
 {
     .ipmi_sensor_events_enable_set = stand_ipmi_sensor_events_enable_set,
     .ipmi_sensor_events_enable_get = stand_ipmi_sensor_events_enable_get,
@@ -4030,6 +4030,18 @@ ipmi_sensor_set_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs)
     sensor->cbs = *cbs;
 }
 
+void
+ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info)
+{
+    sensor->oem_info = oem_info;
+}
+
+void *
+ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor)
+{
+    return sensor->oem_info;
+}
+
 int ipmi_thresholds_init(ipmi_thresholds_t *th)
 {
     int i;
@@ -4088,18 +4100,6 @@ ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
 			       enum ipmi_thresh_e thresh)
 {
     return (states->__states & (1 << thresh)) != 0;
-}
-
-char *
-ipmi_sensor_get_entity_id_string(ipmi_sensor_t *sensor)
-{
-    return sensor->entity_id_string;
-}
-
-void
-ipmi_sensor_set_entity_id_string(ipmi_sensor_t *sensor, char *str)
-{
-    sensor->entity_id_string = str;
 }
 
 char *

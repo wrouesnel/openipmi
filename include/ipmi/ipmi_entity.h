@@ -203,5 +203,6 @@ void ipmi_entity_set_SDR_repository_device(ipmi_entity_t *ent,
 					   int           val);
 void ipmi_entity_set_sensor_device(ipmi_entity_t *ent,
 				   int           val);
+void ipmi_entity_set_entity_id_string(ipmi_entity_t *ent, char *str);
 
 #endif /* _IPMI_ENTITY_H */

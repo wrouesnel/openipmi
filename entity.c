@@ -125,6 +125,8 @@ struct ipmi_entity_s
     ilist_t *sensors;
     ilist_t *inds;
 
+    char *entity_id_string;
+
     ipmi_sensor_t *presence_sensor;
     int           present;
     int           presence_possibly_changed;
@@ -337,6 +339,8 @@ entity_add(ipmi_entity_info_t *ents,
     ent->linked_ear_exists = 0;
     ent->presence_sensor_always_there = 0;
     ent->id[0] = '\0';
+
+    ent->entity_id_string = ipmi_get_entity_id_string(entity_id);
 
     ipmi_bmc_oem_new_entity(ents->bmc, ent);
 
@@ -1977,6 +1981,18 @@ int
 ipmi_entity_is_present(ipmi_entity_t *ent)
 {
     return ent->present;
+}
+
+char *
+ipmi_entity_get_entity_id_string(ipmi_entity_t *entity)
+{
+    return entity->entity_id_string;
+}
+
+void
+ipmi_entity_set_entity_id_string(ipmi_entity_t *entity, char *str)
+{
+    entity->entity_id_string = str;
 }
 
 typedef struct iterate_child_info_s

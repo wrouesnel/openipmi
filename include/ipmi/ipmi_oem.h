@@ -42,7 +42,7 @@
 
 /* This registers an OEM handler.  If an MC is detected that has the
    given manufacturer id and product id, the handler will be called. */
-typedef void (*ipmi_oem_mc_match_handler_cb)(ipmi_mc_t *mc, void *cb_data);
+typedef int (*ipmi_oem_mc_match_handler_cb)(ipmi_mc_t *mc, void *cb_data);
 int ipmi_register_oem_handler(unsigned int                 manufacturer_id,
 			      unsigned int                 product_id,
 			      ipmi_oem_mc_match_handler_cb handler,

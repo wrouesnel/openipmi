@@ -215,15 +215,16 @@ oem_handler_cmp(void *item, void *cb_data)
 	    && (hndlr->product_id == mc->product_id));
 }
 
-static void
+static int
 check_oem_handlers(ipmi_mc_t *mc)
 {
     oem_handlers_t *hndlr;
 
     hndlr = ilist_search(oem_handlers, oem_handler_cmp, mc);
     if (hndlr) {
-	hndlr->handler(mc, hndlr->cb_data);
+	return hndlr->handler(mc, hndlr->cb_data);
     }
+    return 0;
 }
 
 int
@@ -680,9 +681,7 @@ get_device_id_data_from_rsp(ipmi_mc_t  *mc,
 	memcpy(mc->aux_fw_revision, rsp_data + 12, 4);
     }
 
-    check_oem_handlers(mc);
-
-    return 0;
+    return check_oem_handlers(mc);
 }
 
 void
