@@ -3569,9 +3569,6 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	call_con_fails(domain, err, u, port_num, domain->connection_up);
     }
 
-    if (!domain->connecting && domain->conn[u]->scan_sysaddr)
-	ipmi_start_si_scan(domain, u, NULL, NULL);
-
  out_unlock:
     ipmi_read_unlock();
 }

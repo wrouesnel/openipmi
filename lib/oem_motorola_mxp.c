@@ -185,7 +185,7 @@
 #define MXP_BOARD_SENSOR_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_SENSNUM_START)
 #define MXP_BOARD_PRESENCE_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 1)
 
-#define MXP_BOARD_CONTROLNUM_START 40
+#define MXP_BOARD_CONTROLNUM_START 64
 #define MXP_BOARD_CONTROL_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_CONTROLNUM_START)
 #define MXP_BOARD_OOS_LED_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 1)
 #define MXP_BOARD_INS_LED_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 2)
@@ -8777,10 +8777,18 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->power_supply[i].oos_led);
 	if (info->power_supply[i].inserv_led)
 	    ipmi_control_destroy(info->power_supply[i].inserv_led);
+	if (info->power_supply[i].ps_type)
+	    ipmi_control_destroy(info->power_supply[i].ps_type);
+	if (info->power_supply[i].ps_revision)
+	    ipmi_control_destroy(info->power_supply[i].ps_revision);
 	if (info->power_supply[i].fan_presence)
 	    ipmi_sensor_destroy(info->power_supply[i].fan_presence);
 	if (info->power_supply[i].fan_i2c_enable)
 	    ipmi_sensor_destroy(info->power_supply[i].fan_i2c_enable);
+	if (info->power_supply[i].fan_type)
+	    ipmi_control_destroy(info->power_supply[i].fan_type);
+	if (info->power_supply[i].fan_revision)
+	    ipmi_control_destroy(info->power_supply[i].fan_revision);
 	if (info->power_supply[i].fan)
 	    ipmi_sensor_destroy(info->power_supply[i].fan);
 	if (info->power_supply[i].cooling)
@@ -8817,6 +8825,8 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_control_destroy(info->chassis_id);
     if (info->chassis_type_control)
 	ipmi_control_destroy(info->chassis_type_control);
+    if (info->shelf_ga_control)
+	ipmi_control_destroy(info->shelf_ga_control);
     if (info->relays)
 	ipmi_control_destroy(info->relays);
     if (info->sys_led)
