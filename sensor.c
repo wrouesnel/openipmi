@@ -173,6 +173,32 @@ ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor)
     return val;
 }
 
+int
+ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2)
+{
+    if (id1.bmc > id2.bmc)
+	return 1;
+    if (id1.bmc < id2.bmc)
+	return -1;
+    if (id1.mc_num > id2.mc_num)
+	return 1;
+    if (id1.mc_num < id2.mc_num)
+	return -1;
+    if (id1.channel > id2.channel)
+	return 1;
+    if (id1.channel < id2.channel)
+	return -1;
+    if (id1.lun > id2.lun)
+	return 1;
+    if (id1.lun < id2.lun)
+	return -1;
+    if (id1.sensor_num > id2.sensor_num)
+	return 1;
+    if (id1.sensor_num < id2.sensor_num)
+	return -1;
+    return 0;
+}
+
 typedef struct mc_cb_info_s
 {
     ipmi_sensor_cb   handler;
@@ -1328,7 +1354,7 @@ ipmi_sensor_threshold_assertion_event_supported(
 {
     int idx;
 
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -1349,7 +1375,7 @@ ipmi_sensor_threshold_deassertion_event_supported(
 {
     int idx;
 
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -1366,7 +1392,7 @@ ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
 			       enum ipmi_thresh_e event,
 			       int                *val)
 {
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -1382,7 +1408,7 @@ ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 			       enum ipmi_thresh_e event,
 			       int                *val)
 {
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -1398,7 +1424,7 @@ ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
 					       int           event,
 					       int           *val)
 {
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -1414,7 +1440,7 @@ ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
 						 int           event,
 						 int           *val)
 {
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -1430,7 +1456,7 @@ ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 			     int           event,
 			     int           *val)
 {
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -2126,7 +2152,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_msg_t *event)
     int                   rv;
 
 
-    if (sensor->event_reading_type == IPMI_EVENT_TYPE_THRESHOLD) {
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD) {
 	int                         value_present = 0;
 	double                      value = 0.0;
 	enum ipmi_thresh_e          threshold;
@@ -2672,7 +2698,7 @@ stand_ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
 {
     hyst_get_info_t *info;
     
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -2822,7 +2848,7 @@ stand_ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 {
     hyst_set_info_t *info;
     
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -2976,18 +3002,6 @@ thresh_get_start2(ipmi_sensor_t *sensor, void *cb_data)
     ipmi_msg_t        cmd_msg;
     int               rv;
 
-    if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED) {
-	/* Thresholds are fixed, pull them from the SDR. */
-	ipmi_thresholds_init(&(info->th));
-	rv = get_default_sensor_vals(sensor,
-				     sensor->lower_non_critical_threshold,
-				     &(info->th));
-	if (info->done)
-	    info->done(sensor, rv, &(info->th), info->cb_data);
-	opq_op_done(info->sensor->waitq);
-	free(info);
-    }
-
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
     cmd_msg.cmd = IPMI_GET_SENSOR_THRESHOLD_CMD;
@@ -3007,12 +3021,23 @@ static void
 thresh_get_start(void *cb_data, int shutdown)
 {
     thresh_get_info_t *info = cb_data;
-    int                 rv;
+    int               rv;
+    ipmi_sensor_t     *sensor = info->sensor;
 
     if (shutdown) {
 	if (info->done)
 	    info->done(info->sensor, ECANCELED, &(info->th), info->cb_data);
 	free(info);
+	return;
+    }
+
+    if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED) {
+	/* Thresholds are fixed, pull them from the SDR. */
+	int               rv;
+	
+	rv = get_default_sensor_vals(sensor, 0, &(info->th));
+	if (info->done)
+	    info->done(sensor, rv, &(info->th), info->cb_data);
 	return;
     }
 
@@ -3032,11 +3057,11 @@ stand_ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 {
     thresh_get_info_t *info;
     
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
-    if (sensor->threshold_access != IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE)
+    if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
 	return ENOTSUP;
     
     info = malloc(sizeof(*info));
@@ -3196,7 +3221,7 @@ stand_ipmi_thresholds_set(ipmi_sensor_t       *sensor,
 {
     thresh_set_info_t *info;
     
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -3353,7 +3378,7 @@ stand_ipmi_reading_get(ipmi_sensor_t        *sensor,
 {
     reading_get_info_t *info;
     
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -3504,7 +3529,7 @@ stand_ipmi_states_get(ipmi_sensor_t       *sensor,
 {
     states_get_info_t *info;
     
-    if (sensor->event_reading_type == IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* A threshold sensor, it doesn't have states. */
 	return ENOSYS;
 
@@ -3590,7 +3615,7 @@ stand_ipmi_sensor_convert_from_raw(ipmi_sensor_t *sensor,
     double m, b, b_exp, r_exp, fval;
     linearizer c_func;
 
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -3639,7 +3664,7 @@ stand_ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
     int    lowraw, highraw, raw, maxraw, minraw, next_raw;
     int    rv;
 
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -3742,7 +3767,7 @@ stand_ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
     double m, r_exp, fval;
     linearizer c_func;
 
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 
@@ -3770,7 +3795,7 @@ stand_ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy)
 {
     double a, a_exp;
 
-    if (sensor->event_reading_type != IPMI_EVENT_TYPE_THRESHOLD)
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
 

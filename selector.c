@@ -233,15 +233,17 @@ diff_timeval(struct timeval *dest,
     }
 }
 
-#if 0
+#undef MASSIVE_DEBUG
+#ifdef MASSIVE_DEBUG
 #include <stdio.h>
+FILE **debug_out = &stderr;
 static void
 print_tree_item(sel_timer_t *pos, int indent)
 {
     int i;
     for (i=0; i<indent; i++)
-	printf(" ");
-    printf("  %p: %p %p %p (%ld.%7.7ld)\n", pos, pos->left, pos->right,
+	fprintf(*debug_out, " ");
+    fprintf(*debug_out, "  %p: %p %p %p (%ld.%7.7ld)\n", pos, pos->left, pos->right,
 	   pos->up, pos->timeout.tv_sec, pos->timeout.tv_usec);
     if (pos->left)
 	print_tree_item(pos->left, indent+1);
@@ -252,10 +254,11 @@ print_tree_item(sel_timer_t *pos, int indent)
 static void
 print_tree(sel_timer_t *top, sel_timer_t *last)
 {
-    printf("top=%p\n", top);
+    fprintf(*debug_out, "top=%p\n", top);
     if (top)
 	print_tree_item(top, 0);
-    printf("last=%p\n", last);
+    fprintf(*debug_out, "last=%p\n", last);
+    fflush(*debug_out);
 }
 
 static void
@@ -267,16 +270,16 @@ check_tree_item(sel_timer_t *curr,
 {
     if (! curr->left) {
 	if (curr->right) {
-	    printf("Tree corrupt B\n");
+	    fprintf(*debug_out, "Tree corrupt B\n");
 	    *((int *) NULL) = 0;
 	} else if (*depth > max_depth) {
-	    printf("Tree corrupt C\n");
+	    fprintf(*debug_out, "Tree corrupt C\n");
 	    *((int *) NULL) = 0;
 	} else if (*depth < (max_depth - 1)) {
-	    printf("Tree corrupt D\n");
+	    fprintf(*debug_out, "Tree corrupt D\n");
 	    *((int *) NULL) = 0;
 	} else if ((*found_last) && (*depth == max_depth)) {
-	    printf("Tree corrupt E\n");
+	    fprintf(*debug_out, "Tree corrupt E\n");
 	    *((int *) NULL) = 0;
 	} else if (*depth == max_depth) {
 	    *real_last = curr;
@@ -285,11 +288,11 @@ check_tree_item(sel_timer_t *curr,
 	}
     } else {
 	if (curr->left->up != curr) {
-	    printf("Tree corrupt I\n");
+	    fprintf(*debug_out, "Tree corrupt I\n");
 	    *((int *) NULL) = 0;
 	}
 	if (cmp_timeval(&(curr->left->timeout), &(curr->timeout)) < 0) {
-	    printf("Tree corrupt K\n");
+	    fprintf(*debug_out, "Tree corrupt K\n");
 	    *((int *) NULL) = 0;
 	}
 	(*depth)++;
@@ -298,21 +301,21 @@ check_tree_item(sel_timer_t *curr,
 
 	if (! curr->right) {
 	    if (*depth != (max_depth - 1)) {
-		printf("Tree corrupt F\n");
+		fprintf(*debug_out, "Tree corrupt F\n");
 		*((int *) NULL) = 0;
 	    }
 	    if (*found_last) {
-		printf("Tree corrupt G\n");
+		fprintf(*debug_out, "Tree corrupt G\n");
 		*((int *) NULL) = 0;
 	    }
 	    *found_last = 1;
 	} else {
 	    if (curr->right->up != curr) {
-		printf("Tree corrupt H\n");
+		fprintf(*debug_out, "Tree corrupt H\n");
 		*((int *) NULL) = 0;
 	    }
 	    if (cmp_timeval(&(curr->right->timeout), &(curr->timeout)) < 0) {
-		printf("Tree corrupt L\n");
+		fprintf(*debug_out, "Tree corrupt L\n");
 		*((int *) NULL) = 0;
 	    }
 	    (*depth)++;
@@ -331,7 +334,7 @@ check_tree(sel_timer_t *top, sel_timer_t *last)
 
     if (!top) {
 	if (last) {
-	    printf("Tree corrupt A\n");
+	    fprintf(*debug_out, "Tree corrupt A\n");
 	    *((int *) NULL) = 0;
 	}
 	return;
@@ -347,9 +350,10 @@ check_tree(sel_timer_t *top, sel_timer_t *last)
     check_tree_item(top, &depth, max_depth, &real_last, &found_last);
 
     if (real_last != last) {
-	printf("Tree corrupt J\n");
+	fprintf(*debug_out, "Tree corrupt J\n");
 	*((int *) NULL) = 0;
     }
+    fflush(*debug_out);
 }
 #endif
 
@@ -427,9 +431,13 @@ send_up(sel_timer_t *elem, sel_timer_t **top, sel_timer_t **last)
 	if (parent->left == elem) {
 	    elem->left = parent;
 	    elem->right = parent->right;
+	    if (elem->right)
+		elem->right->up = elem;
 	} else {
 	    elem->right = parent;
 	    elem->left = parent->left;
+	    if (elem->left)
+		elem->left->up = elem;
 	}
 	elem->up = parent->up;
 
@@ -541,6 +549,12 @@ add_to_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
     sel_timer_t **next;
     sel_timer_t *parent;
 
+#ifdef MASSIVE_DEBUG
+    fprintf(*debug_out, "add_to_head entry\n");
+    print_tree(*top, *last);
+    check_tree(*top, *last);
+#endif
+
     elem->left = NULL;
     elem->right = NULL;
     elem->up = NULL;
@@ -548,7 +562,7 @@ add_to_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
     if (*top == NULL) {
 	*top = elem;
 	*last = elem;
-	return;
+	goto out;
     }
 
     find_next_pos(*last, &next, &parent);
@@ -558,12 +572,25 @@ add_to_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
     if (cmp_timeval(&elem->timeout, &parent->timeout) < 0) {
 	send_up(elem, top, last);
     }
+
+ out:
+#ifdef MASSIVE_DEBUG
+    fprintf(*debug_out, "add_to_head exit\n");
+    print_tree(*top, *last);
+    check_tree(*top, *last);
+#endif
 }
 
 static void
 remove_from_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
 {
     sel_timer_t *to_insert;
+
+#ifdef MASSIVE_DEBUG
+    fprintf(*debug_out, "remove_from_head entry\n");
+    print_tree(*top, *last);
+    check_tree(*top, *last);
+#endif
 
     /* First remove the last element from the tree, if it's not what's
        being removed, we will use it for insertion into the removal
@@ -573,7 +600,7 @@ remove_from_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
 	/* This is the only element in the heap. */
 	*top = NULL;
 	*last = NULL;
-	return;
+	goto out;
     } else {
 	/* Set the new last position, and remove the item we will
            insert. */
@@ -587,7 +614,7 @@ remove_from_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
 
     if (elem == to_insert) {
 	/* We got lucky and removed the last element.  We are done. */
-	return;
+	goto out;
     }
 
     /* Now stick the formerly last element into the removed element's
@@ -621,6 +648,13 @@ remove_from_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
     } else {
 	send_down(elem, top, last);
     }
+
+ out:
+#ifdef MASSIVE_DEBUG
+    fprintf(*debug_out, "remove_from_head exit\n");
+    print_tree(*top, *last);
+    check_tree(*top, *last);
+#endif
 }
 
 int

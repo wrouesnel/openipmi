@@ -114,6 +114,7 @@ typedef void (*ipmi_sensor_cb)(ipmi_sensor_t *sensor, void *cb_data);
 int ipmi_sensor_pointer_cb(ipmi_sensor_id_t id,
 			   ipmi_sensor_cb   handler,
 			   void             *cb_data);
+int ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2);
 
 ipmi_ind_id_t ipmi_ind_convert_to_id(ipmi_ind_t *ind);
 typedef void (*ipmi_ind_cb)(ipmi_ind_t *ind, void *cb_data);
@@ -547,6 +548,7 @@ int ipmi_threshold_set(ipmi_thresholds_t  *th,
 int ipmi_threshold_get(ipmi_thresholds_t  *th,
 		       enum ipmi_thresh_e threshold,
 		       double             *value);
+		       
 /* Set the thresholds for the given sensor. */
 int ipmi_thresholds_set(ipmi_sensor_t       *sensor,
 			ipmi_thresholds_t   *thresholds,
