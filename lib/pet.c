@@ -1090,10 +1090,10 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->pef_check[1].mask[0] = 1;
     pet->pef_check[2].conf_num = IPMI_PEFPARM_EVENT_FILTER_TABLE;
     pet->pef_check[2].set = eft_sel;
-    pet->pef_check[2].data_len = 22;
-    memset(pet->pef_check[2].data, 0xff, 9);
-    memset(pet->pef_check[2].data+9, 0, 22-9);
-    memset(pet->pef_check[2].mask, 0xff, 22);
+    pet->pef_check[2].data_len = 21;
+    memset(pet->pef_check[2].data, 0xff, 10);
+    memset(pet->pef_check[2].data+10, 0, 21-9);
+    memset(pet->pef_check[2].mask, 0xff, 21);
     pet->pef_check[2].data[0] = eft_sel;
     pet->pef_check[2].mask[0] = 0x7f;
     pet->pef_check[2].data[1] = 0x80;
