@@ -1919,6 +1919,7 @@ init_glib(void)
 		      glib_handle_log,
 		      NULL);
 }
+#endif
 
 /*
  * Initialize the OS handler with the default version.  This is glib
@@ -1933,8 +1934,6 @@ init(void)
     init_posix();
 #endif
 }
-
-#endif
 
 /*
  * Perform one operation.  The first parameter is a timeout in

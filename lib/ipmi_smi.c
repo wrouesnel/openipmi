@@ -1523,6 +1523,7 @@ setup(int          if_num,
     ipmi->register_for_command = smi_register_for_command;
     ipmi->deregister_for_command = smi_deregister_for_command;
     ipmi->close_connection = smi_close_connection;
+    ipmi->close_connection_done = smi_close_connection_done;
 
     if (smi->using_socket) {
 	rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,

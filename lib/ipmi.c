@@ -1186,10 +1186,10 @@ ipmi_parse_options(ipmi_open_option_t *option,
 	option->option = IPMI_OPEN_OPTION_FRUS;
 	option->ival = 1;
     } else if (strcmp(arg, "-nosel") == 0) {
-	option->option = IPMI_OPEN_OPTION_FRUS;
+	option->option = IPMI_OPEN_OPTION_SEL;
 	option->ival = 0;
     } else if (strcmp(arg, "-sel") == 0) {
-	option->option = IPMI_OPEN_OPTION_FRUS;
+	option->option = IPMI_OPEN_OPTION_SEL;
 	option->ival = 1;
     } else if (strcmp(arg, "-noipmbscan") == 0) {
 	option->option = IPMI_OPEN_OPTION_IPMB_SCAN;

@@ -63,9 +63,7 @@ AC_ARG_WITH(perl,
 
 AC_ARG_WITH(perlinstall,
 [  --with-perlinstall=PATH         Look for perl, with the optional path.],
-    if test -d "$withval"; then
-      perlinstalldir="$withval"
-    fi,
+    perlinstalldir="$withval",
 )
 
 tryswig=yes

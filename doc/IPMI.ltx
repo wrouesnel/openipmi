@@ -7791,52 +7791,14 @@ The interface uses object-oriented programming in Perl, so you must
 know how to do that in Perl.  It's pretty simple, really, but it's
 somewhat strange if you already know another OO programming language.
 
-As an example, to create a domain connection, you might use the
-following code:
+As an example, to create a domain connection and read all the events,
+you might use the following code:
 
-\begin{verbatim}
-{
-    package Conh;
-    sub new {
-	my $a = shift;
-	my $b = \$a;
-	return bless $b;
-    }
+\verbatimtabinput{../swig/perl/get_events}
 
-    sub conn_change_cb {
-	my $self = shift;
-	my $domain = shift;
-	my $err = shift;
-	my $conn_num = shift;
-	my $port_num = shift;
-	my $still_connected = shift;
-
-	# Handle connection being up but the domain not being fully up yet.
-    }
-
-    package Uph;
-    sub new {
-	my $a = shift;
-	my $b = \$a;
-	return bless $b;
-    }
-
-    sub domain_up_cb {
-        my $self = shift;
-        my $domain = shift;
-    }
-}
-
-$conh = Conh::new();
-$uph = Uph::new();
-
-@args = ("-noall", "-sel", "smi", "0");
-$domain_id = OpenIPMI::open_domain("test1", \@args, $conh, $uph);
-while (1) {
-    OpenIPMI::wait_io(1000);
-}
-
-\end{verbatim}
+Unfortunately, the documentation for the Perl interface is in the file
+\verb=swig/OpenIPMI.i= along with the sources.  It will hopefully be
+here in the future.
 
 \chapter{Comparison with \acs{SNMP}}
 

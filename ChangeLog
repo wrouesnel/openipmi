@@ -1,3 +1,16 @@
+2004-11-04 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Fix perlinstalldir to work.
+
+	* doc/IPMI.ltx: Added some docs on the Perl interface.
+
+	* lib/ipmi.c: Fixed optional SEL handling.
+
+	* lib/ipmi_smi.c: Added missing close_connection_domain callback
+	initialization.
+
+	* swig/OpenIPMI.i: Fixed initialization to work without glib.
+
 2004-11-01 Corey Minyard <cminyard@mvista.com> 
 
 	* FAQ: Added some useful information
@@ -22,7 +35,7 @@
 	* swig/OpenIPMI.i: Fixed some problems with handling FRU
 	data.
 
-	* swig/perl/sample.c: Fixed some problems with events.
+	* swig/perl/sample: Fixed some problems with events.
 	
 	* configure.in: Move to version 1.4.4
 

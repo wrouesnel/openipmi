@@ -1,0 +1,148 @@
+#!/usr/bin/perl
+
+# get_events
+#
+# A sample perl program to get IPMI events from an BMC
+#
+# Author: MontaVista Software, Inc.
+#         Corey Minyard <minyard@mvista.com>
+#         source@mvista.com
+#
+# Copyright 2004 MontaVista Software Inc.
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License
+#  as published by the Free Software Foundation; either version 2 of
+#  the License, or (at your option) any later version.
+#
+#
+#  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+#  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+#  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+#  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+#  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+#  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#  You should have received a copy of the GNU Lesser General Public
+#  License along with this program; if not, write to the Free
+#  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+use OpenIPMI;
+
+{
+    package MC_Nameget;
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	return bless $b;
+    }
+
+    sub mc_cb {
+	my $self = shift;
+	my $mc = shift;
+
+	$$self = $mc->get_name();
+    }
+
+    package Eventh;
+
+    sub new {
+	my $obj = { };
+	return bless \$obj;
+    }
+
+    sub event_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $event = shift;
+	my $mcid;
+	my $name;
+	my $val;
+	my @data;
+	my $dataref;
+
+	$mcid = $event->get_mc_id();
+
+	$name = MC_Nameget::new("");
+	$mcid->convert_to_mc($name);
+	$dataref = $event->get_data();
+	@data = @$dataref;
+
+	print ("Got event: $$name ", $event->get_record_id(),
+	       " ", $event->get_type(), " ", $event->get_timestamp(), "\n");
+	print "  Data: ";
+	while (defined ($val = shift @data)) {
+	    printf " %2.2x", $val;
+	}
+	print "\n";
+    }
+
+    package Conh;
+    sub new {
+	my $obj = { };
+	$obj->{first_time} = 1;
+	return bless \$obj;
+    }
+
+    sub conn_change_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $err = shift;
+	my $conn_num = shift;
+	my $port_num = shift;
+	my $still_connected = shift;
+
+	if ($err && !$still_connected) {
+	    print "Error starting up connection: $err\n";
+	    exit 1;
+	} elsif ($$self->{first_time}) {
+	    my $event_handler = Eventh::new();
+
+	    # Register an event handler on the first time.
+	    $$self->{first_time} = 0;
+	    $rv = $domain->add_event_handler($event_handler);
+	    if ($rv) {
+		print "Error adding event handler, closing\n";
+		$domain->close();
+		exit(1);
+	    }
+	}
+    }
+
+    package Uph;
+    sub new {
+	my $obj = { };
+	return bless \$obj;
+    }
+
+    sub domain_close_done_cb {
+	exit 0;
+    }
+
+    sub domain_up_cb {
+        my $self = shift;
+        my $domain = shift;
+
+	# Domain is up, the SEL has been read.
+	print "Domain ", $domain->get_name(), " is finished coming up!\n";
+	$domain->close($self);
+    }
+
+}
+
+OpenIPMI::init();
+
+$conh = Conh::new();
+$uph = Uph::new();
+
+# Only get the SEL from the local BMC, don't do anything else.
+@args = ("-noall", "-sel", "smi", "0");
+$domain_id = OpenIPMI::open_domain("test1", \@args, $conh, $uph);
+while (1) {
+    OpenIPMI::wait_io(1000);
+}
