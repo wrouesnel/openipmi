@@ -223,7 +223,7 @@ sui_log(os_handler_t *handler,
     va_list ap;
 
     va_start(ap, format);
-#if 1
+#if 0
     ui_vlog(format, ap);
 #else
     vfprintf(stderr, format, ap);
@@ -236,7 +236,7 @@ sui_vlog(os_handler_t *handler,
 	 char         *format,
 	 va_list      ap)
 {
-#if 1
+#if 0
     ui_vlog(format, ap);
 #else
     vfprintf(stderr, format, ap);

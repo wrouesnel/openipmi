@@ -49,6 +49,9 @@
 #include "ilist.h"
 #include "opq.h"
 
+/* Rescan the bus for MCs every 10 minutes */
+#define IPMI_RESCAN_BUS_INTERVAL 600
+
 /* Re-query the SEL every 10 seconds. */
 #define IPMI_SEL_QUERY_INTERVAL 10
 
@@ -60,6 +63,20 @@ enum ipmi_con_state_e { DEAD = 0,
 			OPERATIONAL };
 
 #define MAX_IPMI_USED_CHANNELS 8
+
+/* Timer structure fo rereading the SEL. */
+typedef struct bmc_reread_info_s
+{
+    int cancelled;
+    ipmi_mc_t *bmc;
+} bmc_reread_info_t;
+    
+/* Timer structure fo rescanning the bus. */
+typedef struct bmc_rescan_bus_info_s
+{
+    int       cancelled;
+    ipmi_mc_t *bmc;
+} bmc_rescan_bus_info_t;
 
 typedef struct ipmi_bmc_s
 {
@@ -84,6 +101,9 @@ typedef struct ipmi_bmc_s
     ipmi_oem_event_handler_cb oem_event_handler;
     void                      *oem_event_cb_data;
 
+    /* Are we in the middle of an MC bus scan? */
+    int                scanning_bus;
+
     ipmi_entity_info_t *entities;
     ipmi_lock_t        *entities_lock;
     ipmi_bmc_entity_cb entity_handler;
@@ -107,8 +127,13 @@ typedef struct ipmi_bmc_s
     /* The system event log, for querying and storing events. */
     ipmi_sel_info_t *sel;
 
+    /* Timer for rescanning the bus periodically. */
+    os_hnd_timer_id_t     *bus_scan_timer;
+    bmc_rescan_bus_info_t *bus_scan_timer_info;
+
     /* Timer for rescanning the sel periodically. */
     os_hnd_timer_id_t *sel_timer;
+    bmc_reread_info_t *sel_timer_info;
 } ipmi_bmc_t;
 
 struct ipmi_mc_s
@@ -752,6 +777,12 @@ ipmi_close_connection(ipmi_mc_t    *mc,
 
     /* FIXME - handle cleaning up the mc list. */
 
+    if (mc->bmc->sel_timer_info)
+        mc->bmc->sel_timer_info->cancelled = 1;
+
+    if (mc->bmc->bus_scan_timer_info)
+        mc->bmc->bus_scan_timer_info->cancelled = 1;
+
     if (mc->sensors_in_my_sdr) {
 	for (i=0; i<mc->sensors_in_my_sdr_count; i++) {
 	    ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
@@ -881,8 +912,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	int          rv;
 
 	/* Remove it from the BMC list. */
-	ipmi_lock(mc->bmc->mc_list_lock);
-	ilist_init_iter(&iter, mc->bmc->mc_list);
+	ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
+	ilist_init_iter(&iter, mc->bmc_mc->bmc->mc_list);
 	rv = ilist_first(&iter);
 	while (rv) {
 	    if (ilist_get(&iter) == mc) {
@@ -891,7 +922,7 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    }
 	    rv = ilist_next(&iter);
 	}
-	ipmi_unlock(mc->bmc->mc_list_lock);
+	ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
     }
     free(mc);
 }
@@ -943,12 +974,6 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     return rv;
 }
 
-typedef struct bmc_reread_info_s
-{
-    int cancelled;
-    ipmi_mc_t *bmc;
-} bmc_reread_info_t;
-    
 static void
 bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 {
@@ -1005,6 +1030,8 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	free(info);
 	ipmi_log("Unable to start the system event log timer."
 		 " System event log will not be queried\n");
+    } else {
+	mc->bmc->sel_timer_info = info;
     }
 }
 
@@ -1054,6 +1081,9 @@ typedef struct mc_ipbm_scan_info_s
     ipmi_ipmb_addr_t addr;
     ipmi_mc_t        *bmc;
     ipmi_msg_t       msg;
+    unsigned int     end_addr;
+    ipmi_bmc_cb      done_handler;
+    void             *cb_data;
 } mc_ipmb_scan_info_t;
 
 static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
@@ -1085,8 +1115,12 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 		goto next_addr;
 
 	    rv = ipmi_sdr_alloc(mc, 0, 1, &(mc->sdrs));
-	    if (!rv)
-		rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
+	    if (!rv) {
+		if (mc->sensor_device_support)
+		    rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
+	        else
+	 	    rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
+	    }
 	    if (rv)
 		ipmi_cleanup_mc(mc);
 	}
@@ -1094,8 +1128,10 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 
  next_addr:
     info->addr.slave_addr += 2;
-    if (info->addr.slave_addr == 0xf0) {
+    if (info->addr.slave_addr == info->end_addr) {
 	/* We've hit the end, we can quit now. */
+	if (info->done_handler)
+	    info->done_handler(info->bmc, 0, info->cb_data);
 	free(info);
 	return;
     }
@@ -1121,8 +1157,13 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     
 }
 
-static void
-start_ipmb_mc_scan(ipmi_mc_t *bmc, int channel)
+void
+ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
+	       		int          channel,
+	       		unsigned int start_addr,
+			unsigned int end_addr,
+			ipmi_bmc_cb  done_handler,
+			void         *cb_data)
 {
     mc_ipmb_scan_info_t *info;
     int                 rv;
@@ -1134,12 +1175,15 @@ start_ipmb_mc_scan(ipmi_mc_t *bmc, int channel)
     info->bmc = bmc;
     info->addr.addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
     info->addr.channel = channel;
-    info->addr.slave_addr = 0x10; /* First non-reserved address. */
+    info->addr.slave_addr = start_addr;
     info->addr.lun = 0;
     info->msg.netfn = IPMI_APP_NETFN;
     info->msg.cmd = IPMI_GET_DEVICE_ID_CMD;
     info->msg.data = NULL;
     info->msg.data_len = 0;
+    info->end_addr = end_addr;
+    info->done_handler = done_handler;
+    info->cb_data = cb_data;
     rv = bmc->bmc->conn->send_command(bmc->bmc->conn,
 				      (ipmi_addr_t *) &(info->addr),
 				      sizeof(info->addr),
@@ -1162,6 +1206,12 @@ start_ipmb_mc_scan(ipmi_mc_t *bmc, int channel)
 }
 
 static void
+mc_scan_done(ipmi_mc_t *bmc, int err, void *cb_data)
+{
+    bmc->bmc->scanning_bus = 0;
+}
+
+static void
 start_mc_scan(ipmi_mc_t *bmc)
 {
     int i;
@@ -1169,15 +1219,44 @@ start_mc_scan(ipmi_mc_t *bmc)
     if (!bmc->bmc->do_bus_scan)
 	return;
 
+    if (bmc->bmc->scanning_bus)
+	return;
+
+    bmc->bmc->scanning_bus = 1;
+
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (bmc->bmc->chan[i].medium == 1) /* IPMB */
-	    start_ipmb_mc_scan(bmc, i);
+	    ipmi_start_ipmb_mc_scan(bmc, i, 0x10, 0xf0, mc_scan_done, NULL);
     }
+}
+
+static void
+bmc_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
+{
+    struct timeval        timeout;
+    bmc_rescan_bus_info_t *info = cb_data;
+    ipmi_mc_t             *bmc = info->bmc;
+
+    if (info->cancelled) {
+	free(info);
+	return;
+    }
+    ipmi_lock(bmc->bmc->mc_list_lock);
+    timeout.tv_sec = IPMI_RESCAN_BUS_INTERVAL;
+    timeout.tv_usec = 0;
+    bmc->bmc->conn->os_hnd->restart_timer(bmc->bmc->conn->os_hnd,
+					  id,
+					  &timeout);
+    ipmi_unlock(bmc->bmc->mc_list_lock);
 }
 
 static void
 set_operational(ipmi_mc_t *mc)
 {
+    struct timeval        timeout;
+    bmc_rescan_bus_info_t *info;
+    int                   rv;
+
     /* Report this before we start scanning for entities and
        sensors so the user can register a callback handler for
        those. */
@@ -1196,6 +1275,28 @@ set_operational(ipmi_mc_t *mc)
 
     ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     start_mc_scan(mc);
+
+    /* Start the timer to rescan the bus periodically. */
+    info = malloc(sizeof(*info));
+    if (!info)
+	rv = ENOMEM;
+    else {
+	info->bmc = mc;
+	info->cancelled = 0;
+        timeout.tv_sec = IPMI_RESCAN_BUS_INTERVAL;
+        timeout.tv_usec = 0;
+        rv = mc->bmc->conn->os_hnd->add_timer(mc->bmc->conn->os_hnd,
+					      &timeout,
+					      bmc_rescan_bus,
+					      info,
+					      &(mc->bmc->bus_scan_timer));
+    }
+    if (rv) {
+	ipmi_log("Unable to start the bus scan timer."
+		 " The bus will not be scanned periodically.\n");
+    } else {
+	mc->bmc->bus_scan_timer_info = info;
+    }
 }
 
 static void
@@ -1454,6 +1555,7 @@ setup_bmc(ipmi_con_t  *ipmi,
 
     mc->bmc->main_sdrs = NULL;
     mc->bmc->conn = ipmi;
+    mc->bmc->scanning_bus = 0;
     mc->bmc->event_handlers = NULL;
     mc->bmc->event_handlers_lock = NULL;
     mc->bmc->oem_event_handler = NULL;

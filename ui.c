@@ -1452,6 +1452,7 @@ mcs_cmd(char *cmd, char **toks, void *cb_data)
     wmove(display_pad, 0, 0);
     curr_display_type = DISPLAY_MCS;
     waddstr(display_pad, "MCs:\n");
+    waddstr(display_pad, "  0x20\n");
     ipmi_bmc_iterate_mcs(bmc, mcs_handler, NULL);
     display_pad_refresh();
     return 0;

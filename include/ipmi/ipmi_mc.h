@@ -243,6 +243,16 @@ int ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc);
 /* Destroy an MC. */
 void ipmi_cleanup_mc(ipmi_mc_t *mc);
 
+/* Scan a set of addresses on the bmc for mcs.  This can be used by OEM
+   code to add an MC if it senses that one has become present. */
+void ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
+	       		     int          channel,
+	       		     unsigned int start_addr,
+			     unsigned int end_addr,
+                             ipmi_bmc_cb  done_handler,
+			     void         *cb_data);
+
+
 /* Set and get the OEM data pointer in the mc. */
 void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
 void *ipmi_mc_get_oem_data(ipmi_mc_t *mc);
