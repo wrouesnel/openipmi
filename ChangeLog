@@ -1,3 +1,8 @@
+2004-10-09 Corey Minyard <cminyard@mvista.com> 
+
+	* OpenIPMIcmdlang.pc.in, Makefile.am: Added file for the new
+	cmdlang library.
+
 2004-10-08 Corey Minyard <cminyard@mvista.com> 
 
 	* doc/IPMI.ltx: Documentation cleanup

@@ -7,7 +7,7 @@ EXTRA_DIST = FAQ TODO README.Force README.MotorolaMXP OpenIPMI.spec.in \
 	     OpenIPMI.spec
 
 PKGCONFIGS = OpenIPMIutils.pc OpenIPMI.pc OpenIPMIui.pc OpenIPMIposix.pc \
-	     OpenIPMIpthread.pc
+	     OpenIPMIpthread.pc OpenIPMIcmdlang.pc
 
 install-data-local: OpenIPMI.pc OpenIPMIui.pc
 	$(mkinstalldirs) $(DESTDIR)$(libdir)/pkgconfig
