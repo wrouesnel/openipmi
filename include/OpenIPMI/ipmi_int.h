@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003 MontaVista Software Inc.
+ * Copyright 2002,2003,2004 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -156,6 +156,9 @@ void ipmi_set_device_string(char                 *input,
    substituted, etc. */
 void *ipmi_mem_alloc(int size);
 void ipmi_mem_free(void *data);
+
+/* strdup using the above memory allocation routines. */
+char *ipmi_strdup(const char *str);
 
 /* If you have debug allocations on, then you should call this to
    check for data you haven't freed (after you have freed all the

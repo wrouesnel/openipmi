@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003 MontaVista Software Inc.
+ * Copyright 2002,2003,2004 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -50,7 +50,8 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_ui.h>
-#include "OpenIPMI/ipmi_fru.h"
+#include <OpenIPMI/ipmi_fru.h>
+#include <OpenIPMI/ipmi_pef.h>
 
 #include "ui_keypad.h"
 #include "ui_command.h"
@@ -73,6 +74,8 @@ command_t commands;
 ipmi_domain_id_t domain_id;
 
 extern os_handler_t ipmi_ui_cb_handlers;
+ipmi_pef_t *pef;
+ipmi_pef_config_t *pef_config;
 
 static int full_screen;
 struct termios old_termios;
@@ -2997,6 +3000,198 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+void
+display_pef(void)
+{
+    if (!pef) {
+	display_pad_out("No PEF read, use readpef to fetch one\n");
+	return;
+    }
+
+    display_pad_out("PEF\n");
+    display_pad_out(" Version: %d.%d", ipmi_pef_major_version(pef),
+		    ipmi_pef_minor_version(pef));
+    display_pad_out(" Supports:");
+    if (ipmi_pef_supports_diagnostic_interrupt(pef))
+	display_pad_out(" diagnostic_interrupt");
+    if (ipmi_pef_supports_oem_action(pef))
+	display_pad_out(" oem_action");
+    if (ipmi_pef_supports_power_cycle(pef))
+	display_pad_out(" power_cycle");
+    if (ipmi_pef_supports_reset(pef))
+	display_pad_out(" reset");
+    if (ipmi_pef_supports_power_down(pef))
+	display_pad_out(" power_down");
+    if (ipmi_pef_supports_alert(pef))
+	display_pad_out(" alert");
+    display_pad_out("\n");
+    display_pad_out("Num event filter table entries: %d\n",
+		    num_event_filter_table_entries(pef));
+}
+
+void
+display_pef_config(void)
+{
+    if (!pef_config) {
+	display_pad_out("No PEF config read, use readpef to fetch one\n");
+	return;
+    }
+
+}
+
+void
+readpef_getconf_handler(ipmi_pef_t        *pef,
+			int               err,
+			ipmi_pef_config_t *config,
+			void              *cb_data)
+{
+    if (err) {
+	ui_log("Error reading PEF config: %x\n", err);
+	return;
+    }
+
+    pef_config = config;
+    display_pef_config();
+}
+
+void
+readpef_alloc_handler(ipmi_pef_t *lpef,
+		      int        err,
+		      void       *cb_data)
+{
+    if (err) {
+	ui_log("Error allocating PEF: %x\n", err);
+	return;
+    }
+
+    if (!ipmi_pef_valid(pef)) {
+	display_pad_out("PEF is not valid\n");
+	ipmi_pef_destroy(pef, NULL, NULL);
+	pef = NULL;
+	return;
+    }
+
+    pef = lpef;
+    display_pad_clear();
+    display_pef();
+
+    ipmi_pef_get_config(pef, readpef_getconf_handler, NULL);
+}
+
+void
+readpef_mc_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    if (pef) {
+	ipmi_pef_destroy(pef, NULL, NULL);
+	pef = NULL;
+    }
+    if (pef_config) {
+	ipmi_pef_free_config(pef_config);
+	pef_config = NULL;
+    }
+
+    ipmi_pef_alloc(mc, readpef_alloc_handler, NULL, NULL);
+}
+
+int
+readpef_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+    unsigned char val;
+
+    if (get_uchar(toks, &val, "mc channel"))
+	return 0;
+    info.mc_id.channel = val;
+
+    if (get_uchar(toks, &val, "MC num"))
+	return 0;
+    info.mc_id.mc_num = val;
+
+    info.mc_id.domain_id = domain_id;
+
+    info.found = 0;
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, readpef_mc_handler, &info);
+    if (rv) {
+	cmd_win_out("Unable to find MC\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%d %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
+int
+viewpef_cmd(char *cmd, char **toks, void *cb_data)
+{
+    display_pad_clear();
+    display_pef();
+    display_pef_config();
+    
+    return 0;
+}
+
+void writepef_done(ipmi_pef_t *pef,
+		   int        err,
+		   void       *cb_data)
+{
+    if (err)
+	ui_log("Error writing PEF: %x\n", err);
+    else
+	ui_log("PEF written\n");
+}
+
+void
+writepef_mc_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    if (!pef) {
+	ui_log("No PEF to write\n");
+	return;
+    }
+    if (!pef_config) {
+	ui_log("No PEF config to write\n");
+	return;
+    }
+
+    ipmi_pef_set_config(pef, pef_config, writepef_done, NULL);
+}
+
+int
+writepef_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+    unsigned char val;
+
+    if (get_uchar(toks, &val, "mc channel"))
+	return 0;
+    info.mc_id.channel = val;
+
+    if (get_uchar(toks, &val, "MC num"))
+	return 0;
+    info.mc_id.mc_num = val;
+
+    info.mc_id.domain_id = domain_id;
+
+    info.found = 0;
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, writepef_mc_handler, &info);
+    if (rv) {
+	cmd_win_out("Unable to find MC\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%d %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
 typedef struct msg_cmd_data_s
 {
     unsigned char    data[MCCMD_DATA_SIZE];
@@ -3781,6 +3976,14 @@ static struct {
       " <channel> <IPMB addr> <LUN> <NetFN> <Cmd> [data...] - Send a command"
       " to the given IPMB address on the given channel and display the"
       " response" },
+    { "readpef",	readpef_cmd,
+      " <channel> <mc num>"
+      " - read pef information from an MC" },
+    { "viewpef",	viewpef_cmd,
+      " - show current pef information " },
+    { "writepef",	writepef_cmd,
+      " <channel> <mc num> "
+      " - write the current PEF information to an MC" },
     { "delevent",	delevent_cmd,
       " <channel> <mc num> <log number> - "
       "Delete the given event number from the SEL" },
@@ -4337,6 +4540,7 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 						&mc_update_handler_id);
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
+    pef = NULL;
 }
 
 void
