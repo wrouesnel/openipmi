@@ -1162,7 +1162,7 @@ data_handler(int            fd,
     socklen_t          from_len;
     uint32_t           seq, sess_id;
     unsigned char      *tmsg;
-    ipmi_addr_t        addr, addr2;
+    ipmi_addr_t        addr, addr2, *addr3;
     unsigned int       addr_len;
     unsigned int       data_len;
     int                recv_addr;
@@ -1362,6 +1362,7 @@ data_handler(int            fd,
        validate all this for us. */
 
     seq = tmsg[4] >> 2;
+    addr3 = &lan->seq_table[seq].addr;
 
     if (tmsg[5] == IPMI_SEND_MSG_CMD) {
 	/* It's a response to a sent message. */
@@ -1447,6 +1448,18 @@ data_handler(int            fd,
         }
 	handle_async_event(ipmi, &addr, addr_len, &msg);
 	goto out_unlock2;
+    } else if ((addr3->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+	       && (tmsg[3] == lan->slave_addr))
+    {
+        /* IPMIv1_5_rev1_1_0926 markup, section 6.12.4, didn't clear
+	   things up at all.  Some manufacturers have interpreted it
+	   this way, but IMHO it is incorrect. */
+        memcpy(&addr, &lan->seq_table[seq].addr, lan->seq_table[seq].addr_len);
+        addr_len = lan->seq_table[seq].addr_len;
+        msg.netfn = tmsg[1] >> 2;
+        msg.cmd = tmsg[5];
+        msg.data = tmsg+6;
+        msg.data_len = data_len - 8;
     } else {
 	/* It's not encapsulated in a send message response. */
 

@@ -3,6 +3,11 @@
 	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added a domain OEM
 	handler for detecting and setting up special types of domains,
 	mainly in preparation for ATCA.
+
+	* lib/ipmi_lan.c: IPMIv1_5_rev1_1_0926 markup, section 6.12.4,
+	didn't clear things up at all.  Some manufacturers have
+	interpreted a certain way that this added code handles, but IMHO
+	it is incorrect.
 	
 2003-12-09  Louis Zhuang  <louis.zhuang@linux.intel.com>
 
