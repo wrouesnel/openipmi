@@ -216,7 +216,8 @@ typedef struct mc_cb_info_s
     int              err;
 } mc_cb_info_t;
 
-static void mc_cb(ipmi_mc_t *mc, void *cb_data)
+static void
+mc_cb(ipmi_mc_t *mc, void *cb_data)
 {
     mc_cb_info_t       *info = cb_data;
     ipmi_sensor_info_t *sensors;
@@ -242,9 +243,9 @@ ipmi_sensor_pointer_cb(ipmi_sensor_id_t id,
 		       ipmi_sensor_cb   handler,
 		       void             *cb_data)
 {
-    int               rv;
-    ipmi_mc_id_t      mc_id;
-    mc_cb_info_t      info;
+    int          rv;
+    ipmi_mc_id_t mc_id;
+    mc_cb_info_t info;
 
     if (id.lun >= 5)
 	return EINVAL;
@@ -3440,6 +3441,9 @@ reading_get2(ipmi_sensor_t *sensor,
 	val_present = 1;
     }
 
+    states.__event_messages_disabled = (info->rsp->data[2] >> 7) & 1;
+    states.__sensor_scanning_disabled = (info->rsp->data[2] >> 6) & 1;
+    states.__initial_update_in_progress = (info->rsp->data[2] >> 5) & 1;
     states.__states = info->rsp->data[3];
 
     if (info->done)
@@ -3589,6 +3593,9 @@ states_get2(ipmi_sensor_t *sensor,
 	return;
     }
 
+    states.__event_messages_disabled = (info->rsp->data[2] >> 7) & 1;
+    states.__sensor_scanning_disabled = (info->rsp->data[2] >> 6) & 1;
+    states.__initial_update_in_progress = (info->rsp->data[2] >> 5) & 1;
     states.__states = (info->rsp->data[4] << 8) | info->rsp->data[3];
 
     if (info->done)

@@ -583,7 +583,7 @@ detect_states_read(ipmi_sensor_t *sensor,
 {
     ent_active_detect_t *info = cb_data;
 
-    if (!err)
+    if (!err && !ipmi_is_sensor_scanning_disabled(&states))
 	info->present = 1;
 
     info->sensor_try_count--;
@@ -601,7 +601,7 @@ detect_reading_read(ipmi_sensor_t *sensor,
 {
     ent_active_detect_t *info = cb_data;
 
-    if (!err)
+    if (!err && !ipmi_is_sensor_scanning_disabled(&states))
 	info->present = 1;
 
     info->sensor_try_count--;

@@ -475,7 +475,7 @@ understand the include files.
 @item @file{ipmiif.h}
 The main include file for OpenIPMI.  It contains the main functions the
 user must deal with when working with the OpenIPMI library.  Almost
-everything will included this.  It include @file{ipmi_types.h} and
+everything will include this.  It includes @file{ipmi_types.h} and
 @file{ipmi_bits.h}, too, so you don't have to include those.
 
 @item @file{ipmi_auth.h}

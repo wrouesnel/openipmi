@@ -598,14 +598,32 @@ int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 /* Discrete states, or threshold status. */
 typedef struct ipmi_states_s
 {
+    int          __event_messages_disabled;
+    int          __sensor_scanning_disabled;
+    int          __initial_update_in_progress;
     unsigned int __states;
 } ipmi_states_t;
 
 static inline void ipmi_init_states(ipmi_states_t *states)
 {
+    states->__event_messages_disabled = 0;
+    states->__sensor_scanning_disabled = 0;
+    states->__initial_update_in_progress = 0;
     states->__states = 0;
 }
 
+static inline int ipmi_is_event_messages_disabled(ipmi_states_t *states)
+{
+    return states->__event_messages_disabled;
+}
+static inline int ipmi_is_sensor_scanning_disabled(ipmi_states_t *states)
+{
+    return states->__sensor_scanning_disabled;
+}
+static inline int ipmi_is_initial_update_in_progress(ipmi_states_t *states)
+{
+    return states->__initial_update_in_progress;
+}
 /* Read the current value of the given threshold sensor. */
 int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
 				   enum ipmi_thresh_e thresh);
