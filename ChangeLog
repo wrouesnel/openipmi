@@ -4,6 +4,9 @@
 	is in used, wait until the MC is no longer in use and apply the
 	pending data update and check OEM handlers then.
 
+	* lib/oem_atca.c: Added a control for getting the address
+	information of an ATCA FRU.
+
 2004-06-15 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Check for a null event in call_presence_handlers().

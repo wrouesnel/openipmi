@@ -28,7 +28,6 @@
  */
 
 /* TODO:
- * Add a control for getting the slot type and physical slot number
  * Add support for setting the power up timeout
  */
 
@@ -61,6 +60,10 @@
 #define IPMC_FIRST_LED_CONTROL_NUM 0x00
 #define IPMC_RESET_CONTROL_NUM     0x80
 #define IPMC_POWER_CONTROL_NUM     0x81
+
+/* This is a control attached to the system interface used to handle
+   the address control, one for each possible IPMB. */
+#define IPMC_ADDRESS_NUM(ipmb)	   (0x80 + (ipmb / 2))
 
 #define PICMG_MFG_ID	0x315a
 
@@ -139,6 +142,9 @@ struct atca_ipmc_s
        pointers remain the same even if we re-allocate the array. */
     unsigned int  num_frus;
     atca_fru_t    **frus;
+
+    /* Control for reading the address info */
+    ipmi_control_t *address_control;
 };
 
 struct atca_shelf_s
@@ -206,6 +212,9 @@ atca_alloc_control(ipmi_mc_t                 *mc,
 		   ipmi_control_get_val_cb   get_val,
 		   ipmi_control_set_light_cb set_light_val,
 		   ipmi_control_get_light_cb get_light_val,
+		   ipmi_control_identifier_set_val_cb set_id_val,
+		   ipmi_control_identifier_get_val_cb get_id_val,
+		   unsigned int              length,
 		   ipmi_control_t            **control)
 {
     int                   rv;
@@ -223,9 +232,9 @@ atca_alloc_control(ipmi_mc_t                 *mc,
     ipmi_control_set_ignore_if_no_entity(*control, 1);
 
     /* Assume we can read and set the value. */
-    if ((set_val) || (set_light_val))
+    if ((set_val) || (set_light_val) || (set_id_val))
 	ipmi_control_set_settable(*control, 1);
-    if ((get_val) || (get_light_val))
+    if ((get_val) || (get_light_val) || (get_id_val))
 	ipmi_control_set_readable(*control, 1);
 
     /* Create all the callbacks in the data structure. */
@@ -234,6 +243,11 @@ atca_alloc_control(ipmi_mc_t                 *mc,
     cbs.get_val = get_val;
     cbs.set_light = set_light_val;
     cbs.get_light = get_light_val;
+    cbs.set_identifier_val = set_id_val;
+    cbs.get_identifier_val = get_id_val;
+
+    if (control_type == IPMI_CONTROL_IDENTIFIER)
+	ipmi_control_identifier_set_max_length(*control, length);
 
     ipmi_control_set_callbacks(*control, &cbs);
 
@@ -1333,6 +1347,9 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 			    NULL,
 			    set_led,
 			    get_led,
+			    NULL,
+			    NULL,
+			    1,
 			    &l->control);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -1641,6 +1658,9 @@ add_fru_control_mc_cb(ipmi_mc_t *mc, void *cb_info)
 			    NULL,
 			    NULL,
 			    NULL,
+			    NULL,
+			    NULL,
+			    1,
 			    &finfo->cold_reset);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -1898,11 +1918,14 @@ add_power_mc_cb(ipmi_mc_t *mc, void *cb_info)
 			    get_power,
 			    NULL,
 			    NULL,
+			    NULL,
+			    NULL,
+			    1,
 			    &finfo->power);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(add_power_mc_cb): "
-		 "Could not convert an mcid to a pointer: 0x%x",
+		 "Could not alloc control: 0x%x",
 		 ENTITY_NAME(finfo->entity), rv);
     }
 
@@ -1952,6 +1975,108 @@ destroy_power_handling(atca_fru_t *finfo)
 }
 
 #endif /* POWER_CONTROL_AVAILABLE */
+
+
+/***********************************************************************
+ *
+ * Control for the address
+ *
+ **********************************************************************/
+
+static int
+get_address(ipmi_control_t                 *control,
+	    ipmi_control_identifier_val_cb handler,
+	    void                           *cb_data)
+{
+    atca_ipmc_t   *ipmc = ipmi_control_get_oem_info(control);
+    unsigned char val[4];
+
+    val[0] = ipmc->site_type;
+    val[1] = ipmc->site_num;
+    val[2] = ipmc->ipmb_address / 2;
+    val[3] = ipmc->ipmb_address;
+
+    /* Just call the callback immediately, we have the data. */
+    handler(control, 0, val, 4, cb_data);
+
+    return 0;
+}
+
+static void
+add_address_control(atca_ipmc_t *ipmc)
+{
+    int                          rv;
+    ipmi_system_interface_addr_t si;
+    ipmi_mc_t                    *si_mc;
+
+    if (ipmc->address_control)
+	return;
+    
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = 0xf;
+    si.lun = 0;
+
+    si_mc = _ipmi_find_mc_by_addr(ipmc->shelf->domain,
+				  (ipmi_addr_t *) &si,
+				  sizeof(si));
+    if (!si_mc) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_address_control): "
+		 "Could not find system interface mc",
+		 ENTITY_NAME(ipmc->frus[0]->entity));
+	return;
+    }
+
+    rv = atca_alloc_control(si_mc, ipmc, NULL,
+			    IPMI_CONTROL_IDENTIFIER,
+			    "address",
+			    NULL,
+			    NULL,
+			    NULL,
+			    NULL,
+			    NULL,
+			    get_address,
+			    4,
+			    &ipmc->address_control);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_address_control_mc_cb): "
+		 "Could not alloc control: 0x%x",
+		 ENTITY_NAME(ipmc->frus[0]->entity), rv);
+	goto out;
+    }
+
+    rv = atca_add_control(si_mc,
+			  &ipmc->address_control,
+			  IPMC_ADDRESS_NUM(ipmc->ipmb_address),
+			  ipmc->frus[0]->entity);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_address_control_mc_cb): "
+		 "Could not add control: 0x%x",
+		 ENTITY_NAME(ipmc->frus[0]->entity), rv);
+	goto out;
+    }
+
+ out:
+    _ipmi_mc_put(si_mc);
+}
+
+static void
+destroy_address_control(atca_ipmc_t *ipmc)
+{
+    if (ipmc->address_control) {
+	ipmi_control_t *control = ipmc->address_control;
+
+	/* We *HAVE* to clear the value first, destroying this can
+	   cause something else to be destroyed and end up in the
+	   function again before we return from
+	   ipmi_control_destroy(). */
+	ipmc->address_control = NULL;
+	ipmi_control_destroy(control);
+    }
+}
+
 
 /***********************************************************************
  *
@@ -2626,6 +2751,7 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	    _ipmi_entity_put(b->frus[0]->entity);
 	    goto out;
 	}
+	add_address_control(b);
 	_ipmi_entity_put(b->frus[0]->entity);
     }
 
@@ -2910,6 +3036,7 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 
 	    _ipmi_mc_get(b->mc);
 	    _ipmi_entity_get(b->frus[0]->entity);
+	    destroy_address_control(b);
 	    destroy_fru_controls(b->frus[0]);
 	    if (b->frus[0]->entity)
 		ipmi_entity_remove_child(info->shelf_entity,
