@@ -1046,6 +1046,7 @@ main(int argc, char *argv[])
     } else if (use_glib) {
 #ifdef HAVE_UCDSNMP
 	init_snmp = 0; /* No SNMP support for glib yet. */
+	sel = NULL;
 #endif
 	g_thread_init(NULL);
 	os_hnd = ipmi_glib_get_os_handler();
@@ -1064,7 +1065,6 @@ main(int argc, char *argv[])
 			  | G_LOG_FLAG_FATAL,
 			  glib_handle_log,
                           NULL);
-	sel = NULL;
 #endif
     } else {
 	os_hnd = ipmi_posix_setup_os_handler();
