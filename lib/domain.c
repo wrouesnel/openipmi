@@ -2972,12 +2972,37 @@ got_dev_id(ipmi_mc_t  *mc,
 
     if ((rsp->data[0] != 0) || (rsp->data_len < 12)) {
 	/* At least the get device id has to work. */
+	if ((rsp->data[0] == 0) && (rsp->data_len >= 6)) {
+	    int major_version = rsp->data[5] & 0xf;
+	    int minor_version = (rsp->data[5] >> 4) & 0xf;
+
+	    if (major_version < 1) {
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "IPMI version of the BMC is %d.%d, which is older"
+			 " than OpenIPMI supports",
+			 major_version, minor_version);
+		return;
+	    }
+	}
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Invalid return from IPMI Get Device ID, something is"
+		 " seriously wrong with the BMC");
 	call_con_fails(domain, EINVAL, 0, 0, 0);
 	return;
     }
 
     domain->major_version = rsp->data[5] & 0xf;
     domain->minor_version = (rsp->data[5] >> 4) & 0xf;
+    if ((domain->major_version != 1)
+	|| ((domain->major_version == 1)
+	    && (domain->minor_version != 5)
+	    && (domain->minor_version != 0)))
+    {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "IPMI version of the BMC is %d.%d, which is not directly"
+		 " supported by OpenIPMI.  It may work, but there may be"
+		 " issues.", domain->major_version, domain->minor_version);
+    }
     domain->SDR_repository_support = (rsp->data[6] & 0x02) == 0x02;
 
     ipmi_mc_set_sdr_repository_support(domain->si_mc,

@@ -1630,6 +1630,24 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t  *mc, ipmi_msg_t *rsp)
     }
 
     if (rsp->data_len < 12) {
+	if ((rsp->data[0] == 0) && (rsp->data_len >= 6)) {
+	    int major_version = rsp->data[5] & 0xf;
+	    int minor_version = (rsp->data[5] >> 4) & 0xf;
+
+	    if (major_version < 1) {
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "IPMI version of the MC at address 0x%2.2x is %d.%d,"
+			 " which is older"
+			 " than OpenIPMI supports",
+			 ipmi_addr_get_slave_addr(&mc->addr),
+			 mc->major_version, minor_version);
+		return EINVAL;
+	    }
+	}
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Invalid return from IPMI Get Device ID from address 0x%2.2x,"
+		 " something is seriously wrong with the MC",
+		 ipmi_addr_get_slave_addr(&mc->addr));
 	return EINVAL;
     }
 

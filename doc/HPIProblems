@@ -63,7 +63,7 @@
   In reality, the user doesn't really care about what HPI calls
   "resources".  Resources seem to be intelligent entities (management
   controllers in IPMI-speak).  They don't really do anything except
-  manage hot-swap and handle watchdogs.
+  manage hot-swap, handle watchdogs, and hold RDRs.
 
   It seems completely wierd to me that watchdogs are part of the
   standard.  They don't really belong here, since they are more a
@@ -72,6 +72,9 @@
   For hot-swap, many systems have non-intelligent entities that can be
   hot-swapped.  HPI can't handle these without kludges.  Hot-swap
   should really be on entities.
+
+  Since RDRs really belong to the domain, they should really belong to
+  the domain.
 
 7. Entities should be first-class objects, not just inferred.
 
@@ -92,3 +95,11 @@
   simultaneously (such as you send a single message that controls
   three different LEDs).  There's no way to do independent control of
   these, so HPI should have a way to set them all simultaneously.
+
+10. The event log is too much like IPMI
+
+  You can do things like get/set the time on the event log, add events
+  to the event log, etc.  These make no sense outside IPMI.  Most
+  systems besides IPMI have no persistent event log, and can only
+  deliver events.  In reality, all the event log stuff should go away,
+  and events should just be delivered to the application.
