@@ -8971,9 +8971,7 @@ mxp_handler(ipmi_mc_t *mc,
 
 
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
-	/* It's the SI MC.  Turn off main SDR scanning, but do nothing
-	   else. */
-	ipmi_mc_set_sdr_repository_support(mc, 0);
+	/* It's the SI MC.  Don't do anything. */
 	return 0;
     }
 
