@@ -619,13 +619,22 @@ add_mxp_mfg_id(unsigned char *data)
 static unsigned int
 mxp_addr_to_instance(unsigned int slave_addr)
 {
-    slave_addr /= 2;
-    if (slave_addr >= 0x58) {
-	if (slave_addr >= 0x61)
-            slave_addr--;
-        return slave_addr - 0x57;
-    } else
-        return slave_addr;
+    switch (slave_addr) {
+    case 0xe4:
+	return 1; /* IP switch 1 */
+
+    case 0xe6:
+	return 2; /* IP switch 2 */
+
+    default:
+	slave_addr /= 2;
+    	if (slave_addr >= 0x58) {
+	    if (slave_addr >= 0x61)
+                slave_addr--;
+            return slave_addr - 0x57;
+        } else
+            return slave_addr;
+    }
 }
 
 /* This will search for a slave address in the MXP boards and return
