@@ -1415,6 +1415,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    ipmi_cleanup_mc(mc);
 	} else {
 	    /* Try again right now. */
+	    ipmi_unlock(info->bmc->bmc->mc_list_lock);
 	    goto retry_addr;
 	}
     }
