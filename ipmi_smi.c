@@ -49,6 +49,9 @@
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_err.h>
 
+/* We time the SMI messages, but we have a long timer. */
+#define SMI_TIMEOUT 60000
+
 #ifdef DEBUG_MSG
 static void
 dump_hex(unsigned char *data, int len)
@@ -586,8 +589,8 @@ smi_send_command(ipmi_con_t            *ipmi,
     ipmi_lock(smi->cmd_lock);
     add_cmd(ipmi, addr, addr_len, msg, smi, cmd);
 
-    timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
-    timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
+    timeout.tv_sec = SMI_TIMEOUT / 1000;
+    timeout.tv_usec = (SMI_TIMEOUT % 1000) * 1000;
     rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd,
 				   &(cmd->timeout_id));
     if (!rv) {

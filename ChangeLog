@@ -1,4 +1,12 @@
 
+2003-01-13 Corey Minyard <cminyard@mvista.com>
+
+	* sel.c, mc.c: Minor cleanups.
+
+	* ipmi_smi.c: Modified the timeout to be a much larger value.
+	The device drivers have their own timers, we just need to make
+	sure something doesn't go wrong here.
+
 2003-01-09 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c: Added a periodic rescan of the presence sensors

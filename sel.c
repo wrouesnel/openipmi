@@ -725,7 +725,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SEL fetch was in progress");
 	sel_op_done(data, ENXIO);
 	goto out;
     }
@@ -797,7 +797,7 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
     }
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "MC went away while SDR fetch was in progress");
+		 "MC went away while SEL fetch was in progress");
 	sel_op_done(data, ENXIO);
 	goto out;
     }

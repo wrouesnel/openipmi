@@ -1490,7 +1490,7 @@ handle_save_reservation(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    if (!mc ) {
+    if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress");
 	save_complete(sdrs, ENXIO);
