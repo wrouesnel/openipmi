@@ -782,7 +782,7 @@ mxp_set_event_enables(ipmi_sensor_t         *sensor,
 		      ipmi_sensor_done_cb   done,
 		      void                  *cb_data)
 {
-    return ENOTSUP;
+    return ENOSYS;
 }
 
 static int
@@ -4204,7 +4204,7 @@ mxpv1_board_presence_states_get_cb(ipmi_sensor_t *sensor,
 
     get_info->rsp = rsp;
 
-    if (err == ENXIO) {
+    if (err == ECANCELED) {
 	/* Special handling if we didn't have an MC. */
 	rv = ipmi_sensor_pointer_cb(get_info->sens_id,
 				    mxpv1_board_presence_states_get2,

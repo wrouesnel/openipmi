@@ -1130,7 +1130,7 @@ get_sel_time(ipmi_mc_t  *mc,
 		 "MC went away during SEL time fetch.",
 		 info->name);
 	if (info->handler)
-	    info->handler(mc, ENXIO, 0, info->cb_data);
+	    info->handler(mc, ECANCELED, 0, info->cb_data);
 	goto out;
     }
 
@@ -1212,7 +1212,7 @@ set_sel_time(ipmi_mc_t  *mc,
 		 "MC went away during SEL time fetch.",
 		 info->name);
 	if (info->handler)
-	    info->handler(mc, ENXIO, info->cb_data);
+	    info->handler(mc, ECANCELED, info->cb_data);
 	goto out;
     }
 
@@ -2490,9 +2490,9 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
     } else {
 	mc->pending_devid_data = 1;
 	mc->pending_new_mc = 1;
-	rv = EBUSY; /* Tell the user that they must call the OEM
-		       handlers check later when the MC is
-		       released. */
+	rv = EAGAIN; /* Tell the user that they must call the OEM
+			handlers check later when the MC is
+			released. */
 	ipmi_unlock(mc->lock);
     }
 
@@ -3107,7 +3107,7 @@ ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
     CHECK_MC_LOCK(mc);
 
     if (!ipmi_mc_ipmb_event_generator_support(mc))
-	return ENOTSUP;
+	return ENOSYS;
 
     val = val != 0;
 

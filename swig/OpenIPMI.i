@@ -211,10 +211,13 @@ parse_raw_str_data(char *str, unsigned int *length)
 	} else if (!inspace && isspace(*s)) {
 	    inspace = 1;
 	}
+	s++;
     }
 
-    if (count == 0)
-	return NULL;
+    if (count == 0) {
+	*length = 0;
+	return malloc(1);
+    }
 
     rv = malloc(count);
     if (!rv)
@@ -222,9 +225,9 @@ parse_raw_str_data(char *str, unsigned int *length)
 
     s = str;
     i = 0;
-    while (*s) {
+    while ((*s) && (i < count)) {
 	rv[i] = strtoul(s, &endstr, 0);
-	if (!isspace(*endstr))
+	if (*endstr && (!isspace(*endstr)))
 	    goto out_err;
 	i++;
 	s = endstr;
@@ -530,7 +533,7 @@ fru_written_done(ipmi_fru_t *fru, int err, void *cb_data)
 
     fru_ref = swig_make_ref(fru, "OpenIPMI::ipmi_fru_t");
     swig_call_cb(cb, "fru_written", "%p%d", &fru_ref, err);
-    swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
+    swig_free_ref(fru_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -543,7 +546,7 @@ fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 
     fru_ref = swig_make_ref(fru, "OpenIPMI::ipmi_fru_t");
     swig_call_cb(cb, "fru_fetched", "%p%d", &fru_ref, err);
-    swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
+    swig_free_ref(fru_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -2015,7 +2018,22 @@ wait_io(int timeout)
     struct timeval tv = { (timeout / 1000), ((timeout + 999) % 1000) };
     swig_os_hnd->perform_one_op(swig_os_hnd, &tv);
 }
+
 %}
+
+/*
+ * Error return constants returned by OpenIPMI.
+ */
+%constant int ebadf = EBADF;
+%constant int einval = EINVAL;
+%constant int e2big = E2BIG;
+%constant int enomem = ENOMEM;
+%constant int enoent = ENOENT;
+%constant int ecanceled = ECANCELED;
+%constant int enosys = ENOSYS;
+%constant int eexist = EEXIST;
+%constant int enodev = ENODEV;
+%constant int eagain = EAGAIN;
 
 /*
  * A bug in swig (default parameters not used in inline) causes this
@@ -2808,14 +2826,16 @@ char *color_string(int color);
     {
 	ipmi_fru_t *fru;
 	int         rv;
-	swig_cb_val handler_val;
+	swig_cb_val handler_val = NULL;
+	ipmi_fru_fetched_cb cb_handler = NULL;
 
-	if (! valid_swig_cb(handler))
-	    return NULL;
+	if (valid_swig_cb(handler)) {
+	    cb_handler = fru_fetched;
+	    handler_val = ref_swig_cb(handler);
+	}
 
-	handler_val = ref_swig_cb(handler);
 	rv = ipmi_fru_alloc(self, is_logical, device_address, device_id,
-			    lun, private_bus, channel, fru_fetched,
+			    lun, private_bus, channel, cb_handler,
 			    handler_val, &fru);
 	if (rv) {
 	    deref_swig_cb_val(handler_val);
@@ -2860,6 +2880,14 @@ char *color_string(int color);
  * And entity object.
  */
 %extend ipmi_entity_t {
+    /*
+     * Get the domain the entity belongs to.
+     */
+    ipmi_domain_t *get_domain()
+    {
+	return ipmi_entity_get_domain(self);
+    }
+
     %newobject get_name;
     /*
      * Get the name of an entity.
@@ -3059,14 +3087,6 @@ char *color_string(int color);
     int is_fru()
     {
 	return ipmi_entity_get_is_fru(self);
-    }
-
-    /*
-     * Returns the domain for the entity.
-     */
-    ipmi_domain_t *get_domain()
-    {
-	return ipmi_entity_get_domain(self);
     }
 
 #define ENTITY_ID_UNSPECIFIED	       			0
@@ -3695,6 +3715,14 @@ char *color_string(int color);
  * An MC object
  */
 %extend ipmi_mc_t {
+    /*
+     * Get the domain the mc belongs to.
+     */
+    ipmi_domain_t *get_domain()
+    {
+	return ipmi_mc_get_domain(self);
+    }
+
     %newobject get_name;
     /*
      * Get the name of an mc.
@@ -3717,14 +3745,6 @@ char *color_string(int color);
 	if (rv)
 	    *rv = ipmi_mc_convert_to_id(self);
 	return rv;
-    }
-
-    /*
-     * Return the domain the MC is in.
-     */
-    ipmi_domain_t *get_domain()
-    {
-	return ipmi_mc_get_domain(self);
     }
 
     /*
@@ -4321,6 +4341,14 @@ char *color_string(int color);
  * and last chararacter (assertion) for discrete values.
  */
 %extend ipmi_sensor_t {
+    /*
+     * Get the entity the sensor belongs to.
+     */
+    ipmi_entity_t *get_entity()
+    {
+	return ipmi_sensor_get_entity(self);
+    }
+
     %newobject get_name;
     /*
      * Get the name of an sensor.
@@ -5419,6 +5447,15 @@ char *color_string(int color);
  * An control object
  */
 %extend ipmi_control_t {
+
+    /*
+     * Get the entity the control belongs to.
+     */
+    ipmi_entity_t *get_entity()
+    {
+	return ipmi_control_get_entity(self);
+    }
+
     %newobject get_name;
     /*
      * Get the name of an control.
@@ -5864,6 +5901,22 @@ char *color_string(int color);
  * A FRU object
  */
 %extend ipmi_fru_t {
+
+/* Area numbers */
+#define FRU_INTERNAL_USE_AREA 0
+#define FRU_CHASSIS_INFO_AREA 1
+#define FRU_BOARD_INFO_AREA   2
+#define FRU_PRODUCT_INFO_AREA 3
+#define FRU_MULTI_RECORD_AREA 4
+
+    /*
+     * Get the domain the FRU belongs to.
+     */
+    ipmi_domain_t *get_domain()
+    {
+	return ipmi_fru_get_domain(self);
+    }
+
     /*
      * Convert the string to a FRU index.  Use this if you have a specfiic
      * fru data object you are after.  Returns -1 if the name is not valid.
@@ -6045,12 +6098,19 @@ char *color_string(int color);
      *  "unicode" - A string of 8-bit values is passed in, like 
      *    "0x10 0x20 0x99".
      *  "ascii" - The string passed in is used.
+     * Passing an undefined value for binary, unicode, and ascii
+     * will result in the field being cleared or (for custom fields)
+     * deleted.  NULL values are not allowed for integer or times.
      */
-    int set(int index, int num, char *type, char *value)
+    int set(int index, int num, char *type, char *value = NULL)
     {
+	if (!type)
+	    return EINVAL;
 	if (strcmp(type, "integer") == 0) {
 	    unsigned int val;
 	    char         *endstr;
+	    if (!value)
+		return EINVAL;
 	    if (*value == '\0')
 		return EINVAL;
 	    val = strtol(value, &endstr, 0);
@@ -6059,6 +6119,8 @@ char *color_string(int color);
 	    return ipmi_fru_set_int_val(self, index, num, val);
 	} else if (strcmp(type, "time") == 0) {
 	    unsigned int val;
+	    if (!value)
+		return EINVAL;
 	    char         *endstr;
 	    if (*value == '\0')
 		return EINVAL;
@@ -6067,28 +6129,43 @@ char *color_string(int color);
 		return EINVAL;
 	    return ipmi_fru_set_time_val(self, index, num, val);
 	} else if (strcmp(type, "binary") == 0) {
-	    unsigned int length;
-	    char *data = parse_raw_str_data(value, &length);
+	    unsigned int length = 0;
+	    char *data;
 	    int rv;
-	    if (!data)
-		return EINVAL;
+	    if (!value) {
+		data = NULL;
+	    } else {
+		data = parse_raw_str_data(value, &length);
+		if (!data)
+		    return ENOMEM;
+	    }
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_BINARY,
 				       data, length);
-	    free(data);
+	    if (data)
+		free(data);
 	    return rv;
 	} else if (strcmp(type, "unicode") == 0) {
-	    unsigned int length;
-	    char *data = parse_raw_str_data(value, &length);
+	    unsigned int length = 0;
+	    char *data;
 	    int rv;
-	    if (!data)
-		return EINVAL;
+	    if (!value) {
+		data = NULL;
+	    } else {
+		data = parse_raw_str_data(value, &length);
+		if (!data)
+		    return ENOMEM;
+	    }
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_UNICODE,
 				       data, length);
-	    free(data);
+	    if (data)
+		free(data);
 	    return rv;
 	} else if (strcmp(type, "ascii") == 0) {
+	    int length = 0;
+	    if (value)
+		length = strlen(value);
 	    return ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_ASCII,
-					 value, strlen(value));
+					 value, length);
 	} else {
 	    return EINVAL;
 	}
@@ -6104,29 +6181,42 @@ char *color_string(int color);
      *  "integer" - The first element of the integer array is used.
      *  "time" - The first element of the integer array is used.
      *  "binary" - An array of 8-bit values is taken, like 
-     *    [ 0x10 0x20 0x99 ].
+     *    [ 0x10, 0x20, 0x99 ].
      *  "unicode" - An array of 8-bit values is passed in, like 
-     *    [ 0x10 0x20 0x99 ].
+     *    [ 0x10, 0x20, 0x99 ].
      *  "ascii" - An array of 8-bit values is passed in, like 
-     *    [ 0x10 0x20 0x99 ].
+     *    [ 0x10, 0x20, 0x99 ].
+     * Undefined values are not allowed here, but that shouldn't
+     * matter because the above function should be used for those.
      */
-    int set(int index, int num, char *type, intarray value)
+    int set_array(int index, int num, char *type, intarray value)
     {
-	if (value.len <= 0)
+	if (value.len < 0)
+	    return EINVAL;
+	if (!type)
 	    return EINVAL;
 
 	if (strcmp(type, "integer") == 0) {
 	    /* Only take the first value. */
+	    if (value.len <= 0)
+		return EINVAL;
 	    return ipmi_fru_set_int_val(self, index, num, value.val[0]);
 	} else if (strcmp(type, "time") == 0) {
 	    /* Only take the first value. */
+	    if (value.len <= 0)
+		return EINVAL;
 	    return ipmi_fru_set_time_val(self, index, num, value.val[0]);
 	} else if (strcmp(type, "binary") == 0) {
 	    unsigned int length = value.len;
-	    char *data = malloc(length);
+	    char *data;
 	    int rv;
+
+	    if (length == 0)
+		data = malloc(1);
+	    else
+		data = malloc(length);
 	    if (!data)
-		return EINVAL;
+		return ENOMEM;
 	    parse_ipmi_data(value, data, length, &length);
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_BINARY,
 				       data, length);
@@ -6145,10 +6235,14 @@ char *color_string(int color);
 	    return rv;
 	} else if (strcmp(type, "ascii") == 0) {
 	    unsigned int length = value.len;
-	    char *data = malloc(length);
+	    char *data;
 	    int rv;
+	    if (length == 0)
+		data = malloc(1);
+	    else
+		data = malloc(length);
 	    if (!data)
-		return EINVAL;
+		return ENOMEM;
 	    parse_ipmi_data(value, data, length, &length);
 	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_ASCII,
 				       data, length);
@@ -6157,6 +6251,75 @@ char *color_string(int color);
 	} else {
 	    return EINVAL;
 	}
+    }
+
+    /*
+     * Set multi-record fields from a string of the form:
+     *  "0x10 0x20 0x99"
+     *
+     * It take a number (which multi-record), type, version, and a
+     * string value.  Passing in an undefined value will delete the
+     * specific multi-record.  Note that if the number is less than
+     * the number of fields in the record, then the record will be
+     * replaced.  If it is larger than or equal to the number of
+     * fields, a new record will be appended in the next location, not
+     * in the number supplied.
+     */
+    int set_multirecord(unsigned int num,
+			unsigned int type,
+			unsigned int version,
+			char         *value = NULL)
+    {
+	unsigned int length = 0;
+	char *data;
+	int rv;
+
+	if (!value) {
+	    data = NULL;
+	} else {
+	    data = parse_raw_str_data(value, &length);
+	    if (!data)
+		return ENOMEM;
+	}
+	rv = ipmi_fru_set_multi_record(self, num, type, version,
+				       data, length);
+	if (data)
+	    free(data);
+	return rv;
+    }
+
+    /*
+     * Set multi-record fields from a string of the form:
+     *  "0x10 0x20 0x99"
+     *
+     * It take a number (which multi-record), type, version, and an
+     * integer array.  Undefined values are not allowed here, use
+     * the previous call to delete records.  Note that if the number
+     * is less than the number of fields in the record, then the
+     * record will be replaced.  If it is larger than or equal to the
+     * number of fields, a new record will be appended in the next
+     * location, not in the number supplied.
+     */
+    int set_multirecord_array(unsigned int num,
+			      unsigned int type,
+			      unsigned int version,
+			      intarray     value)
+    {
+	unsigned int length = value.len;
+	char *data;
+	int rv;
+
+	if (length == 0)
+	    data = malloc(1);
+	else
+	    data = malloc(length);
+	if (!data)
+	    return ENOMEM;
+	parse_ipmi_data(value, data, length, &length);
+	rv = ipmi_fru_set_multi_record(self, num, type, version,
+				       data, length);
+	free(data);
+	return rv;
     }
 
     /*

@@ -301,7 +301,7 @@ check_for_msg_err(ipmi_mc_t *mc, int *rv, ipmi_msg_t *msg,
 		 "oem_atca.c(%s): "
 		 "MC went away", func_name);
 	if (rv)
-	    *rv = ENXIO;
+	    *rv = ECANCELED;
 	return 1;
     }
 
@@ -2980,7 +2980,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 		 "Error getting FRU information: 0x%x",
 		 DOMAIN_NAME(domain), err);
 
-	ipmi_fru_destroy(info->shelf_fru, NULL, NULL);
+	ipmi_fru_destroy_internal(info->shelf_fru, NULL, NULL);
 	info->shelf_fru = NULL;
 
 	/* Try 2 shelf FRUs. */
@@ -3200,7 +3200,7 @@ atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
     atca_shelf_t *info = oem_data;
 
     if (info->shelf_fru)
-	ipmi_fru_destroy(info->shelf_fru, NULL, NULL);
+	ipmi_fru_destroy_internal(info->shelf_fru, NULL, NULL);
     if (info->addresses)
 	ipmi_mem_free(info->addresses);
     if (info->ipmcs) {

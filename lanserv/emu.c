@@ -1535,6 +1535,26 @@ handle_write_fru_data(lmc_data_t    *mc,
 }
 
 int
+ipmi_mc_get_fru_data(lmc_data_t    *mc,
+		     unsigned char device_id,
+		     unsigned int  *length,
+		     unsigned char **data)
+{
+    if (!(mc->device_support & IPMI_DEVID_FRU_INVENTORY_DEV))
+	return ENOSYS;
+
+    if (device_id >= 255)
+	return EINVAL;
+
+    if (!mc->frus[device_id].data)
+	return EINVAL;
+
+    *data = mc->frus[device_id].data;
+    *length = mc->frus[device_id].length;
+    return 0;
+}
+
+int
 ipmi_mc_add_fru_data(lmc_data_t    *mc,
 		     unsigned char device_id,
 		     unsigned int  length,

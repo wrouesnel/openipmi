@@ -451,7 +451,7 @@ handle_reservation_check(ipmi_mc_t  *mc,
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress(1)");
-	fetch_complete(sdrs, ENXIO);
+	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
 	
@@ -464,7 +464,7 @@ handle_reservation_check(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "Lost reservation too many times trying to"
 		     " fetch the SDRs");
-	    fetch_complete(sdrs, EBUSY);
+	    fetch_complete(sdrs, EAGAIN);
 	    goto out;
 	} else {
 	    if (sdrs->working_sdrs) {
@@ -702,7 +702,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress(2)");
-	fetch_complete(sdrs, ENXIO);
+	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
 
@@ -746,12 +746,12 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "To many retries trying to fetch SDRs");
 
-	    sdrs->fetch_err = EBUSY;
+	    sdrs->fetch_err = EAGAIN;
 
 	    if (!ilist_empty(sdrs->outstanding_fetch))
 		goto out_unlock;
 
-	    fetch_complete(sdrs, EBUSY);
+	    fetch_complete(sdrs, EAGAIN);
 	    goto out;
 	}
 
@@ -778,12 +778,12 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "Lost reservation too many times trying to fetch SDRs");
 
-	    sdrs->fetch_err = EBUSY;
+	    sdrs->fetch_err = EAGAIN;
 
 	    if (!ilist_empty(sdrs->outstanding_fetch))
 		goto out_unlock;
 
-	    fetch_complete(sdrs, EBUSY);
+	    fetch_complete(sdrs, EAGAIN);
 	    goto out;
 	} else {
 	    if (sdrs->working_sdrs) {
@@ -1043,7 +1043,7 @@ handle_reservation(ipmi_mc_t  *mc,
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress(3)");
-	fetch_complete(sdrs, ENXIO);
+	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
 	
@@ -1110,7 +1110,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress(4)");
-	fetch_complete(sdrs, ENXIO);
+	fetch_complete(sdrs, ECANCELED);
 	goto out;
     }
 	
@@ -1894,7 +1894,7 @@ handle_sdr_write(ipmi_mc_t  *mc,
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress(5)");
-	save_complete(sdrs, ENXIO);
+	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 	
@@ -1904,7 +1904,7 @@ handle_sdr_write(ipmi_mc_t  *mc,
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "handle_sdr_write: Lost reservation too many times");
-	    save_complete(sdrs, EBUSY);
+	    save_complete(sdrs, EAGAIN);
 	    goto out;
 	} else {
 	    rv = start_save(sdrs, mc);
@@ -1981,7 +1981,7 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress(6)");
-	save_complete(sdrs, ENXIO);
+	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 	
@@ -1991,7 +1991,7 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "handle_sdr_write_done: Lost reservation too many times");
-	    save_complete(sdrs, EBUSY);
+	    save_complete(sdrs, EAGAIN);
 	    goto out;
 	} else {
 	    rv = start_save(sdrs, mc);
@@ -2055,7 +2055,7 @@ handle_sdr_clear(ipmi_mc_t  *mc,
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress(7)");
-	save_complete(sdrs, ENXIO);
+	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 	
@@ -2109,7 +2109,7 @@ handle_save_reservation(ipmi_mc_t  *mc,
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "MC went away while SDR fetch was in progress(8)");
-	save_complete(sdrs, ENXIO);
+	save_complete(sdrs, ECANCELED);
 	goto out;
     }
 	

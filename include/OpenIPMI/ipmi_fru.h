@@ -305,7 +305,7 @@ int ipmi_fru_str_to_index(char *name);
 /* FIXME - for OEM code (if ever necessary) add a way to create an
    empty FRU, fill it with data, and put it into an entity. */
 
-/* The the domain the FRU uses.  For internal use only. */
+/* The the domain the FRU uses. */
 ipmi_domain_t *ipmi_fru_get_domain(ipmi_fru_t *fru);
 
 /* Name of the FRU. */
@@ -490,12 +490,12 @@ int ipmi_fru_set_product_info_custom(ipmi_fru_t   *fru,
 				     char         *str,
 				     unsigned int len);
 
-int ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
-				   unsigned int  num,
-				   unsigned char type,
-				   unsigned char version,
-				   unsigned char *data,
-				   unsigned int  length);
+int ipmi_fru_set_multi_record(ipmi_fru_t    *fru,
+			      unsigned int  num,
+			      unsigned char type,
+			      unsigned char version,
+			      unsigned char *data,
+			      unsigned int  length);
 
 /*
  * A generic interface for setting values by index.  The function to use

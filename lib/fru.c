@@ -262,7 +262,7 @@ read_fru_time(unsigned char **data,
     unsigned char *d = *data;
 
     if (*len < 3)
-	return ENODATA;
+	return EBADF;
 
     t = *d++ * 256 * 256;
     t += *d++ * 256;
@@ -338,10 +338,11 @@ fru_encode_fields(ipmi_fru_t        *fru,
 	fru_string_t *s = v->strings + i;
 	int          len;
 
-	if (offset != s->offset)
+	if (offset != s->offset) {
 	    /* Bug in the FRU code.  Return a unique error code so it
 	       can be identified, but don't pass it to the user. */
-	    return EBADMSG;
+	    return EBADF;
+	}
 
 	if (s->changed) {
 	    len = IPMI_MAX_STR_LEN;
@@ -371,15 +372,17 @@ fru_encode_fields(ipmi_fru_t        *fru,
     }
     /* Now the end marker */
     data[offset] = 0xc1;
+    offset++;
     /* If the record changed, put out the end marker */
     if (rec->changed && !rec->rewrite) {
 	rv = fru_new_update_rec(fru, offset+rec->offset, 1);
 	if (rv)
 	    return rv;
     }
-    offset += 1;
-    if (offset != rec->used_length)
-	return EBADMSG;
+    /* We are not adding the checksum, so remove it from the check */
+    if (offset != (rec->used_length-1)) {
+	return EBADF;
+    }
     return 0;
 }
 
@@ -441,6 +444,10 @@ fru_string_set(enum ipmi_str_type_e type,
 
     if (str) {
 	/* First calculate if it will fit into the record area. */
+
+	/* Truncate if too long. */
+	if (len > 63)
+	    len = 63;
 	ipmi_set_device_string(str, type, len, tstr, 1, &raw_len);
 	raw_diff = raw_len - val->raw_len;
 	if ((raw_diff > 0) && (rec->used_length+raw_diff > rec->length))
@@ -625,8 +632,12 @@ fru_variable_string_set(ipmi_fru_record_t    *rec,
 	    val->strings = newval;
 	    val->len = alloc_num;
 	}
-	val->strings[num].offset = rec->used_length;
+	val->strings[num].str = NULL;
+	val->strings[num].raw_data = NULL;
+	/* Subtract 2 below because of the end marker and the checksum. */
+	val->strings[num].offset = rec->used_length-2;
 	val->strings[num].length = 0;
+	val->strings[num].raw_len = 0;
 	val->next++;
     }
 
@@ -1126,7 +1137,7 @@ fru_decode_chassis_info_area(ipmi_fru_t        *fru,
 		 "%sfru.c(fru_decode_chassis_info_area):"
 		 " FRU string goes past data length",
 		 FRU_DOMAIN_NAME(fru));
-	return EBADMSG;
+	return EBADF;
     }
 
     if (checksum(data, length) != 0) {
@@ -1134,7 +1145,7 @@ fru_decode_chassis_info_area(ipmi_fru_t        *fru,
 		 "%sfru.c(fru_decode_chassis_info_area):"
 		 " FRU string checksum failed",
 		 FRU_DOMAIN_NAME(fru));
-	return EBADMSG;
+	return EBADF;
     }
 
     data_len--; /* remove the checksum */
@@ -1324,7 +1335,7 @@ fru_decode_board_info_area(ipmi_fru_t        *fru,
 		 "%sfru.c(fru_decode_board_info_area):"
 		 " FRU string goes past data length",
 		 FRU_DOMAIN_NAME(fru));
-	return EBADMSG;
+	return EBADF;
     }
 
     if (checksum(data, length) != 0) {
@@ -1332,7 +1343,7 @@ fru_decode_board_info_area(ipmi_fru_t        *fru,
 		 "%sfru.c(fru_decode_board_info_area):"
 		 " FRU string checksum failed",
 		 FRU_DOMAIN_NAME(fru));
-	return EBADMSG;
+	return EBADF;
     }
 
     data_len--; /* remove the checksum */
@@ -1553,7 +1564,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
     ipmi_fru_record_t            *rec;
     int                          err;
     unsigned char                version;
-    unsigned char                length;
+    unsigned int                 length;
     unsigned char                *orig_data = data;
 
     version = *data;
@@ -1563,7 +1574,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
 		 "%sfru.c(fru_decode_product_info_area):"
 		 " FRU string goes past data length",
 		 FRU_DOMAIN_NAME(fru));
-	return EBADMSG;
+	return EBADF;
     }
 
     if (checksum(data, length) != 0) {
@@ -1571,7 +1582,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
 		 "%sfru.c(fru_decode_product_info_area):"
 		 " FRU string checksum failed",
 		 FRU_DOMAIN_NAME(fru));
-	return EBADMSG;
+	return EBADF;
     }
 
     data_len--; /* remove the checksum */
@@ -1792,7 +1803,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 		     "%sfru.c(fru_decode_multi_record_area):"
 		     " Data not long enough for multi record",
 		     FRU_DOMAIN_NAME(fru));
-	    return EBADMSG;
+	    return EBADF;
 	}
 
 	if (checksum(data, 5) != 0) {
@@ -1800,7 +1811,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 		     "%sfru.c(fru_decode_multi_record_area):"
 		     " Header checksum for record %d failed",
 		     FRU_DOMAIN_NAME(fru), num_records+1);
-	    return EBADMSG;
+	    return EBADF;
 	}
 
 	length = data[2];
@@ -1809,7 +1820,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 		     "%sfru.c(fru_decode_multi_record_area):"
 		     " Record went past end of data",
 		     FRU_DOMAIN_NAME(fru));
-	    return EBADMSG;
+	    return EBADF;
 	}
 
 	sum = checksum(data+5, length) + data[3];
@@ -1818,7 +1829,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 		     "%sfru.c(fru_decode_multi_record_area):"
 		     " Data checksum for record %d failed",
 		     FRU_DOMAIN_NAME(fru), num_records+1);
-	    return EBADMSG;
+	    return EBADF;
 	}
 
 	num_records++;
@@ -1998,12 +2009,12 @@ ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 }
 
 int
-ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
-			       unsigned int  num,
-			       unsigned char type,
-			       unsigned char version,
-			       unsigned char *data,
-			       unsigned int  length)
+ipmi_fru_set_multi_record(ipmi_fru_t    *fru,
+			  unsigned int  num,
+			  unsigned char type,
+			  unsigned char version,
+			  unsigned char *data,
+			  unsigned int  length)
 {
     ipmi_fru_multi_record_area_t *u;
     unsigned char                *new_data;
@@ -2054,6 +2065,7 @@ ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
 	u->records[num].offset = rec->used_length;
 	u->records[num].length = 0;
 	u->records[num].changed = 1;
+	u->records[num].data = NULL;
 	raw_diff = 5; /* Header size */
     }
 
@@ -2120,8 +2132,9 @@ fru_encode_multi_record(ipmi_fru_t             *fru,
     ipmi_fru_record_elem_t *elem = u->records + idx;
     int                    rv;
 
-    if (o != elem->offset)
-	return EBADMSG;
+    if (o != elem->offset) {
+	return EBADF;
+    }
 
     data += o;
     data[0] = elem->type;
@@ -2210,6 +2223,10 @@ check_rec_position(ipmi_fru_t   *fru,
     if ((offset == 0) || ((offset % 8) != 0))
 	return EINVAL;
 
+    /* Make sure it fits into the used area */
+    if (length < fru->recs[recn]->used_length)
+	return E2BIG;
+
     /* FRU data record starts cannot exceed 2040 bytes.  The offsets
        are in multiples of 8 and the sizes are 8-bits, thus 8 *
        255.  The end of the data can go till the end of the FRU. */
@@ -2224,7 +2241,7 @@ check_rec_position(ipmi_fru_t   *fru,
 	pos--;
     if (pos >= 0) {
 	if (offset < (fru->recs[pos]->offset + fru->recs[pos]->length))
-	    return EFAULT;
+	    return EINVAL;
     }
 
     /* Check that this is not in the next record's space. */
@@ -2232,8 +2249,8 @@ check_rec_position(ipmi_fru_t   *fru,
     while ((pos < IPMI_FRU_FTR_NUMBER) && !fru->recs[pos])
 	pos++;
     if (pos < IPMI_FRU_FTR_NUMBER) {
-	if (offset < (fru->recs[pos]->offset + fru->recs[pos]->length))
-	    return EFAULT;
+	if ((offset + length) > fru->recs[pos]->offset)
+	    return EINVAL;
     }
 
     return 0;
@@ -2361,8 +2378,18 @@ ipmi_fru_area_set_offset(ipmi_fru_t   *fru,
 	return 0;
     }
 
-    rv = check_rec_position(fru, area, offset, fru->recs[area]->length);
+    if (area == IPMI_FRU_FTR_MULTI_RECORD_AREA) {
+	/* Multi-record lengths are not defined, but just goto the end.
+	   So adjust the length for comparison here. */
+	int newlength = (fru->recs[area]->length
+			 + fru->recs[area]->offset - offset);
+	rv = check_rec_position(fru, area, offset, newlength);
+    } else {
+	rv = check_rec_position(fru, area, offset, fru->recs[area]->length);
+    }
     if (!rv) {
+	if (area == IPMI_FRU_FTR_MULTI_RECORD_AREA)
+	    fru->recs[area]->length += fru->recs[area]->offset - offset;
 	fru->recs[area]->offset = offset;
 	fru->recs[area]->changed = 1;
 	fru->recs[area]->rewrite = 1;
@@ -2384,6 +2411,8 @@ ipmi_fru_area_set_length(ipmi_fru_t   *fru,
     length = length & ~(8-1);
 
     if (area >= IPMI_FRU_FTR_NUMBER)
+	return EINVAL;
+    if (length == 0)
 	return EINVAL;
     fru_lock(fru);
     if (!fru->recs[area]) {
@@ -2463,6 +2492,24 @@ final_fru_destroy(ipmi_fru_t *fru)
 }
 
 int
+ipmi_fru_destroy_internal(ipmi_fru_t            *fru,
+			  ipmi_fru_destroyed_cb handler,
+			  void                  *cb_data)
+{
+    if (fru->in_frulist)
+	return EPERM;
+
+    fru_lock(fru);
+    fru->destroy_handler = handler;
+    fru->destroy_cb_data = cb_data;
+    fru->deleted = 1;
+    fru_unlock(fru);
+
+    fru_put(fru);
+    return 0;
+}
+
+int
 ipmi_fru_destroy(ipmi_fru_t            *fru,
 		 ipmi_fru_destroyed_cb handler,
 		 void                  *cb_data)
@@ -2481,16 +2528,13 @@ ipmi_fru_destroy(ipmi_fru_t            *fru,
 	if (! locked_list_remove(frul, fru, NULL))
 	    /* Not in the list, it's already been removed. */
 	    return EINVAL;
+	fru->in_frulist = 0;
+    } else {
+	/* User can't destroy FRUs he didn't allocate. */
+	return EPERM;
     }
 
-    fru_lock(fru);
-    fru->destroy_handler = handler;
-    fru->destroy_cb_data = cb_data;
-    fru->deleted = 1;
-    fru_unlock(fru);
-
-    fru_put(fru);
-    return 0;
+    return ipmi_fru_destroy_internal(fru, handler, cb_data);
 }
 
 static int start_logical_fru_fetch(ipmi_fru_t *fru);
@@ -2696,7 +2740,7 @@ process_fru_info(ipmi_fru_t *fru)
 		 "%sfru.c(process_fru_info):"
 		 " FRU checksum failed",
 		 FRU_DOMAIN_NAME(fru));
-	return EBADMSG;
+	return EBADF;
     }
 
     fru->version = *data;
@@ -2709,7 +2753,7 @@ process_fru_info(ipmi_fru_t *fru)
 		     "%sfru.c(process_fru_info):"
 		     " FRU offset exceeds data length",
 		     FRU_DOMAIN_NAME(fru));
-	    return EBADMSG;
+	    return EBADF;
 	}
     }
 
@@ -2728,7 +2772,7 @@ process_fru_info(ipmi_fru_t *fru)
 		     "%sfru.c(process_fru_info):"
 		     " FRU fields did not occur in the correct order",
 		     FRU_DOMAIN_NAME(fru));
-	    return EBADMSG;
+	    return EBADF;
 	}
     }
  check_done:

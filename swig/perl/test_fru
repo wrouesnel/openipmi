@@ -37,10 +37,18 @@ use threads::shared;
 use Thread::Semaphore;
 use Lanserv;
 use OpenIPMI;
+use POSIX;
 
 my $errcount : shared = 0;
 
 my $fru_field_table = {};
+
+sub reg_err {
+    my $str = shift;
+
+    $main::errcount++;
+    print STDERR "***", $str, "\n";
+}
 
 # Check a data field from the fru.  Parameters are:
 #  fru - where to get the data from
@@ -63,36 +71,31 @@ sub check_fru_data {
     my $tnum = $num;
 
     if (!defined $idx) {
-	print STDERR "***Invalid name in check_fru_data: $name\n";
-	$errcount++;
+	main::reg_err("Invalid name in check_fru_data: $name");
 	return;
     }
     
     ($tname, $type, $val) = split /\s+/, $fru->get($idx, \$tnum), 3;
 
     if (!defined $tname) {
-	print STDERR "***Internal error on: $name [$num]\n";
-	$errcount++;
+	main::reg_err("Internal error on: $name [$num]");
 	return;
     }
 
     if (!defined $type) {
 	if (defined $exp_val) {
-	    print STDERR "***value for $name [$num] was undefined, expected $exp_val\n";
-	    $errcount++;
+	    main::reg_err("value for $name [$num] was undefined, expected $exp_val");
 	}
 	return;
     }
 
     if ($name ne $tname) {
-	print STDERR "***Internal error on: $name [$num], $tname\n";
-	$errcount++;
+	main::reg_err("Internal error on: $name [$num], $tname");
 	return;
     }
 
     if ($exp_type ne $type) {
-	print STDERR "***Type mismatch on $name [$num], expected $exp_type, got $type\n";
-	$errcount++;
+	main::reg_err("Type mismatch on $name [$num], expected $exp_type, got $type");
 	return;
     }
 
@@ -104,14 +107,12 @@ sub check_fru_data {
 
     if (($exp_type eq "integer") || ($exp_type eq "time")) {
 	if ($exp_val != $val) {
-	    print STDERR "***Value mismatch on $name [$num], expected $exp_val, got $val\n";
-	    $errcount++;
+	    main::reg_err("Value mismatch on $name [$num], expected $exp_val, got $val");
 	    return;
 	}
     } elsif ($exp_type eq "ascii") {
 	if ($exp_val ne $val) {
-	    print STDERR "***Value mismatch on $name [$num], expected '$exp_val', got '$val'\n";
-	    $errcount++;
+	    main::reg_err("Value mismatch on $name [$num], expected '$exp_val', got '$val'");
 	    return;
 	}
     } elsif (($exp_type ne "binary") || ($exp_type ne "unicode")) {
@@ -119,8 +120,7 @@ sub check_fru_data {
 	my @exp_vals = split /\s+/, $exp_val;
 	my $i;
 	if ($#vals != $#exp_vals) {
-	    print STDERR "***Value mismatch on $name [$num], expected $#exp_vals values, got $#vals\n";
-	    $errcount++;
+	    main::reg_err("Value mismatch on $name [$num], expected $#exp_vals values, got $#vals");
 	    return;
 	}
 	$i = 1;
@@ -128,8 +128,7 @@ sub check_fru_data {
 	$exp_val = shift(@exp_vals);
 	while (defined $val) {
 	    if (hex($val) != hex($exp_val)) {
-		print STDERR "***Value mismatch on $name [$num] item $i, expected $exp_val, got $val\n";
-		$errcount++;
+		main::reg_err("Value mismatch on $name [$num] item $i, expected $exp_val, got $val");
 		return;
 	    }
 	    $val = shift(@vals);
@@ -137,8 +136,7 @@ sub check_fru_data {
 	    $i++;
 	}
     } else {
-	print STDERR "***Invalid type on $name [$num]: $exp_type\n";
-	$errcount++;
+	main::reg_err("Invalid type on $name [$num]: $exp_type");
 	return;
     }
 }
@@ -154,8 +152,7 @@ sub check_fru_mr_data {
 
     if (!defined $readval) {
 	if (defined $exp_type) {
-	    print STDERR "***value for multirecord [$num] was undefined, expected value\n";
-	    $errcount++;
+	    main::reg_err("value for multirecord [$num] was undefined, expected value");
 	}
 	return;
     }
@@ -163,14 +160,12 @@ sub check_fru_mr_data {
     ($type, $version, $val) = split /\s+/, $readval, 3;
 
     if ($type ne $exp_type) {
-	    print STDERR "***Value mismatch on multirecord [$num] type, expected $exp_type, got $type\n";
-	    $errcount++;
+	    main::reg_err("Value mismatch on multirecord [$num] type, expected $exp_type, got $type");
 	    return;
     }
 
     if ($version ne $exp_version) {
-	    print STDERR "***Value mismatch on multirecord [$num] version, expected $exp_version, got $version\n";
-	    $errcount++;
+	    main::reg_err("Value mismatch on multirecord [$num] version, expected $exp_version, got $version");
 	    return;
     }
 
@@ -184,8 +179,7 @@ sub check_fru_mr_data {
     my @exp_vals = split /\s+/, $exp_val;
     my $i;
     if ($#vals != $#exp_vals) {
-	print STDERR "***Value mismatch on multirecord [$num], expected $#exp_vals values, got $#vals\n";
-	$errcount++;
+	main::reg_err("Value mismatch on multirecord [$num], expected $#exp_vals values, got $#vals");
 	return;
     }
     $i = 1;
@@ -193,13 +187,92 @@ sub check_fru_mr_data {
     $exp_val = shift(@exp_vals);
     while (defined $val) {
 	if (hex($val) != hex($exp_val)) {
-	    print STDERR "***Value mismatch on multirecord [$num], expected $exp_val, got $val\n";
-	    $errcount++;
+	    main::reg_err("Value mismatch on multirecord [$num], expected $exp_val, got $val");
 	    return;
 	}
 	$val = shift(@vals);
 	$exp_val = shift(@exp_vals);
 	$i++;
+    }
+}
+
+sub fru_1_data_check {
+    my $fru = shift;
+    my $version = shift;
+
+    main::check_fru_data($fru, "internal_use_version", -1, "integer", "1");
+    if ($version == 0) {
+	main::check_fru_data($fru, "internal_use", -1, "binary",
+			     "0x02 0x03 0x04 0x05 0x06 0x07 0x08");
+    } else {
+	main::check_fru_data($fru, "internal_use", -1, "binary",
+			     "0x02 0x03 0x04 0x05 0x06 0x07 0x08 0x09 0x0a 0x0b 0x0c 0x0d 0x0e 0x0f 0x10");
+    }
+
+    main::check_fru_data($fru, "chassis_info_version", -1, "integer", "1");
+    main::check_fru_data($fru, "chassis_info_type", -1, "integer", "1");
+    if ($version == 0) {
+	main::check_fru_data($fru, "chassis_info_part_number", -1, "ascii",
+			     "ATCA");
+	main::check_fru_data($fru, "chassis_info_serial_number", -1, "ascii",
+			     "Tes0");
+	  main::check_fru_data($fru, "chassis_info_custom", 0, "ascii", "");
+	  main::check_fru_data($fru, "chassis_info_custom", 1, "ascii", "xyz");
+	  main::check_fru_data($fru, "chassis_info_custom", 2, "ascii", undef);
+    } else {
+	main::check_fru_data($fru, "chassis_info_part_number", -1, "binary",
+			     "0x40");
+	main::check_fru_data($fru, "chassis_info_serial_number", -1, "binary",
+			     "0x99 0x88 0x77");
+	main::check_fru_data($fru, "chassis_info_custom", 0, "ascii", undef);
+    }
+
+    main::check_fru_data($fru, "board_info_version", -1, "integer", "1");
+    # OpenIPMI converts 0 to 25 (english)
+    main::check_fru_data($fru, "board_info_lang_code", -1, "integer", "25");
+    main::check_fru_data($fru, "board_info_mfg_time", -1, "time", "820476000");
+    main::check_fru_data($fru, "board_info_board_manufacturer", -1, "ascii", "Tes1");
+    main::check_fru_data($fru, "board_info_board_product_name", -1, "ascii", "Tes2");
+    main::check_fru_data($fru, "board_info_board_serial_number", -1, "ascii", "Tes3");
+    main::check_fru_data($fru, "board_info_board_part_number", -1, "ascii", "Tes4");
+    main::check_fru_data($fru, "board_info_fru_file_id", -1, "ascii", "Tes5");
+    main::check_fru_data($fru, "board_info_custom", 0, "ascii", undef);
+
+    main::check_fru_data($fru, "product_info_version", -1, "integer", "1");
+    # OpenIPMI converts 0 to 25 (english)
+    main::check_fru_data($fru, "product_info_lang_code", -1, "integer", "25");
+    main::check_fru_data($fru, "product_info_manufacturer_name", -1, "ascii", "");
+    main::check_fru_data($fru, "product_info_product_name", -1, "ascii", "Te6");
+    main::check_fru_data($fru, "product_info_product_part_model_number", -1, "ascii",
+			 "abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz01234");
+    main::check_fru_data($fru, "product_info_product_version", -1, "binary",
+			 "0x01 0x02 0x03 0x04 0x05 0x06 0x07");
+    main::check_fru_data($fru, "product_info_product_serial_number", -1, "ascii", "");
+    main::check_fru_data($fru, "product_info_asset_tag", -1, "ascii", "12345678");
+    main::check_fru_data($fru, "product_info_fru_file_id", -1, "ascii", '3=8FH$ B');
+    main::check_fru_data($fru, "product_info_custom", 0, "ascii", 'abcd');
+    if ($version == 0) {
+	main::check_fru_data($fru, "product_info_custom", 1, "ascii", undef);
+    } else {
+	main::check_fru_data($fru, "product_info_custom", 1, "ascii",
+			     "abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz01234");
+	main::check_fru_data($fru, "product_info_custom", 2, "ascii",
+			     "ASDF1234*()");
+	main::check_fru_data($fru, "product_info_custom", 3, "ascii",
+			     "1234567890--.");
+    }
+
+
+    if ($version == 0) {
+	main::check_fru_mr_data($fru, 0, 0xc0, 2, "0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08 0x09 0x0a 0x0b 0x0c 0x0d 0x0e 0x0f 0x10");
+	main::check_fru_mr_data($fru, 1, 0xc1, 2, "");
+	main::check_fru_mr_data($fru, 2, undef, undef, undef);
+    } else {
+	main::check_fru_mr_data($fru, 0, 0xc1, 2, "");
+	main::check_fru_mr_data($fru, 1, 0xc2, 2, "0x87 0x55 0x23 0x32 0x99");
+	main::check_fru_mr_data($fru, 2, 0xc3, 2, "0x87 0xfe 0x99");
+	main::check_fru_mr_data($fru, 3, 0xc4, 2, "");
+	main::check_fru_mr_data($fru, 4, undef, undef, undef);
     }
 }
 
@@ -217,14 +290,12 @@ sub check_area_offset {
 	    return;
 	}
 
-	print STDERR "Error getting area offset for area $area: $rv\n";
-	$errcount++;
+	main::reg_err("or getting area offset for area $area: $rv");
 	return;
     }
 
     if ($size != $exp_size) {
-	print STDERR "FRU offset for area $area was $size, expected $exp_size\n";
-	$errcount++;
+	main::reg_err(" offset for area $area was $size, expected $exp_size");
     }
 }
 
@@ -242,14 +313,12 @@ sub check_area_length {
 	    return;
 	}
 
-	print STDERR "Error getting area length for area $area: $rv\n";
-	$errcount++;
+	main::reg_err("Error getting area length for area $area: $rv");
 	return;
     }
 
     if ($length != $exp_length) {
-	print STDERR "FRU length for area $area was $length, expected $exp_length\n";
-	$errcount++;
+	main::reg_err("FRU length for area $area was $length, expected $exp_length");
     }
 }
 
@@ -267,16 +336,16 @@ sub check_area_used_length {
 	    return;
 	}
 
-	print STDERR "Error getting area used length for area $area: $rv\n";
-	$errcount++;
+	main::reg_err("Error getting area used length for area $area: $rv");
 	return;
     }
 
     if ($length != $exp_length) {
-	print STDERR "FRU used length for area $area was $length, expected $exp_length\n";
-	$errcount++;
+	main::reg_err("FRU used length for area $area was $length, expected $exp_length");
     }
 }
+
+$tmpfru = undef;
 
 sub check_area {
     my $fru = shift;
@@ -306,7 +375,7 @@ sub check_area {
 	$domain->close($$self);
     }
 
-    package CheckRead1;
+    package CheckRead3;
 
     sub new {
 	my $self = shift;
@@ -321,72 +390,405 @@ sub check_area {
 	my $err = shift;
 	my $h = $$self->{handler};
 	my $rv;
-	my $idx;
+	my $i;
 	my $num;
+	my $domain = $fru->get_domain();
 
-	print "FRU data read: $err\n";
-	if ($err) {
-	    $errcount++;
-	    print STDERR "Error reading the FRU: $err\n";
+	if ($err != $OpenIPMI::ebadf) {
+	    main::reg_err("Wrong error reading the FRU: $err");
 	    $h->close();
 	    return;
 	}
 
+	print "Bad FRU fetched\n";
+
+	# tmp close
+	$h->close();
+    }
+
+    package CheckRead2;
+
+    sub new {
+	my $self = shift;
+	my $a = {};
+	$a->{handler} = shift;
+	return bless \$a;
+    }
+
+    sub fru_fetched {
+	my $self = shift;
+	my $fru = shift;
+	my $err = shift;
+	my $h = $$self->{handler};
+	my $rv;
+	my $i;
+	my $num;
+	my $domain = $fru->get_domain();
+
+	if ($err) {
+	    main::reg_err("Error reading the FRU: $err");
+	    $main::lanserv->clearlines();
+	    $main::lanserv->cmd("mc_dump_fru_data 20 0");
+	    for ($i=0; $i<128; $i++) {
+		print $main::lanserv->waitnextline(), "\n";
+	    }
+	    $h->close();
+	    return;
+	}
+
+	print "FRU refetched\n";
+	main::fru_1_data_check($fru, 1);
+
+	$tmpfru = $fru;
+
+	# Fetch a bad FRU.
+	$rv = $domain->fru_alloc(1, 0x20, 1, 0, 0, 0, CheckRead3->new($h));
+	if (! defined $rv) {
+	    main::reg_err("Error starting fru fetch: $rv");
+	    $self->close();
+	    return;
+	}
+    }
+
+    package CheckRead1;
+
+    sub new {
+	my $self = shift;
+	my $a = {};
+	$a->{handler} = shift;
+	return bless \$a;
+    }
+
+    sub fru_written {
+	my $self = shift;
+	my $fru = shift;
+	my $err = shift;
+	my $h = $$self->{handler};
+	my $domain = $fru->get_domain();
+
+	if ($err) {
+	    main::reg_err("Error writing the FRU: $err");
+	    $h->close();
+	    return;
+	}
+
+	print "FRU written\n";
+
+	# Now re-read the FRU.
+	$rv = $domain->fru_alloc(1, 0x20, 0, 0, 0, 0, CheckRead2->new($h));
+	if (! defined $rv) {
+	    main::reg_err("Error starting fru fetch: $rv");
+	    $self->close();
+	    return;
+	}
+	
+    }
+
+    sub fru_fetched {
+	my $self = shift;
+	my $fru = shift;
+	my $err = shift;
+	my $h = $$self->{handler};
+	my $rv;
+	my $idx;
+	my $num;
+
+	if ($err) {
+	    main::reg_err("Error reading the FRU: $err");
+	    $h->close();
+	    return;
+	}
+
+	print "FRU data read, checking\n";
 	main::check_area($fru, 0, 8, 8, 8);
 	main::check_area($fru, 1, 16, 24, 20);
 	main::check_area($fru, 2, 48, 40, 33);
 	main::check_area($fru, 3, 88, 104, 100);
 	main::check_area($fru, 4, 192, 832, 26);
 
-	main::check_fru_data($fru, "internal_use_version", -1, "integer", "1");
-	main::check_fru_data($fru, "internal_use", -1, "binary",
-			     "0x02 0x03 0x04 0x05 0x06 0x07 0x08");
+	main::fru_1_data_check($fru, 0);
 
-	main::check_fru_data($fru, "chassis_info_version", -1, "integer", "1");
-	main::check_fru_data($fru, "chassis_info_type", -1, "integer", "1");
-	main::check_fru_data($fru, "chassis_info_part_number", -1, "ascii", "ATCA");
-	main::check_fru_data($fru, "chassis_info_serial_number", -1, "ascii", "Tes0");
-	main::check_fru_data($fru, "chassis_info_custom", 0, "ascii", "");
-	main::check_fru_data($fru, "chassis_info_custom", 1, "ascii", "xyz");
-	main::check_fru_data($fru, "chassis_info_custom", 2, "ascii", undef);
-
-	main::check_fru_data($fru, "board_info_version", -1, "integer", "1");
-	# OpenIPMI converts 0 to 25 (english)
-	main::check_fru_data($fru, "board_info_lang_code", -1, "integer", "25");
-	main::check_fru_data($fru, "board_info_mfg_time", -1, "time", "820476000");
-	main::check_fru_data($fru, "board_info_board_manufacturer", -1, "ascii", "Tes1");
-	main::check_fru_data($fru, "board_info_board_product_name", -1, "ascii", "Tes2");
-	main::check_fru_data($fru, "board_info_board_serial_number", -1, "ascii", "Tes3");
-	main::check_fru_data($fru, "board_info_board_part_number", -1, "ascii", "Tes4");
-	main::check_fru_data($fru, "board_info_fru_file_id", -1, "ascii", "Tes5");
-	main::check_fru_data($fru, "board_info_custom", 0, "ascii", undef);
-
-	main::check_fru_data($fru, "product_info_version", -1, "integer", "1");
-	# OpenIPMI converts 0 to 25 (english)
-	main::check_fru_data($fru, "product_info_lang_code", -1, "integer", "25");
-	main::check_fru_data($fru, "product_info_manufacturer_name", -1, "ascii", "");
-	main::check_fru_data($fru, "product_info_product_name", -1, "ascii", "Te6");
-	main::check_fru_data($fru, "product_info_product_part_model_number", -1, "ascii",
-			     "abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz01234");
-	main::check_fru_data($fru, "product_info_product_version", -1, "binary",
-			     "0x01 0x02 0x03 0x04 0x05 0x06 0x07");
-	main::check_fru_data($fru, "product_info_product_serial_number", -1, "ascii", "");
-	main::check_fru_data($fru, "product_info_asset_tag", -1, "ascii", "12345678");
-	main::check_fru_data($fru, "product_info_fru_file_id", -1, "ascii", '3=8FH$ B');
-	main::check_fru_data($fru, "product_info_custom", 0, "ascii", 'abcd');
-	main::check_fru_data($fru, "product_info_custom", 1, "ascii", undef);
-
-	main::check_fru_mr_data($fru, 0, 0xc0, 2, "0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08 0x09 0x0a 0x0b 0x0c 0x0d 0x0e 0x0f 0x10");
-	main::check_fru_mr_data($fru, 1, 0xc1, 2, "");
-	main::check_fru_mr_data($fru, 2, undef, undef, undef);
-
-	if ($errcount) {
+	if ($main::errcount) {
 	    $h->close();
 	    return;
 	}
 
-	# TEMP return for now.
-	$h->close();
+	print "Fiddle with area offsets and lengths\n";
+	# Move the chassis info area out by 16.  This should fail.
+	$rv = $fru->area_set_offset(1, 32);
+	if (!$rv) {
+	    main::reg_err("Setting the FRU offset to a used offset didn't fail");
+	    $h->close();
+	    return;
+	}
+
+	# Move the chassis info area out by 8.  This should succeed.
+	$rv = $fru->area_set_offset(1, 24);
+	if ($rv) {
+	    main::reg_err("Error setting the FRU offset: $rv");
+	    $h->close();
+	    return;
+	}
+
+	# Increasing the length should fail.
+	$rv = $fru->area_set_length(1, 32);
+	if (!$rv) {
+	    main::reg_err("Increasing the FRU length didn't fail");
+	    $h->close();
+	    return;
+	}
+
+	# Decreasing the length should fail.
+	$rv = $fru->area_set_length(1, 16);
+	if (!$rv) {
+	    main::reg_err("Decreasing the FRU length didn't fail");
+	    $h->close();
+	    return;
+	}
+
+	# This should just barely fit.
+	$rv = $fru->set($fru_field_table->{chassis_info_part_number},
+			-1, "ascii", "abcdefg");
+	if ($rv) {
+	    main::reg_err("Error setting chassis info part number to 8: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "chassis_info_part_number", -1, "ascii",
+			     "abcdefg");
+
+	# This should not fit.
+	$rv = $fru->set($fru_field_table->{chassis_info_part_number},
+			-1, "ascii", "jjjjjjjjj");
+	if (!$rv) {
+	    main::reg_err("Setting value of chassis info long didn't fail");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "chassis_info_part_number", -1, "ascii",
+			     "abcdefg");
+
+	# Decrease the size of the chassis info area so we are 1 byte
+	# too long to decrease the length.
+	$rv = $fru->set_array($fru_field_table->{chassis_info_part_number},
+			      -1, "binary", [ 0x40 ]);
+	if ($rv) {
+	    main::reg_err("Error setting chassis info part number: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "chassis_info_part_number", -1, "binary",
+			     "0x40");
+
+	# Decreasing the length should fail.
+	$rv = $fru->area_set_length(1, 16);
+	if (!$rv) {
+	    main::reg_err("Decreasing the FRU length didn't fail");
+	    $h->close();
+	    return;
+	}
+
+	main::check_area($fru, 0, 8, 8, 8);
+	main::check_area($fru, 1, 24, 24, 17);
+	main::check_area($fru, 2, 48, 40, 33);
+	main::check_area($fru, 3, 88, 104, 100);
+	main::check_area($fru, 4, 192, 832, 26);
+
+	print "Fiddle with area size\n";
+	# Decrease the size of the chassis info area so we can decrease
+	# the length.
+	$rv = $fru->set($fru_field_table->{chassis_info_serial_number},
+			-1, "binary", "0x99 0x88 0x77");
+	if ($rv) {
+	    main::reg_err("Error setting chassis info serial number: $rv");
+	    $h->close();
+	    return;
+	}
+
+	# Decreasing the length should succeed.
+	$rv = $fru->area_set_length(1, 16);
+	if ($rv) {
+	    main::reg_err("Error decreasing chassis info area length: $rv");
+	    $h->close();
+	    return;
+	}
+
+	main::check_area($fru, 0, 8, 8, 8);
+	main::check_area($fru, 1, 24, 16, 16);
+	main::check_area($fru, 2, 48, 40, 33);
+	main::check_area($fru, 3, 88, 104, 100);
+	main::check_area($fru, 4, 192, 832, 26);
+
+	print "Fiddle with area size some more\n";
+	# Decreasing the length should succeed.
+	$rv = $fru->area_set_length(1, 16);
+	if ($rv) {
+	    main::reg_err("Error decreasing chassis info area length: $rv");
+	    $h->close();
+	    return;
+	}
+
+	print "Move areas around\n";
+	# Move everything out.
+	$rv = $fru->area_set_offset(4, 512);
+	if ($rv) {
+	    main::reg_err("Error setting multi-record offset: $rv");
+	    $h->close();
+	    return;
+	}
+	$rv = $fru->area_set_offset(3, 192);
+	if ($rv) {
+	    main::reg_err("Error setting product info offset: $rv");
+	    $h->close();
+	    return;
+	}
+	$rv = $fru->area_set_offset(2, 96);
+	if ($rv) {
+	    main::reg_err("Error setting board info offset: $rv");
+	    $h->close();
+	    return;
+	}
+
+	main::check_area($fru, 0, 8, 8, 8);
+	main::check_area($fru, 1, 24, 16, 16);
+	main::check_area($fru, 2, 96, 40, 33);
+	main::check_area($fru, 3, 192, 104, 100);
+	main::check_area($fru, 4, 512, 512, 26);
+
+	print "Increasing length of product info area and adding values\n";
+	$rv = $fru->area_set_length(3, 256);
+	if ($rv) {
+	    main::reg_err("Error increasing product info area length: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_area($fru, 0, 8, 8, 8);
+	main::check_area($fru, 1, 24, 16, 16);
+	main::check_area($fru, 2, 96, 40, 33);
+	main::check_area($fru, 3, 192, 256, 100);
+	main::check_area($fru, 4, 512, 512, 26);
+
+	# This should truncate
+	$rv = $fru->set($fru_field_table->{product_info_custom}, 7, "ascii",
+			"abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz012345");
+	if ($rv) {
+	    main::reg_err("Error setting product info custom 1: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "product_info_custom", 1, "ascii",
+			     "abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz01234");
+	main::check_area($fru, 3, 192, 256, 164);
+	$rv = $fru->set($fru_field_table->{product_info_custom}, 7, "ascii",
+			"ASDF1234*()");
+	if ($rv) {
+	    main::reg_err("Error setting product info custom 2: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "product_info_custom", 2, "ascii",
+			     "ASDF1234*()");
+	$rv = $fru->set($fru_field_table->{product_info_custom}, 7, "ascii",
+			"1234567890--.");
+	if ($rv) {
+	    main::reg_err("Error setting product info custom 3: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "product_info_custom", 3, "ascii",
+			     "1234567890--.");
+	$rv = $fru->set_multirecord(7, 0xc2, 2, "0x87 0x55 0x23 0x32 0x99");
+	if ($rv) {
+	    main::reg_err("Error setting multirecord 2: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_mr_data($fru, 2, 0xc2, 2, "0x87 0x55 0x23 0x32 0x99");
+	main::check_area($fru, 4, 512, 512, 36);
+	$rv = $fru->set_multirecord_array(7, 0xc3, 2, [ 0x87, 0xfe, 0x99 ]);
+	if ($rv) {
+	    main::reg_err("Error setting multirecord 3: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_mr_data($fru, 3, 0xc3, 2, "0x87 0xfe 0x99");
+	main::check_area($fru, 4, 512, 512, 44);
+	$rv = $fru->set_multirecord_array(7, 0xc4, 2, [ ]);
+	if ($rv) {
+	    main::reg_err("Error setting multirecord 3: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_mr_data($fru, 4, 0xc4, 2, "");
+	main::check_area($fru, 4, 512, 512, 49);
+	$rv = $fru->set_multirecord(7, 0xc5, 2, "");
+	if ($rv) {
+	    main::reg_err("Error setting multirecord 2: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_mr_data($fru, 5, 0xc5, 2, "");
+	main::check_area($fru, 4, 512, 512, 54);
+
+	$rv = $fru->set_multirecord(0, 0, 0, undef);
+	if ($rv) {
+	    main::reg_err("Error deleting multirecord 0: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_area($fru, 4, 512, 512, 33);
+
+	$rv = $fru->set_multirecord(4, 0, 0, undef);
+	if ($rv) {
+	    main::reg_err("Error deleting multirecord 4: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_area($fru, 4, 512, 512, 28);
+
+	$rv = $fru->set($fru_field_table->{chassis_info_custom}, 1, "ascii",
+			undef);
+	if ($rv) {
+	    main::reg_err("Error clearing chassis info custom 1: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "chassis_info_custom", 1, "ascii", undef);
+	main::check_area($fru, 1, 24, 16, 12);
+	$rv = $fru->set($fru_field_table->{chassis_info_custom}, 0, "ascii",
+			undef);
+	if ($rv) {
+	    main::reg_err("Error clearing chassis info custom 0: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "chassis_info_custom", 0, "ascii", undef);
+	main::check_area($fru, 1, 24, 16, 11);
+
+	print "Cleaning up the internal area\n";
+	$rv = $fru->area_set_length(0, 16);
+	if ($rv) {
+	    main::reg_err("Error increasing internal use area length: $rv");
+	    $h->close();
+	    return;
+	}
+	$rv = $fru->set($fru_field_table->{internal_use}, 0, "binary",
+			"0x02 0x03 0x04 0x05 0x06 0x07 0x08 0x09 0x0a 0x0b 0x0c 0x0d 0x0e 0x0f 0x10");
+	if ($rv) {
+	    main::reg_err("Error clearing chassis info custom 0: $rv");
+	    $h->close();
+	    return;
+	}
+
+	print "Writing out the FRU\n";
+	# Make sure it's what we want.
+	main::fru_1_data_check($fru, 1);
+
+	$rv = $fru->write($self);
+	if ($rv) {
+	    main::reg_err("Error writing FRU: $rv");
+	    $h->close();
+	}
     }
 
 
@@ -416,8 +818,7 @@ sub check_area {
 	my $rv;
 
 	if ($err) {
-	    $errcount++;
-	    print STDERR "Error starting up IPMI connection: $err\n";
+	    main::reg_err("Error starting up IPMI connection: $err");
 	    $self->close();
 	    return;
 	}
@@ -425,7 +826,7 @@ sub check_area {
 	print "Connection up!\n";
 	$rv = $domain->fru_alloc(1, 0x20, 0, 0, 0, 0, CheckRead1->new($self));
 	if (! defined $rv) {
-	    print STDERR "Error starting fru fetch: $rv\n";
+	    main::reg_err("Error starting fru fetch: $rv");
 	    $self->close();
 	    return;
 	}
@@ -451,9 +852,11 @@ sub check_area {
 
 }
 
+package main;
+
 $lanserv = Lanserv->new();
 if (! $lanserv) {
-    print STDERR "Unable to start lanserv\n";
+    main::reg_err("Unable to start lanserv");
     exit(1);
 }
 
@@ -501,6 +904,9 @@ $lanserv->cmd
      " 00 bd"
 );
 
+# Create a dummy FRU that has an error
+$lanserv->cmd("mc_add_fru_data 20 1 400 01");
+
 $lanserv->cmd("mc_enable 20");
 
 # Now start OpenIPMI
@@ -532,4 +938,4 @@ while ($$h->{keepon}) {
 }
 
 $lanserv->close();
-exit $errcount;
+exit $main::errcount;

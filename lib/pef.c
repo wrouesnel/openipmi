@@ -265,7 +265,7 @@ check_pef_response_param(ipmi_pef_t *pef,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%s: MC went away while PEF op was in progress",
 		 func_name);
-	return ENXIO;
+	return ECANCELED;
     }
 
     if (rsp->data[0] != 0) {
@@ -2227,7 +2227,7 @@ int \
 ipmi_pefconfig_get_ ## n(ipmi_pef_config_t *pefc, unsigned int *val) \
 { \
     if (!pefc->n ## _supported) \
-	return ENOTSUP; \
+	return ENOSYS; \
     *val = pefc->n; \
     return 0; \
 } \
@@ -2235,7 +2235,7 @@ int \
 ipmi_pefconfig_set_ ## n(ipmi_pef_config_t *pefc, unsigned int val) \
 { \
     if (!pefc->n ## _supported) \
-	return ENOTSUP; \
+	return ENOSYS; \
     pefc->n = val; \
     return 0; \
 }

@@ -245,7 +245,7 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
 		 "%slanparm.c(%s): "
 		 "MC went away while LANPARM op was in progress",
 		 MC_NAME(mc), func_name);
-	return ENXIO;
+	return ECANCELED;
     }
 
     if (rsp->data[0] != 0) {
@@ -1764,7 +1764,7 @@ ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned int      *data_len) \
 { \
     if (*data_len < l) \
-        return EMSGSIZE; \
+        return EBADF; \
     memcpy(data, lanc->n, l); \
     *data_len = l; \
     return 0; \
@@ -1775,7 +1775,7 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned int      data_len) \
 { \
     if (data_len != l) \
-        return EMSGSIZE; \
+        return EBADF; \
     memcpy(lanc->n, data, l); \
     return 0; \
 }
@@ -1794,9 +1794,9 @@ ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned int      *data_len) \
 { \
     if (! lanc->n ## _supported) \
-        return ENOTSUP; \
+        return ENOSYS; \
     if (*data_len < l) \
-        return EMSGSIZE; \
+        return EBADF; \
     memcpy(data, lanc->n, l); \
     *data_len = l; \
     return 0; \
@@ -1807,9 +1807,9 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned int      data_len) \
 { \
     if (! lanc->n ## _supported) \
-        return ENOTSUP; \
+        return ENOSYS; \
     if (data_len != l) \
-        return EMSGSIZE; \
+        return EBADF; \
     memcpy(lanc->n, data, l); \
     return 0; \
 }
@@ -1826,7 +1826,7 @@ ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned int      *data) \
 { \
     if (! lanc->s) \
-        return ENOTSUP; \
+        return ENOSYS; \
     *data = lanc->n; \
     return 0; \
 } \
@@ -1835,7 +1835,7 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned int      data) \
 { \
     if (! lanc->s) \
-        return ENOTSUP; \
+        return ENOSYS; \
     lanc->n = data; \
     return 0; \
 }
@@ -1886,7 +1886,7 @@ ipmi_lanconfig_get_## n(ipmi_lan_config_t *lanc, \
     if (set > lanc->num_alert_destinations) \
 	return EINVAL; \
     if (*data_len < l) \
-        return EMSGSIZE; \
+        return EBADF; \
     memcpy(data, lanc->s[set].n, l); \
     *data_len = l; \
     return 0; \
@@ -1900,7 +1900,7 @@ ipmi_lanconfig_set_## n(ipmi_lan_config_t *lanc, \
     if (set > lanc->num_alert_destinations) \
 	return EINVAL; \
     if (data_len != l) \
-        return EMSGSIZE; \
+        return EBADF; \
     memcpy(lanc->s[set].n, data, l); \
     return 0; \
 }

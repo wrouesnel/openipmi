@@ -421,7 +421,7 @@ handle_sel_clear(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_clear): "
 		 "MC went away while SEL op was in progress",
 		 sel->name);
-        fetch_complete(sel, ENXIO);
+        fetch_complete(sel, ECANCELED);
 	goto out;
     }
 
@@ -491,7 +491,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_data): "
 		 "handle_sel_data: MC went away while SEL op was in progress",
 		 sel->name);
-        fetch_complete(sel, ENXIO);
+        fetch_complete(sel, ECANCELED);
 	goto out;
     }
 	
@@ -505,7 +505,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 		     "%ssel.c(handle_sel_data): "
 		     "Too many lost reservations in SEL fetch",
 		     sel->name);
-	    fetch_complete(sel, EBUSY);
+	    fetch_complete(sel, EAGAIN);
 	    goto out;
 	} else {
 	    start_fetch(elem, 0);
@@ -661,7 +661,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_info): "
 		 "MC went away while SEL op was in progress",
 		 sel->name);
-        fetch_complete(sel, ENXIO);
+        fetch_complete(sel, ECANCELED);
 	goto out;
     }
 	
@@ -790,7 +790,7 @@ sel_handle_reservation(ipmi_mc_t  *mc,
 		 "%ssel.c(sel_handle_reservation): "
 		 "MC went away while SEL op was in progress",
 		 sel->name);
-        fetch_complete(sel, ENXIO);
+        fetch_complete(sel, ECANCELED);
 	goto out;
     }
 	
@@ -1065,7 +1065,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_delete): "
 		 "MC went away while SEL fetch was in progress",
 		 sel->name);
-	sel_op_done(data, ENXIO);
+	sel_op_done(data, ECANCELED);
 	goto out;
     }
 
@@ -1165,7 +1165,7 @@ handle_sel_check(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_check): "
 		 "MC went away while SEL fetch was in progress",
 		 sel->name);
-	sel_op_done(data, ENXIO);
+	sel_op_done(data, ECANCELED);
 	goto out;
     }
 
@@ -1271,7 +1271,7 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_reserved_for_delete): "
 		 "MC went away while SEL fetch was in progress", sel->name);
-	sel_op_done(data, ENXIO);
+	sel_op_done(data, ECANCELED);
 	goto out;
     }
 
@@ -2009,7 +2009,7 @@ sel_add_event_done(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_add_event_done): "
 		 "MC went away while SEL op was in progress", sel->name);
-        sel_add_op_done(info, ENXIO);
+        sel_add_op_done(info, ECANCELED);
 	goto out;
     }
 	

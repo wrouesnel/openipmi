@@ -152,6 +152,10 @@ ipmi_get_bcd_plus(int len,
 	*out = table[val];
 	out++;
     }
+
+    if (bo != 0)
+	(*d)++;
+
     return out - out_s;
 }
 
@@ -213,6 +217,9 @@ ipmi_get_6_bit_ascii(int len,
 	*out = table[val];
 	out++;
     }
+
+    if (bo != 0)
+	(*d)++;
 
     return out - out_s;
 }
@@ -438,45 +445,49 @@ ipmi_set_6_bit_ascii(char          *input,
     int  oval;
 
     while (in_len > 0) {
-	if (pos >= len) {
-	    output[0] = (0x02 << 6) | count;
-	    *out_len = pos+1;
-	    return;
-	}
 	cval = *s;
 	s++;
 	oval = table_6_bit[cval] - 1;
 	switch(bit) {
-	    case 0:
-		pos++;
-		output[pos] = oval;
-		bit = 6;
-		break;
+	case 0:
+	    pos++;
+	    if (pos >= len) 
+		goto out_overflow;
+	    output[pos] = oval;
+	    bit = 6;
+	    break;
 
-	    case 2:
-		output[pos] |= oval << 2;
-		bit = 0;
-		break;
+	case 2:
+	    output[pos] |= oval << 2;
+	    bit = 0;
+	    break;
 
-	    case 4:
-		output[pos] |= oval << 4;
-		pos++;
-		output[pos] = (oval >> 4) & 0x3;
-		bit = 2;
-		break;
+	case 4:
+	    output[pos] |= oval << 4;
+	    pos++;
+	    if (pos >= len) 
+		goto out_overflow;
+	    output[pos] = (oval >> 4) & 0x3;
+	    bit = 2;
+	    break;
 
-	    case 6:
-		output[pos] |= oval << 6;
-		pos++;
-		output[pos] = (oval >> 2) & 0xf;
-		bit = 4;
-		break;
+	case 6:
+	    output[pos] |= oval << 6;
+	    pos++;
+	    if (pos >= len) 
+		goto out_overflow;
+	    output[pos] = (oval >> 2) & 0xf;
+	    bit = 4;
+	    break;
 	}
 	count++;
 	in_len--;
     }
+    if (bit != 0)
+	pos++;
+ out_overflow:
     output[0] = (0x02 << 6) | count;
-    *out_len = pos+1;
+    *out_len = pos;
 }
 
 static void
@@ -504,31 +515,6 @@ ipmi_set_8_bit_ascii(char          *input,
     output[0] = (0x03 << 6) | in_len;
 }
 
-static void
-ipmi_set_8_bit_ascii_to_unicode(char          *input,
-				int           in_len,
-				unsigned char *output,
-				int           *out_len)
-{
-    char tmp[2];
-    /* truncate if necessary. */
-    if (in_len > (*out_len - 1))
-	in_len = *out_len - 1;
-
-    /* A length of 1 is invalid, make it 2 with a nil char */
-    if (in_len == 1) {
-	input = tmp;
-	tmp[0] = input[0];
-	tmp[1] = '\0';
-	in_len++;
-    }
-
-    *out_len = in_len + 1;
-
-    memcpy(output+1, input, in_len);
-    output[0] = (0x02 << 6) | in_len;
-}
-
 void
 ipmi_set_device_string(char                 *input,
 		       enum ipmi_str_type_e type,
@@ -541,9 +527,12 @@ ipmi_set_device_string(char                 *input,
     int          bsize = 0; /* Start with 4-bit. */
     unsigned int i;
 
-    /* Max size is 63 (62 bytes + the type byte). */
-    if (*out_len > 63)
-	*out_len = 63;
+    /* Max size is 64 (63 bytes + the type byte). */
+    if (*out_len > 64)
+	*out_len = 64;
+    /* Truncate */
+    if (in_len > 63)
+	in_len = 63;
 
     if (type == IPMI_ASCII_STR) {
 	for (i=0; i<in_len; i++) {
@@ -563,22 +552,13 @@ ipmi_set_device_string(char                 *input,
 	    /* We can encode it in 6-bit ASCII. */
 	    ipmi_set_6_bit_ascii(input, in_len, output, out_len);
 	} else {
-	    /* Hack for FRU information, if the language is
-	       non-english and the type is ascii, it's unicode. */
-	    if (force_unicode) {
-		/* The input is ASCII and the output is unicode. */
-		ipmi_set_8_bit_ascii_to_unicode(input, in_len,
-						output, out_len);
-	    } else {
-		/* 8-bit ASCII is required. */
-		ipmi_set_8_bit_ascii(input, in_len, output, out_len);
-	    }
+	    ipmi_set_8_bit_ascii(input, in_len, output, out_len);
 	}
     } else {
 	/* The input and output are unicode. */
 	if (in_len > *out_len-1)
 	    in_len = *out_len-1;
-	if (force_unicode)
+	if ((force_unicode) && (type == IPMI_UNICODE_STR))
 	    *output = (0x3 << 6) | in_len;
 	else
 	    *output = in_len;
@@ -782,7 +762,7 @@ int ipmi_threshold_set(ipmi_thresholds_t  *th,
 	if (rv)
 	    return rv;
 	if (!val)
-	    return ENOTSUP;
+	    return ENOSYS;
     }
 
     th->vals[threshold].status = 1;
@@ -801,7 +781,7 @@ int ipmi_threshold_get(ipmi_thresholds_t  *th,
 	*value = th->vals[threshold].val;
 	return 0;
     } else {
-	return ENOTSUP;
+	return ENOSYS;
     }
 }
 

@@ -519,7 +519,7 @@ destroy_entity(void *cb_data, void *item1, void *item2)
 	ent->oem_info_cleanup_handler(ent, ent->oem_info);
 
     if (ent->fru)
-	ipmi_fru_destroy(ent->fru, NULL, NULL);
+	ipmi_fru_destroy_internal(ent->fru, NULL, NULL);
 
     if (ent->waitq)
 	opq_destroy(ent->waitq);
@@ -812,6 +812,7 @@ _ipmi_entity_add_ref(ipmi_entity_t *ent)
     ipmi_lock(ent->lock);
     ent->ref_count++;
     ipmi_unlock(ent->lock);
+    return 0;
 }
 
 int
@@ -820,6 +821,7 @@ _ipmi_entity_remove_ref(ipmi_entity_t *ent)
     ipmi_lock(ent->lock);
     ent->ref_count--;
     ipmi_unlock(ent->lock);
+    return 0;
 }
 
 int
@@ -881,7 +883,7 @@ entity_find(ipmi_entity_info_t *ents,
 
     locked_list_iterate_nolock(ents->entities, search_entity, &info);
     if (info.ent == NULL) {
-	rv = ENODEV;
+	rv = ENOENT;
     } else {
 	info.ent->usecount++;
 	if (found_ent)
@@ -915,7 +917,7 @@ ipmi_entity_find(ipmi_entity_info_t *ents,
     rv = entity_find(ents, device_num, entity_id, entity_instance, &ent);
     if (!rv) {
 	if (ent->destroyed)
-	    rv = ENODEV;
+	    rv = ENOENT;
 	else
 	    *found_ent = ent;
     }
@@ -1399,7 +1401,7 @@ presence_changed(ipmi_entity_t *ent,
 	    } else if (ent->fru != NULL) {
 		fru = ent->fru;
 		ent->fru = NULL;
-		ipmi_fru_destroy(fru, NULL, NULL);
+		ipmi_fru_destroy_internal(fru, NULL, NULL);
 
 		call_fru_handlers(ent, IPMI_DELETED);
 	    }
@@ -4582,7 +4584,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	enum ipmi_update_e op;
 	if (ent->fru) {
 	    op = IPMI_CHANGED;
-	    ipmi_fru_destroy(ent->fru, NULL, NULL);
+	    ipmi_fru_destroy_internal(ent->fru, NULL, NULL);
 	} else {
 	    op = IPMI_ADDED;
 	}
@@ -4597,7 +4599,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 		 ent->info.entity_id, ent->info.entity_instance, info->err);
 	if ((ent->fru) && (info->fru))
 	    /* Keep the old FRU on errors. */
-	    ipmi_fru_destroy(info->fru, NULL, NULL);
+	    ipmi_fru_destroy_internal(info->fru, NULL, NULL);
 	else
 	    /* Keep it if we got it, it might have some useful
 	       information. */
@@ -4619,7 +4621,7 @@ fru_fetched_handler(ipmi_fru_t *fru, int err, void *cb_data)
     rv = ipmi_entity_pointer_cb(*ent_id, fru_fetched_ent_cb, &info);
     if (rv)
 	/* If we can't put the fru someplace, just destroy it. */
-	ipmi_fru_destroy(fru, NULL, NULL);
+	ipmi_fru_destroy_internal(fru, NULL, NULL);
 
     ipmi_mem_free(ent_id);
     _ipmi_put_domain_fully_up(ipmi_fru_get_domain(fru));

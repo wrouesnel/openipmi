@@ -39,4 +39,12 @@ int ipmi_fru_alloc_notrack(ipmi_domain_t       *domain,
 			   void                *fetched_cb_data,
 			   ipmi_fru_t          **new_fru);
 
+/*
+ * Used for destroying notrack FRUs only.
+ */
+typedef void (*ipmi_fru_idestroyed_cb)(ipmi_fru_t *fru, void *cb_data);
+int ipmi_fru_destroy_internal(ipmi_fru_t            *fru,
+			      ipmi_fru_idestroyed_cb handler,
+			      void                  *cb_data);
+
 #endif /* _IPMI_UTILS_H_ */

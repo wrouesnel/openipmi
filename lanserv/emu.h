@@ -68,6 +68,11 @@ int ipmi_mc_add_fru_data(lmc_data_t    *mc,
 			 unsigned char *data,
 			 unsigned int  data_len);
 
+int ipmi_mc_get_fru_data(lmc_data_t    *mc,
+			 unsigned char device_id,
+			 unsigned int  *length,
+			 unsigned char **data);
+
 int ipmi_mc_sensor_set_bit(lmc_data_t   *mc,
 			   unsigned char lun,
 			   unsigned char sens_num,

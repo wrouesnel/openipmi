@@ -53,13 +53,21 @@ sub reader {
 
 sub waitnextline {
     my $self = shift;
-    my $cmd = shift;
     my $readq_sem = $self->{readq_sem};
     my $readq = $self->{readq};
 
     $readq_sem->down(1);
     lock(@$readq);
-    return pop @$readq;
+    return shift @$readq;
+}
+
+sub clearlines {
+    my $self = shift;
+    my $readq = $self->{readq};
+
+    lock(@$readq);
+    while (defined shift @$readq) {
+    }
 }
 
 sub cmd {

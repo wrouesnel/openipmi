@@ -495,7 +495,7 @@ smi_send(smi_data_t   *smi,
     }
 
     if (msg->data_len > IPMI_MAX_MSG_LENGTH)
-	return EMSGSIZE;
+	return EBADF;
 
     if (smi->using_socket) {
 	struct sockaddr_ipmi     saddr;

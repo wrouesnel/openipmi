@@ -599,7 +599,7 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 
     if (!mc) {
 	if (info->__rsp_handler)
-	    info->__rsp_handler(sensor, ENXIO, rsp, info->__cb_data);
+	    info->__rsp_handler(sensor, ECANCELED, rsp, info->__cb_data);
 	return;
     }
 
@@ -1972,10 +1972,10 @@ int ipmi_sensor_get_default_threshold_raw(ipmi_sensor_t *sensor,
 	return rv;
 
     if (!val)
-	return ENOTSUP;
+	return ENOSYS;
 
     if (!ipmi_sensor_get_sensor_init_thresholds(sensor))
-	return ENOTSUP;
+	return ENOSYS;
 
     *raw = sensor->default_thresholds[threshold];
     return 0;
@@ -1998,10 +1998,10 @@ int ipmi_sensor_get_default_threshold_cooked(ipmi_sensor_t *sensor,
 	return rv;
 
     if (!val)
-	return ENOTSUP;
+	return ENOSYS;
 
     if (!ipmi_sensor_get_sensor_init_thresholds(sensor))
-	return ENOTSUP;
+	return ENOSYS;
 
     return (ipmi_sensor_convert_from_raw(sensor,
 					 sensor->default_thresholds[threshold],
@@ -4045,7 +4045,7 @@ stand_ipmi_sensor_get_hysteresis(ipmi_sensor_t             *sensor,
 
     if ((sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_READABLE)
         && (sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_SETTABLE))
-	return ENOTSUP;
+	return ENOSYS;
     
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4141,7 +4141,7 @@ stand_ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 	return ENOSYS;
 
     if (sensor->hysteresis_support != IPMI_HYSTERESIS_SUPPORT_SETTABLE)
-	return ENOTSUP;
+	return ENOSYS;
     
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4291,7 +4291,7 @@ stand_ipmi_sensor_get_thresholds(ipmi_sensor_t             *sensor,
 	return ENOSYS;
 
     if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
-	return ENOTSUP;
+	return ENOSYS;
     
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4404,7 +4404,7 @@ stand_ipmi_sensor_set_thresholds(ipmi_sensor_t       *sensor,
 	return ENOSYS;
 
     if (sensor->threshold_access != IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE)
-	return ENOTSUP;
+	return ENOSYS;
     
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)

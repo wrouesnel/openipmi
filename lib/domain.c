@@ -1260,7 +1260,7 @@ domain_oem_check_done(ipmi_domain_t *domain,
     domain_check_oem_t *check = cb_data;
 
     if (check->cancelled) {
-	check->done(NULL, ENXIO, check->cb_data);
+	check->done(NULL, ECANCELED, check->cb_data);
 	ipmi_mem_free(check);
 	return;
     }
@@ -1568,7 +1568,7 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 	call_mc_upd_handlers(domain, mc, IPMI_DELETED);
 	return 0;
     } else
-	return ENODEV;
+	return ENOENT;
 }
 
 int
@@ -2161,7 +2161,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
 		/* In this case, the use count is defined to be 1, so
 		   it will always be set up properly and the previous
-		   function will not return EBUSY, no need to
+		   function will not return EAGAIN, no need to
 		   check. */
 
 		mc_added = 1;
@@ -2169,7 +2169,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	    } else {
 		/* It was inactive, activate it. */
 		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
-		if (rv == EBUSY) {
+		if (rv == EAGAIN) {
 		    /* The MC is in use, so we cannot handle it right
 		       now.  We wait until the MC is released to do
 		       that and cue off the pending new MC field in
@@ -3131,7 +3131,7 @@ ipmi_domain_reread_sels(ipmi_domain_t  *domain,
 	ipmi_unlock(info->lock);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
-	return ENOTSUP;
+	return ENOSYS;
     }
     ipmi_unlock(info->lock);
 
@@ -4156,7 +4156,7 @@ ipmi_domain_activate_connection(ipmi_domain_t *domain, unsigned int connection)
 	return EINVAL;
 
     if (!domain->conn[connection]->set_active_state)
-	return ENOTSUP;
+	return ENOSYS;
 
     domain->conn[connection]->set_active_state(domain->conn[connection], 1, 
 					       ll_addr_changed, domain);

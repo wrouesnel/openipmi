@@ -136,7 +136,6 @@ void ipmi_set_device_string(char                 *input,
 			    int                  force_unicode,
 			    int                  *out_len);
 
-
 /* Generate a log.  Note that logs should not end in a newline, that
    will be automatically added as needed to the log.  */
 void ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)

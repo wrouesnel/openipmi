@@ -645,6 +645,36 @@ mc_add_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
+mc_dump_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    unsigned char *data;
+    unsigned char devid;
+    unsigned int  length;
+    int           i;
+    int           rv;
+
+    rv = get_uchar(toks, &devid, "Device ID", 0);
+    if (rv)
+	return rv;
+
+    rv = ipmi_mc_get_fru_data(mc, devid, &length, &data);
+    if (rv) {
+	printf("**Unable to dump FRU data, error 0x%x\n", rv);
+	goto out;
+    }
+
+    for (i=0; i<length; i++) {
+	if ((i > 0) && ((i % 8) == 0))
+	    printf("\n");
+	printf(" 0x%2.2x", data[i]);
+    }
+    printf("\n");
+
+ out:
+    return rv;
+}
+
+static int
 mc_setbmc(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     unsigned char ipmb;
@@ -769,6 +799,7 @@ static struct {
     { "sensor_set_event_support", MC,   sensor_set_event_support },
     { "mc_set_power",   MC,		mc_set_power },
     { "mc_add_fru_data",MC,		mc_add_fru_data },
+    { "mc_dump_fru_data",MC,		mc_dump_fru_data },
     { "mc_set_num_leds",MC,		mc_set_num_leds },
     { "mc_add",		NOMC,		mc_add },
     { "mc_delete",	MC,		mc_delete },

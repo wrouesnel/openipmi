@@ -1,3 +1,41 @@
+2004-12-15 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/fru.c, include/OpenIPMI/ipmi_fru.c: Fixe the name of the set
+	multi-record function function.
+	* cmdlang/cmd_fru.c: ditto
+
+	* swig/OpenIPMI.i: Add functions to set FRU multi-records.
+	Properly handle undefined values in the other FRU set functions.
+
+	* include/OpenIPMI/internal/ipmi_utils.h, lib/fru.c: Added
+	internal FRU destroy functions to keep users from destroying
+	internal FRUs.
+	* lib/entity.c: ditto
+	* lib/oem_atca.c: ditto
+	
+	* swig/perl/test_fru, swig/perl/Lanserv.pm: More work on tests.
+
+	* lib/ipmi.c, lib/fru.c: Fixed some more string handling problems
+	that the new testing found.
+
+	* lib/domain.c: Rework error return values to make them a
+	single consistent set.
+	* lib/fru.c: ditto
+	* lib/ipmi.c: ditto
+	* lib/ipmi_smi.c: ditto
+	* lib/lanparm.c: ditto
+	* lib/mc.c: ditto
+	* lib/oem_atca.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/pef.c: ditto
+	* lib/sdr.c: ditto
+	* lib/sel.c: ditto
+	* lib/sensor.c: ditto
+	* lib/.c: ditto
+
+	* swig/OpenIPMI.i: More work to fix some bugs and add the
+	error constants used by OpenIPMI.
+
 2004-12-14 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/fru.c: Fixed some bugs with FRU handling.
