@@ -225,6 +225,55 @@ ipmi_fru_t *ipmi_entity_get_fru(ipmi_entity_t *ent);
 /* Fetch the FRUs for this entity. */
 int ipmi_entity_fetch_frus(ipmi_entity_t *ent);
 
+int ipmi_entity_set_hot_swappable(ipmi_entity_t *ent, int val);
+
+/* Hot-swap state callbacks. */
+typedef struct ipmi_entity_hot_swap_s
+{
+    int (*get_hot_swap_state)(ipmi_entity_t           *ent,
+			      ipmi_entity_hot_swap_cb handler,
+			      void                    *cb_data);
+
+    int (*set_auto_activate)(ipmi_entity_t  *ent,
+			     int            val,
+			     ipmi_entity_cb done,
+			     void           *cb_data);
+
+    int (*set_auto_deactivate)(ipmi_entity_t  *ent,
+			       int            val,
+			       ipmi_entity_cb done,
+			       void           *cb_data);
+
+    int (*get_auto_activate)(ipmi_entity_t      *ent,
+			     ipmi_entity_val_cb handler,
+			     void               *cb_data);
+
+    int (*get_auto_deactivate)(ipmi_entity_t      *ent,
+			       ipmi_entity_val_cb handler,
+			       void               *cb_data);
+
+    int (*activate)(ipmi_entity_t  *ent,
+		    ipmi_entity_cb done,
+		    void           *cb_data);
+
+    int (*deactivate)(ipmi_entity_t  *ent,
+		      ipmi_entity_cb done,
+		      void           *cb_data);
+
+    int (*get_hot_swap_indicator)(ipmi_entity_t      *ent,
+				  ipmi_entity_val_cb handler,
+				  void               *cb_data);
+
+    int (*set_hot_swap_indicator)(ipmi_entity_t  *ent,
+				  int            val,
+				  ipmi_entity_cb done,
+				  void           *cb_data);
+
+    int (*get_hot_swap_requester)(ipmi_entity_t      *ent,
+				  ipmi_entity_val_cb handler,
+				  void               *cb_data);
+} ipmi_entity_hot_swap_t;
+
 /* Locks for the entity. */
 void ipmi_entity_lock(ipmi_entity_t *ent);
 void ipmi_entity_unlock(ipmi_entity_t *ent);

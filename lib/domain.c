@@ -3621,7 +3621,9 @@ ll_con_changed(ipmi_con_t   *ipmi,
     else
 	domain->port_up[port_num][u] = 1;
 
-    if (!domain->in_startup)
+    /* If we are not starting up, if we gain or loose a connection
+       then scan the address. */
+    if ((!domain->in_startup) && (ipmi->scan_sysaddr))
     	ipmi_start_si_scan(domain, u, NULL, NULL);
 
     if (still_connected) {

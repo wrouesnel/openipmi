@@ -162,6 +162,9 @@ struct ipmi_entity_s
 
     ipmi_fru_t   *fru;
 
+    int                    hot_swappable;
+    ipmi_entity_hot_swap_t hs_cb;
+
     ipmi_entity_fru_cb fru_handler;
     void              *fru_cb_data;
 
@@ -3221,3 +3224,153 @@ FRU_VAL_GET(unsigned int,  product_info_fru_file_id_len)
 FRU_VAL_GET(enum ipmi_str_type_e, product_info_fru_file_id_type)
 FRU_STR_GET(product_info_fru_file_id)
 FRU_CUSTOM_GET(product_info)
+
+/***************************************************************************
+ *
+ * Hot swap
+ *
+ ***************************************************************************/
+
+int
+ipmi_entity_set_hot_swappable(ipmi_entity_t *ent, int val)
+{
+    ent->hot_swappable = val;
+    return 0;
+}
+
+int
+ipmi_entity_hot_swappable(ipmi_entity_t *ent)
+{
+    return ent->hot_swappable;
+}
+
+int
+ipmi_entity_register_hot_swap_events(ipmi_entity_t           *ent,
+				     ipmi_entity_hot_swap_cb handler,
+				     void                    *cb_data)
+{
+    return 0;
+}
+
+int
+ipmi_entity_get_hot_swap_state(ipmi_entity_t           *ent,
+			       ipmi_entity_hot_swap_cb handler,
+			       void                    *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.get_hot_swap_state)
+	return ENOSYS;
+    return ent->hs_cb.get_hot_swap_state(ent, handler, cb_data);
+}
+
+int
+ipmi_entity_set_auto_activate(ipmi_entity_t  *ent,
+			      int            val,
+			      ipmi_entity_cb done,
+			      void           *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.set_auto_activate)
+	return ENOSYS;
+    return ent->hs_cb.set_auto_activate(ent, val, done, cb_data);
+}
+
+int
+ipmi_entity_set_auto_deactivate(ipmi_entity_t  *ent,
+				int            val,
+				ipmi_entity_cb done,
+				void           *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.set_auto_deactivate)
+	return ENOSYS;
+    return ent->hs_cb.set_auto_deactivate(ent, val, done, cb_data);
+}
+
+int
+ipmi_entity_get_auto_activate(ipmi_entity_t      *ent,
+			      ipmi_entity_val_cb handler,
+			      void               *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.get_auto_activate)
+	return ENOSYS;
+    return ent->hs_cb.get_auto_activate(ent, handler, cb_data);
+}
+
+int
+ipmi_entity_get_auto_deactivate(ipmi_entity_t      *ent,
+				ipmi_entity_val_cb handler,
+				void               *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.get_auto_deactivate)
+	return ENOSYS;
+    return ent->hs_cb.get_auto_deactivate(ent, handler, cb_data);
+}
+
+int
+ipmi_entity_activate(ipmi_entity_t  *ent,
+		     ipmi_entity_cb done,
+		     void           *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.activate)
+	return ENOSYS;
+    return ent->hs_cb.activate(ent, done, cb_data);
+}
+
+int
+ipmi_entity_deactivate(ipmi_entity_t  *ent,
+		       ipmi_entity_cb done,
+		       void           *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.deactivate)
+	return ENOSYS;
+    return ent->hs_cb.deactivate(ent, done, cb_data);
+}
+
+int
+ipmi_entity_get_hot_swap_indicator(ipmi_entity_t      *ent,
+				   ipmi_entity_val_cb handler,
+				   void               *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.get_hot_swap_indicator)
+	return ENOSYS;
+    return ent->hs_cb.get_hot_swap_indicator(ent, handler, cb_data);
+}
+
+int
+ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
+				   int            val,
+				   ipmi_entity_cb done,
+				   void           *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.set_hot_swap_indicator)
+	return ENOSYS;
+    return ent->hs_cb.set_hot_swap_indicator(ent, val, done, cb_data);
+}
+
+int
+ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
+				   ipmi_entity_val_cb handler,
+				   void               *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.get_hot_swap_requester)
+	return ENOSYS;
+    return ent->hs_cb.get_hot_swap_requester(ent, handler, cb_data);
+}
