@@ -268,7 +268,8 @@ typedef struct lan_data_s
 } lan_data_t;
 
 static void check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan);
-static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num);
+static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
+			 int force_ipmiv15);
 
 static ipmi_lock_t *lan_list_lock = NULL;
 static lan_data_t *lan_list = NULL;
@@ -702,7 +703,7 @@ audit_timeout_handler(void              *cb_data,
 
     for (i=0; i<lan->num_ip_addr; i++) {
 	if (start_up[i])
-	    send_auth_cap(ipmi, lan, i);
+	    send_auth_cap(ipmi, lan, i, 0);
     }
 
     msg.netfn = IPMI_APP_NETFN;
@@ -2437,7 +2438,7 @@ static int
 send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
 			   ipmi_msgi_t *rspi)
 {
-    unsigned char		 data[IPMI_MAX_MSG_LENGTH];
+    unsigned char		 data[1];
     ipmi_msg_t			 msg;
     int				 rv;
     ipmi_system_interface_addr_t addr;
@@ -2457,6 +2458,39 @@ send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
 				  (ipmi_addr_t *) &addr, sizeof(addr),
 				  &msg, session_privilege_set, rspi);
     return rv;
+}
+
+static int
+send_get_channel_cypher_suites(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
+			       ipmi_msgi_t *rspi)
+{
+    unsigned char		 data[3];
+    ipmi_msg_t			 msg;
+    int				 rv;
+    ipmi_system_interface_addr_t addr;
+
+    addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    addr.channel = 0xf;
+    addr.lun = 0;
+
+    data[0] = 0x0e; /* current channel */
+    data[1] = 0x00; /* IPMI payload */
+    data[2] = 0x00;
+
+    msg.cmd = IPMI_SET_SESSION_PRIVILEGE_CMD;
+    msg.netfn = IPMI_APP_NETFN;
+    msg.data = data;
+    msg.data_len = 1;
+
+    rv = lan_send_command_forceip(ipmi, addr_num,
+				  (ipmi_addr_t *) &addr, sizeof(addr),
+				  &msg, session_privilege_set, rspi);
+    return rv;
+}
+
+static int
+start_rmcpp(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msg_t *msg, int addr_num)
+{
 }
 
 static int
@@ -2630,7 +2664,6 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     int        rv;
     int        addr_num = (long) rspi->data4;
 
-
     if (!ipmi) {
 	handle_connected(ipmi, ECANCELED, addr_num);
 	goto out;
@@ -2708,13 +2741,52 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 }
 
 static int
-send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
+auth_cap_done_rmcpp(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
-    unsigned char                data[IPMI_MAX_MSG_LENGTH];
+    ipmi_msg_t *msg = &rspi->msg;
+    lan_data_t *lan;
+    int        addr_num = (long) rspi->data1;
+    int        rv;
+
+    if (!ipmi) {
+	handle_connected(ipmi, ECANCELED, addr_num);
+	goto out;
+    }
+
+    lan = (lan_data_t *) ipmi->con_data;
+
+    if ((msg->data[0] != 0) || (msg->data_len < 9)) {
+	/* Got an error, try it without the RMCP+ bit set.  Some
+	   systems incorrectly return errors when reserved data is
+	   set. */
+	rv = send_auth_cap(ipmi, lan, addr_num, 1);
+	if (rv) {
+	    handle_connected(ipmi, rv, addr_num);
+	    goto out;
+	}
+    }
+
+    if (msg->data[4] & 0x02) {
+	/* We have RMCP+ support!  Use it. */
+	return start_rmcpp(ipmi, lan, msg, addr_num);
+    } else {
+	return auth_cap_done(ipmi, rspi);
+    }
+
+ out:
+    return IPMI_MSG_ITEM_NOT_USED;
+}
+
+static int
+send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
+	      int force_ipmiv15)
+{
+    unsigned char                data[2];
     ipmi_msg_t                   msg;
     ipmi_system_interface_addr_t addr;
     int                          rv;
     ipmi_msgi_t                  *rspi;
+    ipmi_ll_rsp_handler_t        rsp_handler;
 
     rspi = ipmi_mem_alloc(sizeof(*rspi));
     if (!rspi)
@@ -2730,10 +2802,19 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
     msg.netfn = IPMI_APP_NETFN;
     msg.data = data;
     msg.data_len = 2;
+    if ((lan->specified_authtype == IPMI_AUTHTYPE_DEFAULT)
+	&& !force_ipmiv15)
+    {
+	rsp_handler = auth_cap_done_rmcpp;
+	data[0] |= 0x80; /* Get RMCP data. */
+	rspi->data1 = (void *) (long) addr_num;
+    } else {
+	rsp_handler = auth_cap_done;
+    }
 
     rv = lan_send_command_forceip(ipmi, addr_num,
 				  (ipmi_addr_t *) &addr, sizeof(addr),
-				  &msg, auth_cap_done, rspi);
+				  &msg, rsp_handler, rspi);
     if (rv)
 	ipmi_mem_free(rspi);
     return rv;
@@ -2788,7 +2869,7 @@ lan_start_con(ipmi_con_t *ipmi)
     }
 
     for (i=0; i<lan->num_ip_addr; i++) {
-	rv = send_auth_cap(ipmi, lan, i);
+	rv = send_auth_cap(ipmi, lan, i, 0);
 	if (rv)
 	    goto out_err;
     }

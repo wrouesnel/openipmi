@@ -1094,4 +1094,8 @@ $h = undef;
 
 $lanserv->close();
 OpenIPMI::shutdown_everything();
-exit main::get_errcount();
+if (main::get_errcount() != 0) {
+    exit 1;
+} else {
+    exit 0
+}
