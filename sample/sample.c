@@ -46,7 +46,7 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_posix.h>
-#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_event.h>
 
 /* This file should not normally be included by the user, but is here
    to demonstrate an internal domain function. */
@@ -76,6 +76,76 @@ usage(void)
 	   "     not none.\n", progname, progname);
 }
 
+static int
+sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
+			       enum ipmi_event_dir_e       dir,
+			       enum ipmi_thresh_e          threshold,
+			       enum ipmi_event_value_dir_e high_low,
+			       enum ipmi_value_present_e   value_present,
+			       unsigned int                raw_value,
+			       double                      value,
+			       void                        *cb_data,
+			       ipmi_event_t                *event)
+{
+    ipmi_entity_t *ent = ipmi_sensor_get_entity(sensor);
+    int id, instance;
+    char name[33];
+
+    id = ipmi_entity_get_entity_id(ent);
+    instance = ipmi_entity_get_entity_instance(ent);
+    ipmi_sensor_get_id(sensor, name, 32);
+
+    printf("Event from sensor %d.%d.%s: %s %s %s\n",
+	   id, instance, name,
+	   ipmi_get_threshold_string(threshold),
+	   ipmi_get_value_dir_string(high_low),
+	   ipmi_get_event_dir_string(dir));
+    if (value_present == IPMI_BOTH_VALUES_PRESENT) {
+	printf("  value is %f (%2.2x)\n", value, raw_value);
+    } else if (value_present == IPMI_RAW_VALUE_PRESENT) {
+	printf("  raw value is 0x%x\n", raw_value);
+    }
+    if (event)
+	printf("Due to event 0x%4.4x\n", ipmi_event_get_record_id(event));
+
+    /* This passes the event on to the main event handler, which does
+       not exist in this program. */
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
+static int
+sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
+			      enum ipmi_event_dir_e dir,
+			      int                   offset,
+			      int                   severity,
+			      int                   prev_severity,
+			      void                  *cb_data,
+			      ipmi_event_t          *event)
+{
+    ipmi_entity_t *ent = ipmi_sensor_get_entity(sensor);
+    int id, instance;
+    char name[33];
+
+    id = ipmi_entity_get_entity_id(ent);
+    instance = ipmi_entity_get_entity_instance(ent);
+    ipmi_sensor_get_id(sensor, name, 32);
+
+    printf("Event from sensor %d.%d.%s: %d %s\n",
+	   id, instance, name,
+	   offset,
+	   ipmi_get_event_dir_string(dir));
+    if (severity != -1)
+	printf("  severity is %d\n", severity);
+    if (prev_severity != -1)
+	printf("  prev severity is %d\n", prev_severity);
+    if (event)
+	printf("Due to event 0x%4.4x\n", ipmi_event_get_record_id(event));
+
+    /* This passes the event on to the main event handler, which does
+       not exist in this program. */
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
 /* Whenever the status of a sensor changes, the function is called
    We display the information of the sensor if we find a new sensor
 */
@@ -87,12 +157,28 @@ sensor_change(enum ipmi_update_e op,
 {
     int id, instance;
     char name[33];
+    int rv;
 
     id = ipmi_entity_get_entity_id(ent);
     instance = ipmi_entity_get_entity_instance(ent);
     ipmi_sensor_get_id(sensor, name, 32);
-    if (op == IPMI_ADDED) 
+    if (op == IPMI_ADDED) {
 	printf("Sensor added: %d.%d.%s\n", id, instance, name);
+
+	if (ipmi_sensor_get_event_reading_type(sensor)
+	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	    rv = ipmi_sensor_add_threshold_event_handler
+		(sensor,
+		 sensor_threshold_event_handler,
+		 NULL);
+	else
+	    rv = ipmi_sensor_add_discrete_event_handler
+		(sensor,
+		 sensor_discrete_event_handler,
+		 NULL);
+	if (rv)
+	    printf("Unable to add the sensor event handler: %x\n", rv);
+    }
 }
 
 

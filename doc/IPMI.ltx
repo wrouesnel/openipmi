@@ -62,7 +62,16 @@ have built more extensive management control using \acs{OEM} extensions to
 \acro{EEPROM}{Electronically Erasable Programmable Read Only Memory}
 \acro{LAN}{Local Area Network}
 \acro{SEL}{System Event Log}
+\acro{PPP}{Point to Point Protocol}
+\acro{RMCP}{Remote Management Control Protocol}
 \end{acronym}
+
+\chapter{Documents}
+
+\begin{tabularx}{\textwidth}{lX}
+IPMI Spec & \\
+RMCP & \\
+\end{tabularx}
 
 \mainmatter
 
@@ -208,7 +217,7 @@ number of sensors.  In this example, the power supply also has a
 A \ac{BMC} can have several connections to managing systems.  It may have a
 system interface connection to the main processor.  It may share an
 interface to the ethernet chip so the system may be managed through
-the LAN when the main processor is not working.  System can have
+the \acs{LAN} when the main processor is not working.  System can have
 serial port connections.  They can even have connections to modems
 where they can dial up a management system when they detect a
 problem, page an operator, or be dialed into by a management system.
@@ -269,11 +278,11 @@ expected to use raw \acs{IPMI}?
 The first things you must do, of course, it connect to the \ac{BMC}.  If it's
 a direct SMI connection (A \ac{SMIC}, \ac{KCS}, or \ac{BT} interface, or perhaps a
 non-standard serial interface), you just open the driver on the
-operating system and start messaging.  If it's a LAN-type connection,
+operating system and start messaging.  If it's a \acs{LAN}-type connection,
 you have to go through an authentication sequence.  One you have a
 connection to the \ac{BMC}, things are pretty much the same no matter what
 interface you have.  There are a few messaging for doing special
-controls on a LAN interface, but they don't generally matter to the
+controls on a \acs{LAN} interface, but they don't generally matter to the
 user.
 
 Once the connection to the \ac{BMC} is up, the user should query to see what
@@ -1082,8 +1091,8 @@ Holds definitions for the logging interface.\\
 
 \begin{tabularx}{\textwidth}{lX}
 \verb=ipmi_lan.h= &
-This is the LAN messaging interface, this contains the calls for
-creating a LAN connection.\\
+This is the \acs{LAN} messaging interface, this contains the calls for
+creating a \acs{LAN} connection.\\
 
 \verb=ipmi_smi.h= &
 This is the messaging interface for talking to local IPMI interfaces
@@ -1098,10 +1107,10 @@ This is the messaging interface for talking to local IPMI interfaces
 Contains code for configuring the Platform Event Filter (PEF).\\
 
 \verb=ipmi_lanparm.h= &
-Contains code for configuring the LAN configuration data.\\
+Contains code for configuring the \acs{LAN} configuration data.\\
 
 \verb=ipmi_pet.h= &
-Contains code that allows the user to easily set up an IPMI LAN
+Contains code that allows the user to easily set up an IPMI \acs{LAN}
 interface on a BMC to send traps.\\
 
 \end{tabularx}
@@ -1253,7 +1262,7 @@ connections.  You use a per-interface command to set up the interface,
 but once set up, the interfaces all work the same.  The file shown in
 Appendix \ref{ipmi-conn-h} defines the interface for connections.
 
-Note that not all operations are not available on all interfaces.  LAN
+Note that not all operations are not available on all interfaces.  \acs{LAN}
 connections, for instance, cannot receive commands.
 
 \section{System Interfaces}
@@ -1670,7 +1679,7 @@ of a domain, as described in section \ref{creating-openipmi-domains}.
 \section{Channels}
 
 The \acs{IPMI} interfaces on a management controller are called
-``channels''.  These are messaging channels.  LAN, \ac{IPMB}, system
+``channels''.  These are messaging channels.  \acs{LAN}, \ac{IPMB}, system
 interface, and any other messaging interfaces will each have their own
 channel on the \ac{MC}.
 
@@ -1687,7 +1696,7 @@ configuration information such as users and passwords.
 system.\\
 \hline
 1h-7h & \parbox{1in}{Implementation-specific} & These channel may be any
-type of channel, including \acs{IPMB}, and LAN interfaces.\\
+type of channel, including \acs{IPMB}, and \acs{LAN} interfaces.\\
 \hline
 8h-Dh & & Reserved\\
 \hline
@@ -1761,19 +1770,61 @@ decoding the response, and resending messages.
 
 \section{ICMB}
 
-\section{LAN}
+\section{\acs{LAN}}
+The \ac{IPMI} \acs{LAN} interface allows users to connect to \ac{IPMI}
+systems over an Ethernet interface.  This can generally even be done
+when the system is turned off, although it probably has to be plugged
+in.  This lets you do things like power control the system and reset
+the main processor even when the operating system is not operational
+on the system.
+
+The \ac{IPMI} \acs{LAN} protocol runs over a subset of the \ac{RMCP}
+protocol.
 
 \subsection{\acs{SNMP} Traps}
+Many \ac{IPMI} systems can send \acs{SNMP} traps to inform the the
+management system that something has happened.  Generally, it is
+saying that an event has been placed into the event log.  Most of the
+event information is in the SNMP trap, but unfortunately, some key
+information is not there.  It does give the system an immediate
+notification.
 
-\subsection{LAN Configuration}
+\subsection{\acs{LAN} Configuration}
+Most systems have tools to configure the \ac{IPMI} \acs{LAN}
+interface.  IPMI has a built-in way to do this, too, through a set of
+tables.
 
-\subsection{The OpenIPMI LAN Interface }
+\subsection{The OpenIPMI \acs{LAN} Interface}
+The LAN interface is complicated, but OpenIPMI handles most of the
+details for the user.  A single function sets up the interface.
+Unfortunately, that function takes a huge number of parameters due to
+the large number of things required to configure a \ac{IPMI} \acs{LAN}
+connection.  The function is:
+
+\begin{verbatim}
+int ipmi_ip_setup_con(char         * const ip_addrs[],
+                      char         * const ports[],
+                      unsigned int num_ip_addrs,
+                      unsigned int authtype,
+                      unsigned int privilege,
+                      void         *username,
+                      unsigned int username_len,
+                      void         *password,
+                      unsigned int password_len,
+                      os_handler_t *handlers,
+                      void         *user_data,
+                      ipmi_con_t   **new_con);
+\end{verbatim}
+
+\subsection{OpenIPMI and \acs{SNMP} Traps}
 
 \section{Serial}
 
 \subsection{Direct Serial}
 
-\subsection{Serial over PPP}
+\subsection{Serial over \acs{PPP}}
+
+\section{User Management}
 
 \section{OpenIPMI Addressing}
 \label{openipmi-addressing}

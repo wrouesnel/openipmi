@@ -1,3 +1,7 @@
+2004-06-24 Corey Minyard <cminyard@mvista.com> 
+
+	* sample/sample.c: Added event handling for sensors to the sample.
+
 2004-06-23 Michael McMaster <Michael_McMaster@Xiotech.com>
 
 	* lib/mc.c: Initialize info->err in ipmi_mc_reread_sel().
