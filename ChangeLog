@@ -30,6 +30,8 @@
 	* lib/oem_motorola_mxp.c: Removed the ability to set the chassis
 	type control, as it is really not settable.
 
+	* configure.in: Move to version 1.2.9.
+
 2004-02-10 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a way to send events
