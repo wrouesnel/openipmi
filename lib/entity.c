@@ -1817,7 +1817,6 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 	   keep this special. */
 	ent->presence_sensor = sensor;
 	handle_new_presence_sensor(ent, sensor);
-	locked_list_free_entry(link);
     } else if ((ent->presence_sensor == NULL)
 	       && (ent->presence_bit_sensor == NULL)
 	       && is_presence_bit_sensor(sensor, &bit))
