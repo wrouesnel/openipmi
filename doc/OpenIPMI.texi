@@ -2256,19 +2256,53 @@ Voltage sensor for 3.3 volts.
 Voltage sensor for 5 volts.
 @end table
 
+@subsubsection Supported Boards
+
+OpenIPMI currently supports the following MXP-specific boards:
+
+@table @samp
+@item CPCI5365
+Full support
+
+@item CPCI5365
+Basic support
+
+@item CPCI805
+Basic support
+
+@item PPRB
+Basic support
+
+@item PVRB
+Basic support
+
+@item 10/100 Zynx Switch (4500)
+Full support
+
+@item 10/100/1000 Zynx Switch (4900)
+Full support
+
+@end table
+
 @subsection Known Problems
 
 This section documents known problems with the AMC code, either with the
 OpenIPMI OEM code or with the MXP firmware.
 
 @table @samp
-@item SEL
+@item SEL (Old MXP versions only )
 Currently, the SEL on the inactive AMC doesn't work with OpenIPMI.
 The SEL will still provide events, but the ``Get SEL Info'' command
 doesn't work.  OpenIPMI uses the ``Get SEL Info'' command to see if any
 new events have been added to the SEL before a query to avoid any more
 messages if the SEL hasn't been changed.  So you will get SEL errors
 periodically.
+
+@item SEL (All MXP versions)
+Be careful not to send the MXP OEM SEL lock command to the AMC, or
+OpenIPMI will no longer be able to use the SEL on that AMC (a board
+removal and insertion may be required).  Some Motorola tools may do
+this, so be careful.
 
 @item Cooling sensor
 The cooling sensors on the fans don't seem to work properly in the
@@ -2296,7 +2330,7 @@ are not covered will stay with the I2C bus.
 The temperature sensors are not currently represented by the PM on the
 boards.  When this changes, OpenIPMI will switch to using them.
 
-@item Zynx switch ejector latches
+@item Zynx switch ejector latches (Old Zynx switches only)
 The ejector handles on the Zynx switches don't generate events.
 
 @item A/B feeds to AC power supplies
@@ -2305,7 +2339,7 @@ A/B feeds, even though they are not present on the AC power supplies.
 OpenIPMI should look at the chassis type and not provide these bits on
 the Power Supply sensor for an AC chassis.
 
-@item Bogus entities
+@item Bogus entities (Old MXP versions only)
 The SDRs in the AMC create some bogus entities.  The sensors on them
 seem to be functional, but the entities are not standard and will
 probably go away.  You can safely ignore entities ``0.0'' and

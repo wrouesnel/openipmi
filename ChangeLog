@@ -1,3 +1,11 @@
+2004-01-14 Corey Minyard <cminyard@mvista.com> 
+
+	* doc/OpenIPMI.texi: Added some MXP-specific information.
+
+	* lib/oem_motorola_mxp.c: Fixed a few problems, the Chassis ID
+	sensor was on the wrong entity, some boards were missing, and a
+	few other little glitches.
+
 2004-01-13 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.2.1

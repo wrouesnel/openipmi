@@ -72,6 +72,7 @@
 #define MXP_5365_PRODUCT_ID	0x0003
 #define MXP_5385_PRODUCT_ID	0x0002
 #define MXP_PPRB_PRODUCT_ID	0x0006
+#define MXP_PVRB_PRODUCT_ID	0x0011
 
 #define ZYNX_MANUFACTURER_ID	0x0002b0
 #define ZYNX_SWITCH_PRODUCT_ID2	0x3100
@@ -153,12 +154,12 @@
 
 /* Chassis sensors/controls */
 #define MXP_SYS_LED_CONTROL_NUM		1
-#define MXP_CHASSIS_ID_CONTROL_NUM	2
+/* #define MXP_CHASSIS_ID_CONTROL_NUM	2 - moved to boards. */
 #define MXP_CHASSIS_TYPE_CONTROL_NUM	3
 #define MXP_RELAY_CONTROL_NUM	        4
 #define MXP_SHELF_GA_CONTROL_NUM	5
 
-/* Power supply and fan sensors/controls */
+/* Power supply and fan sensors */
 #define MXP_PS_SENSNUM_START 16
 #define MXP_PS_SENSOR_NUM(idx, num) (((idx)*16)+(num)+MXP_PS_SENSNUM_START)
 #define MXP_PS_PRESENCE_NUM(idx) MXP_PS_SENSOR_NUM(idx, 1)
@@ -167,7 +168,7 @@
 #define MXP_FAN_SPEED_NUM(idx) MXP_PS_SENSOR_NUM(idx, 4)
 #define MXP_FAN_COOLING_NUM(idx) MXP_PS_SENSOR_NUM(idx, 5)
 
-/* Power supply sensors/controls */
+/* Power supply and fan controls */
 #define MXP_PS_CONTROLNUM_START 16
 #define MXP_PS_CONTROL_NUM(idx, num) (((idx)*16)+(num)+MXP_PS_CONTROLNUM_START)
 #define MXP_PS_ENABLE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 1)
@@ -180,7 +181,7 @@
 #define MXP_PS_REVISION_NUM(idx) MXP_PS_CONTROL_NUM(idx, 8)
 #define MXP_FAN_TYPE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 9)
 #define MXP_FAN_REVISION_NUM(idx) MXP_PS_CONTROL_NUM(idx, 10)
-#define MXP_FAN_I2C_ENABLE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 11)
+#define MXP_PS_I2C_ISOLATE_NUM(idx) MXP_PS_CONTROL_NUM(idx, 11)
 
 /* Board senors/controls. */
 #define MXP_BOARD_SENSNUM_START 64
@@ -254,11 +255,11 @@ typedef struct mxp_power_supply_s
     ipmi_control_t *inserv_led;
     ipmi_control_t *ps_type;
     ipmi_control_t *ps_revision;
+    ipmi_control_t *ps_i2c_isolate;
 
     ipmi_sensor_t *fan;
     ipmi_sensor_t *fan_presence;
     ipmi_sensor_t *cooling;
-    ipmi_sensor_t *fan_i2c_enable;
 
     ipmi_control_t *fan_speed;
     ipmi_control_t *fan_oos_led;
@@ -327,7 +328,10 @@ typedef struct amc_info_s
     ipmi_control_t *last_reset_reason;
 } amc_info_t;
 
+#define MXP_V1		1
+#define MXP_V2		2
 struct mxp_info_s {
+    int                mxp_version;
     unsigned char      chassis_type;
     unsigned char      chassis_config;
     unsigned int       mfg_id;
@@ -1661,174 +1665,6 @@ mxp_alloc_control(ipmi_mc_t               *mc,
  **********************************************************************/
 
 static void
-chassis_id_set_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    mxp_info_t           *info = control_info->idinfo;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[7];
-
-    if (err) {
-	if (control_info->done_set)
-	    control_info->done_set(control, err, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_SET_CHASSIS_ID_CMD;
-    msg.data_len = 7;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    memcpy(data+3, control_info->vals, 4);
-
-    rv = ipmi_control_send_command(control, info->mc, 0,
-				   &msg, mxp_control_set_done,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->done_set)
-	    control_info->done_set(control, rv, control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-    }
-}
-
-static int
-chassis_id_set(ipmi_control_t     *control,
-	       unsigned char      *val,
-	       int                length,
-	       ipmi_control_op_cb handler,
-	       void               *cb_data)
-{
-    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_info_t           *info = hdr->data;
-    mxp_control_info_t   *control_info;
-    int                  rv;
-
-    if (length != 4)
-	return EINVAL;
-
-    control_info = alloc_control_info(info);
-    if (!control_info)
-	return ENOMEM;
-    control_info->done_set = handler;
-    control_info->cb_data = cb_data;
-    memcpy(control_info->vals, val, 4);
-    rv = ipmi_control_add_opq(control, chassis_id_set_start,
-			     &(control_info->sdata), control_info);
-    if (rv)
-	ipmi_mem_free(control_info);
-    return rv;
-}
-
-static void
-chassis_id_get_cb(ipmi_control_t *control,
-		  int            err,
-		  ipmi_msg_t     *rsp,
-		  void           *cb_data)
-{
-    mxp_control_info_t *control_info = cb_data;
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_id_get_cb: Received IPMI error: %x",
-		 rsp->data[0]);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control,
-					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
-					     NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (rsp->data_len < 9) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "chassis_id_get_cb: Received invalid msg length: %d,"
-		 " expected %d",
-		 rsp->data_len, 9);
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
-					     control_info->cb_data);
-	goto out;
-    }
-
-    if (control_info->get_identifier_val)
-	control_info->get_identifier_val(control, 0,
-					 rsp->data+4, 4,
-					 control_info->cb_data);
- out:
-    ipmi_control_opq_done(control);
-    ipmi_mem_free(control_info);
-}
-
-static void
-chassis_id_get_start(ipmi_control_t *control, int err, void *cb_data)
-{
-    mxp_control_info_t   *control_info = cb_data;
-    mxp_info_t           *info = control_info->idinfo;
-    int                  rv;
-    ipmi_msg_t           msg;
-    unsigned char        data[3];
-
-    if (err) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, err, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_CHASSIS_ID_CMD;
-    msg.data_len = 3;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    rv = ipmi_control_send_command(control, info->mc, 0,
-				   &msg, chassis_id_get_cb,
-				   &(control_info->sdata), control_info);
-    if (rv) {
-	if (control_info->get_identifier_val)
-	    control_info->get_identifier_val(control, rv, NULL, 0,
-					     control_info->cb_data);
-	ipmi_control_opq_done(control);
-	ipmi_mem_free(control_info);
-	return;
-    }
-}
-
-static int
-chassis_id_get(ipmi_control_t                 *control,
-	       ipmi_control_identifier_val_cb handler,
-	       void                           *cb_data)
-{
-    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
-    mxp_info_t           *info = hdr->data;
-    mxp_control_info_t   *control_info;
-    int                  rv;
-
-    control_info = alloc_control_info(info);
-    if (!control_info)
-	return ENOMEM;
-    control_info->get_identifier_val = handler;
-    control_info->cb_data = cb_data;
-    rv = ipmi_control_add_opq(control, chassis_id_get_start,
-			     &(control_info->sdata), control_info);
-    if (rv)
-	ipmi_mem_free(control_info);
-    return rv;
-}
-
-static void
 chassis_type_set_start(ipmi_control_t *control, int err, void *cb_data)
 {
     mxp_control_info_t   *control_info = cb_data;
@@ -2497,25 +2333,6 @@ mxp_add_chassis_sensors(mxp_info_t *info)
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(info->sys_led, 3, sys_leds);
-
-    /* The Chassis ID. */
-    rv = mxp_alloc_control(info->mc, info->chassis_ent,
-			   MXP_CHASSIS_ID_CONTROL_NUM,
-			   info,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "Chassis ID",
-			   NULL,
-			   NULL,
-			   &(info->chassis_id));
-    if (rv)
-	goto out_err;
-    ipmi_control_identifier_set_max_length(info->chassis_id, 4);
-    ipmi_control_get_callbacks(info->chassis_id, &control_cbs);
-    control_cbs.set_identifier_val = chassis_id_set;
-    control_cbs.get_identifier_val = chassis_id_get;
-    ipmi_control_set_settable(info->chassis_id, 1);
-    ipmi_control_set_readable(info->chassis_id, 1);
-    ipmi_control_set_callbacks(info->chassis_id, &control_cbs);
 
     /* The Chassis Type. */
     rv = mxp_alloc_control(info->mc, info->chassis_ent,
@@ -3262,6 +3079,141 @@ ps_revision_get(ipmi_control_t                 *control,
 }
 
 static void
+ps_i2c_isolate_set_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    mxp_power_supply_t *psinfo = control_info->idinfo;
+    ipmi_msg_t         msg;
+    unsigned char      data[5];
+    int                rv;
+
+    if (err) {
+	if (control_info->done_set)
+	    control_info->done_set(control, err, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_SET_IPMB_ISOLATE_CMD;
+    msg.data_len = 5;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    data[3] = psinfo->ipmb_addr;
+    data[4] = control_info->vals[0];
+    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
+				   &msg, mxp_control_set_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_set)
+	    control_info->done_set(control, rv, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+ps_i2c_isolate_set(ipmi_control_t     *control,
+	      int                *val,
+	      ipmi_control_op_cb handler,
+	      void               *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_power_supply_t   *psinfo = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(psinfo);
+    if (!control_info)
+	return ENOMEM;
+    control_info->done_set = handler;
+    control_info->cb_data = cb_data;
+    control_info->vals[0] = *val;
+
+    rv = ipmi_control_add_opq(control, ps_i2c_isolate_set_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
+static int
+ps_i2c_isolate_get_cb(ipmi_control_t     *control,
+		      mxp_control_info_t *control_info,
+		      unsigned char      *data)
+{
+    /* The bit is an enable bit, but this is an "isolate" sensor, so
+       the reading from the message is backwards. */
+    if (data[5] & 2)
+	return 0;
+    else
+	return 1;
+}
+
+static void
+ps_i2c_isolate_get_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+    mxp_power_supply_t *psinfo = control_info->idinfo;
+    ipmi_msg_t         msg;
+    unsigned char      data[4];
+    int                rv;
+
+    if (err) {
+	if (control_info->done_get)
+	    control_info->done_get(control, err, NULL, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_FAN_STATUS_CMD; /* Yes, it is in the fan status */
+    msg.data_len = 4;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    data[3] = psinfo->ipmb_addr;
+    rv = ipmi_control_send_command(control, psinfo->info->mc, 0,
+				   &msg, mxp_control_get_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_get)
+	    control_info->done_get(control, rv, NULL, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+}
+
+static int
+ps_i2c_isolate_get(ipmi_control_t      *control,
+		   ipmi_control_val_cb handler,
+		   void                *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_power_supply_t   *psinfo = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(psinfo);
+    if (!control_info)
+	return ENOMEM;
+    control_info->done_get = handler;
+    control_info->cb_data = cb_data;
+    control_info->min_rsp_length = 6;
+    control_info->get_val = ps_i2c_isolate_get_cb;
+
+    rv = ipmi_control_add_opq(control, ps_i2c_isolate_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+
+    return rv;
+}
+
+static void
 fan_presence_states_get_cb(ipmi_sensor_t   *sensor,
 			   mxp_sens_info_t *sens_info,
 			   unsigned char   *data,
@@ -3344,81 +3296,6 @@ fan_presence_states_get(ipmi_sensor_t       *sensor,
     get_info->min_rsp_length = 6;
 
     rv = ipmi_sensor_add_opq(sensor, fan_presence_states_get_start,
-			     &(get_info->sdata), get_info);
-    if (rv)
-	ipmi_mem_free(get_info);
-
-    return rv;
-}
-
-static void
-fan_i2c_enable_states_get_cb(ipmi_sensor_t   *sensor,
-			   mxp_sens_info_t *sens_info,
-			   unsigned char   *data,
-			   ipmi_states_t   *states)
-{
-    if (data[5] & 2)
-	ipmi_set_state(states, 1, 1); /* enabled */
-    else
-	ipmi_set_state(states, 0, 1); /* disabled */
-}
-
-static void
-fan_i2c_enable_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
-{
-    mxp_sens_info_t    *get_info = cb_data;
-    mxp_power_supply_t *psinfo = get_info->sdinfo;
-    ipmi_states_t      states;
-    ipmi_msg_t         msg;
-    unsigned char      data[4];
-    int                rv;
-
-    ipmi_init_states(&states);
-    ipmi_set_sensor_scanning_enabled(&states, 1);
-
-    if (err) {
-	if (get_info->done)
-	    get_info->done(sensor, err, &states, get_info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(get_info);
-	return;
-    }
-
-    msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_FAN_STATUS_CMD;
-    msg.data_len = 4;
-    msg.data = data;
-    add_mxp_mfg_id(data);
-    data[3] = psinfo->ipmb_addr;
-    rv = ipmi_sensor_send_command(sensor, psinfo->info->mc, 0,
-				  &msg, mxp_sensor_get_done,
-				  &(get_info->sdata), get_info);
-    if (rv) {
-	if (get_info->done)
-	    get_info->done(sensor, rv, &states, get_info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(get_info);
-    }
-}
-
-static int
-fan_i2c_enable_states_get(ipmi_sensor_t       *sensor,
-			ipmi_states_read_cb done,
-			void                *cb_data)
-{
-    mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
-    mxp_power_supply_t  *psinfo = hdr->data;
-    int                 rv;
-    mxp_sens_info_t     *get_info;
-
-
-    get_info = alloc_sens_info(psinfo, done, cb_data);
-    if (!get_info)
-	return ENOMEM;
-    get_info->get_states = fan_i2c_enable_states_get_cb;
-    get_info->min_rsp_length = 6;
-
-    rv = ipmi_sensor_add_opq(sensor, fan_i2c_enable_states_get_start,
 			     &(get_info->sdata), get_info);
     if (rv)
 	ipmi_mem_free(get_info);
@@ -4162,6 +4039,19 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     ipmi_control_set_readable(ps->ps_revision, 1);
     ipmi_control_set_callbacks(ps->ps_revision, &control_cbs);
 
+    /* Power supply I2C isolate control */
+    rv = mxp_alloc_control(info->mc, ps->ent,
+			   MXP_PS_I2C_ISOLATE_NUM(ps->idx),
+			   ps,
+			   IPMI_CONTROL_OUTPUT,
+			   "I2C Isolate",
+			   ps_i2c_isolate_set,
+			   ps_i2c_isolate_get,
+			   &(ps->ps_i2c_isolate));
+    if (rv)
+	goto out_err;
+    ipmi_control_set_num_elements(ps->ps_i2c_isolate, 1);
+
     /* Fan presence sensor */
     rv = mxp_alloc_discrete_sensor(info->mc, ps->fan_ent,
 				   MXP_FAN_PRESENCE_NUM(ps->idx),
@@ -4173,21 +4063,6 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				   fan_presence_states_get,
 				   NULL,
 				   &(ps->fan_presence));
-    if (rv)
-	goto out_err;
-    ipmi_sensor_set_ignore_if_no_entity(ps->fan_presence, 0);
-
-    /* Fan I2C enable sensor */
-    rv = mxp_alloc_discrete_sensor(info->mc, ps->fan_ent,
-				   MXP_FAN_I2C_ENABLE_NUM(ps->idx),
-				   ps, NULL,
-				   IPMI_SENSOR_TYPE_CABLE_INTERCONNECT,
-				   IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE,
-				   "I2C Enable",
-				   0x3, 0,
-				   fan_i2c_enable_states_get,
-				   NULL,
-				   &(ps->fan_i2c_enable));
     if (rv)
 	goto out_err;
     ipmi_sensor_set_ignore_if_no_entity(ps->fan_presence, 0);
@@ -4310,6 +4185,162 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
  * Board sensors and controls handled by the AMC start here.
  *
  **********************************************************************/
+
+static void
+mxpv1_board_presence_states_get2(ipmi_sensor_t *sensor, void *cb_data)
+{
+    mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
+    mxp_board_t         *binfo = hdr->data;
+    mxp_sens_info_t     *get_info = cb_data;
+    ipmi_states_t       states;
+
+    ipmi_init_states(&states);
+    ipmi_set_sensor_scanning_enabled(&states, 1);
+
+    /* If we get an error back from the device ID command, we assume the
+       board is not present. */
+    if (get_info->rsp->data[0] == 0) {
+	ipmi_set_state(&states, 0, 1); /* present */
+
+	/* Scan the MC if we haven't already. */
+	if (!binfo->presence_read) {
+	    binfo->presence_read = 1;
+	    ipmi_start_ipmb_mc_scan(binfo->info->domain, 0,
+				    binfo->ipmb_addr, binfo->ipmb_addr,
+				    NULL, NULL);
+	}
+    } else
+	ipmi_set_state(&states, 1, 1); /* absent */
+
+    if (get_info->done)
+	get_info->done(sensor, 0, &states, get_info->cb_data);
+}
+
+static void
+mxpv1_board_presence_states_get_cb(ipmi_sensor_t *sensor,
+				   int           err,
+				   ipmi_msg_t    *rsp,
+				   void          *cb_data)
+{
+    mxp_sens_info_t *get_info = cb_data;
+    int             rv;
+    ipmi_states_t   states;
+
+    ipmi_init_states(&states);
+    ipmi_set_sensor_scanning_enabled(&states, 1);
+
+    get_info->rsp = rsp;
+
+    if (err == ENXIO) {
+	/* Special handling if we didn't have an MC. */
+	rv = ipmi_sensor_pointer_cb(get_info->sens_id,
+				    mxpv1_board_presence_states_get2,
+				    get_info);
+	if (rv)
+	    get_info->done(sensor, rv, &states, get_info->cb_data);
+    } else if (err) {
+        get_info->done(sensor, err, &states, get_info->cb_data);
+    } else {
+	mxpv1_board_presence_states_get2(sensor, get_info);
+    }
+
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(get_info);
+}
+
+static void
+mxpv1_board_presence_states_get_start(ipmi_sensor_t *sensor, int err,
+				      void *cb_data)
+{
+    mxp_sens_info_t    *get_info = cb_data;
+    mxp_board_t        *binfo = get_info->sdinfo;
+    ipmi_msg_t         msg;
+    int                rv;
+    ipmi_states_t      states;
+
+    ipmi_init_states(&states);
+    ipmi_set_sensor_scanning_enabled(&states, 1);
+
+    if (err) {
+	if (get_info->done)
+	    get_info->done(sensor, err, &states, get_info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(get_info);
+	return;
+    }
+
+    if (binfo->is_amc) {
+	int i = binfo->idx - MXP_ALARM_CARD_IDX_OFFSET;
+	ipmi_system_interface_addr_t si;
+	ipmi_mc_t                    *mc;
+
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = i;
+	si.lun = 0;
+	mc = _ipmi_find_mc_by_addr(binfo->info->domain,
+				   (ipmi_addr_t *) &si, sizeof(si));
+	if (mc)
+	    binfo->info->amc_present[i] = 1;
+	else 
+	    binfo->info->amc_present[i] = 0;
+	
+	if (binfo->info->amc_present[i])
+	    ipmi_set_state(&states, 0, 1); /* present */
+	else
+	    ipmi_set_state(&states, 1, 1); /* absent */
+
+	if (get_info->done)
+	    get_info->done(sensor, 0, &states, get_info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(get_info);
+    } else {
+	ipmi_ipmb_addr_t addr;
+
+	msg.netfn = IPMI_APP_NETFN;
+	msg.cmd = IPMI_GET_DEVICE_ID_CMD;
+	msg.data_len = 0;
+	msg.data = NULL;
+	addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+	addr.channel = 0;
+	addr.lun = 0;
+	addr.slave_addr = binfo->ipmb_addr;
+	rv = ipmi_sensor_send_command_addr(binfo->info->domain, sensor,
+					   (ipmi_addr_t *) &addr, sizeof(addr),
+					   &msg,
+					   mxpv1_board_presence_states_get_cb,
+					   &(get_info->sdata), get_info);
+	if (rv) {
+	    if (get_info->done)
+		get_info->done(sensor, rv, &states, get_info->cb_data);
+	    ipmi_sensor_opq_done(sensor);
+	    ipmi_mem_free(get_info);
+	}
+    }
+}
+
+static int
+mxpv1_board_presence_states_get(ipmi_sensor_t       *sensor,
+				ipmi_states_read_cb done,
+				void                *cb_data)
+{
+    mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
+    mxp_board_t         *binfo = hdr->data;
+    int                 rv;
+    mxp_sens_info_t     *get_info;
+
+
+    get_info = alloc_sens_info(binfo, done, cb_data);
+    if (!get_info)
+	return ENOMEM;
+    get_info->sens_id = ipmi_sensor_convert_to_id(sensor);
+
+    rv = ipmi_sensor_add_opq(sensor, mxpv1_board_presence_states_get_start,
+			     &(get_info->sdata), get_info);
+    if (rv)
+	ipmi_mem_free(get_info);
+
+    return rv;
+}
 
 static void
 board_presence_states_get_cb(ipmi_sensor_t   *sensor,
@@ -4970,16 +5001,29 @@ mxp_add_board_sensors(mxp_info_t  *info,
     int rv;
 
     /* Presence sensor */
-    rv = mxp_alloc_discrete_sensor(board->info->mc, board->ent,
-				   MXP_BOARD_PRESENCE_NUM(board->idx),
-				   board, NULL,
-				   IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
-				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-				   "presence",
-				   0x3, 0x3,
-				   board_presence_states_get,
-				   NULL,
-				   &(board->presence));
+    if (info->mxp_version == MXP_V1) {
+	rv = mxp_alloc_discrete_sensor(board->info->mc, board->ent,
+				       MXP_BOARD_PRESENCE_NUM(board->idx),
+				       board, NULL,
+				       IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
+				       IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+				       "presence",
+				       0x3, 0x3,
+				       mxpv1_board_presence_states_get,
+				       NULL,
+				       &(board->presence));
+    } else {
+	rv = mxp_alloc_discrete_sensor(board->info->mc, board->ent,
+				       MXP_BOARD_PRESENCE_NUM(board->idx),
+				       board, NULL,
+				       IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
+				       IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+				       "presence",
+				       0x3, 0x3,
+				       board_presence_states_get,
+				       NULL,
+				       &(board->presence));
+    }
     if (rv)
 	goto out_err;
     ipmi_sensor_set_ignore_if_no_entity(board->presence, 0);
@@ -6000,6 +6044,168 @@ slot_ga_get(ipmi_control_t                 *control,
     return rv;
 }
 
+static void
+chassis_id_set_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t   *control_info = cb_data;
+    int                  rv;
+    ipmi_msg_t           msg;
+    unsigned char        data[7];
+
+    if (err) {
+	if (control_info->done_set)
+	    control_info->done_set(control, err, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_SET_CHASSIS_ID_CMD;
+    msg.data_len = 7;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    memcpy(data+3, control_info->vals, 4);
+
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, mxp_control_set_done,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->done_set)
+	    control_info->done_set(control, rv, control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+    }
+}
+
+static int
+chassis_id_set(ipmi_control_t     *control,
+	       unsigned char      *val,
+	       int                length,
+	       ipmi_control_op_cb handler,
+	       void               *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    if (length != 4)
+	return EINVAL;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->done_set = handler;
+    control_info->cb_data = cb_data;
+    memcpy(control_info->vals, val, 4);
+    rv = ipmi_control_add_opq(control, chassis_id_set_start,
+			     &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
+static void
+chassis_id_get_cb(ipmi_control_t *control,
+		  int            err,
+		  ipmi_msg_t     *rsp,
+		  void           *cb_data)
+{
+    mxp_control_info_t *control_info = cb_data;
+
+    if (err) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "chassis_id_get_cb: Received IPMI error: %x",
+		 rsp->data[0]);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control,
+					     IPMI_IPMI_ERR_VAL(rsp->data[0]),
+					     NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 9) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "chassis_id_get_cb: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, 9);
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
+					     control_info->cb_data);
+	goto out;
+    }
+
+    if (control_info->get_identifier_val)
+	control_info->get_identifier_val(control, 0,
+					 rsp->data+4, 4,
+					 control_info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(control_info);
+}
+
+static void
+chassis_id_get_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    mxp_control_info_t   *control_info = cb_data;
+    int                  rv;
+    ipmi_msg_t           msg;
+    unsigned char        data[3];
+
+    if (err) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, err, NULL, 0,
+					     control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+
+    msg.netfn = MXP_NETFN_MXP1;
+    msg.cmd = MXP_OEM_GET_CHASSIS_ID_CMD;
+    msg.data_len = 3;
+    msg.data = data;
+    add_mxp_mfg_id(data);
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, chassis_id_get_cb,
+				   &(control_info->sdata), control_info);
+    if (rv) {
+	if (control_info->get_identifier_val)
+	    control_info->get_identifier_val(control, rv, NULL, 0,
+					     control_info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(control_info);
+	return;
+    }
+}
+
+static int
+chassis_id_get(ipmi_control_t                 *control,
+	       ipmi_control_identifier_val_cb handler,
+	       void                           *cb_data)
+{
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(NULL);
+    if (!control_info)
+	return ENOMEM;
+    control_info->get_identifier_val = handler;
+    control_info->cb_data = cb_data;
+    rv = ipmi_control_add_opq(control, chassis_id_get_start,
+			     &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
 typedef struct board_sensor_info_s
 {
     ipmi_sensor_t  *slot;
@@ -6008,6 +6214,7 @@ typedef struct board_sensor_info_s
     ipmi_control_t *blue_led;
     ipmi_control_t *slot_ga;
     ipmi_control_t *power_config;
+    ipmi_control_t *chassis_id;
 } board_sensor_info_t;
 
 static void
@@ -6025,6 +6232,8 @@ destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 	ipmi_control_destroy(sinfo->slot_ga);
     if (sinfo->power_config)
 	ipmi_control_destroy(sinfo->power_config);
+    if (sinfo->chassis_id)
+	ipmi_control_destroy(sinfo->chassis_id);
 }
 
 /*
@@ -6048,6 +6257,7 @@ destroy_board_sensors(ipmi_mc_t *mc, board_sensor_info_t *sinfo)
 #define MXP_BOARD_LAST_RESET_REASON_NUM 8 /* AMC only */
 #define MXP_BOARD_SLOT_GA_NUM		9 /* PM only */
 #define MXP_BOARD_POWER_CONFIG_NUM	10 /* PM only */
+#define MXP_BOARD_CHASSIS_ID_CONTROL_NUM 11
 
 static int
 new_board_sensors(ipmi_mc_t           *mc,
@@ -6145,6 +6355,25 @@ new_board_sensors(ipmi_mc_t           *mc,
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(sinfo->power_config, 3);
+
+    /* The Chassis ID. */
+    rv = mxp_alloc_control(mc, ent,
+			   MXP_BOARD_CHASSIS_ID_CONTROL_NUM,
+			   NULL,
+			   IPMI_CONTROL_IDENTIFIER,
+			   "Chassis ID",
+			   NULL,
+			   NULL,
+			   &sinfo->chassis_id);
+    if (rv)
+	goto out_err;
+    ipmi_control_identifier_set_max_length(sinfo->chassis_id, 4);
+    ipmi_control_get_callbacks(sinfo->chassis_id, &control_cbs);
+    control_cbs.set_identifier_val = chassis_id_set;
+    control_cbs.get_identifier_val = chassis_id_get;
+    ipmi_control_set_settable(sinfo->chassis_id, 1);
+    ipmi_control_set_readable(sinfo->chassis_id, 1);
+    ipmi_control_set_callbacks(sinfo->chassis_id, &control_cbs);
 
  out_err:
     return rv;
@@ -8578,6 +8807,86 @@ mxp_pprb_handler(ipmi_mc_t     *mc,
     return rv;
 }
 
+typedef struct mxp_pvrb_info_s
+{
+    board_sensor_info_t   board;
+} mxp_pvrb_info_t;
+
+static void
+mxp_pvrb_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+{
+    mxp_pvrb_info_t *sinfo = cb_data;
+
+    destroy_board_sensors(mc, &(sinfo->board));
+    ipmi_mem_free(sinfo);
+}
+
+static int
+mxp_pvrb_handler(ipmi_mc_t     *mc,
+		 void          *cb_data)
+{
+    unsigned int       slave_addr = ipmi_mc_get_address(mc);
+    ipmi_entity_info_t *ents;
+    ipmi_entity_t      *ent;
+    int                rv;
+    char               *board_name;
+    ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
+    ipmi_mc_t          *bmc;
+    mxp_info_t         *info = NULL;
+    mxp_pvrb_info_t    *sinfo = NULL;
+    ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
+
+    ipmi_domain_entity_lock(domain);
+
+    bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+    if (bmc
+	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
+	&& (ipmi_mc_product_id(bmc) == MXP_AMC_PRODUCT_ID))
+    {
+	int        i;
+
+	info = ipmi_mc_get_oem_data(bmc);
+	/* We are in an MXP chassis, we can get the index and the name
+           from the table */
+	i = mxp_board_addr_to_index(slave_addr, info);
+	if (i < 0)
+	    board_name = "pvrb board";
+	else
+	    board_name = board_entity_str[i];
+    } else {
+	/* Not in an MXP chassis, just give it a generic name. */
+	board_name = "pvrb board";
+    }
+	    
+    sinfo = ipmi_mem_alloc(sizeof(*sinfo));
+    if (!sinfo) {
+	rv = ENOMEM;
+	goto out;
+    }
+
+    ents = ipmi_domain_get_entities(domain);
+    rv = ipmi_entity_add(ents, domain, mc, 0,
+			 IPMI_ENTITY_ID_PROCESSING_BLADE,
+			 mxp_addr_to_instance(slave_addr),
+			 board_name, IPMI_ASCII_STR, strlen(board_name),
+			 mxp_entity_sdr_add,
+			 NULL, &ent);
+    if (rv)
+	goto out;
+
+    rv = new_board_sensors(mc, ent, info, &(sinfo->board));
+    if (rv)
+	goto out;
+
+    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_pvrb_removal_handler, sinfo, NULL);
+
+ out:
+    if (rv && sinfo)
+	ipmi_mem_free(sinfo);
+    ipmi_domain_entity_unlock(domain);
+    return rv;
+}
+
 typedef struct zynx_info_s
 {
     board_sensor_info_t board;
@@ -8860,10 +9169,10 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->power_supply[i].ps_type);
 	if (info->power_supply[i].ps_revision)
 	    ipmi_control_destroy(info->power_supply[i].ps_revision);
+	if (info->power_supply[i].ps_i2c_isolate)
+	    ipmi_control_destroy(info->power_supply[i].ps_i2c_isolate);
 	if (info->power_supply[i].fan_presence)
 	    ipmi_sensor_destroy(info->power_supply[i].fan_presence);
-	if (info->power_supply[i].fan_i2c_enable)
-	    ipmi_sensor_destroy(info->power_supply[i].fan_i2c_enable);
 	if (info->power_supply[i].fan_type)
 	    ipmi_control_destroy(info->power_supply[i].fan_type);
 	if (info->power_supply[i].fan_revision)
@@ -8958,6 +9267,11 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	return ENOMEM;
     memset(info, 0, sizeof(*info));
 
+    if (ipmi_mc_major_fw_revision(mc) < 5)
+	info->mxp_version = MXP_V1;
+    else
+	info->mxp_version = MXP_V2;
+
     /* Fixups for problems in configuration. */
     /* Disable the SEL for the BMC device, just use the AMC devices to
        get the events. */
@@ -9036,6 +9350,7 @@ mxp_handler(ipmi_mc_t *mc,
 {
     int           rv;
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+
 
     /* The MXP AMC does not support generating events on the IPMB. */
     ipmi_mc_set_ipmb_event_generator_support(mc, 0);
@@ -9251,6 +9566,14 @@ ipmi_oem_motorola_mxp_init(void)
     rv = ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
 				   MXP_PPRB_PRODUCT_ID,
 				   mxp_pprb_handler,
+				   NULL,
+				   NULL);
+    if (rv)
+	return rv;
+
+    rv = ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
+				   MXP_PVRB_PRODUCT_ID,
+				   mxp_pvrb_handler,
 				   NULL,
 				   NULL);
     if (rv)
