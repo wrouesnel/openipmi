@@ -1882,24 +1882,38 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	    break;
 	}
 
-	if (ipmi_sensor_get_event_support(sensor) != IPMI_EVENT_SUPPORT_NONE) {
+	switch (ipmi_sensor_get_event_support(sensor))
+	{
+	case IPMI_EVENT_SUPPORT_PER_STATE:
+	case IPMI_EVENT_SUPPORT_ENTIRE_SENSOR:
 	    rv = ipmi_sensor_events_enable_get(sensor,
 					       read_thresh_event_enables,
 					       NULL);
 	    if (rv)
 		ui_log("Unable to get event values: 0x%x\n", rv);
+	    break;
+
+	default:
+	    break;
 	}
     } else {
 	rv = ipmi_states_get(sensor, read_states, NULL);
 	if (rv)
 	    ui_log("Unable to get sensor reading: 0x%x\n", rv);
 	
-	if (ipmi_sensor_get_event_support(sensor) != IPMI_EVENT_SUPPORT_NONE) {
+	switch (ipmi_sensor_get_event_support(sensor))
+	{
+	case IPMI_EVENT_SUPPORT_PER_STATE:
+	case IPMI_EVENT_SUPPORT_ENTIRE_SENSOR:
 	    rv = ipmi_sensor_events_enable_get(sensor,
 					       read_discrete_event_enables,
 					       NULL);
 	    if (rv)
 		ui_log("Unable to get event values: 0x%x\n", rv);
+	    break;
+
+	default:
+	    break;
 	}
     }
 }
@@ -1948,16 +1962,21 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		    break;
 		}
 
-		if (ipmi_sensor_get_event_support(sensor)
-		    != IPMI_EVENT_SUPPORT_NONE)
+		switch (ipmi_sensor_get_event_support(sensor))
 		{
+		case IPMI_EVENT_SUPPORT_PER_STATE:
+		case IPMI_EVENT_SUPPORT_ENTIRE_SENSOR:
 		    sensor_ops_to_read_count++;
-		    rv = ipmi_sensor_events_enable_get(
-			sensor,
-			read_thresh_event_enables,
-			NULL);
+		    rv = ipmi_sensor_events_enable_get
+			(sensor,
+			 read_thresh_event_enables,
+			 NULL);
 		    if (rv)
 			ui_log("Unable to get event values: 0x%x\n", rv);
+		    break;
+		    
+		default:
+		    break;
 		}
 	    }
 	} else {
@@ -1967,16 +1986,21 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		if (rv)
 		    ui_log("Unable to get sensor reading: 0x%x\n", rv);
 
-		if (ipmi_sensor_get_event_support(sensor)
-		    != IPMI_EVENT_SUPPORT_NONE)
+		switch (ipmi_sensor_get_event_support(sensor))
 		{
+		case IPMI_EVENT_SUPPORT_PER_STATE:
+		case IPMI_EVENT_SUPPORT_ENTIRE_SENSOR:
 		    sensor_ops_to_read_count++;
-		    rv = ipmi_sensor_events_enable_get(
-			sensor,
-			read_discrete_event_enables,
-			NULL);
+		    rv = ipmi_sensor_events_enable_get
+			(sensor,
+			 read_discrete_event_enables,
+			 NULL);
 		    if (rv)
 			ui_log("Unable to get event values: 0x%x\n", rv);
+		    break;
+		    
+		default:
+		    break;
 		}
 	    }
 	}
