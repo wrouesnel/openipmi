@@ -3015,7 +3015,7 @@ mccmd_rsp_handler(ipmi_mc_t  *src,
     display_pad_out("  Completion code = 0x%2.2x\n", msg->data[0]);
     display_pad_out("  data =");
     data = msg->data + 1;
-    for (i=0; i<msg->data_len-1; i++) {
+    for (i=0; i+1<msg->data_len; i++) {
 	if ((i != 0) && ((i % 8) == 0))
 	    display_pad_out("\n        ");
 	display_pad_out(" %2.2x", data[i]);
