@@ -2193,15 +2193,14 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 			       void                        *cb_data,
 			       ipmi_event_t                *event)
 {
-    int  id, instance, lun, num;
+    int  id, instance;
     char name[33];
 
     id = ipmi_sensor_get_entity_id(sensor);
     instance = ipmi_sensor_get_entity_instance(sensor);
-    ipmi_sensor_get_num(sensor, &lun, &num);
     ipmi_sensor_get_id(sensor, name, 33);
-    ui_log("Sensor %d.%d.%d.%d - %s: %s %s %s\n",
-	   id, instance, lun, num, name,
+    ui_log("Sensor %d.%d.%s: %s %s %s\n",
+	   id, instance, name,
 	   ipmi_get_threshold_string(threshold),
 	   ipmi_get_value_dir_string(high_low),
 	   ipmi_get_event_dir_string(dir));
@@ -2223,15 +2222,14 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 			      void                  *cb_data,
 			      ipmi_event_t          *event)
 {
-    int  id, instance, lun, num;
+    int  id, instance;
     char name[33];
 
     id = ipmi_sensor_get_entity_id(sensor);
     instance = ipmi_sensor_get_entity_instance(sensor);
-    ipmi_sensor_get_num(sensor, &lun, &num);
     ipmi_sensor_get_id(sensor, name, 33);
-    ui_log("Sensor %d.%d.%d.%d - %s: %d %s\n",
-	   id, instance, lun, num, name,
+    ui_log("Sensor %d.%d.%s: %d %s\n",
+	   id, instance, name,
 	   offset,
 	   ipmi_get_event_dir_string(dir));
     if (severity != -1)
