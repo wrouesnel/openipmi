@@ -1,13 +1,13 @@
 /*
- * ipmi_mc.h
+ * os_handler.h
  *
- * MontaVista IPMI interface for management controllers
+ * MontaVista IPMI os handler interface.
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002 MontaVista Software Inc.
+ * Copyright 2002,2003 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License

@@ -1,4 +1,20 @@
 
+2003-12-18 Corey Minyard <cminyard@mvista.com>
+
+	* sensor.c: Modified the way the reporting of the hot-swap sensor
+	is done, so it can support being a single offset in a sensor (like
+	a slot sensor).
+	* include/OpenIPMI/ipmi_sensor.h: ditto
+	* include/OpenIPMI/ipmiif.h: ditto
+	
+	* ipmi_lan.c: Modified the timers to be alloc/free/start/stop, so
+	they can be allocated and reused at will.
+	* ipmi_smi.c: ditto
+	* mc.c: ditto
+	* test1.c: ditto
+	* ui_os.c: ditto
+	* include/OpenIPMI/os_handler.c: ditto
+
 2002-12-18 Corey Minyard <cminyard@mvista.com>
 
 	* Release of the 0.0.2 version
