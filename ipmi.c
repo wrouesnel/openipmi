@@ -964,16 +964,34 @@ ipmi_is_event_messages_disabled(ipmi_states_t *states)
     return states->__event_messages_disabled;
 }
 
+void
+ipmi_set_event_messages_disabled(ipmi_states_t *states, int val)
+{
+    states->__event_messages_disabled = val;
+}
+
 int
 ipmi_is_sensor_scanning_disabled(ipmi_states_t *states)
 {
     return states->__sensor_scanning_disabled;
 }
 
+void
+ipmi_set_sensor_scanning_disabled(ipmi_states_t *states, int val)
+{
+    states->__sensor_scanning_disabled = val;
+}
+
 int
 ipmi_is_initial_update_in_progress(ipmi_states_t *states)
 {
     return states->__initial_update_in_progress;
+}
+
+void
+ipmi_set_initial_update_in_progress(ipmi_states_t *states, int val)
+{
+    states->__initial_update_in_progress = val;
 }
 
 int

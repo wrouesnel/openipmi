@@ -603,6 +603,9 @@ void ipmi_init_states(ipmi_states_t *states);
 int ipmi_is_event_messages_disabled(ipmi_states_t *states);
 int ipmi_is_sensor_scanning_disabled(ipmi_states_t *states);
 int ipmi_is_initial_update_in_progress(ipmi_states_t *states);
+void ipmi_set_event_messages_disabled(ipmi_states_t *states, int val);
+void ipmi_set_sensor_scanning_disabled(ipmi_states_t *states, int val);
+void ipmi_set_initial_update_in_progress(ipmi_states_t *states, int val);
 /* Read the current states from the discrete sensor. */
 int ipmi_is_state_set(ipmi_states_t *states,
 		      int           state_num);
