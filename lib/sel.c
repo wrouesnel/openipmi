@@ -1779,14 +1779,16 @@ ipmi_sel_event_add(ipmi_sel_info_t *sel,
 	}
 	holder->event = *new_event;
 	sel->num_sels++;
+    } else if (event_cmp(&holder->event, new_event) == 0) {
+	/* A duplicate event, just ignore it and return the right
+	   error. */
+	rv = EEXIST;
     } else {
 	holder->event = *new_event;
 	if (holder->deleted) {
 	    holder->deleted = 0;
 	    sel->num_sels++;
 	    sel->del_sels--;
-	} else {
-	    rv = EEXIST;
 	}
     }
 
