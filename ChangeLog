@@ -1,5 +1,7 @@
 2004-01-12 Corey Minyard <cminyard@mvista.com> 
 
+	* configure.in: Update version to 1.2.0.
+
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/ipm_oem.h:
 	Added a mechanisms to fixup a sensor before anything is done with
 	it (to fix broken values).

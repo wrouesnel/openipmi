@@ -1818,7 +1818,9 @@ interface.  In particular, the software ID settings must be correct.
 Each user of the MXP @emph{must} have a unique software ID, or chaos
 will result.
 
-FIXME - when the conversion is automatic, rework this text.
+Note that you can connect to an MXP using the old version protocol
+handler, and if it detects a newer version of the MXP it will
+automatically switch over and use the standard LAN protocol.
 
 @subsection SEL support
 
