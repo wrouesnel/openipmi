@@ -1,4 +1,11 @@
 
+2003-01-30 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Move to version 0.1.2.
+
+	* include/OpenIPMI/ipmi_msgbits.h: Added the master read/write
+	command.
+
 2003-01-29 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c, include/OpenIPMI/ipmiif.h: Added a mechanism for changing
