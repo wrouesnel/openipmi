@@ -23,6 +23,8 @@
 	* lib/fru.c: Fix a problem with handling certain invalid
 	FRUs.
 
+	* swig/OpenIPMI.i: Fix a compile problem.
+
 2004-12-28 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/lanparm.h, lanparm/lanparm_ipmi.c: Added

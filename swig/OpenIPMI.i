@@ -6873,9 +6873,9 @@ char *color_string(int color);
 	    return ipmi_fru_set_int_val(self, index, num, val);
 	} else if (strcmp(type, "time") == 0) {
 	    unsigned int val;
+	    char         *endstr;
 	    if (!value)
 		return EINVAL;
-	    char         *endstr;
 	    if (*value == '\0')
 		return EINVAL;
 	    val = strtol(value, &endstr, 0);
