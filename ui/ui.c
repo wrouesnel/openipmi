@@ -5987,7 +5987,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	}
     }
 
-    rv = ipmi_init_domain(con, set, ipmi_ui_setup_done,
+    rv = ipmi_open_domain(con, set, ipmi_ui_setup_done,
 			  (void *) (long) dnum, &(domains[dnum]));
     if (rv) {
 	cmd_win_out("ipmi_init_domain: %s\n", strerror(rv));

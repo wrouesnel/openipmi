@@ -217,15 +217,6 @@ int ipmi_domain_remove_connect_change_handler(ipmi_domain_t      *domain,
 					      ipmi_domain_con_cb handler,
 					      void               *cb_data);
 
-/* The old backwards compatible interfaces.  DON'T USE THESE!! */
-typedef struct ipmi_domain_con_change_s ipmi_domain_con_change_t;
-int ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
-				       ipmi_domain_con_cb       handler,
-				       void                     *cb_data,
-				       ipmi_domain_con_change_t **id);
-void ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
-					   ipmi_domain_con_change_t *id);
-
 
 /* The domain has two timers, one for the SEL rescan interval and one for
    the IPMB bus rescan interval. */
@@ -267,15 +258,6 @@ int ipmi_domain_add_event_handler(ipmi_domain_t           *domain,
 int ipmi_domain_remove_event_handler(ipmi_domain_t           *domain,
 				     ipmi_event_handler_cb   handler,
 				     void                    *event_data);
-
-/* The old interfaces (for backwards compatability).  DON'T USE THESE!! */
-typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
-int ipmi_register_for_events(ipmi_domain_t           *domain,
-			     ipmi_event_handler_cb   handler,
-			     void                    *event_data,
-			     ipmi_event_handler_id_t **id);
-int ipmi_deregister_for_events(ipmi_domain_t           *domain,
-			       ipmi_event_handler_id_t *id);
 
 /* Globally enable or disable events on the domain's interfaces. */
 int ipmi_domain_enable_events(ipmi_domain_t *domain);
@@ -1727,7 +1709,7 @@ int ipmi_init(os_handler_t *handler);
    only one connection is currently supported).  The new domain is
    returned in the new_domain variable, the id for the connection
    change handler is return in con_change_id. */
-int ipmi_init_domain(ipmi_con_t               *con[],
+int ipmi_open_domain(ipmi_con_t               *con[],
 		     unsigned int             num_con,
 		     ipmi_domain_con_cb       con_change_handler,
 		     void                     *con_change_cb_data,
@@ -1775,5 +1757,45 @@ int ipmi_args_setup_con(ipmi_args_t  *args,
 /* Return the version number (ie "1.2.7") of the OpenIPMI library in
    use. */
 char *ipmi_openipmi_version(void);
+
+
+/* Crufty backwards-compatible interfaces.  Don't use these as they
+   are deprecated. */
+
+struct ipmi_domain_con_change_s;
+typedef struct ipmi_domain_con_change_s ipmi_domain_con_change_t
+     IPMI_TYPE_DEPRECATED;
+
+int ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
+				       ipmi_domain_con_cb       handler,
+				       void                     *cb_data,
+				       struct ipmi_domain_con_change_s **id)
+     IPMI_FUNC_DEPRECATED;
+void ipmi_domain_remove_con_change_handler
+(ipmi_domain_t            *domain,
+ struct ipmi_domain_con_change_s *id)
+     IPMI_FUNC_DEPRECATED;
+
+int ipmi_init_domain(ipmi_con_t               *con[],
+		     unsigned int             num_con,
+		     ipmi_domain_con_cb       con_change_handler,
+		     void                     *con_change_cb_data,
+		     struct ipmi_domain_con_change_s **con_change_id,
+		     ipmi_domain_id_t         *new_domain)
+     IPMI_FUNC_DEPRECATED;
+
+struct ipmi_event_handler_id_s;
+typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t
+     IPMI_TYPE_DEPRECATED;
+
+int ipmi_register_for_events(ipmi_domain_t           *domain,
+			     ipmi_event_handler_cb   handler,
+			     void                    *event_data,
+			     struct ipmi_event_handler_id_s **id)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_deregister_for_events(ipmi_domain_t           *domain,
+			       struct ipmi_event_handler_id_s *id)
+     IPMI_FUNC_DEPRECATED;
+
 
 #endif /* __IPMIIF_H */

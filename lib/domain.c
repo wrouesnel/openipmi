@@ -287,9 +287,9 @@ struct ipmi_domain_s
     ipmi_domain_t *next, *prev;
 
     /* Cruft... */
-    ipmi_domain_mc_upd_t     *mc_upd_cruft;
-    ipmi_event_handler_id_t  *event_cruft;
-    ipmi_domain_con_change_t *con_change_cruft;
+    struct ipmi_domain_mc_upd_s     *mc_upd_cruft;
+    struct ipmi_event_handler_id_s  *event_cruft;
+    struct ipmi_domain_con_change_s *con_change_cruft;
 };
 
 static void domain_audit(void *cb_data, os_hnd_timer_id_t *id);
@@ -4116,7 +4116,7 @@ ll_con_changed(ipmi_con_t   *ipmi,
 }
 
 int
-ipmi_init_domain(ipmi_con_t               *con[],
+ipmi_open_domain(ipmi_con_t               *con[],
 		 unsigned int             num_con,
 		 ipmi_domain_con_cb       con_change_handler,
 		 void                     *con_change_cb_data,
@@ -4354,17 +4354,17 @@ struct ipmi_domain_mc_upd_s
 {
     ipmi_domain_mc_upd_cb handler;
     void                  *cb_data;
-    ipmi_domain_mc_upd_t  *next, *prev;
+    struct ipmi_domain_mc_upd_s *next, *prev;
 };
 
 int
 ipmi_domain_register_mc_update_handler(ipmi_domain_t         *domain,
 				       ipmi_domain_mc_upd_cb handler,
 				       void                  *cb_data,
-				       ipmi_domain_mc_upd_t  **id)
+				       struct ipmi_domain_mc_upd_s **id)
 {
-    ipmi_domain_mc_upd_t *info;
-    int                  rv;
+    struct ipmi_domain_mc_upd_s *info;
+    int                         rv;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4389,8 +4389,8 @@ ipmi_domain_register_mc_update_handler(ipmi_domain_t         *domain,
 }
 
 void
-ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
-				     ipmi_domain_mc_upd_t *id)
+ipmi_domain_remove_mc_update_handler(ipmi_domain_t               *domain,
+				     struct ipmi_domain_mc_upd_s *id)
 {
     ipmi_domain_remove_mc_updated_handler(domain, id->handler, id->cb_data);
     ipmi_lock(domain->domain_lock);
@@ -4408,17 +4408,17 @@ struct ipmi_event_handler_id_s
 {
     ipmi_event_handler_cb   handler;
     void                    *event_data;
-    ipmi_event_handler_id_t *next, *prev;
+    struct ipmi_event_handler_id_s *next, *prev;
 };
 
 int
-ipmi_register_for_events(ipmi_domain_t           *domain,
-			 ipmi_event_handler_cb   handler,
-			 void                    *event_data,
-			 ipmi_event_handler_id_t **id)
+ipmi_register_for_events(ipmi_domain_t                  *domain,
+			 ipmi_event_handler_cb          handler,
+			 void                           *event_data,
+			 struct ipmi_event_handler_id_s **id)
 {
-    ipmi_event_handler_id_t *info;
-    int                     rv;
+    struct ipmi_event_handler_id_s *info;
+    int                            rv;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4443,8 +4443,8 @@ ipmi_register_for_events(ipmi_domain_t           *domain,
 }
 
 int
-ipmi_deregister_for_events(ipmi_domain_t           *domain,
-			   ipmi_event_handler_id_t *id)
+ipmi_deregister_for_events(ipmi_domain_t                  *domain,
+			   struct ipmi_event_handler_id_s *id)
 {
     int rv;
     rv = ipmi_domain_remove_event_handler(domain, id->handler, id->event_data);
@@ -4462,19 +4462,19 @@ ipmi_deregister_for_events(ipmi_domain_t           *domain,
 
 struct ipmi_domain_con_change_s
 {
-    ipmi_domain_con_cb       handler;
-    void                     *cb_data;
-    ipmi_domain_con_change_t *next, *prev;
+    ipmi_domain_con_cb              handler;
+    void                            *cb_data;
+    struct ipmi_domain_con_change_s *next, *prev;
 };
 
-int
-ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
-				   ipmi_domain_con_cb       handler,
-				   void                     *cb_data,
-				   ipmi_domain_con_change_t **id)
+static int
+ipmi_domain_add_con_change_handler_nd(ipmi_domain_t                   *domain,
+				      ipmi_domain_con_cb              handler,
+				      void                            *cb_data,
+				      struct ipmi_domain_con_change_s **id)
 {
-    ipmi_domain_con_change_t *info;
-    int                      rv;
+    struct ipmi_domain_con_change_s *info;
+    int                             rv;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4498,9 +4498,21 @@ ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
     return rv;
 }
 
+int
+ipmi_domain_add_con_change_handler(ipmi_domain_t                   *domain,
+				   ipmi_domain_con_cb              handler,
+				   void                            *cb_data,
+				   struct ipmi_domain_con_change_s **id)
+{
+    return ipmi_domain_add_con_change_handler_nd(domain,
+						 handler,
+						 cb_data,
+						 id);
+}
+
 void
-ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
-				      ipmi_domain_con_change_t *id)
+ipmi_domain_remove_con_change_handler(ipmi_domain_t                   *domain,
+				      struct ipmi_domain_con_change_s *id)
 {
     ipmi_domain_remove_connect_change_handler(domain, id->handler,
 					      id->cb_data);
@@ -4515,25 +4527,80 @@ ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
     ipmi_mem_free(id);
 }
 
+int
+ipmi_init_domain(ipmi_con_t               *con[],
+		 unsigned int             num_con,
+		 ipmi_domain_con_cb       con_change_handler,
+		 void                     *con_change_cb_data,
+		 struct ipmi_domain_con_change_s **con_change_id,
+		 ipmi_domain_id_t         *new_domain)
+{
+    int           rv;
+    ipmi_domain_t *domain;
+    int           i;
+
+    if ((num_con < 1) || (num_con > MAX_CONS))
+	return EINVAL;
+
+    rv = setup_domain(con, num_con, &domain);
+    if (rv)
+	return rv;
+
+    domain->in_startup = 1;
+    for (i=0; i<num_con; i++) {
+	con[i]->set_con_change_handler(con[i], ll_con_changed, domain);
+	con[i]->set_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+    }
+
+    add_known_domain(domain);
+
+    if (con_change_handler) {
+	rv = ipmi_domain_add_con_change_handler_nd(domain, con_change_handler,
+						   con_change_cb_data,
+						   con_change_id);
+	if (rv)
+	    goto out_err;
+    }
+
+    for (i=0; i<num_con; i++)
+	rv = con[i]->start_con(con[i]);
+    if (rv)
+	goto out_err;
+
+    if (new_domain)
+	*new_domain = ipmi_domain_convert_to_id(domain);
+    
+ out:
+    _ipmi_domain_put(domain);
+    return rv;
+
+ out_err:
+    for (i=0; i<num_con; i++)
+	con[i]->set_con_change_handler(con[i], NULL, NULL);
+    remove_known_domain(domain);
+    cleanup_domain(domain);
+    goto out;
+}
+
 static void
 free_domain_cruft(ipmi_domain_t *domain)
 {
     while (domain->mc_upd_cruft) {
-	ipmi_domain_mc_upd_t *to_free;
+	struct ipmi_domain_mc_upd_s *to_free;
 	to_free = domain->mc_upd_cruft;
 	domain->mc_upd_cruft = to_free->next;
 	ipmi_mem_free(to_free);
     }
 
     while (domain->event_cruft) {
-	ipmi_event_handler_id_t *to_free;
+	struct ipmi_event_handler_id_s *to_free;
 	to_free = domain->event_cruft;
 	domain->event_cruft = to_free->next;
 	ipmi_mem_free(to_free);
     }
 
     while (domain->con_change_cruft) {
-	ipmi_domain_con_change_t *to_free;
+	struct ipmi_domain_con_change_s *to_free;
 	to_free = domain->con_change_cruft;
 	domain->con_change_cruft = to_free->next;
 	ipmi_mem_free(to_free);

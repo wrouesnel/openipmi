@@ -2,7 +2,7 @@
 empty:=
 space:= $(empty) $(empty)
 
-LIB_VERSION = 0.0.1
+LIB_VERSION = 1.0.1
 
 SPACE_VERSION = $(subst .,$(space),$(LIB_VERSION))
 VERSION_CURRENT = $(wordlist 1, 1, $(SPACE_VERSION))

@@ -151,13 +151,17 @@ int ipmi_domain_remove_mc_updated_handler(ipmi_domain_t        *domain,
 					  void                  *cb_data);
 
 /* The old interfaces (for backwards compatability).  DON'T USE THESE!! */
-typedef struct ipmi_domain_mc_upd_s ipmi_domain_mc_upd_t;
+struct ipmi_domain_mc_upd_s;
+typedef struct ipmi_domain_mc_upd_s ipmi_domain_mc_upd_t
+     IPMI_TYPE_DEPRECATED;
 int ipmi_domain_register_mc_update_handler(ipmi_domain_t         *domain,
 					   ipmi_domain_mc_upd_cb handler,
 					   void                  *cb_data,
-					   ipmi_domain_mc_upd_t  **id);
+					   struct ipmi_domain_mc_upd_s  **id)
+     IPMI_FUNC_DEPRECATED;
 void ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
-					  ipmi_domain_mc_upd_t *id);
+					  struct ipmi_domain_mc_upd_s *id)
+     IPMI_FUNC_DEPRECATED;
 
 /* Call any OEM handlers for the given MC. */
 int _ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);

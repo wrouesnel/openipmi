@@ -296,7 +296,7 @@ main(int argc, const char *argv[])
     for (i=0; i<last_con; i++)
 	ipmi_free_args(con_parms[i]);
 
-    rv = ipmi_init_domain(con, last_con, ipmi_ui_setup_done,
+    rv = ipmi_open_domain(con, last_con, ipmi_ui_setup_done,
 			  NULL, &domain_id);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
