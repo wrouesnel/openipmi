@@ -263,6 +263,9 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
     }
 
     if (rsp->data[0] != 0) {
+#if 0
+	/* Sometimes this comes in and is valid (like when writing
+	   parm 0 to value 2), just ignore it. */
 	/* We ignore 0x80, since that may be a valid error return for an
 	   unsupported parameter.  We also ignore 0x82, just to avoid
 	   extraneous errors. */
@@ -271,6 +274,7 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
 		     "%slanparm.c(%s): "
 		     "IPMI error from LANPARM capabilities fetch: %x",
 		     MC_NAME(mc), func_name, rsp->data[0]);
+#endif
 	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
 
@@ -1508,8 +1512,10 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	    goto done;
 	}
 	lanc->curr_sel++;
-	if (lanc->curr_sel >= lanc->num_alert_destinations)
+	if (lanc->curr_sel >= lanc->num_alert_destinations) {
 	    lanc->curr_parm = IPMI_LANPARM_VLAN_ID;
+	    lanc->curr_sel = 0;
+	}
 	break;
 
     case IPMI_LANPARM_NUM_CIPHER_SUITE_ENTRIES:
@@ -1518,7 +1524,7 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	    if (lanc->num_alert_destinations == 0)
 		goto done;
 	    lanc->curr_parm = IPMI_LANPARM_DEST_VLAN_TAG;
-	    lanc->curr_sel = 0;
+	    lanc->curr_sel = 1;
 	}
 	break;
 

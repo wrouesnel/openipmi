@@ -186,6 +186,46 @@ struct lan_link_s
 
 typedef struct lan_fd_s lan_fd_t;
 
+/* Per-IP specific information. */
+typedef struct lan_ip_data_s
+{
+    int                        working;
+    unsigned int               consecutive_failures;
+    struct timeval             failure_time;
+
+    /* For both RMCP and RMCP+.  For RMCP+, the session id is the one
+       I receive and the sequence numbers are the authenticated
+       ones. */
+    unsigned char              working_authtype;
+    uint32_t                   session_id;
+    uint32_t                   outbound_seq_num;
+    uint32_t                   inbound_seq_num;
+    uint16_t                   recv_msg_map;
+
+    /* RMCP+ specific info */
+    uint32_t                   unauth_out_seq_num;
+    uint32_t                   unauth_in_seq_num;
+    uint16_t                   unauth_recv_msg_map;
+    unsigned char              working_integ;
+    unsigned char              working_conf;
+    uint32_t                   mgsys_session_id;
+    ipmi_rmcpp_auth_t          ainfo;
+
+    /* Used to hold the session id before the connection is up. */
+    uint32_t                   precon_session_id;
+    uint32_t                   precon_mgsys_session_id;
+
+    ipmi_rmcpp_confidentiality_t *conf_info;
+    void                         *conf_data;
+
+    ipmi_rmcpp_integrity_t       *integ_info;
+    void                         *integ_data;
+
+    /* Use for linked-lists of IP addresses. */
+    lan_link_t                 ip_link;
+} lan_ip_data_t;
+
+
 #if IPMI_MAX_MSG_LENGTH > 80
 # define LAN_MAX_RAW_MSG IPMI_MAX_MSG_LENGTH
 #else
@@ -206,19 +246,11 @@ struct lan_data_s
     /* Have we already been started? */
     int                        started;
 
-    /* Protects modifiecations to ip_working, curr_ip_addr, RMCP
+    /* Protects modifiecations to working, curr_ip_addr, RMCP
        sequence numbers, the con_change_handler, and other
        connection-related data.  Note that if the seq_num_lock must
        also be held, it must be locked before this lock.  */
     ipmi_lock_t                *ip_lock;
-
-    /* IP address failure detection and handling. */
-    int                        curr_ip_addr;
-    int                        ip_working[MAX_IP_ADDR];
-    unsigned int               consecutive_ip_failures[MAX_IP_ADDR];
-    struct timeval             ip_failure_time[MAX_IP_ADDR];
-    unsigned int               num_ip_addr;
-    unsigned int               num_sends;
 
     /* If 0, we don't have a connection to the BMC right now. */
     int                        connected;
@@ -229,17 +261,18 @@ struct lan_data_s
     /* If 0, the OEM handlers have not been called. */
     int                        oem_conn_handlers_called;
 
+    /* Number of packets sent on the connection.  Used to track when
+       to switch between IP addresses. */
+    unsigned int               num_sends;
+
+    /* The IP address we are currently using. */
+    int                        curr_ip_addr;
+
+    /* Data about each IP address */
+    lan_ip_data_t              ip[MAX_IP_ADDR];
+
     /* We keep a session on each LAN connection.  I don't think all
        systems require that, but it's safer. */
-
-    /* For both RMCP and RMCP+.  For RMCP+, the session id is the one
-       I receive and the sequence numbers are the authenticated
-       ones. */
-    unsigned char              working_authtype[MAX_IP_ADDR];
-    uint32_t                   session_id[MAX_IP_ADDR];
-    uint32_t                   outbound_seq_num[MAX_IP_ADDR];
-    uint32_t                   inbound_seq_num[MAX_IP_ADDR];
-    uint16_t                   recv_msg_map[MAX_IP_ADDR];
 
     /* From the get channel auth */
     unsigned char              oem_iana[3];
@@ -255,24 +288,6 @@ struct lan_data_s
 
     /* RMCP+ specific info */
     unsigned int               use_two_keys : 1;
-    uint32_t                   unauth_out_seq_num[MAX_IP_ADDR];
-    uint32_t                   unauth_in_seq_num[MAX_IP_ADDR];
-    uint16_t                   unauth_recv_msg_map[MAX_IP_ADDR];
-    unsigned char              working_integ[MAX_IP_ADDR];
-    unsigned char              working_conf[MAX_IP_ADDR];
-    uint32_t                   mgsys_session_id[MAX_IP_ADDR];
-    ipmi_rmcpp_auth_t          ainfo[MAX_IP_ADDR];
-
-    /* Used to hold the session id before the connection is up. */
-    uint32_t                   precon_session_id[MAX_IP_ADDR];
-    uint32_t                   precon_mgsys_session_id[MAX_IP_ADDR];
-
-    ipmi_rmcpp_confidentiality_t *conf_info[MAX_IP_ADDR];
-    void                         *conf_data[MAX_IP_ADDR];
-
-    ipmi_rmcpp_integrity_t       *integ_info[MAX_IP_ADDR];
-    void                         *integ_data[MAX_IP_ADDR];
-
 
     struct {
 	unsigned int          inuse : 1;
@@ -334,7 +349,6 @@ struct lan_data_s
     locked_list_t          *ipmb_change_handlers;
 
     lan_link_t link;
-    lan_link_t ip_link[MAX_IP_ADDR];
 
     /* Statistics */
     void *stat_recv_packets;
@@ -793,13 +807,13 @@ ipmi_rmcpp_register_oem_integrity(unsigned int           integ_num,
 uint32_t
 ipmi_rmcpp_auth_get_my_session_id(ipmi_rmcpp_auth_t *ainfo)
 {
-    return ainfo->lan->precon_session_id[ainfo->addr_num];
+    return ainfo->lan->ip[ainfo->addr_num].precon_session_id;
 }
 
 uint32_t
 ipmi_rmcpp_auth_get_mgsys_session_id(ipmi_rmcpp_auth_t *ainfo)
 {
-    return ainfo->lan->precon_mgsys_session_id[ainfo->addr_num];
+    return ainfo->lan->ip[ainfo->addr_num].precon_mgsys_session_id;
 }
 
 uint8_t
@@ -1258,11 +1272,11 @@ lan_add_con(lan_data_t *lan)
 	idx = hash_lan_addr(addr);
 
 	head = &lan_ip_list[idx];
-	lan->ip_link[i].lan = lan;
-	lan->ip_link[i].next = head;
-	lan->ip_link[i].prev = head->prev;
-	head->prev->next = &lan->ip_link[i];
-	head->prev = &lan->ip_link[i];
+	lan->ip[i].ip_link.lan = lan;
+	lan->ip[i].ip_link.next = head;
+	lan->ip[i].ip_link.prev = head->prev;
+	head->prev->next = &lan->ip[i].ip_link;
+	head->prev = &lan->ip[i].ip_link;
     }
     ipmi_unlock(lan_list_lock);
 }
@@ -1279,9 +1293,9 @@ lan_remove_con_nolock(lan_data_t *lan)
     lan->link.next->prev = lan->link.prev;
     lan->link.lan = NULL;
     for (i=0; i<lan->cparm.num_ip_addr; i++) {
-	lan->ip_link[i].prev->next = lan->link.next;
-	lan->ip_link[i].next->prev = lan->link.prev;
-	lan->ip_link[i].lan = NULL;
+	lan->ip[i].ip_link.prev->next = lan->ip[i].ip_link.next;
+	lan->ip[i].ip_link.next->prev = lan->ip[i].ip_link.prev;
+	lan->ip[i].ip_link.lan = NULL;
     }
 }
 
@@ -1391,7 +1405,7 @@ auth_gen(lan_data_t    *lan,
       { seq,    4 },
       { NULL,   0 }};
 
-    rv = ipmi_auths[lan->working_authtype[addr_num]]
+    rv = ipmi_auths[lan->ip[addr_num].working_authtype]
 	.authcode_gen(lan->authdata, l, out);
     return rv;
 }
@@ -1412,7 +1426,7 @@ auth_check(lan_data_t    *lan,
       { seq,    4 },
       { NULL,   0 }};
 
-    rv = ipmi_auths[lan->working_authtype[addr_num]]
+    rv = ipmi_auths[lan->ip[addr_num].working_authtype]
 	.authcode_check(lan->authdata, l, code);
     return rv;
 }
@@ -1435,15 +1449,16 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
     uint32_t      *seqp;
 
     if (in_session
-	&& (lan->working_conf[addr_num]
+	&& (lan->ip[addr_num].working_conf
 	    != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE))
     {
 	/* Note: This may encrypt the data, the old data will be lost. */
-	rv = lan->conf_info[addr_num]->conf_encrypt(lan->ipmi,
-						    lan->conf_data[addr_num],
-						    msgdata,
-						    &header_len, data_len,
-						    &max_data_len);
+	rv = lan->ip[addr_num].conf_info->conf_encrypt
+	    (lan->ipmi,
+	     lan->ip[addr_num].conf_data,
+	     msgdata,
+	     &header_len, data_len,
+	     &max_data_len);
 	if (rv)
 	    return rv;
     }
@@ -1466,7 +1481,7 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
     data[1] = 0;
     data[2] = 0xff;
     data[3] = 0x07;
-    data[4] = lan->working_authtype[addr_num];
+    data[4] = lan->ip[addr_num].working_authtype;
     data[5] = payload_type;
     tmsg = data+6;
     if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT) {
@@ -1478,19 +1493,20 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 	tmsg += 2;
     }
     if (in_session) {
-	if (lan->working_conf[addr_num]
+	if (lan->ip[addr_num].working_conf
 	    != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE)
 	{
 	    data[5] |= 0x80;
 	}
-	if (lan->working_integ[addr_num] != IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
+	if (lan->ip[addr_num].working_integ
+	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
 	{
-	    seqp = &(lan->outbound_seq_num[addr_num]);
+	    seqp = &(lan->ip[addr_num].outbound_seq_num);
 	    data[5] |= 0x40;
 	} else {
-	    seqp = &(lan->unauth_out_seq_num[addr_num]);
+	    seqp = &(lan->ip[addr_num].unauth_out_seq_num);
 	}
-	ipmi_set_uint32(tmsg, lan->mgsys_session_id[addr_num]);
+	ipmi_set_uint32(tmsg, lan->ip[addr_num].mgsys_session_id);
 	tmsg += 4;
 	ipmi_set_uint32(tmsg, *seqp);
 	tmsg += 4;
@@ -1503,14 +1519,15 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
     }
 
     if (in_session
-	&& (lan->working_integ[addr_num]
+	&& (lan->ip[addr_num].working_integ
 	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE))
     {
 	unsigned int orig_data_len = *data_len;
-	rv = lan->integ_info[addr_num]->integ_pad(lan->ipmi,
-						  lan->integ_data[addr_num],
-						  data, data_len,
-						  max_data_len);
+	rv = lan->ip[addr_num].integ_info->integ_pad
+	    (lan->ipmi,
+	     lan->ip[addr_num].integ_data,
+	     data, data_len,
+	     max_data_len);
 	if (rv)
 	    return rv;
 	payload_len += *data_len - orig_data_len;
@@ -1520,13 +1537,14 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
     ipmi_set_uint16(tmsg, payload_len);
 
     if (in_session
-	&& (lan->working_integ[addr_num]
+	&& (lan->ip[addr_num].working_integ
 	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE))
     {
-	rv = lan->integ_info[addr_num]->integ_add(lan->ipmi,
-						  lan->integ_data[addr_num],
-						  data, data_len,
-						  max_data_len);
+	rv = lan->ip[addr_num].integ_info->integ_add
+	    (lan->ipmi,
+	     lan->ip[addr_num].integ_data,
+	     data, data_len,
+	     max_data_len);
 	if (rv)
 	    return rv;
     }
@@ -1549,7 +1567,7 @@ lan15_format_msg(lan_data_t *lan, int addr_num,
     unsigned char *data;
     int           rv;
 
-    if (lan->working_authtype[addr_num] == IPMI_AUTHTYPE_NONE)
+    if (lan->ip[addr_num].working_authtype == IPMI_AUTHTYPE_NONE)
 	data = *msgdata - 14;
     else
 	data = *msgdata - 30;
@@ -1558,21 +1576,21 @@ lan15_format_msg(lan_data_t *lan, int addr_num,
     data[1] = 0;
     data[2] = 0xff;
     data[3] = 0x07;
-    data[4] = lan->working_authtype[addr_num];
-    ipmi_set_uint32(data+5, lan->outbound_seq_num[addr_num]);
-    ipmi_set_uint32(data+9, lan->session_id[addr_num]);
+    data[4] = lan->ip[addr_num].working_authtype;
+    ipmi_set_uint32(data+5, lan->ip[addr_num].outbound_seq_num);
+    ipmi_set_uint32(data+9, lan->ip[addr_num].session_id);
 
     /* FIXME - need locks for the sequence numbers. */
 
     /* Increment the outbound number, but make sure it's not zero.  If
        it's already zero, ignore it, we are in pre-setup. */
-    if (lan->outbound_seq_num[addr_num] != 0) {
-	(lan->outbound_seq_num[addr_num])++;
-	if (lan->outbound_seq_num[addr_num] == 0)
-	    (lan->outbound_seq_num[addr_num])++;
+    if (lan->ip[addr_num].outbound_seq_num != 0) {
+	(lan->ip[addr_num].outbound_seq_num)++;
+	if (lan->ip[addr_num].outbound_seq_num == 0)
+	    (lan->ip[addr_num].outbound_seq_num)++;
     }
 
-    if (lan->working_authtype[addr_num] == IPMI_AUTHTYPE_NONE) {
+    if (lan->ip[addr_num].working_authtype == IPMI_AUTHTYPE_NONE) {
 	/* No authentication, so no authcode. */
 	data[13] = *data_len;
 	*data_len += 14;
@@ -1610,7 +1628,7 @@ lan_send_addr(lan_data_t  *lan,
     if ((addr->addr_type >= IPMI_RMCPP_ADDR_START)
 	&& (addr->addr_type <= IPMI_RMCPP_ADDR_END))
     {
-	if (lan->working_authtype[addr_num] != IPMI_AUTHTYPE_RMCP_PLUS)
+	if (lan->ip[addr_num].working_authtype != IPMI_AUTHTYPE_RMCP_PLUS)
 	    return EINVAL;
 	payload_type = addr->addr_type - IPMI_RMCPP_ADDR_START;
     } else {
@@ -1667,7 +1685,7 @@ lan_send_addr(lan_data_t  *lan,
 	    return rv;
     }
 
-    if (lan->working_authtype[addr_num] == IPMI_AUTHTYPE_RMCP_PLUS) {
+    if (lan->ip[addr_num].working_authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
 	rv = rmcpp_format_msg(lan, addr_num,
 			      payload_type, !out_of_session,
 			      &tmsg, &pos,
@@ -1733,7 +1751,7 @@ lan_send(lan_data_t  *lan,
 	    if (addr_num >= lan->cparm.num_ip_addr)
 		addr_num = 0;
 	    while (addr_num != lan->curr_ip_addr) {
-		if (lan->ip_working[addr_num])
+		if (lan->ip[addr_num].working)
 		    break;
 		addr_num++;
 		if (addr_num >= lan->cparm.num_ip_addr)
@@ -1869,7 +1887,7 @@ audit_timeout_handler(void              *cb_data,
        will keep it alive. */
     ipmi_lock(lan->ip_lock);
     for (i=0; i<lan->cparm.num_ip_addr; i++)
-	    start_up[i] = ! lan->ip_working[i];
+	    start_up[i] = ! lan->ip[i].working;
     ipmi_unlock(lan->ip_lock);
 
     for (i=0; i<lan->cparm.num_ip_addr; i++) {
@@ -1981,8 +1999,8 @@ connection_up(lan_data_t *lan, int addr_num, int new_con)
 	lan->ipmi->add_stat(lan->ipmi->user_data, lan->stat_conn_up, 1);
 
     ipmi_lock(lan->ip_lock);
-    if ((! lan->ip_working[addr_num]) && new_con) {
-	lan->ip_working[addr_num] = 1;
+    if ((! lan->ip[addr_num].working) && new_con) {
+	lan->ip[addr_num].working = 1;
 
 	ipmi_log(IPMI_LOG_INFO,
 		 "%sipmi_lan.c(connection_up): "
@@ -2011,31 +2029,31 @@ connection_up(lan_data_t *lan, int addr_num, int new_con)
 static void
 reset_session_data(lan_data_t *lan, int addr_num)
 {
-    lan->outbound_seq_num[addr_num] = 0;
-    lan->inbound_seq_num[addr_num] = 0;
-    lan->session_id[addr_num] = 0;
-    lan->mgsys_session_id[addr_num] = 0;
-    lan->precon_session_id[addr_num] = 0;
-    lan->precon_mgsys_session_id[addr_num] = 0;
-    lan->recv_msg_map[addr_num] = 0;
-    lan->unauth_recv_msg_map[addr_num] = 0;
-    lan->working_authtype[addr_num] = 0;
-    lan->unauth_out_seq_num[addr_num] = 0;
-    lan->unauth_in_seq_num[addr_num] = 0;
-    if (lan->conf_data[addr_num]) {
-	lan->conf_info[addr_num]->conf_free(lan->ipmi,
-					    lan->conf_data[addr_num]);
-	lan->conf_data[addr_num] = NULL;
+    lan_ip_data_t *ip = &lan->ip[addr_num];
+
+    ip->outbound_seq_num = 0;
+    ip->inbound_seq_num = 0;
+    ip->session_id = 0;
+    ip->mgsys_session_id = 0;
+    ip->precon_session_id = 0;
+    ip->precon_mgsys_session_id = 0;
+    ip->recv_msg_map = 0;
+    ip->unauth_recv_msg_map = 0;
+    ip->working_authtype = 0;
+    ip->unauth_out_seq_num = 0;
+    ip->unauth_in_seq_num = 0;
+    if (ip->conf_data) {
+	ip->conf_info->conf_free(lan->ipmi, ip->conf_data);
+	ip->conf_data = NULL;
     }
-    lan->conf_info[addr_num] = NULL;
-    if (lan->integ_data[addr_num]) {
-	lan->integ_info[addr_num]->integ_free(lan->ipmi,
-					      lan->integ_data[addr_num]);
-	lan->integ_data[addr_num] = NULL;
+    ip->conf_info = NULL;
+    if (ip->integ_data) {
+	ip->integ_info->integ_free(lan->ipmi, ip->integ_data);
+	ip->integ_data = NULL;
     }
-    lan->integ_info[addr_num] = NULL;
-    lan->working_conf[addr_num] = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
-    lan->working_integ[addr_num] = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
+    ip->integ_info = NULL;
+    ip->working_conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
+    ip->working_integ = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
 }
 
 static void
@@ -2044,7 +2062,7 @@ lost_connection(lan_data_t *lan, int addr_num)
     int i;
 
     ipmi_lock(lan->ip_lock);
-    if (! lan->ip_working[addr_num]) {
+    if (! lan->ip[addr_num].working) {
 	ipmi_unlock(lan->ip_lock);
 	return;
     }
@@ -2052,7 +2070,7 @@ lost_connection(lan_data_t *lan, int addr_num)
     if (lan->stat_conn_down)
 	lan->ipmi->add_stat(lan->ipmi->user_data, lan->stat_conn_down, 1);
 
-    lan->ip_working[addr_num] = 0;
+    lan->ip[addr_num].working = 0;
 
     reset_session_data(lan, addr_num);
 
@@ -2064,7 +2082,7 @@ lost_connection(lan_data_t *lan, int addr_num)
     if (lan->curr_ip_addr == addr_num) {
 	/* Scan to see if any address is operational. */
 	for (i=0; i<lan->cparm.num_ip_addr; i++) {
-	    if (lan->ip_working[i]) {
+	    if (lan->ip[i].working) {
 		lan->curr_ip_addr = i;
 		break;
 	    }
@@ -2129,9 +2147,9 @@ rsp_timeout_handler(void              *cb_data,
 		 "  fail_start_time=%ld.%6.6ld",
 		 seq, lan->seq_table[seq].addr.addr_type,
 		 lan->seq_table[seq].last_ip_num,
-		 lan->consecutive_ip_failures[ip_num],
-		 lan->ip_failure_time[ip_num].tv_sec,
-		 lan->ip_failure_time[ip_num].tv_usec);
+		 lan->ip[ip_num].consecutive_failures,
+		 lan->ip[ip_num].failure_time.tv_sec,
+		 lan->ip[ip_num].failure_time.tv_usec);
     }
 
     if (lan->seq_table[seq].addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
@@ -2141,26 +2159,26 @@ rsp_timeout_handler(void              *cb_data,
            timed out, we might trigger this code accidentally. */
 	ip_num = lan->seq_table[seq].last_ip_num;
 	ipmi_lock(lan->ip_lock);
-	if (lan->ip_working[ip_num]) {
-	    if (lan->consecutive_ip_failures[ip_num] == 0) {
+	if (lan->ip[ip_num].working) {
+	    if (lan->ip[ip_num].consecutive_failures == 0) {
 		/* Set the time when the connection will be considered
                    failed. */
-		gettimeofday(&(lan->ip_failure_time[ip_num]), NULL);
-		lan->ip_failure_time[ip_num].tv_sec += IP_FAIL_TIME / 1000000;
-		lan->ip_failure_time[ip_num].tv_usec += IP_FAIL_TIME % 1000000;
-		if (lan->ip_failure_time[ip_num].tv_usec > 1000000) {
-		    lan->ip_failure_time[ip_num].tv_sec += 1;
-		    lan->ip_failure_time[ip_num].tv_usec -= 1000000;
+		gettimeofday(&(lan->ip[ip_num].failure_time), NULL);
+		lan->ip[ip_num].failure_time.tv_sec += IP_FAIL_TIME / 1000000;
+		lan->ip[ip_num].failure_time.tv_usec += IP_FAIL_TIME % 1000000;
+		if (lan->ip[ip_num].failure_time.tv_usec > 1000000) {
+		    lan->ip[ip_num].failure_time.tv_sec += 1;
+		    lan->ip[ip_num].failure_time.tv_usec -= 1000000;
 		}
-		lan->consecutive_ip_failures[ip_num] = 1;
+		lan->ip[ip_num].consecutive_failures = 1;
 		ipmi_unlock(lan->ip_lock);
 	    } else {
-		lan->consecutive_ip_failures[ip_num]++;
-		if (lan->consecutive_ip_failures[ip_num] >= IP_FAIL_COUNT) {
+		lan->ip[ip_num].consecutive_failures++;
+		if (lan->ip[ip_num].consecutive_failures >= IP_FAIL_COUNT) {
 		    struct timeval now;
 		    ipmi_unlock(lan->ip_lock);
 		    gettimeofday(&now, NULL);
-		    if (cmp_timeval(&now, &lan->ip_failure_time[ip_num]) > 0)
+		    if (cmp_timeval(&now, &lan->ip[ip_num].failure_time) > 0)
 		    {
 			lost_connection(lan, ip_num);
 		    }
@@ -2654,7 +2672,7 @@ handle_payload(ipmi_con_t    *ipmi,
 
     /* We got a response from the connection, so reset the failure
        count. */
-    lan->consecutive_ip_failures[addr_num] = 0;
+    lan->ip[addr_num].consecutive_failures = 0;
 
     /* The command matches up, cancel the timer and deliver it */
     rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd,
@@ -2739,7 +2757,7 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 
     session_id = ipmi_get_uint32(tmsg);
     tmsg += 4;
-    if (session_id != lan->session_id[addr_num]) {
+    if (session_id != lan->ip[addr_num].session_id) {
 	if (lan->stat_bad_session_id)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_bad_session_id, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -2768,7 +2786,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
     if (authenticated) {
 	unsigned int  pad_len;
 
-	if (lan->working_integ[addr_num] == IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
+	if (lan->ip[addr_num].working_integ
+	    == IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
 	{
 	    if (lan->stat_invalid_auth)
 		ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
@@ -2778,11 +2797,12 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    goto out;
 	}
 
-	rv = lan->integ_info[addr_num]->integ_check(ipmi,
-						    lan->integ_data[addr_num],
-						    data,
-						    header_len + payload_len,
-						    len);
+	rv = lan->ip[addr_num].integ_info->integ_check
+	    (ipmi,
+	     lan->ip[addr_num].integ_data,
+	     data,
+	     header_len + payload_len,
+	     len);
 	if (rv) {
 	    if (lan->stat_auth_fail)
 		ipmi->add_stat(ipmi->user_data, lan->stat_auth_fail, 1);
@@ -2808,7 +2828,7 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 
     /* If it's from a down connection, report it as up. */
     ipmi_lock(lan->ip_lock);
-    if (! lan->ip_working[addr_num]) {
+    if (! lan->ip[addr_num].working) {
 	ipmi_unlock(lan->ip_lock);
 	connection_up(lan, addr_num, 0);
 	ipmi_lock(lan->ip_lock);
@@ -2816,14 +2836,14 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 
     if (authenticated)
 	rv = check_session_seq_num(lan, session_seq,
-				   &(lan->inbound_seq_num[addr_num]),
-				   &(lan->recv_msg_map[addr_num]));
+				   &(lan->ip[addr_num].inbound_seq_num),
+				   &(lan->ip[addr_num].recv_msg_map));
     else if (session_id == 0)
 	rv = 0; /* seq num not used for out-of-session messages. */
     else
 	rv = check_session_seq_num(lan, session_seq,
-				   &(lan->unauth_in_seq_num[addr_num]),
-				   &(lan->unauth_recv_msg_map[addr_num]));
+				   &(lan->ip[addr_num].unauth_in_seq_num),
+				   &(lan->ip[addr_num].unauth_recv_msg_map));
     ipmi_unlock(lan->ip_lock);
     if (rv) {
 	if (lan->stat_seq_out_of_range)
@@ -2835,7 +2855,7 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
        decrypt it. */
 
     if (encrypted) {
-	if (lan->working_conf[addr_num]
+	if (lan->ip[addr_num].working_conf
 	    == IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE)
 	{
 	    if (lan->stat_invalid_auth)
@@ -2846,9 +2866,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    goto out;
 	}
 
-	rv = lan->conf_info[addr_num]->conf_decrypt(ipmi,
-						    lan->conf_data[addr_num],
-						    &tmsg, &payload_len);
+	rv = lan->ip[addr_num].conf_info->conf_decrypt
+	    (ipmi, lan->ip[addr_num].conf_data, &tmsg, &payload_len);
 	if (rv) {
 	    if (lan->stat_decrypt_fail)
 		ipmi->add_stat(ipmi->user_data, lan->stat_decrypt_fail, 1);
@@ -2922,7 +2941,7 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
     /* FIXME - need a lock on the session data. */
 
     /* Drop if the authtypes are incompatible. */
-    if (lan->working_authtype[addr_num] != data[4]) {
+    if (lan->ip[addr_num].working_authtype != data[4]) {
 	if (lan->stat_invalid_auth)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -2932,7 +2951,7 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 
     /* Drop if sessions ID's don't match. */
     sess_id = ipmi_get_uint32(data+9);
-    if (sess_id != lan->session_id[addr_num]) {
+    if (sess_id != lan->ip[addr_num].session_id) {
 	if (lan->stat_bad_session_id)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_bad_session_id, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -2961,14 +2980,14 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 
     /* If it's from a down connection, report it as up. */
     ipmi_lock(lan->ip_lock);
-    if (! lan->ip_working[addr_num]) {
+    if (! lan->ip[addr_num].working) {
 	ipmi_unlock(lan->ip_lock);
 	connection_up(lan, addr_num, 0);
 	ipmi_lock(lan->ip_lock);
     }
 
-    rv = check_session_seq_num(lan, seq, &(lan->inbound_seq_num[addr_num]),
-			       &(lan->recv_msg_map[addr_num]));
+    rv = check_session_seq_num(lan, seq, &(lan->ip[addr_num].inbound_seq_num),
+			       &(lan->ip[addr_num].recv_msg_map));
     ipmi_unlock(lan->ip_lock);
     if (rv)
 	goto out;
@@ -3034,7 +3053,7 @@ addr_match_lan(lan_data_t *lan, uint32_t sid, sockaddr_ip_t *addr,
     /* Make sure the source address matches one we expect from
        this system. */
     for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
-	if ((!sid || (lan->session_id[addr_num] == sid))
+	if ((!sid || (lan->ip[addr_num].session_id == sid))
 	    && addr_match(&(lan->cparm.ip_addr[addr_num]), addr))
 	{
 	    *raddr_num = addr_num;
@@ -3460,10 +3479,10 @@ send_close_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
     msg.cmd = IPMI_CLOSE_SESSION_CMD;
     msg.data_len = 4;
     msg.data = data;
-    if (lan->working_authtype[addr_num] == IPMI_AUTHTYPE_RMCP_PLUS)
-	ipmi_set_uint32(data, lan->mgsys_session_id[addr_num]);
+    if (lan->ip[addr_num].working_authtype == IPMI_AUTHTYPE_RMCP_PLUS)
+	ipmi_set_uint32(data, lan->ip[addr_num].mgsys_session_id);
     else
-	ipmi_set_uint32(data, lan->session_id[addr_num]);
+	ipmi_set_uint32(data, lan->ip[addr_num].session_id);
     lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0, addr_num);
 }
 
@@ -3620,10 +3639,10 @@ lan_cleanup(ipmi_con_t *ipmi)
     if (lan->authdata)
 	ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
     for (i=0; i<MAX_IP_ADDR; i++) {
-	if (lan->conf_data[i])
-	    lan->conf_info[i]->conf_free(ipmi, lan->conf_data[i]);
-	if (lan->integ_data[i])
-	    lan->integ_info[i]->integ_free(ipmi, lan->integ_data[i]);
+	if (lan->ip[i].conf_data)
+	    lan->ip[i].conf_info->conf_free(ipmi, lan->ip[i].conf_data);
+	if (lan->ip[i].integ_data)
+	    lan->ip[i].integ_info->integ_free(ipmi, lan->ip[i].integ_data);
     }
     /* paranoia */
     memset(lan->cparm.password, 0, sizeof(lan->cparm.password));
@@ -3720,10 +3739,10 @@ cleanup_con(ipmi_con_t *ipmi)
 	if (lan->authdata)
 	    ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
 	for (i=0; i<MAX_IP_ADDR; i++) {
-	    if (lan->conf_data[i])
-		lan->conf_info[i]->conf_free(ipmi, lan->conf_data[i]);
-	    if (lan->integ_data[i])
-		lan->integ_info[i]->integ_free(ipmi, lan->integ_data[i]);
+	    if (lan->ip[i].conf_data)
+		lan->ip[i].conf_info->conf_free(ipmi, lan->ip[i].conf_data);
+	    if (lan->ip[i].integ_data)
+		lan->ip[i].integ_info->integ_free(ipmi, lan->ip[i].integ_data);
 	}
 	ipmi_mem_free(lan);
     }
@@ -4032,12 +4051,13 @@ rmcpp_auth_finished(ipmi_con_t    *ipmi,
 	goto out;
     }
 
-    lan->session_id[addr_num] = lan->precon_session_id[addr_num];
-    lan->mgsys_session_id[addr_num] = lan->precon_mgsys_session_id[addr_num];
-    lan->inbound_seq_num[addr_num] = 1;
-    lan->outbound_seq_num[addr_num] = 1;
-    lan->unauth_in_seq_num[addr_num] = 1;
-    lan->unauth_out_seq_num[addr_num] = 1;
+    lan->ip[addr_num].session_id = lan->ip[addr_num].precon_session_id;
+    lan->ip[addr_num].mgsys_session_id
+	= lan->ip[addr_num].precon_mgsys_session_id;
+    lan->ip[addr_num].inbound_seq_num = 1;
+    lan->ip[addr_num].outbound_seq_num = 1;
+    lan->ip[addr_num].unauth_in_seq_num = 1;
+    lan->ip[addr_num].unauth_out_seq_num = 1;
 
     /* We're up!.  Start the session stuff. */
     rv = send_set_session_privilege(ipmi, lan, addr_num, info->rspi);
@@ -4063,13 +4083,13 @@ rmcpp_set_info(ipmi_con_t        *ipmi,
     lan_data_t  *lan = info->lan;
     int         rv;
 
-    rv = lan->conf_info[addr_num]->conf_init(ipmi, ainfo,
-					     &(lan->conf_data[addr_num]));
+    rv = lan->ip[addr_num].conf_info->conf_init
+	(ipmi, ainfo, &(lan->ip[addr_num].conf_data));
     if (rv)
 	goto out;
 
-    rv = lan->integ_info[addr_num]->integ_init(ipmi, ainfo,
-					       &(lan->integ_data[addr_num]));
+    rv = lan->ip[addr_num].integ_info->integ_init
+	(ipmi, ainfo, &(lan->ip[addr_num].integ_data));
     if (rv)
 	goto out;
 
@@ -4109,7 +4129,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     }
 
     session_id = ipmi_get_uint32(msg->data+4);
-    if (session_id != lan->precon_session_id[addr_num]) {
+    if (session_id != lan->ip[addr_num].precon_session_id) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 " Got wrong session id: 0x%x",
@@ -4126,7 +4146,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
-    lan->precon_mgsys_session_id[addr_num] = mgsys_session_id;
+    lan->ip[addr_num].precon_mgsys_session_id = mgsys_session_id;
 
     if ((msg->data[12] != 0) || (msg->data[15] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -4230,20 +4250,20 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 	goto out;
     }
 
-    lan->working_conf[addr_num] = conf;
-    lan->working_integ[addr_num] = integ;
-    lan->conf_info[addr_num] = confp;
-    lan->integ_info[addr_num] = integp;
+    lan->ip[addr_num].working_conf = conf;
+    lan->ip[addr_num].working_integ = integ;
+    lan->ip[addr_num].conf_info = confp;
+    lan->ip[addr_num].integ_info = integp;
 
-    lan->ainfo[addr_num].lan = lan;
-    lan->ainfo[addr_num].role = ((lan->cparm.name_lookup_only << 4)
-				 | lan->cparm.privilege);
+    lan->ip[addr_num].ainfo.lan = lan;
+    lan->ip[addr_num].ainfo.role = ((lan->cparm.name_lookup_only << 4)
+				    | lan->cparm.privilege);
 
     info->lan = lan;
     info->rspi = rspi;
 
     rv = authp->start_auth(ipmi, addr_num, lan->fd_slot,
-			   &(lan->ainfo[addr_num]),
+			   &(lan->ip[addr_num].ainfo),
 			   rmcpp_set_info, rmcpp_auth_finished,
 			   info);
     if (rv) {
@@ -4270,7 +4290,7 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
     memset(data, 0, sizeof(data));
     data[0] = 0; /* Set to seq# by the formatting code. */
     data[1] = lan->cparm.privilege;
-    ipmi_set_uint32(data+4, lan->precon_session_id[addr_num]);
+    ipmi_set_uint32(data+4, lan->ip[addr_num].precon_session_id);
     data[8] = 0; /* auth algorithm */
     if (lan->cparm.auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
 	data[11] = 0; /* Let the BMC pick */
@@ -4314,16 +4334,16 @@ start_rmcpp(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi, int addr_num)
     /* We don't really need to get the cipher suites, the user
        requests them (or defaults them to the mandatory ones). */
 
-    lan->working_authtype[addr_num] = IPMI_AUTHTYPE_RMCP_PLUS;
-    lan->outbound_seq_num[addr_num] = 0;
-    lan->unauth_out_seq_num[addr_num] = 0;
-    lan->inbound_seq_num[addr_num] = 0;
-    lan->unauth_in_seq_num[addr_num] = 0;
+    lan->ip[addr_num].working_authtype = IPMI_AUTHTYPE_RMCP_PLUS;
+    lan->ip[addr_num].outbound_seq_num = 0;
+    lan->ip[addr_num].unauth_out_seq_num = 0;
+    lan->ip[addr_num].inbound_seq_num = 0;
+    lan->ip[addr_num].unauth_in_seq_num = 0;
     /* Use our fd_slot in the fd for the session id, so we can look it
        up quickly. */
-    lan->precon_session_id[addr_num] = lan->fd_slot + 1;
-    lan->working_conf[addr_num] = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
-    lan->working_integ[addr_num] = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
+    lan->ip[addr_num].precon_session_id = lan->fd_slot + 1;
+    lan->ip[addr_num].working_conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
+    lan->ip[addr_num].working_integ = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
 
     rv = send_rmcpp_open_session(ipmi, lan, rspi, addr_num);
     if (rv) {
@@ -4363,17 +4383,17 @@ session_activated(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 	goto out;
     }
 
-    lan->working_authtype[addr_num] = msg->data[1] & 0xf;
-    if ((lan->working_authtype[addr_num] != 0)
-	&& (lan->working_authtype[addr_num] != lan->chosen_authtype))
+    lan->ip[addr_num].working_authtype = msg->data[1] & 0xf;
+    if ((lan->ip[addr_num].working_authtype != 0)
+	&& (lan->ip[addr_num].working_authtype != lan->chosen_authtype))
     {
 	/* Eh?  It didn't return a valid authtype. */
         handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
 
-    lan->session_id[addr_num] = ipmi_get_uint32(msg->data+2);
-    lan->outbound_seq_num[addr_num] = ipmi_get_uint32(msg->data+6);
+    lan->ip[addr_num].session_id = ipmi_get_uint32(msg->data+2);
+    lan->ip[addr_num].outbound_seq_num = ipmi_get_uint32(msg->data+6);
 
     rv = send_set_session_privilege(ipmi, lan, addr_num, rspi);
     if (rv) {
@@ -4403,7 +4423,7 @@ send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     data[0] = lan->chosen_authtype;
     data[1] = lan->cparm.privilege;
     memcpy(data+2, lan->challenge_string, 16);
-    ipmi_set_uint32(data+18, lan->inbound_seq_num[addr_num]);
+    ipmi_set_uint32(data+18, lan->ip[addr_num].inbound_seq_num);
 
     msg.cmd = IPMI_ACTIVATE_SESSION_CMD;
     msg.netfn = IPMI_APP_NETFN;
@@ -4443,17 +4463,17 @@ challenge_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     }
 
     /* Get the temporary session id. */
-    lan->session_id[addr_num] = ipmi_get_uint32(msg->data+1);
+    lan->ip[addr_num].session_id = ipmi_get_uint32(msg->data+1);
 
-    lan->outbound_seq_num[addr_num] = 0;
-    lan->working_authtype[addr_num] = lan->chosen_authtype;
+    lan->ip[addr_num].outbound_seq_num = 0;
+    lan->ip[addr_num].working_authtype = lan->chosen_authtype;
     memcpy(lan->challenge_string, msg->data+5, 16);
 
     /* Get a random number of the other end to start sending me sequence
        numbers at, but don't let it be zero. */
-    while (lan->inbound_seq_num[addr_num] == 0) {
+    while (lan->ip[addr_num].inbound_seq_num == 0) {
 	rv = ipmi->os_hnd->get_random(ipmi->os_hnd,
-				      &(lan->inbound_seq_num[addr_num]), 4);
+				      &(lan->ip[addr_num].inbound_seq_num), 4);
 	if (rv) {
 	    handle_connected(ipmi, rv, addr_num);
 	    goto out;
@@ -4761,7 +4781,7 @@ lan_start_con(ipmi_con_t *ipmi)
 	    int port_err[MAX_IP_ADDR];
 
 	    for (i=0; i<lan->cparm.num_ip_addr; i++)
-		port_err[i] = lan->ip_working[i] ? 0 : EINVAL;
+		port_err[i] = lan->ip[i].working ? 0 : EINVAL;
 
 	    ipmi_lock(lan->con_change_lock);
 	    ipmi_unlock(lan->ip_lock);

@@ -1,7 +1,4 @@
 
-Fix presence to try to fetch info from the FRU device instead of just
-knowing that the FRU device MC is present.
-
 Add handling of event data for sensors that have defined event data
 information specific to that sensor type.
 
@@ -13,12 +10,6 @@ there).
 
 Add controls for the GUIDs (system and device) and for the various
 chassis-related commands.
-
-Use GUIDs to tell if an MC has changed.
-
-Modify the LAN connection code to use one socket for all messages,
-instead of a socket per connection.  This should make the library
-scalable to thousands of domains.
 
 Add the ability to add/remove connections in domains and IP addresses
 for LAN connections.
