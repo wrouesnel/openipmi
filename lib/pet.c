@@ -151,17 +151,21 @@ struct ipmi_pet_s
 static void rescan_pet(void *cb_data, os_hnd_timer_id_t *id);
 
 static void
+pet_lock(ipmi_pet_t *pet)
+{
+    ipmi_lock(pet->timer_info->lock);
+}
+
+static void
+pet_unlock(ipmi_pet_t *pet)
+{
+    ipmi_unlock(pet->timer_info->lock);
+}
+
+static void
 internal_pet_destroy(ipmi_pet_t *pet)
 {
     os_handler_t *os_hnd = pet->timer_info->os_hnd;
-
-    if (os_hnd->stop_timer(os_hnd, pet->timer) == 0) {
-	ipmi_destroy_lock(pet->timer_info->lock);
-	os_hnd->free_timer(os_hnd, pet->timer);
-	ipmi_mem_free(pet->timer_info);
-    } else {
-	pet->timer_info->cancelled = 1;
-    }
 
     if (pet->in_list) {
 	ipmi_domain_attr_t *attr;
@@ -170,16 +174,34 @@ internal_pet_destroy(ipmi_pet_t *pet)
 	rv = ipmi_domain_id_find_attribute(pet->domain,
 					   IPMI_PET_ATTR_NAME, &attr);
 	if (!rv) {
+	    pet->refcount++;
 	    pet->in_list = 0;
-	    ipmi_unlock(pet->timer_info->lock);
+	    pet_unlock(pet);
 	
 	    pets = ipmi_domain_attr_get_data(attr);
 
 	    locked_list_remove(pets, pet, NULL);
 	    ipmi_domain_attr_put(attr);
+	    pet_lock(pet);
+	    /* While we were unlocked, someone may have come in and
+	       grabbed the PET by iterating the list of PETs.  That's
+	       ok, we just let them handle the destruction since this
+	       code will not be entered again. */
+	    if (pet->refcount != 1) {
+		pet->refcount--;
+		pet_unlock(pet);
+		return;
+	    }
 	}
+    }
+    pet_unlock(pet);
+
+    if (os_hnd->stop_timer(os_hnd, pet->timer) == 0) {
+	ipmi_destroy_lock(pet->timer_info->lock);
+	os_hnd->free_timer(os_hnd, pet->timer);
+	ipmi_mem_free(pet->timer_info);
     } else {
-	ipmi_unlock(pet->timer_info->lock);
+	pet->timer_info->cancelled = 1;
     }
 
     if (pet->destroy_done) {
@@ -192,21 +214,21 @@ internal_pet_destroy(ipmi_pet_t *pet)
 static void
 pet_get(ipmi_pet_t *pet)
 {
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     pet->refcount++;
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
 }
 
 static void
 pet_put(ipmi_pet_t *pet)
 {
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     pet->refcount--;
     if (pet->refcount == 0) {
 	internal_pet_destroy(pet);
 	return;
     }
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
 }
 
 static int
@@ -227,9 +249,9 @@ destroy_pet(void *cb_data, void *item1, void *item2)
 {
     ipmi_pet_t *pet = item1;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     pet->in_list = 0;
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -276,7 +298,7 @@ pet_op_done(ipmi_pet_t *pet)
 
     }
 
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
 }
 
 static void
@@ -286,7 +308,7 @@ lanparm_unlocked(ipmi_lanparm_t *lanparm,
 {
     ipmi_pet_t *pet = cb_data;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     ipmi_lanparm_destroy(pet->lanparm, NULL, NULL);
     pet->lanparm = NULL;
     pet_op_done(pet);
@@ -301,7 +323,7 @@ lanparm_commited(ipmi_lanparm_t *lanparm,
     int           rv;
     unsigned char data[1];
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->destroyed) {
 	pet_op_done(pet);
 	goto out;
@@ -320,7 +342,7 @@ lanparm_commited(ipmi_lanparm_t *lanparm,
 	pet_op_done(pet);
 	goto out;
     }
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -358,7 +380,7 @@ lanparm_op_done(ipmi_pet_t *pet, int err)
 	    goto out;
 	}
     }
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -403,7 +425,7 @@ lanparm_set_config(ipmi_lanparm_t *lanparm,
     ipmi_pet_t    *pet = cb_data;
     int           rv;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->destroyed) {
 	lanparm_op_done(pet, ECANCELED);
 	goto out;
@@ -422,7 +444,7 @@ lanparm_set_config(ipmi_lanparm_t *lanparm,
 	lanparm_op_done(pet, rv);
 	goto out;
     }
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -442,7 +464,7 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
     int           check_failed = 0;
     int           i;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->destroyed) {
 	lanparm_op_done(pet, ECANCELED);
 	goto out;
@@ -508,7 +530,7 @@ lanparm_got_config(ipmi_lanparm_t *lanparm,
 	}
     }
 
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -520,7 +542,7 @@ pef_unlocked(ipmi_pef_t    *pef,
 {
     ipmi_pet_t *pet = cb_data;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     ipmi_pef_destroy(pet->pef, NULL, NULL);
     pet->pef = NULL;
     pet_op_done(pet);
@@ -535,7 +557,7 @@ pef_commited(ipmi_pef_t    *pef,
     int           rv;
     unsigned char data[1];
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->destroyed) {
 	ipmi_pef_destroy(pet->pef, NULL, NULL);
 	pet->pef = NULL;
@@ -556,7 +578,7 @@ pef_commited(ipmi_pef_t    *pef,
 	pet_op_done(pet);
 	goto out;
     }
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -594,7 +616,7 @@ pef_op_done(ipmi_pet_t *pet, int err)
 	    goto out;
 	}
     }
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -637,7 +659,7 @@ pef_set_config(ipmi_pef_t    *pef,
     ipmi_pet_t    *pet = cb_data;
     int           rv;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->destroyed) {
 	pef_op_done(pet, ECANCELED);
 	goto out;
@@ -656,7 +678,7 @@ pef_set_config(ipmi_pef_t    *pef,
 	pef_op_done(pet, rv);
 	goto out;
     }
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -676,7 +698,7 @@ pef_got_config(ipmi_pef_t    *pef,
     int           check_failed = 0;
     int           i;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->destroyed) {
 	pef_op_done(pet, ECANCELED);
 	goto out;
@@ -733,7 +755,7 @@ pef_got_config(ipmi_pef_t    *pef,
 	}
     }
 
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -746,7 +768,7 @@ pef_locked(ipmi_pef_t *pef,
     ipmi_pet_t    *pet = cb_data;
     int           rv;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->destroyed) {
 	pef_op_done(pet, ECANCELED);
 	goto out;
@@ -773,7 +795,7 @@ pef_locked(ipmi_pef_t *pef,
 	goto out;
     }
 
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -785,7 +807,7 @@ pef_alloced(ipmi_pef_t *pef, int err, void *cb_data)
     unsigned char data[1];
     int           rv;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->destroyed) {
 	pef_op_done(pet, ECANCELED);
 	goto out;
@@ -809,7 +831,7 @@ pef_alloced(ipmi_pef_t *pef, int err, void *cb_data)
 	goto out;
     }
 
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
  out:
     return;
 }
@@ -820,10 +842,10 @@ start_pet_setup(ipmi_mc_t  *mc,
 {
     int  rv = 0;
 
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
 
     if (pet->in_progress) {
-	ipmi_unlock(pet->timer_info->lock);
+	pet_unlock(pet);
 	return EAGAIN;
     }
 
@@ -870,7 +892,7 @@ start_pet_setup(ipmi_mc_t  *mc,
     rv = 0; /* We continue with the PEF run, even if the lanparm fails. */
 
  out:
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
     return rv;
 }
 
@@ -1148,31 +1170,30 @@ ipmi_pet_destroy(ipmi_pet_t       *pet,
 		 void             *cb_data)
 
 {
-    ipmi_lock(pet->timer_info->lock);
+    pet_lock(pet);
     if (pet->in_list) {
 	ipmi_domain_attr_t *attr;
 	locked_list_t      *pets;
 	int                rv;
+
+	pet->in_list = 0;
 	rv = ipmi_domain_id_find_attribute(pet->domain,
 					   IPMI_PET_ATTR_NAME, &attr);
-	if (rv) {
-	    ipmi_unlock(pet->timer_info->lock);
-	    return rv;
-	}
-	pet->in_list = 0;
-	ipmi_unlock(pet->timer_info->lock);
+	if (!rv) {
+	    pet_unlock(pet);
 	
-	pets = ipmi_domain_attr_get_data(attr);
+	    pets = ipmi_domain_attr_get_data(attr);
 
-	locked_list_remove(pets, pet, NULL);
-	ipmi_domain_attr_put(attr);
-	ipmi_lock(pet->timer_info->lock);
+	    locked_list_remove(pets, pet, NULL);
+	    ipmi_domain_attr_put(attr);
+	    pet_lock(pet);
+	}
     }
 
     pet->destroyed = 1;
     pet->destroy_done = done;
     pet->destroy_cb_data = cb_data;
-    ipmi_unlock(pet->timer_info->lock);
+    pet_unlock(pet);
 
     pet_put(pet);
     return 0;

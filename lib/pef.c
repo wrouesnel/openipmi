@@ -441,16 +441,27 @@ internal_destroy_pef(ipmi_pef_t *pef)
 					   IPMI_PEF_ATTR_NAME, &attr);
 	if (!rv) {
 	    pef->in_list = 0;
+	    pef->refcount++;
 	    pef_unlock(pef);
 	
 	    pefs = ipmi_domain_attr_get_data(attr);
 
 	    locked_list_remove(pefs, pef, NULL);
 	    ipmi_domain_attr_put(attr);
+	    pef_lock(pef);
+	    /* While we were unlocked, someone may have come in and
+	       grabbed the PEF by iterating the list of PEFs.  That's
+	       ok, we just let them handle the destruction since this
+	       code will not be entered again. */
+	    if (pef->refcount != 1) {
+		pef->refcount--;
+		pef_unlock(pef);
+		return;
+	    }
 	}
-    } else {
-	pef_unlock(pef);
     }
+
+    pef_unlock(pef);
 
     if (pef->opq)
 	opq_destroy(pef->opq);
@@ -477,18 +488,17 @@ ipmi_pef_destroy(ipmi_pef_t       *pef,
 
     pef_lock(pef);
     if (pef->in_list) {
+	pef->in_list = 0;
 	rv = ipmi_domain_id_find_attribute(pef->domain, IPMI_PEF_ATTR_NAME,
 					   &attr);
-	if (rv) {
+	if (!rv) {
 	    pef_unlock(pef);
-	    return rv;
-	}
-	pef_unlock(pef);
-	pefl = ipmi_domain_attr_get_data(attr);
+	    pefl = ipmi_domain_attr_get_data(attr);
 
-	locked_list_remove(pefl, pef, NULL);
-	ipmi_domain_attr_put(attr);
-	pef_lock(pef);
+	    locked_list_remove(pefl, pef, NULL);
+	    ipmi_domain_attr_put(attr);
+	    pef_lock(pef);
+	}
     }
 
     if (pef->destroyed) {
@@ -659,13 +669,14 @@ ipmi_pef_get_parm(ipmi_pef_t      *pef,
     elem->block = block;
     elem->rv = 0;
 
-    if (!opq_new_op(pef->opq, start_config_fetch, elem, 0))
+    pef_get(pef);
+    if (!opq_new_op(pef->opq, start_config_fetch, elem, 0)) {
+	pef_put(pef);
 	rv = ENOMEM;
+    }
 
     if (rv)
 	ipmi_mem_free(elem);
-    else
-	pef_get(pef);
 
     return rv;
 }
@@ -822,13 +833,15 @@ ipmi_pef_set_parm(ipmi_pef_t       *pef,
     elem->data_len = data_len + 1;
     elem->rv = 0;
 
-    if (!opq_new_op(pef->opq, start_config_set, elem, 0))
+    
+    pef_get(pef);
+    if (!opq_new_op(pef->opq, start_config_set, elem, 0)) {
+	pef_put(pef);
 	rv = ENOMEM;
+    }
 
     if (rv)
 	ipmi_mem_free(elem);
-    else
-	pef_get(pef);
 
     return rv;
 }
@@ -1712,7 +1725,6 @@ got_parm(ipmi_pef_t     *pef,
 	data[0] = 0;
 	err = ipmi_pef_set_parm(pef, 0, data, 1, err_lock_cleared, pefc);
 	if (err) {
-	    ipmi_pef_free_config(pefc);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "pef.c(got_parm): Error trying to clear lock: %x",
 		     err);
@@ -1769,7 +1781,6 @@ lock_done(ipmi_pef_t *pef,
 	data[0] = 0;
 	rv = ipmi_pef_set_parm(pef, 0, data, 1, err_lock_cleared, pefc);
 	if (rv) {
-	    ipmi_pef_free_config(pefc);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "pef.c(lock_done): Error trying to clear lock: %x",
 		     err);
@@ -1802,11 +1813,12 @@ int ipmi_pef_get_config(ipmi_pef_t             *pef,
 
     /* First grab the lock */
     data[0] = 1; /* Set in progress. */
+    pef_get(pef);
     rv = ipmi_pef_set_parm(pef, 0, data, 1, lock_done, pefc);
-    if (rv)
+    if (rv) {
 	ipmi_pef_free_config(pefc);
-    else
-	pef_get(pef);
+	pef_put(pef);
+    }
 
     return rv;
 }
@@ -2089,14 +2101,16 @@ ipmi_pef_set_config(ipmi_pef_t        *pef,
     lp = &(pefparms[pefc->curr_parm]);
     length = lp->length;
     lp->set_handler(pefc, lp, data, &length);
+    pef_get(pef);
     rv = ipmi_pef_set_parm(pef, pefc->curr_parm, data, length, set_done, pefc);
+    if (rv)
+	pef_put(pef);
  out:
     if (rv) {
 	ipmi_pef_free_config(pefc);
     } else {
 	/* The old config no longer holds the lock. */
 	opefc->pef_locked = 0;
-	pef_get(pef);
     }
     return rv;
 }
@@ -2147,12 +2161,13 @@ ipmi_pef_clear_lock(ipmi_pef_t        *pef,
     cl->cb_data = cb_data;
 
     data[0] = 0; /* Clear the lock. */
+    pef_get(pef);
     rv = ipmi_pef_set_parm(pef, 0, data, 1, lock_cleared, cl);
     if (rv) {
+	pef_put(pef);
 	ipmi_mem_free(cl);
     } else if (pefc) {
 	pefc->pef_locked = 0;
-	pef_get(pef);
     }
 
     return rv;

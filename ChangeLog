@@ -1,3 +1,8 @@
+2004-12-17 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/lanparm.c, lib/pef.c, lib/pet.c: Fixed some locking and
+	refcount problems found with testing.
+
 2004-12-16 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/fru.c: Fixed a problem with FRU area creation, where the

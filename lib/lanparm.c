@@ -364,16 +364,26 @@ internal_destroy_lanparm(ipmi_lanparm_t *lanparm)
 					   IPMI_LANPARM_ATTR_NAME,
 					   &attr);
 	if (!rv) {
+	    lanparm->refcount++;
 	    lanparm->in_list = 0;
 	    lanparm_unlock(lanparm);
 	    lanparml = ipmi_domain_attr_get_data(attr);
 
 	    locked_list_remove(lanparml, lanparm, NULL);
 	    ipmi_domain_attr_put(attr);
+	    lanparm_lock(lanparm);
+	    /* While we were unlocked, someone may have come in and
+	       grabbed the lanparm by iterating the list of lanparms.
+	       That's ok, we just let them handle the destruction
+	       since this code will not be entered again. */
+	    if (lanparm->refcount != 1) {
+		lanparm->refcount--;
+		lanparm_unlock(lanparm);
+		return;
+	    }
 	}
-    } else {
-	lanparm_unlock(lanparm);
     }
+    lanparm_unlock(lanparm);
 
     if (lanparm->opq)
 	opq_destroy(lanparm->opq);
@@ -401,20 +411,18 @@ ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
 	ipmi_domain_attr_t *attr;
 	locked_list_t      *lanparml;
 
+	lanparm->in_list = 0;
 	rv = ipmi_domain_id_find_attribute(lanparm->domain,
 					   IPMI_LANPARM_ATTR_NAME,
 					   &attr);
-	if (rv) {
+	if (!rv) {
 	    lanparm_unlock(lanparm);
-	    return rv;
-	}
-	lanparm->in_list = 0;
-	lanparm_unlock(lanparm);
-	lanparml = ipmi_domain_attr_get_data(attr);
+	    lanparml = ipmi_domain_attr_get_data(attr);
 
-	locked_list_remove(lanparml, lanparm, NULL);
-	ipmi_domain_attr_put(attr);
-	lanparm_lock(lanparm);
+	    locked_list_remove(lanparml, lanparm, NULL);
+	    ipmi_domain_attr_put(attr);
+	    lanparm_lock(lanparm);
+	}
     }
 
     if (lanparm->destroyed) {
