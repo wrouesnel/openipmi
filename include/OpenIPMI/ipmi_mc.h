@@ -231,6 +231,9 @@ int ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event);
 int ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event);
 int ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);
 int ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
+int ipmi_mc_event_by_recid(ipmi_mc_t *mc,
+                           unsigned int record_id,
+                           ipmi_event_t *event);
 int ipmi_mc_sel_count(ipmi_mc_t *mc);
 int ipmi_mc_sel_entries_used(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_major_version(ipmi_mc_t *mc);

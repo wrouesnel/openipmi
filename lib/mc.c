@@ -565,6 +565,14 @@ ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event)
 }
 
 int
+ipmi_mc_event_by_recid(ipmi_mc_t *mc,
+                       unsigned int record_id,
+                       ipmi_event_t *event)
+{
+    return ipmi_sel_get_event_by_recid(mc->sel, record_id, event);
+}
+
+int
 ipmi_mc_sel_count(ipmi_mc_t *mc)
 {
     unsigned int val = 0;

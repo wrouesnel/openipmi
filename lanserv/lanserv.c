@@ -199,6 +199,8 @@ smi_send_dev(lan_data_t *lan, msg_t *msg)
 	if (msg->data[pos] == 0) {
 	    ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
 	    pos++;
+	    if (msg->len < 9)
+	        return EMSGSIZE;
 	}
 	ipmb->slave_addr = msg->data[pos];
 	ipmb->lun = msg->data[pos+1] & 0x3;

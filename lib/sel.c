@@ -1531,6 +1531,38 @@ ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
     return rv;
 }
 
+int
+ipmi_sel_get_event_by_recid(ipmi_sel_info_t *sel,
+                            unsigned int    record_id,
+                            ipmi_event_t    *event)
+{
+    int                rv = 0;
+    sel_event_holder_t *holder;
+
+    sel_lock(sel);
+    if (sel->destroyed) {
+	sel_unlock(sel);
+	return EINVAL;
+    }
+
+    holder = find_event(sel->events, record_id);
+    if (!holder) {
+	rv = EINVAL;
+	goto out_unlock;
+    }
+
+    if (holder->deleted) {
+        rv = ENODEV;
+        goto out_unlock;
+    }
+
+    *event = holder->event;
+
+ out_unlock:
+    sel_unlock(sel);
+    return rv;
+}
+
 int ipmi_get_all_sels(ipmi_sel_info_t *sel,
 		      int             *array_size,
 		      ipmi_event_t    *array)

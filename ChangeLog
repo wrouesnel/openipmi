@@ -1,3 +1,23 @@
+2003-12-02 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/emu_cmd.c, lanserv/Makefile.am, lanserv/lanserv_emu.c:
+	Added a command processor for handling control commands to the
+	emulator.
+
+	* lanserv/emu.c, lanserv/emu.h, lanserv/lanser_emu.c: Massive
+	restructure to clean this up and support various commands and get
+	IPMB working.
+
+	* lanserv/lanserv.c: Check for proper message length in broadcasts.
+
+2003-12-02  Louis Zhuang  <louis.zhuang@linux.intel.com>
+
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.h: Add a new function
+	'ipmi_mc_event_by_recid' for OpenHPI to use.
+
+	* include/OpenIPMI/ipmi_sel.h, lib/sel.h: Add a new function
+	'ipmi_sel_get_event_by_recid'.
+
 2003-12-01 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Renamed some functions to

@@ -87,6 +87,9 @@ int ipmi_sel_get_first_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
 int ipmi_sel_get_last_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
 int ipmi_sel_get_next_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
 int ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
+int ipmi_sel_get_event_by_recid(ipmi_sel_info_t *sel,
+                                unsigned int    record_id,
+                                ipmi_event_t    *event);
 
 /* This callback will be called when a new event is added to the SEL. */
 typedef void (*ipmi_sel_new_event_handler_cb)(ipmi_sel_info_t *sel,

@@ -92,6 +92,11 @@ lan_send(lan_data_t *lan,
     lan_addr_t    *l = addr;
     int           rv;
 
+    /* When we send messages to ourself, we set the address to NULL so
+       it won't be used. */
+    if (!l)
+	return;
+
     msg.msg_name = &(l->addr);
     msg.msg_namelen = l->addr_len;
     msg.msg_iov = data;
@@ -114,19 +119,13 @@ smi_send(lan_data_t *lan, msg_t *msg)
     unsigned char    data[36];
     unsigned int     data_len = sizeof(data);
     ipmi_msg_t       imsg;
-    emu_msgparms_t   parms;
 
     imsg.netfn = msg->netfn;
     imsg.cmd = msg->cmd;
     imsg.data = msg->data;
     imsg.data_len = msg->len;
 
-    parms.netfn = &msg->netfn;
-    parms.rqSA = &msg->rq_addr;
-    parms.seq = &msg->rq_seq;
-    parms.rqLun = &msg->rq_lun;
-    parms.cmd = &msg->cmd;
-    ipmi_emu_handle_msg(emu, &parms, msg->rs_lun, &imsg, data, &data_len);
+    ipmi_emu_handle_msg(emu, msg->rs_lun, &imsg, data, &data_len);
 
     ipmi_handle_smi_rsp(lan, msg, data, data_len);
     return 0;
@@ -260,6 +259,7 @@ log(int logtype, msg_t *msg, char *format, ...)
 }
 
 static char *config_file = "/etc/ipmi_lan.conf";
+static char *command_string = NULL;
 static int debug = 0;
 
 static struct poptOption poptOpts[]=
@@ -271,6 +271,15 @@ static struct poptOption poptOpts[]=
 	&config_file,
 	'c',
 	"configuration file",
+	""
+    },
+    {
+	"command-string",
+	'x',
+	POPT_ARG_STRING,
+	&command_string,
+	'x',
+	"command string",
 	""
     },
     {
@@ -301,6 +310,90 @@ write_config(lan_data_t *lan)
 struct sockaddr addr[MAX_ADDR];
 socklen_t addr_len[MAX_ADDR];
 int num_addr = 0;
+
+static char buffer[1024];
+static int pos = 0;
+
+static void
+handle_user_char(char c)
+{
+    switch(c) {
+    case 8:
+    case 0x7f:
+	if (pos > 0) {
+	    pos--;
+	    printf("\b \b");
+	}
+	break;
+
+    case 4:
+	if (pos == 0) {
+	    printf("\n");
+	    ipmi_emu_shutdown();
+	}
+	break;
+
+    case 10:
+    case 13:
+	printf("\n");
+	buffer[pos] = '\0';
+	ipmi_emu_cmd(emu, buffer);
+	printf("> ");
+	pos = 0;
+	break;
+
+    default:
+	if (pos >= sizeof(buffer)-1) {
+	    printf("\nCommand is too long, max of %d characters\n",
+		   sizeof(buffer)-1);
+	} else {
+	    buffer[pos] = c;
+	    pos++;
+	    printf("%c", c);
+	}
+    }
+}
+
+static void
+handle_user_data_ready(void)
+{
+    char rc;
+    int count;
+
+    count = read(0, &rc, 1);
+    while (count > 0) {
+	handle_user_char(rc);
+	count = read(0, &rc, 1);
+    }
+}
+
+struct termios old_termios;
+int old_flags;
+
+static void
+init_term(void)
+{
+    struct termios new_termios;
+
+    tcgetattr(0, &old_termios);
+    new_termios = old_termios;
+    new_termios.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
+			     |INLCR|IGNCR|ICRNL|IXON);
+    new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
+    tcsetattr(0, TCSADRAIN, &new_termios);
+    old_flags = fcntl(0, F_GETFL) & O_ACCMODE;
+    fcntl(0, F_SETFL, old_flags | O_NONBLOCK);
+}
+
+void
+ipmi_emu_shutdown(void)
+{
+    tcsetattr(0, TCSADRAIN, &old_termios);
+    fcntl(0, F_SETFL, old_flags);
+    tcdrain(0);
+    exit(0);
+}
+
 
 int
 main(int argc, const char *argv[])
@@ -368,7 +461,8 @@ main(int argc, const char *argv[])
     if (rv)
 	return 1;
 
-    log(0, NULL, "%s startup", argv[0]);
+    init_term();
+    printf("> ");
 
     max_fd = -1;
     for (i=0; i<num_addr; i++) {
@@ -377,12 +471,20 @@ main(int argc, const char *argv[])
     }
     max_fd++;
 
+    if (command_string) {
+	ipmi_emu_cmd(emu, command_string);
+    }
+
     gettimeofday(&time_next, NULL);
     time_next.tv_sec += 10;
     for (;;) {
 	fd_set readfds;
 
+	fflush(stdout);
+
 	FD_ZERO(&readfds);
+
+	FD_SET(0, &readfds);
 	for (i=0; i<num_addr; i++)
 	    FD_SET(data.lan_fd[i], &readfds);
 
@@ -396,6 +498,9 @@ main(int argc, const char *argv[])
 	    ipmi_lan_tick(&lan, 10);
 	    time_next.tv_sec += 10;
 	} else {
+	    if (FD_ISSET(0, &readfds))
+		handle_user_data_ready();
+
 	    for (i=0; i<num_addr; i++) {
 		if (FD_ISSET(data.lan_fd[i], &readfds))
 		    handle_msg_lan(data.lan_fd[i], &lan);
