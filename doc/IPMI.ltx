@@ -935,19 +935,153 @@ while waiting.
 %---------------------------------------------------------------------
 \chapter{IPMI Interfaces}
 
-\section{OpenIPMI Addressing}
+IPMI has a large number of interfaces for talking to to management
+controllers.  They vary in performance and capability, but the same
+messages work over the top of all of them.  Generally, it does not
+matter how you interface to an IPMI system, the messages will work the
+same.
 
 \section{System Interfaces}
 
+The most common interface to a management controller is the system
+interface.  This provides a direct connection between the main
+processor of a system and the management controller.  Obviously, this
+interface isn't very useful if the system is turned off, but it allows
+a running system to monitor itself.
+
 \subsection{SMIC}
+SMIC interfaces have been around a long time, but mostly during a
+period when IPMI was not popular.  SMIC stands for Server Management
+Interface Chip.  This is a low-performance, byte-at-a-time interface
+with no interrupt capability.
 
 \subsection{KCS}
+KCS interfaces are currently the most popular IPMI system interface.
+KCS stands for Keyboard Controller Style; the interface looks much
+like a standard PC keyboard interface.  It was chosen because lots of
+cheap hardware was available for these types of interfaces.  But it is
+still a byte-at-a-time interface and performs poorly.  It has the
+capability for interrupts, but very few systems have working interrupt
+capability with KCS interfaces.
 
 \subsection{BT}
+BT interfaces are the newest and best interfaces for IPMI.  BT stands
+for Block Transfer.  Messages are sent a whole message at a time
+through the interface, thus it is a much higher performance interface
+than the other system interfaces.
 
 \subsection{The OpenIPMI Driver}
 
-\subsection{The OpenIPMI System Interface }
+The OpenIPMI driver on Linux provides a user interface to all the
+standard IPMI system interfaces.  It does so in a manner that allows
+multiple users to use the driver at the same time, both users in the
+kernel and users in user space.
+
+To do this, the OpenIPMI driver handles all the details of addressing
+and sequencing messages.  Other drivers allowed more direct access to
+the IPMI interface; that means that only one user at a time could use
+the driver.  Since the IPMI can be used for different purposes by
+different users, it is useful to do the multiplexing in the kernel.
+
+The details of configuring the IPMI driver are found in the
+\verb=IPMI.txt= file in the kernel documentation; those details won't
+be discussed here.
+
+To use the IPMI device driver, you open the \verb=/dev/ipmi0= or
+\verb=/dev/ipmidev/0= file.  The driver allows multiple IPMI devices
+at the same time; you would increment the number to get to successive
+devices.  However, most systems only have one.
+
+The primary interface to the driver is through \verb=ioctl= calls.
+\verb=read= and\verb=write= calls will not work because the IPMI
+driver separates the addressing and data for an IPMI message.
+
+The core description of an IPMI message is:
+
+\begin{verbatim}
+struct ipmi_msg
+{
+	unsigned char  netfn;
+	unsigned char  cmd;
+	unsigned short data_len;
+	unsigned char  *data;
+};
+\end{verbatim}
+
+The \verb=netfn= describes the class of message being sent.  IPMI
+messages are grouped into different classes by function.  The
+\verb=cmd= is the command within the class.  Chapter
+\rev{ipmi-commands} discusses this is more detail.  The \verb=data=
+and \verb=data_len= fields are the message contents.  This structure
+is used in both sent and received messages.
+
+\subsubsection{Sending Commands}
+To send a command, use the following:
+
+\begin{verbatim}
+rv = ioctl(fd, IPMICTL_SEND_COMMAND, &req);
+\end{verbatim}
+
+The \verb=req= structure has the following format:
+
+\begin{verbatim}
+struct ipmi_req
+{
+	unsigned char   *addr;
+	unsigned int    addr_len;
+	long            msgid;
+	struct ipmi_msg msg;
+};
+\end{verbatim}
+
+The \verb=addr= and \verb=addr_len= fields describe the destination
+address of the management controller to receive message.  The
+\verb=msg= field itself gives the message to send.  The msgid is a
+field for the user; the user may put any value they want in this
+field.  When the response comes back for the command, it will contain
+the message id.
+
+The driver guarantees that the user will receive a response for every
+message that is successfully sent.  If the message times out or is
+undeliverable, an error resonse will be generated and returned.
+
+The following code fragment shows how to send a message to the local
+management controller, in this case a command to read the value of a
+sensor:
+
+\begin{verbatim}
+struct ipmi_req                   req;
+unsigned char                     data[1];
+struct ipmi_system_interface_addr si;
+
+/* Format the address. */
+si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+si.channel = IPMI_BMC_CHANNEL;
+si.lun = 0;
+
+req.addr = (void *) &si;
+req.addr_len = sizeof(si);
+req.msgid = 0x1234;
+req.msg.netfn = 0x04 /* Sensor/Event netfn */
+req.msg.cmd = 0x2d /* Get sensor reading */
+req.msg.data = data;
+req.msg.data_len = 1;
+data[1] = 10; /* Read sensor 10 */
+
+rv = ioctl(fd, IPMICTL_SEND_COMMAND, &req);
+\end{verbatim}
+
+Note that sending the command is asyncronous; you will not immediately
+get the response.  Instead, the response comes back later and can be
+received at that point in time.  This is what makes the \verb=msgid=
+important.
+
+\subsubsection{Receiving Responses and Events}
+
+\subsubsection{Receiving Commands and Responding}
+
+
+\subsection{The OpenIPMI System Interface}
 
 \section{IPMB}
 
@@ -961,12 +1095,26 @@ while waiting.
 
 \subsection{The OpenIPMI LAN Interface }
 
-\section{Direct Serial}
+\section{Serial}
 
-\section{Serial over PPP}
+\subsection{Direct Serial}
+
+\subsection{Serial over PPP}
+
+\section{OpenIPMI Addressing}
+\label{openipmi-addressing}
+
+%---------------------------------------------------------------------
+\chapter{IPMI Commands}
+\label{ipmi-commands}
+
+%---------------------------------------------------------------------
+\chapter{SDR Repositories}
 
 %---------------------------------------------------------------------
 \chapter{Entities}
+
+\section{FRU Data}
 
 %---------------------------------------------------------------------
 \chapter{Sensors}
@@ -1031,6 +1179,8 @@ That information may be fetched by the user.
 \appendix
 
 \chapter{Comparison with SNMP}
+
+\chapter{Comparison with HPI}
 
 %---------------------------------------------------------------------
 \chapter{ATCA}
