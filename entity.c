@@ -164,6 +164,7 @@ ipmi_entity_info_alloc(ipmi_mc_t *bmc, ipmi_entity_info_t **new_info)
 	return ENOMEM;
 
     ents->bmc = bmc;
+    ents->handler = NULL;
     ents->entities = alloc_ilist();
     if (! ents->entities) {
 	free(ents);
