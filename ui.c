@@ -1491,7 +1491,7 @@ events_enable(ipmi_sensor_t *sensor, void *cb_data)
 				       events_enable_done, NULL);
     if (rv)
 	ui_log("Error sending events enable: 0x%x", rv);
-    free(info);
+    ipmi_mem_free(info);
 }
 
 static int
@@ -1511,7 +1511,7 @@ events_enable_cmd(char *cmd, char **toks, void *cb_data)
 
     info->states = ipmi_mem_alloc(ipmi_event_state_size());
     if (!info->states) {
-	free(info);
+	ipmi_mem_free(info);
 	cmd_win_out("Out of memory\n");
 	return 0;
     }
@@ -1561,7 +1561,7 @@ events_enable_cmd(char *cmd, char **toks, void *cb_data)
     rv = ipmi_sensor_pointer_cb(curr_sensor_id, events_enable, info);
     if (rv) {
 	cmd_win_out("Unable to get sensor pointer: 0x%x\n", rv);
-	free(info);
+	ipmi_mem_free(info);
     }
     return 0;
 }
@@ -1813,9 +1813,105 @@ control_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
-int
-enable_cmd(char *cmd, char **toks, void *cb_data)
+typedef struct rearm_info_s
 {
+    int                global;
+    ipmi_event_state_t *states;
+} rearm_info_t;
+
+void
+rearm_done(ipmi_sensor_t *sensor,
+	   int           err,
+	   void          *cb_data)
+{
+    if (err)
+	ui_log("Error rearming sensor: 0x%x", err);
+}
+
+static void
+rearm(ipmi_sensor_t *sensor, void *cb_data)
+{
+    rearm_info_t *info = cb_data;
+    int          rv;
+
+    rv = ipmi_sensor_rearm(sensor, info->global, info->states,
+			   rearm_done, NULL);
+    if (rv)
+	ui_log("Error sending rearm: 0x%x", rv);
+    if (info->states)
+	ipmi_mem_free(info->states);
+    ipmi_mem_free(info);
+}
+
+static int
+rearm_cmd(char *cmd, char **toks, void *cb_data)
+{
+    rearm_info_t  *info;    
+    unsigned char global;
+    int           i;
+    char          *enptr;
+    int           rv;
+    
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmd_win_out("Out of memory\n");
+	return 0;
+    }
+
+    info->states = NULL;
+
+    if (get_uchar(toks, &global, "global rearm"))
+	return 0;
+    info->global = global;
+
+    if (!global) {
+	info->states = ipmi_mem_alloc(ipmi_event_state_size());
+	if (!info->states) {
+	    ipmi_mem_free(info);
+	    cmd_win_out("Out of memory\n");
+	    return 0;
+	}
+
+	ipmi_event_state_init(info->states);
+
+	enptr = strtok_r(NULL, " \t\n", toks);
+	if (!enptr) {
+	    cmd_win_out("No assertion mask given\n");
+	    return 0;
+	}
+	for (i=0; enptr[i]!='\0'; i++) {
+	    if (enptr[i] == '1')
+		ipmi_discrete_event_set(info->states, i, IPMI_ASSERTION);
+	    else if (enptr[i] == '0')
+		ipmi_discrete_event_clear(info->states, i, IPMI_ASSERTION);
+	    else {
+		cmd_win_out("Invalid assertion value\n");
+		return 0;
+	    }
+	}
+    
+	enptr = strtok_r(NULL, " \t\n", toks);
+	if (!enptr) {
+	    cmd_win_out("No deassertion mask given\n");
+	    return 0;
+	}
+	for (i=0; enptr[i]!='\0'; i++) {
+	    if (enptr[i] == '1')
+		ipmi_discrete_event_set(info->states, i, IPMI_DEASSERTION);
+	    else if (enptr[i] == '0')
+		ipmi_discrete_event_clear(info->states, i, IPMI_DEASSERTION);
+	    else {
+		cmd_win_out("Invalid deassertion value\n");
+		return 0;
+	    }
+	}
+    }
+    
+    rv = ipmi_sensor_pointer_cb(curr_sensor_id, rearm, info);
+    if (rv) {
+	cmd_win_out("Unable to get sensor pointer: 0x%x\n", rv);
+	ipmi_mem_free(info);
+    }
     return 0;
 }
 
@@ -2534,8 +2630,8 @@ static struct {
     { "sensor",		sensor_cmd,
       " <sensor name> - Pull up all the information on the sensor and start"
       " monitoring it" },
-    { "enable",		enable_cmd,
-      " - not currently implemented" },
+    { "rearm",		rearm_cmd,
+      " - rearm the current sensor" },
     { "controls",	controls_cmd,
       " <entity name> - list all the controls attached to the entity" },
     { "control",	control_cmd,

@@ -3,6 +3,11 @@
 
 	* configure.in: Moved to version 0.2.0.
 
+	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_sensor.h
+	Added rearm support for sensors.
+	* sensor.c: ditto
+	* ui.c: ditto
+
 	* include/OpenIPMI/ipmiif.h: The spec was very confusing in
 	section 29.11 and 29.14 (1.5 spec) about the event messages and
 	scanning enable/disable.  After studying the spec more, I'm pretty

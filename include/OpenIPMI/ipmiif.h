@@ -474,6 +474,19 @@ int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
 				  ipmi_event_enables_get_cb done,
 				  void                      *cb_data);
 
+/* Rearm the current sensor.  This will cause the sensor to resend
+   it's current event state if it is out of range.  If
+   ipmi_sensor_get_supports_auto_rearm() returns false and you receive
+   an event, you have to rearm a sensor manually to get any that event
+   from it.  If global_enable is set, all events are enable and the
+   state is ignored (and may be NULL).  Otherwise, the events set in
+   the state are enabled. */
+int ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
+		      int                 global_enable,
+		      ipmi_event_state_t  *state,
+		      ipmi_sensor_done_cb done,
+		      void                *cb_data);
+
 /* Get the hysteresis values for the given sensor.
    FIXME - these are currently the raw values, how do I get the
    cooked values?  There doesn't seem to be an easy way to calculate them. */
@@ -531,7 +544,7 @@ int ipmi_sensor_get_sensor_init_type(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_sensor_init_pu_events(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_sensor_init_pu_scanning(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_ignore_if_no_entity(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_supports_rearm(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_supports_auto_rearm(ipmi_sensor_t *sensor);
 
 /* Returns IPMI_THRESHOLD_ACCESS_SUPPORT_xxx */
 int ipmi_sensor_get_threshold_access(ipmi_sensor_t *sensor);

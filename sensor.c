@@ -94,7 +94,7 @@ struct ipmi_sensor_s
     unsigned int  sensor_init_pu_events : 1;
     unsigned int  sensor_init_pu_scanning : 1;
     unsigned int  ignore_if_no_entity : 1;
-    unsigned int  supports_rearm : 1;
+    unsigned int  supports_auto_rearm : 1;
     unsigned int  hysteresis_support : 2;
     unsigned int  threshold_access : 2;
     unsigned int  event_support : 2;
@@ -732,7 +732,7 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
 	s[p]->sensor_init_pu_events = (sdr.data[5] >> 1) & 1;
 	s[p]->sensor_init_pu_scanning = (sdr.data[5] >> 0) & 1;
 	s[p]->ignore_if_no_entity = (sdr.data[6] >> 7) & 1;
-	s[p]->supports_rearm = (sdr.data[6] >> 6) & 1 ;
+	s[p]->supports_auto_rearm = (sdr.data[6] >> 6) & 1 ;
 	s[p]->hysteresis_support = (sdr.data[6] >> 5) & 3;
 	s[p]->threshold_access = (sdr.data[6] >> 3) & 3;
 	s[p]->event_support = sdr.data[6] & 3;
@@ -937,7 +937,7 @@ static int cmp_sensor(ipmi_sensor_t *s1,
     if (s1->sensor_init_pu_events != s2->sensor_init_pu_events) return 0;
     if (s1->sensor_init_pu_scanning != s2->sensor_init_pu_scanning) return 0;
     if (s1->ignore_if_no_entity != s2->ignore_if_no_entity) return 0;
-    if (s1->supports_rearm != s2->supports_rearm) return 0;
+    if (s1->supports_auto_rearm != s2->supports_auto_rearm) return 0;
     if (s1->hysteresis_support != s2->hysteresis_support) return 0;
     if (s1->threshold_access != s2->threshold_access) return 0;
     if (s1->event_support != s2->event_support) return 0;
@@ -1821,11 +1821,11 @@ ipmi_sensor_get_ignore_if_no_entity(ipmi_sensor_t *sensor)
 }
 
 int
-ipmi_sensor_get_supports_rearm(ipmi_sensor_t *sensor)
+ipmi_sensor_get_supports_auto_rearm(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
 
-    return sensor->supports_rearm;
+    return sensor->supports_auto_rearm;
 }
 
 int
@@ -2220,9 +2220,9 @@ ipmi_sensor_set_ignore_if_no_entity(ipmi_sensor_t *sensor,
 }
 
 void
-ipmi_sensor_set_supports_rearm(ipmi_sensor_t *sensor, int supports_rearm)
+ipmi_sensor_set_supports_auto_rearm(ipmi_sensor_t *sensor, int val)
 {
-    sensor->supports_rearm = supports_rearm;
+    sensor->supports_auto_rearm = val;
 }
 
 void
@@ -2847,6 +2847,127 @@ stand_ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, event_enable_get_start,
 			     &(info->sdata), info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+typedef struct sensor_rearm_info_s
+{
+    ipmi_sensor_op_info_t sdata;
+    ipmi_event_state_t    state;
+    int                   global_enable;
+    ipmi_sensor_done_cb   done;
+    void                  *cb_data;
+} sensor_rearm_info_t;
+
+static void
+sensor_rearm(ipmi_sensor_t *sensor,
+	 int           err,
+	 ipmi_msg_t    *rsp,
+	 void          *cb_data)
+{
+    sensor_rearm_info_t *info = cb_data;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error setting hysteresis: %x", err);
+	if (info->done)
+	    info->done(sensor, err, info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(info);
+	return;
+    }
+
+    if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "IPMI error setting hysteresis: %x", rsp->data[0]);
+	if (info->done)
+	    info->done(sensor,
+		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
+		       info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(info);
+	return;
+    }
+
+    if (info->done)
+	info->done(sensor, 0, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
+
+static void
+sensor_rearm_start(ipmi_sensor_t *sensor, int err, void *cb_data)
+{
+    sensor_rearm_info_t *info = cb_data;
+    unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
+    ipmi_msg_t      cmd_msg;
+    int             rv;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error starting hysteresis set: %x", err);
+	if (info->done)
+	    info->done(sensor, err, info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(info);
+	return;
+    }
+
+    cmd_msg.data = cmd_data;
+    cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+    cmd_msg.cmd = IPMI_REARM_SENSOR_EVENTS_CMD;
+    if (info->global_enable) {
+	cmd_msg.data_len = 2;
+	cmd_msg.data = cmd_data;
+	cmd_data[0] = sensor->num;
+	cmd_data[1] = 0; /* Rearm all events. */
+    } else {
+	cmd_msg.data_len = 6;
+	cmd_msg.data = cmd_data;
+	cmd_data[0] = sensor->num;
+	cmd_data[1] = 0x80; /* Rearm only specific sensors. */
+	cmd_data[2] = info->state.__assertion_events & 0xff;
+	cmd_data[3] = info->state.__assertion_events >> 8;
+	cmd_data[4] = info->state.__deassertion_events & 0xff;
+	cmd_data[5] = info->state.__deassertion_events >> 8;
+    }
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+				  &cmd_msg, sensor_rearm,
+				  &(info->sdata), info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Error sending rearm command: %x", rv);
+	if (info->done)
+	    info->done(sensor, rv, info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(info);
+    }
+}
+
+static int
+stand_ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
+			int                 global_enable,
+			ipmi_event_state_t  *state,
+			ipmi_sensor_done_cb done,
+			void                *cb_data)
+{
+    sensor_rearm_info_t *info;
+    int                 rv;
+    
+    if (!global_enable && !state)
+	return EINVAL;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    info->done = done;
+    info->cb_data = cb_data;
+    info->global_enable = global_enable;
+    if (state)
+	memcpy(&info->state, state, sizeof(info->state));
+    rv = ipmi_sensor_add_opq(sensor, sensor_rearm_start, &(info->sdata), info);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
@@ -3903,6 +4024,7 @@ const ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
 {
     .ipmi_sensor_events_enable_set = stand_ipmi_sensor_events_enable_set,
     .ipmi_sensor_events_enable_get = stand_ipmi_sensor_events_enable_get,
+    .ipmi_sensor_rearm             = stand_ipmi_sensor_rearm,
 
     .ipmi_sensor_convert_from_raw  = stand_ipmi_sensor_convert_from_raw,
     .ipmi_sensor_convert_to_raw    = stand_ipmi_sensor_convert_to_raw,
@@ -3932,6 +4054,24 @@ ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 						     states,
 						     done,
 						     cb_data);
+}
+
+int
+ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
+		  int                 global_enable,
+		  ipmi_event_state_t  *state,
+		  ipmi_sensor_done_cb done,
+		  void                *cb_data)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (!sensor->cbs.ipmi_sensor_rearm)
+	return ENOSYS;
+    return sensor->cbs.ipmi_sensor_rearm(sensor,
+					 global_enable,
+					 state,
+					 done,
+					 cb_data);
 }
 
 int

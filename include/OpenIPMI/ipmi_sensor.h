@@ -324,6 +324,12 @@ typedef int (*ipmi_sensor_events_enable_get_cb)(
     ipmi_sensor_t             *sensor,
     ipmi_event_enables_get_cb done,
     void                      *cb_data);
+typedef int (*ipmi_sensor_rearm_cb)(
+    ipmi_sensor_t       *sensor,
+    int                 global_enable,
+    ipmi_event_state_t  *state,
+    ipmi_sensor_done_cb done,
+    void                *cb_data);
 
 typedef int (*ipmi_sensor_get_hysteresis_cb)(
     ipmi_sensor_t           *sensor,
@@ -360,6 +366,7 @@ typedef struct ipmi_sensor_cbs_s
 {
     ipmi_sensor_events_enable_set_cb ipmi_sensor_events_enable_set;
     ipmi_sensor_events_enable_get_cb ipmi_sensor_events_enable_get;
+    ipmi_sensor_rearm_cb             ipmi_sensor_rearm;
 
     /* These are for threshold sensors only. */
     ipmi_sensor_convert_from_raw_cb  ipmi_sensor_convert_from_raw;
