@@ -96,6 +96,7 @@ struct ipmi_domain_id_s
 {
     ipmi_domain_t *domain;
 };
+#define IPMI_DOMAIN_ID_INVALID { NULL }
 
 struct ipmi_entity_id_s
 {
@@ -106,6 +107,7 @@ struct ipmi_entity_id_s
     unsigned int     address         : 8;
     long             seq;
 };
+#define IPMI_ENTITY_ID_INVALID { IPMI_DOMAIN_ID_INVALID, 0, 0, 0, 0, 0 }
 
 /* This structure is kind of a cheap hack.  It's internal and
    definately *NOT* for use by the user.  It can represent two
@@ -124,6 +126,7 @@ typedef struct ipmi_mcid_s
     unsigned char    channel;
     long             seq;
 } ipmi_mcid_t;
+#define IPMI_MCID_INVALID { IPMI_DOMAIN_ID_INVALID, 0, 0, 0 }
 
 typedef struct ipmi_mc_s ipmi_mc_t;
 
@@ -133,6 +136,7 @@ struct ipmi_sensor_id_s
     unsigned int lun        : 3;
     unsigned int sensor_num : 8;
 };
+#define IPMI_SENSOR_ID_INVALID { IPMI_MCID_INVALID, 0, 0 }
 
 struct ipmi_control_id_s
 {
@@ -140,6 +144,7 @@ struct ipmi_control_id_s
     unsigned int lun         : 3;
     unsigned int control_num : 8;
 };
+#define IPMI_CONTROL_ID_INVALID { IPMI_MCID_INVALID, 0, 0 }
 
 /* Maximum amount of data allowed in a SEL. */
 #define IPMI_MAX_SEL_DATA 13

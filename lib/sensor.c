@@ -237,6 +237,12 @@ ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2)
     return 0;
 }
 
+void
+ipmi_sensor_id_set_invalid(ipmi_sensor_id_t *id)
+{
+    memset(id, 0, sizeof(*id));
+}
+
 typedef struct mc_cb_info_s
 {
     ipmi_sensor_ptr_cb handler;

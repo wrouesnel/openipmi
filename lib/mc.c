@@ -1539,6 +1539,12 @@ ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2)
     return 0;
 }
 
+void
+ipmi_mc_id_set_invalid(ipmi_mcid_t *id)
+{
+    memset(id, 0, sizeof(*id));
+}
+
 /***********************************************************************
  *
  * Handle sending commands and getting responses.

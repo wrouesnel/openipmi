@@ -1,9 +1,23 @@
-2004-02-18 Corey Minyard <cminyard@mvista.com> 
+2004-02-19 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/lanparm.c: Initialize the callback data when cleaning
 	the lan parm lock.
 
 	* man/ipmicmd.1, man/ipmi_ui.1: Update to make current.
+
+	* include/OpenIPMI/ipmiif.h, lib/entity.c: Added an entity id
+	comparison function.
+
+	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_types.h: Added
+	invalid id's for all the various object id's.
+	* include/OpenIPMI/ipmi_mc.h: ditto
+	* lib/entity.c: ditto
+	* lib/mc.c: ditto
+	* lib/sensor.c: ditto
+	* lib/control.c: ditto
+	* lib/domain.c: ditto
+
+	* doc/OpenIPMI.texi: Added some more information about locking.
 
 2004-02-18 Corey Minyard <cminyard@mvista.com> 
 

@@ -3405,6 +3405,50 @@ ipmi_entity_find_id(ipmi_domain_id_t domain_id,
     return rv;
 }
 
+int
+ipmi_cmp_entity_id(ipmi_entity_id_t id1, ipmi_entity_id_t id2)
+{
+    int cmp;
+
+    cmp = ipmi_cmp_domain_id(id1.domain_id, id2.domain_id);
+    if (cmp)
+	return cmp;
+
+    if (id1.entity_id < id2.entity_id)
+	return -1;
+    if (id1.entity_id > id2.entity_id)
+	return 1;
+
+    if (id1.entity_instance < id2.entity_instance)
+	return -1;
+    if (id1.entity_instance > id2.entity_instance)
+	return 1;
+
+    if (id1.channel < id2.channel)
+	return -1;
+    if (id1.channel > id2.channel)
+	return 1;
+
+    if (id1.address < id2.address)
+	return -1;
+    if (id1.address > id2.address)
+	return 1;
+
+    if (id1.seq < id2.seq)
+	return -1;
+    if (id1.seq > id2.seq)
+	return 1;
+
+    return 0;
+}
+
+void
+ipmi_entity_id_set_invalid(ipmi_entity_id_t *id)
+{
+    ipmi_domain_id_set_invalid(&id->domain_id);
+}
+
+
 void
 ipmi_entity_lock(ipmi_entity_t *ent)
 {

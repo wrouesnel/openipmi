@@ -1357,6 +1357,12 @@ ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2)
 }
 
 void
+ipmi_control_id_set_invalid(ipmi_control_id_t *id)
+{
+    memset(id, 0, sizeof(*id));
+}
+
+void
 ipmi_control_set_hot_swap_indicator(ipmi_control_t *control,
 				    int            val,
 				    int            req_act_val,

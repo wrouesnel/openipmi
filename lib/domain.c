@@ -2989,6 +2989,11 @@ ipmi_cmp_domain_id(ipmi_domain_id_t id1, ipmi_domain_id_t id2)
     return 0;
 }
 
+void
+ipmi_domain_id_set_invalid(ipmi_domain_id_t *id)
+{
+    id->domain = NULL;
+}
 
 /***********************************************************************
  *

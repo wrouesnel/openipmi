@@ -496,6 +496,97 @@ delayed or spawned off to another thread.  So, for instance, you can
 use data on the stack of the calling function and pass it to the
 callback function to use.
 
+For instance, suppose you have a callback registered with the domain
+for finding when new entities are ready, and you are looking for a
+specific entity.  The code might look like:
+
+@example
+ipmi_entity_id_t my_entity_id = IPMI_ENTITY_ID_INVALID;
+
+static void
+entity_change(enum ipmi_update_e op,
+	      ipmi_domain_t      *domain,
+	      ipmi_entity_t      *entity,
+	      void               *cb_data)
+@{
+    ipmi_entity_id tmp_id;
+
+    switch (op) @{
+	case IPMI_ADDED:
+            if (entity_i_care_about(entity))
+                my_entity_id = ipmi_entity_convert_to_id(entity);
+	    break;
+
+	case IPMI_DELETED:
+            tmp_id = ipmi_entity_convert_to_id(entity);
+            if (ipmi_cmp_entity_id(my_entity_id, tmp_id) == 0)
+                ipmi_entity_id_set_invalid(&my_entity_id);
+	    break;
+
+        default:
+            break;
+    @}
+@}
+@end example
+
+In this example, the entity is locked in this call, because you have
+received a pointer to the entity in the callback.
+
+However, suppose you want to use the entity id later because the user
+asks about the entity to see if it is present.  You might have a piece
+of code that looks like:
+
+@example
+static void
+my_entity_id_cb(ipmi_entity_t *entity, void *cb_data)
+@{
+    my_data_t *data;
+
+    data->exists = 1;
+    data->present = ipmi_entity_is_present(entity);
+@}
+
+void
+check_if_my_entity_present(my_data_t *data)
+@{
+    int rv;
+
+    data->exists = 0;
+    data->present = 0;
+    rv = ipmi_entity_pointer_cb(my_entity_id, my_entity_id_cb, data);
+    if (rv)
+        printf("The entity could not be found\n");
+@}
+@end example
+
+Most of the data about the various OpenIPMI objects is static, so you
+can pre-collect the information about the objects in the callback
+where there existance is reported.  The only dynamic variable in
+OpenIPMI is entity presence.  Also, many operation require a message
+to the remote system; the ones that take callbacks.  For these
+operation, functions that directly take the id are available.
+
+The entity presence code could be rewritten using this to be:
+
+@example
+void
+check_if_my_entity_present(my_data_t *data)
+@{
+    int rv;
+
+    data->exists = 0;
+    data->present = 0;
+    rv = ipmi_entity_id_is_present(my_entity_id, &data->present);
+    if (rv)
+        printf("The entity could not be found\n");
+    else
+        data->exists = 1;
+@}
+@end example
+
+So, it is recommended that you collect all the static information that
+you need from an object when it is reported to you.
+
 @node    OpenIPMI Objects, , Locking, OpenIPMI Concepts
 @section OpenIPMI Objects
 
