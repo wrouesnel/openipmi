@@ -5,6 +5,8 @@
 
 	* domain.c: Scan MCs that are added from SDR sources.
 
+	* oem_atca.c: Turn off SEL support for everything but the BMC.
+
 2004-03-20 Corey Minyard <cminyard@mvista.com> 
 
 	* everything: Massive rework of the code structure.

@@ -1988,7 +1988,7 @@ _ipmi_mc_check_mc(ipmi_mc_t *mc)
  **********************************************************************/
 
 int
-_ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t  *mc, ipmi_msg_t *rsp)
+_ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 {
     unsigned char *rsp_data = rsp->data;
 

@@ -1807,6 +1807,14 @@ atca_mc_update_handler(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	atca_handle_new_mc(domain, mc, cb_data);
+
+	/* FALLTHROUGH */
+
+    case IPMI_CHANGED:
+	/* Turn off SEL device support for all devices that are not
+	   the BMC. */
+	if (ipmi_mc_get_address(mc) != 0x20)
+	    ipmi_mc_set_sel_device_support(mc, 0);
 	break;
 
     default:
@@ -1909,20 +1917,6 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 
     ents = ipmi_domain_get_entities(domain);
 
-    /* Add a handler for when MCs are added to the domain, so we can
-       add in our custom sensors. */
-    rv = ipmi_domain_register_mc_update_handler(domain,
-						atca_mc_update_handler,
-						info,
-						NULL);
-    if (rv) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%soem_atca.c(shelf_fru_fetched): "
-		 "Could not add MC update handler: %x",
-		 DOMAIN_NAME(domain), rv);
-	goto out;
-    }
-
     /* Create the main shelf entity. */
     name = "ATCA Shelf";
     rv = ipmi_entity_add(ents, domain, 0, 0, 0,
@@ -1959,17 +1953,6 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	b->site_type = info->addresses[i].site_type;
 	b->site_num = info->addresses[i].site_num;
 	ipmi_mc_id_set_invalid(&b->mcid);
-    }
-
-    rv = ipmi_domain_add_entity_update_handler(domain,
-					       atca_entity_update_handler,
-					       info);
-    if (rv) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "%soem_atca.c(shelf_fru_fetched): "
-		 "Could not add entity update handler: %x",
-		 DOMAIN_NAME(domain), rv);
-	goto out;
     }
 
  out:
@@ -2015,6 +1998,33 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     }
     memset(info, 0, sizeof(*info));
 
+    ipmi_domain_set_oem_data(domain, info, atca_oem_data_destroyer);
+
+    /* Add a handler for when MCs are added to the domain, so we can
+       add in our custom sensors. */
+    rv = ipmi_domain_register_mc_update_handler(domain,
+						atca_mc_update_handler,
+						info,
+						NULL);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_atca.c(shelf_fru_fetched): "
+		 "Could not add MC update handler: %x",
+		 DOMAIN_NAME(domain), rv);
+	goto out;
+    }
+
+    rv = ipmi_domain_add_entity_update_handler(domain,
+					       atca_entity_update_handler,
+					       info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_atca.c(shelf_fru_fetched): "
+		 "Could not add entity update handler: %x",
+		 DOMAIN_NAME(domain), rv);
+	goto out;
+    }
+
     info->startup_done = done;
     info->startup_done_cb_data = done_cb_data;
     info->domain = domain;
@@ -2039,8 +2049,6 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	done(domain, done_cb_data);
 	goto out;
     }
-
-    ipmi_domain_set_oem_data(domain, info, atca_oem_data_destroyer);
 
  out:
     return;

@@ -272,7 +272,7 @@ struct ipmi_domain_s
     /* If we are running a domain OEM check, then this will be the
        check that is running.  Otherwise it is NULL. */
     domain_check_oem_t *check;
-	
+
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
 };
