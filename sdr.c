@@ -338,6 +338,7 @@ handle_reservation_check(ipmi_mc_t  *mc,
 
     fetch_complete(sdrs, 0);
  out:
+    return;
 }
 
 /* Must be called with the sdr lock held, it will release it and
@@ -561,6 +562,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
  out_unlock:
     sdr_unlock(sdrs);
  out:
+    return;
 }
 
 static int
@@ -639,6 +641,7 @@ handle_reservation(ipmi_mc_t  *mc,
 
     sdr_unlock(sdrs);
  out:
+    return;
 }
 
 static void
@@ -799,6 +802,7 @@ handle_sdr_info(ipmi_mc_t  *mc,
     }
     sdr_unlock(sdrs);
  out:
+    return;
 }
 
 static int
@@ -1372,6 +1376,7 @@ handle_sdr_write(ipmi_mc_t  *mc,
  out_unlock:
     sdr_unlock(sdrs);
  out:
+    return;
 }
 
 static void
@@ -1444,6 +1449,7 @@ handle_sdr_write_done(ipmi_mc_t  *mc,
  out_unlock:
     sdr_unlock(sdrs);
  out:
+    return;
 }
 
 static void
@@ -1494,6 +1500,7 @@ handle_sdr_clear(ipmi_mc_t  *mc,
     }
     sdr_unlock(sdrs);
  out:
+    return;
 }
 
 static void
@@ -1559,6 +1566,7 @@ handle_save_reservation(ipmi_mc_t  *mc,
     }
     sdr_unlock(sdrs);
  out:
+    return;
 }
 
 static int

@@ -11,7 +11,7 @@ VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
 
 EXTRA_DIST = TODO
 
-AM_CFLAGS = -Wall -Werror -Iinclude -DIPMI_CHECK_LOCKS
+AM_CFLAGS = -Wall -I$(srcdir)/include -DIPMI_CHECK_LOCKS
 SUBDIRS = include
 
 noinst_HEADERS = opq.h ilist.h md5.h md2.h ui_keypad.h ui_command.h

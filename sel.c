@@ -365,6 +365,7 @@ handle_sel_clear(ipmi_mc_t  *mc,
 
     fetch_complete(sel, 0);
  out:
+    return;
 }
 
 static int
@@ -532,6 +533,7 @@ handle_sel_data(ipmi_mc_t  *mc,
  out_unlock:
     sel_unlock(sel);
  out:
+    return;
 }
 
 static void
@@ -645,6 +647,7 @@ handle_sel_info(ipmi_mc_t  *mc,
  out_unlock:
     sel_unlock(sel);
  out:
+    return;
 }
 
 static void
@@ -701,6 +704,7 @@ sel_handle_reservation(ipmi_mc_t  *mc,
     }
     sel_unlock(sel);
  out:
+    return;
 }
 
 static int
@@ -953,6 +957,7 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
 
     sel_unlock(sel);
  out:
+    return;
 }
 
 static int

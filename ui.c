@@ -2002,8 +2002,9 @@ set_control(ipmi_control_t *control, void *cb_data)
 		cmd_win_out("set_control: Returned error 0x%x\n", rv);
 	    }
 	    break;
-	}
+    }
  out:
+    return;
 }
 
 static int
