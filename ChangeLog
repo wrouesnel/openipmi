@@ -1,6 +1,23 @@
 
 2003-04-15 Corey Minyard <cminyard@mvista.com>
 
+	* ipmi_lan.c: Implemented a max outstanding message count to
+	avoid killing a LAN BMC, and implemented a queue to hold extra
+	messages.
+
+2003-04-15 Duncan Laurie <duncan@sun.com>
+
+	* ipmi_lan.c: Fix a couple of bits when the Send Message variant
+	in lan_send is used.  Fix a double-unlock condition that
+	happens with LAN response timeouts.
+
+	* ipmi_lan.c: add a Set Session Privilege Level command to the end
+	of the session setup sequence.  It is required because despite
+	what you use the in the "privilege level" field in Activate
+	Session command it opens in User level.
+
+2003-04-15 Corey Minyard <cminyard@mvista.com>
+
 	* configure.in: Move to version 0.2.6.
 
 	* include/OpenIPMI/ipmi_mc.h, OpenIPMI.texi:  Change the name

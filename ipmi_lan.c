@@ -77,10 +77,26 @@ struct ipmi_ll_event_handler_id_s
 
 typedef struct lan_timer_info_s
 {
-    int          cancelled;
-    ipmi_con_t   *ipmi;
-    unsigned int seq;
+    int               cancelled;
+    ipmi_con_t        *ipmi;
+    os_hnd_timer_id_t *timer;
+    unsigned int      seq;
 } lan_timer_info_t;
+
+typedef struct lan_wait_queue_s
+{
+    lan_timer_info_t      *info;
+    ipmi_addr_t           addr;
+    unsigned int          addr_len;
+    ipmi_msg_t            msg;
+    char                  data[IPMI_MAX_MSG_LENGTH];
+    ipmi_ll_rsp_handler_t rsp_handler;
+    void                  *rsp_data;
+    void                  *data2;
+    void                  *data3;
+
+    struct lan_wait_queue_s *next;
+} lan_wait_queue_t;
 
 typedef struct lan_data_s
 {
@@ -120,6 +136,16 @@ typedef struct lan_data_s
     ipmi_lock_t               *seq_num_lock;
     unsigned int              last_seq;
 
+    /* The number of messages that are outstanding with the remote
+       MC. */
+    unsigned int outstanding_msg_count;
+
+    /* The maximum number of outstanding messages.  This must NEVER be
+       larger than 64. */
+    unsigned int max_outstanding_msg_count;
+
+    /* List of messages waiting to be sent. */
+    lan_wait_queue_t *wait_q, *wait_q_tail;
 
     unsigned int               retries;
     os_hnd_timer_id_t          *timer;
@@ -133,6 +159,8 @@ typedef struct lan_data_s
 
     struct lan_data_s *next, *prev;
 } lan_data_t;
+
+static void check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan);
 
 static lan_data_t *lan_list = NULL;
 
@@ -318,9 +346,9 @@ lan_send(lan_data_t  *lan,
 	tmsg[pos++] = (IPMI_APP_NETFN << 2) | 0;
 	tmsg[pos++] = ipmb_checksum(tmsg, 2);
 	tmsg[pos++] = 0x81; /* Remote console IPMI Software ID */
-	tmsg[pos++] = (seq << 2) | 0x2;
+	tmsg[pos++] = seq << 2;
 	tmsg[pos++] = IPMI_SEND_MSG_CMD;
-	tmsg[pos++] = ipmb_addr->channel;
+	tmsg[pos++] = ipmb_addr->channel & 0xf;
 	if (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
 	    tmsg[pos++] = 0; /* Do a broadcast. */
 	msgstart = pos;
@@ -329,7 +357,7 @@ lan_send(lan_data_t  *lan,
 	tmsg[pos++] = ipmb_checksum(tmsg+msgstart, 2);
 	msgstart = pos;
 	tmsg[pos++] = 0x81;
-	tmsg[pos++] = (seq << 2) | 0x2;
+	tmsg[pos++] = seq << 2;
 	tmsg[pos++] = msg->cmd;
 	memcpy(tmsg+pos, msg->data, msg->data_len);
 	pos += msg->data_len;
@@ -465,9 +493,12 @@ rsp_timeout_handler(void              *cb_data,
     data3 = lan->seq_table[seq].data3;
 
     lan->seq_table[seq].rsp_handler = NULL;
+
+    check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
 
     handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
+    goto out_unlock2;
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
@@ -499,6 +530,125 @@ handle_async_event(ipmi_con_t   *ipmi,
     }
     ipmi_unlock(lan->event_handlers_lock);
 }
+
+/* Must be called with the message sequence lock held. */
+static int
+handle_msg_send(lan_timer_info_t      *info,
+		ipmi_addr_t           *addr,
+		unsigned int          addr_len,
+		ipmi_msg_t            *msg,
+		ipmi_ll_rsp_handler_t rsp_handler,
+		void                  *rsp_data,
+		void                  *data2,
+		void                  *data3)
+
+{
+    ipmi_con_t     *ipmi = info->ipmi;
+    lan_data_t     *lan = ipmi->con_data;
+    unsigned int   seq;
+    struct timeval timeout;
+    int            rv;
+
+    seq = (lan->last_seq + 1) % 64;
+    while (lan->seq_table[seq].rsp_handler != NULL) {
+	if (seq == lan->last_seq) {
+	    /* This cannot really happen if max_outstanding_msg_count <= 64. */
+	    ipmi_log(IPMI_LOG_FATAL,
+		     "ipmi_lan: Attempted to start too many messages");
+	    abort();
+	}
+
+	seq = (seq + 1) % 64;
+    }
+
+    info->seq = seq;
+    lan->seq_table[seq].rsp_handler = rsp_handler;
+    lan->seq_table[seq].rsp_data = rsp_data;
+    lan->seq_table[seq].data2 = data2;
+    lan->seq_table[seq].data3 = data3;
+    memcpy(&(lan->seq_table[seq].addr), addr, addr_len);
+    lan->seq_table[seq].addr_len = addr_len;
+    lan->seq_table[seq].msg = *msg;
+    lan->seq_table[seq].msg.data = lan->seq_table[seq].data;
+    memcpy(lan->seq_table[seq].data, msg->data, msg->data_len);
+    lan->seq_table[seq].timer_info = info;
+    lan->seq_table[seq].retries = 0;
+
+    timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
+    timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
+    lan->seq_table[seq].timer = info->timer;
+    rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				   lan->seq_table[seq].timer,
+				   &timeout,
+				   rsp_timeout_handler,
+				   info);
+    if (rv) {
+	lan->seq_table[seq].rsp_handler = NULL;
+	goto out;
+    }
+
+    rv = lan_send(lan, addr, addr_len, msg, seq);
+    if (rv) {
+	int err;
+
+	lan->seq_table[seq].rsp_handler = NULL;
+	err = ipmi->os_hnd->stop_timer(ipmi->os_hnd,
+				       lan->seq_table[seq].timer);
+	/* Special handling, if we can't remove the timer, then it
+           will time out on us, so we need to not free the command and
+           instead let the timeout handle freeing it. */
+	if (err) {
+	    info->cancelled = 1;
+	}
+    }
+ out:
+    return rv;
+}
+
+static void
+check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
+{
+    int              rv;
+    lan_wait_queue_t *q_item;
+    int              started = 0;
+
+    while (!started && (lan->wait_q != NULL)) {
+	/* Commands are waiting to be started, remove the queue item
+           and start it. */
+	q_item = lan->wait_q;
+	lan->wait_q = q_item->next;
+	if (lan->wait_q == NULL)
+	    lan->wait_q_tail = NULL;
+
+	rv = handle_msg_send(q_item->info, &q_item->addr, q_item->addr_len,
+			     &(q_item->msg), q_item->rsp_handler,
+			     q_item->rsp_data, q_item->data2, q_item->data3);
+	if (rv) {
+	    /* Send an error response to the user. */
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "Command was not able to be sent due to error 0x%x", rv);
+	    
+	    q_item->msg.netfn |= 1; /* Convert it to a response. */
+	    q_item->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
+	    q_item->msg.data_len = 1;
+	    q_item->rsp_handler(ipmi, &q_item->addr, q_item->addr_len,
+				&q_item->msg, q_item->rsp_data, q_item->data2,
+				q_item->data3);
+	    if (! q_item->info->cancelled) {
+		ipmi->os_hnd->free_timer(ipmi->os_hnd, q_item->info->timer);
+		ipmi_mem_free(q_item->info);
+	    }
+	} else {
+	    /* We successfully sent a message, break out of the loop. */
+	    started = 1;
+	}
+	ipmi_mem_free(q_item);
+    }
+
+    if (!started)
+	lan->outstanding_msg_count--;
+}
+
 
 static void
 data_handler(int            fd,
@@ -709,6 +859,8 @@ data_handler(int            fd,
     data2 = lan->seq_table[seq].data2;
     data3 = lan->seq_table[seq].data3;
     lan->seq_table[seq].rsp_handler = NULL;
+
+    check_command_queue(ipmi, lan);
     ipmi_unlock(lan->seq_num_lock);
 
     handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
@@ -733,9 +885,7 @@ lan_send_command(ipmi_con_t            *ipmi,
 {
     lan_timer_info_t *info;
     lan_data_t       *lan;
-    struct timeval   timeout;
     int              rv;
-    unsigned int     seq;
 
 
     lan = (lan_data_t *) ipmi->con_data;
@@ -754,72 +904,67 @@ lan_send_command(ipmi_con_t            *ipmi,
     info->ipmi = ipmi;
     info->cancelled = 0;
 
+    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(info->timer));
+    if (rv) {
+	ipmi_mem_free(info);
+	return rv;
+    }
+
     ipmi_lock(lan->seq_num_lock);
-    seq = (lan->last_seq + 1) % 64;
-    while (lan->seq_table[seq].rsp_handler != NULL) {
-	if (seq == lan->last_seq) {
-	    rv = EAGAIN;
+
+    if (lan->outstanding_msg_count >= lan->max_outstanding_msg_count) {
+	lan_wait_queue_t *q_item;
+
+	q_item = ipmi_mem_alloc(sizeof(*q_item));
+	if (!q_item) {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+	    rv = ENOMEM;
 	    goto out_unlock;
 	}
 
-	seq = (seq + 1) % 64;
-    }
+	q_item->info = info;
+	memcpy(&(q_item->addr), addr, addr_len);
+	q_item->addr_len = addr_len;
+	memcpy(&q_item->msg, msg, sizeof(q_item->msg));
+	q_item->msg.data = q_item->data;
+	memcpy(q_item->data, msg->data, msg->data_len);
+	q_item->rsp_handler = rsp_handler;
+	q_item->rsp_data = rsp_data;
+	q_item->data2 = data2;
+	q_item->data3 = data3;
 
-    info->seq = seq;
-    lan->seq_table[seq].rsp_handler = rsp_handler;
-    lan->seq_table[seq].rsp_data = rsp_data;
-    lan->seq_table[seq].data2 = data2;
-    lan->seq_table[seq].data3 = data3;
-    memcpy(&(lan->seq_table[seq].addr), addr, addr_len);
-    lan->seq_table[seq].addr_len = addr_len;
-    lan->seq_table[seq].msg = *msg;
-    lan->seq_table[seq].msg.data = lan->seq_table[seq].data;
-    memcpy(lan->seq_table[seq].data, msg->data, msg->data_len);
-    lan->seq_table[seq].timer_info = info;
-    lan->seq_table[seq].retries = 0;
-
-    timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
-    timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
-    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd,
-				   &(lan->seq_table[seq].timer));
-    if (!rv) {
-	rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
-				       lan->seq_table[seq].timer,
-				       &timeout,
-				       rsp_timeout_handler,
-				       info);
-	if (rv)
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd,
-				     lan->seq_table[seq].timer);
-    }
-    if (rv) {
-	lan->seq_table[seq].rsp_handler = NULL;
-	goto out_unlock;
-    }
-
-    rv = lan_send(lan, addr, addr_len, msg, seq);
-    if (rv) {
-	int err;
-
-	lan->seq_table[seq].rsp_handler = NULL;
-	err = ipmi->os_hnd->stop_timer(ipmi->os_hnd,
-				       lan->seq_table[seq].timer);
-	/* Special handling, if we can't remove the timer, then it
-           will time out on us, so we need to not free the command and
-           instead let the timeout handle freeing it. */
-	if (err) {
-	    info->cancelled = 1;
-	    info = NULL;
+	/* Add it to the end of the queue. */
+	q_item->next = NULL;
+	if (lan->wait_q_tail == NULL) {
+	    lan->wait_q_tail = q_item;
+	    lan->wait_q = q_item;
 	} else {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd,
-				     lan->seq_table[seq].timer);
+	    lan->wait_q_tail->next = q_item;
+	    lan->wait_q_tail = q_item;
 	}
 	goto out_unlock;
+    }
+
+    rv = handle_msg_send(info, addr, addr_len, msg, rsp_handler, rsp_data,
+			 data2, data3);
+    if (rv) {
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+    }
+
+    if (rv) {
+	if (info->cancelled)
+	    /* The timer couldn't be stopped, so don't let the data be
+	       freed. */
+	    info = NULL;
+	else
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+    } else {
+	lan->outstanding_msg_count++;
     }
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
-    if ((rv) && (info))
+    if ((info) && (rv))
 	ipmi_mem_free(info);
     return rv;
 }
@@ -980,18 +1125,75 @@ lan_close_connection(ipmi_con_t *ipmi)
     ipmi_lock(lan->seq_num_lock);
     for (i=0; i<64; i++) {
 	if (lan->seq_table[i].rsp_handler) {
+	    ipmi_addr_t           addr;
+	    unsigned int          addr_len;
+	    ipmi_ll_rsp_handler_t handler;
+	    void                  *rsp_data;
+	    void                  *data2;
+	    void                  *data3;
+	    lan_timer_info_t      *info;
+	    unsigned char         data[0];
+	    ipmi_msg_t            msg;
+
 	    rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd,
 					  lan->seq_table[i].timer);
-	    if (rv)
-		lan->seq_table[i].timer_info->cancelled = 1;
-	    else {
-		ipmi->os_hnd->free_timer(ipmi->os_hnd,
-					 lan->seq_table[i].timer);
-		ipmi_mem_free(lan->seq_table[i].timer_info);
-	    }
+
+	    memcpy(&addr, &(lan->seq_table[i].addr),
+		   lan->seq_table[i].addr_len);
+	    addr_len = lan->seq_table[i].addr_len;
+	    handler = lan->seq_table[i].rsp_handler;
+	    rsp_data = lan->seq_table[i].rsp_data;
+	    data2 = lan->seq_table[i].data2;
+	    data3 = lan->seq_table[i].data3;
+	    info = lan->seq_table[i].timer_info;
+
+	    msg.netfn = lan->seq_table[i].msg.netfn | 1;
+	    msg.cmd = lan->seq_table[i].msg.cmd;
+	    msg.data = data;
+	    data[0] = IPMI_UNKNOWN_ERR_CC;
+	    msg.data_len = 1;
 
 	    lan->seq_table[i].rsp_handler = NULL;
+
+	    ipmi_unlock(lan->seq_num_lock);
+
+	    /* The unlock is safe here because the connection is no
+               longer valid and thus nothing else can really happen on
+               this connection.  Sends will fail and receives will not
+               validate. */
+	    handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
+
+	    if (rv)
+		info->cancelled = 1;
+	    else {
+		ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+		ipmi_mem_free(info);
+	    }
+
+	    ipmi_lock(lan->seq_num_lock);
 	}
+    }
+    while (lan->wait_q != NULL) {
+	lan_wait_queue_t *q_item;
+
+	q_item = lan->wait_q;
+	lan->wait_q = q_item->next;
+
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, q_item->info->timer);
+
+	ipmi_unlock(lan->seq_num_lock);
+
+	q_item->msg.netfn |= 1; /* Convert it to a response. */
+	q_item->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
+	q_item->msg.data_len = 1;
+	q_item->rsp_handler(ipmi, &q_item->addr, q_item->addr_len,
+			    &q_item->msg, q_item->rsp_data, q_item->data2,
+			    q_item->data3);
+
+	ipmi_lock(lan->seq_num_lock);
+
+	ipmi_mem_free(q_item->info);
+	ipmi_mem_free(q_item);
     }
     ipmi_unlock(lan->seq_num_lock);
 
@@ -1064,6 +1266,76 @@ cleanup_con(ipmi_con_t *ipmi)
     }
 }
 
+static void session_privilege_set(ipmi_con_t   *ipmi,
+				  ipmi_addr_t  *addr,
+				  unsigned int addr_len,
+				  ipmi_msg_t   *msg,
+				  void         *rsp_data,
+				  void         *data2,
+				  void         *data3)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        rv;
+
+    if (msg->data[0] != 0) {
+	if (ipmi->setup_cb)
+	    ipmi->setup_cb(NULL,
+			   ipmi->setup_cb_data,
+			   IPMI_IPMI_ERR_VAL(msg->data[0]));
+	cleanup_con(ipmi);
+	return;
+    }
+
+    if (msg->data_len < 2) {
+	if (ipmi->setup_cb)
+	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
+	cleanup_con(ipmi);
+	return;
+    }
+
+    if (lan->privilege != (msg->data[1] & 0xf)) {
+	/* Requested privilege level did not match. */
+	if (ipmi->setup_cb)
+	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
+	cleanup_con(ipmi);
+	return;
+    }
+
+    /* Assume we are at address 0x20, the OEM code can fix it up if
+       necessary. */
+    rv = ipmi_init_con(ipmi, addr, addr_len, 0x20);
+    if (rv) {
+	if (ipmi->setup_cb)
+	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
+	cleanup_con(ipmi);
+    }
+}
+
+static int
+send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan)
+{
+    unsigned char		 data[IPMI_MAX_MSG_LENGTH];
+    ipmi_msg_t			 msg;
+    int				 rv;
+    ipmi_system_interface_addr_t addr;
+
+    addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    addr.channel = 0xf;
+    addr.lun = 0;
+
+    data[0] = lan->privilege;
+
+    msg.cmd = IPMI_SET_SESSION_PRIVILEGE_CMD;
+    msg.netfn = IPMI_APP_NETFN;
+    msg.data = data;
+    msg.data_len = 1;
+
+    rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
+			  &msg, session_privilege_set,
+			  NULL, NULL, NULL);
+    return rv;
+}
+
 static void session_activated(ipmi_con_t   *ipmi,
 			      ipmi_addr_t  *addr,
 			      unsigned int addr_len,
@@ -1106,12 +1378,10 @@ static void session_activated(ipmi_con_t   *ipmi,
     lan->session_id = ipmi_get_uint32(msg->data+2);
     lan->outbound_seq_num = ipmi_get_uint32(msg->data+6);
 
-    /* Assume we are at address 0x20, the OEM code can fix it up if
-       necessary. */
-    rv = ipmi_init_con(ipmi, addr, addr_len, 0x20);
+    rv = send_set_session_privilege(ipmi, lan);
     if (rv) {
 	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
+	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
 	cleanup_con(ipmi);
     }
 }
@@ -1370,6 +1640,10 @@ ipmi_lan_setup_con(struct in_addr    addr,
     lan->addr.sin_family = AF_INET;
     lan->addr.sin_port = htons(port);
     lan->addr.sin_addr = addr;
+    lan->outstanding_msg_count = 0;
+    lan->max_outstanding_msg_count = 10;
+    lan->wait_q = NULL;
+    lan->wait_q_tail = NULL;
 
     lan->fd = open_lan_fd();
     if (lan->fd == -1) {
