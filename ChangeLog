@@ -1,6 +1,10 @@
 
 2003-04-30 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv.c: Modified the server to support two LAN connections
+	specified in the config file, and modified it to always return the
+	message from the file descriptor that received the message.
+
 	* mc.c: Modified the SEL time code to set the time on the SEL,
 	not get the time, so the SEL time will be correct.
 

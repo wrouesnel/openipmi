@@ -42,6 +42,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <netdb.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <popt.h> /* Option parsing made easy */
@@ -58,7 +59,7 @@
 
 typedef struct misc_data
 {
-    int lan_fd;
+    int lan1_fd, lan2_fd;
     int smi_fd;
     char *config_file;
 } misc_data_t;
@@ -75,24 +76,31 @@ ifree(lan_data_t *lan, void *data)
     return free(data);
 }
 
+typedef struct lan_addr_s
+{
+    struct sockaddr addr;
+    socklen_t       addr_len;
+    int             xmit_fd;
+} lan_addr_t;
+
 static void
 lan_send(lan_data_t *lan,
 	 struct iovec *data, int vecs,
 	 void *addr, int addr_len)
 {
     struct msghdr msg;
-    misc_data_t   *info = lan->user_info;
+    lan_addr_t    *l = addr;
     int           rv;
 
-    msg.msg_name = addr;
-    msg.msg_namelen = addr_len;
+    msg.msg_name = &(l->addr);
+    msg.msg_namelen = l->addr_len;
     msg.msg_iov = data;
     msg.msg_iovlen = vecs;
     msg.msg_control = NULL;
     msg.msg_controllen = 0;
     msg.msg_flags = 0;
 
-    rv = sendmsg(info->lan_fd, &msg, 0);
+    rv = sendmsg(l->xmit_fd, &msg, 0);
     if (rv) {
 	/* FIXME - log an error. */
     }
@@ -240,12 +248,10 @@ static void
 handle_msg_lan(int lan_fd, lan_data_t *lan)
 {
     int                len;
-    struct sockaddr    from_addr;
-    socklen_t          from_len;
+    lan_addr_t         l;
     unsigned char      data[256];
 
-    from_len = sizeof(from_addr);
-    len = recvfrom(lan_fd, data, sizeof(data), 0, &from_addr, &from_len);
+    len = recvfrom(lan_fd, data, sizeof(data), 0, &(l.addr), &(l.addr_len));
     if (len < 0) {
 	if (errno != EINTR) {
 	    perror("Error receiving message");
@@ -253,6 +259,7 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
 	}
 	return;
     }
+    l.xmit_fd = lan_fd;
 
     if (len < 4)
 	return;
@@ -263,11 +270,11 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
     /* Check the message class. */
     switch (data[3]) {
 	case 6:
-	    handle_asf(lan, data, len, &from_addr, from_len);
+	    handle_asf(lan, data, len, &l, sizeof(l));
 	    break;
 
 	case 7:
-	    ipmi_handle_lan_msg(lan, data, len, &from_addr, from_len);
+	    ipmi_handle_lan_msg(lan, data, len, &l, sizeof(l));
 	    break;
     }
 }
@@ -455,6 +462,42 @@ get_user(char **tokptr, lan_data_t *lan)
     return 0;
 }
 
+static int
+get_sock_addr(char **tokptr, struct sockaddr *addr)
+{
+    struct sockaddr_in *a = (void *) addr;
+    struct hostent     *ent;
+    char               *s;
+    char               *end;
+
+    s = strtok_r(NULL, " \t\n", tokptr);
+    if (!s)
+	return -1;
+
+    ent = gethostbyname(s);
+    if (!ent)
+	return -1;
+
+    a->sin_family = AF_INET;
+    memcpy(&(a->sin_addr), ent->h_addr_list[0], ent->h_length);
+
+    s = strtok_r(NULL, " \t\n", tokptr);
+    if (s) {
+	a->sin_port = strtoul(s, &end, 0);
+	if (*end != '\0')
+	    return -1;
+    } else {
+	a->sin_port = 623;
+    }
+
+    return 0;
+}
+
+struct sockaddr addr1;
+socklen_t addr1_len = 0;
+struct sockaddr addr2;
+socklen_t addr2_len = 0;
+
 #define MAX_CONFIG_LINE 256
 static int
 read_config(lan_data_t *lan)
@@ -502,6 +545,10 @@ read_config(lan_data_t *lan)
 	} else if (strcmp(tok, "allowed_auths_admin") == 0) {
 	    err = get_auths(&tokptr, &val);
 	    lan->channel.priv_info[3].allowed_auths = val;
+	} else if (strcmp(tok, "addr1") == 0) {
+	    err = get_sock_addr(&tokptr, &addr1);
+	} else if (strcmp(tok, "addr2") == 0) {
+	    err = get_sock_addr(&tokptr, &addr2);
 	} else if (strcmp(tok, "user") == 0) {
 	    err = get_user(&tokptr, lan);
 	} else if (strcmp(tok, "guid") == 0) {
@@ -546,10 +593,9 @@ ipmi_open(char *ipmi_dev)
 }
 
 static int
-open_lan_fd(int port)
+open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 {
     int                fd;
-    struct sockaddr_in addr;
     int                rv;
 
     fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -558,15 +604,11 @@ open_lan_fd(int port)
 	exit(1);
     }
 
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
+    rv = bind(fd, addr, addr_len);
     if (rv == -1)
     {
-	fprintf(stderr, "Unable to bind to LAN port (%d): %s\n",
-		port, strerror(errno));
+	fprintf(stderr, "Unable to bind to LAN port: %s\n",
+		strerror(errno));
 	exit(1);
     }
 
@@ -625,22 +667,12 @@ log(int logtype, msg_t *msg, char *format, ...)
     va_end(ap);
 }
 
-static int lan_port = 623;
 static char *config_file = "/etc/ipmi_lan.conf";
 static char *ipmi_dev = NULL;
 static int debug = 0;
 
 static struct poptOption poptOpts[]=
 {
-    {
-	"port",
-	'p',
-	POPT_ARG_INT,
-	&lan_port,
-	'p',
-	"port number (default 623)",
-	""
-    },
     {
 	"config-file",
 	'c',
@@ -703,7 +735,18 @@ main(int argc, const char *argv[])
     }
 
     data.smi_fd = ipmi_open(ipmi_dev);
-    data.lan_fd = open_lan_fd(lan_port);
+
+    if (addr1_len == 0) {
+	struct sockaddr_in *addr = (void *) &addr1;
+	addr->sin_family = AF_INET;
+	addr->sin_port = htons(623);
+	addr->sin_addr.s_addr = INADDR_ANY;
+	addr1_len = sizeof(*addr);
+    }
+    data.lan1_fd = open_lan_fd(&addr1, addr1_len);
+    if (addr2_len != 0) {
+	data.lan2_fd = open_lan_fd(&addr2, addr2_len);
+    }
     data.config_file = config_file;
 
     memset(&lan, 0, sizeof(lan));
@@ -725,10 +768,14 @@ main(int argc, const char *argv[])
 
     syslog(LOG_INFO, "%s startup", argv[0]);
 
-    if (data.lan_fd > data.smi_fd)
-	max_fd = data.lan_fd + 1;
-    else
+    if (data.lan1_fd > data.smi_fd) {
+	if (data.lan1_fd > data.lan2_fd)
+	    max_fd = data.lan1_fd + 1;
+	else
+	    max_fd = data.lan2_fd + 1;
+    } else {
 	max_fd = data.smi_fd + 1;
+    }
 
     gettimeofday(&time_next, NULL);
     time_next.tv_sec += 10;
@@ -737,7 +784,8 @@ main(int argc, const char *argv[])
 
 	FD_ZERO(&readfds);
 	FD_SET(data.smi_fd, &readfds);
-	FD_SET(data.lan_fd, &readfds);
+	FD_SET(data.lan2_fd, &readfds);
+	FD_SET(data.lan1_fd, &readfds);
 
 	gettimeofday(&time_now, NULL);
 	diff_timeval(&timeout, &time_next, &time_now);
@@ -753,8 +801,12 @@ main(int argc, const char *argv[])
 		handle_msg_ipmi(data.smi_fd, &lan);
 	    }
 
-	    if (FD_ISSET(data.lan_fd, &readfds)) {
-		handle_msg_lan(data.lan_fd, &lan);
+	    if (FD_ISSET(data.lan1_fd, &readfds)) {
+		handle_msg_lan(data.lan1_fd, &lan);
+	    }
+
+	    if (FD_ISSET(data.lan2_fd, &readfds)) {
+		handle_msg_lan(data.lan2_fd, &lan);
 	    }
 	}
     }
