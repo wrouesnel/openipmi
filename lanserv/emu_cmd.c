@@ -307,6 +307,37 @@ sensor_set_bit(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
+sensor_set_bit_clr_rest(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    int           rv;
+    unsigned char lun;
+    unsigned char num;
+    unsigned char bit;
+    unsigned char gen_event;
+
+    rv = get_uchar(toks, &lun, "LUN", 0);
+    if (rv)
+	return rv;
+
+    rv = get_uchar(toks, &num, "sensor num", 0);
+    if (rv)
+	return rv;
+
+    rv = get_uchar(toks, &bit, "bit to set", 0);
+    if (rv)
+	return rv;
+
+    rv = get_uchar(toks, &gen_event, "generate event", 0);
+    if (rv)
+	return rv;
+
+    rv = ipmi_mc_sensor_set_bit_clr_rest(mc, lun, num, bit, gen_event);
+    if (rv)
+	printf("**Unable to set sensor bit, error 0x%x\n", rv);
+    return rv;
+}
+
+static int
 sensor_set_value(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -640,6 +671,22 @@ atca_set_site(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
+mc_set_num_leds(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    int           rv;
+    unsigned char count;
+
+    rv = get_uchar(toks, &count, "number of LEDs", 0);
+    if (rv)
+	return rv;
+
+    rv = ipmi_mc_set_num_leds(mc, count);
+    if (rv)
+	printf("**Unable to set number of LEDs, error 0x%x\n", rv);
+    return rv;
+}
+
+static int
 read_cmds(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     char *filename = strtok_r(NULL, " \t\n", toks);
@@ -674,12 +721,14 @@ static struct {
     { "device_sdr_add",	MC,		device_sdr_add },
     { "sensor_add",     MC,             sensor_add },
     { "sensor_set_bit", MC,             sensor_set_bit },
+    { "sensor_set_bit_clr_rest", MC,        sensor_set_bit_clr_rest },
     { "sensor_set_value", MC,           sensor_set_value },
     { "sensor_set_hysteresis", MC,      sensor_set_hysteresis },
     { "sensor_set_threshold", MC,       sensor_set_threshold },
     { "sensor_set_event_support", MC,   sensor_set_event_support },
     { "mc_set_power",   MC,		mc_set_power },
     { "mc_add_fru_data",MC,		mc_add_fru_data },
+    { "mc_set_num_leds",MC,		mc_set_num_leds },
     { "mc_add",		NOMC,		mc_add },
     { "mc_setbmc",      NOMC,		mc_setbmc },
     { "atca_enable",    NOMC,	        atca_enable },

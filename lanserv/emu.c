@@ -118,7 +118,8 @@ typedef struct sdrs_s
     sdr_t         *sdrs;
 } sdrs_t;
 
-typedef struct sensor_s
+typedef struct sensor_s sensor_t;
+struct sensor_s
 {
     unsigned char num;
     unsigned int  lun              : 2;
@@ -144,13 +145,30 @@ typedef struct sensor_s
     unsigned char event_enabled[2][15];
 
     unsigned char event_status[15];
-} sensor_t;
+
+    /* Called when the sensor changes values. */
+    void (*sensor_update_handler)(lmc_data_t *mc, sensor_t *sensor);
+};
 
 typedef struct fru_data_s
 {
     unsigned int  length;
     unsigned char *data;
 } fru_data_t;
+
+typedef struct led_data_s
+{
+    unsigned char off_dur;
+    unsigned char def_off_dur;
+    unsigned char on_dur;
+    unsigned char def_on_dur;
+    unsigned char color;
+    unsigned char color_sup;
+    unsigned char loc_cnt;
+    unsigned char loc_cnt_sup;
+    unsigned char def_loc_cnt_color;
+    unsigned char def_override_color;
+} led_data_t;
 
 struct lmc_data_s
 {
@@ -189,9 +207,13 @@ struct lmc_data_s
     fru_data_t frus[255];
 
     unsigned char power_value;
-    unsigned char leds[8];
-    unsigned char leds_on_dur[8];
-    unsigned char leds_color[8];
+#define MAX_LEDS 8
+#define MIN_ATCA_LEDS 2
+    unsigned int  num_leds;
+    led_data_t leds[MAX_LEDS];
+
+    /* Will be NULL if not valid. */
+    sensor_t      *hs_sensor;
 };
 
 typedef struct atca_site_s
@@ -210,6 +232,8 @@ struct emu_data_s
     int         atca_mode;
     atca_site_t atca_sites[128]; /* Indexed by HW address. */
 };
+
+static void picmg_led_set(lmc_data_t *mc, sensor_t *sensor);
 
 /* Device ID support bits */
 #define IPMI_DEVID_CHASSIS_DEVICE	(1 << 7)
@@ -2368,6 +2392,43 @@ ipmi_mc_sensor_set_bit(lmc_data_t   *mc,
     sensor = mc->sensors[lun][sens_num];
 
     set_bit(mc, sensor, bit, value, gen_event);
+
+    if (sensor->sensor_update_handler)
+	sensor->sensor_update_handler(mc, sensor);
+
+    return 0;
+}
+
+int
+ipmi_mc_sensor_set_bit_clr_rest(lmc_data_t   *mc,
+				unsigned char lun,
+				unsigned char sens_num,
+				unsigned char bit,
+				int           gen_event)
+{
+    sensor_t *sensor;
+    int      i;
+
+    if ((lun >= 4) || (sens_num >= 255) || (!mc->sensors[lun][sens_num]))
+	return EINVAL;
+
+    if (bit >= 15)
+	return EINVAL;
+
+    sensor = mc->sensors[lun][sens_num];
+
+    /* Clear all the other bits. */
+    for (i=0; i<15; i++) {
+	if ((i != bit) && (sensor->event_status[i]))
+	    set_bit(mc, sensor, i, 0, gen_event);
+    }
+
+    sensor->value = bit;
+    set_bit(mc, sensor, bit, 1, gen_event);
+
+    if (sensor->sensor_update_handler)
+	sensor->sensor_update_handler(mc, sensor);
+
     return 0;
 }
 
@@ -2386,7 +2447,12 @@ ipmi_mc_sensor_set_value(lmc_data_t    *mc,
     sensor = mc->sensors[lun][sens_num];
 
     sensor->value = value;
+
+    if (sensor->sensor_update_handler)
+	sensor->sensor_update_handler(mc, sensor);
+
     check_thresholds(mc, sensor, gen_event);
+
     return 0;
 }
 
@@ -2486,6 +2552,12 @@ ipmi_mc_add_sensor(lmc_data_t    *mc,
     sensor->sensor_type = type;
     sensor->event_reading_code = event_reading_code;
     mc->sensors[lun][sens_num] = sensor;
+
+    if (mc->emu->atca_mode && (type == 0xf0)) {
+	/* This is the ATCA hot-swap sensor. */
+	mc->hs_sensor = sensor;
+	sensor->sensor_update_handler = picmg_led_set;
+    }
 
     return 0;
 }
@@ -2639,7 +2711,7 @@ handle_set_hs_led(lmc_data_t    *mc,
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
 
-    mc->leds[0] = msg->data[0];
+    mc->leds[0].color = msg->data[0];
 
     printf("Setting hotswap LED to %d\n", msg->data[0]);
 
@@ -2654,7 +2726,7 @@ handle_get_hs_led(lmc_data_t    *mc,
 		  unsigned int  *rdata_len)
 {
     rdata[0] = 0;
-    rdata[1] = mc->leds[0];
+    rdata[1] = mc->leds[0].color;
     *rdata_len = 2;
 }
 
@@ -2824,8 +2896,17 @@ handle_picmg_cmd_get_fru_led_properties(lmc_data_t    *mc,
 
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
-    rdata[2] = 0xf; /* We support the first 4 LEDs. */
-    rdata[3] = 0x4; /* We support 4 more LEDs. */
+    if (mc->num_leds <= 2) {
+	mc->num_leds = 2;
+	rdata[2] = 0x03; /* We support the first 2 LEDs. */
+	rdata[3] = 0x00;
+    } else if (mc->num_leds == 3) {
+	rdata[2] = 0x07; /* We support the first 3 LEDs. */
+	rdata[3] = 0x00;
+    } else {
+	rdata[2] = 0xf; /* We support the first 4 LEDs. */
+	rdata[3] = mc->num_leds = 4; /* How many more do we support? */
+    }
     *rdata_len = 4;
 }
 
@@ -2835,6 +2916,8 @@ handle_picmg_cmd_get_led_color_capabilities(lmc_data_t    *mc,
 					    unsigned char *rdata,
 					    unsigned int  *rdata_len)
 {
+    unsigned int led;
+
     if (check_msg_length(msg, 3, rdata, rdata_len))
 	return;
 
@@ -2844,7 +2927,8 @@ handle_picmg_cmd_get_led_color_capabilities(lmc_data_t    *mc,
 	return;
     }
 
-    if (msg->data[2] >= 8) {
+    led = msg->data[2];
+    if (led >= mc->num_leds) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
@@ -2852,22 +2936,61 @@ handle_picmg_cmd_get_led_color_capabilities(lmc_data_t    *mc,
 
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
+    rdata[2] = mc->leds[led].color_sup;
+    rdata[3] = mc->leds[led].def_loc_cnt_color;
+    rdata[4] = mc->leds[led].def_override_color;
 
-    switch (msg->data[2]) {
+    *rdata_len = 5;
+}
+
+static void
+picmg_led_set(lmc_data_t *mc, sensor_t *sensor)
+{
+    printf("ATCA hot-swap state is %d\n", sensor->value);
+
+    switch (sensor->value) {
     case 0:
-	rdata[2] = 0x2; /* supports blue */
-	rdata[3] = 0x1; /* def LC blue */
-	rdata[4] = 0x1; /* def override blue */
+    case 3:
+    case 4:
+	/* off */
+	mc->leds[0].def_off_dur = 0;
+	mc->leds[0].def_on_dur = 0;
 	break;
 
-    default:
-	rdata[2] = 0x4; /* supports red */
-	rdata[3] = 0x2; /* def LC red */
-	rdata[4] = 0x2; /* def override red */
+    case 1:
+	/* on */
+	mc->leds[0].def_off_dur = 0xff;
+	mc->leds[0].def_on_dur = 0;
+	break;
+
+    case 2:
+	/* long blink */
+	mc->leds[0].def_off_dur = 10;
+	mc->leds[0].def_on_dur = 90;
+	break;
+
+    case 5:
+    case 6:
+	/* short blink */
+	mc->leds[0].def_off_dur = 90;
+	mc->leds[0].def_on_dur = 10;
+	break;
+		
+    case 7:
+	/* Nothing to do */
 	break;
     }
 
-    *rdata_len = 5;
+    if (mc->leds[0].loc_cnt) {
+	mc->leds[0].off_dur = mc->leds[0].def_off_dur;
+	mc->leds[0].on_dur = mc->leds[0].def_on_dur;
+	printf("Setting ATCA LED %d to %s %x %x %x\n",
+	       0,
+	       mc->leds[0].loc_cnt ? "local_control" : "override",
+	       mc->leds[0].off_dur,
+	       mc->leds[0].on_dur,
+	       mc->leds[0].color);
+    }
 }
 
 static void
@@ -2888,24 +3011,50 @@ handle_picmg_cmd_set_fru_led_state(lmc_data_t    *mc,
     }
 
     led = msg->data[2];
-    if (led >= 8) {
+    if (led >= mc->num_leds) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    mc->leds[led] = msg->data[3];
-    mc->leds_on_dur[led] = msg->data[4];
-    if (msg->data[5] == 0xf) {
-	if (led == 0)
-	    mc->leds_color[led] = 1;
-	else
-	    mc->leds_color[led] = 2;
-    }else if (msg->data[5] != 0xe)
-	mc->leds_color[led] = msg->data[5];
+    switch (msg->data[3]) {
+    case 0xfc: /* Local control */
+	if (!mc->leds[led].loc_cnt_sup) {
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	    return;
+	}
 
-    printf("Setting ATCA LED to %x %x %x\n",
-	   msg->data[3], msg->data[4], msg->data[5]);
+	mc->leds[led].loc_cnt = 1;
+
+	mc->leds[led].off_dur = mc->leds[led].def_off_dur;
+	mc->leds[led].on_dur = mc->leds[led].def_on_dur;
+	mc->leds[led].color = mc->leds[led].def_loc_cnt_color;
+	break;
+
+    case 0xfb:
+    case 0xfd:
+    case 0xfe:
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+
+    default: /* Override mode */
+	mc->leds[led].loc_cnt = 0;
+	mc->leds[led].off_dur = msg->data[3];
+	mc->leds[led].on_dur = msg->data[4];
+	if (msg->data[5] == 0xf)
+	    mc->leds[led].color = mc->leds[led].def_override_color;
+	else if (msg->data[5] != 0xe) /* 0xe is don't change. */
+	    mc->leds[led].color = msg->data[5];
+    }
+
+    printf("Setting ATCA LED %d to %s %x %x %x\n",
+	   led,
+	   mc->leds[led].loc_cnt ? "local_control" : "override",
+	   mc->leds[led].off_dur,
+	   mc->leds[led].on_dur,
+	   mc->leds[led].color);
 
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
@@ -2930,36 +3079,31 @@ handle_picmg_cmd_get_fru_led_state(lmc_data_t    *mc,
     }
 
     led = msg->data[2];
-    if (led >= 8) {
+    if (led >= mc->num_leds) {
 	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
 	*rdata_len = 1;
 	return;
     }
 
-    /* Make sure it is initialized to a valid value. */
-    if (mc->leds_color[led] == 0) {
-	if (led == 0)
-	    mc->leds_color[led] = 1;
-	else
-	    mc->leds_color[led] = 2;
-    }
-
     rdata[0] = 0;
     rdata[1] = IPMI_PICMG_GRP_EXT;
-    if (mc->leds[led] == 0xfc) {
-	rdata[2] = 0x00; /* Local control. */
-	rdata[3] = 0; /* LED is always off. */
-	rdata[4] = 0;
-	rdata[5] = 1;
+    rdata[2] = 0x00;
+    if (mc->leds[led].loc_cnt_sup)
+	rdata[2] |= 0x04; /* Local control support */
+
+    if (mc->leds[led].loc_cnt) {
+	rdata[3] = mc->leds[led].off_dur;
+	rdata[4] = mc->leds[led].on_dur;
+	rdata[5] = mc->leds[led].color;
 	*rdata_len = 6;
     } else {
-	rdata[2] = 0x02; /* override state. */
-	rdata[3] = 0;
-	rdata[4] = 0;
-	rdata[5] = 0;
-	rdata[6] = mc->leds[led];
-	rdata[7] = mc->leds_on_dur[led];
-	rdata[8] = mc->leds_color[led];
+	rdata[2] |= 0x02; /* override state. */
+	rdata[3] = mc->leds[led].def_off_dur;
+	rdata[4] = mc->leds[led].def_on_dur;
+	rdata[5] = mc->leds[led].def_loc_cnt_color;
+	rdata[6] = mc->leds[led].off_dur;
+	rdata[7] = mc->leds[led].on_dur;
+	rdata[8] = mc->leds[led].color;
 	*rdata_len = 9;
     }
 }
@@ -3015,7 +3159,62 @@ handle_picmg_cmd_set_fru_activation(lmc_data_t    *mc,
 				    unsigned char *rdata,
 				    unsigned int  *rdata_len)
 {
-    handle_invalid_cmd(mc, rdata, rdata_len);
+    int      op;
+    sensor_t *hssens;
+
+    if (check_msg_length(msg, 3, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 0) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (! mc->hs_sensor) {
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	return;
+    }
+
+    op = msg->data[2];
+    if (op >= 2) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    hssens = mc->hs_sensor;
+    switch (op) {
+    case 0:
+	if ((hssens->event_status[3])
+	    || (hssens->event_status[4])
+	    || (hssens->event_status[5]))
+	{
+	    /* Transition to m6. */
+	    ipmi_mc_sensor_set_bit_clr_rest(mc, hssens->lun, hssens->num,
+					    6, 1);
+
+	    /* Transition to m1. */
+	    ipmi_mc_sensor_set_bit_clr_rest(mc, hssens->lun, hssens->num,
+					    1, 1);
+	}
+	break;
+
+    case 1:
+	if (hssens->event_status[2]) {
+	    /* Transition to m3. */
+	    ipmi_mc_sensor_set_bit_clr_rest(mc, hssens->lun, hssens->num,
+					    3, 1);
+
+	    /* Transition to m4. */
+	    ipmi_mc_sensor_set_bit_clr_rest(mc, hssens->lun, hssens->num,
+					    4, 1);
+	}
+    }
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    *rdata_len = 2;
 }
 
 static void
@@ -3414,6 +3613,19 @@ ipmi_mc_destroy(lmc_data_t *mc)
 }
 
 int
+ipmi_mc_set_num_leds(lmc_data_t   *mc,
+		     unsigned int count)
+{
+    if (count > MAX_LEDS)
+	return EINVAL;
+    if (mc->emu->atca_mode && (count < MIN_ATCA_LEDS))
+	return EINVAL;
+
+    mc->num_leds = count;
+    return 0;
+}
+
+int
 ipmi_emu_add_mc(emu_data_t    *emu,
 		unsigned char ipmb,
 		unsigned char device_id,
@@ -3460,6 +3672,29 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 
     mc->event_receiver = 0x20;
     mc->event_receiver_lun = 0;
+
+    mc->hs_sensor = NULL;
+
+    if (emu->atca_mode) {
+	mc->num_leds = 2;
+
+	/* By default only blue LED has local control. */
+	mc->leds[0].loc_cnt = 1;
+	mc->leds[0].loc_cnt_sup = 1;
+
+	mc->leds[0].def_loc_cnt_color = 1; /* Blue LED */
+	mc->leds[0].def_override_color = 1;
+	mc->leds[0].color_sup = 0x2;
+	mc->leds[0].color = 0x1;
+
+	for (i=1; i<MAX_LEDS; i++) {
+	    /* Others default to red */
+	    mc->leds[i].def_loc_cnt_color = 2;
+	    mc->leds[i].def_override_color = 2;
+	    mc->leds[i].color_sup = 0x2;
+	    mc->leds[i].color = 0x2;
+	}
+    }
 
     if (emu->ipmb[ipmb >> 1])
 	ipmi_mc_destroy(emu->ipmb[ipmb >> 1]);

@@ -61,6 +61,12 @@ int ipmi_mc_sensor_set_bit(lmc_data_t   *mc,
 			   unsigned char value,
 			   int           gen_event);
 
+int ipmi_mc_sensor_set_bit_clr_rest(lmc_data_t   *mc,
+				    unsigned char lun,
+				    unsigned char sens_num,
+				    unsigned char bit,
+				    int           gen_event);
+
 int ipmi_mc_sensor_set_value(lmc_data_t    *mc,
 			     unsigned char lun,
 			     unsigned char sens_num,
@@ -99,6 +105,9 @@ int ipmi_mc_add_sensor(lmc_data_t    *mc,
 		       unsigned char event_reading_code);
 
 int ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_int);
+
+int ipmi_mc_set_num_leds(lmc_data_t   *mc,
+			 unsigned int count);
 
 void ipmi_emu_set_device_id(lmc_data_t *emu, unsigned char device_id);
 unsigned char ipmi_emu_get_device_id(lmc_data_t *emu);

@@ -625,7 +625,7 @@ atca_activate(ipmi_entity_t  *entity,
     hs_info->handler2 = done;
     hs_info->cb_data = cb_data;
     hs_info->finfo = ipmi_entity_get_oem_info(entity);
-    hs_info->op = 0; /* Do an activation */
+    hs_info->op = 1; /* Do an activation */
     rv = ipmi_entity_add_opq(entity, atca_activate_start,
 			     &(hs_info->sdata), hs_info);
     if (rv)
@@ -697,11 +697,112 @@ static ipmi_entity_hot_swap_t atca_hot_swap_handlers =
 };
 
 static void
-setup_fru_hot_swap(atca_fru_t *finfo)
+fetched_hot_swap_state(ipmi_sensor_t *sensor,
+		       int           err,
+		       ipmi_states_t *states,
+		       void          *cb_data)
 {
+    atca_fru_t                *finfo = cb_data;
+    int                       i;
+    int                       handled;
+    ipmi_event_t              *event = NULL;
+    enum ipmi_hot_swap_states old_state;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_atca.c(fetched_hot_swap_state): "
+		 "Error getting sensor value: 0x%x",
+		 SENSOR_NAME(sensor), err);
+	goto out;
+    }
+
+    for (i=0; i<8; i++) {
+	if (ipmi_is_state_set(states, i))
+	    break;
+    }
+
+    if (i == 8) {
+	/* No state set, just give up. */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_atca.c(fetched_hot_swap_state): "
+		 "hot-swap sensor value had no valid bit set: 0x%x",
+		 SENSOR_NAME(sensor), err);
+	goto out;
+    }
+
+    /* The OpenIPMI hot-swap states map directly to the ATCA ones. */
+    old_state = finfo->hs_state;
+    finfo->hs_state = i;
+    handled = IPMI_EVENT_NOT_HANDLED;
+    ipmi_entity_call_hot_swap_handlers(ipmi_sensor_get_entity(sensor),
+				       old_state,
+				       finfo->hs_state,
+				       &event,
+				       &handled);
+
+ out:
+    return;
+}
+
+static int
+hot_swap_state_changed(ipmi_sensor_t         *sensor,
+		       enum ipmi_event_dir_e dir,
+		       int                   offset,
+		       int                   severity,
+		       int                   prev_severity,
+		       void                  *cb_data,
+		       ipmi_event_t          *event)
+{
+    atca_fru_t                *finfo = cb_data;
+    enum ipmi_hot_swap_states old_state;
+    int                       handled = IPMI_EVENT_NOT_HANDLED;
+
+    /* We only want assertions. */
+    if (dir != IPMI_ASSERTION)
+	return handled;
+
+    if ((offset < 0) || (offset >= 8))
+	/* eh? */
+	return handled;
+
+    /* The OpenIPMI hot-swap states map directly to the ATCA ones. */
+    old_state = finfo->hs_state;
+    finfo->hs_state = offset;
+    ipmi_entity_call_hot_swap_handlers(ipmi_sensor_get_entity(sensor),
+				       old_state,
+				       finfo->hs_state,
+				       &event,
+				       &handled);
+
+    return handled;
+}
+
+static void
+setup_fru_hot_swap(atca_fru_t *finfo, ipmi_sensor_t *sensor)
+{
+    int rv;
+
+    finfo->hs_sensor_id = ipmi_sensor_convert_to_id(sensor);
+
     ipmi_entity_set_hot_swappable(finfo->entity, 1);
     ipmi_entity_set_hot_swap_control(finfo->entity, &atca_hot_swap_handlers);
-    /* FIXME - get the state and call the handler. */
+
+    rv = ipmi_sensor_add_discrete_event_handler(sensor, hot_swap_state_changed,
+						finfo);
+    if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(setup_fru_hot_swap): "
+		     "Cannot set event handler for hot-swap sensor: 0x%x",
+		     SENSOR_NAME(sensor), rv);
+    }
+
+    rv = ipmi_states_get(sensor, fetched_hot_swap_state, finfo);
+    if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(setup_fru_hot_swap): "
+		     "Cannot fetch current hot-swap state: 0x%x",
+		     SENSOR_NAME(sensor), rv);
+    }
 }
 
 /***********************************************************************
@@ -1631,8 +1732,7 @@ atca_sensor_update_handler(enum ipmi_update_e op,
 		     ENTITY_NAME(entity), rv);
 	    return;
 	}
-	finfo->hs_sensor_id = ipmi_sensor_convert_to_id(sensor);
-	setup_fru_hot_swap(finfo);
+	setup_fru_hot_swap(finfo, sensor);
 	break;
 
     case IPMI_DELETED:

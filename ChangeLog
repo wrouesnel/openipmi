@@ -1,3 +1,14 @@
+2004-04-02 Corey Minyard <cminyard@mvista.com> 
+
+	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Reworked LED
+	support to better handle ATCA.  Added hot-swap support.
+
+	* lanserv/README.emulator: Added.
+
+	* lanserv/atca.emu: Added.
+
+	* lib/oem_atca.c: Worked on hot-swap support.
+
 2004-04-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start

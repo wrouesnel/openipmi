@@ -16,6 +16,14 @@ commands (but not nearly the whole set yet).  However, it comes up
 empty.  You have to execute commands, either at the command line or in
 a command file, to add the various data you need.
 
+Note that there is an atca.emu file included that sets up an ATCA
+chassis (somewhat incomplete right now).  It currently supports:
+  * A BMC just for the connection and SEL at 0x20.
+  * a FRU device at 0x10
+  * a FRU device at 0x12
+There is currently not any IPMB sensor support and many of the
+commands are not yet implemented, but it's a start.
+
 The commands available are:
 
 quit - stop the program.
@@ -49,6 +57,12 @@ sensor_set_bit <LUN> <sensor num> <bit to set> <bit value> <generate event>
   Only for discrete sensors.  Set the given bit in the sensor to the
   given value.  If <generate event> is non-zero, then an event will be
   generated if the sensor is set up to generate events.
+
+sensor_set_bit_clr_rest <LUN> <sensor num> <bit to set>	<generate event>
+  Only for discrete sensors.  Like sensor_set_bit, but clears the rest
+  of the bits, and only sets the one bit given to 1.  This is for sensors
+  where only one bit is valid, like the ATCA hot-swap sensor or a BIOS
+  state sensor.
 
 sensor_set_value <LUN> <sensor num> <value> <generate event>
   Only for threshold sensors.  Set the sensor to the given value.  If
@@ -152,3 +166,23 @@ mc_setbmc <mc>
 
 read_cmds <file>
   Read and execute the commands from the given file.
+
+mc_set_num_leds <mc> <num leds>
+  Set the number of LEDs the MC supports.  The max is currently 8.  In
+  ATCA mode, this may not be set less than 2.
+
+atca_enable
+  Enables ATCA mode.  Note that you should do this *before* creating
+  any MCs (this should really be first) because the MCs are set up a
+  little differently for ATCA mode.  This causes the MCs to be able to
+  handle PICMG commands properly, sets up 2 LEDs by default, and
+  enables proper hot-swap handling, including the blue LED.  By
+  default the blue LED supports local control and the other LEDs do
+  not and are red.
+
+  In ATCA mode, to drive the hot-swap state machine, you should use
+  sensor_set_bit_clr_rest to set the hot-swap state.
+
+atca_set_site <hardware address> <site type> <site number>
+  Adds the given site to the ATCA site table returned by get address
+  commands.
