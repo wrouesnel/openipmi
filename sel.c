@@ -387,12 +387,9 @@ handle_sel_data(ipmi_mc_t  *mc,
 
     if (sel->next_rec_id == 0xFFFF) {
 	fetch_complete(sel, 0);
-	return;
+	goto out;
     }
     sel->curr_rec_id = sel->next_rec_id;
-
-    if (log_is_new)
-	sel->new_log_handler(sel, &del_log, sel->new_log_cb_data);
 
     /* Request some more data. */
     cmd_msg.data = cmd_data;
@@ -406,6 +403,12 @@ handle_sel_data(ipmi_mc_t  *mc,
     rv = ipmi_send_command(sel->mc, sel->lun, &cmd_msg, handle_sel_data, sel);
     if (rv)
 	    fetch_complete(sel, rv);
+
+ out:
+    if (log_is_new)
+	if (sel->new_log_handler)
+	    sel->new_log_handler(sel, &del_log, sel->new_log_cb_data);
+
 }
 
 static void
