@@ -1,3 +1,8 @@
+2004-06-28 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/domain.c: Fixed a theoretical race condition in fetching
+	the system SELs.
+	
 2004-06-24 Corey Minyard <cminyard@mvista.com> 
 
 	* sample/sample.c: Added event handling for sensors to the sample.

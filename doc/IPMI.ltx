@@ -1874,6 +1874,7 @@ parameters.
 \end{showmsg}
 
 \subsubsection{The \acs{LAN} Configuration Table}
+\label{sec-lan-conf-parms}
 The \acs{LAN} Configuration table has an unusual locking mechanism
 (although it is usual for \acs{IPMI}).  Parameter zero is a lock.  If
 you set the value to one, it will only succeed if the value is zero.
@@ -2358,7 +2359,7 @@ alert, if multiple event filters match, the higher priority action
 will be done and the lower priority action will be ignores.  The
 actions are:
 
-\begin{tabularx}{\textwidth}{|p{0.2\textwidth}|l|X}
+\noindent\begin{tabularx}{\textwidth}{|p{0.2\textwidth}|l|X|}
 \hline
 \bfseries{Action} & \bfseries{Priority} & \bfseries{Description}\\
 \hline
@@ -3015,19 +3016,81 @@ traps but does all the work for you.
 
 \paragraph{Setting Up the \acs{PEF} Table and \acs{LAN} Configuration Table}
 
-For a system to send traps, you must set up the \acs{PEF} table and
-the \acs{LAN} configuration table.  
+For a system to send traps, you must set up the \acs{PEF} table as
+described in section \label{sec-pef-conf-parms} and the \acs{LAN}
+configuration table described in section \label{sec-lan-conf-parms}.
+However, this is a lot of work.
 
 \paragraph{Setting Up For Traps the Easy Way}
+
+OpenIPMI provides a way to set up a simple SNMP trap send from a
+\ac{BMC}.  The call has an unfortunately large number of parameters
+because OpenIPMI cannot pick the various selectors and policy numbers
+needed to set up for the trap, because you may be using them for other
+things.  The function call is:
+
+\begin{verbatim}
+int ipmi_pet_create(ipmi_domain_t    *domain,
+		    unsigned int     connection,
+		    unsigned int     channel,
+		    struct in_addr   ip_addr,
+		    unsigned char    mac_addr[6],
+		    unsigned int     eft_sel,
+		    unsigned int     policy_num,
+		    unsigned int     apt_sel,
+		    unsigned int     lan_dest_sel,
+		    ipmi_pet_done_cb done,
+		    void             *cb_data,
+		    ipmi_pet_t       **pet);
+\end{verbatim}
+
+\begin{description}
+\item[domain] - The domain to set up a trap sender for.
+\item[connection] - Which specific connection to the domain do you
+  want to configure?
+\item[channel] -  The specific channel to configure.  You will have
+  to know the channel you want to configure.
+\item[ip\_addr] - The IP address to tell the \ac{BMC} to send messages to.
+\item[mac\_addr] - The MAC address to tell the \ac{BMC} to send messages to.
+\item[eft\_sel] - the Event Filter selector to use for this PET destination.
+  Note that this does *not* need to be unique for different OpenIPMI
+  instances that are using the same channel, since the configuration
+  will be exactly the same for all EFT entries using the same
+  channel, assuming they share the same policy number.
+\item[policy\_num] - The policy number to use for the alert policy.  This
+  should be the same for all users of a domain.
+\item[apt\_sel] - The Alert Policy selector to use for this PET destination.
+  Note that as \verb=eft_sel=, this need not be unique for each different
+  OpenIPMI instance on the same channel.
+\item[lan\_dest\_sel] - The LAN configuration destination selector for
+  this PET destination.  Unlike \verb=eft_sel= and \verb=apt_sel=,
+  this *must* be unique for each OpenIPMI instance on the same
+  channel, as it specifies the destination address to use.
+\item[done] - This function will be called when the PET configuration is
+  complete.
+\item[cb\_data] - Data to pass to the \verb=done= call.
+\item[pet] - The created object.
+\end{description}
+
+This creates an object that will continue to live and periodically
+check that the configuration is correct.  If you wish to destroy this,
+use the following:
+
+\begin{verbatim}
+int ipmi_pet_destroy(ipmi_pet_t       *pet,
+		     ipmi_pet_done_cb done,
+		     void             *cb_data);
+\end{verbatim}
 
 \subsubsection{Handling Incoming Traps}
 
 OpenIPMI has some ability to handle \acs{SNMP} traps.  It does not
 implement its own \acs{SNMP} stack though, so it cannot do all the
 work for you.  Indeed, different \acs{SNMP} exist and OpenIPMI would
-not want to presume that you would only use one of them.  You must
-have your own stack, like NetSNMP\cite{netsnmp}, and catch the traps
-with that.
+not want to presume that you would only use one of them.  Also, since
+the \acs{SNMP} trap port is fixed, some cooperative mechanism may be
+required between different pieces of software. You must have your own
+stack, like NetSNMP\cite{netsnmp}, and catch the traps with that.
 
 Once you have a trap, you must call:
 
@@ -3126,6 +3189,33 @@ response.
 \chapter{\acs{IPMI} Commands}
 \label{ipmi-commands}
 
+\ac{IPMI} does everything except events through commands and
+responses.  A user sends a command to an \ac{MC}, and the \ac{MC}
+returns a response.  All commands have responses.  Commands may
+optionally have some data; the data depends on the command.  The same
+goes for responses, except that all responses contain at least on data
+byte holding the completion code.  Every response has a completion
+code in the first byte.
+
+Every command and response has a \ac{NetFN} and command number.  A
+\ac{NetFN} is a number that describes a function group.  All
+sensor-related commands, for instance, have the same \ac{NetFN}.  The
+command number is the number for the specific command within the
+\ac{NetFN}.  Responses contain the same \ac{NetFN} and command number
+as the command, except the \ac{NetFN} has one added to it.  So
+responses to sensor command (\ac{NetFN} 04h) will use NetFN 05h.
+Table \ref{netfn-codes} shows the \ac{NetFN} values.  All commands
+have even \ac{NetFN}s, and all responses have odd \ac{NetFN}s.
+
+\begin{longtable}{|l|p{0.8\textwidth}
+\caption{\acs{NetFN} codes\label{netfn-codes}}
+\\ \hline
+\bfseries{NetFN} & \bfseries{Description}\\
+\hline
+\end{longtable}
+
+\section{Sending Commands in OpenIPMI}
+
 %---------------------------------------------------------------------
 \chapter{\acs{SDR} Repositories}
 
@@ -3199,6 +3289,9 @@ That information may be fetched by the user.
 \section{Direct \acs{I$^2$C} Access}
 
 %---------------------------------------------------------------------
+\chapter{Hot Swap}
+
+%---------------------------------------------------------------------
 \chapter{Events}
 \label{events}
 
@@ -3214,6 +3307,9 @@ That information may be fetched by the user.
 
 %---------------------------------------------------------------------
 \chapter{ATCA}
+
+%---------------------------------------------------------------------
+\chapter{Motorola MXP}
 
 %---------------------------------------------------------------------
 \chapter{Command Receiver Program}
