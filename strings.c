@@ -156,6 +156,9 @@ static char *event_reading_types[] =
 char *
 ipmi_get_event_reading_type_string(unsigned int val)
 {
+    if (val == IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC)
+	return "sensor specific";
+
     if (val > NUM_EVENT_READING_TYPES)
 	return "invalid";
     return event_reading_types[val];

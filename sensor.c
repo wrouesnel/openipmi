@@ -1424,8 +1424,8 @@ ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
 					       int           event,
 					       int           *val)
 {
-    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
-	/* Not a threshold sensor, it doesn't have readings. */
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* A threshold sensor, it doesn't have events. */
 	return ENOSYS;
 
     if (event > 14)
@@ -1440,8 +1440,8 @@ ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
 						 int           event,
 						 int           *val)
 {
-    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
-	/* Not a threshold sensor, it doesn't have readings. */
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* A threshold sensor, it doesn't have events. */
 	return ENOSYS;
 
     if (event > 14)
@@ -1456,8 +1456,8 @@ ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 			     int           event,
 			     int           *val)
 {
-    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
-	/* Not a threshold sensor, it doesn't have readings. */
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* A threshold sensor, it doesn't have events. */
 	return ENOSYS;
 
     if (event > 14)
@@ -3424,7 +3424,7 @@ states_get2(ipmi_sensor_t *sensor,
 	return;
     }
 
-    states.__states = (info->rsp->data[3] << 8) | info->rsp->data[4];
+    states.__states = (info->rsp->data[4] << 8) | info->rsp->data[3];
 
     if (info->done)
 	info->done(sensor, 0, states, info->cb_data);
@@ -3434,8 +3434,8 @@ states_get2(ipmi_sensor_t *sensor,
 
 static void
 states_get(ipmi_mc_t  *mc,
-	    ipmi_msg_t *rsp,
-	    void       *rsp_data)
+	   ipmi_msg_t *rsp,
+	   void       *rsp_data)
 {
     states_get_info_t *info = rsp_data;
     mc_cb_info_t      mc_info;
@@ -4002,4 +4002,3 @@ int ipmi_is_state_set(ipmi_states_t *states,
 {
     return (states->__states & (1 << state_num)) != 0;
 }
-

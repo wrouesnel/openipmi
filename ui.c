@@ -72,7 +72,9 @@ enum scroll_wins_e { LOG_WIN_SCROLL, DISPLAY_WIN_SCROLL };
 enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 
 /* The current thing display in the display pad. */
-enum { DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_ENTITY } curr_display_type;
+enum {
+    DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_ENTITY, DISPLAY_SENSORS
+} curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
 typedef struct pos_s {int y; int x; } pos_t;
 typedef struct thr_pos_s
@@ -83,7 +85,7 @@ typedef struct thr_pos_s
 } thr_pos_t;
 thr_pos_t threshold_positions[6];
 
-pos_t discr_value;
+pos_t value;
 pos_t discr_assert_avail;
 pos_t discr_assert_enab;
 pos_t discr_deassert_avail;
@@ -432,6 +434,7 @@ entity_searcher(ipmi_entity_t *entity,
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
     if ((info->id == id) && (info->instance == instance)) {
+	curr_display_type = DISPLAY_SENSORS;
 	info->found = 1;
 	info->handler(entity, info->cb_data);
     }
@@ -531,14 +534,13 @@ read_sensor(ipmi_sensor_t *sensor,
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
+    wmove(display_pad, value.y, value.x);
     if (err) {
-	wmove(display_pad, 1, 10);
 	wprintw(display_pad, "unreadable");
 	display_pad_refresh();
 	return;
     }
 
-    wmove(display_pad, 1, 10);
     wprintw(display_pad, "%f", val);
     display_pad_refresh();
 }
@@ -583,6 +585,7 @@ read_thresholds(ipmi_sensor_t     *sensor,
 	    }
 	}    
     }
+    display_pad_refresh();
 }
 
 static void
@@ -642,6 +645,7 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 	    }
 	}    
     }
+    display_pad_refresh();
 }
 
 static void
@@ -676,6 +680,7 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
 	    wprintw(display_pad, "%d", val != 0);
 	}    
     }
+    display_pad_refresh();
 }
 
 static void
@@ -693,16 +698,16 @@ read_states(ipmi_sensor_t *sensor,
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
+    wmove(display_pad, value.y, value.x);
     if (err) {
-	wmove(display_pad, discr_value.y, discr_value.x);
 	wprintw(display_pad, "?");
     } else {
-	wmove(display_pad, discr_value.y, discr_value.x);
 	for (i=0; i<15; i++) {
 	    val = ipmi_is_state_set(&states, i);
 	    wprintw(display_pad, "%d", val != 0);
 	}    
     }
+    display_pad_refresh();
 }
 
 static void
@@ -787,8 +792,9 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 
 	wprintw(display_pad, "Sensor %d.%d.%d.%d - %s:\n",
 		id, instance, lun, num, name);
-	wprintw(display_pad, "  value = ?\n");
-	wprintw(display_pad, "  units = %s%s",
+	wprintw(display_pad, "  value = ");
+	getyx(display_pad, value.y, value.x);
+	wprintw(display_pad, "\n  units = %s%s",
 		ipmi_get_unit_type_string(ipmi_sensor_get_base_unit(sensor)),
 		ipmi_get_rate_unit_string(ipmi_sensor_get_rate_unit(sensor)));
 	switch(ipmi_sensor_get_modifier_unit_use(sensor)) {
@@ -806,10 +812,10 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	}
 	wprintw(display_pad, "\n");
 	num = ipmi_sensor_get_sensor_type(sensor);
-	wprintw(display_pad, "  sensor type = %s (%d)\n",
+	wprintw(display_pad, "  sensor type = %s (0x%2.2x)\n",
 		ipmi_get_sensor_type_string(num), num);
 	num = ipmi_sensor_get_event_reading_type(sensor);
-	wprintw(display_pad, "  event/reading type = %s (%d)\n",
+	wprintw(display_pad, "  event/reading type = %s (0x%2.2x)\n",
 		ipmi_get_event_reading_type_string(num), num);
 
 	if (ipmi_sensor_get_event_reading_type(sensor)
@@ -901,9 +907,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	    int i;
 
 	    /* A discrete sensor. */
-	    wprintw(display_pad, "\n      Value: ");
-	    getyx(display_pad, discr_value.y, discr_value.x);
-	    wprintw(display_pad, "  Assertion: ");
+	    wprintw(display_pad, "\n  Assertion: ");
 	    wprintw(display_pad, "\n    available: ");
 	    getyx(display_pad, discr_assert_avail.y, discr_assert_avail.x);
 	    for (i=0; i<15; i++) {
@@ -914,7 +918,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	    }
 	    wprintw(display_pad, "\n      enabled: ");
 	    getyx(display_pad, discr_assert_enab.y, discr_assert_enab.x);
-	    wprintw(display_pad, "  Deasertion: ");
+	    wprintw(display_pad, "\n  Deasertion: ");
 	    wprintw(display_pad, "\n    available: ");
 	    getyx(display_pad, discr_deassert_avail.y, discr_deassert_avail.x);
 	    for (i=0; i<15; i++) {
