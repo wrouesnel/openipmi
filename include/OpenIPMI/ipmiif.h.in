@@ -173,8 +173,6 @@ int ipmi_control_id_is_invalid(ipmi_control_id_t *id);
 /* Callback used for generic domain reporting. */
 typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
 
-typedef struct ipmi_domain_con_change_s ipmi_domain_con_change_t;
-
 /* Set and get a "name" for the domain.  This name is used for logging
    errors, so errors from domains can be separated.  You should set
    one if you support multiple domains.  The max length is the number
@@ -210,12 +208,13 @@ typedef void (*ipmi_domain_con_cb)(ipmi_domain_t *domain,
 				   unsigned int  port_num,
 				   int           still_connected,
 				   void          *cb_data);
-int ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
-				       ipmi_domain_con_cb       handler,
-				       void                     *cb_data,
-				       ipmi_domain_con_change_t **id);
-void ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
-					   ipmi_domain_con_change_t *id);
+int ipmi_domain_add_con_change_handler(ipmi_domain_t      *domain,
+				       ipmi_domain_con_cb handler,
+				       void               *cb_data);
+void ipmi_domain_remove_con_change_handler(ipmi_domain_t      *domain,
+					   ipmi_domain_con_cb handler,
+					   void               *cb_data);
+					   
 
 /* The domain has two timers, one for the SEL rescan interval and one for
    the IPMB bus rescan interval. */
@@ -1748,7 +1747,6 @@ int ipmi_init_domain(ipmi_con_t               *con[],
 		     unsigned int             num_con,
 		     ipmi_domain_con_cb       con_change_handler,
 		     void                     *con_change_cb_data,
-		     ipmi_domain_con_change_t **con_change_id,
 		     ipmi_domain_id_t         *new_domain);
 
 

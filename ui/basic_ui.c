@@ -93,7 +93,7 @@ ui_reconnect(void)
     }
 	
     rv = ipmi_init_domain(con, last_con, ipmi_ui_setup_done,
-			  NULL, NULL, NULL);
+			  NULL, NULL);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	exit(1);
@@ -328,8 +328,8 @@ main(int argc, const char *argv[])
 	}
     }
 
-    rv = ipmi_init_domain(con, last_con,
-			  ipmi_ui_setup_done, NULL, NULL, &domain_id);
+    rv = ipmi_init_domain(con, last_con, ipmi_ui_setup_done,
+			  NULL, &domain_id);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	goto out;

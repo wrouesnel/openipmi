@@ -47,6 +47,7 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_oem.h>
 #include <OpenIPMI/ipmi_utils.h>
+#include <OpenIPMI/locked_list.h>
 
 #include <OpenIPMI/ilist.h>
 
@@ -69,12 +70,6 @@ dump_hex(unsigned char *data, int len)
 
 /* Re-query the SEL every 10 seconds by default. */
 #define IPMI_SEL_QUERY_INTERVAL 10
-
-struct ipmi_domain_con_change_s
-{
-    ipmi_domain_con_cb handler;
-    void               *cb_data;
-};
 
 struct ipmi_domain_mc_upd_s
 {
@@ -209,7 +204,6 @@ struct ipmi_domain_s
     ipmi_lock_t *cmds_lock;
     long        cmds_seq; /* Sequence number for messages to avoid
 			     reuse problems. */
-
     long        conn_seq; /* Sequence number for connection switchovers
 			     to avoid handling old messages. */
 
@@ -237,6 +231,9 @@ struct ipmi_domain_s
 
     int           con_up[MAX_CONS];
 
+    /* A list of connection fail handler, separate from the main one. */
+    locked_list_t *con_change_handlers;
+
     /* Are any low-level connections up? */
     int connection_up;
 
@@ -263,14 +260,11 @@ struct ipmi_domain_s
     unsigned char    msg_int_type;
     unsigned char    event_msg_int_type;
 
-    /* A list of connection fail handler, separate from the main one. */
-    ilist_t *con_change_handlers;
-
     /* A list of handlers to call when an MC is added to the domain. */
     ilist_t *mc_upd_handlers;
 
     /* A list of IPMB addresses to not scan. */
-    ilist_t *ipmb_ignores;
+    ilist_t     *ipmb_ignores;
     ipmi_lock_t *ipmb_ignores_lock;
 
     /* This is a timer that waits a little while before activating a
@@ -538,17 +532,9 @@ cleanup_domain(ipmi_domain_t *domain)
 	remove_event_handler(domain, domain->event_handlers);
     ipmi_unlock(domain->event_handlers_lock);
 
-    if (domain->con_change_handlers) {
-	ilist_iter_t iter;
-	void         *data;
-	ilist_init_iter(&iter, domain->con_change_handlers);
-	while (ilist_first(&iter)) {
-	    data = ilist_get(&iter);
-	    ilist_delete(&iter);
-	    ipmi_mem_free(data);
-	}
-	free_ilist(domain->con_change_handlers);
-    }
+    if (domain->con_change_handlers)
+	locked_list_destroy(domain->con_change_handlers);
+
     if (domain->ipmb_ignores) {
 	ilist_iter_t iter;
 	ilist_init_iter(&iter, domain->ipmb_ignores);
@@ -740,7 +726,7 @@ setup_domain(ipmi_con_t    *ipmi[],
 	goto out_err;
     }
 
-    domain->con_change_handlers = alloc_ilist();
+    domain->con_change_handlers = locked_list_alloc(domain->os_hnd);
     if (! domain->con_change_handlers) {
 	rv = ENOMEM;
 	goto out_err;
@@ -1529,6 +1515,7 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 	   already been delivered in the cleanup code. */
 	return IPMI_MSG_ITEM_NOT_USED;
 
+    /* We don't protect this check with a lock, but it shouldn't matter. */
     if (conn_seq != domain->conn_seq)
 	/* The message has been rerouted, just ignore this response. */
 	goto out_unlock;
@@ -1632,8 +1619,8 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     ll_msg_t                     *nmsg;
     ipmi_system_interface_addr_t si;
     ipmi_ll_rsp_handler_t        handler;
-    void                         *data4;
-    int                          is_si = 0;
+    void                         *data4 = NULL;
+    int                          is_ipmb = 0;
     ipmi_msgi_t                  *rspi;
 
     if (addr_len > sizeof(ipmi_addr_t))
@@ -1664,7 +1651,6 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 	addr_len = sizeof(si);
 	handler = ll_si_rsp_handler;
 	data4 = (void *) (long) u;
-	is_si = 1;
     } else if ((addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
 	&& (addr->channel != IPMI_BMC_CHANNEL))
     {
@@ -1688,7 +1674,6 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 	addr_len = sizeof(si);
 	handler = ll_si_rsp_handler;
 	data4 = (void *) (long) u;
-	is_si = 1;
     } else {
 	u = domain->working_conn;
 
@@ -1697,7 +1682,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 	if (u == -1)
 	    u = 0;
 	handler = ll_rsp_handler;
-	data4 = (void *) (long) domain->conn_seq;
+	is_ipmb = 1;
     }
 
     nmsg->domain = domain;
@@ -1718,6 +1703,10 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     nmsg->seq = domain->cmds_seq;
     domain->cmds_seq++;
 
+    /* Have to delay this to here so we are holding the lock. */
+    if (is_ipmb)
+	data4 = (void *) (long) domain->conn_seq;
+
     rspi = ipmi_mem_alloc(sizeof(*rspi));
     if (!rspi) {
 	rv = ENOMEM;
@@ -1737,7 +1726,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     if (rv) {
 	ipmi_mem_free(rspi);
 	goto out_unlock;
-    } else if (!is_si) {
+    } else if (is_ipmb) {
 	/* If it's a system interface we don't add it to the list of
 	   commands running, because it will never need to be
 	   rerouted. */
@@ -3382,53 +3371,28 @@ ipmi_close_connection(ipmi_domain_t             *domain,
     domain->close_done_cb_data = cb_data;
 
     /* We don't actually do the destroy here, since the domain should
-       be locked.  We wait until the usecount goes to zero. */
+       be in use.  We wait until the usecount goes to zero. */
 
     return 0;
 }
 
 int
-ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
-				   ipmi_domain_con_cb       handler,
-				   void                     *cb_data,
-				   ipmi_domain_con_change_t **id)
+ipmi_domain_add_con_change_handler(ipmi_domain_t      *domain,
+				   ipmi_domain_con_cb handler,
+				   void               *cb_data)
 {
-    ipmi_domain_con_change_t *new_id;
-
-    new_id = ipmi_mem_alloc(sizeof(*new_id));
-    if (!new_id)
+    if (locked_list_add(domain->con_change_handlers, handler, cb_data))
+	return 0;
+    else
 	return ENOMEM;
-
-    new_id->handler = handler;
-    new_id->cb_data = cb_data;
-    if (! ilist_add_tail(domain->con_change_handlers, new_id, NULL)) {
-	ipmi_mem_free(new_id);
-	return ENOMEM;
-    }
-
-    if (id)
-	*id = new_id;
-
-    return 0;
 }
 
 void
-ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
-				      ipmi_domain_con_change_t *id)
+ipmi_domain_remove_con_change_handler(ipmi_domain_t      *domain,
+				      ipmi_domain_con_cb handler,
+				      void               *cb_data)
 {
-    ilist_iter_t iter;
-    int          rv;
-
-    ilist_init_iter(&iter, domain->con_change_handlers);
-    rv = ilist_first(&iter);
-    while (rv) {
-	if (ilist_get(&iter) == id) {
-	    ilist_delete(&iter);
-	    ipmi_mem_free(id);
-	    break;
-	}
-	rv = ilist_next(&iter);
-    }
+    locked_list_remove(domain->con_change_handlers, handler, cb_data);
 }
 
 typedef struct con_change_info_s
@@ -3440,27 +3404,15 @@ typedef struct con_change_info_s
     int           still_connected;
 } con_change_info_t;
 
-static void
-iterate_con_changes(ilist_iter_t *iter, void *item, void *cb_data)
+static int
+iterate_con_changes(void *cb_data, void *item1, void *item2)
 {
-    con_change_info_t        *info = cb_data;
-    ipmi_domain_con_change_t *id = item;
+    con_change_info_t  *info = cb_data;
+    ipmi_domain_con_cb handler = item1;
 
-    id->handler(info->domain, info->err, info->conn_num, info->port_num,
-		info->still_connected, id->cb_data);
-}
-
-static void
-call_con_fails(ipmi_domain_t *domain,
-	       int           err,
-	       unsigned int  conn_num,
-	       unsigned int  port_num,
-	       int           still_connected)
-{
-    con_change_info_t info = {domain, err, conn_num, port_num, still_connected};
-    ilist_iter(domain->con_change_handlers, iterate_con_changes, &info);
-    domain->connecting = 0;
-    domain->in_startup = 0;
+    handler(info->domain, info->err, info->conn_num, info->port_num,
+	    info->still_connected, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static void
@@ -3472,9 +3424,24 @@ call_con_change(ipmi_domain_t *domain,
 {
     con_change_info_t info = {domain, err, conn_num, port_num,
 			      still_connected};
-    ilist_iter(domain->con_change_handlers, iterate_con_changes, &info);
+    locked_list_iterate(domain->con_change_handlers, iterate_con_changes,
+			&info);
 }
 
+static void
+call_con_fails(ipmi_domain_t *domain,
+	       int           err,
+	       unsigned int  conn_num,
+	       unsigned int  port_num,
+	       int           still_connected)
+{
+    call_con_change(domain, err, conn_num, port_num, still_connected);
+
+    ipmi_lock(domain->con_lock);
+    domain->connecting = 0;
+    domain->in_startup = 0;
+    ipmi_unlock(domain->con_lock);
+}
 
 static void	
 con_up_complete(ipmi_domain_t *domain)
@@ -4163,7 +4130,6 @@ ipmi_init_domain(ipmi_con_t               *con[],
 		 unsigned int             num_con,
 		 ipmi_domain_con_cb       con_change_handler,
 		 void                     *con_change_cb_data,
-		 ipmi_domain_con_change_t **con_change_id,
 		 ipmi_domain_id_t         *new_domain)
 {
     int           rv;
@@ -4186,9 +4152,9 @@ ipmi_init_domain(ipmi_con_t               *con[],
     add_known_domain(domain);
 
     if (con_change_handler) {
-	rv = ipmi_domain_add_con_change_handler(domain, con_change_handler,
-						con_change_cb_data,
-						con_change_id);
+	rv = ipmi_domain_add_con_change_handler(domain,
+						con_change_handler,
+						con_change_cb_data);
 	if (rv)
 	    goto out_err;
     }

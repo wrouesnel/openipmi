@@ -328,10 +328,9 @@ typedef struct mxp_board_s {
 
 typedef struct domain_up_info_s
 {
-    int                      up;
-    ipmi_mcid_t              mcid;
-    ipmi_domain_con_change_t *con_chid;
-    mxp_info_t		     *info;
+    int         up;
+    ipmi_mcid_t mcid;
+    mxp_info_t	*info;
 } domain_up_info_t;
 
 /* The AMC MC's store one of these in their OEM data. */
@@ -401,6 +400,13 @@ struct mxp_info_s {
 
     int amc_present[2];
 };
+
+static void con_up_handler(ipmi_domain_t *domain,
+			   int           err,
+			   unsigned int  conn_num,
+			   unsigned int  port_num,
+			   int           still_connected,
+			   void          *cb_data);
 
 /***********************************************************************
  *
@@ -8696,8 +8702,8 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_control_destroy(info->sys_led);
 
     if (info->con_ch_info) {
-	ipmi_domain_remove_con_change_handler(domain,
-					      info->con_ch_info->con_chid);
+	ipmi_domain_remove_con_change_handler(domain, con_up_handler,
+					      info->con_ch_info);
 	ipmi_mem_free(info->con_ch_info);
     }
     if (info->mc_upd_id)
@@ -8812,8 +8818,7 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	info->con_ch_info->mcid = ipmi_mc_convert_to_id(mc);
 	info->con_ch_info->info = info;
 	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
-						info->con_ch_info,
-						&info->con_ch_info->con_chid);
+						info->con_ch_info);
 	if (rv) {
 	    ipmi_mem_free(info->con_ch_info);
 	    goto out_err;

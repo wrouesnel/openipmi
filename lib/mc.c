@@ -59,8 +59,7 @@ typedef struct mc_reread_sel_s
     
 typedef struct domain_up_info_s
 {
-    ipmi_mcid_t              mcid;
-    ipmi_domain_con_change_t *con_chid;
+    ipmi_mcid_t mcid;
 } domain_up_info_t;
 
 struct ipmi_mc_removed_s
@@ -246,6 +245,13 @@ static void sels_fetched_start_timer(ipmi_sel_info_t *sel,
 				     unsigned int    count,
 				     void            *cb_data);
 
+static void con_up_handler(ipmi_domain_t *domain,
+			   int           err,
+			   unsigned int  conn_num,
+			   unsigned int  port_num,
+			   int           still_connected,
+			   void          *cb_data);
+
 /***********************************************************************
  *
  * Routines for creating and destructing MCs.
@@ -338,7 +344,6 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 	rv = ENOMEM;
 	goto out_err;
     }
-    mc->conup_info->con_chid = NULL;
 
     rv = ipmi_sensors_alloc(mc, &(mc->sensors));
     if (rv)
@@ -488,11 +493,9 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     }
 
     if (mc->conup_info) {
-	if (mc->conup_info->con_chid) {
-	    ipmi_domain_remove_con_change_handler(domain,
-						  mc->conup_info->con_chid);
-	}
-	mc->conup_info->con_chid = NULL;
+	ipmi_domain_remove_con_change_handler(domain,
+					      con_up_handler,
+					      mc->conup_info);
     }
 
     _ipmi_mc_set_active(mc, 0);
@@ -1405,8 +1408,9 @@ con_up_handler(ipmi_domain_t *domain,
     if (!still_connected)
 	return;
 
-    ipmi_domain_remove_con_change_handler(domain, info->con_chid);
-    info->con_chid = NULL;
+    ipmi_domain_remove_con_change_handler(domain,
+					  con_up_handler,
+					  info);
     ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
 }
 
@@ -1424,8 +1428,7 @@ start_sel_ops(ipmi_mc_t *mc)
            the process. */
 	mc->conup_info->mcid = ipmi_mc_convert_to_id(mc);
 	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
-						mc->conup_info,
-					       	&mc->conup_info->con_chid);
+						mc->conup_info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "Unable to add a connection change handler for the"
