@@ -19,6 +19,10 @@
 
 	* ui/ui.c: Fixed a parm messed up by an interface change.
 
+	* lib/entity.c: Fixed handling of FRU info from devices, we need
+	to look at the pending as well as the current info to know if an
+	entity already has a FRU device.
+
 	* configure.in: Move to version 1.4.7.
 
 2005-01-01 Corey Minyard <cminyard@mvista.com> 

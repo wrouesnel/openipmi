@@ -3541,7 +3541,9 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 			   sizeof(dlr_info_t));
 		    found->ent->pending_info_ready = 1;		
 		} else {
-		    if (!found->ent->info.FRU_inventory_device) {
+		    if ((!found->ent->info.FRU_inventory_device)
+			&& (!found->ent->pending_info.FRU_inventory_device))
+		    {
 			/* We prefer to only keep the information from the
 			   FRU inventory device MCDLR. */
 			memcpy(&found->ent->pending_info, infos.dlrs[i],
