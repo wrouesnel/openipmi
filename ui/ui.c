@@ -4554,8 +4554,8 @@ set_control(ipmi_control_t *control, void *cb_data)
     char          **toks = cb_data;
     int           num_vals;
     int           i;
-    int           *vals;
-    unsigned char *cvals;
+    int           *vals = NULL;
+    unsigned char *cvals = NULL;
     char          *tok;
     char          *estr;
     int           rv;
@@ -4597,7 +4597,6 @@ set_control(ipmi_control_t *control, void *cb_data)
 		cmd_win_out("set_control: Returned error 0x%x\n", rv);
 	    }
     out_bcon:
-	    ipmi_mem_free(vals);
 	    break;
 
 	case IPMI_CONTROL_DISPLAY:
@@ -4632,7 +4631,10 @@ set_control(ipmi_control_t *control, void *cb_data)
 	    break;
     }
  out:
-    return;
+    if (vals)
+	ipmi_mem_free(vals);
+    if (cvals)
+	ipmi_mem_free(cvals);
 }
 
 static int
