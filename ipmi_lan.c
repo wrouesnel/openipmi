@@ -674,12 +674,15 @@ data_handler(int            fd,
     data2 = lan->seq_table[seq].data2;
     data3 = lan->seq_table[seq].data3;
     lan->seq_table[seq].rsp_handler = NULL;
- out_unlock:
     ipmi_unlock(lan->seq_num_lock);
 
     handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
     
  out_unlock2:
+    ipmi_read_unlock();
+    return;
+ out_unlock:
+    ipmi_unlock(lan->seq_num_lock);
     ipmi_read_unlock();
 }
 

@@ -137,6 +137,10 @@ int ipmi_sensor_get_lower_non_critical_threshold(
 int ipmi_sensor_get_positive_going_threshold_hysteresis(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_negative_going_threshold_hysteresis(ipmi_sensor_t *sensor);
 
+int ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
+				       int               raw,
+				       ipmi_thresholds_t *th);
+
 /* These calls allow OEM code to set up a sensor. */
 void ipmi_sensor_set_owner(ipmi_sensor_t *sensor, int owner);
 void ipmi_sensor_set_channel(ipmi_sensor_t *sensor, int channel);

@@ -3060,10 +3060,10 @@ thresh_get(ipmi_mc_t  *mc,
     }
 }
 
-static int
-get_default_sensor_vals(ipmi_sensor_t      *sensor,
-			int                raw,
-			ipmi_thresholds_t  *th)
+int
+ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
+				   int               raw,
+				   ipmi_thresholds_t *th)
 {
     int                val;
     enum ipmi_thresh_e thnum;
@@ -3130,7 +3130,7 @@ thresh_get_start(void *cb_data, int shutdown)
 	/* Thresholds are fixed, pull them from the SDR. */
 	int               rv;
 	
-	rv = get_default_sensor_vals(sensor, 0, &(info->th));
+	rv = ipmi_get_default_sensor_thresholds(sensor, 0, &(info->th));
 	if (info->done)
 	    info->done(sensor, rv, &(info->th), info->cb_data);
 	return;
