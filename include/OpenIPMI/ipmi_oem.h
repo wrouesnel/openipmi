@@ -54,6 +54,17 @@ int ipmi_register_oem_handler(unsigned int                 manufacturer_id,
 int ipmi_deregister_oem_handler(unsigned int manufacturer_id,
 				unsigned int product_id);
 
+/* Register an OEM handler for connections, based upon MC.  This is
+   primarily so that a connection handler can register a way to get
+   the connections slave address, but it may have other uses. */
+typedef int (*ipmi_oem_conn_handler_cb)(ipmi_con_t *conn, void *cb_data);
+int ipmi_register_oem_conn_handler(unsigned int             manufacturer_id,
+				   unsigned int             product_id,
+				   ipmi_oem_conn_handler_cb handler,
+				   void                     *cb_data);
+int ipmi_deregister_oem_conn_handler(unsigned int manufacturer_id,
+				     unsigned int product_id);
+
 /* Used to report that an mc as been removed to the OEM handler.  The
    OEM handler may not refuse to allow the mc to be removed. This is
    so the OEM handler can free data if necessary.  This is registered

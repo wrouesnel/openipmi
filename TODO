@@ -1,15 +1,13 @@
 
+Support for multiple connections to the same IPMI domain.
+
+Add infrastructure for getting the connection's IPMB address.
+
 Add sensor SDRs back into the main SDR repository (if they can from
 there).
-
-Support for multiple LAN connections to the same box in ipmi_lan.
 
 Add support for FRU access.
 
 Add support for the chassis commands.
-
-Add LAN failure detection to the ipmi_lan.c code.
-
-In ipmi_lan.c, add reconnecting when a LAN connection goes down.
 
 Add platform event traps to the LAN code.

@@ -74,7 +74,7 @@ dump_hex(void *vdata, int len)
 
 /* Number of microseconds of consecutive failures allowed on an IP
    before it is considered failed. */
-#define IP_FAIL_TIME 3000000
+#define IP_FAIL_TIME 7000000
 
 /* Number of consecutive failures that must occur before an IP is
    considered failed. */
@@ -581,7 +581,8 @@ audit_timeout_handler(void              *cb_data,
 		si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 		si.channel = 0xf;
 		si.lun = 0;
-		lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0, i);	    }
+		lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0, i);
+	    }
 	}
     }
 
@@ -1750,39 +1751,46 @@ handle_connected(ipmi_con_t *ipmi, int err)
 static void
 finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 {
-    ipmi_con_t                   *ipmi = cb_data;
+    ipmi_con_t *ipmi = cb_data;
 
     ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
 
     handle_connected(ipmi, 0);
 }
 
-static void session_privilege_set(ipmi_con_t   *ipmi,
-				  ipmi_addr_t  *addr,
-				  unsigned int addr_len,
-				  ipmi_msg_t   *msg,
-				  void         *rsp_data,
-				  void         *data2,
-				  void         *data3,
-				  void         *data4)
+static void
+handle_dev_id(ipmi_con_t   *ipmi,
+	      ipmi_addr_t  *addr,
+	      unsigned int addr_len,
+	      ipmi_msg_t   *msg,
+	      void         *rsp_data1,
+	      void         *rsp_data2,
+	      void         *rsp_data3,
+	      void         *rsp_data4)
 {
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t        *lan = (lan_data_t *) ipmi->con_data;
+    int               err;
+    unsigned int      manufacturer_id;
+    unsigned int      product_id;
 
     if (msg->data[0] != 0) {
-        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
-	return;
+	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
+	goto out_err;
     }
 
-    if (msg->data_len < 2) {
-        handle_connected(ipmi, EINVAL);
-	return;
+    if (msg->data_len < 12) {
+	err = EINVAL;
+	goto out_err;
     }
 
-    if (lan->privilege != (msg->data[1] & 0xf)) {
-	/* Requested privilege level did not match. */
-        handle_connected(ipmi, EINVAL);
-	return;
-    }
+    manufacturer_id = (msg->data[7]
+		       | (msg->data[8] << 8)
+		       | (msg->data[9] << 16));
+    product_id = msg->data[10] | (msg->data[11] << 8);
+
+    err = ipmi_check_oem_conn_handlers(ipmi, manufacturer_id, product_id);
+    if (err)
+	goto out_err;
 
     lan->connected = 1;
     if (! lan->initialized) {
@@ -1815,6 +1823,65 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
     } else {
 	connection_up(lan, lan->curr_ip_addr, 1);
     }
+    return;
+
+ out_err:
+    handle_connected(ipmi, err);
+}
+
+static int
+send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan)
+{
+    ipmi_msg_t			 msg;
+    int				 rv;
+    ipmi_system_interface_addr_t addr;
+
+    addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    addr.channel = 0xf;
+    addr.lun = 0;
+
+    msg.cmd = IPMI_GET_DEVICE_ID_CMD;
+    msg.netfn = IPMI_APP_NETFN;
+    msg.data = NULL;
+    msg.data_len = 0;
+
+    rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
+			  &msg, handle_dev_id,
+			  NULL, NULL, NULL, NULL);
+    return rv;
+}
+
+static void session_privilege_set(ipmi_con_t   *ipmi,
+				  ipmi_addr_t  *addr,
+				  unsigned int addr_len,
+				  ipmi_msg_t   *msg,
+				  void         *rsp_data,
+				  void         *data2,
+				  void         *data3,
+				  void         *data4)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        rv;
+
+    if (msg->data[0] != 0) {
+        handle_connected(ipmi, IPMI_IPMI_ERR_VAL(msg->data[0]));
+	return;
+    }
+
+    if (msg->data_len < 2) {
+        handle_connected(ipmi, EINVAL);
+	return;
+    }
+
+    if (lan->privilege != (msg->data[1] & 0xf)) {
+	/* Requested privilege level did not match. */
+        handle_connected(ipmi, EINVAL);
+	return;
+    }
+
+    rv = send_get_dev_id(ipmi, lan);
+    if (rv)
+        handle_connected(ipmi, rv);
 }
 
 static int
@@ -1878,9 +1945,8 @@ static void session_activated(ipmi_con_t   *ipmi,
     lan->outbound_seq_num = ipmi_get_uint32(msg->data+6);
 
     rv = send_set_session_privilege(ipmi, lan);
-    if (rv) {
+    if (rv)
         handle_connected(ipmi, rv);
-    }
 }
 
 static int
@@ -2055,16 +2121,6 @@ lan_set_con_fail_handler(ipmi_con_t            *ipmi,
 }
 
 static int
-default_lan_slave_addr_fetcher(ipmi_con_t                *ipmi, 
-			       ipmi_ll_got_slave_addr_cb handler,
-			       void                      *cb_data)
-{
-    /* By default we just choose 0x20. */
-    handler(ipmi, 0, 0x20, cb_data);
-    return 0;
-}
-
-static int
 lan_start_con(ipmi_con_t *ipmi)
 {
     lan_data_t     *lan = (lan_data_t *) ipmi->con_data;
@@ -2200,7 +2256,6 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 
     ipmi->start_con = lan_start_con;
     ipmi->set_con_fail_handler = lan_set_con_fail_handler;
-    ipmi->ipmi_con_slave_addr_fetch = default_lan_slave_addr_fetcher;
     ipmi->send_command = lan_send_command;
     ipmi->register_for_events = lan_register_for_events;
     ipmi->deregister_for_events = lan_deregister_for_events;

@@ -27,6 +27,8 @@ their special sensors and controls.
 * How to Write OEM Plugins::
 * Internals::
 * Debugging Your Application::
+* Internals::
+* The IPMI LAN Server::
 * Glossary::
 @end menu
 
@@ -617,8 +619,11 @@ os-specific handler operations.
 @item @file{log.h}
 Holds definitions for the logging interface.
 
+@end table
+
 @subsection Files dealing with messaging interfaces
 
+@table @samp
 @item @file{ipmi_lan.h}
 This is the LAN messaging interface, this contains the calls for
 creating a LAN connection.
@@ -627,8 +632,11 @@ creating a LAN connection.
 This is the messaging interface for talking to local IPMI interfaces
 (like KCS), this contains the calls for creating an SMI connection.
 
+@end table
+
 @subsection Internal files that OEM code and messaging interfaces deal with
 
+@table @samp
 @item @file{ipmi_addr.h}
 The file holding information about IPMI addresses.
 
@@ -1402,7 +1410,7 @@ low-level messaging, such as LAN resends and any other protocol-type
 messages.  This depends on the interface, some interfaces don't
 implement raw message tracing.
 
-@node    Internals, Concept Index, Debugging Your Application, Top
+@node    Internals, The IPMI LAN Server, Debugging Your Application, Top
 @chapter Internals
 
 This section describes the internals of OpenIPMI.  These details are
@@ -1435,7 +1443,33 @@ The various interfaces have their own locks, too, for handling sequence
 numbering and the like.  These are interface-dependent and should not
 concern the user since they shouldn't be held during user calls.
 
-@node    Concept Index, Glossary,  Internals, Top
+@node    The IPMI LAN Server, Concept Index, Internals, Top
+@chapter The IPMI LAN Server
+
+OpenIPMI also includes software to represent a system interface (KCS,
+SMIC, BT) as a LAN connection.  It consists of the following parts:
+
+@table @samp
+@item @file{lanserv_ipmi.c}
+A system independent IPMI LAN protocol engine.  You could use this to
+build your own IPMI LAN protocol on your own system.
+
+@item @file{lanserv_asf.c}
+The ASF-specific code, again machine independent.  It handles the RCMP
+portion of the IPMI LAN connection.
+
+@item @file{lanserv.c}
+The Linux-specific code for the IPMI LAN connection.  It parses the
+configuration file, handles I/O, etc.
+
+@item @file{lanserv.h}
+The include file for the system-independent portions of the IPMI lan
+server.
+
+@end table
+
+
+@node    Concept Index, Glossary, The IPMI LAN Server, Top
 @unnumbered Concept Index
 
 @printindex cp

@@ -102,6 +102,11 @@ struct ipmi_states_s
     unsigned int __states;
 };
 
+/* Called by connections to see if they have any special OEM handling
+   to do. */
+int ipmi_check_oem_conn_handlers(ipmi_con_t   *conn,
+				 unsigned int manufacturer_id,
+				 unsigned int product_id);
 
 /* IPMI uses this for memory allocation, so it can easily be
    substituted, etc. */

@@ -1043,10 +1043,10 @@ static int
 oem_handler_cmp(void *item, void *cb_data)
 {
     oem_handlers_t *hndlr = item;
-    ipmi_mc_t      *mc = cb_data;
+    oem_handlers_t *cmp = cb_data;
 
-    return ((hndlr->manufacturer_id == mc->manufacturer_id)
-	    && (hndlr->product_id == mc->product_id));
+    return ((hndlr->manufacturer_id == cmp->manufacturer_id)
+	    && (hndlr->product_id == cmp->product_id));
 }
 
 int
@@ -1054,11 +1054,14 @@ ipmi_deregister_oem_handler(unsigned int manufacturer_id,
 			    unsigned int product_id)
 {
     oem_handlers_t *hndlr;
+    oem_handlers_t tmp;
     ilist_iter_t   iter;
 
+    tmp.manufacturer_id = manufacturer_id;
+    tmp.product_id = product_id;
     ilist_init_iter(&iter, oem_handlers);
     ilist_unpositioned(&iter);
-    hndlr = ilist_search_iter(&iter, oem_handler_cmp, NULL);
+    hndlr = ilist_search_iter(&iter, oem_handler_cmp, &tmp);
     if (hndlr) {
 	ilist_delete(&iter);
 	ipmi_mem_free(hndlr);
@@ -1071,11 +1074,13 @@ static int
 check_oem_handlers(ipmi_mc_t *mc)
 {
     oem_handlers_t *hndlr;
+    oem_handlers_t tmp;
 
-    hndlr = ilist_search(oem_handlers, oem_handler_cmp, mc);
-    if (hndlr) {
+    tmp.manufacturer_id = mc->manufacturer_id;
+    tmp.product_id = mc->product_id;
+    hndlr = ilist_search(oem_handlers, oem_handler_cmp, &tmp);
+    if (hndlr)
 	return hndlr->handler(mc, hndlr->cb_data);
-    }
     return 0;
 }
 

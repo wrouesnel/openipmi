@@ -40,6 +40,8 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_oem.h>
+#include "ilist.h"
 
 static os_hnd_rwlock_t *global_lock;
 static os_handler_t *ipmi_os_handler;
@@ -596,166 +598,6 @@ ipmi_get_seq(void)
     return rv;
 }
 
-int
-ipmi_init(os_handler_t *handler)
-{
-    int rv;
-
-    if (handler->create_rwlock) {
-	rv = handler->create_rwlock(handler, &global_lock);
-	if (rv)
-	    return rv;
-    } else {
-	global_lock = NULL;
-    }
-
-    if (handler->create_lock) {
-	rv = handler->create_lock(handler, &seq_lock);
-	if (rv)
-	    goto out_err;
-    } else {
-	seq_lock = NULL;
-    }
-    ipmi_os_handler = handler;
-    _ipmi_domain_init();
-    _ipmi_mc_init();
-    return 0;
-
- out_err:
-    if (global_lock)
-	handler->destroy_rwlock(ipmi_os_handler, global_lock);
-    if (seq_lock)
-	handler->destroy_lock(ipmi_os_handler, seq_lock);
-    return rv;
-}
-
-void
-ipmi_shutdown(void)
-{
-    _ipmi_domain_shutdown();
-    _ipmi_mc_shutdown();
-    if (global_lock)
-	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
-    if (seq_lock)
-	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
-    global_lock = NULL;
-}
-
-int
-ipmi_addr_equal(ipmi_addr_t *addr1,
-		int         addr1_len,
-		ipmi_addr_t *addr2,
-		int         addr2_len)
-{
-    if (addr1_len != addr2_len)
-	return 0;
-
-    if (addr1->addr_type != addr2->addr_type)
-	return 0;
-
-    if (addr1->channel != addr2->channel)
-	return 0;
-
-    switch (addr1->addr_type)
-    {
-	case IPMI_IPMB_ADDR_TYPE:
-	{
-	    ipmi_ipmb_addr_t *iaddr1 = (ipmi_ipmb_addr_t *) addr1;
-	    ipmi_ipmb_addr_t *iaddr2 = (ipmi_ipmb_addr_t *) addr2;
-
-	    return ((iaddr1->slave_addr == iaddr2->slave_addr)
-		    && (iaddr1->lun == iaddr2->lun));
-	}
-
-	case IPMI_SYSTEM_INTERFACE_ADDR_TYPE:
-	{
-	    ipmi_system_interface_addr_t *iaddr1
-		= (ipmi_system_interface_addr_t *) addr1;
-	    ipmi_system_interface_addr_t *iaddr2
-		= (ipmi_system_interface_addr_t *) addr2;
-	    return (iaddr1->lun == iaddr2->lun);
-	}
-
-	default:
-	    return 0;
-    }
-}
-
-unsigned int
-ipmi_addr_get_lun(ipmi_addr_t *addr)
-{
-    switch (addr->addr_type)
-    {
-	case IPMI_IPMB_ADDR_TYPE:
-	{
-	    ipmi_ipmb_addr_t *iaddr = (ipmi_ipmb_addr_t *) addr;
-
-	    return iaddr->lun;
-	}
-
-	case IPMI_SYSTEM_INTERFACE_ADDR_TYPE:
-	{
-	    ipmi_system_interface_addr_t *iaddr
-		= (ipmi_system_interface_addr_t *) addr;
-
-	    return iaddr->lun;
-	}
-
-	default:
-	    return 0;
-    }
-}
-
-int
-ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun)
-{
-    if (lun >= 4)
-	return EINVAL;
-
-    switch (addr->addr_type)
-    {
-	case IPMI_IPMB_ADDR_TYPE:
-	{
-	    ipmi_ipmb_addr_t *iaddr = (ipmi_ipmb_addr_t *) addr;
-
-	    iaddr->lun = lun;
-	    break;
-	}
-
-	case IPMI_SYSTEM_INTERFACE_ADDR_TYPE:
-	{
-	    ipmi_system_interface_addr_t *iaddr
-		= (ipmi_system_interface_addr_t *) addr;
-
-	    iaddr->lun = lun;
-	    break;
-	}
-
-	default:
-	    return EINVAL;
-    }
-
-    return 0;
-}
-
-/* Returns 0 if the address doesn't have a slave address. */
-unsigned int
-ipmi_addr_get_slave_addr(ipmi_addr_t *addr)
-{
-    switch (addr->addr_type)
-    {
-	case IPMI_IPMB_ADDR_TYPE:
-	{
-	    ipmi_ipmb_addr_t *iaddr = (ipmi_ipmb_addr_t *) addr;
-
-	    return iaddr->slave_addr;
-	}
-
-	default:
-	    return 0;
-    }
-}
-
 void
 ipmi_event_state_init(ipmi_event_state_t *events)
 {
@@ -1049,36 +891,99 @@ ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 	states->__states &= ~(1 << thresh);
 }
 
-unsigned int ipmi_get_uint32(unsigned char *data)
+/***********************************************************************
+ *
+ * Handle global OEM callbacks for new MCs.
+ *
+ **********************************************************************/
+
+typedef struct oem_conn_handlers_s {
+    unsigned int             manufacturer_id;
+    unsigned int             product_id;
+    ipmi_oem_conn_handler_cb handler;
+    void                     *cb_data;
+} oem_conn_handlers_t;
+/* FIXME - do we need a lock?  Probably, add it. */
+static ilist_t *oem_conn_handlers = NULL;
+
+int
+ipmi_register_oem_conn_handler(unsigned int             manufacturer_id,
+			       unsigned int             product_id,
+			       ipmi_oem_conn_handler_cb handler,
+			       void                     *cb_data)
 {
-    return (data[0]
-	    | (data[1] << 8)
-	    | (data[2] << 16)
-	    | (data[3] << 24));
+    oem_conn_handlers_t *new_item;
+    int                 rv;
+
+    /* This might be called before initialization, so be 100% sure.. */
+    rv = _ipmi_mc_init();
+    if (rv)
+	return rv;
+
+    new_item = ipmi_mem_alloc(sizeof(*new_item));
+    if (!new_item)
+	return ENOMEM;
+
+    new_item->manufacturer_id = manufacturer_id;
+    new_item->product_id = product_id;
+    new_item->handler = handler;
+    new_item->cb_data = cb_data;
+
+    if (! ilist_add_tail(oem_conn_handlers, new_item, NULL)) {
+	ipmi_mem_free(new_item);
+	return ENOMEM;
+    }
+
+    return 0;
 }
 
-/* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint16(unsigned char *data)
+static int
+oem_conn_handler_cmp(void *item, void *cb_data)
 {
-    return (data[0]
-	    | (data[1] << 8));
+    oem_conn_handlers_t *hndlr = item;
+    oem_conn_handlers_t *cmp = cb_data;
+
+    return ((hndlr->manufacturer_id == cmp->manufacturer_id)
+	    && (hndlr->product_id == cmp->product_id));
 }
 
-/* Add a 32-bit integer to the data, IPMI (little-endian) style. */
-void ipmi_set_uint32(unsigned char *data, int val)
+int
+ipmi_deregister_oem_conn_handler(unsigned int manufacturer_id,
+				 unsigned int product_id)
 {
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
-    data[2] = (val >> 16) & 0xff;
-    data[3] = (val >> 24) & 0xff;
+    oem_conn_handlers_t *hndlr;
+    oem_conn_handlers_t tmp;
+    ilist_iter_t        iter;
+
+    tmp.manufacturer_id = manufacturer_id;
+    tmp.product_id = product_id;
+    ilist_init_iter(&iter, oem_conn_handlers);
+    ilist_unpositioned(&iter);
+    hndlr = ilist_search_iter(&iter, oem_conn_handler_cmp, &tmp);
+    if (hndlr) {
+	ilist_delete(&iter);
+	ipmi_mem_free(hndlr);
+	return 0;
+    }
+    return ENOENT;
 }
 
-/* Add a 16-bit integer to the data, IPMI (little-endian) style. */
-void ipmi_set_uint16(unsigned char *data, int val)
+int
+ipmi_check_oem_conn_handlers(ipmi_con_t   *conn,
+			     unsigned int manufacturer_id,
+			     unsigned int product_id)
 {
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
+    oem_conn_handlers_t *hndlr;
+    oem_conn_handlers_t tmp;
+
+    tmp.manufacturer_id = manufacturer_id;
+    tmp.product_id = product_id;
+    hndlr = ilist_search(oem_conn_handlers, oem_conn_handler_cmp, &tmp);
+    if (hndlr)
+	return hndlr->handler(conn, hndlr->cb_data);
+    return 0;
 }
+
 
 #ifdef IPMI_CHECK_LOCKS
 /* Set a breakpoint here to detect locking errors. */
@@ -1098,3 +1003,68 @@ ipmi_check_lock(ipmi_lock_t *lock, char *str)
 	IPMI_REPORT_LOCK_ERROR(lock->os_hnd, str);
 }
 #endif
+
+int
+ipmi_init(os_handler_t *handler)
+{
+    int rv;
+
+    oem_conn_handlers = alloc_ilist();
+    if (!oem_conn_handlers)
+	return ENOMEM;
+
+    if (handler->create_rwlock) {
+	rv = handler->create_rwlock(handler, &global_lock);
+	if (rv)
+	    return rv;
+    } else {
+	global_lock = NULL;
+    }
+
+    if (handler->create_lock) {
+	rv = handler->create_lock(handler, &seq_lock);
+	if (rv)
+	    goto out_err;
+    } else {
+	seq_lock = NULL;
+    }
+    ipmi_os_handler = handler;
+    _ipmi_domain_init();
+    _ipmi_mc_init();
+    return 0;
+
+ out_err:
+    if (global_lock)
+	handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    if (seq_lock)
+	handler->destroy_lock(ipmi_os_handler, seq_lock);
+    return rv;
+}
+
+void
+ipmi_shutdown(void)
+{
+    if (oem_conn_handlers) {
+	oem_conn_handlers_t *hndlr;
+	ilist_iter_t        iter;
+
+	/* Destroy the members of the OEM list. */
+	ilist_init_iter(&iter, oem_conn_handlers);
+	while (ilist_first(&iter)) {
+	    hndlr = ilist_get(&iter);
+	    ilist_delete(&iter);
+	    ipmi_mem_free(hndlr);
+	}
+
+	free_ilist(oem_conn_handlers);
+	oem_conn_handlers = NULL;
+    }
+
+    _ipmi_domain_shutdown();
+    _ipmi_mc_shutdown();
+    if (global_lock)
+	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    if (seq_lock)
+	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
+    global_lock = NULL;
+}

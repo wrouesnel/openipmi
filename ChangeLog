@@ -1,6 +1,18 @@
 
 2003-05-13 Corey Minyard <cminyard@mvista.com>
 
+	* ipmi.c, ipmi_lan.c, ipmi_smi.c: Added infrastructure so that
+	OEMs can see connections by device id when the connection is
+	first established.
+	* include/OpenIPMI/ipmi_oem.h: ditto
+	* include/OpenIPMI/ipmi_int.h: ditto
+	
+	* ipmicmd.c: Reworked this so it sits on top of an IPMI
+	connection.  This means you can make LAN connection now.
+
+	* ipmi_utils.c: Split out some generic IPMI things that don't
+	depend on anything else.
+	
 	* everything: Added the concept of an IPMI domain, and replaced
 	the "BMC" with the "domain".  This was not a huge change from a
 	usage point of view, but was a big restructure internally.  This

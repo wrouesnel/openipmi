@@ -61,6 +61,8 @@ static int debug = 0;
 
 #define MAX_ADDR 4
 
+static void log(int logtype, msg_t *msg, char *format, ...);
+
 typedef struct misc_data
 {
     int lan_fd[MAX_ADDR];
@@ -76,12 +78,12 @@ dump_hex(void *vdata, int len, int left)
     int i;
     for (i=0; i<len; i++) {
 	if (left == 0) {
-	    printf("\n  ");
+	    log(DEBUG,  NULL, "\n  ");
 	    left = 15;
 	} else {
 	    left--;
 	}
-	printf(" %2.2x", data[i]);
+	log(DEBUG, NULL, " %2.2x", data[i]);
     }
 
     return left;
@@ -117,14 +119,14 @@ lan_send(lan_data_t *lan,
 
     if (debug) {
 	int left, i;
-	printf("Sending message to:\n  ");
+	log(DEBUG, NULL, "Sending message to:\n  ");
 	dump_hex(&l->addr, l->addr_len, 16);
-	printf("\nMsg:\n  ");
+	log(DEBUG, NULL, "\nMsg:\n  ");
 	left = 16;
 	for (i=0; i<vecs; i++) {
 	    left = dump_hex(data[i].iov_base, data[i].iov_len, left);
 	}
-	printf("\n");
+	log(DEBUG, NULL, "\n");
     }
 
     msg.msg_name = &(l->addr);
@@ -245,7 +247,7 @@ handle_msg_ipmi(int smi_fd, lan_data_t *lan)
 	    rdata[0] = IPMI_REQUEST_DATA_TRUNCATED_CC;
 	    rsp.msg.data_len = sizeof(rdata);
 	} else {
-	    printf("Error receiving message: %s\n", strerror(errno));
+	    log(DEBUG, NULL, "Error receiving message: %s\n", strerror(errno));
 	    return;
 	}
     }
@@ -272,7 +274,7 @@ handle_msg_ipmi(int smi_fd, lan_data_t *lan)
 	rsp.msg.data_len += 7;
 	data[rsp.msg.data_len-1] = ipmb_checksum(data+1, rsp.msg.data_len-2, 0);
     } else {
-	printf("Error!\n");
+	log(DEBUG, NULL, "Error!\n");
 	return;
     }
 
@@ -298,11 +300,11 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
     l.xmit_fd = lan_fd;
 
     if (debug) {
-	printf("Got message from:\n  ");
+	log(DEBUG, NULL, "Got message from:\n  ");
 	dump_hex(&l.addr, l.addr_len, 16);
-	printf("\nMsg:\n  ");
+	log(DEBUG, NULL, "\nMsg:\n  ");
 	dump_hex(data, len, 16);
-	printf("\n");
+	log(DEBUG, NULL, "\n");
     }
 
     if (len < 4)
@@ -750,10 +752,11 @@ log(int logtype, msg_t *msg, char *format, ...)
 	strcpy(fullformat, timebuf);
 	strcat(fullformat, ": ");
 	strcat(fullformat, format);
-	if (logtype == DEBUG) {
+	if (debug || (logtype == DEBUG)) {
 	    vprintf(fullformat, ap);
 	    printf("\n");
-	} else
+	}
+	if (logtype != DEBUG)
 	    vsyslog(LOG_NOTICE, fullformat, ap);
     }
     va_end(ap);
