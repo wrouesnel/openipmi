@@ -349,6 +349,8 @@ char *ipmi_get_entity_id_string(unsigned int val);
 #define IPMI_CONTROL_FAN_SPEED		7
 #define IPMI_CONTROL_IDENTIFIER		8
 #define IPMI_CONTROL_ONE_SHOT_RESET	9
+#define IPMI_CONTROL_OUTPUT		10
+#define IPMI_CONTROL_ONE_SHOT_OUTPUT	11
 char *ipmi_get_control_type_string(unsigned int val);
 
 #define IPMI_CONTROL_COLOR_BLACK	0

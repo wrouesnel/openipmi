@@ -13,11 +13,11 @@
 
 3: Add a way to get the reason for the last AMC reset.
 
-1: Add identifier control for AMC HW version
+*1: Add identifier control for AMC HW version
 
-1: Add identifier control for AMC FW version
+*1: Add identifier control for AMC FW version
 
-1: Add identifier control for AMC FPGA version
+*1: Add identifier control for AMC FPGA version
 
 5: Add identifier control for display panel HW version
 
@@ -31,11 +31,11 @@
 
 4: Add control for board power delay
 
-1: Add control for slot bd_sel
+!1: Add control for slot bd_sel
 
-1: Add control for slot healthy
+1: Add sensor for slot healthy
 
-1: Add control for slot PCI reset
+!1: Add control for slot PCI reset
 
 5: Add control for heartbeat source
 
@@ -43,15 +43,15 @@
 
 5: Add control for heartbeat action
 
-1: Add control for AMC cooling LED
+!1: Add control for AMC cooling LED
 
-1: Add control for AMC temp LED
+!1: Add control for AMC temp LED
 
 5: Add sensor for digital input value
 
 5: Add control for digital output value
 
-1: Initialize I2C and bd_sel states for a slot
+!1: Add a control board slot init
 
 1: Add code for AMC IPMB auto-isolate
 
@@ -59,15 +59,15 @@
 
 5: Do an AMC FPGA upgrade
 
-1: Add an identifier control for power supply type
+!1: Add an identifier control for power supply type
 
-?: Add an identifier control for power supply revision
+!?: Add an identifier control for power supply revision
 
 1: Add control for fan I2C enabled state
 
-1: Add control for fan identity
+!1: Add control for fan identity
 
-1: Add control for fan revision
+!1: Add control for fan revision
 
 1: Add getting the actual fan speed
 

@@ -548,9 +548,10 @@ software.
 Controls are not part of the IPMI spec, but are necessary items in
 almost all systems.  They are provided as part of OpenIPMI so that OEM
 code has a consistent way to represent these, and so OpenIPMI is ready
-when the IPMI team finally sees the light and adds controls.
-OpenIPMI defines many types of control: lights, relays, displays,
-alarms, reset, one-shot-reset, power, fan speed, and identifiers.
+when the IPMI team finally sees the light and adds controls.  OpenIPMI
+defines many types of control: lights, relays, displays, alarms,
+reset, one-shot-reset, power, fan speed, general outputs, one-shot
+outputs, and identifiers.
 
 For all controls except displays and identifiers, the control may
 actually control more than one device.  With some controls, multiple
@@ -590,6 +591,11 @@ power control on a board would generally control input power to the
 board.
 
 Fan speed controls can be used to set the speed of a fan.
+
+General outputs are outputs that don't fall into one of the previous
+categories.  One-shot outputs are like general outputs, but perform
+some action when set to one and are not readable.  Setting them to
+zero returns an error.
 
 Identifier controls hold identification information for a system, such
 as a chassis id, chassis type, geographic address, or whatever.
