@@ -17,6 +17,8 @@
 	* lib/mc.c, lib/sel.c, lib/event.c: Fixed some problem with
 	handling errors from SEL deletes.
 
+	* unix/posix_thread_os_hnd.c: Add a missing return.
+
 2004-10-04 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_control.h, lib/control.c: Add the ability

@@ -840,7 +840,7 @@ int
 ipmi_posix_thread_sel_select(os_handler_t   *os_hnd,
 			     struct timeval *timeout)
 {
-    perform_one_op(os_hnd, timeout);
+    return perform_one_op(os_hnd, timeout);
 }
 
 void
