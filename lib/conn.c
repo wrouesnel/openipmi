@@ -32,6 +32,7 @@
  */
 
 #include <errno.h>
+#include <string.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 
@@ -289,6 +290,201 @@ ipmi_conn_check_oem_handlers(ipmi_con_t               *conn,
     conn_oem_check_done(conn, check);
 
     return 0;
+}
+
+/***********************************************************************
+ *
+ * Handling anonmymous attributes for connections
+ *
+ **********************************************************************/
+
+struct ipmi_con_attr_s
+{
+    char *name;
+    void *data;
+
+    ipmi_lock_t *lock;
+    unsigned int refcount;
+
+    ipmi_con_attr_kill_cb destroy;
+    void                  *cb_data;
+};
+
+static int
+destroy_attr(void *cb_data, void *item1, void *item2)
+{
+    ipmi_con_t      *con = cb_data;
+    ipmi_con_attr_t *attr = item1;
+
+    locked_list_remove(con->attr, item1, item2);
+    ipmi_con_attr_put(attr);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+typedef struct con_attr_cmp_s
+{
+    char            *name;
+    ipmi_con_attr_t *attr;
+} con_attr_cmp_t;
+
+static int
+con_attr_cmp(void *cb_data, void *item1, void *item2)
+{
+    con_attr_cmp_t  *info = cb_data;
+    ipmi_con_attr_t *attr = item1;
+
+    if (strcmp(info->name, attr->name) == 0) {
+	info->attr = attr;
+	return LOCKED_LIST_ITER_STOP;
+    }
+
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+int
+ipmi_con_register_attribute(ipmi_con_t            *con,
+			    char                  *name,
+			    ipmi_con_attr_init_cb init,
+			    ipmi_con_attr_kill_cb destroy,
+			    void                  *cb_data,
+			    ipmi_con_attr_t       **attr)
+{
+    ipmi_con_attr_t     *val = NULL;
+    con_attr_cmp_t      info;
+    int                 rv = 0;
+    locked_list_entry_t *entry;
+
+    info.name = name;
+    info.attr = NULL;
+    locked_list_lock(con->attr);
+    locked_list_iterate_nolock(con->attr, con_attr_cmp, &info);
+    if (info.attr) {
+	ipmi_lock(info.attr->lock);
+	info.attr->refcount++;
+	ipmi_unlock(info.attr->lock);
+	*attr = info.attr;
+	goto out_unlock;
+    }
+
+    val = ipmi_mem_alloc(sizeof(*val));
+    if (!val) {
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    val->name = ipmi_strdup(name);
+    if (!val->name) {
+	ipmi_mem_free(val);
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    entry = locked_list_alloc_entry();
+    if (!entry) {
+	ipmi_mem_free(val->name);
+	ipmi_mem_free(val);
+	rv = ENOMEM;
+	goto out_unlock;
+    }
+
+    rv = ipmi_create_lock_os_hnd(con->os_hnd, &val->lock);
+    if (rv) {
+	locked_list_free_entry(entry);
+	ipmi_mem_free(val->name);
+	ipmi_mem_free(val);
+	goto out_unlock;
+    }
+
+    val->refcount = 2;
+    val->destroy = destroy;
+    val->cb_data = cb_data;
+    val->data = NULL;
+
+    if (init) {
+	rv = init(con, cb_data, &val->data);
+	if (rv) {
+	    ipmi_destroy_lock(val->lock);
+	    locked_list_free_entry(entry);
+	    ipmi_mem_free(val->name);
+	    ipmi_mem_free(val);
+	    rv = ENOMEM;
+	    goto out_unlock;
+	}
+    }
+
+    locked_list_add_entry_nolock(con->attr, val, NULL, entry);
+
+    *attr = val;
+
+ out_unlock:
+    locked_list_unlock(con->attr);
+    return rv;
+}
+			       
+int
+ipmi_con_find_attribute(ipmi_con_t      *con,
+			char             *name,
+			ipmi_con_attr_t **attr)
+{
+    con_attr_cmp_t info;
+
+    if (!con->attr)
+	return EINVAL;
+
+    /* Attributes are immutable, no lock is required. */
+    info.name = name;
+    info.attr = NULL;
+    locked_list_iterate(con->attr, con_attr_cmp, &info);
+    if (info.attr) {
+	ipmi_lock(info.attr->lock);
+	info.attr->refcount++;
+	ipmi_unlock(info.attr->lock);
+	*attr = info.attr;
+	return 0;
+    }
+    return EINVAL;
+}
+
+void *
+ipmi_con_attr_get_data(ipmi_con_attr_t *attr)
+{
+    return attr->data;
+}
+
+void
+ipmi_con_attr_put(ipmi_con_attr_t *attr)
+{
+    ipmi_lock(attr->lock);
+    attr->refcount--;
+    if (attr->refcount > 0) {
+	ipmi_unlock(attr->lock);
+	return;
+    }
+    ipmi_unlock(attr->lock);
+    if (attr->destroy)
+	attr->destroy(attr->cb_data, attr->data);
+    ipmi_destroy_lock(attr->lock);
+    ipmi_mem_free(attr->name);
+    ipmi_mem_free(attr);
+}
+
+int
+ipmi_con_attr_init(ipmi_con_t *con)
+{
+    con->attr = locked_list_alloc(con->os_hnd);
+    if (!con->attr)
+	return ENOMEM;
+    return 0;
+}
+
+void
+ipmi_con_attr_cleanup(ipmi_con_t *con)
+{
+    if (con->attr) {
+	locked_list_iterate(con->attr, destroy_attr, con);
+	locked_list_destroy(con->attr);
+	con->attr = NULL;
+    }
 }
 
 /***********************************************************************

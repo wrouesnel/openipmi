@@ -252,6 +252,7 @@ smi_cleanup(ipmi_con_t *ipmi)
 
     if (ipmi->oem_data_cleanup)
 	ipmi->oem_data_cleanup(ipmi);
+    ipmi_con_attr_cleanup(ipmi);
     if (smi->event_handlers_lock)
 	ipmi_destroy_lock(smi->event_handlers_lock);
     if (smi->cmd_handlers_lock)
@@ -1230,6 +1231,7 @@ cleanup_con(ipmi_con_t *ipmi)
     os_handler_t *handlers = ipmi->os_hnd;
 
     if (ipmi) {
+	ipmi_con_attr_cleanup(ipmi);
 	ipmi_mem_free(ipmi);
     }
 
@@ -1481,6 +1483,10 @@ setup(int          if_num,
     ipmi->priv_level = IPMI_PRIVILEGE_ADMIN; /* Always admin privilege. */
     ipmi->ipmb_addr = 0x20; /* Assume this until told otherwise */
 
+    rv = ipmi_con_attr_init(ipmi);
+    if (rv)
+	goto out_err;
+
     smi = ipmi_mem_alloc(sizeof(*smi));
     if (!smi) {
 	rv = ENOMEM;
@@ -1493,13 +1499,6 @@ setup(int          if_num,
     smi->refcount = 1;
     smi->ipmi = ipmi;
     smi->slave_addr = 0x20; /* Assume this until told otherwise. */
-    smi->pending_cmds = NULL;
-    smi->cmd_lock = NULL;
-    smi->cmd_handlers = NULL;
-    smi->cmd_handlers_lock = NULL;
-    smi->event_handlers = NULL;
-    smi->event_handlers_lock = NULL;
-    smi->fd_wait_id = NULL;
 
     smi->fd = open_smi_fd(if_num, &smi->using_socket);
     if (smi->fd == -1) {

@@ -2315,6 +2315,8 @@ lan_cleanup(ipmi_con_t *ipmi)
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
 
+    ipmi_con_attr_cleanup(ipmi);
+
     for (i=0; i<lan->num_ip_addr; i++)
 	send_close_session(ipmi, lan, i);
 
@@ -2421,6 +2423,7 @@ cleanup_con(ipmi_con_t *ipmi)
     lan_data_t   *lan = (lan_data_t *) ipmi->con_data;
     os_handler_t *handlers = ipmi->os_hnd;
 
+    ipmi_con_attr_cleanup(ipmi);
     ipmi_mem_free(ipmi);
 
     if (lan)
@@ -3058,6 +3061,10 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
     ipmi->ipmb_addr = 0x20; /* Assume this until told otherwise */
+
+    rv = ipmi_con_attr_init(ipmi);
+    if (rv)
+	goto out_err;
 
     lan = ipmi_mem_alloc(sizeof(*lan));
     if (!lan) {

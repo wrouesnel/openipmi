@@ -2881,6 +2881,7 @@ lan_cleanup(ipmi_con_t *ipmi)
 
     if (ipmi->oem_data_cleanup)
 	ipmi->oem_data_cleanup(ipmi);
+    ipmi_con_attr_cleanup(ipmi);
     if (lan->event_handlers_lock)
 	ipmi_destroy_lock(lan->event_handlers_lock);
     if (lan->con_change_lock)
@@ -2958,6 +2959,7 @@ cleanup_con(ipmi_con_t *ipmi)
 	    lan_list = lan->next;
 	ipmi_unlock(lan_list_lock);
 
+	ipmi_con_attr_cleanup(ipmi);
 	if (lan->event_handlers_lock)
 	    ipmi_destroy_lock(lan->event_handlers_lock);
 	if (lan->con_change_lock)
@@ -4216,6 +4218,10 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->con_type = "rmcp";
     ipmi->priv_level = privilege;
     ipmi->ipmb_addr = 0x20; /* Assume this until told otherwise */
+
+    rv = ipmi_con_attr_init(ipmi);
+    if (rv)
+	goto out_err;
 
     lan = ipmi_mem_alloc(sizeof(*lan));
     if (!lan) {

@@ -282,6 +282,12 @@ struct ipmi_con_s
 			       ipmi_addr_t  *addr,
 			       unsigned int addr_len,
 			       ipmi_msg_t   *msg);
+
+    /* Used by the connection attribute code.  Don't do anything with
+       this yourself!.  The thing that creates this connection should
+       call ipmi_con_attr_init() when the connection is created and
+       ipmi_con_attr_cleanup() when the connection is destroyed. */
+    void *attr;
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")
@@ -360,6 +366,47 @@ void ipmi_free_msg_item_data(void *data);
    data if necessary.  This will *not* copy the data items, just the
    address and message. */
 void ipmi_move_msg_item(ipmi_msgi_t *new_item, ipmi_msgi_t *old_item);
+
+/*
+ * Connection attributes.  These are named items that code may create
+ * to attach a void data item to a connection by name.  It can then
+ * look up the data item by name.  Note that you can call
+ * ipmi_con_register_attribute multiple times.  The first time will
+ * create the item, the rest of the times will return the existing
+ * item.
+ *
+ * When the connection is destroyed, the destroy function will be
+ * called on the attribute so the memory (or anything else) can be
+ * cleaned up.
+ *
+ * This is especially for use by RMCP+ payloads so they may attach
+ * data to the connection they are associated with.
+ */
+typedef struct ipmi_con_attr_s ipmi_con_attr_t;
+
+/* Attr init function.  Return the data item in the data field.  Returns
+   an error value.  Will only be called once for the attribute.  */
+typedef int (*ipmi_con_attr_init_cb)(ipmi_con_t *con, void *cb_data,
+				     void **data);
+
+/* Called when the attribute is destroyed.  Note that this may happen
+   after connection destruction, so the connection may not exist any
+   more. */
+typedef void (*ipmi_con_attr_kill_cb)(void *cb_data, void *data);
+
+int ipmi_con_register_attribute(ipmi_con_t            *con,
+				char                  *name,
+				ipmi_con_attr_init_cb init,
+				ipmi_con_attr_kill_cb destroy,
+				void                  *cb_data,
+				ipmi_con_attr_t       **attr);
+int ipmi_con_find_attribute(ipmi_con_t      *con,
+			    char             *name,
+			    ipmi_con_attr_t **attr);
+void *ipmi_con_attr_get_data(ipmi_con_attr_t *attr);
+void ipmi_con_attr_put(ipmi_con_attr_t *attr);
+int ipmi_con_attr_init(ipmi_con_t *con);
+void ipmi_con_attr_cleanup(ipmi_con_t *con);
 
 #ifdef __cplusplus
 }
