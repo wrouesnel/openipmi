@@ -1,3 +1,8 @@
+2003-10-09 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/priv_table.c: Fixed the permissions checking code, ADMIN
+	privilege was specified incorrectly for unknown messages and magic
+	numbers were replaced with defined names.
 
 2003-10-08 Livio Pugliese <lpugliese@uxcomm.com>
 

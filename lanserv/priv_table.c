@@ -420,8 +420,7 @@ ipmi_cmd_permitted(unsigned char priv,
     int      perm;
 
     /* Priviledges */
-    priv--;
-    if (priv >= 4)
+    if ((priv < IPMI_PRIVILEGE_CALLBACK) || (priv > IPMI_PRIVILEGE_ADMIN))
 	return IPMI_PRIV_INVALID;
 
     if ((netfn > IPMI_TRANSPORT_NETFN)
@@ -429,14 +428,17 @@ ipmi_cmd_permitted(unsigned char priv,
     {
 	/* All things not in the table are assumed to take
            administrator priviledge. */
-	if (priv == 4)
+	if (priv == IPMI_PRIVILEGE_ADMIN)
 	    return IPMI_PRIV_PERMITTED;
 	else
 	    return IPMI_PRIV_DENIED;
     }
 
     perm = priv_table[netfn>>1].vals[cmd];
-    perm >>= 4 * priv;
+    /* Extract the permissions for the given privilege from the
+       permission word.  The tables are 0-based, but the first valid
+       privilege is 1, thus the (priv - 1) here. */
+    perm >>= 4 * (priv - 1);
     perm &= 0xf;
 
     switch (perm)
