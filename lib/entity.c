@@ -6506,6 +6506,151 @@ e_check_hot_swap_state(ipmi_entity_t *ent)
     return 0;
 }
 
+
+
+/***********************************************************************
+ *
+ * More hot-swap stuff.  Don't use it.  This is only here because HPI
+ * requires it.
+ *
+ **********************************************************************/
+
+int
+ipmi_entity_get_hot_swap_indicator(ipmi_entity_t      *ent,
+				   ipmi_entity_val_cb handler,
+				   void               *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.get_hot_swap_indicator)
+	return ENOSYS;
+    return ent->hs_cb.get_hot_swap_indicator(ent, handler, cb_data);
+}
+
+int
+ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
+				   int            val,
+				   ipmi_entity_cb done,
+				   void           *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.set_hot_swap_indicator)
+	return ENOSYS;
+    return ent->hs_cb.set_hot_swap_indicator(ent, val, done, cb_data);
+}
+
+int
+ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
+				   ipmi_entity_val_cb handler,
+				   void               *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.get_hot_swap_requester)
+	return ENOSYS;
+    return ent->hs_cb.get_hot_swap_requester(ent, handler, cb_data);
+}
+
+static void
+entity_get_hot_swap_indicator_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_val_cb_info_t *info = cb_data;
+
+    if (!ent->hot_swappable)
+	info->rv = ENOSYS;
+    else if (!ent->hs_cb.get_hot_swap_indicator)
+	info->rv = ENOSYS;
+    else
+	info->rv = ent->hs_cb.get_hot_swap_indicator(ent,
+						     info->handler,
+						     info->cb_data);
+}
+
+int
+ipmi_entity_id_get_hot_swap_indicator(ipmi_entity_id_t   id,
+				      ipmi_entity_val_cb handler,
+				      void               *cb_data)
+{
+    entity_val_cb_info_t info;
+    int                  rv;
+
+    info.rv = 0;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_get_hot_swap_indicator_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_set_hot_swap_indicator_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_cb_info_t *info = cb_data;
+
+    if (!ent->hot_swappable)
+	info->rv = ENOSYS;
+    else if (!ent->hs_cb.set_hot_swap_indicator)
+	info->rv = ENOSYS;
+    else
+	info->rv = ent->hs_cb.set_hot_swap_indicator(ent,
+						     info->val,
+						     info->handler,
+						     info->cb_data);
+}
+
+int
+ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
+				      int              val,
+				      ipmi_entity_cb   done,
+				      void             *cb_data)
+{
+    entity_cb_info_t info;
+    int              rv;
+
+    info.rv = 0;
+    info.val = val;
+    info.handler = done;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_set_hot_swap_indicator_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
+static void
+entity_get_hot_swap_requester_cb(ipmi_entity_t *ent, void *cb_data)
+{
+    entity_val_cb_info_t *info = cb_data;
+
+    if (!ent->hot_swappable)
+	info->rv = ENOSYS;
+    else if (!ent->hs_cb.get_hot_swap_requester)
+	info->rv = ENOSYS;
+    else
+	info->rv = ent->hs_cb.get_hot_swap_requester(ent,
+						     info->handler,
+						     info->cb_data);
+}
+
+int
+ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
+				      ipmi_entity_val_cb handler,
+				      void               *cb_data)
+{
+    entity_val_cb_info_t info;
+    int                  rv;
+
+    info.rv = 0;
+    info.handler = handler;
+    info.cb_data = cb_data;
+    rv = ipmi_entity_pointer_cb(id, entity_get_hot_swap_requester_cb, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
+
 /***********************************************************************
  *
  * Entity message handling.
@@ -6936,147 +7081,3 @@ ipmi_entity_get_multi_record_data(ipmi_entity_t *entity,
 	return ENOSYS;
     return ipmi_fru_get_multi_record_data(entity->fru, num, data, length);
 }
-
-
-/***********************************************************************
- *
- * Cruft
- *
- **********************************************************************/
-
-int
-ipmi_entity_get_hot_swap_indicator(ipmi_entity_t      *ent,
-				   ipmi_entity_val_cb handler,
-				   void               *cb_data)
-{
-    if (!ent->hot_swappable)
-	return ENOSYS;
-    if (!ent->hs_cb.get_hot_swap_indicator)
-	return ENOSYS;
-    return ent->hs_cb.get_hot_swap_indicator(ent, handler, cb_data);
-}
-
-int
-ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
-				   int            val,
-				   ipmi_entity_cb done,
-				   void           *cb_data)
-{
-    if (!ent->hot_swappable)
-	return ENOSYS;
-    if (!ent->hs_cb.set_hot_swap_indicator)
-	return ENOSYS;
-    return ent->hs_cb.set_hot_swap_indicator(ent, val, done, cb_data);
-}
-
-int
-ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
-				   ipmi_entity_val_cb handler,
-				   void               *cb_data)
-{
-    if (!ent->hot_swappable)
-	return ENOSYS;
-    if (!ent->hs_cb.get_hot_swap_requester)
-	return ENOSYS;
-    return ent->hs_cb.get_hot_swap_requester(ent, handler, cb_data);
-}
-
-static void
-entity_get_hot_swap_indicator_cb(ipmi_entity_t *ent, void *cb_data)
-{
-    entity_val_cb_info_t *info = cb_data;
-
-    if (!ent->hot_swappable)
-	info->rv = ENOSYS;
-    else if (!ent->hs_cb.get_hot_swap_indicator)
-	info->rv = ENOSYS;
-    else
-	info->rv = ent->hs_cb.get_hot_swap_indicator(ent,
-						     info->handler,
-						     info->cb_data);
-}
-
-int
-ipmi_entity_id_get_hot_swap_indicator(ipmi_entity_id_t   id,
-				      ipmi_entity_val_cb handler,
-				      void               *cb_data)
-{
-    entity_val_cb_info_t info;
-    int                  rv;
-
-    info.rv = 0;
-    info.handler = handler;
-    info.cb_data = cb_data;
-    rv = ipmi_entity_pointer_cb(id, entity_get_hot_swap_indicator_cb, &info);
-    if (!rv)
-	rv = info.rv;
-    return rv;
-}
-
-static void
-entity_set_hot_swap_indicator_cb(ipmi_entity_t *ent, void *cb_data)
-{
-    entity_cb_info_t *info = cb_data;
-
-    if (!ent->hot_swappable)
-	info->rv = ENOSYS;
-    else if (!ent->hs_cb.set_hot_swap_indicator)
-	info->rv = ENOSYS;
-    else
-	info->rv = ent->hs_cb.set_hot_swap_indicator(ent,
-						     info->val,
-						     info->handler,
-						     info->cb_data);
-}
-
-int
-ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
-				      int              val,
-				      ipmi_entity_cb   done,
-				      void             *cb_data)
-{
-    entity_cb_info_t info;
-    int              rv;
-
-    info.rv = 0;
-    info.val = val;
-    info.handler = done;
-    info.cb_data = cb_data;
-    rv = ipmi_entity_pointer_cb(id, entity_set_hot_swap_indicator_cb, &info);
-    if (!rv)
-	rv = info.rv;
-    return rv;
-}
-
-static void
-entity_get_hot_swap_requester_cb(ipmi_entity_t *ent, void *cb_data)
-{
-    entity_val_cb_info_t *info = cb_data;
-
-    if (!ent->hot_swappable)
-	info->rv = ENOSYS;
-    else if (!ent->hs_cb.get_hot_swap_requester)
-	info->rv = ENOSYS;
-    else
-	info->rv = ent->hs_cb.get_hot_swap_requester(ent,
-						     info->handler,
-						     info->cb_data);
-}
-
-int
-ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
-				      ipmi_entity_val_cb handler,
-				      void               *cb_data)
-{
-    entity_val_cb_info_t info;
-    int                  rv;
-
-    info.rv = 0;
-    info.handler = handler;
-    info.cb_data = cb_data;
-    rv = ipmi_entity_pointer_cb(id, entity_get_hot_swap_requester_cb, &info);
-    if (!rv)
-	rv = info.rv;
-    return rv;
-}
-

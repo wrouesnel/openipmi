@@ -127,12 +127,6 @@ int ipmi_bmc_set_smi_slave_addr_fetcher(
    is old. */
 ipmi_time_t ipmi_mc_get_startup_SEL_time(ipmi_mc_t *bmc);
 
-typedef void (ipmi_mc_del_event_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
-int ipmi_mc_del_event(ipmi_mc_t                 *mc,
-		      ipmi_event_t              *event, 
-		      ipmi_mc_del_event_done_cb handler,
-		      void                      *cb_data);
-
 /* Some OEM boxes may have special SEL delete requirements, so we have
    a special hook to let the OEM code delete events on an MC with SEL
    support. */

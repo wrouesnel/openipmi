@@ -78,6 +78,14 @@ struct ipmi_sel_info_s
     uint16_t entries;
     uint32_t last_addition_timestamp;
     uint32_t last_erase_timestamp;
+
+    /* These are here to store the timestamps until the operation
+       completes.  Successfully.  Otherwise, if we restart the fetch,
+       it will have the timestamps set wrong and won't do the
+       fetch. */
+    uint32_t curr_addition_timestamp;
+    uint32_t curr_erase_timestamp;
+
     uint16_t free_bytes;
     unsigned int overflow : 1;
     unsigned int supports_delete_sel : 1;
@@ -550,7 +558,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 	if (!ilist_add_tail(sel->events, holder, NULL)) {
 	    ipmi_mem_free(holder);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%ssel.c(handle_sel_clear): "
+		     "%ssel.c(handle_sel_data): "
 		     "Could not link log onto the log linked list",
 		     sel->name);
 	    fetch_complete(sel, ENOMEM);
@@ -577,6 +585,12 @@ handle_sel_data(ipmi_mc_t  *mc,
     }
 
     if (sel->next_rec_id == 0xFFFF) {
+	/* Only set the timestamps if the SEL fetch completed
+	   successfully.  If we were unsuccessful, we want to redo the
+	   operation so don't set the timestamps. */
+	sel->last_addition_timestamp = sel->curr_addition_timestamp;
+	sel->last_erase_timestamp = sel->curr_erase_timestamp;
+
 	/* To avoid confusion, deliver the event before we deliver fetch
            complete. */
 	if (event_is_new)
@@ -586,9 +600,12 @@ handle_sel_data(ipmi_mc_t  *mc,
 				       del_event,
 				       sel->new_event_cb_data);
 	/* If the operation completed successfully and everything in
-	   our SEL is deleted, then clear it with our old
-	   reservation. */
-	if ((sel->num_sels == 0) && (!ilist_empty(sel->events))) {
+	   our SEL is deleted, then clear it with our old reservation.
+	   We also do the clear if the overflow flag is set; on some
+	   systems this operation clears the overflow flag. */
+	if ((sel->num_sels == 0)
+	    && ((!ilist_empty(sel->events)) || sel->overflow))
+	{
 	    /* We don't care if this fails, because it will just
 	       happen again later if it does. */
 	    rv = send_sel_clear(elem, mc);
@@ -702,9 +719,12 @@ handle_sel_info(ipmi_mc_t  *mc,
 	&& (erase_timestamp == sel->last_erase_timestamp))
     {
 	/* If the operation completed successfully and everything in
-	   our SEL is deleted, then clear it with our old
-	   reservation. */
-	if ((sel->num_sels == 0) && (!ilist_empty(sel->events))) {
+	   our SEL is deleted, then clear it with our old reservation.
+	   We also do the clear if the overflow flag is set; on some
+	   systems this operation clears the overflow flag. */
+	if ((sel->num_sels == 0)
+	    && ((!ilist_empty(sel->events)) || sel->overflow))
+	{
 	    /* We don't care if this fails, because it will just
 	       happen again later if it does. */
 	    rv = send_sel_clear(elem, mc);

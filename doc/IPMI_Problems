@@ -71,6 +71,12 @@
 17) There is no locking of FRU data to support multiple
     readers/writers.
 
+18) FRU data has no "last write time", so you have no way to know if
+    it has changed since the previous reading of it.
+
+19) There is no way to query the BMC's local IPMB address.  In bladed
+    systems, it may not be 20h.
+
 RMCP+ questions
 ---------------
 

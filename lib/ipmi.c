@@ -43,7 +43,6 @@
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_msgbits.h>
-#include <OpenIPMI/mxp.h>
 
 #include <OpenIPMI/internal/ipmi_domain.h>
 #include <OpenIPMI/internal/ipmi_mc.h>
@@ -883,7 +882,6 @@ int ipmi_oem_atca_init(void);
 int init_oem_test(void);
 int _ipmi_smi_init(os_handler_t *os_hnd);
 int _ipmi_lan_init(os_handler_t *os_hnd);
-int _ipmi_mxp_init(os_handler_t *os_hnd);
 int ipmi_malloc_init(os_handler_t *os_hnd);
 int _ipmi_rakp_init(void);
 int _ipmi_aes_cbc_init(void);
@@ -895,7 +893,6 @@ void ipmi_oem_intel_shutdown(void);
 void ipmi_oem_atca_shutdown(void);
 int _ipmi_smi_shutdown(void);
 int _ipmi_lan_shutdown(void);
-int _ipmi_mxp_shutdown(void);
 
 int
 ipmi_init(os_handler_t *handler)
@@ -930,10 +927,6 @@ ipmi_init(os_handler_t *handler)
     if (rv)
 	goto out_err;
 
-    rv = _ipmi_mxp_init(handler);
-    if (rv)
-	goto out_err;
-
     _ipmi_domain_init();
     _ipmi_mc_init();
 
@@ -961,7 +954,6 @@ ipmi_init(os_handler_t *handler)
     return 0;
 
  out_err:
-    _ipmi_mxp_shutdown();
     _ipmi_smi_shutdown();
     _ipmi_lan_shutdown();
     ipmi_oem_intel_shutdown();
@@ -976,7 +968,6 @@ ipmi_init(os_handler_t *handler)
 void
 ipmi_shutdown(void)
 {
-    _ipmi_mxp_shutdown();
     _ipmi_lan_shutdown();
     _ipmi_smi_shutdown();
     ipmi_oem_atca_shutdown();
@@ -989,7 +980,7 @@ ipmi_shutdown(void)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
 }
 
-enum con_type_e { SMI, LAN, MXP };
+enum con_type_e { SMI, LAN };
 
 struct ipmi_args_s
 {
@@ -1144,83 +1135,6 @@ ipmi_parse_args(int         *curr_arg,
 	memcpy(p->password, args[*curr_arg], len);
 	p->password_len = len;
 	p->password_set = 1;
-	(*curr_arg)++;
-    } else if (strcmp(args[*curr_arg], "mxp") == 0) {
-	struct hostent *ent;
-
-	(*curr_arg)++; CHECK_ARG;
-
-	p->con_type = MXP;
-	p->num_addr = 1;
-
-	ent = gethostbyname(args[*curr_arg]);
-	if (!ent) {
-	    rv = h_errno;
-	    goto out_err;
-	}
-	memcpy(&p->lan_addr[0],
-	       ent->h_addr_list[0],
-	       ent->h_length);
-	(*curr_arg)++; CHECK_ARG;
-	p->lan_port[0] = atoi(args[*curr_arg]);
-	(*curr_arg)++; CHECK_ARG;
-
-    doauth_mxp:
-	if (strcmp(args[*curr_arg], "none") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_NONE;
-	} else if (strcmp(args[*curr_arg], "md2") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_MD2;
-	} else if (strcmp(args[*curr_arg], "md5") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_MD5;
-	} else if (strcmp(args[*curr_arg], "straight") == 0) {
-	    p->authtype = IPMI_AUTHTYPE_STRAIGHT;
-	} else if (p->num_addr == 1) {
-	    p->num_addr++;
-	    ent = gethostbyname(args[*curr_arg]);
-	    if (!ent) {
-		rv = h_errno;
-		goto out_err;
-	    }
-	    memcpy(&p->lan_addr[1],
-		   ent->h_addr_list[0],
-		   ent->h_length);
-	    (*curr_arg)++; CHECK_ARG;
-	    p->lan_port[1] = atoi(args[*curr_arg]);
-	    (*curr_arg)++; CHECK_ARG;
-
-	    goto doauth_mxp;
-	} else {
-	    rv = EINVAL;
-	    goto out_err;
-	}
-	(*curr_arg)++; CHECK_ARG;
-
-	if (strcmp(args[*curr_arg], "callback") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_CALLBACK;
-	} else if (strcmp(args[*curr_arg], "user") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_USER;
-	} else if (strcmp(args[*curr_arg], "operator") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_OPERATOR;
-	} else if (strcmp(args[*curr_arg], "admin") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_ADMIN;
-	} else if (strcmp(args[*curr_arg], "oem") == 0) {
-	    p->privilege = IPMI_PRIVILEGE_OEM;
-	} else {
-	    rv = EINVAL;
-	    goto out_err;
-	}
-	(*curr_arg)++; CHECK_ARG;
-
-	memset(p->username, 0, sizeof(p->username));
-	memset(p->password, 0, sizeof(p->password));
-	strncpy(p->username, args[*curr_arg], 16);
-	p->username[16] = '\0';
-	(*curr_arg)++; CHECK_ARG;
-	strncpy(p->password, args[*curr_arg], 16);
-	p->password[16] = '\0';
-	(*curr_arg)++; CHECK_ARG;
-
-	p->swid = strtoul(args[*curr_arg], NULL, 0);
 	(*curr_arg)++;
     } else {
 	rv = EINVAL;
@@ -1581,20 +1495,6 @@ ipmi_args_setup_con(ipmi_args_t  *args,
 	}
 	return ipmi_lanp_setup_con(parms, i, handlers, user_data, con);
     }
-
-    case MXP:
-	return mxp_lan_setup_con(args->lan_addr,
-				 args->lan_port,
-				 args->num_addr,
-				 args->authtype,
-				 args->privilege,
-				 args->username,
-				 strlen(args->username),
-				 args->password,
-				 strlen(args->password),
-				 handlers, user_data,
-				 args->swid,
-				 con);
 
     default:
 	return EINVAL;

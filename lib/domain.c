@@ -330,6 +330,19 @@ static void real_close_connection(ipmi_domain_t *domain);
 
 static void free_domain_cruft(ipmi_domain_t *domain);
 
+static void ll_con_changed(ipmi_con_t   *ipmi,
+			   int          err,
+			   unsigned int port_num,
+			   int          still_connected,
+			   void         *cb_data);
+
+static void ll_addr_changed(ipmi_con_t   *ipmi,
+			    int          err,
+			    unsigned int ipmb,
+			    int          active,
+			    unsigned int hacks,
+			    void         *cb_data);
+
 /***********************************************************************
  *
  * Some general utilities
@@ -3561,7 +3574,12 @@ real_close_connection(ipmi_domain_t *domain)
 						   domain->ll_event_id[i]);
 
 	/* Remove the connection fail handler. */
-	domain->conn[i]->set_con_change_handler(domain->conn[i], NULL,  NULL);
+	domain->conn[i]->remove_con_change_handler(domain->conn[i],
+						   ll_con_changed,
+						   domain);
+	domain->conn[i]->remove_ipmb_addr_handler(domain->conn[i],
+						  ll_addr_changed,
+						  domain);
 	domain->conn[i] = NULL;
     }
 
@@ -4074,13 +4092,6 @@ initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
     _ipmi_domain_put(domain);
 }
 
-static void ll_addr_changed(ipmi_con_t   *ipmi,
-			    int          err,
-			    unsigned int ipmb,
-			    int          active,
-			    unsigned int hacks,
-			    void         *cb_data);
-
 static void
 activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
 {
@@ -4587,8 +4598,12 @@ ipmi_open_domain(char               *name,
 	   connections. */
 	if ((con[i]->priv_level != 0) && (con[i]->priv_level < priv))
 	    priv = con[i]->priv_level;
-	con[i]->set_con_change_handler(con[i], ll_con_changed, domain);
-	con[i]->set_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+	rv = con[i]->add_con_change_handler(con[i], ll_con_changed, domain);
+	if (rv)
+	    return rv;
+	rv = con[i]->add_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+	if (rv)
+	    return rv;
     }
 
     /* Enable setting the event receiver (by default) if the privilege
@@ -4621,8 +4636,10 @@ ipmi_open_domain(char               *name,
     return rv;
 
  out_err:
-    for (i=0; i<num_con; i++)
-	con[i]->set_con_change_handler(con[i], NULL, NULL);
+    for (i=0; i<num_con; i++) {
+	con[i]->remove_con_change_handler(con[i], ll_con_changed, domain);
+	con[i]->remove_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+    }
     remove_known_domain(domain);
     cleanup_domain(domain);
     goto out;
@@ -5265,8 +5282,12 @@ ipmi_init_domain(ipmi_con_t               *con[],
 
     domain->in_startup = 1;
     for (i=0; i<num_con; i++) {
-	con[i]->set_con_change_handler(con[i], ll_con_changed, domain);
-	con[i]->set_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+	rv = con[i]->add_con_change_handler(con[i], ll_con_changed, domain);
+	if (rv)
+	    return rv;
+	rv = con[i]->add_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+	if (rv)
+	    return rv;
     }
 
     add_known_domain(domain);
@@ -5292,8 +5313,10 @@ ipmi_init_domain(ipmi_con_t               *con[],
     return rv;
 
  out_err:
-    for (i=0; i<num_con; i++)
-	con[i]->set_con_change_handler(con[i], NULL, NULL);
+    for (i=0; i<num_con; i++) {
+	con[i]->remove_con_change_handler(con[i], ll_con_changed, domain);
+	con[i]->remove_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+    }
     remove_known_domain(domain);
     cleanup_domain(domain);
     goto out;

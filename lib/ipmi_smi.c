@@ -53,6 +53,7 @@
 
 #include <OpenIPMI/internal/ipmi_event.h>
 #include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/locked_list.h>
 
 /* We time the SMI messages, but we have a long timer. */
 #define SMI_TIMEOUT 60000
@@ -142,11 +143,8 @@ typedef struct smi_data_s
     ipmi_ll_con_closed_cb close_done;
     void                  *close_cb_data;
 
-    ipmi_ll_con_changed_cb     con_change_handler;
-    void                       *con_change_cb_data;
-
-    ipmi_ll_ipmb_addr_cb ipmb_addr_handler;
-    void                 *ipmb_addr_cb_data;
+    locked_list_t          *con_change_handlers;
+    locked_list_t          *ipmb_change_handlers;
 
     struct smi_data_s *next, *prev;
 } smi_data_t;
@@ -261,6 +259,10 @@ smi_cleanup(ipmi_con_t *ipmi)
 	ipmi_destroy_lock(smi->cmd_lock);
     if (smi->fd_wait_id)
 	ipmi->os_hnd->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
+    if (smi->con_change_handlers)
+	locked_list_destroy(smi->con_change_handlers);
+    if (smi->ipmb_change_handlers)
+	locked_list_destroy(smi->ipmb_change_handlers);
 
     /* Close the fd after we have deregistered it. */
     close(smi->fd);
@@ -550,6 +552,67 @@ set_ipmb_in_dev(smi_data_t *smi)
     }
 }
 
+typedef struct call_ipmb_change_handler_s
+{
+    smi_data_t  *smi;
+    int          err;
+    unsigned int ipmb_addr;
+    int          active;
+    unsigned int hacks;
+} call_ipmb_change_handler_t;
+
+static int
+call_ipmb_change_handler(void *cb_data, void *item1, void *item2)
+{
+    call_ipmb_change_handler_t *info = cb_data;
+    ipmi_ll_ipmb_addr_cb       handler = item1;
+
+    handler(info->smi->ipmi, info->err, info->ipmb_addr, info->active,
+	    info->hacks, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+call_ipmb_change_handlers(smi_data_t *smi, int err, unsigned int ipmb_addr,
+			  int active, unsigned int hacks)
+{
+    call_ipmb_change_handler_t info;
+
+    info.smi = smi;
+    info.err = err;
+    info.ipmb_addr = ipmb_addr;
+    info.active = active;
+    info.hacks = hacks;
+    locked_list_iterate(smi->ipmb_change_handlers, call_ipmb_change_handler,
+			&info);
+}
+
+static int
+smi_add_ipmb_addr_handler(ipmi_con_t           *ipmi,
+			  ipmi_ll_ipmb_addr_cb handler,
+			  void                 *cb_data)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+
+    if (locked_list_add(smi->ipmb_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+static int
+smi_remove_ipmb_addr_handler(ipmi_con_t           *ipmi,
+			     ipmi_ll_ipmb_addr_cb handler,
+			     void                 *cb_data)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+
+    if (locked_list_remove(smi->ipmb_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
 static void
 ipmb_handler(ipmi_con_t   *ipmi,
 	     int          err,
@@ -566,23 +629,9 @@ ipmb_handler(ipmi_con_t   *ipmi,
     if (ipmb != smi->slave_addr) {
 	smi->slave_addr = ipmb;
 	ipmi->ipmb_addr = ipmb;
-	if (smi->ipmb_addr_handler)
-	    smi->ipmb_addr_handler(ipmi, err, ipmb, active, 0,
-				   smi->ipmb_addr_cb_data);
-
+	call_ipmb_change_handlers(smi, err, ipmb, active, 0);
 	set_ipmb_in_dev(smi);
     }
-}
-
-static void
-smi_set_ipmb_addr_handler(ipmi_con_t           *ipmi,
-			  ipmi_ll_ipmb_addr_cb handler,
-			  void                 *cb_data)
-{
-    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
-
-    smi->ipmb_addr_handler = handler;
-    smi->ipmb_addr_cb_data = cb_data;
 }
 
 static void
@@ -1246,20 +1295,70 @@ cleanup_con(ipmi_con_t *ipmi)
 	    close(smi->fd);
 	if (smi->fd_wait_id)
 	    handlers->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
+	if (smi->con_change_handlers)
+	    locked_list_destroy(smi->con_change_handlers);
+	if (smi->ipmb_change_handlers)
+	    locked_list_destroy(smi->ipmb_change_handlers);
 	ipmi_mem_free(smi);
     }
 }
 
+typedef struct call_con_change_handler_s
+{
+    smi_data_t  *smi;
+    int          err;
+    unsigned int port;
+    int          any_port_up;
+} call_con_change_handler_t;
+
+static int
+call_con_change_handler(void *cb_data, void *item1, void *item2)
+{
+    call_con_change_handler_t  *info = cb_data;
+    ipmi_ll_con_changed_cb     handler = item1;
+
+    handler(info->smi->ipmi, info->err, info->port, info->any_port_up, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 static void
-smi_set_con_change_handler(ipmi_con_t             *ipmi,
+call_con_change_handlers(smi_data_t *smi, int err, unsigned int port,
+			 int any_port_up)
+{
+    call_con_change_handler_t info;
+
+    info.smi = smi;
+    info.err = err;
+    info.port = port;
+    info.any_port_up = any_port_up;
+    locked_list_iterate(smi->con_change_handlers, call_con_change_handler,
+			&info);
+}
+
+static int
+smi_add_con_change_handler(ipmi_con_t             *ipmi,
 			   ipmi_ll_con_changed_cb handler,
 			   void                   *cb_data)
 {
-    smi_data_t *smi = ipmi->con_data;
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
 
-    smi->con_change_handler = handler;
-    smi->con_change_cb_data = cb_data;
-    return;
+    if (locked_list_add(smi->con_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+static int
+smi_remove_con_change_handler(ipmi_con_t             *ipmi,
+			      ipmi_ll_con_changed_cb handler,
+			      void                   *cb_data)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+
+    if (locked_list_remove(smi->con_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 static void
@@ -1270,8 +1369,7 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 
     ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
 
-    if (smi->con_change_handler)
-	smi->con_change_handler(ipmi, 0, 1, 1, smi->con_change_cb_data);
+    call_con_change_handlers(smi, 0, 1, 1);
 }
 
 static void
@@ -1285,10 +1383,7 @@ smi_set_ipmb_addr(ipmi_con_t    *ipmi,
     if (smi->slave_addr != ipmb) {
 	smi->slave_addr = ipmb;
 	ipmi->ipmb_addr = ipmb;
-	if (smi->ipmb_addr_handler)
-	    smi->ipmb_addr_handler(ipmi, 0, ipmb, active, 0,
-				   smi->ipmb_addr_cb_data);
-
+	call_ipmb_change_handlers(smi, 0, ipmb, active, 0);
 	set_ipmb_in_dev(smi);
     }
 }
@@ -1321,8 +1416,7 @@ finish_connection(ipmi_con_t *ipmi, smi_data_t *smi)
     return;
 
  out_err:
-    if (smi->con_change_handler)
-	smi->con_change_handler(ipmi, err, 0, 0, smi->con_change_cb_data);
+    call_con_change_handlers(smi, err, 0, 0);
 }
 
 static void
@@ -1336,18 +1430,14 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     smi_data_t *smi = (smi_data_t *) ipmi->con_data;
 
     if (err) {
-	if (smi->con_change_handler)
-	    smi->con_change_handler(ipmi, err, 0, 0, smi->con_change_cb_data);
+	call_con_change_handlers(smi, err, 0, 0);
 	return;
     }
 
     smi->slave_addr = ipmb_addr;
     ipmi->ipmb_addr = ipmb_addr;
     finish_connection(ipmi, smi);
-    if (smi->ipmb_addr_handler)
-	smi->ipmb_addr_handler(ipmi, err, ipmb_addr, active, 0,
-			       smi->ipmb_addr_cb_data);
-
+    call_ipmb_change_handlers(smi, err, ipmb_addr, active, 0);
     set_ipmb_in_dev(smi);
 }
 
@@ -1389,8 +1479,7 @@ handle_dev_id(ipmi_con_t *ipmi, ipmi_msgi_t *msgi)
     return IPMI_MSG_ITEM_NOT_USED;
 
  out_err:
-    if (smi->con_change_handler)
-	smi->con_change_handler(ipmi, err, 0, 0, smi->con_change_cb_data);
+    call_con_change_handlers(smi, err, 0, 0);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -1413,8 +1502,7 @@ smi_oem_done(ipmi_con_t *ipmi, void *cb_data)
     rv = smi_send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			  handle_dev_id, NULL);
     if (rv) {
-	if (smi->con_change_handler)
-	    smi->con_change_handler(ipmi, rv, 0, 0, smi->con_change_cb_data);
+	call_con_change_handlers(smi, rv, 0, 0);
     }
 }
 
@@ -1506,6 +1594,18 @@ setup(int          if_num,
 	goto out_err;
     }
 
+    smi->con_change_handlers = locked_list_alloc(handlers);
+    if (!smi->con_change_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    smi->ipmb_change_handlers = locked_list_alloc(handlers);
+    if (!smi->ipmb_change_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
     /* Create the locks if they are available. */
     rv = ipmi_create_lock_os_hnd(handlers, &smi->cmd_lock);
     if (rv)
@@ -1523,8 +1623,10 @@ setup(int          if_num,
 
     ipmi->start_con = smi_start_con;
     ipmi->set_ipmb_addr = smi_set_ipmb_addr;
-    ipmi->set_ipmb_addr_handler = smi_set_ipmb_addr_handler;
-    ipmi->set_con_change_handler = smi_set_con_change_handler;
+    ipmi->add_ipmb_addr_handler = smi_add_ipmb_addr_handler;
+    ipmi->remove_ipmb_addr_handler = smi_remove_ipmb_addr_handler;
+    ipmi->add_con_change_handler = smi_add_con_change_handler;
+    ipmi->remove_con_change_handler = smi_remove_con_change_handler;
     ipmi->send_command = smi_send_command;
     ipmi->register_for_events = smi_register_for_events;
     ipmi->deregister_for_events = smi_deregister_for_events;

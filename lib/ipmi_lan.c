@@ -52,6 +52,7 @@
 
 #include <OpenIPMI/internal/ipmi_event.h>
 #include <OpenIPMI/internal/ipmi_int.h>
+#include <OpenIPMI/internal/locked_list.h>
 
 #if defined(DEBUG_MSG) || defined(DEBUG_RAWMSG)
 static void
@@ -168,6 +169,31 @@ struct ipmi_rmcpp_auth_s
     unsigned int  k2_len;
 };
 
+typedef struct lan_conn_parms_s
+{
+    unsigned int  num_ip_addr;
+    sockaddr_ip_t ip_addr[MAX_IP_ADDR];
+    unsigned int  authtype;
+    unsigned int  privilege;
+    unsigned char username[IPMI_USERNAME_MAX];
+    unsigned int  username_len;
+    unsigned char password[IPMI_PASSWORD_MAX];
+    unsigned int  password_len;
+    unsigned int  conf;
+    unsigned int  integ;
+    unsigned int  auth;
+    int           name_lookup_only;
+    unsigned char bmc_key[IPMI_PASSWORD_MAX];
+    unsigned int  bmc_key_len;
+} lan_conn_parms_t;
+
+typedef struct lan_link_s lan_link_t;
+struct lan_link_s
+{
+    lan_link_t *next, *prev;
+    lan_data_t *lan;
+};
+
 #if IPMI_MAX_MSG_LENGTH > 80
 # define LAN_MAX_RAW_MSG IPMI_MAX_MSG_LENGTH
 #else
@@ -175,13 +201,17 @@ struct ipmi_rmcpp_auth_s
 #endif
 struct lan_data_s
 {
-    int			       refcount;
+    unsigned int	       refcount;
+    unsigned int	       users;
 
     ipmi_con_t                 *ipmi;
     int                        fd;
 
     unsigned char              slave_addr;
     int                        is_active;
+
+    /* Have we already been started? */
+    int                        started;
 
     /* Protects modifiecations to ip_working, curr_ip_addr, RMCP
        sequence numbers, the con_change_handler, and other
@@ -191,7 +221,6 @@ struct lan_data_s
 
     /* IP address failure detection and handling. */
     int                        curr_ip_addr;
-    sockaddr_ip_t              ip_addr[MAX_IP_ADDR];
     int                        ip_working[MAX_IP_ADDR];
     unsigned int               consecutive_ip_failures[MAX_IP_ADDR];
     struct timeval             ip_failure_time[MAX_IP_ADDR];
@@ -216,36 +245,27 @@ struct lan_data_s
     uint32_t                   outbound_seq_num[MAX_IP_ADDR];
     uint32_t                   inbound_seq_num[MAX_IP_ADDR];
     uint16_t                   recv_msg_map[MAX_IP_ADDR];
-    unsigned char              privilege;
-    unsigned char              username[IPMI_USERNAME_MAX];
-    unsigned char              username_len;
-    unsigned char              password[IPMI_PASSWORD_MAX];
-    unsigned char              password_len;
 
     /* From the get channel auth */
     unsigned char              oem_iana[3];
     unsigned char              oem_aux;
 
+    /* Parms we were configured with. */
+    lan_conn_parms_t           cparm;
+
     /* IPMI LAN 1.5 specific info. */
-    unsigned int               specified_authtype;
     unsigned char              chosen_authtype;
     unsigned char              challenge_string[16];
     ipmi_authdata_t            authdata;
 
     /* RMCP+ specific info */
-    unsigned int               requested_auth;
-    unsigned int               requested_integ;
-    unsigned int               requested_conf;
     unsigned int               use_two_keys : 1;
-    unsigned int               name_lookup_only : 1;
     uint32_t                   unauth_out_seq_num[MAX_IP_ADDR];
     uint32_t                   unauth_in_seq_num[MAX_IP_ADDR];
     uint16_t                   unauth_recv_msg_map[MAX_IP_ADDR];
     unsigned char              working_integ[MAX_IP_ADDR];
     unsigned char              working_conf[MAX_IP_ADDR];
     uint32_t                   mgsys_session_id[MAX_IP_ADDR];
-    unsigned char              bmc_key[20];
-    unsigned int               bmc_key_len;
     ipmi_rmcpp_auth_t          ainfo[MAX_IP_ADDR];
 
     /* Used to hold the session id before the connection is up. */
@@ -319,14 +339,12 @@ struct lan_data_s
        it should be harmless to the user as this is the only use for
        it.  But the user cannot do a wait on I/O in the handler. */
     ipmi_lock_t            *con_change_lock;
+    locked_list_t          *con_change_handlers;
 
-    ipmi_ll_con_changed_cb con_change_handler;
-    void                   *con_change_cb_data;
+    locked_list_t          *ipmb_change_handlers;
 
-    ipmi_ll_ipmb_addr_cb ipmb_addr_handler;
-    void                 *ipmb_addr_cb_data;
-
-    struct lan_data_s *next, *prev;
+    lan_link_t link;
+    lan_link_t ip_link[MAX_IP_ADDR];
 };
 
 
@@ -577,7 +595,7 @@ conf_none_encrypt(ipmi_con_t    *ipmi,
 		  unsigned char **payload,
 		  unsigned int  *header_len,
 		  unsigned int  *payload_len,
-		  unsigned int  max_payload_len)
+		  unsigned int  *max_payload_len)
 {
     return 0;
 }
@@ -773,13 +791,13 @@ ipmi_rmcpp_auth_get_username(ipmi_rmcpp_auth_t *ainfo,
 			     unsigned int      *max_len)
 {
     *max_len = 16;
-    return ainfo->lan->username;
+    return ainfo->lan->cparm.username;
 }
 
 unsigned int
 ipmi_rmcpp_auth_get_username_len(ipmi_rmcpp_auth_t *ainfo)
 {
-    return ainfo->lan->username_len;
+    return ainfo->lan->cparm.username_len;
 }
 
 const unsigned char *
@@ -787,13 +805,13 @@ ipmi_rmcpp_auth_get_password(ipmi_rmcpp_auth_t *ainfo,
 			     unsigned int      *max_len)
 {
     *max_len = 20;
-    return ainfo->lan->password;
+    return ainfo->lan->cparm.password;
 }
 
 unsigned int
 ipmi_rmcpp_auth_get_password_len(ipmi_rmcpp_auth_t *ainfo)
 {
-    return ainfo->lan->username_len;
+    return ainfo->lan->cparm.password_len;
 }
 
 int
@@ -808,15 +826,18 @@ ipmi_rmcpp_auth_get_bmc_key(ipmi_rmcpp_auth_t *ainfo,
 {
     *max_len = 20;
     if (ainfo->lan->use_two_keys)
-	return ainfo->lan->bmc_key;
+	return ainfo->lan->cparm.bmc_key;
     else
-	return ainfo->lan->password;
+	return ainfo->lan->cparm.password;
 }
 
 unsigned int
 ipmi_rmcpp_auth_get_bmc_key_len(ipmi_rmcpp_auth_t *ainfo)
 {
-    return ainfo->lan->bmc_key_len;
+    if (ainfo->lan->use_two_keys)
+	return ainfo->lan->cparm.bmc_key_len;
+    else
+	return ainfo->lan->cparm.password_len;
 }
 
 /* From the get channel auth. */
@@ -966,8 +987,123 @@ static void check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan);
 static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
 			 int force_ipmiv15);
 
+/*
+ * We keep two hash tables, one by IP address and one by connection
+ * address.
+ */
+#define LAN_HASH_SIZE 256
+#define LAN_HASH_SHIFT 6
 static ipmi_lock_t *lan_list_lock = NULL;
-static lan_data_t *lan_list = NULL;
+static lan_link_t lan_list[LAN_HASH_SIZE];
+static lan_link_t lan_ip_list[LAN_HASH_SIZE];
+
+static int
+hash_lan(ipmi_con_t *ipmi)
+{
+    int idx;
+
+    idx = (((unsigned long) ipmi)
+	   >> (sizeof(unsigned long) >> LAN_HASH_SHIFT));
+    idx %= LAN_HASH_SIZE;
+    return idx;
+}
+
+static int
+hash_lan_addr(struct sockaddr *addr)
+{
+    int idx;
+    switch (addr->sa_family)
+    {
+    case PF_INET:
+	{
+	    struct sockaddr_in *iaddr = (struct sockaddr_in *) addr;
+	    idx = ntohl(iaddr->sin_addr.s_addr) % LAN_HASH_SIZE;
+	    break;
+	}
+#ifdef PF_INET6
+    case PF_INET6:
+	{
+	    /* Use the lower 4 bytes of the IPV6 address. */
+	    struct sockaddr_in6 *iaddr = (struct sockaddr_in6 *) addr;
+	    idx = htonl(*((uint32_t *) &iaddr->sin6_addr.s6_addr[12]));
+	    idx %= LAN_HASH_SIZE;
+	    break;
+	}
+#endif
+    default:
+	idx = 0;
+    }
+    idx %= LAN_HASH_SIZE;
+    return idx;
+}
+
+static void
+lan_add_con(lan_data_t *lan)
+{
+    int        idx;
+    lan_link_t *head;
+    int        i;
+
+    ipmi_lock(lan_list_lock);
+    idx = hash_lan(lan->ipmi);
+    head = &lan_list[idx];
+    lan->link.lan = lan;
+    lan->link.next = head;
+    lan->link.prev = head->prev;
+    head->prev->next = &lan->link;
+    head->prev = &lan->link;
+
+    for (i=0; i<lan->cparm.num_ip_addr; i++) {
+	struct sockaddr *addr = &lan->cparm.ip_addr[i].s_ipsock.s_addr;
+
+	idx = hash_lan_addr(addr);
+
+	head = &lan_ip_list[idx];
+	lan->ip_link[i].lan = lan;
+	lan->ip_link[i].next = head;
+	lan->ip_link[i].prev = head->prev;
+	head->prev->next = &lan->ip_link[i];
+	head->prev = &lan->ip_link[i];
+    }
+    ipmi_unlock(lan_list_lock);
+}
+
+static void
+lan_remove_con(lan_data_t *lan)
+{
+    int i;
+    if (!lan->link.lan)
+	/* Hasn't been initialized. */
+	return;
+    ipmi_lock(lan_list_lock);
+    lan->link.prev->next = lan->link.next;
+    lan->link.next->prev = lan->link.prev;
+    for (i=0; i<lan->cparm.num_ip_addr; i++) {
+	lan->ip_link[i].prev->next = lan->link.next;
+	lan->ip_link[i].next->prev = lan->link.prev;
+    }
+    ipmi_unlock(lan_list_lock);
+}
+
+static lan_data_t *
+lan_find_con(ipmi_con_t *ipmi)
+{
+    int        idx;
+    lan_link_t *l;
+
+    ipmi_lock(lan_list_lock);
+    idx = hash_lan(ipmi);
+    l = lan_list[idx].next;
+    while (l->lan) {
+	if (l->lan->ipmi == ipmi)
+	    break;
+	l = l->next;
+    }
+    l->lan->refcount++;
+    ipmi_unlock(lan_list_lock);
+
+    return l->lan;
+}
 
 static inline int
 cmp_timeval(struct timeval *tv1, struct timeval *tv2)
@@ -1014,18 +1150,7 @@ diff_timeval(struct timeval *dest,
 /* Must be called with the ipmi read or write lock. */
 static int lan_valid_ipmi(ipmi_con_t *ipmi)
 {
-    lan_data_t *elem;
-
-    ipmi_lock(lan_list_lock);
-    elem = lan_list;
-    while ((elem) && (elem->ipmi != ipmi)) {
-	elem = elem->next;
-    }
-    if (elem)
-	elem->refcount++;
-    ipmi_unlock(lan_list_lock);
-
-    return (elem != NULL);
+    return (lan_find_con(ipmi) != NULL);
 }
 
 static void lan_cleanup(ipmi_con_t *ipmi);
@@ -1033,12 +1158,12 @@ static void lan_cleanup(ipmi_con_t *ipmi);
 static void
 lan_put(ipmi_con_t *ipmi)
 {
-    lan_data_t *elem = ipmi->con_data;
+    lan_data_t *lan = ipmi->con_data;
     int        done;
 
     ipmi_lock(lan_list_lock);
-    elem->refcount--;
-    done = elem->refcount == 0;
+    lan->refcount--;
+    done = lan->refcount == 0;
     ipmi_unlock(lan_list_lock);
 
     if (done)
@@ -1392,7 +1517,7 @@ lan_send_addr(lan_data_t  *lan,
 	char buf1[32], buf2[32];
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing seq %d\n addr =",
 		 seq);
-	dump_hex((unsigned char *) &(lan->ip_addr[addr_num]),
+	dump_hex((unsigned char *) &(lan->cparm.ip_addr[addr_num]),
 		 sizeof(sockaddr_ip_t));
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d.",
@@ -1407,7 +1532,7 @@ lan_send_addr(lan_data_t  *lan,
     }
 
     rv = sendto(lan->fd, tmsg, pos, 0,
-		(struct sockaddr *) &(lan->ip_addr[addr_num]),
+		(struct sockaddr *) &(lan->cparm.ip_addr[addr_num]),
 		sizeof(sockaddr_ip_t));
     if (rv == -1)
 	rv = errno;
@@ -1435,13 +1560,13 @@ lan_send(lan_data_t  *lan,
 	   they are all operational. */
 	if ((lan->num_sends % SENDS_BETWEEN_IP_SWITCHES) == 0) {
 	    int addr_num = lan->curr_ip_addr + 1;
-	    if (addr_num >= lan->num_ip_addr)
+	    if (addr_num >= lan->cparm.num_ip_addr)
 		addr_num = 0;
 	    while (addr_num != lan->curr_ip_addr) {
 		if (lan->ip_working[addr_num])
 		    break;
 		addr_num++;
-		if (addr_num >= lan->num_ip_addr)
+		if (addr_num >= lan->cparm.num_ip_addr)
 		    addr_num = 0;
 	    }
 	    lan->curr_ip_addr = addr_num;
@@ -1449,7 +1574,7 @@ lan_send(lan_data_t  *lan,
     } else {
 	/* Just rotate between IP addresses if we are not yet connected */
 	int addr_num = lan->curr_ip_addr + 1;
-	if (addr_num >= lan->num_ip_addr)
+	if (addr_num >= lan->cparm.num_ip_addr)
 	    addr_num = 0;
 	lan->curr_ip_addr = addr_num;
     }
@@ -1459,6 +1584,67 @@ lan_send(lan_data_t  *lan,
     *send_ip_num = curr_ip_addr;
 
     return lan_send_addr(lan, addr, addr_len, msg, seq, curr_ip_addr);
+}
+
+typedef struct call_ipmb_change_handler_s
+{
+    lan_data_t  *lan;
+    int          err;
+    unsigned int ipmb_addr;
+    int          active;
+    unsigned int hacks;
+} call_ipmb_change_handler_t;
+
+static int
+call_ipmb_change_handler(void *cb_data, void *item1, void *item2)
+{
+    call_ipmb_change_handler_t *info = cb_data;
+    ipmi_ll_ipmb_addr_cb       handler = item1;
+
+    handler(info->lan->ipmi, info->err, info->ipmb_addr, info->active,
+	    info->hacks, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+call_ipmb_change_handlers(lan_data_t *lan, int err, unsigned int ipmb_addr,
+			  int active, unsigned int hacks)
+{
+    call_ipmb_change_handler_t info;
+
+    info.lan = lan;
+    info.err = err;
+    info.ipmb_addr = ipmb_addr;
+    info.active = active;
+    info.hacks = hacks;
+    locked_list_iterate(lan->ipmb_change_handlers, call_ipmb_change_handler,
+			&info);
+}
+
+static int
+lan_add_ipmb_addr_handler(ipmi_con_t           *ipmi,
+			  ipmi_ll_ipmb_addr_cb handler,
+			  void                 *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (locked_list_add(lan->ipmb_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+static int
+lan_remove_ipmb_addr_handler(ipmi_con_t           *ipmi,
+			     ipmi_ll_ipmb_addr_cb handler,
+			     void                 *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (locked_list_remove(lan->ipmb_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
 }
 
 static void
@@ -1481,21 +1667,8 @@ ipmb_handler(ipmi_con_t   *ipmi,
 	lan->is_active = active;
 	ipmi->hacks = hacks;
 	ipmi->ipmb_addr = ipmb;
-	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, err, ipmb, active, hacks,
-				   lan->ipmb_addr_cb_data);
+	call_ipmb_change_handlers(lan, err, ipmb, active, hacks);
     }
-}
-
-static void
-lan_set_ipmb_addr_handler(ipmi_con_t           *ipmi,
-			  ipmi_ll_ipmb_addr_cb handler,
-			  void                 *cb_data)
-{
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
-
-    lan->ipmb_addr_handler = handler;
-    lan->ipmb_addr_cb_data = cb_data;
 }
 
 static void
@@ -1527,11 +1700,11 @@ audit_timeout_handler(void              *cb_data,
        connection is down, this will bring it up, otherwise it
        will keep it alive. */
     ipmi_lock(lan->ip_lock);
-    for (i=0; i<lan->num_ip_addr; i++)
+    for (i=0; i<lan->cparm.num_ip_addr; i++)
 	    start_up[i] = ! lan->ip_working[i];
     ipmi_unlock(lan->ip_lock);
 
-    for (i=0; i<lan->num_ip_addr; i++) {
+    for (i=0; i<lan->cparm.num_ip_addr; i++) {
 	if (start_up[i])
 	    send_auth_cap(ipmi, lan, i, 0);
     }
@@ -1575,6 +1748,64 @@ audit_timeout_handler(void              *cb_data,
     return;
 }
 
+typedef struct call_con_change_handler_s
+{
+    lan_data_t  *lan;
+    int          err;
+    unsigned int port;
+    int          any_port_up;
+} call_con_change_handler_t;
+
+static int
+call_con_change_handler(void *cb_data, void *item1, void *item2)
+{
+    call_con_change_handler_t  *info = cb_data;
+    ipmi_ll_con_changed_cb     handler = item1;
+
+    handler(info->lan->ipmi, info->err, info->port, info->any_port_up, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+call_con_change_handlers(lan_data_t *lan, int err, unsigned int port,
+			  int any_port_up)
+{
+    call_con_change_handler_t info;
+
+    info.lan = lan;
+    info.err = err;
+    info.port = port;
+    info.any_port_up = any_port_up;
+    locked_list_iterate(lan->con_change_handlers, call_con_change_handler,
+			&info);
+}
+
+static int
+lan_add_con_change_handler(ipmi_con_t             *ipmi,
+			   ipmi_ll_con_changed_cb handler,
+			   void                   *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (locked_list_add(lan->con_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+static int
+lan_remove_con_change_handler(ipmi_con_t             *ipmi,
+			      ipmi_ll_con_changed_cb handler,
+			      void                   *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (locked_list_remove(lan->con_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
 static void
 connection_up(lan_data_t *lan, int addr_num, int new_con)
 {
@@ -1597,13 +1828,10 @@ connection_up(lan_data_t *lan, int addr_num, int new_con)
 	lan->curr_ip_addr = addr_num;
     }
 
-    if (lan->connected && lan->con_change_handler) {
-	ipmi_ll_con_changed_cb con_change_handler = lan->con_change_handler;
-	void                   *con_change_cb_data = lan->con_change_cb_data;
-
+    if (lan->connected) {
 	ipmi_lock(lan->con_change_lock);
 	ipmi_unlock(lan->ip_lock);
-	con_change_handler(lan->ipmi, 0, addr_num, 1, con_change_cb_data);
+	call_con_change_handlers(lan, 0, addr_num, 1);
 	ipmi_unlock(lan->con_change_lock);
     } else {
 	ipmi_unlock(lan->ip_lock);
@@ -1662,14 +1890,14 @@ lost_connection(lan_data_t *lan, int addr_num)
 
     if (lan->curr_ip_addr == addr_num) {
 	/* Scan to see if any address is operational. */
-	for (i=0; i<lan->num_ip_addr; i++) {
+	for (i=0; i<lan->cparm.num_ip_addr; i++) {
 	    if (lan->ip_working[i]) {
 		lan->curr_ip_addr = i;
 		break;
 	    }
 	}
 
-	if (i >= lan->num_ip_addr) {
+	if (i >= lan->cparm.num_ip_addr) {
 	    /* There were no operational connections, report that. */
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sipmi_lan.c(lost_connection): "
@@ -1680,18 +1908,13 @@ lost_connection(lan_data_t *lan, int addr_num)
 	}
     }
 
-    if (lan->con_change_handler) {
-	ipmi_ll_con_changed_cb con_change_handler = lan->con_change_handler;
-	void                   *con_change_cb_data = lan->con_change_cb_data;
-	int                    connected = lan->connected;
+    {
+	int connected = lan->connected;
 	
 	ipmi_lock(lan->con_change_lock);
 	ipmi_unlock(lan->ip_lock);
-	con_change_handler(lan->ipmi, ETIMEDOUT, addr_num, connected,
-			   con_change_cb_data);
+	call_con_change_handlers(lan, ETIMEDOUT, addr_num, connected);
 	ipmi_unlock(lan->con_change_lock);
-    } else {
-	ipmi_unlock(lan->ip_lock);
     }
 }
 
@@ -2542,9 +2765,9 @@ data_handler(int            fd,
             struct sockaddr_in *ipaddr;
             struct sockaddr_in *ipaddr4;
             ipaddr = (struct sockaddr_in *)&(ipaddrd);
-            for (addr_num = 0; addr_num < lan->num_ip_addr; addr_num++) {
+            for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
                     ipaddr4 = (struct sockaddr_in *)
-                            &(lan->ip_addr[addr_num]);
+                            &(lan->cparm.ip_addr[addr_num]);
                     if ((ipaddr->sin_port == ipaddr4->sin_port)
                         && (ipaddr->sin_addr.s_addr
                             == ipaddr4->sin_addr.s_addr))
@@ -2558,9 +2781,9 @@ data_handler(int            fd,
             struct sockaddr_in6 *ipa6;
             struct sockaddr_in6 *ipaddr6;
             ipa6 = (struct sockaddr_in6 *)&(ipaddrd);
-            for (addr_num = 0; addr_num < lan->num_ip_addr; addr_num++) {
+            for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
                     ipaddr6 = (struct sockaddr_in6 *)
-                            &(lan->ip_addr[addr_num]);
+                            &(lan->cparm.ip_addr[addr_num]);
                     if ((ipa6->sin6_port == ipaddr6->sin6_port)
                         && (bcmp(ipa6->sin6_addr.s6_addr,
                                  ipaddr6->sin6_addr.s6_addr,
@@ -2578,7 +2801,7 @@ data_handler(int            fd,
             break;
     }
 
-    if (addr_num >= lan->num_ip_addr) {
+    if (addr_num >= lan->cparm.num_ip_addr) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
 		     "ipmi_lan: Dropped message due to invalid IP");
@@ -2901,19 +3124,12 @@ lan_cleanup(ipmi_con_t *ipmi)
     /* First order of business is to remove it from the LAN list. */
     lan = (lan_data_t *) ipmi->con_data;
 
-    ipmi_lock(lan_list_lock);
-    if (lan->next)
-	lan->next->prev = lan->prev;
-    if (lan->prev)
-	lan->prev->next = lan->next;
-    else
-	lan_list = lan->next;
-    ipmi_unlock(lan_list_lock);
+    lan_remove_con(lan);
 
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
 
-    for (i=0; i<lan->num_ip_addr; i++)
+    for (i=0; i<lan->cparm.num_ip_addr; i++)
 	send_close_session(ipmi, lan, i);
 
     if (lan->close_done)
@@ -3015,6 +3231,10 @@ lan_cleanup(ipmi_con_t *ipmi)
 	ipmi_destroy_lock(lan->con_change_lock);
     if (lan->ip_lock)
 	ipmi_destroy_lock(lan->ip_lock);
+    if (lan->con_change_handlers)
+	locked_list_destroy(lan->con_change_handlers);
+    if (lan->ipmb_change_handlers)
+	locked_list_destroy(lan->ipmb_change_handlers);
     if (lan->seq_num_lock)
 	ipmi_destroy_lock(lan->seq_num_lock);
     if (lan->fd_wait_id)
@@ -3028,8 +3248,8 @@ lan_cleanup(ipmi_con_t *ipmi)
 	    lan->integ_info[i]->integ_free(ipmi, lan->integ_data[i]);
     }
     /* paranoia */
-    memset(lan->password, 0, sizeof(lan->password));
-    memset(lan->bmc_key, 0, sizeof(lan->bmc_key));
+    memset(lan->cparm.password, 0, sizeof(lan->cparm.password));
+    memset(lan->cparm.bmc_key, 0, sizeof(lan->cparm.bmc_key));
 
     /* Close the fd after we have deregistered it. */
     close(lan->fd);
@@ -3044,11 +3264,27 @@ lan_close_connection_done(ipmi_con_t            *ipmi,
 			  void                  *cb_data)
 {
     lan_data_t *lan;
+
     if (! lan_valid_ipmi(ipmi)) {
 	return EINVAL;
     }
 
     lan = (lan_data_t *) ipmi->con_data;
+
+printf("***In close connection\n");
+    ipmi_lock(lan_list_lock);
+    if (lan->users > 1) {
+	/* The connection has been reused, just report it going
+	   down. */
+	lan->users--;
+	ipmi_unlock(lan_list_lock);
+	if (handler)
+	    handler(ipmi, cb_data);
+	lan_put(ipmi);
+	return 0;
+    }
+    ipmi_unlock(lan_list_lock);
+
     lan->close_done = handler;
     lan->close_cb_data = cb_data;
 
@@ -3071,28 +3307,23 @@ cleanup_con(ipmi_con_t *ipmi)
     int          i;
 
     if (ipmi) {
+	ipmi_con_attr_cleanup(ipmi);
 	ipmi_mem_free(ipmi);
     }
 
     if (lan) {
-	lan = (lan_data_t *) ipmi->con_data;
+	lan_remove_con(lan);
 
-	ipmi_lock(lan_list_lock);
-	if (lan->next)
-	    lan->next->prev = lan->prev;
-	if (lan->prev)
-	    lan->prev->next = lan->next;
-	else
-	    lan_list = lan->next;
-	ipmi_unlock(lan_list_lock);
-
-	ipmi_con_attr_cleanup(ipmi);
 	if (lan->event_handlers_lock)
 	    ipmi_destroy_lock(lan->event_handlers_lock);
 	if (lan->con_change_lock)
 	    ipmi_destroy_lock(lan->con_change_lock);
 	if (lan->ip_lock)
 	    ipmi_destroy_lock(lan->ip_lock);
+	if (lan->con_change_handlers)
+	    locked_list_destroy(lan->con_change_handlers);
+	if (lan->ipmb_change_handlers)
+	    locked_list_destroy(lan->ipmb_change_handlers);
 	if (lan->seq_num_lock)
 	    ipmi_destroy_lock(lan->seq_num_lock);
 	if (lan->fd != -1)
@@ -3130,15 +3361,10 @@ handle_connected(ipmi_con_t *ipmi, int err, int addr_num)
 	reset_session_data(lan, addr_num);
 
     ipmi_lock(lan->ip_lock);
-    if (lan->con_change_handler) {
-	ipmi_lock(lan->con_change_lock);
-	ipmi_unlock(lan->ip_lock);
-	lan->con_change_handler(ipmi, err, addr_num, lan->connected,
-				lan->con_change_cb_data);
-	ipmi_unlock(lan->con_change_lock);
-    } else {
-	ipmi_unlock(lan->ip_lock);
-    }
+    ipmi_lock(lan->con_change_lock);
+    ipmi_unlock(lan->ip_lock);
+    call_con_change_handlers(lan, err, addr_num, lan->connected);
+    ipmi_unlock(lan->con_change_lock);
 }
 
 static void
@@ -3165,9 +3391,7 @@ lan_set_ipmb_addr(ipmi_con_t    *ipmi,
 	lan->is_active = active;
 	ipmi->hacks = hacks;
 	ipmi->ipmb_addr = ipmb;
-	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active, hacks,
-				   lan->ipmb_addr_cb_data);
+	call_ipmb_change_handlers(lan, 0, ipmb, active, hacks);
     }
 }
 
@@ -3192,9 +3416,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     ipmi->hacks = hacks;
     ipmi->ipmb_addr = ipmb_addr;
     finish_connection(ipmi, lan, addr_num);
-    if (lan->ipmb_addr_handler)
-	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active, hacks,
-			       lan->ipmb_addr_cb_data);
+    call_ipmb_change_handlers(lan, err, ipmb_addr, active, hacks);
 }
 
 static int
@@ -3316,7 +3538,7 @@ session_privilege_set(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    if (lan->privilege != (msg->data[1] & 0xf)) {
+    if (lan->cparm.privilege != (msg->data[1] & 0xf)) {
 	/* Requested privilege level did not match. */
         handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
@@ -3347,7 +3569,7 @@ send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     addr.channel = 0xf;
     addr.lun = 0;
 
-    data[0] = lan->privilege;
+    data[0] = lan->cparm.privilege;
 
     msg.cmd = IPMI_SET_SESSION_PRIVILEGE_CMD;
     msg.netfn = IPMI_APP_NETFN;
@@ -3490,11 +3712,11 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     lan = (lan_data_t *) ipmi->con_data;
 
     privilege = msg->data[2] & 0xf;
-    if (privilege != lan->privilege) {
+    if (privilege != lan->cparm.privilege) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
 		 "Expected privilege %d, got %d",
-		 lan->privilege, privilege);
+		 lan->cparm.privilege, privilege);
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -3627,7 +3849,8 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     lan->integ_info[addr_num] = integp;
 
     lan->ainfo[addr_num].lan = lan;
-    lan->ainfo[addr_num].role = (lan->name_lookup_only << 4) | lan->privilege;
+    lan->ainfo[addr_num].role = ((lan->cparm.name_lookup_only << 4)
+				 | lan->cparm.privilege);
 
     info->lan = lan;
     info->rspi = rspi;
@@ -3658,28 +3881,28 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
 
     memset(data, 0, sizeof(data));
     data[0] = 0;
-    data[1] = lan->privilege;
+    data[1] = lan->cparm.privilege;
     ipmi_set_uint32(data+4, lan->precon_session_id[addr_num]);
     data[8] = 0; /* auth algorithm */
-    if (lan->requested_auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
+    if (lan->cparm.auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
 	data[11] = 0; /* Let the BMC pick */
     else {
 	data[11] = 8;
-	data[12] = lan->requested_auth;
+	data[12] = lan->cparm.auth;
     }
     data[16] = 1; /* integrity algorithm */
-    if (lan->requested_integ == IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
+    if (lan->cparm.integ == IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
 	data[19] = 0; /* Let the BMC pick */
     else {
 	data[19] = 8;
-	data[20] = lan->requested_integ;
+	data[20] = lan->cparm.integ;
     }
     data[24] = 2; /* confidentiality algorithm */
-    if (lan->requested_conf == IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
+    if (lan->cparm.conf == IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
 	data[27] = 0; /* Let the BMC pick */
     else {
 	data[27] = 8;
-	data[28] = lan->requested_conf;
+	data[28] = lan->cparm.conf;
     }
 
     msg.netfn = IPMI_RMCPP_DUMMY_NETFN;
@@ -3788,7 +4011,7 @@ send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     addr.lun = 0;
 
     data[0] = lan->chosen_authtype;
-    data[1] = lan->privilege;
+    data[1] = lan->cparm.privilege;
     memcpy(data+2, lan->challenge_string, 16);
     ipmi_set_uint32(data+18, lan->inbound_seq_num[addr_num]);
 
@@ -3878,7 +4101,7 @@ send_challenge(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     msg.netfn = IPMI_APP_NETFN;
     msg.data = data;
     msg.data_len = 1;
-    memcpy(data+1, lan->username, IPMI_USERNAME_MAX);
+    memcpy(data+1, lan->cparm.username, IPMI_USERNAME_MAX);
     msg.data_len += IPMI_USERNAME_MAX;
 
     rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
@@ -3915,7 +4138,7 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	lan->authdata = NULL;
     }
 
-    if (lan->specified_authtype == IPMI_AUTHTYPE_DEFAULT) {
+    if (lan->cparm.authtype == IPMI_AUTHTYPE_DEFAULT) {
 	/* Pick the most secure authentication type. */
 	if (msg->data[2] & (1 << IPMI_AUTHTYPE_MD5)) {
 	    lan->chosen_authtype = IPMI_AUTHTYPE_MD5;
@@ -3934,7 +4157,7 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	    goto out;
 	}
     } else {
-	if (!(msg->data[2] & (1 << lan->specified_authtype))) {
+	if (!(msg->data[2] & (1 << lan->cparm.authtype))) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sipmi_lan.c(auth_cap_done): "
 		     "Requested authentication not supported",
@@ -3942,10 +4165,10 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	    handle_connected(ipmi, EINVAL, addr_num);
 	    goto out;
 	}
-	lan->chosen_authtype = lan->specified_authtype;
+	lan->chosen_authtype = lan->cparm.authtype;
     }
 
-    rv = ipmi_auths[lan->chosen_authtype].authcode_init(lan->password,
+    rv = ipmi_auths[lan->chosen_authtype].authcode_init(lan->cparm.password,
 							&(lan->authdata),
 							NULL, auth_alloc,
 							auth_free);
@@ -3994,7 +4217,7 @@ auth_cap_done_p(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	   systems incorrectly return errors when reserved data is
 	   set. */
 
-	if (lan->specified_authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
+	if (lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
 	    /* The user specified RMCP+, but the system doesn't have it. */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sipmi_lan.c(auth_cap_done_p): "
@@ -4018,7 +4241,7 @@ auth_cap_done_p(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	lan->oem_aux = msg->data[8];
 	return start_rmcpp(ipmi, lan, rspi, addr_num);
     } else {
-	if (lan->specified_authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
+	if (lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
 	    /* The user specified RMCP+, but the system doesn't have it. */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sipmi_lan.c(auth_cap_done_p): "
@@ -4058,13 +4281,13 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     addr.lun = 0;
 
     data[0] = 0xe;
-    data[1] = lan->privilege;
+    data[1] = lan->cparm.privilege;
     msg.cmd = IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD;
     msg.netfn = IPMI_APP_NETFN;
     msg.data = data;
     msg.data_len = 2;
-    if (((lan->specified_authtype == IPMI_AUTHTYPE_DEFAULT)
-	 || (lan->specified_authtype == IPMI_AUTHTYPE_RMCP_PLUS))
+    if (((lan->cparm.authtype == IPMI_AUTHTYPE_DEFAULT)
+	 || (lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS))
 	&& !force_ipmiv15)
     {
 	rsp_handler = auth_cap_done_p;
@@ -4081,19 +4304,6 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     return rv;
 }
 
-static void
-lan_set_con_change_handler(ipmi_con_t             *ipmi,
-			   ipmi_ll_con_changed_cb handler,
-			   void                   *cb_data)
-{
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
-
-    ipmi_lock(lan->ip_lock);
-    lan->con_change_handler = handler;
-    lan->con_change_cb_data = cb_data;
-    ipmi_unlock(lan->ip_lock);
-}
-
 static int
 lan_start_con(ipmi_con_t *ipmi)
 {
@@ -4101,6 +4311,34 @@ lan_start_con(ipmi_con_t *ipmi)
     int            rv;
     struct timeval timeout;
     int            i;
+
+    ipmi_lock(lan->ip_lock);
+    if (lan->started) {
+	/* Only allow started to be called once, but make sure the
+	   connected callback gets called if started is called again
+	   (assuming the connection is up).  This lets multiple users
+	   use the same connection.  If the LAN is not connected, this
+	   doesn't matter, the callback will be called properly
+	   later. */
+	if (lan->connected) {
+	    int i;
+	    int port_err[MAX_IP_ADDR];
+
+	    for (i=0; i<lan->cparm.num_ip_addr; i++)
+		port_err[i] = lan->ip_working[i] ? 0 : EINVAL;
+
+	    ipmi_lock(lan->con_change_lock);
+	    ipmi_unlock(lan->ip_lock);
+
+	    for (i=0; i<lan->cparm.num_ip_addr; i++)
+		call_con_change_handlers(lan, port_err[i], i, 1);
+	    ipmi_unlock(lan->con_change_lock);
+	} else
+	    ipmi_unlock(lan->ip_lock);
+	return 0;
+    }
+    lan->started = 1;
+    ipmi_unlock(lan->ip_lock);
 
     /* Start the timer to audit the connections. */
     lan->audit_info = ipmi_mem_alloc(sizeof(*(lan->audit_info)));
@@ -4129,7 +4367,7 @@ lan_start_con(ipmi_con_t *ipmi)
 	goto out_err;
     }
 
-    for (i=0; i<lan->num_ip_addr; i++) {
+    for (i=0; i<lan->cparm.num_ip_addr; i++) {
 	rv = send_auth_cap(ipmi, lan, i, 0);
 	if (rv)
 	    goto out_err;
@@ -4218,6 +4456,31 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
     return ipmi_lanp_setup_con(parms, 6, handlers, user_data, new_con);
 }
 
+static lan_data_t *
+find_matching_lan(lan_conn_parms_t *cparm)
+{
+    lan_link_t *l;
+    lan_data_t *lan;
+    int        idx;
+
+    /* Look in the first IP addresses list. */
+    idx = hash_lan_addr(&cparm->ip_addr[0].s_ipsock.s_addr);
+    ipmi_lock(lan_list_lock);
+    l = lan_ip_list[idx].next;
+    while (l->lan) {
+	lan = l->lan;
+	if (memcmp(&lan->cparm, cparm, sizeof(*cparm)) == 0) {
+	    /* Parms match up, use it */
+	    lan->users++;
+	    ipmi_unlock(lan_list_lock);
+	    return lan;
+	}
+	l = l->next;
+    }
+    ipmi_unlock(lan_list_lock);
+    return NULL;
+}
+
 int
 ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 		    unsigned int     num_parms,
@@ -4225,104 +4488,110 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 		    void             *user_data,
 		    ipmi_con_t       **new_con)
 {
-    ipmi_con_t     *ipmi = NULL;
-    lan_data_t     *lan = NULL;
-    int            rv;
-    int            i;
-    int		   count;
+    ipmi_con_t         *ipmi = NULL;
+    lan_data_t         *lan = NULL;
+    int                rv;
+    int                i;
+    int		       count;
     struct sockaddr_in *pa;
-    char         **ip_addrs = NULL;
-    char         **ports = NULL;
-    unsigned int num_ip_addrs = 0;
-    unsigned int authtype = IPMI_AUTHTYPE_DEFAULT;
-    unsigned int privilege = IPMI_PRIVILEGE_ADMIN;
-    void         *username = NULL;
-    unsigned int username_len = 0;
-    void         *password = NULL;
-    unsigned int password_len = 0;
-    /* Pick algorithms that are mandatory and secure. */
-    unsigned int conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
-    unsigned int integ = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
-    unsigned int auth = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
-    int          name_lookup_only = 1;
-    void         *bmc_key = NULL;
-    unsigned int bmc_key_len = 0;
+    char               **ip_addrs = NULL;
+    char               **ports = NULL;
+    lan_conn_parms_t   cparm;
 
+    memset(&cparm, 0, sizeof(cparm));
+
+    /* Pick some secure defaults. */
+    cparm.authtype = IPMI_AUTHTYPE_DEFAULT;
+    cparm.privilege = IPMI_PRIVILEGE_ADMIN;
+    cparm.conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
+    cparm.integ = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
+    cparm.auth = IPMI_LANP_AUTHENTICATION_ALGORITHM_RAKP_HMAC_SHA1;
+    cparm.name_lookup_only = 1;
 
     for (i=0; i<num_parms; i++) {
 	switch (parms[i].parm_id) {
 	case IPMI_LANP_PARMID_AUTHTYPE:
-	    authtype = parms[i].parm_val;
+	    cparm.authtype = parms[i].parm_val;
 	    break;
 
 	case IPMI_LANP_PARMID_PRIVILEGE:
-	    privilege = parms[i].parm_val;
+	    cparm.privilege = parms[i].parm_val;
 	    break;
 
 	case IPMI_LANP_PARMID_PASSWORD:
-	    password = parms[i].parm_data;
-	    password_len = parms[i].parm_data_len;
+	    if (parms[i].parm_data_len > sizeof(cparm.password))
+		return EINVAL;
+	    memcpy(cparm.password, parms[i].parm_data, parms[i].parm_data_len);
+	    cparm.password_len = parms[i].parm_data_len;
 	    break;
 
 	case IPMI_LANP_PARMID_USERNAME:
-	    username = parms[i].parm_data;
-	    username_len = parms[i].parm_data_len;
+	    if (parms[i].parm_data_len > sizeof(cparm.username))
+		return EINVAL;
+	    memcpy(cparm.username, parms[i].parm_data, parms[i].parm_data_len);
+	    cparm.username_len = parms[i].parm_data_len;
 	    break;
 
 	case IPMI_LANP_PARMID_ADDRS:
-	    if (num_ip_addrs && (num_ip_addrs != parms[i].parm_data_len))
+	    if (cparm.num_ip_addr
+		&& (cparm.num_ip_addr != parms[i].parm_data_len))
 		return EINVAL;
 	    ip_addrs = parms[i].parm_data;
-	    num_ip_addrs = parms[i].parm_data_len;
+	    cparm.num_ip_addr = parms[i].parm_data_len;
 	    break;
 
 	case IPMI_LANP_PARMID_PORTS:
-	    if (num_ip_addrs && (num_ip_addrs != parms[i].parm_data_len))
+	    if (cparm.num_ip_addr
+		&& (cparm.num_ip_addr != parms[i].parm_data_len))
 		return EINVAL;
 	    ports = parms[i].parm_data;
-	    num_ip_addrs = parms[i].parm_data_len;
+	    cparm.num_ip_addr = parms[i].parm_data_len;
 	    break;
 
 	case IPMI_LANP_AUTHENTICATION_ALGORITHM:
-	    auth = parms[i].parm_val;
-	    if (auth != IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
+	    cparm.auth = parms[i].parm_val;
+	    if (cparm.auth != IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
 	    {
-		if (auth >= 64)
+		if (cparm.auth >= 64)
 		    return EINVAL;
-		if ((auth < 0x30) && (!auths[auth]))
+		if ((cparm.auth < 0x30) && (!auths[cparm.auth]))
 		    return ENOSYS;
 	    }
 	    break;
 
 	case IPMI_LANP_INTEGRITY_ALGORITHM:
-	    integ = parms[i].parm_val;
-	    if (integ != IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
+	    cparm.integ = parms[i].parm_val;
+	    if (cparm.integ != IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
 	    {
-		if (integ >= 64)
+		if (cparm.integ >= 64)
 		    return EINVAL;
-		if (integ && ((integ < 0x30) && (!integs[integ])))
+		if (cparm.integ
+		    && ((cparm.integ < 0x30) && (!integs[cparm.integ])))
 		    return ENOSYS;
 	    }
 	    break;
 
 	case IPMI_LANP_CONFIDENTIALITY_ALGORITHM:
-	    conf = parms[i].parm_val;
-	    if (conf != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
+	    cparm.conf = parms[i].parm_val;
+	    if (cparm.conf != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
 	    {
-		if (conf >= 64)
+		if (cparm.conf >= 64)
 		    return EINVAL;
-		if (conf && ((conf < 0x30) && (!confs[conf])))
+		if (cparm.conf
+		    && ((cparm.conf < 0x30) && (!confs[cparm.conf])))
 		    return ENOSYS;
 	    }
 	    break;
 
 	case IPMI_LANP_NAME_LOOKUP_ONLY:
-	    name_lookup_only = parms[i].parm_val != 0;
+	    cparm.name_lookup_only = parms[i].parm_val != 0;
 	    break;
 
 	case IPMI_LANP_BMC_KEY:
-	    bmc_key = parms[i].parm_data;
-	    bmc_key_len = parms[i].parm_data_len;
+	    if (parms[i].parm_data_len > sizeof(cparm.username))
+		return EINVAL;
+	    memcpy(cparm.bmc_key, parms[i].parm_data, parms[i].parm_data_len);
+	    cparm.bmc_key_len = parms[i].parm_data_len;
 	    break;
 
 	default:
@@ -4330,21 +4599,67 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	}
     }
 
-    if ((num_ip_addrs == 0) || (ip_addrs == NULL))
+    if ((cparm.num_ip_addr == 0) || (ip_addrs == NULL))
+	return EINVAL;
+    if ((cparm.authtype != IPMI_AUTHTYPE_DEFAULT)
+	&& ((cparm.authtype >= MAX_IPMI_AUTHS)
+	    || (ipmi_auths[cparm.authtype].authcode_init == NULL)))
+	return EINVAL;
+    if ((cparm.num_ip_addr < 1) || (cparm.num_ip_addr > MAX_IP_ADDR))
 	return EINVAL;
 
-    if (username_len > IPMI_USERNAME_MAX)
+    count = 0;
+#ifdef HAVE_GETADDRINFO
+    for (i=0; i<cparm.num_ip_addr; i++) {
+        struct addrinfo hints, *res0;
+ 
+        memset(&hints, 0, sizeof(hints));
+        if (count == 0)
+            hints.ai_family = PF_UNSPEC;
+        else
+	{
+            /* Make sure all ip address is in the same protocol family*/
+	    struct sockaddr_in *paddr;
+	    paddr = (struct sockaddr_in *)&(cparm.ip_addr[0]);
+            hints.ai_family = paddr->sin_family;
+	}
+        hints.ai_socktype = SOCK_DGRAM;
+        rv = getaddrinfo(ip_addrs[i], ports[i], &hints, &res0);
+	if (rv)
+	    return EINVAL;
+
+	/* Only get the first choices */
+	memcpy(&(cparm.ip_addr[count]), res0->ai_addr, res0->ai_addrlen);
+	count++;
+	freeaddrinfo(res0);
+    }
+#else
+    /* System does not support getaddrinfo, just for IPv4*/
+    for (i=0; i<cparm.num_ip_addr; i++) {
+	struct hostent *ent;
+	struct sockaddr_in *paddr;
+	ent = gethostbyname(ip_addrs[i]);
+	if (!ent)
+	    return EINVAL;
+	paddr = (struct sockaddr_in *)&(cparm.ip_addr[i]);
+        paddr->sin_family = AF_INET;
+        paddr->sin_port = htons(atoi(ports[i]));
+	memcpy(&(paddr->sin_addr), ent->h_addr_list[0], ent->h_length);
+	count++;
+    }
+#endif
+    if (count == 0)
 	return EINVAL;
-    if (password_len > IPMI_PASSWORD_MAX)
-	return EINVAL;
-    if (bmc_key_len > IPMI_PASSWORD_MAX)
-	return EINVAL;
-    if ((authtype != IPMI_AUTHTYPE_DEFAULT)
-	&& ((authtype >= MAX_IPMI_AUTHS)
-	    || (ipmi_auths[authtype].authcode_init == NULL)))
-	return EINVAL;
-    if ((num_ip_addrs < 1) || (num_ip_addrs > MAX_IP_ADDR))
-	return EINVAL;
+    cparm.num_ip_addr = count;
+
+    /* At this point we have a validated set of parms in cparm.  See
+       if we alreay have one that matches. */
+    lan = find_matching_lan(&cparm);
+    if (lan) {
+printf("***REusing connection!\n");
+	*new_con = lan->ipmi;
+	return 0;
+    }
 
     ipmi = ipmi_mem_alloc(sizeof(*ipmi));
     if (!ipmi)
@@ -4354,7 +4669,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
     ipmi->con_type = "rmcp";
-    ipmi->priv_level = privilege;
+    ipmi->priv_level = cparm.privilege;
     ipmi->ipmb_addr = 0x20; /* Assume this until told otherwise */
 
     rv = ipmi_con_attr_init(ipmi);
@@ -4368,63 +4683,14 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     }
     memset(lan, 0, sizeof(*lan));
     ipmi->con_data = lan;
+    lan->cparm = cparm;
 
     lan->refcount = 1;
+    lan->users = 1;
     lan->ipmi = ipmi;
     lan->slave_addr = 0x20; /* Assume this until told otherwise */
     lan->is_active = 1;
-    lan->specified_authtype = authtype;
     lan->chosen_authtype = IPMI_AUTHTYPE_DEFAULT;
-    lan->privilege = privilege;
-    lan->requested_auth = auth;
-    lan->requested_integ = integ;
-    lan->requested_conf = conf;
-    lan->name_lookup_only = name_lookup_only;
-    count = 0;
-#ifdef HAVE_GETADDRINFO
-    for (i=0; i<num_ip_addrs; i++) {
-        struct addrinfo hints, *res0;
-	struct sockaddr_in *paddr;
- 
-        memset(&hints, 0, sizeof(hints));
-        if (count == 0)
-            hints.ai_family = PF_UNSPEC;
-        else
-	{
-            /* Make sure all ip address is in the same protocol family*/
-	    paddr = (struct sockaddr_in *)&(lan->ip_addr[0]);
-            hints.ai_family = paddr->sin_family;
-	}
-        hints.ai_socktype = SOCK_DGRAM;
-        rv = getaddrinfo(ip_addrs[i], ports[i], &hints, &res0);
-        if (rv == 0) {
-            /* Only get the first choices */
-	    memcpy(&(lan->ip_addr[count]), res0->ai_addr, res0->ai_addrlen);
-            lan->ip_working[count] = 0;
-            count++;
-            freeaddrinfo(res0);
-        }
-    }
-#else
-    /* System does not support getaddrinfo, just for IPv4*/
-    for (i=0; i<num_ip_addrs; i++) {
-	struct hostent *ent;
-	struct sockaddr_in *paddr;
-	ent = gethostbyname(ip_addrs[i]);
-	if (!ent) continue;
-	paddr = (struct sockaddr_in *)&(lan->ip_addr[i]);
-        paddr->sin_family = AF_INET;
-        paddr->sin_port = htons(atoi(ports[i]));
-	memcpy(&(paddr->sin_addr), ent->h_addr_list[0], ent->h_length);
-        lan->ip_working[i] = 0;
-	count++;
-    }
-#endif
-    if (count == 0) {
-	rv = EINVAL;
-	goto out_err;
-    }
-    lan->num_ip_addr = count;
     lan->curr_ip_addr = 0;
     lan->num_sends = 0;
     lan->connected = 0;
@@ -4435,7 +4701,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     lan->wait_q = NULL;
     lan->wait_q_tail = NULL;
 
-    pa = (struct sockaddr_in *)&(lan->ip_addr[0]);
+    pa = (struct sockaddr_in *)&(lan->cparm.ip_addr[0]);
     lan->fd = open_lan_fd(pa->sin_family);
     if (lan->fd == -1) {
 	rv = errno;
@@ -4451,6 +4717,18 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     if (rv)
 	goto out_err;
 
+    lan->con_change_handlers = locked_list_alloc(handlers);
+    if (!lan->con_change_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    lan->ipmb_change_handlers = locked_list_alloc(handlers);
+    if (!lan->ipmb_change_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
     rv = ipmi_create_lock_os_hnd(handlers, &lan->con_change_lock);
     if (rv)
 	goto out_err;
@@ -4459,22 +4737,12 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     if (rv)
 	goto out_err;
 
-    if (username_len)
-	memcpy(lan->username, username, username_len);
-    lan->username_len = username_len;
-    if (username_len)
-	memcpy(lan->password, password, password_len);
-    lan->password_len = password_len;
-    memset(lan->password+password_len, 0, sizeof(lan->password)-password_len);
-    if (bmc_key_len)
-	memcpy(lan->bmc_key, bmc_key, bmc_key_len);
-    lan->bmc_key_len = bmc_key_len;
-    memset(lan->bmc_key+bmc_key_len, 0, sizeof(lan->bmc_key)-bmc_key_len);
-
     ipmi->start_con = lan_start_con;
     ipmi->set_ipmb_addr = lan_set_ipmb_addr;
-    ipmi->set_ipmb_addr_handler = lan_set_ipmb_addr_handler;
-    ipmi->set_con_change_handler = lan_set_con_change_handler;
+    ipmi->add_ipmb_addr_handler = lan_add_ipmb_addr_handler;
+    ipmi->remove_ipmb_addr_handler = lan_remove_ipmb_addr_handler;
+    ipmi->add_con_change_handler = lan_add_con_change_handler;
+    ipmi->remove_con_change_handler = lan_remove_con_change_handler;
     ipmi->send_command = lan_send_command;
     ipmi->register_for_events = lan_register_for_events;
     ipmi->deregister_for_events = lan_deregister_for_events;
@@ -4496,13 +4764,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	goto out_err;
 
     /* Add it to the list of valid IPMIs so it will validate. */
-    ipmi_lock(lan_list_lock);
-    if (lan_list)
-	lan_list->prev = lan;
-    lan->next = lan_list;
-    lan->prev = NULL;
-    lan_list = lan;
-    ipmi_unlock(lan_list_lock);
+    lan_add_con(lan);
 
     lan->retries = 0;
 
@@ -4572,15 +4834,19 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 			       ipmi_msg_t      *msg,
 			       unsigned char   *pet_ack)
 {
-    lan_data_t *elem;
+    lan_link_t *l;
+    lan_data_t *lan;
     int        i;
+    int        idx;
     int        found = 0;
 
+    idx = hash_lan_addr(src_addr);
     ipmi_lock(lan_list_lock);
-    elem = lan_list;
-    while (elem) {
-	for (i=0; i<elem->num_ip_addr; i++) {
-	    if (elem->ip_addr[i].s_ipsock.s_addr.sa_family
+    l = lan_ip_list[idx].next;
+    while (l->lan) {
+	lan = l->lan;
+	for (i=0; i<lan->cparm.num_ip_addr; i++) {
+	    if (lan->cparm.ip_addr[i].s_ipsock.s_addr.sa_family
 		!= src_addr->sa_family)
 	    {
 		continue;
@@ -4591,10 +4857,10 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 	    {
 		struct sockaddr_in *src, *dst;
 		src = (struct sockaddr_in *) src_addr;
-		dst = &(elem->ip_addr[i].s_ipsock.s_addr4);
+		dst = &(lan->cparm.ip_addr[i].s_ipsock.s_addr4);
 		if (dst->sin_addr.s_addr == src->sin_addr.s_addr) {
 		    /* We have a match, handle it */
-		    snmp_got_match(elem, msg, pet_ack);
+		    snmp_got_match(lan, msg, pet_ack);
 		    found = 1;
 		    goto out_unlock;
 		}
@@ -4605,14 +4871,14 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 	    {
 		struct sockaddr_in6 *src, *dst;
 		src = (struct sockaddr_in6 *) src_addr;
-		dst = &(elem->ip_addr[i].s_ipsock.s_addr6);
+		dst = &(lan->cparm.ip_addr[i].s_ipsock.s_addr6);
 		if (memcmp(dst->sin6_addr.s6_addr,
 			   src->sin6_addr.s6_addr,
 			   sizeof(struct in6_addr))
 		    == 0)
 		{
 		    /* We have a match, handle it */
-		    snmp_got_match(elem, msg, pet_ack);
+		    snmp_got_match(lan, msg, pet_ack);
 		    found = 1;
 		    goto out_unlock;
 		}
@@ -4621,7 +4887,7 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 #endif
 	    }
 	}
-	elem = elem->next;
+	l = l->next;
     }
  out_unlock:
     ipmi_unlock(lan_list_lock);
@@ -4632,10 +4898,20 @@ int
 _ipmi_lan_init(os_handler_t *os_hnd)
 {
     int rv;
+    int i;
 
     rv = ipmi_create_global_lock(&lan_list_lock);
     if (rv)
 	return rv;
+
+    for (i=0; i<LAN_HASH_SIZE; i++) {
+	lan_list[i].next = &(lan_list[i]);
+	lan_list[i].prev = &(lan_list[i]);
+	lan_list[i].lan = NULL;
+	lan_ip_list[i].next = &(lan_ip_list[i]);
+	lan_ip_list[i].prev = &(lan_ip_list[i]);
+	lan_ip_list[i].lan = NULL;
+    }
 
     rv = ipmi_create_global_lock(&lan_payload_lock);
     if (rv)

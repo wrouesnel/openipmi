@@ -1,3 +1,38 @@
+2005-01-13 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h, lib/entity.c: Undeprecated the
+	hot-swap requester and indicator command, since HPI provides them.
+	I still think it's a bad idea to use them, though.
+
+	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_mc.h:
+	Moved the ipmi_mc_del_event() function to the public interface.
+
+	* lib/sel.c: Clear the SEL if the SEL is empty and the overflow
+	flag is set.  This appears the clear the overflow flag (at least
+	on some systems) and is safe to do.
+
+	* lib/sel.c: Fixed a bug where if the reservation was lost
+	fetching a SEL, it would not fetch anything from the SEL until a
+	new event was added.
+
+	* lib/ipmi_lan.c: Modified the list of LAN addresses to be two
+	hash tables, one indexed by connection and one indexed by IP
+	address (all IP addresses go in).
+
+	* include/OpenIPMI/ipmi_conn.h: Changed the connection and IPMB
+	reporting to use an add/remove instead of a set for the handler.
+	* lib/ipmi_smi.c: ditto
+	* lib/ipmi_lan.c: ditto
+	* lib/domain.c: ditto
+
+	* lib/oem_motorola_mxp_intf.c, lib/ipmi.c: Removed old MXP
+	interface support (it shouldn't be needed any more and maintenance
+	was getting to be a pain).
+	
+	* lib/ipmi_lan.c: Added connection reuse.  If a user makes a
+	connection to a system and the same connection already exists
+	(same parms) then it will reuse the old connection.
+
 2005-01-12 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Add support for openssl.

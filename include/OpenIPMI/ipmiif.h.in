@@ -862,6 +862,31 @@ int ipmi_entity_deactivate(ipmi_entity_t  *ent,
 /* Check the state of hot-swap for the entity. */
 int ipmi_entity_check_hot_swap_state(ipmi_entity_t *ent);
 
+/* It seems like a bad idea to directly modify the hot-swap indicators
+   and requesters.  But, HPI provides it, so we have to have it for
+   that. */
+int ipmi_entity_get_hot_swap_indicator(ipmi_entity_t      *ent,
+				       ipmi_entity_val_cb handler,
+				       void               *cb_data);
+int ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
+				       int            val,
+				       ipmi_entity_cb done,
+				       void           *cb_data);
+int ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
+				       ipmi_entity_val_cb handler,
+				       void               *cb_data);
+int ipmi_entity_id_get_hot_swap_indicator(ipmi_entity_id_t   id,
+					  ipmi_entity_val_cb handler,
+					  void               *cb_data);
+int ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
+					  int              val,
+					  ipmi_entity_cb   done,
+					  void             *cb_data);
+int ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
+					  ipmi_entity_val_cb handler,
+					  void               *cb_data);
+
+
 /* Entity ID based versions of some of the above calls. */
 int ipmi_entity_id_get_hot_swap_state(ipmi_entity_id_t              id,
 				      ipmi_entity_hot_swap_state_cb handler,
@@ -2263,34 +2288,6 @@ int ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 					   ipmi_domain_cb handler,
 					   void           *cb_data);
 
-/* Allowing user modification of the hot-swap indicator and requester
-   seems to be a bad idea. */
-int ipmi_entity_get_hot_swap_indicator(ipmi_entity_t      *ent,
-				       ipmi_entity_val_cb handler,
-				       void               *cb_data)
-     IPMI_FUNC_DEPRECATED;
-int ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
-				       int            val,
-				       ipmi_entity_cb done,
-				       void           *cb_data)
-     IPMI_FUNC_DEPRECATED;
-int ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
-				       ipmi_entity_val_cb handler,
-				       void               *cb_data)
-     IPMI_FUNC_DEPRECATED;
-int ipmi_entity_id_get_hot_swap_indicator(ipmi_entity_id_t   id,
-					  ipmi_entity_val_cb handler,
-					  void               *cb_data)
-     IPMI_FUNC_DEPRECATED;
-int ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
-					  int              val,
-					  ipmi_entity_cb   done,
-					  void             *cb_data)
-     IPMI_FUNC_DEPRECATED;
-int ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
-					  ipmi_entity_val_cb handler,
-					  void               *cb_data)
-     IPMI_FUNC_DEPRECATED;
 int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 				 int           event,
 				 int           *val)

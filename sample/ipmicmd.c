@@ -783,7 +783,7 @@ main(int argc, char *argv[])
 	sel_set_fd_read_handler(sel, 0, SEL_FD_HANDLER_ENABLED);
     }
 
-    con->set_con_change_handler(con, con_changed_handler, NULL);
+    con->add_con_change_handler(con, con_changed_handler, NULL);
 
     rv = con->start_con(con);
     if (rv) {

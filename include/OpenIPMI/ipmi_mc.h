@@ -202,6 +202,12 @@ int ipmi_mc_add_event_to_sel(ipmi_mc_t                 *mc,
 			     ipmi_mc_add_event_done_cb handler,
 			     void                      *cb_data);
 
+typedef void (ipmi_mc_del_event_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
+int ipmi_mc_del_event(ipmi_mc_t                 *mc,
+		      ipmi_event_t              *event, 
+		      ipmi_mc_del_event_done_cb handler,
+		      void                      *cb_data);
+
 ipmi_event_t *ipmi_mc_first_event(ipmi_mc_t *mc);
 ipmi_event_t *ipmi_mc_last_event(ipmi_mc_t *mc);
 ipmi_event_t *ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);

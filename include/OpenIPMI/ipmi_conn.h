@@ -149,12 +149,13 @@ struct ipmi_con_s
        con_changed_handler, so set that up first. */
     int (*start_con)(ipmi_con_t *ipmi);
 
-    /* Set the callback to call when the connection goes down or up.
-       There is only one of these handlers, changing it overwrites it.
-       Setting it to NULL disables it. */
-    void (*set_con_change_handler)(ipmi_con_t             *ipmi,
-				   ipmi_ll_con_changed_cb handler,
-				   void                   *cb_data);
+    /* Add a callback to call when the connection goes down or up. */
+    int (*add_con_change_handler)(ipmi_con_t             *ipmi,
+				  ipmi_ll_con_changed_cb handler,
+				  void                   *cb_data);
+    int (*remove_con_change_handler)(ipmi_con_t             *ipmi,
+				     ipmi_ll_con_changed_cb handler,
+				     void                   *cb_data);
 
     /* If OEM code discovers that an IPMB address has changed, it can
        use this to change it.  The hacks are the same as the ones in
@@ -164,10 +165,13 @@ struct ipmi_con_s
 			  int           active,
 			  unsigned int  hacks);
 
-    /* Set the handler that will be called when the IPMB address changes. */
-    void (*set_ipmb_addr_handler)(ipmi_con_t           *ipmi,
-				  ipmi_ll_ipmb_addr_cb handler,
-				  void                 *cb_data);
+    /* Add a handler that will be called when the IPMB address changes. */
+    int (*add_ipmb_addr_handler)(ipmi_con_t           *ipmi,
+				 ipmi_ll_ipmb_addr_cb handler,
+				 void                 *cb_data);
+    int (*remove_ipmb_addr_handler)(ipmi_con_t           *ipmi,
+				    ipmi_ll_ipmb_addr_cb handler,
+				    void                 *cb_data);
 
     /* This call gets the IPMB address of the connection.  It may be
        NULL if the connection does not support this.  This call may be
