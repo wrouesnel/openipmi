@@ -81,6 +81,9 @@ struct ipmi_sdr_info_s
     /* The thing holding the SDR repository. */
     ipmi_mcid_t mc;
 
+    /* The OS handler for this SDR. */
+    os_handler_t *os_hnd;
+
     /* LUN we are attached with. */
     int         lun;
 
@@ -150,8 +153,6 @@ struct ipmi_sdr_info_s
     int                    sdr_data_write;
     int                    write_sdr_num;
 
-int outstanding_count;
-
     /* List of fetch info items for an in-progress fetch.  The free
        list holds fetch structures that are not currently in use, the
        outstanding list holds ones that have been sent but have not
@@ -160,6 +161,17 @@ int outstanding_count;
     ilist_t *free_fetch;
     ilist_t *outstanding_fetch;
     ilist_t *process_fetch;
+
+    /* This is used so that start_fetch will only start when nothing
+       is outstanding from other fetches.  This avoids getting
+       messages that are not valid, running out of buffers, and other
+       confusing things. */
+    int waiting_start_fetch;
+
+    /* This timer is used to restart the SDR fetch operation.  If it
+       fails due to a lost reservation, wait a random amount of time
+       and restart it. */
+    os_hnd_timer_id_t *restart_timer;
 
     /* The actual current copy of the SDR repository. */
     unsigned int num_sdrs;
@@ -213,6 +225,7 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     int             rv;
     fetch_info_t    *info;
     int             i;
+    os_handler_t    *os_hnd = ipmi_domain_get_os_hnd(domain);
 
     CHECK_MC_LOCK(mc);
 
@@ -226,7 +239,9 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     }
     memset(sdrs, 0, sizeof(*sdrs));
 
+
     sdrs->mc = _ipmi_mc_convert_to_id(mc);
+    sdrs->os_hnd = os_hnd;
     sdrs->destroyed = 0;
     sdrs->sdr_lock = NULL;
     sdrs->fetched = 0;
@@ -240,6 +255,10 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     sdrs->sdr_wait_q = NULL;
 
     rv = ipmi_create_lock(domain, &sdrs->sdr_lock);
+    if (rv)
+	goto out_done;
+
+    rv = os_hnd->alloc_timer(os_hnd, &(sdrs->restart_timer));
     if (rv)
 	goto out_done;
 
@@ -271,7 +290,7 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 	goto out_done;
     }
 
-    sdrs->sdr_wait_q = opq_alloc(ipmi_domain_get_os_hnd(domain));
+    sdrs->sdr_wait_q = opq_alloc(os_hnd);
     if (! sdrs->sdr_wait_q) {
 	rv = ENOMEM;
 	goto out_done;
@@ -312,6 +331,11 @@ internal_destroy_sdr_info(ipmi_sdr_info_t *sdrs)
     free_ilist(sdrs->free_fetch);
     free_ilist(sdrs->outstanding_fetch);
     free_ilist(sdrs->process_fetch);
+
+    /* We don't have to worry about stopping the timer, this can't be
+       called if the timer is running, because a fetch operation would
+       be in progress if that was the case. */
+    sdrs->os_hnd->free_timer(sdrs->os_hnd, sdrs->restart_timer);
 
     opq_destroy(sdrs->sdr_wait_q);
 
@@ -391,7 +415,7 @@ fetch_complete(ipmi_sdr_info_t *sdrs, int err)
     sdr_unlock(sdrs);
 }
 
-static int start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc);
+static int start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay);
 
 static void
 handle_reservation_check(ipmi_mc_t  *mc,
@@ -433,7 +457,7 @@ handle_reservation_check(ipmi_mc_t  *mc,
 		ipmi_mem_free(sdrs->working_sdrs);
 		sdrs->working_sdrs = NULL;
 	    }
-	    rv = start_fetch(sdrs, mc);
+	    rv = start_fetch(sdrs, mc, 1);
 	    if (rv) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
 			 "Could not start the SDR fetch: %x", rv);
@@ -667,6 +691,21 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	fetch_complete(sdrs, ENXIO);
 	goto out;
     }
+
+    if (sdrs->waiting_start_fetch) {
+	/* A start fetch operation is waiting for the outstanding
+           queue to clear, so free this and try again. */
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+
+	rv = start_fetch(sdrs, mc, 1);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "Could not start the SDR fetch: %x", rv);
+	    fetch_complete(sdrs, rv);
+	    goto out;
+	}
+	goto out_unlock;
+    }
 	
     if (info->fetch_retry_num != sdrs->fetch_retry_count) {
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
@@ -737,7 +776,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 		ipmi_mem_free(sdrs->working_sdrs);
 		sdrs->working_sdrs = NULL;
 	    }
-	    rv = start_fetch(sdrs, mc);
+	    rv = start_fetch(sdrs, mc, 1);
 	    if (rv) {
 		/* Cause the fetch to be aborted. */
 		sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
@@ -1182,8 +1221,10 @@ handle_sdr_info(ipmi_mc_t  *mc,
     return;
 }
 
+static void restart_timer_cb(void *cb_data, os_hnd_timer_id_t *id);
+
 static int
-start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
+start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
 {
     unsigned char       cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t          cmd_msg;
@@ -1191,6 +1232,30 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     sdrs->working_sdrs = NULL;
     sdrs->fetch_state = FETCHING;
     sdrs->sdrs_changed = 0;
+
+    if (!ilist_empty(sdrs->outstanding_fetch)) {
+	sdrs->waiting_start_fetch = 1;
+	return 0;
+    }
+
+    if (delay) {
+	/* Start the fetch operation after a random delay. */
+	struct timeval tv;
+
+	sdrs->os_hnd->get_random(sdrs->os_hnd,
+				 &tv.tv_sec,
+				 sizeof(tv.tv_sec));
+	/* Wait a random value between 10 and 30 seconds */
+	tv.tv_sec = (tv.tv_sec % 20) + 10;
+	tv.tv_usec = 0;
+	sdrs->os_hnd->start_timer(sdrs->os_hnd,
+				  sdrs->restart_timer,
+				  &tv,
+				  restart_timer_cb,
+				  sdrs);
+    }
+
+    sdrs->waiting_start_fetch = 0;
 
     /* Get a reservation first. */
     cmd_msg.data = cmd_data;
@@ -1216,7 +1281,7 @@ handle_start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     sdrs->fetch_retry_count = 0;
     sdrs->sdr_retry_count = 0;
     sdr_lock(sdrs);
-    rv = start_fetch(sdrs, mc);
+    rv = start_fetch(sdrs, mc, 0);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "handle_start_fetch: error requesting SDR reserveration: %x",
@@ -1245,6 +1310,22 @@ handle_start_fetch(void *cb_data, int shutdown)
 	sdrs->wait_err = rv;
 	fetch_complete(sdrs, rv);
     }
+}
+
+static void
+restart_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
+{
+    ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) cb_data;
+
+    if (sdrs->destroyed) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "SDR info was destroyed while an operation was in"
+		 " progress(1)");
+	fetch_complete(sdrs, ECANCELED);
+	return;
+    }
+
+    handle_start_fetch(sdrs, 0);
 }
 
 static void

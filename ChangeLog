@@ -1,4 +1,11 @@
 
+2003-08-12 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sdr.c: Added code to the SDR so that it will wait until
+	everything outstanding is clear before restarting the fetch
+	operation.  Also added a random timer to restart SDR operations
+	when the reservation was lost.
+
 2003-08-11 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sdr.c: Fixed a locking bug in the SDR code.
