@@ -1,3 +1,7 @@
+2004-08-19 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Move to version 1.4.1
+
 2004-08-16 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_controls.c:

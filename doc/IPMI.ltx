@@ -1062,6 +1062,10 @@ This does \emph{not} apply to internal interfaces, especially ones that
 send messages.  If you send a message to a \acs{MC}, for instance, the
 \acs{MC} can be NULL when the response comes back.  Be very careful.
 
+Note that the handlers don't get called immediately with current state
+when you add a callback handler.  So you must register for the event
+then query the current state.
+
 \subsubsection{Updated Callbacks}
 
 Updated callbacks tell you when an object comes into existance, is
@@ -1091,9 +1095,6 @@ present.  You will be told with the present callback on the entity.
 The hot-swap state of an entity changes.  That is reported via the
 hot-swap state callback.  Events because of sensors going out of range
 is another example.
-
-Note that the handlers don't get called with current state when you
-add an event-based callback handler.
 
 \subsubsection{Synchronous Callbacks}
 
@@ -1175,7 +1176,7 @@ Contains code for configuring the \acs{LAN} configuration data.\\
 
 \verb=ipmi_pet.h= &
 Contains code that allows the user to easily set up an IPMI \acs{LAN}
-interface on a BMC to send traps.\\
+interface on a BMC to send \ac{SNMP} traps.\\
 
 \end{tabularx}
 
@@ -1276,11 +1277,11 @@ ipmi_domain_id_t id;
 rv = ipmi_open_domain(cons, num_cons, con_change, user_data, &id);
 \end{verbatim}
 
-Up to two connections are currently supported.  A connection is an
-independent \ac{MC} in the same domain; if two MCs have external
-connections, they can both be used for fault-tolerance.  This
-generally requires some special support for the particular domain
-type, see the appendices ons pecific domain types for more detail.
+Up to two connections to a single domain are currently supported.  A
+connection is an independent \ac{MC} in the same domain; if two MCs
+have external connections, they can both be used for fault-tolerance.
+This generally requires some special support for the particular domain
+type, see the appendices on specific domain types for more detail.
 The \verb=con_change= function is called whenever the connection
 changes states (a connection is established or lost).  The connection
 change callback looks like:
@@ -1365,10 +1366,10 @@ TBD - describe this interface in detail
 \subsection{\ac{KCS}}
 \label{sec-kcs}
 The \ac{KCS} interface is currently the most popular \acs{IPMI} system
-interface.  The \ac{KCS} interface looks much like a standard PC
-keyboard interface.  It was chosen because lots of cheap hardware was
-available for these types of interfaces.  But it is still a
-byte-at-a-time interface and performs poorly.  It has the capability
+interface.  The \ac{KCS} interface looks electrically much like a
+standard PC keyboard interface.  It was chosen because lots of cheap
+hardware was available for these types of interfaces.  But it is still
+a byte-at-a-time interface and performs poorly.  It has the capability
 for interrupts, but very few systems have working interrupt capability
 with \ac{KCS} interfaces.
 
