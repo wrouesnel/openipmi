@@ -2638,7 +2638,7 @@ con_up_complete(ipmi_domain_t *domain)
     if (i == MAX_IPMI_USED_CHANNELS) {
 	for (i=0; i<MAX_CONS; i++) {
 	    if (domain->conn[i])
-		domain->con[i].scan_sysaddr = 1
+		domain->conn[i]->scan_sysaddr = 1;
 	}
     }
 
