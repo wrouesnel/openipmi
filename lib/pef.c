@@ -132,11 +132,14 @@ check_pef_response_param(ipmi_pef_t *pef,
 
     if (rsp->data[0] != 0) {
 	/* Allow optional parameters to return errors without complaining. */
-	if (rsp->data[0] != 0x80)
+	if ((rsp->data[0] != 0x80) && (rsp->data[0] != 0xcc)
+	    && (rsp->data[0] != 0x81))
+	{
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%s: IPMI error from PEF capabilities fetch: %x",
 		     func_name,
 		     rsp->data[0]);
+	}
 	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
 
@@ -768,6 +771,19 @@ struct ipmi_pef_config_s
     int curr_sel;
     int curr_block;
 
+    /* Not used for access, just for checking validity. */
+    ipmi_pef_t *my_pef;
+
+    /* Does this config hold the external PEF "set in progress" lock? */
+    int pef_locked;
+
+    /* Does the PEF support locking? */
+    int lock_supported;
+
+    /* Used for deferred errors. */
+    int err;
+
+    ipmi_pef_done_cb       set_done;
     ipmi_pef_get_config_cb done;
     void                   *cb_data;
 
@@ -1320,6 +1336,17 @@ static pefparms_t pefparms[NUM_PEFPARMS] =
 };
 
 static void
+err_lock_cleared(ipmi_pef_t *pef,
+		 int        err,
+		 void       *cb_data)
+{
+    ipmi_pef_config_t *pefc = cb_data;
+
+    pefc->done(pef, pefc->err, NULL, pefc->cb_data);
+    ipmi_pef_free_config(pefc);
+}
+
+static void
 got_parm(ipmi_pef_t     *pef,
 	 int            err,
 	 unsigned char  *data,
@@ -1474,18 +1501,85 @@ got_parm(ipmi_pef_t     *pef,
 
  done:
     if (err) {
-	pefc->done(pef, err, NULL, pefc->cb_data);
-	ipmi_pef_free_config(pefc);
+	unsigned char data[1];
+
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "pef.c(got_parm): Error trying to get parm %d: %x",
+		 pefc->curr_parm, err);
+	pefc->err = err;
+	/* Clear the lock */
+	data[0] = 0;
+	err = ipmi_pef_set_parm(pef, 0, data, 1, err_lock_cleared, pefc);
+	if (err) {
+	    ipmi_pef_free_config(pefc);
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "pef.c(got_parm): Error trying to clear lock: %x",
+		     err);
+	    pefc->done(pef, pefc->err, NULL, pefc->cb_data);
+	    ipmi_pef_free_config(pefc);
+	}
     } else
 	pefc->done(pef, 0, pefc, pefc->cb_data);
 }
 
-int ipmi_pef_get_config(ipmi_pef_t             *pefparm,
+static void 
+lock_done(ipmi_pef_t *pef,
+	  int        err,
+	  void       *cb_data)
+{
+    ipmi_pef_config_t *pefc = cb_data;
+    int               rv;
+
+    if (err == IPMI_IPMI_ERR_VAL(0x80)) {
+	/* Lock is not supported, just mark it and go on. */
+	pefc->lock_supported = 0;
+    } else if (err == IPMI_IPMI_ERR_VAL(0x81)) {
+	/* Someone else has the lock, return EAGAIN. */
+	pefc->done(pef, err, NULL, pefc->cb_data);
+	ipmi_pef_free_config(pefc);
+	return;
+    } else if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "pef.c(lock_done): Error trying to lock the PEF"
+		 " parms: %x",
+		 err);
+	pefc->done(pef, err, NULL, pefc->cb_data);
+	ipmi_pef_free_config(pefc);
+	return;
+    }
+
+    pefc->pef_locked = 1;
+
+    rv = ipmi_pef_get_parm(pef, pefc->curr_parm, pefc->curr_sel, 0,
+			    got_parm, pefc);
+    if (rv) {
+	unsigned char data[1];
+
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "pef.c(lock_done): Error trying to get parm %d: %x",
+		 pefc->curr_parm, rv);
+	pefc->err = rv;
+	/* Clear the lock */
+	data[0] = 0;
+	rv = ipmi_pef_set_parm(pef, 0, data, 1, err_lock_cleared, pefc);
+	if (rv) {
+	    ipmi_pef_free_config(pefc);
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "pef.c(lock_done): Error trying to clear lock: %x",
+		     err);
+	    pefc->done(pef, pefc->err, NULL, pefc->cb_data);
+	    ipmi_pef_free_config(pefc);
+	}
+    }
+}
+
+int ipmi_pef_get_config(ipmi_pef_t             *pef,
 			ipmi_pef_get_config_cb done,
 			void                   *cb_data)
 {
     ipmi_pef_config_t *pefc;
     int               rv;
+    unsigned char     data[1];
 
     pefc = ipmi_mem_alloc(sizeof(*pefc));
     if (!pefc)
@@ -1496,72 +1590,63 @@ int ipmi_pef_get_config(ipmi_pef_t             *pefparm,
     pefc->curr_sel = 0;
     pefc->done = done;
     pefc->cb_data = cb_data;
+    pefc->my_pef = pef;
 
-    rv = ipmi_pef_get_parm(pefparm, pefc->curr_parm, pefc->curr_sel, 0,
-			   got_parm, pefc);
+    /* First grab the lock */
+    data[0] = 1; /* Set in progress. */
+    rv = ipmi_pef_set_parm(pef, 0, data, 1, lock_done, pefc);
     if (rv)
 	ipmi_pef_free_config(pefc);
 
     return rv;
 }
 
-typedef struct setconfig_s
-{
-    int               err;
-    ipmi_pef_done_cb  done;
-    void              *cb_data;
-    ipmi_pef_config_t *pefc;
-} setconfig_t;
-
 static void 
-set_clear(ipmi_pef_t *pefparm,
+set_clear(ipmi_pef_t *pef,
 	 int         err,
 	 void        *cb_data)
 {
-    setconfig_t *sc = cb_data;
+    ipmi_pef_config_t *pefc = cb_data;
 
-    if (sc->err)
-	err = sc->err;
-    sc->done(pefparm, err, sc->cb_data);
-    ipmi_mem_free(sc);
+    if (pefc->err)
+	err = pefc->err;
+    pefc->set_done(pef, err, pefc->cb_data);
+    ipmi_pef_free_config(pefc);
 }
 
 static void 
-commit_done(ipmi_pef_t *pefparm,
+commit_done(ipmi_pef_t *pef,
 	    int        err,
 	    void       *cb_data)
 {
-    setconfig_t   *sc = cb_data;
-    unsigned char data[1];
-    int           rv;
+    ipmi_pef_config_t *pefc = cb_data;
+    unsigned char     data[1];
+    int               rv;
 
     /* Note that we ignore the error.  The commit done is optional,
        and must return an error if it is optional, so we just ignore
        the error and clear the field here. */
 
-    /* Commit is done.  The IPMI spec doesn't say if you should set
-       the "set in progress" value back to 0 or if it is automatic, so
-       we go ahead and do it to be sure. */
+    /* Commit is done.  The IPMI spec says that it goes into the
+       set-in-progress state after this, so we need to clear it. */
 
     data[0] = 0;
-    rv = ipmi_pef_set_parm(pefparm, 0, data, 1, set_clear, sc);
+    rv = ipmi_pef_set_parm(pef, 0, data, 1, set_clear, pefc);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "ipmi_pefparm_commit_done: Error trying to clear the set in"
+		 "pef.c(commit_done): Error trying to clear the set in"
 		 " progress: %x",
 		 rv);
-	sc->done(pefparm, rv, sc->cb_data);
-	ipmi_mem_free(sc);
+	set_clear(pef, rv, pefc);
     }
 }
 
 static void 
-set_done(ipmi_pef_t *pefparm,
+set_done(ipmi_pef_t *pef,
 	 int        err,
 	 void       *cb_data)
 {
-    setconfig_t       *sc = cb_data;
-    ipmi_pef_config_t *pefc = sc->pefc;
+    ipmi_pef_config_t *pefc = cb_data;
     unsigned char     data[MAX_IPMI_DATA_SIZE];
     pefparms_t        *lp = &(pefparms[pefc->curr_parm]);
     unsigned int      length;
@@ -1656,8 +1741,8 @@ set_done(ipmi_pef_t *pefparm,
 
     length = lp->length;
     lp->set_handler(pefc, lp, data, &length);
-    err = ipmi_pef_set_parm(pefparm, pefc->curr_parm,
-			    data, length, set_done, sc);
+    err = ipmi_pef_set_parm(pef, pefc->curr_parm,
+			    data, length, set_done, pefc);
     if (err)
 	goto done;
 
@@ -1677,118 +1762,182 @@ set_done(ipmi_pef_t *pefparm,
     return;
 
  done:
-    ipmi_pef_free_config(pefc);
-    sc->pefc = NULL;
-    if (err) {
+    if (!pefc->lock_supported) {
+	/* No lock support, just finish the operation. */
+	set_clear(pef, err, pefc);
+	return;
+    } else if (err) {
 	data[0] = 0; /* Don't commit the parameters. */
-	sc->err = err;
-	err = ipmi_pef_set_parm(pefparm, 0, data, 1, set_clear, sc);
+	pefc->err = err;
+	err = ipmi_pef_set_parm(pef, 0, data, 1, set_clear, pefc);
     } else {
 	data[0] = 2; /* Commit the parameters. */
-	err = ipmi_pef_set_parm(pefparm, 0, data, 1, commit_done, sc);
+	err = ipmi_pef_set_parm(pef, 0, data, 1, commit_done, pefc);
     }
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "ipmi_pefparm_got_parm: Error trying to clear the set in"
+		 "pef.c(got_parm): Error trying to clear the set in"
 		 " progress: %x",
 		 err);
-	sc->done(pefparm, err, sc->cb_data);
-	ipmi_mem_free(sc);
+	set_clear(pef, err, pefc);
     }
 }
 
 int
 ipmi_pef_set_config(ipmi_pef_t        *pef,
-		    ipmi_pef_config_t *pefc,
+		    ipmi_pef_config_t *opefc,
 		    ipmi_pef_done_cb  done,
 		    void              *cb_data)
 {
-    setconfig_t   *sc;
-    unsigned char data[1];
-    int           rv;
-    int           i;
+    ipmi_pef_config_t *pefc;
+    unsigned char     data[MAX_IPMI_DATA_SIZE];
+    int               rv;
+    int               i;
+    pefparms_t        *lp;
+    unsigned int      length;
 
-    sc = ipmi_mem_alloc(sizeof(*sc));
-    if (!sc)
+    if (opefc->my_pef != pef)
+	return EINVAL;
+
+    if (!opefc->pef_locked)
+	return EINVAL;
+
+    pefc = ipmi_mem_alloc(sizeof(*pefc));
+    if (!pefc)
 	return ENOMEM;
 
-    sc->pefc = ipmi_mem_alloc(sizeof(*pefc));
-    if (!sc->pefc) {
-	ipmi_mem_free(sc);
-	return ENOMEM;
-    }
-
-    *sc->pefc = *pefc;
-    sc->pefc->efts = NULL;
-    sc->pefc->apts = NULL;
-    sc->pefc->asks = NULL;
-    sc->pefc->alert_strings = NULL;
-    sc->err = 0;
+    *pefc = *opefc;
+    pefc->efts = NULL;
+    pefc->apts = NULL;
+    pefc->asks = NULL;
+    pefc->alert_strings = NULL;
+    pefc->err = 0;
+    pefc->pef_locked = 0; /* Set this here, since we will unlock it,
+			     but we don't want the free operation to
+			     attempt an unlock */
 
     if (pefc->num_event_filters) {
-	sc->pefc->efts = ipmi_mem_alloc(sizeof(ipmi_eft_t)
+	pefc->efts = ipmi_mem_alloc(sizeof(ipmi_eft_t)
 					* pefc->num_event_filters);
-	if (!sc->pefc->efts) {
+	if (!pefc->efts) {
 	    rv = ENOMEM;
 	    goto out;
 	}
-	memcpy(sc->pefc->efts, pefc->efts,
+	memcpy(pefc->efts, opefc->efts,
 	       sizeof(ipmi_eft_t) * pefc->num_event_filters);
     }
 
     if (pefc->num_alert_policies) {
-	sc->pefc->apts = ipmi_mem_alloc(sizeof(ipmi_apt_t)
+	pefc->apts = ipmi_mem_alloc(sizeof(ipmi_apt_t)
 					* pefc->num_alert_policies);
-	if (!sc->pefc->apts) {
+	if (!pefc->apts) {
 	    rv = ENOMEM;
 	    goto out;
 	}
-	memcpy(sc->pefc->apts, pefc->apts,
+	memcpy(pefc->apts, opefc->apts,
 	       sizeof(ipmi_apt_t) * pefc->num_alert_policies);
     }
 
     if (pefc->num_alert_strings) {
-	sc->pefc->asks = ipmi_mem_alloc(sizeof(ipmi_ask_t)
+	pefc->asks = ipmi_mem_alloc(sizeof(ipmi_ask_t)
 					* pefc->num_alert_strings);
-	if (!sc->pefc->asks) {
+	if (!pefc->asks) {
 	    rv = ENOMEM;
 	    goto out;
 	}
-	memcpy(sc->pefc->asks, pefc->asks,
+	memcpy(pefc->asks, opefc->asks,
 	       sizeof(ipmi_ask_t) * pefc->num_alert_strings);
 
-	sc->pefc->alert_strings = ipmi_mem_alloc(sizeof(unsigned char *)
+	pefc->alert_strings = ipmi_mem_alloc(sizeof(unsigned char *)
 						 * pefc->num_alert_strings);
-	if (!sc->pefc->alert_strings) {
+	if (!pefc->alert_strings) {
 	    rv = ENOMEM;
 	    goto out;
 	}
-	memset(sc->pefc->asks, 0,
+	memset(pefc->asks, 0,
 	       sizeof(unsigned char *) * pefc->num_alert_strings);
 	
 	for (i=0; i<pefc->num_alert_strings; i++) {
-	    sc->pefc->alert_strings[i] = ipmi_strdup(pefc->alert_strings[i]);
-	    if (!sc->pefc->alert_strings[i]) {
+	    if (!opefc->alert_strings[i])
+		continue;
+	    pefc->alert_strings[i] = ipmi_strdup(opefc->alert_strings[i]);
+	    if (!pefc->alert_strings[i]) {
 		rv = ENOMEM;
 		goto out;
 	    }
 	}
     }
 
-    sc->pefc->curr_parm = 0;
-    sc->pefc->curr_sel = 0;
-    sc->pefc->curr_block = 0;
-    sc->done = done;
-    sc->cb_data = cb_data;
+    /* We know that parm 1 is valid an non-optional, so we just set it. */
+    pefc->curr_parm = 1;
+    pefc->curr_sel = 0;
+    pefc->curr_block = 0;
+    pefc->set_done = done;
+    pefc->cb_data = cb_data;
 
-    data[0] = 1; /* Set in progress. */
-    rv = ipmi_pef_set_parm(pef, sc->pefc->curr_parm, data, 1,
-			   set_done, sc);
+    lp = &(pefparms[pefc->curr_parm]);
+    length = lp->length;
+    lp->set_handler(pefc, lp, data, &length);
+    rv = ipmi_pef_set_parm(pef, pefc->curr_parm, data, length, set_done, pefc);
  out:
     if (rv) {
-	ipmi_pef_free_config(sc->pefc);
-	ipmi_mem_free(sc);
+	ipmi_pef_free_config(pefc);
+    } else {
+	/* The old config no longer holds the lock. */
+	opefc->pef_locked = 0;
     }
+    return rv;
+}
+
+typedef struct clear_lock_s
+{
+    ipmi_pef_done_cb  done;
+    void              *cb_data;
+    
+} clear_lock_t;
+
+static void 
+lock_cleared(ipmi_pef_t *pef,
+	     int         err,
+	     void        *cb_data)
+{
+    clear_lock_t *cl = cb_data;
+
+    cl->done(pef, err, cl->cb_data);
+
+    ipmi_mem_free(cl);
+}
+
+int
+ipmi_pef_clear_lock(ipmi_pef_t        *pef,
+		    ipmi_pef_config_t *pefc,
+		    ipmi_pef_done_cb  done,
+		    void              *cb_data)
+{
+    unsigned char data[1];
+    int           rv;
+    clear_lock_t  *cl;
+
+    if (pefc) {
+	if (pefc->my_pef != pef)
+	    return EINVAL;
+
+	if (!pefc->pef_locked)
+	    return EINVAL;
+    }
+
+    cl = ipmi_mem_alloc(sizeof(*cl));
+    if (!cl)
+	return ENOMEM;
+
+    data[0] = 0; /* Clear the lock. */
+    rv = ipmi_pef_set_parm(pef, 0, data, 1, lock_cleared, cl);
+    if (rv) {
+	ipmi_mem_free(cl);
+    } else if (pefc) {
+	pefc->pef_locked = 0;
+    }
+
     return rv;
 }
 

@@ -120,10 +120,27 @@ unsigned int num_event_filter_table_entries(ipmi_pef_t *pef);
 #define IPMI_PEFPARM_ALERT_STRING		13
 
 
+/*
+ * *** NOTE *** READ THIS BEFORE USING THE CONFIG STUFF BELOW
+ *
+ * The configuration working below is strongly tied to locking of the
+ * PEF.  If you successfully get a configuration (no error), then the
+ * PEF *will* be locked, and you hold the lock.  You must call either
+ * ipmi_pef_set_config() or ipmi_pef_clear_lock() to clean up the
+ * lock.
+ *
+ * This allows you to do a read-modify-write operation and blocking
+ * other operations on the PEF while you are doing this.
+ */
+
 /* A full PEF configuration. */
 typedef struct ipmi_pef_config_s ipmi_pef_config_t;
 
-/* Get the full PEF configuration */
+/* Get the full PEF configuration and lock the PEF.  Note that if the
+   PEF is locked by another, you will get an EAGAIN error in the
+   callback.  You can retry the operation, or if you are sure that it
+   is free, you can call ipmi_pef_clear_lock() before retrying.   Note
+   that the config in the callback *must* be freed by you.*/
 typedef void (*ipmi_pef_get_config_cb)(ipmi_pef_t        *pef,
 				       int               err,
 				       ipmi_pef_config_t *config,
@@ -132,10 +149,19 @@ int ipmi_pef_get_config(ipmi_pef_t             *pef,
 			ipmi_pef_get_config_cb done,
 			void                   *cb_data);
 
-/* Set the full PEF configuration.  Note that a copy is made of the
-   configuration, so you are free to do whatever you like with it
-   after this. */
+/* Set the full PEF configuration.  The config *MUST* be locked and
+   the pef must match the PEF that it was fetched with.  Note that a
+   copy is made of the configuration, so you are free to do whatever
+   you like with it after this.  Note that this unlocks the config, so
+   it cannot be used for future set operations. */
 int ipmi_pef_set_config(ipmi_pef_t        *pef,
+			ipmi_pef_config_t *pefc,
+			ipmi_pef_done_cb  done,
+			void              *cb_data);
+
+/* Clear the lock on a PEF.  If the PEF config is non-NULL, then it's
+   lock is also cleared. */
+int ipmi_pef_clear_lock(ipmi_pef_t        *pef,
 			ipmi_pef_config_t *pefc,
 			ipmi_pef_done_cb  done,
 			void              *cb_data);

@@ -107,8 +107,11 @@ int ipmi_lanparm_set_parm(ipmi_lanparm_t       *lanparm,
    them. */
 typedef struct ipmi_lan_config_s ipmi_lan_config_t;
 
-/* Get the full LAN configuration.  Note that the config in the
-   callback *must* be freed by you. */
+/* Get the full LAN configuration and lock the LAN.  Note that if the
+   LAN is locked by another, you will get an EAGAIN error in the
+   callback.  You can retry the operation, or if you are sure that it
+   is free, you can call ipmi_lan_clear_lock() before retrying.  Note
+   that the config in the callback *must* be freed by you. */
 typedef void (*ipmi_lan_get_config_cb)(ipmi_lanparm_t    *lanparm,
 				       int               err,
 				       ipmi_lan_config_t *config,
@@ -117,11 +120,20 @@ int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
 			ipmi_lan_get_config_cb done,
 			void                   *cb_data);
 
-/* Set the full LAN configuration.  Note that the config is copied, so
-   you are free to do whatever you like with your config after you
-   call this. */
+/* Set the full LAN configuration.  The config *MUST* be locked and
+   the lanparm must match the LAN that it was fetched with.  Note that
+   a copy is made of the configuration, so you are free to do whatever
+   you like with it after this.  Note that this unlocks the config, so
+   it cannot be used for future set operations. */
 int ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
 			ipmi_lan_config_t    *config,
+			ipmi_lanparm_done_cb done,
+			void                 *cb_data);
+
+/* Clear the lock on a LAN.  If the LAN config is non-NULL, then it's
+   lock is also cleared. */
+int ipmi_lan_clear_lock(ipmi_lanparm_t       *lanparm,
+			ipmi_lan_config_t    *lanc,
 			ipmi_lanparm_done_cb done,
 			void                 *cb_data);
 

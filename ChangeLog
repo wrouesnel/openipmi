@@ -1,3 +1,17 @@
+2004-01-06 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/pef.c, include/OpenIPMI/ipmi_pef.h: Reworked this to handle
+	locking properly, the lock is claimed on a PEF config read and the
+	lock is cleared on a write.  Also added a specific clear lock
+	operation.
+
+	* lib/lanparm.c, include/OpenIPMI/ipmi_lanparm.h: Reworked this to
+	handle locking properly, the lock is claimed on a LAN config read
+	and the lock is cleared on a write.  Also added a specific clear
+	lock operation.
+
+	* ui/ui.c: Added LAN and PEF lock clearing.
+
 2004-01-05 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c, ui/basic_ui.c: Added a way to free things allocated in

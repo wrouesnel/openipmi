@@ -569,9 +569,23 @@ typedef struct alert_dest_addr_s
 
 struct ipmi_lan_config_s
 {
-    /* Stuff for getting the values. */
+    /* Stuff for getting/setting the values. */
     int curr_parm;
     int curr_sel;
+
+    /* Not used for access, just for checking validity. */
+    ipmi_lanparm_t *my_lan;
+
+    /* Does this config hold the external LAN "set in progress" lock? */
+    int lan_locked;
+
+    /* Does the LAN config support locking? */
+    int lock_supported;
+
+    /* Used for deferred errors. */
+    int err;
+
+    ipmi_lanparm_done_cb   set_done;
     ipmi_lan_get_config_cb done;
     void                   *cb_data;
 
@@ -958,6 +972,17 @@ static lanparms_t lanparms[NUM_LANPARMS] =
 };
 
 static void
+err_lock_cleared(ipmi_lanparm_t *lanparm,
+		 int            err,
+		 void           *cb_data)
+{
+    ipmi_lan_config_t *lanc = cb_data;
+
+    lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
+    ipmi_lan_free_config(lanc);
+}
+
+static void
 got_parm(ipmi_lanparm_t    *lanparm,
 	 int               err,
 	 unsigned char     *data,
@@ -1043,10 +1068,78 @@ got_parm(ipmi_lanparm_t    *lanparm,
 
  done:
     if (err) {
-	lanc->done(lanparm, err, NULL, lanc->cb_data);
-	ipmi_lan_free_config(lanc);
+	unsigned char data[1];
+
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "lanparm.c(got_parm): Error trying to get parm %d: %x",
+		 lanc->curr_parm, err);
+	lanc->err = err;
+	/* Clear the lock */
+	data[0] = 0;
+	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1,
+				    err_lock_cleared, lanc);
+	if (err) {
+	    ipmi_lan_free_config(lanc);
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "lan.c(got_parm): Error trying to clear lock: %x",
+		     err);
+	    lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
+	    ipmi_lan_free_config(lanc);
+	}
     } else
 	lanc->done(lanparm, 0, lanc, lanc->cb_data);
+}
+
+static void 
+lock_done(ipmi_lanparm_t *lanparm,
+	  int            err,
+	  void           *cb_data)
+{
+    ipmi_lan_config_t *lanc = cb_data;
+    int               rv;
+
+    if (err == IPMI_IPMI_ERR_VAL(0x80)) {
+	/* Lock is not supported, just mark it and go on. */
+	lanc->lock_supported = 0;
+    } else if (err == IPMI_IPMI_ERR_VAL(0x81)) {
+	/* Someone else has the lock, return EAGAIN. */
+	lanc->done(lanparm, err, NULL, lanc->cb_data);
+	ipmi_lan_free_config(lanc);
+	return;
+    } else if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "lan.c(lock_done): Error trying to lock the LAN"
+		 " parms: %x",
+		 err);
+	lanc->done(lanparm, err, NULL, lanc->cb_data);
+	ipmi_lan_free_config(lanc);
+	return;
+    }
+
+    lanc->lan_locked = 1;
+
+    rv = ipmi_lanparm_get_parm(lanparm, lanc->curr_parm, lanc->curr_sel, 0,
+			       got_parm, lanc);
+    if (rv) {
+	unsigned char data[1];
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "lan.c(lock_done): Error trying to get parms: %x",
+		 err);
+
+	lanc->err = rv;
+	/* Clear the lock */
+	data[0] = 0;
+	rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1,
+				   err_lock_cleared, lanc);
+	if (rv) {
+	    ipmi_lan_free_config(lanc);
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "lan.c(lock_done): Error trying to clear lock: %x",
+		     err);
+	    lanc->done(lanparm, lanc->err, NULL, lanc->cb_data);
+	    ipmi_lan_free_config(lanc);
+	}
+    }
 }
 
 int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
@@ -1055,6 +1148,7 @@ int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
 {
     ipmi_lan_config_t *lanc;
     int               rv;
+    unsigned char     data[1];
 
     lanc = ipmi_mem_alloc(sizeof(*lanc));
     if (!lanc)
@@ -1066,33 +1160,26 @@ int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
     lanc->done = done;
     lanc->cb_data = cb_data;
 
-    rv = ipmi_lanparm_get_parm(lanparm, lanc->curr_parm, lanc->curr_sel, 0,
-			       got_parm, lanc);
+    /* First grab the lock */
+    data[0] = 1; /* Set in progress. */
+    rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1, lock_done, lanc);
     if (rv)
 	ipmi_lan_free_config(lanc);
 
     return rv;
 }
 
-typedef struct setconfig_s
-{
-    int                  err;
-    ipmi_lanparm_done_cb done;
-    void                 *cb_data;
-    ipmi_lan_config_t    *lanc;
-} setconfig_t;
-
 static void 
 set_clear(ipmi_lanparm_t *lanparm,
 	 int            err,
 	 void           *cb_data)
 {
-    setconfig_t *sc = cb_data;
+    ipmi_lan_config_t *lanc = cb_data;
 
-    if (sc->err)
-	err = sc->err;
-    sc->done(lanparm, err, sc->cb_data);
-    ipmi_mem_free(sc);
+    if (lanc->err)
+	err = lanc->err;
+    lanc->set_done(lanparm, err, lanc->cb_data);
+    ipmi_lan_free_config(lanc);
 }
 
 static void 
@@ -1100,27 +1187,25 @@ commit_done(ipmi_lanparm_t *lanparm,
 	    int            err,
 	    void           *cb_data)
 {
-    setconfig_t   *sc = cb_data;
-    unsigned char data[1];
-    int           rv;
+    ipmi_lan_config_t *lanc = cb_data;
+    unsigned char     data[1];
+    int               rv;
 
     /* Note that we ignore the error.  The commit done is optional,
        and must return an error if it is optional, so we just ignore
        the error and clear the field here. */
 
-    /* Commit is done.  The IPMI spec doesn't say if you should set
-       the "set in progress" value back to 0 or if it is automatic, so
-       we go ahead and do it to be sure. */
+    /* Commit is done.  The IPMI spec says that it goes into the
+       set-in-progress state after this, so we need to clear it. */
 
     data[0] = 0;
-    rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1, set_clear, sc);
+    rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1, set_clear, lanc);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "ipmi_lanparm_commit_done: Error trying to clear the set in"
 		 " progress: %x",
 		 rv);
-	sc->done(lanparm, rv, sc->cb_data);
-	ipmi_mem_free(sc);
+	set_clear(lanparm, err, lanc);
     }
 }
 
@@ -1129,8 +1214,7 @@ set_done(ipmi_lanparm_t *lanparm,
 	 int            err,
 	 void           *cb_data)
 {
-    setconfig_t       *sc = cb_data;
-    ipmi_lan_config_t *lanc = sc->lanc;
+    ipmi_lan_config_t *lanc = cb_data;
     unsigned char     data[MAX_IPMI_DATA_SIZE];
     lanparms_t        *lp = &(lanparms[lanc->curr_parm]);
 
@@ -1188,94 +1272,149 @@ set_done(ipmi_lanparm_t *lanparm,
 
     lp->set_handler(lanc, lp, data);
     err = ipmi_lanparm_set_parm(lanparm, lanc->curr_parm,
-				data, lp->length, set_done, sc);
+				data, lp->length, set_done, lanc);
     if (err)
 	goto done;
 
     return;
 
  done:
-    ipmi_lan_free_config(lanc);
-    sc->lanc = NULL;
     if (err) {
 	data[0] = 0; /* Don't commit the parameters. */
-	sc->err = err;
-	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, set_clear, sc);
+	lanc->err = err;
+	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, set_clear, lanc);
     } else {
 	data[0] = 2; /* Commit the parameters. */
-	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, commit_done, sc);
+	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, commit_done, lanc);
     }
     if (err) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "ipmi_lanparm_got_parm: Error trying to clear the set in"
 		 " progress: %x",
 		 err);
-	sc->done(lanparm, err, sc->cb_data);
-	ipmi_mem_free(sc);
+	set_clear(lanparm, err, lanc);
     }
 }
 
 int
 ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
+		    ipmi_lan_config_t    *olanc,
+		    ipmi_lanparm_done_cb done,
+		    void                 *cb_data)
+{
+    ipmi_lan_config_t *lanc;
+    unsigned char     data[1];
+    lanparms_t        *lp;
+    int               rv;
+
+    if (olanc->my_lan != lanparm)
+	return EINVAL;
+
+    if (!olanc->lan_locked)
+	return EINVAL;
+
+    lanc = ipmi_mem_alloc(sizeof(*lanc));
+    if (!lanc)
+	return ENOMEM;
+
+    *lanc = *olanc;
+    lanc->alert_dest_type = NULL;
+    lanc->alert_dest_addr = NULL;
+    lanc->err = 0;
+    lanc->lan_locked = 0; /* Set this here, since we will unlock it,
+			     but we don't want the free operation to
+			     attempt an unlock */
+
+    if (lanc->num_alert_destinations) {
+	lanc->alert_dest_type
+	    = ipmi_mem_alloc(sizeof(alert_dest_type_t)
+			     * lanc->num_alert_destinations);
+	if (!lanc->alert_dest_type) {
+	    rv = ENOMEM;
+	    goto out;
+	}
+	memcpy(lanc->alert_dest_type, olanc->alert_dest_type, 
+	       sizeof(alert_dest_type_t) * lanc->num_alert_destinations);
+
+	lanc->alert_dest_addr
+	    = ipmi_mem_alloc(sizeof(alert_dest_addr_t)
+			     * lanc->num_alert_destinations);
+	if (!lanc->alert_dest_addr) {
+	    rv = ENOMEM;
+	    goto out;
+	}
+	memcpy(lanc->alert_dest_addr, olanc->alert_dest_addr, 
+	       sizeof(alert_dest_type_t) * lanc->num_alert_destinations);
+    }
+
+    lanc->curr_parm = 0;
+    lanc->curr_sel = 0;
+    lanc->set_done = done;
+    lanc->cb_data = cb_data;
+
+    lp = &(lanparms[lanc->curr_parm]);
+    lp->set_handler(lanc, lp, data);
+    rv = ipmi_lanparm_set_parm(lanparm, lanc->curr_parm,
+				data, lp->length, set_done, lanc);
+ out:
+    if (rv) {
+	ipmi_lan_free_config(lanc);
+    } else {
+	/* The old config no longer holds the lock. */
+	olanc->lan_locked = 0;
+    }
+    return rv;
+}
+
+typedef struct clear_lock_s
+{
+    ipmi_lanparm_done_cb done;
+    void                 *cb_data;
+    
+} clear_lock_t;
+
+static void 
+lock_cleared(ipmi_lanparm_t *lanparm,
+	     int            err,
+	     void           *cb_data)
+{
+    clear_lock_t *cl = cb_data;
+
+    cl->done(lanparm, err, cl->cb_data);
+
+    ipmi_mem_free(cl);
+}
+
+int
+ipmi_lan_clear_lock(ipmi_lanparm_t       *lanparm,
 		    ipmi_lan_config_t    *lanc,
 		    ipmi_lanparm_done_cb done,
 		    void                 *cb_data)
 {
-    setconfig_t   *sc;
     unsigned char data[1];
     int           rv;
+    clear_lock_t  *cl;
 
-    sc = ipmi_mem_alloc(sizeof(*sc));
-    if (!sc)
-	return ENOMEM;
-    memset(sc, 0, sizeof(*sc));
+    if (lanc) {
+	if (lanc->my_lan != lanparm)
+	    return EINVAL;
 
-    sc->lanc = ipmi_mem_alloc(sizeof(*lanc));
-    if (!sc->lanc) {
-	ipmi_mem_free(sc);
-	return ENOMEM;
-    }
-    memset(sc->lanc, 0, sizeof(*(sc->lanc)));
-
-    *(sc->lanc) = *lanc;
-    sc->lanc->alert_dest_type = NULL;
-    sc->lanc->alert_dest_addr = NULL;
-
-    if (lanc->num_alert_destinations) {
-	sc->lanc->alert_dest_type
-	    = ipmi_mem_alloc(sizeof(alert_dest_type_t)
-			     * lanc->num_alert_destinations);
-	if (!sc->lanc->alert_dest_type) {
-	    rv = ENOMEM;
-	    goto out;
-	}
-	memcpy(sc->lanc->alert_dest_type, lanc->alert_dest_type, 
-	       sizeof(alert_dest_type_t) * lanc->num_alert_destinations);
-
-	sc->lanc->alert_dest_addr
-	    = ipmi_mem_alloc(sizeof(alert_dest_addr_t)
-			     * lanc->num_alert_destinations);
-	if (!sc->lanc->alert_dest_addr) {
-	    rv = ENOMEM;
-	    goto out;
-	}
-	memcpy(sc->lanc->alert_dest_addr, lanc->alert_dest_addr, 
-	       sizeof(alert_dest_type_t) * lanc->num_alert_destinations);
+	if (!lanc->lan_locked)
+	    return EINVAL;
     }
 
-    sc->lanc->curr_parm = 0;
-    sc->lanc->curr_sel = 0;
-    sc->done = done;
-    sc->cb_data = cb_data;
+    cl = ipmi_mem_alloc(sizeof(*cl));
+    if (!cl)
+	return ENOMEM;
 
-    data[0] = 1; /* Set in progress. */
-    rv = ipmi_lanparm_set_parm(lanparm, sc->lanc->curr_parm, data, 1,
-			       set_done, sc);
- out:
+    data[0] = 0; /* Clear the lock. */
+    rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1, lock_cleared, cl);
     if (rv) {
-	ipmi_lan_free_config(sc->lanc);
-	ipmi_mem_free(sc);
+	ipmi_mem_free(cl);
+    } else if (lanc) {
+	lanc->lan_locked = 0;
     }
+
     return rv;
 }
 

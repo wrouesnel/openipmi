@@ -3346,6 +3346,92 @@ writepef_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+void clearpeflock_done(ipmi_pef_t *pef,
+		       int        err,
+		       void       *cb_data)
+{
+    if (err)
+	ui_log("Error clearing PEF lock: %x\n", err);
+    else
+	ui_log("PEF lock cleared\n");
+}
+
+static void
+clearpeflock_rsp_handler(ipmi_mc_t  *src,
+			 ipmi_msg_t *msg,
+			 void       *rsp_data)
+{
+    if (msg->data[0])
+	ui_log("Error clearing PEF lock: %x\n",
+	       IPMI_IPMI_ERR_VAL(msg->data[0]));
+    else
+	ui_log("PEF lock cleared\n");
+}
+
+void
+clearpeflock_mc_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    mccmd_info_t *info = cb_data;
+    unsigned char data[2];
+    ipmi_msg_t    msg;
+    int           rv;
+
+    info->found = 1;
+
+    data[0] = 0;
+    data[1] = 0;
+    msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+    msg.cmd = IPMI_SET_PEF_CONFIG_PARMS_CMD;
+    msg.data = data;
+    msg.data_len = 2;
+    rv = ipmi_mc_send_command(mc, 0, &msg, clearpeflock_rsp_handler,
+			      NULL);
+    if (rv)
+	cmd_win_out("Send PEF clear lock failure: %x\n", rv);
+}
+
+int
+clearpeflock_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+    char          *mc_toks;
+    char          buf[100];
+    char          *ntoks;
+
+    mc_toks = strtok_r(NULL, "", toks);
+    if (mc_toks) {
+	strncpy(buf+2, mc_toks, sizeof(buf));
+	buf[0] = 'a';
+	buf[1] = ' ';
+	strtok_r(buf, " ", &ntoks);
+	if (get_mc_id(&ntoks, &info.mc_id))
+	    return 0;
+
+	info.found = 0;
+	rv = ipmi_mc_pointer_noseq_cb(info.mc_id, clearpeflock_mc_handler,
+				      &info);
+	if (rv) {
+	    cmd_win_out("Unable to find MC\n");
+	    return 0;
+	}
+	if (!info.found) {
+	    cmd_win_out("Unable to find MC (%d %x)\n",
+			info.mc_id.channel, info.mc_id.mc_num);
+	}
+	display_pad_refresh();
+    } else {
+	if (!pef) {
+	    ui_log("No PEF to write\n");
+	    return 0;
+	}
+
+	ipmi_pef_clear_lock(pef, pef_config, clearpeflock_done, NULL);
+    }
+
+    return 0;
+}
+
 typedef struct setpef_parm_s
 {
     char *name;
@@ -3883,6 +3969,99 @@ writelanparm_cmd(char *cmd, char **toks, void *cb_data)
 		    info.mc_id.channel, info.mc_id.mc_num);
     }
     display_pad_refresh();
+
+    return 0;
+}
+
+void clearlanparmlock_done(ipmi_lanparm_t *lanparm,
+			   int            err,
+			   void           *cb_data)
+{
+    if (err)
+	ui_log("Error clearing LANPARM lock: %x\n", err);
+    else
+	ui_log("LANPARM lock cleared\n");
+}
+
+static void
+clearlanparmlock_rsp_handler(ipmi_mc_t  *src,
+			     ipmi_msg_t *msg,
+			     void       *rsp_data)
+{
+    if (msg->data[0])
+	ui_log("Error clearing LANPARM lock: %x\n",
+	       IPMI_IPMI_ERR_VAL(msg->data[0]));
+    else
+	ui_log("LANPARM lock cleared\n");
+}
+
+void
+clearlanparmlock_mc_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    lanparm_info_t *info = cb_data;
+    unsigned char  data[3];
+    ipmi_msg_t     msg;
+    int            rv;
+
+    info->found = 1;
+
+    data[0] = info->channel;
+    data[1] = 0;
+    data[2] = 0;
+    msg.netfn = IPMI_TRANSPORT_NETFN;
+    msg.cmd = IPMI_SET_LAN_CONFIG_PARMS_CMD;
+    msg.data = data;
+    msg.data_len = 3;
+    rv = ipmi_mc_send_command(mc, 0, &msg, clearlanparmlock_rsp_handler,
+			      NULL);
+    if (rv)
+	cmd_win_out("Send LANPARM clear lock failure: %x\n", rv);
+}
+
+int
+clearlanparmlock_cmd(char *cmd, char **toks, void *cb_data)
+{
+    lanparm_info_t info;
+    int            rv;
+    char           *mc_toks;
+    char           buf[100];
+    char           *ntoks;
+    unsigned char  val;
+
+    mc_toks = strtok_r(NULL, "", toks);
+    if (mc_toks) {
+	strncpy(buf+2, mc_toks, sizeof(buf));
+	buf[0] = 'a';
+	buf[1] = ' ';
+	strtok_r(buf, " ", &ntoks);
+	if (get_mc_id(&ntoks, &info.mc_id))
+	    return 0;
+
+	if (get_uchar(toks, &val, "lanparm channel"))
+	    return 0;
+	info.channel = val;
+
+	info.found = 0;
+	rv = ipmi_mc_pointer_noseq_cb(info.mc_id, clearlanparmlock_mc_handler,
+				      &info);
+	if (rv) {
+	    cmd_win_out("Unable to find MC\n");
+	    return 0;
+	}
+	if (!info.found) {
+	    cmd_win_out("Unable to find MC (%d %x)\n",
+			info.mc_id.channel, info.mc_id.mc_num);
+	}
+	display_pad_refresh();
+    } else {
+	if (!lanparm) {
+	    ui_log("No LANPARM to write\n");
+	    return 0;
+	}
+
+	ipmi_lan_clear_lock(lanparm, lanparm_config,
+			    clearlanparmlock_done, NULL);
+    }
 
     return 0;
 }
@@ -4833,6 +5012,10 @@ static struct {
     { "readpef",	readpef_cmd,
       " <channel> <mc num>"
       " - read pef information from an MC" },
+    { "clearpeflock",	clearpeflock_cmd,
+      " [<channel> <mc num>]"
+      " - Clear a PEF lock.  If the MC is given, then the PEF is directly"
+      " cleared.  If not given, then the current PEF is cleared" },
     { "viewpef",	viewpef_cmd,
       " - show current pef information " },
     { "writepef",	writepef_cmd,
@@ -4850,6 +5033,11 @@ static struct {
     { "writelanparm",	writelanparm_cmd,
       " <channel> <mc num> <channel>"
       " - write the current LANPARM information to an MC" },
+    { "clearlanparmlock",	clearlanparmlock_cmd,
+      " [<channel> <mc num> <channel>]"
+      " - Clear a LANPARM lock.  If the MC is given, then the LANPARM is"
+      " directly"
+      " cleared.  If not given, then the current LANPARM is cleared" },
     { "setlanparm",	setlanparm_cmd,
       " <config> [<selector>] <value>"
       " - Set the given config item to the value.  The optional selector"
