@@ -6,6 +6,10 @@
 	* lib/oem_motorola_mxp.c: Added a bunch of controls for various
 	things in the chassis and boards.
 
+	* lib/ipmi_lan.c: Fixed a problem when receiving messages, need to
+	compare the netfn as well as the command when looking for sendmsg
+	and event msg buffer commands.
+
 2004-01-08 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/fru.c: Added error info logs to tell why a FRU was bad.

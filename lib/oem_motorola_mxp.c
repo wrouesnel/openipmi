@@ -4850,7 +4850,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
     ents = ipmi_domain_get_entities(domain);
     name = "Chassis";
     rv = ipmi_entity_add(ents, domain, mc, 0,
-			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 0,
+			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 1,
 			 name, IPMI_ASCII_STR, strlen(name),
 			 mxp_entity_sdr_add,
 			 NULL, &(info->chassis_ent));

@@ -1323,7 +1323,7 @@ data_handler(int            fd,
     seq = tmsg[4] >> 2;
     addr3 = &lan->seq_table[seq].addr;
 
-    if (tmsg[5] == IPMI_SEND_MSG_CMD) {
+    if ((tmsg[5] == IPMI_SEND_MSG_CMD) && ((tmsg[1] >> 2) == IPMI_APP_NETFN)) {
 	/* It's a response to a sent message. */
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) &addr;
 	ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *)&lan->seq_table[seq].addr;
@@ -1371,7 +1371,9 @@ data_handler(int            fd,
 	    msg.data = tmsg+13;
 	    msg.data_len = data_len - 15;
 	}
-    } else if (tmsg[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD) {
+    } else if ((tmsg[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD)
+	       && ((tmsg[1] >> 2) == IPMI_APP_NETFN))
+    {
 	/* It is an event from the event buffer. */
 	ipmi_system_interface_addr_t *si_addr
 	    = (ipmi_system_interface_addr_t *) &addr;
