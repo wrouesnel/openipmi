@@ -70,12 +70,16 @@ int ipmi_deregister_oem_conn_handler(unsigned int manufacturer_id,
    so the OEM handler can free data if necessary.  This is registered
    against the MC itself, not the BMC, and must be called on each MC
    that needs it. */
+typedef struct ipmi_mc_removed_s ipmi_mc_removed_t;
 typedef void (*ipmi_mc_oem_removed_cb)(ipmi_domain_t *domain,
 				       ipmi_mc_t     *mc,
 				       void          *cb_data);
-int ipmi_mc_set_oem_removed_handler(ipmi_mc_t              *mc,
+int ipmi_mc_add_oem_removed_handler(ipmi_mc_t              *mc,
 				    ipmi_mc_oem_removed_cb handler,
-				    void                   *cb_data);
+				    void                   *cb_data,
+				    ipmi_mc_removed_t      **id);
+int ipmi_mc_remove_oem_removed_handler(ipmi_mc_t         *mc,
+				       ipmi_mc_removed_t *id);
 
 /* A new sensor has been added, the OEM handlers get first access at
    it.  This is called before it is added to the entity.  If this call

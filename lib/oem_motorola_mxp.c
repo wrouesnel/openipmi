@@ -4872,7 +4872,7 @@ amc_board_handler(ipmi_mc_t *mc)
     if (rv)
 	goto out_err;
 
-    rv = ipmi_mc_set_oem_removed_handler(mc, amc_removal_handler, info);
+    rv = ipmi_mc_add_oem_removed_handler(mc, amc_removal_handler, info, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "mxp_handler: could not register removal handler");
@@ -5804,7 +5804,7 @@ mxp_805_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    rv = ipmi_mc_set_oem_removed_handler(mc, mxp_805_removal_handler, sinfo);
+    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_805_removal_handler, sinfo, NULL);
 
  out:
     if (rv && sinfo)
@@ -6154,7 +6154,7 @@ mxp_5365_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    rv = ipmi_mc_set_oem_removed_handler(mc, mxp_5365_removal_handler, sinfo);
+    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_5365_removal_handler, sinfo, NULL);
 
  out:
     if (rv && sinfo)
@@ -6234,7 +6234,7 @@ mxp_5385_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    rv = ipmi_mc_set_oem_removed_handler(mc, mxp_5385_removal_handler, sinfo);
+    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_5385_removal_handler, sinfo, NULL);
 
  out:
     if (rv && sinfo)
@@ -6314,7 +6314,7 @@ mxp_pprb_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    rv = ipmi_mc_set_oem_removed_handler(mc, mxp_pprb_removal_handler, sinfo);
+    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_pprb_removal_handler, sinfo, NULL);
 
  out:
     if (rv && sinfo)
@@ -6622,7 +6622,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    rv = ipmi_mc_set_oem_removed_handler(mc, zynx_removal_handler, sinfo);
+    rv = ipmi_mc_add_oem_removed_handler(mc, zynx_removal_handler, sinfo, NULL);
 
  out:
     if (rv && sinfo)
@@ -6804,7 +6804,7 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 
     ipmi_mc_set_oem_data(mc, info);
 
-    rv = ipmi_mc_set_oem_removed_handler(mc, mxp_removal_handler, info);
+    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_removal_handler, info, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "mxp_handler: could not register removal handler");

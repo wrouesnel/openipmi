@@ -38,6 +38,7 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_domain.h>
+#include <OpenIPMI/ipmi_oem.h>
 
 static int
 chassis_entity_sdr_add(ipmi_entity_t   *ent,
@@ -111,9 +112,9 @@ chassis_power_set_start(ipmi_control_t *control, int err, void *cb_data)
     msg.data_len = 1;
     msg.data = data;
     if (control_info->vals[0])
-	data[0] = 0;
-    else
 	data[0] = 1;
+    else
+	data[0] = 0;
 
     rv = ipmi_control_send_command(control, mc, 0,
 				   &msg, chassis_power_set_cb,
@@ -243,6 +244,14 @@ chassis_power_get(ipmi_control_t      *control,
     return rv;
 }
 
+static void
+chassis_mc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_control_t *control = cb_data;
+
+    ipmi_control_destroy(control);
+}
+
 int
 _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 {
@@ -274,6 +283,7 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 
     ipmi_control_set_type(power_control, IPMI_CONTROL_POWER);
     ipmi_control_set_ignore_if_no_entity(power_control, 0);
+    ipmi_control_set_id(power_control, "power", IPMI_ASCII_STR, 5);
 
     ipmi_control_set_settable(power_control, 1);
     ipmi_control_set_readable(power_control, 1);
@@ -284,10 +294,17 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
     cbs.get_val = chassis_power_get;
 
     ipmi_control_set_callbacks(power_control, &cbs);
+    ipmi_control_set_num_elements(power_control, 1);
 
     /* Add it to the MC and entity. */
     rv = ipmi_control_add_nonstandard(mc, power_control, 1,
 				      chassis_ent, NULL, NULL);
+    if (rv) {
+	ipmi_control_destroy(power_control);
+	goto out;
+    }
+
+    rv = ipmi_mc_add_oem_removed_handler(mc, chassis_mc_removal_handler, power_control, NULL);
     if (rv) {
 	ipmi_control_destroy(power_control);
 	goto out;

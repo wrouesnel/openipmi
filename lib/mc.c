@@ -62,6 +62,12 @@ typedef struct domain_up_info_s
     ipmi_domain_con_change_t *con_chid;
 } domain_up_info_t;
 
+struct ipmi_mc_removed_s
+{
+    ipmi_mc_oem_removed_cb handler;
+    void                   *cb_data;
+};
+
 struct ipmi_mc_s
 {
     ipmi_domain_t *domain;
@@ -130,8 +136,7 @@ struct ipmi_mc_s
     ipmi_oem_event_handler_cb sel_oem_event_handler;
     void                      *sel_oem_event_cb_data;
 
-    ipmi_mc_oem_removed_cb removed_mc_handler;
-    void                   *removed_mc_cb_data;
+    ilist_t *removed_handlers;
 
     /* The following are for waiting until a domain is up before
        starting the SEL query, so that the domain will be registered
@@ -244,7 +249,11 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     mc->entities_in_my_sdr = NULL;
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
-    mc->removed_mc_handler = NULL;
+    mc->removed_handlers = alloc_ilist();
+    if (!mc->removed_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
     mc->sel = NULL;
     mc->sel_timer_info = NULL;
     mc->sel_scan_interval = ipmi_domain_get_sel_rescan_time(domain);
@@ -297,6 +306,18 @@ mc_get_os_hnd(ipmi_mc_t *mc)
     return ipmi_domain_get_os_hnd(domain);
 }
 
+static void
+call_removed_handler(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    ipmi_mc_removed_t *info = item;
+    ipmi_mc_t         *mc = cb_data;
+
+    if (info->handler)
+	info->handler(mc->domain, mc, info->cb_data);
+    ipmi_mem_free(info);
+    ilist_delete(iter);
+}
+
 void
 _ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
@@ -305,11 +326,12 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     ipmi_domain_t *domain = mc->domain;
     os_handler_t  *os_hnd = ipmi_domain_get_os_hnd(domain);
 
-    /* Call the OEM handler for removal, if it has been registered. */
-    if (mc->removed_mc_handler) {
-	mc->removed_mc_handler(domain, mc, mc->removed_mc_cb_data);
-	mc->removed_mc_handler = NULL;
+    /* Call the OEM handlers for removal, if it has been registered. */
+    if (mc->removed_handlers) {
+	ilist_iter(mc->removed_handlers, call_removed_handler, mc);
+	free_ilist(mc->removed_handlers);
     }
+    
 
     /* First the device SDR sensors, since they can be there for any
        MC. */
@@ -1838,14 +1860,46 @@ ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
 }
 
 int
-ipmi_mc_set_oem_removed_handler(ipmi_mc_t              *mc,
+ipmi_mc_add_oem_removed_handler(ipmi_mc_t              *mc,
 				ipmi_mc_oem_removed_cb handler,
-				void                   *cb_data)
+				void                   *cb_data,
+				ipmi_mc_removed_t      **id)
+{
+    ipmi_mc_removed_t *info;
+
+    CHECK_MC_LOCK(mc);
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->handler = handler;
+    info->cb_data = cb_data;
+    if (! ilist_add_tail(mc->removed_handlers, info, NULL)) {
+	ipmi_mem_free(info);
+	return ENOMEM;
+    } else if (id) {
+	*id = info;
+    }
+    return 0;
+}
+
+static void
+remove_removed_handler(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    if (item == cb_data) {
+	ipmi_mem_free(item);
+	ilist_delete(iter);
+    }
+}
+
+int
+ipmi_mc_remove_oem_removed_handler(ipmi_mc_t         *mc,
+				   ipmi_mc_removed_t *id)
 {
     CHECK_MC_LOCK(mc);
 
-    mc->removed_mc_handler = handler;
-    mc->removed_mc_cb_data = cb_data;
+    ilist_iter(mc->removed_handlers, remove_removed_handler, id);
     return 0;
 }
 
