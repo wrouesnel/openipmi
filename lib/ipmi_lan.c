@@ -525,9 +525,11 @@ lan_send_addr(lan_data_t  *lan,
                  "\n msg  = netfn=%s cmd=%s data_len=%d.",
 		 ipmi_get_netfn_string(msg->netfn),
                  ipmi_get_command_string(msg->netfn, msg->cmd), msg->data_len);
-	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
-	dump_hex(data, pos);
-	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	if (pos) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
+	    dump_hex(data, pos);
+	}
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     rv = sendto(lan->fd, data, pos, 0,
@@ -1013,10 +1015,12 @@ handle_msg_send(lan_timer_info_t      *info,
 		 "\n msg  = netfn=%s cmd=%s data_len=%d",
 		 ipmi_get_netfn_string(msg->netfn),
 		 ipmi_get_command_string(msg->netfn, msg->cmd), msg->data_len);
-	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
-		 msg->data_len);
-	dump_hex(msg->data, msg->data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	if (msg->data_len) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
+		     msg->data_len);
+	    dump_hex(msg->data, msg->data_len);
+	}
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     if ((addr->addr_type == IPMI_IPMB_ADDR_TYPE)
@@ -1198,8 +1202,10 @@ data_handler(int            fd,
     if (DEBUG_RAWMSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr = ");
 	dump_hex((unsigned char *) &ipaddrd, from_len);
-	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
-	dump_hex(data, len);
+	if (len) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
+	    dump_hex(data, len);
+	}
 	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
@@ -1241,14 +1247,17 @@ data_handler(int            fd,
             break;
 #endif
         default:
-            printf("Unknown protocol family\n");
-            exit(EXIT_FAILURE);
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "ipmi_lan: Unknown protocol family: 0x%x",
+		     paddr->sin_family);
+	    goto out_unlock2;
             break;
     }
 
     if (recv_addr >= lan->num_ip_addr) {
 	if (DEBUG_RAWMSG)
-	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message due to invalid IP");
+	    ipmi_log(IPMI_LOG_DEBUG,
+		     "ipmi_lan: Dropped message due to invalid IP");
 	goto out_unlock2;
     }
 
@@ -1459,10 +1468,12 @@ data_handler(int            fd,
 		     ipmi_get_netfn_string(msg.netfn),
 		     ipmi_get_command_string(msg.netfn, msg.cmd), msg.data_len,
 		     ipmi_get_cc_string(msg.data[0]));
-	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
-		     msg.data_len);
-	    dump_hex(msg.data, msg.data_len);
-	    ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	    if (msg.data_len) {
+		ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
+			 msg.data_len);
+		dump_hex(msg.data, msg.data_len);
+	    }
+	    ipmi_log(IPMI_LOG_DEBUG_END, " ");
         }
 	handle_async_event(ipmi, &addr, addr_len, &msg);
 	goto out_unlock2;
@@ -1556,9 +1567,11 @@ data_handler(int            fd,
 	    ipmi_log(IPMI_LOG_DEBUG_CONT,
 		     "\n exp addr=");
 	    dump_hex(&addr2, lan->seq_table[seq].addr_len);
-            ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data     =\n  ");
-            dump_hex(data, len);
-            ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	    if (len) {
+		ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data     =\n  ");
+		dump_hex(data, len);
+	    }
+            ipmi_log(IPMI_LOG_DEBUG_END, " ");
 	}
 	goto out_unlock;
     }
@@ -1602,9 +1615,11 @@ data_handler(int            fd,
 		ipmi_get_netfn_string(msg.netfn),
                 ipmi_get_command_string(msg.netfn, msg.cmd), msg.data_len,
 		ipmi_get_cc_string(msg.data[0]));
-        ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
-        dump_hex(msg.data, msg.data_len);
-        ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	if (msg.data_len) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
+	    dump_hex(msg.data, msg.data_len);
+	}
+        ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     ipmi_handle_rsp_item_copyall(ipmi, rspi, &addr, addr_len, &msg, handler);
@@ -2811,8 +2826,8 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
     }
 #endif
     if (count == 0) {
-        printf("No valid ip address\n");
-        exit(EXIT_FAILURE);
+	rv = EINVAL;
+	goto out_err;
     }
     lan->num_ip_addr = count;
     lan->curr_ip_addr = 0;

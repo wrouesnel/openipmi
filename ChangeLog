@@ -1,3 +1,23 @@
+2004-10-08 Corey Minyard <cminyard@mvista.com> 
+
+	* doc/IPMI.ltx: Documentation cleanup
+
+	* doc/OpenIPMI.texi: Removed old docs.
+
+	* doc/Makefile.am: Removed old docs and added generation of the
+	LaTeX documentation.
+
+	* sample/sample.c: Cut the length of a line so it came out nicely
+	on the docs.
+
+	* lib/domain.c: Cleaned up log output.
+	* lib/entity.c: ditto
+	* lib/ipmi.c: ditto
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+	
+	* configure.in: Move to version 1.4.3
+
 2004-10-07 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixes some problems found by a static analysis

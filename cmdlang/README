@@ -89,6 +89,10 @@ The command hierarchy is:
       -[no]ipmbscan - IPMB bus scanning
       -[no]oeminit - special OEM processing (like ATCA)
       -[no]seteventrcvr - setting event receivers
+      -wait_til_up - wait until the domain is up before returning
+       Note that if you specify this and the domain never comes up,
+       you will never get a prompt.
+
     Note that setting event receivers it not affected by the -all
     option.  By default -all -seteventrcvr is true, which turns
     everything on.
@@ -625,13 +629,11 @@ The command hierarchy is:
     * close <lanparm config> - Free the lanparm config.
 
 * general
-  * debug <type> on|off - Turn the given debugging type on or off
-  * xml on|off - enable or disable XML-style output
+  * evinfo true | false - Turn on or off dumping object information
+    when an event comes in.  This is false by default.
 
-Note that everything comes back in name/value pairs and can be sent
-back in XML format.  If a command begins with "<", and xml is on,
-everything after is assumed to be valid XML until the end of the
-XML sequence.
+  * debug <type> on|off - Turn the given debugging type on or off
+
 
 
 **DOMAIN INFO**

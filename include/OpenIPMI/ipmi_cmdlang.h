@@ -76,6 +76,9 @@ struct ipmi_cmdlang_s
     os_handler_t *os_hnd;
     selector_t   *selector;
 
+    /* Tells if we are outputting help. */
+    int         help;
+
     /*
      * Error reporting
      */

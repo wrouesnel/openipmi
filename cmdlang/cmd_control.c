@@ -721,7 +721,7 @@ static ipmi_cmdlang_cmd_t *control_cmds;
 static ipmi_cmdlang_init_t cmds_control[] =
 {
     { "control", NULL,
-      "Commands dealing with controls",
+      "- Commands dealing with controls",
       NULL, NULL, &control_cmds },
     { "list", &control_cmds,
       "- List all the entities in the system",

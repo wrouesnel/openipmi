@@ -622,7 +622,7 @@ static ipmi_cmdlang_cmd_t *mc_cmds;
 static ipmi_cmdlang_init_t cmds_mc[] =
 {
     { "mc", NULL,
-      "Commands dealing with MCs",
+      "- Commands dealing with MCs",
       NULL, NULL, &mc_cmds },
     { "list", &mc_cmds,
       "- List all the entities in the system",

@@ -241,7 +241,7 @@ enum ipmi_unit_type_e {
     IPMI_UNIT_TYPE_ERRORS,
     IPMI_UNIT_TYPE_CORRECTABLE_ERRORS,
     IPMI_UNIT_TYPE_UNCORRECTABLE_ERRORS = 90,
-    IPMI_UNIT_TYPE_FATAL_ERROR,
+    IPMI_UNIT_TYPE_FATAL_ERRORS,
     IPMI_UNIT_TYPE_GRAMS,
 };
 char *ipmi_get_unit_type_string(enum ipmi_unit_type_e val);

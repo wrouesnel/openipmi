@@ -353,7 +353,7 @@ smi_send(smi_data_t   *smi,
 	        ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	        dump_hex((unsigned char *)msg->data, msg->data_len);
 	}
-	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     if ((addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
@@ -670,9 +670,11 @@ gen_recv_msg(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 		 ipmi_get_netfn_string(recv->msg.netfn),
                  ipmi_get_command_string(recv->msg.netfn, recv->msg.cmd), recv->msg.data_len,
 		 ipmi_get_cc_string(recv->msg.data[0]));
-	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
-	dump_hex(recv->msg.data, recv->msg.data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	if (recv->msg.data_len) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
+	    dump_hex(recv->msg.data, recv->msg.data_len);
+	}
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     switch (recv->recv_type) {
@@ -763,7 +765,7 @@ ipmi_sock_data_handler(int            fd,
 	} else {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sipmi_smi.c(ipmi_sock_data_handler): "
-		     "Error receiving message: %s\n",
+		     "Error receiving message: %s",
 		     IPMI_CONN_NAME(ipmi), strerror(errno));
 	    goto out_unlock2;
 	}
@@ -771,15 +773,17 @@ ipmi_sock_data_handler(int            fd,
     if (DEBUG_MSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr(%d.) = ", addr_len);
 	dump_hex((unsigned char *) &addr, MIN(addr_len,sizeof(addr)));
-	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(%d.) =\n  ", rv);
-	dump_hex(data, rv);
-	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	if (rv) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(%d.) =\n  ", rv);
+	    dump_hex(data, rv);
+	}
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     if (rv < sizeof(*smsg)) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%sipmi_smi.c(ipmi_sock_data_handler): "
-		 "Undersized socket message: %d bytes\n",
+		 "Undersized socket message: %d bytes",
 		 IPMI_CONN_NAME(ipmi), rv);
 	goto out_unlock2;
     }
@@ -788,7 +792,7 @@ ipmi_sock_data_handler(int            fd,
     if (rv < (sizeof(*smsg) + smsg->data_len)) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%sipmi_smi.c(ipmi_sock_data_handler): "
-		 "Got subsized msg, size was %d, data_len was %d\n",
+		 "Got subsized msg, size was %d, data_len was %d",
 		 IPMI_CONN_NAME(ipmi), rv, smsg->data_len);
 	return;
     }

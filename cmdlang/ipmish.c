@@ -39,6 +39,7 @@
 #include <errno.h>
 #include <termios.h>
 #include <unistd.h>
+#include <signal.h>
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
@@ -63,13 +64,35 @@
 selector_t *debug_sel;
 extern os_handler_t ipmi_debug_os_handlers;
 
+static int done = 0;
+static int evcount = 0;
+static int handling_input = 0;
+static char *line_buffer;
+static int  line_buffer_max = 0;
+static int  line_buffer_pos = 0;
+
+static void
+redraw_cmdline(void)
+{
+    if (!done && handling_input) {
+	fputs("> ", stdout);
+	fwrite(line_buffer, 1, line_buffer_pos, stdout);
+	fflush(stdout);
+    }
+}
+
 void
 posix_vlog(char *format,
 	   enum ipmi_log_type_e log_type,
 	   va_list ap)
 {
     int do_nl = 1;
+    static int last_was_cont = 0;
 
+    if (handling_input && !last_was_cont && !done) 
+	fputc('\n', stdout);
+
+    last_was_cont = 0;
     switch(log_type) {
     case IPMI_LOG_INFO:
 	printf("INFO: ");
@@ -93,12 +116,14 @@ posix_vlog(char *format,
 
     case IPMI_LOG_DEBUG_START:
 	do_nl = 0;
+	last_was_cont = 1;
 	/* FALLTHROUGH */
     case IPMI_LOG_DEBUG:
 	printf("DEBG: ");
 	break;
 
     case IPMI_LOG_DEBUG_CONT:
+	last_was_cont = 1;
 	do_nl = 0;
 	/* FALLTHROUGH */
     case IPMI_LOG_DEBUG_END:
@@ -106,8 +131,10 @@ posix_vlog(char *format,
     }
 
     vprintf(format, ap);
-    if (do_nl)
+    if (do_nl) {
 	printf("\n");
+	redraw_cmdline();
+    }
 }
 void
 debug_vlog(char *format,
@@ -190,32 +217,35 @@ snmp_pre_parse(struct snmp_session *session, snmp_ipaddr from)
 }
 #endif
 
-struct snmp_session *snmp_session;
+static struct snmp_session *snmp_session;
 
-void snmp_add_read_fds(selector_t     *sel,
-		       int            *num_fds,
-		       fd_set         *fdset,
-		       struct timeval *timeout,
-		       int            *timeout_invalid,
-		       void           *cb_data)
+static void
+snmp_add_read_fds(selector_t     *sel,
+		  int            *num_fds,
+		  fd_set         *fdset,
+		  struct timeval *timeout,
+		  int            *timeout_invalid,
+		  void           *cb_data)
 {
     snmp_select_info(num_fds, fdset, timeout, timeout_invalid);
 }
 
-void snmp_check_read_fds(selector_t *sel,
-			 fd_set     *fds,
-			 void       *cb_data)
+static void
+snmp_check_read_fds(selector_t *sel,
+		    fd_set     *fds,
+		    void       *cb_data)
 {
     snmp_read(fds);
 }
 
-void snmp_check_timeout(selector_t *sel,
-			void       *cb_data)
+static void
+snmp_check_timeout(selector_t *sel,
+		   void       *cb_data)
 {
     snmp_timeout();
 }
 
-int
+static int
 snmp_init(selector_t *sel)
 {
     struct snmp_session session;
@@ -270,22 +300,61 @@ snmp_init(selector_t *sel)
 }
 #endif /* HAVE_UCDSNMP */
 
-static int done = 0;
 typedef struct out_data_s
 {
     FILE *stream;
     int  indent;
 } out_data_t;
 
+static int columns = 80;
+
+static void
+out_help(FILE *s, int indent, char *name, char *v)
+{
+    int pos, endpos;
+    char *endword;
+    char *endspace;
+
+    pos = fprintf(s, "%*s%s ", indent, "", name);
+    while (*v) {
+	endword = v;
+	while (isspace(*endword)) {
+	    if (*endword == '\n') {
+		v = endword + 1;
+		fprintf(s, "\n%*s", indent+2, "");
+		pos = indent + 2;
+	    }
+	    endword++;
+	}
+	endspace = endword;
+	while (*endword && !isspace(*endword))
+	    endword++;
+	endpos = pos + endword - v;
+	if (endpos > columns) {
+	    v = endspace;
+	    fprintf(s, "\n%*s", indent+2, "");
+	    pos = indent + 2;
+	}
+	fwrite(v, 1, endword-v, s);
+	pos += endword - v;
+	v = endword;
+    }
+    fputc('\n', s);
+}
+
 static void
 out_value(ipmi_cmdlang_t *info, char *name, char *value)
 {
     out_data_t *out_data = info->user_data;
 
-    if (value)
-	fprintf(out_data->stream, "%*s%s: %s\n", out_data->indent*2, "",
-		name, value);
-    else
+    if (value) {
+	if (info->help) {
+	    out_help(out_data->stream, out_data->indent*2, name, value);
+	} else {
+	    fprintf(out_data->stream, "%*s%s: %s\n", out_data->indent*2, "",
+		    name, value);
+	}
+    } else
 	fprintf(out_data->stream, "%*s%s\n", out_data->indent*2, "", name);
     fflush(out_data->stream);
 }
@@ -297,8 +366,12 @@ out_binary(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
     unsigned char *data = (unsigned char *) value;
     int indent2 = (out_data->indent * 2) + strlen(name) + 1;
     int i;
+    char *sep = ":";
 
-    fprintf(out_data->stream, "%*s%s:", out_data->indent*2, "", name);
+    if (info->help)
+      sep = "";
+
+    fprintf(out_data->stream, "%*s%s%s", out_data->indent*2, "", name, sep);
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 8) == 0))
 	    fprintf(out_data->stream, "\n%*s", indent2, "");
@@ -313,13 +386,17 @@ static void
 out_unicode(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
 {
     out_data_t *out_data = info->user_data;
+    char *sep = ":";
 
-    fprintf(out_data->stream, "%*s%s: %s\n", out_data->indent*2, "",
-	    name, "Unicode!");
+    if (info->help)
+      sep = "";
+
+    fprintf(out_data->stream, "%*s%s%s %s\n", out_data->indent*2, "",
+	    name, sep, "Unicode!");
     fflush(out_data->stream);
 }
 
-void
+static void
 down_level(ipmi_cmdlang_t *info)
 {
     out_data_t *out_data = info->user_data;
@@ -327,7 +404,7 @@ down_level(ipmi_cmdlang_t *info)
     out_data->indent++;
 }
 
-void
+static void
 up_level(ipmi_cmdlang_t *info)
 {
     out_data_t *out_data = info->user_data;
@@ -335,7 +412,7 @@ up_level(ipmi_cmdlang_t *info)
     out_data->indent--;
 }
 
-void cmd_done(ipmi_cmdlang_t *info);
+static void cmd_done(ipmi_cmdlang_t *info);
 
 static out_data_t lout_data =
 {
@@ -361,7 +438,9 @@ static ipmi_cmdlang_t cmdlang =
     .objstr_len = sizeof(cmdlang_objstr),
 };
 
-void
+int *done_ptr = NULL;
+
+static void
 cmd_done(ipmi_cmdlang_t *info)
 {
     out_data_t *out_data = info->user_data;
@@ -387,12 +466,16 @@ cmd_done(ipmi_cmdlang_t *info)
 	info->err = 0;
     }
 
-    fputs("> ", out_data->stream);
-    sel_set_fd_read_handler(info->selector, 0, SEL_FD_HANDLER_ENABLED);
-    out_data->indent = 0;
-    fflush(out_data->stream);
+    if (done_ptr) {
+	*done_ptr = 1;
+    } else {
+	handling_input = 1;
+	redraw_cmdline();
+	sel_set_fd_read_handler(info->selector, 0, SEL_FD_HANDLER_ENABLED);
+	out_data->indent = 0;
+	fflush(out_data->stream);
+    }
 }
-
 
 void
 ipmi_cmdlang_global_err(char *objstr,
@@ -400,12 +483,16 @@ ipmi_cmdlang_global_err(char *objstr,
 			char *errstr,
 			int  errval)
 {
+    if (handling_input && !done)
+	fputc('\n', stdout);
     if (objstr)
 	fprintf(stderr, "global error: %s %s: %s (0x%x)", location, objstr,
 		errstr, errval);
     else
 	fprintf(stderr, "global error: %s: %s (0x%x)", location,
 		errstr, errval);
+    evcount = 0;
+    redraw_cmdline();
 }
 
 void
@@ -417,6 +504,8 @@ ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
     int                         indent2;
     int                         i;
 
+    if (handling_input && !done)
+	fputc('\n', stdout);
     ipmi_cmdlang_event_restart(event);
     printf("Event\n");
     while (ipmi_cmdlang_event_next_field(event, &level, &type, &name, &len,
@@ -445,13 +534,11 @@ ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
 	    break;
 	}
     }
+    evcount = 0;
+    redraw_cmdline();
 }
 
-static char *line_buffer;
-static int  line_buffer_max = 0;
-static int  line_buffer_pos = 0;
-
-void
+static void
 user_input_ready(int fd, void *data)
 {
     ipmi_cmdlang_t *info = data;
@@ -463,18 +550,26 @@ user_input_ready(int fd, void *data)
     count = read(fd, &rc, 1);
     if (count <= 0) {
 	done = 1;
+	evcount = 1; /* Force a newline */
 	return;
     }
 
     switch(rc) {
     case 0x04: /* ^d */
-	fputs("\n", out_data->stream);
-	done = 1;
+	if (line_buffer_pos == 0) {
+	    done = 1;
+	    evcount = 1; /* Force a newline */
+	}
+	break;
+
+    case 12: /* ^l */
+	fputc('\n', out_data->stream);
+	redraw_cmdline();
 	break;
 
     case '\r': case '\n':
+	fputc(rc, out_data->stream);
 	if (line_buffer) {
-	    fputs("\n", out_data->stream);
 	    line_buffer[line_buffer_pos] = '\0';
 	    for (i=0; isspace(line_buffer[i]); i++)
 		;
@@ -488,17 +583,19 @@ user_input_ready(int fd, void *data)
 		cmdlang.errstr = NULL;
 		cmdlang.errstr_dynalloc = 0;
 		cmdlang.location = NULL;
-		ipmi_cmdlang_handle(&cmdlang, line_buffer);
+		handling_input = 0;
 		line_buffer_pos = 0;
+		ipmi_cmdlang_handle(&cmdlang, line_buffer);
 	    } else {
 		fputs("> ", out_data->stream);
 	    }
 	} else {
-	    fputs("\n> ", out_data->stream);
+	    fputs("> ", out_data->stream);
 	}
 	break;
 
-    case '\b': case 0x7f: /* backspace */
+    case 0x7f: /* delete */
+    case '\b': /* backspace */
 	if (line_buffer_pos > 0) {
 	    line_buffer_pos--;
 	    fputs("\b \b", out_data->stream);
@@ -519,7 +616,7 @@ user_input_ready(int fd, void *data)
 	}
 	line_buffer[line_buffer_pos] = rc;
 	line_buffer_pos++;
-	putc(rc, out_data->stream);
+	fputc(rc, out_data->stream);
 	break;
     }
 
@@ -527,8 +624,26 @@ user_input_ready(int fd, void *data)
 }
 
 static int term_setup;
-//static int old_flags;
 struct termios old_termios;
+
+static void
+cleanup_term(os_handler_t *os_hnd, selector_t *sel)
+{
+    if (line_buffer) {
+	ipmi_mem_free(line_buffer);
+	line_buffer = NULL;
+    }
+    sel_clear_fd_handlers(sel, 0);
+
+    if (!term_setup)
+	return;
+
+    tcsetattr(0, TCSADRAIN, &old_termios);
+    tcdrain(0);
+    term_setup = 0;
+}
+
+static void cleanup_sig(int sig);
 
 static void
 setup_term(os_handler_t *os_hnd, selector_t *sel)
@@ -537,13 +652,15 @@ setup_term(os_handler_t *os_hnd, selector_t *sel)
 
     tcgetattr(0, &old_termios);
     new_termios = old_termios;
-    new_termios.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
-			     |INLCR|IGNCR|ICRNL|IXON);
-    new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
+    new_termios.c_lflag &= ~(ICANON|ECHO);
     tcsetattr(0, TCSADRAIN, &new_termios);
-    //old_flags = fcntl(0, F_GETFL) & O_ACCMODE;
-    //	fcntl(0, F_SETFL, old_flags | O_NONBLOCK);
     term_setup = 1;
+
+    signal(SIGINT, cleanup_sig);
+    signal(SIGPIPE, cleanup_sig);
+    signal(SIGUSR1, cleanup_sig);
+    signal(SIGUSR2, cleanup_sig);
+    signal(SIGPWR, cleanup_sig);
 
     lout_data.stream = stdout;
 
@@ -551,30 +668,77 @@ setup_term(os_handler_t *os_hnd, selector_t *sel)
     cmdlang.selector = sel;
 
     sel_set_fd_handlers(sel, 0, &cmdlang, user_input_ready, NULL, NULL, NULL);
-    sel_set_fd_read_handler(sel, 0, SEL_FD_HANDLER_ENABLED);
-}
-
-static void
-cleanup_term(os_handler_t *os_hnd, selector_t *sel)
-{
-    if (!term_setup)
-	return;
-
-    tcsetattr(0, TCSADRAIN, &old_termios);
-    //fcntl(0, F_SETFL, old_flags);
-    tcdrain(0);
-    term_setup = 0;
-    if (line_buffer) {
-	ipmi_mem_free(line_buffer);
-	line_buffer = NULL;
-    }
-    sel_clear_fd_handlers(sel, 0);
+    sel_set_fd_read_handler(sel, 0, SEL_FD_HANDLER_DISABLED);
 }
 
 static void
 exit_cmd(ipmi_cmd_info_t *cmd_info)
 {
     done = 1;
+    evcount = 0;
+}
+
+static int read_nest = 0;
+static void
+read_cmd(ipmi_cmd_info_t *cmd_info)
+{
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int            cdone;
+    char           cmdline[256];
+    FILE           *s;
+    out_data_t     my_out_data;
+    ipmi_cmdlang_t my_cmdlang = *cmdlang;
+    int            curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int            argc = ipmi_cmdlang_get_argc(cmd_info);
+    char           **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int            *saved_done_ptr;
+
+    if ((argc - curr_arg) < 1) {
+	cmdlang->errstr = "No filename entered";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    s = fopen(argv[curr_arg], "r");
+    if (!s) {
+	cmdlang->errstr = "Unable to openfile";
+	cmdlang->err = errno;
+	goto out_err;
+    }
+
+    if (!read_nest) {
+	handling_input = 0;
+	sel_set_fd_read_handler(cmdlang->selector, 0, SEL_FD_HANDLER_DISABLED);
+    }
+    read_nest++;
+    saved_done_ptr = done_ptr;
+
+    while (fgets(cmdline, sizeof(cmdline), s)) {
+	my_out_data.stream = stdout;
+	my_out_data.indent = 0;
+	my_cmdlang.user_data = &my_out_data;
+	cdone = 0;
+	done_ptr = &cdone;
+	printf("> %s", cmdline);
+	ipmi_cmdlang_handle(&my_cmdlang, cmdline);
+	while (!cdone)
+	    cmdlang->os_hnd->perform_one_op(cmdlang->os_hnd, NULL);
+	done_ptr = NULL;
+    }
+    fclose(s);
+
+    done_ptr = saved_done_ptr
+;
+    read_nest--;
+    if (!read_nest) {
+	handling_input = 1;
+	sel_set_fd_read_handler(cmdlang->selector, 0, SEL_FD_HANDLER_ENABLED);
+    }
+
+    return;
+
+ out_err:
+    cmdlang->location = "ipmish.c(read_cmd)";
 }
 
 static void
@@ -584,10 +748,20 @@ setup_cmds(void)
 
     rv = ipmi_cmdlang_reg_cmd(NULL,
 			      "exit",
-			      "leave the program",
+			      "- leave the program",
 			      exit_cmd, NULL, NULL);
     if (rv) {
 	fprintf(stderr, "Error adding exit command: 0x%x\n", rv);
+	exit(1);
+    }
+
+    rv = ipmi_cmdlang_reg_cmd(NULL,
+			      "read",
+			      "<file> - Read commands from the file and"
+			      " execute them",
+			      read_cmd, NULL, NULL);
+    if (rv) {
+	fprintf(stderr, "Error adding read command: 0x%x\n", rv);
 	exit(1);
     }
 }
@@ -611,46 +785,46 @@ shutdown_domain_handler(ipmi_domain_t *domain, void *cb_data)
 }
 
 static void
-evinfo(ipmi_cmd_info_t *cmd_info)
+cleanup_sig(int sig)
 {
-    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    int            curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
-    int            argc = ipmi_cmdlang_get_argc(cmd_info);
-    char           **argv = ipmi_cmdlang_get_argv(cmd_info);
-    int            do_evinfo;
-
-    if ((argc - curr_arg) < 1) {
-	cmdlang->errstr = "True or False not entered";
-	cmdlang->err = EINVAL;
-	goto out_err;
-    }
-
-    ipmi_cmdlang_get_bool(argv[curr_arg], &do_evinfo, cmd_info);
-    if (cmdlang->err) {
-	cmdlang->errstr = "True or False not entered";
-	cmdlang->err = EINVAL;
-	goto out_err;
-    }
-
-    ipmi_cmdlang_set_evinfo(do_evinfo);
-
- out_err:
-    if (cmdlang->err)
-	cmdlang->location = "cmdlang.c(evinfo)";
+    fprintf(stderr, "Exiting due to signal %d\n", sig);
+    done = 0;
+    ipmi_domain_iterate_domains(shutdown_domain_handler, &done);
+    while (done)
+	cmdlang.os_hnd->perform_one_op(cmdlang.os_hnd, NULL);
+    cleanup_term(cmdlang.os_hnd, cmdlang.selector);
+    exit(1);
 }
 
-static ipmi_cmdlang_init_t cmds_global[] =
+typedef struct exec_list_s
 {
-    { "evinfo", NULL,
-      "<true | false> - Enable/disable printing info about the object"
-      " when an event is reported on it (such as entity info, domain"
-      " info, etc.)",
-      evinfo, NULL, NULL },
-};
-#define CMDS_GLOBAL_LEN (sizeof(cmds_global)/sizeof(ipmi_cmdlang_init_t))
+    char *str;
+    struct exec_list_s *next;
+} exec_list_t;
+static exec_list_t *execs, *execs_tail;
+
+static void
+add_exec_str(char *str)
+{
+    exec_list_t *e;
+
+    e = malloc(sizeof(*e));
+    if (!e) {
+	fprintf(stderr, "Out of memory");
+	exit(1);
+    }
+    e->str = str;
+    e->next = NULL;
+    if (execs)
+	execs_tail->next = e;
+    else {
+	execs = e;
+	execs_tail = e;
+    }
+}
 
 int
-main(int argc, const char *argv[])
+main(int argc, char *argv[])
 {
     int              rv;
     int              curr_arg = 1;
@@ -662,13 +836,27 @@ main(int argc, const char *argv[])
     os_handler_t     *os_hnd;
     selector_t       *sel;
     int              use_debug_os = 0;
+    char             *colstr;
 
+    colstr = getenv("COLUMNS");
+    if (colstr) {
+	int tmp = strtoul(colstr, NULL, 0);
+	if (tmp) 
+	    columns = tmp;
+    }
 
     while ((curr_arg < argc) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
 	curr_arg++;
 	if (strcmp(arg, "--") == 0) {
 	    break;
+	} else if ((strcmp(arg, "-x") == 0) || (strcmp(arg, "-execute") == 0)){
+	    if (curr_arg >= argc) {
+		fprintf(stderr, "No option given for %s", arg);
+		return 1;
+	    }
+	    add_exec_str(argv[curr_arg]);
+	    curr_arg++;
 	} else if (strcmp(arg, "-c") == 0) {
 	    full_screen = 0;
 	} else if (strcmp(arg, "-dlock") == 0) {
@@ -725,18 +913,30 @@ main(int argc, const char *argv[])
 	return 1;
     }
 
-    rv = ipmi_cmdlang_reg_table(cmds_global, CMDS_GLOBAL_LEN);
-    if (rv) {
-	fprintf(stderr, "Unable to add global commands: 0x%x\n", rv);
-	return 1;
-    }
-
     setup_cmds();
 
     setup_term(os_hnd, sel);
 
+    while (execs) {
+	exec_list_t *e = execs;
+	int         cdone = 0;
+	read_nest = 1;
+	execs = e->next;
+	printf("> %s\n", e->str);
+	done_ptr = &cdone;
+	ipmi_cmdlang_handle(&cmdlang, e->str);
+	while (!cdone)
+	    os_hnd->perform_one_op(os_hnd, NULL);
+	done_ptr = NULL;
+	free(e);
+	read_nest = 0;
+    }
+
     printf("> ");
     fflush(stdout);
+
+    handling_input = 1;
+    sel_set_fd_read_handler(sel, 0, SEL_FD_HANDLER_ENABLED);
 
     while (!done)
 	os_hnd->perform_one_op(os_hnd, NULL);
@@ -755,10 +955,10 @@ main(int argc, const char *argv[])
 
     os_hnd->free_os_handler(os_hnd);
 
-    /* Make sure a mem log always comes out, if we have that enabled. */
-    ipmi_mem_alloc(10);
-
     ipmi_debug_malloc_cleanup();
+
+    if (evcount)
+	printf("\n");
 
     if (rv)
 	return 1;

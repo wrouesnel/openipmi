@@ -4422,7 +4422,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
     } else {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(fru_fetched_ent_cb):"
-		 "Error fetching entity %d.%d FRU: %x\n",
+		 "Error fetching entity %d.%d FRU: %x",
 		 ENTITY_NAME(ent),
 		 ent->info.entity_id, ent->info.entity_instance, info->err);
 	if ((ent->fru) && (info->fru))

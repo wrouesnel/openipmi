@@ -1,5 +1,20 @@
 \documentclass{book}
 \usepackage{graphicx,moreverb,tabularx,acronym,longtable,alltt,varioref}
+%
+% Don't do any of the formatting when doing html conversion.
+%begin{latexonly}
+%
+% Eliminate the margin notes
+%
+\addtolength{\textwidth}{\marginparwidth}
+%\addtolength{\textwidth}{\marginparsep}
+%\addtolength{\textwidth}{\oddsidemargin}
+\setlength{\marginparwidth}{0pt}
+\setlength{\marginparsep}{0pt}
+\setlength{\evensidemargin}{0pt}
+\setlength{\oddsidemargin}{0pt}
+%end{latexonly}
+
 \title{IPMI -- A Gentle Introduction\\with OpenIPMI}
 \author{Corey Minyard $<$minyard@acm.org$>$\\
         Montavista Software}
@@ -9,6 +24,17 @@
 \newcommand{\msgtag}[1]{\multicolumn{2}{l}{#1}\\ \hline}
 \newcommand{\msgcaption}[1]{\caption{#1}}
 \newenvironment{showmsg}{\noindent\begin{longtable}{|p{.5in}|l|}}{\end{longtable}}
+\newenvironment{tightdefs}
+  {\begin{list}{}%
+      {\renewcommand{\makelabel}{\descriptionlabel}%
+       \setlength{\partopsep}{0pt}%
+       \setlength{\topsep}{0pt}%
+       \setlength{\parskip}{0pt}%
+       \setlength{\parsep}{0pt}%
+       \setlength{\itemsep}{0pt}%
+      }%
+  }%
+  {\end{list}}
 %\begin{showmsg}
 %\msgtag{Request}
 %\msgitem{}{}
@@ -18,6 +44,8 @@
 %\end{showmsg}
 %
 \begin{document}
+\hbadness=10001
+\vbadness=10001
 \maketitle
 
 \frontmatter
@@ -568,7 +596,7 @@ user will need.
 OS handlers have some standard functions pointers for the user.  These
 are:
 
-\begin{tabularx}{\textwidth}{lX}
+\noindent\begin{tabularx}{\textwidth}{lX}
 \texttt{free\_os\_handler} &
 Free the OS handler.  Do not use the OS handler after calling this.\\
 
@@ -1117,37 +1145,37 @@ are classified by need in the sections below.
 \subsection{Files the normal user deals with}
 
 \begin{tabularx}{\textwidth}{lX}
-\verb=ipmiif.h= & 
+\texttt{ipmiif.h} & 
 The main include file for OpenIPMI.  It contains the main functions the
 user must deal with when working with the OpenIPMI library.  Almost
-everything will include this.  It includes \verb=ipmi_types.h= and
-\verb=ipmi_bits.h=, too, so you don't have to include those.\\
+everything will include this.  It includes \texttt{ipmi\_types.h} and
+\texttt{ipmi\_bits.h}, too, so you don't have to include those.\\
 
-\verb=ipmi_auth.h= &
+\texttt{ipmi\_auth.h} &
 The file holding information about athentication algorithms.  You need
 this if dealing with an authenticated interface.\\
 
-\verb=ipmi_bits.h= &
-Various values, mostly for sensors, used by the user.  \verb=ipmiif.h=
+\texttt{ipmi\_bits.h} &
+Various values, mostly for sensors, used by the user.  \texttt{ipmiif.h}
 includes this file, so you generally don't have to include it explicitly.\\
 
-\verb=ipmi_types.h= &
-Types for the basic IPMI objects.  \verb=ipmiif.h= includes this file,
+\texttt{ipmi\_types.h} &
+Types for the basic IPMI objects.  \texttt{ipmiif.h} includes this file,
 so you generally don't have to include it explicitly.\\
 
-\verb=ipmi_err.h= &
+\texttt{ipmi\_err.h} &
 Error values, both IPMI and system, as well as macros for interpreting
 these.\\
 
-\verb=os_handler.h= &
+\texttt{os\_handler.h} &
 The os-specific handler types are defined here.  You must implement this
 and supply it to the IPMI code.\\
 
-\verb=selector.h= &
+\texttt{selector.h} &
 For *nix systems, This file a default mechanism for handling many of the
 os-specific handler operations.\\
 
-\verb=ipmi_log.h= &
+\texttt{ipmi\_log.h} &
 Holds definitions for the logging interface.\\
 
 \end{tabularx}
@@ -1155,11 +1183,11 @@ Holds definitions for the logging interface.\\
 \subsection{Files dealing with messaging interfaces}
 
 \begin{tabularx}{\textwidth}{lX}
-\verb=ipmi_lan.h= &
+\texttt{ipmi\_lan.h} &
 This is the \acs{LAN} messaging interface, this contains the calls for
 creating a \acs{LAN} connection.\\
 
-\verb=ipmi_smi.h= &
+\texttt{ipmi\_smi.h} &
 This is the messaging interface for talking to local IPMI interfaces
 (like KCS), this contains the calls for creating an SMI connection.\\
 
@@ -1168,13 +1196,13 @@ This is the messaging interface for talking to local IPMI interfaces
 \subsection{File for system configuration}
 
 \begin{tabularx}{\textwidth}{lX}
-\verb=ipmi_pef.h= &
+\texttt{ipmi\_pef.h} &
 Contains code for configuring the \ac{PEF}.\\
 
-\verb=ipmi_lanparm.h= &
+\texttt{ipmi\_lanparm.h} &
 Contains code for configuring the \acs{LAN} configuration data.\\
 
-\verb=ipmi_pet.h= &
+\texttt{ipmi\_pet.h} &
 Contains code that allows the user to easily set up an IPMI \acs{LAN}
 interface on a BMC to send \ac{SNMP} traps.\\
 
@@ -1183,52 +1211,52 @@ interface on a BMC to send \ac{SNMP} traps.\\
 \subsection{Internal files that OEM code and messaging interfaces deal with}
 
 \begin{tabularx}{\textwidth}{lX}
-\verb=ipmi_addr.h= &
+\texttt{ipmi\_addr.h} &
 The file holding information about IPMI addresses.\\
 
-\verb=ipmi_conn.h= &
+\texttt{ipmi\_conn.h} &
 This defines the interface for the messaging interfaces.\\
 
-\verb=ipmi_event.h= &
+\texttt{ipmi\_event.h} &
 This defines functions for handling events.\\
 
-\verb=ipmi_entity.h= &
+\texttt{ipmi\_entity.h} &
 This defines internal entity interfaces.\\
 
-\verb=ipmi_fru.h= &
+\texttt{ipmi\_fru.h} &
 This defines internal \ac{FRU} interfaces.\\
 
-\verb=ipmi_control.h= &
+\texttt{ipmi\_control.h} &
 This defines internal control interfaces.\\
 
-\verb=ipmi_int.h= &
+\texttt{ipmi\_int.h} &
 This defines other miscellaneous internal interfaces.\\
 
-\verb=ipmi_domain.h= &
+\texttt{ipmi\_domain.h} &
 This defines the internal interfaces for dealing with domains.\\
 
-\verb=ipmi_mc.h= &
+\texttt{ipmi\_mc.h} &
 This defines internal interfaces for the management controllers.\\
 
-\verb=ipmi_msgbits.h= &
+\texttt{ipmi\_msgbits.h} &
 This defines various IPMI messages.\\
 
-\verb=ipmi_oem.h= &
+\texttt{ipmi\_oem.h} &
 This defines interfaces that OEM code can tie into.\\
 
-\verb=ipmi_sel.h= &
+\texttt{ipmi\_sel.h} &
 This defines the internal interfaces for the \ac{SEL}.\\
 
-\verb=ipmi_sdr.h= &
+\texttt{ipmi\_sdr.h} &
 This defines internal interfaces for the \ac{SDR} repostiory.\\
 
-\verb=ipmi_sensor.h= &
+\texttt{ipmi\_sensor.h} &
 This defines internal interfaces for sensors.\\
 
-\verb=ipmi_locks.h= &
+\texttt{ipmi\_locks.h} &
 This defines internal interfaces for locks.\\
 
-\verb=ipmi_posix.h= &
+\texttt{ipmi\_posix.h} &
 This defines some POSIX OS handlers.\\
 
 \end{tabularx}
@@ -1274,8 +1302,12 @@ ipmi_domain_id_t id;
 
 /* Set up connection(s) here */
 
-rv = ipmi_open_domain(cons, num_cons, con_change, user_data, &id);
+rv = ipmi_open_domain(cons, num_cons, con_change, user_data,
+                      domain_fully_up, user_data2,
+                      options, num_options, &domain_id);
 \end{verbatim}
+
+\subsection{Domain Connections}
 
 Up to two connections to a single domain are currently supported.  A
 connection is an independent \ac{MC} in the same domain; if two MCs
@@ -1310,6 +1342,105 @@ connection to the domain.
 If a connection is down, the connection change callback will be called
 periodically to report the problem as OpenIPMI attempts to
 re-establish the connection.
+
+\subsection{Domain Fully Up}
+
+The \verb=domain_fully_up= callback will be called after the domain
+has been fully scanned, all SDRs fetched, all FRUs fetched, and all
+SELs read for the first time.  This gives you an indication that the
+domain is completely ``up'', although there realy is no concept of
+completely ``up'' in IPMI since the system may dynamically change.  It
+is useful for some things, though (and people complained a lot about
+not having it in the past) so it is now available.  The callback is in
+the form:
+\begin{verbatim}
+static void
+domain_fully_up(ipmi_domain_t *domain,
+                void          *user_data2)
+{
+  ...
+}
+\end{verbatim}
+Note that this will \emph{not} be called until the domain is fully up.
+If the domain never comes up, this will \emph{never} be called.  So
+don't rely on this.  The connection up callback will always be called.
+
+\subsection{Domain Options}
+
+When a domain is created, it may be passed options to control how the
+domain operates.  For instance, if you do not want to scan FRUs, or
+you do not want to fetch SDRs, you can control exactly what OpenIPMI
+will do.
+
+Control of this is done through the options.  This is an array of values
+passed to \verb=ipmi_open_domain=.  Each element is:
+\begin{verbatim}
+typedef struct ipmi_open_option_s
+{
+    int option;
+    union {
+        long ival;
+        void *pval;
+    };
+} ipmi_open_option_t;
+\end{verbatim}
+The option goes into the \verb=option= variable and the union holds
+the option value, whose type depends on the option.
+Table~\vref{domain-options} shows the options available.
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\texttt{IPMI\_OPEN\_OPTION\_ALL} & Uses the \texttt{ival} value as a boolean.
+        This is an all-or-nothing enable.  If this is enabled, then all
+        startup processing will be done.  If this is disabled, then the
+        individual startup processing options will be used to individually
+        control the enables.  This is true by default.\\
+\hline
+\texttt{IPMI\_OPEN\_OPTION\_SDRS} & Uses the \texttt{ival} value as a boolean.
+        The all option overrides this.
+        This enables or disables fetching SDRs.  This is false by default.
+        This is false by default.\\
+\hline
+\texttt{IPMI\_OPEN\_OPTION\_FRUS} & Uses the \texttt{ival} value as a boolean.
+        The all option overrides this.
+        This enables or disables fetching FRU information.
+        This is false by default.\\
+\hline
+\texttt{IPMI\_OPEN\_OPTION\_SEL} & Uses the \texttt{ival} value as a boolean.
+        The all option overrides this.
+        This enables or disables fetching SELs.  Note that you can
+        fetch the SELs by hand from an MC by setting
+        \texttt{ipmi\_mc\_set\_sel\_rescan\_time()} to zero and then calling
+        \texttt{ipmi\_mc\_reread\_sel()} when you want to reread the SEL.
+        This is false by default.\\
+\hline
+\texttt{IPMI\_OPEN\_OPTION\_IPMB\_SCAN} & Uses the \texttt{ival} value as
+        a boolean.
+        The all option overrides this.
+        This enables or disables automatic scanning of the IPMB bus.  If
+        you turn this off you can still scan the bus by hand using the
+        \texttt{ipmi\_start\_ipmb\_mc\_scan()} function.
+        This is false by default.\\
+\hline
+\texttt{IPMI\_OPEN\_OPTION\_OEM\_INIT} & Uses the \texttt{ival} value as a boolean.
+        The all option overrides this.  This will enable or disable OEM
+        startup code for handling special devices.  This is the code that
+        creates custom controls and things like that.
+        This is false by default.\\
+\hline
+\texttt{IPMI\_OPEN\_OPTION\_SET\_EVENT\_RCVR} & Uses the \texttt{ival} value as a
+        boolean.  This is \emph{not} affected by the all option.  This
+        enables setting the event receiver automatically.  If true,
+        OpenIPMI will detect if the event destination of an MC is not set
+        to a valid value and set it.  However, this requires admin level
+        access; you will get errors if you connect with a lower level
+        of access and have this turned on.
+        This is true by default.\\
+\hline
+\end{tabularx}
+\caption{\label{domain-options}Domain options in OpenIPMI}
+\end{table}
 
 %---------------------------------------------------------------------
 \chapter{IPMI Interfaces}
@@ -1825,22 +1956,22 @@ possible channel.
 \begin{showmsg}
 \msgtag{Request}
 \msgitem{0}{
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-3] - Channel number
         \item[bits 4-7] - reserved
-        \end{description}}
+        \end{tightdefs}}
 \msgtag{Response}
 \msgitem{0}{Completion Code}
 \msgitem{1}{
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-3] - Actual channel number (if you put Eh in the
           request, the real channel number is returned here)
         \item[bits 4-7] - reserved
-        \end{description}}
+        \end{tightdefs}}
 \msgitem{2}{
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-6] - Channel medium type.  Valid values are:
-          \begin{description}
+          \begin{tightdefs}
           \item[00h] - reserved
           \item[01h] - \acs{IPMB} (\acs{I$^2$C})
           \item[02h] - \acs{ICMB} version 1.0
@@ -1855,14 +1986,14 @@ possible channel.
           \item[0Bh] - reserved for USB 2.x
           \item[0Ch] - System Interface
           \item[60h-7Fh] - \acs{OEM}
-          \end{description}
+          \end{tightdefs}
           All other values are reserved.
         \item[bit 7] - reserved
-        \end{description}}
+        \end{tightdefs}}
 \msgitem{3}{
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-4] - Channel protocol type.  Valid values are:
-          \begin{description}
+          \begin{tightdefs}
           \item[00h] - reserved
           \item[01h] - \acs{IPMB}-1.0, used for acs{IPMB}, serial/modem
             basic mode, and \acs{LAN}.
@@ -1875,25 +2006,25 @@ possible channel.
           \item[08h] - \acs{BT} from IPMI v1.5, see section \ref{sec-bt}
           \item[09h] - Terminal mode, see section \ref{sec-terminal-mode}
           \item[1Ch-1Fh] - \acs{OEM}
-          \end{description}
+          \end{tightdefs}
           All other values are reserved.
         \item[bits 5-7] - reserved
-        \end{description}}
+        \end{tightdefs}}
 \msgitem{4}{This field describes session information about the channel.
         See section \ref{sec-session-support} for details on sessions.
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-5] - The number of sessions that have been activated
           on a given channel.  This is only valid if the channel has session
           support.
         \item[bits 6-7] - Session support, values are:
-          \begin{description}
+          \begin{tightdefs}
           \item[00b] - channel does not support sessions.
           \item[01b] - channel is single-session. 
           \item[10b] - channel is multi-session.
           \item[11b] - channel is sessions based, but may switch
             between single and multiple sessions.
-          \end{description}
-        \end{description}}
+          \end{tightdefs}
+        \end{tightdefs}}
 \msgitem{5-7}{Vendor ID, used to specify the IANA number for the organization
         the defined the protocol.  This should always be the IPMI IANA,
         which is 7154 (decimal), or F2H, 1Bh, and 00H for these bytes.}
@@ -1902,7 +2033,7 @@ possible channel.
         For channel Fh, this is byte 8 is the interrupt for the system
         interface, byte 9 is the interrupt for the event message buffer
         interface.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h-0Fh] - IRQ 0-15
         \item[10h-13h] - PCI A-D, respectively
         \item[14h] - SMI
@@ -1910,7 +2041,7 @@ possible channel.
         \item[20h-5Fh] - System interrupt 0-62, respecitively
         \item[60h] - Assigned by ACPI, SMBIOS, or a plug and play mechanism.
         \item[FFh] - No interrupt or unspecified
-        \end{description}
+        \end{tightdefs}
         All other values are reserved.
 
         For \ac{OEM} channel types, this value is OEM defined. These
@@ -1930,30 +2061,30 @@ different manner.
 \begin{showmsg}
 \msgtag{Request}
 \msgitem{0}{Channel information, bits are:
-        \begin{description}
+        \begin{tightdefs}
         \item[0-4] - Channel number
         \item[4-5] - reserved
         \item[6-7] - tracking type.  See section \ref{sec-message-tracking}
           for more information.  Values are:
-          \begin{description}
+          \begin{tightdefs}
           \item[00b] - No tracking
           \item[01b] - Track request
           \item[10b] - Send raw.  This is a test mechanism or a mechanism
             used for transmitting proprietary protocols.  It is optional.
           \item[11b] - reserved
-          \end{description}
-        \end{description}}
+          \end{tightdefs}
+        \end{tightdefs}}
 \msgitem{1-n}{Message data.  The format depends on the channel type.  See
         the section on the specific channel type for more information.}
 \msgtag{Response}
 \msgitem{0}{Completion code.  If transmitting on an \acs{IPMB}, SMBus, or
         PCI management bus, the following return codes are used to inform
         the sender of sending problems:
-        \begin{description}
+        \begin{tightdefs}
         \item[81h] - lost arbitration
         \item[82h] - Bus Error
         \item[83h] - NAK on Write
-        \end{description}}
+        \end{tightdefs}}
 \msgcaption{\label{send-msg-cmd}Send Message Command,
   NetFN App (06h), Cmd 34h}
 \end{showmsg}
@@ -1996,7 +2127,7 @@ Message command described in table \ref{get-msg-cmd}.
 \msgtag{Response}
 \msgitem{0}{Completion code}
 \msgitem{1}{Channel information, bits are:
-        \begin{description}
+        \begin{tightdefs}
         \item[0-4] - Channel number
         \item[4-7] - Inferred privilege leel for the message.  Table
           \ref{ipmi-priv-levels} describes the privilege levels.
@@ -2015,15 +2146,15 @@ Message command described in table \ref{get-msg-cmd}.
           be set to ``None''.
 
           Privilege levels are:
-          \begin{description}
+          \begin{tightdefs}
           \item[0] - None (unspecified)
           \item[1] - Callback
           \item[2] - User
           \item[3] - Operator
           \item[4] - Admin
           \item[5] - OEM
-          \end{description}
-        \end{description}}
+          \end{tightdefs}
+        \end{tightdefs}}
 \msgitem{2-n}{Message data.  The format depends on the channel type.  See
         the section on the specific channel type for more information.}
 \msgcaption{\label{get-msg-cmd}Get Message Command,
@@ -2042,7 +2173,7 @@ bit will be set in the response to tell it something is in the queue.
 \msgtag{Response}
 \msgitem{0}{Completion code}
 \msgitem{1}{Flags.  The bits are:
-        \begin{description}
+        \begin{tightdefs}
         \item[0] - message(s) in the receive message queue.
         \item[1] - Event message buffer is full
         \item[2] - reserved
@@ -2051,7 +2182,7 @@ bit will be set in the response to tell it something is in the queue.
         \item[5] - OEM 0
         \item[6] - OEM 1
         \item[7] - OEM 2
-        \end{description}}
+        \end{tightdefs}}
 \msgcaption{\label{get-msg-flags}Get Message Flags Command,
   NetFN App (06h), Cmd 31h}
 \end{showmsg}
@@ -2620,7 +2751,7 @@ will survive removal of power.
 Set In Progress (volatile) & 0 &
         Used to indicate that the parameters are being updated.
         Bits 2-7 are reserved.  Bits 0-1 have the following values:
-        \begin{description}
+        \begin{tightdefs}
         \item[00b] - set complete.  This is the state the system comes up in.
                 This means that any user is finished updating the
                 parameters.  If rollback is implemented, setting this
@@ -2634,7 +2765,7 @@ Set In Progress (volatile) & 0 &
                 are pending and go to ``set complete'' state.  Some systems
                 may not support this, if setting this returns an error you
                 should set this value to ``set complete'' by hand.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Authentication Type Support (Read only) & 1 &
         A read only field showing which authentication types are supported.
@@ -2643,13 +2774,13 @@ Authentication Type Support (Read only) & 1 &
 Authentication Type Enables & 2 &
         A 5 byte field that holds the allowed authentication type for each
         privilege level.  The bytes are:
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0] - callback
         \item[byte 1] - user
         \item[byte 2] - operator
         \item[byte 3] - admin
         \item[byte 4] - oem
-        \end{description}
+        \end{tightdefs}
         The format for each byte is defined in table \ref{auth-bitmask}.\\
 \hline
 \acs{IP} Address & 3 &
@@ -2660,13 +2791,13 @@ Authentication Type Enables & 2 &
 \acs{IP} Address Source & 4 &
         One byte field telling the BMC where to get its IP address. Bits 4-7
         are reserved.  Values for bits 0-3 are:
-        \begin{description}
+        \begin{tightdefs}
         \item[0] - unspecified (I don't know what that means)
         \item[1] - static address, configured from parameter 3
         \item[2] - get address from DHCP
         \item[3] - get address from BIOS or system software
         \item[4] - get address by some other method
-        \end{description}
+        \end{tightdefs}
         As you probably can tell, static address and DHCP are really the
         only useful values.\\
 \hline
@@ -2682,28 +2813,28 @@ Subnet Mask & 6 &
 IPv4 Header Parms & 7 &
         A 3 byte field controlling some parameters in the \acs{IP} header.
         The bytes are:
-        \begin{description}
+        \begin{tightdefs}
           \item[byte 0] - time to live (default 40h) - The number of network
             hops allowed for \acs{IP} packets sent by the \acs{BMC}.
           \item[byte 1]
-            \begin{description}
+            \begin{tightdefs}
               \item[bits 0-4] - reserved
               \item[bits 5-7] - flags.  Sets the of the flags field in the
                 IP header.  The default value is 010b, or do not fragment.
-            \end{description}
+            \end{tightdefs}
           \item[byte 2]  This is the setting of the 8-bit type of service
             field in the \acs{IP} header. Only one of bits 1-4 should be
             set.
-            \begin{description}
+            \begin{tightdefs}
             \item[bit 0] - unused, set to zero.
             \item[bit 1] - minimize monetary cost
             \item[bit 2] - maximize reliability
             \item[bit 3] - maximize throughput
             \item[bit 4] - minimize delay
             \item[bits 5-7] - Precedence, which is unused by IP systems now.
-            \end{description}
+            \end{tightdefs}
             The default value is 00010000b.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Primary RMCP port number (optional) & 8 &
         A 2 byte field holding the \acs{UDP} port number to use for primary
@@ -2719,13 +2850,13 @@ Secondary RMCP port number (optional) & 9 &
         user attempts to set
         an unsupported field, the \acs{BMC} will return an error.  The
         bits are:
-        \begin{description}
+        \begin{tightdefs}
         \item[bit 0] - set to 1 to enable \acs{BMC} generated gratuitous
           \acs{ARP}s.
         \item[bit 1] - set to 1 to enable \acs{BMC} generated \acs{ARP}
           responses.
         \item[bits 2-7] - reserved
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Gratuitous \acs{ARP} interval (optional) & 11 &
         A one byte field holding the interval between gratuitous \acs{ARP}s.
@@ -2771,37 +2902,37 @@ Destination type & 18 &
         defined in table \ref{alert-policy-table-entry}.  Destination 0 is
         special and used by the Alert Immediate command as described in
         section \label{sec-alert-immediate}.  The fields are:
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0]
-          \begin{description}
+          \begin{tightdefs}
             \item[bits 0-3] - The index into the array
             \item[bits 4-7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[byte 1] The destination type.  The bits are:
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-2] - Destination type, values are:
-            \begin{description}
+            \begin{tightdefs}
             \item[000b] - PET Trap
             \item[001b-101b] - reserved
             \item[110b] - OEM 1
             \item[111b] - OEM 1
-            \end{description}
+            \end{tightdefs}
           \item[bits 3-6] - reserved
           \item[bit 7] - If zero, the alert does not need to be acknowledged
             to be considered successful.  If 1, the alert needs to be
             acknowledged with a \acs{PET} Acknowledge Command as defined
             in table \ref{pet-ack-cmd}.
-          \end{description}
+          \end{tightdefs}
         \item[byte 2] \acs{PET} Retry Time.  This specified the amount
           of time between resends when waiting for an acknowledge of
           the sent trap.
         \item[byte 3] Max \acs{PET} Retries.
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-2] - The maximum number of retries of a trap before
             giving up.
           \item[bits 3-7] - reserved
-          \end{description}
-        \end{description}\\
+          \end{tightdefs}
+        \end{tightdefs}\\
 \hline
 Destination address & 19 &
         This is an array of destination address, each 13 bytes long.  The
@@ -2811,32 +2942,32 @@ Destination address & 19 &
         defined in table \ref{alert-policy-table-entry}. Destination 0 is
         special and used by the Alert Immediate command as described in
         section \label{sec-alert-immediate}.  The fields are:
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0]
-          \begin{description}
+          \begin{tightdefs}
             \item[bits 0-3] - The index into the array
             \item[bits 4-7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[byte 1] The address format:
-          \begin{description}
+          \begin{tightdefs}
             \item[bits 0-3] - The address type, 0h is the only valid
               value, specifying IP.
             \item[bits 4-7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[byte 2] Gateway selector
-          \begin{description}
+          \begin{tightdefs}
           \item[bit 0]
-            \begin{description}
+            \begin{tightdefs}
             \item[0] - use the default gateway
             \item[0] - use the backup gateway
             \item[bits 1-7] - reserved
-            \end{description}
-          \end{description}
+            \end{tightdefs}
+          \end{tightdefs}
         \item[bytes 3-6] The \acs{IP} address to send the alert to when using
           this destination, in network order.
         \item[bytes 7-12] The Ethernet \acs{MAC} address to send the alert
           to when using this destination, in network order.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 OEM & 192+ &
         Parameters 192 to 255 are OEM parameters.  The rest of the
@@ -3010,14 +3141,14 @@ written someday.
 \begin{table}
 \begin{tabularx}{\textwidth}{|l|X|}
 \hline
-\verb=IPMI_AUTHTYPE_NONE= & No authentication.\\
+\texttt{IPMI\_AUTHTYPE\_NONE} & No authentication.\\
 \hline
-\verb=IPMI_AUTHTYPE_MD2= & \acs{MD2} style authentication.\\
+\texttt{IPMI\_AUTHTYPE\_MD2} & \acs{MD2} style authentication.\\
 \hline
-\verb=IPMI_AUTHTYPE_MD5= & \acs{MD5} style authentication.  This is the
+\texttt{IPMI\_AUTHTYPE\_MD5} & \acs{MD5} style authentication.  This is the
 recommended type of authentication.\\
 \hline
-\verb=IPMI_AUTHTYPE_STRAIGHT= & Puts the password into the message in
+\texttt{IPMI\_AUTHTYPE\_STRAIGHT} & Puts the password into the message in
 plain text.  Don't use this.\\
 \hline
 \end{tabularx}
@@ -3027,21 +3158,21 @@ plain text.  Don't use this.\\
 \begin{table}
 \begin{tabularx}{\textwidth}{|l|X|}
 \hline
-\verb=IPMI_PRIVILEGE_CALLBACK= & The user is only allowed to request
+\texttt{IPMI\_PRIVILEGE\_CALLBACK} & The user is only allowed to request
 that the IPMI system call back home.\\
 \hline
-\verb=IPMI_PRIVILEGE_USER= & A ``read-only'' user.  The user can look
+\texttt{IPMI\_PRIVILEGE\_USER} & A ``read-only'' user.  The user can look
 at system state, but not change anything.  For instance, the user can
 fetch \acs{SEL} entries, but not delete them.\\
 \hline
-\verb=IPMI_PRIVILEGE_OPERATOR= & This user can do everything but configuration
+\texttt{IPMI\_PRIVILEGE\_OPERATOR} & This user can do everything but configuration
 commands.  For instance, they can clear the SEL and configure sensors, but
 they cannot add users or configure \acs{LAN} parameters.\\
 \hline
-\verb=IPMI_PRIVILEGE_ADMIN= & This user can do pretty much anything on an
+\texttt{IPMI\_PRIVILEGE\_ADMIN} & This user can do pretty much anything on an
 IPMI system.\\
 \hline
-\verb=IPMI_PRIVILEGE_OEM= & Undefined by the spec, it's whatever the \acs{OEM}
+\texttt{IPMI\_PRIVILEGE\_OEM} & Undefined by the spec, it's whatever the \acs{OEM}
 wants.\\
 \hline
 \end{tabularx}
@@ -3145,13 +3276,13 @@ alert capabilities a BMC has.
 \msgtag{Response}
 \msgitem{0}{Completion Code}
 \msgitem{1}{\acs{PEF} version, encoded as:
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-3] - Major version \#
         \item[bits 4-7] - Minor version \#
-        \end{description}}
+        \end{tightdefs}}
 \msgitem{2}{Supported PEF actions, if the bit is one then the action is
         supported:
-        \begin{description}
+        \begin{tightdefs}
         \item[bit 0] - alert
         \item[bit 1] - power down
         \item[bit 2] - reset
@@ -3159,7 +3290,7 @@ alert capabilities a BMC has.
         \item[bit 4] - OEM action
         \item[bit 5] - diagnostic interrupt
         \item[bits 6-7] - reserved
-        \end{description}}
+        \end{tightdefs}}
 \msgitem{3}{Number of entries in teh event filter table}
 \msgcaption{\label{get-pef-cap-cmd}Get \acs{PEF} Capabilities Command,
   NetFN S/E (04h), Cmd 10h}
@@ -3190,11 +3321,11 @@ configuration parameters in a BMC.
 
 \begin{showmsg}
 \msgtag{Request}
-\msgitem{0}{\begin{description}
+\msgitem{0}{\begin{tightdefs}
         \item[bits 0-6] - Parameter Selector.  This selects the entry in the
           table that you want to get.\\
         \item[bit 7] - If 1, only get parameter revision
-        \end{description}}
+        \end{tightdefs}}
 \msgitem{1}{Set Selector.  Some parameters are in an array, this tells which
         array element to set.  Set to zero if the parameter does not have a
         set selector.}
@@ -3278,7 +3409,7 @@ removal of power.
 Set In Progress (volatile) & 0 &
         Used to indicate that the parameters are being updated.
         Bits 2-7 are reserved.  Bits 0-1 have the following values:
-        \begin{description}
+        \begin{tightdefs}
         \item[00b] - set complete.  This is the state the system comes up in.
                 This means that any user is finished updating the
                 parameters.  If rollback is implemented, setting this
@@ -3292,11 +3423,11 @@ Set In Progress (volatile) & 0 &
                 are pending and go to ``set complete'' state.  Some systems
                 may not support this, if setting this returns an error you
                 should set this value to ``set complete'' by hand.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 \acs{PEF} Control & 1 &
         One byte field global control bits for the \acs{PEF}:
-        \begin{description}
+        \begin{tightdefs}
         \item[bit 0] - Set to one to enable the PEF.
         \item[bit 1] - Set to one to cause event messages to be sent for
           each action triggered by a filter.  These events are send as the
@@ -3318,13 +3449,13 @@ Set In Progress (volatile) & 0 &
           when alerts are allowed to be sent.  Parameter 4 of this table
           sets the time.
         \item[bits 4-7] - reserved
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 \acs{PEF} Action Global Control & 2 &
         A one byte field for controlling whether specific \acs{PEF} actions
         are enabled at all.  If the bit is set to one, it is enabled.  The
         bits are:
-        \begin{description}
+        \begin{tightdefs}
         \item[bit 0] - alert
         \item[bit 0] - power down
         \item[bit 0] - reset
@@ -3332,7 +3463,7 @@ Set In Progress (volatile) & 0 &
         \item[bit 0] - OEM
         \item[bit 0] - diagnostic interrupt
         \item[bits 6-7] - reserved
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 PEF Startup Delay (optional) & 3 &
         A one byte field giving the \acs{PEF} startup delay, in
@@ -3349,90 +3480,90 @@ PEF Alert Startup Delay (optional) & 4 &
 Number of Event Filters (read only) & 5 &
         The number of array entries in the event filter table, parameter
         6 of this table.  The bits are:
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-6] - The number of event filter entries.  A zero
           here means that events filters are not supported.
         \item[bit 7] - reserved
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Event Filter Table & 6 &
         This is a 21 byte field giving access to the event filter table.
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0]
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-6] - The set selector, the array index of which
             event filter to set.  00h is reserved and not used and does
             not count in the number of event filters.
           \item[bit 7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[bytes 1-20] - The filter data for the array element given
           by byte 1 of this parameter.  See table \ref{pef-table-entry}
           for the contents of this data.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Event Filter Table Byte 1 & 7 &
         This is a 2 byte field giving access to the first byte of an
         event filter table entry.  This makes it convenient to set the
         first byte without having to read-modify-write the whole entry.
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0]
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-6] - The set selector, the array index of which
             event filter to set.  00h is reserved and not used and does
             not count in the number of event filters.
           \item[bit 7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[byte 1] - Byte 1 of the event filter table entry.  See
           table \ref{pef-table-entry} for the contents of this data.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Number of Alert Policies (read only) & 7 &
         The number of array entries in the alert policy table, parameter
         9 of this table.  The bits are:
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-6] - The number of event filter entries.  A zero
           here means that alert policies are not supported.
         \item[bit 7] - reserved
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Alert Policy Table & 8 &
         This is a 4 byte field giving access to the alert policy table.
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0]
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-6] - The set selector, the array index of which
             alert policy to set.  00h is reserved and not used and does
             not count in the number of event filters.
           \item[bit 7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[bytes 1-3] - The filter data for the array element given
           by byte 1 of this parameter.  See table
           \ref{alert-policy-table-entry}
           for the contents of this data.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 System \acs{GUID} & 9 &
         A 17 byte field telling how to get the system \acs{GUID} for \acs{PET}
         traps.
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0]
-          \begin{description}
+          \begin{tightdefs}
           \item[bit 0] - If one, use the value in bytes 1-16 of this field
             as the \acs{GUID} in traps.  If not set, use the value returned
             from the Get System \acs{GUID} command.
           \item[bits 1-7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[bytes 1-16] - The system \acs{GUID}
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Number of Alert String Keys (read only) & 11 &
         The number of array entries in the alert string keys, parameter
         12 of this table.  The bits are:
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-6] - The number of alert string keys.  A zero
           here means that alert policies are not supported.
         \item[bit 7] - reserved
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 Alert String Keys (some parts are volatile) & 12 &
         Some actions require alert strings for paging an operator.  This
@@ -3448,27 +3579,27 @@ Alert String Keys (some parts are volatile) & 12 &
         a 7h in byte 2, if event filter 4 matches an event and the
         alert policy used has 87h in byte 3, then the alert string
         entry 4h of the alert strings are used.
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0]
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-6] - The set selector, the array index of which
             alert key to set.  Entry 0h is volatile and used by the
             Alert Immediate command as described in section
             \label{sec-alert-immediate}.  Entries 1h-7h are
             non-volatile.  All other entries are reserved.
           \item[bit 7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[byte 1]
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-6] - Event filter number to match
           \item[bit 7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[byte 2]
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-6] - Alert String Set to match
           \item[bit 7] - reserved
-          \end{description}
-        \end{description}\\
+          \end{tightdefs}
+        \end{tightdefs}\\
 \hline
 Alert Strings (some parts are volatile) & 13 &
         Some actions require alert strings for paging an operator.
@@ -3488,16 +3619,16 @@ Alert Strings (some parts are volatile) & 13 &
         message.  Note that TAP only supports 7-bit ASCII and the
         \acs{BMC} will zero the high bit when doing TAP paging.
 
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 0]
-          \begin{description}
+          \begin{tightdefs}
           \item[bits 0-6] - The set selector, the array index of which
             alert string to set.  Entry 0h is volatile and used by the
             Alert Immediate command as described in section
             \label{sec-alert-immediate}.  Entries 1h-7h are
             non-volatile.  All other entries are reserved.
           \item[bit 7] - reserved
-          \end{description}
+          \end{tightdefs}
         \item[byte 1] - Block selector.  The strings may be much larger than
           can be set in a single message.  This selects which block to
           write, in 16-byte increments.  So, a 0 here is the first 16 bytes,
@@ -3505,7 +3636,7 @@ Alert Strings (some parts are volatile) & 13 &
         \item[byte 2-n] - The bytes to write into the specific block
           If this is less than 16 bytes, then only the given number of
           bytes are written.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 OEM Parmeters & 96+ &
         Parameters 96-127 are allowed for OEM use.  All other parameters
@@ -3531,10 +3662,10 @@ the different alerts.
 \hline
 0 & Filter Configuration &
         Bits that control the operation of this filter:
-        \begin{description}
+        \begin{tightdefs}
         \item{bits 0-4} - reserved
         \item{bits 5-6} - filter type
-          \begin{description}
+          \begin{tightdefs}
           \item[00b] - Software configurable filter.  A manging system may
             configure all parts of this filter.
           \item[01b] - reserved
@@ -3542,13 +3673,13 @@ the different alerts.
             not modify the contents of this filter, although it may turn
             on and off the filter using bit 7 of this field.
           \item[11b] - reserved
-          \end{description}
-        \end{description}\\
+          \end{tightdefs}
+        \end{tightdefs}\\
 \hline
 1 & Event filter action &
         These bits set what action this filter will do if it matches.
         These bits are enable if set to one.
-        \begin{description}
+        \begin{tightdefs}
         \item[bit 0] - alert
         \item[bit 1] - power off
         \item[bit 2] - reset
@@ -3556,21 +3687,21 @@ the different alerts.
         \item[bit 4] - OEM action
         \item[bit 5] - diagnostic interrupt
         \item[bits 6-7] - reserved
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 2 & Alert Policy Number &
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-3] - If alert is selected in byte 1, this chooses the
           policy number to use in the alert policy table.
         \item[bits 4-7] - reserved
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 3 & Event Severity &
         This is the value that will be put into the event severity field
         of the \ac{PET} trap.  If more than one event filter matches, the
         highest priority in all event filters will be used.  Valid values
         are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - unspecified
         \item[01h] - monitor
         \item[02h] - information
@@ -3578,7 +3709,7 @@ the different alerts.
         \item[08h] - non-critical condition
         \item[10h] - critical condition
         \item[20h] - non-recoverable condition
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 4 & Generator ID byte 1 &
         This matches the slave address or software id in the event.
@@ -3609,10 +3740,10 @@ the different alerts.
         bits 2 and 7 are set, then a value of 2 or 7 in the low nibble
         of event data 1 will cause a filter match (if everything else
         matches too, of course).
-        \begin{description}
+        \begin{tightdefs}
         \item[byte 9] - bit positions 0-7
         \item[byte 10] - bit positions 8-15
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 11 & Event data 1 AND mask &
         This bit indicates which bits in event data 1 are used for
@@ -3672,9 +3803,9 @@ policy, the \acs{BMC} may go to the next alert policy or stop.
 \endhead
 \hline
 0 & Policy Number and Policy &
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-2] - The policy.  Valid values are:
-          \begin{description}
+          \begin{tightdefs}
           \item[0h] - Alway do this alert if chosen, even if other
             alert policy tables tell the \acs{BMC} to stop.
           \item[1h] - If an alert to a previous destination was successful,
@@ -3692,15 +3823,15 @@ policy, the \acs{BMC} may go to the next alert policy or stop.
             do not do this alert.  If no alert has been successful so far,
             do this alert.  Then proceed to the next policy entry that
             has a different destination type.
-          \end{description}
+          \end{tightdefs}
         \item[bit 3] - Entry enable.  If set to one, the entry is enabled,
           if set to zero it is ignored.
         \item[bits 4-7] - The policy number, the array index of which
           policy table entry to set.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 1 & Channel / Destination &
-        \begin{description}
+        \begin{tightdefs}
         \item[bits 0-3] - The destination selector.  For the chosen
           channel, this is the specific destination in the channel
           to use to send the alert.  See the \acs{LAN} Configuration Table
@@ -3709,7 +3840,7 @@ policy, the \acs{BMC} may go to the next alert policy or stop.
           destination selectors can do.
         \item[bits 4-7] - The channel.  This tells the BMC which channel
           to send the alert over.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 2 & Alert String Info &
         Some types of alerts need a string associated with them, this
@@ -4203,10 +4334,10 @@ have even \ac{NetFN}s, and all responses have odd \ac{NetFN}s.
         effect, an extension of the \ac{NetFN}.  The external groups
         are free to define the message outside those bounds.  Current
         defined external groups are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] CompactPCI
         \item[01h] DMTF Pre-OS Working Group ASF Specification
-        \end{description}
+        \end{tightdefs}
         All other values are reserved.\\
 \hline
 2Eh, 2Fh & OEM/Group & Basically more group extensions, except that the
@@ -4590,7 +4721,7 @@ int ipmi_sdr_get_xxx(ipmi_sdr_info_t *sdr, int *val);
 where the \verb=xxx= is replaced by the item you wish to get.  Valid
 items are:
 
-\begin{longtable}{|p{.25\textwidth}|p{0.7\textwidth}|}
+\begin{longtable}{|p{.24\textwidth}|p{0.7\textwidth}|}
 \hline
 major\_version & The major IPMI version the SDR repository supports, like
         1 for IPMI 1.0 and 1.5, and 2 for IPMI 2.0.\\
@@ -4601,12 +4732,12 @@ minor\_version & The minor IPMI version the SDR repository supports, like
 overflow & An SDR write operation has failed to do lack of space.\\
 \hline
 update\_mode & The update modes supported.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00b] - unspecified
         \item[01b] - Only non-modal updates are supported
         \item[10b] - Only modal updates are supported
         \item[11b] - Both modal and non-modal updates are supported
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 supports\_delete\_sdr & If true, the repository supports deleting individual
         \acs{SDR}s one at a time.\\
@@ -4740,7 +4871,7 @@ Entity IDs defined by \ac{IPMI} are:
 \hline
  5 & PERIPHERAL & A peripheral bay\\
 \hline
- 6 & SYSTEM \_MANAGEMENT \_MODULE & A separate board for system management\\
+ 6 & SYSTEM\_MANAGEMENT \_MODULE & A separate board for system management\\
 \hline
  7 & SYSTEM\_BOARD & The main system board\\
 \hline
@@ -4774,7 +4905,7 @@ Entity IDs defined by \ac{IPMI} are:
         is on a board.  Note that you would \emph{not} use this for the
         main power supply in a system, even it it was a DC-to-DC converter.\\
 \hline
-21 & POWER \_MANAGEMENT \_BOARD & A board for managing and distributing
+21 & POWER\_MANAGEMENT \_BOARD & A board for managing and distributing
         power in the system\\
 \hline
 22 & CHASSIS\_BACK \_PANEL\_BOARD & A rear board in a chassis.\\
@@ -4803,7 +4934,7 @@ Entity IDs defined by \ac{IPMI} are:
         not be used for individual memory chips, but for the board that
         holds the memory chips.\\
 \hline
-33 & SYSTEM \_MANAGEMENT \_SOFTWARE & The meaning of this is unknown.\\
+33 & SYSTEM\_MANAGEMENT \_SOFTWARE & The meaning of this is unknown.\\
 \hline
 34 & BIOS & The BIOS running on the system.\\
 \hline
@@ -4828,17 +4959,17 @@ Entity IDs defined by \ac{IPMI} are:
         has one or more processors, memory, etc. that plugs into a
         backplane.\\
 \hline
-42 & CONNECTIVITY \_SWITCH & A network switch that plugs into a system
+42 & CONNECTIVITY\_SWITCH & A network switch that plugs into a system
         to provide connectivity between independent processors in a
         system.\\
 \hline
-43 & PROCESSOR \_MEMORY \_MODULE & ?\\
+43 & PROCESSOR\_MEMORY \_MODULE & ?\\
 \hline
 44 & IO\_MODULE & ?\\
 \hline
 45 & PROCESSOR\_IO \_MODULE & ?\\
 \hline
-46 & MGMT \_CONTROLLER \_FIRMWARE & The firmware running on an \ac{MC}.\\
+46 & MGMT\_CONTROLLER \_FIRMWARE & The firmware running on an \ac{MC}.\\
 \hline
 \end{longtable}
 
@@ -5008,12 +5139,12 @@ The following call returns the entity type:
 enum ipmi_dlr_type_e ipmi_entity_get_type(ipmi_entity_t *ent);
 \end{verbatim}
 Valid entity types are:
-\begin{description}
+\begin{tightdefs}
 \item[IPMI\_ENTITY\_UNKNOWN]
 \item[IPMI\_ENTITY\_MC]
 \item[IPMI\_ENTITY\_FRU]
 \item[IPMI\_ENTITY\_GENERIC]
-\end{description}
+\end{tightdefs}
 
 There are calls to fetch information about entities, but only certain
 calls are available for certain entities.  All these calls have the
@@ -5025,7 +5156,8 @@ where \verb=xxx= is the data item.  These will not return errors, they
 will return undefined information if they are called on an entity that
 does not support the specific data item.  The data items supported are:
 
-\begin{longtable}{|p{.25\textwidth}|p{.6\textwidth}|l|l|l|l|}
+\begin{longtable}{|p{.20\textwidth}|p{.56\textwidth}|c|c|c|c|}
+\hline
 \bfseries{Data Item} & \bfseries{Description} & \bfseries{M} & \bfseries{F}
   & \bfseries{G} & \bfseries{U}\\
 \hline
@@ -5089,26 +5221,26 @@ is\_logical\_fru & Tells if the FRU information on the FRU is accessed
         IPMB bus as a EEPROM (value is 0).
         &   & x &   &  \\
 \hline
-ACPI\_system\_power\_notify\_required & If true, ACPI system power state
+ACPI\_system\_power \_notify\_required & If true, ACPI system power state
         notification is required for the device.
         & x &   &   &  \\
 \hline
-ACPI\_device\_power\_notify\_required & If true, ACPI device power syste
+ACPI\_device\_power \_notify\_required & If true, ACPI device power syste
         notification is required by the device.
         & x &   &   &  \\
 \hline
-controller\_logs\_init\_agent\_errors & If true, the \acs{MC} logs
+controller\_logs\_init \_agent\_errors & If true, the \acs{MC} logs
         initialization errors.
         & x &   &   &  \\
 \hline
-log\_init\_agent\_errors\_accessing & If this is true, then the
+log\_init\_agent\_errors \_accessing & If this is true, then the
         initialization agent will log any failures trying to set
         the event receiver for the device.
         & x &   &   &  \\
 \hline
 global\_init & Tells the initialization agent whether to initialize
         the controller's event receiver.  This is a two bit value:
-        \begin{description}
+        \begin{tightdefs}
         \item[00b] - Enable the controller's event receiver.
         \item[01b] - Disable the controller's event receiver by setting it
           to FFh.  This is generally to turn of a rogue controller or
@@ -5116,7 +5248,7 @@ global\_init & Tells the initialization agent whether to initialize
         \item[10b] - Do not initialize the controller's event receiver.
           this is generally for debugging.
         \item[11b] - reserved
-        \end{description}
+        \end{tightdefs}
         & x &   &   &  \\
 \hline
 chassis\_device & The controller handles the chassis commands.
@@ -5126,19 +5258,19 @@ bridge & The controller handles bridge commands.  This generally means it
         supports \acs{ICMB}.
         & x &   &   &  \\
 \hline
-IPMB\_event\_generator & The controller generates events on the \acs{IPMB}.
+IPMB\_event \_generator & The controller generates events on the \acs{IPMB}.
         & x &   &   &  \\
 \hline
 IPMB\_event\_receiver & The controller can receive events on the \acs{IPMB}.
         & x &   &   &  \\
 \hline
-FRU\_device\_inventory & The controller supports \acs{FRU} inventory commands.
+FRU\_device \_inventory & The controller supports \acs{FRU} inventory commands.
         & x &   &   &  \\
 \hline
 SEL\_device & The controller supports a \acs{SEL} device for storing events.
         & x &   &   &  \\
 \hline
-SDR\_repository\_device & The controller supports a main \acs{SDR} repository.
+SDR\_repository \_device & The controller supports a main \acs{SDR} repository.
         & x &   &   &  \\
 \hline
 sensor\_device & The controller has sensors, it supports the sensor commands.
@@ -5330,7 +5462,7 @@ will return true.
 
 \subsection{Hot-Swap State}
 OpenIPMI supports eight hot-swap states:
-\begin{itemize}
+\begin{tightdefs}
 \item IPMI\_HOT\_SWAP\_NOT\_PRESENT
 \item IPMI\_HOT\_SWAP\_INACTIVE
 \item IPMI\_HOT\_SWAP\_ACTIVATION\_REQUESTED
@@ -5339,7 +5471,7 @@ OpenIPMI supports eight hot-swap states:
 \item IPMI\_HOT\_SWAP\_DEACTIVATION\_REQUESTED
 \item IPMI\_HOT\_SWAP\_DEACTIVATION\_IN\_PROGRESS
 \item IPMI\_HOT\_SWAP\_OUT\_OF\_CON
-\end{itemize}
+\end{tightdefs}
 These may be converted to a string name with the function:
 \begin{verbatim}
 char *ipmi_hot_swap_state_name(enum ipmi_hot_swap_states state);
@@ -5404,12 +5536,12 @@ The following function will allow the current hot-swap state to be
 fetched:
 \begin{verbatim}
 typedef void (*ipmi_entity_hot_swap_state_cb)(ipmi_entity_t             *ent,
-					      int                       err,
-					      enum ipmi_hot_swap_states state,
-					      void                   *cb_data);
+                                              int                       err,
+                                              enum ipmi_hot_swap_states state,
+                                              void                   *cb_data);
 int ipmi_entity_get_hot_swap_state(ipmi_entity_t                 *ent,
-				   ipmi_entity_hot_swap_state_cb handler,
-				   void                          *cb_data);
+                                   ipmi_entity_hot_swap_state_cb handler,
+                                   void                          *cb_data);
 \end{verbatim}
 
 \subsection{Hot-Swap Events}
@@ -5419,16 +5551,16 @@ The following functions do the registration and deregistraction of a
 hot-swap handler:
 \begin{verbatim}
 typedef int (*ipmi_entity_hot_swap_cb)(ipmi_entity_t             *ent,
-				       enum ipmi_hot_swap_states last_state,
-				       enum ipmi_hot_swap_states curr_state,
-				       void                      *cb_data,
-				       ipmi_event_t              *event);
+                                       enum ipmi_hot_swap_states last_state,
+                                       enum ipmi_hot_swap_states curr_state,
+                                       void                      *cb_data,
+                                       ipmi_event_t              *event);
 int ipmi_entity_add_hot_swap_handler(ipmi_entity_t           *ent,
-				     ipmi_entity_hot_swap_cb handler,
-				     void                    *cb_data);
+                                     ipmi_entity_hot_swap_cb handler,
+                                     void                    *cb_data);
 int ipmi_entity_remove_hot_swap_handler(ipmi_entity_t           *ent,
-					ipmi_entity_hot_swap_cb handler,
-					void                    *cb_data);
+                                        ipmi_entity_hot_swap_cb handler,
+                                        void                    *cb_data);
 \end{verbatim}
 This is a standard event handler as described in
 section~\vref{sec-openipmi-events}
@@ -5452,8 +5584,8 @@ OpenIPMI can use the following function to force it into activation
 requested state:
 \begin{verbatim}
 int ipmi_entity_set_activation_requested(ipmi_entity_t  *ent,
-					 ipmi_entity_cb done,
-					 void           *cb_data);
+                                         ipmi_entity_cb done,
+                                         void           *cb_data);
 \end{verbatim}
 This can occur if an entity has been moved to the inactive state by
 the management software then the entity needs to be powered up again.
@@ -5465,8 +5597,8 @@ To move an entity to active state (either from inactive or activation
 requested state), use the following function:
 \begin{verbatim}
 int ipmi_entity_activate(ipmi_entity_t  *ent,
-			 ipmi_entity_cb done,
-			 void           *cb_data);
+                         ipmi_entity_cb done,
+                         void           *cb_data);
 \end{verbatim}
 This will power the entity up and move it to active state.
 
@@ -5484,8 +5616,8 @@ process) or deactivation requested state to inactive state, the
 function:
 \begin{verbatim}
 int ipmi_entity_deactivate(ipmi_entity_t  *ent,
-			   ipmi_entity_cb done,
-			   void           *cb_data);
+                           ipmi_entity_cb done,
+                           void           *cb_data);
 \end{verbatim}
 is used.
 
@@ -5499,19 +5631,19 @@ specified.  The following functions can be used to read and update
 these times:
 \begin{verbatim}
 int ipmi_entity_get_auto_activate_time(ipmi_entity_t       *ent,
-				       ipmi_entity_time_cb handler,
-				       void                *cb_data);
+                                       ipmi_entity_time_cb handler,
+                                       void                *cb_data);
 int ipmi_entity_set_auto_activate_time(ipmi_entity_t  *ent,
-				       ipmi_timeout_t auto_act,
-				       ipmi_entity_cb done,
-				       void           *cb_data);
+                                       ipmi_timeout_t auto_act,
+                                       ipmi_entity_cb done,
+                                       void           *cb_data);
 int ipmi_entity_get_auto_deactivate_time(ipmi_entity_t       *ent,
-					 ipmi_entity_time_cb handler,
-					 void                *cb_data);
+                                         ipmi_entity_time_cb handler,
+                                         void                *cb_data);
 int ipmi_entity_set_auto_deactivate_time(ipmi_entity_t  *ent,
-					 ipmi_timeout_t auto_deact,
-					 ipmi_entity_cb done,
-					 void           *cb_data);
+                                         ipmi_timeout_t auto_deact,
+                                         ipmi_entity_cb done,
+                                         void           *cb_data);
 \end{verbatim}
 The timeouts are standard OpenIPMI time values, which are in
 nanoseconds.  These will return \verb=ENOSYS= if the operation is not
@@ -5530,12 +5662,12 @@ Most of the string functions have a ``type'' function, a ``len''
 function, and a function to actually get the strings.  For instance:
 \begin{verbatim}
 int ipmi_entity_get_chassis_info_part_number_len(ipmi_entity_t *entity,
-						 unsigned int  *length);
+                                                 unsigned int  *length);
 int ipmi_entity_get_chassis_info_part_number_type(ipmi_entity_t        *entity,
-						  enum ipmi_str_type_e *type);
+                                                  enum ipmi_str_type_e *type);
 int ipmi_entity_get_chassis_info_part_number(ipmi_entity_t *entity,
-					     char          *str,
-					     unsigned int  *strlen);
+                                             char          *str,
+                                             unsigned int  *strlen);
 \end{verbatim}
 The ``len'' function returns the length of the string.  The ``type''
 function returns the type of string per standard OpenIPMI string
@@ -5647,14 +5779,14 @@ going low.
 \end{figure}
 
 Each sensor may have six different thresholds:
-\begin{itemize}
+\begin{tightdefs}
 \item upper non-recoverable
 \item upper critical
 \item upper non-critical
 \item lower non-critical
 \item lower critical
 \item lower non-recoverable
-\end{itemize}
+\end{tightdefs}
 The meanings of these are not defined by \acs{IPMI}, but the meanings
 are pretty obvious.  You may ask, though, why there are both upper and
 lower thresholds and separate going high and going low events.  A
@@ -5744,42 +5876,42 @@ THRESHOLD & The sensor monitors an analog value.  All threshold sensors
 \hline
 DISCRETE\_USAGE & These are \acs{DMI}-based usage states.  Valid offsets
         are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - transition to idle
         \item[01h] - transition to active
         \item[02h] - transition to busy
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 DISCRETE\_STATE & Monitors the value of a state.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - state deasserted
         \item[01h] - state asserted
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-DISCRETE \_PREDICTIVE \_FAILURE & This is used to know if an entity is
+DISCRETE\_PREDICTIVE \_FAILURE & This is used to know if an entity is
         about to fail, but is still operations.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - predictive failure deasserted
         \item[01h] - predictive failure asserted
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 DISCRETE\_LIMIT \_EXCEEDED & This is used to tell if a limit has been
         exceeded.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - limit not exceeded
         \item[01h] - limit exceeded
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-DISCRETE \_PERFORMANCE \_MET & This is used to tell if system performance
+DISCRETE \_PERFORMANCE\_MET & This is used to tell if system performance
         is meeting expectations.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - performance met
         \item[01h] - performance not met
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-DISCRETE \_SEVERITY & This is used to know if an entity is in trouble
+DISCRETE\_SEVERITY & This is used to know if an entity is in trouble
         or other state information.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - transition to ok
         \item[01h] - transition to non-critical from ok.
         \item[02h] - transition to critical from less critical.
@@ -5790,27 +5922,27 @@ DISCRETE \_SEVERITY & This is used to know if an entity is in trouble
           seems rather silly and is probably not used.}
         \item[07h] - monitor
         \item[08h] - informational
-        \end{description}
+        \end{tightdefs}
         The actual meaning of these is not defined by the spec.\\
 \hline
-DISCRETE \_DEVICE \_PRESENCE & This is a presence sensor to know when
+DISCRETE\_DEVICE \_PRESENCE & This is a presence sensor to know when
         an entity is present or not.  Note that OpenIPMI uses this for
         entity presence if it is available.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - entity not present
         \item[01h] - entity present
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-DISCRETE \_DEVICE \_ENABLE & This tells if a device is enabled.  Valid
+DISCRETE\_DEVICE \_ENABLE & This tells if a device is enabled.  Valid
         values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - device disabled
         \item[01h] - device enabled
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 DISCRETE \_AVAILABILITY & This tells the current availability state of
         the device.  Valid values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - transition to running
         \item[01h] - transition to in test
         \item[02h] - transition to power off
@@ -5820,11 +5952,11 @@ DISCRETE \_AVAILABILITY & This tells the current availability state of
         \item[06h] - transition to degraded
         \item[07h] - transition to power save
         \item[08h] - install error
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 DISCRETE \_REDUNDANCY & This shows the redundancy state of an entity.  Valid
         values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Fully redundant, the entity has full redundancy.
         \item[01h] - Redundancy lost, this is reported if
           redundancy has been lost at all.
@@ -5851,16 +5983,16 @@ DISCRETE \_REDUNDANCY & This shows the redundancy state of an entity.  Valid
         \item[08h] - Transition from redundancy lost to redundancy
           degraded.  The entity had lost redundancy and has regained
           some redundancy, but is not fully redundant.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-DISCRETE\_ACPI \_POWER & The current ACPI power state of the system.  Valid
+DISCRETE\_ACPI\_POWER & The current ACPI power state of the system.  Valid
         values are:
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - D0 power state
         \item[01h] - D1 power state
         \item[02h] - D2 power state
         \item[03h] - D3 power state
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 SENSOR\_SPECIFIC & This setting means that the offsets in the sensor are
         dependent on the sensor type.  This is only for discrete sensors.\\
@@ -5890,7 +6022,7 @@ CURRENT & \\
 FAN & \\
 \hline
 PHYSICAL\_SECURITY & The chassis was opened or accessed.
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - General chassis intrusion
         \item[01h] - Drive bay intrusion
         \item[02h] - I/O card area intrusion
@@ -5899,10 +6031,10 @@ PHYSICAL\_SECURITY & The chassis was opened or accessed.
         \item[05h] - Unauthorized dock/undock
         \item[06h] - Fan area intrusion (including unauthorized hot-plugs
           of fans).
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 PLATFORM\_SECURITY &
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - The spec says ``Secure Mode (Front Panel Lockout)
           Violation attempt''.  The meaning of this is unknown.
         \item[01h] - User pre-boot password failure.
@@ -5910,12 +6042,12 @@ PLATFORM\_SECURITY &
         \item[03h] - Network pre-boot password failure.
         \item[04h] - Other pre-boot password failure.
         \item[05h] - Out-of-band pre-boot password failure.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 PROCESSOR & Various processor failures.  Most of these are very Intel processor
         centric, you may need to reference the processor manual for the
         meaning of the failure.
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - IERR
         \item[01h] - Thermal Trip
         \item[02h] - FRB1/BIST failure
@@ -5928,10 +6060,10 @@ PROCESSOR & Various processor failures.  Most of these are very Intel processor
         \item[07h] - Processor presence detected
         \item[08h] - Processor disabled
         \item[09h] - Terminator presence detected
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 POWER\_SUPPLY & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Presence detected
         \item[01h] - Failure detected
         \item[02h] - Predictive failure.  This probably means that the
@@ -5939,10 +6071,10 @@ POWER\_SUPPLY &
         \item[03h] - AC lost
         \item[04h] - AC lost or out-of-range
         \item[05h] - AC present but out of range
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 POWER\_UNIT & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Power off
         \item[01h] - Power cycle
         \item[02h] - 240VA power down
@@ -5953,40 +6085,40 @@ POWER\_UNIT &
         \item[06h] - Failure detected
         \item[07h] - Predictive failure.  This probably means that the
           power unit is still working but may fail soon.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 COOLING\_DEVICE & \\
 \hline
-OTHER\_UNITS\_BASED\_SENSOR & The sensor is a threshold sensor, but not one
+OTHER\_UNITS \_BASED\_SENSOR & The sensor is a threshold sensor, but not one
         specified directly by the spec.  The units can be fetched with
         the calls to get the units.\\
 \hline
 MEMORY & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Correctable memory error
         \item[01h] - Uncorrectable memory error
         \item[02h] - Parity error
         \item[03h] - Memory scrub failed, probably stuck bit
         \item[04h] - Memory device disabled
         \item[05h] - Reached log limit for correctable memory errors
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 DRIVE\_SLOT & \\
 \hline
 POWER\_MEMORY \_RESIZE & \\
 \hline
-SYSTEM \_FIRMWARE \_PROGRESS &  Information about the system firmware (BIOS).
+SYSTEM\_FIRMWARE \_PROGRESS &  Information about the system firmware (BIOS).
         In an event, the event data 2 may give further information about
         the error.  See section~\ref{sec-event-data-info-for-events} for
         more info.
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - System firmware error (power-on-self-test error)
         \item[01h] - System firmware hang
         \item[02h] - System firmware progress
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-EVENT \_LOGGING \_DISABLED & 
-        \begin{description}
+EVENT\_LOGGING \_DISABLED & 
+        \begin{tightdefs}
         \item[00h] - Correctable memory error logging disabled
         \item[01h] - Event logging has been disabled for the sensor
           specified in the event information.  In an event, event data
@@ -5994,11 +6126,11 @@ EVENT \_LOGGING \_DISABLED &
           section~\ref{sec-event-data-info-for-events} for more info.
         \item[02h] - Log area cleared
         \item[03h] - All event logging disabled
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 WATCHDOG\_1 & This is for IPMI version 0.9 and old 1.0 only.  Later 1.0 and
         newer specs use the watchdog 2 sensor type.
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - BIOS watchdog reset
         \item[01h] - OS watchdog reset
         \item[02h] - OS watchdog shutdown
@@ -6007,10 +6139,10 @@ WATCHDOG\_1 & This is for IPMI version 0.9 and old 1.0 only.  Later 1.0 and
         \item[05h] - OS watchdog NMI or diagnostic interrupt
         \item[06h] - OS watchdog expired, status only
         \item[07h] - OS watchdog pre-timeout interrupt, not NMI
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 SYSTEM\_EVENT & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - System reconfigured
         \item[01h] - OEM system boot event
         \item[02h] - Undetermined system hardware failure
@@ -6020,10 +6152,10 @@ SYSTEM\_EVENT &
         \item[04h] - PEF action.  In an event, event data provides
           more information about the event, see
           section~\ref{sec-event-data-info-for-events} for more info.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 CRITICAL\_INTERRUPT &
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Front panel NMI/Diagnostic interrupt
         \item[01h] - Bus timeout
         \item[02h] - I/O channel check NMI
@@ -6034,18 +6166,18 @@ CRITICAL\_INTERRUPT &
         \item[07h] - Bus correctable error
         \item[08h] - Bus uncorrectable error
         \item[09h] - Fatal NMI (port 61h, bit 7)
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 BUTTON & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Power button pressed
         \item[01h] - Sleep button pressed
         \item[02h] - Reset button pressed
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 MODULE\_BOARD & \\
 \hline
-MICROCONTROLLER\_COPROCESSOR & \\
+MICROCONTROLLER \_COPROCESSOR & \\
 \hline
 ADD\_IN\_CARD & \\
 \hline
@@ -6059,26 +6191,26 @@ CABLE\_INTERCONNECT & \\
 \hline
 TERMINATOR & \\
 \hline
-SYSTEM\_BOOT\_INITIATED &
-        \begin{description}
+SYSTEM\_BOOT \_INITIATED &
+        \begin{tightdefs}
         \item[00h] - Power up
         \item[01h] - Hard reset
         \item[02h] - Warm reset
         \item[03h] - User requested PXE boot
         \item[04h] - Automatic boot to diagnostic
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 BOOT\_ERROR & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - No bootable media
         \item[01h] - Non-bootable disk in drive
         \item[02h] - PXE server not found
         \item[03h] - Invalid boot sector
         \item[04h] - Timeout waiting for user selection of boot source
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 OS\_BOOT & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - A: boot completed
         \item[00h] - C: boot completed
         \item[00h] - PXE boot completed
@@ -6086,19 +6218,19 @@ OS\_BOOT &
         \item[00h] - CDROM boot completed
         \item[00h] - ROM boot completed
         \item[00h] - Boot completed, boot device not specified
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-OS\_CRITICAL\_STOP & 
-        \begin{description}
+OS\_CRITICAL\_STOP &%
+        \begin{tightdefs}
         \item[00h] - Stop during OS load or initialization
         \item[01h] - Stop during OS operation
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 SLOT\_CONNECTOR & Note that ready for installation, ready for removal, and
         power states can transition together.  In an event, event data provides
         more information about the event, see
         section~\ref{sec-event-data-info-for-events} for more info.
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Fault status
         \item[01h] - Identify status
         \item[02h] - Device installed (includes doc events)
@@ -6112,10 +6244,10 @@ SLOT\_CONNECTOR & Note that ready for installation, ready for removal, and
           that disables power to the slot.  Assertion means that the
           disable is active.
         \item[08h] - Slot is disabled.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-SYSTEM\_ACPI\_POWER\_STATE & 
-        \begin{description}
+SYSTEM\_ACPI \_POWER\_STATE & 
+        \begin{tightdefs}
         \item[00h] - S0/G0 ``Working''
         \item[01h] - S1 ``Sleeping, system h/w and processor
           context maintained''
@@ -6134,59 +6266,59 @@ SYSTEM\_ACPI\_POWER\_STATE &
         \item[0Bh] - Legacy on state
         \item[0Ch] - Legacy off state
         \item[0Eh] - Unknown
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 WATCHDOG\_2 & This is for newer IPMI 1.0 systems and later specs.  In an
         event, event data provides more information about the event, see
         section~\ref{sec-event-data-info-for-events} for more info.
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Timer expired, status only, no action
         \item[01h] - Hard reset
         \item[02h] - Power down
         \item[03h] - Power cycle
         \item[08h] - Timer interrupts.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 PLATFORM\_ALERT & Used for monitoring the platform management firmware,
         status can be fetched and events generated on platform management
         actions.
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Page sent
         \item[01h] - LAN alert sent
         \item[02h] - Event trap sent per IPMI PET specification
         \item[03h] - Event trap sent using OEM format
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 ENTITY\_PRESENCE & This is the sensor used to tell if an entity is present
         or not.  This applied to the entity the sensor is attached to.
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Entity is present
         \item[01h] - Entity is absent
         \item[02h] - Entity is present but disabled
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 MONITOR\_ASIC\_IC & \\
 \hline
 LAN & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - LAN heartbeat lost
         \item[01h] - LAN heartbeat present
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-MANAGEMENT\_SUBSYSTEM\_HEALTH & 
-        \begin{description}
+MANAGEMENT \_SUBSYSTEM\_HEALTH & 
+        \begin{tightdefs}
         \item[00h] - Sensor access degraded or unavailable
         \item[01h] - Controller access degraded or unavailable
         \item[02h] - Management controller offline
         \item[03h] - Management controller unavailable
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 BATTERY & 
-        \begin{description}
+        \begin{tightdefs}
         \item[00h] - Battery is low
         \item[01h] - Battery failed
         \item[02h] - Battery is present.
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 \end{longtable}
 
@@ -6448,15 +6580,15 @@ the sensor.  Just creating and setting the values doesn't do anything
 directly to the sensor; it must be sent.  To send them, use one of the
 following:
 \begin{verbatim}
-int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
+int ipmi_sensor_set_event_enables(ipmi_sensor_t         *sensor,
                                   ipmi_event_state_t    *states,
                                   ipmi_sensor_done_cb   done,
                                   void                  *cb_data);
-int ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+int ipmi_sensor_enable_events(ipmi_sensor_t         *sensor,
                               ipmi_event_state_t    *states,
                               ipmi_sensor_done_cb   done,
                               void                  *cb_data);
-int ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+int ipmi_sensor_disable_events(ipmi_sensor_t         *sensor,
                                ipmi_event_state_t    *states,
                                ipmi_sensor_done_cb   done,
                                void                  *cb_data);
@@ -6472,11 +6604,11 @@ to the values in the event state structure.
 
 To query the current event state settings, use the following function:
 \begin{verbatim}
-typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,
-                                          int                err,
-                                          ipmi_event_state_t *states,
-                                          void               *cb_data);
-int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
+typedef void (*ipmi_sensor_event_enables_cb)(ipmi_sensor_t      *sensor,
+                                             int                err,
+                                             ipmi_event_state_t *states,
+                                             void               *cb_data);
+int ipmi_sensor_get_event_enables(ipmi_sensor_t             *sensor,
                                   ipmi_event_enables_get_cb done,
                                   void                      *cb_data);
 \end{verbatim}
@@ -6526,16 +6658,16 @@ can be set up for threshold sensors.
 \subsubsection{Threshold Sensor Readings in OpenIPMI}
 The reading of a threshold sensor is done with the following:
 \begin{verbatim}
-typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t             *sensor,
-                                     int                       err,
-                                     enum ipmi_value_present_e value_present,
-                                     unsigned int              raw_value,
-                                     double                    val,
-                                     ipmi_states_t             *states,
-                                     void                      *cb_data);
-int ipmi_reading_get(ipmi_sensor_t        *sensor,
-                     ipmi_reading_done_cb done,
-                     void                 *cb_data);
+typedef void (*ipmi_sensor_reading_cb)(ipmi_sensor_t             *sensor,
+                                       int                       err,
+                                       enum ipmi_value_present_e value_present,
+                                       unsigned int              raw_value,
+                                       double                    val,
+                                       ipmi_states_t             *states,
+                                       void                      *cb_data);
+int ipmi_sensor_get_reading(ipmi_sensor_t        *sensor,
+                            ipmi_reading_done_cb done,
+                            void                 *cb_data);
 \end{verbatim}
 
 Assuming there was no error, the \texttt{value\_present} field will be set
@@ -6611,14 +6743,14 @@ int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
                                    int                *val);
 \end{verbatim}
 The specific threshold values in the enumeration are:
-\begin{itemize}
+\begin{tightdefs}
 \item IPMI\_LOWER\_NON\_CRITICAL
 \item IPMI\_LOWER\_CRITICAL
 \item IPMI\_LOWER\_NON\_RECOVERABLE
 \item IPMI\_UPPER\_NON\_CRITICAL
 \item IPMI\_UPPER\_CRITICAL
 \item IPMI\_UPPER\_NON\_RECOVERABLE
-\end{itemize}
+\end{tightdefs}
 The function
 \begin{verbatim}
 char *ipmi_get_threshold_string(enum ipmi_thresh_e val);
@@ -6665,20 +6797,20 @@ affect the actual sensor until you send the thresholds to the sensor.
 
 To send a set of thresholds to a sensor, use the following function:
 \begin{verbatim}
-int ipmi_thresholds_set(ipmi_sensor_t       *sensor,
-                        ipmi_thresholds_t   *thresholds,
-                        ipmi_sensor_done_cb done,
-                        void                *cb_data);
+int ipmi_sensor_set_thresholds(ipmi_sensor_t       *sensor,
+                               ipmi_thresholds_t   *thresholds,
+                               ipmi_sensor_done_cb done,
+                               void                *cb_data);
 \end{verbatim}
 To get the current threshold settings of a sensor, use:
 \begin{verbatim}
-typedef void (*ipmi_thresh_get_cb)(ipmi_sensor_t     *sensor,
-                                   int               err,
-                                   ipmi_thresholds_t *th,
-                                   void              *cb_data);
-int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
-                        ipmi_thresh_get_cb done,
-                        void               *cb_data);
+typedef void (*ipmi_sensor_thresholds_cb)(ipmi_sensor_t     *sensor,
+                                          int               err,
+                                          ipmi_thresholds_t *th,
+                                          void              *cb_data);
+int ipmi_sensor_get_thresholds(ipmi_sensor_t      *sensor,
+                               ipmi_thresh_get_cb done,
+                               void               *cb_data);
 \end{verbatim}
 
 To find out which thresholds support events, the following can be used
@@ -6693,16 +6825,16 @@ int ipmi_sensor_threshold_event_supported(
 \end{verbatim}
 The \texttt{value\_dir} parameter specifies if the ``going low'' or ``going
 high'' events are being queried.  Value for this are:
-\begin{itemize}
+\begin{tightdefs}
 \item IPMI\_GOING\_LOW
 \item IPMI\_GOING\_HIGH
-\end{itemize}
+\end{tightdefs}
 The \texttt{dir} parameter specifies if the ``assertion'' or ``deassertion''
  events are being queried.  Value for this are:
-\begin{itemize}
+\begin{tightdefs}
 \item IPMI\_ASSERTION
 \item IPMI\_DEASSERTION
-\end{itemize}
+\end{tightdefs}
 Using these, all the thresholds and directions may be iterated through
 to find out what the sensor supports.  The functions
 \begin{verbatim}
@@ -6809,13 +6941,13 @@ printf("  value: %lf%s %s%s%s%s\n", val, percent,
 \end{verbatim}
 
 The modifier units uses in OpenIPMI are:
-\begin{itemize}
+\begin{tightdefs}
 \item IPMI\_MODIFIER\_UNIT\_NONE
 \item IPMI\_MODIFIER\_UNIT\_BASE\_DIV\_MOD
 \item IPMI\_MODIFIER\_UNIT\_BASE\_MULT\_MOD
-\end{itemize}
+\end{tightdefs}
 The rate units are:
-\begin{itemize}
+\begin{tightdefs}
 \item IPMI\_RATE\_UNIT\_NONE
 \item IPMI\_RATE\_UNIT\_PER\_US
 \item IPMI\_RATE\_UNIT\_PER\_MS
@@ -6823,9 +6955,9 @@ The rate units are:
 \item IPMI\_RATE\_UNIT\_MIN
 \item IPMI\_RATE\_UNIT\_HOUR
 \item IPMI\_RATE\_UNIT\_DAY
-\end{itemize}
+\end{tightdefs}
 The normal units are:
-\begin{itemize}
+\begin{tightdefs}
 \item IPMI\_UNIT\_TYPE\_UNSPECIFIED
 \item IPMI\_UNIT\_TYPE\_DEGREES\_C
 \item IPMI\_UNIT\_TYPE\_DEGREES\_F
@@ -6917,7 +7049,9 @@ The normal units are:
 \item IPMI\_UNIT\_TYPE\_ERRORS
 \item IPMI\_UNIT\_TYPE\_CORRECTABLE\_ERRORS
 \item IPMI\_UNIT\_TYPE\_UNCORRECTABLE\_ERRORS
-\end{itemize}
+\item IPMI\_UNIT\_TYPE\_FATAL\_ERRORS
+\item IPMI\_UNIT\_TYPE\_GRAMS
+\end{tightdefs}
 The meanings of these values are not defined by the spec, but should
 be fairly obvious.
 
@@ -6969,20 +7103,20 @@ int ipmi_sensor_get_negative_going_threshold_hysteresis(ipmi_sensor_t *sensor);
 To fetch and set the current threshold values for a sensor (assuming
 it support these operations), use:
 \begin{verbatim}
-typedef void (*ipmi_hysteresis_get_cb)(ipmi_sensor_t *sensor,
-				       int           err,
-				       unsigned int  positive_hysteresis,
-				       unsigned int  negative_hysteresis,
-				       void          *cb_data);
+typedef void (*ipmi_sensor__hysteresis_cb)(ipmi_sensor_t *sensor,
+                                           int           err,
+                                           unsigned int  positive_hysteresis,
+                                           unsigned int  negative_hysteresis,
+                                           void          *cb_data);
 int ipmi_sensor_get_hysteresis(ipmi_sensor_t           *sensor,
-			       ipmi_hysteresis_get_cb done,
-			       void                   *cb_data);
+                               ipmi_hysteresis_get_cb done,
+                               void                   *cb_data);
 
 int ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
-			       unsigned int        positive_hysteresis,
-			       unsigned int        negative_hysteresis,
-			       ipmi_sensor_done_cb done,
-			       void                *cb_data);
+                               unsigned int        positive_hysteresis,
+                               unsigned int        negative_hysteresis,
+                               ipmi_sensor_done_cb done,
+                               void                *cb_data);
 \end{verbatim}
 
 \subsubsection{Threshold Sensor Reading Information in OpenIPMI}
@@ -7032,13 +7166,13 @@ together to represent multi-bit values.
 
 To read the value of a discrete sensor, use the following:
 \begin{verbatim}
-typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
-                                    int           err,
-                                    ipmi_states_t *states,
-                                    void          *cb_data);
-int ipmi_states_get(ipmi_sensor_t       *sensor,
-                    ipmi_states_read_cb done,
-                    void                *cb_data);
+typedef void (*ipmi_sensor_states_cb)(ipmi_sensor_t *sensor,
+                                      int           err,
+                                      ipmi_states_t *states,
+                                      void          *cb_data);
+int ipmi_sensor_get_states(ipmi_sensor_t       *sensor,
+                           ipmi_states_read_cb done,
+                           void                *cb_data);
 \end{verbatim}
 
 The values are returned in the states object.  To know if a specific
@@ -7270,7 +7404,7 @@ int ipmi_control_light_set_with_setting(ipmi_control_t *control);
 
 Lights can be different colors, and the interface allows the supported
 colors to be check and set.  The supported colors are:
-\begin{itemize}
+\begin{tightdefs}
 \item IPMI\_CONTROL\_COLOR\_BLACK
 \item IPMI\_CONTROL\_COLOR\_WHITE
 \item IPMI\_CONTROL\_COLOR\_RED
@@ -7278,7 +7412,7 @@ colors to be check and set.  The supported colors are:
 \item IPMI\_CONTROL\_COLOR\_BLUE
 \item IPMI\_CONTROL\_COLOR\_YELLOW
 \item IPMI\_CONTROL\_COLOR\_ORANGE
-\end{itemize}
+\end{tightdefs}
 
 \subsubsection{Setting Light}
 
@@ -7472,7 +7606,8 @@ The \acs{IPMI} standard supports two basic controls if the system
 supports chassis control.  OpenIPMI automatically detects these and
 creates controls for them.  The controls created are created on the
 chassis entity id (id 23.1) and are named:
-\begin{tabularx}{\textwidth}{|l|X|}
+
+\noindent\begin{tabularx}{\textwidth}{|l|X|}
 \hline
 reset & A one-shot reset that can reset the processor in the chassis.\\
 \hline
@@ -7502,41 +7637,41 @@ OpenIPMI automatically sets the event receiver.
 \section{Event Data Information for Specific Events}
 \label{sec-event-data-info-for-events}
 
-\begin{longtable}{|p{0.27\textwidth}|l|p{0.85\textwidth}|}
+\begin{longtable}{|p{0.21\textwidth}|l|p{0.67\textwidth}|}
 \hline
 SYSTEM \_FIRMWARE \_PROGRESS & 00h &
-        \begin{description}
+        \begin{tightdefs}
         \item[] - 
-        \end{description}\\
+        \end{tightdefs}\\
  & 01h & Uses the same values as offset 00h.\\
  & 02h & 
-        \begin{description}
+        \begin{tightdefs}
         \item[] - 
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
-EVENT \_LOGGING \_DISABLED & 01h &
-        \begin{description}
+EVENT\_LOGGING \_DISABLED & 01h &
+        \begin{tightdefs}
         \item[] - 
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 SYSTEM\_EVENT & 03h &
-        \begin{description}
+        \begin{tightdefs}
         \item[] - 
-        \end{description}\\
+        \end{tightdefs}\\
  & 04h &
-        \begin{description}
+        \begin{tightdefs}
         \item[] - 
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 SLOT\_CONNECTOR & all &
-        \begin{description}
+        \begin{tightdefs}
         \item[] - 
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 WATCHDOG\_2 & all &
-        \begin{description}
+        \begin{tightdefs}
         \item[] - 
-        \end{description}\\
+        \end{tightdefs}\\
 \hline
 \end{longtable}
 
@@ -7597,21 +7732,21 @@ dynamic nature of an \ac{IPMI} system dynamically.
 IPMI uses a special format for storing strings.  It allows data two be
 stored in four different formats.  The first byte describes the type
 and length; the format is:
-\begin{description}
+\begin{tightdefs}
 \item[bits 0-4] - The number of bytes following this byte.  Note that
 this is \emph{not} the number of characters in the string, it is the
 number of bytes following.  The value of 11111b is reserved.
 \item[bit 5] - reserved
 \item[bits 6-7] - The string type.  Valid values are:
-  \begin{description}
+  \begin{tightdefs}
   \item[00h] - Unicode
   \item[01h] - BCD plus
   \item[02h] - 6-bit ASCII, packed
   \item[03h] - 8-bit ASCII and Latin 1.  In this case, a length of one is
     reserved.  The length may be zero, or it may be from 2 to 30, but may
     not be 1.
-  \end{description}
-\end{description}
+  \end{tightdefs}
+\end{tightdefs}
 
 The values and packing are defined in the IPMI spec.
 
@@ -7667,14 +7802,14 @@ entity 12.1 (Alarm Panel) and will be named ``alarm''.  It takes an
 7 &  Reserved, always write 1\\
 \hline
 6 &  LED colors, 1 = amber (default), 0 = red.  Note that the colors were
-	added in some later firmware versions, not in all, and the
-	colors may not affect all LEDs.\\
+        added in some later firmware versions, not in all, and the
+        colors may not affect all LEDs.\\
 \hline
 5 & Minor Relay bit, 0 = on, 1=off.  This is a read only bit and should
-	always be written 1.\\
+        always be written 1.\\
 \hline
 4 & Major Relay bit, 0 = on, 1=off.  This is a read only bit and should
-	always be written 1.\\
+        always be written 1.\\
 \hline
 3 & Minor LED bit, 0 = on, 1=off\\
 \hline

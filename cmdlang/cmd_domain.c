@@ -129,7 +129,7 @@ domain_new_done(ipmi_domain_t *domain,
     domain_con_change(domain, err, conn_num, port_num, still_connected,
 		      NULL);
 
-    if (!rv)
+    if ((!rv) && cmd_info)
 	/* If we get an error removing the connect change handler,
 	   that means this has already been done. */
 	ipmi_cmdlang_cmd_info_put(cmd_info);
@@ -138,10 +138,11 @@ domain_new_done(ipmi_domain_t *domain,
 void
 domain_fully_up(ipmi_domain_t *domain, void *cb_data)
 {
+    ipmi_cmd_info_t *cmd_info = cb_data;
     char            *errstr = NULL;
     int             rv = 0;
     ipmi_cmd_info_t *evi;
-    char domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
@@ -164,6 +165,9 @@ domain_fully_up(ipmi_domain_t *domain, void *cb_data)
     }
     if (evi)
 	ipmi_cmdlang_cmd_info_put(evi);
+
+    if (cmd_info)
+	ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
 static void
@@ -181,6 +185,9 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     char           **argv = ipmi_cmdlang_get_argv(cmd_info);
     int            num_options = 0;
     ipmi_open_option_t options[10];
+    int            wait_til_up = 0;
+    void           *up_info = NULL;
+    void           *con_info = NULL;
 
     if (curr_arg >= argc) {
 	cmdlang->errstr = "No domain name entered";
@@ -199,47 +206,62 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 	if (strcmp(argv[curr_arg], "-noall") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_ALL;
 	    options[num_options].ival = 0;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-all") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_ALL;
 	    options[num_options].ival = 1;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-nosdrs") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_SDRS;
 	    options[num_options].ival = 0;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-sdrs") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_SDRS;
 	    options[num_options].ival = 1;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-nofrus") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
 	    options[num_options].ival = 0;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-frus") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
 	    options[num_options].ival = 1;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-nosel") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
 	    options[num_options].ival = 0;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-sel") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
 	    options[num_options].ival = 1;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-noipmbscan") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_IPMB_SCAN;
 	    options[num_options].ival = 0;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-ipmbscan") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_IPMB_SCAN;
 	    options[num_options].ival = 1;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-nooeminit") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_OEM_INIT;
 	    options[num_options].ival = 0;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-oeminit") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_OEM_INIT;
 	    options[num_options].ival = 1;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-noseteventrcvr") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
 	    options[num_options].ival = 0;
+	    num_options++;
 	} else if (strcmp(argv[curr_arg], "-seteventrcvr") == 0) {
 	    options[num_options].option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
 	    options[num_options].ival = 1;
+	    num_options++;
+	} else if (strcmp(argv[curr_arg], "-wait_til_up") == 0) {
+	    wait_til_up = 1;
 	}
-	num_options++;
 	curr_arg++;
     }
 
@@ -276,9 +298,14 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 	}
     }
 
+    if (wait_til_up)
+	up_info = cmd_info;
+    else
+	con_info = cmd_info;
+
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_open_domain(name, con, set, domain_new_done,
-			  cmd_info, domain_fully_up, NULL,
+    rv = ipmi_open_domain(name, con, set, domain_new_done, con_info,
+			  domain_fully_up, up_info,
 			  options, num_options, NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
@@ -978,12 +1005,15 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       ipmi_cmdlang_domain_handler, domain_info, NULL },
     { "new", &domain_cmds,
       "[<options>] <domain parms> - Set up a new domain.  Options enable"
-      " and disable various automitic processing and are: "
-      " -[no]all - all automatic handling, -[no]sdrs - sdr fetching,"
-      " -[no]frus - FRU fetching, -[no]sel - SEL fetching,"
-      " -[no]ipmbscan - IPMB bus scanning,"
-      " -[no]oeminit - special OEM processing (like ATCA),"
-      " -[no]seteventrcvr - setting event receivers.",
+      " and disable various automatic processing and are:\n"
+      "-[no]all - all automatic handling\n"
+      "-[no]sdrs - sdr fetching\n"
+      "-[no]frus - FRU fetching\n"
+      "-[no]sel - SEL fetching\n"
+      "-[no]ipmbscan - IPMB bus scanning\n"
+      "-[no]oeminit - special OEM processing (like ATCA)\n"
+      "-[no]seteventrcvr - setting event receivers\n"
+      "-wait_til_up - wait until the domain is up before returning",
       domain_new, NULL, NULL },
     { "close", &domain_cmds,
       "<domain> - Close the domain",

@@ -1286,7 +1286,7 @@ ipmi_handle_snmp_trap_data(void            *src_addr,
 	dump_hex(src_addr, src_addr_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data is:\n  ");
 	dump_hex(data, data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
+	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
     if (data_len < 46)

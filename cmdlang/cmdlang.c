@@ -1113,8 +1113,10 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
     }
     if (strcmp(argv[curr_arg], "help") == 0) {
 	ipmi_cmdlang_cmd_t *parent = NULL;
+	int                old_help = cmdlang->help;
 	/* Help has special handling. */
 
+	cmdlang->help = 1;
 	curr_arg++;
 	for (;;) {
 	next_help:
@@ -1162,6 +1164,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	}
 
     done_help:
+	cmdlang->help = old_help;
 	goto done;
     }	
 
@@ -1603,11 +1606,13 @@ ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmd_info_t *info)
 	return;
 
     if ((strcasecmp(str, "true") == 0)
+	|| (strcasecmp(str, "on") == 0)
 	|| (strcasecmp(str, "t") == 0)
 	|| (strcmp(str, "1") == 0))
     {
 	rv = 1;
     } else if ((strcasecmp(str, "false") == 0)
+	       || (strcasecmp(str, "off") == 0)
 	       || (strcasecmp(str, "f") == 0)
 	       || (strcmp(str, "0") == 0))
     {
@@ -2343,6 +2348,105 @@ ipmi_cmdinfo_get_cmdlang(ipmi_cmd_info_t *info)
     return info->cmdlang;
 }
 
+static void
+evinfo(ipmi_cmd_info_t *cmd_info)
+{
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int            curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int            argc = ipmi_cmdlang_get_argc(cmd_info);
+    char           **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int            do_evinfo;
+
+    if ((argc - curr_arg) < 1) {
+	cmdlang->errstr = "True or False not entered";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_bool(argv[curr_arg], &do_evinfo, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "True or False not entered";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_set_evinfo(do_evinfo);
+    return;
+
+ out_err:
+    cmdlang->location = "cmdlang.c(evinfo)";
+}
+
+static void
+debug(ipmi_cmd_info_t *cmd_info)
+{
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int            curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int            argc = ipmi_cmdlang_get_argc(cmd_info);
+    char           **argv = ipmi_cmdlang_get_argv(cmd_info);
+    char           *type;
+    int            val;
+
+    if ((argc - curr_arg) < 2) {
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    type = argv[curr_arg];
+    curr_arg++;
+
+    ipmi_cmdlang_get_bool(argv[curr_arg], &val, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "Invalid boolean setting";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    if (strcmp(type, "msg") == 0) {
+	if (val) DEBUG_MSG_ENABLE(); else DEBUG_MSG_DISABLE();
+    } else if (strcmp(type, "rawmsg") == 0) {
+	if (val) DEBUG_RAWMSG_ENABLE(); else DEBUG_RAWMSG_DISABLE();
+    } else if (strcmp(type, "locks") == 0) {
+	if (val) DEBUG_LOCKS_ENABLE(); else DEBUG_LOCKS_DISABLE();
+    } else if (strcmp(type, "events") == 0) {
+	if (val) DEBUG_EVENTS_ENABLE(); else DEBUG_EVENTS_DISABLE();
+    } else if (strcmp(type, "con0") == 0) {
+	if (val) DEBUG_CON_FAIL_ENABLE(0); else DEBUG_CON_FAIL_DISABLE(0);
+    } else if (strcmp(type, "con1") == 0) {
+	if (val) DEBUG_CON_FAIL_ENABLE(1); else DEBUG_CON_FAIL_DISABLE(1);
+    } else if (strcmp(type, "con2") == 0) {
+	if (val) DEBUG_CON_FAIL_ENABLE(2); else DEBUG_CON_FAIL_DISABLE(2);
+    } else if (strcmp(type, "con3") == 0) {
+	if (val) DEBUG_CON_FAIL_ENABLE(3); else DEBUG_CON_FAIL_DISABLE(3);
+    } else {
+	cmdlang->errstr = "Invalid debug setting";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+    return;
+
+ out_err:
+    if (cmdlang->err)
+	cmdlang->location = "cmdlang.c(debug)";
+}
+
+static ipmi_cmdlang_init_t cmds_global[] =
+{
+    { "evinfo", NULL,
+      "true | false - Enable/disable printing info about the object"
+      " when an event is reported on it (such as entity info, domain"
+      " info, etc.)",
+      evinfo, NULL, NULL },
+    { "debug", NULL,
+      "<type> true | false - "
+      " Turn on/off the specific debugging.  The debugging types are:"
+      " msg, rawmsg, events, con0, con1, con2, con3.  This is primarily"
+      " for designers of OpenIPMI trying to debug problems.",
+      debug, NULL, NULL },
+};
+#define CMDS_GLOBAL_LEN (sizeof(cmds_global)/sizeof(ipmi_cmdlang_init_t))
+
 int ipmi_cmdlang_domain_init(void);
 int ipmi_cmdlang_con_init(void);
 int ipmi_cmdlang_entity_init(void);
@@ -2389,6 +2493,9 @@ ipmi_cmdlang_init(void)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_sel_init();
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_reg_table(cmds_global, CMDS_GLOBAL_LEN);
     if (rv) return rv;
 
     return 0;

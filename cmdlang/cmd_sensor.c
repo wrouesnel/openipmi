@@ -1326,7 +1326,7 @@ static ipmi_cmdlang_cmd_t *sensor_cmds;
 static ipmi_cmdlang_init_t cmds_sensor[] =
 {
     { "sensor", NULL,
-      "Commands dealing with sensors",
+      "- Commands dealing with sensors",
       NULL, NULL, &sensor_cmds },
     { "list", &sensor_cmds,
       "- List all the entities in the system",

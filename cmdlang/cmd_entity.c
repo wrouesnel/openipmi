@@ -911,7 +911,7 @@ static ipmi_cmdlang_cmd_t *entity_cmds, *hs_cmds;
 static ipmi_cmdlang_init_t cmds_entity[] =
 {
     { "entity", NULL,
-      "Commands dealing with entities",
+      "- Commands dealing with entities",
       NULL, NULL, &entity_cmds },
     { "list", &entity_cmds,
       "- List all the entities in the system",
