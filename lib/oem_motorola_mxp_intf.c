@@ -2383,39 +2383,40 @@ static ll_ipmi_t lan_ll_ipmi =
 };
 
 static void
+cleanup_lan(lan_data_t *lan, os_handler_t *handlers)
+{
+    ipmi_write_lock();
+    if (lan->next)
+	lan->next->prev = lan->prev;
+    if (lan->prev)
+	lan->prev->next = lan->next;
+    else
+	lan_list = lan->next;
+    ipmi_write_unlock();
+
+    if (lan->msg_queue_lock)
+	ipmi_destroy_lock(lan->msg_queue_lock);
+    if (lan->seq_num_lock)
+	ipmi_destroy_lock(lan->seq_num_lock);
+    if (lan->fd != -1)
+	close(lan->fd);
+    if (lan->fd_wait_id)
+	handlers->remove_fd_to_wait_for(handlers, lan->fd_wait_id);
+    if (lan->authdata)
+	ipmi_auths[lan->authtype].authcode_cleanup(lan->authdata);
+    ipmi_mem_free(lan);
+}
+
+static void
 cleanup_con(ipmi_con_t *ipmi)
 {
     lan_data_t   *lan = (lan_data_t *) ipmi->con_data;
     os_handler_t *handlers = ipmi->os_hnd;
 
-    if (ipmi) {
-	ipmi_mem_free(ipmi);
-    }
+    ipmi_mem_free(ipmi);
 
-    if (lan) {
-	lan = (lan_data_t *) ipmi->con_data;
-
-	ipmi_write_lock();
-	if (lan->next)
-	    lan->next->prev = lan->prev;
-	if (lan->prev)
-	    lan->prev->next = lan->next;
-	else
-	    lan_list = lan->next;
-	ipmi_write_unlock();
-
-	if (lan->msg_queue_lock)
-	    ipmi_destroy_lock(lan->msg_queue_lock);
-	if (lan->seq_num_lock)
-	    ipmi_destroy_lock(lan->seq_num_lock);
-	if (lan->fd != -1)
-	    close(lan->fd);
-	if (lan->fd_wait_id)
-	    handlers->remove_fd_to_wait_for(handlers, lan->fd_wait_id);
-	if (lan->authdata)
-	    ipmi_auths[lan->authtype].authcode_cleanup(lan->authdata);
-	ipmi_mem_free(lan);
-    }
+    if (lan)
+	cleanup_lan(lan, handlers);
 }
 
 static void
@@ -2531,6 +2532,9 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 			       lan->ipmb_addr_cb_data);
 }
 
+/* A hack, don't want this in include files. */
+void _ipmi_lan_set_ipmi(ipmi_con_t *ipmi);
+
 static void
 handle_dev_id(ipmi_con_t   *ipmi,
 	      ipmi_addr_t  *addr,
@@ -2561,6 +2565,54 @@ handle_dev_id(ipmi_con_t   *ipmi,
 		       | (msg->data[8] << 8)
 		       | (msg->data[9] << 16));
     product_id = msg->data[10] | (msg->data[11] << 8);
+
+    if ((manufacturer_id == 0x0000a1) && (product_id == 0x0004)
+	&& ((msg->data[3] & 0x7f) >= 5))
+    {
+	/* It's a new revision AMC that uses the standard LAN
+	   protocol, switch over to that. */
+	ipmi_con_t     *lancon;
+	struct in_addr ip_addr[MAX_IP_ADDR];
+	int	       port[MAX_IP_ADDR];
+	ipmi_con_t     oldcon;
+	int            i;
+
+	for (i=0; i<lan->num_ip_addr; i++) {
+	    ip_addr[i] = lan->ip_addr[i].sin_addr;
+	    port[i] = lan->ip_addr[i].sin_port;
+	}
+	err = ipmi_lan_setup_con(ip_addr, port, lan->num_ip_addr,
+				 lan->authtype, lan->privilege,
+				 lan->username, lan->username_len,
+				 lan->password, lan->password_len,
+				 ipmi->os_hnd, ipmi->user_data,
+				 &lancon);
+	if (err)
+	    goto out_err;
+
+	/* Make a copy of the previous data, just in case we get an
+	   error. */
+	memcpy(&oldcon, ipmi, sizeof(oldcon));
+
+	/* Switch our connection over to the new LAN one. */
+	memcpy(ipmi, lancon, sizeof(*ipmi));
+	_ipmi_lan_set_ipmi(ipmi);
+	ipmi->set_con_change_handler(ipmi, lan->con_change_handler,
+				     lan->con_change_cb_data);
+	ipmi->set_ipmb_addr_handler(ipmi, lan->ipmb_addr_handler,
+				    lan->ipmb_addr_cb_data);
+	err = ipmi->start_con(ipmi);
+	if (err) {
+	    memcpy(ipmi, &oldcon, sizeof(*ipmi));
+	    lancon->close_connection(lancon);
+	    goto out_err;
+	}
+
+	/* We successfully started the LAN connection, let it take
+	   over. */
+	cleanup_lan(lan, oldcon.os_hnd);
+	return;
+    }
 
     if (!lan->oem_conn_handlers_called) {
 	lan->oem_conn_handlers_called = 1;

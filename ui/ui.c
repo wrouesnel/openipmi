@@ -5312,7 +5312,7 @@ static struct {
     { "pet",		pet_cmd,
       " <ip addr> <mac_addr> <eft selector> <policy num> <apt selector>"
       " <lan dest selector> - "
-      "Set up the domain to send PET traps to the given IP/MAc address" },
+      "Set up the domain to send PET traps to the given IP/MAC address" },
     { "delevent",	delevent_cmd,
       " <channel> <mc num> <log number> - "
       "Delete the given event number from the SEL" },

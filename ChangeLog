@@ -1,4 +1,4 @@
-2004-01-09 Corey Minyard <cminyard@mvista.com> 
+2004-01-12 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/ipm_oem.h:
 	Added a mechanisms to fixup a sensor before anything is done with
@@ -6,6 +6,20 @@
 
 	* lib/oem_motorola_mxp.c: Added a fixup handler for AMC sensors to
 	set the entity instance properly.
+
+	* lib/oem_motorola_mxp.c: Converted over handling of semi-standard
+	sensors to use the standard sensor fetch mechanism, if possible.
+	Also added the AMC temperature sensor.
+
+	* doc/OpenIPMI.texi - Added a bunch of info on the new MXP
+	version.
+
+	* lib/oem_motorola_mxp_intf.c: Modified to startup up a standard
+	LAN connection if on a newer AMC.
+
+	* lib/sensor.c, include/OpenIPMI/ipmi_sensor.c: Added a send_lun
+	to the OEM sensors so they can use the normal sensor code for
+	things that are standard.
 
 2004-01-09 Corey Minyard <cminyard@mvista.com> 
 	* include/OpenIPMI/ipmi_bits.h, ui/ui.c, lib/strings.c: Added

@@ -1197,7 +1197,8 @@ mxp_finish_sensor(ipmi_mc_t     *mc,
     int rv;
 
     /* Add it to the MC and entity. */
-    rv = ipmi_sensor_add_nonstandard(mc, mc, sensor, num, entity, NULL, NULL);
+    rv = ipmi_sensor_add_nonstandard(mc, mc, sensor, num, 0, entity,
+				     NULL, NULL);
     if (rv) {
 	void *hdr;
         hdr = ipmi_sensor_get_oem_info(sensor);

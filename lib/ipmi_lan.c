@@ -1328,13 +1328,13 @@ data_handler(int            fd,
     {
 	/* It's a response to a sent message. */
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) &addr;
-	ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *)&lan->seq_table[seq].addr;
+	ipmi_ipmb_addr_t *ipmb2 =(ipmi_ipmb_addr_t *)&lan->seq_table[seq].addr;
 
 	/* FIXME - this entire thing is a cheap hack. */
 	if (tmsg[6] != 0) {
 	    /* Got an error from the send message.  We don't have any
                IPMB information to work with, so just extract it from
-               the message. */
+               the original message. */
 	    memcpy(ipmb_addr, ipmb2, sizeof(*ipmb_addr));
 	    /* Just in case it's a broadcast. */
 	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
@@ -2759,4 +2759,14 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
  out_err:
     cleanup_con(ipmi);
     return rv;
+}
+
+/* This is a hack of a function so the MXP code can switch the
+   connection over properly. */
+void
+_ipmi_lan_set_ipmi(ipmi_con_t *ipmi)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    lan->ipmi = ipmi;
 }

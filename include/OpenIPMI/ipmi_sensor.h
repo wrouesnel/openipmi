@@ -77,6 +77,7 @@ int ipmi_sensor_add_nonstandard(
     ipmi_mc_t              *source_mc,
     ipmi_sensor_t          *sensor,
     unsigned int           num,
+    unsigned int           send_lun,
     ipmi_entity_t          *ent,
     ipmi_sensor_destroy_cb destroy_handler,
     void                   *destroy_handler_cb_data);

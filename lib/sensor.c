@@ -88,6 +88,10 @@ struct ipmi_sensor_s
     unsigned char lun;
     unsigned char num;
 
+    /* For OEM sensors, the sending LUN might be different that the
+       LUN we use for storage. */
+    unsigned char send_lun;
+
     unsigned char entity_id;
     unsigned char entity_instance;
 
@@ -575,6 +579,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 			    ipmi_mc_t              *source_mc,
 			    ipmi_sensor_t          *sensor,
 			    unsigned int           num,
+			    unsigned int           send_lun,
 			    ipmi_entity_t          *ent,
 			    ipmi_sensor_destroy_cb destroy_handler,
 			    void                   *destroy_handler_cb_data)
@@ -629,6 +634,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     sensor->mc = mc;
     sensor->source_mc = source_mc;
     sensor->lun = 4;
+    sensor->send_lun = send_lun;
     sensor->num = num;
     sensor->source_idx = -1;
     sensor->source_array = NULL;
@@ -784,6 +790,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	s[p]->owner = sdr.data[0];
 	s[p]->channel = sdr.data[1] >> 4;
 	s[p]->lun = sdr.data[1] & 0x03;
+	s[p]->send_lun = s[p]->lun;
 	s[p]->num = sdr.data[2];
 	s[p]->entity_id = sdr.data[3];
 	s[p]->entity_instance_logical = sdr.data[4] >> 7;
@@ -2713,7 +2720,7 @@ enables_set(ipmi_sensor_t *sensor,
 	cmd_data[3] = ~(info->state.__assertion_events >> 8);
 	cmd_data[4] = ~(info->state.__deassertion_events & 0xff);
 	cmd_data[5] = ~(info->state.__deassertion_events >> 8);
-	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				      &cmd_msg, disables_set,
 				      &(info->sdata), info);
 	if (rv) {
@@ -2765,7 +2772,7 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
            status to the sensor. */
 	cmd_data[1] = info->state.status & 0xc0;
 	cmd_msg.data_len = 2;
-	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				      &cmd_msg, disables_set, &(info->sdata),
 				      info);
     } else if (info->do_enable) {
@@ -2783,7 +2790,7 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	cmd_data[4] = info->state.__deassertion_events & 0xff;
 	cmd_data[5] = info->state.__deassertion_events >> 8;
 	cmd_msg.data_len = 6;
-	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				      &cmd_msg, enables_set, &(info->sdata),
 				      info);
     } else {
@@ -2793,7 +2800,7 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	cmd_data[3] = info->state.__assertion_events >> 8;
 	cmd_data[4] = info->state.__deassertion_events & 0xff;
 	cmd_data[5] = info->state.__deassertion_events >> 8;
-	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				      &cmd_msg, disables_set,
 				      &(info->sdata), info);
     }
@@ -3006,7 +3013,7 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_msg.data_len = 1;
     cmd_msg.data = cmd_data;
     cmd_data[0] = sensor->num;
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				  &cmd_msg, enables_get, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -3119,7 +3126,7 @@ sensor_rearm_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	cmd_data[4] = info->state.__deassertion_events & 0xff;
 	cmd_data[5] = info->state.__deassertion_events >> 8;
     }
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				  &cmd_msg, sensor_rearm,
 				  &(info->sdata), info);
     if (rv) {
@@ -3233,7 +3240,7 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_msg.data = cmd_data;
     cmd_data[0] = sensor->num;
     cmd_data[1] = 0xff;
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				  &cmd_msg, hyst_get, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -3343,7 +3350,7 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_data[1] = 0xff;
     cmd_data[2] = info->positive;
     cmd_data[3] = info->negative;
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				  &cmd_msg, hyst_set, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -3516,7 +3523,7 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_msg.data_len = 1;
     cmd_msg.data = cmd_data;
     cmd_data[0] = sensor->num;
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				  &cmd_msg, thresh_get, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -3642,7 +3649,7 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	}
     }
 
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				  &cmd_msg, thresh_set, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -3799,7 +3806,7 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_msg.data_len = 1;
     cmd_msg.data = cmd_data;
     cmd_data[0] = sensor->num;
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				  &cmd_msg, reading_get,
 				  &(info->sdata), info);
     if (rv) {
@@ -3917,7 +3924,7 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_msg.data_len = 1;
     cmd_msg.data = cmd_data;
     cmd_data[0] = sensor->num;
-    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->lun,
+    rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				  &cmd_msg, states_get,
 				  &(info->sdata), info);
     if (rv) {
