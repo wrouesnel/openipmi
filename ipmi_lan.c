@@ -649,7 +649,7 @@ data_handler(int            fd,
     
     ipmi_lock(lan->seq_num_lock);
     if (lan->seq_table[seq].rsp_handler == NULL)
-	goto out_unlock2;
+	goto out_unlock;
 
     /* Validate that this response if for this command. */
     if (((lan->seq_table[seq].msg.netfn | 1) != msg.netfn)
@@ -657,7 +657,7 @@ data_handler(int            fd,
 	|| (! ipmi_addr_equal(&(lan->seq_table[seq].addr),
 			      lan->seq_table[seq].addr_len,
 			      &addr, addr_len)))
-	goto out_unlock2;
+	goto out_unlock;
 
     /* The command matches up, cancel the timer and deliver it */
     rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd, lan->seq_table[seq].timer);
@@ -674,6 +674,7 @@ data_handler(int            fd,
     data2 = lan->seq_table[seq].data2;
     data3 = lan->seq_table[seq].data3;
     lan->seq_table[seq].rsp_handler = NULL;
+ out_unlock:
     ipmi_unlock(lan->seq_num_lock);
 
     handler(ipmi, &addr, addr_len, &msg, rsp_data, data2, data3);
