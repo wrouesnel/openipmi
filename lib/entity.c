@@ -2876,6 +2876,17 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 			     "%sentity.c(ipmi_entity_scan_sdrs):"
 			     " Could not add MC for MCDLR or FRUDLR,"
 			     " error %x", ENTITY_NAME(found->ent), rv);
+		} else if (found->ent->frudev_present) {
+		    if (found->ent->frudev_mc != mc) {
+			ipmi_log(IPMI_LOG_WARNING,
+				 "%sentity.c(ipmi_entity_scan_sdrs):"
+				 " Entity has two different MCs in"
+				 " different SDRs, only using the first"
+				 " for presence.  MCs are %s and %s",
+				 ENTITY_NAME(found->ent),
+				 MC_NAME(found->ent->frudev_mc),
+				 MC_NAME(mc));
+		    }
 		} else {
 		    rv = ipmi_mc_add_active_handler(mc,
 						    entity_mc_active,

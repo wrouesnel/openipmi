@@ -13,6 +13,9 @@
 
 	* doc/OpenIPMI.texi: Added some docs on ATCA.
 
+	* lib/entity.c: Added a check for duplicate FRU entries in the SDR
+	DLRs, in case there is one.
+
 2004-04-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start
