@@ -468,9 +468,16 @@ The command hierarchy is:
        .
        .
 
-  * delevent <mc> <record #> - Delete the given event number from the SEL
+  * delevent <mc> <record #> - Delete the given event number from the
+    SEL
+
   * addevent <mc> <record id> <type> <13 bytes of data> - Add the
     event data to the SEL.
+    Response is:
+    MC
+      Name: <mc>
+      Record ID: <integer>
+
   * clear <domain> - clear the system event log
 
 * con
