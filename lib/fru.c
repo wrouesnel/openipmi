@@ -195,27 +195,28 @@ static int
 fru_decode_string(unsigned char **in,
 		  unsigned int  *in_len,
 		  int           lang_code,
+		  int           force_english,
 		  fru_string_t  *out)
 {
     unsigned char str[IPMI_MAX_STR_LEN+1];
-    int           force_unicode = lang_code != IPMI_LANG_CODE_ENGLISH;
+    int           force_unicode;
     unsigned int  skip = **in & 0x3f;
 
+    force_unicode = !force_english && (lang_code != IPMI_LANG_CODE_ENGLISH);
     out->length = ipmi_get_device_string(*in, *in_len, str, force_unicode,
 					 &out->type, sizeof(str));
 
     *in += skip+1;
     in_len -= skip+1;
 
-    if (out->length != 0)
+    if (out->length != 0) {
 	out->str = ipmi_mem_alloc(out->length);
-    else
+	if (!out->str)
+	    return ENOMEM;
+	memcpy(out->str, str, out->length);
+    } else {
 	out->str = NULL;
-
-    if (!out->str)
-	return ENOMEM;
-
-    memcpy(out->str, str, out->length);
+    }
     return 0;
 }
 
@@ -291,7 +292,7 @@ fru_decode_variable_string(unsigned char  **in,
 	v->len = n_len;
     }
 
-    err = fru_decode_string(in, in_len, lang_code, &v->strings[v->next]);
+    err = fru_decode_string(in, in_len, lang_code, 0, &v->strings[v->next]);
     if (!err)
 	v->next++;
     return err;
@@ -386,9 +387,9 @@ fru_record_free(ipmi_fru_record_t *rec)
  *
  **********************************************************************/
 
-#define HANDLE_STR_DECODE(fname) \
+#define HANDLE_STR_DECODE(fname, force_english) \
     err = fru_decode_string(&data, &data_len, u->lang_code,	\
-			    &u->fname);				\
+			    force_english, &u->fname);		\
     if (err)							\
 	goto out_err
 
@@ -406,11 +407,15 @@ do {									\
 #define GET_DATA_PREFIX(lcname, ucname) \
     ipmi_fru_ ## lcname ## _area_t *u;				\
     fru_lock(fru);						\
-    if (!fru->lcname)						\
+    if (!fru->lcname) {						\
+	fru_unlock(fru);					\
 	return ENOSYS;						\
+    }								\
     u = fru_record_get_data(fru->lcname);			\
-    if (fru->lcname->type != IPMI_FRU_FTR_## ucname ## _AREA)	\
+    if (fru->lcname->type != IPMI_FRU_FTR_## ucname ## _AREA) {	\
+	fru_unlock(fru);					\
 	return EINVAL;						\
+    }
 
 #define GET_DATA_STR(lcname, ucname, fname) \
 int									\
@@ -418,6 +423,10 @@ ipmi_fru_get_ ## lcname ## _ ## fname ## _len(ipmi_fru_t   *fru,	\
 					      unsigned int *length)	\
 {									\
     GET_DATA_PREFIX(lcname, ucname);					\
+    if (!u->fname.str) {						\
+	fru_unlock(fru);						\
+	return ENOSYS;							\
+    }									\
     *length = u->fname.length;						\
     fru_unlock(fru);							\
     return 0;								\
@@ -427,6 +436,10 @@ ipmi_fru_get_ ## lcname ## _ ## fname ## _type(ipmi_fru_t           *fru,\
 					       enum ipmi_str_type_e *type)\
 {									\
     GET_DATA_PREFIX(lcname, ucname);					\
+    if (!u->fname.str) {						\
+	fru_unlock(fru);						\
+	return ENOSYS;							\
+    }									\
     *type = u->fname.type;						\
     fru_unlock(fru);							\
     return 0;								\
@@ -646,7 +659,7 @@ fru_decode_chassis_info_area(unsigned char     *data,
 
     data_len--; /* remove the checksum */
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_INTERNAL_USE_AREA,
+    rec = fru_record_alloc(IPMI_FRU_FTR_CHASSIS_INFO_AREA,
 			   &chassis_info_handlers,
 			   sizeof(*u));
     if (!rec)
@@ -659,8 +672,8 @@ fru_decode_chassis_info_area(unsigned char     *data,
     u->type = *data;
     data++; data_len--;
     u->lang_code = IPMI_LANG_CODE_ENGLISH;
-    HANDLE_STR_DECODE(part_number);
-    HANDLE_STR_DECODE(serial_number);
+    HANDLE_STR_DECODE(part_number, 1);
+    HANDLE_STR_DECODE(serial_number, 1);
     HANDLE_CUSTOM_DECODE();
 
     *rrec = rec;
@@ -762,7 +775,7 @@ fru_decode_board_info_area(unsigned char     *data,
 
     data_len--; /* remove the checksum */
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_INTERNAL_USE_AREA,
+    rec = fru_record_alloc(IPMI_FRU_FTR_BOARD_INFO_AREA,
 			   &board_info_handlers,
 			   sizeof(*u));
     if (!rec)
@@ -773,17 +786,19 @@ fru_decode_board_info_area(unsigned char     *data,
     u->version = version;
     data += 2; data_len -= 2;
     u->lang_code = *data;
+    if (u->lang_code == 0)
+	u->lang_code = IPMI_LANG_CODE_ENGLISH;
     data++; data_len--;
 
     err = read_fru_time(&data, &data_len, &u->mfg_time);
     if (err)
 	goto out_err;
 
-    HANDLE_STR_DECODE(board_manufacturer);
-    HANDLE_STR_DECODE(board_product_name);
-    HANDLE_STR_DECODE(board_serial_number);
-    HANDLE_STR_DECODE(board_part_number);
-    HANDLE_STR_DECODE(fru_file_id);
+    HANDLE_STR_DECODE(board_manufacturer, 0);
+    HANDLE_STR_DECODE(board_product_name, 0);
+    HANDLE_STR_DECODE(board_serial_number, 1);
+    HANDLE_STR_DECODE(board_part_number, 1);
+    HANDLE_STR_DECODE(fru_file_id, 1);
     HANDLE_CUSTOM_DECODE();
 
     *rrec = rec;
@@ -809,8 +824,8 @@ ipmi_fru_get_board_info_version(ipmi_fru_t    *fru,
 }
 
 int 
-ipmi_fru_get_board_lang_code(ipmi_fru_t    *fru,
-			     unsigned char *type)
+ipmi_fru_get_board_info_lang_code(ipmi_fru_t    *fru,
+				  unsigned char *type)
 {
     GET_DATA_PREFIX(board_info, BOARD_INFO);
     
@@ -891,7 +906,7 @@ fru_decode_product_info_area(unsigned char     *data,
 
     data_len--; /* remove the checksum */
 
-    rec = fru_record_alloc(IPMI_FRU_FTR_INTERNAL_USE_AREA,
+    rec = fru_record_alloc(IPMI_FRU_FTR_PRODUCT_INFO_AREA,
 			   &product_info_handlers,
 			   sizeof(*u));
     if (!rec)
@@ -902,14 +917,16 @@ fru_decode_product_info_area(unsigned char     *data,
     u->version = version;
     data += 2; data_len -= 2;
     u->lang_code = *data;
+    if (u->lang_code == 0)
+	u->lang_code = IPMI_LANG_CODE_ENGLISH;
     data++; data_len--;
-    HANDLE_STR_DECODE(manufacturer_name);
-    HANDLE_STR_DECODE(product_name);
-    HANDLE_STR_DECODE(product_part_model_number);
-    HANDLE_STR_DECODE(product_version);
-    HANDLE_STR_DECODE(product_serial_number);
-    HANDLE_STR_DECODE(asset_tag);
-    HANDLE_STR_DECODE(fru_file_id);
+    HANDLE_STR_DECODE(manufacturer_name, 0);
+    HANDLE_STR_DECODE(product_name, 0);
+    HANDLE_STR_DECODE(product_part_model_number, 0);
+    HANDLE_STR_DECODE(product_version, 0);
+    HANDLE_STR_DECODE(product_serial_number, 1);
+    HANDLE_STR_DECODE(asset_tag, 0);
+    HANDLE_STR_DECODE(fru_file_id, 1);
     HANDLE_CUSTOM_DECODE();
 
     *rrec = rec;
@@ -966,7 +983,7 @@ static int
 process_fru_info(ipmi_fru_t *fru)
 {
     unsigned char *data = fru->data;
-    unsigned char data_len = fru->data_len;
+    unsigned int  data_len = fru->data_len;
     fru_offset_t  foff[IPMI_FRU_FTR_NUMBER];
     int           i, j;
     int           err = 0;
@@ -975,16 +992,13 @@ process_fru_info(ipmi_fru_t *fru)
 	return EBADMSG;
 
     fru->version = *data;
-    data++;
 
     for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
 	foff[i].type = i;
-	foff[i].offset = data[i] * 8;
+	foff[i].offset = data[i+1] * 8;
 	if (foff[i].offset >= data_len)
 	    return EBADMSG;
     }
-
-    data += 7;
 
     /* Sort the field by offset.  Not many fields, so we use a bubble
        sort.  We sort these so we can find the start of the next
@@ -1088,21 +1102,17 @@ ipmi_fru_destroy(ipmi_fru_t            *fru,
 void
 fetch_complete(ipmi_fru_t *fru, int err)
 {
+    if (!err)
+	err = process_fru_info(fru);
+
+    if (fru->fetched_handler)
+	fru->fetched_handler(fru, err, fru->fetched_cb_data);
+    fru->fetch_in_progress = 0;
+
     if (fru->data)
 	ipmi_mem_free(fru->data);
     fru->data = NULL;
 
-    if (err) {
-	if (fru->fetched_handler)
-	    fru->fetched_handler(fru, err, fru->fetched_cb_data);
-	fru->fetch_in_progress = 0;
-
-    } else {
-	err = process_fru_info(fru);
-	if (fru->fetched_handler)
-	    fru->fetched_handler(fru, err, fru->fetched_cb_data);
-	fru->fetch_in_progress = 0;
-    }
     if (fru->deleted)
       final_fru_destroy(fru);
     else
@@ -1134,9 +1144,18 @@ fru_data_handler(ipmi_domain_t *domain,
     }
 
     if (data[0] != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO, "IPMI error getting FRU data: %x",
-		 data[0]);
-	fetch_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
+	if (fru->curr_pos >= 8) {
+	    /* Some screwy cards give more size in the info than they
+	       really have, if we have enough, try to process it. */
+	    ipmi_log(IPMI_LOG_WARNING, "IPMI error getting FRU data: %x",
+		     data[0]);
+	    fru->data_len = fru->curr_pos;
+	    fetch_complete(fru, 0);
+	} else {
+	    ipmi_log(IPMI_LOG_ERR_INFO, "IPMI error getting FRU data: %x",
+		     data[0]);
+	    fetch_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
+	}
 	goto out;
     }
 

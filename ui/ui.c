@@ -2328,12 +2328,8 @@ dump_fru_custom_str(ipmi_fru_t *fru,
     unsigned int len;
 
     rv = gtype(fru, num, &type);
-    if (rv) {
-	if (rv != ENOSYS)
-	    display_pad_out("  Error fetching type for %s custom %d: %x\n",
-			    str, num, rv);
+    if (rv)
 	return rv;
-    }
 
     if (type == IPMI_BINARY_STR) {
 	display_pad_out("  %s custom %d is in binary\n", str, num);
@@ -2371,6 +2367,8 @@ do {									\
 				  ipmi_fru_get_ ## name ## _custom_len, \
 				  ipmi_fru_get_ ## name ## _custom_type, \
 				  ipmi_fru_get_ ## name ## _custom);	\
+	if (_rv)							\
+	    break;							\
     }									\
 } while (0)
 
