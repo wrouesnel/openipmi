@@ -1,3 +1,17 @@
+2004-01-28 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Move to version 1.2.5.
+
+	* lib/oem_motorola_mxp.c: Removed the hot-swap status from the
+	blue leds and ejector switches, until I figure out a good way to
+	handle the power.
+
+	* lib/entity.c: Fixed an extraneous unlock in the hot swap code.
+
+	* lib/domain.c: Only scan the IPMB on an address change if not in
+	startup mode to avoid scanning an MC before the user is informed
+	of the domain being up.
+
 2004-01-27 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Finished implementing the hot-swap state machine.
