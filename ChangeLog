@@ -10,6 +10,9 @@
 	* oem_atca.c: Rework the handling of new MCs and entities to handle
 	things added before the FRU information is read.
 
+	* entity.c: Use certain sensors that have presence bits as
+	presence sensors.
+
 2004-03-20 Corey Minyard <cminyard@mvista.com> 
 
 	* everything: Massive rework of the code structure.

@@ -161,7 +161,15 @@ struct ipmi_entity_s
 
     char *entity_id_string;
 
+    /* A standard presence sensor.  This one overrides everything. */
     ipmi_sensor_t *presence_sensor;
+
+    /* A discrete sensor where one of the bits is used for presence.
+       If one of these exists, it will be used unless there is a
+       presence sensor. */
+    ipmi_sensor_t *presence_bit_sensor;
+    int           presence_bit_offset;
+
     int           present;
     int           presence_possibly_changed;
 
@@ -705,6 +713,7 @@ entity_add(ipmi_entity_info_t *ents,
 	goto out_err;
 
     ent->presence_sensor = NULL;
+    ent->presence_bit_sensor = NULL;
     ent->present = 0;
     ent->presence_possibly_changed = 1;
 
@@ -1134,7 +1143,7 @@ presence_parent_handler(ipmi_entity_t *ent,
     presence_changed(parent, present, NULL);
 }
 
-static void
+static int
 presence_sensor_changed(ipmi_sensor_t         *sensor,
 			enum ipmi_event_dir_e dir,
 			int                   offset,
@@ -1151,6 +1160,29 @@ presence_sensor_changed(ipmi_sensor_t         *sensor,
 	presence_changed(ent, offset == 0, event);
     else if (dir == IPMI_DEASSERTION)
 	presence_changed(ent, offset != 0, event);
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
+static int
+presence_bit_sensor_changed(ipmi_sensor_t         *sensor,
+			    enum ipmi_event_dir_e dir,
+			    int                   offset,
+			    int                   severity,
+			    int                   prev_severity,
+			    void                  *cb_data,
+			    ipmi_event_t          *event)
+{
+    ipmi_entity_t *ent = cb_data;
+
+    if (offset != ent->presence_bit_offset)
+	return IPMI_EVENT_NOT_HANDLED;
+
+    /* Assertion means present. */
+    if (dir == IPMI_ASSERTION)
+	presence_changed(ent, 1, event);
+    else if (dir == IPMI_DEASSERTION)
+	presence_changed(ent, 0, event);
+    return IPMI_EVENT_NOT_HANDLED;
 }
 
 static void
@@ -1175,6 +1207,22 @@ states_read(ipmi_sensor_t *sensor,
 	/* The present bit is supported. */
 	present = ipmi_is_state_set(states, 0);
 
+    presence_changed(ent, present, NULL);
+}
+
+static void
+states_bit_read(ipmi_sensor_t *sensor,
+		int           err,
+		ipmi_states_t *states,
+		void          *cb_data)
+{
+    int           present;
+    ipmi_entity_t *ent = cb_data;
+
+    if (err)
+	return;
+
+    present = ipmi_is_state_set(states, ent->presence_bit_offset);
     presence_changed(ent, present, NULL);
 }
 
@@ -1267,6 +1315,9 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
     if (ent->presence_sensor) {
 	/* Presence sensor overrides everything. */
 	rv = ipmi_states_get(ent->presence_sensor, states_read, ent);
+    } else if (ent->presence_bit_sensor) {
+	/* Presence sensor overrides everything. */
+	rv = ipmi_states_get(ent->presence_bit_sensor, states_bit_read, ent);
     } else if (! ilist_empty(ent->sensors)) {
 	/* It has sensors, try to see if any of those are active. */
 	detect = ipmi_mem_alloc(sizeof(*detect));
@@ -1318,10 +1369,18 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     int                val;
 
 
+    /* If we have a presence sensor, remove the presence bit sensor. */
+    if (ent->presence_bit_sensor) {
+	ipmi_sensor_remove_discrete_event_handler(ent->presence_bit_sensor,
+						  presence_sensor_changed,
+						  ent);
+	ent->presence_bit_sensor = NULL;
+    }
+
     event_support = ipmi_sensor_get_event_support(sensor);
 
     /* Add our own event handler. */
-    ipmi_sensor_discrete_set_event_handler(sensor,
+    ipmi_sensor_add_discrete_event_handler(sensor,
 					   presence_sensor_changed,
 					   ent);
 
@@ -1351,6 +1410,49 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     }
 
     ipmi_sensor_events_enable_set(sensor, &events, NULL, NULL);
+
+    ent->presence_possibly_changed = 1;
+
+    if (ent->hs_cb.get_hot_swap_state == NULL) {
+	/* Set the entity hot-swap capable and use our internal state
+	   machine. */
+	ent->hot_swappable = 1;
+	ent->hs_cb = internal_hs_cb;
+    }
+}
+
+static void
+handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
+{
+    ipmi_event_state_t events;
+    int                event_support;
+
+
+    event_support = ipmi_sensor_get_event_support(sensor);
+
+    /* Add our own event handler. */
+    ipmi_sensor_add_discrete_event_handler(sensor,
+					   presence_bit_sensor_changed,
+					   ent);
+
+    /* Nothing to do, it will just be on. */
+    if (event_support == IPMI_EVENT_SUPPORT_GLOBAL_ENABLE)
+	return;
+
+    /* Turn events and scanning on. */
+    ipmi_event_state_init(&events);
+    ipmi_event_state_set_events_enabled(&events, 1);
+    ipmi_event_state_set_scanning_enabled(&events, 1);
+
+    if (event_support == IPMI_EVENT_SUPPORT_PER_STATE) {
+	/* Turn on the event enables. */
+	ipmi_discrete_event_set(&events, ent->presence_bit_offset,
+				IPMI_ASSERTION);
+	ipmi_discrete_event_set(&events, ent->presence_bit_offset,
+				IPMI_DEASSERTION);
+    }
+
+    ipmi_sensor_events_enable(sensor, &events, NULL, NULL);
 
     ent->presence_possibly_changed = 1;
 
@@ -1549,6 +1651,42 @@ is_presence_sensor(ipmi_sensor_t *sensor)
 	    || (deassert_absent && deassert_present));
 }
 
+static int
+is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
+{
+    int val, rv;
+    int bit;
+    int sensor_type = ipmi_sensor_get_sensor_type(sensor);
+
+    /* Is it a sensor with a presence bit? */
+    switch (sensor_type)
+    {
+    case IPMI_SENSOR_TYPE_POWER_SUPPLY: bit = 0; break;
+    case IPMI_SENSOR_TYPE_BATTERY: bit = 2; break;
+    default:
+	return 0;
+    }
+
+    /* Presense sensors that don't generate events are kind of useless. */
+    if (ipmi_sensor_get_event_support(sensor) == IPMI_EVENT_SUPPORT_NONE)
+	return 0;
+
+    /* Check if the bit is available */
+    rv = ipmi_discrete_event_readable(sensor, bit, &val);
+    if (rv || !val)
+	return 0;
+
+    /* Need assertion and deassertion event support. */
+    rv = ipmi_sensor_discrete_assertion_event_supported(sensor, bit, &val);
+    if (rv || !val)
+	return 0;
+    rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, bit, &val);
+    if (rv || !val)
+	return 0;
+
+    return 1;
+}
+
 typedef struct sensor_update_s
 {
     enum ipmi_update_e op;
@@ -1586,6 +1724,17 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 	handle_new_presence_sensor(ent, sensor);
 	ipmi_entity_free_sensor_link(link);
     } else {
+	int bit;
+
+	if ((ent->presence_sensor == NULL)&&(ent->presence_bit_sensor == NULL)
+	    && is_presence_bit_sensor(sensor, &bit))
+	{
+	    /* If it's a sensor with a presence bit, we use it. */
+	    ent->presence_bit_sensor = sensor;
+	    ent->presence_bit_offset = bit;
+	    handle_new_presence_bit_sensor(ent, sensor);
+	}
+
 	if (is_hot_swap_requester(sensor)
 	    && (ent->hot_swap_requester == NULL))
 	{
@@ -1613,6 +1762,7 @@ static int sens_cmp(void *item, void *cb_data)
 typedef struct sens_find_presence_s
 {
     int           is_presence;
+    int           bit;
     ipmi_sensor_t *sensor;
 } sens_cmp_info_t;
 
@@ -1638,6 +1788,29 @@ static int sens_cmp_if_presence(void *item, void *cb_data)
     return info->is_presence;
 }
 
+static void
+sens_detect_if_presence_bit(ipmi_sensor_t *sensor, void *cb_data)
+{
+    sens_cmp_info_t *info = cb_data;
+
+    info->sensor = sensor;
+    info->is_presence = is_presence_bit_sensor(sensor, &info->bit);
+}
+
+static int sens_cmp_if_presence_bit(void *item, void *cb_data)
+{
+    ipmi_sensor_ref_t *ref = item;
+    sens_cmp_info_t   *info = cb_data;
+    int               rv;
+
+    rv = ipmi_sensor_pointer_cb(ref->sensor, sens_detect_if_presence_bit,
+				info);
+    if (rv)
+	return 0;
+    
+    return info->is_presence;
+}
+
 void
 ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 			  ipmi_sensor_t *sensor)
@@ -1645,12 +1818,11 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
     ipmi_sensor_ref_t *ref;
     ilist_iter_t      iter;
     sensor_update_t   uinfo;
+    sens_cmp_info_t   info;
 
     CHECK_ENTITY_LOCK(ent);
 
     if (sensor == ent->presence_sensor) {
-	sens_cmp_info_t info;
-
 	ilist_init_iter(&iter, ent->sensors);
 	ilist_unpositioned(&iter);
 
@@ -1676,11 +1848,28 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 
 	    ipmi_mem_free(ref);
 	} else {
+	    /* See if there is a presence bit sensor. */
 	    ent->presence_sensor = NULL;
+	    ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
+	    if (ref) {
+		ent->presence_bit_sensor = info.sensor;
+		ent->presence_bit_offset = info.bit;
+		handle_new_presence_bit_sensor(ent, info.sensor);
+	    }
 	}
 	ent->presence_possibly_changed = 1;
     } else {
 	ipmi_sensor_id_t id = ipmi_sensor_convert_to_id(sensor);
+
+	if (sensor == ent->presence_bit_sensor) {
+	    ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
+	    if (ref) {
+		ent->presence_bit_sensor = info.sensor;
+		ent->presence_bit_offset = info.bit;
+		handle_new_presence_bit_sensor(ent, info.sensor);
+	    } else
+		ent->presence_bit_sensor = NULL;
+	}
 
 	if (sensor == ent->hot_swap_requester) {
 	    ent->hot_swap_requester = NULL;
