@@ -129,6 +129,7 @@ struct atca_fru_s
     ipmi_sensor_id_t          hs_sensor_id;
     unsigned char             hs_sensor_lun;
     unsigned char             hs_sensor_num;
+    ipmi_control_t            *cold_reset;
 };
 
 struct atca_ipmc_s
@@ -778,7 +779,7 @@ led_set_done(ipmi_control_t *control,
     if (control)
 	mc = ipmi_control_get_mc(control);
 
-    if (check_for_msg_err(mc, err, rsp, 6, "led_get_done")) {
+    if (check_for_msg_err(mc, err, rsp, 6, "led_set_done")) {
 	if (info->set_handler)
 	    info->set_handler(control, err, info->cb_data);
 	goto out;
@@ -1250,6 +1251,126 @@ destroy_fru_leds(atca_fru_t *finfo)
 
 /***********************************************************************
  *
+ * ATCA FRU control handling.  This is for the FRU control command.
+ *
+ **********************************************************************/
+
+typedef struct atca_cold_reset_s
+{
+    ipmi_control_op_cb     handler;
+    void                   *cb_data;
+    ipmi_control_op_info_t sdata;
+} atca_cold_reset_t;
+
+static void
+set_cold_reset_done(ipmi_control_t *control,
+		    int            err,
+		    ipmi_msg_t     *rsp,
+		    void           *cb_data)
+{
+    atca_cold_reset_t *info = cb_data;
+    ipmi_mc_t         *mc = NULL;
+
+    if (control)
+	mc = ipmi_control_get_mc(control);
+
+    if (check_for_msg_err(mc, err, rsp, 6, "set_cold_reset_done")) {
+	if (info->handler)
+	    info->handler(control, err, info->cb_data);
+	goto out;
+    }
+
+    if (info->handler)
+	info->handler(control, 0, info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(info);
+}
+
+static int
+set_cold_reset(ipmi_control_t     *control,
+	       int                *val,
+	       ipmi_control_op_cb handler,
+	       void               *cb_data)
+{
+    atca_cold_reset_t *info;
+    atca_fru_t        *finfo = ipmi_control_get_oem_info(control);
+    ipmi_msg_t        msg;
+    unsigned char     data[3];
+    int               rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->handler = handler;
+    info->cb_data = cb_data;
+    msg.netfn = PICMG_NETFN;
+    msg.cmd = PICMG_CMD_FRU_CONTROL;
+    msg.data = data;
+    msg.data_len = 3;
+    data[0] = PICMG_ID;
+    data[1] = finfo->fru_id;
+    data[2] = 0; /* Cold reset */
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, set_cold_reset_done,
+				   &info->sdata, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+static void
+add_fru_control_mc_cb(ipmi_mc_t *mc, void *cb_info)
+{
+    atca_fru_t *finfo = cb_info;
+    int        rv;
+
+    rv = atca_alloc_control(mc, finfo, NULL,
+			    IPMI_CONTROL_ONE_SHOT_RESET,
+			    "cold reset",
+			    set_cold_reset,
+			    NULL,
+			    NULL,
+			    NULL,
+			    &finfo->cold_reset);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_fru_control_mc_cb): "
+		 "Could not convert an mcid to a pointer: 0x%x",
+		 ENTITY_NAME(finfo->entity), rv);
+    }
+}
+
+static void
+add_fru_control_handling(atca_fru_t *finfo)
+{
+    int rv;
+
+    if (finfo->leds)
+	/* We already have the LEDs fetched. */
+	return;
+    
+    rv = ipmi_mc_pointer_cb(finfo->minfo->mcid, add_fru_control_mc_cb, finfo);
+    if (!rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_fru_control_handling): "
+		 "Could not convert an mcid to a pointer: 0x%x",
+		 ENTITY_NAME(finfo->entity), rv);
+    }
+}
+
+static void
+destroy_fru_control_handling(atca_fru_t *finfo)
+{
+    if (finfo->cold_reset) {
+	ipmi_control_destroy(finfo->cold_reset);
+	finfo->cold_reset = NULL;
+    }
+}
+
+/***********************************************************************
+ *
  * FRU entity handling
  *
  **********************************************************************/
@@ -1421,6 +1542,20 @@ atca_sensor_update_handler(enum ipmi_update_e op,
     }
 }
 
+static void
+add_fru_controls(atca_fru_t *finfo)
+{
+    fetch_fru_leds(finfo);
+    add_fru_control_handling(finfo);
+}
+
+static void
+destroy_fru_controls(atca_fru_t *finfo)
+{
+    destroy_fru_leds(finfo);
+    destroy_fru_control_handling(finfo);
+}
+
 static int
 atca_entity_presence_handler(ipmi_entity_t *entity,
 			     int           present,
@@ -1430,9 +1565,9 @@ atca_entity_presence_handler(ipmi_entity_t *entity,
     atca_fru_t *finfo = cb_data;
 
     if (present)
-	fetch_fru_leds(finfo);
+	add_fru_controls(finfo);
     else
-	destroy_fru_leds(finfo);
+	destroy_fru_controls(finfo);
     return IPMI_EVENT_NOT_HANDLED;
 }
 
@@ -1455,11 +1590,30 @@ atca_entity_update_handler(enum ipmi_update_e op,
     else
 	return;
 
-    if (!finfo)
+    if (!finfo) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_entity_update_handler): "
+		 "Unable to find fru info",
+		 ENTITY_NAME(entity));
 	return;
+    }
 
     switch (op) {
     case IPMI_ADDED:
+    case IPMI_CHANGED:
+	if (finfo->entity){
+	    if (finfo->entity != entity) {
+		/* If the entity is set, then this has already been
+		   done. */
+		ipmi_log(IPMI_LOG_SEVERE,
+			 "%soem_atca.c(atca_entity_update_handler): "
+			 "Entity mismatch on fru %d, old entity was %s",
+			 ENTITY_NAME(entity), finfo->fru_id,
+			 ENTITY_NAME(finfo->entity));
+	    }
+	    return;
+	}
+
 	finfo->entity = entity;
 	rv = ipmi_entity_add_presence_handler(entity,
 					      atca_entity_presence_handler,

@@ -1,3 +1,7 @@
+2004-03-02 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_atca.c: Added the cold reset control.
+
 2004-03-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_atca_conn.c: Set broadcast_broken all the time.
