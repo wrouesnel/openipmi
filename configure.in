@@ -143,6 +143,31 @@ AC_ARG_WITH(perlcflags,
     perlcflags="$withval",
 )
 
+trypython=yes
+pythondir=
+AC_ARG_WITH(python,
+[  --with-python[=PATH]              Look for python.],
+    if test "x$withval" = "xyes"; then
+      trypython=yes
+    elif test "x$withval" = "xno"; then
+      trypython=no
+    elif test -d "$withval"; then
+      trypython=yes
+    fi,
+)
+
+pythoninstalldir=
+AC_ARG_WITH(pythoninstall,
+[  --with-pythoninstall=PATH         Install python modules in the given location.],
+    pythoninstalldir="$withval",
+)
+
+pythoncflags=
+AC_ARG_WITH(pythoncflags,
+[  --with-pythoncflags=PATH          Use the given flags when compiling python parts.],
+    pythoncflags="$withval",
+)
+
 tryswig=yes
 swigprog=
 AC_ARG_WITH(swig,
@@ -277,7 +302,7 @@ if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
       AC_DEFINE(HAVE_PERL)
       PERL_DIR=perl
       if test "x$perlcflags" = "x"; then
-         PERL_CFLAGS="-I $perldir/CORE `$perlprog -V:ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
+         PERL_CFLAGS="-I $perldir/CORE `$perlprog -V:ccflags | grep ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
       else
 	  PERL_CFLAGS="$perlcflags"
       fi
@@ -301,6 +326,53 @@ AC_SUBST(PERL_DIR)
 AC_SUBST(PERL_CFLAGS)
 AC_SUBST(PERL_INSTALL_DIR)
 
+# Handle PYTHON support
+if test "x$pythoncflags" = "x" -o "x$pythoninstalldir" = "x"; then
+   pythonprog=
+   if test "x$trypython" != "xno"; then
+      AC_PATH_PROG(pythonprog, python)
+   fi
+   if test "x$pythonprog" != "x"; then
+      # Now find a proper installation location.
+      if test "x$pythoninstalldir" = "x"; then
+	 pythoninstalldir=`$pythonprog -c 'import distutils.sysconfig; print distutils.sysconfig.get_python_lib();'`
+	 if test "x$pythoninstalldir" = "x" -o ! -d "$pythoninstalldir"; then
+	    pythoninstalldir=
+	 fi
+      fi
+   fi
+
+   if test "x$pythoncflags" = "x"; then
+      pythoninc=`$pythonprog -c 'import distutils.sysconfig; print distutils.sysconfig.get_python_inc();'`
+      if test "x$pythoninc" != "x"; then
+         pythoncflags="-I$pythoninc"
+      else
+         pythoncflags=""
+      fi
+   else
+      PYTHON_CFLAGS="$pythoncflags"
+   fi
+
+   if test "x$pythoninstalldir" != "x"; then
+      AC_DEFINE(HAVE_PYTHON)
+      PYTHON_DIR=python
+      PYTHON_CFLAGS="$pythoncflags"
+      PYTHON_INSTALL_DIR="$pythoninstalldir"
+   else
+      PYTHON_DIR=
+      PYTHON_CFLAGS=
+      PYTHON_INSTALL_DIR=
+   fi
+else
+   AC_DEFINE(HAVE_PYTHON)
+   PYTHON_DIR=python
+   PYTHON_CFLAGS="$pythoncflags"
+   PYTHON_INSTALL_DIR="$pythoninstalldir"
+fi
+AC_SUBST(PYTHON_DIR)
+AC_SUBST(PYTHON_CFLAGS)
+AC_SUBST(PYTHON_INSTALL_DIR)
+
 # Now check for swig
 if test "x$swigprog" = "x" -a "x$tryswig" = "xyes"; then
    AC_PATH_PROG(swigprog, swig)
@@ -311,7 +383,7 @@ if test "x$swigprog" != "x"; then
    swigminor=`echo $swigver | sed 's/^[[0-9]]*\.\([[0-9]]*\)\.[[0-9]]*$/\1/'`
    swigrel=`echo $swigver | sed 's/^[[0-9]]*\.[[0-9]]*\.//'`
    if test '(' "$swigmajor" -lt 1 ')' -o '(' '(' "$swigmajor" -eq 1 ')' -a '(' "$swigminor" -lt 3 ')' ')' -o '(' '(' "$swigmajor" -eq 1 ')' -a '(' "$swigminor" -eq 3 ')' -a '(' "$swigrel" -lt 21 ')' ')'; then
-      echo "***swig must be version 1.3.21 or greater, disabling swig and perl"
+      echo "***swig must be version 1.3.21 or greater, disabling swig and perl/python"
    else
       echo "swig version $swigver"
       AC_DEFINE(HAVE_SWIG)
@@ -425,6 +497,7 @@ AC_OUTPUT(Makefile
 	  man/Makefile
 	  swig/Makefile
 	  swig/perl/Makefile
+	  swig/python/Makefile
 	  cmdlang/Makefile
 	  include/Makefile
 	  include/OpenIPMI/Makefile

@@ -37,37 +37,6 @@
 
 #include "OpenIPMI.h"
 
-swig_cb_val
-get_swig_cb(swig_cb cb)
-{
-    swig_cb_val rv = SvRV(cb);
-    return rv;
-}
-
-swig_cb_val
-ref_swig_cb(swig_cb cb)
-{
-    swig_cb_val rv = SvRV(cb);
-
-    SvREFCNT_inc(rv);
-    return rv;
-}
-
-swig_cb_val
-deref_swig_cb(swig_cb cb)
-{
-    swig_cb_val rv = SvRV(cb);
-
-    SvREFCNT_dec(rv);
-    return rv;
-}
-
-swig_cb_val
-deref_swig_cb_val(swig_cb_val cb)
-{
-    SvREFCNT_dec(cb);
-    return cb;
-}
 
 void
 swig_call_cb(swig_cb_val cb, char *method_name,
@@ -191,6 +160,7 @@ swig_call_cb(swig_cb_val cb, char *method_name,
     SvREFCNT_dec(ref);
 }
 
+#if 0
 swig_ref
 swig_make_ref_destruct(void *item, char *class)
 {
@@ -225,18 +195,4 @@ swig_make_ref_destruct(void *item, char *class)
     sv_bless(rv.val, stash);
     return rv;
 }
-
-swig_ref
-swig_make_ref(void *item, char *class)
-{
-    SV *ref = newSV(0);
-    swig_ref rv;
-
-    rv.val = sv_setref_pv(ref, class, item);
-    return rv;
-}
-
-void swig_free_ref(swig_ref ref)
-{
-    SvREFCNT_dec(ref.val);
-}
+#endif

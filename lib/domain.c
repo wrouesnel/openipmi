@@ -4014,6 +4014,7 @@ got_dev_id(ipmi_mc_t  *mc,
 			 "IPMI version of the BMC is %d.%d, which is older"
 			 " than OpenIPMI supports",
 			 DOMAIN_NAME(domain), major_version, minor_version);
+		call_con_fails(domain, ENOSYS, 0, 0, 0);
 		return;
 	    }
 	}

@@ -34,6 +34,10 @@
 %module OpenIPMI
 
 %{
+#ifdef HAVE_GETADDRINFO
+#include <netdb.h>
+#endif
+
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_fru.h>
@@ -316,7 +320,7 @@ parse_mac_addr(char *str, unsigned char *addr)
 }
 %}
 
-%import "OpenIPMI_lang.i"
+%include "OpenIPMI_lang.i"
 
 %nodefault;
 
@@ -417,9 +421,9 @@ handle_domain_cb(ipmi_domain_t *domain, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
     swig_call_cb(cb, "domain_cb", "%p", &domain_ref);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
 }
 
 static void
@@ -433,10 +437,10 @@ domain_connect_change_handler(ipmi_domain_t *domain,
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
     swig_call_cb(cb, "conn_change_cb", "%p%d%d%d%d",
 		 &domain_ref, err, conn_num, port_num, still_connected);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
 }
 
 static void
@@ -446,9 +450,9 @@ domain_iterate_connections_handler(ipmi_domain_t *domain, int conn,
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
     swig_call_cb(cb, "domain_iter_connection_cb", "%p%d", &domain_ref, conn);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
 }
 
 static void
@@ -458,11 +462,10 @@ domain_event_handler(ipmi_domain_t *domain, ipmi_event_t *event, void *cb_data)
     swig_ref    domain_ref;
     swig_ref    event_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
-				       "OpenIPMI::ipmi_event_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
     swig_call_cb(cb, "event_cb", "%p%p", &domain_ref, &event_ref);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
     swig_free_ref(event_ref);
 }
 
@@ -474,12 +477,12 @@ domain_mc_updated_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
     swig_ref    domain_ref;
     swig_ref    mc_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &domain_ref, &mc_ref);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
 }
 
 static void
@@ -490,12 +493,12 @@ domain_entity_update_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
     swig_ref    domain_ref;
     swig_ref    entity_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
     swig_call_cb(cb, "entity_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &domain_ref, &entity_ref);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
 }
 
 static void
@@ -504,9 +507,9 @@ domain_fully_up(ipmi_domain_t *domain, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
     swig_call_cb(cb, "domain_up_cb", "%p", &domain_ref);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -528,13 +531,12 @@ domain_iterate_entities_handler(ipmi_entity_t *entity, void *cb_data)
     swig_ref    domain_ref;
     swig_ref    entity_ref;
 
-    domain_ref = swig_make_ref(ipmi_entity_get_domain(entity),
-			       "OpenIPMI::ipmi_domain_t");
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    domain_ref = swig_make_ref(ipmi_entity_get_domain(entity), ipmi_domain_t);
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
     swig_call_cb(cb, "domain_iter_entity_cb", "%p%p",
 		 &domain_ref, &entity_ref);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
 }
 
 static void
@@ -543,9 +545,9 @@ ipmb_mc_scan_handler(ipmi_domain_t *domain, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
     swig_call_cb(cb, "domain_ipmb_mc_scan_cb", "%p%d", &domain_ref, err);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -556,9 +558,9 @@ domain_reread_sels_handler(ipmi_domain_t *domain, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
     swig_call_cb(cb, "domain_reread_sels_cb", "%p%d", &domain_ref, err);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
 }
 
 static int
@@ -573,11 +575,11 @@ domain_msg_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     int           lun;
 
     make_ipmi_addr(addr_str, sizeof(addr_str), addr, addr_len, &lun);
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
     swig_call_cb(cb, "domain_addr_cmd_cb", "%p%s%d%d%d%*s", &domain_ref,
 		 addr_str, lun, msg->netfn, msg->cmd,
 		 msg->data_len, msg->data);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
     
@@ -591,11 +593,11 @@ domain_iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     swig_ref    domain_ref;
     swig_ref    mc_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "domain_iter_mc_cb", "%p%p", &domain_ref, &mc_ref);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
 }
 
 static void
@@ -606,12 +608,12 @@ fru_written_done(ipmi_domain_t *domain, ipmi_fru_t *fru,
     swig_ref    domain_ref;
     swig_ref    fru_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    fru_ref = swig_make_ref_destruct(fru, "OpenIPMI::ipmi_fru_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
+    fru_ref = swig_make_ref_destruct(fru, ipmi_fru_t);
     /* The FRU is already referenced because of the callback, no need
        to mess with refcounts. */
     swig_call_cb(cb, "fru_written", "%p%p%d", &domain_ref, &fru_ref, err);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
     swig_free_ref(fru_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -624,12 +626,12 @@ fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err, void *cb_data)
     swig_ref    domain_ref;
     swig_ref    fru_ref;
 
-    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    fru_ref = swig_make_ref_destruct(fru, "OpenIPMI::ipmi_fru_t");
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
+    fru_ref = swig_make_ref_destruct(fru, ipmi_fru_t);
     /* The FRU is already referenced because of the callback, no need
        to mess with refcounts. */
     swig_call_cb(cb, "fru_fetched", "%p%p%d", &domain_ref, &fru_ref, err);
-    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
     swig_free_ref(fru_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -641,9 +643,9 @@ handle_entity_cb(ipmi_entity_t *entity, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    entity_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
     swig_call_cb(cb, "entity_cb", "%p", &entity_ref);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
 }
 
 static void
@@ -655,11 +657,11 @@ entity_iterate_entities_handler(ipmi_entity_t *ent1,
     swig_ref    ent1_ref;
     swig_ref    ent2_ref;
 
-    ent1_ref = swig_make_ref(ent1, "OpenIPMI::ipmi_entity_t");
-    ent2_ref = swig_make_ref(ent2, "OpenIPMI::ipmi_entity_t");
+    ent1_ref = swig_make_ref(ent1, ipmi_entity_t);
+    ent2_ref = swig_make_ref(ent2, ipmi_entity_t);
     swig_call_cb(cb, "entity_iter_entities_cb", "%p%p", &ent1_ref, &ent2_ref);
-    swig_free_ref_check(ent2_ref, "OpenIPMI::ipmi_entity_t");
-    swig_free_ref_check(ent1_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(ent2_ref, ipmi_entity_t);
+    swig_free_ref_check(ent1_ref, ipmi_entity_t);
 }
 
 static void
@@ -671,12 +673,12 @@ entity_iterate_sensors_handler(ipmi_entity_t *entity,
     swig_ref    entity_ref;
     swig_ref    sensor_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "entity_iter_sensors_cb", "%p%p",
 		 &entity_ref, &sensor_ref);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
 }
 
 static void
@@ -688,12 +690,12 @@ entity_iterate_controls_handler(ipmi_entity_t  *entity,
     swig_ref    entity_ref;
     swig_ref    control_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
+    control_ref = swig_make_ref(control, ipmi_control_t);
     swig_call_cb(cb, "entity_iter_controls_cb", "%p%p",
 		 &entity_ref, &control_ref);
-    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(control_ref, ipmi_control_t);
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
 }
 
 static int
@@ -706,12 +708,11 @@ entity_presence_handler(ipmi_entity_t *entity,
     swig_ref    entity_ref;
     swig_ref    event_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
-				       "OpenIPMI::ipmi_event_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
     swig_call_cb(cb, "entity_presence_cb", "%p%d%p",
 		 &entity_ref, present, &event_ref);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
     swig_free_ref(event_ref);
     return IPMI_EVENT_NOT_HANDLED;
 }
@@ -726,12 +727,12 @@ entity_sensor_update_handler(enum ipmi_update_e op,
     swig_ref    entity_ref;
     swig_ref    sensor_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "entity_sensor_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &sensor_ref);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
 }
 
 static void
@@ -744,12 +745,12 @@ entity_control_update_handler(enum ipmi_update_e op,
     swig_ref    entity_ref;
     swig_ref    control_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
+    control_ref = swig_make_ref(control, ipmi_control_t);
     swig_call_cb(cb, "entity_control_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &control_ref);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
-    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
+    swig_free_ref_check(control_ref, ipmi_control_t);
 }
 
 static void
@@ -762,14 +763,14 @@ entity_fru_update_handler(enum ipmi_update_e op,
     swig_ref    fru_ref;
     ipmi_fru_t  *fru;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
     fru = ipmi_entity_get_fru(entity);
     if (fru)
 	ipmi_fru_ref(fru);
-    fru_ref = swig_make_ref_destruct(fru, "OpenIPMI::ipmi_fru_t");
+    fru_ref = swig_make_ref_destruct(fru, ipmi_fru_t);
     swig_call_cb(cb, "entity_fru_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &fru_ref);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
     swig_free_ref(fru_ref);
 }
 
@@ -784,14 +785,13 @@ entity_hot_swap_handler(ipmi_entity_t             *entity,
     swig_ref    entity_ref;
     swig_ref    event_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
-				       "OpenIPMI::ipmi_event_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
     swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%s%s%p", &entity_ref,
 		 ipmi_hot_swap_state_name(last_state),
 		 ipmi_hot_swap_state_name(curr_state),
 		 &event_ref);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
     swig_free_ref(event_ref);
     return IPMI_EVENT_NOT_HANDLED;
 }
@@ -805,10 +805,10 @@ entity_get_hot_swap_handler(ipmi_entity_t             *entity,
     swig_cb_val cb = cb_data;
     swig_ref    entity_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
     swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%d%s", &entity_ref,
 		 err, ipmi_hot_swap_state_name(state));
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -822,10 +822,10 @@ entity_get_hot_swap_time_handler(ipmi_entity_t  *entity,
     swig_cb_val cb = cb_data;
     swig_ref    entity_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
     swig_call_cb(cb, "entity_hot_swap_get_time_cb", "%p%d%f", &entity_ref,
 		 err, ((double) time) / 1000000000.0);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -838,9 +838,9 @@ entity_set_hot_swap_time_handler(ipmi_entity_t  *entity,
     swig_cb_val cb = cb_data;
     swig_ref    entity_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
     swig_call_cb(cb, "entity_hot_swap_set_time_cb", "%p%d", &entity_ref, err);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -853,9 +853,9 @@ entity_activate_handler(ipmi_entity_t  *entity,
     swig_cb_val cb = cb_data;
     swig_ref    entity_ref;
 
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    entity_ref = swig_make_ref(entity, ipmi_entity_t);
     swig_call_cb(cb, "entity_activate_cb", "%p%d", &entity_ref, err);
-    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(entity_ref, ipmi_entity_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -866,9 +866,9 @@ handle_mc_cb(ipmi_mc_t *mc, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_cb", "%p", &mc_ref);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
 }
 
 static void
@@ -879,9 +879,9 @@ mc_active_handler(ipmi_mc_t  *mc,
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_active_cb", "%p%d", &mc_ref, active);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
 }
 
 static void
@@ -892,10 +892,10 @@ mc_msg_cb(ipmi_mc_t  *mc,
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_cmd_cb", "%p%d%d%*s", &mc_ref,
 		 msg->netfn, msg->cmd, msg->data_len, msg->data);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -906,9 +906,9 @@ mc_reset_handler(ipmi_mc_t *mc, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_reset_cb", "%p%d", &mc_ref, err);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -919,9 +919,9 @@ mc_events_enable_handler(ipmi_mc_t *mc, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_events_enable_cb", "%p%d", &mc_ref, err);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -932,9 +932,9 @@ mc_reread_sensors_handler(ipmi_mc_t *mc, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_reread_sensors_cb", "%p%d", &mc_ref, err);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -945,9 +945,9 @@ mc_reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_reread_sel_cb", "%p%d", &mc_ref, err);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -961,9 +961,9 @@ mc_sel_get_time_cb(ipmi_mc_t     *mc,
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_get_sel_time_cb", "%p%d%ld", &mc_ref, err, time);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -978,11 +978,11 @@ mc_channel_get_info(ipmi_mc_t           *mc,
     swig_ref    mc_ref;
     swig_ref    info_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
-    info_ref = swig_make_ref(info, "OpenIPMI::ipmi_channel_info_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
+    info_ref = swig_make_ref(info, ipmi_channel_info_t);
     swig_call_cb(cb, "mc_channel_got_info_cb", "%p%d%p", &mc_ref, err,
 		 &info_ref);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     swig_free_ref(info_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -998,11 +998,11 @@ mc_channel_get_access(ipmi_mc_t             *mc,
     swig_ref    mc_ref;
     swig_ref    info_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
-    info_ref = swig_make_ref(info, "OpenIPMI::ipmi_channel_access_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
+    info_ref = swig_make_ref(info, ipmi_channel_access_t);
     swig_call_cb(cb, "mc_channel_got_access_cb", "%p%d%p", &mc_ref, err,
 		 &info_ref);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     swig_free_ref(info_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -1016,9 +1016,9 @@ mc_channel_set_access(ipmi_mc_t *mc,
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_channel_set_access_cb", "%p%d", &mc_ref, err);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -1049,17 +1049,17 @@ mc_channel_got_users(ipmi_mc_t        *mc,
 	info_ref = &dummy;
     }
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     for (i=0; i<count; i++) {
 	ipmi_user_t *user = ipmi_user_list_get_user(info, i);
-	info_ref[i] = swig_make_ref_destruct(user, "OpenIPMI::ipmi_user_t");
+	info_ref[i] = swig_make_ref_destruct(user, ipmi_user_t);
     }
     ipmi_user_list_get_max_user(info, &max);
     ipmi_user_list_get_enabled_users(info, &enabled);
     ipmi_user_list_get_fixed_users(info, &fixed);
     swig_call_cb(cb, "mc_channel_got_users_cb", "%p%d%d%d%d%*o", &mc_ref, err,
 		 max, enabled, fixed, count, &info_ref);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     for (i=0; i<count; i++)
 	swig_free_ref(info_ref[i]);
     free(info_ref);
@@ -1075,9 +1075,9 @@ mc_channel_set_user(ipmi_mc_t *mc,
     swig_cb_val cb = cb_data;
     swig_ref    mc_ref;
 
-    mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
     swig_call_cb(cb, "mc_channel_set_user_cb", "%p%d", &mc_ref, err);
-    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -1088,9 +1088,9 @@ handle_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    sensor_ref;
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "sensor_cb", "%p", &sensor_ref);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
 }
 
 static char *
@@ -1665,13 +1665,12 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 	raw_set = 1;
 	value_set = 1;
     }
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     threshold_event_str(eventstr, threshold, high_low, dir);
-    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
-				       "OpenIPMI::ipmi_event_t");
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
     swig_call_cb(cb, "threshold_event_cb", "%p%s%d%d%d%f%p", &sensor_ref,
 		 eventstr, raw_set, raw_value, value_set, value, &event_ref);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     swig_free_ref(event_ref);
     return IPMI_EVENT_NOT_HANDLED;
 }
@@ -1690,13 +1689,12 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
     char        eventstr[5];
     swig_ref    event_ref;
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     discrete_event_str(eventstr, offset, dir);
-    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
-				       "OpenIPMI::ipmi_event_t");
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
     swig_call_cb(cb, "threshold_event_cb", "%p%s%d%d%p", &sensor_ref,
 		 eventstr, severity, prev_severity, &event_ref);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     swig_free_ref(event_ref);
     return IPMI_EVENT_NOT_HANDLED;
 }
@@ -1710,9 +1708,9 @@ sensor_event_enable_handler(ipmi_sensor_t *sensor,
     swig_cb_val cb = cb_data;
     swig_ref    sensor_ref;
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "sensor_event_enable_cb", "%p%d", &sensor_ref, err);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -1735,10 +1733,10 @@ sensor_get_event_enables_handler(ipmi_sensor_t      *sensor,
 	st = discrete_event_state_to_str(states);
     }
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "sensor_get_event_enable_cb", "%p%d%s",
 		 &sensor_ref, err, st);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     free(st);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -1752,9 +1750,9 @@ sensor_rearm_handler(ipmi_sensor_t      *sensor,
     swig_cb_val cb = cb_data;
     swig_ref    sensor_ref;
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "sensor_rearm_cb", "%p%d", &sensor_ref, err);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -1769,10 +1767,10 @@ sensor_get_hysteresis_handler(ipmi_sensor_t *sensor,
     swig_cb_val cb = cb_data;
     swig_ref    sensor_ref;
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "sensor_get_hysteresis_cb", "%p%d%d%d", &sensor_ref, err,
 		 positive_hysteresis, negative_hysteresis);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -1785,9 +1783,9 @@ sensor_set_hysteresis_handler(ipmi_sensor_t      *sensor,
     swig_cb_val cb = cb_data;
     swig_ref    sensor_ref;
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "sensor_set_hysteresis_cb", "%p%d", &sensor_ref, err);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -1800,9 +1798,9 @@ sensor_set_thresholds_handler(ipmi_sensor_t      *sensor,
     swig_cb_val cb = cb_data;
     swig_ref    sensor_ref;
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "sensor_set_thresholds_cb", "%p%d", &sensor_ref, err);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -1816,10 +1814,10 @@ static void sensor_get_thresholds_handler(ipmi_sensor_t     *sensor,
     swig_ref    sensor_ref;
     char        *thstr = thresholds_to_str(th);
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     swig_call_cb(cb, "sensor_get_thresholds_cb", "%p%d%s", &sensor_ref, err,
 		 thstr);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     free(thstr);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -1846,11 +1844,11 @@ sensor_get_reading_handler(ipmi_sensor_t             *sensor,
 	raw_set = 1;
 	value_set = 1;
     }
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     statestr = threshold_states_to_str(states);
     swig_call_cb(cb, "threshold_reading_cb", "%p%d%d%d%f%s", &sensor_ref,
 		 raw_set, raw_value, value_set, value, statestr);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     free(statestr);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -1866,11 +1864,11 @@ sensor_get_states_handler(ipmi_sensor_t *sensor,
     swig_ref    sensor_ref;
     char        *statestr;
 
-    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     statestr = discrete_states_to_str(states);
     swig_call_cb(cb, "discrete_states_cb", "%p%d%s", &sensor_ref,
 		 err, statestr);
-    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     free(statestr);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -2062,9 +2060,9 @@ handle_control_cb(ipmi_control_t *control, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    control_ref;
 
-    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    control_ref = swig_make_ref(control, ipmi_control_t);
     swig_call_cb(cb, "control_cb", "%p", &control_ref);
-    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref_check(control_ref, ipmi_control_t);
 }
 
 static void
@@ -2073,9 +2071,9 @@ control_val_set_handler(ipmi_control_t *control, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    control_ref;
 
-    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    control_ref = swig_make_ref(control, ipmi_control_t);
     swig_call_cb(cb, "control_set_val_cb", "%p%d", &control_ref, err);
-    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref_check(control_ref, ipmi_control_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -2087,10 +2085,10 @@ control_val_get_handler(ipmi_control_t *control, int err, int *val,
     swig_cb_val cb = cb_data;
     swig_ref    control_ref;
 
-    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    control_ref = swig_make_ref(control, ipmi_control_t);
     swig_call_cb(cb, "control_get_val_cb", "%p%d%*p", &control_ref, err,
 		 ipmi_control_get_num_vals(control), val);
-    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref_check(control_ref, ipmi_control_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -2103,10 +2101,10 @@ control_val_get_light_handler(ipmi_control_t *control, int err,
     swig_cb_val cb = cb_data;
     swig_ref    control_ref;
 
-    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    control_ref = swig_make_ref(control, ipmi_control_t);
     swig_call_cb(cb, "control_get_light_cb", "%p%d%s", &control_ref, err,
 		 light_setting_to_str(val));
-    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref_check(control_ref, ipmi_control_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -2119,10 +2117,10 @@ control_val_get_id_handler(ipmi_control_t *control, int err,
     swig_cb_val cb = cb_data;
     swig_ref    control_ref;
 
-    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    control_ref = swig_make_ref(control, ipmi_control_t);
     swig_call_cb(cb, "control_get_id_cb", "%p%d%*s", &control_ref, err,
 		 length, val);
-    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref_check(control_ref, ipmi_control_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -2135,14 +2133,13 @@ control_val_event_handler(ipmi_control_t *control, int *valid_vals, int *val,
     swig_ref    control_ref;
     swig_ref    event_ref;
 
-    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
-    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
-				       "OpenIPMI::ipmi_event_t");
+    control_ref = swig_make_ref(control, ipmi_control_t);
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event), ipmi_event_t);
     swig_call_cb(cb, "control_event_val_cb", "%p%p%*p%*p", &control_ref,
 		 &event_ref,
 		 ipmi_control_get_num_vals(control), valid_vals,
 		 ipmi_control_get_num_vals(control), val);
-    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref_check(control_ref, ipmi_control_t);
     swig_free_ref(event_ref);
     return IPMI_EVENT_NOT_HANDLED;
 }
@@ -2157,7 +2154,7 @@ lanparm_get_parm(ipmi_lanparm_t *lanparm,
     swig_cb_val cb = cb_data;
     swig_ref    lanparm_ref;
 
-    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
+    lanparm_ref = swig_make_ref_destruct(lanparm, ipmi_lanparm_t);
     swig_call_cb(cb, "lanparm_got_parm_cb", "%p%d%*s", &lanparm_ref, err,
 		 data_len, (char *) data);
     /* One-time call, get rid of the CB. */
@@ -2174,8 +2171,7 @@ lanparm_set_parm(ipmi_lanparm_t *lanparm,
     swig_ref    lanparm_ref;
 
     if (cb) {
-	lanparm_ref = swig_make_ref_destruct(lanparm,
-					     "OpenIPMI::ipmi_lanparm_t");
+	lanparm_ref = swig_make_ref_destruct(lanparm, ipmi_lanparm_t);
 	swig_call_cb(cb, "lanparm_set_parm_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
@@ -2193,8 +2189,8 @@ lanparm_get_config(ipmi_lanparm_t    *lanparm,
     swig_ref    lanparm_ref;
     swig_ref    config_ref;
 
-    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
-    config_ref = swig_make_ref_destruct(config, "OpenIPMI::ipmi_lan_config_t");
+    lanparm_ref = swig_make_ref_destruct(lanparm, ipmi_lanparm_t);
+    config_ref = swig_make_ref_destruct(config, ipmi_lan_config_t);
     swig_call_cb(cb, "lanparm_got_config_cb", "%p%d%p", &lanparm_ref, err,
 		 &config_ref);
     /* One-time call, get rid of the CB. */
@@ -2212,8 +2208,7 @@ lanparm_set_config(ipmi_lanparm_t    *lanparm,
     swig_ref    lanparm_ref;
 
     if (cb) {
-	lanparm_ref = swig_make_ref_destruct(lanparm,
-					     "OpenIPMI::ipmi_lanparm_t");
+	lanparm_ref = swig_make_ref_destruct(lanparm, ipmi_lanparm_t);
 	swig_call_cb(cb, "lanparm_set_config_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
@@ -2230,8 +2225,7 @@ lanparm_clear_lock(ipmi_lanparm_t    *lanparm,
     swig_ref    lanparm_ref;
 
     if (cb) {
-	lanparm_ref = swig_make_ref_destruct(lanparm,
-					     "OpenIPMI::ipmi_lanparm_t");
+	lanparm_ref = swig_make_ref_destruct(lanparm, ipmi_lanparm_t);
 	swig_call_cb(cb, "lanparm_clear_lock_cb", "%p%d", &lanparm_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
@@ -2245,7 +2239,7 @@ get_pef(ipmi_pef_t *pef, int err, void *cb_data)
     swig_cb_val cb = cb_data;
     swig_ref    pef_ref;
 
-    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+    pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
     swig_call_cb(cb, "got_pef_cb", "%p%d", &pef_ref, err);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -2262,7 +2256,7 @@ pef_get_parm(ipmi_pef_t    *pef,
     swig_cb_val cb = cb_data;
     swig_ref    pef_ref;
 
-    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+    pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
     swig_call_cb(cb, "pef_got_parm_cb", "%p%d%*s", &pef_ref, err,
 		 data_len, (char *) data);
     /* One-time call, get rid of the CB. */
@@ -2279,7 +2273,7 @@ pef_set_parm(ipmi_pef_t *pef,
     swig_ref    pef_ref;
 
     if (cb) {
-	pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+	pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
 	swig_call_cb(cb, "pef_set_parm_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
@@ -2297,8 +2291,8 @@ pef_get_config(ipmi_pef_t    *pef,
     swig_ref    pef_ref;
     swig_ref    config_ref;
 
-    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
-    config_ref = swig_make_ref_destruct(config, "OpenIPMI::ipmi_pef_config_t");
+    pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
+    config_ref = swig_make_ref_destruct(config, ipmi_pef_config_t);
     swig_call_cb(cb, "pef_got_config_cb", "%p%d%p", &pef_ref, err,
 		 &config_ref);
     /* One-time call, get rid of the CB. */
@@ -2316,7 +2310,7 @@ pef_set_config(ipmi_pef_t    *pef,
     swig_ref    pef_ref;
 
     if (cb) {
-	pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+	pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
 	swig_call_cb(cb, "pef_set_config_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
@@ -2333,7 +2327,7 @@ pef_clear_lock(ipmi_pef_t    *pef,
     swig_ref    pef_ref;
 
     if (cb) {
-	pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+	pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
 	swig_call_cb(cb, "pef_clear_lock_cb", "%p%d", &pef_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
@@ -2348,7 +2342,7 @@ get_pet(ipmi_pet_t *pet, int err, void *cb_data)
     swig_ref    pet_ref;
 
     if (cb) {
-	pet_ref = swig_make_ref_destruct(pet, "OpenIPMI::ipmi_pet_t");
+	pet_ref = swig_make_ref_destruct(pet, ipmi_pet_t);
 	swig_call_cb(cb, "got_pet_cb", "%p%d", &pet_ref, err);
 	/* One-time call, get rid of the CB. */
 	deref_swig_cb_val(cb);
@@ -2591,44 +2585,56 @@ open_domain(char *name, char **args, swig_cb done, swig_cb up)
 	}
 	set++;
     }
-
+    
     for (i=0; i<set; i++) {
 	rv = ipmi_args_setup_con(con_parms[i],
 				 swig_os_hnd,
 				 NULL,
 				 &con[i]);
 	if (rv) {
-	    for (j=0; j<set; j++)
-		ipmi_free_args(con_parms[j]);
-	    free(nd);
-	    return NULL;
+	    for (j=0; j<i; j++)
+		con[j]->close_connection(con[j]);
+            free(nd);
+	    nd = NULL;
+	    goto out;
 	}
     }
 
-    if (valid_swig_cb(up)) {
-	up_val = ref_swig_cb(up);
-	domain_up = domain_fully_up;
+    if (!nil_swig_cb(up)) {
+	if (valid_swig_cb(up, domain_up_cb)) {
+	    up_val = ref_swig_cb(up);
+	    domain_up = domain_fully_up;
+	} else {
+	    free(nd);
+	    nd = NULL;
+	    goto out;
+	}
     }
-    if (valid_swig_cb(done)) {
-	done_val = ref_swig_cb(done);
-	con_change = domain_connect_change_handler;
+    if (!nil_swig_cb(done)){
+	if (valid_swig_cb(done, conn_change_cb)) {
+	    done_val = ref_swig_cb(done);
+	    con_change = domain_connect_change_handler;
+	} else {
+	    free(nd);
+	    nd = NULL;
+	    goto out;
+	}
     }
     rv = ipmi_open_domain(name, con, set, con_change, done_val,
 			  domain_up, up_val,
 			  options, num_options, nd);
     if (rv) {
-	if (valid_swig_cb(up))
+	if (domain_up)
 	    deref_swig_cb(up);
-	if (valid_swig_cb(done))
+	if (con_change)
 	    deref_swig_cb(done);
-	for (i=0; i<set; i++) {
-	    ipmi_free_args(con_parms[i]);
+	for (i=0; i<set; i++)
 	    con[i]->close_connection(con[i]);
-	}
 	free(nd);
-	return NULL;
+	nd = NULL;
     }
 
+ out:
     for (i=0; i<set; i++)
 	ipmi_free_args(con_parms[i]);
 
@@ -2692,37 +2698,49 @@ open_domain2(char *name, char **args, swig_cb done, swig_cb up)
 				 NULL,
 				 &con[i]);
 	if (rv) {
-	    for (j=0; j<set; j++)
-		ipmi_free_args(con_parms[j]);
-	    free(nd);
-	    return NULL;
+	    for (j=0; j<i; j++)
+		con[j]->close_connection(con[j]);
+            free(nd);
+	    nd = NULL;
+	    goto out;
 	}
     }
 
-    if (valid_swig_cb(up)) {
-	up_val = ref_swig_cb(up);
-	domain_up = domain_fully_up;
+    if (!nil_swig_cb(up)) {
+	if (valid_swig_cb(up, domain_up_cb)) {
+	    up_val = ref_swig_cb(up);
+	    domain_up = domain_fully_up;
+	} else {
+	    free(nd);
+	    nd = NULL;
+	    goto out;
+	}
     }
-    if (valid_swig_cb(done)) {
-	done_val = ref_swig_cb(done);
-	con_change = domain_connect_change_handler;
+    if (!nil_swig_cb(done)){
+	if (valid_swig_cb(done, conn_change_cb)) {
+	    done_val = ref_swig_cb(done);
+	    con_change = domain_connect_change_handler;
+	} else {
+	    free(nd);
+	    nd = NULL;
+	    goto out;
+	}
     }
     rv = ipmi_open_domain(name, con, set, con_change, done_val,
 			  domain_up, up_val,
 			  options, num_options, nd);
     if (rv) {
-	if (valid_swig_cb(up))
+	if (domain_up)
 	    deref_swig_cb(up);
-	if (valid_swig_cb(done))
+	if (con_change)
 	    deref_swig_cb(done);
-	for (i=0; i<set; i++) {
-	    ipmi_free_args(con_parms[i]);
+	for (i=0; i<set; i++)
 	    con[i]->close_connection(con[i]);
-	}
 	free(nd);
-	return NULL;
+	nd = NULL;
     }
 
+ out:
     for (i=0; i<set; i++)
 	ipmi_free_args(con_parms[i]);
 
@@ -2733,7 +2751,7 @@ static void
 set_log_handler(swig_cb handler)
 {
     swig_cb_val old_handler = swig_log_handler;
-    if (valid_swig_cb(handler))
+    if (valid_swig_cb(handler, log))
 	swig_log_handler = ref_swig_cb(handler);
     else
 	swig_log_handler = NULL;
@@ -2839,10 +2857,10 @@ int pef_str_to_parm(char *str);
    and the name is the stuff in the middle of the name, ie
    (ipmi_<type>_add_<name>_handler.  The function that will be called
    with the info is <type>_<name>_handler. */
-#define cb_add(type, name) \
+#define cb_add(type, name, func) \
 	int         rv;						\
 	swig_cb_val handler_val;				\
-	if (! valid_swig_cb(handler))				\
+	if (! valid_swig_cb(handler, func))			\
 	    return EINVAL;					\
 	handler_val = ref_swig_cb(handler);			\
 	rv = ipmi_ ## type ## _add_ ## name ## _handler		\
@@ -2850,10 +2868,10 @@ int pef_str_to_parm(char *str);
 	if (rv)							\
 	    deref_swig_cb_val(handler_val);			\
 	return rv;
-#define cb_rm(type, name) \
+#define cb_rm(type, name, func) \
 	int         rv;						\
 	swig_cb_val handler_val;				\
-	if (! valid_swig_cb(handler))				\
+	if (! valid_swig_cb(handler, func))			\
 	    return EINVAL;					\
 	handler_val = get_swig_cb(handler);			\
 	rv = ipmi_ ## type ## _remove_ ## name ##_handler	\
@@ -2882,7 +2900,7 @@ int pef_str_to_parm(char *str);
     {
 	int rv;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, domain_cb))
 	    return NULL;
 
 	rv = ipmi_domain_pointer_cb(*self, handle_domain_cb,
@@ -2945,17 +2963,16 @@ int pef_str_to_parm(char *str);
     }
 
     /*
-     * Shut down the connections to the domain and free it up.
-     * If the parameter given, the domain_close_done_cb method for
-     * the object will be called with the following parameters:
-     * <self>
+     * Shut down the connections to the domain and free it up.  The
+     * domain_close_done_cb method for the handler object will be
+     * called with the following parameters: <self>
      */
-    int close(swig_cb handler = NULL)
+    int close(swig_cb handler)
     {
 	int         rv;
 	swig_cb_val handler_val;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, domain_close_done_cb))
 	    return EINVAL;
 
 	handler_val = ref_swig_cb(handler);
@@ -2974,7 +2991,7 @@ int pef_str_to_parm(char *str);
      */
     int add_connect_change_handler(swig_cb handler)
     {
-	cb_add(domain, connect_change);
+	cb_add(domain, connect_change, conn_change_cb);
     }
 
     /*
@@ -2982,7 +2999,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_connect_change_handler(swig_cb handler)
     {
-	cb_rm(domain, connect_change);
+	cb_rm(domain, connect_change, conn_change_cb);
     }
 
     /*
@@ -2995,7 +3012,7 @@ int pef_str_to_parm(char *str);
     {
 	swig_cb_val handler_val;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, domain_iter_connection_cb))
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
@@ -3065,7 +3082,7 @@ int pef_str_to_parm(char *str);
      */
     int add_entity_update_handler(swig_cb handler)
     {
-	cb_add(domain, entity_update);
+	cb_add(domain, entity_update, entity_update_cb);
     }
 
     /*
@@ -3073,7 +3090,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_entity_update_handler(swig_cb handler)
     {
-	cb_rm(domain, entity_update);
+	cb_rm(domain, entity_update, entity_update_cb);
     }
 
     /*
@@ -3086,7 +3103,7 @@ int pef_str_to_parm(char *str);
     {
 	swig_cb_val handler_val;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, domain_iter_entities_cb))
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
@@ -3103,7 +3120,7 @@ int pef_str_to_parm(char *str);
      */
     int add_mc_update_handler(swig_cb handler)
     {
-	cb_add(domain, mc_updated);
+	cb_add(domain, mc_updated, mc_update_cb);
     }
 
     /*
@@ -3111,7 +3128,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_mc_update_handler(swig_cb handler)
     {
-	cb_rm(domain, mc_updated);
+	cb_rm(domain, mc_updated, mc_update_cb);
     }
 
     /*
@@ -3124,7 +3141,7 @@ int pef_str_to_parm(char *str);
     {
 	swig_cb_val handler_val;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, mc_iter_cb))
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
@@ -3155,7 +3172,9 @@ int pef_str_to_parm(char *str);
 	swig_cb_val    handler_val = NULL;
 	ipmi_domain_cb domain_cb = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, domain_ipmb_mc_scan_cb))
+		return EINVAL;
 	    domain_cb = ipmb_mc_scan_handler;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -3199,7 +3218,9 @@ int pef_str_to_parm(char *str);
 	if (rv)
 	    return rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, addr_cmd_cb))
+		return EINVAL;
 	    msg_cb = domain_msg_cb;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -3263,7 +3284,7 @@ int pef_str_to_parm(char *str);
      */
     int add_event_handler(swig_cb handler)
     {
-	cb_add(domain, event);
+	cb_add(domain, event, event_cb);
     }
 
     /*
@@ -3271,7 +3292,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_event_handler(swig_cb handler)
     {
-	cb_rm(domain, event);
+	cb_rm(domain, event, event_cb);
     }
 
     %newobject first_event;
@@ -3352,7 +3373,9 @@ int pef_str_to_parm(char *str);
 	swig_cb_val    handler_val = NULL;
 	ipmi_domain_cb domain_cb = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, domain_reread_sels_cb))
+		return EINVAL;
 	    domain_cb = domain_reread_sels_handler;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -3387,7 +3410,9 @@ int pef_str_to_parm(char *str);
 	swig_cb_val handler_val = NULL;
 	ipmi_fru_cb cb_handler = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, fru_fetched))
+		return NULL;
 	    cb_handler = fru_fetched;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -3454,7 +3479,9 @@ int pef_str_to_parm(char *str);
 	if (rv)
 	    return NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, got_pet_cb))
+		return NULL;
 	    handler_val = ref_swig_cb(handler);
 	}
 	ipmi_pet_ref(pet);
@@ -3488,7 +3515,7 @@ int pef_str_to_parm(char *str);
     {
 	int rv;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, entity_cb))
 	    return NULL;
 
 	rv = ipmi_entity_pointer_cb(*self, handle_entity_cb,
@@ -3545,7 +3572,7 @@ int pef_str_to_parm(char *str);
     {
 	swig_cb_val handler_val;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, entity_iter_entities_cb))
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
@@ -3564,7 +3591,7 @@ int pef_str_to_parm(char *str);
     {
 	swig_cb_val handler_val;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, entity_iter_entities_cb))
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
@@ -3583,7 +3610,7 @@ int pef_str_to_parm(char *str);
     {
 	swig_cb_val handler_val;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, entity_iter_sensors_cb))
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
@@ -3602,7 +3629,7 @@ int pef_str_to_parm(char *str);
     {
 	swig_cb_val handler_val;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, entity_iter_controls_cb))
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
@@ -3620,7 +3647,7 @@ int pef_str_to_parm(char *str);
      */
     int add_presence_handler(swig_cb handler)
     {
-	cb_add(entity, presence);
+	cb_add(entity, presence, entity_presence_cb);
     }
 
     /*
@@ -3628,7 +3655,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_presence_handler(swig_cb handler)
     {
-	cb_rm(entity, presence);
+	cb_rm(entity, presence, entity_presence_cb);
     }
 
     /*
@@ -3640,7 +3667,7 @@ int pef_str_to_parm(char *str);
      */
     int add_sensor_update_handler(swig_cb handler)
     {
-	cb_add(entity, sensor_update);
+	cb_add(entity, sensor_update, entity_sensor_update_cb);
     }
 
     /*
@@ -3648,7 +3675,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_sensor_update_handler(swig_cb handler)
     {
-	cb_rm(entity, sensor_update);
+	cb_rm(entity, sensor_update, entity_sensor_update_cb);
     }
 
     /*
@@ -3660,7 +3687,7 @@ int pef_str_to_parm(char *str);
      */
     int add_control_update_handler(swig_cb handler)
     {
-	cb_add(entity, control_update);
+	cb_add(entity, control_update, entity_control_update_cb);
     }
 
     /*
@@ -3668,7 +3695,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_control_update_handler(swig_cb handler)
     {
-	cb_rm(entity, control_update);
+	cb_rm(entity, control_update, entity_control_update_cb);
     }
 
     /*
@@ -3680,7 +3707,7 @@ int pef_str_to_parm(char *str);
      */
     int add_fru_update_handler(swig_cb handler)
     {
-	cb_add(entity, fru_update);
+	cb_add(entity, fru_update, entity_fru_update_cb);
     }
 
     /*
@@ -3688,7 +3715,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_fru_update_handler(swig_cb handler)
     {
-	cb_rm(entity, fru_update);
+	cb_rm(entity, fru_update, entity_fru_update_cb);
     }
 
     /*
@@ -4113,7 +4140,7 @@ int pef_str_to_parm(char *str);
      */
     int add_hot_swap_handler(swig_cb handler)
     {
-	cb_add(entity, hot_swap);
+	cb_add(entity, hot_swap, entity_hot_swap_update_cb);
     }
 
     /*
@@ -4121,7 +4148,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_hot_swap_handler(swig_cb handler)
     {
-	cb_rm(entity, hot_swap);
+	cb_rm(entity, hot_swap, entity_hot_swap_update_cb);
     }
 
     /*
@@ -4134,7 +4161,7 @@ int pef_str_to_parm(char *str);
 	swig_cb_val handler_val;
 	int         rv;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, entity_hot_swap_cb))
 	    return EINVAL;
 
 	handler_val = ref_swig_cb(handler);
@@ -4156,7 +4183,7 @@ int pef_str_to_parm(char *str);
 	swig_cb_val handler_val;
 	int         rv;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, entity_hot_swap_time_cb))
 	    return EINVAL;
 
 	handler_val = ref_swig_cb(handler);
@@ -4181,7 +4208,9 @@ int pef_str_to_parm(char *str);
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, entity_hot_swap_time_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = entity_set_hot_swap_time_handler;
 	}
@@ -4202,7 +4231,7 @@ int pef_str_to_parm(char *str);
 	swig_cb_val handler_val;
 	int         rv;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, entity_hot_swap_time_cb))
 	    return EINVAL;
 
 	handler_val = ref_swig_cb(handler);
@@ -4227,7 +4256,9 @@ int pef_str_to_parm(char *str);
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, entity_hot_swap_time_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = entity_set_hot_swap_time_handler;
 	}
@@ -4253,7 +4284,9 @@ int pef_str_to_parm(char *str);
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, entity_activate_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = entity_activate_handler;
 	}
@@ -4277,7 +4310,9 @@ int pef_str_to_parm(char *str);
 	ipmi_entity_cb done = NULL;
 	int            rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, entity_activate_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = entity_activate_handler;
 	}
@@ -4300,7 +4335,9 @@ int pef_str_to_parm(char *str);
 	ipmi_entity_cb done = NULL;
 	int         rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (valid_swig_cb(handler, entity_activate_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = entity_activate_handler;
 	}
@@ -4340,7 +4377,7 @@ int pef_str_to_parm(char *str);
     {
 	int rv;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, mc_cb))
 	    return NULL;
 
 	rv = ipmi_mc_pointer_cb(*self, handle_mc_cb,
@@ -4607,7 +4644,7 @@ int pef_str_to_parm(char *str);
      */
     int add_active_handler(swig_cb handler)
     {
-	cb_add(mc, active);
+	cb_add(mc, active, mc_active_cb);
     }
 
     /*
@@ -4615,7 +4652,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_active_handler(swig_cb handler)
     {
-	cb_rm(mc, active);
+	cb_rm(mc, active, mc_active_cb);
     }
 
     /*
@@ -4647,7 +4684,9 @@ int pef_str_to_parm(char *str);
 	if (rv)
 	    return rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, mc_cmd_cb))
+		return EINVAL;
 	    msg_cb = mc_msg_cb;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -4677,7 +4716,9 @@ int pef_str_to_parm(char *str);
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, mc_reset_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = mc_reset_handler;
 	}
@@ -4710,7 +4751,9 @@ int pef_str_to_parm(char *str);
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, mc_events_enable_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = mc_events_enable_handler;
 	}
@@ -4733,7 +4776,9 @@ int pef_str_to_parm(char *str);
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, mc_reread_sensors_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = mc_reread_sensors_handler;
 	}
@@ -4775,7 +4820,9 @@ int pef_str_to_parm(char *str);
 	ipmi_mc_done_cb done = NULL;
 	int             rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, mc_reread_sel_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = mc_reread_sel_handler;
 	}
@@ -4797,7 +4844,9 @@ int pef_str_to_parm(char *str);
 	sel_get_time_cb done = NULL;
 	int             rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, mc_get_sel_time_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = mc_sel_get_time_cb;
 	}
@@ -4963,7 +5012,7 @@ int pef_str_to_parm(char *str);
 	int         rv;
 	swig_cb_val handler_val = NULL;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, mc_channel_got_info_cb))
 	    return EINVAL;
 	handler_val = ref_swig_cb(handler);
 	rv = ipmi_mc_channel_get_info(self, channel,
@@ -4994,7 +5043,7 @@ int pef_str_to_parm(char *str);
 	else
 	    return EINVAL;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, mc_channel_got_access_cb))
 	    return EINVAL;
 	handler_val = ref_swig_cb(handler);
 	rv = ipmi_mc_channel_get_access(self, channel, dest,
@@ -5030,7 +5079,9 @@ int pef_str_to_parm(char *str);
 	else
 	    return EINVAL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, mc_channel_set_access_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = mc_channel_set_access;
 	}
@@ -5057,7 +5108,7 @@ int pef_str_to_parm(char *str);
 	int         rv;
 	swig_cb_val handler_val;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, mc_channel_got_users_cb))
 	    return EINVAL;
 	handler_val = ref_swig_cb(handler);
 	rv = ipmi_mc_get_users(self, channel, user,
@@ -5072,7 +5123,7 @@ int pef_str_to_parm(char *str);
      * is the ipmi_user_t object.  The second parameter is the
      * channel.  The third is the user number; if a valid user number
      * is passed in, then that user is the only one fetched.  The
-     * fourth is the handler object, the mc_channel_got_users_cb
+     * fourth is the handler object, the mc_channel_set_user_cb
      * method will be called on it with the following parameters:
      * <self> <mc> <err> <user1> [<user2> ...]  where the users are
      * ipmi_user_t objects.  Note that some info is channel-specific.
@@ -5087,7 +5138,7 @@ int pef_str_to_parm(char *str);
 	swig_cb_val     handler_val = NULL;
 	ipmi_mc_done_cb done = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (valid_swig_cb(handler, mc_channel_set_user_cb)) {
 	    handler_val = ref_swig_cb(handler);
 	    done = mc_channel_set_user;
 	}
@@ -5130,7 +5181,9 @@ int pef_str_to_parm(char *str);
 	swig_cb_val      handler_val = NULL;
 	ipmi_pef_done_cb done = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, got_pef_cb))
+		return NULL;
 	    handler_val = ref_swig_cb(handler);
 	    done = get_pef;
 	}
@@ -5186,7 +5239,9 @@ int pef_str_to_parm(char *str);
 	if (rv)
 	    return NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (!valid_swig_cb(handler, got_pet_cb))
+		return NULL;
 	    handler_val = ref_swig_cb(handler);
 	}
 	rv = ipmi_pet_create_mc(self, channel, ip, mac, eft_sel, policy_num,
@@ -5564,7 +5619,7 @@ int pef_str_to_parm(char *str);
     {
 	int rv;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, sensor_cb))
 	    return NULL;
 
 	rv = ipmi_sensor_pointer_cb(*self, handle_sensor_cb,
@@ -5636,9 +5691,9 @@ int pef_str_to_parm(char *str);
 	if (ipmi_sensor_get_event_reading_type(self)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	{
-	    cb_add(sensor, threshold_event);
+	    cb_add(sensor, threshold_event, threshold_event_cb);
 	} else {
-	    cb_add(sensor, discrete_event);
+	    cb_add(sensor, discrete_event, discrete_event_cb);
 	}
     }
 
@@ -5650,9 +5705,9 @@ int pef_str_to_parm(char *str);
 	if (ipmi_sensor_get_event_reading_type(self)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	{
-	    cb_rm(sensor, threshold_event);
+	    cb_rm(sensor, threshold_event, threshold_event_cb);
 	} else {
-	    cb_rm(sensor, discrete_event);
+	    cb_rm(sensor, discrete_event, discrete_event_cb);
 	}
     }
 
@@ -5680,7 +5735,9 @@ int pef_str_to_parm(char *str);
 	}
 	if (rv)
 	    return rv;
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sensor_event_enable_cb))
+		return EINVAL;
 	    sensor_cb = sensor_event_enable_handler;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -5717,7 +5774,9 @@ int pef_str_to_parm(char *str);
 	}
 	if (rv)
 	    return rv;
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sensor_event_enable_cb))
+		return EINVAL;
 	    sensor_cb = sensor_event_enable_handler;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -5754,7 +5813,9 @@ int pef_str_to_parm(char *str);
 	}
 	if (rv)
 	    return rv;
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sensor_event_enable_cb))
+		return EINVAL;
 	    sensor_cb = sensor_event_enable_handler;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -5777,7 +5838,7 @@ int pef_str_to_parm(char *str);
 	swig_cb_val                  handler_val = NULL;
 	ipmi_sensor_event_enables_cb sensor_cb = NULL;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, sensor_get_event_enable_cb))
 	    return EINVAL;
 
 	sensor_cb = sensor_get_event_enables_handler;
@@ -5822,7 +5883,9 @@ int pef_str_to_parm(char *str);
 	    if (rv)
 		return rv;
 	}
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sensor_rearm_cb))
+		return EINVAL;
 	    sensor_cb = sensor_rearm_handler;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -5838,7 +5901,7 @@ int pef_str_to_parm(char *str);
     /*
      * Get the hysteresis values for the given sensor.  These are the
      * raw values, there doesn't seem to be an easy way to calculate
-     * the cooked values.  The sensr_get_hysteresis_cb method on the
+     * the cooked values.  The sensor_get_hysteresis_cb method on the
      * first parameter will be called with the values.  It's
      * parameters are: <self> <sensor> <err> <positive hysteresis>
      * <negative hysteresis>
@@ -5849,7 +5912,7 @@ int pef_str_to_parm(char *str);
 	swig_cb_val               handler_val = NULL;
 	ipmi_sensor_hysteresis_cb sensor_cb = NULL;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, sensor_get_hysteresis_cb))
 	    return EINVAL;
 
 	sensor_cb = sensor_get_hysteresis_handler;
@@ -5877,7 +5940,9 @@ int pef_str_to_parm(char *str);
 	swig_cb_val         handler_val = NULL;
 	ipmi_sensor_done_cb sensor_cb = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sensor_set_hysteresis_cb))
+		return EINVAL;
 	    sensor_cb = sensor_set_hysteresis_handler;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -5926,7 +5991,9 @@ int pef_str_to_parm(char *str);
 	if (rv)
 	    return rv;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, sensor_set_thresholds_cb))
+		return EINVAL;
 	    sensor_cb = sensor_set_thresholds_handler;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -5948,7 +6015,7 @@ int pef_str_to_parm(char *str);
 	swig_cb_val               handler_val = NULL;
 	ipmi_sensor_thresholds_cb sensor_cb = NULL;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, sensor_get_thresholds_cb))
 	    return EINVAL;
 
 	sensor_cb = sensor_get_thresholds_handler;
@@ -5971,7 +6038,7 @@ int pef_str_to_parm(char *str);
 	int                    rv;
 	swig_cb_val            handler_val = NULL;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, threshold_reading_cb))
 	    return EINVAL;
 
 	handler_val = ref_swig_cb(handler);
@@ -6679,7 +6746,7 @@ int pef_str_to_parm(char *str);
     {
 	int rv;
 
-	if (! valid_swig_cb(handler))
+	if (! valid_swig_cb(handler, control_cb))
 	    return NULL;
 
 	rv = ipmi_control_pointer_cb(*self, handle_control_cb,
@@ -6845,7 +6912,9 @@ int pef_str_to_parm(char *str);
 	if (val.len != ipmi_control_get_num_vals(self))
 	    return EINVAL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, control_set_val_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = control_val_set_handler;
 	}
@@ -6868,10 +6937,11 @@ int pef_str_to_parm(char *str);
 	ipmi_control_val_cb done = NULL;
 	int                rv;
 
-	if (valid_swig_cb(handler)) {
-	    handler_val = ref_swig_cb(handler);
-	    done = control_val_get_handler;
-	}
+	if (!valid_swig_cb(handler, control_get_val_cb))
+	    return EINVAL;
+	handler_val = ref_swig_cb(handler);
+	done = control_val_get_handler;
+
 	rv = ipmi_control_get_val(self, done, handler_val);
 	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
@@ -6892,7 +6962,7 @@ int pef_str_to_parm(char *str);
      */
     int add_event_handler(swig_cb handler)
     {
-	cb_add(control, val_event);
+	cb_add(control, val_event, control_event_val_cb);
     }
 
     /*
@@ -6900,7 +6970,7 @@ int pef_str_to_parm(char *str);
      */
     int remove_event_handler(swig_cb handler)
     {
-	cb_rm(control, val_event);
+	cb_rm(control, val_event, control_event_val_cb);
     }
 
 #define CONTROL_COLOR_BLACK	0
@@ -6980,7 +7050,9 @@ int pef_str_to_parm(char *str);
 	    return EINVAL;
 	}
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, control_set_val_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = control_val_set_handler;
 	}
@@ -7006,10 +7078,11 @@ int pef_str_to_parm(char *str);
 	ipmi_light_settings_cb done = NULL;
 	int                    rv;
 
-	if (valid_swig_cb(handler)) {
-	    handler_val = ref_swig_cb(handler);
-	    done = control_val_get_light_handler;
-	}
+	if (! valid_swig_cb(handler, control_get_light_cb))
+	    return EINVAL;
+	handler_val = ref_swig_cb(handler);
+	done = control_val_get_light_handler;
+
 	rv = ipmi_control_get_light(self, done, handler_val);
 	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
@@ -7080,7 +7153,9 @@ int pef_str_to_parm(char *str);
 	for (i=0; i<val.len; i++)
 	    data[i] = val.val[i];
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, control_set_val_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	    done = control_val_set_handler;
 	}
@@ -7105,10 +7180,11 @@ int pef_str_to_parm(char *str);
 	ipmi_control_identifier_val_cb done = NULL;
 	int                            rv;
 
-	if (valid_swig_cb(handler)) {
-	    handler_val = ref_swig_cb(handler);
-	    done = control_val_get_id_handler;
-	}
+	if (! valid_swig_cb(handler, control_get_id_cb))
+	    return EINVAL;
+	handler_val = ref_swig_cb(handler);
+	done = control_val_get_id_handler;
+
 	rv = ipmi_control_identifier_get_val(self, done, handler_val);
 	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
@@ -7649,7 +7725,9 @@ int pef_str_to_parm(char *str);
 	swig_cb_val handler_val = NULL;
 	ipmi_fru_cb cb_handler = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, fru_written))
+		return EINVAL;
 	    cb_handler = fru_written_done;
 	    handler_val = ref_swig_cb(handler);
 	    ipmi_fru_ref(self);
@@ -7786,7 +7864,7 @@ int pef_str_to_parm(char *str);
 	int         rv;
 	swig_cb_val handler_val;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, lanparm_got_parm_cb))
 	    return EINVAL;
 	handler_val = ref_swig_cb(handler);
 	ipmi_lanparm_ref(self);
@@ -7820,7 +7898,9 @@ int pef_str_to_parm(char *str);
 	if (!data)
 	    return ENOMEM;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, lanparm_set_parm_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	}
 
@@ -7860,7 +7940,11 @@ int pef_str_to_parm(char *str);
 	    return ENOMEM;
 	parse_ipmi_data(value, data, length, &length);
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, lanparm_set_parm_cb)) {
+		free(data);
+		return EINVAL;
+	    }
 	    handler_val = ref_swig_cb(handler);
 	}
 
@@ -7887,7 +7971,7 @@ int pef_str_to_parm(char *str);
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, lanparm_got_config_cb))
 	    return EINVAL;
 
 	handler_val = ref_swig_cb(handler);
@@ -7914,7 +7998,9 @@ int pef_str_to_parm(char *str);
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, lanparm_set_config_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	}
 
@@ -7941,7 +8027,9 @@ int pef_str_to_parm(char *str);
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, lanparm_clear_lock_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	}
 
@@ -8204,7 +8292,7 @@ int pef_str_to_parm(char *str);
 	int         rv;
 	swig_cb_val handler_val;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, pef_got_parm_cb))
 	    return EINVAL;
 	handler_val = ref_swig_cb(handler);
 	ipmi_pef_ref(self);
@@ -8238,7 +8326,9 @@ int pef_str_to_parm(char *str);
 	if (!data)
 	    return ENOMEM;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, pef_set_parm_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	}
 
@@ -8278,7 +8368,9 @@ int pef_str_to_parm(char *str);
 	    return ENOMEM;
 	parse_ipmi_data(value, data, length, &length);
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, pef_set_parm_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	}
 
@@ -8305,7 +8397,7 @@ int pef_str_to_parm(char *str);
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
 
-	if (!valid_swig_cb(handler))
+	if (!valid_swig_cb(handler, pef_got_config_cb))
 	    return EINVAL;
 
 	handler_val = ref_swig_cb(handler);
@@ -8333,7 +8425,9 @@ int pef_str_to_parm(char *str);
 	swig_cb_val          handler_val = NULL;
 	ipmi_pef_done_cb done = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, pef_set_config_cb))
+		return EINVAL;
 	    done = pef_set_config;
 	    handler_val = ref_swig_cb(handler);
 	}
@@ -8360,7 +8454,9 @@ int pef_str_to_parm(char *str);
 	int         rv;
 	swig_cb_val handler_val = NULL;
 
-	if (valid_swig_cb(handler)) {
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, pef_clear_lock_cb))
+		return EINVAL;
 	    handler_val = ref_swig_cb(handler);
 	}
 

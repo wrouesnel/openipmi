@@ -1,4 +1,4 @@
 
-SUBDIRS    = $(PERL_DIR)
+SUBDIRS    = $(PERL_DIR) #$(PYTHON_DIR)
 
 EXTRA_DIST = OpenIPMI.i

@@ -113,25 +113,6 @@
     }
     tempsv = SvRV($input);
     if ((!SvNOK(tempsv)) && (!SvIOK(tempsv))) {
-	croak("expected a double reference\n");
-    }
-    dvalue = SvNV(tempsv);
-    $1 = &dvalue;
-}
-
-%typemap(argout) double * {
-    SV *tempsv;
-    tempsv = SvRV($input);
-    sv_setnv(tempsv, *$1);
-}
-
-%typemap(in) double * (double dvalue) {
-    SV* tempsv;
-    if (!SvROK($input)) {
-	croak("expected a reference\n");
-    }
-    tempsv = SvRV($input);
-    if ((!SvNOK(tempsv)) && (!SvIOK(tempsv))) {
 	dvalue = 0.0;
     } else {
 	dvalue = SvNV(tempsv);
@@ -164,3 +145,84 @@
     tempsv = SvRV($input);
     sv_setiv(tempsv, *$1);
 }
+
+%{
+static swig_ref
+swig_make_ref_destruct_i(void *item, swig_type_info *class)
+{
+    swig_ref rv;
+
+    rv.val = newSV(0);
+    SWIG_MakePtr(rv.val, item, class, SWIG_SHADOW | SWIG_OWNER);
+    return rv;
+}
+
+/* Make a reference whose destructor will be called when everything
+   is done with it. */
+#define swig_make_ref_destruct(item, name) \
+	swig_make_ref_destruct_i(item, SWIGTYPE_p_ ## name)
+
+static swig_ref
+swig_make_ref_i(void *item, swig_type_info *class)
+{
+    swig_ref rv;
+
+    rv.val = newSV(0);
+    SWIG_MakePtr(rv.val, item, class, 0);
+    return rv;
+}
+
+#define swig_make_ref(item, name) \
+	swig_make_ref_i(item, SWIGTYPE_p_ ## name)
+
+#define swig_free_ref_check(r, c) \
+	do {								\
+	    if (SvREFCNT(SvRV(r.val)) != 1)				\
+		warn("***You cannot keep pointers of class OpenIPMI::%s", #c);\
+	    swig_free_ref(r);						\
+	} while(0)
+
+/* Get the underlying callback object reference. */
+static swig_cb_val
+get_swig_cb(swig_cb cb)
+{
+    swig_cb_val rv = SvRV(cb);
+    return rv;
+}
+
+/* Get the underlying callback object reference and increment its refcount. */
+static swig_cb_val
+ref_swig_cb(swig_cb cb)
+{
+    swig_cb_val rv = SvRV(cb);
+
+    SvREFCNT_inc(rv);
+    return rv;
+}
+
+/* Get the underlying callback object reference and decrement its refcount. */
+static swig_cb_val
+deref_swig_cb(swig_cb cb)
+{
+    swig_cb_val rv = SvRV(cb);
+
+    SvREFCNT_dec(rv);
+    return rv;
+}
+
+/* Decrement the underlying callback object refcount. */
+static swig_cb_val
+deref_swig_cb_val(swig_cb_val cb)
+{
+    SvREFCNT_dec(cb);
+    return cb;
+}
+
+static void
+swig_free_ref(swig_ref ref)
+{
+    SvREFCNT_dec(ref.val);
+}
+
+%}
+

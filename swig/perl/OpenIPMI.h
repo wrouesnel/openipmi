@@ -43,20 +43,10 @@ typedef SV *swig_cb;
    always be a pointer. */
 typedef SV *swig_cb_val;
 
-/* Get the underlying callback object reference. */
-swig_cb_val get_swig_cb(swig_cb cb);
-
-/* Get the underlying callback object reference and increment its refcount. */
-swig_cb_val ref_swig_cb(swig_cb cb);
-
-/* Get the underlying callback object reference and decrement its refcount. */
-swig_cb_val deref_swig_cb(swig_cb cb);
-
-/* Decrement the underlying callback object refcount. */
-swig_cb_val deref_swig_cb_val(swig_cb_val cb);
-
-/* Used to validate the CB values passed in by the user. */
-#define valid_swig_cb(v) ((v) && (SvOK(v)) && (SvOK(SvRV(v))))
+/* Used to validate the CB values passed in by the user.  No cb func
+   check yet. */
+#define nil_swig_cb(v) (((v) == NULL) || (!SvOK(v)) || (! SvOK(SvRV(v))))
+#define valid_swig_cb(v, func) ((v) && (SvOK(v)) && (SvOK(SvRV(v))))
 #define invalidate_swig_cb(v) ((v) = NULL)
 
 
@@ -71,21 +61,5 @@ typedef struct swig_ref
 {
     SV *val;
 } swig_ref;
-
-
-swig_ref swig_make_ref(void *item, char *name);
-void swig_free_ref(swig_ref ref);
-
-/* Make a reference whose destructor will be called when everything
-   is done with it. */
-swig_ref swig_make_ref_destruct(void *item, char *class);
-
-
-#define swig_free_ref_check(r, c) \
-	do {								\
-	    if (SvREFCNT(SvRV(r.val)) != 1)				\
-		warn("***You cannot keep pointers of class %s", c);	\
-	    swig_free_ref(r);						\
-	} while(0)
 
 #endif /* __SWIG_PERL_OPENIPMIH */
