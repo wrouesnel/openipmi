@@ -1159,6 +1159,7 @@ int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
     lanc->curr_sel = 0;
     lanc->done = done;
     lanc->cb_data = cb_data;
+    lanc->my_lan = lanparm;
 
     /* First grab the lock */
     data[0] = 1; /* Set in progress. */
