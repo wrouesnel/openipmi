@@ -192,7 +192,7 @@
 #define MXP_BOARD_BD_SEL_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 3)
 #define MXP_BOARD_PCI_RESET_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 4)
 #define MXP_SLOT_INIT_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 5)
-#define MXP_SLOT_I2C_ENABLE_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 6)
+#define MXP_SLOT_I2C_ISOLATE_NUM(idx) MXP_BOARD_CONTROL_NUM(idx, 6)
 
 
 /* Information common to all sensors.  A pointer to this is put into
@@ -285,7 +285,7 @@ typedef struct mxp_board_s {
     ipmi_control_t *bd_sel;
     ipmi_control_t *pci_reset;
     ipmi_control_t *slot_init;
-    ipmi_control_t *i2c_enable;
+    ipmi_control_t *i2c_isolate;
 } mxp_board_t;
 #define BOARD_HAS_RESET_CONTROL(board) (!((board)->is_amc))
 #define BOARD_HAS_POWER_CONTROL(board) (!((board)->is_amc))
@@ -4900,7 +4900,7 @@ slot_init_set(ipmi_control_t     *control,
 }
 
 static void
-i2c_enable_set_start(ipmi_control_t *control, int err, void *cb_data)
+i2c_isolate_set_start(ipmi_control_t *control, int err, void *cb_data)
 {
     mxp_control_info_t *control_info = cb_data;
     mxp_board_t        *binfo = control_info->idinfo;
@@ -4936,10 +4936,10 @@ i2c_enable_set_start(ipmi_control_t *control, int err, void *cb_data)
 }
 
 static int
-i2c_enable_set(ipmi_control_t     *control,
-	      int                *val,
-	      ipmi_control_op_cb handler,
-	      void               *cb_data)
+i2c_isolate_set(ipmi_control_t     *control,
+		int                *val,
+		ipmi_control_op_cb handler,
+		void               *cb_data)
 {
     mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
     mxp_board_t          *binfo = hdr->data;
@@ -4952,8 +4952,8 @@ i2c_enable_set(ipmi_control_t     *control,
     control_info->done_set = handler;
     control_info->cb_data = cb_data;
     control_info->vals[0] = *val;
-    rv = ipmi_control_add_opq(control, i2c_enable_set_start,
-			     &(control_info->sdata), control_info);
+    rv = ipmi_control_add_opq(control, i2c_isolate_set_start,
+			      &(control_info->sdata), control_info);
     if (rv)
 	ipmi_mem_free(control_info);
     return rv;
@@ -5050,16 +5050,16 @@ mxp_add_board_sensors(mxp_info_t  *info,
 
 	/* I2C enable control */
 	rv = mxp_alloc_control(board->info->mc, board->ent,
-			       MXP_SLOT_I2C_ENABLE_NUM(board->idx),
+			       MXP_SLOT_I2C_ISOLATE_NUM(board->idx),
 			       board,
 			       IPMI_CONTROL_OUTPUT,
-			       "I2C Enable",
-			       i2c_enable_set,
+			       "I2C Isolate",
+			       i2c_isolate_set,
 			       NULL,
-			       &(board->i2c_enable));
+			       &(board->i2c_isolate));
 	if (rv)
 	    goto out_err;
-	ipmi_control_set_num_elements(board->i2c_enable, 1);
+	ipmi_control_set_num_elements(board->i2c_isolate, 1);
     }
 
  out_err:
@@ -8767,8 +8767,8 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->board[i].pci_reset);
 	if (info->board[i].slot_init)
 	    ipmi_control_destroy(info->board[i].slot_init);
-	if (info->board[i].i2c_enable)
-	    ipmi_control_destroy(info->board[i].i2c_enable);
+	if (info->board[i].i2c_isolate)
+	    ipmi_control_destroy(info->board[i].i2c_isolate);
     }
     
     if (info->chassis_id)
