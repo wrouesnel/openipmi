@@ -652,8 +652,8 @@ The sensor can be turned on and off using the status field of
 need to turn scanning on or off.
 
 @item Events
-Some sensors can generate events, some can't.  See @xref{Sensor Events}
-for details on events.
+Some sensors can generate events, some can't.  For more details, see
+@xref{Sensor Events}.
 
 @item Thresholds
 Some sensors support thresholds.  See below for more details.
@@ -759,7 +759,7 @@ is being asserted or deasserted) is present.  The offset specifies the
 specific state or threshold that caused the event to be asserted.  If
 @var{value_present} is true, then the value was passed in the 
 
-@node    Control, , Sensors, Using OpenIPMI
+@node    Controls, , Sensors, Using OpenIPMI
 @section Controls
 
 @node    OpenIPMI Internal Interfaces, How to Write OEM Plugins, Using OpenIPMI, Top
