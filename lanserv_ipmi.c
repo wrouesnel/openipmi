@@ -126,7 +126,7 @@ find_user(lan_data_t *lan, uint8_t *user)
     int    i;
     user_t *rv = NULL;
 
-    for (i=1; i<MAX_USERS; i++) {
+    for (i=1; i<=MAX_USERS; i++) {
 	if (lan->users[i].valid
 	    && (memcmp(user, lan->users[i].username, 16) == 0))
 	{
@@ -141,7 +141,7 @@ find_user(lan_data_t *lan, uint8_t *user)
 static uint8_t
 ipmb_checksum(uint8_t *data, int size, uint8_t start)
 {
-	uint8_t csum = 0;
+	uint8_t csum = start;
 	
 	for (; size > 0; size--, data++)
 		csum += *data;
@@ -159,7 +159,7 @@ sid_to_session(lan_data_t *lan, unsigned int sid)
     if (sid & 1)
 	return NULL;
     idx = (sid >> 1) & SESSION_MASK;
-    if (idx >= MAX_SESSIONS)
+    if (idx > MAX_SESSIONS)
 	return NULL;
     session = lan->sessions + idx;
     if (!session->active)
@@ -554,7 +554,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     }
 
     /* find a free session.  Session 0 is invalid. */
-    for (i=1; i<MAX_SESSIONS; i++) {
+    for (i=1; i<=MAX_SESSIONS; i++) {
 	if (! lan->sessions[i].active) {
 	    session = &(lan->sessions[i]);
 	    break;
@@ -569,7 +569,11 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     session->active = 1;
     session->authtype = auth;
     session->authdata = dummy_session.authdata;
-    lan->gen_rand(lan, seq_data, 4);
+    rv = lan->gen_rand(lan, seq_data, 4);
+    if (rv < 0) {
+	return_err(lan, msg, &dummy_session, IPMI_UNKNOWN_ERR_CC);
+	goto out_free;
+    }
     session->recv_seq = ipmi_get_uint32(seq_data) & ~1;
     if (!session->recv_seq)
 	session->recv_seq = 2;
@@ -622,7 +626,11 @@ handle_smi_msg(lan_data_t *lan, session_t *session, msg_t *msg)
     rv = lan->smi_send(lan, nmsg);
     if (rv) {
 	lan->free(lan, nmsg);
-	return_err(lan, msg, NULL, IPMI_UNKNOWN_ERR_CC);
+	if (rv == EMSGSIZE)
+	    return_err(lan, msg, session,
+		       IPMI_REQUESTED_DATA_LENGTH_EXCEEDED_CC);
+	else
+	    return_err(lan, msg, session, IPMI_UNKNOWN_ERR_CC);
 	return;
     }
 }
@@ -756,7 +764,7 @@ handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
 	    int i;
 
 	    if (idx <= lan->active_sessions) {
-		for (i=0; i<MAX_SESSIONS; i++) {
+		for (i=0; i<=MAX_SESSIONS; i++) {
 		    if (lan->sessions[i].active) {
 			idx--;
 			if (idx == 0) {
@@ -1030,7 +1038,7 @@ handle_get_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
 
     /* Number of enabled users. */
     data[2] = 0;
-    for (i=1; i<MAX_USERS; i++) {
+    for (i=1; i<=MAX_USERS; i++) {
 	if (lan->users[i].valid)
 	    data[2]++;
     }
@@ -1352,4 +1360,18 @@ ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
 {
     return_rsp_data(lan, msg, NULL, rsp, rsp_len);
     lan->free(lan, msg);
+}
+
+int
+ipmi_lan_init(lan_data_t *lan)
+{
+    int i;
+
+    for (i=0; i<=MAX_USERS; i++) {
+	lan->users[i].idx = i;
+    }
+
+    for (i=0; i<=MAX_SESSIONS; i++) {
+	lan->sessions[i].idx = i;
+    }
 }

@@ -99,14 +99,10 @@ struct lan_data_s
     /* user 0 is not used. */
     user_t users[MAX_USERS+1];
 
-    /* session 0 is not used. */
-    session_t sessions[MAX_SESSIONS+1];
-
     channel_t channel;
     channel_t nonv_channel; /* What to write to nonv ram. */
 
     unsigned char *guid;
-
 
     void *user_info;
 
@@ -117,7 +113,7 @@ struct lan_data_s
     int (*smi_send)(lan_data_t *lan, msg_t *msg);
 
     /* Generate 'size' bytes of random data into 'data'. */
-    void (*gen_rand)(lan_data_t *lan, void *data, int size);
+    int (*gen_rand)(lan_data_t *lan, void *data, int size);
 
     /* Allocate and free data. */
     void *(*alloc)(lan_data_t *lan, int size);
@@ -129,6 +125,9 @@ struct lan_data_s
 
 
     /* Don't fill in the below in the user code. */
+
+    /* session 0 is not used. */
+    session_t sessions[MAX_SESSIONS+1];
 
     /* Used to make the sid somewhat unique. */
     uint32_t sid_seq;
@@ -148,7 +147,9 @@ void ipmi_handle_lan_msg(lan_data_t *lan,
 			 unsigned char *data, int len,
 			 void *from_addr, int from_len);
 
-void ipmi_handle_smi_rsp(lan_data_t *len, msg_t *msg,
+void ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
 			 unsigned char *rsp, int rsp_len);
+
+int ipmi_lan_init(lan_data_t *lan);
 
 #endif /* __LANSERV_H */

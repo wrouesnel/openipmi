@@ -1,6 +1,9 @@
 
 2003-04-25 Corey Minyard <cminyard@mvista.com>
 
+	* lanserv.c, lanserv_ipmi.c, lanserv_asf.c, lanserv.h: Added a LAN
+	to SI interface.
+
 	* include/OpenIPMI/ipmi_auth.h: Abstracted the memory allocation
 	so the auth routines don't depend on OpenIPMI.
 	* ipmi_lan.c: ditto
