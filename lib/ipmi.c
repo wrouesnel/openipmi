@@ -1554,5 +1554,5 @@ ipmi_handle_snmp_trap_data(void            *src_addr,
 char *
 ipmi_openipmi_version(void)
 {
-    return VERSION;
+    return OPENIPMI_VERSION;
 }
