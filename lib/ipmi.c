@@ -945,10 +945,16 @@ struct ipmi_args_s
     char            *str_addr[2];
     char            *str_port[2];
     int             num_addr;
+    int             authtype_set;
     int             authtype;
     int             privilege;
-    char            username[17];
-    char            password[17];
+    int             privilege_set;
+    int             username_set;
+    char            username[16];
+    unsigned int    username_len;
+    int             password_set;
+    char            password[16];
+    unsigned int    password_len;
 
     unsigned char   swid;
     struct in_addr  lan_addr[2];
@@ -970,7 +976,8 @@ ipmi_parse_args(int         *curr_arg,
 		ipmi_args_t **iargs)
 {
     ipmi_args_t *p;
-    int rv;
+    int         rv;
+    int         len;
     
     p = ipmi_mem_alloc(sizeof(*p));
     if (!p)
@@ -1034,6 +1041,7 @@ ipmi_parse_args(int         *curr_arg,
 	    goto out_err;
 	}
 	(*curr_arg)++; CHECK_ARG;
+	p->authtype_set = 1;
 
 	if (strcmp(args[*curr_arg], "callback") == 0) {
 	    p->privilege = IPMI_PRIVILEGE_CALLBACK;
@@ -1049,15 +1057,23 @@ ipmi_parse_args(int         *curr_arg,
 	    rv = EINVAL;
 	    goto out_err;
 	}
+	p->privilege_set = 1;
 	(*curr_arg)++; CHECK_ARG;
 
-	memset(p->username, 0, sizeof(p->username));
-	memset(p->password, 0, sizeof(p->password));
-	strncpy(p->username, args[*curr_arg], 16);
+	len = strlen(args[*curr_arg]);
+	if (len > 16)
+	    len = 16;
+	memcpy(p->username, args[*curr_arg], len);
 	p->username[16] = '\0';
 	(*curr_arg)++; CHECK_ARG;
-	strncpy(p->password, args[*curr_arg], 16);
-	p->password[16] = '\0';
+	len = strlen(args[*curr_arg]);
+	p->username_len = len;
+	p->username_set = 1;
+	if (len > 16)
+	    len = 16;
+	memcpy(p->password, args[*curr_arg], len);
+	p->password_len = len;
+	p->password_set = 1;
 	(*curr_arg)++;
     } else if (strcmp(args[*curr_arg], "mxp") == 0) {
 	struct hostent *ent;
@@ -1163,10 +1179,6 @@ ipmi_parse_args2(int         *curr_arg,
 	return ENOMEM;
     memset(p, 0, sizeof(*p));
 
-    /* Initialize some defaults that are not zero. */
-    p->authtype = IPMI_AUTHTYPE_DEFAULT;
-    p->privilege = IPMI_PRIVILEGE_ADMIN;
-
     CHECK_ARG;
 
     if (strcmp(args[*curr_arg], "smi") == 0) {
@@ -1178,6 +1190,7 @@ ipmi_parse_args2(int         *curr_arg,
 	(*curr_arg)++;
     } else if (strcmp(args[*curr_arg], "lan") == 0) {
 	int i;
+	int len;
 
 	(*curr_arg)++; CHECK_ARG;
 
@@ -1191,12 +1204,20 @@ ipmi_parse_args2(int         *curr_arg,
 
 	    if (strcmp(args[*curr_arg], "-U") == 0) {
 		(*curr_arg)++; CHECK_ARG;
-		strncpy(p->username, args[*curr_arg], 16);
-		p->username[16] = '\0';
+		len = strlen(args[*curr_arg]);
+		if (len > 16)
+		    len = 16;
+		memcpy(p->username, args[*curr_arg], len);
+		p->username_set = 1;
+		p->username_len = len;
 	    } else if (strcmp(args[*curr_arg], "-P") == 0) {
 		(*curr_arg)++; CHECK_ARG;
-		strncpy(p->password, args[*curr_arg], 16);
-		p->password[16] = '\0';
+		len = strlen(args[*curr_arg]);
+		if (len > 16)
+		    len = 16;
+		memcpy(p->password, args[*curr_arg], len);
+		p->password_set = 1;
+		p->password_len = len;
 	    } else if (strcmp(args[*curr_arg], "-s") == 0) {
 		p->num_addr = 2;
 	    } else if (strcmp(args[*curr_arg], "-A") == 0) {
@@ -1213,6 +1234,7 @@ ipmi_parse_args2(int         *curr_arg,
 		    rv = EINVAL;
 		    goto out_err;
 		}
+		p->authtype_set = 1;
 	    } else if (strcmp(args[*curr_arg], "-L") == 0) {
 		(*curr_arg)++; CHECK_ARG;
 
@@ -1230,6 +1252,7 @@ ipmi_parse_args2(int         *curr_arg,
 		    rv = EINVAL;
 		    goto out_err;
 		}
+		p->privilege_set = 1;
 	    } else if (strcmp(args[*curr_arg], "-p") == 0) {
 		(*curr_arg)++; CHECK_ARG;
 		p->str_port[0] = ipmi_strdup(args[*curr_arg]);
@@ -1354,17 +1377,43 @@ ipmi_args_setup_con(ipmi_args_t  *args,
 	return ipmi_smi_setup_con(args->smi_intf, handlers, user_data, con);
 
     case LAN:
-	return ipmi_ip_setup_con(args->str_addr,
-				 args->str_port,
-				 args->num_addr,
-				 args->authtype,
-				 args->privilege,
-				 args->username,
-				 strlen(args->username),
-				 args->password,
-				 strlen(args->password),
-				 handlers, user_data,
-				 con);
+    {
+	int              i;
+	ipmi_lanp_parm_t parms[6];
+
+	i = 0;
+	parms[i].parm_id = IPMI_LANP_PARMID_ADDRS;
+	parms[i].parm_data = args->str_addr;
+	parms[i].parm_data_len = args->num_addr;
+	i++;
+	parms[i].parm_id = IPMI_LANP_PARMID_PORTS;
+	parms[i].parm_data = args->str_port;
+	parms[i].parm_data_len = args->num_addr;
+	i++;
+	if (args->authtype_set) {
+	    parms[i].parm_id = IPMI_LANP_PARMID_AUTHTYPE;
+	    parms[i].parm_val = args->authtype;
+	    i++;
+	}
+	if (args->privilege_set) {
+	    parms[i].parm_id = IPMI_LANP_PARMID_PRIVILEGE;
+	    parms[i].parm_val = args->privilege;
+	    i++;
+	}
+	if (args->username_set) {
+	    parms[i].parm_id = IPMI_LANP_PARMID_USERNAME;
+	    parms[i].parm_data = args->username;
+	    parms[i].parm_data_len = args->username_len;
+	    i++;
+	}
+	if (args->password_set) {
+	    parms[i].parm_id = IPMI_LANP_PARMID_PASSWORD;
+	    parms[i].parm_data = args->password;
+	    parms[i].parm_data_len = args->password_len;
+	    i++;
+	}
+	return ipmi_lanp_setup_con(parms, i, handlers, user_data, con);
+    }
 
     case MXP:
 	return mxp_lan_setup_con(args->lan_addr,

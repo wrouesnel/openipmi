@@ -2855,12 +2855,92 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 		  void         *user_data,
 		  ipmi_con_t   **new_con)
 {
+    ipmi_lanp_parm_t parms[6];
+
+    parms[0].parm_id = IPMI_LANP_PARMID_ADDRS;
+    parms[0].parm_data = (void *) ip_addrs;
+    parms[0].parm_data_len = num_ip_addrs;
+    parms[1].parm_id = IPMI_LANP_PARMID_PORTS;
+    parms[1].parm_data = (void *) ports;
+    parms[1].parm_data_len = num_ip_addrs;
+    parms[2].parm_id = IPMI_LANP_PARMID_AUTHTYPE;
+    parms[2].parm_val = authtype;
+    parms[3].parm_id = IPMI_LANP_PARMID_PRIVILEGE;
+    parms[3].parm_val = privilege;
+    parms[4].parm_id = IPMI_LANP_PARMID_USERNAME;
+    parms[4].parm_data = username;
+    parms[4].parm_data_len = username_len;
+    parms[5].parm_id = IPMI_LANP_PARMID_PASSWORD;
+    parms[5].parm_data = password;
+    parms[5].parm_data_len = password_len;
+    return ipmi_lanp_setup_con(parms, 6, handlers, user_data, new_con);
+}
+
+int
+ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
+		    unsigned int     num_parms,
+		    os_handler_t     *handlers,
+		    void             *user_data,
+		    ipmi_con_t       **new_con)
+{
     ipmi_con_t     *ipmi = NULL;
     lan_data_t     *lan = NULL;
     int            rv;
     int            i;
     int		   count;
     struct sockaddr_in *pa;
+    char         **ip_addrs = NULL;
+    char         **ports = NULL;
+    unsigned int num_ip_addrs = 0;
+    unsigned int authtype = IPMI_AUTHTYPE_DEFAULT;
+    unsigned int privilege = IPMI_PRIVILEGE_ADMIN;
+    void         *username = NULL;
+    unsigned int username_len = 0;
+    void         *password = NULL;
+    unsigned int password_len = 0;
+
+
+    for (i=0; i<num_parms; i++) {
+	switch (parms[i].parm_id) {
+	case IPMI_LANP_PARMID_AUTHTYPE:
+	    authtype = parms[i].parm_val;
+	    break;
+
+	case IPMI_LANP_PARMID_PRIVILEGE:
+	    privilege = parms[i].parm_val;
+	    break;
+
+	case IPMI_LANP_PARMID_PASSWORD:
+	    password = parms[i].parm_data;
+	    password_len = parms[i].parm_data_len;
+	    break;
+
+	case IPMI_LANP_PARMID_USERNAME:
+	    username = parms[i].parm_data;
+	    username_len = parms[i].parm_data_len;
+	    break;
+
+	case IPMI_LANP_PARMID_ADDRS:
+	    if (num_ip_addrs && (num_ip_addrs != parms[i].parm_data_len))
+		return EINVAL;
+	    ip_addrs = parms[i].parm_data;
+	    num_ip_addrs = parms[i].parm_data_len;
+	    break;
+
+	case IPMI_LANP_PARMID_PORTS:
+	    if (num_ip_addrs && (num_ip_addrs != parms[i].parm_data_len))
+		return EINVAL;
+	    ports = parms[i].parm_data;
+	    num_ip_addrs = parms[i].parm_data_len;
+	    break;
+
+	default:
+	    return EINVAL;
+	}
+    }
+
+    if ((num_ip_addrs == 0) || (ip_addrs == NULL))
+	return EINVAL;
 
     if (username_len > IPMI_USERNAME_MAX)
 	return EINVAL;
@@ -2977,9 +3057,11 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
     if (rv)
 	goto out_err;
 
-    memcpy(lan->username, username, username_len);
+    if (username_len)
+	memcpy(lan->username, username, username_len);
     lan->username_len = username_len;
-    memcpy(lan->password, password, password_len);
+    if (username_len)
+	memcpy(lan->password, password, password_len);
     lan->password_len = password_len;
 
     ipmi->start_con = lan_start_con;

@@ -1,3 +1,12 @@
+2004-11-27 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_lan.h, lib/ipmi_lan.c: Added a new, more
+	flexible interface for configuring a LAN connection.  Hopefully
+	this is the last one we have to do here, this would be able
+	to handle anything (especially RMCP+).
+
+	* lib/ipmi.c: Adjusted to use the new LAN connection method.
+
 2004-11-18 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_smi.c: Fix the unregister ioctl for the socket interface.
