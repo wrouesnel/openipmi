@@ -7,6 +7,9 @@
 	* lanserv/emu.c lanserv/lanserv.c lanserv/lanserv_emu.c: Adjustments
 	for the previous change.
 
+	* utils/md5.c: Fixed this to work on big and little endian without
+	special defines.
+
 2003-12-02 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/emu_cmd.c, lanserv/Makefile.am, lanserv/lanserv_emu.c:

@@ -99,21 +99,11 @@ transform( MD5_CONTEXT *ctx, byte *data )
     register u32 C = ctx->C;
     register u32 D = ctx->D;
     u32 *cwp = correct_words;
+    int i;
+    byte *p1;
 
-#ifdef BIG_ENDIAN_HOST
-    { int i;
-      byte *p2, *p1;
-      for(i=0, p1=data, p2=(byte*)correct_words; i < 16; i++, p2 += 4 ) {
-	p2[3] = *p1++;
-	p2[2] = *p1++;
-	p2[1] = *p1++;
-	p2[0] = *p1++;
-      }
-    }
-#else
-    memcpy( correct_words, data, 64 );
-#endif
-
+    for(i=0, p1=data; i < 16; i++, p1 += 4)
+	correct_words[i] = p1[0] | (p1[1] << 8) | (p1[2] << 16) | (p1[3] << 24);
 
 #define OP(a, b, c, d, s, T)					    \
   do								    \
@@ -312,12 +302,8 @@ md5_final( MD5_CONTEXT *hd )
     burn_stack (80+6*sizeof(void*));
 
     p = hd->buf;
-  #ifdef BIG_ENDIAN_HOST
     #define X(a) do { *p++ = hd->a      ; *p++ = hd->a >> 8;      \
 		      *p++ = hd->a >> 16; *p++ = hd->a >> 24; } while(0)
-  #else /* little endian */
-    #define X(a) do { *(u32*)p = (*hd).a ; p += 4; } while(0)
-  #endif
     X(A);
     X(B);
     X(C);
@@ -451,7 +437,7 @@ md5_get_info( int algo, size_t *contextsize,
 #ifndef IS_MODULE
 static
 #endif
-const char * const gnupgext_version = "MD5 ($Revision: 1.1 $)";
+const char * const gnupgext_version = "MD5 ($Revision: 1.2 $)";
 
 static struct {
     int class;
