@@ -7803,6 +7803,15 @@ zynx_switch_handler(ipmi_mc_t     *mc,
     ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
     int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
 	= ipmi_standard_sensor_cb.ipmi_reading_get;
+    int                v1_switch;
+
+    if ((ipmi_mc_manufacturer_id(mc) == ZYNX_MANUFACTURER_ID)
+	&& (ipmi_mc_minor_fw_revision(mc) >= 6))
+    {
+	v1_switch = 0;
+    } else {
+	v1_switch = 1;
+    }
 
     ipmi_domain_entity_lock(domain);
 
@@ -7847,120 +7856,122 @@ zynx_switch_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    /* This is the temperature sensor on the board.  It's accessed
-       using a standard reading command, but there's no SDR for it. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
-					       IPMI_SENSOR_TYPE_TEMPERATURE,
-					       IPMI_UNIT_TYPE_DEGREES_C,
-					       "Board Temp",
-					       0, 0,
-					       get,
-					       -1, -1, 55,
-					       1, 0, 0, 0,
-					       &sinfo->board_temp);
-    if (rv)
-	goto out;
-    ipmi_sensor_set_analog_data_format(sinfo->board_temp,
-				       IPMI_ANALOG_DATA_FORMAT_2_COMPL);
-    ipmi_sensor_set_raw_sensor_max(sinfo->board_temp, 0x7f);
-    ipmi_sensor_set_raw_sensor_min(sinfo->board_temp, 0x80);
-    rv = mxp_add_sensor(mc,
-			&sinfo->board_temp,
-			0x60,
-			ent);
-    if (rv)
-	goto out;
+    if (v1_switch) {
+	/* This is the temperature sensor on the board.  It's accessed
+	   using a standard reading command, but there's no SDR for it. */
+	rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
+						   IPMI_SENSOR_TYPE_TEMPERATURE,
+						   IPMI_UNIT_TYPE_DEGREES_C,
+						   "Board Temp",
+						   0, 0,
+						   get,
+						   -1, -1, 55,
+						   1, 0, 0, 0,
+						   &sinfo->board_temp);
+	if (rv)
+	    goto out;
+	ipmi_sensor_set_analog_data_format(sinfo->board_temp,
+					   IPMI_ANALOG_DATA_FORMAT_2_COMPL);
+	ipmi_sensor_set_raw_sensor_max(sinfo->board_temp, 0x7f);
+	ipmi_sensor_set_raw_sensor_min(sinfo->board_temp, 0x80);
+	rv = mxp_add_sensor(mc,
+			    &sinfo->board_temp,
+			    0x60,
+			    ent);
+	if (rv)
+	    goto out;
 
-    /*
-     * Here's the calculations from ZYNX for converting the voltage
-     * readings from raw values to cooked values.:
-     *
-     * Voltage rails      SensorNumber      Normalized Value     Tolerance
-     * Calculation
-     * -------------------------------------------------------------------
-     * 2.5 V              0x41              ~2.0 V                 5%
-     *  Actual Voltage on 2.5V Rail = 1.23 * ((SV41/255) * 3.3)
-     * 1.8 V              0x42              ~1.8 V                 5%
-     *  Actual Voltage on 1.8V Rail =  (SV42/255) * 3.3
-     * 3.3 V              0x43              ~2.0 V		   5%
-     *  Actual Voltage on 3.3V Rail = 1.67 * ((SV43/255) * 3.3)
-     * 5.0 V              0x45              ~2.0 V                 5%
-     *  Actual Voltage on 5V Rail = 2.48* ((SV45/255) * 3.3)
-     */
+	/*
+	 * Here's the calculations from ZYNX for converting the voltage
+	 * readings from raw values to cooked values.:
+	 *
+	 * Voltage rails      SensorNumber      Normalized Value     Tolerance
+	 * Calculation
+	 * -------------------------------------------------------------------
+	 * 2.5 V              0x41              ~2.0 V                 5%
+	 *  Actual Voltage on 2.5V Rail = 1.23 * ((SV41/255) * 3.3)
+	 * 1.8 V              0x42              ~1.8 V                 5%
+	 *  Actual Voltage on 1.8V Rail =  (SV42/255) * 3.3
+	 * 3.3 V              0x43              ~2.0 V		   5%
+	 *  Actual Voltage on 3.3V Rail = 1.67 * ((SV43/255) * 3.3)
+	 * 5.0 V              0x45              ~2.0 V                 5%
+	 *  Actual Voltage on 5V Rail = 2.48* ((SV45/255) * 3.3)
+	 */
+	
+	/* This is the voltage sensors on the board.  It's accessed
+	   using a standard reading command, but there's no SDR for it. */
+	rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
+						   IPMI_SENSOR_TYPE_VOLTAGE,
+						   IPMI_UNIT_TYPE_VOLTS,
+						   "2.5V",
+						   0, 0,
+						   get,
+						   157, 150, 165,
+						   159, 0, 0, -4,
+						   &(sinfo->v2_5));
+	if (rv)
+	    goto out;
+	rv = mxp_add_sensor(mc,
+			    &sinfo->v2_5,
+			    0x41,
+			    ent);
+	if (rv)
+	    goto out;
 
-    /* This is the voltage sensors on the board.  It's accessed
-       using a standard reading command, but there's no SDR for it. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
-					       IPMI_SENSOR_TYPE_VOLTAGE,
-					       IPMI_UNIT_TYPE_VOLTS,
-					       "2.5V",
-					       0, 0,
-					       get,
-					       157, 150, 165,
-					       159, 0, 0, -4,
-					       &(sinfo->v2_5));
-    if (rv)
-	goto out;
-    rv = mxp_add_sensor(mc,
-			&sinfo->v2_5,
-			0x41,
-			ent);
-    if (rv)
-	goto out;
+	rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
+						   IPMI_SENSOR_TYPE_VOLTAGE,
+						   IPMI_UNIT_TYPE_VOLTS,
+						   "1.8V",
+						   0, 0,
+						   get,
+						   139, 133, 146,
+						   129, 0, 0, -4,
+						   &sinfo->v1_8);
+	if (rv)
+	    goto out;
+	rv = mxp_add_sensor(mc,
+			    &sinfo->v1_8,
+			    0x42,
+			    ent);
+	if (rv)
+	    goto out;
 
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
-					       IPMI_SENSOR_TYPE_VOLTAGE,
-					       IPMI_UNIT_TYPE_VOLTS,
-					       "1.8V",
-					       0, 0,
-					       get,
-					       139, 133, 146,
-					       129, 0, 0, -4,
-					       &sinfo->v1_8);
-    if (rv)
-	goto out;
-    rv = mxp_add_sensor(mc,
-			&sinfo->v1_8,
-			0x42,
-			ent);
-    if (rv)
-	goto out;
+	rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
+						   IPMI_SENSOR_TYPE_VOLTAGE,
+						   IPMI_UNIT_TYPE_VOLTS,
+						   "3.3V",
+						   0, 0,
+						   get,
+						   153, 146, 160,
+						   216, 0, 0, -4,
+						   &sinfo->v3_3);
+	if (rv)
+	    goto out;
+	rv = mxp_add_sensor(mc,
+			    &sinfo->v3_3,
+			    0x43,
+			    ent);
+	if (rv)
+	    goto out;
 
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
-					       IPMI_SENSOR_TYPE_VOLTAGE,
-					       IPMI_UNIT_TYPE_VOLTS,
-					       "3.3V",
-					       0, 0,
-					       get,
-					       153, 146, 160,
-					       216, 0, 0, -4,
-					       &sinfo->v3_3);
-    if (rv)
-	goto out;
-    rv = mxp_add_sensor(mc,
-			&sinfo->v3_3,
-			0x43,
-			ent);
-    if (rv)
-	goto out;
-
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
-					       IPMI_SENSOR_TYPE_VOLTAGE,
-					       IPMI_UNIT_TYPE_VOLTS,
-					       "5V",
-					       0, 0,
-					       get,
-					       156, 148, 163,
-					       321, 0, 0, -4,
-					       &sinfo->v5);
-    if (rv)
-	goto out;
-    rv = mxp_add_sensor(mc,
-			&sinfo->v5,
-			0x45,
-			ent);
-    if (rv)
-	goto out;
+	rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
+						   IPMI_SENSOR_TYPE_VOLTAGE,
+						   IPMI_UNIT_TYPE_VOLTS,
+						   "5V",
+						   0, 0,
+						   get,
+						   156, 148, 163,
+						   321, 0, 0, -4,
+						   &sinfo->v5);
+	if (rv)
+	    goto out;
+	rv = mxp_add_sensor(mc,
+			    &sinfo->v5,
+			    0x45,
+			    ent);
+	if (rv)
+	    goto out;
+    }
 
     rv = ipmi_mc_add_oem_removed_handler(mc, zynx_removal_handler, sinfo, NULL);
 

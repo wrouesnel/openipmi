@@ -11,6 +11,9 @@
 	* lib/oem_atca.c: Started serious work into handling for ATCA
 	LEDs.
 
+	* lib/oem_motorola_mxp.c: Added handling for newer Zynx switch
+	boards.
+
 2004-02-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a race condition dealing with an MC going away
