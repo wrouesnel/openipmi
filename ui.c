@@ -2411,7 +2411,12 @@ redisplay_timeout(selector_t  *sel,
     struct timeval now;
     int            rv;
 
-    if (curr_display_type == DISPLAY_SENSOR) {
+    if (curr_display_type == DISPLAY_ENTITY) {
+	rv = ipmi_mc_pointer_cb(bmc_id, entities_cmd_bmcer, NULL);
+	if (rv)
+	    ui_log("redisplay_timeout:"
+		   " Unable to convert BMC id to a pointer\n");
+    } else if (curr_display_type == DISPLAY_SENSOR) {
 	rv = ipmi_sensor_pointer_cb(curr_sensor_id, redisplay_sensor, NULL);
 	if (rv)
 	    ui_log("redisplay_timeout: Unable to get sensor pointer: 0x%x\n",
