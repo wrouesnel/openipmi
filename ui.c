@@ -11,7 +11,9 @@
 #include <ipmi/ipmi_lan.h>
 #include <ipmi/ipmi_auth.h>
 #include <ipmi/ipmi_err.h>
+#include <ipmi/ipmi_mc.h>
 #include <ipmi/ipmiif.h>
+#include <ipmi/ipmi_int.h>
 
 #include "ui_keypad.h"
 #include "ui_command.h"
@@ -73,7 +75,8 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 
 /* The current thing display in the display pad. */
 enum {
-    DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_ENTITY, DISPLAY_SENSORS
+    DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_ENTITY, DISPLAY_SENSORS,
+    DISPLAY_ENTITIES, DISPLAY_MCS, DISPLAY_RSP
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
 typedef struct pos_s {int y; int x; } pos_t;
@@ -416,6 +419,7 @@ entities_cmd(char *cmd, char **toks, void *cb_data)
 
     werase(display_pad);
     wmove(display_pad, 0, 0);
+    curr_display_type = DISPLAY_ENTITIES;
     waddstr(display_pad, "Entities:\n");
     ipmi_bmc_iterate_entities(bmc, entities_handler, NULL);
     display_pad_refresh();
@@ -1135,6 +1139,148 @@ enable_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+void mcs_handler(ipmi_mc_t *bmc,
+		 ipmi_mc_t *mc,
+		 void      *cb_data)
+{
+    int addr;
+
+    addr = ipmi_mc_get_address(mc);
+    wprintw(display_pad, "  0x%x\n", addr);
+}
+
+int
+mcs_cmd(char *cmd, char **toks, void *cb_data)
+{
+    if (!bmc) {
+	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	return 0;
+    }
+
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    curr_display_type = DISPLAY_MCS;
+    waddstr(display_pad, "MCs:\n");
+    ipmi_bmc_iterate_mcs(bmc, mcs_handler, NULL);
+    display_pad_refresh();
+    return 0;
+}
+
+#define MCCMD_DATA_SIZE 30
+typedef struct mccmd_info_s
+{
+    unsigned char addr;
+    unsigned char lun;
+    ipmi_msg_t    msg;
+    int           found;
+} mccmd_info_t;
+
+static void
+mccmd_rsp_handler(ipmi_mc_t  *src,
+		  ipmi_msg_t *msg,
+		  void       *rsp_data)
+{
+    unsigned int i;
+
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    curr_display_type = DISPLAY_RSP;
+    waddstr(display_pad, "Response:\n");
+    wprintw(display_pad, "  NetFN = 0x%2.2x\n", msg->netfn);
+    wprintw(display_pad, "  Command = 0x%2.2x\n", msg->cmd);
+    wprintw(display_pad, "  Completion code = 0x%2.2x\n", msg->data[0]);
+    wprintw(display_pad, "  data =");
+    for (i=1; i<msg->data_len; i++) {
+	if (((i-1) != 0) && (((i-1) % 8) == 0))
+	    waddstr(display_pad, "\n        ");
+	wprintw(display_pad, " %2.2x", msg->data[i]);
+    }
+    waddstr(display_pad, "\n");
+    display_pad_refresh();
+}
+
+void mccmd_handler(ipmi_mc_t *bmc,
+		   ipmi_mc_t *mc,
+		   void      *cb_data)
+{
+    mccmd_info_t *info = cb_data;
+    int          rv;
+
+    if (info->addr == ipmi_mc_get_address(mc)) {
+	info->found = 1;
+	rv = ipmi_send_command(mc, info->lun, &(info->msg), mccmd_rsp_handler,
+			       NULL);
+	if (rv)
+	    wprintw(cmd_win, "Send command failure: %x\n", rv);
+    }
+
+}
+
+static int
+get_uchar(char **toks, unsigned char *val, char *errstr)
+{
+    char *str, *tmpstr;
+
+    str = strtok_r(NULL, " \t\n", toks);
+    if (!str) {
+	if (errstr)
+	    wprintw(cmd_win, "No %s given\n", errstr);
+	return EINVAL;
+    }
+    *val = strtoul(str, &tmpstr, 0);
+    if (*tmpstr != '\0') {
+	if (errstr)
+	    wprintw(cmd_win, "Invalid %s given\n", errstr);
+	return EINVAL;
+    }
+
+    return 0;
+}
+
+int
+mccmd_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    unsigned char data[MCCMD_DATA_SIZE];
+    unsigned int  data_len;
+
+    if (get_uchar(toks, &info.addr, "MC address"))
+	return 0;
+
+    if (get_uchar(toks, &info.lun, "LUN"))
+	return 0;
+
+    if (get_uchar(toks, &info.msg.netfn, "NetFN"))
+	return 0;
+
+    if (get_uchar(toks, &info.msg.cmd, "command"))
+	return 0;
+
+    for (data_len=0; ; data_len++) {
+	if (get_uchar(toks, data+data_len, NULL))
+	    break;
+    }
+
+    info.msg.data_len = data_len;
+    info.msg.data = data;
+
+    if (info.addr == 0x20) {
+	int rv;
+	rv = ipmi_send_command(bmc, info.lun, &(info.msg), mccmd_rsp_handler,
+			       NULL);
+	if (rv)
+	    wprintw(cmd_win, "Send command failure: %x\n", rv);
+    } else {
+	info.found = 0;
+	ipmi_bmc_iterate_mcs(bmc, mccmd_handler, &info);
+	if (!info.found) {
+	    wprintw(cmd_win, "Unable to find MC at address 0x%x\n", info.addr);
+	}
+	display_pad_refresh();
+    }
+    return 0;
+}
+
 static struct {
     char          *name;
     cmd_handler_t handler;
@@ -1144,6 +1290,8 @@ static struct {
     { "sensors",			sensors_cmd },
     { "sensor",				sensor_cmd },
     { "enable",				enable_cmd },
+    { "mcs",				mcs_cmd },
+    { "mccmd",				mccmd_cmd },
     { NULL,				NULL}
 };
 int
@@ -1477,6 +1625,8 @@ main(int argc, char *argv[])
     int            err;
     int            rv;
 
+
+    __ipmi_log_mask = DEBUG_MSG_BIT;
 
     if (argc < 2) {
 	fprintf(stderr, "Not enough arguments\n");

@@ -285,7 +285,7 @@ lan_send(lan_data_t  *lan,
     if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	/* It's a message straight to the BMC. */
 	ipmi_system_interface_addr_t *si_addr
-	    = (ipmi_system_interface_addr_t *) &addr;
+	    = (ipmi_system_interface_addr_t *) addr;
 
 	tmsg[0] = 0x20; /* To the BMC. */
 	tmsg[1] = (msg->netfn << 2) | si_addr->lun;
@@ -300,7 +300,7 @@ lan_send(lan_data_t  *lan,
     } else {
 	/* It's an IPMB address, route it using a send message
            command. */
-	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) &addr;
+	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) addr;
 
 	pos = 0;
 	tmsg[pos++] = 0x20; /* BMC is the bridge. */
@@ -644,6 +644,7 @@ data_handler(int            fd,
 	addr_len = sizeof(ipmi_system_interface_addr_t);
 	msg.data = tmsg+6;
 	msg.data_len = data_len - 6;
+	msg.data_len--; /* Remove the checksum */
     }
     
     ipmi_lock(lan->seq_num_lock);
@@ -665,7 +666,7 @@ data_handler(int            fd,
 	   callback. */
 	lan->seq_table[seq].timer_info->cancelled = 1;
     else
-	/* Time is cancelled, free its data. */
+	/* Timer is cancelled, free its data. */
 	free(lan->seq_table[seq].timer_info);
 
     handler = lan->seq_table[seq].rsp_handler;

@@ -1528,6 +1528,30 @@ ipmi_bmc_iterate_entities(ipmi_mc_t                       *bmc,
     return 0;
 }
 
+typedef struct iterate_mc_info_s
+{
+    ipmi_mc_t               *bmc;
+    ipmi_bmc_iterate_mcs_cb handler;
+    void                    *cb_data;
+} iterate_mc_info_t;
+
+static void
+iterate_mcs_handler(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    iterate_mc_info_t *info = cb_data;
+    info->handler(info->bmc, item, info->cb_data);
+}
+
+int
+ipmi_bmc_iterate_mcs(ipmi_mc_t               *bmc,
+		     ipmi_bmc_iterate_mcs_cb handler,
+		     void                    *cb_data)
+{
+    iterate_mc_info_t info = { bmc, handler, cb_data };
+    ilist_iter(bmc->bmc->mc_list, iterate_mcs_handler, &info);
+    return 0;
+}
+
 ipmi_mc_id_t
 ipmi_mc_convert_to_id(ipmi_mc_t *mc)
 {
