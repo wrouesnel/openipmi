@@ -90,7 +90,19 @@ int sel_start_timer(sel_timer_t    *timer,
 
 int sel_stop_timer(sel_timer_t *timer);
 
-/* This is the main loop for the program. */
-void sel_select_loop(selector_t *sel);
+/* For multi-threaded programs, you will need to wake the selector
+   thread if you add a timer to the top of the heap or change the fd
+   mask.  This code should send a signal to the thread that calls
+   sel-select_loop.  The user will have to allocate the signal, set
+   the handlers, etc.  The thread_id and cb_data are just the values
+   passed into sel_select_loop(). */
+typedef void (*sel_send_sig_cb)(long thread_id, void *cb_data);
+
+/* This is the main loop for the program.  If NULL is passed in to
+   send_sig, then the signal sender is not used. */
+void sel_select_loop(selector_t      *sel,
+		     sel_send_sig_cb send_sig,
+		     long            thread_id,
+		     void            *cb_data);
 
 #endif /* SELECTOR */

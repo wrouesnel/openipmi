@@ -570,7 +570,7 @@ check_sel(void)
 	return;
     }
 
-    sel_select_loop(sel);
+    sel_select_loop(sel, NULL, 0, NULL);
 }
 
 extern unsigned int __ipmi_log_mask;

@@ -105,6 +105,32 @@ ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)
 }
 
 int
+ipmi_create_global_lock(ipmi_lock_t **new_lock)
+{
+    ipmi_lock_t *lock;
+    int         rv;
+
+    lock = malloc(sizeof(*lock));
+    if (!lock)
+	return ENOMEM;
+
+    lock->os_hnd = ipmi_os_handler;
+    if (lock->os_hnd->create_lock) {
+	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
+	if (rv) {
+	    free(lock);
+	    return rv;
+	}
+    } else {
+	lock->ll_lock = NULL;
+    }
+
+    *new_lock = lock;
+
+    return 0;
+}
+
+int
 ipmi_create_lock(ipmi_mc_t *mc, ipmi_lock_t **new_lock)
 {
     return ipmi_create_lock_os_hnd(ipmi_mc_get_os_hnd(mc), new_lock);

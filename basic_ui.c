@@ -134,7 +134,7 @@ main(int argc, char *argv[])
 	goto out;
     }
 
-    sel_select_loop(selector);
+    sel_select_loop(selector, NULL, 0, NULL);
 
  out:
     ipmi_ui_shutdown();

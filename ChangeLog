@@ -1,4 +1,15 @@
 
+2003-01-24 Corey Minyard <cminyard@mvista.com>
+
+	* selector.c, include/OpenIPMI/selector.h: Modified the selector
+	code to be reentrant
+	
+	* ipmi.c, include/OpenIPMI/ipmi_int.h: Added a way to allocate a
+	lock using the global IPMI selector.
+
+	* basic_ui.c, test1.c: Changed to account for the selector
+	changes.
+
 2003-01-22 Corey Minyard <cminyard@mvista.com>
 
 	* basic_ui.c, ui.c, include/OpenIPMI/ipmi_ui.h: Start working on a

@@ -55,6 +55,9 @@ typedef struct ipmi_lock_s ipmi_lock_t;
 /* Create a lock, using the OS handlers for the given MC. */
 int ipmi_create_lock(ipmi_mc_t *mc, ipmi_lock_t **lock);
 
+/* Create a lock using the main os handler registered with ipmi_init(). */
+int ipmi_create_global_lock(ipmi_lock_t **new_lock);
+
 /* Create a lock but us your own OS handlers. */
 int ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **lock);
 

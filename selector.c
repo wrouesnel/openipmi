@@ -39,6 +39,7 @@
    routines registered with it. */
 
 #include <OpenIPMI/selector.h>
+#include <OpenIPMI/ipmi_int.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -86,20 +87,67 @@ struct selector_s
     /* This is an array of all the file descriptors possible.  This is
        moderately wasteful of space, but easy to do.  Hey, memory is
        cheap. */
-    fd_control_t fds[FD_SETSIZE];
+    volatile fd_control_t fds[FD_SETSIZE];
     
     /* These are the offical fd_sets used to track what file descriptors
        need to be monitored. */
-    fd_set read_set;
-    fd_set write_set;
-    fd_set except_set;
+    volatile fd_set read_set;
+    volatile fd_set write_set;
+    volatile fd_set except_set;
 
-    int maxfd; /* The largest file descriptor registered with this
-		  code. */
+    ipmi_lock_t *fd_lock;
+
+    volatile int maxfd; /* The largest file descriptor registered with
+			   this code. */
 
     /* The timer heap. */
-    sel_timer_t *timer_top, *timer_last;
+    volatile sel_timer_t *timer_top, *timer_last;
+
+    ipmi_lock_t *timer_lock;
+
+    /* The timeout */
+    sel_send_sig_cb send_sig;
+    long            thread_id;
+    void            *send_sig_cb_data;
+
+    /* This is the memory used to hold the timeout for select
+       operation. */
+    volatile struct timeval timeout;
+
+    /* If we need to be woken up for an FD or timer head change, this
+       will be true. */
+    volatile int need_wake_on_change;
 };
+
+/* This function will wake the SEL thread.  It must be called with the
+   timer lock held, because it messes with timeout.
+
+   The operation is is subtle, but it does work.  The timeout in the
+   selector is the data passed in as the timeout to select.  When we
+   want to wake the select, we set the timeout to zero first.  That
+   way, if the select has calculated the timeout but has not yet
+   called select, then this will set it to zero (causing it to wait
+   zero time).  If select has already been called, then the signal
+   send should wake it up.  We only need to do this after we have
+   calculated the timeout, but before we have called select, thus the
+   need_wake_on_change is only set in that range. */
+static void
+wake_sel_thread(selector_t *sel)
+{
+    if (sel->need_wake_on_change && sel->send_sig) {
+	sel->timeout.tv_sec = 0;
+	sel->timeout.tv_usec = 0;
+	sel->send_sig(sel->thread_id, sel->send_sig_cb_data);
+    }
+}
+
+static void
+wake_sel_thread_lock(selector_t *sel)
+{
+    ipmi_lock(sel->timer_lock);
+    wake_sel_thread(sel);
+    ipmi_unlock(sel->timer_lock);
+}
 
 /* Initialize a single file descriptor. */
 static void
@@ -121,16 +169,23 @@ sel_set_fd_handlers(selector_t       *sel,
 		    sel_fd_handler_t write_handler,
 		    sel_fd_handler_t except_handler)
 {
-    sel->fds[fd].in_use = 1;
-    sel->fds[fd].data = data;
-    sel->fds[fd].handle_read = read_handler;
-    sel->fds[fd].handle_write = write_handler;
-    sel->fds[fd].handle_except = except_handler;
+    fd_control_t *fdc;
+
+    ipmi_lock(sel->fd_lock);
+    fdc = (fd_control_t *) &(sel->fds[fd]);
+    fdc->in_use = 1;
+    fdc->data = data;
+    fdc->handle_read = read_handler;
+    fdc->handle_write = write_handler;
+    fdc->handle_except = except_handler;
 
     /* Move maxfd up if necessary. */
     if (fd > sel->maxfd) {
 	sel->maxfd = fd;
     }
+
+    wake_sel_thread_lock(sel);
+    ipmi_unlock(sel->fd_lock);
 }
 
 /* Clear the handlers for a file descriptor and remove it from
@@ -139,7 +194,8 @@ void
 sel_clear_fd_handlers(selector_t   *sel,
 		      int          fd)
 {
-    init_fd(&(sel->fds[fd]));
+    ipmi_lock(sel->fd_lock);
+    init_fd((fd_control_t *) &(sel->fds[fd]));
     FD_CLR(fd, &sel->read_set);
     FD_CLR(fd, &sel->write_set);
     FD_CLR(fd, &sel->except_set);
@@ -150,6 +206,9 @@ sel_clear_fd_handlers(selector_t   *sel,
 	    sel->maxfd--;
 	}
     }
+
+    wake_sel_thread_lock(sel);
+    ipmi_unlock(sel->fd_lock);
 }
 
 /* Set whether the file descriptor will be monitored for data ready to
@@ -157,12 +216,14 @@ sel_clear_fd_handlers(selector_t   *sel,
 void
 sel_set_fd_read_handler(selector_t *sel, int fd, int state)
 {
+    ipmi_lock(sel->fd_lock);
     if (state == SEL_FD_HANDLER_ENABLED) {
 	FD_SET(fd, &sel->read_set);
     } else if (state == SEL_FD_HANDLER_DISABLED) {
 	FD_CLR(fd, &sel->read_set);
     }
-    /* FIXME - what to do on errors? */
+    wake_sel_thread_lock(sel);
+    ipmi_unlock(sel->fd_lock);
 }
 
 /* Set whether the file descriptor will be monitored for when the file
@@ -170,12 +231,14 @@ sel_set_fd_read_handler(selector_t *sel, int fd, int state)
 void
 sel_set_fd_write_handler(selector_t *sel, int fd, int state)
 {
+    ipmi_lock(sel->fd_lock);
     if (state == SEL_FD_HANDLER_ENABLED) {
 	FD_SET(fd, &sel->write_set);
     } else if (state == SEL_FD_HANDLER_DISABLED) {
 	FD_CLR(fd, &sel->write_set);
     }
-    /* FIXME - what to do on errors? */
+    wake_sel_thread_lock(sel);
+    ipmi_unlock(sel->fd_lock);
 }
 
 /* Set whether the file descriptor will be monitored for exceptions
@@ -183,12 +246,14 @@ sel_set_fd_write_handler(selector_t *sel, int fd, int state)
 void
 sel_set_fd_except_handler(selector_t *sel, int fd, int state)
 {
+    ipmi_lock(sel->fd_lock);
     if (state == SEL_FD_HANDLER_ENABLED) {
 	FD_SET(fd, &sel->except_set);
     } else if (state == SEL_FD_HANDLER_DISABLED) {
 	FD_CLR(fd, &sel->except_set);
     }
-    /* FIXME - what to do on errors? */
+    wake_sel_thread_lock(sel);
+    ipmi_unlock(sel->fd_lock);
 }
 
 static int
@@ -685,9 +750,11 @@ sel_alloc_timer(selector_t            *sel,
 int
 sel_free_timer(sel_timer_t *timer)
 {
+    ipmi_lock(timer->sel->timer_lock);
     if (timer->in_heap) {
 	sel_stop_timer(timer);
     }
+    ipmi_unlock(timer->sel->timer_lock);
     free(timer);
 
     return 0;
@@ -697,25 +764,50 @@ int
 sel_start_timer(sel_timer_t    *timer,
 		struct timeval *timeout)
 {
-    if (timer->in_heap)
+    volatile sel_timer_t *top;
+
+    ipmi_lock(timer->sel->timer_lock);
+    if (timer->in_heap) {
+	ipmi_unlock(timer->sel->timer_lock);
 	return EBUSY;
+    }
+
+    top = timer->sel->timer_top;
 
     timer->timeout = *timeout;
-    add_to_heap(&(timer->sel->timer_top), &(timer->sel->timer_last), timer);
+    add_to_heap((sel_timer_t **) &(timer->sel->timer_top),
+		(sel_timer_t **) &(timer->sel->timer_last),
+		timer);
     timer->in_heap = 1;
+
+    if (timer->sel->send_sig && (top != timer->sel->timer_top))
+	wake_sel_thread(timer->sel);
+    ipmi_unlock(timer->sel->timer_lock);
     return 0;
 }
 
 int
 sel_stop_timer(sel_timer_t *timer)
 {
-    if (!timer->in_heap)
-	return ETIMEDOUT;
+    volatile sel_timer_t *top;
 
-    remove_from_heap(&(timer->sel->timer_top),
-		     &(timer->sel->timer_last),
+    ipmi_lock(timer->sel->timer_lock);
+    if (!timer->in_heap) {
+	ipmi_unlock(timer->sel->timer_lock);
+	return ETIMEDOUT;
+    }
+
+    top = timer->sel->timer_top;
+
+    remove_from_heap((sel_timer_t **) &(timer->sel->timer_top),
+		     (sel_timer_t **) &(timer->sel->timer_last),
 		     timer);
     timer->in_heap = 0;
+
+    if (timer->sel->send_sig && (top != timer->sel->timer_top))
+	wake_sel_thread(timer->sel);
+    ipmi_unlock(timer->sel->timer_lock);
+
     return 0;
 }
 
@@ -723,7 +815,10 @@ sel_stop_timer(sel_timer_t *timer)
    sets, then scan for any available I/O to process.  It also monitors
    the time and call the timeout handlers periodically. */
 void
-sel_select_loop(selector_t *sel)
+sel_select_loop(selector_t      *sel,
+		sel_send_sig_cb send_sig,
+		long            thread_id,
+		void            *cb_data)
 {
     fd_set      tmp_read_set;
     fd_set      tmp_write_set;
@@ -731,52 +826,64 @@ sel_select_loop(selector_t *sel)
     int         i;
     int         err;
     sel_timer_t *timer;
-    struct timeval timeout, *to_time;
+    volatile struct timeval *to_time = &(sel->timeout);
+    struct timeval now;
 
     for (;;) {
-	if (sel->timer_top) {
-	    struct timeval now;
-
+	ipmi_lock(sel->timer_lock);
+	timer = (sel_timer_t *) sel->timer_top;
+	if (timer) {
 	    /* Check for timers to time out. */
 	    gettimeofday(&now, NULL);
-	    timer = sel->timer_top;
 	    while (cmp_timeval(&now, &timer->timeout) >= 0) {
-		remove_from_heap(&(sel->timer_top),
-				 &(sel->timer_last),
+		remove_from_heap((sel_timer_t **) &(sel->timer_top),
+				 (sel_timer_t **) &(sel->timer_last),
 				 timer);
 
 		timer->in_heap = 0;
+		ipmi_unlock(sel->timer_lock);
 		timer->handler(sel, timer, timer->user_data);
+		ipmi_lock(sel->timer_lock);
 
-		timer = sel->timer_top;
-		gettimeofday(&now, NULL);
-		if (!timer)
-		    goto no_timers;
+		timer = (sel_timer_t *) sel->timer_top;
+		if (!timer) {
+		    break;
+		}
 	    }
-
-	    /* Calculate how long to wait now. */
-	    diff_timeval(&timeout, &sel->timer_top->timeout, &now);
-	    to_time = &timeout;
-	} else {
-	no_timers:
-	    to_time = NULL;
 	}
-	memcpy(&tmp_read_set, &sel->read_set, sizeof(tmp_read_set));
-	memcpy(&tmp_write_set, &sel->write_set, sizeof(tmp_write_set));
-	memcpy(&tmp_except_set, &sel->except_set, sizeof(tmp_except_set));
+
+	if (timer) {
+	    /* Calculate how long to wait now. */
+	    gettimeofday(&now, NULL);
+	    diff_timeval((struct timeval *) to_time,
+			 (struct timeval *) &timer->timeout,
+			 &now);
+	} else {
+	    /* No timers, just set a long time. */
+	    to_time->tv_sec = 100000;
+	    to_time->tv_usec = 0;
+	}
+	sel->need_wake_on_change = 1;
+	ipmi_unlock(sel->timer_lock);
+
+	ipmi_lock(sel->fd_lock);
+	memcpy(&tmp_read_set, (void *) &sel->read_set, sizeof(tmp_read_set));
+	memcpy(&tmp_write_set, (void *) &sel->write_set, sizeof(tmp_write_set));
+	memcpy(&tmp_except_set, (void *) &sel->except_set, sizeof(tmp_except_set));
+	ipmi_unlock(sel->fd_lock);
+
 	err = select(sel->maxfd+1,
 		     &tmp_read_set,
 		     &tmp_write_set,
 		     &tmp_except_set,
-		     to_time);
+		     (struct timeval *) to_time);
+	sel->need_wake_on_change = 0;
 	if (err == 0) {
 	    /* A timeout occurred. */
 	} else if (err < 0) {
 	    /* An error occurred. */
 	    if (errno == EINTR) {
 		/* EINTR is ok, just restart the operation. */
-		timeout.tv_sec = 1;
-		timeout.tv_usec = 0;
 	    } else {
 		/* An error is bad, we need to abort. */
 		syslog(LOG_ERR, "select_loop() - select: %m");
@@ -786,6 +893,7 @@ sel_select_loop(selector_t *sel)
 	    /* We got some I/O. */
 	    for (i=0; i<=sel->maxfd; i++) {
 		if (FD_ISSET(i, &tmp_read_set)) {
+		    ipmi_lock(sel->fd_lock);
 		    if (sel->fds[i].handle_read == NULL) {
 			/* Somehow we don't have a handler for this.
                            Just shut it down. */
@@ -793,8 +901,10 @@ sel_select_loop(selector_t *sel)
 		    } else {
 			sel->fds[i].handle_read(i, sel->fds[i].data);
 		    }
+		    ipmi_unlock(sel->fd_lock);
 		}
 		if (FD_ISSET(i, &tmp_write_set)) {
+		    ipmi_lock(sel->fd_lock);
 		    if (sel->fds[i].handle_write == NULL) {
 			/* Somehow we don't have a handler for this.
                            Just shut it down. */
@@ -802,8 +912,10 @@ sel_select_loop(selector_t *sel)
 		    } else {
 			sel->fds[i].handle_write(i, sel->fds[i].data);
 		    }
+		    ipmi_unlock(sel->fd_lock);
 		}
 		if (FD_ISSET(i, &tmp_except_set)) {
+		    ipmi_lock(sel->fd_lock);
 		    if (sel->fds[i].handle_except == NULL) {
 			/* Somehow we don't have a handler for this.
                            Just shut it down. */
@@ -811,6 +923,7 @@ sel_select_loop(selector_t *sel)
 		    } else {
 			sel->fds[i].handle_except(i, sel->fds[i].data);
 		    }
+		    ipmi_unlock(sel->fd_lock);
 		}
 	    }
 	}
@@ -823,17 +936,29 @@ sel_alloc_selector(selector_t **new_selector)
 {
     selector_t *sel;
     int        i;
+    int        rv;
 
     sel = malloc(sizeof(*sel));
     if (!sel)
 	return ENOMEM;
+    memset(sel, 0, sizeof(*sel));
 
-    FD_ZERO(&sel->read_set);
-    FD_ZERO(&sel->write_set);
-    FD_ZERO(&sel->except_set);
+    sel->need_wake_on_change = 0;
+
+    rv = ipmi_create_global_lock(&(sel->timer_lock));
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_create_global_lock(&(sel->fd_lock));
+    if (rv)
+	goto out_err;
+
+    FD_ZERO((fd_set *) &sel->read_set);
+    FD_ZERO((fd_set *) &sel->write_set);
+    FD_ZERO((fd_set *) &sel->except_set);
 
     for (i=0; i<FD_SETSIZE; i++) {
-	init_fd(&(sel->fds[i]));
+	init_fd((fd_control_t *) &(sel->fds[i]));
     }
 
     sel->timer_top = NULL;
@@ -841,7 +966,15 @@ sel_alloc_selector(selector_t **new_selector)
 
     *new_selector = sel;
 
-    return 0;
+ out_err:
+    if (rv) {
+	if (sel->timer_lock)
+	    ipmi_destroy_lock(sel->timer_lock);
+	if (sel->fd_lock)
+	    ipmi_destroy_lock(sel->fd_lock);
+	free(sel);
+    }
+    return rv;
 }
 
 static void
@@ -860,7 +993,12 @@ sel_free_selector(selector_t *sel)
 {
     sel_timer_t *heap;
 
-    heap = sel->timer_top;
+    if (sel->timer_lock)
+	ipmi_destroy_lock(sel->timer_lock);
+    if (sel->fd_lock)
+	ipmi_destroy_lock(sel->fd_lock);
+
+    heap = (sel_timer_t *) sel->timer_top;
 
     free(sel);
     free_heap_element(heap);
