@@ -1,4 +1,8 @@
 
+2003-10-30 Jarrod Johnson <jbj-taway@ura.dnsalias.org>
+
+	* sample/ipmicmd.c: Close the connection when done.
+
 2003-10-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a way to force

@@ -339,8 +339,10 @@ rsp_handler(ipmi_con_t   *ipmi,
 	    void         *data4)
 {
     dump_msg_data(rsp, addr, "response");
-    if (!interactive)
+    if (!interactive) {
+    	ipmi->close_connection(ipmi);
 	exit(0);
+    }
 }
 
 void
@@ -636,11 +638,13 @@ user_input_ready(int fd, void *data)
 
     if (count < 0) {
 	perror("input read");
+    	con->close_connection(con);
 	exit(1);
     }
     if (count == 0) {
 	if( interactive)
 	    printf("\n"); 
+    	con->close_connection(con);
 	exit(0);
     }
     
