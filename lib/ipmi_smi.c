@@ -54,6 +54,9 @@
 #define SMI_TIMEOUT 60000
 
 #define SMI_AUDIT_TIMEOUT 10000000
+#if !defined(MIN)
+#define MIN(x,y) ((x)<(y)?(x):(y))
+#endif
 
 #ifdef DEBUG_MSG
 static void
@@ -340,12 +343,17 @@ smi_send(smi_data_t   *smi,
     int rv;
 
     if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing, addr = ");
+	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing msgid=%08x\n addr =", msgid);
 	dump_hex((unsigned char *) addr, addr_len);
-	ipmi_log(IPMI_LOG_DEBUG_CONT,
-		 "\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", msg->netfn, msg->cmd);
-	dump_hex(msg->data, msg->data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+        ipmi_log(IPMI_LOG_DEBUG_CONT,
+                 "\n msg  = netfn=%s cmd=%s data_len=%d.",
+		 ipmi_get_netfn_string(msg->netfn),
+                 ipmi_get_command_string(msg->netfn, msg->cmd), msg->data_len);
+	if ( msg->data_len ) {
+	        ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
+	        dump_hex((unsigned char *)msg->data, msg->data_len);
+	}
+	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
     }
 
     if (smi->using_socket) {
@@ -626,13 +634,16 @@ static void
 gen_recv_msg(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "incoming, addr = ");
-	dump_hex(recv->addr, recv->addr_len);
-	ipmi_log(IPMI_LOG_DEBUG_CONT,
-		 "\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", recv->msg.netfn, 
-		 recv->msg.cmd);
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming msgid=%08x\n addr =", recv->msgid);
+	dump_hex((unsigned char *) recv->addr, recv->addr_len);
+        ipmi_log(IPMI_LOG_DEBUG_CONT,
+                 "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
+		 ipmi_get_netfn_string(recv->msg.netfn),
+                 ipmi_get_command_string(recv->msg.netfn, recv->msg.cmd), recv->msg.data_len,
+		 ipmi_get_cc_string(recv->msg.data[0]));
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(recv->msg.data, recv->msg.data_len);
-	ipmi_log(IPMI_LOG_DEBUG_END, "");
+	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
     }
 
     switch (recv->recv_type) {
@@ -725,6 +736,13 @@ ipmi_sock_data_handler(int            fd,
 		     "Error receiving message: %s\n", strerror(errno));
 	    goto out_unlock2;
 	}
+    }
+    if (DEBUG_MSG) {
+	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr(%d.) = ", addr_len);
+	dump_hex((unsigned char *) &addr, MIN(addr_len,sizeof(addr)));
+	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(%d.) =\n  ", rv);
+	dump_hex(data, rv);
+	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
     }
 
     if (rv < sizeof(*smsg)) {
