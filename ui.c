@@ -1,19 +1,16 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <curses.h>
 #include <stdarg.h>
 #include <errno.h>
-#include <string.h>
-#include <netdb.h>
 #include <ipmi/selector.h>
-#include <ipmi/ipmi_smi.h>
-#include <ipmi/ipmi_lan.h>
-#include <ipmi/ipmi_auth.h>
 #include <ipmi/ipmi_err.h>
 #include <ipmi/ipmi_mc.h>
 #include <ipmi/ipmiif.h>
 #include <ipmi/ipmi_int.h>
+#include <ipmi/ipmi_ui.h>
 
 #include "ui_keypad.h"
 #include "ui_command.h"
@@ -35,7 +32,7 @@ command_t commands;
 
 ipmi_mc_t *bmc = NULL;
 
-extern os_handler_t ui_ipmi_cb_handlers;
+extern os_handler_t ipmi_ui_cb_handlers;
 
 
 #define STATUS_WIN_LINES 2
@@ -1621,9 +1618,9 @@ event_handler(ipmi_mc_t  *bmc,
 }
 
 void
-setup_done(ipmi_mc_t *mc,
-	   void      *user_data,
-	   int       err)
+ipmi_ui_setup_done(ipmi_mc_t *mc,
+		   void      *user_data,
+		   int       err)
 {
     int             rv;
 
@@ -1649,23 +1646,12 @@ setup_done(ipmi_mc_t *mc,
 }
 
 int
-main(int argc, char *argv[])
+ipmi_ui_init(selector_t **selector)
 {
-    int            err;
-    int            rv;
+    int rv;
 
-
-#if 0
-    __ipmi_log_mask = DEBUG_MSG_BIT;
-#endif
-
-    if (argc < 2) {
-	fprintf(stderr, "Not enough arguments\n");
-	exit(1);
-    }
-
-    err = sel_alloc_selector(&ui_sel);
-    if (err) {
+    rv = sel_alloc_selector(&ui_sel);
+    if (rv) {
 	fprintf(stderr, "Could not allocate selector\n");
 	exit(1);
     }
@@ -1673,97 +1659,21 @@ main(int argc, char *argv[])
     sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL);
     sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
 
-    err = init_commands();
-    if (err) {
+    rv = init_commands();
+    if (rv) {
 	fprintf(stderr, "Could not initialize commands\n");
 	exit(1);
     }
 
-    err = init_keypad();
-    if (err) {
+    rv = init_keypad();
+    if (rv) {
 	fprintf(stderr, "Could not initialize keymap\n");
 	exit(1);
     }
 
-    err = init_win();
+    rv = init_win();
 
-    ipmi_init(&ui_ipmi_cb_handlers);
-
-    if (strcmp(argv[1], "smi") == 0) {
-	int smi_intf;
-
-	if (argc < 3)
-	    leave(1, "Not enough arguments\n");
-
-	smi_intf = atoi(argv[2]);
-	rv = ipmi_smi_setup_con(smi_intf,
-				&ui_ipmi_cb_handlers, ui_sel,
-				setup_done, NULL);
-	if (rv)
-	    leave_err(rv, "ipmi_smi_setup_con");
-
-    } else if (strcmp(argv[1], "lan") == 0) {
-	struct hostent *ent;
-	struct in_addr lan_addr;
-	int            lan_port;
-	int            authtype = 0;
-	int            privilege = 0;
-	char           username[17];
-	char           password[17];
-
-	if (argc < 8)
-	    leave(1, "Not enough arguments\n");
-
-	ent = gethostbyname(argv[2]);
-	if (!ent)
-	    leave(1, "gethostbyname failed: %s\n", strerror(h_errno));
-
-	memcpy(&lan_addr, ent->h_addr_list[0], ent->h_length);
-	lan_port = atoi(argv[3]);
-
-	if (strcmp(argv[4], "none") == 0) {
-	    authtype = IPMI_AUTHTYPE_NONE;
-	} else if (strcmp(argv[4], "md2") == 0) {
-	    authtype = IPMI_AUTHTYPE_MD2;
-	} else if (strcmp(argv[4], "md5") == 0) {
-	    authtype = IPMI_AUTHTYPE_MD5;
-	} else if (strcmp(argv[4], "straight") == 0) {
-	    authtype = IPMI_AUTHTYPE_STRAIGHT;
-	} else {
-	    leave(1, "Invalid authtype: %s\n", argv[4]);
-	}
-
-	if (strcmp(argv[5], "callback") == 0) {
-	    privilege = IPMI_PRIVILEGE_CALLBACK;
-	} else if (strcmp(argv[5], "user") == 0) {
-	    privilege = IPMI_PRIVILEGE_USER;
-	} else if (strcmp(argv[5], "operator") == 0) {
-	    privilege = IPMI_PRIVILEGE_OPERATOR;
-	} else if (strcmp(argv[5], "admin") == 0) {
-	    privilege = IPMI_PRIVILEGE_ADMIN;
-	} else {
-	    leave(1, "Invalid privilege: %s\n", argv[5]);
-	}
-
-	memset(username, 0, sizeof(username));
-	memset(password, 0, sizeof(password));
-	strncpy(username, argv[6], 16);
-	username[16] = '\0';
-	strncpy(password, argv[7], 16);
-	password[16] = '\0';
-
-	rv = ipmi_lan_setup_con(lan_addr, lan_port,
-				authtype, privilege,
-				username, strlen(username),
-				password, strlen(password),
-				&ui_ipmi_cb_handlers, ui_sel,
-				setup_done, NULL);
-	if (rv) {
-	    leave_err(rv, "ipmi_lan_setup_con");
-	}
-    } else {
-	leave(1, "Invalid mode\n");
-    }
+    ipmi_init(&ipmi_ui_cb_handlers);
 
     {
 	struct timeval now;
@@ -1778,8 +1688,13 @@ main(int argc, char *argv[])
 	    leave_err(rv, "Unable to restart redisplay timer");
     }
 
-    sel_select_loop(ui_sel);
-    leave(0, "");
+    *selector = ui_sel;
 
     return 0;
+}
+
+void
+ipmi_ui_shutdown(void)
+{
+    leave(0, "");
 }

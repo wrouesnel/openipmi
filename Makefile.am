@@ -34,7 +34,7 @@ noinst_PROGRAMS = test1
 test1_SOURCES = test1.c
 test1_LDADD = libOpenIPMI.la
 
-ipmi_ui_SOURCES = ui.c ui_os.c ui_keypad.c ui_command.c
+ipmi_ui_SOURCES = ui.c ui_os.c ui_keypad.c ui_command.c basic_ui.c
 ipmi_ui_LDADD = libOpenIPMI.la -lncurses
 
 TESTS = 

@@ -201,7 +201,7 @@ sui_vlog(os_handler_t *handler,
     ui_vlog(format, ap);
 }
 
-os_handler_t ui_ipmi_cb_handlers =
+os_handler_t ipmi_ui_cb_handlers =
 {
     .add_fd_to_wait_for = add_fd,
     .remove_fd_to_wait_for = remove_fd,
