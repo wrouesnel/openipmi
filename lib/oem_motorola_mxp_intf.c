@@ -69,9 +69,9 @@ dump_hex(void *vdata, int len)
 }
 #endif
 
-/* This is the main timeout, it will go off every 50ms when messages
+/* This is the main timeout, it will go off every 20ms when messages
    are being sent.  The time is specified in microseconds. */
-#define MXP_RESPONSE_TIMEOUT	50000
+#define MXP_RESPONSE_TIMEOUT	20000
 
 #define MXP_AUDIT_TIMEOUT 10000000
 
@@ -87,12 +87,23 @@ dump_hex(void *vdata, int len)
    to fetch the message every tick. */
 #define MXP_GET_MSG_TIMEOUT	1
 
+/* Number of timeout periods between trying to get the lock. */
+#define MXP_GET_LOCK_TIMEOUT	1
+
+/* Number of MXP_GET_LOCK_TIMEOUT periods before the operation is
+   forced. */
+#define MXP_WAIT_LOCK_RETRIES	100
+
+/* After we send this many IPMB messages, add a 20ms delay to let
+   other users of the box have access. */
+#define MXP_MSG_RELAX_COUNT	8
+
 /* The number of times a message fetch will be retried before being
    deemed to have failed.  In most retries, the get message is resent.
    Every GET_RETRY_RESEND_MOD retries, though, the actual message is
    resent. */
-#define MAX_GET_RETRIES 40
-#define GET_RETRY_RESEND_MOD 8
+#define MAX_GET_RETRIES 500
+#define GET_RETRY_RESEND_MOD 16
 
 /* Broadcasts can be lossy, and they are just used for scanning, so we
    don't give them much time. */
@@ -253,6 +264,7 @@ typedef struct lan_data_s
     unsigned int              curr_msg;
     unsigned int              next_msg;
     enum lan_state_e          state;
+    unsigned int              mxp_msg_count;
 
     /* We use sequence numbers for messages right to the system
        interface.  We must do this because we don't want LAN control
@@ -702,7 +714,9 @@ start_next_msg(ipmi_con_t *ipmi,
 	   have special handling because they lock the SEL lock,
 	   too. */
 	lan->state = LAN_WAIT_LOCK;
+	lan->retries = MXP_WAIT_LOCK_RETRIES;
 	send_lock_msg(lan);
+	lan->mxp_msg_count++;
     } else {
 	/* Messages to the system interface can go right through. */
 	lan->state = LAN_MSG_WAIT_NOLOCK;
@@ -991,7 +1005,7 @@ mxp_msg_timeout_handler(void              *cb_data,
 		break;
 
 	    case LAN_WAIT_LOCK:
-		lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
+		lan->op_timeout_countdown = MXP_GET_LOCK_TIMEOUT;
 		send_lock_msg(lan);
 		break;
 
@@ -1042,8 +1056,8 @@ mxp_msg_timeout_handler(void              *cb_data,
 	/* If we fail getting the lock and we are not forcing it yet, then
 	   try a force. */
 	lan->do_force = 1;
-	lan->retries = MAX_SEND_RETRIES;
-	lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
+	lan->retries = MXP_WAIT_LOCK_RETRIES;
+	lan->op_timeout_countdown = MXP_GET_LOCK_TIMEOUT;
 	send_lock_msg(lan);
     } else if (lan->state == LAN_WAIT_UNLOCK) {
 	/* If we fail doing the unlock, don't deliver the failure
@@ -1055,7 +1069,12 @@ mxp_msg_timeout_handler(void              *cb_data,
 	lan->op_timeout_countdown = MXP_GET_MSG_TIMEOUT;
 	lan->retries = MAX_SEND_RETRIES;
 	lan->state = LAN_WAIT_UNLOCK;
-	send_unlock_msg(lan);
+	/* We don't send the unlock periodocally, and let the
+	   timeout handle resending it.  This allows a delay
+	   periotically for other users of the box to gain
+	   access. */
+	if ((lan->mxp_msg_count % MXP_MSG_RELAX_COUNT) != 0)
+	    send_unlock_msg(lan);
     }
 
     if (lan->state != LAN_IDLE) {
@@ -1641,8 +1660,8 @@ data_handler(int            fd,
 		    lan->state = LAN_IDLE;
 		    start_next_msg(ipmi, lan);
 		} else if (tmsg[6] != 0) {
-		    /* We couldn't grab the lock, retry. */
-		    send_lock_msg(lan);
+		    /* We couldn't grab the lock, just do nothing and
+		       let the timer retry it. */
 		} else if (lan->msg_queue[lan->curr_msg].is_ipmb_msg) {
 		    /* We got the lock, and it's going onto the IPMB,
                        next state */
@@ -1691,7 +1710,12 @@ data_handler(int            fd,
 		lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
 		lan->retries = MAX_SEND_RETRIES;
 	        lan->state = LAN_WAIT_UNLOCK;
-		send_unlock_msg(lan);
+		/* We don't send the unlock periodocally, and let the
+		   timeout handle resending it.  This allows a delay
+		   periotically for other users of the box to gain
+		   access. */
+		if ((lan->mxp_msg_count % MXP_MSG_RELAX_COUNT) != 0)
+		    send_unlock_msg(lan);
 	    }
 	    break;
 
@@ -1764,7 +1788,12 @@ data_handler(int            fd,
 		    lan->retries = MAX_SEND_RETRIES;
 		    handle_recv_err(ipmi, lan, tmsg[6], &del);
 		    lan->state = LAN_WAIT_UNLOCK;
-		    send_unlock_msg(lan);
+		    /* We don't send the unlock periodocally, and let the
+		       timeout handle resending it.  This allows a delay
+		       periotically for other users of the box to gain
+		       access. */
+		    if ((lan->mxp_msg_count % MXP_MSG_RELAX_COUNT) != 0)
+			send_unlock_msg(lan);
 		} else {
 		    lan->op_timeout_countdown = MXP_GET_MSG_TIMEOUT;
 	            if (lan->msg_queue[lan->curr_msg].is_broadcast) {
@@ -1803,7 +1832,12 @@ data_handler(int            fd,
 		lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
 		lan->retries = MAX_SEND_RETRIES;
 		lan->state = LAN_WAIT_UNLOCK;
-		send_unlock_msg(lan);
+		/* We don't send the unlock periodocally, and let the
+		   timeout handle resending it.  This allows a delay
+		   periotically for other users of the box to gain
+		   access. */
+		if ((lan->mxp_msg_count % MXP_MSG_RELAX_COUNT) != 0)
+		    send_unlock_msg(lan);
 	    }
             lan_wait_get_rsp_done:
 	    break;

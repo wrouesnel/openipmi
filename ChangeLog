@@ -1,6 +1,11 @@
 
 2003-09-02 Corey Minyard <cminyard@mvista.com>
 
+	* lib/oem_motorola_mxp_intf.c: Changed the timer for MXP messages
+	to 20ms and added a 20ms delay between checking for the message
+	lock.  Added a 20ms delay after sending 8 messages to let other
+	boxes have access.
+
 	* lib/oem_motorola_mxp.c: Fixed the -12V voltage sensor on the
 	5365 card to be 10% tolerance.
 
