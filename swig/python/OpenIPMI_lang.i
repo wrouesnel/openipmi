@@ -111,11 +111,17 @@
     $1 = (char **) malloc((len+1)*sizeof(char *));
     for (i=0; i<len; i++) {
 	PyObject *o = PySequence_GetItem($input,i);
+	if (!o) {
+	    PyErr_SetString(PyExc_ValueError, "Expecting a sequence of strings");
+	    return NULL;
+	}
 	if (!PyString_Check(o)) {
 	    PyErr_SetString(PyExc_ValueError,"Expecting a sequence of strings");
+	    Py_DECREF(o);
 	    return NULL;
 	}
 	$1[i] = PyString_AS_STRING(o);
+	Py_DECREF(o);
     }
     $1[i] = NULL;
 };
@@ -131,11 +137,17 @@
 	return NULL;
     }
     o = PySequence_GetItem($input,0);
+    if (!o) {
+	PyErr_SetString(PyExc_ValueError, "Expecting a floating point number");
+	return NULL;
+    }
     if (!PyFloat_Check(o)) {
+	Py_DECREF(o);
 	PyErr_SetString(PyExc_ValueError, "expected a floating point number");
 	return NULL;
     }
-    dvalue = PyFloat_AS_DOUBLE($input);
+    dvalue = PyFloat_AS_DOUBLE(o);
+    Py_DECREF(o);
     $1 = &dvalue;
 }
 
@@ -147,8 +159,10 @@
     }
     if (PySequence_SetItem($input, 0, o) == -1) {
 	PyErr_SetString(PyExc_TypeError, "Unable to set double object item");
+	Py_DECREF(o);
 	return NULL;
     }
+    Py_DECREF(o);
 }
 
 %typemap(in) int * (int ivalue) {
@@ -157,12 +171,18 @@
 	PyErr_SetString(PyExc_ValueError, "Expecting a sequence");
 	return NULL;
     }
-    o = PySequence_GetItem($input,0);
+    o = PySequence_GetItem($input, 0);
+    if (!o) {
+	PyErr_SetString(PyExc_ValueError, "Expecting an integer number");
+	return NULL;
+    }
     if (!PyInt_Check(o)) {
+	Py_DECREF(o);
 	PyErr_SetString(PyExc_ValueError, "expected an integer number");
 	return NULL;
     }
-    ivalue = PyFloat_AS_DOUBLE($input);
+    ivalue = PyInt_AS_LONG(o);
+    Py_DECREF(o);
     $1 = &ivalue;
 }
 
@@ -174,8 +194,45 @@
     }
     if (PySequence_SetItem($input, 0, o) == -1) {
 	PyErr_SetString(PyExc_TypeError, "Unable to set int object item");
+	Py_DECREF(o);
 	return NULL;
     }
+    Py_DECREF(o);
+}
+
+%typemap(in) unsigned int * (unsigned int ivalue) {
+    PyObject *o;
+    if (!PySequence_Check($input)) {
+	PyErr_SetString(PyExc_ValueError, "Expecting a sequence");
+	return NULL;
+    }
+    o = PySequence_GetItem($input, 0);
+    if (!o) {
+	PyErr_SetString(PyExc_ValueError, "Expecting an integer number");
+	return NULL;
+    }
+    if (!PyInt_Check(o)) {
+	PyErr_SetString(PyExc_ValueError, "expected an integer number");
+	Py_DECREF(o);
+	return NULL;
+    }
+    ivalue = PyInt_AS_LONG(o);
+    Py_DECREF(o);
+    $1 = &ivalue;
+}
+
+%typemap(argout) unsigned int * {
+    PyObject *o = PyInt_FromLong(*$1);
+    if (!o) {
+	PyErr_SetString(PyExc_TypeError, "Unable to allocate int object");
+	return NULL;
+    }
+    if (PySequence_SetItem($input, 0, o) == -1) {
+	PyErr_SetString(PyExc_TypeError, "Unable to set int object item");
+	Py_DECREF(o);
+	return NULL;
+    }
+    Py_DECREF(o);
 }
 
 %{
@@ -467,10 +524,13 @@ swig_call_cb(swig_cb_val cb, char *method_name,
     va_end(ap);
 
     p = PyObject_GetAttrString(cb, method_name);
-    o = PyObject_CallObject(p, args);
-    Py_DECREF(p);
+    if (p) {
+	o = PyObject_CallObject(p, args);
+	Py_DECREF(p);
+	if (o)
+	    Py_DECREF(o);
+    }
     Py_DECREF(args);
-    Py_DECREF(o);
     return;
 
  out_err:
