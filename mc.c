@@ -1143,7 +1143,7 @@ sels_fetched(ipmi_sel_info_t *sel,
 
     /* After the first SEL fetch, disable looking at the timestamp, in
        case someone messes with the SEL time. */
-    bmc->bmc->startup_SEL_time = 0;
+    mc->bmc->startup_SEL_time = 0;
 
     start_SEL_timer(mc);
 }
