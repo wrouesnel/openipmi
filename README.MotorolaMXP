@@ -1,0 +1,25 @@
+The Motorola MXP chassis is fully supported by OpenIPMI, it handles
+AMC redundancy properly and has (just about) every sensor and control
+device available.  Thanks to Motorola for all their help getting this
+working.
+
+The MXP cards from Motorola have a standard protocol for controlling
+things not standardized by IPMI, like the blue light on the card, back
+end power, and on-card reset.  For non-MXP cards, the standard CPCI
+board select and PCI Reset signals are available.
+
+The boards currently supported are:
+
+    CPCI5365
+    CPCI5385
+    CPCI805
+    PPRB
+    PPVB
+    4500 (10/100 Zynx switch)
+    4900 (10/100/1000 Zynx switch)
+
+Depending on the versions of the board, different things may be
+available.
+
+Extensive documentation is available in the OpenIPMI manual, about
+what sensors and controls are available.
