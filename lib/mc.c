@@ -1607,6 +1607,18 @@ start_sel_ops(ipmi_mc_t           *mc,
     return rv;
 }
 
+static void
+mc_first_sels_read(ipmi_sel_info_t *sel,
+		   int             err,
+		   int             changed,
+		   unsigned int    count,
+		   void            *cb_data)
+{
+    ipmi_mc_t *mc = cb_data;
+
+    _ipmi_put_domain_fully_up(mc->domain);
+}
+
 /* This is called after the first sensor scan for the MC, we start up
    timers and things like that here. */
 static void
@@ -1639,7 +1651,9 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 
     if (mc->devid.SEL_device_support && ipmi_option_SEL(mc->domain))
 	/* If the MC supports an SEL, start scanning its SEL. */
-	start_sel_ops(mc, 0, NULL, NULL);
+	start_sel_ops(mc, 0, mc_first_sels_read, mc);
+    else
+	_ipmi_put_domain_fully_up(mc->domain);
 }
 
 int
@@ -1662,10 +1676,13 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 	    return rv;
     }
 
+    _ipmi_get_domain_fully_up(mc->domain);
     if (((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
-	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc)))
+	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc))) {
 	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
-    else
+	if (rv)
+	    sensors_reread(mc, 0, NULL);
+    } else
 	sensors_reread(mc, 0, NULL);
 
     return rv;

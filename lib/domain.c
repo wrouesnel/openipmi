@@ -279,6 +279,10 @@ struct ipmi_domain_s
     ipmi_domain_ptr_cb con_up_handler;
     void               *con_up_handler_cb_data;
 
+    unsigned int       fully_up_count;
+    ipmi_domain_ptr_cb domain_fully_up;
+    void               *domain_fully_up_cb_data;
+
     /* Used to inform the user that the bus scanning has been done */
     ipmi_domain_cb bus_scan_handler;
     void           *bus_scan_handler_cb_data;
@@ -386,6 +390,42 @@ deliver_rsp(ipmi_domain_t                *domain,
 
     if (!used)
 	ipmi_mem_free(rspi);
+}
+
+/***********************************************************************
+ *
+ * Used for handling detecting when the domain is fully up.
+ *
+ **********************************************************************/
+void
+_ipmi_get_domain_fully_up(ipmi_domain_t *domain)
+{
+    if (!domain->domain_fully_up)
+	return;
+    ipmi_lock(domain->domain_lock);
+    domain->fully_up_count++;
+    ipmi_unlock(domain->domain_lock);
+}
+
+void
+_ipmi_put_domain_fully_up(ipmi_domain_t *domain)
+{
+    if (!domain->domain_fully_up)
+	return;
+    ipmi_lock(domain->domain_lock);
+    domain->fully_up_count--;
+    if (domain->fully_up_count == 0) {
+	ipmi_domain_ptr_cb domain_fully_up;
+	void               *domain_fully_up_cb_data;
+
+	domain_fully_up = domain->domain_fully_up;
+	domain_fully_up_cb_data = domain->domain_fully_up_cb_data;
+	domain->domain_fully_up = NULL;
+	ipmi_unlock(domain->domain_lock);
+	domain_fully_up(domain, domain_fully_up_cb_data);
+	return;
+    }
+    ipmi_unlock(domain->domain_lock);
 }
 
 /***********************************************************************
@@ -2373,12 +2413,26 @@ ipmi_start_si_scan(ipmi_domain_t  *domain,
 }
 
 static void
+bmc_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    _ipmi_put_domain_fully_up(domain);
+}
+
+static void
 mc_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 {
+    ipmi_domain_cb bus_scan_handler;
+    void           *bus_scan_handler_cb_data;
+
+    ipmi_lock(domain->mc_lock);
     domain->scanning_bus = 0;
-    if (domain->bus_scan_handler)
-	domain->bus_scan_handler(domain, 0,
-			  	 domain->bus_scan_handler_cb_data);
+    bus_scan_handler = domain->bus_scan_handler;
+    bus_scan_handler_cb_data = domain->bus_scan_handler_cb_data;
+    ipmi_unlock(domain->mc_lock);
+    if (bus_scan_handler)
+	bus_scan_handler(domain, 0,
+			 bus_scan_handler_cb_data);
+    _ipmi_put_domain_fully_up(domain);
 }
 
 void
@@ -2393,6 +2447,7 @@ start_mc_scan(ipmi_domain_t *domain)
 {
     int i;
 
+    ipmi_lock(domain->mc_lock);
     if (!domain->do_bus_scan || (!ipmi_option_IPMB_scan(domain)))
 	return;
 
@@ -2400,11 +2455,13 @@ start_mc_scan(ipmi_domain_t *domain)
 	return;
 
     domain->scanning_bus = 1;
+    ipmi_unlock(domain->mc_lock);
 
     /* If a connections supports sysaddress scanning, then scan the
        system address for that connection. */
     for (i=0; i<MAX_CONS; i++) {
 	if ((domain->con_up[i]) && domain->conn[i]->scan_sysaddr) {
+	    _ipmi_get_domain_fully_up(domain);
 	    ipmi_start_si_scan(domain, i, mc_scan_done, NULL);
 	}
     }
@@ -2414,7 +2471,10 @@ start_mc_scan(ipmi_domain_t *domain)
 	if (domain->chan[i].medium == 1) { /* IPMB */
 	    /* Always scan the normal BMC first, but don't report scan
 	       done on it. */
-	    ipmi_start_ipmb_mc_scan(domain, i, 0x20, 0x20, NULL, NULL);
+	    _ipmi_get_domain_fully_up(domain);
+	    ipmi_start_ipmb_mc_scan(domain, i, 0x20, 0x20, bmc_scan_done,
+				    NULL);
+	    _ipmi_get_domain_fully_up(domain);
 	    ipmi_start_ipmb_mc_scan(domain, i, 0x10, 0xf0, mc_scan_done, NULL);
 	}
     }
@@ -2470,9 +2530,7 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 	/* Rescan all the presence sensors to make sure they are valid. */
 	ipmi_detect_domain_presence_changes(domain, 1);
 
-	ipmi_lock(domain->mc_lock);
 	start_mc_scan(domain);
-	ipmi_unlock(domain->mc_lock);
 
 	/* Also check to see if the SDRs have changed. */
 	check_main_sdrs(domain);
@@ -3419,8 +3477,10 @@ ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 {
     CHECK_DOMAIN_LOCK(domain);
 
+    ipmi_lock(domain->domain_lock);
     domain->SDRs_read_handler = handler;
     domain->SDRs_read_handler_cb_data = cb_data;
+    ipmi_unlock(domain->domain_lock);
     return 0;
 }
 
@@ -3431,8 +3491,10 @@ ipmi_domain_set_con_up_handler(ipmi_domain_t      *domain,
 {
     CHECK_DOMAIN_LOCK(domain);
 
+    ipmi_lock(domain->domain_lock);
     domain->con_up_handler = handler;
     domain->con_up_handler_cb_data = cb_data;
+    ipmi_unlock(domain->domain_lock);
     return 0;
 }
 
@@ -3443,8 +3505,10 @@ ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
 {
     CHECK_DOMAIN_LOCK(domain);
 
+    ipmi_lock(domain->mc_lock);
     domain->bus_scan_handler = handler;
     domain->bus_scan_handler_cb_data = cb_data;
+    ipmi_unlock(domain->mc_lock);
     return 0;
 }
 
@@ -3597,7 +3661,11 @@ call_con_fails(ipmi_domain_t *domain,
 static void	
 con_up_complete(ipmi_domain_t *domain)
 {
-    int i, j;
+    int                i, j;
+    ipmi_domain_ptr_cb con_up_handler;
+    void               *con_up_handler_cb_data;
+    ipmi_domain_cb     SDRs_read_handler;
+    void               *SDRs_read_handler_cb_data;
 
     /* This is an unusual looking piece of code, but is required for
        systems that do not have an IPMB.  If they don't have an IPMB,
@@ -3626,19 +3694,26 @@ con_up_complete(ipmi_domain_t *domain)
 	}
     }
 
-    if (domain->con_up_handler)
-	domain->con_up_handler(domain, domain->con_up_handler_cb_data);
+    ipmi_lock(domain->domain_lock);
+    con_up_handler = domain->con_up_handler;
+    con_up_handler_cb_data = domain->con_up_handler_cb_data;
+    ipmi_unlock(domain->domain_lock);
+    if (con_up_handler)
+	con_up_handler(domain, con_up_handler_cb_data);
 
-    ipmi_lock(domain->mc_lock);
     start_mc_scan(domain);
-    ipmi_unlock(domain->mc_lock);
+
     ipmi_detect_ents_presence_changes(domain->entities, 1);
 
     ipmi_entity_scan_sdrs(domain, NULL, domain->entities, domain->main_sdrs);
     ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
-    if (domain->SDRs_read_handler)
-	domain->SDRs_read_handler(domain, 0,
-				  domain->SDRs_read_handler_cb_data);
+    ipmi_lock(domain->domain_lock);
+    SDRs_read_handler = domain->SDRs_read_handler;
+    SDRs_read_handler_cb_data = domain->SDRs_read_handler_cb_data;
+    ipmi_unlock(domain->domain_lock);
+    if (SDRs_read_handler)
+	SDRs_read_handler(domain, 0, SDRs_read_handler_cb_data);
+    _ipmi_put_domain_fully_up(domain);
 }
 
 static void
@@ -4381,6 +4456,8 @@ ipmi_open_domain(char               *name,
 		 unsigned int       num_con,
 		 ipmi_domain_con_cb con_change_handler,
 		 void               *con_change_cb_data,
+		 ipmi_domain_ptr_cb domain_fully_up,
+		 void               *domain_fully_up_cb_data,
 		 ipmi_open_option_t *options,
 		 unsigned int       num_options,
 		 ipmi_domain_id_t   *new_domain)
@@ -4395,6 +4472,10 @@ ipmi_open_domain(char               *name,
     rv = setup_domain(name, con, num_con, &domain);
     if (rv)
 	return rv;
+
+    domain->domain_fully_up = domain_fully_up;
+    domain->domain_fully_up_cb_data = domain_fully_up_cb_data;
+    domain->fully_up_count = 1;
 
     process_options(domain, options, num_options);
 

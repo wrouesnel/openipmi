@@ -30,6 +30,28 @@
 	* lib/oem_intel.c: Fixed some problems with holding the proper
 	refcounts on object during callbacks.
 
+	* lib/entity.c: Fixed a race condition with the try count
+	for presence detection.
+
+	* lib/domain.c: Fixed race conditions dealing with callbacks.
+
+	* include/OpenIPMI/ipmi_sensor.h, lib/sensor.c: Added a way
+	to get a sensor's domain.
+	
+	* include/OpenIPMI/ipmiif.h.in: Added support to the open domain
+	call for detecting when the domain has finished all initial
+	operations.
+	* include/OpenIPMI/ipmi_domain.h: ditto
+	* lib/domain.c: ditto
+	* lib/entity.c: ditto
+	* lib/mc.c: ditto
+	
+	* ui/ui.c: Adjusted for the change to open domain.
+	* ui/basic_ui.c: ditto
+	* sample/sample.c: ditto
+	* sample/sample2.c: ditto
+	* sample/sample3.c: ditto
+
 2004-10-06 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added an anonymous

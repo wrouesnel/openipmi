@@ -492,6 +492,9 @@ void ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str);
    the sensor. */
 ipmi_mc_t *ipmi_sensor_get_mc(ipmi_sensor_t *sensor);
 
+/* Get the sensor's domain. */
+ipmi_domain_t *ipmi_sensor_get_domain(ipmi_sensor_t *sensor);
+
 /* Return the MC that held the sensor's SDR (or NULL if the sensor
    came from the main SDR repository or was synthesized. */
 ipmi_mc_t *ipmi_sensor_get_source_mc(ipmi_sensor_t *sensor);

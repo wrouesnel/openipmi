@@ -1712,7 +1712,10 @@ int ipmi_control_id_identifier_set_val(ipmi_control_id_t  control_id,
    of option values of length num_options.  If num_options is 0, then
    options may be NULL.  The new domain is returned in the new_domain
    variable, the id for the connection change handler is return in
-   con_change_id. */
+   con_change_id.  The "domain_fully_up" function will be called when
+   the domain is fully operational (and if non-NULL), all the busses
+   have been scanned, SDRs read, and SELs fetched.  Note that if the
+   domain never comes up, this function will *never* be called. */
 typedef struct ipmi_open_option_s
 {
     int option;
@@ -1726,6 +1729,8 @@ int ipmi_open_domain(char               *name,
 		     unsigned int       num_con,
 		     ipmi_domain_con_cb con_change_handler,
 		     void               *con_change_cb_data,
+		     ipmi_domain_ptr_cb domain_fully_up,
+		     void               *domain_fully_up_cb_data,
 		     ipmi_open_option_t *options,
 		     unsigned int       num_options,
 		     ipmi_domain_id_t   *new_domain);

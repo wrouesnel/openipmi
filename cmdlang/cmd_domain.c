@@ -103,7 +103,7 @@ void ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 			    ipmi_mc_t          *mc,
 			    void               *cb_data);
 
-void
+static void
 domain_new_done(ipmi_domain_t *domain,
 		int           err,
 		unsigned int  conn_num,
@@ -133,6 +133,37 @@ domain_new_done(ipmi_domain_t *domain,
 	/* If we get an error removing the connect change handler,
 	   that means this has already been done. */
 	ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+void
+domain_fully_up(ipmi_domain_t *domain, void *cb_data)
+{
+    char            *errstr = NULL;
+    int             rv = 0;
+    ipmi_cmd_info_t *evi;
+    char domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "Domain");
+    ipmi_cmdlang_out(evi, "Domain", domain_name);
+    ipmi_cmdlang_out(evi, "Operation", "Domain fully up");
+
+ out_err:
+    if (rv) {
+	ipmi_cmdlang_global_err(domain_name,
+				"cmd_domain.c(domain_fully_up)",
+				errstr, rv);
+    }
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
 }
 
 static void
@@ -247,7 +278,8 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_open_domain(name, con, set, domain_new_done,
-			  cmd_info, options, num_options, NULL);
+			  cmd_info, domain_fully_up, NULL,
+			  options, num_options, NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = strerror(rv);

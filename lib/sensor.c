@@ -3015,12 +3015,6 @@ ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str)
     sensor->modifier_unit_string = str;
 }
 
-ipmi_entity_t *
-ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
-{
-    return sensor->entity;
-}
-
 void
 ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
 				   unsigned int  offset,
@@ -3045,6 +3039,18 @@ ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
 	return 1;
     }
     return 0;
+}
+
+ipmi_domain_t *
+ipmi_sensor_get_domain(ipmi_sensor_t *sensor)
+{
+    return sensor->domain;
+}
+
+ipmi_entity_t *
+ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
+{
+    return sensor->entity;
 }
 
 

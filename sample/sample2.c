@@ -317,7 +317,8 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
-    rv = ipmi_open_domain("", &con, 1, setup_done, NULL, NULL, 0, NULL);
+    rv = ipmi_open_domain("", &con, 1, setup_done, NULL, NULL, NULL,
+			  NULL, 0, NULL);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	exit(1);

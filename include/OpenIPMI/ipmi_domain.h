@@ -297,6 +297,13 @@ int _ipmi_domain_init(void);
 /* Clean up the global domain memory. */
 void _ipmi_domain_shutdown(void);
 
+
+/* Used as a refcount to know when the domain is completely
+   operational. */
+void _ipmi_get_domain_fully_up(ipmi_domain_t *domain);
+void _ipmi_put_domain_fully_up(ipmi_domain_t *domain);
+
+
 /* Option settings. */
 int ipmi_option_SDRs(ipmi_domain_t *domain);
 int ipmi_option_SEL(ipmi_domain_t *domain);

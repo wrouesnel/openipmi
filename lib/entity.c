@@ -1435,6 +1435,7 @@ states_read(ipmi_sensor_t *sensor,
 	present = ipmi_is_state_set(states, 0);
 
     presence_changed(ent, present, NULL);
+    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
 }
 
 static void
@@ -1451,6 +1452,7 @@ states_bit_read(ipmi_sensor_t *sensor,
 
     present = ipmi_is_state_set(states, ent->presence_bit_offset);
     presence_changed(ent, present, NULL);
+    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
 }
 
 typedef struct ent_detect_info_s
@@ -1460,6 +1462,7 @@ typedef struct ent_detect_info_s
 
 typedef struct ent_active_detect_s
 {
+    ipmi_lock_t      *lock;
     ipmi_entity_id_t ent_id;
     int              sensor_try_count;
     int              present;
@@ -1489,11 +1492,15 @@ detect_states_read(ipmi_sensor_t *sensor,
     if (!err && ipmi_is_sensor_scanning_enabled(states))
 	info->present = 1;
 
+    ipmi_lock(info->lock);
     info->sensor_try_count--;
     if (info->sensor_try_count == 0) {
+	ipmi_unlock(info->lock);
 	ipmi_entity_pointer_cb(info->ent_id, sensor_read_handler, info);
 	ipmi_mem_free(info);
-    }
+	_ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
+    } else
+	ipmi_unlock(info->lock);
 }
 
 static void
@@ -1510,11 +1517,15 @@ detect_reading_read(ipmi_sensor_t             *sensor,
     if (!err && ipmi_is_sensor_scanning_enabled(states))
 	info->present = 1;
 
+    ipmi_lock(info->lock);
     info->sensor_try_count--;
     if (info->sensor_try_count == 0) {
+	ipmi_unlock(info->lock);
 	ipmi_entity_pointer_cb(info->ent_id, sensor_read_handler, info);
 	ipmi_mem_free(info);
-    }
+	_ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
+    } else
+	ipmi_unlock(info->lock);
 }
 
 static void
@@ -1525,12 +1536,18 @@ sensor_detect_send(ipmi_entity_t *ent,
     ent_active_detect_t *info = cb_data;
     int                 rv;
 
+    ipmi_lock(info->lock);
+    info->sensor_try_count++;
+    ipmi_unlock(info->lock);
     rv = ipmi_sensor_get_reading(sensor, detect_reading_read, info);
     if (rv)
 	rv = ipmi_sensor_get_states(sensor, detect_states_read, info);
 
-    if (!rv)
-	info->sensor_try_count++;
+    if (rv) {
+	ipmi_lock(info->lock);
+	info->sensor_try_count--;
+	ipmi_unlock(info->lock);
+    }
 }
 
 static void
@@ -1551,10 +1568,14 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	/* Presence sensor overrides everything. */
 	rv = ipmi_sensor_id_get_states(ent->presence_sensor_id,
 		       		       states_read, ent);
+	if (!rv)
+	    _ipmi_get_domain_fully_up(ent->domain);
     } else if (ent->presence_bit_sensor) {
 	/* Presence bit sensor overrides everything but a presence sensor. */
 	rv = ipmi_sensor_id_get_states(ent->presence_bit_sensor_id,
 		       		       states_bit_read, ent);
+	if (!rv)
+	    _ipmi_get_domain_fully_up(ent->domain);
     } else if ((ent->frudev_present) && (ent->frudev_active)) {
 	/* Even though the spec lists the frudev check last, since
 	   these are an "or" relationship except for the presence
@@ -1565,6 +1586,11 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	detect = ipmi_mem_alloc(sizeof(*detect));
 	if (!detect)
 	    return;
+	rv = ipmi_create_lock(ent->domain, &detect->lock);
+	if (rv) {
+	    ipmi_mem_free(detect);
+	    return;
+	}
 
 	detect->start_presence_event_count = ent->presence_event_count;
     	detect->ent_id = ipmi_entity_convert_to_id(ent);
@@ -1578,6 +1604,8 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 
 	    /* Try the children last. */
 	    presence_parent_handler(NULL, ent, NULL);
+	} else {
+	    _ipmi_get_domain_fully_up(ent->domain);
 	}
     } else {
 	/* Maybe it has children that can handle it's presence. */
@@ -4421,6 +4449,7 @@ fru_fetched_handler(ipmi_fru_t *fru, int err, void *cb_data)
 	ipmi_fru_destroy(fru, NULL, NULL);
 
     ipmi_mem_free(ent_id);
+    _ipmi_put_domain_fully_up(ipmi_fru_get_domain(fru));
 }
 
 int
@@ -4451,6 +4480,8 @@ ipmi_entity_fetch_frus(ipmi_entity_t *ent)
 			NULL);
     if (rv)
 	ipmi_mem_free(ent_id);
+    else
+	_ipmi_get_domain_fully_up(ent->domain);
 
     return rv;
 }
