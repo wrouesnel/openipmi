@@ -131,6 +131,7 @@ void ipmi_domain_id_set_invalid(ipmi_domain_id_t *id);
 int ipmi_domain_id_is_invalid(ipmi_domain_id_t *id);
 
 ipmi_entity_id_t ipmi_entity_convert_to_id(ipmi_entity_t *ent);
+int ipmi_cmp_entity_id(ipmi_entity_id_t id1, ipmi_entity_id_t id2);
 typedef void (*ipmi_entity_ptr_cb)(ipmi_entity_t *entity, void *cb_data);
 int ipmi_entity_pointer_cb(ipmi_entity_id_t   id,
 			   ipmi_entity_ptr_cb handler,
