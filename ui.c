@@ -1227,14 +1227,13 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
     case IPMI_CONTROL_RESET:
     case IPMI_CONTROL_POWER:
     case IPMI_CONTROL_FAN_SPEED:
+    case IPMI_CONTROL_LIGHT:
 	ipmi_control_get_val(control, normal_control_val_read, NULL);
 	break;
 
     case IPMI_CONTROL_DISPLAY:
 	break;
 
-    case IPMI_CONTROL_LIGHT:
-	break;
     case IPMI_CONTROL_IDENTIFIER:
 	break;
     }
