@@ -516,6 +516,9 @@ and supply it to the IPMI code.
 For *nix systems, This file a default mechanism for handling many of the
 os-specific handler operations.
 
+@item @file{log.h}
+Holds definitions for the logging interface.
+
 @subsection Files dealing with messaging interfaces
 
 @item @file{ipmi_lan.h}
@@ -613,18 +616,33 @@ associated with the sensor.
 @section Entities
 
 Entities are the things that sensors monitor and controls can change
-things on.  When a BMC is reported to you, you should register a callback to
-tell you when entities are added or removed.  That way you can know
-about new entities as soon as they are created.  If you wait until later
-to register the callback, entities may have come into existance and you
-will miss them (although you could find them in an iterator).
+things on.  When a BMC is reported to you, you should register a
+callback using @code{ipmi_bmc_set_entity_update_handler()} to tell you
+when entities are added or removed.  That way you can know about new
+entities as soon as they are created.  If you wait until later to
+register the callback, entities may have come into existance and you
+will miss them (although you could find them after the fact using
+@code{ipmi_bmc_iterate_entities()}).
 
-Sensors and controls hang off entities.  OpenIPMI provides iterators
-so you can scan all the sensors and controls on an entity.  It allows
-you to register callbacks to tell you when sensors and controls are
-added to or removed from the entity.  You sould do this in the entity
-creation callback so you won't miss any sensors or controls as they
-are detected.
+As mentioned before, entities may be present or absent.  There a rather
+convoluted algorithm in IPMI to detect this, but you don't have to worry
+about that.  Instead, you can use the
+@code{ipmi_entity_set_presence_handler()} call to register a function to
+be called whenever the presence of the entity changes.  You can use
+@code{ipmi_entity_is_present()} to determine the current presence of the
+entity.  Like the other callbacks, you should register the presence
+callback in the entity creation callback.
+
+Sensors and controls hang off entities.  OpenIPMI provides iterators so
+you can scan all the sensors and controls on an entity.  It allows you
+to register callbacks to tell you when sensors and controls are added to
+or removed from the entity, using either
+@code{ipmi_entity_set_sensor_update_handler()} or
+@code{ipmi_entity_set_control_update_handler()}.  You sould do this in
+the entity creation callback so you won't miss any sensors or controls
+as they are detected.  You can also iterate over the current sensors and
+controls using @code{ipmi_entity_iterate_sensors()} and
+@code{ipmi_entity_iterate_controls()}.
 
 Entities are hierarchical in nature.  An entity can have children
 entities.  OpenIPMI allows you to create these relationships in the
@@ -632,13 +650,11 @@ local database and push them to the SDR database on the chassis, if you
 like.  The next time it starts, it will pull them from the SDR database
 and recreate the relationships.  If you have multiple power supplies in
 a subchassis, or multiple processors on a board, the entity
-relationships let you create nice containment relationships.
-
-And entity may be present or absent in the system.  If the entity is an
-FRU, this is expected.  OpenIPMI will automatically detect presence or
-absense of an entity and report this to you via a callback.  Like the
-other callbacks, you should register them in the entity creation
-callback.
+relationships let you create nice containment relationships.  Use the
+functions @code{ipmi_entity_iterate_children()} to find the children of
+an entity, or @code{ipmi_entity_iterate_parents()} to iterate the
+parents of an entity.  There doesn't seem to be a restriction in IPMI
+that an entity only have one parent, thus the parent iteration call.
 
 @node    Sensors, Controls, Entities, Using OpenIPMI
 @section Sensors
@@ -646,6 +662,11 @@ callback.
 Sensors, of course, are what IPMI is mostly about.  A sensor monitors
 a characteristic of an entity.  IPMI specifies two main classes of
 entities: threshold and discrete, described individually later.
+
+You can tell the main type of sensor by doing an
+@code{ipmi_sensor_get_event_reading_type()} call.  If this returns
+@var{IPMI_EVENT_READING_TYPE_THRESHOLD}, it is a threshold sensor.
+Otherwise, it is a discrete sensor.
 
 It is important to note that all operations on a sensor are serialized,
 each sensor has a queue of operations to perform, and it will only
@@ -658,6 +679,8 @@ sensor easier for the user.
 * Threshold Sensors::
 * Discrete Sensors::
 * Sensor Events::
+* Hot Swap::
+* Strings for Sensor Data Types::
 @end menu
 
 @node    Threshold Sensors, Discrete Sensors, Sensors, Sensors
@@ -680,7 +703,7 @@ IPMI threshold sensors have the following settings:
 The sensor can be turned on and off using the status field of
 @var{ipmi_thresholds_t} by setting or clearing
 @var{IPMI_SENSOR_SCANNING_ENABLED} in the bitmask.  You have to use
-@var{ipmi_sensor_get_sensor_init_scanning} function to tell if you
+@code{ipmi_sensor_get_sensor_init_scanning()} function to tell if you
 need to turn scanning on or off.
 
 @item Events
@@ -692,9 +715,9 @@ Some sensors support thresholds.  See below for more details.
 
 @item Hysteresis
 Some sensors have hysteresis values.  The function
-@var{ipmi_sensor_get_sensor_init_events} will tell you if you need to
+@code{ipmi_sensor_get_sensor_init_events()} will tell you if you need to
 initialize the hysteresis value for the sensor.  The
-@var{ipmi_sensor_get_hysteresis support} tells you what type of
+@code{ipmi_sensor_get_hysteresis support()} tells you what type of
 hysteresis (if any) the sensor supports.  
 
 @end table
@@ -749,11 +772,11 @@ one means a threshold sensor.  A value of 0x6f means the reading depends
 on the sensor type.  Values 0x2-0xc are generic readings that can apply
 no matter what the sensor type, and are specified in the IPMI spec.
 
-When the reading depends on the sensor type, you must do an
-@var{ipmi_sensor_get_sensor_type} to retrieve the sensor type.  You can
+When the reading depends on the sensor type, you must call
+@code{ipmi_sensor_get_sensor_type()} to retrieve the sensor type.  You can
 use this to tell what the reading means.
 
-@node    Sensor Events, , Discrete Sensors, Sensors
+@node    Sensor Events, Hot Swap, Discrete Sensors, Sensors
 @subsection Sensor Events
 
 Both threshold and discrete sensors support events, and they work about
@@ -790,6 +813,12 @@ For all sensor types, the direction (whether the state causing the event
 is being asserted or deasserted) is present.  The offset specifies the
 specific state or threshold that caused the event to be asserted.  If
 @var{value_present} is true, then the value was passed in the 
+
+@node    Hot Swap, Strings for Sensor Data Types, Sensor Events, Sensors
+@subsection Hot Swap
+
+@node Strings for Sensor Data Types, , Hot Swap, Sensors
+@subsection Strings for Sensor Data Types
 
 @node    Controls, The System Event Log (SEL), Sensors, Using OpenIPMI
 @section Controls
