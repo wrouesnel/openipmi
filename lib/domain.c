@@ -344,7 +344,7 @@ cleanup_domain(ipmi_domain_t *domain)
 	    msg.data = &err;
 	    msg.data_len = 1;
 	    err = IPMI_UNKNOWN_ERR_CC;
-	    nmsg->rsp_handler(domain, &nmsg->addr, nmsg->addr_len, &msg,
+	    nmsg->rsp_handler(NULL, &nmsg->addr, nmsg->addr_len, &msg,
 			      nmsg->rsp_data1, nmsg->rsp_data2);
 	    
 	    ilist_delete(&iter);
@@ -1274,8 +1274,14 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
-    if (rv)
+    if (rv) {
+	if (domain)
+	    find_and_remove_msg(domain, nmsg, seq);
+	if (nmsg->rsp_handler)
+	    nmsg->rsp_handler(NULL, NULL, 0, msg,
+			      nmsg->rsp_data1, nmsg->rsp_data2);
 	goto out_unlock;
+    }
 
     if (!find_and_remove_msg(domain, nmsg, seq))
 	goto out_unlock;
@@ -1283,8 +1289,8 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
     if (nmsg->rsp_handler)
 	nmsg->rsp_handler(domain, addr, addr_len, msg,
 			  nmsg->rsp_data1, nmsg->rsp_data2);
-    ipmi_mem_free(nmsg);
  out_unlock:
+    ipmi_mem_free(nmsg);
     ipmi_read_unlock();
 }
 
@@ -1305,8 +1311,12 @@ ll_si_rsp_handler(ipmi_con_t   *ipmi,
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
-    if (rv)
+    if (rv) {
+	if (nmsg->rsp_handler)
+	    nmsg->rsp_handler(NULL, NULL, 0, msg,
+			      nmsg->rsp_data1, nmsg->rsp_data2);
 	goto out_unlock;
+    }
 
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = (long) rsp_data4;
@@ -1360,12 +1370,10 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 	/* Messages to system interface addresses use the channel to
            choose which system address to message. */
 	if ((u < 0) || (u >= MAX_CONS)) {
-ipmi_log(IPMI_LOG_DEBUG, "*****A");
 	    rv = EINVAL;
 	    goto out;
 	}
 	if (!domain->conn[u]) {
-ipmi_log(IPMI_LOG_DEBUG, "*****B");
 	    rv = EINVAL;
 	    goto out;
 	}
@@ -2898,12 +2906,12 @@ real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
 
     ipmi_write_unlock();
 
-    cleanup_domain(domain);
-
     for (i=0; i<MAX_CONS; i++) {
 	if (ipmi[i])
 	    ipmi[i]->close_connection(ipmi[i]);
     }
+
+    cleanup_domain(domain);
 
     if (info->close_done)
 	info->close_done(info->cb_data);

@@ -503,7 +503,7 @@ sensor_addr_response_handler(ipmi_domain_t *domain,
 		 "sensor.c(sensor_addr_rsp_handler):"
 		 " Could not convert sensor id to a pointer");
 	if (info->__rsp_handler)
-	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
+	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
     }
 }
 
@@ -3829,7 +3829,7 @@ reading_get(ipmi_sensor_t *sensor,
     info->raw_val = rsp->data[1];
     if (sensor->analog_data_format != IPMI_ANALOG_DATA_FORMAT_NOT_ANALOG) {
 	rv = ipmi_sensor_convert_from_raw(sensor,
-					  info->cooked_val,
+					  info->raw_val,
 					  &info->cooked_val);
 	if (rv)
 	    info->value_present = IPMI_RAW_VALUE_PRESENT;

@@ -1572,7 +1572,7 @@ read_sensor(ipmi_sensor_t             *sensor,
     if (sensor_displayed) {
 	wmove(display_pad, value_pos.y, value_pos.x);
 	if (value_present == IPMI_BOTH_VALUES_PRESENT)
-	    display_pad_out("%f", val);
+	    display_pad_out("%f (%2.2x)", val, raw_val);
 	else if (value_present == IPMI_RAW_VALUE_PRESENT)
 	    display_pad_out("0x%x (RAW)", raw_val);
 	else
@@ -5597,7 +5597,7 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 	   ipmi_get_value_dir_string(high_low),
 	   ipmi_get_event_dir_string(dir));
     if (value_present == IPMI_BOTH_VALUES_PRESENT) {
-	ui_log("  value is %f\n", value);
+	ui_log("  value is %f (%2.2x)\n", value, raw_value);
     } else if (value_present == IPMI_RAW_VALUE_PRESENT) {
 	ui_log("  raw value is 0x%x\n", raw_value);
     }
