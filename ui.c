@@ -68,6 +68,7 @@ ipmi_mc_id_t bmc_id;
 
 extern os_handler_t ipmi_ui_cb_handlers;
 
+static int full_screen;
 
 #define STATUS_WIN_LINES 2
 #define STATUS_WIN_COLS COLS
@@ -154,21 +155,32 @@ conv_to_spaces(char *name)
 void
 log_pad_refresh(int newlines)
 {
-    if (log_pad_top_line < 0)
-	log_pad_top_line = 0;
+    if (full_screen) {
+	if (log_pad_top_line < 0)
+	    log_pad_top_line = 0;
 
-    if (log_pad_top_line > (NUM_LOG_LINES - LOG_WIN_LINES))
-	log_pad_top_line = NUM_LOG_LINES - LOG_WIN_LINES;
+	if (log_pad_top_line > (NUM_LOG_LINES - LOG_WIN_LINES))
+	    log_pad_top_line = NUM_LOG_LINES - LOG_WIN_LINES;
 
-    if (log_pad_top_line != (NUM_LOG_LINES - LOG_WIN_LINES)) {
-	/* We are not at the bottom, so hold the same position. */
-	log_pad_top_line -= newlines;
+	if (log_pad_top_line != (NUM_LOG_LINES - LOG_WIN_LINES)) {
+	    /* We are not at the bottom, so hold the same position. */
+	    log_pad_top_line -= newlines;
+	}
+	prefresh(log_pad,
+		 log_pad_top_line, 0,
+		 LOG_WIN_TOP, LOG_WIN_LEFT,
+		 LOG_WIN_BOTTOM, LOG_WIN_RIGHT);
+	wrefresh(cmd_win);
     }
-    prefresh(log_pad,
-	     log_pad_top_line, 0,
-	     LOG_WIN_TOP, LOG_WIN_LEFT,
-	     LOG_WIN_BOTTOM, LOG_WIN_RIGHT);
-    wrefresh(cmd_win);
+}
+
+void
+vlog_pad_out(char *format, va_list ap)
+{
+    if (full_screen)
+	vwprintw(log_pad, format, ap);
+    else
+	vprintf(format, ap);
 }
 
 void
@@ -177,31 +189,35 @@ log_pad_out(char *format, ...)
     va_list ap;
 
     va_start(ap, format);
-    vwprintw(log_pad, format, ap);
+    vlog_pad_out(format, ap);
     va_end(ap);
 }
 
 void
 display_pad_refresh(void)
 {
-    if (display_pad_top_line >= NUM_DISPLAY_LINES)
-	display_pad_top_line = NUM_DISPLAY_LINES;
+    if (full_screen) {
+	if (display_pad_top_line >= NUM_DISPLAY_LINES)
+	    display_pad_top_line = NUM_DISPLAY_LINES;
 
-    if (display_pad_top_line < 0)
-	display_pad_top_line = 0;
+	if (display_pad_top_line < 0)
+	    display_pad_top_line = 0;
 
-    prefresh(display_pad,
-	     display_pad_top_line, 0,
-	     DISPLAY_WIN_TOP, DISPLAY_WIN_LEFT,
-	     DISPLAY_WIN_BOTTOM, DISPLAY_WIN_RIGHT);
-    wrefresh(cmd_win);
+	prefresh(display_pad,
+		 display_pad_top_line, 0,
+		 DISPLAY_WIN_TOP, DISPLAY_WIN_LEFT,
+		 DISPLAY_WIN_BOTTOM, DISPLAY_WIN_RIGHT);
+	wrefresh(cmd_win);
+    }
 }
 
 void
 display_pad_clear(void)
 {
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
+    if (full_screen) {
+	werase(display_pad);
+	wmove(display_pad, 0, 0);
+    }
 }
 
 void
@@ -210,7 +226,10 @@ display_pad_out(char *format, ...)
     va_list ap;
 
     va_start(ap, format);
-    vwprintw(display_pad, format, ap);
+    if (full_screen)
+	vwprintw(display_pad, format, ap);
+    else
+	vprintf(format, ap);
     va_end(ap);
 }
 
@@ -220,14 +239,18 @@ cmd_win_out(char *format, ...)
     va_list ap;
 
     va_start(ap, format);
-    vwprintw(cmd_win, format, ap);
+    if (full_screen)
+	vwprintw(cmd_win, format, ap);
+    else
+	vprintf(format, ap);
     va_end(ap);
 }
 
 void
 cmd_win_refresh(void)
 {
-    wrefresh(cmd_win);
+    if (full_screen)
+	wrefresh(cmd_win);
 }
 
 static int
@@ -292,42 +315,44 @@ draw_lines()
 void
 ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
-    int y, x;
+    int y = 0, x;
     int do_nl = 1;
 
-    /* Generate the output to the dummy pad to see how many lines we
-       will use. */
-    vwprintw(dummy_pad, format, ap);
-    getyx(dummy_pad, y, x);
-    wmove(dummy_pad, 0, x);
+    if (full_screen) {
+	/* Generate the output to the dummy pad to see how many lines we
+	   will use. */
+	vwprintw(dummy_pad, format, ap);
+	getyx(dummy_pad, y, x);
+	wmove(dummy_pad, 0, x);
+    }
 
     switch(log_type)
     {
 	case IPMI_LOG_INFO:
-	    wprintw(log_pad, "INFO: ");
+	    log_pad_out("INFO: ");
 	    break;
 
 	case IPMI_LOG_WARNING:
-	    wprintw(log_pad, "WARN: ");
+	    log_pad_out("WARN: ");
 	    break;
 
 	case IPMI_LOG_SEVERE:
-	    wprintw(log_pad, "SEVR: ");
+	    log_pad_out("SEVR: ");
 	    break;
 
 	case IPMI_LOG_FATAL:
-	    wprintw(log_pad, "FATL: ");
+	    log_pad_out("FATL: ");
 	    break;
 
 	case IPMI_LOG_ERR_INFO:
-	    wprintw(log_pad, "EINF: ");
+	    log_pad_out("EINF: ");
 	    break;
 
 	case IPMI_LOG_DEBUG_START:
 	    do_nl = 0;
 	    /* FALLTHROUGH */
 	case IPMI_LOG_DEBUG:
-	    wprintw(log_pad, "DEBG: ");
+	    log_pad_out("DEBG: ");
 	    break;
 
 	case IPMI_LOG_DEBUG_CONT:
@@ -337,28 +362,30 @@ ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 	    break;
     }
 
-    vwprintw(log_pad, format, ap);
+    vlog_pad_out(format, ap);
     if (do_nl)
-	wprintw(log_pad, "\n");
+	log_pad_out("\n");
     log_pad_refresh(y);
-    wrefresh(cmd_win);
+    cmd_win_refresh();
 }
 
 void
 ui_log(char *format, ...)
 {
-    int y, x;
+    int y = 0, x;
     va_list ap;
 
     va_start(ap, format);
 
-    /* Generate the output to the dummy pad to see how many lines we
-       will use. */
-    vwprintw(dummy_pad, format, ap);
-    getyx(dummy_pad, y, x);
-    wmove(dummy_pad, 0, x);
+    if (full_screen) {
+	/* Generate the output to the dummy pad to see how many lines we
+	   will use. */
+	vwprintw(dummy_pad, format, ap);
+	getyx(dummy_pad, y, x);
+	wmove(dummy_pad, 0, x);
+    }
 
-    vwprintw(log_pad, format, ap);
+    vlog_pad_out(format, ap);
     log_pad_refresh(y);
     wrefresh(cmd_win);
     va_end(ap);
@@ -369,7 +396,8 @@ leave(int rv, char *format, ...)
 {
     va_list ap;
 
-    endwin();
+    if (full_screen)
+	endwin();
     sel_free_selector(ui_sel);
 
     va_start(ap, format);
@@ -384,7 +412,8 @@ leave_err(int err, char *format, ...)
 {
     va_list ap;
 
-    endwin();
+    if (full_screen)
+	endwin();
     sel_free_selector(ui_sel);
 
     va_start(ap, format);
@@ -2668,9 +2697,11 @@ ipmi_ui_setup_done(ipmi_mc_t *mc,
 }
 
 int
-ipmi_ui_init(selector_t **selector)
+ipmi_ui_init(selector_t **selector, int do_full_screen)
 {
     int rv;
+
+    full_screen = do_full_screen;
 
     rv = sel_alloc_selector(&ui_sel);
     if (rv) {
@@ -2687,16 +2718,18 @@ ipmi_ui_init(selector_t **selector)
 	exit(1);
     }
 
-    rv = init_keypad();
-    if (rv) {
-	fprintf(stderr, "Could not initialize keymap\n");
-	exit(1);
-    }
+    if (full_screen) {
+	rv = init_keypad();
+	if (rv) {
+	    fprintf(stderr, "Could not initialize keymap\n");
+	    exit(1);
+	}
 
-    rv = init_win();
-    if (rv) {
-	fprintf(stderr, "Could not initialize curses\n");
-	exit(1);
+	rv = init_win();
+	if (rv) {
+	    fprintf(stderr, "Could not initialize curses\n");
+	    exit(1);
+	}
     }
 
     help_cmd(NULL, NULL, NULL);

@@ -1,6 +1,9 @@
 
 2003-01-22 Corey Minyard <cminyard@mvista.com>
 
+	* basic_ui.c, ui.c, include/OpenIPMI/ipmi_ui.h: Start working on a
+	command-line only version of the ui.
+
 	* ui.c: Rework to abstract the output, getting ready for doing
 	command-line only.
 
