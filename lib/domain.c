@@ -1139,21 +1139,27 @@ add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
     int success;
 
     CHECK_DOMAIN_LOCK(domain);
+    CHECK_MC_LOCK(mc);
 
-    ipmi_lock(domain->mc_list_lock);
     success = ilist_add_tail(domain->mc_list, mc, NULL);
     if (!success)
 	rv = ENOMEM;
-    else {
-	mc_upd_info_t info;
-	info.domain = domain;
-	info.added = 1;
-	info.mc = mc;
-	ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
-    }
-    ipmi_unlock(domain->mc_list_lock);
 
     return rv;
+}
+
+static void
+call_new_mc_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc)
+{
+    mc_upd_info_t info;
+
+    CHECK_DOMAIN_LOCK(domain);
+    CHECK_MC_LOCK(mc);
+
+    info.domain = domain;
+    info.added = 1;
+    info.mc = mc;
+    ilist_iter(domain->mc_upd_handlers, iterate_mc_upds, &info);
 }
 
 int
@@ -1275,11 +1281,14 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
     ipmi_start_ipmb_mc_scan(domain, channel, slave_addr, slave_addr,
 			    NULL, NULL);
 
+    ipmi_lock(domain->mc_list_lock);
     rv = add_mc_to_domain(domain, mc);
     if (rv) {
 	_ipmi_cleanup_mc(mc);
 	return rv;
     }
+    call_new_mc_handlers(domain, mc);
+    ipmi_unlock(domain->mc_list_lock);
 
     if (new_mc)
 	*new_mc = mc;
@@ -1750,6 +1759,13 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 
 		_ipmi_mc_set_active(mc, 1);
 
+		ipmi_lock(domain->mc_list_lock);
+		rv = add_mc_to_domain(domain, mc);
+		if (rv) {
+		    _ipmi_cleanup_mc(mc);
+		    goto next_addr;
+		}
+
 		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
 		if (rv) {
 		    /* If we couldn't handle the device data, just clean
@@ -1757,12 +1773,9 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 		    _ipmi_cleanup_mc(mc);
 		    goto out;
 		}
+		call_new_mc_handlers(domain, mc);
 
-		rv = add_mc_to_domain(domain, mc);
-		if (rv) {
-		    _ipmi_cleanup_mc(mc);
-		    goto next_addr;
-		}
+		ipmi_unlock(domain->mc_list_lock);
 
 		_ipmi_mc_handle_new(mc);
 	    } else {

@@ -25,6 +25,9 @@
 	* include/OpenIPMI/ipmiif.h.in: Added functions for the above
 	call.
 
+	* lib/domain.c: Fix the ordering of OEM handling and reporting
+	things so the MC is ready for commands at that time.
+
 2004-04-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start
