@@ -143,7 +143,17 @@ struct lan_data_s
 #define INVALID_MSG			7
 #define OS_ERROR			8
 #define LAN_ERR				9
+#define DEBUG				10
     void (*log)(int type, msg_t *msg, char *format, ...);
+
+    int debug;
+
+    /* Do OEM message handling; this is called after the message is
+       authenticated.  Should return 0 if the standard handling should
+       continue, or non-zero if the message should not go through
+       normal handling.  This field may be NULL, and it will be
+       ignore. */
+    int (*oem_handle_msg)(lan_data_t *lan, msg_t *msg);
 
     /* Don't fill in the below in the user code. */
 

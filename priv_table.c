@@ -71,7 +71,7 @@ static priv_val chassis_privs[] =
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_POH_COUNTER_CMD			0x0f */
 };
 
-/* Bridge netfn (0x00) */
+/* Bridge netfn (0x02) */
 static priv_val bridge_privs[] =
 {
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_BRIDGE_STATE_CMD			0x00 */
@@ -138,7 +138,7 @@ static priv_val bridge_privs[] =
 static priv_val sensor_privs[] =
 {
     PRIV_ENTRY(n,n,n,X), /* IPMI_SET_EVENT_RECEIVER_CMD			0x00 */
-    PRIV_ENTRY(n,n,n,X), /* IPMI_GET_EVENT_RECEIVER_CMD			0x01 */
+    PRIV_ENTRY(n,X,X,X), /* IPMI_GET_EVENT_RECEIVER_CMD			0x01 */
     PRIV_ENTRY(n,n,X,X), /* IPMI_PLATFORM_EVENT_CMD			0x02 */
     PRIV_ENTRY(n,n,n,X), /*						0x03 */
     PRIV_ENTRY(n,n,n,X), /*						0x04 */

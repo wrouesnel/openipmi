@@ -1345,6 +1345,10 @@ handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 
     session->time_left = lan->default_session_timeout;
 
+    if (lan->oem_handle_msg && lan->oem_handle_msg(lan, msg))
+	/* OEM code handled the message. */
+	return;
+
     rv = ipmi_cmd_permitted(session->priv, msg->netfn, msg->cmd);
     switch (rv) {
 	case IPMI_PRIV_PERMITTED:
@@ -1550,6 +1554,11 @@ ipmi_handle_lan_msg(lan_data_t *lan,
     msg.data = pos + 6;
     msg.len = len - 6;
 
+    if (lan->debug) {
+	lan->log(DEBUG, &msg, "msg: netfn = 0x%2.2x cmd=%2.2x",
+		 msg.netfn, msg.cmd);
+    }
+
     if (msg.sid == 0) {
 	handle_no_session(lan, &msg);
     } else if (msg.sid & 1) {
@@ -1578,7 +1587,7 @@ ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last)
 	if (lan->sessions[i].active) {
 	    if (lan->sessions[i].time_left <= time_since_last) {
 		msg.src_addr = lan->sessions[i].src_addr;
-		msg.src_addr = lan->sessions[i].src_len;
+		msg.src_len = lan->sessions[i].src_len;
 		lan->log(SESSION_CLOSED, &msg,
 			 "Session closed: Closed due to timeout");
 		close_session(lan, &(lan->sessions[i]));

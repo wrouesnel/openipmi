@@ -36,6 +36,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <sys/poll.h>
+#include <time.h>
 #include <sys/time.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -206,6 +207,10 @@ handle_msg_ipmi(int smi_fd, lan_data_t *lan)
 	}
     }
 
+    /* We only handle responses. */
+    if (rsp.recv_type != IPMI_RESPONSE_RECV_TYPE)
+	return;
+
     msg = (msg_t *) rsp.msgid;
 
     if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
@@ -217,7 +222,7 @@ handle_msg_ipmi(int smi_fd, lan_data_t *lan)
 	data[1] = (rsp.msg.netfn << 2) | 2;
 	data[2] = ipmb_checksum(data+1, 1, 0);
 	data[3] = ipmb->slave_addr;
-	data[4] = (msg->ll_data << 2) | ipmb->lun;
+	data[4] = (msg->data[4] & 0xfc) | ipmb->lun;
 	data[5] = rsp.msg.cmd;
 	memcpy(data+6, rsp.msg.data, rsp.msg.data_len);
 	rsp.msg.data = data;
@@ -596,15 +601,34 @@ static void
 log(int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
+    struct timeval tod;
+    struct tm ltime;
+    char timebuf[30];
+    int timelen;
+    char fullformat[256];
 
     va_start(ap, format);
-    vsyslog(LOG_NOTICE, format, ap);
+    gettimeofday(&tod, NULL);
+    localtime_r(&tod.tv_sec, &ltime);
+    asctime_r(&ltime, timebuf);
+    timelen = strlen(timebuf);
+    timebuf[timelen-1] = '\0'; /* Nuke the '\n'. */
+    timelen--;
+    if ((timelen + strlen(format) + 2) >= sizeof(fullformat)) {
+	vsyslog(LOG_NOTICE, format, ap);
+    } else {
+	strcpy(fullformat, timebuf);
+	strcat(fullformat, ": ");
+	strcat(fullformat, format);
+	vsyslog(LOG_NOTICE, fullformat, ap);
+    }
     va_end(ap);
 }
 
 static int lan_port = 623;
 static char *config_file = "/etc/ipmi_lan.conf";
 static char *ipmi_dev = NULL;
+static int debug = 0;
 
 static struct poptOption poptOpts[]=
 {
@@ -635,6 +659,15 @@ static struct poptOption poptOpts[]=
 	"IPMI device",
 	""
     },
+    {
+	"debug",
+	'd',
+	POPT_ARG_NONE,
+	NULL,
+	'd',
+	"debug",
+	""
+    },
     POPT_AUTOHELP
     {
 	NULL,
@@ -661,8 +694,13 @@ main(int argc, const char *argv[])
     openlog(argv[0], LOG_CONS, LOG_DAEMON);
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
-    while ((o = poptGetNextOpt(poptCtx)) >= 0)
-	;
+    while ((o = poptGetNextOpt(poptCtx)) >= 0) {
+	switch (o) {
+	    case 'd':
+		debug++;
+		break;
+	}
+    }
 
     data.smi_fd = ipmi_open(ipmi_dev);
     data.lan_fd = open_lan_fd(lan_port);
@@ -677,6 +715,7 @@ main(int argc, const char *argv[])
     lan.gen_rand = gen_rand;
     lan.write_config = write_config;
     lan.log = log;
+    lan.debug = debug;
 
     read_config(&lan);
 

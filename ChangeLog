@@ -4,6 +4,9 @@
 	* lanserv.c, lanserv.h, lanserv_ipmi.c: Added logs for error and
 	notification handling.
 
+	* lanserv.c, lanserv.h, lanserv_ipmi.c: Added an OEM message
+	handler.
+
 2003-04-27 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv.c, lanserv.h, lanserv_ipmi.c: Added timeout handling
