@@ -6794,6 +6794,14 @@ redisplay_timeout(selector_t  *sel,
 }
 
 void
+ipmi_ui_set_first_domain(ipmi_domain_id_t fdomain_id)
+{
+    strcpy(domain_names[0], "first");
+    domain_id = fdomain_id;
+    domains[0] = fdomain_id;
+}
+
+void
 ipmi_ui_setup_done(ipmi_domain_t *domain,
 		   int           err,
 		   unsigned int  conn_num,
@@ -6803,7 +6811,6 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 {
     int rv;
     int dnum = (long) cb_data;
-    static int first_init = 0;
 
     if (err)
 	ui_log("IPMI connection to con.port %d.%d is down"
@@ -6823,11 +6830,6 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
     }
 
     domains[dnum] = ipmi_domain_convert_to_id(domain);
-    if (!first_init) {
-	strcpy(domain_names[dnum], "first");
-	domain_id = domains[dnum];
-	first_init = 1;
-    }
     ipmi_domain_set_name(domain, domain_names[dnum]);
 
     domain_initialized[dnum] = 1;

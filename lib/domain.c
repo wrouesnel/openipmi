@@ -300,8 +300,6 @@ static void real_close_connection(ipmi_domain_t *domain);
 
 static void free_domain_cruft(ipmi_domain_t *domain);
 
-static void ipmi_domain_put(ipmi_domain_t *domain);
-
 /***********************************************************************
  *
  * Some general utilities
@@ -436,8 +434,21 @@ cleanup_domain(ipmi_domain_t *domain)
     /* Delete the sensors from the main SDR repository. */
     if (domain->sensors_in_main_sdr) {
 	for (i=0; i<domain->sensors_in_main_sdr_count; i++) {
-	    if (domain->sensors_in_main_sdr[i])
+	    _ipmi_domain_entity_lock(domain);
+	    if (domain->sensors_in_main_sdr[i]) {
+		ipmi_sensor_t *sensor = domain->sensors_in_main_sdr[i];
+		ipmi_entity_t *entity = ipmi_sensor_get_entity(sensor);
+		ipmi_mc_t     *mc = ipmi_sensor_get_mc(sensor);
+		_ipmi_entity_get(entity);
+		_ipmi_mc_get(mc);
+		_ipmi_sensor_get(sensor);
+		_ipmi_domain_entity_unlock(domain);
 		ipmi_sensor_destroy(domain->sensors_in_main_sdr[i]);
+		_ipmi_sensor_put(sensor);
+		_ipmi_mc_put(mc);
+		_ipmi_entity_put(entity);
+	    } else
+		_ipmi_domain_entity_unlock(domain);
 	}
 	ipmi_mem_free(domain->sensors_in_main_sdr);
     }
@@ -860,8 +871,8 @@ remove_known_domain(ipmi_domain_t *domain)
 
 /* Validate that the domain and it's underlying connection is valid
    and increment its use count. */
-static int
-ipmi_domain_get(ipmi_domain_t *domain)
+int
+_ipmi_domain_get(ipmi_domain_t *domain)
 {
     unsigned int  hash = ipmi_hash_pointer(domain) % DOMAIN_HASH_SIZE;
     ipmi_domain_t *c;
@@ -895,8 +906,8 @@ ipmi_domain_get(ipmi_domain_t *domain)
     return rv;
 }
 
-static void
-ipmi_domain_put(ipmi_domain_t *domain)
+void
+_ipmi_domain_put(ipmi_domain_t *domain)
 {
     ipmi_lock(domains_lock);
 
@@ -1501,7 +1512,7 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
     long          conn_seq = (long) orspi->data4;
     int           rv;
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv)
 	/* No need to report these to the upper layer, they have
 	   already been delivered in the cleanup code. */
@@ -1528,7 +1539,7 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 	ipmi_mem_free(rspi);
     ipmi_mem_free(nmsg);
  out_unlock:
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -1543,7 +1554,7 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 
     rspi = nmsg->rsp_item;
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv) {
 	/* Note that since we don't track SI messages, we must report
 	   them to the upper layer through this interface when the
@@ -1567,7 +1578,7 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 	ipmi_mem_free(rspi);
     ipmi_mem_free(nmsg);
 
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -1880,7 +1891,7 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_unlock(info->lock);
 
     domain = info->domain;
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv) {
 	ipmi_log(IPMI_LOG_INFO,
 		 "%sdomain.c(rescan_timeout_handler): "
@@ -1920,7 +1931,7 @@ rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
 	goto next_addr_nolock;
 
  out:
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
 }
 
 static int
@@ -1935,7 +1946,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_ipmb_addr_t    *ipmb;
 
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv) {
 	ipmi_log(IPMI_LOG_INFO,
 		 "%sdomain.c(devid_bc_rsp_handler): "
@@ -2077,7 +2088,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
  out:
     if (mc)
 	_ipmi_mc_put(mc);
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -2457,7 +2468,7 @@ ll_event_handler(ipmi_con_t   *ipmi,
     int                          rv;
     ipmi_system_interface_addr_t si;
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv)
 	return;
 
@@ -2498,7 +2509,7 @@ ll_event_handler(ipmi_con_t   *ipmi,
     _ipmi_mc_put(mc);
 
  out:
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
 }
 
 typedef struct call_event_handler_s
@@ -2823,7 +2834,7 @@ reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
 	/* We were the last one, call the main handler. */
 
 	/* First validate the domain. */
-	rv = ipmi_domain_get(info->domain);
+	rv = _ipmi_domain_get(info->domain);
 	if (rv)
 	    info->domain = NULL;
 
@@ -2832,7 +2843,7 @@ reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	if (info->domain)
-	    ipmi_domain_put(info->domain);
+	    _ipmi_domain_put(info->domain);
     }
 }
 
@@ -3210,10 +3221,10 @@ ipmi_domain_pointer_cb(ipmi_domain_id_t   id,
 
     domain = id.domain;
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (!rv) {
 	handler(domain, cb_data);
-	ipmi_domain_put(domain);
+	_ipmi_domain_put(domain);
     }
 
     return rv;
@@ -3764,7 +3775,7 @@ initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
     int           u;
     int           rv;
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv)
 	/* So the connection failed.  So what, there's nothing to talk to. */
 	return;
@@ -3789,7 +3800,7 @@ initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
     }
 
  out_unlock:
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
 }
 
 static void ll_addr_changed(ipmi_con_t   *ipmi,
@@ -3818,7 +3829,7 @@ activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
     }
     info->running = 0;
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv)
 	/* Domain is gone, just give up. */
 	goto out_unlock;
@@ -3853,7 +3864,7 @@ activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
 	    domain);
     }
 
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
 
  out_unlock:
     ipmi_unlock(info->lock);
@@ -3933,7 +3944,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     int           start_connection;
     unsigned char old_addr;
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv)
 	/* So the connection failed.  So what, there's nothing to talk to. */
 	return;
@@ -4010,7 +4021,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     }
 
  out_unlock:
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
 }
 
 static void
@@ -4032,7 +4043,7 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	return;
     }
 
-    rv = ipmi_domain_get(domain);
+    rv = _ipmi_domain_get(domain);
     if (rv)
 	/* So the connection failed.  So what, there's nothing to talk to. */
 	return;
@@ -4101,7 +4112,7 @@ ll_con_changed(ipmi_con_t   *ipmi,
     }
 
  out_unlock:
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
 }
 
 int
@@ -4147,7 +4158,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
 	*new_domain = ipmi_domain_convert_to_id(domain);
     
  out:
-    ipmi_domain_put(domain);
+    _ipmi_domain_put(domain);
     return rv;
 
  out_err:

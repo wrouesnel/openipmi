@@ -42,7 +42,7 @@ extern os_handler_t ipmi_ui_cb_handlers;
 int ipmi_ui_init(selector_t **selector, int full_screen);
 void ipmi_ui_shutdown(void);
 
-void ipmi_ui_set_domain_id(ipmi_domain_id_t new_domain_id);
+void ipmi_ui_set_first_domain(ipmi_domain_id_t fdomain_id);
 
 void ipmi_ui_setup_done(ipmi_domain_t *mc,
 			int           err,

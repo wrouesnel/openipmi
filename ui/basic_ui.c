@@ -303,6 +303,8 @@ main(int argc, const char *argv[])
 	goto out;
     }
 
+    ipmi_ui_set_first_domain(domain_id);
+
     sel_select_loop(selector, NULL, 0, NULL);
 
  out:

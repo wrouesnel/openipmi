@@ -1284,8 +1284,6 @@ ipmi_control_set_readable(ipmi_control_t *control, int val)
 int
 ipmi_control_get_entity_id(ipmi_control_t *control)
 {
-    CHECK_CONTROL_LOCK(control);
-
     return ipmi_entity_get_entity_id(control->entity);
 }
 

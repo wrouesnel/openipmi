@@ -1880,8 +1880,6 @@ int ipmi_sensor_get_default_threshold_cooked(ipmi_sensor_t *sensor,
 ipmi_mc_t *
 ipmi_sensor_get_mc(ipmi_sensor_t *sensor)
 {
-    CHECK_SENSOR_LOCK(sensor);
-
     return sensor->mc;
 }
 

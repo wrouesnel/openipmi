@@ -52,8 +52,9 @@
 /* Timer structure for rereading the SEL. */
 typedef struct mc_reread_sel_s
 {
-    int cancelled;
-    ipmi_mc_t *mc;
+    int           cancelled;
+    ipmi_mc_t     *mc;
+    ipmi_domain_t *domain;
 } mc_reread_sel_t;
     
 typedef struct domain_up_info_s
@@ -956,6 +957,9 @@ mc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 	return;
     }
 
+    if (_ipmi_domain_get(info->domain))
+	return;
+
     /* Only fetch the SEL if we know the connection is up. */
     if (ipmi_domain_con_up(mc->domain))
 	rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, info);
@@ -963,6 +967,8 @@ mc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
     /* If we couldn't run the SEL get, then restart the timer now. */
     if (rv)
 	sels_fetched_start_timer(mc->sel, 0, 0, 0, info);
+
+    _ipmi_domain_put(info->domain);
 }
 
 typedef struct sel_reread_s
@@ -1482,6 +1488,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	    goto sel_failure;
 	}
 	info->mc = mc;
+	info->domain = mc->domain;
 	info->cancelled = 0;
 	rv = os_hnd->alloc_timer(os_hnd, &(mc->sel_timer));
 	if (rv) {

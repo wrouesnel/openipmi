@@ -153,13 +153,15 @@ struct ipmi_entity_s
     char *entity_id_string;
 
     /* A standard presence sensor.  This one overrides everything. */
-    ipmi_sensor_t *presence_sensor;
+    ipmi_sensor_t    *presence_sensor;
+    ipmi_sensor_id_t presence_sensor_id;
 
     /* A discrete sensor where one of the bits is used for presence.
        If one of these exists, it will be used unless there is a
        presence sensor. */
-    ipmi_sensor_t *presence_bit_sensor;
-    int           presence_bit_offset;
+    ipmi_sensor_t    *presence_bit_sensor;
+    ipmi_sensor_id_t presence_bit_sensor_id;
+    int              presence_bit_offset;
 
     int           present;
     int           presence_possibly_changed;
@@ -1382,10 +1384,12 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 
     if (ent->presence_sensor) {
 	/* Presence sensor overrides everything. */
-	rv = ipmi_states_get(ent->presence_sensor, states_read, ent);
+	rv = ipmi_sensor_id_states_get(ent->presence_sensor_id,
+		       		       states_read, ent);
     } else if (ent->presence_bit_sensor) {
 	/* Presence bit sensor overrides everything but a presence sensor. */
-	rv = ipmi_states_get(ent->presence_bit_sensor, states_bit_read, ent);
+	rv = ipmi_sensor_id_states_get(ent->presence_bit_sensor_id,
+		       		       states_bit_read, ent);
     } else if ((ent->frudev_present) && (ent->frudev_active)) {
 	/* Even though the spec lists the frudev check last, since
 	   these are an "or" relationship except for the presence
@@ -1464,6 +1468,7 @@ handle_new_presence_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     int                rv;
     int                val;
 
+    ent->presence_sensor_id = ipmi_sensor_convert_to_id(sensor);
 
     /* If we have a presence sensor, remove the presence bit sensor. */
     if (ent->presence_bit_sensor) {
@@ -1524,6 +1529,7 @@ handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     ipmi_event_state_t events;
     int                event_support;
 
+    ent->presence_bit_sensor_id = ipmi_sensor_convert_to_id(sensor);
 
     event_support = ipmi_sensor_get_event_support(sensor);
 
@@ -1981,13 +1987,20 @@ iterate_sensor_handler(void *cb_data, void *item1, void *item2)
     iterate_sensor_info_t *info = cb_data;
     ipmi_sensor_t         *sensor = item1;
     int                   rv;
+    ipmi_mc_t             *mc = ipmi_sensor_get_mc(sensor);
 
-    rv = _ipmi_sensor_get(sensor);
+    rv = _ipmi_mc_get(mc);
     if (rv)
 	goto out;
+    rv = _ipmi_sensor_get(sensor);
+    if (rv) {
+	_ipmi_mc_put(mc);
+	goto out;
+    }
     _ipmi_domain_entity_unlock(info->ent->domain);
     info->handler(info->ent, item1, info->cb_data);
     _ipmi_sensor_put(sensor);
+    _ipmi_mc_put(mc);
     _ipmi_domain_entity_lock(info->ent->domain);
  out:
     return LOCKED_LIST_ITER_CONTINUE;
@@ -2419,7 +2432,7 @@ add_sdr_info(entity_sdr_info_t *infos, dlr_info_t *dlr)
 	    ipmi_mem_free(infos->dlrs);
 	    ipmi_mem_free(infos->found);
 	}
-	memset(new_found+sizeof(entity_found_t) * infos->len,
+	memset(new_found + infos->len,
 	       0,
 	       sizeof(entity_found_t) * (new_length - infos->len));
 	infos->dlrs = new_dlrs;
@@ -2989,11 +3002,12 @@ ipmi_sdr_entity_destroy(void *info)
 	    && (infos->dlrs[i]->type != IPMI_ENTITY_DREAR))
 	{
 	    if (ent->frudev_present) {
-		_ipmi_mc_get(ent->frudev_mc);
+		ipmi_mc_t *mc = ent->frudev_mc;
+		_ipmi_mc_get(mc);
 		ipmi_mc_remove_active_handler(ent->frudev_mc,
 					      entity_mc_active, ent);
 		_ipmi_mc_release(ent->frudev_mc);
-		_ipmi_mc_put(ent->frudev_mc);
+		_ipmi_mc_put(mc);
 		ent->frudev_mc = NULL;
 		ent->frudev_present = 0;
 	    }

@@ -56,6 +56,9 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 		       void                         *rsp_data1,
 		       void                         *rsp_data2);
 
+/* Handle validation and usecounts on domains. */
+int _ipmi_domain_get(ipmi_domain_t *domain);
+void _ipmi_domain_put(ipmi_domain_t *domain);
 
 /* Iterate over all the mc's that the given domain represents. */
 typedef void (*ipmi_domain_iterate_mcs_cb)(ipmi_domain_t *domain,

@@ -357,8 +357,13 @@ chassis_mc_control_removal_handler(ipmi_domain_t *domain,
 				   void          *cb_data)
 {
     ipmi_control_t *control = cb_data;
+    ipmi_entity_t  *entity = ipmi_control_get_entity(control);
 
+    _ipmi_domain_entity_lock(domain);
+    _ipmi_entity_get(entity);
+    _ipmi_domain_entity_unlock(domain);
     ipmi_control_destroy(control);
+    _ipmi_entity_put(entity);
 }
 
 int
