@@ -80,6 +80,11 @@ struct ipmi_entity_s
     unsigned int is_fru : 1;
     unsigned int is_mc : 1;
 
+    /* If this entity is added by the user or comes from the main SDR
+       repository, we don't delete it automatically if it goes
+       away. */
+    unsigned int came_from_SDR : 1;
+
     /* For FRU device only. */
     unsigned int is_logical_fru : 1;
 
@@ -166,7 +171,6 @@ ipmi_entity_info_alloc(ipmi_mc_t *bmc, ipmi_entity_info_t **new_info)
     ents->bmc = bmc;
     ents->handler = NULL;
     ents->entities = alloc_ilist();
-    ents->handler = NULL;
     if (! ents->entities) {
 	free(ents);
 	return ENOMEM;
@@ -194,6 +198,27 @@ ipmi_entity_info_destroy(ipmi_entity_info_t *ents)
     free_ilist(ents->entities);
     free(ents);
     return 0;
+}
+
+static void
+remove_child_cb(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    ipmi_entity_remove_child(item, cb_data);
+}
+
+static void
+cleanup_entity(ipmi_entity_t *ent)
+{
+    /* Tell the user I was destroyed. */
+    if (ent->ents->handler)
+	ent->ents->handler(IPMI_DELETED, ent->bmc, ent, ent->ents->cb_data);
+
+    /* First destroy the parent/child relationships. */
+    ilist_iter(ent->parent_entities, remove_child_cb, ent);
+
+    /* The sensor and control lists should be empty now, we can just
+       destroy it. */
+    destroy_entity(NULL, ent, NULL);
 }
 
 typedef struct search_info_s {
@@ -263,13 +288,18 @@ entity_add(ipmi_entity_info_t *ents,
 	   int                entity_instance,
 	   entity_sdr_add_cb  sdr_gen_output,
 	   void               *sdr_gen_cb_data,
-	   ipmi_entity_t      **new_ent)
+	   ipmi_entity_t      **new_ent,
+	   int                came_from_SDR)
 {
     int           rv;
     ipmi_entity_t *ent;
 
     rv = entity_find(ents, device_num, entity_id, entity_instance, new_ent);
     if (! rv) {
+	/* If it came from an SDR, it always will have come from an SDR. */
+	if (!((*new_ent)->came_from_SDR))
+	    ((*new_ent)->came_from_SDR) = came_from_SDR;
+
 	if (sdr_gen_output != NULL) {
 	    (*new_ent)->sdr_gen_output = sdr_gen_output;
 	    (*new_ent)->sdr_gen_cb_data = sdr_gen_cb_data;
@@ -284,6 +314,7 @@ entity_add(ipmi_entity_info_t *ents,
 
     ent->sdr_gen_output = sdr_gen_output;
     ent->sdr_gen_cb_data = sdr_gen_cb_data;
+    ent->came_from_SDR = came_from_SDR;
 
     ent->bmc = ents->bmc;
     ent->sub_entities = alloc_ilist();
@@ -393,7 +424,7 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
     }
     ipmi_mc_entity_lock(mc);
     rv = entity_add(ents, device_num, entity_id, entity_instance,
-		    sdr_gen_output, sdr_gen_cb_data, &ent);
+		    sdr_gen_output, sdr_gen_cb_data, &ent, 0);
     if (!rv) {
 	ipmi_entity_set_id(ent, id);
 	ent->access_address = ipmi_mc_get_address(mc);
@@ -847,7 +878,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
     CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
 
-    ilist_init_iter(&iter, ent->ents->entities);
+    ilist_init_iter(&iter, ent->sensors);
     ilist_unpositioned(&iter);
     if (sensor == ent->presence_sensor) {
 	sens_cmp_info_t info;
@@ -861,24 +892,24 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 	       user, since we are taking it over. */
 	    ilist_delete(&iter);
 
+	    if (ent->sensor_handler)
+		ent->sensor_handler(IPMI_DELETED, ent, info.sensor,
+				    ent->cb_data);
+
 	    ent->presence_sensor = info.sensor;
 	    handle_new_presence_sensor(ent, info.sensor,
 				       ref->mc, ref->lun, ref->num);
 
 	    free(ref);
-
-	    if (ent->sensor_handler)
-		ent->sensor_handler(IPMI_DELETED, ent, info.sensor,
-				    ent->cb_data);
-
 	} else {
 	    ent->presence_sensor = NULL;
-	    ent->presence_possibly_changed = 1;
 	}
+	ent->presence_possibly_changed = 1;
     } else {
 	ref = ilist_search_iter(&iter, sens_cmp, &info);
 	if (!ref) {
-	    /* FIXME - report an error. */
+	    ipmi_log(IPMI_LOG_WARNING, "User requested removal of a sensor"
+		     "from an entity, but the sensor was not there");
 	    return;
 	}
 
@@ -887,6 +918,14 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 
 	if (ent->sensor_handler)
 	    ent->sensor_handler(IPMI_DELETED, ent, sensor, ent->cb_data);
+    }
+
+    if ((!ent->came_from_SDR)
+	&& (!ent->presence_sensor)
+	&& (ilist_empty(ent->sensors))
+	&& (ilist_empty(ent->controls)))
+    {
+	cleanup_entity(ent);
     }
 }
 
@@ -959,12 +998,13 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     CHECK_MC_LOCK(mc);
     CHECK_ENTITY_LOCK(ent);
 
-    ilist_init_iter(&iter, ent->ents->entities);
+    ilist_init_iter(&iter, ent->controls);
     ilist_unpositioned(&iter);
 
     ref = ilist_search_iter(&iter, control_cmp, &info);
     if (!ref) {
-	/* FIXME - report an error. */
+	ipmi_log(IPMI_LOG_WARNING, "User requested removal of a control"
+		 "from an entity, but the sensor was not there");
 	return;
     }
 
@@ -973,6 +1013,14 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
 
     if (ent->control_handler)
 	ent->control_handler(IPMI_DELETED, ent, control, ent->cb_data);
+
+    if ((!ent->came_from_SDR)
+	&& (!ent->presence_sensor)
+	&& (ilist_empty(ent->sensors))
+	&& (ilist_empty(ent->controls)))
+    {
+	cleanup_entity(ent);
+    }
 }
 
 void ipmi_entity_control_changed(ipmi_entity_t  *ent,
@@ -1036,7 +1084,7 @@ handle_ear(ipmi_entity_info_t *ents,
     device_num.channel = 0;
     device_num.address = 0;
     rv = entity_add(ents, device_num, sdr->data[0], sdr->data[1],
-		    NULL, NULL, &ent);
+		    NULL, NULL, &ent, 1);
     if (rv)
 	return rv;
 
@@ -1061,7 +1109,8 @@ handle_ear(ipmi_entity_info_t *ents,
 				e_num,
 				NULL,
 				NULL,
-				&sub_ent);
+				&sub_ent,
+				1);
 		if (rv)
 		    return rv;
 		rv = add_child(ent, sub_ent, &link);
@@ -1083,7 +1132,8 @@ handle_ear(ipmi_entity_info_t *ents,
 			    sdr->data[pos+1],
 			    NULL,
 			    NULL,
-			    &sub_ent);
+			    &sub_ent,
+			    1);
 	    if (rv)
 		return rv;
 	    rv = add_child(ent, sub_ent, &link);
@@ -1110,7 +1160,7 @@ handle_drear(ipmi_entity_info_t *ents,
     device_num.channel = sdr->data[3] >> 4;
     device_num.address = sdr->data[2] & 0xfe;
     rv = entity_add(ents, device_num, sdr->data[0], sdr->data[1],
-		    NULL, NULL, &ent);
+		    NULL, NULL, &ent, 1);
     if (rv)
 	return rv;
 
@@ -1137,7 +1187,8 @@ handle_drear(ipmi_entity_info_t *ents,
 				e_num,
 				NULL,
 				NULL,
-				&sub_ent);
+				&sub_ent,
+				1);
 		if (rv)
 		    return rv;
 		rv = add_child(ent, sub_ent, &link);
@@ -1160,7 +1211,8 @@ handle_drear(ipmi_entity_info_t *ents,
 			    sdr->data[pos+3],
 			    NULL,
 			    NULL,
-			    &sub_ent);
+			    &sub_ent,
+			    1);
 	    if (rv)
 		return rv;
 	    rv = add_child(ent, sub_ent, &link);
@@ -1216,7 +1268,7 @@ handle_gdlr(ipmi_entity_info_t *ents,
     device_num.channel = (sdr->data[2] >> 5) | ((sdr->data[1] << 3) & 0x08);
     device_num.address = sdr->data[0] & 0xfe;
     rv = entity_add(ents, device_num, sdr->data[7], sdr->data[8],
-		    gdlr_output, NULL, &ent);
+		    gdlr_output, NULL, &ent, 1);
     if (rv)
 	return rv;
 
@@ -1275,7 +1327,7 @@ handle_frudlr(ipmi_entity_info_t *ents,
     device_num.channel = sdr->data[3] >> 4;
     device_num.address = sdr->data[0] & 0xfe;
     rv = entity_add(ents, device_num, sdr->data[7], sdr->data[8],
-		    frudlr_output, NULL, &ent);
+		    frudlr_output, NULL, &ent, 1);
     if (rv)
 	return rv;
 
@@ -1344,11 +1396,11 @@ handle_mcdlr(ipmi_entity_info_t *ents,
     device_num.channel = sdr->data[1] & 0xf;
     device_num.address = sdr->data[0] & 0xfe;
     rv = entity_add(ents, device_num, sdr->data[7], sdr->data[8], 
-		    mcdlr_output, NULL, &ent);
+		    mcdlr_output, NULL, &ent, 1);
     if (rv)
 	return rv;
 
-    ent->is_mc = 0;
+    ent->is_mc = 1;
     ent->slave_address = sdr->data[0] & 0xfe;
     ent->channel = device_num.channel;
 

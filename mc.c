@@ -198,6 +198,9 @@ struct ipmi_mc_s
     ipmi_oem_event_handler_cb oem_event_handler;
     void                      *oem_event_handler_cb_data;
 
+    ipmi_bmc_oem_removed_mc_cb removed_mc_handler;
+    void                       *removed_mc_cb_data;
+
     void *oem_data;
 };
 
@@ -871,7 +874,6 @@ ipmi_close_connection(ipmi_mc_t    *mc,
 {
     int        rv;
     ipmi_con_t *ipmi;
-    int        i;
 
     if (mc->bmc_mc != mc)
 	return EINVAL;
@@ -884,46 +886,7 @@ ipmi_close_connection(ipmi_mc_t    *mc,
 
     ipmi = mc->bmc->conn;
 
-    /* FIXME - handle cleaning up the mc list. */
-
-    if (mc->bmc->sel_timer_info)
-        mc->bmc->sel_timer_info->cancelled = 1;
-
-    if (mc->bmc->bus_scan_timer_info)
-        mc->bmc->bus_scan_timer_info->cancelled = 1;
-
-    if (mc->sensors_in_my_sdr) {
-	for (i=0; i<mc->sensors_in_my_sdr_count; i++) {
-	    ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
-	}
-	free(mc->sensors_in_my_sdr);
-    }
-
-    if (mc->bmc->sensors_in_my_sdr) {
-	for (i=0; i<mc->bmc->sensors_in_my_sdr_count; i++) {
-	    ipmi_sensor_destroy(mc->bmc->sensors_in_my_sdr[i]);
-	}
-	free(mc->bmc->sensors_in_my_sdr);
-    }
-
-    free(mc->sensors_in_my_sdr);
-
-    if (mc->sdrs)
-	ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
-
-    if (mc->sensors)
-	ipmi_sensors_destroy(mc->sensors);
-
-    if (mc->controls)
-	ipmi_controls_destroy(mc->controls);
-
-    if (mc->bmc->main_sdrs)
-	ipmi_sdr_info_destroy(mc->bmc->main_sdrs, NULL, NULL);
-
-    ipmi_lock(mc->bmc->event_handlers_lock);
-    while (mc->bmc->event_handlers)
-	remove_event_handler(mc, mc->bmc->event_handlers);
-    ipmi_unlock(mc->bmc->event_handlers_lock);
+    ipmi_cleanup_mc(mc);
 
     ipmi->close_connection(ipmi);
  out_unlock:
@@ -976,11 +939,59 @@ get_device_id_data_from_rsp(ipmi_mc_t  *mc,
     return check_oem_handlers(mc);
 }
 
+/* This should be called with an error-free message. */
+static int
+mc_device_data_compares(ipmi_mc_t  *mc,
+			ipmi_msg_t *rsp)
+{
+    unsigned char *rsp_data = rsp->data;
+
+    if (rsp->data_len < 12) {
+	return EINVAL;
+    }
+
+    mc->device_id = rsp_data[1];
+    mc->device_revision = rsp_data[2] & 0xf;
+    mc->provides_device_sdrs = (rsp_data[2] & 0x80) == 0x80;
+    mc->device_available = (rsp_data[3] & 0x80) == 0x80;
+    mc->major_fw_revision = rsp_data[3] & 0x7f;
+    mc->minor_fw_revision = rsp_data[4];
+    mc->major_version = rsp_data[5] & 0xf;
+    mc->minor_version = (rsp_data[5] >> 4) & 0xf;
+    mc->chassis_support = (rsp_data[6] & 0x80) == 0x80;
+    mc->bridge_support = (rsp_data[6] & 0x40) == 0x40;
+    mc->IPMB_event_generator_support = (rsp_data[6] & 0x20) == 0x20;
+    mc->IPMB_event_receiver_support = (rsp_data[6] & 0x10) == 0x10;
+    mc->FRU_inventory_support = (rsp_data[6] & 0x08) == 0x08;
+    mc->SEL_device_support = (rsp_data[6] & 0x04) == 0x04;
+    mc->SDR_repository_support = (rsp_data[6] & 0x02) == 0x02;
+    mc->sensor_device_support = (rsp_data[6] & 0x01) == 0x01;
+    mc->manufacturer_id = (rsp_data[7]
+			     | (rsp_data[8] << 8)
+			     | (rsp_data[9] << 16));
+    mc->product_id = rsp_data[10] | (rsp_data[11] << 8);
+
+    if (rsp->data_len < 16) {
+	/* no aux revision. */
+	memset(mc->aux_fw_revision, 0, 4);
+    } else {
+	memcpy(mc->aux_fw_revision, rsp_data + 12, 4);
+    }
+
+    return check_oem_handlers(mc);
+}
+
 void
 ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
     int i;
 
+    /* Call the OEM handler for removal, if it has been registered. */
+    if (mc->removed_mc_handler)
+	mc->removed_mc_handler(mc->bmc_mc, mc, mc->removed_mc_cb_data);
+
+    /* First the device SDR sensors, since they can be there for any
+       MC. */
     if (mc->sensors_in_my_sdr) {
 	for (i=0; i<mc->sensors_in_my_sdr_count; i++) {
 	    ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
@@ -992,13 +1003,28 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	ipmi_sensors_destroy(mc->sensors);
     if (mc->controls)
 	ipmi_controls_destroy(mc->controls);
+
+    /* FIXME - clean up entities that came from this device. */
+
     if (mc->bmc) {
+	/* Make sure the timer stop. */
+	if (mc->bmc->sel_timer_info)
+	    mc->bmc->sel_timer_info->cancelled = 1;
+	if (mc->bmc->bus_scan_timer_info)
+	    mc->bmc->bus_scan_timer_info->cancelled = 1;
+
+	/* Delete the sensors from the main SDR repository. */
 	if (mc->bmc->sensors_in_my_sdr) {
 	    for (i=0; i<mc->bmc->sensors_in_my_sdr_count; i++) {
 		ipmi_sensor_destroy(mc->bmc->sensors_in_my_sdr[i]);
 	    }
 	    free(mc->bmc->sensors_in_my_sdr);
 	}
+
+	ipmi_lock(mc->bmc->event_handlers_lock);
+	while (mc->bmc->event_handlers)
+	    remove_event_handler(mc, mc->bmc->event_handlers);
+	ipmi_unlock(mc->bmc->event_handlers_lock);
 
 	if (mc->bmc->mc_list)
 	    free_ilist(mc->bmc->mc_list);
@@ -1060,6 +1086,7 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     mc->sensors_in_my_sdr_count = 0;
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
+    mc->removed_mc_handler = NULL;
 
     memcpy(&(mc->addr), addr, addr_len);
     mc->addr_len = addr_len;
@@ -1287,6 +1314,8 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 {
     mc_ipmb_scan_info_t *info = rsp_data;
     int                 rv;
+    ipmi_mc_t           *mc;
+
 
     ipmi_read_lock();
     rv = ipmi_mc_validate(info->bmc);
@@ -1297,12 +1326,16 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	return;
     }
 
+    ipmi_lock(info->bmc->bmc->mc_list_lock);
+    /* Found one, start the discovery process on it. */
+    mc = find_mc_by_addr(info->bmc, addr, addr_len);
     if (msg->data[0] == 0) {
-	/* Found one, start the discovery process on it. */
-	ipmi_mc_t *mc;
-
-	ipmi_lock(info->bmc->bmc->mc_list_lock);
-	mc = find_mc_by_addr(info->bmc, addr, addr_len);
+	if (!mc_device_data_compares(mc, msg)) {
+	    /* The MC was replaced with a new one, so clear the old
+               one and add a new one. */
+	    ipmi_cleanup_mc(mc);
+	    mc = NULL;
+	}
 	if (!mc) {
 	    /* It doesn't already exist, so add it. */
 	    rv = ipmi_create_mc(info->bmc, addr, addr_len, &mc);
@@ -1326,9 +1359,11 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    if (rv)
 		ipmi_cleanup_mc(mc);
 	}
- next_addr:
-	ipmi_unlock(info->bmc->bmc->mc_list_lock);
+    } else {
+	/* Didn't get a response.  Maybe the MC has gone away? */
     }
+ next_addr:
+    ipmi_unlock(info->bmc->bmc->mc_list_lock);
 
     if (info->addr.slave_addr == info->end_addr) {
 	/* We've hit the end, we can quit now. */
@@ -1774,6 +1809,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->sensors_in_my_sdr_count = 0;
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
+    mc->removed_mc_handler = NULL;
 
     memcpy(&(mc->addr), mc_addr, mc_addr_len);
     mc->addr_len = mc_addr_len;
@@ -2474,6 +2510,18 @@ ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
 
     bmc->bmc->new_mc_handler = handler;
     bmc->bmc->new_mc_cb_data = cb_data;
+    return 0;
+}
+
+int
+ipmi_bmc_set_oem_removed_mc_handler(ipmi_mc_t                  *mc,
+				    ipmi_bmc_oem_removed_mc_cb handler,
+				    void                       *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    mc->removed_mc_handler = handler;
+    mc->removed_mc_cb_data = cb_data;
     return 0;
 }
 

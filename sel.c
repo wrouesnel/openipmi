@@ -53,6 +53,12 @@ typedef struct sel_fetch_handler_s
     struct sel_fetch_handler_s *next;
 } sel_fetch_handler_t;
 
+typedef struct sel_event_holder_s
+{
+    int          deleted;
+    ipmi_event_t event;
+} sel_event_holder_t;
+
 enum fetch_state_e { IDLE, FETCHING, HANDLERS };
 
 struct ipmi_sel_info_s
@@ -134,12 +140,12 @@ free_events(ilist_t *events)
 static int
 recid_search_cmp(void *item, void *cb_data)
 {
-    ipmi_event_t *event = item;
-    unsigned int recid = *((int *) cb_data);
+    sel_event_holder_t *holder = item;
+    unsigned int       recid = *((int *) cb_data);
 
-    return event->record_id == recid;
+    return holder->event.record_id == recid;
 }
-static ipmi_event_t *
+static sel_event_holder_t *
 find_event(ilist_t *list, unsigned int recid)
 {
     return ilist_search(list, recid_search_cmp, &recid);
@@ -305,6 +311,52 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
     sel_unlock(sel);
 }
 
+static void
+free_deleted_event(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    sel_event_holder_t *holder = item;
+
+    if (holder->deleted) {
+	ilist_delete(iter);
+	free(holder);
+    }
+}
+static void
+free_deleted_events(ilist_t *events)
+{
+    ilist_iter(events, free_deleted_event, NULL);
+}
+
+static void
+handle_sel_clear(ipmi_mc_t  *mc,
+		 ipmi_msg_t *rsp,
+		 void       *rsp_data)
+{
+    ipmi_sel_info_t *sel = (ipmi_sel_info_t *) rsp_data;
+
+    sel_lock(sel);
+    if (sel->destroyed) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "SEL info was destroyed while an operation was in progress");
+	fetch_complete(sel, ECANCELED);
+	goto out;
+    }
+
+    if (!mc) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "MC went away while SEL op was in progress");
+        fetch_complete(sel, ENXIO);
+	goto out;
+    }
+
+    if (rsp->data[0] == 0) {
+	/* Success!  We can free the data. */
+	free_deleted_events(sel->events);
+    }
+    sel_unlock(sel);
+ out:
+}
+
 static int start_fetch(ipmi_sel_info_t *sel);
 
 static void
@@ -312,14 +364,14 @@ handle_sel_data(ipmi_mc_t  *mc,
 		ipmi_msg_t *rsp,
 		void       *rsp_data)
 {
-    ipmi_sel_info_t *sel = (ipmi_sel_info_t *) rsp_data;
-    unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
-    ipmi_msg_t      cmd_msg;
-    int             rv;
-    int             event_is_new = 0;
-    ipmi_event_t      *event;
-    ipmi_event_t      del_event;
-    unsigned int    record_id;
+    ipmi_sel_info_t    *sel = (ipmi_sel_info_t *) rsp_data;
+    unsigned char      cmd_data[MAX_IPMI_DATA_SIZE];
+    ipmi_msg_t         cmd_msg;
+    int                rv;
+    int                event_is_new = 0;
+    sel_event_holder_t *holder;
+    ipmi_event_t       del_event;
+    unsigned int       record_id;
 
 
     sel_lock(sel);
@@ -372,27 +424,29 @@ handle_sel_data(ipmi_mc_t  *mc,
     memcpy(del_event.data, rsp->data+6, 13);
 
     record_id = ipmi_get_uint16(rsp->data+3);
-    event = find_event(sel->events, record_id);
-    if (!event) {
-	event = malloc(sizeof(*event));
-	if (!event) {
+    holder = find_event(sel->events, record_id);
+    if (!holder) {
+	holder = malloc(sizeof(*holder));
+	if (!holder) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "Could not allocate log information for SEL");
 	    fetch_complete(sel, ENOMEM);
 	    goto out;
 	}
-	if (!ilist_add_tail(sel->events, event, NULL)) {
-	    free(event);
+	if (!ilist_add_tail(sel->events, holder, NULL)) {
+	    free(holder);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "Could not link log onto the log linked list");
 	    fetch_complete(sel, ENOMEM);
 	    goto out;
 	}
-	*event = del_event;
+	holder->event = del_event;
+	holder->deleted = 0;
 	event_is_new = 1;
 	sel->num_sels++;
-    } else if (event_cmp(&del_event, event) != 0) {
-	*event = del_event;
+    } else if (event_cmp(&del_event, &(holder->event)) != 0) {
+	holder->event = del_event;
+	holder->deleted = 0;
 	event_is_new = 1;
     }
 
@@ -402,7 +456,30 @@ handle_sel_data(ipmi_mc_t  *mc,
 	if (event_is_new)
 	    if (sel->new_event_handler)
 		sel->new_event_handler(sel, &del_event, sel->new_event_cb_data);
-	fetch_complete(sel, 0);
+	/* If the operation completed successfully and everything in
+	   our SEL is deleted, then clear it with our old
+	   reservation. */
+	if ((sel->num_sels == 0) && (!ilist_empty(sel->events))) {
+	    cmd_msg.data = cmd_data;
+	    cmd_msg.netfn = IPMI_STORAGE_NETFN;
+	    cmd_msg.cmd = IPMI_CLEAR_SEL_CMD;
+	    cmd_msg.data_len = 6;
+	    ipmi_set_uint16(cmd_msg.data, sel->reservation);
+	    cmd_msg.data[2] = 'C';
+	    cmd_msg.data[3] = 'L';
+	    cmd_msg.data[4] = 'R';
+	    cmd_msg.data[5] = 0xaa;
+
+	    /* We don't care if this fails, because it will just
+	       happen again later if it does. */
+	    rv = ipmi_send_command(sel->mc, sel->lun, &cmd_msg,
+				   handle_sel_clear, sel);
+	    if (rv)
+		fetch_complete(sel, 0);
+	    rv = 0;
+	} else {
+	    fetch_complete(sel, 0);
+	}
 	goto out;
     }
     sel->curr_rec_id = sel->next_rec_id;
@@ -740,7 +817,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
            gone. */
 	rv = 0;
     } else if ((data->count < MAX_DEL_RESERVE_RETRIES)
-	     && (rsp->data[0] == IPMI_INVALID_RESERVATION_CC))
+	       && (rsp->data[0] == IPMI_INVALID_RESERVATION_CC))
     {
 	/* Lost our reservation, retry the operation. */
 	data->count++;
@@ -751,6 +828,19 @@ handle_sel_delete(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "IPMI error from SEL delete: %x", rsp->data[0]);
 	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+    } else {
+	/* We deleted the entry, so remove it from our database. */
+	sel_event_holder_t *real_holder;
+	ilist_iter_t       iter;
+
+	ilist_init_iter(&iter, sel->events);
+	ilist_unpositioned(&iter);
+	real_holder = ilist_search_iter(&iter, recid_search_cmp,
+					&(data->record_id));
+	if (real_holder) {
+	    ilist_delete(&iter);
+	    free(real_holder);
+	}
     }
 
     sel_op_done(data, rv);
@@ -854,22 +944,19 @@ start_del_sel(sel_cb_handler_data_t *data)
     return rv;
 }
 
-int
-ipmi_sel_del_event(ipmi_sel_info_t       *sel,
-		   ipmi_event_t          *event,
-		   ipmi_sel_op_done_cb_t handler,
-		   void                  *cb_data)
+static int
+sel_del_event(ipmi_sel_info_t       *sel,
+	      ipmi_event_t          *event,
+	      ipmi_sel_op_done_cb_t handler,
+	      void                  *cb_data,
+	      int                   cmp_event)
 {
-    int                   rv;
+    int                   rv = 0;
     sel_cb_handler_data_t *data;
-    ipmi_event_t          *real_event;
+    sel_event_holder_t    *real_holder;
     ilist_iter_t          iter;
     ipmi_mc_t             *mc;
     int                   lun;
-
-    data = malloc(sizeof(*data));
-    if (!data)
-	return ENOMEM;
 
     sel_lock(sel);
     if (sel->destroyed) {
@@ -879,18 +966,19 @@ ipmi_sel_del_event(ipmi_sel_info_t       *sel,
 
     ilist_init_iter(&iter, sel->events);
     ilist_unpositioned(&iter);
-    real_event = ilist_search_iter(&iter, recid_search_cmp, &(event->record_id));
-    if (!real_event) {
+    real_holder = ilist_search_iter(&iter, recid_search_cmp,
+				    &(event->record_id));
+    if (!real_holder) {
 	rv = EINVAL;
 	goto out_unlock;
     }
 
-    if (event_cmp(event, real_event) != 0) {
+    if (cmp_event && (event_cmp(event, &(real_holder->event)) != 0)) {
 	rv = EINVAL;
 	goto out_unlock;
     }
 
-    ilist_delete(&iter);
+    real_holder->deleted = 1;
     sel->num_sels--;
 
     mc = sel->mc;
@@ -901,22 +989,34 @@ ipmi_sel_del_event(ipmi_sel_info_t       *sel,
     if ((rv = ipmi_mc_validate(sel->mc)))
 	goto out_unlock2;
 
-    data->sel = sel;
-    data->handler = handler;
-    data->cb_data = cb_data;
-    data->mc = mc;
-    data->lun = lun;
-    data->record_id = event->record_id;
-    data->count = 0;
+    if (sel->supports_delete_sel) {
+	/* We can delete the entry immediately, just do it. */
+	data = malloc(sizeof(*data));
+	if (!data)
+	    /* We will eventually free this anyway, so no need to
+               worry. */
+	    goto out;
 
-    rv = start_del_sel(data);
+	data->sel = sel;
+	data->handler = handler;
+	data->cb_data = cb_data;
+	data->mc = mc;
+	data->lun = lun;
+	data->record_id = event->record_id;
+	data->count = 0;
+
+	/* We don't return the return code, because we don't really
+           care.  If this fails, it will just be handled later. */
+	rv = start_del_sel(data);
+	if (rv)
+	    free(data);
+	rv = 0;
+    }
 
  out_unlock2:
     ipmi_read_unlock();
 
  out:
-    if (rv)
-	free(data);
     return rv;
 
  out_unlock:
@@ -925,68 +1025,24 @@ ipmi_sel_del_event(ipmi_sel_info_t       *sel,
 }
 
 int
+ipmi_sel_del_event(ipmi_sel_info_t       *sel,
+		   ipmi_event_t          *event,
+		   ipmi_sel_op_done_cb_t handler,
+		   void                  *cb_data)
+{
+    return sel_del_event(sel, event, handler, cb_data, 1);
+}
+
+int
 ipmi_sel_del_event_by_recid(ipmi_sel_info_t       *sel,
 			    unsigned int          record_id,
 			    ipmi_sel_op_done_cb_t handler,
 			    void                  *cb_data)
 {
-    int                   rv;
-    sel_cb_handler_data_t *data;
-    ipmi_event_t            *real_event;
-    ilist_iter_t          iter;
-    ipmi_mc_t             *mc;
-    int                   lun;
+    ipmi_event_t event;
 
-    data = malloc(sizeof(*data));
-    if (!data)
-	return ENOMEM;
-
-    sel_lock(sel);
-    if (sel->destroyed) {
-	rv = EINVAL;
-	goto out_unlock;
-    }
-
-    ilist_init_iter(&iter, sel->events);
-    ilist_unpositioned(&iter);
-    real_event = ilist_search_iter(&iter, recid_search_cmp, &record_id);
-    if (!real_event) {
-	rv = EINVAL;
-	goto out_unlock;
-    }
-
-    ilist_delete(&iter);
-    sel->num_sels--;
-
-    mc = sel->mc;
-    lun = sel->lun;
-    sel_unlock(sel);
-
-    ipmi_read_lock();
-    if ((rv = ipmi_mc_validate(sel->mc)))
-	goto out_unlock2;
-
-    data->sel = sel;
-    data->handler = handler;
-    data->cb_data = cb_data;
-    data->mc = mc;
-    data->lun = lun;
-    data->record_id = record_id;
-    data->count = 0;
-
-    rv = start_del_sel(data);
-
- out_unlock2:
-    ipmi_read_unlock();
-
- out:
-    if (rv)
-	free(data);
-    return rv;
-
- out_unlock:
-    sel_unlock(sel);
-    goto out;
+    event.record_id = record_id;
+    return sel_del_event(sel, &event, handler, cb_data, 0);
 }
 
 int
@@ -1018,7 +1074,7 @@ ipmi_sel_get_first_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
     }
     ilist_init_iter(&iter, sel->events);
     if (ilist_first(&iter))
-	*event = *((ipmi_event_t *) ilist_get(&iter));
+	*event = ((sel_event_holder_t *) ilist_get(&iter))->event;
     else
 	rv = ENODEV;
     sel_unlock(sel);
@@ -1038,7 +1094,7 @@ ipmi_sel_get_last_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
     }
     ilist_init_iter(&iter, sel->events);
     if (ilist_last(&iter))
-	*event = *((ipmi_event_t *) ilist_get(&iter));
+	*event = ((sel_event_holder_t *) ilist_get(&iter))->event;
     else
 	rv = ENODEV;
     sel_unlock(sel);
@@ -1060,7 +1116,7 @@ ipmi_sel_get_next_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
     ilist_unpositioned(&iter);
     if (ilist_search_iter(&iter, recid_search_cmp, &(event->record_id))) {
 	if (ilist_next(&iter))
-	    *event = *((ipmi_event_t *) ilist_get(&iter));
+	    *event = ((sel_event_holder_t *) ilist_get(&iter))->event;
 	else
 	    rv = ENODEV;
     } else {
@@ -1085,7 +1141,7 @@ ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
     ilist_unpositioned(&iter);
     if (ilist_search_iter(&iter, recid_search_cmp, &(event->record_id))) {
 	if (ilist_prev(&iter))
-	    *event = *((ipmi_event_t *) ilist_get(&iter));
+	    *event = ((sel_event_holder_t *) ilist_get(&iter))->event;
 	else
 	    rv = ENODEV;
     } else {
@@ -1121,7 +1177,7 @@ int ipmi_get_all_sels(ipmi_sel_info_t *sel,
 	    goto out_unlock;
 	}
 	for (i=0; ; ) {
-	    *array = *((ipmi_event_t *) ilist_get(&iter));
+	    *array = ((sel_event_holder_t *) ilist_get(&iter))->event;
 	    array++;
 	    i++;
 	    if (i<sel->num_sels) {
@@ -1260,8 +1316,8 @@ int
 ipmi_sel_event_add(ipmi_sel_info_t *sel,
 		   ipmi_event_t    *new_event)
 {
-    int        rv = 0;
-    ipmi_event_t *event;
+    int                rv = 0;
+    sel_event_holder_t *holder;
 
     sel_lock(sel);
     if (sel->destroyed) {
@@ -1269,21 +1325,21 @@ ipmi_sel_event_add(ipmi_sel_info_t *sel,
 	return EINVAL;
     }
 
-    event = find_event(sel->events, new_event->record_id);
-    if (!event) {
-	event = malloc(sizeof(*event));
-	if (!event) {
+    holder = find_event(sel->events, new_event->record_id);
+    if (!holder) {
+	holder = malloc(sizeof(*holder));
+	if (!holder) {
 	    rv = ENOMEM;
 	    goto out_unlock;
 	}
-	if (!ilist_add_tail(sel->events, event, NULL)) {
+	if (!ilist_add_tail(sel->events, holder, NULL)) {
 	    rv = ENOMEM;
 	    goto out_unlock;
 	}
-	*event = *new_event;
+	holder->event = *new_event;
 	sel->num_sels++;
     } else {
-	*event = *new_event;
+	holder->event = *new_event;
     }
 
  out_unlock:

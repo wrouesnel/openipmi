@@ -176,7 +176,11 @@ void ipmi_entity_set_is_fru(ipmi_entity_t *ent, int is_fru);
 void ipmi_entity_set_device_type(ipmi_entity_t *ent, int device_type);
 void ipmi_entity_set_device_modifier(ipmi_entity_t *ent, int device_modifier);
 void ipmi_entity_set_oem(ipmi_entity_t *ent, int oem);
+
+/* This value is copied into an internal array, so no need to save or
+   manage. */
 void ipmi_entity_set_id(ipmi_entity_t *ent, char *id);
+
 void ipmi_entity_set_presence_sensor_always_there(ipmi_entity_t *ent, int val);
 void ipmi_entity_set_ACPI_system_power_notify_required(ipmi_entity_t *ent,
 						       int           val);
@@ -204,6 +208,10 @@ void ipmi_entity_set_SDR_repository_device(ipmi_entity_t *ent,
 					   int           val);
 void ipmi_entity_set_sensor_device(ipmi_entity_t *ent,
 				   int           val);
+
+/* This pointer is kept in the data structure.  You should use a
+   static string here, which should always be doable, I think.  If
+   not, a management interface needs to be added for this. */
 void ipmi_entity_set_entity_id_string(ipmi_entity_t *ent, char *str);
 
 /* Locks for the entity. */

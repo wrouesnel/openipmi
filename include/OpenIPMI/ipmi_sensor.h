@@ -249,6 +249,9 @@ void ipmi_sensor_set_negative_going_threshold_hysteresis(
     ipmi_sensor_t *sensor,
     int           negative_going_threshold_hysteresis);
 void ipmi_sensor_set_oem1(ipmi_sensor_t *sensor, int oem1);
+
+/* This value is copied into an internal array, so no need to save or
+   manage. */
 void ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id);
 
 void ipmi_sensor_set_discrete_assertion_event_supported(
@@ -459,7 +462,10 @@ int ipmi_sensor_send_command_addr(ipmi_mc_t             *bmc,
 				  ipmi_sensor_op_info_t *info,
 				  void                  *cb_data);
 
-/* Custom sensor strings. */
+/* Custom sensor strings. These pointers are kept in the data
+   structure.  You should use a static string here, which should
+   always be doable, I think.  If not, a management interface needs to
+   be added for these. */
 void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,
 					       char          *str);

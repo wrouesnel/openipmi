@@ -1,4 +1,22 @@
 
+2003-01-16 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c, include/OpenIPMI/ipmi_oem.h: Added an OEM callback for MC
+	removal.
+
+	* mc.c: Added detection of when an MC goes away or changes.
+
+	* mc.c: Cleaned up the MC cleanup code to consolidate it.
+
+	* entity.c: Modified entity sensor/control deletion so that if all
+	the entities and sensors are gone, and the entity was
+	auto-created, that the entity itself would be destroyed.
+
+	* sel.c: Reworked the event deletion code so that it works even
+	without the ability to delete individual entries.  If all the
+	entries in the local database are deleted, it will clear out the
+	database (if the reservation hasn't been lost).
+
 2003-01-15 Corey Minyard <cminyard@mvista.com>
 
 	* sel.c: Fixed a locking problem with SEL operations.
