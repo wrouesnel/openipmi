@@ -37,7 +37,10 @@
 
 #include <OpenIPMI/ipmi_types.h>
 
-/* The abstract type for pef. */
+/* The abstract type for pef.  Note that if you use this directly, you
+   must understand about PEF locking.  If you want easier access to
+   the configuration, see the ipmi_pef_config_t type later in this
+   file. */
 typedef struct ipmi_pef_s ipmi_pef_t;
 
 
@@ -94,15 +97,15 @@ int ipmi_pef_supports_reset(ipmi_pef_t *pef);
 int ipmi_pef_supports_power_down(ipmi_pef_t *pef);
 int ipmi_pef_supports_alert(ipmi_pef_t *pef);
 
-/* Return the MC this PEF uses. */
-ipmi_mcid_t ipmi_pef_get_mc(ipmi_pef_t *pef);
-
 unsigned int ipmi_pef_major_version(ipmi_pef_t *pef);
 unsigned int ipmi_pef_minor_version(ipmi_pef_t *pef);
 
 unsigned int num_event_filter_table_entries(ipmi_pef_t *pef);
 
-/* Entries in the PEF configuration. */
+/* Return the MC this PEF uses. */
+ipmi_mcid_t ipmi_pef_get_mc(ipmi_pef_t *pef);
+
+/* Standard entries in the PEF configuration. */
 
 #define IPMI_PEFPARM_SET_IN_PROGRESS		0
 #define IPMI_PEFPARM_CONTROL			1

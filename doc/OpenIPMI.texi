@@ -609,6 +609,9 @@ understand the include files.
 * Controls::
 * The System Event Log (SEL)::
 * The Sensor Data Record (SDR) Repository::
+* The Platform Event Filter (PEF)::
+* Special LAN Configuration::
+* Using the Automatic Platform Event Trap (PET)::
 @end menu
 
 @node    Include Files, Initialization, Using OpenIPMI, Using OpenIPMI
@@ -662,6 +665,21 @@ creating a LAN connection.
 @item @file{ipmi_smi.h}
 This is the messaging interface for talking to local IPMI interfaces
 (like KCS), this contains the calls for creating an SMI connection.
+
+@end table
+
+@subsection File for system configuration
+
+@table @samp
+@item @file{ipmi_pef.h}
+Contains code for configuring the Platform Event Filter (PEF).
+
+@item @file{ipmi_lanparm.h}
+Contains code for configuring the LAN configuration data.
+
+@item @file{ipmi_pet.h}
+Contains code that allows the user to easily set up an IPMI LAN
+interface on a BMC to send traps.
 
 @end table
 
@@ -1270,12 +1288,111 @@ OpenIPMI couldn't correlate to a sensor.  As well, the functions
 @code{ipmi_domain_next_event()}, and @code{ipmi_domain_prev_event()} let you
 iterate through the events in the local representation of the SEL.
 
-@node    The Sensor Data Record (SDR) Repository, , The System Event Log (SEL), Using OpenIPMI
+@node    The Sensor Data Record (SDR) Repository, The Platform Event Filter (PEF), The System Event Log (SEL), Using OpenIPMI
 @section The Sensor Data Record (SDR) Repository
 
 OpenIPMI has code to manage the SDR Repository on the machine.
 
 FIXME - this section needs information.
+
+@node    The Platform Event Filter (PEF), Special LAN Configuration, The Sensor Data Record (SDR) Repository, Using OpenIPMI
+@section The Platform Event Filter (PEF)
+
+The Platform Event Filter (PEF) allows IPMI events to be forwarded as
+SNMP traps, cause system operations such as power and reset
+operations, and it allows IPMI events to cause the BMC to dial
+page.  The filters present can search for certain information in
+events, and if the information matches to cause the appropriate events
+to occur.
+
+The PEF include file @file{ipmi_pef.h} defines the type
+@var{ipmi_pef_t}.  You must allocate one of these with
+@code{ipmi_pef_alloc()}, it will go find the information and return
+the new PEF via a callback when done.
+
+This @var{ipmi_pef_t} type is designed for fairly low-level access,
+you directly access the configuration parameters, but you have to
+handle all the locking yourself.  If you want easier access to the
+configuration, a @var{ipmi_pef_config_t} type is provided that is able
+to handle the full configuration process.
+
+You can get an @var{ipmi_pef_config_t} from an @var{ipmi_pef_t} object
+using the @code{ipmi_pef_get_config()} call, which fetches the whold
+configuration and calls a callback with the results.  If you receive
+the configuration without an error, the PEF is locked.  If you get an
+error, the PEF is not locked.  You @emph{must} unlock it, or access
+will be blocked to the PEF for others.  You can unlock it using
+@code{ipmi_pef_set_config()}, which writes the configuration back out
+to the PEF, or with @code{ipmi_pef_clear_lock()}, which just clears
+the lock without committing the changes.  Note that the get and set
+operations can involve quite a bit of messaging, as the configuration
+can be quite large.
+
+If you get an @var{EAGAIN} error from fetching the configuration, that
+means someone else is holding the lock.  If you are sure the lock was
+left in a bad state, you can unlock it directly with
+@code{ipmi_pef_clear_lock()} passing in a NULL for the PEF
+configuration.
+
+You can fetch and change your @var{ipmi_pef_config_t} type using the
+many get and set functions defined in the include file.  However, any
+changes you make are only made to the local copy, not the real PEF.
+You must write any changes using @code{ipmi_pef_set_config()}.
+
+The actual meaning of the configuration items is defined in the IPMI
+specification, see that for more details.
+
+@node    Special LAN Configuration, Using the Automatic Platform Event Trap (PET), The Platform Event Filter (PEF), Using OpenIPMI
+@section Special LAN Configuration
+
+IPMI provides a way to configure the LAN interface through IPMI
+messaging, the @var{ipmi_lanparm_t} type defined in the
+@code{ipmi_lanparm.h} include file represents this interface for the
+user.  You allocate one of these with @code{ipmi_lanparm_alloc()}.
+
+This @var{ipmi_lanparm_t} type is designed for fairly low-level
+access, you directly access the configuration parameters, but you have
+to handle all the locking yourself.  If you want easier access to the
+configuration, a @var{ipmi_lanparm_config_t} type is provided that is
+able to handle the full configuration process.
+
+You can get an @var{ipmi_lanparm_config_t} from an
+@var{ipmi_lanparm_t} object using the @code{ipmi_lan_get_config()}
+call, which fetches the whold configuration and calls a callback with
+the results.  If you receive the configuration without an error, the
+LAN configuration is locked.  If you get an error, the LAN
+configuration is not locked.  You @emph{must} unlock it, or access
+will be blocked to the LAN configuration for others.  You can unlock
+it using @code{ipmi_lan_set_config()}, which writes the configuration
+back out to the LANPARM, or with @code{ipmi_lan_clear_lock()}, which
+just clears the lock without committing the changes.  Note that the
+get and set operations can involve quite a bit of messaging, as the
+configuration can be quite large.
+
+If you get an @var{EAGAIN} error from fetching the configuration, that
+means someone else is holding the lock.  If you are sure the lock was
+left in a bad state, you can unlock it directly with
+@code{ipmi_lan_clear_lock()} passing in a NULL for the LAN configuration.
+
+You can fetch and change your @var{ipmi_lanparm_config_t} type using
+the many get and set functions defined in the include file.  However,
+any changes you make are only made to the local copy, not the real
+LANPARM.  You must write any changes using
+@code{ipmi_lan_set_config()}.
+
+The actual meaning of the configuration items is defined in the IPMI
+specification, see that for more details.
+
+@node    Using the Automatic Platform Event Trap (PET), , Special LAN Configuration, Using OpenIPMI
+@section Using the Automatic Platform Event Trap (PET)
+
+Setting up the PEF and LAN configuration to properly receive traps,
+well, it just kind of sucks.  There's a ton of things to configure.
+But you can use the PET code to set up the PEF and LAN configuration
+to forward SNMP traps to a system.  The interface is described in
+@file{ipmi_pet.h}.  The PET will configure the PEF and LAN using the
+table numbers you provide, and will periodically check it to make sure
+it stays correct.
 
 @node    How to Write OEM Plugins, Debugging Your Application, Using OpenIPMI, Top
 @chapter How to Write OEM Plugins
