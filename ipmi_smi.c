@@ -411,6 +411,7 @@ handle_response(ipmi_con_t *ipmi, ipmi_recv_t *recv)
     rsp_handler(ipmi,
 		(ipmi_addr_t *) recv->addr, recv->addr_len,
 		&(recv->msg), rsp_data, data2, data3);
+    return;
 
  out_unlock:
     ipmi_unlock(smi->cmd_lock);

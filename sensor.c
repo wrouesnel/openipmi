@@ -184,7 +184,9 @@ ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor)
 {
     ipmi_sensor_id_t val;
     ipmi_mc_id_t mc_val;
-    
+
+    CHECK_SENSOR_LOCK(sensor);
+
     mc_val = ipmi_mc_convert_to_id(sensor->mc);
     val.bmc = mc_val.bmc;
     val.mc_num = mc_val.mc_num;
@@ -332,6 +334,8 @@ ipmi_sensor_add_opq(ipmi_sensor_t         *sensor,
 void
 ipmi_sensor_opq_done(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     opq_op_done(sensor->waitq);
 }
 
@@ -388,6 +392,9 @@ ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
 {
     int rv;
 
+    CHECK_MC_LOCK(mc);
+    CHECK_SENSOR_LOCK(sensor);
+
     info->__sensor = sensor;
     info->__sensor_id = ipmi_sensor_convert_to_id(sensor);
     info->__cb_data = cb_data;
@@ -408,6 +415,9 @@ ipmi_sensor_send_command_addr(ipmi_mc_t             *bmc,
 {
     int rv;
 
+    CHECK_MC_LOCK(bmc);
+    CHECK_SENSOR_LOCK(sensor);
+
     info->__sensor = sensor;
     info->__sensor_id = ipmi_sensor_convert_to_id(sensor);
     info->__cb_data = cb_data;
@@ -423,6 +433,8 @@ ipmi_find_sensor(ipmi_mc_t *mc, int lun, int num,
 {
     int                rv = 0;
     ipmi_sensor_info_t *sensors;
+
+    CHECK_MC_LOCK(mc);
 
     if (lun > 4)
 	return EINVAL;
@@ -445,6 +457,8 @@ ipmi_sensors_alloc(ipmi_mc_t *mc, ipmi_sensor_info_t **new_sensors)
 {
     ipmi_sensor_info_t *sensors;
     int                i;
+
+    CHECK_MC_LOCK(mc);
 
     sensors = malloc(sizeof(*sensors));
     if (!sensors)
@@ -492,6 +506,9 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 {
     ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(mc);
     void               *link;
+
+    CHECK_MC_LOCK(mc);
+    CHECK_ENTITY_LOCK(ent);
 
     if (num >= 256)
 	return EINVAL;
@@ -1028,6 +1045,10 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
     unsigned int       count;
     ipmi_entity_info_t *ents;
 
+    CHECK_MC_LOCK(bmc);
+    if (source_mc)
+	CHECK_MC_LOCK(source_mc);
+
     rv = get_sensors_from_sdrs(bmc, source_mc, sdrs, &sdr_sensors, &count);
     if (rv)
 	goto out_err;
@@ -1148,20 +1169,13 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 	free(old_sdr_sensors);
     }
 
+ out_err_unlock_free:
+    ipmi_mc_entity_unlock(bmc);
+ out_err:
     /* Free up the extra links that we didn't use. */
     while (sref) {
 	snext = sref->next;
 	ipmi_entity_free_sensor_link(sref);
-	sref = snext;
-    }
-    return 0;
-
- out_err_unlock_free:
-    ipmi_mc_entity_unlock(bmc);
- out_err:
-    while (sref) {
-	snext = sref->next;
-	free(sref);
 	sref = snext;
     }
     return rv;
@@ -1210,6 +1224,8 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
     sdr_fetch_info_t *info;
     int              rv = 0;
 
+    CHECK_MC_LOCK(mc);
+
     info = malloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -1237,6 +1253,8 @@ int
 ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
 				double *nominal_reading)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->nominal_reading_specified)
 	return ENOSYS;
 
@@ -1248,6 +1266,8 @@ ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
 int
 ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->normal_max_specified)
 	return ENOSYS;
 
@@ -1259,6 +1279,8 @@ ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max)
 int
 ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->normal_min_specified)
 	return ENOSYS;
 
@@ -1270,6 +1292,8 @@ ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min)
 int
 ipmi_sensor_get_sensor_max(ipmi_sensor_t *sensor, double *sensor_max)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return (ipmi_sensor_convert_from_raw(sensor,
 					 sensor->sensor_max,
 					 sensor_max));
@@ -1278,6 +1302,8 @@ ipmi_sensor_get_sensor_max(ipmi_sensor_t *sensor, double *sensor_max)
 int
 ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return (ipmi_sensor_convert_from_raw(sensor,
 					 sensor->sensor_min,
 					 sensor_min));
@@ -1289,6 +1315,8 @@ ipmi_sensor_get_upper_non_recoverable_threshold
  double *upper_non_recoverable_threshold)
 {
     int val, rv;
+
+    CHECK_SENSOR_LOCK(sensor);
 
     rv = ipmi_sensor_threshold_readable(sensor,
 					IPMI_UPPER_NON_RECOVERABLE,
@@ -1309,6 +1337,8 @@ ipmi_sensor_get_upper_critical_threshold(ipmi_sensor_t *sensor,
 					 double *upper_critical_threshold)
 {
     int val, rv;
+
+    CHECK_SENSOR_LOCK(sensor);
 
     rv = ipmi_sensor_threshold_readable(sensor,
 					IPMI_UPPER_CRITICAL,
@@ -1331,6 +1361,8 @@ ipmi_sensor_get_upper_non_critical_threshold
 {
     int val, rv;
 
+    CHECK_SENSOR_LOCK(sensor);
+
     rv = ipmi_sensor_threshold_readable(sensor,
 					IPMI_UPPER_NON_CRITICAL,
 					&val);
@@ -1352,6 +1384,8 @@ ipmi_sensor_get_lower_non_recoverable_threshold
 {
     int val, rv;
 
+    CHECK_SENSOR_LOCK(sensor);
+
     rv = ipmi_sensor_threshold_readable(sensor,
 					IPMI_LOWER_NON_RECOVERABLE,
 					&val);
@@ -1370,6 +1404,8 @@ int ipmi_sensor_get_lower_critical_threshold(ipmi_sensor_t *sensor,
 					     double *lower_critical_threshold)
 {
     int val, rv;
+
+    CHECK_SENSOR_LOCK(sensor);
 
     rv = ipmi_sensor_threshold_readable(sensor,
 					IPMI_LOWER_CRITICAL,
@@ -1392,6 +1428,8 @@ ipmi_sensor_get_lower_non_critical_threshold
 {
     int val, rv;
 
+    CHECK_SENSOR_LOCK(sensor);
+
     rv = ipmi_sensor_threshold_readable(sensor,
 					IPMI_LOWER_NON_CRITICAL,
 					&val);
@@ -1409,6 +1447,8 @@ ipmi_sensor_get_lower_non_critical_threshold
 ipmi_mc_t *
 ipmi_sensor_get_mc(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->mc;
 }
 
@@ -1417,6 +1457,8 @@ ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 		    int           *lun,
 		    int           *num)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (lun)
 	*lun = sensor->lun;
     if (num)
@@ -1432,6 +1474,8 @@ ipmi_sensor_threshold_assertion_event_supported(
     int                         *val)
 {
     int idx;
+
+    CHECK_SENSOR_LOCK(sensor);
 
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
@@ -1470,6 +1514,8 @@ ipmi_sensor_threshold_deassertion_event_supported(
 {
     int idx;
 
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
@@ -1503,6 +1549,8 @@ ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
 			       enum ipmi_thresh_e event,
 			       int                *val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
@@ -1519,6 +1567,8 @@ ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
 				   enum ipmi_thresh_e event,
 				   int                val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return;
@@ -1534,6 +1584,8 @@ ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 			       enum ipmi_thresh_e event,
 			       int                *val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
@@ -1565,6 +1617,8 @@ ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
 					       int           event,
 					       int           *val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* A threshold sensor, it doesn't have events. */
 	return ENOSYS;
@@ -1592,6 +1646,8 @@ ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
 						 int           event,
 						 int           *val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* A threshold sensor, it doesn't have events. */
 	return ENOSYS;
@@ -1619,6 +1675,8 @@ ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 			     int           event,
 			     int           *val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* A threshold sensor, it doesn't have events. */
 	return ENOSYS;
@@ -1635,6 +1693,8 @@ ipmi_sensor_discrete_set_event_readable(ipmi_sensor_t *sensor,
 					int           event,
 					int           val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* A threshold sensor, it doesn't have events. */
 	return;
@@ -1648,312 +1708,416 @@ ipmi_sensor_discrete_set_event_readable(ipmi_sensor_t *sensor,
 int
 ipmi_sensor_get_owner(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->owner;
 }
 
 int
 ipmi_sensor_get_channel(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->channel;
 }
 
 int
 ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->entity_id;
 }
 
 int
 ipmi_sensor_get_entity_instance(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->entity_instance;
 }
 
 int
 ipmi_sensor_get_entity_instance_logical(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->entity_instance_logical;
 }
 
 int
 ipmi_sensor_get_sensor_init_scanning(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_init_scanning;
 }
 
 int
 ipmi_sensor_get_sensor_init_events(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_init_events;
 }
 
 int
 ipmi_sensor_get_sensor_init_thresholds(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_init_thresholds;
 }
 
 int
 ipmi_sensor_get_sensor_init_hysteresis(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_init_hysteresis;
 }
 
 int
 ipmi_sensor_get_sensor_init_type(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_init_type;
 }
 
 int
 ipmi_sensor_get_sensor_init_pu_events(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_init_pu_events;
 }
 
 int
 ipmi_sensor_get_sensor_init_pu_scanning(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_init_pu_scanning;
 }
 
 int
 ipmi_sensor_get_ignore_if_no_entity(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->ignore_if_no_entity;
 }
 
 int
 ipmi_sensor_get_supports_rearm(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->supports_rearm;
 }
 
 int
 ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->hysteresis_support;
 }
 
 int
 ipmi_sensor_get_threshold_access(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->threshold_access;
 }
 
 int
 ipmi_sensor_get_event_support(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->event_support;
 }
 
 int
 ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_type;
 }
 
 int
 ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->event_reading_type;
 }
 
 int
 ipmi_sensor_get_analog_data_format(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->analog_data_format;
 }
 
 int
 ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->rate_unit;
 }
 
 int
 ipmi_sensor_get_modifier_unit_use(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->modifier_unit_use;
 }
 
 int
 ipmi_sensor_get_percentage(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->percentage;
 }
 
 int
 ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->base_unit;
 }
 
 int
 ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->modifier_unit;
 }
 
 int
 ipmi_sensor_get_linearization(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->linearization;
 }
 
 int
 ipmi_sensor_get_raw_m(ipmi_sensor_t *sensor, int val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->conv[val].m;
 }
 
 int
 ipmi_sensor_get_raw_tolerance(ipmi_sensor_t *sensor, int val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->conv[val].tolerance;
 }
 
 int
 ipmi_sensor_get_raw_b(ipmi_sensor_t *sensor, int val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->conv[val].b;
 }
 
 int
 ipmi_sensor_get_raw_accuracy(ipmi_sensor_t *sensor, int val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->conv[val].accuracy;
 }
 
 int
 ipmi_sensor_get_raw_accuracy_exp(ipmi_sensor_t *sensor, int val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->conv[val].accuracy_exp;
 }
 
 int
 ipmi_sensor_get_raw_r_exp(ipmi_sensor_t *sensor, int val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->conv[val].r_exp;
 }
 
 int
 ipmi_sensor_get_raw_b_exp(ipmi_sensor_t *sensor, int val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->conv[val].b_exp;
 }
 
 int
 ipmi_sensor_get_normal_min_specified(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->normal_min_specified;
 }
 
 int
 ipmi_sensor_get_normal_max_specified(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->normal_max_specified;
 }
 
 int
 ipmi_sensor_get_nominal_reading_specified(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->nominal_reading_specified;
 }
 
 int
 ipmi_sensor_get_raw_nominal_reading(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->nominal_reading;
 }
 
 int
 ipmi_sensor_get_raw_normal_max(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->normal_max;
 }
 
 int
 ipmi_sensor_get_raw_normal_min(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->normal_min;
 }
 
 int
 ipmi_sensor_get_raw_sensor_max(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_max;
 }
 
 int
 ipmi_sensor_get_raw_sensor_min(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_min;
 }
 
 int
 ipmi_sensor_get_raw_upper_non_recoverable_threshold(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->upper_non_recoverable_threshold;
 }
 
 int
 ipmi_sensor_get_raw_upper_critical_threshold(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->upper_critical_threshold;
 }
 
 int
 ipmi_sensor_get_raw_upper_non_critical_threshold(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->upper_non_critical_threshold;
 }
 
 int
 ipmi_sensor_get_raw_lower_non_recoverable_threshold(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->lower_non_recoverable_threshold;
 }
 
 int
 ipmi_sensor_get_raw_lower_critical_threshold(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->lower_critical_threshold;
 }
 
 int
 ipmi_sensor_get_raw_lower_non_critical_threshold(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->lower_non_critical_threshold;
 }
 
 int
 ipmi_sensor_get_positive_going_threshold_hysteresis(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->positive_going_threshold_hysteresis;
 }
 
 int
 ipmi_sensor_get_negative_going_threshold_hysteresis(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->negative_going_threshold_hysteresis;
 }
 
 int
 ipmi_sensor_get_oem1(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->oem1;
 }
 
 int
 ipmi_sensor_get_id_length(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return strlen(sensor->id);
 }
 
 void
 ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     strncpy(id, sensor->id, length);
     id[length] = '\0';
 }
@@ -2307,6 +2471,8 @@ ipmi_sensor_threshold_set_event_handler(
     ipmi_sensor_threshold_event_handler_cb handler,
     void                                   *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     sensor->threshold_event_handler = handler;
     sensor->cb_data = cb_data;
     return 0;
@@ -2318,6 +2484,8 @@ ipmi_sensor_threshold_get_event_handler(
     ipmi_sensor_threshold_event_handler_cb *handler,
     void                                   **cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     *handler = sensor->threshold_event_handler;
     *cb_data = sensor->cb_data;
 }
@@ -2328,6 +2496,8 @@ ipmi_sensor_discrete_set_event_handler(
     ipmi_sensor_discrete_event_handler_cb handler,
     void                                  *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     sensor->discrete_event_handler = handler;
     sensor->cb_data = cb_data;
     return 0;
@@ -2339,6 +2509,8 @@ ipmi_sensor_discrete_get_event_handler(
     ipmi_sensor_discrete_event_handler_cb *handler,
     void                                  **cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     *handler = sensor->discrete_event_handler;
     *cb_data = sensor->cb_data;
 }
@@ -2348,6 +2520,8 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 {
     enum ipmi_event_dir_e dir;
     int                   rv;
+
+    CHECK_SENSOR_LOCK(sensor);
 
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD) {
 	enum ipmi_value_present_e   value_present;
@@ -2926,6 +3100,8 @@ ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
     int                val;
     enum ipmi_thresh_e thnum;
     int                rv = 0;
+
+    CHECK_SENSOR_LOCK(sensor);
 
     for (thnum = IPMI_LOWER_NON_CRITICAL;
 	 thnum <= IPMI_UPPER_NON_RECOVERABLE;
@@ -3667,6 +3843,8 @@ ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 			      ipmi_sensor_done_cb   done,
 			      void                  *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_events_enable_set)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_events_enable_set(sensor,
@@ -3680,6 +3858,8 @@ ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
 			      ipmi_event_enables_get_cb done,
 			      void                      *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_events_enable_get)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_events_enable_get(sensor,
@@ -3692,6 +3872,8 @@ ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
 			   ipmi_hysteresis_get_cb done,
 			   void                   *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_get_hysteresis)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_get_hysteresis(sensor,
@@ -3706,6 +3888,8 @@ ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 			   ipmi_sensor_done_cb done,
 			   void                *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_set_hysteresis)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_set_hysteresis(sensor,
@@ -3720,6 +3904,8 @@ ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 		    ipmi_thresh_get_cb done,
 		    void               *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_thresholds_get)
 	return ENOSYS;
     return sensor->cbs.ipmi_thresholds_get(sensor, done, cb_data);
@@ -3731,6 +3917,8 @@ ipmi_thresholds_set(ipmi_sensor_t       *sensor,
 		    ipmi_sensor_done_cb done,
 		    void                *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_thresholds_set)
 	return ENOSYS;
     return sensor->cbs.ipmi_thresholds_set(sensor, thresholds, done, cb_data);
@@ -3741,6 +3929,8 @@ ipmi_reading_get(ipmi_sensor_t        *sensor,
 		 ipmi_reading_done_cb done,
 		 void                 *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_reading_get)
 	return ENOSYS;
     return sensor->cbs.ipmi_reading_get(sensor, done, cb_data);
@@ -3751,6 +3941,8 @@ ipmi_states_get(ipmi_sensor_t       *sensor,
 		ipmi_states_read_cb done,
 		void                *cb_data)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_states_get)
 	return ENOSYS;
     return sensor->cbs.ipmi_states_get(sensor, done, cb_data);
@@ -3759,6 +3951,8 @@ ipmi_states_get(ipmi_sensor_t       *sensor,
 char *
 ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_reading_name_string)
 	return NULL;
     return sensor->cbs.ipmi_sensor_reading_name_string(sensor, val);
@@ -3769,6 +3963,8 @@ ipmi_sensor_convert_from_raw(ipmi_sensor_t *sensor,
 			     int           val,
 			     double        *result)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_convert_from_raw)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_convert_from_raw(sensor, val, result);
@@ -3780,6 +3976,8 @@ ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 			   double            val,
 			   int               *result)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_convert_to_raw)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_convert_to_raw(sensor,
@@ -3791,6 +3989,8 @@ ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 int
 ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor, int val, double *tolerance)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_get_tolerance)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_get_tolerance(sensor, val, tolerance);
@@ -3800,6 +4000,8 @@ ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor, int val, double *tolerance)
 int
 ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (!sensor->cbs.ipmi_sensor_get_accuracy)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_get_accuracy(sensor, val, accuracy);
@@ -3826,12 +4028,16 @@ ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info)
 void *
 ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->oem_info;
 }
 
 char *
 ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->sensor_type_string;
 }
 
@@ -3844,6 +4050,8 @@ ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str)
 char *
 ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->event_reading_type_string;
 }
 
@@ -3856,6 +4064,8 @@ ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor, char *str)
 char *
 ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->rate_unit_string;
 }
 
@@ -3868,6 +4078,8 @@ ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str)
 char *
 ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->base_unit_string;
 }
 
@@ -3880,6 +4092,8 @@ ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str)
 char *
 ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     return sensor->modifier_unit_string;
 }
 
@@ -3894,6 +4108,8 @@ ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
 {
     int           rv;
     ipmi_entity_t *ent;
+
+    CHECK_SENSOR_LOCK(sensor);
 
     rv = ipmi_entity_find(ipmi_mc_get_entities(sensor->mc),
 			  sensor->mc,
@@ -3919,6 +4135,8 @@ ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
 				  unsigned int  *offset,
 				  unsigned int  *val_when_requesting)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
     if (sensor->hot_swap_requester != -1) {
 	if (offset)
 	    *offset = sensor->hot_swap_requester;
@@ -3928,3 +4146,12 @@ ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
     }
     return 0;
 }
+
+#ifdef IPMI_CHECK_LOCKS
+void
+__ipmi_check_sensor_lock(ipmi_sensor_t *sensor)
+{
+    __ipmi_check_mc_lock(sensor->mc);
+    __ipmi_check_mc_entity_lock(sensor->mc);
+}
+#endif

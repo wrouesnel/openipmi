@@ -105,7 +105,9 @@ ipmi_control_convert_to_id(ipmi_control_t *control)
 {
     ipmi_control_id_t val;
     ipmi_mc_id_t      mc_val;
-    
+
+    CHECK_CONTROL_LOCK(control);
+
     mc_val = ipmi_mc_convert_to_id(control->mc);
     val.bmc = mc_val.bmc;
     val.mc_num = mc_val.mc_num;
@@ -260,6 +262,8 @@ ipmi_control_add_opq(ipmi_control_t         *control,
 void
 ipmi_control_opq_done(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     opq_op_done(control->waitq);
 }
 
@@ -307,14 +311,17 @@ control_rsp_handler(ipmi_mc_t  *mc,
 			 
 int
 ipmi_control_send_command(ipmi_control_t        *control,
-			 ipmi_mc_t              *mc,
-			 unsigned int           lun,
-			 ipmi_msg_t             *msg,
-			 ipmi_control_rsp_cb    handler,
-			 ipmi_control_op_info_t *info,
-			 void                   *cb_data)
+			  ipmi_mc_t              *mc,
+			  unsigned int           lun,
+			  ipmi_msg_t             *msg,
+			  ipmi_control_rsp_cb    handler,
+			  ipmi_control_op_info_t *info,
+			  void                   *cb_data)
 {
     int rv;
+
+    CHECK_MC_LOCK(mc);
+    CHECK_CONTROL_LOCK(control);
 
     info->__control = control;
     info->__control_id = ipmi_control_convert_to_id(control);
@@ -333,6 +340,8 @@ ipmi_find_control(ipmi_mc_t       *mc,
 {
     int                 rv = 0;
     ipmi_control_info_t *controls;
+
+    CHECK_MC_LOCK(mc);
 
     if (lun != 4)
 	return EINVAL;
@@ -354,6 +363,8 @@ int
 ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls)
 {
     ipmi_control_info_t *controls;
+
+    CHECK_MC_LOCK(mc);
 
     controls = malloc(sizeof(*controls));
     if (!controls)
@@ -395,6 +406,9 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     ipmi_control_info_t *controls = ipmi_mc_get_controls(mc);
     void                *link;
 
+
+    CHECK_MC_LOCK(mc);
+    CHECK_ENTITY_LOCK(ent);
 
     if (num >= 256)
 	return EINVAL;
@@ -475,6 +489,8 @@ ipmi_control_set_val(ipmi_control_t     *control,
 		     ipmi_control_op_cb handler,
 		     void               *cb_data)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->cbs.set_val(control, val, handler, cb_data);
 }
 
@@ -483,6 +499,8 @@ ipmi_control_get_val(ipmi_control_t      *control,
 		     ipmi_control_val_cb handler,
 		     void                *cb_data)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->cbs.get_val(control, handler, cb_data);
 }
 
@@ -496,6 +514,8 @@ ipmi_control_set_display_string(ipmi_control_t     *control,
 				ipmi_control_op_cb handler,
 				void               *cb_data)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (!control->cbs.set_display_string)
 	return ENOSYS;
     return control->cbs.set_display_string(control,
@@ -513,6 +533,8 @@ ipmi_control_get_display_string(ipmi_control_t      *control,
 				ipmi_control_str_cb handler,
 				void                *cb_data)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (!control->cbs.get_display_string)
 	return ENOSYS;
     return control->cbs.get_display_string(control,
@@ -527,6 +549,8 @@ ipmi_control_identifier_get_val(ipmi_control_t                 *control,
 				ipmi_control_identifier_val_cb handler,
 				void                           *cb_data)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (!control->cbs.get_identifier_val)
 	return ENOSYS;
     return control->cbs.get_identifier_val(control, handler, cb_data);
@@ -539,6 +563,8 @@ ipmi_control_identifier_set_val(ipmi_control_t     *control,
 				ipmi_control_op_cb handler,
 				void               *cb_data)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (!control->cbs.set_identifier_val)
 	return ENOSYS;
     return control->cbs.set_identifier_val(control,
@@ -551,6 +577,8 @@ ipmi_control_identifier_set_val(ipmi_control_t     *control,
 int
 ipmi_control_get_type(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->type;
 }
 
@@ -564,18 +592,24 @@ ipmi_control_set_type(ipmi_control_t *control, int val)
 char *
 ipmi_control_get_type_string(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->type_str;
 }
 
 int
 ipmi_control_get_id_length(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return strlen(control->id);
 }
 
 void
 ipmi_control_get_id(ipmi_control_t *control, char *id, int length)
 {
+    CHECK_CONTROL_LOCK(control);
+
     strncpy(id, control->id, length);
 }
 
@@ -589,12 +623,16 @@ ipmi_control_set_id(ipmi_control_t *control, char *id)
 int
 ipmi_control_is_settable(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->settable;
 }
 
 int
 ipmi_control_is_readable(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->readable;
 }
 
@@ -613,12 +651,16 @@ ipmi_control_set_readable(ipmi_control_t *control, int val)
 int
 ipmi_control_get_entity_id(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->entity_id;
 }
 
 int
 ipmi_control_get_entity_instance(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->entity_instance;
 }
 
@@ -627,6 +669,8 @@ ipmi_control_get_entity(ipmi_control_t *control)
 {
     int           rv;
     ipmi_entity_t *ent;
+
+    CHECK_CONTROL_LOCK(control);
 
     rv = ipmi_entity_find(ipmi_mc_get_entities(control->mc),
 			  control->mc,
@@ -647,6 +691,8 @@ ipmi_control_set_oem_info(ipmi_control_t *control, void *oem_info)
 void *
 ipmi_control_get_oem_info(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->oem_info;
 }
 
@@ -655,6 +701,8 @@ ipmi_control_get_display_dimensions(ipmi_control_t *control,
 				    unsigned int   *columns,
 				    unsigned int   *rows)
 {
+    CHECK_CONTROL_LOCK(control);
+
     *columns = control->columns;
     *rows = control->rows;
 }
@@ -668,6 +716,8 @@ ipmi_control_set_num_elements(ipmi_control_t *control, unsigned int val)
 unsigned int
 ipmi_control_identifier_get_max_length(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->identifier_length;
 }
 
@@ -693,6 +743,8 @@ ipmi_control_set_callbacks(ipmi_control_t *control, ipmi_control_cbs_t *cbs)
 ipmi_mc_t *
 ipmi_control_get_mc(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->mc;
 }
 
@@ -701,6 +753,8 @@ ipmi_control_get_num(ipmi_control_t *control,
 		     int            *lun,
 		     int            *num)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (lun)
 	*lun = control->lun;
     if (num)
@@ -720,6 +774,8 @@ ipmi_control_light_set_lights(ipmi_control_t       *control,
 int
 ipmi_control_get_num_vals(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->num_vals;
 }
 
@@ -727,6 +783,8 @@ int
 ipmi_control_get_num_light_settings(ipmi_control_t *control,
 				    unsigned int   light)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (light >= control->num_vals)
 	return -1;
 
@@ -738,6 +796,8 @@ ipmi_control_get_num_light_transitions(ipmi_control_t   *control,
 				       unsigned int     light,
 				       unsigned int     set)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (light >= control->num_vals)
 	return -1;
     if (set >= control->lights[light].num_settings)
@@ -752,6 +812,8 @@ ipmi_control_get_light_color(ipmi_control_t   *control,
 			     unsigned int     set,
 			     unsigned int     num)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (light >= control->num_vals)
 	return -1;
     if (set >= control->lights[light].num_settings)
@@ -768,6 +830,8 @@ ipmi_control_get_light_color_time(ipmi_control_t   *control,
 				  unsigned int     set,
 				  unsigned int     num)
 {
+    CHECK_CONTROL_LOCK(control);
+
     if (light >= control->num_vals)
 	return -1;
     if (set >= control->lights[light].num_settings)
@@ -813,12 +877,16 @@ ipmi_control_set_hot_swap_indicator(ipmi_control_t *control, int val)
 int
 ipmi_control_is_hot_swap_indicator(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->hot_swap_indicator;
 }
 
 int
 ipmi_control_get_ignore_if_no_entity(ipmi_control_t *control)
 {
+    CHECK_CONTROL_LOCK(control);
+
     return control->ignore_if_no_entity;
 }
 
@@ -828,3 +896,13 @@ ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
 {
     control->ignore_if_no_entity = ignore_if_no_entity;
 }
+
+#ifdef IPMI_CHECK_LOCKS
+void
+__ipmi_check_control_lock(ipmi_control_t *control)
+{
+    __ipmi_check_mc_lock(control->mc);
+    __ipmi_check_mc_entity_lock(control->mc);
+}
+#endif
+

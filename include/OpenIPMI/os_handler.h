@@ -122,6 +122,9 @@ struct os_handler_s
 		os_hnd_lock_t *id);
     int (*unlock)(os_handler_t  *handler,
 		  os_hnd_lock_t *id);
+    /* Return 1 if locked, 0 if not locked. */
+    int (*is_locked)(os_handler_t  *handler,
+		     os_hnd_lock_t *id);
     int (*create_rwlock)(os_handler_t  *handler,
 			 os_hnd_rwlock_t **id);
     int (*destroy_rwlock)(os_handler_t  *handler,
@@ -134,6 +137,12 @@ struct os_handler_s
 		      os_hnd_rwlock_t *id);
     int (*write_unlock)(os_handler_t  *handler,
 			os_hnd_rwlock_t *id);
+    /* Return 1 if read or write locked, 0 if not locked. */
+    int (*is_readlocked)(os_handler_t    *handler,
+			 os_hnd_rwlock_t *id);
+    /* Return 1 if write locked, 0 if not locked or only read locked. */
+    int (*is_writelocked)(os_handler_t    *handler,
+			 os_hnd_rwlock_t *id);
 
     /* Condition variables, like in POSIX Threads. */
     int (*create_cond)(os_handler_t  *handler,

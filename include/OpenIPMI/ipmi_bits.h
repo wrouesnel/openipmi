@@ -321,8 +321,6 @@ char *ipmi_get_event_dir_string(unsigned int val);
 #define IPMI_ENTITY_ID_IO_MODULE			44
 #define IPMI_ENTITY_ID_PROCESSOR_IO_MODULE		45
 #define IPMI_ENTITY_ID_MGMT_CONTROLLER_FIRMWARE		46
-
-
 char *ipmi_get_entity_id_string(unsigned int val);
 
 

@@ -286,8 +286,10 @@ check_oem_handlers(ipmi_mc_t *mc)
 int
 ipmi_mc_validate(ipmi_mc_t *mc)
 {
+    int rv;
     /* FIXME - add more validation. */
-    return __ipmi_validate(mc->bmc_mc->bmc->conn);
+    rv = __ipmi_validate(mc->bmc_mc->bmc->conn);
+    return rv;
 }
 
 typedef struct mc_cmp_info_s
@@ -393,6 +395,8 @@ ipmi_send_command(ipmi_mc_t               *mc,
     int         rv;
     ipmi_addr_t addr = mc->addr;
 
+    CHECK_MC_LOCK(mc);
+
     rv = ipmi_addr_set_lun(&addr, lun);
     if (rv)
 	return rv;
@@ -417,6 +421,8 @@ ipmi_bmc_send_command_addr(ipmi_mc_t               *bmc,
 
     if (bmc->bmc == NULL)
 	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
 
     rv = bmc->bmc->conn->send_command(bmc->bmc->conn,
 				      addr, addr_len,
@@ -634,6 +640,8 @@ ipmi_register_for_events(ipmi_mc_t               *bmc,
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     elem = malloc(sizeof(*elem));
     if (!elem)
 	return ENOMEM;
@@ -659,6 +667,8 @@ ipmi_deregister_for_events(ipmi_mc_t               *bmc,
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     ipmi_lock(bmc->bmc->event_handlers_lock);
     rv = remove_event_handler(bmc, id);
     ipmi_unlock(bmc->bmc->event_handlers_lock);
@@ -674,6 +684,8 @@ ipmi_bmc_disable_events(ipmi_mc_t *bmc)
     /* Make sure it's an SMI mc. */
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
 
     if (! bmc->bmc->ll_event_id)
 	return EINVAL;
@@ -694,6 +706,8 @@ ipmi_bmc_enable_events(ipmi_mc_t *bmc)
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     if (bmc->bmc->ll_event_id)
 	return EINVAL;
 
@@ -711,6 +725,8 @@ ipmi_send_response(ipmi_mc_t  *mc,
 {
     int        rv;
     ipmi_con_t *ipmi;
+
+    CHECK_MC_LOCK(mc);
 
     ipmi = mc->bmc_mc->bmc->conn;
     rv = ipmi->send_response(ipmi, 
@@ -774,6 +790,8 @@ ipmi_register_for_command(ipmi_mc_t              *mc,
     int        rv;
     ipmi_con_t *ipmi;
 
+    CHECK_MC_LOCK(mc);
+
     ipmi = mc->bmc_mc->bmc->conn;
 
     rv = ipmi->register_for_command(ipmi, netfn, cmd, ll_cmd_handler,
@@ -790,6 +808,8 @@ ipmi_deregister_for_command(ipmi_mc_t     *mc,
 {
     int        rv;
     ipmi_con_t *ipmi;
+
+    CHECK_MC_LOCK(mc);
 
     ipmi = mc->bmc_mc->bmc->conn;
 
@@ -809,6 +829,8 @@ ipmi_close_connection(ipmi_mc_t    *mc,
 
     if (mc->bmc_mc != mc)
 	return EINVAL;
+
+    CHECK_MC_LOCK(mc);
 
     ipmi_write_lock();
     if ((rv = ipmi_mc_validate(mc)))
@@ -1091,6 +1113,8 @@ ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc)
 {
     int rv;
 
+    CHECK_MC_LOCK(bmc);
+
     ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
     rv = !ilist_add_tail(bmc->bmc->mc_list, mc, NULL);
     if (!rv)
@@ -1217,6 +1241,8 @@ ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
 {
     mc_ipmb_scan_info_t *info;
     int                 rv;
+
+    CHECK_MC_LOCK(bmc);
 
     info = malloc(sizeof(*info));
     if (!info)
@@ -1549,6 +1575,12 @@ dev_id_rsp_handler(ipmi_mc_t  *mc,
 {
     int rv;
 
+    rv = ipmi_mc_validate(mc);
+    if (rv)
+	goto out;
+
+    ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
+
     rv = get_device_id_data_from_rsp(mc, rsp);
 
     mc->bmc->state = QUERYING_MAIN_SDRS;
@@ -1568,10 +1600,15 @@ dev_id_rsp_handler(ipmi_mc_t  *mc,
 	}
     }
 
+ out:
+    ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
+
     if (rv) {
 	if (mc->bmc->conn->setup_cb)
 	    mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, rv);
+	ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
 	ipmi_close_connection(mc, NULL, NULL);
+	ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
 	return;
     }
 }
@@ -1613,17 +1650,34 @@ setup_bmc(ipmi_con_t  *ipmi,
     }
     memset(mc->bmc, 0, sizeof(*(mc->bmc)));
 
-    mc->bmc->main_sdrs = NULL;
     mc->bmc->conn = ipmi;
+
+    /* Create the locks before anything else. */
+    mc->bmc->mc_list_lock = NULL;
+    mc->bmc->entities_lock = NULL;
+    mc->bmc->event_handlers_lock = NULL;
+
+    rv = ipmi_create_lock(mc, &mc->bmc->mc_list_lock);
+    if (rv)
+	goto out_err;
+    /* Lock this first thing. */
+    ipmi_lock(mc->bmc->mc_list_lock);
+
+    rv = ipmi_create_lock(mc, &mc->bmc->entities_lock);
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_create_lock(mc, &mc->bmc->event_handlers_lock);
+    if (rv)
+	goto out_err;
+
+    mc->bmc->main_sdrs = NULL;
     mc->bmc->scanning_bus = 0;
     mc->bmc->event_handlers = NULL;
-    mc->bmc->event_handlers_lock = NULL;
     mc->bmc->oem_event_handler = NULL;
     mc->bmc->mc_list = NULL;
-    mc->bmc->mc_list_lock = NULL;
     mc->bmc->entities = NULL;
     mc->bmc->sel = NULL;
-    mc->bmc->entities_lock = NULL;
     mc->bmc->entity_handler = NULL;
     mc->bmc->new_entity_handler = NULL;
     mc->bmc->new_mc_handler = NULL;
@@ -1646,18 +1700,6 @@ setup_bmc(ipmi_con_t  *ipmi,
     /* When we get new logs, handle them. */
     ipmi_sel_set_new_log_handler(mc->bmc->sel, bmc_sel_new_log_handler, mc);
 
-    rv = ipmi_create_lock(mc, &mc->bmc->mc_list_lock);
-    if (rv)
-	goto out_err;
-
-    rv = ipmi_create_lock(mc, &mc->bmc->entities_lock);
-    if (rv)
-	goto out_err;
-
-    rv = ipmi_create_lock(mc, &mc->bmc->event_handlers_lock);
-    if (rv)
-	goto out_err;
-
     rv = ipmi_sensors_alloc(mc, &(mc->sensors));
     if (rv)
 	goto out_err;
@@ -1669,6 +1711,9 @@ setup_bmc(ipmi_con_t  *ipmi,
     memset(mc->bmc->chan, 0, sizeof(mc->bmc->chan));
 
  out_err:
+    if (mc->bmc->mc_list_lock)
+	ipmi_unlock(mc->bmc->mc_list_lock);
+
     if (rv) {
 	ipmi_cleanup_mc(mc);
     }
@@ -1691,6 +1736,8 @@ ipmi_init_con(ipmi_con_t  *ipmi,
     if (rv)
 	return rv;
 
+    ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
+
     cmd_msg.netfn = IPMI_APP_NETFN;
     cmd_msg.cmd = IPMI_GET_DEVICE_ID_CMD;
     cmd_msg.data_len = 0;
@@ -1701,136 +1748,164 @@ ipmi_init_con(ipmi_con_t  *ipmi,
 
     mc->bmc->state = QUERYING_DEVICE_ID;
 
-    return 0;
-
  close_and_quit:
-    ipmi_close_connection(mc, NULL, NULL);
+    if (rv)
+	ipmi_close_connection(mc, NULL, NULL);
+
+    ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
+
     return rv;
 }
 
 int
 ipmi_detect_bmc_presence_changes(ipmi_mc_t *mc, int force)
 {
-    return ipmi_detect_ents_presence_changes(mc->bmc_mc->bmc->entities, force);
+    int rv;
+    CHECK_MC_LOCK(mc);
+    
+    ipmi_mc_entity_lock(mc);
+    rv = ipmi_detect_ents_presence_changes(mc->bmc_mc->bmc->entities, force);
+    ipmi_mc_entity_unlock(mc);
+    return rv;
 }
 
 int
 ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->provides_device_sdrs;
 }
 
 int
 ipmi_mc_device_available(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->device_available;
 }
 
 int
 ipmi_mc_chassis_support(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->chassis_support;
 }
 
 int
 ipmi_mc_bridge_support(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->bridge_support;
 }
 
 int
 ipmi_mc_ipmb_event_generator_support(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->IPMB_event_generator_support;
 }
 
 int
 ipmi_mc_ipmb_event_receiver_support(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->IPMB_event_receiver_support;
 }
 
 int
 ipmi_mc_fru_inventory_support(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->FRU_inventory_support;
 }
 
 int
 ipmi_mc_sel_device_support(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->SEL_device_support;
 }
 
 void
 ipmi_mc_set_sel_device_support(ipmi_mc_t *mc, int val)
 {
+    CHECK_MC_LOCK(mc);
     mc->SEL_device_support = val;
 }
 
 int
 ipmi_mc_sdr_repository_support(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->SDR_repository_support;
 }
 
 int
 ipmi_mc_sensor_device_support(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->sensor_device_support;
 }
 
 int
 ipmi_mc_device_id(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->device_id;
 }
 
 int
 ipmi_mc_device_revision(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->device_revision;
 }
 
 int
 ipmi_mc_major_fw_revision(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->major_fw_revision;
 }
 
 int
 ipmi_mc_minor_fw_revision(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->minor_fw_revision;
 }
 
 int
 ipmi_mc_major_version(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->major_version;
 }
 
 int
 ipmi_mc_minor_version(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->minor_version;
 }
 
 int
 ipmi_mc_manufacturer_id(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->manufacturer_id;
 }
 
 int
 ipmi_mc_product_id(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->product_id;
 }
 
 void
 ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[])
 {
+    CHECK_MC_LOCK(mc);
     memcpy(val, mc->aux_fw_revision, sizeof(mc->aux_fw_revision));
 }
 
@@ -1838,6 +1913,8 @@ void *
 ipmi_get_user_data(ipmi_mc_t *mc)
 {
     ipmi_con_t *ipmi;
+
+    CHECK_MC_LOCK(mc);
     ipmi = mc->bmc_mc->bmc->conn;
     return ipmi->user_data;
 }
@@ -1845,18 +1922,22 @@ ipmi_get_user_data(ipmi_mc_t *mc)
 void
 ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data)
 {
+    CHECK_MC_LOCK(mc);
     mc->oem_data = data;
 }
 
 void *
 ipmi_mc_get_oem_data(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->oem_data;
 }
 
 int
 ipmi_bmc_get_num_channels(ipmi_mc_t *mc, int *val)
 {
+    CHECK_MC_LOCK(mc);
+
     /* Make sure it's an SMI mc. */
     if (mc->bmc_mc != mc)
 	return EINVAL;
@@ -1868,6 +1949,8 @@ ipmi_bmc_get_num_channels(ipmi_mc_t *mc, int *val)
 int
 ipmi_bmc_get_channel(ipmi_mc_t *mc, int index, ipmi_chan_info_t *chan)
 {
+    CHECK_MC_LOCK(mc);
+
     /* Make sure it's an SMI mc. */
     if (mc->bmc_mc != mc)
 	return EINVAL;
@@ -1882,36 +1965,43 @@ ipmi_bmc_get_channel(ipmi_mc_t *mc, int index, ipmi_chan_info_t *chan)
 os_handler_t *
 ipmi_mc_get_os_hnd(ipmi_mc_t *mc)
 {
+    if (mc->bmc_mc->bmc->mc_list_lock)
+	CHECK_MC_LOCK(mc);
     return mc->bmc_mc->bmc->conn->os_hnd;
 }
 
 ipmi_entity_info_t *
 ipmi_mc_get_entities(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->bmc_mc->bmc->entities;
 }
 
 void
 ipmi_mc_entity_lock(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     ipmi_lock(mc->bmc_mc->bmc->entities_lock);
 }
 
 void
 ipmi_mc_entity_unlock(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     ipmi_unlock(mc->bmc_mc->bmc->entities_lock);
 }
 
 ipmi_sensor_info_t *
 ipmi_mc_get_sensors(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->sensors;
 }
 
 ipmi_control_info_t *
 ipmi_mc_get_controls(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->controls;
 }
 
@@ -1922,9 +2012,11 @@ ipmi_mc_get_sdr_sensors(ipmi_mc_t     *bmc,
 			unsigned int  *count)
 {
     if (mc) {
+	CHECK_MC_LOCK(mc);
 	*sensors = mc->sensors_in_my_sdr;
 	*count = mc->sensors_in_my_sdr_count;
     } else {
+	CHECK_MC_LOCK(bmc);
 	*sensors = bmc->bmc->sensors_in_my_sdr;
 	*count = bmc->bmc->sensors_in_my_sdr_count;
     }
@@ -1937,9 +2029,11 @@ ipmi_mc_set_sdr_sensors(ipmi_mc_t     *bmc,
 			unsigned int  count)
 {
     if (mc) {
+	CHECK_MC_LOCK(mc);
 	mc->sensors_in_my_sdr = sensors;
 	mc->sensors_in_my_sdr_count = count;
     } else {
+	CHECK_MC_LOCK(bmc);
 	bmc->bmc->sensors_in_my_sdr = sensors;
 	bmc->bmc->sensors_in_my_sdr_count = count;
     }
@@ -1948,12 +2042,14 @@ ipmi_mc_set_sdr_sensors(ipmi_mc_t     *bmc,
 ipmi_sdr_info_t *
 ipmi_mc_get_sdrs(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->sdrs;
 }
 
 unsigned int
 ipmi_mc_get_address(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     if (mc->addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) &(mc->addr);
 	return ipmb_addr->slave_addr;
@@ -1966,6 +2062,7 @@ ipmi_mc_get_address(ipmi_mc_t *mc)
 unsigned int
 ipmi_mc_get_channel(ipmi_mc_t *mc)
 {
+    CHECK_MC_LOCK(mc);
     return mc->addr.channel;
 }
 
@@ -1974,6 +2071,8 @@ ipmi_bmc_set_entity_update_handler(ipmi_mc_t          *bmc,
 				   ipmi_bmc_entity_cb handler,
 				   void               *cb_data)
 {
+    CHECK_MC_LOCK(bmc);
+
     /* Make sure it's an SMI mc. */
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
@@ -1988,7 +2087,10 @@ ipmi_bmc_iterate_entities(ipmi_mc_t                       *bmc,
 			  ipmi_entities_iterate_entity_cb handler,
 			  void                            *cb_data)
 {
+    CHECK_MC_LOCK(bmc);
+    ipmi_mc_entity_lock(bmc);
     ipmi_entities_iterate_entities(bmc->bmc->entities, handler, cb_data);
+    ipmi_mc_entity_unlock(bmc);
     return 0;
 }
 
@@ -2017,6 +2119,8 @@ ipmi_bmc_iterate_mcs(ipmi_mc_t               *bmc,
 	/* Not a BMC */
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     ipmi_lock(bmc->bmc->mc_list_lock);
     ilist_iter(bmc->bmc->mc_list, iterate_mcs_handler, &info);
     ipmi_unlock(bmc->bmc->mc_list_lock);
@@ -2027,6 +2131,8 @@ ipmi_mc_id_t
 ipmi_mc_convert_to_id(ipmi_mc_t *mc)
 {
     ipmi_mc_id_t val;
+
+    CHECK_MC_LOCK(mc);
 
     val.bmc = mc->bmc_mc;
     val.channel = mc->addr.channel;
@@ -2098,6 +2204,8 @@ ipmi_bmc_store_entities(ipmi_mc_t *bmc, ipmi_bmc_cb done, void *cb_data)
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     info = malloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -2164,6 +2272,7 @@ ipmi_bmc_oem_new_sensor(ipmi_mc_t     *mc,
 			ipmi_sensor_t *sensor,
 			void          *link)
 {
+    CHECK_MC_LOCK(mc);
     if (mc->new_sensor_handler)
 	return mc->new_sensor_handler(mc, ent, sensor, link,
 				      mc->new_sensor_cb_data);
@@ -2175,6 +2284,7 @@ ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
 				   ipmi_mc_oem_new_sensor_cb handler,
 				   void                      *cb_data)
 {
+    CHECK_MC_LOCK(mc);
     mc->new_sensor_handler = handler;
     mc->new_sensor_cb_data = cb_data;
     return 0;
@@ -2183,6 +2293,7 @@ ipmi_mc_set_oem_new_sensor_handler(ipmi_mc_t                 *mc,
 void
 ipmi_bmc_oem_new_entity(ipmi_mc_t *bmc, ipmi_entity_t *ent)
 {
+    CHECK_MC_LOCK(bmc);
     if (bmc->bmc->new_entity_handler)
 	return bmc->bmc->new_entity_handler(bmc, ent,
 					    bmc->bmc->new_entity_cb_data);
@@ -2196,6 +2307,8 @@ ipmi_bmc_set_oem_new_entity_handler(ipmi_mc_t                  *bmc,
     /* Make sure it's an SMI mc. */
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
 
     bmc->bmc->new_entity_handler = handler;
     bmc->bmc->new_entity_cb_data = cb_data;
@@ -2211,6 +2324,8 @@ ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     bmc->bmc->new_mc_handler = handler;
     bmc->bmc->new_mc_cb_data = cb_data;
     return 0;
@@ -2222,6 +2337,8 @@ ipmi_bmc_set_full_bus_scan(ipmi_mc_t *bmc, int val)
     /* Make sure it's an SMI mc. */
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
 
     bmc->bmc->do_bus_scan = val;
     return 0;
@@ -2235,6 +2352,8 @@ ipmi_bmc_set_oem_setup_finished_handler(ipmi_mc_t                  *bmc,
     /* Make sure it's an SMI mc. */
     if (bmc->bmc_mc != bmc)
 	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
 
     bmc->bmc->setup_finished_handler = handler;
     bmc->bmc->setup_finished_cb_data = cb_data;
@@ -2271,6 +2390,8 @@ ipmi_bmc_del_log(ipmi_mc_t   *bmc,
     if (!bmc->bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     info = malloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -2293,6 +2414,8 @@ ipmi_bmc_del_log_by_recid(ipmi_mc_t    *bmc,
     if (!bmc->bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     info = malloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -2311,6 +2434,8 @@ ipmi_bmc_first_log(ipmi_mc_t *bmc, ipmi_log_t *log)
     if (!bmc->bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     return ipmi_sel_get_first_log(bmc->bmc->sel, log);
 }
 
@@ -2319,6 +2444,8 @@ ipmi_bmc_last_log(ipmi_mc_t *bmc, ipmi_log_t *log)
 {
     if (!bmc->bmc)
 	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
 
     return ipmi_sel_get_last_log(bmc->bmc->sel, log);
 }
@@ -2329,6 +2456,8 @@ ipmi_bmc_next_log(ipmi_mc_t *bmc, ipmi_log_t *log)
     if (!bmc->bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     return ipmi_sel_get_next_log(bmc->bmc->sel, log);
 }
 
@@ -2338,5 +2467,23 @@ ipmi_bmc_prev_log(ipmi_mc_t *bmc, ipmi_log_t *log)
     if (!bmc->bmc)
 	return EINVAL;
 
+    CHECK_MC_LOCK(bmc);
+
     return ipmi_sel_get_prev_log(bmc->bmc->sel, log);
 }
+
+#ifdef IPMI_CHECK_LOCKS
+void
+__ipmi_check_mc_lock(ipmi_mc_t *mc)
+{
+    ipmi_check_lock(mc->bmc_mc->bmc->mc_list_lock,
+		    "MC not locked when it should have been\n");
+}
+
+void
+__ipmi_check_mc_entity_lock(ipmi_mc_t *mc)
+{
+    ipmi_check_lock(mc->bmc_mc->bmc->entities_lock,
+		    "Entity not locked when it should have been\n");
+}
+#endif

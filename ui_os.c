@@ -43,13 +43,23 @@
 #include <unistd.h>
 #include <malloc.h>
 
+#include <OpenIPMI/ipmi_int.h>
+
 extern selector_t *ui_sel;
+
+#ifdef IPMI_CHECK_LOCKS
+static void check_no_locks(os_handler_t *handler);
+#define CHECK_NO_LOCKS(handler) check_no_locks(handler)
+#else
+#define CHECK_NO_LOCKS(handler) do {} while(0)
+#endif
 
 struct os_hnd_fd_id_s
 {
     int             fd;
     void            *cb_data;
     os_data_ready_t data_ready;
+    os_handler_t    *handler;
 };
 
 static void
@@ -57,7 +67,9 @@ fd_handler(int fd, void *data)
 {
     os_hnd_fd_id_t *fd_data = (os_hnd_fd_id_t *) data;
 
+    CHECK_NO_LOCKS(fd_data->handler);
     fd_data->data_ready(fd, fd_data->cb_data, fd_data);
+    CHECK_NO_LOCKS(fd_data->handler);
 }
 
 static int
@@ -76,6 +88,7 @@ add_fd(os_handler_t    *handler,
     fd_data->fd = fd;
     fd_data->cb_data = cb_data;
     fd_data->data_ready = data_ready;
+    fd_data->handler = handler;
     sel_set_fd_handlers(ui_sel, fd, fd_data, fd_handler, NULL, NULL);
     sel_set_fd_read_handler(ui_sel, fd, SEL_FD_HANDLER_ENABLED);
     sel_set_fd_write_handler(ui_sel, fd, SEL_FD_HANDLER_DISABLED);
@@ -100,6 +113,7 @@ struct os_hnd_timer_id_s
     os_timed_out_t timed_out;
     sel_timer_t    *timer;
     int            running;
+    os_handler_t   *handler;
 };
 
 static void
@@ -111,10 +125,12 @@ timer_handler(selector_t  *sel,
     void              *cb_data;
     os_timed_out_t    timed_out;
 
+    CHECK_NO_LOCKS(timer_data->handler);
     timed_out = timer_data->timed_out;
     cb_data = timer_data->cb_data;
     timer_data->running = 0;
     timed_out(cb_data, timer_data);
+    CHECK_NO_LOCKS(timer_data->handler);
 }
 
 static int
@@ -163,6 +179,7 @@ alloc_timer(os_handler_t      *handler,
 
     timer_data->running = 0;
     timer_data->timed_out = NULL;
+    timer_data->handler = handler;
 
     rv = sel_alloc_timer(ui_sel, timer_handler, timer_data,
 			 &(timer_data->timer));
@@ -228,6 +245,213 @@ sui_vlog(os_handler_t *handler,
 #endif
 }
 
+#ifdef IPMI_CHECK_LOCKS
+struct os_hnd_lock_s
+{
+    os_hnd_lock_t *next, *prev;
+    int           lock_count;
+};
+
+static os_hnd_lock_t locks = { &locks, &locks, 0 };
+
+static int
+create_lock(os_handler_t  *handler,
+	    os_hnd_lock_t **id)
+{
+    os_hnd_lock_t *lock;
+
+    lock = malloc(sizeof(*lock));
+    if (!lock)
+	return ENOMEM;
+    lock->lock_count = 0;
+    lock->next = NULL;
+    lock->prev = NULL;
+    *id = lock;
+    return 0;
+}
+
+static int
+destroy_lock(os_handler_t  *handler,
+	     os_hnd_lock_t *id)
+{
+    if (id->lock_count != 0) {
+	IPMI_REPORT_LOCK_ERROR(handler,
+			       "Release of lock when count is not zero\n");
+	id->next->prev = id->prev;
+	id->prev->next = id->next;
+    }
+    free(id);
+    return 0;
+}
+
+static int
+lock(os_handler_t  *handler,
+     os_hnd_lock_t *id)
+{
+    if (id->lock_count == 0) {
+	id->next = locks.next;
+	id->prev = &locks;
+	id->next->prev = id;
+	locks.next = id;
+    }
+    id->lock_count++;
+    return 0;
+}
+
+static int
+unlock(os_handler_t  *handler,
+       os_hnd_lock_t *id)
+{
+    if (id->lock_count <= 0)
+	IPMI_REPORT_LOCK_ERROR(handler,
+			       "lock count went negative\n");
+    id->lock_count--;
+    if (id->lock_count == 0) {
+	id->next->prev = id->prev;
+	id->prev->next = id->next;
+	id->next = NULL;
+	id->prev = NULL;
+    }
+    return 0;
+}
+
+static int
+is_locked(os_handler_t  *handler,
+	  os_hnd_lock_t *id)
+{
+    return id->lock_count != 0;
+}
+
+struct os_hnd_rwlock_s
+{
+    os_hnd_rwlock_t *next, *prev;
+    int read_lock_count;
+    int write_lock_count;
+};
+
+static os_hnd_rwlock_t rwlocks = { &rwlocks, &rwlocks, 0 };
+
+static int
+create_rwlock(os_handler_t    *handler,
+	      os_hnd_rwlock_t **id)
+{
+    os_hnd_rwlock_t *lock;
+
+    lock = malloc(sizeof(*lock));
+    if (!lock)
+	return ENOMEM;
+    lock->read_lock_count = 0;
+    lock->write_lock_count = 0;
+    lock->next = NULL;
+    lock->prev = NULL;
+    *id = lock;
+    return 0;
+}
+
+static int
+destroy_rwlock(os_handler_t    *handler,
+	       os_hnd_rwlock_t *id)
+{
+    if ((id->read_lock_count != 0) || (id->write_lock_count != 0)) {
+	IPMI_REPORT_LOCK_ERROR(handler,
+			       "Release of rwlock when count is not zero\n");
+	id->next->prev = id->prev;
+	id->prev->next = id->next;
+    }
+    free(id);
+    return 0;
+}
+
+static int
+read_lock(os_handler_t    *handler,
+	  os_hnd_rwlock_t *id)
+{
+    if ((id->read_lock_count == 0) && (id->write_lock_count == 0)) {
+	id->next = rwlocks.next;
+	id->prev = &rwlocks;
+	id->next->prev = id;
+	rwlocks.next = id;
+    }
+    id->read_lock_count++;
+    return 0;
+}
+
+static int
+read_unlock(os_handler_t    *handler,
+	    os_hnd_rwlock_t *id)
+{
+    if (id->read_lock_count <= 0)
+	IPMI_REPORT_LOCK_ERROR(handler,
+			       "read lock count went negative\n");
+    id->read_lock_count--;
+    if ((id->read_lock_count == 0) && (id->write_lock_count == 0)) {
+	id->next->prev = id->prev;
+	id->prev->next = id->next;
+	id->next = NULL;
+	id->prev = NULL;
+    }
+    return 0;
+}
+
+static int
+write_lock(os_handler_t    *handler,
+	   os_hnd_rwlock_t *id)
+{
+    if ((id->read_lock_count == 0) && (id->write_lock_count == 0)) {
+	id->next = rwlocks.next;
+	id->prev = &rwlocks;
+	id->next->prev = id;
+	rwlocks.next = id;
+    }
+
+    if (id->read_lock_count != 0)
+	IPMI_REPORT_LOCK_ERROR(handler,
+			       "Write lock attempted when read lock held\n");
+    id->write_lock_count++;
+    return 0;
+}
+
+static int
+write_unlock(os_handler_t    *handler,
+	     os_hnd_rwlock_t *id)
+{
+    if (id->write_lock_count <= 0)
+	IPMI_REPORT_LOCK_ERROR(handler,
+			       "write lock count went negative\n");
+    id->write_lock_count--;
+    if ((id->read_lock_count == 0) && (id->write_lock_count == 0)) {
+	id->next->prev = id->prev;
+	id->prev->next = id->next;
+	id->next = NULL;
+	id->prev = NULL;
+    }
+    return 0;
+}
+
+static int
+is_readlocked(os_handler_t    *handler,
+	      os_hnd_rwlock_t *id)
+{
+    return ((id->write_lock_count != 0) || (id->read_lock_count != 0));
+}
+
+static int
+is_writelocked(os_handler_t    *handler,
+	       os_hnd_rwlock_t *id)
+{
+    return (id->write_lock_count != 0);
+}
+
+static void
+check_no_locks(os_handler_t *handler)
+{
+    if ((locks.next != &locks) || (rwlocks.next != &rwlocks))
+	IPMI_REPORT_LOCK_ERROR(handler,
+			       "Locks held when all should be free\n");
+	
+}
+#endif
+
 os_handler_t ipmi_ui_cb_handlers =
 {
     .add_fd_to_wait_for = add_fd,
@@ -236,10 +460,35 @@ os_handler_t ipmi_ui_cb_handlers =
     .stop_timer = stop_timer,
     .alloc_timer = alloc_timer,
     .free_timer = free_timer,
+#ifdef IPMI_CHECK_LOCKS
+    .create_lock = create_lock,
+    .destroy_lock = destroy_lock,
+    .is_locked = is_locked,
+    .lock = lock,
+    .unlock = unlock,
+    .create_rwlock = create_rwlock,
+    .destroy_rwlock = destroy_rwlock,
+    .read_lock = read_lock,
+    .write_lock = write_lock,
+    .read_unlock = read_unlock,
+    .write_unlock = write_unlock,
+    .is_readlocked = is_readlocked,
+    .is_writelocked = is_writelocked,
+#else
     .create_lock = NULL,
     .destroy_lock = NULL,
+    .is_locked = NULL,
     .lock = NULL,
     .unlock = NULL,
+    .create_rwlock = NULL,
+    .destroy_rwlock = NULL,
+    .read_lock = NULL,
+    .write_lock = NULL,
+    .read_unlock = NULL,
+    .write_unlock = NULL,
+    .is_readlocked = NULL,
+    .is_writelocked = NULL,
+#endif
     .get_random = get_random,
     .log = sui_log,
     .vlog = sui_vlog

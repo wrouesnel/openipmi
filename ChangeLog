@@ -1,7 +1,20 @@
 
 2003-01-06 Corey Minyard <cminyard@mvista.com>
 
-	* entity.c, include/OPneIPMI/ipmiif.h, ui.c:  Added IPMI_ in front
+	* ui.c: Converted the bmc pointer to a bmc id.
+	
+	* ipmi_smi.c: Fixed a double unlock.
+	
+	* ipmi.c, include/OpenIPMI/ipmi_int.h, ui_os.c: Added code for
+	checking for locking errors, fixed locking errors
+	* control.c: ditto
+	* entity.c: ditto
+	* mc.c: ditto
+	* sensor.c: ditto
+
+	* include/OpenIPMI/os_handler.h: Added callbacks for telling
+	if a lock is held.
+	* entity.c, include/OpenIPMI/ipmiif.h, ui.c:  Added IPMI_ in front
 	of some enumeration values.
 
 2003-01-03 Corey Minyard <cminyard@mvista.com>

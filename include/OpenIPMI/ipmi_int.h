@@ -116,4 +116,30 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_RAWMSG_BIT	(1 << 1)
 #define DEBUG_MSG	(__ipmi_log_mask & DEBUG_MSG_BIT)
 #define DEBUG_RAWMSG	(__ipmi_log_mask & DEBUG_RAWMSG_BIT)
+
+#ifdef IPMI_CHECK_LOCKS
+/* Various lock-checking information. */
+void __ipmi_check_mc_lock(ipmi_mc_t *mc);
+#define CHECK_MC_LOCK(mc) __ipmi_check_mc_lock(mc)
+void __ipmi_check_entity_lock(ipmi_entity_t *entity);
+#define CHECK_ENTITY_LOCK(entity) __ipmi_check_entity_lock(entity)
+void __ipmi_check_mc_entity_lock(ipmi_mc_t *mc);
+#define CHECK_MC_ENTITY_LOCK(entity) __ipmi_check_mc_entity_lock(mc)
+void __ipmi_check_sensor_lock(ipmi_sensor_t *sensor);
+#define CHECK_SENSOR_LOCK(sensor) __ipmi_check_sensor_lock(sensor)
+void __ipmi_check_control_lock(ipmi_control_t *control);
+#define CHECK_CONTROL_LOCK(control) __ipmi_check_control_lock(control)
+void ipmi_report_lock_error(os_handler_t *handler, char *str);
+#define IPMI_REPORT_LOCK_ERROR(handler, str) ipmi_report_lock_error(handler, \
+								    str)
+void ipmi_check_lock(ipmi_lock_t *lock, char *str);
+#else
+#define CHECK_MC_LOCK(mc) do {} while (0)
+#define CHECK_ENTITY_LOCK(entity) do {} while (0)
+#define CHECK_MC_ENTITY_LOCK(entity) do {} while (0)
+#define CHECK_SENSOR_LOCK(sensor) do {} while (0)
+#define CHECK_CONTROL_LOCK(control) do {} while (0)
+#define IPMI_REPORT_LOCK_ERROR(handler, str) do {} while (0)
+#endif
+
 #endif /* _IPMI_INT_H */

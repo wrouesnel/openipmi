@@ -1060,3 +1060,19 @@ void ipmi_set_uint16(unsigned char *data, int val)
     data[0] = val & 0xff;
     data[1] = (val >> 8) & 0xff;
 }
+
+#ifdef IPMI_CHECK_LOCKS
+/* Set a breakpoint here to detect locking errors. */
+void
+ipmi_report_lock_error(os_handler_t *handler, char *str)
+{
+    handler->log(handler, "%s", str);
+}
+
+void
+ipmi_check_lock(ipmi_lock_t *lock, char *str)
+{
+    if (! lock->os_hnd->is_locked(lock->os_hnd, lock->ll_lock))
+	IPMI_REPORT_LOCK_ERROR(lock->os_hnd, str);
+}
+#endif

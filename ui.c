@@ -63,7 +63,8 @@ int display_pad_top_line;
 keypad_t keymap;
 command_t commands;
 
-ipmi_mc_t *bmc = NULL;
+int bmc_ready = 0;
+ipmi_mc_id_t bmc_id;
 
 extern os_handler_t ipmi_ui_cb_handlers;
 
@@ -505,10 +506,18 @@ entities_handler(ipmi_entity_t *entity,
     wprintw(display_pad, "  %d.%d (%s) %s\n", id, instance, name, present);
 }
 
-int
+static void
+entities_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    ipmi_bmc_iterate_entities(bmc, entities_handler, NULL);
+}
+
+static int
 entities_cmd(char *cmd, char **toks, void *cb_data)
 {
-    if (!bmc) {
+    int rv;
+
+    if (!bmc_ready) {
 	waddstr(cmd_win, "BMC has not finished setup yet\n");
 	return 0;
     }
@@ -517,7 +526,11 @@ entities_cmd(char *cmd, char **toks, void *cb_data)
     wmove(display_pad, 0, 0);
     curr_display_type = DISPLAY_ENTITIES;
     waddstr(display_pad, "Entities:\n");
-    ipmi_bmc_iterate_entities(bmc, entities_handler, NULL);
+    rv = ipmi_mc_pointer_cb(bmc_id, entities_cmd_bmcer, NULL);
+    if (rv) {
+	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
     display_pad_refresh();
     return 0;
 }
@@ -548,6 +561,12 @@ entity_searcher(ipmi_entity_t *entity,
     }
 }
 
+static void
+entity_finder_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    ipmi_bmc_iterate_entities(bmc, entity_searcher, cb_data);
+}
+
 int
 entity_finder(char *cmd, char **toks,
 	      entity_handler_cb handler,
@@ -556,8 +575,9 @@ entity_finder(char *cmd, char **toks,
     struct ent_rec info;
     char           *ent_name;
     char           *id_name, *instance_name, *toks2, *estr;
+    int            rv;
 
-    if (!bmc) {
+    if (!bmc_ready) {
 	waddstr(cmd_win, "BMC has not finished setup yet\n");
 	return EAGAIN;
     }
@@ -591,7 +611,7 @@ entity_finder(char *cmd, char **toks,
     info.toks = toks;
     info.toks2 = &toks2;
 
-    ipmi_bmc_iterate_entities(bmc, entity_searcher, &info);
+    rv = ipmi_mc_pointer_cb(bmc_id, entity_finder_bmcer, &info);
     if (!info.found) {
 	wprintw(cmd_win, "Entity %d.%d not found\n", info.id, info.instance);
 	return EINVAL;
@@ -1454,10 +1474,18 @@ void mcs_handler(ipmi_mc_t *bmc,
     wprintw(display_pad, "  0x%x\n", addr);
 }
 
+static void
+mcs_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    ipmi_bmc_iterate_mcs(bmc, mcs_handler, NULL);
+}
+
 int
 mcs_cmd(char *cmd, char **toks, void *cb_data)
 {
-    if (!bmc) {
+    int rv;
+
+    if (!bmc_ready) {
 	waddstr(cmd_win, "BMC has not finished setup yet\n");
 	return 0;
     }
@@ -1467,7 +1495,11 @@ mcs_cmd(char *cmd, char **toks, void *cb_data)
     curr_display_type = DISPLAY_MCS;
     waddstr(display_pad, "MCs:\n");
     waddstr(display_pad, "  0x20\n");
-    ipmi_bmc_iterate_mcs(bmc, mcs_handler, NULL);
+    rv = ipmi_mc_pointer_cb(bmc_id, mcs_cmd_bmcer, NULL);
+    if (rv) {
+	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
     display_pad_refresh();
     return 0;
 }
@@ -1524,12 +1556,23 @@ void mccmd_handler(ipmi_mc_t *bmc,
 
 }
 
+static void
+mccmd_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    mccmd_info_t *info = cb_data;
+
+    mccmd_handler(bmc, bmc, cb_data);
+    if (!info->found)
+        ipmi_bmc_iterate_mcs(bmc, mccmd_handler, cb_data);
+}
+
 int
 mccmd_cmd(char *cmd, char **toks, void *cb_data)
 {
     mccmd_info_t  info;
     unsigned char data[MCCMD_DATA_SIZE];
     unsigned int  data_len;
+    int           rv;
 
     if (get_uchar(toks, &info.addr, "MC address"))
 	return 0;
@@ -1552,9 +1595,11 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     info.msg.data = data;
 
     info.found = 0;
-    mccmd_handler(bmc, bmc, &info);
-    if (!info.found)
-        ipmi_bmc_iterate_mcs(bmc, mccmd_handler, &info);
+    rv = ipmi_mc_pointer_cb(bmc_id, mccmd_cmd_bmcer, NULL);
+    if (rv) {
+	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
     if (!info.found) {
 	wprintw(cmd_win, "Unable to find MC at address 0x%x\n", info.addr);
     }
@@ -1563,51 +1608,74 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
-int
-msg_cmd(char *cmd, char **toks, void *cb_data)
+typedef struct msg_cmd_data_s
 {
     unsigned char    data[MCCMD_DATA_SIZE];
     unsigned int     data_len;
     ipmi_ipmb_addr_t addr;
-    unsigned int     channel;
     ipmi_msg_t       msg;
-    int              rv;
+} msg_cmd_data_t;
+
+static void
+msg_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    msg_cmd_data_t *info = cb_data;
+    int            rv;
+
+    rv = ipmi_bmc_send_command_addr(bmc,
+				    (ipmi_addr_t *) &(info->addr),
+				    sizeof(info->addr),
+				    &info->msg,
+				    mccmd_rsp_handler,
+				    NULL);
+    if (rv)
+	wprintw(cmd_win, "Send command failure: %x\n", rv);
+}
+
+static int
+msg_cmd(char *cmd, char **toks, void *cb_data)
+{
+    msg_cmd_data_t info;
+    unsigned int   channel;
+    int            rv;
     
-    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+    info.addr.addr_type = IPMI_IPMB_ADDR_TYPE;
     if (get_uint(toks, &channel, "channel"))
 	return 0;
-    addr.channel = channel;
+    info.addr.channel = channel;
 
-    if (get_uchar(toks, &addr.slave_addr, "slave address"))
+    if (get_uchar(toks, &info.addr.slave_addr, "slave address"))
 	return 0;
 
-    if (addr.slave_addr == 0) {
-	addr.addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
-	if (get_uchar(toks, &addr.slave_addr, "slave address"))
+    if (info.addr.slave_addr == 0) {
+	info.addr.addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
+	if (get_uchar(toks, &info.addr.slave_addr, "slave address"))
 	    return 0;
     }
 
-    if (get_uchar(toks, &addr.lun, "LUN"))
+    if (get_uchar(toks, &info.addr.lun, "LUN"))
 	return 0;
 
-    if (get_uchar(toks, &msg.netfn, "NetFN"))
+    if (get_uchar(toks, &info.msg.netfn, "NetFN"))
 	return 0;
 
-    if (get_uchar(toks, &msg.cmd, "command"))
+    if (get_uchar(toks, &info.msg.cmd, "command"))
 	return 0;
 
-    for (data_len=0; ; data_len++) {
-	if (get_uchar(toks, data+data_len, NULL))
+    for (info.data_len=0; ; info.data_len++) {
+	if (get_uchar(toks, info.data+info.data_len, NULL))
 	    break;
     }
 
-    msg.data_len = data_len;
-    msg.data = data;
+    info.msg.data_len = info.data_len;
+    info.msg.data = info.data;
 
-    rv = ipmi_bmc_send_command_addr(bmc, (ipmi_addr_t *) &addr, sizeof(addr),
-				    &msg, mccmd_rsp_handler, NULL);
-    if (rv)
-	wprintw(cmd_win, "Send command failure: %x\n", rv);
+    rv = ipmi_mc_pointer_cb(bmc_id, msg_cmd_bmcer, &info);
+    if (rv) {
+	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
+
     display_pad_refresh();
 
     return 0;
@@ -1727,13 +1795,24 @@ dellog_cb(ipmi_mc_t *bmc, int err, void *cb_data)
 	ui_log("log deleted\n");
 }
 
+static void
+dellog_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    int          rv;
+    unsigned int *record_id = cb_data;
+
+    rv = ipmi_bmc_del_log_by_recid(bmc, *record_id, dellog_cb, NULL);
+    if (rv)
+	wprintw(cmd_win, "dellog_cmd: error deleting log: %x\n", rv);
+}
+
 static int
 dellog_cmd(char *cmd, char **toks, void *cb_data)
 {
     unsigned int record_id;
     int          rv;
 
-    if (!bmc) {
+    if (!bmc_ready) {
 	waddstr(cmd_win, "BMC has not finished setup yet\n");
 	return 0;
     }
@@ -1741,10 +1820,11 @@ dellog_cmd(char *cmd, char **toks, void *cb_data)
     if (get_uint(toks, &record_id, "record id"))
 	return 0;
 
-    rv = ipmi_bmc_del_log_by_recid(bmc, record_id, dellog_cb, NULL);
-    if (rv)
-	wprintw(cmd_win, "dellog_cmd: error deleting log: %x\n", rv);
-
+    rv = ipmi_mc_pointer_cb(bmc_id, dellog_cmd_bmcer, &record_id);
+    if (rv) {
+	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
     return 0;
 }
 
@@ -1817,9 +1897,20 @@ clear_sel2(ipmi_mc_t  *mc,
     msg.cmd = IPMI_CLEAR_SEL_CMD;
     msg.data_len = 6;
     msg.data = data;
-    rv = ipmi_send_command(bmc, 0, &msg, NULL, NULL);
+    rv = ipmi_send_command(mc, 0, &msg, NULL, NULL);
     if (rv)
 	ui_log("Could not send sel clear cmd: %x\n", rv);
+}
+
+static void
+clear_sel_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    int        rv;
+    ipmi_msg_t *msg = cb_data;
+
+    rv = ipmi_send_command(bmc, 0, msg, clear_sel2, NULL);
+    if (rv)
+	wprintw(cmd_win, "Could not reserve sel: %x\n", rv);
 }
 
 static int
@@ -1832,9 +1923,11 @@ clear_sel_cmd(char *cmd, char **toks, void *cb_data)
     msg.cmd = IPMI_RESERVE_SEL_CMD;
     msg.data_len = 0;
     msg.data = NULL;
-    rv = ipmi_send_command(bmc, 0, &msg, clear_sel2, NULL);
-    if (rv)
-	wprintw(cmd_win, "Could not reserve sel: %x\n", rv);
+    rv = ipmi_mc_pointer_cb(bmc_id, clear_sel_cmd_bmcer, &msg);
+    if (rv) {
+	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
     return 0;
 }
 
@@ -2302,15 +2395,16 @@ ipmi_ui_setup_done(ipmi_mc_t *mc,
     if (err)
 	leave_err(err, "Could not set up IPMI connection");
 
-    bmc = mc;
+    bmc_id = ipmi_mc_convert_to_id(mc);
+    bmc_ready = 1;
 
     ui_log("Completed setup for the IPMI connection\n");
 
-    rv = ipmi_register_for_events(bmc, event_handler, NULL, &event_handler_id);
+    rv = ipmi_register_for_events(mc, event_handler, NULL, &event_handler_id);
     if (rv)
 	leave_err(rv, "ipmi_register_for_events");
 
-    rv = ipmi_bmc_enable_events(bmc);
+    rv = ipmi_bmc_enable_events(mc);
     if (rv)
 	leave_err(rv, "ipmi_bmc_enable_events");
 
