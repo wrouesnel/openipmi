@@ -73,6 +73,7 @@ typedef struct ipmi_bmc_s
 
     ipmi_event_handler_id_t  *event_handlers;
     ipmi_lock_t              *event_handlers_lock;
+    ipmi_oem_event_handler_cb oem_event_handler;
 
     ipmi_entity_info_t *entities;
     ipmi_lock_t        *entities_lock;
@@ -375,6 +376,17 @@ void event_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
     info->err = ipmi_sensor_event(sensor, info->event);
 }
 
+int
+ipmi_bmc_set_oem_event_handler(ipmi_mc_t                 *bmc,
+			       ipmi_oem_event_handler_cb handler)
+{
+    if (bmc->bmc == NULL)
+	return EINVAL;
+
+    bmc->bmc->oem_event_handler = handler;
+    return 0;
+}
+
 static void
 ll_event_handler(ipmi_con_t   *ipmi,
 		 ipmi_addr_t  *addr,
@@ -388,6 +400,12 @@ ll_event_handler(ipmi_con_t   *ipmi,
     int                     rv = 1;
     ipmi_sensor_id_t        id;
     event_sensor_info_t     info;
+
+    /* Let the OEM handler have a go at it first. */
+    if (bmc->bmc->oem_event_handler) {
+	if (bmc->bmc->oem_event_handler(bmc, event))
+	    return;
+    }
 
     /* It's a system event record from an MC. */
     if ((event->data[2] == 0x02) && ((event->data[7] & 0x01) == 0)) {
@@ -1216,6 +1234,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->bmc->conn = ipmi;
     mc->bmc->event_handlers = NULL;
     mc->bmc->event_handlers_lock = NULL;
+    mc->bmc->oem_event_handler = NULL;
     mc->bmc->mc_list = NULL;
     mc->bmc->mc_list_lock = NULL;
     mc->bmc->entities = NULL;

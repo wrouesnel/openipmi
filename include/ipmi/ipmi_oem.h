@@ -87,4 +87,11 @@ int ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
 				    ipmi_bmc_oem_new_mc_cb handler,
 				    void                   *cb_data);
 
+/* The handler should return 0 if it didn't handle the event, or 1
+   if it did. */
+typedef int (*ipmi_oem_event_handler_cb)(ipmi_mc_t  *bmc,
+					 ipmi_msg_t *event);
+int ipmi_bmc_set_oem_event_handler(ipmi_mc_t                 *bmc,
+				   ipmi_oem_event_handler_cb handler);
+
 #endif /* IPMI_OEM_H */
