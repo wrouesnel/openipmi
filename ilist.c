@@ -53,6 +53,7 @@ alloc_ilist(void)
     rv->head->malloced = 1;
     rv->head->next = rv->head;
     rv->head->prev = rv->head;
+    rv->head->item = NULL;
 
     return rv;
 }
@@ -219,6 +220,7 @@ ilist_delete(ilist_iter_t *iter)
     if (ilist_empty(iter->list))
 	return 0;
     curr = iter->curr;
+    iter->curr = curr->next;
     curr->next->prev = curr->prev;
     curr->prev->next = curr->next;
     if (curr->malloced)

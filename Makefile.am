@@ -14,7 +14,7 @@ EXTRA_DIST =
 AM_CFLAGS = -Wall -Werror -Iinclude
 SUBDIRS = include
 
-noinst_HEADERS = opq.h ilist.h md5.h md2.h
+noinst_HEADERS = opq.h ilist.h md5.h md2.h ui_keypad.h ui_command.h
 
 LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
@@ -33,7 +33,7 @@ noinst_PROGRAMS = test1
 test1_SOURCES = test1.c
 test1_LDADD = libOpenIPMI.la
 
-ipmi_ui_SOURCES = ui.c ui_os.c
+ipmi_ui_SOURCES = ui.c ui_os.c ui_keypad.c ui_command.c
 ipmi_ui_LDADD = libOpenIPMI.la -lncurses
 
 TESTS = 

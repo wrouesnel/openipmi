@@ -13,16 +13,25 @@
 #include <ipmi/ipmi_err.h>
 #include <ipmi/ipmiif.h>
 
+#include "ui_keypad.h"
+#include "ui_command.h"
+
 WINDOW *main_win;
 WINDOW *cmd_win;
 WINDOW *stat_win;
 WINDOW *log_pad;
 WINDOW *dummy_pad;
-WINDOW *display_win;
+WINDOW *display_pad;
 
 selector_t *ui_sel;
 
 int log_pad_top_line;
+int display_pad_top_line;
+
+keypad_t keymap;
+command_t commands;
+
+ipmi_mc_t *bmc = NULL;
 
 extern os_handler_t ui_ipmi_cb_handlers;
 
@@ -41,13 +50,16 @@ extern os_handler_t ui_ipmi_cb_handlers;
 #define DISPLAY_WIN_COLS (COLS/2-1)
 #define DISPLAY_WIN_TOP (STATUS_WIN_LINES+1)
 #define DISPLAY_WIN_LEFT 0
+#define DISPLAY_WIN_RIGHT (COLS/2-2)
+#define DISPLAY_WIN_BOTTOM (CMD_WIN_TOP-2)
+#define NUM_DISPLAY_LINES 1024
 
 #define LOG_WIN_LINES (LINES - STATUS_WIN_LINES - CMD_WIN_LINES - 2)
 #define LOG_WIN_COLS (COLS-(COLS/2))
 #define LOG_WIN_LEFT (COLS/2)
 #define LOG_WIN_RIGHT (COLS-1)
 #define LOG_WIN_TOP (STATUS_WIN_LINES+1)
-#define LOG_WIN_BOTTOM (LINES-7)
+#define LOG_WIN_BOTTOM (CMD_WIN_TOP-2)
 #define NUM_LOG_LINES 1024
 
 #define TOP_LINE    STATUS_WIN_LINES
@@ -55,9 +67,16 @@ extern os_handler_t ui_ipmi_cb_handlers;
 #define MID_COL (COLS/2-1)
 #define MID_LINES (LINES - STATUS_WIN_LINES - CMD_WIN_LINES - 2)
 
+enum scroll_wins_e { LOG_WIN_SCROLL, DISPLAY_WIN_SCROLL };
+
+enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
+
 void
 log_pad_refresh(int newlines)
 {
+    if (log_pad_top_line < 0)
+	log_pad_top_line = 0;
+
     if (log_pad_top_line > (NUM_LOG_LINES - LOG_WIN_LINES))
 	log_pad_top_line = NUM_LOG_LINES - LOG_WIN_LINES;
 
@@ -72,6 +91,21 @@ log_pad_refresh(int newlines)
 }
 
 void
+display_pad_refresh(void)
+{
+    if (display_pad_top_line >= NUM_DISPLAY_LINES)
+	display_pad_top_line = NUM_DISPLAY_LINES;
+
+    if (display_pad_top_line < 0)
+	display_pad_top_line = 0;
+
+    prefresh(display_pad,
+	     display_pad_top_line, 0,
+	     DISPLAY_WIN_TOP, DISPLAY_WIN_LEFT,
+	     DISPLAY_WIN_BOTTOM, DISPLAY_WIN_RIGHT);
+}
+
+void
 draw_lines()
 {
     werase(main_win);
@@ -79,8 +113,12 @@ draw_lines()
     whline(main_win, 0, COLS);
     wmove(main_win, BOTTOM_LINE, 0);
     whline(main_win, 0, COLS);
+    wmove(main_win, TOP_LINE, MID_COL);
+    wvline(main_win, ACS_TTEE, 1);
     wmove(main_win, TOP_LINE+1, MID_COL);
     wvline(main_win, 0, MID_LINES);
+    wmove(main_win, TOP_LINE+1+MID_LINES, MID_COL);
+    wvline(main_win, ACS_BTEE, 1);
     wrefresh(main_win);
 }    
 
@@ -156,10 +194,7 @@ recalc_windows(void)
     wrefresh(stat_win);
     touchwin(stat_win);
 
-    mvwin(display_win, DISPLAY_WIN_TOP, DISPLAY_WIN_LEFT);
-    wresize(display_win, DISPLAY_WIN_LINES, DISPLAY_WIN_COLS);
-    wrefresh(display_win);
-    touchwin(display_win);
+    wresize(display_pad, DISPLAY_WIN_LINES, DISPLAY_WIN_COLS);
 
     mvwin(cmd_win, CMD_WIN_TOP, CMD_WIN_LEFT);
     wresize(cmd_win, CMD_WIN_LINES, CMD_WIN_COLS);
@@ -172,6 +207,15 @@ recalc_windows(void)
     doupdate();
 
     log_pad_refresh(0);
+    display_pad_refresh();
+}
+
+static
+void handle_user_char(int c)
+{
+    int err = keypad_handle_key(keymap, c, NULL);
+    if (err)
+	ui_log("Got error on char 0x%x 0%o %d\n", c, c, c);
 }
 
 void
@@ -181,35 +225,474 @@ user_input_ready(int fd, void *data)
 
     c = wgetch(cmd_win);
     while (c != ERR) {
-	if (c == 4)
-	    leave(0, "");
-
-	if (c == KEY_NPAGE)
-	{
-	    log_pad_top_line += (LOG_WIN_LINES-1);
-	    if (log_pad_top_line > NUM_LOG_LINES - LOG_WIN_LINES)
-		log_pad_top_line = NUM_LOG_LINES - LOG_WIN_LINES;
-	    log_pad_refresh(0);
-	} else if (c == KEY_PPAGE) {
-	    log_pad_top_line -= (LOG_WIN_LINES-1);
-	    if (log_pad_top_line < 0)
-		log_pad_top_line = 0;
-	    log_pad_refresh(0);
-	} else if (c == KEY_RESIZE) {
-	    ui_log("Got resize, lines=%d, cols=%d\n", LINES, COLS);
-	    recalc_windows();
-	} else if (c > 0xff) {
-	    ui_log("Got char 0x%x 0%o (%d)\n", c, c, c);
-	    goto next_char;
-	} else {
-	    waddch(cmd_win, c);
-	    if (c == '\n')
-		waddstr(cmd_win, "> ");
-	}
-
-    next_char:
+	handle_user_char(c);
 	c = wgetch(cmd_win);
     }
+}
+
+static char *line_buffer = NULL;
+static int  line_buffer_max = 0;
+static int  line_buffer_pos = 0;
+
+static int
+normal_char(int key, void *cb_data)
+{
+    if (line_buffer_pos >= line_buffer_max) {
+	char *new_line = malloc(line_buffer_max+10+1);
+	if (!new_line)
+	    return ENOMEM;
+	line_buffer_max += 10;
+	if (line_buffer) {
+	    strcpy(new_line, line_buffer);
+	    free(line_buffer);
+	}
+	line_buffer = new_line;
+    }
+    line_buffer[line_buffer_pos] = key;
+    line_buffer_pos++;
+    waddch(cmd_win, key);
+    return 0;
+}
+
+static int
+end_of_line(int key, void *cb_data)
+{
+    int err;
+
+    line_buffer[line_buffer_pos] = '\0';
+    waddch(cmd_win, '\n');
+    err = command_handle(commands, line_buffer, NULL);
+    if (err)
+	wprintw(cmd_win, "Invalid command: %s\n> ", line_buffer);
+    else
+	waddstr(cmd_win, "> ");
+    line_buffer_pos = 0;
+    return 0;
+}
+
+static int
+backspace(int key, void *cb_data)
+{
+    if (line_buffer_pos == 0)
+	return 0;
+
+    line_buffer_pos--;
+    waddstr(cmd_win, "\b \b");
+    return 0;
+}
+
+static int
+key_up(int key, void *cb_data)
+{
+    return 0;
+}
+
+static int
+key_down(int key, void *cb_data)
+{
+    return 0;
+}
+
+static int
+key_right(int key, void *cb_data)
+{
+    return 0;
+}
+
+static int
+key_left(int key, void *cb_data)
+{
+    return 0;
+}
+
+static int
+key_ppage(int key, void *cb_data)
+{
+    if (curr_win == LOG_WIN_SCROLL) {
+	log_pad_top_line -= (LOG_WIN_LINES-1);
+	log_pad_refresh(0);
+    } else if (curr_win == DISPLAY_WIN_SCROLL) {
+	display_pad_top_line -= (DISPLAY_WIN_LINES-1);
+	display_pad_refresh();
+    }
+    return 0;
+}
+
+static int
+key_npage(int key, void *cb_data)
+{
+    if (curr_win == LOG_WIN_SCROLL) {
+	log_pad_top_line += (LOG_WIN_LINES-1);
+	log_pad_refresh(0);
+    } else if (curr_win == DISPLAY_WIN_SCROLL) {
+	display_pad_top_line += (DISPLAY_WIN_LINES-1);
+	display_pad_refresh();
+    }
+    return 0;
+}
+
+static int
+key_leave(int key, void *cb_data)
+{
+    leave(0, "");
+    return 0;
+}
+
+static int
+key_resize(int key, void *cb_data)
+{
+    recalc_windows();
+    return 0;
+}
+
+static int
+key_set_display(int key, void *cb_data)
+{
+    curr_win = DISPLAY_WIN_SCROLL;
+    return 0;
+}
+
+static int
+key_set_log(int key, void *cb_data)
+{
+    curr_win = LOG_WIN_SCROLL;
+    return 0;
+}
+
+static void
+entities_handler(ipmi_entity_t *entity,
+		 void          *cb_data)
+{
+    int  id, instance;
+    char *present;
+
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    if (ipmi_entity_is_present(entity))
+	present = "present";
+    else
+	present = "not present";
+    wprintw(display_pad, "  %d.%d %s\n", id, instance, present);
+}
+
+int
+entities_cmd(char *cmd, char **toks, void *cb_data)
+{
+    if (!bmc) {
+	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	return 0;
+    }
+
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    waddstr(display_pad, "Entities:\n");
+    ipmi_bmc_iterate_entities(bmc, entities_handler, NULL);
+    display_pad_refresh();
+    return 0;
+}
+
+struct ent_rec {
+    int id, instance, found;
+    void (*handler)(ipmi_entity_t *entity, void *cb_data);
+    void *cb_data;
+};
+
+static void
+entity_searcher(ipmi_entity_t *entity,
+		void          *cb_data)
+{
+    struct ent_rec *info = cb_data;
+    int    id, instance;
+
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    if ((info->id == id) && (info->instance == instance)) {
+	info->found = 1;
+	info->handler(entity, info->cb_data);
+    }
+}
+
+static void
+sensors_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
+{
+    int id, instance;
+    int lun, num;
+    char name[33];
+
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    ipmi_sensor_get_num(sensor, &lun, &num);
+    ipmi_sensor_get_id(sensor, name, 33);
+    wprintw(display_pad, "  %d.%d.%d.%d - %s\n", id, instance, lun, num, name);
+}
+
+static void
+found_entity_for_sensors(ipmi_entity_t *entity,
+			 void          *cb_data)
+{
+    int    id, instance;
+
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    wprintw(display_pad, "Sensors for entity %d.%d:\n", id, instance);
+    ipmi_entity_iterate_sensors(entity, sensors_handler, NULL);
+    display_pad_refresh();
+}
+
+int
+sensors_cmd(char *cmd, char **toks, void *cb_data)
+{
+    struct ent_rec info;
+    char           *ent_name;
+    char           *id_name, *instance_name, *toks2;
+
+    if (!bmc) {
+	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	return 0;
+    }
+
+    ent_name = strtok_r(NULL, " \t\n", toks);
+    if (!ent_name) {
+	waddstr(cmd_win, "No entity given\n");
+	return 0;
+    }
+
+    id_name = strtok_r(ent_name, ".", &toks2);
+    instance_name = strtok_r(NULL, "", &toks2);
+    if (!instance_name) {
+	waddstr(cmd_win, "Invalid entity given\n");
+	return 0;
+    }
+    info.id = strtoul(id_name, &toks2, 0);
+    if (*toks2 != '\0') {
+	waddstr(cmd_win, "Invalid entity id given\n");
+	return 0;
+    }
+    info.instance = strtoul(instance_name, &toks2, 0);
+    if (*toks2 != '\0') {
+	waddstr(cmd_win, "Invalid entity instance given\n");
+	return 0;
+    }
+    info.found = 0;
+
+    info.handler = found_entity_for_sensors;
+    info.cb_data = &info;
+
+    ipmi_bmc_iterate_entities(bmc, entity_searcher, &info);
+    if (!info.found) {
+	wprintw(cmd_win, "Entity %d.%d not found\n", info.id, info.instance);
+	return 0;
+    }
+
+    return 0;
+}
+
+struct sensor_info {
+    int lun, num, found;
+};
+
+static void
+sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
+{
+    int id, instance;
+    int lun, num;
+    char name[33];
+    struct sensor_info *sinfo = cb_data;
+    double val;
+    int rv;
+
+    ipmi_sensor_get_num(sensor, &lun, &num);
+    if ((lun == sinfo->lun) && (num == sinfo->num)) {
+	sinfo->found = 1;
+
+	id = ipmi_entity_get_entity_id(entity);
+	instance = ipmi_entity_get_entity_instance(entity);
+	ipmi_sensor_get_id(sensor, name, 33);
+
+	werase(display_pad);
+	wmove(display_pad, 0, 0);
+
+	wprintw(display_pad, "Sensor %d.%d.%d.%d - %s:\n",
+		id, instance, lun, num, name);
+	wprintw(display_pad, "  type = %d\n",
+		ipmi_sensor_get_sensor_type(sensor));
+	wprintw(display_pad, "  reading type = %d\n",
+		ipmi_sensor_get_event_reading_type(sensor));
+	rv = ipmi_sensor_get_nominal_reading(sensor, &val);
+	if (!rv)
+	    wprintw(display_pad, "  nominal = %f\n", val);
+	display_pad_refresh();
+    }
+}
+
+static void
+found_entity_for_sensor(ipmi_entity_t *entity,
+			void          *cb_data)
+{
+    ipmi_entity_iterate_sensors(entity, sensor_handler, cb_data);
+}
+
+int
+sensor_cmd(char *cmd, char **toks, void *cb_data)
+{
+    struct ent_rec     info;
+    struct sensor_info sinfo;
+    char               *ent_name;
+    char               *id_name, *instance_name, *lun_name, *num_name, *toks2;
+
+    if (!bmc) {
+	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	return 0;
+    }
+
+    ent_name = strtok_r(NULL, " \t\n", toks);
+    if (!ent_name) {
+	waddstr(cmd_win, "No sensor given\n");
+	return 0;
+    }
+
+    id_name = strtok_r(ent_name, ".", &toks2);
+    instance_name = strtok_r(NULL, ".", &toks2);
+    if (!instance_name) {
+	waddstr(cmd_win, "Invalid sensor given\n");
+	return 0;
+    }
+    lun_name = strtok_r(NULL, ".", &toks2);
+    if (!lun_name) {
+	waddstr(cmd_win, "Invalid sensor given\n");
+	return 0;
+    }
+    num_name = strtok_r(NULL, "", &toks2);
+    if (!num_name) {
+	waddstr(cmd_win, "Invalid sensor given\n");
+	return 0;
+    }
+
+    info.id = strtoul(id_name, &toks2, 0);
+    if (*toks2 != '\0') {
+	waddstr(cmd_win, "Invalid entity id given\n");
+	return 0;
+    }
+    info.instance = strtoul(instance_name, &toks2, 0);
+    if (*toks2 != '\0') {
+	waddstr(cmd_win, "Invalid entity instance given\n");
+	return 0;
+    }
+    sinfo.lun = strtoul(lun_name, &toks2, 0);
+    if (*toks2 != '\0') {
+	waddstr(cmd_win, "Invalid sensor lun given\n");
+	return 0;
+    }
+    sinfo.num = strtoul(num_name, &toks2, 0);
+    if (*toks2 != '\0') {
+	waddstr(cmd_win, "Invalid sensor num given\n");
+	return 0;
+    }
+    info.found = 0;
+    sinfo.found = 0;
+
+    info.handler = found_entity_for_sensor;
+    info.cb_data = &sinfo;
+
+    ipmi_bmc_iterate_entities(bmc, entity_searcher, &info);
+    if (!info.found) {
+	wprintw(cmd_win, "Entity %d.%d not found\n", info.id, info.instance);
+	return 0;
+    }
+    if (!sinfo.found) {
+	wprintw(cmd_win, "Sensor %d.%d.%d.%d not found\n",
+		info.id, info.instance, sinfo.lun, sinfo.num);
+	return 0;
+    }
+
+    return 0;
+}
+
+static struct {
+    char          *name;
+    cmd_handler_t handler;
+} cmd_list[] =
+{
+    { "entities",			entities_cmd },
+    { "sensors",			sensors_cmd },
+    { "sensor",				sensor_cmd },
+    { NULL,				NULL}
+};
+int
+init_commands(void)
+{
+    int err;
+    int i;
+
+    commands = command_alloc();
+    if (!commands)
+	return ENOMEM;
+
+    for (i=0; cmd_list[i].name != NULL; i++) {
+	err = command_bind(commands, cmd_list[i].name, cmd_list[i].handler);
+	if (err)
+	    goto out_err;
+    }
+
+    return 0;
+
+ out_err:
+    command_free(commands);
+    return err;
+}
+
+int
+init_keypad(void)
+{
+    int i;
+    int err = 0;
+
+    keymap = keypad_alloc();
+    if (!keymap)
+	return ENOMEM;
+
+    for (i=0x20; i<0x7f; i++) {
+	err = keypad_bind_key(keymap, i, normal_char);
+	if (err)
+	    goto out_err;
+    }
+
+    err = keypad_bind_key(keymap, 0x7f, backspace);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_DC, backspace);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_UP, key_up);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_DOWN, key_down);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_RIGHT, key_right);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_LEFT, key_left);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_NPAGE, key_npage);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_PPAGE, key_ppage);
+    if (!err)
+	err = keypad_bind_key(keymap, 4, key_leave);
+    if (!err)
+	err = keypad_bind_key(keymap, 10, end_of_line);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_RESIZE, key_resize);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_F(1), key_set_display);
+    if (!err)
+	err = keypad_bind_key(keymap, KEY_F(2), key_set_log);
+
+    if (err)
+	goto out_err;
+
+    return 0;
+
+ out_err:
+    keypad_free(keymap);
+    return err;
 }
 
 int
@@ -227,19 +710,20 @@ init_win(void)
     if (!stat_win)
 	leave(1, "Could not allocate stat window\n");
 
-    display_win = newwin(DISPLAY_WIN_LINES, DISPLAY_WIN_COLS,
-			 DISPLAY_WIN_TOP, DISPLAY_WIN_LEFT);
-    if (!display_win)
+    display_pad = newpad(NUM_DISPLAY_LINES, DISPLAY_WIN_COLS);
+    if (!display_pad)
 	leave(1, "Could not allocate display window\n");
 
-    log_pad = newpad(NUM_LOG_LINES, LOG_WIN_COLS-2);
+    waddstr(display_pad, "Welcome to the IPMI UI");
+
+    log_pad = newpad(NUM_LOG_LINES, LOG_WIN_COLS);
     if (!log_pad)
 	leave(1, "Could not allocate log window\n");
     scrollok(log_pad, TRUE);
     wmove(log_pad, NUM_LOG_LINES-1, 0);
     log_pad_top_line = NUM_LOG_LINES-LOG_WIN_LINES;
 
-    dummy_pad = newpad(NUM_LOG_LINES, LOG_WIN_COLS-2);
+    dummy_pad = newpad(NUM_LOG_LINES, LOG_WIN_COLS);
     if (!dummy_pad)
 	leave(1, "Could not allocate dummy pad\n");
     wmove(dummy_pad, 0, 0);
@@ -254,6 +738,8 @@ init_win(void)
     scrollok(cmd_win, TRUE);
 
     draw_lines();
+
+    display_pad_refresh();
 
     waddstr(cmd_win, "> ");
     wrefresh(cmd_win);
@@ -364,6 +850,8 @@ setup_done(ipmi_mc_t *mc,
     if (err)
 	leave_err(err, "Could not set up IPMI connection");
 
+    bmc = mc;
+
     rv = ipmi_bmc_set_entity_update_handler(mc, entity_change, mc);
     if (rv)
 	leave_err(rv, "ipmi_bmc_set_entity_update_handler");
@@ -390,7 +878,19 @@ main(int argc, char *argv[])
     sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL);
     sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
 
-    init_win();
+    err = init_commands();
+    if (err) {
+	fprintf(stderr, "Could not initialize commands\n");
+	exit(1);
+    }
+
+    err = init_keypad();
+    if (err) {
+	fprintf(stderr, "Could not initialize keymap\n");
+	exit(1);
+    }
+
+    err = init_win();
 
     ipmi_init(&ui_ipmi_cb_handlers);
 
