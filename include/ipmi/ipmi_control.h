@@ -60,17 +60,19 @@ int ipmi_find_control(ipmi_mc_t       *mc,
 int ipmi_control_alloc_nonstandard(ipmi_control_t **new_control);
 
 /* Destroy a control. */
-void ipmi_control_destroy_nonstandard(ipmi_control_t *control);
+int ipmi_control_destroy(ipmi_control_t *control);
 
+typedef void (*ipmi_control_destroy_cb)(ipmi_control_t *control,
+					void           *cb_data);
 /* Add a control for the given MC and put it into the given entity.
    Note that control will NOT appear as owned by the MC, the MC is used
    for the OS handler and such. */
-int ipmi_control_add_nonstandard(ipmi_mc_t      *mc,
-				 ipmi_control_t *control,
-				 ipmi_entity_t  *ent);
-
-/* Remove the given control from the entity. */
-int ipmi_control_remove_nonstandard(ipmi_control_t *control);
+int ipmi_control_add_nonstandard(
+    ipmi_mc_t               *mc,
+    ipmi_control_t          *control,
+    ipmi_entity_t           *ent,
+    ipmi_control_destroy_cb destroy_handler,
+    void                    *destroy_handler_cb_data);
 
 typedef int (*ipmi_control_set_val_cb)(ipmi_control_t     *control,
 				       int                *val,

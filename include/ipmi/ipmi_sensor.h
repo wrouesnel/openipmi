@@ -79,7 +79,7 @@ int ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 			    ipmi_sdr_info_t *sdrs);
 
 /* Destroy the sensor from the internal data. */
-void ipmi_sensor_destroy(ipmi_sensor_t *sensor);
+int ipmi_sensor_destroy(ipmi_sensor_t *sensor);
 
 /* Called by when an event occurs for the given sensor.  This may be use
    by OEM code to deliver non-standard events to sensors. */

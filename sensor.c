@@ -393,6 +393,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     sensor->mc = mc;
     sensor->lun = 4;
     sensor->num = i;
+    sensor->source_idx = -1;
     sensors->sensors_by_idx[4][i] = sensor;
     sensor->entity_id = ipmi_entity_get_entity_id(ent);
     sensor->entity_instance = ipmi_entity_get_entity_instance(ent);
@@ -414,12 +415,45 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
     free(sensor);
 }
 
-void
+int
 ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 {
+    ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(sensor->mc);
+    ipmi_mc_t          *bmc = ipmi_mc_get_bmc(sensor->mc);
+    ipmi_sensor_t      **sdr_sensors;
+    unsigned int       count;
+    ipmi_entity_info_t *ents = ipmi_mc_get_entities(bmc);
+    ipmi_entity_t      *ent;
+    int                rv;
+
+    if (sensor != sensors->sensors_by_idx[sensor->lun][sensor->num])
+	return EINVAL;
+
+    if (sensor->source_idx >= 0) {
+	ipmi_mc_get_sdr_sensors(ipmi_mc_get_bmc(sensor->mc),
+				sensor->source_mc,
+				&sdr_sensors,
+				&count);
+	if (sdr_sensors[sensor->source_idx] != sensor)
+	    return EINVAL;
+
+	sdr_sensors[sensor->source_idx] = NULL;
+    }
+
+    rv = ipmi_entity_find(ents,
+			  bmc,
+			  sensor->entity_id,
+			  sensor->entity_instance,
+			  &ent);
+    if (!rv)
+	ipmi_entity_remove_sensor(ent, bmc, sensor->lun, sensor->num, sensor);
+
+    sensors->sensors_by_idx[sensor->lun][sensor->num] = NULL;
+
     sensor->destroyed = 1;
     if (!opq_stuff_in_progress(sensor->waitq))
 	sensor_final_destroy(sensor);
+    return 0;
 }
 
 int

@@ -94,6 +94,8 @@ struct ipmi_control_s
     opq_t *waitq;
 
     void *oem_info;
+    ipmi_control_destroy_cb destroy_handler;
+    void                    *destroy_handler_cb_data;
 };
 
 ipmi_control_id_t
@@ -227,16 +229,12 @@ ipmi_control_alloc_nonstandard(ipmi_control_t **new_control)
     return 0;
 }
 
-void
-ipmi_control_destroy_nonstandard(ipmi_control_t *control)
-{
-    free(control);
-}
-
 int
-ipmi_control_add_nonstandard(ipmi_mc_t      *mc,
-			     ipmi_control_t *control,
-			     ipmi_entity_t  *ent)
+ipmi_control_add_nonstandard(ipmi_mc_t              *mc,
+			     ipmi_control_t          *control,
+			     ipmi_entity_t           *ent,
+			     ipmi_control_destroy_cb destroy_handler,
+			     void                    *destroy_handler_cb_data)
 {
     int                 i;
     int                 found = 0;
@@ -287,46 +285,57 @@ ipmi_control_add_nonstandard(ipmi_mc_t      *mc,
     controls->controls_by_idx[i] = control;
     control->entity_id = ipmi_entity_get_entity_id(ent);
     control->entity_instance = ipmi_entity_get_entity_instance(ent);
+    control->destroy_handler = destroy_handler;
+    control->destroy_handler_cb_data = destroy_handler_cb_data;
 
     ipmi_entity_add_control(ent, mc, control->lun, control->num, control, link);
 
     return 0;
 }
 
+static void
+control_final_destroy(ipmi_control_t *control)
+{
+    if (control->destroy_handler)
+	control->destroy_handler(control,
+				 control->destroy_handler_cb_data);
+
+    opq_destroy(control->waitq);
+    free(control);
+}
+
 int
-ipmi_control_remove_nonstandard(ipmi_control_t *control)
+ipmi_control_destroy(ipmi_control_t *control)
 {
     ipmi_control_info_t *controls = ipmi_mc_get_controls(control->mc);
     ipmi_entity_info_t  *ents = ipmi_mc_get_entities(control->mc);
     ipmi_entity_t       *ent;
     int                 rv;
 
+    if (controls->controls_by_idx[control->num] != control)
+	return EINVAL;
+
     rv = ipmi_entity_find(ents,
 			  control->mc,
 			  control->entity_id,
 			  control->entity_instance,
 			  &ent);
-    if (!rv)
+    if (!rv) {
+	if (control->destroy_handler)
+	    control->destroy_handler(control,
+				     control->destroy_handler_cb_data);
+
 	ipmi_entity_remove_control(ent, control->mc,
 				   control->lun, control->num, control);
+    }
 
-    controls->controls_by_idx[control->num] = 0;
-    return 0;
-}
+    controls->controls_by_idx[control->num] = NULL;
 
-static void
-control_final_destroy(ipmi_control_t *control)
-{
-    opq_destroy(control->waitq);
-    free(control);
-}
-
-void
-ipmi_control_destroy(ipmi_control_t *control)
-{
     control->destroyed = 1;
     if (!opq_stuff_in_progress(control->waitq))
 	control_final_destroy(control);
+
+    return 0;
 }
 
 int
