@@ -68,6 +68,9 @@ struct ipmi_control_s
     int type;
     char *type_str;
 
+    int settable;
+    int readable;
+
     int entity_id;
     int entity_instance;
 
@@ -462,6 +465,30 @@ ipmi_control_set_id(ipmi_control_t *control, char *id)
 {
     strncpy(control->id, id, CONTROL_ID_LENGTH);
     control->id[CONTROL_ID_LENGTH] = '\0';
+}
+
+int
+ipmi_control_is_settable(ipmi_control_t *control)
+{
+    return control->settable;
+}
+
+int
+ipmi_control_is_readable(ipmi_control_t *control)
+{
+    return control->readable;
+}
+
+void
+ipmi_control_set_settable(ipmi_control_t *control, int val)
+{
+    control->settable = val;
+}
+
+void
+ipmi_control_set_readable(ipmi_control_t *control, int val)
+{
+    control->readable = val;
 }
 
 int

@@ -638,10 +638,12 @@ int ipmi_states_get(ipmi_sensor_t       *sensor,
  * that nature.  Basically, output devices.  IPMI does not define
  * these, but they are pretty fundamental for system management.  */
 int ipmi_control_get_type(ipmi_control_t *ind);
-int ipmi_control_get_id_length(ipmi_control_t *sensor);
-void ipmi_control_get_id(ipmi_control_t *sensor, char *id, int length);
+int ipmi_control_get_id_length(ipmi_control_t *control);
+void ipmi_control_get_id(ipmi_control_t *control, char *id, int length);
 int ipmi_control_get_entity_id(ipmi_control_t *ind);
 int ipmi_control_get_entity_instance(ipmi_control_t *ind);
+int ipmi_control_is_settable(ipmi_control_t *control);
+int ipmi_control_is_readable(ipmi_control_t *control);
 ipmi_entity_t *ipmi_control_get_entity(ipmi_control_t *ind);
 char *ipmi_control_get_type_string(ipmi_control_t *ind);
 
@@ -658,20 +660,20 @@ typedef void (*ipmi_control_op_cb)(ipmi_control_t *ind, int err, void *cb_data);
  match the number of elements the indicator supports.  All the
  elements will be set simultaneously. */
 int ipmi_control_set_val(ipmi_control_t     *ind,
-		     int            *val,
-		     ipmi_control_op_cb handler,
-		     void           *cb_data);
+			 int                *val,
+			 ipmi_control_op_cb handler,
+			 void               *cb_data);
 
 /* Get the setting of an indicator.  Like setting indicators, this
    returns an array of values, one for each of the number of elements
    the indicator supports. */
 typedef void (*ipmi_control_val_cb)(ipmi_control_t *ind,
-				int        err,
-				int        *val,
-				void       *cb_data);
+				    int            err,
+				    int            *val,
+				    void           *cb_data);
 int ipmi_control_get_val(ipmi_control_t      *ind,
-		     ipmi_control_val_cb handler,
-		     void            *cb_data);
+			 ipmi_control_val_cb handler,
+			 void                *cb_data);
 
 /* For LIGHT types.  */
 

@@ -121,6 +121,8 @@ void ipmi_control_identifier_set_max_length(ipmi_control_t *control,
 
 void ipmi_control_set_id(ipmi_control_t *control, char *id);
 void ipmi_control_set_type(ipmi_control_t *control, int val);
+void ipmi_control_set_settable(ipmi_control_t *control, int val);
+void ipmi_control_set_readable(ipmi_control_t *control, int val);
 
 typedef struct ipmi_control_transition_s
 {

@@ -362,7 +362,7 @@ guaranteed to be good until the function returns.
 @section OpenIPMI Objects
 
 In OpenIPMI, the user deals with four basic objects: the BMC, entities,
-sensors, and indicators.
+sensors, and control.
 
 @subsection The BMC
 
@@ -376,7 +376,7 @@ you in the callback.
 Entities are things that are monitored.  They may be physical things
 such as a power supply or processor, or more abstract things such as the
 set of all power supplies or the ambient air in a chassis.  Sensors
-monitor entities, and indicators are attached to entities.
+monitor entities, and controls are attached to entities.
 
 Entities may be grouped inside other entities, thus an entity may have a
 parent (if it is grouped inside another entity) and children (if it
@@ -401,28 +401,52 @@ and a predictive failure at the same time.  In other, they may be
 mutually exclusive, such as the initialization state of a piece of
 software.
 
-@subsection Indicators
+@subsection Controls
 
-Indicators are not part of the IPMI spec, but are necessary items in
+Controls are not part of the IPMI spec, but are necessary items in
 almost all systems.  They are provided as part of OpenIPMI so that OEM
 code has a consistent way to represent these, and so OpenIPMI is ready
-when the IPMI team finally sees the light and adds indicators.
-OpenIPMI defines three types of indicators: lights, relays, and
-displays.
+when the IPMI team finally sees the light and adds controls.
+OpenIPMI defines many types of control: lights, relays, displays,
+alarms, reset, power, fan speed, and identifiers.
+
+For all controls except displays and identifiers, the control may
+actually control more than one device.  With some controls, multiple
+device may be controlled together and individual ones cannot be set (ie,
+the same message sets all of them).  For these types of controls,
+OpenIPMI represents them as a single control with multiple devices.
+All the devices are read and set at once.
 
 Lights are on/off colored devices, like an LED.  They may be
 multi-color, but can only show one color at a time.  For instance, if
 you work for Kmart, or you are managing a CompactPCI system with
 hot-swap, you will have a blue light in your system.  You can search
-through the indicators to find a light that's blue.  Then, if a special
+through the controls to find a light that's blue.  Then, if a special
 is on, or you want the operator to remove a card, you can light the blue
-light.
+light.  Lights may blink, too.  Each light can have settings.  Each
+setting describes a sequence of one or more transitions the light may go
+through.
 
 Relays are binary outputs.  Most telephony systems have them; they are
 required by telephony specs.  They are simple on/off devices.
 
 Displays are two-dimensional arrays of characters.  OpenIPMI allows you
 to change individual characters at will.
+
+Alarms are bells, whistles, gongs, or anything to alert the user that
+something is wrong.
+
+Reset controls are used to reset the entity to which they are attached.
+
+Power controls can be used to control power to or from an entity.  A
+power control on a power supply would generally control output power.  A
+power control on a board would generally control input power to the
+board.
+
+Fan speed controls can be used to set the speed of a fan.
+
+Identifier controls hold identification information for a system, such
+as a chassis id, chassis type, geographic address, or whatever.
 
 @c **********************************************************************
 @node    Using OpenIPMI, OpenIPMI Internal Interfaces, OpenIPMI Concepts, Top
@@ -439,7 +463,7 @@ understand the include files.
 * The BMC::
 * Entities::
 * Sensors::
-* Indicators::
+* Controls::
 @end menu
 
 @node    Include Files, Initialization, Using OpenIPMI, Using OpenIPMI
@@ -501,8 +525,8 @@ This defines the interface for the messaging interfaces.
 @item @file{ipmi_entity.h}
 This defines internal entity interfaces.
 
-@item @file{ipmi_ind.h}
-This defines internal indicator interfaces.
+@item @file{ipmi_control.h}
+This defines internal control interfaces.
 
 @item @file{ipmi_int.h}
 This defines other miscellaneous internal interfaces.
@@ -564,18 +588,18 @@ to a callback associated with the sensor.
 @node    Entities, Sensors, The BMC, Using OpenIPMI
 @section Entities
 
-Entities are the things that sensors monitor and indicators display
-from.  When a BMC is reported to you, you should register a callback to
+Entities are the things that sensors monitor and controls can change
+things on.  When a BMC is reported to you, you should register a callback to
 tell you when entities are added or removed.  That way you can know
 about new entities as soon as they are created.  If you wait until later
 to register the callback, entities may have come into existance and you
 will miss them (although you could catch them in an iterator).
 
-Sensors and indicators hang off entities.  OpenIPMI provides iterators
-so you can scan all the sensors and indicators on an entity.  It allows
-you to register callbacks to tell you when sensors and indicators are
+Sensors and controls hang off entities.  OpenIPMI provides iterators
+so you can scan all the sensors and controls on an entity.  It allows
+you to register callbacks to tell you when sensors and controls are
 added to or removed from the entity.  You sould do this in the entity
-creation callback so you won't miss any sensors or indicators as they
+creation callback so you won't miss any sensors or controls as they
 are detected.
 
 Entities are hierarchical in nature.  An entity can have children
@@ -592,7 +616,7 @@ absense of an entity and report this to you via a callback.  Like the
 other callbacks, you should register them in the entity creation
 callback.
 
-@node    Sensors, Indicators, Entities, Using OpenIPMI
+@node    Sensors, Controls, Entities, Using OpenIPMI
 @section Sensors
 
 Sensors, of course, are what IPMI is mostly about.  A sensor monitors
@@ -735,8 +759,8 @@ is being asserted or deasserted) is present.  The offset specifies the
 specific state or threshold that caused the event to be asserted.  If
 @var{value_present} is true, then the value was passed in the 
 
-@node    Indicators, , Sensors, Using OpenIPMI
-@section Indicators
+@node    Control, , Sensors, Using OpenIPMI
+@section Controls
 
 @node    OpenIPMI Internal Interfaces, How to Write OEM Plugins, Using OpenIPMI, Top
 @chapter OpenIPMI Internal Interfaces
