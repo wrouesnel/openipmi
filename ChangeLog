@@ -1,3 +1,19 @@
+2005-02-28 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_lan.c: Modified sending to sending to odd netfns will
+	result in immediate send without response.
+
+	* lib/ipmi_lan.c, lib/ipmi_smi.c: Free the "name" attribute if it
+	is set.
+
+	* lib/control.c, lib/sensor.c, lib/entity.c: Don't check for the
+	lock on opq_done() operations, since the lock may not be held due
+	to shutdown races.
+
+2005-02-25 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca.c: Some more fixups for the Intel chassis.
+
 2005-02-24 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Ignore controls and sensors for presence if they

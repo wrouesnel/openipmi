@@ -6785,7 +6785,8 @@ ipmi_entity_opq_done(ipmi_entity_t *entity)
     if (!entity)
 	return;
 
-    CHECK_ENTITY_LOCK(entity);
+    /* No check for the lock.  It will sometimes fail at destruction
+       time. */
 
     opq_op_done(entity->waitq);
 }

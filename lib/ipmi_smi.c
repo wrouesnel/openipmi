@@ -250,6 +250,8 @@ smi_cleanup(ipmi_con_t *ipmi)
     close(smi->fd);
 
     ipmi_mem_free(smi);
+    if (ipmi->name)
+	ipmi_mem_free(ipmi->name);
     ipmi_mem_free(ipmi);
 }
 

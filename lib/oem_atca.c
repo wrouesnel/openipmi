@@ -3041,6 +3041,7 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	unsigned int  mfg_id;
 	unsigned char *p;
 	unsigned char *str;
+	int           has_ipmb_32;
 
 	    
 	if ((ipmi_fru_get_multi_record_type(fru, i, &type) != 0)
@@ -3089,8 +3090,9 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 				     &info->shelf_address_type,
 				     sizeof(info->shelf_address));
 
-	info->num_addresses = data[26];
-	info->addresses = ipmi_mem_alloc(sizeof(atca_address_t) * data[26]);
+	/* We add 1 for adding 0x20 */
+	info->num_addresses = data[26] + 1;
+	info->addresses = ipmi_mem_alloc(sizeof(atca_address_t) * (data[26]+1));
 	if (!info->addresses) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%soem_atca.c(shelf_fru_fetched): "
@@ -3100,7 +3102,7 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	    rv = ENOMEM;
 	    goto out;
 	}
-	memset(info->addresses, 0, sizeof(atca_address_t) * data[26]);
+	memset(info->addresses, 0, sizeof(atca_address_t) * (data[26]+1));
 
 	p = data+27;
 	for (j=0, l=0; l<data[26]; l++, p += 3) {
@@ -3131,9 +3133,21 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 		info->addresses[j].hw_address = p[0];
 		info->addresses[j].site_num = p[1];
 		info->addresses[j].site_type = p[2];
+                if ((p[0]*2) == 32)
+                    has_ipmb_32 = 1;
 		j++;
 	    }
 	}
+
+        if (has_ipmb_32)
+                info->num_addresses--;
+        else {
+	    /* If we don't find the "main" address, add it. */
+            info->addresses[j].hw_address = 32 >> 1;
+            info->addresses[j].site_num = 0;
+            info->addresses[j].site_type = PICMG_SITE_TYPE_DEDICATED_SHMC;
+            j++;
+        }
 
     next_data_item:
 	ipmi_mem_free(data);
@@ -3425,6 +3439,7 @@ atca_entity_fixup(ipmi_mc_t *mc, unsigned char *id, unsigned char *instance)
 	break;
 
      case 0xa0:
+     case 0xf0:
  	/* These instances should all be set to 0x60 */
  	inst = 0x60;
  	break;
@@ -3458,8 +3473,11 @@ add_inst(inst_list_t *inst, int *curr,
     case 30:
     case 0xa0:
     case 0xf0:
+#if 0
+    /* These are on the CMM */
     case 0xf1:
     case 0xf2:
+#endif
 	*container_id = entity_id;
 	return;
     }

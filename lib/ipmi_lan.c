@@ -3143,13 +3143,18 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
     /* We store the address number in data4. */
 
 
-    lan = (lan_data_t *) ipmi->con_data;
-
     if (addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
 
     if (msg->data_len > IPMI_MAX_MSG_LENGTH)
 	return EINVAL;
+
+    lan = (lan_data_t *) ipmi->con_data;
+
+    /* Odd netfns are responses or unacknowledged data.  Just send
+       them. */
+    if (msg->netfn & 1)
+	return lan_send_addr(lan, addr, addr_len, msg, 0, addr_num);
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -3213,6 +3218,13 @@ lan_send_command(ipmi_con_t            *ipmi,
 	return EINVAL;
 
     lan = (lan_data_t *) ipmi->con_data;
+
+    /* Odd netfns are responses or unacknowledged data.  Just send
+       them. */
+    if (msg->netfn & 1) {
+	int dummy_send_ip;
+	return lan_send(lan, addr, addr_len, msg, 0, &dummy_send_ip);
+    }
 
     if (!rspi) {
 	rspi = ipmi_mem_alloc(sizeof(*rspi));
@@ -3482,6 +3494,8 @@ lan_cleanup(ipmi_con_t *ipmi)
 	release_lan_fd(lan->fd, lan->fd_slot);
 
     ipmi_mem_free(lan);
+    if (ipmi->name)
+	ipmi_mem_free(ipmi->name);
     ipmi_mem_free(ipmi);
 }
 

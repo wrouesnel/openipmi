@@ -514,7 +514,8 @@ ipmi_control_opq_done(ipmi_control_t *control)
     if (!control)
 	return;
 
-    CHECK_CONTROL_LOCK(control);
+    /* No check for the lock.  It will sometimes fail at destruction
+       time. */
 
     opq_op_done(control->waitq);
 }

@@ -563,7 +563,8 @@ ipmi_sensor_opq_done(ipmi_sensor_t *sensor)
     if (sensor->destroyed)
 	return;
 
-    CHECK_SENSOR_LOCK(sensor);
+    /* No check for the sensor lock.  It will sometimes fail at
+       destruction time. */
 
     opq_op_done(sensor->waitq);
 }
