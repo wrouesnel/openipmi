@@ -158,11 +158,13 @@ char *_ipmi_mc_name(ipmi_mc_t *mc);
 char *_ipmi_sensor_name(ipmi_sensor_t *sensor);
 char *_ipmi_control_name(ipmi_control_t *control);
 char *_ipmi_entity_name(ipmi_entity_t *entity);
-#define DOMAIN_NAME(d) (d ? _ipmi_domain_name(d) : "")
-#define MC_NAME(m) (m ? _ipmi_mc_name(m) : "")
-#define ENTITY_NAME(e) (e ? _ipmi_entity_name(e) : "")
-#define SENSOR_NAME(s) (s ? _ipmi_sensor_name(s) : "")
-#define CONTROL_NAME(c) (c ? _ipmi_control_name(c) : "")
+char *_ipmi_entity_id_name(ipmi_entity_id_t entity_id);
+#define DOMAIN_NAME(d) ((d) ? _ipmi_domain_name(d) : "")
+#define MC_NAME(m) ((m) ? _ipmi_mc_name(m) : "")
+#define ENTITY_NAME(e) ((e) ? _ipmi_entity_name(e) : "")
+#define ENTITY_ID_NAME(e) (_ipmi_entity_id_name(e))
+#define SENSOR_NAME(s) ((s) ? _ipmi_sensor_name(s) : "")
+#define CONTROL_NAME(c) ((c) ? _ipmi_control_name(c) : "")
 
 
 extern unsigned int __ipmi_log_mask;

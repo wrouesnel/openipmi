@@ -45,7 +45,6 @@
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
-#include <OpenIPMI/ilist.h>
 #include <OpenIPMI/locked_list.h>
 #include <OpenIPMI/opq.h>
 
@@ -187,7 +186,7 @@ struct ipmi_sensor_s
 
     /* A list of handlers to call when an event for the sensor comes
        in. */
-    ilist_t *handler_list;
+    locked_list_t *handler_list;
 
     opq_t *waitq;
     ipmi_event_state_t event_state;
@@ -798,7 +797,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     if (! sensor->waitq)
 	return ENOMEM;
 
-    sensor->handler_list = alloc_ilist();
+    sensor->handler_list = locked_list_alloc(os_hnd);
     if (! sensor->handler_list) {
 	opq_destroy(sensor->waitq);
 	return ENOMEM;
@@ -808,7 +807,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
     if (!link) {
 	opq_destroy(sensor->waitq);
 	sensor->waitq = NULL;
-	ilist_twoitem_destroy(sensor->handler_list);
+	locked_list_destroy(sensor->handler_list);
 	sensor->handler_list = NULL;
 	return ENOMEM;
     }
@@ -855,7 +854,7 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
 	opq_destroy(sensor->waitq);
 
     if (sensor->handler_list)
-	ilist_twoitem_destroy(sensor->handler_list);
+	locked_list_destroy(sensor->handler_list);
 
     if (sensor->entity)
 	ipmi_entity_remove_sensor(sensor->entity, sensor);
@@ -1035,7 +1034,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    goto out_err;
 	}
 
-	s[p]->handler_list = alloc_ilist();
+	s[p]->handler_list = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
 	if (! s[p]->handler_list) {
 	    opq_destroy(s[p]->waitq);
 	    rv = ENOMEM;
@@ -1191,7 +1190,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 			goto out_err;
 		    }
 
-		    s[p+j]->handler_list = alloc_ilist();
+		    s[p+j]->handler_list
+			= locked_list_alloc(ipmi_domain_get_os_hnd(domain));
 		    if (! s[p+j]->handler_list) {
 			rv = ENOMEM;
 			goto out_err;
@@ -1259,7 +1259,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 		if (s[i]->waitq)
 		    opq_destroy(s[i]->waitq);
 		if (s[i]->handler_list)
-		    ilist_twoitem_destroy(s[i]->handler_list);
+		    locked_list_destroy(s[i]->handler_list);
 		ipmi_mem_free(s[i]);
 	    }
 	ipmi_mem_free(s);
@@ -1626,7 +1626,7 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	    /* They compare, prefer to keep the old data. */
 	    i = nsensor->source_idx;
 	    opq_destroy(nsensor->waitq);
-	    ilist_twoitem_destroy(nsensor->handler_list);
+	    locked_list_destroy(nsensor->handler_list);
 	    ipmi_mem_free(nsensor);
 	    ent_item->sensor = NULL;
 	    sdr_sensors[i] = osensor;
@@ -2922,9 +2922,6 @@ ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str)
 ipmi_entity_t *
 ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
 {
-
-    CHECK_SENSOR_LOCK(sensor);
-
     return sensor->entity;
 }
 
@@ -2982,10 +2979,7 @@ ipmi_sensor_add_threshold_event_handler(
 {
     CHECK_SENSOR_LOCK(sensor);
 
-    if (ilist_twoitem_exists(sensor->handler_list, handler, cb_data))
-	return EADDRINUSE;
-
-    if (! ilist_add_twoitem(sensor->handler_list, handler, cb_data))
+    if (! locked_list_add(sensor->handler_list, handler, cb_data))
 	return ENOMEM;
 
     return 0;
@@ -2999,7 +2993,7 @@ ipmi_sensor_remove_threshold_event_handler(
 {
     CHECK_SENSOR_LOCK(sensor);
 
-    if (! ilist_remove_twoitem(sensor->handler_list, handler, cb_data))
+    if (! locked_list_remove(sensor->handler_list, handler, cb_data))
 	return ENOENT;
 
     return 0;
@@ -3027,10 +3021,7 @@ ipmi_sensor_add_discrete_event_handler(
 {
     CHECK_SENSOR_LOCK(sensor);
 
-    if (ilist_twoitem_exists(sensor->handler_list, handler, cb_data))
-	return EADDRINUSE;
-
-    if (! ilist_add_twoitem(sensor->handler_list, handler, cb_data))
+    if (! locked_list_add(sensor->handler_list, handler, cb_data))
 	return ENOMEM;
 
     return 0;
@@ -3044,7 +3035,7 @@ ipmi_sensor_remove_discrete_event_handler(
 {
     CHECK_SENSOR_LOCK(sensor);
 
-    if (! ilist_remove_twoitem(sensor->handler_list, handler, cb_data))
+    if (! locked_list_remove(sensor->handler_list, handler, cb_data))
 	return ENOENT;
 
     return 0;
@@ -3069,11 +3060,11 @@ typedef struct sensor_event_info_s
     ipmi_event_t                *event;
 } sensor_event_info_t;
 
-static void
-threshold_sensor_event_call_handler(void *data, void *ihandler, void *cb_data)
+static int
+threshold_sensor_event_call_handler(void *cb_data, void *item1, void *item2)
 {
-    ipmi_sensor_threshold_event_cb handler = ihandler;
-    sensor_event_info_t            *info = data;
+    ipmi_sensor_threshold_event_cb handler = item1;
+    sensor_event_info_t            *info = cb_data;
     int                            handled;
 
     handled = handler(info->sensor, info->dir,
@@ -3086,6 +3077,7 @@ threshold_sensor_event_call_handler(void *data, void *ihandler, void *cb_data)
 	info->handled = handled;
 	info->event = NULL;
     }
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 void
@@ -3123,19 +3115,19 @@ ipmi_sensor_call_threshold_event_handlers
 	    info.handled = IPMI_EVENT_HANDLED;
 	info.event = NULL;
     }
-    ilist_iter_twoitem(sensor->handler_list,
-		       threshold_sensor_event_call_handler, &info);
+    locked_list_iterate(sensor->handler_list,
+			threshold_sensor_event_call_handler, &info);
 
     if (handled)
 	*handled = info.handled;
     *event = info.event;
 }
 
-static void
-discrete_sensor_event_call_handler(void *data, void *ihandler, void *cb_data)
+static int
+discrete_sensor_event_call_handler(void *cb_data, void *item1, void *item2)
 {
-    ipmi_sensor_discrete_event_cb handler = ihandler;
-    sensor_event_info_t           *info = data;
+    ipmi_sensor_discrete_event_cb handler = item1;
+    sensor_event_info_t           *info = cb_data;
     int                           handled;
 
     handled = handler(info->sensor, info->dir, info->offset,
@@ -3146,6 +3138,7 @@ discrete_sensor_event_call_handler(void *data, void *ihandler, void *cb_data)
 	info->handled = handled;
 	info->event = NULL;
     }
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 void
@@ -3176,8 +3169,8 @@ ipmi_sensor_call_discrete_event_handlers(ipmi_sensor_t         *sensor,
 	    info.handled = IPMI_EVENT_HANDLED;
 	info.event = NULL;
     }
-    ilist_iter_twoitem(sensor->handler_list,
-		       discrete_sensor_event_call_handler, &info);
+    locked_list_iterate(sensor->handler_list,
+			discrete_sensor_event_call_handler, &info);
 
     if (handled)
 	*handled = info.handled;
@@ -5439,11 +5432,17 @@ ipmi_sensor_id_states_get(ipmi_sensor_id_t    sensor_id,
 void
 __ipmi_check_sensor_lock(ipmi_sensor_t *sensor)
 {
-    ipmi_domain_t *domain;
-    if (!sensor->mc)
-	return; /* The sensor has really been destroyed, just go on. */
-    domain = ipmi_mc_get_domain(sensor->mc);
-    __ipmi_check_domain_lock(domain);
-    /* FIXME - check entity lock. */
+    if (!sensor)
+	return;
+
+    if (!DEBUG_LOCKS)
+	return;
+
+    CHECK_ENTITY_LOCK(sensor->entity);
+    CHECK_MC_LOCK(sensor->mc);
+
+    if (sensor->usecount == 0)
+	ipmi_report_lock_error(ipmi_domain_get_os_hnd(sensor->domain),
+			       "sensor not locked when it should have been");
 }
 #endif

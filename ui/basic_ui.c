@@ -237,6 +237,8 @@ main(int argc, const char *argv[])
 	    break;
 	} else if (strcmp(arg, "-c") == 0) {
 	    full_screen = 0;
+	} else if (strcmp(arg, "-dlock") == 0) {
+	    DEBUG_LOCKS_ENABLE();
 	} else if (strcmp(arg, "-dmem") == 0) {
 	    DEBUG_MALLOC_ENABLE();
 	} else if (strcmp(arg, "-drawmsg") == 0) {

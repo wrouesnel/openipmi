@@ -131,6 +131,7 @@ struct atca_ipmc_s
     unsigned char site_num;
     unsigned char ipmb_address;
     ipmi_mcid_t   mcid;
+    ipmi_mc_t     *mc;
 
     /* Because discovery of FRUs is racy (we may find frus before we
        know their max number) we allocate FRUs as an array of
@@ -1283,12 +1284,13 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 		ipmi_msg_t *msg,
 		void       *rsp_data)
 {
-    atca_led_t   *l = rsp_data;
-    atca_fru_t   *finfo;
-    unsigned int num = l->num;
-    char         name[10];
-    int          rv;
-    int          i;
+    ipmi_domain_t *domain;
+    atca_led_t    *l = rsp_data;
+    atca_fru_t    *finfo;
+    unsigned int  num = l->num;
+    char          name[10];
+    int           rv;
+    int           i;
 
     if (l->destroyed) {
 	/* The entity or MC was destroyed while the message was in
@@ -1304,6 +1306,21 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 	return;
 
     finfo = l->fru;
+
+    domain = ipmi_mc_get_domain(mc);
+    _ipmi_domain_entity_lock(domain);
+    if (!finfo->entity)
+	rv = EINVAL;
+    else
+	rv = _ipmi_entity_get(finfo->entity);
+    _ipmi_domain_entity_unlock(domain);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(fru_led_cap_rsp): "
+		 "Could not get entity: 0x%x",
+		 MC_NAME(mc), rv);
+	return;
+    }
 
     if (num == 0)
 	sprintf(name, "blue led");
@@ -1322,6 +1339,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 		 "%soem_atca.c(fru_led_cap_rsp): "
 		 "Could not create LED control: 0x%x",
 		 MC_NAME(mc), rv);
+	_ipmi_entity_put(finfo->entity);
 	return;
     }
     for (i=1; i<=6; i++) {
@@ -1337,6 +1355,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 			  &l->control,
 			  num,
 			  finfo->entity);
+    _ipmi_entity_put(finfo->entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(fru_led_cap_rsp): "
@@ -2284,6 +2303,7 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
     atca_fru_t    *finfo;
     int           i;
     unsigned int  ipmb_addr;
+    int           rv;
 
     ipmb_addr = ipmi_mc_get_address(mc);
 
@@ -2295,7 +2315,7 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
     }
     if (!minfo) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_handle_new_mc): "
+		 "%soem_atca.c(atca_ipmc_removal_handler): "
 		 "Could not find IPMC info",
 		 MC_NAME(mc));
 	return;
@@ -2307,7 +2327,16 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
 	    if (!finfo)
 		continue;
 
+	    _ipmi_domain_entity_lock(domain);
+	    if (! finfo->entity)
+		rv = ENOENT;
+	    else
+		rv = _ipmi_entity_get(finfo->entity);
+	    _ipmi_domain_entity_unlock(domain);
+	    if (rv)
+		continue;
 	    destroy_fru_controls(finfo);
+	    _ipmi_entity_put(finfo->entity);
 	    /* We always leave FRU 0 around until we destroy the domain. */
 	    if (i != 0) {
 		ipmi_mem_free(finfo);
@@ -2315,6 +2344,17 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
 	    }
 	}
     }
+}
+
+static void
+atca_con_up(ipmi_domain_t *domain, void *cb_data)
+{
+    atca_shelf_t *info = cb_data;
+
+    /* We wait until here to set up everything for the first time so
+       it will be reported to the user properly. */
+    if (!info->setup)
+	setup_from_shelf_fru(domain, info);
 }
 
 static void
@@ -2326,11 +2366,6 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
     int           rv;
     int           i;
     unsigned int  ipmb_addr;
-
-    /* We wait until here to set up everything for the first time so
-       it will be reported to the user properly. */
-    if (!info->setup)
-	setup_from_shelf_fru(domain, info);
 
     ipmb_addr = ipmi_mc_get_address(mc);
 
@@ -2349,6 +2384,7 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
     }
 
     minfo->mcid = ipmi_mc_convert_to_id(mc);
+    minfo->mc = mc;
 
     /* Now fetch the properties. */
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
@@ -2866,17 +2902,23 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 
     /* Remove all the parent/child relationships we previously
        defined. */
+    _ipmi_entity_get(info->shelf_entity);
     if (info->ipmcs) {
 	int i;
 	for (i=0; i<info->num_ipmcs; i++) {
 	    atca_ipmc_t *b = &(info->ipmcs[i]);
 
+	    _ipmi_mc_get(b->mc);
+	    _ipmi_entity_get(b->frus[0]->entity);
 	    destroy_fru_controls(b->frus[0]);
 	    if (b->frus[0]->entity)
 		ipmi_entity_remove_child(info->shelf_entity,
 					 b->frus[0]->entity);
+	    _ipmi_entity_put(b->frus[0]->entity);
+	    _ipmi_mc_put(b->mc);
 	}
     }
+    _ipmi_entity_put(info->shelf_entity);
 }
 
 static void
@@ -3040,6 +3082,8 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     ipmi_domain_add_mc_updated_handler(domain,
 				       atca_fix_sel_handler,
 				       info);
+
+    ipmi_domain_set_con_up_handler(domain, atca_con_up, info);
 
  out:
     return;

@@ -267,6 +267,11 @@ struct ipmi_domain_s
     ipmi_domain_cb SDRs_read_handler;
     void           *SDRs_read_handler_cb_data;
 
+    /* Used to inform OEM code that the user has been informed that
+       the connection is up. */
+    ipmi_domain_ptr_cb con_up_handler;
+    void               *con_up_handler_cb_data;
+
     /* Used to inform the user that the bus scanning has been done */
     ipmi_domain_cb bus_scan_handler;
     void           *bus_scan_handler_cb_data;
@@ -294,6 +299,8 @@ static void cancel_domain_oem_check(ipmi_domain_t *domain);
 static void real_close_connection(ipmi_domain_t *domain);
 
 static void free_domain_cruft(ipmi_domain_t *domain);
+
+static void ipmi_domain_put(ipmi_domain_t *domain);
 
 /***********************************************************************
  *
@@ -607,6 +614,7 @@ setup_domain(ipmi_con_t    *ipmi[],
 
     domain->valid = 1;
     domain->in_shutdown = 0;
+    domain->usecount = 1;
 
     for (i=0; i<num_con; i++) {
 	domain->conn[i] = ipmi[i];
@@ -682,7 +690,6 @@ setup_domain(ipmi_con_t    *ipmi[],
     if (rv)
 	goto out_err;
     _ipmi_mc_use(domain->si_mc);
-    _ipmi_mc_put(domain->si_mc);
 
     rv = ipmi_sdr_info_alloc(domain, domain->si_mc, 0, 0, &domain->main_sdrs);
     if (rv)
@@ -756,6 +763,9 @@ setup_domain(ipmi_con_t    *ipmi[],
     memset(domain->chan, 0, sizeof(domain->chan));
 
  out_err:
+    if (domain->si_mc)
+	_ipmi_mc_put(domain->si_mc);
+
     if (domain->mc_lock)
 	ipmi_unlock(domain->mc_lock);
 
@@ -3250,6 +3260,18 @@ ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 }
 
 int
+ipmi_domain_set_con_up_handler(ipmi_domain_t      *domain,
+			       ipmi_domain_ptr_cb handler,
+			       void               *cb_data)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    domain->con_up_handler = handler;
+    domain->con_up_handler_cb_data = cb_data;
+    return 0;
+}
+
+int
 ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
 				 ipmi_domain_cb handler,
 				 void           *cb_data)
@@ -3422,6 +3444,9 @@ con_up_complete(ipmi_domain_t *domain)
 	}
     }
 
+    if (domain->con_up_handler)
+	domain->con_up_handler(domain, domain->con_up_handler_cb_data);
+
     ipmi_lock(domain->mc_lock);
     start_mc_scan(domain);
     ipmi_unlock(domain->mc_lock);
@@ -3531,8 +3556,10 @@ get_channels(ipmi_domain_t *domain)
 	cmd_msg.data_len = 1;
 	cmd_data[0] = 0;
 
+	_ipmi_mc_get(domain->si_mc);
 	rv = ipmi_mc_send_command(domain->si_mc, 0, &cmd_msg,
 				  chan_info_rsp_handler, (void *) 0);
+	_ipmi_mc_put(domain->si_mc);
     } else {
 	ipmi_sdr_t sdr;
 
@@ -3695,13 +3722,18 @@ static int
 domain_send_mc_id(ipmi_domain_t *domain)
 {
     ipmi_msg_t msg;
+    int        rv;
 
     msg.netfn = IPMI_APP_NETFN;
     msg.cmd = IPMI_GET_DEVICE_ID_CMD;
     msg.data_len = 0;
     msg.data = NULL;
 
-    return ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
+    _ipmi_mc_get(domain->si_mc);
+    rv = ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
+    _ipmi_mc_put(domain->si_mc);
+
+    return rv;
 }
 
 static int
@@ -4080,7 +4112,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
 		 ipmi_domain_id_t         *new_domain)
 {
     int           rv;
-    ipmi_domain_t *domain;
+    ipmi_domain_t *domain = NULL;
     int           i;
 
     if ((num_con < 1) || (num_con > MAX_CONS))
@@ -4115,6 +4147,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
 	*new_domain = ipmi_domain_convert_to_id(domain);
     
  out:
+    ipmi_domain_put(domain);
     return rv;
 
  out_err:

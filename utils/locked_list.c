@@ -221,7 +221,7 @@ locked_list_iterate(locked_list_t          *ll,
     if (ll->cb_count == 0) {
 	while (ll->destroy_list) {
 	    entry = ll->destroy_list;
-	    ll->destroy_list = entry->next;
+	    ll->destroy_list = entry->dlist_next;
 	    entry->next->prev = entry->prev;
 	    entry->prev->next = entry->next;
 	    ipmi_mem_free(entry);

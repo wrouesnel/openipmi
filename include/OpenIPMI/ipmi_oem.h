@@ -82,6 +82,12 @@ int ipmi_register_oem_conn_handler(unsigned int             manufacturer_id,
 int ipmi_deregister_oem_conn_handler(unsigned int manufacturer_id,
 				     unsigned int product_id);
 
+/* Register a handler to be called when a connection goes up and the
+   user is informed. */
+int ipmi_domain_set_con_up_handler(ipmi_domain_t      *domain,
+				   ipmi_domain_ptr_cb handler,
+				   void               *cb_data);
+
 /* Used to report that an mc as been removed to the OEM handler.  The
    OEM handler may not refuse to allow the mc to be removed. This is
    so the OEM handler can free data if necessary.  This is registered

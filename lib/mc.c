@@ -47,8 +47,6 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_oem.h>
 #include <OpenIPMI/locked_list.h>
-
-#include <OpenIPMI/ilist.h>
 #include <OpenIPMI/opq.h>
 
 /* Timer structure for rereading the SEL. */
@@ -302,6 +300,8 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 	return ENOMEM;
     memset(mc, 0, sizeof(*mc));
 
+    mc->usecount = 1; /* Require a release */
+
     mc->domain = domain;
 
     mc->seq = ipmi_get_seq();
@@ -365,7 +365,6 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 				   domain);
 
     mc_set_name(mc);
-    mc->usecount = 1; /* Require a release */
  out_err:
     if (rv)
 	_ipmi_cleanup_mc(mc);
@@ -455,8 +454,20 @@ cleanup_mc(ipmi_mc_t *mc)
        MC. */
     if (mc->sensors_in_my_sdr) {
 	for (i=0; i<mc->sensors_in_my_sdr_count; i++) {
-	    if (mc->sensors_in_my_sdr[i])
+	    ipmi_sensor_t *sensor;
+	    _ipmi_domain_entity_lock(domain);
+	    sensor = mc->sensors_in_my_sdr[i];
+	    if (sensor) {
+		ipmi_entity_t *entity = ipmi_sensor_get_entity(sensor);
+		_ipmi_entity_get(entity);
+		_ipmi_sensor_get(sensor);
+		_ipmi_domain_entity_unlock(domain);
 		ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
+		_ipmi_sensor_put(sensor);
+		_ipmi_entity_put(entity);
+	    } else {
+		_ipmi_domain_entity_unlock(domain);
+	    }
 	}
 	ipmi_mem_free(mc->sensors_in_my_sdr);
 	mc->sensors_in_my_sdr = NULL;
@@ -1767,8 +1778,8 @@ typedef struct oem_handlers_s {
     ipmi_oem_shutdown_handler_cb shutdown;
     void                         *cb_data;
 } oem_handlers_t;
-/* FIXME - do we need a lock?  Probably, add it. */
-static ilist_t *oem_handlers;
+
+static locked_list_t *oem_handlers;
 
 int
 ipmi_register_oem_handler(unsigned int                 manufacturer_id,
@@ -1796,7 +1807,7 @@ ipmi_register_oem_handler(unsigned int                 manufacturer_id,
     new_item->shutdown = shutdown;
     new_item->cb_data = cb_data;
 
-    if (! ilist_add_tail(oem_handlers, new_item, NULL)) {
+    if (! locked_list_add(oem_handlers, new_item, NULL)) {
 	ipmi_mem_free(new_item);
 	return ENOMEM;
     }
@@ -1831,7 +1842,7 @@ ipmi_register_oem_handler_range(unsigned int                 manufacturer_id,
     new_item->shutdown = shutdown;
     new_item->cb_data = cb_data;
 
-    if (! ilist_add_tail(oem_handlers, new_item, NULL)) {
+    if (! locked_list_add(oem_handlers, new_item, NULL)) {
 	ipmi_mem_free(new_item);
 	return ENOMEM;
     }
@@ -1839,37 +1850,45 @@ ipmi_register_oem_handler_range(unsigned int                 manufacturer_id,
     return 0;
 }
 
-static int
-oem_handler_cmp(void *item, void *cb_data)
+typedef struct handler_cmp_s
 {
-    oem_handlers_t *hndlr = item;
-    oem_handlers_t *cmp = cb_data;
+    int          rv;
+    unsigned int manufacturer_id;
+    unsigned int first_product_id;
+    unsigned int last_product_id;
+    ipmi_mc_t    *mc;
+} handler_cmp_t;
 
-    return ((hndlr->manufacturer_id == cmp->manufacturer_id)
-	    && (hndlr->first_product_id <= cmp->first_product_id)
-	    && (hndlr->last_product_id >= cmp->last_product_id));
+static int
+oem_handler_cmp_dereg(void *cb_data, void *item1, void *item2)
+{
+    oem_handlers_t *hndlr = item1;
+    handler_cmp_t  *cmp = cb_data;
+
+    if ((hndlr->manufacturer_id == cmp->manufacturer_id)
+	&& (hndlr->first_product_id <= cmp->first_product_id)
+	&& (hndlr->last_product_id >= cmp->last_product_id))
+    {
+	cmp->rv = 0;
+	locked_list_remove(oem_handlers, item1, item2);
+	ipmi_mem_free(hndlr);
+	return LOCKED_LIST_ITER_STOP;
+    }
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 int
 ipmi_deregister_oem_handler(unsigned int manufacturer_id,
 			    unsigned int product_id)
 {
-    oem_handlers_t *hndlr;
-    oem_handlers_t tmp;
-    ilist_iter_t   iter;
+    handler_cmp_t  tmp;
 
+    tmp.rv = ENOENT;
     tmp.manufacturer_id = manufacturer_id;
     tmp.first_product_id = product_id;
     tmp.last_product_id = product_id;
-    ilist_init_iter(&iter, oem_handlers);
-    ilist_unpositioned(&iter);
-    hndlr = ilist_search_iter(&iter, oem_handler_cmp, &tmp);
-    if (hndlr) {
-	ilist_delete(&iter);
-	ipmi_mem_free(hndlr);
-	return 0;
-    }
-    return ENOENT;
+    locked_list_iterate(oem_handlers, oem_handler_cmp_dereg, &tmp);
+    return tmp.rv;
 }
 
 int
@@ -1877,37 +1896,44 @@ ipmi_deregister_oem_handler_range(unsigned int manufacturer_id,
 				  unsigned int first_product_id,
 				  unsigned int last_product_id)
 {
-    oem_handlers_t *hndlr;
-    oem_handlers_t tmp;
-    ilist_iter_t   iter;
+    handler_cmp_t  tmp;
 
+    tmp.rv = ENOENT;
     tmp.manufacturer_id = manufacturer_id;
     tmp.first_product_id = first_product_id;
     tmp.last_product_id = last_product_id;
-    ilist_init_iter(&iter, oem_handlers);
-    ilist_unpositioned(&iter);
-    hndlr = ilist_search_iter(&iter, oem_handler_cmp, &tmp);
-    if (hndlr) {
-	ilist_delete(&iter);
-	ipmi_mem_free(hndlr);
-	return 0;
+    locked_list_iterate(oem_handlers, oem_handler_cmp_dereg, &tmp);
+    return tmp.rv;
+}
+
+static int
+oem_handler_call(void *cb_data, void *item1, void *item2)
+{
+    oem_handlers_t *hndlr = item1;
+    handler_cmp_t  *cmp = cb_data;
+
+    if ((hndlr->manufacturer_id == cmp->manufacturer_id)
+	&& (hndlr->first_product_id <= cmp->first_product_id)
+	&& (hndlr->last_product_id >= cmp->last_product_id))
+    {
+	cmp->rv = hndlr->handler(cmp->mc, hndlr->cb_data);
+	return LOCKED_LIST_ITER_STOP;
     }
-    return ENOENT;
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static int
 check_oem_handlers(ipmi_mc_t *mc)
 {
-    oem_handlers_t *hndlr;
-    oem_handlers_t tmp;
+    handler_cmp_t  tmp;
 
+    tmp.rv = 0;
     tmp.manufacturer_id = mc->manufacturer_id;
     tmp.first_product_id = mc->product_id;
     tmp.last_product_id = mc->product_id;
-    hndlr = ilist_search(oem_handlers, oem_handler_cmp, &tmp);
-    if (hndlr)
-	return hndlr->handler(mc, hndlr->cb_data);
-    return 0;
+    tmp.mc = mc;
+    locked_list_iterate(oem_handlers, oem_handler_call, &tmp);
+    return tmp.rv;
 }
 
 
@@ -2629,8 +2655,8 @@ ipmi_mc_get_ipmi_address(ipmi_mc_t    *mc,
 			 ipmi_addr_t  *addr,
 			 unsigned int *addr_len)
 {
-    CHECK_MC_LOCK(mc);
-
+    /* We don't check the lock here because this is used as part of
+       the lock grabbing. */
     if (addr)
 	memcpy(addr, &mc->addr, mc->addr_len);
     if (addr_len)
@@ -2772,7 +2798,7 @@ _ipmi_mc_init(void)
     if (mc_initialized)
 	return 0;
 
-    oem_handlers = alloc_ilist();
+    oem_handlers = locked_list_alloc(ipmi_get_global_os_handler());
     if (!oem_handlers)
 	return ENOMEM;
 
@@ -2781,24 +2807,23 @@ _ipmi_mc_init(void)
     return 0;
 }
 
+static int
+oem_handler_free(void *cb_data, void *item1, void *item2)
+{
+    oem_handlers_t *hndlr = item1;
+
+    locked_list_remove(oem_handlers, item1, item2);
+    ipmi_mem_free(hndlr);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
 void
 _ipmi_mc_shutdown(void)
 {
     if (mc_initialized) {
-	oem_handlers_t *hndlr;
-	ilist_iter_t   iter;
-
 	/* Destroy the members of the OEM list. */
-	ilist_init_iter(&iter, oem_handlers);
-	while (ilist_first(&iter)) {
-	    hndlr = ilist_get(&iter);
-	    if (hndlr->shutdown)
-		hndlr->shutdown(hndlr->cb_data);
-	    ilist_delete(&iter);
-	    ipmi_mem_free(hndlr);
-	}
-
-	free_ilist(oem_handlers);
+	locked_list_iterate(oem_handlers, oem_handler_free, NULL);
+	locked_list_destroy(oem_handlers);
 	oem_handlers = NULL;
 	mc_initialized = 0;
     }

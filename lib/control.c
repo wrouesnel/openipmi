@@ -40,7 +40,6 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_control.h>
-#include <OpenIPMI/ilist.h>
 #include <OpenIPMI/opq.h>
 #include <OpenIPMI/locked_list.h>
 
@@ -102,7 +101,7 @@ struct ipmi_control_s
 
     /* A list of handlers to call when an event for the control comes
        in. */
-    ilist_t *handler_list;
+    locked_list_t *handler_list;
 
     /* For light types. */
     ipmi_control_light_t *lights;
@@ -362,7 +361,7 @@ control_final_destroy(ipmi_control_t *control)
 	control->oem_info_cleanup_handler(control, control->oem_info);
 
     if (control->handler_list)
-	ilist_twoitem_destroy(control->handler_list);
+	locked_list_destroy(control->handler_list);
 
     if (control->waitq)
 	opq_destroy(control->waitq);
@@ -750,7 +749,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     if (! control->waitq)
 	return ENOMEM;
 
-    control->handler_list = alloc_ilist();
+    control->handler_list = locked_list_alloc(os_hnd);
     if (! control->handler_list) {
 	opq_destroy(control->waitq);
 	return ENOMEM;
@@ -760,7 +759,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     if (!link) {
 	opq_destroy(control->waitq);
 	control->waitq = NULL;
-	ilist_twoitem_destroy(control->handler_list);
+	locked_list_destroy(control->handler_list);
 	control->handler_list = NULL;
 	return ENOMEM;
     }
@@ -1113,11 +1112,11 @@ typedef struct control_event_info_s
     ipmi_event_t   *event;
 } control_event_info_t;
 
-static void
-control_val_event_call_handler(void *data, void *ihandler, void *cb_data)
+static int
+control_val_event_call_handler(void *cb_data, void *item1, void *item2)
 {
-    ipmi_control_val_event_cb handler = ihandler;
-    control_event_info_t      *info = data;
+    ipmi_control_val_event_cb handler = item1;
+    control_event_info_t      *info = cb_data;
     int                       handled;
 
     handled = handler(info->control,
@@ -1129,6 +1128,7 @@ control_val_event_call_handler(void *data, void *ihandler, void *cb_data)
 	info->handled = handled;
 	info->event = NULL;
     }
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 void
@@ -1146,8 +1146,8 @@ ipmi_control_call_val_event_handlers(ipmi_control_t *control,
     info.event = *event;
     info.handled = IPMI_EVENT_NOT_HANDLED;
 
-    ilist_iter_twoitem(control->handler_list,
-		       control_val_event_call_handler, &info);
+    locked_list_iterate(control->handler_list,
+			control_val_event_call_handler, &info);
 
     if (handled)
 	*handled = info.handled;
@@ -1161,10 +1161,7 @@ ipmi_control_add_val_event_handler(ipmi_control_t            *control,
 {
     CHECK_CONTROL_LOCK(control);
 
-    if (ilist_twoitem_exists(control->handler_list, handler, cb_data))
-	return EADDRINUSE;
-
-    if (! ilist_add_twoitem(control->handler_list, handler, cb_data))
+    if (! locked_list_add(control->handler_list, handler, cb_data))
 	return ENOMEM;
 
     return 0;
@@ -1176,7 +1173,7 @@ int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
 {
     CHECK_CONTROL_LOCK(control);
 
-    if (! ilist_remove_twoitem(control->handler_list, handler, cb_data))
+    if (! locked_list_remove(control->handler_list, handler, cb_data))
 	return ENOENT;
 
     return 0;
@@ -1787,12 +1784,18 @@ ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
 void
 __ipmi_check_control_lock(ipmi_control_t *control)
 {
-    ipmi_domain_t *domain;
-    if (!control->mc)
-	return; /* The control has really been destroyed, just go on. */
-    domain = ipmi_mc_get_domain(control->mc);
-    __ipmi_check_domain_lock(domain);
-    /* FIXME - check entity lock. */
+    if (!control)
+	return;
+
+    if (!DEBUG_LOCKS)
+	return;
+
+    CHECK_ENTITY_LOCK(control->entity);
+    CHECK_MC_LOCK(control->mc);
+
+    if (control->usecount == 0)
+	ipmi_report_lock_error(ipmi_domain_get_os_hnd(control->domain),
+			       "control not locked when it should have been");
 }
 #endif
 

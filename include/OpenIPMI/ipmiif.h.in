@@ -139,6 +139,7 @@ int ipmi_entity_find_id(ipmi_domain_id_t domain_id,
 			int entity_id, int entity_instance,
 			int channel, int slave_address,
 			ipmi_entity_id_t *id);
+int ipmi_cmp_entity_id(ipmi_entity_id_t id1, ipmi_entity_id_t id2);
 void ipmi_entity_id_set_invalid(ipmi_entity_id_t *id);
 int ipmi_entity_id_is_invalid(ipmi_entity_id_t *id);
 
