@@ -1,3 +1,11 @@
+2004-03-09 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_motorola_mxp.c: Don't create the "healthy" sensor for
+	AMC boards.
+
+	* lib/oem_motorola_mxp.c: Clear our the right variable after the
+	allocation of info->con_ch_info.
+
 2004-03-04 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_int.h, lib/sel.c, lib/mc.c: Fix broken
@@ -9,7 +17,7 @@
 	a new event delete function that does not take a domain.
 
 	* doc/OpenIPMI.texi: Added some more documentation and cleaned
-	things upa little.
+	things up a little.
 
 2004-03-02 Corey Minyard <cminyard@mvista.com> 
 

@@ -4889,27 +4889,6 @@ mxp_add_board_sensors(mxp_info_t  *info,
     if (rv)
 	goto out_err;
 
-    /* The CPCI healthy line sensor. */
-    rv = mxp_alloc_discrete_sensor
-	(board->info->mc,
-	 board, NULL,
-	 MXP_SENSOR_HEALTHY,
-	 IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE,
-	 "healthy",
-	 0x2, 0x2,
-	 board_healthy_states_get,
-	 NULL,
-	 &board->healthy);
-    if (rv)
-	goto out_err;
-    ipmi_sensor_set_ignore_if_no_entity(board->healthy, 0);
-    rv = mxp_add_sensor(board->info->mc, 
-			&board->healthy,
-			MXP_BOARD_HEALTHY_NUM(board->idx),
-			board->ent);
-    if (rv)
-	goto out_err;
-
     /* out-of-service LED control */
     rv = mxp_alloc_control(board->info->mc,
 			   board,
@@ -4949,6 +4928,27 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	goto out_err;
 
     if (!board->is_amc) {
+	/* The CPCI healthy line sensor. */
+	rv = mxp_alloc_discrete_sensor
+	    (board->info->mc,
+	     board, NULL,
+	     MXP_SENSOR_HEALTHY,
+	     IPMI_EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE,
+	     "healthy",
+	     0x2, 0x2,
+	     board_healthy_states_get,
+	     NULL,
+	     &board->healthy);
+	if (rv)
+	    goto out_err;
+	ipmi_sensor_set_ignore_if_no_entity(board->healthy, 0);
+	rv = mxp_add_sensor(board->info->mc, 
+			    &board->healthy,
+			    MXP_BOARD_HEALTHY_NUM(board->idx),
+			    board->ent);
+	if (rv)
+	    goto out_err;
+
 	/* Board Select control */
 	rv = mxp_alloc_control(board->info->mc,
 			       board,
@@ -8743,7 +8743,7 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	    rv = ENOMEM;
 	    goto out_err;
 	}
-	memset(info, 0, sizeof(*info));
+	memset(info->con_ch_info, 0, sizeof(domain_up_info_t));
 	info->con_ch_info->up = 0;
 	info->con_ch_info->mcid = ipmi_mc_convert_to_id(mc);
 	info->con_ch_info->info = info;
