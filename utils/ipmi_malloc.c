@@ -1,13 +1,13 @@
 /*
- * ipmi.c
+ * ipmi_malloc.c
  *
- * MontaVista IPMI generic code
+ * MontaVista IPMI memory handling code.
  *
  * Author: MontaVista Software, Inc.
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003 MontaVista Software Inc.
+ * Copyright 2002,2003,2004 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -37,6 +37,9 @@
 #include <OpenIPMI/ipmi_malloc.h>
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ilist.h>
+
+void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type, char *format, ...)
+     __attribute__ ((__format__ (__printf__, 2, 3))) = NULL;
 
 #define DBG_ALIGN 16
 
@@ -139,27 +142,30 @@ mem_debug_log(void                      *data,
 {
     int  i;
 
-    ipmi_log(IPMI_LOG_DEBUG_START, "%s", text);
+    if (!ipmi_malloc_log)
+	return;
+
+    ipmi_malloc_log(IPMI_LOG_DEBUG_START, "%s", text);
     if (hdr) {
-	ipmi_log(IPMI_LOG_DEBUG_CONT,
+	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT,
 		 " %ld bytes at %p, allocated at",
 		 hdr->size, data);
 	for (i=0; i<TB_SIZE; i++)
-	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", hdr->tb[i]);
+	    ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " %p", hdr->tb[i]);
     } else if (data) {
-	ipmi_log(IPMI_LOG_DEBUG_CONT, " at %p", data);
+	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " at %p", data);
     }
     if (trlr) {
-	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n originally freed at");
+	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, "\n originally freed at");
 	for (i=0; i<TB_SIZE; i++)
-	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", trlr->tb[i]);
+	    ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " %p", trlr->tb[i]);
     }
     if (tb) {
-	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  at");
+	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, "\n  at");
 	for (i=0; i<TB_SIZE; i++)
-	    ipmi_log(IPMI_LOG_DEBUG_CONT, " %p", tb[i]);
+	    ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " %p", tb[i]);
     }
-    ipmi_log(IPMI_LOG_DEBUG_END, " ");
+    ipmi_malloc_log(IPMI_LOG_DEBUG_END, " ");
 }
 
 static void

@@ -71,9 +71,4 @@ enum ipmi_log_type_e
     IPMI_LOG_DEBUG_END,
 };
 
-/* Generate a log.  Note that logs should not end in a newline, that
-   will be automatically added as needed to the log.  */
-void ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
-     __attribute__ ((__format__ (__printf__, 2, 3)));
-
 #endif /* __IPMI_LOG_H_ */

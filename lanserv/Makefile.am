@@ -23,7 +23,7 @@ noinst_HEADERS = emu.h
 
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
 	lanserv_oem_force.c lanserv_config.c
-libIPMIlanserv_la_LIBADD = $(top_builddir)/utils/libIPMIutils.a
+libIPMIlanserv_la_LIBADD = $(top_builddir)/utils/libOpenIPMIutils.la
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libIPMIlanserv.map
 

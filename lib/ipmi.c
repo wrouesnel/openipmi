@@ -918,6 +918,9 @@ ipmi_init(os_handler_t *handler)
 {
     int rv;
 
+    /* Set up logging in malloc code. */
+    ipmi_malloc_log = ipmi_log;
+
     rv = _ipmi_conn_init();
     if (rv)
 	return rv;
