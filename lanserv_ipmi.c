@@ -55,9 +55,9 @@ dump_hex(uint8_t *data, int len)
     int i;
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 16) == 0)) {
-	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  ");
+	    printf("\n  ");
 	}
-	ipmi_log(IPMI_LOG_DEBUG_CONT, " %2.2x", data[i]);
+	printf(" %2.2x", data[i]);
     }
 }
 #endif
@@ -178,22 +178,25 @@ close_session(lan_data_t *lan, session_t *session)
 }
 
 static int
-auth_gen(session_t     *ses,
-	 uint8_t *out,
-	 uint8_t *data1,
-	 int     data1_len,
-	 uint8_t *data2,
-	 int     data2_len,
-	 uint8_t *data3,
-	 int     data3_len)
+auth_gen(session_t *ses,
+	 uint8_t   *out,
+	 uint8_t   *sid,
+	 uint8_t   *seq,
+	 uint8_t   *data1,
+	 int       data1_len,
+	 uint8_t   *data2,
+	 int       data2_len,
+	 uint8_t   *data3,
+	 int       data3_len)
 {
     int rv;
     ipmi_auth_sg_t l[] =
-    { { &ses->sid,              4  },
-      { data1,                  data1_len },
-      { data2,                  data2_len },
-      { &ses->xmit_seq,		4 },
-      { NULL,                   0 }};
+    { { sid,   4  },
+      { data1, data1_len },
+      { data2, data2_len },
+      { data3, data3_len },
+      { seq,   4 },
+      { NULL,  0 }};
 
     rv = ipmi_auths[ses->authtype].authcode_gen(ses->authdata, l, out);
     return rv;
@@ -201,17 +204,18 @@ auth_gen(session_t     *ses,
 
 static int
 auth_check(session_t *ses,
-	   uint32_t  seq,
+	   uint8_t   *sid,
+	   uint8_t   *seq,
 	   uint8_t   *data,
 	   int       data_len,
 	   uint8_t  *code)
 {
     int rv;
     ipmi_auth_sg_t l[] =
-    { { &ses->sid, 4  },
-      { data,      data_len },
-      { &seq,      4 },
-      { NULL,      0 }};
+    { { sid,  4  },
+      { data, data_len },
+      { seq,  4 },
+      { NULL, 0 }};
 
     rv = ipmi_auths[ses->authtype].authcode_check(ses->authdata, l, code);
     return rv;
@@ -247,7 +251,7 @@ check_challenge(lan_data_t *lan,
     return rv;
 }
 
-#define IPMI_LAN_MAX_HEADER_SIZE 30
+#define IPMI_LAN_MAX_HEADER_SIZE 36
 
 static void
 return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
@@ -275,14 +279,14 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
     }
 
     data[0] = 6; /* RMCP version. */
-    data[1] = 1;
+    data[1] = 0;
     data[2] = 0xff; /* No seq num */
     data[3] = 7; /* IPMI msg class */
     data[4] = session->authtype;
-    if (session->xmit_seq == 0)
-	session->xmit_seq++;
     ipmi_set_uint32(data+5, session->xmit_seq);
     session->xmit_seq++;
+    if (session->xmit_seq == 0)
+	session->xmit_seq++;
     ipmi_set_uint32(data+9, session->sid);
     if (session->authtype == IPMI_AUTHTYPE_NONE)
 	pos = data+13;
@@ -300,23 +304,27 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
     pos[5] = rsp->cmd;
 
     csum = ipmb_checksum(pos+3, 3, 0);
-    csum = ipmb_checksum(msg->data, msg->len, csum);
+    csum = ipmb_checksum(rsp->data, rsp->data_len, csum);
 
     vec[0].iov_base = data;
 
     if (session->authtype == IPMI_AUTHTYPE_NONE)
-	vec[0].iov_len = 14;
+	vec[0].iov_len = 14 + 6;
     else {
-	rv = auth_gen(session, data+13, pos, 6, msg->data, msg->len, &csum, 1);
+	rv = auth_gen(session, data+13,
+		      data+9, data+5,
+		      pos, 6,
+		      rsp->data, rsp->data_len,
+		      &csum, 1);
 	if (rv) {
 	    /* FIXME - what to do? */
 	    return;
 	}
-	vec[0].iov_len = 30;
+	vec[0].iov_len = 30 + 6;
     }
 
-    vec[1].iov_base = msg->data;
-    vec[1].iov_len = msg->len;
+    vec[1].iov_base = rsp->data;
+    vec[1].iov_len = rsp->data_len;
     vec[2].iov_base = &csum;
     vec[2].iov_len = 1;
 
@@ -386,7 +394,7 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
     } else {
 	data[0] = 0;
 	data[1] = chan;
-	data[2] = lan->channel.priv_info[priv].allowed_auths;
+	data[2] = lan->channel.priv_info[priv-1].allowed_auths;
 	data[3] = 0x04; /* per-message authentication is on,
 			   user-level authenitcation is on,
 			   non-null user names disabled,
@@ -484,7 +492,7 @@ ifree(void *info, void *data)
 }
 
 static void
-handle_temp_session(lan_data_t *lan, msg_t *msg)
+handle_temp_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 {
     uint8_t   seq_data[4];
     int       user_idx;
@@ -534,7 +542,9 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     if (rv)
 	return;
 
-    rv = auth_check(&dummy_session, msg->seq, msg->data, msg->len,
+    /* The "-6, +7" is cheating a little, but we need the last checksum
+       to correctly calculate the code. */
+    rv = auth_check(&dummy_session, raw+9, raw+5, msg->data-6, msg->len+7,
 		    msg->authcode);
     if (rv)
 	goto out_free;
@@ -548,8 +558,17 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
     }
 
     priv = msg->data[1] & 0xf;
-    if ((user->priviledge == 0xf) || (priv > user->priviledge)) {
+    if ((user->priviledge == 0xf)
+	|| (priv > user->priviledge)
+	|| (priv > lan->channel.priviledge_limit))
+    {
 	return_err(lan, msg, &dummy_session, 0x86); /* Priviledge error */
+	goto out_free;
+    }
+
+    if (! (lan->channel.priv_info[priv-1].allowed_auths & (1 << auth))) {
+	/* Authentication level not permitted for this priviledge */
+	return_err(lan, msg, &dummy_session, IPMI_INVALID_DATA_FIELD_CC);
 	goto out_free;
     }
 
@@ -618,6 +637,7 @@ handle_smi_msg(lan_data_t *lan, session_t *session, msg_t *msg)
 	return;
     }
 
+    memcpy(nmsg, msg, sizeof(*nmsg));
     nmsg->src_addr = ((char *) nmsg) + sizeof(*nmsg);
     memcpy(nmsg->src_addr, msg->src_addr, msg->src_len);
     nmsg->data  = ((uint8_t *) nmsg->src_addr) + msg->src_len;
@@ -1152,7 +1172,7 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
 }
 
 static void
-handle_normal_session(lan_data_t *lan, msg_t *msg)
+handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 {
     session_t *session = sid_to_session(lan, msg->sid);
     int       rv;
@@ -1160,7 +1180,10 @@ handle_normal_session(lan_data_t *lan, msg_t *msg)
     if (session == NULL)
 	return;
 
-    rv = auth_check(session, msg->seq, msg->data, msg->len, msg->authcode);
+    /* The "-6, +7" is cheating a little, but we need the last
+       checksum to correctly calculate the code. */
+    rv = auth_check(session, raw+9, raw+5, msg->data-6, msg->len+7,
+		    msg->authcode);
     if (rv)
 	return;
 
@@ -1184,12 +1207,12 @@ handle_normal_session(lan_data_t *lan, msg_t *msg)
 
 	case IPMI_PRIV_DENIED:
 	case IPMI_PRIV_BOOT: /* FIXME - this can sometimes be permitted. */
-	    return_err(lan, msg, NULL, IPMI_INSUFFICIENT_PRIVILEGE_CC);
+	    return_err(lan, msg, session, IPMI_INSUFFICIENT_PRIVILEGE_CC);
 	    return;
 
 	case IPMI_PRIV_INVALID:
 	default:
-	    return_err(lan, msg, NULL, IPMI_UNKNOWN_ERR_CC);
+	    return_err(lan, msg, session, IPMI_UNKNOWN_ERR_CC);
 	    return;
     }
 
@@ -1348,9 +1371,9 @@ ipmi_handle_lan_msg(lan_data_t *lan,
 	handle_no_session(lan, &msg);
     } else if (msg.sid & 1) {
 	/* We use odd SIDs for temporary ones. */
-	handle_temp_session(lan, &msg);
+	handle_temp_session(lan, &msg, data);
     } else {
-	handle_normal_session(lan, &msg);
+	handle_normal_session(lan, &msg, data);
     }
 }
 
@@ -1365,7 +1388,8 @@ ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
 int
 ipmi_lan_init(lan_data_t *lan)
 {
-    int i;
+    int     i;
+    uint8_t challenge_data[16];
 
     for (i=0; i<=MAX_USERS; i++) {
 	lan->users[i].idx = i;
@@ -1374,4 +1398,21 @@ ipmi_lan_init(lan_data_t *lan)
     for (i=0; i<=MAX_SESSIONS; i++) {
 	lan->sessions[i].idx = i;
     }
+
+    /* Force user 1 to be a null user. */
+    memset(lan->users[1].username, 0, 16);
+
+    i = lan->gen_rand(lan, challenge_data, 16);
+    if (i < 0)
+	return i;
+
+    i = ipmi_md5_authcode_init(challenge_data, &(lan->challenge_auth),
+			       lan, ialloc, ifree);
+    if (i)
+	return i;
+
+    lan->sid_seq = 0;
+    lan->next_challenge_seq = 0;
+
+    return 0;
 }

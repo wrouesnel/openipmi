@@ -154,7 +154,7 @@ smi_send(lan_data_t *lan, msg_t *msg)
 static int
 gen_rand(lan_data_t *lan, void *data, int size)
 {
-    int fd = open("/dev/random", O_RDONLY);
+    int fd = open("/dev/urandom", O_RDONLY);
     int rv;
 
     if (fd == -1)
@@ -218,10 +218,10 @@ handle_msg_ipmi(int smi_fd, lan_data_t *lan)
 	data[3] = ipmb->slave_addr;
 	data[4] = (msg->ll_data << 2) | ipmb->lun;
 	data[5] = rsp.msg.cmd;
-	memcpy(data+6, data, rsp.msg.data_len);
+	memcpy(data+6, rsp.msg.data, rsp.msg.data_len);
 	rsp.msg.data = data;
 	rsp.msg.data_len += 7;
-	data[rsp.msg.data_len-1] = ipmb_checksum(data+1, rsp.msg.data_len+5, 0);
+	data[rsp.msg.data_len-1] = ipmb_checksum(data+1, rsp.msg.data_len-2, 0);
     } else {
 	printf("Error!\n");
 	return;
@@ -330,6 +330,8 @@ get_auths(char **tokptr, unsigned int *rval)
 
 	tok = strtok_r(NULL, " \t\n", tokptr);
     }
+
+    *rval = val;
 
     return 0;
 }
@@ -657,11 +659,13 @@ main(int argc, const char *argv[])
 	if ((rv == -1) && (errno == EINTR))
 	    continue;
 
-	if (FD_ISSET(data.smi_fd, &readfds))
+	if (FD_ISSET(data.smi_fd, &readfds)) {
 	    handle_msg_ipmi(data.smi_fd, &lan);
+	}
 
-	if (FD_ISSET(data.lan_fd, &readfds))
+	if (FD_ISSET(data.lan_fd, &readfds)) {
 	    handle_msg_lan(data.lan_fd, &lan);
+	}
     }
 }
 

@@ -174,7 +174,6 @@ static priv_val sensor_privs[] =
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_DEVICE_SDR_INFO_CMD		0x20 */
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_DEVICE_SDR_CMD			0x21 */
     PRIV_ENTRY(n,X,X,X), /* IPMI_RESERVE_DEVICE_SDR_REPOSITORY_CMD	0x22 */
-
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_SENSOR_READING_FACTORS_CMD		0x23 */
     PRIV_ENTRY(n,n,X,X), /* IPMI_SET_SENSOR_HYSTERESIS_CMD		0x24 */
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_SENSOR_HYSTERESIS_CMD		0x25 */
@@ -184,6 +183,7 @@ static priv_val sensor_privs[] =
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_SENSOR_EVENT_ENABLE_CMD		0x29 */
     PRIV_ENTRY(n,n,X,X), /* IPMI_REARM_SENSOR_EVENTS_CMD		0x2a */
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_SENSOR_EVENT_STATUS_CMD		0x2b */
+    PRIV_ENTRY(n,n,n,X), /*						0x2c */
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_SENSOR_READING_CMD			0x2d */
     PRIV_ENTRY(n,n,X,X), /* IPMI_SET_SENSOR_TYPE_CMD			0x2e */
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_SENSOR_TYPE_CMD			0x2f */
@@ -227,6 +227,7 @@ static priv_val app_privs[] =
     PRIV_ENTRY(n,n,n,X), /*						0x20 */
     PRIV_ENTRY(n,n,n,X), /*						0x21 */
     PRIV_ENTRY(n,n,X,X), /* IPMI_RESET_WATCHDOG_TIMER_CMD		0x22 */
+    PRIV_ENTRY(n,n,n,X), /*						0x23 */
     PRIV_ENTRY(n,n,X,X), /* IPMI_SET_WATCHDOG_TIMER_CMD			0x24 */
     PRIV_ENTRY(n,X,X,X), /* IPMI_GET_WATCHDOG_TIMER_CMD			0x25 */
     PRIV_ENTRY(n,n,n,X), /*						0x26 */
@@ -274,6 +275,12 @@ static priv_val app_privs[] =
     PRIV_ENTRY(n,n,n,X), /*						0x50 */
     PRIV_ENTRY(n,n,n,X), /*						0x51 */
     PRIV_ENTRY(n,n,X,X), /* IPMI_MASTER_READ_WRITE_CMD			0x52 */
+};
+
+/* Firmware netfn (0x08) */
+static priv_val firmware_privs[] =
+{
+    PRIV_ENTRY(n,n,n,X), /*						0x00 */
 };
 
 /* Storage netfn (0x0a) */
@@ -394,12 +401,13 @@ static struct
 {
     int      size;
     priv_val *vals;
-} priv_table[6] =
+} priv_table[7] =
 {
     { sizeof(chassis_privs)/sizeof(priv_val), chassis_privs },
     { sizeof(bridge_privs)/sizeof(priv_val), bridge_privs },
     { sizeof(sensor_privs)/sizeof(priv_val), sensor_privs },
     { sizeof(app_privs)/sizeof(priv_val), app_privs },
+    { sizeof(firmware_privs)/sizeof(priv_val), firmware_privs },
     { sizeof(storage_privs)/sizeof(priv_val), storage_privs },
     { sizeof(transport_privs)/sizeof(priv_val), transport_privs },
 };

@@ -251,15 +251,17 @@ ipmb_checksum(unsigned char *data, int size)
 static int
 auth_gen(lan_data_t    *lan,
 	 unsigned char *out,
+	 uint8_t       *ses_id,
+	 uint8_t       *seq,
 	 unsigned char *data,
 	 unsigned int  data_len)
 {
     int rv;
     ipmi_auth_sg_t l[] =
-    { { &lan->session_id,       4  },
-      { data,                   data_len },
-      { &lan->outbound_seq_num, 4 },
-      { NULL,                   0 }};
+    { { ses_id, 4 },
+      { data,   data_len },
+      { seq,    4 },
+      { NULL,   0 }};
 
     rv = ipmi_auths[lan->working_authtype].authcode_gen(lan->authdata, l, out);
     return rv;
@@ -267,18 +269,18 @@ auth_gen(lan_data_t    *lan,
 
 static int
 auth_check(lan_data_t    *lan,
-	   uint32_t      ses_id,
-	   uint32_t      seq,
+	   uint8_t       *ses_id,
+	   uint8_t       *seq,
 	   unsigned char *data,
 	   unsigned int  data_len,
 	   unsigned char *code)
 {
     int rv;
     ipmi_auth_sg_t l[] =
-    { { &ses_id, 4  },
-      { data,    data_len },
-      { &seq,    4 },
-      { NULL,    0 }};
+    { { ses_id, 4  },
+      { data,   data_len },
+      { seq,    4 },
+      { NULL,   0 }};
 
     rv = ipmi_auths[lan->working_authtype].authcode_check(lan->authdata,
 							  l,
@@ -373,7 +375,7 @@ lan_send(lan_data_t  *lan,
 	pos += 14; /* Convert to pos in data */
     } else {
 	data[29] = pos;
-	rv = auth_gen(lan, data+13, tmsg, pos);
+	rv = auth_gen(lan, data+13, data+9, data+5, tmsg, pos);
 	if (rv)
 	    return rv;
 	pos += 30; /* Convert to pos in data */
@@ -666,7 +668,7 @@ data_handler(int            fd,
     socklen_t          from_len;
     uint32_t           seq, sess_id;
     unsigned char      *tmsg;
-    ipmi_addr_t        addr;
+    ipmi_addr_t        addr, addr2;
     unsigned int       addr_len;
     unsigned int       data_len;
     
@@ -746,9 +748,10 @@ data_handler(int            fd,
     if (data[4] != 0) {
 	/* Validate the message's authcode.  Do this before checking
            the session seq num so we know the data is valid. */
-	rv = auth_check(lan, sess_id, seq, data+30, data[29], data+13);
-	if (rv)
+	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13);
+	if (rv) {
 	    goto out_unlock2;
+	}
 	tmsg = data + 30;
     } else {
 	tmsg = data + 14;
@@ -764,9 +767,10 @@ data_handler(int            fd,
     } else if ((lan->inbound_seq_num - seq) <= 8) {
 	/* It's before the current sequence number, but within 8. */
 	uint8_t bit = 1 << (lan->inbound_seq_num - seq);
-	if (lan->recv_msg_map & bit)
+	if (lan->recv_msg_map & bit) {
 	    /* We've already received the message, so discard it. */
 	    goto out_unlock2;
+	}
 
 	lan->recv_msg_map |= bit;
     } else {
@@ -780,19 +784,38 @@ data_handler(int            fd,
     /* We don't check the checksums, because the network layer should
        validate all this for us. */
 
+    seq = tmsg[4] >> 2;
+
     if (tmsg[5] == IPMI_SEND_MSG_CMD) {
 	/* It's a response to a sent message. */
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) &addr;
+	ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *)&lan->seq_table[seq].addr;
 
-	seq = tmsg[11] >> 2;
-	ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-	ipmb_addr->slave_addr = tmsg[10];
-	ipmb_addr->lun = tmsg[11] & 0x3;
-	msg.netfn = tmsg[8] >> 2;
-	msg.cmd = tmsg[12];
-	addr_len = sizeof(ipmi_ipmb_addr_t);
-	msg.data = tmsg+13;
-	msg.data_len = data_len - 13;
+	/* FIXME - this entire thing is a cheap hack. */
+	if (tmsg[6] != 0) {
+	    /* Got an error from the send message.  We don't have any
+               IPMB information to work with, so just extract it from
+               the message. */
+	    memcpy(ipmb_addr, ipmb2, sizeof(*ipmb_addr));
+	    addr_len = sizeof(ipmi_ipmb_addr_t);
+	    msg.netfn = lan->seq_table[seq].msg.netfn;
+	    msg.cmd = lan->seq_table[seq].msg.cmd;
+	    msg.data = tmsg + 6;
+	    msg.data_len = 1;
+	} else {
+	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
+	    /* This is a hack, but the channel does not come back in the
+	       message.  So we use the channel from the original
+	       instead. */
+	    ipmb_addr->channel = ipmb2->channel;
+	    ipmb_addr->slave_addr = tmsg[9];
+	    ipmb_addr->lun = tmsg[10] & 0x3;
+	    msg.netfn = tmsg[7] >> 2;
+	    msg.cmd = tmsg[11];
+	    addr_len = sizeof(ipmi_ipmb_addr_t);
+	    msg.data = tmsg+12;
+	    msg.data_len = data_len - 14;
+	}
     } else if (tmsg[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD) {
 	/* It an event from the event buffer. */
 	ipmi_system_interface_addr_t *si_addr
@@ -804,6 +827,7 @@ data_handler(int            fd,
 
 	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si_addr->channel = 0xf;
+	si_addr->lun = tmsg[1] & 3;
 
 	msg.netfn = tmsg[1] >> 2;
 	msg.cmd = tmsg[5];
@@ -821,7 +845,6 @@ data_handler(int            fd,
 	si_addr->channel = 0xf;
 	si_addr->lun = tmsg[1] & 3;
 
-	seq = tmsg[4] >> 2;
 	msg.netfn = tmsg[1] >> 2;
 	msg.cmd = tmsg[5];
 	addr_len = sizeof(ipmi_system_interface_addr_t);
@@ -832,15 +855,24 @@ data_handler(int            fd,
     
     ipmi_lock(lan->seq_num_lock);
     if (lan->seq_table[seq].rsp_handler == NULL)
+    {
 	goto out_unlock;
+    }
+
+    /* Convert broadcast addresses to regular IPMB addresses, since
+       they come back that way. */
+    memcpy(&addr2, &lan->seq_table[seq].addr, lan->seq_table[seq].addr_len);
+    if (addr2.addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	addr2.addr_type = IPMI_IPMB_ADDR_TYPE;
 
     /* Validate that this response if for this command. */
     if (((lan->seq_table[seq].msg.netfn | 1) != msg.netfn)
 	|| (lan->seq_table[seq].msg.cmd != msg.cmd)
-	|| (! ipmi_addr_equal(&(lan->seq_table[seq].addr),
-			      lan->seq_table[seq].addr_len,
+	|| (! ipmi_addr_equal(&addr2, lan->seq_table[seq].addr_len,
 			      &addr, addr_len)))
+    {
 	goto out_unlock;
+    }
 
     /* The command matches up, cancel the timer and deliver it */
     rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, lan->seq_table[seq].timer);
@@ -1546,7 +1578,7 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	return;
     }
 
-    if (!(msg->data[1] & (1 << lan->authtype))) {
+    if (!(msg->data[2] & (1 << lan->authtype))) {
         ipmi_log(IPMI_LOG_ERR_INFO, "Requested authentication not supported");
 	if (ipmi->setup_cb)
 	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
@@ -1576,7 +1608,7 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
     addr.channel = 0xf;
     addr.lun = 0;
 
-    data[0] = 0x7;
+    data[0] = 0xe;
     data[1] = lan->privilege;
     msg.cmd = IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD;
     msg.netfn = IPMI_APP_NETFN;
