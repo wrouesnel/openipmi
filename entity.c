@@ -407,9 +407,9 @@ search_child(void *item, void *cb_data)
 }
 
 static int
-ipmi_entity_add_child(ipmi_entity_t       *ent,
-		      ipmi_entity_t       *child,
-		      entity_child_link_t **new_link)
+add_child(ipmi_entity_t       *ent,
+	  ipmi_entity_t       *child,
+	  entity_child_link_t **new_link)
 {
     entity_child_link_t *link;
 
@@ -443,6 +443,15 @@ ipmi_entity_add_child(ipmi_entity_t       *ent,
     if (new_link)
 	*new_link = link;
     return 0;
+}
+
+int
+ipmi_entity_add_child(ipmi_entity_t       *ent,
+		      ipmi_entity_t       *child)
+{
+    entity_child_link_t *link;
+
+    return add_child(ent, child, &link);
 }
 
 int
@@ -999,7 +1008,7 @@ handle_ear(ipmi_entity_info_t *ents,
 				&sub_ent);
 		if (rv)
 		    return rv;
-		rv = ipmi_entity_add_child(ent, sub_ent, &link);
+		rv = add_child(ent, sub_ent, &link);
 		if (rv)
 		    return rv;
 
@@ -1021,7 +1030,7 @@ handle_ear(ipmi_entity_info_t *ents,
 			    &sub_ent);
 	    if (rv)
 		return rv;
-	    rv = ipmi_entity_add_child(ent, sub_ent, &link);
+	    rv = add_child(ent, sub_ent, &link);
 	    if (rv)
 		return rv;
 
@@ -1075,7 +1084,7 @@ handle_drear(ipmi_entity_info_t *ents,
 				&sub_ent);
 		if (rv)
 		    return rv;
-		rv = ipmi_entity_add_child(ent, sub_ent, &link);
+		rv = add_child(ent, sub_ent, &link);
 		if (rv)
 		    return rv;
 
@@ -1098,7 +1107,7 @@ handle_drear(ipmi_entity_info_t *ents,
 			    &sub_ent);
 	    if (rv)
 		return rv;
-	    rv = ipmi_entity_add_child(ent, sub_ent, &link);
+	    rv = add_child(ent, sub_ent, &link);
 	    if (rv)
 		return rv;
 

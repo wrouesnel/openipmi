@@ -229,8 +229,6 @@ int ipmi_entity_get_entity_instance(ipmi_entity_t *ent);
 int ipmi_entity_get_device_type(ipmi_entity_t *ent);
 int ipmi_entity_get_device_modifier(ipmi_entity_t *ent);
 int ipmi_entity_get_oem(ipmi_entity_t *ent);
-int ipmi_entity_get_id_length(ipmi_entity_t *ent);
-void ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
 int ipmi_entity_get_presense_sensor_always_there(ipmi_entity_t *ent);
 int ipmi_entity_get_in_sdr_db(ipmi_entity_t *ent);
 int ipmi_entity_get_is_child(ipmi_entity_t *ent);
@@ -248,6 +246,15 @@ int ipmi_entity_get_SEL_device(ipmi_entity_t *ent);
 int ipmi_entity_get_SDR_repository_device(ipmi_entity_t *ent);
 int ipmi_entity_get_sensor_device(ipmi_entity_t *ent);
 
+/* The ID from the device SDR. */
+int ipmi_entity_get_id_length(ipmi_entity_t *ent);
+void ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
+
+/* The ID from the main SDR. */
+int ipmi_entity_get_assigned_id_length(ipmi_entity_t *ent);
+void ipmi_entity_get_assigned_id(ipmi_entity_t *ent, char *id, int length);
+
+/* Is the entity currently present? */
 int ipmi_entity_is_present(ipmi_entity_t *ent);
 
 /* Register a handler that will be called when a sensor that monitors
@@ -463,9 +470,20 @@ int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 			int           *lun,
 			int           *num);
 
+/* Strings for various values for a sensor.  We put them in here, and
+   they will be the correct strings even for OEM values. */
+char *ipmi_sensor_get_entity_id_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_reading_name_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor);
+
 /* Get the entity the sensor is hooked to. */
 int ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_entity_instance(ipmi_sensor_t *sensor);
+ipmi_entity_t *ipmi_sensor_get_entity(ipmi_sensor_t *sensor);
 
 /* Information about a sensor from it's SDR.  These are things that
    are specified by IPMI, see the spec for more details. */

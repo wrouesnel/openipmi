@@ -118,6 +118,8 @@ struct ipmi_mc_s
     int SDR_repository_support : 1;
     int sensor_device_support : 1;
 
+    int in_bmc_list : 1; /* Tells if we are in the list of our BMC yet. */
+
     uint8_t device_id;
 
     uint8_t device_revision;
@@ -683,8 +685,8 @@ get_device_id_data_from_rsp(ipmi_mc_t  *mc,
     return 0;
 }
 
-static void
-cleanup_mc(ipmi_mc_t *mc)
+void
+ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
     if (mc->sensors)
 	ipmi_sensors_destroy(mc->sensors);
@@ -703,15 +705,31 @@ cleanup_mc(ipmi_mc_t *mc)
 	    mc->bmc->conn->deregister_for_events(mc->bmc->conn,
 						 mc->bmc->ll_event_id);
 	free(mc->bmc);
+    } else if (mc->in_bmc_list) {
+	ilist_iter_t iter;
+	int          rv;
+
+	/* Remove it from the BMC list. */
+	ipmi_lock(mc->bmc->mc_list_lock);
+	ilist_init_iter(&iter, mc->bmc->mc_list);
+	rv = ilist_first(&iter);
+	while (rv) {
+	    if (ilist_get(&iter) == mc) {
+		ilist_delete(&iter);
+		break;
+	    }
+	    rv = ilist_next(&iter);
+	}
+	ipmi_unlock(mc->bmc->mc_list_lock);
     }
     free(mc);
 }
 
-static int
-setup_mc(ipmi_mc_t    *bmc,
-	 ipmi_addr_t  *addr,
-	 unsigned int addr_len,
-	 ipmi_mc_t    **new_mc)
+int
+ipmi_create_mc(ipmi_mc_t    *bmc,
+	      ipmi_addr_t  *addr,
+	      unsigned int addr_len,
+	      ipmi_mc_t    **new_mc)
 {
     ipmi_mc_t *mc;
     int       rv = 0;
@@ -739,7 +757,7 @@ setup_mc(ipmi_mc_t    *bmc,
 
  out_err:
     if (rv) {
-	cleanup_mc(mc);
+	ipmi_cleanup_mc(mc);
     }
     else
 	*new_mc = mc;
@@ -750,6 +768,21 @@ static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
     ipmi_detect_bmc_presence_changes(mc, 0);
+}
+
+
+int
+ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc)
+{
+    int rv;
+
+    ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
+    rv = !ilist_add_tail(bmc->bmc->mc_list, mc, NULL);
+    if (!rv)
+	mc->in_bmc_list = 1;
+    ipmi_unlock(bmc->bmc->mc_list_lock);
+
+    return rv;
 }
 
 static void
@@ -763,15 +796,13 @@ mc_sdr_handler(ipmi_sdr_info_t *sdrs,
     int        rv;
 
     if (err) {
-	cleanup_mc(mc);
+	ipmi_cleanup_mc(mc);
 	return;
     }
 
-    ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
-    rv = !ilist_add_tail(mc->bmc_mc->bmc->mc_list, mc, NULL);
-    ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
+    rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
     if (rv)
-	cleanup_mc(mc);
+	ipmi_cleanup_mc(mc);
     else {
 	if (mc->bmc_mc->bmc->new_mc_handler)
 	    mc->bmc_mc->bmc->new_mc_handler(mc->bmc_mc, mc,
@@ -805,7 +836,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	mc = find_mc_by_addr(info->bmc, addr, addr_len);
 	if (!mc) {
 	    /* It doesn't already exist, so add it. */
-	    rv = setup_mc(info->bmc, addr, addr_len, &mc);
+	    rv = ipmi_create_mc(info->bmc, addr, addr_len, &mc);
 	    if (rv) {
 		/* Out of memory, just give up for now. */
 		free(info);
@@ -819,7 +850,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    if (!rv)
 		rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
 	    if (rv)
-		cleanup_mc(mc);
+		ipmi_cleanup_mc(mc);
 	}
     }
 
@@ -1214,7 +1245,7 @@ setup_bmc(ipmi_con_t  *ipmi,
 
  out_err:
     if (rv) {
-	cleanup_mc(mc);
+	ipmi_cleanup_mc(mc);
     }
     else
 	*new_mc = mc;

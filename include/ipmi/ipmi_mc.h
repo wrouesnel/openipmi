@@ -39,6 +39,7 @@
 #include <ipmi/ipmi_sensor.h>
 #include <ipmi/ipmi_ind.h>
 #include <ipmi/ipmi_sdr.h>
+#include <ipmi/ipmi_addr.h>
 
 /* A response comes back in this format. */
 typedef void (*ipmi_response_handler_t)(ipmi_mc_t  *src,
@@ -198,6 +199,19 @@ int ipmi_mc_get_channel(ipmi_mc_t *mc);
 /* Should the BMC do a full bus scan at startup?  This is so OEM
    code can turn this function off.  The value is a boolean. */
 int ipmi_bmc_set_full_bus_scan(ipmi_mc_t *bmc, int val);
+
+/* Allocate an MC in the BMC.  It doesn't add it to the BMC's list, to
+   allow the MC to be setup before that happens. */
+int ipmi_create_mc(ipmi_mc_t    *bmc,
+		   ipmi_addr_t  *addr,
+		   unsigned int addr_len,
+		   ipmi_mc_t    **new_mc);
+
+/* Add an MC to the list of MCs in the BMC. */
+int ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc);
+
+/* Destroy an MC. */
+void ipmi_cleanup_mc(ipmi_mc_t *mc);
 
 /* Initialize the MC code, called only once at init time. */
 int ipmi_mc_init(void);

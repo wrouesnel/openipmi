@@ -764,6 +764,19 @@ static void
 redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 {
     int rv;
+    ipmi_entity_t *entity;
+
+    entity = ipmi_sensor_get_entity(sensor);
+    if (!entity)
+	return;
+
+    if (!ipmi_entity_is_present(entity)
+	&& ipmi_sensor_get_ignore_if_no_entity(sensor))
+    {
+	wmove(display_pad, value_pos.y, value_pos.x);
+	wprintw(display_pad, "not present");
+	return;
+    }
 
     if (ipmi_sensor_get_event_reading_type(sensor)
 	== IPMI_EVENT_READING_TYPE_THRESHOLD)
@@ -835,6 +848,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
     char name[33];
     struct sensor_info *sinfo = cb_data;
     int rv;
+    int present = 1;
 
     ipmi_sensor_get_num(sensor, &lun, &num);
     if ((lun == sinfo->lun) && (num == sinfo->num)) {
@@ -853,17 +867,23 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		id, instance, lun, num, name);
 	wprintw(display_pad, "  value = ");
 	getyx(display_pad, value_pos.y, value_pos.x);
+	if (!ipmi_entity_is_present(entity)
+	    && ipmi_sensor_get_ignore_if_no_entity(sensor))
+	{
+	    wprintw(display_pad, "not present");
+	    present = 0;
+	}
 	wprintw(display_pad, "\n  Events = ");
 	getyx(display_pad, enabled_pos.y, enabled_pos.x);
 	wprintw(display_pad, "\n  Scanning = ");
 	getyx(display_pad, scanning_pos.y, scanning_pos.x);
 	wprintw(display_pad, "\n");
-	num = ipmi_sensor_get_sensor_type(sensor);
 	wprintw(display_pad, "  sensor type = %s (0x%2.2x)\n",
-		ipmi_get_sensor_type_string(num), num);
-	num = ipmi_sensor_get_event_reading_type(sensor);
+		ipmi_sensor_get_sensor_type_string(sensor),
+		ipmi_sensor_get_sensor_type(sensor));
 	wprintw(display_pad, "  event/reading type = %s (0x%2.2x)\n",
-		ipmi_get_event_reading_type_string(num), num);
+		ipmi_sensor_get_event_reading_type_string(sensor),
+		ipmi_sensor_get_event_reading_type(sensor));
 
 	if (ipmi_sensor_get_event_reading_type(sensor)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
@@ -872,45 +892,21 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	    double val;
 
 	    wprintw(display_pad, "  units = %s%s",
-		    ipmi_get_unit_type_string(ipmi_sensor_get_base_unit(sensor)),
-		    ipmi_get_rate_unit_string(ipmi_sensor_get_rate_unit(sensor)));
+		    ipmi_sensor_get_base_unit_string(sensor),
+		    ipmi_sensor_get_rate_unit_string(sensor));
 	    switch(ipmi_sensor_get_modifier_unit_use(sensor)) {
 		case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
 		    wprintw(display_pad, "/%s",
-			    ipmi_get_unit_type_string(
-				ipmi_sensor_get_modifier_unit(sensor)));
+			    ipmi_sensor_get_modifier_unit_string(sensor));
 		    break;
 		    
 		case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
 		    wprintw(display_pad, "*%s",
-			    ipmi_get_unit_type_string(
-				ipmi_sensor_get_modifier_unit(sensor)));
+			    ipmi_sensor_get_modifier_unit_string(sensor));
 		    break;
 	    }
 	    wprintw(display_pad, "\n");
 
-	    rv = ipmi_reading_get(sensor, read_sensor, NULL);
-	    if (rv)
-		ui_log("Unable to get sensor reading: 0x%x\n", rv);
-
-	    if (ipmi_sensor_get_threshold_access(sensor)
-		!= IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
-	    {
-		rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
-		if (rv)
-		    ui_log("Unable to get threshold values: 0x%x\n", rv);
-	    }
-	    
-	    if (ipmi_sensor_get_event_support(sensor)
-		!= IPMI_EVENT_SUPPORT_NONE)
-	    {
-		rv = ipmi_sensor_events_enable_get(sensor,
-						   read_thresh_event_enables,
-						   NULL);
-		if (rv)
-		    ui_log("Unable to get event values: 0x%x\n", rv);
-	    }
-	    
 	    rv = ipmi_sensor_get_nominal_reading(sensor, &val);
 	    if (!rv) wprintw(display_pad, "  nominal = %f\n", val);
 
@@ -975,6 +971,31 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		    threshold_positions[t].set = 0;
 		}
 	    }
+
+	    if (present) {
+		rv = ipmi_reading_get(sensor, read_sensor, NULL);
+		if (rv)
+		    ui_log("Unable to get sensor reading: 0x%x\n", rv);
+
+		if (ipmi_sensor_get_threshold_access(sensor)
+		    != IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
+		{
+		    rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
+		    if (rv)
+			ui_log("Unable to get threshold values: 0x%x\n", rv);
+		}
+	    
+		if (ipmi_sensor_get_event_support(sensor)
+		    != IPMI_EVENT_SUPPORT_NONE)
+		{
+		    rv = ipmi_sensor_events_enable_get(
+			sensor,
+			read_thresh_event_enables,
+			NULL);
+		    if (rv)
+			ui_log("Unable to get event values: 0x%x\n", rv);
+		}
+	    }
 	} else {
 	    int val;
 	    int i;
@@ -1003,18 +1024,21 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	    wprintw(display_pad, "\n      enabled: ");
 	    getyx(display_pad, discr_deassert_enab.y, discr_deassert_enab.x);
 
-	    rv = ipmi_states_get(sensor, read_states, NULL);
-	    if (rv)
-		ui_log("Unable to get sensor reading: 0x%x\n", rv);
-
-	    if (ipmi_sensor_get_event_support(sensor)
-		!= IPMI_EVENT_SUPPORT_NONE)
-	    {
-		rv = ipmi_sensor_events_enable_get(sensor,
-						   read_discrete_event_enables,
-						   NULL);
+	    if (present) {
+		rv = ipmi_states_get(sensor, read_states, NULL);
 		if (rv)
-		    ui_log("Unable to get event values: 0x%x\n", rv);
+		    ui_log("Unable to get sensor reading: 0x%x\n", rv);
+
+		if (ipmi_sensor_get_event_support(sensor)
+		    != IPMI_EVENT_SUPPORT_NONE)
+		{
+		    rv = ipmi_sensor_events_enable_get(
+			sensor,
+			read_discrete_event_enables,
+			NULL);
+		    if (rv)
+			ui_log("Unable to get event values: 0x%x\n", rv);
+		}
 	    }
 	}
 

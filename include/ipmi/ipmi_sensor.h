@@ -288,6 +288,8 @@ typedef int (*ipmi_reading_get_cb)(
 typedef int (*ipmi_states_get_cb)(ipmi_sensor_t       *sensor,
 				  ipmi_states_read_cb done,
 				  void                *cb_data);
+typedef char *(*ipmi_sensor_reading_name_string_cb)(
+    ipmi_sensor_t *sensor, int val);
 
 typedef struct ipmi_sensor_cbs_s
 {
@@ -307,12 +309,22 @@ typedef struct ipmi_sensor_cbs_s
 
     /* This is for a discrete sensor. */
     ipmi_states_get_cb               ipmi_states_get;
+    ipmi_sensor_reading_name_string_cb ipmi_sensor_reading_name_string;
 } ipmi_sensor_cbs_t;
 
 /* Can be used by OEM code to replace some or all of the callbacks for
    a sensor. */
 void ipmi_sensor_get_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs);
 void ipmi_sensor_set_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs);
+
+void ipmi_sensor_set_entity_id_string(ipmi_sensor_t *sensor, char *str);
+void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str);
+void ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,
+					       char          *str);
+void ipmi_sensor_set_reading_name_string(ipmi_sensor_t *sensor, char *str);
+void ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str);
+void ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str);
+void ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str);
 
 /* Get the MC that the sensor is in. */
 ipmi_mc_t *ipmi_sensor_get_mc(ipmi_sensor_t *sensor);

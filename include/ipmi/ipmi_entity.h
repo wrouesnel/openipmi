@@ -68,6 +68,12 @@ int ipmi_entity_add(ipmi_entity_info_t *ents,
 		    void               *sdr_gen_cb_data,
 		    ipmi_entity_t      **new_ent);
 
+/* More OEM stuff, handle entity associations. */
+int ipmi_entity_add_child(ipmi_entity_t       *ent,
+			  ipmi_entity_t       *child);
+int ipmi_entity_remove_child(ipmi_entity_t     *ent,
+			     ipmi_entity_t     *child);
+
 /* Get the number of child entities that the entity has. */
 int ipmi_entity_subentity_count(ipmi_entity_t *ent,
 				unsigned int  *count);

@@ -144,7 +144,15 @@ struct ipmi_sensor_s
 
     unsigned char oem1;
 
-    char id[SENSOR_ID_LEN+1];
+    char id[SENSOR_ID_LEN+1]; /* The ID from the device SDR. */
+    char assigned_id[SENSOR_ID_LEN+1]; /* The ID from the main SDR. */
+
+    char *entity_id_string;
+    char *sensor_type_string;
+    char *event_reading_type_string;
+    char *rate_unit_string;
+    char *base_unit_string;
+    char *modifier_unit_string;
 
     ipmi_sensor_threshold_event_handler_cb threshold_event_handler;
     ipmi_sensor_discrete_event_handler_cb  discrete_event_handler;
@@ -723,6 +731,18 @@ handle_new_sensor(ipmi_mc_t     *mc,
 
     /* Call this before the OEM call so the OEM call can replace it. */
     sensor->cbs = standard_sensor_cb;
+    sensor->entity_id_string
+	= ipmi_get_entity_id_string(sensor->entity_id);
+    sensor->sensor_type_string
+	= ipmi_get_sensor_type_string(sensor->sensor_type);
+    sensor->event_reading_type_string
+	= ipmi_get_event_reading_type_string(sensor->event_reading_type);
+    sensor->rate_unit_string
+	= ipmi_get_rate_unit_string(sensor->rate_unit);
+    sensor->base_unit_string
+	= ipmi_get_unit_type_string(sensor->base_unit);
+    sensor->modifier_unit_string
+	= ipmi_get_unit_type_string(sensor->modifier_unit);
 
     ents = ipmi_mc_get_entities(mc);
 
@@ -1781,6 +1801,19 @@ ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length)
     id[length] = '\0';
 }
 
+int
+ipmi_sensor_get_assigned_id_length(ipmi_sensor_t *sensor)
+{
+    return strlen(sensor->assigned_id);
+}
+
+void
+ipmi_sensor_get_assigned_id(ipmi_sensor_t *sensor, char *id, int length)
+{
+    strncpy(id, sensor->assigned_id, length);
+    id[length] = '\0';
+}
+
 void
 ipmi_sensor_set_owner(ipmi_sensor_t *sensor, int owner)
 {
@@ -2122,6 +2155,13 @@ ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id)
 {
     strncpy(sensor->id, id, SENSOR_ID_LEN);
     sensor->id[SENSOR_ID_LEN] = '\0';
+}
+
+void
+ipmi_sensor_set_assigned_id(ipmi_sensor_t *sensor, char *id)
+{
+    strncpy(sensor->assigned_id, id, SENSOR_ID_LEN);
+    sensor->assigned_id[SENSOR_ID_LEN] = '\0';
 }
 
 int
@@ -3833,6 +3873,14 @@ stand_ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy)
     return 0;
 }
 
+static char *
+stand_ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int val)
+{
+    return ipmi_get_reading_name(sensor->event_reading_type,
+				 sensor->sensor_type,
+				 val);
+}
+
 static ipmi_sensor_cbs_t standard_sensor_cb =
 {
     .ipmi_sensor_events_enable_set = stand_ipmi_sensor_events_enable_set,
@@ -3849,6 +3897,7 @@ static ipmi_sensor_cbs_t standard_sensor_cb =
     .ipmi_reading_get              = stand_ipmi_reading_get,
 
     .ipmi_states_get               = stand_ipmi_states_get,
+    .ipmi_sensor_reading_name_string = stand_ipmi_sensor_reading_name_string,
 };
 
 int
@@ -3928,6 +3977,12 @@ ipmi_states_get(ipmi_sensor_t       *sensor,
 		void                *cb_data)
 {
     return sensor->cbs.ipmi_states_get(sensor, done, cb_data);
+}
+
+char *
+ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int val)
+{
+    return sensor->cbs.ipmi_sensor_reading_name_string(sensor, val);
 }
 
 int
@@ -4033,4 +4088,92 @@ ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
 			       enum ipmi_thresh_e thresh)
 {
     return (states->__states & (1 << thresh)) != 0;
+}
+
+char *
+ipmi_sensor_get_entity_id_string(ipmi_sensor_t *sensor)
+{
+    return sensor->entity_id_string;
+}
+
+void
+ipmi_sensor_set_entity_id_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->entity_id_string = str;
+}
+
+char *
+ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor)
+{
+    return sensor->sensor_type_string;
+}
+
+void
+ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->sensor_type_string = str;
+}
+
+char *
+ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor)
+{
+    return sensor->event_reading_type_string;
+}
+
+void
+ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->event_reading_type_string = str;
+}
+
+char *
+ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor)
+{
+    return sensor->rate_unit_string;
+}
+
+void
+ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->rate_unit_string = str;
+}
+
+char *
+ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor)
+{
+    return sensor->base_unit_string;
+}
+
+void
+ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->base_unit_string = str;
+}
+
+char *
+ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor)
+{
+    return sensor->modifier_unit_string;
+}
+
+void
+ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->modifier_unit_string = str;
+}
+
+ipmi_entity_t *
+ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
+{
+    int           rv;
+    ipmi_entity_t *ent;
+
+    rv = ipmi_entity_find(ipmi_mc_get_entities(sensor->mc),
+			  sensor->mc,
+			  sensor->entity_id,
+			  sensor->entity_instance,
+			  &ent);
+    if (rv)
+	return NULL;
+    return ent;
 }
