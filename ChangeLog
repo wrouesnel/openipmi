@@ -1,3 +1,8 @@
+2004-09-09 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/mc.c: Return the proper callback data for the sel_reread
+	function.
+
 2004-09-08 Corey Minyard <cminyard@mvista.com> 
 
 	* utils/ipmi_malloc.c, include/OpenIPMI/ipmi_malloc.h: Added
