@@ -219,6 +219,10 @@ struct ipmi_domain_s
 
     unsigned int default_sel_rescan_time;
 
+    /* Used to inform the user that the main SDR has been read. */
+    ipmi_domain_cb SDRs_read_handler;
+    void           *SDRs_read_handler_cb_data;
+
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
 };
@@ -2361,6 +2365,16 @@ ipmi_cmp_domain_id(ipmi_domain_id_t id1, ipmi_domain_id_t id2)
  *
  **********************************************************************/
 
+int
+ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
+				       ipmi_domain_cb handler,
+				       void           *cb_data)
+{
+    domain->SDRs_read_handler = handler;
+    domain->SDRs_read_handler_cb_data = cb_data;
+    return 0;
+}
+
 /* Closing a connection is subtle because of locks.  We schedule it to
    be done in a timer callback, that way we can handle all the locks
    as part of the close. */
@@ -2556,6 +2570,8 @@ con_up_complete(ipmi_domain_t *domain)
 
     ipmi_entity_scan_sdrs(domain->entities, domain->main_sdrs);
     ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
+    if (domain->SDRs_read_handler)
+	domain->SDRs_read_handler(domain, 0, domain->SDRs_read_handler_cb_data);
 }
 
 static void

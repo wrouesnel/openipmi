@@ -1,4 +1,9 @@
 
+2003-08-13 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c, include/OpenIPIM/ipmiif.h: Added a way for the
+	user to know when all the main SDRs have been read.
+
 2003-08-13  Louis Zhuang  <louis.zhuang@linux.intel.com>
 
 	* lib/selector.c: Fixed a trivial bug in process_timers

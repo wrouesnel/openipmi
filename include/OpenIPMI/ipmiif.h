@@ -270,6 +270,16 @@ int ipmi_domain_store_entities(ipmi_domain_t  *domain,
 			       ipmi_domain_cb done,
 			       void           *cb_data);
 
+/* Set a handler that will be called when the main SDR repository is
+   read.  This is primarily here for OpenHPI to meet their
+   requirements, generally you should do this dynamically.  There is
+   only one handler, and it will only be called when the main SDR
+   repository is first read. */
+int ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
+					   ipmi_domain_cb handler,
+					   void           *cb_data);
+
+
 /* For the given entity, iterate over all the children of the entity,
    calling the given handler with each child.  The children will not
    change while this is happening. */

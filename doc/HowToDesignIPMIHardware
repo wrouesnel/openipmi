@@ -214,12 +214,12 @@ Don't dynamically change the capabilities of an MC
 --------------------------------------------------
 
 In some blade-based systems, one card can ``take on'' the BMC address
-of 0x20.  This is a bad idea (I talk about this later), but it's even
-worse if you change the capabilities of the MC based upon whether it
-is at address 0x20 or not.  If the MC can be an event receiver, it
-should *always* be an event receiver.  Doing otherwise complicates the
-design of the software that uses it, and makes it more difficult to
-design general software for the system.
+of 0x20.  I think this is a bad idea (I talk about this later), but
+it's even worse if you change the capabilities of the MC based upon
+whether it is at address 0x20 or not.  If the MC can be an event
+receiver, it should *always* be an event receiver.  Doing otherwise
+complicates the design of the software that uses it, and makes it more
+difficult to design general software for the system.
 
 
 Blade-based system shouldn't have a BMC
@@ -243,6 +243,22 @@ Instead, each card should sit at it's own address (as defined by PICMG
 2.9 or whatever).  Management software can pick an interface and use
 the set event receiver command to tell the controllers in the system
 where to send their events.
+
+
+FRU Information
+---------------
+
+To me, the most sensible information to handle FRU information is to
+put it on the FRU itself.  On intelligent FRUs (that have MCs on them)
+the MC should be an FRU Inventory Device that holds the FRU
+information for that FRU and any sub-FRUs, expecially if the FRU is
+dynamically swappable (A board in a CPCI system, for instance).  It
+seems to make sense for non-intelligent FRUs to have an I2C EEPROM
+chip on them that holds their FRU information.
+
+Each FRU in the system should have a Type 11 SDR (FRU Device Locator
+Record, or FDLR) or a Type 12 SDR (Management Controller Device
+Locator Record, or MCDLR) in the appropriate FRU Inventory Device.
 
 
 Things currently missing from the standard
@@ -310,13 +326,12 @@ independent pieces of software.
 
 Some systems have MCs on a normal card in the system.  The management
 system (or perhaps some proxy) runs on the card.  The external
-management system shouldn't have to know what card is active.  In
+management system shouldn't have to know which card is active.  In
 effect, the cards should both be active.  There can only be one event
 receiver.  The management systems can set the event receiver for all
 the MCs in the system using the set event receiver command.  Anything
-listening for events can listen to all the MCs (or any MC capable of
-being an event receiver).  It doesn't matter which MC the event comes
-from.
+listening for events can listen to all the MCs capable of being an
+event receiver.  It doesn't matter which MC the event comes from.
 
 Systems with separate alarm cards should basically be configured the
 same way.  Both cards should be fully active all the time, and the
