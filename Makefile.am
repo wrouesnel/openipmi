@@ -42,7 +42,7 @@ ipmisample_LDADD = -lOpenIPMI
 ipmicmd_SOURCES = ipmicmd.c
 ipmicmd_LDADD = -lpopt
 
-ipmilan_SOURCES = lanserv.c ipmi_auth.c md5.c md2.c ipmi_malloc.c
+ipmilan_SOURCES = lanserv.c ipmi_auth.c priv_table.c md5.c md2.c ipmi_malloc.c
 
 test_heap_SOURCES = test_heap.c
 test_heap_LDADD = 

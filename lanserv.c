@@ -66,9 +66,16 @@ dump_hex(unsigned char *data, int len)
 #endif
 
 /*
- * Restrictions: <=256 sessions
- *               <=32768 users
+ * Restrictions: <=64 sessions
+ *               <=64 users (per spec, 6 bits)
  */
+#define MAX_USERS		64
+#define USER_BITS_REQ		6 /* Bits required to hold a user. */
+#define USER_MASK		0x3f
+#define MAX_SESSIONS		64
+#define SESSION_BITS_REQ	6 /* Bits required to hold a session. */
+#define SESSION_MASK		0x3f
+
 
 typedef struct msg_s
 {
@@ -127,45 +134,59 @@ typedef struct session_s
 
 typedef struct user_s
 {
-    int           idx; /* My idx in the table. */
+    unsigned char valid;
     unsigned char username[16];
     unsigned char pw[16];
     unsigned char priviledge;
     unsigned int  allowed_auths;
+
+    /* Set by the user code. */
+    int           idx; /* My idx in the table. */
 } user_t;
 
 typedef struct lan_data_s
 {
-    /* Used to make the sid somewhat unique. */
-    unsigned int sid_seq;
+    user_t users[MAX_USERS];
 
-    user_t *users;
-    int    num_users;
+    session_t sessions[MAX_SESSIONS];
 
-    session_t *sessions;
-    int       num_sessions;
-
-    channel_t channels[16];
+    channel_t channel;
 
     unsigned char *guid;
-    unsigned char guid_data[16];
 
-    unsigned int null_user_supported;
-    user_t null_user;
 
     void *lan_info;
-    void *smi_info;
-
     void (*lan_send)(void *lan_info, unsigned char *data, int len,
 		     void *addr, int addr_len);
+
+    void *smi_info;
     int (*smi_send)(void *smi, unsigned char *data, int len,
-		    void *addr, int addr_len);
+		    ipmi_addr_t *addr, int addr_len);
+
+    /* Generate 'size' bytes of random data into 'data'. */
     void (*gen_rand)(void *data, int size);
 
     /* Don't fill in the below in the user code. */
+
+    /* Used to make the sid somewhat unique. */
+    unsigned int sid_seq;
+
     ipmi_authdata_t challenge_auth;
     unsigned int next_challenge_seq;
 } lan_data_t;
+
+/* Deal with multi-byte data, IPMI (little-endian) style. */
+unsigned int ipmi_get_uint16(unsigned char *data)
+{
+    return (data[0]
+	    | (data[1] << 8));
+}
+
+void ipmi_set_uint16(unsigned char *data, int val)
+{
+    data[0] = val & 0xff;
+    data[1] = (val >> 8) & 0xff;
+}
 
 unsigned int ipmi_get_uint32(unsigned char *data)
 {
@@ -175,14 +196,6 @@ unsigned int ipmi_get_uint32(unsigned char *data)
 	    | (data[3] << 24));
 }
 
-/* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint16(unsigned char *data)
-{
-    return (data[0]
-	    | (data[1] << 8));
-}
-
-/* Add a 32-bit integer to the data, IPMI (little-endian) style. */
 void ipmi_set_uint32(unsigned char *data, int val)
 {
     data[0] = val & 0xff;
@@ -191,11 +204,33 @@ void ipmi_set_uint32(unsigned char *data, int val)
     data[3] = (val >> 24) & 0xff;
 }
 
-/* Add a 16-bit integer to the data, IPMI (little-endian) style. */
-void ipmi_set_uint16(unsigned char *data, int val)
+/* Deal with multi-byte data, RMCP (big-endian) style. */
+unsigned int rmcp_get_uint16(unsigned char *data)
 {
-    data[0] = val & 0xff;
-    data[1] = (val >> 8) & 0xff;
+    return (data[1]
+	    | (data[0] << 8));
+}
+
+void rmcp_set_uint16(unsigned char *data, int val)
+{
+    data[1] = val & 0xff;
+    data[0] = (val >> 8) & 0xff;
+}
+
+unsigned int rmcp_get_uint32(unsigned char *data)
+{
+    return (data[3]
+	    | (data[2] << 8)
+	    | (data[1] << 16)
+	    | (data[0] << 24));
+}
+
+void rmcp_set_uint32(unsigned char *data, int val)
+{
+    data[3] = val & 0xff;
+    data[2] = (val >> 8) & 0xff;
+    data[1] = (val >> 16) & 0xff;
+    data[0] = (val >> 24) & 0xff;
 }
 
 static int
@@ -214,13 +249,9 @@ find_user(lan_data_t *lan, unsigned char *user)
     int    i;
     user_t *rv = NULL;
 
-    if ((lan->null_user_supported) && (is_authval_null(user)))
-    {
-	return &lan->null_user;
-    }
-
-    for (i=0; i<lan->num_users; i++) {
-	if (memcmp(user, lan->users[i].username, 16) == 0)
+    for (i=0; i<MAX_USERS; i++) {
+	if (lan->users[i].valid
+	    && (memcmp(user, lan->users[i].username, 16) == 0))
 	{
 	    rv = &(lan->users[i]);
 	    break;
@@ -267,13 +298,13 @@ handle_asf(lan_data_t *lan,
     rsp[1] = 0;
     rsp[2] = 0xff; /* No ack, the ack is not required, so we don't do it. */
     rsp[3] = 6; /* ASF class */
-    ipmi_set_uint32(rsp+4, ASF_IANA);
+    rmcp_set_uint32(rsp+4, ASF_IANA);
     rsp[8] = 0x40; /* Presense Pong */
     rsp[9] = data[9]; /* Message tag */
     rsp[10] = 0;
     rsp[11] = 16; /* Data length */
-    ipmi_set_uint32(rsp+12, ASF_IANA); /* no special capabilities */
-    ipmi_set_uint32(rsp+16, 0); /* no special capabilities */
+    rmcp_set_uint32(rsp+12, ASF_IANA); /* no special capabilities */
+    rmcp_set_uint32(rsp+16, 0); /* no special capabilities */
     rsp[20] = 0x81; /* We support IPMI */
     rsp[21] = 0x0; /* No supported interactions */
     memset(rsp+22, 0, 6); /* Reserved. */
@@ -290,8 +321,8 @@ sid_to_session(lan_data_t *lan, unsigned int sid)
 
     if (sid & 1)
 	return NULL;
-    idx = (sid >> 1) & 0xff;
-    if (idx > lan->num_sessions)
+    idx = (sid >> 1) & SESSION_MASK;
+    if (idx >= MAX_SESSIONS)
 	return NULL;
     session = lan->sessions + idx;
     if (!session->active)
@@ -399,7 +430,10 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, ipmi_msg_t *rsp)
     data[2] = 0xff; /* No seq num */
     data[3] = 7; /* IPMI msg class */
     data[4] = session->authtype;
+    if (session->xmit_seq == 0)
+	session->xmit_seq++;
     ipmi_set_uint32(data+5, session->xmit_seq);
+    session->xmit_seq++;
     ipmi_set_uint32(data+9, session->sid);
     if (session->authtype == IPMI_AUTHTYPE_NONE)
 	pos = data+13;
@@ -418,7 +452,7 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, ipmi_msg_t *rsp)
     memcpy(msg+6, rsp->data, rsp->data_len);
     pos[len-1] = ipmb_checksum(pos+3, len-4);
 
-    if (session->authtype != IPMI_AUTHTYPE_NONE)
+    if (session->authtype == IPMI_AUTHTYPE_NONE)
 	len += 14;
     else {
 	rv = auth_gen(session, data+13, pos, len);
@@ -478,9 +512,11 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 
     chan = msg->data[0] & 0xf;
     priv = msg->data[1] & 0xf;
-    if ((!lan->channels[chan].available)
-	|| (priv > lan->channels[chan].priviledge_limit))
-    {
+    if (chan == 0xe)
+	chan = 0xf;
+    if (chan != 0xf) {
+	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
+    } else if (priv > lan->channel.priviledge_limit) {
 	return_err(lan, msg, NULL, IPMI_INVALID_DATA_FIELD_CC);
     } else {
 	rsp.netfn = msg->netfn;
@@ -489,15 +525,13 @@ handle_get_channel_auth_capabilities(lan_data_t *lan, msg_t *msg)
 	rsp.data_len = 17;
 	data[0] = 0;
 	data[1] = chan;
-	data[2] = lan->channels[chan].priv_info[priv].allowed_auths;
-	data[3] = 0x00; /* per-message authentication is on,
+	data[2] = lan->channel.priv_info[priv].allowed_auths;
+	data[3] = 0x04; /* per-message authentication is on,
 			   user-level authenitcation is on,
 			   non-null user names disabled,
 			   no anonymous support. */
-	if (lan->num_users > 0)
-	    data[3] |= 0x04; /* We nave non-null users. */
-	if (lan->null_user_supported) {
-	    if (is_authval_null(lan->null_user.pw))
+	if (lan->users[0].valid) {
+	    if (is_authval_null(lan->users[0].pw))
 		data[3] |= 0x01; /* Anonymous login. */
 	    else
 		data[3] |= 0x02; /* Null user supported. */
@@ -547,7 +581,7 @@ handle_get_session_challenge(lan_data_t *lan, msg_t *msg)
     rsp.data_len = 17;
     data[0] = 0;
 
-    sid = (lan->next_challenge_seq << 16) | (user->idx << 1) | 1;
+    sid = (lan->next_challenge_seq << (USER_BITS_REQ+1)) | (user->idx << 1) | 1;
     lan->next_challenge_seq++;
     ipmi_set_uint32(data+1, sid);
 
@@ -606,8 +640,8 @@ handle_odd_session(lan_data_t *lan, msg_t *msg)
     if (rv)
 	return;
 
-    user_idx = (msg->sid >> 1) & 0x7fff;
-    if (user_idx > lan->num_users)
+    user_idx = (msg->sid >> 1) & USER_MASK;
+    if (user_idx > MAX_USERS)
 	return;
 
     auth = msg->data[0] & 0xf;
@@ -647,7 +681,7 @@ handle_odd_session(lan_data_t *lan, msg_t *msg)
     }
 
     /* find a free session. */
-    for (i=0; i<lan->num_sessions; i++) {
+    for (i=0; i<MAX_SESSIONS; i++) {
 	if (! lan->sessions[i].active) {
 	    session = &(lan->sessions[i]);
 	    break;
@@ -671,7 +705,7 @@ handle_odd_session(lan_data_t *lan, msg_t *msg)
 
     if (lan->sid_seq == 0)
 	lan->sid_seq++;
-    session->sid = (lan->sid_seq << 9) | (session->idx << 1);
+    session->sid = (lan->sid_seq << (SESSION_BITS_REQ+1)) | (session->idx << 1);
     lan->sid_seq++;
 
     rsp.netfn = msg->netfn;
@@ -764,6 +798,18 @@ handle_normal_msg(lan_data_t *lan, msg_t *msg)
 }
 
 void
+handle_ipmi_set_lan_configuration_parameters(lan_data_t *lan, msg_t *msg)
+{
+}
+
+void
+handle_ipmi_get_lan_configuration_parameters(lan_data_t *lan, msg_t *msg)
+{
+}
+
+
+
+void
 handle_lan_msg(lan_data_t *lan, msg_t *msg)
 {
     session_t *session = sid_to_session(lan, msg->sid);
@@ -844,6 +890,21 @@ handle_lan_msg(lan_data_t *lan, msg_t *msg)
 	    default:
 		handle_normal_msg(lan, msg);
 	}
+    } else if (msg->netfn == IPMI_TRANSPORT_NETFN) {
+	switch (msg->cmd)
+	{
+	    case IPMI_SET_LAN_CONFIG_PARMS_CMD:
+		handle_ipmi_set_lan_configuration_parameters(lan, msg);
+		break;
+
+	    case IPMI_GET_LAN_CONFIG_PARMS_CMD:
+		handle_ipmi_get_lan_configuration_parameters(lan, msg);
+		break;
+
+	    default:
+		return_err(lan, msg, NULL, IPMI_INVALID_CMD_CC);
+		break;
+	}
     } else {
 	handle_normal_msg(lan, msg);
     }
@@ -921,6 +982,9 @@ handle_ipmi(lan_data_t *lan,
 	handle_lan_msg(lan, &msg);
     }
 }
+
+
+/**********************************************************************/
 
 int smi_fd;
 int lan_fd;

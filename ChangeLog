@@ -1,4 +1,13 @@
 
+2003-04-24 Corey Minyard <cminyard@mvista.com>
+
+	* priv_table.c, include/OpenIPMI/ipmi_auth.h: Added a table and
+	handling for figuring out if a message is permitted for a certain
+	priviledge level.
+	
+	* include/OpenIPMI/ipmi_msgbits.h: Added all the message ids from
+	table G-1 from the IPMI 1.5 spec.
+
 2003-04-23 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi.c, ipmi_auth.c: Created ipmi_auth.c from some stuff in

@@ -90,4 +90,17 @@ extern ipmi_auth_t ipmi_auths[MAX_IPMI_AUTHS];
 #define IPMI_PRIVILEGE_OPERATOR		3
 #define IPMI_PRIVILEGE_ADMIN		4
 
+
+/* Tell if a specific command is permitted for the given priviledge
+   level.  Returns one of the following. */
+#define PRIV_INVALID	-1
+#define PRIV_DENIED	0
+#define PRIV_PERMITTED	1
+#define PRIV_SEND	2 /* Special send message handling needed. */
+#define PRIV_BOOT	3 /* Special set system boot options handling. */
+
+int ipmi_cmd_permitted(unsigned char priv,
+		       unsigned char netfn,
+		       unsigned char cmd);
+
 #endif /* _IPMI_AUTH_H */
