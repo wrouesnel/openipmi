@@ -110,6 +110,7 @@ log_pad_refresh(int newlines)
 	     log_pad_top_line, 0,
 	     LOG_WIN_TOP, LOG_WIN_LEFT,
 	     LOG_WIN_BOTTOM, LOG_WIN_RIGHT);
+    wrefresh(cmd_win);
 }
 
 void
@@ -125,6 +126,7 @@ display_pad_refresh(void)
 	     display_pad_top_line, 0,
 	     DISPLAY_WIN_TOP, DISPLAY_WIN_LEFT,
 	     DISPLAY_WIN_BOTTOM, DISPLAY_WIN_RIGHT);
+    wrefresh(cmd_win);
 }
 
 void
@@ -794,22 +796,6 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		id, instance, lun, num, name);
 	wprintw(display_pad, "  value = ");
 	getyx(display_pad, value.y, value.x);
-	wprintw(display_pad, "\n  units = %s%s",
-		ipmi_get_unit_type_string(ipmi_sensor_get_base_unit(sensor)),
-		ipmi_get_rate_unit_string(ipmi_sensor_get_rate_unit(sensor)));
-	switch(ipmi_sensor_get_modifier_unit_use(sensor)) {
-	    case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
-		wprintw(display_pad, "/%s",
-			ipmi_get_unit_type_string(
-			    ipmi_sensor_get_modifier_unit(sensor)));
-		break;
-		
-	    case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
-		wprintw(display_pad, "*%s",
-			ipmi_get_unit_type_string(
-			    ipmi_sensor_get_modifier_unit(sensor)));
-		break;
-	}
 	wprintw(display_pad, "\n");
 	num = ipmi_sensor_get_sensor_type(sensor);
 	wprintw(display_pad, "  sensor type = %s (0x%2.2x)\n",
@@ -823,6 +809,24 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	{
 	    enum ipmi_thresh_e t;
 	    double val;
+
+	    wprintw(display_pad, "  units = %s%s",
+		    ipmi_get_unit_type_string(ipmi_sensor_get_base_unit(sensor)),
+		    ipmi_get_rate_unit_string(ipmi_sensor_get_rate_unit(sensor)));
+	    switch(ipmi_sensor_get_modifier_unit_use(sensor)) {
+		case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
+		    wprintw(display_pad, "/%s",
+			    ipmi_get_unit_type_string(
+				ipmi_sensor_get_modifier_unit(sensor)));
+		    break;
+		    
+		case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
+		    wprintw(display_pad, "*%s",
+			    ipmi_get_unit_type_string(
+				ipmi_sensor_get_modifier_unit(sensor)));
+		    break;
+	    }
+	    wprintw(display_pad, "\n");
 
 	    rv = ipmi_reading_get(sensor, read_sensor, NULL);
 	    if (rv)
@@ -1028,6 +1032,12 @@ sensor_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+int
+enable_cmd(char *cmd, char **toks, void *cb_data)
+{
+    return 0;
+}
+
 static struct {
     char          *name;
     cmd_handler_t handler;
@@ -1036,6 +1046,7 @@ static struct {
     { "entities",			entities_cmd },
     { "sensors",			sensors_cmd },
     { "sensor",				sensor_cmd },
+    { "enable",				enable_cmd },
     { NULL,				NULL}
 };
 int
@@ -1177,6 +1188,59 @@ report_error(char *str, int err)
 }
 
 static void
+sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
+			       enum ipmi_event_dir_e       dir,
+			       enum ipmi_thresh_e          threshold,
+			       enum ipmi_event_value_dir_e high_low,
+			       int                         value_present,
+			       double                      value,
+			       void                        *cb_data)
+{
+    int  id, instance, lun, num;
+    char name[33];
+
+    id = ipmi_sensor_get_entity_id(sensor);
+    instance = ipmi_sensor_get_entity_instance(sensor);
+    ipmi_sensor_get_num(sensor, &lun, &num);
+    ipmi_sensor_get_id(sensor, name, 33);
+    ui_log("Sensor %d.%d.%d.%d - %s: %s %s %s\n",
+	   id, instance, lun, num, name,
+	   ipmi_get_threshold_string(threshold),
+	   ipmi_get_value_dir_string(high_low),
+	   ipmi_get_event_dir_string(dir));
+    if (value_present) {
+	ui_log("  value is %f\n", value);
+    }
+}
+
+static void
+sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
+			      enum ipmi_event_dir_e dir,
+			      int                   offset,
+			      int                   severity_present,
+			      int                   severity,
+			      int		    prev_severity_present,
+			      int                   prev_severity,
+			      void                  *cb_data)
+{
+    int  id, instance, lun, num;
+    char name[33];
+
+    id = ipmi_sensor_get_entity_id(sensor);
+    instance = ipmi_sensor_get_entity_instance(sensor);
+    ipmi_sensor_get_num(sensor, &lun, &num);
+    ipmi_sensor_get_id(sensor, name, 33);
+    ui_log("Sensor %d.%d.%d.%d - %s: %d %s\n",
+	   id, instance, lun, num, name,
+	   offset,
+	   ipmi_get_event_dir_string(dir));
+    if (severity_present)
+	ui_log("  severity is %d\n", severity);
+    if (prev_severity_present)
+	ui_log("  prev severity is %d\n", prev_severity);
+}
+
+static void
 sensor_change(enum ipmi_update_e op,
 	      ipmi_entity_t      *ent,
 	      ipmi_sensor_t      *sensor,
@@ -1185,6 +1249,7 @@ sensor_change(enum ipmi_update_e op,
     int id, instance;
     int lun, num;
     char name[33];
+    int rv;
 
     id = ipmi_entity_get_entity_id(ent);
     instance = ipmi_entity_get_entity_instance(ent);
@@ -1194,6 +1259,19 @@ sensor_change(enum ipmi_update_e op,
 	    ipmi_sensor_get_id(sensor, name, 33);
 	    ui_log("Sensor added: %d.%d.%d.%d (%s)\n",
 		   id, instance, lun, num, name);
+	    if (ipmi_sensor_get_event_reading_type(sensor)
+		== IPMI_EVENT_READING_TYPE_THRESHOLD)
+		rv = ipmi_sensor_threshold_set_event_handler(
+		    sensor,
+		    sensor_threshold_event_handler,
+		    NULL);
+	    else
+		rv = ipmi_sensor_discrete_set_event_handler(
+		    sensor,
+		    sensor_discrete_event_handler,
+		    NULL);
+	    if (rv)
+		ui_log("Unable to register sensor event handler: 0x%x\n", rv);
 	    break;
 	case DELETED:
 	    ipmi_sensor_get_id(sensor, name, 33);
@@ -1257,6 +1335,17 @@ entity_change(enum ipmi_update_e op,
     }
 }
 
+static ipmi_event_handler_id_t *event_handler_id;
+
+static void
+event_handler(ipmi_mc_t  *bmc,
+	      ipmi_msg_t *event,
+	      void       *event_data)
+{
+    /* FIXME - fill this out. */
+    ui_log("Unknown event\n");
+}
+
 void
 setup_done(ipmi_mc_t *mc,
 	   void      *user_data,
@@ -1269,6 +1358,14 @@ setup_done(ipmi_mc_t *mc,
 	leave_err(err, "Could not set up IPMI connection");
 
     bmc = mc;
+
+    rv = ipmi_register_for_events(bmc, event_handler, NULL, &event_handler_id);
+    if (rv)
+	leave_err(rv, "ipmi_register_for_events");
+
+    rv = ipmi_bmc_enable_events(bmc);
+    if (rv)
+	leave_err(rv, "ipmi_bmc_enable_events");
 
     rv = ipmi_bmc_set_entity_update_handler(mc, entity_change, mc);
     if (rv)

@@ -461,6 +461,10 @@ int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 			int           *lun,
 			int           *num);
 
+/* Get the entity the sensor is hooked to. */
+int ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_entity_instance(ipmi_sensor_t *sensor);
+
 /* Information about a sensor from it's SDR.  These are things that
    are specified by IPMI, see the spec for more details. */
 int ipmi_sensor_get_sensor_init_scanning(ipmi_sensor_t *sensor);

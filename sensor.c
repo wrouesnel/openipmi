@@ -2151,7 +2151,6 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_msg_t *event)
     enum ipmi_event_dir_e dir;
     int                   rv;
 
-
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD) {
 	int                         value_present = 0;
 	double                      value = 0.0;

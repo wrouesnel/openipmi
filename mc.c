@@ -238,7 +238,14 @@ find_mc_by_addr(ipmi_mc_t   *bmc,
 		ipmi_addr_t *addr,
 		int         addr_len)
 {
-    mc_cmp_info_t info;
+    mc_cmp_info_t    info;
+
+    /* Cheap hack to handle the BMC LUN. */
+    if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
+	if (ipmb->slave_addr == 0x20)
+	    return bmc;
+    }
 
     memcpy(&(info.addr), addr, addr_len);
     info.addr_len = addr_len;
@@ -382,8 +389,11 @@ ll_event_handler(ipmi_con_t   *ipmi,
 	info.err = 0;
 	info.event = event;
 	rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
-	if (!rv)
+	if (rv) {
+	    ipmi_log("Got event message from unknown source: %x.%x.%x.%x",
+		     id.mc_num, id.channel, id.lun, id.sensor_num);
 	    rv = info.err;
+	}
     }
 
     /* It's an event from system software, or the info couldn't be found. */
