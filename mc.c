@@ -1194,7 +1194,8 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    if (rv) {
 		/* Out of memory, just give up for now. */
 		free(info);
-		return;
+		ipmi_unlock(info->bmc->bmc->mc_list_lock);
+		goto out;
 	    }
 	    rv = get_device_id_data_from_rsp(mc, msg);
 	    if (rv)
