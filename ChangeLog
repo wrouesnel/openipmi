@@ -1,3 +1,8 @@
+2005-03-23 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/mxp.h: Fixed the license to be LGPL, as
+	intended.
+
 2005-03-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fix a bug in fru presence handling, addressing

@@ -1,22 +1,34 @@
 /*
- * mxp_ipmi.h
+ * mxp.h
  *
  * Interfaces to the MXP OEM code.
  *
- * (C) 2003 MontaVista Software, Inc.  All right reserved.
+ * Author: MontaVista Software, Inc.
+ *         Corey Minyard <minyard@mvista.com>
+ *         source@mvista.com
  *
- * This program is licensed under the MontaVista Software,
- * Inc. License Agreement ("License Agreement"), and is for the
- * purposes of the License Agreement a MontaVista Licensed Deployment
- * Program.  The License requires that you have a valid Product
- * Subscription with MontaVista Software, Inc., or are a Named Contact
- * with active access to the MontaVista Zone, or have a Software
- * License Agreement with MontaVista Software, Inc. This program comes
- * with no warranties other than those provided for in the Product
- * Subscription agreement. The License Agreement grants you the right
- * to install, modify and use the program.  You may distribute the
- * object code and scripts for this program, but you have no right to
- * distribute the source code for this program.
+ * Copyright 2002,2003 MontaVista Software Inc.
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public License
+ *  as published by the Free Software Foundation; either version 2 of
+ *  the License, or (at your option) any later version.
+ *
+ *
+ *  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+ *  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ *  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+ *  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ *  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this program; if not, write to the Free
+ *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #ifndef _MXP_IPMI_H

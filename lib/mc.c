@@ -4122,6 +4122,7 @@ static int set_pw(ipmi_mc_t *mc, ipmi_user_t *user)
     if (user->pw2_set) {
 	msg.data_len = 22;
 	memcpy(data+2, user->pw, 20);
+	data[0] |= 0x80;
     } else {
 	msg.data_len = 18;
 	memcpy(data+2, user->pw, 16);
