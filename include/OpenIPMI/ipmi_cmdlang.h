@@ -36,6 +36,10 @@
 
 #include <OpenIPMI/selector.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Forward declaration */
 typedef struct ipmi_cmd_info_s ipmi_cmd_info_t;
 
@@ -340,5 +344,9 @@ int ipmi_cmdlang_get_argc(ipmi_cmd_info_t *info);
 char **ipmi_cmdlang_get_argv(ipmi_cmd_info_t *info);
 int ipmi_cmdlang_get_curr_arg(ipmi_cmd_info_t *info);
 ipmi_cmdlang_t *ipmi_cmdinfo_get_cmdlang(ipmi_cmd_info_t *info);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __IPMI_CMDLANG_H */

@@ -36,9 +36,17 @@
 
 #include <OpenIPMI/os_handler.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Logs go to the standard glib log hander. */
 
 /* Allocate and configure an OS handler. */
 os_handler_t *ipmi_glib_get_os_handler(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __IPMI_GLIB_H */

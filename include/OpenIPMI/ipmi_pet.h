@@ -37,6 +37,10 @@
 
 #include <OpenIPMI/ipmi_types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct ipmi_pet_s ipmi_pet_t;
 
 typedef void (*ipmi_pet_done_cb)(ipmi_pet_t *pet, int err, void *cb_data);
@@ -128,5 +132,9 @@ unsigned int ipmi_pet_get_eft_sel(ipmi_pet_t *pet);
 unsigned int ipmi_pet_get_policy_num(ipmi_pet_t *pet);
 unsigned int ipmi_pet_get_apt_sel(ipmi_pet_t *pet);
 unsigned int ipmi_pet_get_lan_dest_sel(ipmi_pet_t *pet);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_PET_H */

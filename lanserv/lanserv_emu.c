@@ -248,7 +248,7 @@ diff_timeval(struct timeval *dest,
 }
 
 static void
-log(int logtype, msg_t *msg, char *format, ...)
+lanserv_log(int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
     struct timeval tod;
@@ -500,7 +500,7 @@ main(int argc, const char *argv[])
     lan.smi_send = smi_send;
     lan.gen_rand = gen_rand;
     lan.write_config = write_config;
-    lan.log = log;
+    lan.log = lanserv_log;
     lan.debug = debug;
 
     num_addr = MAX_ADDR;

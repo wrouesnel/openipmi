@@ -34,6 +34,15 @@
 #ifndef __IPMIIF_H
 #define __IPMIIF_H
 
+#include <time.h>
+#include <OpenIPMI/ipmi_types.h>
+#include <OpenIPMI/ipmi_bits.h>
+#include <OpenIPMI/os_handler.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* For version detection */
 #define OPENIPMI_VERSION_MAJOR @OPENIPMI_VERSION_MAJOR@
 #define OPENIPMI_VERSION_MINOR @OPENIPMI_VERSION_MINOR@
@@ -103,11 +112,6 @@ char *ipmi_openipmi_version(void);
  * callbacks, so you will constipate the system if you block in
  * callbacks.  Just don't do it.
  */
-
-#include <time.h>
-#include <OpenIPMI/ipmi_types.h>
-#include <OpenIPMI/ipmi_bits.h>
-#include <OpenIPMI/os_handler.h>
 
 /* This is the maximum size of any name in OpenIPMI */
 #define IPMI_MAX_NAME_LEN 64
@@ -1731,17 +1735,43 @@ int ipmi_parse_options(ipmi_open_option_t *option,
 		       char               *arg);
 
 /* Parse the arguments and extract a connection.  curr_arg should be
-   passed in as the current argument, it will be set to one after the
-   last argument parsed.  arg_count should be the total number of
-   arguments.  args is the arguments (in argv style), and the data is
-   returned in the iargs value.  Note that on an error, a non-zero
-   value is returned and curr_arg will be set to the argument that had
-   the error.  You must use ipmi_free_args() to free the value
-   returned in iargs. */
+   passed in as the current argument, it will be set to the argument
+   after the last argument parsed.  arg_count should be the total
+   number of arguments.  args is the arguments (in argv style), and
+   the data is returned in the iargs value.  Note that on an error, a
+   non-zero value is returned and curr_arg will be set to the argument
+   that had the error.  You must use ipmi_free_args() to free the
+   value returned in iargs.  Note that this is the old version and you
+   really should not use it.  Use ipmi_parse_args2(). */
 int ipmi_parse_args(int         *curr_arg,
 		    int         arg_count,
 		    char        * const *args,
 		    ipmi_args_t **iargs);
+
+/* Parse the arguments and extract a connection.  curr_arg should be
+   passed in as the current argument in the args array, it will be set
+   to the argument after the last argument parsed.  arg_count
+   should be the total number of arguments.  args is the arguments (in
+   argv style), and the data is returned in the iargs value.  Note
+   that on an error, a non-zero value is returned and curr_arg will be
+   set to the argument that had the error.  You must use
+   ipmi_free_args() to free the value returned in iargs.
+
+   The arguments are parsed as:
+      lan [-U <username>] [-P <password>] [-A <authtype>] [-L <privilege>]
+          [-s] [-p[2] <port number>] <IP> [<IP>]
+   for a RMCP LAN connection or
+      smi <smi num>
+   for a system interface connection.  For multiple IP addresses to the
+   same BMC, use the -s option and the second IP (and -p2)
+   for the second IP address.  OpenIPMI supports multiple IP
+   addresses, detecting failures, switching between
+   addresses, and other fault-tolerant things.  It does this
+   transparently to the user. */
+int ipmi_parse_args2(int         *curr_arg,
+		     int         arg_count,
+		     char        * const *args,
+		     ipmi_args_t **iargs);	 
 
 /* Free an argument structure. */
 void ipmi_free_args(ipmi_args_t *args);
@@ -2249,5 +2279,9 @@ int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 				 int           event,
 				 int           *val)
      IPMI_FUNC_DEPRECATED;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __IPMIIF_H */

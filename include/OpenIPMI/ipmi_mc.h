@@ -36,6 +36,10 @@
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_sdr.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* MCs are mostly internal items in OpenIPMI, but they are here because
    they are sometimes useful.  It is at least theoretically possible to
    put a non-IPMI system under OpenIPMI, and if you do the MCs won't
@@ -224,5 +228,9 @@ int ipmi_mc_set_sdrs_first_read_handler(ipmi_mc_t      *mc,
 int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
 					ipmi_mc_ptr_cb handler,
 					void           *cb_data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_MC_H */

@@ -37,6 +37,10 @@
 /* To get a socket. */
 #include <netinet/in.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* The formats of these MUST match the formats for the kernel. */
 
 #ifndef __LINUX_IPMI_H /* Don't include this if we are including the kernel */
@@ -147,5 +151,9 @@ int ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun);
 /* Get the slsave address from the address, returns 0 if the address
    does not have a slave address. */
 unsigned int ipmi_addr_get_slave_addr(ipmi_addr_t *addr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __IPMI_ADDR_H */

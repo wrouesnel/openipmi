@@ -36,6 +36,10 @@
 
 #include <OpenIPMI/ipmi_types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* The following functions get boatloads of information from the FRU.
    These all will return ENOSYS if the information is not available.
    All these function return error, not lengths.
@@ -337,5 +341,9 @@ int ipmi_fru_get_internal_use_data(ipmi_fru_t    *fru,
 
 int ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
 				     unsigned int *length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_FRU_H */

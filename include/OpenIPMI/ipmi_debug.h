@@ -36,6 +36,10 @@
 
 #include <OpenIPMI/os_handler.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern unsigned int __ipmi_log_mask;
 
 /* Log normal IPMI messages, but not low-level protocol messages. */
@@ -89,5 +93,9 @@ extern int __ipmi_debug_locks;
 #define DEBUG_LOCKS	(__ipmi_debug_locks)
 #define DEBUG_LOCKS_ENABLE() __ipmi_debug_locks = 1
 #define DEBUG_LOCKS_DISABLE() __ipmi_debug_locks = 0
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_DEBUG_H */

@@ -49,6 +49,10 @@
 #include <stdint.h>
 #include <OpenIPMI/ipmi_addr.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * These are the main types the user has to deal with.
  */
@@ -211,5 +215,9 @@ typedef struct ipmi_chan_info_s
 } ipmi_chan_info_t;
 
 #define MAX_IPMI_USED_CHANNELS 8
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_TYPES_H */

@@ -37,6 +37,10 @@
 #include <OpenIPMI/ipmiif.h>
 #include <netinet/in.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define IPMI_LAN_STD_PORT	623
 
 /*
@@ -188,5 +192,9 @@ int ipmi_lan_setup_con(struct in_addr *ip_addrs,
 int ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 				   ipmi_msg_t      *msg,
 				   unsigned char   *pet_ack);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __IPMI_LAN_H */

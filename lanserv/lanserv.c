@@ -63,7 +63,7 @@ static int daemonize = 1;
 
 #define MAX_ADDR 4
 
-static void log(int logtype, msg_t *msg, char *format, ...);
+static void lanserv_log(int logtype, msg_t *msg, char *format, ...);
 
 typedef struct misc_data
 {
@@ -81,12 +81,12 @@ dump_hex(void *vdata, int len, int left)
     int i;
     for (i=0; i<len; i++) {
 	if (left == 0) {
-	    log(DEBUG,  NULL, "\n  ");
+	    lanserv_log(DEBUG,  NULL, "\n  ");
 	    left = 15;
 	} else {
 	    left--;
 	}
-	log(DEBUG, NULL, " %2.2x", data[i]);
+	lanserv_log(DEBUG, NULL, " %2.2x", data[i]);
     }
 
     return left;
@@ -122,14 +122,14 @@ lan_send(lan_data_t *lan,
 
     if (debug) {
 	int left, i;
-	log(DEBUG, NULL, "Sending message to:\n  ");
+	lanserv_log(DEBUG, NULL, "Sending message to:\n  ");
 	dump_hex(&l->addr, l->addr_len, 16);
-	log(DEBUG, NULL, "\nMsg:\n  ");
+	lanserv_log(DEBUG, NULL, "\nMsg:\n  ");
 	left = 16;
 	for (i=0; i<vecs; i++) {
 	    left = dump_hex(data[i].iov_base, data[i].iov_len, left);
 	}
-	log(DEBUG, NULL, "\n");
+	lanserv_log(DEBUG, NULL, "\n");
     }
 
     msg.msg_name = &(l->addr);
@@ -371,7 +371,7 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 	    rdata[0] = IPMI_REQUEST_DATA_TRUNCATED_CC;
 	    rsp.msg.data_len = sizeof(rdata);
 	} else {
-	    log(DEBUG, NULL, "Error receiving message: %s\n", strerror(errno));
+	    lanserv_log(DEBUG, NULL, "Error receiving message: %s\n", strerror(errno));
 	    return;
 	}
     }
@@ -403,7 +403,7 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
 	rsp.msg.data_len += 8;
 	data[rsp.msg.data_len-1] = ipmb_checksum(data+1, rsp.msg.data_len-2, 0);
     } else {
-	log(DEBUG, NULL, "Error!\n");
+	lanserv_log(DEBUG, NULL, "Error!\n");
 	return;
     }
 
@@ -431,20 +431,20 @@ handle_msg_ipmi_sock(int smi_fd, lan_data_t *lan)
 	if (errno == EINTR) {
 	    return; /* Try again later. */
 	} else {
-	    log(DEBUG, NULL, "Error receiving message: %s\n", strerror(errno));
+	    lanserv_log(DEBUG, NULL, "Error receiving message: %s\n", strerror(errno));
 	    return;
 	}
     }
 
     if (rv < sizeof(*smsg)) {
-	log(DEBUG, NULL, "Got subsized msg, size was %d\n", rv);
+	lanserv_log(DEBUG, NULL, "Got subsized msg, size was %d\n", rv);
 	return;
     }
 
     smsg = (struct ipmi_sock_msg *) rdata;
 
     if (rv < (sizeof(*smsg) + smsg->data_len)) {
-	log(DEBUG, NULL, "Got subsized msg, size was %d, data_len was %d\n",
+	lanserv_log(DEBUG, NULL, "Got subsized msg, size was %d, data_len was %d\n",
 	    rv, smsg->data_len);
 	return;
     }
@@ -478,7 +478,7 @@ handle_msg_ipmi_sock(int smi_fd, lan_data_t *lan)
 	smsg->data_len += 8;
 	data[smsg->data_len-1] = ipmb_checksum(data+1, smsg->data_len-2, 0);
     } else {
-	log(DEBUG, NULL, "Error!\n");
+	lanserv_log(DEBUG, NULL, "Error!\n");
 	return;
     }
 
@@ -505,11 +505,11 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
     l.xmit_fd = lan_fd;
 
     if (debug) {
-	log(DEBUG, NULL, "Got message from:\n  ");
+	lanserv_log(DEBUG, NULL, "Got message from:\n  ");
 	dump_hex(&l.addr, l.addr_len, 16);
-	log(DEBUG, NULL, "\nMsg:\n  ");
+	lanserv_log(DEBUG, NULL, "\nMsg:\n  ");
 	dump_hex(data, len, 16);
-	log(DEBUG, NULL, "\n");
+	lanserv_log(DEBUG, NULL, "\n");
     }
 
     if (len < 4)
@@ -636,7 +636,7 @@ diff_timeval(struct timeval *dest,
 }
 
 static void
-log(int logtype, msg_t *msg, char *format, ...)
+lanserv_log(int logtype, msg_t *msg, char *format, ...)
 {
     va_list ap;
     struct timeval tod;
@@ -794,7 +794,7 @@ main(int argc, const char *argv[])
     }
     lan.gen_rand = gen_rand;
     lan.write_config = write_config;
-    lan.log = log;
+    lan.log = lanserv_log;
     lan.debug = debug;
 
     if (num_addr == 0) {
@@ -827,7 +827,7 @@ main(int argc, const char *argv[])
 	if ((pid = fork()) > 0) {
 	    exit(0);
 	} else if (pid < 0) {
-	    log(LAN_ERR, NULL, "Error forking first fork");
+	    lanserv_log(LAN_ERR, NULL, "Error forking first fork");
 	    exit(1);
 	} else {
 	    /* setsid() is necessary if we really want to demonize */
@@ -836,13 +836,13 @@ main(int argc, const char *argv[])
 	    if ((pid = fork()) > 0) {
 		exit(0);
 	    } else if (pid < 0) {
-		log(LAN_ERR, NULL, "Error forking second fork");
+		lanserv_log(LAN_ERR, NULL, "Error forking second fork");
 		exit(1);
 	    }
 	}
     }
 
-    log(LAN_ERR, NULL, "%s startup", argv[0]);
+    lanserv_log(LAN_ERR, NULL, "%s startup", argv[0]);
 
     max_fd = data.smi_fd;
     for (i=0; i<num_addr; i++) {

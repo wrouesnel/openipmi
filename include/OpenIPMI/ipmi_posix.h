@@ -37,6 +37,10 @@
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/selector.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* These are the defined OS handlers for POSIX with and without
    threading.  If you use these (and thus link with the OpenIPMIposix
    or OpenIPMIpthread libraries) you must provide posix_vlog().  It is
@@ -155,5 +159,9 @@ int ipmi_posix_thread_sel_select(os_handler_t   *os_hnd,
 /* Calls sel_select_loop() with the proper data. */
 void ipmi_posix_thread_sel_select_loop(os_handler_t *os_hnd)
      IPMI_FUNC_DEPRECATED;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __IPMI_POSIX_H */

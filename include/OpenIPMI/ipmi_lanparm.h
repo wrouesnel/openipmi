@@ -36,6 +36,10 @@
 
 #include <OpenIPMI/ipmi_types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* The abstract type for lanparm. */
 typedef struct ipmi_lanparm_s ipmi_lanparm_t;
 
@@ -368,5 +372,9 @@ int ipmi_lanconfig_set_dest_mac_addr(ipmi_lan_config_t *lanc,
 				     unsigned int      dest,
 				     unsigned char     *data,
 				     unsigned int      data_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_LANPARM_H */

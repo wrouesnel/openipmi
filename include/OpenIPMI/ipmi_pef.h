@@ -37,6 +37,10 @@
 
 #include <OpenIPMI/ipmi_types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* The abstract type for pef.  Note that if you use this directly, you
    must understand about PEF locking.  If you want easier access to
    the configuration, see the ipmi_pef_config_t type later in this
@@ -511,5 +515,9 @@ int ipmi_pefconfig_get_guid(ipmi_pef_config_t *pefc,
 int ipmi_pefconfig_set_guid(ipmi_pef_config_t *pefc, unsigned int enabled,
 			    unsigned char *data, unsigned int data_len);
 
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_PEF_H */

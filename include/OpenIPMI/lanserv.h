@@ -42,6 +42,10 @@
 
 #include <OpenIPMI/ipmi_auth.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * Restrictions: <=64 sessions
  *               <=64 users (per spec, 6 bits)
@@ -296,5 +300,9 @@ int lanserv_read_config(lan_data_t    *lan,
 void ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last);
 
 int ipmi_lan_init(lan_data_t *lan);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __LANSERV_H */

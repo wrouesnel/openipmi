@@ -40,6 +40,10 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/os_handler.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* This represents a registration for an event handler. */
 typedef struct ipmi_ll_event_handler_id_s ipmi_ll_event_handler_id_t;
 
@@ -329,5 +333,9 @@ void ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
 				  unsigned int          addr_len,
 				  ipmi_msg_t            *msg,
 				  ipmi_ll_rsp_handler_t rsp_handler);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_CONN_H */

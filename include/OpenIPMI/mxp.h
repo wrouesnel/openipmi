@@ -31,6 +31,10 @@
 #include <OpenIPMI/ipmiif.h>
 #include <netinet/in.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define IPMI_MXP_STD_PORT	623
 
 /*
@@ -74,5 +78,9 @@ int mxp_lan_setup_con(struct in_addr            *ip_addrs,
 		      void                      *user_data,
 		      unsigned char             swid,
 		      ipmi_con_t                **new_con);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _MXP_IPMI_H */

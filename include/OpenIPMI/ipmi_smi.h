@@ -37,6 +37,10 @@
 #include <OpenIPMI/ipmi_mc.h>
 #include <netinet/in.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Create a connection to a system-management interface on the current
  * computer.  The parameters are: 
  *
@@ -50,5 +54,9 @@ int ipmi_smi_setup_con(int                if_num,
 		       os_handler_t       *handlers,
 		       void               *user_data,
 		       ipmi_con_t         **new_con);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __IPMI_SMI_H */

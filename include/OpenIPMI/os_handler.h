@@ -38,6 +38,10 @@
 #include <sys/time.h>
 #include <OpenIPMI/ipmi_log.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* An os-independent normal lock. */
 typedef struct os_hnd_lock_s os_hnd_lock_t;
 
@@ -247,5 +251,9 @@ struct os_handler_s
     int (*is_writelocked)(os_handler_t    *handler,
 			 os_hnd_rwlock_t *id);
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __OS_HANDLER_H */

@@ -229,14 +229,6 @@
 #define IPMI_SET_SOL_CONFIGURATION_PARAMETERS	0x21
 #define IPMI_GET_SOL_CONFIGURATION_PARAMETERS	0x22
 
-/* Convert a netfn/cmd into a string.  You must pass a buffer in (32
-   bytes is good) and the buffer length.  The string will be stored in
-   that buffer and also returned. */
-char *ipmi_get_command_string(unsigned int netfn,
-			      unsigned int cmd,
-			      char         *buffer,
-			      unsigned int buf_len);
-
 /*
  * NetFNs
  */
@@ -250,11 +242,27 @@ char *ipmi_get_command_string(unsigned int netfn,
 #define IPMI_GROUP_EXTENSION_NETFN	0x2c
 #define IPMI_OEM_GROUP_NETFN		0x2e
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Convert a netfn into a string.  You must pass a buffer in (32
    bytes is good) and the buffer length.  The string will be stored in
    that buffer and also returned. */
 char *ipmi_get_netfn_string(unsigned int netfn,
 			    char         *buffer,
 			    unsigned int buf_len);
+
+/* Convert a netfn/cmd into a string.  You must pass a buffer in (32
+   bytes is good) and the buffer length.  The string will be stored in
+   that buffer and also returned. */
+char *ipmi_get_command_string(unsigned int netfn,
+			      unsigned int cmd,
+			      char         *buffer,
+			      unsigned int buf_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_MSGBITS_H */

@@ -79,12 +79,20 @@
 #define IPMI_NOT_SUPPORTED_IN_PRESENT_STATE_CC	0xD5
 #define IPMI_UNKNOWN_ERR_CC			0xff
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Convert a completion code into a string.  You must pass a buffer in
    (32 bytes is good) and the buffer length.  The string will be
    stored in that buffer and also returned. */
 char *ipmi_get_cc_string(unsigned int cc,
 			 char         *buffer,
 			 unsigned int buf_len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #include <errno.h>
 

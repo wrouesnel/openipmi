@@ -385,7 +385,7 @@ Domain Created: <domain>
 - Open a connection to a new domain.
 \fI<parms>\fP are either:
 .RS
-lan [-u \fI<username>\fP] [-P \fI<password>\fP] [-A \fI<authtype>\fP] [-L \fI<privilege>\fP] [-s] [-p[2] \fI<port number>\fP] \fI<IP>\fP [\fI<IP>\fP]
+lan [-U \fI<username>\fP] [-P \fI<password>\fP] [-A \fI<authtype>\fP] [-L \fI<privilege>\fP] [-s] [-p[2] \fI<port number>\fP] \fI<IP>\fP [\fI<IP>\fP]
 .RE
 for a RMCP LAN connection or
 .RS
@@ -399,7 +399,7 @@ BMC.  For that, use the -s option and the second IP (and -p2)
 for the second IP address.  OpenIPMI supports these IP
 addresses and connections, detecting failures, switching between
 addresses, and other fault-tolerant things.  It does this
-transparently to the user.  Mutiple connections may require special
+transparently to the user.  Multiple connections may require special
 OEM support, read the documentation about your specific system if you
 need this.
 

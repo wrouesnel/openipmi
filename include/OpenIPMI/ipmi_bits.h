@@ -36,6 +36,10 @@
 
 #include <limits.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
 enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
@@ -443,5 +447,9 @@ char *ipmi_get_color_string(unsigned int val);
 
 #define IPMI_TIMEOUT_NOW	0
 #define IPMI_TIMEOUT_FOREVER	LONG_MAX
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_BITS_H */

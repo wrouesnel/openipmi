@@ -36,6 +36,10 @@
 #include <sys/time.h> /* For timeval */
 #include <OpenIPMI/os_handler.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* The main data structure used by the selector. */
 struct selector_s;
 typedef struct selector_s selector_t;
@@ -147,5 +151,9 @@ void ipmi_sel_set_read_fds_handler(selector_t                 *sel,
 				   ipmi_sel_check_read_fds_cb handle,
 				   ipmi_sel_check_timeout_cb  timeout,
 				   void                       *cb_data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* SELECTOR */

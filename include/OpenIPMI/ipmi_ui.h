@@ -38,6 +38,10 @@
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/selector.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern os_handler_t ipmi_ui_cb_handlers;
 
 int ipmi_ui_init(selector_t **selector, int full_screen);
@@ -51,5 +55,9 @@ void ipmi_ui_setup_done(ipmi_domain_t *mc,
 			unsigned int  port_num,
 			int           still_connected,
 			void          *user_data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_UI_H */

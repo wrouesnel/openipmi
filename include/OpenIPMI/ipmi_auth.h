@@ -35,6 +35,10 @@
 #ifndef _IPMI_AUTH_H
 #define _IPMI_AUTH_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Data is provided to the authorization code as an array of these items, a
    "scatter-gather" list.  The algorithm will go through the item in the
    array until "data" is NULL. */
@@ -110,5 +114,9 @@ char *ipmi_privilege_string(int privilege);
 int ipmi_cmd_permitted(unsigned char priv,
 		       unsigned char netfn,
 		       unsigned char cmd);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_AUTH_H */

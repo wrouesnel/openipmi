@@ -35,6 +35,10 @@
 #ifndef __IPMI_LOG_H_
 #define __IPMI_LOG_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Types of logs that may be generated. */
 enum ipmi_log_type_e
 {
@@ -70,5 +74,9 @@ enum ipmi_log_type_e
     IPMI_LOG_DEBUG_CONT,
     IPMI_LOG_DEBUG_END,
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __IPMI_LOG_H_ */

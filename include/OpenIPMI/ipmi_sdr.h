@@ -36,6 +36,10 @@
 #include <OpenIPMI/ipmi_types.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define MAX_SDR_DATA 255
 
 /* Generic information about an SDR. */
@@ -144,5 +148,9 @@ typedef void (*ipmi_sdr_save_cb)(ipmi_sdr_info_t *sdrs, int err, void *cb_data);
 int ipmi_sdr_save(ipmi_sdr_info_t  *sdrs,
 		  ipmi_sdr_save_cb done,
 		  void             *cb_data);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _IPMI_SDR_H */
