@@ -44,6 +44,8 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 
+#define PICMG_MFG_ID	0x315a
+
 /* PICMG Site type */
 #define PICMG_SITE_TYPE_PICMG_BOARD		0
 #define PICMG_SITE_TYPE_POWER_ENTRY_MODULE	1
@@ -56,7 +58,7 @@
 #define PICMG_SITE_TYPE_PMC			8
 #define PICMG_SITE_TYPE_READ_TRANSITION_MODULE	9
 
-/* Address key types, mainl for get address info. */
+/* Address key types, mainly for get address info. */
 #define PICMG_ADDRESS_KEY_HARDWARE	0
 #define PICMG_ADDRESS_KEY_IPMB_0	1
 #define PICMG_ADDRESS_KEY_PHYSICAL	3
@@ -66,12 +68,32 @@
 #define PICMG_ID				0
 #define PICMG_CMD_GET_ADDRESS_INFO		1
 
+typedef struct atca_address_s
+{
+    unsigned char hw_address;
+    unsigned char site_num;
+    unsigned char site_type;
+} atca_address_t;
+
+typedef struct atca_board_s
+{
+    unsigned char ipmb_addr;
+    ipmi_entity_t *entity;
+} atca_board_t;
+
 typedef struct atca_info_s
 {
     ipmi_domain_t *domain;
     unsigned char shelf_fru_ipmb;
     unsigned char shelf_fru_device_id;
     ipmi_fru_t    *shelf_fru;
+
+    unsigned char        shelf_address[40];
+    enum ipmi_str_type_e shelf_address_type;
+    unsigned int         shelf_address_len;
+
+    unsigned int   num_addresses;
+    atca_address_t *addresses;
 } atca_info_t;
 
 
@@ -80,6 +102,9 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 {
     atca_info_t   *info = cb_data;
     ipmi_domain_t *domain = info->domain;
+    unsigned int  count;
+    int           found;
+    int           i, j;
 
     if (err) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -89,7 +114,71 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	goto out;
     }
 
-    /* We got the shelf FRU info, now hunt through it. */
+    /* We got the shelf FRU info, now hunt through it for the address
+       table. */
+    found = 0;
+    count = ipmi_fru_get_num_multi_records(fru);
+    for (i=0; i<count; i++) {
+	unsigned char type;
+	unsigned char ver;
+	unsigned int  len;
+	unsigned char *data;
+	unsigned int  mfg_id;
+	unsigned char *p;
+	    
+	if ((ipmi_fru_get_multi_record_type(fru, i, &type) != 0)
+	    || (ipmi_fru_get_multi_record_type(fru, i, &ver) != 0)
+	    || (ipmi_fru_get_multi_record_data_len(fru, i, &len) != 0))
+	    continue;
+
+	if ((type != 0xc0) || (ver != 2) || (len < 27))
+	    continue;
+
+	data = ipmi_mem_alloc(len);
+	if (ipmi_fru_get_multi_record_data(fru, i, data, &len) != 0) {
+	    ipmi_mem_free(data);
+	    continue;
+	}
+
+	mfg_id = data[0] | (data[1] << 8) | (data[2] << 16);
+	if (mfg_id != PICMG_MFG_ID)
+	    continue;
+
+	if (data[4] != 0x10) /* Address table record id */
+	    continue;
+
+	if (data[5] != 0) /* We only know version 0 */
+	    continue;
+
+	if (len < (27 + (3 * data[26])))
+	    /* length does not meet the minimum possible length. */
+	    continue;
+
+	info->shelf_address_len
+	    = ipmi_get_device_string(data+6, 21,
+				     info->shelf_address, 0,
+				     &info->shelf_address_type,
+				     sizeof(info->shelf_address));
+
+	info->addresses = ipmi_mem_alloc(sizeof(atca_address_t) * data[26]);
+	if (!info->addresses)
+	    goto out;
+
+	info->num_addresses = data[26];
+	p = data+27;
+	for (j=0; j<data[26]; j++, p += 3) {
+	    info->addresses[j].hw_address = p[0];
+	    info->addresses[j].site_num = p[1];
+	    info->addresses[j].site_type = p[2];
+	}
+
+	ipmi_mem_free(data);
+    }
+
+    count = 0;
+    for (i=0; i<info->num_addresses; i++) {
+	
+    }
 
  out:
     return;
