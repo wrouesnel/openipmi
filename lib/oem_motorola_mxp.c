@@ -7428,7 +7428,6 @@ timed_rescan_bus4(ipmi_sensor_t *sensor, void *cb_data)
 					     &dummy_event,
 					     NULL);
 
-    ipmi_mem_free(info);
 }
 
 static void
