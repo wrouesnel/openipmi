@@ -66,6 +66,7 @@ struct ipmi_ind_s
     int destroyed;
 
     int type;
+    char *type_str;
 
     int entity_id;
     int entity_instance;
@@ -426,6 +427,13 @@ void
 ipmi_ind_set_type(ipmi_ind_t *ind, int val)
 {
     ind->type = val;
+    ind->type_str = ipmi_get_ind_type_string(val);
+}
+
+char *
+ipmi_ind_get_type_string(ipmi_ind_t *ind)
+{
+    return ind->type_str;
 }
 
 int
@@ -612,4 +620,30 @@ ipmi_ind_get_light_color_time(ipmi_ind_t   *ind,
 	return -1;
 
     return ind->lights[light].settings[set].transitions[num].time;
+}
+
+int
+ipmi_cmp_ind_id(ipmi_ind_id_t id1, ipmi_ind_id_t id2)
+{
+    if (id1.bmc > id2.bmc)
+	return 1;
+    if (id1.bmc < id2.bmc)
+	return -1;
+    if (id1.mc_num > id2.mc_num)
+	return 1;
+    if (id1.mc_num < id2.mc_num)
+	return -1;
+    if (id1.channel > id2.channel)
+	return 1;
+    if (id1.channel < id2.channel)
+	return -1;
+    if (id1.lun > id2.lun)
+	return 1;
+    if (id1.lun < id2.lun)
+	return -1;
+    if (id1.ind_num > id2.ind_num)
+	return 1;
+    if (id1.ind_num < id2.ind_num)
+	return -1;
+    return 0;
 }

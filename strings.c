@@ -678,3 +678,42 @@ ipmi_get_reading_name(unsigned int event_reading_type,
 	return "unknown";
     return rv;
 }
+
+static char *ind_types[] =
+{
+    "unspecified",
+    "light",
+    "relay",
+    "display",
+    "alarm",
+    "reset",
+    "power",
+    "fan speed",
+    "identifier",
+};
+#define NUM_IND_TYPES (sizeof(ind_types)/sizeof(char *))
+char *
+ipmi_get_ind_type_string(unsigned int val)
+{
+    if (val > NUM_IND_TYPES)
+	return "invalid";
+    return ind_types[val];
+}
+
+static char *colors[] =
+{
+    "black",
+    "white",
+    "red",
+    "green",
+    "blue",
+    "yellow",
+};
+#define NUM_COLORS (sizeof(colors)/sizeof(char *))
+char *
+ipmi_get_color_string(unsigned int val)
+{
+    if (val > NUM_IND_TYPES)
+	return "invalid";
+    return colors[val];
+}

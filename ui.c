@@ -76,6 +76,7 @@ enum {
     DISPLAY_INDS, DISPLAY_IND, DISPLAY_ENTITIES, DISPLAY_MCS, DISPLAY_RSP
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
+ipmi_ind_id_t curr_ind_id;
 typedef struct pos_s {int y; int x; } pos_t;
 typedef struct thr_pos_s
 {
@@ -94,6 +95,26 @@ pos_t discr_deassert_avail;
 pos_t discr_deassert_enab;
 
 ipmi_entity_id_t curr_entity_id;
+
+static void
+conv_from_spaces(char *name)
+{
+    while (*name) {
+	if (*name == ' ')
+	    *name = '~';
+	name++;
+    }
+}
+
+static void
+conv_to_spaces(char *name)
+{
+    while (*name) {
+	if (*name == '~')
+	    *name = ' ';
+	name++;
+    }
+}
 
 void
 log_pad_refresh(int newlines)
@@ -507,14 +528,15 @@ static void
 sensors_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 {
     int id, instance;
-    int lun, num;
     char name[33];
+    char name2[33];
 
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
-    ipmi_sensor_get_num(sensor, &lun, &num);
     ipmi_sensor_get_id(sensor, name, 33);
-    wprintw(display_pad, "  %d.%d.%d.%d - %s\n", id, instance, lun, num, name);
+    strcpy(name2, name);
+    conv_from_spaces(name2);
+    wprintw(display_pad, "  %d.%d.%s - %s\n", id, instance, name2, name);
 }
 
 static void
@@ -542,47 +564,9 @@ sensors_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
-static void
-inds_handler(ipmi_entity_t *entity, ipmi_ind_t *ind, void *cb_data)
-{
-    int id, instance;
-    int lun, num;
-    char name[33];
-
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
-    ipmi_ind_get_num(ind, &lun, &num);
-    ipmi_ind_get_id(ind, name, 33);
-    wprintw(display_pad, "  %d.%d.%d.%d - %s\n", id, instance, lun, num, name);
-}
-
-static void
-found_entity_for_inds(ipmi_entity_t *entity,
-		      char          **toks,
-		      char          **toks2,
-		      void          *cb_data)
-{
-    int id, instance;
-
-    curr_display_type = DISPLAY_INDS;
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
-    wprintw(display_pad, "Inds for entity %d.%d:\n", id, instance);
-    ipmi_entity_iterate_inds(entity, inds_handler, NULL);
-    display_pad_refresh();
-}
-
-int
-inds_cmd(char *cmd, char **toks, void *cb_data)
-{
-    entity_finder(cmd, toks, found_entity_for_inds, NULL);
-    return 0;
-}
-
 struct sensor_info {
-    int lun, num, found;
+    int  found;
+    char *name;
 };
 
 static void
@@ -904,27 +888,26 @@ static void
 sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 {
     int id, instance;
-    int lun, num;
     char name[33];
     struct sensor_info *sinfo = cb_data;
     int rv;
     int present = 1;
 
-    ipmi_sensor_get_num(sensor, &lun, &num);
-    if ((lun == sinfo->lun) && (num == sinfo->num)) {
+    ipmi_sensor_get_id(sensor, name, 33);
+    if (strcmp(name, sinfo->name) == 0) {
 	sinfo->found = 1;
 	curr_display_type = DISPLAY_SENSOR;
 	curr_sensor_id = ipmi_sensor_convert_to_id(sensor);
 
 	id = ipmi_entity_get_entity_id(entity);
 	instance = ipmi_entity_get_entity_instance(entity);
-	ipmi_sensor_get_id(sensor, name, 33);
 
 	werase(display_pad);
 	wmove(display_pad, 0, 0);
 
-	wprintw(display_pad, "Sensor %d.%d.%d.%d - %s:\n",
-		id, instance, lun, num, name);
+	conv_from_spaces(name);
+	wprintw(display_pad, "Sensor %d.%d.%s - %s:\n",
+		id, instance, name, sinfo->name);
 	wprintw(display_pad, "  value = ");
 	getyx(display_pad, value_pos.y, value_pos.x);
 	if (!ipmi_entity_is_present(entity)
@@ -1112,30 +1095,14 @@ found_entity_for_sensor(ipmi_entity_t *entity,
 			char          **toks2,
 			void          *cb_data)
 {
-    char *lun_name, *num_name;
     struct sensor_info sinfo;
-    char *estr;
 
-    lun_name = strtok_r(NULL, ".", toks2);
-    if (!lun_name) {
+    sinfo.name = strtok_r(NULL, ".", toks2);
+    if (!sinfo.name) {
 	waddstr(cmd_win, "Invalid sensor given\n");
 	return;
     }
-    num_name = strtok_r(NULL, "", toks2);
-    if (!num_name) {
-	waddstr(cmd_win, "Invalid sensor given\n");
-	return;
-    }
-    sinfo.lun = strtoul(lun_name, &estr, 0);
-    if (*estr != '\0') {
-	waddstr(cmd_win, "Invalid sensor lun given\n");
-	return;
-    }
-    sinfo.num = strtoul(num_name, &estr, 0);
-    if (*estr != '\0') {
-	waddstr(cmd_win, "Invalid sensor num given\n");
-	return;
-    }
+    conv_to_spaces(sinfo.name);
     sinfo.found = 0;
 
     ipmi_entity_iterate_sensors(entity, sensor_handler, &sinfo);
@@ -1145,8 +1112,9 @@ found_entity_for_sensor(ipmi_entity_t *entity,
 	id = ipmi_entity_get_entity_id(entity);
 	instance = ipmi_entity_get_entity_instance(entity);
 
-	wprintw(cmd_win, "Sensor %d.%d.%d.%d not found\n",
-		id, instance, sinfo.lun, sinfo.num);
+	conv_from_spaces(sinfo.name);
+	wprintw(cmd_win, "Sensor %d.%d.%s not found\n",
+		id, instance, sinfo.name);
 	return;
     }
 }
@@ -1155,6 +1123,185 @@ int
 sensor_cmd(char *cmd, char **toks, void *cb_data)
 {
     entity_finder(cmd, toks, found_entity_for_sensor, NULL);
+    return 0;
+}
+
+static void
+inds_handler(ipmi_entity_t *entity, ipmi_ind_t *ind, void *cb_data)
+{
+    int id, instance;
+    char name[33];
+    char name2[33];
+
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    ipmi_ind_get_id(ind, name, 33);
+    strcpy(name2, name);
+    conv_from_spaces(name2);
+    wprintw(display_pad, "  %d.%d.%s - %s\n", id, instance, name2, name);
+}
+
+static void
+found_entity_for_inds(ipmi_entity_t *entity,
+		      char          **toks,
+		      char          **toks2,
+		      void          *cb_data)
+{
+    int id, instance;
+
+    curr_display_type = DISPLAY_INDS;
+    id = ipmi_entity_get_entity_id(entity);
+    instance = ipmi_entity_get_entity_instance(entity);
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    wprintw(display_pad, "Inds for entity %d.%d:\n", id, instance);
+    ipmi_entity_iterate_inds(entity, inds_handler, NULL);
+    display_pad_refresh();
+}
+
+static int
+inds_cmd(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, found_entity_for_inds, NULL);
+    return 0;
+}
+
+static void
+normal_ind_val_read(ipmi_ind_t *ind,
+		    int        err,
+		    int        *val,
+		    void       *cb_data)
+{
+    ipmi_ind_id_t ind_id;
+    int           num_vals;
+    int           i;
+
+    ind_id = ipmi_ind_convert_to_id(ind);
+    if (!((curr_display_type == DISPLAY_IND)
+	  && (ipmi_cmp_ind_id(ind_id, curr_ind_id) == 0)))
+	return;
+
+    num_vals = ipmi_ind_get_num_vals(ind);
+
+    if (err) {
+	wmove(display_pad, value_pos.y, value_pos.x);
+	wprintw(display_pad, "?");
+    } else {
+	for (i=0; i<num_vals; i++) {
+	    wmove(display_pad, value_pos.y+i, value_pos.x);
+	    wprintw(display_pad, "%d (0x%x)", val[i], val[i]);
+	}
+    }
+    display_pad_refresh();
+}
+
+struct ind_info {
+    int found;
+    unsigned char *name;
+};
+
+static void
+ind_handler(ipmi_entity_t *entity, ipmi_ind_t *ind, void *cb_data)
+{
+    int id, instance;
+    char name[33];
+    struct ind_info *iinfo = cb_data;
+    int ind_type;
+    int num_vals;
+
+
+    ipmi_ind_get_id(ind, name, 33);
+    if (strcmp(name, iinfo->name) == 0) {
+	iinfo->found = 1;
+	curr_display_type = DISPLAY_IND;
+
+	id = ipmi_entity_get_entity_id(entity);
+	instance = ipmi_entity_get_entity_instance(entity);
+	curr_ind_id = ipmi_ind_convert_to_id(ind);
+
+	werase(display_pad);
+	wmove(display_pad, 0, 0);
+
+	conv_from_spaces(name);
+	wprintw(display_pad, "Ind %d.%d.%s - %s:\n",
+		id, instance, name, iinfo->name);
+	ind_type = ipmi_ind_get_type(ind);
+	wprintw(display_pad, "  type = %s (%d)\n",
+		ipmi_ind_get_type_string(ind), ind_type);
+	num_vals = ipmi_ind_get_num_vals(ind);
+	switch (ind_type) {
+	case IPMI_IND_LIGHT:
+	case IPMI_IND_RELAY:
+	case IPMI_IND_ALARM:
+	case IPMI_IND_RESET:
+	case IPMI_IND_POWER:
+	case IPMI_IND_FAN_SPEED:
+	    wprintw(display_pad, "  num entities = %d\n", num_vals);
+	    break;
+
+	case IPMI_IND_DISPLAY:
+	case IPMI_IND_IDENTIFIER:
+	    break;
+	}
+	wprintw(display_pad, "  value = ");
+	getyx(display_pad, value_pos.y, value_pos.x);
+
+	switch (ind_type) {
+	case IPMI_IND_RELAY:
+	case IPMI_IND_ALARM:
+	case IPMI_IND_RESET:
+	case IPMI_IND_POWER:
+	case IPMI_IND_FAN_SPEED:
+	    ipmi_ind_get_val(ind, normal_ind_val_read, NULL);
+	    break;
+
+	case IPMI_IND_DISPLAY:
+	    break;
+
+	case IPMI_IND_LIGHT:
+	    break;
+	case IPMI_IND_IDENTIFIER:
+	    break;
+	}
+
+	display_pad_refresh();
+    }
+}
+
+static void
+found_entity_for_ind(ipmi_entity_t *entity,
+		     char          **toks,
+		     char          **toks2,
+		     void          *cb_data)
+{
+    struct ind_info iinfo;
+
+    iinfo.name = strtok_r(NULL, "", toks2);
+    if (!iinfo.name) {
+	waddstr(cmd_win, "Invalid ind given\n");
+	return;
+    }
+    conv_to_spaces(iinfo.name);
+    iinfo.found = 0;
+
+    ipmi_entity_iterate_inds(entity, ind_handler, &iinfo);
+    if (!iinfo.found) {
+	int id, instance;
+
+	id = ipmi_entity_get_entity_id(entity);
+	instance = ipmi_entity_get_entity_instance(entity);
+
+	conv_from_spaces(iinfo.name);
+	wprintw(cmd_win, "Ind %d.%d.%s not found\n",
+		id, instance, iinfo.name);
+	return;
+    }
+}
+
+int
+ind_cmd(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, found_entity_for_ind, NULL);
     return 0;
 }
 
@@ -1318,6 +1465,7 @@ static struct {
     { "sensor",				sensor_cmd },
     { "enable",				enable_cmd },
     { "inds",				inds_cmd },
+    { "ind",				ind_cmd },
     { "mcs",				mcs_cmd },
     { "mccmd",				mccmd_cmd },
     { NULL,				NULL}

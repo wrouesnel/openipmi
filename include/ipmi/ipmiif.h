@@ -119,6 +119,7 @@ int ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2);
 ipmi_ind_id_t ipmi_ind_convert_to_id(ipmi_ind_t *ind);
 typedef void (*ipmi_ind_cb)(ipmi_ind_t *ind, void *cb_data);
 int ipmi_ind_pointer_cb(ipmi_ind_id_t id, ipmi_ind_cb handler, void *cb_data);
+int ipmi_cmp_ind_id(ipmi_ind_id_t id1, ipmi_ind_id_t id2);
 
 /* Events come in this format. */
 typedef void (*ipmi_event_handler_t)(ipmi_mc_t  *bmc,
@@ -245,7 +246,7 @@ int ipmi_entity_get_FRU_inventory_device(ipmi_entity_t *ent);
 int ipmi_entity_get_SEL_device(ipmi_entity_t *ent);
 int ipmi_entity_get_SDR_repository_device(ipmi_entity_t *ent);
 int ipmi_entity_get_sensor_device(ipmi_entity_t *ent);
-char *ipmi_sensor_get_entity_id_string(ipmi_entity_t *ent);
+char *ipmi_entity_get_entity_id_string(ipmi_entity_t *ent);
 
 /* The ID from the SDR. */
 int ipmi_entity_get_id_length(ipmi_entity_t *ent);
@@ -640,6 +641,7 @@ void ipmi_ind_get_id(ipmi_ind_t *sensor, char *id, int length);
 int ipmi_ind_get_entity_id(ipmi_ind_t *ind);
 int ipmi_ind_get_entity_instance(ipmi_ind_t *ind);
 ipmi_entity_t *ipmi_ind_get_entity(ipmi_ind_t *ind);
+char *ipmi_ind_get_type_string(ipmi_ind_t *ind);
 
 /* Get the number of values the indicator supports. */
 int ipmi_ind_get_num_vals(ipmi_ind_t *ind);

@@ -337,6 +337,7 @@ char *ipmi_get_entity_id_string(unsigned int val);
 #define IPMI_IND_POWER			6
 #define IPMI_IND_FAN_SPEED		7
 #define IPMI_IND_IDENTIFIER		8
+char *ipmi_get_ind_type_string(unsigned int val);
 
 #define IPMI_IND_COLOR_BLACK		0
 #define IPMI_IND_COLOR_WHITE		1
@@ -344,5 +345,6 @@ char *ipmi_get_entity_id_string(unsigned int val);
 #define IPMI_IND_COLOR_GREEN		3
 #define IPMI_IND_COLOR_BLUE		4
 #define IPMI_IND_COLOR_YELLOW		5
+char *ipmi_get_color_string(unsigned int val);
 
 #endif /* _IPMI_BITS_H */
