@@ -112,6 +112,8 @@ read_command_file(emu_data_t *emu, char *command_file)
 	}
 	while (fgets(buffer+pos, INPUT_BUFFER_SIZE-pos, f)) {
 	    printf("%s", buffer+pos);
+	    if (buffer[pos] == '#')
+		continue;
 	    pos = strlen(buffer);
 	    if (pos == 0)
 		continue;

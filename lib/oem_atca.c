@@ -1891,7 +1891,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	unsigned char *p;
 	    
 	if ((ipmi_fru_get_multi_record_type(fru, i, &type) != 0)
-	    || (ipmi_fru_get_multi_record_type(fru, i, &ver) != 0)
+	    || (ipmi_fru_get_multi_record_format_version(fru, i, &ver) != 0)
 	    || (ipmi_fru_get_multi_record_data_len(fru, i, &len) != 0))
 	    continue;
 
