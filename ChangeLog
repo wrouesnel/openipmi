@@ -1,6 +1,8 @@
 
 2003-04-16 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 0.3.0.
+
 	* mc.c: During shutdown, delete entities after sensors and
 	controls because sensors and controls may refer to entities.
 
@@ -23,7 +25,7 @@
 
 2003-04-15 Corey Minyard <cminyard@mvista.com>
 
-	* configure.in: Move to version 0.2.6.
+	* configure.in: Move to version 0.2.7.
 
 	* include/OpenIPMI/ipmi_mc.h, OpenIPMI.texi:  Change the name
 	of ipmi_bmc_get_startup_SEL_time() to ipmi_mc_get_startup_SEL_time(),
