@@ -2548,6 +2548,7 @@ switchover_con_finish(void *cb_data, os_hnd_timer_id_t *id)
 {
     ipmi_con_t *ipmi = cb_data;
 
+    ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
     ipmi->close_connection(ipmi);
 }
 
@@ -2623,11 +2624,11 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	/* Start the timer to close the original connection. */
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 0;
-	ipmi->os_hnd->start_timer(ipmi->os_hnd,
-				  timer,
-				  &timeout,
-				  switchover_con_finish,
-				  ipmi);
+	lancon->os_hnd->start_timer(lancon->os_hnd,
+				    timer,
+				    &timeout,
+				    switchover_con_finish,
+				    lancon);
 
 	err = ipmi->start_con(ipmi);
 	if (err)
