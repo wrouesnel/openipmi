@@ -1684,6 +1684,8 @@ is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
     if (rv || !val)
 	return 0;
 
+    *bit_offset = bit;
+
     return 1;
 }
 
