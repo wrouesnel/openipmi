@@ -1,6 +1,11 @@
 
 2003-01-09 Corey Minyard <cminyard@mvista.com>
 
+	* control.c: Fixed the calculation size for the non-standard entry
+	array size.
+
+2003-01-09 Corey Minyard <cminyard@mvista.com>
+
 	* OpenIPMI.texi: More work on docs.
 	* include/OpenIPMI/ipmi_control.h: ditto
 	* include/OpenIPMI/ipmi_sensor.h: ditto

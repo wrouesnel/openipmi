@@ -452,7 +452,7 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
 
 	/* Allocate the array in multiples of 16 (to avoid thrashing malloc
 	   too much). */
-	new_size = ((num % 16) * 16) + 16;
+	new_size = ((num / 16) * 16) + 16;
 	new_array = malloc(sizeof(*new_array) * new_size);
 	if (!new_array)
 	    return ENOMEM;
