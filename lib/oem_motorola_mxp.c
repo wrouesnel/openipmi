@@ -1085,7 +1085,7 @@ mxp_thresholds_get(ipmi_sensor_t      *sensor,
     ipmi_thresholds_t th;
     int               rv;
 
-    rv = ipmi_get_default_sensor_thresholds(sensor, 0, &th);
+    rv = ipmi_get_default_sensor_thresholds(sensor, &th);
     if (done)
 	done(sensor, rv, &th, cb_data);
     return 0;
@@ -1372,12 +1372,8 @@ mxp_alloc_threshold_sensor(
     }
     ipmi_sensor_set_raw_sensor_max(*sensor, 0xff);
     ipmi_sensor_set_raw_sensor_min(*sensor, 0);
-    ipmi_sensor_set_raw_upper_non_recoverable_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_upper_critical_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_upper_non_critical_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_lower_non_recoverable_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_lower_critical_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_lower_non_critical_threshold(*sensor, 0);
+    for (i=0; i<6; i++)
+        ipmi_sensor_set_raw_default_threshold(*sensor, i, 0);
     ipmi_sensor_set_positive_going_threshold_hysteresis(*sensor, 0);
     ipmi_sensor_set_negative_going_threshold_hysteresis(*sensor, 0);
 
@@ -1516,12 +1512,8 @@ mxp_alloc_semi_stand_threshold_sensor(
     }
     ipmi_sensor_set_raw_sensor_max(*sensor, 0xff);
     ipmi_sensor_set_raw_sensor_min(*sensor, 0);
-    ipmi_sensor_set_raw_upper_non_recoverable_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_upper_critical_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_upper_non_critical_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_lower_non_recoverable_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_lower_critical_threshold(*sensor, 0);
-    ipmi_sensor_set_raw_lower_non_critical_threshold(*sensor, 0);
+    for (i=0; i<6; i++)
+        ipmi_sensor_set_raw_default_threshold(*sensor, i, 0);
     ipmi_sensor_set_positive_going_threshold_hysteresis(*sensor, 0);
     ipmi_sensor_set_negative_going_threshold_hysteresis(*sensor, 0);
 
@@ -9223,4 +9215,6 @@ ipmi_oem_motorola_mxp_init(void)
 				   NULL);
     if (rv)
 	return rv;
+
+    return 0;
 }

@@ -1395,7 +1395,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	if (!rv) display_pad_out("  sensor_max = %f\n", val);
 	
 	display_pad_out("Thresholds:\n");
-	for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++){
+	for (t=IPMI_LOWER_NON_CRITICAL; t<=IPMI_UPPER_NON_RECOVERABLE; t++){
 	    int settable, readable;
 	    int i;
 	    int assert_sup[2], deassert_sup[2];
@@ -1578,7 +1578,7 @@ read_sensor(ipmi_sensor_t             *sensor,
 	else
 	    display_pad_out("unreadable");
 
-	for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++) {
+	for (t=IPMI_LOWER_NON_CRITICAL; t<=IPMI_UPPER_NON_RECOVERABLE; t++) {
 	    if (threshold_positions[t].set) {
 		wmove(display_pad,
 		      threshold_positions[t].oor.y,
@@ -1620,7 +1620,7 @@ read_thresholds(ipmi_sensor_t     *sensor,
 
     if (sensor_displayed) {
 	if (err) {
-	    for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++)
+	    for (t=IPMI_LOWER_NON_CRITICAL; t<=IPMI_UPPER_NON_RECOVERABLE; t++)
 	    {
 		if (threshold_positions[t].set) {
 		    wmove(display_pad,
@@ -1630,7 +1630,7 @@ read_thresholds(ipmi_sensor_t     *sensor,
 		}
 	    }    
 	} else {
-	    for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++) {
+	    for (t=IPMI_LOWER_NON_CRITICAL; t<=IPMI_UPPER_NON_RECOVERABLE; t++) {
 		if (threshold_positions[t].set) {
 		    rv = ipmi_threshold_get(th, t, &val);
 		    wmove(display_pad,
@@ -1694,7 +1694,7 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 	    != IPMI_EVENT_SUPPORT_PER_STATE)
 	    goto out;
 
-	for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++) {
+	for (t=IPMI_LOWER_NON_CRITICAL; t<=IPMI_UPPER_NON_RECOVERABLE; t++) {
 	    if (threshold_positions[t].set) {
 		wmove(display_pad,
 		      threshold_positions[t].enabled.y,

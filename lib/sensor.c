@@ -152,12 +152,7 @@ struct ipmi_sensor_s
     unsigned char normal_min;
     unsigned char sensor_max;
     unsigned char sensor_min;
-    unsigned char upper_non_recoverable_threshold;
-    unsigned char upper_critical_threshold;
-    unsigned char upper_non_critical_threshold;
-    unsigned char lower_non_recoverable_threshold;
-    unsigned char lower_critical_threshold;
-    unsigned char lower_non_critical_threshold;
+    unsigned char default_thresholds[6];
     unsigned char positive_going_threshold_hysteresis;
     unsigned char negative_going_threshold_hysteresis;
 
@@ -881,12 +876,12 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->normal_min = sdr.data[28];
 	    s[p]->sensor_max = sdr.data[29];
 	    s[p]->sensor_min = sdr.data[30];
-	    s[p]->upper_non_recoverable_threshold = sdr.data[31];
-	    s[p]->upper_critical_threshold = sdr.data[32];
-	    s[p]->upper_non_critical_threshold = sdr.data[33];
-	    s[p]->lower_non_recoverable_threshold = sdr.data[34];
-	    s[p]->lower_critical_threshold = sdr.data[35];
-	    s[p]->lower_non_critical_threshold = sdr.data[36];
+	    s[p]->default_thresholds[IPMI_UPPER_NON_RECOVERABLE]= sdr.data[31];
+	    s[p]->default_thresholds[IPMI_UPPER_CRITICAL] = sdr.data[32];
+	    s[p]->default_thresholds[IPMI_UPPER_NON_CRITICAL] = sdr.data[33];
+	    s[p]->default_thresholds[IPMI_LOWER_NON_RECOVERABLE] = sdr.data[34];
+	    s[p]->default_thresholds[IPMI_LOWER_CRITICAL] = sdr.data[35];
+	    s[p]->default_thresholds[IPMI_LOWER_NON_CRITICAL] = sdr.data[36];
 	    s[p]->positive_going_threshold_hysteresis = sdr.data[37];
 	    s[p]->negative_going_threshold_hysteresis = sdr.data[38];
 	    s[p]->oem1 = sdr.data[41];
@@ -1089,20 +1084,10 @@ static int cmp_sensor(ipmi_sensor_t *s1,
     if (s1->normal_min != s2->normal_min) return 0;
     if (s1->sensor_max != s2->sensor_max) return 0;
     if (s1->sensor_min != s2->sensor_min) return 0;
-    if (s1->upper_non_recoverable_threshold
-	!= s2->upper_non_recoverable_threshold)
-	return 0;
-    if (s1->upper_critical_threshold != s2->upper_critical_threshold) return 0;
-    if (s1->upper_non_critical_threshold
-	!= s2->upper_non_critical_threshold)
-	return 0;
-    if (s1->lower_non_recoverable_threshold
-	!= s2->lower_non_recoverable_threshold)
-	return 0;
-    if (s1->lower_critical_threshold != s2->lower_critical_threshold) return 0;
-    if (s1->lower_non_critical_threshold
-	!= s2->lower_non_critical_threshold)
-	return 0;
+    for (i=0; i<6; i++) {
+	if (s1->default_thresholds[i] != s2->default_thresholds[i])
+	    return 0;
+    }
     if (s1->positive_going_threshold_hysteresis
 	!= s2->positive_going_threshold_hysteresis)
 	return 0;
@@ -1360,140 +1345,70 @@ ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min)
 					 sensor_min));
 }
 
-int
-ipmi_sensor_get_upper_non_recoverable_threshold
-(ipmi_sensor_t *sensor,
- double *upper_non_recoverable_threshold)
+int ipmi_sensor_set_raw_default_threshold(ipmi_sensor_t *sensor,
+					  int           threshold,
+					  int           val)
 {
-    int val, rv;
-
     CHECK_SENSOR_LOCK(sensor);
 
-    rv = ipmi_sensor_threshold_readable(sensor,
-					IPMI_UPPER_NON_RECOVERABLE,
-					&val);
-    if (rv)
-	return rv;
+    if ((threshold < 0) || (threshold > 5))
+	return EINVAL;
 
-    if (!val)
-	return ENOTSUP;
-
-    return (ipmi_sensor_convert_from_raw(sensor,
-					 sensor->upper_non_recoverable_threshold,
-					 upper_non_recoverable_threshold));
+    sensor->default_thresholds[threshold] = val;
+    return 0;
 }
 
-int
-ipmi_sensor_get_upper_critical_threshold(ipmi_sensor_t *sensor,
-					 double *upper_critical_threshold)
+int ipmi_sensor_get_default_threshold_raw(ipmi_sensor_t *sensor,
+					  int           threshold,
+					  int           *raw)
 {
-    int val, rv;
+    int rv;
+    int val;
 
     CHECK_SENSOR_LOCK(sensor);
 
-    rv = ipmi_sensor_threshold_readable(sensor,
-					IPMI_UPPER_CRITICAL,
-					&val);
+    if ((threshold < 0) || (threshold > 5))
+	return EINVAL;
+
+    rv = ipmi_sensor_threshold_settable(sensor, threshold, &val);
     if (rv)
 	return rv;
 
     if (!val)
 	return ENOTSUP;
 
-    return (ipmi_sensor_convert_from_raw(sensor,
-					 sensor->upper_critical_threshold,
-					 upper_critical_threshold));
+    if (!ipmi_sensor_get_sensor_init_thresholds(sensor))
+	return ENOTSUP;
+
+    *raw = sensor->default_thresholds[threshold];
+    return 0;
 }
 
-int
-ipmi_sensor_get_upper_non_critical_threshold
-(ipmi_sensor_t *sensor,
- double *upper_non_critical_threshold)
+int ipmi_sensor_get_default_threshold_cooked(ipmi_sensor_t *sensor,
+					     int           threshold,
+					     double        *cooked)
 {
-    int val, rv;
+    int rv;
+    int val;
 
     CHECK_SENSOR_LOCK(sensor);
 
-    rv = ipmi_sensor_threshold_readable(sensor,
-					IPMI_UPPER_NON_CRITICAL,
-					&val);
+    if ((threshold < 0) || (threshold > 5))
+	return EINVAL;
+
+    rv = ipmi_sensor_threshold_settable(sensor, threshold, &val);
     if (rv)
 	return rv;
 
     if (!val)
 	return ENOTSUP;
 
-    return (ipmi_sensor_convert_from_raw(sensor,
-					 sensor->upper_non_critical_threshold,
-					 upper_non_critical_threshold));
-}
-
-int
-ipmi_sensor_get_lower_non_recoverable_threshold
-(ipmi_sensor_t *sensor,
- double *lower_non_recoverable_threshold)
-{
-    int val, rv;
-
-    CHECK_SENSOR_LOCK(sensor);
-
-    rv = ipmi_sensor_threshold_readable(sensor,
-					IPMI_LOWER_NON_RECOVERABLE,
-					&val);
-    if (rv)
-	return rv;
-
-    if (!val)
+    if (!ipmi_sensor_get_sensor_init_thresholds(sensor))
 	return ENOTSUP;
 
     return (ipmi_sensor_convert_from_raw(sensor,
-					 sensor->lower_non_recoverable_threshold,
-					 lower_non_recoverable_threshold));
-}
-
-int
-ipmi_sensor_get_lower_critical_threshold(ipmi_sensor_t *sensor,
-					 double *lower_critical_threshold)
-{
-    int val, rv;
-
-    CHECK_SENSOR_LOCK(sensor);
-
-    rv = ipmi_sensor_threshold_readable(sensor,
-					IPMI_LOWER_CRITICAL,
-					&val);
-    if (rv)
-	return rv;
-
-    if (!val)
-	return ENOTSUP;
-
-    return (ipmi_sensor_convert_from_raw(sensor,
-					 sensor->lower_critical_threshold,
-					 lower_critical_threshold));
-}
-
-int
-ipmi_sensor_get_lower_non_critical_threshold
-(ipmi_sensor_t *sensor,
- double *lower_non_critical_threshold)
-{
-    int val, rv;
-
-    CHECK_SENSOR_LOCK(sensor);
-
-    rv = ipmi_sensor_threshold_readable(sensor,
-					IPMI_LOWER_NON_CRITICAL,
-					&val);
-    if (rv)
-	return rv;
-
-    if (!val)
-	return ENOTSUP;
-
-    return (ipmi_sensor_convert_from_raw(sensor,
-					 sensor->lower_non_critical_threshold,
-					 lower_non_critical_threshold));
+					 sensor->default_thresholds[threshold],
+					 cooked));
 }
 
 ipmi_mc_t *
@@ -2090,54 +2005,6 @@ ipmi_sensor_get_raw_sensor_min(ipmi_sensor_t *sensor)
 }
 
 int
-ipmi_sensor_get_raw_upper_non_recoverable_threshold(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->upper_non_recoverable_threshold;
-}
-
-int
-ipmi_sensor_get_raw_upper_critical_threshold(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->upper_critical_threshold;
-}
-
-int
-ipmi_sensor_get_raw_upper_non_critical_threshold(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->upper_non_critical_threshold;
-}
-
-int
-ipmi_sensor_get_raw_lower_non_recoverable_threshold(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->lower_non_recoverable_threshold;
-}
-
-int
-ipmi_sensor_get_raw_lower_critical_threshold(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->lower_critical_threshold;
-}
-
-int
-ipmi_sensor_get_raw_lower_non_critical_threshold(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->lower_non_critical_threshold;
-}
-
-int
 ipmi_sensor_get_positive_going_threshold_hysteresis(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -2461,56 +2328,6 @@ void
 ipmi_sensor_set_raw_sensor_min(ipmi_sensor_t *sensor, int raw_sensor_min)
 {
     sensor->sensor_min = raw_sensor_min;
-}
-
-void
-ipmi_sensor_set_raw_upper_non_recoverable_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_upper_non_recoverable_threshold)
-{
-    sensor->upper_non_recoverable_threshold
-	= raw_upper_non_recoverable_threshold;
-}
-
-void
-ipmi_sensor_set_raw_upper_critical_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_upper_critical_threshold)
-{
-    sensor->upper_critical_threshold = raw_upper_critical_threshold;
-}
-
-void
-ipmi_sensor_set_raw_upper_non_critical_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_upper_non_critical_threshold)
-{
-    sensor->upper_non_critical_threshold = raw_upper_non_critical_threshold;
-}
-
-void
-ipmi_sensor_set_raw_lower_non_recoverable_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_lower_non_recoverable_threshold)
-{
-    sensor->lower_non_recoverable_threshold
-	= raw_lower_non_recoverable_threshold;
-}
-
-void
-ipmi_sensor_set_raw_lower_critical_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_lower_critical_threshold)
-{
-    sensor->lower_critical_threshold = raw_lower_critical_threshold;
-}
-
-void
-ipmi_sensor_set_raw_lower_non_critical_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_lower_non_critical_threshold)
-{
-    sensor->lower_non_critical_threshold = raw_lower_non_critical_threshold;
 }
 
 void
@@ -3681,10 +3498,8 @@ thresh_get(ipmi_sensor_t *sensor,
 
 int
 ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
-				   int               raw,
 				   ipmi_thresholds_t *th)
 {
-    int                val;
     enum ipmi_thresh_e thnum;
     int                rv = 0;
 
@@ -3694,17 +3509,12 @@ ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
 	 thnum <= IPMI_UPPER_NON_RECOVERABLE;
 	 thnum++)
     {
-	ipmi_sensor_threshold_readable(sensor, thnum, &val);
-	if (val) {
-	    th->vals[thnum].status = 1;
-	    rv = ipmi_sensor_convert_from_raw(sensor,
-					      raw,
-					      &(th->vals[thnum].val));
-	    if (rv)
-		goto out;
-	} else {
-	    th->vals[thnum].status = 0;
-	}
+	th->vals[thnum].status = 1;
+	rv = ipmi_sensor_convert_from_raw(sensor,
+					  sensor->default_thresholds[thnum],
+					  &(th->vals[thnum].val));
+	if (rv)
+	    goto out;
     }
  out:
     return rv;
@@ -3729,10 +3539,16 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     }
 
     if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED) {
-	/* Thresholds are fixed, pull them from the SDR. */
-	rv = ipmi_get_default_sensor_thresholds(sensor, 0, &(info->th));
+	int thnum;
+	/* Thresholds are fixed, they cannot be read. */
+	for (thnum = IPMI_LOWER_NON_CRITICAL;
+	     thnum <= IPMI_UPPER_NON_RECOVERABLE;
+	     thnum++)
+	{
+	    info->th.vals[thnum].status = 0;
+	}
 	if (info->done)
-	    info->done(sensor, rv, &(info->th), info->cb_data);
+	    info->done(sensor, 0, &(info->th), info->cb_data);
 	ipmi_mem_free(info);
 	ipmi_sensor_opq_done(sensor);
 	return;

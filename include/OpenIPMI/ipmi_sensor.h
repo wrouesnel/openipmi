@@ -115,12 +115,13 @@ int ipmi_sensor_get_raw_normal_max(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_raw_normal_min(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_raw_sensor_max(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_raw_sensor_min(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_raw_upper_non_recoverable_threshold(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_raw_upper_critical_threshold(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_raw_upper_non_critical_threshold(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_raw_lower_non_recoverable_threshold(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_raw_lower_critical_threshold(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_raw_lower_non_critical_threshold(ipmi_sensor_t *sensor);
+
+int ipmi_sensor_get_default_threshold_raw(ipmi_sensor_t *sensor,
+					  int           threshold,
+					  int           *raw);
+int ipmi_sensor_get_default_threshold_cooked(ipmi_sensor_t *sensor,
+					     int           threshold,
+					     double        *cooked);
 
 /* Controls rounding on conversions from flow.  NORMAL does normal
    rounding (ie 1.4->1, 1.5->2, 1.6->2, etc.).  DOWN sets the value to
@@ -138,31 +139,10 @@ int ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 			       double            val,
 			       int               *result);
 
-/* The user normally shouldn't need these, the lower-level code uses them
-   if it needs them. */
-int ipmi_sensor_get_upper_non_recoverable_threshold(
-    ipmi_sensor_t *sensor,
-    double *upper_non_recoverable_threshold);
-int ipmi_sensor_get_upper_critical_threshold(
-    ipmi_sensor_t *sensor,
-    double *upper_critical_threshold);
-int ipmi_sensor_get_upper_non_critical_threshold(
-    ipmi_sensor_t *sensor,
-    double *upper_non_critical_threshold);
-int ipmi_sensor_get_lower_non_recoverable_threshold(
-    ipmi_sensor_t *sensor,
-    double *lower_non_recoverable_threshold);
-int ipmi_sensor_get_lower_critical_threshold(
-    ipmi_sensor_t *sensor,
-    double *lower_critical_threshold);
-int ipmi_sensor_get_lower_non_critical_threshold(
-    ipmi_sensor_t *sensor,
-    double *lower_non_critical_threshold);
 int ipmi_sensor_get_positive_going_threshold_hysteresis(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_negative_going_threshold_hysteresis(ipmi_sensor_t *sensor);
 
 int ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
-				       int               raw,
 				       ipmi_thresholds_t *th);
 
 /* These calls allow OEM code to set up a sensor. */
@@ -233,24 +213,9 @@ void ipmi_sensor_set_raw_normal_max(ipmi_sensor_t *sensor, int raw_normal_max);
 void ipmi_sensor_set_raw_normal_min(ipmi_sensor_t *sensor, int raw_normal_min);
 void ipmi_sensor_set_raw_sensor_max(ipmi_sensor_t *sensor, int raw_sensor_max);
 void ipmi_sensor_set_raw_sensor_min(ipmi_sensor_t *sensor, int raw_sensor_min);
-void ipmi_sensor_set_raw_upper_non_recoverable_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_upper_non_recoverable_threshold);
-void ipmi_sensor_set_raw_upper_critical_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_upper_critical_threshold);
-void ipmi_sensor_set_raw_upper_non_critical_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_upper_non_critical_threshold);
-void ipmi_sensor_set_raw_lower_non_recoverable_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_lower_non_recoverable_threshold);
-void ipmi_sensor_set_raw_lower_critical_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_lower_critical_threshold);
-void ipmi_sensor_set_raw_lower_non_critical_threshold(
-    ipmi_sensor_t *sensor,
-    int           raw_lower_non_critical_threshold);
+int ipmi_sensor_set_raw_default_threshold(ipmi_sensor_t *sensor,
+					  int           threshold,
+					  int           val);
 void ipmi_sensor_set_positive_going_threshold_hysteresis(
     ipmi_sensor_t *sensor,
     int           positive_going_threshold_hysteresis);
