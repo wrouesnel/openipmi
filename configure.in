@@ -24,6 +24,16 @@ AC_ARG_WITH(ucdsnmp,
     fi,
 )
 
+AC_ARG_WITH(snmpflags,
+[  --with-snmpflags=flags          Set the flags to compile with SNMP.],
+    CPPFLAGS="$withval $CPPFLAGS"
+)
+
+AC_ARG_WITH(snmplibs,
+[  --with-snmplibs=libs            Set the libraries to link with SNMP.],
+    SNMPLIBS="$withval",
+)
+
 # If UCD SNMP requires OpenSSL, this tells where to find the crypto lib
 tryopenssl=yes
 AC_ARG_WITH(openssl,
@@ -38,6 +48,16 @@ AC_ARG_WITH(openssl,
       OPENSSLINCS="-I$withval/include"
       tryopenssl=yes
     fi,
+)
+
+AC_ARG_WITH(opensslflags,
+[  --with-opensslflags=flags       Set the flags to compile with OpenSSL.],
+    OPENSSLINCS="$withval"
+)
+
+AC_ARG_WITH(openssllibs,
+[  --with-openssllibs=libs         Set the libraries to link with OpenSSL.],
+    OPENSSLLIBS="$withval",
 )
 
 tryglib=yes

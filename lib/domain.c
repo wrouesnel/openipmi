@@ -2601,7 +2601,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 
 	ipmi_log(IPMI_LOG_DEBUG_START,
 		 "Event recid mc (0x%x):%4.4x type:%2.2x timestamp %lld:",
-		 mcid.mc_num, record_id, type, (int64_t) timestamp);
+		 mcid.mc_num, record_id, type, (long long) timestamp);
 	if (data_len) {
 	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  ");
 	    data = ipmi_event_get_data_ptr(event);

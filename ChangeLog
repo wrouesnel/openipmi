@@ -1,3 +1,10 @@
+2005-01-20 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Allow the SNMP and OpenSSL libraries and compile
+	flags to be hard-coded on the configure command line.
+
+	* lib/domain.c: Fixed a problem with the type in a log.
+	
 2005-01-19 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_lanparm.h: Added the RMCP+ and VLAN
