@@ -1,3 +1,10 @@
+2004-03-23 Corey Minyard <cminyard@mvista.com> 
+
+	* entity.c: Call _ipmi_find_or_create_mc_by_slave_addr() on new
+	mcdlrs.
+
+	* domain.c: Scan MCs that are added from SDR sources.
+
 2004-03-20 Corey Minyard <cminyard@mvista.com> 
 
 	* everything: Massive rework of the code structure.

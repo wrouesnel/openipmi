@@ -5003,7 +5003,7 @@ list_sel_cmder(ipmi_domain_t *domain, void *cb_data)
 	unsigned char *data = ipmi_event_get_data_ptr(event);
 	int           i;
 
-	display_pad_out("  (%x %x) %4.4x:%2.2x %d:",
+	display_pad_out("  (%x %x) %4.4x:%2.2x %lld:",
 			mcid.channel, mcid.mc_num, record_id, type, timestamp);
 	for (i=0; i<data_len; i++)
 	    display_pad_out(" %2.2x", data[i]);

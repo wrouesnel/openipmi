@@ -2501,8 +2501,15 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 
 	    case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
 		rv = decode_mcdlr(&sdr, &dlr);
-		if ((!rv) && dlr.entity_id)
+		if ((!rv) && dlr.entity_id) {
+		    /* Attempt to create the MC. */
+		    _ipmi_find_or_create_mc_by_slave_addr
+			(domain,
+			 dlr.channel,
+			 dlr.slave_address,
+			 NULL);
 		    rv = add_sdr_info(&infos, &dlr);
+		}
 		break;
 	}
 	if (rv)

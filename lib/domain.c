@@ -1257,7 +1257,8 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 
     mc = _ipmi_find_mc_by_addr(domain, &addr, addr_size);
     if (mc) {
-	*new_mc = mc;
+	if (new_mc)
+	    *new_mc = mc;
 	return 0;
     }
 
@@ -1267,13 +1268,19 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 
     _ipmi_mc_set_active(mc, 0);
 
+    /* If we find an MC in the SDRs that we don't know about yet,
+       attempt to scan it. */
+    ipmi_start_ipmb_mc_scan(domain, channel, slave_addr, slave_addr,
+			    NULL, NULL);
+
     rv = add_mc_to_domain(domain, mc);
     if (rv) {
 	_ipmi_cleanup_mc(mc);
 	return rv;
     }
 
-    *new_mc = mc;
+    if (new_mc)
+	*new_mc = mc;
     return 0;
 }
 
