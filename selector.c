@@ -591,7 +591,7 @@ remove_from_heap(sel_timer_t **top, sel_timer_t **last, sel_timer_t *elem)
     sel_timer_t *to_insert;
 
 #ifdef MASSIVE_DEBUG
-    fprintf(*debug_out, "remove_from_head entry\n");
+    fprintf(*debug_out, "remove_from_heap entry\n");
     print_tree(*top, *last);
     check_tree(*top, *last);
 #endif

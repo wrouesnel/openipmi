@@ -4004,6 +4004,8 @@ ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 			      ipmi_sensor_done_cb   done,
 			      void                  *cb_data)
 {
+    if (!sensor->cbs.ipmi_sensor_events_enable_set)
+	return ENOSYS;
     return sensor->cbs.ipmi_sensor_events_enable_set(sensor,
 						     states,
 						     done,
@@ -4015,6 +4017,8 @@ ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
 			      ipmi_event_enables_get_cb done,
 			      void                      *cb_data)
 {
+    if (!sensor->cbs.ipmi_sensor_events_enable_get)
+	return ENOSYS;
     return sensor->cbs.ipmi_sensor_events_enable_get(sensor,
 						     done,
 						     cb_data);
@@ -4025,6 +4029,8 @@ ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
 			   ipmi_hysteresis_get_cb done,
 			   void                   *cb_data)
 {
+    if (!sensor->cbs.ipmi_sensor_get_hysteresis)
+	return ENOSYS;
     return sensor->cbs.ipmi_sensor_get_hysteresis(sensor,
 						  done,
 						  cb_data);
@@ -4037,6 +4043,8 @@ ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 			   ipmi_sensor_done_cb done,
 			   void                *cb_data)
 {
+    if (!sensor->cbs.ipmi_sensor_set_hysteresis)
+	return ENOSYS;
     return sensor->cbs.ipmi_sensor_set_hysteresis(sensor,
 						  positive_hysteresis,
 						  negative_hysteresis,
@@ -4049,6 +4057,8 @@ ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 		    ipmi_thresh_get_cb done,
 		    void               *cb_data)
 {
+    if (!sensor->cbs.ipmi_thresholds_get)
+	return ENOSYS;
     return sensor->cbs.ipmi_thresholds_get(sensor, done, cb_data);
 }
 
@@ -4058,6 +4068,8 @@ ipmi_thresholds_set(ipmi_sensor_t       *sensor,
 		    ipmi_sensor_done_cb done,
 		    void                *cb_data)
 {
+    if (!sensor->cbs.ipmi_thresholds_set)
+	return ENOSYS;
     return sensor->cbs.ipmi_thresholds_set(sensor, thresholds, done, cb_data);
 }
 
@@ -4066,6 +4078,8 @@ ipmi_reading_get(ipmi_sensor_t        *sensor,
 		 ipmi_reading_done_cb done,
 		 void                 *cb_data)
 {
+    if (!sensor->cbs.ipmi_reading_get)
+	return ENOSYS;
     return sensor->cbs.ipmi_reading_get(sensor, done, cb_data);
 }
 
@@ -4074,12 +4088,16 @@ ipmi_states_get(ipmi_sensor_t       *sensor,
 		ipmi_states_read_cb done,
 		void                *cb_data)
 {
+    if (!sensor->cbs.ipmi_states_get)
+	return ENOSYS;
     return sensor->cbs.ipmi_states_get(sensor, done, cb_data);
 }
 
 char *
 ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int val)
 {
+    if (!sensor->cbs.ipmi_sensor_reading_name_string)
+	return NULL;
     return sensor->cbs.ipmi_sensor_reading_name_string(sensor, val);
 }
 
@@ -4088,6 +4106,8 @@ ipmi_sensor_convert_from_raw(ipmi_sensor_t *sensor,
 			     int           val,
 			     double        *result)
 {
+    if (!sensor->cbs.ipmi_sensor_convert_from_raw)
+	return ENOSYS;
     return sensor->cbs.ipmi_sensor_convert_from_raw(sensor, val, result);
 }
 
@@ -4097,6 +4117,8 @@ ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 			   double            val,
 			   int               *result)
 {
+    if (!sensor->cbs.ipmi_sensor_convert_to_raw)
+	return ENOSYS;
     return sensor->cbs.ipmi_sensor_convert_to_raw(sensor,
 						  rounding,
 						  val,
@@ -4106,6 +4128,8 @@ ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 int
 ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor, int val, double *tolerance)
 {
+    if (!sensor->cbs.ipmi_sensor_get_tolerance)
+	return ENOSYS;
     return sensor->cbs.ipmi_sensor_get_tolerance(sensor, val, tolerance);
 }
 
@@ -4113,6 +4137,8 @@ ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor, int val, double *tolerance)
 int
 ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy)
 {
+    if (!sensor->cbs.ipmi_sensor_get_accuracy)
+	return ENOSYS;
     return sensor->cbs.ipmi_sensor_get_accuracy(sensor, val, accuracy);
 }
 

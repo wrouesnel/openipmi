@@ -1784,7 +1784,7 @@ void
 ipmi_entity_set_id(ipmi_entity_t *ent, char *id)
 {
     strncpy(ent->id, id, 32);
-    id[32] = '\0';
+    ent->id[32] = '\0';
 }
 
 int

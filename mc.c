@@ -1218,6 +1218,7 @@ setup_bmc(ipmi_con_t  *ipmi,
 
     mc->bmc = NULL;
     mc->sensors = NULL;
+    mc->inds = NULL;
     mc->new_sensor_handler = NULL;
 
     memcpy(&(mc->addr), mc_addr, mc_addr_len);
@@ -1266,6 +1267,10 @@ setup_bmc(ipmi_con_t  *ipmi,
 	goto out_err;
 
     rv = ipmi_sensors_alloc(mc, &(mc->sensors));
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_inds_alloc(mc, &(mc->inds));
     if (rv)
 	goto out_err;
 

@@ -1,6 +1,7 @@
 
 #include <stdlib.h>
 #include <errno.h>
+#include <stdio.h>
 #include <ipmi/os_handler.h>
 #include <ipmi/selector.h>
 #include <sys/types.h>
@@ -189,7 +190,11 @@ sui_log(os_handler_t *handler,
     va_list ap;
 
     va_start(ap, format);
+#if 0
     ui_vlog(format, ap);
+#else
+    vfprintf(stderr, format, ap);
+#endif
     va_end(ap);
 }
 
@@ -198,7 +203,11 @@ sui_vlog(os_handler_t *handler,
 	 char         *format,
 	 va_list      ap)
 {
+#if 0
     ui_vlog(format, ap);
+#else
+    vfprintf(stderr, format, ap);
+#endif
 }
 
 os_handler_t ipmi_ui_cb_handlers =
