@@ -5161,6 +5161,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	ipmi_entity_set_private_bus_id(info->board[idx].ent, 0);
 	ipmi_entity_set_channel(info->board[idx].ent, 0);
 	ipmi_entity_fetch_frus(info->board[idx].ent);
+	ipmi_entity_set_physical_slot_num(info->board[idx].ent, 1, i+1);
 	info->board[idx].info = info;
 	info->board[idx].idx = idx;
 	info->board[idx].is_amc = 1;
@@ -5213,6 +5214,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	ipmi_entity_set_lun(info->board[idx].ent, 0);
 	ipmi_entity_set_private_bus_id(info->board[idx].ent, 0);
 	ipmi_entity_set_channel(info->board[idx].ent, 0);
+	ipmi_entity_set_physical_slot_num(info->board[idx].ent, 1, i+1);
 	info->board[idx].info = info;
 	info->board[idx].idx = idx;
 	info->board[idx].is_amc = 0;
@@ -5250,6 +5252,8 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    goto out;
 	}
 	ipmi_entity_set_type(info->power_supply[i].ent, IPMI_ENTITY_FRU);
+	ipmi_entity_set_physical_slot_num(info->power_supply[i].ent,
+					     1, i+1);
 	/* FIXME - is there FRU information someplace? */
 
 	info->power_supply[i].info = info;
@@ -5287,6 +5291,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 		     MC_NAME(mc), rv);
 	    goto out;
 	}
+	ipmi_entity_set_physical_slot_num(info->fan[i].fan_ent, 1, i+1);
 
 	info->fan[i].info = info;
 	info->fan[i].idx = i;
@@ -5336,6 +5341,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	ipmi_entity_set_lun(info->board[idx].ent, 0);
 	ipmi_entity_set_private_bus_id(info->board[idx].ent, 0);
 	ipmi_entity_set_channel(info->board[idx].ent, 0);
+	ipmi_entity_set_physical_slot_num(info->board[idx].ent, 1, i+1);
 	info->board[idx].info = info;
 	info->board[idx].idx = idx;
 	info->board[idx].is_amc = 0;

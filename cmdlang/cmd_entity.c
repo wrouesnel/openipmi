@@ -170,6 +170,7 @@ entity_dump(ipmi_entity_t *entity, ipmi_cmd_info_t *cmd_info)
     static char          *ent_types[] = { "unknown", "mc", "fru",
 					  "generic", "invalid" };
     int                  length;
+    unsigned int         val;
 
     type = ipmi_entity_get_type(entity);
     if (type > IPMI_ENTITY_GENERIC)
@@ -198,6 +199,9 @@ entity_dump(ipmi_entity_t *entity, ipmi_cmd_info_t *cmd_info)
 	ipmi_entity_iterate_children(entity, entity_iterate_handler, cmd_info);
 	ipmi_cmdlang_up(cmd_info);
     }
+
+    if (ipmi_entity_get_physical_slot_num(entity, &val) == 0)
+	ipmi_cmdlang_out_int(cmd_info, "Physical Slot", val);
 
     length = ipmi_entity_get_id_length(entity);
     if (length &&

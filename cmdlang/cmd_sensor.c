@@ -393,6 +393,7 @@ read_sensor(ipmi_sensor_t             *sensor,
 			      ipmi_is_threshold_out_of_range(states, thresh));
 	ipmi_cmdlang_up(cmd_info);
     }
+    ipmi_cmdlang_up(cmd_info);
 
  out:
     ipmi_cmdlang_unlock(cmd_info);
@@ -450,6 +451,7 @@ read_sensor_states(ipmi_sensor_t *sensor,
 	ipmi_cmdlang_out_bool(cmd_info, "Set", ipmi_is_state_set(states, i));
 	ipmi_cmdlang_up(cmd_info);
     }
+    ipmi_cmdlang_up(cmd_info);
 
  out:
     ipmi_cmdlang_unlock(cmd_info);

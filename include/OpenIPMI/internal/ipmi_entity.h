@@ -182,6 +182,9 @@ void ipmi_entity_set_type(ipmi_entity_t *ent, enum ipmi_dlr_type_e type);
 void ipmi_entity_set_device_type(ipmi_entity_t *ent, int device_type);
 void ipmi_entity_set_device_modifier(ipmi_entity_t *ent, int device_modifier);
 void ipmi_entity_set_oem(ipmi_entity_t *ent, int oem);
+void ipmi_entity_set_physical_slot_num(ipmi_entity_t *ent,
+				       int present,
+				       unsigned int val);
 
 /* This value is copied into an internal array, so no need to save or
    manage. */

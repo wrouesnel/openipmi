@@ -1,3 +1,17 @@
+2005-02-23 Tariq Shureih <tariq@linux.intel.com>, Corey Minyard <cminyard@mvista.com> 
+
+	* lib/entity.c: Added a physical slot number attribute for
+	entities, useful for ATCA, CTCA, PICMG2.6, etc.
+	* include/OpenIPMI/ipmiif.h.in: ditto
+	* include/OpenIPMI/internal/ipmi_entity.h: ditto
+	* cmdlang/cmd_entity.c, man/ipmi_cmdlang.7: ditto
+	* lib/oem_atca.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* swig/OpenIPMI.i: ditto
+
+	* lib/entity.c: Fixed an ordering problem were if the FRU becomes
+	present before its entity data comes in, still fetch the FRU info.
+
 2005-02-18 Corey Minyard <cminyard@mvista.com> 
 
 	* cmdlang/cmd_entity.c: Add an "entity tree" command to dump

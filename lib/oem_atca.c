@@ -2880,6 +2880,11 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 		     DOMAIN_NAME(domain), rv);
 	    goto out;
 	}
+
+	/* Store the site_num as the physical slot number */
+	ipmi_entity_set_physical_slot_num(b->frus[0]->entity, 1,
+					  info->addresses[i].site_num);
+
 	rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_WARNING,

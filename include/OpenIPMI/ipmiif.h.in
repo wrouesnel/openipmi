@@ -667,6 +667,12 @@ int ipmi_entity_get_id_length(ipmi_entity_t *ent);
 enum ipmi_str_type_e ipmi_entity_get_id_type(ipmi_entity_t *ent);
 int ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
 
+/* This can be set bo OEM code to register the "slot number" an entity
+   is in.  This returns ENOSYS if the entity does not have a slot number
+   associated with it. */
+int ipmi_entity_get_physical_slot_num(ipmi_entity_t *ent,
+				      unsigned int *slot_num);
+
 /* Is the entity currently present?  Note that this value can change
    dynamically, so an "_id_" function is provided, too, that takes an
    entity id as well as an entity.  Note that this call returns an

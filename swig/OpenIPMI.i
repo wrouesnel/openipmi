@@ -4078,6 +4078,19 @@ int pef_str_to_parm(char *str);
     }
 
     /*
+     * Returns the physical slot number, or -1 if there is not
+     * a slot number.
+     */
+    int get_physical_slot_num()
+    {
+	unsigned int num;
+	if (ipmi_entity_get_physical_slot_num(self, &num) == 0)
+	    return num;
+	else
+	    return -1;
+    }
+
+    /*
      * Returns true if the entity is hot-swappable, false if not.
      */
     int is_hot_swappable()
