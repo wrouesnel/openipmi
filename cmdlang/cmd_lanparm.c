@@ -416,7 +416,7 @@ static lp_item_t lp_port = {set_port, out_port};
 
 void
 set_mac(ipmi_cmd_info_t *cmd_info, char *val,
-       ipmi_lan_config_t *lanc, void *func)
+	ipmi_lan_config_t *lanc, void *func)
 {
     ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int            (*f)(ipmi_lan_config_t *l, unsigned char *v,
@@ -433,7 +433,7 @@ set_mac(ipmi_cmd_info_t *cmd_info, char *val,
 }
 void
 out_mac(ipmi_cmd_info_t *cmd_info, char *name,
-       ipmi_lan_config_t *lanc, void *func)
+	ipmi_lan_config_t *lanc, void *func)
 {
     unsigned char v[6];
     int           rv;
@@ -828,7 +828,7 @@ lanparm_config_set(ipmi_lanparm_t *lanparm, void *cb_data)
     rv = ipmi_lan_set_config(lanparm, lanc, lanparm_config_set_done, cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
-	cmdlang->errstr = "Error getting LANPARM";
+	cmdlang->errstr = "Error setting LANPARM";
 	cmdlang->err = rv;
 	goto out_err;
     }
@@ -913,15 +913,18 @@ lanparm_config_close(ipmi_cmd_info_t *cmd_info)
     int               argc = ipmi_cmdlang_get_argc(cmd_info);
     char              **argv = ipmi_cmdlang_get_argv(cmd_info);
     ipmi_lan_config_t *lanc;
+    char              *lanc_name;
 
     if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
 	cmdlang->errstr = "Not enough parameters";
 	cmdlang->err = EINVAL;
+	lanc_name = "";
 	goto out_err;
     }
+    lanc_name = argv[curr_arg];
 
-    lanc = find_config(argv[curr_arg], 1);
+    lanc = find_config(lanc_name, 1);
     if (!lanc) {
 	cmdlang->errstr = "Invalid LAN config";
 	cmdlang->err = EINVAL;
@@ -932,7 +935,7 @@ lanparm_config_close(ipmi_cmd_info_t *cmd_info)
     return;
 
  out_err:
-    strncpy(cmdlang->objstr, argv[curr_arg], cmdlang->objstr_len);
+    strncpy(cmdlang->objstr, lanc_name, cmdlang->objstr_len);
     cmdlang->location = "cmd_lanparm.c(lanparm_config_close)";
 }
 
@@ -994,7 +997,125 @@ lanparm_config_info(ipmi_cmd_info_t *cmd_info)
 
  out_err:
     strncpy(cmdlang->objstr, argv[curr_arg], cmdlang->objstr_len);
-    cmdlang->location = "cmd_lanparm.c(lanparm_config_close)";
+    cmdlang->location = "cmd_lanparm.c(lanparm_config_info)";
+}
+
+static void
+lanparm_config_update(ipmi_cmd_info_t *cmd_info)
+{
+    ipmi_cmdlang_t    *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int               curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int               argc = ipmi_cmdlang_get_argc(cmd_info);
+    char              **argv = ipmi_cmdlang_get_argv(cmd_info);
+    ipmi_lan_config_t *lanc;
+    int               i;
+    char              *name;
+    char              *val;
+    char              *lanc_name;
+    int               sel;
+
+    if ((argc - curr_arg) < 3) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	lanc_name = "";
+	goto out_err;
+    }
+    lanc_name = argv[curr_arg];
+    curr_arg++;
+
+    lanc = find_config(lanc_name, 0);
+    if (!lanc) {
+	cmdlang->errstr = "Invalid LAN config";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    name = argv[curr_arg];
+    curr_arg++;
+    val = argv[curr_arg];
+    curr_arg++;
+
+    /* Basic items */
+    for (i=0; lps[i].name; i++) {
+	if (strcmp(lps[i].name, name) == 0) {
+	    lp_item_t *lp = lps[i].lpi;
+	    if (!lp->set) {
+		cmdlang->errstr = "Parameter is read-only";
+		cmdlang->err = EINVAL;
+		goto out_err;
+	    }
+	    lp->set(cmd_info, val, lanc, lps[i].set_func);
+	    goto out;
+	}
+    }
+
+    /* per-user items */
+    for (i=0; ulps[i].name; i++) {
+	if (strcmp(ulps[i].name, name) == 0) {
+	    ulp_item_t *lp = ulps[i].lpi;
+
+	    if ((argc - curr_arg) < 4) {
+		/* Not enough parameters */
+		cmdlang->errstr = "Not enough parameters";
+		cmdlang->err = EINVAL;
+		goto out_err;
+	    }
+	    if (!lp->set) {
+		cmdlang->errstr = "Parameter is read-only";
+		cmdlang->err = EINVAL;
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_int(val, &sel, cmd_info);
+	    if (cmdlang->err) {
+		cmdlang->errstr = "selector invalid";
+		goto out_err;
+	    }
+	    val = argv[curr_arg];
+	    curr_arg++;
+	    lp->set(cmd_info, sel, val, lanc, ulps[i].set_func);
+	    goto out;
+	}
+    }
+
+    /* per-destination items */
+    for (i=0; alps[i].name; i++) {
+	if (strcmp(alps[i].name, name) == 0) {
+	    ulp_item_t *lp = alps[i].lpi;
+
+	    if ((argc - curr_arg) < 4) {
+		/* Not enough parameters */
+		cmdlang->errstr = "Not enough parameters";
+		cmdlang->err = EINVAL;
+		goto out_err;
+	    }
+	    if (!lp->set) {
+		cmdlang->errstr = "Parameter is read-only";
+		cmdlang->err = EINVAL;
+		goto out_err;
+	    }
+	    ipmi_cmdlang_get_int(val, &sel, cmd_info);
+	    if (cmdlang->err) {
+		cmdlang->errstr = "selector invalid";
+		goto out_err;
+	    }
+	    val = argv[curr_arg];
+	    curr_arg++;
+	    lp->set(cmd_info, sel, val, lanc, alps[i].set_func);
+	    goto out;
+	}
+    }
+
+    cmdlang->errstr = "Invalid parameter name";
+    cmdlang->err = EINVAL;
+    goto out_err;
+
+ out:
+    return;
+
+ out_err:
+    strncpy(cmdlang->objstr, lanc_name, cmdlang->objstr_len);
+    cmdlang->location = "cmd_lanparm.c(lanparm_config_update)";
 }
 
 static void
@@ -1103,6 +1224,12 @@ static ipmi_cmdlang_init_t cmds_lanparm[] =
     { "unlock", &config_cmds,
       "<lanparm> <lanparm config> - Unlock, but do not set the config",
       ipmi_cmdlang_lanparm_handler, lanparm_config_unlock, NULL },
+    { "update", &config_cmds,
+      "<lanparm config> <parm> [selector] <value> - Set the given parameter"
+      " in the lanparm config to the given value.  If the parameter has"
+      " a selector of some type, the selector must be given, otherwise"
+      " no selector should be given.",
+      lanparm_config_update, NULL, NULL },
     { "close", &config_cmds,
       "<lanparm config> - free the config",
       lanparm_config_close, NULL, NULL },

@@ -49,6 +49,10 @@ typedef void (*ipmi_pef_done_cb)(ipmi_pef_t *pef,
 				 int        err,
 				 void       *cb_data);
 
+/* Generic callback for iterating. */
+typedef void (*ipmi_pef_ptr_cb)(ipmi_pef_t *pef,
+				void       *cb_data);
+
 /* Allocate a PEF.  The PEF will not be usable (it can only be
    destroyed) until the done callback is called. */
 int ipmi_pef_alloc(ipmi_mc_t        *mc,
@@ -60,6 +64,10 @@ int ipmi_pef_alloc(ipmi_mc_t        *mc,
 int ipmi_pef_destroy(ipmi_pef_t       *pef,
                      ipmi_pef_done_cb handler,
                      void             *cb_data);
+
+void ipmi_pef_iterate_pefs(ipmi_domain_t   *domain,
+			   ipmi_pef_ptr_cb handler,
+			   void            *cb_data);
 
 /* Fetch a parameter value from the PEF.  The "set" and "block"
    parameters are the set selector and block selectors.  If those are
@@ -104,6 +112,8 @@ unsigned int num_event_filter_table_entries(ipmi_pef_t *pef);
 
 /* Return the MC this PEF uses. */
 ipmi_mcid_t ipmi_pef_get_mc(ipmi_pef_t *pef);
+#define IPMI_PEF_NAME_LEN 64
+int ipmi_pef_get_name(ipmi_pef_t *pef, char *name, int length);
 
 /* Standard entries in the PEF configuration. */
 

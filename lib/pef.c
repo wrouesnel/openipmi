@@ -51,10 +51,18 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ilist.h>
 #include <OpenIPMI/opq.h>
+#include <OpenIPMI/locked_list.h>
+
+#define IPMI_PEF_ATTR_NAME "ipmi_pef"
 
 struct ipmi_pef_s
 {
     ipmi_mcid_t mc;
+    ipmi_domain_id_t domain;
+
+    int refcount;
+
+    char name[IPMI_PEF_NAME_LEN];
 
     /* Is the PEF ready (the capabilities have been checked)? */
     unsigned int ready : 1;
@@ -94,6 +102,40 @@ struct ipmi_pef_s
     opq_t *opq;
 };
 
+static int
+pef_attr_init(ipmi_domain_t *domain, void *cb_data, void **data)
+{
+    locked_list_t *pefl;
+    
+    pefl = locked_list_alloc(ipmi_domain_get_os_hnd(domain));
+    if (!pefl)
+	return ENOMEM;
+
+    *data = pefl;
+    return 0;
+}
+
+static int pef_destroy_handler(ipmi_domain_t        *domain,
+				   ipmi_pef_t       *pef,
+				   ipmi_pef_done_cb done,
+				   void                 *cb_data);
+
+static int
+destroy_pef(void *cb_data, void *item1, void *item2)
+{
+    pef_destroy_handler(cb_data, item1, NULL, NULL);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+pef_attr_destroy(ipmi_domain_t *domain, void *cb_data, void *data)
+{
+    locked_list_t *pefl = data;
+
+    locked_list_iterate(pefl, destroy_pef, domain);
+    locked_list_destroy(pefl);
+}
+
 static void
 pef_lock(ipmi_pef_t *pef)
 {
@@ -106,6 +148,92 @@ pef_unlock(ipmi_pef_t *pef)
 {
     if (pef->os_hnd->lock)
 	pef->os_hnd->unlock(pef->os_hnd, pef->pef_lock);
+}
+
+static void
+pef_get(ipmi_pef_t *pef)
+{
+    pef_lock(pef);
+    pef->refcount++;
+    pef_unlock(pef);
+}
+
+static void internal_destroy_pef(ipmi_pef_t *pef);
+
+static void
+pef_put(ipmi_pef_t *pef)
+{
+    pef_lock(pef);
+    pef->refcount--;
+    if (pef->refcount == 0) {
+	internal_destroy_pef(pef);
+	return;
+    }
+    pef_unlock(pef);
+}
+
+typedef struct iterate_pefs_info_s
+{
+    ipmi_pef_ptr_cb handler;
+    void            *cb_data;
+} iterate_pefs_info_t;
+
+static int
+pefs_handler(void *cb_data, void *item1, void *item2)
+{
+    iterate_pefs_info_t *info = cb_data;
+    info->handler(item1, info->cb_data);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+void
+ipmi_pef_iterate_pefs(ipmi_domain_t       *domain,
+			      ipmi_pef_ptr_cb handler,
+			      void                *cb_data)
+{
+    iterate_pefs_info_t info;
+    void                *attr_data;
+    locked_list_t       *pefs;
+    int                 rv;
+
+    rv = ipmi_domain_find_attribute(domain, IPMI_PEF_ATTR_NAME,
+				    &attr_data);
+    if (rv)
+	return;
+    pefs = attr_data;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    locked_list_iterate(pefs, pefs_handler, &info);
+}
+
+ipmi_mcid_t
+ipmi_pef_get_mc_id(ipmi_pef_t *pef)
+{
+    return pef->mc;
+}
+
+int
+ipmi_pef_get_name(ipmi_pef_t *pef, char *name, int length)
+{
+    int  slen;
+
+    if (length <= 0)
+	return 0;
+
+    /* Never changes, no lock needed. */
+    slen = strlen(pef->name);
+    if (slen == 0) {
+	if (name)
+	    *name = '\0';
+	goto out;
+    }
+
+    if (name)
+	memcpy(name, pef->name, slen);
+    name[slen] = '\0';
+ out:
+    return slen;
 }
 
 static int
@@ -216,9 +344,20 @@ ipmi_pef_alloc(ipmi_mc_t        *mc,
 {
     ipmi_pef_t    *pef = NULL;
     int           rv = 0;
-    ipmi_domain_t *domain;
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+    locked_list_t *pefl;
+    void          *attr_data;
 
     CHECK_MC_LOCK(mc);
+
+    rv = ipmi_domain_register_attribute(domain, IPMI_PEF_ATTR_NAME,
+					pef_attr_init,
+					pef_attr_destroy,
+					NULL,
+					&attr_data);
+    if (rv)
+	return rv;
+    pefl = attr_data;
 
     pef = ipmi_mem_alloc(sizeof(*pef));
     if (!pef) {
@@ -227,8 +366,9 @@ ipmi_pef_alloc(ipmi_mc_t        *mc,
     }
     memset(pef, 0, sizeof(*pef));
 
+    pef->refcount = 1;
     pef->mc = ipmi_mc_convert_to_id(mc);
-    domain = ipmi_mc_get_domain(mc);
+    pef->domain = ipmi_domain_convert_to_id(domain);
     pef->os_hnd = ipmi_domain_get_os_hnd(domain);
     pef->pef_lock = NULL;
     pef->ready_cb = done;
@@ -244,6 +384,11 @@ ipmi_pef_alloc(ipmi_mc_t        *mc,
 	rv = pef->os_hnd->create_lock(pef->os_hnd, &pef->pef_lock);
 	if (rv)
 	    goto out;
+    }
+
+    if (! locked_list_add(pefl, pef, NULL)) {
+	rv = ENOMEM;
+	goto out;
     }
 
  out:
@@ -288,11 +433,22 @@ internal_destroy_pef(ipmi_pef_t *pef)
     ipmi_mem_free(pef);
 }
 
-int
-ipmi_pef_destroy(ipmi_pef_t       *pef,
-		 ipmi_pef_done_cb handler,
-		 void             *cb_data)
+static int
+pef_destroy_handler(ipmi_domain_t    *domain,
+		    ipmi_pef_t       *pef,
+		    ipmi_pef_done_cb handler,
+		    void             *cb_data)
 {
+    int           rv;
+    void          *attr_data;
+    locked_list_t *pefl;
+    
+    rv = ipmi_domain_find_attribute(domain, IPMI_PEF_ATTR_NAME,
+				    &attr_data);
+    if (rv)
+	return rv;
+    pefl = attr_data;
+
     /* We don't need the read lock, because the pef are stand-alone
        after they are created (except for fetching SELs, of course). */
     pef_lock(pef);
@@ -301,19 +457,50 @@ ipmi_pef_destroy(ipmi_pef_t       *pef,
 	return EINVAL;
     }
     pef->destroyed = 1;
+    pef_unlock(pef);
     pef->destroy_handler = handler;
     pef->destroy_cb_data = cb_data;
-    if (opq_stuff_in_progress(pef->opq)) {
-	/* It's currently doing something with callbacks, so let it be
-           destroyed in the handler, since we can't cancel the handler
-           or operation. */
-	pef_unlock(pef);
-	return 0;
-    }
-
-    /* This unlocks the lock. */
-    internal_destroy_pef(pef);
+    pef_put(pef);
     return 0;
+}
+
+typedef struct pef_destroy_s
+{
+    int        err;
+    ipmi_pef_t *pef;
+
+    ipmi_pef_done_cb done;
+    void             *cb_data;
+} pef_destroy_t;
+
+static void
+pef_destroy_handler_domain(ipmi_domain_t *domain, void *cb_data)
+{
+    pef_destroy_t *info = cb_data;
+
+    info->err = pef_destroy_handler(domain, info->pef,
+				    info->done, info->cb_data);
+}
+
+int
+ipmi_pef_destroy(ipmi_pef_t       *pef,
+		 ipmi_pef_done_cb done,
+		 void             *cb_data)
+{
+    pef_destroy_t info;
+    int           rv;
+
+    info.err = 0;
+    info.pef = pef;
+    info.done = done;
+    info.cb_data = cb_data;
+    rv = ipmi_domain_pointer_cb(pef->domain,
+				pef_destroy_handler_domain,
+				&info);
+    if (!rv)
+	rv = info.err;
+
+    return rv;
 }
 
 typedef struct pef_fetch_handler_s
@@ -342,15 +529,12 @@ fetch_complete(ipmi_pef_t *pef, int err, pef_fetch_handler_t *elem)
 
     ipmi_mem_free(elem);
 
-    if (pef->destroyed) {
-	internal_destroy_pef(pef);
-	return;
-    }
-
-    opq_op_done(pef->opq);
+    if (!pef->destroyed)
+	opq_op_done(pef->opq);
 
  out:
     pef_unlock(pef);
+    pef_put(pef);
 }
 
 
@@ -479,6 +663,8 @@ ipmi_pef_get_parm(ipmi_pef_t      *pef,
 
     if (rv)
 	ipmi_mem_free(elem);
+    else
+	pef_get(pef);
 
     return rv;
 }
@@ -506,15 +692,12 @@ set_complete(ipmi_pef_t *pef, int err, pef_set_handler_t *elem)
 
     ipmi_mem_free(elem);
 
-    if (pef->destroyed) {
-	internal_destroy_pef(pef);
-	return;
-    }
-
-    opq_op_done(pef->opq);
+    if (!pef->destroyed)
+	opq_op_done(pef->opq);
 
  out:
     pef_unlock(pef);
+    pef_put(pef);
 }
 
 static void
@@ -637,6 +820,8 @@ ipmi_pef_set_parm(ipmi_pef_t       *pef,
 
     if (rv)
 	ipmi_mem_free(elem);
+    else
+	pef_get(pef);
 
     return rv;
 }
@@ -1352,6 +1537,7 @@ err_lock_cleared(ipmi_pef_t *pef,
 
     pefc->done(pef, pefc->err, NULL, pefc->cb_data);
     ipmi_pef_free_config(pefc);
+    pef_put(pef);
 }
 
 static void
@@ -1525,9 +1711,12 @@ got_parm(ipmi_pef_t     *pef,
 		     err);
 	    pefc->done(pef, pefc->err, NULL, pefc->cb_data);
 	    ipmi_pef_free_config(pefc);
+	    pef_put(pef);
 	}
-    } else
+    } else {
 	pefc->done(pef, 0, pefc, pefc->cb_data);
+	pef_put(pef);
+    }
 }
 
 static void 
@@ -1545,6 +1734,7 @@ lock_done(ipmi_pef_t *pef,
 	/* Someone else has the lock, return EAGAIN. */
 	pefc->done(pef, err, NULL, pefc->cb_data);
 	ipmi_pef_free_config(pefc);
+	pef_put(pef);
 	return;
     } else if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -1553,6 +1743,7 @@ lock_done(ipmi_pef_t *pef,
 		 err);
 	pefc->done(pef, err, NULL, pefc->cb_data);
 	ipmi_pef_free_config(pefc);
+	pef_put(pef);
 	return;
     }
 
@@ -1577,6 +1768,7 @@ lock_done(ipmi_pef_t *pef,
 		     err);
 	    pefc->done(pef, pefc->err, NULL, pefc->cb_data);
 	    ipmi_pef_free_config(pefc);
+	    pef_put(pef);
 	}
     }
 }
@@ -1599,12 +1791,15 @@ int ipmi_pef_get_config(ipmi_pef_t             *pef,
     pefc->done = done;
     pefc->cb_data = cb_data;
     pefc->my_pef = pef;
+    pefc->lock_supported = 1; /* Assume it works. */
 
     /* First grab the lock */
     data[0] = 1; /* Set in progress. */
     rv = ipmi_pef_set_parm(pef, 0, data, 1, lock_done, pefc);
     if (rv)
 	ipmi_pef_free_config(pefc);
+    else
+	pef_get(pef);
 
     return rv;
 }
@@ -1620,6 +1815,7 @@ set_clear(ipmi_pef_t *pef,
 	err = pefc->err;
     pefc->set_done(pef, err, pefc->cb_data);
     ipmi_pef_free_config(pefc);
+    pef_put(pef);
 }
 
 static void 
@@ -1893,6 +2089,7 @@ ipmi_pef_set_config(ipmi_pef_t        *pef,
     } else {
 	/* The old config no longer holds the lock. */
 	opefc->pef_locked = 0;
+	pef_get(pef);
     }
     return rv;
 }
@@ -1947,6 +2144,7 @@ ipmi_pef_clear_lock(ipmi_pef_t        *pef,
 	ipmi_mem_free(cl);
     } else if (pefc) {
 	pefc->pef_locked = 0;
+	pef_get(pef);
     }
 
     return rv;

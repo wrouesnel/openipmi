@@ -1348,7 +1348,7 @@ ipmi_cmdlang_out_mac(ipmi_cmd_info_t *info,
     char outstr[18];
 
     /* Why isn't there a standard ether_ntoa_r? */
-    sprintf(outstr, "%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x",
+    sprintf(outstr, "%2.2x:%2.2x:%2.2x:%2.2x:%2.2x:%2.2x",
 	    mac_addr[0],
 	    mac_addr[1],
 	    mac_addr[2],
@@ -1600,7 +1600,7 @@ ipmi_cmdlang_get_mac(char *str, unsigned char val[6], ipmi_cmd_info_t *info)
 	str = tv+1;
     }
 
-    memcpy(val, tmp_val, sizeof(val));
+    memcpy(val, tmp_val, sizeof(tmp_val));
     return;
 
  out:

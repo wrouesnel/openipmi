@@ -10,6 +10,12 @@
 	lanparm code to keep track of the lanparms that have been
 	allocated, be able to list them, etc.
 
+	* include/OpenIPMI/ipmi_pef.h, lib/pef.c: Rework of the pef code
+	to keep track of the lanparms that have been allocated, be able to
+	list them, etc.
+
+	* lib/pef.c, lib/lanparm.c: Fix locking behaviour to work.
+
 2004-10-05 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in: Renamed a bunch of the sensor

@@ -393,7 +393,7 @@ lanparm_destroy_handler(ipmi_domain_t        *domain,
 
 typedef struct lanparm_destroy_s
 {
-    int        err;
+    int            err;
     ipmi_lanparm_t *lanparm;
 
     ipmi_lanparm_done_cb done;
@@ -1396,6 +1396,7 @@ int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
     lanc->done = done;
     lanc->cb_data = cb_data;
     lanc->my_lan = lanparm;
+    lanc->lock_supported = 1; /* Assume it works */
 
     lanparm_get(lanparm);
 
@@ -1417,6 +1418,7 @@ set_clear(ipmi_lanparm_t *lanparm,
 {
     ipmi_lan_config_t *lanc = cb_data;
 
+printf("**f\n");
     if (lanc->err)
 	err = lanc->err;
     lanc->set_done(lanparm, err, lanc->cb_data);
@@ -1434,6 +1436,7 @@ commit_done(ipmi_lanparm_t *lanparm,
     unsigned char     data[1];
     int               rv;
 
+printf("**e\n");
     /* Note that we ignore the error.  The commit done is optional,
        and must return an error if it is optional, so we just ignore
        the error and clear the field here. */
@@ -1523,19 +1526,23 @@ set_done(ipmi_lanparm_t *lanparm,
 
  done:
     if (!lanc->lock_supported) {
+printf("**a\n");
 	/* No lock support, just finish the operation. */
 	set_clear(lanparm, err, lanc);
 	return;
     }
     else if (err) {
+printf("**b\n");
 	data[0] = 0; /* Don't commit the parameters. */
 	lanc->err = err;
 	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, set_clear, lanc);
     } else {
+printf("**c\n");
 	data[0] = 2; /* Commit the parameters. */
 	err = ipmi_lanparm_set_parm(lanparm, 0, data, 1, commit_done, lanc);
     }
     if (err) {
+printf("**d\n");
 	ipmi_log(IPMI_LOG_WARNING,
 		 "lanparm.c(set_done): Error trying to clear the set in"
 		 " progress: %x",
@@ -1604,7 +1611,7 @@ ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
     lp = &(lanparms[lanc->curr_parm]);
     lp->set_handler(lanc, lp, data);
     rv = ipmi_lanparm_set_parm(lanparm, lanc->curr_parm,
-				data, lp->length, set_done, lanc);
+			       data, lp->length, set_done, lanc);
  out:
     if (rv) {
 	ipmi_lan_free_config(lanc);
