@@ -80,6 +80,13 @@ struct ipmi_mc_s
     /* Are we currently being cleaned up? */
     int in_cleanup;
 
+    /* If we have any external users that do not have direct
+       references, we increment the usecount.  This is primarily the
+       internal uses in the active_handlers list, but we cannot use
+       that list being empty because it also may have external
+       users. */
+    int usecount;
+
     /* True if the MC is a valid MC in the system, false if not.
        Primarily used to handle shutdown races, where the MC still
        exists in lists but has been shut down. */
@@ -389,7 +396,7 @@ check_mc_destroy(ipmi_mc_t *mc)
     if (!mc->active
 	&& (ipmi_controls_get_count(mc->controls) == 0)
 	&& (ipmi_sensors_get_count(mc->sensors) == 0)
-	&& ilist_empty(mc->active_handlers))
+	&& (mc->usecount == 0))
     {
 	/* There are no sensors associated with this MC, so it's safe
            to delete it.  If there are sensors that still reference
@@ -2237,6 +2244,22 @@ ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc)
     return mc->provides_device_sdrs;
 }
 
+void
+_ipmi_mc_use(ipmi_mc_t *mc)
+{
+    CHECK_MC_LOCK(mc);
+    mc->usecount++;
+}
+
+void
+_ipmi_mc_release(ipmi_mc_t *mc)
+{
+    CHECK_MC_LOCK(mc);
+    mc->usecount--;
+    if (mc->usecount == 0)
+	check_mc_destroy(mc);
+}
+
 static void
 call_active_handler(void *data, void *ihandler, void *cb_data)
 {
@@ -2278,10 +2301,6 @@ ipmi_mc_remove_active_handler(ipmi_mc_t         *mc,
 
     if (! ilist_remove_twoitem(mc->active_handlers, handler, cb_data))
 	return ENOENT;
-
-    /* The active handlers contribute to the things that keep an MC
-       around. */
-    check_mc_destroy(mc);
 
     return 0;
 }

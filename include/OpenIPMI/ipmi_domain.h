@@ -249,6 +249,11 @@ void ipmi_domain_set_oem_data(ipmi_domain_t                   *domain,
 			      ipmi_domain_destroy_oem_data_cb destroyer);
 void *ipmi_domain_get_oem_data(ipmi_domain_t *domain);
 
+/* Register a call that will be done at the beginning of the domain
+   shutdown process.  Setting it to NULL will disable it. */
+typedef void (*ipmi_domain_shutdown_cb)(ipmi_domain_t *domain);
+void ipmi_domain_set_oem_shutdown_handler(ipmi_domain_t           *domain,
+					  ipmi_domain_shutdown_cb handler);
 
 /* Initialize the domain code, called only once at init time. */
 int _ipmi_domain_init(void);

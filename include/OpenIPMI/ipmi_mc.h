@@ -358,6 +358,11 @@ void ipmi_mc_id_set_invalid(ipmi_mcid_t *id);
 /* Is it the invalid MCID? */
 int ipmi_mc_id_is_invalid(ipmi_mcid_t *id);
 
+/* Used to create external references to an MC so it won't go away
+   even if it is released. */
+void _ipmi_mc_use(ipmi_mc_t *mc);
+void _ipmi_mc_release(ipmi_mc_t *mc);
+
 /* Used to periodically check that the MC data is current and valid. */
 void _ipmi_mc_check_mc(ipmi_mc_t *mc);
 

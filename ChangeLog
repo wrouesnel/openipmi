@@ -7,6 +7,33 @@
 
 	* lib/domain.c: Add a scan of IPMB 0x20 as the first thing.
 
+	* lib/domain.c: Destroy locks last in a domain.
+
+	* lib/mc.c, lib/entity.c, include/OpenIPMI/ipmi_mc.h: Rework the
+	active_handlers dependency between entitys and MCs by using a
+	refcount instead of seeing if something is in the active handlers
+	list.  Using the list didn't work because external (user) entities
+	in the list would keep the MC from being destroyed.
+
+	* lib/oem_atca.c: Added a check_hot_swap_state handler.  Fixed
+	some problems with getting the hot-swap state.
+
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Added a callback
+	to be called when a domain starts shutting down.
+
+	* lanserv/atca.emu: Added a new board.
+
+	* lanserv/emu.c: Fixed problems with event timestamps.
+
+	* lib/domain.c, lib/entity.c, lib/mc.c, lib/oem_atca.c: Fixed a
+	host of problems with shutdown order.  It still needs some work
+	because of the backwards dependency from entities to MCs created
+	by the requirement for active MCs to contribute to entity
+	presence.
+
+	* lib/oem_atca.c: Create the entities for the items in the shelf
+	address table at startup and keep them around.
+
 2004-04-07 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Added an MC active callback to the UI.

@@ -322,10 +322,12 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
 	mc->sel.next_entry++;
     }
 
+    gettimeofday(&t, NULL);
+
     ipmi_set_uint16(e->data, e->record_id);
     e->data[2] = record_type;
     if (record_type < 0xe0) {
-	ipmi_set_uint32(e->data+3, t.tv_sec);
+	ipmi_set_uint32(e->data+3, t.tv_sec + mc->sel.time_offset);
 	memcpy(e->data+7, event+4, 9);
     } else {
 	memcpy(e->data+3, event, 13);
@@ -343,7 +345,6 @@ ipmi_mc_add_to_sel(lmc_data_t    *mc,
 
     mc->sel.count++;
 
-    gettimeofday(&t, NULL);
     mc->sel.last_add_time = t.tv_sec + mc->sel.time_offset;
     return 0;
 }
@@ -3665,10 +3666,10 @@ ipmi_emu_add_mc(emu_data_t    *emu,
 
     /* Start the time at zero. */
     gettimeofday(&t, NULL);
-    mc->sel.time_offset = t.tv_sec;
-    mc->main_sdrs.time_offset = t.tv_sec;
+    mc->sel.time_offset = -t.tv_sec;
+    mc->main_sdrs.time_offset = -t.tv_sec;
     for (i=0; i<4; i++)
-	mc->device_sdrs[i].time_offset = t.tv_sec;
+	mc->device_sdrs[i].time_offset = -t.tv_sec;
 
     mc->event_receiver = 0x20;
     mc->event_receiver_lun = 0;

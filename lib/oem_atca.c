@@ -128,7 +128,6 @@ struct atca_ipmc_s
        pointers remain the same even if we re-allocate the array. */
     unsigned int  num_frus;
     atca_fru_t    **frus;
-    unsigned int  ipm_fru_id;
 };
 
 struct atca_shelf_s
@@ -404,7 +403,7 @@ atca_get_hot_swap_state_start(ipmi_entity_t *entity, int err, void *cb_data)
 
     rv = ipmi_sensor_id_states_get(finfo->hs_sensor_id,
 				   atca_get_hot_swap_state_done,
-				   finfo);
+				   hs_info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%soem_atca.c(atca_get_hot_swap_state_start): "
@@ -417,7 +416,7 @@ atca_get_hot_swap_state_start(ipmi_entity_t *entity, int err, void *cb_data)
     }
 }
 
-int
+static int
 atca_get_hot_swap_state(ipmi_entity_t                 *entity,
 			ipmi_entity_hot_swap_state_cb handler,
 			void                          *cb_data)
@@ -440,7 +439,7 @@ atca_get_hot_swap_state(ipmi_entity_t                 *entity,
      return rv;
 }
 
-int
+static int
 atca_set_auto_activate(ipmi_entity_t  *ent,
 		       ipmi_timeout_t auto_act,
 		       ipmi_entity_cb done,
@@ -449,7 +448,7 @@ atca_set_auto_activate(ipmi_entity_t  *ent,
     return ENOSYS;
 }
 
-int
+static int
 atca_get_auto_activate(ipmi_entity_t       *ent,
 		       ipmi_entity_time_cb handler,
 		       void                *cb_data)
@@ -457,7 +456,7 @@ atca_get_auto_activate(ipmi_entity_t       *ent,
     return ENOSYS;
 }
 
-int
+static int
 atca_set_auto_deactivate(ipmi_entity_t  *ent,
 			 ipmi_timeout_t auto_act,
 			 ipmi_entity_cb done,
@@ -466,7 +465,7 @@ atca_set_auto_deactivate(ipmi_entity_t  *ent,
     return ENOSYS;
 }
 
-int
+static int
 atca_get_auto_deactivate(ipmi_entity_t       *ent,
 			 ipmi_entity_time_cb handler,
 			 void                *cb_data)
@@ -609,7 +608,7 @@ atca_activate_start(ipmi_entity_t *entity, int err, void *cb_data)
     }
 }
 
-int
+static int
 atca_activate(ipmi_entity_t  *entity,
 	      ipmi_entity_cb done,
 	      void           *cb_data)
@@ -633,7 +632,7 @@ atca_activate(ipmi_entity_t  *entity,
     return rv;
 }
 
-int
+static int
 atca_deactivate(ipmi_entity_t  *entity,
 		ipmi_entity_cb done,
 		void           *cb_data)
@@ -657,7 +656,7 @@ atca_deactivate(ipmi_entity_t  *entity,
     return rv;
 }
 
-int
+static int
 atca_get_hot_swap_indicator(ipmi_entity_t      *ent,
 			    ipmi_entity_val_cb handler,
 			    void               *cb_data)
@@ -665,7 +664,7 @@ atca_get_hot_swap_indicator(ipmi_entity_t      *ent,
     return ENOSYS;
 }
 
-int
+static int
 atca_set_hot_swap_indicator(ipmi_entity_t  *ent,
 			    int            val,
 			    ipmi_entity_cb done,
@@ -674,12 +673,42 @@ atca_set_hot_swap_indicator(ipmi_entity_t  *ent,
     return ENOSYS;
 }
 
-int
+static int
 atca_get_hot_swap_requester(ipmi_entity_t      *ent,
 			    ipmi_entity_val_cb handler,
 			    void               *cb_data)
 {
     return ENOSYS;
+}
+
+static void
+hot_swap_checker(ipmi_entity_t             *entity,
+		 int                       err,
+		 enum ipmi_hot_swap_states state,
+		 void                      *cb_data)
+{
+    atca_fru_t                *finfo;
+    enum ipmi_hot_swap_states old_state;
+    int                       handled = IPMI_EVENT_NOT_HANDLED;
+    ipmi_event_t              *event = NULL;
+
+    if (err)
+	return;
+
+    finfo = ipmi_entity_get_oem_info(entity);
+
+    if (state != finfo->hs_state) {
+	old_state = finfo->hs_state;
+	finfo->hs_state = state;
+	ipmi_entity_call_hot_swap_handlers(entity, old_state, state, &event,
+					   &handled);
+    }
+}
+
+static int
+atca_check_hot_swap_state(ipmi_entity_t *entity)
+{
+    return atca_get_hot_swap_state(entity, hot_swap_checker, NULL);
 }
 
 static ipmi_entity_hot_swap_t atca_hot_swap_handlers =
@@ -694,6 +723,7 @@ static ipmi_entity_hot_swap_t atca_hot_swap_handlers =
     .get_hot_swap_indicator = atca_get_hot_swap_indicator,
     .set_hot_swap_indicator = atca_set_hot_swap_indicator,
     .get_hot_swap_requester = atca_get_hot_swap_requester,
+    .check_hot_swap_state   = atca_check_hot_swap_state,
 };
 
 static void
@@ -1751,6 +1781,7 @@ atca_sensor_update_handler(enum ipmi_update_e op,
 					       finfo->hs_state,
 					       &event,
 					       &handled);
+	    ipmi_entity_set_hot_swappable(finfo->entity, 0);
 	}
 	break;
 
@@ -1819,6 +1850,8 @@ atca_entity_update_handler(enum ipmi_update_e op,
     case IPMI_ADDED:
     case IPMI_CHANGED:
 	if (finfo->entity){
+	    void *tmp;
+
 	    if (finfo->entity != entity) {
 		/* If the entity is set, then this has already been
 		   done. */
@@ -1828,9 +1861,20 @@ atca_entity_update_handler(enum ipmi_update_e op,
 			 ENTITY_NAME(entity), finfo->fru_id,
 			 ENTITY_NAME(finfo->entity));
 	    }
-	    return;
-	}
 
+	    /* If OEM info is already set, then we don't need to do
+	       this again. */
+	    tmp = ipmi_entity_get_oem_info(entity);
+	    if (tmp != NULL) {
+		if (tmp != finfo) {
+		    ipmi_log(IPMI_LOG_SEVERE,
+			     "%soem_atca.c(atca_entity_update_handler): "
+			     "Entity OEM info mismatch on fru %d",
+			     ENTITY_NAME(entity), finfo->fru_id);
+		}
+		return;
+	    }
+	}
 	finfo->entity = entity;
 	rv = ipmi_entity_add_presence_handler(entity,
 					      atca_entity_presence_handler,
@@ -1875,13 +1919,9 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
 		   void       *rsp_data)
 {
     atca_ipmc_t        *minfo = rsp_data;
-    atca_shelf_t       *info = minfo->shelf;
-    ipmi_entity_info_t *ents;
     int                rv;
-    char               *name;
     unsigned int       num_frus;
     unsigned int       ipm_fru_id;
-    ipmi_domain_t      *domain;
 
     if (check_for_msg_err(mc, NULL, rsp, 5, "fru_picmg_prop_rsp"))
 	return;
@@ -1906,36 +1946,6 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
 		 "Could not allocate FRU memory",
 		 MC_NAME(mc));
 	return;
-    }
-
-    minfo->ipm_fru_id = ipm_fru_id;
-
-    if (minfo->site_type == PICMG_SITE_TYPE_PICMG_BOARD) {
-	domain = ipmi_mc_get_domain(mc);
-	ents = ipmi_domain_get_entities(domain);
-	name = "ATCA Board";
-	rv = ipmi_entity_add(ents, domain, 0, minfo->ipmb_address, 0,
-			     PICMG_ENTITY_ID_FRONT_BOARD,
-			     0x60, /* Always device relative */
-			     name, IPMI_ASCII_STR, strlen(name),
-			     atca_entity_sdr_add,
-			     NULL, &minfo->frus[ipm_fru_id]->entity);
-	if (rv) {
-	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(fru_picmg_prop_rsp): "
-		     " Could not add board entity: %x",
-		     DOMAIN_NAME(domain), rv);
-	    return;
-	}
-	rv = ipmi_entity_add_child(info->shelf_entity,
-				   minfo->frus[ipm_fru_id]->entity);
-	if (rv) {
-	    ipmi_log(IPMI_LOG_WARNING,
-		     "%soem_atca.c(fru_picmg_prop_rsp): "
-		     "Could not add child ipmc: %x",
-		     DOMAIN_NAME(domain), rv);
-	    return;
-	}
     }
 }
 
@@ -1968,11 +1978,10 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
 	for (i=0; i<minfo->num_frus; i++) {
 	    finfo = minfo->frus[i];
 	    destroy_fru_controls(finfo);
-	    ipmi_mem_free(finfo);
+	    /* We always leave FRU 0 around until we destroy the domain. */
+	    if (i != 0)
+		ipmi_mem_free(finfo);
 	}
-	ipmi_mem_free(minfo->frus);
-	minfo->frus = NULL;
-	minfo->num_frus = 0;
     }
 }
 
@@ -2295,6 +2304,8 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     for (i=0; i<info->num_addresses; i++) {
 	/* Process each IPMC. */
 	atca_ipmc_t *b = &(info->ipmcs[i]);
+	char        *name;
+	int         entity_id;
 
 	b->shelf = info;
 	b->idx = i;
@@ -2302,6 +2313,81 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	b->site_type = info->addresses[i].site_type;
 	b->site_num = info->addresses[i].site_num;
 	ipmi_mc_id_set_invalid(&b->mcid);
+
+	rv = realloc_frus(b, 1); /* Start with 1 FRU for the MC. */
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "Could not allocate FRU memory",
+		     DOMAIN_NAME(domain));
+	    goto out;
+	}
+
+	switch (b->site_type) {
+	case 0:
+	    name = "ATCA Board";
+	    entity_id = 0xa0;
+	    break;
+
+	case 1: /* Power entry module */
+	    name = "Power Unit";
+	    entity_id = 0x0a;
+	    break;
+
+	case 2: /* Shelf FRU info */
+	    name = "Shelf FRU";
+	    entity_id = 0xf2;
+	    break;
+
+	case 3: /* Dedicated ShMC */
+	    name = "ShMC";
+	    entity_id = 0xf0;
+	    break;
+
+	case 4: /* Fan Tray */
+	    name = "Fan Tray";
+	    entity_id = 0x1e;
+	    break;
+
+	case 5: /* Fan Filter Tray */
+	    name = "Fan Filters";
+	    entity_id = 0xf1;
+	    break;
+
+	case 9: /* Rear Transition Module */
+	    name = "RTM";
+	    entity_id = 0xc0;
+	    break;
+
+	case 6: /* Alarm */
+	case 7: /* AdvancedMC Module */
+	case 8: /* PMC */
+	default:
+	    /* Skip adding the entity. */
+	    continue;
+	}
+
+	rv = ipmi_entity_add(ents, domain, 0, b->ipmb_address, 0,
+			     entity_id,
+			     0x60, /* Always device relative */
+			     name, IPMI_ASCII_STR, strlen(name),
+			     atca_entity_sdr_add,
+			     NULL, &b->frus[0]->entity);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     " Could not add board entity: %x",
+		     DOMAIN_NAME(domain), rv);
+	    goto out;
+	}
+	rv = ipmi_entity_add_child(info->shelf_entity, b->frus[0]->entity);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_WARNING,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "Could not add child ipmc: %x",
+		     DOMAIN_NAME(domain), rv);
+	    goto out;
+	}
     }
 
     /* Add a handler for when MCs are added to the domain, so we can
@@ -2340,6 +2426,24 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 }
 
 static void
+atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
+{
+    atca_shelf_t *info = ipmi_domain_get_oem_data(domain);
+
+    /* Remove all the parent/child relationships we previously
+       defined. */
+    if (info->ipmcs) {
+	int i;
+	for (i=0; i<info->num_ipmcs; i++) {
+	    atca_ipmc_t *b = &(info->ipmcs[i]);
+
+	    destroy_fru_controls(b->frus[0]);
+	    ipmi_entity_remove_child(info->shelf_entity, b->frus[0]->entity);
+	}
+    }
+}
+
+static void
 atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
 {
     atca_shelf_t *info = oem_data;
@@ -2348,8 +2452,17 @@ atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
 	ipmi_fru_destroy(info->shelf_fru, NULL, NULL);
     if (info->addresses)
 	ipmi_mem_free(info->addresses);
-    if (info->ipmcs)
+    if (info->ipmcs) {
+	int i;
+	for (i=0; i<info->num_ipmcs; i++) {
+	    atca_ipmc_t *b = &(info->ipmcs[i]);
+
+	    ipmi_mem_free(b->frus[0]);
+	    ipmi_mem_free(b->frus);
+	    b->frus = NULL;
+	}
 	ipmi_mem_free(info->ipmcs);
+    }
     ipmi_mem_free(info);
 }
 
@@ -2414,6 +2527,8 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     }
 
     ipmi_domain_set_oem_data(domain, info, atca_oem_data_destroyer);
+    ipmi_domain_set_oem_shutdown_handler(domain,
+					 atca_oem_domain_shutdown_handler);
 
     ipmi_domain_register_mc_update_handler(domain,
 					   atca_fix_sel_handler,

@@ -198,6 +198,8 @@ struct ipmi_domain_s
     ipmi_oem_event_handler_cb oem_event_handler;
     void                      *oem_event_cb_data;
 
+    ipmi_domain_shutdown_cb shutdown_handler;
+
     /* Are we in the middle of an MC bus scan? */
     int scanning_bus;
 
@@ -343,6 +345,13 @@ iterate_cleanup_mc(ilist_iter_t *iter, void *item, void *cb_data)
 }
 
 void
+ipmi_domain_set_oem_shutdown_handler(ipmi_domain_t           *domain,
+				     ipmi_domain_shutdown_cb handler)
+{
+    domain->shutdown_handler = handler;
+}
+
+void
 cleanup_domain(ipmi_domain_t *domain)
 {
     int i;
@@ -386,6 +395,10 @@ cleanup_domain(ipmi_domain_t *domain)
 	ipmi_destroy_lock(domain->cmds_lock);
     if (domain->cmds)
 	free_ilist(domain->cmds);
+
+    /* Shutdown code called here. */
+    if (domain->shutdown_handler)
+	domain->shutdown_handler(domain);
 
     /* Delete the sensors from the main SDR repository. */
     if (domain->sensors_in_main_sdr) {
@@ -469,8 +482,6 @@ cleanup_domain(ipmi_domain_t *domain)
 	remove_event_handler(domain, domain->event_handlers);
     ipmi_unlock(domain->event_handlers_lock);
 
-    if (domain->mc_list)
-	free_ilist(domain->mc_list);
     if (domain->con_change_handlers) {
 	ilist_iter_t iter;
 	void         *data;
@@ -481,17 +492,6 @@ cleanup_domain(ipmi_domain_t *domain)
 	    ipmi_mem_free(data);
 	}
 	free_ilist(domain->con_change_handlers);
-    }
-    if (domain->mc_upd_handlers) {
-	ilist_iter_t iter;
-	void         *data;
-	ilist_init_iter(&iter, domain->mc_upd_handlers);
-	while (ilist_first(&iter)) {
-	    data = ilist_get(&iter);
-	    ilist_delete(&iter);
-	    ipmi_mem_free(data);
-	}
-	free_ilist(domain->mc_upd_handlers);
     }
     if (domain->ipmb_ignores) {
 	ilist_iter_t iter;
@@ -522,12 +522,6 @@ cleanup_domain(ipmi_domain_t *domain)
 	    }
 	}
     }
-    if (domain->mc_list_lock)
-	ipmi_destroy_lock(domain->mc_list_lock);
-    if (domain->con_lock)
-	ipmi_destroy_lock(domain->con_lock);
-    if (domain->event_handlers_lock)
-	ipmi_destroy_lock(domain->event_handlers_lock);
 
     /* Destroy the entities last, since sensors and controls may
        refer to them. */
@@ -536,12 +530,35 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->entities_lock)
 	ipmi_destroy_lock(domain->entities_lock);
 
+    /* The MC list should no longer have anything in it. */
+    if (domain->mc_upd_handlers) {
+	ilist_iter_t iter;
+	void         *data;
+	ilist_init_iter(&iter, domain->mc_upd_handlers);
+	while (ilist_first(&iter)) {
+	    data = ilist_get(&iter);
+	    ilist_delete(&iter);
+	    ipmi_mem_free(data);
+	}
+	free_ilist(domain->mc_upd_handlers);
+    }
+    if (domain->mc_list)
+	free_ilist(domain->mc_list);
+
     /* We wait until here to call the OEM data destroyer, the process
        of destroying information that has previously gone on can call
        OEM callbacks, we want the OEM data to hang around until we
        don't need it for sure. */
     if (domain->oem_data && domain->oem_data_destroyer)
 	domain->oem_data_destroyer(domain, domain->oem_data);
+
+    /* Locks must be last, because they can be used by many things. */
+    if (domain->mc_list_lock)
+	ipmi_destroy_lock(domain->mc_list_lock);
+    if (domain->con_lock)
+	ipmi_destroy_lock(domain->con_lock);
+    if (domain->event_handlers_lock)
+	ipmi_destroy_lock(domain->event_handlers_lock);
 
     ipmi_mem_free(domain);
 }

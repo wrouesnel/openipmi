@@ -266,6 +266,7 @@ struct ipmi_entity_info_s
 
 static void call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op);
 static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
+static void call_presence_handlers(ipmi_entity_t *ent);
 
 /***********************************************************************
  *
@@ -371,7 +372,9 @@ static void
 entity_final_destroy(ipmi_entity_t *ent)
 {
     if ((ent->running_timer_count != 0)
-	|| (opq_stuff_in_progress(ent->waitq)))
+	|| (opq_stuff_in_progress(ent->waitq))
+	|| (! ilist_empty(ent->sub_entities))
+	|| (! ilist_empty(ent->parent_entities)))
     {
 	ipmi_unlock(ent->timer_lock);
 	return;
@@ -379,6 +382,7 @@ entity_final_destroy(ipmi_entity_t *ent)
 
     if (ent->frudev_present) {
 	ipmi_mc_remove_active_handler(ent->frudev_mc, entity_mc_active, ent);
+	_ipmi_mc_release(ent->frudev_mc);
     }
 
     if (ent->oem_info_cleanup_handler)
@@ -506,7 +510,7 @@ cleanup_entity(ipmi_entity_t *ent)
 	}
     }
 
-    /* The sensor, control,parent, and child lists should be empty
+    /* The sensor, control, parent, and child lists should be empty
        now, we can just destroy it. */
     destroy_entity(NULL, ent, NULL);
     return 1;
@@ -984,6 +988,9 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
 	child->ents->handler(IPMI_CHANGED, child->domain, child,
 			     child->ents->cb_data);
 
+    cleanup_entity(ent);
+    cleanup_entity(child);
+
     return 0;
 }
 
@@ -1096,6 +1103,19 @@ static void call_presence_handler(void *data, void *cb_data1, void *cb_data2)
 	info->handled = handled;
 	info->event = NULL;
     }
+}
+
+static void
+call_presence_handlers(ipmi_entity_t *ent)
+{
+    presence_handler_info_t info;
+
+    info.ent = ent;
+    info.present = ent->present;
+    info.event = NULL;
+    info.handled = IPMI_EVENT_NOT_HANDLED;
+    ilist_iter_twoitem(ent->presence_handlers, call_presence_handler,
+		       &info);
 }
 
 static void
@@ -2914,6 +2934,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 				 " MCDLR or FRUDLR,"
 				 " error %x", ENTITY_NAME(found->ent), rv);
 		    } else {
+			_ipmi_mc_use(mc);
 			found->ent->frudev_present = 1;
 			found->ent->frudev_active = ipmi_mc_is_active(mc);
 			found->ent->frudev_mc = mc;
@@ -3020,6 +3041,14 @@ ipmi_sdr_entity_destroy(void *info)
 	if ((infos->dlrs[i]->type != IPMI_ENTITY_EAR)
 	    && (infos->dlrs[i]->type != IPMI_ENTITY_DREAR))
 	{
+	    if (ent->frudev_present) {
+		ipmi_mc_remove_active_handler(ent->frudev_mc,
+					      entity_mc_active, ent);
+		_ipmi_mc_release(ent->frudev_mc);
+		ent->frudev_mc = NULL;
+		ent->frudev_present = 0;
+	    }
+
 	    ent->ref_count--;
 	} else {
 	    if (infos->dlrs[i]->is_ranges) {

@@ -875,10 +875,10 @@ int ipmi_entity_remove_hot_swap_handler(ipmi_entity_t           *ent,
 					void                    *cb_data);
 
 /* Get the current hot-swap state. */
-typedef int (*ipmi_entity_hot_swap_state_cb)(ipmi_entity_t             *ent,
-					     int                       err,
-					     enum ipmi_hot_swap_states state,
-					     void                    *cb_data);
+typedef void (*ipmi_entity_hot_swap_state_cb)(ipmi_entity_t             *ent,
+					      int                       err,
+					      enum ipmi_hot_swap_states state,
+					      void                   *cb_data);
 int ipmi_entity_get_hot_swap_state(ipmi_entity_t                 *ent,
 				   ipmi_entity_hot_swap_state_cb handler,
 				   void                          *cb_data);
