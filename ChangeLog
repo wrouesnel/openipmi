@@ -11,6 +11,11 @@
 	* lib/sel.c: Initialize the return value in
 	ipmi_sel_add_event_to_sel().
 
+	* lib/sel.c, ui/ui.c: Fix some problem with adding events to the
+	SEL.
+
+	* configure.in: Move to version 1.2.10.
+	
 2004-02-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sensor.c: Reworked sensor naming to include the entity
