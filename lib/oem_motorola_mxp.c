@@ -7373,9 +7373,8 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 	    cid.mcid = ipmi_mc_convert_to_id(mc);
 	    cid.mcid.mc_num = einfo->data[4];
 	    cid.mcid.channel = 0;
-	    cid.mcid.mc_num = 0x20;
 	    cid.lun = 4;
-	    cid.control_num = MXP_BOARD_POWER_CONFIG_NUM;
+	    cid.control_num = MXP_BOARD_POWER_NUM;
 	    rv2 = ipmi_control_pointer_noseq_cb(cid,
 						mxp_board_power_control_event,
 						einfo);
