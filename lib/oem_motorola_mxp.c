@@ -1851,7 +1851,7 @@ mxp_alloc_id_control(ipmi_mc_t                          *mc,
 
     /* Create all the callbacks in the data structure. */
     memset(&cbs, 0, sizeof(cbs));
-    ipmi_control_identifier_set_max_length(*control, 4);
+    ipmi_control_identifier_set_max_length(*control, size);
     cbs.set_identifier_val = set_val;
     cbs.get_identifier_val = get_val;
 
