@@ -353,6 +353,9 @@ handle_sel_clear(ipmi_mc_t  *mc,
 	/* Success!  We can free the data. */
 	free_deleted_events(sel->events);
     }
+
+    fetch_complete(sel, 0);
+
     sel_unlock(sel);
  out:
 }

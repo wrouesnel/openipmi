@@ -1330,7 +1330,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     /* Found one, start the discovery process on it. */
     mc = find_mc_by_addr(info->bmc, addr, addr_len);
     if (msg->data[0] == 0) {
-	if (!mc_device_data_compares(mc, msg)) {
+	if (mc && !mc_device_data_compares(mc, msg)) {
 	    /* The MC was replaced with a new one, so clear the old
                one and add a new one. */
 	    ipmi_cleanup_mc(mc);
