@@ -120,6 +120,53 @@ ipmi_addr_equal(ipmi_addr_t *addr1,
     }
 }
 
+int
+ipmi_addr_equal_nolun(ipmi_addr_t *addr1,
+		      int         addr1_len,
+		      ipmi_addr_t *addr2,
+		      int         addr2_len)
+{
+    if (addr1_len != addr2_len)
+	return 0;
+
+    if (addr1->addr_type != addr2->addr_type)
+	return 0;
+
+    if (addr1->channel != addr2->channel)
+	return 0;
+
+    /* Note that we do *not* include the LUN in address comparisons. */
+    switch (addr1->addr_type)
+    {
+	case IPMI_IPMB_ADDR_TYPE:
+	{
+	    ipmi_ipmb_addr_t *iaddr1 = (ipmi_ipmb_addr_t *) addr1;
+	    ipmi_ipmb_addr_t *iaddr2 = (ipmi_ipmb_addr_t *) addr2;
+
+	    return (iaddr1->slave_addr == iaddr2->slave_addr);
+	}
+
+	case IPMI_SYSTEM_INTERFACE_ADDR_TYPE:
+	    return 1;
+
+	if (addr1->addr_type == IPMI_LAN_ADDR_TYPE) {
+		struct ipmi_lan_addr *lan_addr1
+			= (struct ipmi_lan_addr *) addr1;
+		struct ipmi_lan_addr *lan_addr2
+		    = (struct ipmi_lan_addr *) addr2;
+
+		return ((lan_addr1->remote_SWID == lan_addr2->remote_SWID)
+			&& (lan_addr1->local_SWID == lan_addr2->local_SWID)
+			&& (lan_addr1->privilege == lan_addr2->privilege)
+			&& (lan_addr1->session_handle
+			    == lan_addr2->session_handle));
+	}
+
+	default:
+	    return 0;
+    }
+}
+
 unsigned int
 ipmi_addr_get_lun(ipmi_addr_t *addr)
 {

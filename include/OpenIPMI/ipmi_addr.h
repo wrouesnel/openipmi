@@ -169,7 +169,13 @@ int ipmi_addr_equal(ipmi_addr_t *addr1,
 unsigned int ipmi_addr_get_lun(ipmi_addr_t *addr);
 int ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun);
 
-/* Get the slsave address from the address, returns 0 if the address
+/* Like the above, but do not use the LUN in the comparison. */
+int ipmi_addr_equal_nolun(ipmi_addr_t *addr1,
+			  int         addr1_len,
+			  ipmi_addr_t *addr2,
+			  int         addr2_len);
+
+/* Get the slave address from the address, returns 0 if the address
    does not have a slave address. */
 unsigned int ipmi_addr_get_slave_addr(ipmi_addr_t *addr);
 

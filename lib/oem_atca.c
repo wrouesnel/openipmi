@@ -3419,24 +3419,82 @@ atca_entity_fixup(ipmi_mc_t *mc, unsigned char *id, unsigned char *instance)
     *instance = (*instance & 0x80) | (inst & 0x7f);
 }
 
+typedef struct inst_list_s
+{
+    unsigned int entity_id;
+    unsigned int entity_instance;
+} inst_list_t;
+
+static void
+add_inst(inst_list_t *inst, int *curr,
+	 unsigned int entity_id, unsigned int entity_instance,
+	 unsigned int *container_id)
+{
+    int i;
+
+    /* Ignore system-relative ones. */
+    if (entity_instance < 0x60)
+	return;
+
+    /* Ignore the containers. */
+    switch (entity_id) {
+    case 10:
+    case 30:
+    case 0xa0:
+    case 0xf0:
+    case 0xf1:
+    case 0xf2:
+	*container_id = entity_id;
+	return;
+    }
+
+    for (i=0; i<*curr; i++) {
+	if ((inst[i].entity_id == entity_id)
+	    && (inst[i].entity_instance == entity_instance))
+	{
+	    return;
+	}
+    }
+
+    inst[i].entity_id = entity_id;
+    inst[i].entity_instance = entity_instance;
+    *curr = i+1;
+}
+
 static void
 misc_sdrs_fixup(ipmi_mc_t       *mc,
 		ipmi_sdr_info_t *sdrs,
 		void            *cb_data)
 {
     unsigned int count;
-    int          i;
+    int          i, j;
     ipmi_sdr_t   sdr;
     int          rv;
+    inst_list_t  *inst = NULL;
+    int          next_inst = 0;
+    unsigned int entity_id;
+    unsigned int entity_instance;
+    uint16_t     last_rec = 0;
+    unsigned int addr, chan;
+    unsigned int container_id = 0xa0;
 
     rv = ipmi_get_sdr_count(sdrs, &count);
     if (rv)
 	return;
 
+    if (count > 0) {
+	inst = ipmi_mem_alloc(sizeof(*inst) * count);
+	if (!inst)
+	    return;
+    }
+
     for (i=0; i<count; i++) {
 	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
 	if (rv)
 	    break;
+
+	if (sdr.record_id > last_rec)
+	    last_rec = sdr.record_id;
 
 	/* Fix up the entity instances for the SDRs. */
 	switch (sdr.type) {
@@ -3445,14 +3503,63 @@ misc_sdrs_fixup(ipmi_mc_t       *mc,
 	    /* Make it device relative. */
 	    atca_entity_fixup(mc, &sdr.data[3], &sdr.data[4]);
 	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    entity_id = sdr.data[3];
+	    entity_instance = sdr.data[4];
 	    break;
 	case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
 	case IPMI_SDR_FRU_DEVICE_LOCATOR_RECORD:
 	    atca_entity_fixup(mc, &sdr.data[7], &sdr.data[8]);
 	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    entity_id = sdr.data[7];
+	    entity_instance = sdr.data[8];
 	    break;
+
+	default:
+	    continue;
 	}
+
+	add_inst(inst, &next_inst, entity_id, entity_instance, &container_id);
     }
+
+    /* Add entity association records for all the entities. */
+    addr = ipmi_mc_get_address(mc);
+    chan = ipmi_mc_get_channel(mc);
+
+    memset(&sdr, 0, sizeof(sdr));
+    sdr.major_version = 1;
+    sdr.minor_version = 5;
+    sdr.type = 9;
+    sdr.length = 27;
+    sdr.data[0] = container_id;
+    sdr.data[1] = 0x60;
+    sdr.data[2] = addr;
+    sdr.data[3] = chan;
+    sdr.data[4] = 0;
+    sdr.data[5] = addr;
+    sdr.data[6] = chan;
+    sdr.data[9] = addr;
+    sdr.data[10] = chan;
+    sdr.data[13] = addr;
+    sdr.data[14] = chan;
+    sdr.data[17] = addr;
+    sdr.data[18] = chan;
+    for (i=0; i<next_inst; ) {
+	last_rec++;
+	sdr.record_id = last_rec;
+	for (j=0; (j<4)&&(i<next_inst); j++, i++) {
+	    sdr.data[7+(j*4)] = inst[i].entity_id;
+	    sdr.data[8+(j*4)] = inst[i].entity_instance;
+	}
+	for (; j<4; j++) {
+	    sdr.data[5+(j*4)] = 0;
+	    sdr.data[6+(j*4)] = 0;
+	    sdr.data[7+(j*4)] = 0;
+	    sdr.data[8+(j*4)] = 0;
+	}
+	ipmi_sdr_add(sdrs, &sdr);
+    }
+
+    ipmi_mem_free(inst);
 }
 
 static int

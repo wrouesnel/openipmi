@@ -759,14 +759,20 @@ handle_sel_info(ipmi_mc_t  *mc,
 	sel->curr_rec_id = 0;
     }
 
-    sel->last_addition_timestamp = add_timestamp;
-    sel->last_erase_timestamp = erase_timestamp;
+    sel->curr_addition_timestamp = add_timestamp;
+    sel->curr_erase_timestamp = erase_timestamp;
 
     sel->sels_changed = 1;
     sel->next_rec_id = 0;
 
     if (fetched_num_sels == 0) {
 	/* No sels, so there's nothing to do. */
+
+	/* Set the timestamps here, because they are not the same, but
+	   there was nothing to do. */
+	sel->last_addition_timestamp = sel->curr_addition_timestamp;
+	sel->last_erase_timestamp = sel->curr_erase_timestamp;
+
 	fetch_complete(sel, 0);
 	goto out;
     }

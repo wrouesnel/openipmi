@@ -1358,7 +1358,9 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
 		if (tab->mcs[i]) {
 		    ipmi_mc_get_ipmi_address(tab->mcs[i], &addr2, &addr2_len);
 
-		    if (ipmi_addr_equal(addr, addr_len, &addr2, addr2_len)) {
+		    if (ipmi_addr_equal_nolun(addr, addr_len,
+					      &addr2, addr2_len))
+		    {
 			mc = tab->mcs[i];
 			break;
 		    }

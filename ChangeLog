@@ -1,3 +1,16 @@
+2005-02-11 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi_utils.c, include/OpenIPMI/ipmi_addr.h: Add an address
+	comparison that does not use the LUN as part of the comparison.
+
+	* lib/domain.c: Modify finding MCs to not use the LUN, since there
+	may be multiple LUNs on an MC.
+
+	* lib/oem_atca.c: In the Intel SDR fixups, added entity
+	containment records for all the entities found in the SDRs.
+
+	* lib/sel.c: Fixed problems with timestamp handling.
+
 2005-02-08 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Fixed some problems with the use of qsort and the
