@@ -318,6 +318,9 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
 {
     sel_fetch_handler_t *elem, *next;
 
+    if (sel->in_destroy)
+	return;
+
     elem = sel->fetch_handlers;
     sel->fetch_handlers = NULL;
     sel->fetched = 1;
@@ -335,7 +338,7 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
 	elem = next;
     }
 
-    if (!sel->in_destroy && sel->destroyed) {
+    if (sel->destroyed) {
 	internal_destroy_sel(sel);
 	/* Previous call releases lock. */
 	return;

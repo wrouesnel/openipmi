@@ -1,4 +1,8 @@
 
+2003-06-05 Corey Minyard <cminyard@mvista.com>
+
+	* sel.c: Fixed a SEL destruction race condition.
+
 2003-06-04 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.tex, REAME.Force: Minor updates to make some things
