@@ -77,27 +77,27 @@ struct ipmi_sdr_info_s
     uint8_t  minor_version;
     uint32_t last_addition_timestamp;
     uint32_t last_erase_timestamp;
-    int overflow : 1;
-    int update_mode : 2;
-    int supports_delete_sdr : 1;
-    int supports_partial_add_sdr : 1;
-    int supports_reserve_sdr : 1;
-    int supports_get_sdr_repository_allocation : 1;
+    unsigned int overflow : 1;
+    unsigned int update_mode : 2;
+    unsigned int supports_delete_sdr : 1;
+    unsigned int supports_partial_add_sdr : 1;
+    unsigned int supports_reserve_sdr : 1;
+    unsigned int supports_get_sdr_repository_allocation : 1;
 
     /* Information from the GET DEVICDE SDR INFO command, sensor mode
        only. */
-    int dynamic_population : 1;
+    unsigned int dynamic_population : 1;
     char lun_has_sensors[4];
 
     /* Have the SDRs previously been fetched? */
-    int fetched : 1;
+    unsigned int fetched : 1;
 
     /* Has the SDR been destroyed?  This is here because of race
        conditions in shutdown.  If we are currently in the process of
        fetching SDRs, we will allow a destroy operation to complete,
        but we don't actually destroy the data until the SDR fetch
        reaches a point were it can be stopped safely. */
-    int destroyed : 1;
+    unsigned int destroyed : 1;
     /* Something to call when the destroy is complete. */
     ipmi_sdr_destroyed_t destroy_handler;
     void                 *destroy_cb_data;

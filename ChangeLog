@@ -1,4 +1,9 @@
 
+2003-02-12 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c, sdr.c, sel.c: Changed all 1-bit integers to unsigned so
+	that comparisons work properly.
+	
 2003-02-09 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Moved to version 0.1.3.

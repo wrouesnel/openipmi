@@ -180,19 +180,20 @@ struct ipmi_mc_s
 
     ipmi_control_info_t *controls;
 
-    int provides_device_sdrs : 1;
-    int device_available : 1;
+    unsigned int provides_device_sdrs : 1;
+    unsigned int device_available : 1;
 
-    int chassis_support : 1;
-    int bridge_support : 1;
-    int IPMB_event_generator_support : 1;
-    int IPMB_event_receiver_support : 1;
-    int FRU_inventory_support : 1;
-    int SEL_device_support : 1;
-    int SDR_repository_support : 1;
-    int sensor_device_support : 1;
+    unsigned int chassis_support : 1;
+    unsigned int bridge_support : 1;
+    unsigned int IPMB_event_generator_support : 1;
+    unsigned int IPMB_event_receiver_support : 1;
+    unsigned int FRU_inventory_support : 1;
+    unsigned int SEL_device_support : 1;
+    unsigned int SDR_repository_support : 1;
+    unsigned int sensor_device_support : 1;
 
-    int in_bmc_list : 1; /* Tells if we are in the list of our BMC yet. */
+    unsigned int in_bmc_list : 1; /* Tells if we are in the list of
+                                     our BMC yet. */
 
     uint8_t device_id;
 

@@ -74,20 +74,20 @@ struct ipmi_sel_info_s
     uint8_t  entries;
     uint32_t last_addition_timestamp;
     uint32_t last_erase_timestamp;
-    int      overflow : 1;
-    int      supports_delete_sel : 1;
-    int      supports_partial_add_sel : 1;
-    int      supports_reserve_sel : 1;
-    int      supports_get_sel_allocation : 1;
+    unsigned int overflow : 1;
+    unsigned int supports_delete_sel : 1;
+    unsigned int supports_partial_add_sel : 1;
+    unsigned int supports_reserve_sel : 1;
+    unsigned int supports_get_sel_allocation : 1;
 
-    int      fetched : 1;
+    unsigned int fetched : 1;
 
     /* Has the SEL been destroyed?  This is here because of race
        conditions in shutdown.  If we are currently in the process of
        fetching SELs, we will allow a destroy operation to complete,
        but we don't actually destroy the data until the SEL fetch
        reaches a point were it can be stopped safely. */
-    int      destroyed : 1;
+    unsigned int destroyed : 1;
     /* Something to call when the destroy is complete. */
     ipmi_sel_destroyed_t destroy_handler;
     void                 *destroy_cb_data;
