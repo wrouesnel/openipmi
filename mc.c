@@ -104,8 +104,8 @@ struct ipmi_mc_s
     /* The device SDRs on the MC. */
     ipmi_sdr_info_t *sdrs;
 
-    ipmi_sensor_info_t *sensors;
-    ipmi_ind_info_t *inds;
+    ipmi_sensor_info_t  *sensors;
+    ipmi_control_info_t *controls;
 
     int provides_device_sdrs : 1;
     int device_available : 1;
@@ -643,8 +643,8 @@ ipmi_close_connection(ipmi_mc_t    *mc,
     if (mc->sensors)
 	ipmi_sensors_destroy(mc->sensors);
 
-    if (mc->inds)
-	ipmi_inds_destroy(mc->inds);
+    if (mc->controls)
+	ipmi_controls_destroy(mc->controls);
 
     if (mc->bmc->main_sdrs)
 	ipmi_sdr_destroy(mc->bmc->main_sdrs, NULL, NULL);
@@ -710,8 +710,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
     if (mc->sensors)
 	ipmi_sensors_destroy(mc->sensors);
-    if (mc->inds)
-	ipmi_inds_destroy(mc->inds);
+    if (mc->controls)
+	ipmi_controls_destroy(mc->controls);
     if (mc->bmc) {
 	if (mc->bmc->mc_list)
 	    free_ilist(mc->bmc->mc_list);
@@ -767,7 +767,7 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
 
     mc->bmc = NULL;
     mc->sensors = NULL;
-    mc->inds = NULL;
+    mc->controls = NULL;
     mc->new_sensor_handler = NULL;
 
     memcpy(&(mc->addr), addr, addr_len);
@@ -778,7 +778,7 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     if (rv)
 	goto out_err;
 
-    rv = ipmi_inds_alloc(mc, &(mc->inds));
+    rv = ipmi_controls_alloc(mc, &(mc->controls));
     if (rv)
 	goto out_err;
 
@@ -1218,7 +1218,7 @@ setup_bmc(ipmi_con_t  *ipmi,
 
     mc->bmc = NULL;
     mc->sensors = NULL;
-    mc->inds = NULL;
+    mc->controls = NULL;
     mc->new_sensor_handler = NULL;
 
     memcpy(&(mc->addr), mc_addr, mc_addr_len);
@@ -1270,7 +1270,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     if (rv)
 	goto out_err;
 
-    rv = ipmi_inds_alloc(mc, &(mc->inds));
+    rv = ipmi_controls_alloc(mc, &(mc->controls));
     if (rv)
 	goto out_err;
 
@@ -1499,10 +1499,10 @@ ipmi_mc_get_sensors(ipmi_mc_t *mc)
     return mc->sensors;
 }
 
-ipmi_ind_info_t *
-ipmi_mc_get_inds(ipmi_mc_t *mc)
+ipmi_control_info_t *
+ipmi_mc_get_controls(ipmi_mc_t *mc)
 {
-    return mc->inds;
+    return mc->controls;
 }
 
 ipmi_sdr_info_t *

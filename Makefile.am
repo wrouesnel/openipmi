@@ -22,7 +22,7 @@ lib_LTLIBRARIES = libOpenIPMI.la libOpenIPMIui.la
 
 bin_PROGRAMS = ipmi_ui
 
-libOpenIPMI_la_SOURCES = entity.c ipmi.c mc.c sdr.c selector.c ind.c \
+libOpenIPMI_la_SOURCES = entity.c ipmi.c mc.c sdr.c selector.c control.c \
 	ilist.c ipmi_smi.c opq.c sel.c sensor.c ipmi_lan.c md5.c md2.c \
 	strings.c
 libOpenIPMI_la_LIBADD = -lm

@@ -329,22 +329,22 @@ char *ipmi_get_entity_id_string(unsigned int val);
 /*
  * Indicator types.
  */
-#define IPMI_IND_LIGHT			1
-#define IPMI_IND_RELAY			2
-#define IPMI_IND_DISPLAY		3
-#define IPMI_IND_ALARM			4
-#define IPMI_IND_RESET			5
-#define IPMI_IND_POWER			6
-#define IPMI_IND_FAN_SPEED		7
-#define IPMI_IND_IDENTIFIER		8
-char *ipmi_get_ind_type_string(unsigned int val);
+#define IPMI_CONTROL_LIGHT		1
+#define IPMI_CONTROL_RELAY		2
+#define IPMI_CONTROL_DISPLAY		3
+#define IPMI_CONTROL_ALARM		4
+#define IPMI_CONTROL_RESET		5
+#define IPMI_CONTROL_POWER		6
+#define IPMI_CONTROL_FAN_SPEED		7
+#define IPMI_CONTROL_IDENTIFIER		8
+char *ipmi_get_control_type_string(unsigned int val);
 
-#define IPMI_IND_COLOR_BLACK		0
-#define IPMI_IND_COLOR_WHITE		1
-#define IPMI_IND_COLOR_RED		2
-#define IPMI_IND_COLOR_GREEN		3
-#define IPMI_IND_COLOR_BLUE		4
-#define IPMI_IND_COLOR_YELLOW		5
+#define IPMI_CONTROL_COLOR_BLACK	0
+#define IPMI_CONTROL_COLOR_WHITE	1
+#define IPMI_CONTROL_COLOR_RED		2
+#define IPMI_CONTROL_COLOR_GREEN	3
+#define IPMI_CONTROL_COLOR_BLUE		4
+#define IPMI_CONTROL_COLOR_YELLOW	5
 char *ipmi_get_color_string(unsigned int val);
 
 #endif /* _IPMI_BITS_H */

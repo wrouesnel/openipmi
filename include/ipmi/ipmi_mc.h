@@ -37,7 +37,7 @@
 #include <ipmi/os_handler.h>
 #include <ipmi/ipmi_entity.h>
 #include <ipmi/ipmi_sensor.h>
-#include <ipmi/ipmi_ind.h>
+#include <ipmi/ipmi_control.h>
 #include <ipmi/ipmi_sdr.h>
 #include <ipmi/ipmi_addr.h>
 
@@ -181,7 +181,7 @@ void ipmi_mc_entity_unlock(ipmi_mc_t *mc);
 ipmi_sensor_info_t *ipmi_mc_get_sensors(ipmi_mc_t *mc);
 
 /* Get the indicators that the given MC owns. */
-ipmi_ind_info_t *ipmi_mc_get_inds(ipmi_mc_t *mc);
+ipmi_control_info_t *ipmi_mc_get_controls(ipmi_mc_t *mc);
 
 /* Rescan the entities for possible presence changes.  "force" causes
    a full rescan even if nothing on an entity has changed. */

@@ -89,8 +89,8 @@ int ipmi_entity_get_subentity(ipmi_entity_t *ent,
    will return NULL on a failure. */
 void *ipmi_entity_alloc_sensor_link(void);
 void ipmi_entity_free_sensor_link(void *link);
-void *ipmi_entity_alloc_ind_link(void);
-void ipmi_entity_free_ind_link(void *link);
+void *ipmi_entity_alloc_control_link(void);
+void ipmi_entity_free_control_link(void *link);
 
 /* Add a sensor/indicator to the entity.  The "ref" must be allocated with the
    above call.  This call is guaranteed to succeed. */
@@ -100,12 +100,12 @@ void ipmi_entity_add_sensor(ipmi_entity_t *ent,
 			    int           num,
 			    ipmi_sensor_t *sensor,
 			    void          *ref);
-void ipmi_entity_add_ind(ipmi_entity_t *ent,
-			 ipmi_mc_t     *mc,
-			 int           lun,
-			 int           num,
-			 ipmi_ind_t    *ind,
-			 void          *ref);
+void ipmi_entity_add_control(ipmi_entity_t  *ent,
+			     ipmi_mc_t      *mc,
+			     int            lun,
+			     int            num,
+			     ipmi_control_t *ind,
+			     void           *ref);
 
 /* Remove a sensor/indicator from an entity.  This call is guaranteed
    to succeed. */
@@ -114,11 +114,11 @@ void ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 			       int           lun,
 			       int           num,
 			       ipmi_sensor_t *sensor);
-void ipmi_entity_remove_ind(ipmi_entity_t *ent,
-			    ipmi_mc_t     *mc,
-			    int           lun,
-			    int           num,
-			    ipmi_ind_t    *ind);
+void ipmi_entity_remove_control(ipmi_entity_t  *ent,
+				ipmi_mc_t      *mc,
+				int            lun,
+				int            num,
+				ipmi_control_t *ind);
 
 /* A sensor/ind that is attached the entity has had it's information
    changed by the remote system.  This does NOT mean the sensor's
@@ -129,12 +129,12 @@ void ipmi_entity_sensor_changed(ipmi_entity_t *ent,
 				int           num,
 				ipmi_sensor_t *old,
 				ipmi_sensor_t *new);
-void ipmi_entity_ind_changed(ipmi_entity_t *ent,
-			     ipmi_mc_t     *mc,
-			     int           lun,
-			     int           num,
-			     ipmi_ind_t    *old,
-			     ipmi_ind_t    *new);
+void ipmi_entity_control_changed(ipmi_entity_t  *ent,
+				 ipmi_mc_t      *mc,
+				 int            lun,
+				 int            num,
+				 ipmi_control_t *old,
+				 ipmi_control_t *new);
 
 /* Create an SDR record for the entity and append it to the set of SDRs. */
 int ipmi_entity_append_to_sdrs(ipmi_entity_info_t *ents,

@@ -73,10 +73,11 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 /* The current thing display in the display pad. */
 enum {
     DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_ENTITY, DISPLAY_SENSORS,
-    DISPLAY_INDS, DISPLAY_IND, DISPLAY_ENTITIES, DISPLAY_MCS, DISPLAY_RSP
+    DISPLAY_CONTROLS, DISPLAY_CONTROL, DISPLAY_ENTITIES, DISPLAY_MCS,
+    DISPLAY_RSP
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
-ipmi_ind_id_t curr_ind_id;
+ipmi_control_id_t curr_control_id;
 typedef struct pos_s {int y; int x; } pos_t;
 typedef struct thr_pos_s
 {
@@ -1103,7 +1104,7 @@ sensor_cmd(char *cmd, char **toks, void *cb_data)
 }
 
 static void
-inds_handler(ipmi_entity_t *entity, ipmi_ind_t *ind, void *cb_data)
+controls_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 {
     int id, instance;
     char name[33];
@@ -1111,53 +1112,53 @@ inds_handler(ipmi_entity_t *entity, ipmi_ind_t *ind, void *cb_data)
 
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
-    ipmi_ind_get_id(ind, name, 33);
+    ipmi_control_get_id(control, name, 33);
     strcpy(name2, name);
     conv_from_spaces(name2);
     wprintw(display_pad, "  %d.%d.%s - %s\n", id, instance, name2, name);
 }
 
 static void
-found_entity_for_inds(ipmi_entity_t *entity,
-		      char          **toks,
-		      char          **toks2,
-		      void          *cb_data)
+found_entity_for_controls(ipmi_entity_t *entity,
+			  char          **toks,
+			  char          **toks2,
+			  void          *cb_data)
 {
     int id, instance;
 
-    curr_display_type = DISPLAY_INDS;
+    curr_display_type = DISPLAY_CONTROLS;
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
     werase(display_pad);
     wmove(display_pad, 0, 0);
-    wprintw(display_pad, "Inds for entity %d.%d:\n", id, instance);
-    ipmi_entity_iterate_inds(entity, inds_handler, NULL);
+    wprintw(display_pad, "Controls for entity %d.%d:\n", id, instance);
+    ipmi_entity_iterate_controls(entity, controls_handler, NULL);
     display_pad_refresh();
 }
 
 static int
-inds_cmd(char *cmd, char **toks, void *cb_data)
+controls_cmd(char *cmd, char **toks, void *cb_data)
 {
-    entity_finder(cmd, toks, found_entity_for_inds, NULL);
+    entity_finder(cmd, toks, found_entity_for_controls, NULL);
     return 0;
 }
 
 static void
-normal_ind_val_read(ipmi_ind_t *ind,
-		    int        err,
-		    int        *val,
-		    void       *cb_data)
+normal_control_val_read(ipmi_control_t *control,
+			int            err,
+			int            *val,
+			void           *cb_data)
 {
-    ipmi_ind_id_t ind_id;
-    int           num_vals;
-    int           i;
+    ipmi_control_id_t control_id;
+    int               num_vals;
+    int               i;
 
-    ind_id = ipmi_ind_convert_to_id(ind);
-    if (!((curr_display_type == DISPLAY_IND)
-	  && (ipmi_cmp_ind_id(ind_id, curr_ind_id) == 0)))
+    control_id = ipmi_control_convert_to_id(control);
+    if (!((curr_display_type == DISPLAY_CONTROL)
+	  && (ipmi_cmp_control_id(control_id, curr_control_id) == 0)))
 	return;
 
-    num_vals = ipmi_ind_get_num_vals(ind);
+    num_vals = ipmi_control_get_num_vals(control);
 
     if (err) {
 	wmove(display_pad, value_pos.y, value_pos.x);
@@ -1172,12 +1173,12 @@ normal_ind_val_read(ipmi_ind_t *ind,
 }
 
 static void
-redisplay_ind(ipmi_ind_t *ind, void *cb_data)
+redisplay_control(ipmi_control_t *control, void *cb_data)
 {
-    int           ind_type;
+    int           control_type;
     ipmi_entity_t *entity;
 
-    entity = ipmi_ind_get_entity(ind);
+    entity = ipmi_control_get_entity(control);
     if (!entity)
 	return;
 
@@ -1187,92 +1188,92 @@ redisplay_ind(ipmi_ind_t *ind, void *cb_data)
 	return;
     }
 
-    ind_type = ipmi_ind_get_type(ind);
-    switch (ind_type) {
-    case IPMI_IND_RELAY:
-    case IPMI_IND_ALARM:
-    case IPMI_IND_RESET:
-    case IPMI_IND_POWER:
-    case IPMI_IND_FAN_SPEED:
-	ipmi_ind_get_val(ind, normal_ind_val_read, NULL);
+    control_type = ipmi_control_get_type(control);
+    switch (control_type) {
+    case IPMI_CONTROL_RELAY:
+    case IPMI_CONTROL_ALARM:
+    case IPMI_CONTROL_RESET:
+    case IPMI_CONTROL_POWER:
+    case IPMI_CONTROL_FAN_SPEED:
+	ipmi_control_get_val(control, normal_control_val_read, NULL);
 	break;
 
-    case IPMI_IND_DISPLAY:
+    case IPMI_CONTROL_DISPLAY:
 	break;
 
-    case IPMI_IND_LIGHT:
+    case IPMI_CONTROL_LIGHT:
 	break;
-    case IPMI_IND_IDENTIFIER:
+    case IPMI_CONTROL_IDENTIFIER:
 	break;
     }
 }
 
-struct ind_info {
+struct control_info {
     int found;
     unsigned char *name;
 };
 
 static void
-ind_handler(ipmi_entity_t *entity, ipmi_ind_t *ind, void *cb_data)
+control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 {
     int id, instance;
     char name[33];
-    struct ind_info *iinfo = cb_data;
-    int ind_type;
+    struct control_info *iinfo = cb_data;
+    int control_type;
     int num_vals;
 
 
-    ipmi_ind_get_id(ind, name, 33);
+    ipmi_control_get_id(control, name, 33);
     if (strcmp(name, iinfo->name) == 0) {
 	iinfo->found = 1;
-	curr_display_type = DISPLAY_IND;
+	curr_display_type = DISPLAY_CONTROL;
 
 	id = ipmi_entity_get_entity_id(entity);
 	instance = ipmi_entity_get_entity_instance(entity);
-	curr_ind_id = ipmi_ind_convert_to_id(ind);
+	curr_control_id = ipmi_control_convert_to_id(control);
 
 	werase(display_pad);
 	wmove(display_pad, 0, 0);
 
 	conv_from_spaces(name);
-	wprintw(display_pad, "Ind %d.%d.%s - %s:\n",
+	wprintw(display_pad, "Control %d.%d.%s - %s:\n",
 		id, instance, name, iinfo->name);
-	ind_type = ipmi_ind_get_type(ind);
+	control_type = ipmi_control_get_type(control);
 	wprintw(display_pad, "  type = %s (%d)\n",
-		ipmi_ind_get_type_string(ind), ind_type);
-	num_vals = ipmi_ind_get_num_vals(ind);
-	switch (ind_type) {
-	case IPMI_IND_LIGHT:
-	case IPMI_IND_RELAY:
-	case IPMI_IND_ALARM:
-	case IPMI_IND_RESET:
-	case IPMI_IND_POWER:
-	case IPMI_IND_FAN_SPEED:
+		ipmi_control_get_type_string(control), control_type);
+	num_vals = ipmi_control_get_num_vals(control);
+	switch (control_type) {
+	case IPMI_CONTROL_LIGHT:
+	case IPMI_CONTROL_RELAY:
+	case IPMI_CONTROL_ALARM:
+	case IPMI_CONTROL_RESET:
+	case IPMI_CONTROL_POWER:
+	case IPMI_CONTROL_FAN_SPEED:
 	    wprintw(display_pad, "  num entities = %d\n", num_vals);
 	    break;
 
-	case IPMI_IND_DISPLAY:
-	case IPMI_IND_IDENTIFIER:
+	case IPMI_CONTROL_DISPLAY:
+	case IPMI_CONTROL_IDENTIFIER:
 	    break;
 	}
 	wprintw(display_pad, "  value = ");
 	getyx(display_pad, value_pos.y, value_pos.x);
 
-	switch (ind_type) {
-	case IPMI_IND_RELAY:
-	case IPMI_IND_ALARM:
-	case IPMI_IND_RESET:
-	case IPMI_IND_POWER:
-	case IPMI_IND_FAN_SPEED:
-	    ipmi_ind_get_val(ind, normal_ind_val_read, NULL);
+	switch (control_type) {
+	case IPMI_CONTROL_RELAY:
+	case IPMI_CONTROL_ALARM:
+	case IPMI_CONTROL_RESET:
+	case IPMI_CONTROL_POWER:
+	case IPMI_CONTROL_FAN_SPEED:
+	    ipmi_control_get_val(control, normal_control_val_read, NULL);
 	    break;
 
-	case IPMI_IND_DISPLAY:
+	case IPMI_CONTROL_DISPLAY:
 	    break;
 
-	case IPMI_IND_LIGHT:
+	case IPMI_CONTROL_LIGHT:
 	    break;
-	case IPMI_IND_IDENTIFIER:
+	case IPMI_CONTROL_IDENTIFIER:
 	    break;
 	}
 
@@ -1281,22 +1282,22 @@ ind_handler(ipmi_entity_t *entity, ipmi_ind_t *ind, void *cb_data)
 }
 
 static void
-found_entity_for_ind(ipmi_entity_t *entity,
+found_entity_for_control(ipmi_entity_t *entity,
 		     char          **toks,
 		     char          **toks2,
 		     void          *cb_data)
 {
-    struct ind_info iinfo;
+    struct control_info iinfo;
 
     iinfo.name = strtok_r(NULL, "", toks2);
     if (!iinfo.name) {
-	waddstr(cmd_win, "Invalid ind given\n");
+	waddstr(cmd_win, "Invalid control given\n");
 	return;
     }
     conv_to_spaces(iinfo.name);
     iinfo.found = 0;
 
-    ipmi_entity_iterate_inds(entity, ind_handler, &iinfo);
+    ipmi_entity_iterate_controls(entity, control_handler, &iinfo);
     if (!iinfo.found) {
 	int id, instance;
 
@@ -1304,16 +1305,16 @@ found_entity_for_ind(ipmi_entity_t *entity,
 	instance = ipmi_entity_get_entity_instance(entity);
 
 	conv_from_spaces(iinfo.name);
-	wprintw(cmd_win, "Ind %d.%d.%s not found\n",
+	wprintw(cmd_win, "Control %d.%d.%s not found\n",
 		id, instance, iinfo.name);
 	return;
     }
 }
 
 int
-ind_cmd(char *cmd, char **toks, void *cb_data)
+control_cmd(char *cmd, char **toks, void *cb_data)
 {
-    entity_finder(cmd, toks, found_entity_for_ind, NULL);
+    entity_finder(cmd, toks, found_entity_for_control, NULL);
     return 0;
 }
 
@@ -1476,8 +1477,8 @@ static struct {
     { "sensors",			sensors_cmd },
     { "sensor",				sensor_cmd },
     { "enable",				enable_cmd },
-    { "inds",				inds_cmd },
-    { "ind",				ind_cmd },
+    { "controls",			controls_cmd },
+    { "control",			control_cmd },
     { "mcs",				mcs_cmd },
     { "mccmd",				mccmd_cmd },
     { NULL,				NULL}
@@ -1800,8 +1801,8 @@ redisplay_timeout(selector_t  *sel,
 	if (rv)
 	    ui_log("redisplay_timeout: Unable to get sensor pointer: 0x%x\n",
 		   rv);
-    } else if (curr_display_type == DISPLAY_IND) {
-	rv = ipmi_ind_pointer_cb(curr_ind_id, redisplay_ind, NULL);
+    } else if (curr_display_type == DISPLAY_CONTROL) {
+	rv = ipmi_control_pointer_cb(curr_control_id, redisplay_control, NULL);
 	if (rv)
 	    ui_log("redisplay_timeout: Unable to get sensor pointer: 0x%x\n",
 		   rv);

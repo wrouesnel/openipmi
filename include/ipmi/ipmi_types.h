@@ -62,8 +62,8 @@ typedef struct ipmi_sensor_id_s ipmi_sensor_id_t;
 /*
  * An indicator is an output device, such as a light, relay, or display.
  */
-typedef struct ipmi_ind_s ipmi_ind_t;
-typedef struct ipmi_ind_id_s ipmi_ind_id_t;
+typedef struct ipmi_control_s ipmi_control_t;
+typedef struct ipmi_control_id_s ipmi_control_id_t;
 
 #ifndef __LINUX_IPMI_H /* Don't include this is we are including the kernel */
 
@@ -110,13 +110,13 @@ struct ipmi_sensor_id_s
     unsigned int sensor_num : 8;
 };
 
-struct ipmi_ind_id_s
+struct ipmi_control_id_s
 {
     ipmi_mc_t    *bmc;
-    unsigned int mc_num     : 8;
-    unsigned int channel    : 4;
-    unsigned int            : 1;
-    unsigned int lun        : 3;
-    unsigned int ind_num    : 8;
+    unsigned int mc_num      : 8;
+    unsigned int channel     : 4;
+    unsigned int             : 1;
+    unsigned int lun         : 3;
+    unsigned int control_num : 8;
 };
 #endif /* _IPMI_TYPES_H */

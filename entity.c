@@ -57,13 +57,13 @@ typedef struct ipmi_sensor_ref_s
     ilist_item_t list_link;
 } ipmi_sensor_ref_t;
 
-typedef struct ipmi_ind_ref_s
+typedef struct ipmi_control_ref_s
 {
     ipmi_mc_t    *mc;
     char	 lun;
     short        num;
     ilist_item_t list_link;
-} ipmi_ind_ref_t;
+} ipmi_control_ref_t;
 
 struct ipmi_entity_s
 {
@@ -123,7 +123,7 @@ struct ipmi_entity_s
     ilist_t *parent_entities;
 
     ilist_t *sensors;
-    ilist_t *inds;
+    ilist_t *controls;
 
     char *entity_id_string;
 
@@ -136,8 +136,8 @@ struct ipmi_entity_s
     ipmi_entity_sensor_cb sensor_handler;
     void                  *cb_data;
 
-    ipmi_entity_ind_cb ind_handler;
-    void               *ind_cb_data;
+    ipmi_entity_control_cb control_handler;
+    void                   *control_cb_data;
 
     entity_sdr_add_cb  sdr_gen_output;
     void               *sdr_gen_cb_data;
@@ -304,8 +304,8 @@ entity_add(ipmi_entity_info_t *ents,
 	return ENOMEM;
     }
 
-    ent->inds = alloc_ilist();
-    if (!ent->inds) {
+    ent->controls = alloc_ilist();
+    if (!ent->controls) {
 	free_ilist(ent->sensors);
 	free_ilist(ent->parent_entities);
 	free_ilist(ent->sub_entities);
@@ -336,7 +336,7 @@ entity_add(ipmi_entity_info_t *ents,
     ent->entity_id = entity_id;
     ent->entity_instance = entity_instance;
     ent->sensor_handler = NULL;
-    ent->ind_handler = NULL;
+    ent->control_handler = NULL;
     ent->in_db = 0;
     ent->linked_ear_exists = 0;
     ent->presence_sensor_always_there = 0;
@@ -347,7 +347,7 @@ entity_add(ipmi_entity_info_t *ents,
     ipmi_bmc_oem_new_entity(ents->bmc, ent);
 
     if (!ilist_add_tail(ents->entities, ent, NULL)) {
-	free_ilist(ent->inds);
+	free_ilist(ent->controls);
 	free_ilist(ent->sensors);
 	free_ilist(ent->parent_entities);
 	free_ilist(ent->sub_entities);
@@ -717,13 +717,13 @@ ipmi_entity_free_sensor_link(void *link)
 }
 
 void *
-ipmi_entity_alloc_ind_link(void)
+ipmi_entity_alloc_control_link(void)
 {
-    return malloc(sizeof(ipmi_ind_ref_t));
+    return malloc(sizeof(ipmi_control_ref_t));
 }
 
 void
-ipmi_entity_free_ind_link(void *link)
+ipmi_entity_free_control_link(void *link)
 {
     free(link);
 }
@@ -871,14 +871,14 @@ void ipmi_entity_sensor_changed(ipmi_entity_t *ent,
 }
 
 void
-ipmi_entity_add_ind(ipmi_entity_t *ent,
-		    ipmi_mc_t     *mc,
-		    int           lun,
-		    int           num,
-		    ipmi_ind_t    *ind,
-		    void          *ref)
+ipmi_entity_add_control(ipmi_entity_t  *ent,
+			ipmi_mc_t      *mc,
+			int            lun,
+			int            num,
+			ipmi_control_t *control,
+			void           *ref)
 {
-    ipmi_ind_ref_t *link = (ipmi_ind_ref_t *) ref;
+    ipmi_control_ref_t *link = (ipmi_control_ref_t *) ref;
 
     /* The calling code should check for duplicates, no check done
        here. */
@@ -886,22 +886,22 @@ ipmi_entity_add_ind(ipmi_entity_t *ent,
     link->lun = lun;
     link->num = num;
     link->list_link.malloced = 0;
-    ilist_add_tail(ent->inds, link, &(link->list_link));
-    if (ent->ind_handler)
-	ent->ind_handler(ADDED, ent, ind, ent->cb_data);
+    ilist_add_tail(ent->controls, link, &(link->list_link));
+    if (ent->control_handler)
+	ent->control_handler(ADDED, ent, control, ent->cb_data);
 }
 
-typedef struct ind_info_s
+typedef struct control_info_s
 {
     ipmi_mc_t *mc;
     int       lun;
     int       num;
-} ind_info_t;
+} control_info_t;
 
-static int ind_cmp(void *item, void *cb_data)
+static int control_cmp(void *item, void *cb_data)
 {
-    ipmi_ind_ref_t *ref1 = item;
-    ipmi_ind_ref_t *ref2 = cb_data;
+    ipmi_control_ref_t *ref1 = item;
+    ipmi_control_ref_t *ref2 = cb_data;
 
     return ((ref1->mc == ref2->mc)
 	    && (ref1->lun == ref2->lun)
@@ -909,20 +909,20 @@ static int ind_cmp(void *item, void *cb_data)
 }
 
 void
-ipmi_entity_remove_ind(ipmi_entity_t     *ent,
-			  ipmi_mc_t         *mc,
-			  int               lun,
-			  int               num,
-			  ipmi_ind_t     *ind)
+ipmi_entity_remove_control(ipmi_entity_t  *ent,
+			   ipmi_mc_t      *mc,
+			   int            lun,
+			   int            num,
+			   ipmi_control_t *control)
 {
-    ipmi_ind_ref_t *ref;
-    ilist_iter_t      iter;
-    ind_info_t       info = { mc, lun, num };
+    ipmi_control_ref_t *ref;
+    ilist_iter_t       iter;
+    control_info_t     info = { mc, lun, num };
 
     ilist_init_iter(&iter, ent->ents->entities);
     ilist_unpositioned(&iter);
 
-    ref = ilist_search_iter(&iter, ind_cmp, &info);
+    ref = ilist_search_iter(&iter, control_cmp, &info);
     if (!ref) {
 	/* FIXME - report an error. */
 	return;
@@ -931,19 +931,19 @@ ipmi_entity_remove_ind(ipmi_entity_t     *ent,
     ilist_delete(&iter);
     free(ref);
 
-    if (ent->ind_handler)
-	ent->ind_handler(DELETED, ent, ind, ent->cb_data);
+    if (ent->control_handler)
+	ent->control_handler(DELETED, ent, control, ent->cb_data);
 }
 
-void ipmi_entity_ind_changed(ipmi_entity_t *ent,
-			     ipmi_mc_t     *mc,
-			     int           lun,
-			     int           num,
-			     ipmi_ind_t    *old,
-			     ipmi_ind_t    *new)
+void ipmi_entity_control_changed(ipmi_entity_t  *ent,
+				 ipmi_mc_t      *mc,
+				 int            lun,
+				 int            num,
+				 ipmi_control_t *old,
+				 ipmi_control_t *new)
 {
-    if (ent->ind_handler)
-	ent->ind_handler(CHANGED, ent, new, ent->cb_data);
+    if (ent->control_handler)
+	ent->control_handler(CHANGED, ent, new, ent->cb_data);
 }
 
 int
@@ -957,12 +957,12 @@ ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
 }
 
 int
-ipmi_entity_set_ind_update_handler(ipmi_entity_t      *ent,
-				   ipmi_entity_ind_cb handler,
-				   void               *cb_data)
+ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
+				       ipmi_entity_control_cb handler,
+				       void               *cb_data)
 {
-    ent->ind_handler = handler;
-    ent->ind_cb_data = cb_data;
+    ent->control_handler = handler;
+    ent->control_cb_data = cb_data;
     return 0;
 }
 
@@ -2078,36 +2078,36 @@ ipmi_entity_iterate_sensors(ipmi_entity_t                 *ent,
 }
 
 
-typedef struct iterate_ind_info_s
+typedef struct iterate_control_info_s
 {
-    ipmi_entity_t              *ent;
-    ipmi_entity_iterate_ind_cb handler;
-    void                       *cb_data;
-} iterate_ind_info_t;
+    ipmi_entity_t                  *ent;
+    ipmi_entity_iterate_control_cb handler;
+    void                           *cb_data;
+} iterate_control_info_t;
 
-static void ind_iter_cb(ipmi_ind_t *ind, void *cb_data)
+static void control_iter_cb(ipmi_control_t *control, void *cb_data)
 {
-    iterate_ind_info_t *info = cb_data;
+    iterate_control_info_t *info = cb_data;
 
-    info->handler(info->ent, ind, info->cb_data);
+    info->handler(info->ent, control, info->cb_data);
 }
 
 
 static void
-iterate_ind_handler(ilist_iter_t *iter, void *item, void *cb_data)
+iterate_control_handler(ilist_iter_t *iter, void *item, void *cb_data)
 {
-    ipmi_ind_ref_t *ref = item;
+    ipmi_control_ref_t *ref = item;
 
-    ipmi_find_ind(ref->mc, ref->lun, ref->num, ind_iter_cb, cb_data);
+    ipmi_find_control(ref->mc, ref->lun, ref->num, control_iter_cb, cb_data);
 }
 
 void
-ipmi_entity_iterate_inds(ipmi_entity_t              *ent,
-			 ipmi_entity_iterate_ind_cb handler,
-			 void                       *cb_data)
+ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
+			     ipmi_entity_iterate_control_cb handler,
+			     void                           *cb_data)
 {
-    iterate_ind_info_t info = { ent, handler, cb_data };
-    ilist_iter(ent->inds, iterate_ind_handler, &info);
+    iterate_control_info_t info = { ent, handler, cb_data };
+    ilist_iter(ent->controls, iterate_control_handler, &info);
 }
 
 typedef struct iterate_entity_info_s

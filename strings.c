@@ -679,7 +679,7 @@ ipmi_get_reading_name(unsigned int event_reading_type,
     return rv;
 }
 
-static char *ind_types[] =
+static char *control_types[] =
 {
     "unspecified",
     "light",
@@ -691,13 +691,13 @@ static char *ind_types[] =
     "fan speed",
     "identifier",
 };
-#define NUM_IND_TYPES (sizeof(ind_types)/sizeof(char *))
+#define NUM_CONTROL_TYPES (sizeof(control_types)/sizeof(char *))
 char *
-ipmi_get_ind_type_string(unsigned int val)
+ipmi_get_control_type_string(unsigned int val)
 {
-    if (val > NUM_IND_TYPES)
+    if (val > NUM_CONTROL_TYPES)
 	return "invalid";
-    return ind_types[val];
+    return control_types[val];
 }
 
 static char *colors[] =
@@ -713,7 +713,7 @@ static char *colors[] =
 char *
 ipmi_get_color_string(unsigned int val)
 {
-    if (val > NUM_IND_TYPES)
+    if (val > NUM_COLORS)
 	return "invalid";
     return colors[val];
 }
