@@ -815,7 +815,7 @@ sensor_set_name(ipmi_sensor_t *sensor)
 	length = 1;
 
     left = SENSOR_NAME_LEN - length;
-    length += snprintf(sensor->name+length, left, "%d.%d",
+    length += snprintf(sensor->name+length, left, "%d.%d.",
 		       sensor->entity_id, sensor->entity_instance);
     left = SENSOR_NAME_LEN - length;
 
