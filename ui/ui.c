@@ -2216,7 +2216,7 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
 	    case IPMI_CONTROL_IDENTIFIER:
 		if (id_control_vals) {
 		    for (i=0; i<id_control_length; i++)
-			display_pad_out("0x%2.2x", id_control_vals[i]);
+			display_pad_out("0x%2.2x\n", id_control_vals[i]);
 		    ipmi_mem_free(id_control_vals);
 		    id_control_vals = NULL;
 		} else {

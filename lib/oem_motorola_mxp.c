@@ -4399,7 +4399,7 @@ bd_sel_get_cb(ipmi_control_t     *control,
 	      mxp_control_info_t *control_info,
 	      unsigned char      *data)
 {
-    return (data[0] >> 2) & 1;
+    return (data[4] >> 2) & 1;
 }
 
 static void
@@ -4525,7 +4525,7 @@ pci_reset_get_cb(ipmi_control_t     *control,
 		 mxp_control_info_t *control_info,
 		 unsigned char      *data)
 {
-    return (data[0] >> 3) & 1;
+    return (data[4] >> 3) & 1;
 }
 
 static void
@@ -4624,14 +4624,17 @@ slot_init_set_start(ipmi_control_t *control, int err, void *cb_data)
 
 static int
 slot_init_set(ipmi_control_t     *control,
-	       int                *val,
-	       ipmi_control_op_cb handler,
+	      int                *val,
+	      ipmi_control_op_cb handler,
 	      void               *cb_data)
 {
     mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
     mxp_board_t          *binfo = hdr->data;
     mxp_control_info_t   *control_info;
     int                  rv;
+
+    if (*val == 0)
+	return EINVAL;
 
     control_info = alloc_control_info(binfo);
     if (!control_info)
