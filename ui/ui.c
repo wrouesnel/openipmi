@@ -1879,6 +1879,7 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	    break;
 
 	default:
+	    break;
 	}
 
 	if (ipmi_sensor_get_event_support(sensor) != IPMI_EVENT_SUPPORT_NONE) {
@@ -1944,6 +1945,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		    break;
 		    
 		default:
+		    break;
 		}
 
 		if (ipmi_sensor_get_event_support(sensor)
