@@ -1265,6 +1265,11 @@ user, it should call @code{ipmi_handle_unhandled_event()} so that the
 user can be informed of the event (and thus can delete it if they
 like).
 
+Also, OEM code should ignore events with old timestamps (before the
+startup of the system).  The OEM code can fetch the event from the
+timestamp, and it can get the SEL timestamp at startup using
+@code{ipmi_bmc_get_startup_SEL_time()}.
+
 @node    Using IDs in OEM Code, Sensor and Control Operation Queues, Events, How to Write OEM Plugins
 @section Using IDs in OEM Code
 
