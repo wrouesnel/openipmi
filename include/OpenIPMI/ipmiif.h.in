@@ -909,11 +909,19 @@ int ipmi_entity_set_auto_deactivate_time(ipmi_entity_t  *ent,
 					 ipmi_entity_cb done,
 					 void           *cb_data);
 
+/* Cause the entity to move from INACTIVE to ACTIVATION_REQUESTED
+   state, if possible. If the entity does not support this operation,
+   this will return ENOSYS and you can move straight from INACTIVE to
+   ACTIVE state by calling ipmi_entity_active. */
+int ipmi_entity_set_activation_requested(ipmi_entity_t  *ent,
+					 ipmi_entity_cb done,
+					 void           *cb_data);
+
 /* Attempt to activate or deactivate an entity.  Activate will cause a
-   transition from INACTIVE to ACTIVE, or from EXTRACTION_PENDING to
-   ACTIVE.  Deactivate will cause a transition from EXTRACTION_PENDING
-   or ACTIVE to INACTIVE. This is only valid if autoactivate and/or
-   autodeactivate is set. */
+   transition from INACTIVE to ACTIVE (but only if
+   ipmi_entity_set_activation_requested() returns ENOSYS), or from
+   ACTIVATION_REQUESTED to ACTIVE.  Deactivate will cause a transition
+   from DEACTIVATION_REQUESTED or ACTIVE to INACTIVE. */
 int ipmi_entity_activate(ipmi_entity_t  *ent,
 			 ipmi_entity_cb done,
 			 void           *cb_data);

@@ -934,6 +934,7 @@ struct domain_check_oem_s
 };
 
 static void domain_oem_check_done(ipmi_domain_t *domain,
+				  int           err,
 				  void          *cb_data);
 
 static void
@@ -945,29 +946,35 @@ start_oem_domain_check(ipmi_domain_t      *domain,
     ilist_init_iter(&iter, oem_handlers);
     if (!ilist_first(&iter)) {
 	/* Empty list, just go on */
-	check->done(domain, check->cb_data);
+	check->done(domain, 0, check->cb_data);
 	ipmi_mem_free(check);
 	goto out;
     } else {
 	oem_handlers_t *h = ilist_get(&iter);
-	int            rv = 1;
+	int            rv = ENOSYS;
 
 	while (rv) {
 	    check->curr_handler = h;
 	    rv = h->check(domain, domain_oem_check_done, check);
 	    if (!rv)
 		break;
+	    if (rv != ENOSYS)
+		break;
 	    if (!ilist_next(&iter)) {
 		/* End of list, just go on */
-		check->done(domain, check->cb_data);
+		check->done(domain, 0, check->cb_data);
 		ipmi_mem_free(check);
 		goto out;
 	    }
 	    h = ilist_get(&iter);
 	}
 	if (rv) {
+	    if (rv == ENOSYS)
+		/* This just means that we didn't match anything. */
+		rv = 0;
+
 	    /* We didn't get a check to start, just give up. */
-	    check->done(domain, check->cb_data);
+	    check->done(domain, rv, check->cb_data);
 	    ipmi_mem_free(check);
 	}
     }
@@ -1005,7 +1012,7 @@ next_oem_domain_check(ipmi_domain_t      *domain,
 	while (rv) {
 	    if (!ilist_next(&iter)) {
 		/* End of list, just go on */
-		check->done(domain, check->cb_data);
+		check->done(domain, 0, check->cb_data);
 		ipmi_mem_free(check);
 		goto out;
 	    }
@@ -1015,7 +1022,7 @@ next_oem_domain_check(ipmi_domain_t      *domain,
 	}
 	if (rv) {
 	    /* We didn't get a check to start, just give up. */
-	    check->done(domain, check->cb_data);
+	    check->done(domain, 0, check->cb_data);
 	    ipmi_mem_free(check);
 	}
     }
@@ -1025,13 +1032,21 @@ next_oem_domain_check(ipmi_domain_t      *domain,
 
 static void
 domain_oem_check_done(ipmi_domain_t *domain,
+		      int           err,
 		      void          *cb_data)
 {
     domain_check_oem_t *check = cb_data;
 
     if (check->cancelled) {
-	check->done(NULL, check->cb_data);
+	check->done(NULL, ENXIO, check->cb_data);
 	ipmi_mem_free(check);
+	return;
+    }
+
+    if (err != ENOSYS) {
+	/* Either we got a success or some error trying to install the
+	   OEM handlers. */
+	check->done(NULL, err, check->cb_data);
 	return;
     }
 
@@ -3600,9 +3615,11 @@ get_sdrs(ipmi_domain_t *domain)
 }
 
 static void
-domain_oem_handlers_checked(ipmi_domain_t *domain, void *cb_data)
+domain_oem_handlers_checked(ipmi_domain_t *domain, int err, void *cb_data)
 {
     int rv;
+
+    /* FIXME - handle errors setting up OEM comain information. */
 
     if (domain->SDR_repository_support) {
 	rv = get_sdrs(domain);

@@ -4732,6 +4732,18 @@ ipmi_entity_get_auto_deactivate_time(ipmi_entity_t       *ent,
 }
 
 int
+ipmi_entity_set_activation_requested(ipmi_entity_t  *ent,
+				     ipmi_entity_cb done,
+				     void           *cb_data)
+{
+    if (!ent->hot_swappable)
+	return ENOSYS;
+    if (!ent->hs_cb.activate)
+	return ENOSYS;
+    return ent->hs_cb.set_activation_requested(ent, done, cb_data);
+}
+
+int
 ipmi_entity_activate(ipmi_entity_t  *ent,
 		     ipmi_entity_cb done,
 		     void           *cb_data)

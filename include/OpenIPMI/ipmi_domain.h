@@ -227,8 +227,13 @@ int ipmi_domain_get_channel(ipmi_domain_t    *domain,
    whether this is the specific type of domain or not, do any setup
    for that domain type, and then call the done routine passed in.
    Note that the done routine may be called later, (allowing this
-   handler to send messages and the like) but it *must* be called. */
+   handler to send messages and the like) but it *must* be called.
+   Note that the error value in the check_done routine should be
+   ENOSYS if the specific OEM handlers were not applicable, 0 if the
+   OEM handlers were installed, and anything else for specific
+   errors installing the OEM handlers. */
 typedef void (*ipmi_domain_oem_check_done)(ipmi_domain_t *domain,
+					   int           err,
 					   void          *cb_data);
 typedef int (*ipmi_domain_oem_check)(ipmi_domain_t              *domain,
 				     ipmi_domain_oem_check_done done,

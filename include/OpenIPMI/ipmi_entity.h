@@ -275,6 +275,10 @@ typedef struct ipmi_entity_hot_swap_s
 			       ipmi_entity_time_cb handler,
 			       void                *cb_data);
 
+    int (*set_activation_requested)(ipmi_entity_t  *ent,
+				    ipmi_entity_cb done,
+				    void           *cb_data);
+
     int (*activate)(ipmi_entity_t  *ent,
 		    ipmi_entity_cb done,
 		    void           *cb_data);

@@ -33,6 +33,7 @@
 #include <OpenIPMI/ipmi_domain.h>
 
 #define INTEL_MANUFACTURER_ID 0x000157
+#define NSC_MANUFACTURER_ID 0x000322
 
 static int
 tsrlt2_handler(ipmi_mc_t     *mc,
@@ -45,6 +46,7 @@ tsrlt2_handler(ipmi_mc_t     *mc,
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
 	/* It's the SI MC, which we detect at startup.  Set up the MCs
 	   for the domain to scan. */
+	/* We scan 0x20 and 0x28 */
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1f);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0x27);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xff);
@@ -54,7 +56,7 @@ tsrlt2_handler(ipmi_mc_t     *mc,
 }
 
 static int
-se750Xwv2_handler(ipmi_mc_t     *mc,
+tig_handler(ipmi_mc_t     *mc,
 		  void          *cb_data)
 {
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
@@ -64,6 +66,7 @@ se750Xwv2_handler(ipmi_mc_t     *mc,
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
 	/* It's the SI MC, which we detect at startup.  Set up the MCs
 	   for the domain to scan. */
+	/* We scan 0x20, 0x28, and 0xc0 */
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1f);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0x27);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xbf);
@@ -87,8 +90,24 @@ ipmi_oem_intel_init(void)
 	return rv;
 
     rv = ipmi_register_oem_handler(INTEL_MANUFACTURER_ID,
-				   0x0000, /* FIXME, find the number */
-				   se750Xwv2_handler,
+				   0x001b,
+				   tig_handler,
+				   NULL,
+				   NULL);
+    if (rv)
+	return rv;
+
+    rv = ipmi_register_oem_handler(INTEL_MANUFACTURER_ID,
+				   0x0103,
+				   tig_handler,
+				   NULL,
+				   NULL);
+    if (rv)
+	return rv;
+
+    rv = ipmi_register_oem_handler(NSC_MANUFACTURER_ID,
+				   0x4311,
+				   tig_handler,
 				   NULL,
 				   NULL);
     if (rv)

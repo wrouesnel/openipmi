@@ -1,3 +1,21 @@
+2004-04-15 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_intel.c: More work on getting the various Intel servers
+	supported better.
+
+	* include/OpenIPMI/ipmiif.h.in: Modified the hot-swap state
+	machine slightly to support the ability to move to activation
+	requested state from inactive state.
+
+	* include/OpenIPMI/ipmi_entity.h, lib/entity.c: Added the calls
+	for ipmi_entity_set_activation_requested() to the hot-swap
+	variables.  The normal state machine will not support it.
+
+	* lib/oem_atca.c: Added support for setting the FRU activation
+	policy with ipmi_entity_set_activation_requested().
+
+	* configure.in: Move to version 1.3.5
+
 2004-04-14 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Scan MCs from MCDLRs even if the information is

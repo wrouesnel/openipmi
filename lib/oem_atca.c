@@ -47,11 +47,19 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_picmg.h>
 
-/* Allow LED controls to go from 0 to 80. */
+/* Uncomment this if you *really* want direct power control.  Note
+   that I think this is a bad idea, you should *really* use the
+   hot-swap state machine to handle power control.  Plus, the code is
+   untested. */
+/* #define POWER_CONTROL_AVAILABLE */
+
+/* Allow LED controls to go from 0 to 7fh. */
 #define IPMC_FIRST_LED_CONTROL_NUM 0x00
 #define IPMC_RESET_CONTROL_NUM     0x80
+#define IPMC_POWER_CONTROL_NUM     0x81
 
 #define PICMG_MFG_ID	0x315a
 
@@ -111,6 +119,7 @@ struct atca_fru_s
     unsigned char             hs_sensor_lun;
     unsigned char             hs_sensor_num;
     ipmi_control_t            *cold_reset;
+    ipmi_control_t            *power;
 };
 
 struct atca_ipmc_s
@@ -154,6 +163,8 @@ struct atca_shelf_s
 
     ipmi_domain_oem_check_done startup_done;
     void                       *startup_done_cb_data;
+
+    ipmi_event_handler_id_t *event_handler_id;
 
     /* Hacks for broken implementations. */
 
@@ -536,7 +547,7 @@ atca_activate_sensor_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     int            rv;
     ipmi_mc_t      *mc = ipmi_sensor_get_mc(sensor);
     ipmi_msg_t     msg;
-    unsigned char  data[3];
+    unsigned char  data[4];
 
     if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -554,12 +565,19 @@ atca_activate_sensor_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     }
 
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
-    msg.cmd = IPMI_PICMG_CMD_SET_FRU_ACTIVATION;
     msg.data = data;
-    msg.data_len = 3;
     data[0] = IPMI_PICMG_GRP_EXT;
     data[1] = finfo->fru_id;
-    data[2] = hs_info->op;
+    if (hs_info->op == 0x100) {
+	msg.cmd = IPMI_PICMG_CMD_SET_FRU_ACTIVATION_POLICY;
+	data[2] = 0x01; /* Enable setting the locked bit. */
+	data[3] = 0x00; /* Clear the locked bit. */
+	msg.data_len = 4;
+    } else {
+	msg.cmd = IPMI_PICMG_CMD_SET_FRU_ACTIVATION;
+	data[2] = hs_info->op;
+	msg.data_len = 3;
+    }
     rv = ipmi_sensor_send_command(sensor, mc, 0, &msg, atca_activate_done,
 				  &hs_info->sdata2, hs_info);
     if (rv) {
@@ -618,6 +636,30 @@ atca_activate_start(ipmi_entity_t *entity, int err, void *cb_data)
 	ipmi_entity_opq_done(entity);
 	ipmi_mem_free(hs_info);
     }
+}
+
+static int
+atca_unlock_fru(ipmi_entity_t  *entity,
+		ipmi_entity_cb done,
+		void           *cb_data)
+{
+    atca_hs_info_t *hs_info;
+    int            rv;
+
+    hs_info = ipmi_mem_alloc(sizeof(*hs_info));
+    if (!hs_info)
+	return ENOMEM;
+    memset(hs_info, 0, sizeof(*hs_info));
+
+    hs_info->handler2 = done;
+    hs_info->cb_data = cb_data;
+    hs_info->op = 0x100; /* Do a set activation policy unlock */
+    hs_info->finfo = ipmi_entity_get_oem_info(entity);
+    rv = ipmi_entity_add_opq(entity, atca_activate_start,
+			     &(hs_info->sdata), hs_info);
+    if (rv)
+	ipmi_mem_free(hs_info);
+    return rv;
 }
 
 static int
@@ -725,17 +767,18 @@ atca_check_hot_swap_state(ipmi_entity_t *entity)
 
 static ipmi_entity_hot_swap_t atca_hot_swap_handlers =
 {
-    .get_hot_swap_state     = atca_get_hot_swap_state,
-    .set_auto_activate      = atca_set_auto_activate,
-    .get_auto_activate      = atca_get_auto_activate,
-    .set_auto_deactivate    = atca_set_auto_deactivate,
-    .get_auto_deactivate    = atca_get_auto_deactivate,
-    .activate               = atca_activate,
-    .deactivate             = atca_deactivate,
-    .get_hot_swap_indicator = atca_get_hot_swap_indicator,
-    .set_hot_swap_indicator = atca_set_hot_swap_indicator,
-    .get_hot_swap_requester = atca_get_hot_swap_requester,
-    .check_hot_swap_state   = atca_check_hot_swap_state,
+    .get_hot_swap_state       = atca_get_hot_swap_state,
+    .set_auto_activate        = atca_set_auto_activate,
+    .get_auto_activate        = atca_get_auto_activate,
+    .set_auto_deactivate      = atca_set_auto_deactivate,
+    .get_auto_deactivate      = atca_get_auto_deactivate,
+    .set_activation_requested = atca_unlock_fru,
+    .activate                 = atca_activate,
+    .deactivate               = atca_deactivate,
+    .get_hot_swap_indicator   = atca_get_hot_swap_indicator,
+    .set_hot_swap_indicator   = atca_set_hot_swap_indicator,
+    .get_hot_swap_requester   = atca_get_hot_swap_requester,
+    .check_hot_swap_state     = atca_check_hot_swap_state,
 };
 
 static void
@@ -1586,8 +1629,8 @@ add_fru_control_mc_cb(ipmi_mc_t *mc, void *cb_info)
 			  finfo->entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(fru_led_cap_rsp): "
-		 "Could not add LED control: 0x%x",
+		 "%soem_atca.c(add_fru_control_mc_cb): "
+		 "Could not add reset control: 0x%x",
 		 MC_NAME(mc), rv);
 	return;
     }
@@ -1598,8 +1641,7 @@ add_fru_control_handling(atca_fru_t *finfo)
 {
     int rv;
 
-    if (finfo->leds)
-	/* We already have the LEDs fetched. */
+    if (finfo->cold_reset)
 	return;
     
     rv = ipmi_mc_pointer_cb(finfo->minfo->mcid, add_fru_control_mc_cb, finfo);
@@ -1625,6 +1667,265 @@ destroy_fru_control_handling(atca_fru_t *finfo)
 	ipmi_control_destroy(control);
     }
 }
+
+#ifdef POWER_CONTROL_AVAILABLE
+/***********************************************************************
+ *
+ * ATCA FRU power handling.  This is for the FRU power level commands.
+ *
+ **********************************************************************/
+
+typedef struct atca_power_s
+{
+    ipmi_control_op_cb     set_handler;
+    ipmi_control_val_cb    get_handler;
+    void                   *cb_data;
+    ipmi_control_op_info_t sdata;
+    int                    level;
+} atca_power_t;
+
+static void
+set_power_done(ipmi_control_t *control,
+	       int            err,
+	       ipmi_msg_t     *rsp,
+	       void           *cb_data)
+{
+    atca_power_t *info = cb_data;
+    ipmi_mc_t    *mc = NULL;
+
+    if (control)
+	mc = ipmi_control_get_mc(control);
+
+    if (check_for_msg_err(mc, &err, rsp, 2, "set_power_done")) {
+	if (info->set_handler)
+	    info->set_handler(control, err, info->cb_data);
+	goto out;
+    }
+
+    if (info->set_handler)
+	info->set_handler(control, 0, info->cb_data);
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(info);
+}
+
+static void
+set_power_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    atca_power_t  *info = cb_data;
+    atca_fru_t    *finfo = ipmi_control_get_oem_info(control);
+    ipmi_msg_t    msg;
+    unsigned char data[4];
+    int           rv;
+
+    if (err) {
+	if (info->set_handler)
+	    info->set_handler(control, err, info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(info);
+	return;
+    }
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_SET_POWER_LEVEL;
+    msg.data = data;
+    msg.data_len = 4;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = finfo->fru_id;
+    data[2] = info->level;
+    data[3] = info->level;
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, set_power_done,
+				   &info->sdata, info);
+    if (err) {
+	if (info->set_handler)
+	    info->set_handler(control, err, info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(info);
+	return;
+    }
+}
+
+static int
+set_power(ipmi_control_t     *control,
+	  int                *val,
+	  ipmi_control_op_cb handler,
+	  void               *cb_data)
+{
+    atca_power_t *info;
+    int          rv;
+
+    if ((*val < 0) || (*val > 14))
+	return EINVAL;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->set_handler = handler;
+    info->cb_data = cb_data;
+    info->level = *val;
+    rv = ipmi_control_add_opq(control, set_power_start, &info->sdata, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+static void
+get_power_done(ipmi_control_t *control,
+	       int            err,
+	       ipmi_msg_t     *rsp,
+	       void           *cb_data)
+{
+    atca_power_t *info = cb_data;
+    ipmi_mc_t    *mc = NULL;
+
+    if (control)
+	mc = ipmi_control_get_mc(control);
+
+    if (check_for_msg_err(mc, &err, rsp, 3, "get_power_done")) {
+	if (info->get_handler)
+	    info->get_handler(control, err, &info->level, info->cb_data);
+	goto out;
+    }
+
+    info->level = rsp->data[2] & 0xf;
+
+    if (info->get_handler)
+	info->get_handler(control, 0, &info->level, info->cb_data);
+
+ out:
+    ipmi_control_opq_done(control);
+    ipmi_mem_free(info);
+}
+
+static void
+get_power_start(ipmi_control_t *control, int err, void *cb_data)
+{
+    atca_power_t  *info = cb_data;
+    atca_fru_t    *finfo = ipmi_control_get_oem_info(control);
+    int           rv;
+    ipmi_msg_t    msg;
+    unsigned char data[3];
+
+    if (err) {
+	if (info->get_handler)
+	    info->get_handler(control, err, &info->level, info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(info);
+	return;
+    }
+
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_GET_POWER_LEVEL;
+    msg.data = data;
+    msg.data_len = 3;
+    data[0] = IPMI_PICMG_GRP_EXT;
+    data[1] = finfo->fru_id;
+    data[2] = 0; /* Get current levels */
+
+    rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
+				   &msg, get_power_done,
+				   &(info->sdata), info);
+    if (rv) {
+	if (info->get_handler)
+	    info->get_handler(control, rv, &info->level, info->cb_data);
+	ipmi_control_opq_done(control);
+	ipmi_mem_free(info);
+    }
+}
+
+static int
+get_power(ipmi_control_t      *control,
+	  ipmi_control_val_cb handler,
+	  void                *cb_data)
+{
+    atca_power_t *info;
+    int          rv;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    memset(info, 0, sizeof(*info));
+
+    info->get_handler = handler;
+    info->cb_data = cb_data;
+    info->level = 0;
+
+    rv = ipmi_control_add_opq(control, get_power_start, &info->sdata, info);
+    if (rv)
+	ipmi_mem_free(info);
+
+    return rv;
+}
+
+static void
+add_power_mc_cb(ipmi_mc_t *mc, void *cb_info)
+{
+    atca_fru_t *finfo = cb_info;
+    int        rv;
+
+    rv = atca_alloc_control(mc, finfo, NULL,
+			    IPMI_CONTROL_ONE_SHOT_RESET,
+			    "power",
+			    set_power,
+			    get_power,
+			    NULL,
+			    NULL,
+			    &finfo->power);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_power_mc_cb): "
+		 "Could not convert an mcid to a pointer: 0x%x",
+		 ENTITY_NAME(finfo->entity), rv);
+    }
+
+    rv = atca_add_control(mc, 
+			  &finfo->power,
+			  IPMC_POWER_CONTROL_NUM,
+			  finfo->entity);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_power_mc_cb): "
+		 "Could not add power control: 0x%x",
+		 MC_NAME(mc), rv);
+	return;
+    }
+}
+
+static void
+add_power_handling(atca_fru_t *finfo)
+{
+    int rv;
+
+    if (finfo->power)
+	return;
+    
+    rv = ipmi_mc_pointer_cb(finfo->minfo->mcid, add_power_mc_cb, finfo);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(add_power_handling): "
+		 "Could not convert an mcid to a pointer: 0x%x",
+		 ENTITY_NAME(finfo->entity), rv);
+    }
+}
+
+static void
+destroy_power_handling(atca_fru_t *finfo)
+{
+    if (finfo->power) {
+	ipmi_control_t *control = finfo->power;
+
+	/* We *HAVE* to clear the value first, destroying this can
+	   cause something else to be destroyed and end up in the
+	   function again before we return from
+	   ipmi_control_destroy(). */
+	finfo->power = NULL;
+	ipmi_control_destroy(control);
+    }
+}
+
+#endif /* POWER_CONTROL_AVAILABLE */
 
 /***********************************************************************
  *
@@ -1807,6 +2108,9 @@ add_fru_controls(atca_fru_t *finfo)
 {
     fetch_fru_leds(finfo);
     add_fru_control_handling(finfo);
+#ifdef POWER_CONTROL_AVAILABLE
+    add_power_handling(finfo);
+#endif
 }
 
 static void
@@ -1814,6 +2118,9 @@ destroy_fru_controls(atca_fru_t *finfo)
 {
     destroy_fru_leds(finfo);
     destroy_fru_control_handling(finfo);
+#ifdef POWER_CONTROL_AVAILABLE
+    destroy_power_handling(finfo);
+#endif
 }
 
 static int
@@ -2299,15 +2606,13 @@ alt_shelf_fru_cb(ipmi_domain_t *domain,
 
     info = ipmi_domain_get_oem_data(domain);
 
-    if (!domain)
-	goto out;
-
     if (msg->data[0] != 0) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(alt_shelf_fru_cb): "
 		 "Error getting alternate FRU information: 0x%x",
 		 DOMAIN_NAME(domain), msg->data[0]);
-	goto out;
+	rv = EINVAL;
+	goto out_err;
     }
 
     if (msg->data_len < 8) {
@@ -2315,7 +2620,8 @@ alt_shelf_fru_cb(ipmi_domain_t *domain,
 		 "%soem_atca.c(alt_shelf_fru_cb): "
 		 "ATCA get address response not long enough",
 		 DOMAIN_NAME(domain));
-	goto out;
+	rv = EINVAL;
+	goto out_err;
     }
 
     info->shelf_fru_ipmb = msg->data[3];
@@ -2335,13 +2641,13 @@ alt_shelf_fru_cb(ipmi_domain_t *domain,
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(alt_shelf_fru_cb): "
 		 "Error allocating fru information: 0x%x", rv);
-	goto out;
+	goto out_err;
     }
 
     return;
 
- out:
-    info->startup_done(domain, info->startup_done_cb_data);
+ out_err:
+    info->startup_done(domain, rv, info->startup_done_cb_data);
 }
 
 static void
@@ -2369,8 +2675,10 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 
 	/* Try 2 shelf FRUs. */
 	info->curr_shelf_fru++;
-	if (info->curr_shelf_fru > 2)
+	if (info->curr_shelf_fru > 2) {
+	    rv = EINVAL;
 	    goto out;
+	}
 
 	/* Send the ATCA Get Address Info command to get the shelf FRU info. */
 	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
@@ -2464,6 +2772,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 		     "could not allocate memory for shelf addresses",
 		     DOMAIN_NAME(domain));
 	    ipmi_mem_free(data);
+	    rv = ENOMEM;
 	    goto out;
 	}
 	memset(info->addresses, 0, sizeof(atca_address_t) * data[26]);
@@ -2538,13 +2847,18 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     ipmi_domain_iterate_entities(domain, atca_iterate_entities, info);
 
  out:
-    info->startup_done(domain, info->startup_done_cb_data);
+    info->startup_done(domain, rv, info->startup_done_cb_data);
 }
 
 static void
 atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 {
     atca_shelf_t *info = ipmi_domain_get_oem_data(domain);
+
+    if (info->event_handler_id) {
+	ipmi_deregister_for_events(domain, info->event_handler_id);
+	info->event_handler_id = NULL;
+    }
 
     /* Remove all the parent/child relationships we previously
        defined. */
@@ -2566,6 +2880,8 @@ atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
 {
     atca_shelf_t *info = oem_data;
 
+    if (info->event_handler_id)
+	ipmi_deregister_for_events(domain, info->event_handler_id);
     if (info->shelf_fru)
 	ipmi_fru_destroy(info->shelf_fru, NULL, NULL);
     if (info->addresses)
@@ -2585,6 +2901,40 @@ atca_oem_data_destroyer(ipmi_domain_t *domain, void *oem_data)
 }
 
 static void
+atca_event_handler(ipmi_domain_t *domain,
+		   ipmi_event_t  *event,
+		   void          *event_data)
+{
+    unsigned char data[13];
+
+    /* Here we look for hot-swap events so we know to start the
+       process of scanning for an IPMC when it is installed. */
+    if (ipmi_event_get_type(event) != 2)
+	/* Not a system event */
+	return;
+
+    ipmi_event_get_data(event, data, 0, 13);
+    if (data[6] != 4)
+	/* Not IPMI 1.5 */
+	return;
+
+    if (data[7] != 0xf0)
+	/* Not a hot-swap event. */
+	return;
+
+    if (((data[10] & 0xf) == 0) || ((data[11] & 0xf) != 0))
+	/* We only scan if the current or previous state was not
+	   installed. */
+	return;
+
+    /* We have a hot-swap event where the previous state was not
+       installed or the current state is not installed.  Scan the
+       MC. */
+    ipmi_start_ipmb_mc_scan(domain, data[5] & 0xf, data[4], data[4],
+			    NULL, 0);
+}
+
+static void
 set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 		   ipmi_domain_oem_check_done done, void *done_cb_data)
 {
@@ -2598,14 +2948,14 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 		 "%soem_atca.c(set_up_atca_domain): "
 		 "ATCA get address response not long enough",
 		 DOMAIN_NAME(domain));
-	done(domain, done_cb_data);
+	done(domain, EINVAL, done_cb_data);
 	goto out;
     }
 
     info = ipmi_domain_get_oem_data(domain);
     if (info) {
 	/* We have already initialized this domain, ignore this. */
-	done(domain, done_cb_data);
+	done(domain, 0, done_cb_data);
 	goto out;
     }
 
@@ -2615,7 +2965,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 		 "%soem_atca.c(set_up_atca_domain): "
 		 "Could not allocate ATCA information structure",
 		 DOMAIN_NAME(domain));
-	done(domain, done_cb_data);
+	done(domain, ENOMEM, done_cb_data);
 	goto out;
     }
     memset(info, 0, sizeof(*info));
@@ -2634,7 +2984,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	mfg_id = ipmi_mc_manufacturer_id(mc);
 	prod_id = ipmi_mc_product_id(mc);
 	if ((mfg_id == 0x000157) && (prod_id == 0x0841)) {
-	    //info->shelf_address_only_on_bmc = 1;
+	    /* info->shelf_address_only_on_bmc = 1; */
 	    info->allow_sel_on_any = 1;
 	}
     }
@@ -2650,6 +3000,17 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     if (info->shelf_address_only_on_bmc)
 	info->shelf_fru_ipmb = 0x20;
 
+    rv = ipmi_register_for_events(domain, atca_event_handler, info,
+				  &info->event_handler_id);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_atca.c(set_up_atca_domain): "
+		 "Could not register for events: 0x%x", rv);
+	ipmi_mem_free(info);
+	done(domain, rv, done_cb_data);
+	goto out;
+    }
+
     rv = ipmi_fru_alloc(domain,
 			1,
 			info->shelf_fru_ipmb,
@@ -2664,8 +3025,9 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(set_up_atca_domain): "
 		 "Error allocating fru information: 0x%x", rv);
+	ipmi_deregister_for_events(domain, info->event_handler_id);
 	ipmi_mem_free(info);
-	done(domain, done_cb_data);
+	done(domain, rv, done_cb_data);
 	goto out;
     }
 
@@ -2677,6 +3039,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 					   atca_fix_sel_handler,
 					   info,
 					   NULL);
+
  out:
     return;
 }
@@ -2822,7 +3185,7 @@ check_if_atca_cb(ipmi_domain_t *domain,
 	/* It's an ATCA system, set it up */
 	set_up_atca_domain(domain, msg, done, rsp_data2);
     } else {
-	done(domain, rsp_data2);
+	done(domain, ENOSYS, rsp_data2);
     }
 }
 

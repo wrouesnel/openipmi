@@ -1360,6 +1360,39 @@ hs_set_deact_time(char *cmd, char **toks, void *cb_data)
 }
 
 static void
+hs_activation_request_cb(ipmi_entity_t  *ent,
+			 int            err,
+			 void           *cb_data)
+{
+    if (err)
+	ui_log("Could not activate entity: error 0x%x\n", err);
+    else
+	ui_log("entity activated\n");
+}
+
+static void
+hs_activation_request_handler(ipmi_entity_t *entity,
+			      char          **toks,
+			      char          **toks2,
+			      void          *cb_data)
+{
+    int rv;
+
+    rv = ipmi_entity_set_activation_requested(entity,
+					      hs_activation_request_cb,
+					      NULL);
+    if (rv)
+	cmd_win_out("Could not set activation requested: error 0x%x\n", rv);
+}
+
+static int
+hs_activation_request(char *cmd, char **toks, void *cb_data)
+{
+    entity_finder(cmd, toks, hs_activation_request_handler, NULL);
+    return 0;
+}
+
+static void
 hs_activate_cb(ipmi_entity_t  *ent,
 	       int            err,
 	       void           *cb_data)
@@ -5903,6 +5936,10 @@ static struct {
     { "hs_set_deact_time", hs_set_deact_time,
       " <entity name> <time in nanoseconds>"
       " - Set the host-swap auto-deactivate time" },
+    { "hs_activation_request", hs_activation_request,
+      " <entity name> - Act like a user requested an activation of the"
+      " entity.  This is generally equivalent to closing the handle"
+      " latch or something like that." },
     { "hs_activate", hs_activate,
       " <entity name> - activate the given entity" },
     { "hs_deactivate", hs_deactivate,
