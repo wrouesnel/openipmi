@@ -112,6 +112,9 @@ typedef struct ipmi_bmc_s
 
     ipmi_con_t  *conn;
 
+    /* The SEL time when the connection first came up. */
+    unsigned long startup_SEL_time;
+
     ipmi_bmc_oem_new_entity_cb new_entity_handler;
     void                       *new_entity_cb_data;
 
@@ -540,9 +543,10 @@ static void
 system_event_handler(ipmi_mc_t    *bmc,
 		     ipmi_event_t *event)
 {
-    int                     rv = 1;
-    ipmi_sensor_id_t        id;
-    event_sensor_info_t     info;
+    int                 rv = 1;
+    ipmi_sensor_id_t    id;
+    event_sensor_info_t info;
+    unsigned long       timestamp;
 
     if (DEBUG_EVENTS) {
 	ipmi_log(IPMI_LOG_DEBUG,
@@ -557,7 +561,8 @@ system_event_handler(ipmi_mc_t    *bmc,
 		 event->data[12]);
     }
 
-    /* Let the OEM handler have a go at it first. */
+    /* Let the OEM handler have a go at it first.  Note that OEM
+       handlers must look at the time themselves. */
     if (bmc->bmc->oem_event_handler) {
 	if (bmc->bmc->oem_event_handler(bmc,
 					event,
@@ -565,8 +570,14 @@ system_event_handler(ipmi_mc_t    *bmc,
 	    return;
     }
 
-    /* It's a system event record from an MC. */
-    if ((event->type == 0x02) && ((event->data[4] & 0x01) == 0)) {
+    timestamp = ipmi_get_uint32(&(event->data[0]));
+
+    /* It's a system event record from an MC, and the timestamp is
+       later than our startup timestamp. */
+    if ((event->type == 0x02)
+	&& ((event->data[4] & 0x01) == 0)
+	&& (timestamp >= bmc->bmc->startup_SEL_time))
+    {
 	ipmi_mc_id_t mc_id;
 
 	info.handled = 0;
@@ -1069,6 +1080,10 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 	return;
     }
 
+    /* After the first SEL fetch, disable looking at the timestamp, in
+       case someone messes with the SEL time. */
+    bmc->bmc->startup_SEL_time = 0;
+
     ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
 
     timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
@@ -1081,22 +1096,65 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_unlock(bmc->bmc->mc_list_lock);
 }
 
+static void
+start_SEL_timer(ipmi_mc_t *mc)
+{
+    struct timeval timeout;
+    int            rv;
+
+    timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
+    timeout.tv_usec = 0;
+    rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
+					    mc->bmc->sel_timer,
+					    &timeout,
+					    bmc_reread_sel,
+					    mc->bmc->sel_timer_info);
+    if (rv)
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "Unable to start the SEL fetch timer due to error: %x",
+		 rv);
+}
+
+static void
+got_sel_time(ipmi_mc_t  *mc,
+	     ipmi_msg_t *rsp,
+	     void       *rsp_data)
+{
+    if (!mc) {
+	ipmi_log(IPMI_LOG_WARNING, "MC went away during SEL time fetch");
+	return;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Unable to fetch the SEL time due to error: %x",
+		 rsp->data[0]);
+	mc->bmc->startup_SEL_time = 0;
+    } else if (rsp->data_len < 5) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "Unable to fetch the SEL time message was too short");
+	mc->bmc->startup_SEL_time = 0;
+    } else {
+	mc->bmc->startup_SEL_time = ipmi_get_uint32(&(rsp->data[1]));
+    }
+
+    ipmi_sel_get(mc->bmc->sel, NULL, NULL);
+
+    start_SEL_timer(mc);
+}
+
 /* This is called after the first sensor scan for the MC, we start up
    timers and things like that here. */
 static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    struct timeval    timeout;
     bmc_reread_info_t *info;
     int               rv;
+    ipmi_msg_t        msg;
 
     ipmi_detect_bmc_presence_changes(mc, 0);
 
-    ipmi_sel_get(mc->bmc->sel, NULL, NULL);
-
-    /* Fetch the current system event log.  We do this here so we can
-       be sure that the entities are all there before reporting
-       events. */
+    /* Allocate the system event log fetch timer. */
     info = malloc(sizeof(*info));
     if (!info) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -1106,27 +1164,31 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     }
     info->bmc = mc;
     info->cancelled = 0;
-    timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
-    timeout.tv_usec = 0;
     rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd,
 					    &(mc->bmc->sel_timer));
-    if (!rv) {
-	rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
-						mc->bmc->sel_timer,
-						&timeout,
-						bmc_reread_sel,
-						info);
-	if (rv)
-	    mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd,
-					      mc->bmc->sel_timer);
-    }
     if (rv) {
 	free(info);
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "Unable to start the system event log timer."
+		 "Unable to allocate the system event log timer."
 		 " System event log will not be queried");
     } else {
 	mc->bmc->sel_timer_info = info;
+    }
+
+    /* Fetch the current system event log.  We do this here so we can
+       be sure that the entities are all there before reporting
+       events. */
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_GET_SEL_TIME_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+    rv = ipmi_send_command(mc, 0, &msg, got_sel_time, NULL);
+    if (rv) {
+	ipmi_log(IPMI_LOG_DEBUG,
+		 "Unable to start SEL time fetch due to error: %x\n",
+		 rv);
+	mc->bmc->startup_SEL_time = 0;
+	ipmi_sel_get(mc->bmc->sel, NULL, NULL);
     }
 }
 
