@@ -239,8 +239,8 @@ struct ipmi_mc_s
     ipmi_oem_event_handler_cb oem_event_handler;
     void                      *oem_event_handler_cb_data;
 
-    ipmi_bmc_oem_removed_mc_cb removed_mc_handler;
-    void                       *removed_mc_cb_data;
+    ipmi_mc_oem_removed_cb removed_mc_handler;
+    void                   *removed_mc_cb_data;
 
     /* This is a retry count for missed pings from an MC query. */
     int missed_responses;
@@ -1319,10 +1319,6 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
     int rv;
     ipmi_mc_t *bmc = mc->bmc_mc;
 
-    /* Call the OEM handler for removal, if it has been registered. */
-    if (mc->removed_mc_handler)
-	mc->removed_mc_handler(bmc, mc, mc->removed_mc_cb_data);
-
     /* First the device SDR sensors, since they can be there for any
        MC. */
     if (mc->sensors_in_my_sdr) {
@@ -1361,6 +1357,10 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	ipmi_sel_destroy(mc->sel, NULL, NULL);
 
     /* FIXME - clean up entities that came from this device. */
+
+    /* Call the OEM handler for removal, if it has been registered. */
+    if (mc->removed_mc_handler)
+	mc->removed_mc_handler(bmc, mc, mc->removed_mc_cb_data);
 
     if (mc->bmc) {
 	/* It's a BMC, clean up all the bmc-specific information. */
@@ -1471,6 +1471,7 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     mc = ipmi_mem_alloc(sizeof(*mc));
     if (!mc)
 	return ENOMEM;
+    memset(mc, 0, sizeof(*mc));
 
     mc->bmc_mc = bmc;
 
@@ -1482,6 +1483,7 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     mc->new_sensor_handler = NULL;
     mc->removed_mc_handler = NULL;
     mc->sel = NULL;
+    mc->sel_timer_info = NULL;
 
     memcpy(&(mc->addr), addr, addr_len);
     mc->addr_len = addr_len;
@@ -3098,9 +3100,9 @@ ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
 }
 
 int
-ipmi_bmc_set_oem_removed_mc_handler(ipmi_mc_t                  *mc,
-				    ipmi_bmc_oem_removed_mc_cb handler,
-				    void                       *cb_data)
+ipmi_mc_set_oem_removed_handler(ipmi_mc_t              *mc,
+				ipmi_mc_oem_removed_cb handler,
+				void                   *cb_data)
 {
     CHECK_MC_LOCK(mc);
 

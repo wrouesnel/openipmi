@@ -1,4 +1,12 @@
 
+2003-02-20 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c, include/OpenIPMI/ipmi_oem.h: Changed the name of the
+	MC removal callback to reflect it's function better (since it's
+	not BMC-related).
+
+	* entity.c: Fixed a memory leak with presence sensors.
+
 2003-02-19 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c, include/OpenIPMI/ipmi_conn.h: Modified the ipmi_init_con()

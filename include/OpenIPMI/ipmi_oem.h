@@ -98,12 +98,12 @@ int ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
    so the OEM handler can free data if necessary.  This is registered
    against the MC itself, not the BMC, and must be called on each MC
    that needs it. */
-typedef void (*ipmi_bmc_oem_removed_mc_cb)(ipmi_mc_t *bmc,
-					   ipmi_mc_t *mc,
-					   void      *cb_data);
-int ipmi_mc_set_oem_removed_mc_handler(ipmi_mc_t                  *mc,
-				       ipmi_bmc_oem_removed_mc_cb handler,
-				       void                       *cb_data);
+typedef void (*ipmi_mc_oem_removed_cb)(ipmi_mc_t *bmc,
+				       ipmi_mc_t *mc,
+				       void      *cb_data);
+int ipmi_mc_set_oem_removed_handler(ipmi_mc_t              *mc,
+				    ipmi_mc_oem_removed_cb handler,
+				    void                   *cb_data);
 
 /* The handler should return 0 if it didn't handle the event, or 1
    if it did.  If the call handles the event, OpenIPMI will not deliver

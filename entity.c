@@ -850,6 +850,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 	   keep this special. */
 	ent->presence_sensor = sensor;
 	handle_new_presence_sensor(ent, sensor, mc, lun, num);
+	ipmi_entity_free_sensor_link(link);
     } else {
 	ilist_add_tail(ent->sensors, link, &(link->list_link));
 	if (ent->sensor_handler)
