@@ -9,6 +9,9 @@
 	happened when sitting for a long time in the debugger (so a whole
 	slew of things happened at once).
 
+	* example_oem.c, Makefile.am, OpenIPMI.texi: Added an example OEM
+	plugin file for others to use to build their plugins.
+
 2003-03-26 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c: Fixed some problems with non-BMC SELs.

@@ -1138,6 +1138,10 @@ That's life, no standard can do everything.  Thus, OEM code needs to be
 written for handling specific MCs.  In general, the MC is the primary
 place that OEM code ties in.
 
+An example of an OEM plugin is given in @file{example_oem.c}, it
+contains a lot of useful info (including an example of how to do direct
+I2C access and represent it as a sensor).
+
 An OEM handler should register itself with the
 @code{ipmi_register_oem_handler()} function.  It registers with a
 manufacturer id and product id.  When an MC with those values is

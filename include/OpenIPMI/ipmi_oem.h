@@ -42,7 +42,7 @@
 
 /* This registers an OEM handler.  If an MC is detected that has the
    given manufacturer id and product id, the handler will be
-   called. If the IPMI system is shutdown while this is register, then
+   called. If the IPMI system is shutdown while this is registered, then
    shutdown will be called (if it is not NULL). */
 typedef int (*ipmi_oem_mc_match_handler_cb)(ipmi_mc_t *mc, void *cb_data);
 typedef int (*ipmi_oem_shutdown_handler_cb)(void *cb_data);
