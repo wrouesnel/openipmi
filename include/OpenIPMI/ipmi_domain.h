@@ -164,6 +164,12 @@ void ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
                              ipmi_domain_cb done_handler,
 			     void           *cb_data);
 
+/* Set a handler that will be called when bus is scanned.  This is 
+   primarily here for OpenHPI to meet their requirements */
+int ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
+				     ipmi_domain_cb handler,
+				     void           *cb_data);
+
 /* Scan a system interface address for an MC. */
 void ipmi_start_si_scan(ipmi_domain_t *domain,
 			int            si_num,

@@ -227,6 +227,10 @@ struct ipmi_domain_s
     ipmi_domain_cb SDRs_read_handler;
     void           *SDRs_read_handler_cb_data;
 
+    /* Used to inform the user that the bus scanning has been done */
+    ipmi_domain_cb bus_scan_handler;
+    void           *bus_scan_handler_cb_data;
+	
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
 };
@@ -1537,6 +1541,9 @@ static void
 mc_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 {
     domain->scanning_bus = 0;
+    if (domain->bus_scan_handler)
+	domain->bus_scan_handler(domain, 0,
+			  	 domain->bus_scan_handler_cb_data);
 }
 
 static void
@@ -2577,6 +2584,16 @@ ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 {
     domain->SDRs_read_handler = handler;
     domain->SDRs_read_handler_cb_data = cb_data;
+    return 0;
+}
+
+int
+ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
+				       ipmi_domain_cb handler,
+				       void           *cb_data)
+{
+    domain->bus_scan_handler = handler;
+    domain->bus_scan_handler_cb_data = cb_data;
     return 0;
 }
 

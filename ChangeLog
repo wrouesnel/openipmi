@@ -1,5 +1,13 @@
 2003-11-21  Louis Zhuang  <louis.zhuang@linux.intel.com>
 
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Add function
+	'ipmi_domain_set_bus_scan_handler' to indicate bus scan
+	is done
+	* sample/sample.c: Add some code to demostrate usage of
+	'ipmi_domain_set_bus_scan_handler'
+
+2003-11-21  Louis Zhuang  <louis.zhuang@linux.intel.com>
+
 	* lib/domain.c: Fix a bug in ipmi_domain_reread_sels
 
 2003-11-17 Corey Minyard <cminyard@mvista.com>
