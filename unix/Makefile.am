@@ -1,0 +1,29 @@
+
+empty:=
+space:= $(empty) $(empty)
+
+LIB_VERSION = 0.0.1
+
+SPACE_VERSION = $(subst .,$(space),$(LIB_VERSION))
+VERSION_CURRENT = $(wordlist 1, 1, $(SPACE_VERSION))
+VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
+VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
+LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
+
+AM_CFLAGS = -Wall -I$(top_srcdir)/include
+
+lib_LTLIBRARIES = libOpenIPMIposix.la libOpenIPMIpthread.la
+
+libOpenIPMIpthread_la_SOURCES = posix_thread_os_hnd.c
+libOpenIPMIpthread_la_LIBADD = -lpthread \
+	$(top_builddir)/utils/libOpenIPMIutils.la
+libOpenIPMIpthread_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
+	-Wl,-Map -Wl,libOpenIPMIpthread.map
+
+libOpenIPMIposix_la_SOURCES = posix_os_hnd.c
+libOpenIPMIposix_la_LIBADD =  $(top_builddir)/utils/libOpenIPMIutils.la
+libOpenIPMIposix_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
+	-Wl,-Map -Wl,libOpenIPMIposix.map
+
+clean:
+	rm -f *.map

@@ -36,7 +36,7 @@
 
 #include <stdarg.h>
 #include <sys/time.h>
-#include <OpenIPMI/log.h>
+#include <OpenIPMI/ipmi_log.h>
 
 /* An os-independent normal lock. */
 typedef struct os_hnd_lock_s os_hnd_lock_t;
@@ -192,6 +192,7 @@ struct os_handler_s
     int (*cond_wait)(os_handler_t  *handler,
 		     os_hnd_cond_t *cond,
 		     os_hnd_lock_t *lock);
+    /* The timeout here is relative, not absolute. */
     int (*cond_timedwait)(os_handler_t   *handler,
 			  os_hnd_cond_t  *cond,
 			  os_hnd_lock_t  *lock,
@@ -208,14 +209,10 @@ struct os_handler_s
 			 void               *data);
     /* Terminate the running thread. */
     int (*thread_exit)(os_handler_t *handler);
-};
 
-/* This is a defined OS handler for POSIX threading.  If the user uses
-   this, they must set ipmi_threaded_posix_vlog or logs will not come
-   out anywhere. */
-extern os_handler_t ipmi_posix_thread_os_handler;
-void (*ipmi_threaded_posix_vlog)(char *format,
-				 enum ipmi_log_type_e log_type,
-				 va_list ap);
+    /* Should *NOT* be used by the user, this is for the OS handler's
+       internal use. */
+    void *internal_data;
+};
 
 #endif /* __OS_HANDLER_H */

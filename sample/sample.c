@@ -45,7 +45,7 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_lan.h>
-#include <OpenIPMI/selector.h>
+#include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/ipmi_int.h>
 
 /* This file should not normally be included by the user, but is here
@@ -57,9 +57,6 @@
    application, you can find that there is only 4 lines code in main()
    function if you use the SMI-only interface, and several simple
    callback functions in all cases. */
-
-extern os_handler_t ipmi_ui_cb_handlers;
-selector_t *ui_sel;
 
 static const char *progname;
 
@@ -369,6 +366,9 @@ setup_done(ipmi_domain_t *domain,
     
 }
 
+static os_handler_t *os_hnd;
+static selector_t *sel;
+
 int
 main(int argc, const char *argv[])
 {
@@ -379,12 +379,21 @@ main(int argc, const char *argv[])
 
     progname = argv[0];
 
-    /* Create selector first. */
-    sel_alloc_selector(&ui_sel);
+    /* OS handler allocated first. */
+    os_hnd = ipmi_posix_get_os_handler();
+    if (!os_hnd) {
+	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
+	exit(1);
+    }
 
-    /* Initialize the OpenIPMI library. ipmi_ui_cb_handler is an OS
-       handler */
-    ipmi_init(&ipmi_ui_cb_handlers);
+    /* Create selector with os handler. */
+    sel_alloc_selector(os_hnd, &sel);
+
+    /* The OS handler has to know about the selector. */
+    ipmi_posix_os_handler_set_sel(os_hnd, sel);
+
+    /* Initialize the OpenIPMI library. */
+    ipmi_init(os_hnd);
 
 #if 0
     /* If all you need is an SMI connection, this is all the code you
@@ -395,7 +404,7 @@ main(int argc, const char *argv[])
        descriptor in selector is changed and predefined callback is
        called. After the connection is established, setup_done will be
        called. */
-    rv = ipmi_smi_setup_con(0, &ipmi_ui_cb_handlers, ui_sel, &con);
+    rv = ipmi_smi_setup_con(0, os_hnd, sel, &con);
     if (rv) {
 	printf("ipmi_smi_setup_con: %s", strerror(rv));
 	exit(1);
@@ -411,10 +420,7 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    rv = ipmi_args_setup_con(args,
-			     &ipmi_ui_cb_handlers,
-			     ui_sel,
-			     &con);
+    rv = ipmi_args_setup_con(args, os_hnd, sel, &con);
     if (rv) {
         fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
 	exit(1);
@@ -433,16 +439,16 @@ main(int argc, const char *argv[])
     /* We run the select loop here, this shows how you can use
        sel_select.  You could add your own processing in this loop. */
     while (1) {
-	sel_select(ui_sel, NULL, 0, NULL, NULL);
+	sel_select(sel, NULL, 0, NULL, NULL);
     }
 #else
     /* Let the selector code run the select loop. */
-    sel_select_loop(ui_sel, NULL, 0, NULL);
+    sel_select_loop(sel, NULL, 0, NULL);
 #endif
 }
 
 void
-ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
+posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     int do_nl = 1;
 

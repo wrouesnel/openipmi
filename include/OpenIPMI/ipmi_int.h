@@ -39,6 +39,8 @@
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_addr.h>
+#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/ipmi_locks.h>
 
 /* Get the "global" OS handlers used for non-domain operations. */
 os_handler_t *ipmi_get_global_os_handler(void);
@@ -53,39 +55,14 @@ void ipmi_read_unlock(void);
 void ipmi_write_lock(void);
 void ipmi_write_unlock(void);
 
-/* This is a generic lock used by the IPMI code. */
-typedef struct ipmi_lock_s ipmi_lock_t;
-
 /* Create a lock, using the OS handlers for the given MC. */
 int ipmi_create_lock(ipmi_domain_t *mc, ipmi_lock_t **lock);
 
 /* Create a lock using the main os handler registered with ipmi_init(). */
 int ipmi_create_global_lock(ipmi_lock_t **new_lock);
 
-/* Create a lock but us your own OS handlers. */
-int ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **lock);
-
-/* Destroy a lock. */
-void ipmi_destroy_lock(ipmi_lock_t *lock);
-
-/* Lock the lock.  Locks are recursive, so the same thread can claim
-   the same lock multiple times, and must release it the same number
-   of times. */
-void ipmi_lock(ipmi_lock_t *lock);
-
-/* Release the lock. */
-void ipmi_unlock(ipmi_lock_t *lock);
-
-/* Like the above locks, but read/write locks. */
-typedef struct ipmi_rwlock_s ipmi_rwlock_t;
-int ipmi_create_rwlock_os_hnd(os_handler_t *os_hnd, ipmi_rwlock_t **new_lock);
 int ipmi_create_global_rwlock(ipmi_rwlock_t **new_lock);
 int ipmi_create_rwlock(ipmi_domain_t *domain, ipmi_rwlock_t **new_lock);
-void ipmi_destroy_rwlock(ipmi_rwlock_t *lock);
-void ipmi_rwlock_read_lock(ipmi_rwlock_t *lock);
-void ipmi_rwlock_read_unlock(ipmi_rwlock_t *lock);
-void ipmi_rwlock_write_lock(ipmi_rwlock_t *lock);
-void ipmi_rwlock_write_unlock(ipmi_rwlock_t *lock);
 
 /* Get a globally unique sequence number. */
 long ipmi_get_seq(void);
@@ -166,21 +143,6 @@ void ipmi_set_device_string(char                 *input,
 			    int                  *out_len);
 
 
-/* IPMI uses this for memory allocation, so it can easily be
-   substituted, etc. */
-void *ipmi_mem_alloc(int size);
-void ipmi_mem_free(void *data);
-
-/* strdup using the above memory allocation routines. */
-char *ipmi_strdup(const char *str);
-
-/* If you have debug allocations on, then you should call this to
-   check for data you haven't freed (after you have freed all the
-   data, of course).  It's safe to call even if malloc debugging is
-   turned off. */
-void ipmi_debug_malloc_cleanup(void);
-
-
 /* Various logging stuff (mostly for debugging) */
 
 /* Internal function to get the name of a domain. */
@@ -204,9 +166,6 @@ extern unsigned int __ipmi_log_mask;
 /* Log all messages. */
 #define DEBUG_RAWMSG_BIT	(1 << 1)
 
-/* Attempt to detect locking errors and report them. */
-#define DEBUG_LOCKS_BIT		(1 << 2)
-
 /* Log events that are received. */
 #define DEBUG_EVENTS_BIT	(1 << 3)
 
@@ -216,10 +175,6 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_CON2_FAIL_BIT	(1 << 6)
 #define DEBUG_CON3_FAIL_BIT	(1 << 7)
 
-/* Debug mallocs.  This should only be set at startup (before
-   ipmi_mem_alloc() is called), and cannot be cleared after that. */
-#define DEBUG_MALLOC_BIT	(1 << 8)
-
 #define DEBUG_MSG	(__ipmi_log_mask & DEBUG_MSG_BIT)
 #define DEBUG_MSG_ENABLE() __ipmi_log_mask |= DEBUG_MSG_BIT
 #define DEBUG_MSG_DISABLE() __ipmi_log_mask &= ~DEBUG_MSG_BIT
@@ -227,10 +182,6 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_RAWMSG	(__ipmi_log_mask & DEBUG_RAWMSG_BIT)
 #define DEBUG_RAWMSG_ENABLE() __ipmi_log_mask |= DEBUG_RAWMSG_BIT
 #define DEBUG_RAWMSG_DISABLE() __ipmi_log_mask &= ~DEBUG_RAWMSG_BIT
-
-#define DEBUG_LOCKS	(__ipmi_log_mask & DEBUG_LOCKS_BIT)
-#define DEBUG_LOCKS_ENABLE() __ipmi_log_mask |= DEBUG_LOCKS_BIT
-#define DEBUG_LOCKS_DISABLE() __ipmi_log_mask &= ~DEBUG_LOCKS_BIT
 
 #define DEBUG_EVENTS	(__ipmi_log_mask & DEBUG_EVENTS_BIT)
 #define DEBUG_EVENTS_ENABLE() __ipmi_log_mask |= DEBUG_EVENTS_BIT
@@ -241,9 +192,6 @@ extern unsigned int __ipmi_log_mask;
 	__ipmi_log_mask |= (DEBUG_CON0_FAIL_BIT << con)
 #define DEBUG_CON_FAIL_DISABLE(con) \
 	__ipmi_log_mask &= ~(DEBUG_CON0_FAIL_BIT << con)
-
-#define DEBUG_MALLOC	(__ipmi_log_mask & DEBUG_MALLOC_BIT)
-#define DEBUG_MALLOC_ENABLE() __ipmi_log_mask |= DEBUG_MALLOC_BIT
 
 /* Lock/unlock the entities for the given domain. */
 void ipmi_domain_entity_lock(ipmi_domain_t *domain);
@@ -264,9 +212,7 @@ void __ipmi_check_sensor_lock(ipmi_sensor_t *sensor);
 #define CHECK_SENSOR_LOCK(sensor) __ipmi_check_sensor_lock(sensor)
 void __ipmi_check_control_lock(ipmi_control_t *control);
 #define CHECK_CONTROL_LOCK(control) __ipmi_check_control_lock(control)
-void ipmi_report_lock_error(os_handler_t *handler, char *str);
-#define IPMI_REPORT_LOCK_ERROR(handler, str) ipmi_report_lock_error(handler, \
-								    str)
+
 void ipmi_check_lock(ipmi_lock_t *lock, char *str);
 #else
 #define CHECK_MC_LOCK(mc) do {} while (0)
@@ -275,7 +221,6 @@ void ipmi_check_lock(ipmi_lock_t *lock, char *str);
 #define CHECK_DOMAIN_ENTITY_LOCK(domain) do {} while (0)
 #define CHECK_SENSOR_LOCK(sensor) do {} while (0)
 #define CHECK_CONTROL_LOCK(control) do {} while (0)
-#define IPMI_REPORT_LOCK_ERROR(handler, str) do {} while (0)
 #endif
 
 #define ipmi_seconds_to_time(x) (((ipmi_time_t) (x)) * 1000000000)

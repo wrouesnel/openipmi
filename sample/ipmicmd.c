@@ -47,21 +47,19 @@
 #include <string.h>
 #include <popt.h> /* Option parsing made easy */
 
-#include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/mxp.h>
 
 #include <OpenIPMI/ipmi_int.h>
 
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
-
-extern os_handler_t ipmi_ui_cb_handlers;
 
 static char* sOp		= NULL;
 static int   interactive        = 1;
@@ -96,7 +94,8 @@ struct poptOption poptOpts[]=
     }	
 };
 
-selector_t *ui_sel;
+selector_t *sel;
+os_handler_t *os_hnd;
 static ipmi_con_t *con;
 
 /* We cobbled everything in the next section together to provide the
@@ -195,7 +194,7 @@ ipmi_create_global_lock(ipmi_lock_t **new_lock)
     if (!lock)
 	return ENOMEM;
 
-    lock->os_hnd = &ipmi_ui_cb_handlers;
+    lock->os_hnd = os_hnd;
     if (lock->os_hnd && lock->os_hnd->create_lock) {
 	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
 	if (rv) {
@@ -237,8 +236,8 @@ real_quit(selector_t *sel, sel_timer_t *timer, void *data)
     sel_free_timer(timer);
     if (con && con->close_connection) 
 	con->close_connection(con);
-    if (ui_sel)
-	sel_free_selector(ui_sel);
+    if (sel)
+	sel_free_selector(sel);
     exit(rv);
 }
 
@@ -251,11 +250,11 @@ leave(int ret)
     static int ret_code;
 
     ret_code = ret;
-    rv = sel_alloc_timer(ui_sel, real_quit, &ret_code, &timer);
+    rv = sel_alloc_timer(sel, real_quit, &ret_code, &timer);
     if (rv) {
 	/* Cannot allocate timer, exit anyway */
-        if (ui_sel)
-	    sel_free_selector(ui_sel);
+        if (sel)
+	    sel_free_selector(sel);
 	exit(1);
     }
 
@@ -264,8 +263,8 @@ leave(int ret)
     rv = sel_start_timer(timer, &timeout);
     if (rv) {
 	sel_free_timer(timer);
-        if (ui_sel)
-	    sel_free_selector(ui_sel);
+        if (sel)
+	    sel_free_selector(sel);
 	exit(1);
     }
 }
@@ -856,11 +855,18 @@ main(int argc, const char *oargv[])
 
     curr_arg = 0;
 
-    rv = sel_alloc_selector(&ui_sel);
-    if (rv) {
-	fprintf(stderr, "Could not allocate selector\n");
-	leave(1);
+    /* OS handler allocated first. */
+    os_hnd = ipmi_posix_get_os_handler();
+    if (!os_hnd) {
+	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
+	exit(1);
     }
+
+    /* Create selector with os handler. */
+    sel_alloc_selector(os_hnd, &sel);
+
+    /* The OS handler has to know about the selector. */
+    ipmi_posix_os_handler_set_sel(os_hnd, sel);
 
     rv = ipmi_parse_args(&curr_arg, argc, argv, &args);
     if (rv) {
@@ -869,10 +875,7 @@ main(int argc, const char *oargv[])
 	leave(1);
     }
 
-    rv = ipmi_args_setup_con(args,
-			     &ipmi_ui_cb_handlers,
-			     ui_sel,
-			     &con);
+    rv = ipmi_args_setup_con(args, os_hnd, sel, &con);
     if (rv) {
         fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
 	leave(1);
@@ -884,9 +887,9 @@ main(int argc, const char *oargv[])
 	    fprintf(stderr, "Could not set to get events: %x\n", rv);
 	}
 
-	sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL,
+	sel_set_fd_handlers(sel, 0, NULL, user_input_ready, NULL, NULL,
 			    NULL);
-	sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
+	sel_set_fd_read_handler(sel, 0, SEL_FD_HANDLER_ENABLED);
     }
 
     con->set_con_change_handler(con, con_changed_handler, NULL);
@@ -902,7 +905,7 @@ main(int argc, const char *oargv[])
 	printf("=> ");
     fflush(stdout);
 
-    sel_select_loop(ui_sel, NULL, 0, NULL);
+    sel_select_loop(sel, NULL, 0, NULL);
 
     return rv;
 }

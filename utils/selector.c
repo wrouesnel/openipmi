@@ -39,7 +39,8 @@
    routines registered with it. */
 
 #include <OpenIPMI/selector.h>
-#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/ipmi_locks.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -750,7 +751,7 @@ ipmi_sel_set_read_fds_handler(selector_t                 *sel,
 
 /* Initialize the select code. */
 int
-sel_alloc_selector(selector_t **new_selector)
+sel_alloc_selector(os_handler_t *os_hnd, selector_t **new_selector)
 {
     selector_t *sel;
     int        i;
@@ -765,11 +766,11 @@ sel_alloc_selector(selector_t **new_selector)
     sel->wait_list.next = &sel->wait_list;
     sel->wait_list.prev = &sel->wait_list;
 
-    rv = ipmi_create_global_lock(&(sel->timer_lock));
+    rv = ipmi_create_lock_os_hnd(os_hnd, &(sel->timer_lock));
     if (rv)
 	goto out_err;
 
-    rv = ipmi_create_global_lock(&(sel->fd_lock));
+    rv = ipmi_create_lock_os_hnd(os_hnd, &(sel->fd_lock));
     if (rv)
 	goto out_err;
 

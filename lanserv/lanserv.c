@@ -50,7 +50,7 @@
 #include <sys/ioctl.h>
 #include <syslog.h>
 
-#include <OpenIPMI/log.h>
+#include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/lanserv.h>
 

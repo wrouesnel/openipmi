@@ -1,8 +1,19 @@
 
 AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
-lib_LIBRARIES = libIPMIutils.a
+noinst_HEADERS = heap.h
 
-libIPMIutils_a_SOURCES = md5.c md2.c ipmi_auth.c
-libIPMIutils_a_LIBADD = 
+lib_LTLIBRARIES = libOpenIPMIutils.la
 
+libOpenIPMIutils_la_SOURCES = md5.c md2.c ipmi_auth.c selector.c \
+			      ipmi_malloc.c ilist.c locks.c
+
+noinst_PROGRAMS = test_heap
+
+test_heap_SOURCES = test_heap.c
+test_heap_LDADD = 
+
+TESTS = test_heap
+
+clean:
+	rm -f *.map

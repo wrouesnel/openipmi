@@ -98,62 +98,10 @@ ipmi_get_global_os_handler(void)
     return ipmi_os_handler;
 }
     
-struct ipmi_lock_s
-{
-    os_hnd_lock_t *ll_lock;
-    os_handler_t  *os_hnd;
-};
-
-int
-ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)
-{
-    ipmi_lock_t *lock;
-    int         rv;
-
-    lock = ipmi_mem_alloc(sizeof(*lock));
-    if (!lock)
-	return ENOMEM;
-
-    lock->os_hnd = os_hnd;
-    if (lock->os_hnd && lock->os_hnd->create_lock) {
-	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
-	if (rv) {
-	    ipmi_mem_free(lock);
-	    return rv;
-	}
-    } else {
-	lock->ll_lock = NULL;
-    }
-
-    *new_lock = lock;
-
-    return 0;
-}
-
 int
 ipmi_create_global_lock(ipmi_lock_t **new_lock)
 {
-    ipmi_lock_t *lock;
-    int         rv;
-
-    lock = ipmi_mem_alloc(sizeof(*lock));
-    if (!lock)
-	return ENOMEM;
-
-    lock->os_hnd = ipmi_os_handler;
-    if (lock->os_hnd && lock->os_hnd->create_lock) {
-	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
-	if (rv) {
-	    ipmi_mem_free(lock);
-	    return rv;
-	}
-    } else {
-	lock->ll_lock = NULL;
-    }
-
-    *new_lock = lock;
-
-    return 0;
+    return ipmi_create_lock_os_hnd(ipmi_os_handler, new_lock);
 }
 
 int
@@ -162,118 +110,16 @@ ipmi_create_lock(ipmi_domain_t *domain, ipmi_lock_t **new_lock)
     return ipmi_create_lock_os_hnd(ipmi_domain_get_os_hnd(domain), new_lock);
 }
 
-void ipmi_destroy_lock(ipmi_lock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->destroy_lock(lock->os_hnd, lock->ll_lock);
-    ipmi_mem_free(lock);
-}
-
-void ipmi_lock(ipmi_lock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->lock(lock->os_hnd, lock->ll_lock);
-}
-
-void ipmi_unlock(ipmi_lock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->unlock(lock->os_hnd, lock->ll_lock);
-}
-
-struct ipmi_rwlock_s
-{
-    os_hnd_rwlock_t *ll_lock;
-    os_handler_t  *os_hnd;
-};
-
-int
-ipmi_create_rwlock_os_hnd(os_handler_t *os_hnd, ipmi_rwlock_t **new_lock)
-{
-    ipmi_rwlock_t *lock;
-    int         rv;
-
-    lock = ipmi_mem_alloc(sizeof(*lock));
-    if (!lock)
-	return ENOMEM;
-
-    lock->os_hnd = os_hnd;
-    if (lock->os_hnd && lock->os_hnd->create_lock) {
-	rv = lock->os_hnd->create_rwlock(lock->os_hnd, &(lock->ll_lock));
-	if (rv) {
-	    ipmi_mem_free(lock);
-	    return rv;
-	}
-    } else {
-	lock->ll_lock = NULL;
-    }
-
-    *new_lock = lock;
-
-    return 0;
-}
-
 int
 ipmi_create_global_rwlock(ipmi_rwlock_t **new_lock)
 {
-    ipmi_rwlock_t *lock;
-    int           rv;
-
-    lock = ipmi_mem_alloc(sizeof(*lock));
-    if (!lock)
-	return ENOMEM;
-
-    lock->os_hnd = ipmi_os_handler;
-    if (lock->os_hnd && lock->os_hnd->create_lock) {
-	rv = lock->os_hnd->create_rwlock(lock->os_hnd, &(lock->ll_lock));
-	if (rv) {
-	    ipmi_mem_free(lock);
-	    return rv;
-	}
-    } else {
-	lock->ll_lock = NULL;
-    }
-
-    *new_lock = lock;
-
-    return 0;
+    return ipmi_create_rwlock_os_hnd(ipmi_os_handler, new_lock);
 }
 
 int
 ipmi_create_rwlock(ipmi_domain_t *domain, ipmi_rwlock_t **new_lock)
 {
     return ipmi_create_rwlock_os_hnd(ipmi_domain_get_os_hnd(domain), new_lock);
-}
-
-void ipmi_destroy_rwlock(ipmi_rwlock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->destroy_rwlock(lock->os_hnd, lock->ll_lock);
-    ipmi_mem_free(lock);
-}
-
-void ipmi_rwlock_read_lock(ipmi_rwlock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->read_lock(lock->os_hnd, lock->ll_lock);
-}
-
-void ipmi_rwlock_read_unlock(ipmi_rwlock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->read_unlock(lock->os_hnd, lock->ll_lock);
-}
-
-void ipmi_rwlock_write_lock(ipmi_rwlock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->write_lock(lock->os_hnd, lock->ll_lock);
-}
-
-void ipmi_rwlock_write_unlock(ipmi_rwlock_t *lock)
-{
-    if (lock->ll_lock)
-	lock->os_hnd->write_unlock(lock->os_hnd, lock->ll_lock);
 }
 
 void
@@ -1061,25 +907,6 @@ ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 	states->__states &= ~(1 << thresh);
 }
 
-#ifdef IPMI_CHECK_LOCKS
-/* Set a breakpoint here to detect locking errors. */
-void
-ipmi_report_lock_error(os_handler_t *handler, char *str)
-{
-    handler->log(handler, IPMI_LOG_WARNING, "%s", str);
-}
-
-void
-ipmi_check_lock(ipmi_lock_t *lock, char *str)
-{
-    if ((!DEBUG_LOCKS) || (!lock) || (!lock->ll_lock))
-	return;
-
-    if (! lock->os_hnd->is_locked(lock->os_hnd, lock->ll_lock))
-	IPMI_REPORT_LOCK_ERROR(lock->os_hnd, str);
-}
-#endif
-
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
 int _ipmi_pet_init(void);
@@ -1153,18 +980,6 @@ ipmi_shutdown(void)
     if (seq_lock)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
     global_lock = NULL;
-}
-
-char *
-ipmi_strdup(const char *str)
-{
-    char *rv = ipmi_mem_alloc(strlen(str)+1);
-
-    if (!rv)
-	return NULL;
-
-    strcpy(rv, str);
-    return rv;
 }
 
 enum con_type_e { SMI, LAN, MXP };

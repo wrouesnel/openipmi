@@ -50,7 +50,7 @@
 #include <sys/ioctl.h>
 #include <termios.h>
 
-#include <OpenIPMI/log.h>
+#include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/lanserv.h>

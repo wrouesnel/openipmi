@@ -34,13 +34,14 @@
 #ifndef SELECTOR
 #define SELECTOR
 #include <sys/time.h> /* For timeval */
+#include <OpenIPMI/os_handler.h>
 
 /* The main data structure used by the selector. */
 struct selector_s;
 typedef struct selector_s selector_t;
 
 /* You have to create a selector before you can use it. */
-int sel_alloc_selector(selector_t **new_selector);
+int sel_alloc_selector(os_handler_t *os_hnd, selector_t **new_selector);
 
 /* Used to destroy a selector. */
 int sel_free_selector(selector_t *new_selector);

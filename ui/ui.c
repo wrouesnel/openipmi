@@ -6149,7 +6149,7 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 
     full_screen = do_full_screen;
 
-    rv = sel_alloc_selector(&ui_sel);
+    rv = sel_alloc_selector(ipmi_get_global_os_handler(), &ui_sel);
     if (rv) {
 	fprintf(stderr, "Could not allocate selector\n");
 	exit(1);

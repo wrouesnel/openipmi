@@ -44,6 +44,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <string.h>
 
 #include <OpenIPMI/ipmi_int.h>
 
@@ -52,8 +53,6 @@ void (*ipmi_threaded_posix_vlog)(char *format,
 				 enum ipmi_log_type_e log_type,
 				 va_list ap);
 
-
-static selector_t *posix_sel;
 
 struct os_hnd_fd_id_s
 {
@@ -100,6 +99,7 @@ add_fd(os_handler_t       *handler,
 {
     os_hnd_fd_id_t *fd_data;
     int            rv;
+    selector_t     *posix_sel = handler->internal_data;
 
     fd_data = ipmi_mem_alloc(sizeof(*fd_data));
     if (!fd_data)
@@ -126,6 +126,8 @@ add_fd(os_handler_t       *handler,
 static int
 remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
+    selector_t *posix_sel = handler->internal_data;
+
     sel_set_fd_read_handler(posix_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
     sel_clear_fd_handlers(posix_sel, fd_data->fd);
     return 0;
@@ -196,6 +198,7 @@ alloc_timer(os_handler_t      *handler,
 {
     os_hnd_timer_id_t *timer_data;
     int               rv;
+    selector_t        *posix_sel = handler->internal_data;
 
     timer_data = ipmi_mem_alloc(sizeof(*timer_data));
     if (!timer_data)
@@ -278,11 +281,14 @@ create_lock(os_handler_t  *handler,
 	    os_hnd_lock_t **id)
 {
     os_hnd_lock_t *lock;
+    int           rv;
 
     lock = ipmi_mem_alloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
-    pthread_mutex_init(&lock->mutex, NULL);
+    rv = pthread_mutex_init(&lock->mutex, NULL);
+    if (rv)
+	return rv;
     lock->lock_count = 0;
     *id = lock;
     return 0;
@@ -292,9 +298,13 @@ static int
 destroy_lock(os_handler_t  *handler,
 	     os_hnd_lock_t *id)
 {
+    int rv;
+
     if (id->lock_count != 0)
 	ipmi_log(IPMI_LOG_FATAL, "Destroy of lock when count is not zero");
-    pthread_mutex_destroy(&id->mutex);
+    rv = pthread_mutex_destroy(&id->mutex);
+    if (rv)
+	return rv;
     ipmi_mem_free(id);
     return 0;
 }
@@ -303,8 +313,13 @@ static int
 lock(os_handler_t  *handler,
      os_hnd_lock_t *id)
 {
-    if ((id->lock_count == 0) || (pthread_self() != id->owner))
-	pthread_mutex_lock(&id->mutex);
+    int rv;
+
+    if ((id->lock_count == 0) || (pthread_self() != id->owner)) {
+	rv = pthread_mutex_lock(&id->mutex);
+	if (rv)
+	    return rv;
+    }
     id->owner = pthread_self();
     id->lock_count++;
     return 0;
@@ -314,13 +329,20 @@ static int
 unlock(os_handler_t  *handler,
        os_hnd_lock_t *id)
 {
+    int rv;
+
     if (id->lock_count == 0)
 	ipmi_log(IPMI_LOG_FATAL, "lock count went negative");
     if (pthread_self() != id->owner)
 	ipmi_log(IPMI_LOG_FATAL, "lock release by non-owner");
     id->lock_count--;
-    if (id->lock_count == 0) 
-	pthread_mutex_unlock(&id->mutex);
+    if (id->lock_count == 0) {
+	rv = pthread_mutex_unlock(&id->mutex);
+	if (rv) {
+	    id->lock_count++;
+	    return rv;
+	}
+    }
     return 0;
 }
 
@@ -348,12 +370,22 @@ create_rwlock(os_handler_t    *handler,
 	      os_hnd_rwlock_t **id)
 {
     os_hnd_rwlock_t *lock;
+    int             rv;
 
     lock = ipmi_mem_alloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
-    pthread_rwlock_init(&lock->rwlock, NULL);
-    pthread_mutex_init(&lock->read_lock_lock, NULL);
+    rv = pthread_rwlock_init(&lock->rwlock, NULL);
+    if (rv) {
+	ipmi_mem_free(lock);
+	return rv;
+    }
+    rv = pthread_mutex_init(&lock->read_lock_lock, NULL);
+    if (rv) {
+	pthread_rwlock_destroy(&lock->rwlock);
+	ipmi_mem_free(lock);
+	return rv;
+    }
     lock->read_lock_count = 0;
     lock->write_lock_count = 0;
     *id = lock;
@@ -364,10 +396,14 @@ static int
 destroy_rwlock(os_handler_t    *handler,
 	       os_hnd_rwlock_t *id)
 {
+    int rv;
+
     if ((id->read_lock_count != 0) || (id->write_lock_count != 0))
 	ipmi_log(IPMI_LOG_FATAL, "Release of rwlock when count is not zero");
+    rv = pthread_rwlock_destroy(&id->rwlock);
+    if (rv)
+	return rv;
     pthread_mutex_destroy(&id->read_lock_lock);
-    pthread_rwlock_destroy(&id->rwlock);
     ipmi_mem_free(id);
     return 0;
 }
@@ -376,12 +412,16 @@ static int
 read_lock(os_handler_t    *handler,
 	  os_hnd_rwlock_t *id)
 {
+    int rv;
+
     if ((id->write_lock_count > 0) && (id->write_owner == pthread_self())) {
 	id->read_lock_count++;
 	return 0;
     }
 
-    pthread_rwlock_rdlock(&id->rwlock);
+    rv = pthread_rwlock_rdlock(&id->rwlock);
+    if (rv)
+	return rv;
     pthread_mutex_lock(&id->read_lock_lock);
     id->read_lock_count++;
     pthread_mutex_unlock(&id->read_lock_lock);
@@ -392,6 +432,8 @@ static int
 read_unlock(os_handler_t    *handler,
 	    os_hnd_rwlock_t *id)
 {
+    int rv;
+
     if ((id->write_lock_count > 0) && (id->write_owner == pthread_self())) {
 	if (id->read_lock_count == 0)
 	    ipmi_log(IPMI_LOG_FATAL, "read lock count went negative");
@@ -404,7 +446,13 @@ read_unlock(os_handler_t    *handler,
 	ipmi_log(IPMI_LOG_FATAL, "read lock count went negative");
     id->read_lock_count--;
     pthread_mutex_unlock(&id->read_lock_lock);
-    pthread_rwlock_unlock(&id->rwlock);
+    rv = pthread_rwlock_unlock(&id->rwlock);
+    if (rv) {
+	pthread_mutex_lock(&id->read_lock_lock);
+	id->read_lock_count++;
+	pthread_mutex_unlock(&id->read_lock_lock);
+	return rv;
+    }
     return 0;
 }
 
@@ -412,8 +460,13 @@ static int
 write_lock(os_handler_t    *handler,
 	   os_hnd_rwlock_t *id)
 {
-    if ((id->write_lock_count == 0) || (id->write_owner != pthread_self()))
-	pthread_rwlock_wrlock(&id->rwlock);
+    int rv;
+
+    if ((id->write_lock_count == 0) || (id->write_owner != pthread_self())) {
+	rv = pthread_rwlock_wrlock(&id->rwlock);
+	if (rv)
+	    return rv;
+    }
     id->write_owner = pthread_self();
     id->write_lock_count++;
     return 0;
@@ -423,6 +476,8 @@ static int
 write_unlock(os_handler_t    *handler,
 	     os_hnd_rwlock_t *id)
 {
+    int rv;
+
     if (id->write_lock_count == 0)
 	ipmi_log(IPMI_LOG_FATAL, "write lock count went negative");
     if (pthread_self() != id->write_owner)
@@ -431,7 +486,13 @@ write_unlock(os_handler_t    *handler,
     if (id->write_lock_count == 0) {
 	if (id->read_lock_count != 0)
 	    ipmi_log(IPMI_LOG_FATAL,"read lock count not zero on write unlock");
-	pthread_rwlock_unlock(&id->rwlock);
+	rv = pthread_rwlock_unlock(&id->rwlock);
+	if (rv) {
+	    id->write_lock_count++;
+	    return rv;
+	}
+	if (id->read_lock_count == 0)
+	    ipmi_log(IPMI_LOG_FATAL, "read lock count went negative");
     }
     return 0;
 }
@@ -450,7 +511,118 @@ is_writelocked(os_handler_t    *handler,
     return (id->write_lock_count != 0);
 }
 
-os_handler_t ipmi_posix_thread_os_handler =
+struct os_hnd_cond_s
+{
+    pthread_cond_t cond;
+};
+
+static int
+create_cond(os_handler_t  *handler,
+	    os_hnd_cond_t **new_cond)
+{
+    os_hnd_cond_t *cond;
+
+    cond = ipmi_mem_alloc(sizeof(*cond));
+    if (!cond)
+	return ENOMEM;
+
+    return pthread_cond_init(&cond->cond, NULL);
+}
+
+static int
+destroy_cond(os_handler_t  *handler,
+	     os_hnd_cond_t *cond)
+{
+    int rv;
+
+    rv = pthread_cond_destroy(&cond->cond);
+    if (rv)
+	return rv;
+    ipmi_mem_free(cond);
+    return 0;
+}
+
+static int
+cond_wait(os_handler_t  *handler,
+	  os_hnd_cond_t *cond,
+	  os_hnd_lock_t *lock)
+{
+    return pthread_cond_wait(&cond->cond, &lock->mutex);
+}
+
+static int
+cond_timedwait(os_handler_t   *handler,
+	       os_hnd_cond_t  *cond,
+	       os_hnd_lock_t  *lock,
+	       struct timeval *timeout)
+{
+    struct timespec spec;
+    struct timeval  now;
+
+    gettimeofday(&now, NULL);
+    spec.tv_sec = timeout->tv_sec + now.tv_sec;
+    spec.tv_nsec = (timeout->tv_usec + now.tv_usec) * 1000;
+    while (spec.tv_nsec > 1000000000) {
+	spec.tv_sec += 1;
+	spec.tv_nsec -= 1000000000;
+    }
+    return pthread_cond_timedwait(&cond->cond, &lock->mutex, &spec);
+}
+
+static int
+cond_wake(os_handler_t  *handler,
+	  os_hnd_cond_t *cond)
+{
+    return pthread_cond_signal(&cond->cond);
+}
+
+static int
+cond_broadcast(os_handler_t  *handler,
+	       os_hnd_cond_t *cond)
+{
+    return pthread_cond_broadcast(&cond->cond);
+}
+
+static int
+create_thread(os_handler_t       *handler,
+	      int                priority,
+	      void               (*startup)(void *data),
+	      void               *data)
+{
+    pthread_attr_t     attr, *pattr = NULL;
+    struct sched_param param;
+    int                rv;
+
+    if (priority) {
+	rv = pthread_attr_init(&attr);
+	if (rv)
+	    return rv;
+	rv = pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
+	if (rv)
+	    goto out;
+	param.sched_priority = priority;
+	rv = pthread_attr_setschedparam(&attr, &param);
+	if (rv)
+	    goto out;
+	pattr = &attr;
+    }
+
+    rv = pthread_create(NULL, pattr, (void *(*)(void *)) startup, data);
+
+ out:
+    if (pattr)
+	pthread_attr_destroy(pattr);
+    return rv;
+}
+
+static int
+thread_exit(os_handler_t *handler)
+{
+    pthread_exit(NULL);
+}
+
+
+static os_handler_t ipmi_posix_thread_os_handler =
 {
     .add_fd_to_wait_for = add_fd,
     .remove_fd_to_wait_for = remove_fd,
@@ -473,5 +645,32 @@ os_handler_t ipmi_posix_thread_os_handler =
     .is_writelocked = is_writelocked,
     .get_random = get_random,
     .log = sposix_log,
-    .vlog = sposix_vlog
+    .vlog = sposix_vlog,
+    .create_cond = create_cond,
+    .destroy_cond = destroy_cond,
+    .cond_wait = cond_wait,
+    .cond_timedwait = cond_timedwait,
+    .cond_wake = cond_wake,
+    .cond_broadcast = cond_broadcast,
+    .create_thread = create_thread,
+    .thread_exit = thread_exit,
 };
+
+os_handler_t *
+ipmi_posix_thread_get_os_handler(void)
+{
+    os_handler_t *rv;
+
+    rv = ipmi_mem_alloc(sizeof(*rv));
+    if (!rv)
+	return NULL;
+
+    memcpy(rv, &ipmi_posix_thread_os_handler, sizeof(*rv));
+    return rv;
+}
+
+void
+ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel)
+{
+    os_hnd->internal_data = sel;
+}

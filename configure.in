@@ -116,6 +116,7 @@ fi
 AC_OUTPUT(Makefile
 	  utils/Makefile
 	  lib/Makefile
+	  unix/Makefile
 	  ui/Makefile
 	  lanserv/Makefile
 	  sample/Makefile
@@ -126,6 +127,8 @@ AC_OUTPUT(Makefile
 	  include/OpenIPMI/ipmiif.h
 	  include/linux/Makefile
 	  include/net/Makefile
+	  OpenIPMIutils.pc
 	  OpenIPMI.pc
 	  OpenIPMIpthread.pc
+	  OpenIPMIposix.pc
 	  OpenIPMIui.pc)

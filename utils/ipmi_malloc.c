@@ -34,7 +34,8 @@
 #include <malloc.h>
 #include <string.h>
 #include <execinfo.h> /* For backtrace() */
-#include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/ipmi_malloc.h>
+#include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/ilist.h>
 
 #define DBG_ALIGN 16
@@ -44,6 +45,8 @@
 #define SIGNATURE 0x82c2e45a
 #define FREE_SIGNATURE 0xb981cef1
 #define BYTE_SIGNATURE 0x74
+
+int __ipmi_debug_malloc = 0;
 
 struct dbg_malloc_header
 {
@@ -370,4 +373,16 @@ void
 ilist_mem_free(void *data)
 {
     ipmi_mem_free(data);
+}
+
+char *
+ipmi_strdup(const char *str)
+{
+    char *rv = ipmi_mem_alloc(strlen(str)+1);
+
+    if (!rv)
+	return NULL;
+
+    strcpy(rv, str);
+    return rv;
 }

@@ -35,16 +35,15 @@
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_err.h>
-#include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/selector.h>
+#include <OpenIPMI/ipmi_posix.h>
 
 /* This sample application demostrates a very simple method to use
    OpenIPMI. It takes a entity id, entity instance, and sensor name,
    looks for that sensor to be created, then prints out the value
    every 5 seconds. */
 
-extern os_handler_t ipmi_ui_cb_handlers;
-selector_t *ui_sel;
+static os_handler_t *os_hnd;
+static selector_t *sel;
 
 static const char *progname;
 
@@ -182,9 +181,9 @@ control_check_timeout(void *cb_data, os_hnd_timer_id_t *id)
 	}
     }
 
-    ipmi_ui_cb_handlers.start_timer(&ipmi_ui_cb_handlers,
-				    check_timer, &check_timeout,
-				    control_check_timeout, NULL);
+    os_hnd->start_timer(os_hnd,
+			check_timer, &check_timeout,
+			control_check_timeout, NULL);
 }
 
 /* Whenever the status of a control changes, the function is called
@@ -283,12 +282,21 @@ main(int argc, const char *argv[])
     entity_instance = strtoul(argv[2], NULL, 10);
     control_name = argv[3];
 
-    /* Create selector first. */
-    sel_alloc_selector(&ui_sel);
+    /* OS handler allocated first. */
+    os_hnd = ipmi_posix_get_os_handler();
+    if (!os_hnd) {
+	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
+	exit(1);
+    }
 
-    /* Initialize the OpenIPMI library. ipmi_ui_cb_handler is an OS
-       handler */
-    ipmi_init(&ipmi_ui_cb_handlers);
+    /* Create selector with os handler. */
+    sel_alloc_selector(os_hnd, &sel);
+
+    /* The OS handler has to know about the selector. */
+    ipmi_posix_os_handler_set_sel(os_hnd, sel);
+
+    /* Initialize the OpenIPMI library. */
+    ipmi_init(os_hnd);
 
     rv = ipmi_parse_args(&curr_arg, argc, argv, &args);
     if (rv) {
@@ -298,10 +306,7 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    rv = ipmi_args_setup_con(args,
-			     &ipmi_ui_cb_handlers,
-			     ui_sel,
-			     &con);
+    rv = ipmi_args_setup_con(args, os_hnd, sel, &con);
     if (rv) {
         fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
 	exit(1);
@@ -313,7 +318,7 @@ main(int argc, const char *argv[])
 	exit(1);
     }
 
-    rv = ipmi_ui_cb_handlers.alloc_timer(&ipmi_ui_cb_handlers, &check_timer);
+    rv = os_hnd->alloc_timer(os_hnd, &check_timer);
     if (rv) {
 	fprintf(stderr, "alloc_timer: %x\n", rv);
 	leave();
@@ -321,16 +326,16 @@ main(int argc, const char *argv[])
 
     check_timeout.tv_sec = 5;
     check_timeout.tv_usec = 0;
-    ipmi_ui_cb_handlers.start_timer(&ipmi_ui_cb_handlers,
-				    check_timer, &check_timeout,
-				    control_check_timeout, NULL);
+    os_hnd->start_timer(os_hnd,
+			check_timer, &check_timeout,
+			control_check_timeout, NULL);
 
     /* This is the main loop of the event-driven program. 
        Try <CTRL-C> to exit the program */ 
     /* We run the select loop here, this shows how you can use
        sel_select.  You could add your own processing in this loop. */
     while (1) {
-	sel_select(ui_sel, NULL, 0, NULL, NULL);
+	sel_select(sel, NULL, 0, NULL, NULL);
     }
 }
 

@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@prefix@
+libdir=@libdir@
+includedir=@includedir@
+ 
+Name: OpenIPMIposix
+Description: POSIX unthreaded OS handler for OpenIPMI
+Version: @VERSION@
+Requires: OpenIPMIutils
+Libs: -L${libdir} -lOpenIPMIposix -lOpenIPMIutils
+Cflags: -I${includedir}

@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@prefix@
+libdir=@libdir@
+includedir=@includedir@
+ 
+Name: OpenIPMIutils
+Description: Utilities used by the OpenIPMI library.
+Version: @VERSION@
+Requires: 
+Libs: -L${libdir} -lOpenIPMIutils
+Cflags: -I${includedir}
