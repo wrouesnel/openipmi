@@ -1481,11 +1481,19 @@ handle_new_presence_bit_sensor(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
     ipmi_event_state_set_scanning_enabled(&events, 1);
 
     if (event_support == IPMI_EVENT_SUPPORT_PER_STATE) {
+	int val;
+	int rv;
 	/* Turn on the event enables. */
-	ipmi_discrete_event_set(&events, ent->presence_bit_offset,
-				IPMI_ASSERTION);
-	ipmi_discrete_event_set(&events, ent->presence_bit_offset,
-				IPMI_DEASSERTION);
+	rv = ipmi_sensor_discrete_assertion_event_supported
+	    (sensor, ent->presence_bit_offset, &val);
+	if (!rv && val)
+	    ipmi_discrete_event_set(&events, ent->presence_bit_offset,
+				    IPMI_ASSERTION);
+	rv = ipmi_sensor_discrete_deassertion_event_supported
+	    (sensor, ent->presence_bit_offset, &val);
+	if (!rv && val)
+	    ipmi_discrete_event_set(&events, ent->presence_bit_offset,
+				    IPMI_DEASSERTION);
     }
 
     ipmi_sensor_events_enable(sensor, &events, NULL, NULL);
@@ -1639,10 +1647,6 @@ is_presence_sensor(ipmi_sensor_t *sensor)
     int val, rv;
     int supports_present = 0;
     int supports_absent = 0;
-    int assert_present = 0;
-    int deassert_present = 0;
-    int assert_absent = 0;
-    int deassert_absent = 0;
 
     /* Is it the right type (a presence sensor)? */
     if (ipmi_sensor_get_sensor_type(sensor) != 0x25)
@@ -1666,26 +1670,7 @@ is_presence_sensor(ipmi_sensor_t *sensor)
     if ((!supports_present) && (!supports_absent))
 	return 0;
 
-    rv = ipmi_sensor_discrete_assertion_event_supported(sensor, 0, &val);
-    if ((!rv) && (val))
-	assert_present = 1;
-    rv = ipmi_sensor_discrete_assertion_event_supported(sensor, 1, &val);
-    if ((!rv) && (val))
-	deassert_present = 1;
-    rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, 0, &val);
-    if ((!rv) && (val))
-	assert_absent = 1;
-    rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, 1, &val);
-    if ((!rv) && (val))
-	deassert_absent = 1;
-
-    /* We have to have the right combination of assertion support to
-       use this as a presence sensor. */
-    return ((assert_present && deassert_present)
-	    || (assert_absent && deassert_absent)
-	    || (assert_absent && deassert_absent)
-	    || (assert_absent && assert_present)
-	    || (deassert_absent && deassert_present));
+    return 1;
 }
 
 static int
@@ -1711,14 +1696,6 @@ is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
 
     /* Check if the bit is available */
     rv = ipmi_discrete_event_readable(sensor, bit, &val);
-    if (rv || !val)
-	return 0;
-
-    /* Need assertion and deassertion event support. */
-    rv = ipmi_sensor_discrete_assertion_event_supported(sensor, bit, &val);
-    if (rv || !val)
-	return 0;
-    rv = ipmi_sensor_discrete_deassertion_event_supported(sensor, bit, &val);
     if (rv || !val)
 	return 0;
 

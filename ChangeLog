@@ -21,6 +21,8 @@
 	* lib/entity.c: Added a slot sensor as one that has a bit presence
 	detector.
 
+	* lib/entity.c: Don't require event support for a presence sensor.
+
 2004-03-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Always rescan FRU info on an entity presence change
