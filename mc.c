@@ -1380,7 +1380,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
        MC. */
     if (mc->sensors_in_my_sdr) {
 	for (i=0; i<mc->sensors_in_my_sdr_count; i++) {
-	    ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
+	    if (mc->sensors_in_my_sdr[i])
+		ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
 	}
 	ipmi_mem_free(mc->sensors_in_my_sdr);
     }
