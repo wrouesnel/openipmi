@@ -1594,6 +1594,7 @@ atca_find_mc_fru_info(atca_shelf_t *info, ipmi_entity_t *entity)
 		 ENTITY_NAME(entity), ipmb_addr);
 	return NULL;
     }
+
     rv = realloc_frus(minfo, 1);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -1641,13 +1642,14 @@ atca_sensor_update_handler(enum ipmi_update_e op,
 	if (finfo->hs_state != IPMI_HOT_SWAP_NOT_PRESENT) {
 	    int                       handled;
 	    enum ipmi_hot_swap_states old_state;
+	    ipmi_event_t              *event = NULL;
 
 	    old_state = finfo->hs_state;
 	    finfo->hs_state = IPMI_HOT_SWAP_NOT_PRESENT;
 	    ipmi_entity_call_hot_swap_handlers(entity,
 					       old_state,
 					       finfo->hs_state,
-					       NULL,
+					       &event,
 					       &handled);
 	}
 	break;
@@ -1838,11 +1840,29 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
 }
 
 static void
-atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
+			  atca_shelf_t *info)
 {
-    atca_ipmc_t *minfo = cb_data;
-    atca_fru_t  *finfo;
-    int         i;
+    atca_ipmc_t   *minfo = NULL;
+    atca_fru_t    *finfo;
+    int           i;
+    unsigned int  ipmb_addr;
+
+    ipmb_addr = ipmi_mc_get_address(mc);
+
+    for (i=0; i<info->num_ipmcs; i++) {
+	if (ipmb_addr == info->ipmcs[i].ipmb_address) {
+	    minfo = &(info->ipmcs[i]);
+	    break;
+	}
+    }
+    if (!minfo) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_handle_new_mc): "
+		 "Could not find IPMC info",
+		 MC_NAME(mc));
+	return;
+    }
 
     if (minfo->frus) {
 	for (i=0; i<minfo->num_frus; i++) {
@@ -1884,16 +1904,6 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
 
     minfo->mcid = ipmi_mc_convert_to_id(mc);
 
-    rv = ipmi_mc_add_oem_removed_handler(mc, atca_ipmc_removal_handler,
-					 minfo, NULL);
-    if (rv) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_handle_new_mc): "
-		 "Could not add OEM removal handler: 0x%x",
-		 MC_NAME(mc), rv);
-	goto out_err;
-    }
-
     /* Now fetch the properties. */
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
     msg.cmd = IPMI_PICMG_CMD_GET_PROPERTIES;
@@ -1908,9 +1918,6 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
 		 MC_NAME(mc), rv);
 	/* Just go on, don't shut down the info. */
     }
-
- out_err:
-    return;
 }
 
 static void
@@ -1922,6 +1929,10 @@ atca_mc_update_handler(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	atca_handle_new_mc(domain, mc, cb_data);
+	break;
+
+    case IPMI_DELETED:
+	atca_ipmc_removal_handler(domain, mc, cb_data);
 	break;
 
     default:

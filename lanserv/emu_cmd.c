@@ -5,9 +5,9 @@
 #include <stdlib.h>
 #include "emu.h"
 
-typedef void (*ipmi_emu_cmd_handler)(emu_data_t *emu,
-				     lmc_data_t *mc,
-				     char       **toks);
+typedef int (*ipmi_emu_cmd_handler)(emu_data_t *emu,
+				    lmc_data_t *mc,
+				    char       **toks);
 
 static int
 get_uchar(char **toks, unsigned char *val, char *errstr, int empty_ok)
@@ -93,10 +93,11 @@ get_uint(char **toks, unsigned int *val, char *errstr)
 }
 
 #define INPUT_BUFFER_SIZE 65536
-void
+int
 read_command_file(emu_data_t *emu, char *command_file)
 {
     FILE *f = fopen(command_file, "r");
+    int  rv;
 
     if (!f) {
 	fprintf(stderr, "Unable to open command file '%s'\n",
@@ -128,7 +129,9 @@ read_command_file(emu_data_t *emu, char *command_file)
 		continue;
 	    }
 	    
-	    ipmi_emu_cmd(emu, buffer);
+	    rv = ipmi_emu_cmd(emu, buffer);
+	    if (rv)
+		return rv;
 	    pos = 0;
 	}
  out:
@@ -136,9 +139,11 @@ read_command_file(emu_data_t *emu, char *command_file)
 	    free(buffer);
 	fclose(f);
     }
+
+    return 0;
 }
 
-static void
+static int
 sel_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -147,18 +152,19 @@ sel_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uint(toks, &max_records, "max records");
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &flags, "flags", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = ipmi_mc_enable_sel(mc, max_records, flags);
     if (rv)
 	printf("**Unable to enable sel, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 sel_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           i;
@@ -168,20 +174,21 @@ sel_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &record_type, "record type", 0);
     if (rv)
-	return;
+	return rv;
 
     for (i=0; i<13; i++) {
 	rv = get_uchar(toks, &data[i], "data byte", 0);
 	if (rv)
-	    return;
+	    return rv;
     }
 
     rv = ipmi_mc_add_to_sel(mc, record_type, data);
     if (rv)
 	printf("**Unable to add to sel, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 main_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           i;
@@ -194,16 +201,17 @@ main_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	    break;
 	if (rv) {
 	    printf("**Error 0x%x in data byte %d\n", rv, i);
-	    return;
+	    return rv;
 	}
     }
 
     rv = ipmi_mc_add_main_sdr(mc, data, i);
     if (rv)
 	printf("**Unable to add to sdr, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 device_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           i;
@@ -213,7 +221,7 @@ device_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &lun, "LUN", 0);
     if (rv)
-	return;
+	return rv;
 
     for (i=0; i<256; i++) {
 	rv = get_uchar(toks, &data[i], "data byte", 1);
@@ -221,16 +229,17 @@ device_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	    break;
 	if (rv) {
 	    printf("**Error 0x%x in data byte %d\n", rv, i);
-	    return;
+	    return rv;
 	}
     }
 
     rv = ipmi_mc_add_device_sdr(mc, lun, data, i);
     if (rv)
 	printf("**Unable to add to sdr, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 sensor_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -241,26 +250,27 @@ sensor_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &lun, "LUN", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &num, "sensor num", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &type, "sensor type", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &code, "event reading code", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = ipmi_mc_add_sensor(mc, lun, num, type, code);
     if (rv)
 	printf("**Unable to add to sensor, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 sensor_set_bit(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -272,30 +282,31 @@ sensor_set_bit(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &lun, "LUN", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &num, "sensor num", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &bit, "bit to set", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &value, "bit value", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &gen_event, "generate event", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = ipmi_mc_sensor_set_bit(mc, lun, num, bit, value, gen_event);
     if (rv)
 	printf("**Unable to set sensor bit, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 sensor_set_value(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -306,26 +317,27 @@ sensor_set_value(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &lun, "LUN", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &num, "sensor num", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &value, "value", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &gen_event, "generate event", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = ipmi_mc_sensor_set_value(mc, lun, num, value, gen_event);
     if (rv)
 	printf("**Unable to set sensor value, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 sensor_set_hysteresis(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -336,31 +348,32 @@ sensor_set_hysteresis(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &lun, "LUN", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &num, "sensor num", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &support, "hysteresis support", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &positive, "positive hysteresis", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &negative, "negative hysteresis", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = ipmi_mc_sensor_set_hysteresis(mc, lun, num, support, positive,
 				       negative);
     if (rv)
 	printf("**Unable to set sensor hysteresis, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 sensor_set_threshold(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -373,33 +386,34 @@ sensor_set_threshold(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &lun, "LUN", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &num, "sensor num", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &support, "threshold support", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_bitmask(toks, enabled, "threshold enabled", 6, 0);
     if (rv)
-	return;
+	return rv;
 
     for (i=5; i>=0; i--) {
 	rv = get_uchar(toks, &thresholds[i], "threshold value", 0);
 	if (rv)
-	    return;
+	    return rv;
     }
 
     rv = ipmi_mc_sensor_set_threshold(mc, lun, num, support,
 				      enabled, thresholds);
     if (rv)
 	printf("**Unable to set sensor thresholds, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 sensor_set_event_support(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -415,39 +429,39 @@ sensor_set_event_support(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &lun, "LUN", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &num, "sensor num", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &events_enable, "events enable", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &scanning, "scanning", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uchar(toks, &support, "event support", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_bitmask(toks, assert_support, "assert support", 15, 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_bitmask(toks, deassert_support, "deassert support", 15, 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_bitmask(toks, assert_enabled, "assert enabled", 15, 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_bitmask(toks, deassert_enabled, "deassert enabled", 15, 0);
     if (rv)
-	return;
+	return rv;
 
     rv = ipmi_mc_sensor_set_event_support(mc, lun, num,
 					  events_enable, scanning,
@@ -456,9 +470,10 @@ sensor_set_event_support(emu_data_t *emu, lmc_data_t *mc, char **toks)
 					  assert_enabled, deassert_enabled);
     if (rv)
 	printf("**Unable to set sensor thresholds, error 0x%x\n", rv);
+    return rv;
 }
 
-void
+static int
 mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     unsigned char ipmb;
@@ -475,25 +490,35 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char dyn_sens = 0;
     int           rv;
     
-    if (get_uchar(toks, &ipmb, "IPMB address", 0))
-	return;
-    if (get_uchar(toks, &device_id, "Device ID", 0))
-	return;
-    if (get_uchar(toks, &has_device_sdrs, "Has Device SDRs", 0))
-	return;
-    if (get_uchar(toks, &device_revision, "Device Revision", 0))
-	return;
-    if (get_uchar(toks, &major_fw_rev, "Major FW Rev", 0))
-	return;
-    if (get_uchar(toks, &minor_fw_rev, "Minor FW Rev", 0))
-	return;
-    if (get_uchar(toks, &device_support, "Device Support", 0))
-	return;
-    if (get_uint(toks, &mfg_id_i, "Manufacturer ID"))
-	return;
-    if (get_uint(toks, &product_id_i, "Product ID"))
-	return;
-    if (get_uchar(toks, &dyn_sens, "Dynamic Sensor Population", 1))
+    rv = get_uchar(toks, &ipmb, "IPMB address", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &device_id, "Device ID", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &has_device_sdrs, "Has Device SDRs", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &device_revision, "Device Revision", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &major_fw_rev, "Major FW Rev", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &minor_fw_rev, "Minor FW Rev", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &device_support, "Device Support", 0);
+    if (rv)
+	return rv;
+    rv = get_uint(toks, &mfg_id_i, "Manufacturer ID");
+    if (rv)
+	return rv;
+    rv = get_uint(toks, &product_id_i, "Product ID");
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &dyn_sens, "Dynamic Sensor Population", 1);
+    if (rv)
 	goto next;
  next:
     mfg_id[0] = mfg_id_i & 0xff;
@@ -506,28 +531,32 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 			 device_support, mfg_id, product_id, dyn_sens);
     if (rv)
 	printf("**Unable to add the MC, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 mc_set_power(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     unsigned char power;
     unsigned char gen_int;
     int           rv;
 
-    if (get_uchar(toks, &power, "Power", 0))
-	return;
+    rv = get_uchar(toks, &power, "Power", 0);
+    if (rv)
+	return rv;
 
-    if (get_uchar(toks, &gen_int, "Gen int", 0))
-	return;
+    rv = get_uchar(toks, &gen_int, "Gen int", 0);
+    if (rv)
+	return rv;
 
     rv = ipmi_mc_set_power(mc, power, gen_int);
     if (rv)
 	printf("**Unable to set power, error 0x%x\n", rv);
+    return rv;
 }
 
 #define MAX_FRU_SIZE 8192
-static void
+static int
 mc_add_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     unsigned char data[MAX_FRU_SIZE];
@@ -538,11 +567,11 @@ mc_add_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = get_uchar(toks, &devid, "Device ID", 0);
     if (rv)
-	return;
+	return rv;
 
     rv = get_uint(toks, &length, "FRU physical size");
     if (rv)
-	return;
+	return rv;
 
     for (i=0; i<MAX_FRU_SIZE; i++) {
 	rv = get_uchar(toks, &data[i], "data byte", 1);
@@ -550,29 +579,32 @@ mc_add_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	    break;
 	if (rv) {
 	    printf("**Error 0x%x in data byte %d\n", rv, i);
-	    return;
+	    return rv;
 	}
     }
 
     rv = ipmi_mc_add_fru_data(mc, devid, length, data, i);
     if (rv)
 	printf("**Unable to add FRU data, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 mc_setbmc(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     unsigned char ipmb;
+    int           rv;
 
-    if (get_uchar(toks, &ipmb, "IPMB address of BMC", 0))
-	return;
-    if (ipmi_emu_set_bmc_mc(emu, ipmb)) {
+    rv = get_uchar(toks, &ipmb, "IPMB address of BMC", 0);
+    if (rv)
+	return rv;
+    rv = ipmi_emu_set_bmc_mc(emu, ipmb);
+    if (rv)
 	printf("**Invalid IPMB address\n");
-	return;
-    }
+    return rv;
 }
 
-static void
+static int
 atca_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int rv;
@@ -580,9 +612,10 @@ atca_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
     rv = ipmi_emu_atca_enable(emu);
     if (rv)
 	printf("**Unable to enable ATCA mode, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 atca_set_site(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     int           rv;
@@ -590,35 +623,40 @@ atca_set_site(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned char site_type;
     unsigned char site_number;
     
-    if (get_uchar(toks, &hw_address, "hardware address", 0))
-	return;
-    if (get_uchar(toks, &site_type, "site type", 0))
-	return;
-    if (get_uchar(toks, &site_number, "site number", 0))
-	return;
+    rv = get_uchar(toks, &hw_address, "hardware address", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &site_type, "site type", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &site_number, "site number", 0);
+    if (rv)
+	return rv;
 
     rv = ipmi_emu_atca_set_site(emu, hw_address, site_type, site_number);
     if (rv)
 	printf("**Unable to set site type, error 0x%x\n", rv);
+    return rv;
 }
 
-static void
+static int
 read_cmds(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     char *filename = strtok_r(NULL, " \t\n", toks);
 
     if (!filename) {
 	printf("**No filename specified\n");
-	return;
+	return EINVAL;
     }
 
-    read_command_file(emu, filename);
+    return read_command_file(emu, filename);
 }
 
-static void
+static int
 quit(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     ipmi_emu_shutdown();
+    return 0;
 }
 
 #define MC	1
@@ -650,34 +688,37 @@ static struct {
     { NULL }
 };
 
-void
+int
 ipmi_emu_cmd(emu_data_t *emu, char *cmd_str)
 {
     char       *toks;
     char       *cmd;
     int        i;
-    int        rv;
+    int        rv = EINVAL;
     lmc_data_t *mc = NULL;
 
     cmd = strtok_r(cmd_str, " \t\n", &toks);
     if (!cmd)
-	return;
+	return 0;
     if (cmd[0] == '#')
-	return;
+	return 0;
 
     for (i=0; cmds[i].name; i++) {
 	if (strcmp(cmd, cmds[i].name) == 0) {
 	    if (cmds[i].flags & MC) {
 		unsigned char ipmb;
-		if (get_uchar(&toks, &ipmb, "MC address", 0))
-		    return;
+		rv = get_uchar(&toks, &ipmb, "MC address", 0);
+		if (rv)
+		    return rv;
 		rv = ipmi_emu_get_mc_by_addr(emu, ipmb, &mc);
 		if (rv) {
 		    printf("**Invalid MC address\n");
-		    return;
+		    return rv;
 		}
 	    }
-	    cmds[i].handler(emu, mc, &toks);
+	    rv = cmds[i].handler(emu, mc, &toks);
+	    if (rv)
+		return rv;
 	    goto out;
 	}
     }
@@ -685,5 +726,5 @@ ipmi_emu_cmd(emu_data_t *emu, char *cmd_str)
     printf("**Unknown command: %s\n", cmd);
 
  out:
-    return;
+    return rv;
 }

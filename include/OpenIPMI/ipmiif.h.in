@@ -1583,9 +1583,18 @@ int ipmi_control_get_num_light_settings(ipmi_control_t *control,
 /* Handling the settings variable for a settings type light.  Note
    that setting the on time to zero will turn off the LED (the off
    time should be positive) and setting the off time to zero will turn
-   on the LED (the on time should be positive). */
+   on the LED (the on time should be positive).
+
+   Local control is a state that some LED support where the target
+   system has control of the LED. */
 typedef struct ipmi_light_setting_s ipmi_light_setting_t;
 unsigned int ipmi_light_setting_get_count(ipmi_light_setting_t *setting);
+int ipmi_light_setting_in_local_control(ipmi_light_setting_t *setting,
+					int                  num,
+					int                  *lc);
+int ipmi_light_setting_set_local_control(ipmi_light_setting_t *setting,
+					 int                  num,
+					 int                  lc);
 int ipmi_light_setting_get_color(ipmi_light_setting_t *setting, int num,
 				 int *color);
 int ipmi_light_setting_set_color(ipmi_light_setting_t *setting, int num,

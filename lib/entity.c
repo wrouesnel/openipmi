@@ -142,6 +142,7 @@ struct ipmi_entity_s
     long             seq;
 
     int          destroyed;
+    int          cb_in_progress;
 
     /* My domain's os handler. */
     os_handler_t *os_hnd;
@@ -213,7 +214,7 @@ struct ipmi_entity_s
 
     ilist_t               *sensor_handlers;
     ipmi_entity_sensor_cb sensor_handler;
-    void                  *cb_data;
+    void                  *sensor_cb_data;
 
     ilist_t                *control_handlers;
     ipmi_entity_control_cb control_handler;
@@ -261,15 +262,7 @@ struct ipmi_entity_info_s
     ilist_t               *entities;
 };
 
-typedef struct fru_ent_info_s
-{
-    enum ipmi_update_e op;
-    ipmi_entity_t      *entity;
-    ipmi_fru_t         *fru;
-    int                err;
-} fru_ent_info_t;
-
-static void call_fru_handler(void *data, void *cb_data1, void *cb_data2);
+static void call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op);
 static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
 
 /***********************************************************************
@@ -379,8 +372,9 @@ entity_final_destroy(ipmi_entity_t *ent)
 	return;
     }
 
-    if (ent->frudev_present)
+    if (ent->frudev_present) {
 	ipmi_mc_remove_active_handler(ent->frudev_mc, entity_mc_active, ent);
+    }
 
     if (ent->oem_info_cleanup_handler)
 	ent->oem_info_cleanup_handler(ent, ent->oem_info);
@@ -480,6 +474,10 @@ cleanup_entity(ipmi_entity_t *ent)
 	|| (!ilist_empty(ent->sensors))
 	|| (!ilist_empty(ent->controls)))
 	return 0;
+
+    ent->destroyed = 1;
+    if (ent->cb_in_progress)
+	return 1;
 
     /* Tell the user I was destroyed. */
     /* Call the update handler list. */
@@ -1103,6 +1101,8 @@ presence_changed(ipmi_entity_t *ent,
     int                     handled = IPMI_EVENT_NOT_HANDLED;
     presence_handler_info_t info;
     ipmi_fru_t              *fru;
+    int                     old_destroyed;
+    ipmi_domain_t           *domain = ent->domain;
 
     if (present != ent->present) {
 	if (handled == IPMI_EVENT_HANDLED)
@@ -1124,21 +1124,16 @@ presence_changed(ipmi_entity_t *ent,
 	    if (present) {
 		ipmi_entity_fetch_frus(ent);
 	    } else if (ent->fru != NULL) {
-		fru_ent_info_t info;
-
 		fru = ent->fru;
 		ent->fru = NULL;
 		ipmi_fru_destroy(fru, NULL, NULL);
 
-		info.op = IPMI_DELETED;
-		info.entity = ent;
-		info.fru = NULL;
-		info.err = 0;
-		ilist_iter_twoitem(ent->fru_handlers, call_fru_handler, &info);
-		if (ent->fru_handler)
-		    ent->fru_handler(IPMI_DELETED, ent, ent->fru_cb_data);
+		call_fru_handlers(ent, IPMI_DELETED);
 	    }
 	}
+	
+	ent->cb_in_progress++;
+	old_destroyed = ent->destroyed;
 	if (ent->presence_handler) {
 	    ent->presence_handler(ent, present, ent->presence_cb_data, event);
 	    handled = IPMI_EVENT_HANDLED;
@@ -1155,10 +1150,14 @@ presence_changed(ipmi_entity_t *ent,
 	/* If our presence changes, that can affect parents, too.  So we
 	   rescan them. */
 	ipmi_entity_iterate_parents(ent, presence_parent_handler, NULL);
+
+	ent->cb_in_progress--;
+	if ((ent->destroyed) && (!old_destroyed))
+	    cleanup_entity(ent);
     }
 
     if (event && (handled == IPMI_EVENT_NOT_HANDLED))
-	ipmi_handle_unhandled_event(ent->domain, event);
+	ipmi_handle_unhandled_event(domain, event);
 }
 
 static void
@@ -1582,6 +1581,42 @@ ipmi_entity_remove_sensor_update_handler(ipmi_entity_t      *ent,
 	return EINVAL;
 }
 
+typedef struct sensor_handler_s
+{
+    enum ipmi_update_e op;
+    ipmi_sensor_t      *sensor;
+    ipmi_entity_t      *entity;
+} sensor_handler_t;
+
+static void
+call_sensor_handler(void *data, void *cb_data1, void *cb_data2)
+{
+    sensor_handler_t      *info = data;
+    ipmi_entity_sensor_cb handler = cb_data1;
+
+    handler(info->op, info->entity, info->sensor, cb_data2);
+}
+
+static void
+call_sensor_handlers(ipmi_entity_t *ent, ipmi_sensor_t *sensor, 
+		     enum ipmi_update_e op)
+{
+    sensor_handler_t info;
+    int              old_destroyed;
+
+    ent->cb_in_progress++;
+    old_destroyed = ent->destroyed;
+    if (ent->sensor_handler)
+	ent->sensor_handler(op, ent, sensor, ent->sensor_cb_data);
+    info.op = op;
+    info.entity = ent;
+    info.sensor = sensor;
+    ilist_iter_twoitem(ent->sensor_handlers, call_sensor_handler, &info);
+    ent->cb_in_progress--;
+    if ((ent->destroyed) && (!old_destroyed))
+	cleanup_entity(ent);
+}
+
 int
 ipmi_entity_add_control_update_handler(ipmi_entity_t      *ent,
 				       ipmi_entity_control_cb handler,
@@ -1604,6 +1639,41 @@ ipmi_entity_remove_control_update_handler(ipmi_entity_t      *ent,
 	return 0;
     else
 	return EINVAL;
+}
+
+typedef struct control_handler_s
+{
+    enum ipmi_update_e op;
+    ipmi_entity_t      *entity;
+    ipmi_control_t     *control;
+} control_handler_t;
+
+static void call_control_handler(void *data, void *cb_data1, void *cb_data2)
+{
+    control_handler_t      *info = data;
+    ipmi_entity_control_cb handler = cb_data1;
+
+    handler(info->op, info->entity, info->control, cb_data2);
+}
+
+static void
+call_control_handlers(ipmi_entity_t *ent, ipmi_control_t *control, 
+		     enum ipmi_update_e op)
+{
+    control_handler_t info;
+    int               old_destroyed;
+
+    ent->cb_in_progress++;
+    old_destroyed = ent->destroyed;
+    if (ent->control_handler)
+	ent->control_handler(op, ent, control, ent->control_cb_data);
+    info.op = op;
+    info.entity = ent;
+    info.control = control;
+    ilist_iter_twoitem(ent->control_handlers, call_control_handler, &info);
+    ent->cb_in_progress--;
+    if ((ent->destroyed) && (!old_destroyed))
+	cleanup_entity(ent);
 }
 
 static void handle_new_hot_swap_requester(ipmi_entity_t *ent,
@@ -1735,28 +1805,12 @@ is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
     return 1;
 }
 
-typedef struct sensor_update_s
-{
-    enum ipmi_update_e op;
-    ipmi_entity_t      *entity;
-    ipmi_sensor_t      *sensor;
-} sensor_update_t;
-
-static void call_sensor_handler(void *data, void *cb_data1, void *cb_data2)
-{
-    sensor_update_t       *info = data;
-    ipmi_entity_sensor_cb handler = cb_data1;
-
-    handler(info->op, info->entity, info->sensor, cb_data2);
-}
-
 void
 ipmi_entity_add_sensor(ipmi_entity_t *ent,
 		       ipmi_sensor_t *sensor,
 		       void          *ref)
 {
     ipmi_sensor_ref_t *link = (ipmi_sensor_ref_t *) ref;
-    sensor_update_t   info;
 
     CHECK_ENTITY_LOCK(ent);
 
@@ -1790,12 +1844,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
 	}
 	ilist_add_tail(ent->sensors, link, &(link->list_link));
 	
-	info.op = IPMI_ADDED;
-	info.entity = ent;
-	info.sensor = sensor;
-	ilist_iter_twoitem(ent->sensor_handlers, call_sensor_handler, &info);
-	if (ent->sensor_handler)
-	    ent->sensor_handler(IPMI_ADDED, ent, sensor, ent->cb_data);
+	call_sensor_handlers(ent, sensor, IPMI_ADDED);
     }
 }
 
@@ -1869,7 +1918,6 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 {
     ipmi_sensor_ref_t *ref;
     ilist_iter_t      iter;
-    sensor_update_t   uinfo;
     sens_cmp_info_t   info;
 
     CHECK_ENTITY_LOCK(ent);
@@ -1886,14 +1934,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	       user, since we are taking it over. */
 	    ilist_delete(&iter);
 
-	    uinfo.op = IPMI_DELETED;
-	    uinfo.entity = ent;
-	    uinfo.sensor = sensor;
-	    ilist_iter_twoitem(ent->sensor_handlers, call_sensor_handler,
-			       &uinfo);
-	    if (ent->sensor_handler)
-		ent->sensor_handler(IPMI_DELETED, ent, info.sensor,
-				    ent->cb_data);
+	    call_sensor_handlers(ent, sensor, IPMI_DELETED);
 
 	    ent->presence_sensor = info.sensor;
 	    handle_new_presence_sensor(ent, info.sensor);
@@ -1948,30 +1989,10 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	ilist_delete(&iter);
 	ipmi_mem_free(ref);
 
-	uinfo.op = IPMI_DELETED;
-	uinfo.entity = ent;
-	uinfo.sensor = sensor;
-	ilist_iter_twoitem(ent->sensor_handlers, call_sensor_handler, &uinfo);
-	if (ent->sensor_handler)
-	    ent->sensor_handler(IPMI_DELETED, ent, sensor, ent->cb_data);
+	call_sensor_handlers(ent, sensor, IPMI_DELETED);
     }
 
     cleanup_entity(ent);
-}
-
-typedef struct control_update_s
-{
-    enum ipmi_update_e op;
-    ipmi_entity_t      *entity;
-    ipmi_control_t     *control;
-} control_update_t;
-
-static void call_control_handler(void *data, void *cb_data1, void *cb_data2)
-{
-    control_update_t       *info = data;
-    ipmi_entity_control_cb handler = cb_data1;
-
-    handler(info->op, info->entity, info->control, cb_data2);
 }
 
 void
@@ -1980,7 +2001,6 @@ ipmi_entity_add_control(ipmi_entity_t  *ent,
 			void           *ref)
 {
     ipmi_control_ref_t *link = (ipmi_control_ref_t *) ref;
-    control_update_t   info;
 
     CHECK_ENTITY_LOCK(ent);
 
@@ -1995,12 +2015,7 @@ ipmi_entity_add_control(ipmi_entity_t  *ent,
     link->list_link.malloced = 0;
     ilist_add_tail(ent->controls, link, &(link->list_link));
 
-    info.op = IPMI_ADDED;
-    info.entity = ent;
-    info.control = control;
-    ilist_iter_twoitem(ent->control_handlers, call_control_handler, &info);
-    if (ent->control_handler)
-	ent->control_handler(IPMI_ADDED, ent, control, ent->cb_data);
+    call_control_handlers(ent, control, IPMI_ADDED);
 }
 
 static int control_cmp(void *item, void *cb_data)
@@ -2018,7 +2033,6 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     ipmi_control_ref_t *ref;
     ilist_iter_t       iter;
     ipmi_control_id_t  id;
-    control_update_t   info;
 
     CHECK_ENTITY_LOCK(ent);
 
@@ -2044,12 +2058,7 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     ilist_delete(&iter);
     ipmi_mem_free(ref);
 
-    info.op = IPMI_DELETED;
-    info.entity = ent;
-    info.control = control;
-    ilist_iter_twoitem(ent->control_handlers, call_control_handler, &info);
-    if (ent->control_handler)
-	ent->control_handler(IPMI_DELETED, ent, control, ent->cb_data);
+    call_control_handlers(ent, control, IPMI_DELETED);
 
     cleanup_entity(ent);
 }
@@ -2062,7 +2071,7 @@ ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
     CHECK_ENTITY_LOCK(ent);
 
     ent->sensor_handler = handler;
-    ent->cb_data = cb_data;
+    ent->sensor_cb_data = cb_data;
     return 0;
 }
 
@@ -4114,13 +4123,44 @@ ipmi_entity_set_update_handler(ipmi_entity_info_t    *ents,
     return 0;
 }
 
+typedef struct fru_handler_s
+{
+    enum ipmi_update_e op;
+    ipmi_entity_t      *entity;
+} fru_handler_t;
+
 static void call_fru_handler(void *data, void *cb_data1, void *cb_data2)
 {
-    fru_ent_info_t     *info = data;
+    fru_handler_t      *info = data;
     ipmi_entity_fru_cb handler = cb_data1;
 
     handler(info->op, info->entity, cb_data2);
 }
+
+static void
+call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op)
+{
+    fru_handler_t info;
+    int           old_destroyed;
+
+    ent->cb_in_progress++;
+    old_destroyed = ent->destroyed;
+    if (ent->fru_handler)
+	ent->fru_handler(op, ent, ent->fru_cb_data);
+    info.op = op;
+    info.entity = ent;
+    ilist_iter_twoitem(ent->fru_handlers, call_fru_handler, &info);
+    ent->cb_in_progress--;
+    if ((ent->destroyed) && (!old_destroyed))
+	cleanup_entity(ent);
+}
+
+typedef struct fru_ent_info_s
+{
+    ipmi_entity_t      *entity;
+    ipmi_fru_t         *fru;
+    int                err;
+} fru_ent_info_t;
 
 static void
 fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
@@ -4137,11 +4177,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	}
 	ent->fru = info->fru;
 
-	info->op = op;
-	info->entity = ent;
-	ilist_iter_twoitem(ent->fru_handlers, call_fru_handler, info);
-	if (ent->fru_handler)
-	    ent->fru_handler(op, ent, ent->fru_cb_data);
+	call_fru_handlers(ent, op);
     } else {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(fru_fetched_ent_cb):"
@@ -4479,7 +4515,7 @@ typedef struct hot_swap_handler_info_s
     ipmi_entity_t             *ent;
     enum ipmi_hot_swap_states last_state;
     enum ipmi_hot_swap_states curr_state;
-    ipmi_event_t              *event;
+    ipmi_event_t              **event;
     int                       handled;
 } hot_swap_handler_info_t;
 
@@ -4491,10 +4527,10 @@ call_hot_swap_handler(void *data, void *cb_data1, void *cb_data2)
     int                     handled;
 
     handled = handler(info->ent, info->last_state, info->curr_state,
-		      cb_data2, info->event);
+		      cb_data2, *(info->event));
     if (handled == IPMI_EVENT_HANDLED) {
 	info->handled = handled;
-	info->event = NULL;
+	*(info->event) = NULL;
     }
 }
 
@@ -4506,15 +4542,21 @@ ipmi_entity_call_hot_swap_handlers(ipmi_entity_t             *ent,
 				   int                       *handled)
 {
     hot_swap_handler_info_t info;
+    int                     old_destroyed;
 
     info.ent = ent;
     info.last_state = last_state;
     info.curr_state = curr_state;
-    info.event = *event;
+    info.event = event;
     info.handled = IPMI_EVENT_NOT_HANDLED;
+    ent->cb_in_progress++;
+    old_destroyed = ent->destroyed;
     ilist_iter_twoitem(ent->hot_swap_handlers, call_hot_swap_handler, &info);
     if (handled)
 	*handled = info.handled;
+    ent->cb_in_progress--;
+    if ((ent->destroyed) && (!old_destroyed))
+	cleanup_entity(ent);
 }
 
 int

@@ -77,6 +77,9 @@ struct ipmi_mc_s
     ipmi_addr_t   addr;
     int           addr_len;
 
+    /* Are we currently being cleaned up? */
+    int in_cleanup;
+
     /* True if the MC is a valid MC in the system, false if not.
        Primarily used to handle shutdown races, where the MC still
        exists in lists but has been shut down. */
@@ -380,6 +383,9 @@ check_mc_destroy(ipmi_mc_t *mc)
 {
     ipmi_domain_t *domain = mc->domain;
 
+    if (mc->in_cleanup)
+	return;
+
     if (!mc->active
 	&& (ipmi_controls_get_count(mc->controls) == 0)
 	&& (ipmi_sensors_get_count(mc->sensors) == 0)
@@ -424,6 +430,11 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     int           rv;
     ipmi_domain_t *domain = mc->domain;
     os_handler_t  *os_hnd = ipmi_domain_get_os_hnd(domain);
+
+    if (mc->in_cleanup)
+	return;
+
+    mc->in_cleanup = 1;
 
     /* Call the OEM handlers for removal, if it has been registered. */
     if (mc->removed_handlers) {
@@ -472,6 +483,8 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     }
 
     _ipmi_mc_set_active(mc, 0);
+
+    mc->in_cleanup = 0;
 
     check_mc_destroy(mc);
 }

@@ -33,6 +33,12 @@
 
 	* ui/ui.c: Added support for settings-based lights.
 
+	* lib/entity.c: A rework of the entity handling so that entities
+	cannot be destroyed while callback handlers are using them.
+
+	* lanserv/emu_cmd.c, lanserv/emu.h: Made command reading halt
+	on the first error.
+
 2004-03-31 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c: Added power control, fixed

@@ -126,7 +126,7 @@ int ipmi_emu_atca_set_site(emu_data_t    *emu,
 
 /* In emu_cmd.c */
 void ipmi_emu_shutdown(void);
-void ipmi_emu_cmd(emu_data_t *emu, char *cmd_str);
-void read_command_file(emu_data_t *emu, char *command_file);
+int ipmi_emu_cmd(emu_data_t *emu, char *cmd_str);
+int read_command_file(emu_data_t *emu, char *command_file);
 
 #endif /* __EMU_IPMI_ */
