@@ -182,7 +182,7 @@ void ipmi_control_light_set_lights(ipmi_control_t       *control,
 				   unsigned int         num_lights,
 				   ipmi_control_light_t *lights);
 
-void ipmi_control_set_num_relays(ipmi_control_t *control, unsigned int val);
+void ipmi_control_set_num_elements(ipmi_control_t *control, unsigned int val);
 
 int ipmi_control_get_num(ipmi_control_t *control,
 			 int            *lun,

@@ -662,7 +662,7 @@ ipmi_control_get_display_dimensions(ipmi_control_t *control,
 }
 
 void
-ipmi_control_set_num_relays(ipmi_control_t *control, unsigned int val)
+ipmi_control_set_num_elements(ipmi_control_t *control, unsigned int val)
 {
     control->num_vals = val;
 }
