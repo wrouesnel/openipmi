@@ -81,9 +81,13 @@ lanparm_info(ipmi_lanparm_t *lanparm, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     int             rv;
+    char            lanparm_name[IPMI_LANPARM_NAME_LEN];
+
+    ipmi_lanparm_get_name(lanparm, lanparm_name, sizeof(lanparm_name));
 
     ipmi_cmdlang_out(cmd_info, "LANPARM", NULL);
     ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", lanparm_name);
     rv = ipmi_mc_pointer_cb(ipmi_lanparm_get_mc_id(lanparm), get_mc_name,
 			    cmd_info);
     ipmi_cmdlang_out_int(cmd_info, "Channel",
@@ -311,6 +315,36 @@ out_int(ipmi_cmd_info_t *cmd_info, char *name,
 static lp_item_t lp_int = {set_int, out_int};
 
 void
+set_bool(ipmi_cmd_info_t *cmd_info, char *val,
+	 ipmi_lan_config_t *lanc, void *func)
+{
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int            (*f)(ipmi_lan_config_t *l, unsigned int v) = func;
+    int            v;
+
+    ipmi_cmdlang_get_bool(val, &v, cmd_info);
+    if (!cmdlang->err) {
+	cmdlang->err = f(lanc, v);
+	if (cmdlang->err) {
+	    cmdlang->errstr = "Error setting parameter";
+	}
+    }
+}
+void
+out_bool(ipmi_cmd_info_t *cmd_info, char *name,
+	 ipmi_lan_config_t *lanc, void *func)
+{
+    unsigned int   v;
+    int            rv;
+    int            (*f)(ipmi_lan_config_t *l, unsigned int *v) = func;
+    
+    rv = f(lanc, &v);
+    if (!rv)
+	ipmi_cmdlang_out_bool(cmd_info, name, v);
+}
+static lp_item_t lp_bool = {set_bool, out_bool};
+
+void
 set_ip(ipmi_cmd_info_t *cmd_info, char *val,
        ipmi_lan_config_t *lanc, void *func)
 {
@@ -443,8 +477,8 @@ static struct lps_s
     F(subnet_mask, ip),
     F(primary_rmcp_port, port),
     F(secondary_rmcp_port, port),
-    F(bmc_generated_arps, int),
-    F(bmc_generated_garps, int),
+    F(bmc_generated_arps, bool),
+    F(bmc_generated_garps, bool),
     F(garp_interval, int),
     F(default_gateway_ip_addr, ip),
     F(default_gateway_mac_addr, mac),
@@ -1046,8 +1080,7 @@ static ipmi_cmdlang_init_t cmds_lanparm[] =
       ipmi_cmdlang_domain_handler, lanparm_list,  NULL },
     { "new", &lanparm_cmds,
       "<mc> <channel>"
-      " - Set up the MC to send LANPARM traps from the given connection"
-      " to the given IP/MAC address over the given channel",
+      " - Create a lanparm for the given MC and channel.",
       ipmi_cmdlang_mc_handler, lanparm_new, NULL },
     { "info", &lanparm_cmds,
       "<lanparm> - Dump information about a lanparm",
@@ -1065,13 +1098,13 @@ static ipmi_cmdlang_init_t cmds_lanparm[] =
       "<lanparm> - Fetch the LAN information for the lanparm",
       ipmi_cmdlang_lanparm_handler, lanparm_config_get, NULL },
     { "set", &config_cmds,
-      "<lanparm> <config> - Set the LAN information for the lanparm",
+      "<lanparm> <lanparm config> - Set the LAN information for the lanparm",
       ipmi_cmdlang_lanparm_handler, lanparm_config_set, NULL },
     { "unlock", &config_cmds,
-      "<lanparm> <config> - Unlock, but do not set the config",
+      "<lanparm> <lanparm config> - Unlock, but do not set the config",
       ipmi_cmdlang_lanparm_handler, lanparm_config_unlock, NULL },
     { "close", &config_cmds,
-      "<config> - free the config",
+      "<lanparm config> - free the config",
       lanparm_config_close, NULL, NULL },
     { "unlock_mc", &lanparm_cmds,
       "<mc> <channel> - Unlock the lanparms for the given mc/channel",
