@@ -33,6 +33,8 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <netdb.h>
 
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ipmi_domain.h>
@@ -41,6 +43,10 @@
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_oem.h>
+#include <OpenIPMI/ipmi_auth.h>
+#include <OpenIPMI/ipmi_lan.h>
+#include <OpenIPMI/ipmi_smi.h>
+#include <OpenIPMI/mxp.h>
 
 static os_hnd_rwlock_t *global_lock;
 static os_handler_t *ipmi_os_handler;
@@ -1011,4 +1017,285 @@ ipmi_shutdown(void)
     if (seq_lock)
 	ipmi_os_handler->destroy_lock(ipmi_os_handler, seq_lock);
     global_lock = NULL;
+}
+
+char *
+ipmi_strdup(char *str)
+{
+    char *rv = ipmi_mem_alloc(strlen(str)+1);
+
+    if (!rv)
+	return NULL;
+
+    strcpy(rv, str);
+    return rv;
+}
+
+enum con_type_e { SMI, LAN, MXP };
+
+struct ipmi_args_s
+{
+    enum con_type_e con_type;
+
+    int             smi_intf;
+
+    char            *str_addr[2];
+    char            *str_port[2];
+    int             num_addr;
+    int             authtype;
+    int             privilege;
+    char            username[17];
+    char            password[17];
+
+    unsigned char   swid;
+    struct in_addr  lan_addr[2];
+    int             lan_port[2];
+};
+
+#define CHECK_ARG \
+    do { \
+        if (*curr_arg >= arg_count) { \
+	    rv = EINVAL; \
+	    goto out_err; \
+        } \
+    } while(0)
+
+int
+ipmi_parse_args(int *curr_arg, int arg_count, char *args[],
+		ipmi_args_t **iargs)
+{
+    ipmi_args_t *p;
+    int rv;
+    
+    p = ipmi_mem_alloc(sizeof(*p));
+    if (!p)
+	return ENOMEM;
+    memset(p, 0, sizeof(*p));
+
+    CHECK_ARG;
+
+    if (strcmp(args[*curr_arg], "smi") == 0) {
+	(*curr_arg)++; CHECK_ARG;
+
+	p->con_type = SMI;
+
+	p->smi_intf = atoi(args[*curr_arg]);
+	(*curr_arg)++;
+    } else if (strcmp(args[*curr_arg], "lan") == 0) {
+	(*curr_arg)++; CHECK_ARG;
+
+	p->con_type = LAN;
+	p->num_addr = 1;
+
+	p->str_addr[0] = ipmi_strdup(args[*curr_arg]);
+	if (p->str_addr[0] == NULL) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+	(*curr_arg)++; CHECK_ARG;
+	p->str_port[0] = ipmi_strdup(args[*curr_arg]);
+	if (p->str_port[0] == NULL) {
+	    rv = ENOMEM;
+	    goto out_err;
+	}
+	(*curr_arg)++; CHECK_ARG;
+
+    doauth:
+	if (strcmp(args[*curr_arg], "none") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_NONE;
+	} else if (strcmp(args[*curr_arg], "md2") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_MD2;
+	} else if (strcmp(args[*curr_arg], "md5") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_MD5;
+	} else if (strcmp(args[*curr_arg], "straight") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_STRAIGHT;
+	} else if (p->num_addr == 1) {
+	    p->num_addr++;
+	    p->str_addr[1] = ipmi_strdup(args[*curr_arg]);
+	    if (p->str_addr[1] == NULL) {
+		rv = ENOMEM;
+		goto out_err;
+	    }
+	    (*curr_arg)++; CHECK_ARG;
+	    p->str_port[1] = ipmi_strdup(args[*curr_arg]);
+	    if (p->str_port[1] == NULL) {
+		rv = ENOMEM;
+		goto out_err;
+	    }
+	    (*curr_arg)++; CHECK_ARG;
+	    goto doauth;
+	} else {
+	    rv = EINVAL;
+	    goto out_err;
+	}
+	(*curr_arg)++; CHECK_ARG;
+
+	if (strcmp(args[*curr_arg], "callback") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_CALLBACK;
+	} else if (strcmp(args[*curr_arg], "user") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_USER;
+	} else if (strcmp(args[*curr_arg], "operator") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_OPERATOR;
+	} else if (strcmp(args[*curr_arg], "admin") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_ADMIN;
+	} else if (strcmp(args[*curr_arg], "oem") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_OEM;
+	} else {
+	    rv = EINVAL;
+	    goto out_err;
+	}
+	(*curr_arg)++; CHECK_ARG;
+
+	memset(p->username, 0, sizeof(p->username));
+	memset(p->password, 0, sizeof(p->password));
+	strncpy(p->username, args[*curr_arg], 16);
+	p->username[16] = '\0';
+	(*curr_arg)++; CHECK_ARG;
+	strncpy(p->password, args[*curr_arg], 16);
+	p->password[16] = '\0';
+	(*curr_arg)++;
+    } else if (strcmp(args[*curr_arg], "mxp") == 0) {
+	struct hostent *ent;
+
+	(*curr_arg)++; CHECK_ARG;
+
+	p->con_type = MXP;
+	p->num_addr = 1;
+
+	ent = gethostbyname(args[*curr_arg]);
+	if (!ent) {
+	    rv = h_errno;
+	    goto out_err;
+	}
+	memcpy(&p->lan_addr[0],
+	       ent->h_addr_list[0],
+	       ent->h_length);
+	(*curr_arg)++; CHECK_ARG;
+	p->lan_port[0] = atoi(args[*curr_arg]);
+	(*curr_arg)++; CHECK_ARG;
+
+    doauth_mxp:
+	if (strcmp(args[*curr_arg], "none") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_NONE;
+	} else if (strcmp(args[*curr_arg], "md2") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_MD2;
+	} else if (strcmp(args[*curr_arg], "md5") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_MD5;
+	} else if (strcmp(args[*curr_arg], "straight") == 0) {
+	    p->authtype = IPMI_AUTHTYPE_STRAIGHT;
+	} else if (p->num_addr == 1) {
+	    p->num_addr++;
+	    ent = gethostbyname(args[*curr_arg]);
+	    if (!ent) {
+		rv = h_errno;
+		goto out_err;
+	    }
+	    memcpy(&p->lan_addr[1],
+		   ent->h_addr_list[0],
+		   ent->h_length);
+	    (*curr_arg)++; CHECK_ARG;
+	    p->lan_port[1] = atoi(args[*curr_arg]);
+	    (*curr_arg)++; CHECK_ARG;
+
+	    goto doauth_mxp;
+	} else {
+	    rv = EINVAL;
+	    goto out_err;
+	}
+	(*curr_arg)++; CHECK_ARG;
+
+	if (strcmp(args[*curr_arg], "callback") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_CALLBACK;
+	} else if (strcmp(args[*curr_arg], "user") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_USER;
+	} else if (strcmp(args[*curr_arg], "operator") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_OPERATOR;
+	} else if (strcmp(args[*curr_arg], "admin") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_ADMIN;
+	} else if (strcmp(args[*curr_arg], "oem") == 0) {
+	    p->privilege = IPMI_PRIVILEGE_OEM;
+	} else {
+	    rv = EINVAL;
+	    goto out_err;
+	}
+	(*curr_arg)++; CHECK_ARG;
+
+	memset(p->username, 0, sizeof(p->username));
+	memset(p->password, 0, sizeof(p->password));
+	strncpy(p->username, args[*curr_arg], 16);
+	p->username[16] = '\0';
+	(*curr_arg)++; CHECK_ARG;
+	strncpy(p->password, args[*curr_arg], 16);
+	p->password[16] = '\0';
+	(*curr_arg)++; CHECK_ARG;
+
+	p->swid = strtoul(args[*curr_arg], NULL, 0);
+	(*curr_arg)++;
+    } else {
+	rv = EINVAL;
+	goto out_err;
+    }
+
+    *iargs = p;
+    return 0;
+
+ out_err:
+    ipmi_free_args(p);
+    return rv;
+}
+
+void
+ipmi_free_args(ipmi_args_t *args)
+{
+    if (args->str_addr[0])
+	ipmi_mem_free(args->str_addr[0]);
+    if (args->str_addr[1])
+	ipmi_mem_free(args->str_addr[1]);
+    if (args->str_port[0])
+	ipmi_mem_free(args->str_port[0]);
+    if (args->str_port[1])
+	ipmi_mem_free(args->str_port[1]);
+    ipmi_mem_free(args);
+}
+
+int
+ipmi_args_setup_con(ipmi_args_t  *args,
+		    os_handler_t *handlers,
+		    void         *user_data,
+		    ipmi_con_t   **con)
+{
+    switch(args->con_type) {
+    case SMI:
+	return ipmi_smi_setup_con(args->smi_intf, handlers, user_data, con);
+
+    case LAN:
+	return ipmi_ip_setup_con(args->str_addr,
+				 args->str_port,
+				 args->num_addr,
+				 args->authtype,
+				 args->privilege,
+				 args->username,
+				 strlen(args->username),
+				 args->password,
+				 strlen(args->password),
+				 handlers, user_data,
+				 con);
+
+    case MXP:
+	return mxp_lan_setup_con(args->lan_addr,
+				 args->lan_port,
+				 args->num_addr,
+				 args->authtype,
+				 args->privilege,
+				 args->username,
+				 strlen(args->username),
+				 args->password,
+				 strlen(args->password),
+				 handlers, user_data,
+				 args->swid,
+				 con);
+
+    default:
+	return EINVAL;
+    }
 }

@@ -61,24 +61,6 @@
 extern os_handler_t ipmi_ui_cb_handlers;
 selector_t *ui_sel;
 
-/* This is connection information.  This is for flexibility in dealing
-   with the different types of conenction and parameters.  In
-   particular, LAN connections are very complex.  If you only need SMI
-   connections, things are much simpler. */
-enum con_type_e { SMI, LAN };
-static enum con_type_e con_type;
-
-/* SMI parms. */
-static int smi_intf;
-
-/* LAN parms. */
-static char *lan_addr[1];
-static char *lan_port[1];
-static int  authtype = 0;
-static int  privilege = 0;
-static char username[17];
-static char password[17];
-
 static char *progname;
 
 static void
@@ -390,9 +372,10 @@ setup_done(ipmi_domain_t *domain,
 int
 main(int argc, char *argv[])
 {
-    int        rv;
-    int        curr_arg = 1;
-    ipmi_con_t *con;
+    int         rv;
+    int         curr_arg = 1;
+    ipmi_args_t *args;
+    ipmi_con_t  *con;
 
     progname = argv[0];
 
@@ -420,110 +403,20 @@ main(int argc, char *argv[])
 #endif
 
 #if 1
-    /* The following code does complex argument parsing to allow LAN
-       and SMI connections, and to allow specifying passwords,
-       etc. for LAN connections. */
-    while ((argc > 1) && (argv[curr_arg][0] == '-')) {
-	char *arg = argv[curr_arg];
-	curr_arg++;
-	argc--;
-	if (strcmp(arg, "--") == 0) {
-	    break;
-	} else if (strcmp(arg, "-dmem") == 0) {
-	    DEBUG_MALLOC_ENABLE();
-	} else if (strcmp(arg, "-dmsg") == 0) {
-	    DEBUG_MSG_ENABLE();
-	} else {
-	    fprintf(stderr, "Unknown option: %s\n", arg);
-	    usage();
-	    return 1;
-	}
-    }
-
-    if (argc < 2) {
-	fprintf(stderr, "Not enough arguments\n");
+    rv = ipmi_parse_args(&curr_arg, argc, argv, &args);
+    if (rv) {
+	fprintf(stderr, "Error parsing command arguments, argument %d: %s\n",
+		curr_arg, strerror(rv));
 	usage();
 	exit(1);
     }
 
-    if (strcmp(argv[curr_arg], "smi") == 0) {
-	con_type = SMI;
-
-	if (argc < 3) {
-	    fprintf(stderr, "Not enough arguments\n");
-	    usage();
-	    exit(1);
-	}
-
-	smi_intf = atoi(argv[curr_arg+1]);
-	rv = ipmi_smi_setup_con(smi_intf,
-				&ipmi_ui_cb_handlers, ui_sel,
-				&con);
-	if (rv) {
-	    fprintf(stderr, "ipmi_smi_setup_con: %s\n", strerror(rv));
-	    exit(1);
-	}
-
-    } else if (strcmp(argv[curr_arg], "lan") == 0) {
-	con_type = LAN;
-
-	if (argc < 6) {
-	    fprintf(stderr, "Not enough arguments\n");
-	    usage();
-	    exit(1);
-	}
-
-	lan_addr[0] = argv[curr_arg+1];
-	lan_port[0] = argv[curr_arg+2];
-
-	if (strcmp(argv[curr_arg+3], "none") == 0) {
-	    authtype = IPMI_AUTHTYPE_NONE;
-	} else if (strcmp(argv[curr_arg+3], "md2") == 0) {
-	    authtype = IPMI_AUTHTYPE_MD2;
-	} else if (strcmp(argv[curr_arg+3], "md5") == 0) {
-	    authtype = IPMI_AUTHTYPE_MD5;
-	} else if (strcmp(argv[curr_arg+3], "straight") == 0) {
-	    authtype = IPMI_AUTHTYPE_STRAIGHT;
-	} else {
-	    fprintf(stderr, "Invalid authtype: %s\n", argv[curr_arg+3]);
-	    usage();
-	    exit(1);
-	}
-
-	if (strcmp(argv[curr_arg+4], "callback") == 0) {
-	    privilege = IPMI_PRIVILEGE_CALLBACK;
-	} else if (strcmp(argv[curr_arg+4], "user") == 0) {
-	    privilege = IPMI_PRIVILEGE_USER;
-	} else if (strcmp(argv[curr_arg+4], "operator") == 0) {
-	    privilege = IPMI_PRIVILEGE_OPERATOR;
-	} else if (strcmp(argv[curr_arg+4], "admin") == 0) {
-	    privilege = IPMI_PRIVILEGE_ADMIN;
-	} else {
-	    fprintf(stderr, "Invalid privilege: %s\n", argv[curr_arg+4]);
-	    usage();
-	    exit(1);
-	}
-
-	memset(username, 0, sizeof(username));
-	memset(password, 0, sizeof(password));
-	strncpy(username, argv[curr_arg+5], 16);
-	username[16] = '\0';
-	strncpy(password, argv[curr_arg+6], 16);
-	password[16] = '\0';
-
-	rv = ipmi_ip_setup_con(lan_addr, lan_port, 1,
-			       authtype, privilege,
-			       username, strlen(username),
-			       password, strlen(password),
-			       &ipmi_ui_cb_handlers, ui_sel,
-			       &con);
-	if (rv) {
-	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
-	    exit(1);
-	}
-    } else {
-	fprintf(stderr, "Invalid mode\n");
-	usage();
+    rv = ipmi_args_setup_con(args,
+			     &ipmi_ui_cb_handlers,
+			     ui_sel,
+			     &con);
+    if (rv) {
+        fprintf(stderr, "ipmi_ip_setup_con: %s", strerror(rv));
 	exit(1);
     }
 #endif

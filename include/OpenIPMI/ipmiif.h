@@ -1209,4 +1209,30 @@ int ipmi_close_connection(ipmi_domain_t *domain,
 			  close_done_t  close_done,
 			  void          *cb_data);
 
+/* The following is a convenience function for parsing IPMI arguments
+   in some standard manner. */
+
+/* This type holds the arguments for a standard IPMI connection. */
+typedef struct ipmi_args_s ipmi_args_t;
+
+/* Parse the arguments.  curr_arg should be passed in as the current
+   argument, it will be set to one after the last argument parsed.
+   arg_count should be the total number of arguments.  args is the
+   arguments (in argv style), and the data is returned in the iargs
+   value.  Note that on an error, a non-zero value is returned and
+   curr_arg will be set to the argument that had the error.  You must
+   use ipmi_free_args() to free the value returned in iargs. */
+int ipmi_parse_args(int *curr_arg, int arg_count, char *args[],
+		    ipmi_args_t **iargs);
+
+/* Free an argument structure. */
+void ipmi_free_args(ipmi_args_t *args);
+
+/* Set up a connection from an argument structure. */
+int ipmi_args_setup_con(ipmi_args_t  *args,
+			os_handler_t *handlers,
+			void         *user_data,
+			ipmi_con_t   **con);
+
+
 #endif /* __IPMIIF_H */

@@ -129,17 +129,14 @@ channels the BMC supports.  For 1.5 and later, it gets this from a
 command.  For 1.0, it gets it from the main SDR repository.
 
 Once you are connected, you should scan the SDRs in the main SDR
-repository for any entities.  I would not expect there to be any sensors
-there, though, because it doesn't make sense to put sensors there.
-There may be some though.  This is the place where entities and entity
-relationships are documented.
+repository for any entities and sensors.  Sensors and entities may
+also be in the device SDR repository, which should be scanned next.
+This allows the user to discover the sensors in the system.  Note that
+the sensors may point to entities that don't have a entry in the SDR
+that defines them, those entities need to be handled when they are
+detected.
 
-Sensors should be in the device SDR repository, which should be scanned
-next.  This allows the user to discover the sensors in the system.  Note
-that the sensors may point to entities that don't exist, those entities
-need to be handled when they are detected.
-
-After this point in time, the interface could be deemed to be up.
+After this point in time, the interface could be deemed to be ``up''.
 However, there's still more to do.
 
 If the interface supports an event queue, the user will have to poll it
@@ -160,17 +157,18 @@ really care about.  It lets you get right at the sensors and entities.
 @node    The User View, , How IPMI Works, Intro to IPMI
 @section The User View
 
-A bunch of acronyms have just been introduced, along with a lot of vague
-concepts, and some description about how to use IPMI.  The nice thing is
-that the user of OpenIPMI doesn't really have to know about all these
-things.  From the user's point of view, the entity provides the central
-framework for everything else.  Sensors monitor entities.  Entities may
-be present or absent.  When you connect to an interface, OpenIPMI takes
-care of detecting the entities in the system and reporting them to you.
-You may register to be told when entities are added or removed from the
-database.  Note that an entity may be present in the database, but not
-present in the system, the reporting from only gives the presence in the
-database, not physical presence in the system.
+A bunch of acronyms have just been introduced, along with a lot of
+vague concepts, and some description about how to use IPMI.  The nice
+thing is that the user of OpenIPMI doesn't really have to know about
+all these things.  From the user's point of view, the entity provides
+the central framework for everything sensors and controls.  Sensors
+monitor entities.  Entities may be present or absent.  When you
+connect to an interface, OpenIPMI takes care of detecting the entities
+in the system and reporting them to you.  You may register to be told
+when entities are added or removed from the database.  Note that an
+entity may be present in the database, but not present in the system,
+the reporting from only gives the presence in the database, not
+physical presence in the system.
 
 The user must know about two other OpenIPMI concepts: connections and
 domains.  A connection provides the interface to the IPMI system.  In
@@ -404,7 +402,7 @@ These are condition variables like the ones specified in POSIX threads.
 Although OpenIPMI does not use condition variables (since it never waits
 for anything) it may be convenient for other things to have them.
 OpenIPMI does not use them, and if nothing in your system needs them,
-they need not be provides.
+they need not be provided.
 
 @item Random Data
 For certain operations, OpenIPMI needs random data.
@@ -756,12 +754,13 @@ LAN connections have a lot more parameters due to authentication
 requirements.  The parameters are:
 @table @samp
 @item  ip_addrs
-The IP addresses of the remote BMC.  You may list
+The IP name or addresses of the remote BMC.  You may list
 multiple IP addresses in an array, each address @strong{must} be to the
-same BMC.
+same BMC.  This is a string parameter that will be converted.
 @item ports
-The UDP ports to use, one for each address.  It should
-generally be IPMI_LAN_STD_PORT.
+The UDP ports to use, one for each address.  It should generally be
+IPMI_LAN_STD_PORT, 623.  This is a string parameter and may also be a
+service name.
 @item num_ip_addrs
 The number of ip addresses (and ports) in the ip_addrs and ports arrays.
 @item authtype
@@ -788,12 +787,12 @@ The new connection is returned here.
 
 For example, you may have the following code to set up a single address:
 @example
-        rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
-                                IPMI_AUTHTYPE_MD5, IPMI_PRIVILEGE_ADMIN,
-                                username, strlen(username),
-                                password, strlen(password),
-                                &sample_cb_handlers, my_data,
-                                &con);
+        rv = ipmi_ip_setup_con(lan_addr, lan_port, 1,
+                               IPMI_AUTHTYPE_MD5, IPMI_PRIVILEGE_ADMIN,
+                               username, strlen(username),
+                               password, strlen(password),
+                               &sample_cb_handlers, my_data,
+                               &con);
         if (rv) @{
             fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
             exit(1);

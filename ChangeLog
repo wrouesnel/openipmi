@@ -1,3 +1,12 @@
+2003-11-17 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmiif.h, lib/ipmi.h: Added parameter parsing
+	code for parsing the various types of connections from argv-type
+	strings (really taken from ui/basic_ui.c).
+
+	* ui/basic_ui.c, sample/sample.c, sample/ipmicmd.c: Converted over
+	to use the new parameter parsing code.
+
 2003-11-21  Louis Zhuang  <louis.zhuang@linux.intel.com>
 
 	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Add function
