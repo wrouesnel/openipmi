@@ -1,0 +1,177 @@
+/* The following structures get boadloads of information from the FRU.
+   These all will return ENOSYS if the information is not available.
+   All these function return error, not lengths.
+
+   The string return functions allow you to fetch the type and length.
+   The length returns for ASCII strings does *not* include the nil
+   character, but for ASCII strings it will be put on to the end.
+   Also, when fetching the string, you must set the max_len variable
+   to the maximum length of the returned data.  The actual length
+   copied into the output string is returned in max_len. */
+int ipmi_entity_get_internal_use_version(ipmi_entity_t *entity,
+					 unsigned char *version);
+int ipmi_entity_get_internal_use_length(ipmi_entity_t *entity,
+					unsigned int  *length);
+int  ipmi_entity_get_internal_use_data(ipmi_entity_t *entity,
+				       unsigned char *data,
+				       unsigned int  *max_len);
+
+int ipmi_entity_get_chassis_info_version(ipmi_entity_t *entity,
+					 unsigned char *version);
+int  ipmi_entity_get_chassis_info_type(ipmi_entity_t *entity,
+				       unsigned char *type);
+
+int ipmi_entity_get_chassis_info_part_number_len(ipmi_entity_t *entity,
+						 unsigned int  *length);
+int ipmi_entity_get_chassis_info_part_number_type(ipmi_entity_t        *entity,
+						  enum ipmi_str_type_e *type);
+int ipmi_entity_get_chassis_info_part_number(ipmi_entity_t *entity,
+					     char          *str,
+					     unsigned int  *strlen);
+int ipmi_entity_get_chassis_info_serial_number_len(ipmi_entity_t *entity,
+						   unsigned int  *length);
+int ipmi_entity_get_chassis_info_serial_number_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_chassis_info_serial_number(ipmi_entity_t *entity,
+					       char          *str,
+					       unsigned int  *strlen);
+int ipmi_entity_get_chassis_info_custom_len(ipmi_entity_t *entity,
+					    unsigned int  num,
+					    unsigned int  *length);
+int ipmi_entity_get_chassis_info_custom_type(ipmi_entity_t        *entity,
+					     unsigned int         num,
+					     enum ipmi_str_type_e *type);
+int ipmi_entity_get_chassis_info_custom(ipmi_entity_t *entity,
+					unsigned int  num,
+					char          *str,
+					unsigned int  *strlen);
+
+int ipmi_entity_get_board_info_version(ipmi_entity_t *entity,
+				       unsigned char *version);
+int ipmi_entity_get_board_info_lang_code(ipmi_entity_t *entity,
+					 unsigned char *type);
+int ipmi_entity_get_board_info_mfg_time(ipmi_entity_t *fru,
+					time_t        *time);
+int ipmi_entity_get_board_info_board_manufacturer_len(ipmi_entity_t *entity,
+						      unsigned int  *length);
+int ipmi_entity_get_board_info_board_manufacturer_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_board_info_board_manufacturer(ipmi_entity_t *entity,
+						  char          *str,
+						  unsigned int  *strlen);
+int ipmi_entity_get_board_info_board_product_name_len(ipmi_entity_t *entity,
+						      unsigned int  *length);
+int ipmi_entity_get_board_info_board_product_name_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_board_info_board_product_name(ipmi_entity_t *entity,
+						  char          *str,
+						  unsigned int  *strlen);
+int ipmi_entity_get_board_info_board_serial_number_len(ipmi_entity_t *entity,
+						       unsigned int  *length);
+int ipmi_entity_get_board_info_board_serial_number_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_board_info_board_serial_number(ipmi_entity_t *entity,
+						   char          *str,
+						   unsigned int  *strlen);
+int ipmi_entity_get_board_info_board_part_number_len(ipmi_entity_t   *entity,
+						  unsigned int *length);
+int ipmi_entity_get_board_info_board_part_number_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_board_info_board_part_number(ipmi_entity_t *entity,
+						 char          *str,
+						 unsigned int  *strlen);
+int ipmi_entity_get_board_info_fru_file_id_len(ipmi_entity_t *entity,
+					       unsigned int  *length);
+int ipmi_entity_get_board_info_fru_file_id_type(ipmi_entity_t        *entity,
+						enum ipmi_str_type_e *type);
+int ipmi_entity_get_board_info_fru_file_id(ipmi_entity_t *entity,
+					   char          *str,
+					   unsigned int  *strlen);
+int ipmi_entity_get_board_info_custom_len(ipmi_entity_t *entity,
+					  unsigned int  num,
+					  unsigned int  *length);
+int ipmi_entity_get_board_info_custom_type(ipmi_entity_t        *entity,
+					   unsigned int         num,
+					   enum ipmi_str_type_e *type);
+int ipmi_entity_get_board_info_custom(ipmi_entity_t *entity,
+				      unsigned int  num,
+				      char          *str,
+				      unsigned int  *strlen);
+
+int ipmi_entity_get_product_info_version(ipmi_entity_t *entity,
+					 unsigned char *version);
+int ipmi_entity_get_product_info_lang_code(ipmi_entity_t *entity,
+					   unsigned char *type);
+int ipmi_entity_get_product_info_manufacturer_name_len(ipmi_entity_t *entity,
+						       unsigned int  *length);
+int ipmi_entity_get_product_info_manufacturer_name_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_product_info_manufacturer_name(ipmi_entity_t *entity,
+						   char          *str,
+						   unsigned int  *strlen);
+int ipmi_entity_get_product_info_product_name_len(ipmi_entity_t *entity,
+						  unsigned int  *length);
+int ipmi_entity_get_product_info_product_name_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_product_info_product_name(ipmi_entity_t *entity,
+					      char          *str,
+					      unsigned int  *strlen);
+int ipmi_entity_get_product_info_product_part_model_number_len
+  (ipmi_entity_t *entity,
+   unsigned int  *length);
+int ipmi_entity_get_product_info_product_part_model_number_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_product_info_product_part_model_number
+  (ipmi_entity_t *entity,
+   char          *str,
+   unsigned int  *strlen);
+int ipmi_entity_get_product_info_product_version_len(ipmi_entity_t *entity,
+						     unsigned int  *length);
+int ipmi_entity_get_product_info_product_version_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_product_info_product_version(ipmi_entity_t *entity,
+						 char          *str,
+						 unsigned int  *strlen);
+int ipmi_entity_get_product_info_product_serial_number_len
+  (ipmi_entity_t *entity,
+   unsigned int  *length);
+int ipmi_entity_get_product_info_product_serial_number_type
+  (ipmi_entity_t        *entity,
+   enum ipmi_str_type_e *type);
+int ipmi_entity_get_product_info_product_serial_number(ipmi_entity_t *entity,
+						       char          *str,
+						       unsigned int  *strlen);
+int ipmi_entity_get_product_info_asset_tag_len(ipmi_entity_t *entity,
+					       unsigned int  *length);
+int ipmi_entity_get_product_info_asset_tag_type(ipmi_entity_t        *entity,
+						enum ipmi_str_type_e *type);
+int ipmi_entity_get_product_info_asset_tag(ipmi_entity_t *entity,
+					   char          *str,
+					   unsigned int  *strlen);
+int ipmi_entity_get_product_info_fru_file_id_len(ipmi_entity_t *entity,
+						 unsigned int  *length);
+int ipmi_entity_get_product_info_fru_file_id_type(ipmi_entity_t        *entity,
+						  enum ipmi_str_type_e *type);
+int ipmi_entity_get_product_info_fru_file_id(ipmi_entity_t *entity,
+					     char          *str,
+					     unsigned int  *strlen);
+int ipmi_entity_get_product_info_custom_len(ipmi_entity_t *entity,
+					    unsigned int  num,
+					    unsigned int  *length);
+int ipmi_entity_get_product_info_custom_type(ipmi_entity_t        *entity,
+					     unsigned int         num,
+					     enum ipmi_str_type_e *type);
+int ipmi_entity_get_product_info_custom(ipmi_entity_t *entity,
+					unsigned int  num,
+					char          *str,
+					unsigned int  *strlen);
+

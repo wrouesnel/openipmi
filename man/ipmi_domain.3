@@ -1,0 +1,72 @@
+.TH ipmi_domain 3
+
+.SH NAME
+ipmi_domain \- OpenIPMI operations on domains
+
+.SH SYNOPSIS
+.LP
+These routines operate on OpenIPMI domains.
+.LP
+.BI "int ipmi_init_domain(ipmi_con_t" " *con[]",
+.BI "unsigned int" " num_con",
+.BI "ipmi_domain_con_cb" " con_change_handler",
+.BI "void" " *con_change_cb_data",
+.BI "ipmi_domain_con_change_t" " **con_change_id",
+.BI "ipmi_domain_id_t" " *new_domain");
+.LP
+typedef void (*close_done_t)(void *cb_data);
+.RS 0
+.BI "int ipmi_close_connection(ipmi_domain_t" " *domain",
+.BI "close_done_t" " close_done",
+.BI "void"         " *cb_data");
+.LP
+.BI "ipmi_domain_id_t ipmi_domain_convert_to_id(ipmi_domain_t" "*domain");
+.LP
+typedef void (*ipmi_domain_ptr_cb)(ipmi_domain_t *domain, void *cb_data);
+.RS 0
+.BI "int ipmi_domain_pointer_cb(ipmi_domain_id_t"   " id",
+.BI "ipmi_domain_ptr_cb" " handler",
+.BI "void"               " *cb_data");
+.LP
+.BI "int ipmi_cmp_domain_id(ipmi_domain_id_t" " id1",
+.BI "ipmi_domain_id_t" " id2");
+.LP
+.BI "typedef void (*ipmi_domain_cb)(ipmi_domain_t" " *domain",
+.BI "int" " err",
+.BI "void" " *cb_data");
+.LP
+typedef struct ipmi_domain_con_change_s ipmi_domain_con_change_t;
+.LP
+.BI "typedef void (*ipmi_domain_con_cb)(ipmi_domain_t" " *domain",
+.BI "int"           " err",
+.BI "unsigned int"  " conn_num",
+.BI "unsigned int"  " port_num",
+.BI "int"           " still_connected",
+.BI "void"          " *cb_data");
+.LP
+.BI "int ipmi_domain_add_con_change_handler(ipmi_domain_t" " *domain",
+.BI "ipmi_domain_con_cb"       " handler",
+.BI "void"                     " *cb_data",
+.BI "ipmi_domain_con_change_t" " **id");
+.LP
+.BI "void ipmi_domain_remove_con_change_handler(ipmi_domain_t" " *domain",
+.BI "ipmi_domain_con_change_t" " *id");
+.LP
+
+.SH DESCRIPTION
+
+.SH CONFIGURATION
+
+.SH "ERROR OUTPUT"
+At startup, all error output goes to stderr.  After that, all error
+output goes to syslog.
+
+
+.SH "SEE ALSO"
+ipmi_ui(1)
+
+.SH "KNOWN PROBLEMS"
+
+.SH AUTHOR
+.PP
+Corey Minyard <cminyard@mvista.org>

@@ -1,0 +1,198 @@
+ipmi_entity_id_t ipmi_entity_convert_to_id(ipmi_entity_t *ent);
+typedef void (*ipmi_entity_ptr_cb)(ipmi_entity_t *entity, void *cb_data);
+int ipmi_entity_pointer_cb(ipmi_entity_id_t   id,
+			   ipmi_entity_ptr_cb handler,
+			   void               *cb_data);
+
+/* Used in various operations to tell what has happened to a sensor,
+   control, entity, or whatever. */
+enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
+
+/* A callback that will be called when entities are added to and
+   removed from the domain, and when their presence changes. */
+typedef void (*ipmi_domain_entity_cb)(enum ipmi_update_e op,
+				      ipmi_domain_t      *domain,
+				      ipmi_entity_t      *entity,
+				      void               *cb_data);
+
+/* Set the handler to be called when an entity is added or deleted. */
+int ipmi_domain_set_entity_update_handler(ipmi_domain_t         *domain,
+					  ipmi_domain_entity_cb handler,
+					  void                  *cb_data);
+
+/* Iterate over all the entities in the domain, calling the given
+   function with each entity.  The entities will not change while this
+   is happening. */
+typedef void (*ipmi_entities_iterate_entity_cb)(ipmi_entity_t *entity,
+						void          *cb_data);
+int ipmi_domain_iterate_entities(ipmi_domain_t                   *domain,
+				 ipmi_entities_iterate_entity_cb handler,
+				 void                            *cb_data);
+
+/* Store all the information I have locally into the SDR repository.
+   This is a moderately dangerous operation, as it can wipe out your
+   SDR repository if you are not careful. */
+int ipmi_domain_store_entities(ipmi_domain_t  *domain,
+			       ipmi_domain_cb done,
+			       void           *cb_data);
+
+/* For the given entity, iterate over all the children of the entity,
+   calling the given handler with each child.  The children will not
+   change while this is happening. */
+typedef void (*ipmi_entity_iterate_child_cb)(ipmi_entity_t *ent,
+					     ipmi_entity_t *child,
+					     void          *cb_data);
+void ipmi_entity_iterate_children(ipmi_entity_t                *ent,
+				  ipmi_entity_iterate_child_cb handler,
+				  void                         *cb_data);
+
+/* Iterate over the parents of the given entitiy.
+   FIXME - can an entity have more than one parent? */
+typedef void (*ipmi_entity_iterate_parent_cb)(ipmi_entity_t *ent,
+					      ipmi_entity_t *parent,
+					      void          *cb_data);
+void ipmi_entity_iterate_parents(ipmi_entity_t                 *ent,
+				 ipmi_entity_iterate_parent_cb handler,
+				 void                          *cb_data);
+
+/* Iterate over all the sensors of an entity. */
+typedef void (*ipmi_entity_iterate_sensor_cb)(ipmi_entity_t *ent,
+					      ipmi_sensor_t *sensor,
+					      void          *cb_data);
+void ipmi_entity_iterate_sensors(ipmi_entity_t                 *ent,
+				 ipmi_entity_iterate_sensor_cb handler,
+				 void                          *cb_data);
+
+/* Iterate over all the controls of an entity. */
+typedef void (*ipmi_entity_iterate_control_cb)(ipmi_entity_t  *ent,
+					       ipmi_control_t *control,
+					       void           *cb_data);
+void ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
+				  ipmi_entity_iterate_control_cb handler,
+				  void                           *cb_data);
+
+/* Set the handle to monitor the presence of an entity.  Only one
+   handler may be specified, add a NULL handler to remove the current
+   handler.  If the presence change was due to a system event, then
+   the event field will not be NULL and will point to the event that
+   cause the presence change.  This is so the user can delete the event
+   from the SEL. */
+typedef void (*ipmi_entity_presence_cb)(ipmi_entity_t *entity,
+					int           present,
+					void          *cb_data,
+					ipmi_event_t  *event);
+int ipmi_entity_set_presence_handler(ipmi_entity_t           *ent,
+				     ipmi_entity_presence_cb handler,
+				     void                    *cb_data);
+
+/* Detect if the presence of an entity has changed.  If "force" is zero,
+   then it will only do this if OpenIPMI has some reason to think the
+   presence has changed.  If "force" is non-zero, it will force OpenIPMI
+   to detect the current presence of the entity. */
+int ipmi_detect_entity_presence_change(ipmi_entity_t *entity, int force);
+
+/* Get the string name for the entity ID. */
+char *ipmi_entity_get_entity_id_string(ipmi_entity_t *ent);
+
+/* The ID from the SDR. */
+int ipmi_entity_get_id_length(ipmi_entity_t *ent);
+enum ipmi_str_type_e ipmi_entity_get_id_type(ipmi_entity_t *ent);
+int ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
+
+/* Is the entity currently present? */
+int ipmi_entity_is_present(ipmi_entity_t *ent);
+
+/* Register a handler that will be called fru information is added,
+   deleted, or modified.  If you call this in the entity added
+   callback for the domain, you are guaranteed to get this set before
+   any fru exist. */
+typedef void (*ipmi_entity_fru_cb)(enum ipmi_update_e op,
+				   ipmi_entity_t      *ent,
+				   void               *cb_data);
+int ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
+				       ipmi_entity_fru_cb handler,
+				       void              *cb_data);
+
+/* Register a handler that will be called when a sensor that monitors
+   this entity is added, deleted, or modified.  If you call this in
+   the entity added callback for the domain, you are guaranteed to get
+   this set before any sensors exist. */
+typedef void (*ipmi_entity_sensor_cb)(enum ipmi_update_e op,
+				      ipmi_entity_t      *ent,
+				      ipmi_sensor_t      *sensor,
+				      void               *cb_data);
+int ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
+					  ipmi_entity_sensor_cb handler,
+					  void                  *cb_data);
+
+/* Register a handler that will be called when an control on
+   this entity is added, deleted, or modified.  If you call this in
+   the entity added callback for the domain, you are guaranteed to get
+   this set before any sensors exist. */
+typedef void (*ipmi_entity_control_cb)(enum ipmi_update_e op,
+				       ipmi_entity_t      *ent,
+				       ipmi_control_t     *control,
+				       void               *cb_data);
+int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
+					   ipmi_entity_control_cb handler,
+					   void                   *cb_data);
+
+/* Type of entities.  Note that you will never see EAR and DREAR
+   entities, so don't worry about those. */
+enum ipmi_dlr_type_e { IPMI_ENTITY_UNKNOWN = 0,
+		       IPMI_ENTITY_MC,
+		       IPMI_ENTITY_FRU,
+		       IPMI_ENTITY_GENERIC,
+		       IPMI_ENTITY_EAR,
+		       IPMI_ENTITY_DREAR };
+
+/* Get information about an entity.  Most of this is IPMI specific. */
+
+/* The entity type.  Depending on the return value from this,
+   different field will be valid as marked below. */
+enum ipmi_dlr_type_e ipmi_entity_get_type(ipmi_entity_t *ent);
+
+/* These are valid for all entities. */
+int ipmi_entity_get_is_fru(ipmi_entity_t *ent);
+ipmi_domain_t *ipmi_entity_get_domain(ipmi_entity_t *ent);
+int ipmi_entity_get_entity_id(ipmi_entity_t *ent);
+int ipmi_entity_get_entity_instance(ipmi_entity_t *ent);
+int ipmi_entity_get_presence_sensor_always_there(ipmi_entity_t *ent);
+int ipmi_entity_get_is_child(ipmi_entity_t *ent);
+int ipmi_entity_get_is_parent(ipmi_entity_t *ent);
+
+/* Valid for all entities except unknown. */
+int ipmi_entity_get_channel(ipmi_entity_t *ent);
+int ipmi_entity_get_lun(ipmi_entity_t *ent);
+int ipmi_entity_get_oem(ipmi_entity_t *ent);
+
+/* Valid for FRU and Generic */
+int ipmi_entity_get_access_address(ipmi_entity_t *ent);
+int ipmi_entity_get_private_bus_id(ipmi_entity_t *ent);
+int ipmi_entity_get_device_type(ipmi_entity_t *ent);
+int ipmi_entity_get_device_modifier(ipmi_entity_t *ent);
+
+/* Valid for MC and Generic */
+int ipmi_entity_get_slave_address(ipmi_entity_t *ent);
+
+/* Valid for FRU only. */
+int ipmi_entity_get_is_logical_fru(ipmi_entity_t *ent);
+int ipmi_entity_get_fru_device_id(ipmi_entity_t *ent);
+
+/* Valid for MC only */
+int ipmi_entity_get_ACPI_system_power_notify_required(ipmi_entity_t *ent);
+int ipmi_entity_get_ACPI_device_power_notify_required(ipmi_entity_t *ent);
+int ipmi_entity_get_controller_logs_init_agent_errors(ipmi_entity_t *ent);
+int ipmi_entity_get_log_init_agent_errors_accessing(ipmi_entity_t *ent);
+int ipmi_entity_get_global_init(ipmi_entity_t *ent);
+int ipmi_entity_get_chassis_device(ipmi_entity_t *ent);
+int ipmi_entity_get_bridge(ipmi_entity_t *ent);
+int ipmi_entity_get_IPMB_event_generator(ipmi_entity_t *ent);
+int ipmi_entity_get_IPMB_event_receiver(ipmi_entity_t *ent);
+int ipmi_entity_get_FRU_inventory_device(ipmi_entity_t *ent);
+int ipmi_entity_get_SEL_device(ipmi_entity_t *ent);
+int ipmi_entity_get_SDR_repository_device(ipmi_entity_t *ent);
+int ipmi_entity_get_sensor_device(ipmi_entity_t *ent);
+
+/* Valid for Generic only */
+int ipmi_entity_get_address_span(ipmi_entity_t *ent);

@@ -1,0 +1,74 @@
+/* Maximum amount of data allowed in a SEL. */
+#define IPMI_MAX_SEL_DATA 13
+/* An entry from the system event log. */
+typedef struct ipmi_event_s
+{
+    ipmi_mcid_t   mcid; /* The MC this event is stored in. */
+
+    unsigned int  record_id;
+    unsigned int  type;
+    unsigned char data[IPMI_MAX_SEL_DATA];
+} ipmi_event_t;
+
+
+/* Events come in this format. */
+typedef void (*ipmi_event_handler_cb)(ipmi_domain_t *domain,
+				      ipmi_event_t  *event,
+				      void          *event_data);
+
+typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
+
+/* Register a handler to receive events.  Multiple handlers may be
+   registered, they will all receive all events.  The event_data will
+   be passed in with every event received.  This will only catch
+   events that are not sent to a sensor, so if you get a system
+   software event or an event from a sensor the software doesn't know
+   about, this handler will get it. */
+int ipmi_register_for_events(ipmi_domain_t           *domain,
+			     ipmi_event_handler_cb   handler,
+			     void                    *event_data,
+			     ipmi_event_handler_id_t **id);
+/* Deregister an event handler. */
+int ipmi_deregister_for_events(ipmi_domain_t           *domain,
+			       ipmi_event_handler_id_t *id);
+
+/* Globally enable or disable events on the mc. */
+int ipmi_domain_enable_events(ipmi_domain_t *domain);
+int ipmi_domain_disable_events(ipmi_domain_t *domain);
+
+/* When you are done with an event, you should delete it.  This frees up
+   the internal store for the event and removes it from the external
+   system event event. */
+/* Delete a specific event. */
+int ipmi_domain_del_event(ipmi_domain_t  *domain,
+			  ipmi_event_t   *event,
+			  ipmi_domain_cb done_handler,
+			  void           *cb_data);
+
+/* You can also scan the current set of events stored in the system.
+   They return an error if the SEL is empty, or if you try to go past
+   the last or before the first event.  The first and last function
+   return the event, the next and prev function take the current event in
+   "event" and return the next or previous event in "event". */
+int ipmi_domain_first_event(ipmi_domain_t *domain, ipmi_event_t *event);
+int ipmi_domain_last_event(ipmi_domain_t *domain, ipmi_event_t *event);
+int ipmi_domain_next_event(ipmi_domain_t *domain, ipmi_event_t *event);
+int ipmi_domain_prev_event(ipmi_domain_t *domain, ipmi_event_t *event);
+
+/* Return the number of non-deleted entries in the local copy of the
+   SEL. */
+int ipmi_domain_sel_count(ipmi_domain_t *domain,
+			  unsigned int  *count);
+
+/* Return the number of entries estimated to be used in the real SEL.
+   If there are deleted event in the local copy of the SEL, they are
+   not necessarily deleted from the real SEL, so this takes that into
+   account. */
+int ipmi_domain_sel_entries_used(ipmi_domain_t *domain,
+				 unsigned int  *count);
+
+/* Force rereading all the SELs in the domain.  The handler will be
+   called after they are all reread. */
+int ipmi_domain_reread_sels(ipmi_domain_t  *domain,
+			    ipmi_domain_cb handler,
+			    void           *cb_data);
