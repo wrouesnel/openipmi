@@ -42,6 +42,10 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
 
+#include <ucd-snmp/asn1.h>
+#include <ucd-snmp/snmp_api.h>
+#include <ucd-snmp/snmp.h>
+
 static selector_t *selector;
 
 ipmi_args_t *con_parms[2];
@@ -84,6 +88,73 @@ ui_reconnect(void)
 	exit(1);
     }
 }
+
+#define IPMI_OID_SIZE 9
+static oid ipmi_oid[IPMI_OID_SIZE] = {1,3,6,1,4,1,3183,1,1};
+int snmp_input(int op,
+	       struct snmp_session *session,
+	       int reqid,
+	       struct snmp_pdu *pdu,
+	       void *magic)
+{
+    struct sockaddr_in *src_ip;
+    uint32_t           specific;
+
+    if (op != RECEIVED_MESSAGE)
+	goto out;
+    if (pdu->command != SNMP_MSG_TRAP)
+	goto out;
+    if (snmp_oid_compare(ipmi_oid, IPMI_OID_SIZE,
+			 pdu->enterprise, pdu->enterprise_length)
+	!= 0)
+    {
+	goto out;
+    }
+    if (pdu->trap_type != SNMP_TRAP_ENTERPRISESPECIFIC)
+	goto out;
+    src_ip = (struct sockaddr_in *) &pdu->agent_addr;
+    specific = pdu->specific_type;
+
+    
+
+ out:
+    return 1;
+}
+
+static
+int snmp_pre_parse(struct snmp_session *session, snmp_ipaddr from)
+{
+    return 1;
+}
+
+struct snmp_session *snmp_session;
+
+int
+snmp_init(void)
+{
+    struct snmp_session session;
+
+    snmp_sess_init(&session);
+    session.peername = SNMP_DEFAULT_PEERNAME;
+    session.version = SNMP_DEFAULT_VERSION;
+    session.community_len = SNMP_DEFAULT_COMMUNITY_LEN;
+    session.retries = SNMP_DEFAULT_RETRIES;
+    session.timeout = SNMP_DEFAULT_TIMEOUT;
+    session.local_port = SNMP_TRAP_PORT;
+    session.callback = snmp_input;
+    session.callback_magic = NULL;
+    session.authenticator = NULL;
+    session.isAuthoritative = SNMP_SESS_UNKNOWNAUTH;
+
+    snmp_session = snmp_open_ex(&session, snmp_pre_parse,
+				NULL, NULL, NULL, NULL);
+    if (snmp_session == NULL) {
+        snmp_sess_perror("snmptrapd", &session);
+	return -1;
+    }
+
+    return 0;
+}
     
 int
 main(int argc, const char *argv[])
@@ -94,6 +165,7 @@ main(int argc, const char *argv[])
     int              full_screen = 1;
     ipmi_domain_id_t domain_id;
     int              i;
+    int              init_snmp = 0;
 
     while ((curr_arg < argc) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
@@ -106,10 +178,17 @@ main(int argc, const char *argv[])
 	    DEBUG_MALLOC_ENABLE();
 	} else if (strcmp(arg, "-dmsg") == 0) {
 	    DEBUG_MSG_ENABLE();
+	} else if (strcmp(arg, "-snmp") == 0) {
+	    init_snmp = 1;
 	} else {
 	    fprintf(stderr, "Unknown option: %s\n", arg);
 	    return 1;
 	}
+    }
+
+    if (init_snmp) {
+	if (snmp_init() < 0)
+	    return 1;
     }
 
     rv = ipmi_ui_init(&selector, full_screen);

@@ -9168,10 +9168,39 @@ mxp_activate(ipmi_con_t           *conn,
 }
 
 static int
+mxp_handle_send_rsp_err(ipmi_con_t *ipmi, ipmi_msg_t *rsp)
+{
+    ipmi_msg_t                   msg;
+    unsigned char                data[3];
+    ipmi_system_interface_addr_t si;
+
+    if (rsp->data[0] == 0x82) {
+	/* If we get a 0x82 response from an MXP send, we send an IPMB
+	   auto-isolate command to clean up the bus. */
+	msg.netfn = MXP_NETFN_MXP1;
+	msg.cmd = MXP_OEM_SET_AUTO_IPMB_ISOLATE_CMD;
+	msg.data = data;
+	msg.data_len = 3;
+	add_mxp_mfg_id(data);
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = 0;
+	si.lun = 0;
+	ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
+			   NULL, NULL, NULL, NULL, NULL);
+
+	/* Don't handle the message, let a timeout and resend occur. */
+	return 1;
+    }
+
+    return 0;
+}
+
+static int
 mxp_conn_handler(ipmi_con_t *conn, void *cb_data)
 {
     conn->get_ipmb_addr = mxp_ipmb_fetch;
     conn->set_active_state = mxp_activate;
+    conn->handle_send_rsp_err = mxp_handle_send_rsp_err;
     return 0;
 }
 

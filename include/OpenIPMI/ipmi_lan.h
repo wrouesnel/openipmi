@@ -93,4 +93,13 @@ int ipmi_lan_setup_con(struct in_addr *ip_addrs,
 		       void           *user_data,
 		       ipmi_con_t     **new_con);
 
+/* Used to handle SNMP traps.  The IP address is the source, specific
+   is the value of the specific trap field, data is the variable
+   bindings field and data_len is the length of the variable
+   bindings. */
+void ipmi_lan_handle_snmp_trap_data(struct in_addr src_ip,
+				    long           specific,
+				    unsigned char  *data,
+				    unsigned int   data_len);
+
 #endif /* __IPMI_LAN_H */

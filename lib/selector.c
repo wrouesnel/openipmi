@@ -88,7 +88,7 @@ typedef struct theap_s theap_t;
 #define HEAP_OUTPUT_DATA pos->timeout.tv_sec, pos->timeout.tv_usec
 
 static int
-cmp_timeval(struct timeval *tv1, struct timeval *tv2)
+cmp_timeval(const struct timeval *tv1, const struct timeval *tv2)
 {
     if (tv1->tv_sec < tv2->tv_sec)
 	return -1;
@@ -154,6 +154,12 @@ struct selector_s
     /* The timeout */
     sel_send_sig_cb send_sig;
     void            *send_sig_cb_data;
+
+    /* Handlers to allow other code to work with the select. */
+    ipmi_sel_add_read_fds_cb   add_read;
+    ipmi_sel_check_read_fds_cb check_read;
+    ipmi_sel_check_timeout_cb  check_timeout;
+    void                       *read_cb_data;
 
     /* This is a list of items waiting to be woken up because they are
        sitting in a select.  See wake_sel_thread() for more info. */
@@ -498,20 +504,42 @@ process_fds(selector_t	            *sel,
     fd_set      tmp_except_set;
     int i;
     int err;
+    int num_fds;
     
     ipmi_lock(sel->fd_lock);
     memcpy(&tmp_read_set, (void *) &sel->read_set, sizeof(tmp_read_set));
     memcpy(&tmp_write_set, (void *) &sel->write_set, sizeof(tmp_write_set));
     memcpy(&tmp_except_set, (void *) &sel->except_set, sizeof(tmp_except_set));
+    num_fds = sel->maxfd+1;
+    if (sel->add_read) {
+	int timeout_invalid;
+	struct timeval ttimeout;
+
+	timeout_invalid = 1; 
+	sel->add_read(sel, &num_fds, &tmp_read_set,
+		      &ttimeout, &timeout_invalid,
+		      sel->read_cb_data);
+	if (!timeout_invalid
+	    && (cmp_timeval(&ttimeout, (struct timeval *)timeout) <= 0))
+	{
+	    *timeout= ttimeout;
+	}	      
+    }
     ipmi_unlock(sel->fd_lock);
 
-    err = select(sel->maxfd+1,
+    err = select(num_fds,
 		 &tmp_read_set,
 		 &tmp_write_set,
 		 &tmp_except_set,
 		 (struct timeval *) timeout);
-    if (err <= 0)
+    if (err <= 0) {
+	if ((err == 0) && (sel->check_timeout))
+	    sel->check_timeout(sel, sel->read_cb_data);
 	goto out;
+    }
+
+    if (sel->check_read)
+	sel->check_read(sel, &tmp_read_set, sel->read_cb_data);
     
     /* We got some I/O. */
     for (i=0; i<=sel->maxfd; i++) {
@@ -614,6 +642,21 @@ sel_select_loop(selector_t      *sel,
 	    return err;
 	}
     }
+}
+
+void
+ipmi_sel_set_add_read_fds_handler(selector_t                 *sel, 
+				  ipmi_sel_add_read_fds_cb   add,
+				  ipmi_sel_check_read_fds_cb handle,
+				  ipmi_sel_check_timeout_cb  timeout,
+				  void                       *cb_data)
+{
+    ipmi_lock(sel->fd_lock);
+    sel->add_read = add;
+    sel->check_read = handle;
+    sel->check_timeout = timeout;
+    sel->read_cb_data = cb_data;
+    ipmi_unlock(sel->fd_lock);
 }
 
 /* Initialize the select code. */

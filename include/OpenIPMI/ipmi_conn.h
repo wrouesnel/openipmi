@@ -228,6 +228,14 @@ struct ipmi_con_s
 
     /* Close an IPMI connection. */
     int (*close_connection)(ipmi_con_t *ipmi);
+
+
+    /* This is set by OEM code to handle certain conditions when a
+       send message fails.  It is currently only used by the IPMI LAN
+       code, if a send messages response is an error, this will be
+       called first.  If this function returns true, then the IPMI LAN
+       code will not do anything with the message. */
+    int (*handle_send_rsp_err)(ipmi_con_t *con, ipmi_msg_t *msg);
 };
 
 /* Different types of low-level handlers must register themselves with

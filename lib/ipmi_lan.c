@@ -1343,6 +1343,10 @@ data_handler(int            fd,
 	    msg.cmd = lan->seq_table[seq].msg.cmd;
 	    msg.data = tmsg + 6;
 	    msg.data_len = 1;
+	    if (ipmi->handle_send_rsp_err) {
+		if (ipmi->handle_send_rsp_err(ipmi, &msg))
+		    goto out_unlock2;
+	    }
 	} else {
 	    if (data_len < 15)
 		/* The response to a send message was not carrying the
@@ -2770,3 +2774,12 @@ _ipmi_lan_set_ipmi(ipmi_con_t *ipmi)
 
     lan->ipmi = ipmi;
 }
+
+void
+ipmi_lan_handle_snmp_trap_data(struct in_addr src_ip,
+			       long           specific,
+			       unsigned char  *data,
+			       unsigned int   data_len)
+{
+}
+			       

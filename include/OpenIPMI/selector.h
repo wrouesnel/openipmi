@@ -122,4 +122,21 @@ int sel_select_loop(selector_t      *sel,
 		    long            thread_id,
 		    void            *cb_data);
 
+typedef void (*ipmi_sel_add_read_fds_cb)(selector_t     *sel,
+					 int            *num_fds,
+					 fd_set         *fdset,
+					 struct timeval *timeout,
+					 int            *timeout_invalid,
+					 void           *cb_data);
+typedef void (*ipmi_sel_check_read_fds_cb)(selector_t *sel,
+					   fd_set     *fds,
+					   void       *cb_data);
+typedef void (*ipmi_sel_check_timeout_cb)(selector_t *sel,
+					  void       *cb_data);
+void ipmi_sel_set_add_read_fds_handler(selector_t                 *sel, 
+				       ipmi_sel_add_read_fds_cb   add,
+				       ipmi_sel_check_read_fds_cb handle,
+				       ipmi_sel_check_timeout_cb  timeout,
+				       void                       *cb_data);
+
 #endif /* SELECTOR */

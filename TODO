@@ -54,7 +54,7 @@
 
 *1: Add a control board slot init
 
-1: Add code for AMC IPMB auto-isolate
+!1: Add code for AMC IPMB auto-isolate
 
 *1: Add control for IPMB isolate of a slot
     - Write-only control
@@ -79,9 +79,9 @@
 
 *1: Add sensor for current AMC active/standby state
 
-2: Auto-switch to old MXP LAN protocol based on version
+!2: Auto-switch to old MXP LAN protocol based on version
 
-1: In the PET code, Handle the fact that the different IP addresses on
+*1: In the PET code, Handle the fact that the different IP addresses on
    the AMC have different channels.
 
 
