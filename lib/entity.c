@@ -1850,6 +1850,8 @@ ipmi_entity_remove_sensor(ipmi_entity_t *ent,
 	} else {
 	    /* See if there is a presence bit sensor. */
 	    ent->presence_sensor = NULL;
+	    ilist_init_iter(&iter, ent->sensors);
+	    ilist_unpositioned(&iter);
 	    ref = ilist_search_iter(&iter, sens_cmp_if_presence_bit, &info);
 	    if (ref) {
 		ent->presence_bit_sensor = info.sensor;
