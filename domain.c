@@ -238,6 +238,7 @@ cleanup_domain(ipmi_domain_t *domain)
 			      nmsg->rsp_data1, nmsg->rsp_data2);
 	    
 	    ilist_delete(&iter);
+	    ipmi_mem_free(nmsg);
 	    ok = ilist_first(&iter);
 	}
 	ipmi_unlock(domain->cmds_lock);
@@ -2464,8 +2465,12 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 
 	    /* Deactivate all the other connections. */
 	    for (u=0; u<MAX_CONS; u++) {
-		if (u == domain->working_conn || !domain->conn[u])
+		if (u == domain->working_conn
+		    || !domain->conn[u]
+		    || !domain->con_up[u])
+		{
 		    continue;
+		}
 
 		if (domain->conn[u]->set_active_state)
 		    domain->conn[u]->set_active_state(
@@ -2474,14 +2479,13 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 			ll_addr_changed,
 			domain);
 	    }
-	} else if (domain->working_conn == u) {
-	    /* It's no longer active, but it was active before. */
+	} else {
+	    /* It's no longer active, find a new active one. */
 	    int to_activate = u;
 
 	    /* If no one else is active, activate one. */
 	    for (u=0; u<MAX_CONS; u++) {
-		if (u == domain->working_conn
-		    || !domain->conn[u]
+		if (!domain->conn[u]
 		    || !domain->con_up[u])
 		{
 		    continue;
@@ -2548,6 +2552,7 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	domain->port_up[port_num][u] = 1;
 
     if (still_connected) {
+	domain->con_up[u] = 1;
 	if (domain->connecting) {
 	    /* If we are connecting, don't report anything. */
 	} else if (domain->connection_up) {
@@ -2556,7 +2561,6 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	} else {
 	    /* We don't have a working connection, so start up the
                process. */
-	    domain->con_up[u] = 1;
 	    domain->working_conn = u;
 
 	    /* When a connection comes back up, start the process of
@@ -2600,6 +2604,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
 {
     int           rv;
     ipmi_domain_t *domain;
+    int           i;
 
     if ((num_con < 1) || (num_con > MAX_CONS))
 	return EINVAL;
@@ -2608,8 +2613,10 @@ ipmi_init_domain(ipmi_con_t               *con[],
     if (rv)
 	return rv;
 
-    con[0]->set_con_change_handler(con[0], ll_con_changed, domain);
-    con[0]->set_ipmb_addr_handler(con[0], ll_addr_changed, domain);
+    for (i=0; i<num_con; i++) {
+	con[i]->set_con_change_handler(con[i], ll_con_changed, domain);
+	con[i]->set_ipmb_addr_handler(con[i], ll_addr_changed, domain);
+    }
 
     ipmi_write_lock();
     add_known_domain(domain);
@@ -2622,7 +2629,8 @@ ipmi_init_domain(ipmi_con_t               *con[],
 	    goto out_err;
     }
 
-    rv = con[0]->start_con(con[0]);
+    for (i=0; i<num_con; i++)
+	rv = con[i]->start_con(con[i]);
     if (rv)
 	goto out_err;
 
@@ -2634,7 +2642,8 @@ ipmi_init_domain(ipmi_con_t               *con[],
     return rv;
 
  out_err:
-    con[0]->set_con_change_handler(con[0], NULL, NULL);
+    for (i=0; i<num_con; i++)
+	con[i]->set_con_change_handler(con[i], NULL, NULL);
     remove_known_domain(domain);
     cleanup_domain(domain);
     goto out;

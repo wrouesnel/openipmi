@@ -1954,7 +1954,7 @@ normal_control_val_read(ipmi_control_t *control,
     } else {
 	if (err) {
 	    if (normal_control_vals)
-		free(normal_control_vals);
+		ipmi_mem_free(normal_control_vals);
 	    normal_control_vals = NULL;
 	} else {
 	    normal_control_vals = ipmi_mem_alloc(sizeof(int) * num_vals);
@@ -1995,7 +1995,7 @@ identifier_control_val_read(ipmi_control_t *control,
     } else {
 	if (err) {
 	    if (id_control_vals)
-		free(id_control_vals);
+		ipmi_mem_free(id_control_vals);
 	    id_control_vals = NULL;
 	} else {
 	    id_control_length = length;
@@ -3613,14 +3613,15 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
     int rv;
 
     if (err)
-	ui_log("IPMI connection to con.port %d.%d is down\n",
-	       conn_num, port_num);
+	ui_log("IPMI connection to con.port %d.%d is down"
+	       "  due to error 0x%x\n",
+	       conn_num, port_num, err);
     else
 	ui_log("IPMI connection to con.port %d.%d is up\n",
 	       conn_num, port_num);
 
     if (!still_connected) {
-	ui_log("IPMI connection is down due to error 0x%x\n", err);
+	ui_log("All IPMI connections down");
 	return;
     } else if (!initialized)
 	ui_log("Completed setup for the IPMI connection\n");

@@ -39,14 +39,15 @@
 #include <OpenIPMI/ipmi_oem.h>
 #include <OpenIPMI/ipmi_err.h>
 
-void ipmb_handler(ipmi_con_t   *ipmi,
-		  ipmi_addr_t  *addr,
-		  unsigned int addr_len,
-		  ipmi_msg_t   *msg,
-		  void         *rsp_data1,
-		  void         *rsp_data2,
-		  void         *rsp_data3,
-		  void         *rsp_data4)
+static void
+ipmb_handler(ipmi_con_t   *ipmi,
+	     ipmi_addr_t  *addr,
+	     unsigned int addr_len,
+	     ipmi_msg_t   *msg,
+	     void         *rsp_data1,
+	     void         *rsp_data2,
+	     void         *rsp_data3,
+	     void         *rsp_data4)
 {
     ipmi_ll_ipmb_addr_cb handler = rsp_data1;
     void                 *cb_data = rsp_data2;
@@ -59,6 +60,9 @@ void ipmb_handler(ipmi_con_t   *ipmi,
 	err = EINVAL;
     else
 	ipmb = msg->data[2];
+
+    if (!err)
+	ipmi->set_ipmb_addr(ipmi, ipmb, ipmb == 0x20);
 
     if (handler)
 	handler(ipmi, err, ipmb, ipmb == 0x20, cb_data);
@@ -83,14 +87,15 @@ force_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
 			      ipmb_handler, handler, cb_data, NULL, NULL);
 }
 
-void activate_handler(ipmi_con_t   *ipmi,
-		      ipmi_addr_t  *addr,
-		      unsigned int addr_len,
-		      ipmi_msg_t   *rmsg,
-		      void         *rsp_data1,
-		      void         *rsp_data2,
-		      void         *rsp_data3,
-		      void         *rsp_data4)
+static void
+activate_handler(ipmi_con_t   *ipmi,
+		 ipmi_addr_t  *addr,
+		 unsigned int addr_len,
+		 ipmi_msg_t   *rmsg,
+		 void         *rsp_data1,
+		 void         *rsp_data2,
+		 void         *rsp_data3,
+		 void         *rsp_data4)
 {
     ipmi_ll_ipmb_addr_cb         handler = rsp_data1;
     void                         *cb_data = rsp_data2;
@@ -125,16 +130,16 @@ void activate_handler(ipmi_con_t   *ipmi,
 }
 
 static int
-force_activate(ipmi_con_t           *conn,
-	       int                  active,
-	       ipmi_ll_ipmb_addr_cb handler,
-	       void                 *cb_data)
+send_activate(ipmi_con_t           *ipmi,
+	      int                  active,
+	      ipmi_ll_ipmb_addr_cb handler,
+	      void                 *cb_data)
 {
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
     unsigned char                data[1];
 
-    /* Send the OEM command to get the IPMB address. */
+    /* Send the OEM command to set the IPMB address. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = 0xf;
     si.lun = 0;
@@ -147,8 +152,67 @@ force_activate(ipmi_con_t           *conn,
     msg.data = data;
     msg.data_len = 1;
 
-    return conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
+    return ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			      activate_handler, handler, cb_data, NULL, NULL);
+}
+
+static void
+deactivated(ipmi_con_t   *ipmi,
+	    ipmi_addr_t  *addr,
+	    unsigned int addr_len,
+	    ipmi_msg_t   *rmsg,
+	    void         *rsp_data1,
+	    void         *rsp_data2,
+	    void         *rsp_data3,
+	    void         *rsp_data4)
+{
+    ipmi_ll_ipmb_addr_cb         handler = rsp_data1;
+    void                         *cb_data = rsp_data2;
+    int                          active = (long) rsp_data3;
+    int                          rv;
+
+    rv = send_activate(ipmi, active, handler, cb_data);
+    if (rv)
+	handler(ipmi, rv, 0, 0, cb_data);
+}
+
+static int
+force_activate(ipmi_con_t           *conn,
+	       int                  active,
+	       ipmi_ll_ipmb_addr_cb handler,
+	       void                 *cb_data)
+{
+    ipmi_ipmb_addr_t ipmb;
+    ipmi_msg_t       msg;
+    unsigned char    data[1];
+    int              rv = EINVAL;
+
+    if (active) {
+	/* Deactivate any existing BMCs. */
+
+	/* Send as a broadcast so it goes quickly and only gets sent
+           once. */
+	ipmb.addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
+	ipmb.channel = 0;
+	ipmb.lun = 0;
+	ipmb.slave_addr = 0x20;
+
+	msg.netfn = 0x30;
+	msg.cmd = 3;
+	data[0] = 1;
+	msg.data = data;
+	msg.data_len = 1;
+
+	rv = conn->send_command(conn, (ipmi_addr_t *) &ipmb, sizeof(ipmb),
+				&msg,
+				deactivated, handler, cb_data,
+				(void *) (long) active, NULL);
+    }
+
+    if (rv)
+	rv = send_activate(conn, active, handler, cb_data);
+
+    return rv;
 }
 
 static int

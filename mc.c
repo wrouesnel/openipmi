@@ -786,15 +786,10 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     }
 }
 
-
 static void
-mc_sdr_handler(ipmi_sdr_info_t *sdrs,
-	       int             err,
-	       int             changed,
-	       unsigned int    count,
-	       void            *cb_data)
+mc_sdr_mc_handler(ipmi_mc_t *mc, void *cb_data)
 {
-    ipmi_mc_t  *mc = (ipmi_mc_t *) cb_data;
+    int err = (long) cb_data;
 
     if (err) {
 	_ipmi_cleanup_mc(mc);
@@ -805,15 +800,35 @@ mc_sdr_handler(ipmi_sdr_info_t *sdrs,
     ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
 }
 
+static void
+mc_sdr_handler(ipmi_sdr_info_t *sdrs,
+	       int             err,
+	       int             changed,
+	       unsigned int    count,
+	       void            *cb_data)
+{
+    ipmi_mcid_t *mcid = cb_data;
+
+    _ipmi_mc_pointer_cb(*mcid, mc_sdr_mc_handler, (void *) (long) err);
+    ipmi_mem_free(mcid);
+}
+
 int
 _ipmi_mc_handle_new(ipmi_mc_t *mc)
 {
-    int rv = 0;
+    int         rv = 0;
+    ipmi_mcid_t *mcid;
 
     mc->active = 1;
-    if (mc->provides_device_sdrs)
-	rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
-    else
+
+    if (mc->provides_device_sdrs) {
+	mcid = ipmi_mem_alloc(sizeof(*mcid));
+	if (!mcid)
+	    return ENOMEM;
+	*mcid = _ipmi_mc_convert_to_id(mc);
+
+	rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mcid);
+    } else
 	sensors_reread(mc, 0, NULL);
 
     return rv;

@@ -310,7 +310,6 @@ handle_reservation_check(ipmi_mc_t  *mc,
 	/* We lost our reservation, restart the operation.  Only do
            this so many times, in order to guarantee that this
            completes. */
-	ipmi_mem_free(sdrs->working_sdrs);
 	sdrs->fetch_retry_count++;
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -319,6 +318,10 @@ handle_reservation_check(ipmi_mc_t  *mc,
 	    fetch_complete(sdrs, EBUSY);
 	    goto out;
 	} else {
+	    if (sdrs->working_sdrs) {
+		ipmi_mem_free(sdrs->working_sdrs);
+		sdrs->working_sdrs = NULL;
+	    }
 	    rv = start_fetch(sdrs, mc);
 	    if (rv) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
@@ -432,7 +435,6 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	/* We lost our reservation, restart the operation.  Only do
            this so many times, in order to guarantee that this
            completes. */
-	ipmi_mem_free(sdrs->working_sdrs);
 	sdrs->fetch_retry_count++;
 	if (sdrs->fetch_retry_count > MAX_SDR_FETCH_RETRIES) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -440,6 +442,10 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    fetch_complete(sdrs, EBUSY);
 	    goto out;
 	} else {
+	    if (sdrs->working_sdrs) {
+		ipmi_mem_free(sdrs->working_sdrs);
+		sdrs->working_sdrs = NULL;
+	    }
 	    rv = start_fetch(sdrs, mc);
 	    if (rv) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
@@ -859,7 +865,6 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     sdrs->fetch_state = FETCHING;
     sdrs->sdrs_changed = 0;
     sdrs->fetch_retry_count = 0;
-
 
     /* Get a reservation first. */
     cmd_msg.data = cmd_data;
@@ -1714,7 +1719,7 @@ handle_start_save(void *cb_data, int shutdown)
     rv = _ipmi_mc_pointer_cb(sdrs->mc, handle_start_save_cb, sdrs);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_start_fetch: error finding MC: %x",
+		 "handle_start_save: error finding MC: %x",
 		 rv);
 	sdrs->wait_err = rv;
 	fetch_complete(sdrs, rv);

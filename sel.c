@@ -90,6 +90,7 @@ struct ipmi_sel_info_s
        but we don't actually destroy the data until the SEL fetch
        reaches a point were it can be stopped safely. */
     unsigned int destroyed : 1;
+    unsigned int in_destroy : 1;
     /* Something to call when the destroy is complete. */
     ipmi_sel_destroyed_t destroy_handler;
     void                 *destroy_cb_data;
@@ -214,6 +215,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 
     sel->mc = _ipmi_mc_convert_to_id(mc);
     sel->destroyed = 0;
+    sel->in_destroy = 0;
     sel->os_hnd = ipmi_domain_get_os_hnd(domain);
     sel->sel_lock = NULL;
     sel->fetched = 0;
@@ -257,6 +259,8 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 static void
 internal_destroy_sel(ipmi_sel_info_t *sel)
 {
+    sel->in_destroy = 1;
+
     /* We don't have to have a valid ipmi to destroy an SEL, the are
        designed to live after the ipmi has been destroyed. */
     sel_unlock(sel);
@@ -331,7 +335,7 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
 	elem = next;
     }
 
-    if (sel->destroyed) {
+    if (!sel->in_destroy && sel->destroyed) {
 	internal_destroy_sel(sel);
 	/* Previous call releases lock. */
 	return;
@@ -373,7 +377,8 @@ handle_sel_clear(ipmi_mc_t  *mc,
     sel_lock(sel);
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "SEL info was destroyed while an operation was in progress");
+		 "SEL info was destroyed while an operation was in"
+		 " progress(1)");
 	fetch_complete(sel, ECANCELED);
 	goto out;
     }
@@ -438,8 +443,8 @@ handle_sel_data(ipmi_mc_t  *mc,
     sel_lock(sel);
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "handle_sel_data: "
-		 "SEL info was destroyed while an operation was in progress");
+		 "SEL info was destroyed while an operation was in"
+		 " progress(2)");
 	fetch_complete(sel, ECANCELED);
 	goto out;
     }
@@ -589,6 +594,7 @@ handle_sel_info(ipmi_mc_t  *mc,
     sel_lock(sel);
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "handle_sel_info: "
 		 "SEL info was destroyed while an operation was in progress");
 	fetch_complete(sel, ECANCELED);
 	goto out;
@@ -915,7 +921,9 @@ sel_op_done(sel_cb_handler_data_t *data,
     if (data->handler)
 	data->handler(sel, data->cb_data, rv);
 
-    if (sel->destroyed) {
+    if (sel->in_destroy) {
+	/* Nothing to do */
+    } else if (sel->destroyed) {
 	/* This will unlock the lock. */
 	internal_destroy_sel(sel);
     } else {
@@ -1120,6 +1128,7 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
     sel_lock(sel);
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel_reserved_for_delete: "
 		 "SEL info was destroyed while an operation was in progress");
 	sel_op_done(data, ECANCELED);
 	goto out;
@@ -1179,7 +1188,7 @@ start_del_sel_cb(ipmi_mc_t *mc, void *cb_data)
     sel_lock(sel);
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "start_del_sel: "
+		 "start_del_sel_cb: "
 		 "SEL info was destroyed while an operation was in progress");
 	sel_op_done(data, ECANCELED);
 	goto out;
@@ -1192,7 +1201,7 @@ start_del_sel_cb(ipmi_mc_t *mc, void *cb_data)
 
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "start_del_sel: could not send cmd: %x",
+		 "start_del_sel_cb: could not send cmd: %x",
 		 rv);
 	sel_op_done(data, rv);
 	goto out;
@@ -1210,12 +1219,13 @@ start_del_sel(void *cb_data, int shutdown)
     ipmi_sel_info_t       *sel = data->sel;
     int                   rv;
 
+    sel_lock(sel);
     if (shutdown) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "start_del_sel: "
 		 "SEL info was destroyed while an operation was in progress");
 	sel_op_done(data, ECANCELED);
-	return;
+	goto out;
     }
 
     rv = _ipmi_mc_pointer_cb(sel->mc, start_del_sel_cb, data);
@@ -1223,7 +1233,11 @@ start_del_sel(void *cb_data, int shutdown)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "start_del_sel: MC went away during delete");
 	sel_op_done(data, ECANCELED);
+	goto out;
     }
+    sel_unlock(sel);
+ out:
+    return;
 }
 
 typedef struct sel_del_event_info_s
