@@ -24,6 +24,12 @@
 	* include/OpenIPMI/mxp.h: Fixed the license to be LGPL, as
 	intended.
 
+	* configure.in: Added some target detection and some
+	target-specific defines.
+
+	* lib/ipmi.c, lib/ipmi_smi.c: Made the init/shutdown of ipmi_smi
+	based upon target-specific defines.
+
 2005-03-22 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fix a bug in fru presence handling, addressing

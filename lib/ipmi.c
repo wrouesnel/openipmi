@@ -919,9 +919,11 @@ ipmi_init(os_handler_t *handler)
 	seq_lock = NULL;
     }
 
+#ifdef HAVE_OPENIPMI_SMI
     rv = _ipmi_smi_init(handler);
     if (rv)
 	goto out_err;
+#endif
 
     rv = _ipmi_lan_init(handler);
     if (rv)
@@ -954,7 +956,9 @@ ipmi_init(os_handler_t *handler)
     return 0;
 
  out_err:
+#ifdef HAVE_OPENIPMI_SMI
     _ipmi_smi_shutdown();
+#endif
     _ipmi_lan_shutdown();
     ipmi_oem_intel_shutdown();
     _ipmi_mc_shutdown();
@@ -969,7 +973,9 @@ void
 ipmi_shutdown(void)
 {
     _ipmi_lan_shutdown();
+#ifdef HAVE_OPENIPMI_SMI
     _ipmi_smi_shutdown();
+#endif
     ipmi_oem_atca_shutdown();
     ipmi_oem_atca_conn_shutdown();
     ipmi_oem_intel_shutdown();
@@ -1434,8 +1440,10 @@ ipmi_args_setup_con(ipmi_args_t  *args,
 		    ipmi_con_t   **con)
 {
     switch(args->con_type) {
+#ifdef HAVE_OPENIPMI_SMI
     case SMI:
 	return ipmi_smi_setup_con(args->smi_intf, handlers, user_data, con);
+#endif
 
     case LAN:
     {

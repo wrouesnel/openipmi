@@ -31,6 +31,8 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#ifdef HAVE_OPENIPMI_SMI
+
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -1651,3 +1653,5 @@ _ipmi_smi_shutdown(void)
 	smi_list_lock = NULL;
     }
 }
+
+#endif /* HAVE_OPENIPMI_SMI */
