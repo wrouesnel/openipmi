@@ -6,6 +6,9 @@
 	sensor was on the wrong entity, some boards were missing, and a
 	few other little glitches.
 
+	* lib/domain.c: Added scanning the system interface when a
+	connection goes up or down.
+
 2004-01-13 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.2.1

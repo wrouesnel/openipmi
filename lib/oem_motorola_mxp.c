@@ -326,6 +326,7 @@ typedef struct amc_info_s
     ipmi_control_t *fpga_version;
     ipmi_control_t *temp_cool_led;
     ipmi_control_t *last_reset_reason;
+    ipmi_control_t *chassis_id;
 } amc_info_t;
 
 #define MXP_V1		1
@@ -342,7 +343,6 @@ struct mxp_info_s {
     mxp_board_t        board[MXP_TOTAL_BOARDS];
 
     /* Chassis info */
-    ipmi_control_t *chassis_id;
     ipmi_control_t *chassis_type_control;
     ipmi_control_t *shelf_ga_control;
     ipmi_control_t *sys_led;
@@ -6131,11 +6131,11 @@ chassis_id_get_cb(ipmi_control_t *control,
 	goto out;
     }
 
-    if (rsp->data_len < 9) {
+    if (rsp->data_len < 8) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "chassis_id_get_cb: Received invalid msg length: %d,"
 		 " expected %d",
-		 rsp->data_len, 9);
+		 rsp->data_len, 8);
 	if (control_info->get_identifier_val)
 	    control_info->get_identifier_val(control, EINVAL, NULL, 0,
 					     control_info->cb_data);
@@ -7022,10 +7022,6 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     amc_info_t *info = cb_data;
 
-    if (!info->s5v)
-	/* It hasn't been initialized, so just free the data structure. */
-	goto out;
-
     if (info->slot)
 	ipmi_sensor_destroy(info->slot);
     if (info->s5v)
@@ -7052,8 +7048,9 @@ amc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	ipmi_control_destroy(info->fw_version);
     if (info->fpga_version)
 	ipmi_control_destroy(info->fpga_version);
+    if (info->chassis_id)
+	ipmi_control_destroy(info->chassis_id);
 
-out:
     ipmi_mem_free(info);
 }
 
@@ -7233,6 +7230,25 @@ amc_board_handler(ipmi_mc_t *mc)
     control_cbs.get_identifier_val = amc_fpga_version_get;
     ipmi_control_set_readable(info->fpga_version, 1);
     ipmi_control_set_callbacks(info->fpga_version, &control_cbs);
+
+    /* The Chassis ID. */
+    rv = mxp_alloc_control(mc, info->ent,
+			   MXP_BOARD_CHASSIS_ID_CONTROL_NUM,
+			   NULL,
+			   IPMI_CONTROL_IDENTIFIER,
+			   "Chassis ID",
+			   NULL,
+			   NULL,
+			   &info->chassis_id);
+    if (rv)
+	goto out_err;
+    ipmi_control_identifier_set_max_length(info->chassis_id, 4);
+    ipmi_control_get_callbacks(info->chassis_id, &control_cbs);
+    control_cbs.set_identifier_val = chassis_id_set;
+    control_cbs.get_identifier_val = chassis_id_get;
+    ipmi_control_set_settable(info->chassis_id, 1);
+    ipmi_control_set_readable(info->chassis_id, 1);
+    ipmi_control_set_callbacks(info->chassis_id, &control_cbs);
 
     /* 5V */
     assert = 0;
@@ -9144,10 +9160,6 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     mxp_info_t *info = cb_data;
     int        i;
 
-    if (!info->chassis_id)
-	/* It hasn't been initialized, so just free the data structure. */
-	goto out;
-
     for (i=0; i<MXP_POWER_SUPPLIES; i++) {
 	if (info->power_supply[i].ent)
 	    ipmi_entity_remove_child(info->chassis_ent,
@@ -9190,7 +9202,8 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     }
 
     for (i=0; i<MXP_TOTAL_BOARDS; i++) {
-	ipmi_entity_remove_child(info->chassis_ent, info->board[i].ent);
+	if (info->chassis_ent)
+	    ipmi_entity_remove_child(info->chassis_ent, info->board[i].ent);
 	if (info->board[i].presence)
 	    ipmi_sensor_destroy(info->board[i].presence);
 	if (info->board[i].slot)
@@ -9209,8 +9222,6 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->board[i].i2c_isolate);
     }
     
-    if (info->chassis_id)
-	ipmi_control_destroy(info->chassis_id);
     if (info->chassis_type_control)
 	ipmi_control_destroy(info->chassis_type_control);
     if (info->shelf_ga_control)
@@ -9220,13 +9231,14 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     if (info->sys_led)
 	ipmi_control_destroy(info->sys_led);
 
-    if (info->con_ch_info)
+    if (info->con_ch_info) {
     	ipmi_domain_remove_con_change_handler(domain,
 					      info->con_ch_info->con_chid);
-    ipmi_domain_remove_mc_update_handler(domain, info->mc_upd_id);
-    ipmi_mem_free(info->con_ch_info);
+        ipmi_mem_free(info->con_ch_info);
+    }
+    if (info->mc_upd_id)
+	ipmi_domain_remove_mc_update_handler(domain, info->mc_upd_id);
 
- out:
     ipmi_mem_free(info);
 }
 

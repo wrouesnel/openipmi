@@ -3544,6 +3544,8 @@ ll_con_changed(ipmi_con_t   *ipmi,
     else
 	domain->port_up[port_num][u] = 1;
 
+    ipmi_start_si_scan(domain, u, NULL, NULL);
+
     if (still_connected) {
 	domain->con_up[u] = 1;
 	if (domain->connecting) {
