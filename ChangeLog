@@ -1,4 +1,7 @@
 
+2003-01-21 Corey Minyard <cminyard@mvista.com>
+	* configure.in: Went to version 0.1.1
+
 2003-01-20 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Added a list_sel command.
