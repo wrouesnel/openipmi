@@ -1522,8 +1522,8 @@ decode_mcdlr(ipmi_sdr_t *sdr,
     info->entity_id = data[5];
     info->entity_instance = data[6];
 
-    info->oem = sdr->data[7];
-    info->id_len = ipmi_get_device_string(sdr->data+8,
+    info->oem = data[7];
+    info->id_len = ipmi_get_device_string(data+8,
 					  sdr->length-length,
 					  info->id, 0,
 					  &info->id_type, ENTITY_ID_LEN);

@@ -402,9 +402,8 @@ ipmi_get_6_bit_ascii(int len,
 		bo = 6;
 		break;
 	    case 2:
-		val = (*d >> 2) & 3;
+		val = (*d >> 2) & 0x3f;
 		d++;
-		val |= (*d & 0xf) << 2;
 		bo = 0;
 		break;
 	    case 4:
@@ -616,11 +615,12 @@ ipmi_set_6_bit_ascii(char          *input,
 		     int           *out_len)
 {
     int  len = *out_len;
-    char *s = input+1;
+    char *s = input;
     int  pos = 0;
     int  bit = 0;
     int  count = 0;
     int  cval;
+    int  oval;
 
     while (*s != '\0') {
 	if (pos >= len) {
@@ -628,29 +628,31 @@ ipmi_set_6_bit_ascii(char          *input,
 	    return;
 	}
 	cval = *s;
+	s++;
+	oval = table_6_bit[cval] - 1;
 	switch(bit) {
 	    case 0:
 		pos++;
-		output[pos] = table_6_bit[cval];
+		output[pos] = oval;
 		bit = 6;
 		break;
 
 	    case 2:
-		output[pos] |= (table_6_bit[cval] << 2);
+		output[pos] |= oval << 2;
 		bit = 0;
 		break;
 
 	    case 4:
-		output[pos] |= table_4_bit[cval] << 4;
+		output[pos] |= oval << 4;
 		pos++;
-		output[pos] = (table_4_bit[cval] >> 4) & 0x3;
+		output[pos] = (oval >> 4) & 0x3;
 		bit = 2;
 		break;
 
 	    case 6:
-		output[pos] |= table_4_bit[cval] << 6;
+		output[pos] |= oval << 6;
 		pos++;
-		output[pos] = (table_4_bit[cval] >> 2) & 0xf;
+		output[pos] = (oval >> 2) & 0xf;
 		bit = 4;
 		break;
 	}
@@ -706,6 +708,7 @@ ipmi_set_device_string(char                 *input,
 		bsize |= 2;
 		break;
 	    }
+	    s++;
 	}
 	if (bsize == 0) {
 	    /* We can encode it in 4-bit BCD+ */
