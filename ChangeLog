@@ -1,5 +1,12 @@
 
+2003-07-03 Corey Minyard <cminyard@mvista.com>
+
+	* sdr.c: When handling SDR data, be sure to check that the MC is
+	valid in responses, so that this properly handles MCs going away.
+
 2003-06-11 Corey Minyard <cminyard@mvista.com>
+
+	* configure.in: Move to version 0.4.3
 
 	* include/net/af_ipmi.h: Added include file for IPMI socket.
 	* Makefile.am: ditto

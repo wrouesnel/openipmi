@@ -657,6 +657,17 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	goto out;
     }
 
+    if (!mc) {
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+	if (!ilist_empty(sdrs->outstanding_fetch))
+	    goto out_unlock;
+
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "MC went away while SDR fetch was in progress(2)");
+	fetch_complete(sdrs, ENXIO);
+	goto out;
+    }
+	
     if (info->fetch_retry_num != sdrs->fetch_retry_count) {
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 
