@@ -1065,10 +1065,11 @@ ipmi_parse_args(int         *curr_arg,
 	    len = 16;
 	memcpy(p->username, args[*curr_arg], len);
 	p->username[16] = '\0';
-	(*curr_arg)++; CHECK_ARG;
-	len = strlen(args[*curr_arg]);
 	p->username_len = len;
 	p->username_set = 1;
+	(*curr_arg)++; CHECK_ARG;
+
+	len = strlen(args[*curr_arg]);
 	if (len > 16)
 	    len = 16;
 	memcpy(p->password, args[*curr_arg], len);

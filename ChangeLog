@@ -1,3 +1,8 @@
+2004-12-02 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi.c: fixed a problem with ipmi_parse_args mishandling
+	userids.
+
 2004-12-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Ignore sensors for presence if they use the
