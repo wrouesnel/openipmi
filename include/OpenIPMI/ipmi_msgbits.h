@@ -36,9 +36,6 @@
 
 #define MAX_IPMI_DATA_SIZE 36
 
-/* Timeout to wait for IPMI responses, in milliseconds. */
-#define IPMI_RSP_TIMEOUT 5000
-
 /*
  * IPMI commands
  */

@@ -42,12 +42,12 @@ void ui_reconnect(void)
 	    exit(1);
 	}
     } else if (con_type == LAN) {
-	rv = ipmi_lan_setup_con(lan_addr, lan_port,
+	rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
 				authtype, privilege,
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, selector,
-				ipmi_ui_setup_done, NULL);
+				ipmi_ui_setup_done, NULL, NULL);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
 	    exit(1);
@@ -157,12 +157,12 @@ main(int argc, char *argv[])
 	strncpy(password, argv[curr_arg+6], 16);
 	password[16] = '\0';
 
-	rv = ipmi_lan_setup_con(lan_addr, lan_port,
+	rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
 				authtype, privilege,
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, selector,
-				ipmi_ui_setup_done, NULL);
+				ipmi_ui_setup_done, NULL, NULL);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
 	    rv = EINVAL;

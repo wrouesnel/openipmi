@@ -295,12 +295,12 @@ main(int argc, char *argv[])
 	    password[16] = '\0';
 	}
 
-	rv = ipmi_lan_setup_con(lan_addr, lan_port,
+	rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
 				authtype, privilege,
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, ui_sel,
-				setup_done, NULL);
+				setup_done, NULL, NULL);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
 	    exit(1);

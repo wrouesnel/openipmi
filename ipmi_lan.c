@@ -63,7 +63,22 @@ dump_hex(unsigned char *data, int len)
 }
 #endif
 
-#define MAX_SEND_RETRIES 3
+#define LAN_AUDIT_TIMEOUT 10000000
+
+/* Timeout to wait for IPMI responses, in milliseconds. */
+#define LAN_RSP_TIMEOUT 1000000
+
+/* # of times to try a message before we fail it. */
+#define LAN_RSP_RETRIES 6
+
+/* Number of microseconds of consecutive failures allowed on an IP
+   before it is considered failed. */
+#define IP_FAIL_TIME 3000000
+
+/* Number of consecutive failures that must occur before an IP is
+   considered failed. */
+#define IP_FAIL_COUNT 3
+
 
 struct ipmi_ll_event_handler_id_s
 {
@@ -74,6 +89,12 @@ struct ipmi_ll_event_handler_id_s
 
     ipmi_ll_event_handler_id_t *next, *prev;
 };
+
+typedef struct audit_timer_info_s
+{
+    int        cancelled;
+    ipmi_con_t *ipmi;
+} audit_timer_info_t;
 
 typedef struct lan_timer_info_s
 {
@@ -98,12 +119,29 @@ typedef struct lan_wait_queue_s
     struct lan_wait_queue_s *next;
 } lan_wait_queue_t;
 
+#define MAX_IP_ADDR 2
+#define SENDS_BETWEEN_IP_SWITCHES 8
+
+enum con_state_e {ACTIVE_STANDBY, ACTIVE_ACTIVE};
+
 typedef struct lan_data_s
 {
     ipmi_con_t                 *ipmi;
     int                        fd;
 
-    struct sockaddr_in         addr;
+    int                        curr_ip_addr;
+    struct sockaddr_in         ip_addr[MAX_IP_ADDR];
+    int                        ip_working[MAX_IP_ADDR];
+    unsigned int               consecutive_ip_failures[MAX_IP_ADDR];
+    struct timeval             ip_failure_time[MAX_IP_ADDR];
+    unsigned int               num_ip_addr;
+    unsigned int               num_sends;
+
+    /* If 0, we don't have a connection to the BMC right now. */
+    int                        connected;
+
+    /* If 0, we have not yet initialized */
+    int                        initialized;
 
     unsigned int               authtype;
     unsigned int               privilege;
@@ -132,6 +170,9 @@ typedef struct lan_data_s
 	os_hnd_timer_id_t     *timer;
 	lan_timer_info_t      *timer_info;
 	unsigned int          retries;
+
+	/* The number of the last IP address sent on. */
+	int                   last_ip_num;
     } seq_table[64];
     ipmi_lock_t               *seq_num_lock;
     unsigned int              last_seq;
@@ -154,15 +195,64 @@ typedef struct lan_data_s
     ipmi_ll_event_handler_id_t *event_handlers;
     ipmi_lock_t                *event_handlers_lock;
 
+    os_hnd_timer_id_t          *audit_timer;
+    audit_timer_info_t         *audit_info;
+
     ipmi_ll_con_failed_cb con_fail_handler;
     void                  *con_fail_cb_data;
+
+    lan_report_con_failure_cb lan_con_fail_handler;
+    void                      *lan_con_fail_cb_data;
 
     struct lan_data_s *next, *prev;
 } lan_data_t;
 
 static void check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan);
+static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan);
 
 static lan_data_t *lan_list = NULL;
+
+static inline int
+cmp_timeval(struct timeval *tv1, struct timeval *tv2)
+{
+    if (tv1->tv_sec < tv2->tv_sec)
+        return -1;
+ 
+    if (tv1->tv_sec > tv2->tv_sec)
+        return 1;
+
+    if (tv1->tv_usec < tv2->tv_usec)
+        return -1; 
+   
+    if (tv1->tv_usec > tv2->tv_usec)
+        return 1;
+
+    return 0;
+}
+
+static inline void
+diff_timeval(struct timeval *dest,
+             struct timeval *left,
+             struct timeval *right)
+{
+    if (   (left->tv_sec < right->tv_sec)
+        || (   (left->tv_sec == right->tv_sec)
+            && (left->tv_usec < right->tv_usec)))
+    {
+        /* If left < right, just force to zero, don't allow negative
+           numbers. */
+        dest->tv_sec = 0;
+        dest->tv_usec = 0;
+        return;
+    }
+
+    dest->tv_sec = left->tv_sec - right->tv_sec;
+    dest->tv_usec = left->tv_usec - right->tv_usec;
+    while (dest->tv_usec < 0) {
+        dest->tv_usec += 1000000;
+        dest->tv_sec--;
+    }
+}
 
 /* Must be called with the ipmi read or write lock. */
 static int lan_valid_ipmi(ipmi_con_t *ipmi)
@@ -290,11 +380,12 @@ auth_check(lan_data_t    *lan,
 	 
 #define IPMI_MAX_LAN_LEN (IPMI_MAX_MSG_LENGTH + 42)
 static int
-lan_send(lan_data_t  *lan,
-	 ipmi_addr_t *addr,
-	 int         addr_len,
-	 ipmi_msg_t  *msg,
-	 uint8_t     seq)
+lan_send_addr(lan_data_t  *lan,
+	      ipmi_addr_t *addr,
+	      int         addr_len,
+	      ipmi_msg_t  *msg,
+	      uint8_t     seq,
+	      int         addr_num)
 {
     unsigned char data[IPMI_MAX_LAN_LEN];
     unsigned char *tmsg;
@@ -393,20 +484,195 @@ lan_send(lan_data_t  *lan,
 
     if (DEBUG_MSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing\n addr =");
-	dump_hex((unsigned char *) &(lan->addr), sizeof(lan->addr));
+	dump_hex((unsigned char *) &(lan->ip_addr[lan->curr_ip_addr]),
+		 sizeof(struct sockaddr_in));
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
 	dump_hex(data, pos);
 	ipmi_log(IPMI_LOG_DEBUG_END, "");
     }
 
     rv = sendto(lan->fd, data, pos, 0,
-		(struct sockaddr *) &(lan->addr), sizeof(lan->addr));
+		(struct sockaddr *) &(lan->ip_addr[addr_num]),
+		sizeof(struct sockaddr_in));
     if (rv == -1)
 	rv = errno;
     else
 	rv = 0;
 
     return rv;
+}
+
+static int
+lan_send(lan_data_t  *lan,
+	 ipmi_addr_t *addr,
+	 int         addr_len,
+	 ipmi_msg_t  *msg,
+	 uint8_t     seq,
+	 int         *send_ip_num)
+{
+    if (lan->connected) {
+	lan->num_sends++;
+
+	/* We periodically switch between IP addresses, just to make sure
+	   they are all operational. */
+	if ((lan->num_sends % SENDS_BETWEEN_IP_SWITCHES) == 0) {
+	    int addr_num = lan->curr_ip_addr + 1;
+	    while (addr_num != lan->curr_ip_addr) {
+		if (addr_num >= lan->num_ip_addr)
+		    addr_num = 0;
+		if (lan->ip_working[addr_num])
+		    break;
+		addr_num++;
+	    }
+	    lan->curr_ip_addr = addr_num;
+	}
+    }
+
+    *send_ip_num = lan->curr_ip_addr;
+    return lan_send_addr(lan, addr, addr_len, msg, seq, lan->curr_ip_addr);
+}
+
+static void
+audit_timeout_handler(void              *cb_data,
+		      os_hnd_timer_id_t *id)
+{
+    audit_timer_info_t *info = cb_data;
+    ipmi_con_t         *ipmi = info->ipmi;
+    lan_data_t         *lan;
+    struct timeval     timeout;
+    ipmi_msg_t         msg;
+    int                i;
+
+    /* If we were cancelled, just free the data and ignore the call. */
+    if (info->cancelled) {
+	goto out_done;
+    }
+
+    ipmi_read_lock();
+
+    if (!lan_valid_ipmi(ipmi)) {
+	goto out_unlock_done;
+    }
+
+    lan = ipmi->con_data;
+
+    if (! lan->connected) {
+	send_auth_cap(ipmi, lan);
+    } else {
+	/* Send a message to any connection we think is down. */
+	for (i=0; i<lan->num_ip_addr; i++) {
+	    ipmi_system_interface_addr_t si;
+	    if (! lan->ip_working[i]) {
+		msg.netfn = IPMI_APP_NETFN;
+		msg.cmd = IPMI_GET_DEVICE_ID_CMD;
+		msg.data = NULL;
+		msg.data_len = 0;
+		
+		si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+		si.channel = 0xf;
+		si.lun = 0;
+		lan_send_addr(lan, (ipmi_addr_t *) &si, sizeof(si), &msg, 0, i);
+	    }
+	}
+    }
+
+    timeout.tv_sec = LAN_AUDIT_TIMEOUT / 1000000;
+    timeout.tv_usec = LAN_AUDIT_TIMEOUT % 1000000;
+    ipmi->os_hnd->start_timer(ipmi->os_hnd,
+			      id,
+			      &timeout,
+			      audit_timeout_handler,
+			      cb_data);
+    info = NULL;
+
+ out_unlock_done:
+    ipmi_read_unlock();
+ out_done:
+    if (info) {
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
+	ipmi_mem_free(info);
+    }
+    return;
+}
+
+static unsigned int
+num_ip_working(lan_data_t *lan)
+{
+    int count = 0;
+    int i;
+
+    for (i=0; i<lan->num_ip_addr; i++) {
+	if (lan->ip_working[i])
+	    count++;
+    }
+
+    return count;
+}
+
+static void
+connection_up(lan_data_t *lan, int addr_num)
+{
+    /* The IP is already operational, so ignore this. */
+    if (lan->ip_working[addr_num])
+	return;
+
+    lan->ip_working[addr_num] = 1;
+
+    /* We don't report anything until we have a connection up */
+    if (! lan->connected)
+	return;
+
+    ipmi_log(IPMI_LOG_INFO, "Connection %d to the MXP is up", addr_num);
+
+    if (lan->lan_con_fail_handler)
+	lan->lan_con_fail_handler(addr_num, 0, lan->lan_con_fail_cb_data);
+
+    if (num_ip_working(lan) == 1) {
+	/* No other address was operational, so report that the system
+           is back up. */
+	ipmi_log(IPMI_LOG_INFO, "Connection to the MXP restored");
+	lan->curr_ip_addr = addr_num;
+	if (lan->con_fail_handler)
+	    lan->con_fail_handler(lan->ipmi, 0, lan->con_fail_cb_data);
+    }
+}
+
+
+static void
+lost_connection(lan_data_t *lan, int addr_num)
+{
+    int i;
+
+    if (! lan->ip_working[addr_num])
+	return;
+
+    lan->ip_working[addr_num] = 0;
+
+    ipmi_log(IPMI_LOG_WARNING, "Connection %d to the BMC is down", addr_num);
+
+    if (lan->lan_con_fail_handler)
+	lan->lan_con_fail_handler(addr_num, ETIMEDOUT,
+				  lan->lan_con_fail_cb_data);
+
+    if (lan->curr_ip_addr == addr_num) {
+	/* Scan to see if any address is operational. */
+	for (i=0; i<lan->num_ip_addr; i++) {
+	    if (lan->ip_working[i]) {
+		lan->curr_ip_addr = i;
+		break;
+	    }
+	}
+
+	if (i >= lan->num_ip_addr) {
+	    /* There were no operational connections, report that. */
+	    ipmi_log(IPMI_LOG_SEVERE, "All connections the MXP down");
+
+	    lan->connected = 0;
+	    if (lan->con_fail_handler)
+		lan->con_fail_handler(lan->ipmi, ETIMEDOUT,
+				      lan->con_fail_cb_data);
+	}
+    }
 }
 
 static void
@@ -425,6 +691,7 @@ rsp_timeout_handler(void              *cb_data,
     void                  *rsp_data;
     void                  *data2;
     void                  *data3;
+    int                   ip_num;
 
     ipmi_read_lock();
 
@@ -445,8 +712,33 @@ rsp_timeout_handler(void              *cb_data,
     if (lan->seq_table[seq].rsp_handler == NULL)
 	goto out_unlock;
 
+    ip_num = lan->seq_table[seq].last_ip_num;
+    if (lan->ip_working[ip_num]) {
+	if (lan->consecutive_ip_failures[ip_num] == 0) {
+	    /* Set the time when the connection will be considered failed. */
+	    gettimeofday(&(lan->ip_failure_time[ip_num]), NULL);
+	    lan->ip_failure_time[ip_num].tv_sec += IP_FAIL_TIME / 1000000;
+	    lan->ip_failure_time[ip_num].tv_usec += IP_FAIL_TIME % 1000000;
+	    if (lan->ip_failure_time[ip_num].tv_usec > 1000000) {
+		lan->ip_failure_time[ip_num].tv_sec += 1;
+		lan->ip_failure_time[ip_num].tv_usec -= 1000000;
+	    }
+	    lan->consecutive_ip_failures[ip_num] = 1;
+	} else {
+	    lan->consecutive_ip_failures[ip_num]++;
+	    if (lan->consecutive_ip_failures[ip_num] >= IP_FAIL_COUNT) {
+		struct timeval now;
+		gettimeofday(&now, NULL);
+		if (cmp_timeval(&now, &lan->ip_failure_time[ip_num]) > 0)
+		{
+		    lost_connection(lan, ip_num);
+		}
+	    }
+	}
+    }
+
     lan->seq_table[seq].retries++;
-    if (lan->seq_table[seq].retries <= MAX_SEND_RETRIES)
+    if (lan->seq_table[seq].retries <= LAN_RSP_RETRIES)
     {
 	struct timeval timeout;
 	int            rv;
@@ -458,11 +750,12 @@ rsp_timeout_handler(void              *cb_data,
 		      &(lan->seq_table[seq].addr),
 		      lan->seq_table[seq].addr_len,
 		      &(lan->seq_table[seq].msg),
-		      seq);
+		      seq,
+		      &(lan->seq_table[seq].last_ip_num));
 
 	if (!rv) {
-	    timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
-	    timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
+	    timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
+	    timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
 	    ipmi->os_hnd->start_timer(ipmi->os_hnd,
 				      id,
 				      &timeout,
@@ -576,8 +869,8 @@ handle_msg_send(lan_timer_info_t      *info,
     lan->seq_table[seq].timer_info = info;
     lan->seq_table[seq].retries = 0;
 
-    timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
-    timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
+    timeout.tv_sec = LAN_RSP_TIMEOUT / 1000000;
+    timeout.tv_usec = LAN_RSP_TIMEOUT % 1000000;
     lan->seq_table[seq].timer = info->timer;
     rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
 				   lan->seq_table[seq].timer,
@@ -589,7 +882,8 @@ handle_msg_send(lan_timer_info_t      *info,
 	goto out;
     }
 
-    rv = lan_send(lan, addr, addr_len, msg, seq);
+    rv = lan_send(lan, addr, addr_len, msg, seq,
+		  &(lan->seq_table[seq].last_ip_num));
     if (rv) {
 	int err;
 
@@ -671,6 +965,7 @@ data_handler(int            fd,
     ipmi_addr_t        addr, addr2;
     unsigned int       addr_len;
     unsigned int       data_len;
+    int                recv_addr;
     
     ipmi_ll_rsp_handler_t handler;
     void                  *rsp_data;
@@ -702,9 +997,17 @@ data_handler(int            fd,
     /* Make sure the source IP matches what we expect the other end to
        be. */
     ipaddr = (struct sockaddr_in *) &ipaddrd;
-    if ((ipaddr->sin_port != lan->addr.sin_port)
-	|| (ipaddr->sin_addr.s_addr != lan->addr.sin_addr.s_addr))
+    for (recv_addr = 0; recv_addr < lan->num_ip_addr; recv_addr++) {
+	if ((ipaddr->sin_port == lan->ip_addr[recv_addr].sin_port)
+	    && (ipaddr->sin_addr.s_addr
+		== lan->ip_addr[recv_addr].sin_addr.s_addr))
+	{
+	    break;
+	}
+    }
+    if (recv_addr >= lan->num_ip_addr)
 	goto out_unlock2;
+
     /* Validate the length first, so we know that all the data in the
        buffer we will deal with is valid. */
     if (len < 21) /* Minimum size of an IPMI msg. */
@@ -756,6 +1059,10 @@ data_handler(int            fd,
     } else {
 	tmsg = data + 14;
     }
+
+    /* If it's from a down connection, report it as up. */
+    if (! lan->ip_working[recv_addr])
+	connection_up(lan, recv_addr);
 
     /* Check the sequence number. */
     if ((seq - lan->inbound_seq_num) <= 8) {
@@ -1001,48 +1308,6 @@ lan_send_command(ipmi_con_t            *ipmi,
     return rv;
 }
 
-static inline int
-cmp_timeval(struct timeval *tv1, struct timeval *tv2)
-{
-    if (tv1->tv_sec < tv2->tv_sec)
-        return -1;
- 
-    if (tv1->tv_sec > tv2->tv_sec)
-        return 1;
-
-    if (tv1->tv_usec < tv2->tv_usec)
-        return -1; 
-   
-    if (tv1->tv_usec > tv2->tv_usec)
-        return 1;
-
-    return 0;
-}
-
-static inline void
-diff_timeval(struct timeval *dest,
-             struct timeval *left,
-             struct timeval *right)
-{
-    if (   (left->tv_sec < right->tv_sec)
-        || (   (left->tv_sec == right->tv_sec)
-            && (left->tv_usec < right->tv_usec)))
-    {
-        /* If left < right, just force to zero, don't allow negative
-           numbers. */
-        dest->tv_sec = 0;
-        dest->tv_usec = 0;
-        return;
-    }
-
-    dest->tv_sec = left->tv_sec - right->tv_sec;
-    dest->tv_usec = left->tv_usec - right->tv_usec;
-    while (dest->tv_usec < 0) {
-        dest->tv_usec += 1000000;
-        dest->tv_sec--;
-    }
-}
-
 static int
 lan_register_for_events(ipmi_con_t                 *ipmi,
 			ipmi_ll_evt_handler_t      handler,
@@ -1239,6 +1504,15 @@ lan_close_connection(ipmi_con_t *ipmi)
 	ipmi_mem_free(q_item->info);
 	ipmi_mem_free(q_item);
     }
+    if (lan->audit_info) {
+	rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, lan->audit_timer);
+	if (rv)
+	    lan->audit_info->cancelled = 1;
+	else {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, lan->audit_timer);
+	    ipmi_mem_free(lan->audit_info);
+	}
+    }
     ipmi_unlock(lan->seq_num_lock);
 
     evt_to_free = lan->event_handlers;
@@ -1345,13 +1619,20 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 	return;
     }
 
-    /* Assume we are at address 0x20, the OEM code can fix it up if
-       necessary. */
-    rv = ipmi_init_con(ipmi, addr, addr_len, 0x20);
-    if (rv) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	cleanup_con(ipmi);
+    if (! lan->initialized) {
+	lan->initialized = 1;
+
+	/* Assume we are at address 0x20, the OEM code can fix it up if
+	   necessary. */
+	rv = ipmi_init_con(ipmi, addr, addr_len, 0x20);
+	if (rv) {
+	    if (ipmi->setup_cb)
+		ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
+	    cleanup_con(ipmi);
+	}
+    } else {
+	lan->connected = 1;
+	connection_up(lan, lan->curr_ip_addr);
     }
 }
 
@@ -1632,22 +1913,26 @@ lan_set_con_fail_handler(ipmi_con_t            *ipmi,
 }
 
 int
-ipmi_lan_setup_con(struct in_addr    addr,
-		   int               port,
-		   unsigned int      authtype,
-		   unsigned int      privilege,
-		   void              *username,
-		   unsigned int      username_len,
-		   void              *password,
-		   unsigned int      password_len,
-		   os_handler_t      *handlers,
-		   void              *user_data,
-		   ipmi_setup_done_t setup_cb,
-		   void              *cb_data)
+ipmi_lan_setup_con(struct in_addr            *ip_addrs,
+		   int                       *ports,
+		   unsigned int              num_ip_addrs,
+		   unsigned int              authtype,
+		   unsigned int              privilege,
+		   void                      *username,
+		   unsigned int              username_len,
+		   void                      *password,
+		   unsigned int              password_len,
+		   os_handler_t              *handlers,
+		   void                      *user_data,
+		   ipmi_setup_done_t         setup_cb,
+		   lan_report_con_failure_cb fail_con_cb,
+		   void                      *cb_data)
 {
-    ipmi_con_t    *ipmi = NULL;
-    lan_data_t    *lan = NULL;
-    int           rv;
+    ipmi_con_t     *ipmi = NULL;
+    lan_data_t     *lan = NULL;
+    int            rv;
+    int            i;
+    struct timeval timeout;
 
 
     if (username_len > IPMI_USERNAME_MAX)
@@ -1656,6 +1941,8 @@ ipmi_lan_setup_con(struct in_addr    addr,
 	return EINVAL;
     if ((authtype >= MAX_IPMI_AUTHS)
 	|| (ipmi_auths[authtype].authcode_init == NULL))
+	return EINVAL;
+    if ((num_ip_addrs < 1) || (num_ip_addrs > MAX_IP_ADDR))
 	return EINVAL;
 
     /* Make sure we register before anything else. */
@@ -1681,9 +1968,18 @@ ipmi_lan_setup_con(struct in_addr    addr,
     lan->authtype = authtype;
     lan->privilege = privilege;
 
-    lan->addr.sin_family = AF_INET;
-    lan->addr.sin_port = htons(port);
-    lan->addr.sin_addr = addr;
+    for (i=0; i<num_ip_addrs; i++) {
+	lan->ip_addr[i].sin_family = AF_INET;
+	lan->ip_addr[i].sin_port = htons(ports[i]);
+	lan->ip_addr[i].sin_addr = ip_addrs[i];
+	lan->ip_working[i] = 1;
+    }
+    lan->num_ip_addr = num_ip_addrs;
+    lan->curr_ip_addr = 0;
+    lan->num_sends = 0;
+    lan->connected = 0;
+    lan->initialized = 0;
+
     lan->outstanding_msg_count = 0;
     lan->max_outstanding_msg_count = 10;
     lan->wait_q = NULL;
@@ -1703,6 +1999,29 @@ ipmi_lan_setup_con(struct in_addr    addr,
     rv = ipmi_create_lock_os_hnd(handlers, &lan->event_handlers_lock);
     if (rv)
 	goto out_err;
+
+    /* Start the timer to audit the connections. */
+    lan->audit_info = ipmi_mem_alloc(sizeof(*(lan->audit_info)));
+    if (!lan->audit_info)
+	goto out_err;
+
+    lan->audit_info->cancelled = 0;
+    lan->audit_info->ipmi = ipmi;
+    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(lan->audit_timer));
+    if (rv)
+	goto out_err;
+    timeout.tv_sec = LAN_AUDIT_TIMEOUT / 1000000;
+    timeout.tv_usec = LAN_AUDIT_TIMEOUT % 1000000;
+    rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				   lan->audit_timer,
+				   &timeout,
+				   audit_timeout_handler,
+				   lan->audit_info);
+    if (rv) {
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, lan->audit_timer);
+	lan->audit_timer = NULL;
+	goto out_err;
+    }
 
     memcpy(lan->username, username, username_len);
     lan->username_len = username_len;
