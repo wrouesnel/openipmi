@@ -6092,7 +6092,7 @@ static void
 close_domain_handler(ipmi_domain_t *domain, void *cb_data)
 {
     domain_scan_t *info = cb_data;
-    char name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, name, sizeof(name));
     if (strcmp(name, info->name) == 0) {
@@ -6125,7 +6125,7 @@ static void
 set_domain_handler(ipmi_domain_t *domain, void *cb_data)
 {
     domain_scan_t *info = cb_data;
-    char name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, name, sizeof(name));
     if (strcmp(name, info->name) == 0) {
@@ -6157,7 +6157,7 @@ set_domain_cmd(char *cmd, char **toks, void *cb_data)
 static void
 domains_handler(ipmi_domain_t *domain, void *cb_data)
 {
-    char name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, name, sizeof(name));
     display_pad_out("  %s\n", name);

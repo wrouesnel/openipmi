@@ -44,7 +44,7 @@ con_list_handler(ipmi_domain_t *domain, int conn, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    char            conn_name[IPMI_MAX_DOMAIN_NAME_LEN+20];
+    char            conn_name[IPMI_DOMAIN_NAME_LEN+20];
     int             p;
 
     if (cmdlang->err)
@@ -59,7 +59,7 @@ static void
 con_list(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
     ipmi_cmdlang_out(cmd_info, "Domain", NULL);
@@ -76,7 +76,7 @@ static void
 con_info(ipmi_domain_t *domain, int conn, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    char            conn_name[IPMI_MAX_DOMAIN_NAME_LEN+20];
+    char            conn_name[IPMI_DOMAIN_NAME_LEN+20];
     int             p;
     int             rv;
     unsigned int    val;
@@ -122,7 +122,7 @@ con_activate(ipmi_domain_t *domain, int conn, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
-    char            conn_name[IPMI_MAX_DOMAIN_NAME_LEN+20];
+    char            conn_name[IPMI_DOMAIN_NAME_LEN+20];
     int             p;
 
     rv = ipmi_domain_activate_connection(domain, conn);

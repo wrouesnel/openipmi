@@ -54,7 +54,7 @@ domain_list_handler(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
 
     if (cmdlang->err)
 	return;
@@ -77,7 +77,7 @@ static void
 domain_info(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
@@ -137,7 +137,7 @@ domain_new_done(ipmi_domain_t *domain,
     /* If we get an error removing the connect change handler,
        that means this has already been done. */
     if ((!rv) && cmd_info) {
-	char  domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+	char  domain_name[IPMI_DOMAIN_NAME_LEN];
 
 	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 	ipmi_cmdlang_lock(cmd_info);
@@ -154,7 +154,7 @@ domain_fully_up(ipmi_domain_t *domain, void *cb_data)
     char            *errstr = NULL;
     int             rv = 0;
     ipmi_cmd_info_t *evi;
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
@@ -219,65 +219,13 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 	    cmdlang->err = EINVAL;
 	    goto out;
 	}
-	if (strcmp(argv[curr_arg], "-noall") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_ALL;
-	    options[num_options].ival = 0;
+
+	if (! ipmi_parse_options(options+num_options, argv[curr_arg]))
 	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-all") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_ALL;
-	    options[num_options].ival = 1;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-nosdrs") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_SDRS;
-	    options[num_options].ival = 0;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-sdrs") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_SDRS;
-	    options[num_options].ival = 1;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-nofrus") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
-	    options[num_options].ival = 0;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-frus") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
-	    options[num_options].ival = 1;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-nosel") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
-	    options[num_options].ival = 0;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-sel") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
-	    options[num_options].ival = 1;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-noipmbscan") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_IPMB_SCAN;
-	    options[num_options].ival = 0;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-ipmbscan") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_IPMB_SCAN;
-	    options[num_options].ival = 1;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-nooeminit") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_OEM_INIT;
-	    options[num_options].ival = 0;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-oeminit") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_OEM_INIT;
-	    options[num_options].ival = 1;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-noseteventrcvr") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
-	    options[num_options].ival = 0;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-seteventrcvr") == 0) {
-	    options[num_options].option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
-	    options[num_options].ival = 1;
-	    num_options++;
-	} else if (strcmp(argv[curr_arg], "-wait_til_up") == 0) {
+	else if (strcmp(argv[curr_arg], "-wait_til_up") == 0)
 	    wait_til_up = 1;
-	}
+	else
+	    break;
 	curr_arg++;
     }
 
@@ -351,7 +299,7 @@ domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     ipmi_domain_t   *domain = ipmi_fru_get_domain(fru);
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
 
@@ -475,7 +423,7 @@ domain_msg_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_msg_t       *msg = &rspi->msg;
     ipmi_ipmb_addr_t *addr = (ipmi_ipmb_addr_t *) &rspi->addr;
     ipmi_cmd_info_t  *cmd_info = rspi->data1;
-    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
@@ -629,7 +577,7 @@ scan_done(ipmi_domain_t *domain, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -717,7 +665,7 @@ domain_rescan_sels_done(ipmi_domain_t *domain, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
     if (err) {
@@ -769,7 +717,7 @@ domain_presence(ipmi_domain_t *domain, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             rv;
-    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
 
     rv = ipmi_detect_domain_presence_changes(domain, 1);
     if (rv) {
@@ -794,7 +742,7 @@ domain_sel_rescan_time(ipmi_domain_t *domain, void *cb_data)
     int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
     int             argc = ipmi_cmdlang_get_argc(cmd_info);
     char            **argv = ipmi_cmdlang_get_argv(cmd_info);
-    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
 
     if ((argc - curr_arg) < 1) {
 	/* Not enough parameters */
@@ -833,7 +781,7 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
     int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
     int             argc = ipmi_cmdlang_get_argc(cmd_info);
     char            **argv = ipmi_cmdlang_get_argv(cmd_info);
-    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
 
     if ((argc - curr_arg) < 1) {
 	cmdlang->errstr = "Not enough parameters";
@@ -863,7 +811,7 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
 
 typedef struct domain_close_info_s
 {
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
     ipmi_cmd_info_t *cmd_info;
 } domain_close_info_t;
 
@@ -943,7 +891,7 @@ domain_event_handler(ipmi_domain_t *domain,
 
  out_err:
     if (rv) {
-	char domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+	char domain_name[IPMI_DOMAIN_NAME_LEN];
 
 	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 	ipmi_cmdlang_global_err(domain_name,
@@ -965,7 +913,7 @@ domain_con_change(ipmi_domain_t *domain,
     char            *errstr;
     int             rv = 0;
     ipmi_cmd_info_t *evi;
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
@@ -1004,7 +952,7 @@ domain_change(ipmi_domain_t      *domain,
     ipmi_cmd_info_t *evi;
     int             rv = 0;
     char            *errstr = NULL;
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char            domain_name[IPMI_DOMAIN_NAME_LEN];
 
     evi = ipmi_cmdlang_alloc_event_info();
     if (!evi) {

@@ -1506,8 +1506,92 @@ first_sel_op(ipmi_mc_t *mc)
 }
 
 static void
+startup_got_sel_time(ipmi_mc_t  *mc,
+		     ipmi_msg_t *rsp,
+		     void       *rsp_data)
+{
+    mc_name_info_t *info = rsp_data;
+    struct timeval now;
+    uint32_t       time;
+
+    if (!mc) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(startup_set_sel_time): "
+		 "MC went away during SEL time get", info->name);
+	goto out;
+    }
+
+    if (rsp->data[0] != 0) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(startup_set_sel_time): "
+		 "Unable to get the SEL time due to error: %x",
+		 mc->name, rsp->data[0]);
+	mc->startup_SEL_time = 0;
+	goto out_start;
+    }
+
+    if (rsp->data_len < 5) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%smc.c(startup_got_sel_time): "
+		 "Get SEL time response too short for MC at 0x%x",
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
+	goto out_start;
+    }
+
+    gettimeofday(&now, NULL);
+    time = ipmi_get_uint32(rsp->data+1);
+
+    if (time < now.tv_sec)
+	/* Time is in the past, move it forward. */
+	first_sel_op(mc);
+    else
+	/* Time is current or in the future, don't move it backwards
+	   as that may mess other things up. */
+	ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
+
+    goto out;
+
+ out_start:    
+    first_sel_op(mc);
+
+ out:
+    ipmi_mem_free(info);
+}
+
+static void
 con_up_mc(ipmi_mc_t *mc, void *cb_data)
 {
+    ipmi_msg_t     msg;
+    int            rv;
+    mc_name_info_t *info;
+
+    /* Set the current system event log time.  We do this here so
+       we can be sure that the entities are all there before
+       reporting events. */
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_GET_SEL_TIME_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(con_up_mc): "
+		 "Unable to start SEL time, out of memory",
+		 mc->name);
+	goto cont_op;
+    }
+    rv = ipmi_mc_send_command(mc, 0, &msg, startup_got_sel_time, info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(con_up_mc): "
+		 "Unable to start SEL time set due to error: %x",
+		 mc->name, rv);
+	ipmi_mem_free(info);
+	goto cont_op;
+    }
+    return;
+
+ cont_op:
     first_sel_op(mc);
 }
 
@@ -1572,7 +1656,7 @@ start_sel_ops(ipmi_mc_t           *mc,
 
     if (ipmi_domain_con_up(domain)) {
 	/* The domain is already up, just start the process. */
-	first_sel_op(mc);
+	con_up_mc(mc, NULL);
     } else if (fail_if_down) {
 	rv = EAGAIN;
 	ipmi_mem_free(info);
@@ -1591,7 +1675,7 @@ start_sel_ops(ipmi_mc_t           *mc,
 		     " delayed SEL timer start, starting it now, but some"
 		     " events may come in before the connection is up.",
 		     mc->name);
-	    first_sel_op(mc);
+	    con_up_mc(mc, NULL);
 	}
     }
     return 0;

@@ -63,7 +63,7 @@ static void
 mc_list(ipmi_domain_t *domain, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    char             domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char             domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
     ipmi_cmdlang_out(cmd_info, "Domain", NULL);

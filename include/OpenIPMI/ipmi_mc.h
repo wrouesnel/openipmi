@@ -60,7 +60,7 @@ int ipmi_mc_id_is_invalid(ipmi_mcid_t *id);
 typedef void (*ipmi_mc_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
 
 /* Get the name of an MC. */
-#define IPMI_MC_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
+#define IPMI_MC_NAME_LEN (IPMI_DOMAIN_NAME_LEN + 32)
 int ipmi_mc_get_name(ipmi_mc_t *mc, char *name, int length);
 
 /* Return the domain for the given MC. */

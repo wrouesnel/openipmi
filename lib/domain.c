@@ -140,7 +140,7 @@ struct ipmi_domain_s
 {
     /* Used for error reporting. We add an extra space at the end, thus
        the +1. */
-    char name[IPMI_MAX_DOMAIN_NAME_LEN+1];
+    char name[IPMI_DOMAIN_NAME_LEN+1];
 
     /* Used to handle shutdown race conditions. */
     int             valid;

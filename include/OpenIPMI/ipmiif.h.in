@@ -196,7 +196,7 @@ void ipmi_domain_iterate_domains(ipmi_domain_ptr_cb handler,
 
 /* Get the "name" for the domain.  Returns the length of the string
    (minus the closing \0). */
-#define IPMI_MAX_DOMAIN_NAME_LEN 32
+#define IPMI_DOMAIN_NAME_LEN 32
 int ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int length);
 
 /* Domains come in different flavors.  It might be useful to know the
@@ -588,7 +588,7 @@ enum ipmi_dlr_type_e ipmi_entity_get_type(ipmi_entity_t *ent);
 /* Get a useful string name for the entity.  The return value is the
    number of characters in the string put into name.  The length is the
    length of the "name" array. */
-#define IPMI_ENTITY_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
+#define IPMI_ENTITY_NAME_LEN (IPMI_DOMAIN_NAME_LEN + 32)
 int ipmi_entity_get_name(ipmi_entity_t *entity, char *name, int length);
 
 int ipmi_entity_get_is_fru(ipmi_entity_t *ent);
@@ -1384,7 +1384,7 @@ int ipmi_sensor_id_get_states(ipmi_sensor_id_t      sensor_id,
 /* Get a useful string name for the control.  The return value is the
    number of characters in the string put into name.  The length is the
    length of the "name" array. */
-#define IPMI_CONTROL_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 34)
+#define IPMI_CONTROL_NAME_LEN (IPMI_DOMAIN_NAME_LEN + 34)
 int ipmi_control_get_name(ipmi_control_t *sensor, char *name, int length);
 
 /* The type of control.  Returns something in the form IPMI_CONTROL_xxx */
@@ -1748,14 +1748,18 @@ int ipmi_init(os_handler_t *handler);
 /* This will clean up all the memory associated with IPMI. */
 void ipmi_shutdown(void);
 
+/* Parse a possible option, returns EINVAL if the option is not valid. */
+int ipmi_parse_options(ipmi_open_option_t *option,
+		       char               *arg);
 
-/* Parse the arguments.  curr_arg should be passed in as the current
-   argument, it will be set to one after the last argument parsed.
-   arg_count should be the total number of arguments.  args is the
-   arguments (in argv style), and the data is returned in the iargs
-   value.  Note that on an error, a non-zero value is returned and
-   curr_arg will be set to the argument that had the error.  You must
-   use ipmi_free_args() to free the value returned in iargs. */
+/* Parse the arguments and extract a connection.  curr_arg should be
+   passed in as the current argument, it will be set to one after the
+   last argument parsed.  arg_count should be the total number of
+   arguments.  args is the arguments (in argv style), and the data is
+   returned in the iargs value.  Note that on an error, a non-zero
+   value is returned and curr_arg will be set to the argument that had
+   the error.  You must use ipmi_free_args() to free the value
+   returned in iargs. */
 int ipmi_parse_args(int         *curr_arg,
 		    int         arg_count,
 		    char        * const *args,

@@ -78,7 +78,7 @@ struct ipmi_fru_record_s
     void                  *data;
 };
 
-#define FRU_NAME_SIZE (IPMI_MAX_DOMAIN_NAME_LEN + 31)
+#define FRU_NAME_SIZE (IPMI_DOMAIN_NAME_LEN + 31)
 struct ipmi_fru_s
 {
     int deleted;

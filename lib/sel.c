@@ -64,7 +64,7 @@ typedef struct sel_event_holder_s
     ipmi_event_t *event;
 } sel_event_holder_t;
 
-#define SEL_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
+#define SEL_NAME_LEN (IPMI_DOMAIN_NAME_LEN + 32)
 
 struct ipmi_sel_info_s
 {

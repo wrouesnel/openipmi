@@ -1,3 +1,25 @@
+2004-10-19 Corey Minyard <cminyard@mvista.com> 
+
+	* cmdlang/cmd_conn.c: Renamed IPMI_MAX_DOMAIN_NAME_LEN to
+	IPMI_DOMAIN_NAME LEN to make it consistent with the other defines.
+	* cmdlang/cmd_domain.c: ditto
+	* cmdlang/cmd_entity.c: ditto
+	* cmdlang/cmd_lanparm.c: ditto
+	* cmdlang/cmd_mc.c: ditto
+	* cmdlang/cmd_pef.c: ditto
+	* cmdlang/cmd_pet.c: ditto
+	* cmdlang/cmd_sel.c: ditto
+	* cmdlang/cmdlang.c: ditto
+	* include/OpenIPMI/ipmi_mc.h: ditto
+	* include/OpenIPMI/ipmiif.h.in: ditto
+	* lib/domain.c: ditto
+	* lib/fru.c: ditto
+	* lib/ipmi.c: ditto
+	* lib/mc.c: ditto
+	* lib/sel.c: ditto
+	* ui/ui.c: ditto
+
+
 2004-10-18 Corey Minyard <cminyard@mvista.com> 
 
 	* Practically_everything: More work on the include files, moved
@@ -10,6 +32,9 @@
 
 	* cmdlang/cmd_mc.c, cmdlang/cmd_domain.c, man/ipmi_cmdlang.7:
 	Added beter support for the SELs.
+
+	* lib/mc.c: Don't set the SEL time if that would move the time
+	backwards.
 
 2004-10-14 Corey Minyard <cminyard@mvista.com> 
 

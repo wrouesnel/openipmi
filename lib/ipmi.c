@@ -1225,6 +1225,58 @@ ipmi_free_args(ipmi_args_t *args)
 }
 
 int
+ipmi_parse_options(ipmi_open_option_t *option,
+		   char               *arg)
+{
+    if (strcmp(arg, "-noall") == 0) {
+	option->option = IPMI_OPEN_OPTION_ALL;
+	option->ival = 0;
+    } else if (strcmp(arg, "-all") == 0) {
+	option->option = IPMI_OPEN_OPTION_ALL;
+	option->ival = 1;
+    } else if (strcmp(arg, "-nosdrs") == 0) {
+	option->option = IPMI_OPEN_OPTION_SDRS;
+	option->ival = 0;
+    } else if (strcmp(arg, "-sdrs") == 0) {
+	option->option = IPMI_OPEN_OPTION_SDRS;
+	option->ival = 1;
+    } else if (strcmp(arg, "-nofrus") == 0) {
+	option->option = IPMI_OPEN_OPTION_FRUS;
+	option->ival = 0;
+    } else if (strcmp(arg, "-frus") == 0) {
+	option->option = IPMI_OPEN_OPTION_FRUS;
+	option->ival = 1;
+    } else if (strcmp(arg, "-nosel") == 0) {
+	option->option = IPMI_OPEN_OPTION_FRUS;
+	option->ival = 0;
+    } else if (strcmp(arg, "-sel") == 0) {
+	option->option = IPMI_OPEN_OPTION_FRUS;
+	option->ival = 1;
+    } else if (strcmp(arg, "-noipmbscan") == 0) {
+	option->option = IPMI_OPEN_OPTION_IPMB_SCAN;
+	option->ival = 0;
+    } else if (strcmp(arg, "-ipmbscan") == 0) {
+	option->option = IPMI_OPEN_OPTION_IPMB_SCAN;
+	option->ival = 1;
+    } else if (strcmp(arg, "-nooeminit") == 0) {
+	option->option = IPMI_OPEN_OPTION_OEM_INIT;
+	option->ival = 0;
+    } else if (strcmp(arg, "-oeminit") == 0) {
+	option->option = IPMI_OPEN_OPTION_OEM_INIT;
+	option->ival = 1;
+    } else if (strcmp(arg, "-noseteventrcvr") == 0) {
+	option->option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
+	option->ival = 0;
+    } else if (strcmp(arg, "-seteventrcvr") == 0) {
+	option->option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
+	option->ival = 1;
+    } else
+	return EINVAL;
+
+    return 0;
+}
+
+int
 ipmi_args_setup_con(ipmi_args_t  *args,
 		    os_handler_t *handlers,
 		    void         *user_data,

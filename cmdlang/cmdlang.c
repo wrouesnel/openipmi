@@ -176,7 +176,7 @@ for_each_domain_handler(ipmi_domain_t *domain, void *cb_data)
 {
     domain_iter_info_t *info = cb_data;
     ipmi_cmd_info_t    *cmd_info = info->cmd_info;
-    char               domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    char               domain_name[IPMI_DOMAIN_NAME_LEN];
 
     if (cmd_info->cmdlang->err)
 	return;
