@@ -247,13 +247,9 @@ int ipmi_entity_get_SDR_repository_device(ipmi_entity_t *ent);
 int ipmi_entity_get_sensor_device(ipmi_entity_t *ent);
 char *ipmi_sensor_get_entity_id_string(ipmi_entity_t *ent);
 
-/* The ID from the device SDR. */
+/* The ID from the SDR. */
 int ipmi_entity_get_id_length(ipmi_entity_t *ent);
 void ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
-
-/* The ID from the main SDR. */
-int ipmi_entity_get_assigned_id_length(ipmi_entity_t *ent);
-void ipmi_entity_get_assigned_id(ipmi_entity_t *ent, char *id, int length);
 
 /* Is the entity currently present? */
 int ipmi_entity_is_present(ipmi_entity_t *ent);
@@ -549,6 +545,10 @@ int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
 int ipmi_sensor_get_oem1(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
 void ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
+/* The ID from the main SDR. */
+int ipmi_sensor_get_assigned_id_length(ipmi_sensor_t *sensor);
+void ipmi_sensor_get_assigned_id(ipmi_sensor_t *sensor, char *id, int length);
+
 
 /* This is the implementation for a set of thresholds for a
    threshold-based sensor.  Don't directly use the contents of the

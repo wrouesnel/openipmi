@@ -233,7 +233,7 @@ diff_timeval(struct timeval *dest,
     }
 }
 
-#define MASSIVE_DEBUG
+#undef MASSIVE_DEBUG
 #ifdef MASSIVE_DEBUG
 #include <stdio.h>
 FILE **debug_out = &stderr;

@@ -346,6 +346,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t     *mc,
     for (i=0; i<sensors->idx_size[4]; i++) {
 	if (!sensors->sensors_by_idx[4][i]) {
 	    found = 1;
+	    break;
 	}
     }
 

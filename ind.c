@@ -238,6 +238,7 @@ ipmi_ind_add_nonstandard(ipmi_mc_t     *mc,
     for (i=0; i<inds->idx_size; i++) {
 	if (!inds->inds_by_idx[i]) {
 	    found = 1;
+	    break;
 	}
     }
 

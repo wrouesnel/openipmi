@@ -556,9 +556,11 @@ states_read(ipmi_sensor_t *sensor,
 	    ipmi_states_t states,
 	    void          *cb_data)
 {
-    int present = ipmi_is_state_set(&states, 1);
+    int           present = ipmi_is_state_set(&states, 0);
+    ipmi_entity_t *ent = cb_data;
 
-    presence_changed(cb_data, present);
+    if (!err)
+        presence_changed(ent, present);
 }
 
 typedef struct ent_detect_info_s
@@ -632,7 +634,6 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 
     if ((!info->force) && (! ent->presence_possibly_changed))
 	return;
-
     ent->presence_possibly_changed = 0;
 
     if (ent->presence_sensor) {

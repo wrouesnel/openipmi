@@ -394,16 +394,18 @@ entities_handler(ipmi_entity_t *entity,
 {
     int  id, instance;
     char *present;
+    char name[33];
 
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
     curr_display_type = DISPLAY_ENTITY;
     curr_entity_id = ipmi_entity_convert_to_id(entity);
+    ipmi_entity_get_id(entity, name, 32);
     if (ipmi_entity_is_present(entity))
 	present = "present";
     else
 	present = "not present";
-    wprintw(display_pad, "  %d.%d %s\n", id, instance, present);
+    wprintw(display_pad, "  %d.%d (%s) %s\n", id, instance, name, present);
 }
 
 int
@@ -1203,8 +1205,8 @@ mccmd_rsp_handler(ipmi_mc_t  *src,
 		  ipmi_msg_t *msg,
 		  void       *rsp_data)
 {
-    unsigned int i;
-    char         *data;
+    unsigned int  i;
+    unsigned char *data;
 
     werase(display_pad);
     wmove(display_pad, 0, 0);
@@ -1360,6 +1362,12 @@ init_keypad(void)
     }
 
     err = keypad_bind_key(keymap, 0x7f, backspace);
+    if (!err)
+      err = keypad_bind_key(keymap, 9, normal_char);
+    if (!err)
+      err = keypad_bind_key(keymap, 8, backspace);
+    if (!err)
+      err = keypad_bind_key(keymap, KEY_BACKSPACE, backspace);
     if (!err)
 	err = keypad_bind_key(keymap, KEY_DC, backspace);
     if (!err)
