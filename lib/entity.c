@@ -229,6 +229,7 @@ typedef struct entity_child_link_s
 struct ipmi_entity_info_s
 {
     ipmi_domain_entity_cb handler;
+    ilist_t               *update_handlers;
     void                  *cb_data;
     ipmi_domain_t         *domain;
     ipmi_domain_id_t      domain_id;
@@ -320,6 +321,13 @@ ipmi_entity_info_alloc(ipmi_domain_t *domain, ipmi_entity_info_t **new_info)
 	return ENOMEM;
     }
 
+    ents->update_handlers = alloc_ilist();
+    if (! ents->update_handlers) {
+	free_ilist(ents->entities);
+	ipmi_mem_free(ents);
+	return ENOMEM;
+    }
+
     *new_info = ents;
 
     return 0;
@@ -372,17 +380,35 @@ destroy_entity(ilist_iter_t *iter, void *item, void *cb_data)
 int
 ipmi_entity_info_destroy(ipmi_entity_info_t *ents)
 {
+    ilist_twoitem_destroy(ents->update_handlers);
     ilist_iter(ents->entities, destroy_entity, NULL);
     free_ilist(ents->entities);
     ipmi_mem_free(ents);
     return 0;
 }
 
+typedef struct ent_info_update_handler_info_s
+{
+    enum ipmi_update_e op;
+    ipmi_domain_t      *domain;
+    ipmi_entity_t      *entity;
+} ent_info_update_handler_info_t;
+
+static void call_entity_info_update_handler(void *data, void *cb_data1,
+					    void *cb_data2)
+{
+    ent_info_update_handler_info_t *info = data;
+    ipmi_domain_entity_cb          handler = cb_data1;
+
+    handler(info->op, info->domain, info->entity, cb_data2);
+}
+
 /* Returns true if the entity was really deleted, false if not. */
 static int
 cleanup_entity(ipmi_entity_t *ent)
 {
-    ilist_iter_t iter;
+    ilist_iter_t                   iter;
+    ent_info_update_handler_info_t info;
 
     /* First see if the entity is ready for cleanup. */
     if ((ent->ref_count)
@@ -393,6 +419,15 @@ cleanup_entity(ipmi_entity_t *ent)
 	|| (!ilist_empty(ent->controls)))
 	return 0;
 
+    /* Call the update handler list. */
+    info.op = IPMI_DELETED;
+    info.entity = ent;
+    info.domain = ent->domain;
+    ilist_iter_twoitem(ent->ents->update_handlers,
+		       call_entity_info_update_handler,
+		       &info);
+
+	/* Call the old version handler. */
     /* Tell the user I was destroyed. */
     if (ent->ents->handler)
 	ent->ents->handler(IPMI_DELETED, ent->domain, ent, ent->ents->cb_data);
@@ -451,6 +486,28 @@ _ipmi_entity_name(ipmi_entity_t *entity)
  * children.
  *
  **********************************************************************/
+int
+ipmi_entity_info_add_update_handler(ipmi_entity_info_t    *ents,
+				    ipmi_domain_entity_cb handler,
+				    void                  *cb_data)
+{
+    if (ilist_add_twoitem(ents->update_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_entity_info_remove_update_handler(ipmi_entity_info_t    *ents,
+				       ipmi_domain_entity_cb handler,
+				       void                  *cb_data)
+{
+    if (ilist_remove_twoitem(ents->update_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
 typedef struct search_info_s {
     ipmi_device_num_t device_num;
     uint8_t           entity_id;
@@ -519,8 +576,9 @@ entity_add(ipmi_entity_info_t *ents,
 	   void               *sdr_gen_cb_data,
 	   ipmi_entity_t      **new_ent)
 {
-    int           rv;
-    ipmi_entity_t *ent;
+    int                            rv;
+    ipmi_entity_t                  *ent;
+    ent_info_update_handler_info_t info;
 
     rv = entity_find(ents, device_num, entity_id, entity_instance, new_ent);
     if (! rv) {
@@ -596,6 +654,14 @@ entity_add(ipmi_entity_info_t *ents,
     if (!ilist_add_tail(ents->entities, ent, NULL))
 	goto out_err;
 
+    /* Call the update handler list. */
+    info.op = IPMI_ADDED;
+    info.entity = ent;
+    info.domain = ent->domain;
+    ilist_iter_twoitem(ents->update_handlers, call_entity_info_update_handler,
+		       &info);
+
+    /* Call the old version handler. */
     if (ents->handler)
 	ents->handler(IPMI_ADDED, ent->domain, ent, ents->cb_data);
 
@@ -2328,10 +2394,21 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
     /* Now go through the new dlrs to call the updated handler on
        them. */
     for (i=0; i<infos.next; i++) {
+	ent_info_update_handler_info_t info;
+
 	found = infos.found + i;
 	if (found->found)
 	    continue;
 
+	/* Call the update handler list. */
+	info.op = IPMI_CHANGED;
+	info.entity = found->ent;
+	info.domain = domain;
+	ilist_iter_twoitem(found->ent->ents->update_handlers,
+			   call_entity_info_update_handler,
+			   &info);
+
+	/* Call the old version handler. */
 	if (found->ent->ents->handler)
 	    found->ent->ents->handler(IPMI_CHANGED, domain, found->ent,
 				      found->ent->ents->cb_data);      

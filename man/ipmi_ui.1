@@ -31,6 +31,9 @@ windows are scrollable with page up and page down keys, press the "F1"
 key to choose the the left window to scroll, the "F2" key to choose
 the right window to scroll.
 
+Note that you must set your environment TERM variable properly for
+your terminal, or ipmi_ui will display garbage on the screen.
+
 Note that you can put two connection specifications on the command
 line, and ipmi_ui will make two connection.  You can only do this if
 the connections are to the same IPMI domain through different
@@ -255,6 +258,12 @@ takes is system-specific.
 Scan for an MC at the given address.  If the MC exists but OpenIPMI
 didn't know about it, it will be added.  If the MC no longer exists,
 then it will be removed.
+
+.SS mc_events_enable <channel> <mc num> <enabled>
+Enable or disable event generation for the given MC.
+
+.SS mc_events_enabled <channel> <mc num>
+Prints out if the events are enabled for the given MC.
 
 
 .SH LAN Parameter Configuration

@@ -66,6 +66,7 @@
 /* PICMG Commands */
 #define PICMG_NETFN				0x2c
 #define PICMG_ID				0x00
+#define PICMG_CMD_GET_PROPERTIES		0x00
 #define PICMG_CMD_GET_ADDRESS_INFO		0x01
 #define PICMG_CMD_GET_SHELF_ADDRESS_INFO	0x02
 #define PICMG_CMD_SET_SHELF_ADDRESS_INFO	0x03
@@ -90,6 +91,8 @@
 #define PICMG_CMD_GET_FAN_LEVEL			0x16
 #define PICMG_CMD_BUSED_RESOURCE		0x17
 
+/* PICMG Entity IDs. */
+#define PICMG_ENTITY_ID_FRONT_BOARD		0xa0
 
 typedef struct atca_info_s atca_info_t;
 
@@ -169,21 +172,32 @@ atca_entity_sdr_add(ipmi_entity_t   *ent,
     return 0;
 }
 
-typedef struct atca_board_info_s atca_board_info_t;
+typedef struct atca_mc_s atca_mc_t;
+typedef struct atca_fru_s atca_fru_t;
 
 typedef struct atca_led_s
 {
-    unsigned int      num;
-    unsigned int      colors; /* A bitmask, in OpenIPMI numbers. */
-    atca_board_info_t *sinfo;
-    ipmi_control_t    *control;
+    unsigned int   fru_id;
+    unsigned int   num;
+    unsigned int   colors; /* A bitmask, in OpenIPMI numbers. */
+    atca_fru_t     *fru;
+    ipmi_control_t *control;
 } atca_led_t;
 
-struct atca_board_info_s
+struct atca_fru_s
 {
+    atca_mc_t     *minfo;
+    unsigned int  fru_id;
     unsigned int  num_leds;
     atca_led_t    *leds;
     ipmi_entity_t *entity;
+};
+
+struct atca_mc_s
+{
+    unsigned int  num_frus;
+    atca_fru_t    *frus;
+    unsigned int  ipm_fru_id;
 };
 
 /* Information common to all controls. */
@@ -285,15 +299,22 @@ atca_add_control(ipmi_mc_t      *mc,
 void
 atca_board_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    atca_board_info_t *sinfo = cb_data;
-    int               i;
+    atca_mc_t  *minfo = cb_data;
+    atca_fru_t *finfo;
+    int        i;
 
-    if (sinfo->leds) {
-	for (i=0; i<sinfo->num_leds; i++) {
-	    if (sinfo->leds[i].control)
-		ipmi_control_destroy(sinfo->leds[i].control);
+    if (minfo->frus) {
+	for (i=0; i<minfo->num_frus; i++) {
+	    finfo = &minfo->frus[i];
+	    if (finfo->leds) {
+		for (i=0; i<finfo->num_leds; i++) {
+		    if (finfo->leds[i].control)
+			ipmi_control_destroy(finfo->leds[i].control);
+		}
+		ipmi_mem_free(finfo->leds);
+	    }
 	}
-	ipmi_mem_free(sinfo->leds);
+	ipmi_mem_free(minfo->frus);
     }
 }
 
@@ -450,7 +471,7 @@ set_led(ipmi_control_t       *control,
     info->msg.data_len = 6;
 
     info->data[0] = PICMG_ID;
-    info->data[1] = 0;
+    info->data[1] = l->fru->fru_id;
     info->data[2] = l->num;
     if (on_time <= 0) {
 	/* Turn the LED off */
@@ -602,7 +623,7 @@ get_led(ipmi_control_t         *control,
     info->msg.data_len = 3;
 
     info->data[0] = PICMG_ID;
-    info->data[1] = 0;
+    info->data[1] = l->fru->fru_id;
     info->data[2] = l->num;
 
     rv = ipmi_control_add_opq(control, led_get_start, &info->sdata, info);
@@ -619,15 +640,17 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 		ipmi_msg_t *msg,
 		void       *rsp_data)
 {
-    atca_led_t        *l = rsp_data;
-    atca_board_info_t *sinfo = l->sinfo;
-    unsigned int      num = l->num;
-    char              name[10];
-    int               rv;
-    int               i;
+    atca_led_t   *l = rsp_data;
+    atca_fru_t   *finfo;
+    unsigned int num = l->num;
+    char         name[10];
+    int          rv;
+    int          i;
 
     if (check_for_msg_err(mc, 0, msg, 5, "fru_led_cap_rsp"))
 	return;
+
+    finfo = l->fru;
 
     if (num == 0)
 	sprintf(name, "blue led");
@@ -660,7 +683,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
     rv = atca_add_control(mc, 
 			  &l->control,
 			  num,
-			  sinfo->entity);
+			  finfo->entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(fru_led_cap_rsp): "
@@ -671,23 +694,23 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
 }
 
 static void
-get_led_capability(ipmi_mc_t *mc, atca_board_info_t *sinfo, unsigned int num)
+get_led_capability(ipmi_mc_t *mc, atca_fru_t *finfo, unsigned int num)
 {
     ipmi_msg_t    msg;
     unsigned char data[3];
     int           rv;
 
-    sinfo->leds[num].num = num;
-    sinfo->leds[num].sinfo = sinfo;
+    finfo->leds[num].num = num;
+    finfo->leds[num].fru = finfo;
 
     msg.netfn = PICMG_NETFN;
     msg.cmd = PICMG_CMD_GET_LED_COLOR_CAPABILITIES;
     msg.data = data;
     msg.data_len = 3;
     data[0] = PICMG_ID;
-    data[1] = 0;
+    data[1] = finfo->fru_id;
     data[2] = num;
-    rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_cap_rsp, &sinfo->leds[num]);
+    rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_cap_rsp, &finfo->leds[num]);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(get_led_capabilities): "
@@ -699,90 +722,110 @@ get_led_capability(ipmi_mc_t *mc, atca_board_info_t *sinfo, unsigned int num)
 
 static void
 fru_led_prop_rsp(ipmi_mc_t  *mc,
-		 ipmi_msg_t *msg,
+		 ipmi_msg_t *rsp,
 		 void       *rsp_data)
 {
-    atca_board_info_t *sinfo = rsp_data;
-    int               i, j;
-    unsigned int      num_leds;
+    atca_fru_t   *finfo = rsp_data;
+    int          i, j;
+    unsigned int num_leds;
 
-    if (check_for_msg_err(mc, 0, msg, 4, "fru_led_prop_rsp"))
+    if (check_for_msg_err(mc, 0, rsp, 4, "fru_led_prop_rsp"))
 	return;
 
-    num_leds = 4 * msg->data[3];
-    sinfo->leds = ipmi_mem_alloc(sizeof(atca_led_t) * num_leds);
-    if (!sinfo->leds) {
+    num_leds = 4 + rsp->data[3];
+    finfo->leds = ipmi_mem_alloc(sizeof(atca_led_t) * num_leds);
+    if (!finfo->leds) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(fru_led_prop_rsp): "
 		 "Could not allocate memory LEDs",
 		 MC_NAME(mc));
 	return;
     }
-    memset(sinfo->leds, 0, sizeof(atca_led_t) * num_leds);
-    sinfo->num_leds = num_leds;
+    memset(finfo->leds, 0, sizeof(atca_led_t) * num_leds);
+    finfo->num_leds = num_leds;
 
     for (i=0; i<4; i++) {
-	if (msg->data[2] & (1 << i)) {
+	if (rsp->data[2] & (1 << i)) {
 	    /* We support this LED.  Fetch its capabilities */
-	    get_led_capability(mc, sinfo, i);
+	    get_led_capability(mc, finfo, i);
 	}
     }
 
-    for (j=0; j<msg->data[3]; j++, i++) {
+    for (j=0; j<rsp->data[3]; j++, i++) {
 	if (i >= 128)
 	    /* We only support 128 LEDs. */
 	    break;
 	/* We support this LED, Fetch it's capabilities. */
-	get_led_capability(mc, sinfo, i);
+	get_led_capability(mc, finfo, i);
     }
 }
 
 static void
-atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_info_t *info)
+fru_picmg_prop_rsp(ipmi_mc_t  *mc,
+		   ipmi_msg_t *rsp,
+		   void       *rsp_data)
 {
+    atca_mc_t          *minfo = rsp_data;
     int                addr = ipmi_mc_get_address(mc);
     int                channel = ipmi_mc_get_channel(mc);
     ipmi_entity_info_t *ents;
-    atca_board_info_t  *sinfo = NULL;
     int                rv;
     char               *name;
     ipmi_msg_t         msg;
     unsigned char      data[2];
+    unsigned int       num_frus;
+    unsigned int       ipm_fru_id;
+    int                i;
+    ipmi_domain_t      *domain;
 
-    sinfo = ipmi_mem_alloc(sizeof(*sinfo));
-    if (!sinfo) {
+    if (check_for_msg_err(mc, 0, rsp, 5, "fru_picmg_prop_rsp"))
+	return;
+
+    num_frus = rsp->data[3];
+    ipm_fru_id = rsp->data[4];
+
+    if (ipm_fru_id >= num_frus) {
+	/* Something is bad here, give up. */
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_handle_new_mc): "
-		 "Could not allocate board sensor info",
+		 "%soem_atca.c(fru_picmg_prop_rsp): "
+		 "IPMI controller FRU id is larger than number of FRUs",
 		 MC_NAME(mc));
 	return;
     }
-    memset(sinfo, 0, sizeof(*sinfo));
+    /* Note that the above also checks for num_frus==0. */
 
+    minfo->frus = ipmi_mem_alloc(sizeof(atca_fru_t) * num_frus);
+    if (!minfo->frus) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(fru_picmg_prop_rsp): "
+		 "Could not allocate FRU memory",
+		 MC_NAME(mc));
+	return;
+    }
+    memset(minfo->frus, 0, sizeof(atca_fru_t) * num_frus);
+
+    for (i=0; i<num_frus; i++) {
+	minfo->frus[i].minfo = minfo;
+	minfo->frus[i].fru_id = i;
+    }
+
+    minfo->ipm_fru_id = ipm_fru_id;
+
+    domain = ipmi_mc_get_domain(mc);
     ents = ipmi_domain_get_entities(domain);
     name = "ATCA Board";
     rv = ipmi_entity_add(ents, domain, channel, addr, 0,
-			 IPMI_ENTITY_ID_PROCESSING_BLADE,
+			 PICMG_ENTITY_ID_FRONT_BOARD,
 			 0x60, /* Always device relative. */
 			 name, IPMI_ASCII_STR, strlen(name),
 			 atca_entity_sdr_add,
-			 NULL, &sinfo->entity);
+			 NULL, &minfo->frus[ipm_fru_id].entity);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_handle_new_mc): "
 		 "Could not create entity: 0x%x",
 		 MC_NAME(mc), rv);
-	goto out_err;
-    }
-
-    rv = ipmi_mc_add_oem_removed_handler(mc, atca_board_removal_handler,
-					 sinfo, NULL);
-    if (rv) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(atca_handle_new_mc): "
-		 "Could not add OEM removal handler: 0x%x",
-		 MC_NAME(mc), rv);
-	goto out_err;
+	return;
     }
 
     /* Now fetch the LED information. */
@@ -791,12 +834,57 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_info_t *info)
     msg.data = data;
     msg.data_len = 2;
     data[0] = PICMG_ID;
-    data[1] = 0;
-    rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_prop_rsp, sinfo);
+    data[1] = minfo->ipm_fru_id;
+    rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_prop_rsp,
+			      &(minfo->frus[ipm_fru_id]));
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(fru_picmg_prop_rsp): "
+		 "Could not send FRU LED properties command: 0x%x",
+		 MC_NAME(mc), rv);
+	/* Just go on, don't shut down the info. */
+    }
+}
+
+static void
+atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_info_t *info)
+{
+    atca_mc_t     *minfo = NULL;
+    ipmi_msg_t    msg;
+    unsigned char data[1];
+    int           rv;
+
+    minfo = ipmi_mem_alloc(sizeof(*minfo));
+    if (!minfo) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_handle_new_mc): "
+		 "Could not allocate board sensor info",
+		 MC_NAME(mc));
+	return;
+    }
+    memset(minfo, 0, sizeof(*minfo));
+
+    rv = ipmi_mc_add_oem_removed_handler(mc, atca_board_removal_handler,
+					 minfo, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_handle_new_mc): "
-		 "Could not send FRU LED properties command: 0x%x",
+		 "Could not add OEM removal handler: 0x%x",
+		 MC_NAME(mc), rv);
+	goto out_err;
+    }
+
+    /* Now fetch the properties. */
+    msg.netfn = PICMG_NETFN;
+    msg.cmd = PICMG_CMD_GET_PROPERTIES;
+    msg.data = data;
+    msg.data_len = 1;
+    data[0] = PICMG_ID;
+    rv = ipmi_mc_send_command(mc, 0, &msg, fru_picmg_prop_rsp, minfo);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_handle_new_mc): "
+		 "Could not send FRU properties command: 0x%x",
 		 MC_NAME(mc), rv);
 	/* Just go on, don't shut down the info. */
     }
@@ -804,8 +892,8 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_info_t *info)
     return;
 
  out_err:
-    if (sinfo)
-	ipmi_mem_free(sinfo);
+    if (minfo)
+	ipmi_mem_free(minfo);
 }
 
 static void

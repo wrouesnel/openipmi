@@ -2963,6 +2963,7 @@ typedef struct mccmd_info_s
     unsigned char lun;
     ipmi_msg_t    msg;
     int           found;
+    unsigned char val;
 } mccmd_info_t;
 
 void mc_handler(ipmi_mc_t *mc, void *cb_data)
@@ -3166,6 +3167,94 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
 
     info.found = 0;
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, mccmd_handler, &info);
+    if (rv) {
+	cmd_win_out("Unable to convert MC id to a pointer\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%d %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
+void
+mc_events_enable_cb(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    if (err)
+	ui_log("Error setting events enable: 0x%x\n", err);
+    else
+	ui_log("Events enable set\n");
+}
+
+void
+mc_events_enable_handler(ipmi_mc_t *mc,
+			 void      *cb_data)
+{
+    mccmd_info_t *info = cb_data;
+    int          rv;
+
+    info->found = 1;
+    rv = ipmi_mc_set_events_enable(mc, info->val, mc_events_enable_cb, NULL);
+    if (rv)
+	cmd_win_out("Set events enable failure: %x\n", rv);
+}
+
+int
+mc_events_enable_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+
+    
+    if (get_mc_id(toks, &info.mc_id))
+	return 0;
+
+    if (get_uchar(toks, &info.val, "enabled"))
+	return 0;
+
+    info.found = 0;
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, mc_events_enable_handler, &info);
+    if (rv) {
+	cmd_win_out("Unable to convert MC id to a pointer\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%d %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
+void
+mc_events_enabled_handler(ipmi_mc_t *mc,
+			  void      *cb_data)
+{
+    mccmd_info_t *info = cb_data;
+
+    info->found = 1;
+    if (ipmi_mc_get_events_enable(mc))
+	cmd_win_out("Events enabled\n");
+    else
+	cmd_win_out("Events not enabled\n");
+}
+
+int
+mc_events_enabled_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+
+    
+    if (get_mc_id(toks, &info.mc_id))
+	return 0;
+
+    info.found = 0;
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, mc_events_enabled_handler, &info);
     if (rv) {
 	cmd_win_out("Unable to convert MC id to a pointer\n");
 	return 0;
@@ -5398,6 +5487,12 @@ static struct {
       " <channel> <mc num> <LUN> <NetFN> <Cmd> [data...]"
       " - Send the given command"
       " to the management controller and display the response" },
+    { "mc_events_enable", mc_events_enable_cmd,
+      " <channel> <mc num> <enabled> - set enabled to 0 to disable events,"
+      " 1 to enable them.  This is the global event enable on the MC." },
+    { "mc_events_enabled", mc_events_enabled_cmd,
+      " <channel> <mc num> - Prints out if the events are enabled for"
+      " the given MC." },
     { "msg",		msg_cmd,
       " <channel> <IPMB addr> <LUN> <NetFN> <Cmd> [data...] - Send a command"
       " to the given IPMB address on the given channel and display the"

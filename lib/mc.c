@@ -122,6 +122,8 @@ struct ipmi_mc_s
     mc_reread_sel_t   *sel_timer_info;
     unsigned int      sel_scan_interval; /* seconds between SEL scans */
 
+    /* Is the global events enable for the MC enabled? */
+    int events_enabled;
 
     /* The SEL time when the connection first came up.  Only used at
        startup, after the SEL has been read the first time this will
@@ -283,6 +285,8 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     mc->domain = domain;
 
     mc->seq = ipmi_get_seq();
+
+    mc->events_enabled = 1;
 
     mc->active = 1;
 
@@ -1127,27 +1131,63 @@ ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
  *
  **********************************************************************/
 
+typedef struct set_event_rcvr_info_s
+{
+    ipmi_mc_done_cb done;
+    void            *cb_data;
+} set_event_rcvr_info_t;
+
 static void
 set_event_rcvr_done(ipmi_mc_t  *mc,
 		    ipmi_msg_t *rsp,
 		    void       *rsp_data)
 {
-    if (!mc)
-	return; /* The MC went away, no big deal. */
+    ipmi_mc_done_cb done = NULL;
+    void            *cb_data = NULL;
+    int             rv = 0;
+
+    if (rsp_data) {
+	set_event_rcvr_info_t *info = rsp_data;
+	done = info->done;
+	cb_data = info->cb_data;
+	ipmi_mem_free(info);
+    }
+
+    if (!mc) {
+	rv = ECANCELED;
+	goto out; /* The MC went away, no big deal. */
+    }
 
     if (rsp->data[0] != 0) {
 	/* Error setting the event receiver, report it. */
 	ipmi_log(IPMI_LOG_WARNING,
 		 "Could not set event receiver for MC at 0x%x",
 		 ipmi_addr_get_slave_addr(&mc->addr));
+	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
     }
+
+ out:
+    if (done)
+	done(mc, rv, cb_data);
 }
 
-static void
-send_set_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
+static int
+send_set_event_rcvr(ipmi_mc_t       *mc,
+		    unsigned int    addr,
+		    ipmi_mc_done_cb done,
+		    void            *cb_data)
 {
-    ipmi_msg_t    msg;
-    unsigned char data[2];
+    ipmi_msg_t            msg;
+    unsigned char         data[2];
+    set_event_rcvr_info_t *info = NULL;
+
+    if (done) {
+	info = ipmi_mem_alloc(sizeof(*info));
+	if (!info)
+	    return ENOMEM;
+	info->done = done;
+	info->cb_data = cb_data;
+    }
     
     msg.netfn = IPMI_SENSOR_EVENT_NETFN;
     msg.cmd = IPMI_SET_EVENT_RECEIVER_CMD;
@@ -1155,7 +1195,7 @@ send_set_event_rcvr(ipmi_mc_t *mc, unsigned int addr)
     msg.data_len = 2;
     data[0] = addr;
     data[1] = 0; /* LUN is 0 per the spec (section 7.2 of 1.5 spec). */
-    ipmi_mc_send_command(mc, 0, &msg, set_event_rcvr_done, NULL);
+    return ipmi_mc_send_command(mc, 0, &msg, set_event_rcvr_done, info);
     /* No care about return values, if this fails it will be done
        again later. */
 }
@@ -1177,6 +1217,8 @@ get_event_rcvr_done(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_WARNING,
 		 "Get event receiver length invalid for MC at 0x%x",
 		 ipmi_addr_get_slave_addr(&mc->addr));
+    } else if ((rsp->data[1] == 0) && (!mc->events_enabled))  {
+	/* Nothing to do, our event receiver is disabled. */
     } else {
 	ipmi_domain_t    *domain = ipmi_mc_get_domain(mc);
 	ipmi_mc_t        *destmc;
@@ -1187,14 +1229,18 @@ get_event_rcvr_done(ipmi_mc_t  *mc,
 	ipmb.slave_addr = rsp->data[1];
 	ipmb.lun = 0;
 
-	destmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &ipmb,
-				       sizeof(ipmb));
-	if (!destmc || !ipmi_mc_ipmb_event_receiver_support(destmc)) {
-	    /* The current event receiver doesn't exist or cannot
-               receive events, change it. */
-	    unsigned int event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
-	    if (event_rcvr)
-		send_set_event_rcvr(mc, event_rcvr);
+	if (mc->events_enabled) {
+	    destmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &ipmb,
+					   sizeof(ipmb));
+	    if (!destmc || !ipmi_mc_ipmb_event_receiver_support(destmc)) {
+		/* The current event receiver doesn't exist or cannot
+		   receive events, change it. */
+		unsigned int event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
+		if (event_rcvr)
+		    send_set_event_rcvr(mc, event_rcvr, NULL, NULL);
+	    }
+	} else {
+	    send_set_event_rcvr(mc, 0, NULL, NULL);
 	}
     }
 }
@@ -1350,7 +1396,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
 
     if (event_rcvr)
-	send_set_event_rcvr(mc, event_rcvr);
+	send_set_event_rcvr(mc, event_rcvr, NULL, NULL);
 
     if (mc->SEL_device_support) {
 	mc_reread_sel_t *info;
@@ -2516,6 +2562,43 @@ ipmi_mc_remove_oem_removed_handler(ipmi_mc_t         *mc,
     ilist_iter(mc->removed_handlers, remove_removed_handler, id);
     return 0;
 }
+
+int
+ipmi_mc_get_events_enable(ipmi_mc_t *mc)
+{
+    CHECK_MC_LOCK(mc);
+
+    return mc->events_enabled;
+}
+
+int
+ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
+			  int             val,
+			  ipmi_mc_done_cb done,
+			  void            *cb_data)
+{
+    int rv;
+
+    val = val != 0;
+
+    if (val == mc->events_enabled) {
+	/* Didn't changed, just finish the operation. */
+	done(mc, 0, cb_data);
+	return 0;
+    }
+
+    mc->events_enabled = val;
+    
+    if (val) {
+	unsigned int event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
+	rv = send_set_event_rcvr(mc, event_rcvr, done, cb_data);
+    } else {
+	rv = send_set_event_rcvr(mc, 0, done, cb_data);
+    }
+
+    return rv;
+}
+
 
 /***********************************************************************
  *

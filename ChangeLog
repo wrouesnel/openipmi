@@ -17,6 +17,17 @@
 	* utils/Makefile.am: Removed the md2 and md5 tests since they
 	contain marginally free code.
 
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a way to enable and
+	disable the event generation on an MC.
+
+	* ui.c, man/ipmi_ui.1: Added commands for mc event enable
+	settings.
+
+	* lib/entity.c, include/OpenIPMI/ipmi_entity.h: Added a way to
+	have multiple callback handlers called when an entity is added to
+	a domain.
+	* lib/domain.c, include/OpenIPMI/ipmiif.h: ditto
+
 2004-02-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a race condition dealing with an MC going away

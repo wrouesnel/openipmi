@@ -104,6 +104,13 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 			   ipmi_mc_done_cb done,
 			   void            *done_data);
 
+/* Get and set the setting to enable events for the entire MC. */
+int ipmi_mc_get_events_enable(ipmi_mc_t *mc);
+int ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
+			      int             val,
+			      ipmi_mc_done_cb done,
+			      void            *cb_data);
+
 /* Use the "main" SDR repository as a device SDR repository. This
    means that any SDRs in the "main" SDR repository on the MC will
    appear as sensors, etc as if they were in the device SDR
