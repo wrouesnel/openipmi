@@ -104,6 +104,7 @@
 ipmi_mc_id_t ipmi_mc_convert_to_id(ipmi_mc_t *mc);
 typedef void (*ipmi_mc_cb)(ipmi_mc_t *mc, void *cb_data);
 int ipmi_mc_pointer_cb(ipmi_mc_id_t id, ipmi_mc_cb handler, void *cb_data);
+int ipmi_cmp_mc_id(ipmi_mc_id_t id1, ipmi_mc_id_t id2);
 
 ipmi_entity_id_t ipmi_entity_convert_to_id(ipmi_entity_t *ent);
 typedef void (*ipmi_entity_cb)(ipmi_entity_t *entity, void *cb_data);
@@ -191,11 +192,6 @@ int ipmi_bmc_del_event(ipmi_mc_t    *bmc,
 		       ipmi_event_t *event,
 		       ipmi_bmc_cb  done_handler,
 		       void         *cb_data);
-/* Delete a event by record id. */
-int ipmi_bmc_del_event_by_recid(ipmi_mc_t    *bmc,
-				unsigned int record_id,
-				ipmi_bmc_cb  done_handler,
-				void         *cb_data);
 
 /* You can also scan the current set of events stored in the system.
    They return an error if the SEL is empty, or if you try to go past

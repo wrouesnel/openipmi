@@ -1824,9 +1824,11 @@ void mcs_handler(ipmi_mc_t *bmc,
 		 void      *cb_data)
 {
     int addr;
+    int channel;
 
     addr = ipmi_mc_get_address(mc);
-    display_pad_out("  0x%x\n", addr);
+    channel = ipmi_mc_get_channel(mc);
+    display_pad_out("  (%d 0x%x)\n", channel, addr);
 }
 
 static void
@@ -1848,7 +1850,7 @@ mcs_cmd(char *cmd, char **toks, void *cb_data)
     display_pad_clear();
     curr_display_type = DISPLAY_MCS;
     display_pad_out("MCs:\n");
-    display_pad_out("  0x20\n");
+    display_pad_out("  (15 0x0)\n");
     rv = ipmi_mc_pointer_cb(bmc_id, mcs_cmd_bmcer, NULL);
     if (rv) {
 	cmd_win_out("Unable to convert BMC id to a pointer\n");
@@ -1861,7 +1863,7 @@ mcs_cmd(char *cmd, char **toks, void *cb_data)
 #define MCCMD_DATA_SIZE 30
 typedef struct mccmd_info_s
 {
-    unsigned char addr;
+    ipmi_mc_id_t  mc_id;
     unsigned char lun;
     ipmi_msg_t    msg;
     int           found;
@@ -1892,23 +1894,17 @@ mccmd_rsp_handler(ipmi_mc_t  *src,
     display_pad_refresh();
 }
 
-void mccmd_handler(ipmi_mc_t *bmc,
-		   ipmi_mc_t *mc,
+void mccmd_handler(ipmi_mc_t *mc,
 		   void      *cb_data)
 {
     mccmd_info_t *info = cb_data;
     int          rv;
 
-    if (((info->addr == 0x20) && (bmc == mc))
-	|| (info->addr == ipmi_mc_get_address(mc)))
-    {
-	info->found = 1;
-	rv = ipmi_send_command(mc, info->lun, &(info->msg), mccmd_rsp_handler,
-			       NULL);
-	if (rv)
-	    cmd_win_out("Send command failure: %x\n", rv);
-    }
-
+    info->found = 1;
+    rv = ipmi_send_command(mc, info->lun, &(info->msg), mccmd_rsp_handler,
+			   NULL);
+    if (rv)
+	cmd_win_out("Send command failure: %x\n", rv);
 }
 
 static void
@@ -1916,9 +1912,8 @@ mccmd_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 {
     mccmd_info_t *info = cb_data;
 
-    mccmd_handler(bmc, bmc, cb_data);
-    if (!info->found)
-        ipmi_bmc_iterate_mcs(bmc, mccmd_handler, cb_data);
+    info->mc_id.bmc = bmc;
+    ipmi_mc_pointer_cb(info->mc_id, mccmd_handler, cb_data);
 }
 
 int
@@ -1928,9 +1923,15 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     unsigned char data[MCCMD_DATA_SIZE];
     unsigned int  data_len;
     int           rv;
+    unsigned char val;
 
-    if (get_uchar(toks, &info.addr, "MC address"))
+    if (get_uchar(toks, &val, "MC channel"))
 	return 0;
+    info.mc_id.channel = val;
+
+    if (get_uchar(toks, &val, "MC num"))
+	return 0;
+    info.mc_id.mc_num = val;
 
     if (get_uchar(toks, &info.lun, "LUN"))
 	return 0;
@@ -1956,7 +1957,8 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
 	return 0;
     }
     if (!info.found) {
-	cmd_win_out("Unable to find MC at address 0x%x\n", info.addr);
+	cmd_win_out("Unable to find MC (%d 0x%x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
     }
     display_pad_refresh();
 
@@ -2145,32 +2147,64 @@ delevent_cb(ipmi_mc_t *bmc, int err, void *cb_data)
 	ui_log("log deleted\n");
 }
 
+typedef struct delevent_info_s
+{
+    ipmi_mc_id_t mc_id;
+    int          record_id;
+    int          rv;
+} delevent_info_t;
+
 static void
 delevent_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 {
-    int          rv;
-    unsigned int *record_id = cb_data;
+    int             rv;
+    delevent_info_t *info = cb_data;
+    ipmi_event_t    event;
+    int             found = 0;
 
-    rv = ipmi_bmc_del_event_by_recid(bmc, *record_id, delevent_cb, NULL);
-    if (rv)
-	cmd_win_out("dellog_cmd: error deleting log: %x\n", rv);
+    info->mc_id.bmc = bmc;
+
+    rv = ipmi_bmc_first_event(bmc, &event);
+    while (!rv && !found) {
+	if ((ipmi_cmp_mc_id(event.mc_id, info->mc_id) == 0)
+	    && (event.record_id == info->record_id))
+	{
+	    found = 1;
+	    rv = ipmi_bmc_del_event(bmc, &event, delevent_cb, NULL);
+	    if (rv)
+		cmd_win_out("error deleting log: %x\n", rv);
+	} else {
+	    rv = ipmi_bmc_next_event(bmc, &event);
+	}
+    }
+    if (!found)
+	cmd_win_out("log not found\n", rv);
 }
 
 static int
 delevent_cmd(char *cmd, char **toks, void *cb_data)
 {
-    unsigned int record_id;
-    int          rv;
+    delevent_info_t info;
+    int             rv;
+    unsigned int    val;
 
     if (!bmc_ready) {
 	cmd_win_out("BMC has not finished setup yet\n");
 	return 0;
     }
 
-    if (get_uint(toks, &record_id, "record id"))
+    if (get_uint(toks, &val, "mc channel"))
+	return 0;
+    info.mc_id.channel = val;
+
+    if (get_uint(toks, &val, "mc number"))
+	return 0;
+    info.mc_id.mc_num = val;
+
+    if (get_uint(toks, &info.record_id, "record id"))
 	return 0;
 
-    rv = ipmi_mc_pointer_cb(bmc_id, delevent_cmd_bmcer, &record_id);
+    rv = ipmi_mc_pointer_cb(bmc_id, delevent_cmd_bmcer, &info);
     if (rv) {
 	cmd_win_out("Unable to convert BMC id to a pointer\n");
 	return 0;
@@ -2268,8 +2302,9 @@ list_sel_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
     display_pad_out("Events:\n");
     rv = ipmi_bmc_first_event(bmc, &event);
     while (!rv) {
-	display_pad_out("  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
+	display_pad_out("  (%d 0x%x) %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
 			" %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
+			event.mc_id.channel, event.mc_id.mc_num,
 			event.record_id, event.type,
 			event.data[0],
 			event.data[1],
@@ -2304,8 +2339,8 @@ list_sel_cmd(char *cmd, char **toks, void *cb_data)
 
 typedef struct sdrs_info_s
 {
-    int found;
-    unsigned char mc_addr;
+    int           found;
+    ipmi_mc_id_t  mc_id;
     unsigned char do_sensors;
 } sdrs_info_t;
 
@@ -2332,9 +2367,9 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
     display_pad_clear();
     curr_display_type = DISPLAY_SDRS;
 
-    display_pad_out("%s SDRs for MC %x\n",
+    display_pad_out("%s SDRs for MC (%d 0x%x)\n",
 	    info->do_sensors ? "device" : "main",
-	    info->mc_addr);
+	    info->mc_id.channel, info->mc_id.mc_num);
     for (i=0; i<count; i++) {
 	ipmi_sdr_t sdr;
 	int        j;
@@ -2383,16 +2418,13 @@ start_sdr_dump(ipmi_mc_t *mc, sdrs_info_t *info)
 }
 
 void
-sdrs_mcs_handler(ipmi_mc_t *bmc,
-		 ipmi_mc_t *mc,
+sdrs_mcs_handler(ipmi_mc_t *mc,
 		 void      *cb_data)
 {
     sdrs_info_t *info = cb_data;
 
-    if (info->mc_addr == ipmi_mc_get_address(mc)) {
-	info->found = 1;
-	start_sdr_dump(mc, info);
-    }
+    info->found = 1;
+    start_sdr_dump(mc, info);
 }
 
 static void
@@ -2400,18 +2432,16 @@ sdrs_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 {
     sdrs_info_t *info = cb_data;
 
-    if (info->mc_addr == 0x20) {
-	info->found = 1;
-	start_sdr_dump(bmc, info);
-    } else
-	ipmi_bmc_iterate_mcs(bmc, sdrs_mcs_handler, cb_data);
+    info->mc_id.bmc = bmc;
+    ipmi_mc_pointer_cb(info->mc_id, sdrs_mcs_handler, info);
 }
 
 static int
 sdrs_cmd(char *cmd, char **toks, void *cb_data)
 {
-    int         rv;
-    sdrs_info_t *info;
+    int           rv;
+    sdrs_info_t   *info;
+    unsigned char val;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info) {
@@ -2419,10 +2449,17 @@ sdrs_cmd(char *cmd, char **toks, void *cb_data)
 	return 0;
     }
 
-    if (get_uchar(toks, &info->mc_addr, "MC address")) {
+    if (get_uchar(toks, &val, "MC channel")) {
 	ipmi_mem_free(info);
 	return 0;
     }
+    info->mc_id.channel = val;
+
+    if (get_uchar(toks, &val, "MC num")) {
+	ipmi_mem_free(info);
+	return 0;
+    }
+    info->mc_id.mc_num = val;
 
     if (get_uchar(toks, &info->do_sensors, "do_sensors")) {
 	ipmi_mem_free(info);
@@ -2861,7 +2898,8 @@ event_handler(ipmi_mc_t    *bmc,
 	      void         *event_data)
 {
     /* FIXME - fill this out. */
-    ui_log("Unknown event\n");
+    ui_log("Unknown event from mc (%d 0x%x)\n",
+	   event->mc_id.channel, event->mc_id.mc_num);
     ui_log("  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
 	   " %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
 	   event->record_id, event->type,

@@ -449,6 +449,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 
     sel->next_rec_id = ipmi_get_uint16(rsp->data+1);
 
+    del_event.mc_id = ipmi_mc_convert_to_id(mc);
     del_event.record_id = ipmi_get_uint16(rsp->data+3);
     del_event.type = rsp->data[5];
     memcpy(del_event.data, rsp->data+6, 13);

@@ -918,7 +918,7 @@ handle_new_sensor(ipmi_mc_t     *bmc,
 		     &ent);
 
     if (! ipmi_bmc_oem_new_sensor(bmc, ent, sensor, link)) {
-	ipmi_entity_add_sensor(ent, bmc,
+	ipmi_entity_add_sensor(ent, sensor->mc,
 			       sensor->lun, sensor->num, sensor, link);
     }
 }
@@ -1024,7 +1024,7 @@ static void
 sensor_reread_done(sdr_fetch_info_t *info, int err)
 {
     if (info->done)
-	info->done(info->bmc, err, info->done_data);
+	info->done(info->source_mc, err, info->done_data);
     opq_op_done(info->sensors->sensor_wait_q);
     ipmi_mem_free(info);
 }

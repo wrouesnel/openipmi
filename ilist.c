@@ -282,6 +282,22 @@ ilist_iter(ilist_t *list, ilist_iter_cb handler, void *cb_data)
 }
 
 void
+ilist_iter_rev(ilist_t *list, ilist_iter_cb handler, void *cb_data)
+{
+    ilist_item_t *curr, *prev;
+    ilist_iter_t iter;
+
+    iter.list = list;
+    iter.curr = list->head->prev;
+    while (iter.curr != list->head) {
+	curr = iter.curr;
+	prev = curr->prev;
+	handler(&iter, curr->item, cb_data);
+	iter.curr = prev;
+    }
+}
+
+void
 ilist_init_iter(ilist_iter_t *iter, ilist_t *list)
 {
     iter->list = list;

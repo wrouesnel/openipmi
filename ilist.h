@@ -101,6 +101,11 @@ typedef void (*ilist_iter_cb)(ilist_iter_t *iter, void *item, void *cb_data);
    but no other items. */
 void ilist_iter(ilist_t *list, ilist_iter_cb handler, void *cb_data);
 
+/* Call the given handler for each item in the list, but run the list
+   backwards.  You may delete the current item the iterator references
+   while this is happening, but no other items. */
+void ilist_iter_rev(ilist_t *list, ilist_iter_cb handler, void *cb_data);
+
 /* Initialize a statically declared iterator. */
 void ilist_init_iter(ilist_iter_t *iter, ilist_t *list);
 

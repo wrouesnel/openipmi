@@ -1,4 +1,27 @@
 
+2003-02-19 Corey Minyard <cminyard@mvista.com>
+
+	* ui.c: Various cleanups for the SMI address and the new SEL
+	setup.
+	
+	* ilist.c, ilist.h: Added a way to traverse the list backwards.
+
+	* ipmi_smi.c: Converted the BMC to use an SMI address.
+
+	* mc.c, include/OpenIPMI/ipmi_mc.h: Added a way for the OEM code
+	to add a way to fetch the SMI slave address.
+
+	* mc.c, include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_mc.h, sel.c:
+	Changed SEL support to be per-MC (as it should be) and not on the
+	BMC.  This will allow support for SELs not on the MC, and for
+	multiple SEL devices in a system.  It required the removal of
+	ipmi_bmc_del_event_by_recid(), and a modification to the event
+	structure, since the system now has to know what MC the event came
+	from.
+
+	* include/OpenIPMI/ipmi_types.h: Added an MC to the event so we
+	know which MC it came from.
+
 2003-02-18 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: Added a way to set the event enables.

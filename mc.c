@@ -68,11 +68,11 @@ enum ipmi_con_state_e { DEAD = 0,
 #define MAX_IPMI_USED_CHANNELS 8
 
 /* Timer structure fo rereading the SEL. */
-typedef struct bmc_reread_info_s
+typedef struct mc_reread_sel_s
 {
     int cancelled;
-    ipmi_mc_t *bmc;
-} bmc_reread_info_t;
+    ipmi_mc_t *mc;
+} mc_reread_sel_t;
     
 /* Timer structure fo rescanning the bus. */
 typedef struct bmc_rescan_bus_info_s
@@ -111,6 +111,10 @@ typedef struct ipmi_bmc_s
     unsigned char    msg_int_type;
     unsigned char    event_msg_int_type;
 
+    /* This is the actual address of the BMC. */
+    unsigned char bmc_slave_addr;
+    ipmi_mc_slave_addr_fetch_cb slave_addr_fetcher;
+
     /* The sensors that came from the main SDR. */
     ipmi_sensor_t **sensors_in_my_sdr;
     unsigned int  sensors_in_my_sdr_count;
@@ -137,9 +141,6 @@ typedef struct ipmi_bmc_s
     /* The SEL time when the connection first came up. */
     unsigned long startup_SEL_time;
 
-    /* The handler to call for delete event operations. */
-    ipmi_bmc_del_event_cb sel_del_event_handler;
-
     ipmi_bmc_oem_new_entity_cb new_entity_handler;
     void                       *new_entity_cb_data;
 
@@ -152,9 +153,6 @@ typedef struct ipmi_bmc_s
     /* Should I do a full bus scan for devices on the bus? */
     int                        do_bus_scan;
 
-    /* The system event log, for querying and storing events. */
-    ipmi_sel_info_t *sel;
-
     /* Timer for rescanning the bus periodically. */
     unsigned int          bus_scan_interval; /* seconds between scans */
     os_hnd_timer_id_t     *bus_scan_timer;
@@ -164,10 +162,7 @@ typedef struct ipmi_bmc_s
        they can be properly freed. */
     mc_ipmb_scan_info_t *bus_scans_running;
 
-    /* Timer for rescanning the sel periodically. */
-    unsigned int      sel_scan_interval; /* seconds between scans */
-    os_hnd_timer_id_t *sel_timer;
-    bmc_reread_info_t *sel_timer_info;
+    unsigned int      sel_scan_interval; /* seconds between SEL scans */
 
     ilist_t *con_fail_handlers;
 
@@ -210,6 +205,18 @@ struct ipmi_mc_s
 
     unsigned int in_bmc_list : 1; /* Tells if we are in the list of
                                      our BMC yet. */
+
+    /* The system event log, for querying and storing events. */
+    ipmi_sel_info_t *sel;
+
+    /* The handler to call for delete event operations.  This is NULL
+       normally and is only used if the MC has a special delete event
+       handler. */
+    ipmi_mc_del_event_cb sel_del_event_handler;
+
+    /* Timer for rescanning the sel periodically. */
+    os_hnd_timer_id_t *sel_timer;
+    mc_reread_sel_t   *sel_timer_info;
 
     uint8_t device_id;
 
@@ -437,10 +444,8 @@ find_mc_by_addr(ipmi_mc_t   *bmc,
     mc_cmp_info_t    info;
 
     /* Cheap hack to handle the BMC LUN. */
-    if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
-	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
-	if (ipmb->slave_addr == 0x20)
-	    return bmc;
+    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	return bmc;
     }
 
     memcpy(&(info.addr), addr, addr_len);
@@ -462,6 +467,11 @@ ipmi_mc_find_or_create_mc_by_slave_addr(ipmi_mc_t    *bmc,
     addr.lun = 0;
     addr.slave_addr = slave_addr;
 
+    if (slave_addr == bmc->bmc->bmc_slave_addr) {
+	*new_mc = bmc;
+	return 0;
+    }
+
     mc = find_mc_by_addr(bmc, (ipmi_addr_t *) &addr, sizeof(addr));
     if (mc) {
 	*new_mc = mc;
@@ -471,6 +481,11 @@ ipmi_mc_find_or_create_mc_by_slave_addr(ipmi_mc_t    *bmc,
     rv = ipmi_create_mc(bmc, (ipmi_addr_t *) &addr, sizeof(addr), &mc);
     if (rv)
 	return rv;
+
+    rv = ipmi_add_mc_to_bmc(bmc, mc);
+    if (rv)
+	return rv;
+
     *new_mc = mc;
     return 0;
 }
@@ -586,11 +601,7 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 	    rsp_handler(NULL, msg, rsp_data);
 	else {
 	    ipmi_lock(bmc->bmc->mc_list_lock);
-	    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-		mc = bmc;
-	    } else {
-		mc = find_mc_by_addr(bmc, addr, addr_len);
-	    }
+	    mc = find_mc_by_addr(bmc, addr, addr_len);
 	    rsp_handler(mc, msg, rsp_data);
 	    ipmi_unlock(bmc->bmc->mc_list_lock);
 	}
@@ -762,9 +773,10 @@ system_event_handler(ipmi_mc_t    *bmc,
 
     if (DEBUG_EVENTS) {
 	ipmi_log(IPMI_LOG_DEBUG,
-		 "Event recid:%4.4x type:%2.2x:"
+		 "Event recid mc (%d 0x%x):%4.4x type:%2.2x:"
 		 " %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
 		 " %2.2x %2.2x %2.2x %2.2x %2.2x",
+		 event->mc_id.channel, event->mc_id.mc_num,
 		 event->record_id, event->type,
 		 event->data[0], event->data[1], event->data[2],
 		 event->data[3], event->data[4], event->data[5],
@@ -830,9 +842,9 @@ system_event_handler(ipmi_mc_t    *bmc,
 
 /* Got a new event in the system event log that we didn't have before. */
 static void
-bmc_sel_new_event_handler(ipmi_sel_info_t *sel,
-			  ipmi_event_t    *event,
-			  void            *cb_data)
+mc_sel_new_event_handler(ipmi_sel_info_t *sel,
+			 ipmi_event_t    *event,
+			 void            *cb_data)
 {
     system_event_handler(cb_data, event);
 }
@@ -845,10 +857,17 @@ ipmi_bmc_get_startup_SEL_time(ipmi_mc_t *bmc)
 }
 
 void
-ipmi_bmc_set_del_event_handler(ipmi_mc_t             *bmc,
-			       ipmi_bmc_del_event_cb handler)
+ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
+			      ipmi_mc_del_event_cb handler)
 {
-    bmc->bmc->sel_del_event_handler = handler;
+    mc->sel_del_event_handler = handler;
+}
+
+static void
+mc_rescan_event_handler(ipmi_mc_t *bmc, ipmi_mc_t *mc, void *cb_data)
+{
+    if (mc->SEL_device_support)
+	ipmi_sel_get(mc->sel, NULL, NULL);
 }
 
 int
@@ -858,7 +877,10 @@ ipmi_bmc_rescan_events(ipmi_mc_t *bmc)
 	/* It's not the BMC. */
 	return EINVAL;
 
-    return ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
+    if (bmc->SEL_device_support)
+	ipmi_sel_get(bmc->sel, NULL, NULL);
+
+    return ipmi_bmc_iterate_mcs(bmc, mc_rescan_event_handler, NULL);
 }
 
 static void
@@ -872,12 +894,15 @@ ll_event_handler(ipmi_con_t   *ipmi,
     ipmi_event_t devent;
     ipmi_mc_t    *bmc = data2;
 
+    /* Events coming in through the event handler are always from the
+       BMC. */
+    devent.mc_id = ipmi_mc_convert_to_id(bmc);
     devent.record_id = ipmi_get_uint16(event->data);
     devent.type = event->data[2];
     memcpy(devent.data, event+3, IPMI_MAX_SEL_DATA);
 
     /* Add it to the system event log. */
-    ipmi_sel_event_add(bmc->bmc->sel, &devent);
+    ipmi_sel_event_add(bmc->sel, &devent);
 
     /* Call the handler on it. */
     system_event_handler(bmc, &devent);
@@ -1292,10 +1317,11 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
     int i;
     int rv;
+    ipmi_mc_t *bmc = mc->bmc_mc;
 
     /* Call the OEM handler for removal, if it has been registered. */
     if (mc->removed_mc_handler)
-	mc->removed_mc_handler(mc->bmc_mc, mc, mc->removed_mc_cb_data);
+	mc->removed_mc_handler(bmc, mc, mc->removed_mc_cb_data);
 
     /* First the device SDR sensors, since they can be there for any
        MC. */
@@ -1315,30 +1341,36 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
     if (mc->controls)
 	ipmi_controls_destroy(mc->controls);
 
+    /* Make sure the timer stops. */
+    if (mc->sel_timer_info) {
+	mc->sel_timer_info->cancelled = 1;
+	rv = bmc->bmc->conn->os_hnd->stop_timer(bmc->bmc->conn->os_hnd,
+						mc->sel_timer);
+	if (!rv) {
+	    /* If we can stop the timer, free it and it's info.
+	       If we can't stop the timer, that means that the
+	       code is currently in the timer handler, so we let
+	       the "cancelled" value do this for us. */
+	    bmc->bmc->conn->os_hnd->free_timer(bmc->bmc->conn->os_hnd,
+					       mc->sel_timer);
+	    ipmi_mem_free(mc->sel_timer_info);
+	}
+    }
+
+    if (mc->sel)
+	ipmi_sel_destroy(mc->sel, NULL, NULL);
+
     /* FIXME - clean up entities that came from this device. */
 
     if (mc->bmc) {
+	/* It's a BMC, clean up all the bmc-specific information. */
+
 	ilist_iter(mc->bmc->mc_list, iterate_cleanup_mc, NULL);
 
 	/* Destroy the main SDR repository, if it exists. */
 	if (mc->bmc->main_sdrs)
 	    ipmi_sdr_info_destroy(mc->bmc->main_sdrs, NULL, NULL);
 
-	/* Make sure the timer stop. */
-	if (mc->bmc->sel_timer_info) {
-	    mc->bmc->sel_timer_info->cancelled = 1;
-	    rv = mc->bmc->conn->os_hnd->stop_timer(mc->bmc->conn->os_hnd,
-						   mc->bmc->sel_timer);
-	    if (!rv) {
-		/* If we can stop the timer, free it and it's info.
-                   If we can't stop the timer, that means that the
-                   code is currently in the timer handler, so we let
-                   the "cancelled" value do this for us. */
-		mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd,
-						  mc->bmc->sel_timer);
-		ipmi_mem_free(mc->bmc->sel_timer_info);
-	    }
-	}
 	if (mc->bmc->bus_scan_timer_info) {
 	    mc->bmc->bus_scan_timer_info->cancelled = 1;
 	    rv = mc->bmc->conn->os_hnd->stop_timer(mc->bmc->conn->os_hnd,
@@ -1395,8 +1427,6 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    ipmi_destroy_lock(mc->bmc->event_handlers_lock);
 	if (mc->bmc->entities)
 	    ipmi_entity_info_destroy(mc->bmc->entities);
-	if (mc->bmc->sel)
-	    ipmi_sel_destroy(mc->bmc->sel, NULL, NULL);
 	if (mc->bmc->entities_lock)
 	    ipmi_destroy_lock(mc->bmc->entities_lock);
 	if (mc->bmc->ll_event_id)
@@ -1451,6 +1481,7 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
     mc->removed_mc_handler = NULL;
+    mc->sel = NULL;
 
     memcpy(&(mc->addr), addr, addr_len);
     mc->addr_len = addr_len;
@@ -1464,6 +1495,14 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     if (rv)
 	goto out_err;
 
+    rv = ipmi_sel_alloc(mc, 0, &(mc->sel));
+    if (rv)
+	goto out_err;
+    /* When we get new logs, handle them. */
+    ipmi_sel_set_new_event_handler(mc->sel,
+				   mc_sel_new_event_handler,
+				   mc);
+
  out_err:
     if (rv) {
 	ipmi_cleanup_mc(mc);
@@ -1474,7 +1513,7 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     return rv;
 }
 
-static void bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id);
+static void mc_reread_sel(void *cb_data, os_hnd_timer_id_t *id);
 
 static void
 sels_fetched_start_timer(ipmi_sel_info_t *sel,
@@ -1483,9 +1522,10 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
 			 unsigned int    count,
 			 void            *cb_data)
 {
-    bmc_reread_info_t *info = cb_data;
-    ipmi_mc_t         *bmc = info->bmc;
-    struct timeval    timeout;
+    mc_reread_sel_t *info = cb_data;
+    ipmi_mc_t       *mc = info->mc;
+    ipmi_mc_t       *bmc = mc->bmc_mc;
+    struct timeval  timeout;
 
     if (info->cancelled) {
 	ipmi_mem_free(info);
@@ -1495,18 +1535,18 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
     timeout.tv_sec = bmc->bmc->sel_scan_interval;
     timeout.tv_usec = 0;
     bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
-					bmc->bmc->sel_timer,
+					mc->sel_timer,
 					&timeout,
-					bmc_reread_sel,
+					mc_reread_sel,
 					info);
 }
 
 static void
-bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
+mc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 {
-    bmc_reread_info_t *info = cb_data;
-    ipmi_mc_t         *bmc = info->bmc;
-    int               rv = EINVAL;
+    mc_reread_sel_t *info = cb_data;
+    ipmi_mc_t       *mc = info->mc;
+    int             rv = EINVAL;
 
     if (info->cancelled) {
 	ipmi_mem_free(info);
@@ -1514,12 +1554,12 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
     }
 
     /* Only fetch the SEL if we know the connection is up. */
-    if (bmc->bmc->connection_up)
-	rv = ipmi_sel_get(bmc->bmc->sel, sels_fetched_start_timer, info);
+    if (mc->bmc_mc->bmc->connection_up)
+	rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, info);
 
     /* If we couldn't run the SEL get, then restart the timer now. */
     if (rv)
-	sels_fetched_start_timer(bmc->bmc->sel, 0, 0, 0, info);
+	sels_fetched_start_timer(mc->sel, 0, 0, 0, info);
 }
 
 static void
@@ -1527,14 +1567,15 @@ start_SEL_timer(ipmi_mc_t *mc)
 {
     struct timeval timeout;
     int            rv;
+    ipmi_mc_t      *bmc = mc->bmc_mc;
 
-    timeout.tv_sec = mc->bmc->sel_scan_interval;
+    timeout.tv_sec = bmc->bmc->sel_scan_interval;
     timeout.tv_usec = 0;
-    rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
-					    mc->bmc->sel_timer,
-					    &timeout,
-					    bmc_reread_sel,
-					    mc->bmc->sel_timer_info);
+    rv = bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
+					     mc->sel_timer,
+					     &timeout,
+					     mc_reread_sel,
+					     mc->sel_timer_info);
     if (rv)
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "Unable to start the SEL fetch timer due to error: %x",
@@ -1585,7 +1626,7 @@ got_sel_time(ipmi_mc_t  *mc,
 	mc->bmc->startup_SEL_time = ipmi_get_uint32(&(rsp->data[1]));
     }
 
-    ipmi_sel_get(mc->bmc->sel, sels_fetched, mc);
+    ipmi_sel_get(mc->sel, sels_fetched, mc);
 }
 
 /* This is called after the first sensor scan for the MC, we start up
@@ -1593,47 +1634,53 @@ got_sel_time(ipmi_mc_t  *mc,
 static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    bmc_reread_info_t *info;
-    int               rv;
-    ipmi_msg_t        msg;
-
+    /* See if any presence has changed with the new sensors. */ 
     ipmi_detect_bmc_presence_changes(mc, 0);
 
-    /* Allocate the system event log fetch timer. */
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "Unable to allocate info for system event log timer."
-		 " System event log will not be queried");
-	return;
-    }
-    info->bmc = mc;
-    info->cancelled = 0;
-    rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd,
-					    &(mc->bmc->sel_timer));
-    if (rv) {
-	ipmi_mem_free(info);
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "Unable to allocate the system event log timer."
-		 " System event log will not be queried");
-    } else {
-	mc->bmc->sel_timer_info = info;
-    }
+    if (mc->SEL_device_support) {
+	mc_reread_sel_t *info;
+	int             rv;
+	ipmi_msg_t      msg;
+	ipmi_mc_t       *bmc = mc->bmc_mc;
 
-    /* Fetch the current system event log.  We do this here so we can
-       be sure that the entities are all there before reporting
-       events. */
-    msg.netfn = IPMI_STORAGE_NETFN;
-    msg.cmd = IPMI_GET_SEL_TIME_CMD;
-    msg.data = NULL;
-    msg.data_len = 0;
-    rv = ipmi_send_command(mc, 0, &msg, got_sel_time, NULL);
-    if (rv) {
-	ipmi_log(IPMI_LOG_DEBUG,
-		 "Unable to start SEL time fetch due to error: %x\n",
-		 rv);
-	mc->bmc->startup_SEL_time = 0;
-	ipmi_sel_get(mc->bmc->sel, NULL, NULL);
+	/* If the MC supports an SEL, start scanning its SEL. */
+
+	/* Allocate the system event log fetch timer. */
+	info = ipmi_mem_alloc(sizeof(*info));
+	if (!info) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "Unable to allocate info for system event log timer."
+		     " System event log will not be queried");
+	    return;
+	}
+	info->mc = mc;
+	info->cancelled = 0;
+	rv = bmc->bmc->conn->os_hnd->alloc_timer(bmc->bmc->conn->os_hnd,
+						&(mc->sel_timer));
+	if (rv) {
+	    ipmi_mem_free(info);
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "Unable to allocate the system event log timer."
+		     " System event log will not be queried");
+	} else {
+	    mc->sel_timer_info = info;
+	}
+
+	/* Fetch the current system event log.  We do this here so we can
+	   be sure that the entities are all there before reporting
+	   events. */
+	msg.netfn = IPMI_STORAGE_NETFN;
+	msg.cmd = IPMI_GET_SEL_TIME_CMD;
+	msg.data = NULL;
+	msg.data_len = 0;
+	rv = ipmi_send_command(mc, 0, &msg, got_sel_time, NULL);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_DEBUG,
+		     "Unable to start SEL time fetch due to error: %x\n",
+		     rv);
+	    mc->bmc->startup_SEL_time = 0;
+	    ipmi_sel_get(mc->sel, NULL, NULL);
+	}
     }
 }
 
@@ -1649,6 +1696,10 @@ ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc)
     rv = !ilist_add_tail(bmc->bmc->mc_list, mc, NULL);
     if (!rv)
 	mc->in_bmc_list = 1;
+
+    if (bmc->bmc->new_mc_handler)
+	bmc->bmc->new_mc_handler(bmc, mc, bmc->bmc->new_mc_cb_data);
+
     ipmi_unlock(bmc->bmc->mc_list_lock);
 
     return rv;
@@ -1668,9 +1719,6 @@ mc_sdr_handler(ipmi_sdr_info_t *sdrs,
 	return;
     }
 
-    if (mc->bmc_mc->bmc->new_mc_handler)
-	mc->bmc_mc->bmc->new_mc_handler(mc->bmc_mc, mc,
-					mc->bmc_mc->bmc->new_mc_cb_data);
     /* Scan all the sensors and call sensors_reread() when done. */
     if (mc->provides_device_sdrs)
 	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
@@ -1754,8 +1802,12 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    rv = ipmi_sdr_info_alloc(mc, 0, 1, &(mc->sdrs));
 	    if (!rv)
 		rv = ipmi_add_mc_to_bmc(mc->bmc_mc, mc);
-	    if (!rv)
-		rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
+	    if (!rv) {
+		if (mc->provides_device_sdrs)
+		    rv = ipmi_sdr_fetch(mc->sdrs, mc_sdr_handler, mc);
+		else
+		    sensors_reread(mc, 0, NULL);
+	    }
 	    if (rv)
 		ipmi_cleanup_mc(mc);
 	}
@@ -1921,7 +1973,7 @@ bmc_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 }
 
 static void
-set_operational(ipmi_mc_t *mc)
+set_operational(ipmi_mc_t *bmc)
 {
     struct timeval        timeout;
     bmc_rescan_bus_info_t *info;
@@ -1930,47 +1982,47 @@ set_operational(ipmi_mc_t *mc)
     /* Report this before we start scanning for entities and
        sensors so the user can register a callback handler for
        those. */
-    mc->bmc->state = OPERATIONAL;
-    if (mc->bmc->conn->setup_cb)
-	mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, 0);
+    bmc->bmc->state = OPERATIONAL;
+    if (bmc->bmc->conn->setup_cb)
+	bmc->bmc->conn->setup_cb(bmc, bmc->bmc->conn->setup_cb_data, 0);
 
     /* Call the OEM setup finish if it is registered. */
-    if (mc->bmc->setup_finished_handler)
-	mc->bmc->setup_finished_handler(mc,
-					mc->bmc->setup_finished_cb_data);
+    if (bmc->bmc->setup_finished_handler)
+	bmc->bmc->setup_finished_handler(bmc,
+					 bmc->bmc->setup_finished_cb_data);
 
     /* Start an SDR scan. */
-    ipmi_entity_scan_sdrs(mc->bmc->entities, mc->bmc->main_sdrs);
-    ipmi_sensor_handle_sdrs(mc, NULL, mc->bmc->main_sdrs);
+    ipmi_entity_scan_sdrs(bmc->bmc->entities, bmc->bmc->main_sdrs);
+    ipmi_sensor_handle_sdrs(bmc, NULL, bmc->bmc->main_sdrs);
 
     /* Scan all the sensors and call sensors_reread() when done. */
-    if (mc->provides_device_sdrs)
-	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
+    if (bmc->provides_device_sdrs)
+	ipmi_mc_reread_sensors(bmc, sensors_reread, NULL);
     else
-	sensors_reread(mc, 0, NULL);
+	sensors_reread(bmc, 0, NULL);
 
-    start_mc_scan(mc);
+    start_mc_scan(bmc);
 
     /* Start the timer to rescan the bus periodically. */
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	rv = ENOMEM;
     else {
-	info->bmc = mc;
+	info->bmc = bmc;
 	info->cancelled = 0;
-        timeout.tv_sec = mc->bmc->bus_scan_interval;
+        timeout.tv_sec = bmc->bmc->bus_scan_interval;
         timeout.tv_usec = 0;
-        rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd,
-						&(mc->bmc->bus_scan_timer));
+        rv = bmc->bmc->conn->os_hnd->alloc_timer(bmc->bmc->conn->os_hnd,
+						 &(bmc->bmc->bus_scan_timer));
 	if (!rv) {
-	    rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
-						    mc->bmc->bus_scan_timer,
-						    &timeout,
-						    bmc_rescan_bus,
-						    info);
+	    rv = bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
+						     bmc->bmc->bus_scan_timer,
+						     &timeout,
+						     bmc_rescan_bus,
+						     info);
 	    if (rv)
-		mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd,
-						  mc->bmc->bus_scan_timer);
+		bmc->bmc->conn->os_hnd->free_timer(bmc->bmc->conn->os_hnd,
+						   bmc->bmc->bus_scan_timer);
 	}
     }
     if (rv) {
@@ -1978,7 +2030,7 @@ set_operational(ipmi_mc_t *mc)
 		 "Unable to start the bus scan timer."
 		 " The bus will not be scanned periodically.");
     } else {
-	mc->bmc->bus_scan_timer_info = info;
+	bmc->bmc->bus_scan_timer_info = info;
     }
 }
 
@@ -2166,48 +2218,76 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 }
 
 static void
-dev_id_rsp_handler(ipmi_mc_t  *mc,
+got_slave_addr(ipmi_mc_t    *bmc,
+	       int          err,
+	       unsigned int addr,
+	       void         *cb_data)
+{
+    int rv;
+
+    ipmi_lock(bmc->bmc->mc_list_lock);
+    if (err) {
+	rv = err;
+	goto out;
+    }
+
+    if (bmc->SDR_repository_support)
+	rv = ipmi_sdr_fetch(bmc->bmc->main_sdrs, sdr_handler, bmc);
+    else if (bmc->provides_device_sdrs) {
+	bmc->bmc->state = QUERYING_SENSOR_SDRS;
+	rv = ipmi_sdr_fetch(bmc->sdrs, sdr_handler, bmc);
+    } else {
+	rv = finish_mc_handling(bmc);
+    }
+
+ out:
+    if (rv) {
+	if (bmc->bmc->conn->setup_cb)
+	    bmc->bmc->conn->setup_cb(bmc, bmc->bmc->conn->setup_cb_data, rv);
+	ipmi_close_connection(bmc, NULL, NULL);
+    }
+
+    ipmi_lock(bmc->bmc->mc_list_lock);
+}
+
+static void
+dev_id_rsp_handler(ipmi_mc_t  *bmc,
 		   ipmi_msg_t *rsp,
 		   void       *rsp_data)
 {
     int rv;
 
-    rv = ipmi_mc_validate(mc);
-    if (rv)
-	goto out;
+    ipmi_lock(bmc->bmc->mc_list_lock);
 
-    ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
+    rv = get_device_id_data_from_rsp(bmc, rsp);
 
-    rv = get_device_id_data_from_rsp(mc, rsp);
-
-    mc->bmc->state = QUERYING_MAIN_SDRS;
+    bmc->bmc->state = QUERYING_MAIN_SDRS;
 
     if (!rv)
-	rv = ipmi_sdr_info_alloc(mc, 0, 0, &mc->bmc->main_sdrs);
+	rv = ipmi_sdr_info_alloc(bmc, 0, 0, &bmc->bmc->main_sdrs);
     if (!rv)
-	rv = ipmi_sdr_info_alloc(mc, 0, 1, &mc->sdrs);
+	rv = ipmi_sdr_info_alloc(bmc, 0, 1, &bmc->sdrs);
     if (!rv) {
-	if (mc->SDR_repository_support)
-	    rv = ipmi_sdr_fetch(mc->bmc->main_sdrs, sdr_handler, mc);
-	else if (mc->provides_device_sdrs) {
-	    mc->bmc->state = QUERYING_SENSOR_SDRS;
-	    rv = ipmi_sdr_fetch(mc->sdrs, sdr_handler, mc);
+	if (bmc->bmc->slave_addr_fetcher) {
+	    /* The OEM code added a way to fetch our address.  Call
+               it. */
+	    rv = bmc->bmc->slave_addr_fetcher(bmc, got_slave_addr, NULL);
+	} else if (bmc->SDR_repository_support)
+	    rv = ipmi_sdr_fetch(bmc->bmc->main_sdrs, sdr_handler, bmc);
+	else if (bmc->provides_device_sdrs) {
+	    bmc->bmc->state = QUERYING_SENSOR_SDRS;
+	    rv = ipmi_sdr_fetch(bmc->sdrs, sdr_handler, bmc);
 	} else {
-	    rv = finish_mc_handling(mc);
+	    rv = finish_mc_handling(bmc);
 	}
     }
 
- out:
-    ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
-
     if (rv) {
-	if (mc->bmc->conn->setup_cb)
-	    mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, rv);
-	ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
-	ipmi_close_connection(mc, NULL, NULL);
-	ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
-	return;
+	if (bmc->bmc->conn->setup_cb)
+	    bmc->bmc->conn->setup_cb(bmc, bmc->bmc->conn->setup_cb_data, rv);
+	ipmi_close_connection(bmc, NULL, NULL);
     }
+    ipmi_unlock(bmc->bmc->mc_list_lock);
 }
 
 static int
@@ -2236,6 +2316,7 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
     mc->removed_mc_handler = NULL;
+    mc->sel = NULL;
 
     memcpy(&(mc->addr), mc_addr, mc_addr_len);
     mc->addr_len = mc_addr_len;
@@ -2247,6 +2328,10 @@ setup_bmc(ipmi_con_t  *ipmi,
 	goto out_err;
     }
     memset(mc->bmc, 0, sizeof(*(mc->bmc)));
+
+    /* Assume it's 20, OEM code can change it if necessary. */
+    mc->bmc->bmc_slave_addr = 0x20;
+    mc->bmc->slave_addr_fetcher = NULL;
 
     mc->bmc->conn = ipmi;
 
@@ -2279,7 +2364,6 @@ setup_bmc(ipmi_con_t  *ipmi,
     mc->bmc->oem_event_handler = NULL;
     mc->bmc->mc_list = NULL;
     mc->bmc->entities = NULL;
-    mc->bmc->sel = NULL;
     mc->bmc->entity_handler = NULL;
     mc->bmc->new_entity_handler = NULL;
     mc->bmc->new_mc_handler = NULL;
@@ -2307,14 +2391,6 @@ setup_bmc(ipmi_con_t  *ipmi,
     if (rv)
 	goto out_err;
 
-    rv = ipmi_sel_alloc(mc, 0, &(mc->bmc->sel));
-    if (rv)
-	goto out_err;
-    /* When we get new logs, handle them. */
-    ipmi_sel_set_new_event_handler(mc->bmc->sel,
-				   bmc_sel_new_event_handler,
-				   mc);
-
     rv = ipmi_sensors_alloc(mc, &(mc->sensors));
     if (rv)
 	goto out_err;
@@ -2324,6 +2400,14 @@ setup_bmc(ipmi_con_t  *ipmi,
 	goto out_err;
 
     memset(mc->bmc->chan, 0, sizeof(mc->bmc->chan));
+
+    rv = ipmi_sel_alloc(mc, 0, &(mc->sel));
+    if (rv)
+	goto out_err;
+    /* When we get new logs, handle them. */
+    ipmi_sel_set_new_event_handler(mc->sel,
+				   mc_sel_new_event_handler,
+				   mc);
 
  out_err:
     if (mc->bmc->mc_list_lock)
@@ -2763,6 +2847,25 @@ ipmi_bmc_iterate_mcs(ipmi_mc_t               *bmc,
     return 0;
 }
 
+static int
+ipmi_bmc_iterate_mcs_rev(ipmi_mc_t               *bmc,
+			 ipmi_bmc_iterate_mcs_cb handler,
+			 void                    *cb_data)
+{
+    iterate_mc_info_t info = { bmc, handler, cb_data };
+
+    if (bmc->bmc == NULL)
+	/* Not a BMC */
+	return EINVAL;
+
+    CHECK_MC_LOCK(bmc);
+
+    ipmi_lock(bmc->bmc->mc_list_lock);
+    ilist_iter_rev(bmc->bmc->mc_list, iterate_mcs_handler, &info);
+    ipmi_unlock(bmc->bmc->mc_list_lock);
+    return 0;
+}
+
 ipmi_mc_id_t
 ipmi_mc_convert_to_id(ipmi_mc_t *mc)
 {
@@ -2811,6 +2914,24 @@ ipmi_mc_pointer_cb(ipmi_mc_id_t id, ipmi_mc_cb handler, void *cb_data)
     ipmi_read_unlock();
 
     return rv;
+}
+
+int
+ipmi_cmp_mc_id(ipmi_mc_id_t id1, ipmi_mc_id_t id2)
+{
+    if (id1.bmc > id2.bmc)
+	return 1;
+    if (id1.bmc < id2.bmc)
+	return -1;
+    if (id1.mc_num > id2.mc_num)
+	return 1;
+    if (id1.mc_num < id2.mc_num)
+	return -1;
+    if (id1.channel > id2.channel)
+	return 1;
+    if (id1.channel < id2.channel)
+	return -1;
+    return 0;
 }
 
 typedef struct sdrs_saved_info_s
@@ -3018,7 +3139,7 @@ ipmi_bmc_set_oem_setup_finished_handler(ipmi_mc_t                  *bmc,
 
 typedef struct sel_op_done_info_s
 {
-    ipmi_mc_t   *bmc;
+    ipmi_mc_t   *mc;
     ipmi_bmc_cb done;
     void        *cb_data;
 } sel_op_done_info_t;
@@ -3032,7 +3153,50 @@ sel_op_done(ipmi_sel_info_t *sel,
 
     /* No need to lock, the BMC should already be locked. */
     if (info->done)
-        info->done(info->bmc, err, info->cb_data);
+        info->done(info->mc->bmc_mc, err, info->cb_data);
+}
+
+typedef struct del_event_info_s
+{
+    ipmi_event_t *event;
+    ipmi_bmc_cb  done_handler;
+    void         *cb_data;
+    int          rv;
+} del_event_info_t;
+
+static void
+del_event_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    del_event_info_t   *info = cb_data;
+    sel_op_done_info_t *sel_info;
+
+    if (!mc->SEL_device_support) {
+	info->rv = EINVAL;
+	return;
+    }
+
+    /* If we have an OEM handler, call it instead. */
+    if (mc->sel_del_event_handler) {
+	info->rv = mc->sel_del_event_handler(mc,
+					     info->event,
+					     info->done_handler,
+					     info->cb_data);
+	return;
+    }
+
+    sel_info = ipmi_mem_alloc(sizeof(*sel_info));
+    if (!sel_info) {
+	info->rv = ENOMEM;
+	return;
+    }
+
+    sel_info->mc = mc;
+    sel_info->done = info->done_handler;
+    sel_info->cb_data = cb_data;
+
+    info->rv = ipmi_sel_del_event(mc->sel, info->event, sel_op_done, sel_info);
+    if (info->rv)
+	ipmi_mem_free(sel_info);
 }
 
 int
@@ -3041,96 +3205,180 @@ ipmi_bmc_del_event(ipmi_mc_t    *bmc,
 		   ipmi_bmc_cb  done_handler,
 		   void         *cb_data)
 {
-    sel_op_done_info_t *info;
-
-    if (!bmc->bmc)
-	return EINVAL;
+    int              rv;
+    del_event_info_t info;
 
     CHECK_MC_LOCK(bmc);
 
-    /* If we have an OEM handler, call it instead. */
-    if (bmc->bmc->sel_del_event_handler)
-	return bmc->bmc->sel_del_event_handler(bmc, event,
-					       done_handler, cb_data);
-
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
-
-    info->bmc = bmc;
-    info->done = done_handler;
-    info->cb_data = cb_data;
-
-    return ipmi_sel_del_event(bmc->bmc->sel, event, sel_op_done, info);
+    info.event = event;
+    info.done_handler = done_handler;
+    info.cb_data = cb_data;
+    info.rv = 0;
+    rv = ipmi_mc_pointer_cb(event->mc_id, del_event_handler, &info);
+    if (rv)
+	return rv;
+    else
+	return info.rv;
 }
 
-int
-ipmi_bmc_del_event_by_recid(ipmi_mc_t    *bmc,
-			    unsigned int record_id,
-			    ipmi_bmc_cb  done_handler,
-			    void         *cb_data)
+typedef struct next_event_handler_info_s
 {
-    sel_op_done_info_t *info;
+    int          rv;
+    ipmi_event_t *event;
+    int          found_curr_mc;
+    int          do_prev; /* If going backwards, this will be 1. */
+} next_event_handler_info_t;
 
-    if (!bmc->bmc)
-	return EINVAL;
+static void
+next_event_handler(ipmi_mc_t *bmc, ipmi_mc_t *mc, void *cb_data)
+{
+    next_event_handler_info_t *info = cb_data;
+    ipmi_mc_id_t              mc_id = ipmi_mc_convert_to_id(mc);
 
-    CHECK_MC_LOCK(bmc);
+    if (!info->rv)
+	/* We've found an event already, just return. */
+	return;
 
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
-
-    info->bmc = bmc;
-    info->done = done_handler;
-    info->cb_data = cb_data;
-
-    return ipmi_sel_del_event_by_recid(bmc->bmc->sel, record_id,
-				       sel_op_done, info);
+    if (info->do_prev) {
+	if (info->found_curr_mc)
+	    /* We've found the MC that had the event, but it didn't have
+	       any more events.  Look for last events now. */
+	    info->rv = ipmi_sel_get_last_event(mc->sel, info->event);
+	else if (ipmi_cmp_mc_id(info->event->mc_id, mc_id) == 0) {
+	    info->found_curr_mc = 1;
+	    info->rv = ipmi_sel_get_prev_event(mc->sel, info->event);
+	}
+    } else {
+	if (info->found_curr_mc)
+	    /* We've found the MC that had the event, but it didn't have
+	       any more events.  Look for first events now. */
+	    info->rv = ipmi_sel_get_first_event(mc->sel, info->event);
+	else if (ipmi_cmp_mc_id(info->event->mc_id, mc_id) == 0) {
+	    info->found_curr_mc = 1;
+	    info->rv = ipmi_sel_get_next_event(mc->sel, info->event);
+	}
+    }
 }
 
 int
 ipmi_bmc_first_event(ipmi_mc_t *bmc, ipmi_event_t *event)
 {
+    int                       rv;
+    next_event_handler_info_t info;
+
     if (!bmc->bmc)
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_sel_get_first_event(bmc->bmc->sel, event);
+    rv = ipmi_sel_get_first_event(bmc->sel, event);
+    if (rv) {
+	info.rv = ENODEV;
+	info.event = event;
+	info.found_curr_mc = 1;
+	info.do_prev = 0;
+	rv = ipmi_bmc_iterate_mcs(bmc, next_event_handler, &info);
+	if (!rv)
+	    rv = info.rv;
+    }
+
+    return rv;
 }
 
 int
 ipmi_bmc_last_event(ipmi_mc_t *bmc, ipmi_event_t *event)
 {
+    int                       rv;
+    next_event_handler_info_t info;
+
     if (!bmc->bmc)
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_sel_get_last_event(bmc->bmc->sel, event);
+    info.rv = ENODEV;
+    info.event = event;
+    info.found_curr_mc = 1;
+    info.do_prev = 1;
+    rv = ipmi_bmc_iterate_mcs(bmc, next_event_handler, &info);
+    if (!rv)
+	rv = info.rv;
+    if (rv)
+	rv = ipmi_sel_get_last_event(bmc->sel, event);
+
+    return rv;
 }
 
 int
 ipmi_bmc_next_event(ipmi_mc_t *bmc, ipmi_event_t *event)
 {
+    int                       rv;
+    next_event_handler_info_t info;
+    ipmi_mc_id_t              mc_id = ipmi_mc_convert_to_id(bmc);
+
     if (!bmc->bmc)
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_sel_get_next_event(bmc->bmc->sel, event);
+    rv = ENODEV;
+    if (ipmi_cmp_mc_id(event->mc_id, mc_id) == 0)
+	/* If the event is from the BMC, try the next event in the BMC. */
+	rv = ipmi_sel_get_next_event(bmc->sel, event);
+    if (rv) {
+	info.rv = ENODEV;
+	info.event = event;
+	info.found_curr_mc = 1;
+	info.do_prev = 0;
+	rv = ipmi_bmc_iterate_mcs(bmc, next_event_handler, &info);
+	if (!rv)
+	    rv = info.rv;
+    }
+
+    return rv;
 }
 
 int
 ipmi_bmc_prev_event(ipmi_mc_t *bmc, ipmi_event_t *event)
 {
+    int                       rv;
+    next_event_handler_info_t info;
+    ipmi_mc_id_t              mc_id = ipmi_mc_convert_to_id(bmc);
+
     if (!bmc->bmc)
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_sel_get_prev_event(bmc->bmc->sel, event);
+    rv = ENODEV;
+    if (ipmi_cmp_mc_id(event->mc_id, mc_id) == 0) {
+	/* If the event is from the BMC, try the prev event in the BMC. */
+	rv = ipmi_sel_get_prev_event(bmc->sel, event);
+    } else {
+	info.rv = ENODEV;
+	info.event = event;
+	info.found_curr_mc = 1;
+	info.do_prev = 1;
+	rv = ipmi_bmc_iterate_mcs_rev(bmc, next_event_handler, &info);
+	if (!rv)
+	    rv = info.rv;
+	if (rv)
+	    /* If we weren't on the bmc SEL but didn't find anything
+               else, then we try the last on in the BMC sel. */
+	    rv = ipmi_sel_get_last_event(bmc->sel, event);
+    }
+
+    return rv;
+}
+
+static void
+sel_count_handler(ipmi_mc_t *bmc, ipmi_mc_t *mc, void *cb_data)
+{
+    int *count = cb_data;
+    int nc = 0;
+
+    ipmi_get_sel_count(mc->sel, &nc);
+    *count += nc;
 }
 
 int
@@ -3142,7 +3390,20 @@ ipmi_bmc_sel_count(ipmi_mc_t    *bmc,
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_get_sel_count(bmc->bmc->sel, count);
+    *count = 0;
+    ipmi_get_sel_count(bmc->sel, count);
+    ipmi_bmc_iterate_mcs(bmc, sel_count_handler, count);
+    return 0;
+}
+
+static void
+sel_entries_used_handler(ipmi_mc_t *bmc, ipmi_mc_t *mc, void *cb_data)
+{
+    int *count = cb_data;
+    int nc = 0;
+
+    ipmi_get_sel_entries_used(mc->sel, &nc);
+    *count += nc;
 }
 
 int ipmi_bmc_sel_entries_used(ipmi_mc_t    *bmc,
@@ -3153,7 +3414,10 @@ int ipmi_bmc_sel_entries_used(ipmi_mc_t    *bmc,
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_get_sel_entries_used(bmc->bmc->sel, count);
+    *count = 0;
+    ipmi_get_sel_entries_used(bmc->sel, count);
+    ipmi_bmc_iterate_mcs(bmc, sel_entries_used_handler, count);
+    return 0;
 }
 
 #ifdef IPMI_CHECK_LOCKS

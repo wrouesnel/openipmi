@@ -1007,9 +1007,9 @@ ipmi_smi_setup_con(int               if_num,
 		   ipmi_setup_done_t setup_cb,
 		   void              *cb_data)
 {
-    ipmi_con_t       *con;
-    int              err;
-    ipmi_ipmb_addr_t addr;
+    ipmi_con_t                   *con;
+    int                          err;
+    ipmi_system_interface_addr_t addr;
 
     if (!handlers->add_fd_to_wait_for
 	|| !handlers->remove_fd_to_wait_for
@@ -1019,10 +1019,9 @@ ipmi_smi_setup_con(int               if_num,
 
     err = setup(if_num, handlers, user_data, &con);
     if (!err) {
-	addr.addr_type = IPMI_IPMB_ADDR_TYPE;
-	addr.channel = 0;
+	addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	addr.channel = IPMI_BMC_CHANNEL;
 	addr.lun = 0;
-	addr.slave_addr = 0x20;
 	con->setup_cb = setup_cb;
 	con->setup_cb_data = cb_data;
 	err = ipmi_init_con(con, (ipmi_addr_t *) &addr, sizeof(addr));

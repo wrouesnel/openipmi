@@ -246,6 +246,23 @@ int ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc);
 /* Destroy an MC. */
 void ipmi_cleanup_mc(ipmi_mc_t *mc);
 
+/* This should be called from OEM code for an SMI, ONLY WHEN THE NEW
+   MC HANDLER IS CALLED, if the slave address of the SMI is not 0x20.
+   This will allow the bmc t know it's own address, which is pretty
+   important.  You pass in a function that the code will call (and
+   pass in it's own function) when it wants the address. */
+typedef void (*ipmi_mc_got_slave_addr_cb)(ipmi_mc_t    *bmc,
+					  int          err,
+					  unsigned int addr,
+					  void         *cb_data);
+typedef int (*ipmi_mc_slave_addr_fetch_cb)(
+    ipmi_mc_t                 *bmc,
+    ipmi_mc_got_slave_addr_cb handler,
+    void                      *cb_data);
+int ipmi_bmc_set_smi_slave_addr_fetcher(
+    ipmi_mc_t                   *bmc,
+    ipmi_mc_slave_addr_fetch_cb handler);
+
 /* Scan a set of addresses on the bmc for mcs.  This can be used by OEM
    code to add an MC if it senses that one has become present. */
 void ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
@@ -265,13 +282,14 @@ unsigned long ipmi_bmc_get_startup_SEL_time(ipmi_mc_t *bmc);
 void ipmi_handle_unhandled_event(ipmi_mc_t *bmc, ipmi_event_t *event);
 
 /* Some OEM boxes may have special SEL delete requirements, so we have
-   a special hook to let the OEM code delete events. */
-typedef int (*ipmi_bmc_del_event_cb)(ipmi_mc_t    *bmc,
-				     ipmi_event_t *event,
-				     ipmi_bmc_cb  done_handler,
-				     void         *cb_data);
-void ipmi_bmc_set_del_event_handler(ipmi_mc_t             *bmc,
-				    ipmi_bmc_del_event_cb handler);
+   a special hook to let the OEM code delete events on an MC with SEL
+   support. */
+typedef int (*ipmi_mc_del_event_cb)(ipmi_mc_t    *mc,
+				    ipmi_event_t *event,
+				    ipmi_bmc_cb  done_handler,
+				    void         *cb_data);
+void ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
+				   ipmi_mc_del_event_cb handler);
 
 /* Set and get the OEM data pointer in the mc. */
 void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);
