@@ -1819,7 +1819,7 @@ managment addresses provided (channel 0xf mc 0, channel 0xf mc 1) to
 talk directly to the cards.  The various sensors and controls that are
 directly on the card are provided on those controllers.  The third
 management controller (channel 0 mc 0x20) represents the currently
-active AMC, the chassis controls are attached to that controller.
+active AMC, it handles all the the chassis controls.
 
 @subsection MXP LAN Protocol
 
