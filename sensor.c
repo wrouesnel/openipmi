@@ -733,9 +733,10 @@ handle_new_sensor(ipmi_mc_t     *mc,
 		     sensor->entity_instance,
 		     &ent);
 
-    if (! ipmi_bmc_oem_new_sensor(ipmi_mc_get_bmc(mc), ent, sensor, link))
+    if (! ipmi_bmc_oem_new_sensor(ipmi_mc_get_bmc(mc), ent, sensor, link)) {
 	ipmi_entity_add_sensor(ent, mc,
 			       sensor->lun, sensor->num, sensor, link);
+    }
 }
 
 static int cmp_sensor(ipmi_sensor_t *s1,
@@ -2438,11 +2439,14 @@ enables_get2(ipmi_sensor_t *sensor,
 	     void          *cb_data)
 {
     event_enable_get_info_t *info = cb_data;
+    int                     global_enable;
+    int                     scanning_enabled;
 
     if (info->rsp->data[0]) {
 	if (info->done)
 	    info->done(info->sensor,
 		       IPMI_IPMI_ERR_VAL(info->rsp->data[0]),
+		       0, 0,
 		       info->state,
 		       info->cb_data);
 	opq_op_done(info->sensor->waitq);
@@ -2455,8 +2459,12 @@ enables_get2(ipmi_sensor_t *sensor,
 				      | (info->rsp->data[3] << 8));
     info->state.__deassertion_events = (info->rsp->data[4]
 					| (info->rsp->data[5] << 8));
+    global_enable = (info->rsp->data[1] >> 7) & 1;
+    scanning_enabled = (info->rsp->data[1] >> 6) & 1;
     if (info->done)
-	info->done(sensor, 0, info->state, info->cb_data);
+	info->done(sensor, 0,
+		   global_enable, scanning_enabled,
+		   info->state, info->cb_data);
     opq_op_done(info->sensor->waitq);
     free(info);
 }
@@ -2471,7 +2479,8 @@ enables_get(ipmi_mc_t  *mc,
 
     if (!mc) {
 	if (info->done)
-	    info->done(info->sensor, ECANCELED, info->state, info->cb_data);
+	    info->done(info->sensor, ECANCELED,
+		       0, 0, info->state, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
 	return;
@@ -2479,7 +2488,8 @@ enables_get(ipmi_mc_t  *mc,
 
     if (info->sensor->destroyed) {
 	if (info->done)
-	    info->done(info->sensor, ECANCELED, info->state, info->cb_data);
+	    info->done(info->sensor, ECANCELED,
+		       0, 0, info->state, info->cb_data);
 	free(info);
 	sensor_final_destroy(info->sensor);
 	return;
@@ -2494,7 +2504,8 @@ enables_get(ipmi_mc_t  *mc,
     mc_cb(mc, &mc_info);
     if (mc_info.err) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, info->state, info->cb_data);
+	    info->done(info->sensor, mc_info.err,
+		       0, 0, info->state, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -2514,10 +2525,11 @@ event_enable_get_start2(ipmi_sensor_t *sensor, void *cb_data)
     cmd_msg.data_len = 1;
     cmd_msg.data = cmd_data;
     cmd_data[0] = sensor->num;
-    rv = ipmi_send_command(sensor->mc, sensor->lun, &cmd_msg, enables_get, info);
+    rv = ipmi_send_command(sensor->mc, sensor->lun,
+			   &cmd_msg, enables_get, info);
     if (rv) {
 	if (info->done)
-	    info->done(sensor, rv, info->state, info->cb_data);
+	    info->done(sensor, rv, 0, 0, info->state, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -2531,7 +2543,8 @@ event_enable_get_start(void *cb_data, int shutdown)
 
     if (shutdown) {
 	if (info->done)
-	    info->done(info->sensor, ECANCELED, info->state, info->cb_data);
+	    info->done(info->sensor, ECANCELED,
+		       0, 0, info->state, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
 	return;
@@ -2540,7 +2553,7 @@ event_enable_get_start(void *cb_data, int shutdown)
     rv = ipmi_sensor_pointer_cb(info->sensor_id, event_enable_get_start2, info);
     if (rv) {
 	if (info->done)
-	    info->done(info->sensor, rv, info->state, info->cb_data);
+	    info->done(info->sensor, rv, 0, 0, info->state, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -3253,35 +3266,44 @@ typedef struct reading_get_info_s
 
 static void
 reading_get2(ipmi_sensor_t *sensor,
-	    void          *cb_data)
+	     void          *cb_data)
 {
     reading_get_info_t  *info = cb_data;
     int                 rv;
-    double              val;
+    int                 val_present = 0;
+    double              val = 0.0;
+    ipmi_states_t       states = {0};
 
     if (info->rsp->data[0]) {
 	if (info->done)
 	    info->done(info->sensor,
 		       IPMI_IPMI_ERR_VAL(info->rsp->data[0]),
+		       0,
 		       0.0,
+		       states,
 		       info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
 	return;
     }
-    
-    rv = ipmi_sensor_convert_from_raw(sensor,
-				      info->rsp->data[1],
-				      &val);
-    if (rv) {
-	info->done(info->sensor, rv, 0.0, info->cb_data);
-	opq_op_done(info->sensor->waitq);
-	free(info);
-	return;
+
+    if (sensor->analog_data_format != IPMI_ANALOG_DATA_FORMAT_NOT_ANALOG) {
+	rv = ipmi_sensor_convert_from_raw(sensor,
+					  info->rsp->data[1],
+					  &val);
+	if (rv) {
+	    info->done(info->sensor, rv, 0, 0.0, states, info->cb_data);
+	    opq_op_done(info->sensor->waitq);
+	    free(info);
+	    return;
+	}
+	val_present = 1;
     }
 
+    states.__states = info->rsp->data[3];
+
     if (info->done)
-	info->done(sensor, 0, val, info->cb_data);
+	info->done(sensor, 0, val_present, val, states, info->cb_data);
     opq_op_done(info->sensor->waitq);
     free(info);
 }
@@ -3293,10 +3315,11 @@ reading_get(ipmi_mc_t  *mc,
 {
     reading_get_info_t *info = rsp_data;
     mc_cb_info_t      mc_info;
+    ipmi_states_t     states = {0};
 
     if (!mc) {
 	if (info->done)
-	    info->done(info->sensor, ECANCELED, 0.0, info->cb_data);
+	    info->done(info->sensor, ECANCELED, 0, 0.0, states, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
 	return;
@@ -3304,7 +3327,7 @@ reading_get(ipmi_mc_t  *mc,
 
     if (info->sensor->destroyed) {
 	if (info->done)
-	    info->done(info->sensor, ECANCELED, 0.0, info->cb_data);
+	    info->done(info->sensor, ECANCELED, 0, 0.0, states, info->cb_data);
 	free(info);
 	sensor_final_destroy(info->sensor);
 	return;
@@ -3319,7 +3342,8 @@ reading_get(ipmi_mc_t  *mc,
     mc_cb(mc, &mc_info);
     if (mc_info.err) {
 	if (info->done)
-	    info->done(info->sensor, mc_info.err, 0.0, info->cb_data);
+	    info->done(info->sensor, mc_info.err, 0, 0.0, states,
+		       info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -3332,6 +3356,7 @@ reading_get_start2(ipmi_sensor_t *sensor, void *cb_data)
     unsigned char     cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t        cmd_msg;
     int               rv;
+    ipmi_states_t     states = {0};
 
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
@@ -3342,7 +3367,7 @@ reading_get_start2(ipmi_sensor_t *sensor, void *cb_data)
     rv = ipmi_send_command(sensor->mc, sensor->lun, &cmd_msg, reading_get, info);
     if (rv) {
 	if (info->done)
-	    info->done(sensor, rv, 0.0, info->cb_data);
+	    info->done(sensor, rv, 0, 0.0, states, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -3353,10 +3378,11 @@ reading_get_start(void *cb_data, int shutdown)
 {
     reading_get_info_t *info = cb_data;
     int                 rv;
+    ipmi_states_t       states = {0};
 
     if (shutdown) {
 	if (info->done)
-	    info->done(info->sensor, ECANCELED, 0.0, info->cb_data);
+	    info->done(info->sensor, ECANCELED, 0, 0.0, states, info->cb_data);
 	free(info);
 	return;
     }
@@ -3364,7 +3390,7 @@ reading_get_start(void *cb_data, int shutdown)
     rv = ipmi_sensor_pointer_cb(info->sensor_id, reading_get_start2, info);
     if (rv) {
 	if (info->done)
-	    info->done(info->sensor, rv, 0.0, info->cb_data);
+	    info->done(info->sensor, rv, 0, 0.0, states, info->cb_data);
 	opq_op_done(info->sensor->waitq);
 	free(info);
     }
@@ -4000,4 +4026,11 @@ int ipmi_is_state_set(ipmi_states_t *states,
 		      int           state_num)
 {
     return (states->__states & (1 << state_num)) != 0;
+}
+
+int
+ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
+			       enum ipmi_thresh_e thresh)
+{
+    return (states->__states & (1 << thresh)) != 0;
 }

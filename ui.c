@@ -85,7 +85,9 @@ typedef struct thr_pos_s
 } thr_pos_t;
 thr_pos_t threshold_positions[6];
 
-pos_t value;
+pos_t value_pos;
+pos_t enabled_pos;
+pos_t scanning_pos;
 pos_t discr_assert_avail;
 pos_t discr_assert_enab;
 pos_t discr_deassert_avail;
@@ -526,7 +528,9 @@ struct sensor_info {
 static void
 read_sensor(ipmi_sensor_t *sensor,
 	    int           err,
+	    int           val_present,
 	    double        val,
+	    ipmi_states_t states,
 	    void          *cb_data)
 {
     ipmi_sensor_id_t sensor_id;
@@ -536,14 +540,17 @@ read_sensor(ipmi_sensor_t *sensor,
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
-    wmove(display_pad, value.y, value.x);
+    wmove(display_pad, value_pos.y, value_pos.x);
     if (err) {
 	wprintw(display_pad, "unreadable");
 	display_pad_refresh();
 	return;
     }
 
-    wprintw(display_pad, "%f", val);
+    if (val_present)
+	wprintw(display_pad, "%f", val);
+    else
+	wprintw(display_pad, "unreadable");
     display_pad_refresh();
 }
 
@@ -593,6 +600,8 @@ read_thresholds(ipmi_sensor_t     *sensor,
 static void
 read_thresh_event_enables(ipmi_sensor_t      *sensor,
 			  int                err,
+			  int                global_enable,
+			  int                scanning_enabled,
 			  ipmi_event_state_t states,
 			  void               *cb_data)
 {
@@ -604,55 +613,72 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
-    if (err) {
-	for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++) {
-	    if (threshold_positions[t].set) {
-		wmove(display_pad,
-		      threshold_positions[t].enabled.y,
-		      threshold_positions[t].enabled.x);
+    wmove(display_pad, enabled_pos.y, enabled_pos.x);
+    if (err)
+	wprintw(display_pad, "?         ");
+    else if (global_enable)
+	wprintw(display_pad, "enabled");
+    else
+	wprintw(display_pad, "disabled");
+
+    wmove(display_pad, scanning_pos.y, scanning_pos.x);
+    if (err)
+	wprintw(display_pad, "?         ");
+    else if (scanning_enabled)
+	wprintw(display_pad, "enabled");
+    else
+	wprintw(display_pad, "disabled");
+
+    if (ipmi_sensor_get_event_support(sensor)
+	!= IPMI_EVENT_SUPPORT_PER_STATE)
+	goto out;
+
+    for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++) {
+	if (threshold_positions[t].set) {
+	    wmove(display_pad,
+		  threshold_positions[t].enabled.y,
+		  threshold_positions[t].enabled.x);
+	    if (err) {
 		wprintw(display_pad, "?         ");
+		continue;
 	    }
-	}    
-    } else {
-	for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++) {
-	    if (threshold_positions[t].set) {
-		wmove(display_pad,
-		      threshold_positions[t].enabled.y,
-		      threshold_positions[t].enabled.x);
+	    wprintw(display_pad, "  ");
+	    if (ipmi_is_threshold_event_set(&states, t,
+					    IPMI_GOING_LOW,
+					    IPMI_ASSERTION))
+		wprintw(display_pad, "L^");
+	    else
 		wprintw(display_pad, "  ");
-		if (ipmi_is_threshold_event_set(&states, t,
-						IPMI_GOING_LOW,
-						IPMI_ASSERTION))
-		    wprintw(display_pad, "L^");
-		else
-		    wprintw(display_pad, "  ");
-		if (ipmi_is_threshold_event_set(&states, t,
-						IPMI_GOING_LOW,
-						IPMI_DEASSERTION))
-		    wprintw(display_pad, "Lv");
-		else
-		    wprintw(display_pad, "  ");
-		if (ipmi_is_threshold_event_set(&states, t,
-						IPMI_GOING_HIGH,
-						IPMI_ASSERTION))
-		    wprintw(display_pad, "H^");
-		else
-		    wprintw(display_pad, "  ");
-		if (ipmi_is_threshold_event_set(&states, t,
-						IPMI_GOING_HIGH,
-						IPMI_DEASSERTION))
-		    wprintw(display_pad, "HV");
-		else
-		    wprintw(display_pad, "  ");
-	    }
-	}    
-    }
+	    if (ipmi_is_threshold_event_set(&states, t,
+					    IPMI_GOING_LOW,
+					    IPMI_DEASSERTION))
+		wprintw(display_pad, "Lv");
+	    else
+		wprintw(display_pad, "  ");
+	    if (ipmi_is_threshold_event_set(&states, t,
+					    IPMI_GOING_HIGH,
+					    IPMI_ASSERTION))
+		wprintw(display_pad, "H^");
+	    else
+		wprintw(display_pad, "  ");
+	    if (ipmi_is_threshold_event_set(&states, t,
+					    IPMI_GOING_HIGH,
+					    IPMI_DEASSERTION))
+		wprintw(display_pad, "HV");
+	    else
+		wprintw(display_pad, "  ");
+	}
+    }    
+
+ out:
     display_pad_refresh();
 }
 
 static void
 read_discrete_event_enables(ipmi_sensor_t      *sensor,
 			    int                err,
+			    int                global_enable,
+			    int                scanning_enabled,
 			    ipmi_event_state_t states,
 			    void               *cb_data)
 {
@@ -664,6 +690,26 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
     if (!((curr_display_type == DISPLAY_SENSOR)
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
+
+    wmove(display_pad, enabled_pos.y, enabled_pos.x);
+    if (err)
+	wprintw(display_pad, "?         ");
+    else if (global_enable)
+	wprintw(display_pad, "enabled");
+    else
+	wprintw(display_pad, "disabled");
+
+    wmove(display_pad, scanning_pos.y, scanning_pos.x);
+    if (err)
+	wprintw(display_pad, "?         ");
+    else if (scanning_enabled)
+	wprintw(display_pad, "enabled");
+    else
+	wprintw(display_pad, "disabled");
+
+    if (ipmi_sensor_get_event_support(sensor)
+	!= IPMI_EVENT_SUPPORT_PER_STATE)
+	goto out;
 
     if (err) {
 	wmove(display_pad, discr_assert_enab.y, discr_assert_enab.x);
@@ -682,6 +728,8 @@ read_discrete_event_enables(ipmi_sensor_t      *sensor,
 	    wprintw(display_pad, "%d", val != 0);
 	}    
     }
+
+ out:
     display_pad_refresh();
 }
 
@@ -700,7 +748,7 @@ read_states(ipmi_sensor_t *sensor,
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
-    wmove(display_pad, value.y, value.x);
+    wmove(display_pad, value_pos.y, value_pos.x);
     if (err) {
 	wprintw(display_pad, "?");
     } else {
@@ -724,25 +772,34 @@ redisplay_sensor(ipmi_sensor_t *sensor, void *cb_data)
 	if (rv)
 	    ui_log("redisplay_sensor: Unable to get sensor reading: 0x%x\n",
 		   rv);
-	rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
-	if (rv)
-	    ui_log("Unable to get threshold values: 0x%x\n", rv);
-	
-	rv = ipmi_sensor_events_enable_get(sensor,
-					   read_thresh_event_enables,
-					   NULL);
-	if (rv)
-	    ui_log("Unable to get threshold values: 0x%x\n", rv);
+
+	if (ipmi_sensor_get_threshold_access(sensor)
+	    != IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
+	{
+	    rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
+	    if (rv)
+		ui_log("Unable to get threshold values: 0x%x\n", rv);
+	}
+
+	if (ipmi_sensor_get_event_support(sensor) != IPMI_EVENT_SUPPORT_NONE) {
+	    rv = ipmi_sensor_events_enable_get(sensor,
+					       read_thresh_event_enables,
+					       NULL);
+	    if (rv)
+		ui_log("Unable to get event values: 0x%x\n", rv);
+	}
     } else {
 	rv = ipmi_states_get(sensor, read_states, NULL);
 	if (rv)
 	    ui_log("Unable to get sensor reading: 0x%x\n", rv);
 	
-	rv = ipmi_sensor_events_enable_get(sensor,
-					   read_discrete_event_enables,
-					   NULL);
-	if (rv)
-	    ui_log("Unable to get threshold values: 0x%x\n", rv);
+	if (ipmi_sensor_get_event_support(sensor) != IPMI_EVENT_SUPPORT_NONE) {
+	    rv = ipmi_sensor_events_enable_get(sensor,
+					       read_discrete_event_enables,
+					       NULL);
+	    if (rv)
+		ui_log("Unable to get event values: 0x%x\n", rv);
+	}
     }
 }
 
@@ -795,7 +852,11 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	wprintw(display_pad, "Sensor %d.%d.%d.%d - %s:\n",
 		id, instance, lun, num, name);
 	wprintw(display_pad, "  value = ");
-	getyx(display_pad, value.y, value.x);
+	getyx(display_pad, value_pos.y, value_pos.x);
+	wprintw(display_pad, "\n  Events = ");
+	getyx(display_pad, enabled_pos.y, enabled_pos.x);
+	wprintw(display_pad, "\n  Scanning = ");
+	getyx(display_pad, scanning_pos.y, scanning_pos.x);
 	wprintw(display_pad, "\n");
 	num = ipmi_sensor_get_sensor_type(sensor);
 	wprintw(display_pad, "  sensor type = %s (0x%2.2x)\n",
@@ -832,15 +893,23 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	    if (rv)
 		ui_log("Unable to get sensor reading: 0x%x\n", rv);
 
-	    rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
-	    if (rv)
-		ui_log("Unable to get threshold values: 0x%x\n", rv);
+	    if (ipmi_sensor_get_threshold_access(sensor)
+		!= IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
+	    {
+		rv = ipmi_thresholds_get(sensor, read_thresholds, NULL);
+		if (rv)
+		    ui_log("Unable to get threshold values: 0x%x\n", rv);
+	    }
 	    
-	    rv = ipmi_sensor_events_enable_get(sensor,
-					       read_thresh_event_enables,
-					       NULL);
-	    if (rv)
-		ui_log("Unable to get threshold values: 0x%x\n", rv);
+	    if (ipmi_sensor_get_event_support(sensor)
+		!= IPMI_EVENT_SUPPORT_NONE)
+	    {
+		rv = ipmi_sensor_events_enable_get(sensor,
+						   read_thresh_event_enables,
+						   NULL);
+		if (rv)
+		    ui_log("Unable to get event values: 0x%x\n", rv);
+	    }
 	    
 	    rv = ipmi_sensor_get_nominal_reading(sensor, &val);
 	    if (!rv) wprintw(display_pad, "  nominal = %f\n", val);
@@ -938,11 +1007,15 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 	    if (rv)
 		ui_log("Unable to get sensor reading: 0x%x\n", rv);
 
-	    rv = ipmi_sensor_events_enable_get(sensor,
-					       read_discrete_event_enables,
-					       NULL);
-	    if (rv)
-		ui_log("Unable to get threshold values: 0x%x\n", rv);
+	    if (ipmi_sensor_get_event_support(sensor)
+		!= IPMI_EVENT_SUPPORT_NONE)
+	    {
+		rv = ipmi_sensor_events_enable_get(sensor,
+						   read_discrete_event_enables,
+						   NULL);
+		if (rv)
+		    ui_log("Unable to get event values: 0x%x\n", rv);
+	    }
 	}
 
 	display_pad_refresh();

@@ -575,7 +575,9 @@ detect_states_read(ipmi_sensor_t *sensor,
 static void
 detect_reading_read(ipmi_sensor_t *sensor,
 		    int           err,
+		    int           val_present,
 		    double        val,
+		    ipmi_states_t states,
 		    void          *cb_data)
 {
     ent_active_detect_t *info = cb_data;

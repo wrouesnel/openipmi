@@ -428,6 +428,8 @@ int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 /* Get the event enables for the given sensor. */
 typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,
 					  int                err,
+					  int                global_enable,
+					  int                scanning_enabled,
 					  ipmi_event_state_t states,
 					  void               *cb_data);
 int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
@@ -568,23 +570,28 @@ int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 			ipmi_thresh_get_cb done,
 			void               *cb_data);
 
+/* Discrete states, or threshold status. */
+typedef struct ipmi_states_s
+{
+    unsigned int __states;
+} ipmi_states_t;
+
 /* Read the current value of the given threshold sensor. */
+int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
+				   enum ipmi_thresh_e thresh);
 typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t *sensor,
 				     int           err,
+				     int           val_present,
 				     double        val,
+				     ipmi_states_t states,
 				     void          *cb_data);
 int ipmi_reading_get(ipmi_sensor_t        *sensor,
 		     ipmi_reading_done_cb done,
 		     void                 *cb_data);
 
 /* Read the current states from the discrete sensor. */
-typedef struct ipmi_states_s
-{
-    unsigned int __states;
-} ipmi_states_t;
 int ipmi_is_state_set(ipmi_states_t *states,
 		      int           state_num);
-
 typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
 				    int           err,
 				    ipmi_states_t states,
