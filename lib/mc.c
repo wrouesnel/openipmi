@@ -1469,6 +1469,10 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 	mc->startup_SEL_time = 0;
     }
 
+    if (!mc->sel_timer_info)
+	/* timer info is gone, just give up. */
+	return;
+
     rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
     if (rv) {
 	sels_fetched_start_timer(mc->sel,

@@ -11,6 +11,8 @@
 
 	* lib/sel.c: Fixed problems with timestamp handling.
 
+	* lib/mc.c: Fixed an error/shutdown race with timer info.
+
 2005-02-08 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Fixed some problems with the use of qsort and the
