@@ -147,6 +147,9 @@ struct ipmi_fru_s
 
     unsigned int refcount;
 
+    /* Is the FRU being read or written? */
+    int in_use;
+
     ipmi_lock_t *lock;
 
     ipmi_domain_t        *domain;
@@ -217,9 +220,7 @@ fru_unlock(ipmi_fru_t *fru)
 static void
 fru_get(ipmi_fru_t *fru)
 {
-    ipmi_lock(fru->lock);
     fru->refcount++;
-    ipmi_unlock(fru->lock);
 }
 
 static void
@@ -443,7 +444,7 @@ fru_string_set(enum ipmi_str_type_e type,
 	ipmi_set_device_string(str, type, len, tstr, 1, &raw_len);
 	raw_diff = raw_len - val->raw_len;
 	if ((raw_diff > 0) && (rec->used_length+raw_diff > rec->length))
-	    return ENOMEM;
+	    return ENOSPC;
 	if (len == 0)
 	    newval = ipmi_mem_alloc(1);
 	else
@@ -622,11 +623,9 @@ fru_variable_string_set(ipmi_fru_record_t    *rec,
 	    }
 	    val->strings = newval;
 	    val->len = alloc_num;
-	    if (num > 0) {
-		val->strings[num].offset
-		    = val->strings[num-1].offset + val->strings[num-1].raw_len;
-	    }
 	}
+	val->strings[num].offset = rec->used_length;
+	val->strings[num].length = 0;
 	val->next++;
     }
 
@@ -1780,11 +1779,14 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
     unsigned char           sum;
     unsigned int            length;
     unsigned int            start_offset = 0;
+    unsigned int            left = data_len;
 
     /* First scan for the number of records. */
     num_records = 0;
     for (;;) {
-	if (data_len < 5) {
+	unsigned char eol;
+
+	if (left < 5) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sfru.c(fru_decode_multi_record_area):"
 		     " Data not long enough for multi record",
@@ -1801,7 +1803,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	}
 
 	length = data[2];
-	if ((length + 5) > data_len) {
+	if ((length + 5) > left) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sfru.c(fru_decode_multi_record_area):"
 		     " Record went past end of data",
@@ -1820,11 +1822,14 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 
 	num_records++;
 
-	if (data[1] & 0x80)
-	    /* End of list */
-	    break;
+	eol = data[1] + 0x80;
 
 	data += length + 5;
+	left -= length + 5;
+
+	if (eol)
+	    /* End of list */
+	    break;
     }
 
     rec = fru_record_alloc(IPMI_FRU_FTR_MULTI_RECORD_AREA);
@@ -1832,7 +1837,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	return ENOMEM;
 
     rec->length = data_len;
-    rec->used_length = data - orig_data + 2; /* Add 2 for the end marker */
+    rec->used_length = data - orig_data;
     rec->orig_used_length = rec->used_length;
 
     u = fru_record_get_data(rec);
@@ -1848,23 +1853,8 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
     data = orig_data;
     data_len = orig_data_len;
     for (i=0; i<num_records; i++) {
-	if (data_len < 5) {
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(fru_decode_multi_record_area):"
-		     " Data not long enough for multi record",
-		     FRU_DOMAIN_NAME(fru));
-	    return EBADMSG;
-	}
-
+	/* No checks required, they've already been done above. */
 	length = data[2];
-	if ((length + 5) > data_len) {
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(fru_decode_multi_record_area):"
-		     " Record went past end of data",
-		     FRU_DOMAIN_NAME(fru));
-	    return EBADMSG;
-	}
-
 	r = u->records + i;
 	r->data = ipmi_mem_alloc(length);
 	if (!r->data) {
@@ -2014,7 +2004,7 @@ ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
     ipmi_fru_multi_record_area_t *u;
     unsigned char                *new_data;
     ipmi_fru_record_t            *rec;
-    int                          raw_diff;
+    int                          raw_diff = 0;
     int                          i;
 
     fru_lock(fru);
@@ -2047,15 +2037,29 @@ ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
 		return ENOMEM;
 	    }
 	    memset(new_recs, 0, new_len * sizeof(*new_recs));
-	    memcpy(new_recs, u->records, u->rec_len * sizeof(*new_recs));
-	    ipmi_mem_free(u->records);
+	    if (u->records) {
+		memcpy(new_recs, u->records, u->rec_len * sizeof(*new_recs));
+		ipmi_mem_free(u->records);
+	    }
 	    u->records = new_recs;
 	    u->rec_len = new_len;
 	}
+	if (u->num_records == 0)
+	    fru->header_changed = 1;
 	u->num_records++;
+	u->records[num].offset = rec->used_length;
+	u->records[num].length = 0;
+	u->records[num].changed = 1;
+	raw_diff = 5; /* Header size */
     }
 
     if (data) {
+	raw_diff += length - u->records[num].length;
+
+	/* Is there enough space? */
+	if ((rec->used_length + raw_diff) > rec->length)
+	    return ENOSPC;
+
 	/* Modifying the record. */
 	if (length == 0)
 	    new_data = ipmi_mem_alloc(1);
@@ -2065,7 +2069,6 @@ ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
 	    fru_unlock(fru);
 	    return ENOMEM;
 	}
-	raw_diff = length - u->records[num].length;
 	memcpy(new_data, data, length);
 	if (u->records[num].data)
 	    ipmi_mem_free(u->records[num].data);
@@ -2074,7 +2077,7 @@ ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
 	u->records[num].format_version = version;
 	u->records[num].length = length;
 	if (raw_diff) {
-	    for (i=num; i<u->num_records; i++) {
+	    for (i=num+1; i<u->num_records; i++) {
 		u->records[i].offset += raw_diff;
 		u->records[i].changed = 1;
 	    }
@@ -2084,9 +2087,10 @@ ipmi_fru_set_multi_record_data(ipmi_fru_t    *fru,
 	if (u->records[num].data)
 	    ipmi_mem_free(u->records[num].data);
 	u->num_records--;
-	raw_diff = 5 + u->records[num].length;
+	raw_diff = - (5 + u->records[num].length);
 	for (i=num; i<u->num_records; i++) {
 	    u->records[i] = u->records[i+1];
+	    u->records[i].offset += raw_diff;
 	    u->records[i].changed = 1;
 	}
 	if (u->num_records == 0)
@@ -2115,9 +2119,6 @@ fru_encode_multi_record(ipmi_fru_t             *fru,
     if (o != elem->offset)
 	return EBADMSG;
 
-    if (!elem->changed)
-	goto out;
-
     data += o;
     data[0] = elem->type;
     data[1] = 2; /* Version */
@@ -2128,13 +2129,12 @@ fru_encode_multi_record(ipmi_fru_t             *fru,
     data[4] = -checksum(data, 4);
     memcpy(data+5, elem->data, elem->length);
 
-    if (!rec->rewrite) {
+    if (rec->changed && !rec->rewrite) {
 	rv = fru_new_update_rec(fru, rec->offset+elem->offset, elem->length+5);
 	if (rv)
 	    return rv;
     }
 
- out:
     *offset = o + elem->length + 5;
     return 0;
 }
@@ -2270,10 +2270,13 @@ ipmi_fru_add_area(ipmi_fru_t   *fru,
     rec->changed = 1;
     rec->rewrite = 1;
     rec->used_length = fru_area_info[area].empty_length;
+    rec->orig_used_length = rec->used_length;
+    rec->offset = offset;
+    rec->length = length;
     fru->header_changed = 1;
 
     rv = fru_setup_min_field(rec, area, 1);
-    if (!rv) {
+    if (rv) {
 	fru_unlock(fru);
 	return rv;
     }
@@ -2492,7 +2495,9 @@ static int start_physical_fru_fetch(ipmi_fru_t *fru);
 static int
 destroy_fru(void *cb_data, void *item1, void *item2)
 {
-    ipmi_fru_destroy(item1, NULL, NULL);
+    ipmi_fru_t *fru = item1;
+    fru->in_frulist = 0;
+    ipmi_fru_destroy(fru, NULL, NULL);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -2547,6 +2552,8 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 
     /* Refcount starts at 2 because we start a fetch immediately. */
     fru->refcount = 2;
+    fru->in_use = 1;
+
     fru->domain = domain;
     fru->is_logical = is_logical;
     fru->device_address = device_address;
@@ -2761,14 +2768,16 @@ fetch_complete(ipmi_fru_t *fru, int err)
 {
     if (!err)
 	err = process_fru_info(fru);
-    fru_unlock(fru);
-
-    if (fru->fetched_handler)
-	fru->fetched_handler(fru, err, fru->fetched_cb_data);
 
     if (fru->data)
 	ipmi_mem_free(fru->data);
     fru->data = NULL;
+
+    fru->in_use = 0;
+    fru_unlock(fru);
+
+    if (fru->fetched_handler)
+	fru->fetched_handler(fru, err, fru->fetched_cb_data);
 
     fru_put(fru);
 }
@@ -3036,14 +3045,15 @@ write_complete(ipmi_fru_t *fru, int err)
 	    }
 	}
     }
+    if (fru->data)
+	ipmi_mem_free(fru->data);
+    fru->data = NULL;
+
+    fru->in_use = 0;
     fru_unlock(fru);
 
     if (fru->fetched_handler)
 	fru->fetched_handler(fru, err, fru->fetched_cb_data);
-
-    if (fru->data)
-	ipmi_mem_free(fru->data);
-    fru->data = NULL;
 
     fru_put(fru);
 }
@@ -3190,12 +3200,13 @@ ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
     int              i;
 
     fru_lock(fru);
-    if (fru->refcount != 1) {
+    if (fru->in_use) {
 	/* Something else is happening with the FRU, error this
 	   operation. */
 	fru_unlock(fru);
 	return EAGAIN;
     }
+    fru->in_use = 1;
     fru_get(fru);
 
     /* We allocate and format the entire FRU data.  We do this because
@@ -3206,12 +3217,16 @@ ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
     fru->data = ipmi_mem_alloc(fru->data_len);
     memset(fru->data, 0, fru->data_len);
     fru->data[0] = 1; /* Version */
-    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
+    for (i=0; i<IPMI_FRU_FTR_MULTI_RECORD_AREA; i++) {
 	if (fru->recs[i])
 	    fru->data[i+1] = fru->recs[i]->offset / 8;
 	else
 	    fru->data[i+1] = 0;
     }
+    if (fru->recs[i] && fru->recs[i]->used_length)
+	fru->data[i+1] = fru->recs[i]->offset / 8;
+    else
+	fru->data[i+1] = 0;
     fru->data[6] = 0;
     fru->data[7] = -checksum(fru->data, 7);
 
@@ -3229,7 +3244,11 @@ ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
 	    if (rv)
 		goto out_err;
 	    if (rec->rewrite) {
-		rv = fru_new_update_rec(fru, rec->offset, rec->length);
+		if (i == IPMI_FRU_FTR_MULTI_RECORD_AREA)
+		    rv = fru_new_update_rec(fru, rec->offset,
+					    rec->used_length);
+		else
+		    rv = fru_new_update_rec(fru, rec->offset, rec->length);
 		if (rv)
 		    goto out_err;
 		
@@ -3273,6 +3292,7 @@ ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
     ipmi_mem_free(fru->data);
     fru->data = NULL;
     fru_unlock(fru);
+    fru->in_use = 0;
     fru_put(fru);
     return rv;
 }
@@ -3342,7 +3362,10 @@ frus_handler(void *cb_data, void *item1, void *item2)
 static int
 frus_prefunc(void *cb_data, void *item1, void *item2)
 {
-    fru_get(item1);
+    ipmi_fru_t *fru = item1;
+    ipmi_lock(fru->lock);
+    fru_get(fru);
+    ipmi_unlock(fru->lock);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 

@@ -114,4 +114,9 @@ void locked_list_iterate_prefunc_nolock(locked_list_t          *ll,
 					void                   *cb_data);
 unsigned int locked_list_num_entries_nolock(locked_list_t *ll);
 
+/* Lock and unlock the lock in the locked list, useful with the
+   previous nolock calls. */
+void locked_list_lock(locked_list_t *ll);
+void locked_list_unlock(locked_list_t *ll);
+
 #endif /* _LOCKED_LIST_H */

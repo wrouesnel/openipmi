@@ -53,6 +53,10 @@ int _ipmi_entity_get(ipmi_entity_t *ent);
 /* Must be called with no locks held. */
 void _ipmi_entity_put(ipmi_entity_t *ent);
 
+/* Used so entities can be forced to be kept around. */
+int _ipmi_entity_add_ref(ipmi_entity_t *ent);
+int _ipmi_entity_remove_ref(ipmi_entity_t *ent);
+
 /* Find an entity in the domain's set of entities that has the given
    entity id and entity instance.  The MC is the mc the entity came
    from, or NULL if from the main SDR repository.  Entity will be

@@ -719,19 +719,26 @@ handle_sel_info(ipmi_mc_t  *mc,
 	}
     }
 
+    /* Note that we only re-fetch from the beginning if the SEL is
+       erased.  The SEL is supposed to be ordered and only have new
+       records added onto the end.  So we can re-fetch from the last
+       added one to get the next event properly.  Unless, of course,
+       the SEL was erased. */
+    if (sel->last_erase_timestamp != erase_timestamp) {
+	sel->curr_rec_id = 0;
+    }
+
     sel->last_addition_timestamp = add_timestamp;
     sel->last_erase_timestamp = erase_timestamp;
 
     sel->sels_changed = 1;
+    sel->next_rec_id = 0;
 
     if (fetched_num_sels == 0) {
 	/* No sels, so there's nothing to do. */
 	fetch_complete(sel, 0);
 	goto out;
     }
-
-    sel->next_rec_id = 0;
-    sel->curr_rec_id = 0;
 
     /* Fetch the first SEL entry. */
     cmd_msg.data = cmd_data;

@@ -9,6 +9,31 @@
 	and control lists to use the main domain lock as their lock, since
 	that lock was always claimed anyway.
 
+	* lib/lanparm.c: Fixed a race condition between lanparm iteration
+	and destruction using the new locked list stuff.
+	* lib/pet.c: ditto
+	* lib/pef.c: ditto
+	* lib/fru.c: ditto
+
+	* lib/entity.c: Fixed some minor locking problems the previous
+	changed exposed.
+
+	* swig/OpenIPMI.i: Add the FRU writing support to the Perl code.
+
+	* doc/IPMI.ltx: Added documenation for FRU writing.
+
+	* swig/perl/sample: Clean up Perl warnings.
+
+	* include/OpenIPMI/internal/ipmi_entity.c, lib/entity.c: Added a
+	way for code to force entities to stay around.
+
+	* lib/oem_atca.c: Force the shelf entity to stay around even if
+	there are no sub-entities.
+
+	* cmdlang/fru_cmd.c: Added multi-record setting.
+
+	* lib/fru.c: Fixed problems writing multi-records.
+
 2004-12-10 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/internal/ipmi_int.h, lib/ipmi.c: Fixes

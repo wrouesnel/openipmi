@@ -80,8 +80,8 @@ use OpenIPMI;
 	$dataref = $event->get_data();
 	@data = @$dataref;
 
-	print ("Got event: $$name ", $event->get_record_id(),
-	       " ", $event->get_type(), " ", $event->get_timestamp(), "\n");
+	print "Got event: $$name ", $event->get_record_id(),
+	      " ", $event->get_type(), " ", $event->get_timestamp(), "\n";
 	print "  Data: ";
 	while (defined ($val = shift @data)) {
 	    printf " %2.2x", $val;
@@ -154,58 +154,58 @@ use OpenIPMI;
 	if (($op eq "added") || ($op eq "changed")) {
 	    print "  lun = ", $sensor->get_lun(), "\n";
 	    print "  num = ", $sensor->get_num(), "\n";
-	    print("  sensor_type_string = ",
-		   $sensor->get_sensor_type_string(), "\n");
+	    print "  sensor_type_string = ",
+		   $sensor->get_sensor_type_string(), "\n";
 	    print "  sensor_type = ", $sensor->get_sensor_type(), "\n";
-	    print("  event_reading_type_string = ",
-		   $sensor->get_event_reading_type_string(), "\n");
-	    print("  event_reading_type = ",
-		   $sensor->get_event_reading_type(), "\n");
+	    print "  event_reading_type_string = ",
+		   $sensor->get_event_reading_type_string(), "\n";
+	    print "  event_reading_type = ",
+		   $sensor->get_event_reading_type(), "\n";
 	    print "  entity_id = ", $sensor->get_entity_id(), "\n";
 	    print "  entity_instance = ", $sensor->get_entity_instance(), "\n";
-	    print("  sensor_init_scanning = ",
-		   $sensor->get_sensor_init_scanning(), "\n");
-	    print("  sensor_init_events = ",
-		   $sensor->get_sensor_init_events(), "\n");
-	    print("  sensor_init_thresholds = ",
-		   $sensor->get_sensor_init_thresholds(), "\n");
-	    print("  sensor_init_hysteresis = ",
-		   $sensor->get_sensor_init_hysteresis(), "\n");
-	    print("  sensor_init_type = ",
-		   $sensor->get_sensor_init_type(), "\n");
-	    print("  sensor_init_pu_events = ",
-		   $sensor->get_sensor_init_pu_events(), "\n");
-	    print("  sensor_init_pu_scanning = ",
-		   $sensor->get_sensor_init_pu_scanning(), "\n");
-	    print("  ignore_if_no_entity = ",
-		   $sensor->get_ignore_if_no_entity(), "\n");
-	    print("  supports_auto_rearm = ",
-		   $sensor->get_supports_auto_rearm(), "\n");
+	    print "  sensor_init_scanning = ",
+		   $sensor->get_sensor_init_scanning(), "\n";
+	    print "  sensor_init_events = ",
+		   $sensor->get_sensor_init_events(), "\n";
+	    print "  sensor_init_thresholds = ",
+		   $sensor->get_sensor_init_thresholds(), "\n";
+	    print "  sensor_init_hysteresis = ",
+		   $sensor->get_sensor_init_hysteresis(), "\n";
+	    print "  sensor_init_type = ",
+		   $sensor->get_sensor_init_type(), "\n";
+	    print "  sensor_init_pu_events = ",
+		   $sensor->get_sensor_init_pu_events(), "\n";
+	    print "  sensor_init_pu_scanning = ",
+		   $sensor->get_sensor_init_pu_scanning(), "\n";
+	    print "  ignore_if_no_entity = ",
+		   $sensor->get_ignore_if_no_entity(), "\n";
+	    print "  supports_auto_rearm = ",
+		   $sensor->get_supports_auto_rearm(), "\n";
 	    print "  event_support = ", $sensor->get_event_support(), "\n";
-	    print("  sensor_direction = ",
-		  $sensor->get_sensor_direction(), "\n");
+	    print "  sensor_direction = ",
+		  $sensor->get_sensor_direction(), "\n";
 	    print "  oem1 = ", $sensor->get_oem1(), "\n";
 	    print "  sensor_id = ", $sensor->get_sensor_id(), "\n";
 
 	    if ($sensor->get_event_reading_type()
 		== $OpenIPMI::EVENT_READING_TYPE_THRESHOLD)
 	    {
-		print("  rate_unit_string = ",
-		       $sensor->get_rate_unit_string(), "\n");
+		print "  rate_unit_string = ",
+		       $sensor->get_rate_unit_string(), "\n";
 		print "  rate_unit = ", $sensor->get_rate_unit(), "\n";
-		print("  base_unit_string = ",
-		       $sensor->get_base_unit_string(), "\n");
+		print "  base_unit_string = ",
+		       $sensor->get_base_unit_string(), "\n";
 		print "  base_unit = ", $sensor->get_base_unit(), "\n";
-		print("  modifier_unit_string = ",
-		       $sensor->get_modifier_unit_string(), "\n");
+		print "  modifier_unit_string = ",
+		       $sensor->get_modifier_unit_string(), "\n";
 		print "  modifier_unit = ", $sensor->get_modifier_unit(), "\n";
-		print("  modifier_unit_use = ",
-		       $sensor->get_modifier_unit_use(), "\n");
+		print "  modifier_unit_use = ",
+		       $sensor->get_modifier_unit_use(), "\n";
 		print "  percentage = ", $sensor->get_percentage(), "\n";
-		print("  threshold_access = ",
-		       $sensor->get_threshold_access(), "\n");
-		print("  hysteresis_support = ",
-		       $sensor->get_hysteresis_support(), "\n");
+		print "  threshold_access = ",
+		       $sensor->get_threshold_access(), "\n";
+		print "  hysteresis_support = ",
+		       $sensor->get_hysteresis_support(), "\n";
 
 		if ($sensor->get_normal_min_specified()) {
 		    $rv = $sensor->get_normal_min(\$val);
@@ -263,8 +263,8 @@ use OpenIPMI;
 		    $rv = $sensor->threshold_reading_supported($i,
 							       \$supported);
 		    if ($rv) {
-			print ("***Error getting supported for threshold $i:",
-			       $rv, "\n");
+			print "***Error getting supported for threshold $i:",
+			      $rv, "\n";
 		    }
 
 		    if (! $supported) {
@@ -275,8 +275,8 @@ use OpenIPMI;
 
 		    $rv = $sensor->threshold_settable($i, \$settable);
 		    if ($rv) {
-			print ("***Error getting settable for threshold $i:",
-			       $rv, "\n");
+			print "***Error getting settable for threshold $i:",
+			      $rv, "\n";
 		    }
 		    if ($settable) {
 			print " settable";
@@ -284,8 +284,8 @@ use OpenIPMI;
 
 		    $rv = $sensor->threshold_readable($i, \$readable);
 		    if ($rv) {
-			print ("***Error getting readable for threshold $i:",
-			       $rv, "\n");
+			print "***Error getting readable for threshold $i:",
+			      $rv, "\n";
 		    }
 		    if ($readable) {
 			print " readable";
@@ -299,8 +299,8 @@ use OpenIPMI;
 			    my $s = 0;
 			    $rv = $sensor->threshold_event_supported($e, \$s);
 			    if ($rv) {
-				print ("***Error getting ev support for event",
-				       "$e: $rv\n");
+				print "***Error getting ev support for event",
+				      "$e: $rv\n";
 			    } elsif ($s) {
 				print " $e";
 			    }
@@ -318,22 +318,22 @@ use OpenIPMI;
 
 		    $rv = $sensor->discrete_event_readable($i, \$readable);
 		    if ($rv) {
-			print ("***Error getting readable for offset $i:",
-			       $rv, "\n");
+			print "***Error getting readable for offset $i:",
+			      $rv, "\n";
 		    }
 
 		    $rv = $sensor->discrete_event_supported($i . "a",
 							    \$a_supported);
 		    if ($rv) {
-			print ("***Error getting a supported for offset $i:",
-			       $rv, "\n");
+			print "***Error getting a supported for offset $i:",
+			      $rv, "\n";
 		    }
 
 		    $rv = $sensor->discrete_event_supported($i . "d",
 							    \$d_supported);
 		    if ($rv) {
-			print ("***Error getting d supported for offset $i:",
-			       $rv, "\n");
+			print "***Error getting d supported for offset $i:",
+			      $rv, "\n";
 		    }
 
 		    if ($readable || $a_supported || $d_supported) {
@@ -374,7 +374,7 @@ use OpenIPMI;
 	my $err = shift;
 	my $val;
 
-	print("Control ", $control->get_name(), " err = $err, values = ");
+	print "Control ", $control->get_name(), " err = $err, values = ";
 	while (defined ($val = shift @data)) {
 	    print " $val";
 	}
@@ -387,8 +387,8 @@ use OpenIPMI;
 	my $err = shift;
 	my $val = shift;
 
-	print("Control ", $control->get_name(), " err = $err, light value = ",
-	      $val, "\n");
+	print "Control ", $control->get_name(), " err = $err, light value = ",
+	      $val, "\n";
     }
 
     sub control_get_id_cb {
@@ -397,7 +397,7 @@ use OpenIPMI;
 	my $err = shift;
 	my $val;
 
-	print("Control ", $control->get_name(), " err = $err, id value = ");
+	print "Control ", $control->get_name(), " err = $err, id value = ";
 	while (defined ($val = shift @data)) {
 	    printf " %2.2x", $val;
 	}
@@ -413,7 +413,7 @@ use OpenIPMI;
 	my @valids = ();
 	my @vals = ();
 
-	print("Control ", $control->get_name(), " event, values = ");
+	print "Control ", $control->get_name(), " event, values = ";
 	for $i (0 .. $num-1) {
 	    push @valids, shift;
 	}
@@ -434,68 +434,68 @@ use OpenIPMI;
 	my $use_setting = 0;
 	my $rv;
 	my $num_vals;
-	my $i, $j, $k;
+	my ($i, $j, $k);
 
 	print $op, " control ", $control->get_name(), "\n";
 	if (($op eq "added") || ($op eq "changed")) {
 	    my $type;
 
 	    $type = $control->get_type();
-	    print("  type = ", $type, "\n");
-	    print("  entity_id = ", $control->get_entity_id(), "\n");
-	    print("  entity_instance = ",
-		  $control->get_entity_instance(), "\n");
-	    print("  settable = ", $control->is_settable(), "\n");
-	    print("  readable = ", $control->is_readable(), "\n");
-	    print("  ignore_if_no_entity = ",
-		  $control->get_ignore_if_no_entity(), "\n");
-	    print("  control_id = ", $control->get_control_id(), "\n");
-	    print("  has_events = ", $control->has_events(), "\n");
+	    print "  type = ", $type, "\n";
+	    print "  entity_id = ", $control->get_entity_id(), "\n";
+	    print "  entity_instance = ",
+		  $control->get_entity_instance(), "\n";
+	    print "  settable = ", $control->is_settable(), "\n";
+	    print "  readable = ", $control->is_readable(), "\n";
+	    print "  ignore_if_no_entity = ",
+		  $control->get_ignore_if_no_entity(), "\n";
+	    print "  control_id = ", $control->get_control_id(), "\n";
+	    print "  has_events = ", $control->has_events(), "\n";
 	    $num_vals = $control->get_num_vals();
-	    print("  num_vals = ", $num_vals, "\n");
+	    print "  num_vals = ", $num_vals, "\n";
 
 	    if ($type == $OpenIPMI::CONTROL_LIGHT) {
 		$use_setting = $control->light_set_with_setting();
 	    }
 
 	    if ($use_setting) {
-		print("  light controlled with setting\n");
-		print("  Colors: ");
+		print "  light controlled with setting\n";
+		print "  Colors: ";
 		for $i (0 .. $OpenIPMI::CONTROL_NUM_COLORS) {
 		    if ($control->light_is_color_supported($i)) {
-			print(" ", OpenIPMI::color_string($i), "($i)");
+			print " ", OpenIPMI::color_string($i), "($i)";
 		    }
 		}
-		print("\n");
-		print("  light_has_local_control = ",
-		      $control->light_has_local_control(), "\n");
+		print "\n";
+		print "  light_has_local_control = ",
+		      $control->light_has_local_control(), "\n";
 		$rv = $control->ipmi_control_get_light($self);
 		if ($rv) {
-		    print("***Error getting light: $rv\n");
+		    print "***Error getting light: $rv\n";
 		}
-	    } elsif ($TYPE == $OpenIPMI::CONTROL_IDENTIFIER) {
-		print("  identifier_get_max_length = ",
-		      $control->identifier_get_max_length(), "\n");
+	    } elsif ($type == $OpenIPMI::CONTROL_IDENTIFIER) {
+		print "  identifier_get_max_length = ",
+		      $control->identifier_get_max_length(), "\n";
 		$rv = $control->identifier_get_val($self);
 		if ($rv) {
-		    print("***Error getting control id: $rv\n");
+		    print "***Error getting control id: $rv\n";
 		}
 	    } else {
 		if ($type == $OpenIPMI::CONTROL_LIGHT) {
 		    for $i (0 .. $num_vals-1) {
-			my $n = $control->get_num_light_values(i);
-			print("  Light $i\n");
+			my $n = $control->get_num_light_values($i);
+			print "  Light $i\n";
 			for $j (0 .. $n-1) {
-			    print("    Value $j\n");
+			    print "    Value $j\n";
 			    my $o= $control->get_num_light_transitions($i, $j);
 			    for $k (0 .. $o-1) {
 				my $v;
-				print("    Transition $k:");
+				print "    Transition $k:";
 				$v = $control->get_light_color($i, $j, $k);
-				print(" ", OpenIPMI::color_string($v));
+				print " ", OpenIPMI::color_string($v);
 				$v = $control->get_light_color_time
 				    ($i, $j, $k);
-				print(" time(", $v, ")\n");
+				print " time(", $v, ")\n";
 			    }
 			}
 		    }
@@ -505,13 +505,13 @@ use OpenIPMI;
 	    if ($op eq "added") {
 		$rv = $control->add_event_handler($self);
 		if ($rv) {
-		    print("***Error adding control event handler: $rv\n");
+		    print "***Error adding control event handler: $rv\n";
 		}
 	    }
 	} elsif ($op eq "deleted") {
 	    $rv = $control->remove_event_handler($self);
 	    if ($rv) {
-		print("***Error removing control event handler: $rv\n");
+		print "***Error removing control event handler: $rv\n";
 	    }
 	}
     }
@@ -525,17 +525,17 @@ use OpenIPMI;
 
 	print $op, " fru for ", $entity->get_name(), "\n";
 	if (($op eq "added") || ($op eq "changed")) {
-	    my $i, $j, $k;
+	    my ($i, $j, $k);
 
 	    $i = $fru->str_to_index("internal_use_version");
 	    if ($i == -1) {
-		print("*** FRU string 'internal_use_version' was invalid\n");
+		print "*** FRU string 'internal_use_version' was invalid\n";
 	    } else {
-		print("  internal_use_version index is $i\n");
+		print "  internal_use_version index is $i\n";
 	    }
 	    $i = $fru->str_to_index("blah blah");
 	    if ($i != -1) {
-		print("*** FRU string 'blah blah' was valid\n");
+		print "*** FRU string 'blah blah' was valid\n";
 	    }
 
 	    $i = 0;
@@ -543,7 +543,7 @@ use OpenIPMI;
 	    $k = $j;
 	    $rv = $fru->get($i, \$j);
 	    while ($rv) {
-		my $name, $type, $value;
+		my ($name, $type, $value);
 
 		($name, $type, $value) = split / /, $rv, 3;
 		if (defined $value) {
@@ -571,8 +571,8 @@ use OpenIPMI;
 	my $new_state = shift;
 	my $event = shift;
 
-	print ("Hot swap change for ", $entity->get_name(), " was $old_state",
-	       " now $new_state\n");	
+	print "Hot swap change for ", $entity->get_name(), " was $old_state",
+	      " now $new_state\n";
 	if (defined $event) {
 	    $self->event_cb($entity->get_domain(), $event);
 	}
@@ -590,12 +590,12 @@ use OpenIPMI;
 	    print "  is_fru = ", $entity->is_fru(), "\n";
 	    print "  entity_id = ", $entity->get_entity_id(), "\n";
 	    print "  entity_instance = ", $entity->get_entity_instance(), "\n";
-	    print("  device_channel = ",
-		  $entity->get_entity_device_channel(), "\n");
-	    print("  device_address = ",
-		  $entity->get_entity_device_address(), "\n");
-	    print ("  presence_sensor_always_there = ",
-		   $entity->get_presence_sensor_always_there(), "\n");
+	    print "  device_channel = ",
+		  $entity->get_entity_device_channel(), "\n";
+	    print "  device_address = ",
+		  $entity->get_entity_device_address(), "\n";
+	    print "  presence_sensor_always_there = ",
+		   $entity->get_presence_sensor_always_there(), "\n";
 	    print "  channel = ", $entity->get_channel(), "\n";
 	    print "  lun = ", $entity->get_lun(), "\n";
 	    print "  oem = ", $entity->get_oem(), "\n";
@@ -606,26 +606,26 @@ use OpenIPMI;
 	    print "  slave_address = ", $entity->get_slave_address(), "\n";
 	    print "  is_logical_fru = ", $entity->get_is_logical_fru(), "\n";
 	    print "  fru_device_id = ", $entity->get_fru_device_id(), "\n";
-	    print ("  ACPI_system_power_notify_required = ",
-		   $entity->get_ACPI_system_power_notify_required(), "\n");
-	    print ("  ACPI_device_power_notify_required = ",
-		   $entity->get_ACPI_device_power_notify_required(), "\n");
-	    print ("  controller_logs_init_agent_errors = ",
-		   $entity->get_controller_logs_init_agent_errors(), "\n");
-	    print ("  log_init_agent_errors_accessing = ",
-		   $entity->get_log_init_agent_errors_accessing(), "\n");
+	    print "  ACPI_system_power_notify_required = ",
+		  $entity->get_ACPI_system_power_notify_required(), "\n";
+	    print "  ACPI_device_power_notify_required = ",
+		  $entity->get_ACPI_device_power_notify_required(), "\n";
+	    print "  controller_logs_init_agent_errors = ",
+		  $entity->get_controller_logs_init_agent_errors(), "\n";
+	    print "  log_init_agent_errors_accessing = ",
+		  $entity->get_log_init_agent_errors_accessing(), "\n";
 	    print "  global_init = ", $entity->get_global_init(), "\n";
 	    print "  chassis_device = ", $entity->get_chassis_device(), "\n";
 	    print "  bridge = ", $entity->get_bridge(), "\n";
-	    print ("  IPMB_event_generator = ",
-		   $entity->get_IPMB_event_generator(), "\n");
-	    print ("  IPMB_event_receiver = ",
-		   $entity->get_IPMB_event_receiver(), "\n");
-	    print ("  FRU_inventory_device = ",
-		   $entity->get_FRU_inventory_device(), "\n");
+	    print "  IPMB_event_generator = ",
+		  $entity->get_IPMB_event_generator(), "\n";
+	    print "  IPMB_event_receiver = ",
+		  $entity->get_IPMB_event_receiver(), "\n";
+	    print "  FRU_inventory_device = ",
+		  $entity->get_FRU_inventory_device(), "\n";
 	    print "  SEL_device = ", $entity->get_SEL_device(), "\n";
-	    print ("  SDR_repository_device = ",
-		   $entity->get_SDR_repository_device(), "\n");
+	    print "  SDR_repository_device = ",
+		  $entity->get_SDR_repository_device(), "\n";
 	    print "  sensor_device = ", $entity->get_sensor_device(), "\n";
 	    print "  address_span = ", $entity->get_address_span(), "\n";
 	    print "  dlr_id = ", $entity->get_dlr_id(), "\n";
@@ -727,56 +727,56 @@ use OpenIPMI;
 
 	print $op, " MC ", $mc->get_name(), "\n";
 	if (($op eq "added") || ($op eq "changed")) {
-	    print ("  provides_device_sdrs = ",
-		   $mc->provides_device_sdrs(), "\n");
-	    print ("  device_available = ", $mc->device_available(), "\n");
-	    print ("  chassis_support = ", $mc->chassis_support(), "\n");
-	    print ("  bridge_support = ", $mc->bridge_support(), "\n");
-	    print ("  ipmb_event_generator_support = ",
-		   $mc->ipmb_event_generator_support(), "\n");
-	    print ("  ipmb_event_receiver_support = ",
-		   $mc->ipmb_event_receiver_support(), "\n");
-	    print ("  fru_inventory_support = ",
-		   $mc->fru_inventory_support(), "\n");
-	    print ("  sel_device_support = ",
-		   $mc->sel_device_support(), "\n");
-	    print ("  sdr_repository_support = ",
-		   $mc->sdr_repository_support(), "\n");
-	    print ("  sensor_device_support = ",
-		   $mc->sensor_device_support(), "\n");
-	    print ("  device_id = ", $mc->device_id(), "\n");
-	    print ("  device_revision = ", $mc->device_revision(), "\n");
-	    print ("  major_fw_revision = ", $mc->major_fw_revision(), "\n");
-	    print ("  minor_fw_revision = ", $mc->minor_fw_revision(), "\n");
-	    print ("  major_version = ", $mc->major_version(), "\n");
-	    print ("  minor_version = ", $mc->minor_version(), "\n");
-	    print ("  manufacturer_id = ", $mc->manufacturer_id(), "\n");
-	    print ("  product_id = ", $mc->product_id(), "\n");
-	    print ("  aux_fw_revision = ", $mc->aux_fw_revision(), "\n");
-	    print ("  is_active = ", $mc->is_active(), "\n");
-	    print ("  get_events_enable = ", $mc->get_events_enable(), "\n");
-	    print ("  sel_count = ", $mc->sel_count(), "\n");
-	    print ("  sel_entries_used = ", $mc->sel_entries_used(), "\n");
-	    print ("  sel_get_major_version = ",
-		   $mc->sel_get_major_version(), "\n");
-	    print ("  sel_get_minor_version = ",
-		   $mc->sel_get_minor_version(), "\n");
-	    print ("  sel_get_num_entries = ",
-		   $mc->sel_get_num_entries(), "\n");
-	    print ("  sel_get_free_bytes = ", $mc->sel_get_free_bytes(), "\n");
-	    print ("  sel_get_overflow = ", $mc->sel_get_overflow(), "\n");
-	    print ("  sel_get_supports_delete_sel = ",
-		   $mc->sel_get_supports_delete_sel(), "\n");
-	    print ("  sel_get_supports_partial_add_sel = ",
-		   $mc->sel_get_supports_partial_add_sel(), "\n");
-	    print ("  sel_get_supports_reserve_sel = ",
-		   $mc->sel_get_supports_reserve_sel(), "\n");
-	    print ("  sel_get_supports_get_sel_allocation = ",
-		   $mc->sel_get_supports_get_sel_allocation(), "\n");
-	    print ("  sel_get_last_addition_timestamp = ",
-		   $mc->sel_get_last_addition_timestamp(), "\n");
-	    print ("  get_sel_rescan_time = ",
-		   $mc->get_sel_rescan_time(), "\n");
+	    print "  provides_device_sdrs = ",
+		  $mc->provides_device_sdrs(), "\n";
+	    print "  device_available = ", $mc->device_available(), "\n";
+	    print "  chassis_support = ", $mc->chassis_support(), "\n";
+	    print "  bridge_support = ", $mc->bridge_support(), "\n";
+	    print "  ipmb_event_generator_support = ",
+		  $mc->ipmb_event_generator_support(), "\n";
+	    print "  ipmb_event_receiver_support = ",
+		   $mc->ipmb_event_receiver_support(), "\n";
+	    print "  fru_inventory_support = ",
+		  $mc->fru_inventory_support(), "\n";
+	    print "  sel_device_support = ",
+		  $mc->sel_device_support(), "\n";
+	    print "  sdr_repository_support = ",
+		  $mc->sdr_repository_support(), "\n";
+	    print "  sensor_device_support = ",
+		  $mc->sensor_device_support(), "\n";
+	    print "  device_id = ", $mc->device_id(), "\n";
+	    print "  device_revision = ", $mc->device_revision(), "\n";
+	    print "  major_fw_revision = ", $mc->major_fw_revision(), "\n";
+	    print "  minor_fw_revision = ", $mc->minor_fw_revision(), "\n";
+	    print "  major_version = ", $mc->major_version(), "\n";
+	    print "  minor_version = ", $mc->minor_version(), "\n";
+	    print "  manufacturer_id = ", $mc->manufacturer_id(), "\n";
+	    print "  product_id = ", $mc->product_id(), "\n";
+	    print "  aux_fw_revision = ", $mc->aux_fw_revision(), "\n";
+	    print "  is_active = ", $mc->is_active(), "\n";
+	    print "  get_events_enable = ", $mc->get_events_enable(), "\n";
+	    print "  sel_count = ", $mc->sel_count(), "\n";
+	    print "  sel_entries_used = ", $mc->sel_entries_used(), "\n";
+	    print "  sel_get_major_version = ",
+		  $mc->sel_get_major_version(), "\n";
+	    print "  sel_get_minor_version = ",
+		  $mc->sel_get_minor_version(), "\n";
+	    print "  sel_get_num_entries = ",
+		  $mc->sel_get_num_entries(), "\n";
+	    print "  sel_get_free_bytes = ", $mc->sel_get_free_bytes(), "\n";
+	    print "  sel_get_overflow = ", $mc->sel_get_overflow(), "\n";
+	    print "  sel_get_supports_delete_sel = ",
+		  $mc->sel_get_supports_delete_sel(), "\n";
+	    print "  sel_get_supports_partial_add_sel = ",
+		  $mc->sel_get_supports_partial_add_sel(), "\n";
+	    print "  sel_get_supports_reserve_sel = ",
+		  $mc->sel_get_supports_reserve_sel(), "\n";
+	    print "  sel_get_supports_get_sel_allocation = ",
+		  $mc->sel_get_supports_get_sel_allocation(), "\n";
+	    print "  sel_get_last_addition_timestamp = ",
+		  $mc->sel_get_last_addition_timestamp(), "\n";
+	    print "  get_sel_rescan_time = ",
+		  $mc->get_sel_rescan_time(), "\n";
 
 	    $rv = $mc->set_events_enable(1, $self);
 	    if ($rv) {
@@ -846,7 +846,7 @@ use OpenIPMI;
 	my $cmd = shift;
 
 	print "Got message from ", $mc->get_name(), "\n";
-	print " lun=$lun, netfn=$netfn, cmd=$cmd\n";
+	print " netfn=$netfn, cmd=$cmd\n";
 	print " data:";
 	while (defined ($val = shift)) {
 	    printf " %2.2x", $val;

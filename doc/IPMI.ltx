@@ -5660,19 +5660,50 @@ immediately, set the value to \verb=IPMI_TIMEOUT_NOW=.
 \section{\acs{FRU} Data}
 
 OpenIPMI supports fetching all the \acs{FRU} data supported by the
-IPMI spec.  It is able to fetch all the standard data and all the
-custom data stored in multi-records.
+IPMI spec.  It is able to fetch and modify all the standard data and
+all the custom data stored in multi-records.
 
-Most of the string functions have a ``type'' function, a ``len''
-function, and a function to actually get the strings.  For instance:
+\subsection{\acs{FRU} Data Organization}
+
+FRU data is organized into areas, and the areas are organized into
+fields.  The areas are:
+
+\begin{description}
+\item[internal\_use]
+\item[chassis\_info]
+\item[board\_info]
+\item[product\_info]
+\item[multi\_record]
+\end{description}
+
+A section may or may not be present.  An area, if present, may have
+required fields and ``custom'' fields.  The required fields can be
+fetched by name, the custom fields are fetched by index number.  Note
+that you don't need to know anything about areas if you are just
+fetching data from the \acs{FRU}, but you need to know about them to
+modify FRU data.
+
+There are a very large number of FRU variables and they are fairly
+well defined in the \acs{IPMI} \acs{FRU} document; see that document
+and the \verb=ipmiif.h= include file for details on the \acs{FRU}
+data.
+
+\subsection{Fetching FRU Data from a FRU}
+
+Some fields are integers, some are time values, and some are strings.
+Each type has its own fetch type.  The integer and time values only
+return the one value that is returned.
+
+The string functions have a ``type'' function, a ``len'' function, and
+a function to actually get the strings.  For instance:
 \begin{verbatim}
-int ipmi_entity_get_chassis_info_part_number_len(ipmi_entity_t *entity,
-                                                 unsigned int  *length);
-int ipmi_entity_get_chassis_info_part_number_type(ipmi_entity_t        *entity,
-                                                  enum ipmi_str_type_e *type);
-int ipmi_entity_get_chassis_info_part_number(ipmi_entity_t *entity,
-                                             char          *str,
-                                             unsigned int  *strlen);
+int ipmi_fru_get_chassis_info_part_number_len(ipmi_entity_t *entity,
+                                              unsigned int  *length);
+int ipmi_fru_get_chassis_info_part_number_type(ipmi_entity_t        *entity,
+                                               enum ipmi_str_type_e *type);
+int ipmi_fru_get_chassis_info_part_number(ipmi_entity_t *entity,
+                                          char          *str,
+                                          unsigned int  *strlen);
 \end{verbatim}
 The ``len'' function returns the length of the string.  The ``type''
 function returns the type of string per standard OpenIPMI string
@@ -5685,10 +5716,150 @@ string, the beginning of the string that fills the array will be
 copied in.  All these functions return an error; the only current
 return is ENOSYS if the parameter is not present.
 
-There are a very large number of FRU variables and they are fairly
-well defined in the \acs{IPMI} \acs{FRU} document; see that document
-and the \verb=ipmiif.h= include file for details on the \acs{FRU}
-data.
+You may also fetch fru data (except for multi-records) through a
+single general function.  It is a necessarily complex interface.
+The function is:
+\begin{verbatim}
+int ipmi_fru_get(ipmi_fru_t                *fru,
+		 int                       index,
+		 char                      **name,
+		 int                       *num,
+		 enum ipmi_fru_data_type_e *dtype,
+		 int                       *intval,
+		 time_t                    *time,
+		 char                      **data,
+		 unsigned int              *data_len);
+\end{verbatim}
+The index is a contiguous range from zero that holds every FRU data
+item.  So you can iterate through the indexes from 0 until it returns
+EINVAL to find all the names.
+
+The \verb=name= returns the string name for the index.  Note that the
+indexes may change between release, so don't rely on absolute numbers.
+The names will remain the same, so you can rely on those.
+
+The \verb=number= is a pointer to an integer with the number of the
+item to get within the field.  Some fields (custom records) have
+multiple items in them.  The first item will be zero, and the integer
+here will be updated to reference the next item.  When the last item
+is reached, the field will be updated to -1.  For fields that don't
+have multiple items, this will not modify the value num points to,
+so you can use that to detect if indexes are used for the item.
+
+The \verb=dtype= field will be set to the data type.  If it is an
+integer value, then \verb=intval= will be set to whatever the value
+is.  If it is a time value, then the \verb=time= field will be filled
+in.  If it is not, then a block of data will be allocated to hold the
+field and placed into \verb=data=, the length of the data will be in
+\verb=data_len=.  You must free the data when you are done with
+\verb=ipmi_fru_data_free()=.
+
+This function Returns \verb=EINVAL= if the index is out of range,
+\verb=ENOSYS= if the particular index is not supported (the name will
+still be set), or \verb=E2BIG= if the num is too big (again, the name
+will be set).
+
+Any of the return values may be passed \verb=NULL= to ignore the data.
+
+\subsection{Writing FRU Data to a FRU}
+
+OpenIPMI supports writing FRU data.  This is a \emph{very} dangerous
+operations and should not be done by general code.  There are no locks
+on the FRU data, so multiple writers can easily corrupt the data.  But
+for doing FRU data updates, OpenIPMI can be used to fetch, modify, and
+write the FRU data assuming proper care is taken.
+
+To write to the FRU, you must first fetch it by allocating it.  If the
+FRU data currently in the fru is corrupt, you will get errors, but as
+long as the data length of the FRU is non-zero you can still modify it
+and write it back out.
+
+After the FRU has been fetched, you may then modify the contents.
+Remember that each field of a FRU is in an area.  To increase the size
+of a field or add a new field, it's area must have enough space.
+
+You may change the size of an area by increasing or decreasing its
+length.  You may also add a new area, but it must be one of the
+supported types.  You must, however, make sure there is enough empty
+space to after the area.  OpenIPMI will not rearrange the areas to
+make space, you have to do that yourself.  So you may have to change
+the offset of an area (and other areas) to make space.  The following
+functions are for working with areas:
+\begin{verbatim}
+int ipmi_fru_add_area(ipmi_fru_t   *fru,
+		      unsigned int area,
+		      unsigned int offset,
+		      unsigned int length);
+int ipmi_fru_delete_area(ipmi_fru_t *fru, int area);
+int ipmi_fru_area_get_offset(ipmi_fru_t   *fru,
+			     unsigned int area,
+			     unsigned int *offset);
+int ipmi_fru_area_get_length(ipmi_fru_t   *fru,
+			     unsigned int area,
+			     unsigned int *length);
+int ipmi_fru_area_set_offset(ipmi_fru_t   *fru,
+			     unsigned int area,
+			     unsigned int offset);
+int ipmi_fru_area_set_length(ipmi_fru_t   *fru,
+			     unsigned int area,
+			     unsigned int length);
+int ipmi_fru_area_get_used_length(ipmi_fru_t *fru,
+				  unsigned int area,
+				  unsigned int *used_length);
+\end{verbatim}
+The \verb=used_length= variable tells how much of teh length of the
+FRU is actually used.  Note that area offsets and length must be
+multiples of 8.
+
+To change the value of a field, you will use functions of the form:
+\begin{verbatim}
+int ipmi_fru_set_chassis_info_type(ipmi_entity_t *entity,
+                                   unsigned char type);
+int ipmi_entity_set_chassis_info_part_number(ipmi_entity_t        *entity,
+                                             enum ipmi_str_type_e *type);
+                                             char                 *str,
+                                             unsigned int         strlen);
+int ipmi_fru_set_chassis_info_custom(ipmi_fru_t           *fru,
+                                     unsigned int         num,
+                                     enum ipmi_str_type_e type,
+                                     char                 *str,
+                                     unsigned int         len);
+\end{verbatim}
+These set the fields to the given values.  If you set a required field
+to a \verb=NULL= string, it will clear the value of the string.  If
+you set a multi-record or custom string to a \verb=NULL= string, it
+will delete the record at the given number.
+
+Like the \verb=ipmi_fru_get= function, the following functions allow
+setting FRU variables by index:
+\begin{verbatim}
+int ipmi_fru_set_int_val(ipmi_fru_t *fru,
+                         int        index,
+                         int        num,
+                         int        val);
+int ipmi_fru_set_time_val(ipmi_fru_t *fru,
+                          int        index,
+                          int        num,
+                          time_t     time);
+int ipmi_fru_set_data_val(ipmi_fru_t                *fru,
+                          int                       index,
+                          int                       num,
+                          enum ipmi_fru_data_type_e dtype,
+                          char                      *data,
+                          unsigned int              len);
+\end{verbatim}
+The \verb=num= field is ignored if the particular index does not
+support more than one field (is not a custom field).  When adding, if
+the \verb=num= field is a field that already exists, it will be
+replaced or updated.  If \verb=num= is beyond the last element of the
+particular item, a new item will be added onto the end, it will not be
+added at the specific index.
+
+To write the FRU data back out after you have modified it, use the
+following function:
+\begin{verbatim}
+int ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data);
+\end{verbatim}
 
 \section{Entity \acs{SDR}s}
 \label{sec-entity-sdrs}

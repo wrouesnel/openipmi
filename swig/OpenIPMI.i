@@ -194,6 +194,50 @@ parse_ipmi_data(intarray data, unsigned char *odata,
     return 0;
 }
 
+static char *
+parse_raw_str_data(char *str, unsigned int *length)
+{
+    char *s = str;
+    int  inspace = 1;
+    int  count = 0;
+    int  i;
+    char *rv;
+    char *endstr;
+
+    while (*s) {
+	if (inspace && !isspace(*s)) {
+	    inspace = 0;
+	    count++;
+	} else if (!inspace && isspace(*s)) {
+	    inspace = 1;
+	}
+    }
+
+    if (count == 0)
+	return NULL;
+
+    rv = malloc(count);
+    if (!rv)
+	return NULL;
+
+    s = str;
+    i = 0;
+    while (*s) {
+	rv[i] = strtoul(s, &endstr, 0);
+	if (!isspace(*endstr))
+	    goto out_err;
+	i++;
+	s = endstr;
+    }
+
+    *length = count;
+    return rv;
+
+ out_err:
+    free(rv);
+    return NULL;
+}
+
 %}
 
 %import "OpenIPMI_lang.i"
@@ -476,6 +520,32 @@ domain_iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     swig_call_cb(cb, "domain_iter_mc_cb", "%p%p", &domain_ref, &mc_ref);
     swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+}
+
+static void
+fru_written_done(ipmi_fru_t *fru, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    fru_ref;
+
+    fru_ref = swig_make_ref(fru, "OpenIPMI::ipmi_fru_t");
+    swig_call_cb(cb, "fru_written", "%p%d", &fru_ref, err);
+    swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    fru_ref;
+
+    fru_ref = swig_make_ref(fru, "OpenIPMI::ipmi_fru_t");
+    swig_call_cb(cb, "fru_fetched", "%p%d", &fru_ref, err);
+    swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
 }
 
 static void
@@ -2046,6 +2116,100 @@ open_domain(char *name, char **args, swig_cb done, swig_cb up)
     return nd;
 }
 
+static ipmi_domain_id_t *
+open_domain2(char *name, char **args, swig_cb done, swig_cb up)
+{
+    int                i, j;
+    int                len;
+    int                num_options = 0;
+    ipmi_open_option_t options[10];
+    int                set = 0;
+    ipmi_args_t        *con_parms[2];
+    ipmi_con_t         *con[2];
+    ipmi_domain_id_t   *nd;
+    int                rv;
+    swig_cb_val        done_val = NULL;
+    swig_cb_val        up_val = NULL;
+    ipmi_domain_con_cb con_change = NULL;
+    ipmi_domain_ptr_cb domain_up = NULL;
+
+    for (len=0; args[len]; len++)
+	;
+
+    nd = malloc(sizeof(*nd));
+
+    for (i=0; args[i]; i++) {
+	if (num_options >= 10) {
+	    free(nd);
+	    return NULL;
+	}
+
+	if (! ipmi_parse_options(options+num_options, args[i]))
+	    num_options++;
+	else
+	    break;
+    }
+
+    rv = ipmi_parse_args2(&i, len, args, &con_parms[set]);
+    if (rv) {
+	free(nd);
+	return NULL;
+    }
+    set++;
+
+    if (i < len) {
+	rv = ipmi_parse_args2(&i, len, args, &con_parms[set]);
+	if (rv) {
+	    ipmi_free_args(con_parms[0]);
+	    free(nd);
+	    return NULL;
+	}
+	set++;
+    }
+
+    for (i=0; i<set; i++) {
+	rv = ipmi_args_setup_con(con_parms[i],
+				 swig_os_hnd,
+				 NULL,
+				 &con[i]);
+	if (rv) {
+	    for (j=0; j<set; j++)
+		ipmi_free_args(con_parms[j]);
+	    free(nd);
+	    return NULL;
+	}
+    }
+
+    if (valid_swig_cb(up)) {
+	up_val = ref_swig_cb(up);
+	domain_up = domain_fully_up;
+    }
+    if (valid_swig_cb(done)) {
+	done_val = ref_swig_cb(done);
+	con_change = domain_connect_change_handler;
+    }
+    rv = ipmi_open_domain(name, con, set, con_change, done_val,
+			  domain_up, up_val,
+			  options, num_options, nd);
+    if (rv) {
+	if (valid_swig_cb(up))
+	    deref_swig_cb(up);
+	if (valid_swig_cb(done))
+	    deref_swig_cb(done);
+	for (i=0; i<set; i++) {
+	    ipmi_free_args(con_parms[i]);
+	    con[i]->close_connection(con[i]);
+	}
+	free(nd);
+	return NULL;
+    }
+
+    for (i=0; i<set; i++)
+	ipmi_free_args(con_parms[i]);
+
+    return nd;
+}
+
 static void
 set_log_handler(swig_cb handler)
 {
@@ -2067,6 +2231,7 @@ color_string(int color)
 %}
 
 %newobject open_domain;
+%newobject open_domain2;
 /*
  * Create a new domain.  The domain will be named with the first parm,
  * the startup arguments are in a reference to a list in the second
@@ -2094,6 +2259,13 @@ color_string(int color)
  */
 ipmi_domain_id_t *open_domain(char *name, char **args,
 			      swig_cb done = NULL, swig_cb up = NULL);
+
+/*
+ * Like open_domain, but takes the new parameter types and is more
+ * flexible.  This is required for RMCP+.
+ */
+ipmi_domain_id_t *open_domain2(char *name, char **args,
+			       swig_cb done = NULL, swig_cb up = NULL);
 
 /*
  * Set the handler for OpenIPMI logs.  This is a global value and
@@ -2614,6 +2786,42 @@ char *color_string(int color);
 	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
 	return rv;
+    }
+
+    /*
+     * Fetch a FRU with the given parameters.  The first parameter (the object)
+     * is the domain, successive parameters are:
+     *  is_logical - do a logical or physical FRU fetch.
+     *  device_address - The IPMB address of the FRU device.
+     *  device_id - The particular FRU device id to fetch.
+     *  LUN - The LUN to talk to for the device.
+     *  private_bus - for physical FRUs, the bus it is on.
+     *  channel - The channel where the device is located.
+     * If the handler is supplied, then the fru_fetched method on that
+     * will be called upon completion with the handler object as the first
+     * parameter, the FRU as the second, and an error value as the third.
+     */
+    ipmi_fru_t *fru_alloc(int is_logical, int device_address, int device_id,
+			  int lun, int private_bus, int channel,
+			  swig_cb handler = NULL)
+    {
+	ipmi_fru_t *fru;
+	int         rv;
+	swig_cb_val handler_val;
+
+	if (! valid_swig_cb(handler))
+	    return NULL;
+
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_fru_alloc(self, is_logical, device_address, device_id,
+			    lun, private_bus, channel, fru_fetched,
+			    handler_val, &fru);
+	if (rv) {
+	    deref_swig_cb_val(handler_val);
+	    return NULL;
+	}
+
+	return fru;
     }
 }
 
@@ -3227,6 +3435,11 @@ char *color_string(int color);
     int is_hot_swappable()
     {
 	return ipmi_entity_hot_swappable(self);
+    }
+
+    int supports_managed_hot_swap()
+    {
+	return ipmi_entity_supports_managed_hot_swap(self);
     }
 
     /*
@@ -5700,9 +5913,9 @@ char *color_string(int color);
 	    break;
 
 	case IPMI_FRU_DATA_TIME:
-	    len = snprintf(dummy, 1, "%s integer %ld", name, (long) time);
+	    len = snprintf(dummy, 1, "%s time %ld", name, (long) time);
 	    str = malloc(len + 1);
-	    sprintf(str, "%s integer %ld", name, (long) time);
+	    sprintf(str, "%s time %ld", name, (long) time);
 	    break;
 
 	case IPMI_FRU_DATA_BINARY:
@@ -5739,6 +5952,221 @@ char *color_string(int color);
 	    ipmi_fru_data_free(data);
 
 	return str;
+    }
+
+    /*
+     * Set a specific data item by index (see the get function for more
+     * info on what index and num mean).  Note that the "num "field is
+     * not updated by this call, unlike the get function.
+     *
+     * The type passed in tells the kind of data being passed in.  It is
+     * either:
+     *  "integer" - An integer value passed in.
+     *  "time" - An integer value passed in.
+     *  "binary" - A string of 8-bit values is passed in, like 
+     *    "0x10 0x20 0x99".
+     *  "unicode" - A string of 8-bit values is passed in, like 
+     *    "0x10 0x20 0x99".
+     *  "ascii" - The string passed in is used.
+     */
+    int set(int index, int num, char *type, char *value)
+    {
+	if (strcmp(type, "integer") == 0) {
+	    unsigned int val;
+	    char         *endstr;
+	    if (*value == '\0')
+		return EINVAL;
+	    val = strtol(value, &endstr, 0);
+	    if (*endstr != '\0')
+		return EINVAL;
+	    return ipmi_fru_set_int_val(self, index, num, val);
+	} else if (strcmp(type, "time") == 0) {
+	    unsigned int val;
+	    char         *endstr;
+	    if (*value == '\0')
+		return EINVAL;
+	    val = strtol(value, &endstr, 0);
+	    if (*endstr != '\0')
+		return EINVAL;
+	    return ipmi_fru_set_time_val(self, index, num, val);
+	} else if (strcmp(type, "binary") == 0) {
+	    unsigned int length;
+	    char *data = parse_raw_str_data(value, &length);
+	    int rv;
+	    if (!data)
+		return EINVAL;
+	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_BINARY,
+				       data, length);
+	    free(data);
+	    return rv;
+	} else if (strcmp(type, "unicode") == 0) {
+	    unsigned int length;
+	    char *data = parse_raw_str_data(value, &length);
+	    int rv;
+	    if (!data)
+		return EINVAL;
+	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_UNICODE,
+				       data, length);
+	    free(data);
+	    return rv;
+	} else if (strcmp(type, "ascii") == 0) {
+	    return ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_ASCII,
+					 value, strlen(value));
+	} else {
+	    return EINVAL;
+	}
+    }
+
+    /*
+     * Set a specific data item by index (see the get function for more
+     * info on what index and num mean).  Note that the "num "field is
+     * not updated by this call, unlike the get function.
+     *
+     * The type passed in tells the kind of data being passed in.  It is
+     * either:
+     *  "integer" - The first element of the integer array is used.
+     *  "time" - The first element of the integer array is used.
+     *  "binary" - An array of 8-bit values is taken, like 
+     *    [ 0x10 0x20 0x99 ].
+     *  "unicode" - An array of 8-bit values is passed in, like 
+     *    [ 0x10 0x20 0x99 ].
+     *  "ascii" - An array of 8-bit values is passed in, like 
+     *    [ 0x10 0x20 0x99 ].
+     */
+    int set(int index, int num, char *type, intarray value)
+    {
+	if (value.len <= 0)
+	    return EINVAL;
+
+	if (strcmp(type, "integer") == 0) {
+	    /* Only take the first value. */
+	    return ipmi_fru_set_int_val(self, index, num, value.val[0]);
+	} else if (strcmp(type, "time") == 0) {
+	    /* Only take the first value. */
+	    return ipmi_fru_set_time_val(self, index, num, value.val[0]);
+	} else if (strcmp(type, "binary") == 0) {
+	    unsigned int length = value.len;
+	    char *data = malloc(length);
+	    int rv;
+	    if (!data)
+		return EINVAL;
+	    parse_ipmi_data(value, data, length, &length);
+	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_BINARY,
+				       data, length);
+	    free(data);
+	    return rv;
+	} else if (strcmp(type, "unicode") == 0) {
+	    unsigned int length = value.len;
+	    char *data = malloc(length);
+	    int rv;
+	    if (!data)
+		return EINVAL;
+	    parse_ipmi_data(value, data, length, &length);
+	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_UNICODE,
+				       data, length);
+	    free(data);
+	    return rv;
+	} else if (strcmp(type, "ascii") == 0) {
+	    unsigned int length = value.len;
+	    char *data = malloc(length);
+	    int rv;
+	    if (!data)
+		return EINVAL;
+	    parse_ipmi_data(value, data, length, &length);
+	    rv = ipmi_fru_set_data_val(self, index, num, IPMI_FRU_DATA_ASCII,
+				       data, length);
+	    free(data);
+	    return rv;
+	} else {
+	    return EINVAL;
+	}
+    }
+
+    /*
+     * Add a new area to the FRU.  You must pass in the area number, the
+     * start offset and length of the area.  The offset must be a multiple
+     * of 8 and the length will be truncated to a multiple of 8.
+     */
+    int add_area(unsigned int area,
+		 unsigned int offset,
+		 unsigned int length)
+    {
+	return ipmi_fru_add_area(self, area, offset, length);
+    }
+
+    /*
+     * Delete the given area from the FRU.
+     */
+    int delete_area(int area)
+    {
+	return ipmi_fru_delete_area(self, area);
+    }
+
+    /*
+     * Get the offset of the given area into the offset pointer.
+     */
+    int area_get_offset(unsigned int area,
+			unsigned int *offset)
+    {
+	return ipmi_fru_area_get_offset(self, area, offset);
+    }
+
+    /*
+     * Get the length of the given area into the length pointer.
+     */
+    int area_get_length(unsigned int area,
+			unsigned int *length)
+    {
+	return ipmi_fru_area_get_length(self, area, length);
+    }
+
+    /*
+     * Set the offset of the given area.
+     */
+    int area_set_offset(unsigned int area,
+			unsigned int offset)
+    {
+	return ipmi_fru_area_set_offset(self, area, offset);
+    }
+
+    /*
+     * Set the length of the given area.
+     */
+    int area_set_length(unsigned int area,
+			unsigned int length)
+    {
+	return ipmi_fru_area_set_length(self, area, length);
+    }
+
+    /*
+     * Get the number of bytes currently used in the given area into
+     * the used_length pointer.
+     */
+    int area_get_used_length(unsigned int area,
+			     unsigned int *used_length)
+    {
+	return ipmi_fru_area_get_used_length(self, area, used_length);
+    }
+
+    /*
+     * Write the contents of the fru back into the FRU device.  If the
+     * handler (first parm) is non-null, the "fru_written" method on
+     * that object will be called with the FRU as the first parameter and
+     * the error value for the write as the second parameter.
+     */
+    int write(swig_cb handler = NULL)
+    {
+	int         rv;
+	swig_cb_val handler_val;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = ref_swig_cb(handler);
+	rv = ipmi_fru_write(self, fru_written_done, handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
     }
 }
 

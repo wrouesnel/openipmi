@@ -2896,8 +2896,10 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
     info->setup = 1;
 
  out:
-    if (info->shelf_entity)
+    if (info->shelf_entity) {
+	_ipmi_entity_add_ref(info->shelf_entity);
 	_ipmi_entity_put(info->shelf_entity);
+    }
     return;
 }
 
@@ -3076,6 +3078,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 				     &info->shelf_address_type,
 				     sizeof(info->shelf_address));
 
+	info->num_addresses = data[26];
 	info->addresses = ipmi_mem_alloc(sizeof(atca_address_t) * data[26]);
 	if (!info->addresses) {
 	    ipmi_log(IPMI_LOG_SEVERE,
@@ -3088,7 +3091,6 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	}
 	memset(info->addresses, 0, sizeof(atca_address_t) * data[26]);
 
-	info->num_addresses = data[26];
 	p = data+27;
 	for (j=0, l=0; l<data[26]; l++, p += 3) {
 	    int skip = 0;
@@ -3169,7 +3171,9 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 
     /* Remove all the parent/child relationships we previously
        defined. */
+    _ipmi_domain_entity_lock(domain);
     _ipmi_entity_get(info->shelf_entity);
+    _ipmi_domain_entity_unlock(domain);
     if (info->ipmcs) {
 	int i;
 	for (i=0; i<info->num_ipmcs; i++) {
@@ -3186,6 +3190,7 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 	    }
 	}
     }
+    _ipmi_entity_remove_ref(info->shelf_entity);
     _ipmi_entity_put(info->shelf_entity);
 }
 

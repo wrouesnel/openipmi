@@ -807,6 +807,22 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 }
 
 int
+_ipmi_entity_add_ref(ipmi_entity_t *ent)
+{
+    ipmi_lock(ent->lock);
+    ent->ref_count++;
+    ipmi_unlock(ent->lock);
+}
+
+int
+_ipmi_entity_remove_ref(ipmi_entity_t *ent)
+{
+    ipmi_lock(ent->lock);
+    ent->ref_count--;
+    ipmi_unlock(ent->lock);
+}
+
+int
 ipmi_entity_info_add_update_handler(ipmi_entity_info_t    *ents,
 				    ipmi_domain_entity_cb handler,
 				    void                  *cb_data)

@@ -410,7 +410,7 @@ domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 
     ipmi_cmdlang_lock(cmd_info);
 
-    if (err) {
+    if (err && (ipmi_fru_get_data_length(fru) == 0)) {
 	cmdlang->errstr = "Error fetching FRU info";
 	cmdlang->err = err;
 	ipmi_domain_get_name(domain, cmdlang->objstr,
@@ -423,6 +423,8 @@ domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
     ipmi_cmdlang_out(cmd_info, "Domain", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", domain_name);
+    if (err)
+	ipmi_cmdlang_out_int(cmd_info, "Warning fetching FRU", err);
     ipmi_cmdlang_dump_fru_info(cmd_info, fru);
     ipmi_cmdlang_up(cmd_info);
 

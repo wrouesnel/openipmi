@@ -382,3 +382,15 @@ locked_list_free_entry(locked_list_entry_t *entry)
 {
     ipmi_mem_free(entry);
 }
+
+void
+locked_list_lock(locked_list_t *ll)
+{
+    ll->lock(ll->lock_cb_data);
+}
+
+void
+locked_list_unlock(locked_list_t *ll)
+{
+    ll->unlock(ll->lock_cb_data);
+}
