@@ -1171,6 +1171,7 @@ set_operational(ipmi_mc_t *mc)
 
     /* Start an SDR scan. */
     ipmi_entity_scan_sdrs(mc->bmc->entities, mc->bmc->main_sdrs);
+    ipmi_sensor_handle_sdrs(mc, NULL, mc->bmc->main_sdrs);
 
     ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     start_mc_scan(mc);

@@ -71,6 +71,13 @@ int ipmi_sensor_add_nonstandard(
     ipmi_sensor_destroy_cb destroy_handler,
     void                   *destroy_handler_cb_data);
 
+/* Extract the sensors from the given SDRs.  The SDRs should have come
+   from the source_mc, or if from the main SDR repository, source_mc
+   should be NULL. */
+int ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
+			    ipmi_mc_t       *source_mc,
+			    ipmi_sdr_info_t *sdrs);
+
 /* Destroy the sensor from the internal data. */
 void ipmi_sensor_destroy(ipmi_sensor_t *sensor);
 
