@@ -189,7 +189,9 @@ struct lmc_data_s
     fru_data_t frus[255];
 
     unsigned char power_value;
-    unsigned char hs_led_value;
+    unsigned char leds[8];
+    unsigned char leds_on_dur[8];
+    unsigned char leds_color[8];
 };
 
 typedef struct atca_site_s
@@ -2637,7 +2639,7 @@ handle_set_hs_led(lmc_data_t    *mc,
     if (check_msg_length(msg, 1, rdata, rdata_len))
 	return;
 
-    mc->hs_led_value = msg->data[0];
+    mc->leds[0] = msg->data[0];
 
     printf("Setting hotswap LED to %d\n", msg->data[0]);
 
@@ -2652,7 +2654,7 @@ handle_get_hs_led(lmc_data_t    *mc,
 		  unsigned int  *rdata_len)
 {
     rdata[0] = 0;
-    rdata[1] = mc->hs_led_value;
+    rdata[1] = mc->leds[0];
     *rdata_len = 2;
 }
 
@@ -2776,6 +2778,330 @@ handle_picmg_get_address_info(lmc_data_t    *mc,
     *rdata_len = 8;
 }
 
+static void
+handle_picmg_cmd_fru_control(lmc_data_t    *mc,
+			     ipmi_msg_t    *msg,
+			     unsigned char *rdata,
+			     unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 3, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 0) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (msg->data[2] != 0) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    /* Nothing to reset. */
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    *rdata_len = 2;
+}
+
+static void
+handle_picmg_cmd_get_fru_led_properties(lmc_data_t    *mc,
+					ipmi_msg_t    *msg,
+					unsigned char *rdata,
+					unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 2, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 0) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    rdata[2] = 0xf; /* We support the first 4 LEDs. */
+    rdata[3] = 0x4; /* We support 4 more LEDs. */
+    *rdata_len = 4;
+}
+
+static void
+handle_picmg_cmd_get_led_color_capabilities(lmc_data_t    *mc,
+					    ipmi_msg_t    *msg,
+					    unsigned char *rdata,
+					    unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 3, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 0) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (msg->data[2] >= 8) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+
+    switch (msg->data[2]) {
+    case 0:
+	rdata[2] = 0x2; /* supports blue */
+	rdata[3] = 0x1; /* def LC blue */
+	rdata[4] = 0x1; /* def override blue */
+	break;
+
+    default:
+	rdata[2] = 0x4; /* supports red */
+	rdata[3] = 0x2; /* def LC red */
+	rdata[4] = 0x2; /* def override red */
+	break;
+    }
+
+    *rdata_len = 5;
+}
+
+static void
+handle_picmg_cmd_set_fru_led_state(lmc_data_t    *mc,
+				   ipmi_msg_t    *msg,
+				   unsigned char *rdata,
+				   unsigned int  *rdata_len)
+{
+    int led;
+
+    if (check_msg_length(msg, 3, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 0) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    led = msg->data[2];
+    if (led >= 8) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    mc->leds[led] = msg->data[3];
+    mc->leds_on_dur[led] = msg->data[4];
+    mc->leds_color[led] = msg->data[5];
+
+    printf("Setting ATCA LED to %x %x %x\n",
+	   msg->data[3], msg->data[3], msg->data[3]);
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    *rdata_len = 2;
+}
+
+static void
+handle_picmg_cmd_get_fru_led_state(lmc_data_t    *mc,
+				   ipmi_msg_t    *msg,
+				   unsigned char *rdata,
+				   unsigned int  *rdata_len)
+{
+    int led;
+
+    if (check_msg_length(msg, 3, rdata, rdata_len))
+	return;
+
+    if (msg->data[1] != 0) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    led = msg->data[2];
+    if (led >= 8) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    /* Make sure it is initialized to a valid value. */
+    if (mc->leds_color[led] == 0) {
+	if (led == 0)
+	    mc->leds_color[led] = 1;
+	else
+	    mc->leds_color[led] = 2;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    rdata[2] = 0x02; /* We only support override state for now. */
+    rdata[3] = 0;
+    rdata[4] = 0;
+    rdata[5] = mc->leds_color[led];
+    rdata[6] = mc->leds[led];
+    rdata[7] = mc->leds_on_dur[led];
+    rdata[8] = mc->leds_color[led];
+    *rdata_len = 9;
+}
+
+static void
+handle_picmg_cmd_get_shelf_address_info(lmc_data_t    *mc,
+					ipmi_msg_t    *msg,
+					unsigned char *rdata,
+					unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_set_shelf_address_info(lmc_data_t    *mc,
+					ipmi_msg_t    *msg,
+					unsigned char *rdata,
+					unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_set_ipmb_state(lmc_data_t    *mc,
+				ipmi_msg_t    *msg,
+				unsigned char *rdata,
+				unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_set_fru_activation_policy(lmc_data_t    *mc,
+					   ipmi_msg_t    *msg,
+					   unsigned char *rdata,
+					   unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_get_fru_activation_policy(lmc_data_t    *mc,
+					   ipmi_msg_t    *msg,
+					   unsigned char *rdata,
+					   unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_set_fru_activation(lmc_data_t    *mc,
+				    ipmi_msg_t    *msg,
+				    unsigned char *rdata,
+				    unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_get_device_locator_record(lmc_data_t    *mc,
+					   ipmi_msg_t    *msg,
+					   unsigned char *rdata,
+					   unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_set_port_state(lmc_data_t    *mc,
+				ipmi_msg_t    *msg,
+				unsigned char *rdata,
+				unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_get_port_state(lmc_data_t    *mc,
+				ipmi_msg_t    *msg,
+				unsigned char *rdata,
+				unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_compute_power_properties(lmc_data_t    *mc,
+					  ipmi_msg_t    *msg,
+					  unsigned char *rdata,
+					  unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_set_power_level(lmc_data_t    *mc,
+				 ipmi_msg_t    *msg,
+				 unsigned char *rdata,
+				 unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_get_power_level(lmc_data_t    *mc,
+				 ipmi_msg_t    *msg,
+				 unsigned char *rdata,
+				 unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_renegotiate_power(lmc_data_t    *mc,
+				   ipmi_msg_t    *msg,
+				   unsigned char *rdata,
+				   unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_get_fan_speed_properties(lmc_data_t    *mc,
+					  ipmi_msg_t    *msg,
+					  unsigned char *rdata,
+					  unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_set_fan_level(lmc_data_t    *mc,
+			       ipmi_msg_t    *msg,
+			       unsigned char *rdata,
+			       unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_get_fan_level(lmc_data_t    *mc,
+			       ipmi_msg_t    *msg,
+			       unsigned char *rdata,
+			       unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
+static void
+handle_picmg_cmd_bused_resource(lmc_data_t    *mc,
+				ipmi_msg_t    *msg,
+				unsigned char *rdata,
+				unsigned int  *rdata_len)
+{
+    handle_invalid_cmd(mc, rdata, rdata_len);
+}
+
 int
 ipmi_emu_atca_enable(emu_data_t *emu)
 {
@@ -2815,28 +3141,94 @@ handle_picmg_msg(lmc_data_t    *mc,
 	handle_picmg_get_address_info(mc, msg, rdata, rdata_len);
 	break;
 
-    case IPMI_PICMG_CMD_GET_SHELF_ADDRESS_INFO:
-    case IPMI_PICMG_CMD_SET_SHELF_ADDRESS_INFO:
     case IPMI_PICMG_CMD_FRU_CONTROL:
+	handle_picmg_cmd_fru_control(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_FRU_LED_PROPERTIES:
+	handle_picmg_cmd_get_fru_led_properties(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_LED_COLOR_CAPABILITIES:
+	handle_picmg_cmd_get_led_color_capabilities(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_SET_FRU_LED_STATE:
+	handle_picmg_cmd_set_fru_led_state(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_FRU_LED_STATE:
+	handle_picmg_cmd_get_fru_led_state(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_GET_SHELF_ADDRESS_INFO:
+	handle_picmg_cmd_get_shelf_address_info(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_SET_SHELF_ADDRESS_INFO:
+	handle_picmg_cmd_set_shelf_address_info(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_SET_IPMB_STATE:
+	handle_picmg_cmd_set_ipmb_state(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_SET_FRU_ACTIVATION_POLICY:
+	handle_picmg_cmd_set_fru_activation_policy(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_FRU_ACTIVATION_POLICY:
+	handle_picmg_cmd_get_fru_activation_policy(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_SET_FRU_ACTIVATION:
+	handle_picmg_cmd_set_fru_activation(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_DEVICE_LOCATOR_RECORD:
+	handle_picmg_cmd_get_device_locator_record(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_SET_PORT_STATE:
+	handle_picmg_cmd_set_port_state(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_PORT_STATE:
+	handle_picmg_cmd_get_port_state(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_COMPUTE_POWER_PROPERTIES:
+	handle_picmg_cmd_compute_power_properties(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_SET_POWER_LEVEL:
+	handle_picmg_cmd_set_power_level(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_POWER_LEVEL:
+	handle_picmg_cmd_get_power_level(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_RENEGOTIATE_POWER:
+	handle_picmg_cmd_renegotiate_power(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_FAN_SPEED_PROPERTIES:
+	handle_picmg_cmd_get_fan_speed_properties(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_SET_FAN_LEVEL:
+	handle_picmg_cmd_set_fan_level(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_GET_FAN_LEVEL:
+	handle_picmg_cmd_get_fan_level(mc, msg, rdata, rdata_len);
+	break;
+
     case IPMI_PICMG_CMD_BUSED_RESOURCE:
+	handle_picmg_cmd_bused_resource(mc, msg, rdata, rdata_len);
+	break;
+
     default:
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	break;

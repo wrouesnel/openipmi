@@ -2405,6 +2405,7 @@ int control_displayed;
 int control_ops_to_read_count;
 int control_read_err;
 int *normal_control_vals;
+ipmi_light_setting_t *light_control_val;
 int id_control_length;
 unsigned char *id_control_vals;
 
@@ -2463,12 +2464,35 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
 	/* Nothing to do. */
     } else {
 	switch (control_type) {
+	    case IPMI_CONTROL_LIGHT:
+		if (ipmi_control_light_set_with_setting(control)) {
+		    if (light_control_val) {
+			ipmi_light_setting_t *setting = light_control_val;
+			for (i=0; i<num_vals; ) {
+			    int color, on, off;
+			    ipmi_light_setting_get_color(setting, i, &color);
+			    ipmi_light_setting_get_on_time(setting, i, &on);
+			    ipmi_light_setting_get_off_time(setting, i, &off);
+			    wmove(display_pad, value_pos.y+i, value_pos.x);
+			    display_pad_out("0x%x 0x%x 0x%x", color, on, off);
+			    i++;
+			    if (i < num_vals)
+				display_pad_out("\n          ");
+			}
+			ipmi_free_light_settings(light_control_val);
+			light_control_val = NULL;
+		    } else {
+			display_pad_out("error reading values");
+		    }
+		    break;
+		}
+		/* FALLTHRU */
+
 	    case IPMI_CONTROL_RELAY:
 	    case IPMI_CONTROL_ALARM:
 	    case IPMI_CONTROL_RESET:
 	    case IPMI_CONTROL_POWER:
 	    case IPMI_CONTROL_FAN_SPEED:
-	    case IPMI_CONTROL_LIGHT:
 	    case IPMI_CONTROL_OUTPUT:
 		if (normal_control_vals) {
 		    for (i=0; i<num_vals; ) {
@@ -2507,6 +2531,57 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
     display_pad_out("\n");
 
     display_pad_refresh();
+}
+
+static void
+light_control_val_read(ipmi_control_t       *control,
+		       int                  err,
+		       ipmi_light_setting_t *setting,
+		       void                 *cb_data)
+{
+    ipmi_control_id_t control_id;
+    int               num_vals;
+    int               i;
+
+    if (control == NULL) {
+	/* The control went away, stop the operation. */
+	wmove(display_pad, value_pos.y, value_pos.x);
+	display_pad_out("invalid");
+	curr_display_type = DISPLAY_NONE;
+	return;
+    }
+    control_id = ipmi_control_convert_to_id(control);
+    if (!((curr_display_type == DISPLAY_CONTROL)
+	  && (ipmi_cmp_control_id(control_id, curr_control_id) == 0)))
+	return;
+
+    num_vals = ipmi_control_get_num_vals(control);
+
+    if (control_displayed) {
+	if (err) {
+	    wmove(display_pad, value_pos.y, value_pos.x);
+	    display_pad_out("?");
+	} else {
+	    for (i=0; i<num_vals; i++) {
+		int color, on, off;
+		ipmi_light_setting_get_color(setting, i, &color);
+		ipmi_light_setting_get_on_time(setting, i, &on);
+		ipmi_light_setting_get_off_time(setting, i, &off);
+		wmove(display_pad, value_pos.y+i, value_pos.x);
+		display_pad_out("0x%x 0x%x 0x%x", color, on, off);
+	    }
+	}
+	display_pad_refresh();
+    } else {
+	if (light_control_val)
+	    ipmi_free_light_settings(light_control_val);
+	if (err) {
+	    light_control_val = NULL;
+	} else {
+	    light_control_val = ipmi_light_settings_dup(setting);
+	}
+	display_control(ipmi_control_get_entity(control), control);
+    }
 }
 
 static void
@@ -2639,13 +2714,18 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
 
     control_type = ipmi_control_get_type(control);
     switch (control_type) {
+    case IPMI_CONTROL_LIGHT:
+	if (ipmi_control_light_set_with_setting(control)) {
+	    ipmi_control_get_light(control, light_control_val_read, NULL);
+	    break;
+	}
+	/* FALLTHRU */
     case IPMI_CONTROL_RELAY:
     case IPMI_CONTROL_ALARM:
     case IPMI_CONTROL_RESET:
     case IPMI_CONTROL_POWER:
     case IPMI_CONTROL_FAN_SPEED:
     case IPMI_CONTROL_OUTPUT:
-    case IPMI_CONTROL_LIGHT:
 	ipmi_control_get_val(control, normal_control_val_read, NULL);
 	break;
 
@@ -2693,13 +2773,23 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 
 	control_type = ipmi_control_get_type(control);
 	switch (control_type) {
+	case IPMI_CONTROL_LIGHT:
+	    if (ipmi_control_light_set_with_setting(control)) {
+		control_ops_to_read_count++;
+		rv = ipmi_control_get_light(control, light_control_val_read,
+					    NULL);
+		if (rv) {
+		    ui_log("Unable to read light control val: 0x%x\n", rv);
+		}
+		break;
+	    }
+	    /* FALLTHRU */
 	case IPMI_CONTROL_RELAY:
 	case IPMI_CONTROL_ALARM:
 	case IPMI_CONTROL_RESET:
 	case IPMI_CONTROL_POWER:
 	case IPMI_CONTROL_FAN_SPEED:
 	case IPMI_CONTROL_OUTPUT:
-	case IPMI_CONTROL_LIGHT:
 	    control_ops_to_read_count++;
 	    rv = ipmi_control_get_val(control, normal_control_val_read, NULL);
 	    if (rv) {
@@ -4914,6 +5004,41 @@ set_control(ipmi_control_t *control, void *cb_data)
 
     control_type = ipmi_control_get_type(control);
     switch (control_type) {
+	case IPMI_CONTROL_LIGHT:
+	    if (ipmi_control_light_set_with_setting(control)) {
+		ipmi_light_setting_t *setting;
+
+		num_vals = ipmi_control_get_num_vals(control);
+		setting = ipmi_alloc_light_settings(num_vals);
+		if (!setting) {
+		    cmd_win_out("set_control: out of memory\n");
+		    goto out;
+		}
+
+		for (i=0; i<num_vals; i++) {
+		    unsigned int val;
+
+		    if (get_uint(toks, &val, "light color"))
+			goto out_bcon;
+		    ipmi_light_setting_set_color(setting, i, val);
+
+		    if (get_uint(toks, &val, "light on time"))
+			goto out_bcon;
+		    ipmi_light_setting_set_on_time(setting, i, val);
+
+		    if (get_uint(toks, &val, "light off time"))
+			goto out_bcon;
+		    ipmi_light_setting_set_off_time(setting, i, val);
+		}
+
+		rv = ipmi_control_set_light(control, setting, NULL, NULL);
+		if (rv) {
+		    cmd_win_out("set_control: Returned error 0x%x\n", rv);
+		}
+		ipmi_free_light_settings(setting);
+		break;
+	    }
+	    /* FALLTHRU */
 	case IPMI_CONTROL_RELAY:
 	case IPMI_CONTROL_ALARM:
 	case IPMI_CONTROL_RESET:
@@ -4922,7 +5047,6 @@ set_control(ipmi_control_t *control, void *cb_data)
 	case IPMI_CONTROL_OUTPUT:
 	case IPMI_CONTROL_ONE_SHOT_RESET:
 	case IPMI_CONTROL_ONE_SHOT_OUTPUT:
-	case IPMI_CONTROL_LIGHT:
 	    num_vals = ipmi_control_get_num_vals(control);
 	    vals = ipmi_mem_alloc(sizeof(*vals) * num_vals);
 	    if (!vals) {

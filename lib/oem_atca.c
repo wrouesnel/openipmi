@@ -233,11 +233,11 @@ atca_add_control(ipmi_mc_t      *mc,
 
 
 static int
-check_for_msg_err(ipmi_mc_t *mc, int rv, ipmi_msg_t *msg,
+check_for_msg_err(ipmi_mc_t *mc, int *rv, ipmi_msg_t *msg,
 		  int expected_length,
 		  char *func_name)
 {
-    if (rv) {
+    if (rv && *rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(%s): "
 		 "Error from message", func_name);
@@ -248,6 +248,8 @@ check_for_msg_err(ipmi_mc_t *mc, int rv, ipmi_msg_t *msg,
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "oem_atca.c(%s): "
 		 "MC went away", func_name);
+	if (rv)
+	    *rv = ENXIO;
 	return 1;
     }
 
@@ -256,6 +258,8 @@ check_for_msg_err(ipmi_mc_t *mc, int rv, ipmi_msg_t *msg,
 		 "%soem_atca.c(%s): "
 		 "IPMI error: 0x%x",
 		 MC_NAME(mc), func_name, msg->data[0]);
+	if (rv)
+	    *rv = IPMI_IPMI_ERR_VAL(msg->data[0]);
 	return 1;
     }
 
@@ -264,6 +268,8 @@ check_for_msg_err(ipmi_mc_t *mc, int rv, ipmi_msg_t *msg,
 		 "%soem_atca.c(%s): "
 		 "response not big enough, expected %d, got %d bytes",
 		 MC_NAME(mc), func_name, expected_length, msg->data_len);
+	if (rv)
+	    *rv = EINVAL;
 	return 1;
     }
 
@@ -272,6 +278,8 @@ check_for_msg_err(ipmi_mc_t *mc, int rv, ipmi_msg_t *msg,
 		 "%soem_atca.c(%s): "
 		 "Command ID not PICMG, it was 0x%x",
 		 MC_NAME(mc), func_name, msg->data[1]);
+	if (rv)
+	    *rv = EINVAL;
 	return 1;
     }
 
@@ -761,7 +769,7 @@ led_set_done(ipmi_control_t *control,
     if (control)
 	mc = ipmi_control_get_mc(control);
 
-    if (check_for_msg_err(mc, err, rsp, 6, "led_set_done")) {
+    if (check_for_msg_err(mc, &err, rsp, 6, "led_set_done")) {
 	if (info->set_handler)
 	    info->set_handler(control, err, info->cb_data);
 	goto out;
@@ -885,10 +893,20 @@ led_get_done(ipmi_control_t *control,
     if (control)
 	mc = ipmi_control_get_mc(control);
 
-    if (check_for_msg_err(mc, err, rsp, 6, "led_get_done")) {
+    if (check_for_msg_err(mc, &err, rsp, 6, "led_get_done")) {
 	if (info->get_handler)
 	    info->get_handler(control, err, info->settings, info->cb_data);
 	goto out;
+    }
+
+    if (rsp->data[2] & 0x2) {
+	/* In override state */
+	if (check_for_msg_err(mc, &err, rsp, 9, "led_get_done")) {
+	    if (info->get_handler)
+		info->get_handler(control, err, info->settings, info->cb_data);
+	    goto out;
+	}
+	
     }
 
     if ((rsp->data[3] >= 0xfb) && (rsp->data[3] <= 0xfe)) {
@@ -1036,7 +1054,7 @@ fru_led_cap_rsp(ipmi_mc_t  *mc,
     }
     l->op_in_progress = 0;
 
-    if (check_for_msg_err(mc, 0, msg, 5, "fru_led_cap_rsp"))
+    if (check_for_msg_err(mc, NULL, msg, 5, "fru_led_cap_rsp"))
 	return;
 
     finfo = l->fru;
@@ -1120,7 +1138,7 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
     int          i, j;
     unsigned int num_leds;
 
-    if (check_for_msg_err(mc, 0, rsp, 4, "fru_led_prop_rsp"))
+    if (check_for_msg_err(mc, NULL, rsp, 4, "fru_led_prop_rsp"))
 	return;
 
     /* Note that while the MC exists, finfo is guaranteed to exist
@@ -1137,7 +1155,7 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
 	return;
     
     num_leds = 4 + rsp->data[3];
-    finfo->leds = ipmi_mem_alloc(sizeof(atca_led_t) * num_leds);
+    finfo->leds = ipmi_mem_alloc(sizeof(atca_led_t *) * num_leds);
     if (!finfo->leds) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(fru_led_prop_rsp): "
@@ -1151,6 +1169,15 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
     for (i=0; i<4; i++) {
 	if (rsp->data[2] & (1 << i)) {
 	    /* We support this LED.  Fetch its capabilities */
+	    finfo->leds[i] = ipmi_mem_alloc(sizeof(atca_led_t));
+	    if (!finfo->leds[i]) {
+		ipmi_log(IPMI_LOG_SEVERE,
+			 "%soem_atca.c(fru_led_prop_rsp): "
+			 "Could not allocate memory for an LED",
+			 MC_NAME(mc));
+		return;
+	    }
+	    memset(finfo->leds[i], 0, sizeof(atca_led_t));
 	    get_led_capability(mc, finfo, i);
 	}
     }
@@ -1160,6 +1187,15 @@ fru_led_prop_rsp(ipmi_mc_t  *mc,
 	    /* We only support 128 LEDs. */
 	    break;
 	/* We support this LED, Fetch it's capabilities. */
+	finfo->leds[i] = ipmi_mem_alloc(sizeof(atca_led_t));
+	if (!finfo->leds[i]) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(fru_led_prop_rsp): "
+		     "Could not allocate memory for an aux LED",
+		     MC_NAME(mc));
+	    return;
+	}
+	memset(finfo->leds[i], 0, sizeof(atca_led_t));
 	get_led_capability(mc, finfo, i);
     }
 }
@@ -1256,7 +1292,7 @@ set_cold_reset_done(ipmi_control_t *control,
     if (control)
 	mc = ipmi_control_get_mc(control);
 
-    if (check_for_msg_err(mc, err, rsp, 6, "set_cold_reset_done")) {
+    if (check_for_msg_err(mc, &err, rsp, 6, "set_cold_reset_done")) {
 	if (info->handler)
 	    info->handler(control, err, info->cb_data);
 	goto out;
@@ -1667,7 +1703,7 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
     unsigned int       ipm_fru_id;
     ipmi_domain_t      *domain;
 
-    if (check_for_msg_err(mc, 0, rsp, 5, "fru_picmg_prop_rsp"))
+    if (check_for_msg_err(mc, NULL, rsp, 5, "fru_picmg_prop_rsp"))
 	return;
 
     num_frus = rsp->data[3] + 1;

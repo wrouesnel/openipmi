@@ -1355,7 +1355,7 @@ ipmi_control_set_light(ipmi_control_t       *control,
 {
     CHECK_CONTROL_LOCK(control);
 
-    if (!control->cbs.set_val)
+    if (!control->cbs.set_light)
 	return ENOSYS;
     return control->cbs.set_light(control, settings, handler, cb_data);
 }
@@ -1367,7 +1367,7 @@ ipmi_control_get_light(ipmi_control_t         *control,
 {
     CHECK_CONTROL_LOCK(control);
 
-    if (!control->cbs.get_val)
+    if (!control->cbs.get_light)
 	return ENOSYS;
     return control->cbs.get_light(control, handler, cb_data);
 }
