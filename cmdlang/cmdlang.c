@@ -36,6 +36,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
@@ -705,12 +706,17 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	for (;;) {
 	next_help:
 	    if (argc == curr_arg) {
+		rv = 0;
 		if (parent)
-		    cmdlang->out(cmdlang, parent->name, parent->help);
+		    rv = cmdlang->out(cmdlang, parent->name, parent->help);
 		else
-		    cmdlang->out(cmdlang, "help", NULL);
+		    rv = cmdlang->out(cmdlang, "help", NULL);
+		if (rv)
+		    goto done;
 		while (cmd) {
-		    cmdlang->out(cmdlang, cmd->name, cmd->help);
+		    rv = cmdlang->out(cmdlang, cmd->name, cmd->help);
+		    if (rv)
+			goto done;
 		    cmd = cmd->next;
 		}
 		break;
@@ -837,7 +843,8 @@ ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
     cmd->next = rv;
 
  done:
-    *new_val = rv;
+    if (new_val)
+	*new_val = rv;
     return 0;
 }
 
@@ -846,8 +853,51 @@ ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 		 char            *name,
 		 char            *value)
 {
+    return info->cmdlang->out(info->cmdlang, name, value);
 }
 
+int
+ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
+		     char            *name,
+		     int             value)
+{
+    char sval[20];
+
+    sprintf(sval, "%d", value);
+    return ipmi_cmdlang_out(info, name, sval);
+}
+
+int
+ipmi_cmdlang_down(ipmi_cmd_info_t *info)
+{
+    return info->cmdlang->down(info->cmdlang);
+}
+
+int
+ipmi_cmdlang_up(ipmi_cmd_info_t *info)
+{
+    return info->cmdlang->up(info->cmdlang);
+}
+
+int
+ipmi_cmdlang_done(ipmi_cmd_info_t *info)
+{
+    return info->cmdlang->done(info->cmdlang);
+}
+
+int ipmi_cmdlang_domain_init(void);
+
+int
+ipmi_cmdlang_init(void)
+{
+    int rv;
+
+    rv = ipmi_cmdlang_domain_init();
+    if (rv)
+	return rv;
+
+    return 0;
+}
 
 /*
 The command hierarchy is:

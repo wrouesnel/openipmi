@@ -1032,7 +1032,7 @@ struct ipmi_args_s
 int
 ipmi_parse_args(int         *curr_arg,
 		int         arg_count,
-		const char  **args,
+		char        * const *args,
 		ipmi_args_t **iargs)
 {
     ipmi_args_t *p;

@@ -1756,7 +1756,7 @@ typedef struct ipmi_args_s ipmi_args_t;
    use ipmi_free_args() to free the value returned in iargs. */
 int ipmi_parse_args(int         *curr_arg,
 		    int         arg_count,
-		    const char  **args,
+		    char        * const *args,
 		    ipmi_args_t **iargs);
 
 /* Free an argument structure. */

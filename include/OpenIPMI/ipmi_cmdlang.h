@@ -34,6 +34,8 @@
 #ifndef __IPMI_CMDLANG_H
 #define __IPMI_CMDLANG_H
 
+#include <OpenIPMI/selector.h>
+
 /* Forward declaration */
 typedef struct ipmi_cmd_info_s ipmi_cmd_info_t;
 
@@ -48,16 +50,24 @@ typedef struct ipmi_cmdlang_s ipmi_cmdlang_t;
    pass in NULL. */
 typedef int (*cmd_out_cb)(ipmi_cmdlang_t *info, char *name, char *value);
 
-/* The command is done.  If there was an error, the err value in info
-   will be non-null. */
-typedef int (*cmd_done_cb)(ipmi_cmdlang_t *info);
+/* Command-specific info. */
+typedef int (*cmd_info_cb)(ipmi_cmdlang_t *info);
 
 struct ipmi_cmdlang_s
 {
     int          xml_mode; /* Generate xml output? */
     cmd_out_cb   out;	   /* Generate output with this. */
-    cmd_done_cb  done;     /* Called when the command is done */
-    unsigned int level;    /* The indention level for output*/
+    cmd_info_cb  down;     /* Go down a level (new indention or
+			      nesting) */
+    cmd_info_cb  up;       /* Go up a level (leave the current
+			      indention or nesting) */
+    cmd_info_cb  done;     /* Called when the command is done.  If
+			      there was an error, the err value in
+			      info will be non-null. */
+
+    /* OS handler and selector to use for the commands */
+    os_handler_t *os_hnd;
+    selector_t   *selector;
 
     char         *err;     /* If non-NULL, an error occurred and this
 			      is the error info. */
@@ -139,11 +149,24 @@ struct ipmi_cmd_info_s
     char               **argv;        /* The arguments */
     ipmi_cmdlang_t     *cmdlang;      /* The cmdlang structure to use */
     ipmi_cmdlang_cmd_t *cmd;          /* The matching cmd structure. */
+
+    /* For use by the user commands */
+    int err;
+    void *data;
 };
 
 
 int ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 		     char            *name,
 		     char            *value);
+int ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
+			 char            *name,
+			 int             value);
+int ipmi_cmdlang_down(ipmi_cmd_info_t *info);
+int ipmi_cmdlang_up(ipmi_cmd_info_t *info);
+int ipmi_cmdlang_done(ipmi_cmd_info_t *info);
+
+
+int ipmi_cmdlang_init(void);
 
 #endif /* __IPMI_CMDLANG_H */
