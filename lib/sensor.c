@@ -2264,9 +2264,9 @@ ipmi_sensor_set_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
 }
 
 int
-ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
-			     int           event,
-			     int           *val)
+ipmi_sensor_discrete_event_readable(ipmi_sensor_t *sensor,
+				    int           event,
+				    int           *val)
 {
     CHECK_SENSOR_LOCK(sensor);
 
@@ -5849,4 +5849,22 @@ ipmi_sensor_id_states_get(ipmi_sensor_id_t      sensor_id,
 			  void                  *cb_data)
 {
     return ipmi_sensor_id_get_states(sensor_id, done, cb_data);
+}
+
+int
+ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
+			     int           event,
+			     int           *val)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* A threshold sensor, it doesn't have events. */
+	return ENOSYS;
+
+    if (event > 14)
+	return EINVAL;
+
+    *val = sensor->mask3[event];
+    return 0;
 }

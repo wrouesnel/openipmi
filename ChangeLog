@@ -1,3 +1,10 @@
+2004-10-26 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h.in, lib/sensor.c: Renamed
+	ipmi_discrete_event_readable to ipmi_sensor_discrete_event_readable.
+	* lib/entity.c: ditto
+	* cmdlang/cmd_sensor.c: ditto
+
 2004-10-24 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in, lib/entity.c: Deprectated the

@@ -277,7 +277,7 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
 	enum ipmi_event_dir_e dir;
 
 	for (event=0; event<15; event++) {
-	    rv = ipmi_discrete_event_readable(sensor, event, &val);
+	    rv = ipmi_sensor_discrete_event_readable(sensor, event, &val);
 	    if (rv || !val)
 		continue;
 	    ipmi_cmdlang_out(cmd_info, "Event", NULL);
@@ -436,7 +436,7 @@ read_sensor_states(ipmi_sensor_t *sensor,
 	int  ival;
 	char *str;
 
-	rv = ipmi_discrete_event_readable(sensor, i, &ival);
+	rv = ipmi_sensor_discrete_event_readable(sensor, i, &ival);
 	if ((rv) || !ival)
 	    continue;
 
@@ -977,7 +977,7 @@ sensor_get_event_enables_done(ipmi_sensor_t      *sensor,
 	char *str;
 
 	for (offset=0; offset<15; offset++) {
-	    rv = ipmi_discrete_event_readable(sensor, offset, &val);
+	    rv = ipmi_sensor_discrete_event_readable(sensor, offset, &val);
 	    if (rv || !val)
 		continue;
 	    ipmi_cmdlang_out(cmd_info, "Event", NULL);

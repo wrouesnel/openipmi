@@ -879,6 +879,29 @@ threshold_str(char *s, enum ipmi_thresh_e thresh)
 }
 
 static char *
+threshold_from_str(char *s, int len, enum ipmi_thresh_e *thresh)
+{
+    if (len != 2)
+	return NULL;
+
+    if (strncasecmp(s, "un", 2) == 0)
+	*thresh = IPMI_UPPER_NON_CRITICAL;
+    else if (strncasecmp(s, "uc", 2) == 0)
+	*thresh = IPMI_UPPER_CRITICAL;
+    else if (strncasecmp(s, "ur", 2) == 0)
+	*thresh = IPMI_UPPER_NON_RECOVERABLE;
+    else if (strncasecmp(s, "ln", 2) == 0)
+	*thresh = IPMI_LOWER_NON_CRITICAL;
+    else if (strncasecmp(s, "lc", 2) == 0)
+	*thresh = IPMI_LOWER_CRITICAL;
+    else if (strncasecmp(s, "lr", 2) == 0)
+	*thresh = IPMI_LOWER_NON_RECOVERABLE;
+    else
+	return NULL;
+    return s+2;
+}
+
+static char *
 threshold_event_str(char                        *s, 
 		    enum ipmi_thresh_e          thresh,
 		    enum ipmi_event_value_dir_e value_dir,
@@ -899,9 +922,60 @@ threshold_event_str(char                        *s,
 }
 
 static char *
+threshold_event_from_str(char                        *s,
+			 int                        len,
+			 enum ipmi_thresh_e          *thresh,
+			 enum ipmi_event_value_dir_e *value_dir,
+			 enum ipmi_event_dir_e       *dir)
+{
+    if (len != 4)
+	return NULL;
+
+    s = threshold_from_str(s, 2, thresh);
+
+    if (*s == 'l')
+	*value_dir = IPMI_GOING_LOW;
+    else if (*s == 'h')
+	*value_dir = IPMI_GOING_HIGH;
+    else
+	return NULL;
+    s++;
+    if (*s == 'a')
+	*dir = IPMI_ASSERTION;
+    else if (*s == 'd')
+	*dir = IPMI_DEASSERTION;
+    else
+	return NULL;
+    s++;
+    return s;
+}
+
+static char *
+discrete_event_from_str(char                  *s,
+			int                   len,
+			int                   *offset,
+			enum ipmi_event_dir_e *dir)
+{
+    if ((len < 2) || (len > 3))
+	return NULL;
+
+    *offset = strtoul(s, &s, 0);
+    if (*offset >= 15)
+	return NULL;
+    if (*s == 'a')
+	*dir = IPMI_ASSERTION;
+    else if (*s == 'd')
+	*dir = IPMI_DEASSERTION;
+    else
+	return NULL;
+    s++;
+    return s;
+}
+
+static char *
 discrete_event_str(char                   *s, 
 		   int                    offset,
-		    enum ipmi_event_dir_e dir)
+		   enum ipmi_event_dir_e dir)
 {
     if (offset >= 100)
 	offset = 99;
@@ -1016,39 +1090,14 @@ str_to_threshold_event_state(char               *str,
 	    ipmi_event_state_set_scanning_enabled(e, 1);
 	else if (strncasecmp(s, "busy", len) == 0)
 	    ipmi_event_state_set_busy(e, 1);
-	else if (len != 4)
-	    goto out_err;
 	else {
-	    if (strncasecmp(s, "un", 2) == 0)
-		thresh = IPMI_UPPER_NON_CRITICAL;
-	    else if (strncasecmp(s, "uc", 2) == 0)
-		thresh = IPMI_UPPER_CRITICAL;
-	    else if (strncasecmp(s, "ur", 2) == 0)
-		thresh = IPMI_UPPER_NON_RECOVERABLE;
-	    else if (strncasecmp(s, "ln", 2) == 0)
-		thresh = IPMI_LOWER_NON_CRITICAL;
-	    else if (strncasecmp(s, "lc", 2) == 0)
-		thresh = IPMI_LOWER_CRITICAL;
-	    else if (strncasecmp(s, "lr", 2) == 0)
-		thresh = IPMI_LOWER_NON_RECOVERABLE;
-	    else
+	    s = threshold_event_from_str(s, len, &thresh, &value_dir, &dir);
+	    if (!s)
 		goto out_err;
-	    s += 2;
-	    if (*s == 'l')
-		value_dir = IPMI_GOING_LOW;
-	    else if (*s == 'h')
-		value_dir = IPMI_GOING_HIGH;
-	    else
-		goto out_err;
-	    s++;
-	    if (*s == 'a')
-		dir = IPMI_ASSERTION;
-	    else if (*s == 'd')
-		dir = IPMI_DEASSERTION;
-	    else
-		goto out_err;
+
 	    ipmi_threshold_event_set(e, thresh, value_dir, dir);
 	}
+
 	start = next;
 	rv = next_parm(str, &start, &next);
     }
@@ -1141,17 +1190,9 @@ str_to_discrete_event_state(char               *str,
 	    ipmi_event_state_set_scanning_enabled(e, 1);
 	else if (strncasecmp(s, "busy", len) == 0)
 	    ipmi_event_state_set_busy(e, 1);
-	else if ((len < 2) || (len > 3))
-	    goto out_err;
 	else {
-	    offset = strtoul(s, &s, 0);
-	    if (offset >= 15)
-		goto out_err;
-	    if (*s == 'a')
-		dir = IPMI_ASSERTION;
-	    else if (*s == 'd')
-		dir = IPMI_DEASSERTION;
-	    else
+	    s = discrete_event_from_str(s, len, &offset, &dir);
+	    if (!s)
 		goto out_err;
 	    ipmi_discrete_event_set(e, offset, dir);
 	}
@@ -2573,6 +2614,60 @@ void set_log_handler(swig_cb handler = NULL);
 	return ipmi_entity_get_domain(self);
     }
 
+#define ENTITY_ID_UNSPECIFIED	       			0
+#define ENTITY_ID_OTHER					1
+#define ENTITY_ID_UNKOWN				2
+#define ENTITY_ID_PROCESSOR				3
+#define ENTITY_ID_DISK					4
+#define ENTITY_ID_PERIPHERAL				5
+#define ENTITY_ID_SYSTEM_MANAGEMENT_MODULE		6
+#define ENTITY_ID_SYSTEM_BOARD				7
+#define ENTITY_ID_MEMORY_MODULE				8
+#define ENTITY_ID_PROCESSOR_MODULE			9
+#define ENTITY_ID_POWER_SUPPLY				10
+#define ENTITY_ID_ADD_IN_CARD				11
+#define ENTITY_ID_FRONT_PANEL_BOARD			12
+#define ENTITY_ID_BACK_PANEL_BOARD			13
+#define ENTITY_ID_POWER_SYSTEM_BOARD			14
+#define ENTITY_ID_DRIVE_BACKPLANE			15
+#define ENTITY_ID_SYSTEM_INTERNAL_EXPANSION_BOARD	16
+#define ENTITY_ID_OTHER_SYSTEM_BOARD			17
+#define ENTITY_ID_PROCESSOR_BOARD			18
+#define ENTITY_ID_POWER_UNIT				19
+#define ENTITY_ID_POWER_MODULE				20
+#define ENTITY_ID_POWER_MANAGEMENT_BOARD		21
+#define ENTITY_ID_CHASSIS_BACK_PANEL_BOARD		22
+#define ENTITY_ID_SYSTEM_CHASSIS			23
+#define ENTITY_ID_SUB_CHASSIS				24
+#define ENTITY_ID_OTHER_CHASSIS_BOARD			25
+#define ENTITY_ID_DISK_DRIVE_BAY			26
+#define ENTITY_ID_PERIPHERAL_BAY			27
+#define ENTITY_ID_DEVICE_BAY				28
+#define ENTITY_ID_FAN_COOLING				29
+#define ENTITY_ID_COOLING_UNIT				30
+#define ENTITY_ID_CABLE_INTERCONNECT			31
+#define ENTITY_ID_MEMORY_DEVICE				32
+#define ENTITY_ID_SYSTEM_MANAGEMENT_SOFTWARE		33
+#define ENTITY_ID_BIOS					34
+#define ENTITY_ID_OPERATING_SYSTEM			35
+#define ENTITY_ID_SYSTEM_BUS				36
+#define ENTITY_ID_GROUP					37
+#define ENTITY_ID_REMOTE_MGMT_COMM_DEVICE		38
+#define ENTITY_ID_EXTERNAL_ENVIRONMENT			39
+#define ENTITY_ID_BATTERY				40
+#define ENTITY_ID_PROCESSING_BLADE			41
+#define ENTITY_ID_CONNECTIVITY_SWITCH			42
+#define ENTITY_ID_PROCESSOR_MEMORY_MODULE		43
+#define ENTITY_ID_IO_MODULE				44
+#define ENTITY_ID_PROCESSOR_IO_MODULE			45
+#define ENTITY_ID_MGMT_CONTROLLER_FIRMWARE		46
+#define ENTITY_ID_IPMI_CHANNEL				47
+#define ENTITY_ID_PCI_BUS				48
+#define ENTITY_ID_PCI_EXPRESS_BUS			49
+#define ENTITY_ID_SCSI_BUS				50
+#define ENTITY_ID_SATA_SAS_BUS				51
+#define ENTITY_ID_PROCESSOR_FRONT_SIDE_BUS		52
+
     /*
      * Get the entity id for the entity
      */
@@ -2859,7 +2954,7 @@ void set_log_handler(swig_cb handler = NULL);
 	return ipmi_entity_get_address_span(self);
     }
 
-    %newobject get_id;
+    %newobject get_dlr_id;
     /*
      * Return the id string from the DLR.
      */
@@ -4161,152 +4256,651 @@ void set_log_handler(swig_cb handler = NULL);
 	return num;
     }
 
-#if 0
-    /* Strings for various values for a sensor.  We put them in here, and
-       they will be the correct strings even for OEM values. */
+    /*
+     * The sensor type.  This return sa string representing the sensor
+     * type.
+     */
     char *get_sensor_type_string()
     {
 	return ipmi_sensor_get_sensor_type_string(self);
     }
 
+#define SENSOR_TYPE_TEMPERATURE				0x01
+#define SENSOR_TYPE_VOLTAGE				0x02
+#define SENSOR_TYPE_CURRENT				0x03
+#define SENSOR_TYPE_FAN					0x04
+#define SENSOR_TYPE_PHYSICAL_SECURITY			0x05
+#define SENSOR_TYPE_PLATFORM_SECURITY			0x06
+#define SENSOR_TYPE_PROCESSOR				0x07
+#define SENSOR_TYPE_POWER_SUPPLY			0x08
+#define SENSOR_TYPE_POWER_UNIT				0x09
+#define SENSOR_TYPE_COOLING_DEVICE			0x0a
+#define SENSOR_TYPE_OTHER_UNITS_BASED_SENSOR		0x0b
+#define SENSOR_TYPE_MEMORY				0x0c
+#define SENSOR_TYPE_DRIVE_SLOT				0x0d
+#define SENSOR_TYPE_POWER_MEMORY_RESIZE			0x0e
+#define SENSOR_TYPE_SYSTEM_FIRMWARE_PROGRESS		0x0f
+#define SENSOR_TYPE_EVENT_LOGGING_DISABLED		0x10
+#define SENSOR_TYPE_WATCHDOG_1				0x11
+#define SENSOR_TYPE_SYSTEM_EVENT			0x12
+#define SENSOR_TYPE_CRITICAL_INTERRUPT			0x13
+#define SENSOR_TYPE_BUTTON				0x14
+#define SENSOR_TYPE_MODULE_BOARD			0x15
+#define SENSOR_TYPE_MICROCONTROLLER_COPROCESSOR		0x16
+#define SENSOR_TYPE_ADD_IN_CARD				0x17
+#define SENSOR_TYPE_CHASSIS				0x18
+#define SENSOR_TYPE_CHIP_SET				0x19
+#define SENSOR_TYPE_OTHER_FRU				0x1a
+#define SENSOR_TYPE_CABLE_INTERCONNECT			0x1b
+#define SENSOR_TYPE_TERMINATOR				0x1c
+#define SENSOR_TYPE_SYSTEM_BOOT_INITIATED		0x1d
+#define SENSOR_TYPE_BOOT_ERROR				0x1e
+#define SENSOR_TYPE_OS_BOOT				0x1f
+#define SENSOR_TYPE_OS_CRITICAL_STOP			0x20
+#define SENSOR_TYPE_SLOT_CONNECTOR			0x21
+#define SENSOR_TYPE_SYSTEM_ACPI_POWER_STATE		0x22
+#define SENSOR_TYPE_WATCHDOG_2				0x23
+#define SENSOR_TYPE_PLATFORM_ALERT			0x24
+#define SENSOR_TYPE_ENTITY_PRESENCE			0x25
+#define SENSOR_TYPE_MONITOR_ASIC_IC			0x26
+#define SENSOR_TYPE_LAN					0x27
+#define SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH		0x28
+#define SENSOR_TYPE_BATTERY				0x29
+    /*
+     * Return the numeric sensor type.
+     */
+    int get_sensor_type()
+    {
+	return ipmi_sensor_get_sensor_type(self);
+    }
+
+    /*
+     * Return the event reading type string.  If this returns
+     * "threshold", then this is a threshold sensor.  Otherwise it is
+     * a discrete sensor.
+     */
     char *get_event_reading_type_string()
     {
 	return ipmi_sensor_get_event_reading_type_string(self);
     }
 
+#define EVENT_READING_TYPE_THRESHOLD				0x01
+#define EVENT_READING_TYPE_DISCRETE_USAGE			0x02
+#define EVENT_READING_TYPE_DISCRETE_STATE			0x03
+#define EVENT_READING_TYPE_DISCRETE_PREDICTIVE_FAILURE		0x04
+#define EVENT_READING_TYPE_DISCRETE_LIMIT_EXCEEDED		0x05
+#define EVENT_READING_TYPE_DISCRETE_PERFORMANCE_MET		0x06
+#define EVENT_READING_TYPE_DISCRETE_SEVERITY			0x07
+#define EVENT_READING_TYPE_DISCRETE_DEVICE_PRESENCE		0x08
+#define EVENT_READING_TYPE_DISCRETE_DEVICE_ENABLE		0x09
+#define EVENT_READING_TYPE_DISCRETE_AVAILABILITY		0x0a
+#define EVENT_READING_TYPE_DISCRETE_REDUNDANCY			0x0b
+#define EVENT_READING_TYPE_DISCRETE_ACPI_POWER			0x0c
+#define EVENT_READING_TYPE_SENSOR_SPECIFIC			0x6f
+    /*
+     * Return the numeric event reading type.  This will return
+     * EVENT_READING_TYPE_THRESHOLD for threshold sensors; everthing
+     * else is a discrete sensor.
+     */
+    int get_event_reading_type()
+    {
+	return ipmi_sensor_get_event_reading_type(self);
+    }
+
+    /*
+     * Get the string for the sensor's rate unit.  This will be blank
+     * if there is not a rate unit for this sensor.
+     */
     char *get_rate_unit_string()
     {
 	return ipmi_sensor_get_rate_unit_string(self);
     }
 
+#define RATE_UNIT_NONE		0
+#define RATE_UNIT_PER_US	1
+#define RATE_UNIT_PER_MS	2
+#define RATE_UNIT_PER_SEC	3
+#define RATE_UNIT_MIN		4
+#define RATE_UNIT_HOUR		5
+#define RATE_UNIT_DAY		6
+
+    /*
+     * Get the rate unit for this sensor.
+     */
+    int get_rate_unit()
+    {
+	return ipmi_sensor_get_rate_unit(self);
+    }
+
+    /*
+     * Get the string for the sensor's base unit.
+     */
     char *get_base_unit_string()
     {
 	return ipmi_sensor_get_base_unit_string(self);
     }
 
+#define IPMI_UNIT_TYPE_UNSPECIFIED		0
+#define IPMI_UNIT_TYPE_DEGREES_C		1
+#define IPMI_UNIT_TYPE_DEGREES_F		2
+#define IPMI_UNIT_TYPE_DEGREES_K		3
+#define IPMI_UNIT_TYPE_VOLTS			4
+#define IPMI_UNIT_TYPE_AMPS			5
+#define IPMI_UNIT_TYPE_WATTS			6
+#define IPMI_UNIT_TYPE_JOULES			7
+#define IPMI_UNIT_TYPE_COULOMBS			8
+#define IPMI_UNIT_TYPE_VA			9
+#define IPMI_UNIT_TYPE_NITS			10
+#define IPMI_UNIT_TYPE_LUMENS			11
+#define IPMI_UNIT_TYPE_LUX			12
+#define IPMI_UNIT_TYPE_CANDELA			13
+#define IPMI_UNIT_TYPE_KPA			14
+#define IPMI_UNIT_TYPE_PSI			15
+#define IPMI_UNIT_TYPE_NEWTONS			16
+#define IPMI_UNIT_TYPE_CFM			17
+#define IPMI_UNIT_TYPE_RPM			18
+#define IPMI_UNIT_TYPE_HZ			19
+#define IPMI_UNIT_TYPE_USECONDS			20
+#define IPMI_UNIT_TYPE_MSECONDS			21
+#define IPMI_UNIT_TYPE_SECONDS			22
+#define IPMI_UNIT_TYPE_MINUTE			23
+#define IPMI_UNIT_TYPE_HOUR			24
+#define IPMI_UNIT_TYPE_DAY			25
+#define IPMI_UNIT_TYPE_WEEK			26
+#define IPMI_UNIT_TYPE_MIL			27
+#define IPMI_UNIT_TYPE_INCHES			28
+#define IPMI_UNIT_TYPE_FEET			29
+#define IPMI_UNIT_TYPE_CUBIC_INCHS		30
+#define IPMI_UNIT_TYPE_CUBIC_FEET		31
+#define IPMI_UNIT_TYPE_MILLIMETERS		32
+#define IPMI_UNIT_TYPE_CENTIMETERS		33
+#define IPMI_UNIT_TYPE_METERS			34
+#define IPMI_UNIT_TYPE_CUBIC_CENTIMETERS	35
+#define IPMI_UNIT_TYPE_CUBIC_METERS		36
+#define IPMI_UNIT_TYPE_LITERS			37
+#define IPMI_UNIT_TYPE_FL_OZ			38
+#define IPMI_UNIT_TYPE_RADIANS			39
+#define IPMI_UNIT_TYPE_SERADIANS		40
+#define IPMI_UNIT_TYPE_REVOLUTIONS		41
+#define IPMI_UNIT_TYPE_CYCLES			42
+#define IPMI_UNIT_TYPE_GRAVITIES		43
+#define IPMI_UNIT_TYPE_OUNCES			44
+#define IPMI_UNIT_TYPE_POUNDS			45
+#define IPMI_UNIT_TYPE_FOOT_POUNDS		46
+#define IPMI_UNIT_TYPE_OUNCE_INCHES		47
+#define IPMI_UNIT_TYPE_GAUSS			48
+#define IPMI_UNIT_TYPE_GILBERTS			49
+#define IPMI_UNIT_TYPE_HENRIES			50
+#define IPMI_UNIT_TYPE_MHENRIES			51
+#define IPMI_UNIT_TYPE_FARADS			52
+#define IPMI_UNIT_TYPE_UFARADS			53
+#define IPMI_UNIT_TYPE_OHMS			54
+#define IPMI_UNIT_TYPE_SIEMENS			55
+#define IPMI_UNIT_TYPE_MOLES			56
+#define IPMI_UNIT_TYPE_BECQUERELS		57
+#define IPMI_UNIT_TYPE_PPM			58
+#define IPMI_UNIT_TYPE_reserved1		59
+#define IPMI_UNIT_TYPE_DECIBELS			60
+#define IPMI_UNIT_TYPE_DbA			61
+#define IPMI_UNIT_TYPE_DbC			62
+#define IPMI_UNIT_TYPE_GRAYS			63
+#define IPMI_UNIT_TYPE_SIEVERTS			64
+#define IPMI_UNIT_TYPE_COLOR_TEMP_DEG_K		65
+#define IPMI_UNIT_TYPE_BITS			66
+#define IPMI_UNIT_TYPE_KBITS			67
+#define IPMI_UNIT_TYPE_MBITS			68
+#define IPMI_UNIT_TYPE_GBITS			69
+#define IPMI_UNIT_TYPE_BYTES			70
+#define IPMI_UNIT_TYPE_KBYTES			71
+#define IPMI_UNIT_TYPE_MBYTES			72
+#define IPMI_UNIT_TYPE_GBYTES			73
+#define IPMI_UNIT_TYPE_WORDS			74
+#define IPMI_UNIT_TYPE_DWORDS			75
+#define IPMI_UNIT_TYPE_QWORDS			76
+#define IPMI_UNIT_TYPE_LINES			77
+#define IPMI_UNIT_TYPE_HITS			78
+#define IPMI_UNIT_TYPE_MISSES			79
+#define IPMI_UNIT_TYPE_RETRIES			80
+#define IPMI_UNIT_TYPE_RESETS			81
+#define IPMI_UNIT_TYPE_OVERRUNS			82
+#define IPMI_UNIT_TYPE_UNDERRUNS		83
+#define IPMI_UNIT_TYPE_COLLISIONS		84
+#define IPMI_UNIT_TYPE_PACKETS			85
+#define IPMI_UNIT_TYPE_MESSAGES			86
+#define IPMI_UNIT_TYPE_CHARACTERS		87
+#define IPMI_UNIT_TYPE_ERRORS			88
+#define IPMI_UNIT_TYPE_CORRECTABLE_ERRORS	89	
+#define IPMI_UNIT_TYPE_UNCORRECTABLE_ERRORS	90
+#define IPMI_UNIT_TYPE_FATAL_ERRORS		91
+#define IPMI_UNIT_TYPE_GRAMS			92
+
+    /*
+     * Get the sensor's base unit.
+     */
+    int get_base_unit()
+    {
+	return ipmi_sensor_get_base_unit(self);
+    }
+
+    /*
+     * Get the modifier unit string for the sensor, this will be an empty
+     * string if there is none.
+     */
     char *get_modifier_unit_string()
     {
 	return ipmi_sensor_get_modifier_unit_string(self);
     }
 
+    /*
+     * Get the sensor's modifier unit.
+     */
+    int get_modifier_unit()
+    {
+	return ipmi_sensor_get_modifier_unit(self);
+    }
 
-/* This call is a little different from the other string calls.  For a
-   discrete sensor, you can pass the offset into this call and it will
-   return the string associated with the reading.  This way, OEM
-   sensors can supply their own strings as necessary for the various
-   offsets. */
-char *ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset);
+#define MODIFIER_UNIT_NONE		0
+#define MODIFIER_UNIT_BASE_DIV_MOD	1
+#define MODIFIER_UNIT_BASE_MULT_MOD	2
 
-/* Get the entity the sensor is hooked to. */
-int ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_entity_instance(ipmi_sensor_t *sensor);
-ipmi_entity_t *ipmi_sensor_get_entity(ipmi_sensor_t *sensor);
-
-/* Information about a sensor from it's SDR.  These are things that
-   are specified by IPMI, see the spec for more details. */
-int ipmi_sensor_get_sensor_init_scanning(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_sensor_init_events(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_sensor_init_thresholds(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_sensor_init_hysteresis(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_sensor_init_type(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_sensor_init_pu_events(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_sensor_init_pu_scanning(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_ignore_if_no_entity(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_supports_auto_rearm(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_THRESHOLD_ACCESS_SUPPORT_xxx */
-int ipmi_sensor_get_threshold_access(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_HYSTERESIS_SUPPORT_xxx */
-int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_EVENT_SUPPORT_xxx */
-int ipmi_sensor_get_event_support(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_SENSOR_TYPE_xxx */
-int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_EVENT_READING_TYPE_xxx */
-int ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_SENSOR_DIRECTION_xxx */
-int ipmi_sensor_get_sensor_direction(ipmi_sensor_t *sensor);
-
-/* Sets "val" to if an event is supported for this particular sensor. */
-int ipmi_sensor_threshold_event_supported(
-    ipmi_sensor_t               *sensor,
-    enum ipmi_thresh_e          event,
-    enum ipmi_event_value_dir_e value_dir,
-    enum ipmi_event_dir_e       dir,
-    int                         *val);
-
-/* Sets "val" to if a specific threshold can be set. */
-int ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
-				   enum ipmi_thresh_e threshold,
-				   int                *val);
-
-/* Sets "val" to if a specific threshold can be read. */
-int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
-				   enum ipmi_thresh_e threshold,
-				   int                *val);
-
-/* Sets "val" to if a specific threshold has its reading returned when
-   reading the value of the threshold sensor. */
-int ipmi_sensor_threshold_reading_supported(ipmi_sensor_t      *sensor,
-					    enum ipmi_thresh_e thresh,
-					    int                *val);
-
-/* Sets "val" to if the specific event can send an event */
-int ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
-					 int                   offset,
-					 enum ipmi_event_dir_e dir,
-					 int                   *val);
-
-/* Sets "val" to if the specific event can be read (is supported). */
-int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
-				 int           event,
-				 int           *val);
-
-/* Returns IPMI_RATE_UNIT_xxx */
-enum ipmi_rate_unit_e ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_MODIFIER_UNIT_xxx */
-enum ipmi_modifier_unit_use_e ipmi_sensor_get_modifier_unit_use(
-    ipmi_sensor_t *sensor);
-
-/* Returns if the value is a percentage. */
-int ipmi_sensor_get_percentage(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_UNIT_TYPE_xxx */
-enum ipmi_unit_type_e ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_UNIT_TYPE_xxx */
-enum ipmi_unit_type_e ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor);
-
-/* Sensor reading information from the SDR. */
-int ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
-			      int           val,
-			      double        *tolerance);
-int ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy);
-int ipmi_sensor_get_normal_min_specified(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_normal_max_specified(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_nominal_reading_specified(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
-				    double *nominal_reading);
-int ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max);
-int ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min);
-int ipmi_sensor_get_sensor_max(ipmi_sensor_t *sensor, double *sensor_max);
-int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
-
-int ipmi_sensor_get_oem1(ipmi_sensor_t *sensor);
-
-/* The ID string from the SDR. */
-int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
-enum ipmi_str_type_e ipmi_sensor_get_id_type(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
+    /*
+     * Return the how the modifier unit should be used.  If this
+     * returns MODIFIER_UNIT_NONE, then the modifier unit is not
+     * used.  If it returns MODIFIER_UNIT_BASE_DIV_MOD, the modifier
+     * unit is dividied by the base unit (eg per hour, per second,
+     * etc.).  If it returns MODIFIER_UNIT_BASE_MULT_MOD, the modifier
+     * unit is multiplied by the base unit.
+     */
+    int get_modifier_unit_use()
+    {
+	return ipmi_sensor_get_modifier_unit_use(self);
+    }
 
 
-#endif
+    /*
+     * This call is a little different from the other string calls.
+     * For a discrete sensor, you can pass the offset into this call
+     * and it will return the string associated with the reading.
+     * This way, OEM sensors can supply their own strings as necessary
+     * for the various offsets.  This is only for discrete sensors.
+     */
+    char *reading_name_string(int offset)
+    {
+	return ipmi_sensor_reading_name_string(self, offset);
+    }
+
+    /*
+     * Get the entity id of the entity the sensor is hooked to.
+     */
+    int get_entity_id()
+    {
+	return ipmi_sensor_get_entity_id(self);
+    }
+
+    /*
+     * Get the entity instance of the entity the sensor is hooked to.
+     */
+    int get_entity_instance()
+    {
+	return ipmi_sensor_get_entity_instance(self);
+    }
+
+    /*
+     * Get the entity the sensor is hooked to.
+     */
+    ipmi_entity_t *get_entity()
+    {
+	return ipmi_sensor_get_entity(self);
+    }
+
+
+    /*
+     * Initialization information about a sensor from it's SDR.
+     */
+    int get_sensor_init_scanning()
+    {
+	return ipmi_sensor_get_sensor_init_scanning(self);
+    }
+
+    /*
+     * Initialization information about a sensor from it's SDR.
+     */
+    int get_sensor_init_events()
+    {
+	return ipmi_sensor_get_sensor_init_events(self);
+    }
+
+    /*
+     * Initialization information about a sensor from it's SDR.
+     */
+    int get_sensor_init_thresholds()
+    {
+	return ipmi_sensor_get_sensor_init_thresholds(self);
+    }
+
+    /*
+     * Initialization information about a sensor from it's SDR.
+     */
+    int get_sensor_init_hysteresis()
+    {
+	return ipmi_sensor_get_sensor_init_hysteresis(self);
+    }
+
+    /*
+     * Initialization information about a sensor from it's SDR.
+     */
+    int get_sensor_init_type()
+    {
+	return ipmi_sensor_get_sensor_init_type(self);
+    }
+
+    /*
+     * Initialization information about a sensor from it's SDR.
+     */
+    int get_sensor_init_pu_events()
+    {
+	return ipmi_sensor_get_sensor_init_pu_events(self);
+    }
+
+    /*
+     * Initialization information about a sensor from it's SDR.
+     */
+    int get_sensor_init_pu_scanning()
+    {
+	return ipmi_sensor_get_sensor_init_pu_scanning(self);
+    }
+
+    /*
+     * Ignore the sensor if the entity it is attached to is not
+     * present.
+     */
+    int get_ignore_if_no_entity()
+    {
+	return ipmi_sensor_get_ignore_if_no_entity(self);
+    }
+
+    /*
+     * If this is false, the user must manually re-arm the sensor to get
+     * any more events from it.
+     */
+    int get_supports_auto_rearm()
+    {
+	return ipmi_sensor_get_supports_auto_rearm(self);
+    }
+
+
+#define THRESHOLD_ACCESS_SUPPORT_NONE		0
+#define THRESHOLD_ACCESS_SUPPORT_READABLE	1
+#define THRESHOLD_ACCESS_SUPPORT_SETTABLE	2
+#define THRESHOLD_ACCESS_SUPPORT_FIXED		3
+
+    /*
+     * Get how the thresholds of the sensor may be accessed.
+     */
+    int get_threshold_access()
+    {
+	return ipmi_sensor_get_threshold_access(self);
+    }
+
+#define HYSTERESIS_SUPPORT_NONE		0
+#define HYSTERESIS_SUPPORT_READABLE	1
+#define HYSTERESIS_SUPPORT_SETTABLE	2
+#define HYSTERESIS_SUPPORT_FIXED	3
+
+    /*
+     * Get how the hysteresis of the sensor may be accessed.
+     */
+    int get_hysteresis_support()
+    {
+	return ipmi_sensor_get_hysteresis_support(self);
+    }
+
+#define EVENT_SUPPORT_PER_STATE		0
+#define EVENT_SUPPORT_ENTIRE_SENSOR	1
+#define EVENT_SUPPORT_GLOBAL_ENABLE	2
+#define EVENT_SUPPORT_NONE		3
+
+    /*
+     * Get how the events in the sensor may be enabled and disabled.
+     */
+    int get_event_support()
+    {
+	return ipmi_sensor_get_event_support(self);
+    }
+
+#define SENSOR_DIRECTION_UNSPECIFIED	0
+#define SENSOR_DIRECTION_INPUT		1
+#define SENSOR_DIRECTION_OUTPUT		2
+
+    /*
+     * Get whether the sensor is monitoring an input or an output.
+     * For instance, the +5V sensor on the output of a power supply
+     * would be the output, the +5V sensor measuring the voltage
+     * coming into a card would be an input.
+     */
+    int get_sensor_direction()
+    {
+	return ipmi_sensor_get_sensor_direction(self);
+    }
+
+    /*
+     * Sets the second parameter to if an event is supported for this
+     * particular threshold event on the sensor. The first parameter
+     * is the event specifier string.  This will return 0 on success
+     * or EINVAL on an invalid event.
+     */
+    int threshold_event_supported(char *event, int *val)
+    {
+	enum ipmi_thresh_e          thresh;
+	enum ipmi_event_value_dir_e value_dir;
+	enum ipmi_event_dir_e       dir;
+	char                        *s;
+
+	s = threshold_event_from_str(event, strlen(event), &thresh,
+				      &value_dir, &dir);
+	if (!s)
+	    return EINVAL;
+	return ipmi_sensor_threshold_event_supported(self,
+						     thresh,
+						     value_dir,
+						     dir,
+						     val);
+    }
+
+    /*
+     * Sets the second parameter to if a specific threshold can be
+     * set.  The first parameter is the threshold.  Returns EINVAL
+     * if the threshold is invalid, otherwise returns zero.
+     */
+    int threshold_settable(char *threshold, int *val)
+    {
+	enum ipmi_thresh_e thresh;
+	char               *s;
+
+	s = threshold_from_str(threshold, strlen(threshold), &thresh);
+	if (!s)
+	    return EINVAL;
+	return ipmi_sensor_threshold_settable(self, thresh, val);
+    }
+
+    /*
+     * Sets the second parameter to if a specific threshold can be
+     * read.  The first parameter is the threshold.  Returns EINVAL
+     * if the threshold is invalid, otherwise returns zero.
+     */
+    int threshold_readable(char *threshold, int *val)
+    {
+	enum ipmi_thresh_e thresh;
+	char               *s;
+
+	s = threshold_from_str(threshold, strlen(threshold), &thresh);
+	if (!s)
+	    return EINVAL;
+	return ipmi_sensor_threshold_readable(self, thresh, val);
+    }
+
+    /*
+     * Sets the second parameter to if a specific threshold has its
+     * reading returned when reading the value of the sensor.  The
+     * first parameter is the threshold.  Returns EINVAL if the
+     * threshold is invalid, otherwise returns zero.
+     */
+    int threshold_reading_supported(char *threshold, int *val)
+    {
+	enum ipmi_thresh_e thresh;
+	char               *s;
+
+	s = threshold_from_str(threshold, strlen(threshold), &thresh);
+	if (!s)
+	    return EINVAL;
+	return ipmi_sensor_threshold_reading_supported(self, thresh, val);
+    }
+
+    /*
+     * Sets the second parameter to if an offset will generate an
+     * event for the given event specifier for this particular
+     * sensor. The first parameter is the event specifier string.
+     * This will return 0 on success or EINVAL on an invalid event.
+     */
+    int discrete_event_supported(char *event, int *val)
+    {
+	int                   offset;
+	enum ipmi_event_dir_e dir;
+	char                  *s;
+
+	s = discrete_event_from_str(event, strlen(event), &offset, &dir);
+	if (!s)
+	    return EINVAL;
+	return ipmi_sensor_discrete_event_supported(self, offset, dir, val);
+    }
+
+    /*
+     * Sets the second parameter to if a specific offset is set by the
+     * sensor.  The first parameter is the offset.  Returns EINVAL if
+     * the threshold is invalid, otherwise returns zero.
+     */
+    int discrete_event_readable(int offset, int *val)
+    {
+	return ipmi_sensor_discrete_event_readable(self, offset, val);
+    }
+
+    /*
+     * Returns if the value is a percentage.
+     */
+    int get_percentage()
+    {
+	return ipmi_sensor_get_percentage(self);
+    }
+
+    /*
+     * Returns the tolerance for the sensor at the given raw value
+     * (first parameter).  The tolerance is returned as a double in
+     * the second parameter.  Returns an error value.
+     */
+    int get_tolerance(int val, double *tolerance)
+    {
+	return ipmi_sensor_get_tolerance(self, val, tolerance);
+    }
+
+    /*
+     * Returns the accuracy for the sensor at the given raw value
+     * (first parameter).  The accuracy is returned as a double in the
+     * second parameter.  Returns an error value.
+     */
+    int get_accuracy(int val, double *accuracy)
+    {
+	return ipmi_sensor_get_accuracy(self, val, accuracy);
+    }
+
+    /*
+     * Is the normal minimum for the sensor specified?
+     */
+    int get_normal_min_specified()
+    {
+	return ipmi_sensor_get_normal_min_specified(self);
+    }
+
+    /*
+     * Get the normal minimum for the sensor into the first parameter.
+     * Returns an error value.
+     */
+    int get_normal_min(double *normal_min)
+    {
+	return ipmi_sensor_get_normal_min(self, normal_min);
+    }
+
+    /*
+     * Is the normal maximum for the sensor specified?
+     */
+    int get_normal_max_specified()
+    {
+	return ipmi_sensor_get_normal_max_specified(self);
+    }
+
+    /*
+     * Get the normal maximum for the sensor into the first parameter.
+     * Returns an error value.
+     */
+    int get_normal_max(double *normal_max)
+    {
+	return ipmi_sensor_get_normal_max(self, normal_max);
+    }
+
+    /*
+     * Returns if the nominal reading for the sensor is specified.
+     */
+    int get_nominal_reading_specified()
+    {
+	return ipmi_sensor_get_nominal_reading_specified(self);
+    }
+
+    /*
+     * Get the nominal value for the sensor into the first parameter.
+     * Returns an error value.
+     */
+    int get_nominal_reading(double *nominal_reading)
+    {
+	return ipmi_sensor_get_nominal_reading(self, nominal_reading);
+    }
+
+    /*
+     * Get the sensor maximum for the sensor into the first parameter.
+     * Returns an error value.
+     */
+    int get_sensor_max(double *sensor_max)
+    {
+	return ipmi_sensor_get_sensor_max(self, sensor_max);
+    }
+
+    /*
+     * Get the sensor minimum for the sensor into the first parameter.
+     * Returns an error value.
+     */
+    int get_sensor_min(double *sensor_min)
+    {
+	return ipmi_sensor_get_sensor_min(self, sensor_min);
+    }
+
+    /*
+     * Get the OEM value from the sensor's SDR.
+     */
+    int get_oem1()
+    {
+	return ipmi_sensor_get_oem1(self);
+    }
+
+    %newobject get_sensor_id;
+    /*
+     * Get the ID string from the sensor's SDR.
+     */
+    char *get_sensor_id()
+    {
+	/* FIXME - no unicode handling. */
+	int len = ipmi_sensor_get_id_length(self) + 1;
+	char *id = malloc(len);
+	ipmi_sensor_get_id(self, id, len);
+	return id;
+    }
 }
 
 /*

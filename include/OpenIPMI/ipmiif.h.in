@@ -1135,16 +1135,17 @@ int ipmi_sensor_threshold_reading_supported(ipmi_sensor_t      *sensor,
 					    enum ipmi_thresh_e thresh,
 					    int                *val);
 
-/* Sets "val" to if the specific event can send an event */
+/* Sets "val" to if the specific offset can send an event for the
+   given direction. */
 int ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
 					 int                   offset,
 					 enum ipmi_event_dir_e dir,
 					 int                   *val);
 
 /* Sets "val" to if the specific event can be read (is supported). */
-int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
-				 int           event,
-				 int           *val);
+int ipmi_sensor_discrete_event_readable(ipmi_sensor_t *sensor,
+					int           event,
+					int           *val);
 
 /* Returns IPMI_RATE_UNIT_xxx */
 enum ipmi_rate_unit_e ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
@@ -2237,6 +2238,10 @@ int ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
 int ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
 					  ipmi_entity_val_cb handler,
 					  void               *cb_data)
+     IPMI_FUNC_DEPRECATED;
+int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
+				 int           event,
+				 int           *val)
      IPMI_FUNC_DEPRECATED;
 
 #endif /* __IPMIIF_H */

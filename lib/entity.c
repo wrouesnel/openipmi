@@ -1501,7 +1501,7 @@ states_read(ipmi_sensor_t *sensor,
     if (err)
 	return;
 
-    rv = ipmi_discrete_event_readable(sensor, 0, &val);
+    rv = ipmi_sensor_discrete_event_readable(sensor, 0, &val);
     if (rv || !val)
 	/* The present bit is not supported, so use the not present bit. */
 	present = ! ipmi_is_state_set(states, 1);
@@ -2045,11 +2045,11 @@ is_presence_sensor(ipmi_sensor_t *sensor)
 	return 0;
 
     /* Check present bit */
-    rv = ipmi_discrete_event_readable(sensor, 0, &val);
+    rv = ipmi_sensor_discrete_event_readable(sensor, 0, &val);
     if ((!rv) && (val))
 	supports_present = 1;
     /* Check absent bit. */
-    rv = ipmi_discrete_event_readable(sensor, 1, &val);
+    rv = ipmi_sensor_discrete_event_readable(sensor, 1, &val);
     if ((!rv) && (val))
 	supports_absent = 1;
 
@@ -2084,7 +2084,7 @@ is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
 	return 0;
 
     /* Check if the bit is available */
-    rv = ipmi_discrete_event_readable(sensor, bit, &val);
+    rv = ipmi_sensor_discrete_event_readable(sensor, bit, &val);
     if (rv || !val)
 	return 0;
 
