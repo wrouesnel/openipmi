@@ -3,6 +3,9 @@
 	* lib/mc.c: Fixed a problem where the startup SEL time was not set
 	if the target time was ahead of the time on the system.  This
 	would cause old events in the SEL to be reported as new events.
+
+	* lib/oem_atca.c: Reworked the fixups for broken entity ids to
+	be more general.
 	
 2004-12-02 Corey Minyard <cminyard@mvista.com> 
 
