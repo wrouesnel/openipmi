@@ -2,6 +2,11 @@
 2003-02-03 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c, include/OpenIPMI/ipmiif.h, sel.c, include/OpenIPMI/ipmi_sel.h:
+	Modified the previous change to report the number of entries in
+	the SEL, since the number of total entries available in the SEL
+	may not be available.
+	
+	* mc.c, include/OpenIPMI/ipmiif.h, sel.c, include/OpenIPMI/ipmi_sel.h:
 	Added a way to get the estimated number of entries left for new
 	events in the SEL.
 

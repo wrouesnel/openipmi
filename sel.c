@@ -880,6 +880,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 	if (real_holder) {
 	    ilist_delete(&iter);
 	    free(real_holder);
+	    sel->del_sels--;
 	}
     }
 
@@ -1108,7 +1109,7 @@ ipmi_get_sel_count(ipmi_sel_info_t *sel,
 }
 
 int
-ipmi_get_sel_entries_left(ipmi_sel_info_t *sel,
+ipmi_get_sel_entries_used(ipmi_sel_info_t *sel,
 			  unsigned int    *count)
 {
     sel_lock(sel);
@@ -1117,7 +1118,7 @@ ipmi_get_sel_entries_left(ipmi_sel_info_t *sel,
 	return EINVAL;
     }
 
-    *count = sel->entries - (sel->num_sels + sel->del_sels);
+    *count = sel->num_sels + sel->del_sels;
 
     sel_unlock(sel);
     return 0;

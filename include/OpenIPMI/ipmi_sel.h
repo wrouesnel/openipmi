@@ -77,10 +77,10 @@ int ipmi_sel_get(ipmi_sel_info_t     *sel,
 int ipmi_get_sel_count(ipmi_sel_info_t *sel,
 		       unsigned int    *count);
 
-/* Get the number of entries that are left in the real SEL.  This
+/* Get the number of entries that are used in the real SEL.  This
    takes into account events that have been deleted locally but have
    not yet been deleted from the real SEL. */
-int ipmi_get_sel_entries_left(ipmi_sel_info_t *sel,
+int ipmi_get_sel_entries_used(ipmi_sel_info_t *sel,
 			      unsigned int    *count);
 
 int ipmi_sel_get_first_event(ipmi_sel_info_t *sel, ipmi_event_t *event);

@@ -3017,7 +3017,7 @@ ipmi_bmc_sel_count(ipmi_mc_t    *bmc,
     return ipmi_get_sel_count(bmc->bmc->sel, count);
 }
 
-int ipmi_bmc_sel_entries_left(ipmi_mc_t    *bmc,
+int ipmi_bmc_sel_entries_used(ipmi_mc_t    *bmc,
 			      unsigned int *count)
 {
     if (!bmc->bmc)
@@ -3025,7 +3025,7 @@ int ipmi_bmc_sel_entries_left(ipmi_mc_t    *bmc,
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_get_sel_entries_left(bmc->bmc->sel, count);
+    return ipmi_get_sel_entries_used(bmc->bmc->sel, count);
 }
 
 #ifdef IPMI_CHECK_LOCKS
