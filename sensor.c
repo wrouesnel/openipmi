@@ -96,10 +96,12 @@ struct ipmi_sensor_s
     unsigned int  sensor_init_pu_scanning : 1;
     unsigned int  ignore_if_no_entity : 1;
     unsigned int  supports_rearm : 1;
-    unsigned int  hot_swap_requester : 1;
     unsigned int  hysteresis_support : 2;
     unsigned int  threshold_access : 2;
     unsigned int  event_support : 2;
+
+    int          hot_swap_requester;
+    unsigned int hot_swap_requester_val;
 
     unsigned char sensor_type;
 
@@ -474,6 +476,8 @@ ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
 
     memset(sensor, 0, sizeof(*sensor));
 
+    sensor->hot_swap_requester = -1;
+
     *new_sensor = sensor;
     return 0;
 }
@@ -673,6 +677,8 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
 	    goto out_err;
 	}
 	memset(s[p], 0, sizeof(*s[p]));
+
+	s[p]->hot_swap_requester = -1;
 
 	s[p]->waitq = opq_alloc(ipmi_mc_get_os_hnd(bmc));
 	if (!s[p]->waitq) {
@@ -3900,13 +3906,25 @@ ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
 }
 
 void
-ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor, int val)
+ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
+				   unsigned int  offset,
+				   unsigned int  val_when_requesting)
 {
-    sensor->hot_swap_requester = val;
+    sensor->hot_swap_requester = offset;
+    sensor->hot_swap_requester_val = val_when_requesting;
 }
 
 int
-ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor)
+ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
+				  unsigned int  *offset,
+				  unsigned int  *val_when_requesting)
 {
-    return sensor->hot_swap_requester;
+    if (sensor->hot_swap_requester != -1) {
+	if (offset)
+	    *offset = sensor->hot_swap_requester;
+	if (val_when_requesting)
+	    *val_when_requesting = sensor->hot_swap_requester_val;
+	return 1;
+    }
+    return 0;
 }

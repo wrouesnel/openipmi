@@ -279,7 +279,9 @@ void ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
 					enum ipmi_thresh_e thresh,
 					int                val);
 
-void ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor, int val);
+void ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
+					unsigned int  offset,
+					unsigned int  val_when_requesting);
 
 
 /* Allow OEM code to get the event handler so it can call it. */
