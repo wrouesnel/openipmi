@@ -1,4 +1,12 @@
 
+2003-10-01 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_control.h: Added an include for
+	ipmi_addr.h since it is used in this include file.
+	
+	* include/OpenIPMI/ipmi_mc.h, lib/Makefile.am, lib/mc.c, lib/chassis.c:
+	Added converting chassis control commands to a power control.
+
 2003-09-30 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sdr.c: Don't refetch SDRs if the population is not dynamic.

@@ -904,6 +904,12 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 
     mc->active = 1;
 
+    if (mc->chassis_support && (ipmi_mc_get_address(mc) == 0x20)) {
+        rv = _ipmi_chassis_create_controls(mc);
+	if (rv)
+	    return rv;
+    }
+
     if (mc->provides_device_sdrs)
 	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     else
