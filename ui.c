@@ -108,7 +108,7 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 enum {
     DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_SENSORS,
     DISPLAY_CONTROLS, DISPLAY_CONTROL, DISPLAY_ENTITIES, DISPLAY_MCS,
-    DISPLAY_RSP, HELP
+    DISPLAY_RSP, HELP, EVENTS
 } curr_display_type;
 ipmi_sensor_id_t curr_sensor_id;
 ipmi_control_id_t curr_control_id;
@@ -1935,8 +1935,9 @@ clear_sel_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
     int          rv;
     ipmi_event_t event, event2;
 
-    rv = ipmi_bmc_first_event(bmc, &event);
+    rv = ipmi_bmc_first_event(bmc, &event2);
     while (!rv) {
+	event = event2;
 	rv = ipmi_bmc_next_event(bmc, &event2);
 	ipmi_bmc_del_event(bmc, &event, NULL, NULL);
 	event = event2;
@@ -1949,6 +1950,53 @@ clear_sel_cmd(char *cmd, char **toks, void *cb_data)
     int rv;
 
     rv = ipmi_mc_pointer_cb(bmc_id, clear_sel_cmd_bmcer, NULL);
+    if (rv) {
+	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
+	return 0;
+    }
+    return 0;
+}
+
+static void
+list_sel_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+{
+    int          rv;
+    ipmi_event_t event;
+
+    curr_display_type = EVENTS;
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    waddstr(display_pad, "Events:\n");
+    rv = ipmi_bmc_first_event(bmc, &event);
+    while (!rv) {
+	wprintw(display_pad,
+		"  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
+		" %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
+		event.record_id, event.type,
+		event.data[0],
+		event.data[1],
+		event.data[2],
+		event.data[3],
+		event.data[4],
+		event.data[5],
+		event.data[6],
+		event.data[7],
+		event.data[8],
+		event.data[9],
+		event.data[10],
+		event.data[11],
+		event.data[12]);
+	rv = ipmi_bmc_next_event(bmc, &event);
+    }
+    display_pad_refresh();
+}
+
+static int
+list_sel_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int rv;
+
+    rv = ipmi_mc_pointer_cb(bmc_id, list_sel_cmd_bmcer, NULL);
     if (rv) {
 	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
 	return 0;
@@ -1995,6 +2043,8 @@ static struct {
       " <type> on|off - Turn the given debugging type on or off." },
     { "clear_sel",	clear_sel_cmd,
       " - clear the system event log" },
+    { "list_sel",	list_sel_cmd,
+      " - list the local copy of the system event log" },
     { "help",		help_cmd,
       " - This output"},
     { NULL,		NULL}

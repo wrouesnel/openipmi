@@ -1013,6 +1013,11 @@ sel_del_event(ipmi_sel_info_t       *sel,
 	goto out_unlock;
     }
 
+    if (real_holder->deleted) {
+	rv = EINVAL;
+	goto out_unlock;
+    }
+
     real_holder->deleted = 1;
     sel->num_sels--;
 

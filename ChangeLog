@@ -1,6 +1,8 @@
 
 2003-01-20 Corey Minyard <cminyard@mvista.com>
 
+	* ui.c: Added a list_sel command.
+
 	* ui.c: Modified the clear sel command to go through all the
 	events and delete them, instead of clearing the SEL with a
 	command.
