@@ -933,10 +933,12 @@ ipmi_pet_create(ipmi_domain_t    *domain,
  out_unlock_err:
     if (pet->timer_info) {
 	if (pet->timer) {
-	    if (os_hnd->stop_timer(os_hnd, pet->timer) == 0)
+	    if (os_hnd->stop_timer(os_hnd, pet->timer) == 0) {
+		os_hnd->free_timer(os_hnd, pet->timer);
 		ipmi_mem_free(pet->timer_info);
-	    else
+	    } else {
 		pet->timer_info->cancelled = 1;
+	    }
 	} else
 	    ipmi_mem_free(pet->timer_info);
     }
@@ -965,6 +967,7 @@ rescan_pet(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_rwlock_read_lock(pet_lock);
 
     if (timer_info->cancelled) {
+	timer_info->os_hnd->free_timer(timer_info->os_hnd, id);
 	ipmi_mem_free(timer_info);
 	ipmi_rwlock_read_unlock(pet_lock);
 	return;
@@ -1004,10 +1007,12 @@ ipmi_pet_destroy(ipmi_pet_t       *pet,
     if (pet->timer_info) {
 	os_handler_t *os_hnd = pet->timer_info->os_hnd;
 	if (pet->timer) {
-	    if (os_hnd->stop_timer(os_hnd, pet->timer) == 0)
+	    if (os_hnd->stop_timer(os_hnd, pet->timer) == 0) {
+		os_hnd->free_timer(os_hnd, pet->timer);
 		ipmi_mem_free(pet->timer_info);
-	    else
+	    } else {
 		pet->timer_info->cancelled = 1;
+	    }
 	} else
 	    ipmi_mem_free(pet->timer_info);
     }
@@ -1023,8 +1028,8 @@ ipmi_pet_destroy(ipmi_pet_t       *pet,
 	goto out_unlock_err;
     }
 
-    pet->next = pet->next->prev;
-    pet->prev = pet->prev->next;
+    pet->next->prev = pet->prev;
+    pet->prev->next = pet->next;
 
     ipmi_lock(pet->lock);
     pet->destroyed = 1;
