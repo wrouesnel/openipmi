@@ -593,6 +593,11 @@ int ipmi_entity_get_is_fru(ipmi_entity_t *ent);
 ipmi_domain_t *ipmi_entity_get_domain(ipmi_entity_t *ent);
 int ipmi_entity_get_entity_id(ipmi_entity_t *ent);
 int ipmi_entity_get_entity_instance(ipmi_entity_t *ent);
+/* If the entity instance is 0x60 or greater, then the channel and
+   address are also important since the entity is device-relative. */
+int ipmi_entity_get_device_channel(ipmi_entity_t *ent);
+int ipmi_entity_get_device_address(ipmi_entity_t *ent);
+
 int ipmi_entity_get_presence_sensor_always_there(ipmi_entity_t *ent);
 int ipmi_entity_get_is_child(ipmi_entity_t *ent);
 int ipmi_entity_get_is_parent(ipmi_entity_t *ent);
