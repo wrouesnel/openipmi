@@ -676,6 +676,7 @@ exit_cmd(ipmi_cmd_info_t *cmd_info)
 {
     done = 1;
     evcount = 0;
+    ipmi_cmdlang_out(cmd_info, "Exiting ipmish", NULL);
 }
 
 static int read_nest = 0;
@@ -692,6 +693,7 @@ read_cmd(ipmi_cmd_info_t *cmd_info)
     int            argc = ipmi_cmdlang_get_argc(cmd_info);
     char           **argv = ipmi_cmdlang_get_argv(cmd_info);
     int            *saved_done_ptr;
+    char           *fname;
 
     if ((argc - curr_arg) < 1) {
 	cmdlang->errstr = "No filename entered";
@@ -699,7 +701,9 @@ read_cmd(ipmi_cmd_info_t *cmd_info)
 	goto out_err;
     }
 
-    s = fopen(argv[curr_arg], "r");
+    fname = argv[curr_arg];
+    curr_arg++;
+    s = fopen(fname, "r");
     if (!s) {
 	cmdlang->errstr = "Unable to openfile";
 	cmdlang->err = errno;
@@ -734,6 +738,8 @@ read_cmd(ipmi_cmd_info_t *cmd_info)
 	handling_input = 1;
 	sel_set_fd_read_handler(cmdlang->selector, 0, SEL_FD_HANDLER_ENABLED);
     }
+
+    ipmi_cmdlang_out(cmd_info, "File read", fname);
 
     return;
 
@@ -835,6 +841,7 @@ static char *usage_str =
 "  --dmem - turn on memory debugging.\n"
 "  --drawmsg - turn on raw message tracing.\n"
 "  --dmsg - turn on message tracing debugging.\n"
+"  --dmsgerr - turn on printing out low-level message errors.\n"
 #ifdef HAVE_UCDSNMP
 "  --snmp - turn on SNMP trap handling.\n"
 #endif
@@ -889,6 +896,8 @@ main(int argc, char *argv[])
 	    DEBUG_RAWMSG_ENABLE();
 	} else if (strcmp(arg, "--dmsg") == 0) {
 	    DEBUG_MSG_ENABLE();
+	} else if (strcmp(arg, "--dmsgerr") == 0) {
+	    DEBUG_MSG_ERR_ENABLE();
 #ifdef HAVE_UCDSNMP
 	} else if (strcmp(arg, "--snmp") == 0) {
 	    init_snmp = 1;

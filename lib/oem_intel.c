@@ -54,7 +54,6 @@ static unsigned char busid = 0x03;   /*default to PRIVATE_BUS_ID;  */
 typedef struct intel_tig_info_s
 {
     ipmi_mcid_t    mc_id;
-    int            initialized;
     ipmi_control_t *alarm;
 } intel_tig_info_t;
 
@@ -358,28 +357,6 @@ out:
 }
 
 static void
-con_up_mc(ipmi_mc_t *mc, void *cb_data)
-{
-    add_tig_alarm_handler(mc, cb_data);
-}
-
-static void
-con_up_handler(ipmi_domain_t *domain,
-	       int           err,
-	       unsigned int  conn_num,
-	       unsigned int  port_num,
-	       int           still_connected,
-	       void          *cb_data)
-{
-    intel_tig_info_t *info = cb_data;
-
-    if (!info->initialized && still_connected) {
-	ipmi_mc_pointer_cb(info->mc_id, con_up_mc, info);
-	info->initialized = 1;
-    }
-}
-
-static void
 tig_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     intel_tig_info_t *info = cb_data;
@@ -402,7 +379,6 @@ tig_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    _ipmi_entity_put(ent);
 	}
     }
-    ipmi_domain_remove_connect_change_handler(domain, con_up_handler, info);
     ipmi_mem_free(info);
 }
 
@@ -427,6 +403,28 @@ tsrlt2_handler(ipmi_mc_t *mc,
 }
 
 static int
+tig_event_handler(ipmi_mc_t    *mc,
+		  ipmi_event_t *log,
+		  void         *cb_data)
+{
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+    unsigned char data[13];
+
+    if (ipmi_event_get_type(log) == 2) {
+	ipmi_event_get_data(log, data, 0, sizeof(data));
+	if ((data[7] == 18) /* System event sensor type */
+	    && ((data[10] & 0x0f) == 5)) /* Offset 5 */
+	{
+	    /* If we get the right system event, scan 0xc0 because it
+	       will come and go with power. */
+	    ipmi_start_ipmb_mc_scan(domain, 0, 0xc0, 0xc0, NULL, NULL);
+	}
+    }
+
+    return 0;
+}
+
+static int
 tig_handler(ipmi_mc_t *mc,
 	    void      *cb_data)
 {
@@ -444,11 +442,12 @@ tig_handler(ipmi_mc_t *mc,
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0x27);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xbf);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0xc1, 0xff);
+    } else if ((channel == 0) && (addr == 0x20)) {
+	/* The MC at address 0x28 has exactly the same product id as
+	   the one at 0x20.  We only want one alarm thingy, so only
+	   allow 0x20. */
 
-	/* Save the MC ID in a connection up handler.  We wait
-	   for the connection to come up before we report the
-	   addition of the entities and controls so they appear
-	   after the user is informed of the domain. */
+	/* Assign the alarm control to address 0x20. */
 	info = ipmi_mem_alloc(sizeof(*info));
 	if (!info) {
             ipmi_log(IPMI_LOG_WARNING,
@@ -469,15 +468,18 @@ tig_handler(ipmi_mc_t *mc,
 	    goto out;
 	}
 
-	ipmi_mc_set_oem_data(mc, info);
+	add_tig_alarm_handler(mc, info);
 
-	rv = ipmi_domain_add_connect_change_handler(domain, con_up_handler,
-						    info);
+	rv = ipmi_mc_set_oem_event_handler(mc,
+					   tig_event_handler,
+					   NULL);
 	if (rv) {
-            ipmi_log(IPMI_LOG_WARNING,
-                     "%s oem_intel.c: could not add connect change"
-		     " handler: %x",
-                     MC_NAME(mc), rv);
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_intel.c(tig_handler): "
+		     "could not register event handler",
+		     MC_NAME(mc));
+	    ipmi_mem_free(info);
+	    goto out;
 	}
     }
 

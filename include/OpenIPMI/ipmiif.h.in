@@ -1757,8 +1757,9 @@ int ipmi_open_domain(char               *name,
 /* Do OEM initialization.  This is false by default */
 #define IPMI_OPEN_OPTION_OEM_INIT	6
 
-/* Set event receivers.  This is not affected by option_all and is true
-   by default. */
+/* Set event receivers.  This is not affected by option_all and is
+   true by default if the privilege level is admin or greater, false
+   by default if the privilege level is less than admin. */
 #define IPMI_OPEN_OPTION_SET_EVENT_RCVR	7
 
 

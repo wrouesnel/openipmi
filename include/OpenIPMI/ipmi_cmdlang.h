@@ -263,6 +263,7 @@ void ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_double(char *str, double *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_uchar(char *str, unsigned char *val,
 			    ipmi_cmd_info_t *info);
+void ipmi_cmdlang_get_user(char *str, int *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_time(char *str, ipmi_time_t *val, ipmi_cmd_info_t *info);
 void ipmi_cmdlang_get_timeout(char *str, ipmi_timeout_t *val,
 			      ipmi_cmd_info_t *info);

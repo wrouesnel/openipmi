@@ -975,7 +975,7 @@ pef_config_info(ipmi_cmd_info_t *cmd_info)
     if ((argc - curr_arg) < 1) {
 	locked_list_iterate(pefs, pef_config_info_handler, cmd_info);
     } else {
-	lanc = find_config(argv[curr_arg], 1);
+	lanc = find_config(argv[curr_arg], 0);
 	if (!lanc) {
 	    cmdlang->errstr = "Invalid PEF config";
 	    cmdlang->err = EINVAL;

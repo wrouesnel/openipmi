@@ -75,7 +75,7 @@ unsigned int ipmi_event_get_data_len(ipmi_event_t *event);
 
 /* Copy some of the data attached to the event, starting at the given
    offset to an array.  Copy "len" bytes. */
-unsigned int ipmi_event_get_data(ipmi_event_t *event, char *data,
+unsigned int ipmi_event_get_data(ipmi_event_t *event, unsigned char *data,
 				 unsigned int offset, unsigned int len);
 
 /* Get a pointer to the event's data.  Note that this pointer will be

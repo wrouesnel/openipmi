@@ -519,7 +519,7 @@ lan_send_addr(lan_data_t  *lan,
     if (DEBUG_RAWMSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing %sseq %d\n addr =",
 		 sndmsg, seq);
-	dump_hex((unsigned char *) &(lan->ip_addr[lan->curr_ip_addr]),
+	dump_hex((unsigned char *) &(lan->ip_addr[addr_num]),
 		 sizeof(sockaddr_ip_t));
         ipmi_log(IPMI_LOG_DEBUG_CONT,
                  "\n msg  = netfn=%s cmd=%s data_len=%d.",
@@ -793,7 +793,7 @@ rsp_timeout_handler(void              *cb_data,
 	goto out_unlock;
     }
 
-    if (DEBUG_RAWMSG)
+    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d", seq);
 
     if (! lan->seq_table[seq].inuse)
@@ -1255,7 +1255,7 @@ data_handler(int            fd,
     }
 
     if (recv_addr >= lan->num_ip_addr) {
-	if (DEBUG_RAWMSG)
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG,
 		     "ipmi_lan: Dropped message due to invalid IP");
 	goto out_unlock2;
@@ -1264,7 +1264,7 @@ data_handler(int            fd,
     /* Validate the length first, so we know that all the data in the
        buffer we will deal with is valid. */
     if (len < 21) { /* Minimum size of an IPMI msg. */
-	if (DEBUG_RAWMSG)
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message because too small(1)");
 	goto out_unlock2;
     }
@@ -1273,7 +1273,7 @@ data_handler(int            fd,
 	/* No authentication. */
 	if (len < (data[13] + 14)) {
 	    /* Not enough data was supplied, reject the message. */
-	    if (DEBUG_RAWMSG)
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(2)");
 	    goto out_unlock2;
@@ -1281,7 +1281,7 @@ data_handler(int            fd,
 	data_len = data[13];
     } else {
 	if (len < 37) { /* Minimum size of an authenticated IPMI msg. */
-	    if (DEBUG_RAWMSG)
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(3)");
 	    goto out_unlock2;
@@ -1289,7 +1289,7 @@ data_handler(int            fd,
 	/* authcode in message, add 16 to the above checks. */
 	if (len < (data[29] + 30)) {
 	    /* Not enough data was supplied, reject the message. */
-	    if (DEBUG_RAWMSG)
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG,
 			 "Dropped message because too small(4)");
 	    goto out_unlock2;
@@ -1302,7 +1302,7 @@ data_handler(int            fd,
 	|| (data[2] != 0xff)
 	|| (data[3] != 0x07))
     {
-	if (DEBUG_RAWMSG)
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid IPMI/RMCP");
 	goto out_unlock2;
     }
@@ -1311,7 +1311,7 @@ data_handler(int            fd,
 
     /* Drop if the authtypes are incompatible. */
     if (lan->working_authtype[recv_addr] != data[4]) {
-	if (DEBUG_RAWMSG)
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype");
 	goto out_unlock2;
     }
@@ -1319,7 +1319,7 @@ data_handler(int            fd,
     /* Drop if sessions ID's don't match. */
     sess_id = ipmi_get_uint32(data+9);
     if (sess_id != lan->session_id[recv_addr]) {
-	if (DEBUG_RAWMSG)
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid session id");
 	goto out_unlock2;
     }
@@ -1332,7 +1332,7 @@ data_handler(int            fd,
 	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13,
 			recv_addr);
 	if (rv) {
-	    if (DEBUG_RAWMSG)
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message auth fail");
 	    goto out_unlock2;
 	}
@@ -1357,7 +1357,7 @@ data_handler(int            fd,
 	uint8_t bit = 1 << (lan->inbound_seq_num[recv_addr] - seq);
 	if (lan->recv_msg_map[recv_addr] & bit) {
 	    /* We've already received the message, so discard it. */
-	    if (DEBUG_RAWMSG)
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message duplicate");
 	    goto out_unlock2;
 	}
@@ -1366,7 +1366,7 @@ data_handler(int            fd,
     } else {
 	/* It's outside the current sequence number range, discard
 	   the packet. */
-	if (DEBUG_RAWMSG)
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message out of seq range");
 	goto out_unlock2;
     }
@@ -1446,7 +1446,7 @@ data_handler(int            fd,
 
 	if (tmsg[6] != 0) {
 	    /* An error getting the events, just ignore it. */
-	    if (DEBUG_RAWMSG)
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Dropped message err getting event");
 	    goto out_unlock2;
 	}
@@ -1537,7 +1537,7 @@ data_handler(int            fd,
     
     ipmi_lock(lan->seq_num_lock);
     if (! lan->seq_table[seq].inuse) {
-	if (DEBUG_RAWMSG)
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message seq not in use");
 	goto out_unlock;
     }
@@ -1554,7 +1554,7 @@ data_handler(int            fd,
 	|| (! ipmi_addr_equal(&addr2, lan->seq_table[seq].addr_len,
 			      &addr, addr_len)))
     {
-	if (DEBUG_RAWMSG) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR) {
 	    ipmi_log(IPMI_LOG_DEBUG_START,
                      "Dropped message seq %d - netfn/cmd/addr mismatch\n"
                      " netfn     = %2.2x, exp netfn = %2.2x\n"
@@ -1673,7 +1673,7 @@ lan_send_command_forceip(ipmi_con_t            *ipmi,
 
     ipmi_lock(lan->seq_num_lock);
 
-    if (lan->outstanding_msg_count >= lan->max_outstanding_msg_count) {
+    if (lan->outstanding_msg_count >= 60) {
 	rv = EAGAIN;
 	goto out_unlock;
     }
@@ -2771,6 +2771,8 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
+    ipmi->con_type = "rmcp";
+    ipmi->priv_level = privilege;
 
     lan = ipmi_mem_alloc(sizeof(*lan));
     if (!lan) {

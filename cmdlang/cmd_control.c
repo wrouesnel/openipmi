@@ -68,6 +68,7 @@ control_list(ipmi_entity_t *entity, void *cb_data)
     ipmi_cmdlang_out(cmd_info, "Entity", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", entity_name);
+    ipmi_cmdlang_out(cmd_info, "Controls", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_entity_iterate_controls(entity, control_list_handler, cmd_info);
     ipmi_cmdlang_up(cmd_info);

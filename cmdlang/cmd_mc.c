@@ -81,6 +81,7 @@ mc_dump(ipmi_mc_t *mc, ipmi_cmd_info_t *cmd_info)
     unsigned char   vals[4];
     char            str[100];
 
+    ipmi_cmdlang_out_bool(cmd_info, "Active", ipmi_mc_is_active(mc));
     ipmi_cmdlang_out_bool(cmd_info, "provides_device_sdrs",
 			  ipmi_mc_provides_device_sdrs(mc));
     ipmi_cmdlang_out_bool(cmd_info, "device_available",
@@ -417,6 +418,7 @@ mc_msg(ipmi_mc_t *mc, void *cb_data)
 	    goto out_err;
 	}
 	curr_arg++;
+	i++;
     }
 
     msg.netfn = NetFN;
@@ -581,6 +583,39 @@ mc_sdrs(ipmi_mc_t *mc, void *cb_data)
 	ipmi_mem_free(info);
 }
 
+static void
+mc_active(ipmi_mc_t *mc, int active, void *cb_data)
+{
+    char            *errstr;
+    int             rv;
+    ipmi_cmd_info_t *evi;
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "MC");
+    ipmi_cmdlang_out(evi, "Name", mc_name);
+    ipmi_cmdlang_out(evi, "Operation", "Active Changed");
+    ipmi_cmdlang_out_bool(evi, "Active", active);
+
+    ipmi_cmdlang_cmd_info_put(evi);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(mc_name,
+			    "cmd_mc.c(presence_change)",
+			    errstr, rv);
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+}
+
 void
 ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 		       ipmi_domain_t      *domain,
@@ -609,6 +644,11 @@ ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 	ipmi_cmdlang_out(evi, "Operation", "Add");
 	if (ipmi_cmdlang_get_evinfo())
 	    mc_dump(mc, evi);
+	rv = ipmi_mc_add_active_handler(mc, mc_active, NULL);
+	if (rv) {
+	    errstr = "ipmi_mc_add_active_handler failed";
+	    goto out_err;
+	}
 	break;
 
 	case IPMI_DELETED:

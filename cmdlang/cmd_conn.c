@@ -84,9 +84,11 @@ con_info(ipmi_domain_t *domain, int conn, void *cb_data)
     char            conn_name[IPMI_MAX_DOMAIN_NAME_LEN+20];
     int             p;
     int             rv;
-    unsigned int    act;
+    unsigned int    val;
+    unsigned int    num;
+    unsigned int    port;
 
-    rv = ipmi_domain_is_connection_active(domain, conn, &act);
+    rv = ipmi_domain_is_connection_active(domain, conn, &val);
     if (rv)
 	return;
 
@@ -96,7 +98,26 @@ con_info(ipmi_domain_t *domain, int conn, void *cb_data)
     ipmi_cmdlang_out(cmd_info, "Connection", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", conn_name);
-    ipmi_cmdlang_out_bool(cmd_info, "Active", act);
+    ipmi_cmdlang_out_bool(cmd_info, "Active", val);
+    rv = ipmi_domain_is_connection_up(domain, conn, &val);
+    if (!rv)
+	ipmi_cmdlang_out_bool(cmd_info, "Up", val);
+    rv = ipmi_domain_num_connection_ports(domain, conn, &num);
+    if (!rv) {
+	for (port=0; port<num; port++) {
+	    rv = ipmi_domain_is_connection_port_up(domain,
+						   conn,
+						   port,
+						   &val);
+	    if (!rv) {
+		ipmi_cmdlang_out(cmd_info, "Port", NULL);
+		ipmi_cmdlang_down(cmd_info);
+		ipmi_cmdlang_out_int(cmd_info, "Number", port);
+		ipmi_cmdlang_out_bool(cmd_info, "Up", val);
+		ipmi_cmdlang_up(cmd_info);
+	    }
+	}
+    }
     ipmi_cmdlang_up(cmd_info);
 }
 

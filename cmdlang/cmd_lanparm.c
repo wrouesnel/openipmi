@@ -1100,7 +1100,7 @@ lanparm_config_info(ipmi_cmd_info_t *cmd_info)
     if ((argc - curr_arg) < 1) {
 	locked_list_iterate(lancs, lanparm_config_info_handler, cmd_info);
     } else {
-	lanc = find_config(argv[curr_arg], 1);
+	lanc = find_config(argv[curr_arg], 0);
 	if (!lanc) {
 	    cmdlang->errstr = "Invalid LAN config";
 	    cmdlang->err = EINVAL;
@@ -1185,11 +1185,12 @@ lanparm_config_update(ipmi_cmd_info_t *cmd_info)
 		cmdlang->err = EINVAL;
 		goto out_err;
 	    }
-	    ipmi_cmdlang_get_int(val, &sel, cmd_info);
+	    ipmi_cmdlang_get_user(val, &sel, cmd_info);
 	    if (cmdlang->err) {
 		cmdlang->errstr = "selector invalid";
 		goto out_err;
 	    }
+	    sel--; /* Numbers are 1-based, value is zero based. */
 	    val = argv[curr_arg];
 	    curr_arg++;
 	    lp->set(cmd_info, sel, val, lanc, ulps[i].set_func);

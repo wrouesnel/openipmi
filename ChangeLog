@@ -1,3 +1,52 @@
+2004-10-11 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_event.h, lib/event.c: Changed the type
+	for getting event data to an unsigned char.
+
+	* cmdlang/cmd_mc.c, man/ipmi_cmdlang.7: Added active handler to
+	know when MCs go active/inactive.  Added if the MC is active to
+	the MC info.
+
+	* cmdlang/cmd_control.c: Fixed an output problem with the
+	control listing.
+
+	* cmdlang/cmdlang.c: Fixed error output when no object was
+	selected to work in all cases.
+
+	* cmdlang/ipmish.c: Added output for ipmish-specific commands.
+
+	* lib/oem_intel.c: Attach the alarm control to MC 0x20 and scan
+	address 0xc0 when certain events are received.
+
+	* cmdlang/cmd_lanparm.c: Fixed a problem with losing lanparm
+	configs.
+	
+	* cmdlang/cmd_pef.c: Fixed a problem with losing pef configs.
+
+	* include/OpenIPMI/ipmi_conn.h: Added a con_type field to the
+	connection type for the connection code to use to identify itself.
+	Added a priv_level field so the privilege of the conneciton may be
+	reported.
+	
+	* lib/ipmi_lan.c, lib/ipmi_smi.c: Added the new items to the
+	connection type.
+
+	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added a way to
+	query the ports of a connection to see if they are up.
+
+	* cmdlang/cmd_conn.c, man/ipmi_cmdlang.7: Added port information
+	reporting and reporting of if the connection is up.
+
+	* lib/domain.c: Modified setting the "set event receiver" option
+	to depend on the privilege level, since it requires admin access
+	to run.
+
+	* include/OpenIPMI/ipmi_int.h: Added a "msg err" debugging flag to
+	print out when errors occur in messaging.
+
+	* cmdlang/ipmish.c, cmdlang/cmdlang.c, lib/ipmi_lan.c: Added
+	support for the msg err debugging flag.
+
 2004-10-10 Corey Minyard <cminyard@mvista.com> 
 
 	* man/ipmi_cmdlang.7: Finished this document.

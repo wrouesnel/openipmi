@@ -858,7 +858,7 @@ entity_hot_swap(ipmi_entity_t             *entity,
 
  out_err:
     ipmi_cmdlang_global_err(entity_name,
-			    "cmd_entity.c(presence_change)",
+			    "cmd_entity.c(entity_hot_swap)",
 			    errstr, rv);
     if (evi)
 	ipmi_cmdlang_cmd_info_put(evi);

@@ -184,6 +184,8 @@ extern unsigned int __ipmi_log_mask;
 #define DEBUG_CON2_FAIL_BIT	(1 << 6)
 #define DEBUG_CON3_FAIL_BIT	(1 << 7)
 
+#define DEBUG_MSG_ERR_BIT	(1 << 8)
+
 #define DEBUG_MSG	(__ipmi_log_mask & DEBUG_MSG_BIT)
 #define DEBUG_MSG_ENABLE() __ipmi_log_mask |= DEBUG_MSG_BIT
 #define DEBUG_MSG_DISABLE() __ipmi_log_mask &= ~DEBUG_MSG_BIT
@@ -201,6 +203,10 @@ extern unsigned int __ipmi_log_mask;
 	__ipmi_log_mask |= (DEBUG_CON0_FAIL_BIT << con)
 #define DEBUG_CON_FAIL_DISABLE(con) \
 	__ipmi_log_mask &= ~(DEBUG_CON0_FAIL_BIT << con)
+
+#define DEBUG_MSG_ERR	(__ipmi_log_mask & DEBUG_MSG_ERR_BIT)
+#define DEBUG_MSG_ERR_ENABLE() __ipmi_log_mask |= DEBUG_MSG_ERR_BIT
+#define DEBUG_MSG_ERR_DISABLE() __ipmi_log_mask &= ~DEBUG_MSG_ERR_BIT
 
 /* Lock/unlock the entities/mcs for the given domain. */
 void _ipmi_domain_entity_lock(ipmi_domain_t *domain);

@@ -48,6 +48,7 @@
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_lanparm.h>
 #include <OpenIPMI/ipmi_pef.h>
+#include <OpenIPMI/ipmi_auth.h>
 
 
 /*
@@ -1217,13 +1218,6 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
     }
 
  done:
-    if ((!cmdlang->err) && (!info->did_output)) {
-	cmdlang->errstr = "Specified object not found";
-	cmdlang->err = EINVAL;
-	cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
-	goto done;
-    }
-
     ipmi_cmdlang_cmd_info_put(info);
 }
 
@@ -1504,6 +1498,12 @@ ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *cmd_info)
     ipmi_cmdlang_lock(cmd_info);
     cmd_info->usecount--;
     if (cmd_info->usecount == 0) {
+	if ((!cmd_info->cmdlang->err) && (!cmd_info->did_output)) {
+	    cmd_info->cmdlang->errstr = "Specified object not found";
+	    cmd_info->cmdlang->err = EINVAL;
+	    cmd_info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
+	}
+
 	cmd_info->cmdlang->done(cmd_info->cmdlang);
 	ipmi_cmdlang_unlock(cmd_info);
 	if (cmd_info->lock)
@@ -1642,6 +1642,40 @@ ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmd_info_t *info)
     }
 
     *val = rv;
+}
+
+void
+ipmi_cmdlang_get_user(char *str, int *val, ipmi_cmd_info_t *info)
+{
+    char *end;
+    int  rv;
+
+    if (info->cmdlang->err)
+	return;
+
+    rv = strtoul(str, &end, 0);
+    if (*end != '\0')
+	goto not_int;
+
+    *val = rv;
+    return;
+
+ not_int:
+    if (strcmp(str, "callback") == 0)
+	*val = IPMI_PRIVILEGE_CALLBACK;
+    else if (strcmp(str, "user") == 0)
+	*val = IPMI_PRIVILEGE_USER;
+    else if (strcmp(str, "operator") == 0)
+	*val = IPMI_PRIVILEGE_OPERATOR;
+    else if (strcmp(str, "admin") == 0)
+	*val = IPMI_PRIVILEGE_ADMIN;
+    else if (strcmp(str, "oem") == 0)
+	*val = IPMI_PRIVILEGE_OEM;
+    else {
+	info->cmdlang->errstr = "Invalid privilege level";
+	info->cmdlang->err = EINVAL;
+	info->cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_user)";
+    }
 }
 
 void
@@ -2422,6 +2456,8 @@ debug(ipmi_cmd_info_t *cmd_info)
 
     if (strcmp(type, "msg") == 0) {
 	if (val) DEBUG_MSG_ENABLE(); else DEBUG_MSG_DISABLE();
+    } else if (strcmp(type, "msgerr") == 0) {
+	if (val) DEBUG_MSG_ERR_ENABLE(); else DEBUG_MSG_ERR_DISABLE();
     } else if (strcmp(type, "rawmsg") == 0) {
 	if (val) DEBUG_RAWMSG_ENABLE(); else DEBUG_RAWMSG_DISABLE();
     } else if (strcmp(type, "locks") == 0) {
@@ -2441,6 +2477,8 @@ debug(ipmi_cmd_info_t *cmd_info)
 	cmdlang->err = EINVAL;
 	goto out_err;
     }
+
+    ipmi_cmdlang_out(cmd_info, "Debugging set", NULL);
     return;
 
  out_err:

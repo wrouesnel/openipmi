@@ -249,6 +249,13 @@ struct ipmi_con_s
 
     /* Name the connection code can use for logging. */
     char *name;
+
+    /* The connection code may put a string here to identify
+       itself. */
+    char *con_type;
+
+    /* The privilege level of the connection */
+    unsigned int priv_level;
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")

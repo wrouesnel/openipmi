@@ -50,6 +50,7 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_auth.h>
 
 /* We time the SMI messages, but we have a long timer. */
 #define SMI_TIMEOUT 60000
@@ -1427,6 +1428,8 @@ setup(int          if_num,
 
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
+    ipmi->con_type = "smi";
+    ipmi->priv_level = IPMI_PRIVILEGE_ADMIN; /* Always admin privilege. */
 
     smi = ipmi_mem_alloc(sizeof(*smi));
     if (!smi) {

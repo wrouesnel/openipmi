@@ -177,9 +177,6 @@ domain_fully_up(ipmi_domain_t *domain, void *cb_data)
 	ipmi_cmdlang_cmd_info_put(evi);
 
     if (cmd_info) {
-	char  domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
-
-	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 	ipmi_cmdlang_lock(cmd_info);
 	ipmi_cmdlang_out(cmd_info, "Domain Created", domain_name);
 	ipmi_cmdlang_unlock(cmd_info);
@@ -586,6 +583,7 @@ domain_msg(ipmi_domain_t *domain, void *cb_data)
 	    goto out_err;
 	}
 	curr_arg++;
+	i++;
     }
 
     if (is_broadcast)

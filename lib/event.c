@@ -142,7 +142,7 @@ ipmi_event_get_data_len(ipmi_event_t *event)
 }
 
 unsigned int
-ipmi_event_get_data(ipmi_event_t *event, char *data,
+ipmi_event_get_data(ipmi_event_t *event, unsigned char *data,
 		    unsigned int offset, unsigned int len)
 {
     if (offset > event->data_len)

@@ -47,6 +47,7 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_oem.h>
 #include <OpenIPMI/ipmi_utils.h>
+#include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/locked_list.h>
 
 #include <OpenIPMI/ilist.h>
@@ -4150,6 +4151,73 @@ ipmi_domain_is_connection_active(ipmi_domain_t *domain,
     return 0;
 }
 
+int
+ipmi_domain_is_connection_up(ipmi_domain_t *domain,
+			     unsigned int  connection,
+			     unsigned int  *up)
+{
+    int          port;
+    unsigned int val;
+
+    CHECK_DOMAIN_LOCK(domain);
+
+    if ((connection >= MAX_CONS) || !domain->conn[connection])
+	return EINVAL;
+
+    val = 0;
+    for (port=0; port<MAX_PORTS_PER_CON; port++) {
+	if (domain->port_up[port][connection] == 1)
+	    val = 1;
+    }
+
+    *up = val;
+    return 0;
+}
+
+int
+ipmi_domain_num_connection_ports(ipmi_domain_t *domain,
+				 unsigned int  connection,
+				 unsigned int  *ports)
+{
+    int          port;
+    unsigned int val = 0;
+
+    CHECK_DOMAIN_LOCK(domain);
+
+    if ((connection >= MAX_CONS) || !domain->conn[connection])
+	return EINVAL;
+
+    for (port=0; port<MAX_PORTS_PER_CON; port++) {
+	if (domain->port_up[port][connection] != -1)
+	    val = port+1;
+    }
+
+    *ports = val;
+    return 0;
+}
+
+int
+ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
+				  unsigned int  connection,
+				  unsigned int  port,
+				  unsigned int  *up)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    if ((connection >= MAX_CONS) || !domain->conn[connection])
+	return EINVAL;
+
+    if (port >= MAX_PORTS_PER_CON)
+	return EINVAL;
+
+    if (domain->port_up[port][connection] == -1)
+	return ENOSYS;
+
+    *up = domain->port_up[port][connection];
+
+    return 0;
+}
+
 void
 ipmi_domain_iterate_connections(ipmi_domain_t          *domain,
 				ipmi_connection_ptr_cb handler,
@@ -4468,6 +4536,7 @@ ipmi_open_domain(char               *name,
     int           rv;
     ipmi_domain_t *domain = NULL;
     int           i;
+    int           priv;
 
     if ((num_con < 1) || (num_con > MAX_CONS))
 	return EINVAL;
@@ -4480,12 +4549,21 @@ ipmi_open_domain(char               *name,
     domain->domain_fully_up_cb_data = domain_fully_up_cb_data;
     domain->fully_up_count = 1;
 
-    process_options(domain, options, num_options);
-
+    priv = IPMI_PRIVILEGE_ADMIN;
     for (i=0; i<num_con; i++) {
+	/* Find the least-common demominator privilege for the
+	   connections. */
+	if ((con[i]->priv_level != 0) && (con[i]->priv_level < priv))
+	    priv = con[i]->priv_level;
 	con[i]->set_con_change_handler(con[i], ll_con_changed, domain);
 	con[i]->set_ipmb_addr_handler(con[i], ll_addr_changed, domain);
     }
+
+    /* Enable setting the event receiver (by default) if the privilege
+       is admin or greater. */
+    domain->option_set_event_rcvr = (priv >= IPMI_PRIVILEGE_ADMIN);
+
+    process_options(domain, options, num_options);
 
     add_known_domain(domain);
 

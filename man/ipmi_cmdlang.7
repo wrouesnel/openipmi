@@ -1425,6 +1425,17 @@ The following comes out when an MC is changed:
 .fi
 .RE
 
+The following comes out when an MC changes active state:
+.RS
+.nf
+  EVENT
+    Object Type: MC
+    Name: <mc>
+    Operation: Active Changed
+    Active: <bool>
+.fi
+.RE
+
 The following comes out when a discrete sensor gets an event:
 .RS
 .nf
@@ -1645,6 +1656,7 @@ will have its own output info.  These are:
 .SS **MC INFO**
 .RS
 .nf
+  Active: <bool>
   provides_device_sdrs: <bool>
   device_available: <bool>
   chassis_support: <bool>
@@ -2033,6 +2045,12 @@ Controls of type identifier have the following:
 .RS
 .nf
   Active: <bool>
+  Up: <bool>
+  Port
+    Number: <integer>
+    Up: <bool>
+   .
+   .
 .fi
 .RE
 

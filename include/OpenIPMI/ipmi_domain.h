@@ -225,6 +225,25 @@ int ipmi_domain_is_connection_active(ipmi_domain_t *domain,
 				     unsigned int  connection,
 				     unsigned int  *active);
 
+/* Is the connection up? */
+int ipmi_domain_is_connection_up(ipmi_domain_t *domain,
+				 unsigned int  connection,
+				 unsigned int  *up);
+
+/* Number of ports in the connection?  A connection may have multiple
+   ports (ie, multiple IP addresses to the same BMC, whereas a
+   separate connection is a connection to a different BMC); these
+   functions let you check their status. */
+int ipmi_domain_num_connection_ports(ipmi_domain_t *domain,
+				     unsigned int  connection,
+				     unsigned int  *ports);
+
+/* Number of ports in the connection? */
+int ipmi_domain_is_connection_port_up(ipmi_domain_t *domain,
+				      unsigned int  connection,
+				      unsigned int  port,
+				      unsigned int  *up);
+
 /* Returns the main SDR repository for the domain, or NULL if there is
    not one. */
 ipmi_sdr_info_t *ipmi_domain_get_main_sdrs(ipmi_domain_t *domain);
