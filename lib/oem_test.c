@@ -51,8 +51,8 @@
 #define MONTAVISTA_TEST_END	0xfff
 
 /* Control numbers. */
-#define POWER_CONTROL		0x00
-#define HS_LED_CONTROL		0x40
+#define POWER_CONTROL(ipmb)	((ipmb) >> 1)
+#define HS_LED_CONTROL(ipmb)	(((ipmb) >> 1) | 0x80)
 
 static int
 dummy_entity_sdr_add(ipmi_entity_t   *ent,
@@ -162,7 +162,7 @@ test_event_handler_0(ipmi_mc_t    *mc,
 
 	id.mcid = ipmi_mc_convert_to_id(src_mc);
 	id.lun = 4;
-	id.control_num = data[8];
+	id.control_num = POWER_CONTROL(data[8]);
 
 	info.err = 0;
 	info.event = event;
@@ -674,7 +674,7 @@ test_handler_0(ipmi_mc_t *mc,
 
     /* Power control for the entity for MC 0x40 (18.2) */
     rv = ipmi_entity_add(ents, domain, 0, 0, 0,
-			 IPMI_ENTITY_ID_PROCESSOR_BOARD, 2,
+			 IPMI_ENTITY_ID_PROCESSOR_BOARD, 0x20,
 			 NULL, IPMI_ASCII_STR, 0,
 			 dummy_entity_sdr_add,
 			 NULL, &ent);
@@ -711,7 +711,7 @@ test_handler_0(ipmi_mc_t *mc,
     /* Add it to the MC and entity.  We presume this comes from the
        "main" SDR, so set the source_mc to NULL. */
     rv = ipmi_control_add_nonstandard(mc, NULL, control,
-				      POWER_CONTROL,
+				      POWER_CONTROL(0x40),
 				      ent, NULL, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
@@ -760,7 +760,7 @@ test_handler_0(ipmi_mc_t *mc,
     /* Add it to the MC and entity.  We presume this comes from the
        "main" SDR, so set the source_mc to NULL. */
     rv = ipmi_control_add_nonstandard(mc, NULL, control,
-				      HS_LED_CONTROL,
+				      HS_LED_CONTROL(0x40),
 				      ent, NULL, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,

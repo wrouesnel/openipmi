@@ -2579,7 +2579,7 @@ ipmi_mc_set_power(lmc_data_t *mc, unsigned char power, int gen_event)
     data[5] = 0;
     data[6] = 0x01; /* Version 1. */
     data[7] = 0;
-    data[8] = (mc->ipmb >> 1) - 0x40; /* Control number. */
+    data[8] = 0x40; /* IPMB of the device being powered. */
     data[9] = 0;
     data[10] = power;
     data[11] = 0;

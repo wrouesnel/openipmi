@@ -92,6 +92,7 @@ get_uint(char **toks, unsigned int *val, char *errstr)
     return 0;
 }
 
+#define INPUT_BUFFER_SIZE 65536
 void
 read_command_file(emu_data_t *emu, char *command_file)
 {
@@ -101,9 +102,15 @@ read_command_file(emu_data_t *emu, char *command_file)
 	fprintf(stderr, "Unable to open command file '%s'\n",
 		command_file);
     } else {
-	char buffer[1024];
+	char *buffer;
 	int  pos = 0;
-	while (fgets(buffer+pos, sizeof(buffer)-pos, f)) {
+
+	buffer = malloc(INPUT_BUFFER_SIZE);
+	if (!buffer) {
+	    fprintf(stderr, "Could not allocate buffer memory\n");
+	    goto out;
+	}
+	while (fgets(buffer+pos, INPUT_BUFFER_SIZE-pos, f)) {
 	    printf("%s", buffer+pos);
 	    pos = strlen(buffer);
 	    if (pos == 0)
@@ -122,6 +129,9 @@ read_command_file(emu_data_t *emu, char *command_file)
 	    ipmi_emu_cmd(emu, buffer);
 	    pos = 0;
 	}
+ out:
+	if (buffer)
+	    free(buffer);
 	fclose(f);
     }
 }
@@ -133,7 +143,7 @@ sel_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
     unsigned int  max_records;
     unsigned char flags;
 
-    rv = get_uint(toks, &max_records, "flags");
+    rv = get_uint(toks, &max_records, "max records");
     if (rv)
 	return;
 
@@ -514,6 +524,39 @@ mc_set_power(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	printf("Unable to set power, error 0x%x\n", rv);
 }
 
+#define MAX_FRU_SIZE 8192
+static void
+mc_add_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    unsigned char data[MAX_FRU_SIZE];
+    unsigned char devid;
+    unsigned int  length;
+    int           i;
+    int           rv;
+
+    rv = get_uchar(toks, &devid, "Device ID", 0);
+    if (rv)
+	return;
+
+    rv = get_uint(toks, &length, "FRU physical size");
+    if (rv)
+	return;
+
+    for (i=0; i<MAX_FRU_SIZE; i++) {
+	rv = get_uchar(toks, &data[i], "data byte", 1);
+	if (rv == ENOSPC)
+	    break;
+	if (rv) {
+	    printf("Error 0x%x in data byte %d\n", rv, i);
+	    return;
+	}
+    }
+
+    rv = ipmi_mc_add_fru_data(mc, devid, length, data, i);
+    if (rv)
+	printf("Unable to add FRU data, error 0x%x\n", rv);
+}
+
 static void
 mc_setbmc(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
@@ -566,6 +609,7 @@ static struct {
     { "sensor_set_threshold", MC,       sensor_set_threshold },
     { "sensor_set_event_support", MC,   sensor_set_event_support },
     { "mc_set_power",   MC,		mc_set_power },
+    { "mc_add_fru_data",MC,		mc_add_fru_data },
     { "mc_add",		NOMC,		mc_add },
     { "mc_setbmc",      NOMC,		mc_setbmc },
     { "read_cmds",	NOMC,		read_cmds },
