@@ -880,7 +880,6 @@ smi_send_command(ipmi_con_t            *ipmi,
     rv = smi_send(smi, smi->fd, addr, addr_len, msg, (long) cmd);
     if (rv) {
 	remove_cmd(ipmi, smi, cmd);
-	ipmi_mem_free(cmd->rsp_item);
 	ipmi_mem_free(cmd);
 	goto out_unlock;
     }

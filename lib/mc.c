@@ -213,6 +213,7 @@ struct ipmi_mc_s
     mc_devid_data_t real_devid;
     mc_devid_data_t pending_devid;
     int pending_devid_data;
+    int pending_new_mc;
 
 
     char name[MC_NAME_LEN];
@@ -1582,6 +1583,10 @@ _ipmi_mc_put(ipmi_mc_t *mc)
 	if (mc->pending_devid_data) {
 	    mc->devid = mc->pending_devid;
 	    mc->pending_devid_data = 0;
+	    if (mc->pending_new_mc) {
+		_ipmi_mc_handle_new(mc);
+		mc->pending_new_mc = 0;
+	    }
 	}
 
 	/* If we need to cleanup the MC, do so. */
@@ -2233,15 +2238,21 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
     /* Copy these to the version we use for comparison. */
     mc->real_devid = mc->pending_devid;
 
-    /* OEM handlers set the pending data. */
-    rv = check_oem_handlers(mc);
-
     /* Either copy it or mark it to be copied. */
     if (mc->usecount == 1) {
 	mc->devid = mc->pending_devid;
 	mc->pending_devid_data = 0;
-    } else
+	mc->pending_new_mc = 0;
+
+	/* OEM handlers set the pending data. */
+	rv = check_oem_handlers(mc);
+    } else {
 	mc->pending_devid_data = 1;
+	mc->pending_new_mc = 1;
+	rv = EBUSY; /* Tell the user that they must call the OEM
+		       handlers check later when the MC is
+		       released. */
+    }
     _ipmi_domain_mc_unlock(mc->domain);
 
     return rv;

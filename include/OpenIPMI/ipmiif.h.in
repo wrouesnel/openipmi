@@ -375,7 +375,7 @@ int ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 					   void           *cb_data);
 
 
-/* The following structures get boadloads of information from the FRU.
+/* The following structures get boatloads of information from the FRU.
    These all will return ENOSYS if the information is not available.
    All these function return error, not lengths.
 

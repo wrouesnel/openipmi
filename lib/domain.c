@@ -2009,7 +2009,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    goto out;
 		}
 
-		/* No handlers can be regsitered yet, so this is safe. */
+		/* No handlers can be registered yet, so this is safe. */
 		_ipmi_mc_set_active(mc, 1);
 
 		rv = add_mc_to_domain(domain, mc);
@@ -2026,17 +2026,28 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    goto out;
 		}
 
+		/* In this case, the use count is defined to be 1, so
+		   it will always be set up properly and the previous
+		   function will not return EBUSY, no need to
+		   check. */
+
 		mc_added = 1;
 		_ipmi_mc_handle_new(mc);
 	    } else {
 		/* It was inactive, activate it. */
 		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
-		if (rv) {
+		if (rv == EBUSY) {
+		    /* The MC is in use, so we cannot handle it right
+		       now.  We wait until the MC is released to do
+		       that and cue off the pending new MC field in
+		       the MC. */
+		} else if (rv) {
 		    /* If we couldn't handle the device data, just clean
-		       it up */
+		       it up. */
 		    _ipmi_cleanup_mc(mc);
-		} else
+		} else {
 		    _ipmi_mc_handle_new(mc);
+		}
 	    }
 	} else {
 	    /* Periodically check the MCs. */

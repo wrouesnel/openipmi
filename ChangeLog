@@ -1,3 +1,9 @@
+2004-06-16 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/domain.c, lib/mc.c: Don't check the OEM handlers if the MC
+	is in used, wait until the MC is no longer in use and apply the
+	pending data update and check OEM handlers then.
+
 2004-06-15 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Check for a null event in call_presence_handlers().
