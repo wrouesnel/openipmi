@@ -2514,7 +2514,7 @@ ipmi_sensor_discrete_get_event_handler(
 }
 
 int
-ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
+ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
 {
     enum ipmi_event_dir_e dir;
     int                   rv;
@@ -2530,12 +2530,12 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 	if (!sensor->threshold_event_handler)
 	    return EINVAL;
 
-	dir = log->data[9] >> 7;
-	threshold = (log->data[10] >> 1) & 0x07;
-	high_low = log->data[10] & 1;
+	dir = event->data[9] >> 7;
+	threshold = (event->data[10] >> 1) & 0x07;
+	high_low = event->data[10] & 1;
 
-	if ((log->data[10] >> 6) == 2) {
-	    rv = ipmi_sensor_convert_from_raw(sensor, log->data[11], &value);
+	if ((event->data[10] >> 6) == 2) {
+	    rv = ipmi_sensor_convert_from_raw(sensor, event->data[11], &value);
 	    if (!rv)
 		value_present = IPMI_RAW_VALUE_PRESENT;
 	    else
@@ -2544,8 +2544,8 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 	    value_present = IPMI_NO_VALUES_PRESENT;
 	}
 	sensor->threshold_event_handler(sensor, dir, threshold, high_low,
-					value_present, log->data[11], value,
-					sensor->cb_data, log);
+					value_present, event->data[11], value,
+					sensor->cb_data, event);
     } else {
 	int offset;
 	int severity = -1, prev_severity = -1;
@@ -2553,11 +2553,11 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 	if (!sensor->discrete_event_handler)
 	    return EINVAL;
 
-	dir = log->data[9] >> 7;
-	offset = log->data[10] & 0x0f;
-	if ((log->data[10] >> 6) == 2) {
-	    severity = log->data[11] >> 4;
-	    prev_severity = log->data[11] & 0xf;
+	dir = event->data[9] >> 7;
+	offset = event->data[10] & 0x0f;
+	if ((event->data[10] >> 6) == 2) {
+	    severity = event->data[11] >> 4;
+	    prev_severity = event->data[11] & 0xf;
 	    if (severity == 0xf)
 		severity = -1;
 	    if (prev_severity == 0xf)
@@ -2566,7 +2566,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 	sensor->discrete_event_handler(sensor, dir, offset,
 				       severity,
 				       prev_severity,
-				       sensor->cb_data, log);
+				       sensor->cb_data, event);
     }
 
     return 0;

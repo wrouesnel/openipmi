@@ -90,9 +90,9 @@ int ipmi_bmc_set_oem_new_mc_handler(ipmi_mc_t              *bmc,
 /* The handler should return 0 if it didn't handle the event, or 1
    if it did.  If the call handles the event, OpenIPMI will not deliver
    the event anywhere else. */
-typedef int (*ipmi_oem_event_handler_cb)(ipmi_mc_t  *bmc,
-					 ipmi_log_t *log,
-					 void       *cb_data);
+typedef int (*ipmi_oem_event_handler_cb)(ipmi_mc_t    *bmc,
+					 ipmi_event_t *log,
+					 void         *cb_data);
 /* Set a handler for when an event comes in from a specific MC. */
 int ipmi_mc_set_oem_event_handler(ipmi_mc_t                 *mc,
 				  ipmi_oem_event_handler_cb handler,

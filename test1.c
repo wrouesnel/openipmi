@@ -274,7 +274,7 @@ void got_sels(ipmi_sel_info_t *sel,
 
     printf("SEL Changed = %d, count = %d\n", changed, count);
     for (i=0; i<count; i++) {
-	ipmi_log_t rsel;
+	ipmi_event_t rsel;
 
 	rv = ipmi_get_sel_by_index(sel, i, &rsel);
 	if (rv) {
@@ -447,7 +447,7 @@ static void
 entity_presence_handler(ipmi_entity_t *entity,
 			int           present,
 			void          *cb_data,
-			ipmi_log_t    *log)
+			ipmi_event_t  *event)
 {
     int id, instance;
 

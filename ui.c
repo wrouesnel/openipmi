@@ -1836,7 +1836,7 @@ set_control_cmd(char *cmd, char **toks, void *cb_data)
 }
 
 static void
-dellog_cb(ipmi_mc_t *bmc, int err, void *cb_data)
+delevent_cb(ipmi_mc_t *bmc, int err, void *cb_data)
 {
     if (err)
 	ui_log("Error deleting log: %x\n", err);
@@ -1845,18 +1845,18 @@ dellog_cb(ipmi_mc_t *bmc, int err, void *cb_data)
 }
 
 static void
-dellog_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
+delevent_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 {
     int          rv;
     unsigned int *record_id = cb_data;
 
-    rv = ipmi_bmc_del_log_by_recid(bmc, *record_id, dellog_cb, NULL);
+    rv = ipmi_bmc_del_event_by_recid(bmc, *record_id, delevent_cb, NULL);
     if (rv)
 	wprintw(cmd_win, "dellog_cmd: error deleting log: %x\n", rv);
 }
 
 static int
-dellog_cmd(char *cmd, char **toks, void *cb_data)
+delevent_cmd(char *cmd, char **toks, void *cb_data)
 {
     unsigned int record_id;
     int          rv;
@@ -1869,7 +1869,7 @@ dellog_cmd(char *cmd, char **toks, void *cb_data)
     if (get_uint(toks, &record_id, "record id"))
 	return 0;
 
-    rv = ipmi_mc_pointer_cb(bmc_id, dellog_cmd_bmcer, &record_id);
+    rv = ipmi_mc_pointer_cb(bmc_id, delevent_cmd_bmcer, &record_id);
     if (rv) {
 	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
 	return 0;
@@ -2013,8 +2013,8 @@ static struct {
       " <channel> <IPMB addr> <LUN> <NetFN> <Cmd> [data...] - Send a command"
       " to the given IPMB address on the given channel and display the"
       " response" },
-    { "dellog",		dellog_cmd,
-      " <log number> - Delete the given log number" },
+    { "delevent",	delevent_cmd,
+      " <log number> - Delete the given event number from the SEL" },
     { "debug",		debug_cmd,
       " <type> on|off - Turn the given debugging type on or off." },
     { "clear_sel",	clear_sel_cmd,
@@ -2191,7 +2191,7 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 			       unsigned int                raw_value,
 			       double                      value,
 			       void                        *cb_data,
-			       ipmi_log_t                  *log)
+			       ipmi_event_t                *event)
 {
     int  id, instance, lun, num;
     char name[33];
@@ -2210,8 +2210,8 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
     } else if (value_present == IPMI_RAW_VALUE_PRESENT) {
 	ui_log("  raw value is 0x%x\n", raw_value);
     }
-    if (log)
-	ui_log("Due to log 0x%4.4x\n", log->record_id);
+    if (event)
+	ui_log("Due to log 0x%4.4x\n", event->record_id);
 }
 
 static void
@@ -2221,7 +2221,7 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 			      int                   severity,
 			      int                   prev_severity,
 			      void                  *cb_data,
-			      ipmi_log_t            *log)
+			      ipmi_event_t          *event)
 {
     int  id, instance, lun, num;
     char name[33];
@@ -2238,8 +2238,8 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 	ui_log("  severity is %d\n", severity);
     if (prev_severity != -1)
 	ui_log("  prev severity is %d\n", prev_severity);
-    if (log)
-	ui_log("Due to log 0x%4.4x\n", log->record_id);
+    if (event)
+	ui_log("Due to log 0x%4.4x\n", event->record_id);
 }
 
 static void
@@ -2322,15 +2322,15 @@ static void
 entity_presence_handler(ipmi_entity_t *entity,
 			int           present,
 			void          *cb_data,
-			ipmi_log_t    *log)
+			ipmi_event_t  *event)
 {
     int id, instance;
 
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
     ui_log("Entity %d.%d, presence is %d\n", id, instance, present);
-    if (log)
-	ui_log("Due to log 0x%4.4x\n", log->record_id);
+    if (event)
+	ui_log("Due to log 0x%4.4x\n", event->record_id);
 }
 
 static void
@@ -2380,28 +2380,28 @@ entity_change(enum ipmi_update_e op,
 static ipmi_event_handler_id_t *event_handler_id;
 
 static void
-event_handler(ipmi_mc_t  *bmc,
-	      ipmi_log_t *log,
-	      void       *event_data)
+event_handler(ipmi_mc_t    *bmc,
+	      ipmi_event_t *event,
+	      void         *event_data)
 {
     /* FIXME - fill this out. */
     ui_log("Unknown event\n");
     ui_log("  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
 	   " %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
-	   log->record_id, log->type,
-	   log->data[0],
-	   log->data[1],
-	   log->data[2],
-	   log->data[3],
-	   log->data[4],
-	   log->data[5],
-	   log->data[6],
-	   log->data[7],
-	   log->data[8],
-	   log->data[9],
-	   log->data[10],
-	   log->data[11],
-	   log->data[12]);
+	   event->record_id, event->type,
+	   event->data[0],
+	   event->data[1],
+	   event->data[2],
+	   event->data[3],
+	   event->data[4],
+	   event->data[5],
+	   event->data[6],
+	   event->data[7],
+	   event->data[8],
+	   event->data[9],
+	   event->data[10],
+	   event->data[11],
+	   event->data[12]);
 }
 
 sel_timer_t *redisplay_timer;

@@ -86,7 +86,7 @@ int ipmi_sensor_destroy(ipmi_sensor_t *sensor);
 
 /* Called by when an event occurs for the given sensor.  This may be use
    by OEM code to deliver non-standard events to sensors. */
-int ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *event);
+int ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event);
 
 /* Fetch boatloads of internal information about sensors. */
 int ipmi_sensor_get_owner(ipmi_sensor_t *sensor);

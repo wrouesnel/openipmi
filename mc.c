@@ -474,9 +474,9 @@ remove_event_handler(ipmi_mc_t               *mc,
 
 typedef struct event_sensor_info_s
 {
-    int        handled;
-    int        err;
-    ipmi_log_t *log;
+    int          handled;
+    int          err;
+    ipmi_event_t *event;
 } event_sensor_info_t;
 
 void
@@ -485,7 +485,7 @@ event_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
     event_sensor_info_t *info = cb_data;
 
     /* It's an event for a specific sensor, and the sensor exists. */
-    info->err = ipmi_sensor_event(sensor, info->log);
+    info->err = ipmi_sensor_event(sensor, info->event);
 }
 
 int
@@ -518,13 +518,13 @@ mc_event_cb(ipmi_mc_t *mc, void *cb_data)
 
     if (mc->oem_event_handler)
 	info->handled = mc->oem_event_handler(mc,
-					      info->log,
+					      info->event,
 					      mc->oem_event_handler_cb_data);
 }
 
 static void
-system_event_handler(ipmi_mc_t  *bmc,
-		     ipmi_log_t *log)
+system_event_handler(ipmi_mc_t    *bmc,
+		     ipmi_event_t *event)
 {
     ipmi_event_handler_id_t *l;
     int                     rv = 1;
@@ -534,39 +534,39 @@ system_event_handler(ipmi_mc_t  *bmc,
     /* Let the OEM handler have a go at it first. */
     if (bmc->bmc->oem_event_handler) {
 	if (bmc->bmc->oem_event_handler(bmc,
-					log,
+					event,
 					bmc->bmc->oem_event_cb_data))
 	    return;
     }
 
     /* It's a system event record from an MC. */
-    if ((log->type == 0x02) && ((log->data[4] & 0x01) == 0)) {
+    if ((event->type == 0x02) && ((event->data[4] & 0x01) == 0)) {
 	ipmi_mc_id_t mc_id;
 
 	info.handled = 0;
 	info.err = 0;
-	info.log = log;
+	info.event = event;
 
 	/* See if the MC has an OEM handler for this. */
 	mc_id.bmc = bmc;
-	if (log->data[6] == 0x03) {
+	if (event->data[6] == 0x03) {
 	    mc_id.channel = 0;
 	} else {
-	    mc_id.channel = log->data[5] >> 4;
+	    mc_id.channel = event->data[5] >> 4;
 	}
-	mc_id.mc_num = log->data[4];
+	mc_id.mc_num = event->data[4];
 	ipmi_mc_pointer_cb(mc_id, mc_event_cb, &info);
 
 	/* It's from an MC. */
 	id.bmc = bmc;
-	if (log->data[6] == 0x03) {
+	if (event->data[6] == 0x03) {
 	    id.channel = 0;
 	} else {
-	    id.channel = log->data[5] >> 4;
+	    id.channel = event->data[5] >> 4;
 	}
-	id.mc_num = log->data[4];
-	id.lun = log->data[5] & 0x3;
-	id.sensor_num = log->data[8];
+	id.mc_num = event->data[4];
+	id.lun = event->data[5] & 0x3;
+	id.sensor_num = event->data[8];
 
 	rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
 	if (rv) {
@@ -579,7 +579,7 @@ system_event_handler(ipmi_mc_t  *bmc,
 	ipmi_lock(bmc->bmc->event_handlers_lock);
 	l = bmc->bmc->event_handlers;
 	while (l) {
-	    l->handler(bmc, log, l->event_data);
+	    l->handler(bmc, event, l->event_data);
 	    l = l->next;
 	}
 	ipmi_unlock(bmc->bmc->event_handlers_lock);
@@ -588,11 +588,11 @@ system_event_handler(ipmi_mc_t  *bmc,
 
 /* Got a new event in the system event log that we didn't have before. */
 static void
-bmc_sel_new_log_handler(ipmi_sel_info_t *sel,
-			ipmi_log_t      *log,
-			void            *cb_data)
+bmc_sel_new_event_handler(ipmi_sel_info_t *sel,
+			  ipmi_event_t    *event,
+			  void            *cb_data)
 {
-    system_event_handler(cb_data, log);
+    system_event_handler(cb_data, event);
 }
 
 
@@ -614,18 +614,18 @@ ll_event_handler(ipmi_con_t   *ipmi,
 		 void         *event_data,
 		 void         *data2)
 {
-    ipmi_log_t log;
-    ipmi_mc_t  *bmc = data2;
+    ipmi_event_t devent;
+    ipmi_mc_t    *bmc = data2;
 
-    log.record_id = ipmi_get_uint16(event->data);
-    log.type = event->data[2];
-    memcpy(log.data, event+3, IPMI_MAX_SEL_DATA);
+    devent.record_id = ipmi_get_uint16(event->data);
+    devent.type = event->data[2];
+    memcpy(devent.data, event+3, IPMI_MAX_SEL_DATA);
 
     /* Add it to the system event log. */
-    ipmi_sel_log_add(bmc->bmc->sel, &log);
+    ipmi_sel_event_add(bmc->bmc->sel, &devent);
 
     /* Call the handler on it. */
-    system_event_handler(bmc, &log);
+    system_event_handler(bmc, &devent);
 }
 
 int
@@ -1714,7 +1714,9 @@ setup_bmc(ipmi_con_t  *ipmi,
     if (rv)
 	goto out_err;
     /* When we get new logs, handle them. */
-    ipmi_sel_set_new_log_handler(mc->bmc->sel, bmc_sel_new_log_handler, mc);
+    ipmi_sel_set_new_event_handler(mc->bmc->sel,
+				   bmc_sel_new_event_handler,
+				   mc);
 
     rv = ipmi_sensors_alloc(mc, &(mc->sensors));
     if (rv)
@@ -2396,10 +2398,10 @@ sel_op_done(ipmi_sel_info_t *sel,
 }
 
 int
-ipmi_bmc_del_log(ipmi_mc_t   *bmc,
-		 ipmi_log_t  *log,
-		 ipmi_bmc_cb done_handler,
-		 void        *cb_data)
+ipmi_bmc_del_event(ipmi_mc_t    *bmc,
+		   ipmi_event_t *event,
+		   ipmi_bmc_cb  done_handler,
+		   void         *cb_data)
 {
     sel_op_done_info_t *info;
 
@@ -2416,14 +2418,14 @@ ipmi_bmc_del_log(ipmi_mc_t   *bmc,
     info->done = done_handler;
     info->cb_data = cb_data;
 
-    return ipmi_sel_del_log(bmc->bmc->sel, log, sel_op_done, info);
+    return ipmi_sel_del_event(bmc->bmc->sel, event, sel_op_done, info);
 }
 
 int
-ipmi_bmc_del_log_by_recid(ipmi_mc_t    *bmc,
-			  unsigned int record_id,
-			  ipmi_bmc_cb  done_handler,
-			  void         *cb_data)
+ipmi_bmc_del_event_by_recid(ipmi_mc_t    *bmc,
+			    unsigned int record_id,
+			    ipmi_bmc_cb  done_handler,
+			    void         *cb_data)
 {
     sel_op_done_info_t *info;
 
@@ -2440,52 +2442,52 @@ ipmi_bmc_del_log_by_recid(ipmi_mc_t    *bmc,
     info->done = done_handler;
     info->cb_data = cb_data;
 
-    return ipmi_sel_del_log_by_recid(bmc->bmc->sel, record_id,
-				     sel_op_done, info);
+    return ipmi_sel_del_event_by_recid(bmc->bmc->sel, record_id,
+				       sel_op_done, info);
 }
 
 int
-ipmi_bmc_first_log(ipmi_mc_t *bmc, ipmi_log_t *log)
+ipmi_bmc_first_event(ipmi_mc_t *bmc, ipmi_event_t *event)
 {
     if (!bmc->bmc)
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_sel_get_first_log(bmc->bmc->sel, log);
+    return ipmi_sel_get_first_event(bmc->bmc->sel, event);
 }
 
 int
-ipmi_bmc_last_log(ipmi_mc_t *bmc, ipmi_log_t *log)
+ipmi_bmc_last_event(ipmi_mc_t *bmc, ipmi_event_t *event)
 {
     if (!bmc->bmc)
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_sel_get_last_log(bmc->bmc->sel, log);
+    return ipmi_sel_get_last_event(bmc->bmc->sel, event);
 }
 
 int
-ipmi_bmc_next_log(ipmi_mc_t *bmc, ipmi_log_t *log)
+ipmi_bmc_next_event(ipmi_mc_t *bmc, ipmi_event_t *event)
 {
     if (!bmc->bmc)
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_sel_get_next_log(bmc->bmc->sel, log);
+    return ipmi_sel_get_next_event(bmc->bmc->sel, event);
 }
 
 int
-ipmi_bmc_prev_log(ipmi_mc_t *bmc, ipmi_log_t *log)
+ipmi_bmc_prev_event(ipmi_mc_t *bmc, ipmi_event_t *event)
 {
     if (!bmc->bmc)
 	return EINVAL;
 
     CHECK_MC_LOCK(bmc);
 
-    return ipmi_sel_get_prev_log(bmc->bmc->sel, log);
+    return ipmi_sel_get_prev_event(bmc->bmc->sel, event);
 }
 
 #ifdef IPMI_CHECK_LOCKS

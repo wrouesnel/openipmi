@@ -27,6 +27,7 @@ their special sensors and controls.
 * OpenIPMI Internal Interfaces::
 * How to Write OEM Plugins::
 * Internals::
+* Debugging Your Application::
 * Glossary::
 @end menu
 
@@ -565,10 +566,13 @@ This defines internal interfaces for sensors.
 @node    Initialization, The BMC, Include Files, Using OpenIPMI
 @section Initialization
 
-To initialize the OpenIPMI library, you must call @var{ipmi_init} and
+To initialize the OpenIPMI library, you must call @code{ipmi_init()} and
 pass in an @var{os_handler_t} in to it.  OpenIPMI will use this OS
 handler for global operations.  This @emph{must} be done before any
 other OpenIPMI calls.
+
+If you need to initialize any OEM libraries, do it right after the call
+to @code{ipmi_init()}.
 
 @node    The BMC, Entities, Initialization, Using OpenIPMI
 @section The BMC
@@ -597,11 +601,13 @@ OpenIPMI will rescan the bus for new MCs every 10 minutes.  It is
 expected that OEM handlers can detect new MCs with custom events and add
 the new MC sooner.
 
-Events also come in on the BMC interface.  In the setup done callback,
-you should register for events, if you are interested in them.  This
+Events also come in on the BMC interface.  In the setup done
+callback, you should register for events with
+@code{ipmi_register_for_events()}, if you are interested in them.  This
 means that your callback will receive all events that are not attached
-to a sensor.  If an event is attached to a sensor, it will be delivered
-to a callback associated with the sensor.
+to a sensor or otherwise handled by something inside OpenIPMI.  If an
+event is attached to a sensor, it will be delivered to a callback
+associated with the sensor.
 
 @node    Entities, Sensors, The BMC, Using OpenIPMI
 @section Entities
@@ -611,7 +617,7 @@ things on.  When a BMC is reported to you, you should register a callback to
 tell you when entities are added or removed.  That way you can know
 about new entities as soon as they are created.  If you wait until later
 to register the callback, entities may have come into existance and you
-will miss them (although you could catch them in an iterator).
+will miss them (although you could find them in an iterator).
 
 Sensors and controls hang off entities.  OpenIPMI provides iterators
 so you can scan all the sensors and controls on an entity.  It allows
@@ -929,10 +935,58 @@ through the logs in the local representation of the SEL.
 @node    OpenIPMI Internal Interfaces, How to Write OEM Plugins, Using OpenIPMI, Top
 @chapter OpenIPMI Internal Interfaces
 
-@node    How to Write OEM Plugins, Internals, OpenIPMI Internal Interfaces, Top
+@node    How to Write OEM Plugins, Debugging Your Application, OpenIPMI Internal Interfaces, Top
 @chapter How to Write OEM Plugins
 
-@node    Internals, Concept Index, How to Write OEM Plugins, Top
+@node    Debugging Your Application, Internals, How to Write OEM Plugins, Top
+@chapter Debugging Your Application
+
+OpenIPMI has some things to help you debug your application (and
+OpenIPMI itself).  Note that these debugging interfaces are subject to
+change.
+
+@menu
+* Debug Flags::
+* Debugging Locking::
+* Seeing IPMI Messages::
+@end menu
+
+@node    Debug Flags, Debugging Locking, Debugging Your Application, Debugging Your Application
+@section Debug Flags
+
+OpenIPMI has a set of flags you may set to enable or disable certain
+debugging information generation.  Debugging information goes to the log
+output with IPMI_LOG_DEBUG[_yyy] types.  To enable a flag, do a
+@code{DEBUG_xxx_ENABLE()} call, where xxx is the name of the flag.  To
+disable a flag, so a @code{DEBUG_XXX_DISABLE()} call.  To check to see
+if a flag is enabled (for OEM code, for instance), use the
+@var{DEBUG_xxx} macro.
+
+@node    Debugging Locking, Seeing IPMI Messages, Debug Flags, Debugging Your Application
+@section Debugging Locking
+
+The LOCKS flag turns on locking (if the @var{IPMI_CHECK_LOCKS}
+preprocessor variable is defined, which it is by default).  If you
+enable locking, OpenIPMI will check everywhere that the proper locks are
+held, and do other checks depending on what low-level OS handling code
+is in place, and complain if things aren't right.  You can set a
+breakpoint at the function @code{ipmi_report_lock_error()} to have a
+debugger stop when a lock problem occurs.
+
+The lock checking is somewhat expensive, and if you want to remove the
+calls, you can remove the definition of @var{IPMI_CHECK_LOCKS} from
+the file Makefile.am.
+
+@node    Seeing IPMI Messages, , Debugging Locking, Debugging Your Application
+@section Seeing IPMI Messages
+
+Two flags control message traceing.  Setting the MSG flag will turn on
+message tracing of IPMI messages.  If you turn on RAWMSG, it will trace
+low-level messaging, such as LAN resends and any other protocol-type
+messages.  This depends on the interface, some interfaces don't
+implement raw message tracing.
+
+@node    Internals, Concept Index, Debugging Your Application, Top
 @chapter Internals
 
 This section describes the internals of OpenIPMI.  These details are

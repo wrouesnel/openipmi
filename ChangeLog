@@ -1,6 +1,25 @@
 
 2003-01-07 Corey Minyard <cminyard@mvista.com>
 
+	* OpenIPMI.texi: More work on docs.
+
+	* Makefile.am: Turned on lock checking code generation.
+	
+	* include/OpenIPMI/ipmi_int.h: Cleaned up the debugging flags.
+
+	* include/OpenIPMI/ipmi_sel.h: Changed the name "log" to "event".
+	* include/OpenIPMI/ipmi_oem.h: ditto
+	* include/OpenIPMI/ipmi_sensor.h: ditto
+	* include/OpenIPMI/ipmi_types.h: ditto
+	* include/OpenIPMI/ipmiif.h: ditto
+	* entity.c: ditto
+	* ipmi.c: ditto
+	* mc.c: ditto
+	* sel.c: ditto
+	* sensor.c: ditto
+	* test1.c: ditto
+	* ui.c: ditto
+	
 	* sel.c: Cleaned up the rather broken locking.
 	
 	* sdr.c, include/OpenIPMI/ipmi_sdr.h: Cleaned up the names and

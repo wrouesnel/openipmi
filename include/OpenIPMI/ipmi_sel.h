@@ -57,9 +57,9 @@ int ipmi_sel_destroy(ipmi_sel_info_t      *sel,
 		     ipmi_sel_destroyed_t handler,
 		     void                 *cb_data);
 
-/* Add a new log to the SEL. */
-int ipmi_sel_log_add(ipmi_sel_info_t *sel,
-		     ipmi_log_t      *new_log);
+/* Add a new event to the SEL. */
+int ipmi_sel_event_add(ipmi_sel_info_t *sel,
+		       ipmi_event_t    *new_event);
 
 /* Fetch the remote SELs, but do not wait until the fetch is complete,
    return immediately.  When the fetch is complete, call the given
@@ -76,18 +76,18 @@ int ipmi_sel_get(ipmi_sel_info_t     *sel,
 int ipmi_get_sel_count(ipmi_sel_info_t *sel,
 		       unsigned int    *count);
 
-int ipmi_sel_get_first_log(ipmi_sel_info_t *sel, ipmi_log_t *log);
-int ipmi_sel_get_last_log(ipmi_sel_info_t *sel, ipmi_log_t *log);
-int ipmi_sel_get_next_log(ipmi_sel_info_t *sel, ipmi_log_t *log);
-int ipmi_sel_get_prev_log(ipmi_sel_info_t *sel, ipmi_log_t *log);
+int ipmi_sel_get_first_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
+int ipmi_sel_get_last_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
+int ipmi_sel_get_next_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
+int ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, ipmi_event_t *event);
 
-/* This callback will be called when a new log is added to the SEL. */
-typedef void (*ipmi_sel_new_log_handler_cb)(ipmi_sel_info_t *sel,
-					    ipmi_log_t      *log,
-					    void            *cb_data);
-int ipmi_sel_set_new_log_handler(ipmi_sel_info_t             *sel,
-				 ipmi_sel_new_log_handler_cb handler,
-				 void                        *cb_data);
+/* This callback will be called when a new event is added to the SEL. */
+typedef void (*ipmi_sel_new_event_handler_cb)(ipmi_sel_info_t *sel,
+					      ipmi_event_t    *event,
+					      void            *cb_data);
+int ipmi_sel_set_new_event_handler(ipmi_sel_info_t             *sel,
+				   ipmi_sel_new_event_handler_cb handler,
+				   void                          *cb_data);
 
 /* Fetch all the sels.  The array size should point to a value that
    holds the number of elements in the passed in array.  The
@@ -96,22 +96,22 @@ int ipmi_sel_set_new_log_handler(ipmi_sel_info_t             *sel,
    array_size, this will return E2BIG and do nothing. */
 int ipmi_get_all_sels(ipmi_sel_info_t *sel,
 		      int             *array_size,
-		      ipmi_log_t      *array);
+		      ipmi_event_t    *array);
 
 typedef void (*ipmi_sel_op_done_cb_t)(ipmi_sel_info_t *sel,
 				      void            *cb_data,
 				      int             err);
 
 /* Delete an event log entry. */
-int ipmi_sel_del_log(ipmi_sel_info_t       *sel,
-		     ipmi_log_t            *log,
-		     ipmi_sel_op_done_cb_t handler,
-		     void                  *cb_data);
+int ipmi_sel_del_event(ipmi_sel_info_t       *sel,
+		       ipmi_event_t          *event,
+		       ipmi_sel_op_done_cb_t handler,
+		       void                  *cb_data);
 
-int ipmi_sel_del_log_by_recid(ipmi_sel_info_t       *sel,
-			      unsigned int          record_id,
-			      ipmi_sel_op_done_cb_t handler,
-			      void                  *cb_data);
+int ipmi_sel_del_event_by_recid(ipmi_sel_info_t       *sel,
+				unsigned int          record_id,
+				ipmi_sel_op_done_cb_t handler,
+				void                  *cb_data);
 
 /* Get various information from the IPMI SEL info commands. */
 int ipmi_sel_get_major_version(ipmi_sel_info_t *sel, int *val);
@@ -123,8 +123,8 @@ int ipmi_sel_get_supports_reserve_sel(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_supports_get_sel_allocation(ipmi_sel_info_t *sel,
 					     int             *val);
 
-/* Add a log to the internal representation of the system event log. */
-int ipmi_sel_log_add(ipmi_sel_info_t *sel,
-		     ipmi_log_t      *new_log);
+/* Add a event to the internal representation of the system event log. */
+int ipmi_sel_event_add(ipmi_sel_info_t *sel,
+		       ipmi_event_t      *new_event);
 
 #endif /* _IPMI_SEL_H */

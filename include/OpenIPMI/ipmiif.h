@@ -129,9 +129,9 @@ int ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2);
 typedef void (*ipmi_bmc_cb)(ipmi_mc_t *bmc, int err, void *cb_data);
 
 /* Events come in this format. */
-typedef void (*ipmi_event_handler_t)(ipmi_mc_t  *bmc,
-				     ipmi_log_t *log,
-				     void       *event_data);
+typedef void (*ipmi_event_handler_t)(ipmi_mc_t    *bmc,
+				     ipmi_event_t *event,
+				     void         *event_data);
 
 typedef struct ipmi_event_handler_id_s ipmi_event_handler_id_t;
 
@@ -153,29 +153,29 @@ int ipmi_deregister_for_events(ipmi_mc_t               *bmc,
 int ipmi_bmc_enable_events(ipmi_mc_t *bmc);
 int ipmi_bmc_disable_events(ipmi_mc_t *bmc);
 
-/* When you are done with a log, you should delete it.  This frees up
-   the internal store for the log and removes it from the external
-   system event log. */
-/* Delete a specific log. */
-int ipmi_bmc_del_log(ipmi_mc_t   *bmc,
-		     ipmi_log_t  *log,
-		     ipmi_bmc_cb done_handler,
-		     void        *cb_data);
-/* Delete a log by record id. */
-int ipmi_bmc_del_log_by_recid(ipmi_mc_t    *bmc,
-			      unsigned int record_id,
-			      ipmi_bmc_cb  done_handler,
-			      void         *cb_data);
+/* When you are done with an event, you should delete it.  This frees up
+   the internal store for the event and removes it from the external
+   system event event. */
+/* Delete a specific event. */
+int ipmi_bmc_del_event(ipmi_mc_t    *bmc,
+		       ipmi_event_t *event,
+		       ipmi_bmc_cb  done_handler,
+		       void         *cb_data);
+/* Delete a event by record id. */
+int ipmi_bmc_del_event_by_recid(ipmi_mc_t    *bmc,
+				unsigned int record_id,
+				ipmi_bmc_cb  done_handler,
+				void         *cb_data);
 
-/* You can also scan the current set of logs stored in the system.
+/* You can also scan the current set of events stored in the system.
    They return an error if the SEL is empty, or if you try to go past
-   the last or before the first log.  The first and last function
-   return the log, the next and prev function take the current log in
-   "log" and return the next or previous log in "log". */
-int ipmi_bmc_first_log(ipmi_mc_t *bmc, ipmi_log_t *log);
-int ipmi_bmc_last_log(ipmi_mc_t *bmc, ipmi_log_t *log);
-int ipmi_bmc_next_log(ipmi_mc_t *bmc, ipmi_log_t *log);
-int ipmi_bmc_prev_log(ipmi_mc_t *bmc, ipmi_log_t *log);
+   the last or before the first event.  The first and last function
+   return the event, the next and prev function take the current event in
+   "event" and return the next or previous event in "event". */
+int ipmi_bmc_first_event(ipmi_mc_t *bmc, ipmi_event_t *event);
+int ipmi_bmc_last_event(ipmi_mc_t *bmc, ipmi_event_t *event);
+int ipmi_bmc_next_event(ipmi_mc_t *bmc, ipmi_event_t *event);
+int ipmi_bmc_prev_event(ipmi_mc_t *bmc, ipmi_event_t *event);
 
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
@@ -245,13 +245,13 @@ void ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
 /* Set the handle to monitor the presence of an entity.  Only one
    handler may be specified, add a NULL handler to remove the current
    handler.  If the presence change was due to a system event, then
-   the log field will not be NULL and will point to the event that
-   cause the presence change.  This is so the user can delete the log
+   the event field will not be NULL and will point to the event that
+   cause the presence change.  This is so the user can delete the event
    from the SEL. */
 typedef void (*ipmi_entity_presence_cb)(ipmi_entity_t *entity,
 					int           present,
 					void          *cb_data,
-					ipmi_log_t    *log);
+					ipmi_event_t  *event);
 int ipmi_entity_set_presence_handler(ipmi_entity_t           *ent,
 				     ipmi_entity_presence_cb handler,
 				     void                    *cb_data);
@@ -327,7 +327,7 @@ int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
    tells if the value is going high or low, and the threshold value
    tells which threshold is being reported.  The value_present field
    tells whether the raw or converted values are present.  If the
-   "log" field is not NULL, then the log provided is the log that
+   "event" field is not NULL, then the log provided is the log that
    caused this event to be generated; it is provided so you may delete
    the log from the SEL. */
 enum ipmi_value_present_e { IPMI_NO_VALUES_PRESENT,
@@ -342,7 +342,7 @@ typedef void (*ipmi_sensor_threshold_event_handler_cb)(
     unsigned int                raw_value,
     double                      value,
     void                        *cb_data,
-    ipmi_log_t                  *log);
+    ipmi_event_t                *event);
 int
 ipmi_sensor_threshold_set_event_handler(
     ipmi_sensor_t                          *sensor,
@@ -355,9 +355,9 @@ ipmi_sensor_threshold_set_event_handler(
    to disable it.  When an event comes in from the sensor, the
    callback function will be called.  The "dir" variable tells if the
    state is being asserted or deasserted, the offset is the state that
-   is being asserted or deasserted.  If the "log" field is not NULL,
-   then the log provided is the log that caused this event to be
-   generated; it is provided so you may delete the log from the SEL.
+   is being asserted or deasserted.  If the "event" field is not NULL,
+   then the event provided is the event that caused this event to be
+   generated; it is provided so you may delete the event from the SEL.
    Note that the offset, severity, and prev_severity values will be -1
    if not valid or present. */
 typedef void (*ipmi_sensor_discrete_event_handler_cb)(
@@ -367,7 +367,7 @@ typedef void (*ipmi_sensor_discrete_event_handler_cb)(
     int                   severity,
     int                   prev_severity,
     void                  *cb_data,
-    ipmi_log_t            *log);
+    ipmi_event_t          *event);
 int
 ipmi_sensor_discrete_set_event_handler(
     ipmi_sensor_t                         *sensor,
@@ -779,10 +779,6 @@ int ipmi_control_get_display_string(ipmi_control_t      *control,
 				    unsigned int        len,
 				    ipmi_control_str_cb handler,
 				    void                *cb_data);
-
-/*
- * System Event Log stuff
- */
 
 /* This must be called before calling any other IPMI functions.  It
    sets a mutex and mutex operations for the smi.  You must provide
