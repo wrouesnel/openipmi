@@ -317,6 +317,10 @@ void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
 int _ipmi_mc_init(void);
 void _ipmi_mc_shutdown(void);
 
+/* Get the name of an MC. */
+#define IPMI_MC_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
+int ipmi_mc_get_name(ipmi_mc_t *mc, char *name, int length);
+
 /* Returns EEXIST if the event is already there. */
 int _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
 

@@ -92,7 +92,6 @@ typedef struct domain_up_info_s
     ipmi_mcid_t mcid;
 } domain_up_info_t;
 
-#define MC_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
 struct ipmi_mc_s
 {
     unsigned int usecount;
@@ -215,8 +214,9 @@ struct ipmi_mc_s
     int pending_devid_data;
     int pending_new_mc;
 
-
-    char name[MC_NAME_LEN];
+    /* Name used for reporting.  We add a ' ' onto the end, thus
+       the +1. */
+    char name[IPMI_MC_NAME_LEN+1];
 };
 
 static void mc_sel_new_event_handler(ipmi_sel_info_t *sel,
@@ -241,7 +241,7 @@ static void call_active_handlers(ipmi_mc_t *mc);
 
 typedef struct mc_name_info
 {
-    char name[MC_NAME_LEN];
+    char name[IPMI_MC_NAME_LEN];
 } mc_name_info_t;
 
 /***********************************************************************
@@ -253,21 +253,14 @@ typedef struct mc_name_info
 static void
 mc_set_name(ipmi_mc_t *mc)
 {
-    char        *dname = DOMAIN_NAME(mc->domain);
     int         length;
     ipmi_mcid_t id = ipmi_mc_convert_to_id(mc);
 
     ipmi_lock(mc->lock);
-    mc->name[0] = '(';
-    if (*dname != '\0') {
-	length = strlen(dname) - 3; /* Remove the "() " */
-	memcpy(mc->name+1, dname+1, length);
-	length++;
-	mc->name[length] = '.';
-	length++;
-    } else
-	length = 1;
-    length += snprintf(mc->name+length, MC_NAME_LEN-length-3, "%x.%x",
+    length = ipmi_domain_get_name(mc->domain, mc->name, sizeof(mc->name)-3);
+    mc->name[length] = '(';
+    length++;
+    length += snprintf(mc->name+length, IPMI_MC_NAME_LEN-length-3, "%x.%x",
 		       id.channel, id.mc_num);
     mc->name[length] = ')';
     length++;
@@ -276,6 +269,33 @@ mc_set_name(ipmi_mc_t *mc)
     mc->name[length] = '\0';
     length++;
     ipmi_unlock(mc->lock);
+}
+
+int
+ipmi_mc_get_name(ipmi_mc_t *mc, char *name, int length)
+{
+    int  slen;
+
+    if (length <= 0)
+	return 0;
+
+    /* Never changes, no lock needed. */
+    slen = strlen(mc->name);
+    if (slen == 0) {
+	if (name)
+	    *name = '\0';
+	goto out;
+    }
+
+    slen -= 1; /* Remove the trailing ' ' */
+    if (slen >= length)
+	slen = length - 1;
+
+    if (name)
+	memcpy(name, mc->name, slen);
+    name[slen] = '\0';
+ out:
+    return slen;
 }
 
 char *
@@ -1063,7 +1083,7 @@ typedef struct sel_get_time_s
 {
     sel_get_time_cb handler;
     void            *cb_data;
-    char            name[MC_NAME_LEN];
+    char            name[IPMI_MC_NAME_LEN];
 } sel_get_time_t;
 
 static void
@@ -1145,7 +1165,7 @@ typedef struct set_sel_time_s
 {
     ipmi_mc_done_cb handler;
     void            *cb_data;
-    char            name[MC_NAME_LEN];
+    char            name[IPMI_MC_NAME_LEN];
 } set_sel_time_t;
 
 static void

@@ -139,8 +139,9 @@ typedef struct mc_table_s
 
 struct ipmi_domain_s
 {
-    /* Used for error reporting. */
-    char name[IPMI_MAX_DOMAIN_NAME_LEN+4];
+    /* Used for error reporting. We add an extra space at the end, thus
+       the +1. */
+    char name[IPMI_MAX_DOMAIN_NAME_LEN+1];
 
     /* Used to handle shutdown race conditions. */
     int             valid;
@@ -297,6 +298,9 @@ struct ipmi_domain_s
     ipmi_domain_entity_cb cruft_entity_update_handler;
     void                  *cruft_entity_update_cb_data;
 };
+
+/* A list of all domains in the system. */
+static locked_list_t *domains_list;
 
 static void domain_audit(void *cb_data, os_hnd_timer_id_t *id);
 
@@ -614,7 +618,8 @@ cleanup_domain(ipmi_domain_t *domain)
 }
 
 static int
-setup_domain(ipmi_con_t    *ipmi[],
+setup_domain(char          *name,
+	     ipmi_con_t    *ipmi[],
 	     int           num_con,
 	     ipmi_domain_t **new_domain)
 {
@@ -628,6 +633,13 @@ setup_domain(ipmi_con_t    *ipmi[],
     if (!domain)
 	return ENOMEM;
     memset(domain, 0, sizeof(*domain));
+
+    strncpy(domain->name, name, sizeof(domain->name)-1);
+    i = strlen(domain->name);
+    if (i > 0) {
+	domain->name[i] = ' ';
+	domain->name[i+1] = '\0';
+    }
 
     domain->os_hnd = ipmi[0]->os_hnd;
 
@@ -3394,6 +3406,8 @@ ipmi_close_connection(ipmi_domain_t             *domain,
     domain->close_done = close_done;
     domain->close_done_cb_data = cb_data;
 
+    locked_list_remove(domains_list, domain, NULL);
+
     /* We don't actually do the destroy here, since the domain should
        be in use.  We wait until the usecount goes to zero. */
 
@@ -3466,7 +3480,15 @@ call_con_fails(ipmi_domain_t *domain,
 
     ipmi_lock(domain->con_lock);
     domain->connecting = 0;
-    domain->in_startup = 0;
+    if (domain->in_startup) {
+	if (! locked_list_add(domains_list, domain, NULL)) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%sdomain.c(sdr_handler): "
+		     "Out of memory, could not add domain to the domains list",
+		     DOMAIN_NAME(domain));
+	}
+	domain->in_startup = 0;
+    }
     ipmi_unlock(domain->con_lock);
 }
 
@@ -4163,7 +4185,8 @@ ll_con_changed(ipmi_con_t   *ipmi,
 }
 
 int
-ipmi_open_domain(ipmi_con_t               *con[],
+ipmi_open_domain(char                     *name,
+		 ipmi_con_t               *con[],
 		 unsigned int             num_con,
 		 ipmi_domain_con_cb       con_change_handler,
 		 void                     *con_change_cb_data,
@@ -4176,7 +4199,7 @@ ipmi_open_domain(ipmi_con_t               *con[],
     if ((num_con < 1) || (num_con > MAX_CONS))
 	return EINVAL;
 
-    rv = setup_domain(con, num_con, &domain);
+    rv = setup_domain(name, con, num_con, &domain);
     if (rv)
 	return rv;
 
@@ -4221,6 +4244,34 @@ ipmi_open_domain(ipmi_con_t               *con[],
  * Handle misc data about domains.
  *
  **********************************************************************/
+
+typedef struct domains_iter_s
+{
+    ipmi_domain_ptr_cb handler;
+    void               *cb_data;
+} domains_iter_t;
+
+static int
+iterate_domains(void *cb_data, void *item1, void *item2)
+{
+    domains_iter_t *info = cb_data;
+    info->handler(item1, info->cb_data);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+void
+ipmi_domain_iterate_domains(ipmi_domain_ptr_cb handler,
+			    void               *cb_data)
+{
+    domains_iter_t info;
+
+    if (!handler)
+	return;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    locked_list_iterate(domains_list, iterate_domains, &info);
+}
 
 ipmi_sdr_info_t *
 ipmi_domain_get_main_sdrs(ipmi_domain_t *domain)
@@ -4286,68 +4337,32 @@ _ipmi_domain_name(ipmi_domain_t *domain)
     return domain->name;
 }
 
-void
-ipmi_domain_set_name(ipmi_domain_t *domain, char *name)
-{
-    int len;
-    int i;
-
-    ipmi_lock(domain->domain_lock);
-    if (!name) {
-	domain->name[0] = '\0';
-	goto out_unlock;
-    }
-    len = strlen(name);
-    if (len == 0) {
-	domain->name[0] = '\0';
-	goto out_unlock;
-    }
-    if (len > IPMI_MAX_DOMAIN_NAME_LEN)
-	len = IPMI_MAX_DOMAIN_NAME_LEN;
-    domain->name[0] = '(';
-    memcpy(domain->name+1, name, len);
-    domain->name[len+1] = ')';
-    domain->name[len+2] = ' ';
-    domain->name[len+3] = '\0';
-
-    for (i=0; i<MAX_CONS; i++) {
-	if (domain->conn[i])
-	    domain->conn[i]->name = domain->name;
-    }
- out_unlock:
-    ipmi_unlock(domain->domain_lock);
-}
-
-void
-ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int *len)
+int
+ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int length)
 {
     int  slen;
-    char *data;
 
-    if (*len <= 0)
-	return;
+    if (length <= 0)
+	return 0;
 
-    ipmi_lock(domain->domain_lock);
+    /* Never changes, no lock needed. */
     slen = strlen(domain->name);
     if (slen == 0) {
-	*len = 0;
 	if (name)
 	    *name = '\0';
-	goto out_unlock;
+	goto out;
     }
 
-    data = domain->name+1; /* Skip the leading '(' */
-    slen = strlen(data) - 2; /* Remove the trailing ') ' */
-    if (slen >= *len) {
-	slen = *len - 1;
+    slen -= 1; /* Remove the trailing ' ' */
+    if (slen >= length) {
+	slen = length - 1;
     }
 
     if (name)
-	memcpy(name, data, slen);
+	memcpy(name, domain->name, slen);
     name[slen] = '\0';
-    *len = slen + 1; /* Include the null char */
- out_unlock:
-    ipmi_unlock(domain->domain_lock);
+ out:
+    return slen;
 }
 
 void
@@ -4388,13 +4403,23 @@ _ipmi_domain_init(void)
 {
     int rv;
 
-    oem_handlers = alloc_ilist();
-    if (!oem_handlers)
+    domains_list = locked_list_alloc(ipmi_get_global_os_handler());
+    if (!domains)
 	return ENOMEM;
+
+    oem_handlers = alloc_ilist();
+    if (!oem_handlers) {
+	locked_list_destroy(domains_list);
+	domains_list = NULL;
+	return ENOMEM;
+    }
 
     rv = ipmi_create_global_lock(&domains_lock);
     if (rv) {
+	locked_list_destroy(domains_list);
+	domains_list = NULL;
 	free_ilist(oem_handlers);
+	oem_handlers = NULL;
 	return rv;
     }
 
@@ -4404,8 +4429,12 @@ _ipmi_domain_init(void)
 void
 _ipmi_domain_shutdown(void)
 {
-    ipmi_destroy_lock(domains_lock);
+    locked_list_destroy(domains_list);
+    domains_list = NULL;
     free_ilist(oem_handlers);
+    oem_handlers = NULL;
+    ipmi_destroy_lock(domains_lock);
+    domains_lock = NULL;
 }
 
 
@@ -4607,7 +4636,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
     if ((num_con < 1) || (num_con > MAX_CONS))
 	return EINVAL;
 
-    rv = setup_domain(con, num_con, &domain);
+    rv = setup_domain("", con, num_con, &domain);
     if (rv)
 	return rv;
 

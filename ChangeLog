@@ -1,3 +1,22 @@
+2004-09-07 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Added a list of
+	domains and a way to iterate them.
+
+	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Reworked the
+	naming code to make thing a lot more sane and consistent.
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: ditto
+	* lib/entity.c: ditto
+	* lib/sensor.c: ditto
+	* lib/control.c: ditto
+
+	* sample/sample.c: Add domain name for above changes.
+	* sample/sample2.c: ditto
+	* sample/sample3.c: ditto
+	* ui/basic_ui.c, ui/ui.c: ditto
+
+	* lib/ipmi.c: Added a prototype for ipmi_malloc_init().
+
 2004-09-02 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Print active information about MCs when reported.

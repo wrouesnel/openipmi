@@ -920,6 +920,7 @@ void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
 void ipmi_oem_atca_shutdown(void);
 void _ipmi_pet_shutdown(void);
+int ipmi_malloc_init(os_handler_t *os_hnd);
 
 int
 ipmi_init(os_handler_t *handler)

@@ -175,21 +175,14 @@ int ipmi_control_id_is_invalid(ipmi_control_id_t *id);
 /* Callback used for generic domain reporting. */
 typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
 
-/* Set and get a "name" for the domain.  This name is used for logging
-   errors, so errors from domains can be separated.  You should set
-   one if you support multiple domains.  The max length is the number
-   of characters, not including the nil at the end.  A longer name
-   will be silently truncated when set.  When getting the name, the
-   actual length of the "name" array must be the max length + 1 to be
-   able to be sure to get the full name.  The actual length of the
-   name array must be put into "len" before calling (the actual length
-   must including the terminating nil), the actual length, including
-   the terminating nil, is put into "len".  This setting should be
-   done very early (before or at the point when the connection comes
-   up), as other things will pull the name and use it. */
+/* Iterate through all the domains. */
+void ipmi_domain_iterate_domains(ipmi_domain_ptr_cb handler,
+				 void               *cb_data);
+
+/* Get the "name" for the domain.  Returns the length of the string
+   (minus the closing \0). */
 #define IPMI_MAX_DOMAIN_NAME_LEN 32
-void ipmi_domain_set_name(ipmi_domain_t *domain, char *name);
-void ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int *len);
+int ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int length);
 
 /* Domains come in different flavors.  It might be useful to know the
    type of domain you are hooked to, so this function will return the
@@ -663,6 +656,7 @@ enum ipmi_dlr_type_e ipmi_entity_get_type(ipmi_entity_t *ent);
 /* Get a useful string name for the entity.  The return value is the
    number of characters in the string put into name.  The length is the
    length of the "name" array. */
+#define IPMI_ENTITY_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
 int ipmi_entity_get_name(ipmi_entity_t *entity, char *name, int length);
 
 int ipmi_entity_get_is_fru(ipmi_entity_t *ent);
@@ -1154,6 +1148,7 @@ int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 /* Get a useful string name for the sensor.  The return value is the
    number of characters in the string put into name.  The length is the
    length of the "name" array. */
+#define IPMI_SENSOR_NAME_LEN (IPMI_ENTITY_NAME_LEN + 34)
 int ipmi_sensor_get_name(ipmi_sensor_t *sensor, char *name, int length);
 
 /* Strings for various values for a sensor.  We put them in here, and
@@ -1440,6 +1435,7 @@ int ipmi_sensor_id_states_get(ipmi_sensor_id_t    sensor_id,
 /* Get a useful string name for the control.  The return value is the
    number of characters in the string put into name.  The length is the
    length of the "name" array. */
+#define IPMI_CONTROL_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 34)
 int ipmi_control_get_name(ipmi_control_t *sensor, char *name, int length);
 
 /* The type of control.  Returns something in the form IPMI_CONTROL_xxx */
@@ -1706,13 +1702,16 @@ int ipmi_control_id_identifier_set_val(ipmi_control_id_t  control_id,
    an OS handler to use for the system. */
 int ipmi_init(os_handler_t *handler);
 
-/* Create a new domain with the given IPMI connections.  The con array
-   is an array of connections to use , num_con is the number of
-   connections (currently up to two connections are supported, assuming
-   the underlying connections have proper support).  The new domain is
+/* Create a new domain with the given IPMI connections.  The name is
+   the name to give to the domain that is used by OpenIPMI for logs
+   and things of that nature.  The con array is an array of
+   connections to use , num_con is the number of connections
+   (currently up to two connections are supported, assuming the
+   underlying connections have proper support).  The new domain is
    returned in the new_domain variable, the id for the connection
    change handler is return in con_change_id. */
-int ipmi_open_domain(ipmi_con_t               *con[],
+int ipmi_open_domain(char                     *name,
+		     ipmi_con_t               *con[],
 		     unsigned int             num_con,
 		     ipmi_domain_con_cb       con_change_handler,
 		     void                     *con_change_cb_data,

@@ -69,7 +69,6 @@ struct ipmi_sensor_info_s
 };
 
 #define SENSOR_ID_LEN 32 /* 16 bytes are allowed for a sensor. */
-#define SENSOR_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + SENSOR_ID_LEN + 5)
 struct ipmi_sensor_s
 {
     unsigned int  usecount;
@@ -202,8 +201,9 @@ struct ipmi_sensor_s
     ipmi_sensor_destroy_cb destroy_handler;
     void                   *destroy_handler_cb_data;
 
-    /* Name we use for reporting */
-    char name[SENSOR_NAME_LEN];
+    /* Name we use for reporting.  We add a ' ' onto the end, thus
+       the +1. */
+    char name[IPMI_SENSOR_NAME_LEN+1];
 
 
     /* Cruft. */
@@ -941,26 +941,13 @@ static void
 sensor_set_name(ipmi_sensor_t *sensor)
 {
     int length;
-    int left;
 
-    sensor->name[0] = '(';
-    length = 1;
-    left = SENSOR_NAME_LEN - length;
-    if (sensor->entity) {
-	length += snprintf(sensor->name+length, left-3, "%s.",
-			   _ipmi_entity_name(sensor->entity));
-	left = SENSOR_NAME_LEN - length;
-    }
-
-    if (sensor->id_len > (left - 3)) {
-	memcpy(sensor->name+length, sensor->id, left-3);
-	length += left - 3;
-    } else {
-	memcpy(sensor->name+length, sensor->id, sensor->id_len);
-	length += sensor->id_len;
-    }
-    sensor->name[length] = ')';
+    length = ipmi_entity_get_name(sensor->entity, sensor->name,
+				  sizeof(sensor->name)-2);
+    sensor->name[length] = '.';
     length++;
+    length += snprintf(sensor->name+length, IPMI_SENSOR_NAME_LEN-length-2,
+		       "%s", sensor->id);
     sensor->name[length] = ' ';
     length++;
     sensor->name[length] = '\0';
@@ -976,15 +963,28 @@ _ipmi_sensor_name(ipmi_sensor_t *sensor)
 int
 ipmi_sensor_get_name(ipmi_sensor_t *sensor, char *name, int length)
 {
-    int rv = 0;
+    int  slen;
 
-    if (sensor->entity)
-	rv = ipmi_entity_get_name(sensor->entity, name, length);
-    length -= rv;
-    if (length > sensor->id_len + 2)
-	length = sensor->id_len + 2; /* Leave space for the nil */
-    rv += snprintf(name+rv, length, ".%s", sensor->id);
-    return rv;
+    if (length <= 0)
+	return 0;
+
+    /* Never changes, no lock needed. */
+    slen = strlen(sensor->name);
+    if (slen == 0) {
+	if (name)
+	    *name = '\0';
+	goto out;
+    }
+
+    slen -= 1; /* Remove the trailing ' ' */
+    if (slen >= length)
+	slen = length - 1;
+
+    if (name)
+	memcpy(name, sensor->name, slen);
+    name[slen] = '\0';
+ out:
+    return slen;
 }
 
 /***********************************************************************
@@ -1175,7 +1175,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->id_len = ipmi_get_device_string(sdr.data+42, sdr.length-42,
 						  s[p]->id, 0, &s[p]->id_type,
 						  SENSOR_ID_LEN);
-	    sensor_set_name(s[p]);
+	    if (s[p]->entity)
+		sensor_set_name(s[p]);
 
 	    p++;
 	} else {
@@ -1272,7 +1273,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 		    /* FIXME - unicode handling? */
 		}
 		s[p+j]->id_len = len;
-		sensor_set_name(s[p+j]);
+		if (s[p+j]->entity)
+		    sensor_set_name(s[p+j]);
 	    }
 
 	    if (sdr.data[18] & 0x0f)
@@ -2896,7 +2898,8 @@ ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id,
     memcpy(sensor->id, id, length);
     sensor->id_type = type;
     sensor->id_len = length;
-    sensor_set_name(sensor);
+    if (sensor->entity)
+	sensor_set_name(sensor);
 }
 
 void

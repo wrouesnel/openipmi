@@ -123,7 +123,6 @@ typedef struct dlr_info_s
     dlr_ref_t contained_entities[4];
 } dlr_info_t;
 
-#define ENTITY_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
 struct ipmi_entity_s
 {
     ipmi_domain_t    *domain;
@@ -253,8 +252,9 @@ struct ipmi_entity_s
     void                            *oem_info;
     ipmi_entity_cleanup_oem_info_cb oem_info_cleanup_handler;
 
-    /* Name we use for reporting */
-    char name[ENTITY_NAME_LEN];
+    /* Name we use for reporting.  We add a ' ' onto the end, thus
+       the +1. */
+    char name[IPMI_ENTITY_NAME_LEN+1];
 
 
     /* Cruft */
@@ -553,29 +553,21 @@ ipmi_entity_get_oem_info(ipmi_entity_t *entity)
 static void
 entity_set_name(ipmi_entity_t *entity)
 {
-    char *dname = DOMAIN_NAME(entity->domain);
-    int  length;
+    int length = sizeof(entity->name);
 
     ipmi_lock(entity->lock);
-    entity->name[0] = '(';
-    if (*dname != '\0') {
-	length = strlen(dname) - 3; /* Remove the "() " */
-	memcpy(entity->name+1, dname+1, length);
-	length++;
-	entity->name[length] = '.';
-	length++;
-    } else
-	length = 1;
-    
+    length = ipmi_domain_get_name(entity->domain, entity->name, length);
+    entity->name[length] = '(';
+    length++;
     if (entity->info.entity_instance >= 0x60) {
-	length += snprintf(entity->name+length, ENTITY_NAME_LEN-length-3,
+	length += snprintf(entity->name+length, IPMI_ENTITY_NAME_LEN-length-3,
 			   "r%d.%d.%d.%d",
 			   entity->info.device_num.channel,
 			   entity->info.device_num.address,
 			   entity->info.entity_id,
 			   entity->info.entity_instance - 0x60);
     } else {
-	length += snprintf(entity->name+length, ENTITY_NAME_LEN-length-3,
+	length += snprintf(entity->name+length, IPMI_ENTITY_NAME_LEN-length-3,
 			   "%d.%d", entity->info.entity_id,
 			   entity->info.entity_instance);
     }
@@ -612,22 +604,28 @@ _ipmi_entity_id_name(ipmi_entity_id_t entity_id)
 int
 ipmi_entity_get_name(ipmi_entity_t *ent, char *name, int length)
 {
-    int rv;
+    int  slen;
 
-    if (ent->info.entity_instance >= 0x60) {
-	rv = snprintf(name, length,
-		      "r%d.%d.%d.%d",
-		      ent->info.device_num.channel,
-		      ent->info.device_num.address,
-		      ent->info.entity_id,
-		      ent->info.entity_instance);
-    } else {
-	rv = snprintf(name, length,
-		      "%d.%d", ent->info.entity_id,
-		      ent->info.entity_instance);
+    if (length <= 0)
+	return 0;
+
+    /* Never changes, no lock needed. */
+    slen = strlen(ent->name);
+    if (slen == 0) {
+	if (name)
+	    *name = '\0';
+	goto out;
     }
 
-    return rv;
+    slen -= 1; /* Remove the trailing ' ' */
+    if (slen >= length)
+	slen = length - 1;
+
+    if (name)
+	memcpy(name, ent->name, slen);
+    name[slen] = '\0';
+ out:
+    return slen;
 }
 
 /***********************************************************************

@@ -63,7 +63,6 @@ struct ipmi_control_info_s
 };
 
 #define CONTROL_ID_LEN 32
-#define CONTROL_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + CONTROL_ID_LEN + 5)
 struct ipmi_control_s
 {
     unsigned int usecount;
@@ -133,8 +132,9 @@ struct ipmi_control_s
     ipmi_control_destroy_cb destroy_handler;
     void                    *destroy_handler_cb_data;
 
-    /* Name we use for reporting */
-    char name[CONTROL_NAME_LEN];
+    /* Name we use for reporting.  We add a ' ' onto the end, thus
+       the +1. */
+    char name[IPMI_CONTROL_NAME_LEN+1];
 };
 
 static void control_final_destroy(ipmi_control_t *control);
@@ -418,26 +418,13 @@ static void
 control_set_name(ipmi_control_t *control)
 {
     int length;
-    int left;
 
-    control->name[0] = '(';
-    length = 1;
-    left = CONTROL_NAME_LEN - length;
-    if (control->entity) {
-	length += snprintf(control->name+length, left-3, "%s.",
-			   _ipmi_entity_name(control->entity));
-	left = CONTROL_NAME_LEN - length;
-    }
-
-    if (control->id_len > (left - 3)) {
-	memcpy(control->name+length, control->id, left-3);
-	length += left - 3;
-    } else {
-	memcpy(control->name+length, control->id, control->id_len);
-	length += control->id_len;
-    }
-    control->name[length] = ')';
+    length = ipmi_entity_get_name(control->entity, control->name,
+				  sizeof(control->name)-2);
+    control->name[length] = '.';
     length++;
+    length += snprintf(control->name+length, IPMI_CONTROL_NAME_LEN-length-2,
+		       "%s", control->id);
     control->name[length] = ' ';
     length++;
     control->name[length] = '\0';
@@ -1298,7 +1285,8 @@ ipmi_control_set_id(ipmi_control_t *control, char *id,
     memcpy(control->id, id, length);
     control->id_type = type;
     control->id_len = length;
-    control_set_name(control);
+    if (control->entity)
+	control_set_name(control);
 }
 
 int

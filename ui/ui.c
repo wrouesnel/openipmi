@@ -78,12 +78,6 @@ command_t commands;
 
 ipmi_domain_id_t domain_id;
 
-#define MAX_DOMAINS 20
-#define MAX_DOMAIN_NAME 30
-ipmi_domain_id_t domains[MAX_DOMAINS];
-int domain_initialized[MAX_DOMAINS];
-char domain_names[MAX_DOMAINS][MAX_DOMAIN_NAME];
-
 extern os_handler_t ipmi_ui_cb_handlers;
 ipmi_pef_t *pef;
 ipmi_pef_config_t *pef_config;
@@ -847,13 +841,7 @@ leave_cmder(ipmi_domain_t *domain, void *cb_data)
 static int
 key_leave(int key, void *cb_data)
 {
-    int dnum;
-
-    for (dnum=0; dnum<MAX_DOMAINS; dnum++) {
-	if (!ipmi_domain_id_is_invalid(&(domains[dnum]))) {
-	    ipmi_domain_pointer_cb(domains[dnum], leave_cmder, NULL);
-	}
-    }
+    ipmi_domain_iterate_domains(leave_cmder, NULL);
     if (leave_count == 0)
 	leave(0, "");
 
@@ -1100,6 +1088,7 @@ entity_handler(ipmi_entity_t *entity,
 {
     char *present;
     char name[33];
+    char ename[IPMI_ENTITY_NAME_LEN];
     char loc[MAX_ENTITY_LOC_SIZE];
     enum ipmi_dlr_type_e type;
     static char *ent_types[] = { "unknown", "mc", "fru",
@@ -1118,6 +1107,9 @@ entity_handler(ipmi_entity_t *entity,
     display_pad_out("Entity %s (%s)  %s\n", 
 		    get_entity_loc(entity, loc, sizeof(loc)),
 		    name,  present);
+
+    ipmi_entity_get_name(entity, ename, sizeof(ename));
+    display_pad_out("  name = %s\n", ename);
 
     display_pad_out("  type = %s\n", ent_types[type]);
     display_pad_out("  entity id string = %s\n",
@@ -1597,6 +1589,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 {
     char loc[MAX_ENTITY_LOC_SIZE];
     char name[33];
+    char sname[IPMI_SENSOR_NAME_LEN];
     int  rv;
 
     if (sensor_displayed)
@@ -1608,6 +1601,8 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 
     sensor_displayed = 1;
 
+    ipmi_sensor_get_name(sensor, sname, sizeof(sname));
+
     ipmi_sensor_get_id(sensor, name, 33);
     display_pad_clear();
 
@@ -1615,6 +1610,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
     display_pad_out("Sensor %s.%s:\n",
 		    get_entity_loc(entity, loc, sizeof(loc)),
 		    name);
+    display_pad_out("  name = %s\n", sname);
     display_pad_out("  value = ");
     getyx(display_pad, value_pos.y, value_pos.x);
     if (!ipmi_entity_is_present(entity)
@@ -2528,6 +2524,7 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
     char loc[MAX_ENTITY_LOC_SIZE];
     int  control_type;
     char name[33];
+    char cname[IPMI_CONTROL_NAME_LEN];
     int  i;
     int  num_vals;
 
@@ -2549,6 +2546,8 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
     display_pad_out("Control %s.%s:\n",
 		    get_entity_loc(entity, loc, sizeof(loc)),
 		    name);
+    ipmi_control_get_name(control, cname, sizeof(cname));
+    display_pad_out("  name = %s\n", cname);
     control_type = ipmi_control_get_type(control);
     display_pad_out("  type = %s (%d)\n",
 		    ipmi_control_get_type_string(control), control_type);
@@ -6004,25 +6003,13 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
     char         *parms[30];
     const char   **argv = (const char **) parms;
     int          num_parms;
-    unsigned int curr_parm = 0;
+    unsigned int curr_parm;
     ipmi_args_t  *con_parms[2];
     int          set = 0;
     int          i;
-    int          dnum;
     ipmi_con_t   *con[2];
     int          rv;
 
-    for (dnum=0; dnum<MAX_DOMAINS; dnum++) {
-	if (ipmi_domain_id_is_invalid(&(domains[dnum]))) {
-	    break;
-	}
-    }
-    if (dnum == MAX_DOMAINS) {
-	cmd_win_out("Too many domains registered\n");
-	return 0;
-    }
-
-    domain_initialized[dnum] = 0;
     for (num_parms=0; num_parms<30; num_parms++) {
 	parms[num_parms] = strtok_r(NULL, " \t\n", toks);
 	if (!parms[num_parms])
@@ -6040,10 +6027,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	return 0;
     }
 
-    strncpy(domain_names[dnum], parms[0], MAX_DOMAIN_NAME-1);
-    domain_names[dnum][MAX_DOMAIN_NAME-1] = '\0';
-    curr_parm++;
-
+    curr_parm = 1;
     rv = ipmi_parse_args(&curr_parm, num_parms, argv, &con_parms[set]);
     if (rv) {
 	cmd_win_out("First connection parms are invalid\n");
@@ -6072,8 +6056,8 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	}
     }
 
-    rv = ipmi_open_domain(con, set, ipmi_ui_setup_done,
-			  (void *) (long) dnum, &(domains[dnum]));
+    rv = ipmi_open_domain(parms[0], con, set, ipmi_ui_setup_done,
+			  NULL, NULL);
     if (rv) {
 	cmd_win_out("ipmi_init_domain: %s\n", strerror(rv));
 	for (i=0; i<set; i++)
@@ -6081,7 +6065,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 	goto out;
     }
 
-    cmd_win_out("Domain %d started\n", dnum);
+    cmd_win_out("Domain started\n");
  out:
     for (i=0; i<set; i++)
 	ipmi_free_args(con_parms[i]);
@@ -6096,80 +6080,95 @@ final_close(void *cb_data)
     ui_log("Domain close");
 }
 
-static void
-close_cmder(ipmi_domain_t *domain, void *cb_data)
+typedef struct domain_scan_s
 {
-    int rv;
-    int dn = (long) cb_data;
+    int  err;
+    char *name;
+} domain_scan_t;
 
-    rv = ipmi_close_connection(domain, final_close, NULL);
-    if (rv)
-	cmd_win_out("Could not close connection\n");
-    else
-	ipmi_domain_id_set_invalid(&(domains[dn]));
+static void
+close_domain_handler(ipmi_domain_t *domain, void *cb_data)
+{
+    domain_scan_t *info = cb_data;
+    char name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, name, sizeof(name));
+    if (strcmp(name, info->name) == 0) {
+	/* Found it. */
+	info->err = ipmi_close_connection(domain, final_close, NULL);
+	if (info->err)
+	    cmd_win_out("Could not close connection\n");
+    }
 }
 
 
 static int
 close_domain_cmd(char *cmd, char **toks, void *cb_data)
 {
-    unsigned int dn;
-    int          rv;
+    domain_scan_t info;
 
-    if (get_uint(toks, &dn, "domain number"))
-	return 0;
-
-    if (dn >= MAX_DOMAINS) {
-	cmd_win_out("invalid_domain_number\n");
+    info.err = ENODEV;
+    info.name = strtok_r(NULL, " \t\n", toks);
+    if (!info.name) {
+	cmd_win_out("No domain given\n");
 	return 0;
     }
 
-    if (ipmi_domain_id_is_invalid(&(domains[dn]))) {
-	cmd_win_out("invalid_domain_number\n");
-	return 0;
-    }
-
-    rv = ipmi_domain_pointer_cb(domains[dn], close_cmder, (void *) (long) dn);
-    if (rv)
-	cmd_win_out("Could not convert domain to a pointer\n");
+    ipmi_domain_iterate_domains(close_domain_handler, &info);
 
     return 0;
+}
+
+static void
+set_domain_handler(ipmi_domain_t *domain, void *cb_data)
+{
+    domain_scan_t *info = cb_data;
+    char name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, name, sizeof(name));
+    if (strcmp(name, info->name) == 0) {
+	/* Found it. */
+	info->err = 0;
+	domain_id = ipmi_domain_convert_to_id(domain);
+    }
 }
 
 static int
 set_domain_cmd(char *cmd, char **toks, void *cb_data)
 {
-    unsigned int dn;
+    domain_scan_t info;
 
-    if (get_uint(toks, &dn, "domain number"))
-	return 0;
-
-    if (dn >= MAX_DOMAINS) {
-	cmd_win_out("invalid_domain_number\n");
-	return 0;
-    }
-
-    if (ipmi_domain_id_is_invalid(&(domains[dn]))) {
-	cmd_win_out("invalid_domain_number\n");
+    info.err = ENODEV;
+    info.name = strtok_r(NULL, " \t\n", toks);
+    if (!info.name) {
+	cmd_win_out("No domain given\n");
 	return 0;
     }
 
-    domain_id = domains[dn];
+    ipmi_domain_iterate_domains(set_domain_handler, &info);
+    if (info.err)
+	cmd_win_out("Error setting domain: 0x%x\n", info.err);
 
     return 0;
+}
+
+static void
+domains_handler(ipmi_domain_t *domain, void *cb_data)
+{
+    char name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, name, sizeof(name));
+    display_pad_out("  %s\n", name);
 }
 
 static int
 domains_cmd(char *cmd, char **toks, void *cb_data)
 {
-    unsigned int dnum;
-
     display_pad_clear();
     display_pad_out("Domains:\n");
-    for (dnum=0; dnum<MAX_DOMAINS; dnum++) {
-	if (! ipmi_domain_id_is_invalid(&(domains[dnum])))
-	    display_pad_out("  %2.2d %s\n", dnum, domain_names[dnum]);
-    }
+    ipmi_domain_iterate_domains(domains_handler, NULL);
+    display_pad_refresh();
+    
     return 0;
 }
 
@@ -6887,14 +6886,6 @@ redisplay_timeout(selector_t  *sel,
 }
 
 void
-ipmi_ui_set_first_domain(ipmi_domain_id_t fdomain_id)
-{
-    strcpy(domain_names[0], "first");
-    domain_id = fdomain_id;
-    domains[0] = fdomain_id;
-}
-
-void
 ipmi_ui_setup_done(ipmi_domain_t *domain,
 		   int           err,
 		   unsigned int  conn_num,
@@ -6903,7 +6894,6 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 		   void          *cb_data)
 {
     int rv;
-    int dnum = (long) cb_data;
 
     if (err)
 	ui_log("IPMI connection to con.port %d.%d is down"
@@ -6916,17 +6906,9 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
     if (!still_connected) {
 	ui_log("All IPMI connections down\n");
 	return;
-    } else if (!domain_initialized[dnum])
-	ui_log("Completed setup for the IPMI connection, domain type %s\n",
-	       ipmi_domain_get_type_string(ipmi_domain_get_type(domain)));
-    else {
-	return;
     }
 
-    domains[dnum] = ipmi_domain_convert_to_id(domain);
-    ipmi_domain_set_name(domain, domain_names[dnum]);
-
-    domain_initialized[dnum] = 1;
+    domain_id = ipmi_domain_convert_to_id(domain);
 
     rv = ipmi_domain_add_event_handler(domain, event_handler, NULL);
     if (rv)
@@ -6961,10 +6943,6 @@ int
 ipmi_ui_init(selector_t **selector, int do_full_screen)
 {
     int rv;
-    int i;
-
-    for (i=0; i<MAX_DOMAINS; i++)
-	ipmi_domain_id_set_invalid(&(domains[0]));
 
     full_screen = do_full_screen;
 
