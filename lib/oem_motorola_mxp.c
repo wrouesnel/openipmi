@@ -145,6 +145,7 @@
 
 #define MXP_CHASSIS_CONFIG_6U		0
 #define MXP_CHASSIS_CONFIG_3U		1
+#define MXP_CHASSIS_CONFIG_HALFPINT	2
 
 /* Sensor numbers in the MXP.
  *
@@ -347,6 +348,9 @@ struct mxp_info_s {
     ipmi_entity_t      *chassis_ent;
     mxp_power_supply_t power_supply[MXP_POWER_SUPPLIES];
     mxp_board_t        board[MXP_TOTAL_BOARDS];
+
+    /* Number of boards in the system */
+    unsigned int num_boards;
 
     /* Chassis info */
     ipmi_control_t *chassis_type_control;
@@ -5213,7 +5217,7 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	    goto out;
     }
 
-    for (i=0; i<MXP_BOARDS; i++) {
+    for (i=0; i<info->num_boards; i++) {
 	int idx = i + MXP_BOARD_IDX_OFFSET;
 	if (info->chassis_config == MXP_CHASSIS_CONFIG_6U)
 	    ipmb_addr = 0xB6 + (i*2);
@@ -8301,15 +8305,25 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
     }
 
     info->chassis_type = msg->data[4];
+    info->num_boards = MXP_BOARDS;
     switch (info->chassis_type) {
-    case 1:
+    case 1: /* 400W 2.16 */
 	info->chassis_config = MXP_CHASSIS_CONFIG_6U;
 	break;
 
-    case 2:
-    case 3: /* AC Supply */
-    case 4: /* DC supply */
+    case 2: /* 600W 2.20 mesh */
+    case 3: /* 600W H.110 */
+    case 4: /* 600W 2.16 */
 	info->chassis_config = MXP_CHASSIS_CONFIG_3U;
+	break;
+
+    case 5: /* HalfPint */
+    case 6: /* HalfPint H.110 */
+    case 7: /* HalfPint H.110 */
+    case 8: /* HalfPint 2.16 */
+    case 9: /* HalfPint 2.20 mesh */
+	info->chassis_config = MXP_CHASSIS_CONFIG_HALFPINT;
+	info->num_boards = 8;
 	break;
 
     default:
@@ -8615,7 +8629,7 @@ mxp_handler(ipmi_mc_t *mc,
 
 
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
-	/* It's the SI MC.  Turn off man SDR scanning, but do nothing
+	/* It's the SI MC.  Turn off main SDR scanning, but do nothing
 	   else. */
 	ipmi_mc_set_sdr_repository_support(mc, 0);
 	return 0;

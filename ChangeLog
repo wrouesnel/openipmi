@@ -2,6 +2,8 @@
 
 	* configure.in: Move to version 1.2.7.
 
+	* lib/oem_motorola_mxp.c: Add support for MXP half-pint chassis.
+
 2004-02-08 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Don't subtract 0x60 from device-relative entity
