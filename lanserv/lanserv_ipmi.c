@@ -343,29 +343,28 @@ return_rmcpp_rsp(lan_data_t *lan, session_t *session, msg_t *msg,
 	}
     }
 
+    mlen = len;
     if (session && !session->in_startup && session->integ) {
 	unsigned int count;
 	/* Pad to the next multiple of 4, including the pad length and
 	   next header. */
 	count = 0;
-	while ((len+2) % 4) {
-	    if (len == dlen)
+	while ((mlen+2) % 4) {
+	    if (mlen == dlen)
 		return;
-	    pos[len] = 0xff;
+	    pos[mlen] = 0xff;
 	    count++;
-	    len++;
+	    mlen++;
 	}
-	if (len == dlen)
+	if (mlen == dlen)
 	    return;
-	pos[len] = count;
-	len++;
-	if (len == dlen)
+	pos[mlen] = count;
+	mlen++;
+	if (mlen == dlen)
 	    return;
-	mlen = len;
 	pos[mlen] = 0x07; /* Next header */
 	mlen++;
-    } else
-	mlen = len;
+    }
 
     if (payload == 2)
 	s = 22;
@@ -2523,6 +2522,7 @@ rakp_hmac_sha1_init(lan_data_t *lan, session_t *session)
 {
     session->auth_data.akey = EVP_sha1();
     session->auth_data.akey_len = 20;
+    session->auth_data.integ_len = 12;
     return 0;
 }
 
@@ -2531,6 +2531,7 @@ rakp_hmac_md5_init(lan_data_t *lan, session_t *session)
 {
     session->auth_data.akey = EVP_md5();
     session->auth_data.akey_len = 16;
+    session->auth_data.integ_len = 16;
     return 0;
 }
 
@@ -2619,6 +2620,7 @@ rakp_hmac_set4(lan_data_t *lan, session_t *session,
     unsigned char       idata[36];
     unsigned int        ilen;
     auth_data_t         *a = &session->auth_data;
+    unsigned char       integ[20];
 
     if (((*data_len) + a->akey_len) > max_len)
 	return E2BIG;
@@ -2627,9 +2629,10 @@ rakp_hmac_set4(lan_data_t *lan, session_t *session,
     ipmi_set_uint32(idata+16, session->sid);
     memcpy(idata+20, lan->guid, 16);
 
-    HMAC(a->akey, a->sik, a->akey_len, idata, 36, data + *data_len, &ilen);
+    HMAC(a->akey, a->sik, a->akey_len, idata, 36, integ, &ilen);
+    memcpy(data+*data_len, integ, a->integ_len);
 
-    *data_len += a->akey_len;
+    *data_len += a->integ_len;
     return 0;
 }
 
@@ -2656,6 +2659,7 @@ hmac_sha1_init(lan_data_t *lan, session_t *session)
     session->auth_data.ikey2 = EVP_sha1();
     session->auth_data.ikey = session->auth_data.sik;
     session->auth_data.ikey_len = 20;
+    session->auth_data.integ_len = 12;
     return 0;
 }
 
@@ -2666,6 +2670,7 @@ hmac_md5_init(lan_data_t *lan, session_t *session)
     session->auth_data.ikey2 = EVP_md5();
     session->auth_data.ikey = user->pw;
     session->auth_data.ikey_len = 16;
+    session->auth_data.integ_len = 16;
     return 0;
 }
 
@@ -2679,15 +2684,16 @@ hmac_add(lan_data_t *lan, session_t *session,
 	 unsigned char *pos,
 	 unsigned int *data_len, unsigned int data_size)
 {
-    auth_data_t  *a = &session->auth_data;
-    unsigned int ilen;
+    auth_data_t   *a = &session->auth_data;
+    unsigned int  ilen;
+    unsigned char integ[20];
 
     if (((*data_len) + a->ikey_len) > data_size)
 	return E2BIG;
 
-    HMAC(a->ikey2, a->ikey, a->ikey_len, pos+4, (*data_len)-4,
-	 pos+(*data_len), &ilen);
-    *data_len += a->ikey_len;
+    HMAC(a->ikey2, a->ikey, a->ikey_len, pos+4, (*data_len)-4, integ, &ilen);
+    memcpy(pos+(*data_len), integ, a->integ_len);
+    *data_len += a->integ_len;
     return 0;
 }
 
@@ -2698,12 +2704,12 @@ hmac_check(lan_data_t *lan, session_t *session, msg_t *msg)
     auth_data_t   *a = &session->auth_data;
     unsigned int  ilen;
 
-    if ((msg->len-5) < a->ikey_len)
+    if ((msg->len-5) < a->integ_len)
 	return E2BIG;
 
-    HMAC(a->ikey2, a->ikey, a->ikey_len, msg->data, msg->len-a->ikey_len,
+    HMAC(a->ikey2, a->ikey, a->ikey_len, msg->data, msg->len-a->integ_len,
 	 integ, &ilen);
-    if (memcmp(msg->data+msg->len-a->ikey_len, integ, a->ikey_len) != 0)
+    if (memcmp(msg->data+msg->len-a->integ_len, integ, a->integ_len) != 0)
 	return EINVAL;
     return 0;
 }
@@ -3446,9 +3452,9 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 	    return;
 	}
     } else {
-	session_t *session = sid_to_session(lan, msg->sid);
-	int       rv;
-	int       diff;
+	session_t    *session = sid_to_session(lan, msg->sid);
+	int          rv;
+	int          diff;
 
 	if (session == NULL) {
 	    lan->log(INVALID_MSG, msg,
@@ -3473,17 +3479,6 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 		     " Message integrity failed");
 	    return;
 	}
-
-	/* Remove the integrity padding */
-	if ((msg->data[msg->len-1] > 3)
-	    || (msg->data[msg->len-1] > msg->len))
-	{
-	    lan->log(LAN_ERR, msg,
-		     "LAN msg failure:"
-		     " Message integrity padding invalid");
-	    return;
-	}
-	msg->len -= msg->data[msg->len-1] + 1;
 
 	rv = decrypt_message(lan, session, msg);
 	if (rv) {

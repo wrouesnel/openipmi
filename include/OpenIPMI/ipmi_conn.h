@@ -104,6 +104,11 @@ typedef void (*ipmi_ll_con_closed_cb)(ipmi_con_t *ipmi, void *cb_data);
    use 0x20. */
 #define IPMI_CONN_HACK_20_AS_MAIN_ADDR	0x00000001
 
+/* Set this bit in the hacks for an RMCP+ connection to a broken
+   Intel BMC.  Hopefully Intel will fix the problems with their
+   BMC, but this works around the problem for now. */
+#define IPMI_CONN_HACK_BROKEN_INTEL_BMC	0x00000002
+
 /* The data structure representing a connection.  The low-level handler
    fills this out then calls ipmi_init_con() with the connection. */
 struct ipmi_con_s
@@ -271,7 +276,7 @@ struct ipmi_con_s
 				 void                  *cb_data);
 
     /* Hacks reported by OEM code.  This should be set by the lower
-       layer. */
+       layer or by the user interface code. */
     unsigned int  hacks;
 
     /* The IPMB address as reported by the lower layer. */

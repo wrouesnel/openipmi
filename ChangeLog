@@ -1,7 +1,32 @@
-2005-03-28 Corey Minyard <cminyard@mvista.com> 
+2005-03-29 Corey Minyard <cminyard@mvista.com> 
 
-	* Release version 2.0.0
+	* include/OpenIPMI/ipmi_conn.h: Added support for a
+	IPMI_CONN_HACK_BROKEN_INTEL_BMC for handling RMCP+ problems
+	on Intel BMCs.  The Intel BMCs use the bottom 4 bits of the
+	ROLE(m) instead of the whole ROLE(m) byte.  They also use K1
+	instead of SIK to authenticate normal messages.  Both of these are
+	problems with spec compliance.
+	* cmdlang/cmd_domain.c: ditto.
+	* lib/hmac.c: ditto
+	* lib/rakp.c: ditto
+	* lib/ipmi.c: ditto
+	* man/ipmi-cmdlang.7: ditto
 
+	* lib/ipmi_lan.c: It seems the payload length does not include the
+	integrity padding, adjust for that.
+
+	* lib/hmac.c: The integrity length for normal messages is 12 bytes
+	for SHA1-96, not 20 bytes.
+	
+	* lib/rakp.c: The integrity length for RAKP4 messages was 12
+	bytes, not 20 bytes.
+	
+	* lanserv/lanserv_ipmi.c: It seems the payload length does not
+	include the integrity padding, adjust for that. The integrity
+	length for normal messages is 12 bytes for SHA1-96, not 20 bytes.
+	The integrity length for RAKP4 messages was 12 bytes, not 20
+	bytes.
+	
 2005-03-24 Corey Minyard <cminyard@mvista.com> 
 
 	* cmdlang/cmdlang.c: Cast ipmi_time_t to long long when outputting

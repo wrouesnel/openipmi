@@ -170,6 +170,7 @@ typedef struct auth_data_s
     unsigned char k1[20];
     unsigned char k2[20];
     unsigned int  akey_len;
+    unsigned int  integ_len;
     void          *adata;
     const void    *akey;
     unsigned int  ikey_len;

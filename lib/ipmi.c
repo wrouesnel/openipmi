@@ -1023,6 +1023,8 @@ struct ipmi_args_s
     unsigned char   swid;
     struct in_addr  lan_addr[2];
     int             lan_port[2];
+
+    unsigned int    hacks;
 };
 
 #define CHECK_ARG \
@@ -1208,6 +1210,11 @@ ipmi_parse_args2(int         *curr_arg,
 		memcpy(p->password, args[*curr_arg], len);
 		p->password_set = 1;
 		p->password_len = len;
+	    } else if (strcmp(args[*curr_arg], "-H") == 0) {
+		(*curr_arg)++; CHECK_ARG;
+		if (strcmp(args[*curr_arg], "intelplus") == 0)
+		    p->hacks |= IPMI_CONN_HACK_BROKEN_INTEL_BMC;
+		/* Ignore unknown hacks. */
 	    } else if (strcmp(args[*curr_arg], "-s") == 0) {
 		p->num_addr = 2;
 	    } else if (strcmp(args[*curr_arg], "-A") == 0) {
@@ -1439,10 +1446,15 @@ ipmi_args_setup_con(ipmi_args_t  *args,
 		    void         *user_data,
 		    ipmi_con_t   **con)
 {
+    int rv;
+
     switch(args->con_type) {
 #ifdef HAVE_OPENIPMI_SMI
     case SMI:
-	return ipmi_smi_setup_con(args->smi_intf, handlers, user_data, con);
+	rv = ipmi_smi_setup_con(args->smi_intf, handlers, user_data, con);
+	if (!rv)
+	    (*con)->hacks = args->hacks;
+	break;
 #endif
 
     case LAN:
@@ -1507,12 +1519,18 @@ ipmi_args_setup_con(ipmi_args_t  *args,
 	    parms[i].parm_data_len = args->bmc_key_len;
 	    i++;
 	}
-	return ipmi_lanp_setup_con(parms, i, handlers, user_data, con);
+	rv = ipmi_lanp_setup_con(parms, i, handlers, user_data, con);
+	if (!rv)
+	    (*con)->hacks = args->hacks;
+	break;
     }
 
     default:
-	return EINVAL;
+	rv = EINVAL;
+	break;
     }
+
+    return rv;
 }
 
 /* This is the number of seconds between 1/1/70 (IPMI event date) and

@@ -61,6 +61,8 @@ struct rakp_info_s
     ipmi_rmcpp_finish_auth_cb done;
     void                      *cb_data;
 
+    unsigned int  hacks;
+
     unsigned char msg_tag;
 
     void *key_data;
@@ -362,6 +364,7 @@ start_rakp(ipmi_con_t                *ipmi,
     info->check2 = check2;
     info->set3 = set3;
     info->check4 = check4;
+    info->hacks = ipmi->hacks;
 
     p = ipmi_rmcpp_auth_get_my_rand(info->ainfo, &plen);
     if (plen < 16)
@@ -426,6 +429,7 @@ static ipmi_rmcpp_authentication_t rakp_none_auth =
 typedef struct rakp_hmac_key_s
 {
     unsigned int key_len;
+    unsigned int integ_len;
     const EVP_MD *evp_md;
 } rakp_hmac_key_t;
 
@@ -521,7 +525,12 @@ rakp_hmac_s3(rakp_info_t   *info,
     p = ipmi_rmcpp_auth_get_mgsys_rand(info->ainfo, &plen);
     memcpy(idata+0, p, 16);
     ipmi_set_uint32(idata+16, ipmi_rmcpp_auth_get_my_session_id(info->ainfo));
-    idata[20] = ipmi_rmcpp_auth_get_role(info->ainfo);
+    if (info->hacks & IPMI_CONN_HACK_BROKEN_INTEL_BMC)
+      /* For the RAKP4 message, the Intel BMC only uses the bottom 4
+	 nibbles. */
+	idata[20] = ipmi_rmcpp_auth_get_role(info->ainfo) & 0xf;
+    else
+	idata[20] = ipmi_rmcpp_auth_get_role(info->ainfo);
     idata[21] = ipmi_rmcpp_auth_get_username_len(info->ainfo);
     if (idata[21] > 16)
 	return EINVAL;
@@ -550,7 +559,7 @@ rakp_hmac_c4(rakp_info_t   *info,
     const unsigned char *p;
     unsigned int        plen;
 
-    if (data_len < 8+rinfo->key_len)
+    if (data_len < 8+rinfo->integ_len)
 	return E2BIG;
 
     p = ipmi_rmcpp_auth_get_my_rand(info->ainfo, &plen);
@@ -563,7 +572,7 @@ rakp_hmac_c4(rakp_info_t   *info,
 
     p = ipmi_rmcpp_auth_get_sik(info->ainfo, &plen);
     HMAC(rinfo->evp_md, p, rinfo->key_len, idata, 36, integ_data, &ilen);
-    if (memcmp(data+8, integ_data, rinfo->key_len) != 0)
+    if (memcmp(data+8, integ_data, rinfo->integ_len) != 0)
 	return EINVAL;
 
     return 0;
@@ -587,6 +596,7 @@ rakp_sha1_init(rakp_info_t *info)
 	return ENOMEM;
     key_data->evp_md = EVP_sha1();
     key_data->key_len = 20;
+    key_data->integ_len = 12;
     info->key_data = key_data;
     return 0;
 }
@@ -621,6 +631,7 @@ rakp_md5_init(rakp_info_t *info)
 	return ENOMEM;
     key_data->evp_md = EVP_md5();
     key_data->key_len = 16;
+    key_data->integ_len = 16;
     info->key_data = key_data;
     return 0;
 }

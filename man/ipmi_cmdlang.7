@@ -393,7 +393,7 @@ Domain Created: <domain>
 .RS
 lan [-U \fI<username>\fP] [-P \fI<password>\fP] [-A \fI<authtype>\fP] [-L \fI<privilege>\fP] [-s] [-p[2] \fI<port number>\fP] \fI<IP>\fP [\fI<IP>\fP]
   [-Ra \fI<auth alg>\fP] [-Ri \fI<integ alg>\fP] [-Rc \fI<conf algo>\fP]
-  [-Rl] [-Rk \fI<bmc key>\fP]
+  [-Rl] [-Rk \fI<bmc key>\fP] [-H <hackname>]
 .RE
 for a RMCP/RMCP+ LAN connection or
 .RS
@@ -439,6 +439,15 @@ lookup.  -Rk sets the BMC key, needed if the system does two-key
 lookups.
 
 For SMI types, the <smi num> is the driver number, generally 0.
+
+The \fI<hackname>\fP enables certain hacks for broken platforms.  This
+may be listed multiple times to enable multiple hacks.  The currently
+available hacks are:
+.PD 0
+.HP
+.B intelplus
+- For Intel platforms that have broken RMCP+.
+.PD
 
 Options enable and disable various automitic processing and are:
 .PD 0

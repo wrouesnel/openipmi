@@ -1527,11 +1527,13 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 	seqp = NULL;
     }
 
+    /* Payload length doesn't include the padding. */
+    ipmi_set_uint16(tmsg, payload_len);
+
     if (in_session
 	&& (lan->ip[addr_num].working_integ
 	    != IPMI_LANP_INTEGRITY_ALGORITHM_NONE))
     {
-	unsigned int orig_data_len = *data_len;
 	rv = lan->ip[addr_num].integ_info->integ_pad
 	    (lan->ipmi,
 	     lan->ip[addr_num].integ_data,
@@ -1539,11 +1541,7 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 	     max_data_len);
 	if (rv)
 	    return rv;
-	payload_len += *data_len - orig_data_len;
     }
-
-    /* Now that we have all the padding in, we can add the length. */
-    ipmi_set_uint16(tmsg, payload_len);
 
     if (in_session
 	&& (lan->ip[addr_num].working_integ
@@ -2794,6 +2792,7 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
     /* Authenticate the message before we do anything else. */
     if (authenticated) {
 	unsigned int  pad_len;
+	unsigned int  integ_len;
 
 	if (lan->ip[addr_num].working_integ
 	    == IPMI_LANP_INTEGRITY_ALGORITHM_NONE)
@@ -2806,11 +2805,19 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	    goto out;
 	}
 
+	/* Increase the length to include the padding; this eases the
+	   handling for the payload integrity check. */
+	integ_len = header_len + payload_len;
+	while ((integ_len < len) && (data[integ_len] == 0xff))
+	    integ_len++;
+	if (integ_len < len)
+	    integ_len++;
+
 	rv = lan->ip[addr_num].integ_info->integ_check
 	    (ipmi,
 	     lan->ip[addr_num].integ_data,
 	     data,
-	     header_len + payload_len,
+	     integ_len,
 	     len);
 	if (rv) {
 	    if (lan->stat_auth_fail)
@@ -2821,16 +2828,14 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 	}
 
 	/* Remove the integrity padding. */
-	pad_len = tmsg[payload_len-1] + 1;
-	if (pad_len > payload_len) {
+	pad_len = data[integ_len-1] + 1;
+	if ((integ_len - header_len - pad_len) != payload_len) {
 	    if (lan->stat_bad_size)
 		ipmi->add_stat(ipmi->user_data, lan->stat_bad_size, 1);
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Padding too large");
+		ipmi_log(IPMI_LOG_DEBUG, "Padding size not valid: %d", pad_len);
 	    goto out;
 	}
-
-	payload_len -= pad_len;
     }
 
     /* The packet is good, we can trust the data in it now. */
