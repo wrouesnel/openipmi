@@ -2815,6 +2815,33 @@ activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_read_unlock();
 }
 
+/* If the activate timer is not running, then start it.  This
+   allows some time for other connections to become active before
+   we go off and start activating things.  We wait a random amount
+   of time so that if we get into a war with another program about
+   who is active, someone will eventually win. */
+static void
+start_activate_timer(ipmi_domain_t *domain)
+{
+    ipmi_lock(domain->activate_timer_info->lock);
+    if (!domain->activate_timer_info->running) {
+	struct timeval tv;
+	domain->os_hnd->get_random(domain->os_hnd,
+				   &tv.tv_sec,
+				   sizeof(tv.tv_sec));
+	/* Wait a random value between 5 and 15 seconds */
+	tv.tv_sec = (tv.tv_sec % 10) + 5;
+	tv.tv_usec = 0;
+	domain->os_hnd->start_timer(domain->os_hnd,
+				    domain->activate_timer,
+				    &tv,
+				    activate_timer_cb,
+				    domain->activate_timer_info);
+	domain->activate_timer_info->running = 1;
+    }
+    ipmi_unlock(domain->activate_timer_info->lock);
+}
+
 static void
 ll_addr_changed(ipmi_con_t   *ipmi,
 		int          err,
@@ -2883,28 +2910,9 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 	}
     }
 
-    /* If the activate timer is not running, then start it.  This
-       allows some time for other connections to become active before
-       we go off and start activating things.  We wait a random amount
-       of time so that if we get into a war with another program about
-       who is active, someone will eventually win. */
-    ipmi_lock(domain->activate_timer_info->lock);
-    if (!domain->activate_timer_info->running) {
-	struct timeval tv;
-	domain->os_hnd->get_random(domain->os_hnd,
-				   &tv.tv_sec,
-				   sizeof(tv.tv_sec));
-	/* Wait a random value between 5 and 15 seconds */
-	tv.tv_sec = (tv.tv_sec % 10) + 5;
-	tv.tv_usec = 0;
-	domain->os_hnd->start_timer(domain->os_hnd,
-				    domain->activate_timer,
-				    &tv,
-				    activate_timer_cb,
-				    domain->activate_timer_info);
-	domain->activate_timer_info->running = 1;
-    }
-    ipmi_unlock(domain->activate_timer_info->lock);
+    /* Start the timer to activate the connection, if necessary. */
+    if (domain->conn[u]->set_active_state)
+	start_activate_timer(domain);
 
  out_unlock:
     ipmi_read_unlock();
@@ -2955,13 +2963,9 @@ ll_con_changed(ipmi_con_t   *ipmi,
                process. */
 	    domain->working_conn = u;
 
-	    /* Set the new connection active, if necessary. */
+	    /* Start the timer to activate the connection, if necessary. */
 	    if (domain->conn[u]->set_active_state)
-		domain->conn[u]->set_active_state(
-		    domain->conn[u],
-		    1,
-		    ll_addr_changed,
-		    domain);
+		start_activate_timer(domain);
 
 	    /* When a connection comes back up, start the process of
 	       getting SDRs, scanning the bus, and the like. */

@@ -1,7 +1,16 @@
 
+2003-08-11 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sdr.c: Fixed a locking bug in the SDR code.
+
+	* lib/domain.c: Modified the set timer code that processes a new
+	working connection to wait a while until activating the
+	connection.  This allows other connections that may already be
+	active to come up.
+
 2003-08-01 Corey Minyard <cminyard@mvista.com>
 
-	* Changelog: Move to version 1.0.2.
+	* configure.in: Move to version 1.0.2.
 
 	* lib/sensor.c, lib/control.c: Handle NULL controls and sensors in
 	opq done.  If a sensor is destroyed during an operation, this can
