@@ -48,5 +48,5 @@ install-exec-local: OpenIPMI.so OpenIPMI.pm
 
 TEST_LD_LIBRARY_PATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs
 
-TESTS_ENVIRONMENT = LD_LIBRARY_PATH="$(TEST_LD_LIBRARY_PATH)"
+TESTS_ENVIRONMENT = LD_LIBRARY_PATH="$(TEST_LD_LIBRARY_PATH)" PERLLIB="$(top_builddir)/swig/perl"
 TESTS = test_fru test_chan test_lanparm test_pet

@@ -2,6 +2,14 @@
 
 	* configure.in: Changes "==" to "=".
 
+	* swig/perl/Makefile.am: Added PERLLIB to pull the modules from
+	the right place.
+
+	* lib/ipmi_lan.c: Only use the get_msg_tag() method on payloads if
+	the session id is zero.
+
+	* include/OpenIPMI/ipmi_lan.h: Improve payload docs.
+
 2005-01-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/event.c: Fixed a problem with the data length when getting

@@ -2999,7 +2999,7 @@ rmcpp_find_ipmi(lan_fd_t      *item,
     }
 
     sid = ipmi_get_uint32(d);
-    if (payloads[payload]->get_msg_tag) {
+    if ((sid == 0) && payloads[payload]->get_msg_tag) {
 	int rv = payloads[payload]->get_msg_tag(d+10, mlen, &ctag);
 	if (rv) {
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)

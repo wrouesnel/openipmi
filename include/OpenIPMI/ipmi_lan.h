@@ -293,9 +293,13 @@ typedef struct ipmi_payload_s
 			      unsigned char *data,
 			      unsigned int  data_len);
 
-    /* If the message has a tag, return it in "tag".  This may be
-       NULL.  If present, it should return an error if the message is
-       not valid or the tag could not be extracted. */
+    /* If the message has a tag, return it in "tag".  This field may
+       be NULL if the payload doesn't have tags.  If this field is
+       present, it should return an error if the message is not valid
+       or the tag could not be extracted.  Note that tags are only for
+       identifying sessions ids for out-of-connection messages
+       that have zero in the session id field, and thus this is not
+       generally used by most payloads. */
     int (*get_msg_tag)(unsigned char *data, unsigned int data_len,
 		       unsigned char *tag);
 } ipmi_payload_t;
