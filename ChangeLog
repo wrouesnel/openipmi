@@ -1,6 +1,8 @@
 
 2003-04-15 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 0.2.6.
+
 	* include/OpenIPMI/ipmi_mc.h, OpenIPMI.texi:  Change the name
 	of ipmi_bmc_get_startup_SEL_time() to ipmi_mc_get_startup_SEL_time(),
 	in the docs and includes, since it had already changed in the code.
