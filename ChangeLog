@@ -1,6 +1,12 @@
 
 2003-01-24 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c: Modified the close connection code to avoid locking
+	problems.
+
+	* include/OpenIPMI/ipmiif.h: Changed the format of the close done
+	callback to remove the BMC (since it will be gone).
+	
 	* selector.c, include/OpenIPMI/selector.h: Modified the selector
 	code to be reentrant
 	

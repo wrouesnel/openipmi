@@ -976,30 +976,83 @@ ipmi_deregister_for_command(ipmi_mc_t     *mc,
     return rv;
 }
 
+/* Closing a connection is subtle because of locks.  We schedule it to
+   be done in a timer callback, that way we can handle all the locks
+   as part of the close. */
+typedef struct close_info_s
+{
+    close_done_t close_done;
+    void         *cb_data;
+    ipmi_mc_t    *mc;
+} close_info_t;
+
+static void
+real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
+{
+    close_info_t *info = cb_data;
+    ipmi_mc_t    *mc = info->mc;
+    ipmi_con_t   *ipmi;
+
+    mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd, id);
+
+    ipmi_write_lock();
+    ipmi = mc->bmc->conn;
+
+    ipmi_cleanup_mc(mc);
+
+    ipmi->close_connection(ipmi);
+
+    ipmi_write_unlock();
+
+    if (info->close_done)
+	info->close_done(info->cb_data);
+    free(info);
+}
+
 int
 ipmi_close_connection(ipmi_mc_t    *mc,
 		      close_done_t close_done,
 		      void         *cb_data)
 {
-    int        rv;
-    ipmi_con_t *ipmi;
+    int               rv;
+    close_info_t      *close_info = NULL;
+    os_hnd_timer_id_t *timer = NULL;
+    struct timeval    timeout;
 
     if (mc->bmc_mc != mc)
 	return EINVAL;
 
     CHECK_MC_LOCK(mc);
 
-    ipmi_write_lock();
+    close_info = malloc(sizeof(*close_info));
+    if (!close_info)
+	return ENOMEM;
+
+    rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd, &timer);
+    if (rv)
+	goto out;
+
     if ((rv = ipmi_mc_validate(mc)))
-	goto out_unlock;
+	goto out;
 
-    ipmi = mc->bmc->conn;
+    close_info->mc = mc;
+    close_info->close_done = close_done;
+    close_info->cb_data = cb_data;
 
-    ipmi_cleanup_mc(mc);
-
-    ipmi->close_connection(ipmi);
- out_unlock:
-    ipmi_write_unlock();
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+    rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
+					    timer,
+					    &timeout,
+					    real_close_connection,
+					    close_info);
+ out:
+    if (rv) {
+	if (close_info)
+	    free(close_info);
+	if (timer)
+	    mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd, timer);
+    }
     return rv;
 }
 
@@ -1193,6 +1246,8 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	if (mc->bmc->ll_event_id)
 	    mc->bmc->conn->deregister_for_events(mc->bmc->conn,
 						 mc->bmc->ll_event_id);
+
+	/* Remove all the connection fail handlers. */
 	mc->bmc->conn->set_con_fail_handler(mc->bmc->conn, NULL,  NULL);
 	free(mc->bmc);
     } else if (mc->in_bmc_list) {
@@ -1434,7 +1489,7 @@ ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc)
 
     CHECK_MC_LOCK(bmc);
 
-    ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
+    ipmi_lock(bmc->bmc->mc_list_lock);
     rv = !ilist_add_tail(bmc->bmc->mc_list, mc, NULL);
     if (!rv)
 	mc->in_bmc_list = 1;

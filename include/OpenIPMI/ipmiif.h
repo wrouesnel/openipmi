@@ -857,7 +857,7 @@ void *ipmi_get_user_data(ipmi_mc_t *mc);
    with the connections, any outstanding responses will be lost, etc.
    The passed in MC must be a SMI MC.  All slave MC's will also be
    closed when this is closed. */
-typedef void (*close_done_t)(ipmi_mc_t *mc, void *cb_data);
+typedef void (*close_done_t)(void *cb_data);
 int ipmi_close_connection(ipmi_mc_t    *mc,
 			  close_done_t close_done,
 			  void         *cb_data);
