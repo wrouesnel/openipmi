@@ -1351,6 +1351,7 @@ mxp_alloc_basic_sensor(void          *data,
     hdr = ipmi_mem_alloc(sizeof(*hdr));
     if (!hdr)
 	return ENOMEM;
+    memset(hdr, 0, sizeof(*hdr));
 
     hdr->assert_events = assert_events;
     hdr->deassert_events = deassert_events;
@@ -1797,6 +1798,7 @@ mxp_alloc_control(ipmi_mc_t               *mc,
     hdr = ipmi_mem_alloc(sizeof(*hdr));
     if (!hdr)
 	return ENOMEM;
+    memset(hdr, 0, sizeof(*hdr));
 
     hdr->data = data;
 
@@ -1865,6 +1867,7 @@ mxp_alloc_id_control(ipmi_mc_t                          *mc,
     hdr = ipmi_mem_alloc(sizeof(*hdr));
     if (!hdr)
 	return ENOMEM;
+    memset(hdr, 0, sizeof(*hdr));
 
     hdr->data = data;
 
@@ -3972,6 +3975,8 @@ mxp_fan_reading_get_cb(ipmi_sensor_t        *sensor,
     get_info = ipmi_mem_alloc(sizeof(*get_info));
     if (!get_info)
 	return ENOMEM;
+    memset(get_info, 0, sizeof(*get_info));
+
     get_info->sdinfo = faninfo;
     get_info->done = done;
     get_info->cb_data = cb_data;
@@ -6392,6 +6397,7 @@ mxp_voltage_reading_get_cb(ipmi_sensor_t        *sensor,
     get_info = ipmi_mem_alloc(sizeof(*get_info));
     if (!get_info)
 	return ENOMEM;
+    memset(get_info, 0, sizeof(*get_info));
     get_info->sdinfo = info;
     get_info->done = done;
     get_info->cb_data = cb_data;
@@ -7105,6 +7111,7 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 		 SENSOR_NAME(sensor));
 	return;
     }
+    memset(info, 0, sizeof(*info));
     hnd = ipmi_domain_get_os_hnd(domain);
     info->hnd = hnd;
     info->domain_id = ipmi_domain_convert_to_id(domain);
@@ -7735,6 +7742,7 @@ i2c_sens_get_reading(ipmi_sensor_t        *sensor,
     get_info = ipmi_mem_alloc(sizeof(*get_info));
     if (!get_info)
 	return ENOMEM;
+    memset(get_info, 0, sizeof(*get_info));
     get_info->sdinfo = info;
     get_info->done = done;
     get_info->cb_data = cb_data;
@@ -7838,6 +7846,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 	rv = ENOMEM;
 	goto out;
     }
+    memset(sinfo, 0, sizeof(*sinfo));
 
     ents = ipmi_domain_get_entities(domain);
     rv = ipmi_entity_add(ents, domain,
@@ -8009,6 +8018,7 @@ alloc_adm1021_sensor(ipmi_mc_t             *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->bus = bus;
     info->addr = addr;
     info->offset = 1; /* Offset 1 is the remote temp sens. */
@@ -8091,6 +8101,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->bus = bus;
     info->addr = addr;
     info->offset = 0x27; /* Offset 0x27 is the temp sens. */
@@ -8124,6 +8135,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->bus = bus;
     info->addr = addr;
     info->offset = 0x20; /* Offset 0x20 is the 1.5V sens. */
@@ -8154,6 +8166,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->bus = bus;
     info->addr = addr;
     info->offset = 0x22; /* Offset 0x22 is the 3.3V sens. */
@@ -8184,6 +8197,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->bus = bus;
     info->addr = addr;
     info->offset = 0x23; /* Offset 0x23 is the 5V sens. */
@@ -8214,6 +8228,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->bus = bus;
     info->addr = addr;
     info->offset = 0x24; /* Offset 0x24 is the 12V sens. */
@@ -8246,6 +8261,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->bus = bus;
     info->addr = addr;
     info->offset = 0x21; /* Offset 0x21 is the Vcpp1 sens., which is -12V */
@@ -8279,6 +8295,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->bus = bus;
     info->addr = addr;
     info->offset = 0x25; /* Offset 0x25 is the Vcpp2 sens., which is 1.5V */
@@ -8727,6 +8744,7 @@ mxp_bmc_handler(ipmi_mc_t *mc)
 	    rv = ENOMEM;
 	    goto out_err;
 	}
+	memset(info, 0, sizeof(*info));
 	info->con_ch_info->up = 0;
 	info->con_ch_info->mcid = ipmi_mc_convert_to_id(mc);
 	info->con_ch_info->info = info;

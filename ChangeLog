@@ -5,6 +5,9 @@
 
 	* configure.in: Move to version 1.2.16.
 
+	* lib/oem_motorola_mxp.c: Added zeroing all data structures after
+	they are allocated.
+
 2004-02-24 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/control.c: Added an option for light controls to be able to

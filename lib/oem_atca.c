@@ -913,6 +913,24 @@ atca_mc_update_handler(enum ipmi_update_e op,
 }
 
 static void
+atca_entity_update_handler(enum ipmi_update_e op,
+			   ipmi_domain_t      *domain,
+			   ipmi_entity_t      *entity,
+			   void               *cb_data)
+{
+    switch (op) {
+    case IPMI_ADDED:
+	break;
+
+    case IPMI_CHANGED:
+	break;
+
+    case IPMI_DELETED:
+	break;
+    }
+}
+
+static void
 shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 {
     atca_info_t        *info = cb_data;
@@ -1081,6 +1099,17 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	    }
 	    j++;
 	}
+    }
+
+    rv = ipmi_domain_add_entity_update_handler(domain,
+					       atca_entity_update_handler,
+					       info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_atca.c(shelf_fru_fetched): "
+		 "Could not add entity update handler: %x",
+		 DOMAIN_NAME(domain), rv);
+	goto out;
     }
 
  out:
