@@ -2903,6 +2903,7 @@ real_close_connection(void *cb_data, os_hnd_timer_id_t *id)
 
 	/* Remove the connection fail handler. */
 	domain->conn[i]->set_con_change_handler(domain->conn[i], NULL,  NULL);
+	domain->conn[i] = NULL;
     }
 
     ipmi_write_unlock();

@@ -488,7 +488,7 @@ sensor_addr_response_handler(ipmi_domain_t *domain,
 
     if (sensor->destroyed) {
 	if (info->__rsp_handler)
-	    info->__rsp_handler(sensor, ECANCELED, NULL, info->__cb_data);
+	    info->__rsp_handler(NULL, ECANCELED, NULL, info->__cb_data);
 	sensor_final_destroy(sensor);
 	return;
     }
@@ -503,7 +503,7 @@ sensor_addr_response_handler(ipmi_domain_t *domain,
 		 "sensor.c(sensor_addr_rsp_handler):"
 		 " Could not convert sensor id to a pointer");
 	if (info->__rsp_handler)
-	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
+	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
     }
 }
 

@@ -1174,7 +1174,11 @@ first_sel_op(ipmi_mc_t *mc)
 		 "Unable to start SEL time set due to error: %x\n",
 		 rv);
 	mc->startup_SEL_time = 0;
-	ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
+	rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer,
+			  mc->sel_timer_info);
+	if (rv) {
+	    sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
+	}
     }
 }
 
