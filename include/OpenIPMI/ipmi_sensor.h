@@ -186,7 +186,8 @@ void ipmi_sensor_set_sensor_init_pu_scanning(
     int           sensor_init_pu_scanning);
 void ipmi_sensor_set_ignore_if_no_entity(ipmi_sensor_t *sensor,
 					 int           ignore_if_no_entity);
-void ipmi_sensor_set_supports_rearm(ipmi_sensor_t *sensor, int supports_rearm);
+void ipmi_sensor_set_supports_auto_rearm(ipmi_sensor_t *sensor,
+					 int supports_rearm);
 void ipmi_sensor_set_hysteresis_support(ipmi_sensor_t *sensor,
 					int           hysteresis_support);
 void ipmi_sensor_set_threshold_access(ipmi_sensor_t *sensor,
