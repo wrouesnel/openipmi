@@ -55,12 +55,18 @@
 12) There appears to be no way to get the session limit or the enable
     value for IPMI users. 
 
-13) Entity presence detection is far too complicated.  There needs to
-    be a simple one-message presence detection for entities.
+13) There is no way to get an event to know immediately if data has
+    changed (lanparm, PEF, FRU, but mostly SDRs, especially device
+    SDRs).
 
 14) There is no way to describe an entity unless it is a FRU, MC, or
     generic.  A general entity description record would be nice.
 
 15) Manual rearm sensors are crazy.
 
-16) 
+16) The whole concept of software ids (SWIDs) is half-baked and
+    probably needs to be removed.
+
+17) There is no locking of FRU data to support multiple
+    readers/writers.
+
