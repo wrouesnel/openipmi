@@ -1602,6 +1602,7 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 
 	/* I couldn't message any sensors, the thing must be gone. */
 	if (detect->sensor_try_count == 0) {
+	    ipmi_destroy_lock(detect->lock);
 	    ipmi_mem_free(detect);
 
 	    /* Try the children last. */
