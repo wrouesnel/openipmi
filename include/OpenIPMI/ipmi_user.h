@@ -64,6 +64,9 @@ int ipmi_mc_get_users(ipmi_mc_t         *mc,
 		      void              *cb_data);
 
 int ipmi_user_list_get_channel(ipmi_user_list_t *list, unsigned int *channel);
+int ipmi_user_list_get_max_user(ipmi_user_list_t *list, unsigned int *max);
+int ipmi_user_list_get_enabled_users(ipmi_user_list_t *list, unsigned int *e);
+int ipmi_user_list_get_fixed_users(ipmi_user_list_t *list, unsigned int *f);
 
 /*
  * You may not keep the user list returned from ipmi_mc_get_users(),

@@ -121,6 +121,9 @@ sub get_errcount {
 	my $self = shift;
 	my $mc = shift;
 	my $err = shift;
+	my $max_user = shift;
+	my $enabled_users = shift;
+	my $fixed_users = shift;
 	my $user = shift;
 	my $val;
 	my $rv;

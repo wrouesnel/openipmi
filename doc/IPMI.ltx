@@ -653,6 +653,25 @@ Freeing and handling the OS handler is done with the standard
 functions in the OS handler, described in section
 \ref{std-func-os-handler}.
 
+\subsubsection{The GLIB OS Handler}
+
+An OS handler is already defined for glib and will work with threads.
+It is defined in the include file
+\verb=ipmi_glib.h=; see that file for more details.
+
+To allocate a GLIB OS handler, use:
+
+\begin{verbatim}
+os_hnd = ipmi_glib_get_os_handler();
+\end{verbatim}
+
+Presumably, GLIB handles the waking of threads, so unlike the POSIX
+version no wakeup signal is required.
+
+All the other the OS handler functions are done with the standard
+functions in the OS handler, described in section
+\ref{std-func-os-handler}.
+
 \subsection{Error Handling}
 
 Almost all OpenIPMI calls that do anything besides fetch a piece of
@@ -712,12 +731,12 @@ wants to objects.
 So how do you mark an \acs{IPMI} object in-use?  If you are handling
 incoming \acs{IPMI} callbacks you generally don't have to worry about this.
 But say you are handling outside input, such as a user interface.
-What then?  If the pointers can change, how do I keep a reference to
+What then?  If the pointers can change, how do you keep a reference to
 something?
 
 OpenIPMI provides two identifiers for \acs{IPMI} objects.  One is a
 pointer, but a pointer is only good inside a callback.  The other is
-an OpenIPMI id, the id is good outside callbacks.  But the only thing
+an OpenIPMI id; the id is good outside callbacks.  But the only thing
 you can do with an id is pass it to a function that will call a
 callback for you with the pointer.  You can convert a pointer to an id
 (inside a callback, of course) so you should do that if you need to
@@ -3143,46 +3162,258 @@ written someday.
 \section{User Management}
 \label{user-mgmt}
 
-\begin{table}
-\begin{tabularx}{\textwidth}{|l|X|}
-\hline
-\texttt{IPMI\_AUTHTYPE\_NONE} & No authentication.\\
-\hline
-\texttt{IPMI\_AUTHTYPE\_MD2} & \acs{MD2} style authentication.\\
-\hline
-\texttt{IPMI\_AUTHTYPE\_MD5} & \acs{MD5} style authentication.  This is the
-recommended type of authentication.\\
-\hline
-\texttt{IPMI\_AUTHTYPE\_STRAIGHT} & Puts the password into the message in
-plain text.  Don't use this.\\
-\hline
-\end{tabularx}
-\caption{\label{ipmi-authtypes}Authentication types in IPMI}
-\end{table}
+IPMI uses users for access control on IPMI systems with LAN or serial
+interfaces.  The local system interface has no access controls, but
+the more external interfaces require authentication to be able to use
+the interface.  Users may be able to authenticate links and send and
+recieve IPMI messages.  
+
+Users have a defined maximum privilege level.  They may not negotiate
+a connection with a higher privilege level than that.  The privilege
+levels are defined in table~\vref{ipmi-priv-levels} and they affect
+what messages the system will accept from the user.  In addition to
+that, the user may be restricted to only work in a callback session.
 
 \begin{table}
 \begin{tabularx}{\textwidth}{|l|X|}
 \hline
-\texttt{IPMI\_PRIVILEGE\_CALLBACK} & The user is only allowed to request
+\texttt{IPMI\_PRIVILEGE\_CALLBACK (1)} & The user is only allowed to request
 that the IPMI system call back home.\\
 \hline
-\texttt{IPMI\_PRIVILEGE\_USER} & A ``read-only'' user.  The user can look
+\texttt{IPMI\_PRIVILEGE\_USER (2)} & A ``read-only'' user.  The user can look
 at system state, but not change anything.  For instance, the user can
 fetch \acs{SEL} entries, but not delete them.\\
 \hline
-\texttt{IPMI\_PRIVILEGE\_OPERATOR} & This user can do everything but configuration
+\texttt{IPMI\_PRIVILEGE\_OPERATOR (3)} & This user can do everything but configuration
 commands.  For instance, they can clear the SEL and configure sensors, but
 they cannot add users or configure \acs{LAN} parameters.\\
 \hline
-\texttt{IPMI\_PRIVILEGE\_ADMIN} & This user can do pretty much anything on an
+\texttt{IPMI\_PRIVILEGE\_ADMIN (4)} & This user can do pretty much anything on an
 IPMI system.\\
 \hline
-\texttt{IPMI\_PRIVILEGE\_OEM} & Undefined by the spec, it's whatever the \acs{OEM}
+\texttt{IPMI\_PRIVILEGE\_OEM (5)} & Undefined by the spec, it's whatever the \acs{OEM}
 wants.\\
 \hline
 \end{tabularx}
 \caption{\label{ipmi-priv-levels}Privilege levels in IPMI}
 \end{table}
+
+The systems have two ways of identifying users: by number and by name.
+A BMC will have a set of users (up to 63, but the BMC may have a lower
+limit) indexed by number.  User 0 is reserved.  User 1 is a special
+user that is defined to not have a name.  This provides a simple but
+insecure way to access the system, especially if user 1 does not have
+a password.  All the other user numbers may be assigned names.  The
+name is used for system authentication.
+
+Users may have passwords assigned to them.  If no password is
+assigned, then an empty password is able to authenticate the user.
+The passwords are used to authenticate the link and the messages.
+
+The user number, name, password and enable are global for all channels
+in an BMC.  The link/message authentication enables are done
+per-channel.
+
+\begin{User management in OpenIPMI}
+
+Enabling a user is a complicated process.  The user must have a name
+and password assigned.  It must be set with the proper authentication
+enables.  Then it must be enabled with a separate enable command.
+
+Fortunately, OpenIPMI handles a lot of this process for you.  You may
+get a list of users (or a specific user in a one-user list) with the
+command:
+\begin{verbatim}
+typedef void (*ipmi_user_list_cb)(ipmi_mc_t        *mc,
+				  int              err,
+				  ipmi_user_list_t *list,
+				  void             *cb_data);
+#define IPMI_MC_ALL_USERS	0
+int ipmi_mc_get_users(ipmi_mc_t         *mc,
+		      unsigned int      channel,
+		      unsigned int      user,
+		      ipmi_user_list_cb handler,
+		      void              *cb_data);
+\end{verbatim}
+Using \verb=IPMI_MC_ALL_USERS= will fetch all users, otherwise the
+user specified will be used.  The channel-specific information will be
+fetched for only the given channel.
+
+\begin{User management commands}
+
+Table~\vref{set-user-access-cmd} shows the command used to set the
+enables for the user (this is not the same as the user enable).  These
+are all per-channel.
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{Sets various controls for the user on the channel:
+        \begin{tightdefs}
+        \item[bits 0-3] - channel number
+        \item[bit 4] - Enable IPMI messaging for the user.  If this is
+	  not set, the user may not send IPMI messages.
+        \item[bit 5] - Enable link authentication for the user.  If
+	  this is not set, the user may not authenticate a link.
+        \item[bit 6] - User restricted to callback only.  If this is
+	  set, the user is restricted to callback authentication in
+	  non-callback situations.  In a callback situation, the
+	  privilege level is determined by the normal setting.
+        \item[bit 7] - If this is 1, modify the fields in this byte.
+	  If this is 0, the fields in this byte are ignored.
+        \end{tightdefs}}
+\msgitem{1}{User ID:
+        \begin{tightdefs}
+        \item[bits 0-5] - User number
+        \item[bits 6-7] - reserved
+        \end{tightdefs}}
+\msgitem{2}{User limits
+        \begin{tightdefs}
+        \item[bits 0-3] - The privilege level, as defined in
+          table~\vref{ipmi-priv-levels}.  Putting a value of Fh in this
+	  field will disable access to this channel for the user.
+        \item[bits 4-7] - reserved.
+        \end{tightdefs}}
+\msgitem{(3)}{User session limit - optional byte
+        \begin{tightdefs}
+        \item[bits 0-3] - The user session limit.  If set to 0, then
+	  the limit is the channel's session limit.  There does not
+	  appear to be any way to read this value, so it is a ``write
+	  only'' parameter.
+        \item[bits 4-7] - reserved
+        \end{tightdefs}}
+\msgtag{Response}
+\msgitem{0}{Completion Code}
+\msgcaption{\label{set-user-access-cmd}Set User Access Command,
+  NetFN S/E (06h), Cmd 43h}
+\end{showmsg}
+
+To fetch the channel information for a user, use the command shown in
+table~\vref{get-user-access-cmd}.
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{%
+        \begin{tightdefs}
+        \item[bits 0-3] - channel number
+        \item[bits 4-7] - reserved
+        \end{tightdefs}}
+\msgitem{1}{%
+        \begin{tightdefs}
+        \item[bits 0-5] - User number
+        \item[bits 6-7] - reserved
+        \end{tightdefs}}
+\msgtag{Response}
+\msgitem{0}{Completion Code}
+\msgitem{1}{%
+        \begin{tightdefs}
+        \item[bits 0-5] - Maximum number of user ids available.  If
+          this is 1, then only user 1 is supported.
+        \item[bits 6-7] - reserved
+        \end{tightdefs}}
+\msgitem{2}{%
+        \begin{tightdefs}
+        \item[bits 0-5] - Number of enabled user ids.
+        \item[bits 6-7] - reserved
+        \end{tightdefs}}
+\msgitem{3}{%
+        \begin{tightdefs}
+        \item[bits 0-5] - Count of user ids with fixed names (that cannot
+	  be changed with the set user name command).  This includes user
+	  1 and must be sequential starting with user 2.
+        \item[bits 6-7] - reserved
+        \end{tightdefs}}
+\msgitem{1}{Various controls for the user on the channel:
+        \begin{tightdefs}
+        \item[bits 0-3] - User privilege limit.
+        \item[bit 4] - IPMI messaging enabled for the user.  If this is
+	  not set, the user may not send IPMI messages.
+        \item[bit 5] - Link authentication enabled for the user.  If
+	  this is not set, the user may not authenticate a link.
+        \item[bits 6] - User restricted to callback only.  If this is
+	  set, the user is restricted to callback authentication in
+	  non-callback situations.  In a callback situation, the
+	  privilege level is determined by the normal setting.
+        \item[bits 7] - If reserved.
+        \end{tightdefs}}
+\msgcaption{\label{get-user-access-cmd}Get User Access Command,
+  NetFN S/E (06h), Cmd 44h}
+\end{showmsg}
+
+The user name is set using the command defined in
+table~\vref{set-user-name-cmd} and the name can be fetched with the
+command defined in table~\vref{get-user-name-cmd}.
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{User ID:
+        \begin{tightdefs}
+        \item[bits 0-5] - User number
+        \item[bits 6-7] - reserved
+        \end{tightdefs}}
+\msgitem{1-16}{User name - These bytes are ASCII-encoded bytes that
+	define the name of the user.}
+\msgtag{Response}
+\msgitem{0}{Completion Code}
+\msgcaption{\label{set-user-name-cmd}Set User Name Command,
+  NetFN S/E (06h), Cmd 45h}
+\end{showmsg}
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{User ID:
+        \begin{tightdefs}
+        \item[bits 0-5] - User number
+        \item[bits 6-7] - reserved
+        \end{tightdefs}}
+\msgtag{Response}
+\msgitem{0}{Completion Code}
+\msgitem{1-16}{User name - These bytes are ASCII-encoded bytes that
+	define the name of the user.}
+\msgcaption{\label{get-user-name-cmd}Get User Name Command,
+  NetFN S/E (06h), Cmd 46h}
+\end{showmsg}
+
+The Set User Password command defined in
+table~\vref{set-user-password-cmd} sets the password and also enables
+and disables the user with a different mode of the command.
+Obviously, there is no way to get the password, but unfortunately,
+there is no way to get the enable value, either.  Passwords for the
+IPMI 1.5 authentication are 16-bytes long.  Passwords for RMCP+ may be
+either 16 or 20 bytes long.  You may set a 20-byte password for a
+user, but then that user may not be used for IPMI 1.5 authentication,
+only for RMCP+ authentication.
+\begin{showmsg}
+\msgtag{Request}
+\msgitem{0}{User ID:
+        \begin{tightdefs}
+        \item[bits 0-5] - User number
+        \item[bit 6] - If this is 0, then use 16-byte passwords.  If this
+	  is 1, then use 20-byte passwords.
+        \item[bit 7] - reserved
+        \end{tightdefs}}
+\msgitem{1}{%
+        \begin{tightdefs}
+        \item[bits 0-1] - Operation:
+          \begin{tightdefs}
+	  \item[00b] - disable the user.
+	  \item[01b] - enable the user.
+	  \item[10b] - set the password to the value in this command.
+	  \item[11b] - test the password in this command and return an
+	    error code if it is incorrect.
+          \end{tightdefs}
+        \item[bits 2-7] - reserved
+        \end{tightdefs}}
+\msgitem{2-17/20}{Password - These bytes are ASCII-encoded bytes that
+	define the name of the user.  This is only present for the
+	set and test password operations.}
+\msgtag{Response}
+\msgitem{0}{Completion Code.  Special values are:
+	\begin{tightdefs}
+	\item[80h] - Password test failed
+	\item[81h] - Password was the wrong length
+	\end{tightdefs}}
+\msgcaption{\label{set-user-password-cmd}Set User Password Command,
+  NetFN S/E (06h), Cmd 45h}
+\end{showmsg}
+
+
+\section{Channels and Authentication}
 
 \begin{table}
 \begin{tabularx}{\textwidth}{|l|X|}
@@ -3203,6 +3434,23 @@ wants.\\
 \hline
 \end{tabularx}
 \caption{\label{auth-bitmask}Authentication bitmask often used in \acs{IPMI}}
+\end{table}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\texttt{IPMI\_AUTHTYPE\_NONE} & No authentication.\\
+\hline
+\texttt{IPMI\_AUTHTYPE\_MD2} & \acs{MD2} style authentication.\\
+\hline
+\texttt{IPMI\_AUTHTYPE\_MD5} & \acs{MD5} style authentication.  This is the
+recommended type of authentication.\\
+\hline
+\texttt{IPMI\_AUTHTYPE\_STRAIGHT} & Puts the password into the message in
+plain text.  Don't use this.\\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-authtypes}Authentication types in IPMI}
 \end{table}
 
 \section{The \acs{PEF} Table and \acs{SNMP} Traps}

@@ -1035,6 +1035,7 @@ mc_channel_got_users(ipmi_mc_t        *mc,
     int         count;
     swig_ref    dummy;
     int         i;
+    int         max, enabled, fixed;
 
     if (info) {
 	count = ipmi_user_list_get_user_count(info);
@@ -1053,8 +1054,11 @@ mc_channel_got_users(ipmi_mc_t        *mc,
 	ipmi_user_t *user = ipmi_user_list_get_user(info, i);
 	info_ref[i] = swig_make_ref_destruct(user, "OpenIPMI::ipmi_user_t");
     }
-    swig_call_cb(cb, "mc_channel_got_users_cb", "%p%d%*o", &mc_ref, err,
-		 count, &info_ref);
+    ipmi_user_list_get_max_user(info, &max);
+    ipmi_user_list_get_enabled_users(info, &enabled);
+    ipmi_user_list_get_fixed_users(info, &fixed);
+    swig_call_cb(cb, "mc_channel_got_users_cb", "%p%d%d%d%d%*o", &mc_ref, err,
+		 max, enabled, fixed, count, &info_ref);
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
     for (i=0; i<count; i++)
 	swig_free_ref(info_ref[i]);
@@ -4986,7 +4990,8 @@ int pef_str_to_parm(char *str);
      * If -1 is passed for the user number, then all users are
      * fetched.  The third is the handler object, the
      * mc_channel_got_users_cb method will be called on it with the
-     * following parameters: <self> <mc> <err> <user1> [<user2> ...]
+     * following parameters: <self> <mc> <err> <max users>
+     * <enabled users> <fixed users> <user1> [<user2> ...]
      * where the users are ipmi_user_t objects.
      */
     int get_users(int channel, int user, swig_cb handler)

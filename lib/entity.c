@@ -4938,9 +4938,13 @@ ipmi_entity_fetch_frus(ipmi_entity_t *ent)
 				fru_fetched_handler,
 				ent_id,
 				NULL);
-    if (rv)
+    if (rv) {
 	ipmi_mem_free(ent_id);
-    else
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%sentity.c(ipmi_entity_fetch_frus):"
+		 " Unable to allocate the FRU: %x",
+		 ENTITY_NAME(ent), rv);
+    } else
 	_ipmi_get_domain_fully_up(ent->domain);
 
     return rv;

@@ -3697,8 +3697,10 @@ struct ipmi_user_list_s
 {
     int               channel;
     int               curr;
-    int               max;
     int               idx;
+    int               max;
+    int               enabled;
+    int               fixed;
     ipmi_user_t       *users;
 
     ipmi_user_list_cb handler;
@@ -3750,6 +3752,27 @@ int
 ipmi_user_list_get_channel(ipmi_user_list_t *list, unsigned int *channel)
 {
     *channel = list->channel;
+    return 0;
+}
+
+int
+ipmi_user_list_get_max_user(ipmi_user_list_t *list, unsigned int *max)
+{
+    *max = list->max;
+    return 0;
+}
+
+int
+ipmi_user_list_get_enabled_users(ipmi_user_list_t *list, unsigned int *e)
+{
+    *e = list->enabled;
+    return 0;
+}
+
+int
+ipmi_user_list_get_fixed_users(ipmi_user_list_t *list, unsigned int *f)
+{
+    *f = list->fixed;
     return 0;
 }
 
@@ -3832,8 +3855,11 @@ got_user1(ipmi_mc_t  *mc,
     }
 
     if (! list->users) {
-	if (list->max == 0)
-	    list->max = rsp->data[1] & 0x1f;
+	if (list->max == 0) {
+	    list->max = rsp->data[1] & 0x3f;
+	    list->enabled = rsp->data[2] & 0x3f;
+	    list->fixed = rsp->data[3] & 0x3f;
+	}
 	if (list->max < 1) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%smc.c(got_chan_info): user access num uses is < 1",
@@ -3896,7 +3922,7 @@ list_next_user(ipmi_mc_t *mc, ipmi_user_list_t *info)
     ipmi_msg_t      msg;
     unsigned char   data[2];
 
-    if ((info->curr > 0x1f) || (info->curr < 1))
+    if ((info->curr > 0x3f) || (info->curr < 1))
 	return EINVAL;
 
     msg.netfn = IPMI_APP_NETFN;
@@ -3921,7 +3947,7 @@ ipmi_mc_get_users(ipmi_mc_t         *mc,
 
     if (channel > 15)
 	return EINVAL;
-    if (user > 0x1f)
+    if (user > 0x3f)
 	return EINVAL;
 
     list = ipmi_mem_alloc(sizeof(*list));
@@ -4160,7 +4186,7 @@ ipmi_mc_set_user(ipmi_mc_t       *mc,
 
     if (channel > 15)
 	return EINVAL;
-    if (num > 0x1f)
+    if (num > 0x3f)
 	return EINVAL;
 
     user = ipmi_user_copy(iuser);
@@ -4209,7 +4235,7 @@ ipmi_user_get_num(ipmi_user_t *user, unsigned int *num)
 int
 ipmi_user_set_num(ipmi_user_t *user, unsigned int num)
 {
-    if (num > 0x1f)
+    if (num > 0x3f)
 	return EINVAL;
     user->num = num;
     return 0;
