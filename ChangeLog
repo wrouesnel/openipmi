@@ -1,3 +1,20 @@
+2004-10-12 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/entity.c: Fixed some race conditions with entity creation
+	and deletion.  The changes make sure that if an entity is deleted
+	and re-added at about the same time, the operations occur in the
+	right order.
+
+	* lib/entity.c: Modified the timers to handle destruction more
+	gracefully so the entity doesn't have to hang around until the
+	timers go off.
+
+	* lib/sensor.c: Report bad SDRs by record id, not the internal
+	OpenIPMI index.
+
+	* lib/sensor.c: Fix handling of duplicate SDR record detection
+	to take the MC into account, too.
+
 2004-10-11 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_event.h, lib/event.c: Changed the type

@@ -86,6 +86,7 @@ struct ipmi_sensor_s
 				 this is stored.  This will be -1 if
 				 it does not have a source index (ie
 				 it's a non-standard sensor) */
+    int           source_recid; /* The SDR record ID the sensor came from. */
     ipmi_sensor_t **source_array; /* This is the source array where
                                      the sensor is stored. */
 
@@ -205,6 +206,8 @@ struct ipmi_sensor_s
        the +1. */
     char name[IPMI_SENSOR_NAME_LEN+1];
 
+    /* Used for temporary linking. */
+    ipmi_sensor_t *tlink;
 
     /* Cruft. */
     ipmi_sensor_threshold_event_handler_nd_cb threshold_event_handler;
@@ -1063,6 +1066,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	}
 	memset(s[p], 0, sizeof(*s[p]));
 
+	s[p]->source_recid = sdr.record_id;
 	s[p]->hot_swap_requester = -1;
 
 	s[p]->waitq = opq_alloc(ipmi_domain_get_os_hnd(domain));
@@ -1446,7 +1450,7 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     entity_list_t       *ent_item;
     entity_list_t       *new_ent_item;
     locked_list_entry_t *link, *links = NULL;
-    short               *sens_tmp;
+    ipmi_sensor_t       **sens_tmp;
     
 
     CHECK_DOMAIN_LOCK(domain);
@@ -1544,36 +1548,46 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     }
 
     /* Check for duplicate sensor numbers in the new sensor set. */
-    sens_tmp = ipmi_mem_alloc(4 * 256 * sizeof(short));
+    sens_tmp = ipmi_mem_alloc(256 * sizeof(ipmi_sensor_t **));
     if (!sens_tmp) {
 	rv = ENOMEM;
 	goto out_err_free;
     }
-    for (i=0; i<(4*256); i++)
-	sens_tmp[i] = -1;
+    memset(sens_tmp, 0, 256 * sizeof(ipmi_sensor_t **));
     ent_item = new_sensors;
     while (ent_item) {
 	ipmi_sensor_t *nsensor = ent_item->sensor;
-	int           idx;
+	ipmi_sensor_t *csensor;
 
 	if ((!ent_item->ent) || (!nsensor)) {
 	    ent_item = ent_item->next;
 	    continue;
 	}
 
-	idx = (nsensor->lun * 256) + nsensor->num;
-	if (sens_tmp[idx] != -1) {
+	csensor = sens_tmp[nsensor->num];
+	while (csensor) {
+	    if ((csensor->lun == nsensor->lun)
+		&& (csensor->num == nsensor->num)
+		&& (csensor->mc == nsensor->mc))
+	    {
+		break;
+	    }
+	    csensor = csensor->tlink;
+	}
+	if (csensor) {
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%ssensor.c(ipmi_sensor_handle_sdrs):"
-		     " Sensor idx 0x%x is the same as sensor idx 0x%x in the"
-		     " repository.  Ignoring second sensor.  Fix your SDRs!",
+		     " Sensor record %d has the same number sensor record"
+		     " %d in the repository.  Ignoring second sensor. "
+		     " Fix your SDRs!",
 		     SENSOR_NAME(nsensor),
-		     sens_tmp[idx],
-		     nsensor->source_idx);
+		     csensor->source_recid,
+		     nsensor->source_recid);
 	    ent_item->op = ENT_LIST_DUP;
 	    ent_item->osensor = NULL;
 	} else {
-	    sens_tmp[idx] = nsensor->source_idx;
+	    nsensor->tlink = sens_tmp[nsensor->num];
+	    sens_tmp[nsensor->num] = nsensor;
 	}
 	ent_item = ent_item->next;
     }
