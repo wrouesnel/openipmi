@@ -2,7 +2,7 @@ RPM		= rpmbuild
 RPMFLAGS	= -ta
 
 SUBDIRS    = include utils lib unix $(GLIB_DIR) cmdlang ui lanserv \
-	     sample doc man
+	     sample doc man $(SWIG_DIR)
 
 EXTRA_DIST = FAQ TODO README.Force README.MotorolaMXP OpenIPMI.spec.in \
 	     OpenIPMI.spec

@@ -5,31 +5,47 @@
 
 #include "OpenIPMI.h"
 
-swig_cb
-ref_swig_cb(swig_cb cb)
+swig_cb_val
+get_swig_cb(swig_cb cb)
 {
-    SV *ref = cb;
-
-    SvREFCNT_inc(ref);
-    return cb;
+    swig_cb_val rv = SvRV(cb);
+    return rv;
 }
 
-swig_cb
+swig_cb_val
+ref_swig_cb(swig_cb cb)
+{
+    swig_cb_val rv = SvRV(cb);
+
+    SvREFCNT_inc(rv);
+    return rv;
+}
+
+swig_cb_val
 deref_swig_cb(swig_cb cb)
 {
-    SV *ref = cb;
+    swig_cb_val rv = SvRV(cb);
 
-    SvREFCNT_dec(ref);
+    SvREFCNT_dec(rv);
+    return rv;
+}
+
+swig_cb_val
+deref_swig_cb_val(swig_cb_val cb)
+{
+    SvREFCNT_dec(cb);
     return cb;
 }
 
 void
-swig_call_cb(swig_cb cb, char *method_name,
+swig_call_cb(swig_cb_val cb, char *method_name,
 	     char *format, ...)
 {
-    SV *ref = cb;
+    SV *ref = newRV_inc(cb);
     va_list ap;
     dSP ;
+
+    sv_bless(ref, SvSTASH(cb));
 
     ENTER;
     SAVETMPS;
@@ -68,7 +84,7 @@ swig_call_cb(swig_cb cb, char *method_name,
 	    break;
 
 	case 'p':
-	    XPUSHs(va_arg(ap, SV *));
+	    XPUSHs(va_arg(ap, swig_ref *)->val);
 	    break;
 	    
 	default:
@@ -91,11 +107,13 @@ swig_ref
 swig_make_ref(void *item, char *class)
 {
     SV *ref = newSV(0);
+    swig_ref rv;
 
-    return sv_setref_pv(ref, class, item);
+    rv.val = sv_setref_pv(ref, class, item);
+    return rv;
 }
 
 void swig_free_ref(swig_ref ref)
 {
-    SvREFCNT_dec(ref);
+    SvREFCNT_dec(ref.val);
 }

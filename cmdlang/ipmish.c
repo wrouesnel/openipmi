@@ -156,6 +156,30 @@ debug_vlog(char *format,
     posix_vlog(format, log_type, ap);
 }
 
+#ifdef HAVE_GLIB
+void glib_handle_log(const gchar *log_domain,
+		     GLogLevelFlags log_level,
+		     const gchar *message,
+		     gpointer user_data)
+{
+    char *pfx = "";
+
+    if (log_level & G_LOG_LEVEL_ERROR)
+	pfx = "FATL: ";
+    else if (log_level & G_LOG_LEVEL_CRITICAL)
+	pfx = "SEVR: ";
+    else if (log_level & G_LOG_LEVEL_WARNING)
+	pfx = "WARN: ";
+    else if (log_level & G_LOG_LEVEL_MESSAGE)
+	pfx = "EINF: ";
+    else if (log_level & G_LOG_LEVEL_INFO)
+	pfx = "INFO: ";
+    else if (log_level & G_LOG_LEVEL_DEBUG)
+	pfx = "DEBG: ";
+    printf("%s%s\n", pfx, message);
+}
+#endif
+
 static void
 enable_term_fd(ipmi_cmdlang_t *cmdlang)
 {
@@ -983,6 +1007,16 @@ main(int argc, char *argv[])
 		    "ipmi_smi_setup_con: Unable to allocate os handler\n");
 	    return 1;
 	}
+	g_log_set_handler("OpenIPMI",
+			  G_LOG_LEVEL_ERROR
+			  | G_LOG_LEVEL_CRITICAL
+			  | G_LOG_LEVEL_WARNING
+			  | G_LOG_LEVEL_MESSAGE
+			  | G_LOG_LEVEL_INFO
+			  | G_LOG_LEVEL_DEBUG
+			  | G_LOG_FLAG_FATAL,
+			  glib_handle_log,
+                          NULL);
 	sel = NULL;
 #endif
     } else {

@@ -48,6 +48,26 @@ AC_ARG_WITH(glib,
     fi,
 )
 
+tryperl=yes
+AC_ARG_WITH(perl,
+[  --with-perl                     Look for perl.],
+    if test "x$withval" = "xyes"; then
+      tryperl=yes
+    elif test "x$withval" = "xno"; then
+      tryperl=no
+    fi,
+)
+
+tryswig=yes
+AC_ARG_WITH(swig,
+[  --with-swig                     Look for swig.],
+    if test "x$withval" = "xyes"; then
+      tryswig=yes
+    elif test "x$withval" = "xno"; then
+      tryswig=no
+    fi,
+)
+
 AC_PROG_CC
 AM_PROG_LIBTOOL
 AC_STDC_HEADERS
@@ -59,6 +79,7 @@ AC_SUBST(OPENIPMI_VERSION_MINOR)
 AC_SUBST(OPENIPMI_VERSION_RELEASE)
 AC_SUBST(OPENIPMI_VERSION_EXTRA)
 
+# Handle GLIB support
 glibprog=
 if test "x$tryglib" != "xno"; then
    AC_PATH_PROG(glibprog, glib-config)
@@ -67,7 +88,7 @@ if test "x$glibprog" != "x"; then
    AC_DEFINE(HAVE_GLIB)
    GLIB_DIR=glib
    GLIB_CFLAGS=`$glibprog --cflags gthread`
-   GLIB_LIBS=`$glibprog --libs gthread`
+   GLIB_LIBS="\$(top_builddir)/glib/libOpenIPMIglib.la `$glibprog --libs gthread`"
    GLIB_PKGCONF=OpenIPMIglib.pc
 else
    GLIB_DIR=
@@ -80,6 +101,52 @@ AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
 AC_SUBST(GLIB_PKGCONF)
 
+# Handle PERL support
+perlprog=
+if test "x$tryperl" != "xno"; then
+   AC_PATH_PROG(perlprog, perl)
+fi
+if test "x$perlprog" != "x"; then
+   perldir=`$perlprog -V:ccdlflags`
+   if test "x$perldir" == "x"; then
+      perldir=
+   else
+      if echo "$perldir" | grep "UNKNOWN"; then
+	 perldir=
+      else
+         perldir=`echo $perldir | sed 's/^.*,\(\/.*\).;$/\1/'`
+	 if test ! -d $perldir; then
+	    perldir=
+	 fi
+      fi
+   fi
+fi
+
+if test "x$perldir" != "x"; then
+   AC_DEFINE(HAVE_PERL)
+   PERL_DIR=perl
+   PERL_CFLAGS="-I $perldir `$perlprog -V:ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
+else
+   PERL_DIR=
+   PERL_CFLAGS=
+fi
+AC_SUBST(PERL_DIR)
+AC_SUBST(PERL_CFLAGS)
+
+# Now check for swig
+swigprog=
+if test "x$tryswig" != "xno"; then
+   AC_PATH_PROG(swigprog, swig)
+fi
+if test "x$swigprog" != "x"; then
+   AC_DEFINE(HAVE_SWIG)
+   SWIG_DIR=swig
+else
+   SWIG_DIR=
+fi
+AC_SUBST(SWIG_DIR)
+
+# Handle SNMP support
 if test "x$tryucdsnmp" != "xno"; then
 
    HAVE_UCDSNMP=no
@@ -155,6 +222,8 @@ AC_OUTPUT(Makefile
 	  sample/Makefile
 	  doc/Makefile
 	  man/Makefile
+	  swig/Makefile
+	  swig/perl/Makefile
 	  cmdlang/Makefile
 	  include/Makefile
 	  include/OpenIPMI/Makefile

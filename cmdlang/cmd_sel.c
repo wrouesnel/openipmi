@@ -85,7 +85,6 @@ mc_sel_list(ipmi_mc_t *mc, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     char            mc_name[IPMI_MC_NAME_LEN];
-    int             rv;
     ipmi_event_t    *event, *event2;
 
     ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));

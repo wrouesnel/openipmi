@@ -348,7 +348,7 @@ glib_vlog(os_handler_t         *handler,
     case IPMI_LOG_WARNING:	flags = G_LOG_LEVEL_WARNING; break;
     case IPMI_LOG_SEVERE:	flags = G_LOG_LEVEL_CRITICAL; break;
     case IPMI_LOG_FATAL:	flags = G_LOG_LEVEL_ERROR; break;
-    case IPMI_LOG_ERR_INFO:	flags = G_LOG_LEVEL_INFO; break;
+    case IPMI_LOG_ERR_INFO:	flags = G_LOG_LEVEL_MESSAGE; break;
     case IPMI_LOG_DEBUG:	flags = G_LOG_LEVEL_DEBUG; break;
 
     case IPMI_LOG_DEBUG_END:

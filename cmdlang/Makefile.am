@@ -30,7 +30,6 @@ ipmish_LDADD =  libOpenIPMIcmdlang.la \
 		$(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
-		$(top_builddir)/glib/libOpenIPMIglib.la \
 		$(SNMPLIBS) $(GLIB_LIBS)
 
 clean:
