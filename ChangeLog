@@ -1,3 +1,11 @@
+2005-03-30 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi_lan.c: Fix a problem with multiple connections to the
+	same address.  These cannot share lan_fd entries because they
+	cannot be uniquely identified.
+
+	* all: Release version 2.0.0.
+	
 2005-03-29 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_conn.h: Added support for a
@@ -27,8 +35,6 @@
 	The integrity length for RAKP4 messages was 12 bytes, not 20
 	bytes.
 
-	* all: Release version 2.0.0.
-	
 2005-03-29 Darius Davis <darius.davis@cyclades.com>, Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Add test for execinfo.h

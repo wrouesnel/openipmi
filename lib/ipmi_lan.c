@@ -373,6 +373,8 @@ struct lan_data_s
 };
 
 
+static int addr_match(sockaddr_ip_t *a1, sockaddr_ip_t *a2);
+
 /************************************************************************
  *
  * Authentication and encryption information and functions.
@@ -1059,6 +1061,17 @@ static void data_handler(int            fd,
 			 void           *cb_data,
 			 os_hnd_fd_id_t *id);
 
+static void
+move_to_lan_list_end(lan_fd_t *list, lan_fd_t *item)
+{
+    item->next->prev = item->prev;
+    item->prev->next = item->next;
+    item->next = list;
+    item->prev = list->prev;
+    list->prev->next = item;
+    list->prev = item;
+}
+
 static lan_fd_t *
 find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 {
@@ -1086,26 +1099,50 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 
     ipmi_lock(lock);
     item = list->next;
+ retry:
     if (item->cons_in_use < MAX_CONS_PER_FD) {
+	int tslot = -1;
 	/* Got an entry with a slot, just reuse it. */
 	for (i=0; i<MAX_CONS_PER_FD; i++) {
-	    if (! item->lan[i])
-		break;
+	    if (item->lan[i]) {
+		/* Check for a matching IP address.  Can't have two
+		   systems with the same address in the same fd entry. */
+		int j, k;
+		lan_data_t *l = item->lan[i];
+
+		for (j=0; j<l->cparm.num_ip_addr; j++) {
+		    for (k=0; k<lan->cparm.num_ip_addr; k++) {
+			if (addr_match(&l->cparm.ip_addr[j],
+				       &lan->cparm.ip_addr[k]))
+			{
+			    /* Found the same address in the same
+			       lan_data file.  Try another one. */
+			    item = item->next;
+			    goto retry;
+			}
+		    }
+		}
+	    } else if (tslot < 0)
+		tslot = i;
+	}
+	if (tslot < 0) {
+	    lan_fd_t *next = item->next;
+	    /* Can't happen, but log and fix it up. */
+	    ipmi_log(IPMI_LOG_SEVERE, "ipmi_lan.c: Internal error, count"
+		     " in lan fd list item incorrect, but we can recover.");
+	    item->cons_in_use = MAX_CONS_PER_FD;
+	    move_to_lan_list_end(list, item);
+	    item = next;
+	    goto retry;
 	}
 	item->cons_in_use++;
 	item->lan[i] = lan;
-	*slot = i;
+	*slot = tslot;
 
-	if (item->cons_in_use == MAX_CONS_PER_FD) {
+	if (item->cons_in_use == MAX_CONS_PER_FD)
 	    /* Out of connections in this item, move it to the end of
 	       the list. */
-	    item->next->prev = item->prev;
-	    item->prev->next = item->next;
-	    item->next = list;
-	    item->prev = list->prev;
-	    list->prev->next = item;
-	    list->prev = item;
-	}
+	    move_to_lan_list_end(list, item);
     } else {
 	/* No free entries, create one */
 	if (*free_list) {
@@ -2959,7 +2996,9 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	if (lan->stat_invalid_auth)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype");
+	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid authtype, "
+		     "expected %d, got %d", lan->ip[addr_num].working_authtype,
+		     data[4] & 0x0f);
 	goto out;
     }
 
