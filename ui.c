@@ -2063,19 +2063,20 @@ set_control(ipmi_control_t *control, void *cb_data)
 	    vals = ipmi_mem_alloc(sizeof(*vals) * num_vals);
 	    if (!vals) {
 		cmd_win_out("set_control: out of memory\n");
-		goto out;
+		goto out_bcon;
 	    }
 	
 	    for (i=0; i<num_vals; i++) {
 		tok = strtok_r(NULL, " \t\n", toks);
 		if (!tok) {
 		    cmd_win_out("set_control: Value %d is not present\n", i);
-		    goto out;
+		    goto out_bcon;
 		}
 		vals[i] = strtol(tok, &estr, 0);
 		if (*estr != '\0') {
+		    ipmi_mem_free(vals);
 		    cmd_win_out("set_control: Value %d is invalid\n", i);
-		    goto out;
+		    goto out_bcon;
 		}
 	    }
 
@@ -2083,6 +2084,8 @@ set_control(ipmi_control_t *control, void *cb_data)
 	    if (rv) {
 		cmd_win_out("set_control: Returned error 0x%x\n", rv);
 	    }
+    out_bcon:
+	    ipmi_mem_free(vals);
 	    break;
 
 	case IPMI_CONTROL_DISPLAY:

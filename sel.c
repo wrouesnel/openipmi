@@ -1063,6 +1063,9 @@ sel_del_event(ipmi_sel_info_t       *sel,
 	if (rv)
 	    ipmi_mem_free(data);
 	rv = 0;
+    } else {
+	/* Do don't really delete the event, but report is as done. */
+	handler(sel, cb_data, 0);
     }
 
  out_unlock2:

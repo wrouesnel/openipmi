@@ -1,6 +1,11 @@
 
 2003-02-20 Corey Minyard <cminyard@mvista.com>
 
+	* ui.c: Fixed a memory leak with controls.
+
+	* sel.c: Make sure to report that a sel delete completed, even if
+	we can only clear the whole SEL when all are done.
+
 	* include/OpenIPMI/ipmi_msgbits.h: Added event receiver commands.
 
 	* mc.c: Fixed a memory leak deleting logs.
