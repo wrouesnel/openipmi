@@ -1127,7 +1127,6 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
     }
 
  next_addr:
-    info->addr.slave_addr += 2;
     if (info->addr.slave_addr == info->end_addr) {
 	/* We've hit the end, we can quit now. */
 	if (info->done_handler)
@@ -1135,6 +1134,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	free(info);
 	return;
     }
+    info->addr.slave_addr += 2;
 
     rv = info->bmc->bmc->conn->send_command(info->bmc->bmc->conn,
 					    (ipmi_addr_t *) &(info->addr),
@@ -1142,8 +1142,8 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 					    &(info->msg),
 					    devid_bc_rsp_handler,
 					    info, NULL, NULL);
-    while ((rv) && (info->addr.slave_addr < 0xef)) {
-	(info->addr.slave_addr)++;
+    while ((rv) && (info->addr.slave_addr < info->end_addr)) {
+	info->addr.slave_addr += 2;
 	rv = info->bmc->bmc->conn->send_command(info->bmc->bmc->conn,
 						(ipmi_addr_t *) &(info->addr),
 						sizeof(info->addr),
@@ -1191,8 +1191,8 @@ ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
 				      devid_bc_rsp_handler,
 				      info, NULL, NULL);
 
-    while ((rv) && (info->addr.slave_addr < 0xef)) {
-	(info->addr.slave_addr)++;
+    while ((rv) && (info->addr.slave_addr < end_addr)) {
+	info->addr.slave_addr += 2;
 	rv = bmc->bmc->conn->send_command(bmc->bmc->conn,
 					  (ipmi_addr_t *) &(info->addr),
 					  sizeof(info->addr),
