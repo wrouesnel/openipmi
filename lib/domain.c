@@ -3294,9 +3294,11 @@ got_dev_id(ipmi_mc_t  *mc,
 	return;
     }
 
-    domain->major_version = rsp->data[5] & 0xf;
-    domain->minor_version = (rsp->data[5] >> 4) & 0xf;
-    domain->SDR_repository_support = (rsp->data[6] >> 1) & 1;
+    /* Get the information from the MC, not the message, since it may have
+       been fixed up. */
+    domain->major_version = ipmi_mc_major_version(mc);
+    domain->minor_version = ipmi_mc_minor_version(mc);
+    domain->SDR_repository_support = ipmi_mc_sdr_repository_support(mc);
 
     if ((domain->major_version != 1)
 	|| ((domain->major_version == 1)
