@@ -35,6 +35,7 @@
 #include <string.h>
 #include <errno.h>
 #include <math.h>
+#include <ctype.h>
 #include <stdio.h> /* For sprintf */
 
 #include <OpenIPMI/ipmi_conn.h>
@@ -3044,7 +3045,7 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	unsigned int  mfg_id;
 	unsigned char *p;
 	unsigned char *str;
-	int           has_ipmb_32;
+	int           has_ipmb_32 = 0;
 
 	    
 	if ((ipmi_fru_get_multi_record_type(fru, i, &type) != 0)
