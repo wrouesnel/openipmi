@@ -46,6 +46,7 @@
 #include <popt.h> /* Option parsing made easy */
 #include <malloc.h>
 #include <sys/ioctl.h>
+#include <syslog.h>
 
 #include <OpenIPMI/log.h>
 #include <OpenIPMI/ipmi_err.h>
@@ -434,7 +435,7 @@ get_user(char **tokptr, lan_data_t *lan)
     err = get_priv(tokptr, &val);
     if (err)
 	return err;
-    lan->users[num].priviledge = val;
+    lan->users[num].privilege = val;
 
     err = get_uint(tokptr, &val);
     if (err)
@@ -483,7 +484,7 @@ read_config(lan_data_t *lan)
 	    lan->channel.per_msg_auth = val;
 	} else if (strcmp(tok, "priv_limit") == 0) {
 	    err = get_priv(&tokptr, &val);
-	    lan->channel.priviledge_limit = val;
+	    lan->channel.privilege_limit = val;
 	} else if (strcmp(tok, "allowed_auths_callback") == 0) {
 	    err = get_auths(&tokptr, &val);
 	    lan->channel.priv_info[0].allowed_auths = val;
@@ -591,6 +592,16 @@ diff_timeval(struct timeval *dest,
     }
 }
 
+static void
+log(int logtype, msg_t *msg, char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vsyslog(LOG_NOTICE, format, ap);
+    va_end(ap);
+}
+
 static int lan_port = 623;
 static char *config_file = "/etc/ipmi_lan.conf";
 static char *ipmi_dev = NULL;
@@ -646,6 +657,8 @@ main(int argc, const char *argv[])
     struct timeval timeout;
     struct timeval time_next;
     struct timeval time_now;
+
+    openlog(argv[0], 0, LOG_DAEMON);
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((o = poptGetNextOpt(poptCtx)) >= 0)
@@ -704,4 +717,3 @@ main(int argc, const char *argv[])
 	}
     }
 }
-

@@ -56,7 +56,7 @@ typedef struct channel_s
     /* We don't support user-level authentication disable, and access
        mode is always available and cannot be set. */
 
-    unsigned int priviledge_limit : 4;
+    unsigned int privilege_limit : 4;
     struct {
 	unsigned char allowed_auths;
     } priv_info[NUM_PRIV_LEVEL];
@@ -80,6 +80,10 @@ typedef struct session_s
 
     /* The number of seconds left before the session is shut down. */
     unsigned int time_left;
+
+    /* Address of the message that started the sessions. */
+    void *src_addr;
+    int  src_len;
 } session_t;
 
 typedef struct user_s
@@ -87,7 +91,7 @@ typedef struct user_s
     unsigned char valid;
     unsigned char username[16];
     unsigned char pw[16];
-    unsigned char priviledge;
+    unsigned char privilege;
     unsigned char max_sessions;
     unsigned char curr_sessions;
     uint16_t      allowed_auths;
@@ -126,10 +130,20 @@ struct lan_data_s
     void *(*alloc)(lan_data_t *lan, int size);
     void (*free)(lan_data_t *lan, void *data);
 
-    /* Writethe configuration file (done when a non-volatile
+    /* Write the configuration file (done when a non-volatile
        change is done, or when a user name/password is written. */
     void (*write_config)(lan_data_t *lan);
 
+#define NEW_SESSION			1
+#define NEW_SESSION_FAILED		2
+#define SESSION_CLOSED			3
+#define SESSION_CHALLENGE		4
+#define SESSION_CHALLENGE_FAILED	5
+#define AUTH_FAILED			6
+#define INVALID_MSG			7
+#define OS_ERROR			8
+#define LAN_ERR				9
+    void (*log)(int type, msg_t *msg, char *format, ...);
 
     /* Don't fill in the below in the user code. */
 

@@ -1,4 +1,9 @@
 
+2003-04-28 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv.c, lanserv.h, lanserv_ipmi.c: Added logs for error and
+	notification handling.
+
 2003-04-27 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv.c, lanserv.h, lanserv_ipmi.c: Added timeout handling
