@@ -27,6 +27,13 @@
 	The integrity length for RAKP4 messages was 12 bytes, not 20
 	bytes.
 	
+2005-03-29 Darius Davis <darius.davis@cyclades.com>, Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Add test for execinfo.h
+
+	* utils/ipmi_malloc.c: #ifdef HAVE_EXECINFO_H around code dependent on
+	execinfo.h and the backtrace function.
+
 2005-03-24 Corey Minyard <cminyard@mvista.com> 
 
 	* cmdlang/cmdlang.c: Cast ipmi_time_t to long long when outputting
@@ -96,7 +103,7 @@
 
 	* lib/domain.c: Added IPMI 2.0 as a supported version.
 
-2005-03-21 Darius Davis <darius.davis@cyclades.com>
+2005-03-21 Darius Davis <dariusd@users.sourceforge.net>
 
 	* lib/strings.c: Fix misnamed command string for payload activation.
 

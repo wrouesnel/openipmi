@@ -32,7 +32,11 @@
  */
 
 #include <string.h>
+
+#ifdef HAVE_EXECINFO_H
 #include <execinfo.h> /* For backtrace() */
+#endif
+
 #include <OpenIPMI/ipmi_log.h>
 #include <OpenIPMI/os_handler.h>
 
@@ -61,11 +65,19 @@ struct dbg_malloc_header
 {
     unsigned long signature;
     unsigned long size;
+    /*
+     * The following tb is included even if !HAVE_EXECINFO_H, because
+     * it is used to detect buffer underruns.
+     */
     void          *tb[TB_SIZE];
 };
 
 struct dbg_malloc_trailer
 {
+    /*
+     * The following tb is included even if !HAVE_EXECINFO_H, because
+     * it is used to detect buffer overruns.
+     */
     void                     *tb[TB_SIZE];
     struct dbg_malloc_header *next, *prev;
 };
@@ -146,7 +158,9 @@ mem_debug_log(void                      *data,
 	      void                      **tb,
 	      char                      *text)
 {
+#ifdef HAVE_EXECINFO_H
     int  i;
+#endif
 
     if (!ipmi_malloc_log)
 	return;
@@ -154,13 +168,17 @@ mem_debug_log(void                      *data,
     ipmi_malloc_log(IPMI_LOG_DEBUG_START, "%s", text);
     if (hdr) {
 	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT,
-		 " %ld bytes at %p, allocated at",
+		 " %ld bytes at %p",
 		 hdr->size, data);
+#ifdef HAVE_EXECINFO_H
+	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, ", allocated at");
 	for (i=0; i<TB_SIZE && hdr->tb[i]; i++)
 	    ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " %p", hdr->tb[i]);
+#endif
     } else if (data) {
 	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " at %p", data);
     }
+#ifdef HAVE_EXECINFO_H
     if (trlr) {
 	ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, "\n originally freed at");
 	for (i=0; i<TB_SIZE && trlr->tb[i]; i++)
@@ -171,6 +189,7 @@ mem_debug_log(void                      *data,
 	for (i=0; i<TB_SIZE && tb[i]; i++)
 	    ipmi_malloc_log(IPMI_LOG_DEBUG_CONT, " %p", tb[i]);
     }
+#endif
     ipmi_malloc_log(IPMI_LOG_DEBUG_END, " ");
 }
 
@@ -308,7 +327,9 @@ ipmi_debug_free(void *to_free, void **tb)
     }
 
     hdr->signature = FREE_SIGNATURE;
+#ifdef HAVE_EXECINFO_H
     memcpy(trlr->tb, tb, sizeof(trlr->tb));
+#endif
 
     /* Fill the data area with a signature. */
     dp = (long *) (((char *) hdr) + sizeof(*hdr));
@@ -350,10 +371,14 @@ ipmi_mem_alloc(int size)
     int           i;
 
     if (DEBUG_MALLOC) {
+#ifdef HAVE_EXECINFO_H
 	void *tb[TB_SIZE+1];
 	memset(tb, 0, sizeof(tb));
 	backtrace(tb, TB_SIZE+1);
 	rv = ipmi_debug_malloc(size, tb+1);
+#else
+	rv = ipmi_debug_malloc(size, NULL);
+#endif
 	if (rv) {
 	    c = rv;
 	    /* Fill it with junk to catch using before initializing. */
@@ -370,10 +395,14 @@ void
 ipmi_mem_free(void *data)
 {
     if (DEBUG_MALLOC) {
+#ifdef HAVE_EXECINFO_H
 	void *tb[TB_SIZE+1];
 	memset(tb, 0, sizeof(tb));
 	backtrace(tb, TB_SIZE+1);
 	ipmi_debug_free(data, tb+1);
+#else
+	ipmi_debug_free(data, NULL);
+#endif
     } else
 	malloc_os_hnd->mem_free(data);
 }
