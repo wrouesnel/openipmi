@@ -42,7 +42,6 @@
 #include <unistd.h>
 #include <string.h>
 
-#include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_posix.h>
 
 struct os_hnd_fd_id_s
@@ -73,7 +72,7 @@ free_fd_data(int fd, void *data)
 
     if (fd_data->freed)
         fd_data->freed(fd, fd_data->cb_data);
-    ipmi_mem_free(data);
+    free(data);
 }
 
 static int
@@ -89,7 +88,7 @@ add_fd(os_handler_t       *handler,
     selector_t     *posix_sel = handler->internal_data;
 
 
-    fd_data = ipmi_mem_alloc(sizeof(*fd_data));
+    fd_data = malloc(sizeof(*fd_data));
     if (!fd_data)
 	return ENOMEM;
 
@@ -103,7 +102,7 @@ add_fd(os_handler_t       *handler,
     rv = sel_set_fd_handlers(posix_sel, fd, fd_data, fd_handler, NULL, NULL,
 			     free_fd_data);
     if (rv) {
-	ipmi_mem_free(fd_data);
+	free(fd_data);
 	return rv;
     }
     sel_set_fd_read_handler(posix_sel, fd, SEL_FD_HANDLER_ENABLED);
@@ -191,7 +190,7 @@ alloc_timer(os_handler_t      *handler,
     int               rv;
     selector_t        *posix_sel = handler->internal_data;
 
-    timer_data = ipmi_mem_alloc(sizeof(*timer_data));
+    timer_data = malloc(sizeof(*timer_data));
     if (!timer_data)
 	return ENOMEM;
 
@@ -202,7 +201,7 @@ alloc_timer(os_handler_t      *handler,
     rv = sel_alloc_timer(posix_sel, timer_handler, timer_data,
 			 &(timer_data->timer));
     if (rv) {
-	ipmi_mem_free(timer_data);
+	free(timer_data);
 	return rv;
     }
 
@@ -214,7 +213,7 @@ static int
 free_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
     sel_free_timer(timer_data->timer);
-    ipmi_mem_free(timer_data);
+    free(timer_data);
     return 0;
 }
 
@@ -316,7 +315,7 @@ ipmi_posix_get_os_handler(void)
 {
     os_handler_t *rv;
 
-    rv = ipmi_mem_alloc(sizeof(*rv));
+    rv = malloc(sizeof(*rv));
     if (!rv)
 	return NULL;
 

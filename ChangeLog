@@ -34,6 +34,9 @@
 	* utils/ipmi_mem_alloc.c: Fixed a bug handling the head and
 	tail elements of the debug malloc list.
 
+	* sample/sample2.c, sample/sample3.c: Fixed a few small problems
+	in the examples.
+	
 	* configure.in: Move to version 1.4.2
 
 2004-09-01 Corey Minyard <cminyard@mvista.com> 

@@ -40,7 +40,7 @@
 #include <OpenIPMI/ipmi_posix.h>
 
 /* This sample application demostrates a very simple method to use
-   OpenIPMI. It takes a entity id, entity instance, and sensor name,
+   OpenIPMI. It takes a entity id, entity instance, and control name,
    looks for that sensor to be created, then prints out the value
    every 5 seconds. */
 

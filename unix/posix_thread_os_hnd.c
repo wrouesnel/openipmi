@@ -90,7 +90,7 @@ free_fd_data(int fd, void *data)
 
     if (fd_data->freed)
         fd_data->freed(fd, fd_data->cb_data);
-    ipmi_mem_free(data);
+    free(data);
 }
 
 static int
@@ -106,7 +106,7 @@ add_fd(os_handler_t       *handler,
     pt_os_hnd_data_t *info = handler->internal_data;
     selector_t       *posix_sel = info->sel;
 
-    fd_data = ipmi_mem_alloc(sizeof(*fd_data));
+    fd_data = malloc(sizeof(*fd_data));
     if (!fd_data)
 	return ENOMEM;
 
@@ -120,7 +120,7 @@ add_fd(os_handler_t       *handler,
     rv = sel_set_fd_handlers(posix_sel, fd, fd_data, fd_handler, NULL, NULL,
 			     free_fd_data);
     if (rv) {
-	ipmi_mem_free(fd_data);
+	free(fd_data);
 	return rv;
     }
     sel_set_fd_read_handler(posix_sel, fd, SEL_FD_HANDLER_ENABLED);
@@ -210,7 +210,7 @@ alloc_timer(os_handler_t      *handler,
     pt_os_hnd_data_t  *info = handler->internal_data;
     selector_t        *posix_sel = info->sel;
 
-    timer_data = ipmi_mem_alloc(sizeof(*timer_data));
+    timer_data = malloc(sizeof(*timer_data));
     if (!timer_data)
 	return ENOMEM;
 
@@ -221,7 +221,7 @@ alloc_timer(os_handler_t      *handler,
     rv = sel_alloc_timer(posix_sel, timer_handler, timer_data,
 			 &(timer_data->timer));
     if (rv) {
-	ipmi_mem_free(timer_data);
+	free(timer_data);
 	return rv;
     }
 
@@ -233,7 +233,7 @@ static int
 free_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
     sel_free_timer(timer_data->timer);
-    ipmi_mem_free(timer_data);
+    free(timer_data);
     return 0;
 }
 
@@ -291,7 +291,7 @@ create_lock(os_handler_t  *handler,
     os_hnd_lock_t *lock;
     int           rv;
 
-    lock = ipmi_mem_alloc(sizeof(*lock));
+    lock = malloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
     rv = pthread_mutex_init(&lock->mutex, NULL);
@@ -313,7 +313,7 @@ destroy_lock(os_handler_t  *handler,
     rv = pthread_mutex_destroy(&id->mutex);
     if (rv)
 	return rv;
-    ipmi_mem_free(id);
+    free(id);
     return 0;
 }
 
@@ -380,18 +380,18 @@ create_rwlock(os_handler_t    *handler,
     os_hnd_rwlock_t *lock;
     int             rv;
 
-    lock = ipmi_mem_alloc(sizeof(*lock));
+    lock = malloc(sizeof(*lock));
     if (!lock)
 	return ENOMEM;
     rv = pthread_rwlock_init(&lock->rwlock, NULL);
     if (rv) {
-	ipmi_mem_free(lock);
+	free(lock);
 	return rv;
     }
     rv = pthread_mutex_init(&lock->read_lock_lock, NULL);
     if (rv) {
 	pthread_rwlock_destroy(&lock->rwlock);
-	ipmi_mem_free(lock);
+	free(lock);
 	return rv;
     }
     lock->read_lock_count = 0;
@@ -412,7 +412,7 @@ destroy_rwlock(os_handler_t    *handler,
     if (rv)
 	return rv;
     pthread_mutex_destroy(&id->read_lock_lock);
-    ipmi_mem_free(id);
+    free(id);
     return 0;
 }
 
@@ -528,7 +528,7 @@ create_cond(os_handler_t  *handler,
 {
     os_hnd_cond_t *cond;
 
-    cond = ipmi_mem_alloc(sizeof(*cond));
+    cond = malloc(sizeof(*cond));
     if (!cond)
 	return ENOMEM;
 
@@ -544,7 +544,7 @@ destroy_cond(os_handler_t  *handler,
     rv = pthread_cond_destroy(&cond->cond);
     if (rv)
 	return rv;
-    ipmi_mem_free(cond);
+    free(cond);
     return 0;
 }
 
@@ -632,8 +632,8 @@ thread_exit(os_handler_t *handler)
 void
 ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd)
 {
-    ipmi_mem_free(os_hnd->internal_data);
-    ipmi_mem_free(os_hnd);
+    free(os_hnd->internal_data);
+    free(os_hnd);
 }
 
 void
@@ -753,15 +753,15 @@ ipmi_posix_thread_get_os_handler(void)
 {
     os_handler_t *rv;
 
-    rv = ipmi_mem_alloc(sizeof(*rv));
+    rv = malloc(sizeof(*rv));
     if (!rv)
 	return NULL;
 
     memcpy(rv, &ipmi_posix_thread_os_handler, sizeof(*rv));
 
-    rv->internal_data = ipmi_mem_alloc(sizeof(pt_os_hnd_data_t));
+    rv->internal_data = malloc(sizeof(pt_os_hnd_data_t));
     if (! rv->internal_data) {
-	ipmi_mem_free(rv);
+	free(rv);
 	rv = NULL;
     }
     return rv;
@@ -820,7 +820,7 @@ posix_mutex_alloc(void **val)
 
 void posix_mutex_free(void *val)
 {
-    ipmi_mem_free(val);
+    free(val);
 }
 
 void posix_mutex_lock(void *val)

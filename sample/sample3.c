@@ -466,7 +466,7 @@ got_thresholds(ipmi_sensor_t     *sensor,
 	    /* Threshold not available. */
 	    continue;
 
-	rv = ipmi_threshold_get(sdata->th, thresh, &dval);
+	rv = ipmi_threshold_get(th, thresh, &dval);
 	if (rv) {
 	    printf("  threshold %s could not be fetched due to error 0x%x\n",
 		   ipmi_get_threshold_string(thresh), rv);
@@ -483,7 +483,7 @@ got_thresholds(ipmi_sensor_t     *sensor,
 	goto out_err;
     }
 
-    rv = ipmi_thresholds_set(sensor, sdata->th, thresholds_set, sdata->name);
+    rv = ipmi_thresholds_set(sensor, sdata->th, thresholds_set, sdata);
     if (rv) {
 	printf("Error 0x%x setting thresholds for sensor %s\n",
 	       rv, sdata->name);
