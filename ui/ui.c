@@ -6519,6 +6519,24 @@ entity_change(enum ipmi_update_e op,
 }
 
 static void
+mc_sels_read(ipmi_mc_t *mc, void *cb_data)
+{
+    int addr = ipmi_mc_get_address(mc);
+    int channel = ipmi_mc_get_channel(mc);
+
+    ui_log("MC (%d %x) SELs read\n", channel, addr);
+}
+
+static void
+mc_sdrs_read(ipmi_mc_t *mc, void *cb_data)
+{
+    int addr = ipmi_mc_get_address(mc);
+    int channel = ipmi_mc_get_channel(mc);
+
+    ui_log("MC (%d %x) SDRs read\n", channel, addr);
+}
+
+static void
 mc_active(ipmi_mc_t *mc, int active, void *cb_data)
 {
     int addr = ipmi_mc_get_address(mc);
@@ -6527,6 +6545,8 @@ mc_active(ipmi_mc_t *mc, int active, void *cb_data)
     ui_log("MC is %s: (%d %x)\n",
 	   active ? "active" : "inactive",
 	   channel, addr);
+    ipmi_mc_set_sdrs_first_read_handler(mc, mc_sdrs_read, NULL);
+    ipmi_mc_set_sels_first_read_handler(mc, mc_sels_read, NULL);
 }
 
 static void

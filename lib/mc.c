@@ -154,6 +154,11 @@ struct ipmi_mc_s
     ipmi_oem_event_handler_cb sel_oem_event_handler;
     void                      *sel_oem_event_cb_data;
 
+    ipmi_mc_ptr_cb sdrs_first_read_handler;
+    void           *sdrs_first_read_cb_data;
+    ipmi_mc_ptr_cb sels_first_read_handler;
+    void           *sels_first_read_cb_data;
+
     /* Call these when the MC is destroyed. */
     ilist_t *removed_handlers;
 
@@ -1330,6 +1335,9 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 	return;
     }
 
+    if (mc->sels_first_read_handler)
+	mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
+
     if (rsp->data[0] != 0) {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "Unable to set the SEL time due to error: %x",
@@ -1368,6 +1376,8 @@ first_sel_op(ipmi_mc_t *mc)
 			  mc->sel_timer_info);
 	if (rv) {
 	    sels_fetched_start_timer(mc->sel, 0, 0, 0, mc->sel_timer_info);
+	    if (mc->sels_first_read_handler)
+		mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
 	}
     }
 }
@@ -1444,6 +1454,9 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     if (event_rcvr)
 	send_set_event_rcvr(mc, event_rcvr, NULL, NULL);
 
+    if (mc->sdrs_first_read_handler)
+	mc->sdrs_first_read_handler(mc, mc->sdrs_first_read_cb_data);
+
     if (mc->SEL_device_support) {
 	mc_reread_sel_t *info;
 	int             rv;
@@ -1457,7 +1470,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "Unable to allocate info for system event log timer."
 		     " System event log will not be queried");
-	    return;
+	    goto sel_failure;
 	}
 	info->mc = mc;
 	info->cancelled = 0;
@@ -1472,6 +1485,10 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	}
 
 	start_sel_ops(mc);
+    } else {
+    sel_failure:
+	if (mc->sels_first_read_handler)
+	    mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
     }
 }
 
@@ -2258,6 +2275,27 @@ _ipmi_mc_release(ipmi_mc_t *mc)
     mc->usecount--;
     if (mc->usecount == 0)
 	check_mc_destroy(mc);
+}
+
+int
+ipmi_mc_set_sdrs_first_read_handler(ipmi_mc_t      *mc,
+				    ipmi_mc_ptr_cb handler,
+				    void           *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+    mc->sdrs_first_read_handler = handler;
+    mc->sdrs_first_read_cb_data = cb_data;
+    return 0;
+}
+
+int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
+					ipmi_mc_ptr_cb handler,
+					void           *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+    mc->sels_first_read_handler = handler;
+    mc->sels_first_read_cb_data = cb_data;
+    return 0;
 }
 
 static void

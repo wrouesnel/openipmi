@@ -16,6 +16,10 @@
 
 	* configure.in: Move to version 1.3.5
 
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added callbacks for
+	knowing when the MC has finished reading its SDRs and reading the
+	SEL for the first time.
+
 2004-04-14 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Scan MCs from MCDLRs even if the information is

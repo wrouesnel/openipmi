@@ -41,6 +41,25 @@
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_addr.h>
 
+/* Allow entities to keep information that came from an MC in the MC
+   itself so that when the MC is destroyed, it can be cleaned up. */
+void *_ipmi_mc_get_sdr_entities(ipmi_mc_t *mc);
+void _ipmi_mc_set_sdr_entities(ipmi_mc_t *mc, void *entities);
+
+ipmi_mcid_t ipmi_mc_convert_to_id(ipmi_mc_t *mc);
+typedef void (*ipmi_mc_ptr_cb)(ipmi_mc_t *mc, void *cb_data);
+int ipmi_mc_pointer_cb(ipmi_mcid_t    id,
+		       ipmi_mc_ptr_cb handler,
+		       void           *cb_data);
+int ipmi_mc_pointer_noseq_cb(ipmi_mcid_t    id,
+			     ipmi_mc_ptr_cb handler,
+			     void           *cb_data);
+int ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2);
+int ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2);
+void ipmi_mc_id_set_invalid(ipmi_mcid_t *id);
+/* Is it the invalid MCID? */
+int ipmi_mc_id_is_invalid(ipmi_mcid_t *id);
+
 /* A response comes back in this format. */
 typedef void (*ipmi_mc_response_handler_t)(ipmi_mc_t  *src,
 					   ipmi_msg_t *msg,
@@ -136,6 +155,17 @@ int ipmi_mc_add_active_handler(ipmi_mc_t         *mc,
 int ipmi_mc_remove_active_handler(ipmi_mc_t         *mc,
 				  ipmi_mc_active_cb handler,
 				  void              *cb_data);
+
+/* A monitor to tell when the SDRs and SELs for an MC are read for the
+   first time and are finished being processed.  Setting the handler
+   to NULL disables it.  Note this only works for the first time, it
+   will not be called on subsequent SDR and SEL reads and checks. */
+int ipmi_mc_set_sdrs_first_read_handler(ipmi_mc_t      *mc,
+					ipmi_mc_ptr_cb handler,
+					void           *cb_data);
+int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
+					ipmi_mc_ptr_cb handler,
+					void           *cb_data);
 
 /* Reset the MC, either a cold or warm reset depending on the type.
    Note that the effects of a reset are not defined by IPMI, so this
@@ -338,25 +368,6 @@ void _ipmi_mc_get_sdr_sensors(ipmi_mc_t     *mc,
 void _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
 			      ipmi_sensor_t **sensors,
 			      unsigned int  count);
-
-/* Allow entities to keep information that came from an MC in the MC
-   itself so that when the MC is destroyed, it can be cleaned up. */
-void *_ipmi_mc_get_sdr_entities(ipmi_mc_t *mc);
-void _ipmi_mc_set_sdr_entities(ipmi_mc_t *mc, void *entities);
-
-ipmi_mcid_t ipmi_mc_convert_to_id(ipmi_mc_t *mc);
-typedef void (*ipmi_mc_ptr_cb)(ipmi_mc_t *mc, void *cb_data);
-int ipmi_mc_pointer_cb(ipmi_mcid_t    id,
-		       ipmi_mc_ptr_cb handler,
-		       void           *cb_data);
-int ipmi_mc_pointer_noseq_cb(ipmi_mcid_t    id,
-			     ipmi_mc_ptr_cb handler,
-			     void           *cb_data);
-int ipmi_cmp_mc_id(ipmi_mcid_t id1, ipmi_mcid_t id2);
-int ipmi_cmp_mc_id_noseq(ipmi_mcid_t id1, ipmi_mcid_t id2);
-void ipmi_mc_id_set_invalid(ipmi_mcid_t *id);
-/* Is it the invalid MCID? */
-int ipmi_mc_id_is_invalid(ipmi_mcid_t *id);
 
 /* Used to create external references to an MC so it won't go away
    even if it is released. */
