@@ -37,9 +37,13 @@
 #include <stdlib.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
+#include <OpenIPMI/ipmi_entity.h>
+#include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
 
+/* Don't pollute the namespace iwth ipmi_fru_t. */
+void ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru);
 
 static void
 entity_list_handler(ipmi_entity_t *entity, void *cb_data)
@@ -189,6 +193,20 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
     }
 }
 
+static void
+fru_info(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_fru_t      *fru;
+
+    /* We cheat here and don't call the entity functions, but that
+       allows us to reuse the FRU output functions.  If you are
+       looking at this for an example DON'T DO THIS IN YOUR CODE. */
+    fru = ipmi_entity_get_fru(entity);
+    if (fru)
+	ipmi_cmdlang_dump_fru_info(cmd_info, fru);
+}
+
 void
 entity_change(enum ipmi_update_e op,
 	      ipmi_domain_t      *domain,
@@ -283,56 +301,41 @@ entity_change(enum ipmi_update_e op,
 
 static ipmi_cmdlang_cmd_t *entity_cmds;
 
+static ipmi_cmdlang_init_t cmds_entity[] =
+{
+    { "entity", NULL,
+      "Commands dealing with entities",
+      NULL, NULL, &entity_cmds },
+    { "list", &entity_cmds,
+      "- List all the entities in the system",
+      ipmi_cmdlang_domain_handler, entity_list, NULL },
+    { "info", &entity_cmds,
+      "<entity> - Dump information about an entity",
+      ipmi_cmdlang_entity_handler, entity_info, NULL },
+    { "fru", &entity_cmds,
+      "<entity> - Dump FRU information about an entity",
+      ipmi_cmdlang_entity_handler, fru_info, NULL },
+};
+#define CMDS_ENTITY_LEN (sizeof(cmds_entity)/sizeof(ipmi_cmdlang_init_t))
+
 int
 ipmi_cmdlang_entity_init(void)
 {
-    int rv;
-
-    rv = ipmi_cmdlang_reg_cmd(NULL,
-			      "entity",
-			      "Commands dealing with entities",
-			      NULL, NULL,
-			      &entity_cmds);
-    if (rv)
-	return rv;
-
-    rv = ipmi_cmdlang_reg_cmd(entity_cmds,
-			      "list",
-			      "- List all the entities in the system",
-			      ipmi_cmdlang_domain_handler, entity_list,
-			      NULL);
-    if (rv)
-	return rv;
-
-    rv = ipmi_cmdlang_reg_cmd(entity_cmds,
-			      "info",
-			      "<domain> - Dump information about an entity",
-			      ipmi_cmdlang_entity_handler, entity_info,
-			      NULL);
-    if (rv)
-	return rv;
-
-    return 0;
+    return ipmi_cmdlang_reg_table(cmds_entity, CMDS_ENTITY_LEN);
 }
 
 #if 0
-void ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
-				     unsigned int  seconds);
-void ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain,
-				      unsigned int  seconds);
-  * fru <domain> <is_logical> <device_address> <device_id> <lun> <private_bus>
-    <channel> - dump a fru given all its insundry information.
-  * msg <domain> <channel> <ipmb> <LUN> <NetFN> <Cmd> [data...] - Send a
-    command to the given IPMB address on the given channel and display the
-    response.  Note that this does not require the existance of an
-    MC.
-  * pet <domain> <connection> <channel> <ip addr> <mac_addr> <eft selector>
-    <policy num> <apt selector> <lan dest selector> - 
-    Set up the domain to send PET traps from the given connection
-    to the given IP/MAC address over the given channel
-  * scan <domain> <ipmb addr> [ipmb addr] - scan an IPMB to add or remove it.
-    If a range is given, then scan all IPMBs in the range
-  * presence - Check the presence of entities
-  new <domain> <parms...> - Open a connection to a new domain
-  close <domain> - close the given domain
+* entity
+  * hs - hot-swap control
+    * get_act_time <entity> - Get the host-swap auto-activate time
+    * set_act_time <entity> - Set the host-swap auto-activate time
+    * get_deact_time <entity> - Get the host-swap auto-deactivate time
+    * set_deact_time <entity> - Set the host-swap auto-deactivate time
+    * activation_request <entity> Act like a user requested an
+      activation of the entity.  This is generally equivalent to
+      closing the handle latch or something like that.
+    * activate <entity> - activate the given entity
+    * deactivate <entity> - deactivate the given entity
+    * state <entity> - Return the current hot-swap state of the given entity
+    * check <domain> - Audit all the entity hot-swap states
 #endif

@@ -44,7 +44,7 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
 
-
+/* Don't pollute the namespace iwth ipmi_fru_t. */
 void ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru);
 
 static void
@@ -294,16 +294,17 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     ipmi_con_t   *con[2];
     int          rv;
     char         *name;
+    int          curr_arg = cmd_info->curr_arg;
 
     if (cmd_info->curr_arg >= cmd_info->argc) {
 	cmd_info->cmdlang->errstr = "No domain name entered";
 	cmd_info->cmdlang->err = EINVAL;
 	goto out;
     }
-    name = cmd_info->argv[cmd_info->curr_arg];
-    cmd_info->curr_arg++;
+    name = cmd_info->argv[curr_arg];
+    curr_arg++;
 
-    rv = ipmi_parse_args(&cmd_info->curr_arg,
+    rv = ipmi_parse_args(&curr_arg,
 			 cmd_info->argc,
 			 cmd_info->argv,
 			 &con_parms[set]);
@@ -314,8 +315,8 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     }
     set++;
 
-    if (cmd_info->curr_arg > cmd_info->argc) {
-	rv = ipmi_parse_args(&cmd_info->curr_arg,
+    if (curr_arg > cmd_info->argc) {
+	rv = ipmi_parse_args(&curr_arg,
 			     cmd_info->argc,
 			     cmd_info->argv,
 			     &con_parms[set]);
@@ -458,7 +459,6 @@ domain_fru(ipmi_domain_t *domain, void *cb_data)
 	goto out_err;
     }
     curr_arg++;
-    cmd_info->curr_arg = curr_arg;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_fru_alloc(domain,
@@ -525,6 +525,7 @@ domain_msg(ipmi_domain_t *domain, void *cb_data)
     int i;
     ipmi_ipmb_addr_t addr;
     ipmi_msg_t msg;
+
 
     if ((cmd_info->argc - curr_arg) < 5) {
 	/* Not enough parameters */
@@ -601,7 +602,6 @@ domain_msg(ipmi_domain_t *domain, void *cb_data)
 	curr_arg++;
     }
 
-    cmd_info->curr_arg = curr_arg;
     if (is_broadcast)
 	addr.addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
     else
@@ -631,92 +631,244 @@ domain_msg(ipmi_domain_t *domain, void *cb_data)
     return;
 
  out_err:
-    ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
-			 cmd_info->cmdlang->objstr_len);
-    cmd_info->cmdlang->location = "cmd_domain.c(domain_msg)";
+    if (cmd_info->cmdlang->err) {
+	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_domain.c(domain_msg)";
+    }
+}
+
+static void
+scan_done(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+
+    if (! cmd_info->cmdlang->err) {
+	if (err) {
+	    cmd_info->cmdlang->err = err;
+	    ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
+				 cmd_info->cmdlang->objstr_len);
+	    cmd_info->cmdlang->location = "cmd_domain.c(scan_done)";
+	}
+    }
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+domain_scan(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int rv;
+    int channel;
+    int ipmb1, ipmb2;
+    int curr_arg = cmd_info->curr_arg;
+
+    if ((cmd_info->argc - curr_arg) < 2) {
+	/* Not enough parameters */
+	cmd_info->cmdlang->errstr = "Not enough parameters";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
+			  &channel, cmd_info->cmdlang);
+    if (cmd_info->cmdlang->err) {
+	cmd_info->cmdlang->errstr = "channel invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
+			  &ipmb1, cmd_info->cmdlang);
+    if (cmd_info->cmdlang->err) {
+	cmd_info->cmdlang->errstr = "ipmb1 invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    if (curr_arg < cmd_info->argc) {
+	ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
+			     &ipmb2, cmd_info->cmdlang);
+	if (cmd_info->cmdlang->err) {
+	    cmd_info->cmdlang->errstr = "ipmb2 invalid";
+	    goto out_err;
+	}
+	curr_arg++;
+    } else
+	ipmb2 = ipmb1;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_start_ipmb_mc_scan(domain, channel, ipmb1, ipmb2,
+				 scan_done, cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmd_info->cmdlang->errstr = "Error requesting scan";
+	cmd_info->cmdlang->err = rv;
+	goto out_err;
+    }
+    
+ out_err:
+    if (cmd_info->cmdlang->err) {
+	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_domain.c(domain_scan)";
+    }
+}
+
+static void
+domain_presence(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int             rv;
+
+    rv = ipmi_detect_domain_presence_changes(domain, 1);
+    if (rv) {
+	cmd_info->cmdlang->err = rv;
+	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_domain.c(domain_presence)";
+    }
+}
+
+static void
+domain_sel_rescan_time(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int time;
+    int curr_arg = cmd_info->curr_arg;
+
+    if ((cmd_info->argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmd_info->cmdlang->errstr = "Not enough parameters";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
+			  &time, cmd_info->cmdlang);
+    if (cmd_info->cmdlang->err) {
+	cmd_info->cmdlang->errstr = "time invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_domain_set_sel_rescan_time(domain, time);
+
+ out_err:
+    if (cmd_info->cmdlang->err) {
+	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_domain.c(domain_sel_rescan_time)";
+    }
+}
+
+
+static void
+domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int time;
+    int curr_arg = cmd_info->curr_arg;
+
+    if ((cmd_info->argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmd_info->cmdlang->errstr = "Not enough parameters";
+	cmd_info->cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_int(cmd_info->argv[curr_arg],
+			  &time, cmd_info->cmdlang);
+    if (cmd_info->cmdlang->err) {
+	cmd_info->cmdlang->errstr = "time invalid";
+	goto out_err;
+    }
+    curr_arg++;
+
+    ipmi_domain_set_ipmb_rescan_time(domain, time);
+
+ out_err:
+    if (cmd_info->cmdlang->err) {
+	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_domain.c(domain_ipmb_rescan_time)";
+    }
+}
+
+
+static void
+final_close(void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+domain_close(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    int             rv;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_close_connection(domain, final_close, cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmd_info->cmdlang->err = rv;
+	ipmi_domain_get_name(domain, cmd_info->cmdlang->objstr,
+			     cmd_info->cmdlang->objstr_len);
+	cmd_info->cmdlang->location = "cmd_domain.c(domain_close)";
+    }
 }
 
 static ipmi_cmdlang_cmd_t *domain_cmds;
 
+static ipmi_cmdlang_init_t cmds_domain[] =
+{
+    { "domain", NULL,
+      "- Commands dealing with domains",
+      NULL, NULL, &domain_cmds},
+    { "list", &domain_cmds,
+      "- List all the domains in the system",
+      domain_list, NULL,  NULL },
+    { "info", &domain_cmds,
+      "<domain> - Dump information about a domain",
+      ipmi_cmdlang_domain_handler, domain_info, NULL },
+    { "new", &domain_cmds,
+      "<domain parms> - Set up a new domain",
+      domain_new, NULL, NULL },
+    { "close", &domain_cmds,
+      "<domain> - Close the domain",
+      ipmi_cmdlang_domain_handler, domain_close, NULL },
+    { "fru", &domain_cmds,
+      "<domain> <is_logical> <device_address> <device_id>"
+      " <lun> <private_bus> <channel>"
+      " - Fetch FRU data with the given parms",
+      ipmi_cmdlang_domain_handler, domain_fru, NULL },
+    { "msg", &domain_cmds,
+      "<domain> <channel> <ipmb> <LUN> <NetFN> <command> [data...]"
+      " - Send a message to the given address",
+      ipmi_cmdlang_domain_handler, domain_msg, NULL },
+    { "scan", &domain_cmds,
+      "<domain> <channel> <ipmb addr> [ipmb addr]"
+      " - scan an IPMB to add or remove it. If a range is given,"
+      " then scan all IPMBs in the range",
+      ipmi_cmdlang_domain_handler, domain_scan, NULL },
+    { "presence", &domain_cmds,
+      "<domain> - Check the presence of all entities in the domain",
+      ipmi_cmdlang_domain_handler, domain_presence, NULL },
+    { "sel_rescan_time", &domain_cmds,
+      "<domain> <time in seconds> - Set the time between SEL rescans"
+      " for all SELs in the system.  zero disables scans.",
+      ipmi_cmdlang_domain_handler, domain_sel_rescan_time, NULL },
+    { "ipmb_rescan_time", &domain_cmds,
+      "<domain> <time in seconds> - Set the time between IPMB rescans"
+      " for this domain.  zero disables scans.",
+      ipmi_cmdlang_domain_handler, domain_ipmb_rescan_time, NULL },
+};
+#define CMDS_DOMAIN_LEN (sizeof(cmds_domain)/sizeof(ipmi_cmdlang_init_t))
+
 int
 ipmi_cmdlang_domain_init(void)
 {
-    int rv;
-
-    rv = ipmi_cmdlang_reg_cmd(NULL,
-			      "domain",
-			      "Commands dealing with domains",
-			      NULL, NULL,
-			      &domain_cmds);
-    if (rv)
-	goto out;
-
-    rv = ipmi_cmdlang_reg_cmd(domain_cmds,
-			      "list",
-			      "- List all the domains in the system",
-			      domain_list, NULL,
-			      NULL);
-    if (rv)
-	goto out;
-
-    rv = ipmi_cmdlang_reg_cmd(domain_cmds,
-			      "info",
-			      "<domain> - Dump information about a domain",
-			      ipmi_cmdlang_domain_handler, domain_info,
-			      NULL);
-    if (rv)
-	goto out;
-
-    rv = ipmi_cmdlang_reg_cmd(domain_cmds,
-			      "new",
-			      "<domain parms> - Set up a new domain",
-			      domain_new, NULL,
-			      NULL);
-    if (rv)
-	goto out;
-
-    rv = ipmi_cmdlang_reg_cmd(domain_cmds,
-			      "fru",
-			      "<domain> <is_logical> <device_address>"
-			      " <device_id>"
-			      " <lun> <private_bus> <channel> - Fetch FRU"
-			      " data with the given parms",
-			      ipmi_cmdlang_domain_handler, domain_fru,
-			      NULL);
-    if (rv)
-	goto out;
-
-    rv = ipmi_cmdlang_reg_cmd(domain_cmds,
-			      "msg",
-			      "<domain> <channel> <ipmb> <LUN> <NetFN>"
-			      " <command> [data...] - Send a message to the"
-			      " given address",
-			      ipmi_cmdlang_domain_handler, domain_msg,
-			      NULL);
-    if (rv)
-	goto out;
-
- out:
-
-    return rv;
+    return ipmi_cmdlang_reg_table(cmds_domain, CMDS_DOMAIN_LEN);
 }
-
-#if 0
-void ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
-				     unsigned int  seconds);
-void ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain,
-				      unsigned int  seconds);
-  * msg <domain> <channel> <ipmb> <LUN> <NetFN> <Cmd> [data...] - Send a
-    command to the given IPMB address on the given channel and display the
-    response.  Note that this does not require the existance of an
-    MC.
-  * pet <domain> <connection> <channel> <ip addr> <mac_addr> <eft selector>
-    <policy num> <apt selector> <lan dest selector> - 
-    Set up the domain to send PET traps from the given connection
-    to the given IP/MAC address over the given channel
-  * scan <domain> <ipmb addr> [ipmb addr] - scan an IPMB to add or remove it.
-    If a range is given, then scan all IPMBs in the range
-  * presence - Check the presence of entities
-  new <domain> <parms...> - Open a connection to a new domain
-  close <domain> - close the given domain
-#endif

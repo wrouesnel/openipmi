@@ -1,10 +1,16 @@
+2004-09-23 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_pet.h, lib/pet.c: Modified the PETs to be
+	refcount based, use locked lists, and have all the information
+	about them available.
+
 2004-09-17 Corey Minyard <cminyard@mvista.com> 
 
-	* include/ipmiif.h.in, lib/fru.c: Modified the FRU length returned
-	to include the NIL character for ASCII strings.
+	* include/OpenIPMI/ipmiif.h.in, lib/fru.c: Modified the FRU length
+	returned to include the NIL character for ASCII strings.
 
-	* include/ipmiif.h.in, lib/fru.c: Added a way to get the domain
-	from the fru type.
+	* include/OpenIPMI/ipmiif.h.in, lib/fru.c: Added a way to get the
+	domain from the fru type.
 
 2004-09-13 Corey Minyard <cminyard@mvista.com> 
 

@@ -185,6 +185,9 @@ struct ipmi_domain_s
     /* A special MC used to represent the system interface. */
     ipmi_mc_t *si_mc;
 
+    /* Used for generating unique numbers for a domain. */
+    unsigned int uniq_num;
+
 #define IPMB_HASH 32
     mc_table_t ipmb_mcs[IPMB_HASH];
 #define SYS_INTF_MCS 2
@@ -2146,7 +2149,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
-void
+int
 ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 	       		int            channel,
 	       		unsigned int   start_addr,
@@ -2162,7 +2165,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
-	return;
+	return ENOMEM;
     memset(info, 0, sizeof(*info));
 
     info->domain = domain;
@@ -2211,7 +2214,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 	goto out_err;
     else
 	add_bus_scans_running(domain, info);
-    return;
+    return 0;
 
  out_err:
     if (info->done_handler)
@@ -2221,6 +2224,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     if (info->lock)
 	ipmi_destroy_lock(info->lock);
     ipmi_mem_free(info);
+    return rv;
 }
 
 void
@@ -4419,6 +4423,18 @@ void
 ipmi_domain_set_type(ipmi_domain_t *domain, enum ipmi_domain_type dtype)
 {
     domain->domain_type = dtype;
+}
+
+unsigned int
+ipmi_domain_get_unique_num(ipmi_domain_t *domain)
+{
+    unsigned int rv;
+
+    ipmi_lock(domain->domain_lock);
+    rv = domain->uniq_num;
+    domain->uniq_num++;
+    ipmi_unlock(domain->domain_lock);
+    return rv;
 }
 
 /***********************************************************************

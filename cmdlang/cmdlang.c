@@ -37,6 +37,9 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
@@ -886,6 +889,29 @@ ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
     return 0;
 }
 
+int
+ipmi_cmdlang_reg_table(ipmi_cmdlang_init_t *table, int len)
+{
+    int                i;
+    int                rv;
+    ipmi_cmdlang_cmd_t *parent = NULL;
+
+    for (i=0; i<len; i++) {
+	if (table[i].parent)
+	    parent = *table[i].parent;
+	rv = ipmi_cmdlang_reg_cmd(parent,
+				  table[i].name,
+				  table[i].help,
+				  table[i].handler,
+				  table[i].cb_data,
+				  table[i].new_val);
+	if (rv)
+	    return rv;
+    }
+
+    return 0;
+}
+
 void
 ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 		 char            *name,
@@ -943,6 +969,41 @@ ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
 			 unsigned int    len)
 {
     info->cmdlang->out_unicode(info->cmdlang, name, value, len);
+}
+
+void
+ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
+		    char            *name,
+		    struct in_addr  *ip_addr)
+{
+    char outstr[16];
+    u_int32_t addr = ntohl(ip_addr->s_addr);
+
+    /* Why isn't there an inet_ntoa_r? */
+    sprintf(outstr, "%d.%d.%d.%d",
+	    (addr >> 24) & 0xff,
+	    (addr >> 16) & 0xff,
+	    (addr >> 8) & 0xff,
+	    (addr >> 0) & 0xff);
+    ipmi_cmdlang_out(info, name, outstr);
+}
+
+void
+ipmi_cmdlang_out_mac(ipmi_cmd_info_t *info,
+		     char            *name,
+		     unsigned char   mac_addr[6])
+{
+    char outstr[18];
+
+    /* Why isn't there a standard ether_ntoa_r? */
+    sprintf(outstr, "%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x",
+	    mac_addr[0],
+	    mac_addr[1],
+	    mac_addr[2],
+	    mac_addr[3],
+	    mac_addr[4],
+	    mac_addr[5]);
+    ipmi_cmdlang_out(info, name, outstr);
 }
 
 void
@@ -1039,6 +1100,84 @@ ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmdlang_t *cmdlang)
     }
 
     *val = rv;
+}
+
+void
+ipmi_cmdlang_get_ip(char *str, struct in_addr *val,
+		    ipmi_cmdlang_t *cmdlang)
+{
+#ifdef HAVE_GETADDRINFO
+    struct addrinfo    hints, *res0;
+    int                rv;
+    struct sockaddr_in *paddr;
+ 
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    rv = getaddrinfo(str, 0, &hints, &res0);
+    if (rv == 0) {
+	/* Only get the first choice */
+	paddr = (struct sockaddr_in *) res0->ai_addr;
+	*val = paddr->sin_addr;
+	freeaddrinfo(res0);
+    } else
+	cmdlang->err = rv;
+#else
+    /* System does not support getaddrinfo, just for IPv4*/
+    struct hostent     *ent;
+    struct sockaddr_in *paddr;
+
+    ent = gethostbyname(str);
+    if (!ent) {
+	cmdlang->err = EINVAL;
+    } else {
+	paddr = (struct sockaddr_in *) &ent->h_addr_list[0];
+	*val = paddr->sin_addr;
+	memcpy(val, ent->h_addr_list[0], ent->h_length);
+    }
+#endif
+}
+
+void
+ipmi_cmdlang_get_mac(char *str, unsigned char val[6],
+		     ipmi_cmdlang_t *cmdlang)
+{
+    char          tmp[3];
+    char          *tv;
+    int           len;
+    unsigned char tmp_val[6];
+    int           i;
+    char          *end;
+
+    for (i=0; i<6; i++) {
+	if (i == 5)
+	    tv = str + strlen(str);
+	else
+	    tv = strchr(str, ':');
+	if (!tv) {
+	    cmdlang->err = EINVAL;
+	    goto out;
+	}
+	len = tv-str;
+	if (len > 2) {
+	    cmdlang->err = EINVAL;
+	    goto out;
+	}
+	memset(tmp, 0, sizeof(tmp));
+	memcpy(tmp, str, len);
+	tmp_val[i] = strtoul(tmp, &end, 16);
+	if (*end != '\0') {
+	    cmdlang->err = EINVAL;
+	    goto out;
+	}
+	str = tv+1;
+    }
+
+    memcpy(val, tmp_val, sizeof(val));
+    return;
+
+ out:
+    return;
 }
 
 typedef struct ipmi_cmdlang_event_entry_s ipmi_cmdlang_event_entry_t;
@@ -1238,6 +1377,7 @@ int ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t *event,
 
 int ipmi_cmdlang_domain_init(void);
 int ipmi_cmdlang_entity_init(void);
+int ipmi_cmdlang_pet_init(void);
 
 int
 ipmi_cmdlang_init(void)
@@ -1245,12 +1385,13 @@ ipmi_cmdlang_init(void)
     int rv;
 
     rv = ipmi_cmdlang_domain_init();
-    if (rv)
-	return rv;
+    if (rv) return rv;
 
     rv = ipmi_cmdlang_entity_init();
-    if (rv)
-	return rv;
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_pet_init();
+    if (rv) return rv;
 
     return 0;
 }
@@ -1278,43 +1419,6 @@ ipmi_cmdlang_cleanup(void)
 /*
 The command hierarchy is:
 
-* help - get general help.
-* domain
-  * help
-  * list - List all domains
-  * info <domain> - List information about the given domain
-  * fru <domain> <is_logical> <device_address> <device_id> <lun> <private_bus>
-    <channel> - dump a fru given all it's insundry information.
-  * msg <domain> <channel> <ipmb> <LUN> <NetFN> <Cmd> [data...] - Send a
-    command to the given IPMB address on the given channel and display the
-    response.  Note that this does not require the existance of an
-    MC.
-  * pet <domain> <connection> <channel> <ip addr> <mac_addr> <eft selector>
-    <policy num> <apt selector> <lan dest selector> - 
-    Set up the domain to send PET traps from the given connection
-    to the given IP/MAC address over the given channel
-  * scan <domain> <ipmb addr> [ipmb addr] - scan an IPMB to add or remove it.
-    If a range is given, then scan all IPMBs in the range
-  * presence - Check the presence of entities
-  new <domain> <parms...> - Open a connection to a new domain
-  close <domain> - close the given domain
-* entity
-  * help
-  * list <domain> - List all entities.
-  * info <entity> - List information about the given entity
-  * hs - hot-swap control
-    * get_act_time <entity> - Get the host-swap auto-activate time
-    * set_act_time <entity> - Set the host-swap auto-activate time
-    * get_deact_time <entity> - Get the host-swap auto-deactivate time
-    * set_deact_time <entity> - Set the host-swap auto-deactivate time
-    * activation_request <entity> Act like a user requested an
-      activation of the entity.  This is generally equivalent to
-      closing the handle latch or something like that.
-    * activate <entity> - activate the given entity
-    * deactivate <entity> - deactivate the given entity
-    * state <entity> - Return the current hot-swap state of the given entity
-    * check <domain> - Audit all the entity hot-swap states
-  * fru <entity> - Dump the FRU information about the given entity.
 * sensor
   * help
   * list <entity> - List all sensors
@@ -1329,20 +1433,6 @@ The command hierarchy is:
   * list <entity> - List all controls
   * info <control> 
   * set <control> <val1> [<val2> ...] - set the value(s) for the control
-* mc
-  * help
-  * list <domain> - List all MCs
-  * info <mc> 
-  * reset <warm | cold> <mc> - Do a warm or cold reset on the given MC
-  * cmd <mc> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
-    to the management controller and display the response.
-  * set_events_enable <enable | disable> <mc> - enables or disables
-    events on the MC.
-  * get_events_enabled <mc> - Prints out if the events are enabled for
-    the given MC.
-  * sdrs <mc> <main | sensor> - list the SDRs for the mc.  Either gets
-    the main SDR repository or the sensor SDR repository.
-  * get_sel_time <mc> - Get the time in the SEL for the given MC
 * pef
   * read <mc> - read pef information from an MC.  Note the lock is not
     released.

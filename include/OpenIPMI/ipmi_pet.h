@@ -70,7 +70,7 @@ typedef void (*ipmi_pet_done_cb)(ipmi_pet_t *pet, int err, void *cb_data);
  * and handled as standard events in OpenIPMI.
  *
  * Note that this uses the standard SNMP trap port (162), so you
- * cannot run SNMP software that receives traps and an OpenIPMI PET at
+ * cannot run SNMP software that receives traps and an IPMI PET at
  * the same time on the same machine.
  */
 int ipmi_pet_create(ipmi_domain_t    *domain,
@@ -86,10 +86,46 @@ int ipmi_pet_create(ipmi_domain_t    *domain,
 		    void             *cb_data,
 		    ipmi_pet_t       **pet);
 
+/*
+ * Like the previous call, but takes an MC instead of a domain and
+ * channel.
+ */
+int ipmi_pet_create_mc(ipmi_mc_t        *mc,
+		       unsigned int     channel,
+		       struct in_addr   ip_addr,
+		       unsigned char    mac_addr[6],
+		       unsigned int     eft_sel,
+		       unsigned int     policy_num,
+		       unsigned int     apt_sel,
+		       unsigned int     lan_dest_sel,
+		       ipmi_pet_done_cb done,
+		       void             *cb_data,
+		       ipmi_pet_t       **ret_pet);
+
 /* Destroy a PET.  Note that if you destroy all PETs, this will result
    in the SNMP trap UDP port being closed. */
 int ipmi_pet_destroy(ipmi_pet_t       *pet,
 		     ipmi_pet_done_cb done,
 		     void             *cb_data);
+
+/* Get the "name" for the PET.  Returns the length of the string
+   (minus the closing \0).  PET names are auto-assigned. */
+#define IPMI_PET_NAME_LEN 64
+int ipmi_pet_get_name(ipmi_pet_t *pet, char *name, int len);
+
+/* Iterate through all the PETs. */
+typedef void (*ipmi_pet_ptr_cb)(ipmi_pet_t *pet, void *cb_data);
+void ipmi_pet_iterate_pets(ipmi_pet_ptr_cb handler,
+			   void            *cb_data);
+
+ipmi_mcid_t ipmi_pet_get_mc_id(ipmi_pet_t *pet);
+unsigned int ipmi_pet_get_channel(ipmi_pet_t *pet);
+struct in_addr *ipmi_pet_get_ip_addr(ipmi_pet_t *pet, struct in_addr *ip_addr);
+unsigned char *ipmi_pet_get_mac_addr(ipmi_pet_t    *pet,
+				     unsigned char mac_addr[6]);
+unsigned int ipmi_pet_get_eft_sel(ipmi_pet_t *pet);
+unsigned int ipmi_pet_get_policy_num(ipmi_pet_t *pet);
+unsigned int ipmi_pet_get_apt_sel(ipmi_pet_t *pet);
+unsigned int ipmi_pet_get_lan_dest_sel(ipmi_pet_t *pet);
 
 #endif /* _IPMI_PET_H */

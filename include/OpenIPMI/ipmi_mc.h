@@ -393,4 +393,7 @@ void _ipmi_mc_check_mc(ipmi_mc_t *mc);
 /* Create chassis conrols for an MC. */
 int _ipmi_chassis_create_controls(ipmi_mc_t *mc);
 
+/* Generate a unique number for the MC. */
+unsigned int ipmi_mc_get_unique_num(ipmi_mc_t *mc);
+
 #endif /* _IPMI_MC_H */

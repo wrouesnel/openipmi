@@ -125,6 +125,9 @@ struct ipmi_mc_s
     int curr_active;
     unsigned int active_transitions;
 
+    /* Used to generate unique numbers for the MC. */
+    unsigned int uniq_num;
+
     /* The device SDRs on the MC. */
     ipmi_sdr_info_t *sdrs;
 
@@ -2848,6 +2851,18 @@ ipmi_mc_get_channel(ipmi_mc_t *mc)
 ipmi_domain_t *ipmi_mc_get_domain(ipmi_mc_t *mc)
 {
     return mc->domain;
+}
+
+unsigned int
+ipmi_mc_get_unique_num(ipmi_mc_t *mc)
+{
+    unsigned int rv;
+
+    ipmi_lock(mc->lock);
+    rv = mc->uniq_num;
+    mc->uniq_num++;
+    ipmi_unlock(mc->lock);
+    return rv;
 }
 
 int

@@ -48,3 +48,21 @@ mc_change(enum ipmi_update_e op,
 	  void               *cb_data)
 {
 }
+
+#if 0
+/*
+* mc
+  * list <domain> - List all MCs
+  * info <mc> 
+  * reset <warm | cold> <mc> - Do a warm or cold reset on the given MC
+  * cmd <mc> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
+    to the management controller and display the response.
+  * set_events_enable <enable | disable> <mc> - enables or disables
+    events on the MC.
+  * get_events_enabled <mc> - Prints out if the events are enabled for
+    the given MC.
+  * sdrs <mc> <main | sensor> - list the SDRs for the mc.  Either gets
+    the main SDR repository or the sensor SDR repository.
+  * get_sel_time <mc> - Get the time in the SEL for the given MC
+*/
+#endif

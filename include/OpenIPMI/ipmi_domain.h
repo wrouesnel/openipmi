@@ -168,12 +168,12 @@ int _ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
 /* Scan a set of addresses on the bmc for mcs.  This can be used by OEM
    code to add an MC if it senses that one has become present. */
-void ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
-	       		     int            channel,
-	       		     unsigned int   start_addr,
-			     unsigned int   end_addr,
-                             ipmi_domain_cb done_handler,
-			     void           *cb_data);
+int ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
+			    int            channel,
+			    unsigned int   start_addr,
+			    unsigned int   end_addr,
+			    ipmi_domain_cb done_handler,
+			    void           *cb_data);
 
 /* Set a handler that will be called when bus is scanned.  This is 
    primarily here for OpenHPI to meet their requirements */
@@ -287,6 +287,9 @@ void ipmi_domain_set_type(ipmi_domain_t *domain, enum ipmi_domain_type dtype);
 /* OEM code can call then when it know that an MC scan is complete, to
    speed things up. */
 void _ipmi_mc_scan_done(ipmi_domain_t *domain);
+
+/* Can be used to generate unique numbers for a domain. */
+unsigned int ipmi_domain_get_unique_num(ipmi_domain_t *domain);
 
 /* Initialize the domain code, called only once at init time. */
 int _ipmi_domain_init(void);

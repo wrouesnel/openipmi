@@ -128,6 +128,19 @@ int ipmi_cmdlang_reg_cmd(ipmi_cmdlang_cmd_t      *parent,
 			 void                    *handler_data,
 			 ipmi_cmdlang_cmd_t      **rv);
 
+/* Register a table of commands. */
+typedef struct ipmi_cmdlang_init_s
+{
+    char                    *name;
+    ipmi_cmdlang_cmd_t      **parent;
+    char                    *help;
+    ipmi_cmdlang_handler_cb handler;
+    void                    *cb_data;
+    ipmi_cmdlang_cmd_t      **new_val;
+} ipmi_cmdlang_init_t;
+int ipmi_cmdlang_reg_table(ipmi_cmdlang_init_t *table, int len);
+
+
 /* The following functions handle parsing various OpenIPMI objects
    according to the naming standard.  If you pass it into a command
    registration as the handler and pass your function as the
@@ -214,6 +227,12 @@ void ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
 			      char            *name,
 			      char            *value,
 			      unsigned int    len);
+void ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
+			 char            *name,
+			 struct in_addr  *ip_addr);
+void ipmi_cmdlang_out_mac(ipmi_cmd_info_t *info,
+			  char            *name,
+			  unsigned char   mac_addr[6]);
 
 /* The output from the command language is done at a nesting level.
    When you start outputting data for a new thing, you should "down"
@@ -233,6 +252,10 @@ void ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmdlang_t *cmdlang);
 void ipmi_cmdlang_get_uchar(char *str, unsigned char *val,
 			    ipmi_cmdlang_t *cmdlang);
 void ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmdlang_t *cmdlang);
+void ipmi_cmdlang_get_ip(char *str, struct in_addr *val,
+			 ipmi_cmdlang_t *cmdlang);
+void ipmi_cmdlang_get_mac(char *str, unsigned char val[6],
+			  ipmi_cmdlang_t *cmdlang);
 
 /* Call these to initialize and setup the command interpreter.  init
    should be called after the IPMI library proper is initialized, but

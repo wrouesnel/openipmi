@@ -910,7 +910,7 @@ ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
 int ipmi_oem_intel_init(void);
-int _ipmi_pet_init(void);
+int _ipmi_pet_init(os_handler_t *os_hnd);
 int _ipmi_conn_init(void);
 int ipmi_oem_atca_conn_init(void);
 int ipmi_oem_atca_init(void);
@@ -958,7 +958,7 @@ ipmi_init(os_handler_t *handler)
     rv = _ipmi_conn_init();
     if (rv)
         goto out_err;
-    rv = _ipmi_pet_init();
+    rv = _ipmi_pet_init(handler);
     if (rv)
         goto out_err;
 
