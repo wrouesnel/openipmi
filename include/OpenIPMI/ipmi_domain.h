@@ -209,6 +209,13 @@ void _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 /* Returns if the domain thinks it has a connection up. */
 int ipmi_domain_con_up(ipmi_domain_t *domain);
 
+/* Iterate through the connections on a domain. */
+typedef void (*ipmi_connection_ptr_cb)(ipmi_domain_t *domain, int conn,
+				       void *cb_data);
+void ipmi_domain_iterate_connections(ipmi_domain_t          *domain,
+				     ipmi_connection_ptr_cb handler,
+				     void                   *cb_data);
+
 /* Attempt to activate a given connection. */
 int ipmi_domain_activate_connection(ipmi_domain_t *domain,
 				    unsigned int  connection);

@@ -123,6 +123,7 @@ AC_OUTPUT(Makefile
 	  sample/Makefile
 	  doc/Makefile
 	  man/Makefile
+	  cmdlang/Makefile
 	  include/Makefile
 	  include/OpenIPMI/Makefile
 	  include/OpenIPMI/ipmiif.h

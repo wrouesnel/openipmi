@@ -629,12 +629,17 @@ setup_domain(char          *name,
     ipmi_system_interface_addr_t si;
     int                          i, j;
 
+    /* Don't allow '(' in the domain name, as that messes up the
+       naming.  That is the only restriction. */
+    if (strchr(name, '('))
+	return EINVAL;
+
     domain = ipmi_mem_alloc(sizeof(*domain));
     if (!domain)
 	return ENOMEM;
     memset(domain, 0, sizeof(*domain));
 
-    strncpy(domain->name, name, sizeof(domain->name)-1);
+    strncpy(domain->name, name, sizeof(domain->name)-2);
     i = strlen(domain->name);
     if (i > 0) {
 	domain->name[i] = ' ';
@@ -3085,9 +3090,9 @@ ipmi_domain_remove_entity_update_handler(ipmi_domain_t         *domain,
 }
 
 int
-ipmi_domain_iterate_entities(ipmi_domain_t                   *domain,
-			     ipmi_entities_iterate_entity_cb handler,
-			     void                            *cb_data)
+ipmi_domain_iterate_entities(ipmi_domain_t      *domain,
+			     ipmi_entity_ptr_cb handler,
+			     void               *cb_data)
 {
     CHECK_DOMAIN_LOCK(domain);
 
@@ -3970,6 +3975,21 @@ ipmi_domain_is_connection_active(ipmi_domain_t *domain,
 
     *active = domain->con_active[connection];
     return 0;
+}
+
+void
+ipmi_domain_iterate_connections(ipmi_domain_t          *domain,
+				ipmi_connection_ptr_cb handler,
+				void                   *cb_data)
+{
+    int i;
+
+    CHECK_DOMAIN_LOCK(domain);
+
+    for (i=0; i<MAX_CONS; i++) {
+	if (domain->conn[i])
+	    handler(domain, i, cb_data);
+    }
 }
 
 /* If the activate timer is not running, then start it.  This

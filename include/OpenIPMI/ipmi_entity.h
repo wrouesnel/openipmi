@@ -156,9 +156,9 @@ int ipmi_entity_info_remove_update_handler(ipmi_entity_info_t    *ent,
 					   void                  *cb_data);
 
 /* Iterate over all the entities in the entity info. */
-void ipmi_entities_iterate_entities(ipmi_entity_info_t              *ent,
-				    ipmi_entities_iterate_entity_cb handler,
-				    void                            *cb_data);
+void ipmi_entities_iterate_entities(ipmi_entity_info_t *ent,
+				    ipmi_entity_ptr_cb handler,
+				    void               *cb_data);
 
 /* Scan all the entities in the container and re-detect their precence
    if a presence-modifying event has occurred.  Non-event operations
