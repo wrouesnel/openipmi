@@ -12,6 +12,12 @@
 
 	* configure.in: Move to version 1.2.15.
 
+	* lib/domain.c, lib/mc.c, lib/oem_motorola_mxp.c: Fix some
+	problems handling things being destroyed at startup.
+
+	* lib/oem_motorola_mxp.c: Changed the number of boards on the
+	half-pint chassis to 9.  Fixed the detection of board versions.
+
 2004-02-22 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_motorola_mxp.c: Added reading the reset control for

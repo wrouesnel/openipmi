@@ -3270,7 +3270,12 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
 {
     int           rv = 0;
     long          curr = (long) rsp_data;
-    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+    ipmi_domain_t *domain;
+
+    if (!mc)
+	return;
+
+    domain = ipmi_mc_get_domain(mc);
 
     if (rsp->data[0] != 0) {
 	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);

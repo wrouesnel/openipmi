@@ -1335,21 +1335,22 @@ start_sel_ops(ipmi_mc_t *mc)
 static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    if (mc) {
-	unsigned int event_rcvr = 0;
+    unsigned int event_rcvr = 0;
 
-	/* See if any presence has changed with the new sensors. */ 
-	ipmi_detect_domain_presence_changes(mc->domain, 0);
+    if (!mc)
+	return;
 
-	/* We set the event receiver here, so that we know all the SDRs
-	   are installed.  That way any incoming events from the device
-	   will have the proper sensor set. */
-	if (mc->IPMB_event_generator_support)
-	    event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
+    /* See if any presence has changed with the new sensors. */ 
+    ipmi_detect_domain_presence_changes(mc->domain, 0);
 
-	if (event_rcvr)
-	    send_set_event_rcvr(mc, event_rcvr);
-    }
+    /* We set the event receiver here, so that we know all the SDRs
+       are installed.  That way any incoming events from the device
+       will have the proper sensor set. */
+    if (mc->IPMB_event_generator_support)
+	event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
+
+    if (event_rcvr)
+	send_set_event_rcvr(mc, event_rcvr);
 
     if (mc->SEL_device_support) {
 	mc_reread_sel_t *info;

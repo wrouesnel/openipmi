@@ -6558,11 +6558,7 @@ amc_board_handler(ipmi_mc_t *mc)
     char               *name;
     int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
 	= ipmi_standard_sensor_cb.ipmi_reading_get;
-    /* The major fw revision on MXP boards is the board type, the
-       minor revision is the actual fw revision.  Versions 21 an
-       greater have actual SDRs and the like, older versions do
-       not. */
-    int                v1_amc = ipmi_mc_minor_fw_revision(mc) < 21;
+    int                v1_amc = ipmi_mc_device_revision(mc) < 2;
 
 
     info = ipmi_mem_alloc(sizeof(*info));
@@ -8340,7 +8336,6 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
     mxp_genboard_info_t *sinfo = NULL;
     int                 product_id;
     ipmi_ipmb_addr_t    addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
-    int                 fw_major = ipmi_mc_major_fw_revision(mc);
     int                 fw_minor = ipmi_mc_minor_fw_revision(mc);
 
 
@@ -8400,8 +8395,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    if ((product_id == MXP_5365_PRODUCT_ID) && 
-	((fw_major < 3) || ((fw_major == 3) && (fw_minor < 152))))
+    if ((product_id == MXP_5365_PRODUCT_ID) && (fw_minor < 21))
     {
 	/* These only have to be added for old boards. */
 	rv = alloc_adm1021_sensor(mc, ent, 0x80, 0x01, 0x9c, "Proc Temp",
@@ -8438,12 +8432,19 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 {
     mxp_info_t *info = rsp_data;
 
+    if (!src) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "oem_motorola_mxp.c(mxp_chassis_type_rsp): "
+		 "domain went away at startup");
+	return;
+    }
+
     if (msg->data[0] != 0) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_motorola_mxp.c(mxp_chassis_type_rsp): "
 		 "Error getting chassis id: 0x%x",
 		 MC_NAME(src), msg->data[0]);
-	/* Destroy the MC so it will be detected again late,r and hopefully
+	/* Destroy the MC so it will be detected again later and hopefully
 	   will work that time. */
 	_ipmi_cleanup_mc(src);
 	return;
@@ -8471,7 +8472,7 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
     case 8: /* HalfPint 2.16 */
     case 9: /* HalfPint 2.20 mesh */
 	info->chassis_config = MXP_CHASSIS_CONFIG_HALFPINT;
-	info->num_boards = 8;
+	info->num_boards = 9;
 	info->num_power_supplies = 5;
 	info->start_fan_ipmb = 0x30;
 	break;
@@ -8497,6 +8498,13 @@ mxp_setup_finished(ipmi_mc_t *mc, mxp_info_t *info)
     ipmi_msg_t    msg;
     unsigned char data[3];
     int           rv;
+
+    if (!mc) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "oem_motorola_mxp.c(mxp_setup_finished): "
+		 "domain went away at startup");
+	return;
+    }
 
     /* Query the chassis type, continue from there. */
     add_mxp_mfg_id(data);
