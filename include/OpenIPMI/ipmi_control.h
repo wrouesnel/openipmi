@@ -196,9 +196,45 @@ void ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
 
 /* Returns true if this control is a hot-swap indicator, meaning that
    is is used to indicate to the operator when it is save to remove a
-   hot-swappable device. */
-int ipmi_control_is_hot_swap_indicator(ipmi_control_t *control);
-void ipmi_control_set_hot_swap_indicator(ipmi_control_t *control, int val);
+   hot-swappable device.  Setting "val" to one enables the control as
+   a hot-swap power control.  The 'val" setting is retured by the get
+   function.  The active_val is the value to use to turn off the
+   indicator (in active state).  The req_act_val is the value to set
+   when requesting deactivation.  The req_deact_val is the value to set
+   when requesting deactivation.  The inactive val is the value to use
+   when inactive. */
+int ipmi_control_is_hot_swap_indicator(ipmi_control_t *control,
+				       int            *req_act_val,
+				       int            *active_val,
+				       int            *req_deact_val,
+				       int            *inactive_val);
+void ipmi_control_set_hot_swap_indicator(ipmi_control_t *control,
+					 int            val,
+					 int            req_act_val,
+					 int            active_val,
+					 int            req_deact_val,
+					 int            inactive_val);
+
+/* Get/set the control as a hot-swap power control.  This must be set
+   to 1 to turn the power on and zero to turn it off. */
+int ipmi_control_is_hot_swap_power(ipmi_control_t *control);
+void ipmi_control_set_hot_swap_power(ipmi_control_t *control, int val);
+
+/* Can this control generate events? */
+void ipmi_control_set_has_events(ipmi_control_t *control, int val);
+
+/* Allow OEM code to call the event handlers.  Note that if the event
+   is handled by the handlers, then "*event" will be set to NULL and
+   *handled will be set to true.  If the event is not handled, then
+   *handled will be set to false and the event value will be
+   unchanged.  This is to help the OEM handlers only deliver the event
+   once to the user. */
+void ipmi_control_call_val_event_handlers(ipmi_control_t *control,
+					  int            *valid_vals,
+					  int            *vals,
+					  ipmi_event_t   **event,
+					  int            *handled);
+
 
 typedef struct ipmi_control_transition_s
 {

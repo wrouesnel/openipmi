@@ -1,3 +1,47 @@
+2004-01-23 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ilist.c, include/OpenIPMI/ilist.h: Added a
+	ilist_twoitem_destroy() call.
+
+	* include/OpenIPMI/ipmi_control.h, lib/control.c: Allow controls
+	to generate update events.
+
+	* lib/conn.c: Fixed some memory leaks.
+
+	* include/OpenIPMI/ipmi_bits.h: Added a return value for the event
+	handlers to tell if the handler will manage the event or if it
+	should be passed on.
+	* include/OpenIPMI/ipmi_control.h, lib/control.c: ditto
+	* include/OpenIPMI/ipmi_sensor.h, lib/sensor.c: ditto
+
+	* include/OpenIPMI/ipmi_control.h, lib/control.c: Added lots of
+	info to the hot-swap indicator.
+
+	* include/OpenIPMI/entity.h: Added lots of info to the hot-swap
+	state machine description.
+
+	* include/OpenIPMI/ipmiif.h, lib/entity.c: Started work on the
+	hot-swap state machine.
+
+	* lib/oem_motorola_mxp.c: Went back to the old presence state
+	machine, except the healthy and reset events cause a presence
+	check, they don't directly drive the state machine, since then are
+	not 100% dependable.
+
+	* lib/oem_motorola_mxp.c: Modified the code to register all
+	product ids from 0x01 to 0x40 as MXP products.
+
+2004-01-22 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_control.h:
+	Added a way for standard value controls to generate events.
+	* lib/control.c: ditto
+
+2004-01-21 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h, lib/sensor.c: Added a way to register
+	multiple handlers on a sensor event.
+
 2004-01-20 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h: Added hot-swap state machine and

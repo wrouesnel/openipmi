@@ -637,45 +637,68 @@ int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 /* Hot-swap is done on entities.  We have a hot-swap model defined
    here that controls basic hot-swap operation on an entity. */
 
-/* The hot-swap states are:
+/* The hot-swap states correspond exactly to the ATCA state machine
+   states, although unlike ATCA not all states may be used in all
+   hot-swap state machines.  The states are:
 
-   NOT_PRESENT - the device is not physically present in the system.
-   INACTIVE - The device is present, but turned off.
+   NOT_PRESENT - the entity is not physically present in the system.
+   INACTIVE - The entity is present, but turned off.
+   ACTIVATION_REQUESTED - Something has requested that the entity be
+       activated.
+   ACTIVATION_IN_PROGRESS - The activation is in progress, but has not
+       yet completed.
    ACTIVE - The device is operational.
-   EXTRACTION_PENDING - The device is being disabled.
+   DEACTIVATION_REQUESTED - Something has requested that the entity
+       be deactivated.
+   DEACTIVATION_IN_PROGRESS - The device is being deactivated, but
+       has not yet completed.
+   OUT_OF_CON - The board is (probably) installed, but cannot be
+       communicated with.
 
    The basic state machine goes in order of the states, except that
-   INACTIVE normally occurs afer EXTRACTION_PENDING.  NOT_PRESENT can
-   occur after any state on an unmanaged extraction.
+   INACTIVE normally occurs afer DEACTIVATION_IN_PROGRESS.  States may
+   be skipped if the state machine does not implement them; the
+   simplest state machine would only have NOT_PRESENT and
+   ACTIVE.  NOT_PRESENT can occur after any state on an unmanaged
+   extraction.  DEACTIVATION_IN_PROGRESS or INACTIVE can also occur
+   after any state, except that DEACTIVATION_IN_PROGRESS cannot occur
+   after NOT_PRESENT
 
-   A device may not have an INACTIVE and/or EXTRACTION_PENDING state.
-   You would do this if the device has no power control and/or removal
-   states.
-
-   The state machine may also go from EXTRACTION_PENDING to ACTIVE.
-
-   Notice, that unlike HPI, there is no "insertion pending" state.
-   This is basically a state that is inactive from insertion, so it
-   can be simulated with a transition from not present to inactive.
+   The state machine may also go from DEACTIVATION_REQUESTED to ACTIVE
+   if the deactivation was aborted.
 */
 enum ipmi_hot_swap_states {
     IPMI_HOT_SWAP_NOT_PRESENT = 0,
     IPMI_HOT_SWAP_INACTIVE = 1,
-    IPMI_HOT_SWAP_ACTIVE = 2,
-    IPMI_HOT_SWAP_EXTRACTION_PENDING = 3,
+    IPMI_HOT_SWAP_ACTIVATION_REQUESTED = 2,
+    IPMI_HOT_SWAP_ACTIVATION_IN_PROGRESS = 3,
+    IPMI_HOT_SWAP_ACTIVE = 4,
+    IPMI_HOT_SWAP_DEACTIVATION_REQUESTED = 5,
+    IPMI_HOT_SWAP_DEACTIVATION_IN_PROGRESS = 6,
+    IPMI_HOT_SWAP_OUT_OF_CON = 7,
 };
 
-/* Does the entity implement the hot-swap state machine? */
+/* Does the entity implement a hot-swap state machine? */
 int ipmi_entity_hot_swappable(ipmi_entity_t *ent);
 
-/* Register to receive the hot-swap state when it changes. */
-typedef void (*ipmi_entity_hot_swap_cb)(ipmi_entity_t             *ent,
-					enum ipmi_hot_swap_states last_state,
-					enum ipmi_hot_swap_states curr_state,
-					void                      *cb_data);
-int ipmi_entity_register_hot_swap_events(ipmi_entity_t           *ent,
-					 ipmi_entity_hot_swap_cb handler,
-					 void                    *cb_data);
+/* Register to receive the hot-swap state when it changes.  the
+   handler returns an integer.  It should return IPMI_EVENT_HANDLED if
+   it handled the event, or IPMI_EVENT_NOT_HANDLED if it didn't handle
+   the event.  "Handling" the event means that is will manage the
+   event (delete it when it is time).  If no sensor handles the event,
+   then it will be delivered to the "main" unhandled event handler for
+   the domain. */
+typedef int (*ipmi_entity_hot_swap_cb)(ipmi_entity_t             *ent,
+				       enum ipmi_hot_swap_states last_state,
+				       enum ipmi_hot_swap_states curr_state,
+				       void                      *cb_data,
+				       ipmi_event_t              *event);
+int ipmi_entity_add_hot_swap_handler(ipmi_entity_t           *ent,
+				     ipmi_entity_hot_swap_cb handler,
+				     void                    *cb_data);
+int ipmi_entity_remove_hot_swap_handler(ipmi_entity_t           *ent,
+					ipmi_entity_hot_swap_cb handler,
+					void                    *cb_data);
 
 /* Get the current hot-swap state. */
 int ipmi_entity_get_hot_swap_state(ipmi_entity_t           *ent,
@@ -683,26 +706,26 @@ int ipmi_entity_get_hot_swap_state(ipmi_entity_t           *ent,
 				   void                    *cb_data);
 
 /* Thses set whether the device will automatically be activated and
-   deactivated by the hardware or OpenIPMI.  By default devices will
-   automatically be activated/deactivated and this value is set to
-   true (upon insertion, they will transition directly to active
-   state.  Upon a removal request, it will transition directly to
-   inactive.  If this is set to false, then the state machine will
-   stop in the inactive/removal pending state and the user must call
-   the activate or deactivate routines below to push it out of those
-   states. */
+   deactivated by the hardware or OpenIPMI.  Both values are get/set
+   together.  By default devices will automatically be
+   activated/deactivated and this value is set to true (upon
+   insertion, they will transition directly to active state.  Upon a
+   removal request, it will transition directly to inactive.  If this
+   is set to false, then the state machine will stop in the
+   inactive/removal pending state and the user must call the activate
+   or deactivate routines below to push it out of those states. */
 int ipmi_entity_get_auto_activate(ipmi_entity_t      *ent,
 				  ipmi_entity_val_cb handler,
 				  void               *cb_data);
 int ipmi_entity_set_auto_activate(ipmi_entity_t  *ent,
-				  int            val,
+				  int            auto_act,
 				  ipmi_entity_cb done,
 				  void           *cb_data);
 int ipmi_entity_get_auto_deactivate(ipmi_entity_t      *ent,
 				    ipmi_entity_val_cb handler,
 				    void               *cb_data);
 int ipmi_entity_set_auto_deactivate(ipmi_entity_t  *ent,
-				    int            val,
+				    int            auto_deact,
 				    ipmi_entity_cb done,
 				    void           *cb_data);
 
@@ -766,6 +789,32 @@ ipmi_sensor_threshold_set_event_handler(
     ipmi_sensor_threshold_event_handler_cb handler,
     void                                   *cb_data);
 
+/* Like the set event handler call, but allows multiple handlers to be
+   added to a sensor.  Also, the handler returns an integer.  It
+   should return IPMI_EVENT_HANDLED if it handled the event, or
+   IPMI_EVENT_NOT_HANDLED if it didn't handle the event.  "Handling"
+   the event means that is will manage the event (delete it when it is
+   time).  If no sensor handles the event, then it will be delivered
+   to the "main" unhandled event handler for the domain. */
+typedef int (*ipmi_sensor_threshold_event_cb)(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_event_dir_e       dir,
+    enum ipmi_thresh_e          threshold,
+    enum ipmi_event_value_dir_e high_low,
+    enum ipmi_value_present_e   value_present,
+    unsigned int                raw_value,
+    double                      value,
+    void                        *cb_data,
+    ipmi_event_t                *event);
+int ipmi_sensor_add_threshold_event_handler(
+    ipmi_sensor_t                  *sensor,
+    ipmi_sensor_threshold_event_cb handler,
+    void                           *cb_data);
+int ipmi_sensor_remove_threshold_event_handler(
+    ipmi_sensor_t                  *sensor,
+    ipmi_sensor_threshold_event_cb handler,
+    void                           *cb_data);
+
 /* Register a handler for a discrete sensor.  Only one handler may be
    registered against a sensor, if you call this again with a new
    handler, the old handler will be replaced.  Set the handler to NULL
@@ -790,6 +839,30 @@ ipmi_sensor_discrete_set_event_handler(
     ipmi_sensor_t                         *sensor,
     ipmi_sensor_discrete_event_handler_cb handler,
     void                                  *cb_data);
+
+/* Like the set event handler call, but allows multiple handlers to be
+   added to a sensor.  Also, the handler returns an integer.  It
+   should return IPMI_EVENT_HANDLED if it handled the event, or
+   IPMI_EVENT_NOT_HANDLED if it didn't handle the event.  "Handling"
+   the event means that is will manage the event (delete it when it is
+   time).  If no sensor handles the event, then it will be delivered
+   to the "main" unhandled event handler for the domain. */
+typedef int (*ipmi_sensor_discrete_event_cb)(
+    ipmi_sensor_t         *sensor,
+    enum ipmi_event_dir_e dir,
+    int                   offset,
+    int                   severity,
+    int                   prev_severity,
+    void                  *cb_data,
+    ipmi_event_t          *event);
+int ipmi_sensor_add_discrete_event_handler(
+    ipmi_sensor_t                 *sensor,
+    ipmi_sensor_discrete_event_cb handler,
+    void                          *cb_data);
+int ipmi_sensor_remove_discrete_event_handler(
+    ipmi_sensor_t                 *sensor,
+    ipmi_sensor_discrete_event_cb handler,
+    void                          *cb_data);
 
 /* The event state is which events are set and cleared for the given
    sensor.  Events are enumerated for threshold events and numbered
@@ -1191,6 +1264,32 @@ typedef void (*ipmi_control_val_cb)(ipmi_control_t *control,
 int ipmi_control_get_val(ipmi_control_t      *control,
 			 ipmi_control_val_cb handler,
 			 void                *cb_data);
+
+/* Returns true if the control can generate events upon change, and
+   false if not. */
+int ipmi_control_has_events(ipmi_control_t *control);
+
+/* Register a handler that will be called when the control changes
+   value.  Note that if the control does not support this operation,
+   it will return ENOSYS.  The valid_vals array is an array of
+   booleans telling if the given value in the vals array is a valid
+   value.  The event must be handled just like sensor events.  The
+   handler should return IPMI_EVENT_HANDLED if it handled the event
+   and IPMI_EVENT_NOT_HANDLED if it didn't handle the event.
+   "Handling" the event means that is will manage the event (delete it
+   when it is time).  If no sensor handles the event, then it will be
+   delivered to the "main" unhandled event handler for the domain. */
+typedef int (*ipmi_control_val_event_cb)(ipmi_control_t *control,
+					 int            *valid_vals,
+					 int            *vals,
+					 void           *cb_data,
+					 ipmi_event_t   *event);
+int ipmi_control_add_val_event_handler(ipmi_control_t            *control,
+				       ipmi_control_val_event_cb handler,
+				       void                      *cb_data);
+int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
+					  ipmi_control_val_event_cb handler,
+					  void                      *cb_data);
 
 /* For LIGHT types.  */
 

@@ -60,6 +60,16 @@ int ipmi_register_oem_handler(unsigned int                 manufacturer_id,
 			      void                         *cb_data);
 int ipmi_deregister_oem_handler(unsigned int manufacturer_id,
 				unsigned int product_id);
+int ipmi_register_oem_handler_range
+(unsigned int                 manufacturer_id,
+ unsigned int                 first_product_id,
+ unsigned int                 last_product_id,
+ ipmi_oem_mc_match_handler_cb handler,
+ ipmi_oem_shutdown_handler_cb shutdown,
+ void                         *cb_data);
+int ipmi_deregister_oem_handler_range(unsigned int manufacturer_id,
+				      unsigned int first_product_id,
+				      unsigned int last_product_id);
 
 /* Register an OEM handler for connections, based upon MC.  This is
    primarily so that a connection handler can register a way to get

@@ -75,6 +75,12 @@
 #define MXP_PPRB_PRODUCT_ID	0x0006
 #define MXP_PVRB_PRODUCT_ID	0x0011
 
+/* All MXP products that require special fixups for SDRs will fall in this
+   range */
+#define MXP_START_PRODUCT_RANGE 1
+#define MXP_END_PRODUCT_RANGE   0x40
+	/* Make sure to skip the ones with special handlers. */
+
 #define ZYNX_MANUFACTURER_ID	0x0002b0
 #define ZYNX_SWITCH_PRODUCT_ID2	0x3100
 
@@ -800,7 +806,7 @@ mxp_3u_to_6u_addr(mxp_info_t *mxpinfo, int addr)
 {
     /* For the 6U chassis, the IPMB addresses come in wrong, and we
        have to recalculate it. */
-    if (mxpinfo->chassis_config == MXP_CHASSIS_CONFIG_6U) {
+    if (mxpinfo && mxpinfo->chassis_config == MXP_CHASSIS_CONFIG_6U) {
 	if (addr == 0xe4) /* switch 1 */
 	    addr = 0xb2;
 	else if (addr == 0xe6) /* switch 2 */
@@ -4222,6 +4228,7 @@ mxpv1_board_presence_states_get(ipmi_sensor_t       *sensor,
     return rv;
 }
 
+#if 0 /* We tried using healthy, but it's not a reliable indication. */
 static void
 board_presence_states_get_cb(ipmi_sensor_t   *sensor,
 			     mxp_sens_info_t *sens_info,
@@ -4334,6 +4341,7 @@ board_presence_states_get(ipmi_sensor_t       *sensor,
 
     return rv;
 }
+#endif
 
 static void
 board_led_set_start(ipmi_control_t *control, int err, void *cb_data)
@@ -4881,17 +4889,19 @@ mxp_add_board_sensors(mxp_info_t  *info,
     int rv;
 
     /* Presence sensor */
+    rv = mxp_alloc_discrete_sensor(board->info->mc, board->ent,
+				   MXP_BOARD_PRESENCE_NUM(board->idx),
+				   board, NULL,
+				   IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
+				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+				   "presence",
+				   0x3, 0x3,
+				   mxpv1_board_presence_states_get,
+				   NULL,
+				   &(board->presence));
+#if 0
+    /* Can't use healthy for board presence, because it depends on bd sel */
     if (info->mxp_version == MXP_V1) {
-	rv = mxp_alloc_discrete_sensor(board->info->mc, board->ent,
-				       MXP_BOARD_PRESENCE_NUM(board->idx),
-				       board, NULL,
-				       IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
-				       IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-				       "presence",
-				       0x3, 0x3,
-				       mxpv1_board_presence_states_get,
-				       NULL,
-				       &(board->presence));
     } else {
 	rv = mxp_alloc_discrete_sensor(board->info->mc, board->ent,
 				       MXP_BOARD_PRESENCE_NUM(board->idx),
@@ -4904,6 +4914,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 				       NULL,
 				       &(board->presence));
     }
+#endif
     if (rv)
 	goto out_err;
     ipmi_sensor_set_ignore_if_no_entity(board->presence, 0);
@@ -4949,6 +4960,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->bd_sel, 1);
+        ipmi_control_set_ignore_if_no_entity(board->bd_sel, 0);
 
 	/* PCI Reset control */
 	rv = mxp_alloc_control(board->info->mc, board->ent,
@@ -4962,6 +4974,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->pci_reset, 1);
+        ipmi_control_set_ignore_if_no_entity(board->pci_reset, 0);
 
 	/* Slot init control */
 	rv = mxp_alloc_control(board->info->mc, board->ent,
@@ -4975,6 +4988,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->slot_init, 1);
+        ipmi_control_set_ignore_if_no_entity(board->slot_init, 0);
 
 	/* I2C enable control */
 	rv = mxp_alloc_control(board->info->mc, board->ent,
@@ -4988,6 +5002,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->i2c_isolate, 1);
+        ipmi_control_set_ignore_if_no_entity(board->i2c_isolate, 0);
     }
 
  out_err:
@@ -6191,6 +6206,7 @@ new_board_sensors(ipmi_mc_t           *mc,
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(sinfo->power, 1);
+    ipmi_control_set_ignore_if_no_entity(sinfo->power, 0);
 
     /* Blue LED control */
     rv = mxp_alloc_control(mc, ent,
@@ -6204,7 +6220,7 @@ new_board_sensors(ipmi_mc_t           *mc,
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(sinfo->blue_led, 1, blue_blinking_led);
-    ipmi_control_set_hot_swap_indicator(sinfo->blue_led, 1);
+    ipmi_control_set_hot_swap_indicator(sinfo->blue_led, 1, 1, 0, 2, 1);
 
     /* Slot gegraphic address */
     rv = mxp_alloc_control(mc, ent,
@@ -6964,7 +6980,8 @@ amc_board_handler(ipmi_mc_t *mc)
     rv = ipmi_mc_set_sel_oem_event_handler(mc, mxp_event_handler, info);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "mxp_handler: could not register event handler");
+		 "oem_motorola_mxp.c(amc_board_handler):"
+		 " could not register event handler");
 	goto out_err;
     }
 
@@ -6982,7 +6999,8 @@ amc_board_handler(ipmi_mc_t *mc)
 			 NULL, &info->ent);
     if (rv) {
 	ipmi_log(IPMI_LOG_WARNING,
-		 "amc_board_handler: Could not add alarm card entity: %x",
+		 "oem_motorola_mxp.c(amc_board_handler):"
+		 " Could not add alarm card entity: %x",
 		 rv);
 	goto out_err;
     }
@@ -6991,34 +7009,34 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_mc_set_sel_device_support(mc, 1);
 
     /* AMC slot sensor */
-    rv = mxp_alloc_discrete_sensor(
-				   mc, info->ent,
-				   MXP_BOARD_SLOT_NUM,
-				   NULL, NULL,
-				   IPMI_SENSOR_TYPE_SLOT_CONNECTOR,
-				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-				   "slot",
-				   0x40, 0x40, /* offset 6 is supported (hot-swap requester). */
-				   board_slot_get,
-				   NULL,
-				   &info->slot);
+    rv = mxp_alloc_discrete_sensor
+      (mc, info->ent,
+       MXP_BOARD_SLOT_NUM,
+       NULL, NULL,
+       IPMI_SENSOR_TYPE_SLOT_CONNECTOR,
+       IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+       "slot",
+       0x40, 0x40, /* offset 6 is supported (hot-swap requester). */
+       board_slot_get,
+       NULL,
+       &info->slot);
     if (rv)
 	goto out_err;
     /* offset 6 is for hot-swap */
     ipmi_sensor_set_hot_swap_requester(info->slot, 6, 1);
 
     /* AMC offline sensor */
-    rv = mxp_alloc_discrete_sensor(
-				   mc, info->ent,
-				   MXP_AMC_OFFLINE_NUM,
-				   NULL, NULL,
-				   IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH,
-				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-				   "offline",
-				   0x04, 0x04, /* Management Controller Offline. */
-				   amc_offline_get,
-				   NULL,
-				   &info->offline);
+    rv = mxp_alloc_discrete_sensor
+      (mc, info->ent,
+       MXP_AMC_OFFLINE_NUM,
+       NULL, NULL,
+       IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH,
+       IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+       "offline",
+       0x04, 0x04, /* Management Controller Offline. */
+       amc_offline_get,
+       NULL,
+       &info->offline);
     if (rv)
 	goto out_err;
 
@@ -7033,7 +7051,7 @@ amc_board_handler(ipmi_mc_t *mc)
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(info->blue_led, 1, blue_led);
-    ipmi_control_set_hot_swap_indicator(info->blue_led, 1);
+    ipmi_control_set_hot_swap_indicator(info->blue_led, 1, 1, 0, 2, 1);
 
     /* Temperature and cooling LEDs. */
     rv = mxp_alloc_control(mc, info->ent,
@@ -7219,7 +7237,8 @@ amc_board_handler(ipmi_mc_t *mc)
     rv = ipmi_mc_add_oem_removed_handler(mc, amc_removal_handler, info, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "mxp_handler: could not register removal handler");
+		 "oem_motorola_mxp.c(amc_board_handler):"
+		 " could not register removal handler");
 	goto out_err;
     }
 
@@ -7251,11 +7270,10 @@ amc_presence_event(ipmi_sensor_t *sensor, void *cb_data)
     mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
     mxp_board_t         *binfo = hdr->data;
     mxp_info_t          *info = binfo->info;
-    amc_presence_info_t                   *pinfo = cb_data;
-    ipmi_sensor_discrete_event_handler_cb handler;
-    void                                  *h_cb_data;
-    int                                   offset;
-    int                                   deoffset;
+    amc_presence_info_t *pinfo = cb_data;
+    int                 offset;
+    int                 deoffset;
+    ipmi_event_t        *event = NULL;
 
 
     if (pinfo->present == info->amc_present[pinfo->idx])
@@ -7271,21 +7289,18 @@ amc_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 	deoffset = 0; /* Board is absent. */
     }
 
-    ipmi_sensor_discrete_get_event_handler(sensor, &handler, &h_cb_data);
-    if (handler) {
-	handler(sensor,
-		IPMI_ASSERTION,
-		offset,
-		-1, -1,
-		h_cb_data,
-		NULL);
-	handler(sensor,
-		IPMI_DEASSERTION,
-		deoffset,
-		-1, -1,
-		h_cb_data,
-		NULL);
-    }
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     IPMI_ASSERTION,
+					     offset,
+					     -1, -1,
+					     &event,
+					     NULL);
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     IPMI_DEASSERTION,
+					     deoffset,
+					     -1, -1,
+					     &event,
+					     NULL);
 }
 
 static void
@@ -7330,53 +7345,43 @@ typedef struct mc_event_info_s
 static void
 mxp_board_power_changed_event(ipmi_sensor_t *sensor, void *cb_data)
 {
-    mc_event_info_t                       *einfo = cb_data;
-    ipmi_sensor_discrete_event_handler_cb handler;
-    void                                  *h_cb_data;
-    enum ipmi_event_dir_e                 assertion;
-    ipmi_event_t                          *event = &(einfo->event_copy);
+    mc_event_info_t       *einfo = cb_data;
+    enum ipmi_event_dir_e assertion;
+    ipmi_event_t          *event = &(einfo->event_copy);
 
     if (event->data[10])
 	assertion = IPMI_DEASSERTION;
     else
 	assertion = IPMI_ASSERTION;
 
-    ipmi_sensor_discrete_get_event_handler(sensor, &handler, &h_cb_data);
-    if (handler) {
-	handler(sensor,
-		assertion,
-		5, /* Offset 5 is the power offset. */
-		-1, -1,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
-    }
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     assertion,
+					     /* Offset 5 is the power offset. */
+					     5,
+					     -1, -1,
+					     &einfo->event,
+					     NULL);
 }
 
 static void
 mxp_board_ejector_changed_event(ipmi_sensor_t *sensor, void *cb_data)
 {
-    mc_event_info_t                       *einfo = cb_data;
-    ipmi_sensor_discrete_event_handler_cb handler;
-    void                                  *h_cb_data;
-    enum ipmi_event_dir_e                 assertion;
-    ipmi_event_t                          *event = &(einfo->event_copy);
+    mc_event_info_t       *einfo = cb_data;
+    enum ipmi_event_dir_e assertion;
+    ipmi_event_t          *event = &(einfo->event_copy);
 
     if (event->data[9] & 0x80)
 	assertion = IPMI_DEASSERTION;
     else
 	assertion = IPMI_ASSERTION;
 
-    ipmi_sensor_discrete_get_event_handler(sensor, &handler, &h_cb_data);
-    if (handler) {
-	handler(sensor,
-		assertion,
-		6, /* Offset 6 is the ejector offset. */
-		-1, -1,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
-    }
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     assertion,
+					     /* Offset 6 is the ejector offset. */
+					     6,
+					     -1, -1,
+					     &einfo->event,
+					     NULL);
 }
 
 typedef struct rescan_info_s
@@ -7384,17 +7389,76 @@ typedef struct rescan_info_s
     ipmi_domain_id_t domain_id;
     int              addr;
     os_handler_t     *hnd;
+    ipmi_sensor_id_t sensor_id;
 } rescan_info_t;
+
+static void
+timed_rescan_bus4(ipmi_sensor_t *sensor, void *cb_data)
+{
+    rescan_info_t    *info = cb_data;
+    int              offset;
+    int              deoffset;
+    ipmi_ipmb_addr_t addr = {IPMI_IPMB_ADDR_TYPE, 0, info->addr, 0};
+    ipmi_event_t     *dummy_event = NULL;
+    ipmi_mc_t        *mc;
+    ipmi_domain_t    *domain;
+
+    mc = ipmi_sensor_get_mc(sensor);
+    domain = ipmi_mc_get_domain(mc);
+
+    /* Use the MC presence to know about the entity's presence. */
+    if (_ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr))) {
+	offset = 0; /* Board is present. */
+	deoffset = 1; /* Board is present. */
+    } else {
+	offset = 1; /* Board is absent. */
+	deoffset = 0; /* Board is absent. */
+    }
+
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     IPMI_ASSERTION,
+					     offset,
+					     -1, -1,
+					     &dummy_event,
+					     NULL);
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     IPMI_DEASSERTION,
+					     deoffset,
+					     -1, -1,
+					     &dummy_event,
+					     NULL);
+
+    ipmi_mem_free(info);
+}
+
+static void
+timed_rescan_bus3(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    rescan_info_t    *info = cb_data;
+
+    if (!domain) {
+        ipmi_mem_free(info);
+	return;
+    }
+
+    ipmi_sensor_pointer_cb(info->sensor_id, timed_rescan_bus4, info);
+    ipmi_mem_free(info);
+}
 
 static void
 timed_rescan_bus2(ipmi_domain_t *domain, void *cb_data)
 {
     rescan_info_t *info = cb_data;
 
+    if (!domain) {
+        ipmi_mem_free(info);
+	return;
+    }
+
     /* Do an MC query on the board.  If it has become present, it will
        be added.  If it has gone away it will be deleted. */
-    ipmi_start_ipmb_mc_scan(domain, 0, info->addr, info->addr, NULL, NULL);
-    ipmi_mem_free(info);
+    ipmi_start_ipmb_mc_scan(domain, 0, info->addr, info->addr,
+		            timed_rescan_bus3, info);
 }
 
 static void
@@ -7413,46 +7477,21 @@ timed_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 static void
 mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 {
-    mc_event_info_t                       *einfo = cb_data;
-    ipmi_sensor_discrete_event_handler_cb handler;
-    void                                  *h_cb_data;
-    unsigned int                          addr;
-    int                                   offset;
-    int                                   deoffset;
-    ipmi_event_t                          *event = &(einfo->event_copy);
-    ipmi_mc_t                             *mc;
-    ipmi_domain_t                         *domain;
-    os_handler_t                          *hnd;
-    os_hnd_timer_id_t                     *timer;
-    struct timeval                        timeout;
-    rescan_info_t			  *info;
-    int                                   rv;
-    mxp_info_t                            *mxpinfo;
+    mc_event_info_t   *einfo = cb_data;
+    unsigned int      addr;
+    ipmi_event_t      *event = &(einfo->event_copy);
+    ipmi_mc_t         *mc;
+    ipmi_domain_t     *domain;
+    os_handler_t      *hnd;
+    os_hnd_timer_id_t *timer;
+    struct timeval    timeout;
+    rescan_info_t     *info;
+    int               rv;
+    mxp_info_t        *mxpinfo;
 
-    if (event->data[9] & 0x80) {
-	offset = 1; /* Board is absent. */
-	deoffset = 0; /* Board is absent. */
-    } else {
-	offset = 0; /* Board is present. */
-	deoffset = 1; /* Board is present. */
-    }
-
-    ipmi_sensor_discrete_get_event_handler(sensor, &handler, &h_cb_data);
-    if (handler) {
-	handler(sensor,
-		IPMI_ASSERTION,
-		offset,
-		-1, -1,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
-	handler(sensor,
-		IPMI_DEASSERTION,
-		deoffset,
-		-1, -1,
-		h_cb_data,
-		NULL);
-    }
+    /* We don't trust the valus in the healthy or reset, but they often
+       tell us that something has changed, so do an MC query and use the
+       MC's presence to determine the sensor presence value. */
 
     mc = ipmi_sensor_get_mc(sensor);
     domain = ipmi_mc_get_domain(mc);
@@ -7478,6 +7517,7 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
     info->hnd = hnd;
     info->domain_id = ipmi_domain_convert_to_id(domain);
     info->addr = addr;
+    info->sensor_id = ipmi_sensor_convert_to_id(sensor);
     rv = hnd->alloc_timer(hnd, &timer);
     if (rv) {
 	ipmi_mem_free(info);
@@ -7502,12 +7542,10 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 static void
 mxp_gen_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 {
-    mc_event_info_t                       *einfo = cb_data;
-    ipmi_sensor_discrete_event_handler_cb handler;
-    void                                  *h_cb_data;
-    int                                   offset;
-    int                                   deoffset;
-    ipmi_event_t                          *event = &(einfo->event_copy);
+    mc_event_info_t *einfo = cb_data;
+    int             offset;
+    int             deoffset;
+    ipmi_event_t    *event = &(einfo->event_copy);
 
     /* An offset of 0 means the PS is present, an offset of one is not
        present. */
@@ -7519,37 +7557,26 @@ mxp_gen_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 	deoffset = 1; /* PS is present. */
     }
 
-    ipmi_sensor_discrete_get_event_handler(sensor, &handler, &h_cb_data);
-    if (handler) {
-	handler(sensor,
-		IPMI_ASSERTION,
-		offset,
-		-1, -1,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
-	handler(sensor,
-		IPMI_DEASSERTION,
-		deoffset,
-		-1, -1,
-		h_cb_data,
-		NULL);
-    }
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     IPMI_ASSERTION,
+					     offset,
+					     -1, -1,
+					     &einfo->event,
+					     NULL);
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     IPMI_DEASSERTION,
+					     deoffset,
+					     -1, -1,
+					     &einfo->event,
+					     NULL);
 }
 
 static void
 mxp_fan_cooling_event(ipmi_sensor_t *sensor, void *cb_data)
 {
-    mc_event_info_t                        *einfo = cb_data;
-    ipmi_sensor_threshold_event_handler_cb handler;
-    void                                   *h_cb_data;
-    enum ipmi_event_dir_e                 assertion;
-    ipmi_event_t                          *event = &(einfo->event_copy);
-
-    ipmi_sensor_threshold_get_event_handler(sensor, &handler, &h_cb_data);
-
-    if (!handler)
-	return;
+    mc_event_info_t       *einfo = cb_data;
+    enum ipmi_event_dir_e assertion;
+    ipmi_event_t          *event = &(einfo->event_copy);
 
     /* The set bits tell if the value has changed.  The assertion bit
        tells if the value is asserted or not. */
@@ -7562,43 +7589,34 @@ mxp_fan_cooling_event(ipmi_sensor_t *sensor, void *cb_data)
     /* The cooling event has two levels, non-critical and critical. */
 
     if (event->data[11] & 2) {
-	handler(sensor,
-		assertion,
-		IPMI_UPPER_NON_CRITICAL,
-		IPMI_GOING_HIGH,
-		IPMI_NO_VALUES_PRESENT,
-		0, 0.0,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
+	ipmi_sensor_call_threshold_event_handlers(sensor,
+						  assertion,
+						  IPMI_UPPER_NON_CRITICAL,
+						  IPMI_GOING_HIGH,
+						  IPMI_NO_VALUES_PRESENT,
+						  0, 0.0,
+						  &einfo->event,
+						  NULL);
     }
 
     if (event->data[11] & 4) {
-	handler(sensor,
-		assertion,
-		IPMI_UPPER_CRITICAL,
-		IPMI_GOING_HIGH,
-		IPMI_NO_VALUES_PRESENT,
-		0, 0.0,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
+	ipmi_sensor_call_threshold_event_handlers(sensor,
+						  assertion,
+						  IPMI_UPPER_CRITICAL,
+						  IPMI_GOING_HIGH,
+						  IPMI_NO_VALUES_PRESENT,
+						  0, 0.0,
+						  &einfo->event,
+						  NULL);
     }
 }
 
 static void
 mxp_fan_speed_event(ipmi_sensor_t *sensor, void *cb_data)
 {
-    mc_event_info_t                        *einfo = cb_data;
-    ipmi_sensor_threshold_event_handler_cb handler;
-    void                                   *h_cb_data;
-    enum ipmi_event_dir_e                  assertion;
-    ipmi_event_t                          *event = &(einfo->event_copy);
-
-    ipmi_sensor_threshold_get_event_handler(sensor, &handler, &h_cb_data);
-
-    if (!handler)
-	return;
+    mc_event_info_t       *einfo = cb_data;
+    enum ipmi_event_dir_e assertion;
+    ipmi_event_t          *event = &(einfo->event_copy);
 
     if (event->data[9] & 0x80)
 	assertion = IPMI_DEASSERTION;
@@ -7609,30 +7627,23 @@ mxp_fan_speed_event(ipmi_sensor_t *sensor, void *cb_data)
        tells if the value is asserted or not. */
 
     if (event->data[11] & 1) {
-	handler(sensor,
-		assertion,
-		IPMI_LOWER_CRITICAL,
-		IPMI_GOING_LOW,
-		IPMI_NO_VALUES_PRESENT,
-		0, 0.0,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
+	ipmi_sensor_call_threshold_event_handlers(sensor,
+						  assertion,
+						  IPMI_LOWER_CRITICAL,
+						  IPMI_GOING_LOW,
+						  IPMI_NO_VALUES_PRESENT,
+						  0, 0.0,
+						  &einfo->event,
+						  NULL);
     }
 }
 
 static void
 mxp_ps_alarm_event(ipmi_sensor_t *sensor, void *cb_data)
 {
-    mc_event_info_t                       *einfo = cb_data;
-    ipmi_sensor_discrete_event_handler_cb handler;
-    void                                  *h_cb_data;
-    enum ipmi_event_dir_e                 assertion;
-    ipmi_event_t                          *event = &(einfo->event_copy);
-
-    ipmi_sensor_discrete_get_event_handler(sensor, &handler, &h_cb_data);
-    if (!handler)
-	return;
+    mc_event_info_t       *einfo = cb_data;
+    enum ipmi_event_dir_e assertion;
+    ipmi_event_t          *event = &(einfo->event_copy);
 
     /* The set bits tell if the value has changed.  The assertion bit
        tells if the value is asserted or not. */
@@ -7644,24 +7655,22 @@ mxp_ps_alarm_event(ipmi_sensor_t *sensor, void *cb_data)
 
     /* Report a feed A status change. */
     if (event->data[11] & 0x1) {
-	handler(sensor,
-		assertion,
-		13,
-		-1, -1,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
+	ipmi_sensor_call_discrete_event_handlers(sensor,
+						 assertion,
+						 13,
+						 -1, -1,
+						 &einfo->event,
+						 NULL);
     }
 
     /* Report a feed B status change. */
     if (event->data[11] & 0x2) {
-	handler(sensor,
-		assertion,
-		14,
-		-1, -1,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
+	ipmi_sensor_call_discrete_event_handlers(sensor,
+						 assertion,
+						 14,
+						 -1, -1,
+						 &einfo->event,
+						 NULL);
     }
 
     /* Report a power good change.  We have to invert the assertion,
@@ -7672,28 +7681,21 @@ mxp_ps_alarm_event(ipmi_sensor_t *sensor, void *cb_data)
 	    assertion = IPMI_ASSERTION;
 	else
 	    assertion = IPMI_DEASSERTION;
-	handler(sensor,
-		assertion,
-		1,
-		-1, -1,
-		h_cb_data,
-		einfo->event);
-	einfo->event = NULL;
+	ipmi_sensor_call_discrete_event_handlers(sensor,
+						 assertion,
+						 1,
+						 -1, -1,
+						 &einfo->event,
+						 NULL);
     }
 }
 
 static void
 mxp_amc_failover_event(ipmi_sensor_t *sensor, void *cb_data)
 {
-    mc_event_info_t                       *einfo = cb_data;
-    ipmi_sensor_discrete_event_handler_cb handler;
-    void                                  *h_cb_data;
-    enum ipmi_event_dir_e                 assertion;
-    ipmi_event_t                          *event = &(einfo->event_copy);
-
-    ipmi_sensor_discrete_get_event_handler(sensor, &handler, &h_cb_data);
-    if (!handler)
-	return;
+    mc_event_info_t       *einfo = cb_data;
+    enum ipmi_event_dir_e assertion;
+    ipmi_event_t          *event = &(einfo->event_copy);
 
     /* The set bits tell if the value has changed.  The assertion bit
        tells if the value is asserted or not. */
@@ -7703,13 +7705,12 @@ mxp_amc_failover_event(ipmi_sensor_t *sensor, void *cb_data)
     else
 	assertion = IPMI_ASSERTION; /* Loosing control */
 
-    handler(sensor,
-	    assertion,
-	    2,
-	    -1, -1,
-	    h_cb_data,
-	    einfo->event);
-    einfo->event = NULL;
+    ipmi_sensor_call_discrete_event_handlers(sensor,
+					     assertion,
+					     2,
+					     -1, -1,
+					     &einfo->event,
+					     NULL);
 }
 
 static void
@@ -8120,23 +8121,101 @@ i2c_sens_get_reading(ipmi_sensor_t        *sensor,
  *
  **********************************************************************/
 
-typedef struct mxp_805_info_s
+static void
+mxp_genboard_sdrs_fixup(ipmi_mc_t       *mc,
+		        ipmi_sdr_info_t *sdrs,
+		        void            *cb_data)
 {
-    board_sensor_info_t   board;
-} mxp_805_info_t;
+    unsigned int count;
+    int          i;
+    ipmi_sdr_t   sdr;
+    int          rv;
+    char         str[20];
+    int          len;
+    unsigned int ipmb;
+    unsigned int slot;
+
+    rv = ipmi_get_sdr_count(sdrs, &count);
+    if (rv)
+	return;
+
+    ipmb = ipmi_mc_get_address(mc);
+    if (ipmb > 0xc2)
+	slot = (ipmb - 0xb0) / 2;
+    else
+	slot = ((ipmb - 0xb0) / 2) + 1;
+
+    for (i=0; i<count; i++) {
+	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
+	if (rv)
+	    break;
+
+	/* Fix up the entity instances for the SDRs. */
+	switch (sdr.type) {
+	case IPMI_SDR_FULL_SENSOR_RECORD:
+	    sdr.data[0] = ipmb;
+	    sdr.data[3] = IPMI_ENTITY_ID_PROCESSING_BLADE;
+	    sdr.data[4] = slot;
+	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    break;
+
+	case IPMI_SDR_FRU_DEVICE_LOCATOR_RECORD:
+	    sdr.type = 0xc0; /* Just invalidate it */
+	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    break;
+
+	case IPMI_SDR_MC_CONFIRMATION_RECORD:
+	    sdr.type = 0xc0; /* Just invalidate it */
+	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    break;
+
+	case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
+	    sdr.data[0] = ipmb;
+	    sdr.data[7] = IPMI_ENTITY_ID_PROCESSING_BLADE;
+	    sdr.data[8] = slot;
+	    sprintf(str, "BD%2.2d", slot);
+	    len = 16;
+	    ipmi_set_device_string(str, IPMI_ASCII_STR, strlen(str),
+			    	   sdr.data+10, 0, &len);
+	    sdr.length = 10 + len;
+	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    break;
+	}
+    }
+}
+
+typedef struct zynx_info_s
+{
+    board_sensor_info_t board;
+    ipmi_sensor_t *board_temp;
+    ipmi_sensor_t *v2_5;
+    ipmi_sensor_t *v1_8;
+    ipmi_sensor_t *v3_3;
+    ipmi_sensor_t *v5;
+} zynx_info_t;
 
 static void
-mxp_805_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+zynx_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    mxp_805_info_t *sinfo = cb_data;
+    zynx_info_t *sinfo = cb_data;
 
     destroy_board_sensors(mc, &(sinfo->board));
+    if (sinfo->board_temp)
+	ipmi_sensor_destroy(sinfo->board_temp);
+    if (sinfo->v2_5)
+	ipmi_sensor_destroy(sinfo->v2_5);
+    if (sinfo->v1_8)
+	ipmi_sensor_destroy(sinfo->v1_8);
+    if (sinfo->v3_3)
+	ipmi_sensor_destroy(sinfo->v3_3);
+    if (sinfo->v5)
+	ipmi_sensor_destroy(sinfo->v5);
     ipmi_mem_free(sinfo);
 }
 
 static int
-mxp_805_handler(ipmi_mc_t     *mc,
-		void          *cb_data)
+zynx_switch_handler(ipmi_mc_t     *mc,
+		    void          *cb_data)
 {
     unsigned int       slave_addr = ipmi_mc_get_address(mc);
     ipmi_entity_info_t *ents;
@@ -8146,8 +8225,11 @@ mxp_805_handler(ipmi_mc_t     *mc,
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     ipmi_mc_t          *bmc;
     mxp_info_t         *info = NULL;
-    mxp_805_info_t     *sinfo = NULL;
+    int                i;
+    zynx_info_t        *sinfo = NULL;
     ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
+    int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
+	= ipmi_standard_sensor_cb.ipmi_reading_get;
 
     ipmi_domain_entity_lock(domain);
 
@@ -8156,30 +8238,32 @@ mxp_805_handler(ipmi_mc_t     *mc,
 	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
 	&& (ipmi_mc_product_id(bmc) == MXP_AMC_PRODUCT_ID))
     {
-	int i;
-
 	info = ipmi_mc_get_oem_data(bmc);
 	/* We are in an MXP chassis, we can get the index and the name
 	   from the table */
 	i = mxp_board_addr_to_index(slave_addr, info);
 	if (i < 0)
-	    board_name = "805 board";
+	    board_name = "MXP SWTCH";
 	else
 	    board_name = board_entity_str[i];
     } else {
 	/* Not in an MXP chassis, just give it a generic name. */
-	board_name = "805 board";
+	board_name = "MXP SWTCH";
     }
-    
+
     sinfo = ipmi_mem_alloc(sizeof(*sinfo));
     if (!sinfo) {
 	rv = ENOMEM;
 	goto out;
     }
 
+    rv = ipmi_mc_set_sdrs_fixup_handler(mc, mxp_genboard_sdrs_fixup, NULL);
+    if (rv)
+	goto out;
+
     ents = ipmi_domain_get_entities(domain);
     rv = ipmi_entity_add(ents, domain, mc, 0,
-			 IPMI_ENTITY_ID_PROCESSING_BLADE,
+			 IPMI_ENTITY_ID_CONNECTIVITY_SWITCH,
 			 mxp_addr_to_instance(slave_addr),
 			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
@@ -8191,7 +8275,93 @@ mxp_805_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_805_removal_handler, sinfo, NULL);
+    /* This is the temperature sensor on the board.  It's accessed
+       using a standard reading command, but there's no SDR for it. */
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x60, info, NULL,
+					       IPMI_SENSOR_TYPE_TEMPERATURE,
+					       IPMI_UNIT_TYPE_DEGREES_C,
+					       "Board Temp",
+					       0, 0,
+					       get,
+					       -1, -1, 55,
+					       1, 0, 0, 0,
+					       &(sinfo->board_temp));
+    if (rv)
+	goto out;
+    ipmi_sensor_set_analog_data_format(sinfo->board_temp,
+				       IPMI_ANALOG_DATA_FORMAT_2_COMPL);
+    ipmi_sensor_set_raw_sensor_max(sinfo->board_temp, 0x7f);
+    ipmi_sensor_set_raw_sensor_min(sinfo->board_temp, 0x80);
+
+
+    /*
+     * Here's the calculations from ZYNX for converting the voltage
+     * readings from raw values to cooked values.:
+     *
+     * Voltage rails      SensorNumber      Normalized Value     Tolerance
+     * Calculation
+     * -------------------------------------------------------------------
+     * 2.5 V              0x41              ~2.0 V                 5%
+     *  Actual Voltage on 2.5V Rail = 1.23 * ((SV41/255) * 3.3)
+     * 1.8 V              0x42              ~1.8 V                 5%
+     *  Actual Voltage on 1.8V Rail =  (SV42/255) * 3.3
+     * 3.3 V              0x43              ~2.0 V		   5%
+     *  Actual Voltage on 3.3V Rail = 1.67 * ((SV43/255) * 3.3)
+     * 5.0 V              0x45              ~2.0 V                 5%
+     *  Actual Voltage on 5V Rail = 2.48* ((SV45/255) * 3.3)
+     */
+
+    /* This is the voltage sensors on the board.  It's accessed
+       using a standard reading command, but there's no SDR for it. */
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x41, info, NULL,
+					       IPMI_SENSOR_TYPE_VOLTAGE,
+					       IPMI_UNIT_TYPE_VOLTS,
+					       "2.5V",
+					       0, 0,
+					       get,
+					       157, 150, 165,
+					       159, 0, 0, -4,
+					       &(sinfo->v2_5));
+    if (rv)
+	goto out;
+
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x42, info, NULL,
+					       IPMI_SENSOR_TYPE_VOLTAGE,
+					       IPMI_UNIT_TYPE_VOLTS,
+					       "1.8V",
+					       0, 0,
+					       get,
+					       139, 133, 146,
+					       129, 0, 0, -4,
+					       &(sinfo->v1_8));
+    if (rv)
+	goto out;
+
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x43, info, NULL,
+					       IPMI_SENSOR_TYPE_VOLTAGE,
+					       IPMI_UNIT_TYPE_VOLTS,
+					       "3.3V",
+					       0, 0,
+					       get,
+					       153, 146, 160,
+					       216, 0, 0, -4,
+					       &(sinfo->v3_3));
+    if (rv)
+	goto out;
+
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x45, info, NULL,
+					       IPMI_SENSOR_TYPE_VOLTAGE,
+					       IPMI_UNIT_TYPE_VOLTS,
+					       "5V",
+					       0, 0,
+					       get,
+					       156, 148, 163,
+					       321, 0, 0, -4,
+					       &(sinfo->v5));
+    if (rv)
+	goto out;
+
+    rv = ipmi_mc_add_oem_removed_handler(mc, zynx_removal_handler, sinfo, NULL);
 
  out:
     if (rv && sinfo)
@@ -8466,17 +8636,19 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     return rv;
 }
 
-typedef struct mxp_5365_info_s
+typedef struct mxp_genboard_info_s
 {
+    board_sensor_info_t   board;
+
+    /* Only for the 5365 board. */
     adm1021_sensor_info_t adm1021;
     adm9240_sensor_info_t adm9240;
-    board_sensor_info_t   board;
-} mxp_5365_info_t;
+} mxp_genboard_info_t;
 
 static void
-mxp_5365_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+mxp_genboard_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    mxp_5365_info_t *sinfo = cb_data;
+    mxp_genboard_info_t *sinfo = cb_data;
 
     destroy_board_sensors(mc, &(sinfo->board));
     destroy_adm1021_sensors(mc, &(sinfo->adm1021));
@@ -8484,86 +8656,36 @@ mxp_5365_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     ipmi_mem_free(sinfo);
 }
 
-static void
-cpci5365_v2_sdrs_fixup(ipmi_mc_t       *mc,
-		       ipmi_sdr_info_t *sdrs,
-		       void            *cb_data)
-{
-    unsigned int count;
-    int          i;
-    ipmi_sdr_t   sdr;
-    int          rv;
-    char         str[20];
-    int          len;
-    unsigned int ipmb;
-    unsigned int slot;
-
-    rv = ipmi_get_sdr_count(sdrs, &count);
-    if (rv)
-	return;
-
-    ipmb = ipmi_mc_get_address(mc);
-    if (ipmb > 0xc2)
-	slot = (ipmb - 0xb0) / 2;
-    else
-	slot = ((ipmb - 0xb0) / 2) + 1;
-ipmi_log(IPMI_LOG_DEBUG, "Fixup for ipmb %d, slot %d", ipmb, slot);
-
-    for (i=0; i<count; i++) {
-	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
-	if (rv)
-	    break;
-
-	/* Fix up the entity instances for the SDRs. */
-	switch (sdr.type) {
-	case IPMI_SDR_FULL_SENSOR_RECORD:
-	    sdr.data[0] = ipmb;
-	    sdr.data[3] = IPMI_ENTITY_ID_PROCESSING_BLADE;
-	    sdr.data[4] = slot;
-	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
-	    break;
-
-	case IPMI_SDR_FRU_DEVICE_LOCATOR_RECORD:
-	    sdr.type = 0xc0; /* Just invalidate it */
-	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
-	    break;
-
-	case IPMI_SDR_MC_CONFIRMATION_RECORD:
-	    sdr.type = 0xc0; /* Just invalidate it */
-	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
-	    break;
-
-	case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
-	    sdr.data[0] = ipmb;
-	    sdr.data[7] = IPMI_ENTITY_ID_PROCESSING_BLADE;
-	    sdr.data[8] = slot;
-	    sprintf(str, "BD%2.2d", slot);
-	    len = 16;
-	    ipmi_set_device_string(str, IPMI_ASCII_STR, strlen(str),
-			    	   sdr.data+10, 0, &len);
-	    sdr.length = 10 + len;
-	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
-	    break;
-	}
-    }
-}
+static int mxp_handler(ipmi_mc_t *mc, void *cb_data);
 
 static int
-mxp_5365_handler(ipmi_mc_t     *mc,
-		 void          *cb_data)
+mxp_genboard_handler(ipmi_mc_t     *mc,
+		     void          *cb_data)
 {
-    unsigned int       slave_addr = ipmi_mc_get_address(mc);
-    ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
-    int                rv;
-    char               *board_name;
-    ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
-    ipmi_mc_t          *bmc;
-    mxp_info_t         *info = NULL;
-    mxp_5365_info_t    *sinfo = NULL;
-    ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
-    unsigned int       fw_major = ipmi_mc_major_fw_revision(mc);
-    unsigned int       fw_minor = ipmi_mc_minor_fw_revision(mc);
+    unsigned int        slave_addr = ipmi_mc_get_address(mc);
+    ipmi_entity_info_t  *ents;
+    ipmi_entity_t       *ent;
+    int                 rv;
+    char                *board_name;
+    ipmi_domain_t       *domain = ipmi_mc_get_domain(mc);
+    ipmi_mc_t           *bmc;
+    mxp_info_t          *info = NULL;
+    mxp_genboard_info_t *sinfo = NULL;
+    int                 product_id;
+    ipmi_ipmb_addr_t    addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
+    int                 fw_major = ipmi_mc_major_fw_revision(mc);
+    int                 fw_minor = ipmi_mc_minor_fw_revision(mc);
+
+
+    product_id = ipmi_mc_product_id(mc);
+    switch (product_id)
+    {
+    case MXP_AMC_PRODUCT_ID:
+	return mxp_handler(mc, cb_data);
+
+    case ZYNX_SWITCH_PRODUCT_ID:
+	return zynx_switch_handler(mc, cb_data);
+    }
 
     ipmi_domain_entity_lock(domain);
 
@@ -8579,14 +8701,14 @@ mxp_5365_handler(ipmi_mc_t     *mc,
 	   from the table */
 	i = mxp_board_addr_to_index(slave_addr, info);
 	if (i < 0)
-	    board_name = "5365 board";
+	    board_name = "MXP board";
 	else
 	    board_name = board_entity_str[i];
     } else {
 	/* Not in an MXP chassis, just give it a generic name. */
-	board_name = "5365 board";
+	board_name = "MXP board";
     }
-
+    
     sinfo = ipmi_mem_alloc(sizeof(*sinfo));
     if (!sinfo) {
 	rv = ENOMEM;
@@ -8594,7 +8716,7 @@ mxp_5365_handler(ipmi_mc_t     *mc,
     }
     memset(sinfo, 0, sizeof(*sinfo));
 
-    rv = ipmi_mc_set_sdrs_fixup_handler(mc, cpci5365_v2_sdrs_fixup, NULL);
+    rv = ipmi_mc_set_sdrs_fixup_handler(mc, mxp_genboard_sdrs_fixup, NULL);
     if (rv)
 	goto out;
 
@@ -8612,449 +8734,30 @@ mxp_5365_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
-    rv = alloc_adm1021_sensor(mc, ent, 0x80, 0x01, 0x9c, "Proc Temp",
-			      &(sinfo->adm1021));
-    if (rv)
-	goto out;
-
-    if ((fw_major < 3) || ((fw_major == 3) && (fw_minor < 154))) {
+    if ((product_id == MXP_5365_PRODUCT_ID) && 
+	((fw_major < 3) || ((fw_major == 3) && (fw_minor < 154))))
+    {
 	/* These only have to be added for old boards. */
+	rv = alloc_adm1021_sensor(mc, ent, 0x80, 0x01, 0x9c, "Proc Temp",
+				  &(sinfo->adm1021));
+	if (rv)
+	    goto out;
+
 	rv = alloc_adm9240_sensor(mc, ent, 0x81, 0x01, 0x5a,
 				  &(sinfo->adm9240));
 	if (rv)
 	    goto out;
     } else {
+	/* Remove this once it is set correctly. */
 	ipmi_mc_set_provides_device_sdrs(mc, 1);
     }
 
-    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_5365_removal_handler,
+    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_genboard_removal_handler,
 					 sinfo, NULL);
 
  out:
     if (rv && sinfo)
-	ipmi_mem_free(sinfo);
-    ipmi_domain_entity_unlock(domain);
-    return rv;
-}
-
-typedef struct mxp_5385_info_s
-{
-    board_sensor_info_t   board;
-} mxp_5385_info_t;
-
-static void
-mxp_5385_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
-{
-    mxp_5385_info_t *sinfo = cb_data;
-
-    destroy_board_sensors(mc, &(sinfo->board));
-    ipmi_mem_free(sinfo);
-}
-
-static int
-mxp_5385_handler(ipmi_mc_t     *mc,
-		 void          *cb_data)
-{
-    unsigned int       slave_addr = ipmi_mc_get_address(mc);
-    ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
-    int                rv;
-    char               *board_name;
-    ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
-    ipmi_mc_t          *bmc;
-    mxp_info_t         *info = NULL;
-    mxp_5385_info_t    *sinfo = NULL;
-    ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
-
-    ipmi_domain_entity_lock(domain);
-
-    bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
-    if (bmc
-	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
-	&& (ipmi_mc_product_id(bmc) == MXP_AMC_PRODUCT_ID))
-    {
-	int i;
-
-	info = ipmi_mc_get_oem_data(bmc);
-	/* We are in an MXP chassis, we can get the index and the name
-	   from the table */
-	i = mxp_board_addr_to_index(slave_addr, info);
-	if (i < 0)
-	    board_name = "5385 board";
-	else
-	    board_name = board_entity_str[i];
-    } else {
-	/* Not in an MXP chassis, just give it a generic name. */
-	board_name = "5385 board";
-    }
-    
-    sinfo = ipmi_mem_alloc(sizeof(*sinfo));
-    if (!sinfo) {
-	rv = ENOMEM;
-	goto out;
-    }
-
-    ents = ipmi_domain_get_entities(domain);
-    rv = ipmi_entity_add(ents, domain, mc, 0,
-			 IPMI_ENTITY_ID_PROCESSING_BLADE,
-			 mxp_addr_to_instance(slave_addr),
-			 board_name, IPMI_ASCII_STR, strlen(board_name),
-			 mxp_entity_sdr_add,
-			 NULL, &ent);
-    if (rv)
-	goto out;
-
-    rv = new_board_sensors(mc, ent, info, &(sinfo->board));
-    if (rv)
-	goto out;
-
-    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_5385_removal_handler, sinfo, NULL);
-
- out:
-    if (rv && sinfo)
-	ipmi_mem_free(sinfo);
-    ipmi_domain_entity_unlock(domain);
-    return rv;
-}
-
-typedef struct mxp_pprb_info_s
-{
-    board_sensor_info_t   board;
-} mxp_pprb_info_t;
-
-static void
-mxp_pprb_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
-{
-    mxp_pprb_info_t *sinfo = cb_data;
-
-    destroy_board_sensors(mc, &(sinfo->board));
-    ipmi_mem_free(sinfo);
-}
-
-static int
-mxp_pprb_handler(ipmi_mc_t     *mc,
-		 void          *cb_data)
-{
-    unsigned int       slave_addr = ipmi_mc_get_address(mc);
-    ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
-    int                rv;
-    char               *board_name;
-    ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
-    ipmi_mc_t          *bmc;
-    mxp_info_t         *info = NULL;
-    mxp_pprb_info_t    *sinfo = NULL;
-    ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
-
-    ipmi_domain_entity_lock(domain);
-
-    bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
-    if (bmc
-	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
-	&& (ipmi_mc_product_id(bmc) == MXP_AMC_PRODUCT_ID))
-    {
-	int i;
-
-	info = ipmi_mc_get_oem_data(bmc);
-	/* We are in an MXP chassis, we can get the index and the name
-	   from the table */
-	i = mxp_board_addr_to_index(slave_addr, info);
-	if (i < 0)
-	    board_name = "pprb board";
-	else
-	    board_name = board_entity_str[i];
-    } else {
-	/* Not in an MXP chassis, just give it a generic name. */
-	board_name = "pprb board";
-    }
-    
-    sinfo = ipmi_mem_alloc(sizeof(*sinfo));
-    if (!sinfo) {
-	rv = ENOMEM;
-	goto out;
-    }
-
-    ents = ipmi_domain_get_entities(domain);
-    rv = ipmi_entity_add(ents, domain, mc, 0,
-			 IPMI_ENTITY_ID_PROCESSING_BLADE,
-			 mxp_addr_to_instance(slave_addr),
-			 board_name, IPMI_ASCII_STR, strlen(board_name),
-			 mxp_entity_sdr_add,
-			 NULL, &ent);
-    if (rv)
-	goto out;
-
-    rv = new_board_sensors(mc, ent, info, &(sinfo->board));
-    if (rv)
-	goto out;
-
-    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_pprb_removal_handler, sinfo, NULL);
-
- out:
-    if (rv && sinfo)
-	ipmi_mem_free(sinfo);
-    ipmi_domain_entity_unlock(domain);
-    return rv;
-}
-
-typedef struct mxp_pvrb_info_s
-{
-    board_sensor_info_t   board;
-} mxp_pvrb_info_t;
-
-static void
-mxp_pvrb_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
-{
-    mxp_pvrb_info_t *sinfo = cb_data;
-
-    destroy_board_sensors(mc, &(sinfo->board));
-    ipmi_mem_free(sinfo);
-}
-
-static int
-mxp_pvrb_handler(ipmi_mc_t     *mc,
-		 void          *cb_data)
-{
-    unsigned int       slave_addr = ipmi_mc_get_address(mc);
-    ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
-    int                rv;
-    char               *board_name;
-    ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
-    ipmi_mc_t          *bmc;
-    mxp_info_t         *info = NULL;
-    mxp_pvrb_info_t    *sinfo = NULL;
-    ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
-
-    ipmi_domain_entity_lock(domain);
-
-    bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
-    if (bmc
-	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
-	&& (ipmi_mc_product_id(bmc) == MXP_AMC_PRODUCT_ID))
-    {
-	int i;
-
-	info = ipmi_mc_get_oem_data(bmc);
-	/* We are in an MXP chassis, we can get the index and the name
-	   from the table */
-	i = mxp_board_addr_to_index(slave_addr, info);
-	if (i < 0)
-	    board_name = "pvrb board";
-	else
-	    board_name = board_entity_str[i];
-    } else {
-	/* Not in an MXP chassis, just give it a generic name. */
-	board_name = "pvrb board";
-    }
-    
-    sinfo = ipmi_mem_alloc(sizeof(*sinfo));
-    if (!sinfo) {
-	rv = ENOMEM;
-	goto out;
-    }
-
-    ents = ipmi_domain_get_entities(domain);
-    rv = ipmi_entity_add(ents, domain, mc, 0,
-			 IPMI_ENTITY_ID_PROCESSING_BLADE,
-			 mxp_addr_to_instance(slave_addr),
-			 board_name, IPMI_ASCII_STR, strlen(board_name),
-			 mxp_entity_sdr_add,
-			 NULL, &ent);
-    if (rv)
-	goto out;
-
-    rv = new_board_sensors(mc, ent, info, &(sinfo->board));
-    if (rv)
-	goto out;
-
-    rv = ipmi_mc_add_oem_removed_handler(mc, mxp_pvrb_removal_handler, sinfo, NULL);
-
- out:
-    if (rv && sinfo)
-	ipmi_mem_free(sinfo);
-    ipmi_domain_entity_unlock(domain);
-    return rv;
-}
-
-typedef struct zynx_info_s
-{
-    board_sensor_info_t board;
-    ipmi_sensor_t *board_temp;
-    ipmi_sensor_t *v2_5;
-    ipmi_sensor_t *v1_8;
-    ipmi_sensor_t *v3_3;
-    ipmi_sensor_t *v5;
-} zynx_info_t;
-
-static void
-zynx_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
-{
-    zynx_info_t *sinfo = cb_data;
-
-    destroy_board_sensors(mc, &(sinfo->board));
-    if (sinfo->board_temp)
-	ipmi_sensor_destroy(sinfo->board_temp);
-    if (sinfo->v2_5)
-	ipmi_sensor_destroy(sinfo->v2_5);
-    if (sinfo->v1_8)
-	ipmi_sensor_destroy(sinfo->v1_8);
-    if (sinfo->v3_3)
-	ipmi_sensor_destroy(sinfo->v3_3);
-    if (sinfo->v5)
-	ipmi_sensor_destroy(sinfo->v5);
-    ipmi_mem_free(sinfo);
-}
-
-static int
-zynx_switch_handler(ipmi_mc_t     *mc,
-		    void          *cb_data)
-{
-    unsigned int       slave_addr = ipmi_mc_get_address(mc);
-    ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
-    int                rv;
-    char               *board_name;
-    ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
-    ipmi_mc_t          *bmc;
-    mxp_info_t         *info = NULL;
-    int                i;
-    zynx_info_t        *sinfo = NULL;
-    ipmi_ipmb_addr_t   addr = {IPMI_IPMB_ADDR_TYPE, 0, 0x20, 0};
-    int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
-	= ipmi_standard_sensor_cb.ipmi_reading_get;
-
-    ipmi_domain_entity_lock(domain);
-
-    bmc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
-    if (bmc
-	&& (ipmi_mc_manufacturer_id(bmc) == MXP_MANUFACTURER_ID)
-	&& (ipmi_mc_product_id(bmc) == MXP_AMC_PRODUCT_ID))
-    {
-	info = ipmi_mc_get_oem_data(bmc);
-	/* We are in an MXP chassis, we can get the index and the name
-	   from the table */
-	i = mxp_board_addr_to_index(slave_addr, info);
-	if (i < 0)
-	    board_name = "MXP SWTCH";
-	else
-	    board_name = board_entity_str[i];
-    } else {
-	/* Not in an MXP chassis, just give it a generic name. */
-	board_name = "MXP SWTCH";
-    }
-
-    sinfo = ipmi_mem_alloc(sizeof(*sinfo));
-    if (!sinfo) {
-	rv = ENOMEM;
-	goto out;
-    }
-
-    ents = ipmi_domain_get_entities(domain);
-    rv = ipmi_entity_add(ents, domain, mc, 0,
-			 IPMI_ENTITY_ID_CONNECTIVITY_SWITCH,
-			 mxp_addr_to_instance(slave_addr),
-			 board_name, IPMI_ASCII_STR, strlen(board_name),
-			 mxp_entity_sdr_add,
-			 NULL, &ent);
-    if (rv)
-	goto out;
-
-    rv = new_board_sensors(mc, ent, info, &(sinfo->board));
-    if (rv)
-	goto out;
-
-    /* This is the temperature sensor on the board.  It's accessed
-       using a standard reading command, but there's no SDR for it. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x60, info, NULL,
-					       IPMI_SENSOR_TYPE_TEMPERATURE,
-					       IPMI_UNIT_TYPE_DEGREES_C,
-					       "Board Temp",
-					       0, 0,
-					       get,
-					       -1, -1, 55,
-					       1, 0, 0, 0,
-					       &(sinfo->board_temp));
-    if (rv)
-	goto out;
-    ipmi_sensor_set_analog_data_format(sinfo->board_temp,
-				       IPMI_ANALOG_DATA_FORMAT_2_COMPL);
-    ipmi_sensor_set_raw_sensor_max(sinfo->board_temp, 0x7f);
-    ipmi_sensor_set_raw_sensor_min(sinfo->board_temp, 0x80);
-
-
-    /*
-     * Here's the calculations from ZYNX for converting the voltage
-     * readings from raw values to cooked values.:
-     *
-     * Voltage rails      SensorNumber      Normalized Value     Tolerance
-     * Calculation
-     * -------------------------------------------------------------------
-     * 2.5 V              0x41              ~2.0 V                 5%
-     *  Actual Voltage on 2.5V Rail = 1.23 * ((SV41/255) * 3.3)
-     * 1.8 V              0x42              ~1.8 V                 5%
-     *  Actual Voltage on 1.8V Rail =  (SV42/255) * 3.3
-     * 3.3 V              0x43              ~2.0 V		   5%
-     *  Actual Voltage on 3.3V Rail = 1.67 * ((SV43/255) * 3.3)
-     * 5.0 V              0x45              ~2.0 V                 5%
-     *  Actual Voltage on 5V Rail = 2.48* ((SV45/255) * 3.3)
-     */
-
-    /* This is the voltage sensors on the board.  It's accessed
-       using a standard reading command, but there's no SDR for it. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x41, info, NULL,
-					       IPMI_SENSOR_TYPE_VOLTAGE,
-					       IPMI_UNIT_TYPE_VOLTS,
-					       "2.5V",
-					       0, 0,
-					       get,
-					       157, 150, 165,
-					       159, 0, 0, -4,
-					       &(sinfo->v2_5));
-    if (rv)
-	goto out;
-
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x42, info, NULL,
-					       IPMI_SENSOR_TYPE_VOLTAGE,
-					       IPMI_UNIT_TYPE_VOLTS,
-					       "1.8V",
-					       0, 0,
-					       get,
-					       139, 133, 146,
-					       129, 0, 0, -4,
-					       &(sinfo->v1_8));
-    if (rv)
-	goto out;
-
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x43, info, NULL,
-					       IPMI_SENSOR_TYPE_VOLTAGE,
-					       IPMI_UNIT_TYPE_VOLTS,
-					       "3.3V",
-					       0, 0,
-					       get,
-					       153, 146, 160,
-					       216, 0, 0, -4,
-					       &(sinfo->v3_3));
-    if (rv)
-	goto out;
-
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x45, info, NULL,
-					       IPMI_SENSOR_TYPE_VOLTAGE,
-					       IPMI_UNIT_TYPE_VOLTS,
-					       "5V",
-					       0, 0,
-					       get,
-					       156, 148, 163,
-					       321, 0, 0, -4,
-					       &(sinfo->v5));
-    if (rv)
-	goto out;
-
-    rv = ipmi_mc_add_oem_removed_handler(mc, zynx_removal_handler, sinfo, NULL);
-
- out:
-    if (rv && sinfo)
-	ipmi_mem_free(sinfo);
+	mxp_genboard_removal_handler(domain, mc, sinfo);
     ipmi_domain_entity_unlock(domain);
     return rv;
 }
@@ -9429,6 +9132,9 @@ ipmb_handler(ipmi_con_t   *ipmi,
     int                  active = 0;
     int                  err = 0;
     
+    if (!ipmi)
+	return;
+
     if (msg->data[0] != 0)
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
     else if (msg->data_len < 23)
@@ -9576,51 +9282,12 @@ ipmi_oem_motorola_mxp_init(void)
     if (rv)
 	return rv;
 
-    rv = ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
-				   MXP_AMC_PRODUCT_ID,
-				   mxp_handler,
-				   NULL,
-				   NULL);
-    if (rv)
-	return rv;
-
-    rv = ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
-				   MXP_805_PRODUCT_ID,
-				   mxp_805_handler,
-				   NULL,
-				   NULL);
-    if (rv)
-	return rv;
-
-    rv = ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
-				   MXP_5365_PRODUCT_ID,
-				   mxp_5365_handler,
-				   NULL,
-				   NULL);
-    if (rv)
-	return rv;
-
-    rv = ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
-				   MXP_5385_PRODUCT_ID,
-				   mxp_5385_handler,
-				   NULL,
-				   NULL);
-    if (rv)
-	return rv;
-
-    rv = ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
-				   MXP_PPRB_PRODUCT_ID,
-				   mxp_pprb_handler,
-				   NULL,
-				   NULL);
-    if (rv)
-	return rv;
-
-    rv = ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
-				   MXP_PVRB_PRODUCT_ID,
-				   mxp_pvrb_handler,
-				   NULL,
-				   NULL);
+    rv = ipmi_register_oem_handler_range(MXP_MANUFACTURER_ID,
+					 MXP_START_PRODUCT_RANGE,
+					 MXP_END_PRODUCT_RANGE,
+					 mxp_genboard_handler,
+					 NULL,
+					 NULL);
     if (rv)
 	return rv;
 
@@ -9631,10 +9298,4 @@ ipmi_oem_motorola_mxp_init(void)
 				   NULL);
     if (rv)
 	return rv;
-
-    return ipmi_register_oem_handler(MXP_MANUFACTURER_ID,
-				     ZYNX_SWITCH_PRODUCT_ID,
-				     zynx_switch_handler,
-				     NULL,
-				     NULL);
 }

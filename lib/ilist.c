@@ -438,12 +438,15 @@ ilist_add_twoitem(ilist_t *list, void *cb_data1, void *cb_data2)
 int
 ilist_remove_twoitem(ilist_t *list, void *cb_data1, void *cb_data2)
 {
-    ilist_iter_t iter;
+    ilist_iter_t          iter;
+    ilist_twoitem_entry_t *entry;
 
     if (! find_twoitem(&iter, list, cb_data1, cb_data2))
 	return 0;
 
+    entry = ilist_get(&iter);
     ilist_delete(&iter);
+    ilist_mem_free(entry);
     return 1;
 }
 
@@ -482,11 +485,14 @@ ilist_iter_twoitem(ilist_t *list, ilist_twoitem_cb handler, void *data)
 void
 ilist_twoitem_destroy(ilist_t *list)
 {
-    ilist_iter_t iter;
+    ilist_iter_t          iter;
+    ilist_twoitem_entry_t *entry;
 
     ilist_init_iter(&iter, list);
     while (ilist_first(&iter)) {
+	entry = ilist_get(&iter);
 	ilist_delete(&iter);
+	ilist_mem_free(entry);
     }
     free_ilist(list);
 }

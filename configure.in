@@ -91,7 +91,8 @@ if test "x$tryucdsnmp" != "xno"; then
          AC_CHECK_HEADER(snmp_api.h, FOUND_SNMPINCL=yes; )
          if test "x$FOUND_SNMPINCL" == "xno"; then
            AC_CHECK_HEADER(ucd-snmp/snmp_api.h,
-	                   FOUND_SNMPINCL=yes; AC_DEFINE(HAVE_ALT_UCDSNMP_DIR))
+	                   FOUND_SNMPINCL=yes;
+			     AC_DEFINE(HAVE_ALT_UCDSNMP_DIR))
          fi
       fi
       if test "x$FOUND_SNMPINCL" == "xno"; then

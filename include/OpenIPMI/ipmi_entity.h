@@ -225,6 +225,7 @@ ipmi_fru_t *ipmi_entity_get_fru(ipmi_entity_t *ent);
 /* Fetch the FRUs for this entity. */
 int ipmi_entity_fetch_frus(ipmi_entity_t *ent);
 
+/* Set the entity as hot-swappable. */
 int ipmi_entity_set_hot_swappable(ipmi_entity_t *ent, int val);
 
 /* Hot-swap state callbacks. */
@@ -235,18 +236,18 @@ typedef struct ipmi_entity_hot_swap_s
 			      void                    *cb_data);
 
     int (*set_auto_activate)(ipmi_entity_t  *ent,
-			     int            val,
+			     int            auto_act,
 			     ipmi_entity_cb done,
 			     void           *cb_data);
-
-    int (*set_auto_deactivate)(ipmi_entity_t  *ent,
-			       int            val,
-			       ipmi_entity_cb done,
-			       void           *cb_data);
 
     int (*get_auto_activate)(ipmi_entity_t      *ent,
 			     ipmi_entity_val_cb handler,
 			     void               *cb_data);
+
+    int (*set_auto_deactivate)(ipmi_entity_t  *ent,
+			       int            auto_act,
+			       ipmi_entity_cb done,
+			       void           *cb_data);
 
     int (*get_auto_deactivate)(ipmi_entity_t      *ent,
 			       ipmi_entity_val_cb handler,
@@ -273,6 +274,39 @@ typedef struct ipmi_entity_hot_swap_s
 				  ipmi_entity_val_cb handler,
 				  void               *cb_data);
 } ipmi_entity_hot_swap_t;
+
+/* Set the hot-swap control state machine. */
+void ipmi_entity_set_hot_swap_control(ipmi_entity_t          *ent,
+				      ipmi_entity_hot_swap_t *cbs);
+
+/* There is a built-in hot-swap engine for entities that will be used
+   if all the right things are set on a entity and a hot-swap control
+   state machine is not already installed (get_hot_swap_state is not
+   NULL).
+
+   If an entity has a presence sensor and other criteria are not met,
+   a simplified (active/inactive) hot-swap state machine is
+   implemented.
+
+   If an entity has the following, then an inactive state is added with
+   possible setting of auto-activate.  Note that these need to be there
+   even if the entity is not present:
+   * A presence sensor
+   * A power control with "ipmi_control_is_hot_swap_power" returning true
+
+   If the following are present, then the extraction pending state will
+   be used:
+   * A presence sensor
+   * A discrete sensor with "ipmi_sensor_is_hot_swap_requester" returning
+     true.
+   This sensor may appear later, it does not have to always be present.
+
+   If a hot-swap indicator appears (an LED control with one LED for
+   which "ipmi_control_is_hot_swap_indicator" returns true, it will be
+   automatically controlled.  This control does not have to be present
+   all the time, but should generally appear except in not present
+   state.
+*/
 
 /* Locks for the entity. */
 void ipmi_entity_lock(ipmi_entity_t *ent);

@@ -1129,11 +1129,11 @@ void _ipmi_pet_shutdown(void);
 void
 ipmi_shutdown(void)
 {
+    ipmi_oem_atca_conn_shutdown();
     _ipmi_pet_shutdown();
-    _ipmi_conn_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
-    ipmi_oem_atca_conn_shutdown();
+    _ipmi_conn_shutdown();
     if (global_lock)
 	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
     if (seq_lock)

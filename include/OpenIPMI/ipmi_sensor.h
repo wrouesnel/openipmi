@@ -297,8 +297,9 @@ void ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
    the hot-swappable entity from the system.  If this returns true,
    the offset will be set to the offset in the sensor of the hot-swap
    request value.  val_when_requesting will be set to the value (1 or
-   0) that corresponds to the sensor requesting a hot-swap.  This
-   should generally be a slot sensor (sensor type 21h). */
+   0) that the offset will be set to when the sensor is requesting a
+   hot-swap.  This should generally be a slot sensor (sensor type
+   21h). */
 int ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
 				      unsigned int  *offset,
 				      unsigned int  *val_when_requesting);
@@ -306,15 +307,31 @@ void ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
 					unsigned int  offset,
 					unsigned int  val_when_requesting);
 
-/* Allow OEM code to get the event handler so it can call it. */
-void ipmi_sensor_threshold_get_event_handler(
-    ipmi_sensor_t                          *sensor,
-    ipmi_sensor_threshold_event_handler_cb *handler,
-    void                                   **cb_data);
-void ipmi_sensor_discrete_get_event_handler(
-    ipmi_sensor_t                         *sensor,
-    ipmi_sensor_discrete_event_handler_cb *handler,
-    void                                  **cb_data);
+/* Allow OEM code to call the event handlers.  Note that if the event
+   is handled by the handlers, then "*event" will be set to NULL and
+   *handled will be set to true.  If the event is not handled, then
+   *handled will be set to false and the event value will be
+   unchanged.  This is to help the OEM handlers only deliver the event
+   once to the user. */
+void
+ipmi_sensor_call_threshold_event_handlers
+(ipmi_sensor_t               *sensor,
+ enum ipmi_event_dir_e       dir,
+ enum ipmi_thresh_e          threshold,
+ enum ipmi_event_value_dir_e high_low,
+ enum ipmi_value_present_e   value_present,
+ unsigned int                raw_value,
+ double                      value,
+ ipmi_event_t                **event,
+ int                         *handled);
+void ipmi_sensor_call_discrete_event_handlers
+(ipmi_sensor_t         *sensor,
+ enum ipmi_event_dir_e dir,
+ int                   offset,
+ int                   severity,
+ int                   prev_severity,
+ ipmi_event_t          **event,
+ int                   *handled);
 
 /* Typedefs for the sensor polymorphic functions. */
 typedef int (*ipmi_sensor_convert_from_raw_cb)(

@@ -2562,23 +2562,11 @@ ipmi_sensor_threshold_set_event_handler(
     return 0;
 }
 
-void
-ipmi_sensor_threshold_get_event_handler(
-    ipmi_sensor_t                          *sensor,
-    ipmi_sensor_threshold_event_handler_cb *handler,
-    void                                   **cb_data)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    *handler = sensor->threshold_event_handler;
-    *cb_data = sensor->cb_data;
-}
-
 int
 ipmi_sensor_add_threshold_event_handler(
-    ipmi_sensor_t                          *sensor,
-    ipmi_sensor_threshold_event_handler_cb handler,
-    void                                   *cb_data)
+    ipmi_sensor_t                  *sensor,
+    ipmi_sensor_threshold_event_cb handler,
+    void                           *cb_data)
 {
     CHECK_SENSOR_LOCK(sensor);
 
@@ -2593,9 +2581,9 @@ ipmi_sensor_add_threshold_event_handler(
 
 int
 ipmi_sensor_remove_threshold_event_handler(
-    ipmi_sensor_t                          *sensor,
-    ipmi_sensor_threshold_event_handler_cb handler,
-    void                                   *cb_data)
+    ipmi_sensor_t                  *sensor,
+    ipmi_sensor_threshold_event_cb handler,
+    void                           *cb_data)
 {
     CHECK_SENSOR_LOCK(sensor);
 
@@ -2619,23 +2607,11 @@ ipmi_sensor_discrete_set_event_handler(
     return 0;
 }
 
-void
-ipmi_sensor_discrete_get_event_handler(
-    ipmi_sensor_t                         *sensor,
-    ipmi_sensor_discrete_event_handler_cb *handler,
-    void                                  **cb_data)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    *handler = sensor->discrete_event_handler;
-    *cb_data = sensor->cb_data;
-}
-
 int
 ipmi_sensor_add_discrete_event_handler(
-    ipmi_sensor_t                         *sensor,
-    ipmi_sensor_discrete_event_handler_cb handler,
-    void                                  *cb_data)
+    ipmi_sensor_t                 *sensor,
+    ipmi_sensor_discrete_event_cb handler,
+    void                          *cb_data)
 {
     CHECK_SENSOR_LOCK(sensor);
 
@@ -2650,9 +2626,9 @@ ipmi_sensor_add_discrete_event_handler(
 
 int
 ipmi_sensor_remove_discrete_event_handler(
-    ipmi_sensor_t                         *sensor,
-    ipmi_sensor_discrete_event_handler_cb handler,
-    void                                  *cb_data)
+    ipmi_sensor_t                 *sensor,
+    ipmi_sensor_discrete_event_cb handler,
+    void                          *cb_data)
 {
     CHECK_SENSOR_LOCK(sensor);
 
@@ -2671,7 +2647,7 @@ typedef struct sensor_event_info_s
     enum ipmi_thresh_e          threshold;
     enum ipmi_event_value_dir_e high_low;
     enum ipmi_value_present_e   value_present;
-    unsigned int                raw;
+    unsigned int                raw_value;
     double                      value;
 
     int                         offset;
@@ -2684,97 +2660,180 @@ typedef struct sensor_event_info_s
 static void
 threshold_sensor_event_call_handler(void *data, void *ihandler, void *cb_data)
 {
-    ipmi_sensor_threshold_event_handler_cb handler = ihandler;
-    sensor_event_info_t                    *info = data;
+    ipmi_sensor_threshold_event_cb handler = ihandler;
+    sensor_event_info_t            *info = data;
+    int                            handled;
 
-    handler(info->sensor, info->dir,
-	    info->threshold,
-	    info->high_low,
-	    info->value_present,
-	    info->raw, info->value,
-	    cb_data, info->event);
-    info->handled = 1;
+    handled = ! handler(info->sensor, info->dir,
+			info->threshold,
+			info->high_low,
+			info->value_present,
+			info->raw_value, info->value,
+			cb_data, info->event);
+    if (!info->handled && handled)
+	info->handled = 1;
     info->event = NULL;
+}
+
+void
+ipmi_sensor_call_threshold_event_handlers
+(ipmi_sensor_t               *sensor,
+ enum ipmi_event_dir_e       dir,
+ enum ipmi_thresh_e          threshold,
+ enum ipmi_event_value_dir_e high_low,
+ enum ipmi_value_present_e   value_present,
+ unsigned int                raw_value,
+ double                      value,
+ ipmi_event_t                **event,
+ int                         *handled)
+{
+    sensor_event_info_t info;
+
+    info.sensor = sensor;
+    info.dir = dir;
+    info.threshold = threshold;
+    info.high_low = high_low;
+    info.value_present = value_present;
+    info.raw_value = raw_value;
+    info.value = value;
+    info.event = *event;
+    info.handled = 0;
+
+    if (sensor->threshold_event_handler) {
+	sensor->threshold_event_handler(sensor, info.dir,
+					info.threshold,
+					info.high_low,
+					info.value_present,
+					info.raw_value, info.value,
+					sensor->cb_data, info.event);
+	info.handled = 1;
+	info.event = NULL;
+    }
+    ilist_iter_twoitem(sensor->handler_list,
+		       threshold_sensor_event_call_handler, &info);
+
+    if (handled)
+	*handled = info.handled;
+    *event = info.event;
 }
 
 static void
 discrete_sensor_event_call_handler(void *data, void *ihandler, void *cb_data)
 {
-    ipmi_sensor_discrete_event_handler_cb handler = ihandler;
-    sensor_event_info_t                   *info = data;
+    ipmi_sensor_discrete_event_cb handler = ihandler;
+    sensor_event_info_t           *info = data;
+    int                           handled;
 
-    handler(info->sensor, info->dir, info->offset,
-	    info->severity,
-	    info->prev_severity,
-	    cb_data, info->event);
-    info->handled = 1;
+    handled = ! handler(info->sensor, info->dir, info->offset,
+			info->severity,
+			info->prev_severity,
+			cb_data, info->event);
+    if (!info->handled && handled)
+	info->handled = 1;
     info->event = NULL;
+}
+
+void
+ipmi_sensor_call_discrete_event_handlers(ipmi_sensor_t         *sensor,
+					 enum ipmi_event_dir_e dir,
+					 int                   offset,
+					 int                   severity,
+					 int                   prev_severity,
+					 ipmi_event_t          **event,
+					 int                   *handled)
+{
+    sensor_event_info_t info;
+
+    info.sensor = sensor;
+    info.dir = dir;
+    info.offset = offset;
+    info.severity = severity;
+    info.prev_severity = prev_severity;
+    info.event = *event;
+    info.handled = 0;
+
+    if (sensor->discrete_event_handler) {
+	sensor->discrete_event_handler(sensor, info.dir, info.offset,
+				       info.severity,
+				       info.prev_severity,
+				       sensor->cb_data, info.event);
+	info.handled = 1;
+	info.event = NULL;
+    }
+    ilist_iter_twoitem(sensor->handler_list,
+		       discrete_sensor_event_call_handler, &info);
+
+    if (handled)
+	*handled = info.handled;
+    *event = info.event;
 }
 
 int
 ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
 {
-    sensor_event_info_t info;
-    int                 rv;
+    int rv;
+    int handled;
 
     CHECK_SENSOR_LOCK(sensor);
 
-    info.handled = 0;
-    info.event = event;
+    handled = 0;
 
     if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD) {
-	info.dir = event->data[9] >> 7;
-	info.threshold = (event->data[10] >> 1) & 0x07;
-	info.high_low = event->data[10] & 1;
-	info.raw = event->data[11];
-	info.value = 0.0;
+	enum ipmi_event_dir_e       dir;
+	enum ipmi_thresh_e          threshold;
+	enum ipmi_event_value_dir_e high_low;
+	enum ipmi_value_present_e   value_present;
+	unsigned int                raw_value;
+	double                      value;
+
+	dir = event->data[9] >> 7;
+	threshold = (event->data[10] >> 1) & 0x07;
+	high_low = event->data[10] & 1;
+	raw_value = event->data[11];
+	value = 0.0;
 
 	if ((event->data[10] >> 6) == 2) {
-	    rv = ipmi_sensor_convert_from_raw(sensor, info.raw, &info.value);
+	    rv = ipmi_sensor_convert_from_raw(sensor, raw_value, &value);
 	    if (!rv)
-		info.value_present = IPMI_RAW_VALUE_PRESENT;
+		value_present = IPMI_RAW_VALUE_PRESENT;
 	    else
-		info.value_present = IPMI_BOTH_VALUES_PRESENT;
+		value_present = IPMI_BOTH_VALUES_PRESENT;
 	} else {
-	    info.value_present = IPMI_NO_VALUES_PRESENT;
+	    value_present = IPMI_NO_VALUES_PRESENT;
 	}
-	if (sensor->threshold_event_handler) {
-	    sensor->threshold_event_handler(sensor, info.dir,
-					    info.threshold,
-					    info.high_low,
-					    info.value_present,
-					    info.raw, info.value,
-					    sensor->cb_data, info.event);
-	    info.handled = 1;
-	    info.event = NULL;
-	}
-	ilist_iter_twoitem(sensor->handler_list,
-			   threshold_sensor_event_call_handler, &info);
+	ipmi_sensor_call_threshold_event_handlers(sensor, dir,
+						  threshold,
+						  high_low,
+						  value_present,
+						  raw_value, value,
+						  &event,
+						  &handled);
     } else {
-	info.dir = event->data[9] >> 7;
-	info.offset = event->data[10] & 0x0f;
+	enum ipmi_event_dir_e dir;
+	int                   offset;
+	int                   severity = 0;
+	int                   prev_severity = 0;
+
+	dir = event->data[9] >> 7;
+	offset = event->data[10] & 0x0f;
 	if ((event->data[10] >> 6) == 2) {
-	    info.severity = event->data[11] >> 4;
-	    info.prev_severity = event->data[11] & 0xf;
-	    if (info.severity == 0xf)
-		info.severity = -1;
-	    if (info.prev_severity == 0xf)
-		info.prev_severity = -1;
+	    severity = event->data[11] >> 4;
+	    prev_severity = event->data[11] & 0xf;
+	    if (severity == 0xf)
+		severity = -1;
+	    if (prev_severity == 0xf)
+		prev_severity = -1;
 	}
-	if (sensor->discrete_event_handler) {
-	    sensor->discrete_event_handler(sensor, info.dir, info.offset,
-					   info.severity,
-					   info.prev_severity,
-					   sensor->cb_data, info.event);
-	    info.handled = 1;
-	    info.event = NULL;
-	}
-	ilist_iter_twoitem(sensor->handler_list,
-			   discrete_sensor_event_call_handler, &info);
+
+	ipmi_sensor_call_discrete_event_handlers(sensor, dir, offset,
+						 severity,
+						 prev_severity,
+						 &event,
+						 &handled);
     }
 
     /* Make sure the caller knows if we didn't deliver the event. */
-    if (!info.handled)
+    if (!handled)
 	return EINVAL;
     return 0;
 }

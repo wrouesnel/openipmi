@@ -145,6 +145,8 @@ int ilist_twoitem_exists(ilist_t *list, void *cb_data1, void *cb_data2);
 /* Call all the callbacks in the list */
 void ilist_iter_twoitem(ilist_t *ilist, ilist_twoitem_cb handler, void *data);
 
+void ilist_twoitem_destroy(ilist_t *list);
+
 /* Internal data structures, DO NOT USE THESE. */
 
 struct ilist_item_s

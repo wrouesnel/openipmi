@@ -119,8 +119,9 @@ atca_oem_finish_check(ipmi_con_t   *ipmi,
 
 static int
 atca_oem_check(ipmi_con_t               *conn,
+	       void                     *check_cb_data,
 	       ipmi_conn_oem_check_done done,
-	       void                     *cb_data)
+	       void                     *done_cb_data)
 {
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
@@ -138,7 +139,7 @@ atca_oem_check(ipmi_con_t               *conn,
 
     return conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			      atca_oem_finish_check,
-			      done, cb_data, NULL, NULL);
+			      done, done_cb_data, NULL, NULL);
 }
 
 int

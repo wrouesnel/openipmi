@@ -403,4 +403,10 @@ char *ipmi_get_color_string(unsigned int val);
 #define IPMI_SDR_MC_CONFIRMATION_RECORD		0x13
 #define IPMI_SDR_MC_BMC_MESSAGE_CHANNEL_RECORD	0x14
 
+/*
+ * Misc values
+ */
+#define IPMI_EVENT_HANDLED     0
+#define IPMI_EVENT_NOT_HANDLED 1
+
 #endif /* _IPMI_BITS_H */

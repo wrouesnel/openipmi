@@ -1634,8 +1634,10 @@ lan_send_command_forceip(ipmi_con_t            *ipmi,
 
  out_unlock:
     ipmi_unlock(lan->seq_num_lock);
-    if ((info) && (rv))
+    if ((info) && (rv)) {
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
 	ipmi_mem_free(info);
+    }
     return rv;
 }
 

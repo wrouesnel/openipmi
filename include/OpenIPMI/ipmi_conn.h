@@ -290,8 +290,9 @@ int ipmi_handle_snmp_trap_data(void            *src_addr,
 typedef void (*ipmi_conn_oem_check_done)(ipmi_con_t *conn,
 					 void       *cb_data);
 typedef int (*ipmi_conn_oem_check)(ipmi_con_t               *conn,
+				   void                     *check_cb_data,
 				   ipmi_conn_oem_check_done done,
-				   void                     *cb_data);
+				   void                     *done_cb_data);
 int ipmi_register_conn_oem_check(ipmi_conn_oem_check check,
 				 void                *cb_data);
 int ipmi_deregister_conn_oem_check(ipmi_conn_oem_check check,

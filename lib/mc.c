@@ -451,7 +451,7 @@ ipmi_mc_reset(ipmi_mc_t       *mc,
 
     if (reset_type == IPMI_MC_RESET_COLD)
 	msg.cmd = IPMI_COLD_RESET_CMD;
-    if (reset_type == IPMI_MC_RESET_WARM)
+    else if (reset_type == IPMI_MC_RESET_WARM)
 	msg.cmd = IPMI_WARM_RESET_CMD;
     else
 	return EINVAL;
@@ -459,6 +459,8 @@ ipmi_mc_reset(ipmi_mc_t       *mc,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    info->done = done;
+    info->cb_data = cb_data;
 
     msg.netfn = IPMI_APP_NETFN;
     msg.data = NULL;
@@ -1497,7 +1499,8 @@ ipmi_mc_send_command(ipmi_mc_t                  *mc,
 
 typedef struct oem_handlers_s {
     unsigned int                 manufacturer_id;
-    unsigned int                 product_id;
+    unsigned int                 first_product_id;
+    unsigned int                 last_product_id;
     ipmi_oem_mc_match_handler_cb handler;
     ipmi_oem_shutdown_handler_cb shutdown;
     void                         *cb_data;
@@ -1525,7 +1528,43 @@ ipmi_register_oem_handler(unsigned int                 manufacturer_id,
 	return ENOMEM;
 
     new_item->manufacturer_id = manufacturer_id;
-    new_item->product_id = product_id;
+    new_item->first_product_id = product_id;
+    new_item->last_product_id = product_id;
+    new_item->handler = handler;
+    new_item->shutdown = shutdown;
+    new_item->cb_data = cb_data;
+
+    if (! ilist_add_tail(oem_handlers, new_item, NULL)) {
+	ipmi_mem_free(new_item);
+	return ENOMEM;
+    }
+
+    return 0;
+}
+
+int
+ipmi_register_oem_handler_range(unsigned int                 manufacturer_id,
+				unsigned int                 first_product_id,
+				unsigned int                 last_product_id,
+				ipmi_oem_mc_match_handler_cb handler,
+				ipmi_oem_shutdown_handler_cb shutdown,
+				void                         *cb_data)
+{
+    oem_handlers_t *new_item;
+    int            rv;
+
+    /* This might be called before initialization, so be 100% sure. */
+    rv = _ipmi_mc_init();
+    if (rv)
+	return rv;
+
+    new_item = ipmi_mem_alloc(sizeof(*new_item));
+    if (!new_item)
+	return ENOMEM;
+
+    new_item->manufacturer_id = manufacturer_id;
+    new_item->first_product_id = first_product_id;
+    new_item->last_product_id = last_product_id;
     new_item->handler = handler;
     new_item->shutdown = shutdown;
     new_item->cb_data = cb_data;
@@ -1545,7 +1584,8 @@ oem_handler_cmp(void *item, void *cb_data)
     oem_handlers_t *cmp = cb_data;
 
     return ((hndlr->manufacturer_id == cmp->manufacturer_id)
-	    && (hndlr->product_id == cmp->product_id));
+	    && (hndlr->first_product_id <= cmp->first_product_id)
+	    && (hndlr->last_product_id >= cmp->last_product_id));
 }
 
 int
@@ -1557,7 +1597,31 @@ ipmi_deregister_oem_handler(unsigned int manufacturer_id,
     ilist_iter_t   iter;
 
     tmp.manufacturer_id = manufacturer_id;
-    tmp.product_id = product_id;
+    tmp.first_product_id = product_id;
+    tmp.last_product_id = product_id;
+    ilist_init_iter(&iter, oem_handlers);
+    ilist_unpositioned(&iter);
+    hndlr = ilist_search_iter(&iter, oem_handler_cmp, &tmp);
+    if (hndlr) {
+	ilist_delete(&iter);
+	ipmi_mem_free(hndlr);
+	return 0;
+    }
+    return ENOENT;
+}
+
+int
+ipmi_deregister_oem_handler_range(unsigned int manufacturer_id,
+				  unsigned int first_product_id,
+				  unsigned int last_product_id)
+{
+    oem_handlers_t *hndlr;
+    oem_handlers_t tmp;
+    ilist_iter_t   iter;
+
+    tmp.manufacturer_id = manufacturer_id;
+    tmp.first_product_id = first_product_id;
+    tmp.last_product_id = last_product_id;
     ilist_init_iter(&iter, oem_handlers);
     ilist_unpositioned(&iter);
     hndlr = ilist_search_iter(&iter, oem_handler_cmp, &tmp);
@@ -1576,7 +1640,8 @@ check_oem_handlers(ipmi_mc_t *mc)
     oem_handlers_t tmp;
 
     tmp.manufacturer_id = mc->manufacturer_id;
-    tmp.product_id = mc->product_id;
+    tmp.first_product_id = mc->product_id;
+    tmp.last_product_id = mc->product_id;
     hndlr = ilist_search(oem_handlers, oem_handler_cmp, &tmp);
     if (hndlr)
 	return hndlr->handler(mc, hndlr->cb_data);

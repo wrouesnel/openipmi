@@ -82,8 +82,20 @@ struct ipmi_control_s
     unsigned int num_vals;
 
     int hot_swap_indicator;
+    int hot_swap_active_val;
+    int hot_swap_inactive_val;
+    int hot_swap_req_act_val;
+    int hot_swap_req_deact_val;
+
+    int hot_swap_power;
+
+    int has_events;
 
     int ignore_if_no_entity;
+
+    /* A list of handlers to call when an event for the control comes
+       in. */
+    ilist_t *handler_list;
 
     /* For light types. */
     ipmi_control_light_t *lights;
@@ -186,7 +198,11 @@ control_final_destroy(ipmi_control_t *control)
     if (control->oem_info_cleanup_handler)
 	control->oem_info_cleanup_handler(control, control->oem_info);
 
-    opq_destroy(control->waitq);
+    if (control->handler_list)
+	ilist_twoitem_destroy(control->handler_list);
+
+    if (control->waitq)
+	opq_destroy(control->waitq);
     ipmi_mem_free(control);
 }
 
@@ -420,8 +436,8 @@ ipmi_controls_alloc(ipmi_mc_t *mc, ipmi_control_info_t **new_controls)
     if (!controls)
 	return ENOMEM;
     memset(controls, 0, sizeof(*controls));
+
     controls->control_wait_q = opq_alloc(os_hnd);
-    controls->control_count = 0;
     if (! controls->control_wait_q) {
 	ipmi_mem_free(controls);
 	return ENOMEM;
@@ -501,6 +517,12 @@ ipmi_control_add_nonstandard(ipmi_mc_t               *mc,
     if (! control->waitq)
 	return ENOMEM;
 
+    control->handler_list = alloc_ilist();
+    if (! control->handler_list) {
+	opq_destroy(control->waitq);
+	return ENOMEM;
+    }
+
     link = ipmi_entity_alloc_control_link();
     if (!link) {
 	opq_destroy(control->waitq);
@@ -573,6 +595,96 @@ ipmi_control_get_val(ipmi_control_t      *control,
     return control->cbs.get_val(control, handler, cb_data);
 }
 
+void
+ipmi_control_set_has_events(ipmi_control_t *control, int val)
+{
+    control->has_events = val;
+}
+
+int
+ipmi_control_has_events(ipmi_control_t *control)
+{
+    return control->has_events;
+}
+
+typedef struct control_event_info_s
+{
+    ipmi_control_t *control;
+    int            handled;
+
+    int            *valid_vals;
+    int            *vals;
+
+    ipmi_event_t   *event;
+} control_event_info_t;
+
+static void
+control_val_event_call_handler(void *data, void *ihandler, void *cb_data)
+{
+    ipmi_control_val_event_cb handler = ihandler;
+    control_event_info_t      *info = data;
+    int                       handled;
+
+    handled = ! handler(info->control,
+			info->valid_vals,
+			info->vals,
+			cb_data,
+			info->event);
+    if (!info->handled && handled)
+	info->handled = 1;
+    info->event = NULL;
+}
+
+void
+ipmi_control_call_val_event_handlers(ipmi_control_t *control,
+				     int            *valid_vals,
+				     int            *vals,
+				     ipmi_event_t   **event,
+				     int            *handled)
+{
+    control_event_info_t info;
+
+    info.control = control;
+    info.valid_vals = valid_vals;
+    info.vals = vals;
+    info.event = *event;
+    info.handled = 0;
+
+    ilist_iter_twoitem(control->handler_list,
+		       control_val_event_call_handler, &info);
+
+    if (handled)
+	*handled = info.handled;
+    *event = info.event;
+}
+
+int
+ipmi_control_add_val_event_handler(ipmi_control_t            *control,
+				   ipmi_control_val_event_cb handler,
+				   void                      *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (ilist_twoitem_exists(control->handler_list, handler, cb_data))
+	return EADDRINUSE;
+
+    if (! ilist_add_twoitem(control->handler_list, handler, cb_data))
+	return ENOMEM;
+
+    return 0;
+}
+
+int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
+					  ipmi_control_val_event_cb handler,
+					  void                      *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (! ilist_remove_twoitem(control->handler_list, handler, cb_data))
+	return ENOENT;
+
+    return 0;
+}
 
 int
 ipmi_control_set_display_string(ipmi_control_t     *control,
@@ -961,17 +1073,55 @@ ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2)
 }
 
 void
-ipmi_control_set_hot_swap_indicator(ipmi_control_t *control, int val)
+ipmi_control_set_hot_swap_indicator(ipmi_control_t *control,
+				    int            val,
+				    int            req_act_val,
+				    int            active_val,
+				    int            req_deact_val,
+				    int            inactive_val)
 {
     control->hot_swap_indicator = val;
+    control->hot_swap_active_val = active_val;
+    control->hot_swap_inactive_val = inactive_val;
+    control->hot_swap_req_act_val = req_act_val;
+    control->hot_swap_req_deact_val = req_deact_val;
 }
 
 int
-ipmi_control_is_hot_swap_indicator(ipmi_control_t *control)
+ipmi_control_is_hot_swap_indicator(ipmi_control_t *control,
+				   int            *req_act_val,
+				   int            *active_val,
+				   int            *req_deact_val,
+				   int            *inactive_val)
 {
     CHECK_CONTROL_LOCK(control);
 
-    return control->hot_swap_indicator;
+    if (control->hot_swap_indicator) {
+	if (active_val)
+	    *active_val = control->hot_swap_active_val;
+	if (inactive_val)
+	    *inactive_val = control->hot_swap_inactive_val;
+	if (req_act_val)
+	    *req_act_val = control->hot_swap_req_act_val;
+	if (req_deact_val)
+	    *req_deact_val = control->hot_swap_req_deact_val;
+	return 1;
+    }
+    return 0; 
+}
+
+void
+ipmi_control_set_hot_swap_power(ipmi_control_t *control, int val)
+{
+    control->hot_swap_power = val;
+}
+
+int
+ipmi_control_is_hot_swap_power(ipmi_control_t *control)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    return control->hot_swap_power;
 }
 
 int

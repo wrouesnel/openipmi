@@ -197,6 +197,7 @@ conn_oem_check_done(ipmi_con_t *conn,
     ipmi_unlock(check->lock);
 
     if (done) {
+	ipmi_destroy_lock(check->lock);
 	check->done(conn, check->cb_data);
 	ipmi_mem_free(check);
     }
@@ -209,7 +210,7 @@ conn_handler_call(void *data, void *ihandler, void *cb_data)
     ipmi_conn_oem_check check_cb = ihandler;
     int                 rv;
 
-    rv = check_cb(check->conn, conn_oem_check_done, cb_data);
+    rv = check_cb(check->conn, cb_data, conn_oem_check_done, check);
     if (!rv)
 	check->count++;
 }
@@ -245,6 +246,7 @@ ipmi_conn_check_oem_handlers(ipmi_con_t               *conn,
 
     if (count == 0) {
 	check->done(conn, check->cb_data);
+	ipmi_destroy_lock(check->lock);
 	ipmi_mem_free(check);
     }
 
@@ -300,6 +302,16 @@ _ipmi_conn_shutdown(void)
 
 	free_ilist(oem_conn_handlers);
 	oem_conn_handlers = NULL;
+    }
+
+    if (oem_handlers) {
+	ilist_twoitem_destroy(oem_handlers);
+	oem_handlers = NULL;
+    }
+
+    if (oem_handlers_lock) {
+	ipmi_destroy_rwlock(oem_handlers_lock);
+	oem_handlers_lock = NULL;
     }
 }
 
