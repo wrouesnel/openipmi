@@ -285,11 +285,12 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
     while (elem) {
 	next = elem->next;
 	elem->next = NULL;
-	elem->handler(sel,
-		      err,
-		      sel->sels_changed,
-		      sel->num_sels,
-		      elem->cb_data);
+	if (elem->handler)
+	    elem->handler(sel,
+		          err,
+		          sel->sels_changed,
+		          sel->num_sels,
+		          elem->cb_data);
 	free(elem);
 	elem = next;
     }
@@ -658,7 +659,8 @@ handle_sel_delete(ipmi_mc_t  *mc,
     else if (rsp->data[0])
 	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
 
-    data->handler(data->sel, data->cb_data, rv);
+    if (data->handler)
+        data->handler(data->sel, data->cb_data, rv);
 
     free(data);
 }

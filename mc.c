@@ -870,8 +870,8 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 
     ipmi_sel_get(bmc->bmc->sel, NULL, NULL);
 
-    gettimeofday(&timeout, NULL);
-    timeout.tv_sec += IPMI_SEL_QUERY_INTERVAL;
+    timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
+    timeout.tv_usec = 0;
     bmc->bmc->conn->os_hnd->restart_timer(bmc->bmc->conn->os_hnd,
 					  id,
 					  &timeout);
@@ -900,8 +900,8 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     }
     info->bmc = mc;
     info->cancelled = 0;
-    gettimeofday(&timeout, NULL);
-    timeout.tv_sec += IPMI_SEL_QUERY_INTERVAL;
+    timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
+    timeout.tv_usec = 0;
     rv = mc->bmc->conn->os_hnd->add_timer(mc->bmc->conn->os_hnd,
 					  &timeout,
 					  bmc_reread_sel,
