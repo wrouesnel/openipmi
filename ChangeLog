@@ -1,4 +1,12 @@
 
+2003-10-20 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/lanserv.c, lanserv/lanserv_config.c: Restructured the
+	LAN code to make it more flexible and split out more generic
+	functions.
+	* lanserver/lanserv_emu.c, lanserv/emu.c, lanserv/emu.h: Ditto
+	* include/OpenIPMI/lanserv.h: Ditto
+	
 2003-10-17 Tony Griffiths <tonyg@agile.tv>
 
 	* lib/ipmi_smi.c: Added some enhanced debugging info.

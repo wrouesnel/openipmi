@@ -36,6 +36,8 @@
 
 #include <sys/uio.h> /* for iovec */
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include <OpenIPMI/ipmi_auth.h>
 
@@ -268,6 +270,13 @@ void ipmi_handle_lan_msg(lan_data_t *lan,
 
 void ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
 			 unsigned char *rsp, int rsp_len);
+
+/* Read in a configuration file and fill in the lan and address info. */
+int lanserv_read_config(lan_data_t      *lan,
+			char            *config_file,
+			struct sockaddr addr[],
+			socklen_t       addr_len[],
+			int             *num_addr);
 
 /* Call this periodically to time things.  time_since_last is the
    number of seconds since the last call to this. */

@@ -54,9 +54,13 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/lanserv.h>
 
+#include "emu.h"
+
+#define MAX_ADDR 4
+
 typedef struct misc_data
 {
-    int lan1_fd, lan2_fd;
+    int lan_fd[MAX_ADDR];
     char *config_file;
 } misc_data_t;
 
@@ -102,67 +106,27 @@ lan_send(lan_data_t *lan,
     }
 }
 
-static void
-handle_invalid_cmd(lan_data_t    *lan,
-		   unsigned char *rdata,
-		   unsigned int  *rdata_len)
-{
-    rdata[0] = IPMI_INVALID_CMD_CC;
-    *rdata_len = 1;
-}
-
-static void
-handle_get_device_id(lan_data_t    *lan,
-		     unsigned char *data,
-		     unsigned int  data_len,
-		     unsigned char *rdata,
-		     unsigned int  *rdata_len)
-{
-    memset(rdata, 0, 12);
-    rdata[5] = 0x51;
-    *rdata_len = 12;
-}
-
-static void
-handle_app_netfn(lan_data_t    *lan,
-		 unsigned int  cmd,
-		 unsigned char *data,
-		 unsigned int  data_len,
-		 unsigned char *rdata,
-		 unsigned int  *rdata_len)
-{
-    switch(cmd) {
-	case IPMI_GET_DEVICE_ID_CMD:
-	    handle_get_device_id(lan, data, data_len, rdata, rdata_len);
-	    break;
-
-	default:
-	    handle_invalid_cmd(lan, rdata, rdata_len);
-	    break;
-    }
-}
+static emu_data_t *emu;
 
 static int
 smi_send(lan_data_t *lan, msg_t *msg)
 {
     unsigned char    data[36];
-    unsigned int     data_len;
+    unsigned int     data_len = sizeof(data);
+    ipmi_msg_t       imsg;
+    emu_msgparms_t   parms;
 
-    if (msg->cmd == IPMI_SEND_MSG_CMD) {
-	data[0] = IPMI_TIMEOUT_CC;
-	data_len = 1;
-    } else {
-	switch (msg->netfn) {
-	    case IPMI_APP_NETFN:
-		handle_app_netfn(lan, msg->cmd, msg->data, msg->len,
-				 data, &data_len);
-		break;
+    imsg.netfn = msg->netfn;
+    imsg.cmd = msg->cmd;
+    imsg.data = msg->data;
+    imsg.data_len = msg->len;
 
-	    default:
-		handle_invalid_cmd(lan, data, &data_len);
-		break;
-	}
-    }
+    parms.netfn = &msg->netfn;
+    parms.rqSA = &msg->rq_addr;
+    parms.seq = &msg->rq_seq;
+    parms.rqLun = &msg->rq_lun;
+    parms.cmd = &msg->cmd;
+    ipmi_emu_handle_msg(emu, &parms, msg->rs_lun, &imsg, data, &data_len);
 
     ipmi_handle_smi_rsp(lan, msg, data, data_len);
     return 0;
@@ -217,298 +181,6 @@ handle_msg_lan(int lan_fd, lan_data_t *lan)
 	    ipmi_handle_lan_msg(lan, data, len, &l, sizeof(l));
 	    break;
     }
-}
-
-static void
-write_config(lan_data_t *lan)
-{
-//    misc_data_t *info = lan->user_info;
-}
-
-static int
-get_bool(char **tokptr, unsigned int *rval)
-{
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
-
-    if (!tok)
-	return -1;
-    if (strcmp(tok, "true") == 0)
-	*rval = 1;
-    else if (strcmp(tok, "false") == 0)
-	*rval = 0;
-    else
-	return -1;
-
-    return 0;
-}
-
-static int
-get_priv(char **tokptr, unsigned int *rval)
-{
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
-
-    if (!tok)
-	return -1;
-    if (strcmp(tok, "callback") == 0)
-	*rval = IPMI_PRIVILEGE_CALLBACK;
-    else if (strcmp(tok, "user") == 0)
-	*rval = IPMI_PRIVILEGE_USER;
-    else if (strcmp(tok, "operator") == 0)
-	*rval = IPMI_PRIVILEGE_OPERATOR;
-    else if (strcmp(tok, "admin") == 0)
-	*rval = IPMI_PRIVILEGE_ADMIN;
-    else
-	return -1;
-
-    return 0;
-}
-
-static int
-get_auths(char **tokptr, unsigned int *rval)
-{
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
-    int  val = 0;
-
-    while (tok) {
-	if (strcmp(tok, "none") == 0)
-	    val |= (1 << IPMI_AUTHTYPE_NONE);
-	else if (strcmp(tok, "md2") == 0)
-	    val |= (1 << IPMI_AUTHTYPE_MD2);
-	else if (strcmp(tok, "md5") == 0)
-	    val |= (1 << IPMI_AUTHTYPE_MD5);
-	else if (strcmp(tok, "straight") == 0)
-	    val |= (1 << IPMI_AUTHTYPE_STRAIGHT);
-	else
-	    return -1;
-
-	tok = strtok_r(NULL, " \t\n", tokptr);
-    }
-
-    *rval = val;
-
-    return 0;
-}
-
-static int
-get_uint(char **tokptr, unsigned int *rval)
-{
-    char *end;
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
-
-    *rval = strtoul(tok, &end, 0);
-    if (*end != '\0')
-	return -1;
-    return 0;
-}
-
-static void
-cleanup_ascii_16(uint8_t *c)
-{
-    int i;
-
-    i = 0;
-    while ((i < 16) && (*c != 0)) {
-	c++;
-	i++;
-    }
-    while (i < 16) {
-	*c = 0;
-	c++;
-	i++;
-    }
-}
-
-static int
-read_16(char **tokptr, unsigned char *data)
-{
-    char *tok = strtok_r(NULL, " \t\n", tokptr);
-    char *end;
-
-    if (!tok)
-	return -1;
-    if (*tok == '"') {
-	int end;
-	/* Ascii PW */
-	tok++;
-	end = strlen(tok) - 1;
-	if (tok[end] != '"')
-	    return -1;
-	tok[end] = '\0';
-	strncpy(data, tok, 16);
-	cleanup_ascii_16(data);
-    } else {
-	int  i;
-	char c[3];
-	/* HEX pw */
-	if (strlen(tok) != 32)
-	    return -1;
-	c[2] = '\0';
-	for (i=0; i<16; i++) {
-	    c[0] = *tok;
-	    tok++;
-	    c[1] = *tok;
-	    tok++;
-	    data[i] = strtoul(c, &end, 16);
-	    if (*end != '\0')
-		return -1;
-	}
-    }
-
-    return 0;
-}
-
-static int
-get_user(char **tokptr, lan_data_t *lan)
-{
-    unsigned int num;
-    unsigned int val;
-    int          err;
-
-    err = get_uint(tokptr, &num);
-    if (err)
-	return err;
-
-    if (num > MAX_USERS)
-	return -1;
-
-    err = get_bool(tokptr, &val);
-    if (err)
-	return err;
-    lan->users[num].valid = val;
-
-    err = read_16(tokptr, lan->users[num].username);
-    if (err)
-	return err;
-
-    err = read_16(tokptr, lan->users[num].pw);
-    if (err)
-	return err;
-
-    err = get_priv(tokptr, &val);
-    if (err)
-	return err;
-    lan->users[num].privilege = val;
-
-    err = get_uint(tokptr, &val);
-    if (err)
-	return err;
-    lan->users[num].max_sessions = val;
-
-    err = get_auths(tokptr, &val);
-    if (err)
-	return err;
-    lan->users[num].allowed_auths = val;
-
-    return 0;
-}
-
-static int
-get_sock_addr(char **tokptr, struct sockaddr *addr, socklen_t *len)
-{
-    struct sockaddr_in *a = (void *) addr;
-    struct hostent     *ent;
-    char               *s;
-    char               *end;
-
-    s = strtok_r(NULL, " \t\n", tokptr);
-    if (!s)
-	return -1;
-
-    ent = gethostbyname(s);
-    if (!ent)
-	return -1;
-
-    a->sin_family = AF_INET;
-    memcpy(&(a->sin_addr), ent->h_addr_list[0], ent->h_length);
-
-    s = strtok_r(NULL, " \t\n", tokptr);
-    if (s) {
-	a->sin_port = htons(strtoul(s, &end, 0));
-	if (*end != '\0')
-	    return -1;
-    } else {
-	a->sin_port = htons(623);
-    }
-
-    *len = sizeof(*a);
-    return 0;
-}
-
-struct sockaddr addr1;
-socklen_t addr1_len = 0;
-struct sockaddr addr2;
-socklen_t addr2_len = 0;
-
-#define MAX_CONFIG_LINE 256
-static int
-read_config(lan_data_t *lan)
-{
-    misc_data_t  *info = lan->user_info;
-    FILE         *f = fopen(info->config_file, "r");
-    char         buf[MAX_CONFIG_LINE];
-    char         *tok;
-    char         *tokptr;
-    unsigned int val;
-    int          err = 0;
-    int          line;
-
-    if (!f)
-	return -1;
-
-    line = 0;
-    while (fgets(buf, sizeof(buf), f) != NULL) {
-	line++;
-
-	if (buf[0] == '#')
-	    continue;
-	tok = strtok_r(buf, " \t\n", &tokptr);
-	if (!tok)
-	    continue;
-
-	if (strcmp(tok, "PEF_alerting") == 0) {
-	    err = get_bool(&tokptr, &val);
-	    lan->channel.PEF_alerting = val;
-	} else if (strcmp(tok, "per_msg_auth") == 0) {
-	    err = get_bool(&tokptr, &val);
-	    lan->channel.per_msg_auth = val;
-	} else if (strcmp(tok, "priv_limit") == 0) {
-	    err = get_priv(&tokptr, &val);
-	    lan->channel.privilege_limit = val;
-	} else if (strcmp(tok, "allowed_auths_callback") == 0) {
-	    err = get_auths(&tokptr, &val);
-	    lan->channel.priv_info[0].allowed_auths = val;
-	} else if (strcmp(tok, "allowed_auths_user") == 0) {
-	    err = get_auths(&tokptr, &val);
-	    lan->channel.priv_info[1].allowed_auths = val;
-	} else if (strcmp(tok, "allowed_auths_operator") == 0) {
-	    err = get_auths(&tokptr, &val);
-	    lan->channel.priv_info[2].allowed_auths = val;
-	} else if (strcmp(tok, "allowed_auths_admin") == 0) {
-	    err = get_auths(&tokptr, &val);
-	    lan->channel.priv_info[3].allowed_auths = val;
-	} else if (strcmp(tok, "addr1") == 0) {
-	    err = get_sock_addr(&tokptr, &addr1, &addr1_len);
-	} else if (strcmp(tok, "addr2") == 0) {
-	    err = get_sock_addr(&tokptr, &addr2, &addr2_len);
-	} else if (strcmp(tok, "user") == 0) {
-	    err = get_user(&tokptr, lan);
-	} else if (strcmp(tok, "guid") == 0) {
-	    if (!lan->guid)
-		lan->guid = malloc(16);
-	    if (!lan->guid)
-		return -1;
-	    err = read_16(&tokptr, lan->guid);
-	    if (err)
-		return err;
-	} else {
-	    /* error */
-	}
-
-	if (err)
-	    return err;
-    }
-
-    return 0;
 }
 
 static int
@@ -620,6 +292,16 @@ static struct poptOption poptOpts[]=
     }	
 };
 
+static void
+write_config(lan_data_t *lan)
+{
+//    misc_data_t *info = lan->user_info;
+}
+
+struct sockaddr addr[MAX_ADDR];
+socklen_t addr_len[MAX_ADDR];
+int num_addr = 0;
+
 int
 main(int argc, const char *argv[])
 {
@@ -628,6 +310,7 @@ main(int argc, const char *argv[])
     int max_fd;
     int rv;
     int o;
+    int i;
     poptContext poptCtx;
     struct timeval timeout;
     struct timeval time_next;
@@ -644,6 +327,8 @@ main(int argc, const char *argv[])
 
     data.config_file = config_file;
 
+    emu = ipmi_emu_alloc();
+
     memset(&lan, 0, sizeof(lan));
     lan.user_info = &data;
     lan.alloc = ialloc;
@@ -655,20 +340,28 @@ main(int argc, const char *argv[])
     lan.log = log;
     lan.debug = debug;
 
-    read_config(&lan);
+    num_addr = MAX_ADDR;
+    if (lanserv_read_config(&lan, data.config_file, addr, addr_len, &num_addr))
+	exit(1);
 
-    if (addr1_len == 0) {
-	struct sockaddr_in *addr = (void *) &addr1;
-	addr->sin_family = AF_INET;
-	addr->sin_port = htons(623);
-	addr->sin_addr.s_addr = INADDR_ANY;
-	addr1_len = sizeof(*addr);
+    if (num_addr == 0) {
+	struct sockaddr_in *ipaddr = (void *) &addr[0];
+	ipaddr->sin_family = AF_INET;
+	ipaddr->sin_port = htons(623);
+	ipaddr->sin_addr.s_addr = INADDR_ANY;
+	addr_len[0] = sizeof(*ipaddr);
+	num_addr++;
     }
-    data.lan1_fd = open_lan_fd(&addr1, addr1_len);
-    if (addr2_len != 0) {
-	data.lan2_fd = open_lan_fd(&addr2, addr2_len);
-    } else {
-	data.lan2_fd = -1;
+
+    for (i=0; i<num_addr; i++) {
+	if (addr_len[i] == 0)
+	    break;
+
+	data.lan_fd[i] = open_lan_fd(&addr[i], addr_len[i]);
+	if (data.lan_fd[i] == -1) {
+	    fprintf(stderr, "Unable to open LAN address %d\n", i+1);
+	    exit(1);
+	}
     }
 
     rv = ipmi_lan_init(&lan);
@@ -677,10 +370,12 @@ main(int argc, const char *argv[])
 
     log(0, NULL, "%s startup", argv[0]);
 
-    if (data.lan1_fd > data.lan2_fd)
-	max_fd = data.lan1_fd + 1;
-    else
-	max_fd = data.lan2_fd + 1;
+    max_fd = -1;
+    for (i=0; i<num_addr; i++) {
+	if (data.lan_fd[i] > max_fd)
+	    max_fd = data.lan_fd[i];
+    }
+    max_fd++;
 
     gettimeofday(&time_next, NULL);
     time_next.tv_sec += 10;
@@ -688,9 +383,8 @@ main(int argc, const char *argv[])
 	fd_set readfds;
 
 	FD_ZERO(&readfds);
-	FD_SET(data.lan1_fd, &readfds);
-	if (data.lan2_fd != -1)
-	    FD_SET(data.lan2_fd, &readfds);
+	for (i=0; i<num_addr; i++)
+	    FD_SET(data.lan_fd[i], &readfds);
 
 	gettimeofday(&time_now, NULL);
 	diff_timeval(&timeout, &time_next, &time_now);
@@ -702,12 +396,9 @@ main(int argc, const char *argv[])
 	    ipmi_lan_tick(&lan, 10);
 	    time_next.tv_sec += 10;
 	} else {
-	    if (FD_ISSET(data.lan1_fd, &readfds)) {
-		handle_msg_lan(data.lan1_fd, &lan);
-	    }
-
-	    if ((data.lan2_fd != -1) && FD_ISSET(data.lan2_fd, &readfds)) {
-		handle_msg_lan(data.lan2_fd, &lan);
+	    for (i=0; i<num_addr; i++) {
+		if (FD_ISSET(data.lan_fd[i], &readfds))
+		    handle_msg_lan(data.lan_fd[i], &lan);
 	    }
 	}
     }

@@ -19,8 +19,10 @@ bin_PROGRAMS = ipmilan
 
 noinst_PROGRAMS = lanserv_emu
 
+noinst_HEADERS = emu.h
+
 libIPMIlanserv_la_SOURCES = lanserv_ipmi.c lanserv_asf.c priv_table.c \
-	lanserv_oem_force.c
+	lanserv_oem_force.c lanserv_config.c
 libIPMIlanserv_la_LIBADD = $(top_builddir)/utils/libIPMIutils.a
 libIPMIlanserv_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libIPMIlanserv.map
@@ -29,7 +31,7 @@ ipmilan_SOURCES = lanserv.c
 ipmilan_LDADD = -lpopt libIPMIlanserv.la
 ipmilan_LDFLAGS = -rdynamic
 
-lanserv_emu_SOURCES = lanserv_emu.c
+lanserv_emu_SOURCES = lanserv_emu.c emu.c
 lanserv_emu_LDADD = -lpopt libIPMIlanserv.la
 lanserv_emu_LDFLAGS = -rdynamic
 
