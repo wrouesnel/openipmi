@@ -684,17 +684,17 @@ OpenIPMI will rescan the bus for new MCs every 10 minutes.  It is
 expected that OEM handlers can detect new MCs with custom events and add
 the new MC sooner.
 
-Events also come in on the BMC interface.  In the setup done callback,
-you should register for events with @code{ipmi_register_for_events()},
-even if you are not interested in them (because you need to delete
-them).  This means that your callback will receive all events that are
-not attached to a sensor or otherwise handled by something inside
-OpenIPMI.  If an event is attached to a sensor, it will be delivered to
-a callback associated with the sensor.  Note that you may get events on
-this interface even if they are destined for a sensor, if the sensor
-doesn't have a handler, if the event was not delivered to the user by
-another mechanism.  This is so that the user can know the event exists
-and needs to be deleted.
+Events also come in on the BMC interface (even if the event generator is
+elsewhere).  In the setup done callback, you should register for events
+with @code{ipmi_register_for_events()}, even if you are not interested
+in them (because you need to delete them).  This means that your
+callback will receive all events that are not attached to a sensor or
+otherwise handled by something inside OpenIPMI.  If an event is attached
+to a sensor, it will be delivered to a callback associated with the
+sensor.  Note that you may get events on this interface even if they are
+destined for a sensor, if the sensor doesn't have a handler, if the
+event was not delivered to the user by another mechanism.  This is so
+that the user can know the event exists and needs to be deleted.
 
 @node    Entities, Sensors, The BMC, Using OpenIPMI
 @section Entities
@@ -1111,6 +1111,12 @@ deleting individual entries, then you must deleted @emph{all} the local
 entries in the local copy of the SEL before OpenIPMI will clear the
 entries from the SEL in the device.
 
+When OpenIPMI scans the MCs, it checks the SEL device capabilities bit
+and sets up an SEL for each MC that has that bit set.  This means that
+multiple MCs may have an SEL.  When traversing the SEL, OpenIPMI will go
+through @emph{all} the SEL devices on all MCs.  Also, events have the id
+of the MC they came from so they can be traced back to their source.
+
 The @code{ipmi_register_for_events()} function allows you to get events
 OpenIPMI couldn't correlate to a sensor.  As well, the functions
 @code{ipmi_bmc_first_event()}, @code{ipmi_bmc_last_event()},
@@ -1176,6 +1182,12 @@ hasn't turned off bus scanning with @code{ipmi_bmc_set_full_bus_scan()})
 it will detect MCs and start scanning them for entities and sensors.
 The function @code{ipmi_bmc_set_oem_new_mc_handler()} lets the OEM code
 get a first shot at new MCs.
+
+Note that sometimes you have to hook on to a device that is not at the
+standard 0x20.  If you do this, then you need to set a way to fetch the
+actual address of the connection.  You do this using the
+@code{ipmi_bmc_set_smi_slave_addr_fetcher()} call, which you must set in
+the OEM callback that reports the BMC being added.
 
 @node    Non-Standard Sensors, OEM Controls, Fixups, How to Write OEM Plugins
 @section Non-Standard Sensors

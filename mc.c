@@ -1835,7 +1835,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	goto out;
     }
     info->addr.slave_addr += 2;
-    if (info->addr.slave_addr == 0x20) {
+    if (info->addr.slave_addr == info->bmc->bmc->bmc_slave_addr) {
 	/* We don't scan the BMC, that would be scary. */
 	goto next_addr_nolock;
     }

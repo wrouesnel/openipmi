@@ -1,6 +1,8 @@
 
 2003-02-19 Corey Minyard <cminyard@mvista.com>
 
+	* OpenIPMI.texi: Updated docs for changes.
+
 	* ui.c: Various cleanups for the SMI address and the new SEL
 	setup.
 	
