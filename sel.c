@@ -752,6 +752,66 @@ ipmi_sel_del_log(ipmi_sel_info_t       *sel,
 }
 
 int
+ipmi_sel_del_log_by_recid(ipmi_sel_info_t       *sel,
+			  unsigned int          record_id,
+			  ipmi_sel_op_done_cb_t handler,
+			  void                  *cb_data)
+{
+    int                   rv;
+    sel_cb_handler_data_t *data;
+    ipmi_log_t            *real_log;
+    ilist_iter_t          iter;
+    ipmi_mc_t             *mc;
+    int                   lun;
+
+    data = malloc(sizeof(*data));
+    if (!data)
+	return ENOMEM;
+
+    sel_lock(sel);
+    if (sel->destroyed) {
+	rv = EINVAL;
+	goto out_unlock;
+    }
+
+    ilist_init_iter(&iter, sel->logs);
+    real_log = ilist_search_iter(&iter, recid_search_cmp, &record_id);
+    if (!real_log) {
+	rv = EINVAL;
+	goto out_unlock;
+    }
+
+    ilist_delete(&iter);
+    sel->num_sels--;
+
+    mc = sel->mc;
+    lun = sel->lun;
+    sel_unlock(sel);
+
+    ipmi_read_lock();
+    if ((rv = ipmi_mc_validate(sel->mc)))
+	goto out_unlock2;
+
+    data->sel = sel;
+    data->handler = handler;
+    data->cb_data = cb_data;
+
+    rv = send_del_sel(mc, lun, record_id, data);
+
+ out_unlock2:
+    ipmi_read_unlock();
+
+ out:
+    if (rv)
+	free(data);
+    return rv;
+
+ out_unlock:
+    sel_unlock(sel);
+    goto out;
+}
+
+int
 ipmi_get_sel_count(ipmi_sel_info_t *sel,
 		   unsigned int    *count)
 {

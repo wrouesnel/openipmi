@@ -1939,3 +1939,102 @@ ipmi_bmc_set_oem_setup_finished_handler(ipmi_mc_t                  *bmc,
     bmc->bmc->setup_finished_cb_data = cb_data;
     return 0;
 }
+
+typedef struct sel_op_done_info_s
+{
+    ipmi_mc_t   *bmc;
+    ipmi_bmc_cb done;
+    void        *cb_data;
+} sel_op_done_info_t;
+
+static void
+sel_op_done(ipmi_sel_info_t *sel,
+	    void            *cb_data,
+	    int             err)
+{
+    sel_op_done_info_t *info = cb_data;
+
+    /* No need to lock, the BMC should already be locked. */
+    info->done(info->bmc, err, info->cb_data);
+}
+
+int
+ipmi_bmc_del_log(ipmi_mc_t   *bmc,
+		 ipmi_log_t  *log,
+		 ipmi_bmc_cb done_handler,
+		 void        *cb_data)
+{
+    sel_op_done_info_t *info;
+
+    if (!bmc->bmc)
+	return EINVAL;
+
+    info = malloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->bmc = bmc;
+    info->done = done_handler;
+    info->cb_data = cb_data;
+
+    return ipmi_sel_del_log(bmc->bmc->sel, log, sel_op_done, info);
+}
+
+int
+ipmi_bmc_del_log_by_recid(ipmi_mc_t    *bmc,
+			  unsigned int record_id,
+			  ipmi_bmc_cb  done_handler,
+			  void         *cb_data)
+{
+    sel_op_done_info_t *info;
+
+    if (!bmc->bmc)
+	return EINVAL;
+
+    info = malloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->bmc = bmc;
+    info->done = done_handler;
+    info->cb_data = cb_data;
+
+    return ipmi_sel_del_log_by_recid(bmc->bmc->sel, record_id,
+				     sel_op_done, info);
+}
+
+int
+ipmi_bmc_first_log(ipmi_mc_t *bmc, ipmi_log_t *log)
+{
+    if (!bmc->bmc)
+	return EINVAL;
+
+    return ipmi_sel_get_first_log(bmc->bmc->sel, log);
+}
+
+int
+ipmi_bmc_last_log(ipmi_mc_t *bmc, ipmi_log_t *log)
+{
+    if (!bmc->bmc)
+	return EINVAL;
+
+    return ipmi_sel_get_last_log(bmc->bmc->sel, log);
+}
+
+int
+ipmi_bmc_next_log(ipmi_mc_t *bmc, ipmi_log_t *log)
+{
+    if (!bmc->bmc)
+	return EINVAL;
+
+    return ipmi_sel_get_next_log(bmc->bmc->sel, log);
+}
+
+int
+ipmi_bmc_prev_log(ipmi_mc_t *bmc, ipmi_log_t *log)
+{
+    if (!bmc->bmc)
+	return EINVAL;
+
+    return ipmi_sel_get_prev_log(bmc->bmc->sel, log);
+}

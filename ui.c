@@ -149,6 +149,48 @@ conv_to_spaces(char *name)
     }
 }
 
+static int
+get_uchar(char **toks, unsigned char *val, char *errstr)
+{
+    char *str, *tmpstr;
+
+    str = strtok_r(NULL, " \t\n", toks);
+    if (!str) {
+	if (errstr)
+	    wprintw(cmd_win, "No %s given\n", errstr);
+	return EINVAL;
+    }
+    *val = strtoul(str, &tmpstr, 0);
+    if (*tmpstr != '\0') {
+	if (errstr)
+	    wprintw(cmd_win, "Invalid %s given\n", errstr);
+	return EINVAL;
+    }
+
+    return 0;
+}
+
+static int
+get_uint(char **toks, unsigned int *val, char *errstr)
+{
+    char *str, *tmpstr;
+
+    str = strtok_r(NULL, " \t\n", toks);
+    if (!str) {
+	if (errstr)
+	    wprintw(cmd_win, "No %s given\n", errstr);
+	return EINVAL;
+    }
+    *val = strtoul(str, &tmpstr, 0);
+    if (*tmpstr != '\0') {
+	if (errstr)
+	    wprintw(cmd_win, "Invalid %s given\n", errstr);
+	return EINVAL;
+    }
+
+    return 0;
+}
+
 void
 log_pad_refresh(int newlines)
 {
@@ -1467,27 +1509,6 @@ void mccmd_handler(ipmi_mc_t *bmc,
 
 }
 
-static int
-get_uchar(char **toks, unsigned char *val, char *errstr)
-{
-    char *str, *tmpstr;
-
-    str = strtok_r(NULL, " \t\n", toks);
-    if (!str) {
-	if (errstr)
-	    wprintw(cmd_win, "No %s given\n", errstr);
-	return EINVAL;
-    }
-    *val = strtoul(str, &tmpstr, 0);
-    if (*tmpstr != '\0') {
-	if (errstr)
-	    wprintw(cmd_win, "Invalid %s given\n", errstr);
-	return EINVAL;
-    }
-
-    return 0;
-}
-
 int
 mccmd_cmd(char *cmd, char **toks, void *cb_data)
 {
@@ -1637,6 +1658,27 @@ set_control_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+int
+dellog_cmd(char *cmd, char **toks, void *cb_data)
+{
+    unsigned int record_id;
+    int          rv;
+
+    if (!bmc) {
+	waddstr(cmd_win, "BMC has not finished setup yet\n");
+	return 0;
+    }
+
+    if (get_uint(toks, &record_id, "record id"))
+	return 0;
+
+    rv = ipmi_bmc_del_log_by_recid(bmc, record_id, NULL, NULL);
+    if (rv)
+	wprintw(cmd_win, "dellog_cmd: error deleting log: %x\n", rv);
+
+    return 0;
+}
+
 static struct {
     char          *name;
     cmd_handler_t handler;
@@ -1651,6 +1693,7 @@ static struct {
     { "set_control",			set_control_cmd },
     { "mcs",				mcs_cmd },
     { "mccmd",				mccmd_cmd },
+    { "dellog",				dellog_cmd },
     { NULL,				NULL}
 };
 int

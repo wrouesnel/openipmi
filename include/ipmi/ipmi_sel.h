@@ -108,6 +108,11 @@ int ipmi_sel_del_log(ipmi_sel_info_t       *sel,
 		     ipmi_sel_op_done_cb_t handler,
 		     void                  *cb_data);
 
+int ipmi_sel_del_log_by_recid(ipmi_sel_info_t       *sel,
+			      unsigned int          record_id,
+			      ipmi_sel_op_done_cb_t handler,
+			      void                  *cb_data);
+
 /* Get various information from the IPMI SEL info commands. */
 int ipmi_sel_get_major_version(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_minor_version(ipmi_sel_info_t *sel, int *val);

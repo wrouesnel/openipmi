@@ -123,6 +123,9 @@ int ipmi_control_pointer_cb(ipmi_control_id_t id,
 			    void              *cb_data);
 int ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2);
 
+/* Callback used for generic BMC reporting. */
+typedef void (*ipmi_bmc_cb)(ipmi_mc_t *bmc, int err, void *cb_data);
+
 /* Events come in this format. */
 typedef void (*ipmi_event_handler_t)(ipmi_mc_t  *bmc,
 				     ipmi_log_t *log,
@@ -148,6 +151,26 @@ int ipmi_deregister_for_events(ipmi_mc_t               *bmc,
 int ipmi_bmc_enable_events(ipmi_mc_t *bmc);
 int ipmi_bmc_disable_events(ipmi_mc_t *bmc);
 
+/* When you are done with a log, you should delete it.  This frees up
+   the internal store for the log and removes it from the external
+   system event log. */
+/* Delete a specific log. */
+int ipmi_bmc_del_log(ipmi_mc_t   *bmc,
+		     ipmi_log_t  *log,
+		     ipmi_bmc_cb done_handler,
+		     void        *cb_data);
+/* Delete a log by record id. */
+int ipmi_bmc_del_log_by_recid(ipmi_mc_t    *bmc,
+			      unsigned int record_id,
+			      ipmi_bmc_cb  done_handler,
+			      void         *cb_data);
+
+/* You can also scan the current set of logs stored in the system. */
+int ipmi_bmc_first_log(ipmi_mc_t *bmc, ipmi_log_t *log);
+int ipmi_bmc_last_log(ipmi_mc_t *bmc, ipmi_log_t *log);
+int ipmi_bmc_next_log(ipmi_mc_t *bmc, ipmi_log_t *log);
+int ipmi_bmc_prev_log(ipmi_mc_t *bmc, ipmi_log_t *log);
+
 enum ipmi_update_e { ADDED, DELETED, CHANGED };
 /* A callback that will be called when entities are added to and
    removed from the BMC, and when their presence changes. */
@@ -171,7 +194,6 @@ int ipmi_bmc_iterate_entities(ipmi_mc_t                       *bmc,
 			      void                            *cb_data);
 
 /* Store all the information I have locally into the SDR repository. */
-typedef void (*ipmi_bmc_cb)(ipmi_mc_t *bmc, int err, void *cb_data);
 int ipmi_bmc_store_entities(ipmi_mc_t *bmc, ipmi_bmc_cb done, void *cb_data);
 
 /* For the given entity, iterate over all the children of the entity,
