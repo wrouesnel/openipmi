@@ -4619,8 +4619,17 @@ mxp_event_handler(ipmi_mc_t    *mc,
 	/* It's an old event, ignore it. */
 	return 0;
 
-    if ((event->data[4] & 1) == 0)
+    /* If the low bit of data[4] is set, then it's from the MC,
+       otherwise it's from a card.  Power supply messages also come in
+       with their IPMB address, but we don't want to use those because
+       we don't have MCs for the power supplies. */
+    if (((event->data[4] & 1) == 0)
+	&& !((event->data[4] == 0x54)
+	     || (event->data[4] == 0x56)
+	     || (event->data[4] == 0x58)))
+    {
         mc_id.mc_num = event->data[4];
+    }
 
     einfo.event = event;
     einfo.event_copy = *event;
