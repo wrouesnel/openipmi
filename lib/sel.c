@@ -72,9 +72,10 @@ struct ipmi_sel_info_s
 
     uint8_t  major_version;
     uint8_t  minor_version;
-    uint8_t  entries;
+    uint16_t entries;
     uint32_t last_addition_timestamp;
     uint32_t last_erase_timestamp;
+    uint16_t free_bytes;
     unsigned int overflow : 1;
     unsigned int supports_delete_sel : 1;
     unsigned int supports_partial_add_sel : 1;
@@ -659,6 +660,8 @@ handle_sel_info(ipmi_mc_t  *mc,
     sel->major_version = rsp->data[1] & 0xf;
     sel->minor_version = (rsp->data[1] >> 4) & 0xf;
     fetched_num_sels = ipmi_get_uint16(rsp->data+2);
+    sel->entries = fetched_num_sels;
+    sel->free_bytes = ipmi_get_uint16(rsp->data+4);
     sel->overflow = (rsp->data[14] & 0x80) == 0x80;
     sel->supports_delete_sel = (rsp->data[14] & 0x08) == 0x08;
     sel->supports_partial_add_sel = (rsp->data[14] & 0x04) == 0x04;
@@ -1702,6 +1705,36 @@ ipmi_sel_get_minor_version(ipmi_sel_info_t *sel, int *val)
     }
 
     *val = sel->minor_version;
+
+    sel_unlock(sel);
+    return 0;
+}
+
+int
+ipmi_sel_get_num_entries(ipmi_sel_info_t *sel, int *val)
+{
+    sel_lock(sel);
+    if (sel->destroyed) {
+	sel_unlock(sel);
+	return EINVAL;
+    }
+
+    *val = sel->entries;
+
+    sel_unlock(sel);
+    return 0;
+}
+
+int
+ipmi_sel_get_free_bytes(ipmi_sel_info_t *sel, int *val)
+{
+    sel_lock(sel);
+    if (sel->destroyed) {
+	sel_unlock(sel);
+	return EINVAL;
+    }
+
+    *val = sel->free_bytes;
 
     sel_unlock(sel);
     return 0;

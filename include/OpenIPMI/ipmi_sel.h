@@ -126,6 +126,8 @@ int ipmi_sel_del_event_by_recid(ipmi_sel_info_t       *sel,
 /* Get various information from the IPMI SEL info commands. */
 int ipmi_sel_get_major_version(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_minor_version(ipmi_sel_info_t *sel, int *val);
+int ipmi_sel_get_num_entries(ipmi_sel_info_t *sel, int *val);
+int ipmi_sel_get_free_bytes(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_overflow(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_supports_delete_sel(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_supports_partial_add_sel(ipmi_sel_info_t *sel, int *val);

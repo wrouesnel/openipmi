@@ -1945,8 +1945,9 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     unsigned int        addr_len = rspi->addr_len;
     mc_ipmb_scan_info_t *info = rspi->data1;
     int                 rv;
-    ipmi_mc_t           *mc;
+    ipmi_mc_t           *mc = NULL;
     ipmi_ipmb_addr_t    *ipmb;
+    int                 mc_added = 0;
 
 
     rv = _ipmi_domain_get(domain);
@@ -1990,6 +1991,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    goto out;
 		}
 
+		/* No handlers can be regsitered yet, so this is safe. */
 		_ipmi_mc_set_active(mc, 1);
 
 		rv = add_mc_to_domain(domain, mc);
@@ -2005,9 +2007,8 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    _ipmi_cleanup_mc(mc);
 		    goto out;
 		}
-		call_mc_upd_handlers(domain, mc, IPMI_ADDED);
 
-		_ipmi_mc_handle_new(mc);
+		mc_added = 1;
 	    } else {
 		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
 		if (rv) {
@@ -2059,6 +2060,11 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
  next_addr:
     ipmi_unlock(domain->mc_lock);
+
+    if (mc_added) {
+	call_mc_upd_handlers(domain, mc, IPMI_ADDED);
+	_ipmi_mc_handle_new(mc);
+    }
 
  next_addr_nolock:
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;

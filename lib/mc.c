@@ -835,6 +835,24 @@ ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc)
     return val;
 }
 
+int
+ipmi_mc_sel_get_num_entries(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+    
+    ipmi_sel_get_num_entries(mc->sel, &val);
+    return val;
+}
+
+int
+ipmi_mc_sel_get_free_bytes(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+    
+    ipmi_sel_get_free_bytes(mc->sel, &val);
+    return val;
+}
+
 int 
 ipmi_mc_sel_get_overflow(ipmi_mc_t *mc)
 {
@@ -2126,6 +2144,7 @@ int
 _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 {
     unsigned char *rsp_data = rsp->data;
+    int           rv;
 
     if (rsp_data[0] != 0) {
 	return IPMI_IPMI_ERR_VAL(rsp_data[0]);
@@ -2153,6 +2172,7 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 	return EINVAL;
     }
 
+    ipmi_lock(mc->lock);
     mc->device_id = rsp_data[1];
     mc->device_revision = rsp_data[2] & 0xf;
     mc->provides_device_sdrs = (rsp_data[2] & 0x80) == 0x80;
@@ -2204,7 +2224,9 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
     memcpy(mc->real_aux_fw_revision, mc->aux_fw_revision,
 	   sizeof(mc->real_aux_fw_revision));
 
-    return check_oem_handlers(mc);
+    rv = check_oem_handlers(mc);
+    ipmi_unlock(mc->lock);
+    return rv;
 }
 
 int
@@ -2772,8 +2794,10 @@ ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
 
     val = val != 0;
 
+    ipmi_lock(mc->lock);
     if (val == mc->events_enabled) {
 	/* Didn't changed, just finish the operation. */
+	ipmi_unlock(mc->lock);
 	done(mc, 0, cb_data);
 	return 0;
     }
@@ -2786,6 +2810,7 @@ ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
     } else {
 	rv = send_set_event_rcvr(mc, 0, done, cb_data);
     }
+    ipmi_unlock(mc->lock);
 
     return rv;
 }

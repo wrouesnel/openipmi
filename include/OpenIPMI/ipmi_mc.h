@@ -330,6 +330,8 @@ int ipmi_mc_sel_count(ipmi_mc_t *mc);
 int ipmi_mc_sel_entries_used(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_major_version(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_num_entries(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_free_bytes(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_overflow(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc);

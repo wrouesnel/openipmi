@@ -13,6 +13,13 @@
 
 	* doc/OpenIPMI.texi: Reworked the docs on locking.
 
+	* lib/sel.c, include/OpenIPMI/ipmi_sel.c: Added a way to get the
+	number of entries and free bytes in the SEL.
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.c: ditto
+
+	* lib/domain.c, lib/mc.c, lib/entities.c: More work on locking,
+	making sure locks are held in the proper places.
+
 2004-04-29 Corey Minyard <cminyard@mvista.com> 
 
 	* everything: A massive rework of the internals.  Basically,
