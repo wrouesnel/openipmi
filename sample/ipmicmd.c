@@ -127,43 +127,17 @@ posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 }
 
 static void
-real_quit(selector_t *sel, sel_timer_t *timer, void *data)
-{
-    int rv = (int)(*(int *)data);
-    sel_free_timer(timer);
-    if (con && con->close_connection) 
-	con->close_connection(con);
-    if (sel)
-	sel_free_selector(sel);
-    exit(rv);
-}
-
-void
 leave(int ret)
 {
-    int               rv;
-    sel_timer_t *timer = NULL;
-    struct timeval    timeout;
-    static int ret_code;
-
-    ret_code = ret;
-    rv = sel_alloc_timer(sel, real_quit, &ret_code, &timer);
-    if (rv) {
-	/* Cannot allocate timer, exit anyway */
-        if (sel)
-	    sel_free_selector(sel);
-	exit(1);
+    if (con && con->close_connection) {
+	con->close_connection(con);
+	con = NULL;
     }
-
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 0;
-    rv = sel_start_timer(timer, &timeout);
-    if (rv) {
-	sel_free_timer(timer);
-        if (sel)
-	    sel_free_selector(sel);
-	exit(1);
+    if (sel) {
+	sel_free_selector(sel);
+	sel = NULL;
     }
+    exit(ret);
 }
 
 void printInfo( )
@@ -280,10 +254,8 @@ int
 rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
     dump_msg_data(&rspi->msg, &rspi->addr, "response");
-    if (!interactive) {
-    	ipmi->close_connection(ipmi);
+    if (!interactive)
 	leave(0);
-    }
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -335,6 +307,7 @@ timed_rsp_handler(ipmi_con_t *con, ipmi_msgi_t *rspi)
 	       ((float) diff) / ((float)(data->total_count)),
 	       diff);
 	free(data);
+	free(rspi);
     } else {
 	int rv;
 
@@ -350,7 +323,7 @@ timed_rsp_handler(ipmi_con_t *con, ipmi_msgi_t *rspi)
 	} else
     	    return IPMI_MSG_ITEM_USED;
     }
-    return IPMI_MSG_ITEM_NOT_USED;
+    return IPMI_MSG_ITEM_USED;
 }
 
 void
@@ -379,7 +352,6 @@ time_msgs(ipmi_con_t    *con,
 
     data->con = con;
     gettimeofday(&data->start_time, NULL);
-    data->count = 0;
     memcpy(&data->msg, msg, sizeof(data->msg));
     memcpy(data->data, msg->data, msg->data_len);
     data->msg.data = data->data;
