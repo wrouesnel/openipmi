@@ -2332,6 +2332,7 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
 		  unsigned int              password_len,
 		  os_handler_t              *handlers,
 		  void                      *user_data,
+		  unsigned char             swid,
 		  ipmi_con_t                **new_con)
 {
     ipmi_con_t     *ipmi = NULL;
@@ -2388,6 +2389,7 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
     lan->curr_msg = 0;
     lan->next_msg = 0;
     lan->state = LAN_IDLE;
+    lan->swid = swid;
 
     lan->fd = open_lan_fd();
     if (lan->fd == -1) {

@@ -43,10 +43,11 @@
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_int.h>
+#include <OpenIPMI/mxp.h>
 
 static selector_t *selector;
 
-enum con_type_e { SMI, LAN, LAN2 };
+enum con_type_e { SMI, LAN, MXP };
 
 /* SMI parms. */
 
@@ -279,6 +280,125 @@ main(int argc, char *argv[])
 				strlen(con_parms[last_con].password),
 				&ipmi_ui_cb_handlers, selector,
 				&con[last_con]);
+	if (rv) {
+	    fprintf(stderr, "ipmi_lan_setup_con: %s\n", strerror(rv));
+	    rv = EINVAL;
+	    goto out;
+	}
+    } else if (strcmp(argv[curr_arg], "mxp") == 0) {
+	struct hostent *ent;
+	unsigned char swid;
+
+	argc--;
+	curr_arg++;
+
+	con_parms[last_con].con_type = MXP;
+	con_parms[last_con].num_addr = 1;
+
+	if (argc < 7) {
+	    fprintf(stderr, "Not enough arguments\n");
+	    exit(1);
+	}
+
+	ent = gethostbyname(argv[curr_arg]);
+	if (!ent) {
+	    fprintf(stderr, "gethostbyname failed: %s\n", strerror(h_errno));
+	    exit(1);
+	}
+	curr_arg++;
+	argc--;
+	memcpy(&con_parms[last_con].lan_addr[0],
+	       ent->h_addr_list[0],
+	       ent->h_length);
+	con_parms[last_con].lan_port[0] = atoi(argv[curr_arg]);
+	curr_arg++;
+	argc--;
+
+    doauth_mxp:
+	if (strcmp(argv[curr_arg], "none") == 0) {
+	    con_parms[last_con].authtype = IPMI_AUTHTYPE_NONE;
+	} else if (strcmp(argv[curr_arg], "md2") == 0) {
+	    con_parms[last_con].authtype = IPMI_AUTHTYPE_MD2;
+	} else if (strcmp(argv[curr_arg], "md5") == 0) {
+	    con_parms[last_con].authtype = IPMI_AUTHTYPE_MD5;
+	} else if (strcmp(argv[curr_arg], "straight") == 0) {
+	    con_parms[last_con].authtype = IPMI_AUTHTYPE_STRAIGHT;
+	} else if (con_parms[last_con].num_addr == 1) {
+	    if (argc < 8) {
+		fprintf(stderr, "Not enough arguments\n");
+		exit(1);
+	    }
+
+	    con_parms[last_con].num_addr++;
+	    ent = gethostbyname(argv[curr_arg]);
+	    if (!ent) {
+		fprintf(stderr, "gethostbyname failed: %s\n",
+			strerror(h_errno));
+		rv = EINVAL;
+		goto out;
+	    }
+	    curr_arg++;
+	    argc--;
+	    memcpy(&con_parms[last_con].lan_addr[1],
+		   ent->h_addr_list[0],
+		   ent->h_length);
+	    con_parms[last_con].lan_port[1] = atoi(argv[curr_arg]);
+	    curr_arg++;
+	    argc--;
+	    goto doauth_mxp;
+	} else {
+	    fprintf(stderr, "Invalid authtype: %s\n", argv[curr_arg]);
+	    rv = EINVAL;
+	    goto out;
+	}
+	curr_arg++;
+	argc--;
+
+	if (strcmp(argv[curr_arg], "callback") == 0) {
+	    con_parms[last_con].privilege = IPMI_PRIVILEGE_CALLBACK;
+	} else if (strcmp(argv[curr_arg], "user") == 0) {
+	    con_parms[last_con].privilege = IPMI_PRIVILEGE_USER;
+	} else if (strcmp(argv[curr_arg], "operator") == 0) {
+	    con_parms[last_con].privilege = IPMI_PRIVILEGE_OPERATOR;
+	} else if (strcmp(argv[curr_arg], "admin") == 0) {
+	    con_parms[last_con].privilege = IPMI_PRIVILEGE_ADMIN;
+	} else {
+	    fprintf(stderr, "Invalid privilege: %s\n", argv[curr_arg]);
+	    rv = EINVAL;
+	    goto out;
+	}
+	curr_arg++;
+	argc--;
+
+	memset(con_parms[last_con].username, 0,
+	       sizeof(con_parms[last_con].username));
+	memset(con_parms[last_con].password, 0,
+	       sizeof(con_parms[last_con].password));
+	strncpy(con_parms[last_con].username, argv[curr_arg], 16);
+	con_parms[last_con].username[16] = '\0';
+	curr_arg++;
+	argc--;
+	strncpy(con_parms[last_con].password, argv[curr_arg], 16);
+	con_parms[last_con].password[16] = '\0';
+	curr_arg++;
+	argc--;
+
+	swid = strtoul(argv[curr_arg], NULL, 0);
+	curr_arg++;
+	argc--;
+
+	rv = mxp_lan_setup_con(con_parms[last_con].lan_addr,
+			       con_parms[last_con].lan_port,
+			       con_parms[last_con].num_addr,
+			       con_parms[last_con].authtype,
+			       con_parms[last_con].privilege,
+			       con_parms[last_con].username,
+			       strlen(con_parms[last_con].username),
+			       con_parms[last_con].password,
+			       strlen(con_parms[last_con].password),
+			       &ipmi_ui_cb_handlers, selector,
+			       swid,
+			       &con[last_con]);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s\n", strerror(rv));
 	    rv = EINVAL;

@@ -10,6 +10,7 @@
 	* include/OpenIPMI/mxp.h: ditto
 	* lib/Makefile.am: ditto
 	* lib/ipmi.c: ditto
+	* ui/basic_ui.c: ditto
 
 2003-07-22 Corey Minyard <cminyard@mvista.com>
 

@@ -72,6 +72,7 @@ int mxp_lan_setup_con(struct in_addr            *ip_addrs,
 		      unsigned int              password_len,
 		      os_handler_t              *handlers,
 		      void                      *user_data,
+		      unsigned char             swid,
 		      ipmi_con_t                **new_con);
 
 #endif /* _MXP_IPMI_H */
