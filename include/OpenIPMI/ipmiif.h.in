@@ -103,7 +103,10 @@
    on.  This is how the locking works for this, inside the callback
    you will hold the locks so the item you are using will not change.
    It's kind of a pain, but it improves reliability.  This way, you
-   cannot "forget" to release the lock for something. */
+   cannot "forget" to release the lock for something.  Note that this
+   callback function you provide will be called immediately in the
+   same thread of execution, this callback is not delayed or spawned
+   off to another thread. */
 /* The comparisons below return -1 if id1<id2, 0 if id1==id2, and 1 if
    id1>id2. */
 ipmi_domain_id_t ipmi_domain_convert_to_id(ipmi_domain_t *domain);

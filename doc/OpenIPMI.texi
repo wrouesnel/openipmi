@@ -488,6 +488,14 @@ library uses this mechanism to determine whether the id you are holding
 is good.  Once it converts the id to the pointer, your pointer is
 guaranteed to be good until the function returns.
 
+These functions are named ipmi_xxx_pointer_cb(), where ``xxx'' is
+control, entity, domain, or sensor.  Unlike many other callbacks, the
+callback function you provide to these functions will be called
+immediately in the same thread of execution, this callback is not
+delayed or spawned off to another thread.  So, for instance, you can
+use data on the stack of the calling function and pass it to the
+callback function to use.
+
 @node    OpenIPMI Objects, , Locking, OpenIPMI Concepts
 @section OpenIPMI Objects
 

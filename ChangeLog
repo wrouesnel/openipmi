@@ -4,6 +4,10 @@
 	versions of some hot-swap functions and the function to get the
 	current entity presence.
 
+	* include/OpenIPMI/ipmiif.h, doc/OpenIMPI.texi: Added some text
+	about how the object pointer callbacks are always called
+	immediately.
+
 2004-02-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sensor.c: Reworked sensor naming to include the entity
