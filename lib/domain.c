@@ -856,9 +856,10 @@ domain_oem_check_done(ipmi_domain_t              *domain,
 
     while (rv) {
 	if (!ilist_next(&check->iter)) {
-	    ipmi_mem_free(check);
 	    domain->check = NULL;
 	    check->done(domain, check->cb_data);
+	    ipmi_mem_free(check);
+	    break;
 	} else {
 	    h = ilist_get(&check->iter);
 	    rv = h->check(domain, domain_oem_check_done, check);
@@ -3644,10 +3645,14 @@ ipmi_domain_get_event_rcvr(ipmi_domain_t *domain)
 int
 _ipmi_domain_init(void)
 {
+    oem_handlers = alloc_ilist();
+    if (!oem_handlers)
+	return ENOMEM;
     return 0;
 }
 
 void
 _ipmi_domain_shutdown(void)
 {
+    free_ilist(oem_handlers);
 }

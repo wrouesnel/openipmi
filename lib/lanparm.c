@@ -298,7 +298,7 @@ start_config_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     }
 
     msg.data = data;
-    msg.netfn = IPMI_SENSOR_EVENT_NETFN;
+    msg.netfn = IPMI_TRANSPORT_NETFN;
     msg.cmd = IPMI_GET_LAN_CONFIG_PARMS_CMD;
     data[0] = lanparm->channel;
     data[1] = elem->parm;
@@ -370,8 +370,8 @@ ipmi_lanparm_get_parm(ipmi_lanparm_t      *lanparm,
     elem->cb_data = cb_data;
     elem->lanparm = lanparm;
     elem->parm = parm;
-    elem->parm = set;
-    elem->parm = block;
+    elem->set = set;
+    elem->block = block;
     elem->rv = 0;
 
     lanparm_lock(lanparm);
