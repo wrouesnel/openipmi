@@ -1702,6 +1702,16 @@ int ipmi_open_domain(char               *name,
    by default if the privilege level is less than admin. */
 #define IPMI_OPEN_OPTION_SET_EVENT_RCVR	7
 
+/* Set SEL time to the current system time.  This is not affected by
+   option_all and is true by default if the privilege level is admin
+   or greater, false by default if the privilege level is less than
+   admin.  Note that you should really set the system time, the BMC
+   will start with it set to zero and you really want to know what
+   time it is.  This, of course, assumes that your system time is
+   correct, but you are using NTP, right?  Also, the time in the BMC
+   is GMT, so timezones/DST don't matter. */
+#define IPMI_OPEN_OPTION_SET_SEL_TIME   8
+
 
 /* Close an IPMI connection.  This will free all memory associated
    with the connections, any outstanding responses will be lost, etc.

@@ -235,6 +235,7 @@ int ipmi_option_FRUs(ipmi_domain_t *domain);
 int ipmi_option_IPMB_scan(ipmi_domain_t *domain);
 int ipmi_option_OEM_init(ipmi_domain_t *domain);
 int ipmi_option_set_event_rcvr(ipmi_domain_t *domain);
+int ipmi_option_set_sel_time(ipmi_domain_t *domain);
 
 /*
  * Domain attribute handling.

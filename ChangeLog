@@ -1,5 +1,8 @@
 2004-12-07 Corey Minyard <cminyard@mvista.com> 
 
+	* include/OpenIPMI/ipmiif.h.in, lib/mc.c, lib/domain.c,	lib/ipmi.c:
+	Added an option to not set the SEL time.
+
 	* include/OpenIPMI/ipmi_mc.h, include/OpenIPMI/internal/ipmi_mc.h:
 	Moved the ipmi_mc_set_current_sel_time() from the internal to
 	the user-visible interface.

@@ -1541,8 +1541,9 @@ startup_got_sel_time(ipmi_mc_t  *mc,
     gettimeofday(&now, NULL);
     time = ipmi_get_uint32(rsp->data+1);
 
-    if (time < now.tv_sec)
-	/* Time is in the past, move it forward. */
+    if ((time < now.tv_sec) && ipmi_option_set_sel_time(mc->domain))
+	/* Time is in the past and setting time is requested, move it
+	   forward. */
 	first_sel_op(mc);
     else {
 	struct timeval tv;

@@ -449,11 +449,17 @@ This is false by default.
 .HP
 .B -[no]seteventrcvr
 - setting event receivers.  Note that setting event
-receivers and waiting til up is not affected by the
+receivers is not affected by the
 .B -all
 option.  If this
 is true (the default) then OpenIPMI will attempt to set the event receiver
 for an MC it finds that does not have it set to a valid destination.
+.B -[no]setseltime
+- set SEL time.  Note that setting the SEL time is not affected by the
+.B -all
+option.  If this
+is true (the default) then OpenIPMI will attempt to set the time in
+the SELs it finds.  It will set it to the current system time.
 .HP
 .B -wait_til_up
 - wait until the domain is up before returning

@@ -316,6 +316,7 @@ struct ipmi_domain_s
     unsigned int option_IPMB_scan : 1;
     unsigned int option_OEM_init : 1;
     unsigned int option_set_event_rcvr : 1;
+    unsigned int option_set_sel_time : 1;
 };
 
 /* A list of all domains in the system. */
@@ -753,6 +754,7 @@ setup_domain(char          *name,
     domain->in_startup = 1;
     domain->option_all = 1;
     domain->option_set_event_rcvr = 1;
+    domain->option_set_sel_time = 1;
 
     strncpy(domain->name, name, sizeof(domain->name)-2);
     i = strlen(domain->name);
@@ -4507,6 +4509,12 @@ ipmi_option_set_event_rcvr(ipmi_domain_t *domain)
     return domain->option_set_event_rcvr;
 }
 
+int
+ipmi_option_set_sel_time(ipmi_domain_t *domain)
+{
+    return domain->option_set_sel_time;
+}
+
 
 static int
 process_options(ipmi_domain_t      *domain, 
@@ -4538,6 +4546,9 @@ process_options(ipmi_domain_t      *domain,
 	    break;
 	case IPMI_OPEN_OPTION_SET_EVENT_RCVR:
 	    domain->option_set_event_rcvr = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_SET_SEL_TIME:
+	    domain->option_set_sel_time = options[i].ival != 0;
 	    break;
 	default:
 	    return EINVAL;
@@ -4588,6 +4599,7 @@ ipmi_open_domain(char               *name,
     /* Enable setting the event receiver (by default) if the privilege
        is admin or greater. */
     domain->option_set_event_rcvr = (priv >= IPMI_PRIVILEGE_ADMIN);
+    domain->option_set_sel_time = (priv >= IPMI_PRIVILEGE_ADMIN);
 
     process_options(domain, options, num_options);
 
