@@ -19,7 +19,7 @@ OpenIPMI_OBJ = OpenIPMI_wrap.o OpenIPMI_perl.o
 OpenIPMI_LIB = $(top_builddir)/unix/libOpenIPMIposix.la \
 	       $(top_builddir)/lib/libOpenIPMI.la \
 	       $(top_builddir)/utils/libOpenIPMIutils.la \
-	       $(GLIB_LIBS)
+	       $(GLIB_LIB) $(GLIB_LIBS)
 
 EXTRA_DIST = OpenIPMI_perl.c
 

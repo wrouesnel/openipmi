@@ -88,17 +88,20 @@ if test "x$glibprog" != "x"; then
    AC_DEFINE(HAVE_GLIB)
    GLIB_DIR=glib
    GLIB_CFLAGS=`$glibprog --cflags gthread`
-   GLIB_LIBS="\$(top_builddir)/glib/libOpenIPMIglib.la `$glibprog --libs gthread`"
+   GLIB_LIBS="`$glibprog --libs gthread`"
+   GLIB_LIB='$(top_builddir)/glib/libOpenIPMIglib.la'
    GLIB_PKGCONF=OpenIPMIglib.pc
 else
    GLIB_DIR=
    GLIB_CFLAGS=
    GLIB_LIBS=
+   GLIB_LIB=
    GLIB_PKGCONF=
 fi
 AC_SUBST(GLIB_DIR)
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
+AC_SUBST(GLIB_LIB)
 AC_SUBST(GLIB_PKGCONF)
 
 # Handle PERL support
