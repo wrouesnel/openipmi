@@ -2035,9 +2035,15 @@ is_presence_sensor(ipmi_sensor_t *sensor)
     int val, rv;
     int supports_present = 0;
     int supports_absent = 0;
+    int reading_type;
 
     /* Is it the right type (a presence sensor)? */
     if (ipmi_sensor_get_sensor_type(sensor) != 0x25)
+	return 0;
+
+    reading_type = ipmi_sensor_get_event_reading_type(sensor);
+    if (reading_type != IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC)
+	/* Don't know how to interpret a "generic" reating type code */
 	return 0;
 
     /* Presense sensors that don't generate events are kind of useless. */
@@ -2067,6 +2073,11 @@ is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
     int val, rv;
     int bit;
     int sensor_type = ipmi_sensor_get_sensor_type(sensor);
+    int reading_type = ipmi_sensor_get_event_reading_type(sensor);
+
+    if (reading_type != IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC)
+	/* All presence bits are in sensor-specific bits, not generic ones */
+	return 0;
 
     /* Is it a sensor with a presence bit? */
     switch (sensor_type)

@@ -1,3 +1,11 @@
+2004-12-01 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/entity.c: Ignore sensors for presence if they use the
+	generic reading type codes.
+
+	* lib/chassis.c: Added a dummy presence sensor for the chassis
+	entity so it will be reported as present.
+
 2004-11-27 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_lan.h, lib/ipmi_lan.c: Added a new, more

@@ -352,6 +352,26 @@ chassis_power_get(ipmi_control_t      *control,
     return rv;
 }
 
+static int
+presence_states_get(ipmi_sensor_t         *sensor,
+		    ipmi_sensor_states_cb done,
+		    void                  *cb_data)
+{
+    ipmi_states_t *states = NULL;
+
+    states = ipmi_mem_alloc(ipmi_states_size());
+    if (!states)
+	return ENOMEM;
+
+    ipmi_init_states(states);
+    ipmi_set_sensor_scanning_enabled(states, 1);
+    ipmi_set_event_messages_enabled(states, 1);
+    ipmi_set_state(states, 0, 1);
+    done(sensor, 0, states, cb_data);
+    ipmi_mem_free(states);
+    return 0;
+}
+
 static void
 chassis_mc_control_removal_handler(ipmi_domain_t *domain,
 				   ipmi_mc_t     *mc,
@@ -367,6 +387,21 @@ chassis_mc_control_removal_handler(ipmi_domain_t *domain,
     _ipmi_entity_put(entity);
 }
 
+static void
+chassis_mc_sensor_removal_handler(ipmi_domain_t *domain,
+				  ipmi_mc_t     *mc,
+				  void          *cb_data)
+{
+    ipmi_sensor_t *sensor = cb_data;
+    ipmi_entity_t *entity = ipmi_sensor_get_entity(sensor);
+
+    _ipmi_domain_entity_lock(domain);
+    _ipmi_entity_get(entity);
+    _ipmi_domain_entity_unlock(domain);
+    ipmi_sensor_destroy(sensor);
+    _ipmi_entity_put(entity);
+}
+
 int
 _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 {
@@ -377,6 +412,9 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
     ipmi_control_t     *reset_control = NULL;
     int                rv;
     ipmi_control_cbs_t cbs;
+    ipmi_sensor_t      *sensor;
+    char               *id;
+    ipmi_sensor_cbs_t  scbs;
 
     rv = ipmi_entity_add(ents, domain, 0, 0, 0,
 			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 1,
@@ -388,6 +426,64 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 		 "%schassis.c(_ipmi_chassis_create_controls): "
 		 "Could not add chassis entity: %x",
 		 DOMAIN_NAME(domain), rv);
+	goto out;
+    }
+    /* We create a presence sensor which will always exist. */
+    ipmi_entity_set_presence_sensor_always_there(chassis_ent, 1);
+
+    /* Create a dummy presence sensor, the chassis entity is always
+       present, we force it so. */
+    rv = ipmi_sensor_alloc_nonstandard(&sensor);
+    if (rv)
+	goto out;
+    ipmi_sensor_set_entity_instance_logical(sensor, 0);
+    ipmi_sensor_set_sensor_init_scanning(sensor, 1);
+    ipmi_sensor_set_sensor_init_events(sensor, 0);
+    ipmi_sensor_set_sensor_init_thresholds(sensor, 0);
+    ipmi_sensor_set_sensor_init_hysteresis(sensor, 0);
+    ipmi_sensor_set_sensor_init_type(sensor, 1);
+    ipmi_sensor_set_sensor_init_pu_events(sensor, 0);
+    ipmi_sensor_set_sensor_init_pu_scanning(sensor, 1);
+    ipmi_sensor_set_ignore_if_no_entity(sensor, 0);
+    ipmi_sensor_set_supports_auto_rearm(sensor, 1);
+    ipmi_sensor_set_event_support(sensor, 
+				  IPMI_EVENT_SUPPORT_GLOBAL_ENABLE);
+
+    ipmi_sensor_set_sensor_type(sensor, IPMI_SENSOR_TYPE_ENTITY_PRESENCE);
+    ipmi_sensor_set_event_reading_type
+	(sensor, IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC);
+    id = "chassis presence";
+    ipmi_sensor_set_id(sensor, id, IPMI_ASCII_STR, strlen(id));
+
+    ipmi_sensor_set_sensor_type_string
+	(sensor,
+	 ipmi_get_sensor_type_string(IPMI_SENSOR_TYPE_ENTITY_PRESENCE));
+    ipmi_sensor_set_event_reading_type_string
+      (sensor,
+       ipmi_get_event_reading_type_string
+       (IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC));
+
+    /* Enable the event here.  We don't really generate events, but
+       there is no need because the value doesn't change :) */
+    ipmi_sensor_set_discrete_assertion_event_supported(sensor, 0, 1);
+    ipmi_sensor_discrete_set_event_readable(sensor, 0, 1);
+
+    /* Create all the callbacks in the data structure.  We only need "get". */
+    memset(&scbs, 0, sizeof(scbs));
+    scbs.ipmi_sensor_get_states = presence_states_get;
+    ipmi_sensor_set_callbacks(sensor, &scbs);
+
+    rv = ipmi_sensor_add_nonstandard(mc, NULL, sensor, 240, 0, chassis_ent,
+				     NULL, NULL);
+    if (rv) {
+	ipmi_sensor_destroy(sensor);
+	goto out;
+    }
+    rv = ipmi_mc_add_oem_removed_handler(mc,
+					 chassis_mc_sensor_removal_handler,
+					 sensor);
+    if (rv) {
+	ipmi_sensor_destroy(sensor);
 	goto out;
     }
     
@@ -473,6 +569,8 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 	_ipmi_control_put(power_control);
     if (reset_control)
 	_ipmi_control_put(reset_control);
+    if (sensor)
+	_ipmi_sensor_put(sensor);
     if (chassis_ent)
 	_ipmi_entity_put(chassis_ent);
     return rv;
