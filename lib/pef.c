@@ -1197,6 +1197,7 @@ static int gnas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	return ENOMEM;
     }
 
+    memset(pefc->alert_strings, 0, sizeof(unsigned char *) * num);
     pefc->num_alert_strings = num;
     
     return 0;
@@ -1278,7 +1279,8 @@ static int gas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     s2[len+data_len] = '\0';
 
     *t = s2;
-    ipmi_mem_free(s1);
+    if (s1)
+    	ipmi_mem_free(s1);
     
     return 0;
 }
@@ -1447,7 +1449,7 @@ got_parm(ipmi_pef_t     *pef,
 	if (pefc->curr_sel >= pefc->num_alert_strings) {
 	    pefc->curr_parm++;
 	    pefc->curr_sel = 0;
-	    pefc->curr_block = 0;
+	    pefc->curr_block = 1;
 	}
 	break;
 
@@ -1492,8 +1494,8 @@ got_parm(ipmi_pef_t     *pef,
     if (!lp->valid)
 	goto next_parm;
 
-    err = ipmi_pef_get_parm(pef, pefc->curr_parm, pefc->curr_sel, 0,
-			    got_parm, pefc);
+    err = ipmi_pef_get_parm(pef, pefc->curr_parm, pefc->curr_sel, 
+		    pefc->curr_block, got_parm, pefc);
     if (err)
 	goto done;
 
@@ -1710,7 +1712,7 @@ set_done(ipmi_pef_t *pef,
 	if (pefc->curr_sel >= pefc->num_alert_strings) {
 	    pefc->curr_parm++;
 	    pefc->curr_sel = 0;
-	    pefc->curr_block = 0;
+	    pefc->curr_block = 1;
 	}
 	data[0] = pefc->curr_sel;
 	data[1] = pefc->curr_block;
@@ -1854,7 +1856,7 @@ ipmi_pef_set_config(ipmi_pef_t        *pef,
 	    rv = ENOMEM;
 	    goto out;
 	}
-	memset(pefc->asks, 0,
+	memset(pefc->alert_strings, 0,
 	       sizeof(unsigned char *) * pefc->num_alert_strings);
 	
 	for (i=0; i<pefc->num_alert_strings; i++) {
