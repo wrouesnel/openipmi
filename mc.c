@@ -626,6 +626,12 @@ bmc_sel_new_event_handler(ipmi_sel_info_t *sel,
 }
 
 
+unsigned long
+ipmi_bmc_get_startup_SEL_time(ipmi_mc_t *bmc)
+{
+    return bmc->bmc->startup_SEL_time;
+}
+
 int
 ipmi_bmc_rescan_events(ipmi_mc_t *bmc)
 {
