@@ -4958,6 +4958,7 @@ clear_sel_cmder(ipmi_domain_t *domain, void *cb_data)
 	event2 = event;
 	event = ipmi_domain_next_event(domain, event2);
 	ipmi_domain_del_event(domain, event2, NULL, NULL);
+	ipmi_event_free(event2);
     }
 }
 
