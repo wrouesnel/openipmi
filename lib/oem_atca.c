@@ -3074,7 +3074,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	str = data + 5;
 	info->shelf_address_len
 	    = ipmi_get_device_string(&str, 21,
-				     info->shelf_address, 0,
+				     info->shelf_address, IPMI_STR_FRU_SEMANTICS, 0,
 				     &info->shelf_address_type,
 				     sizeof(info->shelf_address));
 

@@ -1204,8 +1204,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 
 	    str = sdr.data + 42;
 	    s[p]->id_len = ipmi_get_device_string(&str, sdr.length-42,
-						  s[p]->id, 0, &s[p]->id_type,
-						  SENSOR_ID_LEN);
+						  s[p]->id, IPMI_STR_SDR_SEMANTICS, 0,
+						  &s[p]->id_type, SENSOR_ID_LEN);
 	    if (s[p]->entity)
 		sensor_set_name(s[p]);
 	} else if (sdr.type == 2) {
@@ -1221,8 +1221,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 
 	    str = sdr.data + 26;
 	    s[p]->id_len = ipmi_get_device_string(&str, sdr.length-26,
-						  s[p]->id, 0, &s[p]->id_type,
-						  SENSOR_ID_LEN);
+						  s[p]->id, IPMI_STR_SDR_SEMANTICS, 0,
+						  &s[p]->id_type, SENSOR_ID_LEN);
 
 	    share_count = sdr.data[18] & 0x0f;
 	    if (share_count == 0)
@@ -1239,8 +1239,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 
 	    str = sdr.data + 11;
 	    s[p]->id_len = ipmi_get_device_string(&str, sdr.length-11,
-						  s[p]->id, 0, &s[p]->id_type,
-						  SENSOR_ID_LEN);
+						  s[p]->id, IPMI_STR_SDR_SEMANTICS, 0,
+						  &s[p]->id_type, SENSOR_ID_LEN);
 
 	    share_count = sdr.data[7] & 0x0f;
 	    if (share_count == 0)

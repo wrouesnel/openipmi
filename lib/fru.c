@@ -516,7 +516,8 @@ fru_decode_string(ipmi_fru_t     *fru,
     out->offset = *in - start_pos;
     in_start = *in;
     force_unicode = !force_english && (lang_code != IPMI_LANG_CODE_ENGLISH);
-    out->length = ipmi_get_device_string(in, *in_len, str, force_unicode,
+    out->length = ipmi_get_device_string(in, *in_len, str,
+					 IPMI_STR_FRU_SEMANTICS, force_unicode,
 					 &out->type, sizeof(str));
     out->raw_len = *in - in_start;
     in_len -= out->raw_len;
@@ -1160,7 +1161,7 @@ fru_decode_chassis_info_area(ipmi_fru_t        *fru,
     HANDLE_STR_DECODE(CHASSIS_INFO, part_number, 1);
     HANDLE_STR_DECODE(CHASSIS_INFO, serial_number, 1);
     HANDLE_CUSTOM_DECODE(CHASSIS_INFO);
-    rec->used_length = data - orig_data + 1; /* add 1 for the checksum */
+    rec->used_length = data - orig_data + 2; /* add 1 for the checksum, 1 for term */
     rec->orig_used_length = rec->used_length;
 
     *rrec = rec;
@@ -1367,7 +1368,7 @@ fru_decode_board_info_area(ipmi_fru_t        *fru,
     HANDLE_STR_DECODE(BOARD_INFO, board_part_number, 1);
     HANDLE_STR_DECODE(BOARD_INFO, fru_file_id, 1);
     HANDLE_CUSTOM_DECODE(BOARD_INFO);
-    rec->used_length = data - orig_data + 1; /* add 1 for the checksum */
+    rec->used_length = data - orig_data + 2; /* add 1 for the checksum, 1 for term */
     rec->orig_used_length = rec->used_length;
 
     *rrec = rec;
@@ -1583,7 +1584,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
     if (err)
 	goto out_err;
 
-    rec->length = length; /* add 1 for the checksum */
+    rec->length = length;
 
     u = fru_record_get_data(rec);
 
@@ -1603,7 +1604,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
     HANDLE_STR_DECODE(PRODUCT_INFO, asset_tag, 0);
     HANDLE_STR_DECODE(PRODUCT_INFO, fru_file_id, 1);
     HANDLE_CUSTOM_DECODE(PRODUCT_INFO);
-    rec->used_length = data - orig_data + 1; /* add 1 for the checksum */
+    rec->used_length = data - orig_data + 2; /* add 1 for the checksum, 1 for term */
     rec->orig_used_length = rec->used_length;
 
     *rrec = rec;
@@ -1822,7 +1823,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 
 	num_records++;
 
-	eol = data[1] + 0x80;
+	eol = data[1] & 0x80;
 
 	data += length + 5;
 	left -= length + 5;
@@ -1856,7 +1857,10 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	/* No checks required, they've already been done above. */
 	length = data[2];
 	r = u->records + i;
-	r->data = ipmi_mem_alloc(length);
+	if (length == 0)
+	    r->data = ipmi_mem_alloc(1);
+	else
+	    r->data = ipmi_mem_alloc(length);
 	if (!r->data) {
 	    err = ENOMEM;
 	    goto out_err;
@@ -3542,6 +3546,15 @@ ipmi_fru_str_to_index(char *name)
 	    return i;
     }
     return -1;
+}
+
+char *
+ipmi_fru_index_to_str(int index)
+{
+    if ((index < 0) || (index >= NUM_FRUL_ENTRIES))
+	return NULL;
+
+    return frul[index].name;
 }
 
 int

@@ -2592,7 +2592,7 @@ decode_gdlr(ipmi_sdr_t         *sdr,
     info->oem = sdr->data[9];
     str = sdr->data + 10;
     info->id_len = ipmi_get_device_string(&str, sdr->length-10,
-					  info->id, 0,
+					  info->id, IPMI_STR_SDR_SEMANTICS, 0,
 					  &info->id_type, ENTITY_ID_LEN);
 
     return 0;
@@ -2666,7 +2666,7 @@ decode_frudlr(ipmi_sdr_t         *sdr,
     str = sdr->data + 10;
     info->id_len = ipmi_get_device_string(&str,
 					  sdr->length-10,
-					  info->id, 0,
+					  info->id, IPMI_STR_SDR_SEMANTICS, 0,
 					  &info->id_type, ENTITY_ID_LEN);
 
     return 0;
@@ -2775,7 +2775,7 @@ decode_mcdlr(ipmi_sdr_t *sdr,
     str = sdr->data + 10;
     info->id_len = ipmi_get_device_string(&str,
 					  sdr->length-10,
-					  info->id, 0,
+					  info->id, IPMI_STR_SDR_SEMANTICS, 0,
 					  &info->id_type, ENTITY_ID_LEN);
 
 

@@ -243,6 +243,7 @@ unsigned int
 ipmi_get_device_string(unsigned char        **pinput,
 		       unsigned int         in_len,
 		       char                 *output,
+		       int                  semantics,
 		       int                  force_unicode,
 		       enum ipmi_str_type_e *stype,
 		       unsigned int         max_out_len)
@@ -276,8 +277,10 @@ ipmi_get_device_string(unsigned char        **pinput,
 
     /* Special case for FRU data, type 3 is unicode if the language is
        non-english. */
-    if ((force_unicode) && (type == 3))
+    if ((force_unicode) && (type == 3)) {
 	type = 0;
+	force_unicode = 0;
+    }
 
     len = **pinput & 0x3f;
     (*pinput)++;
@@ -287,7 +290,10 @@ ipmi_get_device_string(unsigned char        **pinput,
     {
 	case 0: /* Unicode */
 	    olen = ipmi_get_unicode(len, pinput, in_len, output, max_out_len);
-	    *stype = IPMI_UNICODE_STR;
+	    if (semantics == IPMI_STR_FRU_SEMANTICS)
+		*stype = IPMI_BINARY_STR;
+	    else
+		*stype = IPMI_UNICODE_STR;
 	    break;
 	case 1: /* BCD Plus */
 	    olen = ipmi_get_bcd_plus(len, pinput, in_len, output, max_out_len);

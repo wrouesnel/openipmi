@@ -1,0 +1,535 @@
+#!/usr/bin/perl
+
+# test_fru
+#
+# Test of the FRU code.
+#
+# Author: MontaVista Software, Inc.
+#         Corey Minyard <minyard@mvista.com>
+#         source@mvista.com
+#
+# Copyright 2004 MontaVista Software Inc.
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License
+#  as published by the Free Software Foundation; either version 2 of
+#  the License, or (at your option) any later version.
+#
+#
+#  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+#  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+#  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+#  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+#  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+#  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#  You should have received a copy of the GNU Lesser General Public
+#  License along with this program; if not, write to the Free
+#  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+use threads;
+use threads::shared;
+use Thread::Semaphore;
+use Lanserv;
+use OpenIPMI;
+
+my $errcount : shared = 0;
+
+my $fru_field_table = {};
+
+# Check a data field from the fru.  Parameters are:
+#  fru - where to get the data from
+#  name - The name of the field to check
+#  num - The number of the field to check, ignored if the field doesn't
+#    support numbers.
+#  exp_type - The expected type (integer, time, ascii, binary, unicode).
+#  exp_val - The expected value.  For integers and ASCII strings, this
+#    is the value.  For binary and unicode, this is a string with the
+#    values listed out.  If the value is expected to not be there, this
+#    should be undefined.
+sub check_fru_data {
+    my $fru = shift;
+    my $name = shift;
+    my $num = shift;
+    my $exp_type = shift;
+    my $exp_val = shift;
+    my $idx = $fru_field_table->{$name};
+    my ($tname, $type, $val);
+    my $tnum = $num;
+
+    if (!defined $idx) {
+	print STDERR "***Invalid name in check_fru_data: $name\n";
+	$errcount++;
+	return;
+    }
+    
+    ($tname, $type, $val) = split /\s+/, $fru->get($idx, \$tnum), 3;
+
+    if (!defined $tname) {
+	print STDERR "***Internal error on: $name [$num]\n";
+	$errcount++;
+	return;
+    }
+
+    if (!defined $type) {
+	if (defined $exp_val) {
+	    print STDERR "***value for $name [$num] was undefined, expected $exp_val\n";
+	    $errcount++;
+	}
+	return;
+    }
+
+    if ($name ne $tname) {
+	print STDERR "***Internal error on: $name [$num], $tname\n";
+	$errcount++;
+	return;
+    }
+
+    if ($exp_type ne $type) {
+	print STDERR "***Type mismatch on $name [$num], expected $exp_type, got $type\n";
+	$errcount++;
+	return;
+    }
+
+    # If the length of the thing is zero, there won't be anything in the string.  That's ok,
+    # but make the comparisons work.
+    if (!defined $val) {
+	$val = "";
+    }
+
+    if (($exp_type eq "integer") || ($exp_type eq "time")) {
+	if ($exp_val != $val) {
+	    print STDERR "***Value mismatch on $name [$num], expected $exp_val, got $val\n";
+	    $errcount++;
+	    return;
+	}
+    } elsif ($exp_type eq "ascii") {
+	if ($exp_val ne $val) {
+	    print STDERR "***Value mismatch on $name [$num], expected '$exp_val', got '$val'\n";
+	    $errcount++;
+	    return;
+	}
+    } elsif (($exp_type ne "binary") || ($exp_type ne "unicode")) {
+	my @vals = split /\s+/, $val;
+	my @exp_vals = split /\s+/, $exp_val;
+	my $i;
+	if ($#vals != $#exp_vals) {
+	    print STDERR "***Value mismatch on $name [$num], expected $#exp_vals values, got $#vals\n";
+	    $errcount++;
+	    return;
+	}
+	$i = 1;
+	$val = shift(@vals);
+	$exp_val = shift(@exp_vals);
+	while (defined $val) {
+	    if (hex($val) != hex($exp_val)) {
+		print STDERR "***Value mismatch on $name [$num] item $i, expected $exp_val, got $val\n";
+		$errcount++;
+		return;
+	    }
+	    $val = shift(@vals);
+	    $exp_val = shift(@exp_vals);
+	    $i++;
+	}
+    } else {
+	print STDERR "***Invalid type on $name [$num]: $exp_type\n";
+	$errcount++;
+	return;
+    }
+}
+
+sub check_fru_mr_data {
+    my $fru = shift;
+    my $num = shift;
+    my $exp_type = shift;
+    my $exp_version = shift;
+    my $exp_val = shift;
+    my ($type, $version, $val);
+    my $readval = $fru->get_multirecord($num);
+
+    if (!defined $readval) {
+	if (defined $exp_type) {
+	    print STDERR "***value for multirecord [$num] was undefined, expected value\n";
+	    $errcount++;
+	}
+	return;
+    }
+
+    ($type, $version, $val) = split /\s+/, $readval, 3;
+
+    if ($type ne $exp_type) {
+	    print STDERR "***Value mismatch on multirecord [$num] type, expected $exp_type, got $type\n";
+	    $errcount++;
+	    return;
+    }
+
+    if ($version ne $exp_version) {
+	    print STDERR "***Value mismatch on multirecord [$num] version, expected $exp_version, got $version\n";
+	    $errcount++;
+	    return;
+    }
+
+    # If the length of the thing is zero, there won't be anything in the string.  That's ok,
+    # but make the comparisons work.
+    if (!defined $val) {
+	$val = "";
+    }
+
+    my @vals = split /\s+/, $val;
+    my @exp_vals = split /\s+/, $exp_val;
+    my $i;
+    if ($#vals != $#exp_vals) {
+	print STDERR "***Value mismatch on multirecord [$num], expected $#exp_vals values, got $#vals\n";
+	$errcount++;
+	return;
+    }
+    $i = 1;
+    $val = shift(@vals);
+    $exp_val = shift(@exp_vals);
+    while (defined $val) {
+	if (hex($val) != hex($exp_val)) {
+	    print STDERR "***Value mismatch on multirecord [$num], expected $exp_val, got $val\n";
+	    $errcount++;
+	    return;
+	}
+	$val = shift(@vals);
+	$exp_val = shift(@exp_vals);
+	$i++;
+    }
+}
+
+sub check_area_offset {
+    my $fru = shift;
+    my $area = shift;
+    my $exp_size = shift;
+    my $size;
+    my $rv;
+
+    $rv = $fru->area_get_offset($area, \$size);
+    if ($rv) {
+	if (!defined $exp_size) {
+	    # expected
+	    return;
+	}
+
+	print STDERR "Error getting area offset for area $area: $rv\n";
+	$errcount++;
+	return;
+    }
+
+    if ($size != $exp_size) {
+	print STDERR "FRU offset for area $area was $size, expected $exp_size\n";
+	$errcount++;
+    }
+}
+
+sub check_area_length {
+    my $fru = shift;
+    my $area = shift;
+    my $exp_length = shift;
+    my $length;
+    my $rv;
+
+    $rv = $fru->area_get_length($area, \$length);
+    if ($rv) {
+	if (!defined $exp_length) {
+	    # expected
+	    return;
+	}
+
+	print STDERR "Error getting area length for area $area: $rv\n";
+	$errcount++;
+	return;
+    }
+
+    if ($length != $exp_length) {
+	print STDERR "FRU length for area $area was $length, expected $exp_length\n";
+	$errcount++;
+    }
+}
+
+sub check_area_used_length {
+    my $fru = shift;
+    my $area = shift;
+    my $exp_length = shift;
+    my $length;
+    my $rv;
+
+    $rv = $fru->area_get_used_length($area, \$length);
+    if ($rv) {
+	if (!defined $exp_length) {
+	    # expected
+	    return;
+	}
+
+	print STDERR "Error getting area used length for area $area: $rv\n";
+	$errcount++;
+	return;
+    }
+
+    if ($length != $exp_length) {
+	print STDERR "FRU used length for area $area was $length, expected $exp_length\n";
+	$errcount++;
+    }
+}
+
+sub check_area {
+    my $fru = shift;
+    my $area = shift;
+    my $exp_offset = shift;
+    my $exp_length = shift;
+    my $exp_used_length = shift;
+
+    check_area_offset($fru, $area, $exp_offset);
+    check_area_length($fru, $area, $exp_length);
+    check_area_used_length($fru, $area, $exp_used_length);
+}
+
+{
+    package CloseDomain;
+    sub new {
+	my $a = shift;
+	my $b = \$a;
+	$b = bless $b;
+	return $b;
+    }
+
+    sub domain_cb {
+	my $self = shift;
+	my $domain = shift;
+
+	$domain->close($$self);
+    }
+
+    package CheckRead1;
+
+    sub new {
+	my $self = shift;
+	my $a = {};
+	$a->{handler} = shift;
+	return bless \$a;
+    }
+
+    sub fru_fetched {
+	my $self = shift;
+	my $fru = shift;
+	my $err = shift;
+	my $h = $$self->{handler};
+	my $rv;
+	my $idx;
+	my $num;
+
+	print "FRU data read: $err\n";
+	if ($err) {
+	    $errcount++;
+	    print STDERR "Error reading the FRU: $err\n";
+	    $h->close();
+	    return;
+	}
+
+	main::check_area($fru, 0, 8, 8, 8);
+	main::check_area($fru, 1, 16, 24, 20);
+	main::check_area($fru, 2, 48, 40, 33);
+	main::check_area($fru, 3, 88, 104, 100);
+	main::check_area($fru, 4, 192, 832, 26);
+
+	main::check_fru_data($fru, "internal_use_version", -1, "integer", "1");
+	main::check_fru_data($fru, "internal_use", -1, "binary",
+			     "0x02 0x03 0x04 0x05 0x06 0x07 0x08");
+
+	main::check_fru_data($fru, "chassis_info_version", -1, "integer", "1");
+	main::check_fru_data($fru, "chassis_info_type", -1, "integer", "1");
+	main::check_fru_data($fru, "chassis_info_part_number", -1, "ascii", "ATCA");
+	main::check_fru_data($fru, "chassis_info_serial_number", -1, "ascii", "Tes0");
+	main::check_fru_data($fru, "chassis_info_custom", 0, "ascii", "");
+	main::check_fru_data($fru, "chassis_info_custom", 1, "ascii", "xyz");
+	main::check_fru_data($fru, "chassis_info_custom", 2, "ascii", undef);
+
+	main::check_fru_data($fru, "board_info_version", -1, "integer", "1");
+	# OpenIPMI converts 0 to 25 (english)
+	main::check_fru_data($fru, "board_info_lang_code", -1, "integer", "25");
+	main::check_fru_data($fru, "board_info_mfg_time", -1, "time", "820476000");
+	main::check_fru_data($fru, "board_info_board_manufacturer", -1, "ascii", "Tes1");
+	main::check_fru_data($fru, "board_info_board_product_name", -1, "ascii", "Tes2");
+	main::check_fru_data($fru, "board_info_board_serial_number", -1, "ascii", "Tes3");
+	main::check_fru_data($fru, "board_info_board_part_number", -1, "ascii", "Tes4");
+	main::check_fru_data($fru, "board_info_fru_file_id", -1, "ascii", "Tes5");
+	main::check_fru_data($fru, "board_info_custom", 0, "ascii", undef);
+
+	main::check_fru_data($fru, "product_info_version", -1, "integer", "1");
+	# OpenIPMI converts 0 to 25 (english)
+	main::check_fru_data($fru, "product_info_lang_code", -1, "integer", "25");
+	main::check_fru_data($fru, "product_info_manufacturer_name", -1, "ascii", "");
+	main::check_fru_data($fru, "product_info_product_name", -1, "ascii", "Te6");
+	main::check_fru_data($fru, "product_info_product_part_model_number", -1, "ascii",
+			     "abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz01234");
+	main::check_fru_data($fru, "product_info_product_version", -1, "binary",
+			     "0x01 0x02 0x03 0x04 0x05 0x06 0x07");
+	main::check_fru_data($fru, "product_info_product_serial_number", -1, "ascii", "");
+	main::check_fru_data($fru, "product_info_asset_tag", -1, "ascii", "12345678");
+	main::check_fru_data($fru, "product_info_fru_file_id", -1, "ascii", '3=8FH$ B');
+	main::check_fru_data($fru, "product_info_custom", 0, "ascii", 'abcd');
+	main::check_fru_data($fru, "product_info_custom", 1, "ascii", undef);
+
+	main::check_fru_mr_data($fru, 0, 0xc0, 2, "0x01 0x02 0x03 0x04 0x05 0x06 0x07 0x08 0x09 0x0a 0x0b 0x0c 0x0d 0x0e 0x0f 0x10");
+	main::check_fru_mr_data($fru, 1, 0xc1, 2, "");
+	main::check_fru_mr_data($fru, 2, undef, undef, undef);
+
+	if ($errcount) {
+	    $h->close();
+	    return;
+	}
+
+	# TEMP return for now.
+	$h->close();
+    }
+
+
+    package Handlers;
+
+    sub new {
+	my $a = {};
+	$a->{keepon} = 1;
+	return bless \$a;
+    }
+
+    sub log {
+	my $self = shift;
+	my $level = shift;
+	my $log = shift;
+
+	print $level, ": ", $log, "\n";
+    }
+    
+    sub conn_change_cb {
+	my $self = shift;
+	my $domain = shift;
+	my $err = shift;
+	my $conn_num = shift;
+	my $port_num = shift;
+	my $still_connected = shift;
+	my $rv;
+
+	if ($err) {
+	    $errcount++;
+	    print STDERR "Error starting up IPMI connection: $err\n";
+	    $self->close();
+	    return;
+	}
+
+	print "Connection up!\n";
+	$rv = $domain->fru_alloc(1, 0x20, 0, 0, 0, 0, CheckRead1->new($self));
+	if (! defined $rv) {
+	    print STDERR "Error starting fru fetch: $rv\n";
+	    $self->close();
+	    return;
+	}
+    }
+
+    sub domain_close_done_cb {
+	my $self = shift;
+
+	$$self->{keepon} = 0;
+    }
+
+    sub close {
+	my $self = shift;
+	my $domain = shift;
+
+	if (defined $$self->{domain_id}) {
+	    my $v = CloseDomain::new($self);
+	    $$self->{domain_id}->convert_to_domain($v);
+	} else {
+	    $$self->{keepon} = 0;
+	}
+    }
+
+}
+
+$lanserv = Lanserv->new();
+if (! $lanserv) {
+    print STDERR "Unable to start lanserv\n";
+    exit(1);
+}
+
+# Add a BMC
+$lanserv->cmd("mc_add 20 0 1 23 9 8 1f 1291 f02");
+$lanserv->cmd("mc_setbmc 20");
+$lanserv->cmd("main_sdr_add 20 00 00 51 12 0f 20 00 00 1f 00 00 00 07 01 00 c4 'T 'e 's 't");
+
+# Create some FRU information
+$lanserv->cmd
+    ("mc_add_fru_data 20 0 400 " .
+     " 01 01 02 06 0b 18 00 d3" .
+# Internal Use
+     " 01 02 03 04 05 06 07 08" .
+# Chassis info
+     " 01 03 01 c4 'A 'T 'C 'A" .
+     " c4 'T 'e 's '0 c0 c3 'x" .
+     " 'y 'z c1 00 00 00 00 4f" .
+# Expansion space
+     " 00 00 00 00 00 00 00 00" .
+# Board info
+     " 01 05 00 00 00 00 c4 'T" .
+     " 'e 's '1 c4 'T 'e 's '2" .
+     " c4 'T 'e 's '3 c4 'T 'e" .
+     " 's '4 c4 'T 'e 's '5 c1" .
+     " 00 00 00 00 00 00 00 8a" .
+#Product Info
+     " 01 0d 00 c0 c3 'T 'e '6" .
+     " ff 'a 'b 'c 'd 'e 'f 'g" .
+     " 'h 'i 'j 'k 'l 'm 'n 'o" .
+     " 'p 'q 'r 's 't 'u 'v 'w" .
+     " 'x 'y 'z '0 '1 '2 '3 '4" .
+     " '5 'a 'b 'c 'd 'e 'f 'g" .
+     " 'h 'i 'j 'k 'l 'm 'n 'o" .
+     " 'p 'q 'r 's 't 'u 'v 'w" .
+     " 'x 'y 'z '0 '1 '2 '3 '4" .
+     " 07 01 02 03 04 05 06 07" .
+     " c0 48 21 43 65 87 88 53" .
+     " 87 99 28 01 88 c4 'a 'b" .
+     " 'c 'd c1 00 00 00 00 e4" .
+# Multi-records
+     " c0 02 10 78 b6 01 02 03" .
+     " 04 05 06 07 08 09 0a 0b" .
+     " 0c 0d 0e 0f 10 c1 82 00" .
+     " 00 bd"
+);
+
+$lanserv->cmd("mc_enable 20");
+
+# Now start OpenIPMI
+OpenIPMI::init();
+
+$i = 0;
+$s = OpenIPMI::fru_index_to_str($i);
+while (defined $s) {
+    $fru_field_table->{$s} = $i;
+    $i++;
+    $s = OpenIPMI::fru_index_to_str($i);
+}
+
+$h = Handlers::new();
+
+OpenIPMI::set_log_handler($h);
+
+@args = ( "-noseteventrcvr",
+	  "lan", "-p", "9000", "-U", "minyard", "-P", "test", "localhost");
+$$h->{domain_id} = OpenIPMI::open_domain2("test", \@args, $h, \undef);
+if (! $$h->{domain_id}) {
+    $lanserv->close();
+    print "IPMI open failed\n";
+    exit 1;
+}
+
+while ($$h->{keepon}) {
+    OpenIPMI::wait_io(1000);
+}
+
+$lanserv->close();
+exit $errcount;

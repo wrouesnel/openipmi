@@ -114,9 +114,12 @@ void ipmi_set_uint16(unsigned char *data, int val);
    unicode or ASCII.  The number of bytes put into the output string
    is returned.  The input pointer will be updated to point to the
    character after the used data. */
+#define IPMI_STR_SDR_SEMANTICS	0
+#define IPMI_STR_FRU_SEMANTICS	1
 unsigned int ipmi_get_device_string(unsigned char        **input,
 				    unsigned int         in_len,
 				    char                 *output,
+				    int                  semantics,
 				    int                  force_unicode,
 				    enum ipmi_str_type_e *type,
 				    unsigned int         max_out_len);

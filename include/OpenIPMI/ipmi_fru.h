@@ -292,6 +292,12 @@ int ipmi_fru_get(ipmi_fru_t                *fru,
    non-NULL. */
 void ipmi_fru_data_free(char *data);
 
+/* Convert an idx to a name (does not require a FRU).  Return an error
+   if the index is out of range. */
+char *ipmi_fru_index_to_str(int idx);
+
+/* Convert a name to an index.  Returns -1 if the name is not valid. */
+int ipmi_fru_str_to_index(char *name);
 
 /* More internal stuff.  The average user will not need to be able
    to use the following functions, but they are here just in case. */

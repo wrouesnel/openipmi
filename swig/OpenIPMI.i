@@ -2800,6 +2800,7 @@ char *color_string(int color);
      * If the handler is supplied, then the fru_fetched method on that
      * will be called upon completion with the handler object as the first
      * parameter, the FRU as the second, and an error value as the third.
+     * This returns the FRU, or undefined if a failure occurred.
      */
     ipmi_fru_t *fru_alloc(int is_logical, int device_address, int device_id,
 			  int lun, int private_bus, int channel,
@@ -5849,6 +5850,17 @@ char *color_string(int color);
 }
 
 /*
+ * Convert the FRU index to a string.  Returns undefined if the
+ * index is out of range.
+ */
+%name(fru_index_to_str) char *ipmi_fru_index_to_str(int idx);
+
+/*
+ * Convert a name to an index.  Returns -1 if the name is not valid.
+ */
+%name(fru_str_to_index) int ipmi_fru_str_to_index(char *name);
+
+/*
  * A FRU object
  */
 %extend ipmi_fru_t {
@@ -5951,6 +5963,71 @@ char *color_string(int color);
 	if (data)
 	    ipmi_fru_data_free(data);
 
+	return str;
+    }
+
+    /*
+     * Return the number of multi-records the FRU has.
+     */
+    int get_num_multi_records()
+    {
+	return ipmi_fru_get_num_multi_records(self);
+    }
+
+    /*
+     * Fetch a multi record from the FRU.  The data comes out in a
+     * string with the format:
+     *    "<type num> <version num> [data1 [data2 ...]]"
+     * It returns an undefined value if the num is invalid.  The data
+     * items will not be present if the length is zero.
+     */
+    %newobject get_multirecord;
+    char *get_multirecord(int num)
+    {
+	unsigned char type;
+	unsigned char version;
+	unsigned int length;
+	unsigned char *data;
+	int           rv;
+	char          dummy[1];
+	char          *str, *s;
+	int           strlen;
+	int           i;
+
+	rv = ipmi_fru_get_multi_record_type(self, num, &type);
+	if (rv)
+	    return NULL;
+	rv = ipmi_fru_get_multi_record_format_version(self, num, &version);
+	if (rv)
+	    return NULL;
+	rv = ipmi_fru_get_multi_record_data_len(self, num, &length);
+	if (rv)
+	    return NULL;
+	if (length == 0)
+	    data = malloc(1);
+	else
+	    data = malloc(length);
+	if (!data)
+	    return NULL;
+	rv = ipmi_fru_get_multi_record_data(self, num, data, &length);
+	if (rv) {
+	    free(data);
+	    return NULL;
+	}
+
+	strlen = snprintf(dummy, 1, "%d %d", type, version);
+	strlen += length * 5;
+	str = malloc(strlen + 1);
+	if (!str) {
+	    free(data);
+	    return NULL;
+	}
+
+	s = str;
+	s += sprintf(s, "%d %d", type, version);
+	for (i=0; i<length; i++)
+	    s += sprintf(s, " 0x%2.2x", data[i]);
+	free(data);
 	return str;
     }
 
@@ -6106,7 +6183,7 @@ char *color_string(int color);
      * Get the offset of the given area into the offset pointer.
      */
     int area_get_offset(unsigned int area,
-			unsigned int *offset)
+			int          *offset)
     {
 	return ipmi_fru_area_get_offset(self, area, offset);
     }
@@ -6115,7 +6192,7 @@ char *color_string(int color);
      * Get the length of the given area into the length pointer.
      */
     int area_get_length(unsigned int area,
-			unsigned int *length)
+			int          *length)
     {
 	return ipmi_fru_area_get_length(self, area, length);
     }
@@ -6143,7 +6220,7 @@ char *color_string(int color);
      * the used_length pointer.
      */
     int area_get_used_length(unsigned int area,
-			     unsigned int *used_length)
+			     int          *used_length)
     {
 	return ipmi_fru_area_get_used_length(self, area, used_length);
     }

@@ -45,3 +45,8 @@ install-exec-local: OpenIPMI.so OpenIPMI.pm
 	$(INSTALL) -d $(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI
 	$(INSTALL_PROGRAM) OpenIPMI.so $(DESTDIR)$(PERL_INSTALL_DIR)/auto/OpenIPMI
 	$(INSTALL_PROGRAM) OpenIPMI.pm $(DESTDIR)$(PERL_INSTALL_DIR)
+
+TEST_LD_LIBRARY_PATH=$(top_builddir)/lib/.libs:$(top_builddir)/utils/.libs:$(top_builddir)/glib/.libs:$(top_builddir)/unix/.libs
+
+TESTS_ENVIRONMENT = LD_LIBRARY_PATH="$(TEST_LD_LIBRARY_PATH)"
+TESTS = test_fru

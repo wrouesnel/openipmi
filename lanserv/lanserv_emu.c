@@ -341,6 +341,7 @@ int num_addr = 0;
 
 static char buffer[1024];
 static int pos = 0;
+static int echo = 1;
 
 static void
 handle_user_char(char c)
@@ -350,13 +351,15 @@ handle_user_char(char c)
     case 0x7f:
 	if (pos > 0) {
 	    pos--;
-	    printf("\b \b");
+	    if (echo)
+		printf("\b \b");
 	}
 	break;
 
     case 4:
 	if (pos == 0) {
-	    printf("\n");
+	    if (echo)
+		printf("\n");
 	    ipmi_emu_shutdown();
 	}
 	break;
@@ -365,7 +368,10 @@ handle_user_char(char c)
     case 13:
 	printf("\n");
 	buffer[pos] = '\0';
-	ipmi_emu_cmd(emu, buffer);
+	if (strcmp(buffer, "noecho") == 0)
+	    echo = 0;
+	else
+	    ipmi_emu_cmd(emu, buffer);
 	printf("> ");
 	pos = 0;
 	break;
@@ -377,7 +383,8 @@ handle_user_char(char c)
 	} else {
 	    buffer[pos] = c;
 	    pos++;
-	    printf("%c", c);
+	    if (echo)
+		printf("%c", c);
 	}
     }
 }

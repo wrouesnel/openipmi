@@ -1,3 +1,28 @@
+2004-12-14 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/fru.c: Fixed some bugs with FRU handling.
+
+	* include/OpenIPMI/internal/ipmi_int.h, lib/ipmi.c: FRU data
+	needed some more info for decoding, handle that.
+	* lib/fru.c: ditto
+	* lib/entity.c: ditto
+	* lib/sensor.c: ditto
+	* lib/oem_atca.c: ditto
+
+	* include/OpenIPMI/ipmi_fru.h, lib/fru.c: Added functions to
+	convert between names and FRU field indexes.
+
+	* lanserv/lanserv_emu.c: Added a noecho command to turn off echo.
+
+	* lib/ipmi_smi.c: Return the entry when registering commands
+	to watch.
+
+	* swig/OpenIPMI.i: Added support for getting multirecords from
+	the FRU.  Fixed some other FRU-related problems.
+
+	* swig/perl/test_fru, swig/perl/Lanserv.pm, swig/perl/Makefile.am:
+	Started working on some tests.
+
 2004-12-13 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/internal/locked_list.h, utils/locked_list.h:
