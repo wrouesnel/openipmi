@@ -166,6 +166,7 @@ struct ipmi_domain_s
     ipmi_lock_t           *entities_lock;
 
 #define MAX_CONS 2
+    ipmi_lock_t   *con_lock;
     int           working_conn;
     ipmi_con_t    *conn[MAX_CONS];
     int           con_active[MAX_CONS];
@@ -444,6 +445,8 @@ cleanup_domain(ipmi_domain_t *domain)
     }
     if (domain->mc_list_lock)
 	ipmi_destroy_lock(domain->mc_list_lock);
+    if (domain->con_lock)
+	ipmi_destroy_lock(domain->con_lock);
     if (domain->event_handlers_lock)
 	ipmi_destroy_lock(domain->event_handlers_lock);
     for (i=0; i<MAX_CONS; i++) {
@@ -501,6 +504,7 @@ setup_domain(ipmi_con_t    *ipmi[],
 
     /* Create the locks before anything else. */
     domain->mc_list_lock = NULL;
+    domain->con_lock = NULL;
     domain->entities_lock = NULL;
     domain->event_handlers_lock = NULL;
     domain->default_sel_rescan_time = IPMI_SEL_QUERY_INTERVAL;
@@ -513,6 +517,10 @@ setup_domain(ipmi_con_t    *ipmi[],
 	goto out_err;
     /* Lock this first thing. */
     ipmi_lock(domain->mc_list_lock);
+
+    rv = ipmi_create_lock(domain, &domain->con_lock);
+    if (rv)
+	goto out_err;
 
     rv = ipmi_create_lock(domain, &domain->entities_lock);
     if (rv)
@@ -2755,7 +2763,13 @@ start_con_up(ipmi_domain_t *domain)
 {
     ipmi_msg_t msg;
 
+    ipmi_lock(domain->con_lock);
+    if (domain->connecting || domain->connection_up) {
+	ipmi_unlock(domain->con_lock);
+	return 0;
+    }
     domain->connecting = 1;
+    ipmi_unlock(domain->con_lock);
 
     msg.netfn = IPMI_APP_NETFN;
     msg.cmd = IPMI_GET_DEVICE_ID_CMD;
@@ -2794,6 +2808,7 @@ initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
     }
 
     if (active) {
+        domain->working_conn = u;
 	rv = start_con_up(domain);
 	if (rv)
 	    call_con_fails(domain, rv, u, 0, domain->connection_up);
@@ -2910,6 +2925,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     ipmi_domain_t *domain = cb_data;
     int           rv;
     int           u;
+    int           start_connection;
 
 
     ipmi_read_lock();
@@ -2939,13 +2955,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[u],
 			    domain->con_ipmb_addr[u], NULL, NULL);
 
-    if (active && (first_active_con(domain) == -1)) {
-	/* We now have an active connection and we didn't before,
-           attempt to start up the connection. */
-	rv = start_con_up(domain);
-	if (rv)
-	    call_con_fails(domain, rv, u, 0, domain->connection_up);
-    }
+    start_connection =  (active && (first_active_con(domain) == -1));
 
     if (domain->con_active[u] != active) {
 	domain->con_active[u] = active;
@@ -2974,14 +2984,21 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 			domain);
 	    }
 	}
-    } else if (active)
+    } else if (active) {
         /* Always pick the last working active connection to use. */
 	domain->working_conn = u;
-
-
-    /* Start the timer to activate the connection, if necessary. */
-    if (domain->conn[u]->set_active_state)
+    } else if (domain->conn[u]->set_active_state) {
+        /* Start the timer to activate the connection, if necessary. */
 	start_activate_timer(domain);
+    }
+
+    if (start_connection) {
+	/* We now have an active connection and we didn't before,
+           attempt to start up the connection. */
+	rv = start_con_up(domain);
+	if (rv)
+	    call_con_fails(domain, rv, u, 0, domain->connection_up);
+    }
 
  out_unlock:
     ipmi_read_unlock();
