@@ -886,6 +886,8 @@ start_oem_domain_check(ipmi_domain_t      *domain,
 	while (rv) {
 	    check->curr_handler = h;
 	    rv = h->check(domain, domain_oem_check_done, check);
+	    if (!rv)
+		break;
 	    if (!ilist_next(&iter)) {
 		/* End of list, just go on */
 		check->done(domain, check->cb_data);
@@ -929,7 +931,7 @@ next_oem_domain_check(ipmi_domain_t      *domain,
 	/* The current handler we were working on went away, start over. */
 	start_oem_domain_check(domain, check);
     } else {
-	int            rv = 1;
+	int rv = 1;
 
 	while (rv) {
 	    if (!ilist_next(&iter)) {
