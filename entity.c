@@ -674,8 +674,10 @@ detect_states_read(ipmi_sensor_t *sensor,
 	info->present = 1;
 
     info->sensor_try_count--;
-    if (info->sensor_try_count == 0)
+    if (info->sensor_try_count == 0) {
 	presence_changed(info->ent, info->present, NULL);
+	ipmi_mem_free(info);
+    }
 }
 
 static void

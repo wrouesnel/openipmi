@@ -87,6 +87,19 @@ struct ipmi_bmc_con_fail_s
     void        *cb_data;
 };
 
+/* Used to keep a record of a bus scan. */
+typedef struct mc_ipbm_scan_info_s mc_ipmb_scan_info_t;
+struct mc_ipbm_scan_info_s
+{
+    ipmi_ipmb_addr_t addr;
+    ipmi_mc_t        *bmc;
+    ipmi_msg_t       msg;
+    unsigned int     end_addr;
+    ipmi_bmc_cb      done_handler;
+    void             *cb_data;
+    mc_ipmb_scan_info_t *next;
+};
+
 typedef struct ipmi_bmc_s
 {
     /* The main set of SDRs on a BMC. */
@@ -146,6 +159,10 @@ typedef struct ipmi_bmc_s
     unsigned int          bus_scan_interval; /* seconds between scans */
     os_hnd_timer_id_t     *bus_scan_timer;
     bmc_rescan_bus_info_t *bus_scan_timer_info;
+
+    /* This is a list of all the bus scans currently happening, so
+       they can be properly freed. */
+    mc_ipmb_scan_info_t *bus_scans_running;
 
     /* Timer for rescanning the sel periodically. */
     unsigned int      sel_scan_interval; /* seconds between scans */
@@ -665,6 +682,8 @@ remove_event_handler(ipmi_mc_t               *mc,
     else
 	mc->bmc->event_handlers = event->next;
 
+    ipmi_mem_free(event);
+
     return 0;
 }
 
@@ -908,8 +927,6 @@ ipmi_deregister_for_events(ipmi_mc_t               *bmc,
     ipmi_lock(bmc->bmc->event_handlers_lock);
     rv = remove_event_handler(bmc, id);
     ipmi_unlock(bmc->bmc->event_handlers_lock);
-    if (!rv)
-	ipmi_mem_free(id);
 
     return rv;
 }
@@ -1274,6 +1291,7 @@ void
 ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
     int i;
+    int rv;
 
     /* Call the OEM handler for removal, if it has been registered. */
     if (mc->removed_mc_handler)
@@ -1307,10 +1325,34 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    ipmi_sdr_info_destroy(mc->bmc->main_sdrs, NULL, NULL);
 
 	/* Make sure the timer stop. */
-	if (mc->bmc->sel_timer_info)
+	if (mc->bmc->sel_timer_info) {
 	    mc->bmc->sel_timer_info->cancelled = 1;
-	if (mc->bmc->bus_scan_timer_info)
+	    rv = mc->bmc->conn->os_hnd->stop_timer(mc->bmc->conn->os_hnd,
+						   mc->bmc->sel_timer);
+	    if (!rv) {
+		/* If we can stop the timer, free it and it's info.
+                   If we can't stop the timer, that means that the
+                   code is currently in the timer handler, so we let
+                   the "cancelled" value do this for us. */
+		mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd,
+						  mc->bmc->sel_timer);
+		ipmi_mem_free(mc->bmc->sel_timer_info);
+	    }
+	}
+	if (mc->bmc->bus_scan_timer_info) {
 	    mc->bmc->bus_scan_timer_info->cancelled = 1;
+	    rv = mc->bmc->conn->os_hnd->stop_timer(mc->bmc->conn->os_hnd,
+						   mc->bmc->bus_scan_timer);
+	    if (!rv) {
+		/* If we can stop the timer, free it and it's info.
+                   If we can't stop the timer, that means that the
+                   code is currently in the timer handler, so we let
+                   the "cancelled" value do this for us. */
+		mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd,
+						  mc->bmc->bus_scan_timer);
+		ipmi_mem_free(mc->bmc->bus_scan_timer_info);
+	    }
+	}
 
 	/* Delete the sensors from the main SDR repository. */
 	if (mc->bmc->sensors_in_my_sdr) {
@@ -1328,8 +1370,25 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 
 	if (mc->bmc->mc_list)
 	    free_ilist(mc->bmc->mc_list);
-	if (mc->bmc->con_fail_handlers)
+	if (mc->bmc->con_fail_handlers) {
+	    ilist_iter_t iter;
+	    void         *data;
+	    ilist_init_iter(&iter, mc->bmc->con_fail_handlers);
+	    while (ilist_first(&iter)) {
+		data = ilist_get(&iter);
+		ilist_delete(&iter);
+		ipmi_mem_free(data);
+	    }
 	    free_ilist(mc->bmc->con_fail_handlers);
+	}
+	if (mc->bmc->bus_scans_running) {
+	    mc_ipmb_scan_info_t *item;
+	    while (mc->bmc->bus_scans_running) {
+		item = mc->bmc->bus_scans_running;
+		mc->bmc->bus_scans_running = item->next;
+		ipmi_mem_free(item);
+	    }
+	}
 	if (mc->bmc->mc_list_lock)
 	    ipmi_destroy_lock(mc->bmc->mc_list_lock);
 	if (mc->bmc->event_handlers_lock)
@@ -1625,15 +1684,30 @@ mc_sdr_handler(ipmi_sdr_info_t *sdrs,
     }
 }
 
-typedef struct mc_ipbm_scan_info_s
+static void
+add_bus_scans_running(ipmi_mc_t *bmc, mc_ipmb_scan_info_t *info)
 {
-    ipmi_ipmb_addr_t addr;
-    ipmi_mc_t        *bmc;
-    ipmi_msg_t       msg;
-    unsigned int     end_addr;
-    ipmi_bmc_cb      done_handler;
-    void             *cb_data;
-} mc_ipmb_scan_info_t;
+    info->next = bmc->bmc->bus_scans_running;
+    bmc->bmc->bus_scans_running = info;
+}
+
+static void
+remove_bus_scans_running(ipmi_mc_t *bmc, mc_ipmb_scan_info_t *info)
+{
+    mc_ipmb_scan_info_t *i2;
+
+    i2 = bmc->bmc->bus_scans_running;
+    if (i2 == info)
+	bmc->bmc->bus_scans_running = info->next;
+    else
+	while (i2->next != NULL) {
+	    if (i2->next == info) {
+		i2->next = info->next;
+		break;
+	    }
+	    i2 = i2->next;
+	}
+}
 
 static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 				 ipmi_addr_t  *addr,
@@ -1674,6 +1748,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    rv = ipmi_create_mc(info->bmc, addr, addr_len, &mc);
 	    if (rv) {
 		/* Out of memory, just give up for now. */
+		remove_bus_scans_running(info->bmc, info);
 		ipmi_mem_free(info);
 		ipmi_unlock(info->bmc->bmc->mc_list_lock);
 		goto out;
@@ -1711,6 +1786,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	/* We've hit the end, we can quit now. */
 	if (info->done_handler)
 	    info->done_handler(info->bmc, 0, info->cb_data);
+	remove_bus_scans_running(info->bmc, info);
 	ipmi_mem_free(info);
 	goto out;
     }
@@ -1737,8 +1813,10 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 						info, NULL, NULL);
     }
 
-    if (rv)
+    if (rv) {
+	remove_bus_scans_running(info->bmc, info);
 	ipmi_mem_free(info);
+    }
  out:
     ipmi_read_unlock();
 }
@@ -1790,6 +1868,8 @@ ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
 
     if (rv)
 	ipmi_mem_free(info);
+    else
+	add_bus_scans_running(bmc, info);
 }
 
 static void
@@ -2228,6 +2308,8 @@ setup_bmc(ipmi_con_t  *ipmi,
 	rv = ENOMEM;
 	goto out_err;
     }
+
+    mc->bmc->bus_scans_running = NULL;
 
     rv = ipmi_entity_info_alloc(mc, &(mc->bmc->entities));
     if (rv)
