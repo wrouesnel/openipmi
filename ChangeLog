@@ -1,4 +1,14 @@
 
+2003-08-27 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_lan.c: Fixed reconnection problems. 
+
+	* lib/oem_motorola_mxp_intf: Removed connection loss detection from
+	the MXP-specific queue fetch, because it is unreliable.  Just use
+	the main LAN connection for failure detection.
+
+	* lib/mc.c: Don't cleanup the MC if the SDR read fails.
+
 2003-08-13 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 1.0.3.

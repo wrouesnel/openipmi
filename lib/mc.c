@@ -893,7 +893,9 @@ mc_sdr_mc_handler(ipmi_mc_t *mc, void *cb_data)
     int err = (long) cb_data;
 
     if (err) {
-	_ipmi_cleanup_mc(mc);
+	ipmi_log(IPMI_LOG_WARNING, "Error reading device SDRs from "
+		 "an MC at address 0x%x: %x",
+		 ipmi_mc_get_address(mc), err);
 	return;
     }
 

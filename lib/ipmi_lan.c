@@ -540,12 +540,14 @@ lan_send(lan_data_t  *lan,
 	   they are all operational. */
 	if ((lan->num_sends % SENDS_BETWEEN_IP_SWITCHES) == 0) {
 	    int addr_num = lan->curr_ip_addr + 1;
+	    if (addr_num >= lan->num_ip_addr)
+		addr_num = 0;
 	    while (addr_num != lan->curr_ip_addr) {
-		if (addr_num >= lan->num_ip_addr)
-		    addr_num = 0;
 		if (lan->ip_working[addr_num])
 		    break;
 		addr_num++;
+		if (addr_num >= lan->num_ip_addr)
+		    addr_num = 0;
 	    }
 	    lan->curr_ip_addr = addr_num;
 	}
@@ -672,7 +674,7 @@ static void
 connection_up(lan_data_t *lan, int addr_num, int new_con)
 {
     /* The IP is already operational, so ignore this. */
-    if (! lan->ip_working[addr_num]) {
+    if ((! lan->ip_working[addr_num]) && new_con) {
 	lan->ip_working[addr_num] = 1;
 
 	ipmi_log(IPMI_LOG_INFO, "Connection %d to the BMC is up", addr_num);
@@ -1946,6 +1948,7 @@ static void
 finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 {
     lan->connected = 1;
+    connection_up(lan, addr_num, 1);
     if (! lan->initialized) {
 	struct timeval    timeout;
 	os_hnd_timer_id_t *timer;
@@ -1973,8 +1976,6 @@ finish_connection(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 	    handle_connected(ipmi, rv);
 	    return;
 	}
-    } else {
-	connection_up(lan, addr_num, 1);
     }
 }
 

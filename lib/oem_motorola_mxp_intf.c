@@ -83,10 +83,6 @@ dump_hex(void *vdata, int len)
    retransmitted before being deemed to have failed. */
 #define MAX_SEND_RETRIES 5
 
-/* The number of retries before we deem that a connection has failed
-   and switch to another connection. */
-#define CONN_FAILED_RETRIES 3
-
 /* This is the timeout when waiting for an incoming message.  We try
    to fetch the message every tick. */
 #define MXP_GET_MSG_TIMEOUT	1
@@ -96,7 +92,6 @@ dump_hex(void *vdata, int len)
    Every GET_RETRY_RESEND_MOD retries, though, the actual message is
    resent. */
 #define MAX_GET_RETRIES 40
-#define GET_CONN_FAILED_RETRIES 20
 #define GET_RETRY_RESEND_MOD 8
 
 /* Broadcasts can be lossy, and they are just used for scanning, so we
@@ -292,10 +287,6 @@ typedef struct lan_data_s
     /* The number of retries before the operation is deemed to have
        failed. */
     unsigned int              retries;
-
-    /* The number of retries before the connection is deemed to have
-       failed. */
-    unsigned int              conn_fail_retries;
 
     /* The following is used to count timer timeouts until the operation
        has deemed to time out.  The timer period is fixed, we use this
@@ -561,12 +552,14 @@ lan_send(lan_data_t  *lan,
 	   they are all operational. */
 	if ((lan->num_sends % SENDS_BETWEEN_IP_SWITCHES) == 0) {
 	    int addr_num = lan->curr_ip_addr + 1;
+	    if (addr_num >= lan->num_ip_addr)
+		addr_num = 0;
 	    while (addr_num != lan->curr_ip_addr) {
-		if (addr_num >= lan->num_ip_addr)
-		    addr_num = 0;
 		if (lan->ip_working[addr_num])
 		    break;
 		addr_num++;
+		if (addr_num >= lan->num_ip_addr)
+		    addr_num = 0;
 	    }
 	    lan->curr_ip_addr = addr_num;
 	}
@@ -688,7 +681,6 @@ start_next_msg(ipmi_con_t *ipmi,
 
     lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
     lan->retries = MAX_SEND_RETRIES;
-    lan->conn_fail_retries = CONN_FAILED_RETRIES;
     lan->do_force = 0;
 
     if (DEBUG_MSG) {
@@ -977,10 +969,6 @@ mxp_msg_timeout_handler(void              *cb_data,
     }
 
     ipmi_lock(lan->msg_queue_lock);
-
-    lan->conn_fail_retries--;
-    if (lan->conn_fail_retries == 0)
-	lost_connection(lan, lan->curr_ip_addr);
 
     lan->retries--;
     if (lan->retries > 0) {
@@ -1659,7 +1647,6 @@ data_handler(int            fd,
 		    /* We got the lock, and it's going onto the IPMB,
                        next state */
 		    lan->retries = MAX_SEND_RETRIES;
-		    lan->conn_fail_retries = CONN_FAILED_RETRIES;
 		    lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
 		    lan->state = LAN_WAIT_CLEAR;
 		    send_get_msg(lan);
@@ -1667,7 +1654,6 @@ data_handler(int            fd,
 		    /* We got a lock and it's an SEL command.  Lock
                        the SEL next. */
 		    lan->retries = MAX_SEND_RETRIES;
-		    lan->conn_fail_retries = CONN_FAILED_RETRIES;
 		    lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
 		    lan->state = LAN_WAIT_SEL_LOCK;
 		    send_sel_lock_msg(lan);
@@ -1690,7 +1676,6 @@ data_handler(int            fd,
 		} else {
 		    lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
 		    lan->retries = MAX_SEND_RETRIES;
-		    lan->conn_fail_retries = CONN_FAILED_RETRIES;
 		    lan->state = LAN_WAIT_SEL_SEND_RSP;
 		    lan_send(lan,
 			     lan->msg_queue[lan->curr_msg].lun,
@@ -1705,7 +1690,6 @@ data_handler(int            fd,
 	    if (handle_recv_msg(ipmi, lan, tmsg, data_len, &del) == 0) {
 		lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
 		lan->retries = MAX_SEND_RETRIES;
-		lan->conn_fail_retries = CONN_FAILED_RETRIES;
 	        lan->state = LAN_WAIT_UNLOCK;
 		send_unlock_msg(lan);
 	    }
@@ -1730,7 +1714,6 @@ data_handler(int            fd,
                        state, send the actual message. */
 		    lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
 		    lan->retries = MAX_SEND_RETRIES;
-		    lan->conn_fail_retries = CONN_FAILED_RETRIES;
 		    lan->state = LAN_WAIT_SEND_RSP;
 		    lan_send(lan,
 			     lan->msg_queue[lan->curr_msg].lun,
@@ -1779,13 +1762,11 @@ data_handler(int            fd,
 		       operation. */
 		    lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
 		    lan->retries = MAX_SEND_RETRIES;
-		    lan->conn_fail_retries = CONN_FAILED_RETRIES;
 		    handle_recv_err(ipmi, lan, tmsg[6], &del);
 		    lan->state = LAN_WAIT_UNLOCK;
 		    send_unlock_msg(lan);
 		} else {
 		    lan->op_timeout_countdown = MXP_GET_MSG_TIMEOUT;
-		    lan->conn_fail_retries = GET_CONN_FAILED_RETRIES;
 	            if (lan->msg_queue[lan->curr_msg].is_broadcast) {
 		        lan->retries = MAX_GET_BC_RETRIES;
 		    } else {
@@ -1808,7 +1789,6 @@ data_handler(int            fd,
 		} else if (tmsg[6] == 0x80) {
 		    /* We got a response, so reset the fail retry
                        counter. */
-		    lan->conn_fail_retries = GET_CONN_FAILED_RETRIES;
 		    lan->op_timeout_countdown = MXP_GET_MSG_TIMEOUT;
 		    break;
 		} else if (tmsg[6] != 0) {
@@ -1821,7 +1801,6 @@ data_handler(int            fd,
 			goto lan_wait_get_rsp_done;
 		}
 		lan->op_timeout_countdown = MXP_STD_OP_TIMEOUT;
-		lan->conn_fail_retries = CONN_FAILED_RETRIES;
 		lan->retries = MAX_SEND_RETRIES;
 		lan->state = LAN_WAIT_UNLOCK;
 		send_unlock_msg(lan);
@@ -2175,7 +2154,6 @@ lan_send_command(ipmi_con_t            *ipmi,
 	}
 
 	lan->retries = MAX_SEND_RETRIES;
-	lan->conn_fail_retries = CONN_FAILED_RETRIES;
 
 	if (lan->state == LAN_IDLE) {
 	    struct timeval   timeout;
