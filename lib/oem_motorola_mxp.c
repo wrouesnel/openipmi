@@ -8573,7 +8573,6 @@ mxp_handler(ipmi_mc_t *mc,
 	    void      *cb_data)
 {
     int           rv;
-    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
     unsigned int  channel = ipmi_mc_get_channel(mc);
     unsigned int  addr    = ipmi_mc_get_address(mc);
 
