@@ -135,6 +135,9 @@ struct ipmi_sdr_info_s
     /* Are we currently fetching SDRs? */
     enum fetch_state_e fetch_state;
 
+    /* Are we currently fetching database data? */
+    int                db_fetching;
+
     /* When fetching the data in event-driven mode, these are the
        variables that track what is going on. */
     int                    curr_rec_id;
@@ -186,8 +189,10 @@ struct ipmi_sdr_info_s
     ipmi_sdr_t *sdrs;
 
     char db_key[32+5];
+    int  db_key_set;
 };
 
+static void internal_destroy_sdr_info(ipmi_sdr_info_t *sdrs);
 
 static inline void sdr_lock(ipmi_sdr_info_t *sdrs)
 {
@@ -223,6 +228,119 @@ cleanup_fetch_items(ipmi_sdr_info_t *sdrs)
     ilist_iter(sdrs->outstanding_fetch, cancel_fetch, NULL);
 }
 
+static void
+process_db_data(ipmi_sdr_info_t *sdrs,
+		unsigned char   *db_data,
+		unsigned int    len)
+{
+    int           num;
+    unsigned char *d;
+
+    if (len < 9)
+	goto no_db;
+
+    /* Format# is the last byte. */
+    d = db_data + len - 1;
+    if (*d != 1)
+	goto no_db;
+
+    /* timestamps are the 8 bytes before the format#. */
+    d -= 8;
+    sdrs->last_addition_timestamp = ipmi_get_uint32(d);
+    d += 4;
+    sdrs->last_erase_timestamp = ipmi_get_uint32(d);
+    d += 4;
+    len -= 9;
+    num = len / sizeof(ipmi_sdr_t);
+    /* Allocate 9 extra bytes for storing the timestamps and
+     * format#. */
+    sdrs->sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t) * num) + 9);
+    if (!sdrs->sdrs)
+	goto no_db;
+    memcpy(sdrs->sdrs, db_data, sizeof(ipmi_sdr_t) * num);
+    sdrs->num_sdrs = num;
+    sdrs->sdr_array_size = num;
+    sdrs->fetched = 1;
+
+ no_db:
+    sdrs->os_hnd->database_free(sdrs->os_hnd, db_data);
+}
+
+static void
+db_fetched(void          *cb_data,
+	   int           err,
+	   unsigned char *db_data,
+	   unsigned int  db_data_len)
+{
+    ipmi_sdr_info_t *sdrs = cb_data;
+
+    sdr_lock(sdrs);
+    if (sdrs->destroyed) {
+	internal_destroy_sdr_info(sdrs);
+	return;
+    }
+
+    /* Note that since this is run from the opq, there is no reason to
+       check to see if another fetch is going on and has finished.  We
+       are guaranteed that this works. */
+    if (!err)
+	process_db_data(sdrs, db_data, db_data_len);
+
+    sdrs->db_fetching = 0;
+    sdr_unlock(sdrs);
+    if (!err)
+	sdrs->os_hnd->database_free(sdrs->os_hnd, db_data);
+    opq_op_done(sdrs->sdr_wait_q);
+}
+
+static void
+start_db_fetch(void *cb_data, int shutdown)
+{
+    ipmi_sdr_info_t *sdrs = cb_data;
+    int             rv = ENOSYS;
+
+    if (shutdown)
+	return;
+
+    sdr_lock(sdrs);
+    if (sdrs->destroyed) {
+	internal_destroy_sdr_info(sdrs);
+	return;
+    }
+
+    /* Go ahead and do the database fetch here if we have support. */
+    if (sdrs->os_hnd->database_find && sdrs->db_key_set)
+    {
+	unsigned char *db_data;
+	unsigned int  db_data_len;
+	int           data_fetched = 0;
+
+	rv = sdrs->os_hnd->database_find(sdrs->os_hnd,
+					 sdrs->db_key,
+					 &data_fetched,
+					 &db_data,
+					 &db_data_len,
+					 db_fetched,
+					 sdrs);
+	/* If the above fails, no problem, the db_data will be NULL. */
+	if (!rv) {
+	    if (data_fetched) {
+		process_db_data(sdrs, db_data, db_data_len);
+		rv = -1; /* Just mark it as done */
+	    }
+	}
+    } else {
+	rv = -1; /* Just mark it as done */
+    }
+
+    if (rv) {
+	sdrs->db_fetching = 0;
+	sdr_unlock(sdrs);
+	opq_op_done(sdrs->sdr_wait_q);
+    } else
+	sdr_unlock(sdrs);
+}
+
 int
 ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 		    ipmi_mc_t       *mc,
@@ -235,8 +353,6 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     fetch_info_t    *info;
     int             i;
     os_handler_t    *os_hnd = ipmi_domain_get_os_hnd(domain);
-    unsigned char   guid[16];
-    char            *s;
 
     CHECK_MC_LOCK(mc);
 
@@ -311,59 +427,6 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 	goto out_done;
     }
 
-    s = sdrs->db_key;
-    s += sprintf(s, "sdr-");
-    for (i=0; i<16; i++)
-	s += sprintf(s, "%2.2x", guid[i]);
-
-    /* Go ahead and do the database fetch here if we have support. */
-    if (sdrs->os_hnd->database_find && (ipmi_mc_get_guid(mc, guid) == 0))
-    {
-	unsigned char *db_data;
-	unsigned int  db_data_len;
-
-	sdrs->os_hnd->database_find(sdrs->os_hnd,
-				    sdrs->db_key,
-				    &db_data,
-				    &db_data_len);
-	/* If the above fails, no problem, the db_data will be NULL. */
-
-	if (db_data) {
-	    /* Process the db data into SDRs. */
-	    int num;
-	    unsigned char *d = db_data;
-	    unsigned int len = db_data_len;
-
-	    if (len < 9)
-		goto no_db;
-
-	    /* Format# is the last byte. */
-	    d = db_data + len - 1;
-	    if (*d != 1)
-		goto no_db;
-
-	    /* timestamps are the 8 bytes before the format#. */
-	    d -= 8;
-	    sdrs->last_addition_timestamp = ipmi_get_uint32(d);
-	    d += 4;
-	    sdrs->last_erase_timestamp = ipmi_get_uint32(d);
-	    d += 4;
-	    len -= 9;
-	    num = db_data_len / sizeof(ipmi_sdr_t);
-	    /* Allocate 9 extra bytes for storing the timestamps and
-	     * format#. */
-	    sdrs->sdrs = ipmi_mem_alloc((sizeof(ipmi_sdr_t) * num) + 9);
-	    if (!sdrs->sdrs)
-		goto no_db;
-	    memcpy(sdrs->sdrs, db_data, sizeof(ipmi_sdr_t) * num);
-	    sdrs->num_sdrs = num;
-	    sdrs->sdr_array_size = num;
-
-	no_db:
-	    sdrs->os_hnd->database_free(sdrs->os_hnd, db_data);
-	}
-    }
-
  out_done:
     if (rv) {
 	if (sdrs) {
@@ -434,7 +497,7 @@ ipmi_sdr_info_destroy(ipmi_sdr_info_t      *sdrs,
     sdrs->destroyed = 1;
     sdrs->destroy_handler = handler;
     sdrs->destroy_cb_data = cb_data;
-    if (sdrs->fetch_state != IDLE) {
+    if ((sdrs->fetch_state != IDLE) || sdrs->db_fetching) {
 	/* It's currently in fetch state, so let it be destroyed in
            the handler, since we can't cancel the handler or
            operation. */
@@ -1524,6 +1587,7 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     sdr_fetch_info_t    *info = cb_data;
     ipmi_sdr_info_t     *sdrs = info->sdrs;
     sdr_fetch_handler_t *elem;
+    unsigned char       guid[16];
 
     elem = ipmi_mem_alloc(sizeof(*elem));
     if (!elem) {
@@ -1547,6 +1611,27 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	    goto out;
 	}
     }
+
+    sdr_lock(sdrs);
+    if (!sdrs->fetched) {
+	/* Look in the database before the first fetch. */
+	if (ipmi_mc_get_guid(mc, guid) == 0) {
+	    char *s;
+	    int  i;
+
+	    s = sdrs->db_key;
+	    s += sprintf(s, "sdr-");
+	    for (i=0; i<16; i++)
+		s += sprintf(s, "%2.2x", guid[i]);
+	    sdrs->db_key_set = 1;
+	}
+
+	sdrs->db_fetching = 1;
+	sdr_unlock(sdrs);
+	if (!opq_new_op(sdrs->sdr_wait_q, start_db_fetch, sdrs, 0))
+	    sdrs->db_fetching = 0;
+    } else
+	sdr_unlock(sdrs);
 
     if (! opq_new_op_with_done(sdrs->sdr_wait_q,
 			       handle_start_fetch,

@@ -45,14 +45,22 @@
 #include <string.h>
 #include <signal.h>
 
+#ifdef HAVE_GDBM
+#include <gdbm.h>
+#endif
+
 #include <OpenIPMI/os_handler.h>
-#include <OpenIPMI/selector.h>
 
 #include <glib.h>
 
 typedef struct g_os_hnd_data_s
 {
     gint priority;
+#ifdef HAVE_GDBM
+    char *gdbm_filename;
+    GDBM_FILE gdbmf;
+    GMutex *gdbm_lock;
+#endif
 } g_os_hnd_data_t;
 
 
@@ -607,6 +615,13 @@ free_os_handler(os_handler_t *os_hnd)
 {
     g_os_hnd_data_t *info = os_hnd->internal_data;
 
+#ifdef HAVE_GDBM
+    g_mutex_free(info->gdbm_lock);
+    if (info->gdbm_filename)
+	free(info->gdbm_filename);
+    if (info->gdbmf)
+	gdbm_close(info->gdbmf);
+#endif
     g_free(info);
     g_free(os_hnd);
 }
@@ -622,6 +637,119 @@ glib_free(void *data)
 {
     g_free(data);
 }
+
+#ifdef HAVE_GDBM
+#define GDBM_FILE ".OpenIPMI_db"
+
+static void
+init_gdbm(g_os_hnd_data_t *info)
+{
+    if (!info->gdbm_filename) {
+	char *home = getenv("HOME");
+	if (!home)
+	    return;
+	info->gdbm_filename = malloc(strlen(home)+strlen(GDBM_FILE)+2);
+	if (!info->gdbm_filename)
+	    return;
+	strcpy(info->gdbm_filename, home);
+	strcat(info->gdbm_filename, "/");
+	strcat(info->gdbm_filename, GDBM_FILE);
+    }
+
+    info->gdbmf = gdbm_open(info->gdbm_filename, 512, GDBM_WRCREAT, 0600,
+			    NULL);
+    /* gdbmf will be NULL on error, which is what reports an error. */
+}
+
+static int
+database_store(os_handler_t  *handler,
+	       char          *key,
+	       unsigned char *data,
+	       unsigned int  data_len)
+{
+    g_os_hnd_data_t *info = handler->internal_data;
+    datum           gkey, gdata;
+    int             rv;
+
+    g_mutex_lock(info->gdbm_lock);
+    if (!info->gdbmf) {
+	init_gdbm(info);
+	if (!info->gdbmf) {
+	    g_mutex_unlock(info->gdbm_lock);
+	    return EINVAL;
+	}
+    }
+
+    gkey.dptr = key;
+    gkey.dsize = strlen(key);
+    gdata.dptr = data;
+    gdata.dsize = data_len;
+
+    rv = gdbm_store(info->gdbmf, gkey, gdata, GDBM_REPLACE);
+    g_mutex_unlock(info->gdbm_lock);
+    if (rv)
+	return EINVAL;
+    return 0;
+}
+
+static int
+database_find(os_handler_t  *handler,
+	      char          *key,
+	      unsigned int  *fetch_completed,
+	      unsigned char **data,
+	      unsigned int  *data_len,
+	      void (*got_data)(void          *cb_data,
+			       int           err,
+			       unsigned char *data,
+			       unsigned int  data_len),
+	      void *cb_data)
+{
+    g_os_hnd_data_t *info = handler->internal_data;
+    datum           gkey, gdata;
+
+    g_mutex_lock(info->gdbm_lock);
+    if (!info->gdbmf) {
+	init_gdbm(info);
+	if (!info->gdbmf) {
+	    g_mutex_unlock(info->gdbm_lock);
+	    return EINVAL;
+	}
+    }
+
+    gkey.dptr = key;
+    gkey.dsize = strlen(key);
+    gdata = gdbm_fetch(info->gdbmf, gkey);
+    g_mutex_unlock(info->gdbm_lock);
+    if (!gdata.dptr)
+	return EINVAL;
+    *data = gdata.dptr;
+    *data_len = gdata.dsize;
+    *fetch_completed = 1;
+    return 0;
+}
+
+static void
+database_free(os_handler_t  *handler,
+	      unsigned char *data)
+{
+    free(data);
+}
+
+static int
+set_gdbm_filename(os_handler_t *os_hnd, char *name)
+{
+    g_os_hnd_data_t *info = os_hnd->internal_data;
+    char            *nname;
+
+    nname = strdup(name);
+    if (!nname)
+	return ENOMEM;
+    if (info->gdbm_filename)
+	free(info->gdbm_filename);
+    info->gdbm_filename = name;
+    return 0;
+}
+#endif
 
 static os_handler_t ipmi_glib_os_handler =
 {
@@ -661,6 +789,13 @@ static os_handler_t ipmi_glib_os_handler =
 
     .perform_one_op = perform_one_op,
     .operation_loop = operation_loop,
+
+#ifdef HAVE_GDBM
+    .database_store = database_store,
+    .database_find = database_find,
+    .database_free = database_free,
+    .database_set_filename = set_gdbm_filename,
+#endif
 };
 
 os_handler_t *
@@ -680,6 +815,15 @@ ipmi_glib_get_os_handler(int priority)
 	g_free(rv);
 	return NULL;
     }
+
+#ifdef HAVE_GDBM
+    info->gdbm_lock = g_mutex_new();
+    if (!info->gdbm_lock) {
+	free(info);
+	free(rv);
+	rv = NULL;
+    }
+#endif
 
     info->priority = priority;
     rv->internal_data = info;

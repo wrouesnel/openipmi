@@ -41,8 +41,20 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#ifdef HAVE_GDBM
+#include <gdbm.h>
+#endif
 
 #include <OpenIPMI/ipmi_posix.h>
+
+typedef struct iposix_info_s
+{
+    selector_t *sel;
+#ifdef HAVE_GDBM
+    char *gdbm_filename;
+    GDBM_FILE gdbmf;
+#endif
+} iposix_info_t;
 
 struct os_hnd_fd_id_s
 {
@@ -85,7 +97,8 @@ add_fd(os_handler_t       *handler,
 {
     os_hnd_fd_id_t *fd_data;
     int            rv;
-    selector_t     *posix_sel = handler->internal_data;
+    iposix_info_t  *info = handler->internal_data;
+    selector_t     *posix_sel = info->sel;
 
 
     fd_data = malloc(sizeof(*fd_data));
@@ -114,7 +127,8 @@ add_fd(os_handler_t       *handler,
 static int
 remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
-    selector_t *posix_sel = handler->internal_data;
+    iposix_info_t  *info = handler->internal_data;
+    selector_t     *posix_sel = info->sel;
 
     sel_set_fd_read_handler(posix_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
     sel_clear_fd_handlers(posix_sel, fd_data->fd);
@@ -188,7 +202,8 @@ alloc_timer(os_handler_t      *handler,
 {
     os_hnd_timer_id_t *timer_data;
     int               rv;
-    selector_t        *posix_sel = handler->internal_data;
+    iposix_info_t     *info = handler->internal_data;
+    selector_t        *posix_sel = info->sel;
 
     timer_data = malloc(sizeof(*timer_data));
     if (!timer_data)
@@ -268,25 +283,25 @@ static int
 perform_one_op(os_handler_t   *os_hnd,
 	       struct timeval *timeout)
 {
-    selector_t *sel = os_hnd->internal_data;
+    iposix_info_t *info = os_hnd->internal_data;
 
-    return sel_select(sel, NULL, 0, NULL, timeout);
+    return sel_select(info->sel, NULL, 0, NULL, timeout);
 }
 
 static void
 operation_loop(os_handler_t *os_hnd)
 {
-    selector_t *sel = os_hnd->internal_data;
+    iposix_info_t *info = os_hnd->internal_data;
 
-    sel_select_loop(sel, NULL, 0, NULL);
+    sel_select_loop(info->sel, NULL, 0, NULL);
 }
 
 static void
 free_os_handler(os_handler_t *os_hnd)
 {
-    selector_t *sel = os_hnd->internal_data;
+    iposix_info_t *info = os_hnd->internal_data;
 
-    sel_free_selector(sel);
+    sel_free_selector(info->sel);
     ipmi_posix_free_os_handler(os_hnd);
 }
 
@@ -301,6 +316,111 @@ posix_free(void *data)
 {
     free(data);
 }
+
+#ifdef HAVE_GDBM
+#define GDBM_FILE ".OpenIPMI_db"
+
+static void
+init_gdbm(iposix_info_t *info)
+{
+    if (!info->gdbm_filename) {
+	char *home = getenv("HOME");
+	if (!home)
+	    return;
+	info->gdbm_filename = malloc(strlen(home)+strlen(GDBM_FILE)+2);
+	if (!info->gdbm_filename)
+	    return;
+	strcpy(info->gdbm_filename, home);
+	strcat(info->gdbm_filename, "/");
+	strcat(info->gdbm_filename, GDBM_FILE);
+    }
+
+    info->gdbmf = gdbm_open(info->gdbm_filename, 512, GDBM_WRCREAT, 0600,
+			    NULL);
+    /* gdbmf will be NULL on error, which is what reports an error. */
+}
+
+static int
+database_store(os_handler_t  *handler,
+	       char          *key,
+	       unsigned char *data,
+	       unsigned int  data_len)
+{
+    iposix_info_t *info = handler->internal_data;
+    datum         gkey, gdata;
+    int           rv;
+
+    if (!info->gdbmf) {
+	init_gdbm(info);
+	if (!info->gdbmf)
+	    return EINVAL;
+    }
+
+    gkey.dptr = key;
+    gkey.dsize = strlen(key);
+    gdata.dptr = data;
+    gdata.dsize = data_len;
+
+    rv = gdbm_store(info->gdbmf, gkey, gdata, GDBM_REPLACE);
+    if (rv)
+	return EINVAL;
+    return 0;
+}
+
+static int
+database_find(os_handler_t  *handler,
+	      char          *key,
+	      unsigned int  *fetch_completed,
+	      unsigned char **data,
+	      unsigned int  *data_len,
+	      void (*got_data)(void          *cb_data,
+			       int           err,
+			       unsigned char *data,
+			       unsigned int  data_len),
+	      void *cb_data)
+{
+    iposix_info_t *info = handler->internal_data;
+    datum         gkey, gdata;
+
+    if (!info->gdbmf) {
+	init_gdbm(info);
+	if (!info->gdbmf)
+	    return EINVAL;
+    }
+
+    gkey.dptr = key;
+    gkey.dsize = strlen(key);
+    gdata = gdbm_fetch(info->gdbmf, gkey);
+    if (!gdata.dptr)
+	return EINVAL;
+    *data = gdata.dptr;
+    *data_len = gdata.dsize;
+    *fetch_completed = 1;
+    return 0;
+}
+
+static void
+database_free(os_handler_t  *handler,
+	      unsigned char *data)
+{
+    free(data);
+}
+
+static int
+set_gdbm_filename(os_handler_t *os_hnd, char *name)
+{
+    iposix_info_t *info = os_hnd->internal_data;
+    char          *nname;
+
+    nname = strdup(name);
+    if (!nname)
+	return ENOMEM;
+    if (info->gdbm_filename)
+	free(info->gdbm_filename);
+    info->gdbm_filename = name;
+    return 0;
+}
+#endif
 
 static os_handler_t ipmi_posix_os_handler =
 {
@@ -318,44 +438,74 @@ static os_handler_t ipmi_posix_os_handler =
     .free_os_handler = free_os_handler,
     .perform_one_op = perform_one_op,
     .operation_loop = operation_loop,
+#ifdef HAVE_GDBM
+    .database_store = database_store,
+    .database_find = database_find,
+    .database_free = database_free,
+    .database_set_filename = set_gdbm_filename,
+#endif
 };
 
 os_handler_t *
 ipmi_posix_get_os_handler(void)
 {
-    os_handler_t *rv;
+    os_handler_t  *rv;
+    iposix_info_t *info;
 
     rv = malloc(sizeof(*rv));
     if (!rv)
 	return NULL;
 
     memcpy(rv, &ipmi_posix_os_handler, sizeof(*rv));
+
+    info = malloc(sizeof(*info));
+    if (!info) {
+	free(rv);
+	return NULL;
+    }
+    memset(info, 0, sizeof(*info));
+
+    rv->internal_data = info;
+
     return rv;
 }
 
 void
 ipmi_posix_free_os_handler(os_handler_t *os_hnd)
 {
+    iposix_info_t *info = os_hnd->internal_data;
+
+#ifdef HAVE_GDBM
+    if (info->gdbm_filename)
+	free(info->gdbm_filename);
+    if (info->gdbmf)
+	gdbm_close(info->gdbmf);
+#endif
+    free(info);
+    free(os_hnd);
 }
 
 void
 ipmi_posix_os_handler_set_sel(os_handler_t *os_hnd, selector_t *sel)
 {
-    os_hnd->internal_data = sel;
+    iposix_info_t *info = os_hnd->internal_data;
+    info->sel = sel;
 }
 
 selector_t *
 ipmi_posix_os_handler_get_sel(os_handler_t *os_hnd)
 {
-    return os_hnd->internal_data;
+    iposix_info_t *info = os_hnd->internal_data;
+    return info->sel;
 }
 
 os_handler_t *
 ipmi_posix_setup_os_handler(void)
 {
-    os_handler_t *os_hnd;
-    selector_t   *sel;
-    int          rv;
+    os_handler_t  *os_hnd;
+    selector_t    *sel;
+    int           rv;
+    iposix_info_t *info;
 
     os_hnd = ipmi_posix_get_os_handler();
     if (!os_hnd)
@@ -368,7 +518,8 @@ ipmi_posix_setup_os_handler(void)
 	goto out;
     }
 
-    os_hnd->internal_data = sel;
+    info = os_hnd->internal_data;
+    info->sel = sel;
 
  out:
     return os_hnd;

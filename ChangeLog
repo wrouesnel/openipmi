@@ -1,3 +1,19 @@
+2005-02-02 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/os_handler.h, lib/ipmi.c: Added an interface to
+	protect users that have created their own OS handler from
+	additions to the os handler data structure.
+
+	* include/OpenIPMI/os_handler.h, lib/sdr.c: Added a non-blocking
+	mode to the database.
+
+	* configure.in: Added gdbm tests.
+
+	* cmdlang/os_debug.c, cmdlang/Makefile.am: Added gdbm support.
+	* glib/glib_os_hnd.c, glib/Makefile.am: ditto
+	* unix/posix_os_hnd.c, unix/posix_thread_os_hnd.cg, unix/Makefile.am:
+	ditto
+
 2005-02-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sdr.c: Add support for dynamically resizing SDR fetches if
@@ -17,6 +33,8 @@
 	came in as entity id 7 or 0.
 
 	* include/OpenIPMI/os_handler.h: Added a database interface.
+	NOTE: This change is not binary backwards compatible if you have
+	created your own OS handler.
 
 	* lib/sdr.h: Added support for storing and retrieving SDR
 	data in the database for client-side caching.

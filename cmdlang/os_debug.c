@@ -39,6 +39,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/selector.h>
@@ -46,6 +47,14 @@
 
 /* Internal includes, do not use in your programs */
 #include <OpenIPMI/internal/ipmi_malloc.h>
+
+#ifdef HAVE_GDBM
+#include <gdbm.h>
+
+static char *gdbm_filename;
+static GDBM_FILE gdbmf;
+#endif
+
 
 extern selector_t *debug_sel;
 
@@ -387,6 +396,107 @@ debug_free(void *data)
     free(data);
 }
 
+#ifdef HAVE_GDBM
+#define GDBM_FILE ".OpenIPMI_db"
+
+static void
+init_gdbm(void)
+{
+    if (!gdbm_filename) {
+	char *home = getenv("HOME");
+	if (!home)
+	    return;
+	gdbm_filename = malloc(strlen(home)+strlen(GDBM_FILE)+2);
+	if (!gdbm_filename)
+	    return;
+	strcpy(gdbm_filename, home);
+	strcat(gdbm_filename, "/");
+	strcat(gdbm_filename, GDBM_FILE);
+    }
+
+    gdbmf = gdbm_open(gdbm_filename, 512, GDBM_WRCREAT, 0600, NULL);
+    /* gdbmf will be NULL on error, which is what reports an error. */
+}
+
+static int
+database_store(os_handler_t  *handler,
+	       char          *key,
+	       unsigned char *data,
+	       unsigned int  data_len)
+{
+    datum gkey, gdata;
+    int   rv;
+
+    if (!gdbmf) {
+	init_gdbm();
+	if (!gdbmf)
+	    return EINVAL;
+    }
+
+    gkey.dptr = key;
+    gkey.dsize = strlen(key);
+    gdata.dptr = data;
+    gdata.dsize = data_len;
+
+    rv = gdbm_store(gdbmf, gkey, gdata, GDBM_REPLACE);
+    if (rv)
+	return EINVAL;
+    return 0;
+}
+
+static int
+database_find(os_handler_t  *handler,
+	      char          *key,
+	      unsigned int  *fetch_completed,
+	      unsigned char **data,
+	      unsigned int  *data_len,
+	      void (*got_data)(void          *cb_data,
+			       int           err,
+			       unsigned char *data,
+			       unsigned int  data_len),
+	      void *cb_data)
+{
+    datum gkey, gdata;
+
+    if (!gdbmf) {
+	init_gdbm();
+	if (!gdbmf)
+	    return EINVAL;
+    }
+
+    gkey.dptr = key;
+    gkey.dsize = strlen(key);
+    gdata = gdbm_fetch(gdbmf, gkey);
+    if (!gdata.dptr)
+	return EINVAL;
+    *data = gdata.dptr;
+    *data_len = gdata.dsize;
+    *fetch_completed = 1;
+    return 0;
+}
+
+static void
+database_free(os_handler_t  *handler,
+	      unsigned char *data)
+{
+    free(data);
+}
+
+static int
+set_gdbm_filename(os_handler_t *os_hnd, char *name)
+{
+    char *nname;
+
+    nname = strdup(name);
+    if (!nname)
+	return ENOMEM;
+    if (gdbm_filename)
+	free(gdbm_filename);
+    gdbm_filename = name;
+    return 0;
+}
+#endif
+
 os_handler_t ipmi_debug_os_handlers =
 {
     .mem_alloc = debug_malloc,
@@ -413,5 +523,11 @@ os_handler_t ipmi_debug_os_handlers =
     .operation_loop = operation_loop,
     .free_os_handler = free_os_handler,
     .log = sdebug_log,
-    .vlog = sdebug_vlog
+    .vlog = sdebug_vlog,
+#ifdef HAVE_GDBM
+    .database_store = database_store,
+    .database_find = database_find,
+    .database_free = database_free,
+    .database_set_filename = set_gdbm_filename,
+#endif
 };

@@ -38,6 +38,19 @@
 #include <sys/time.h>
 #include <OpenIPMI/ipmi_log.h>
 
+/************************************************************************
+ * WARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNINGWARNING
+ *
+ * In order to make this data structure extensible, you should never
+ * declare a static version of the OS handler.  You should *always*
+ * allocate it with the allocation routine at the end of this file,
+ * and free it with the free routine found there.  That way, if new
+ * items are added to the end of this data structure, you are ok.  You
+ * have been warned!  Note that if you use the standard OS handlers,
+ * then you are ok.
+ *
+ ************************************************************************/
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -255,24 +268,46 @@ struct os_handler_s
        things in OpenIPMI to speed up various operations by caching
        data locally instead of going to the actual system to get them.
        The key is a arbitrary length character string.  The find
-       routine returns an error on failure, otherwise it allocates a
-       block of data and returns it in data (with the length in
-       data_len).  The data returned should be freed by database_free.
-       Note that these routines are optional and do not need to be
-       here, they simply speed up operation when working correctly.
-       Also, if these routines fail for some reason it is not
-       fatal. */
+       routine returns an error on failure.  Otherwise, if it can
+       fetch the data without delay, it allocates a block of data and
+       returns it in data (with the length in data_len) and sets
+       fetch_completed to true.  Otherwise, if it cannot fetch the
+       data without delay, it will set fetch_completed to false and
+       start the database operation, calling got_data() when it is
+       done.
+
+       The data returned should be freed by database_free.  Note that
+       these routines are optional and do not need to be here, they
+       simply speed up operation when working correctly.  Also, if
+       these routines fail for some reason it is not fatal to the
+       operation of OpenIPMI.  It is not a big deal. */
     int (*database_store)(os_handler_t  *handler,
 			  char          *key,
 			  unsigned char *data,
 			  unsigned int  data_len);
     int (*database_find)(os_handler_t  *handler,
 			 char          *key,
+			 unsigned int  *fetch_completed,
 			 unsigned char **data,
-			 unsigned int  *data_len);
+			 unsigned int  *data_len,
+			 void (*got_data)(void          *cb_data,
+					  int           err,
+					  unsigned char *data,
+					  unsigned int  data_len),
+			 void *cb_data);
     void (*database_free)(os_handler_t  *handler,
 			  unsigned char *data);
+    /* Sets the filename to use for the database to the one specified.
+       The meaning is system-dependent.  On *nix systems it defaults
+       to $HOME/.OpenIPMI_db.  This is for use by the user, OpenIPMI
+       proper does not use this. */
+    int (*database_set_filename)(os_handler_t *handler,
+				 char         *name);
 };
+
+/* Only use these to allocate/free OS handlers. */
+os_handler_t *ipmi_alloc_os_handler(void);
+void ipmi_free_os_handler(os_handler_t *handler);
 
 #ifdef __cplusplus
 }

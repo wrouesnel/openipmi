@@ -45,6 +45,10 @@
 #include <string.h>
 #include <signal.h>
 
+#ifdef HAVE_GDBM
+#include <gdbm.h>
+#endif
+
 #include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_posix.h>
@@ -56,6 +60,11 @@ typedef struct pt_os_hnd_data_s
     selector_t       *sel;
     int              wake_sig;
     struct sigaction oldact;
+#ifdef HAVE_GDBM
+    char *gdbm_filename;
+    GDBM_FILE gdbmf;
+    pthread_mutex_t gdbm_lock;
+#endif
 } pt_os_hnd_data_t;
 
 
@@ -485,7 +494,16 @@ thread_exit(os_handler_t *handler)
 void
 ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd)
 {
-    free(os_hnd->internal_data);
+    pt_os_hnd_data_t *info = os_hnd->internal_data;
+
+#ifdef HAVE_GDBM
+    pthread_mutex_destroy(&info->gdbm_lock);
+    if (info->gdbm_filename)
+	free(info->gdbm_filename);
+    if (info->gdbmf)
+	gdbm_close(info->gdbmf);
+#endif
+    free(info);
     free(os_hnd);
 }
 
@@ -562,6 +580,119 @@ posix_free(void *data)
     free(data);
 }
 
+#ifdef HAVE_GDBM
+#define GDBM_FILE ".OpenIPMI_db"
+
+static void
+init_gdbm(pt_os_hnd_data_t *info)
+{
+    if (!info->gdbm_filename) {
+	char *home = getenv("HOME");
+	if (!home)
+	    return;
+	info->gdbm_filename = malloc(strlen(home)+strlen(GDBM_FILE)+2);
+	if (!info->gdbm_filename)
+	    return;
+	strcpy(info->gdbm_filename, home);
+	strcat(info->gdbm_filename, "/");
+	strcat(info->gdbm_filename, GDBM_FILE);
+    }
+
+    info->gdbmf = gdbm_open(info->gdbm_filename, 512, GDBM_WRCREAT, 0600,
+			    NULL);
+    /* gdbmf will be NULL on error, which is what reports an error. */
+}
+
+static int
+database_store(os_handler_t  *handler,
+	       char          *key,
+	       unsigned char *data,
+	       unsigned int  data_len)
+{
+    pt_os_hnd_data_t *info = handler->internal_data;
+    datum            gkey, gdata;
+    int              rv;
+
+    pthread_mutex_lock(&info->gdbm_lock);
+    if (!info->gdbmf) {
+	init_gdbm(info);
+	if (!info->gdbmf) {
+	    pthread_mutex_unlock(&info->gdbm_lock);
+	    return EINVAL;
+	}
+    }
+
+    gkey.dptr = key;
+    gkey.dsize = strlen(key);
+    gdata.dptr = data;
+    gdata.dsize = data_len;
+
+    rv = gdbm_store(info->gdbmf, gkey, gdata, GDBM_REPLACE);
+    pthread_mutex_unlock(&info->gdbm_lock);
+    if (rv)
+	return EINVAL;
+    return 0;
+}
+
+static int
+database_find(os_handler_t  *handler,
+	      char          *key,
+	      unsigned int  *fetch_completed,
+	      unsigned char **data,
+	      unsigned int  *data_len,
+	      void (*got_data)(void          *cb_data,
+			       int           err,
+			       unsigned char *data,
+			       unsigned int  data_len),
+	      void *cb_data)
+{
+    pt_os_hnd_data_t *info = handler->internal_data;
+    datum            gkey, gdata;
+
+    pthread_mutex_lock(&info->gdbm_lock);
+    if (!info->gdbmf) {
+	init_gdbm(info);
+	if (!info->gdbmf) {
+	    pthread_mutex_unlock(&info->gdbm_lock);
+	    return EINVAL;
+	}
+    }
+
+    gkey.dptr = key;
+    gkey.dsize = strlen(key);
+    gdata = gdbm_fetch(info->gdbmf, gkey);
+    pthread_mutex_unlock(&info->gdbm_lock);
+    if (!gdata.dptr)
+	return EINVAL;
+    *data = gdata.dptr;
+    *data_len = gdata.dsize;
+    *fetch_completed = 1;
+    return 0;
+}
+
+static void
+database_free(os_handler_t  *handler,
+	      unsigned char *data)
+{
+    free(data);
+}
+
+static int
+set_gdbm_filename(os_handler_t *os_hnd, char *name)
+{
+    pt_os_hnd_data_t *info = os_hnd->internal_data;
+    char             *nname;
+
+    nname = strdup(name);
+    if (!nname)
+	return ENOMEM;
+    if (info->gdbm_filename)
+	free(info->gdbm_filename);
+    info->gdbm_filename = name;
+    return 0;
+}
+#endif
+
 static os_handler_t ipmi_posix_thread_os_handler =
 {
     .mem_alloc = posix_malloc,
@@ -590,12 +721,20 @@ static os_handler_t ipmi_posix_thread_os_handler =
     .free_os_handler = free_os_handler,
     .perform_one_op = perform_one_op,
     .operation_loop = operation_loop,
+#ifdef HAVE_GDBM
+    .database_store = database_store,
+    .database_find = database_find,
+    .database_free = database_free,
+    .database_set_filename = set_gdbm_filename,
+#endif
 };
 
 os_handler_t *
 ipmi_posix_thread_get_os_handler(void)
 {
-    os_handler_t *rv;
+    os_handler_t     *rv;
+    pt_os_hnd_data_t *info;
+    int              err;
 
     rv = malloc(sizeof(*rv));
     if (!rv)
@@ -603,11 +742,20 @@ ipmi_posix_thread_get_os_handler(void)
 
     memcpy(rv, &ipmi_posix_thread_os_handler, sizeof(*rv));
 
-    rv->internal_data = malloc(sizeof(pt_os_hnd_data_t));
-    if (! rv->internal_data) {
+    info = malloc(sizeof(pt_os_hnd_data_t));
+    if (!info) {
 	free(rv);
 	rv = NULL;
     }
+    rv->internal_data = info;
+
+    err = pthread_mutex_init(&info->gdbm_lock, NULL);
+    if (err) {
+	free(info);
+	free(rv);
+	rv = NULL;
+    }
+
     return rv;
 }
 

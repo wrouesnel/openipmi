@@ -15,6 +15,7 @@ AM_CFLAGS = -Wall -I$(top_srcdir)/include $(GLIB_CFLAGS)
 lib_LTLIBRARIES = libOpenIPMIglib.la
 
 libOpenIPMIglib_la_SOURCES = glib_os_hnd.c
+libOpenIPMIpthread_la_LIBADD = $(GDBM_LIB)
 libOpenIPMIglib_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIglib.map $(GLIB_LIBS)
 

@@ -168,6 +168,10 @@ if test "x$POPTLIBS" = "x"; then
    fi
 fi
 
+# Check for GDBM
+AC_CHECK_HEADER(gdbm.h, AC_DEFINE(HAVE_GDBM) GDBM_LIB=-lgdbm; )
+AC_SUBST(GDBM_LIB)
+
 # Find pkg-config
 pkgprog=
 AC_PATH_PROG(pkgprog, pkg-config)

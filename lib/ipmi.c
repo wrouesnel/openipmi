@@ -1738,3 +1738,18 @@ ipmi_handle_rsp_item(ipmi_con_t            *ipmi,
 	ipmi_free_msg_item(rspi);
 }
 
+os_handler_t *
+ipmi_alloc_os_handler(void)
+{
+    os_handler_t *rv = ipmi_mem_alloc(sizeof(*rv));
+    if (rv)
+	memset(rv, 0, sizeof(*rv));
+    return rv;
+}
+
+void
+ipmi_free_os_handler(os_handler_t *handler)
+{
+    ipmi_mem_free(handler);
+}
+
