@@ -2779,6 +2779,9 @@ static int
 misc_sdrs_fixup_reg(ipmi_mc_t     *mc,
 		    void          *cb_data)
 {
+    /* Setting the event reciever on these MCs seems to be broken. */
+    ipmi_mc_set_ipmb_event_generator_support(mc, 0);
+    
     ipmi_mc_set_sdrs_fixup_handler(mc, misc_sdrs_fixup, NULL);
     return 0;
 }
