@@ -47,7 +47,9 @@
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_debug.h>
 
+#ifdef HAVE_GLIB
 #include <glib.h>
+#endif
 
 /* Internal includes, do not use in your programs */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -879,6 +881,9 @@ static char *usage_str =
 "  --drawmsg - turn on raw message tracing.\n"
 "  --dmsg - turn on message tracing debugging.\n"
 "  --dmsgerr - turn on printing out low-level message errors.\n"
+#ifdef HAVE_GLIB
+"  --glib - use glib for the OS handler.\n"
+#endif
 #ifdef HAVE_UCDSNMP
 "  --snmp - turn on SNMP trap handling.\n"
 #endif
@@ -902,7 +907,9 @@ main(int argc, char *argv[])
     os_handler_t     *os_hnd;
     int              use_debug_os = 0;
     char             *colstr;
+#ifdef HAVE_GLIB
     int              use_glib = 0;
+#endif
 
     colstr = getenv("COLUMNS");
     if (colstr) {
@@ -940,8 +947,10 @@ main(int argc, char *argv[])
 	} else if (strcmp(arg, "--snmp") == 0) {
 	    init_snmp = 1;
 #endif
+#ifdef HAVE_GLIB
 	} else if (strcmp(arg, "--glib") == 0) {
 	    use_glib = 1;
+#endif
 	} else if (strcmp(arg, "--help") == 0) {
 	    usage(argv[0]);
 	    return 0;
@@ -962,8 +971,11 @@ main(int argc, char *argv[])
 #ifdef HAVE_UCDSNMP
 	sel = debug_sel;
 #endif
+#ifdef HAVE_GLIB
     } else if (use_glib) {
+#ifdef HAVE_UCDSNMP
 	init_snmp = 0; /* No SNMP support for glib yet. */
+#endif
 	g_thread_init(NULL);
 	os_hnd = ipmi_glib_get_os_handler();
 	if (!os_hnd) {
@@ -972,6 +984,7 @@ main(int argc, char *argv[])
 	    return 1;
 	}
 	sel = NULL;
+#endif
     } else {
 	os_hnd = ipmi_posix_setup_os_handler();
 	if (!os_hnd) {

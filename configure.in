@@ -38,6 +38,16 @@ AC_ARG_WITH(openssl,
     fi,
 )
 
+tryglib=yes
+AC_ARG_WITH(glib,
+[  --with-glib                     Look for glib.],
+    if test "x$withval" = "xyes"; then
+      tryglib=yes
+    elif test "x$withval" = "xno"; then
+      tryglib=no
+    fi,
+)
+
 AC_PROG_CC
 AM_PROG_LIBTOOL
 AC_STDC_HEADERS
@@ -48,6 +58,27 @@ AC_SUBST(OPENIPMI_VERSION_MAJOR)
 AC_SUBST(OPENIPMI_VERSION_MINOR)
 AC_SUBST(OPENIPMI_VERSION_RELEASE)
 AC_SUBST(OPENIPMI_VERSION_EXTRA)
+
+glibprog=
+if test "x$tryglib" != "xno"; then
+   AC_PATH_PROG(glibprog, glib-config)
+fi
+if test "x$glibprog" != "x"; then
+   AC_DEFINE(HAVE_GLIB)
+   GLIB_DIR=glib
+   GLIB_CFLAGS=`$glibprog --cflags gthread`
+   GLIB_LIBS=`$glibprog --libs gthread`
+   GLIB_PKGCONF=OpenIPMIglib.pc
+else
+   GLIB_DIR=
+   GLIB_CFLAGS=
+   GLIB_LIBS=
+   GLIB_PKGCONF=
+fi
+AC_SUBST(GLIB_DIR)
+AC_SUBST(GLIB_CFLAGS)
+AC_SUBST(GLIB_LIBS)
+AC_SUBST(GLIB_PKGCONF)
 
 if test "x$tryucdsnmp" != "xno"; then
 
@@ -136,5 +167,6 @@ AC_OUTPUT(Makefile
 	  OpenIPMI.pc
 	  OpenIPMIpthread.pc
 	  OpenIPMIposix.pc
+	  OpenIPMIglib.pc
 	  OpenIPMIcmdlang.pc
 	  OpenIPMIui.pc)
