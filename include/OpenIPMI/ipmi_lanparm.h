@@ -165,6 +165,55 @@ void ipmi_lan_free_config(ipmi_lan_config_t *config);
  * ports, etc. are in network order.
  */
 
+/* This interface lets you fetch and set the data values by parm
+   num. Note that the parm nums *DO NOT* correspond to the
+   IPMI_LANPARM_xxx values above. */
+
+enum ipmi_lanconf_val_type_e { IPMI_LANCONFIG_INT, IPMI_LANCONFIG_BOOL,
+			       IPMI_LANCONFIG_DATA,
+			       IPMI_LANCONFIG_IP, IPMI_LANCONFIG_MAC };
+/* When getting the value, the valtype will be set to int or data.  If
+   it is int or bool, the value is returned in ival and the dval is
+   not used.  If it is data, ip, or mac, the data will be returned in
+   an allocated array in dval and the length set in dval_len.  The
+   data must be freed with ipmi_lanconfig_data_free().  The is used
+   for some data items (the priv level for authentication type, the
+   destination for alerts and destination addresses); for other items
+   it is ignored.  The index should point to the value to fetch
+   (starting at zero), it will be updated to the next value or -1 if
+   no more are left.  The index will be unchanged if the parm does not
+   support an index.
+
+   The string name is returned in the name field, if it is not NULL.
+
+   Note that when fetching a value, if the passed in pointer is NULL
+   the data will not be filled in (except for index, which must always
+   be present).  That lets you get the value type without getting the
+   data, for instance. */
+int ipmi_lanconfig_get_val(ipmi_lan_config_t *lanc,
+			   unsigned int      parm,
+			   const char        **name,
+			   int               *index,
+			   enum ipmi_lanconf_val_type_e *valtype,
+			   unsigned int      *ival,
+			   unsigned char     **dval,
+			   unsigned int      *dval_len);
+  /* Set a value in the lan config.  You must know ahead of time the
+     actual value type and set the proper one. */
+int ipmi_lanconfig_set_val(ipmi_lan_config_t *lanc,
+			   unsigned int      parm,
+			   int               index,
+			   unsigned int      ival,
+			   unsigned char     *dval,
+			   unsigned int      dval_len);
+/* Free data from ipmi_lanconfig_get_val(). */
+void ipmi_lanconfig_data_free(void *data);
+/* Convert a string to a lanconfig parm number.  Returns -1 if the
+   string is invalid. */
+unsigned int ipmi_lanconfig_str_to_parm(char *name);
+/* Convert the parm to a string name. */
+const char *ipmi_lanconfig_parm_to_str(unsigned int parm);
+
 /* The first set of parameters here must be present, so they are
    returned directly, no errors for getting.  Setting returns an
    error. */
@@ -263,12 +312,20 @@ int ipmi_lanconfig_get_primary_rmcp_port(ipmi_lan_config_t *lanc,
 int ipmi_lanconfig_set_primary_rmcp_port(ipmi_lan_config_t *lanc,
 					 unsigned char     *data,
 					 unsigned int      data_len);
+int ipmi_lanconfig_get_port_rmcp_primary(ipmi_lan_config_t *lanc,
+					 unsigned int      *val);
+int ipmi_lanconfig_set_port_rmcp_primary(ipmi_lan_config_t *lanc,
+					 unsigned int      val);
 int ipmi_lanconfig_get_secondary_rmcp_port(ipmi_lan_config_t *lanc,
 					   unsigned char     *data,
 					   unsigned int      *data_len);
 int ipmi_lanconfig_set_secondary_rmcp_port(ipmi_lan_config_t *lanc,
 					   unsigned char     *data,
 					   unsigned int      data_len);
+int ipmi_lanconfig_get_port_rmcp_secondary(ipmi_lan_config_t *lanc,
+					   unsigned int      *val);
+int ipmi_lanconfig_set_port_rmcp_secondary(ipmi_lan_config_t *lanc,
+					   unsigned int      val);
 
 /* Control of ARP-ing.  These are optional and so may return errors. */
 int ipmi_lanconfig_get_bmc_generated_arps(ipmi_lan_config_t *lanc,

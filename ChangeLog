@@ -7,7 +7,17 @@
 
 	* swig/perl/test_fru: Fixed a timing problem.
 
-	* swig/perl/test_chan: Added channel/user testing.
+	* swig/perl/test_chan, swig/perl/Makefile.am: Added channel/user
+	testing.
+
+	* swig/perl/OpenIPMI_perl.c: Added a way to pass an array of
+	objects.
+
+	* lanserv/lanserv_ipmi.c: Fixed some minor bugs in channel
+	handling.
+
+	* include/OpenIPMI/ipmi_lanparm.h, lib/lanparm.c: Added an
+	interface for getting general data values by index/name.
 
 2004-12-25 Corey Minyard <cminyard@mvista.com> 
 

@@ -211,7 +211,7 @@ sub get_errcount {
 		main::reg_err("Error setting access_cb_only");
 	    }
 
-	    $rv = $user->set_privilege_limit(OpenIPMI::PRIVILEGE_ADMIN);
+	    $rv = $user->set_privilege_limit($OpenIPMI::PRIVILEGE_ADMIN);
 	    if ($rv) {
 		main::reg_err("Error setting privilege_limit");
 	    }
@@ -260,7 +260,7 @@ sub get_errcount {
 	    $rv = $user->get_privilege_limit(\$val);
 	    if ($rv) {
 		main::reg_err("Error getting privilege_limit");
-	    } elsif ($val != OpenIPMI::PRIVILEGE_ADMIN) {
+	    } elsif ($val != $OpenIPMI::PRIVILEGE_ADMIN) {
 		main::reg_err("privilege_limit not admin");
 	    }
 

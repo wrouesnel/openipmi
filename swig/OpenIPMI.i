@@ -982,9 +982,7 @@ mc_channel_got_users(ipmi_mc_t        *mc,
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
     for (i=0; i<count; i++) {
 	ipmi_user_t *user = ipmi_user_list_get_user(info, i);
-	if (user)
-	    user = ipmi_user_copy(user);
-	info_ref[i] = swig_make_ref(user, "OpenIPMI::ipmi_user_t");
+	info_ref[i] = swig_make_ref_destruct(user, "OpenIPMI::ipmi_user_t");
     }
     swig_call_cb(cb, "mc_channel_got_users_cb", "%p%d%*o", &mc_ref, err,
 		 count, &info_ref);

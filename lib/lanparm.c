@@ -165,6 +165,7 @@ lanparms_prefunc(void *cb_data, void *item1, void *item2)
 {
     ipmi_lanparm_t *lanparm = item1;
     lanparm_get(lanparm);
+    return LOCKED_LIST_ITER_CONTINUE;
 }
 
 void
@@ -1760,8 +1761,10 @@ ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc, \
 			 unsigned char     *data, \
 			 unsigned int      *data_len) \
 { \
-    if (*data_len < l) \
+    if (*data_len < l) { \
+        *data_len = l; \
         return EBADF; \
+    } \
     memcpy(data, lanc->n, l); \
     *data_len = l; \
     return 0; \
@@ -1792,8 +1795,10 @@ ipmi_lanconfig_get_ ## n(ipmi_lan_config_t *lanc, \
 { \
     if (! lanc->n ## _supported) \
         return ENOSYS; \
-    if (*data_len < l) \
+    if (*data_len < l) { \
+        *data_len = l; \
         return EBADF; \
+    } \
     memcpy(data, lanc->n, l); \
     *data_len = l; \
     return 0; \
@@ -1811,11 +1816,66 @@ ipmi_lanconfig_set_ ## n(ipmi_lan_config_t *lanc, \
     return 0; \
 }
 
-LP_ARRAY_PARM_SUP(primary_rmcp_port, 4)
-LP_ARRAY_PARM_SUP(secondary_rmcp_port, 4)
+LP_ARRAY_PARM_SUP(primary_rmcp_port, 2)
+LP_ARRAY_PARM_SUP(secondary_rmcp_port, 2)
 LP_ARRAY_PARM_SUP(default_gateway_mac_addr, 6)
 LP_ARRAY_PARM_SUP(backup_gateway_ip_addr, 4)
 LP_ARRAY_PARM_SUP(backup_gateway_mac_addr, 6)
+
+int
+ipmi_lanconfig_get_port_rmcp_primary(ipmi_lan_config_t *lanc,
+				     unsigned int      *val)
+{
+    unsigned char data[2];
+    int           rv;
+    unsigned int  len = 2;
+
+    rv = ipmi_lanconfig_get_primary_rmcp_port(lanc, data, &len);
+    if (rv)
+	return rv;
+    *val = ntohs(*((uint16_t *) data));
+    return 0;
+}
+
+int
+ipmi_lanconfig_set_port_rmcp_primary(ipmi_lan_config_t *lanc,
+				     unsigned int      val)
+{
+    unsigned char data[2];
+    int           rv;
+
+    *((uint16_t *) data) = htons(val);
+    rv = ipmi_lanconfig_set_primary_rmcp_port(lanc, data, 2);
+    return rv;
+}
+
+int
+ipmi_lanconfig_get_port_rmcp_secondary(ipmi_lan_config_t *lanc,
+				       unsigned int      *val)
+{
+    unsigned char data[2];
+    int           rv;
+    unsigned int  len = 2;
+
+    rv = ipmi_lanconfig_get_secondary_rmcp_port(lanc, data, &len);
+    if (rv)
+	return rv;
+    *val = ntohs(*((uint16_t *) data));
+    return 0;
+}
+
+int
+ipmi_lanconfig_set_port_rmcp_secondary(ipmi_lan_config_t *lanc,
+				       unsigned int      val)
+{
+    unsigned char data[2];
+    int           rv;
+
+    *((uint16_t *) data) = htons(val);
+    rv = ipmi_lanconfig_set_secondary_rmcp_port(lanc, data, 2);
+    return rv;
+}
+
 
 #define LP_BYTE_PARM_SUP(n, s) \
 int \
@@ -1882,8 +1942,10 @@ ipmi_lanconfig_get_## n(ipmi_lan_config_t *lanc, \
 { \
     if (set > lanc->num_alert_destinations) \
 	return EINVAL; \
-    if (*data_len < l) \
+    if (*data_len < l) { \
+        *data_len = l; \
         return EBADF; \
+    } \
     memcpy(data, lanc->s[set].n, l); \
     *data_len = l; \
     return 0; \
@@ -1911,3 +1973,290 @@ LP_BYTE_TAB(alert_dest_addr, dest_format)
 LP_BYTE_TAB(alert_dest_addr, gw_to_use)
 LP_ARRAY_TAB(alert_dest_addr, dest_ip_addr, 4)
 LP_ARRAY_TAB(alert_dest_addr, dest_mac_addr, 6)
+
+typedef struct lanparm_gendata_s
+{
+    enum ipmi_lanconf_val_type_e datatype;
+    unsigned char *fname;
+
+    union {
+	struct {
+	    unsigned int (*gval)(ipmi_lan_config_t *lanc);
+	    int (*gval_v)(ipmi_lan_config_t *lanc, unsigned int *val);
+	    int (*gval_iv)(ipmi_lan_config_t *lanc, unsigned int idx,
+			   unsigned int *val);
+	    int (*sval)(ipmi_lan_config_t *lanc, unsigned int val);
+	    int (*sval_v)(ipmi_lan_config_t *lanc, unsigned int val);
+	    int (*sval_iv)(ipmi_lan_config_t *lanc, unsigned int idx,
+			   unsigned int val);
+	} ival;
+	struct {
+	    int (*gval_v)(ipmi_lan_config_t *lanc, unsigned char *data,
+			  unsigned int *data_len);
+	    int (*gval_iv)(ipmi_lan_config_t *lanc, unsigned int idx,
+			   unsigned char *data, unsigned int *data_len);
+	    int (*sval_v)(ipmi_lan_config_t *lanc, unsigned char *data,
+			  unsigned int data_len);
+	    int (*sval_iv)(ipmi_lan_config_t *lanc, unsigned int idx,
+			   unsigned char *data, unsigned int data_len);
+	} dval;
+    } u;
+    unsigned int (*iv_cnt)(ipmi_lan_config_t *lanc);
+} lanparm_gendata_t;
+
+unsigned int ret_user_cnt(ipmi_lan_config_t *lanc)
+{
+    return 5;
+}
+
+#define F_BOOL(name) \
+	{ .datatype = IPMI_LANCONFIG_BOOL, .fname = #name, \
+	  .u = { .ival = { .gval = ipmi_lanconfig_get_ ## name }}}
+#define F_INTR(name) \
+	{ .datatype = IPMI_LANCONFIG_INT, .fname = #name, \
+	  .u = { .ival = { .gval = ipmi_lanconfig_get_ ## name }}}
+#define F_INT(name) \
+	{ .datatype = IPMI_LANCONFIG_INT, .fname = #name, \
+	  .u = { .ival = { .gval = ipmi_lanconfig_get_ ## name, \
+			   .sval = ipmi_lanconfig_set_ ## name }}}
+#define F_INTV(name) \
+	{ .datatype = IPMI_LANCONFIG_INT, .fname = #name, \
+	  .u = { .ival = { .gval_v = ipmi_lanconfig_get_ ## name, \
+			   .sval_v = ipmi_lanconfig_set_ ## name }}}
+#define F_INTIV(name, gcnt) \
+	{ .datatype = IPMI_LANCONFIG_INT, .fname = #name, \
+	  .u = { .ival = { .gval_iv = ipmi_lanconfig_get_ ## name, \
+			   .sval_iv = ipmi_lanconfig_set_ ## name }}, \
+	  .iv_cnt = gcnt }
+#define F_BOOLV(name) \
+	{ .datatype = IPMI_LANCONFIG_BOOL, .fname = #name, \
+	  .u = { .ival = { .gval_v = ipmi_lanconfig_get_ ## name, \
+			   .sval_v = ipmi_lanconfig_set_ ## name }}}
+#define F_BOOLIV(name, gcnt) \
+	{ .datatype = IPMI_LANCONFIG_BOOL, .fname = #name, \
+	  .u = { .ival = { .gval_iv = ipmi_lanconfig_get_ ## name, \
+			   .sval_iv = ipmi_lanconfig_set_ ## name }}, \
+	  .iv_cnt = gcnt }
+#define F_IP(name) \
+	{ .datatype = IPMI_LANCONFIG_IP, .fname = #name, \
+	  .u = { .dval = { .gval_v = ipmi_lanconfig_get_ ## name, \
+			   .sval_v = ipmi_lanconfig_set_ ## name }}}
+#define F_MAC(name) \
+	{ .datatype = IPMI_LANCONFIG_MAC, .fname = #name, \
+	  .u = { .dval = { .gval_v = ipmi_lanconfig_get_ ## name, \
+			   .sval_v = ipmi_lanconfig_set_ ## name }}}
+#define F_IPIV(name, gcnt) \
+	{ .datatype = IPMI_LANCONFIG_IP, .fname = #name, \
+	  .u = { .dval = { .gval_iv = ipmi_lanconfig_get_ ## name, \
+			   .sval_iv = ipmi_lanconfig_set_ ## name }}, \
+	  .iv_cnt = gcnt }
+#define F_MACIV(name, gcnt) \
+	{ .datatype = IPMI_LANCONFIG_MAC, .fname = #name, \
+	  .u = { .dval = { .gval_iv = ipmi_lanconfig_get_ ## name, \
+			   .sval_iv = ipmi_lanconfig_set_ ## name }}, \
+	  .iv_cnt = gcnt }
+#define F_DATA(name) \
+	{ .datatype = IPMI_LANCONFIG_DATA, .fname = #name, \
+	  .u = { .dval = { .gval_v = ipmi_lanconfig_get_ ## name, \
+			   .sval_v = ipmi_lanconfig_set_ ## name }}}
+
+static lanparm_gendata_t gdata[] =
+{
+    F_BOOL(support_auth_oem),
+    F_BOOL(support_auth_straight),
+    F_BOOL(support_auth_md5),
+    F_BOOL(support_auth_md2),
+    F_BOOL(support_auth_none),
+    F_INT(ip_addr_source),
+    F_INTR(num_alert_destinations),
+    F_INTV(ipv4_ttl),
+    F_INTV(ipv4_flags),
+    F_INTV(ipv4_precedence),
+    F_INTV(ipv4_tos),
+    F_BOOLIV(enable_auth_oem, ret_user_cnt),
+    F_BOOLIV(enable_auth_straight, ret_user_cnt),
+    F_BOOLIV(enable_auth_md5, ret_user_cnt),
+    F_BOOLIV(enable_auth_md2, ret_user_cnt),
+    F_BOOLIV(enable_auth_none, ret_user_cnt),
+    F_IP(ip_addr),
+    F_MAC(mac_addr),
+    F_IP(subnet_mask),
+    F_INTV(port_rmcp_primary),
+    F_INTV(port_rmcp_secondary),
+    F_BOOLV(bmc_generated_arps),
+    F_BOOLV(bmc_generated_garps),
+    F_INTV(garp_interval),
+    F_IP(default_gateway_ip_addr),
+    F_MAC(default_gateway_mac_addr),
+    F_IP(backup_gateway_ip_addr),
+    F_MAC(backup_gateway_mac_addr),
+    F_DATA(community_string),
+    F_INTIV(alert_ack, ipmi_lanconfig_get_num_alert_destinations),
+    F_INTIV(dest_type, ipmi_lanconfig_get_num_alert_destinations),
+    F_INTIV(alert_retry_interval, ipmi_lanconfig_get_num_alert_destinations),
+    F_INTIV(max_alert_retries, ipmi_lanconfig_get_num_alert_destinations),
+    F_INTIV(dest_format, ipmi_lanconfig_get_num_alert_destinations),
+    F_INTIV(gw_to_use, ipmi_lanconfig_get_num_alert_destinations),
+    F_IPIV(dest_ip_addr, ipmi_lanconfig_get_num_alert_destinations),
+    F_MACIV(dest_mac_addr, ipmi_lanconfig_get_num_alert_destinations)
+};
+#define NUM_GDATA_ENTRIES (sizeof(gdata) / sizeof(lanparm_gendata_t))
+
+int
+ipmi_lanconfig_get_val(ipmi_lan_config_t *lanc,
+		       unsigned int      parm,
+		       const char        **name,
+		       int               *index,
+		       enum ipmi_lanconf_val_type_e *valtype,
+		       unsigned int      *ival,
+		       unsigned char     **dval,
+		       unsigned int      *dval_len)
+{
+    unsigned int  curr = *index;
+    unsigned int  count;
+    int           rv = 0;
+    unsigned char *data;
+    unsigned int  data_len;
+
+    if (parm >= NUM_GDATA_ENTRIES)
+	return EINVAL;
+    if (valtype)
+	*valtype = gdata[parm].datatype;
+
+    if (gdata[parm].iv_cnt) {
+	count = gdata[parm].iv_cnt(lanc);
+	if (curr >= count) {
+	    *index = -1;
+	    return E2BIG;
+	}
+
+	if (curr+1 == count)
+	    *index = -1;
+	else
+	    *index = curr+1;
+    }
+
+    switch (gdata[parm].datatype) {
+    case IPMI_LANCONFIG_INT:
+    case IPMI_LANCONFIG_BOOL:
+	if (!ival)
+	    break;
+	if (gdata[parm].u.ival.gval)
+	    *ival = gdata[parm].u.ival.gval(lanc);
+	else if (gdata[parm].u.ival.gval_v)
+	    rv = gdata[parm].u.ival.gval_v(lanc, ival);
+	else if (gdata[parm].u.ival.gval_iv)
+	    rv = gdata[parm].u.ival.gval_iv(lanc, curr, ival);
+	else
+	    rv = ENOSYS;
+	break;
+
+    case IPMI_LANCONFIG_DATA:
+    case IPMI_LANCONFIG_IP:
+    case IPMI_LANCONFIG_MAC:
+	data_len = 0;
+	if (gdata[parm].u.dval.gval_v)
+	    rv = gdata[parm].u.dval.gval_v(lanc, NULL, &data_len);
+	else if (gdata[parm].u.dval.gval_iv)
+	    rv = gdata[parm].u.dval.gval_iv(lanc, curr, NULL, &data_len);
+	else
+	    rv = ENOSYS;
+	if (rv && (rv != EBADF))
+	    break;
+	if (data_len == 0)
+	    data = ipmi_mem_alloc(1);
+	else
+	    data = ipmi_mem_alloc(data_len);
+	if (gdata[parm].u.dval.gval_v)
+	    rv = gdata[parm].u.dval.gval_v(lanc, data, &data_len);
+	else if (gdata[parm].u.dval.gval_iv)
+	    rv = gdata[parm].u.dval.gval_iv(lanc, curr, data, &data_len);
+	if (rv) {
+	    ipmi_mem_free(data);
+	    break;
+	}
+	if (dval)
+	    *dval = data;
+	if (dval_len)
+	    *dval_len = data_len;
+	break;
+    }
+
+    return rv;
+}
+
+int
+ipmi_lanconfig_set_val(ipmi_lan_config_t *lanc,
+		       unsigned int      parm,
+		       int               index,
+		       unsigned int      ival,
+		       unsigned char     *dval,
+		       unsigned int      dval_len)
+{
+    unsigned int  count;
+    int           rv = 0;
+
+    if (parm >= NUM_GDATA_ENTRIES)
+	return EINVAL;
+
+    if (gdata[parm].iv_cnt) {
+	count = gdata[parm].iv_cnt(lanc);
+	if (index >= count)
+	    return E2BIG;
+    }
+
+    switch (gdata[parm].datatype) {
+    case IPMI_LANCONFIG_INT:
+    case IPMI_LANCONFIG_BOOL:
+	if (!ival)
+	    break;
+	if (gdata[parm].u.ival.sval)
+	    rv = gdata[parm].u.ival.sval(lanc, ival);
+	else if (gdata[parm].u.ival.sval_v)
+	    rv = gdata[parm].u.ival.sval_v(lanc, ival);
+	else if (gdata[parm].u.ival.sval_iv)
+	    rv = gdata[parm].u.ival.sval_iv(lanc, index, ival);
+	else
+	    rv = ENOSYS;
+	break;
+
+    case IPMI_LANCONFIG_DATA:
+    case IPMI_LANCONFIG_IP:
+    case IPMI_LANCONFIG_MAC:
+	if (gdata[parm].u.dval.sval_v)
+	    rv = gdata[parm].u.dval.sval_v(lanc, dval, dval_len);
+	else if (gdata[parm].u.dval.sval_iv)
+	    rv = gdata[parm].u.dval.sval_iv(lanc, index, dval, dval_len);
+	else
+	    rv = ENOSYS;
+	break;
+    }
+
+    return rv;
+}
+
+
+void
+ipmi_lanconfig_data_free(void *data)
+{
+    ipmi_mem_free(data);
+}
+
+unsigned int
+ipmi_lanconfig_str_to_parm(char *name)
+{
+    int i;
+    for (i=0; i<NUM_GDATA_ENTRIES; i++) {
+	if (strcmp(name, gdata[i].fname) == 0)
+	    return i;
+    }
+    return -1;
+}
+
+const char *
+ipmi_lanconfig_parm_to_str(unsigned int parm)
+{
+    if (parm >= NUM_GDATA_ENTRIES)
+	return NULL;
+    return gdata[parm].fname;
+}
