@@ -852,6 +852,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	/* We read a header. */
 	sdrs->read_size = rsp->data[7] + SDR_HEADER_SIZE;
 	sdrs->next_read_rec_id = ipmi_get_uint16(rsp->data+1);
+	ipmi_log(IPMI_LOG_DEBUG, "Got next record %4.4x", sdrs->next_read_rec_id);
 	sdrs->next_read_offset = info->read_len;
     }
 
@@ -901,7 +902,9 @@ handle_sdr_data(ipmi_mc_t  *mc,
 
 	if (sdrs->next_read_offset == sdrs->read_size) {
 	    /* Done with this SDR, time to go to the next. */
-	    if (sdrs->next_read_rec_id == 0xffff) {
+	    if ((sdrs->next_read_rec_id == 0xffff)
+                || (sdrs->next_read_rec_id == 0x0000))
+	    {
 		/* This is the last SDR.  However, we don't go to the
 		   next stage until all the outstanding fetches are
 		   complete. */

@@ -8541,17 +8541,19 @@ mxp_5365_handler(ipmi_mc_t     *mc,
     if (rv)
 	goto out;
 
+    rv = alloc_adm1021_sensor(mc, ent, 0x80, 0x01, 0x9c, "Proc Temp",
+			      &(sinfo->adm1021));
+    if (rv)
+	goto out;
+
     if ((fw_major < 3) || ((fw_major == 3) && (fw_minor < 154))) {
 	/* These only have to be added for old boards. */
-	rv = alloc_adm1021_sensor(mc, ent, 0x80, 0x01, 0x9c, "Proc Temp",
-				  &(sinfo->adm1021));
-	if (rv)
-	    goto out;
-
 	rv = alloc_adm9240_sensor(mc, ent, 0x81, 0x01, 0x5a,
 				  &(sinfo->adm9240));
 	if (rv)
 	    goto out;
+    } else {
+	ipmi_mc_set_provides_device_sdrs(mc, 1);
     }
 
     rv = ipmi_mc_add_oem_removed_handler(mc, mxp_5365_removal_handler,
