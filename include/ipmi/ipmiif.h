@@ -385,10 +385,10 @@ unsigned int ipmi_event_state_size(void);
 void ipmi_copy_event_state(ipmi_event_state_t *dest, ipmi_event_state_t *src);
 
 /* Routines to init, clear, set, and query values in the event state. */
-void ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val);
-int ipmi_event_state_get_events_enabled(ipmi_event_state_t *events);
-void ipmi_event_state_set_scanning_enabled(ipmi_event_state_t *events,int val);
-int ipmi_event_state_get_scanning_enabled(ipmi_event_state_t *events);
+void ipmi_event_state_set_events_disabled(ipmi_event_state_t *events, int val);
+int ipmi_event_state_get_events_disabled(ipmi_event_state_t *events);
+void ipmi_event_state_set_scanning_disabled(ipmi_event_state_t *events,int val);
+int ipmi_event_state_get_scanning_disabled(ipmi_event_state_t *events);
 void ipmi_event_state_set_busy(ipmi_event_state_t *events, int val);
 int ipmi_event_state_get_busy(ipmi_event_state_t *events);
 void ipmi_event_state_set_enable_events(ipmi_event_state_t *events, int val);
@@ -429,8 +429,6 @@ int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 /* Get the event enables for the given sensor. */
 typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,
 					  int                err,
-					  int                global_enable,
-					  int                scanning_enabled,
 					  ipmi_event_state_t *states,
 					  void               *cb_data);
 int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,

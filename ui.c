@@ -723,34 +723,39 @@ read_thresholds(ipmi_sensor_t     *sensor,
 static void
 read_thresh_event_enables(ipmi_sensor_t      *sensor,
 			  int                err,
-			  int                global_enable,
-			  int                scanning_enabled,
 			  ipmi_event_state_t *states,
 			  void               *cb_data)
 {
     ipmi_sensor_id_t   sensor_id;
     enum ipmi_thresh_e t;
+    int                global_disable;
+    int                scanning_disable;
+
+    if (err)
+	return;
 
     sensor_id = ipmi_sensor_convert_to_id(sensor);
     if (!((curr_display_type == DISPLAY_SENSOR)
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
+    global_disable = ipmi_event_state_get_events_disabled(states);
+    scanning_disable = ipmi_event_state_get_scanning_disabled(states);
     wmove(display_pad, enabled_pos.y, enabled_pos.x);
     if (err)
 	wprintw(display_pad, "?         ");
-    else if (global_enable)
-	wprintw(display_pad, "enabled");
-    else
+    else if (global_disable)
 	wprintw(display_pad, "disabled");
+    else
+	wprintw(display_pad, "enabled");
 
     wmove(display_pad, scanning_pos.y, scanning_pos.x);
     if (err)
 	wprintw(display_pad, "?         ");
-    else if (scanning_enabled)
-	wprintw(display_pad, "enabled");
-    else
+    else if (scanning_disable)
 	wprintw(display_pad, "disabled");
+    else
+	wprintw(display_pad, "enabled");
 
     if (ipmi_sensor_get_event_support(sensor)
 	!= IPMI_EVENT_SUPPORT_PER_STATE)
@@ -800,35 +805,38 @@ read_thresh_event_enables(ipmi_sensor_t      *sensor,
 static void
 read_discrete_event_enables(ipmi_sensor_t      *sensor,
 			    int                err,
-			    int                global_enable,
-			    int                scanning_enabled,
 			    ipmi_event_state_t *states,
 			    void               *cb_data)
 {
     ipmi_sensor_id_t sensor_id;
     int              i;
     int              val;
+    int              global_disable;
+    int              scanning_disable;
 
     sensor_id = ipmi_sensor_convert_to_id(sensor);
     if (!((curr_display_type == DISPLAY_SENSOR)
 	  && (ipmi_cmp_sensor_id(sensor_id, curr_sensor_id) == 0)))
 	return;
 
+    global_disable = ipmi_event_state_get_events_disabled(states);
+    scanning_disable = ipmi_event_state_get_scanning_disabled(states);
+
     wmove(display_pad, enabled_pos.y, enabled_pos.x);
     if (err)
 	wprintw(display_pad, "?         ");
-    else if (global_enable)
-	wprintw(display_pad, "enabled");
-    else
+    else if (global_disable)
 	wprintw(display_pad, "disabled");
+    else
+	wprintw(display_pad, "enabled");
 
     wmove(display_pad, scanning_pos.y, scanning_pos.x);
     if (err)
 	wprintw(display_pad, "?         ");
-    else if (scanning_enabled)
-	wprintw(display_pad, "enabled");
-    else
+    else if (scanning_disable)
 	wprintw(display_pad, "disabled");
+    else
+	wprintw(display_pad, "enabled");
 
     if (ipmi_sensor_get_event_support(sensor)
 	!= IPMI_EVENT_SUPPORT_PER_STATE)

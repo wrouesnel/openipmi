@@ -820,8 +820,8 @@ ipmi_is_discrete_event_set(ipmi_event_state_t    *events,
     }
 }
 
-#define IPMI_SENSOR_EVENTS_ENABLED	0x80
-#define IPMI_SENSOR_SCANNING_ENABLED	0x40
+#define IPMI_SENSOR_EVENTS_DISABLED	0x80
+#define IPMI_SENSOR_SCANNING_DISABLED	0x40
 #define IPMI_SENSOR_BUSY		0x20
 
 unsigned int ipmi_event_state_size(void)
@@ -836,31 +836,31 @@ ipmi_copy_event_state(ipmi_event_state_t *dest, ipmi_event_state_t *src)
 }
 
 void
-ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val)
+ipmi_event_state_set_events_disabled(ipmi_event_state_t *events, int val)
 {
     if (val)
-	events->status |= IPMI_SENSOR_EVENTS_ENABLED;
+	events->status |= IPMI_SENSOR_EVENTS_DISABLED;
     else
-	events->status &= ~IPMI_SENSOR_EVENTS_ENABLED;
+	events->status &= ~IPMI_SENSOR_EVENTS_DISABLED;
 }
 
 int
-ipmi_event_state_get_events_enabled(ipmi_event_state_t *events)
+ipmi_event_state_get_events_disabled(ipmi_event_state_t *events)
 {
     return (events->status >> 7) & 1;
 }
 
 void
-ipmi_event_state_set_scanning_enabled(ipmi_event_state_t *events, int val)
+ipmi_event_state_set_scanning_disabled(ipmi_event_state_t *events, int val)
 {
     if (val)
-	events->status |= IPMI_SENSOR_SCANNING_ENABLED;
+	events->status |= IPMI_SENSOR_SCANNING_DISABLED;
     else
-	events->status &= ~IPMI_SENSOR_SCANNING_ENABLED;
+	events->status &= ~IPMI_SENSOR_SCANNING_DISABLED;
 }
 
 int
-ipmi_event_state_get_scanning_enabled(ipmi_event_state_t *events)
+ipmi_event_state_get_scanning_disabled(ipmi_event_state_t *events)
 {
     return (events->status >> 6) & 1;
 }

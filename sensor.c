@@ -2560,12 +2560,10 @@ enables_get(ipmi_sensor_t *sensor,
 	    void          *cb_data)
 {
     event_enable_get_info_t *info = cb_data;
-    int                     global_enable;
-    int                     scanning_enabled;
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, 0, 0, &info->state, info->cb_data);
+	    info->done(sensor, err, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -2575,7 +2573,6 @@ enables_get(ipmi_sensor_t *sensor,
 	if (info->done)
 	    info->done(sensor,
 		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       0, 0,
 		       &info->state,
 		       info->cb_data);
 	ipmi_sensor_opq_done(sensor);
@@ -2588,12 +2585,8 @@ enables_get(ipmi_sensor_t *sensor,
 				      | (rsp->data[3] << 8));
     info->state.__deassertion_events = (rsp->data[4]
 					| (rsp->data[5] << 8));
-    global_enable = ! ((rsp->data[1] >> 7) & 1);
-    scanning_enabled = ! ((rsp->data[1] >> 6) & 1);
     if (info->done)
-	info->done(sensor, 0,
-		   global_enable, scanning_enabled,
-		   &info->state, info->cb_data);
+	info->done(sensor, 0, &info->state, info->cb_data);
     ipmi_sensor_opq_done(sensor);
     free(info);
 }
@@ -2608,7 +2601,7 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 
     if (err) {
 	if (info->done)
-	    info->done(sensor, err, 0, 0, &info->state, info->cb_data);
+	    info->done(sensor, err, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
 	return;
@@ -2624,7 +2617,7 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, enables_get, &(info->sdata), info);
     if (rv) {
 	if (info->done)
-	    info->done(sensor, rv, 0, 0, &info->state, info->cb_data);
+	    info->done(sensor, rv, &info->state, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	free(info);
     }
