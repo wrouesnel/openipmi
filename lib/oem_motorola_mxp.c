@@ -5985,7 +5985,9 @@ new_board_sensors(ipmi_mc_t           *mc,
 #define MXP_2_5V_SENSOR_NUM	4
 #define MXP_8V_SENSOR_NUM	5
 #define MXP_AMC_OFFLINE_NUM     6
-#define MXP_AMC_TEMP_SENSOR_NUM	7
+
+/* Must match the real sensor number */
+#define MXP_AMC_TEMP_SENSOR_NUM	10
 
 static void
 amc_offline_get_cb(ipmi_sensor_t   *sensor,
