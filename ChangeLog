@@ -1,3 +1,17 @@
+2004-02-23 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/mc.c: Fixed a race condition dealing with an MC going away
+	while the SDRs were being fetched.  I wasn't following my own
+	rules about pointers and callbacks.
+
+	* lib/oem_motorola_mxp.c: Added a read handler for the I2C Isolate
+	control.
+
+	* lib/oem_motorola_mxp.c: Used the minor firmware version, not the
+	major version,to tell if an MXP board has SDRs on-board.
+
+	* configure.in: Move to version 1.2.15.
+
 2004-02-22 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/oem_motorola_mxp.c: Added reading the reset control for

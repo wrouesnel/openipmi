@@ -1765,11 +1765,14 @@ check_oem_handlers(ipmi_mc_t *mc)
 
 typedef struct sdr_fetch_info_s
 {
-    ipmi_domain_t            *domain;
-    ipmi_mc_t                *source_mc; /* This is used to scan the SDRs. */
-    ipmi_mc_done_cb          done;
-    void                     *done_data;
-    opq_t                    *sensor_wait_q;
+    ipmi_domain_t    *domain;
+    ipmi_mcid_t      source_mc; /* This is used to scan the SDRs. */
+    ipmi_mc_done_cb  done;
+    void             *done_data;
+    opq_t            *sensor_wait_q;
+    int              err;
+    int              changed;
+    ipmi_sdr_info_t  *sdrs;
 } sdr_fetch_info_t;
 
 int
@@ -1793,12 +1796,40 @@ ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc)
 }
 
 static void
-sdr_reread_done(sdr_fetch_info_t *info, int err)
+sdr_reread_done(sdr_fetch_info_t *info, ipmi_mc_t *mc, int err, int mc_valid)
 {
     if (info->done)
-	info->done(info->source_mc, err, info->done_data);
-    opq_op_done(info->sensor_wait_q);
+	info->done(mc, err, info->done_data);
+    if (mc_valid)
+	opq_op_done(info->sensor_wait_q);
     ipmi_mem_free(info);
+}
+
+static void
+sdrs_fetched_mc_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
+    int              rv = 0;
+
+    if (info->err) {
+	sdr_reread_done(info, mc, info->err, 1);
+	return;
+    }
+
+    if (mc->fixup_sdrs_handler)
+	mc->fixup_sdrs_handler(mc, info->sdrs, mc->fixup_sdrs_cb_data);
+
+    if (info->changed) {
+	ipmi_entity_scan_sdrs(info->domain, mc,
+			      ipmi_domain_get_entities(info->domain),
+			      info->sdrs);
+	rv = ipmi_sensor_handle_sdrs(info->domain, mc, info->sdrs);
+
+	if (!rv)
+	    ipmi_detect_domain_presence_changes(info->domain, 0);
+    }
+
+    sdr_reread_done(info, mc, rv, 1);
 }
 
 static void
@@ -1808,30 +1839,29 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	     unsigned int    count,
 	     void            *cb_data)
 {
-    sdr_fetch_info_t   *info = (sdr_fetch_info_t *) cb_data;
-    int                rv = 0;
-    ipmi_mc_t          *mc;
+    sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
+    int              rv = 0;
 
-    if (err) {
-	sdr_reread_done(info, err);
-	return;
-    }
+    info->err = err;
+    info->changed = changed;
+    info->sdrs = sdrs;
+    rv = ipmi_mc_pointer_cb(info->source_mc, sdrs_fetched_mc_cb, info);
+    if (rv)
+	sdr_reread_done(info, NULL, ECANCELED, 1);
+}
 
-    mc = info->source_mc;
-    if (mc->fixup_sdrs_handler)
-	mc->fixup_sdrs_handler(mc, sdrs, mc->fixup_sdrs_cb_data);
+static void
+sensor_read_mc_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
+    int              rv;
 
-    if (changed) {
-	ipmi_entity_scan_sdrs(info->domain, info->source_mc,
-			      ipmi_domain_get_entities(info->domain),
-			      sdrs);
-	rv = ipmi_sensor_handle_sdrs(info->domain, info->source_mc, sdrs);
-
-	if (!rv)
-	    ipmi_detect_domain_presence_changes(info->domain, 0);
-    }
-
-    sdr_reread_done(info, rv);
+    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(mc), sdrs_fetched, info);
+    if (rv == ENOSYS)
+	/* ENOSYS means that the sensor population is not dyanmic. */
+	sdr_reread_done(info, mc, 0, 1);
+    else if (rv)
+	sdr_reread_done(info, mc, rv, 1);
 }
 
 static void
@@ -1841,16 +1871,13 @@ sensor_read_handler(void *cb_data, int shutdown)
     int              rv;
 
     if (shutdown) {
-	sdr_reread_done(info, ECANCELED);
+	sdr_reread_done(info, NULL, ECANCELED, 0);
 	return;
     }
 
-    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(info->source_mc), sdrs_fetched, info);
-    if (rv == ENOSYS)
-	/* ENOSYS means that the sensor population is not dyanmic. */
-	sdr_reread_done(info, 0);
-    else if (rv)
-	sdr_reread_done(info, rv);
+    rv = ipmi_mc_pointer_cb(info->source_mc, sensor_read_mc_cb, info);
+    if (rv)
+	sdr_reread_done(info, NULL, ECANCELED, 0);
 }
 
 int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
@@ -1869,7 +1896,7 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 
     sensors = _ipmi_mc_get_sensors(mc);
 
-    info->source_mc = mc;
+    info->source_mc = ipmi_mc_convert_to_id(mc);
     info->domain = ipmi_mc_get_domain(mc);
     info->done = done;
     info->done_data = done_data;

@@ -4815,6 +4815,43 @@ i2c_isolate_set(ipmi_control_t     *control,
 }
 
 static int
+i2c_isolate_get_cb(ipmi_control_t     *control,
+		   mxp_control_info_t *control_info,
+		   unsigned char      *data)
+{
+    return (data[4] >> 1) & 1;
+}
+
+static int
+i2c_isolate_get(ipmi_control_t      *control,
+		ipmi_control_val_cb handler,
+		void                *cb_data)
+{
+    mxp_control_header_t *hdr = ipmi_control_get_oem_info(control);
+    mxp_board_t          *binfo = hdr->data;
+    mxp_control_info_t   *control_info;
+    int                  rv;
+
+    control_info = alloc_control_info(binfo);
+    if (!control_info)
+	return ENOMEM;
+    control_info->done_get = handler;
+    control_info->cb_data = cb_data;
+    control_info->get_val = i2c_isolate_get_cb;
+    control_info->min_rsp_length = 5;
+    control_info->mc = binfo->info->mc;
+    control_info->cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
+    control_info->extra_data[0] = binfo->ipmb_addr;
+    control_info->extra_data_len = 1;
+
+    rv = ipmi_control_add_opq(control, mxp_control_get_start,
+			      &(control_info->sdata), control_info);
+    if (rv)
+	ipmi_mem_free(control_info);
+    return rv;
+}
+
+static int
 mxp_add_board_sensors(mxp_info_t  *info,
 		      mxp_board_t *board)
 {
@@ -4964,7 +5001,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 			       IPMI_CONTROL_OUTPUT,
 			       "I2C Isolate",
 			       i2c_isolate_set,
-			       NULL,
+			       i2c_isolate_get,
 			       &board->i2c_isolate);
 	if (rv)
 	    goto out_err;
@@ -6515,7 +6552,11 @@ amc_board_handler(ipmi_mc_t *mc)
     char               *name;
     int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
 	= ipmi_standard_sensor_cb.ipmi_reading_get;
-    int                v1_amc = ipmi_mc_major_fw_revision(mc) < 5;
+    /* The major fw revision on MXP boards is the board type, the
+       minor revision is the actual fw revision.  Versions 21 an
+       greater have actual SDRs and the like, older versions do
+       not. */
+    int                v1_amc = ipmi_mc_minor_fw_revision(mc) < 21;
 
 
     info = ipmi_mem_alloc(sizeof(*info));
