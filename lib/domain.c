@@ -2633,6 +2633,8 @@ typedef struct sels_reread_s
     /* We may have multiple threads going at the data from multiple
        SEL reads, so we need to protect the data. */
     ipmi_lock_t *lock;
+
+    ipmi_domain_t *domain;
 } sels_reread_t;
 
 static void
@@ -2640,6 +2642,7 @@ reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
 {
     sels_reread_t *info = cb_data;
     int           count;
+    int           rv;
 
     ipmi_lock(info->lock);
     info->count--;
@@ -2649,8 +2652,16 @@ reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
     ipmi_unlock(info->lock);
     if (count == 0) {
 	/* We were the last one, call the main handler. */
+
+	/* First validate the domain. */
+	ipmi_read_lock();
+	rv = ipmi_domain_validate(info->domain);
+	if (rv)
+	    info->domain = NULL;
+	ipmi_read_unlock();
+
 	if (info->handler)
-	    info->handler(ipmi_mc_get_domain(mc), info->err, info->cb_data);
+	    info->handler(info->domain, info->err, info->cb_data);
 	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
     }
@@ -2694,6 +2705,7 @@ ipmi_domain_reread_sels(ipmi_domain_t  *domain,
     info->count = 0;
     info->tried = 0;
     info->err = 0;
+    info->domain = domain;
     info->handler = handler;
     info->cb_data = cb_data;
     ipmi_lock(info->lock);
@@ -3480,6 +3492,9 @@ got_dev_id(ipmi_mc_t  *mc,
 {
     ipmi_domain_t *domain = rsp_data;
     int           rv;
+
+    if (!mc)
+	return; /* domain went away while processing. */
 
     rv = _ipmi_mc_get_device_id_data_from_rsp(mc, rsp);
     if (rv) {
