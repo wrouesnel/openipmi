@@ -151,6 +151,12 @@ struct ipmi_entity_s
     void                    *presence_cb_data;
 };
 
+typedef struct entity_child_link_s
+{
+    ipmi_entity_t *child;
+    unsigned int  in_db : 1;
+} entity_child_link_t;
+
 struct ipmi_entity_info_s
 {
     ipmi_bmc_entity_cb handler;
@@ -207,6 +213,13 @@ remove_child_cb(ilist_iter_t *iter, void *item, void *cb_data)
 }
 
 static void
+remove_parent_cb(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    entity_child_link_t *link = item;
+    ipmi_entity_remove_child(cb_data, link->child);
+}
+
+static void
 cleanup_entity(ipmi_entity_t *ent)
 {
     ilist_iter_t iter;
@@ -216,6 +229,7 @@ cleanup_entity(ipmi_entity_t *ent)
 	ent->ents->handler(IPMI_DELETED, ent->bmc, ent, ent->ents->cb_data);
 
     /* First destroy the parent/child relationships. */
+    ilist_iter(ent->sub_entities, remove_parent_cb, ent);
     ilist_iter(ent->parent_entities, remove_child_cb, ent);
 
     /* Remove it from the entities list. */
@@ -450,12 +464,6 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
     return 0;
 }
 
-typedef struct entity_child_link_s
-{
-    ipmi_entity_t *child;
-    unsigned int  in_db : 1;
-} entity_child_link_t;
-
 static int
 search_parent(void *item, void *cb_data)
 {
@@ -533,10 +541,11 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
     CHECK_ENTITY_LOCK(child);
 
     ilist_init_iter(&iter, ent->sub_entities);
+    ilist_unpositioned(&iter);
 
     /* Find the child in the parent's list. */
     link = ilist_search_iter(&iter, search_child, child);
-    if (link != NULL)
+    if (link == NULL)
 	return ENODEV;
 
     ilist_delete(&iter);
@@ -544,6 +553,7 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
 
     /* Find the parent in the child's list. */
     ilist_init_iter(&iter, child->parent_entities);
+    ilist_unpositioned(&iter);
     if (ilist_search_iter(&iter, search_parent, ent))
 	ilist_delete(&iter);
 
@@ -1649,9 +1659,11 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
     ilist_sort(ent->sub_entities, cmp_entities);
 
     ilist_init_iter(&iter, ent->sub_entities);
-    ilist_first(&iter);
     last = NULL;
-    next = ilist_get(&iter);
+    if (ilist_first(&iter))
+	next = ilist_get(&iter);
+    else
+	next = NULL;
     while (next) {
 	curr = next;
 	prev_inst = curr->entity_instance;

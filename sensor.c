@@ -528,13 +528,13 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 	new_array = malloc(sizeof(*new_array) * new_size);
 	if (!new_array)
 	    return ENOMEM;
-	if (sensors->sensors_by_idx[4])
+	if (sensors->sensors_by_idx[4]) {
 	    memcpy(new_array, sensors->sensors_by_idx[4],
 		   sizeof(*new_array) * (sensors->idx_size[4]));
+	    free(sensors->sensors_by_idx[4]);
+	}
 	for (i=sensors->idx_size[4]; i<new_size; i++)
 	    new_array[i] = NULL;
-	if (sensors->sensors_by_idx[4])
-	    free(sensors->sensors_by_idx[4]);
 	sensors->sensors_by_idx[4] = new_array;
 	sensors->idx_size[4] = new_size;
     }
@@ -596,7 +596,8 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
 			  sensor->entity_instance,
 			  &ent);
     if (!rv)
-	ipmi_entity_remove_sensor(ent, bmc, sensor->lun, sensor->num, sensor);
+	ipmi_entity_remove_sensor(ent, sensor->mc,
+				  sensor->lun, sensor->num, sensor);
 
     sensors->sensors_by_idx[sensor->lun][sensor->num] = NULL;
 
@@ -615,7 +616,7 @@ ipmi_sensors_destroy(ipmi_sensor_info_t *sensors)
 	return EINVAL;
 
     sensors->destroyed = 1;
-    for (i=0; i<4; i++) {
+    for (i=0; i<=4; i++) {
 	for (j=0; j<sensors->idx_size[i]; j++) {
 	    if (sensors->sensors_by_idx[i][j]) {
 		ipmi_sensor_destroy(sensors->sensors_by_idx[i][j]);
@@ -1065,9 +1066,10 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
        with the entities, and we make sure all the entities exist. */
     for (i=0; i<count; i++) {
 	ipmi_sensor_t      *nsensor = sdr_sensors[i];
-	ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(nsensor->mc);
 
 	if (nsensor != NULL) {
+	    ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(nsensor->mc);
+
 	    /* Make sure the entity exists for ALL sensors in the
 	       new list.  This way, if a sensor has changed
 	       entities, the new entity will exist. */
@@ -1093,12 +1095,15 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 		    rv = ENOMEM;
 		    goto out_err_unlock_free;
 		}
-		memcpy(new_by_idx,
-		       sensors->sensors_by_idx[nsensor->lun],
-		       sensors->idx_size[nsensor->lun]);
+		if (sensors->sensors_by_idx[nsensor->lun]) {
+		    memcpy(new_by_idx,
+			   sensors->sensors_by_idx[nsensor->lun],
+			   (sensors->idx_size[nsensor->lun]
+			    * sizeof(ipmi_sensor_t *)));
+		    free(sensors->sensors_by_idx[nsensor->lun]);
+		}
 		for (j=sensors->idx_size[nsensor->lun]; j<new_size; j++)
 		    new_by_idx[j] = NULL;
-		free(sensors->sensors_by_idx[nsensor->lun]);
 		sensors->sensors_by_idx[nsensor->lun] = new_by_idx;
 		sensors->idx_size[nsensor->lun] = new_size;
 	    }
@@ -1123,29 +1128,36 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
     /* For each new sensor, put it into the MC it belongs with. */
     for (i=0; i<count; i++) {
 	ipmi_sensor_t *nsensor = sdr_sensors[i];
-	ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(nsensor->mc);
-	ipmi_sensor_t *osensor;
 
-	osensor = sensors->sensors_by_idx[nsensor->lun][nsensor->num];
-	if (osensor == NULL) {
-	    /* It's a new sensor. */
-	    sensors->sensors_by_idx[nsensor->lun][nsensor->num] = nsensor;
-	    snext = sref;
-	    sref = sref->next;
-	    handle_new_sensor(bmc, nsensor, snext);
-	} else {
-	    /* It's already there. */
-	    if (cmp_sensor(nsensor, osensor)) {
-		/* They compare, prefer to keep the old data. */
-		free(nsensor);
-		sdr_sensors[i] = osensor;
-		old_sdr_sensors[osensor->source_idx] = NULL;
-		osensor->source_idx = i;
+	if (nsensor) {
+	    ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(nsensor->mc);
+	    if (sensors->sensors_by_idx[nsensor->lun]
+		&& (nsensor->num < sensors->idx_size[nsensor->lun])
+		&& sensors->sensors_by_idx[nsensor->lun][nsensor->num])
+	    {
+		/* It's already there. */
+		ipmi_sensor_t *osensor
+		    = sensors->sensors_by_idx[nsensor->lun][nsensor->num];
+
+		if (cmp_sensor(nsensor, osensor)) {
+		    /* They compare, prefer to keep the old data. */
+		    free(nsensor);
+		    sdr_sensors[i] = osensor;
+		    old_sdr_sensors[osensor->source_idx] = NULL;
+		    osensor->source_idx = i;
+		} else {
+		    /* Destroy the old sensor, add the new one. */
+		    handle_deleted_sensor(bmc, osensor);
+		    old_sdr_sensors[osensor->source_idx] = NULL;
+		    free(osensor);
+		    sensors->sensors_by_idx[nsensor->lun][nsensor->num]
+			= nsensor;
+		    snext = sref;
+		    sref = sref->next;
+		    handle_new_sensor(bmc, nsensor, snext);
+		}
 	    } else {
-		/* Destroy the old sensor, add the new one. */
-		handle_deleted_sensor(bmc, osensor);
-		old_sdr_sensors[osensor->source_idx] = NULL;
-		free(osensor);
+		/* It's a new sensor. */
 		sensors->sensors_by_idx[nsensor->lun][nsensor->num] = nsensor;
 		snext = sref;
 		sref = sref->next;

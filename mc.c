@@ -1690,7 +1690,6 @@ ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
 				      &(info->msg),
 				      devid_bc_rsp_handler,
 				      info, NULL, NULL);
-
     while ((rv) && (info->addr.slave_addr < end_addr)) {
 	info->addr.slave_addr += 2;
 	rv = bmc->bmc->conn->send_command(bmc->bmc->conn,

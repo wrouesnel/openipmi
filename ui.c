@@ -123,6 +123,7 @@ typedef struct thr_pos_s
     int   set;
     pos_t value;
     pos_t enabled;
+    pos_t oor;
 } thr_pos_t;
 thr_pos_t threshold_positions[6];
 
@@ -182,7 +183,7 @@ void
 vlog_pad_out(char *format, va_list ap)
 {
     if (full_screen)
-	vwprintw(log_pad, format, ap);
+	vw_printw(log_pad, format, ap);
     else
 	vprintf(format, ap);
 }
@@ -231,7 +232,7 @@ display_pad_out(char *format, ...)
 
     va_start(ap, format);
     if (full_screen)
-	vwprintw(display_pad, format, ap);
+	vw_printw(display_pad, format, ap);
     else
 	vprintf(format, ap);
     va_end(ap);
@@ -244,7 +245,7 @@ cmd_win_out(char *format, ...)
 
     va_start(ap, format);
     if (full_screen)
-	vwprintw(cmd_win, format, ap);
+	vw_printw(cmd_win, format, ap);
     else
 	vprintf(format, ap);
     va_end(ap);
@@ -321,15 +322,17 @@ draw_lines()
 void
 ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
-    int y = 0, x;
+    int x = 0, y = 0, old_x = 0, old_y = 0;
     int do_nl = 1;
 
     if (full_screen) {
 	/* Generate the output to the dummy pad to see how many lines we
 	   will use. */
-	vwprintw(dummy_pad, format, ap);
+	getyx(dummy_pad, old_y, old_x);
+	vw_printw(dummy_pad, format, ap);
 	getyx(dummy_pad, y, x);
-	wmove(dummy_pad, 0, x);
+	if (do_nl)
+	    wprintw(dummy_pad, "\n");
     }
 
     switch(log_type)
@@ -368,9 +371,32 @@ ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
 	    break;
     }
 
-    vlog_pad_out(format, ap);
-    if (do_nl)
-	log_pad_out("\n");
+    if (full_screen) {
+	int max_x, max_y, i, j;
+
+	if (old_y == y) {
+	    for (j=old_x; j<x; j++)
+		waddch(log_pad, mvwinch(dummy_pad, y, j));
+	} else {
+	    getmaxyx(dummy_pad, max_y, max_x);
+	    for (j=old_x; j<max_x; j++)
+		waddch(log_pad, mvwinch(dummy_pad, old_y, j));
+	    waddch(log_pad, '\n');
+	    for (i=old_y+1; i<y; i++) {
+		for (j=0; j<max_x; j++)
+		    waddch(log_pad, mvwinch(dummy_pad, i, j));
+		waddch(log_pad, '\n');
+	    }
+	    for (j=0; j<x; j++)
+		waddch(log_pad, mvwinch(dummy_pad, y, j));
+	}
+	y -= old_y;
+	wmove(dummy_pad, 0, x);
+    } else {
+	vlog_pad_out(format, ap);
+	if (do_nl)
+	    log_pad_out("\n");
+    }
     log_pad_refresh(y);
     cmd_win_refresh();
 }
@@ -386,9 +412,11 @@ ui_log(char *format, ...)
     if (full_screen) {
 	/* Generate the output to the dummy pad to see how many lines we
 	   will use. */
-	vwprintw(dummy_pad, format, ap);
+	vw_printw(dummy_pad, format, ap);
 	getyx(dummy_pad, y, x);
 	wmove(dummy_pad, 0, x);
+	va_end(ap);
+	va_start(ap, format);
     }
 
     vlog_pad_out(format, ap);
@@ -844,7 +872,8 @@ read_sensor(ipmi_sensor_t             *sensor,
 	    ipmi_states_t             *states,
 	    void                      *cb_data)
 {
-    ipmi_sensor_id_t sensor_id;
+    ipmi_sensor_id_t   sensor_id;
+    enum ipmi_thresh_e t;
 
     sensor_id = ipmi_sensor_convert_to_id(sensor);
     if (!((curr_display_type == DISPLAY_SENSOR)
@@ -864,6 +893,19 @@ read_sensor(ipmi_sensor_t             *sensor,
 	display_pad_out("0x%x (RAW)", raw_val);
     else
 	display_pad_out("unreadable");
+
+    for (t=IPMI_LOWER_NON_CRITICAL; t<IPMI_UPPER_NON_RECOVERABLE; t++) {
+	if (threshold_positions[t].set) {
+	    wmove(display_pad,
+		  threshold_positions[t].oor.y,
+		  threshold_positions[t].oor.x);
+	    if (ipmi_is_threshold_out_of_range(states, t))
+		display_pad_out("true ");
+	    else
+		display_pad_out("false");
+	}
+    }    
+    
     display_pad_refresh();
 }
 
@@ -1228,7 +1270,7 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		anything_set |= settable;
 		ipmi_sensor_threshold_readable(sensor, t, &readable);
 		anything_set |= readable;
-		for (i=0; i<1; i++) {
+		for (i=0; i<=1; i++) {
 		    ipmi_sensor_threshold_assertion_event_supported(
 			sensor, t, i, &(assert_sup[i]));
 		    anything_set |= assert_sup[i];
@@ -1246,11 +1288,11 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		    else display_pad_out(" ");
 		    if (assert_sup[0]) display_pad_out("L^");
 		    else display_pad_out("  ");
-		    if (assert_sup[0]) display_pad_out("Lv");
+		    if (deassert_sup[0]) display_pad_out("Lv");
 		    else display_pad_out("  ");
 		    if (assert_sup[1]) display_pad_out("H^");
 		    else display_pad_out("  ");
-		    if (assert_sup[1]) display_pad_out("Hv");
+		    if (deassert_sup[1]) display_pad_out("Hv");
 		    else display_pad_out("  ");
 		    display_pad_out("\n      enabled: ");
 		    getyx(display_pad,
@@ -1260,6 +1302,10 @@ sensor_handler(ipmi_entity_t *entity, ipmi_sensor_t *sensor, void *cb_data)
 		    getyx(display_pad,
 			  threshold_positions[t].value.y,
 			  threshold_positions[t].value.x);
+		    display_pad_out("\n out of range: ");
+		    getyx(display_pad,
+			  threshold_positions[t].oor.y,
+			  threshold_positions[t].oor.x);
 		    display_pad_out("\n");
 		} else {
 		    threshold_positions[t].set = 0;
