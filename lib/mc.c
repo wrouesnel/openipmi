@@ -1847,7 +1847,7 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
     info->sdrs = sdrs;
     rv = ipmi_mc_pointer_cb(info->source_mc, sdrs_fetched_mc_cb, info);
     if (rv)
-	sdr_reread_done(info, NULL, ECANCELED, 1);
+	sdr_reread_done(info, NULL, ECANCELED, 0);
 }
 
 static void
