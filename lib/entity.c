@@ -246,6 +246,9 @@ struct ipmi_entity_s
 
     ipmi_entity_control_cb cruft_control_handler;
     void                   *cruft_control_cb_data;
+
+    ipmi_entity_fru_cb cruft_fru_handler;
+    void               *cruft_fru_cb_data;
 };
 
 struct ipmi_entity_info_s
@@ -6296,3 +6299,26 @@ ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
     return rv;
 }
 
+int
+ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
+				   ipmi_entity_fru_cb handler,
+				   void              *cb_data)
+{
+    int rv = 0;
+
+    CHECK_ENTITY_LOCK(ent);
+
+    ipmi_lock(ent->lock);
+    if (ent->cruft_fru_handler)
+	ipmi_entity_remove_fru_update_handler
+	    (ent,
+	     ent->cruft_fru_handler,
+	     ent->cruft_fru_cb_data);
+
+    ent->cruft_fru_handler = handler;
+    ent->cruft_fru_cb_data = cb_data;
+    if (handler)
+	rv = ipmi_entity_add_fru_update_handler(ent, handler, cb_data);
+    ipmi_unlock(ent->lock);
+    return rv;
+}
