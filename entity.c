@@ -538,9 +538,7 @@ static void
 presence_sensor_changed(ipmi_sensor_t         *sensor,
 			enum ipmi_event_dir_e dir,
 			int                   offset,
-			int                   severity_present,
 			int                   severity,
-			int		      prev_severity_present,
 			int                   prev_severity,
 			void                  *cb_data,
 			ipmi_log_t            *log)

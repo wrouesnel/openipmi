@@ -356,14 +356,14 @@ ipmi_sensor_threshold_set_event_handler(
    state is being asserted or deasserted, the offset is the state that
    is being asserted or deasserted.  If the "log" field is not NULL,
    then the log provided is the log that caused this event to be
-   generated; it is provided so you may delete the log from the SEL. */
+   generated; it is provided so you may delete the log from the SEL.
+   Note that the offset, severity, and prev_severity values will be -1
+   if not valid or present. */
 typedef void (*ipmi_sensor_discrete_event_handler_cb)(
     ipmi_sensor_t         *sensor,
     enum ipmi_event_dir_e dir,
     int                   offset,
-    int                   severity_present,
     int                   severity,
-    int			  prev_severity_present,
     int                   prev_severity,
     void                  *cb_data,
     ipmi_log_t            *log);

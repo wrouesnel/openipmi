@@ -2350,8 +2350,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 					sensor->cb_data, log);
     } else {
 	int offset;
-	int severity_present = 0, prev_severity_present = 0;
-	int severity = 0, prev_severity = 0;
+	int severity = -1, prev_severity = -1;
 
 	if (!sensor->discrete_event_handler)
 	    return EINVAL;
@@ -2361,14 +2360,14 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_log_t *log)
 	if ((log->data[10] >> 6) == 2) {
 	    severity = log->data[11] >> 4;
 	    prev_severity = log->data[11] & 0xf;
-	    if (severity != 0xf)
-		severity_present = 1;
-	    if (prev_severity != 0xf)
-		prev_severity_present = 1;
+	    if (severity == 0xf)
+		severity = -1;
+	    if (prev_severity == 0xf)
+		prev_severity = -11;
 	}
 	sensor->discrete_event_handler(sensor, dir, offset,
-				       severity_present, severity,
-				       prev_severity_present, prev_severity,
+				       severity,
+				       prev_severity,
 				       sensor->cb_data, log);
     }
 

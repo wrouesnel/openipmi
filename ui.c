@@ -2019,9 +2019,7 @@ static void
 sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 			      enum ipmi_event_dir_e dir,
 			      int                   offset,
-			      int                   severity_present,
 			      int                   severity,
-			      int		    prev_severity_present,
 			      int                   prev_severity,
 			      void                  *cb_data,
 			      ipmi_log_t            *log)
@@ -2037,9 +2035,9 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
 	   id, instance, lun, num, name,
 	   offset,
 	   ipmi_get_event_dir_string(dir));
-    if (severity_present)
+    if (severity != -1)
 	ui_log("  severity is %d\n", severity);
-    if (prev_severity_present)
+    if (prev_severity != -1)
 	ui_log("  prev severity is %d\n", prev_severity);
     if (log)
 	ui_log("Due to log 0x%4.4x\n", log->record_id);
