@@ -1,4 +1,9 @@
 
+2003-03-05 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmiif.h: Fixed the description of the
+	ipmi_bmc_add_con_fail_handler() call to be accurate and complete.
+
 2003-02-27 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 0.2.2.

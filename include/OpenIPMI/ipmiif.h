@@ -132,7 +132,13 @@ typedef void (*ipmi_bmc_cb)(ipmi_mc_t *bmc, int err, void *cb_data);
 typedef struct ipmi_bmc_con_fail_s ipmi_bmc_con_fail_t;
 
 /* Add and remove a function to be called when the connection to the
-   BMC goes down. */
+   BMC goes down or back up.  Being down does NOT mean the BMC has
+   been shutdown, it is still active, and OpenIPMI will continue to
+   attempt to reconnect to the BMC.  When the connection goes down,
+   The "err" value in the callback will be non-zero to report the
+   reason for the failure.  When the connection goes up, the "err"
+   value will be zero reporting that the connection is now
+   available. */
 int ipmi_bmc_add_con_fail_handler(ipmi_mc_t           *bmc,
 				  ipmi_bmc_cb         handler,
 				  void                *cb_data,

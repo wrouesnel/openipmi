@@ -74,7 +74,11 @@
 *****************************************************************************/
 /*** PVCS LOG SECTION ********************************************************
 *
-* $Log: not supported by cvs2svn $*
+* $Log: not supported by cvs2svn $
+* Revision 1.1  2003/02/21 16:11:20  cminyard
+* Added ipmicmd to this code.
+* Moved to the newest kernel headers.
+**
  * 
  *    Rev 1.5   16 Oct 2002 09:20:36   Isabellf
  *  - make it work with patch v7 of the driver
@@ -98,6 +102,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/time.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -160,7 +165,7 @@ int curr_seq = 0;
 
 void printInfo( )
 {
-    printf( "ipmicmd\t$,$Date: 2003-02-21 16:11:20 $,$Author: cminyard $\n");
+    printf( "ipmicmd\t$,$Date: 2003-03-05 15:42:34 $,$Author: cminyard $\n");
     printf( "Kontron Canada Inc.\n");
     printf( "-\n");
     printf( "This little utility is an ipmi command tool ;-)\n");
@@ -262,6 +267,52 @@ got_data(int fd)
     printf("\n");
 }
 
+void
+time_msgs(struct ipmi_req *req, unsigned long count)
+{
+    struct timeval   start_time, end_time;
+    int              i;
+    fd_set           rset;
+    struct ipmi_recv rsp;
+    unsigned long    diff;
+    int              rv;
+    struct ipmi_addr addr;
+    char             data[30];
+
+    gettimeofday(&start_time, NULL);
+    for (i=0; i<count; i++) {
+	rv = ioctl(ipmi_fd, IPMICTL_SEND_COMMAND, req);
+	if (rv == -1) {
+	    printf("Error sending command: %s\n", strerror(errno));
+	    return;
+	}
+
+	FD_ZERO(&rset);
+	FD_SET(ipmi_fd, &rset);
+	rv = select(ipmi_fd+1, &rset, NULL, NULL, NULL);
+	if (rv == -1) {
+	    printf("Error from select: %s\n", strerror(errno));
+	    return;
+	}
+
+	rsp.addr = (unsigned char *) &addr;
+	rsp.addr_len = sizeof(addr);
+	rsp.msg.data = data;
+	rsp.msg.data_len = sizeof(data);
+	rv = ioctl(ipmi_fd, IPMICTL_RECEIVE_MSG, &rsp);
+	if (rv == -1) {
+	    printf("Error receiving response: %s\n", strerror(errno));
+	    return;
+	}
+    }
+    gettimeofday(&end_time, NULL);
+    diff = (((end_time.tv_sec - start_time.tv_sec) * 1000000)
+	    + (end_time.tv_usec - start_time.tv_usec));
+    printf("Time was %fus per msg, %ldus total\n",
+	   ((float) diff) / ((float)(count)),
+	   diff);
+}
+
 
 int
 process_input_line(char *buf)
@@ -275,8 +326,9 @@ process_input_line(char *buf)
     struct ipmi_ipmb_addr             ipmb_addr;
     struct ipmi_system_interface_addr bmc_addr;
     char                              outbuf[40];
-    int                               rv;
+    int                               rv = 0;
     short                             channel;
+    unsigned long                     time_count = 0;
 
     if (v == NULL)
 	return -1;
@@ -292,6 +344,9 @@ process_input_line(char *buf)
 	printf("      send a command on the channel.\n");
 	printf("  <channel> 00 <dest addr> <dest lun> <netfn> <cmd> <data...> -\n");
 	printf("      broadcast a command on the channel.\n");
+	printf("  test_lat <count> <command> - Send the command and wait for\n"
+	       "      the response <count> times and measure the average\n"
+	       "      time.\n");
 	return 0;
     }
 
@@ -339,6 +394,17 @@ process_input_line(char *buf)
 	    return -1;
 	}
 	return 0;
+    }
+
+    if (strcmp(v, "test_lat") == 0) {
+	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
+	if (!v) {
+	    printf("No netfn for regcmd\n");
+	    return -1;
+	}
+	time_count = strtoul(v, &endptr, 16);
+
+	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
     }
 
     while (v != NULL) {
@@ -399,9 +465,13 @@ process_input_line(char *buf)
     req.msg.cmd = outbuf[start]; start++;
     req.msg.data = &(outbuf[start]);
     req.msg.data_len = pos-start;
-    rv = ioctl(ipmi_fd, IPMICTL_SEND_COMMAND, &req);
-    if (rv == -1) {
-	printf("Error sending command: %s\n", strerror(errno));
+    if (time_count) {
+	time_msgs(&req, time_count);
+    } else {
+	rv = ioctl(ipmi_fd, IPMICTL_SEND_COMMAND, &req);
+	if (rv == -1) {
+	    printf("Error sending command: %s\n", strerror(errno));
+	}
     }
     curr_seq++;
 
