@@ -8,3 +8,7 @@ chassis-related commands.
 Use GUIDs to tell if an MC has changed.
 
 Improve the granularity of locking.
+
+Modify the LAN connection code to use one socket for all messages,
+instead of a socket per connection.  This should make the library
+scalable to thousands of domains.

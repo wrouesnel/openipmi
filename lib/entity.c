@@ -5944,14 +5944,108 @@ e_get_hot_swap_requester(ipmi_entity_t      *ent,
     return rv;
 }
 
+typedef struct hs_check_s
+{
+    int           power;
+    ipmi_entity_t *entity;
+} hs_check_t;
+
+static void
+check_requester(ipmi_sensor_t *sensor,
+		int           err,
+		ipmi_states_t *states,
+		void          *cb_data)
+{
+    hs_check_t    *info = cb_data;
+    ipmi_entity_t *ent = info->entity;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%sentity.c(requester_checked): Unable to"
+		 " get requester value, error %x",
+		 SENSOR_NAME(sensor), err);
+	goto out;
+    }
+
+    if (ipmi_is_state_set(states, ent->hot_swap_offset)
+	== ent->hot_swap_requesting_val)
+    {
+	/* requester is requesting, change the state. */
+	if (info->power)
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_DEACTIVATION_REQUESTED,
+			       NULL);
+	else
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
+    } else {
+	if (info->power)
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
+	else
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVATION_REQUESTED,
+			       NULL);
+    }
+
+ out:
+    ipmi_mem_free(info);
+}
+
+static void
+check_power(ipmi_control_t *control,
+	    int            err,
+	    int            *val,
+	    void           *cb_data)
+{
+    int           rv;
+    hs_check_t    *info = cb_data;
+    ipmi_entity_t *ent = info->entity;
+
+    if (err) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%sentity.c(power_chedked): Unable to"
+		 " get power value, error %x",
+		 CONTROL_NAME(control), err);
+	ipmi_mem_free(info);
+    }
+
+    info->power = val[0];
+
+    if (ent->hot_swap_requester) {
+	rv = ipmi_states_get(ent->hot_swap_requester,
+			     check_requester,
+			     ent);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%sentity.c(power_checked): Unable to"
+		     " request requester status, error %x",
+		     SENSOR_NAME(ent->hot_swap_requester), rv);
+	    ipmi_mem_free(info);
+	}
+    } else {
+	if (val[0])
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
+	else
+	    set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
+	ipmi_mem_free(info);
+    }
+}
+
 static int
 e_check_hot_swap_state(ipmi_entity_t *ent)
 {
-    if (ent->hot_swap_power)
-	ipmi_control_get_val(ent->hot_swap_power, power_checked, ent);
+    hs_check_t *info;
 
-    if (ent->hot_swap_requester)
-	ipmi_states_get(ent->hot_swap_requester, requester_checked, ent);
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->entity = ent;
+    info->power = 1; /* Assume power is on if no power control. */
+
+    if (ent->hot_swap_power)
+	ipmi_control_get_val(ent->hot_swap_power, check_power, info);
+    else if (ent->hot_swap_requester)
+	ipmi_states_get(ent->hot_swap_requester, check_requester, info);
+    else
+	ipmi_mem_free(info);
 
     return 0;
 }
