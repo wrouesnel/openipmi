@@ -19,7 +19,7 @@ get_uchar(char **toks, unsigned char *val, char *errstr, int empty_ok)
 	if (empty_ok)
 	    return ENOSPC;
 	if (errstr)
-	    printf("No %s given\n", errstr);
+	    printf("**No %s given\n", errstr);
 	return EINVAL;
     }
     if (str[0] == '\'') {
@@ -29,7 +29,7 @@ get_uchar(char **toks, unsigned char *val, char *errstr, int empty_ok)
     *val = strtoul(str, &tmpstr, 16);
     if (*tmpstr != '\0') {
 	if (errstr)
-	    printf("Invalid %s given\n", errstr);
+	    printf("**Invalid %s given\n", errstr);
 	return EINVAL;
     }
 
@@ -48,12 +48,12 @@ get_bitmask(char **toks, unsigned char *val, char *errstr, int size,
 	if (empty_ok)
 	    return ENOSPC;
 	if (errstr)
-	    printf("No %s given\n", errstr);
+	    printf("**No %s given\n", errstr);
 	return EINVAL;
     }
     if (strlen(str) != size) {
 	if (errstr)
-	    printf("invalid number of bits in %s\n", errstr);
+	    printf("**invalid number of bits in %s\n", errstr);
 	return EINVAL;
     }
     for (i=size-1, j=0; i>=0; i--, j++) {
@@ -63,7 +63,7 @@ get_bitmask(char **toks, unsigned char *val, char *errstr, int size,
 	    val[i] = 1;
 	} else {
 	    if (errstr)
-		printf("Invalid bit value '%c' in %s\n", str[j], errstr);
+		printf("**Invalid bit value '%c' in %s\n", str[j], errstr);
 	    return EINVAL;
 	}
     }
@@ -79,13 +79,13 @@ get_uint(char **toks, unsigned int *val, char *errstr)
     str = strtok_r(NULL, " \t\n", toks);
     if (!str) {
 	if (errstr)
-	    printf("No %s given\n", errstr);
+	    printf("**No %s given\n", errstr);
 	return EINVAL;
     }
     *val = strtoul(str, &tmpstr, 16);
     if (*tmpstr != '\0') {
 	if (errstr)
-	    printf("Invalid %s given\n", errstr);
+	    printf("**Invalid %s given\n", errstr);
 	return EINVAL;
     }
 
@@ -155,7 +155,7 @@ sel_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = ipmi_mc_enable_sel(mc, max_records, flags);
     if (rv)
-	printf("Unable to enable sel, error 0x%x\n", rv);
+	printf("**Unable to enable sel, error 0x%x\n", rv);
 }
 
 static void
@@ -178,7 +178,7 @@ sel_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = ipmi_mc_add_to_sel(mc, record_type, data);
     if (rv)
-	printf("Unable to add to sel, error 0x%x\n", rv);
+	printf("**Unable to add to sel, error 0x%x\n", rv);
 }
 
 static void
@@ -193,14 +193,14 @@ main_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	if (rv == ENOSPC)
 	    break;
 	if (rv) {
-	    printf("Error 0x%x in data byte %d\n", rv, i);
+	    printf("**Error 0x%x in data byte %d\n", rv, i);
 	    return;
 	}
     }
 
     rv = ipmi_mc_add_main_sdr(mc, data, i);
     if (rv)
-	printf("Unable to add to sdr, error 0x%x\n", rv);
+	printf("**Unable to add to sdr, error 0x%x\n", rv);
 }
 
 static void
@@ -220,14 +220,14 @@ device_sdr_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	if (rv == ENOSPC)
 	    break;
 	if (rv) {
-	    printf("Error 0x%x in data byte %d\n", rv, i);
+	    printf("**Error 0x%x in data byte %d\n", rv, i);
 	    return;
 	}
     }
 
     rv = ipmi_mc_add_device_sdr(mc, lun, data, i);
     if (rv)
-	printf("Unable to add to sdr, error 0x%x\n", rv);
+	printf("**Unable to add to sdr, error 0x%x\n", rv);
 }
 
 static void
@@ -257,7 +257,7 @@ sensor_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = ipmi_mc_add_sensor(mc, lun, num, type, code);
     if (rv)
-	printf("Unable to add to sensor, error 0x%x\n", rv);
+	printf("**Unable to add to sensor, error 0x%x\n", rv);
 }
 
 static void
@@ -292,7 +292,7 @@ sensor_set_bit(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = ipmi_mc_sensor_set_bit(mc, lun, num, bit, value, gen_event);
     if (rv)
-	printf("Unable to set sensor bit, error 0x%x\n", rv);
+	printf("**Unable to set sensor bit, error 0x%x\n", rv);
 }
 
 static void
@@ -322,7 +322,7 @@ sensor_set_value(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = ipmi_mc_sensor_set_value(mc, lun, num, value, gen_event);
     if (rv)
-	printf("Unable to set sensor value, error 0x%x\n", rv);
+	printf("**Unable to set sensor value, error 0x%x\n", rv);
 }
 
 static void
@@ -357,7 +357,7 @@ sensor_set_hysteresis(emu_data_t *emu, lmc_data_t *mc, char **toks)
     rv = ipmi_mc_sensor_set_hysteresis(mc, lun, num, support, positive,
 				       negative);
     if (rv)
-	printf("Unable to set sensor hysteresis, error 0x%x\n", rv);
+	printf("**Unable to set sensor hysteresis, error 0x%x\n", rv);
 }
 
 static void
@@ -396,7 +396,7 @@ sensor_set_threshold(emu_data_t *emu, lmc_data_t *mc, char **toks)
     rv = ipmi_mc_sensor_set_threshold(mc, lun, num, support,
 				      enabled, thresholds);
     if (rv)
-	printf("Unable to set sensor thresholds, error 0x%x\n", rv);
+	printf("**Unable to set sensor thresholds, error 0x%x\n", rv);
 }
 
 static void
@@ -455,7 +455,7 @@ sensor_set_event_support(emu_data_t *emu, lmc_data_t *mc, char **toks)
 					  assert_support, deassert_support,
 					  assert_enabled, deassert_enabled);
     if (rv)
-	printf("Unable to set sensor thresholds, error 0x%x\n", rv);
+	printf("**Unable to set sensor thresholds, error 0x%x\n", rv);
 }
 
 void
@@ -505,7 +505,7 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 			 device_revision, major_fw_rev, minor_fw_rev,
 			 device_support, mfg_id, product_id, dyn_sens);
     if (rv)
-	printf("Unable to add the MC, error 0x%x\n", rv);
+	printf("**Unable to add the MC, error 0x%x\n", rv);
 }
 
 static void
@@ -523,7 +523,7 @@ mc_set_power(emu_data_t *emu, lmc_data_t *mc, char **toks)
 
     rv = ipmi_mc_set_power(mc, power, gen_int);
     if (rv)
-	printf("Unable to set power, error 0x%x\n", rv);
+	printf("**Unable to set power, error 0x%x\n", rv);
 }
 
 #define MAX_FRU_SIZE 8192
@@ -549,14 +549,14 @@ mc_add_fru_data(emu_data_t *emu, lmc_data_t *mc, char **toks)
 	if (rv == ENOSPC)
 	    break;
 	if (rv) {
-	    printf("Error 0x%x in data byte %d\n", rv, i);
+	    printf("**Error 0x%x in data byte %d\n", rv, i);
 	    return;
 	}
     }
 
     rv = ipmi_mc_add_fru_data(mc, devid, length, data, i);
     if (rv)
-	printf("Unable to add FRU data, error 0x%x\n", rv);
+	printf("**Unable to add FRU data, error 0x%x\n", rv);
 }
 
 static void
@@ -567,9 +567,39 @@ mc_setbmc(emu_data_t *emu, lmc_data_t *mc, char **toks)
     if (get_uchar(toks, &ipmb, "IPMB address of BMC", 0))
 	return;
     if (ipmi_emu_set_bmc_mc(emu, ipmb)) {
-	printf("Invalid IPMB address\n");
+	printf("**Invalid IPMB address\n");
 	return;
     }
+}
+
+static void
+atca_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    int rv;
+
+    rv = ipmi_emu_atca_enable(emu);
+    if (rv)
+	printf("**Unable to enable ATCA mode, error 0x%x\n", rv);
+}
+
+static void
+atca_set_site(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    int           rv;
+    unsigned char hw_address;
+    unsigned char site_type;
+    unsigned char site_number;
+    
+    if (get_uchar(toks, &hw_address, "hardware address", 0))
+	return;
+    if (get_uchar(toks, &site_type, "site type", 0))
+	return;
+    if (get_uchar(toks, &site_number, "site number", 0))
+	return;
+
+    rv = ipmi_emu_atca_set_site(emu, hw_address, site_type, site_number);
+    if (rv)
+	printf("**Unable to set site type, error 0x%x\n", rv);
 }
 
 static void
@@ -578,7 +608,7 @@ read_cmds(emu_data_t *emu, lmc_data_t *mc, char **toks)
     char *filename = strtok_r(NULL, " \t\n", toks);
 
     if (!filename) {
-	printf("No filename specified\n");
+	printf("**No filename specified\n");
 	return;
     }
 
@@ -614,6 +644,8 @@ static struct {
     { "mc_add_fru_data",MC,		mc_add_fru_data },
     { "mc_add",		NOMC,		mc_add },
     { "mc_setbmc",      NOMC,		mc_setbmc },
+    { "atca_enable",    NOMC,	        atca_enable },
+    { "atca_set_site",	NOMC,		atca_set_site },
     { "read_cmds",	NOMC,		read_cmds },
     { NULL }
 };
@@ -641,7 +673,7 @@ ipmi_emu_cmd(emu_data_t *emu, char *cmd_str)
 		    return;
 		rv = ipmi_emu_get_mc_by_addr(emu, ipmb, &mc);
 		if (rv) {
-		    printf("Invalid MC address\n");
+		    printf("**Invalid MC address\n");
 		    return;
 		}
 	    }
@@ -650,7 +682,7 @@ ipmi_emu_cmd(emu_data_t *emu, char *cmd_str)
 	}
     }
 
-    printf("Unknown command: %s\n", cmd);
+    printf("**Unknown command: %s\n", cmd);
 
  out:
     return;

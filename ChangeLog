@@ -1,3 +1,36 @@
+2004-04-01 Corey Minyard <cminyard@mvista.com> 
+
+	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start
+	at ATCA support.
+
+	* lanserv/atca.emu: Emulator file for ATCA support started.
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added support for watching
+	when an MC goes active or inactive.
+
+	* lib/entity.c: For entities with FRU data, use the fru device
+	(whether the MC is active or not)) to know if the entity is
+	present.
+
+	* include/OpenIPMI/ipmi_msgbits.h: Add some netfns for the group
+	extensions.
+
+	* lanserv/ipmi_checksum.c, lanserv/Makefile.am: Added a small
+	program for calculating checksums, useful when working with
+	emulator files and FRU info.
+
+	* lib/domain.c: Moved the OEM domain info destroyer callback to
+	the end of the domain destruction so that the OEM data is
+	available through the destructino process.
+
+	* lib/mc.c, lib/domain.c: Newly created MCs come up inactive by
+	default and are set active.
+
+	* lib/oem_atca.c: Lots of little bug fixes, finally getting to
+	test it.
+
+	* ui/ui.c: Added multi-record dumping for FRU info.
+
 2004-03-31 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c: Added power control, fixed

@@ -1304,7 +1304,7 @@ start_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc, int delay)
 				  sdrs);
 	return 0;
     } else {
-	/* Get a reservation first. */
+	/* Get the SDR repository information first. */
 	cmd_msg.data = cmd_data;
 	if (sdrs->sensor) {
 	    cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;

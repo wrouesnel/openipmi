@@ -2987,6 +2987,7 @@ dump_fru_info(ipmi_fru_t *fru)
     unsigned int  uival;
     time_t        tval;
     int           rv;
+    int           i, num_multi;
 
     rv = ipmi_fru_get_internal_use_version(fru, &ucval);
     if (!rv)
@@ -3052,6 +3053,48 @@ dump_fru_info(ipmi_fru_t *fru)
     DUMP_FRU_STR(product_info_asset_tag, "product info asset tag");
     DUMP_FRU_STR(product_info_fru_file_id, "product info fru file id");
     DUMP_FRU_CUSTOM_STR(product_info, "product info");
+    num_multi = ipmi_fru_get_num_multi_records(fru);
+    for (i=0; i<num_multi; i++) {
+	unsigned char type, ver;
+	unsigned int  j;
+	unsigned int  len;
+	unsigned char *data;
+
+	rv = ipmi_fru_get_multi_record_type(fru, i, &type);
+	if (rv)
+	    display_pad_out("  multi-record %d, error getting type: %x\n", rv);
+	rv = ipmi_fru_get_multi_record_format_version(fru, i, &ver);
+	if (rv)
+	    display_pad_out("  multi-record %d, error getting ver: %x\n", rv);
+
+	display_pad_out("  multi-record %d, type 0x%x, format version 0x%x:",
+			i, type, ver);
+	
+	rv = ipmi_fru_get_multi_record_data_len(fru, i, &len);
+	if (rv) {
+	    display_pad_out("\n  multi-record %d, error getting length: %x\n",
+			    rv);
+	    continue;
+	}
+	data = ipmi_mem_alloc(len);
+	if (!data) {
+	    display_pad_out("\n  multi-record %d, error allocating data\n");
+	    continue;
+	}
+	rv = ipmi_fru_get_multi_record_data(fru, i, data, &len);
+	if (rv) {
+	    display_pad_out("\n  multi-record %d, error getting data: %x\n",
+			    rv);
+	} else {
+	    for (j=0; j<len; j++) {
+		if ((j > 0) && ((j % 16) == 0))
+		    display_pad_out("\n     ");
+		display_pad_out(" %2.2x", data[j]);
+	    }
+	    display_pad_out("\n");
+	}
+	ipmi_mem_free(data);
+    }
 }
 
 static void

@@ -216,13 +216,15 @@ char *ipmi_get_command_string(unsigned int netfn,
 /*
  * NetFNs
  */
-#define IPMI_CHASSIS_NETFN	0x00
-#define IPMI_BRIDGE_NETFN	0x02
-#define IPMI_SENSOR_EVENT_NETFN	0x04
-#define IPMI_APP_NETFN		0x06
-#define IPMI_FIRMWARE_NETFN	0x08
-#define IPMI_STORAGE_NETFN	0x0a
-#define IPMI_TRANSPORT_NETFN	0x0c
+#define IPMI_CHASSIS_NETFN		0x00
+#define IPMI_BRIDGE_NETFN		0x02
+#define IPMI_SENSOR_EVENT_NETFN		0x04
+#define IPMI_APP_NETFN			0x06
+#define IPMI_FIRMWARE_NETFN		0x08
+#define IPMI_STORAGE_NETFN		0x0a
+#define IPMI_TRANSPORT_NETFN		0x0c
+#define IPMI_GROUP_EXTENSION_NETFN	0x2c
+#define IPMI_OEM_GROUP_NETFN		0x2e
 
 char *ipmi_get_netfn_string(unsigned int netfn);
 

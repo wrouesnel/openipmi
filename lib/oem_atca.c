@@ -48,6 +48,11 @@
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_picmg.h>
+
+/* Allow LED controls to go from 0 to 80. */
+#define IPMC_FIRST_LED_CONTROL_NUM 0x00
+#define IPMC_RESET_CONTROL_NUM     0x80
 
 #define PICMG_MFG_ID	0x315a
 
@@ -67,34 +72,6 @@
 #define PICMG_ADDRESS_KEY_HARDWARE	0
 #define PICMG_ADDRESS_KEY_IPMB_0	1
 #define PICMG_ADDRESS_KEY_PHYSICAL	3
-
-/* PICMG Commands */
-#define PICMG_NETFN				0x2c
-#define PICMG_ID				0x00
-#define PICMG_CMD_GET_PROPERTIES		0x00
-#define PICMG_CMD_GET_ADDRESS_INFO		0x01
-#define PICMG_CMD_GET_SHELF_ADDRESS_INFO	0x02
-#define PICMG_CMD_SET_SHELF_ADDRESS_INFO	0x03
-#define PICMG_CMD_FRU_CONTROL			0x04
-#define PICMG_CMD_GET_FRU_LED_PROPERTIES	0x05
-#define PICMG_CMD_GET_LED_COLOR_CAPABILITIES	0x06
-#define PICMG_CMD_SET_FRU_LED_STATE		0x07
-#define PICMG_CMD_GET_FRU_LED_STATE		0x08
-#define PICMG_CMD_SET_IPMB_STATE		0x09
-#define PICMG_CMD_SET_FRU_ACTIVATION_POLICY	0x0a
-#define PICMG_CMD_GET_FRU_ACTIVATION_POLICY	0x0b
-#define PICMG_CMD_SET_FRU_ACTIVATION		0x0c
-#define PICMG_CMD_GET_DEVICE_LOCATOR_RECORD	0x0d
-#define PICMG_CMD_SET_PORT_STATE		0x0e
-#define PICMG_CMD_GET_PORT_STATE		0x0f
-#define PICMG_CMD_COMPUTE_POWER_PROPERTIES	0x10
-#define PICMG_CMD_SET_POWER_LEVEL		0x11
-#define PICMG_CMD_GET_POWER_LEVEL		0x12
-#define PICMG_CMD_RENEGOTIATE_POWER		0x13
-#define PICMG_CMD_GET_FAN_SPEED_PROPERTIES	0x14
-#define PICMG_CMD_SET_FAN_LEVEL			0x15
-#define PICMG_CMD_GET_FAN_LEVEL			0x16
-#define PICMG_CMD_BUSED_RESOURCE		0x17
 
 /* PICMG Entity IDs. */
 #define PICMG_ENTITY_ID_FRONT_BOARD		0xa0
@@ -557,11 +534,11 @@ atca_activate_sensor_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	return;
     }
 
-    msg.netfn = PICMG_NETFN;
-    msg.cmd = PICMG_CMD_SET_FRU_ACTIVATION;
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_SET_FRU_ACTIVATION;
     msg.data = data;
     msg.data_len = 3;
-    data[0] = PICMG_ID;
+    data[0] = IPMI_PICMG_GRP_EXT;
     data[1] = finfo->fru_id;
     data[2] = hs_info->op;
     rv = ipmi_sensor_send_command(sensor, mc, 0, &msg, atca_activate_done,
@@ -857,12 +834,12 @@ set_led(ipmi_control_t       *control,
     memset(info, 0, sizeof(*info));
     info->set_handler = handler;
     info->cb_data = cb_data;
-    info->msg.netfn = PICMG_NETFN;
-    info->msg.cmd = PICMG_CMD_SET_FRU_LED_STATE;
+    info->msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    info->msg.cmd = IPMI_PICMG_CMD_SET_FRU_LED_STATE;
     info->msg.data = info->data;
     info->msg.data_len = 6;
 
-    info->data[0] = PICMG_ID;
+    info->data[0] = IPMI_PICMG_GRP_EXT;
     info->data[1] = l->fru->fru_id;
     info->data[2] = l->num;
     if (on_time <= 0) {
@@ -1009,12 +986,12 @@ get_led(ipmi_control_t         *control,
 
     info->get_handler = handler;
     info->cb_data = cb_data;
-    info->msg.netfn = PICMG_NETFN;
-    info->msg.cmd = PICMG_CMD_GET_FRU_LED_STATE;
+    info->msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    info->msg.cmd = IPMI_PICMG_CMD_GET_FRU_LED_STATE;
     info->msg.data = info->data;
     info->msg.data_len = 3;
 
-    info->data[0] = PICMG_ID;
+    info->data[0] = IPMI_PICMG_GRP_EXT;
     info->data[1] = l->fru->fru_id;
     info->data[2] = l->num;
 
@@ -1116,11 +1093,11 @@ get_led_capability(ipmi_mc_t *mc, atca_fru_t *finfo, unsigned int num)
     linfo->num = num;
     linfo->fru = finfo;
 
-    msg.netfn = PICMG_NETFN;
-    msg.cmd = PICMG_CMD_GET_LED_COLOR_CAPABILITIES;
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_GET_LED_COLOR_CAPABILITIES;
     msg.data = data;
     msg.data_len = 3;
-    data[0] = PICMG_ID;
+    data[0] = IPMI_PICMG_GRP_EXT;
     data[1] = finfo->fru_id;
     data[2] = num;
     linfo->op_in_progress = 1;
@@ -1196,16 +1173,16 @@ fetch_fru_leds_mc_cb(ipmi_mc_t *mc, void *cb_info)
     int           rv;
 
     /* Now fetch the LED information. */
-    msg.netfn = PICMG_NETFN;
-    msg.cmd = PICMG_CMD_GET_FRU_LED_PROPERTIES;
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_GET_FRU_LED_PROPERTIES;
     msg.data = data;
     msg.data_len = 2;
-    data[0] = PICMG_ID;
+    data[0] = IPMI_PICMG_GRP_EXT;
     data[1] = finfo->fru_id;
     rv = ipmi_mc_send_command(mc, 0, &msg, fru_led_prop_rsp, finfo);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
-		 "%soem_atca.c(fru_picmg_prop_rsp): "
+		 "%soem_atca.c(fetch_fru_leds_mc_cb): "
 		 "Could not send FRU LED properties command: 0x%x",
 		 MC_NAME(mc), rv);
 	/* Just go on, don't shut down the info. */
@@ -1222,7 +1199,7 @@ fetch_fru_leds(atca_fru_t *finfo)
 	return;
     
     rv = ipmi_mc_pointer_cb(finfo->minfo->mcid, fetch_fru_leds_mc_cb, finfo);
-    if (!rv) {
+    if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(fetch_fru_leds): "
 		 "Could not convert an mcid to a pointer: 0x%x",
@@ -1310,11 +1287,11 @@ set_cold_reset(ipmi_control_t     *control,
 
     info->handler = handler;
     info->cb_data = cb_data;
-    msg.netfn = PICMG_NETFN;
-    msg.cmd = PICMG_CMD_FRU_CONTROL;
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_FRU_CONTROL;
     msg.data = data;
     msg.data_len = 3;
-    data[0] = PICMG_ID;
+    data[0] = IPMI_PICMG_GRP_EXT;
     data[1] = finfo->fru_id;
     data[2] = 0; /* Cold reset */
     rv = ipmi_control_send_command(control, ipmi_control_get_mc(control), 0,
@@ -1345,6 +1322,18 @@ add_fru_control_mc_cb(ipmi_mc_t *mc, void *cb_info)
 		 "Could not convert an mcid to a pointer: 0x%x",
 		 ENTITY_NAME(finfo->entity), rv);
     }
+
+    rv = atca_add_control(mc, 
+			  &finfo->cold_reset,
+			  IPMC_RESET_CONTROL_NUM,
+			  finfo->entity);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(fru_led_cap_rsp): "
+		 "Could not add LED control: 0x%x",
+		 MC_NAME(mc), rv);
+	return;
+    }
 }
 
 static void
@@ -1357,7 +1346,7 @@ add_fru_control_handling(atca_fru_t *finfo)
 	return;
     
     rv = ipmi_mc_pointer_cb(finfo->minfo->mcid, add_fru_control_mc_cb, finfo);
-    if (!rv) {
+    if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(add_fru_control_handling): "
 		 "Could not convert an mcid to a pointer: 0x%x",
@@ -1369,8 +1358,14 @@ static void
 destroy_fru_control_handling(atca_fru_t *finfo)
 {
     if (finfo->cold_reset) {
-	ipmi_control_destroy(finfo->cold_reset);
+	ipmi_control_t *control = finfo->cold_reset;
+
+	/* We *HAVE* to clear the value first, destroying this can
+	   cause something else to be destroyed and end up in the
+	   function again before we return from
+	   ipmi_control_destroy(). */
 	finfo->cold_reset = NULL;
+	ipmi_control_destroy(control);
     }
 }
 
@@ -1419,7 +1414,8 @@ realloc_frus(atca_ipmc_t *minfo, unsigned int num_frus)
 
     minfo->frus = new_frus;
     minfo->num_frus = num_frus;
-    ipmi_mem_free(old_frus);
+    if (old_frus)
+	ipmi_mem_free(old_frus);
     return 0;
 }
 
@@ -1565,7 +1561,7 @@ static int
 atca_entity_presence_handler(ipmi_entity_t *entity,
 			     int           present,
 			     void          *cb_data,
-			     ipmi_event_t  *enent)
+			     ipmi_event_t  *event)
 {
     atca_fru_t *finfo = cb_data;
 
@@ -1643,7 +1639,7 @@ atca_entity_update_handler(enum ipmi_update_e op,
 
     case IPMI_DELETED:
 	finfo->entity = NULL;
-	destroy_fru_leds(finfo);
+	destroy_fru_controls(finfo);
 	break;
 
     default:
@@ -1674,7 +1670,7 @@ fru_picmg_prop_rsp(ipmi_mc_t  *mc,
     if (check_for_msg_err(mc, 0, rsp, 5, "fru_picmg_prop_rsp"))
 	return;
 
-    num_frus = rsp->data[3];
+    num_frus = rsp->data[3] + 1;
     ipm_fru_id = rsp->data[4];
 
     if (ipm_fru_id >= num_frus) {
@@ -1737,7 +1733,7 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     if (minfo->frus) {
 	for (i=0; i<minfo->num_frus; i++) {
 	    finfo = minfo->frus[i];
-	    destroy_fru_leds(finfo);
+	    destroy_fru_controls(finfo);
 	    ipmi_mem_free(finfo);
 	}
 	ipmi_mem_free(minfo->frus);
@@ -1785,11 +1781,11 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
     }
 
     /* Now fetch the properties. */
-    msg.netfn = PICMG_NETFN;
-    msg.cmd = PICMG_CMD_GET_PROPERTIES;
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_GET_PROPERTIES;
     msg.data = data;
     msg.data_len = 1;
-    data[0] = PICMG_ID;
+    data[0] = IPMI_PICMG_GRP_EXT;
     rv = ipmi_mc_send_command(mc, 0, &msg, fru_picmg_prop_rsp, minfo);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -1908,10 +1904,10 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	if (mfg_id != PICMG_MFG_ID)
 	    continue;
 
-	if (data[4] != 0x10) /* Address table record id */
+	if (data[3] != 0x10) /* Address table record id */
 	    continue;
 
-	if (data[5] != 0) /* We only know version 0 */
+	if (data[4] != 0) /* We only know version 0 */
 	    continue;
 
 	if (len < (27 + (3 * data[26])))
@@ -1919,7 +1915,7 @@ shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
 	    continue;
 
 	info->shelf_address_len
-	    = ipmi_get_device_string(data+6, 21,
+	    = ipmi_get_device_string(data+5, 21,
 				     info->shelf_address, 0,
 				     &info->shelf_address_type,
 				     sizeof(info->shelf_address));
@@ -2070,7 +2066,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     rv = ipmi_fru_alloc(domain,
 			1,
 			info->shelf_fru_ipmb,
-			info->shelf_fru_device_id,
+			1,
 			0,
 			0,
 			0,
@@ -2136,9 +2132,9 @@ check_if_atca(ipmi_domain_t              *domain,
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = 0xf;
     si.lun = 0;
-    msg.netfn = PICMG_NETFN;
-    msg.cmd = PICMG_CMD_GET_ADDRESS_INFO;
-    data[0] = PICMG_ID;
+    msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
+    msg.cmd = IPMI_PICMG_CMD_GET_ADDRESS_INFO;
+    data[0] = IPMI_PICMG_GRP_EXT;
     data[1] = 0; /* Ignored for physical address */
     data[2] = PICMG_ADDRESS_KEY_PHYSICAL;
     data[3] = 1; /* Look for Shelf FRU 1 */

@@ -117,6 +117,13 @@ void ipmi_get_mfg_id(lmc_data_t *emu, unsigned char mfg_id[3]);
 void ipmi_set_product_id(lmc_data_t *emu, unsigned char product_id[3]);
 void ipmi_get_product_id(lmc_data_t *emu, unsigned char product_id[3]);
 
+/* ATCA support */
+int ipmi_emu_atca_enable(emu_data_t *emu);
+int ipmi_emu_atca_set_site(emu_data_t    *emu,
+			   unsigned char hw_address,
+			   unsigned char site_type,
+			   unsigned char site_number);
+
 /* In emu_cmd.c */
 void ipmi_emu_shutdown(void);
 void ipmi_emu_cmd(emu_data_t *emu, char *cmd_str);

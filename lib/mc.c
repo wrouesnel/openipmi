@@ -144,7 +144,11 @@ struct ipmi_mc_s
     ipmi_oem_event_handler_cb sel_oem_event_handler;
     void                      *sel_oem_event_cb_data;
 
+    /* Call these when the MC is destroyed. */
     ilist_t *removed_handlers;
+
+    /* Call these when the MC changes from active to inactive. */
+    ilist_t *active_handlers;
 
     /* The following are for waiting until a domain is up before
        starting the SEL query, so that the domain will be registered
@@ -288,7 +292,7 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 
     mc->events_enabled = 1;
 
-    mc->active = 1;
+    mc->active = 0; /* Start assuming inactive. */
 
     mc->sensors = NULL;
     mc->sensors_in_my_sdr = NULL;
@@ -298,6 +302,11 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     mc->new_sensor_handler = NULL;
     mc->removed_handlers = alloc_ilist();
     if (!mc->removed_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+    mc->active_handlers = alloc_ilist();
+    if (!mc->active_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -366,6 +375,48 @@ call_removed_handler(ilist_iter_t *iter, void *item, void *cb_data)
     ilist_delete(iter);
 }
 
+static void
+check_mc_destroy(ipmi_mc_t *mc)
+{
+    ipmi_domain_t *domain = mc->domain;
+
+    if (!mc->active
+	&& (ipmi_controls_get_count(mc->controls) == 0)
+	&& (ipmi_sensors_get_count(mc->sensors) == 0)
+	&& ilist_empty(mc->active_handlers))
+    {
+	/* There are no sensors associated with this MC, so it's safe
+           to delete it.  If there are sensors that still reference
+           this MC (such as from another MC's SDR repository, or the
+           main SDR repository) we have to leave it inactive but not
+           delete it.  The active handlers come from MCDLR and FRUDLR
+           SDRs that monitor the MC. */
+	_ipmi_remove_mc_from_domain(domain, mc);
+
+	if (mc->removed_handlers) {
+	    void *data;
+	    data = ilist_remove_first(mc->removed_handlers);
+	    while (data) {
+		ipmi_mem_free(data);
+		data = ilist_remove_first(mc->removed_handlers);
+	    }
+	    free_ilist(mc->removed_handlers);
+	}
+    	if (mc->active_handlers)
+	    ilist_twoitem_destroy(mc->active_handlers);
+	if (mc->sensors)
+	    ipmi_sensors_destroy(mc->sensors);
+	if (mc->controls)
+	    ipmi_controls_destroy(mc->controls);
+	if (mc->sdrs)
+	    ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
+	if (mc->sel)
+	    ipmi_sel_destroy(mc->sel, NULL, NULL);
+
+	ipmi_mem_free(mc);
+    }
+}
+
 void
 _ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
@@ -420,34 +471,9 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	mc->conup_info = NULL;
     }
 
-    if ((ipmi_controls_get_count(mc->controls) == 0)
-	&& (ipmi_sensors_get_count(mc->sensors) == 0))
-    {
-	/* There are no sensors associated with this MC, so it's safe
-           to delete it.  If there are sensors that still reference
-           this MC (such as from another MC's SDR repository, or the
-           main SDR repository) we have to leave it inactive but not
-           delete it. */
-	_ipmi_remove_mc_from_domain(domain, mc);
+    _ipmi_mc_set_active(mc, 0);
 
-	if (mc->removed_handlers) {
-	    free_ilist(mc->removed_handlers);
-	    mc->removed_handlers = NULL;
-	}
-    
-	if (mc->sensors)
-	    ipmi_sensors_destroy(mc->sensors);
-	if (mc->controls)
-	    ipmi_controls_destroy(mc->controls);
-	if (mc->sdrs)
-	    ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
-	if (mc->sel)
-	    ipmi_sel_destroy(mc->sel, NULL, NULL);
-
-	ipmi_mem_free(mc);
-    } else {
-	mc->active = 0;
-    }
+    check_mc_destroy(mc);
 }
 
 /***********************************************************************
@@ -1433,7 +1459,7 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 {
     int rv = 0;
 
-    mc->active = 1;
+    _ipmi_mc_set_active(mc, 1);
 
     if (mc->chassis_support && (ipmi_mc_get_address(mc) == 0x20)) {
         rv = _ipmi_chassis_create_controls(mc);
@@ -2197,6 +2223,55 @@ ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc)
     return mc->provides_device_sdrs;
 }
 
+static void
+call_active_handler(void *data, void *ihandler, void *cb_data)
+{
+    ipmi_mc_active_cb handler = ihandler;
+    ipmi_mc_t         *mc = data;
+
+    handler(mc, mc->active, cb_data);
+}
+
+static void
+call_active_handlers(ipmi_mc_t *mc)
+{
+    ilist_iter_twoitem(mc->active_handlers, call_active_handler, mc);
+}
+
+int
+ipmi_mc_add_active_handler(ipmi_mc_t         *mc,
+			   ipmi_mc_active_cb handler,
+			   void              *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    /* Don't allow two to be added. */
+    if (ilist_twoitem_exists(mc->active_handlers, handler, cb_data))
+	return 0;
+
+    if (! ilist_add_twoitem(mc->active_handlers, handler, cb_data))
+	return ENOMEM;
+
+    return 0;
+}
+
+int
+ipmi_mc_remove_active_handler(ipmi_mc_t         *mc,
+			      ipmi_mc_active_cb handler,
+			      void              *cb_data)
+{
+    CHECK_MC_LOCK(mc);
+
+    if (! ilist_remove_twoitem(mc->active_handlers, handler, cb_data))
+	return ENOENT;
+
+    /* The active handlers contribute to the things that keep an MC
+       around. */
+    check_mc_destroy(mc);
+
+    return 0;
+}
+
 int
 ipmi_mc_is_active(ipmi_mc_t *mc)
 {
@@ -2206,7 +2281,10 @@ ipmi_mc_is_active(ipmi_mc_t *mc)
 void
 _ipmi_mc_set_active(ipmi_mc_t *mc, int val)
 {
-    mc->active = val;
+    if (mc->active != val) {
+	mc->active = val;
+	call_active_handlers(mc);
+    }
 }
 
 void

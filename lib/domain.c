@@ -390,9 +390,6 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->cmds)
 	free_ilist(domain->cmds);
 
-    if (domain->oem_data && domain->oem_data_destroyer)
-	domain->oem_data_destroyer(domain, domain->oem_data);
-
     /* Delete the sensors from the main SDR repository. */
     if (domain->sensors_in_main_sdr) {
 	for (i=0; i<domain->sensors_in_main_sdr_count; i++) {
@@ -541,6 +538,13 @@ cleanup_domain(ipmi_domain_t *domain)
 	ipmi_entity_info_destroy(domain->entities);
     if (domain->entities_lock)
 	ipmi_destroy_lock(domain->entities_lock);
+
+    /* We wait until here to call the OEM data destroyer, the process
+       of destroying information that has previously gone on can call
+       OEM callbacks, we want the OEM data to hang around until we
+       don't need it for sure. */
+    if (domain->oem_data && domain->oem_data_destroyer)
+	domain->oem_data_destroyer(domain, domain->oem_data);
 
     ipmi_mem_free(domain);
 }
@@ -1266,8 +1270,6 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
     if (rv)
 	return rv;
 
-    _ipmi_mc_set_active(mc, 0);
-
     /* If we find an MC in the SDRs that we don't know about yet,
        attempt to scan it. */
     ipmi_start_ipmb_mc_scan(domain, channel, slave_addr, slave_addr,
@@ -1745,6 +1747,8 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 		    ipmi_unlock(domain->mc_list_lock);
 		    goto out;
 		}
+
+		_ipmi_mc_set_active(mc, 1);
 
 		rv = _ipmi_mc_get_device_id_data_from_rsp(mc, msg);
 		if (rv) {

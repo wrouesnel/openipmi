@@ -229,6 +229,13 @@ struct ipmi_entity_s
     /* Queue we use for operations. */
     opq_t *waitq;
 
+    /* When using the FRU device to detect presence. */
+    int frudev_present;
+    ipmi_mc_t *frudev_mc; /* Note that the MC cannot be destroyed
+			     while we have an active monitor on it, so
+			     this is safe. */
+    int frudev_active;
+
     /* OEM info assigned to an entity, for use by plugins. */
     void                            *oem_info;
     ipmi_entity_cleanup_oem_info_cb oem_info_cleanup_handler;
@@ -263,6 +270,7 @@ typedef struct fru_ent_info_s
 } fru_ent_info_t;
 
 static void call_fru_handler(void *data, void *cb_data1, void *cb_data2);
+static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
 
 /***********************************************************************
  *
@@ -370,6 +378,9 @@ entity_final_destroy(ipmi_entity_t *ent)
 	ipmi_unlock(ent->timer_lock);
 	return;
     }
+
+    if (ent->frudev_present)
+	ipmi_mc_remove_active_handler(ent->frudev_mc, entity_mc_active, ent);
 
     if (ent->oem_info_cleanup_handler)
 	ent->oem_info_cleanup_handler(ent, ent->oem_info);
@@ -1367,11 +1378,17 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	detect->present = 0;
 	ipmi_entity_iterate_sensors(ent, sensor_detect_send, detect);
 
-	/* I couldn't message any sensors, the thing must be done. */
+	/* I couldn't message any sensors, the thing must be gone. */
 	if (detect->sensor_try_count == 0) {
-	    presence_changed(ent, detect->present, NULL);
 	    ipmi_mem_free(detect);
+	    if (ent->frudev_present)
+		goto try_frudev;
+	    else
+		presence_changed(ent, 0, NULL);
 	}
+    } else if (ent->frudev_present) {
+    try_frudev:	
+	presence_changed(ent, ent->frudev_active, NULL);
     } else {
 	/* Maybe it has children that can handle it's presence. */
 	presence_parent_handler(NULL, ent, NULL);
@@ -1396,6 +1413,17 @@ ipmi_detect_entity_presence_change(ipmi_entity_t *entity, int force)
     info.force = force;
     ent_detect_presence(entity, &info);
     return 0;
+}
+
+static void
+entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data)
+{
+    ipmi_entity_t *ent = cb_data;
+
+    if (ent->frudev_active != active) {
+	ent->frudev_active = active;
+	ipmi_detect_entity_presence_change(ent, 1);
+    }
 }
 
 static void
@@ -2720,15 +2748,8 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 
 	    case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
 		rv = decode_mcdlr(&sdr, &dlr);
-		if ((!rv) && dlr.entity_id) {
-		    /* Attempt to create the MC. */
-		    _ipmi_find_or_create_mc_by_slave_addr
-			(domain,
-			 dlr.channel,
-			 dlr.slave_address,
-			 NULL);
+		if (!rv)
 		    rv = add_sdr_info(&infos, &dlr);
-		}
 		break;
 	}
 	if (rv)
@@ -2811,11 +2832,58 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	if ((infos.dlrs[i]->type != IPMI_ENTITY_EAR)
 	    && (infos.dlrs[i]->type != IPMI_ENTITY_DREAR))
 	{
+	    uint8_t ipmb    = 0xff;
+	    int     channel = -1;
+
 	    /* A real DLR, increment the refcount, and copy the info. */
 	    found->ent->ref_count++;
 	    memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
 	    entity_set_name(found->ent);
 	    /* Don't fetch FRU information until present. */
+
+	    /* Set up the MC information for the device. */
+	    if (infos.dlrs[i]->type == IPMI_ENTITY_FRU) {
+		channel = infos.dlrs[i]->channel;
+		ipmb = infos.dlrs[i]->slave_address;
+	    }
+	    else if (infos.dlrs[i]->type == IPMI_ENTITY_MC)
+	    {
+		channel = infos.dlrs[i]->channel;
+		ipmb = infos.dlrs[i]->access_address;
+	    }
+
+	    /* If we can use the FRU device presence to detect whether
+	       the entity is present, we register the monitor with the
+	       appropriate management controller to see if it is
+	       active and base presence off of that, if no other
+	       presence detection capability is there. */
+	    if ((channel != -1) && (infos.dlrs[i]->entity_id)) {
+		ipmi_mc_t *mc;
+		/* Attempt to create the MC. */
+		rv = _ipmi_find_or_create_mc_by_slave_addr
+		    (domain, channel, ipmb, &mc);
+		if (rv) {
+		    ipmi_log(IPMI_LOG_SEVERE,
+			     "%sentity.c(ipmi_entity_scan_sdrs):"
+			     " Could not add MC for MCDLR or FRUDLR,"
+			     " error %x", ENTITY_NAME(found->ent), rv);
+		} else {
+		    rv = ipmi_mc_add_active_handler(mc,
+						    entity_mc_active,
+						    found->ent);
+		    if (rv) {
+			ipmi_log(IPMI_LOG_SEVERE,
+				 "%sentity.c(ipmi_entity_scan_sdrs):"
+				 " Could not add an MC active handler for"
+				 " MCDLR or FRUDLR,"
+				 " error %x", ENTITY_NAME(found->ent), rv);
+		    } else {
+			found->ent->frudev_present = 1;
+			found->ent->frudev_active = ipmi_mc_is_active(mc);
+			found->ent->frudev_mc = mc;
+		    }
+		}
+	    }
 	} else {
 	    /* It's an EAR, so handling adding the children. */
 	    for (j=0; j<found->cent_next; j++) {

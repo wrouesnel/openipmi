@@ -38,6 +38,7 @@
 
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
+#include <OpenIPMI/ipmi_picmg.h>
 #include <OpenIPMI/ipmi_bits.h>
 
 #include "emu.h"
@@ -191,10 +192,21 @@ struct lmc_data_s
     unsigned char hs_led_value;
 };
 
+typedef struct atca_site_s
+{
+    unsigned char valid;
+    unsigned char hw_address;
+    unsigned char site_type;
+    unsigned char site_number;
+} atca_site_t;
+
 struct emu_data_s
 {
     int        bmc_mc;
     lmc_data_t *ipmb[128];
+
+    int         atca_mode;
+    atca_site_t atca_sites[128]; /* Indexed by HW address. */
 };
 
 /* Device ID support bits */
@@ -1712,7 +1724,7 @@ handle_get_device_sdr_info(lmc_data_t    *mc,
 			   unsigned char *rdata,
 			   unsigned int  *rdata_len)
 {
-    if (!(mc->device_support & IPMI_DEVID_SENSOR_DEV)) {
+    if (! mc->has_device_sdrs) {
 	handle_invalid_cmd(mc, rdata, rdata_len);
 	return;
     }
@@ -2674,6 +2686,187 @@ handle_oem0_netfn(lmc_data_t    *mc,
     }
 }
 
+static void
+handle_picmg_get_properties(lmc_data_t    *mc,
+			    ipmi_msg_t    *msg,
+			    unsigned char *rdata,
+			    unsigned int  *rdata_len)
+{
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    rdata[2] = 0x02; /* Version 2.0 */
+    rdata[3] = 0; /* Only have one FRU. */
+    rdata[4] = 0; /* As defined by spec. */
+    *rdata_len = 5;
+}
+
+static void
+handle_picmg_get_address_info(lmc_data_t    *mc,
+			      ipmi_msg_t    *msg,
+			      unsigned char *rdata,
+			      unsigned int  *rdata_len)
+{
+    atca_site_t  *sites = mc->emu->atca_sites;
+    unsigned char hw_addr = mc->ipmb >> 1;
+    unsigned char devid = 0;
+    int           i;
+
+    if (msg->data_len == 3) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (msg->data_len >= 2)
+	devid = msg->data[1];
+
+    if (msg->data_len >= 4) {
+	switch (msg->data[2]) {
+	case 0:
+	    hw_addr = msg->data[3];
+	    break;
+
+	case 1:
+	    hw_addr = msg->data[3] >> 1;
+	    break;
+
+	case 3:
+	    if (msg->data_len < 5) {
+		rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	    for (i=0; i<128; i++) {
+		if (sites[i].valid
+		    && (sites[i].site_type == msg->data[4])
+		    && (sites[i].site_number == msg->data[3]))
+		{
+		    break;
+		}
+	    }
+	    if (i == 128) {
+		rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+		*rdata_len = 1;
+		return;
+	    }
+	    hw_addr = i;
+	    break;
+		
+	default:
+	    rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	    *rdata_len = 1;
+	    return;
+	}
+    }
+
+    if ((hw_addr >= 128) || (!sites[hw_addr].valid) || (devid > 0)) {
+	rdata[0] = IPMI_DESTINATION_UNAVAILABLE_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = IPMI_PICMG_GRP_EXT;
+    rdata[2] = hw_addr;
+    rdata[3] = hw_addr << 1;
+    rdata[4] = 0xff;
+    rdata[5] = devid;
+    rdata[6] = sites[hw_addr].site_number;
+    rdata[7] = sites[hw_addr].site_type;
+    *rdata_len = 8;
+}
+
+int
+ipmi_emu_atca_enable(emu_data_t *emu)
+{
+    emu->atca_mode = 1;
+    return 0;
+}
+
+int
+ipmi_emu_atca_set_site(emu_data_t    *emu,
+		       unsigned char hw_address,
+		       unsigned char site_type,
+		       unsigned char site_number)
+{
+    if (hw_address >= 128)
+	return EINVAL;
+
+    emu->atca_sites[hw_address].valid = 1;
+    emu->atca_sites[hw_address].hw_address = hw_address;
+    emu->atca_sites[hw_address].site_type = site_type;
+    emu->atca_sites[hw_address].site_number = site_number;
+    return 0;
+}
+
+static void
+handle_picmg_msg(lmc_data_t    *mc,
+		 unsigned char lun,
+		 ipmi_msg_t    *msg,
+		 unsigned char *rdata,
+		 unsigned int  *rdata_len)
+{
+    switch(msg->cmd) {
+    case IPMI_PICMG_CMD_GET_PROPERTIES:
+	handle_picmg_get_properties(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_GET_ADDRESS_INFO:
+	handle_picmg_get_address_info(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_PICMG_CMD_GET_SHELF_ADDRESS_INFO:
+    case IPMI_PICMG_CMD_SET_SHELF_ADDRESS_INFO:
+    case IPMI_PICMG_CMD_FRU_CONTROL:
+    case IPMI_PICMG_CMD_GET_FRU_LED_PROPERTIES:
+    case IPMI_PICMG_CMD_GET_LED_COLOR_CAPABILITIES:
+    case IPMI_PICMG_CMD_SET_FRU_LED_STATE:
+    case IPMI_PICMG_CMD_GET_FRU_LED_STATE:
+    case IPMI_PICMG_CMD_SET_IPMB_STATE:
+    case IPMI_PICMG_CMD_SET_FRU_ACTIVATION_POLICY:
+    case IPMI_PICMG_CMD_GET_FRU_ACTIVATION_POLICY:
+    case IPMI_PICMG_CMD_SET_FRU_ACTIVATION:
+    case IPMI_PICMG_CMD_GET_DEVICE_LOCATOR_RECORD:
+    case IPMI_PICMG_CMD_SET_PORT_STATE:
+    case IPMI_PICMG_CMD_GET_PORT_STATE:
+    case IPMI_PICMG_CMD_COMPUTE_POWER_PROPERTIES:
+    case IPMI_PICMG_CMD_SET_POWER_LEVEL:
+    case IPMI_PICMG_CMD_GET_POWER_LEVEL:
+    case IPMI_PICMG_CMD_RENEGOTIATE_POWER:
+    case IPMI_PICMG_CMD_GET_FAN_SPEED_PROPERTIES:
+    case IPMI_PICMG_CMD_SET_FAN_LEVEL:
+    case IPMI_PICMG_CMD_GET_FAN_LEVEL:
+    case IPMI_PICMG_CMD_BUSED_RESOURCE:
+    default:
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	break;
+    }
+}
+
+static void
+handle_group_extension_netfn(lmc_data_t    *mc,
+			     unsigned char lun,
+			     ipmi_msg_t    *msg,
+			     unsigned char *rdata,
+			     unsigned int  *rdata_len)
+{
+    if (check_msg_length(msg, 1, rdata, rdata_len))
+	return;
+
+    switch (msg->data[0]) {
+    case IPMI_PICMG_GRP_EXT:
+	if (mc->emu->atca_mode)
+	    handle_picmg_msg(mc, lun, msg, rdata, rdata_len);
+	else
+	    handle_invalid_cmd(mc, rdata, rdata_len);
+	break;
+
+    default:
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	break;
+    }
+}
+
 static uint8_t
 ipmb_checksum(uint8_t *data, int size, uint8_t start)
 {
@@ -2757,6 +2950,10 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 
     case IPMI_STORAGE_NETFN:
 	handle_storage_netfn(mc, lun, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GROUP_EXTENSION_NETFN:
+	handle_group_extension_netfn(mc, lun, msg, rdata, rdata_len);
 	break;
 
     case 0x30:

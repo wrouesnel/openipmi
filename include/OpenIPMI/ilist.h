@@ -124,7 +124,7 @@ typedef int (*ilist_sort_cb)(void *item1, void *item2);
 
 void ilist_sort(ilist_t *list, ilist_sort_cb cmp);
 
-/* A two-item list.  This is useful for managnig list of handlers
+/* A two-item list.  This is useful for managing list of handlers
    where you have a callback handler and a data item.  You create it
    with the given two data items, and when you call
    ilist_iter_twoitem, it will call the handler you pass in with the

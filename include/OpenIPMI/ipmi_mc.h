@@ -126,6 +126,16 @@ int ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc);
 int ipmi_mc_is_active(ipmi_mc_t *mc);
 void _ipmi_mc_set_active(ipmi_mc_t *mc, int val);
 
+/* Used to monitor when the MC goes active or inactive. */
+typedef void (*ipmi_mc_active_cb)(ipmi_mc_t *mc,
+				  int       active,
+				  void      *cb_data);
+int ipmi_mc_add_active_handler(ipmi_mc_t         *mc,
+			       ipmi_mc_active_cb handler,
+			       void              *cb_data);
+int ipmi_mc_remove_active_handler(ipmi_mc_t         *mc,
+				  ipmi_mc_active_cb handler,
+				  void              *cb_data);
 
 /* Reset the MC, either a cold or warm reset depending on the type.
    Note that the effects of a reset are not defined by IPMI, so this
