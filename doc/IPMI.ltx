@@ -1,0 +1,1039 @@
+\documentclass{book}
+\usepackage{graphicx}
+\title{IPMI -- A Gentle Introduction\\with OpenIPMI}
+\author{Corey Minyard $<$minyard@acm.org$>$\\
+	Montavista Software}
+\date{\today}
+\begin{document}
+\maketitle
+
+\frontmatter
+
+\chapter{Preface}
+This document describes IPMI in great detail; how it works and what it
+does and does not do.  It starts from the basics and moves into
+details.  If you've heard about IPMI and want to find out more, this
+is the document for you.  If you know something about IPMI but wish to
+find out more, you can gloss over the introductory text and dive more
+into the details.
+
+IPMI stands for Intelligent Platform Management Interface.  Not a
+great name, but not too bad.  It is intelligent (in a manner of
+speaking, anyway) because it requires a processor besides the main
+processor that is always on and maintaining the system.  In most
+systems with IPMI, you can monitor and maintain the system even when
+the main processor is turned off (though the system must generally be
+plugged in).
+
+Platform means that IPMI deals with the platform, not the software
+running on the platform.  Software management is mostly out of the
+scope of IPMI
+
+Management Interface mains that the management system uses IPMI to
+talk to the system to monitor and perform manintenance on the
+platform.  IPMI is mostly about monitoring, though it does have a few
+minor management functions.  However, many companies and organizations
+have built more extensive management control using OEM extensions to
+IPMI.
+
+\tableofcontents
+
+\mainmatter
+
+\chapter{Management, Systems, and IPMI}
+Management will mean different things to different industries.  In
+simple server systems, a management system may only deal with
+controlling power on a few servers and making sure they don't get too
+hot.  In a telecom system, management systems generally control every
+aspect of the system, including startup of all parts of the system,
+full monitoring of all components of the system, detection and
+recovery from software and hardware errors, basic configuration of the
+system, and a host of other things.  IPMI obviously only plays one
+role in this, but it is a roll that must be played.  In the past, the
+monitoring and management of hardware has been done with lots of
+proprietary interfaces.  IPMI standardizes this interface.
+
+\begin{figure}
+\includegraphics[width=\textwidth]{MgmtIF.eps}
+\caption{\label{mgmtif}Management Interfaces}
+\end{figure}
+
+Figure \ref{mgmtif} shows a management system and the things it
+manages.  IPMI fits mostly within the ``Hardware'' box, although there
+may be other hardware interfaces the management interfaces the
+management system must manage.  The management system ties into all
+elements of the system and makes global decisions based upon inputs
+from all parts of the systems.  For instance, a server may be
+overheating or have a low voltage.  The management system will be
+informed of this through the hardware interfaces.  It may choose to
+move the function of that server to another server and bring that
+server down so it may be repaired.  If no other server is available to
+take over the operation, the management system may look at the
+severity of the problem, predict how long the system may survive, and
+let it continue.  These types of decisions are called ``policy''.
+
+In all cases these events are logged to permanent storage.  In an
+operator is informed of things that need human attention.  The
+operater may also issue manual operations to configure and override
+the management system as necessary.
+
+The operations the management system performs on the system are called
+``Commands'' in this picture.  Commands have ``Responses'' from the
+system.  Asynchronous notifications from the system to the management
+system are called ``Events''.  The system never sends commands to the
+management system, and the system may perform local operations on its
+own (such as controlling fan speed) but never perform global
+operations unless pre-configured by the management system to do so.
+So the system may perform limited policy decisions, but the management
+system is firmly in control of policy.
+
+\section{IPMI Implementation}
+
+The Management Controller (MC) sits at the center of an IPMI system.
+It is generally always on when the system is plugged in, even if the
+system is off.  The management system communicates with the management
+controller; the management controller provides a normalized interface
+to all the sensors, events, and FRU data in the system.
+
+\begin{figure}
+\includegraphics[width=\textwidth]{ManagementController.eps}
+\caption{\label{managementcontroller}Parts of a Management Controller}
+\end{figure}
+
+Figure \ref{managementcontroller} shows the various parts of the
+management controller.  Note that most everything is optional;
+depending on what a management controller does it may only need some
+things.  The baseboard management controller (BMC) is required to have
+a lot of the items.
+
+The MC Processor is generally a small, inexpensive, but reliable
+microcontroller.  Several companies sell processors that have a lot of
+the IPMI components already implemented and software to help a company
+implement an IPMI system.
+
+The system interface provides a way for the main processor to
+communicate with the management controller.  Some systems do not have
+this connection and only use external interfaces and/or IPMB
+interfaces.  System interfaces include SMIC, KCS, and BT interfaces.
+
+An MC (generally the BMC) may have other interfaces to an external
+management system through serial ports or Ethernet.
+
+Generally, sensors sit on an I2C bus since many off-the-shelf sensors
+can sit directly on the bus with no extra logic.  Wherever the sensors
+sit, the MC provides a more abstract interface to the sensors so that
+the management system does not have to know the details of how to talk
+to the sensor.  Sensors may be traditional analog sensors like
+temperature and voltage.  But they may report other things, too, like
+the current BIOS state, whether a device is present or not, or other
+things like that.
+
+FRU data is often stored in I2C EEPROMs on the I2C bus.  FRU data is
+information about a Field Replacable Unit.  This includes things like
+the manufacturer, the serial number, date of manufacture, etc.  A
+system generally has information about the chassis and information
+about each field replacable unit it has.  Field replacable units may
+include power supplies, DIMMs (memory devices), plug-in-boards, or a
+host of other things.
+
+Connections to other MCs may be done through an Intelligent Platform
+Management Bus (IPMB).  On an IPMB, each MC is a peer and they
+communicate directly through messages.
+
+In addition to IPMB, IPMI systems can be interconnected through an
+Intelligent Chassis Management Bus.  This is a serial bus that runs
+between chassis.
+
+A management controller may be able to control various aspects of the
+chassis, such as power and reset.  It may also have a watchdog timer
+for the main processor.
+
+The SDR repositories store information about the sensors and
+components of the system.  The BMC must have a main SDR repository;
+this repository is writable.  There may only be one main SDR
+repository in the system.  The device SDR repository may be on any MC
+in the system; it is a read-only repository.
+
+The event log holds asynchronous events in the system.  Events may be
+forwarded through the system interface or other interfaces, but they
+are always stored in the event log.  The BMC must have an event log;
+generally the other management controllers forward their events to the
+BMC.
+
+\section{System Types}
+
+Although any arbitrary type of system may use IPMI for platform
+management, systems generally fall into two categories: server systems
+and bus systems.
+
+\begin{figure}
+\includegraphics[width=\textwidth]{ServerSystem.eps}
+\caption{\label{typicalserver}A typical server system}
+\end{figure}
+
+Figure \ref{typicalserver} shows a typical server system.  It is a
+single stand-alone box that is a single computer.  It has a Baseboard
+Canagement Controller (BMC) that is the main management controller in
+the system.  It controls a number of sensors.  In this
+example, the power supply also has a management controller (MC) with
+it's own sensors.
+
+A BMC can have several connections to managing systems.  It may have a
+system interface connection to the main processor.  It may share an
+interface to the ethernet chip so the system may be managed through
+the LAN when the main processor is not working.  System can have
+serial port connections.  They can even have connections to modems
+where they can dial up a management system when they detect a
+problem, page an operator, or be dialed into by a management system.
+
+\begin{figure}
+\includegraphics[width=\textwidth]{BusSystem.eps}
+\caption{\label{typicalbus}A typical bus system}
+\end{figure}
+
+Figure \ref{typicalbus} shows a typical bus system.  The word ``bus''
+is perhaps a bit misleading; these types of systems used to have
+busses (like CPCI and VME) but recently have tended to not have big
+busses and use networking for interconnect (like PICMG 2.16 and ATCA).
+These systems generally contain a number of processors on pluggable
+boards often called Single Board Computers (SBCs) or blades.  One or
+more power supplies power the whole system.  The boards and power
+supplies can be hot-pluggable.
+
+These systems generally have one or two boards that manage the system;
+this can be on a standard SBC, on another special purpose blade (like
+a blade used as a network switch), or on a standalone board with this
+purpose.  The shelf management controller(s) generally act as the BMC
+in the system; they will have the event log and the SDRs in the
+system.  A system with two shelf controllers will generally allow the
+system to be managed even if one of the shelf controllers fails.
+
+Bus systems generally use one or more IPMBs (Intelligent Platform
+Management Bus, a sister standard to IPMI) to interconnect the various
+components for management.  IPMB is a modified I$^2$C interface; it
+provides for a somewhat slow but simple communication bus.
+
+The boards can generally be individually power controlled, so even
+though a board is plugged into the system it may be turned off.  The
+shelf managment controller may implement some policy, such as fan
+controls or auto-powering up boards, but is generally used as a
+conduit for an external management system to control the parts of the
+system.
+
+Individal SBCs vary on whether the local Management Controller is
+connected to the microprocessor on an SBC.  Some are, and some aren't.
+This has some limited usefulness if the software on the SBC wishes to
+obtain local information from the IPMI system or store logs in the
+IPMI event log.
+
+These types of systems are used to achieve high density in places with
+expensive real-estate, like a telco central office.  As you might
+imagine, you can pack a lot of processing power into a small space
+with a system like this.  Since they are generally designed for
+hot-swap, and can have I/O come out the back of the system on separate
+cards, it makes mainenance easier.
+
+%---------------------------------------------------------------------
+\chapter{OpenIPMI}
+
+So now we've got a BMC, MCs, and things like that.  But how are you
+expected to use raw IPMI?
+
+The first things you must do, of course, it connect to the BMC.  If it's
+a direct SMI connection (A SMIC, KCS, or BT interface, or perhaps a
+non-standard serial interface), you just open the driver on the
+operating system and start messaging.  If it's a LAN-type connection,
+you have to go through an authentication sequence.  One you have a
+connection to the BMC, things are pretty much the same no matter what
+interface you have.  There are a few messaging for doing special
+controls on a LAN interface, but they don't generally matter to the
+user.
+
+Once the connection to the BMC is up, the user should query to see what
+channels the BMC supports.  For 1.5 and later, it gets this from a
+command.  For 1.0, it gets it from the main SDR repository.
+
+Once you are connected, you should scan the SDRs in the main SDR
+repository for any entities and sensors.  Sensors and entities may
+also be in the device SDR repository, which should be scanned next.
+This allows the user to discover the sensors in the system.  Note that
+the sensors may point to entities that don't have a entry in the SDR
+that defines them, those entities need to be handled when they are
+detected.
+
+After this point in time, the interface could be deemed to be ``up''.
+However, there's still more to do.
+
+If the interface supports an event queue, the user will have to poll it
+(if the driver doesn't deliver them asynchronously, that is).  If the
+interface doesn't support an event queue the user should periodically
+scan the system event log for new events.  (Note that even if it does
+support an event queue, the user should still poll the system event log
+in case the event queue missed any events coming in.)
+
+Also, the user should start scanning the IPMB bus with broadcast get
+device id commands to detect any MCs on the bus.
+
+This is what OpenIPMI does for you.  Beyond this, it also represents the
+sensors, controls, and entities in a nice OO fashion, and it handles the
+details of addressing, message routing, and other things you don't
+really care about.  It lets you get right at the sensors and entities.
+
+\section{The User View}
+
+A bunch of acronyms have just been introduced, along with a lot of
+vague concepts, and some description about how to use IPMI.  The nice
+thing is that the user of OpenIPMI doesn't really have to know about
+all these things.
+
+From the user's point of view, the entity provides the central
+framework for everything sensors and controls.  Sensors monitor
+entities.  Entities may be present or absent.  When you connect to an
+interface, OpenIPMI takes care of detecting the entities in the system
+and reporting them to you.  You may register to be told when entities
+are added or removed from the database.  Note that an entity may be
+present in the database, but not present in the system, the reporting
+from only gives the presence in the database, not physical presence in
+the system.
+
+The user must know about two other OpenIPMI concepts: connections and
+domains.  A connection provides the interface to the IPMI system.  In
+essence, it is the BMC connection.  You must allocate one or more
+connections and create a domain with them.  OpenIPMI supports multple
+connections to a domain in some cases, but currently it requires the OEM
+plugins exist.  A domain represents a set of devices on a bus (like
+IPMB) whose entities will be unique.  For instance, a chassis with a lot
+of cards plugged could be a domain, each card could be an entity and
+then create it's own sub-entities, but they will be designed so the
+entity id's don't collide.
+
+OpenIPMI will automatically manage the connections, activating and
+deactating the proper connections (if the connections support that),
+detecting failures and switching over, etc.
+
+Though the user doesn't have know the inner details of IPMI addressing
+and messaging, they do need to know about entities and sensors.
+OpenIPMI mainly focuses on representing the entities and sensors in
+convenient ways.  The user still needs to understand the capabilities of
+sensors, how the sensors advertise those capabilties, and the things
+that can be done to the sensors.
+
+You may register with an entity to be told when it's physical presence
+in the system changes.  Some devices (like power supplies) are
+field-replacable while the system is running, these are called Field
+Replacable Units (FRUs).  They may have sensors that monitor them, but
+those sensors may not be active if the device is not physically present
+in the system.
+
+Sensors and controls are also automatically detected and reported.
+This is done through entities, you register with an entity to be told
+when a sensor or control has been added or removed.
+
+\section{OpenIPMI Concepts}
+
+OpenIPMI is an event-driven library that is designed to be relatively
+operating system independent.  If you have written control systems or
+things like that in the past, you will be quite familiar with
+event-driven systems and may skip to the next section.  If not, you want
+to read this.  Event-driven systems may seem a little unusual, but they
+are accepted practice and by far the best way to build control systems.
+
+\subsection{Event-Driven Systems}
+
+In an event-driven system, you never stop and wait for something to
+happen.  If you are not used to this, you are probably used to writing
+code like this:
+
+\begin{verbatim}
+  while (true) {
+    wait_for_input();
+    perform_op1();
+    wait_for_op1_results();
+    perform_op2();
+  }
+\end{verbatim}
+
+This is fairly straightforward, but it has some problems.  What if
+another more important input comes in while you are waiting for the
+results of \verb=perform_op1()=?  Now the program will have to handle
+input in \verb=wait_for_op1_results()=, too, and somehow return and
+say something is happening.  The loop will then have to somehow handle
+multiple operations in progress.  And this is a simple example, what
+if there were hundreds of possible inputs, each with their own result
+handler, and each had to go through several states?  You could assign
+each to a thread, but if you have thousands of possible pending
+operations in a system, that many threads may thrash your system and
+render it inoperable, probably right at the time you need it most
+(since a lot of things are going on).
+
+In an event-driven system, instead you would say:
+\begin{verbatim}
+  init()
+  {
+    <initialize input_data>
+    register_for_input(op1_handler, input_data);
+  }
+  op1_handler(input_data)
+  {
+    <allocate and initialize op_data>
+    perform_op1(..., op2_handler, op_data);
+  }
+  op2_handler(op_data)
+  {
+    perform_op2();
+    <free op_data>
+  }
+\end{verbatim}
+
+As you see, when you start an operation, you provide the next thing to
+call when the operation completes.  The functions passed around are
+called ``callbacks''.  You allocate and pass around chunks
+of data to be passed to the handlers.  And you register input handler
+that get called when certain event occur.  So the code runs in short
+non-blocking sections, registers for the next operation, then returns
+back to some invisible main loop that handles the details of scheduling
+operations.  This may seem more complicated than the previous example,
+but it has a large number of advantages:
+\begin{itemize}
+\item The system is almost always ready to handle input.  For instance,
+user-interface systems (like most widget sets) are almost always
+event-driven, this
+makes them much more ``live'', since they are always ready to handle
+user input.
+\item This system can handle multiple simultaneous operations without
+threads.  In general, threaded systems are less reliable and more
+complicated, unless you need priorities or scalability on SMP, why use
+them?  And even if you use them, you can have much better control over
+what is running in the system.
+\item If you are building a redundant system with data replication, this
+gives you a natural way to hold your data, know when to transfer it over
+to the mate system, and continue an operation on the mate system.
+\item If you track the data, it's easy to monitor every operation
+occuring in the system, stop an operations, or whatever.
+\item It's much easier to detect and manage overload situations in an
+event driven system.  Event-driven systems have event queues of things
+waiting to be processed.  You can put things in the queue and watch the
+queue length.  If the queue length gets too big, you are in overload,
+and can intelligently decide which events you want to throw away, based
+on priority, time to live, or some other criteria.
+\end{itemize}
+
+In general, a threaded system is easier to conceptually understand until
+you understand event-driven methods.  An event-driven system is almost
+always easier to correctly implement.
+
+Note that event-driven systems don't preclude the use of threads.
+Threads may be vastly overused, but they are important.  You could, for
+example, allocate one event loop thead per CPU to help scale your
+system.  You need to use threads to manage priorities.  Some inputs may
+be more important than others, so you may have an event loop for each
+priority and feed them that way.  You have a thread per CPU, and/or a
+thread per priority, but you don't need a thread per operation.
+
+This is often called ``state-machine programming'' since most control
+systems are state-machine based, and this is a natural way to implement
+a state machine.  The \verb=op_data= holds the state of the state
+machine, each input gets \verb=op_data=, looks at the current state, and
+decides what to do next.
+
+The OpenIPMI library is completely event-driven.  It has no internal
+blocking operations, and it expects that anything it calls will not
+block.  IPMI messaging and operating system primitives are provided
+through external plug-in pieces.
+
+If a library function that takes a callback does not return an error,
+the callback is guaranteed to be called, even if the object the call is
+associated with goes away.  If it goes away, a NULL may be passed in as
+the object to the callback, but the \verb=cb_data= will still be valid.
+
+\subsection{The OS Handler}
+
+The OS handler provides services for the OpenIPMI library.  These
+services are:
+\begin{description}
+\item[Input Callbacks]
+The OpenIPMI code uses the ``file descriptor'' concept of *nix, input
+devices are numbered.  This is not used internally in the library, but
+it is used by the messaging interfaces, so the messaging interfaces and
+OS handler may implement their own conventions for these numbers.  This
+provides a way for OpenIPMI to register to receive input from devices.
+
+\item[Timers]
+OpenIPMI times everthing (as it should), thus it needs timers.
+
+\item[Locks]
+OpenIPMI does not require locks, you may leave the operations NULL and
+they won't be used.  However, if you are doing multi-threaded
+operations, you should provide locks.  The locks should be recursive
+(the same lock may be claimed multiple times by the same thread).  You
+need to provide read/write locks operations, although these may be
+normal locks (the system will just be less responsive).
+
+\item[Condition Variables]
+These are condition variables like the ones specified in POSIX threads.
+Although OpenIPMI does not use condition variables (since it never waits
+for anything) it may be convenient for other things to have them.
+OpenIPMI does not use them, and if nothing in your system needs them,
+they need not be provided.
+
+\item[Random Data]
+For certain operations, OpenIPMI needs random data.
+\end{description}
+
+\section{Error Handling}
+
+Almost all OpenIPMI calls that do anything besides fetch a piece of
+local data will return an integer error value.  A zero means no error.
+Two types of errors are returned, system errors (which are standard Unix
+errno values) and IPMI errors (which are the standard IPMI error codes).
+You can use the macros \verb=IPMI_IS_OS_ERR= and
+\verb=IPMI_IS_IPMI_ERR= to tell the type of error, and
+\verb=IPMI_GET_OS_ERR= and \verb=IPMI_GET_IPMI_ERR= to get
+the actual error values.
+
+Note that if your system doesn't have Unix-type error numbers, you will
+have to provide those for the OpenIPMI library.
+
+If a function returns an error, any callbacks provided to that function
+will \emph{never} be called.  If a function that takes a callback
+returns success, the callback will \emph{always} be called, even if the
+object associated has ceased to exist.  If an object with outstandard
+operations ceases to exist, all the callbacks for outstanding operations
+will be called with ECANCELED as the error.  Errors are passed into many
+callbacks, if an error is present the rest of the data in the callback
+is probably not valid except for the \verb=cb_data= variable you
+provide, and possibly the object the callback is associated with.  The
+object the callback is associated with may be NULL if it has ceased to
+exist.
+
+\subsection{Locking}
+
+As mentioned before, you may or may not be using locking, \emph{but
+you must read this section anyway.}  Locking here involves existance of
+entities as well as normal locking.
+
+Locking has changed between OpenIPMI 1.3 and 1.4.  In OpenIPMI 1.3,
+locks were held in user callbacks.  Locking was very course grained
+and the locks were recursive, so this was generally not a problem.
+However, in general it is a bad idea to hold locks in user callbacks.
+The user might have two domains and do things between them, resulting
+in possible deadlocks.  Because of this, locking strategy has changed
+in OpenIPMI 1.4.  The interfaces and basic usage are completely
+unchanged, but the semantics have changed.
+
+\subsubsection{Locking principles}
+
+The basic principle of locking is that if you are in a callback for an
+IPMI object (an IPMI object is passed in the callback), that object is
+refcounted (marked in-use) and the system cannot delete it.  In any
+callback for an object owned by a particular domain, that object will
+be and anything it belongs to will be marked in-use.  So, for
+instance, in a callback for a sensor, the sensor is in-use, the entity
+the sensor belongs to is in-use, the management controller the sensor
+is on is in-use, and the domain the sensor is in will be in-use.  No
+other sensors, entities, or management controllers will necessarily be
+marked in-use.  Outside of callbacks, the library is free to change
+pointers, change information, add and remove objects, or whatever it
+wants to objects.
+
+So how do you mark an IPMI object in-use?  If you are handling
+incoming IPMI callbacks you generally don't have to worry about this.
+But say you are handling outside input, such as a user interface.
+What then?  If the pointers can change, how do I keep a reference to
+something?
+
+OpenIPMI provides two identifiers for IPMI objects.  One is a pointer,
+but a pointer is only good inside a callback.  The other is an
+OpenIPMI id, the id is good outside callbacks.  But the only thing you
+can do with an id is pass it to a function that will call a callback
+for you with the pointer.  You can convert a pointer to an id (inside
+a callback, of course) so you should do that if you need to save a
+reference to the object.  Note that there are some functions that take
+ids that do this for you (such as \verb=ipmi_sensor_id_reading_get()=,
+other sensor functions, hot-swap functions, and a few others); these
+are provided for your convenience.
+
+This mechanism, though a little inconvenient, almost guarantees that
+you will not forget to decrement a use count.  It nicely encapsulates
+the locked operation in a function\footnote{This is how locking works
+in Ada95 and Java, although their mechanisms are a little more
+convenient since they are built into the language}.  You have to
+return from the function unless you exit, longjmp, or throw an
+exception that falls through the callback, and you shouldn't do those
+things.
+
+You \emph{must} do this whether you are using locking or not, because the
+library uses this mechanism to determine whether the id you are holding
+is good.  Once it converts the id to the pointer, your pointer is
+guaranteed to be good until the function returns.
+
+These functions are named \verb=ipmi_xxx_pointer_cb()=, where ``xxx''
+is control, entity, domain, or sensor.  Unlike many other callbacks,
+the callback function you provide to these functions will be called
+immediately in the same thread of execution, this callback is not
+delayed or spawned off to another thread.  So, for instance, you can
+use data on the stack of the calling function and pass it to the
+callback function to use.
+
+\subsubsection{Locking example}
+
+For instance, suppose you have a callback registered with the domain
+for finding when new entities are ready, and you are looking for a
+specific entity.  The code might look like:
+
+\begin{verbatim}
+ipmi_entity_id_t my_entity_id = IPMI_ENTITY_ID_INVALID;
+
+static void
+entity_change(enum ipmi_update_e op,
+	      ipmi_domain_t      *domain,
+	      ipmi_entity_t      *entity,
+	      void               *cb_data)
+{
+    ipmi_entity_id tmp_id;
+
+    switch (op) {
+	case IPMI_ADDED:
+            if (entity_i_care_about(entity))
+                my_entity_id = ipmi_entity_convert_to_id(entity);
+	    break;
+
+	case IPMI_DELETED:
+            tmp_id = ipmi_entity_convert_to_id(entity);
+            if (ipmi_cmp_entity_id(my_entity_id, tmp_id) == 0)
+                ipmi_entity_id_set_invalid(&my_entity_id);
+	    break;
+
+        default:
+            break;
+    }
+}
+\end{verbatim}
+
+In this example, the entity is in-use in this call, because you have
+received a pointer to the entity in the callback.
+
+However, suppose you want to use the entity id later because the user
+asks about the entity to see if it is present.  You might have a piece
+of code that looks like:
+
+\begin{verbatim}
+static void
+my_entity_id_cb(ipmi_entity_t *entity, void *cb_data)
+{
+    my_data_t *data;
+
+    data->exists = 1;
+    data->present = ipmi_entity_is_present(entity);
+}
+
+void
+check_if_my_entity_present(my_data_t *data)
+{
+    int rv;
+
+    data->exists = 0;
+    data->present = 0;
+    rv = ipmi_entity_pointer_cb(my_entity_id, my_entity_id_cb, data);
+    if (rv)
+        printf("The entity could not be found\n");
+}
+\end{verbatim}
+
+Most of the data about the various OpenIPMI objects is static, so you
+can pre-collect the information about the objects in the callback
+where there existance is reported.  The only dynamic variable in
+OpenIPMI is entity presence.  Also, many operation require a message
+to the remote system; the ones that take callbacks.  For these
+operation, functions that directly take the id are available.
+
+The entity presence code could be rewritten using this to be:
+
+\begin{verbatim}
+void
+check_if_my_entity_present(my_data_t *data)
+{
+    int rv;
+
+    data->exists = 0;
+    data->present = 0;
+    rv = ipmi_entity_id_is_present(my_entity_id, &data->present);
+    if (rv)
+        printf("The entity could not be found\n");
+    else
+        data->exists = 1;
+}
+\end{verbatim}
+
+So, it is recommended that you collect all the static information that
+you need from an object when it is reported to you.
+
+\subsubsection{Locking semantics}
+
+As mentioned before, OpenIPMI will not delete an object you have a
+pointer to while in a callback, but in multi-threaded systems it is
+free to do pretty much anything else to the object, including call
+callbacks on it.  This means, for instance, that you can be iterating
+over the entities in the system and a new entity can be added, have
+the entity update callback called on it, and be added to the list.
+There is no guarantee or order between the adding of entities to the
+list and the callback.  So the new entity might be iterated, it might
+not, the iteration might be before or after the the callback, etc.
+
+How can you avoid this?  You have a few options:
+
+\begin{itemize}
+\item Ignore the problem.  I strongly recommend that you do not take this
+option.
+
+\item Single-thread your program.  If you don't need be able to take
+advantage of multiple CPUs in an SMP system, and you have no need for
+priorities, single-threading is a good option.  With OpenIPMI, you can
+have a single-threaded application that is non-blocking and can
+perform very well.  Plus, single-threaded programs are easier to
+debug, easier to understand and maintain, and more reliable.
+
+\item Do your own locking.  OpenIPMI used to hold locks for the user while
+in callbacks.  This is, in general, a bad idea.  OpenIPMI does not
+know what the user is doing.  This can result in deadlocks if the user
+is not careful, and it make it hard for the user to handle multiple
+things\footnote{For instance, if you have two callbacks on two
+sensors, and each of them then did a locking operation on the other
+sensor, you can end up in a deadlock situation where one thread holds
+one lock, another thread holds another lock, and they are both waiting
+for the lock the other is holding}.  Instead, the user must do their
+own locking.  For instance, you could claim a lock in both the entity
+iteration and the callback for a new entity.  This would prevent the
+both pieces of code from running at the same time.  You are in control
+of the locks, so you can handle it as appropriate.  You have to know
+what you are doing, but that goes without saying when doing
+multi-threaded programming.
+\end{itemize}
+
+Note that this may seen abnormal, but it is pretty standard in
+multi-threaded systems.  HPI, for instance has the same problem.  If
+you have one thread waiting for events from an HPI domain, and another
+iterating the RDRs, or you have two threads each doing operations on
+sensors, you have exactly the same situation.  You have to protect
+yourself with locks the same way.
+
+Note that data about an object (like the device id data, whether the
+MC is active, or the entity is present, or whatever) will \emph{not}
+change while the object is in use.  This data is held until the object
+is no longer in use and then installed (and in the case of activity or
+presence, the callbacks are then called).
+
+\subsection{OpenIPMI Objects}
+
+In OpenIPMI, the user deals with six basic objects: connections,
+domains, entities, sensors, controls, and events.
+
+\subsubsection{Connections}
+
+A connection provides the low-level interface to the system.  It is
+usually a connection to a BMC in a system.  It handles getting IPMI
+messages to the proper elements in the system.
+
+\subsubsection{Domains}
+
+The domain is the container for the system, the entities in the system
+are attached to the it.  You create a domain with a connection to a
+system; the domain handles the job of discovery of the things in the
+system.
+
+\subsubsection{Entities}
+
+Entities are things that are monitored.  They may be physical things
+such as a power supply or processor, or more abstract things such as the
+set of all power supplies or the ambient air in a chassis.  Sensors
+monitor entities, and controls are attached to entities.
+
+Entities may be grouped inside other entities, thus an entity may have a
+parent (if it is grouped inside another entity) and children (if it
+contains other entities).  These relationships are abstract; you may
+change them if it you like.  A raw system with no SDR data will not have
+any relationships defined.  Relationships are stored in the SDR
+repository, you may change them and store them back, if you like and if
+the system supports that.
+
+FRU information about the entity is sometimes available.  You can
+register with an entity to see if/when it becomes available using
+\verb=ipmi_entity_add_fru_update_handler()=.  Once it is available,
+you can fetch the FRU data using the commands defined in the IPMI
+include file.
+
+\paragraph{Device-Relative vs System-Relative Entities}
+
+In IPMI, entities may be be either in a fixed place in the system, or
+they may be moved about the system.  Fixed entities, are, well, in a
+fixed location in the system.  These are called system relative
+entities.  They have an entity instance less than 60h.
+
+Other entities may not reside in a fixed location.  For instance, a
+power supply or CompactPCI board may be plugged in to one of many
+locations in a chassis; it doesn't know ahead of time which one.
+These types of entities are generally device-relative and have an
+entity instance of 60h or larger.  For these types of entities, the
+management controller on which they reside becomes part of the entity.
+In OpenIPMI, the IPMB channel number of IPMB address are part of the
+entity.  In \verb=ipmi_ui=, these are printed and entered as
+``r<channel>.<ipmb>.<entity id>.<entity instance>''.
+
+\subsubsection{Sensors}
+
+Sensor monitor something about an object.  IPMI defines many types of
+sensors, but groups them into two main categories: Threshold and
+discrete.  Threshold sensors are ``analog'', they have continuous (or
+mostly continuous) readings.  Things like fans speed, voltage, or
+temperature.
+
+Discrete sensors have a set of binary readings that may each be
+independently zero or one.  In some sensors, these may be independent.
+For instance, a power supply may have both an external power failure and
+a predictive failure at the same time.  In other cases they may be
+mutually exclusive, such as the initialization state of a piece of
+software.
+
+\subsubsection{Controls}
+
+Controls are not part of the IPMI spec, but are necessary items in
+almost all systems.  They are provided as part of OpenIPMI so that OEM
+code has a consistent way to represent these, and so OpenIPMI is ready
+when the IPMI team finally sees the light and adds controls.  OpenIPMI
+defines many types of control: lights, relays, displays, alarms,
+reset, one-shot-reset, power, fan speed, general outputs, one-shot
+outputs, and identifiers.
+
+For all controls except displays and identifiers, the control may
+actually control more than one device.  With some controls, multiple
+device may be controlled together and individual ones cannot be set (ie,
+the same message sets all of them).  For these types of controls,
+OpenIPMI represents them as a single control with multiple devices.
+All the devices are read and set at once.
+
+Reset controls are reset settings that can be turned on and off.
+One-shot-reset controls cause a reset by setting the value to 1; they
+are not readable and setting to zero returns an error.
+
+Lights are on/off colored devices, like an LED.  They may be
+multi-color, but can only show one color at a time.  For instance, if
+you work for Kmart, or you are managing a CompactPCI system with
+hot-swap, you will have a blue light in your system.  You can search
+through the controls to find a light that's blue.  Then, if a special
+is on, or you want the operator to remove a card, you can light the blue
+light.  Lights may blink, too.  Each light can have settings.  Each
+setting describes a sequence of one or more transitions the light may go
+through.
+
+Relays are binary outputs.  Most telephony systems have them; they are
+required by telephony specs.  They are simple on/off devices.
+
+Displays are two-dimensional arrays of characters.  OpenIPMI allows you
+to change individual characters at will.
+
+Alarms are bells, whistles, gongs, or anything to alert the user that
+something is wrong.
+
+Reset controls are used to reset the entity to which they are attached.
+
+Power controls can be used to control power to or from an entity.  A
+power control on a power supply would generally control output power.  A
+power control on a board would generally control input power to the
+board.
+
+Fan speed controls can be used to set the speed of a fan.
+
+General outputs are outputs that don't fall into one of the previous
+categories.  One-shot outputs are like general outputs, but perform
+some action when set to one and are not readable.  Setting them to
+zero returns an error.
+
+Identifier controls hold identification information for a system, such
+as a chassis id, chassis type, geographic address, or whatever.
+
+\subsubsection{Events}
+
+When an external event comes into OpenIPMI, the user will always
+receive that event in some manner (unless they do not register with a
+generic event handler, but they should always do that).  The event may
+come through a callback for a sensor, control, entity, or other
+callback.
+
+All the callbacks you should be using return a value telling whether
+the handler has ``handled'' the event.  Handling the event means that
+the callback is going to manage the event.  Primarily, this means that
+it is responsible for deleting the event from the event log with
+\verb=ipmi_event_delete()=.  If no callback handles the event, then it
+will be delivered to the main event handler(s).  This allows calls to
+receive events but the events to be managed in a single location.
+
+If a callback handles the event, then all future callbacks called due
+to the event will receive a \verb=NULL= for the event.  So be ready to
+handle a \verb=NULL= event in all your event handlers.  A \verb=NULL=
+may also be passed to an event handler if the callback was not due to
+an event.
+
+\subsection{Callbacks}
+
+As you will discover, OpenIPMI is very callback based.  The callbacks
+are somewhat fined grained; you register for exactly what you want to
+see on individual objects.  This is not as bad as you might imagine
+(even though it may seem somewhat strange).  It does mean that you
+have to do a lot of registering in all the right places, though.  IPMI
+has a large number of asyncronous things that it has to inform you
+about.  If it delivered all these through one interface, you would
+have to look at each call and try to figure out what type of things
+was being reported, what object is was associated, etc.  In effect,
+that work is done by OpenIPMI.
+
+\subsubsection{Updated Callbacks}
+
+Updated callbacks tell you when an object comes into existance, is
+destroyed, or if configuration information about an object has
+changed.  On an entity, for instance, when an entity is first added,
+the entity update handler on the domain will be called with the
+entity.  when an SDR is read and causes a change to the entity, the
+updated handler will be called again with the change.  When the entity
+is deleted, it will be called again.
+
+In general, you should add updated handlers whenever the thing you
+want to register against comes into existance.  So for entities and
+the main event handler, you should register them in the
+\verb=setup_done= callback for the domain.  The entity update handler
+should register the update handlers for sensors, controls, and FRU
+information.  It should register the event handlers for presence and
+hot-swap there, too.
+
+Sensor and control update handlers should set up and register for
+events from the sensor.
+
+\subsubsection{Event Based Callbacks}
+
+Event based callbacks tell you when asynchronous things happen in the
+system.  For instance, a card gets plugged in and an entity becomes
+present.  You will be told with the present callback on the entity.
+The hot-swap state of an entity changes.  That is reported via the
+hot-swap state callback.  Events because of sensors going out of range
+is another example.
+
+Note that the handlers don't get called with current state when you
+add an event-based callback handler.
+
+\subsubsection{Synchronous Callbacks}
+
+Synchronous callbacks are callbacks for things you request and are
+one-shot operations.  For instance, if you want to know the current
+value of a sensor, you call call \verb=ipmi_reading_get()= and you
+give it a handler to call when the reading has been fetched.
+
+This is always done for things that OpenIPMI might have to send a
+message to do.  If it a result of OpenIPMI's requirement to be able to
+work in non-threaded systems and still be responsive to operations
+while waiting.
+
+
+%---------------------------------------------------------------------
+\chapter{IPMI Interfaces}
+
+\section{OpenIPMI Addressing}
+
+\section{System Interfaces}
+
+\subsection{SMIC}
+
+\subsection{KCS}
+
+\subsection{BT}
+
+\subsection{The OpenIPMI Driver}
+
+\subsection{The OpenIPMI System Interface }
+
+\section{IPMB}
+
+\section{ICMB}
+
+\section{LAN}
+
+\subsection{SNMP Traps}
+
+\subsection{LAN Configuration}
+
+\subsection{The OpenIPMI LAN Interface }
+
+\section{Direct Serial}
+
+\section{Serial over PPP}
+
+%---------------------------------------------------------------------
+\chapter{Entities}
+
+%---------------------------------------------------------------------
+\chapter{Sensors}
+
+  IPMI defines
+special types of sensors called Presence Sensors, these report if an
+entity is present in the system.
+
+Sensors provide a lot of functions depending on their type.  Threshold
+sensors monitor ``analog'' things like temperature, voltage, or fan speed.
+Discrete sensors monitor events or states, like the previously
+introduced presence sensor, software initialization progress, or if
+external power is present to the system.
+
+Threshold sensors report their readings in values from 0-255.  OpenIPMI
+makes every effort to convert this to a floating-point value for you to
+use.  IPMI defines standard ways to convert values using various
+formulas.  OpenIPMI implements all these and provides ways for OEM
+functions to plug in to provide their own converters.  If you have a
+sensor that cannot be represented using the standard mechanisms, you
+need to get the OEM algorithms for this and implement them in an OEM
+plug-in for the sensors.
+
+You may enable events on a threshold sensor by specifying values (called
+thresholds) where you want the sensor to report an event.  Then you can
+enable the events for the specific thresholds.  Not all sensors support
+all thresholds, some cannot have their events enabled and others cannot
+have them disabled.  The capabilities of a sensor may all be queried
+by the user to determine what it can do.
+
+Threshold sensors may have hysteresis, meaning that when the threshold
+goes on above or below the specified value, the transition point where
+the threshold goes off is somewhat below or above the given value.  For
+instance, if you want a fan speed sensor to go off when it goes below
+150 RPM, if the fan is hanging right around 150 RPM, the sensor may be
+constantly sending you events as it goes slightly above and slightly
+below 150 RPM, which is bad because it can overload the system
+management software.  The hysteresis for the fan might be set at 10 rpm,
+which means that if the speed goes below 150 RPM, then it must go above
+160 RPM for the threshold to be disabled.  Hysteresis may be settable or
+may be fixed for the sensor.
+
+Discrete sensors report their readings in a 16-bit bitmask, each bit
+representing a dicrete value.  You enable events on the sensor by
+specifying which discrete values you want to generate events.  Like
+threshold sensors, these events may or may not be user-controllable.
+That information may be fetched by the user.
+
+%---------------------------------------------------------------------
+\chapter{Controls and Miscellany}
+
+\section{Watchdog Timer}
+
+\section{Chassis}
+
+\section{Direct I2C Access}
+
+%---------------------------------------------------------------------
+\chapter{Events}
+
+%---------------------------------------------------------------------
+\appendix
+
+\chapter{Comparison with SNMP}
+
+%---------------------------------------------------------------------
+\chapter{ATCA}
+
+\backmatter
+\end{document}

@@ -202,10 +202,7 @@ in the system.
 Sensors are also automatically detected and reported.  This is done
 through entities, you register with an entity to be told when a sensor
 has been added or removed.  IPMI defines special types of sensors called
-Presence Sensors, these report if an entity is present in the system.  A
-presence sensor is @emph{not} reported to the user, OpenIPMI attaches
-these to the entity directly and uses them to detect the presence of the
-entity.
+Presence Sensors, these report if an entity is present in the system.
 
 Sensors provide a lot of functions depending on their type.  Threshold
 sensors monitor ``analog'' things like temperature, voltage, or fan speed.
@@ -867,7 +864,7 @@ one-shot operations.  For instance, if you want to know the current
 value of a sensor, you call call @code{ipmi_reading_get()} and you
 give it a handler to call when the reading has been fetched.
 
-This is always done for things that OpenIPMI might hav to send a
+This is always done for things that OpenIPMI might have to send a
 message to do.  If it a result of OpenIPMI's requirement to be able to
 work in non-threaded systems and still be responsive to operations
 while waiting.
