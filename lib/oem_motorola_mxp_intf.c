@@ -485,7 +485,7 @@ lan_send_addr(lan_data_t  *lan,
     tmsg[1] = (msg->netfn << 2) | lun;
     tmsg[2] = ipmb_checksum(tmsg, 2);
     tmsg[3] = lan->swid;
-    tmsg[4] = seq;
+    tmsg[4] = seq << 2;
     tmsg[5] = msg->cmd;
     memcpy(tmsg+6, msg->data, msg->data_len);
     pos = msg->data_len + 6;
@@ -1896,7 +1896,7 @@ handle_msg_send(lan_timer_info_t      *info,
 	}
     }
  out:
-    ipmi_lock(lan->seq_num_lock);
+    ipmi_unlock(lan->seq_num_lock);
     return rv;
 }
 
@@ -2663,16 +2663,10 @@ auth_cap_done(ipmi_con_t   *ipmi,
     int           rv;
 
 
-ipmi_log(IPMI_LOG_DEBUG, "Got auth cap 1");
-
     if ((msg->data[0] != 0) || (msg->data_len < 9)) {
-ipmi_log(IPMI_LOG_DEBUG, "Got auth cap 2");
-
 	handle_connected(ipmi, EINVAL);
 	return;
     }
-ipmi_log(IPMI_LOG_DEBUG, "Got auth cap 3");
-
 
     if (!(msg->data[2] & (1 << lan->authtype))) {
         ipmi_log(IPMI_LOG_ERR_INFO, "Requested authentication not supported");
@@ -2681,7 +2675,6 @@ ipmi_log(IPMI_LOG_DEBUG, "Got auth cap 3");
     }
 
     rv = send_challenge(ipmi, lan);
-ipmi_log(IPMI_LOG_DEBUG, "Got auth cap 4: %d", rv);
     if (rv) {
         ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Unable to send challenge command: 0x%x", rv);
@@ -2707,8 +2700,6 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
     msg.netfn = IPMI_APP_NETFN;
     msg.data = data;
     msg.data_len = 2;
-
-ipmi_log(IPMI_LOG_DEBUG, "Sending auth cap");
 
     rv = lan_send_command(ipmi, (ipmi_addr_t *) &addr, sizeof(addr),
 			  &msg, auth_cap_done, NULL, NULL, NULL, NULL);

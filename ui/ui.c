@@ -983,7 +983,7 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	{
 	    if (sensor_value_present == IPMI_BOTH_VALUES_PRESENT)
-		display_pad_out("%f", sensor_val);
+		display_pad_out("%f (%2.2x)", sensor_val, sensor_raw_val);
 	    else if (sensor_value_present == IPMI_RAW_VALUE_PRESENT)
 		display_pad_out("0x%x (RAW)", sensor_raw_val);
 	    else
@@ -3624,7 +3624,7 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 	       conn_num, port_num);
 
     if (!still_connected) {
-	ui_log("All IPMI connections down");
+	ui_log("All IPMI connections down\n");
 	return;
     } else if (!initialized)
 	ui_log("Completed setup for the IPMI connection\n");
