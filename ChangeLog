@@ -6,6 +6,8 @@
 	* lib/ipmi_lan.c: Added a boatload of statistics to the LAN
 	interface.
 
+	* lib/sel.c: Added statistics.
+
 2005-03-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Added a

@@ -2498,8 +2498,8 @@ _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%smc.c(_ipmi_mc_get_device_id_data_from_rsp): "
 		 "Invalid return from IPMI Get Device ID from address 0x%2.2x,"
-		 " something is seriously wrong with the MC",
-		 mc->name, ipmi_addr_get_slave_addr(&mc->addr));
+		 " something is seriously wrong with the MC, length is %d",
+		 mc->name, ipmi_addr_get_slave_addr(&mc->addr), rsp->data_len);
 	return EINVAL;
     }
 

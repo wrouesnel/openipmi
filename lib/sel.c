@@ -142,6 +142,21 @@ struct ipmi_sel_info_s
     void                          *new_event_cb_data;
 
     char name[SEL_NAME_LEN];
+
+    ipmi_domain_stat_t *sel_good_scans;
+    ipmi_domain_stat_t *sel_scan_lost_reservation;
+    ipmi_domain_stat_t *sel_fail_scan_lost_reservation;
+    ipmi_domain_stat_t *sel_received_events;
+    ipmi_domain_stat_t *sel_fetch_errors;
+
+    ipmi_domain_stat_t *sel_good_clears;
+    ipmi_domain_stat_t *sel_clear_lost_reservation;
+    ipmi_domain_stat_t *sel_clear_errors;
+
+    ipmi_domain_stat_t *sel_good_deletes;
+    ipmi_domain_stat_t *sel_delete_lost_reservation;
+    ipmi_domain_stat_t *sel_fail_delete_lost_reservation;
+    ipmi_domain_stat_t *sel_delete_errors;
 };
 
 static inline void sel_lock(ipmi_sel_info_t *sel)
@@ -288,6 +303,42 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
 	    ipmi_mem_free(sel);
 	}
     } else {
+	ipmi_domain_stat_register(domain, "sel_good_scans",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_good_scans);
+	ipmi_domain_stat_register(domain, "sel_scan_lost_reservation",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_scan_lost_reservation);
+	ipmi_domain_stat_register(domain, "sel_fail_scan_lost_reservation",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_fail_scan_lost_reservation);
+	ipmi_domain_stat_register(domain, "sel_received_events",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_received_events);
+	ipmi_domain_stat_register(domain, "sel_fetch_errors",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_fetch_errors);
+	ipmi_domain_stat_register(domain, "sel_good_clears",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_good_clears);
+	ipmi_domain_stat_register(domain, "sel_clear_lost_reservation",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_clear_lost_reservation);
+	ipmi_domain_stat_register(domain, "sel_clear_errors",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_clear_errors);
+	ipmi_domain_stat_register(domain, "sel_good_deletes",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_good_deletes);
+	ipmi_domain_stat_register(domain, "sel_delete_lost_reservation",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_delete_lost_reservation);
+	ipmi_domain_stat_register(domain, "sel_fail_delete_lost_reservation",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_fail_delete_lost_reservation);
+	ipmi_domain_stat_register(domain, "sel_delete_errors",
+				  _ipmi_mc_name(mc),
+				  &sel->sel_delete_errors);
 	*new_sel = sel;
     }
     return rv;
@@ -311,6 +362,31 @@ internal_destroy_sel(ipmi_sel_info_t *sel)
 
     if (sel->sel_lock)
 	sel->os_hnd->destroy_lock(sel->os_hnd, sel->sel_lock);
+
+    if (sel->sel_good_scans)
+	ipmi_domain_stat_put(sel->sel_good_scans);
+    if (sel->sel_scan_lost_reservation)
+	ipmi_domain_stat_put(sel->sel_scan_lost_reservation);
+    if (sel->sel_fail_scan_lost_reservation)
+	ipmi_domain_stat_put(sel->sel_fail_scan_lost_reservation);
+    if (sel->sel_received_events)
+	ipmi_domain_stat_put(sel->sel_received_events);
+    if (sel->sel_fetch_errors)
+	ipmi_domain_stat_put(sel->sel_fetch_errors);
+    if (sel->sel_good_clears)
+	ipmi_domain_stat_put(sel->sel_good_clears);
+    if (sel->sel_clear_lost_reservation)
+	ipmi_domain_stat_put(sel->sel_clear_lost_reservation);
+    if (sel->sel_clear_errors)
+	ipmi_domain_stat_put(sel->sel_clear_errors);
+    if (sel->sel_good_deletes)
+	ipmi_domain_stat_put(sel->sel_good_deletes);
+    if (sel->sel_delete_lost_reservation)
+	ipmi_domain_stat_put(sel->sel_delete_lost_reservation);
+    if (sel->sel_fail_delete_lost_reservation)
+	ipmi_domain_stat_put(sel->sel_fail_delete_lost_reservation);
+    if (sel->sel_delete_errors)
+	ipmi_domain_stat_put(sel->sel_delete_errors);
 
     /* Do this after we have gotten rid of all external dependencies,
        but before it is free. */
@@ -441,9 +517,18 @@ handle_sel_clear(ipmi_mc_t  *mc,
     }
 
     if (rsp->data[0] == 0) {
+	if (sel->sel_good_clears)
+	    ipmi_domain_stat_add(sel->sel_good_clears, 1);
+
 	/* Success!  We can free the data. */
 	free_deleted_events(sel->events);
 	sel->del_sels = 0;
+    } else if (rsp->data[0] == IPMI_INVALID_RESERVATION_CC) {
+	if (sel->sel_clear_lost_reservation)
+	    ipmi_domain_stat_add(sel->sel_clear_lost_reservation, 1);
+    } else {
+	if (sel->sel_clear_errors)
+	    ipmi_domain_stat_add(sel->sel_clear_errors, 1);
     }
 
     fetch_complete(sel, 0);
@@ -519,7 +604,11 @@ handle_sel_data(ipmi_mc_t  *mc,
            fetch, there is heavy contention for the SEL and someone
            needs to drop out to allow everyone else to continue. */
 	sel->fetch_retry_count++;
+	if (sel->sel_scan_lost_reservation)
+	    ipmi_domain_stat_add(sel->sel_scan_lost_reservation, 1);
 	if (sel->fetch_retry_count > MAX_SEL_FETCH_RETRIES) {
+	    if (sel->sel_fail_scan_lost_reservation)
+		ipmi_domain_stat_add(sel->sel_fail_scan_lost_reservation, 1);
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%ssel.c(handle_sel_data): "
 		     "Too many lost reservations in SEL fetch",
@@ -532,6 +621,8 @@ handle_sel_data(ipmi_mc_t  *mc,
 	}
     }
     if (rsp->data[0] != 0) {
+	if (sel->sel_fetch_errors)
+	    ipmi_domain_stat_add(sel->sel_fetch_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_data): "
 		 "IPMI error from SEL fetch: %x",
@@ -579,6 +670,8 @@ handle_sel_data(ipmi_mc_t  *mc,
 	holder->deleted = 0;
 	event_is_new = 1;
 	sel->num_sels++;
+	if (sel->sel_received_events)
+	    ipmi_domain_stat_add(sel->sel_received_events, 1);
     } else if (event_cmp(del_event, holder->event) != 0) {
 	/* It's a new event in an old slot, so overwrite the old
            event. */
@@ -591,6 +684,8 @@ handle_sel_data(ipmi_mc_t  *mc,
 	    sel->del_sels--;
 	}
 	event_is_new = 1;
+	if (sel->sel_received_events)
+	    ipmi_domain_stat_add(sel->sel_received_events, 1);
     } else {
 	ipmi_event_free(del_event);
     }
@@ -604,12 +699,15 @@ handle_sel_data(ipmi_mc_t  *mc,
 
 	/* To avoid confusion, deliver the event before we deliver fetch
            complete. */
-	if (event_is_new)
-	    if (sel->new_event_handler)
-		sel->new_event_handler(sel,
-				       mc,
-				       del_event,
-				       sel->new_event_cb_data);
+	if (event_is_new && sel->new_event_handler)
+	    sel->new_event_handler(sel,
+				   mc,
+				   del_event,
+				   sel->new_event_cb_data);
+
+	if (sel->sel_good_scans)
+	    ipmi_domain_stat_add(sel->sel_good_scans, 1);
+
 	/* If the operation completed successfully and everything in
 	   our SEL is deleted, then clear it with our old reservation.
 	   We also do the clear if the overflow flag is set; on some
@@ -651,9 +749,8 @@ handle_sel_data(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    if (event_is_new)
-	if (sel->new_event_handler)
-	    sel->new_event_handler(sel, mc, del_event, sel->new_event_cb_data);
+    if (event_is_new && sel->new_event_handler)
+	sel->new_event_handler(sel, mc, del_event, sel->new_event_cb_data);
  out_unlock:
     sel_unlock(sel);
  out:
@@ -708,6 +805,8 @@ handle_sel_info(ipmi_mc_t  *mc,
     }
 	
     if (rsp->data[0] != 0) {
+	if (sel->sel_fetch_errors)
+	    ipmi_domain_stat_add(sel->sel_fetch_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_info): "
 		 "IPMI error from SEL info fetch: %x",
@@ -717,6 +816,8 @@ handle_sel_info(ipmi_mc_t  *mc,
     }
 
     if (rsp->data_len < 15) {
+	if (sel->sel_fetch_errors)
+	    ipmi_domain_stat_add(sel->sel_fetch_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_info): SEL info too short", sel->name);
 	fetch_complete(sel, EINVAL);
@@ -745,6 +846,9 @@ handle_sel_info(ipmi_mc_t  *mc,
 	&& (add_timestamp == sel->last_addition_timestamp)
 	&& (erase_timestamp == sel->last_erase_timestamp))
     {
+	if (sel->sel_good_clears)
+	    ipmi_domain_stat_add(sel->sel_good_clears, 1);
+
 	/* If the operation completed successfully and everything in
 	   our SEL is deleted, then clear it with our old reservation.
 	   We also do the clear if the overflow flag is set; on some
@@ -848,12 +952,16 @@ sel_handle_reservation(ipmi_mc_t  *mc,
     }
 	
     if (rsp->data[0] != 0) {
+	if (sel->sel_fetch_errors)
+	    ipmi_domain_stat_add(sel->sel_fetch_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_handle_reservation): "
 		 "Failed getting reservation", sel->name);
 	fetch_complete(sel, ENOSYS);
 	goto out;
     } else if (rsp->data_len < 3) {
+	if (sel->sel_fetch_errors)
+	    ipmi_domain_stat_add(sel->sel_fetch_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_handle_reservation): "
 		 "got invalid reservation length", sel->name);
@@ -1068,7 +1176,8 @@ typedef struct sel_cb_handler_data_s
     ipmi_event_t          *event;
 } sel_cb_handler_data_t;
 
-static int send_reserve_sel(sel_cb_handler_data_t *data, ipmi_mc_t *mc);
+static int send_reserve_sel_for_delete(sel_cb_handler_data_t *data,
+				       ipmi_mc_t *mc);
 
 static void
 sel_op_done(sel_cb_handler_data_t *data,
@@ -1139,12 +1248,21 @@ handle_sel_delete(ipmi_mc_t  *mc,
     } else if ((data->count < MAX_DEL_RESERVE_RETRIES)
 	       && (rsp->data[0] == IPMI_INVALID_RESERVATION_CC))
     {
+	if (sel->sel_delete_lost_reservation)
+	    ipmi_domain_stat_add(sel->sel_delete_lost_reservation, 1);
 	/* Lost our reservation, retry the operation. */
 	data->count++;
-	rv = send_reserve_sel(data, mc);
+	rv = send_reserve_sel_for_delete(data, mc);
 	if (!rv)
 	    goto out_unlock;
     } else if (rsp->data[0]) {
+	if (rsp->data[0] == IPMI_INVALID_RESERVATION_CC) {
+	    if (sel->sel_fail_delete_lost_reservation)
+		ipmi_domain_stat_add(sel->sel_fail_delete_lost_reservation, 1);
+	} else {
+	    if (sel->sel_delete_errors)
+		ipmi_domain_stat_add(sel->sel_delete_errors, 1);
+	}
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_delete): "
 		 "IPMI error from SEL delete: %x", sel->name, rsp->data[0]);
@@ -1228,6 +1346,8 @@ handle_sel_check(ipmi_mc_t  *mc,
 	sel_op_done(data, 0);
 	goto out;
     } else if (rsp->data[0]) {
+	if (sel->sel_delete_errors)
+	    ipmi_domain_stat_add(sel->sel_delete_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_check): IPMI error from SEL get: %x",
 		 sel->name, rsp->data[0]);
@@ -1329,6 +1449,8 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
     }
 
     if (rsp->data[0] != 0) {
+	if (sel->sel_delete_errors)
+	    ipmi_domain_stat_add(sel->sel_delete_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_reserved_for_delete): "
 		 "IPMI error from SEL delete reservation: %x",
@@ -1353,7 +1475,7 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
 }
 
 static int
-send_reserve_sel(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
+send_reserve_sel_for_delete(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
 {
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
@@ -1387,7 +1509,7 @@ start_del_sel_cb(ipmi_mc_t *mc, void *cb_data)
     }
 
     if (data->sel->supports_reserve_sel)
-	rv = send_reserve_sel(data, mc);
+	rv = send_reserve_sel_for_delete(data, mc);
     else
 	rv = send_check_sel(data, mc);
 
