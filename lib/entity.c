@@ -2058,6 +2058,7 @@ ipmi_sdr_entity_destroy(void *info)
     }
 
     destroy_sdr_info(info);
+    ipmi_mem_free(info);
 
     return 0;
 }

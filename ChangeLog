@@ -1,6 +1,9 @@
 
 2003-09-30 Corey Minyard <cminyard@mvista.com>
 
+	* lib/entity.c: Make sure to free the entity SDR info when it is
+	destroyed.
+
 	* lib/domain.c: Initialize the running field of the
 	activate_timer_info data.
 
