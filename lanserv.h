@@ -77,6 +77,9 @@ typedef struct session_s
 
     unsigned char priv;
     unsigned char max_priv;
+
+    /* The number of seconds left before the session is shut down. */
+    unsigned int time_left;
 } session_t;
 
 typedef struct user_s
@@ -101,6 +104,10 @@ struct lan_data_s
 
     channel_t channel;
     channel_t nonv_channel; /* What to write to nonv ram. */
+
+    /* The amount of time in seconds before a session will be shut
+       down if there is no activity. */
+    unsigned int default_session_timeout;
 
     unsigned char *guid;
 
@@ -149,6 +156,10 @@ void ipmi_handle_lan_msg(lan_data_t *lan,
 
 void ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
 			 unsigned char *rsp, int rsp_len);
+
+/* Call this periodically to time things.  time_since_last is the
+   number of seconds since the last call to this. */
+void ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last);
 
 int ipmi_lan_init(lan_data_t *lan);
 

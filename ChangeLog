@@ -1,4 +1,9 @@
 
+2003-04-27 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv.c, lanserv.h, lanserv_ipmi.c: Added timeout handling
+	for sessions.
+
 2003-04-26 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv_ipmi.c: Added incoming session sequence number

@@ -12,6 +12,4 @@ Add LAN failure detection to the ipmi_lan.c code.
 
 In ipmi_lan.c, add reconnecting when a LAN connection goes down.
 
-Time LAN session in lanserv_ipmi.c
-
 Add platform event traps to the LAN code.

@@ -600,6 +600,7 @@ handle_temp_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
     session->max_priv = priv;
     session->priv = IPMI_PRIVILEGE_USER; /* Start at user privilege. */
     session->userid = user->idx;
+    session->time_left = lan->default_session_timeout;
 
     if (lan->sid_seq == 0)
 	lan->sid_seq++;
@@ -1200,6 +1201,8 @@ handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
     if (msg->seq > session->recv_seq)
 	session->recv_seq = msg->seq;
 
+    session->time_left = lan->default_session_timeout;
+
     rv = ipmi_cmd_permitted(session->priv, msg->netfn, msg->cmd);
     switch (rv) {
 	case IPMI_PRIV_PERMITTED:
@@ -1398,6 +1401,22 @@ ipmi_handle_smi_rsp(lan_data_t *lan, msg_t *msg,
     lan->free(lan, msg);
 }
 
+void
+ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last)
+{
+    int i;
+
+    for (i=1; i<=MAX_SESSIONS; i++) {
+	if (lan->sessions[i].active) {
+	    if (lan->sessions[i].time_left <= time_since_last) {
+		close_session(lan, &(lan->sessions[i]));
+	    } else {
+		lan->sessions[i].time_left -= time_since_last;
+	    }
+	}
+    }
+}
+
 int
 ipmi_lan_init(lan_data_t *lan)
 {
@@ -1426,6 +1445,10 @@ ipmi_lan_init(lan_data_t *lan)
 
     lan->sid_seq = 0;
     lan->next_challenge_seq = 0;
+
+    /* Default the timeout to 30 seconds. */
+    if (lan->default_session_timeout == 0)
+	lan->default_session_timeout = 30;
 
     return 0;
 }

@@ -567,6 +567,30 @@ open_lan_fd(int port)
     return fd;
 }
 
+static void
+diff_timeval(struct timeval *dest,
+	     struct timeval *left,
+	     struct timeval *right)
+{
+    if (   (left->tv_sec < right->tv_sec)
+	|| (   (left->tv_sec == right->tv_sec)
+	    && (left->tv_usec < right->tv_usec)))
+    {
+	/* If left < right, just force to zero, don't allow negative
+           numbers. */
+	dest->tv_sec = 0;
+	dest->tv_usec = 0;
+	return;
+    }
+
+    dest->tv_sec = left->tv_sec - right->tv_sec;
+    dest->tv_usec = left->tv_usec - right->tv_usec;
+    while (dest->tv_usec < 0) {
+	dest->tv_usec += 1000000;
+	dest->tv_sec--;
+    }
+}
+
 static int lan_port = 623;
 static char *config_file = "/etc/ipmi_lan.conf";
 static char *ipmi_dev = NULL;
@@ -619,6 +643,9 @@ main(int argc, const char *argv[])
     int rv;
     int o;
     poptContext poptCtx;
+    struct timeval timeout;
+    struct timeval time_next;
+    struct timeval time_now;
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
     while ((o = poptGetNextOpt(poptCtx)) >= 0)
@@ -648,6 +675,8 @@ main(int argc, const char *argv[])
     else
 	max_fd = data.smi_fd + 1;
 
+    gettimeofday(&time_next, NULL);
+    time_next.tv_sec += 10;
     for (;;) {
 	fd_set readfds;
 
@@ -655,16 +684,23 @@ main(int argc, const char *argv[])
 	FD_SET(data.smi_fd, &readfds);
 	FD_SET(data.lan_fd, &readfds);
 
-	rv = select(max_fd, &readfds, NULL, NULL, NULL);
+	gettimeofday(&time_now, NULL);
+	diff_timeval(&timeout, &time_next, &time_now);
+	rv = select(max_fd, &readfds, NULL, NULL, &timeout);
 	if ((rv == -1) && (errno == EINTR))
 	    continue;
 
-	if (FD_ISSET(data.smi_fd, &readfds)) {
-	    handle_msg_ipmi(data.smi_fd, &lan);
-	}
+	if (rv == 0) {
+	    ipmi_lan_tick(&lan, 10);
+	    time_next.tv_sec += 10;
+	} else {
+	    if (FD_ISSET(data.smi_fd, &readfds)) {
+		handle_msg_ipmi(data.smi_fd, &lan);
+	    }
 
-	if (FD_ISSET(data.lan_fd, &readfds)) {
-	    handle_msg_lan(data.lan_fd, &lan);
+	    if (FD_ISSET(data.lan_fd, &readfds)) {
+		handle_msg_lan(data.lan_fd, &lan);
+	    }
 	}
     }
 }
