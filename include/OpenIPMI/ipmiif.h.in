@@ -279,6 +279,13 @@ void ipmi_event_free(ipmi_event_t *event);
 /* When you are done with an event, you should delete it.  This
    removes the event from the local event queue and removes it from
    the external system event log. */
+int ipmi_event_delete(ipmi_event_t   *event,
+		      ipmi_domain_cb done_handler,
+		      void           *cb_data);
+
+/* This is the old domain event deleter.  Since events now carry with
+   them more useful information, there is no need for this any more,
+   but it still works. */
 int ipmi_domain_del_event(ipmi_domain_t  *domain,
 			  ipmi_event_t   *event,
 			  ipmi_domain_cb done_handler,
@@ -907,7 +914,9 @@ int ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
 				       void           *cb_data);
 
 /* Get the current value of the hot-swap requester, if available.  If
-   not available, this will return ENOSYS. */
+   not available, this will return ENOSYS.  The hot-swap requester is
+   the thing on the chassis that the operator uses to request a
+   hot-swap of the entity (like the the ejector handle switch). */
 int ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
 				       ipmi_entity_val_cb handler,
 				       void               *cb_data);

@@ -5,6 +5,9 @@
 	* lib/ipmi_lan.c: ditto
 	* lib/ipmi_smi.c: ditto
 
+	* include/OpenIPMI/ipmiif.h.in, lib/event.c, lib/domain.c: Created
+	a new event delete function that does not take a domain.
+
 	* doc/OpenIPMI.texi: Added some more documentation and cleaned
 	things upa little.
 

@@ -2391,66 +2391,13 @@ ipmi_domain_enable_events(ipmi_domain_t *domain)
  *
  **********************************************************************/
 
-typedef struct del_event_info_s
-{
-    ipmi_domain_t  *domain;
-    ipmi_event_t   *event;
-    ipmi_domain_cb done_handler;
-    void           *cb_data;
-    int            rv;
-} del_event_info_t;
-
-static void
-mc_del_event_done(ipmi_mc_t *mc, int err, void *cb_data)
-{
-    del_event_info_t *info = cb_data;
-
-    if (info->done_handler)
-	info->done_handler(info->domain, err, info->cb_data);
-    ipmi_mem_free(info);
-}
-
-static void
-del_event_handler(ipmi_mc_t *mc, void *cb_data)
-{
-    del_event_info_t *info = cb_data;
-    int              rv;
-
-    rv = ipmi_mc_del_event(mc, info->event, mc_del_event_done, info);
-    if (rv) {
-	if (info->done_handler)
-	    info->done_handler(info->domain, rv, info->cb_data);
-	ipmi_mem_free(info);
-    }
-}
-
 int
 ipmi_domain_del_event(ipmi_domain_t  *domain,
 		      ipmi_event_t   *event,
 		      ipmi_domain_cb done_handler,
 		      void           *cb_data)
 {
-    int              rv;
-    del_event_info_t *info;
-    ipmi_mcid_t      mcid = ipmi_event_get_mcid(event);
-
-    CHECK_DOMAIN_LOCK(domain);
-
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
-
-    info->domain = domain;
-    info->event = event;
-    info->done_handler = done_handler;
-    info->cb_data = cb_data;
-    info->rv = 0;
-    rv = ipmi_mc_pointer_cb(mcid, del_event_handler, info);
-    if (rv) {
-	ipmi_mem_free(info);
-	return rv;
-    }
-    return rv;
+    return ipmi_event_delete(event, done_handler, cb_data);
 }
 
 typedef struct next_event_handler_info_s
