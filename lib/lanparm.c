@@ -1506,6 +1506,16 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	    lanc->curr_parm = IPMI_LANPARM_VLAN_ID;
 	break;
 
+    case IPMI_LANPARM_NUM_CIPHER_SUITE_ENTRIES:
+	lanc->curr_parm++;
+	if (lanc->num_cipher_suites == 0) {
+	    if (lanc->num_alert_destinations == 0)
+		goto done;
+	    lanc->curr_parm = IPMI_LANPARM_DEST_VLAN_TAG;
+	    lanc->curr_sel = 0;
+	}
+	break;
+
     case IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV:
 	if (lanc->num_alert_destinations == 0)
 	    goto done;
@@ -1516,6 +1526,8 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	break;
 
     case IPMI_LANPARM_DEST_VLAN_TAG:
+	if (!lanc->vlan_tag_supported)
+	    goto done;
 	if ((data[1] & 0xf) != lanc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -2195,6 +2207,32 @@ ipmi_lanconfig_set_## n(ipmi_lan_config_t *lanc, \
     return 0; \
 }
 
+#define LP_INT_TAB_SUP(s, n, p) \
+int \
+ipmi_lanconfig_get_## n(ipmi_lan_config_t *lanc, \
+			unsigned int      set, \
+			unsigned int      *val) \
+{ \
+    if (! lanc->p) \
+        return ENOSYS; \
+    if (set > lanc->num_alert_destinations) \
+	return EINVAL; \
+    *val = lanc->s[set].n; \
+    return 0; \
+} \
+int \
+ipmi_lanconfig_set_## n(ipmi_lan_config_t *lanc, \
+			unsigned int      set, \
+			unsigned int      val) \
+{ \
+    if (! lanc->p) \
+        return ENOSYS; \
+    if (set > lanc->num_alert_destinations) \
+	return EINVAL; \
+    lanc->s[set].n = val; \
+    return 0; \
+}
+
 #define LP_ARRAY_TAB(s, n, l) \
 int \
 ipmi_lanconfig_get_## n(ipmi_lan_config_t *lanc, \
@@ -2236,8 +2274,8 @@ LP_INT_TAB(alert_dest_addr, gw_to_use)
 LP_ARRAY_TAB(alert_dest_addr, dest_ip_addr, 4)
 LP_ARRAY_TAB(alert_dest_addr, dest_mac_addr, 6)
 
-LP_INT_TAB(alert_dest_addr, dest_vlan_tag_type)
-LP_INT_TAB(alert_dest_addr, dest_vlan_tag)
+LP_INT_TAB_SUP(alert_dest_addr, dest_vlan_tag_type, vlan_tag_supported)
+LP_INT_TAB_SUP(alert_dest_addr, dest_vlan_tag, vlan_tag_supported)
 
 unsigned int
 ipmi_lanconfig_get_num_cipher_suites(ipmi_lan_config_t *lanc)

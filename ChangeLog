@@ -4,6 +4,9 @@
 	flags to be hard-coded on the configure command line.
 
 	* lib/domain.c: Fixed a problem with the type in a log.
+
+	* lib/lanparm.c: Fixed some problem handling the newly added
+	parms not being there.
 	
 2005-01-19 Corey Minyard <cminyard@mvista.com> 
 

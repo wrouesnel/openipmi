@@ -1653,13 +1653,11 @@ audit_timeout_handler(void              *cb_data,
 
 
     /* If we were cancelled, just free the data and ignore the call. */
-    if (info->cancelled) {
+    if (info->cancelled)
 	goto out_done;
-    }
 
-    if (!lan_valid_ipmi(ipmi)) {
+    if (!lan_valid_ipmi(ipmi))
 	goto out_done;
-    }
 
     lan = ipmi->con_data;
 
@@ -1897,9 +1895,8 @@ rsp_timeout_handler(void              *cb_data,
     ipmi_msgi_t           *rspi;
     int                   ip_num;
 
-    if (!lan_valid_ipmi(ipmi)) {
+    if (!lan_valid_ipmi(ipmi))
 	return;
-    }
 
     lan = ipmi->con_data;
     seq = info->seq;
@@ -1907,9 +1904,8 @@ rsp_timeout_handler(void              *cb_data,
     ipmi_lock(lan->seq_num_lock);
 
     /* If we were cancelled, just free the data and ignore it. */
-    if (info->cancelled) {
+    if (info->cancelled)
 	goto out;
-    }
 
     if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	ipmi_log(IPMI_LOG_DEBUG, "Timeout for seq #%d", seq);
@@ -2745,7 +2741,7 @@ data_handler(int            fd,
 
     from_len = sizeof(ipaddrd);
     len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 
-		    &from_len);
+		   &from_len);
     if (len < 5)
 	goto out;
 
@@ -2763,45 +2759,45 @@ data_handler(int            fd,
        be. */
     paddr = (struct sockaddr_in *)&ipaddrd;
     switch (paddr->sin_family) {
-        case PF_INET:
-            {
-            struct sockaddr_in *ipaddr;
-            struct sockaddr_in *ipaddr4;
-            ipaddr = (struct sockaddr_in *)&(ipaddrd);
+    case PF_INET:
+	{
+	    struct sockaddr_in *ipaddr;
+	    struct sockaddr_in *ipaddr4;
+	    ipaddr = (struct sockaddr_in *)&(ipaddrd);
             for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
-                    ipaddr4 = (struct sockaddr_in *)
-                            &(lan->cparm.ip_addr[addr_num]);
-                    if ((ipaddr->sin_port == ipaddr4->sin_port)
-                        && (ipaddr->sin_addr.s_addr
-                            == ipaddr4->sin_addr.s_addr))
-                        break;
-                }
-            }
+		ipaddr4 = (struct sockaddr_in *)
+		    &(lan->cparm.ip_addr[addr_num]);
+		if ((ipaddr->sin_port == ipaddr4->sin_port)
+		    && (ipaddr->sin_addr.s_addr
+			== ipaddr4->sin_addr.s_addr))
+		    break;
+	    }
+	}
             break;
 #ifdef PF_INET6
-        case PF_INET6:
-            {
+    case PF_INET6:
+	{
             struct sockaddr_in6 *ipa6;
             struct sockaddr_in6 *ipaddr6;
             ipa6 = (struct sockaddr_in6 *)&(ipaddrd);
             for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
-                    ipaddr6 = (struct sockaddr_in6 *)
-                            &(lan->cparm.ip_addr[addr_num]);
-                    if ((ipa6->sin6_port == ipaddr6->sin6_port)
-                        && (bcmp(ipa6->sin6_addr.s6_addr,
-                                 ipaddr6->sin6_addr.s6_addr,
-                                 sizeof(struct in6_addr)) == 0))
-                        break;
-                }
-            }
-            break;
+		ipaddr6 = (struct sockaddr_in6 *)
+		    &(lan->cparm.ip_addr[addr_num]);
+		if ((ipa6->sin6_port == ipaddr6->sin6_port)
+		    && (bcmp(ipa6->sin6_addr.s6_addr,
+			     ipaddr6->sin6_addr.s6_addr,
+			     sizeof(struct in6_addr)) == 0))
+		    break;
+	    }
+	}
+	break;
 #endif
-        default:
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "ipmi_lan: Unknown protocol family: 0x%x",
-		     paddr->sin_family);
-	    goto out;
-            break;
+    default:
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan: Unknown protocol family: 0x%x",
+		 paddr->sin_family);
+	goto out;
+	break;
     }
 
     if (addr_num >= lan->cparm.num_ip_addr) {
@@ -3199,9 +3195,8 @@ lan_close_connection_done(ipmi_con_t            *ipmi,
 {
     lan_data_t *lan;
 
-    if (! lan_valid_ipmi(ipmi)) {
+    if (! lan_valid_ipmi(ipmi))
 	return EINVAL;
-    }
 
     lan = (lan_data_t *) ipmi->con_data;
 
