@@ -39,10 +39,9 @@
 #include <OpenIPMI/selector.h>
 
 /* This sample application demostrates a very simple method to use
-   OpenIPMI. It just searchs all controlss in the system.  From this
-   application, you can find that there is only 4 lines code in main()
-   function if you use the SMI-only interface, and several simple
-   callback functions in all cases. */
+   OpenIPMI. It takes a entity id, entity instance, and sensor name,
+   looks for that sensor to be created, then prints out the value
+   every 5 seconds. */
 
 extern os_handler_t ipmi_ui_cb_handlers;
 selector_t *ui_sel;
@@ -53,10 +52,10 @@ static void
 usage(void)
 {
     printf("Usage:\n"
-	   "  %s [options] smi <smi #>\n"
+	   "  %s [options] <entity id> <entity instance> <name> smi <smi #>\n"
 	   "     Make a connection to a local system management interface.\n"
 	   "     smi # is generally 0.\n"
-	   "  %s [options] lan <host> <port> <authtype> <privilege> <username> <password>\n"
+	   "  %s [options] <entity id> <entity instance> <name> lan <host> <port> <authtype> <privilege> <username> <password>\n"
 	   "     Make a connection to a IPMI 1.5 LAN interface.\n"
 	   "     Host and port specify where to connect to (port is\n"
 	   "     generally 623).  authtype is none, md2, md5, or straight.\n"
