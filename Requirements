@@ -99,6 +99,9 @@ collection of the requirements I think exist.
    4.4) OpenIPMI will support writing the main SDR repository with
         entity associations and with sensors that came from there.
 
+   4.5) The user will have full access to all IPMI operations for the
+        sensor.
+
 5) Events
 
    5.1) All incoming events must be delivered to the user in some
@@ -115,7 +118,7 @@ collection of the requirements I think exist.
    5.4) OpenIPMI will configure the events receivers on all management
         controllers as necessary.
 
-   5.5) OpenIPMI will support deletion of SELs
+   5.5) OpenIPMI will support deletion of events from SELs
 
    5.6) All events in the SELs before detection of the management
         controller will not be delivered as sensor events (since their
@@ -125,6 +128,25 @@ collection of the requirements I think exist.
 6) Controls
 
    6.1) OpenIPMI will support controls for output devices.
+
+   6.2) The following controls are supported: lights (including LEDs),
+        relays, displays (2-d text devices), alarms (generic alerting
+        devices), reset (controls reset of entities), power (controls
+        power to an entity or power from an entity if it is a power
+        supply), fan speed, and identifiers (unique ids for an entity).
+
+   6.3) Some output devices may have multiple devices that cannot be
+        set independently (for instance, you may have two LEDs that
+        you send a message to set, and they cannot be set
+        independently, the message sets the value of both LEDs at the
+        same time).  In these cases, a single control will control
+        both devices, and the control will have muliple instances.
+        All instances must be set together when setting the value of
+        the control.
+
+   6.4) Controls may be read and/or written, depending on the capabilities
+        of the device.  The capabilities of the device will be
+        advertised through the API.
 
 7) OEM plug-ins
 
