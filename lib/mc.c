@@ -56,6 +56,12 @@ typedef struct mc_reread_sel_s
     ipmi_mc_t *mc;
 } mc_reread_sel_t;
     
+typedef struct domain_up_info_s
+{
+    ipmi_mcid_t              mcid;
+    ipmi_domain_con_change_t *con_chid;
+} domain_up_info_t;
+
 struct ipmi_mc_s
 {
     ipmi_domain_t *domain;
@@ -122,6 +128,11 @@ struct ipmi_mc_s
 
     ipmi_mc_oem_removed_cb removed_mc_handler;
     void                   *removed_mc_cb_data;
+
+    /* The following are for waiting until a domain is up before
+       starting the SEL query, so that the domain will be registered
+       before events are fetched. */
+    domain_up_info_t *conup_info;
 
     /* The rest is the actual data from the get device id and SDRs.
        There's the real version and the normal version, the real
@@ -237,6 +248,13 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     mc->addr_len = addr_len;
     mc->sdrs = NULL;
 
+    mc->conup_info = ipmi_mem_alloc(sizeof(*(mc->conup_info)));
+    if (!mc->conup_info) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+    mc->conup_info->con_chid = NULL;
+
     rv = ipmi_sensors_alloc(mc, &(mc->sensors));
     if (rv)
 	goto out_err;
@@ -312,6 +330,14 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     if (mc->removed_mc_handler) {
 	mc->removed_mc_handler(domain, mc, mc->removed_mc_cb_data);
 	mc->removed_mc_handler = NULL;
+    }
+
+    if (mc->conup_info) {
+	if (mc->conup_info->con_chid) {
+	    ipmi_domain_remove_con_change_handler(domain,
+						  mc->conup_info->con_chid);
+	}
+	ipmi_mem_free(mc->conup_info);
     }
 
     if ((ipmi_controls_get_count(mc->controls) == 0)
@@ -726,14 +752,90 @@ set_sel_time(ipmi_mc_t  *mc,
     ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
 }
 
+static void
+first_sel_op(ipmi_mc_t *mc)
+{
+    struct timeval now;
+    ipmi_msg_t     msg;
+    int            rv;
+    unsigned char  data[4];
+
+
+    /* Set the current system event log time.  We do this here so
+       we can be sure that the entities are all there before
+       reporting events. */
+    gettimeofday(&now, NULL);
+    msg.netfn = IPMI_STORAGE_NETFN;
+    msg.cmd = IPMI_SET_SEL_TIME_CMD;
+    msg.data = data;
+    msg.data_len = 4;
+    ipmi_set_uint32(data, now.tv_sec);
+    mc->startup_SEL_time = now.tv_sec;
+    rv = ipmi_mc_send_command(mc, 0, &msg, set_sel_time, NULL);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "Unable to start SEL time set due to error: %x\n",
+		 rv);
+	mc->startup_SEL_time = 0;
+	ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
+    }
+}
+
+static void
+con_up_mc(ipmi_mc_t *mc, void *cb_data)
+{
+    first_sel_op(mc);
+}
+
+static void
+con_up_handler(ipmi_domain_t *domain,
+	       int           err,
+	       unsigned int  conn_num,
+	       unsigned int  port_num,
+	       int           still_connected,
+	       void          *cb_data)
+{
+    domain_up_info_t *info = cb_data;
+
+    if (!still_connected)
+	return;
+
+    ipmi_domain_remove_con_change_handler(domain, info->con_chid);
+    info->con_chid = NULL;
+    _ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
+}
+
+static void
+start_sel_ops(ipmi_mc_t *mc)
+{
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+    int           rv;
+
+    if (ipmi_domain_con_up(domain)) {
+	/* The domain is already up, just start the process. */
+	first_sel_op(mc);
+    } else {
+	/* The domain is not up yet, wait for it to come up then start
+           the process. */
+	mc->conup_info->mcid = _ipmi_mc_convert_to_id(mc);
+	rv = ipmi_domain_add_con_change_handler(domain, con_up_handler,
+						mc->conup_info,
+					       	&mc->conup_info->con_chid);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "Unable to add a connection change handler for the"
+		     " delayed SEL timer start, starting it now, but some"
+		     " events may come in before the connection is up.");
+	    first_sel_op(mc);
+	}
+    }
+}
+
 /* This is called after the first sensor scan for the MC, we start up
    timers and things like that here. */
 static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
-    unsigned char  data[4];
-    struct timeval now;
-
     if (mc) {
 	unsigned int event_rcvr = 0;
 
@@ -757,7 +859,6 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     if (mc->SEL_device_support) {
 	mc_reread_sel_t *info;
 	int             rv;
-	ipmi_msg_t      msg;
 	os_handler_t    *os_hnd = mc_get_os_hnd(mc);
 
 	/* If the MC supports an SEL, start scanning its SEL. */
@@ -782,24 +883,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	    mc->sel_timer_info = info;
 	}
 
-	/* Set the current system event log time.  We do this here so
-	   we can be sure that the entities are all there before
-	   reporting events. */
-	gettimeofday(&now, NULL);
-	msg.netfn = IPMI_STORAGE_NETFN;
-	msg.cmd = IPMI_SET_SEL_TIME_CMD;
-	msg.data = data;
-	msg.data_len = 4;
-	ipmi_set_uint32(data, now.tv_sec);
-	mc->startup_SEL_time = now.tv_sec;
-	rv = ipmi_mc_send_command(mc, 0, &msg, set_sel_time, NULL);
-	if (rv) {
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "Unable to start SEL time set due to error: %x\n",
-		     rv);
-	    mc->startup_SEL_time = 0;
-	    ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
-	}
+	start_sel_ops(mc);
     }
 }
 

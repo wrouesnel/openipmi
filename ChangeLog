@@ -1,4 +1,9 @@
 
+2003-07-24 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Delayed the start of fetching events for an MC's SEL
+	until the domain connection is up.
+
 2003-07-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: Fixed searching for the next presence sensor when
