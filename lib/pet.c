@@ -736,10 +736,8 @@ start_pet_setup(ipmi_domain_t *domain,
     ipmi_system_interface_addr_t si;
     ipmi_mc_t                    *mc;
 
-    if (pet->in_progress) {
-	rv = EAGAIN;
-	goto out;
-    }
+    if (pet->in_progress)
+	return EAGAIN;
 
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = pet->connection;

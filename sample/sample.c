@@ -303,7 +303,7 @@ entity_change(enum ipmi_update_e op,
 	    printf("Entity added: %d.%d\n", id, instance);
 	    /* Register callback so that when the status of a
 	       sensor changes, sensor_change is called */
-	    rv = ipmi_entity_set_sensor_update_handler(entity,
+	    rv = ipmi_entity_add_sensor_update_handler(entity,
 						       sensor_change,
 						       entity);
 	    if (rv) {
@@ -311,7 +311,7 @@ entity_change(enum ipmi_update_e op,
 		exit(1);
 	    }
 
-            rv = ipmi_entity_set_fru_update_handler(entity,
+            rv = ipmi_entity_add_fru_update_handler(entity,
                                                     fru_change,
                                                     NULL);
 	    if (rv) {
@@ -352,9 +352,9 @@ setup_done(ipmi_domain_t *domain,
 
     /* Register a callback functin entity_change. When a new entities 
        is created, entity_change is called */
-    rv = ipmi_domain_set_entity_update_handler(domain, entity_change, domain);
+    rv = ipmi_domain_add_entity_update_handler(domain, entity_change, domain);
     if (rv) {      
-	printf("ipmi_domain_set_entity_update_handler return error: %d\n", rv);
+	printf("ipmi_domain_add_entity_update_handler return error: %d\n", rv);
 	return;
     }
 

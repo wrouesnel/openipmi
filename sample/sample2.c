@@ -229,11 +229,11 @@ entity_change(enum ipmi_update_e op,
     if (op == IPMI_ADDED) {
 	    /* Register callback so that when the status of a
 	       control changes, control_change is called */
-	    rv = ipmi_entity_set_control_update_handler(entity,
+	    rv = ipmi_entity_add_control_update_handler(entity,
 							control_change,
 							entity);
 	    if (rv) {
-		printf("ipmi_entity_set_control_update_handler: 0x%x", rv);
+		printf("ipmi_entity_add_control_update_handler: 0x%x", rv);
 		leave();
 	    }
     }
@@ -256,9 +256,9 @@ setup_done(ipmi_domain_t *domain,
 
     /* Register a callback functin entity_change. When a new entity
        is created, entity_change is called */
-    rv = ipmi_domain_set_entity_update_handler(domain, entity_change, domain);
+    rv = ipmi_domain_add_entity_update_handler(domain, entity_change, domain);
     if (rv) {      
-	printf("ipmi_domain_set_entity_update_handler return error: %d\n", rv);
+	printf("ipmi_domain_add_entity_update_handler return error: %d\n", rv);
 	return;
     }
 }

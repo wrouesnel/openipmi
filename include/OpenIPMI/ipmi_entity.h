@@ -150,13 +150,6 @@ int ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 			  ipmi_entity_info_t *ents,
 			  ipmi_sdr_info_t    *sdrs);
 
-/* Sets a handler that will be called when an entity in the list
-   changes.  User's should not normally call this, they should call
-   the BMC version .*/
-int ipmi_entity_set_update_handler(ipmi_entity_info_t    *ents,
-				   ipmi_domain_entity_cb handler,
-				   void                  *cb_data);
-
 /* This supports the ability to add multiple handler. */
 int ipmi_entity_info_add_update_handler(ipmi_entity_info_t    *ents,
 					ipmi_domain_entity_cb handler,

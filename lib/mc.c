@@ -1603,8 +1603,10 @@ mc_ptr_cb(ipmi_domain_t *domain, void *cb_data)
 
     mc = _ipmi_find_mc_by_addr(domain, &addr, addr_len);
     if (mc) {
-	if (info->cmp_seq && (mc->seq != info->id.seq))
+	if (info->cmp_seq && (mc->seq != info->id.seq)) {
+	    _ipmi_mc_put(mc);
 	    return;
+	}
 
 	info->err = 0;
 	info->handler(mc, info->cb_data);

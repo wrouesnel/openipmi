@@ -2989,18 +2989,6 @@ _ipmi_set_sdr_entities(ipmi_domain_t *domain,
 }
 
 int
-ipmi_domain_set_entity_update_handler(ipmi_domain_t         *domain,
-				      ipmi_domain_entity_cb handler,
-				      void                  *cb_data)
-{
-    CHECK_DOMAIN_LOCK(domain);
-
-    return ipmi_entity_set_update_handler(domain->entities,
-					  handler,
-					  cb_data);
-}
-
-int
 ipmi_domain_add_entity_update_handler(ipmi_domain_t         *domain,
 				      ipmi_domain_entity_cb handler,
 				      void                  *cb_data)
