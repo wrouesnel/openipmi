@@ -1444,18 +1444,19 @@ ipmi_args_setup_con(ipmi_args_t  *args,
 
 int
 ipmi_handle_snmp_trap_data(void            *src_addr,
+			   unsigned int    src_addr_len,
 			   int             src_addr_type,
 			   long            specific,
 			   unsigned char   *data,
 			   unsigned int    data_len)
 {
-    int            handled = 0;
-    unsigned char  pet_ack[12];
-    ipmi_msg_t     *msg = NULL;
+    int           handled = 0;
+    unsigned char pet_ack[12];
+    ipmi_msg_t    *msg = NULL;
 
     if (DEBUG_RAWMSG) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "Got SNMP trap from:\n  ");
-	dump_hex(src_addr, 16);
+	dump_hex(src_addr, src_addr_len);
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data is:\n  ");
 	dump_hex(data, data_len);
 	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
@@ -1543,7 +1544,7 @@ ipmi_handle_snmp_trap_data(void            *src_addr,
     pet_ack[7] = data[27]; /* Sensor device */
     pet_ack[8] = data[28]; /* Sensor number */
     memcpy(pet_ack+9, data+31, 3); /* Event data 1-3 */
-    
+
     if (src_addr_type == IPMI_EXTERN_ADDR_IP)
 	handled = ipmi_lan_handle_external_event(src_addr, msg, pet_ack);
 

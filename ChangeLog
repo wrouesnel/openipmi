@@ -4,6 +4,9 @@
 
 	* lib/ipmi.c: Added raw debug tracing for incoming SNMP traps.
 
+	* include/OpenIPMI/ipmi_conn.h, lib/ipmi.c, ui/basic_ui.c: Added
+	a source address length to the SNMP trap reporting handler.
+
 2004-02-26 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a way to check if an

@@ -148,6 +148,7 @@ int snmp_input(int op,
 	goto out;
     
     ipmi_handle_snmp_trap_data(src_ip,
+		    	       sizeof(*src_ip),
 			       IPMI_EXTERN_ADDR_IP,
 			       specific,
 			       var->val.string,

@@ -281,6 +281,7 @@ void _ipmi_conn_shutdown(void);
 /* Handle a trap from an external SNMP source.  It returns 1 if the
    event was handled an zero if it was not. */
 int ipmi_handle_snmp_trap_data(void            *src_addr,
+			       unsigned int    src_addr_len,
 			       int             src_addr_type,
 			       long            specific,
 			       unsigned char   *data,
