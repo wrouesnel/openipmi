@@ -47,6 +47,7 @@
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_pet.h>
 #include <OpenIPMI/ipmi_lanparm.h>
+#include <OpenIPMI/ipmi_pef.h>
 
 
 /*
@@ -329,10 +330,10 @@ ipmi_cmdlang_pet_handler(ipmi_cmd_info_t *cmd_info)
  */
 typedef struct lanparm_iter_info_s
 {
-    char            *cmdstr;
+    char                *cmdstr;
     ipmi_lanparm_ptr_cb handler;
-    void            *cb_data;
-    ipmi_cmd_info_t *cmd_info;
+    void                *cb_data;
+    ipmi_cmd_info_t     *cmd_info;
 } lanparm_iter_info_t;
 
 static void
@@ -418,6 +419,103 @@ ipmi_cmdlang_lanparm_handler(ipmi_cmd_info_t *cmd_info)
     }
 
     for_each_lanparm(cmd_info, domain, class, obj, cmd_info->handler_data,
+		 cmd_info);
+}
+
+/*
+ * Handling for iterating PEFs.
+ */
+typedef struct pef_iter_info_s
+{
+    char            *cmdstr;
+    ipmi_pef_ptr_cb handler;
+    void            *cb_data;
+    ipmi_cmd_info_t *cmd_info;
+} pef_iter_info_t;
+
+static void
+for_each_pef_handler(ipmi_pef_t *pef, void *cb_data)
+{
+    pef_iter_info_t *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char            name[IPMI_PEF_NAME_LEN];
+    char            *c;
+
+    if (cmdlang->err)
+	return;
+
+    ipmi_pef_get_name(pef, name, sizeof(name));
+
+    c = strrchr(name, '.');
+    if (!c)
+	goto out_err;
+    c++;
+    if ((! info->cmdstr) || (strcmp(info->cmdstr, c) == 0))
+	info->handler(pef, info->cb_data);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(name,
+			    "cmdlang.c(for_each_pef_handler)",
+			    "Bad PEF name", EINVAL);
+}
+
+static void
+for_each_pef_domain_handler(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_pef_iterate_pefs(domain, for_each_pef_handler, cb_data);
+}
+
+static void
+for_each_pef(ipmi_cmd_info_t *cmd_info,
+	     char            *domain,
+	     char            *class,
+	     char            *obj,
+	     ipmi_pef_ptr_cb handler,
+	     void            *cb_data)
+{
+    pef_iter_info_t info;
+
+    if (class) {
+	cmd_info->cmdlang->errstr = "Invalid PEF";
+	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_pef)";
+	return;
+    }
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.cmd_info = cmd_info;
+    info.cmdstr = obj;
+    for_each_domain(cmd_info, domain, NULL, NULL,
+		    for_each_pef_domain_handler, &info);
+}
+
+void
+ipmi_cmdlang_pef_handler(ipmi_cmd_info_t *cmd_info)
+{
+    char *domain, *class, *obj;
+
+    if (cmd_info->curr_arg >= cmd_info->argc) {
+	domain = class = obj = NULL;
+    } else {
+	domain = cmd_info->argv[cmd_info->curr_arg];
+	class = NULL;
+	obj = strrchr(domain, '.');
+	if (!obj) {
+	    cmd_info->cmdlang->errstr = "Invalid PEF";
+	    cmd_info->cmdlang->err = EINVAL;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_pef_handler)";
+	    return;
+	}
+	*obj = '\0';
+	obj++;
+	cmd_info->curr_arg++;
+    }
+
+    for_each_pef(cmd_info, domain, class, obj, cmd_info->handler_data,
 		 cmd_info);
 }
 
@@ -853,7 +951,7 @@ for_each_connection(ipmi_cmd_info_t        *cmd_info,
 	    cmd_info->cmdlang->location = "cmdlang.c(for_each_connection)";
 	    return;
 	}
-	info.conn = strtoul(class, &endptr, 0);
+	info.conn = strtoul(obj, &endptr, 0);
 	if (*endptr != '\0') {
 	    cmd_info->cmdlang->errstr = "Invalid connection number";
 	    cmd_info->cmdlang->err = EINVAL;
@@ -2249,6 +2347,8 @@ int ipmi_cmdlang_mc_init(void);
 int ipmi_cmdlang_pet_init(void);
 int ipmi_cmdlang_lanparm_init(void);
 void ipmi_cmdlang_lanparm_shutdown(void);
+int ipmi_cmdlang_pef_init(void);
+void ipmi_cmdlang_pef_shutdown(void);
 int ipmi_cmdlang_sensor_init(void);
 int ipmi_cmdlang_control_init(void);
 int ipmi_cmdlang_sel_init(void);
@@ -2271,6 +2371,9 @@ ipmi_cmdlang_init(void)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_lanparm_init();
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_pef_init();
     if (rv) return rv;
 
     rv = ipmi_cmdlang_sensor_init();
@@ -2302,6 +2405,7 @@ cleanup_level(ipmi_cmdlang_cmd_t *cmds)
 void
 ipmi_cmdlang_cleanup(void)
 {
+    ipmi_cmdlang_pef_shutdown();
     ipmi_cmdlang_lanparm_shutdown();
     cleanup_level(cmd_list);
 }
@@ -2319,40 +2423,3 @@ ipmi_cmdlang_get_evinfo(void)
 {
     return do_evinfo;
 }
-
-/*
-The command hierarchy is:
-
-* pef
-  * read <mc> - read pef information from an MC.  Note the lock is not
-    released.
-  * clearlock <mc> - Clear a PEF lock.
-  * write <mc> <pefval> <value> [pefval <value> [...]]
-    - write the PEF information to the MC.  Every value given will be
-     written atomically and the lock will be released.  Note that
-     you must do a read before doing this command.
-* lan
-    * read <mc> <channel> - read lanparm information from an MC for
-      the given channel on the MC.  Note the lock will not be released
-      after this command.
-    * clearlock <mc> <channel> - Clear the LAN parm lock on the given
-      MC and channel.
-    * writelanparm <mc> <channel> <lanval> <value> [lanval <value> [...]]
-      - write the LANPARM information to an MC.  Every value given will be
-      written atomically and the lock will be released.  Note that
-      you must do a read before doing this command.
-* con
-  * list <domain> - List the connections
-  * active <connection> - print out if the given connection is active or not
-  * activate <connection> - Activate the given connection
-* sel
-    * delevent <mc> <log #> - Delete the given event number from the SEL
-      FIXME - is the "mc" right?
-    * addevent <mc> <record id> <type> <13 bytes of data> - Add the
-      event data to the SEL.
-    * clear <domain> - clear the system event log
-    * list <domain> - list the local copy of the system event log
-* general
-  * debug <type> on|off - Turn the given debugging type on or off
-  * xml on|off - enable or disable XML-style output
-*/

@@ -41,6 +41,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_pef.h>
@@ -229,9 +230,10 @@ ipmi_pef_get_name(ipmi_pef_t *pef, char *name, int length)
 	goto out;
     }
 
-    if (name)
+    if (name) {
 	memcpy(name, pef->name, slen);
-    name[slen] = '\0';
+	name[slen] = '\0';
+    }
  out:
     return slen;
 }
@@ -347,6 +349,7 @@ ipmi_pef_alloc(ipmi_mc_t        *mc,
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
     locked_list_t *pefl;
     void          *attr_data;
+    int           len, p;
 
     CHECK_MC_LOCK(mc);
 
@@ -369,6 +372,10 @@ ipmi_pef_alloc(ipmi_mc_t        *mc,
     pef->refcount = 1;
     pef->mc = ipmi_mc_convert_to_id(mc);
     pef->domain = ipmi_domain_convert_to_id(domain);
+    len = sizeof(pef->name);
+    p = ipmi_domain_get_name(domain, pef->name, len);
+    len -= p;
+    snprintf(pef->name+p, len, ".%d", ipmi_domain_get_unique_num(domain));
     pef->os_hnd = ipmi_domain_get_os_hnd(domain);
     pef->pef_lock = NULL;
     pef->ready_cb = done;
@@ -448,6 +455,10 @@ pef_destroy_handler(ipmi_domain_t    *domain,
     if (rv)
 	return rv;
     pefl = attr_data;
+
+    if (! locked_list_remove(pefl, pef, NULL))
+	/* Not in the list, it's already been removed. */
+	return EINVAL;
 
     /* We don't need the read lock, because the pef are stand-alone
        after they are created (except for fetching SELs, of course). */
@@ -1915,9 +1926,9 @@ set_done(ipmi_pef_t *pef,
 	    pefc->curr_parm++;
 	    pefc->curr_sel = 0;
 	    pefc->curr_block = 1;
+	    data[1] = pefc->curr_block;
 	}
 	data[0] = pefc->curr_sel;
-	data[1] = pefc->curr_block;
 	break;
 
     case IPMI_PEFPARM_ALERT_STRING:
@@ -1958,7 +1969,7 @@ set_done(ipmi_pef_t *pef,
 	    /* End of string, either a subsize-block or a nil
 	       character in the data. */
 	    pefc->curr_sel++;
-	    pefc->curr_block = 0;
+	    pefc->curr_block = 1;
 	} else {
 	    pefc->curr_block++;
 	}
@@ -2112,6 +2123,7 @@ lock_cleared(ipmi_pef_t *pef,
 	cl->done(pef, err, cl->cb_data);
 
     ipmi_mem_free(cl);
+    pef_put(pef);
 }
 
 int
@@ -2215,6 +2227,31 @@ ipmi_pefconfig_set_ ## n(ipmi_pef_config_t *pefc, unsigned int val) \
 
 PEF_BYTE_SUPPORT(startup_delay);
 PEF_BYTE_SUPPORT(alert_startup_delay);
+
+PEF_BIT(guid_enabled);
+
+int
+ipmi_pefconfig_get_guid_val(ipmi_pef_config_t *pefc,
+			    unsigned char     *data,
+			    unsigned int      *data_len)
+{
+    if (*data_len <= 16)
+        return EINVAL;
+    memcpy(data, pefc->guid, 16);
+    *data_len = 16;
+    return 0;
+}
+
+int
+ipmi_pefconfig_set_guid_val(ipmi_pef_config_t *pefc,
+			    unsigned char     *data,
+			    unsigned int      data_len)
+{
+    if (data_len != 16)
+	return EINVAL;
+    memcpy(pefc->guid, data, 16);
+    return 0;
+}
 
 int
 ipmi_pefconfig_get_guid(ipmi_pef_config_t *pefc,

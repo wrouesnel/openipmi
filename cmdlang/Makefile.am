@@ -16,7 +16,7 @@ lib_LTLIBRARIES = libOpenIPMIcmdlang.la
 
 libOpenIPMIcmdlang_la_SOURCES = cmdlang.c cmd_domain.c cmd_entity.c cmd_mc.c \
 	cmd_pet.c cmd_sensor.c cmd_control.c cmd_sel.c cmd_lanparm.c \
-	out_fru.c
+	cmd_pef.c out_fru.c
 libOpenIPMIcmdlang_la_LIBADD = -lm \
 	$(top_builddir)/utils/libOpenIPMIutils.la \
 	$(top_builddir)/lib/libOpenIPMI.la

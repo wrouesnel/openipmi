@@ -43,7 +43,7 @@
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/locked_list.h>
 
-locked_list_t *lancs;
+static locked_list_t *lancs;
 
 static void
 lanparm_list_handler(ipmi_lanparm_t *lanparm, void *cb_data)
@@ -234,7 +234,7 @@ typedef struct lp_item_s
     lp_out out;
 } lp_item_t;
 
-void
+static void
 set_retint(ipmi_cmd_info_t *cmd_info, char *val,
 	   ipmi_lan_config_t *lanc, void *func)
 {
@@ -250,7 +250,7 @@ set_retint(ipmi_cmd_info_t *cmd_info, char *val,
 	}
     }
 }
-void
+static void
 out_retint(ipmi_cmd_info_t *cmd_info, char *name,
 	   ipmi_lan_config_t *lanc, void *func)
 {
@@ -259,7 +259,7 @@ out_retint(ipmi_cmd_info_t *cmd_info, char *name,
 }
 static lp_item_t lp_retint = {set_retint, out_retint};
 
-void
+static void
 set_retbool(ipmi_cmd_info_t *cmd_info, char *val,
 	    ipmi_lan_config_t *lanc, void *func)
 {
@@ -275,7 +275,7 @@ set_retbool(ipmi_cmd_info_t *cmd_info, char *val,
 	}
     }
 }
-void
+static void
 out_retbool(ipmi_cmd_info_t *cmd_info, char *name,
 	    ipmi_lan_config_t *lanc, void *func)
 {
@@ -284,7 +284,7 @@ out_retbool(ipmi_cmd_info_t *cmd_info, char *name,
 }
 static lp_item_t lp_retbool = {set_retbool, out_retbool};
 
-void
+static void
 set_int(ipmi_cmd_info_t *cmd_info, char *val,
 	ipmi_lan_config_t *lanc, void *func)
 {
@@ -300,7 +300,7 @@ set_int(ipmi_cmd_info_t *cmd_info, char *val,
 	}
     }
 }
-void
+static void
 out_int(ipmi_cmd_info_t *cmd_info, char *name,
 	ipmi_lan_config_t *lanc, void *func)
 {
@@ -314,7 +314,7 @@ out_int(ipmi_cmd_info_t *cmd_info, char *name,
 }
 static lp_item_t lp_int = {set_int, out_int};
 
-void
+static void
 set_bool(ipmi_cmd_info_t *cmd_info, char *val,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -330,7 +330,7 @@ set_bool(ipmi_cmd_info_t *cmd_info, char *val,
 	}
     }
 }
-void
+static void
 out_bool(ipmi_cmd_info_t *cmd_info, char *name,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -344,7 +344,7 @@ out_bool(ipmi_cmd_info_t *cmd_info, char *name,
 }
 static lp_item_t lp_bool = {set_bool, out_bool};
 
-void
+static void
 set_ip(ipmi_cmd_info_t *cmd_info, char *val,
        ipmi_lan_config_t *lanc, void *func)
 {
@@ -361,7 +361,7 @@ set_ip(ipmi_cmd_info_t *cmd_info, char *val,
 	}
     }
 }
-void
+static void
 out_ip(ipmi_cmd_info_t *cmd_info, char *name,
        ipmi_lan_config_t *lanc, void *func)
 {
@@ -377,7 +377,7 @@ out_ip(ipmi_cmd_info_t *cmd_info, char *name,
 }
 static lp_item_t lp_ip = {set_ip, out_ip};
 
-void
+static void
 set_port(ipmi_cmd_info_t *cmd_info, char *val,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -396,7 +396,7 @@ set_port(ipmi_cmd_info_t *cmd_info, char *val,
 	}
     }
 }
-void
+static void
 out_port(ipmi_cmd_info_t *cmd_info, char *name,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -414,7 +414,7 @@ out_port(ipmi_cmd_info_t *cmd_info, char *name,
 }
 static lp_item_t lp_port = {set_port, out_port};
 
-void
+static void
 set_mac(ipmi_cmd_info_t *cmd_info, char *val,
 	ipmi_lan_config_t *lanc, void *func)
 {
@@ -431,7 +431,7 @@ set_mac(ipmi_cmd_info_t *cmd_info, char *val,
 	}
     }
 }
-void
+static void
 out_mac(ipmi_cmd_info_t *cmd_info, char *name,
 	ipmi_lan_config_t *lanc, void *func)
 {
@@ -446,6 +446,37 @@ out_mac(ipmi_cmd_info_t *cmd_info, char *name,
 	ipmi_cmdlang_out_mac(cmd_info, name, v);
 }
 static lp_item_t lp_mac = {set_mac, out_mac};
+
+static void
+set_str(ipmi_cmd_info_t *cmd_info, char *val,
+	ipmi_lan_config_t *lanc, void *func)
+{
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int            (*f)(ipmi_lan_config_t *l, char *v,
+			unsigned int dl) = func;
+
+    if (!cmdlang->err) {
+	cmdlang->err = f(lanc, val, strlen(val));
+	if (cmdlang->err) {
+	    cmdlang->errstr = "Error setting parameter";
+	}
+    }
+}
+static void
+out_str(ipmi_cmd_info_t *cmd_info, char *name,
+	ipmi_lan_config_t *lanc, void *func)
+{
+    char          v[100];
+    int           rv;
+    int           (*f)(ipmi_lan_config_t *l, char *v,
+		       unsigned int *dl) = func;
+    unsigned int  len = sizeof(v);
+    
+    rv = f(lanc, v, &len);
+    if (!rv)
+	ipmi_cmdlang_out(cmd_info, name, v);
+}
+static lp_item_t lp_str = {set_str, out_str};
 
 static struct lps_s
 {
@@ -484,6 +515,7 @@ static struct lps_s
     F(default_gateway_mac_addr, mac),
     F(backup_gateway_ip_addr, ip),
     F(backup_gateway_mac_addr, mac),
+    F(community_string, str),
     { NULL }
 };
 
@@ -500,7 +532,7 @@ typedef struct ulp_item_s
     ulp_out out;
 } ulp_item_t;
 
-void
+static void
 uset_bool(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -517,7 +549,7 @@ uset_bool(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 	}
     }
 }
-void
+static void
 uout_bool(ipmi_cmd_info_t *cmd_info, int sel, char *name,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -551,7 +583,7 @@ static struct ulps_s
 /*
  * per-alert-dest items
  */
-void
+static void
 uset_int(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -568,7 +600,7 @@ uset_int(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 	}
     }
 }
-void
+static void
 uout_int(ipmi_cmd_info_t *cmd_info, int sel, char *name,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -583,7 +615,7 @@ uout_int(ipmi_cmd_info_t *cmd_info, int sel, char *name,
 }
 static ulp_item_t lp_uint = {uset_int, uout_int};
 
-void
+static void
 uset_ip(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 	ipmi_lan_config_t *lanc, void *func)
 {
@@ -600,7 +632,7 @@ uset_ip(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 	}
     }
 }
-void
+static void
 uout_ip(ipmi_cmd_info_t *cmd_info, int sel, char *name,
 	ipmi_lan_config_t *lanc, void *func)
 {
@@ -616,7 +648,7 @@ uout_ip(ipmi_cmd_info_t *cmd_info, int sel, char *name,
 }
 static ulp_item_t lp_uip = {uset_ip, uout_ip};
 
-void
+static void
 uset_mac(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -633,7 +665,7 @@ uset_mac(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 	}
     }
 }
-void
+static void
 uout_mac(ipmi_cmd_info_t *cmd_info, int sel, char *name,
 	 ipmi_lan_config_t *lanc, void *func)
 {
@@ -1055,7 +1087,7 @@ lanparm_config_update(ipmi_cmd_info_t *cmd_info)
 	if (strcmp(ulps[i].name, name) == 0) {
 	    ulp_item_t *lp = ulps[i].lpi;
 
-	    if ((argc - curr_arg) < 4) {
+	    if ((argc - curr_arg) < 1) {
 		/* Not enough parameters */
 		cmdlang->errstr = "Not enough parameters";
 		cmdlang->err = EINVAL;
@@ -1083,7 +1115,7 @@ lanparm_config_update(ipmi_cmd_info_t *cmd_info)
 	if (strcmp(alps[i].name, name) == 0) {
 	    ulp_item_t *lp = alps[i].lpi;
 
-	    if ((argc - curr_arg) < 4) {
+	    if ((argc - curr_arg) < 1) {
 		/* Not enough parameters */
 		cmdlang->errstr = "Not enough parameters";
 		cmdlang->err = EINVAL;

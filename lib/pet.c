@@ -1202,9 +1202,10 @@ ipmi_pet_get_name(ipmi_pet_t *pet, char *name, int length)
 	goto out;
     }
 
-    if (name)
+    if (name) {
 	memcpy(name, pet->name, slen);
-    name[slen] = '\0';
+	name[slen] = '\0';
+    }
  out:
     return slen;
 }

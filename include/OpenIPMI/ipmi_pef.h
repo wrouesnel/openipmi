@@ -223,13 +223,18 @@ int ipmi_pefconfig_get_alert_startup_delay(ipmi_pef_config_t *pefc,
 int ipmi_pefconfig_set_alert_startup_delay(ipmi_pef_config_t *pefc,
 					   unsigned int val);
 
-int ipmi_pefconfig_get_guid(ipmi_pef_config_t *pefc,
-			    unsigned int      *enabled,
-			    unsigned char     *data,
-			    unsigned int      *data_len);
-int ipmi_pefconfig_set_guid(ipmi_pef_config_t *pefc, unsigned int enabled,
-			    unsigned char *data, unsigned int data_len);
-
+unsigned int ipmi_pefconfig_get_guid_enabled(ipmi_pef_config_t *pefc);
+int ipmi_pefconfig_set_guid_enabled(ipmi_pef_config_t *pefc,
+				    unsigned int      val);
+int ipmi_pefconfig_set_guid_val(ipmi_pef_config_t *pefc,
+				unsigned char     *data,
+				unsigned int      data_len);
+int ipmi_pefconfig_get_guid_val(ipmi_pef_config_t *pefc,
+				unsigned char     *data,
+				unsigned int      *data_len);
+int ipmi_pefconfig_set_guid_val(ipmi_pef_config_t *pefc,
+				unsigned char     *data,
+				unsigned int      data_len);
 
 /*
  * The following is for the event filter table entries.
@@ -494,5 +499,17 @@ int ipmi_pefconfig_get_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
 				    unsigned char *val, unsigned int len);
 int ipmi_pefconfig_set_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
 				    unsigned char *val);
+
+
+/*
+ * Cruft, don't use
+ */
+int ipmi_pefconfig_get_guid(ipmi_pef_config_t *pefc,
+			    unsigned int      *enabled,
+			    unsigned char     *data,
+			    unsigned int      *data_len);
+int ipmi_pefconfig_set_guid(ipmi_pef_config_t *pefc, unsigned int enabled,
+			    unsigned char *data, unsigned int data_len);
+
 
 #endif /* _IPMI_PEF_H */

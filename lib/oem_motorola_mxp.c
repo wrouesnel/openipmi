@@ -7010,6 +7010,7 @@ mc_upd_handler(enum ipmi_update_e op,
     id.mcid.channel = 0;
     id.mcid.mc_num = 0x20;
     id.lun = 4;
+    id.mcid.seq = 0; /* irrelevant, but keeps static analysis tools happy. */
     id.sensor_num = MXP_BOARD_PRESENCE_NUM(MXP_ALARM_CARD_IDX_OFFSET+i);
     ipmi_sensor_pointer_noseq_cb(id, amc_presence_event, &pinfo);
 }

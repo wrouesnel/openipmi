@@ -297,9 +297,10 @@ ipmi_mc_get_name(ipmi_mc_t *mc, char *name, int length)
     if (slen >= length)
 	slen = length - 1;
 
-    if (name)
+    if (name) {
 	memcpy(name, mc->name, slen);
-    name[slen] = '\0';
+	name[slen] = '\0';
+    }
  out:
     return slen;
 }

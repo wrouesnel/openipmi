@@ -2158,7 +2158,7 @@ realloc_frus(atca_ipmc_t *minfo, unsigned int num_frus)
     atca_fru_t   **old_frus;
     atca_fru_t   **new_frus;
     unsigned int old_num_frus;
-    int          i;
+    int          i, j;
 
     old_num_frus = minfo->num_frus;
     if (old_num_frus >= num_frus)
@@ -2178,8 +2178,9 @@ realloc_frus(atca_ipmc_t *minfo, unsigned int num_frus)
 	if (!new_frus[i]) {
 	    /* An allocation failed, free all the items that we
 	       allocated. */
-	    for (i--; i>=old_num_frus; i--)
-		ipmi_mem_free(new_frus[i]);
+	    j = i; /* Keeps static analyzers happy, use a new var. */
+	    for (j--; j>=old_num_frus; j--)
+		ipmi_mem_free(new_frus[j]);
 	    ipmi_mem_free(new_frus);
 	    return ENOMEM;
 	}

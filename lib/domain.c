@@ -628,6 +628,7 @@ cleanup_domain(ipmi_domain_t *domain)
 	mc_ipmb_scan_info_t *item;
 	while (domain->bus_scans_running) {
 	    item = domain->bus_scans_running;
+	    domain->bus_scans_running = item->next;
 	    ipmi_lock(item->lock);
 	    if (item->timer_running) {
 		if (item->os_hnd->stop_timer(item->os_hnd, item->timer)) {
@@ -636,7 +637,6 @@ cleanup_domain(ipmi_domain_t *domain)
 		    item = NULL;
 		}
 	    }
-	    domain->bus_scans_running = item->next;
 	    if (item) {
 		ipmi_unlock(item->lock);
 		item->os_hnd->free_timer(item->os_hnd, item->timer);
@@ -4559,9 +4559,10 @@ ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int length)
 	slen = length - 1;
     }
 
-    if (name)
+    if (name) {
 	memcpy(name, domain->name, slen);
-    name[slen] = '\0';
+	name[slen] = '\0';
+    }
  out:
     return slen;
 }

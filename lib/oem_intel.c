@@ -438,6 +438,7 @@ tig_handler(ipmi_mc_t *mc,
             ipmi_log(IPMI_LOG_WARNING,
                      "%s oem_intel.c: could not allocate TIG info",
                      MC_NAME(mc));
+	    goto out;
 	}
 	memset(info, 0, sizeof(*info));
 	info->mc_id = ipmi_mc_convert_to_id(mc);

@@ -183,6 +183,7 @@ ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun)
 		= (struct ipmi_lan_addr *) addr;
 
 	    iaddr->lun = lun;
+	    break;
 	}
 
 	default:

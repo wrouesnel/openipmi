@@ -208,9 +208,10 @@ ipmi_lanparm_get_name(ipmi_lanparm_t *lanparm, char *name, int length)
 	goto out;
     }
 
-    if (name)
+    if (name) {
 	memcpy(name, lanparm->name, slen);
-    name[slen] = '\0';
+	name[slen] = '\0';
+    }
  out:
     return slen;
 }

@@ -41,6 +41,7 @@ The commands may take parameters.  Some general ones are:
 * <connection> - A connection number, in the form: <domain>.<num>
 * <pet> - A platform event trap id, in the form [<domain>][.<integer>]
 * <lanparm> - A LAN parameter id, in the form [<domain>][.<integer>]
+* <pef> - A PEF id, in the form [<domain>][.<integer>]
 
 Note that the domain name and sensor/control name may have spaces in
 them; the names may be bracketed by quotes (' or ").  A backslash (\)
@@ -485,14 +486,65 @@ The command hierarchy is:
 
   * close <pet> - Close the pet.
 
-* pef
-  * read <mc> - read pef information from an MC.  Note the lock is not
-    released.
-  * clearlock <mc> - Clear a PEF lock.
-  * write <mc> <pefval> <value> [pefval <value> [...]]
-    - write the PEF information to the MC.  Every value given will be
-     written atomically and the lock will be released.  Note that
-     you must do a read before doing this command.
+* pef - commands dealing with platform even filters.  These are
+  basically connections to the PEF configuration parameters in an MC.
+  You use a pef to fetch a pef config, which you can then modify and
+  write back to the MC.  Note that when you get a pef config, you
+  claim a lock on the MC that must be unlocked.
+
+  * list <domain> - List all the pefs that currently exist in the
+    domain.
+    Response is:
+    Name: <pef>
+    Name: <pef>
+      .
+      .
+
+  * info <pef> - Dump info about the pef. 
+    Response is:
+    PEF
+      Name: <pef>
+      MC: <mc>
+
+  * new <mc> - Create a pef for the given MC.
+    Response is:
+    PEF: <pef>
+
+  * unlock_mc <mc> - Unlock the PEF lock on the given MC.
+
+  * close <pef> - Free the given pef
+
+  * config - commands dealing with PEF configurations.  These
+    are the actual PEF data items.
+
+    * list - list all the PEF configs
+      Response is:
+      Name: <pef config>
+      Name: <pef config>
+      .
+      .
+
+    * info <pef config> - Dump information about the pef config.
+      Response is:
+      PEF Config
+        Name: <pef config>
+	** PEF CONFIG **
+
+    * get <pef> - Fetch the pef data items from the pef
+      and create a pef config.
+      Response is:
+      PEF Config
+        Name: <pef config>
+	** PEF CONFIG **
+
+    * set <pef> <pef config> - Write the pef data back
+      to the pef.  Note that this must be the same pef used
+      to create the config.
+
+    * unlock <pef> <pef config> - Unlock the lock in the
+      MC and mark the pef config as unlocked.
+
+    * close <pef config> - Free the pef config.
 
 * lanparm - commands dealing with lanparms.  These are basically
   connections to the LAN configuration parameters in an MC.  You

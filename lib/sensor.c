@@ -980,9 +980,10 @@ ipmi_sensor_get_name(ipmi_sensor_t *sensor, char *name, int length)
     if (slen >= length)
 	slen = length - 1;
 
-    if (name)
+    if (name) {
 	memcpy(name, sensor->name, slen);
-    name[slen] = '\0';
+	name[slen] = '\0';
+    }
  out:
     return slen;
 }

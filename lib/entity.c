@@ -621,9 +621,10 @@ ipmi_entity_get_name(ipmi_entity_t *ent, char *name, int length)
     if (slen >= length)
 	slen = length - 1;
 
-    if (name)
+    if (name) {
 	memcpy(name, ent->name, slen);
-    name[slen] = '\0';
+	name[slen] = '\0';
+    }
  out:
     return slen;
 }

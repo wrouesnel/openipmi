@@ -141,7 +141,7 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     ipmi_args_t    *con_parms[2];
     int            set = 0;
-    int            i;
+    int            i, j;
     ipmi_con_t     *con[2];
     int            rv;
     char           *name;
@@ -239,8 +239,8 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmdlang->errstr = "Unable to setup connection";
 	    cmdlang->err = rv;
-	    for (i=0; i<set; i++)
-		ipmi_free_args(con_parms[i]);
+	    for (j=0; j<i; j++)
+		ipmi_free_args(con_parms[j]);
 	    goto out;
 	}
     }

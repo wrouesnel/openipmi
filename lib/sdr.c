@@ -279,11 +279,11 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 
     for (i=0; i<MAX_SDR_FETCH_OUTSTANDING; i++) {
 	info = ipmi_mem_alloc(sizeof(*info));
-	info->sdrs = sdrs;
 	if (!info) {
 	    rv = ENOMEM;
 	    goto out_done;
 	}
+	info->sdrs = sdrs;
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
     }
 
