@@ -1,4 +1,22 @@
 
+2003-05-14 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_conn.h: Added a lot of connection handling
+	changes for handling different and dynamic IPMB addresses, and for
+	supporting the concept of a connection being "active".
+	* ipmi.c: ditto
+	* ipmi_lan.c: ditto
+	* ipmicmd.c: ditto
+	* ipmi_smi.c: ditto
+	* domain.c: ditto
+	* ipmi.c: ditto
+	* ipmi.c: ditto
+
+	* lanserv.h, lanserv.c, lanserv_ipmi.c: Added a lot of OEM
+	handling.
+
+	* sensor.c: Fixed a missing return.
+
 2003-05-13 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi.c, ipmi_lan.c, ipmi_smi.c: Added infrastructure so that

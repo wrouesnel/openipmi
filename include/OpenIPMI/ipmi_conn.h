@@ -73,11 +73,21 @@ typedef void (*ipmi_ll_cmd_handler_t)(ipmi_con_t   *ipmi,
 
 /* Called when a low-level connection has failed or come up.  If err
    is zero, the connection has come up after being failed.  if err is
-   non-zero, it's an error number to report why the failure
-   occurred. */
+   non-zero, it's an error number to report why the failure occurred.
+   The active parm tells if the interface is active or not, this
+   callback is also used to inform the upper layer when the connection
+   becomes active or inactive. */
 typedef void (*ipmi_ll_con_failed_cb)(ipmi_con_t *ipmi,
 				      int        err,
+				      int        active,
 				      void       *cb_data);
+
+/* Used when fetching the IPMB address of the connection. */
+typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t   *ipmi,
+				     int          err,
+				     unsigned int ipmb_addr,
+				     int          active,
+				     void         *cb_data);
 
 /* The data structure representing a connection.  The low-level handler
    fills this out then calls ipmi_init_con() with the connection. */
@@ -93,6 +103,9 @@ struct ipmi_con_s
 
     /* Connection-specific data for the underlying connection. */
     void *con_data;
+
+    /* If OEM code want to attach some data, it can to it here. */
+    void *oem_data;
 
     /* Calls for the interface.  These should all return standard
        "errno" errors if they fail. */
@@ -111,10 +124,42 @@ struct ipmi_con_s
 				 ipmi_ll_con_failed_cb handler,
 				 void                  *cb_data);
 
-    /* Send an IPMI command (in "msg".  on the "ipmi" connection to
-       the given "addr".  When the response comes in or the message
-       times out, rsp_handler will be called with the following four
-       data items.  Note that the lower layer MUST guarantee that the
+    /* If OEM code discovers that an IPMB address has changed, it can
+       use this to change it. */
+    void (*set_ipmb_addr)(ipmi_con_t *ipmi, unsigned char ipmb, int active);
+
+    /* Set the handler that will be called when the IPMB address changes. */
+    void (*set_ipmb_addr_handler)(ipmi_con_t           *ipmi,
+				  ipmi_ll_ipmb_addr_cb handler,
+				  void                 *cb_data);
+
+    /* This call gets the IPMB address of the connection.  It may be
+       NULL if the connection does not support this.  This call may be
+       set or overridden by the OEM code.  This is primarily for use
+       by the connection code itself, the OEM code for the BMC
+       connected to should set this.  If it is not set, the IPMB
+       address is assumed to be 0x20.  This *should* send a message to
+       the device, because connection code will assume that and use it
+       to check for device function.  This should also check if the
+       device is active.  If this is non-null, it will be called
+       periodically. */
+    int (*get_ipmb_addr)(ipmi_con_t           *ipmi,
+			 ipmi_ll_ipmb_addr_cb handler,
+			 void                 *cb_data);
+
+    /* Change the state of the connection to be active or inactive.
+       This may be NULL if the connection does not support this.  The
+       interface code may set this, the OEM code should override this
+       if necessary. */
+    int (*set_active_state)(ipmi_con_t            *ipmi,
+			    int                   is_active,
+			    ipmi_ll_con_failed_cb handler,
+			    void                  *cb_data);
+
+    /* Send an IPMI command (in "msg" on the "ipmi" connection to the
+       given "addr".  When the response comes in or the message times
+       out, rsp_handler will be called with the following four data
+       items.  Note that the lower layer MUST guarantee that the
        reponse handler is called, even if it fails or the message is
        dropped. */
     int (*send_command)(ipmi_con_t            *ipmi,

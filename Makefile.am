@@ -25,7 +25,7 @@ bin_PROGRAMS = ipmi_ui ipmicmd ipmilan
 libOpenIPMI_la_SOURCES = entity.c ipmi.c domain.c mc.c sdr.c selector.c \
 	control.c ipmi_utils.c \
 	ilist.c ipmi_smi.c opq.c sel.c sensor.c ipmi_lan.c md5.c md2.c \
-	strings.c ipmi_malloc.c ipmi_auth.c
+	strings.c ipmi_malloc.c ipmi_auth.c ipmi_oem_force.c
 libOpenIPMI_la_LIBADD = -lm
 libOpenIPMI_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMI.map
@@ -47,7 +47,8 @@ ipmicmd_LDADD = ipmi_lan.c ipmi_smi.c selector.c ui_os.c ipmi_malloc.c \
 
 ipmilan_SOURCES = lanserv.c lanserv_ipmi.c lanserv_asf.c \
 	ipmi_auth.c priv_table.c \
-	md5.c md2.c
+	md5.c md2.c \
+	lanserv_oem_force.c
 ipmilan_LDADD = -lpopt
 
 lanserv_emu_SOURCES = lanserv_emu.c lanserv_ipmi.c lanserv_asf.c \

@@ -143,6 +143,21 @@ lan_send(lan_data_t *lan,
     }
 }
 
+static void
+ipmb_addr_change(lan_data_t    *lan,
+		 unsigned char addr)
+{
+    unsigned int slave_addr = addr;
+    int          rv;
+    misc_data_t  *info = lan->user_info;
+
+    rv = ioctl(info->smi_fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
+    if (rv) {
+	lan->log(OS_ERROR, NULL,
+		 "Error setting IPMB address: 0x%x", errno);
+    }    
+}
+
 static int
 smi_send(lan_data_t *lan, msg_t *msg)
 {
@@ -814,6 +829,8 @@ static struct poptOption poptOpts[]=
     }	
 };
 
+int init_oem_force(lan_data_t *lan);
+
 int
 main(int argc, const char *argv[])
 {
@@ -854,6 +871,7 @@ main(int argc, const char *argv[])
     lan.write_config = write_config;
     lan.log = log;
     lan.debug = debug;
+    lan.ipmb_addr_change = ipmb_addr_change;
 
     if (read_config(&lan))
 	exit(1);
@@ -886,7 +904,7 @@ main(int argc, const char *argv[])
     if (rv)
 	return 1;
 
-    openlog("ser2net", LOG_PID | LOG_CONS, LOG_DAEMON);
+    openlog("ipmilan", LOG_PID | LOG_CONS, LOG_DAEMON);
 
     if (daemonize) {
 	int pid;
@@ -910,6 +928,9 @@ main(int argc, const char *argv[])
     }
 
     syslog(LOG_INFO, "%s startup", argv[0]);
+
+    /* Initialize OEM handlers. */
+    init_oem_force(&lan);
 
     max_fd = data.smi_fd;
     for (i=0; i<num_addr; i++) {

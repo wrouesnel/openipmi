@@ -25,6 +25,9 @@ typedef struct msg_s
     void *src_addr;
     int  src_len;
 
+    long oem_data; /* For use by OEM handlers.  This will be set to
+                      zero by the calling code. */
+
     uint32_t      seq;
     uint32_t      sid;
     unsigned char *authcode;
@@ -44,6 +47,14 @@ typedef struct msg_s
 
     unsigned long ll_data; /* For use by the low-level code. */
 } msg_t;
+
+typedef struct rsp_msg
+{
+    uint8_t        netfn;
+    uint8_t        cmd;
+    unsigned short data_len;
+    uint8_t        *data;
+} rsp_msg_t;
 
 #define NUM_PRIV_LEVEL 4
 typedef struct channel_s
@@ -117,6 +128,10 @@ struct lan_data_s
 
     void *user_info;
 
+    /* Information about the MC we are hooked to. */
+    unsigned int  manufacturer_id;
+    unsigned int  product_id;
+
     void (*lan_send)(lan_data_t *lan,
 		     struct iovec *data, int vecs,
 		     void *addr, int addr_len);
@@ -129,6 +144,12 @@ struct lan_data_s
     /* Allocate and free data. */
     void *(*alloc)(lan_data_t *lan, int size);
     void (*free)(lan_data_t *lan, void *data);
+
+    void *oem_data;
+
+    /* IPMB address changed.  Can be called by OEM code if it detects
+       an IPMB address change.  It should be ignored if NULL. */
+    void (*ipmb_addr_change)(lan_data_t *lan, unsigned char addr);
 
     /* Write the configuration file (done when a non-volatile
        change is done, or when a user name/password is written. */
@@ -143,7 +164,8 @@ struct lan_data_s
 #define INVALID_MSG			7
 #define OS_ERROR			8
 #define LAN_ERR				9
-#define DEBUG				10
+#define INFO				10
+#define DEBUG				11
     void (*log)(int type, msg_t *msg, char *format, ...);
 
     int debug;
@@ -153,7 +175,19 @@ struct lan_data_s
        continue, or non-zero if the message should not go through
        normal handling.  This field may be NULL, and it will be
        ignored. */
-    int (*oem_handle_msg)(lan_data_t *lan, msg_t *msg);
+    int (*oem_handle_msg)(lan_data_t *lan, msg_t *msg, session_t *session);
+
+    /* Called before a response is sent.  Should return 0 if the
+       standard handling should continue, or non-zero if the OEM
+       handled the response itself.  Note that this code should *not
+       free the message, the lanserv_ipmi code will handle that. */
+    int (*oem_handle_rsp)(lan_data_t *lan, msg_t *msg,
+			  session_t *session, rsp_msg_t *rsp);
+
+    /* Check the privilege of a command to see if it is permitted. */
+    int (*oem_check_permitted)(unsigned char priv,
+			       unsigned char netfn,
+			       unsigned char cmd);
 
     /* Don't fill in the below in the user code. */
 
@@ -169,6 +203,28 @@ struct lan_data_s
     unsigned int next_challenge_seq;
 };
 
+
+typedef void (*handle_oem_cb)(lan_data_t *lan, void *cb_data);
+typedef struct oem_handler_s
+{
+    unsigned int  manufacturer_id;
+    unsigned int  product_id;
+    handle_oem_cb handler;
+    void          *cb_data;
+
+    struct oem_handler_s *next;
+} oem_handler_t;
+
+/* Register a new OEM handler. */
+void ipmi_register_oem(oem_handler_t *handler);
+
+/* A helper function to allow OEM code to send messages. */
+int ipmi_oem_send_msg(lan_data_t    *lan,
+		      unsigned char netfn,
+		      unsigned char cmd,
+		      unsigned char *data,
+		      unsigned int  len,
+		      long          oem_data);
 
 void handle_asf(lan_data_t *lan,
 		unsigned char *data, int len,

@@ -75,6 +75,10 @@
 /*** PVCS LOG SECTION ********************************************************
 *
 * $Log: not supported by cvs2svn $
+* Revision 1.4  2003/05/14 03:24:07  cminyard
+* Added connection info stuff.
+* Added LAN info to the docs.
+*
 * Revision 1.3  2003/04/23 13:19:39  cminyard
 * Added a debug interface
 * Added dumping an mc's information.
@@ -317,7 +321,7 @@ void ipmi_destroy_lock(ipmi_lock_t *lock)
 
 void printInfo( )
 {
-    printf( "ipmicmd\t$,$Date: 2003-05-14 03:24:07 $,$Author: cminyard $\n");
+    printf( "ipmicmd\t$,$Date: 2003-05-14 18:03:00 $,$Author: cminyard $\n");
     printf( "Kontron Canada Inc.\n");
     printf( "-\n");
     printf( "This little utility is an ipmi command tool ;-)\n");
@@ -714,6 +718,7 @@ char buf[256];
 static void
 con_fail_handler(ipmi_con_t *ipmi,
 		 int        err,
+		 int        active,
 		 void       *cb_data)
 {
     if (!interactive) {
@@ -774,6 +779,12 @@ main(int argc, const char *argv[])
     }
 
     argv = poptGetArgs(poptCtx);
+
+    if (!argv) {
+	fprintf(stderr, "Not enough arguments\n");
+	exit(1);
+    }
+
     for (argc=0; argv[argc]!= NULL; argc++)
 	;
 

@@ -51,6 +51,8 @@
 /* We time the SMI messages, but we have a long timer. */
 #define SMI_TIMEOUT 60000
 
+#define SMI_AUDIT_TIMEOUT 10000000
+
 #ifdef DEBUG_MSG
 static void
 dump_hex(unsigned char *data, int len)
@@ -64,6 +66,12 @@ dump_hex(unsigned char *data, int len)
     }
 }
 #endif
+
+typedef struct audit_timer_info_s
+{
+    int        cancelled;
+    ipmi_con_t *ipmi;
+} audit_timer_info_t;
 
 typedef struct pending_cmd_s
 {
@@ -117,8 +125,14 @@ typedef struct smi_data_s
 
     unsigned char              slave_addr;
 
+    os_hnd_timer_id_t          *audit_timer;
+    audit_timer_info_t         *audit_info;
+
     ipmi_ll_con_failed_cb      con_fail_handler;
     void                       *con_fail_cb_data;
+
+    ipmi_ll_ipmb_addr_cb ipmb_addr_handler;
+    void                 *ipmb_addr_cb_data;
 
     struct smi_data_s *next, *prev;
 } smi_data_t;
@@ -323,6 +337,119 @@ smi_send(smi_data_t   *smi,
 	return errno;
 
     return 0;
+}
+
+static void
+set_ipmb_in_dev(smi_data_t *smi)
+{
+    unsigned int slave_addr;
+    int          rv;
+
+    slave_addr = smi->slave_addr;
+
+    rv = ioctl(smi->fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
+    if (rv) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "Error setting IPMB address: 0x%x", errno);
+    }
+}
+
+static void
+ipmb_handler(ipmi_con_t   *ipmi,
+	     int          err,
+	     unsigned int ipmb,
+	     int          active,
+	     void         *cb_data)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+
+    if (err)
+	return;
+
+    if (ipmb != smi->slave_addr) {
+	smi->slave_addr = ipmb;
+	if (smi->ipmb_addr_handler)
+	    smi->ipmb_addr_handler(ipmi, err, ipmb, active,
+				   smi->ipmb_addr_cb_data);
+
+	set_ipmb_in_dev(smi);
+    }
+}
+
+static void
+smi_set_ipmb_addr_handler(ipmi_con_t           *ipmi,
+			  ipmi_ll_ipmb_addr_cb handler,
+			  void                 *cb_data)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+
+    smi->ipmb_addr_handler = handler;
+    smi->ipmb_addr_cb_data = cb_data;
+}
+
+static void
+audit_timeout_handler(void              *cb_data,
+		      os_hnd_timer_id_t *id)
+{
+    audit_timer_info_t           *info = cb_data;
+    ipmi_con_t                   *ipmi = info->ipmi;
+    smi_data_t                   *smi;
+    struct timeval               timeout;
+    ipmi_msg_t                   msg;
+    ipmi_system_interface_addr_t si;
+
+
+    /* If we were cancelled, just free the data and ignore the call. */
+    if (info->cancelled) {
+	goto out_done;
+    }
+
+    ipmi_read_lock();
+
+    if (!smi_valid_ipmi(ipmi)) {
+	goto out_unlock_done;
+    }
+
+    smi = ipmi->con_data;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_DEVICE_ID_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+		
+    /* Send a message to check the working of the interface. */
+    if (ipmi->get_ipmb_addr) {
+	/* If we have a way to query the IPMB address, do so
+           periodically. */
+	ipmi->get_ipmb_addr(ipmi, ipmb_handler, NULL);
+    } else {
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = 0xf;
+	si.lun = 0;
+	ipmi->send_command(ipmi,
+			   (ipmi_addr_t *) &si, sizeof(si),
+			   &msg, NULL, NULL, NULL, NULL, NULL);
+    }
+
+    timeout.tv_sec = SMI_AUDIT_TIMEOUT / 1000000;
+    timeout.tv_usec = SMI_AUDIT_TIMEOUT % 1000000;
+    ipmi->os_hnd->start_timer(ipmi->os_hnd,
+			      id,
+			      &timeout,
+			      audit_timeout_handler,
+			      cb_data);
+
+    /* Make sure the timer info doesn't get freed. */
+    info = NULL;
+
+ out_unlock_done:
+    ipmi_read_unlock();
+ out_done:
+    if (info) {
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
+	ipmi_mem_free(info);
+    }
+    return;
 }
 
 static void
@@ -756,6 +883,7 @@ smi_close_connection(ipmi_con_t *ipmi)
     pending_cmd_t              *cmd_to_free, *next_cmd;
     cmd_handler_t              *hnd_to_free, *next_hnd;
     ipmi_ll_event_handler_id_t *evt_to_free, *next_evt;
+    int                        rv;
 
     if (! smi_valid_ipmi(ipmi)) {
 	return EINVAL;
@@ -797,6 +925,16 @@ smi_close_connection(ipmi_con_t *ipmi)
 	next_evt = evt_to_free->next;
 	ipmi_mem_free(evt_to_free);
 	evt_to_free = next_evt;
+    }
+
+    if (smi->audit_info) {
+	rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, smi->audit_timer);
+	if (rv)
+	    smi->audit_info->cancelled = 1;
+	else {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, smi->audit_timer);
+	    ipmi_mem_free(smi->audit_info);
+	}
     }
 
     if (smi->event_handlers_lock)
@@ -869,44 +1007,30 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
     ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
 
     if (smi->con_fail_handler)
-	smi->con_fail_handler(ipmi, 0, smi->con_fail_cb_data);
+	smi->con_fail_handler(ipmi, 0, 1, smi->con_fail_cb_data);
 }
 
 static void
-handle_dev_id(ipmi_con_t   *ipmi,
-	      ipmi_addr_t  *addr,
-	      unsigned int addr_len,
-	      ipmi_msg_t   *msg,
-	      void         *rsp_data1,
-	      void         *rsp_data2,
-	      void         *rsp_data3,
-	      void         *rsp_data4)
+smi_set_ipmb_addr(ipmi_con_t *ipmi, unsigned char ipmb, int active)
 {
-    smi_data_t        *smi = (smi_data_t *) ipmi->con_data;
-    int               err;
-    unsigned int      manufacturer_id;
-    unsigned int      product_id;
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+
+    if (smi->slave_addr != ipmb) {
+	smi->slave_addr = ipmb;
+	if (smi->ipmb_addr_handler)
+	    smi->ipmb_addr_handler(ipmi, 0, ipmb, active,
+				   smi->ipmb_addr_cb_data);
+
+	set_ipmb_in_dev(smi);
+    }
+}
+
+static void
+finish_connection(ipmi_con_t *ipmi, smi_data_t *smi)
+{
     struct timeval    timeout;
     os_hnd_timer_id_t *timer;
-
-    if (msg->data[0] != 0) {
-	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
-	goto out_err;
-    }
-
-    if (msg->data_len < 12) {
-	err = EINVAL;
-	goto out_err;
-    }
-
-    manufacturer_id = (msg->data[7]
-		       | (msg->data[8] << 8)
-		       | (msg->data[9] << 16));
-    product_id = msg->data[10] | (msg->data[11] << 8);
-
-    err = ipmi_check_oem_conn_handlers(ipmi, manufacturer_id, product_id);
-    if (err)
-	goto out_err;
+    int               err;
 
     /* Schedule this to run in a timeout, so we are not holding
        the read lock. */
@@ -930,15 +1054,116 @@ handle_dev_id(ipmi_con_t   *ipmi,
 
  out_err:
     if (smi->con_fail_handler)
-	smi->con_fail_handler(ipmi, err, smi->con_fail_cb_data);
+	smi->con_fail_handler(ipmi, err, 0, smi->con_fail_cb_data);
+}
+
+static void
+handle_ipmb_addr(ipmi_con_t   *ipmi,
+		 int          err,
+		 unsigned int ipmb_addr,
+		 int          active,
+		 void         *cb_data)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+
+    if (err) {
+	if (smi->con_fail_handler)
+	    smi->con_fail_handler(ipmi, err, 0, smi->con_fail_cb_data);
+	return;
+    }
+
+    smi->slave_addr = ipmb_addr;
+    finish_connection(ipmi, smi);
+    if (smi->ipmb_addr_handler)
+	smi->ipmb_addr_handler(ipmi, err, ipmb_addr, active,
+			       smi->ipmb_addr_cb_data);
+
+    set_ipmb_in_dev(smi);
+}
+
+static void
+handle_dev_id(ipmi_con_t   *ipmi,
+	      ipmi_addr_t  *addr,
+	      unsigned int addr_len,
+	      ipmi_msg_t   *msg,
+	      void         *rsp_data1,
+	      void         *rsp_data2,
+	      void         *rsp_data3,
+	      void         *rsp_data4)
+{
+    smi_data_t        *smi = (smi_data_t *) ipmi->con_data;
+    int               err;
+    unsigned int      manufacturer_id;
+    unsigned int      product_id;
+
+    if (msg->data[0] != 0) {
+	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
+	goto out_err;
+    }
+
+    if (msg->data_len < 12) {
+	err = EINVAL;
+	goto out_err;
+    }
+
+    manufacturer_id = (msg->data[7]
+		       | (msg->data[8] << 8)
+		       | (msg->data[9] << 16));
+    product_id = msg->data[10] | (msg->data[11] << 8);
+
+    err = ipmi_check_oem_conn_handlers(ipmi, manufacturer_id, product_id);
+    if (err)
+	goto out_err;
+
+    if (ipmi->get_ipmb_addr) {
+	/* We have a way to fetch the IPMB address, do so. */
+	err = ipmi->get_ipmb_addr(ipmi, handle_ipmb_addr, NULL);
+	if (err)
+	    goto out_err;
+    } else
+	finish_connection(ipmi, smi);
+    return;
+
+ out_err:
+    if (smi->con_fail_handler)
+	smi->con_fail_handler(ipmi, err, 0, smi->con_fail_cb_data);
 }
 
 static int
 smi_start_con(ipmi_con_t *ipmi)
 {
+    smi_data_t                   *smi = (smi_data_t *) ipmi->con_data;
     int                          rv;
     ipmi_msg_t                   msg;
     ipmi_system_interface_addr_t si;
+    struct timeval               timeout;
+
+    /* Start the timer to audit the connections. */
+    smi->audit_info = ipmi_mem_alloc(sizeof(*(smi->audit_info)));
+    if (!smi->audit_info) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    smi->audit_info->cancelled = 0;
+    smi->audit_info->ipmi = ipmi;
+    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(smi->audit_timer));
+    if (rv)
+	goto out_err;
+    timeout.tv_sec = SMI_AUDIT_TIMEOUT / 1000000;
+    timeout.tv_usec = SMI_AUDIT_TIMEOUT % 1000000;
+    rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				   smi->audit_timer,
+				   &timeout,
+				   audit_timeout_handler,
+				   smi->audit_info);
+    if (rv) {
+	ipmi_mem_free(smi->audit_info);
+	smi->audit_info = NULL;
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, smi->audit_timer);
+	smi->audit_timer = NULL;
+	goto out_err;
+    }
 
     msg.netfn = IPMI_APP_NETFN;
     msg.cmd = IPMI_GET_DEVICE_ID_CMD;
@@ -951,6 +1176,7 @@ smi_start_con(ipmi_con_t *ipmi)
     rv = smi_send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			  handle_dev_id, NULL, NULL, NULL, NULL);
 
+ out_err:
     return rv;
 }
 
@@ -1020,6 +1246,8 @@ setup(int          if_num,
     smi->if_num = if_num;
 
     ipmi->start_con = smi_start_con;
+    ipmi->set_ipmb_addr = smi_set_ipmb_addr;
+    ipmi->set_ipmb_addr_handler = smi_set_ipmb_addr_handler;
     ipmi->set_con_fail_handler = smi_set_con_fail_handler;
     ipmi->send_command = smi_send_command;
     ipmi->register_for_events = smi_register_for_events;

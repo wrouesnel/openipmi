@@ -1468,6 +1468,8 @@ server.
 
 @end table
 
+The man page for @file{ipmilan} describes how to use the LAN server, see
+that for more details.
 
 @node    Concept Index, Glossary, The IPMI LAN Server, Top
 @unnumbered Concept Index

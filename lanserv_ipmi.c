@@ -40,14 +40,6 @@
 
 #include "lanserv.h"
 
-typedef struct rsp_msg
-{
-    uint8_t        netfn;
-    uint8_t        cmd;
-    unsigned short data_len;
-    uint8_t        *data;
-} rsp_msg_t;
-
 #if 0
 static void
 dump_hex(uint8_t *data, int len)
@@ -117,6 +109,32 @@ cleanup_ascii_16(uint8_t *c)
 	*c = 0;
 	c++;
 	i++;
+    }
+}
+
+static oem_handler_t *oem_handlers = NULL;
+
+void
+ipmi_register_oem(oem_handler_t *handler)
+{
+    handler->next = oem_handlers;
+    oem_handlers = handler;
+}
+
+static void
+check_oem_handlers(lan_data_t *lan)
+{
+    oem_handler_t *c;
+
+    c = oem_handlers;
+    while (c) {
+	if ((c->manufacturer_id == lan->manufacturer_id)
+	    && (c->product_id == lan->product_id))
+	{
+	    c->handler(lan, c->cb_data);
+	    break;
+	}
+	c = c->next;
     }
 }
 
@@ -276,9 +294,14 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 	/* We need the session.. */
 	/* We should not get temporary sessions here. */
 	session = sid_to_session(lan, msg->sid);
-	if (!session)
-	    return;
     }
+
+    if (lan->oem_handle_rsp && lan->oem_handle_rsp(lan, msg, session, rsp))
+	/* OEM code handled the response. */
+	return;
+
+    if (!session)
+	return;
 
     data[0] = 6; /* RMCP version. */
     data[1] = 0;
@@ -1345,11 +1368,16 @@ handle_normal_session(lan_data_t *lan, msg_t *msg, uint8_t *raw)
 
     session->time_left = lan->default_session_timeout;
 
-    if (lan->oem_handle_msg && lan->oem_handle_msg(lan, msg))
+    if (lan->oem_handle_msg && lan->oem_handle_msg(lan, msg, session))
 	/* OEM code handled the message. */
 	return;
 
-    rv = ipmi_cmd_permitted(session->priv, msg->netfn, msg->cmd);
+    rv = IPMI_PRIV_INVALID;
+    if (lan->oem_check_permitted)
+	rv = lan->oem_check_permitted(session->priv, msg->netfn, msg->cmd);
+    if (rv == IPMI_PRIV_INVALID)
+	rv = ipmi_cmd_permitted(session->priv, msg->netfn, msg->cmd);
+
     switch (rv) {
 	case IPMI_PRIV_PERMITTED:
 	    break;
@@ -1484,6 +1512,8 @@ ipmi_handle_lan_msg(lan_data_t *lan,
     msg.src_addr = from_addr;
     msg.src_len = from_len;
 
+    msg.oem_data = 0;
+
     if (len < 14) {
 	lan->log(LAN_ERR, &msg,
 		 "LAN msg failure: message too short");
@@ -1598,6 +1628,65 @@ ipmi_lan_tick(lan_data_t *lan, unsigned int time_since_last)
     }
 }
 
+static int
+lan_look_for_get_devid(lan_data_t *lan, msg_t *msg, session_t *session,
+		       rsp_msg_t *rsp)
+{
+    if ((rsp->netfn == (IPMI_APP_NETFN | 1))
+	&& (rsp->cmd == IPMI_GET_DEVICE_ID_CMD)
+	&& (rsp->data_len >= 12)
+	&& (rsp->data[0] == 0))
+    {
+	lan->oem_handle_rsp = NULL;
+	lan->manufacturer_id = (rsp->data[7]
+				| (rsp->data[8] << 8)
+				| (rsp->data[9] << 16));
+	lan->product_id = rsp->data[10] | (rsp->data[11] << 8);
+	check_oem_handlers(lan);
+
+	/* Will be set to 1 if we sent it. */
+	return msg->oem_data;
+    }
+    return 0;
+}
+
+int
+ipmi_oem_send_msg(lan_data_t    *lan,
+		  unsigned char netfn,
+		  unsigned char cmd,
+		  unsigned char *data,
+		  unsigned int  len,
+		  long          oem_data)
+{
+    msg_t *nmsg;
+    int   rv;
+
+    nmsg = lan->alloc(lan, sizeof(*nmsg)+len);
+    if (!nmsg) {
+	lan->log(OS_ERROR, NULL,
+		 "SMI message: out of memory");
+	return ENOMEM;
+    }
+
+    memset(nmsg, 0, sizeof(*nmsg));
+    nmsg->oem_data = oem_data;
+    nmsg->netfn = netfn;
+    nmsg->cmd = cmd;
+    nmsg->data = ((unsigned char *) nmsg) + sizeof(*nmsg);
+    nmsg->len = len;
+    if (len > 0)
+	memcpy(nmsg->data, data, len);
+    
+    rv = lan->smi_send(lan, nmsg);
+    if (rv) {
+	lan->log(OS_ERROR, nmsg,
+		 "SMI send: error %d", rv);
+	lan->free(lan, nmsg);
+    }
+
+    return rv;
+}
+
 int
 ipmi_lan_init(lan_data_t *lan)
 {
@@ -1626,6 +1715,20 @@ ipmi_lan_init(lan_data_t *lan)
 
     lan->sid_seq = 0;
     lan->next_challenge_seq = 0;
+
+    /* If the calling code already hasn't set up an OEM handler, we
+       set up our own to look for a get device id.  When we find a get
+       device ID, we call the OEM code to install their own. */
+    if (lan->oem_handle_rsp == NULL) {
+	int rv;
+
+	lan->oem_handle_rsp = lan_look_for_get_devid;
+
+	/* Send a get device id to the low-level code so we can
+           discover who we are. */
+	rv = ipmi_oem_send_msg(lan, IPMI_APP_NETFN, IPMI_GET_DEVICE_ID_CMD,
+			       NULL, 0, 1);
+    }
 
     /* Default the timeout to 30 seconds. */
     if (lan->default_session_timeout == 0)

@@ -211,6 +211,9 @@ typedef struct lan_data_s
     lan_report_con_failure_cb lan_con_fail_handler;
     void                      *lan_con_fail_cb_data;
 
+    ipmi_ll_ipmb_addr_cb ipmb_addr_handler;
+    void                 *ipmb_addr_cb_data;
+
     struct lan_data_s *next, *prev;
 } lan_data_t;
 
@@ -540,6 +543,37 @@ lan_send(lan_data_t  *lan,
 }
 
 static void
+ipmb_handler(ipmi_con_t   *ipmi,
+	     int          err,
+	     unsigned int ipmb,
+	     int          active,
+	     void         *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (err)
+	return;
+
+    if (ipmb != lan->slave_addr) {
+	lan->slave_addr = ipmb;
+	if (lan->ipmb_addr_handler)
+	    lan->ipmb_addr_handler(ipmi, err, ipmb, active,
+				   lan->ipmb_addr_cb_data);
+    }
+}
+
+static void
+lan_set_ipmb_addr_handler(ipmi_con_t           *ipmi,
+			  ipmi_ll_ipmb_addr_cb handler,
+			  void                 *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    lan->ipmb_addr_handler = handler;
+    lan->ipmb_addr_cb_data = cb_data;
+}
+
+static void
 audit_timeout_handler(void              *cb_data,
 		      os_hnd_timer_id_t *id)
 {
@@ -592,12 +626,18 @@ audit_timeout_handler(void              *cb_data,
     msg.data_len = 0;
 		
     /* Send a message to check the working of the interface. */
-    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-    si.channel = 0xf;
-    si.lun = 0;
-    ipmi->send_command(ipmi,
-		       (ipmi_addr_t *) &si, sizeof(si),
-		       &msg, NULL, NULL, NULL, NULL, NULL);
+    if (ipmi->get_ipmb_addr) {
+	/* If we have a way to query the IPMB address, do so
+           periodically. */
+	ipmi->get_ipmb_addr(ipmi, ipmb_handler, NULL);
+    } else {
+	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si.channel = 0xf;
+	si.lun = 0;
+	ipmi->send_command(ipmi,
+			   (ipmi_addr_t *) &si, sizeof(si),
+			   &msg, NULL, NULL, NULL, NULL, NULL);
+    }
 
     timeout.tv_sec = LAN_AUDIT_TIMEOUT / 1000000;
     timeout.tv_usec = LAN_AUDIT_TIMEOUT % 1000000;
@@ -637,7 +677,7 @@ connection_up(lan_data_t *lan, int addr_num, int new_con)
 	ipmi_log(IPMI_LOG_INFO, "Connection to the BMC restored");
 	lan->curr_ip_addr = addr_num;
 	if (lan->con_fail_handler)
-	    lan->con_fail_handler(lan->ipmi, 0, lan->con_fail_cb_data);
+	    lan->con_fail_handler(lan->ipmi, 0, 1, lan->con_fail_cb_data);
     }
 }
 
@@ -681,7 +721,7 @@ lost_connection(lan_data_t *lan, int addr_num)
 	    lan->working_authtype = 0;
 
 	    if (lan->con_fail_handler)
-		lan->con_fail_handler(lan->ipmi, ETIMEDOUT,
+		lan->con_fail_handler(lan->ipmi, ETIMEDOUT, 0,
 				      lan->con_fail_cb_data);
 	}
     }
@@ -1745,7 +1785,7 @@ handle_connected(ipmi_con_t *ipmi, int err)
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
     if (lan->con_fail_handler)
-	lan->con_fail_handler(ipmi, err, lan->con_fail_cb_data);
+	lan->con_fail_handler(ipmi, err, err == 0, lan->con_fail_cb_data);
 }
 
 static void
@@ -1756,6 +1796,76 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
     ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
 
     handle_connected(ipmi, 0);
+}
+
+static void
+finish_connection(ipmi_con_t *ipmi, lan_data_t *lan)
+{
+    lan->connected = 1;
+    if (! lan->initialized) {
+	struct timeval    timeout;
+	os_hnd_timer_id_t *timer;
+	int               rv;
+
+	lan->initialized = 1;
+
+	/* Schedule this to run in a timeout, so we are not holding
+           the read lock. */
+	rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &timer);
+	if (rv) {
+	    handle_connected(ipmi, rv);
+	    return;
+	}
+
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 0;
+	rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				       timer,
+				       &timeout,
+				       finish_start_con,
+				       ipmi);
+	if (rv) {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, timer);
+	    handle_connected(ipmi, rv);
+	    return;
+	}
+    } else {
+	connection_up(lan, lan->curr_ip_addr, 1);
+    }
+}
+
+static void
+lan_set_ipmb_addr(ipmi_con_t *ipmi, unsigned char ipmb, int active)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (lan->slave_addr != ipmb) {
+	lan->slave_addr = ipmb;
+	if (lan->ipmb_addr_handler)
+	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active,
+				   lan->ipmb_addr_cb_data);
+    }
+}
+
+static void
+handle_ipmb_addr(ipmi_con_t   *ipmi,
+		 int          err,
+		 unsigned int ipmb_addr,
+		 int          active,
+		 void         *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (err) {
+	handle_connected(ipmi, err);
+	return;
+    }
+
+    lan->slave_addr = ipmb_addr;
+    finish_connection(ipmi, lan);
+    if (lan->ipmb_addr_handler)
+	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active,
+			       lan->ipmb_addr_cb_data);
 }
 
 static void
@@ -1792,37 +1902,13 @@ handle_dev_id(ipmi_con_t   *ipmi,
     if (err)
 	goto out_err;
 
-    lan->connected = 1;
-    if (! lan->initialized) {
-	struct timeval    timeout;
-	os_hnd_timer_id_t *timer;
-	int               rv;
-
-	lan->initialized = 1;
-
-	/* Schedule this to run in a timeout, so we are not holding
-           the read lock. */
-	rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &timer);
-	if (rv) {
-	    handle_connected(ipmi, rv);
-	    return;
-	}
-
-	timeout.tv_sec = 0;
-	timeout.tv_usec = 0;
-	rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
-				       timer,
-				       &timeout,
-				       finish_start_con,
-				       ipmi);
-	if (rv) {
-	    ipmi->os_hnd->free_timer(ipmi->os_hnd, timer);
-	    handle_connected(ipmi, rv);
-	    return;
-	}
-    } else {
-	connection_up(lan, lan->curr_ip_addr, 1);
-    }
+    if (ipmi->get_ipmb_addr) {
+	/* We have a way to fetch the IPMB address, do so. */
+	err = ipmi->get_ipmb_addr(ipmi, handle_ipmb_addr, NULL);
+	if (err)
+	    goto out_err;
+    } else
+	finish_connection(ipmi, lan);
     return;
 
  out_err:
@@ -2255,6 +2341,8 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     lan->password_len = password_len;
 
     ipmi->start_con = lan_start_con;
+    ipmi->set_ipmb_addr = lan_set_ipmb_addr;
+    ipmi->set_ipmb_addr_handler = lan_set_ipmb_addr_handler;
     ipmi->set_con_fail_handler = lan_set_con_fail_handler;
     ipmi->send_command = lan_send_command;
     ipmi->register_for_events = lan_register_for_events;

@@ -117,6 +117,7 @@ struct ipmi_domain_s
     ipmi_ll_event_handler_id_t *ll_event_id;
 
     ipmi_con_t  *conn;
+    unsigned char con_ipmb_addr;
 
     /* Should I do a full bus scan for devices on the bus? */
     int                        do_bus_scan;
@@ -2098,6 +2099,7 @@ start_con_up(ipmi_domain_t *domain)
 static void
 ll_con_failed(ipmi_con_t *ipmi,
 	      int        err,
+	      int        active,
 	      void       *cb_data)
 {
     ipmi_domain_t   *domain = cb_data;
@@ -2126,6 +2128,43 @@ ll_con_failed(ipmi_con_t *ipmi,
     ipmi_read_unlock();
 }
 
+static void
+ll_addr_changed(ipmi_con_t   *ipmi,
+		int          err,
+		unsigned int ipmb,
+		int          active,
+		void         *cb_data)
+{
+    ipmi_domain_t *domain = cb_data;
+    int           rv;
+
+    ipmi_read_lock();
+    rv = ipmi_domain_validate(domain);
+    if (rv)
+	/* So the connection failed.  So what, there's nothing to talk to. */
+	goto out_unlock;
+
+    if (err)
+	goto out_unlock;
+
+    if (ipmb != domain->con_ipmb_addr) {
+	/* First scan the old address to remove it. */
+	if (domain->con_ipmb_addr != 0)
+	    ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr,
+				    domain->con_ipmb_addr, NULL, NULL);
+    }
+
+    domain->con_ipmb_addr = ipmb;
+
+    /* Scan the new address.  Even though the address may not have
+       changed, it may have changed modes and need to be rescanned. */
+    ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr,
+			    domain->con_ipmb_addr, NULL, NULL);
+
+ out_unlock:
+    ipmi_read_unlock();
+}
+
 int
 ipmi_init_domain(ipmi_con_t             *con,
 		 ipmi_domain_cb         con_fail_handler,
@@ -2141,6 +2180,7 @@ ipmi_init_domain(ipmi_con_t             *con,
 	return rv;
 
     con->set_con_fail_handler(con, ll_con_failed, domain);
+    con->set_ipmb_addr_handler(con, ll_addr_changed, domain);
 
     ipmi_write_lock();
     add_known_domain(domain);

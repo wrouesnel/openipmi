@@ -3707,6 +3707,7 @@ states_get(ipmi_sensor_t *sensor,
 	    info->done(sensor, err, &states, info->cb_data);
 	ipmi_sensor_opq_done(sensor);
 	ipmi_mem_free(info);
+	return;
     }
 
     if (rsp->data[0]) {
