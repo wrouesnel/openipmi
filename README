@@ -113,6 +113,9 @@ the SNMP libraries.  If you do not want to use the SNMP libraries even
 if they are installed, you can specify '--with-ucdsnmp=no' as a
 configure option.
 
+After you have configured OpenIPMI, type "make" to build it.  To
+install it in the prefix you defined, do "make install".
+
 
 Using ipmi_ui
 =============
