@@ -7104,14 +7104,17 @@ mxp_ps_alarm_event(ipmi_sensor_t *sensor, void *cb_data)
 						 NULL);
     }
 
-    /* Report a power good change.  We have to invert the assertion,
-       becase it's a power good bit but a power supply sensor has a
-       power fail bit. */
+    /* Report a power good change.  Note that even though it is
+       supposed to be a "power good" bit (and it is in the PS status
+       message), it is really a "power bad" bit in the event, so we do
+       not invert the assertion. */
     if (event->data[11] & 0x8) {
+#if 0 /* Bit is really power fail in the event. */
 	if (event->data[9] & 0x80)
 	    assertion = IPMI_ASSERTION;
 	else
 	    assertion = IPMI_DEASSERTION;
+#endif
 	ipmi_sensor_call_discrete_event_handlers(sensor,
 						 assertion,
 						 1,
