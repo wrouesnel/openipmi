@@ -1881,7 +1881,6 @@ decode_mcdlr(ipmi_sdr_t *sdr,
 	     dlr_info_t *info)
 {
     unsigned char *data;
-    unsigned int  length;
 
 
     memset(info, 0, sizeof(*info));
@@ -1904,11 +1903,9 @@ decode_mcdlr(ipmi_sdr_t *sdr,
 	/* IPMI 1.0 SDR type 12 record, doesn't have the channel
 	   field, so we have to have special handling. */
 	info->channel = 0;
-	length = 9;
     } else {
 	info->channel = *data & 0xf;
 	data++;
-	length = 10;
     }
 
     info->ACPI_system_power_notify_required = (data[0] >> 7) & 1;
@@ -1926,12 +1923,16 @@ decode_mcdlr(ipmi_sdr_t *sdr,
     info->SDR_repository_device = (data[1] >> 1) & 1;
     info->sensor_device = (data[1] >> 0) & 1;
 
-    info->entity_id = data[5];
-    info->entity_instance = data[6];
+    /* We switch back to referring to sdr->data here, because the rest
+       of the offsets are the same in 1.0 and 1.5.  Only the power
+       state and device capabilities change between the two
+       version. */
+    info->entity_id = sdr->data[7];
+    info->entity_instance = sdr->data[8];
 
-    info->oem = data[7];
-    info->id_len = ipmi_get_device_string(data+8,
-					  sdr->length-length,
+    info->oem = sdr->data[9];
+    info->id_len = ipmi_get_device_string(sdr->data+10,
+					  sdr->length-10,
 					  info->id, 0,
 					  &info->id_type, ENTITY_ID_LEN);
 
