@@ -1,0 +1,555 @@
+\input texinfo   @c -*-texinfo-*-
+@setfilename OpenIPMI.info
+@settitle OpenIPMI Interface Users's Guide
+@setchapternewpage odd
+
+@titlepage
+@sp 10
+@comment The title is printed in a large font.
+@center @titlefont{OpenIPMI User's Guide}
+
+@page
+@vskip 0pt plus 1filll
+Copyright @copyright{} 2002 MontaVista Software
+@end titlepage
+
+@node    Top,       Intro to IPMI,         , (dir)
+
+@menu
+* Intro to IPMI::     A little about IPMI
+* Concept Index::     This index has two entries.
+* OpenIPMI Concepts::
+* Using OpenIPMI::
+* OpenIPMI Internal Interfaces::
+* How to Write OEM Plugins::
+* Glossary::
+@end menu
+
+@node    Intro to IPMI, OpenIPMI Concepts, Top,      Top
+@comment node-name,     next,          previous, up
+@chapter Intro to IPMI
+@cindex intro
+
+If you have read the IPMI spec, you are probably thoroughly confused
+about IPMI.  The IPMI spec doesn't provide the high-level expected usage
+of IPMI.  This chapter covers that information.  It provides a
+high-level view of how IPMI is expected to be used.
+
+@menu
+* Things in IPMI::
+* The User View::
+@end menu
+
+@node    Things in IPMI, The User View, Intro to IPMI, Intro to IPMI
+@section Things in IPMI
+
+IPMI is a specification for system monitoring.  It monitors entities in
+your system with sensors.  Sensors can generate events, which may be
+stored in a System Event Log (SEL) and forwarded to listening parties.
+Information about the system may be stored in Sensor Data Records
+(SDRs), which hold information about a whole lot more things than
+sensors.  Various Management Controllers (MCs) may exist in the system,
+these are the intelligent devices that control the sensors in the
+system.  The main MC is the Baseboard Management Controller (BMC), it is
+what what the external software interacts with directly, either through
+a system interface, a LAN connection, a serial connection, etc.
+
+Inside the system, the various devices generally communicate over an
+Intelligent Peripheral Management Bus (IPMB).  So if you need to message
+a specific sensor, you will send a message to the BMC asking it to
+forward the message to the proper MC over the IPMB bus.  The destination
+is specified via an IPMB address.
+
+IPMB addresses contain a slave address, which identifies the MC.  They also
+contain a Logical Unit Number (LUN), which identifies an entity inside
+the MC.
+
+Some types of connections need to be authenticated, you will need to
+provide userids and passwords for the BMC to accept your messages.
+Several different authentication algorithms are available.
+
+@node    The User View, , Things in IPMI, Intro to IPMI
+@section The User View
+
+A bunch of acronyms have just been introduced, along with a lot of vague
+concepts.  The nice thing is that the user of OpenIPMI doesn't really
+have to know about all these things.  From the user's point of view, the
+entity provides the central framework for everything else.  Sensors
+monitor entities.  Entities may be present or absent.  When you connect
+to a BMC, OpenIPMI takes care of detecting the entities in the system
+and reporting them to you.  You may register with the BMC to be told
+when entities are added or removed from the database.  An entity may be
+present in the database, but not present in the system, the reporting
+from the BMC only gives the presence in the database, not physical
+presence in the system.
+
+You may register with an entity to be told when it's physical presence
+in the system changes.  Some devices (like power supplies) are
+field-replacable while the system is running, these are called Field
+Replacable Units (FRUs).
+
+Sensors are also automatically detected and reported.  This is done
+through entities, you register with an entity to be told when a sensor
+has been added or removed.  IPMI defines special types of sensors called
+Presence Sensors, these report if an entity is present in the system.  A
+presence sensor is @emph{not} reported to the user, OpenIPMI attaches
+these to the entity directly and uses them to detect the presence of the
+entity.
+
+Sensors provide a lot of functions depending on their type.  Threshold
+sensors monitor "analog" things like temperature, voltage, or fan speed.
+Discrete sensors monitor events or states, like the previously
+introduced presence sensor, software initialization progress, or if
+external power is present to the system.
+
+Threshold sensors report their readings in values from 0-255.  OpenIPMI
+makes every effort to convert this to a floating-point value for you to
+use.  IPMI defines standard ways to convert values using various
+formulas.  OpenIPMI implements all these and provides ways for OEM
+functions to plug in to provide their own converters.  If you have a
+sensor that cannot be represented using the standard mechanisms, you
+need to get the OEM algorithms for this and implement them in an OEM
+plug-in for the sensors.
+
+You may enable events on a threshold sensor by specifying values (called
+thresholds) where you want the sensor to report an event.  Then you can
+enable the events for the specific thresholds.  Not all sensors support
+all thresholds, some cannot have their events enabled and others cannot
+have them disabled.  The capabilities of a sensor may all be fetched
+by the user to determine what it can do.
+
+Threshold sensors may have hysteresis, meaning that when the sensor goes
+above or below the specified value, the transition point where the
+threshold goes off is somewhat below or above the given value.  For
+instance, if you want a fan speed sensor to go off when it goes below
+150 RPM, if the fan is hanging right around 150 RPM, the sensor may be
+constantly sending you events as it goes slightly above and slightly
+below 150 RPM, which is bad because it can overload the system
+management software.  The hysteresis for the fan might be set at 10 rpm,
+which means that if the speed goes below 150 RPM, then it must go above
+160 RPM for the threshold to be disabled.  Hysteresis may be settable or
+may be fixed for the sensor.
+
+Discrete sensors report their readings in a 16-bit bitmask, each bit
+representing a dicrete value.  You enable events on the sensor by
+specifying which discrete values you want to generate events.  Like
+threshold sensors, these events may or may not be user-controllable.
+That information may be fetched by the user.
+
+@c **********************************************************************
+@node    OpenIPMI Concepts, Using OpenIPMI,  Intro to IPMI, Top
+@chapter OpenIPMI Concepts
+
+OpenIPMI is an event-driven library that is designed to be relatively
+operating system independent.  If you have written control systems or
+things like that in the past, you will be quite familiar with
+event-driven systems and may skip to the next section.  If not, you want
+to read this.  Event-driven systems may seem a little unusual, but they
+are accepted practice and by far the best way to build control systems.
+
+@menu
+* Event-Driven Systems::
+* The OS Handler::
+* Messaging Interfaces::
+* Error Handling::
+* Locking::
+* OpenIPMI Objects::
+@end menu
+
+@node    Event-Driven Systems, The OS Handler, OpenIPMI Concepts, OpenIPMI Concepts
+@section Event-Driven Systems
+
+In an event-driven system, you never stop and wait for something to
+happen.  If you are not used to this, you are probably used to writing
+code like this:
+@example
+  while (true) @{
+    wait_for_input();
+    perform_op1();
+    wait_for_op1_results();
+    perform_op2();
+  @}
+@end example
+This is fairly straightforward, but it has some problems.  What if
+another, more important input, comes in while you are waiting for the
+results of @code{perform_op1()}?  Now @code{wait_for_op1_results()} will
+have to handle input, too, and somehow return and say something is
+happening.  The loop will then have to somehow handle multiple
+operations in progress.  And this is a simple example, what if there
+were hundreds of possible inputs, each with their own result handler,
+and each had to go through several states?  You could assign each to a
+thread, but if you have thousands of possible pending operations in a
+system, that many threads may thrash your system and render it
+inoperable, probably right at the time you need it most (since a lot of
+things are going on).
+
+In an event-driven system, instead you would say:
+@example
+  init()
+  @{
+    <initialize input_data>
+    register_for_input(op1_handler, input_data);
+  @}
+  op1_handler(input_data)
+  @{
+    <allocate and initialize op_data>
+    perform_op1(..., op2_handler, op_data);
+  @}
+  op2_handler(op_data)
+  @{
+    perform_op2();
+    <free op_data>
+  @}
+@end example
+As you see, when you start an operation, you provide the next thing to
+call when the operation completes.  The functions passed around are
+called ``callbacks''.  You allocate and pass around chunks
+of data to be passed to the handlers.  And you register input handler
+that get called when certain event occur.  So the code runs in short
+non-blocking sections, registers for the next operation, then returns
+back to some invisible main loop that handles the details of scheduling
+operations.  This may seem more complicated than the previous example,
+but it has a large number of advantages:
+@enumerate
+@item The system is almost always ready to handle input.  For instance,
+user-interface systems (like most widget sets) are almost always
+event-driven, this
+makes them much more ``live'', since they are always ready to handle
+user input.
+@item This system can handle multiple operations simultaneously without
+threads.  In general, threaded systems are less reliable and more
+complicated, unless you need priorities or scalability on SMP, why use
+them?  And even if you use them, you can have much better control over
+what is running in the system.
+@item If you are building a redundant system with data replication, this
+gives you a natural way to hold your data, know when to transfer it over
+to the mate system, and continue an operation on the mate system.
+@item If you track the data, it's easy to monitor every operation
+occuring in the system, stop an operations, or whatever.
+@end enumerate
+
+In general, a threaded system is easier to conceptually understand until
+you understand event-driven methods.  An event-driven system is almost
+always easier to correctly implement.
+
+This is often called ``state-machine programming'' since most control
+systems are state-machine based, and this is a natural way to implement
+a state machine.  The @code{op_data} holds the state of the state
+machine, each input gets @code{op_data}, looks at the current state, and
+decides what to do next.
+
+The OpenIPMI library is completely event-driven.  It has no internal
+blocking operations, and it expects that anything it calls will not
+block.  IPMI messaging and operating system primitives are provided
+through external plug-in pieces.
+
+If a library function that takes a callback does not return an error,
+the callback is guaranteed to be called, even if the object the call is
+associated with goes away.  If it goes away, a NULL may be passed to the
+callback, but the @code{cb_data} will still be valid.
+
+@node    The OS Handler, Messaging Interfaces, Event-Driven Systems, OpenIPMI Concepts
+@section The OS Handler
+
+The OS handler provides services for the OpenIPMI library.  These
+services are:
+@table @samp
+@item Input Callbacks
+The OpenIPMI code uses the ``file descriptor'' concept of *nix, input
+devices are numbered.  This is not used internally in the library, but
+it is used by the messaging interfaces, so they messaging interfaces and
+OS handler may implement their own conventions for these numbers.  But
+this provides a way to register to receive input from devices.
+
+@item Timers
+OpenIPMI times everthing (as it should), thus it needs timers.
+
+@item Locks
+OpenIPMI does not require locks, you may leave the operations NULL and
+they won't be used.  However, if you are doing multi-threaded
+operations, you should provide locks.  The locks should be recursive
+(the same lock may be claimed multiple times by the same thread).  You
+need to provide read/write locks operations, although these may be
+normal locks (the system will just be less responsive).
+
+@item Condition Variables
+These are condition variables like the ones specified in POSIX threads.
+Although OpenIPMI does not use condition variables (since it never waits
+for anything) it may be convenient for other things to have them.
+OpenIPMI does not use them, and if nothing in your system needs them,
+they need not be provides.
+
+@item Random Data
+For certain operations, OpenIPMI needs random data.
+@end table
+
+@node    Messaging Interfaces, Error Handling, The OS Handler, OpenIPMI Concepts
+@section Messaging Interfaces
+
+Messaging interfaces provide the low-level interface to the BMC.  It can
+be through a LAN, a system interface, a serial port, or a host of other
+possible interfaces.
+
+@node    Error Handling, Locking, Messaging Interfaces, OpenIPMI Concepts
+@section Error Handling
+
+Almost all OpenIPMI calls that do anything besides fetch a piece of
+local data will return an integer error value.  A zero means no error.
+Two types of errors are returned, system errors (which are standard Unix
+errno values) and IPMI errors (which are the standard IPMI error codes).
+You can use the macros @var{IPMI_IS_OS_ERR} and
+@var{IPMI_IS_IPMI_ERR} to tell the type of error, and
+@var{IPMI_GET_OS_ERR} and @var{IPMI_GET_IPMI_ERR} to get
+the actual error values.
+
+Note that if your system doesn't have Unix-type error numbers, you will
+have to provide those for the OpenIPMI library.
+
+If a function returns an error, any callbacks provided to that function
+will NEVER be called.  Errors are passed into many callbacks, if an
+error is present the rest of the data in the callback is probably not
+valid except for the @code{cb_data} variable you provide, and possibly
+the object the callback is associated with.  The object the callback is
+associated with may be NULL if it has ceased to exist.
+
+@node    Locking, OpenIPMI Objects, Error Handling, OpenIPMI Concepts
+@section Locking
+
+As mentioned before, you may or may not be using locking, @strong{but
+you must read this section anyway.}  Locking here involves existance of
+entities as well as normal locking.
+
+The basic principle of locking is that if you are in a callback for an
+IPMI object (an IPMI object is passed in the callback), that object is
+locked and the system cannot change it.  In any callback for an object
+owned by a particular BMC, that object will be locked and anything it
+belongs to will be locked.  So, for instance, in a callback for a
+sensor, the sensor is locked, the entity the sensor belongs to is
+locked, and the management controller the sensor is on is also locked.
+No other sensors, entities, or management controllers will necessarily
+be locked.  Outside of callbacks, the library is free to change
+pointers, change information, add and remove objects, or whatever it
+wants.
+
+So how do you obtain a lock for an IPMI object?  If you are handling
+incoming IPMI events you generally don't have to worry about this.  But
+say you are handling outside input, such as a user interface.  What
+then?  If the pointers can change, how do I keep a reference to
+something.
+
+OpenIPMI provides two identifiers for IPMI objects.  One is a pointer,
+but a pointer is only good inside a callback.  The other is an OpenIPMI
+id, the id is good outside callback.  But the only thing you can do with
+an id is pass it to a function that will call a callback for you with
+the pointer.  You can convert a pointer to an id (in a callback, of
+course) so you should do that if you need to save a reference to the
+object.
+
+This mechanism, though a little inconvenient, almost guarantees that you
+will not forget to release a lock.  It nicely encapsulates the locked
+operation in a function@footnote{This is how locking works in Ada95 and
+Java, although their mechanisms are a little more convenient since they
+are built into the language}.  You have to return from the function
+unless you exit, longjmp, or throw an exception that falls through the
+callback, and you shouldn't do those things.
+
+You must do this whether you are using locking or not, because the
+library uses this mechanism to determine whether the id you are holding
+is good.  Once it converts the id to the pointer, your pointer is
+guaranteed to be good until the function returns.
+
+@node    OpenIPMI Objects, , Locking, OpenIPMI Concepts
+@section OpenIPMI Objects
+
+In OpenIPMI, the user deals with four basic objects: the BMC, entities,
+sensors, and indicators.
+
+@subsection The BMC
+
+The BMC is the representative for the system.  It's what perform the
+connection to, and the entities in the system are attached to the BMC.
+When you have successfully connected to a system, the BMC is given to
+you in the callback.
+
+@subsection Entities
+
+Entities are things that are monitored.  They may be physical things
+such as a power supply or processor, or more abstract things such as the
+set of all power supplies or the ambient air in a chassis.  Sensors
+monitor entities, and indicators are attached to entities.
+
+Entities may be grouped inside other entities, thus an entity may have a
+parent (if it is grouped inside another entity) and children (if it
+contains other entities).  These relationships are abstract; you may
+change them if it you like.  A raw system with no SDR data will not have
+any relationships defined.  Relationships are stored in the SDR
+repository, you may change them and store them back, if you like and if
+the system supports that.
+
+@subsection Sensors
+
+Sensor monitor something about an object.  IPMI defines many types of
+sensors, but groups them into two main categories: Threhold and
+discrete.  Threshold sensors are ``analog'', they have continuous (or
+mostly continuous) readings.  Things like fans speed, voltage, or
+temperature.
+
+Discrete sensors have a set of binary readings that may each be
+independently zero or one.  In some sensors, these may be independent.
+For instance, a power supply may have both an external power failure
+and a predictive failure at the same time.  In other, they may be
+mutually exclusive, such as the initialization state of a piece of
+software.
+
+@subsection Indicators
+
+Indicators are not part of the IPMI spec, but are necessary items in
+almost all systems.  They are provided as part of OpenIPMI so that OEM
+code has a consistent way to represent these, and so OpenIPMI is ready
+when the IPMI team finally sees the light and adds indicators.
+OpenIPMI defines three types of indicators: lights, relays, and
+displays.
+
+Lights are on/off colored devices, like an LED.  They may be
+multi-color, but can only show one color at a time.  For instance, if
+you work for Kmart, or you are managing a CompactPCI system with
+hot-swap, you will have a blue light in your system.  You can search
+through the indicators to find a light that's blue.  Then, if a special
+is on, or you want the operator to remove a card, you can light the blue
+light.
+
+Relays are binary outputs.  Most telephony systems have them, they are
+required by telephony specs.  They are simple on/off devices.
+
+Displays are two-dimensional arrays of characters.  OpenIPMI allows you
+to change individual characters at will.
+
+@c **********************************************************************
+@node    Using OpenIPMI, OpenIPMI Internal Interfaces, OpenIPMI Concepts, Top
+@chapter Using OpenIPMI
+
+This chapter discusses how to use the OpenIPMI library.
+
+@menu
+* Include Files::
+* Initialization::
+* The BMC::
+* Entities::
+* Sensors::
+* Indicators::
+@end menu
+
+@node    Include Files, Initialization, Using OpenIPMI, Using OpenIPMI
+@section Include Files
+
+@subsection Files the normal user deals with
+
+@table @samp
+@item @file{ipmiif.h}
+The main include file for OpenIPMI.  It contains the main functions the
+user must deal with when working with the OpenIPMI library.  Almost
+everything will included this.  It include @file{ipmi_types.h} and
+@file{ipmi_bits.h}, too, so you don't have to include those.
+
+@item @file{ipmi_auth.h}
+The file holding information about athentication algorithms.
+
+@item @file{ipmi_bits.h}
+Various values, mostly for sensors, used by the user.  @file{ipmiif.h}
+includes this file, so you generally don't have to include it explicitly.
+
+@item @file{ipmi_types.h}
+Types for the basic IPMI objects.  @file{ipmiif.h} includes this file,
+so you generally don't have to include it explicitly.
+
+@item @file{ipmi_err.h}
+Error values, both IPMI and system, as well as macros for interpreting
+these.
+
+@item @file{ipmi_sel.h}
+Used to access the system event log for the system.
+
+@item @file{os_handler.h}
+The os-specific handler types are defined here.  You must implement this
+and supply it to the IPMI code.
+
+@subsection Files dealing with messaging interfaces
+
+@item @file{ipmi_lan.h}
+This is the LAN messaging interface, this contains the calls for
+creating a LAN connection.
+
+@item @file{ipmi_smi.h}
+This is the messaging interface for talking to local IPMI interfaces
+(like KCS), this contains the calls for creating an SMI connection.
+
+@subsection Internal files that OEM code or messaging interfaces deal with
+
+@item @file{ipmi_addr.h}
+The file holding information about IPMI addresses.
+
+@item @file{ipmi_conn.h}
+This defines the interface for the 
+
+@item @file{ipmi_entity.h}
+@item @file{ipmi_ind.h}
+@item @file{ipmi_int.h}
+
+@item @file{ipmi_mc.h}
+@item @file{ipmi_msgbits.h}
+@item @file{ipmi_oem.h}
+
+@item @file{ipmi_sdr.h}
+@item @file{ipmi_sensor.h}
+
+@item @file{selector.h}
+
+@end table
+
+@node    Initialization, The BMC, Include Files, Using OpenIPMI
+@section Initialization
+
+To initialize the OpenIPMI library, you must call
+
+@node    The BMC, Entities, Initialization, Using OpenIPMI
+@section The BMC
+
+@node    Entities, Sensors, The BMC, Using OpenIPMI
+@section Entities
+
+@node    Sensors, Indicators, Entities, Using OpenIPMI
+@section Sensors
+
+@node    Indicators, , Sensors, Using OpenIPMI
+@section Indicators
+
+@node    OpenIPMI Internal Interfaces, How to Write OEM Plugins, Using OpenIPMI, Top
+@chapter OpenIPMI Internal Interfaces
+
+@node    How to Write OEM Plugins, Concept Index, OpenIPMI Internal Interfaces, Top
+@chapter How to Write OEM Plugins
+
+@node    Concept Index, Glossary,  How to Write OEM Plugins, Top
+@unnumbered Concept Index
+
+@printindex cp
+
+@node    Glossary,       , Concept Index, Top
+BMC
+callback
+discrete sensor
+entity
+FRU
+OpenIPMI id
+IPMB
+IPMI
+LUN
+MC
+presence sensor
+SDR
+SEL
+slave address
+threshold
+threshold sensor
+@contents
+@bye
