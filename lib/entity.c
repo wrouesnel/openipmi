@@ -2866,7 +2866,9 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	       appropriate management controller to see if it is
 	       active and base presence off of that, if no other
 	       presence detection capability is there. */
-	    if ((channel != -1) && (infos.dlrs[i]->entity_id)) {
+	    if (ipmb == 0) {
+		/* Not a valid IPMB, just ignore it. */
+	    } else if ((channel != -1) && (infos.dlrs[i]->entity_id)) {
 		ipmi_mc_t *mc;
 		/* Attempt to create the MC. */
 		rv = _ipmi_find_or_create_mc_by_slave_addr
