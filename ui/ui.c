@@ -3029,16 +3029,18 @@ display_pef(void)
 		    num_event_filter_table_entries(pef));
 }
 
-static struct
+typedef struct pef_table_s
 {
     char *name;
     int (*get)(ipmi_pef_config_t *pefc,
 	       unsigned int      sel,
 	       unsigned int      *val);
     char *fmt;
-} eft_table[] =
-{
+} pef_table_t;
+
 #define X(n, f) { #n, ipmi_pefconfig_get_##n, f }
+static pef_table_t eft_table[] =
+{
     X(enable_filter, "%d"),
     X(filter_type, "%d"),
     X(diagnostic_interrupt, "%d"),
@@ -3064,67 +3066,126 @@ static struct
     X(data3_mask, "%d"),
     X(data3_compare1, "%d"),
     X(data3_compare2, "%d"),
+    { NULL }
+};
+static pef_table_t apt_table[] =
+{
+    X(policy_num, "%d"),
+    X(enabled, "%d"),
+    X(policy, "%d"),
+    X(channel, "0x%x"),
+    X(destination_selector, "%d"),
+    X(alert_string_event_specific, "%d"),
+    X(alert_string_selector, "%d"),
+    { NULL }
+};
+static pef_table_t ask_table[] =
+{
+    X(event_filter, "%d"),
+    X(alert_string_set, "%d"),
+    { NULL }
 };
 
 void
 display_pef_config(void)
 {
-    int           i;
+    int           i, j;
     unsigned int  val;
     unsigned int  len;
     unsigned char data[128];
     int           rv;
+    unsigned int  count;
 
     if (!pef_config) {
 	display_pad_out("No PEF config read, use readpef to fetch one\n");
 	return;
     }
 
-    display_pad_out("alert_startup_delay_enabled: %d\n",
+    display_pad_out("  alert_startup_delay_enabled: %d\n",
 		    ipmi_pefconfig_get_alert_startup_delay_enabled(pef_config));
-    display_pad_out("get_startup_delay_enabled: %d\n",
+    display_pad_out("  get_startup_delay_enabled: %d\n",
 		    ipmi_pefconfig_get_startup_delay_enabled(pef_config));
-    display_pad_out("get_event_messages_enabled: %d\n",
+    display_pad_out("  get_event_messages_enabled: %d\n",
 		    ipmi_pefconfig_get_event_messages_enabled(pef_config));
-    display_pad_out("get_pef_enabled: %d\n",
+    display_pad_out("  get_pef_enabled: %d\n",
 		    ipmi_pefconfig_get_pef_enabled(pef_config));
-    display_pad_out("get_diagnostic_interrupt_enabled: %d\n",
+    display_pad_out("  get_diagnostic_interrupt_enabled: %d\n",
 		    ipmi_pefconfig_get_diagnostic_interrupt_enabled(pef_config));
-    display_pad_out("get_oem_action_enabled: %d\n",
+    display_pad_out("  get_oem_action_enabled: %d\n",
 		    ipmi_pefconfig_get_oem_action_enabled(pef_config));
-    display_pad_out("get_power_cycle_enabled: %d\n",
+    display_pad_out("  get_power_cycle_enabled: %d\n",
 		    ipmi_pefconfig_get_power_cycle_enabled(pef_config));
-    display_pad_out("get_reset_enabled: %d\n",
+    display_pad_out("  get_reset_enabled: %d\n",
 		    ipmi_pefconfig_get_reset_enabled(pef_config));
-    display_pad_out("get_power_down_enabled: %d\n",
+    display_pad_out("  get_power_down_enabled: %d\n",
 		    ipmi_pefconfig_get_power_down_enabled(pef_config));
-    display_pad_out("get_alert_enabled: %d\n",
+    display_pad_out("  get_alert_enabled: %d\n",
 		    ipmi_pefconfig_get_alert_enabled(pef_config));
 
     if (ipmi_pefconfig_get_startup_delay(pef_config, &val) == 0)
-	display_pad_out("get_startup_delay: %d\n", val);
+	display_pad_out("  get_startup_delay: %d\n", val);
     if (ipmi_pefconfig_get_alert_startup_delay(pef_config, &val) == 0)
-	display_pad_out("get_alert_startup_delay: %d\n", val);
+	display_pad_out("  get_alert_startup_delay: %d\n", val);
 
     len = sizeof(data);
     rv = ipmi_pefconfig_get_guid(pef_config, &val, data, &len);
     if (!rv) {
-	display_pad_out("guid_enabled: %d\n", val);
-	display_pad_out("guid:", val);
+	display_pad_out("  guid_enabled: %d\n", val);
+	display_pad_out("  guid:", val);
 	for (i=0; i<len; i++)
 	    display_pad_out(" %2.2x", data[i]);
     }
 
-    display_pad_out("num_event_filters: %d\n",
-		    ipmi_pefconfig_get_num_event_filters(pef_config));
+    count = ipmi_pefconfig_get_num_event_filters(pef_config);
+    display_pad_out("  num_event_filters: %d\n", count);
+    for (i=0; i<count; i++) {
+	display_pad_out("  event filter %d:\n", i);
+	for (j=0; eft_table[j].name != NULL; j++) {
+	    rv = eft_table[i].get(pef_config, j, &val);
+	    display_pad_out("    %s: ", eft_table[i].name);
+	    if (rv)
+		display_pad_out("error %x", rv);
+	    else
+		display_pad_out(eft_table[i].fmt, val);
+	    display_pad_out("\n");
+	}
+    }
 
+    count = ipmi_pefconfig_get_num_alert_policies(pef_config);
+    display_pad_out("  num_event_filters: %d\n", count);
+    for (i=0; i<count; i++) {
+	display_pad_out("  alert policy %d:\n", i);
+	for (j=0; apt_table[j].name != NULL; j++) {
+	    rv = apt_table[i].get(pef_config, j, &val);
+	    display_pad_out("    %s: ", apt_table[i].name);
+	    if (rv)
+		display_pad_out("error %x", rv);
+	    else
+		display_pad_out(apt_table[i].fmt, val);
+	    display_pad_out("\n");
+	}
+    }
 
-#if 0
-    display_pad_out("num_: %d\n",
-		    ipmi_pefconfig_get_num_(pef_config));
-    display_pad_out("num_: %d\n",
-		    ipmi_pefconfig_get_num_(pef_config));
-#endif
+    count = ipmi_pefconfig_get_num_alert_strings(pef_config);
+    display_pad_out("  num_event_filters: %d\n", count);
+    for (i=0; i<count; i++) {
+	display_pad_out("  alert string %d:\n", i);
+	for (j=0; ask_table[j].name != NULL; j++) {
+	    rv = ask_table[i].get(pef_config, j, &val);
+	    display_pad_out("    %s: ", ask_table[i].name);
+	    if (rv)
+		display_pad_out("error %x", rv);
+	    else
+		display_pad_out(ask_table[i].fmt, val);
+	    display_pad_out("\n");
+	}
+	rv = ipmi_pefconfig_get_alert_string(pef_config, i,
+					     data, sizeof(data));
+	if (rv)
+	    display_pad_out("    alert_string: error %x\n", rv);
+	else
+	    display_pad_out("    alert_string: '%s'\n", data);
+    }
 }
 
 void

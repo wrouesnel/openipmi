@@ -434,5 +434,9 @@ int ipmi_pefconfig_get_alert_string_set(ipmi_pef_config_t *pefc,
 int ipmi_pefconfig_set_alert_string_set(ipmi_pef_config_t *pefc,
 					unsigned int      sel,
 					unsigned int      val);
+int ipmi_pefconfig_get_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
+				    unsigned char *val, unsigned int len);
+int ipmi_pefconfig_set_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
+				    unsigned char *val);
 
 #endif /* _IPMI_PEF_H */
