@@ -20,6 +20,9 @@
 	* lib/oem_motorola_mxp.c, lib/oem_atca.c: Cleanup up all the
 	ignore if no entity setup for all the sensors and controls.
 
+	* lib/fru.c: Fix a problem with handling certain invalid
+	FRUs.
+
 2004-12-28 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/lanparm.h, lanparm/lanparm_ipmi.c: Added

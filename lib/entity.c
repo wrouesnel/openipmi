@@ -1706,7 +1706,8 @@ detect_control_val(ipmi_control_t *control,
     if (info->try_count == info->done_count) {
 	if (ipmi_entity_pointer_cb(info->ent_id, control_detect_handler, info))
 	    detect_cleanup(info, ipmi_control_get_domain(control));
-    }
+    } else
+	ipmi_unlock(info->lock);
 }
 
 static void

@@ -558,7 +558,7 @@ fru_decode_string(ipmi_fru_t     *fru,
 					 IPMI_STR_FRU_SEMANTICS, force_unicode,
 					 &out->type, sizeof(str));
     out->raw_len = *in - in_start;
-    in_len -= out->raw_len;
+    *in_len -= out->raw_len;
     out->raw_data = ipmi_mem_alloc(out->raw_len);
     if (!out->raw_data)
 	return ENOMEM;
