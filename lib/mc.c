@@ -1793,8 +1793,10 @@ ipmi_mc_get_ipmi_address(ipmi_mc_t    *mc,
 {
     CHECK_MC_LOCK(mc);
 
-    memcpy(addr, &mc->addr, mc->addr_len);
-    *addr_len = mc->addr_len;
+    if (addr)
+	memcpy(addr, &mc->addr, mc->addr_len);
+    if (addr_len)
+	*addr_len = mc->addr_len;
 }
 
 unsigned int

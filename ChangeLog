@@ -1,6 +1,16 @@
 
 2003-09-28 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 1.1.2.
+
+	* lib/domain.c: Added handling of system ids in events.
+
+	* lib/domain.c: Don't allow messages to be sent on a shutdown
+	domain.  This avoids an infinite loop in some cases.
+
+	* lib/domain.c: In cleanup_domain(), pass the error response in
+	as the response, not the original message.
+
 	* lib/entity.c, include/OpenIPMI/ipmiif.h: Added entity functions
 	to get FRU information so the user doesn't have to deal directly
 	with the FRU type.
@@ -15,7 +25,7 @@
 
 	* configure.in: Move to version 1.1.1.
 
-	* lib/ipmi_malloc.c: Fill debug malloced memory with junk to help
+	* Lib/ipmi_malloc.c: Fill debug malloced memory with junk to help
 	catch usage before initialization.  Also cleaned up some error
 	messages.
 

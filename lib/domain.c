@@ -322,7 +322,7 @@ cleanup_domain(ipmi_domain_t *domain)
 	    msg.data = &err;
 	    msg.data_len = 1;
 	    err = IPMI_UNKNOWN_ERR_CC;
-	    nmsg->rsp_handler(domain, &nmsg->addr, nmsg->addr_len, &nmsg->msg,
+	    nmsg->rsp_handler(domain, &nmsg->addr, nmsg->addr_len, &msg,
 			      nmsg->rsp_data1, nmsg->rsp_data2);
 	    
 	    ilist_delete(&iter);
@@ -1100,6 +1100,9 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     if (msg->data_len > IPMI_MAX_MSG_LENGTH)
 	return EINVAL;
 
+    if (!domain->valid)
+	return EINVAL;
+
     CHECK_DOMAIN_LOCK(domain);
 
     nmsg = ipmi_mem_alloc(sizeof(*nmsg));
@@ -1644,7 +1647,7 @@ event_sensor_cb(ipmi_sensor_t *sensor, void *cb_data)
 
 void
 _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
-				  ipmi_mc_t     *mc,
+				  ipmi_mc_t     *ev_mc,
 				  ipmi_event_t  *event)
 {
     int                 rv = 1;
@@ -1667,7 +1670,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
     /* Let the OEM handler for the MC that the message came from have
        a go at it first.  Note that OEM handlers must look at the time
        themselves. */
-    if (_ipmi_mc_check_sel_oem_event_handler(mc, event))
+    if (_ipmi_mc_check_sel_oem_event_handler(ev_mc, event))
 	return;
 
     timestamp = ipmi_get_uint32(&(event->data[0]));
@@ -1675,8 +1678,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
     /* It's a system event record from an MC, and the timestamp is
        later than our startup timestamp. */
     if ((event->type == 0x02)
-	&& ((event->data[4] & 0x01) == 0)
-	&& (timestamp >= ipmi_mc_get_startup_SEL_time(mc)))
+	&& (timestamp >= ipmi_mc_get_startup_SEL_time(ev_mc)))
     {
 	ipmi_mc_t           *mc;
 	ipmi_ipmb_addr_t    addr;
@@ -1690,7 +1692,18 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 	} else {
 	    addr.channel = event->data[5] >> 4;
 	}
-	addr.slave_addr = event->data[4];
+	if ((event->data[4] & 0x01) == 0) {
+	    addr.slave_addr = event->data[4];
+	} else {
+	    /* A software ID, assume it comes from the MC where we go it. */
+	    ipmi_addr_t iaddr;
+
+	    ipmi_mc_get_ipmi_address(ev_mc, &iaddr, NULL);
+	    addr.slave_addr = ipmi_addr_get_slave_addr(&iaddr);
+	    if (addr.slave_addr == 0)
+		/* A system interface, just assume it's the BMC. */
+		addr.slave_addr = 0x20;
+	}
 	addr.lun = 0;
 
 	mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
