@@ -302,7 +302,7 @@ lan_send(lan_data_t  *lan,
 	tmsg[1] = (msg->netfn << 2) | si_addr->lun;
 	tmsg[2] = ipmb_checksum(tmsg, 2);
 	tmsg[3] = 0x81; /* Remote console IPMI Software ID */
-	tmsg[4] = (seq << 2) | 0x2;
+	tmsg[4] = seq << 2;
 	tmsg[5] = msg->cmd;
 	memcpy(tmsg+6, msg->data, msg->data_len);
 	pos = msg->data_len + 6;
@@ -346,7 +346,7 @@ lan_send(lan_data_t  *lan,
     } else {
 	data[29] = pos;
 	rv = auth_gen(lan, data+13, tmsg, pos);
-	if (!rv)
+	if (rv)
 	    return rv;
 	pos += 30; /* Convert to pos in data */
     }
@@ -1131,9 +1131,9 @@ send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan)
     data[0] = lan->authtype;
     data[1] = lan->privilege;
     memcpy(data+2, lan->challenge_string, 16);
-    ipmi_set_uint32(msg.data+18, lan->inbound_seq_num);
+    ipmi_set_uint32(data+18, lan->inbound_seq_num);
 
-    msg.cmd = IPMI_GET_SESSION_CHALLENGE_CMD;
+    msg.cmd = IPMI_ACTIVATE_SESSION_CMD;
     msg.netfn = IPMI_APP_NETFN;
     msg.data = data;
     msg.data_len = 22;
@@ -1184,7 +1184,7 @@ static void challenge_done(ipmi_con_t   *ipmi,
     while (lan->inbound_seq_num == 0) {
 	rv = ipmi->os_hnd->get_random(ipmi->os_hnd,
 				      &(lan->inbound_seq_num), 4);
-	if (rv) {
+	if (!rv) {
 	    if (ipmi->setup_cb)
 		ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
 	    cleanup_con(ipmi);
@@ -1294,7 +1294,7 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
     addr.channel = 0xf;
     addr.lun = 0;
 
-    data[0] = 0;
+    data[0] = 0x7;
     data[1] = lan->privilege;
     msg.cmd = IPMI_GET_CHANNEL_AUTH_CAPABILITIES_CMD;
     msg.netfn = IPMI_APP_NETFN;

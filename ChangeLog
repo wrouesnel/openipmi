@@ -1,4 +1,8 @@
 
+2003-04-03 Duncan Laurie <duncan@sun.com>
+
+	* ipmi_lan.c: Fixups trying to the the lan code working.
+
 2003-04-01 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c: Changed the event receiver setting so that it is always
