@@ -108,14 +108,10 @@ ipmi_control_id_t
 ipmi_control_convert_to_id(ipmi_control_t *control)
 {
     ipmi_control_id_t val;
-    ipmi_mc_id_t      mc_val;
 
     CHECK_CONTROL_LOCK(control);
 
-    mc_val = ipmi_mc_convert_to_id(control->mc);
-    val.bmc = mc_val.bmc;
-    val.mc_num = mc_val.mc_num;
-    val.channel = mc_val.channel;
+    val.mc_id = ipmi_mc_convert_to_id(control->mc);
     val.lun = control->lun;
     val.control_num = control->num;
 
@@ -136,7 +132,7 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
     mc_cb_info_t        *info = cb_data;
     ipmi_control_info_t *controls;
     
-    ipmi_mc_entity_lock(info->id.bmc);
+    ipmi_mc_entity_lock(mc);
     controls = ipmi_mc_get_controls(mc);
     if (info->id.lun != 4)
 	info->err = EINVAL;
@@ -147,7 +143,7 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
     else
 	info->handler(controls->controls_by_idx[info->id.control_num],
 		      info->cb_data);
-    ipmi_mc_entity_unlock(info->id.bmc);
+    ipmi_mc_entity_unlock(mc);
 }
 
 int
@@ -156,7 +152,6 @@ ipmi_control_pointer_cb(ipmi_control_id_t id,
 			void              *cb_data)
 {
     int               rv;
-    ipmi_mc_id_t      mc_id;
     mc_cb_info_t      info;
 
     if (id.lun >= 5)
@@ -167,10 +162,7 @@ ipmi_control_pointer_cb(ipmi_control_id_t id,
     info.id = id;
     info.err = 0;
 
-    mc_id.bmc = id.bmc;
-    mc_id.channel = id.channel;
-    mc_id.mc_num = id.mc_num;
-    rv = ipmi_mc_pointer_cb(mc_id, mc_cb, &info);
+    rv = ipmi_mc_pointer_cb(id.mc_id, mc_cb, &info);
     if (!rv)
 	rv = info.err;
 
@@ -891,18 +883,9 @@ ipmi_control_get_light_color_time(ipmi_control_t   *control,
 int
 ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2)
 {
-    if (id1.bmc > id2.bmc)
-	return 1;
-    if (id1.bmc < id2.bmc)
-	return -1;
-    if (id1.mc_num > id2.mc_num)
-	return 1;
-    if (id1.mc_num < id2.mc_num)
-	return -1;
-    if (id1.channel > id2.channel)
-	return 1;
-    if (id1.channel < id2.channel)
-	return -1;
+    int rv = ipmi_cmp_mc_id(id1.mc_id, id2.mc_id);
+    if (rv)
+	return rv;
     if (id1.lun > id2.lun)
 	return 1;
     if (id1.lun < id2.lun)

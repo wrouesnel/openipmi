@@ -188,14 +188,10 @@ ipmi_sensor_id_t
 ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor)
 {
     ipmi_sensor_id_t val;
-    ipmi_mc_id_t mc_val;
 
     CHECK_SENSOR_LOCK(sensor);
 
-    mc_val = ipmi_mc_convert_to_id(sensor->mc);
-    val.bmc = mc_val.bmc;
-    val.mc_num = mc_val.mc_num;
-    val.channel = mc_val.channel;
+    val.mc_id = ipmi_mc_convert_to_id(sensor->mc);
     val.lun = sensor->lun;
     val.sensor_num = sensor->num;
 
@@ -205,18 +201,11 @@ ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor)
 int
 ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2)
 {
-    if (id1.bmc > id2.bmc)
-	return 1;
-    if (id1.bmc < id2.bmc)
-	return -1;
-    if (id1.mc_num > id2.mc_num)
-	return 1;
-    if (id1.mc_num < id2.mc_num)
-	return -1;
-    if (id1.channel > id2.channel)
-	return 1;
-    if (id1.channel < id2.channel)
-	return -1;
+    int rv;
+
+    rv = ipmi_cmp_mc_id(id1.mc_id, id2.mc_id);
+    if (rv)
+	return rv;
     if (id1.lun > id2.lun)
 	return 1;
     if (id1.lun < id2.lun)
@@ -242,7 +231,7 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
     mc_cb_info_t       *info = cb_data;
     ipmi_sensor_info_t *sensors;
     
-    ipmi_mc_entity_lock(info->id.bmc);
+    ipmi_mc_entity_lock(mc);
     sensors = ipmi_mc_get_sensors(mc);
     if (info->id.lun > 4)
 	info->err = EINVAL;
@@ -255,7 +244,7 @@ mc_cb(ipmi_mc_t *mc, void *cb_data)
 	info->handler(
 	    sensors->sensors_by_idx[info->id.lun][info->id.sensor_num],
 	    info->cb_data);
-    ipmi_mc_entity_unlock(info->id.bmc);
+    ipmi_mc_entity_unlock(mc);
 }
 
 int
@@ -264,7 +253,6 @@ ipmi_sensor_pointer_cb(ipmi_sensor_id_t id,
 		       void             *cb_data)
 {
     int          rv;
-    ipmi_mc_id_t mc_id;
     mc_cb_info_t info;
 
     if (id.lun >= 5)
@@ -275,10 +263,30 @@ ipmi_sensor_pointer_cb(ipmi_sensor_id_t id,
     info.id = id;
     info.err = 0;
 
-    mc_id.bmc = id.bmc;
-    mc_id.channel = id.channel;
-    mc_id.mc_num = id.mc_num;
-    rv = ipmi_mc_pointer_cb(mc_id, mc_cb, &info);
+    rv = ipmi_mc_pointer_cb(id.mc_id, mc_cb, &info);
+    if (!rv)
+	rv = info.err;
+
+    return rv;
+}
+
+int
+ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t id,
+			     ipmi_sensor_cb   handler,
+			     void             *cb_data)
+{
+    int          rv;
+    mc_cb_info_t info;
+
+    if (id.lun >= 5)
+	return EINVAL;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.id = id;
+    info.err = 0;
+
+    rv = ipmi_mc_pointer_noseq_cb(id.mc_id, mc_cb, &info);
     if (!rv)
 	rv = info.err;
 

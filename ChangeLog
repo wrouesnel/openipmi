@@ -1,6 +1,24 @@
 
 2003-04-30 Corey Minyard <cminyard@mvista.com>
 
+	* include/OpenIPMI/ipmi_types.h: A restructure of the id's was
+	done to remove the MC validation calls from the rest of the code
+	and use the standard MC callbacks.  It also added sequence
+	numbers to MCs and MC ids so that if an MC is freed and the same
+	memory is re-allocated, the MC still won't compare with an old
+	id.
+	* include/OpenIPMI/ipmi_mc.h: ditto
+	* include/OpenIPMI/ipmi_sensor.h: ditto
+	* control.c: ditto
+	* entity.c: ditto
+	* sensor.c: ditto
+	* mc.c: ditto
+	* sdr.c: ditto
+	* sel.c: ditto
+
+	* include/OpenIPMI/ipmi_int.h, ipmi.c: Added a sequence number
+	allocator.
+
 	* lanserv.c: Modified the server to support two LAN connections
 	specified in the config file, and modified it to always return the
 	message from the file descriptor that received the message.

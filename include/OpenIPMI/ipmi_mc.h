@@ -317,4 +317,11 @@ int ipmi_mc_init(void);
 /* Clean up the global MC memory. */
 void ipmi_mc_shutdown(void);
 
+/* Do a pointer callback but ignore the sequence number.  This is
+   primarily for handling incoming events, where the sequence number
+   doesn't matter. */
+int ipmi_mc_pointer_noseq_cb(ipmi_mc_id_t id,
+			     ipmi_mc_cb   handler,
+			     void         *cb_data);
+
 #endif /* _IPMI_MC_H */

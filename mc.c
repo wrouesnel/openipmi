@@ -177,6 +177,7 @@ typedef struct ipmi_bmc_s
 struct ipmi_mc_s
 {
     ipmi_mc_t   *bmc_mc; /* Pointer to the MC that is the BMC. */
+    long        seq;
     ipmi_addr_t addr;
     int         addr_len;
 
@@ -923,26 +924,24 @@ system_event_handler(ipmi_mc_t    *mc,
 	    mc_id.channel = event->data[5] >> 4;
 	}
 	mc_id.mc_num = event->data[4];
-	ipmi_mc_pointer_cb(mc_id, mc_event_cb, &info);
+	ipmi_mc_pointer_noseq_cb(mc_id, mc_event_cb, &info);
 
 	if (info.handled) {
 	    rv = 0;
 	} else {
 	    /* The OEM code didn't handle it. */
-	    id.bmc = mc->bmc_mc;
-	    if (event->data[6] == 0x03) {
-		id.channel = 0;
-	    } else {
-		id.channel = event->data[5] >> 4;
-	    }
-	    id.mc_num = event->data[4];
+	    id.mc_id.bmc = mc->bmc_mc;
+	    if (event->data[6] == 0x03)
+		id.mc_id.channel = 0;
+	    else
+		id.mc_id.channel = event->data[5] >> 4;
+	    id.mc_id.mc_num = event->data[4];
 	    id.lun = event->data[5] & 0x3;
 	    id.sensor_num = event->data[8];
 
-	    rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
-	    if (!rv) {
+	    rv = ipmi_sensor_pointer_noseq_cb(id, event_sensor_cb, &info);
+	    if (!rv)
 		rv = info.err;
-	    }
 	}
     }
 
@@ -1649,6 +1648,8 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
     memset(mc, 0, sizeof(*mc));
 
     mc->bmc_mc = bmc;
+
+    mc->seq = ipmi_get_seq();
 
     mc->active = 1;
 
@@ -2647,6 +2648,7 @@ setup_bmc(ipmi_con_t   *ipmi,
 
     mc->bmc_mc = mc;
 
+    mc->seq = ipmi_get_seq();
     mc->bmc = NULL;
     mc->sensors = NULL;
     mc->sensors_in_my_sdr = NULL;
@@ -3295,6 +3297,7 @@ ipmi_mc_convert_to_id(ipmi_mc_t *mc)
 
     val.bmc = mc->bmc_mc;
     val.channel = mc->addr.channel;
+    val.seq = mc->seq;
     if (mc->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	/* The BMC address is always zero. */
 	val.mc_num = 0;
@@ -3309,6 +3312,7 @@ int
 ipmi_mc_pointer_cb(ipmi_mc_id_t id, ipmi_mc_cb handler, void *cb_data)
 {
     int       rv;
+    ipmi_mc_t *mc;
 
     ipmi_read_lock();
     rv = ipmi_mc_validate(id.bmc);
@@ -3316,19 +3320,51 @@ ipmi_mc_pointer_cb(ipmi_mc_id_t id, ipmi_mc_cb handler, void *cb_data)
 	goto out_unlock;
     ipmi_lock(id.bmc->bmc->mc_list_lock);
     if (id.mc_num == 0) {
-	handler(id.bmc, cb_data);
+	mc = id.bmc;
     } else {
 	ipmi_ipmb_addr_t ipmb = {IPMI_IPMB_ADDR_TYPE, id.channel,
 				 id.mc_num, 0};
-	ipmi_mc_t *mc;
+
 	mc = find_mc_by_addr(id.bmc, (ipmi_addr_t *) &ipmb, sizeof(ipmb));
 	if (!mc)
 	    rv = EINVAL;
-	else
-	/* We don't have a lock for the mc itself, we rely on the BMC lock
-	   for this right now. */
-	    handler(mc, cb_data);
     }
+    if (!rv) {
+	if (mc->seq != id.seq)
+	    rv = EINVAL;
+    }
+    if (!rv)
+	handler(mc, cb_data);
+    ipmi_unlock(id.bmc->bmc->mc_list_lock);
+ out_unlock:
+    ipmi_read_unlock();
+
+    return rv;
+}
+
+int
+ipmi_mc_pointer_noseq_cb(ipmi_mc_id_t id, ipmi_mc_cb handler, void *cb_data)
+{
+    int       rv;
+    ipmi_mc_t *mc;
+
+    ipmi_read_lock();
+    rv = ipmi_mc_validate(id.bmc);
+    if (rv)
+	goto out_unlock;
+    ipmi_lock(id.bmc->bmc->mc_list_lock);
+    if (id.mc_num == 0) {
+	mc = id.bmc;
+    } else {
+	ipmi_ipmb_addr_t ipmb = {IPMI_IPMB_ADDR_TYPE, id.channel,
+				 id.mc_num, 0};
+
+	mc = find_mc_by_addr(id.bmc, (ipmi_addr_t *) &ipmb, sizeof(ipmb));
+	if (!mc)
+	    rv = EINVAL;
+    }
+    if (!rv)
+	handler(mc, cb_data);
     ipmi_unlock(id.bmc->bmc->mc_list_lock);
  out_unlock:
     ipmi_read_unlock();
@@ -3350,6 +3386,10 @@ ipmi_cmp_mc_id(ipmi_mc_id_t id1, ipmi_mc_id_t id2)
     if (id1.channel > id2.channel)
 	return 1;
     if (id1.channel < id2.channel)
+	return -1;
+    if (id1.seq > id2.seq)
+	return 1;
+    if (id1.seq < id2.seq)
 	return -1;
     return 0;
 }

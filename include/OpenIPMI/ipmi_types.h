@@ -94,33 +94,29 @@ struct ipmi_mc_id_s
     ipmi_mc_t    *bmc;
     unsigned int mc_num  : 8;
     unsigned int channel : 4;
+    long         seq;
 };
 
 struct ipmi_entity_id_s
 {
-    ipmi_mc_t    *bmc;
+    ipmi_mc_id_t bmc_id;
     unsigned int entity_id       : 8;
     unsigned int entity_instance : 4;
     unsigned int channel         : 8;
     unsigned int address         : 8;
+    long         seq;
 };
 
 struct ipmi_sensor_id_s
 {
-    ipmi_mc_t    *bmc;
-    unsigned int mc_num     : 8;
-    unsigned int channel    : 4;
-    unsigned int            : 1;
+    ipmi_mc_id_t mc_id;
     unsigned int lun        : 3;
     unsigned int sensor_num : 8;
 };
 
 struct ipmi_control_id_s
 {
-    ipmi_mc_t    *bmc;
-    unsigned int mc_num      : 8;
-    unsigned int channel     : 4;
-    unsigned int             : 1;
+    ipmi_mc_id_t mc_id;
     unsigned int lun         : 3;
     unsigned int control_num : 8;
 };

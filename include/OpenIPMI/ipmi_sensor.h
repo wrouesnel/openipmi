@@ -487,4 +487,11 @@ void ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str);
 /* Get the MC that the sensor is in. */
 ipmi_mc_t *ipmi_sensor_get_mc(ipmi_sensor_t *sensor);
 
+/* Do a pointer callback but ignore the sequence number in the MC.
+   This is primarily for handling incoming events, where the sequence
+   number doesn't matter. */
+int ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t id,
+				 ipmi_sensor_cb   handler,
+				 void             *cb_data);
+
 #endif /* _IPMI_SENSOR_H */

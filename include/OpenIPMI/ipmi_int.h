@@ -73,6 +73,9 @@ void ipmi_lock(ipmi_lock_t *lock);
 /* Release the lock. */
 void ipmi_unlock(ipmi_lock_t *lock);
 
+/* Get a globally unique sequence number. */
+long ipmi_get_seq(void);
+
 /* The sensor code calls the MC code with this when it finds a new
    sensor.  If this returns 1, the sensor will NOT be added to the
    list of sensors in then entity.  This will call the OEM code if it

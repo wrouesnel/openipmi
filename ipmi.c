@@ -578,6 +578,23 @@ ipmi_set_device_string(char          *input,
     }
 }
 
+static long seq = 0;
+static os_hnd_lock_t *seq_lock;
+long
+ipmi_get_seq(void)
+{
+    long rv;
+
+    if (seq_lock)
+	ipmi_os_handler->lock(ipmi_os_handler, seq_lock);
+    rv = seq;
+    seq++;
+    if (seq_lock)
+	ipmi_os_handler->unlock(ipmi_os_handler, seq_lock);
+
+    return rv;
+}
+
 int
 ipmi_init(os_handler_t *handler)
 {
@@ -590,16 +607,30 @@ ipmi_init(os_handler_t *handler)
     } else {
 	global_lock = NULL;
     }
+
+    if (handler->create_lock) {
+	rv = handler->create_lock(handler, &seq_lock);
+	if (rv)
+	    goto out_err;
+    } else {
+	seq_lock = NULL;
+    }
     ipmi_os_handler = handler;
     ipmi_mc_init();
     return 0;
+
+ out_err:
+    if (global_lock)
+	handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    return rv;
 }
 
 void
 ipmi_shutdown(void)
 {
     ipmi_mc_shutdown();
-    ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
+    if (global_lock)
+	ipmi_os_handler->destroy_rwlock(ipmi_os_handler, global_lock);
     global_lock = NULL;
 }
 

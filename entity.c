@@ -66,7 +66,9 @@ typedef struct ipmi_control_ref_s
 
 struct ipmi_entity_s
 {
-    ipmi_mc_t *bmc;
+    ipmi_mc_t    *bmc;
+    ipmi_mc_id_t bmc_id;
+    long         seq;
 
     /* Key fields */
     uint8_t access_address;
@@ -161,6 +163,7 @@ struct ipmi_entity_info_s
     ipmi_bmc_entity_cb handler;
     void               *cb_data;
     ipmi_mc_t          *bmc;
+    ipmi_mc_id_t       bmc_id;
     ilist_t            *entities;
 };
 
@@ -174,6 +177,7 @@ ipmi_entity_info_alloc(ipmi_mc_t *bmc, ipmi_entity_info_t **new_info)
 	return ENOMEM;
 
     ents->bmc = bmc;
+    ents->bmc_id = ipmi_mc_convert_to_id(bmc);
     ents->handler = NULL;
     ents->entities = alloc_ilist();
     if (! ents->entities) {
@@ -344,6 +348,8 @@ entity_add(ipmi_entity_info_t *ents,
     ent->came_from_SDR = came_from_SDR;
 
     ent->bmc = ents->bmc;
+    ent->bmc_id = ents->bmc_id;
+    ent->seq = ipmi_get_seq();
     ent->sub_entities = alloc_ilist();
     if (!ent->sub_entities) {
 	ipmi_mem_free(ent);
@@ -2455,7 +2461,7 @@ ipmi_entity_convert_to_id(ipmi_entity_t *ent)
 
     CHECK_ENTITY_LOCK(ent);
 
-    val.bmc = ent->bmc;
+    val.bmc_id = ent->bmc_id;
     val.entity_id = ent->entity_id;
     val.entity_instance = ent->entity_instance;
     val.channel = ent->device_num.channel;
@@ -2464,34 +2470,56 @@ ipmi_entity_convert_to_id(ipmi_entity_t *ent)
     return val;
 }
 
+typedef struct mc_cb_info_s
+{
+    ipmi_entity_cb   handler;
+    void             *cb_data;
+    ipmi_entity_id_t id;
+    int              err;
+} mc_cb_info_t;
+
+static void
+bmc_cb(ipmi_mc_t *bmc, void *cb_data)
+{
+    ipmi_device_num_t device_num;
+    ipmi_entity_t     *ent;
+    mc_cb_info_t      *info = cb_data;
+
+    ipmi_mc_entity_lock(bmc);
+
+    device_num.channel = info->id.channel;
+    device_num.address = info->id.address;
+    info->err = entity_find(ipmi_mc_get_entities(bmc),
+			    device_num,
+			    info->id.entity_id,
+			    info->id.entity_instance,
+			    &ent); 
+    if (!info->err) {
+	if (ent->seq != info->id.seq)
+	    info->err = EINVAL;
+    }
+    if (!info->err)
+	info->handler(ent, info->cb_data);
+
+    ipmi_mc_entity_unlock(bmc);
+}
+
 int
 ipmi_entity_pointer_cb(ipmi_entity_id_t id,
 		       ipmi_entity_cb   handler,
 		       void             *cb_data)
 {
-    int               rv;
-    ipmi_device_num_t device_num;
-    ipmi_entity_t     *ent;
+    int          rv;
+    mc_cb_info_t info;
 
-    ipmi_read_lock();
-    rv = ipmi_mc_validate(id.bmc);
-    if (rv)
-	goto out_unlock;
-    ipmi_mc_entity_lock(id.bmc);
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.id = id;
+    info.err = 0;
 
-    device_num.channel = id.channel;
-    device_num.address = id.address;
-    rv = entity_find(ipmi_mc_get_entities(id.bmc),
-		     device_num,
-		     id.entity_id,
-		     id.entity_instance,
-		     &ent); 
+    rv = ipmi_mc_pointer_cb(id.bmc_id, bmc_cb, &info);
     if (!rv)
-	handler(ent, cb_data);
-
-    ipmi_mc_entity_unlock(id.bmc);
- out_unlock:
-    ipmi_read_unlock();
+	rv = info.err;
 
     return rv;
 }
