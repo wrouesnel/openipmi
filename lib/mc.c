@@ -691,9 +691,9 @@ ipmi_mc_get_sel_rescan_time(ipmi_mc_t *mc)
 
 typedef struct sel_op_done_info_s
 {
-    ipmi_mc_t  *mc;
-    ipmi_mc_cb done;
-    void       *cb_data;
+    ipmi_mc_t       *mc;
+    ipmi_mc_done_cb done;
+    void            *cb_data;
 } sel_op_done_info_t;
 
 static void

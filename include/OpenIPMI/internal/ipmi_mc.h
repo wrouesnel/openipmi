@@ -146,10 +146,10 @@ int ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
 /* Some OEM boxes may have special SEL delete requirements, so we have
    a special hook to let the OEM code delete events on an MC with SEL
    support. */
-typedef int (*ipmi_mc_del_event_cb)(ipmi_mc_t    *mc,
-				    ipmi_event_t *event,
-				    ipmi_mc_cb   done_handler,
-				    void         *cb_data);
+typedef int (*ipmi_mc_del_event_cb)(ipmi_mc_t                 *mc,
+				    ipmi_event_t              *event,
+				    ipmi_mc_del_event_done_cb done_handler,
+				    void                      *cb_data);
 void ipmi_mc_set_del_event_handler(ipmi_mc_t            *mc,
 				   ipmi_mc_del_event_cb handler);
 typedef int (*ipmi_mc_add_event_cb)(ipmi_mc_t                 *mc,
