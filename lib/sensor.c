@@ -953,9 +953,23 @@ _ipmi_sensor_name(ipmi_sensor_t *sensor)
     return sensor->name;
 }
 
+int
+ipmi_sensor_get_name(ipmi_sensor_t *sensor, char *name, int length)
+{
+    int rv = 0;
+
+    if (sensor->entity)
+	rv = ipmi_entity_get_name(sensor->entity, name, length);
+    length -= rv;
+    if (length > sensor->id_len + 2)
+	length = sensor->id_len + 2; /* Leave space for the nil */
+    rv += snprintf(name+rv, length, ".%s", sensor->id);
+    return rv;
+}
+
 /***********************************************************************
  *
- * Sensor SDR handlnig
+ * Sensor SDR handling
  *
  **********************************************************************/
 
@@ -1968,6 +1982,36 @@ ipmi_sensor_set_threshold_deassertion_event_supported(
 	return;
 
     sensor->mask2[idx] = val;
+}
+
+int
+ipmi_sensor_threshold_reading_supported(ipmi_sensor_t      *sensor,
+					enum ipmi_thresh_e thresh,
+					int                *val)
+{
+    switch(thresh) {
+    case IPMI_LOWER_NON_CRITICAL:
+	*val = sensor->mask1[12];
+	break;
+    case IPMI_LOWER_CRITICAL:
+	*val = sensor->mask1[13];
+	break;
+    case IPMI_LOWER_NON_RECOVERABLE:
+	*val = sensor->mask1[14];
+	break;
+    case IPMI_UPPER_NON_CRITICAL:
+	*val = sensor->mask2[12];
+	break;
+    case IPMI_UPPER_CRITICAL:
+	*val = sensor->mask2[13];
+	break;
+    case IPMI_UPPER_NON_RECOVERABLE:
+	*val = sensor->mask2[14];
+	break;
+    default:
+	return EINVAL;
+    }
+    return 0;
 }
 
 int

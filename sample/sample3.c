@@ -47,13 +47,106 @@
 #include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/ipmi_event.h>
 
-/* This sample application demostrates a very simple method to use
-   OpenIPMI. It just search all sensors in the system.  From this
-   application, you can find that there is only 4 lines code in main()
-   function if you use the SMI-only interface, and several simple
-   callback functions in all cases. */
+/* This sample application demostrates some general handling of sensors,
+   like reading values, setting up events, and things of that nature.
+   It also demonstrates some good coding practices like refcounting
+   structures. */
 
 static const char *progname;
+
+#define MAX_SENSOR_NAME_SIZE 128
+
+typedef struct sdata_s
+{
+    unsigned int       refcount;
+    ipmi_sensor_id_t   sensor_id;
+    char               name[MAX_SENSOR_NAME_SIZE];
+    ipmi_event_state_t *es;
+    ipmi_thresholds_t  *th;
+    int                state_sup;
+    int                thresh_sup;
+
+    struct sdata_s     *next, *prev;
+} sdata_t;
+
+static sdata_t *sdata_list = NULL;
+
+static sdata_t *
+alloc_sdata(ipmi_sensor_t *sensor)
+{
+    sdata_t *sdata;
+
+    sdata = malloc(sizeof(*sdata));
+    if (!sdata)
+	return NULL;
+
+    sdata->es = malloc(ipmi_event_state_size());
+    if (!sdata->es) {
+	free(sdata);
+	return NULL;
+    }
+    ipmi_event_state_init(sdata->es);
+
+    sdata->th = malloc(ipmi_thresholds_size());
+    if (!sdata->th) {
+	free(sdata->es);
+	free(sdata);
+	return NULL;
+    }
+    ipmi_thresholds_init(sdata->th);
+
+    sdata->refcount = 1;
+
+    sdata->sensor_id = ipmi_sensor_convert_to_id(sensor);
+    ipmi_sensor_get_name(sensor, sdata->name, sizeof(sdata->name));
+
+    sdata->next = sdata_list;
+    sdata->prev = NULL;
+    sdata_list = sdata;
+
+    return sdata;
+}
+
+static sdata_t *
+find_sdata(ipmi_sensor_t *sensor)
+{
+    ipmi_sensor_id_t id = ipmi_sensor_convert_to_id(sensor);
+    sdata_t          *link;
+
+    link = sdata_list;
+    while (link) {
+	if (ipmi_cmp_sensor_id(id, link->sensor_id) == 0)
+	    return link;
+	link = link->next;
+    }
+    return NULL;
+}
+
+static void
+use_sdata(sdata_t *sdata)
+{
+    sdata->refcount++;
+}
+
+static void
+release_sdata(sdata_t *sdata)
+{
+    sdata->refcount--;
+    if (sdata->refcount == 0) {
+	/* Remove it from the list. */
+	if (sdata->next)
+	    sdata->next->prev = sdata->prev;
+
+	if (sdata->prev)
+	    sdata->prev->next = sdata->next;
+	else
+	    sdata_list = sdata->next;
+
+	free(sdata->es);
+	free(sdata->th);
+	free(sdata);
+    }
+}
 
 static void
 usage(void)
@@ -62,7 +155,8 @@ usage(void)
 	   "  %s [options] smi <smi #>\n"
 	   "     Make a connection to a local system management interface.\n"
 	   "     smi # is generally 0.\n"
-	   "  %s [options] lan <host> <port> <authtype> <privilege> <username> <password>\n"
+	   "  %s [options] lan <host> <port> <authtype> <privilege>"
+	   " <username> <password>\n"
 	   "     Make a connection to a IPMI 1.5 LAN interface.\n"
 	   "     Host and port specify where to connect to (port is\n"
 	   "     generally 623).  authtype is none, md2, md5, or straight.\n"
@@ -80,11 +174,101 @@ got_thresh_reading(ipmi_sensor_t             *sensor,
 		   ipmi_states_t             *states,
 		   void                      *cb_data)
 {
+    sdata_t            *sdata = cb_data;
+    enum ipmi_thresh_e thresh;
+
+    if (err) {
+	printf("Error 0x%x getting discrete states for sensor %s\n",
+	       err, sdata->name);
+	goto out;
+    }
+
+    printf("Got threshold reading for sensor %s\n", sdata->name);
+    if (ipmi_is_event_messages_enabled(states))
+	printf("  event messages enabled");
+    if (ipmi_is_sensor_scanning_enabled(states))
+	printf("  sensor scanning enabled");
+    if (ipmi_is_initial_update_in_progress(states))
+	printf("  initial update in progress");
+
+    switch (value_present)
+    {
+    case IPMI_NO_VALUES_PRESENT:
+	printf("  no value present\n");
+	break;
+    case IPMI_BOTH_VALUES_PRESENT:
+	printf("  value: %lf\n", val);
+	/* FALLTHROUGH */
+    case IPMI_RAW_VALUE_PRESENT:
+	printf("  raw value: 0x%2.2x\n", raw_value);
+    }
+
+    if (sdata->thresh_sup == IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
+	goto out;
+
+    for (thresh=IPMI_LOWER_NON_CRITICAL;
+	 thresh<=IPMI_UPPER_NON_RECOVERABLE;
+	 thresh++)
+    {
+	int val, rv;
+
+	rv = ipmi_sensor_threshold_reading_supported(sensor, thresh, &val);
+	if (rv || !val)
+	    continue;
+
+	if (ipmi_is_threshold_out_of_range(states, thresh))
+	    printf("  Threshold %s is out of range\n",
+		   ipmi_get_threshold_string(thresh));
+	else
+	    printf("  Threshold %s is in range\n",
+		   ipmi_get_threshold_string(thresh));
+    }
+
+ out:
+    release_sdata(sdata);
 }
 
 static void
-got_discrete_states()
+got_discrete_states(ipmi_sensor_t *sensor,
+		    int           err,
+		    ipmi_states_t *states,
+		    void          *cb_data)
 {
+    sdata_t *sdata = cb_data;
+    int     i;
+
+    if (err) {
+	printf("Error 0x%x getting discrete states for sensor %s\n",
+	       err, sdata->name);
+	goto out;
+    }
+
+    if (err) {
+	printf("Error 0x%x getting discrete states for sensor %s\n",
+	       err, sdata->name);
+	goto out;
+    }
+
+    printf("Got state reading for sensor %s\n", sdata->name);
+    if (ipmi_is_event_messages_enabled(states))
+	printf("  event messages enabled");
+    if (ipmi_is_sensor_scanning_enabled(states))
+	printf("  sensor scanning enabled");
+    if (ipmi_is_initial_update_in_progress(states))
+	printf("  initial update in progress");
+
+    for (i=0; i<15; i++) {
+	int val, rv;
+
+	rv = ipmi_discrete_event_readable(sensor, i, &val);
+	if (rv || !val)
+	    continue;
+
+	printf("  state %d value is %d\n", i, ipmi_is_state_set(states, i));
+    }
+
+ out:
+    release_sdata(sdata);
 }
 
 static void
@@ -92,23 +276,17 @@ event_set_done(ipmi_sensor_t *sensor,
 	       int           err,
 	       void          *cb_data)
 {
-    char *sname = cb_data;
-
-    if (!sensor) {
-	printf("sensor %s went away while setting events due to error 0x%x\n",
-	       sname, err);
-	goto out;
-    }
+    sdata_t *sdata = cb_data;
 
     if (err) {
-	printf("Error 0x%x setting events for sensor %s\n", err, sname);
+	printf("Error 0x%x setting events for sensor %s\n", err, sdata->name);
 	goto out;
     }
 
-    printf("Events set for sensor %s\n", sname);
+    printf("Events set for sensor %s\n", sdata->name);
 
  out:
-    free(sname);
+    release_sdata(sdata);
 }
 
 static void
@@ -117,38 +295,21 @@ got_events(ipmi_sensor_t      *sensor,
 	   ipmi_event_state_t *states,
 	   void               *cb_data)
 {
-    char               *sname = cb_data;
-    ipmi_event_state_t *es;
-    int                state_sup;
-    int                rv;
-
-    if (!sensor) {
-	printf("sensor %s went away while setting events due to error 0x%x\n",
-	       sname, err);
-	goto out_err;
-    }
+    sdata_t *sdata = cb_data;
+    int     rv;
 
     if (err) {
-	printf("Error 0x%x getting events for sensor %s\n", err, sname);
+	printf("Error 0x%x getting events for sensor %s\n", err, sdata->name);
 	goto out_err;
     }
-
-    state_sup = ipmi_sensor_get_event_support(sensor);
-
-    es = malloc(ipmi_event_state_size());
-    if (!es) {
-	printf("Unable to allocate event state memory\n");
-	goto out_err;
-    }
-    ipmi_event_state_init(es);
 
     /* Turn on the general events for a sensor, since this at
        least supports per-sensor enables. */
-    ipmi_event_state_set_events_enabled(es, 1);
-    ipmi_event_state_set_scanning_enabled(es, 1);
+    ipmi_event_state_set_events_enabled(sdata->es, 1);
+    ipmi_event_state_set_scanning_enabled(sdata->es, 1);
 
-    printf("Sensor %s event settings:\n", sname);
-    if (state_sup != IPMI_EVENT_SUPPORT_PER_STATE) {
+    printf("Sensor %s event settings:\n", sdata->name);
+    if (sdata->state_sup != IPMI_EVENT_SUPPORT_PER_STATE) {
 	/* No per-state sensors, just do the global enable. */
     } else if (ipmi_sensor_get_event_reading_type(sensor)
 	       == IPMI_EVENT_READING_TYPE_THRESHOLD)
@@ -185,7 +346,8 @@ got_events(ipmi_sensor_t      *sensor,
 			   ipmi_get_event_dir_string(dir),
 			   v);
 		    
-		    ipmi_threshold_event_set(es, thresh, value_dir, dir);
+		    ipmi_threshold_event_set(sdata->es, thresh,
+					     value_dir, dir);
 		}
 	    }
 	}
@@ -215,45 +377,39 @@ got_events(ipmi_sensor_t      *sensor,
 		       ipmi_get_event_dir_string(dir),
 		       v);
 		    
-		ipmi_discrete_event_set(es, i, dir);
+		ipmi_discrete_event_set(sdata->es, i, dir);
 	    }
 	}
     }
 
-    rv = ipmi_sensor_events_enable_set(sensor, es, event_set_done, sname);
-    free(es);
+    rv = ipmi_sensor_events_enable_set(sensor, sdata->es,
+				       event_set_done, sdata->name);
     if (rv) {
-	printf("Error 0x%x enabling events for sensor %s\n", err, sname);
+	printf("Error 0x%x enabling events for sensor %s\n", err, sdata->name);
 	goto out_err;
     }
 
     return;
 
  out_err:
-    free(sname);
+    release_sdata(sdata);
 }
 
 static void
 thresholds_set(ipmi_sensor_t *sensor, int err, void *cb_data)
 {
-    char *sname = cb_data;
-
-    if (!sensor) {
-	printf("sensor %s went away while setting thresholds"
-	       " due to error 0x%x\n",
-	       sname, err);
-	goto out;
-    }
+    sdata_t *sdata = cb_data;
 
     if (err) {
-	printf("Error 0x%x setting thresholds for sensor %s\n", err, sname);
+	printf("Error 0x%x setting thresholds for sensor %s\n",
+	       err, sdata->name);
 	goto out;
     }
 
-    printf("Thresholds set for sensor %s\n", sname);
+    printf("Thresholds set for sensor %s\n", sdata->name);
 
  out:
-    free(sname);
+    release_sdata(sdata);
 }
 
 static void
@@ -262,31 +418,16 @@ got_thresholds(ipmi_sensor_t     *sensor,
 	       ipmi_thresholds_t *th,
 	       void              *cb_data)
 {
-    char               *sname = cb_data;
-    ipmi_thresholds_t  *nth;
+    sdata_t            *sdata = cb_data;
     enum ipmi_thresh_e thresh;
     int                rv;
 
-    if (!sensor) {
-	printf("sensor %s went away while getting thresholds"
-	       " due to error 0x%x\n",
-	       sname, err);
-	goto out_err;
-    }
-
     if (err) {
-	printf("Error 0x%x getting events for sensor %s\n", err, sname);
+	printf("Error 0x%x getting events for sensor %s\n", err, sdata->name);
 	goto out_err;
     }
 
-    nth = malloc(ipmi_thresholds_size());
-    if (!nth) {
-	printf("Unable to allocate threshold memory\n");
-	goto out_err;
-    }
-    ipmi_thresholds_init(nth);
-
-    printf("Sensor %s threshold settings:\n", sname);
+    printf("Sensor %s threshold settings:\n", sdata->name);
     for (thresh=IPMI_LOWER_NON_CRITICAL;
 	 thresh<=IPMI_UPPER_NON_RECOVERABLE;
 	 thresh++)
@@ -299,7 +440,7 @@ got_thresholds(ipmi_sensor_t     *sensor,
 	    /* Threshold not available. */
 	    continue;
 
-	rv = ipmi_threshold_get(th, thresh, &dval);
+	rv = ipmi_threshold_get(sdata->th, thresh, &dval);
 	if (rv) {
 	    printf("  threshold %s could not be fetched due to error 0x%x\n",
 		   ipmi_get_threshold_string(thresh), rv);
@@ -309,23 +450,23 @@ got_thresholds(ipmi_sensor_t     *sensor,
 	}
     }
 
-    rv = ipmi_get_default_sensor_thresholds(sensor, nth);
+    rv = ipmi_get_default_sensor_thresholds(sensor, sdata->th);
     if (rv) {
-	printf("Error 0x%x getting def thresholds for sensor %s\n", rv, sname);
-	free(nth);
+	printf("Error 0x%x getting def thresholds for sensor %s\n",
+	       rv, sdata->name);
 	goto out_err;
     }
 
-    rv = ipmi_thresholds_set(sensor, nth, thresholds_set, sname);
-    free(nth);
+    rv = ipmi_thresholds_set(sensor, sdata->th, thresholds_set, sdata->name);
     if (rv) {
-	printf("Error 0x%x setting thresholds for sensor %s\n", rv, sname);
+	printf("Error 0x%x setting thresholds for sensor %s\n",
+	       rv, sdata->name);
 	goto out_err;
     }
     return;
 
  out_err:
-    free(sname);
+    release_sdata(sdata);
 }
 
 
@@ -337,71 +478,57 @@ sensor_change(enum ipmi_update_e op,
 	      ipmi_sensor_t      *sensor,
 	      void               *cb_data)
 {
-    int id, instance;
-    char name[33];
-    char *sname, *sname2, *sname3;
-    int rv;
+    sdata_t *sdata;
+    int     rv;
 
-    id = ipmi_entity_get_entity_id(ent);
-    instance = ipmi_entity_get_entity_instance(ent);
-    ipmi_sensor_get_id(sensor, name, 32);
     if (op == IPMI_ADDED) {
-	int state_sup, thresh_sup;
-
-	sname = malloc(strlen(name)+32);
-	if (!sname) {
+	sdata = alloc_sdata(sensor);
+	if (!sdata) {
 	    printf("Unable to allocate sensor name memory\n");
 	    return;
 	}
-	sprintf(sname, "%d.%d.%s", id, instance, name);
-	sname2 = strdup(sname);
-	sname3 = strdup(sname);
 
-	printf("Sensor added: %s\n", sname);
+	printf("Sensor added: %s\n", sdata->name);
 
 	/* Get the current reading. */
 	if (ipmi_sensor_get_event_reading_type(sensor)
 	    == IPMI_EVENT_READING_TYPE_THRESHOLD)
 	{
-	    rv = ipmi_reading_get(sensor, got_thresh_reading, sname);
+	    use_sdata(sdata);
+	    rv = ipmi_reading_get(sensor, got_thresh_reading, sdata);
 	    if (rv) {
-		printf("ipmi_reading_get return error: %d\n", rv);
-		free(sname);
+		printf("ipmi_reading_get returned error 0x%x for sensor %s\n",
+		       rv, sdata->name);
+		release_sdata(sdata);
 	    }
 	} else {
-	    rv = ipmi_states_get(sensor, got_discrete_states, sname);
+	    use_sdata(sdata);
+	    rv = ipmi_states_get(sensor, got_discrete_states, sdata);
 	    if (rv) {
-		printf("ipmi_reading_get return error: %d\n", rv);
-		free(sname);
+		printf("ipmi_states_get returned error 0x%x for sensor %s\n",
+		       rv, sdata->name);
+		release_sdata(sdata);
 	    }
-	}
-
-	if (!sname2) {
-	    printf("Unable to allocate sensor name memory 2\n");
-	    return;
-	}
-	if (!sname3) {
-	    printf("Unable to allocate sensor name memory 3\n");
-	    free(sname2);
-	    return;
 	}
 
 	/* Set up events. */
-	state_sup = ipmi_sensor_get_event_support(sensor);
-	switch (state_sup)
+	sdata->state_sup = ipmi_sensor_get_event_support(sensor);
+	switch (sdata->state_sup)
 	{
 	    case IPMI_EVENT_SUPPORT_NONE:
 	    case IPMI_EVENT_SUPPORT_GLOBAL_ENABLE:
 		/* No events to set up. */
-		printf("Sensor %s has no event support\n", sname2);
-		free(sname2);
+		printf("Sensor %s has no event support\n", sdata->name);
 		goto get_thresh;
 	}
 
-	rv = ipmi_sensor_events_enable_get(sensor, got_events, sname2);
+	use_sdata(sdata);
+	rv = ipmi_sensor_events_enable_get(sensor, got_events, sdata);
 	if (rv) {
-	    printf("ipmi_sensor_events_enable_get return error: %d\n", rv);
-	    free(sname2);
+	    printf("ipmi_sensor_events_enable_get returned error 0x%x"
+		   " for sensor %s\n",
+		   rv, sdata->name);
+	    release_sdata(sdata);
 	}
 
     get_thresh:
@@ -409,34 +536,45 @@ sensor_change(enum ipmi_update_e op,
 
 	if (ipmi_sensor_get_event_reading_type(sensor)
 	    != IPMI_EVENT_READING_TYPE_THRESHOLD)
-	{
 	    /* Thresholds only for threshold sensors (duh) */
-	    free(sname3);
 	    goto out;
-	}
 
-	thresh_sup = ipmi_sensor_get_threshold_access(sensor);
+	sdata->thresh_sup = ipmi_sensor_get_threshold_access(sensor);
 
-	switch (thresh_sup)
+	switch (sdata->thresh_sup)
 	{
 	case IPMI_THRESHOLD_ACCESS_SUPPORT_NONE:
-	    printf("Sensor %s has no threshold support\n", sname3);
-	    free(sname3);
+	    printf("Sensor %s has no threshold support\n", sdata->name);
 	    goto out;
 
 	case IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED:
-	    printf("Sensor %s has fixed threshold support\n", sname3);
-	    free(sname3);
+	    printf("Sensor %s has fixed threshold support\n", sdata->name);
 	    goto out;
 	}
 
-	rv = ipmi_thresholds_get(sensor, got_thresholds, sname3);
+	use_sdata(sdata);
+	rv = ipmi_thresholds_get(sensor, got_thresholds, sdata);
 	if (rv) {
-	    printf("ipmi_thresholds_get return error: %d\n", rv);
-	    free(sname3);
+	    printf("ipmi_thresholds_get returned error 0x%x"
+		   " for sensor %s\n",
+		   rv, sdata->name);
+	    release_sdata(sdata);
+	}
+    } else if (op == IPMI_DELETED) {
+	sdata = find_sdata(sensor);
+	if (!sdata) {
+	    char name[120];
+	    ipmi_sensor_get_name(sensor, name, sizeof(name));
+
+	    printf("sensor %s was deleted but not found in the sensor db\n",
+		   name);
+	    goto out;
 	}
 
+	printf("sensor %s was deleted\n", sdata->name);
+	release_sdata(sdata);
     }
+
  out:
     return;
 }
@@ -450,18 +588,17 @@ entity_change(enum ipmi_update_e op,
 	      ipmi_entity_t      *entity,
 	      void               *cb_data)
 {
-    int rv;
-    int id, instance;
+    int  rv;
+    char name[50];
 
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
+    ipmi_entity_get_name(entity, name, sizeof(name));
     if (op == IPMI_ADDED) {
-	    printf("Entity added: %d.%d\n", id, instance);
+	    printf("Entity added: %s\n", name);
 	    /* Register callback so that when the status of a
 	       sensor changes, sensor_change is called */
 	    rv = ipmi_entity_add_sensor_update_handler(entity,
 						       sensor_change,
-						       entity);
+						       NULL);
 	    if (rv) {
 		printf("ipmi_entity_set_sensor_update_handler: 0x%x", rv);
 		exit(1);

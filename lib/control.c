@@ -434,6 +434,19 @@ _ipmi_control_name(ipmi_control_t *control)
     return control->name;
 }
 
+int
+ipmi_control_get_name(ipmi_control_t *control, char *name, int length)
+{
+    int rv = 0;
+
+    if (control->entity)
+	rv = ipmi_entity_get_name(control->entity, name, length);
+    if (length > control->id_len + 2)
+	length = control->id_len + 2; /* Leave space for the nil */
+    rv += snprintf(name+rv, length, ".%s", control->id);
+    return rv;
+}
+
 /***********************************************************************
  *
  * Control message handling.

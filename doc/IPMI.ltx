@@ -4097,9 +4097,9 @@ events.  False disables events.  The functions are:
 \begin{verbatim}
 int ipmi_mc_get_events_enable(ipmi_mc_t *mc);
 int ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
-			      int             val,
-			      ipmi_mc_done_cb done,
-			      void            *cb_data);
+                              int             val,
+                              ipmi_mc_done_cb done,
+                              void            *cb_data);
 \end{verbatim}
 
 The setting is fetched and held locally, so the ``get'' function is
@@ -4395,14 +4395,14 @@ otherwise.  The header is:
 \begin{showmsg}
 \hline
 \msgitem{0-1}{Record ID.  This is the number used to fetch the record
-	from the \ac{SDR} repository.}
+        from the \ac{SDR} repository.}
 \msgitem{2}{IPMI Version.  This is the IPMI version the record is
-	specified under.}
+        specified under.}
 \msgitem{3}{Record Type.  This tells the specific type of record
-	contained in the \ac{SDR}; it gives the format of the data
-	after the header.}
+        contained in the \ac{SDR}; it gives the format of the data
+        after the header.}
 \msgitem{4}{Record Size.  This is the number of bytes in the SDR,
-	not including the header.}
+        not including the header.}
 \msgcaption{The \acs{SDR} header}
 \end{showmsg}
 
@@ -4414,44 +4414,44 @@ various record types supported by IPMI.
 \begin{tabular}{|l|p{0.85\textwidth}|}
 \hline
 01h & Type 1 sensors are generally used for analog sensors.  They
-	can be used for discrete sensors, too, but most of the
-	fields are irrelevant for discrete sensors.\\
+        can be used for discrete sensors, too, but most of the
+        fields are irrelevant for discrete sensors.\\
 \hline
 02h & Type 2 sensors are used for discrete sensors.  Multiple
-	similar sensors may be specific in a single type 2
-	record if the sensor meet certain criteria.\\
+        similar sensors may be specific in a single type 2
+        record if the sensor meet certain criteria.\\
 \hline
 03h & Type 3 sensors are used for sensors that only send events.\\
 \hline
 08h & A type 8 sensor is called a \acf{EAR}.  These are used to specify
-	entity containment; to specify, for instance that a processor
-	entity is on a specific board entity.\\
+        entity containment; to specify, for instance that a processor
+        entity is on a specific board entity.\\
 \hline
 09h & A type 9 sensor is called a \acf{DREAR}.  It is like a type 8
-	record, but can contain device-relative entities.\\
+        record, but can contain device-relative entities.\\
 \hline
 10h & A type 16 record is called a \acf{GDLR}.  It is used to give
-	information about an entity when the entity is not a \acs{FRU}
-	or \acs{MC}.\\
+        information about an entity when the entity is not a \acs{FRU}
+        or \acs{MC}.\\
 \hline
 11h & A type 17 record is called a \acf{FRUDLR}.  It is used to give
-	information about a \acs{FRU} entity in the system that is
-	not a \acs{MC}.\\
+        information about a \acs{FRU} entity in the system that is
+        not a \acs{MC}.\\
 \hline
 12h & A type 18 record is called a \acf{MCDLR}.  It is used to give
-	information about a \acs{MC} entity in the system.\\
+        information about a \acs{MC} entity in the system.\\
 \hline
 13h & A type 19 record is called a Management Controller Confirmation
-	Record.  It record the fact that a \acs{MC} has been found in
-	the system.  Note that OpenIPMI does not currently use these.\\
+        Record.  It record the fact that a \acs{MC} has been found in
+        the system.  Note that OpenIPMI does not currently use these.\\
 \hline
 14h & A type 20 record is called a \acs{BMC} Message Channel Info Record.
-	It is only used in \acs{IPMI} version 1.0; it specifies the
-	channels available on the system.  Newer version of \acs{IPMI}
-	use specific messages to carry this information.\\
+        It is only used in \acs{IPMI} version 1.0; it specifies the
+        channels available on the system.  Newer version of \acs{IPMI}
+        use specific messages to carry this information.\\
 \hline
 C0h & This is used for OEM records.  The format depends on the specific
-	system type.\\
+        system type.\\
 \hline
 \end{tabular}
 \caption{\label{tab-sdr-types}SDR types.  All other record types are reserved}
@@ -4496,10 +4496,10 @@ create it:
 
 \begin{verbatim}
 int ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
-			ipmi_mc_t       *mc,
-			unsigned int    lun,
-			int             sensor,
-			ipmi_sdr_info_t **new_sdrs);
+                        ipmi_mc_t       *mc,
+                        unsigned int    lun,
+                        int             sensor,
+                        ipmi_sdr_info_t **new_sdrs);
 \end{verbatim}
 
 If you want the main \acs{SDR}s held on an MC, set the sensor value to
@@ -4509,13 +4509,13 @@ following call to fetch it:
 
 \begin{verbatim}
 typedef void (*ipmi_sdrs_fetched_t)(ipmi_sdr_info_t *sdrs,
-				    int             err,
-				    int             changed,
-				    unsigned int    count,
-				    void            *cb_data);
+                                    int             err,
+                                    int             changed,
+                                    unsigned int    count,
+                                    void            *cb_data);
 int ipmi_sdr_fetch(ipmi_sdr_info_t     *sdrs,
-		   ipmi_sdrs_fetched_t handler,
-		   void                *cb_data);
+                   ipmi_sdrs_fetched_t handler,
+                   void                *cb_data);
 \end{verbatim}
 
 If you allocate your own \acs{SDR} info structure, you should destroy
@@ -4524,8 +4524,8 @@ it when you are done with it with the following call:
 \begin{verbatim}
 typedef void (*ipmi_sdr_destroyed_t)(ipmi_sdr_info_t *sdrs, void *cb_data);
 int ipmi_sdr_info_destroy(ipmi_sdr_info_t      *sdrs,
-			  ipmi_sdr_destroyed_t handler,
-			  void                 *cb_data);
+                          ipmi_sdr_destroyed_t handler,
+                          void                 *cb_data);
 \end{verbatim}
 
 Note that you should \emph{not} destroy an SDR repository you fetched
@@ -4549,38 +4549,38 @@ items are:
 \begin{longtable}{|p{.25\textwidth}|p{0.7\textwidth}|}
 \hline
 major\_version & The major IPMI version the SDR repository supports, like
-	1 for IPMI 1.0 and 1.5, and 2 for IPMI 2.0.\\
+        1 for IPMI 1.0 and 1.5, and 2 for IPMI 2.0.\\
 \hline
 minor\_version & The minor IPMI version the SDR repository supports, like
-	0 for IPMI 1.0 and 2.0, and 5 for IPMI 1.5.\\
+        0 for IPMI 1.0 and 2.0, and 5 for IPMI 1.5.\\
 \hline
 overflow & An SDR write operation has failed to do lack of space.\\
 \hline
 update\_mode & The update modes supported.  Valid values are:
-	\begin{description}
-	\item[00b] - unspecified
-	\item[01b] - Only non-modal updates are supported
-	\item[10b] - Only modal updates are supported
-	\item[11b] - Both modal and non-modal updates are supported
-	\end{description}\\
+        \begin{description}
+        \item[00b] - unspecified
+        \item[01b] - Only non-modal updates are supported
+        \item[10b] - Only modal updates are supported
+        \item[11b] - Both modal and non-modal updates are supported
+        \end{description}\\
 \hline
 supports\_delete\_sdr & If true, the repository supports deleting individual
-	\acs{SDR}s one at a time.\\
+        \acs{SDR}s one at a time.\\
 \hline
 supports\_partial \_add\_sdr & If true, the repository supports the partial
-	add command.\\
+        add command.\\
 \hline
 supports\_reserve\_sdr & If true, the repository supports using reservations.\\
 \hline
 supports\_get\_sdr \_repository \_allocation & If true, the repository allows
-	allocation information to be fetched with the Get SDR Repository
-	Allocation Info command.\\
+        allocation information to be fetched with the Get SDR Repository
+        Allocation Info command.\\
 \hline
 dynamic\_population & If true, the \acs{IPMI} \emph{system} can dynamically
-	change the
-	contents of the SDR repository.  This may only be true for device
-	SDR repositories.  Although main SDR repositories can dynamically
-	change, it is not the system that does this, it is the user.\\
+        change the
+        contents of the SDR repository.  This may only be true for device
+        SDR repositories.  Although main SDR repositories can dynamically
+        change, it is not the system that does this, it is the user.\\
 \hline
 \end{longtable}
 
@@ -4588,8 +4588,8 @@ The following call can be used to tell whether sensors are available
 on specific \acs{LUN}s.
 \begin{verbatim}
 int ipmi_sdr_get_lun_has_sensors(ipmi_sdr_info_t *sdr,
-				 unsigned int    lun,
-				 int             *val);
+                                 unsigned int    lun,
+                                 int             *val);
 \end{verbatim}
 
 \subsection{Handling a \acs{SDR} Repository}
@@ -4599,7 +4599,7 @@ by the record id, type, or index.  To find out the number of SDRs
 in the repository, use:
 \begin{verbatim}
 int ipmi_get_sdr_count(ipmi_sdr_info_t *sdr,
-		       unsigned int    *count);
+                       unsigned int    *count);
 \end{verbatim}
 
 Fetching the \acs{SDR}s by index is probably the most useful function;
@@ -4607,28 +4607,28 @@ it treats the repository as an array and lets you fetch items,
 starting at zero.  The call is:
 \begin{verbatim}
 int ipmi_get_sdr_by_index(ipmi_sdr_info_t *sdr,
-			  int             index,
-			  ipmi_sdr_t      *return_sdr);
+                          int             index,
+                          ipmi_sdr_t      *return_sdr);
 \end{verbatim}
 If you are interested in a specific record number, you can fetch it
 with:
 \begin{verbatim}
 int ipmi_get_sdr_by_type(ipmi_sdr_info_t *sdr,
-			 int             type,
-			 ipmi_sdr_t      *return_sdr);
+                         int             type,
+                         ipmi_sdr_t      *return_sdr);
 \end{verbatim}
 If you want to find the first \acs{SDR} of a given type, use the
 following call:
 \begin{verbatim}
 int ipmi_get_sdr_by_type(ipmi_sdr_info_t *sdr,
-			 int             type,
-			 ipmi_sdr_t      *return_sdr);
+                         int             type,
+                         ipmi_sdr_t      *return_sdr);
 \end{verbatim}
 To get all the \acs{SDR}s, use the following:
 \begin{verbatim}
 int ipmi_get_all_sdrs(ipmi_sdr_info_t *sdr,
-		      int             *array_size,
-		      ipmi_sdr_t      *array);
+                      int             *array_size,
+                      ipmi_sdr_t      *array);
 \end{verbatim}
 Your passed in array will be filled with the SDR data.  The int
 pointed to by \verb=array_size= must be set to the number of available
@@ -4688,7 +4688,7 @@ Entity IDs defined by \ac{IPMI} are:
  1 & OTHER & Something else?\\
 \hline
  2 & UNKOWN & It's hard to understand why the entity id wouldn't be
-	known, but this is defined by the spec.\\
+        known, but this is defined by the spec.\\
 \hline
  3 & PROCESSOR & A processor\\
 \hline
@@ -4703,7 +4703,7 @@ Entity IDs defined by \ac{IPMI} are:
  8 & MEMORY\_MODULE & A memory module (a DIMM, for instance)\\
 \hline
  9 & PROCESSOR \_MODULE & A device that holds processors, if they are not
-	mounted on the system board.  This would generally be a socket.\\
+        mounted on the system board.  This would generally be a socket.\\
 \hline
 10 & POWER\_SUPPLY & The main power supplies for the system use this.\\
 \hline
@@ -4718,7 +4718,7 @@ Entity IDs defined by \ac{IPMI} are:
 15 & DRIVE\_BACKPLANE & A board that disk drives plug in to\\
 \hline
 16 & SYSTEM\_INTERNAL \_EXPANSION\_BOARD & A board that contains expansion
-	slots.  A PCI riser board, for instance.\\
+        slots.  A PCI riser board, for instance.\\
 \hline
 17 & OTHER\_SYSTEM \_BOARD & Some other board in the system.\\
 \hline
@@ -4727,11 +4727,11 @@ Entity IDs defined by \ac{IPMI} are:
 19 & POWER\_UNIT & A logical grouping for a set of power supplies\\
 \hline
 20 & POWER\_MODULE & Used for internal DC-to-DC converters, like one that
-	is on a board.  Note that you would \emph{not} use this for the
-	main power supply in a system, even it it was a DC-to-DC converter.\\
+        is on a board.  Note that you would \emph{not} use this for the
+        main power supply in a system, even it it was a DC-to-DC converter.\\
 \hline
 21 & POWER \_MANAGEMENT \_BOARD & A board for managing and distributing
-	power in the system\\
+        power in the system\\
 \hline
 22 & CHASSIS\_BACK \_PANEL\_BOARD & A rear board in a chassis.\\
 \hline
@@ -4740,14 +4740,14 @@ Entity IDs defined by \ac{IPMI} are:
 24 & SUB\_CHASSIS & A sub-unit of the main chassis.\\
 \hline
 25 & OTHER\_CHASSIS \_BOARD & Some other board that doesn't fit the
-	given categories.\\
+        given categories.\\
 \hline
 26 & DISK\_DRIVE\_BAY & A sub-chassis that holds a set of disk drives.\\
 \hline
 27 & PERIPHERAL\_BAY & A sub-chassis that holds a set of peripherals.\\
 \hline
 28 & DEVICE\_BAY & A sub-chassis that holds a set of devices.  The
-	difference between a peripheral and a device is not known.\\
+        difference between a peripheral and a device is not known.\\
 \hline
 29 & FAN\_COOLING & A fan or other cooling device.\\
 \hline
@@ -4756,8 +4756,8 @@ Entity IDs defined by \ac{IPMI} are:
 31 & CABLE \_INTERCONNECT & A cable routing device.\\
 \hline
 32 & MEMORY\_DEVICE & A replacable memory device, like a DIMM.  This should
-	not be used for individual memory chips, but for the board that
-	holds the memory chips.\\
+        not be used for individual memory chips, but for the board that
+        holds the memory chips.\\
 \hline
 33 & SYSTEM \_MANAGEMENT \_SOFTWARE & The meaning of this is unknown.\\
 \hline
@@ -4768,25 +4768,25 @@ Entity IDs defined by \ac{IPMI} are:
 36 & SYSTEM\_BUS & The main interconnect bus in a system.\\
 \hline
 37 & GROUP & A generic grouping of entities if no physical thing groups
-	them but they need to be groups.\\
+        them but they need to be groups.\\
 \hline
 38 & REMOTE\_MGMT \_COMM\_DEVICE & A communication device used for
-	remote management.\\
+        remote management.\\
 \hline
 39 & EXTERNAL \_ENVIRONMENT & The environment outside the chassis.  For
-	instance, a temperature sensor outside the chassis that monitored
-	external temperature would use this.  Different instances may be
-	used to specify different regions outside the box.\\
+        instance, a temperature sensor outside the chassis that monitored
+        external temperature would use this.  Different instances may be
+        used to specify different regions outside the box.\\
 \hline
 40 & BATTERY & A battery\\
 \hline
 41 & PROCESSING\_BLADE & A single-board computer, generally a board that
-	has one or more processors, memory, etc. that plugs into a
-	backplane.\\
+        has one or more processors, memory, etc. that plugs into a
+        backplane.\\
 \hline
 42 & CONNECTIVITY \_SWITCH & A network switch that plugs into a system
-	to provide connectivity between independent processors in a
-	system.\\
+        to provide connectivity between independent processors in a
+        system.\\
 \hline
 43 & PROCESSOR \_MEMORY \_MODULE & ?\\
 \hline
@@ -4867,11 +4867,11 @@ direct prohibition of this in \acs{IPMI}, although it would be a
 little wierd.  To iterate the parents, use the following call:
 \begin{verbatim}
 typedef void (*ipmi_entity_iterate_child_cb)(ipmi_entity_t *ent,
-					     ipmi_entity_t *child,
-					     void          *cb_data);
+                                             ipmi_entity_t *child,
+                                             void          *cb_data);
 void ipmi_entity_iterate_children(ipmi_entity_t                *ent,
-				  ipmi_entity_iterate_child_cb handler,
-				  void                         *cb_data);
+                                  ipmi_entity_iterate_child_cb handler,
+                                  void                         *cb_data);
 \end{verbatim}
 
 Similarly, an entity may have children, but it is certain that more
@@ -4879,11 +4879,11 @@ than one child is allowed.  To iterate entities children, use the
 following call:
 \begin{verbatim}
 typedef void (*ipmi_entity_iterate_parent_cb)(ipmi_entity_t *ent,
-					      ipmi_entity_t *parent,
-					      void          *cb_data);
+                                              ipmi_entity_t *parent,
+                                              void          *cb_data);
 void ipmi_entity_iterate_parents(ipmi_entity_t                 *ent,
-				 ipmi_entity_iterate_parent_cb handler,
-				 void                          *cb_data);
+                                 ipmi_entity_iterate_parent_cb handler,
+                                 void                          *cb_data);
 \end{verbatim}
 
 To discover if an entity is a child (has parent entities) or is a
@@ -4933,12 +4933,12 @@ If you need to know when an entity becomes present or absent, you may
 use the following callback registration:
 \begin{verbatim}
 typedef int (*ipmi_entity_presence_change_cb)(ipmi_entity_t *entity,
-					      int           present,
-					      void          *cb_data,
-					      ipmi_event_t  *event);
+                                              int           present,
+                                              void          *cb_data,
+                                              ipmi_event_t  *event);
 int ipmi_entity_add_presence_handler(ipmi_entity_t                  *ent,
-				     ipmi_entity_presence_change_cb handler,
-				     void                           *cb_data);
+                                     ipmi_entity_presence_change_cb handler,
+                                     void                           *cb_data);
 int ipmi_entity_remove_presence_handler
 (ipmi_entity_t                  *ent,
  ipmi_entity_presence_change_cb handler,
@@ -4984,125 +4984,125 @@ does not support the specific data item.  The data items supported are:
   & \bfseries{G} & \bfseries{U}\\
 \hline
 is\_fru & This will be true if the item has \acs{FRU} information
-	& x & x & x & x\\
+        & x & x & x & x\\
 \hline
 entity\_id & This will be the entity id of the entity.
-	& x & x & x & x\\
+        & x & x & x & x\\
 \hline
 entity\_instance & This will be the entity instance of the entity.
-	& x & x & x & x\\
+        & x & x & x & x\\
 \hline
 device\_channel & This is the device channel for the entity.  It is
-	only useful if the entity instance is device-relative.  See
-	section~\ref{chap-entities} for more details.
-	& x & x & x & x\\
+        only useful if the entity instance is device-relative.  See
+        section~\ref{chap-entities} for more details.
+        & x & x & x & x\\
 \hline
 device\_address & This is the \acs{IPMB} address for the entity.  It is
-	only useful if the entity instance is device-relative.  See
-	section~\ref{chap-entities} for more details.
-	& x & x & x & x\\
+        only useful if the entity instance is device-relative.  See
+        section~\ref{chap-entities} for more details.
+        & x & x & x & x\\
 \hline
 presense\_sensor \_always\_there & If this is true, then the entity has
-	a presence sensor or a presence bit sensor and that sensor is
-	always present.
-	& x & x & x & x\\
+        a presence sensor or a presence bit sensor and that sensor is
+        always present.
+        & x & x & x & x\\
 \hline
 channel & The channel number for the entity.  This is different than
-	device\_channel because it is the actual value from the \acs{SDR},
-	not the value from the entity info.
-	& x & x & x &  \\
+        device\_channel because it is the actual value from the \acs{SDR},
+        not the value from the entity info.
+        & x & x & x &  \\
 \hline
 lun & The \acs{LUN} from the SDR.
-	& x & x & x &  \\
+        & x & x & x &  \\
 \hline
 oem & The entity SDRs have an \acs{OEM} field that may be fetched with this
-	call.  The meaning of this is system dependent.
-	& x & x & x &  \\
+        call.  The meaning of this is system dependent.
+        & x & x & x &  \\
 \hline
 access\_address & The \acs{IPMB} address of the \acs{MC} the entity is on
-	or is represented by.
-	&   & x & x &  \\
+        or is represented by.
+        &   & x & x &  \\
 \hline
 private\_bus\_id & The FRU information may be on an \acs{EEPROM} device on
-	a private bus.  If so, 
-	&   & x & x &  \\
+        a private bus.  If so, 
+        &   & x & x &  \\
 \hline
 device\_type & The type of \acs{I$^2$C} device.  This is really not very
-	important, but these are defined in the IPMI spec.
-	&   & x & x &  \\
+        important, but these are defined in the IPMI spec.
+        &   & x & x &  \\
 \hline
 device\_modifier & An extension to the device\_type field to further refine
-	the device type.
-	&   & x & x &  \\
+        the device type.
+        &   & x & x &  \\
 \hline
 slave\_address & The IPMB address of the device on the IPMB.
-	& x &   & x &  \\
+        & x &   & x &  \\
 \hline
 is\_logical\_fru & Tells if the FRU information on the FRU is accessed
-	through an \ac{MC} (value is 1) or is access directly on the
-	IPMB bus as a EEPROM (value is 0).
-	&   & x &   &  \\
+        through an \ac{MC} (value is 1) or is access directly on the
+        IPMB bus as a EEPROM (value is 0).
+        &   & x &   &  \\
 \hline
 ACPI\_system\_power\_notify\_required & If true, ACPI system power state
-	notification is required for the device.
-	& x &   &   &  \\
+        notification is required for the device.
+        & x &   &   &  \\
 \hline
 ACPI\_device\_power\_notify\_required & If true, ACPI device power syste
-	notification is required by the device.
-	& x &   &   &  \\
+        notification is required by the device.
+        & x &   &   &  \\
 \hline
 controller\_logs\_init\_agent\_errors & If true, the \acs{MC} logs
-	initialization errors.
-	& x &   &   &  \\
+        initialization errors.
+        & x &   &   &  \\
 \hline
 log\_init\_agent\_errors\_accessing & If this is true, then the
-	initialization agent will log any failures trying to set
-	the event receiver for the device.
-	& x &   &   &  \\
+        initialization agent will log any failures trying to set
+        the event receiver for the device.
+        & x &   &   &  \\
 \hline
 global\_init & Tells the initialization agent whether to initialize
-	the controller's event receiver.  This is a two bit value:
-	\begin{description}
-	\item[00b] - Enable the controller's event receiver.
-	\item[01b] - Disable the controller's event receiver by setting it
-	  to FFh.  This is generally to turn of a rogue controller or
-	  for debugging.
-	\item[10b] - Do not initialize the controller's event receiver.
-	  this is generally for debugging.
-	\item[11b] - reserved
-	\end{description}
-	& x &   &   &  \\
+        the controller's event receiver.  This is a two bit value:
+        \begin{description}
+        \item[00b] - Enable the controller's event receiver.
+        \item[01b] - Disable the controller's event receiver by setting it
+          to FFh.  This is generally to turn of a rogue controller or
+          for debugging.
+        \item[10b] - Do not initialize the controller's event receiver.
+          this is generally for debugging.
+        \item[11b] - reserved
+        \end{description}
+        & x &   &   &  \\
 \hline
 chassis\_device & The controller handles the chassis commands.
-	& x &   &   &  \\
+        & x &   &   &  \\
 \hline
 bridge & The controller handles bridge commands.  This generally means it
-	supports \acs{ICMB}.
-	& x &   &   &  \\
+        supports \acs{ICMB}.
+        & x &   &   &  \\
 \hline
 IPMB\_event\_generator & The controller generates events on the \acs{IPMB}.
-	& x &   &   &  \\
+        & x &   &   &  \\
 \hline
 IPMB\_event\_receiver & The controller can receive events on the \acs{IPMB}.
-	& x &   &   &  \\
+        & x &   &   &  \\
 \hline
 FRU\_device\_inventory & The controller supports \acs{FRU} inventory commands.
-	& x &   &   &  \\
+        & x &   &   &  \\
 \hline
 SEL\_device & The controller supports a \acs{SEL} device for storing events.
-	& x &   &   &  \\
+        & x &   &   &  \\
 \hline
 SDR\_repository\_device & The controller supports a main \acs{SDR} repository.
-	& x &   &   &  \\
+        & x &   &   &  \\
 \hline
 sensor\_device & The controller has sensors, it supports the sensor commands.
-	& x &   &   &  \\
+        & x &   &   &  \\
 \hline
 get\_address\_span & The number of additional consecutive slave addresses
-	used by the device.  For instance, if the address is C0h and this
-	value is zero, then it is only at C0h.  If this value was one, then
-	it would be at C0h and C2h.
-	&   &   & x &  \\
+        used by the device.  For instance, if the address is C0h and this
+        value is zero, then it is only at C0h.  If this value was one, then
+        it would be at C0h and C2h.
+        &   &   & x &  \\
 \hline
 \end{longtable}
 
@@ -5135,21 +5135,21 @@ To find the sensors in an entity, you can iterate them using the
 function:
 \begin{verbatim}
 typedef void (*ipmi_entity_iterate_sensor_cb)(ipmi_entity_t *ent,
-					      ipmi_sensor_t *sensor,
-					      void          *cb_data);
+                                              ipmi_sensor_t *sensor,
+                                              void          *cb_data);
 void ipmi_entity_iterate_sensors(ipmi_entity_t                 *ent,
-				 ipmi_entity_iterate_sensor_cb handler,
-				 void                          *cb_data);
+                                 ipmi_entity_iterate_sensor_cb handler,
+                                 void                          *cb_data);
 \end{verbatim}
 The ``handler'' function will be called with each sensor in the
 entity.  Controls have a similar function:
 \begin{verbatim}
 typedef void (*ipmi_entity_iterate_control_cb)(ipmi_entity_t  *ent,
-					       ipmi_control_t *control,
-					       void           *cb_data);
+                                               ipmi_control_t *control,
+                                               void           *cb_data);
 void ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
-				  ipmi_entity_iterate_control_cb handler,
-				  void                           *cb_data);
+                                  ipmi_entity_iterate_control_cb handler,
+                                  void                           *cb_data);
 \end{verbatim}
 
 So, for instance, if you wanted to print the name and entity id string
@@ -5158,7 +5158,7 @@ of every sensor in an entity, you might have code that looks like:
 static void
 handle_sensor(ipmi_entity_t *ent,
               ipmi_sensor_t *sensor,
-	      void          *cb_data)
+              void          *cb_data)
 {
     char *name;
     int  length = ipmi_sensor_get_id_length(sensor);
@@ -5168,12 +5168,12 @@ handle_sensor(ipmi_entity_t *ent,
         name = ``empty name'';
     else {
         name = malloc(length+1);
-	if (!name) {
-	    /* Handle error */
-	    return;
+        if (!name) {
+            /* Handle error */
+            return;
         }
-	allocated = 1;
-	length = ipmi_sensor_get_id(sensor, name, length);
+        allocated = 1;
+        length = ipmi_sensor_get_id(sensor, name, length);
     }
     printf("Sensor %s\n", name);
     if (allocated)
@@ -5194,28 +5194,28 @@ control is added to the entity or deleted from the entity.  The
 following functions allow the user to watch sensors in a domain:
 \begin{verbatim}
 typedef void (*ipmi_entity_sensor_cb)(enum ipmi_update_e op,
-				      ipmi_entity_t      *ent,
-				      ipmi_sensor_t      *sensor,
-				      void               *cb_data);
+                                      ipmi_entity_t      *ent,
+                                      ipmi_sensor_t      *sensor,
+                                      void               *cb_data);
 int ipmi_entity_add_sensor_update_handler(ipmi_entity_t         *ent,
-					  ipmi_entity_sensor_cb handler,
-					  void                  *cb_data);
+                                          ipmi_entity_sensor_cb handler,
+                                          void                  *cb_data);
 int ipmi_entity_remove_sensor_update_handler(ipmi_entity_t         *ent,
-					     ipmi_entity_sensor_cb handler,
-					     void                  *cb_data);
+                                             ipmi_entity_sensor_cb handler,
+                                             void                  *cb_data);
 \end{verbatim}
 Likewise, the following function are for controls:
 \begin{verbatim}
 typedef void (*ipmi_entity_control_cb)(enum ipmi_update_e op,
-				       ipmi_entity_t      *ent,
-				       ipmi_control_t     *control,
-				       void               *cb_data);
+                                       ipmi_entity_t      *ent,
+                                       ipmi_control_t     *control,
+                                       void               *cb_data);
 int ipmi_entity_add_control_update_handler(ipmi_entity_t          *ent,
-					   ipmi_entity_control_cb handler,
-					   void                   *cb_data);
+                                           ipmi_entity_control_cb handler,
+                                           void                   *cb_data);
 int ipmi_entity_remove_control_update_handler(ipmi_entity_t          *ent,
-					      ipmi_entity_control_cb handler,
-					      void                   *cb_data);
+                                              ipmi_entity_control_cb handler,
+                                              void                   *cb_data);
 \end{verbatim}
 The add functions should generally be called in the callback that
 reports the new entity, that way you will not miss any controls or
@@ -5229,9 +5229,9 @@ it was added, removed, or changed:
 \begin{verbatim}
 static void
 handle_sensor(enum ipmi_update_e op,
-	      ipmi_entity_t      *ent,
+              ipmi_entity_t      *ent,
               ipmi_sensor_t      *sensor,
-	      void               *cb_data)
+              void               *cb_data)
 {
     char *name;
     int  length = ipmi_sensor_get_id_length(sensor);
@@ -5241,12 +5241,12 @@ handle_sensor(enum ipmi_update_e op,
         name = ``empty name'';
     else {
         name = malloc(length+1);
-	if (!name) {
-	    /* Handle error */
-	    return;
+        if (!name) {
+            /* Handle error */
+            return;
         }
-	allocated = 1;
-	length = ipmi_sensor_get_id(sensor, name, length);
+        allocated = 1;
+        length = ipmi_sensor_get_id(sensor, name, length);
     }
     printf("Sensor %s\n", name);
     if (allocated)
@@ -5426,130 +5426,130 @@ IPMI\_EVENT\_READING\_TYPE\_.  The values are:
 \begin{longtable}{|p{.27\textwidth}|p{0.65\textwidth}|}
 \hline
 THRESHOLD & The sensor monitors an analog value.  All threshold sensors
-	have this value.\\
+        have this value.\\
 \hline
 DISCRETE\_USAGE & These are \acs{DMI}-based usage states.  Valid offsets
-	are:
-	\begin{description}
-	\item[00h] - transition to idle
-	\item[01h] - transition to active
-	\item[02h] - transition to busy
-	\end{description}\\
+        are:
+        \begin{description}
+        \item[00h] - transition to idle
+        \item[01h] - transition to active
+        \item[02h] - transition to busy
+        \end{description}\\
 \hline
 DISCRETE\_STATE & Monitors the value of a state.  Valid values are:
-	\begin{description}
-	\item[00h] - state deasserted
-	\item[01h] - state asserted
-	\end{description}\\
+        \begin{description}
+        \item[00h] - state deasserted
+        \item[01h] - state asserted
+        \end{description}\\
 \hline
 DISCRETE \_PREDICTIVE \_FAILURE & This is used to know if an entity is
-	about to fail, but is still operations.  Valid values are:
-	\begin{description}
-	\item[00h] - predictive failure deasserted
-	\item[01h] - predictive failure asserted
-	\end{description}\\
+        about to fail, but is still operations.  Valid values are:
+        \begin{description}
+        \item[00h] - predictive failure deasserted
+        \item[01h] - predictive failure asserted
+        \end{description}\\
 \hline
 DISCRETE\_LIMIT \_EXCEEDED & This is used to tell if a limit has been
-	exceeded.  Valid values are:
-	\begin{description}
-	\item[00h] - limit not exceeded
-	\item[01h] - limit exceeded
-	\end{description}\\
+        exceeded.  Valid values are:
+        \begin{description}
+        \item[00h] - limit not exceeded
+        \item[01h] - limit exceeded
+        \end{description}\\
 \hline
 DISCRETE \_PERFORMANCE \_MET & This is used to tell if system performance
-	is meeting expectations.  Valid values are:
-	\begin{description}
-	\item[00h] - performance met
-	\item[01h] - performance not met
-	\end{description}\\
+        is meeting expectations.  Valid values are:
+        \begin{description}
+        \item[00h] - performance met
+        \item[01h] - performance not met
+        \end{description}\\
 \hline
 DISCRETE \_SEVERITY & This is used to know if an entity is in trouble
-	or other state information.  Valid values are:
-	\begin{description}
-	\item[00h] - transition to ok
-	\item[01h] - transition to non-critical from ok.
-	\item[02h] - transition to critical from less critical.
-	\item[03h] - transition to non-recoverable from less critical.
-	\item[04h] - transition to non-critical from more critical.
-	\item[05h] - transition to critical from non-recoverable.
-	\item[06h] - transition to non-recoverable.\footnote{This state
-	  seems rather silly and is probably not used.}
-	\item[07h] - monitor
-	\item[08h] - informational
-	\end{description}
-	The actual meaning of these is not defined by the spec.\\
+        or other state information.  Valid values are:
+        \begin{description}
+        \item[00h] - transition to ok
+        \item[01h] - transition to non-critical from ok.
+        \item[02h] - transition to critical from less critical.
+        \item[03h] - transition to non-recoverable from less critical.
+        \item[04h] - transition to non-critical from more critical.
+        \item[05h] - transition to critical from non-recoverable.
+        \item[06h] - transition to non-recoverable.\footnote{This state
+          seems rather silly and is probably not used.}
+        \item[07h] - monitor
+        \item[08h] - informational
+        \end{description}
+        The actual meaning of these is not defined by the spec.\\
 \hline
 DISCRETE \_DEVICE \_PRESENCE & This is a presence sensor to know when
-	an entity is present or not.  Note that OpenIPMI uses this for
-	entity presence if it is available.  Valid values are:
-	\begin{description}
-	\item[00h] - entity not present
-	\item[01h] - entity present
-	\end{description}\\
+        an entity is present or not.  Note that OpenIPMI uses this for
+        entity presence if it is available.  Valid values are:
+        \begin{description}
+        \item[00h] - entity not present
+        \item[01h] - entity present
+        \end{description}\\
 \hline
 DISCRETE \_DEVICE \_ENABLE & This tells if a device is enabled.  Valid
-	values are:
-	\begin{description}
-	\item[00h] - device disabled
-	\item[01h] - device enabled
-	\end{description}\\
+        values are:
+        \begin{description}
+        \item[00h] - device disabled
+        \item[01h] - device enabled
+        \end{description}\\
 \hline
 DISCRETE \_AVAILABILITY & This tells the current availability state of
-	the device.  Valid values are:
-	\begin{description}
-	\item[00h] - transition to running
-	\item[01h] - transition to in test
-	\item[02h] - transition to power off
-	\item[03h] - transition to on line
-	\item[04h] - transition to off line
-	\item[05h] - transition to off duty
-	\item[06h] - transition to degraded
-	\item[07h] - transition to power save
-	\item[08h] - install error
-	\end{description}\\
+        the device.  Valid values are:
+        \begin{description}
+        \item[00h] - transition to running
+        \item[01h] - transition to in test
+        \item[02h] - transition to power off
+        \item[03h] - transition to on line
+        \item[04h] - transition to off line
+        \item[05h] - transition to off duty
+        \item[06h] - transition to degraded
+        \item[07h] - transition to power save
+        \item[08h] - install error
+        \end{description}\\
 \hline
 DISCRETE \_REDUNDANCY & This shows the redundancy state of an entity.  Valid
-	values are:
-	\begin{description}
-	\item[00h] - Fully redundant, the entity has full redundancy.
-	\item[01h] - Redundancy lost, this is reported if
-	  redundancy has been lost at all.
-	\item[02h] - Redundance degraded, the system is still redundant
-	  but is missing some resources (like the system has four fans
-	  and only two are running).
-	\item[03h] - Transition from fully redundant to non-redundant:
-	  sufficient resource.  The entity
-	  has lost redundancy but has sufficient resources to continue
-	  normal operation.
-	\item[04h] - Transition from non-redundant:sufficient
-	  resources to non-redundant:insufficient resource.  The
-	  entity has lost enough resources to continue normal
-	  operation.
-	\item[05h] - Transition from fully redundant to non-redundant:
-	  sufficient resource.  The entity
-	  has lost redundancy but has sufficient resources to continue
-	  normal operation.
-	\item[06h] - Non-redundant:insufficient resources.  entity has
-	  lost redundancy and lost enough resources to continue normal
-	  operation.
-	\item[07h] - Transition from redundant to redundancy degraded.
-	  The unit has lost some redundancy but is still redundant.
-	\item[08h] - Transition from redundancy lost to redundancy
-	  degraded.  The entity had lost redundancy and has regained
-	  some redundancy, but is not fully redundant.
-	\end{description}\\
+        values are:
+        \begin{description}
+        \item[00h] - Fully redundant, the entity has full redundancy.
+        \item[01h] - Redundancy lost, this is reported if
+          redundancy has been lost at all.
+        \item[02h] - Redundance degraded, the system is still redundant
+          but is missing some resources (like the system has four fans
+          and only two are running).
+        \item[03h] - Transition from fully redundant to non-redundant:
+          sufficient resource.  The entity
+          has lost redundancy but has sufficient resources to continue
+          normal operation.
+        \item[04h] - Transition from non-redundant:sufficient
+          resources to non-redundant:insufficient resource.  The
+          entity has lost enough resources to continue normal
+          operation.
+        \item[05h] - Transition from fully redundant to non-redundant:
+          sufficient resource.  The entity
+          has lost redundancy but has sufficient resources to continue
+          normal operation.
+        \item[06h] - Non-redundant:insufficient resources.  entity has
+          lost redundancy and lost enough resources to continue normal
+          operation.
+        \item[07h] - Transition from redundant to redundancy degraded.
+          The unit has lost some redundancy but is still redundant.
+        \item[08h] - Transition from redundancy lost to redundancy
+          degraded.  The entity had lost redundancy and has regained
+          some redundancy, but is not fully redundant.
+        \end{description}\\
 \hline
 DISCRETE\_ACPI \_POWER & The current ACPI power state of the system.  Valid
-	values are:
-	\begin{description}
-	\item[00h] - D0 power state
-	\item[01h] - D1 power state
-	\item[02h] - D2 power state
-	\item[03h] - D3 power state
-	\end{description}\\
+        values are:
+        \begin{description}
+        \item[00h] - D0 power state
+        \item[01h] - D1 power state
+        \item[02h] - D2 power state
+        \item[03h] - D3 power state
+        \end{description}\\
 \hline
 SENSOR\_SPECIFIC & This setting means that the offsets in the sensor are
-	dependent on the sensor type.  This is only for discrete sensors.\\
+        dependent on the sensor type.  This is only for discrete sensors.\\
 \hline
 \end{longtable}
 
@@ -5576,158 +5576,158 @@ CURRENT & \\
 FAN & \\
 \hline
 PHYSICAL\_SECURITY & The chassis was opened or accessed.
-	\begin{description}
-	\item[00h] - General chassis intrusion
-	\item[01h] - Drive bay intrusion
-	\item[02h] - I/O card area intrusion
-	\item[03h] - Processor area intrusion
-	\item[04h] - LAN cable is unplugged
-	\item[05h] - Unauthorized dock/undock
-	\item[06h] - Fan area intrusion (including unauthorized hot-plugs
-	  of fans).
-	\end{description}\\
+        \begin{description}
+        \item[00h] - General chassis intrusion
+        \item[01h] - Drive bay intrusion
+        \item[02h] - I/O card area intrusion
+        \item[03h] - Processor area intrusion
+        \item[04h] - LAN cable is unplugged
+        \item[05h] - Unauthorized dock/undock
+        \item[06h] - Fan area intrusion (including unauthorized hot-plugs
+          of fans).
+        \end{description}\\
 \hline
 PLATFORM\_SECURITY &
-	\begin{description}
-	\item[00h] - The spec says ``Secure Mode (Front Panel Lockout)
-	  Violation attempt''.  The meaning of this is unknown.
-	\item[01h] - User pre-boot password failure.
-	\item[02h] - Setup pre-boot password failure.
-	\item[03h] - Network pre-boot password failure.
-	\item[04h] - Other pre-boot password failure.
-	\item[05h] - Out-of-band pre-boot password failure.
-	\end{description}\\
+        \begin{description}
+        \item[00h] - The spec says ``Secure Mode (Front Panel Lockout)
+          Violation attempt''.  The meaning of this is unknown.
+        \item[01h] - User pre-boot password failure.
+        \item[02h] - Setup pre-boot password failure.
+        \item[03h] - Network pre-boot password failure.
+        \item[04h] - Other pre-boot password failure.
+        \item[05h] - Out-of-band pre-boot password failure.
+        \end{description}\\
 \hline
 PROCESSOR & Various processor failures.  Most of these are very Intel processor
-	centric, you may need to reference the processor manual for the
-	meaning of the failure.
-	\begin{description}
-	\item[00h] - IERR
-	\item[01h] - Thermal Trip
-	\item[02h] - FRB1/BIST failure
-	\item[03h] - FRB2/Hang in POST failure, if the failure is believed
-	  to be due to a processor failure.
-	\item[04h] - FRB3/Processor Startup/Initialization failure (CPU
-	  didn't start).
-	\item[05h] - Configuration Error
-	\item[06h] - SMBIOS ``Uncorrectable CPU-complex error''
-	\item[07h] - Processor presence detected
-	\item[08h] - Processor disabled
-	\item[09h] - Terminator presence detected
-	\end{description}\\
+        centric, you may need to reference the processor manual for the
+        meaning of the failure.
+        \begin{description}
+        \item[00h] - IERR
+        \item[01h] - Thermal Trip
+        \item[02h] - FRB1/BIST failure
+        \item[03h] - FRB2/Hang in POST failure, if the failure is believed
+          to be due to a processor failure.
+        \item[04h] - FRB3/Processor Startup/Initialization failure (CPU
+          didn't start).
+        \item[05h] - Configuration Error
+        \item[06h] - SMBIOS ``Uncorrectable CPU-complex error''
+        \item[07h] - Processor presence detected
+        \item[08h] - Processor disabled
+        \item[09h] - Terminator presence detected
+        \end{description}\\
 \hline
 POWER\_SUPPLY & 
-	\begin{description}
-	\item[00h] - Presence detected
-	\item[01h] - Failure detected
-	\item[02h] - Predictive failure.  This probably means that the
-	  power supply is still working but may fail soon.
-	\item[03h] - AC lost
-	\item[04h] - AC lost or out-of-range
-	\item[05h] - AC present but out of range
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Presence detected
+        \item[01h] - Failure detected
+        \item[02h] - Predictive failure.  This probably means that the
+          power supply is still working but may fail soon.
+        \item[03h] - AC lost
+        \item[04h] - AC lost or out-of-range
+        \item[05h] - AC present but out of range
+        \end{description}\\
 \hline
 POWER\_UNIT & 
-	\begin{description}
-	\item[00h] - Power off
-	\item[01h] - Power cycle
-	\item[02h] - 240VA power down
-	\item[03h] - Interlock power down
-	\item[04h] - AC lost
-	\item[05h] - Soft power control failure (unit did not response to
-	  request)
-	\item[06h] - Failure detected
-	\item[07h] - Predictive failure.  This probably means that the
-	  power unit is still working but may fail soon.
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Power off
+        \item[01h] - Power cycle
+        \item[02h] - 240VA power down
+        \item[03h] - Interlock power down
+        \item[04h] - AC lost
+        \item[05h] - Soft power control failure (unit did not response to
+          request)
+        \item[06h] - Failure detected
+        \item[07h] - Predictive failure.  This probably means that the
+          power unit is still working but may fail soon.
+        \end{description}\\
 \hline
 COOLING\_DEVICE & \\
 \hline
 OTHER\_UNITS\_BASED\_SENSOR & The sensor is a threshold sensor, but not one
-	specified directly by the spec.  The units can be fetched with
-	the calls to get the units.\\
+        specified directly by the spec.  The units can be fetched with
+        the calls to get the units.\\
 \hline
 MEMORY & 
-	\begin{description}
-	\item[00h] - Correctable memory error
-	\item[01h] - Uncorrectable memory error
-	\item[02h] - Parity error
-	\item[03h] - Memory scrub failed, probably stuck bit
-	\item[04h] - Memory device disabled
-	\item[05h] - Reached log limit for correctable memory errors
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Correctable memory error
+        \item[01h] - Uncorrectable memory error
+        \item[02h] - Parity error
+        \item[03h] - Memory scrub failed, probably stuck bit
+        \item[04h] - Memory device disabled
+        \item[05h] - Reached log limit for correctable memory errors
+        \end{description}\\
 \hline
 DRIVE\_SLOT & \\
 \hline
 POWER\_MEMORY \_RESIZE & \\
 \hline
 SYSTEM \_FIRMWARE \_PROGRESS &  Information about the system firmware (BIOS).
-	In an event, the event data 2 may give further information about
-	the error.  See section~\ref{sec-event-data-info-for-events} for
-	more info.
-	\begin{description}
-	\item[00h] - System firmware error (power-on-self-test error)
-	\item[01h] - System firmware hang
-	\item[02h] - System firmware progress
-	\end{description}\\
+        In an event, the event data 2 may give further information about
+        the error.  See section~\ref{sec-event-data-info-for-events} for
+        more info.
+        \begin{description}
+        \item[00h] - System firmware error (power-on-self-test error)
+        \item[01h] - System firmware hang
+        \item[02h] - System firmware progress
+        \end{description}\\
 \hline
 EVENT \_LOGGING \_DISABLED & 
-	\begin{description}
-	\item[00h] - Correctable memory error logging disabled
-	\item[01h] - Event logging has been disabled for the sensor
-	  specified in the event information.  In an event, event data
-	  provides more information about the event, see
-	  section~\ref{sec-event-data-info-for-events} for more info.
-	\item[02h] - Log area cleared
-	\item[03h] - All event logging disabled
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Correctable memory error logging disabled
+        \item[01h] - Event logging has been disabled for the sensor
+          specified in the event information.  In an event, event data
+          provides more information about the event, see
+          section~\ref{sec-event-data-info-for-events} for more info.
+        \item[02h] - Log area cleared
+        \item[03h] - All event logging disabled
+        \end{description}\\
 \hline
 WATCHDOG\_1 & This is for IPMI version 0.9 and old 1.0 only.  Later 1.0 and
-	newer specs use	the watchdog 2 sensor type.
-	\begin{description}
-	\item[00h] - BIOS watchdog reset
-	\item[01h] - OS watchdog reset
-	\item[02h] - OS watchdog shutdown
-	\item[03h] - OS watchdog power down
-	\item[04h] - OS watchdog power cycle
-	\item[05h] - OS watchdog NMI or diagnostic interrupt
-	\item[06h] - OS watchdog expired, status only
-	\item[07h] - OS watchdog pre-timeout interrupt, not NMI
-	\end{description}\\
+        newer specs use the watchdog 2 sensor type.
+        \begin{description}
+        \item[00h] - BIOS watchdog reset
+        \item[01h] - OS watchdog reset
+        \item[02h] - OS watchdog shutdown
+        \item[03h] - OS watchdog power down
+        \item[04h] - OS watchdog power cycle
+        \item[05h] - OS watchdog NMI or diagnostic interrupt
+        \item[06h] - OS watchdog expired, status only
+        \item[07h] - OS watchdog pre-timeout interrupt, not NMI
+        \end{description}\\
 \hline
 SYSTEM\_EVENT & 
-	\begin{description}
-	\item[00h] - System reconfigured
-	\item[01h] - OEM system boot event
-	\item[02h] - Undetermined system hardware failure
-	\item[03h] - Entry added to the auxilliary log.  In an event,
-	  event data provides more information about the event, see
-	  section~\ref{sec-event-data-info-for-events} for more info.
-	\item[04h] - PEF action.  In an event, event data provides
-	  more information about the event, see
-	  section~\ref{sec-event-data-info-for-events} for more info.
-	\end{description}\\
+        \begin{description}
+        \item[00h] - System reconfigured
+        \item[01h] - OEM system boot event
+        \item[02h] - Undetermined system hardware failure
+        \item[03h] - Entry added to the auxilliary log.  In an event,
+          event data provides more information about the event, see
+          section~\ref{sec-event-data-info-for-events} for more info.
+        \item[04h] - PEF action.  In an event, event data provides
+          more information about the event, see
+          section~\ref{sec-event-data-info-for-events} for more info.
+        \end{description}\\
 \hline
 CRITICAL\_INTERRUPT &
-	\begin{description}
-	\item[00h] - Front panel NMI/Diagnostic interrupt
-	\item[01h] - Bus timeout
-	\item[02h] - I/O channel check NMI
-	\item[03h] - Software NMI
-	\item[04h] - PCI PERR
-	\item[05h] - PCI SERR
-	\item[06h] - EISA fail safe timeout
-	\item[07h] - Bus correctable error
-	\item[08h] - Bus uncorrectable error
-	\item[09h] - Fatal NMI (port 61h, bit 7)
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Front panel NMI/Diagnostic interrupt
+        \item[01h] - Bus timeout
+        \item[02h] - I/O channel check NMI
+        \item[03h] - Software NMI
+        \item[04h] - PCI PERR
+        \item[05h] - PCI SERR
+        \item[06h] - EISA fail safe timeout
+        \item[07h] - Bus correctable error
+        \item[08h] - Bus uncorrectable error
+        \item[09h] - Fatal NMI (port 61h, bit 7)
+        \end{description}\\
 \hline
 BUTTON & 
-	\begin{description}
-	\item[00h] - Power button pressed
-	\item[01h] - Sleep button pressed
-	\item[02h] - Reset button pressed
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Power button pressed
+        \item[01h] - Sleep button pressed
+        \item[02h] - Reset button pressed
+        \end{description}\\
 \hline
 MODULE\_BOARD & \\
 \hline
@@ -5746,133 +5746,133 @@ CABLE\_INTERCONNECT & \\
 TERMINATOR & \\
 \hline
 SYSTEM\_BOOT\_INITIATED &
-	\begin{description}
-	\item[00h] - Power up
-	\item[01h] - Hard reset
-	\item[02h] - Warm reset
-	\item[03h] - User requested PXE boot
-	\item[04h] - Automatic boot to diagnostic
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Power up
+        \item[01h] - Hard reset
+        \item[02h] - Warm reset
+        \item[03h] - User requested PXE boot
+        \item[04h] - Automatic boot to diagnostic
+        \end{description}\\
 \hline
 BOOT\_ERROR & 
-	\begin{description}
-	\item[00h] - No bootable media
-	\item[01h] - Non-bootable disk in drive
-	\item[02h] - PXE server not found
-	\item[03h] - Invalid boot sector
-	\item[04h] - Timeout waiting for user selection of boot source
-	\end{description}\\
+        \begin{description}
+        \item[00h] - No bootable media
+        \item[01h] - Non-bootable disk in drive
+        \item[02h] - PXE server not found
+        \item[03h] - Invalid boot sector
+        \item[04h] - Timeout waiting for user selection of boot source
+        \end{description}\\
 \hline
 OS\_BOOT & 
-	\begin{description}
-	\item[00h] - A: boot completed
-	\item[00h] - C: boot completed
-	\item[00h] - PXE boot completed
-	\item[00h] - Diagnostic boot completed
-	\item[00h] - CDROM boot completed
-	\item[00h] - ROM boot completed
-	\item[00h] - Boot completed, boot device not specified
-	\end{description}\\
+        \begin{description}
+        \item[00h] - A: boot completed
+        \item[00h] - C: boot completed
+        \item[00h] - PXE boot completed
+        \item[00h] - Diagnostic boot completed
+        \item[00h] - CDROM boot completed
+        \item[00h] - ROM boot completed
+        \item[00h] - Boot completed, boot device not specified
+        \end{description}\\
 \hline
 OS\_CRITICAL\_STOP & 
-	\begin{description}
-	\item[00h] - Stop during OS load or initialization
-	\item[01h] - Stop during OS operation
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Stop during OS load or initialization
+        \item[01h] - Stop during OS operation
+        \end{description}\\
 \hline
 SLOT\_CONNECTOR & Note that ready for installation, ready for removal, and
-	power states can transition together.  In an event, event data provides
-	more information about the event, see
-	section~\ref{sec-event-data-info-for-events} for more info.
-	\begin{description}
-	\item[00h] - Fault status
-	\item[01h] - Identify status
-	\item[02h] - Device installed (includes doc events)
-	\item[03h] - Ready for device installation.  This generally means
-	  that the power is off.
-	\item[04h] - Ready for device removal.
-	\item[05h] - Power is off
-	\item[06h] - Removal request.  This generally means that the user
-	  has asserted some mechanism that requests removal.
-	\item[07h] - Interlock.  This is generally some mechanical device
-	  that disables power to the slot.  Assertion means that the
-	  disable is active.
-	\item[08h] - Slot is disabled.
-	\end{description}\\
+        power states can transition together.  In an event, event data provides
+        more information about the event, see
+        section~\ref{sec-event-data-info-for-events} for more info.
+        \begin{description}
+        \item[00h] - Fault status
+        \item[01h] - Identify status
+        \item[02h] - Device installed (includes doc events)
+        \item[03h] - Ready for device installation.  This generally means
+          that the power is off.
+        \item[04h] - Ready for device removal.
+        \item[05h] - Power is off
+        \item[06h] - Removal request.  This generally means that the user
+          has asserted some mechanism that requests removal.
+        \item[07h] - Interlock.  This is generally some mechanical device
+          that disables power to the slot.  Assertion means that the
+          disable is active.
+        \item[08h] - Slot is disabled.
+        \end{description}\\
 \hline
 SYSTEM\_ACPI\_POWER\_STATE & 
-	\begin{description}
-	\item[00h] - S0/G0 ``Working''
-	\item[01h] - S1 ``Sleeping, system h/w and processor
-	  context maintained''
-	\item[02h] - S2 ``Sleeping, processor context lost''
-	\item[03h] - S3 ``Sleeping, system h/w and processor
-	  context lost, memory maintained''
-	\item[04h] - S4 ``non-volatile sleep or suspend to disk''
-	\item[05h] - S5/G2 ``soft off''
-	\item[06h] - S4/S5 soft-off, particular S4/S5 state cannot be
-	  determined.
-	\item[07h] - G3 ``Mechanical off''
-	\item[08h] - Sleeping in an S1, S2, or S3 state, particular state
-	  cannot be determined.
-	\item[09h] - G1 sleeping, S1-S4 state cannot be determined
-	\item[0Ah] - S5 state entered by override
-	\item[0Bh] - Legacy on state
-	\item[0Ch] - Legacy off state
-	\item[0Eh] - Unknown
-	\end{description}\\
+        \begin{description}
+        \item[00h] - S0/G0 ``Working''
+        \item[01h] - S1 ``Sleeping, system h/w and processor
+          context maintained''
+        \item[02h] - S2 ``Sleeping, processor context lost''
+        \item[03h] - S3 ``Sleeping, system h/w and processor
+          context lost, memory maintained''
+        \item[04h] - S4 ``non-volatile sleep or suspend to disk''
+        \item[05h] - S5/G2 ``soft off''
+        \item[06h] - S4/S5 soft-off, particular S4/S5 state cannot be
+          determined.
+        \item[07h] - G3 ``Mechanical off''
+        \item[08h] - Sleeping in an S1, S2, or S3 state, particular state
+          cannot be determined.
+        \item[09h] - G1 sleeping, S1-S4 state cannot be determined
+        \item[0Ah] - S5 state entered by override
+        \item[0Bh] - Legacy on state
+        \item[0Ch] - Legacy off state
+        \item[0Eh] - Unknown
+        \end{description}\\
 \hline
 WATCHDOG\_2 & This is for newer IPMI 1.0 systems and later specs.  In an
-	event, event data provides more information about the event, see
-	section~\ref{sec-event-data-info-for-events} for more info.
-	\begin{description}
-	\item[00h] - Timer expired, status only, no action
-	\item[01h] - Hard reset
-	\item[02h] - Power down
-	\item[03h] - Power cycle
-	\item[08h] - Timer interrupts.
-	\end{description}\\
+        event, event data provides more information about the event, see
+        section~\ref{sec-event-data-info-for-events} for more info.
+        \begin{description}
+        \item[00h] - Timer expired, status only, no action
+        \item[01h] - Hard reset
+        \item[02h] - Power down
+        \item[03h] - Power cycle
+        \item[08h] - Timer interrupts.
+        \end{description}\\
 \hline
 PLATFORM\_ALERT & Used for monitoring the platform management firmware,
-	status can be fetched and events generated on platform management
-	actions.
-	\begin{description}
-	\item[00h] - Page sent
-	\item[01h] - LAN alert sent
-	\item[02h] - Event trap sent per IPMI PET specification
-	\item[03h] - Event trap sent using OEM format
-	\end{description}\\
+        status can be fetched and events generated on platform management
+        actions.
+        \begin{description}
+        \item[00h] - Page sent
+        \item[01h] - LAN alert sent
+        \item[02h] - Event trap sent per IPMI PET specification
+        \item[03h] - Event trap sent using OEM format
+        \end{description}\\
 \hline
 ENTITY\_PRESENCE & This is the sensor used to tell if an entity is present
-	or not.  This applied to the entity the sensor is attached to.
-	\begin{description}
-	\item[00h] - Entity is present
-	\item[01h] - Entity is absent
-	\item[02h] - Entity is present but disabled
-	\end{description}\\
+        or not.  This applied to the entity the sensor is attached to.
+        \begin{description}
+        \item[00h] - Entity is present
+        \item[01h] - Entity is absent
+        \item[02h] - Entity is present but disabled
+        \end{description}\\
 \hline
 MONITOR\_ASIC\_IC & \\
 \hline
 LAN & 
-	\begin{description}
-	\item[00h] - LAN heartbeat lost
-	\item[01h] - LAN heartbeat present
-	\end{description}\\
+        \begin{description}
+        \item[00h] - LAN heartbeat lost
+        \item[01h] - LAN heartbeat present
+        \end{description}\\
 \hline
 MANAGEMENT\_SUBSYSTEM\_HEALTH & 
-	\begin{description}
-	\item[00h] - Sensor access degraded or unavailable
-	\item[01h] - Controller access degraded or unavailable
-	\item[02h] - Management controller offline
-	\item[03h] - Management controller unavailable
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Sensor access degraded or unavailable
+        \item[01h] - Controller access degraded or unavailable
+        \item[02h] - Management controller offline
+        \item[03h] - Management controller unavailable
+        \end{description}\\
 \hline
 BATTERY & 
-	\begin{description}
-	\item[00h] - Battery is low
-	\item[01h] - Battery failed
-	\item[02h] - Battery is present.
-	\end{description}\\
+        \begin{description}
+        \item[00h] - Battery is low
+        \item[01h] - Battery failed
+        \item[02h] - Battery is present.
+        \end{description}\\
 \hline
 \end{longtable}
 
@@ -5939,19 +5939,19 @@ values are:
 \begin{longtable}{|p{0.27\textwidth}|p{0.65\textwidth}|}
 \hline
 PER\_STATE & Each individual state or threshold may individually have
-	its events turned off and on.  This means that the individual
-	thresholds and states may be individually enabled.\\
+        its events turned off and on.  This means that the individual
+        thresholds and states may be individually enabled.\\
 \hline
 ENTIRE\_SENSOR & The entire sensor may have events enabled and disabled
-	using the events\_enabled setting when setting the event
-	enables.  Section~\ref{sec-sensor-event-states} describes this
-	setting.\\
+        using the events\_enabled setting when setting the event
+        enables.  Section~\ref{sec-sensor-event-states} describes this
+        setting.\\
 \hline
 GLOBAL\_ENABLE & Events may only be enabled and disabled for the whole
-	managment controller.  Events are disabled by setting the
-	event receiver to 00h, or enabled by setting them to the proper
-	event receiver.  See section~\ref{sec-global-event-enables}
-	for more details.\\
+        managment controller.  Events are disabled by setting the
+        event receiver to 00h, or enabled by setting them to the proper
+        event receiver.  See section~\ref{sec-global-event-enables}
+        for more details.\\
 \hline
 NONE & The sensor does not support events.\\
 \hline
@@ -6013,22 +6013,6 @@ If event messages are enabled, then the sensor may generate events.
 If scanning is enabled, then the sensor is ``turned on'' and working.
 If initial update is in progress, the information from the sensor is
 not valid since the sensor is still trying to get a valid reading.
-
-For discrete sensor, the function:
-\begin{verbatim}
-int ipmi_is_state_set(ipmi_states_t *states,
-		      int           state_num);
-\end{verbatim}
-will return true if the given state (bit) is set and false if it is
-not set.
-
-For threshold sensors, the function:
-\begin{verbatim}
-int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
-				   enum ipmi_thresh_e thresh);
-\end{verbatim}
-will return true if the given threshold is out of rant and false if
-not.
 
 \subsubsection{Sensor Event State Information}
 \label{sec-sensor-event-states}
@@ -6096,17 +6080,17 @@ directly to the sensor; it must be sent.  To send them, use one of the
 following:
 \begin{verbatim}
 int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
-				  ipmi_event_state_t    *states,
-				  ipmi_sensor_done_cb   done,
-				  void                  *cb_data);
+                                  ipmi_event_state_t    *states,
+                                  ipmi_sensor_done_cb   done,
+                                  void                  *cb_data);
 int ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
-			      ipmi_event_state_t    *states,
-			      ipmi_sensor_done_cb   done,
-			      void                  *cb_data);
+                              ipmi_event_state_t    *states,
+                              ipmi_sensor_done_cb   done,
+                              void                  *cb_data);
 int ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
-			       ipmi_event_state_t    *states,
-			       ipmi_sensor_done_cb   done,
-			       void                  *cb_data);
+                               ipmi_event_state_t    *states,
+                               ipmi_sensor_done_cb   done,
+                               void                  *cb_data);
 \end{verbatim}
 The ``set'' function will set the states to exactly what is set in the
 event state structure.  The ``enable'' function will only enable the
@@ -6120,12 +6104,12 @@ to the values in the event state structure.
 To query the current event state settings, use the following function:
 \begin{verbatim}
 typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,
-					  int                err,
-					  ipmi_event_state_t *states,
-					  void               *cb_data);
+                                          int                err,
+                                          ipmi_event_state_t *states,
+                                          void               *cb_data);
 int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
-				  ipmi_event_enables_get_cb done,
-				  void                      *cb_data);
+                                  ipmi_event_enables_get_cb done,
+                                  void                      *cb_data);
 \end{verbatim}
 
 Appendex~\vref{app-sample-prog-event-setup} contains a program that
@@ -6140,10 +6124,10 @@ TBD - write this.
 int ipmi_sensor_get_supports_auto_rearm(ipmi_sensor_t *sensor);
 
 int ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
-		      int                 global_enable,
-		      ipmi_event_state_t  *state,
-		      ipmi_sensor_done_cb done,
-		      void                *cb_data);
+                      int                 global_enable,
+                      ipmi_event_state_t  *state,
+                      ipmi_sensor_done_cb done,
+                      void                *cb_data);
 \end{verbatim}
 
 \subsubsection{Initialization}
@@ -6167,23 +6151,22 @@ As mentioned before, threshold sensors monitor analog values.  This
 means that they have a lot of information about how to convert the
 values from the raw readings (the 0-255 value returned from the
 sensor) into useful readings, what thresholds are supported,
-hysteresis settings, and a plethora of other settings.  This is not
-complicated (and OpenIPMI handles the most difficult parts of this)
-but there are a lot of things to do.
+hysteresis settings, and a plethora of other settings.  Lots of things
+can be set up for threshold sensors.
 
 \subsubsection{Threshold Sensor Readings in OpenIPMI}
 The reading of a threshold sensor is done with the following:
 \begin{verbatim}
 typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t             *sensor,
-				     int                       err,
-				     enum ipmi_value_present_e value_present,
-				     unsigned int              raw_value,
-				     double                    val,
-				     ipmi_states_t             *states,
-				     void                      *cb_data);
+                                     int                       err,
+                                     enum ipmi_value_present_e value_present,
+                                     unsigned int              raw_value,
+                                     double                    val,
+                                     ipmi_states_t             *states,
+                                     void                      *cb_data);
 int ipmi_reading_get(ipmi_sensor_t        *sensor,
-		     ipmi_reading_done_cb done,
-		     void                 *cb_data);
+                     ipmi_reading_done_cb done,
+                     void                 *cb_data);
 \end{verbatim}
 
 Assuming there was no error, the \texttt{value\_present} field will be set
@@ -6198,6 +6181,27 @@ to one of the following:
 \item[IPMI\_BOTH\_VALUES\_PRESENT] - Both the raw and converted values are
   present.
 \end{description}
+
+The current states of the various thresholds (whether they are out of
+range or note) is returned in the \texttt{states} parameter.  To know
+if a sensor sets a threshold state setting when the value is read, use
+the following function:
+\begin{verbatim}
+int ipmi_sensor_threshold_reading_supported(ipmi_sensor_t      *sensor,
+                                            enum ipmi_thresh_e thresh,
+                                            int                *val);
+\end{verbatim}
+This may not mean that the threshold will generate events (although it
+will almost certainly mean that, the spec is not clear on this).  It
+is only defined to mean that the threshold is returned in the reading.
+
+For threshold sensors, the function:
+\begin{verbatim}
+int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
+                                   enum ipmi_thresh_e thresh);
+\end{verbatim}
+will return true if the given threshold is out of range and false if
+not.
 
 \subsubsection{Threshold Sensor Events in OpenIPMI}
 \label{sec-threshold-sensor-events-in-openipmi}
@@ -6231,11 +6235,11 @@ individually.  To find this, the following functions will return true
 if a specific threshold is readable or settable, and false if not:
 \begin{verbatim}
 int ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
-				   enum ipmi_thresh_e threshold,
-				   int                *val);
+                                   enum ipmi_thresh_e threshold,
+                                   int                *val);
 int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
-				   enum ipmi_thresh_e threshold,
-				   int                *val);
+                                   enum ipmi_thresh_e threshold,
+                                   int                *val);
 \end{verbatim}
 The specific threshold values in the enumeration are:
 \begin{itemize}
@@ -6280,12 +6284,12 @@ This clears all settings.  The following functions are then available
 to set the various threshold values:
 \begin{verbatim}
 int ipmi_threshold_set(ipmi_thresholds_t  *th,
-		       ipmi_sensor_t      *sensor,
-		       enum ipmi_thresh_e threshold,
-		       double             value);
+                       ipmi_sensor_t      *sensor,
+                       enum ipmi_thresh_e threshold,
+                       double             value);
 int ipmi_threshold_get(ipmi_thresholds_t  *th,
-		       enum ipmi_thresh_e threshold,
-		       double             *value);
+                       enum ipmi_thresh_e threshold,
+                       double             *value);
 \end{verbatim}
 These get and set the values in the data structure.  This does not
 affect the actual sensor until you send the thresholds to the sensor.
@@ -6293,19 +6297,19 @@ affect the actual sensor until you send the thresholds to the sensor.
 To send a set of thresholds to a sensor, use the following function:
 \begin{verbatim}
 int ipmi_thresholds_set(ipmi_sensor_t       *sensor,
-			ipmi_thresholds_t   *thresholds,
-			ipmi_sensor_done_cb done,
-			void                *cb_data);
+                        ipmi_thresholds_t   *thresholds,
+                        ipmi_sensor_done_cb done,
+                        void                *cb_data);
 \end{verbatim}
 To get the current threshold settings of a sensor, use:
 \begin{verbatim}
 typedef void (*ipmi_thresh_get_cb)(ipmi_sensor_t     *sensor,
-				   int               err,
-				   ipmi_thresholds_t *th,
-				   void              *cb_data);
+                                   int               err,
+                                   ipmi_thresholds_t *th,
+                                   void              *cb_data);
 int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
-			ipmi_thresh_get_cb done,
-			void               *cb_data);
+                        ipmi_thresh_get_cb done,
+                        void               *cb_data);
 \end{verbatim}
 
 To find out which thresholds support events, the following can be used
@@ -6344,23 +6348,25 @@ in when the event state of a sensor is queried.  To set or clear
 individual events in one of these structures, use the following:
 \begin{verbatim}
 void ipmi_threshold_event_clear(ipmi_event_state_t          *events,
-				enum ipmi_thresh_e          threshold,
-				enum ipmi_event_value_dir_e value_dir,
-				enum ipmi_event_dir_e       dir);
+                                enum ipmi_thresh_e          threshold,
+                                enum ipmi_event_value_dir_e value_dir,
+                                enum ipmi_event_dir_e       dir);
 void ipmi_threshold_event_set(ipmi_event_state_t          *events,
-			      enum ipmi_thresh_e          threshold,
-			      enum ipmi_event_value_dir_e value_dir,
-			      enum ipmi_event_dir_e       dir);
+                              enum ipmi_thresh_e          threshold,
+                              enum ipmi_event_value_dir_e value_dir,
+                              enum ipmi_event_dir_e       dir);
 \end{verbatim}
 To see if a specific event is set, use:
 \begin{verbatim}
 int ipmi_is_threshold_event_set(ipmi_event_state_t          *events,
-				enum ipmi_thresh_e          threshold,
-				enum ipmi_event_value_dir_e value_dir,
-				enum ipmi_event_dir_e       dir);
+                                enum ipmi_thresh_e          threshold,
+                                enum ipmi_event_value_dir_e value_dir,
+                                enum ipmi_event_dir_e       dir);
 \end{verbatim}
 
 \subsubsection{Threshold Sensor Units in OpenIPMI}
+
+TBD - write this.
 
 \begin{verbatim}
 /* Returns IPMI_RATE_UNIT_xxx */
@@ -6385,6 +6391,8 @@ char *ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor);
 
 \subsubsection{Threshold Sensor Hysteresis in OpenIPMI}
 
+TBD - write this
+
 \begin{verbatim}
 /* Returns IPMI_HYSTERESIS_SUPPORT_xxx */
 int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
@@ -6392,17 +6400,19 @@ int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
 
 \subsubsection{Threshold Sensor Reading Information in OpenIPMI}
 
+TBD - write this
+
 \begin{verbatim}
 /* Sensor reading information from the SDR. */
 int ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
-			      int           val,
-			      double        *tolerance);
+                              int           val,
+                              double        *tolerance);
 int ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy);
 int ipmi_sensor_get_normal_min_specified(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_normal_max_specified(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_nominal_reading_specified(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
-				    double *nominal_reading);
+                                    double *nominal_reading);
 int ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max);
 int ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min);
 int ipmi_sensor_get_sensor_max(ipmi_sensor_t *sensor, double *sensor_max);
@@ -6411,26 +6421,77 @@ int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
 
 \subsection{Discrete Sensors in OpenIPMI}
 
-\begin{verbatim}
-/* Returns if the bit can send an event */
-int ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
-					 int                   offset,
-					 enum ipmi_event_dir_e dir,
-					 int                   *val);
+The value of a discrete sensor is its states, the value of its bits.
+Each bit is a single independent states; the bits are not used
+together to represent multi-bit values.
 
-/* Returns if the specific event can be read (is supported). */
-int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
-				 int           event,
-				 int           *val);
+\subsubsection{Discrete Sensor Readings in OpenIPMI}
+
+To read the value of a discrete sensor, use the following:
+\begin{verbatim}
+typedef void (*ipmi_states_read_cb)(ipmi_sensor_t *sensor,
+                                    int           err,
+                                    ipmi_states_t *states,
+                                    void          *cb_data);
+int ipmi_states_get(ipmi_sensor_t       *sensor,
+                    ipmi_states_read_cb done,
+                    void                *cb_data);
 \end{verbatim}
+
+The values are returned in the states object.  To know if a specific
+state will be set in the states structure for a sensor, use the function:
+\begin{verbatim}
+int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
+                                 int           event,
+                                 int           *val);
+\end{verbatim}
+This will set val to if the bit for the given sensor will support
+being read.
+
+Once you know if the bit is supported, the function:
+\begin{verbatim}
+int ipmi_is_state_set(ipmi_states_t *states,
+                      int           state_num);
+\end{verbatim}
+will return true if the given state (bit) is set and false if it is
+not set.
 
 \subsubsection{Discrete Sensor Events in OpenIPMI}
 \label{sec-discrete-sensor-events-in-openipmi}
 
-Talk about event states
+To know if a specific bit can cause an event to be sent by the sensor,
+use the following function:
+\begin{verbatim}
+int ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
+                                         int                   offset,
+                                         enum ipmi_event_dir_e dir,
+                                         int                   *val);
+\end{verbatim}
+The \texttt{val} will be set to whether the event is supported or not.
+
+To actually enable or disable individual events for a sensor, an event
+state structure must be created.  An event state structure is passed
+in when the event state of a sensor is queried.  To set or clear
+individual events in one of these structures, use the following:
+\begin{verbatim}
+void ipmi_discrete_event_clear(ipmi_event_state_t    *events,
+                               int                   event_offset,
+                               enum ipmi_event_dir_e dir);
+void ipmi_discrete_event_set(ipmi_event_state_t    *events,
+                             int                   event_offset,
+                             enum ipmi_event_dir_e dir);
+\end{verbatim}
+To see if a specific event is set, use:
+\begin{verbatim}
+int ipmi_is_discrete_event_set(ipmi_event_state_t    *events,
+                               int                   event_offset,
+                               enum ipmi_event_dir_e dir);
+\end{verbatim}
 
 \section{Sensor \acs{SDR}s}
 \label{sec-sensor-sdrs}
+
+TBD - write this
 
 %---------------------------------------------------------------------
 \chapter{Controls and Miscellany}
@@ -6456,38 +6517,38 @@ OpenIPMI automatically sets the event receiver.
 \begin{longtable}{|p{0.27\textwidth}|l|p{0.85\textwidth}|}
 \hline
 SYSTEM \_FIRMWARE \_PROGRESS & 00h &
-	\begin{description}
-	\item[] - 
-	\end{description}\\
+        \begin{description}
+        \item[] - 
+        \end{description}\\
  & 01h & Uses the same values as offset 00h.\\
  & 02h & 
-	\begin{description}
-	\item[] - 
-	\end{description}\\
+        \begin{description}
+        \item[] - 
+        \end{description}\\
 \hline
 EVENT \_LOGGING \_DISABLED & 01h &
-	\begin{description}
-	\item[] - 
-	\end{description}\\
+        \begin{description}
+        \item[] - 
+        \end{description}\\
 \hline
 SYSTEM\_EVENT & 03h &
-	\begin{description}
-	\item[] - 
-	\end{description}\\
+        \begin{description}
+        \item[] - 
+        \end{description}\\
  & 04h &
-	\begin{description}
-	\item[] - 
-	\end{description}\\
+        \begin{description}
+        \item[] - 
+        \end{description}\\
 \hline
 SLOT\_CONNECTOR & all &
-	\begin{description}
-	\item[] - 
-	\end{description}\\
+        \begin{description}
+        \item[] - 
+        \end{description}\\
 \hline
 WATCHDOG\_2 & all &
-	\begin{description}
-	\item[] - 
-	\end{description}\\
+        \begin{description}
+        \item[] - 
+        \end{description}\\
 \hline
 \end{longtable}
 
@@ -6517,8 +6578,8 @@ register your own handler here:
 \begin{verbatim}
 int
 ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
-				       ipmi_domain_cb handler,
-				       void           *cb_data)
+                                       ipmi_domain_cb handler,
+                                       void           *cb_data)
 \end{verbatim}
 
 Likewise, when a \ac{MC} is reported the \acs{SDR}s and events have
@@ -6526,11 +6587,11 @@ not yet been read.  To register handlers for those, use:
 
 \begin{verbatim}
 int ipmi_mc_set_sdrs_first_read_handler(ipmi_mc_t      *mc,
-					ipmi_mc_ptr_cb handler,
-					void           *cb_data);
+                                        ipmi_mc_ptr_cb handler,
+                                        void           *cb_data);
 int ipmi_mc_set_sels_first_read_handler(ipmi_mc_t      *mc,
-					ipmi_mc_ptr_cb handler,
-					void           *cb_data);
+                                        ipmi_mc_ptr_cb handler,
+                                        void           *cb_data);
 \end{verbatim}
 
 Note that you should almost certainly \emph{not} use these, unless you

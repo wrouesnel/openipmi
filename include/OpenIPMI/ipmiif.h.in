@@ -659,6 +659,12 @@ enum ipmi_dlr_type_e { IPMI_ENTITY_UNKNOWN = 0,
 enum ipmi_dlr_type_e ipmi_entity_get_type(ipmi_entity_t *ent);
 
 /* These are valid for all entities. */
+
+/* Get a useful string name for the entity.  The return value is the
+   number of characters in the string put into name.  The length is the
+   length of the "name" array. */
+int ipmi_entity_get_name(ipmi_entity_t *entity, char *name, int length);
+
 int ipmi_entity_get_is_fru(ipmi_entity_t *ent);
 ipmi_domain_t *ipmi_entity_get_domain(ipmi_entity_t *ent);
 int ipmi_entity_get_entity_id(ipmi_entity_t *ent);
@@ -1145,6 +1151,11 @@ int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 			int           *lun,
 			int           *num);
 
+/* Get a useful string name for the sensor.  The return value is the
+   number of characters in the string put into name.  The length is the
+   length of the "name" array. */
+int ipmi_sensor_get_name(ipmi_sensor_t *sensor, char *name, int length);
+
 /* Strings for various values for a sensor.  We put them in here, and
    they will be the correct strings even for OEM values. */
 char *ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor);
@@ -1192,7 +1203,7 @@ int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
 /* Returns IPMI_EVENT_READING_TYPE_xxx */
 int ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor);
 
-/* Returns if an event is supported for this particular sensor. */
+/* Sets "val" to if an event is supported for this particular sensor. */
 int ipmi_sensor_threshold_event_supported(
     ipmi_sensor_t               *sensor,
     enum ipmi_thresh_e          event,
@@ -1200,23 +1211,29 @@ int ipmi_sensor_threshold_event_supported(
     enum ipmi_event_dir_e       dir,
     int                         *val);
 
-/* Returns if a specific threshold can be set. */
+/* Sets "val" to if a specific threshold can be set. */
 int ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
 				   enum ipmi_thresh_e threshold,
 				   int                *val);
 
-/* Returns if a specific threshold can be read. */
+/* Sets "val" to if a specific threshold can be read. */
 int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
 				   enum ipmi_thresh_e threshold,
 				   int                *val);
 
-/* Returns if the specific event can send an event */
+/* Sets "val" to if a specific threshold has its reading returned when
+   reading the value of the threshold sensor. */
+int ipmi_sensor_threshold_reading_supported(ipmi_sensor_t      *sensor,
+					    enum ipmi_thresh_e thresh,
+					    int                *val);
+
+/* Sets "val" to if the specific event can send an event */
 int ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
-					 int                   event,
+					 int                   offset,
 					 enum ipmi_event_dir_e dir,
 					 int                   *val);
 
-/* Returns if the specific event can be read (is supported). */
+/* Sets "val" to if the specific event can be read (is supported). */
 int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 				 int           event,
 				 int           *val);
@@ -1418,6 +1435,12 @@ int ipmi_sensor_id_states_get(ipmi_sensor_id_t    sensor_id,
  * that nature.  Basically, output devices.  IPMI does not define
  * these, but they are pretty fundamental for system management.
  */
+
+/* Get a useful string name for the control.  The return value is the
+   number of characters in the string put into name.  The length is the
+   length of the "name" array. */
+int ipmi_control_get_name(ipmi_control_t *sensor, char *name, int length);
+
 int ipmi_control_get_type(ipmi_control_t *control);
 int ipmi_control_get_id_length(ipmi_control_t *control);
 enum ipmi_str_type_e ipmi_control_get_id_type(ipmi_control_t *control);

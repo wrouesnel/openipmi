@@ -609,6 +609,27 @@ _ipmi_entity_id_name(ipmi_entity_id_t entity_id)
     return name;
 }
 
+int
+ipmi_entity_get_name(ipmi_entity_t *ent, char *name, int length)
+{
+    int rv;
+
+    if (ent->info.entity_instance >= 0x60) {
+	rv = snprintf(name, length,
+		      "r%d.%d.%d.%d",
+		      ent->info.device_num.channel,
+		      ent->info.device_num.address,
+		      ent->info.entity_id,
+		      ent->info.entity_instance);
+    } else {
+	rv = snprintf(name, length,
+		      "%d.%d", ent->info.entity_id,
+		      ent->info.entity_instance);
+    }
+
+    return rv;
+}
+
 /***********************************************************************
  *
  * Handling of adding/removing/searching entities, parents, and
@@ -5834,16 +5855,18 @@ handle_new_hot_swap_requester(ipmi_entity_t *ent, ipmi_sensor_t *sensor)
 
     if (event_support == IPMI_EVENT_SUPPORT_PER_STATE) {
 	/* Turn on all the event enables that we can. */
-	rv = ipmi_sensor_discrete_assertion_event_supported
+	rv = ipmi_sensor_discrete_event_supported
 	    (sensor,
 	     ent->hot_swap_offset,
+	     IPMI_ASSERTION,
 	     &val);
 	if ((!rv) && (val))
 	    ipmi_discrete_event_set(&events, ent->hot_swap_offset,
 				    IPMI_ASSERTION);
-	rv = ipmi_sensor_discrete_deassertion_event_supported
+	rv = ipmi_sensor_discrete_event_supported
 	    (sensor,
 	     ent->hot_swap_offset,
+	     IPMI_DEASSERTION,
 	     &val);
 	if ((!rv) && (val))
 	    ipmi_discrete_event_set(&events, ent->hot_swap_offset,
