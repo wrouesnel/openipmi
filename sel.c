@@ -397,8 +397,13 @@ handle_sel_data(ipmi_mc_t  *mc,
     }
 
     if (sel->next_rec_id == 0xFFFF) {
+	/* To avoid confusion, deliver the log before we deliver fetch
+           complete. */
+	if (log_is_new)
+	    if (sel->new_log_handler)
+		sel->new_log_handler(sel, &del_log, sel->new_log_cb_data);
 	fetch_complete(sel, 0);
-	goto done;
+	goto out;
     }
     sel->curr_rec_id = sel->next_rec_id;
 
@@ -419,7 +424,6 @@ handle_sel_data(ipmi_mc_t  *mc,
 	goto out;
     }
 
- done:
     if (log_is_new)
 	if (sel->new_log_handler)
 	    sel->new_log_handler(sel, &del_log, sel->new_log_cb_data);

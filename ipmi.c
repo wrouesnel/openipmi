@@ -1066,7 +1066,7 @@ void ipmi_set_uint16(unsigned char *data, int val)
 void
 ipmi_report_lock_error(os_handler_t *handler, char *str)
 {
-    handler->log(handler, "%s", str);
+    handler->log(handler, IPMI_LOG_WARNING, "%s", str);
 }
 
 void
