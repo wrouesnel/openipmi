@@ -1840,27 +1840,32 @@ typedef struct fru_data_rep_s
 } fru_data_rep_t;
 
 #define F_UCHAR(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 0, \
-		     .u.inttype.fetch_uchar = ipmi_fru_get_ ## x }
+		     .u = { .inttype = { .fetch_uchar = ipmi_fru_get_ ## x }}}
 #define F_NUM_UCHAR(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 1, \
-		         .u.intnumtype.fetch_uchar = ipmi_fru_get_ ## x }
+		         .u = { .intnumtype = {				     \
+				 .fetch_uchar = ipmi_fru_get_ ## x }}}
 #define F_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_TIME, .hasnum = 0, \
-		    .u.timetype.fetch = ipmi_fru_get_ ## x }
+		    .u = { .timetype = { .fetch = ipmi_fru_get_ ## x }}}
 #define F_NUM_TIME(x) { .name = #x, .type = IPMI_FRU_DATA_INT, .hasnum = 1, \
-		        .u.timenumtype.fetch = ipmi_fru_get_ ## x }
+		        .u = { .timenumtype = { .fetch = ipmi_fru_get_ ## x }}}
 #define F_STR(x) { .name = #x, .type = IPMI_FRU_DATA_ASCII, .hasnum = 0, \
-		   .u.strtype.fetch_len = ipmi_fru_get_ ## x ## _len, \
-		   .u.strtype.fetch_type = ipmi_fru_get_ ## x ## _type, \
-		   .u.strtype.fetch_data = ipmi_fru_get_ ## x }
+		   .u = { .strtype = {					     \
+			  .fetch_len = ipmi_fru_get_ ## x ## _len, \
+		          .fetch_type = ipmi_fru_get_ ## x ## _type, \
+		          .fetch_data = ipmi_fru_get_ ## x }}}
 #define F_NUM_STR(x) { .name = #x, .type = IPMI_FRU_DATA_ASCII, .hasnum = 1, \
-		       .u.strnumtype.fetch_len = ipmi_fru_get_ ## x ## _len, \
-		       .u.strnumtype.fetch_type = ipmi_fru_get_ ## x ## _type,\
-		       .u.strnumtype.fetch_data = ipmi_fru_get_ ## x }
+		       .u = { .strnumtype = {                                \
+			      .fetch_len = ipmi_fru_get_ ## x ## _len, \
+		              .fetch_type = ipmi_fru_get_ ## x ## _type,\
+		              .fetch_data = ipmi_fru_get_ ## x }}}
 #define F_BIN(x) { .name = #x, .type = IPMI_FRU_DATA_BINARY, .hasnum = 0, \
-		   .u.bintype.fetch_len = ipmi_fru_get_ ## x ## _len, \
-		   .u.bintype.fetch_data = ipmi_fru_get_ ## x }
+		   .u = { .bintype = {					     \
+			  .fetch_len = ipmi_fru_get_ ## x ## _len, \
+		   	  .fetch_data = ipmi_fru_get_ ## x }}}
 #define F_NUM_BIN(x) { .name = #x, .type = IPMI_FRU_DATA_BINARY, .hasnum = 1, \
-		       .u.binnumtype.fetch_len = ipmi_fru_get_ ## x ## _len, \
-		       .u.binnumtype.fetch_data = ipmi_fru_get_ ## x }
+		       .u = { .binnumtype = {				      \
+			      .fetch_len = ipmi_fru_get_ ## x ## _len, \
+		       	      .fetch_data = ipmi_fru_get_ ## x }}}
 static fru_data_rep_t frul[] =
 {
     F_UCHAR(internal_use_version),
