@@ -7,6 +7,9 @@
 
 	* oem_atca.c: Turn off SEL support for everything but the BMC.
 
+	* oem_atca.c: Rework the handling of new MCs and entities to handle
+	things added before the FRU information is read.
+
 2004-03-20 Corey Minyard <cminyard@mvista.com> 
 
 	* everything: Massive rework of the code structure.
