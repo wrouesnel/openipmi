@@ -189,6 +189,9 @@ typedef struct lan_data_s
     unsigned char              slave_addr;
     int                        is_active;
 
+    /* tell the audit handler to destroy this connection. */
+    int                        destroyed;
+
     int                        curr_ip_addr;
     struct sockaddr_in         ip_addr[MAX_IP_ADDR];
     int                        ip_working[MAX_IP_ADDR];
@@ -835,6 +838,19 @@ audit_timeout_handler(void              *cb_data,
     }
 
     lan = ipmi->con_data;
+
+    if (lan->destroyed) {
+	/* Start the timer so the close will destroy it. */
+	timeout.tv_sec = 100000;
+	timeout.tv_usec = 0;
+	ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				  id,
+				  &timeout,
+				  audit_timeout_handler,
+				  cb_data);
+	ipmi_read_unlock();
+	ipmi->close_connection(ipmi);
+    }
 
     /* Send message to all addresses we think are down.  If the
        connection is down, this will bring it up, otherwise it
@@ -2540,7 +2556,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 }
 
 /* A hack, don't want this in include files. */
-void _ipmi_lan_set_ipmi(ipmi_con_t *ipmi);
+int _ipmi_lan_set_ipmi(ipmi_con_t *old, ipmi_con_t *new);
 void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv);
 
 static void
@@ -2585,10 +2601,13 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	/* Switch our connection over to the new LAN one.  We *must*
 	   reuse the old ipmi structure because that is what our user
 	   is holding. */
+	err = _ipmi_lan_set_ipmi(lancon, ipmi);
+	if (err)
+	    goto out_err;
+
 	memcpy(&tmpcon, ipmi, sizeof(tmpcon));
 	memcpy(ipmi, lancon, sizeof(*ipmi));
 	memcpy(lancon, &tmpcon, sizeof(*lancon));
-	_ipmi_lan_set_ipmi(ipmi);
 	lan->ipmi = lancon;
 
 	/* After this, we are switched. */
@@ -2600,8 +2619,9 @@ handle_dev_id(ipmi_con_t   *ipmi,
 				    lan->ipmb_addr_cb_data);
 	lan->ipmb_addr_handler = NULL;
 
-	/* The old connection is gone, just close it. */
-	lan_close_connection(lancon);
+	/* The old connection is gone, just force it to be closed on
+	   the next audit. */
+	lan->destroyed = 1;
 
 	err = ipmi->start_con(ipmi);
 	if (err)

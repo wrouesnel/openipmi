@@ -2780,12 +2780,25 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 /* This is a hack of a function so the MXP code can switch the
    connection over properly.  Must be called with the global read lock
    held. */
-void
-_ipmi_lan_set_ipmi(ipmi_con_t *ipmi)
+int
+_ipmi_lan_set_ipmi(ipmi_con_t *old, ipmi_con_t *new)
 {
-    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    lan_data_t     *lan = (lan_data_t *) old->con_data;
+    os_hnd_fd_id_t *fd_wait_id;
+    int            rv;
 
-    lan->ipmi = ipmi;
+    rv = old->os_hnd->add_fd_to_wait_for(old->os_hnd,
+					 lan->fd,
+					 data_handler, 
+					 new,
+					 &fd_wait_id);
+    if (!rv) {
+	old->os_hnd->remove_fd_to_wait_for(old->os_hnd, lan->fd_wait_id);
+	lan->fd_wait_id = fd_wait_id;
+	lan->ipmi = new;
+    }
+
+    return rv;
 }
 
 /* Another cheap hack so the MXP code can call this. */
