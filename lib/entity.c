@@ -4428,6 +4428,9 @@ ipmi_entity_fetch_frus(ipmi_entity_t *ent)
     ipmi_entity_id_t *ent_id;
     int              rv;
 
+    if (! ipmi_option_FRUs(ent->domain))
+	return 0;
+
     ent_id = ipmi_mem_alloc(sizeof(*ent_id));
     if (!ent_id)
 	return ENOMEM;

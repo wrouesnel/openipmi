@@ -1732,6 +1732,32 @@ int ipmi_open_domain(char               *name,
 		     unsigned int       num_options,
 		     ipmi_domain_id_t   *new_domain);
 
+/* Options for ipmi_open_domain */
+
+/* integer used as a boolean.  If this is true, the other processing
+   options are ignored and everything is done.  Otherwise, only the
+   specific options are turned on.  This is true by default. */
+#define IPMI_OPEN_OPTION_ALL		1
+
+/* Read the SDRs.  This is false by default */
+#define IPMI_OPEN_OPTION_SDRS		2
+
+/* Read the FRUs.  This is false by default */
+#define IPMI_OPEN_OPTION_FRUS		3
+
+/* Start SEL scanning.  This is false by default */
+#define IPMI_OPEN_OPTION_SEL		4
+
+/* Start IPMB scanning.  This is false by default */
+#define IPMI_OPEN_OPTION_IPMB_SCAN	5
+
+/* Do OEM initialization.  This is false by default */
+#define IPMI_OPEN_OPTION_OEM_INIT	6
+
+/* Set event receivers.  This is not affected by option_all and is true
+   by default. */
+#define IPMI_OPEN_OPTION_SET_EVENT_RCVR	7
+
 
 /* This will clean up all the memory associated with IPMI. */
 void ipmi_shutdown(void);

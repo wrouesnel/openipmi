@@ -297,4 +297,12 @@ int _ipmi_domain_init(void);
 /* Clean up the global domain memory. */
 void _ipmi_domain_shutdown(void);
 
+/* Option settings. */
+int ipmi_option_SDRs(ipmi_domain_t *domain);
+int ipmi_option_SEL(ipmi_domain_t *domain);
+int ipmi_option_FRUs(ipmi_domain_t *domain);
+int ipmi_option_IPMB_scan(ipmi_domain_t *domain);
+int ipmi_option_OEM_init(ipmi_domain_t *domain);
+int ipmi_option_set_event_rcvr(ipmi_domain_t *domain);
+
 #endif /* _IPMI_DOMAIN_H */

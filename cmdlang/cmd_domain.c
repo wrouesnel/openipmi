@@ -148,6 +148,8 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     int            curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
     int            argc = ipmi_cmdlang_get_argc(cmd_info);
     char           **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int            num_options = 0;
+    ipmi_open_option_t options[10];
 
     if (curr_arg >= argc) {
 	cmdlang->errstr = "No domain name entered";
@@ -156,6 +158,59 @@ domain_new(ipmi_cmd_info_t *cmd_info)
     }
     name = argv[curr_arg];
     curr_arg++;
+
+    while ((curr_arg < argc) && argv[curr_arg][0] == '-') {
+	if (num_options >= 10) {
+	    cmdlang->errstr = "Too many options";
+	    cmdlang->err = EINVAL;
+	    goto out;
+	}
+	if (strcmp(argv[curr_arg], "-noall") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_ALL;
+	    options[num_options].ival = 0;
+	} else if (strcmp(argv[curr_arg], "-all") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_ALL;
+	    options[num_options].ival = 1;
+	} else if (strcmp(argv[curr_arg], "-nosdrs") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_SDRS;
+	    options[num_options].ival = 0;
+	} else if (strcmp(argv[curr_arg], "-sdrs") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_SDRS;
+	    options[num_options].ival = 1;
+	} else if (strcmp(argv[curr_arg], "-nofrus") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
+	    options[num_options].ival = 0;
+	} else if (strcmp(argv[curr_arg], "-frus") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
+	    options[num_options].ival = 1;
+	} else if (strcmp(argv[curr_arg], "-nosel") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
+	    options[num_options].ival = 0;
+	} else if (strcmp(argv[curr_arg], "-sel") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_FRUS;
+	    options[num_options].ival = 1;
+	} else if (strcmp(argv[curr_arg], "-noipmbscan") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_IPMB_SCAN;
+	    options[num_options].ival = 0;
+	} else if (strcmp(argv[curr_arg], "-ipmbscan") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_IPMB_SCAN;
+	    options[num_options].ival = 1;
+	} else if (strcmp(argv[curr_arg], "-nooeminit") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_OEM_INIT;
+	    options[num_options].ival = 0;
+	} else if (strcmp(argv[curr_arg], "-oeminit") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_OEM_INIT;
+	    options[num_options].ival = 1;
+	} else if (strcmp(argv[curr_arg], "-noseteventrcvr") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
+	    options[num_options].ival = 0;
+	} else if (strcmp(argv[curr_arg], "-seteventrcvr") == 0) {
+	    options[num_options].option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
+	    options[num_options].ival = 1;
+	}
+	num_options++;
+	curr_arg++;
+    }
 
     rv = ipmi_parse_args(&curr_arg, argc, argv, &con_parms[set]);
     if (rv) {
@@ -192,7 +247,7 @@ domain_new(ipmi_cmd_info_t *cmd_info)
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
     rv = ipmi_open_domain(name, con, set, domain_new_done,
-			  cmd_info, NULL, 0, NULL);
+			  cmd_info, options, num_options, NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = strerror(rv);

@@ -33,6 +33,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmiif.h>
@@ -52,9 +53,11 @@
 /* Timer structure for rereading the SEL. */
 typedef struct mc_reread_sel_s
 {
-    int           cancelled;
-    ipmi_mc_t     *mc;
-    ipmi_domain_t *domain;
+    int                 cancelled;
+    ipmi_mc_t           *mc;
+    ipmi_domain_t       *domain;
+    ipmi_sels_fetched_t handler;
+    void                *cb_data;
 } mc_reread_sel_t;
 
 typedef struct mc_devid_data_s
@@ -952,7 +955,7 @@ ipmi_mc_set_sel_oem_event_handler(ipmi_mc_t                 *mc,
     return 0;
 }
 
-static void mc_reread_sel(void *cb_data, os_hnd_timer_id_t *id);
+static void mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id);
 
 static void
 sels_fetched_start_timer(ipmi_sel_info_t *sel,
@@ -975,21 +978,30 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
        case someone messes with the SEL time. */
     mc->startup_SEL_time = 0;
 
-    os_hnd = mc_get_os_hnd(mc);
+    if (info->handler) {
+	ipmi_sels_fetched_t handler;
+	void                *mcb_data;
+
+	handler = info->handler;
+	mcb_data = info->cb_data;
+	info->handler = NULL;
+	handler(sel, err, changed, count, mcb_data);
+    }
 
     if (mc->sel_scan_interval != 0) {
+	os_hnd = mc_get_os_hnd(mc);
 	timeout.tv_sec = mc->sel_scan_interval;
 	timeout.tv_usec = 0;
 	os_hnd->start_timer(os_hnd,
 			    mc->sel_timer,
 			    &timeout,
-			    mc_reread_sel,
+			    mc_reread_sel_timeout,
 			    info);
     }
 }
 
 static void
-mc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
+mc_reread_sel_timeout(void *cb_data, os_hnd_timer_id_t *id)
 {
     mc_reread_sel_t *info = cb_data;
     ipmi_mc_t       *mc = info->mc;
@@ -1056,29 +1068,45 @@ reread_sel_done(ipmi_sel_info_t *sel,
     ipmi_mem_free(info);
 }
 
+static int start_sel_ops(ipmi_mc_t           *mc,
+			 int                 fail_if_down,
+			 ipmi_sels_fetched_t handler,
+			 void                *cb_data);
+
 int
 ipmi_mc_reread_sel(ipmi_mc_t       *mc,
 		   ipmi_mc_done_cb handler,
 		   void            *cb_data)
 {
-    sel_reread_t *info;
-    int           rv;
+    sel_reread_t        *info = NULL;
+    ipmi_sels_fetched_t cb = NULL;
+    int                 rv;
 
     if (handler) {
 	info = ipmi_mem_alloc(sizeof(*info));
 	if (!info)
-	  return ENOMEM;
+	    return ENOMEM;
 
 	info->handler = handler;
 	info->cb_data = cb_data;
 	info->mcid = ipmi_mc_convert_to_id(mc);
 	info->err = 0;
+	cb = reread_sel_done;
+    }
 
-	rv = ipmi_sel_get(mc->sel, reread_sel_done, info);
-	if (rv)
-	    ipmi_mem_free(info);
-    } else
-	rv = ipmi_sel_get(mc->sel, NULL, NULL);
+    ipmi_lock(mc->lock);
+    if (mc->sel_timer_info) {
+	/* SEL is already set up, just do a request. */
+	rv = ipmi_sel_get(mc->sel, cb, info);
+    } else {
+	/* SEL is not set up, start it. */
+	rv = start_sel_ops(mc, 1, cb, info);
+    }
+    ipmi_unlock(mc->lock);
+
+    if (rv && info)
+	ipmi_mem_free(info);
+
     return rv;
 }
 
@@ -1503,15 +1531,54 @@ con_up_handler(ipmi_domain_t *domain,
     ipmi_mc_pointer_cb(info->mcid, con_up_mc, info);
 }
 
-static void
-start_sel_ops(ipmi_mc_t *mc)
+static int
+start_sel_ops(ipmi_mc_t           *mc,
+	      int                 fail_if_down,
+	      ipmi_sels_fetched_t handler,
+	      void                *cb_data)
 {
-    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
-    int           rv;
+    ipmi_domain_t   *domain = ipmi_mc_get_domain(mc);
+    mc_reread_sel_t *info;
+    int             rv;
+    os_handler_t    *os_hnd = mc_get_os_hnd(mc);
+
+    /* Allocate the system event log fetch timer. */
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%smc.c(sensors_reread): "
+		 "Unable to allocate info for system event log timer."
+		 " System event log will not be queried",
+		 mc->name);
+	rv = ENOMEM;
+	goto sel_failure;
+    }
+    info->mc = mc;
+    info->domain = mc->domain;
+    info->cancelled = 0;
+    info->handler = handler;
+    info->cb_data = cb_data;
+    rv = os_hnd->alloc_timer(os_hnd, &(mc->sel_timer));
+    if (rv) {
+	ipmi_mem_free(info);
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%smc.c(sensors_reread): "
+		 "Unable to allocate the system event log timer."
+		 " System event log will not be queried",
+		 mc->name);
+	goto sel_failure;
+    } else {
+	mc->sel_timer_info = info;
+    }
 
     if (ipmi_domain_con_up(domain)) {
 	/* The domain is already up, just start the process. */
 	first_sel_op(mc);
+    } else if (fail_if_down) {
+	rv = EAGAIN;
+	ipmi_mem_free(info);
+	mc->sel_timer_info = NULL;
+	goto sel_failure;
     } else {
 	/* The domain is not up yet, wait for it to come up then start
            the process. */
@@ -1528,6 +1595,15 @@ start_sel_ops(ipmi_mc_t *mc)
 	    first_sel_op(mc);
 	}
     }
+    return 0;
+
+ sel_failure:
+    /* SELs not started, just call the handler. */
+    if (mc->sels_first_read_handler) {
+	mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
+	mc->sels_first_read_handler = NULL;
+    }
+    return rv;
 }
 
 /* This is called after the first sensor scan for the MC, we start up
@@ -1546,8 +1622,11 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     /* We set the event receiver here, so that we know all the SDRs
        are installed.  That way any incoming events from the device
        will have the proper sensor set. */
-    if (mc->devid.IPMB_event_generator_support)
+    if (mc->devid.IPMB_event_generator_support
+	&& ipmi_option_set_event_rcvr(mc->domain))
+    {
 	event_rcvr = ipmi_domain_get_event_rcvr(mc->domain);
+    }
 
     if (event_rcvr)
 	send_set_event_rcvr(mc, event_rcvr, NULL, NULL);
@@ -1557,46 +1636,9 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	mc->sdrs_first_read_handler = NULL;
     }
 
-    if (mc->devid.SEL_device_support) {
-	mc_reread_sel_t *info;
-	int             rv;
-	os_handler_t    *os_hnd = mc_get_os_hnd(mc);
-
+    if (mc->devid.SEL_device_support && ipmi_option_SEL(mc->domain))
 	/* If the MC supports an SEL, start scanning its SEL. */
-
-	/* Allocate the system event log fetch timer. */
-	info = ipmi_mem_alloc(sizeof(*info));
-	if (!info) {
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%smc.c(sensors_reread): "
-		     "Unable to allocate info for system event log timer."
-		     " System event log will not be queried",
-		     mc->name);
-	    goto sel_failure;
-	}
-	info->mc = mc;
-	info->domain = mc->domain;
-	info->cancelled = 0;
-	rv = os_hnd->alloc_timer(os_hnd, &(mc->sel_timer));
-	if (rv) {
-	    ipmi_mem_free(info);
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%smc.c(sensors_reread): "
-		     "Unable to allocate the system event log timer."
-		     " System event log will not be queried",
-		     mc->name);
-	} else {
-	    mc->sel_timer_info = info;
-	}
-
-	start_sel_ops(mc);
-    } else {
-    sel_failure:
-	if (mc->sels_first_read_handler) {
-	    mc->sels_first_read_handler(mc, mc->sels_first_read_cb_data);
-	    mc->sels_first_read_handler = NULL;
-	}
-    }
+	start_sel_ops(mc, 0, NULL, NULL);
 }
 
 int
@@ -1619,7 +1661,8 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 	    return rv;
     }
 
-    if ((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
+    if (((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
+	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc)))
 	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     else
 	sensors_reread(mc, 0, NULL);

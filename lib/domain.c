@@ -300,6 +300,15 @@ struct ipmi_domain_s
 
     ipmi_domain_entity_cb cruft_entity_update_handler;
     void                  *cruft_entity_update_cb_data;
+
+    /* Option processing */
+    unsigned int option_all : 1;
+    unsigned int option_SDRs : 1;
+    unsigned int option_SEL : 1;
+    unsigned int option_FRUs : 1;
+    unsigned int option_IPMB_scan : 1;
+    unsigned int option_OEM_init : 1;
+    unsigned int option_set_event_rcvr : 1;
 };
 
 /* A list of all domains in the system. */
@@ -694,6 +703,8 @@ setup_domain(char          *name,
     memset(domain, 0, sizeof(*domain));
 
     domain->in_startup = 1;
+    domain->option_all = 1;
+    domain->option_set_event_rcvr = 1;
 
     strncpy(domain->name, name, sizeof(domain->name)-2);
     i = strlen(domain->name);
@@ -1547,8 +1558,9 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 
     /* If we find an MC in the SDRs that we don't know about yet,
        attempt to scan it. */
-    ipmi_start_ipmb_mc_scan(domain, channel, slave_addr, slave_addr,
-			    NULL, NULL);
+    if (ipmi_option_IPMB_scan(domain))
+	ipmi_start_ipmb_mc_scan(domain, channel, slave_addr, slave_addr,
+				NULL, NULL);
 
     rv = add_mc_to_domain(domain, mc);
     if (rv) {
@@ -2361,7 +2373,7 @@ start_mc_scan(ipmi_domain_t *domain)
 {
     int i;
 
-    if (!domain->do_bus_scan)
+    if (!domain->do_bus_scan || (!ipmi_option_IPMB_scan(domain)))
 	return;
 
     if (domain->scanning_bus)
@@ -2408,7 +2420,8 @@ refetch_sdr_handler(ipmi_sdr_info_t *sdrs,
 static void
 check_main_sdrs(ipmi_domain_t *domain)
 {
-    ipmi_sdr_fetch(domain->main_sdrs, refetch_sdr_handler, domain);
+    if (ipmi_option_SDRs(domain))
+	ipmi_sdr_fetch(domain->main_sdrs, refetch_sdr_handler, domain);
 }
 
 static void
@@ -3772,12 +3785,6 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 	call_con_fails(domain, rv, 0, 0, 0);
 }
 
-static int 
-get_sdrs(ipmi_domain_t *domain)
-{
-    return ipmi_sdr_fetch(domain->main_sdrs, sdr_handler, domain);
-}
-
 static void
 domain_oem_handlers_checked(ipmi_domain_t *domain, int err, void *cb_data)
 {
@@ -3785,8 +3792,8 @@ domain_oem_handlers_checked(ipmi_domain_t *domain, int err, void *cb_data)
 
     /* FIXME - handle errors setting up OEM comain information. */
 
-    if (domain->SDR_repository_support) {
-	rv = get_sdrs(domain);
+    if (domain->SDR_repository_support && ipmi_option_SDRs(domain)) {
+	rv = ipmi_sdr_fetch(domain->main_sdrs, sdr_handler, domain);
     } else {
 	rv = get_channels(domain);
     }
@@ -3856,9 +3863,13 @@ got_dev_id(ipmi_mc_t  *mc,
 	return;
     }
 
-    rv = check_oem_handlers(domain, domain_oem_handlers_checked, NULL);
-    if (rv)
-	call_con_fails(domain, rv, 0, 0, 0);
+    if (ipmi_option_OEM_init(domain)) {
+	rv = check_oem_handlers(domain, domain_oem_handlers_checked, NULL);
+	if (rv)
+	    call_con_fails(domain, rv, 0, 0, 0);
+    } else {
+	domain_oem_handlers_checked(domain, 0, NULL);
+    }
 }
 
 static int
@@ -4263,6 +4274,82 @@ ll_con_changed(ipmi_con_t   *ipmi,
 }
 
 int
+ipmi_option_SDRs(ipmi_domain_t *domain)
+{
+    return domain->option_all || domain->option_SDRs;
+}
+
+int
+ipmi_option_SEL(ipmi_domain_t *domain)
+{
+    return domain->option_all || domain->option_SEL;
+}
+
+int
+ipmi_option_FRUs(ipmi_domain_t *domain)
+{
+    return domain->option_all || domain->option_FRUs;
+}
+
+int
+ipmi_option_IPMB_scan(ipmi_domain_t *domain)
+{
+    return domain->option_all || domain->option_IPMB_scan;
+}
+
+int
+ipmi_option_OEM_init(ipmi_domain_t *domain)
+{
+    return domain->option_all || domain->option_OEM_init;
+}
+
+int
+ipmi_option_set_event_rcvr(ipmi_domain_t *domain)
+{
+    return domain->option_set_event_rcvr;
+}
+
+
+static int
+process_options(ipmi_domain_t      *domain, 
+		ipmi_open_option_t *options,
+		unsigned int       num_options)
+{
+    int i;
+
+    /* Option processing. */
+    for (i=0; i<num_options; i++) {
+	switch (options[i].option) {
+	case IPMI_OPEN_OPTION_ALL:
+	    domain->option_all = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_SDRS:
+	    domain->option_SDRs = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_FRUS:
+	    domain->option_FRUs = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_SEL:
+	    domain->option_SEL = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_IPMB_SCAN:
+	    domain->option_IPMB_scan = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_OEM_INIT:
+	    domain->option_OEM_init = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_SET_EVENT_RCVR:
+	    domain->option_set_event_rcvr = options[i].ival != 0;
+	    break;
+	default:
+	    return EINVAL;
+	}
+    }
+
+    return 0;
+}
+
+int
 ipmi_open_domain(char               *name,
 		 ipmi_con_t         *con[],
 		 unsigned int       num_con,
@@ -4282,6 +4369,8 @@ ipmi_open_domain(char               *name,
     rv = setup_domain(name, con, num_con, &domain);
     if (rv)
 	return rv;
+
+    process_options(domain, options, num_options);
 
     for (i=0; i<num_con; i++) {
 	con[i]->set_con_change_handler(con[i], ll_con_changed, domain);
