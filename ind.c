@@ -70,16 +70,14 @@ struct ipmi_ind_s
     int entity_id;
     int entity_instance;
 
+    unsigned int num_vals;
+
     /* For light types. */
-    unsigned int num_colors;
-    unsigned int colors[3];
+    ipmi_ind_light_t *lights;
 
     /* For display types. */
     unsigned int columns;
     unsigned int rows;
-
-    /* For relay types. */
-    unsigned int num_relays;
 
     /* For identifier types. */
     unsigned int identifier_length;
@@ -345,8 +343,10 @@ ipmi_inds_destroy(ipmi_ind_info_t *inds)
 }
 
 int
-ipmi_ind_set_val(ipmi_ind_t *ind, int val,
-		 ipmi_ind_op_cb handler, void *cb_data)
+ipmi_ind_set_val(ipmi_ind_t     *ind,
+		 int            *val,
+		 ipmi_ind_op_cb handler,
+		 void           *cb_data)
 {
     return ind->cbs.set_val(ind, val, handler, cb_data);
 }
@@ -486,38 +486,19 @@ ipmi_ind_get_oem_info(ipmi_ind_t *ind)
     return ind->oem_info;
 }
 
-unsigned int
-ipmi_ind_get_num_colors(ipmi_ind_t *ind)
-{
-    return ind->num_colors;
-}
-
-int
-ipmi_ind_get_color(ipmi_ind_t *ind, unsigned int color_num)
-{
-    if (color_num >= ind->num_colors)
-	return -1;
-    return ind->colors[color_num];
-}
-
-void ipmi_ind_get_display_dimensions(ipmi_ind_t   *ind,
-				     unsigned int *columns,
-				     unsigned int *rows)
+void
+ipmi_ind_get_display_dimensions(ipmi_ind_t   *ind,
+				unsigned int *columns,
+				unsigned int *rows)
 {
     *columns = ind->columns;
     *rows = ind->rows;
 }
 
-unsigned int
-ipmi_ind_get_num_relays(ipmi_ind_t *ind)
-{
-    return ind->num_relays;
-}
-
 void
 ipmi_ind_set_num_relays(ipmi_ind_t *ind, unsigned int val)
 {
-    ind->num_relays = val;
+    ind->num_vals = val;
 }
 
 unsigned int
@@ -560,4 +541,74 @@ ipmi_ind_get_num(ipmi_ind_t *ind,
     if (num)
 	*num = ind->num;
     return 0;
+}
+
+void
+ipmi_ind_light_set_lights(ipmi_ind_t       *ind,
+			  unsigned int     num_lights,
+			  ipmi_ind_light_t *lights)
+{
+    ind->num_vals = num_lights;
+    ind->lights = lights;
+}
+
+int
+ipmi_ind_get_num_vals(ipmi_ind_t *ind)
+{
+    return ind->num_vals;
+}
+
+int
+ipmi_ind_get_num_light_settings(ipmi_ind_t *ind,
+				unsigned int light)
+{
+    if (light >= ind->num_vals)
+	return -1;
+
+    return ind->lights[light].num_settings;
+}
+
+int
+ipmi_ind_get_num_light_transitions(ipmi_ind_t   *ind,
+				   unsigned int light,
+				   unsigned int set)
+{
+    if (light >= ind->num_vals)
+	return -1;
+    if (set >= ind->lights[light].num_settings)
+	return -1;
+
+    return ind->lights[light].settings[set].num_transitions;
+}
+
+int
+ipmi_ind_get_light_color(ipmi_ind_t   *ind,
+			 unsigned int light,
+			 unsigned int set,
+			 unsigned int num)
+{
+    if (light >= ind->num_vals)
+	return -1;
+    if (set >= ind->lights[light].num_settings)
+	return -1;
+    if (num > ind->lights[light].settings[set].num_transitions)
+	return -1;
+
+    return ind->lights[light].settings[set].transitions[num].color;
+}
+
+int
+ipmi_ind_get_light_color_time(ipmi_ind_t   *ind,
+			      unsigned int light,
+			      unsigned int set,
+			      unsigned int num)
+{
+    if (light >= ind->num_vals)
+	return -1;
+    if (set >= ind->lights[light].num_settings)
+	return -1;
+    if (num > ind->lights[light].settings[set].num_transitions)
+	return -1;
+
+    return ind->lights[light].settings[set].transitions[num].time;
 }

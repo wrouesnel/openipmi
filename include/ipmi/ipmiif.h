@@ -641,28 +641,72 @@ int ipmi_ind_get_entity_id(ipmi_ind_t *ind);
 int ipmi_ind_get_entity_instance(ipmi_ind_t *ind);
 ipmi_entity_t *ipmi_ind_get_entity(ipmi_ind_t *ind);
 
+/* Get the number of values the indicator supports. */
+int ipmi_ind_get_num_vals(ipmi_ind_t *ind);
+
+
 /* A general callback for indicator operations that don't received
    any data. */
 typedef void (*ipmi_ind_op_cb)(ipmi_ind_t *ind, int err, void *cb_data);
 
+/* Set the setting of an indicator.  Note that an indicator may
+ support more than one element, the array passed in to "val" must
+ match the number of elements the indicator supports.  All the
+ elements will be set simultaneously. */
+int ipmi_ind_set_val(ipmi_ind_t     *ind,
+		     int            *val,
+		     ipmi_ind_op_cb handler,
+		     void           *cb_data);
+
+/* Get the setting of an indicator.  Like setting indicators, this
+   returns an array of values, one for each of the number of elements
+   the indicator supports. */
+typedef void (*ipmi_ind_val_cb)(ipmi_ind_t *ind,
+				int        err,
+				int        *val,
+				void       *cb_data);
+int ipmi_ind_get_val(ipmi_ind_t      *ind,
+		     ipmi_ind_val_cb handler,
+		     void            *cb_data);
+
 /* For LIGHT types.  */
-/* Get the number of colors the light supports (1 for 1-color leds and
-   such, 2 for bicolor leds, etc. */
-unsigned int ipmi_ind_get_num_colors(ipmi_ind_t *ind);
-/* color_num is 0 for off, 1 for the first color, 2 for the second
-   color, etc. */
-int ipmi_ind_get_color(ipmi_ind_t *ind, unsigned int color_num);
 
-/* RELAY types have no settings.  Relays are a bitmask of entries,
-   where each bit represents one relay starting with bit zero being
-   relay 1, bit 1 being relay 2, etc. */
+/* A light indicator may control one or more lights.  If a light
+   indicator controls more than one light, the lights may not
+   be set individually, they are controlled as a group, one set
+   command will set them all. */
 
-/* Get the number of relays supported by the relay indicator. */
-unsigned int ipmi_ind_get_num_relays(ipmi_ind_t *ind);
+/* Get the number of settings the light supports. */
+int ipmi_ind_get_num_light_settings(ipmi_ind_t   *ind,
+				    unsigned int light);
+
+/* This describes a setting for a light.  For each setting each light
+   is defined to go through a number of transitions.  Each transition
+   is described by a color, a time (in milliseconds) that the color is
+   present.  For non-blinking lights, there will only be one transition.
+   For blinking lights, there will be one or more transition.. */
+
+/* Get the setting for the specific setting.  These return -1 for
+   an invalid num. */
+int ipmi_ind_get_num_light_transitions(ipmi_ind_t   *ind,
+				       unsigned int light,
+				       unsigned int setting);
+int ipmi_ind_get_light_color(ipmi_ind_t   *ind,
+			     unsigned int light,
+			     unsigned int setting,
+			     unsigned int num);
+int ipmi_ind_get_light_color_time(ipmi_ind_t   *ind,
+				  unsigned int light,
+				  unsigned int setting,
+				  unsigned int num);
+
+/* RELAY types have no settings. */
 
 /* ALARM types have no settings. */
 
-/* IDENTIFIER types are represented as arrays of unsigned data. */
+/* IDENTIFIER types are represented as arrays of unsigned data.
+   Identifiers do not support multiple elements, and have their own
+   setting function. */
 typedef void (*ipmi_ind_identifier_val_cb)(ipmi_ind_t    *ind,
 					   int           err,
 					   unsigned char *val,
@@ -678,21 +722,9 @@ int ipmi_ind_identifier_set_val(ipmi_ind_t     *ind,
 				void           *cb_data);
 unsigned int ipmi_ind_identifier_get_max_length(ipmi_ind_t *ind);
 
-/* Set the setting of an indicator. */
-int ipmi_ind_set_val(ipmi_ind_t     *ind,
-		     int            val,
-		     ipmi_ind_op_cb handler,
-		     void           *cb_data);
 
-/* Get the setting of an indicator. */
-typedef void (*ipmi_ind_val_cb)(ipmi_ind_t *ind, int err,
-				int val, void *cb_data);
-int ipmi_ind_get_val(ipmi_ind_t      *ind,
-		     ipmi_ind_val_cb handler,
-		     void            *cb_data);
-
-
-/* For DISPLAY types, which are string displays. */
+/* For DISPLAY types, which are string displays. Displays do not
+   support multiple elements, and have their own setting function. */
 /* Get the dimensions of the display device.  This assumes a square, which
    is usually (but maybe not always) a good assumption. */
 void ipmi_ind_get_display_dimensions(ipmi_ind_t   *ind,

@@ -70,7 +70,7 @@ int ipmi_ind_add_nonstandard(ipmi_mc_t     *mc,
 int ipmi_ind_remove_nonstandard(ipmi_ind_t *ind);
 
 typedef int (*ipmi_ind_set_val_cb)(ipmi_ind_t     *ind,
-				   int            val,
+				   int            *val,
 				   ipmi_ind_op_cb handler,
 				   void           *cb_data);
 
@@ -117,6 +117,25 @@ void ipmi_ind_identifier_set_max_length(ipmi_ind_t *ind, unsigned int val);
 
 void ipmi_ind_set_id(ipmi_ind_t *ind, char *id);
 void ipmi_ind_set_type(ipmi_ind_t *ind, int val);
+
+typedef struct ipmi_ind_transition_s
+{
+    unsigned int color;
+    unsigned int time;
+} ipmi_ind_transition_t;
+typedef struct ipmi_ind_setting_s
+{
+    unsigned int          num_transitions;
+    ipmi_ind_transition_t *transitions;
+} ipmi_ind_setting_t;
+typedef struct ipmi_ind_light_s
+{
+    unsigned int       num_settings;
+    ipmi_ind_setting_t *settings;
+} ipmi_ind_light_t;
+void ipmi_ind_light_set_lights(ipmi_ind_t       *ind,
+			       unsigned int     num_lights,
+			       ipmi_ind_light_t *lights);
 
 void ipmi_ind_set_num_relays(ipmi_ind_t *ind, unsigned int val);
 
