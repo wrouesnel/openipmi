@@ -103,8 +103,9 @@ check_lanparm_response_param(ipmi_lanparm_t *lanparm,
 
     if (rsp->data[0] != 0) {
 	/* We ignore 0x80, since that may be a valid error return for an
-	   unsupported parameter. */
-	if (rsp->data[0] != 0x80)
+	   unsupported parameter.  We also ignore 0x82, just to avoid
+	   extraneous errors. */
+	if ((rsp->data[0] != 0x80) && (rsp->data[0] != 0x82))
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%s: IPMI error from LANPARM capabilities fetch: %x",
 		     func_name,
@@ -920,7 +921,7 @@ static lanparms_t lanparms[NUM_LANPARMS] =
     { 1, 0, 1, F, gba,  sba  }, /* IPMI_LANPARM_IP_ADDRESS_SRC		     */
 #undef F
 #define F OFFSET_OF(mac_addr)
-    { 1, 0, 6, F, gba,  sba  }, /* IPMI_LANPARM_MAX_ADDRESS		     */
+    { 1, 0, 6, F, gba,  sba  }, /* IPMI_LANPARM_MAC_ADDRESS		     */
 #undef F
 #define F OFFSET_OF(subnet_mask)
     { 1, 0, 4, F, gba,  sba  }, /* IPMI_LANPARM_SUBNET_MASK		     */
@@ -991,6 +992,12 @@ got_parm(ipmi_lanparm_t    *lanparm,
 {
     ipmi_lan_config_t *lanc = cb_data;
     lanparms_t        *lp = &(lanparms[lanc->curr_parm]);
+
+    if (err == IPMI_IPMI_ERR_VAL(0x82)) {
+	/* We attempted to write a read-only parameter that is not
+	   marked by the spec as read-only.  Just ignore it. */
+	err = 0;
+    }
 
     /* Check the length, and don't forget the revision byte must be added. */
     if ((!err) && (data_len < (lp->length+1))) {
