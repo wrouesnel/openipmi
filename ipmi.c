@@ -41,7 +41,6 @@
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_oem.h>
-#include "ilist.h"
 
 static os_hnd_rwlock_t *global_lock;
 static os_handler_t *ipmi_os_handler;
@@ -891,100 +890,6 @@ ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 	states->__states &= ~(1 << thresh);
 }
 
-/***********************************************************************
- *
- * Handle global OEM callbacks for new MCs.
- *
- **********************************************************************/
-
-typedef struct oem_conn_handlers_s {
-    unsigned int             manufacturer_id;
-    unsigned int             product_id;
-    ipmi_oem_conn_handler_cb handler;
-    void                     *cb_data;
-} oem_conn_handlers_t;
-/* FIXME - do we need a lock?  Probably, add it. */
-static ilist_t *oem_conn_handlers = NULL;
-
-int
-ipmi_register_oem_conn_handler(unsigned int             manufacturer_id,
-			       unsigned int             product_id,
-			       ipmi_oem_conn_handler_cb handler,
-			       void                     *cb_data)
-{
-    oem_conn_handlers_t *new_item;
-    int                 rv;
-
-    /* This might be called before initialization, so be 100% sure.. */
-    rv = _ipmi_mc_init();
-    if (rv)
-	return rv;
-
-    new_item = ipmi_mem_alloc(sizeof(*new_item));
-    if (!new_item)
-	return ENOMEM;
-
-    new_item->manufacturer_id = manufacturer_id;
-    new_item->product_id = product_id;
-    new_item->handler = handler;
-    new_item->cb_data = cb_data;
-
-    if (! ilist_add_tail(oem_conn_handlers, new_item, NULL)) {
-	ipmi_mem_free(new_item);
-	return ENOMEM;
-    }
-
-    return 0;
-}
-
-static int
-oem_conn_handler_cmp(void *item, void *cb_data)
-{
-    oem_conn_handlers_t *hndlr = item;
-    oem_conn_handlers_t *cmp = cb_data;
-
-    return ((hndlr->manufacturer_id == cmp->manufacturer_id)
-	    && (hndlr->product_id == cmp->product_id));
-}
-
-int
-ipmi_deregister_oem_conn_handler(unsigned int manufacturer_id,
-				 unsigned int product_id)
-{
-    oem_conn_handlers_t *hndlr;
-    oem_conn_handlers_t tmp;
-    ilist_iter_t        iter;
-
-    tmp.manufacturer_id = manufacturer_id;
-    tmp.product_id = product_id;
-    ilist_init_iter(&iter, oem_conn_handlers);
-    ilist_unpositioned(&iter);
-    hndlr = ilist_search_iter(&iter, oem_conn_handler_cmp, &tmp);
-    if (hndlr) {
-	ilist_delete(&iter);
-	ipmi_mem_free(hndlr);
-	return 0;
-    }
-    return ENOENT;
-}
-
-int
-ipmi_check_oem_conn_handlers(ipmi_con_t   *conn,
-			     unsigned int manufacturer_id,
-			     unsigned int product_id)
-{
-    oem_conn_handlers_t *hndlr;
-    oem_conn_handlers_t tmp;
-
-    tmp.manufacturer_id = manufacturer_id;
-    tmp.product_id = product_id;
-    hndlr = ilist_search(oem_conn_handlers, oem_conn_handler_cmp, &tmp);
-    if (hndlr)
-	return hndlr->handler(conn, hndlr->cb_data);
-    return 0;
-}
-
-
 #ifdef IPMI_CHECK_LOCKS
 /* Set a breakpoint here to detect locking errors. */
 void
@@ -1011,9 +916,9 @@ ipmi_init(os_handler_t *handler)
 {
     int rv;
 
-    oem_conn_handlers = alloc_ilist();
-    if (!oem_conn_handlers)
-	return ENOMEM;
+    rv = _ipmi_conn_init();
+    if (rv)
+	return rv;
 
     if (handler->create_rwlock) {
 	rv = handler->create_rwlock(handler, &global_lock);
@@ -1049,22 +954,7 @@ ipmi_init(os_handler_t *handler)
 void
 ipmi_shutdown(void)
 {
-    if (oem_conn_handlers) {
-	oem_conn_handlers_t *hndlr;
-	ilist_iter_t        iter;
-
-	/* Destroy the members of the OEM list. */
-	ilist_init_iter(&iter, oem_conn_handlers);
-	while (ilist_first(&iter)) {
-	    hndlr = ilist_get(&iter);
-	    ilist_delete(&iter);
-	    ipmi_mem_free(hndlr);
-	}
-
-	free_ilist(oem_conn_handlers);
-	oem_conn_handlers = NULL;
-    }
-
+    _ipmi_conn_shutdown();
     _ipmi_domain_shutdown();
     _ipmi_mc_shutdown();
     if (global_lock)

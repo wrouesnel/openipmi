@@ -1,5 +1,29 @@
 
+2003-05-15 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_conn.h: Reworked the connection reporting,
+	changed "fail" to "change" everywhere to make it more accurate,
+	and report all connection changes through the same interface.
+	* domain.c: ditto
+	* ipmi_lan.c: ditto
+	* ipmi_smi.c: ditto
+	* ipmicmd.c: ditto
+	* sample.c: ditto
+	* ui.c: ditto
+	* include/OpenIPMI/ipmi_lan.h: ditto
+	* include/OpenIPMI/ipmi_ui.h: ditto
+	* include/OpenIPMI/ipmiif.h: ditto
+
+	* include/OpenIPMI/ipmiif.h, domain.c: Modified the domain
+	interface to support more than one connection (although the code
+	still only supports one).
+
 2003-05-14 Corey Minyard <cminyard@mvista.com>
+
+	* ipmi.c, conn.c: Moved some connection handling stuff into a
+	new file.
+	* include/OpenIPMI/ipmi_int.h: ditto
+	* include/OpenIPMI/ipmi_conn.h: ditto
 
 	* include/OpenIPMI/ipmi_conn.h: Added a lot of connection handling
 	changes for handling different and dynamic IPMB addresses, and for

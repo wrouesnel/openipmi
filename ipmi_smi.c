@@ -128,8 +128,8 @@ typedef struct smi_data_s
     os_hnd_timer_id_t          *audit_timer;
     audit_timer_info_t         *audit_info;
 
-    ipmi_ll_con_failed_cb      con_fail_handler;
-    void                       *con_fail_cb_data;
+    ipmi_ll_con_changed_cb     con_change_handler;
+    void                       *con_change_cb_data;
 
     ipmi_ll_ipmb_addr_cb ipmb_addr_handler;
     void                 *ipmb_addr_cb_data;
@@ -506,8 +506,9 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     cmd = NULL; /* It's gone after this point. */
 
     /* call the user handler. */
-    rsp_handler(ipmi, addr, addr_len, &(recv->msg),
-		rsp_data, data2, data3, data4);
+    if (rsp_handler)
+	rsp_handler(ipmi, addr, addr_len, &(recv->msg),
+		    rsp_data, data2, data3, data4);
     return;
 
  out_unlock:
@@ -987,14 +988,14 @@ cleanup_con(ipmi_con_t *ipmi)
 }
 
 static void
-smi_set_con_fail_handler(ipmi_con_t            *ipmi,
-			 ipmi_ll_con_failed_cb handler,
-			 void                  *cb_data)
+smi_set_con_change_handler(ipmi_con_t             *ipmi,
+			   ipmi_ll_con_changed_cb handler,
+			   void                   *cb_data)
 {
     smi_data_t *smi = ipmi->con_data;
 
-    smi->con_fail_handler = handler;
-    smi->con_fail_cb_data = cb_data;
+    smi->con_change_handler = handler;
+    smi->con_change_cb_data = cb_data;
     return;
 }
 
@@ -1006,8 +1007,8 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 
     ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
 
-    if (smi->con_fail_handler)
-	smi->con_fail_handler(ipmi, 0, 1, smi->con_fail_cb_data);
+    if (smi->con_change_handler)
+	smi->con_change_handler(ipmi, 0, 1, 0, smi->con_change_cb_data);
 }
 
 static void
@@ -1053,8 +1054,8 @@ finish_connection(ipmi_con_t *ipmi, smi_data_t *smi)
     return;
 
  out_err:
-    if (smi->con_fail_handler)
-	smi->con_fail_handler(ipmi, err, 0, smi->con_fail_cb_data);
+    if (smi->con_change_handler)
+	smi->con_change_handler(ipmi, err, 0, 0, smi->con_change_cb_data);
 }
 
 static void
@@ -1067,8 +1068,8 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     smi_data_t *smi = (smi_data_t *) ipmi->con_data;
 
     if (err) {
-	if (smi->con_fail_handler)
-	    smi->con_fail_handler(ipmi, err, 0, smi->con_fail_cb_data);
+	if (smi->con_change_handler)
+	    smi->con_change_handler(ipmi, err, 0, 0, smi->con_change_cb_data);
 	return;
     }
 
@@ -1125,8 +1126,8 @@ handle_dev_id(ipmi_con_t   *ipmi,
     return;
 
  out_err:
-    if (smi->con_fail_handler)
-	smi->con_fail_handler(ipmi, err, 0, smi->con_fail_cb_data);
+    if (smi->con_change_handler)
+	smi->con_change_handler(ipmi, err, 0, 0, smi->con_change_cb_data);
 }
 
 static int
@@ -1248,7 +1249,7 @@ setup(int          if_num,
     ipmi->start_con = smi_start_con;
     ipmi->set_ipmb_addr = smi_set_ipmb_addr;
     ipmi->set_ipmb_addr_handler = smi_set_ipmb_addr_handler;
-    ipmi->set_con_fail_handler = smi_set_con_fail_handler;
+    ipmi->set_con_change_handler = smi_set_con_change_handler;
     ipmi->send_command = smi_send_command;
     ipmi->register_for_events = smi_register_for_events;
     ipmi->deregister_for_events = smi_deregister_for_events;

@@ -39,21 +39,6 @@
 
 #define IPMI_LAN_STD_PORT	623
 
-/* This callback may be passed into the setup connection function, it
-   will be called when an individual connection goes up or down.  The
-   addr_num corresponds to the address index in the array passed in to
-   the setup connection.  If err is 0, then the connection has come
-   up.  If it is non-zero, it is reporting that the connection went
-   down.  This will be called if either or both connections go down.
-   If both connections go down, the main interface call will be
-   called, too.  If you pass in NULL, this will be ignored.  The
-   cb_data is the same value passed into the setup connection
-   function. */
-typedef void (*lan_report_con_failure_cb)(int  addr_num,
-					  int  err,
-					  void *cb_data);
-
-
 /*
  * Set up an IPMI LAN connection.  The boatload of parameters are:
  *
@@ -64,6 +49,7 @@ typedef void (*lan_report_con_failure_cb)(int  addr_num,
  *     generally be IPMI_LAN_STD_PORT.
  *  num_ip_addrs - The number of ip addresses (and thus ports) in the
  *     arrays above.
+ *  authtype - The authentication type to use, from ipmi_auth.h
  *  privilege - The privilege level to request for the connection, from
  *     the set of values in ipmi_auth.h.
  *  username - The 16-byte max username to use for the connection.
@@ -73,10 +59,7 @@ typedef void (*lan_report_con_failure_cb)(int  addr_num,
  *  handlers - The set of OS handlers to use for this connection.
  *  user_data - This will be put into the BMC and may be fetched by the
  *     user.  The user can use it for anything they like.
- *  setup_cb - The function to call when the setup of the connection is
- *     complete, or when the connection setup fails.
- *  cb_data - passed to setup_cb when it is called.
- *  new_con - The new connection is passed in here.
+ *  new_con - The new connection is returned here.
  */
 int ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 		       int                       *ports,
@@ -89,8 +72,6 @@ int ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 		       unsigned int              password_len,
 		       os_handler_t              *handlers,
 		       void                      *user_data,
-		       lan_report_con_failure_cb fail_con_cb,
-		       void                      *cb_data,
 		       ipmi_con_t                **new_con);
 
 #endif /* __IPMI_LAN_H */

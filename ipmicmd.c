@@ -75,6 +75,10 @@
 /*** PVCS LOG SECTION ********************************************************
 *
 * $Log: not supported by cvs2svn $
+* Revision 1.5  2003/05/14 18:03:00  cminyard
+* Work on connection handling for IPMB handling.
+* Added a lot of OEM handling to lanserv.
+*
 * Revision 1.4  2003/05/14 03:24:07  cminyard
 * Added connection info stuff.
 * Added LAN info to the docs.
@@ -182,14 +186,6 @@ static ipmi_con_t *con;
 
 /* We cobbled everything in the next section together to provide the
    things that the low-level handlers need. */
-int
-ipmi_check_oem_conn_handlers(ipmi_con_t   *conn,
-			     unsigned int manufacturer_id,
-			     unsigned int product_id)
-{
-    return 0;
-}
-
 void
 ipmi_write_lock()
 {
@@ -209,6 +205,8 @@ void
 ipmi_read_unlock()
 {
 }
+
+int init_oem_force(void);
 
 unsigned int __ipmi_log_mask = 0;
 
@@ -321,7 +319,7 @@ void ipmi_destroy_lock(ipmi_lock_t *lock)
 
 void printInfo( )
 {
-    printf( "ipmicmd\t$,$Date: 2003-05-14 18:03:00 $,$Author: cminyard $\n");
+    printf( "ipmicmd\t$,$Date: 2003-05-15 20:38:43 $,$Author: cminyard $\n");
     printf( "Kontron Canada Inc.\n");
     printf( "-\n");
     printf( "This little utility is an ipmi command tool ;-)\n");
@@ -716,10 +714,11 @@ user_input_ready(int fd, void *data)
 char buf[256];
 
 static void
-con_fail_handler(ipmi_con_t *ipmi,
-		 int        err,
-		 int        active,
-		 void       *cb_data)
+con_changed_handler(ipmi_con_t   *ipmi,
+		    int          err,
+		    unsigned int port_num,
+		    int          still_connected,
+		    void         *cb_data)
 {
     if (!interactive) {
 	if (err) {
@@ -729,9 +728,12 @@ con_fail_handler(ipmi_con_t *ipmi,
 	process_input_line(buf);
     } else {
 	if (err)
-	    fprintf(stderr, "Connection failed: %x\n", err);
+	    fprintf(stderr, "Connection failed to port %d: %x\n", port_num,
+		    err);
 	else
-	    fprintf(stderr, "Connection up\n");
+	    fprintf(stderr, "Connection up to port %d\n", port_num);
+	if (!still_connected)
+	    fprintf(stderr, "All connection to the BMC are down\n");
     }
 }
 
@@ -790,6 +792,17 @@ main(int argc, const char *argv[])
 
     if (argc < 1) {
 	fprintf(stderr, "Not enough arguments\n");
+	exit(1);
+    }
+
+    rv = _ipmi_conn_init();
+    if (rv) {
+	fprintf(stderr, "Error initializing connections: 0x%x\n", rv);
+	exit(1);
+    }
+    rv = init_oem_force();
+    if (rv) {
+	fprintf(stderr, "Error initializing Force OEM: 0x%x\n", rv);
 	exit(1);
     }
 
@@ -909,7 +922,7 @@ main(int argc, const char *argv[])
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, ui_sel,
-				NULL, NULL, &con);
+				&con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s\n", strerror(rv));
 	    rv = EINVAL;
@@ -942,7 +955,7 @@ main(int argc, const char *argv[])
 	sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
     }
 
-    con->set_con_fail_handler(con, con_fail_handler, NULL);
+    con->set_con_change_handler(con, con_changed_handler, NULL);
 
     rv = con->start_con(con);
     if (rv) {

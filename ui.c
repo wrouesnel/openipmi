@@ -3605,17 +3605,26 @@ static int initialized = 0;
 void
 ipmi_ui_setup_done(ipmi_domain_t *domain,
 		   int           err,
+		   unsigned int  conn_num,
+		   unsigned int  port_num,
+		   int           still_connected,
 		   void          *user_data)
 {
     int rv;
 
-    if (err) {
+    if (err)
+	ui_log("IPMI connection to con.port %d.%d is down\n",
+	       conn_num, port_num);
+    else
+	ui_log("IPMI connection to con.port %d.%d is up\n",
+	       conn_num, port_num);
+
+    if (!still_connected) {
 	ui_log("IPMI connection is down due to error 0x%x\n", err);
 	return;
     } else if (!initialized)
 	ui_log("Completed setup for the IPMI connection\n");
     else {
-	ui_log("IPMI connection is back up\n");
 	return;
     }
 

@@ -1192,6 +1192,7 @@ detected, the OEM handler supplied in the function is called.  Then the
 OEM handler can perform the functions it needs to do for that MC.
 
 @menu
+* Connections::
 * Fixups::
 * Non-Standard Sensors::
 * OEM Controls::
@@ -1203,7 +1204,22 @@ OEM handler can perform the functions it needs to do for that MC.
 * SDR Repository and OEM Code::
 @end menu
 
-@node    Fixups, Non-Standard Sensors, How to Write OEM Plugins, How to Write OEM Plugins
+@node    Connections, Fixups, How to Write OEM Plugins, How to Write OEM Plugins
+@section Connections
+
+Some connections need to be able to handle certain things.  The primary
+one is that the IPMB address for the connection must be set properly,
+and sometimes when you connect to an MC it is not at IPMB address 0x20
+(in many blade-based systems, for instance).
+
+If an IPMB address can change, it should bind in an OEM connection
+handler for @code{ipmi_register_oem_conn_handler()}.  That handler
+should set the @code{get_ipmb_addr} function pointer in the connection
+to its own handler.  The connection will call this function at startup
+to determine the IPMB address, and it will call this function
+periodically to see if the IPMB address changes.
+
+@node    Fixups, Non-Standard Sensors, Connections, How to Write OEM Plugins
 @section Fixups
 
 Well, it happens.  Some bit is set wrong in the MC, or in a sensor SDR,

@@ -74,15 +74,22 @@ typedef void (*ipmi_ll_cmd_handler_t)(ipmi_con_t   *ipmi,
 /* Called when a low-level connection has failed or come up.  If err
    is zero, the connection has come up after being failed.  if err is
    non-zero, it's an error number to report why the failure occurred.
-   The active parm tells if the interface is active or not, this
-   callback is also used to inform the upper layer when the connection
-   becomes active or inactive. */
-typedef void (*ipmi_ll_con_failed_cb)(ipmi_con_t *ipmi,
-				      int        err,
-				      int        active,
-				      void       *cb_data);
+   Since some connections support multiple ports into the system, this
+   is used to report partial failures as well as full failures.
+   port_num will be the port number that has failed (if err is
+   nonzero) or has just come up (if err is zero).  What port_num that
+   means depends on the connection type.  any_port_up will be true if
+   the system still has connectivity through other ports. */
+typedef void (*ipmi_ll_con_changed_cb)(ipmi_con_t   *ipmi,
+				       int          err,
+				       unsigned int port_num,
+				       int          any_port_up,
+				       void         *cb_data);
 
-/* Used when fetching the IPMB address of the connection. */
+/* Used when fetching the IPMB address of the connection. The active
+   parm tells if the interface is active or not, this callback is also
+   used to inform the upper layer when the connection becomes active
+   or inactive. */
 typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t   *ipmi,
 				     int          err,
 				     unsigned int ipmb_addr,
@@ -114,15 +121,15 @@ struct ipmi_con_s
        be called with the global read lock not held, because the
        handler must write lock the global lock in order to add the MC
        to the global list.  This will report success/failure with the
-       con_fail_handler, so set that up first. */
+       con_changed_handler, so set that up first. */
     int (*start_con)(ipmi_con_t *ipmi);
 
     /* Set the callback to call when the connection goes down or up.
        There is only one of these handlers, changing it overwrites it.
        Setting it to NULL disables it. */
-    void (*set_con_fail_handler)(ipmi_con_t            *ipmi,
-				 ipmi_ll_con_failed_cb handler,
-				 void                  *cb_data);
+    void (*set_con_change_handler)(ipmi_con_t             *ipmi,
+				   ipmi_ll_con_changed_cb handler,
+				   void                   *cb_data);
 
     /* If OEM code discovers that an IPMB address has changed, it can
        use this to change it. */
@@ -151,10 +158,10 @@ struct ipmi_con_s
        This may be NULL if the connection does not support this.  The
        interface code may set this, the OEM code should override this
        if necessary. */
-    int (*set_active_state)(ipmi_con_t            *ipmi,
-			    int                   is_active,
-			    ipmi_ll_con_failed_cb handler,
-			    void                  *cb_data);
+    int (*set_active_state)(ipmi_con_t           *ipmi,
+			    int                  is_active,
+			    ipmi_ll_ipmb_addr_cb handler,
+			    void                 *cb_data);
 
     /* Send an IPMI command (in "msg" on the "ipmi" connection to the
        given "addr".  When the response comes in or the message times
@@ -232,5 +239,9 @@ void ipmi_register_ll(ll_ipmi_t *ll);
 
 /* Called by the IPMI code in various places to validate a connection. */
 int __ipmi_validate(ipmi_con_t *ipmi);
+
+/* Initialization code for the initialization the connection code. */
+int _ipmi_conn_init(void);
+void _ipmi_conn_shutdown(void);
 
 #endif /* _IPMI_CONN_H */

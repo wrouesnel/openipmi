@@ -78,7 +78,7 @@ dump_hex(void *vdata, int len)
 
 /* Number of consecutive failures that must occur before an IP is
    considered failed. */
-#define IP_FAIL_COUNT 6
+#define IP_FAIL_COUNT 4
 
 
 struct ipmi_ll_event_handler_id_s
@@ -122,7 +122,10 @@ typedef struct lan_wait_queue_s
 } lan_wait_queue_t;
 
 #define MAX_IP_ADDR 2
-#define SENDS_BETWEEN_IP_SWITCHES 8
+
+/* We must keep this number small, if it's too big and a failure
+   occurs, we will be outside the sequence number before we switch. */
+#define SENDS_BETWEEN_IP_SWITCHES 3
 
 typedef struct lan_data_s
 {
@@ -205,11 +208,8 @@ typedef struct lan_data_s
     os_hnd_timer_id_t          *audit_timer;
     audit_timer_info_t         *audit_info;
 
-    ipmi_ll_con_failed_cb con_fail_handler;
-    void                  *con_fail_cb_data;
-
-    lan_report_con_failure_cb lan_con_fail_handler;
-    void                      *lan_con_fail_cb_data;
+    ipmi_ll_con_changed_cb con_change_handler;
+    void                   *con_change_cb_data;
 
     ipmi_ll_ipmb_addr_cb ipmb_addr_handler;
     void                 *ipmb_addr_cb_data;
@@ -493,7 +493,7 @@ lan_send_addr(lan_data_t  *lan,
     }
 
     if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing\n addr =");
+	ipmi_log(IPMI_LOG_DEBUG_START, "outgoing seq %d\n addr =", seq);
 	dump_hex((unsigned char *) &(lan->ip_addr[lan->curr_ip_addr]),
 		 sizeof(struct sockaddr_in));
 	ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
@@ -536,6 +536,12 @@ lan_send(lan_data_t  *lan,
 	    }
 	    lan->curr_ip_addr = addr_num;
 	}
+    } else {
+	/* Just rotate between IP addresses if we are not yet connected */
+	int addr_num = lan->curr_ip_addr + 1;
+	if (addr_num >= lan->num_ip_addr)
+	    addr_num = 0;
+	lan->curr_ip_addr = addr_num;
     }
 
     *send_ip_num = lan->curr_ip_addr;
@@ -668,17 +674,16 @@ connection_up(lan_data_t *lan, int addr_num, int new_con)
 	lan->ip_working[addr_num] = 1;
 
 	ipmi_log(IPMI_LOG_INFO, "Connection %d to the BMC is up", addr_num);
-
-	if (lan->lan_con_fail_handler)
-	    lan->lan_con_fail_handler(addr_num, 0, lan->lan_con_fail_cb_data);
     }
 
     if (new_con) {
 	ipmi_log(IPMI_LOG_INFO, "Connection to the BMC restored");
 	lan->curr_ip_addr = addr_num;
-	if (lan->con_fail_handler)
-	    lan->con_fail_handler(lan->ipmi, 0, 1, lan->con_fail_cb_data);
     }
+
+    if (lan->connected && lan->con_change_handler)
+	lan->con_change_handler(lan->ipmi, 0, addr_num, 1,
+				lan->con_change_cb_data);
 }
 
 
@@ -693,10 +698,6 @@ lost_connection(lan_data_t *lan, int addr_num)
     lan->ip_working[addr_num] = 0;
 
     ipmi_log(IPMI_LOG_WARNING, "Connection %d to the BMC is down", addr_num);
-
-    if (lan->lan_con_fail_handler)
-	lan->lan_con_fail_handler(addr_num, ETIMEDOUT,
-				  lan->lan_con_fail_cb_data);
 
     if (lan->curr_ip_addr == addr_num) {
 	/* Scan to see if any address is operational. */
@@ -719,12 +720,12 @@ lost_connection(lan_data_t *lan, int addr_num)
 	    lan->session_id = 0;
 	    lan->recv_msg_map = 0;
 	    lan->working_authtype = 0;
-
-	    if (lan->con_fail_handler)
-		lan->con_fail_handler(lan->ipmi, ETIMEDOUT, 0,
-				      lan->con_fail_cb_data);
 	}
     }
+
+    if (lan->con_change_handler)
+	lan->con_change_handler(lan->ipmi, ETIMEDOUT, addr_num, lan->connected,
+				lan->con_change_cb_data);
 }
 
 static void
@@ -776,7 +777,8 @@ rsp_timeout_handler(void              *cb_data,
 		 "  addr_type=%d, ip_num=%d, fails=%d\n"
 		 "  fail_start_time=%ld.%6.6ld",
 		 seq, lan->seq_table[seq].addr.addr_type,
-		 lan->seq_table[seq].last_ip_num, ip_num,
+		 lan->seq_table[seq].last_ip_num,
+		 lan->consecutive_ip_failures[ip_num],
 		 lan->ip_failure_time[ip_num].tv_sec,
 		 lan->ip_failure_time[ip_num].tv_usec);
     }
@@ -1783,9 +1785,17 @@ static void
 handle_connected(ipmi_con_t *ipmi, int err)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        i;
 
-    if (lan->con_fail_handler)
-	lan->con_fail_handler(ipmi, err, err == 0, lan->con_fail_cb_data);
+    if (lan->con_change_handler) {
+	/* Report everything up. */
+	for (i=0; i<lan->num_ip_addr; i++)
+	{
+	    if (lan->ip_working[i])
+		lan->con_change_handler(ipmi, err, i, lan->connected,
+					lan->con_change_cb_data);
+	}
+    }
 }
 
 static void
@@ -2196,14 +2206,14 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan)
 }
 
 static void
-lan_set_con_fail_handler(ipmi_con_t            *ipmi,
-			 ipmi_ll_con_failed_cb handler,
-			 void                  *cb_data)
+lan_set_con_change_handler(ipmi_con_t             *ipmi,
+			   ipmi_ll_con_changed_cb handler,
+			   void                   *cb_data)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
-    lan->con_fail_handler = handler;
-    lan->con_fail_cb_data = cb_data;
+    lan->con_change_handler = handler;
+    lan->con_change_cb_data = cb_data;
 }
 
 static int
@@ -2260,8 +2270,6 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 		   unsigned int              password_len,
 		   os_handler_t              *handlers,
 		   void                      *user_data,
-		   lan_report_con_failure_cb fail_con_cb,
-		   void                      *cb_data,
 		   ipmi_con_t                **new_con)
 {
     ipmi_con_t     *ipmi = NULL;
@@ -2307,7 +2315,7 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 	lan->ip_addr[i].sin_family = AF_INET;
 	lan->ip_addr[i].sin_port = htons(ports[i]);
 	lan->ip_addr[i].sin_addr = ip_addrs[i];
-	lan->ip_working[i] = 1;
+	lan->ip_working[i] = 0;
     }
     lan->num_ip_addr = num_ip_addrs;
     lan->curr_ip_addr = 0;
@@ -2343,7 +2351,7 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     ipmi->start_con = lan_start_con;
     ipmi->set_ipmb_addr = lan_set_ipmb_addr;
     ipmi->set_ipmb_addr_handler = lan_set_ipmb_addr_handler;
-    ipmi->set_con_fail_handler = lan_set_con_fail_handler;
+    ipmi->set_con_change_handler = lan_set_con_change_handler;
     ipmi->send_command = lan_send_command;
     ipmi->register_for_events = lan_register_for_events;
     ipmi->deregister_for_events = lan_deregister_for_events;
@@ -2365,9 +2373,6 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 					    NULL, auth_alloc, auth_free);
     if (rv)
 	goto out_err;
-
-    lan->lan_con_fail_handler = fail_con_cb;
-    lan->lan_con_fail_cb_data = cb_data;
 
     /* Add it to the list of valid IPMIs so it will validate. */
     ipmi_write_lock();

@@ -43,6 +43,9 @@ void ipmi_ui_shutdown(void);
 
 void ipmi_ui_setup_done(ipmi_domain_t *mc,
 			int           err,
+			unsigned int  conn_num,
+			unsigned int  port_num,
+			int           still_connected,
 			void          *user_data);
 
 #endif /* _IPMI_UI_H */

@@ -132,22 +132,33 @@ int ipmi_cmp_control_id(ipmi_control_id_t id1, ipmi_control_id_t id2);
 /* Callback used for generic domain reporting. */
 typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
 
-typedef struct ipmi_domain_con_fail_s ipmi_domain_con_fail_t;
+typedef struct ipmi_domain_con_change_s ipmi_domain_con_change_t;
 
-/* Add and remove a function to be called when the connection to the
-   domain goes down or back up.  Being down does NOT mean the domain has
-   been shutdown, it is still active, and OpenIPMI will continue to
-   attempt to reconnect to the domain.  When the connection goes down,
-   The "err" value in the callback will be non-zero to report the
-   reason for the failure.  When the connection goes up, the "err"
-   value will be zero reporting that the connection is now
-   available. */
-int ipmi_domain_add_con_fail_handler(ipmi_domain_t          *domain,
-				     ipmi_domain_cb         handler,
-				     void                   *cb_data,
-				     ipmi_domain_con_fail_t **id);
-void ipmi_domain_remove_con_fail_handler(ipmi_domain_t          *domain,
-					 ipmi_domain_con_fail_t *id);
+/* Add and remove a function to be called when the connection or port
+   to the domain goes down or back up.  Being down does NOT mean the
+   domain has been shutdown, it is still active, and OpenIPMI will
+   continue to attempt to reconnect to the domain.  When the
+   connection goes down, The "err" value in the callback will be
+   non-zero to report the reason for the failure.  When the connection
+   goes up, the "err" value will be zero reporting that the connection
+   is now available.  The particular connections that went up or down
+   is reported.  conn_num is the connection number (which ipmi_con_t
+   supplied in the array at startup), port_num is the particular port
+   on the connection, and depends on the connection type.
+   still_connected is true if the system still has a valid connection
+   to the target, or false if all connection are gone. */
+typedef void (*ipmi_domain_con_cb)(ipmi_domain_t *domain,
+				   int           err,
+				   unsigned int  conn_num,
+				   unsigned int  port_num,
+				   int           still_connected,
+				   void          *cb_data);
+int ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
+				       ipmi_domain_con_cb       handler,
+				       void                     *cb_data,
+				       ipmi_domain_con_change_t **id);
+void ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
+					   ipmi_domain_con_change_t *id);
 
 /* The domain has two timers, one for the SEL rescan interval and one for
    the IPMB bus rescan interval. */
@@ -904,14 +915,18 @@ int ipmi_control_get_display_string(ipmi_control_t      *control,
    an OS handler to use for the system. */
 int ipmi_init(os_handler_t *handler);
 
-/* Create a new domain with the given IPMI connection.  The new domain
-   is returned in the new_domain variable, the id for the connection
-   fail handler is return in con_fail_id. */
-int ipmi_init_domain(ipmi_con_t             *con,
-		     ipmi_domain_cb         con_fail_handler,
-		     void                   *con_fail_cb_data,
-		     ipmi_domain_con_fail_t **con_fail_id,
-		     ipmi_domain_id_t       *new_domain);
+/* Create a new domain with the given IPMI connections.  The con array
+   is an array of connections to use , num_con is the number of
+   connections (currently, if 1 is not used, it will fail, because
+   only one connection is currently supported).  The new domain is
+   returned in the new_domain variable, the id for the connection
+   change handler is return in con_change_id. */
+int ipmi_init_domain(ipmi_con_t               *con[],
+		     unsigned int             num_con,
+		     ipmi_domain_con_cb       con_change_handler,
+		     void                     *con_change_cb_data,
+		     ipmi_domain_con_change_t **con_change_id,
+		     ipmi_domain_id_t         *new_domain);
 
 
 /* This will clean up all the memory associated with IPMI. */

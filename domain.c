@@ -52,10 +52,10 @@
 #define IPMI_RESCAN_BUS_INTERVAL 600
 
 
-struct ipmi_domain_con_fail_s
+struct ipmi_domain_con_change_s
 {
-    ipmi_domain_cb handler;
-    void           *cb_data;
+    ipmi_domain_con_cb handler;
+    void               *cb_data;
 };
 
 /* Timer structure for rescanning the bus. */
@@ -116,8 +116,12 @@ struct ipmi_domain_s
 
     ipmi_ll_event_handler_id_t *ll_event_id;
 
-    ipmi_con_t  *conn;
+    ipmi_con_t    *conn;
     unsigned char con_ipmb_addr;
+
+#define MAX_PORTS_PER_CON 4
+    /* -1 if not valid, 0 if not up, 1 if up. */
+    int           port_up[MAX_PORTS_PER_CON];
 
     /* Should I do a full bus scan for devices on the bus? */
     int                        do_bus_scan;
@@ -136,13 +140,16 @@ struct ipmi_domain_s
     unsigned char    event_msg_int_type;
 
     /* A list of connection fail handler, separate from the main one. */
-    ilist_t *con_fail_handlers;
+    ilist_t *con_change_handlers;
 
     /* A list of IPMB addresses to not scan. */
     ilist_t *ipmb_ignores;
 
     /* Is the low-level connection up? */
     int connection_up;
+
+    /* Are we in the process of connecting? */
+    int connecting;
 
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
@@ -216,16 +223,16 @@ cleanup_domain(ipmi_domain_t *domain)
 
     if (domain->mc_list)
 	free_ilist(domain->mc_list);
-    if (domain->con_fail_handlers) {
+    if (domain->con_change_handlers) {
 	ilist_iter_t iter;
 	void         *data;
-	ilist_init_iter(&iter, domain->con_fail_handlers);
+	ilist_init_iter(&iter, domain->con_change_handlers);
 	while (ilist_first(&iter)) {
 	    data = ilist_get(&iter);
 	    ilist_delete(&iter);
 	    ipmi_mem_free(data);
 	}
-	free_ilist(domain->con_fail_handlers);
+	free_ilist(domain->con_change_handlers);
     }
     if (domain->ipmb_ignores) {
 	ilist_iter_t iter;
@@ -252,7 +259,7 @@ cleanup_domain(ipmi_domain_t *domain)
 					    domain->ll_event_id);
 
     /* Remove the connection fail handler. */
-    domain->conn->set_con_fail_handler(domain->conn, NULL,  NULL);
+    domain->conn->set_con_change_handler(domain->conn, NULL,  NULL);
 
     /* Destroy the entities last, since sensors and controls may
        refer to them. */
@@ -272,6 +279,7 @@ setup_domain(ipmi_con_t    *ipmi,
     ipmi_domain_t                *domain;
     int                          rv;
     ipmi_system_interface_addr_t si;
+    int                          i;
 
     domain = ipmi_mem_alloc(sizeof(*domain));
     if (!domain)
@@ -281,6 +289,9 @@ setup_domain(ipmi_con_t    *ipmi,
     domain->valid = 1;
 
     domain->conn = ipmi;
+
+    for (i=0; i<MAX_PORTS_PER_CON; i++)
+	domain->port_up[i] = -1;
 
     /* Create the locks before anything else. */
     domain->mc_list_lock = NULL;
@@ -334,8 +345,8 @@ setup_domain(ipmi_con_t    *ipmi,
 	goto out_err;
     }
 
-    domain->con_fail_handlers = alloc_ilist();
-    if (! domain->con_fail_handlers) {
+    domain->con_change_handlers = alloc_ilist();
+    if (! domain->con_change_handlers) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -1801,12 +1812,12 @@ ipmi_close_connection(ipmi_domain_t *domain,
 }
 
 int
-ipmi_domain_add_con_fail_handler(ipmi_domain_t          *domain,
-				 ipmi_domain_cb         handler,
-				 void                   *cb_data,
-				 ipmi_domain_con_fail_t **id)
+ipmi_domain_add_con_change_handler(ipmi_domain_t            *domain,
+				   ipmi_domain_con_cb       handler,
+				   void                     *cb_data,
+				   ipmi_domain_con_change_t **id)
 {
-    ipmi_domain_con_fail_t *new_id;
+    ipmi_domain_con_change_t *new_id;
 
     new_id = ipmi_mem_alloc(sizeof(*new_id));
     if (!new_id)
@@ -1814,7 +1825,7 @@ ipmi_domain_add_con_fail_handler(ipmi_domain_t          *domain,
 
     new_id->handler = handler;
     new_id->cb_data = cb_data;
-    if (! ilist_add_tail(domain->con_fail_handlers, new_id, NULL)) {
+    if (! ilist_add_tail(domain->con_change_handlers, new_id, NULL)) {
 	ipmi_mem_free(new_id);
 	return ENOMEM;
     }
@@ -1826,13 +1837,13 @@ ipmi_domain_add_con_fail_handler(ipmi_domain_t          *domain,
 }
 
 void
-ipmi_domain_remove_con_fail_handler(ipmi_domain_t          *domain,
-				    ipmi_domain_con_fail_t *id)
+ipmi_domain_remove_con_change_handler(ipmi_domain_t            *domain,
+				      ipmi_domain_con_change_t *id)
 {
     ilist_iter_t iter;
     int          rv;
 
-    ilist_init_iter(&iter, domain->con_fail_handlers);
+    ilist_init_iter(&iter, domain->con_change_handlers);
     rv = ilist_first(&iter);
     while (rv) {
 	if (ilist_get(&iter) == id) {
@@ -1844,32 +1855,54 @@ ipmi_domain_remove_con_fail_handler(ipmi_domain_t          *domain,
     }
 }
 
-typedef struct con_fail_info_s
+typedef struct con_change_info_s
 {
     ipmi_domain_t *domain;
     int           err;
-} con_fail_info_t;
+    unsigned int  conn_num;
+    unsigned int  port_num;
+    int           still_connected;
+} con_change_info_t;
 
 static void
-iterate_con_fails(ilist_iter_t *iter, void *item, void *cb_data)
+iterate_con_changes(ilist_iter_t *iter, void *item, void *cb_data)
 {
-    con_fail_info_t        *info = cb_data;
-    ipmi_domain_con_fail_t *id = item;
+    con_change_info_t        *info = cb_data;
+    ipmi_domain_con_change_t *id = item;
 
-    id->handler(info->domain, info->err, id->cb_data);
+    id->handler(info->domain, info->err, info->conn_num, info->port_num,
+		info->still_connected, id->cb_data);
 }
 
 static void
-call_con_fails(ipmi_domain_t *domain, int err)
+call_con_fails(ipmi_domain_t *domain,
+	       int           err,
+	       unsigned int  conn_num,
+	       unsigned int  port_num,
+	       int           still_connected)
 {
-    con_fail_info_t info = {domain, err};
-    ilist_iter(domain->con_fail_handlers, iterate_con_fails, &info);
+    con_change_info_t info = {domain, err, conn_num, port_num, still_connected};
+    ilist_iter(domain->con_change_handlers, iterate_con_changes, &info);
+    domain->connecting = 0;
+}
+
+static void
+call_con_change(ipmi_domain_t *domain,
+		int           err,
+		unsigned int  conn_num,
+		unsigned int  port_num,
+		int           still_connected)
+{
+    con_change_info_t info = {domain, err, conn_num, port_num, still_connected};
+    ilist_iter(domain->con_change_handlers, iterate_con_changes, &info);
 }
 
 
 static void	
 con_up_complete(ipmi_domain_t *domain)
 {
+    int i;
+
     domain->connection_up = 1;
 
     ipmi_lock(domain->mc_list_lock);
@@ -1877,7 +1910,10 @@ con_up_complete(ipmi_domain_t *domain)
     ipmi_unlock(domain->mc_list_lock);
     ipmi_detect_ents_presence_changes(domain->entities, 1);
 
-    call_con_fails(domain, 0);
+    for (i=0; i<MAX_PORTS_PER_CON; i++) {
+	if (domain->port_up[i] == 1)
+	    call_con_fails(domain, 0, 0, i, 1);
+    }
 
     ipmi_entity_scan_sdrs(domain->entities, domain->main_sdrs);
     ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
@@ -1943,7 +1979,7 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
     }
 
     if (rv) {
-	call_con_fails(domain, rv);
+	call_con_fails(domain, rv, 0, 0, 0);
 	return;
     }
 
@@ -2038,7 +2074,7 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
 
     rv = get_channels(domain);
     if (rv)
-	call_con_fails(domain, rv);
+	call_con_fails(domain, rv, 0, 0, 0);
 }
 
 static int 
@@ -2057,7 +2093,7 @@ got_dev_id(ipmi_mc_t  *mc,
 
     if ((rsp->data[0] != 0) || (rsp->data_len < 12)) {
 	/* At least the get device id has to work. */
-	call_con_fails(domain, EINVAL);
+	call_con_fails(domain, EINVAL, 0, 0, 0);
 	return;
     }
 
@@ -2070,7 +2106,7 @@ got_dev_id(ipmi_mc_t  *mc,
 
     if (domain->major_version < 1) {
 	/* We only support 1.0 and greater. */
-	call_con_fails(domain, EINVAL);
+	call_con_fails(domain, EINVAL, 0, 0, 0);
 	return;
     }
 
@@ -2080,13 +2116,15 @@ got_dev_id(ipmi_mc_t  *mc,
 	rv = get_channels(domain);
     }
     if (rv)
-	call_con_fails(domain, rv);
+	call_con_fails(domain, rv, 0, 0, 0);
 }
 
 static int
 start_con_up(ipmi_domain_t *domain)
 {
     ipmi_msg_t msg;
+
+    domain->connecting = 1;
 
     msg.netfn = IPMI_APP_NETFN;
     msg.cmd = IPMI_GET_DEVICE_ID_CMD;
@@ -2097,13 +2135,21 @@ start_con_up(ipmi_domain_t *domain)
 }
 
 static void
-ll_con_failed(ipmi_con_t *ipmi,
-	      int        err,
-	      int        active,
-	      void       *cb_data)
+ll_con_changed(ipmi_con_t   *ipmi,
+	       int          err,
+	       unsigned int port_num,
+	       int          still_connected,
+	       void         *cb_data)
 {
     ipmi_domain_t   *domain = cb_data;
     int             rv;
+
+    if (port_num >= MAX_PORTS_PER_CON) {
+	ipmi_log(IPMI_LOG_SEVERE, "domain.c:ll_con_changed: Got port number %d,"
+		 " but %d is the max number of ports",
+		 port_num, MAX_PORTS_PER_CON);
+	return;
+    }
 
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
@@ -2111,18 +2157,27 @@ ll_con_failed(ipmi_con_t *ipmi,
 	/* So the connection failed.  So what, there's nothing to talk to. */
 	goto out_unlock;
 
-    if (err) {
-	domain->connection_up = 0;
-    } else {
-	/* When a connection comes back up, start the process of
-	   getting SDRs, scanning the bus, and the like. */
-	rv = start_con_up(domain);
-	if (rv)
-	    err = rv;
-    }
-
     if (err)
-	call_con_fails(domain, err);
+	domain->port_up[port_num] = 0;
+    else
+	domain->port_up[port_num] = 1;
+
+    if (still_connected) {
+	if (domain->connecting) {
+	    /* If we are connecting, don't report anything. */
+	} else if (domain->connection_up) {
+	    call_con_change(domain, err, 0, port_num, still_connected);
+	} else {
+	    /* When a connection comes back up, start the process of
+	       getting SDRs, scanning the bus, and the like. */
+	    rv = start_con_up(domain);
+	    if (rv)
+		call_con_fails(domain, rv, 0, port_num, still_connected);
+	}
+    } else {
+	call_con_fails(domain, err, 0, port_num, still_connected);
+	domain->connection_up = 0;
+    }
 
  out_unlock:
     ipmi_read_unlock();
@@ -2166,31 +2221,38 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 }
 
 int
-ipmi_init_domain(ipmi_con_t             *con,
-		 ipmi_domain_cb         con_fail_handler,
-		 void                   *con_fail_cb_data,
-		 ipmi_domain_con_fail_t **con_fail_id,
-		 ipmi_domain_id_t       *new_domain)
+ipmi_init_domain(ipmi_con_t               *con[],
+		 unsigned int             num_con,
+		 ipmi_domain_con_cb       con_change_handler,
+		 void                     *con_change_cb_data,
+		 ipmi_domain_con_change_t **con_change_id,
+		 ipmi_domain_id_t         *new_domain)
 {
     int           rv;
     ipmi_domain_t *domain;
 
-    rv = setup_domain(con, &domain);
+    if (num_con != 1)
+	return EINVAL;
+
+    rv = setup_domain(con[0], &domain);
     if (rv)
 	return rv;
 
-    con->set_con_fail_handler(con, ll_con_failed, domain);
-    con->set_ipmb_addr_handler(con, ll_addr_changed, domain);
+    con[0]->set_con_change_handler(con[0], ll_con_changed, domain);
+    con[0]->set_ipmb_addr_handler(con[0], ll_addr_changed, domain);
 
     ipmi_write_lock();
     add_known_domain(domain);
 
-    rv = ipmi_domain_add_con_fail_handler(domain, con_fail_handler,
-					  con_fail_cb_data, con_fail_id);
-    if (rv)
-	goto out_err;
+    if (con_change_handler) {
+	rv = ipmi_domain_add_con_change_handler(domain, con_change_handler,
+						con_change_cb_data,
+						con_change_id);
+	if (rv)
+	    goto out_err;
+    }
 
-    rv = con->start_con(con);
+    rv = con[0]->start_con(con[0]);
     if (rv)
 	goto out_err;
 
@@ -2202,7 +2264,7 @@ ipmi_init_domain(ipmi_con_t             *con,
     return rv;
 
  out_err:
-    con->set_con_fail_handler(con, NULL, NULL);
+    con[0]->set_con_change_handler(con[0], NULL, NULL);
     remove_known_domain(domain);
     cleanup_domain(domain);
     goto out;

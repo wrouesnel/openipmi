@@ -145,6 +145,9 @@ entity_change(enum ipmi_update_e op,
 void
 setup_done(ipmi_domain_t *domain,
 	   int           err,
+	   unsigned int  conn_num,
+	   unsigned int  port_num,
+	   int           still_connected,
 	   void          *user_data)
 {
     int rv;
@@ -302,7 +305,7 @@ main(int argc, char *argv[])
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, ui_sel,
-				NULL, NULL, &con);
+				&con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
 	    exit(1);
@@ -314,7 +317,7 @@ main(int argc, char *argv[])
     }
 #endif
 
-    rv = ipmi_init_domain(con, setup_done, NULL, NULL, NULL);
+    rv = ipmi_init_domain(&con, 1, setup_done, NULL, NULL, NULL);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	exit(1);

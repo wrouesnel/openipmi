@@ -49,14 +49,14 @@ void ui_reconnect(void)
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, selector,
-				NULL, NULL, &con);
+				&con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
 	    exit(1);
 	}
     }
 
-    rv = ipmi_init_domain(con, ipmi_ui_setup_done, NULL, NULL, NULL);
+    rv = ipmi_init_domain(&con, 1, ipmi_ui_setup_done, NULL, NULL, NULL);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	exit(1);
@@ -200,7 +200,7 @@ main(int argc, char *argv[])
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, selector,
-				NULL, NULL, &con);
+				&con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s\n", strerror(rv));
 	    rv = EINVAL;
@@ -212,7 +212,7 @@ main(int argc, char *argv[])
 	goto out;
     }
 
-    rv = ipmi_init_domain(con, ipmi_ui_setup_done, NULL, NULL, NULL);
+    rv = ipmi_init_domain(&con, 1, ipmi_ui_setup_done, NULL, NULL, NULL);
     if (rv) {
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	goto out;
