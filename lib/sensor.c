@@ -1154,6 +1154,8 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
     if (s) {
 	for (i=0; i<s_size; i++)
 	    if (s[i]) {
+		if (s[i]->mc)
+		    _ipmi_mc_put(s[i]->mc);
 		if (s[i]->waitq)
 		    opq_destroy(s[i]->waitq);
 		if (s[i]->handler_list)
@@ -1413,7 +1415,9 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 		    /* They compare, prefer to keep the old data. */
 		    opq_destroy(nsensor->waitq);
 		    ilist_twoitem_destroy(nsensor->handler_list);
+		    _ipmi_mc_put(nsensor->mc);
 		    ipmi_mem_free(nsensor);
+		    nsensor = NULL;
 		    sdr_sensors[i] = osensor;
 		    osensor->source_idx = i;
 		    osensor->source_array = sdr_sensors;
@@ -1434,6 +1438,8 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 		sref = sref->next;
 		handle_new_sensor(domain, nsensor, snext);
 	    }
+	    if (nsensor)
+	      _ipmi_mc_put(nsensor->mc);
 	}
     }
 
@@ -1451,7 +1457,7 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	ipmi_mem_free(old_sdr_sensors);
     }
 
- out_err_unlock_free:
+ out_err_unlock:
     ipmi_domain_entity_unlock(domain);
  out_err:
     /* Free up the extra links that we didn't use. */
@@ -1461,6 +1467,16 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	sref = snext;
     }
     return rv;
+
+ out_err_unlock_free:
+    /* Free up the usecounts on all the MCs we got. */
+    for (i=0; i<count; i++) {
+	ipmi_sensor_t *nsensor = sdr_sensors[i];
+
+	if (nsensor)
+	    _ipmi_mc_put(nsensor->mc);
+    }
+    goto out_err_unlock;
 }
 			
 /***********************************************************************

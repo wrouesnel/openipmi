@@ -2977,6 +2977,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 				 MC_NAME(found->ent->frudev_mc),
 				 MC_NAME(mc));
 		    }
+		    _ipmi_mc_put(mc);
 		} else {
 		    rv = ipmi_mc_add_active_handler(mc,
 						    entity_mc_active,
@@ -2993,6 +2994,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 			found->ent->frudev_active = ipmi_mc_is_active(mc);
 			found->ent->frudev_mc = mc;
 		    }
+		    _ipmi_mc_put(mc);
 		}
 	    }
 	} else {

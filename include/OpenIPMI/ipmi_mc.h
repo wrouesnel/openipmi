@@ -214,6 +214,13 @@ int _ipmi_create_mc(ipmi_domain_t *domain,
 /* Destroy an MC. */
 void _ipmi_cleanup_mc(ipmi_mc_t *mc);
 
+/* These are called to claim and release the use of an MC.  An MC will
+   not change while it has been gotten.  Must be holding the
+   domain->mc_lock to call these. */
+int _ipmi_mc_get(ipmi_mc_t *mc);
+void _ipmi_mc_put(ipmi_mc_t *mc);
+
+
 #if 0
 /* FIXME - need to handle this somehow. */
 /* This should be called from OEM code for an SMI, ONLY WHEN THE NEW

@@ -71,25 +71,23 @@ struct ipmi_mc_removed_s
 #define MC_NAME_LEN (IPMI_MAX_DOMAIN_NAME_LEN + 32)
 struct ipmi_mc_s
 {
+    unsigned int usecount;
+    ipmi_lock_t *lock;
+
     ipmi_domain_t *domain;
     long          seq;
     ipmi_addr_t   addr;
     int           addr_len;
 
-    /* Are we currently being cleaned up? */
-    int in_cleanup;
+    /* Are we currently in need of a cleanup? */
+    int cleanup;
 
     /* If we have any external users that do not have direct
-       references, we increment the usecount.  This is primarily the
+       references, we increment the usercount.  This is primarily the
        internal uses in the active_handlers list, but we cannot use
        that list being empty because it also may have external
        users. */
-    int usecount;
-
-    /* True if the MC is a valid MC in the system, false if not.
-       Primarily used to handle shutdown races, where the MC still
-       exists in lists but has been shut down. */
-    int valid;
+    int usercount;
 
     /* If the MC is known to be good in the system, then active is
        true.  If active is false, that means that there are sensors
@@ -321,6 +319,9 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     mc->entities_in_my_sdr = NULL;
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
+    rv = ipmi_create_lock(domain, &mc->lock);
+    if (rv)
+	goto out_err;
     mc->removed_handlers = alloc_ilist();
     if (!mc->removed_handlers) {
 	rv = ENOMEM;
@@ -367,6 +368,7 @@ _ipmi_create_mc(ipmi_domain_t *domain,
 				   domain);
 
     mc_set_name(mc);
+    mc->usecount = 1; /* Require a release */
  out_err:
     if (rv)
 	_ipmi_cleanup_mc(mc);
@@ -395,18 +397,15 @@ call_removed_handler(ilist_iter_t *iter, void *item, void *cb_data)
     ilist_delete(iter);
 }
 
-static void
+static int
 check_mc_destroy(ipmi_mc_t *mc)
 {
     ipmi_domain_t *domain = mc->domain;
 
-    if (mc->in_cleanup)
-	return;
-
     if (!mc->active
 	&& (ipmi_controls_get_count(mc->controls) == 0)
 	&& (ipmi_sensors_get_count(mc->sensors) == 0)
-	&& (mc->usecount == 0))
+	&& (mc->usercount == 0))
     {
 	/* There are no sensors associated with this MC, so it's safe
            to delete it.  If there are sensors that still reference
@@ -437,23 +436,28 @@ check_mc_destroy(ipmi_mc_t *mc)
 	    ipmi_sdr_info_destroy(mc->sdrs, NULL, NULL);
 	if (mc->sel)
 	    ipmi_sel_destroy(mc->sel, NULL, NULL);
+	if (mc->lock)
+	    ipmi_destroy_lock(mc->lock);
 
 	ipmi_mem_free(mc);
+	return 1;
     }
+    return 0;
 }
 
 void
 _ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
+    mc->cleanup = 1;
+}
+
+static void
+cleanup_mc(ipmi_mc_t *mc)
+{
     int           i;
     int           rv;
     ipmi_domain_t *domain = mc->domain;
     os_handler_t  *os_hnd = ipmi_domain_get_os_hnd(domain);
-
-    if (mc->in_cleanup)
-	return;
-
-    mc->in_cleanup = 1;
 
     /* Call the OEM handlers for removal, if it has been registered. */
     if (mc->removed_handlers) {
@@ -499,10 +503,6 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
     }
 
     _ipmi_mc_set_active(mc, 0);
-
-    mc->in_cleanup = 0;
-
-    check_mc_destroy(mc);
 }
 
 /***********************************************************************
@@ -1293,6 +1293,8 @@ get_event_rcvr_done(ipmi_mc_t  *mc,
 		if (event_rcvr)
 		    send_set_event_rcvr(mc, event_rcvr, NULL, NULL);
 	    }
+	    if (destmc)
+		_ipmi_mc_put(destmc);
 	} else {
 	    send_set_event_rcvr(mc, 0, NULL, NULL);
 	}
@@ -1530,6 +1532,40 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
  *
  **********************************************************************/
 
+void
+_ipmi_mc_use(ipmi_mc_t *mc)
+{
+    CHECK_MC_LOCK(mc);
+    mc->usercount++;
+}
+
+void
+_ipmi_mc_release(ipmi_mc_t *mc)
+{
+    CHECK_MC_LOCK(mc);
+    mc->usercount--;
+}
+
+/* Must be holding the domain->mc_lock to call these. */
+int
+_ipmi_mc_get(ipmi_mc_t *mc)
+{
+    mc->usecount++;
+    return 0;
+}
+
+void
+_ipmi_mc_put(ipmi_mc_t *mc)
+{
+    if (mc->usecount == 1) {
+	if (mc->cleanup)
+	    cleanup_mc(mc);
+	if (check_mc_destroy(mc))
+	    return;
+    }
+    mc->usecount--;
+}
+
 ipmi_mcid_t
 ipmi_mc_convert_to_id(ipmi_mc_t *mc)
 {
@@ -1585,6 +1621,7 @@ mc_ptr_cb(ipmi_domain_t *domain, void *cb_data)
 
 	info->err = 0;
 	info->handler(mc, info->cb_data);
+	_ipmi_mc_put(mc);
     }
 }
 
@@ -1693,6 +1730,8 @@ addr_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	else
 	    mc = NULL;
 	rsp_handler(mc, msg, rspi->data1);
+	if (mc)
+	    _ipmi_mc_put(mc);
     }
     return IPMI_MSG_ITEM_NOT_USED;
 }
@@ -2269,22 +2308,6 @@ ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc)
 {
     CHECK_MC_LOCK(mc);
     return mc->provides_device_sdrs;
-}
-
-void
-_ipmi_mc_use(ipmi_mc_t *mc)
-{
-    CHECK_MC_LOCK(mc);
-    mc->usecount++;
-}
-
-void
-_ipmi_mc_release(ipmi_mc_t *mc)
-{
-    CHECK_MC_LOCK(mc);
-    mc->usecount--;
-    if (mc->usecount == 0)
-	check_mc_destroy(mc);
 }
 
 int

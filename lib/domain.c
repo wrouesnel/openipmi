@@ -130,21 +130,12 @@ typedef struct activate_timer_info_s
 
 typedef struct domain_check_oem_s domain_check_oem_t;
 
-/* This is used to hold a list of management controllers.  It is
-   unfortunate that this structure is required.  It exists becuase it
-   is possible for the destruction of one management controller to
-   result in the destruction of another management controller (due to
-   the SDR of the management controller being destroyed) Thus if we
-   are destroying using the list, we do not remove the list item of
-   anything, we just mark it destroyed and remove it later.  Since we
-   do two passes at destruction time (using the list) this works even
-   for previous items in the list. */
-typedef struct ipmi_mc_list_item_s
+typedef struct mc_table_s
 {
-    int          removed;
-    ipmi_mc_t    *mc;
-    ilist_item_t item;
-} ipmi_mc_list_item_t;
+    unsigned short size;
+    unsigned short curr;
+    ipmi_mc_t      **mcs;
+} mc_table_t;
 
 struct ipmi_domain_s
 {
@@ -190,10 +181,11 @@ struct ipmi_domain_s
     /* A special MC used to represent the system interface. */
     ipmi_mc_t *si_mc;
 
-    ilist_t            *mc_list;
-    ipmi_lock_t        *mc_list_lock;
-    /* We are currently destroying all the MCs in the mc_list. */
-    int                in_mc_list_cleanup;
+#define IPMB_HASH 32
+    mc_table_t ipmb_mcs[IPMB_HASH];
+#define SYS_INTF_MCS 2
+    ipmi_mc_t *sys_intf_mcs[SYS_INTF_MCS];
+    ipmi_lock_t *mc_lock;
 
     /* A list of outstanding messages.  We use this so we can reroute
        messages to another connection in case a connection fails. */
@@ -373,18 +365,9 @@ deliver_rsp(ipmi_domain_t                *domain,
  **********************************************************************/
 
 static void
-iterate_cleanup_mc(ilist_iter_t *iter, void *item, void *cb_data)
+iterate_cleanup_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
-    ipmi_mc_list_item_t *li = item;
-
-    if (li->removed) {
-	/* It has already been destroyed, but we had to leave it in
-	   the list.  Just remove it from the list now. */
-	ilist_delete(iter);
-	ipmi_mem_free(li);
-    } else {
-	_ipmi_cleanup_mc(li->mc);
-    }
+    _ipmi_cleanup_mc(mc);
 }
 
 void
@@ -493,15 +476,17 @@ cleanup_domain(ipmi_domain_t *domain)
        only left inactive) in the first pass due to references form
        other MCs SDR repositories.  The second pass will get them
        all. */
-    if (domain->mc_list) {
-	domain->in_mc_list_cleanup = 1;
-	ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
-	ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
-	domain->in_mc_list_cleanup = 0;
-    }
+    ipmi_domain_iterate_mcs(domain, iterate_cleanup_mc, NULL);
+    ipmi_domain_iterate_mcs(domain, iterate_cleanup_mc, NULL);
 
-    if (domain->si_mc)
+    ipmi_lock(domain->mc_lock);
+    if (domain->si_mc) {
+	_ipmi_mc_get(domain->si_mc);
+	_ipmi_mc_release(domain->si_mc);
 	_ipmi_cleanup_mc(domain->si_mc);
+	_ipmi_mc_put(domain->si_mc);
+    }
+    ipmi_unlock(domain->mc_lock);
 
     /* Destroy the main SDR repository, if it exists. */
     if (domain->main_sdrs)
@@ -574,8 +559,10 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->mc_upd_handlers)
 	locked_list_destroy(domain->mc_upd_handlers);
 
-    if (domain->mc_list)
-	free_ilist(domain->mc_list);
+    for (i=0; i<IPMB_HASH; i++) {
+	if (domain->ipmb_mcs[i].mcs)
+	    ipmi_mem_free(domain->ipmb_mcs[i].mcs);
+    }
 
     /* We wait until here to call the OEM data destroyer, the process
        of destroying information that has previously gone on can call
@@ -587,8 +574,8 @@ cleanup_domain(ipmi_domain_t *domain)
     /* Locks must be last, because they can be used by many things. */
     if (domain->ipmb_ignores_lock)
 	ipmi_destroy_lock(domain->ipmb_ignores_lock);
-    if (domain->mc_list_lock)
-	ipmi_destroy_lock(domain->mc_list_lock);
+    if (domain->mc_lock)
+	ipmi_destroy_lock(domain->mc_lock);
     if (domain->con_lock)
 	ipmi_destroy_lock(domain->con_lock);
     if (domain->domain_lock)
@@ -639,11 +626,11 @@ setup_domain(ipmi_con_t    *ipmi[],
     /* Set the default timer intervals. */
     domain->audit_domain_interval = IPMI_AUDIT_DOMAIN_INTERVAL;
 
-    rv = ipmi_create_lock(domain, &domain->mc_list_lock);
+    rv = ipmi_create_lock(domain, &domain->mc_lock);
     if (rv)
 	goto out_err;
     /* Lock this first thing. */
-    ipmi_lock(domain->mc_list_lock);
+    ipmi_lock(domain->mc_lock);
 
     rv = ipmi_create_lock(domain, &domain->con_lock);
     if (rv)
@@ -694,6 +681,8 @@ setup_domain(ipmi_con_t    *ipmi[],
 			 &domain->si_mc);
     if (rv)
 	goto out_err;
+    _ipmi_mc_use(domain->si_mc);
+    _ipmi_mc_put(domain->si_mc);
 
     rv = ipmi_sdr_info_alloc(domain, domain->si_mc, 0, 0, &domain->main_sdrs);
     if (rv)
@@ -705,12 +694,6 @@ setup_domain(ipmi_con_t    *ipmi[],
 
     domain->cmds = alloc_ilist();
     if (! domain->cmds) {
-	rv = ENOMEM;
-	goto out_err;
-    }
-
-    domain->mc_list = alloc_ilist();
-    if (! domain->mc_list) {
 	rv = ENOMEM;
 	goto out_err;
     }
@@ -773,8 +756,8 @@ setup_domain(ipmi_con_t    *ipmi[],
     memset(domain->chan, 0, sizeof(domain->chan));
 
  out_err:
-    if (domain->mc_list_lock)
-	ipmi_unlock(domain->mc_list_lock);
+    if (domain->mc_lock)
+	ipmi_unlock(domain->mc_lock);
 
     if (rv)
 	cleanup_domain(domain);
@@ -1152,55 +1135,56 @@ cancel_domain_oem_check(ipmi_domain_t *domain)
  *
  **********************************************************************/
 
-typedef struct mc_cmp_info_s
-{
-    ipmi_addr_t addr;
-    int         addr_len;
-} mc_cmp_info_t;
-
-static int
-mc_cmp(void *item, void *cb_data)
-{
-    ipmi_mc_list_item_t *li = item;
-    ipmi_mc_t           *mc = li->mc;
-    mc_cmp_info_t       *info = cb_data;
-    ipmi_addr_t         addr;
-    unsigned int        addr_len;
-
-    /* The MC has been destroyed already. */
-    if (li->removed)
-	return 0;
-
-    ipmi_mc_get_ipmi_address(mc, &addr, &addr_len);
-
-    return ipmi_addr_equal(&addr, addr_len,
-			   &(info->addr), info->addr_len);
-}
+#define HASH_SLAVE_ADDR(x) (((x) >> 1) & (IPMB_HASH-1))
 
 ipmi_mc_t *
 _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
 		      ipmi_addr_t   *addr,
 		      unsigned int  addr_len)
 {
-    ipmi_mc_list_item_t *li;
-    mc_cmp_info_t       info;
+    ipmi_mc_t     *mc = NULL;
 
     if (addr_len > sizeof(ipmi_addr_t))
 	return NULL;
 
-    if ((addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
-	&& (addr->channel == IPMI_BMC_CHANNEL))
-    {
-	    return domain->si_mc;
+    ipmi_lock(domain->mc_lock);
+    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	if (addr->channel == IPMI_BMC_CHANNEL)
+	    mc = domain->si_mc;
+	else if (addr->channel < SYS_INTF_MCS)
+	    mc = domain->sys_intf_mcs[addr->channel];
+    } else if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
+	int              idx;
+	mc_table_t       *tab;
+	ipmi_addr_t      addr2;
+	unsigned int     addr2_len;
+	int              i;
+
+	if (addr_len >= sizeof(*ipmb)) {
+	    idx = HASH_SLAVE_ADDR(ipmb->slave_addr);
+	    tab = &(domain->ipmb_mcs[idx]);
+	    for (i=0; i<tab->size; i++) {
+		if (tab->mcs[i]) {
+		    ipmi_mc_get_ipmi_address(tab->mcs[i], &addr2, &addr2_len);
+
+		    if (ipmi_addr_equal(addr, addr_len, &addr2, addr2_len)) {
+			mc = tab->mcs[i];
+			break;
+		    }
+		}
+	    }
+	}
     }
 
-    memcpy(&(info.addr), addr, addr_len);
-    info.addr_len = addr_len;
-    li = ilist_search(domain->mc_list, mc_cmp, &info);
-    if (li)
-	return li->mc;
-    else
-	return NULL;
+    /* If we cannot get the MC, it has been destroyed. */
+    if (mc) {
+	if (_ipmi_mc_get(mc))
+	    mc = NULL;
+    }
+    ipmi_unlock(domain->mc_lock);
+
+    return mc;
 }
 
 static int
@@ -1276,30 +1260,64 @@ iterate_mc_upds(void *cb_data, void *item1, void *item2)
 static int
 add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
-    ipmi_mc_list_item_t *li;
-    int                 rv = 0;
-    int                 success;
+    ipmi_addr_t  addr;
+    unsigned int addr_len;
+    int          rv = 0;
 
     CHECK_DOMAIN_LOCK(domain);
     CHECK_MC_LOCK(mc);
 
-    li = ipmi_mem_alloc(sizeof(*li));
-    if (!li)
-	return ENOMEM;
+    ipmi_mc_get_ipmi_address(mc, &addr, &addr_len);
+    
+    ipmi_lock(domain->mc_lock);
 
-    li->removed = 0;
-    li->mc = mc;
-    success = ilist_add_tail(domain->mc_list, li, &li->item);
-    if (!success) {
-	ipmi_mem_free(li);
-	rv = ENOMEM;
+    if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	if (addr.channel > SYS_INTF_MCS)
+	    rv = EINVAL;
+	else
+	    domain->sys_intf_mcs[addr.channel] = mc;
+    } else if (addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) &addr;
+	int              idx;
+	mc_table_t       *tab;
+	int              i;
+
+	idx = HASH_SLAVE_ADDR(ipmb->slave_addr);
+	tab = &(domain->ipmb_mcs[idx]);
+	if (tab->size == tab->curr) {
+	    ipmi_mc_t **nmcs;
+
+	    nmcs = ipmi_mem_alloc(sizeof(ipmi_mc_t *) * (tab->size+5));
+	    if (!nmcs) {
+		rv = ENOMEM;
+		goto out_unlock;
+	    }
+	    if (tab->mcs) {
+		memcpy(nmcs, tab->mcs, sizeof(ipmi_mc_t *) * tab->size);
+		ipmi_mem_free(tab->mcs);
+	    }
+	    memset(nmcs+tab->size, 0, sizeof(ipmi_mc_t *) * 5);
+	    tab->size += 5;
+	    tab->mcs = nmcs;
+	}
+	for (i=0; i<tab->size; i++) {
+	    if (!tab->mcs[i]) {
+		tab->mcs[i] = mc;
+		tab->curr++;
+		break;
+	    }
+	}
     }
+
+out_unlock:
+    ipmi_unlock(domain->mc_lock);
 
     return rv;
 }
 
 static void
-call_mc_upd_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc,
+call_mc_upd_handlers(ipmi_domain_t      *domain,
+		     ipmi_mc_t          *mc,
 		     enum ipmi_update_e op)
 {
     mc_upd_info_t info;
@@ -1338,37 +1356,39 @@ ipmi_domain_remove_mc_updated_handler(ipmi_domain_t        *domain,
 int
 _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
-    ipmi_mc_list_item_t *li;
-    int                 rv;
-    int                 found = 0;
-    ilist_iter_t        iter;
+    ipmi_addr_t  addr;
+    unsigned int addr_len;
+    int          found = 0;
 
-    ipmi_lock(domain->mc_list_lock);
-    ilist_init_iter(&iter, domain->mc_list);
-    rv = ilist_first(&iter);
-    while (rv) {
-	li = ilist_get(&iter);
-	if (li->mc == mc) {
-	    if (domain->in_mc_list_cleanup) {
-		/* We are currently cleaning up MCs, so this may not
-		   be the current MC being worked on.  So we have to
-		   destroy it later, since when iterating a list you
-		   can only destroy the item currently being worked
-		   on. */
-		li->removed = 1;
-	    } else {
-		ilist_delete(&iter);
-		ipmi_mem_free(li);
-	    }
+    ipmi_mc_get_ipmi_address(mc, &addr, &addr_len);
+    
+    ipmi_lock(domain->mc_lock);
+
+    if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
+	if ((addr.channel < SYS_INTF_MCS)
+	    && (mc == domain->sys_intf_mcs[addr.channel]))
+	{
+	    domain->sys_intf_mcs[addr.channel] = NULL;
 	    found = 1;
-	    break;
 	}
-	rv = ilist_next(&iter);
-    }
-    if (found)
-	call_mc_upd_handlers(domain, mc, IPMI_DELETED);
+    } else if (addr.addr_type == IPMI_IPMB_ADDR_TYPE) {
+	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) &addr;
+	int              idx;
+	mc_table_t       *tab;
+	int              i;
 
-    ipmi_unlock(domain->mc_list_lock);
+	idx = HASH_SLAVE_ADDR(ipmb->slave_addr);
+	tab = &(domain->ipmb_mcs[idx]);
+	for (i=0; i<tab->size; i++) {
+	    if (tab->mcs[i] == mc) {
+		tab->curr--;
+		tab->mcs[i] = NULL;
+		found = 1;
+	    }
+	}
+    }
+
+    ipmi_unlock(domain->mc_lock);
 
     if (found)
 	return 0;
@@ -1418,14 +1438,13 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
     ipmi_start_ipmb_mc_scan(domain, channel, slave_addr, slave_addr,
 			    NULL, NULL);
 
-    ipmi_lock(domain->mc_list_lock);
     rv = add_mc_to_domain(domain, mc);
     if (rv) {
 	_ipmi_cleanup_mc(mc);
+	_ipmi_mc_put(mc);
 	return rv;
     }
     call_mc_upd_handlers(domain, mc, IPMI_ADDED);
-    ipmi_unlock(domain->mc_list_lock);
 
     if (new_mc)
 	*new_mc = mc;
@@ -1920,7 +1939,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 
-    ipmi_lock(domain->mc_list_lock);
+    ipmi_lock(domain->mc_lock);
 
     mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
     if (msg->data[0] == 0) {
@@ -1930,7 +1949,8 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	    /* The MC was replaced with a new one, so clear the old
                one and add a new one. */
 	    _ipmi_cleanup_mc(mc);
-	    mc = NULL;
+	    _ipmi_mc_put(mc);
+	    mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
 	}
 	if (!mc || !ipmi_mc_is_active(mc)) {
 	    /* It doesn't already exist, or it's inactive, so add
@@ -1947,13 +1967,12 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    info->os_hnd->free_timer(info->os_hnd, info->timer);
 		    ipmi_destroy_lock(info->lock);
 		    ipmi_mem_free(info);
-		    ipmi_unlock(domain->mc_list_lock);
+		    ipmi_unlock(domain->mc_lock);
 		    goto out;
 		}
 
 		_ipmi_mc_set_active(mc, 1);
 
-		ipmi_lock(domain->mc_list_lock);
 		rv = add_mc_to_domain(domain, mc);
 		if (rv) {
 		    _ipmi_cleanup_mc(mc);
@@ -1968,8 +1987,6 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    goto out;
 		}
 		call_mc_upd_handlers(domain, mc, IPMI_ADDED);
-
-		ipmi_unlock(domain->mc_list_lock);
 
 		_ipmi_mc_handle_new(mc);
 	    } else {
@@ -2000,7 +2017,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	    /* Try again after a second. */
 	    struct timeval timeout;
 
-	    ipmi_unlock(domain->mc_list_lock);
+	    ipmi_unlock(domain->mc_lock);
 
 	    if (msg->data[0] == IPMI_TIMEOUT_CC)
 		/* If we timed out, then no need to time, since a
@@ -2022,7 +2039,7 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     }
 
  next_addr:
-    ipmi_unlock(domain->mc_list_lock);
+    ipmi_unlock(domain->mc_lock);
 
  next_addr_nolock:
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;
@@ -2053,6 +2070,8 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	goto next_addr_nolock;
 
  out:
+    if (mc)
+	_ipmi_mc_put(mc);
     ipmi_domain_put(domain);
     return IPMI_MSG_ITEM_NOT_USED;
 }
@@ -2286,9 +2305,9 @@ domain_audit(void *cb_data, os_hnd_timer_id_t *id)
 	/* Rescan all the presence sensors to make sure they are valid. */
 	ipmi_detect_domain_presence_changes(domain, 1);
 
-	ipmi_lock(domain->mc_list_lock);
+	ipmi_lock(domain->mc_lock);
 	start_mc_scan(domain);
-	ipmi_unlock(domain->mc_list_lock);
+	ipmi_unlock(domain->mc_lock);
 
 	/* Also check to see if the SDRs have changed. */
 	check_main_sdrs(domain);
@@ -2395,8 +2414,10 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 
 	/* Let the OEM handler for the MC that sent the event try
 	   next. */
-	if (_ipmi_mc_check_oem_event_handler(mc, event))
+	if (_ipmi_mc_check_oem_event_handler(mc, event)) {
+	    _ipmi_mc_put(mc);
 	    return;
+	}
 
 	/* The OEM code didn't handle it. */
 	id.mcid = ipmi_mc_convert_to_id(mc);
@@ -2408,6 +2429,8 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 	rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
 	if (!rv)
 	    rv = info.err;
+
+	_ipmi_mc_put(mc);
     }
 
  out:
@@ -2467,6 +2490,7 @@ ll_event_handler(ipmi_con_t   *ipmi,
 	    /* Call the handler on it if it wasn't already in there. */
 	    _ipmi_domain_system_event_handler(domain, mc, event);
     }
+    _ipmi_mc_put(mc);
 
  out:
     ipmi_domain_put(domain);
@@ -3012,37 +3036,39 @@ ipmi_domain_iterate_entities(ipmi_domain_t                   *domain,
     return 0;
 }
 
-typedef struct iterate_mc_info_s
-{
-    ipmi_domain_t              *domain;
-    ipmi_domain_iterate_mcs_cb handler;
-    void                       *cb_data;
-} iterate_mc_info_t;
-
-static void
-iterate_mcs_handler(ilist_iter_t *iter, void *item, void *cb_data)
-{
-    ipmi_mc_list_item_t *li = item;
-    iterate_mc_info_t   *info = cb_data;
-
-    if (li->removed)
-	return;
-
-    info->handler(info->domain, li->mc, info->cb_data);
-}
-
 int
 ipmi_domain_iterate_mcs(ipmi_domain_t              *domain,
 			ipmi_domain_iterate_mcs_cb handler,
 			void                       *cb_data)
 {
-    iterate_mc_info_t info = { domain, handler, cb_data };
+    int i, j;
 
     CHECK_DOMAIN_LOCK(domain);
 
-    ipmi_lock(domain->mc_list_lock);
-    ilist_iter(domain->mc_list, iterate_mcs_handler, &info);
-    ipmi_unlock(domain->mc_list_lock);
+    ipmi_lock(domain->mc_lock);
+    for (i=0; i<SYS_INTF_MCS; i++) {
+	ipmi_mc_t *mc = domain->sys_intf_mcs[i];
+	if (mc && !_ipmi_mc_get(mc)) {
+	    ipmi_unlock(domain->mc_lock);
+	    handler(domain, mc, cb_data);
+	    ipmi_lock(domain->mc_lock);
+	    _ipmi_mc_put(mc);
+	}
+    }
+    for (i=0; i<IPMB_HASH; i++) {
+	mc_table_t *tab = &(domain->ipmb_mcs[i]);
+
+	for (j=0; j<tab->size; j++) {
+	    ipmi_mc_t *mc = tab->mcs[j];
+	    if (mc && !_ipmi_mc_get(mc)) {
+		ipmi_unlock(domain->mc_lock);
+		handler(domain, mc, cb_data);
+		ipmi_lock(domain->mc_lock);
+		_ipmi_mc_put(mc);
+	    }
+	}
+    }
+    ipmi_unlock(domain->mc_lock);
     return 0;
 }
 
@@ -3051,13 +3077,34 @@ ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
 			    ipmi_domain_iterate_mcs_cb handler,
 			    void                       *cb_data)
 {
-    iterate_mc_info_t info = { domain, handler, cb_data };
+    int i, j;
 
     CHECK_DOMAIN_LOCK(domain);
 
-    ipmi_lock(domain->mc_list_lock);
-    ilist_iter_rev(domain->mc_list, iterate_mcs_handler, &info);
-    ipmi_unlock(domain->mc_list_lock);
+    ipmi_lock(domain->mc_lock);
+    for (i=IPMB_HASH-1; i>=0; i--) {
+	mc_table_t *tab = &(domain->ipmb_mcs[i]);
+
+	for (j=tab->size-1; j>=0; j--) {
+	    ipmi_mc_t *mc = tab->mcs[j];
+	    if (mc && !_ipmi_mc_get(mc)) {
+		ipmi_unlock(domain->mc_lock);
+		handler(domain, mc, cb_data);
+		ipmi_lock(domain->mc_lock);
+		_ipmi_mc_put(mc);
+	    }
+	}
+    }
+    for (i=SYS_INTF_MCS-1; i>=0; i--) {
+	ipmi_mc_t *mc = domain->sys_intf_mcs[i];
+	if (mc && !_ipmi_mc_get(mc)) {
+	    ipmi_unlock(domain->mc_lock);
+	    handler(domain, mc, cb_data);
+	    ipmi_lock(domain->mc_lock);
+	    _ipmi_mc_put(mc);
+	}
+    }
+    ipmi_unlock(domain->mc_lock);
     return 0;
 }
 
@@ -3394,9 +3441,9 @@ con_up_complete(ipmi_domain_t *domain)
 	}
     }
 
-    ipmi_lock(domain->mc_list_lock);
+    ipmi_lock(domain->mc_lock);
     start_mc_scan(domain);
-    ipmi_unlock(domain->mc_list_lock);
+    ipmi_unlock(domain->mc_lock);
     ipmi_detect_ents_presence_changes(domain->entities, 1);
 
     ipmi_entity_scan_sdrs(domain, NULL, domain->entities, domain->main_sdrs);
@@ -4167,14 +4214,15 @@ ipmi_domain_set_name(ipmi_domain_t *domain, char *name)
     int len;
     int i;
 
+    ipmi_lock(domain->domain_lock);
     if (!name) {
 	domain->name[0] = '\0';
-	return;
+	goto out_unlock;
     }
     len = strlen(name);
     if (len == 0) {
 	domain->name[0] = '\0';
-	return;
+	goto out_unlock;
     }
     if (len > IPMI_MAX_DOMAIN_NAME_LEN)
 	len = IPMI_MAX_DOMAIN_NAME_LEN;
@@ -4188,22 +4236,26 @@ ipmi_domain_set_name(ipmi_domain_t *domain, char *name)
 	if (domain->conn[i])
 	    domain->conn[i]->name = domain->name;
     }
+ out_unlock:
+    ipmi_unlock(domain->domain_lock);
 }
 
 void
 ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int *len)
 {
-    int  slen = strlen(domain->name);
+    int  slen;
     char *data;
 
     if (*len <= 0)
 	return;
 
+    ipmi_lock(domain->domain_lock);
+    slen = strlen(domain->name);
     if (slen == 0) {
 	*len = 0;
 	if (name)
 	    *name = '\0';
-	return;
+	goto out_unlock;
     }
 
     data = domain->name+1; /* Skip the leading '(' */
@@ -4216,6 +4268,8 @@ ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int *len)
 	memcpy(name, data, slen);
     name[slen] = '\0';
     *len = slen + 1; /* Include the null char */
+ out_unlock:
+    ipmi_unlock(domain->domain_lock);
 }
 
 void

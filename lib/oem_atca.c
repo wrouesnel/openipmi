@@ -2981,6 +2981,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	    /* info->shelf_address_only_on_bmc = 1; */
 	    info->allow_sel_on_any = 1;
 	}
+	_ipmi_mc_put(mc);
     }
 
     info->startup_done = done;
