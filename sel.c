@@ -588,14 +588,15 @@ handle_sel_info(ipmi_mc_t  *mc,
 	    /* We don't care if this fails, because it will just
 	       happen again later if it does. */
 	    rv = send_sel_clear(sel);
-	    if (rv)
+	    if (rv) {
 		fetch_complete(sel, 0);
+		goto out;
+	    }
 	    rv = 0;
 	} else {
 	    fetch_complete(sel, 0);
+	    goto out;
 	}
-
-	goto out;
     }
 
     sel->last_addition_timestamp = add_timestamp;
