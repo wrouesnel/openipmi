@@ -243,6 +243,7 @@ int ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc);
+int ipmi_mc_sel_get_last_addition_timestamp(ipmi_mc_t *mc);
 
 int _ipmi_mc_check_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);
 int _ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event);

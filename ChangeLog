@@ -1,3 +1,11 @@
+2003-12-04  Louis Zhuang  <louis.zhuang@linux.intel.com>
+
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.h: Add a new function
+	'ipmi_mc_sel_get_last_addition_timestamp' for OpenHPI to use.
+
+	* include/OpenIPMI/ipmi_sel.h, lib/sel.h: Add a new function
+	'ipmi_sel_get_last_addition_timestamp'.
+
 2003-12-04 Jeff Zheng <jeff.zheng@intel.com>, Corey Minyard <cminyard@mvista.com>
 
 	* sample/ipmicmd.c: Actually close the IPMI connection at quit.

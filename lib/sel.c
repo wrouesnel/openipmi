@@ -1719,6 +1719,22 @@ ipmi_sel_get_supports_get_sel_allocation(ipmi_sel_info_t *sel,
 }
 
 int
+ipmi_sel_get_last_addition_timestamp(ipmi_sel_info_t *sel,
+                                     int             *val)
+{
+    sel_lock(sel);
+    if (sel->destroyed) {
+	sel_unlock(sel);
+	return EINVAL;
+    }
+
+    *val = sel->last_addition_timestamp;
+
+    sel_unlock(sel);
+    return 0;
+}
+
+int
 ipmi_sel_set_new_event_handler(ipmi_sel_info_t               *sel,
 			       ipmi_sel_new_event_handler_cb handler,
 			       void                          *cb_data)

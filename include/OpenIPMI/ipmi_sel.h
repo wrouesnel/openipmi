@@ -133,6 +133,7 @@ int ipmi_sel_get_supports_partial_add_sel(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_supports_reserve_sel(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_supports_get_sel_allocation(ipmi_sel_info_t *sel,
 					     int             *val);
+int ipmi_sel_get_last_addition_timestamp(ipmi_sel_info_t *sel, int *val);
 
 /* Add a event to the internal representation of the system event log. */
 int ipmi_sel_event_add(ipmi_sel_info_t *sel,

@@ -654,6 +654,15 @@ ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc)
 }
 
 int
+ipmi_mc_sel_get_last_addition_timestamp(ipmi_mc_t *mc)
+{
+    unsigned int val = 0;
+
+    ipmi_sel_get_last_addition_timestamp(mc->sel, &val);
+    return val;
+}
+
+int
 ipmi_mc_set_oem_event_handler(ipmi_mc_t                 *mc,
 			      ipmi_oem_event_handler_cb handler,
 			      void                      *cb_data)
