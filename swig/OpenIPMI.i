@@ -44,6 +44,7 @@
 #include <OpenIPMI/ipmi_debug.h>
 #include <OpenIPMI/ipmi_user.h>
 #include <OpenIPMI/ipmi_lanparm.h>
+#include <OpenIPMI/ipmi_pef.h>
 
 /* For ipmi_debug_malloc_cleanup() */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -2158,6 +2159,102 @@ lanparm_clear_lock(ipmi_lanparm_t    *lanparm,
     swig_free_ref(lanparm_ref);
 }
 
+static void
+get_pef(ipmi_pef_t *pef, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    pef_ref;
+
+    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+    swig_call_cb(cb, "got_pef_cb", "%p%d", &pef_ref, err);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(pef_ref);
+}
+
+static void
+pef_get_parm(ipmi_pef_t    *pef,
+	     int           err,
+	     unsigned char *data,
+	     unsigned int  data_len,
+	     void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    pef_ref;
+
+    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+    swig_call_cb(cb, "pef_got_parm_cb", "%p%d%*s", &pef_ref, err,
+		 data_len, (char *) data);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(pef_ref);
+}
+
+static void
+pef_set_parm(ipmi_pef_t *pef,
+	     int        err,
+	     void       *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    pef_ref;
+
+    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+    swig_call_cb(cb, "pef_set_parm_cb", "%p%d", &pef_ref, err);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(pef_ref);
+}
+
+static void
+pef_get_config(ipmi_pef_t    *pef,
+		   int               err,
+		   ipmi_pef_config_t *config,
+		   void              *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    pef_ref;
+    swig_ref    config_ref;
+
+    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+    config_ref = swig_make_ref_destruct(config, "OpenIPMI::ipmi_pef_config_t");
+    swig_call_cb(cb, "pef_got_config_cb", "%p%d%p", &pef_ref, err,
+		 &config_ref);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(pef_ref);
+    swig_free_ref(config_ref);
+}
+
+static void
+pef_set_config(ipmi_pef_t    *pef,
+	       int           err,
+	       void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    pef_ref;
+
+    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+    swig_call_cb(cb, "pef_set_config_cb", "%p%d", &pef_ref, err);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(pef_ref);
+}
+
+static void
+pef_clear_lock(ipmi_pef_t    *pef,
+	       int           err,
+	       void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    pef_ref;
+
+    pef_ref = swig_make_ref_destruct(pef, "OpenIPMI::ipmi_pef_t");
+    swig_call_cb(cb, "pef_clear_lock_cb", "%p%d", &pef_ref, err);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(pef_ref);
+}
+
 %}
 
 typedef struct {
@@ -2210,6 +2307,12 @@ typedef struct {
 
 typedef struct {
 } ipmi_lan_config_t;
+
+typedef struct {
+} ipmi_pef_t;
+
+typedef struct {
+} ipmi_pef_config_t;
 
 %inline %{
 void enable_debug_malloc()
@@ -2552,6 +2655,18 @@ lanparm_str_to_parm(char *str)
     return ipmi_lanconfig_str_to_parm(str);
 }
 
+static const char *
+pef_parm_to_str(int parm)
+{
+    return ipmi_pefconfig_parm_to_str(parm);
+}
+
+static int
+pef_str_to_parm(char *str)
+{
+    return ipmi_pefconfig_str_to_parm(str);
+}
+
 %}
 
 %newobject open_domain;
@@ -2610,6 +2725,10 @@ char *color_string(int color);
 /* Convert between lanparm string names and parm numbers. */
 char *lanparm_parm_to_str(int parm);
 int lanparm_str_to_parm(char *str);
+
+/* Convert between pef string names and parm numbers. */
+char *pef_parm_to_str(int parm);
+int pef_str_to_parm(char *str);
 
 /* These two defines simplify the functions that do addition/removal
    of callbacks.  The type is the object type (domain, entity, etc)
@@ -4771,6 +4890,33 @@ int lanparm_str_to_parm(char *str);
 	if (rv)
 	    return NULL;
 	return lp;
+    }
+
+    /*
+     * Allocate a pef object for the MC.  The lanparm is returned.  The
+     * first parameter is an optional callback object, the got_pef_cb
+     * method will be called on it when the PEF fetch is complete.  It
+     * will have the following parameters: <self> <pef> <err>.  Note
+     * that you cannot use the PEF until the fetch is complete.
+     */
+    %newobject get_pef;
+    ipmi_pef_t *get_pef(swig_cb handler = NULL)
+    {
+	int              rv;
+	ipmi_pef_t       *pef = NULL;
+	swig_cb_val      handler_val = NULL;
+	ipmi_pef_done_cb done = NULL;
+
+	if (valid_swig_cb(handler)) {
+	    handler_val = ref_swig_cb(handler);
+	    done = get_pef;
+	}
+	rv = ipmi_pef_alloc(self, done, handler_val, &pef);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	else
+	    ipmi_pef_ref(pef);
+	return pef;
     }
 }
 
@@ -7556,7 +7702,7 @@ int lanparm_str_to_parm(char *str);
      * data for an integer is a number.  The data for a bool is true
      * or false.  The data for ip is an IP address in the form
      * "n.n.n.n".  Data for mac is a mac address in the form
-     * "nn.nn.nn.nn.nn.nn"
+     * "nn:nn:nn:nn:nn:nn"
      *
      * The second parameter (the index) is zero based and should be
      * set to zero when fetching an index for the first time.  It will
@@ -7565,9 +7711,9 @@ int lanparm_str_to_parm(char *str);
      * changed to the next supported value, or to -1 if this is the
      * last item.
      *
-     * Be careful with the index, it must be a real number, not something
-     * that can be interpreted to a number.  If necessary, in perl, you
-     * must do $idx = int($idx) in some cases.
+     * Be careful with the index, it must be a number, not something
+     * that can be interpreted to a number.  If necessary, in perl,
+     * you must do $idx = int($idx) in some cases.
      */
     %newobject get_val;
     char *get_val(int parm, int *index)
@@ -7787,6 +7933,398 @@ int lanparm_str_to_parm(char *str);
 	}
 
 	rv = ipmi_lanconfig_set_val(self, parm, idx, ival, dval, dval_len);
+	if (dval)
+	    free(dval);
+	return rv;
+    }
+}
+
+%extend ipmi_pef_t {
+    ~ipmi_pef_t()
+    {
+	ipmi_pef_deref(self);
+    }
+
+    %newobject get_mc_id;
+    ipmi_mcid_t *get_mc_id()
+    {
+	ipmi_mcid_t *rv = malloc(sizeof(*rv));
+	if (rv)
+	    *rv = ipmi_pef_get_mc(self);
+	return rv;
+    }
+
+#define PEFPARM_SET_IN_PROGRESS			0
+#define PEFPARM_CONTROL				1
+#define PEFPARM_ACTION_GLOBAL_CONTROL		2
+#define PEFPARM_STARTUP_DELAY			3
+#define PEFPARM_ALERT_STARTUP_DELAY		4
+#define PEFPARM_NUM_EVENT_FILTERS		5
+#define PEFPARM_EVENT_FILTER_TABLE		6
+#define PEFPARM_EVENT_FILTER_TABLE_DATA1	7
+#define PEFPARM_NUM_ALERT_POLICIES		8
+#define PEFPARM_ALERT_POLICY_TABLE		9
+#define PEFPARM_SYSTEM_GUID			10
+#define PEFPARM_NUM_ALERT_STRINGS		11
+#define PEFPARM_ALERT_STRING_KEY		12
+#define PEFPARM_ALERT_STRING			13
+
+    /*
+     * Fetch an individual parm from the MC.  The parameter (parm1) ,
+     * and set (parm2) and block (parm3) are specified, along with a
+     * handler (parm4).  The pef_got_parm_cb method on the handler
+     * will be called when the the operation completes with the
+     * following parms: <self> <pef> <err> <parm_rev> <data1> [<data2> ...]
+     */
+    int get_parm(int parm, int set, int block, swig_cb handler)
+    {
+	int         rv;
+	swig_cb_val handler_val;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+	handler_val = ref_swig_cb(handler);
+	ipmi_pef_ref(self);
+	rv = ipmi_pef_get_parm(self, parm, set, block, pef_get_parm,
+				   handler_val);
+	if (rv) {
+	    ipmi_pef_deref(self);
+	    deref_swig_cb_val(handler_val);
+	}
+	return rv;
+    }
+
+    /*
+     * Set an individual parm on the MC.  The parameter (parm1),
+     * and string value (parm2) is specified, along with an optional
+     * handler (parm3).  The pef_set_parm_cb method on the handler
+     * will be called when the the operation completes with the
+     * following parms: <self> <pef> <err>.
+     *
+     * The string value is in the form "0xNN 0xNN ...", basically
+     * a string of integer values.
+     */
+    int set_parm(int parm, char *value, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_pef_done_cb done = NULL;
+	unsigned char        *data;
+	unsigned int         length;
+
+	data = parse_raw_str_data(value, &length);
+	if (!data)
+	    return ENOMEM;
+
+	if (valid_swig_cb(handler)) {
+	    done = pef_set_parm;
+	    handler_val = ref_swig_cb(handler);
+	}
+
+	ipmi_pef_ref(self);
+	rv = ipmi_pef_set_parm(self, parm, data, length,
+				   done, handler_val);
+	free(data);
+	if (rv)
+	    ipmi_pef_deref(self);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Set an individual parm on the MC.  The parameter (parm1), and
+     * an array of integers (parm2) is specified, along with an
+     * optional handler (parm3).  The pef_set_parm_cb method on
+     * the handler will be called when the the operation completes
+     * with the following parms: <self> <pef> <err>.
+     *
+     * The string value is in the form "0xNN 0xNN ...", basically
+     * a string of integer values.
+     */
+    int set_parm_array(int parm, intarray value, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_pef_done_cb done = NULL;
+	unsigned char        *data;
+	unsigned int         length = value.len;
+
+	if (length == 0)
+	    data = malloc(1);
+	else
+	    data = malloc(length);
+	if (!data)
+	    return ENOMEM;
+	parse_ipmi_data(value, data, length, &length);
+
+	if (valid_swig_cb(handler)) {
+	    done = pef_set_parm;
+	    handler_val = ref_swig_cb(handler);
+	}
+
+	ipmi_pef_ref(self);
+	rv = ipmi_pef_set_parm(self, parm, data, length,
+				   done, handler_val);
+	free(data);
+	if (rv)
+	    ipmi_pef_deref(self);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Get the full standard configuration for the pefs.  When
+     * done, the pef_got_config_cb method will be called on the
+     * handler (first parm) with the following parms: <self> <pef>
+     * <err> <pefconfig>.  The pefconfig will be an object of type
+     * ipmi_pef_config_t.
+     */
+    int get_config(swig_cb handler)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = ref_swig_cb(handler);
+
+	ipmi_pef_ref(self);
+	rv = ipmi_pef_get_config(self, pef_get_config, handler_val);
+	if (rv) {
+	    ipmi_pef_deref(self);
+	    deref_swig_cb_val(handler_val);
+	}
+	return rv;
+	
+    }
+
+    /*
+     * Set the full standard configuration for the pefs.  The
+     * config to set is the first parm of type ipmi_pef_config_t.  When
+     * done, the pef_set_config_cb method will be called on the
+     * handler (second parm) with the following parms: <self>
+     * <pef> <err>.
+     */
+    int set_config(ipmi_pef_config_t *config, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_pef_done_cb done = NULL;
+
+	if (valid_swig_cb(handler)) {
+	    done = pef_set_config;
+	    handler_val = ref_swig_cb(handler);
+	}
+
+	ipmi_pef_ref(self);
+	rv = ipmi_pef_set_config(self, config, done, handler_val);
+	if (rv)
+	    ipmi_pef_deref(self);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Unlock the lock for the pef.  The config to set is the
+     * first parm of type ipmi_pef_config_t and may be undefined
+     * (meaning that the MC of the pef will be unlocked).  If the
+     * config is supplied, it will be marked as unlocked.  When done,
+     * the pef_clear_lock_cb method will be called on the handler
+     * (second parm) with the following parms: <self> <pef> <err>.
+     */
+    int clear_lock(ipmi_pef_config_t *config = NULL, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_pef_done_cb done = NULL;
+
+	if (valid_swig_cb(handler)) {
+	    done = pef_clear_lock;
+	    handler_val = ref_swig_cb(handler);
+	}
+
+	ipmi_pef_ref(self);
+	rv = ipmi_pef_clear_lock(self, config, done, handler_val);
+	if (rv)
+	    ipmi_pef_deref(self);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+}
+
+%extend ipmi_pef_config_t {
+    ~ipmi_pef_config_t()
+    {
+	ipmi_pef_free_config(self);
+    }
+
+    /*
+     * Get a value from the pefconfig.  The first parameter is the
+     * parm number, the second is the parm index (which is a pointer
+     * to an integer).  The returned value will be undefined if
+     * an error occurred, it will be of the format:
+     *   "<name> <type> <data>"
+     * The type and data will not be present if the data value is not
+     * supported or the index is out of range, but the name will still
+     * be present.
+     *
+     * The supports types are: integer, bool, data, and string.  The
+     * data for an integer is a number.  The data for a bool is true
+     * or false.  The data for string is a string, starting one space
+     * after the string and going to the end of the returned valid
+     *
+     * The second parameter (the index) is zero based and should be
+     * set to zero when fetching an index for the first time.  It will
+     * be unchanged if the data item does not support multiple items.
+     * If it does support multiple items, then the number will be
+     * changed to the next supported value, or to -1 if this is the
+     * last item.
+     *
+     * Be careful with the index, it must be a number, not something
+     * that can be interpreted to a number.  If necessary, in perl,
+     * you must do $idx = int($idx) in some cases.
+     */
+    %newobject get_val;
+    char *get_val(int parm, int *index)
+    {
+	enum ipmi_pefconf_val_type_e valtype;
+	unsigned int      ival = 0;
+	unsigned char     *dval = NULL;
+	unsigned int      dval_len = 0;
+	const char        *name;
+	char              dummy[1];
+	char              *str = NULL, *s;
+	int               rv;
+	int               i;
+	unsigned int      len;
+
+	rv = ipmi_pefconfig_get_val(self, parm, &name, index, &valtype,
+				    &ival, &dval, &dval_len);
+	if ((rv == ENOSYS) || (rv == E2BIG))
+	    return strdup(name);
+	else if (rv)
+	    return NULL;
+
+	switch (valtype) {
+	case IPMI_PEFCONFIG_INT:
+	    len = snprintf(dummy, 1, "%s integer %d", name, ival);
+	    str = malloc(len + 1);
+	    sprintf(str, "%s integer %d", name, ival);
+	    break;
+	    
+	case IPMI_PEFCONFIG_BOOL:
+	    len = snprintf(dummy, 1, "%s bool %s", name,
+			   ival ? "true" : "false");
+	    str = malloc(len + 1);
+	    sprintf(str, "%s bool %s", name, 
+		    ival ? "true" : "false");
+	    break;
+	    
+	case IPMI_PEFCONFIG_DATA:
+	    len = snprintf(dummy, 1, "%s data", name);
+	    len += dval_len * 5;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "%s data", name);
+	    for (i=0; i<dval_len; i++)
+		s += sprintf(s, " 0x%2.2x", dval[i]);
+	    break;
+
+	case IPMI_PEFCONFIG_STR:
+	    len = snprintf(dummy, 1, "%s string %s", name, (char *) dval);
+	    str = malloc(len + 1);
+	    sprintf(str, "%s string %s", name, (char *) dval);
+	    break;
+	}
+
+	if (dval)
+	    ipmi_pefconfig_data_free(dval);
+
+	return str;
+    }
+
+    /*
+     * Set a value in the pefconfig.  The first parameter is the parm
+     * number, the second is the parm index.  The type is a string
+     * in the third parm.  The data is the fourth parm.
+     *
+     * The supports types are: integer, bool, data, and string.  The
+     * data for an integer is a number.  The data for a bool is true
+     * or false.  The data for string is just a string.
+     *
+     * The index is ignored for types that do not use it.
+     */
+    int set_val(int parm, int idx, char *type, char *value) {
+	enum ipmi_pefconf_val_type_e valtype;
+	int               rv;
+	unsigned int      ival = 0;
+	unsigned char     *dval = NULL;
+	unsigned int      dval_len = 0;
+
+	rv = ipmi_pefconfig_parm_to_type(parm, &valtype);
+	if (rv)
+	    return rv;
+
+	switch (valtype) {
+	case IPMI_PEFCONFIG_INT:
+	{
+	    char *endstr;
+	    if (strcmp(type, "integer") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    if (*value == '\0')
+		return EINVAL;
+	    ival = strtol(value, &endstr, 0);
+	    if (*endstr != '\0')
+		return EINVAL;
+	    break;
+	}
+	    
+	case IPMI_PEFCONFIG_BOOL:
+	    if (strcmp(type, "bool") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    if (strcasecmp(value, "true") == 0)
+		ival = 1;
+	    else if (strcasecmp(value, "false") == 0)
+		ival = 0;
+	    else if (strcasecmp(value, "on") == 0)
+		ival = 1;
+	    else if (strcasecmp(value, "off") == 0)
+		ival = 0;
+	    else
+		return EINVAL;
+	    break;
+	    
+	case IPMI_PEFCONFIG_DATA:
+	    if (strcmp(type, "data") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    dval = parse_raw_str_data(value, &dval_len);
+	    if (!dval)
+		return ENOMEM;
+	    break;
+
+	case IPMI_PEFCONFIG_STR:
+	    if (strcmp(type, "string") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    dval = strdup((char *) value);
+	    if (!dval)
+		return ENOMEM;
+	    break;
+	}
+
+	rv = ipmi_pefconfig_set_val(self, parm, idx, ival, dval, dval_len);
 	if (dval)
 	    free(dval);
 	return rv;

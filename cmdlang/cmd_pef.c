@@ -505,10 +505,10 @@ uset_str(ipmi_cmd_info_t *cmd_info, int sel, char *val,
 {
     ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int            (*f)(ipmi_pef_config_t *l, unsigned int sel,
-			char *v, unsigned int dl) = func;
+			char *v) = func;
 
     if (!cmdlang->err) {
-	cmdlang->err = f(lanc, sel, val, strlen(val));
+	cmdlang->err = f(lanc, sel, val);
 	if (cmdlang->err) {
 	    cmdlang->errstr = "Error setting parameter";
 	}

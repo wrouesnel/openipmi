@@ -154,6 +154,18 @@ pef_put(ipmi_pef_t *pef)
     pef_unlock(pef);
 }
 
+void
+ipmi_pef_ref(ipmi_pef_t *pef)
+{
+    pef_get(pef);
+}
+
+void
+ipmi_pef_deref(ipmi_pef_t *pef)
+{
+    pef_put(pef);
+}
+
 static int
 destroy_pef(void *cb_data, void *item1, void *item2)
 {
@@ -2384,18 +2396,23 @@ PEF_SUB_BYTE(asks, num_alert_strings, alert_string_set);
 
 int
 ipmi_pefconfig_get_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
-				unsigned char *val, unsigned int len)
+				unsigned char *val, unsigned int *len)
 {
+    unsigned int olen = *len;
+    unsigned int rlen;
     if (sel >= pefc->num_alert_strings)
 	return EINVAL;
-    if (len == 0)
-	return EINVAL;
     if (! pefc->alert_strings[sel]) {
+	*len = 1;
+	if (olen == 0)
+	    return EBADF;
 	*val = '\0';
 	return 0;
     }
-    if (strlen((char *) pefc->alert_strings[sel])+1 < len)
-	return EAGAIN;
+    rlen = strlen((char *) pefc->alert_strings[sel]) + 1;
+    *len = rlen;
+    if (rlen < olen)
+	return EBADF;
     strcpy(val, pefc->alert_strings[sel]);
     return 0;
 }
@@ -2416,5 +2433,347 @@ ipmi_pefconfig_set_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
     }
     if (s)
 	ipmi_mem_free(s);
+    return 0;
+}
+
+
+typedef struct pefparm_gendata_s
+{
+    enum ipmi_pefconf_val_type_e datatype;
+    unsigned char *fname;
+
+    union {
+	struct {
+	    unsigned int (*gval)(ipmi_pef_config_t *pefc);
+	    int (*gval_v)(ipmi_pef_config_t *pefc, unsigned int *val);
+	    int (*gval_iv)(ipmi_pef_config_t *pefc, unsigned int idx,
+			   unsigned int *val);
+	    int (*sval)(ipmi_pef_config_t *pefc, unsigned int val);
+	    int (*sval_v)(ipmi_pef_config_t *pefc, unsigned int val);
+	    int (*sval_iv)(ipmi_pef_config_t *pefc, unsigned int idx,
+			   unsigned int val);
+	} ival;
+	struct {
+	    int (*gval_v)(ipmi_pef_config_t *pefc, unsigned char *data,
+			  unsigned int *data_len);
+	    int (*gval_iv)(ipmi_pef_config_t *pefc, unsigned int idx,
+			   unsigned char *data, unsigned int *data_len);
+	    int (*sval_v)(ipmi_pef_config_t *pefc, unsigned char *data,
+			  unsigned int data_len);
+	    int (*sval_iv)(ipmi_pef_config_t *pefc, unsigned int idx,
+			   unsigned char *data, unsigned int data_len);
+	} dval;
+	struct {
+	    int (*gval_v)(ipmi_pef_config_t *pefc, unsigned char *data,
+			  unsigned int *data_len);
+	    int (*gval_iv)(ipmi_pef_config_t *pefc, unsigned int idx,
+			   unsigned char *data, unsigned int *data_len);
+	    int (*sval_v)(ipmi_pef_config_t *pefc, unsigned char *data);
+	    int (*sval_iv)(ipmi_pef_config_t *pefc, unsigned int idx,
+			   unsigned char *data);
+	} sval;
+    } u;
+    unsigned int (*iv_cnt)(ipmi_pef_config_t *pefc);
+} pefparm_gendata_t;
+
+#define F_BOOLR(name) \
+	{ .datatype = IPMI_PEFCONFIG_BOOL, .fname = #name, \
+	  .u = { .ival = { .gval = ipmi_pefconfig_get_ ## name }}}
+#define F_BOOL(name) \
+	{ .datatype = IPMI_PEFCONFIG_BOOL, .fname = #name, \
+	  .u = { .ival = { .gval = ipmi_pefconfig_get_ ## name, \
+			   .sval = ipmi_pefconfig_set_ ## name }}}
+#define F_INTR(name) \
+	{ .datatype = IPMI_PEFCONFIG_INT, .fname = #name, \
+	  .u = { .ival = { .gval = ipmi_pefconfig_get_ ## name }}}
+#define F_INT(name) \
+	{ .datatype = IPMI_PEFCONFIG_INT, .fname = #name, \
+	  .u = { .ival = { .gval = ipmi_pefconfig_get_ ## name, \
+			   .sval = ipmi_pefconfig_set_ ## name }}}
+#define F_INTV(name) \
+	{ .datatype = IPMI_PEFCONFIG_INT, .fname = #name, \
+	  .u = { .ival = { .gval_v = ipmi_pefconfig_get_ ## name, \
+			   .sval_v = ipmi_pefconfig_set_ ## name }}}
+#define F_INTIV(name, gcnt) \
+	{ .datatype = IPMI_PEFCONFIG_INT, .fname = #name, \
+	  .u = { .ival = { .gval_iv = ipmi_pefconfig_get_ ## name, \
+			   .sval_iv = ipmi_pefconfig_set_ ## name }}, \
+	  .iv_cnt = gcnt }
+#define F_BOOLV(name) \
+	{ .datatype = IPMI_PEFCONFIG_BOOL, .fname = #name, \
+	  .u = { .ival = { .gval_v = ipmi_pefconfig_get_ ## name, \
+			   .sval_v = ipmi_pefconfig_set_ ## name }}}
+#define F_BOOLIV(name, gcnt) \
+	{ .datatype = IPMI_PEFCONFIG_BOOL, .fname = #name, \
+	  .u = { .ival = { .gval_iv = ipmi_pefconfig_get_ ## name, \
+			   .sval_iv = ipmi_pefconfig_set_ ## name }}, \
+	  .iv_cnt = gcnt }
+#define F_DATA(name) \
+	{ .datatype = IPMI_PEFCONFIG_DATA, .fname = #name, \
+	  .u = { .dval = { .gval_v = ipmi_pefconfig_get_ ## name, \
+			   .sval_v = ipmi_pefconfig_set_ ## name }}}
+#define F_STRIV(name, gcnt) \
+	{ .datatype = IPMI_PEFCONFIG_STR, .fname = #name, \
+	  .u = { .sval = { .gval_iv = ipmi_pefconfig_get_ ## name, \
+			   .sval_iv = ipmi_pefconfig_set_ ## name }}, \
+	  .iv_cnt = gcnt }
+
+static pefparm_gendata_t gdata[] =
+{
+    F_BOOL(alert_startup_delay_enabled),
+    F_BOOL(startup_delay_enabled),
+    F_BOOL(event_messages_enabled),
+    F_BOOL(pef_enabled),
+    F_BOOL(diagnostic_interrupt_enabled),
+    F_BOOL(oem_action_enabled),
+    F_BOOL(power_cycle_enabled),
+    F_BOOL(reset_enabled),
+    F_BOOL(power_down_enabled),
+    F_BOOL(alert_enabled),
+    F_INTV(startup_delay),
+    F_INTV(alert_startup_delay),
+    F_BOOL(guid_enabled),
+    F_DATA(guid_val),
+    F_INTR(num_event_filters),
+    F_BOOLIV(enable_filter, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(filter_type, ipmi_pefconfig_get_num_event_filters),
+    F_BOOLIV(diagnostic_interrupt, ipmi_pefconfig_get_num_event_filters),
+    F_BOOLIV(oem_action, ipmi_pefconfig_get_num_event_filters),
+    F_BOOLIV(power_cycle, ipmi_pefconfig_get_num_event_filters),
+    F_BOOLIV(reset, ipmi_pefconfig_get_num_event_filters),
+    F_BOOLIV(power_down, ipmi_pefconfig_get_num_event_filters),
+    F_BOOLIV(alert, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(alert_policy_number, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(event_severity, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(generator_id_addr, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(generator_id_channel_lun, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(sensor_type, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(sensor_number, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(event_trigger, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data1_offset_mask, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data1_mask, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data1_compare1, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data1_compare2, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data2_mask, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data2_compare1, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data2_compare2, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data3_mask, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data3_compare1, ipmi_pefconfig_get_num_event_filters),
+    F_INTIV(data3_compare2, ipmi_pefconfig_get_num_event_filters),
+    F_INTR(num_alert_policies),
+    F_INTIV(policy_num, ipmi_pefconfig_get_num_alert_policies),
+    F_INTIV(enabled, ipmi_pefconfig_get_num_alert_policies),
+    F_INTIV(policy, ipmi_pefconfig_get_num_alert_policies),
+    F_INTIV(channel, ipmi_pefconfig_get_num_alert_policies),
+    F_INTIV(destination_selector, ipmi_pefconfig_get_num_alert_policies),
+    F_INTIV(alert_string_event_specific, ipmi_pefconfig_get_num_alert_policies),
+    F_INTIV(alert_string_selector, ipmi_pefconfig_get_num_alert_policies),
+    F_INTR(num_alert_strings),
+    F_INTIV(event_filter, ipmi_pefconfig_get_num_alert_strings),
+    F_INTIV(alert_string_set, ipmi_pefconfig_get_num_alert_strings),
+    F_STRIV(alert_string, ipmi_pefconfig_get_num_alert_strings),
+};
+#define NUM_GDATA_ENTRIES (sizeof(gdata) / sizeof(pefparm_gendata_t))
+
+int
+ipmi_pefconfig_get_val(ipmi_pef_config_t *pefc,
+		       unsigned int      parm,
+		       const char        **name,
+		       int               *index,
+		       enum ipmi_pefconf_val_type_e *valtype,
+		       unsigned int      *ival,
+		       unsigned char     **dval,
+		       unsigned int      *dval_len)
+{
+    unsigned int  curr = *index;
+    unsigned int  count;
+    int           rv = 0;
+    unsigned char *data;
+    unsigned int  data_len;
+
+    if (parm >= NUM_GDATA_ENTRIES)
+	return EINVAL;
+    if (valtype)
+	*valtype = gdata[parm].datatype;
+    if (name)
+	*name = gdata[parm].fname;
+
+    if (gdata[parm].iv_cnt) {
+	count = gdata[parm].iv_cnt(pefc);
+	if (curr >= count) {
+	    *index = -1;
+	    return E2BIG;
+	}
+
+	if (curr+1 == count)
+	    *index = -1;
+	else
+	    *index = curr+1;
+    }
+
+    switch (gdata[parm].datatype) {
+    case IPMI_PEFCONFIG_INT:
+    case IPMI_PEFCONFIG_BOOL:
+	if (!ival)
+	    break;
+	if (gdata[parm].u.ival.gval)
+	    *ival = gdata[parm].u.ival.gval(pefc);
+	else if (gdata[parm].u.ival.gval_v)
+	    rv = gdata[parm].u.ival.gval_v(pefc, ival);
+	else if (gdata[parm].u.ival.gval_iv)
+	    rv = gdata[parm].u.ival.gval_iv(pefc, curr, ival);
+	else
+	    rv = ENOSYS;
+	break;
+
+    case IPMI_PEFCONFIG_DATA:
+	data_len = 0;
+	if (gdata[parm].u.dval.gval_v)
+	    rv = gdata[parm].u.dval.gval_v(pefc, NULL, &data_len);
+	else if (gdata[parm].u.dval.gval_iv)
+	    rv = gdata[parm].u.dval.gval_iv(pefc, curr, NULL, &data_len);
+	else
+	    rv = ENOSYS;
+	if (rv && (rv != EBADF))
+	    break;
+	if (data_len == 0)
+	    data = ipmi_mem_alloc(1);
+	else
+	    data = ipmi_mem_alloc(data_len);
+	if (gdata[parm].u.dval.gval_v)
+	    rv = gdata[parm].u.dval.gval_v(pefc, data, &data_len);
+	else if (gdata[parm].u.dval.gval_iv)
+	    rv = gdata[parm].u.dval.gval_iv(pefc, curr, data, &data_len);
+	if (rv) {
+	    ipmi_mem_free(data);
+	    break;
+	}
+	if (dval)
+	    *dval = data;
+	if (dval_len)
+	    *dval_len = data_len;
+	break;
+
+    case IPMI_PEFCONFIG_STR:
+	data_len = 0;
+	if (gdata[parm].u.sval.gval_v)
+	    rv = gdata[parm].u.sval.gval_v(pefc, NULL, &data_len);
+	else if (gdata[parm].u.sval.gval_iv)
+	    rv = gdata[parm].u.sval.gval_iv(pefc, curr, NULL, &data_len);
+	else
+	    rv = ENOSYS;
+	if (rv && (rv != EBADF))
+	    break;
+	if (data_len == 0)
+	    data = ipmi_mem_alloc(1);
+	else
+	    data = ipmi_mem_alloc(data_len);
+	if (gdata[parm].u.sval.gval_v)
+	    rv = gdata[parm].u.sval.gval_v(pefc, data, &data_len);
+	else if (gdata[parm].u.sval.gval_iv)
+	    rv = gdata[parm].u.sval.gval_iv(pefc, curr, data, &data_len);
+	if (rv) {
+	    ipmi_mem_free(data);
+	    break;
+	}
+	if (dval)
+	    *dval = data;
+	if (dval_len)
+	    *dval_len = data_len;
+    }
+
+    return rv;
+}
+
+int
+ipmi_pefconfig_set_val(ipmi_pef_config_t *pefc,
+		       unsigned int      parm,
+		       int               index,
+		       unsigned int      ival,
+		       unsigned char     *dval,
+		       unsigned int      dval_len)
+{
+    unsigned int  count;
+    int           rv = 0;
+
+    if (parm >= NUM_GDATA_ENTRIES)
+	return EINVAL;
+
+    if (gdata[parm].iv_cnt) {
+	count = gdata[parm].iv_cnt(pefc);
+	if (index >= count)
+	    return E2BIG;
+    }
+
+    switch (gdata[parm].datatype) {
+    case IPMI_PEFCONFIG_INT:
+    case IPMI_PEFCONFIG_BOOL:
+	if (!ival)
+	    break;
+	if (gdata[parm].u.ival.sval)
+	    rv = gdata[parm].u.ival.sval(pefc, ival);
+	else if (gdata[parm].u.ival.sval_v)
+	    rv = gdata[parm].u.ival.sval_v(pefc, ival);
+	else if (gdata[parm].u.ival.sval_iv)
+	    rv = gdata[parm].u.ival.sval_iv(pefc, index, ival);
+	else
+	    rv = ENOSYS;
+	break;
+
+    case IPMI_PEFCONFIG_DATA:
+	if (gdata[parm].u.dval.sval_v)
+	    rv = gdata[parm].u.dval.sval_v(pefc, dval, dval_len);
+	else if (gdata[parm].u.dval.sval_iv)
+	    rv = gdata[parm].u.dval.sval_iv(pefc, index, dval, dval_len);
+	else
+	    rv = ENOSYS;
+	break;
+
+    case IPMI_PEFCONFIG_STR:
+	if (gdata[parm].u.sval.sval_v)
+	    rv = gdata[parm].u.sval.sval_v(pefc, dval);
+	else if (gdata[parm].u.sval.sval_iv)
+	    rv = gdata[parm].u.sval.sval_iv(pefc, index, dval);
+	else
+	    rv = ENOSYS;
+	break;
+    }
+
+    return rv;
+}
+
+
+void
+ipmi_pefconfig_data_free(void *data)
+{
+    ipmi_mem_free(data);
+}
+
+unsigned int
+ipmi_pefconfig_str_to_parm(char *name)
+{
+    int i;
+    for (i=0; i<NUM_GDATA_ENTRIES; i++) {
+	if (strcmp(name, gdata[i].fname) == 0)
+	    return i;
+    }
+    return -1;
+}
+
+const char *
+ipmi_pefconfig_parm_to_str(unsigned int parm)
+{
+    if (parm >= NUM_GDATA_ENTRIES)
+	return NULL;
+    return gdata[parm].fname;
+}
+
+int
+ipmi_pefconfig_parm_to_type(unsigned int                 parm,
+			    enum ipmi_pefconf_val_type_e *valtype)
+{
+    if (parm >= NUM_GDATA_ENTRIES)
+	return EINVAL;
+    *valtype = gdata[parm].datatype;
     return 0;
 }

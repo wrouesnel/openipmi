@@ -69,6 +69,14 @@ int ipmi_pef_destroy(ipmi_pef_t       *pef,
                      ipmi_pef_done_cb handler,
                      void             *cb_data);
 
+/* Used to track references to a pef.  You can use this instead of
+   ipmi_pef_destroy, but use of the destroy function is
+   recommended.  This is primarily here to help reference-tracking
+   garbage collection systems like what is in Perl to be able to
+   automatically destroy pefs when they are done. */
+void ipmi_pef_ref(ipmi_pef_t *pef);
+void ipmi_pef_deref(ipmi_pef_t *pef);
+
 void ipmi_pef_iterate_pefs(ipmi_domain_t   *domain,
 			   ipmi_pef_ptr_cb handler,
 			   void            *cb_data);
@@ -186,6 +194,57 @@ int ipmi_pef_clear_lock(ipmi_pef_t        *pef,
 /* Free a PEF configuration. */
 void ipmi_pef_free_config(ipmi_pef_config_t *config);
 
+/* This interface lets you fetch and set the data values by parm
+   num. Note that the parm nums *DO NOT* correspond to the
+   IPMI_PEFPARM_xxx values above. */
+
+enum ipmi_pefconf_val_type_e { IPMI_PEFCONFIG_INT, IPMI_PEFCONFIG_BOOL,
+			       IPMI_PEFCONFIG_DATA, IPMI_PEFCONFIG_STR };
+/* When getting the value, the valtype will be set to int or data.  If
+   it is int or bool, the value is returned in ival and the dval is
+   not used.  If it is data, the data will be returned in an allocated
+   array in dval and the length set in dval_len.  The data must be
+   freed with ipmi_pefconfig_data_free().  The is used for some data
+   items (the priv level for authentication type, the destination for
+   alerts and destination addresses); for other items it is ignored.
+   The index should point to the value to fetch (starting at zero), it
+   will be updated to the next value or -1 if no more are left.  The
+   index will be unchanged if the parm does not support an index.
+
+   The string name is returned in the name field, if it is not NULL.
+
+   Note that when fetching a value, if the passed in pointer is NULL
+   the data will not be filled in (except for index, which must always
+   be present).  That lets you get the value type without getting the
+   data, for instance. */
+int ipmi_pefconfig_get_val(ipmi_pef_config_t *pefc,
+			   unsigned int      parm,
+			   const char        **name,
+			   int               *index,
+			   enum ipmi_pefconf_val_type_e *valtype,
+			   unsigned int      *ival,
+			   unsigned char     **dval,
+			   unsigned int      *dval_len);
+  /* Set a value in the pef config.  You must know ahead of time the
+     actual value type and set the proper one. */
+int ipmi_pefconfig_set_val(ipmi_pef_config_t *pefc,
+			   unsigned int      parm,
+			   int               index,
+			   unsigned int      ival,
+			   unsigned char     *dval,
+			   unsigned int      dval_len);
+/* Free data from ipmi_pefconfig_get_val(). */
+void ipmi_pefconfig_data_free(void *data);
+/* Convert a string to a pefconfig parm number.  Returns -1 if the
+   string is invalid. */
+unsigned int ipmi_pefconfig_str_to_parm(char *name);
+/* Convert the parm to a string name. */
+const char *ipmi_pefconfig_parm_to_str(unsigned int parm);
+/* Get the type of a specific parm. */
+int ipmi_pefconfig_parm_to_type(unsigned int                 parm,
+				enum ipmi_pefconf_val_type_e *valtype);
+
+
 /*
  * Main configuration items for the PEF.
  */
@@ -230,9 +289,6 @@ int ipmi_pefconfig_set_alert_startup_delay(ipmi_pef_config_t *pefc,
 unsigned int ipmi_pefconfig_get_guid_enabled(ipmi_pef_config_t *pefc);
 int ipmi_pefconfig_set_guid_enabled(ipmi_pef_config_t *pefc,
 				    unsigned int      val);
-int ipmi_pefconfig_set_guid_val(ipmi_pef_config_t *pefc,
-				unsigned char     *data,
-				unsigned int      data_len);
 int ipmi_pefconfig_get_guid_val(ipmi_pef_config_t *pefc,
 				unsigned char     *data,
 				unsigned int      *data_len);
@@ -500,7 +556,7 @@ int ipmi_pefconfig_set_alert_string_set(ipmi_pef_config_t *pefc,
 					unsigned int      sel,
 					unsigned int      val);
 int ipmi_pefconfig_get_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
-				    unsigned char *val, unsigned int len);
+				    unsigned char *val, unsigned int *len);
 int ipmi_pefconfig_set_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
 				    unsigned char *val);
 

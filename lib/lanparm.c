@@ -2024,7 +2024,7 @@ unsigned int ret_user_cnt(ipmi_lan_config_t *lanc)
     return 5;
 }
 
-#define F_BOOL(name) \
+#define F_BOOLR(name) \
 	{ .datatype = IPMI_LANCONFIG_BOOL, .fname = #name, \
 	  .u = { .ival = { .gval = ipmi_lanconfig_get_ ## name }}}
 #define F_INTR(name) \
@@ -2077,11 +2077,11 @@ unsigned int ret_user_cnt(ipmi_lan_config_t *lanc)
 
 static lanparm_gendata_t gdata[] =
 {
-    F_BOOL(support_auth_oem),				/* 0 */
-    F_BOOL(support_auth_straight),
-    F_BOOL(support_auth_md5),
-    F_BOOL(support_auth_md2),
-    F_BOOL(support_auth_none),
+    F_BOOLR(support_auth_oem),				/* 0 */
+    F_BOOLR(support_auth_straight),
+    F_BOOLR(support_auth_md5),
+    F_BOOLR(support_auth_md2),
+    F_BOOLR(support_auth_none),
     F_INT(ip_addr_source),				/* 5 */
     F_INTR(num_alert_destinations),
     F_INTV(ipv4_ttl),

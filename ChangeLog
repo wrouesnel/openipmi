@@ -29,6 +29,11 @@
 
 	* swig/perl/test_lanparm: Added lanparm tests.
 
+	* include/OpenIPMI/ipmi_pef.h, lib/pef.c: Added a way to get data
+	by parm number and added refcount stuff for perl.
+
+	* swig/OpenIPMI.i: Added support for PEF.
+
 2004-12-29 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Added printing of if the sensor/control should be
