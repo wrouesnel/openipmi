@@ -124,6 +124,8 @@ remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 
     sel_set_fd_read_handler(posix_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
     sel_clear_fd_handlers(posix_sel, fd_data->fd);
+    /* fd_data gets freed in the free_fd_data callback registered at
+       set time. */
     return 0;
 }
 
