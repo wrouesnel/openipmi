@@ -8,8 +8,10 @@
 
 	* ilist.c, ilist.h: Added some helper functions.
 
-	* ui_os.c: Switch from /dev/random to /dev/srandom to avoid
+	* ui_os.c: Switch from /dev/random to /dev/urandom to avoid
 	blocking for lack of entropy.
+
+	* ui.c: Added a total bytes in SDR count.
 
 2003-06-03 Corey Minyard <cminyard@mvista.com>
 

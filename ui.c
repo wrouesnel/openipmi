@@ -2896,6 +2896,7 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
     sdrs_info_t *info = cb_data;
     int         i;
     int         rv;
+    int         total_size = 0;
 
     if (err) {
 	ui_log("Error fetching sdrs: %x\n", err);
@@ -2922,6 +2923,7 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	    display_pad_out("*could not get index %d\n", i);
 	    continue;
 	}
+	total_size += sdr.length+5;
 	display_pad_out("%4.4x: type %x, version %d.%d",
 		sdr.record_id, sdr.type, sdr.major_version, sdr.minor_version);
 	for (j=0; j<sdr.length; j++) {
@@ -2931,6 +2933,7 @@ void sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	}
 	display_pad_out("\n");
     }
+    display_pad_out("total bytes in SDRs: %d\n", total_size);
     display_pad_refresh();
 
  out:
