@@ -767,6 +767,7 @@ ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
     memset(sensor, 0, sizeof(*sensor));
 
     sensor->hot_swap_requester = -1;
+    sensor->ignore_if_no_entity = 1;
     sensor->usecount = 1;
 
     *new_sensor = sensor;

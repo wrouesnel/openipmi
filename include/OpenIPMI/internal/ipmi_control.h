@@ -214,6 +214,7 @@ void ipmi_control_set_settable(ipmi_control_t *control, int val);
 void ipmi_control_set_readable(ipmi_control_t *control, int val);
 void ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
 				          int            ignore_if_no_entity);
+ipmi_domain_t *ipmi_control_get_domain(ipmi_control_t *control);
 
 /* Returns true if this control is a hot-swap indicator, meaning that
    is is used to indicate to the operator when it is save to remove a

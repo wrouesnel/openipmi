@@ -715,6 +715,8 @@ ipmi_control_alloc_nonstandard(ipmi_control_t **new_control)
 	return ENOMEM;
 
     memset(control, 0, sizeof(*control));
+    /* By default we ignore if no entity. */
+    ipmi_control_set_ignore_if_no_entity(control, 1);
 
     control->usecount = 1;
     *new_control = control;
@@ -1845,6 +1847,12 @@ ipmi_control_set_ignore_if_no_entity(ipmi_control_t *control,
 				     int            ignore_if_no_entity)
 {
     control->ignore_if_no_entity = ignore_if_no_entity;
+}
+
+ipmi_domain_t *
+ipmi_control_get_domain(ipmi_control_t *control)
+{
+    return control->domain;
 }
 
 #ifdef IPMI_CHECK_LOCKS

@@ -237,7 +237,6 @@ atca_alloc_control(ipmi_mc_t                 *mc,
     ipmi_control_set_oem_info(*control, data, data_cleanup);
     ipmi_control_set_type(*control, control_type);
     ipmi_control_set_id(*control, id, IPMI_ASCII_STR, strlen(id));
-    ipmi_control_set_ignore_if_no_entity(*control, 1);
 
     /* Assume we can read and set the value. */
     if ((set_val) || (set_light_val) || (set_id_val))

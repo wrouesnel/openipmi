@@ -1613,6 +1613,10 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
     display_pad_out("Sensor %s.%s:\n",
 		    get_entity_loc(entity, loc, sizeof(loc)),
 		    name);
+    if (ipmi_sensor_get_ignore_if_no_entity(sensor))
+	display_pad_out("  ignore if entity not present\n");
+    else
+	display_pad_out("  still there if entity not present\n");
     display_pad_out("  name = %s\n", sname);
     display_pad_out("  value = ");
     getyx(display_pad, value_pos.y, value_pos.x);
@@ -2550,6 +2554,10 @@ display_control(ipmi_entity_t *entity, ipmi_control_t *control)
     display_pad_out("Control %s.%s:\n",
 		    get_entity_loc(entity, loc, sizeof(loc)),
 		    name);
+    if (ipmi_control_get_ignore_if_no_entity(control))
+	display_pad_out("  ignore if entity not present\n");
+    else
+	display_pad_out("  still there if entity not present\n");
     ipmi_control_get_name(control, cname, sizeof(cname));
     display_pad_out("  name = %s\n", cname);
     control_type = ipmi_control_get_type(control);

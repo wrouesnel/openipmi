@@ -1,3 +1,25 @@
+2004-12-29 Corey Minyard <cminyard@mvista.com> 
+
+	* ui/ui.c: Added printing of if the sensor/control should be
+	ignored if the entity is not present.
+
+	* lib/control.c: Default nonstandard controls to be ignored if the
+	entity is not present.
+
+	* lib/sensor.c: Default nonstandard sensors to be ignored if the
+	entity is not present.
+
+	* lib/entity.c: Use controls for presence detection, and clean
+	up the presence code to properly handle presence sensor removal.
+	Also modify the presence detection to be 100% compliant with
+	the spec, including messaging FRU devices as the last step.
+	
+	* lib/chassis.c: Remove the dummy presence sensor since the
+	controls can be used for presence now.
+
+	* lib/oem_motorola_mxp.c, lib/oem_atca.c: Cleanup up all the
+	ignore if no entity setup for all the sensors and controls.
+
 2004-12-28 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/lanparm.h, lanparm/lanparm_ipmi.c: Added

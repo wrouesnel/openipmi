@@ -1383,7 +1383,6 @@ mxp_alloc_basic_sensor(void          *data,
     ipmi_sensor_set_sensor_init_type(*sensor, 1);
     ipmi_sensor_set_sensor_init_pu_events(*sensor, 0);
     ipmi_sensor_set_sensor_init_pu_scanning(*sensor, 1);
-    ipmi_sensor_set_ignore_if_no_entity(*sensor, 1);
     ipmi_sensor_set_supports_auto_rearm(*sensor, 1);
     if (assert_events || deassert_events)
 	ipmi_sensor_set_event_support(*sensor, 
@@ -1824,7 +1823,6 @@ mxp_alloc_control(ipmi_mc_t               *mc,
     ipmi_control_set_oem_info(*control, hdr, mxp_cleanup_control_oem_info);
     ipmi_control_set_type(*control, control_type);
     ipmi_control_set_id(*control, id, IPMI_ASCII_STR, strlen(id));
-    ipmi_control_set_ignore_if_no_entity(*control, 1);
 
     /* Assume we can read and set the value. */
     if (set_val)
@@ -1898,7 +1896,6 @@ mxp_alloc_id_control(ipmi_mc_t                          *mc,
     ipmi_control_set_oem_info(control, hdr, mxp_cleanup_control_oem_info);
     ipmi_control_set_type(control, control_type);
     ipmi_control_set_id(control, id, IPMI_ASCII_STR, strlen(id));
-    ipmi_control_set_ignore_if_no_entity(control, 1);
 
     /* Assume we can read and set the value. */
     if (set_val)
@@ -6134,7 +6131,6 @@ new_board_sensors(ipmi_mc_t           *mc,
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(sinfo->power, 1);
-    ipmi_control_set_ignore_if_no_entity(sinfo->power, 0);
     ipmi_control_set_hot_swap_power(sinfo->power, 1);
     rv = mxp_add_control(mc, 
 			 &sinfo->power,
@@ -6822,7 +6818,6 @@ amc_board_handler(ipmi_mc_t *mc)
 					&info->s5v);
 	if (rv)
 	    goto out_err;
-	ipmi_sensor_set_ignore_if_no_entity(info->s5v, 0);
 	rv = mxp_add_sensor(mc, 
 			    &info->s5v,
 			    MXP_5V_SENSOR_NUM,
