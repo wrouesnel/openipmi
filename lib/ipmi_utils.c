@@ -100,6 +100,19 @@ ipmi_addr_equal(ipmi_addr_t *addr1,
 	    return (iaddr1->lun == iaddr2->lun);
 	}
 
+	if (addr1->addr_type == IPMI_LAN_ADDR_TYPE) {
+		struct ipmi_lan_addr *lan_addr1
+			= (struct ipmi_lan_addr *) addr1;
+		struct ipmi_lan_addr *lan_addr2
+		    = (struct ipmi_lan_addr *) addr2;
+
+		return ((lan_addr1->remote_SWID == lan_addr2->remote_SWID)
+			&& (lan_addr1->local_SWID == lan_addr2->local_SWID)
+			&& (lan_addr1->session_handle
+			    == lan_addr2->session_handle)
+			&& (lan_addr1->lun == lan_addr2->lun));
+	}
+
 	default:
 	    return 0;
     }
@@ -121,6 +134,14 @@ ipmi_addr_get_lun(ipmi_addr_t *addr)
 	{
 	    ipmi_system_interface_addr_t *iaddr
 		= (ipmi_system_interface_addr_t *) addr;
+
+	    return iaddr->lun;
+	}
+
+	case IPMI_LAN_ADDR_TYPE:
+	{
+	    struct ipmi_lan_addr *iaddr
+		= (struct ipmi_lan_addr *) addr;
 
 	    return iaddr->lun;
 	}
@@ -153,6 +174,14 @@ ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun)
 
 	    iaddr->lun = lun;
 	    break;
+	}
+
+	case IPMI_LAN_ADDR_TYPE:
+	{
+	    struct ipmi_lan_addr *iaddr
+		= (struct ipmi_lan_addr *) addr;
+
+	    iaddr->lun = lun;
 	}
 
 	default:

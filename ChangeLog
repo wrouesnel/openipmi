@@ -21,6 +21,12 @@
 	* ui/basic_ui: Added a '-drawmsg' parameter to start raw message
 	tracing at startup.
 
+	* include/OpenIPMI/ipmi_addr.h: Added updates to the lan address
+	stuff.
+	* ui/ipmicmd.c: ditto
+
+	* lib/ipmi_utils.c: Added handling of the LAN address type.
+
 2004-02-10 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a way to send events

@@ -327,9 +327,10 @@ dump_msg_data(ipmi_msg_t *msg, ipmi_addr_t *addr, char *type)
 		   ipmb_addr->slave_addr,
 		   ipmb_addr->lun);
 	else if (lan_addr)
-	    printf("    lan addr = %x,%x,%x\n",
+	    printf("    lan addr = %x,%x,%x,%x\n",
 		   lan_addr->session_handle,
-		   lan_addr->dest,
+		   lan_addr->remote_SWID,
+		   lan_addr->local_SWID,
 		   lan_addr->lun);
 	printf("  netfn     = 0x%x\n", msg->netfn);
 	printf("  cmd       = 0x%x\n", msg->cmd);
@@ -528,7 +529,7 @@ process_input_line(char *buf)
 	printf("      to the local BMC\n");
 	printf("  <channel> [ipmb] <dest addr> <lun> <netfn> <cmd> <data...> -\n");
 	printf("      send an IPMB command on the channel.\n");
-	printf("  <channel> lan <handle> <dest swid> <lun> <netfn> <cmd> <data...> -\n");
+	printf("  <channel> lan <handle> <remote swid> <local swid> <lun> <netfn> <cmd> <data...> -\n");
 	printf("      send a command on a LAN channel.\n");
 	printf("  <channel> 00 <dest addr> <lun> <netfn> <cmd> <data...> -\n");
 	printf("      broadcast a command on the channel.\n");
@@ -649,7 +650,8 @@ process_input_line(char *buf)
 	lan->addr_type = IPMI_LAN_ADDR_TYPE;
 	lan->channel = channel;
 	lan->session_handle = outbuf[start]; start++;
-	lan->dest = outbuf[start]; start++;
+	lan->remote_SWID = outbuf[start]; start++;
+	lan->local_SWID = outbuf[start]; start++;
 	lan->lun = outbuf[start]; start++;
 	msg.netfn = outbuf[start]; start++;
 	addr_len = sizeof(*lan);
