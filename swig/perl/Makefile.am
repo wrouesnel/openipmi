@@ -36,6 +36,6 @@ OpenIPMI_perl.o: OpenIPMI_perl.c OpenIPMI.h
 	$(COMPILE) -c $<
 
 OpenIPMI_wrap.c OpenIPMI.pm: $(top_srcdir)/swig/OpenIPMI.i
-	swig $(DEFS) -perl5 -includeall -o $@ $<
+	swig $(DEFS) -perl5 -o $@ $<
 
 CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI.so OpenIPMI_wrap.c

@@ -32,7 +32,10 @@
      useful, and it's certainly ugly, but it's primarily for my
      testing.
 
-     If you want to write something useful to replace it, feel free!
+     In general, it has been replace with the ipmish command, which
+     provides a much more consistent interface to the system.  It is
+     much more consistent and is well documented.  It is perhaps not
+     quite as nice for interactive use.
 
 
   2.2) What if I just want to send some IPMI commands.
@@ -45,13 +48,9 @@
   2.3) I'm trying to write a little program that comes up and queries a
      few things.  Can I use the OpenIPMI library to do that?
 
-     Probably not.  OpenIPMI was designed as a large-scale IPMI
-     interface for programs that stay up and do lots of management
-     work.  It's not really for one-off little tools.
-
-     If you want to do small tools, it's easy enough to just open the
-     device and send the commands (or use the ipmicmd tool).  You have
-     to understand IPMI well to use it at that level, anyway.
+     Yes, you can.  In the ipmi_open_domain() command, you can turn on
+     and off the things you want, so you can trim down the startup
+     process to speed it up.
 
 
   2.4) Why can't I just perform an operation and immediately get the
@@ -74,8 +73,8 @@
      delete items from the SEL.  You have a couple of options...
 
      If you don't care about the SEL, then set the SEL rescan time to
-     zero with ipmi_domain_set_sel_rescan_time().  This will turn off
-     the SEL completely.
+     zero with ipmi_domain_set_sel_rescan_time() or disable it with
+     the startup options.  This will turn off the SEL completely.
 
      If you do care about SELs on multiple programs, you will have to
      develop a protocol between all the users.  You have to have a way
@@ -219,7 +218,9 @@
      in OpenIPMI?
 
      Sure.  You can write OEM code that ties in to when objects are
-     added to the system and fix them up as necessary.
+     added to the system and fix them up as necessary.  The details
+     of this are beyond the scope of the FAQ, but you can look in
+     lib/oem_*.c for examples.
 
 
  2.17) It takes a long time to find all the information about a system
@@ -230,6 +231,11 @@
      You can write an OEM plugin or scan the addresses you are
      interested in by hand.
 
+     If you don't care about the information, as of version 1.4.4 you
+     can skip those steps via options to the ipmi_open_domain()
+     function or the startup parms to ipmish or the Perl interface.
+
+
  2.18) I want to know when OpenIPMI is done finding everything in the
      system.
 
@@ -239,3 +245,27 @@
      software that can dynamically manage elements of the system
      coming and going.  OpenIPMI will tell you when it finds things,
      and then you can manage them.
+
+     But bowing to popular demand, though, the 1.4 version of OpenIPMI
+     adds a "done" callback to the ipmi_open_domain function that lets
+     you know when OpenIPMI has finished the first pass of everything
+     (SDRs, SELs, FRUs, IPMB scan).  There is no guarantee that it
+     found everything in the first pass, and you should handle
+     dynamically adding things later.
+
+
+ 2.19) How do I build the Perl interface?
+
+     The Perl interface uses swig, which is available from
+     http://www.swig.org.  That must be installed and in your patch to
+     build the Perl interface.  You must also have the development
+     libraries for Perl installed, of course.
+
+
+ 2.20) How do I catch SNMP traps with OpenIPMI?
+
+     Although OpenIPMI has infrastructure to handle traps, it does not
+     catch them for you.  You have to provide the software to catch
+     the traps and then you can tell OpenIPMI about them.  The
+     ui/basic_ui.c code has some example SNMP trap code using the
+     netsmp and ucsdsnmp libraries.
