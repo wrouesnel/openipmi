@@ -1359,10 +1359,16 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 
 	/* Messages to system interface addresses use the channel to
            choose which system address to message. */
-	if ((u < 0) || (u >= MAX_CONS))
-	    return EINVAL;
-	if (!domain->conn[u])
-	    return EINVAL;
+	if ((u < 0) || (u >= MAX_CONS)) {
+ipmi_log(IPMI_LOG_DEBUG, "*****A");
+	    rv = EINVAL;
+	    goto out;
+	}
+	if (!domain->conn[u]) {
+ipmi_log(IPMI_LOG_DEBUG, "*****B");
+	    rv = EINVAL;
+	    goto out;
+	}
 
 	si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si.channel = IPMI_BMC_CHANNEL;
@@ -1411,15 +1417,19 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 				       data4);
 
     if (rv) {
-	ipmi_mem_free(nmsg);
+	goto out_unlock;
     } else if (!is_si) {
 	/* If it's a system interface we don't add it to the list of
 	   commands running, because it will never need to be
 	   rerouted. */
 	ilist_add_tail(domain->cmds, nmsg, &nmsg->link);
     }
+ out_unlock:
     ipmi_unlock(domain->cmds_lock);
 
+ out:
+    if (rv)
+	ipmi_mem_free(nmsg);
     return rv;
 }
 

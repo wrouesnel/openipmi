@@ -8121,69 +8121,6 @@ i2c_sens_get_reading(ipmi_sensor_t        *sensor,
  *
  **********************************************************************/
 
-static void
-mxp_genboard_sdrs_fixup(ipmi_mc_t       *mc,
-		        ipmi_sdr_info_t *sdrs,
-		        void            *cb_data)
-{
-    unsigned int count;
-    int          i;
-    ipmi_sdr_t   sdr;
-    int          rv;
-    char         str[20];
-    int          len;
-    unsigned int ipmb;
-    unsigned int slot;
-
-    rv = ipmi_get_sdr_count(sdrs, &count);
-    if (rv)
-	return;
-
-    ipmb = ipmi_mc_get_address(mc);
-    if (ipmb > 0xc2)
-	slot = (ipmb - 0xb0) / 2;
-    else
-	slot = ((ipmb - 0xb0) / 2) + 1;
-
-    for (i=0; i<count; i++) {
-	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
-	if (rv)
-	    break;
-
-	/* Fix up the entity instances for the SDRs. */
-	switch (sdr.type) {
-	case IPMI_SDR_FULL_SENSOR_RECORD:
-	    sdr.data[0] = ipmb;
-	    sdr.data[3] = IPMI_ENTITY_ID_PROCESSING_BLADE;
-	    sdr.data[4] = slot;
-	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
-	    break;
-
-	case IPMI_SDR_FRU_DEVICE_LOCATOR_RECORD:
-	    sdr.type = 0xc0; /* Just invalidate it */
-	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
-	    break;
-
-	case IPMI_SDR_MC_CONFIRMATION_RECORD:
-	    sdr.type = 0xc0; /* Just invalidate it */
-	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
-	    break;
-
-	case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
-	    sdr.data[0] = ipmb;
-	    sdr.data[7] = IPMI_ENTITY_ID_PROCESSING_BLADE;
-	    sdr.data[8] = slot;
-	    sprintf(str, "BD%2.2d", slot);
-	    len = 16;
-	    ipmi_set_device_string(str, IPMI_ASCII_STR, strlen(str),
-			    	   sdr.data+10, 0, &len);
-	    sdr.length = 10 + len;
-	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
-	    break;
-	}
-    }
-}
-
 typedef struct zynx_info_s
 {
     board_sensor_info_t board;
@@ -8256,10 +8193,6 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 	rv = ENOMEM;
 	goto out;
     }
-
-    rv = ipmi_mc_set_sdrs_fixup_handler(mc, mxp_genboard_sdrs_fixup, NULL);
-    if (rv)
-	goto out;
 
     ents = ipmi_domain_get_entities(domain);
     rv = ipmi_entity_add(ents, domain, mc, 0,
@@ -8716,10 +8649,6 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
     }
     memset(sinfo, 0, sizeof(*sinfo));
 
-    rv = ipmi_mc_set_sdrs_fixup_handler(mc, mxp_genboard_sdrs_fixup, NULL);
-    if (rv)
-	goto out;
-
     ents = ipmi_domain_get_entities(domain);
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_PROCESSING_BLADE,
@@ -8735,7 +8664,7 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 	goto out;
 
     if ((product_id == MXP_5365_PRODUCT_ID) && 
-	((fw_major < 3) || ((fw_major == 3) && (fw_minor < 154))))
+	((fw_major < 3) || ((fw_major == 3) && (fw_minor < 152))))
     {
 	/* These only have to be added for old boards. */
 	rv = alloc_adm1021_sensor(mc, ent, 0x80, 0x01, 0x9c, "Proc Temp",
@@ -8747,9 +8676,6 @@ mxp_genboard_handler(ipmi_mc_t     *mc,
 				  &(sinfo->adm9240));
 	if (rv)
 	    goto out;
-    } else {
-	/* Remove this once it is set correctly. */
-	ipmi_mc_set_provides_device_sdrs(mc, 1);
     }
 
     rv = ipmi_mc_add_oem_removed_handler(mc, mxp_genboard_removal_handler,

@@ -1570,6 +1570,7 @@ read_sensor(ipmi_sensor_t             *sensor,
 	return;
 
     if (sensor_displayed) {
+	wmove(display_pad, value_pos.y, value_pos.x);
 	if (value_present == IPMI_BOTH_VALUES_PRESENT)
 	    display_pad_out("%f", val);
 	else if (value_present == IPMI_RAW_VALUE_PRESENT)

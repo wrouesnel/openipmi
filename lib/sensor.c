@@ -3183,11 +3183,27 @@ enables_get(ipmi_sensor_t *sensor,
 	return;
     }
 
+    if (rsp->data_len < 2) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sensor.c(enables_get):"
+		 " get sensor enables response too short");
+	if (info->done)
+	    info->done(sensor,
+		       EINVAL,
+		       &info->state,
+		       info->cb_data);
+	ipmi_sensor_opq_done(sensor);
+	ipmi_mem_free(info);
+	return;
+    }
+
     info->state.status = rsp->data[1] & 0xc0;
-    info->state.__assertion_events = (rsp->data[2]
-				      | (rsp->data[3] << 8));
-    info->state.__deassertion_events = (rsp->data[4]
-					| (rsp->data[5] << 8));
+    if (rsp->data_len >= 4)
+        info->state.__assertion_events = (rsp->data[2]
+				          | (rsp->data[3] << 8));
+    if (rsp->data_len >= 6)
+        info->state.__deassertion_events = (rsp->data[4]
+					    | (rsp->data[5] << 8));
     if (info->done)
 	info->done(sensor, 0, &info->state, info->cb_data);
     ipmi_sensor_opq_done(sensor);

@@ -901,9 +901,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 
 	if (sdrs->next_read_offset == sdrs->read_size) {
 	    /* Done with this SDR, time to go to the next. */
-	    if ((sdrs->next_read_rec_id == 0xffff)
-                || (sdrs->next_read_rec_id == 0x0000))
-	    {
+	    if (sdrs->next_read_rec_id == 0xffff) {
 		/* This is the last SDR.  However, we don't go to the
 		   next stage until all the outstanding fetches are
 		   complete. */
