@@ -1903,7 +1903,8 @@ lock_cleared(ipmi_pef_t *pef,
 {
     clear_lock_t *cl = cb_data;
 
-    cl->done(pef, err, cl->cb_data);
+    if (cl->done)
+	cl->done(pef, err, cl->cb_data);
 
     ipmi_mem_free(cl);
 }
@@ -1929,6 +1930,8 @@ ipmi_pef_clear_lock(ipmi_pef_t        *pef,
     cl = ipmi_mem_alloc(sizeof(*cl));
     if (!cl)
 	return ENOMEM;
+    cl->done = done;
+    cl->cb_data = cb_data;
 
     data[0] = 0; /* Clear the lock. */
     rv = ipmi_pef_set_parm(pef, 0, data, 1, lock_cleared, cl);
