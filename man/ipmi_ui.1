@@ -105,6 +105,12 @@ List all the entities in the system.  The output is the entity
 specifier, followed by an optional entity name in parenthesis,
 followed by "present" or "not present".
 
+.SS fru <entity>
+List the FRU information associated with the entity.
+
+.SS dump_fru <is_logical> <device_address> <device_id> <lun> <private_bus> <channel>
+Dump raw information from the specified FRU device.
+
 .SH SENSORS
 
 Sensors define input devices that OpenIPMI can monitor.
@@ -226,6 +232,54 @@ get device id command.
 
 Send an IPMI command to the given MC.  The MC must exist and be active
 to do this.
+
+.SS mc_reset <channel> <mc addr> [warm | cold]
+Send a warm or cold reset command to the given MC.  The action the MC
+takes is system-specific.
+
+
+.SH LAN Parameter Configuration
+
+OpenIPMI has functions that make it easier to configure the LAN
+parameters of a LAN connection.  Note that the LAN parameters have a
+lock that OpenIPMI attempts to use.  If you read the LAN parameters,
+they will be locked until you either write them or clear the lock.
+
+.SS readlanparm <channel> <mc num> <channel>
+Read lanparm information from an MC and display it in the display window.
+
+.SS viewlanparm
+Show current lanparm information in the display window.
+
+.SS writelanparm <channel> <mc num> <channel>
+Write the current LANPARM information to an MC.  Note that this must be
+the MC that the parameters were read from.
+
+.SS clearlanparmlock [<channel> <mc num> <channel>]
+Clear a LANPARM lock.  If the MC is given, then the LANPARM lock is
+directly cleared.  If not given, then the LANPARM lock for the current
+parms is cleared.
+
+.SS setlanparm <config> [<selector>] <value>
+Set the given config item to the value.  The optional selector is used
+for items that take a selector, like "auth" or any of the items in
+"destination".
+
+.SH Platform Event Filter (PEF)
+
+OpenIPMI contains function to help manage the PEF settings on a BMC.
+Note that the PEF parameters have a lock that OpenIPMI attempts to
+use.  If you read the PEF parameters, they will be locked until you
+either write them or clear the lock.
+
+  readpef <channel> <mc num> - read pef information from an MC
+  clearpeflock [<channel> <mc num>] - Clear a PEF lock.  If the MC is given, then the PEF is directly cleared.  If not given, then the current PEF is cleared
+  viewpef - show current pef information
+  writepef <channel> <mc num> - write the current PEF information to an MC
+  setpef <config> [<selector>] <value> - Set the given config item to the value.  The optional selector is used for items that take a selector
+
+  pet <connection> <channel> <ip addr> <mac_addr> <eft selector> <policy num> <apt selector> <lan dest selector> - Set up the domain to send PET traps from the
+given connection to the given IP/MAC address over the given channel
 
 
 .SH OTHER COMMANDS

@@ -431,8 +431,8 @@ set_complete(ipmi_lanparm_t *lanparm, int err, lanparm_set_handler_t *elem)
 
 static void
 lanparm_config_set(ipmi_mc_t  *mc,
-	       ipmi_msg_t *rsp,
-	       void       *rsp_data)
+		   ipmi_msg_t *rsp,
+		   void       *rsp_data)
 {
     lanparm_set_handler_t *elem = rsp_data;
     ipmi_lanparm_t        *lanparm = elem->lanparm;
@@ -486,7 +486,7 @@ static void
 start_config_set(void *cb_data, int shutdown)
 {
     lanparm_set_handler_t *elem = cb_data;
-    int               rv;
+    int                   rv;
 
     if (shutdown) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -549,6 +549,9 @@ ipmi_lanparm_set_parm(ipmi_lanparm_t       *lanparm,
 	rv = ENOMEM;
 
     lanparm_unlock(lanparm);
+
+    if (rv)
+	ipmi_mem_free(elem);
 
     return rv;
 }
@@ -1429,6 +1432,8 @@ ipmi_lan_clear_lock(ipmi_lanparm_t       *lanparm,
     cl = ipmi_mem_alloc(sizeof(*cl));
     if (!cl)
 	return ENOMEM;
+    cl->done = done;
+    cl->cb_data = cb_data;
 
     data[0] = 0; /* Clear the lock. */
     rv = ipmi_lanparm_set_parm(lanparm, 0, data, 1, lock_cleared, cl);

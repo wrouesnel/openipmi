@@ -1,5 +1,10 @@
 2004-02-18 Corey Minyard <cminyard@mvista.com> 
 
+	* lib/lanparm.c: Initialize the callback data when cleaning
+	the lan parm lock.
+
+2004-02-18 Corey Minyard <cminyard@mvista.com> 
+
 	* configure.in: Reworked SNMP library configuration to check
 	for the include files first, then the libraries.
 

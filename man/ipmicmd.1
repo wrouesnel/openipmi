@@ -76,14 +76,24 @@ be dumped on your console.  That's a little strange looking, but IPMI
 is ansychronous underneath.  Note that the \-k option is synchronous,
 it will wait for the response or a timeout before returning.
 
-.SS 0f <netfn> <lun> <cmd> [data1 [data2 ...]]
+.SS 0f <lun> <netfn> <cmd> [data1 [data2 ...]]
 Send a command to the BMC you are connected to.
 
-.SS <channel> <IPMB addr> <netfn> <lun> <cmd> [data1 [data2 ...]]
-Send a command to a device on the IPMB bus.
+.SS <channel> [ipmb] <IPMB addr> <lun> <netfn> <cmd> [data1 [data2 ...]]
+Send a command to a device on the IPMB bus.  The "ipmb" string is optional.
 
-.SS <channel> 00 <IPMB addr> <netfn> <lun> <cmd> [data1 [data2 ...]]
+.SS <channel> 00 <IPMB addr> <lun> <netfn> <cmd> [data1 [data2 ...]]
 Send a broadcast command to a device on the IPMB bus.
+
+.SS <channel> lan <handle> <remote swid> <local swid> <lun> <netfn> <cmd> [data1 [data2 ...]]
+Send a command to a device over a LAN channel.  Note that this not the
+same as a LAN connection.  This sends a message through a local BMC to
+a remote system that is hooked up with a LAN connection.
+
+.SS test_lat <count> <command>
+Executes the given commands (one of the previous commands) count times
+and gives the average time per command to execute.  Note that "count"
+is hexadecimal.
 
 .SS help
 Display some help.
