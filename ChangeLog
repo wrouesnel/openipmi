@@ -1,3 +1,11 @@
+2005-01-01 Corey Minyard <cminyard@mvista.com> 
+
+	* swig/perl/test_pef: Add PEF tests.
+
+	* lanserv/lanserv_ipmi.c: Fixed a few problems with PEF handling.
+
+	* lib/pef.c: Fixed some problems with PEF handling.
+
 2004-12-31 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/lanserv.h, lanserv/lanserv_ipmi.c: Added PEF

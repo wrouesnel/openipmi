@@ -1071,7 +1071,7 @@ static int gctl(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 
     pefc->alert_startup_delay_enabled = (data[0] >> 3) & 1;
     pefc->startup_delay_enabled = (data[0] >> 2) & 1;
-    pefc->event_messages_enabled = (data[0] >> 2) & 1;
+    pefc->event_messages_enabled = (data[0] >> 1) & 1;
     pefc->pef_enabled = (data[0] >> 0) & 1;
 
     return 0;
@@ -1081,9 +1081,9 @@ static void sctl(ipmi_pef_config_t *pefc, pefparms_t *lp, unsigned char *data,
 		 unsigned int *data_len)
 {
     data[0] = ((pefc->alert_startup_delay_enabled << 3)
-	       || (pefc->startup_delay_enabled << 2)
-	       || (pefc->event_messages_enabled << 1)
-	       || pefc->pef_enabled);
+	       | (pefc->startup_delay_enabled << 2)
+	       | (pefc->event_messages_enabled << 1)
+	       | pefc->pef_enabled);
 }
 
 /* Action Global Control */
@@ -1471,6 +1471,7 @@ static int gas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     int           len;
 
     data++; /* Skip the revision byte. */
+    data_len--;
     pos = data[0] & 0x7f;
     t = &(pefc->alert_strings[pos]);
 
@@ -1524,7 +1525,7 @@ static void sas(ipmi_pef_config_t *pefc, pefparms_t *lp, unsigned char *data,
 	return;
     }
 
-    t += (block * 16);
+    t += ((block-1) * 16);
     len = strlen(t);
     if (len >= 16) {
 	memcpy(data+2, t, 16);
@@ -1703,6 +1704,7 @@ got_parm(ipmi_pef_t     *pef,
 	    /* End of string, either a subsize-block or a nil
 	       character in the data. */
 	    pefc->curr_sel++;
+	    pefc->curr_block = 1;
 	    if (pefc->curr_sel >= pefc->num_alert_strings)
 		goto done;
 	} else {
@@ -1720,7 +1722,7 @@ got_parm(ipmi_pef_t     *pef,
 	goto next_parm;
 
     err = ipmi_pef_get_parm(pef, pefc->curr_parm, pefc->curr_sel, 
-		    pefc->curr_block, got_parm, pefc);
+			    pefc->curr_block, got_parm, pefc);
     if (err)
 	goto done;
 
@@ -1907,9 +1909,9 @@ set_done(ipmi_pef_t *pef,
 
     case IPMI_PEFPARM_EVENT_FILTER_TABLE:
 	pefc->curr_sel++;
-	if (pefc->curr_sel >= pefc->num_event_filters) {
+	if (pefc->curr_sel > pefc->num_event_filters) {
 	    pefc->curr_parm++;
-	    pefc->curr_sel = 0;
+	    pefc->curr_sel = 1;
 	}
 	data[0] = pefc->curr_sel;
 	break;
@@ -1926,7 +1928,7 @@ set_done(ipmi_pef_t *pef,
 
     case IPMI_PEFPARM_ALERT_POLICY_TABLE:
 	pefc->curr_sel++;
-	if (pefc->curr_sel >= pefc->num_alert_policies) {
+	if (pefc->curr_sel > pefc->num_alert_policies) {
 	    pefc->curr_parm++;
 	    pefc->curr_sel = 0;
 	}
@@ -1953,7 +1955,7 @@ set_done(ipmi_pef_t *pef,
 	break;
 
     case IPMI_PEFPARM_ALERT_STRING:
-	/* curr_sel increment is done write after the send formatting,
+	/* curr_sel increment is done right after the send formatting,
 	   because we don't know until there if it's the end of the
 	   string. */
 	if (pefc->curr_sel >= pefc->num_alert_strings)

@@ -1862,10 +1862,12 @@ handle_ipmi_set_pef_config_parms(lan_data_t *lan,
 	    err =  IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
 	else if (set >= lan->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else if (msg->data[2] == 0)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
 	    int dlen = msg->len - 3;
 	    set = msg->data[1] & 0x7f;
-	    block = msg->data[2];
+	    block = msg->data[2] - 1;
 	    if (((block*16) + dlen) > MAX_ALERT_STRING_LEN) {
 		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
 		break;
@@ -2009,14 +2011,16 @@ handle_ipmi_get_pef_config_parms(lan_data_t *lan,
 	set = msg->data[1] & 0x7f;
 	if (set >= lan->pef.num_alert_strings)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
+	else if (msg->data[2] == 0)
+	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    block = msg->data[2];
+	    block = msg->data[2] - 1;
 	    if ((block*16) > MAX_ALERT_STRING_LEN) {
 		err = IPMI_PARAMETER_OUT_OF_RANGE_CC;
 		break;
 	    }
 	    tmpdata[0] = set;
-	    tmpdata[1] = block;
+	    tmpdata[1] = block + 1;
 	    memcpy(tmpdata+2, lan->pef.alert_strings[set]+(block*16), 16);
 	    data = tmpdata;
 	    length = 18;
@@ -2447,7 +2451,6 @@ ipmi_lan_init(lan_data_t *lan)
     lan->pef.num_alert_strings = MAX_ALERT_STRINGS;
     for (i=0; i<MAX_ALERT_STRINGS; i++) {
 	lan->pef.alert_string_keys[i][0] = i;
-	lan->pef.alert_strings[i][0] = i;
     }
 
     /* Force user 1 to be a null user. */
