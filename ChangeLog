@@ -17,6 +17,8 @@
 
 	* swig/perl/test_pef, swig/perl/test_lanparm: Minor perl cleanups.
 
+	* ui/ui.c: Fixed a parm messed up by an interface change.
+
 	* configure.in: Move to version 1.4.7.
 
 2005-01-01 Corey Minyard <cminyard@mvista.com> 

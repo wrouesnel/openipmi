@@ -3994,8 +3994,8 @@ display_pef_config(void)
 		display_pad_out(ask_table[j].fmt, val);
 	    display_pad_out("\n");
 	}
-	rv = ipmi_pefconfig_get_alert_string(pef_config, i,
-					     data, sizeof(data));
+	len = sizeof(data);
+	rv = ipmi_pefconfig_get_alert_string(pef_config, i, data, &len);
 	if (rv)
 	    display_pad_out("    alert_string: error %x\n", rv);
 	else
