@@ -108,16 +108,6 @@ typedef struct cmd_handler_s
     struct cmd_handler_s *next, *prev;
 } cmd_handler_t;
 
-struct ipmi_ll_event_handler_id_s
-{
-    ipmi_con_t            *ipmi;
-    ipmi_ll_evt_handler_t handler;
-    void                  *event_data;
-    void                  *data2;
-
-    ipmi_ll_event_handler_id_t *next, *prev;
-};
-
 typedef struct smi_data_s
 {
     int                        refcount;
@@ -131,8 +121,8 @@ typedef struct smi_data_s
     cmd_handler_t              *cmd_handlers;
     ipmi_lock_t                *cmd_handlers_lock;
     os_hnd_fd_id_t             *fd_wait_id;
-    ipmi_ll_event_handler_id_t *event_handlers;
-    ipmi_lock_t                *event_handlers_lock;
+    ipmi_lock_t                *smi_lock;
+    locked_list_t              *event_handlers;
 
     unsigned char              slave_addr;
 
@@ -172,11 +162,10 @@ static int smi_valid_ipmi(ipmi_con_t *ipmi)
 static void
 smi_cleanup(ipmi_con_t *ipmi)
 {
-    smi_data_t                 *smi;
-    pending_cmd_t              *cmd, *next_cmd;
-    cmd_handler_t              *hnd_to_free, *next_hnd;
-    ipmi_ll_event_handler_id_t *evt_to_free, *next_evt;
-    int                        rv;
+    smi_data_t    *smi;
+    pending_cmd_t *cmd, *next_cmd;
+    cmd_handler_t *hnd_to_free, *next_hnd;
+    int           rv;
 
     /* First order of business is to remove it from the SMI list. */
     smi = (smi_data_t *) ipmi->con_data;
@@ -229,15 +218,6 @@ smi_cleanup(ipmi_con_t *ipmi)
 	hnd_to_free = next_hnd;
     }
 
-    evt_to_free = smi->event_handlers;
-    smi->event_handlers = NULL;
-    while (evt_to_free) {
-	evt_to_free->ipmi = NULL;
-	next_evt = evt_to_free->next;
-	ipmi_mem_free(evt_to_free);
-	evt_to_free = next_evt;
-    }
-
     if (smi->audit_info) {
 	rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, smi->audit_timer);
 	if (rv)
@@ -251,8 +231,8 @@ smi_cleanup(ipmi_con_t *ipmi)
     if (ipmi->oem_data_cleanup)
 	ipmi->oem_data_cleanup(ipmi);
     ipmi_con_attr_cleanup(ipmi);
-    if (smi->event_handlers_lock)
-	ipmi_destroy_lock(smi->event_handlers_lock);
+    if (smi->smi_lock)
+	ipmi_destroy_lock(smi->smi_lock);
     if (smi->cmd_handlers_lock)
 	ipmi_destroy_lock(smi->cmd_handlers_lock);
     if (smi->cmd_lock)
@@ -261,6 +241,8 @@ smi_cleanup(ipmi_con_t *ipmi)
 	ipmi->os_hnd->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
     if (smi->con_change_handlers)
 	locked_list_destroy(smi->con_change_handlers);
+    if (smi->event_handlers)
+	locked_list_destroy(smi->event_handlers);
     if (smi->ipmb_change_handlers)
 	locked_list_destroy(smi->ipmb_change_handlers);
 
@@ -319,33 +301,6 @@ remove_cmd(ipmi_con_t    *ipmi,
 	cmd->prev->next = cmd->next;
     else
 	smi->pending_cmds = cmd->next;
-}
-
-/* Must be called with event_lock held. */
-static void
-add_event_handler(ipmi_con_t                 *ipmi,
-		  smi_data_t                 *smi,
-		  ipmi_ll_event_handler_id_t *event)
-{
-    event->ipmi = ipmi;
-
-    event->next = smi->event_handlers;
-    event->prev = NULL;
-    if (smi->event_handlers)
-	smi->event_handlers->prev = event;
-    smi->event_handlers = event;
-}
-
-static void
-remove_event_handler(smi_data_t                 *smi,
-		     ipmi_ll_event_handler_id_t *event)
-{
-    if (event->next)
-	event->next->prev = event->prev;
-    if (event->prev)
-	event->prev->next = event->next;
-    else
-	smi->event_handlers = event->next;
 }
 
 static int
@@ -750,6 +705,74 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     ipmi_unlock(smi->cmd_lock);
 }
 
+typedef struct call_event_handler_s
+{
+    smi_data_t   *smi;
+    ipmi_addr_t  *addr;
+    unsigned int addr_len;
+    ipmi_event_t *event;
+} call_event_handler_t;
+
+static int
+call_event_handler(void *cb_data, void *item1, void *item2)
+{
+    call_event_handler_t  *info = cb_data;
+    ipmi_ll_evt_handler_t handler = item1;
+
+    handler(info->smi->ipmi, info->addr, info->addr_len, info->event, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+smi_add_event_handler(ipmi_con_t            *ipmi,
+		      ipmi_ll_evt_handler_t handler,
+		      void                  *cb_data)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+    int        rv = 0;
+
+    ipmi_lock(smi->smi_lock);
+    if (! locked_list_add(smi->event_handlers, handler, cb_data))
+	rv = ENOMEM;
+    if (!rv) {
+	if (locked_list_num_entries(smi->event_handlers) == 1) {
+	    int val = 1;
+	    if (smi->using_socket)
+		rv = ioctl(smi->fd, SIOCIPMIGETEVENT, &val);
+	    else
+		rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
+	    if (rv == -1) {
+		locked_list_remove(smi->event_handlers, handler, cb_data);
+		rv = errno;
+	    }
+	}
+    }
+    ipmi_unlock(smi->smi_lock);
+    return rv;
+}
+
+static int
+smi_remove_event_handler(ipmi_con_t            *ipmi,
+			 ipmi_ll_evt_handler_t handler,
+			 void                  *cb_data)
+{
+    smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+    int        rv = 0;
+
+    ipmi_lock(smi->smi_lock);
+    if (! locked_list_remove(smi->event_handlers, handler, cb_data))
+	rv = EINVAL;
+    if (locked_list_num_entries(smi->event_handlers) == 0) {
+	int val = 0;
+	if (smi->using_socket)
+	    ioctl(smi->fd, SIOCIPMIGETEVENT, &val);
+	else
+	    ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
+    }
+    ipmi_unlock(smi->smi_lock);
+    return rv;
+}
+
 static ipmi_mcid_t invalid_mcid = IPMI_MCID_INVALID;
 
 static void
@@ -758,12 +781,12 @@ handle_async_event(ipmi_con_t  *ipmi,
 		   unsigned int addr_len,
 		   ipmi_msg_t   *msg)
 {
-    smi_data_t                 *smi = (smi_data_t *) ipmi->con_data;
-    ipmi_ll_event_handler_id_t *elem, *next;
-    ipmi_event_t               *event;
-    ipmi_time_t                timestamp;
-    unsigned int               type = msg->data[2];
-    unsigned int               record_id = ipmi_get_uint16(msg->data);
+    smi_data_t           *smi = (smi_data_t *) ipmi->con_data;
+    ipmi_event_t         *event;
+    ipmi_time_t          timestamp;
+    unsigned int         type = msg->data[2];
+    unsigned int         record_id = ipmi_get_uint16(msg->data);
+    call_event_handler_t info;
 
     if (type < 0xe0)
 	timestamp = ipmi_seconds_to_time(ipmi_get_uint32(msg->data+3));
@@ -778,20 +801,12 @@ handle_async_event(ipmi_con_t  *ipmi,
 	/* We missed it here, but the SEL fetch should catch it later. */
 	return;
 
-    ipmi_lock(smi->event_handlers_lock);
-    elem = smi->event_handlers;
-    while (elem != NULL) {
-	/* Fetch the next element now, so the user can delete the
-           current one. */
-	next = elem->next;
+    info.smi = smi;
+    info.addr = addr;
+    info.addr_len = addr_len;
+    info.event = event;
+    locked_list_iterate(smi->event_handlers, call_event_handler, &info);
 
-	/* call the user handler. */
-	elem->handler(ipmi, addr, addr_len,
-		      event, elem->event_data, elem->data2);
-
-	elem = next;
-    }
-    ipmi_unlock(smi->event_handlers_lock);
     ipmi_event_free(event);
 }
 
@@ -1079,95 +1094,6 @@ smi_send_command(ipmi_con_t            *ipmi,
 }
 
 static int
-smi_register_for_events(ipmi_con_t                 *ipmi,
-			ipmi_ll_evt_handler_t      handler,
-			void                       *event_data,
-			void                       *data2,
-			ipmi_ll_event_handler_id_t **id)
-{
-    smi_data_t                 *smi;
-    int                        rv = 0;
-    int                        was_empty;
-    ipmi_ll_event_handler_id_t *entry;
-
-    smi = (smi_data_t *) ipmi->con_data;
-
-    entry = ipmi_mem_alloc(sizeof(*entry));
-    if (!entry) {
-	rv = ENOMEM;
-	goto out_unlock2;
-    }
-
-    entry->handler = handler;
-    entry->event_data = event_data;
-    entry->data2 = data2;
-
-    ipmi_lock(smi->event_handlers_lock);
-    was_empty = smi->event_handlers == NULL;
-
-    add_event_handler(ipmi, smi, entry);
-
-    if (was_empty) {
-	int val = 1;
-	if (smi->using_socket)
-	    rv = ioctl(smi->fd, SIOCIPMIGETEVENT, &val);
-	else
-	    rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
-	if (rv == -1) {
-	    remove_event_handler(smi, entry);
-	    rv = errno;
-	    goto out_unlock;
-	}
-    }
-
-    if (id)
-	*id = entry;
-
- out_unlock:
-    ipmi_unlock(smi->event_handlers_lock);
- out_unlock2:
-    return rv;
-}
-
-static int
-smi_deregister_for_events(ipmi_con_t                 *ipmi,
-			  ipmi_ll_event_handler_id_t *id)
-{
-    smi_data_t *smi;
-    int        rv = 0;
-
-    smi = (smi_data_t *) ipmi->con_data;
-
-    if (id->ipmi != ipmi) {
-	rv = EINVAL;
-	goto out_unlock2;
-    }
-
-    ipmi_lock(smi->event_handlers_lock);
-
-    remove_event_handler(smi, id);
-    id->ipmi = NULL;
-
-    if (smi->event_handlers == NULL) {
-	int val = 0;
-	if (smi->using_socket)
-	    rv = ioctl(smi->fd, SIOCIPMIGETEVENT, &val);
-	else
-	    rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
-	if (rv == -1) {
-	    rv = errno;
-	    goto out_unlock;
-	}
-    }
-
- out_unlock:
-    ipmi_unlock(smi->event_handlers_lock);
- out_unlock2:
-
-    return rv;
-}
-
-static int
 smi_send_response(ipmi_con_t   *ipmi,
 		  ipmi_addr_t  *addr,
 		  unsigned int addr_len,
@@ -1285,8 +1211,8 @@ cleanup_con(ipmi_con_t *ipmi)
     }
 
     if (smi) {
-	if (smi->event_handlers_lock)
-	    ipmi_destroy_lock(smi->event_handlers_lock);
+	if (smi->smi_lock)
+	    ipmi_destroy_lock(smi->smi_lock);
 	if (smi->cmd_handlers_lock)
 	    ipmi_destroy_lock(smi->cmd_handlers_lock);
 	if (smi->cmd_lock)
@@ -1297,6 +1223,8 @@ cleanup_con(ipmi_con_t *ipmi)
 	    handlers->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
 	if (smi->con_change_handlers)
 	    locked_list_destroy(smi->con_change_handlers);
+	if (smi->event_handlers)
+	    locked_list_destroy(smi->event_handlers);
 	if (smi->ipmb_change_handlers)
 	    locked_list_destroy(smi->ipmb_change_handlers);
 	ipmi_mem_free(smi);
@@ -1600,6 +1528,12 @@ setup(int          if_num,
 	goto out_err;
     }
 
+    smi->event_handlers = locked_list_alloc(handlers);
+    if (!smi->event_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
     smi->ipmb_change_handlers = locked_list_alloc(handlers);
     if (!smi->ipmb_change_handlers) {
 	rv = ENOMEM;
@@ -1615,7 +1549,7 @@ setup(int          if_num,
     if (rv)
 	goto out_err;
 
-    rv = ipmi_create_lock_os_hnd(handlers, &smi->event_handlers_lock);
+    rv = ipmi_create_lock_os_hnd(handlers, &smi->smi_lock);
     if (rv)
 	goto out_err;
 
@@ -1628,8 +1562,8 @@ setup(int          if_num,
     ipmi->add_con_change_handler = smi_add_con_change_handler;
     ipmi->remove_con_change_handler = smi_remove_con_change_handler;
     ipmi->send_command = smi_send_command;
-    ipmi->register_for_events = smi_register_for_events;
-    ipmi->deregister_for_events = smi_deregister_for_events;
+    ipmi->add_event_handler = smi_add_event_handler;
+    ipmi->remove_event_handler = smi_remove_event_handler;
     ipmi->send_response = smi_send_response;
     ipmi->register_for_command = smi_register_for_command;
     ipmi->deregister_for_command = smi_deregister_for_command;
@@ -1675,12 +1609,12 @@ setup(int          if_num,
 }
 
 int
-ipmi_smi_setup_con(int               if_num,
-		   os_handler_t      *handlers,
-		   void              *user_data,
-		   ipmi_con_t        **new_con)
+ipmi_smi_setup_con(int          if_num,
+		   os_handler_t *handlers,
+		   void         *user_data,
+		   ipmi_con_t   **new_con)
 {
-    int                          err;
+    int err;
 
     if (!handlers->add_fd_to_wait_for
 	|| !handlers->remove_fd_to_wait_for

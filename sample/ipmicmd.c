@@ -292,8 +292,7 @@ event_handler(ipmi_con_t   *ipmi,
 	      ipmi_addr_t  *addr,
 	      unsigned int addr_len,
 	      ipmi_event_t *event,
-	      void         *data1,
-	      void         *data2)
+	      void         *cb_data)
 {
     unsigned int  record_id = ipmi_event_get_record_id(event);
     unsigned int  type = ipmi_event_get_type(event);
@@ -773,7 +772,7 @@ main(int argc, char *argv[])
     }
 
     if (interactive) {
-	rv = con->register_for_events(con, event_handler, NULL, NULL, NULL);
+	rv = con->add_event_handler(con, event_handler, NULL);
 	if (rv) {
 	    fprintf(stderr, "Could not set to get events: %x\n", rv);
 	}

@@ -1198,6 +1198,29 @@ ipmi_entity_add_child(ipmi_entity_t       *ent,
     return rv;
 }
 
+static int
+ipmi_entity_remove_child_internal(ipmi_entity_t     *ent,
+				  ipmi_entity_t     *child)
+{
+    int rv = 0;
+
+    CHECK_ENTITY_LOCK(ent);
+    CHECK_ENTITY_LOCK(child);
+
+    if (! locked_list_remove_nolock(ent->child_entities, child, NULL))
+	rv = EINVAL;
+    locked_list_remove_nolock(child->parent_entities, ent, NULL);
+
+    ent->presence_possibly_changed = 1;
+
+    if (!rv) {
+	ent->changed = 1;
+	child->changed = 1;
+    }
+
+    return rv;
+}
+
 int
 ipmi_entity_remove_child(ipmi_entity_t     *ent,
 			 ipmi_entity_t     *child)
@@ -3499,7 +3522,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	} else {
 	    /* It's an EAR, so handling removing the children. */
 	    for (j=0; j<found->cent_next; j++)
-		ipmi_entity_remove_child(found->ent, found->cent[j]);
+		ipmi_entity_remove_child_internal(found->ent, found->cent[j]);
 	}
     }
 

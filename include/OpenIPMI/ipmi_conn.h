@@ -44,9 +44,6 @@
 extern "C" {
 #endif
 
-/* This represents a registration for an event handler. */
-typedef struct ipmi_ll_event_handler_id_s ipmi_ll_event_handler_id_t;
-
 /* Called when an IPMI response to a command comes in from the BMC. */
 typedef int (*ipmi_ll_rsp_handler_t)(ipmi_con_t   *ipmi,
 				     ipmi_msgi_t  *rspi);
@@ -61,8 +58,7 @@ typedef void (*ipmi_ll_evt_handler_t)(ipmi_con_t   *ipmi,
 				      ipmi_addr_t  *addr,
 				      unsigned int addr_len,
 				      ipmi_event_t *event,
-				      void         *event_data,
-				      void         *data2);
+				      void         *cb_data);
 
 /* Called when an incoming command is received by the IPMI code. */
 typedef void (*ipmi_ll_cmd_handler_t)(ipmi_con_t   *ipmi,
@@ -209,17 +205,15 @@ struct ipmi_con_s
 			ipmi_ll_rsp_handler_t rsp_handler,
 			ipmi_msgi_t           *rspi);
 
-    /* Register to receive IPMI events from the interface.  Return a
-       handle that can be used for later deregistration. */
-    int (*register_for_events)(ipmi_con_t                 *ipmi,
-			       ipmi_ll_evt_handler_t      handler,
-			       void                       *event_data,
-			       void                       *data2,
-			       ipmi_ll_event_handler_id_t **id);
+    /* Register to receive IPMI events from the interface. */
+    int (*add_event_handler)(ipmi_con_t                 *ipmi,
+			     ipmi_ll_evt_handler_t      handler,
+			     void                       *cb_data);
 
-    /* Remove an event registration. */
-    int (*deregister_for_events)(ipmi_con_t                 *ipmi,
-				 ipmi_ll_event_handler_id_t *id);
+    /* Remove an event handler. */
+    int (*remove_event_handler)(ipmi_con_t                 *ipmi,
+				ipmi_ll_evt_handler_t      handler,
+				void                       *cb_data);
 
     /* Send a response message.  This is not supported on all
        interfaces, primarily only on system management interfaces.  If

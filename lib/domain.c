@@ -221,8 +221,6 @@ struct ipmi_domain_s
     int           con_active[MAX_CONS];
     unsigned char con_ipmb_addr[MAX_CONS];
 
-    ipmi_ll_event_handler_id_t *ll_event_id[MAX_CONS];
-
     int           con_up[MAX_CONS];
 
     /* A list of connection fail handler, separate from the main one. */
@@ -2687,10 +2685,9 @@ ll_event_handler(ipmi_con_t   *ipmi,
 		 ipmi_addr_t  *addr,
 		 unsigned int addr_len,
 		 ipmi_event_t *event,
-		 void         *event_data,
-		 void         *data2)
+		 void         *cb_data)
 {
-    ipmi_domain_t                *domain = data2;
+    ipmi_domain_t                *domain = cb_data;
     ipmi_mc_t                    *mc;
     int                          rv;
     ipmi_system_interface_addr_t si;
@@ -2801,14 +2798,10 @@ ipmi_domain_disable_events(ipmi_domain_t *domain)
     CHECK_DOMAIN_LOCK(domain);
 
     for (i=0; i<MAX_CONS; i++) {
-	if (! domain->ll_event_id[i])
-	    continue;
-
-	rv = domain->conn[i]->deregister_for_events(domain->conn[i],
-						    domain->ll_event_id[i]);
-	if (!rv)
-	    domain->ll_event_id[i] = NULL;
-	else if (!return_rv)
+	rv = domain->conn[i]->remove_event_handler(domain->conn[i],
+						   ll_event_handler,
+						   domain);
+	if (!return_rv)
 	    return_rv = rv;
     }
     return return_rv;
@@ -2824,16 +2817,12 @@ ipmi_domain_enable_events(ipmi_domain_t *domain)
     CHECK_DOMAIN_LOCK(domain);
 
     for (i=0; i<MAX_CONS; i++) {
-	if (domain->ll_event_id[i])
-	    continue;
-
 	if (! domain->conn[i])
 	    continue;
 
-	rv = domain->conn[i]->register_for_events(domain->conn[i],
-						  ll_event_handler,
-						  NULL, domain,
-						  &(domain->ll_event_id[i]));
+	rv = domain->conn[i]->add_event_handler(domain->conn[i],
+						ll_event_handler,
+						domain);
 	if (!return_rv)
 	    return_rv = rv;
     }
@@ -3566,14 +3555,13 @@ real_close_connection(ipmi_domain_t *domain)
     for (i=0; i<MAX_CONS; i++) {
 	ipmi[i] = domain->conn[i];
 
-	if (!domain->conn[i])
+	if (!ipmi[i])
 	    continue;
 
-	if (domain->ll_event_id[i])
-	    domain->conn[i]->deregister_for_events(domain->conn[i],
-						   domain->ll_event_id[i]);
-
-	/* Remove the connection fail handler. */
+	/* Remove all the handlers. */
+	domain->conn[i]->remove_event_handler(domain->conn[i],
+					      ll_event_handler,
+					      domain);
 	domain->conn[i]->remove_con_change_handler(domain->conn[i],
 						   ll_con_changed,
 						   domain);

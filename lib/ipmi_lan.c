@@ -91,16 +91,6 @@ dump_hex(void *vdata, int len)
 
 typedef struct lan_data_s lan_data_t;
 
-struct ipmi_ll_event_handler_id_s
-{
-    ipmi_con_t            *ipmi;
-    ipmi_ll_evt_handler_t handler;
-    void                  *event_data;
-    void                  *data2;
-
-    ipmi_ll_event_handler_id_t *next, *prev;
-};
-
 typedef struct audit_timer_info_s
 {
     int        cancelled;
@@ -324,8 +314,7 @@ struct lan_data_s
     os_hnd_timer_id_t          *timer;
 
     os_hnd_fd_id_t             *fd_wait_id;
-    ipmi_ll_event_handler_id_t *event_handlers;
-    ipmi_lock_t                *event_handlers_lock;
+    locked_list_t              *event_handlers;
 
     os_hnd_timer_id_t          *audit_timer;
     audit_timer_info_t         *audit_info;
@@ -1068,21 +1057,22 @@ lan_add_con(lan_data_t *lan)
     ipmi_unlock(lan_list_lock);
 }
 
+/* Must be called with the lan list lock held. */
 static void
-lan_remove_con(lan_data_t *lan)
+lan_remove_con_nolock(lan_data_t *lan)
 {
     int i;
     if (!lan->link.lan)
 	/* Hasn't been initialized. */
 	return;
-    ipmi_lock(lan_list_lock);
     lan->link.prev->next = lan->link.next;
     lan->link.next->prev = lan->link.prev;
+    lan->link.lan = NULL;
     for (i=0; i<lan->cparm.num_ip_addr; i++) {
 	lan->ip_link[i].prev->next = lan->link.next;
 	lan->ip_link[i].next->prev = lan->link.prev;
+	lan->ip_link[i].lan = NULL;
     }
-    ipmi_unlock(lan_list_lock);
 }
 
 static lan_data_t *
@@ -1164,37 +1154,14 @@ lan_put(ipmi_con_t *ipmi)
     ipmi_lock(lan_list_lock);
     lan->refcount--;
     done = lan->refcount == 0;
+
+    /* If done, remove it before we release the lock. */
+    if (done)
+	lan_remove_con_nolock(lan);
     ipmi_unlock(lan_list_lock);
 
     if (done)
 	lan_cleanup(ipmi);
-}
-
-/* Must be called with event_lock held. */
-static void
-add_event_handler(ipmi_con_t                 *ipmi,
-		  lan_data_t                 *lan,
-		  ipmi_ll_event_handler_id_t *event)
-{
-    event->ipmi = ipmi;
-
-    event->next = lan->event_handlers;
-    event->prev = NULL;
-    if (lan->event_handlers)
-	lan->event_handlers->prev = event;
-    lan->event_handlers = event;
-}
-
-static void
-remove_event_handler(lan_data_t                 *lan,
-		     ipmi_ll_event_handler_id_t *event)
-{
-    if (event->next)
-	event->next->prev = event->prev;
-    if (event->prev)
-	event->prev->next = event->next;
-    else
-	lan->event_handlers = event->next;
 }
 
 static int
@@ -2081,6 +2048,50 @@ rsp_timeout_handler(void              *cb_data,
     ipmi_mem_free(info);
 }
 
+typedef struct call_event_handler_s
+{
+    lan_data_t   *lan;
+    ipmi_addr_t  *addr;
+    unsigned int addr_len;
+    ipmi_event_t *event;
+} call_event_handler_t;
+
+static int
+call_event_handler(void *cb_data, void *item1, void *item2)
+{
+    call_event_handler_t  *info = cb_data;
+    ipmi_ll_evt_handler_t handler = item1;
+
+    handler(info->lan->ipmi, info->addr, info->addr_len, info->event, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static int
+lan_add_event_handler(ipmi_con_t            *ipmi,
+		      ipmi_ll_evt_handler_t handler,
+		      void                  *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (locked_list_add(lan->event_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+static int
+lan_remove_event_handler(ipmi_con_t            *ipmi,
+			 ipmi_ll_evt_handler_t handler,
+			 void                  *cb_data)
+{
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+
+    if (locked_list_remove(lan->event_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
 static ipmi_mcid_t invalid_mcid = IPMI_MCID_INVALID;
 
 static void
@@ -2089,10 +2100,10 @@ handle_async_event(ipmi_con_t   *ipmi,
 		   unsigned int addr_len,
 		   ipmi_msg_t   *msg)
 {
-    lan_data_t                 *lan = (lan_data_t *) ipmi->con_data;
-    ipmi_ll_event_handler_id_t *elem, *next;
-    ipmi_event_t               *event = NULL;
-    ipmi_time_t                timestamp;
+    lan_data_t           *lan = (lan_data_t *) ipmi->con_data;
+    ipmi_event_t         *event = NULL;
+    ipmi_time_t          timestamp;
+    call_event_handler_t info;
 
     if (msg) {
 	unsigned int type = msg->data[2];
@@ -2112,20 +2123,12 @@ handle_async_event(ipmi_con_t   *ipmi,
 	    return;
     }
 
-    ipmi_lock(lan->event_handlers_lock);
-    elem = lan->event_handlers;
-    while (elem != NULL) {
-	/* Fetch the next element now, so the user can delete the
-           current one. */
-	next = elem->next;
+    info.lan = lan;
+    info.addr = addr;
+    info.addr_len = addr_len;
+    info.event = event;
+    locked_list_iterate(lan->event_handlers, call_event_handler, &info);
 
-	/* call the user handler. */
-	elem->handler(ipmi, addr, addr_len, event,
-		      elem->event_data, elem->data2);
-
-	elem = next;
-    }
-    ipmi_unlock(lan->event_handlers_lock);
     if (event)
 	ipmi_event_free(event);
 }
@@ -2996,60 +2999,6 @@ lan_send_command(ipmi_con_t            *ipmi,
 }
 
 static int
-lan_register_for_events(ipmi_con_t                 *ipmi,
-			ipmi_ll_evt_handler_t      handler,
-			void                       *event_data,
-			void                       *data2,
-			ipmi_ll_event_handler_id_t **id)
-{
-    lan_data_t                 *lan;
-    int                        rv = 0;
-    ipmi_ll_event_handler_id_t *entry;
-
-    lan = (lan_data_t *) ipmi->con_data;
-
-    entry = ipmi_mem_alloc(sizeof(*entry));
-    if (!entry) {
-	rv = ENOMEM;
-	goto out_unlock2;
-    }
-
-    entry->handler = handler;
-    entry->event_data = event_data;
-    entry->data2 = data2;
-
-    ipmi_lock(lan->event_handlers_lock);
-    add_event_handler(ipmi, lan, entry);
-    ipmi_unlock(lan->event_handlers_lock);
- out_unlock2:
-    return rv;
-}
-
-static int
-lan_deregister_for_events(ipmi_con_t                 *ipmi,
-			  ipmi_ll_event_handler_id_t *id)
-{
-    lan_data_t *lan;
-    int        rv = 0;
-
-    lan = (lan_data_t *) ipmi->con_data;
-
-    if (id->ipmi != ipmi) {
-	rv = EINVAL;
-	goto out_unlock2;
-    }
-
-    ipmi_lock(lan->event_handlers_lock);
-    remove_event_handler(lan, id);
-    id->ipmi = NULL;
-    ipmi_mem_free(id);
-    ipmi_unlock(lan->event_handlers_lock);
- out_unlock2:
-
-    return rv;
-}
-
-static int
 lan_send_response(ipmi_con_t   *ipmi,
 		  ipmi_addr_t  *addr,
 		  unsigned int addr_len,
@@ -3116,15 +3065,9 @@ send_close_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 static void
 lan_cleanup(ipmi_con_t *ipmi)
 {
-    lan_data_t                   *lan;
-    ipmi_ll_event_handler_id_t   *evt_to_free, *next_evt;
-    int                          rv;
-    int                          i;
-
-    /* First order of business is to remove it from the LAN list. */
-    lan = (lan_data_t *) ipmi->con_data;
-
-    lan_remove_con(lan);
+    lan_data_t *lan = ipmi->con_data;
+    int        rv;
+    int        i;
 
     /* After this point no other operations can occur on this ipmi
        interface, so it's safe. */
@@ -3213,26 +3156,17 @@ lan_cleanup(ipmi_con_t *ipmi)
     }
     ipmi_unlock(lan->seq_num_lock);
 
-    evt_to_free = lan->event_handlers;
-    lan->event_handlers = NULL;
-    while (evt_to_free) {
-	evt_to_free->ipmi = NULL;
-	next_evt = evt_to_free->next;
-	ipmi_mem_free(evt_to_free);
-	evt_to_free = next_evt;
-    }
-
     if (ipmi->oem_data_cleanup)
 	ipmi->oem_data_cleanup(ipmi);
     ipmi_con_attr_cleanup(ipmi);
-    if (lan->event_handlers_lock)
-	ipmi_destroy_lock(lan->event_handlers_lock);
     if (lan->con_change_lock)
 	ipmi_destroy_lock(lan->con_change_lock);
     if (lan->ip_lock)
 	ipmi_destroy_lock(lan->ip_lock);
     if (lan->con_change_handlers)
 	locked_list_destroy(lan->con_change_handlers);
+    if (lan->event_handlers)
+	locked_list_destroy(lan->event_handlers);
     if (lan->ipmb_change_handlers)
 	locked_list_destroy(lan->ipmb_change_handlers);
     if (lan->seq_num_lock)
@@ -3271,7 +3205,6 @@ lan_close_connection_done(ipmi_con_t            *ipmi,
 
     lan = (lan_data_t *) ipmi->con_data;
 
-printf("***In close connection\n");
     ipmi_lock(lan_list_lock);
     if (lan->users > 1) {
 	/* The connection has been reused, just report it going
@@ -3283,11 +3216,17 @@ printf("***In close connection\n");
 	lan_put(ipmi);
 	return 0;
     }
+
+    /* Once we begin the shutdown process, we don't want anyone else
+       reusing the connection. */
+    lan_remove_con_nolock(lan);
     ipmi_unlock(lan_list_lock);
 
     lan->close_done = handler;
     lan->close_cb_data = cb_data;
 
+    /* Put it once for the lan_valid_ipmi() call, then once to
+       actually destroy it. */
     lan_put(ipmi);
     lan_put(ipmi);
     return 0;
@@ -3312,16 +3251,18 @@ cleanup_con(ipmi_con_t *ipmi)
     }
 
     if (lan) {
-	lan_remove_con(lan);
+	/* This is only called in the case of an error at startup, so
+	   there is no need to remove it from the LAN lists (hashes),
+	   because it won't be there yet. */
 
-	if (lan->event_handlers_lock)
-	    ipmi_destroy_lock(lan->event_handlers_lock);
 	if (lan->con_change_lock)
 	    ipmi_destroy_lock(lan->con_change_lock);
 	if (lan->ip_lock)
 	    ipmi_destroy_lock(lan->ip_lock);
 	if (lan->con_change_handlers)
 	    locked_list_destroy(lan->con_change_handlers);
+	if (lan->event_handlers)
+	    locked_list_destroy(lan->event_handlers);
 	if (lan->ipmb_change_handlers)
 	    locked_list_destroy(lan->ipmb_change_handlers);
 	if (lan->seq_num_lock)
@@ -4723,6 +4664,12 @@ printf("***REusing connection!\n");
 	goto out_err;
     }
 
+    lan->event_handlers = locked_list_alloc(handlers);
+    if (!lan->event_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
     lan->ipmb_change_handlers = locked_list_alloc(handlers);
     if (!lan->ipmb_change_handlers) {
 	rv = ENOMEM;
@@ -4733,10 +4680,6 @@ printf("***REusing connection!\n");
     if (rv)
 	goto out_err;
 
-    rv = ipmi_create_lock_os_hnd(handlers, &lan->event_handlers_lock);
-    if (rv)
-	goto out_err;
-
     ipmi->start_con = lan_start_con;
     ipmi->set_ipmb_addr = lan_set_ipmb_addr;
     ipmi->add_ipmb_addr_handler = lan_add_ipmb_addr_handler;
@@ -4744,8 +4687,8 @@ printf("***REusing connection!\n");
     ipmi->add_con_change_handler = lan_add_con_change_handler;
     ipmi->remove_con_change_handler = lan_remove_con_change_handler;
     ipmi->send_command = lan_send_command;
-    ipmi->register_for_events = lan_register_for_events;
-    ipmi->deregister_for_events = lan_deregister_for_events;
+    ipmi->add_event_handler = lan_add_event_handler;
+    ipmi->remove_event_handler = lan_remove_event_handler;
     ipmi->send_response = lan_send_response;
     ipmi->register_for_command = lan_register_for_command;
     ipmi->deregister_for_command = lan_deregister_for_command;
@@ -4763,7 +4706,8 @@ printf("***REusing connection!\n");
     if (rv)
 	goto out_err;
 
-    /* Add it to the list of valid IPMIs so it will validate. */
+    /* Add it to the list of valid IPMIs so it will validate.  This
+       must be done last, after a point where it cannot fail. */
     lan_add_con(lan);
 
     lan->retries = 0;
@@ -4829,22 +4773,32 @@ snmp_got_match(lan_data_t *lan, ipmi_msg_t *msg, unsigned char *pet_ack)
     lan_send(lan, (ipmi_addr_t *) &si, sizeof(si), &ack, 0, &dummy_send_ip);
 }
 
+typedef struct lan_do_evt_s
+{
+    lan_data_t          *lan;
+    struct lan_do_evt_s *next;
+} lan_do_evt_t;
+
 int
 ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 			       ipmi_msg_t      *msg,
 			       unsigned char   *pet_ack)
 {
-    lan_link_t *l;
-    lan_data_t *lan;
-    int        i;
-    int        idx;
-    int        found = 0;
+    lan_link_t   *l;
+    lan_data_t   *lan;
+    int          i;
+    int          idx;
+    lan_do_evt_t *found = NULL;
+    lan_do_evt_t *next = NULL;
 
     idx = hash_lan_addr(src_addr);
     ipmi_lock(lan_list_lock);
     l = lan_ip_list[idx].next;
+    /* Note that we call all the connections with the given IP
+       address, not just the first one we find.  There may be more
+       than one. */
     while (l->lan) {
-	lan = l->lan;
+	lan = NULL;
 	for (i=0; i<lan->cparm.num_ip_addr; i++) {
 	    if (lan->cparm.ip_addr[i].s_ipsock.s_addr.sa_family
 		!= src_addr->sa_family)
@@ -4860,9 +4814,8 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 		dst = &(lan->cparm.ip_addr[i].s_ipsock.s_addr4);
 		if (dst->sin_addr.s_addr == src->sin_addr.s_addr) {
 		    /* We have a match, handle it */
-		    snmp_got_match(lan, msg, pet_ack);
-		    found = 1;
-		    goto out_unlock;
+		    lan = l->lan;
+		    lan->refcount++;
 		}
 	    }
 	    break;
@@ -4878,20 +4831,40 @@ ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 		    == 0)
 		{
 		    /* We have a match, handle it */
-		    snmp_got_match(lan, msg, pet_ack);
-		    found = 1;
-		    goto out_unlock;
+		    lan = l->lan;
+		    lan->refcount++;
 		}
 	    }
 	    break;
 #endif
 	    }
+
+	    if (lan) {
+		next = ipmi_mem_alloc(sizeof(*next));
+		if (!next)
+		    /* Can't do anything, just go on.  It's not
+		       fatal, it just delays things. */
+		    continue;
+		next->lan = lan;
+		next->next = found;
+		found = next;
+	    }
 	}
 	l = l->next;
     }
- out_unlock:
     ipmi_unlock(lan_list_lock);
-    return found;
+
+    while (found) {
+	next = found;
+	found = found->next;
+	snmp_got_match(next->lan, msg, pet_ack);
+	lan_put(next->lan->ipmi);
+	ipmi_mem_free(next);
+    }
+
+    /* Next will be left non-NULL if something was delivered, it will
+       be NULL if nothing was delivered. */
+    return next != NULL;
 }
 
 int
