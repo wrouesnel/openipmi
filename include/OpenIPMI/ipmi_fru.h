@@ -36,43 +36,20 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_types.h>
 
-/* chassis types */
-#define IPMI_FRU_CT_OTHER                  1
-#define IPMI_FRU_CT_UNKNOWN                2
-#define IPMI_FRU_CT_DESKTOP                3
-#define IPMI_FRU_CT_LOW_PROFILE_DESKTOP    4
-#define IPMI_FRU_CT_PIZZA_BOX              5
-#define IPMI_FRU_CT_MINI_TOWER             6
-#define IPMI_FRU_CT_TOWER                  7
-#define IPMI_FRU_CT_PORTABLE               8
-#define IPMI_FRU_CT_LAPTOP                 9
-#define IPMI_FRU_CT_NOTEBOOK              10
-#define IPMI_FRU_CT_HANDHELD              11
-#define IPMI_FRU_CT_DOCKING_STATION       12
-#define IPMI_FRU_CT_ALL_IN_ONE            13
-#define IPMI_FRU_CT_SUB_NOTEBOOK          14
-#define IPMI_FRU_CT_SPACE_SAVING          15
-#define IPMI_FRU_CT_LUNCH_BOX             16
-#define IPMI_FRU_CT_MAIN_SERVER_CHASSIS   17
-#define IPMI_FRU_CT_EXPANSION_CHASSIS     18
-#define IPMI_FRU_CT_SUB_CHASSIS           19
-#define IPMI_FRU_CT_BUS_EXPANSION_CHASSIS 20
-#define IPMI_FRU_CT_PERIPERAL_CHASSIS     21
-#define IPMI_FRU_CT_RAID_CHASSIS          22
-#define IPMI_FRU_CT_RACK_MOUNT_CHASSIS    23
-
+/* FRU information opaque type. */
+typedef struct ipmi_fru_s ipmi_fru_t;
 
 typedef void (*ipmi_fru_fetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
-int ipmi_fru_alloc(ipmi_domain_t *domain,
-		   unsigned char is_logical,
-		   unsigned char device_address,
-		   unsigned char device_id,
-		   unsigned char lun,
-		   unsigned char private_bus,
-		   unsigned char channel,
+int ipmi_fru_alloc(ipmi_domain_t       *domain,
+		   unsigned char       is_logical,
+		   unsigned char       device_address,
+		   unsigned char       device_id,
+		   unsigned char       lun,
+		   unsigned char       private_bus,
+		   unsigned char       channel,
 		   ipmi_fru_fetched_cb fetched_handler,
 		   void                *fetched_cb_data,
-		   ipmi_fru_t    **new_fru);
+		   ipmi_fru_t          **new_fru);
 
 /* Destroy an FRU.  Note that if the FRU is currently fetching SDRs,
    the destroy cannot complete immediatly, it will be marked for
@@ -83,6 +60,161 @@ int ipmi_fru_destroy(ipmi_fru_t            *fru,
 		     ipmi_fru_destroyed_cb handler,
 		     void                  *cb_data);
 
+/* NOTE! - do not use the functions from portable programs, use the
+   entity functions to fetch these. */
+int ipmi_fru_get_internal_use_version(ipmi_fru_t    *fru,
+				      unsigned char *version);
+int ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
+				     unsigned int *length);
+int  ipmi_fru_get_internal_use_data(ipmi_fru_t    *fru,
+				    unsigned char *data,
+				    unsigned int  *max_len);
 
+int ipmi_fru_get_chassis_info_version(ipmi_fru_t    *fru,
+				      unsigned char *version);
+int  ipmi_fru_get_chassis_info_type(ipmi_fru_t    *fru,
+				    unsigned char *type);
+
+int ipmi_fru_get_chassis_info_part_number_len(ipmi_fru_t   *fru,
+					      unsigned int *length);
+int ipmi_fru_get_chassis_info_part_number_type(ipmi_fru_t           *fru,
+					       enum ipmi_str_type_e *type);
+int ipmi_fru_get_chassis_info_part_number(ipmi_fru_t   *fru,
+					  char         *str,
+					  unsigned int *strlen);
+int ipmi_fru_get_chassis_info_serial_number_len(ipmi_fru_t   *fru,
+						unsigned int *length);
+int ipmi_fru_get_chassis_info_serial_number_type(ipmi_fru_t           *fru,
+						 enum ipmi_str_type_e *type);
+int ipmi_fru_get_chassis_info_serial_number(ipmi_fru_t   *fru,
+					    char         *str,
+					    unsigned int *strlen);
+int ipmi_fru_get_chassis_info_custom_len(ipmi_fru_t   *fru,
+					 unsigned int num,
+					 unsigned int *length);
+int ipmi_fru_get_chassis_info_custom_type(ipmi_fru_t           *fru,
+					  unsigned int         num,
+					  enum ipmi_str_type_e *type);
+int ipmi_fru_get_chassis_info_custom(ipmi_fru_t   *fru,
+				     unsigned int num,
+				     char         *str,
+				     unsigned int *strlen);
+
+int ipmi_fru_get_board_info_version(ipmi_fru_t    *fru,
+				    unsigned char *version);
+int ipmi_fru_get_board_info_lang_code(ipmi_fru_t    *fru,
+				      unsigned char *type);
+int ipmi_fru_get_board_info_board_manufacturer_len(ipmi_fru_t   *fru,
+						   unsigned int *length);
+int ipmi_fru_get_board_info_board_manufacturer_type(ipmi_fru_t           *fru,
+						    enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_board_manufacturer(ipmi_fru_t   *fru,
+					       char         *str,
+					       unsigned int *strlen);
+int ipmi_fru_get_board_info_board_product_name_len(ipmi_fru_t   *fru,
+						   unsigned int *length);
+int ipmi_fru_get_board_info_board_product_name_type(ipmi_fru_t           *fru,
+						    enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_board_product_name(ipmi_fru_t   *fru,
+					       char         *str,
+					       unsigned int *strlen);
+int ipmi_fru_get_board_info_board_serial_number_len(ipmi_fru_t   *fru,
+						    unsigned int *length);
+int ipmi_fru_get_board_info_board_serial_number_type(ipmi_fru_t           *fru,
+						     enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_board_serial_number(ipmi_fru_t   *fru,
+						char         *str,
+						unsigned int *strlen);
+int ipmi_fru_get_board_info_board_part_number_len(ipmi_fru_t   *fru,
+						  unsigned int *length);
+int ipmi_fru_get_board_info_board_part_number_type(ipmi_fru_t           *fru,
+						   enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_board_part_number(ipmi_fru_t   *fru,
+					      char         *str,
+					      unsigned int *strlen);
+int ipmi_fru_get_board_info_fru_file_id_len(ipmi_fru_t   *fru,
+					    unsigned int *length);
+int ipmi_fru_get_board_info_fru_file_id_type(ipmi_fru_t           *fru,
+					     enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_fru_file_id(ipmi_fru_t   *fru,
+					char         *str,
+					unsigned int *strlen);
+int ipmi_fru_get_board_info_custom_len(ipmi_fru_t   *fru,
+				       unsigned int num,
+				       unsigned int *length);
+int ipmi_fru_get_board_info_custom_type(ipmi_fru_t           *fru,
+					unsigned int         num,
+					enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_custom(ipmi_fru_t   *fru,
+				   unsigned int num,
+				   char         *str,
+				   unsigned int *strlen);
+
+int ipmi_fru_get_product_info_version(ipmi_fru_t    *fru,
+				      unsigned char *version);
+int ipmi_fru_get_product_info_lang_code(ipmi_fru_t    *fru,
+					unsigned char *type);
+int ipmi_fru_get_product_info_manufacturer_name_len(ipmi_fru_t   *fru,
+						    unsigned int *length);
+int ipmi_fru_get_product_info_manufacturer_name_type(ipmi_fru_t           *fru,
+						     enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_manufacturer_name(ipmi_fru_t   *fru,
+						char         *str,
+						unsigned int *strlen);
+int ipmi_fru_get_product_info_product_name_len(ipmi_fru_t   *fru,
+					       unsigned int *length);
+int ipmi_fru_get_product_info_product_name_type(ipmi_fru_t           *fru,
+						enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_product_name(ipmi_fru_t   *fru,
+					   char         *str,
+					   unsigned int *strlen);
+int ipmi_fru_get_product_info_product_part_model_number_len(ipmi_fru_t   *fru,
+							    unsigned int *length);
+int ipmi_fru_get_product_info_product_part_model_number_type(ipmi_fru_t           *fru,
+							     enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_product_part_model_number(ipmi_fru_t   *fru,
+							char         *str,
+							unsigned int *strlen);
+int ipmi_fru_get_product_info_product_version_len(ipmi_fru_t   *fru,
+						  unsigned int *length);
+int ipmi_fru_get_product_info_product_version_type(ipmi_fru_t           *fru,
+						   enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_product_version(ipmi_fru_t   *fru,
+					      char         *str,
+					      unsigned int *strlen);
+int ipmi_fru_get_product_info_product_serial_number_len(ipmi_fru_t   *fru,
+							unsigned int *length);
+int ipmi_fru_get_product_info_product_serial_number_type(ipmi_fru_t           *fru,
+							 enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_product_serial_number(ipmi_fru_t   *fru,
+						    char         *str,
+						    unsigned int *strlen);
+int ipmi_fru_get_product_info_asset_tag_len(ipmi_fru_t   *fru,
+					    unsigned int *length);
+int ipmi_fru_get_product_info_asset_tag_type(ipmi_fru_t           *fru,
+					     enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_asset_tag(ipmi_fru_t   *fru,
+					char         *str,
+					unsigned int *strlen);
+int ipmi_fru_get_product_info_fru_file_id_len(ipmi_fru_t   *fru,
+					      unsigned int *length);
+int ipmi_fru_get_product_info_fru_file_id_type(ipmi_fru_t           *fru,
+					       enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_fru_file_id(ipmi_fru_t   *fru,
+					  char         *str,
+					  unsigned int *strlen);
+int ipmi_fru_get_product_info_custom_len(ipmi_fru_t   *fru,
+					 unsigned int num,
+					 unsigned int *length);
+int ipmi_fru_get_product_info_custom_type(ipmi_fru_t           *fru,
+					  unsigned int         num,
+					  enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_custom(ipmi_fru_t   *fru,
+				     unsigned int num,
+				     char         *str,
+				     unsigned int *strlen);
+
+/* FIXME - for OEM code (if ever necessary) add a way to create an
+   empty FRU, fill it with data, and put it into an entity. */
 
 #endif /* _IPMI_FRU_H */

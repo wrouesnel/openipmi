@@ -3980,7 +3980,6 @@ entity_presence_handler(ipmi_entity_t *entity,
 
 void fru_change(enum ipmi_update_e op,
 		ipmi_entity_t      *ent,
-		ipmi_fru_t         *fru,
 		void               *cb_data)
 {
     int id, instance;

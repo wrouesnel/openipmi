@@ -218,7 +218,11 @@ void ipmi_entity_set_sensor_device(ipmi_entity_t *ent,
    not, a management interface needs to be added for this. */
 void ipmi_entity_set_entity_id_string(ipmi_entity_t *ent, char *str);
 
-/* Fetch the FRUs for the given entity. */
+/* Return the FRU for this entity, or NULL if it doesn't have one
+   or the fetch has not completed. */
+ipmi_fru_t *ipmi_entity_get_fru(ipmi_entity_t *ent);
+
+/* Fetch the FRUs for this entity. */
 int ipmi_entity_fetch_frus(ipmi_entity_t *ent);
 
 /* Locks for the entity. */

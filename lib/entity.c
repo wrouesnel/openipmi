@@ -1182,7 +1182,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	ent->fru = info->fru;
 
 	if (ent->fru_handler)
-	    ent->fru_handler(op, ent, ent->fru, ent->fru_cb_data);
+	    ent->fru_handler(op, ent, ent->fru_cb_data);
     } else {
 	ipmi_log(IPMI_LOG_WARNING, "Error fetching entity %d.%d FRU: %x\n",
 		 ent->info.entity_id, ent->info.entity_instance, info->err);
@@ -3082,3 +3082,132 @@ __ipmi_check_entity_lock(ipmi_entity_t *entity)
     __ipmi_check_domain_entity_lock(entity->domain);
 }
 #endif
+
+/*
+ * Getting the FRU values for an entity.
+ */
+
+#define FRU_VAL_GET(type, name) \
+int								\
+ipmi_entity_get_ ## name(ipmi_entity_t *entity,			\
+			 type          *val)			\
+{								\
+    CHECK_ENTITY_LOCK(entity);					\
+    if (!entity->fru)						\
+	return ENOSYS;						\
+    return ipmi_fru_get_ ## name(entity->fru, val);		\
+}
+
+#define FRU_STR_GET(name) \
+int								\
+ipmi_entity_get_ ## name(ipmi_entity_t *entity,			\
+			 char          *str,			\
+			 unsigned int  *strlen)			\
+{								\
+    CHECK_ENTITY_LOCK(entity);					\
+    if (!entity->fru)						\
+	return ENOSYS;						\
+    return ipmi_fru_get_ ## name(entity->fru, str, strlen);	\
+}
+
+#define FRU_CUSTOM_GET(name) \
+int									\
+ipmi_entity_get_ ## name ## _custom_len(ipmi_entity_t *entity,		\
+					unsigned int  num,		\
+					unsigned int  *length)		\
+{									\
+    CHECK_ENTITY_LOCK(entity);						\
+    if (!entity->fru)							\
+	return ENOSYS;							\
+    return ipmi_fru_get_ ## name ## _custom_len(entity->fru, num, length);\
+}									\
+int									\
+ipmi_entity_get_## name ## custom_type(ipmi_entity_t        *entity,	\
+				       unsigned int         num,	\
+				       enum ipmi_str_type_e *type)	\
+{									\
+    CHECK_ENTITY_LOCK(entity);						\
+    if (!entity->fru)							\
+	return ENOSYS;							\
+    return ipmi_fru_get_ ## name ## _custom_type(entity->fru, num, type);\
+}									\
+int									\
+ipmi_entity_get_## name ## custom(ipmi_entity_t        *entity,		\
+			          unsigned int         num,		\
+			          char                 *str,		\
+				  unsigned int         *str_len)	\
+{									\
+    CHECK_ENTITY_LOCK(entity);						\
+    if (!entity->fru)							\
+	return ENOSYS;							\
+    return ipmi_fru_get_ ## name ## _custom(entity->fru, num, str, str_len);\
+}
+
+FRU_VAL_GET(unsigned char, internal_use_version)
+FRU_VAL_GET(unsigned int,  internal_use_length)
+
+int
+ipmi_entity_get_internal_use_data(ipmi_entity_t *entity,
+				  unsigned char *data,
+				  unsigned int  *max_len)
+{
+    CHECK_ENTITY_LOCK(entity);
+    if (!entity->fru)
+	return ENOSYS;
+    return ipmi_fru_get_internal_use_data(entity->fru, data, max_len);
+}
+
+FRU_VAL_GET(unsigned char, chassis_info_version)
+FRU_VAL_GET(unsigned char, chassis_info_type)
+
+FRU_VAL_GET(unsigned int,  chassis_info_part_number_len)
+FRU_VAL_GET(enum ipmi_str_type_e, chassis_info_part_number_type)
+FRU_STR_GET(chassis_info_part_number)
+FRU_VAL_GET(unsigned int,  chassis_info_serial_number_len)
+FRU_VAL_GET(enum ipmi_str_type_e, chassis_info_serial_number_type)
+FRU_STR_GET(chassis_info_serial_number)
+FRU_CUSTOM_GET(chassis_info)
+
+FRU_VAL_GET(unsigned char, board_info_version)
+FRU_VAL_GET(unsigned char, board_info_lang_code)
+FRU_VAL_GET(unsigned int,  board_info_board_manufacturer_len)
+FRU_VAL_GET(enum ipmi_str_type_e, board_info_board_manufacturer_type)
+FRU_STR_GET(board_info_board_manufacturer)
+FRU_VAL_GET(unsigned int,  board_info_board_product_name_len)
+FRU_VAL_GET(enum ipmi_str_type_e, board_info_board_product_name_type)
+FRU_STR_GET(board_info_board_product_name)
+FRU_VAL_GET(unsigned int,  board_info_board_serial_number_len)
+FRU_VAL_GET(enum ipmi_str_type_e, board_info_board_serial_number_type)
+FRU_STR_GET(board_info_board_serial_number)
+FRU_VAL_GET(unsigned int, board_info_board_part_number_len)
+FRU_VAL_GET(enum ipmi_str_type_e, board_info_board_part_number_type)
+FRU_STR_GET(board_info_board_part_number)
+FRU_VAL_GET(unsigned int,  board_info_fru_file_id_len)
+FRU_VAL_GET(enum ipmi_str_type_e, board_info_fru_file_id_type)
+FRU_STR_GET(board_info_fru_file_id)
+FRU_CUSTOM_GET(board_info)
+
+FRU_VAL_GET(unsigned char, product_info_version)
+FRU_VAL_GET(unsigned char, product_info_lang_code)
+FRU_VAL_GET(unsigned int, product_info_manufacturer_name_len)
+FRU_VAL_GET(enum ipmi_str_type_e, product_info_manufacturer_name_type)
+FRU_STR_GET(product_info_manufacturer_name)
+FRU_VAL_GET(unsigned int,  product_info_product_name_len)
+FRU_VAL_GET(enum ipmi_str_type_e, product_info_product_name_type)
+FRU_STR_GET(product_info_product_name)
+FRU_VAL_GET(unsigned int,  product_info_product_part_model_number_len)
+FRU_VAL_GET(enum ipmi_str_type_e, product_info_product_part_model_number_type)
+FRU_STR_GET(product_info_product_part_model_number)
+FRU_VAL_GET(unsigned int,  product_info_product_version_len)
+FRU_VAL_GET(enum ipmi_str_type_e, product_info_product_version_type)
+FRU_STR_GET(product_info_product_version)
+FRU_VAL_GET(unsigned int,  product_info_product_serial_number_len)
+FRU_VAL_GET(enum ipmi_str_type_e, product_info_product_serial_number_type)
+FRU_STR_GET(product_info_product_serial_number)
+FRU_VAL_GET(unsigned int,  product_info_asset_tag_len)
+FRU_VAL_GET(enum ipmi_str_type_e, product_info_asset_tag_type)
+FRU_STR_GET(product_info_asset_tag)
+FRU_VAL_GET(unsigned int,  product_info_fru_file_id_len)
+FRU_VAL_GET(enum ipmi_str_type_e, product_info_fru_file_id_type)
+FRU_STR_GET(product_info_fru_file_id)
+FRU_CUSTOM_GET(product_info)

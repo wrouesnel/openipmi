@@ -355,4 +355,33 @@ char *ipmi_get_control_type_string(unsigned int val);
 #define IPMI_CONTROL_COLOR_YELLOW	5
 char *ipmi_get_color_string(unsigned int val);
 
+
+/*
+ * chassis types from FRUs
+ */
+#define IPMI_FRU_CT_OTHER                  1
+#define IPMI_FRU_CT_UNKNOWN                2
+#define IPMI_FRU_CT_DESKTOP                3
+#define IPMI_FRU_CT_LOW_PROFILE_DESKTOP    4
+#define IPMI_FRU_CT_PIZZA_BOX              5
+#define IPMI_FRU_CT_MINI_TOWER             6
+#define IPMI_FRU_CT_TOWER                  7
+#define IPMI_FRU_CT_PORTABLE               8
+#define IPMI_FRU_CT_LAPTOP                 9
+#define IPMI_FRU_CT_NOTEBOOK              10
+#define IPMI_FRU_CT_HANDHELD              11
+#define IPMI_FRU_CT_DOCKING_STATION       12
+#define IPMI_FRU_CT_ALL_IN_ONE            13
+#define IPMI_FRU_CT_SUB_NOTEBOOK          14
+#define IPMI_FRU_CT_SPACE_SAVING          15
+#define IPMI_FRU_CT_LUNCH_BOX             16
+#define IPMI_FRU_CT_MAIN_SERVER_CHASSIS   17
+#define IPMI_FRU_CT_EXPANSION_CHASSIS     18
+#define IPMI_FRU_CT_SUB_CHASSIS           19
+#define IPMI_FRU_CT_BUS_EXPANSION_CHASSIS 20
+#define IPMI_FRU_CT_PERIPERAL_CHASSIS     21
+#define IPMI_FRU_CT_RAID_CHASSIS          22
+#define IPMI_FRU_CT_RACK_MOUNT_CHASSIS    23
+
+
 #endif /* _IPMI_BITS_H */
