@@ -1650,8 +1650,8 @@ int ipmi_init(os_handler_t *handler);
 
 /* Create a new domain with the given IPMI connections.  The con array
    is an array of connections to use , num_con is the number of
-   connections (currently, if 1 is not used, it will fail, because
-   only one connection is currently supported).  The new domain is
+   connections (currently up to two connections are supported, assuming
+   the underlying connections have proper support).  The new domain is
    returned in the new_domain variable, the id for the connection
    change handler is return in con_change_id. */
 int ipmi_open_domain(ipmi_con_t               *con[],
