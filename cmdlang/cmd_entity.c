@@ -39,6 +39,9 @@
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_fru.h>
 
+/* Internal includes, do not use in your programs */
+#include <OpenIPMI/internal/ipmi_malloc.h>
+
 /* Don't pollute the namespace iwth ipmi_fru_t. */
 void ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru);
 
@@ -103,8 +106,9 @@ static void
 entity_dump(ipmi_entity_t *entity, ipmi_cmd_info_t *cmd_info)
 {
     enum ipmi_dlr_type_e type;
-    static char     *ent_types[] = { "unknown", "mc", "fru",
-				     "generic", "invalid" };
+    static char          *ent_types[] = { "unknown", "mc", "fru",
+					  "generic", "invalid" };
+    int                  length;
 
     type = ipmi_entity_get_type(entity);
     if (type > IPMI_ENTITY_GENERIC)
@@ -129,6 +133,23 @@ entity_dump(ipmi_entity_t *entity, ipmi_cmd_info_t *cmd_info)
 	ipmi_entity_iterate_children(entity, entity_iterate_handler, cmd_info);
 	ipmi_cmdlang_up(cmd_info);
     }
+
+    length = ipmi_entity_get_id_length(entity);
+    if (length &&
+	(ipmi_entity_get_id_type(entity) == IPMI_ASCII_STR && length > 1))
+    {
+	char *str = ipmi_mem_alloc(length);
+
+	if (str) {
+	    length = ipmi_entity_get_id(entity, str, length);
+	    ipmi_cmdlang_out_type(cmd_info, "Id",
+				  ipmi_entity_get_id_type(entity),
+				  str, length);
+	    ipmi_mem_free(str);
+	}
+    }
+    ipmi_cmdlang_out(cmd_info, "Entity ID String",
+		     ipmi_entity_get_entity_id_string(entity));
 
     switch (type) {
     case IPMI_ENTITY_MC:

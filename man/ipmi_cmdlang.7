@@ -570,6 +570,35 @@ Domain IPMB rescan time set: <domain>
 .SS entity
 These commands deal with entity objects.
 
+list <entity> - List all the entities that meed the criteria
+.TP
+Response:
+.RS
+.nf
+Domain
+  Name: <domain>
+  Entities
+    Name: <entity>
+     .
+     .
+ .
+ .
+.fi
+.RE
+
+info <entity> - Dump information about an entity.
+.TP
+Reponse:
+.RS
+.nf
+Entity
+  Name: <entity>
+  **ENTITY INFO**
+ .
+ .
+.fi
+.RE
+
 fru <entity> - Dump the FRU information about the given entity.
 .TP
 Reponse:
@@ -1014,6 +1043,17 @@ Response:
 MC
   Name: <mc>
   SEL Time: <integer>
+.fi
+.RE
+
+.B set_sel_time <mc> <time>
+- Set the time in the SEL for the given MC.
+.TP
+Response:
+.RS
+.nf
+MC SEL time set
+  Name: <mc>
 .fi
 .RE
 
@@ -1868,16 +1908,18 @@ objects.  The definitions of this information output is done here.
   Present: <bool>
   Presence sensor always there: <bool>
   Hot swappable: <bool>
-  Parents
+  %Parents
     Name: <entity>
     Name: <entity>
      .
      .
-  Children
+  %Children
     Name: <entity>
     Name: <entity>
      .
      .
+  %Id: <string>
+  Entity ID String: <string>
 .fi
 .RE
 

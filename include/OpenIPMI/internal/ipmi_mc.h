@@ -133,16 +133,6 @@ int ipmi_mc_del_event(ipmi_mc_t                 *mc,
 		      ipmi_mc_del_event_done_cb handler,
 		      void                      *cb_data);
 
-/* Set the time for the SEL.  Note that this function is rather
-   dangerous to do, especially if you don't set it to the current
-   time, as it can cause old events to be interpreted as new
-   events on this and other systems. */
-int ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
-				 const struct timeval  *time,
-				 ipmi_mc_done_cb handler,
-				 void            *cb_data);
-
-
 /* Some OEM boxes may have special SEL delete requirements, so we have
    a special hook to let the OEM code delete events on an MC with SEL
    support. */
@@ -220,6 +210,6 @@ void _ipmi_mc_check_mc(ipmi_mc_t *mc);
 int _ipmi_chassis_create_controls(ipmi_mc_t *mc);
 
 /* Generate a unique number for the MC. */
-unsigned int ipmi_mc_get_unique_num(ipmi_mc_t *mc);
+unsigned int ipmi_mc_get_unique_nmu(ipmi_mc_t *mc);
 
 #endif /* _IPMI_MC_INTERNAL_H */
