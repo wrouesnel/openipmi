@@ -3943,6 +3943,11 @@ static double c_linear(double val)
     return val;
 }
 
+static double log2(double val)
+{
+    return log(val) / 0.69314718 /* log(2) */;
+}
+
 static double c_exp10(double val)
 {
     return pow(10.0, val);
@@ -3974,11 +3979,12 @@ static double c_1_over_cube(double val)
 }
 
 typedef double (*linearizer)(double val);
-static linearizer linearize[11] =
+static linearizer linearize[12] =
 {
     c_linear,
     log,
     log10,
+    log2,
     exp,
     c_exp10,
     c_exp2,

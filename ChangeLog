@@ -1,4 +1,9 @@
 
+2003-10-08 Livio Pugliese <lpugliese@uxcomm.com>
+
+	* lib/sensor.c: Added the missing log2() conversion function to
+	the array of conversion values.
+
 2003-10-07 Tony Griffiths <tonyg@agile.tv>
 
 	* lib/domain.c: Fix getting the vendor id from the channel info
