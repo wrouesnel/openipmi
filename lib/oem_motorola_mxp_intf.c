@@ -3129,6 +3129,7 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
 				      lan->fd,
 				      data_handler, 
 				      ipmi,
+				      NULL,
 				      &(lan->fd_wait_id));
     if (rv)
 	goto out_err;

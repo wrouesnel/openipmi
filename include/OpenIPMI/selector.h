@@ -51,16 +51,24 @@ int sel_free_selector(selector_t *new_selector);
 typedef void (*sel_fd_handler_t)(int fd, void *data);
 
 /* Set the handlers for a file descriptor.  The "data" parameter is
-   not used, it is just passed to the exception handlers. */
-void sel_set_fd_handlers(selector_t       *sel,
-			 int              fd,
-			 void             *data,
-			 sel_fd_handler_t read_handler,
-			 sel_fd_handler_t write_handler,
-			 sel_fd_handler_t except_handler);
+   not used, it is just passed to the exception handlers.  The done
+   handler (if non-NULL) will be called when the data is removed or
+   replaced. */
+typedef void (*sel_fd_cleared_cb)(int fd, void *data);
+int sel_set_fd_handlers(selector_t        *sel,
+			int               fd,
+			void              *data,
+			sel_fd_handler_t  read_handler,
+			sel_fd_handler_t  write_handler,
+			sel_fd_handler_t  except_handler,
+			sel_fd_cleared_cb done);
 
 /* Remove the handlers for a file descriptor.  This will also disable
-   the handling of all I/O for the fd. */
+   the handling of all I/O for the fd.  Note that when this returns,
+   some other thread may be in a handler.  To avoid races with
+   clearing the data (SMP only), you should provide a done handler in
+   the set routine; it will be called when the registered handler is
+   sure to not be called again. */
 void sel_clear_fd_handlers(selector_t *sel,
 			   int        fd);
 

@@ -1470,12 +1470,14 @@ setup(int          if_num,
 					  smi->fd,
 					  ipmi_sock_data_handler, 
 					  ipmi,
+					  NULL,
 					  &(smi->fd_wait_id));
     } else {
 	rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
 					  smi->fd,
 					  ipmi_dev_data_handler,
 					  ipmi,
+					  NULL,
 					  &(smi->fd_wait_id));
     }
     if (rv) {

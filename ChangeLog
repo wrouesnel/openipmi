@@ -10,6 +10,21 @@
 	* Makefile.am, configure.in, OpenIPMI.pc.in, OpenIPMIui.pc.in:
 	Added pkg-config info for OpenIPMI libraries.
 
+2004-03-15 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/selector.h, lib/selector.c: Unfortunately,
+	there were some race conditions in the freeing up of file
+	descriptors.  Cleanups were done for this.
+
+	* include/OpenIPMI/os_handler.h: Unfortunately, there were some
+	race conditions in the freeing up of file descriptors.  Cleanups
+	were done for this.
+
+	* ui/ui_os.c: Adjusted for the selector and os_handler changes.
+	* lib/ipmi_smi.c: ditto
+	* lib/ipmi_lan.c: ditto
+	* lib/oem_motorola_mxp_intf.c: ditto
+
 2004-03-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fix the set_time routine to pass in the info to the

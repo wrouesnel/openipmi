@@ -55,10 +55,11 @@ static void check_no_locks(os_handler_t *handler);
 
 struct os_hnd_fd_id_s
 {
-    int             fd;
-    void            *cb_data;
-    os_data_ready_t data_ready;
-    os_handler_t    *handler;
+    int                fd;
+    void               *cb_data;
+    os_data_ready_t    data_ready;
+    os_handler_t       *handler;
+    os_fd_data_freed_t freed;
 };
 
 static void
@@ -71,14 +72,26 @@ fd_handler(int fd, void *data)
     CHECK_NO_LOCKS(fd_data->handler);
 }
 
+static void
+free_fd_data(int fd, void *data)
+{
+    os_hnd_fd_id_t *fd_data = data;
+
+    if (fd_data->freed)
+        fd_data->freed(fd, fd_data->cb_data);
+    ipmi_mem_free(data);
+}
+
 static int
-add_fd(os_handler_t    *handler,
-       int             fd,
-       os_data_ready_t data_ready,
-       void            *cb_data,
-       os_hnd_fd_id_t  **id)
+add_fd(os_handler_t       *handler,
+       int                fd,
+       os_data_ready_t    data_ready,
+       void               *cb_data,
+       os_fd_data_freed_t freed,
+       os_hnd_fd_id_t     **id)
 {
     os_hnd_fd_id_t *fd_data;
+    int            rv;
 
     fd_data = ipmi_mem_alloc(sizeof(*fd_data));
     if (!fd_data)
@@ -88,7 +101,12 @@ add_fd(os_handler_t    *handler,
     fd_data->cb_data = cb_data;
     fd_data->data_ready = data_ready;
     fd_data->handler = handler;
-    sel_set_fd_handlers(ui_sel, fd, fd_data, fd_handler, NULL, NULL);
+    rv = sel_set_fd_handlers(ui_sel, fd, fd_data, fd_handler, NULL, NULL,
+			     free_fd_data);
+    if (rv) {
+	ipmi_mem_free(fd_data);
+	return rv;
+    }
     sel_set_fd_read_handler(ui_sel, fd, SEL_FD_HANDLER_ENABLED);
     sel_set_fd_write_handler(ui_sel, fd, SEL_FD_HANDLER_DISABLED);
     sel_set_fd_except_handler(ui_sel, fd, SEL_FD_HANDLER_DISABLED);
@@ -102,7 +120,8 @@ remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
     sel_clear_fd_handlers(ui_sel, fd_data->fd);
     sel_set_fd_read_handler(ui_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
-    ipmi_mem_free(fd_data);
+    /* fd_data gets freed in the free_fd_data callback registered at
+       set time. */
     return 0;
 }
 

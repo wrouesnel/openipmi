@@ -884,7 +884,8 @@ main(int argc, const char *oargv[])
 	    fprintf(stderr, "Could not set to get events: %x\n", rv);
 	}
 
-	sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL);
+	sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL,
+			    NULL);
 	sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
     }
 

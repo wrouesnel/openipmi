@@ -61,6 +61,19 @@ typedef struct os_hnd_timer_id_s os_hnd_timer_id_t;
 typedef void (*os_data_ready_t)(int fd, void *cb_data, os_hnd_fd_id_t *id);
 typedef void (*os_timed_out_t)(void *cb_data, os_hnd_timer_id_t *id);
 
+/* This can be registered with add_fd_to_wait_for, it will be called
+   if the fd handler is freed or replaced.  This can be used to avoid
+   free race conditions, handlers may be in callbacks when you remove
+   an fd to wait for, this will be called when all handlers are
+   done. */
+typedef void (*os_fd_data_freed_t)(int fd, void *data);
+
+/* This can be registered with free_timer, it will be called if the
+   time free actually occurs.  This can be used to avoid free race
+   conditions, handlers may be in callbacks when you free the timer,
+   this will be called when all handlers are done. */
+typedef void (*os_timer_freed_t)(void *data);
+
 typedef struct os_handler_s os_handler_t;
 struct os_handler_s
 {
@@ -75,11 +88,12 @@ struct os_handler_s
        may only call the commands ending in "_wait", the event-driven
        code will return errors.  You also may not receive commands or
        event.  Note that these calls may NOT block. */
-    int (*add_fd_to_wait_for)(os_handler_t    *handler,
-			      int             fd,
-			      os_data_ready_t data_ready,
-			      void            *cb_data,
-			      os_hnd_fd_id_t  **id);
+    int (*add_fd_to_wait_for)(os_handler_t       *handler,
+			      int                fd,
+			      os_data_ready_t    data_ready,
+			      void               *cb_data,
+			      os_fd_data_freed_t freed,
+			      os_hnd_fd_id_t     **id);
     int (*remove_fd_to_wait_for)(os_handler_t   *handler,
 				 os_hnd_fd_id_t *id);
 

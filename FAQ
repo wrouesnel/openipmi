@@ -202,3 +202,13 @@
      where it should exist, so it has to scan everything on the bus.
      You can write an OEM plugin or scan the addresses you are
      interested in by hand.
+
+ 18) I want to know when OpenIPMI is done finding everything in the
+     system.
+
+     Unfortunately, there is no concept of "done" in IPMI.  IPMI
+     allows a dynamic environment with elements of the system coming
+     and going.  You need to re-think your philosophy here and design
+     software that can dynamically manage elements of the system
+     coming and going.  OpenIPMI will tell you when it finds things,
+     and then you can manage them.

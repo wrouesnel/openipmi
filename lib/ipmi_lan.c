@@ -2851,6 +2851,7 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 				      lan->fd,
 				      data_handler, 
 				      ipmi,
+				      NULL,
 				      &(lan->fd_wait_id));
     if (rv)
 	goto out_err;
@@ -2896,6 +2897,7 @@ _ipmi_lan_set_ipmi(ipmi_con_t *old, ipmi_con_t *new)
 					 lan->fd,
 					 data_handler, 
 					 new,
+					 NULL,
 					 &fd_wait_id);
     if (!rv) {
 	lan->fd_wait_id = fd_wait_id;

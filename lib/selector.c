@@ -50,10 +50,20 @@
 #include <signal.h>
 #include <string.h>
 
+typedef struct fd_state_s
+{
+    int               deleted;
+    unsigned int      use_count;
+    sel_fd_cleared_cb done;
+} fd_state_t;
+
 /* The control structure for each file descriptor. */
 typedef struct fd_control_s
 {
-    int              in_use;
+    /* This structure is allocated when an FD is set and it holds
+       whether the FD has been deleted and information to handle the
+       deletion. */
+    fd_state_t       *state;
     void             *data;		/* Operation-specific data */
     sel_fd_handler_t handle_read;
     sel_fd_handler_t handle_write;
@@ -227,7 +237,7 @@ wake_sel_thread_lock(selector_t *sel)
 static void
 init_fd(fd_control_t *fd)
 {
-    fd->in_use = 0;
+    fd->state = NULL;
     fd->data = NULL;
     fd->handle_read = NULL;
     fd->handle_write = NULL;
@@ -235,19 +245,36 @@ init_fd(fd_control_t *fd)
 }
 
 /* Set the handlers for a file descriptor. */
-void
-sel_set_fd_handlers(selector_t       *sel,
-		    int              fd,
-		    void             *data,
-		    sel_fd_handler_t read_handler,
-		    sel_fd_handler_t write_handler,
-		    sel_fd_handler_t except_handler)
+int
+sel_set_fd_handlers(selector_t        *sel,
+		    int               fd,
+		    void              *data,
+		    sel_fd_handler_t  read_handler,
+		    sel_fd_handler_t  write_handler,
+		    sel_fd_handler_t  except_handler,
+		    sel_fd_cleared_cb done)
 {
     fd_control_t *fdc;
+    fd_state_t   *state;
+
+    state = ipmi_mem_alloc(sizeof(*state));
+    if (!state)
+	return ENOMEM;
+    state->deleted = 0;
+    state->use_count = 0;
+    state->done = done;
 
     ipmi_lock(sel->fd_lock);
     fdc = (fd_control_t *) &(sel->fds[fd]);
-    fdc->in_use = 1;
+    if (fdc->state) {
+	fdc->state->deleted = 1;
+	if (fdc->state->use_count == 0) {
+	    if (fdc->state->done)
+		fdc->state->done(fd, fdc->data);
+	    ipmi_mem_free(fdc->state);
+	}
+    }
+    fdc->state = state;
     fdc->data = data;
     fdc->handle_read = read_handler;
     fdc->handle_write = write_handler;
@@ -260,23 +287,37 @@ sel_set_fd_handlers(selector_t       *sel,
 
     wake_sel_thread_lock(sel);
     ipmi_unlock(sel->fd_lock);
+    return 0;
 }
 
 /* Clear the handlers for a file descriptor and remove it from
    select's monitoring. */
 void
-sel_clear_fd_handlers(selector_t   *sel,
-		      int          fd)
+sel_clear_fd_handlers(selector_t *sel,
+		      int        fd)
 {
+    fd_control_t *fdc;
     ipmi_lock(sel->fd_lock);
-    init_fd((fd_control_t *) &(sel->fds[fd]));
+    fdc = (fd_control_t *) &(sel->fds[fd]);
+
+    if (fdc->state) {
+	fdc->state->deleted = 1;
+	if (fdc->state->use_count == 0) {
+	    if (fdc->state->done)
+		fdc->state->done(fd, fdc->data);
+	    ipmi_mem_free(fdc->state);
+	}
+	fdc->state = NULL;
+    }
+
+    init_fd(fdc);
     FD_CLR(fd, &sel->read_set);
     FD_CLR(fd, &sel->write_set);
     FD_CLR(fd, &sel->except_set);
 
     /* Move maxfd down if necessary. */
     if (fd == sel->maxfd) {
-	while ((sel->maxfd >= 0) && (! sel->fds[sel->maxfd].in_use)) {
+	while ((sel->maxfd >= 0) && (! sel->fds[sel->maxfd].state)) {
 	    sel->maxfd--;
 	}
     }
@@ -544,35 +585,83 @@ process_fds(selector_t	            *sel,
     /* We got some I/O. */
     for (i=0; i<=sel->maxfd; i++) {
 	if (FD_ISSET(i, &tmp_read_set)) {
+	    sel_fd_handler_t handle_read;
+	    void             *data;
+	    fd_state_t       *state;
+
 	    ipmi_lock(sel->fd_lock);
 	    if (sel->fds[i].handle_read == NULL) {
 		/* Somehow we don't have a handler for this.
 		   Just shut it down. */
 		sel_set_fd_read_handler(sel, i, SEL_FD_HANDLER_DISABLED);
 	    } else {
-		sel->fds[i].handle_read(i, sel->fds[i].data);
+		handle_read = sel->fds[i].handle_read;
+		data = sel->fds[i].data;
+		state = sel->fds[i].state;
+		state->use_count++;
+		ipmi_unlock(sel->fd_lock);
+		handle_read(i, data);
+		ipmi_lock(sel->fd_lock);
+		state->use_count--;
+		if (state->deleted && state->use_count == 0) {
+		    if (state->done)
+			state->done(i, data);
+		    ipmi_mem_free(state);
+		}
 	    }
 	    ipmi_unlock(sel->fd_lock);
 	}
 	if (FD_ISSET(i, &tmp_write_set)) {
+	    sel_fd_handler_t handle_write;
+	    void             *data;
+	    fd_state_t       *state;
+
 	    ipmi_lock(sel->fd_lock);
 	    if (sel->fds[i].handle_write == NULL) {
 		/* Somehow we don't have a handler for this.
                    Just shut it down. */
 		sel_set_fd_write_handler(sel, i, SEL_FD_HANDLER_DISABLED);
 	    } else {
-		sel->fds[i].handle_write(i, sel->fds[i].data);
+		handle_write = sel->fds[i].handle_write;
+		data = sel->fds[i].data;
+		state = sel->fds[i].state;
+		state->use_count++;
+		ipmi_unlock(sel->fd_lock);
+		handle_write(i, data);
+		ipmi_lock(sel->fd_lock);
+		state->use_count--;
+		if (state->deleted && state->use_count == 0) {
+		    if (state->done)
+			state->done(i, data);
+		    ipmi_mem_free(state);
+		}
 	    }
 	    ipmi_unlock(sel->fd_lock);
 	}
 	if (FD_ISSET(i, &tmp_except_set)) {
+	    sel_fd_handler_t handle_except;
+	    void             *data;
+	    fd_state_t       *state;
+
 	    ipmi_lock(sel->fd_lock);
 	    if (sel->fds[i].handle_except == NULL) {
 		/* Somehow we don't have a handler for this.
                    Just shut it down. */
 		sel_set_fd_except_handler(sel, i, SEL_FD_HANDLER_DISABLED);
 	    } else {
-	        sel->fds[i].handle_except(i, sel->fds[i].data);
+	        handle_except = sel->fds[i].handle_except;
+		data = sel->fds[i].data;
+		state = sel->fds[i].state;
+		state->use_count++;
+		ipmi_unlock(sel->fd_lock);
+	        handle_except(i, data);
+		ipmi_lock(sel->fd_lock);
+		state->use_count--;
+		if (state->deleted && state->use_count == 0) {
+		    if (state->done)
+			state->done(i, data);
+		    ipmi_mem_free(state);
+		}
 	    }
 	    ipmi_unlock(sel->fd_lock);
 	}

@@ -6155,7 +6155,7 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 	exit(1);
     }
 
-    sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL);
+    sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL, NULL);
     sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
 
     rv = init_commands();
