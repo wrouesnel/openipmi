@@ -163,6 +163,9 @@ typedef struct ipmi_bmc_s
 
     ilist_t *con_fail_handlers;
 
+    /* A list of IPMB addresses to not scan. */
+    ilist_t *ipmb_ignores;
+
     /* Is the low-level connection up? */
     int connection_up;
 } ipmi_bmc_t;
@@ -509,6 +512,23 @@ find_mc_by_addr(ipmi_mc_t   *bmc,
     return NULL;
 }
 
+static int
+in_ipmb_ignores(ipmi_mc_t *bmc, unsigned char ipmb_addr)
+{
+    unsigned long addr;
+    ilist_iter_t iter;
+
+    ilist_init_iter(&iter, bmc->bmc->ipmb_ignores);
+    ilist_unpositioned(&iter);
+    while (ilist_next(&iter)) {
+	addr = (unsigned long) ilist_get(&iter);
+	if (addr == ipmb_addr)
+	    return 1;
+    }
+
+    return 0;
+}
+
 int
 ipmi_mc_find_or_create_mc_by_slave_addr(ipmi_mc_t    *bmc,
 					unsigned int slave_addr,
@@ -572,6 +592,21 @@ ipmi_bmc_add_con_fail_handler(ipmi_mc_t           *bmc,
 	ipmi_mem_free(new_id);
 	return ENOMEM;
     }
+
+    return 0;
+}
+
+int
+ipmi_bmc_add_ipmb_ignore(ipmi_mc_t *bmc, unsigned char ipmb_addr)
+{
+    unsigned long addr = ipmb_addr;
+
+    if (bmc->bmc_mc != bmc)
+	/* Not a BMC. */
+	return EINVAL;
+
+    if (! ilist_add_tail(bmc->bmc->ipmb_ignores, (void *) addr, NULL))
+	return ENOMEM;
 
     return 0;
 }
@@ -1504,6 +1539,14 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 	    }
 	    free_ilist(mc->bmc->con_fail_handlers);
 	}
+	if (mc->bmc->ipmb_ignores) {
+	    ilist_iter_t iter;
+	    ilist_init_iter(&iter, mc->bmc->ipmb_ignores);
+	    while (ilist_first(&iter)) {
+		ilist_delete(&iter);
+	    }
+	    free_ilist(mc->bmc->ipmb_ignores);
+	}
 	if (mc->bmc->bus_scans_running) {
 	    mc_ipmb_scan_info_t *item;
 	    while (mc->bmc->bus_scans_running) {
@@ -2119,8 +2162,11 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	goto out;
     }
     info->addr.slave_addr += 2;
-    if (info->addr.slave_addr == info->bmc->bmc->bmc_slave_addr) {
-	/* We don't scan the BMC, that would be scary. */
+    if ((info->addr.slave_addr == info->bmc->bmc->bmc_slave_addr)
+	|| (in_ipmb_ignores(info->bmc, info->addr.slave_addr)))
+    {
+	/* We don't scan the BMC, that would be scary.  We also check
+           the ignores list. */
 	goto next_addr_nolock;
     }
 
@@ -2668,6 +2714,12 @@ setup_bmc(ipmi_con_t   *ipmi,
 
     mc->bmc->con_fail_handlers = alloc_ilist();
     if (! mc->bmc->con_fail_handlers) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    mc->bmc->ipmb_ignores = alloc_ilist();
+    if (! mc->bmc->ipmb_ignores) {
 	rv = ENOMEM;
 	goto out_err;
     }

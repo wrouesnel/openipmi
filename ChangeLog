@@ -1,6 +1,10 @@
 
 2003-04-17 Corey Minyard <cminyard@mvista.com>
 
+	* configure.in: Move to version 0.3.1.
+
+	* mc.c: Added a mechanism to ignore IPMB addresses.
+
 	* configure.in: Move to version 0.3.0b.
 
 	* ui.c: Ignore control values when an error is reported from

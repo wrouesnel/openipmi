@@ -277,6 +277,11 @@ void ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
                              ipmi_bmc_cb  done_handler,
 			     void         *cb_data);
 
+/* Add an IPMB address to a list of addresses to not scan.  This way,
+   if you have weak puny devices in IPMB that will break if you do
+   normal IPMB operations, you can have them be ignored. */
+int ipmi_bmc_add_ipmb_ignore(ipmi_mc_t *bmc, unsigned char ipmb_addr);
+
 /* Return the timestamp that was fetched before the first SEL fetch.
    This is so that OEM code can properly ignore old events. */
 unsigned long ipmi_mc_get_startup_SEL_time(ipmi_mc_t *bmc);
