@@ -34,6 +34,8 @@ AC_ARG_WITH(openssl,
       tryopenssl=no
     elif test -d "$withval"; then
       SNMPLIBS="-L$withval/lib $SNMPLIBS"
+      OPENSSLLIBS="-L$withval/lib"
+      OPENSSLINCS="-I$withval/include"
       tryopenssl=yes
     fi,
 )
@@ -112,7 +114,6 @@ AM_PROG_LIBTOOL
 AC_STDC_HEADERS
 AC_CHECK_FUNCS(getaddrinfo)
 
-AC_SUBST(SNMPLIBS)
 AC_SUBST(OPENIPMI_VERSION_MAJOR)
 AC_SUBST(OPENIPMI_VERSION_MINOR)
 AC_SUBST(OPENIPMI_VERSION_RELEASE)
@@ -310,6 +311,28 @@ if test "x$tryucdsnmp" != "xno"; then
       fi
    fi
 fi
+
+AC_SUBST(SNMPLIBS)
+
+# Handle SNMP support
+if test "x$tryopenssl" != "xno"; then
+
+   HAVE_OPENSSL=no
+   # Try net snmp first
+   AC_CHECK_HEADER(openssl/crypto.h, FOUND_OPENSSL=yes; )
+
+   if test "x$FOUND_OPENSSL" == "xyes"; then
+      AC_CHECK_LIB(crypto, CRYPTO_malloc, 
+		   OPENSSLLIBS="-lcrypto $OPENSSLLIBS"
+		   AC_DEFINE(HAVE_OPENSSL)
+		   HAVE_OPENSSL=yes,
+		   ,
+		   $OPENSSLLIBS)
+   fi
+fi
+
+AC_SUBST(OPENSSLLIBS)
+AC_SUBST(OPENSSLINCS)
 
 AC_OUTPUT(Makefile
 	  utils/Makefile

@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003 MontaVista Software Inc.
+ * Copyright 2002,2003,2004 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -205,21 +205,26 @@ typedef struct lan_data_s
     ipmi_authdata_t            authdata;
 
     /* RMCP+ specific info */
-    unsigned int               requested_auth : 6;
-    unsigned int               requested_integ : 6;
-    unsigned int               requested_conf : 6;
+    unsigned int               requested_auth;
+    unsigned int               requested_integ;
+    unsigned int               requested_conf;
+    unsigned int               use_two_keys : 1;
     uint32_t                   unauth_out_seq_num[MAX_IP_ADDR];
     uint32_t                   unauth_in_seq_num[MAX_IP_ADDR];
     uint16_t                   unauth_recv_msg_map[MAX_IP_ADDR];
     unsigned char              working_integ[MAX_IP_ADDR];
     unsigned char              working_conf[MAX_IP_ADDR];
     uint32_t                   mgsys_session_id[MAX_IP_ADDR];
+    unsigned char              bmc_key[20];
+    unsigned char              my_rand_num[MAX_IP_ADDR][16];
+    unsigned char              mgsys_rand_num[MAX_IP_ADDR][16];
+    unsigned char              mgsys_guid[MAX_IP_ADDR][16];
 
-    ipmi_rmcp_confidentiality_t conf_info[MAX_IP_ADDR];
-    void                        *conf_data[MAX_IP_ADDR];
+    ipmi_rmcpp_confidentiality_t conf_info[MAX_IP_ADDR];
+    void                         *conf_data[MAX_IP_ADDR];
 
-    ipmi_rmcp_integrity_t       integ_info[MAX_IP_ADDR];
-    void                        *integ_data[MAX_IP_ADDR];
+    ipmi_rmcpp_integrity_t       integ_info[MAX_IP_ADDR];
+    void                         *integ_data[MAX_IP_ADDR];
 
 
     struct {
@@ -299,20 +304,68 @@ static ipmi_payload_t *payloads[64] =
     &_ipmi_payload
 };
 
-
-
 int
-ipmi_lan_register_payload(unsigned int   payload_type,
-			  ipmi_payload_t *payload)
+ipmi_rmcpp_register_payload(unsigned int   payload_type,
+			    ipmi_payload_t *payload)
 {
-    if ((payload_type == 0) || (payload_type == 2) || (payload_type >= 64))
+    if ((payload_type == IPMI_RMCPP_PAYLOAD_TYPE_IPMI)
+	|| (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT)
+	|| (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST)
+	|| (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE)
+	|| (payload_type >= 64))
+    {
 	return EINVAL;
+    }
     if (payloads[payload_type] && payload)
 	return EAGAIN;
 
     payloads[payload_type] = payload;
     return 0;
 }
+
+static ipmi_rmcpp_authentication_t *auths[64];
+
+int
+ipmi_rmcpp_register_authentication(unsigned int                auth_num,
+				   ipmi_rmcpp_authentication_t *auth)
+{
+    if (auth_num >= 64)
+	return EINVAL;
+    if (auths[auth_num] && auth)
+	return EAGAIN;
+    
+    auths[auth_num] = auth;
+    return 0;
+}
+
+ipmi_rmcpp_confidentiality_t *confs[64];
+
+int ipmi_rmcpp_register_confidentiality(unsigned int                 conf_num,
+					ipmi_rmcpp_confidentiality_t *conf)
+{
+    if (conf_num >= 64)
+	return EINVAL;
+    if (confs[conf_num] && conf)
+	return EAGAIN;
+    
+    confs[conf_num] = conf;
+    return 0;
+}
+
+ipmi_rmcpp_integrity_t *integs[64];
+
+int ipmi_rmcpp_register_integrity(unsigned int           integ_num,
+				  ipmi_rmcpp_integrity_t *integ)
+{
+    if (integ_num >= 64)
+	return EINVAL;
+    if (integs[integ_num] && integ)
+	return EAGAIN;
+    
+    integs[integ_num] = integ;
+    return 0;
+}
+
 
 static void check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan);
 static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
@@ -1893,14 +1946,14 @@ data_handler(int            fd,
 }
 
 /* Note that this puts the address number in data4 of the rspi. */
-static int
-lan_send_command_forceip(ipmi_con_t            *ipmi,
-			 int                   addr_num,
-			 ipmi_addr_t           *addr,
-			 unsigned int          addr_len,
-			 ipmi_msg_t            *msg,
-			 ipmi_ll_rsp_handler_t rsp_handler,
-			 ipmi_msgi_t           *rspi)
+int
+ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
+			      int                   addr_num,
+			      ipmi_addr_t           *addr,
+			      unsigned int          addr_len,
+			      ipmi_msg_t            *msg,
+			      ipmi_ll_rsp_handler_t rsp_handler,
+			      ipmi_msgi_t           *rspi)
 {
     lan_timer_info_t *info;
     lan_data_t       *lan;
@@ -2548,9 +2601,9 @@ send_get_dev_id(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     msg.data = NULL;
     msg.data_len = 0;
 
-    rv = lan_send_command_forceip(ipmi, addr_num,
-				  (ipmi_addr_t *) &addr, sizeof(addr),
-				  &msg, handle_dev_id, rspi);
+    rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
+				       (ipmi_addr_t *) &addr, sizeof(addr),
+				       &msg, handle_dev_id, rspi);
     return rv;
 }
 
@@ -2632,9 +2685,9 @@ send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     msg.data = data;
     msg.data_len = 1;
 
-    rv = lan_send_command_forceip(ipmi, addr_num,
-				  (ipmi_addr_t *) &addr, sizeof(addr),
-				  &msg, session_privilege_set, rspi);
+    rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
+				       (ipmi_addr_t *) &addr, sizeof(addr),
+				       &msg, session_privilege_set, rspi);
     return rv;
 }
 
@@ -2675,16 +2728,87 @@ check_rakp_rsp(ipmi_con_t   *ipmi,
     return 0;
 }
 
+typedef struct auth_info_s
+{
+    ipmi_msgi_t *rspi;
+    lan_data_t  *lan;
+} auth_info_t;
+
+static void
+rmcpp_auth_finished(ipmi_con_t    *ipmi,
+		    int           err,
+		    int           addr_num,
+		    void          *cb_data)
+{
+    auth_info_t *info = cb_data;
+    lan_data_t  *lan = info->lan;
+    int         rv = EINVAL;
+
+    if (!ipmi) {
+	handle_connected(lan->ipmi, ECANCELED, addr_num);
+	goto out;
+    }
+
+    if (err) {
+	handle_connected(lan->ipmi, err, addr_num);
+	goto out;
+    }
+
+    /* We're up!.  Start the session stuff. */
+    rv = send_set_session_privilege(ipmi, lan, addr_num, info->rspi);
+    if (rv) {
+        handle_connected(ipmi, rv, addr_num);
+	goto out;
+    }
+
+ out:
+    if (rv)
+	ipmi_free_msg_item(info->rspi);
+    ipmi_mem_free(info);
+    return;
+}
+
+static int
+rmcpp_set_info(ipmi_con_t             *ipmi,
+	       int                    addr_num,
+	       ipmi_rmcpp_auth_info_t *ainfo,
+	       void                   *cb_data)
+{
+    auth_info_t *info = cb_data;
+    lan_data_t  *lan = info->lan;
+    int         rv;
+
+    memcpy(lan->my_rand_num[addr_num], ainfo->my_rand_num, 16);
+    memcpy(lan->mgsys_rand_num[addr_num], ainfo->mgsys_rand_num, 16);
+    memcpy(lan->mgsys_guid[addr_num], ainfo->mgsys_guid, 16);
+
+    rv = lan->conf_info[addr_num].conf_init(ainfo,
+					    &(lan->conf_data[addr_num]));
+    if (rv)
+	goto out;
+
+    rv = lan->integ_info[addr_num].integ_init(ainfo,
+					      &(lan->integ_data[addr_num]));
+    if (rv)
+	goto out;
+
+ out:
+    return rv;
+}
+
 static int
 got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 {
-    ipmi_msg_t *msg = &rspi->msg;
-    lan_data_t *lan;
-    int        addr_num = (long) rspi->data4;
-    uint32_t   session_id;
-    uint32_t   mgsys_session_id;
-    int        privilege;
-    int        auth, integ, conf;
+    ipmi_msg_t  *msg = &rspi->msg;
+    lan_data_t  *lan;
+    int         addr_num = (long) rspi->data4;
+    uint32_t    session_id;
+    uint32_t    mgsys_session_id;
+    int         privilege;
+    int         auth, integ, conf;
+    auth_info_t *info;
+    int         rv;
+    ipmi_rmcpp_auth_info_t ainfo;
 
     if (check_rakp_rsp(ipmi, msg, "got_rmcpp_open_session_rsp", 36, addr_num))
 	goto out;
@@ -2695,7 +2819,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     if (privilege != lan->privilege) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 " Expected privilege %d, got %d",
+		 "Expected privilege %d, got %d",
 		 lan->privilege, privilege);
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
@@ -2715,7 +2839,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     if (mgsys_session_id == 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 " Got NULL mgd system session id");
+		 "Got NULL mgd system session id");
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -2723,7 +2847,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     if ((msg->data[12] != 0) || (msg->data[15] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 " Got NULL or invalid authentication payload");
+		 "Got NULL or invalid authentication payload");
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -2732,7 +2856,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     if ((msg->data[20] != 0) || (msg->data[23] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 " Got NULL or invalid integrity payload");
+		 "Got NULL or invalid integrity payload");
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
@@ -2741,13 +2865,69 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     if ((msg->data[28] != 0) || (msg->data[31] != 8)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
-		 " Got NULL or invalid confidentiality payload");
+		 "Got NULL or invalid confidentiality payload");
 	handle_connected(ipmi, EINVAL, addr_num);
 	goto out;
     }
     conf = msg->data[32] & 0x3f;
 
-    
+    if (!auths[auth]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "BMC returned an auth algorithm that wasn't supported: %d",
+		 auth);
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+
+    if (!confs[conf]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "BMC returned an conf algorithm that wasn't supported: %d",
+		 conf);
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+
+    if (!integs[integ]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 "BMC returned an integ algorithm that wasn't supported: %d",
+		 integ);
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	handle_connected(ipmi, ENOMEM, addr_num);
+	goto out;
+    }
+
+    lan->working_conf[addr_num] = conf;
+    lan->working_integ[addr_num] = integ;
+    lan->conf_info[addr_num] = *(confs[conf]);
+    lan->integ_info[addr_num] = *(integs[integ]);
+
+    memset(&ainfo, 0, sizeof(ainfo));
+    ainfo.session_id = session_id;
+    ainfo.mgsys_session_id = mgsys_session_id;
+    ainfo.role = lan->privilege;
+    memcpy(ainfo.username, lan->username, lan->username_len);
+    ainfo.username_len = lan->username_len;
+    memcpy(ainfo.password, lan->password, lan->password_len);
+    ainfo.password_len = lan->password_len;
+    ainfo.use_two_keys = lan->use_two_keys;
+    memcpy(ainfo.bmc_key, lan->bmc_key, 20);
+
+    rv = auths[addr_num]->start_auth(ipmi, addr_num, &ainfo,
+				     rmcpp_set_info, rmcpp_auth_finished,
+				     info);
+    if (rv) {
+	ipmi_mem_free(info);
+	handle_connected(ipmi, rv, addr_num);
+	goto out;
+    }
 
     return IPMI_MSG_ITEM_USED;
 
@@ -2759,31 +2939,31 @@ static int
 send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
 			int addr_num)
 {
-    int                        rv;
-    unsigned char              data[32];
-    ipmi_msg_t                 msg;
-    ipmi_rmcp_nosession_addr_t addr;
+    int                         rv;
+    unsigned char               data[32];
+    ipmi_msg_t                  msg;
+    ipmi_rmcpp_nosession_addr_t addr;
 
     memset(data, 0, sizeof(data));
     data[0] = 0;
     data[1] = lan->privilege;
     ipmi_set_uint32(data+4, lan->session_id[addr_num]);
     data[8] = 0; /* auth algorithm */
-    if (lan->requested_auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_DEFAULT)
+    if (lan->requested_auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
 	data[11] = 0; /* Let the BMC pick */
     else {
 	data[11] = 8;
 	data[12] = lan->requested_auth;
     }
     data[16] = 1; /* integrity algorithm */
-    if (lan->requested_integ == IPMI_LANP_INTEGRITY_ALGORITHM_DEFAULT)
+    if (lan->requested_integ == IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
 	data[19] = 0; /* Let the BMC pick */
     else {
 	data[19] = 8;
 	data[20] = lan->requested_integ;
     }
     data[24] = 2; /* confidentiality algorithm */
-    if (lan->requested_conf == IPMI_LANP_CONFIDENTIALITY_ALGORITHM_DEFAULT)
+    if (lan->requested_conf == IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
 	data[27] = 0; /* Let the BMC pick */
     else {
 	data[27] = 8;
@@ -2796,9 +2976,9 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
     msg.data_len = 32;
     addr.addr_type = IPMI_RMCPP_NOSESSION_ADDR_TYPE;
 
-    rv = lan_send_command_forceip(ipmi, addr_num,
-				  (ipmi_addr_t *) &addr, sizeof(addr),
-				  &msg, got_rmcpp_open_session_rsp, rspi);
+    rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
+				       (ipmi_addr_t *) &addr, sizeof(addr),
+				       &msg, got_rmcpp_open_session_rsp, rspi);
     return rv;
 }
 
@@ -2904,9 +3084,9 @@ send_activate_session(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     msg.data = data;
     msg.data_len = 22;
 
-    rv = lan_send_command_forceip(ipmi, addr_num,
-				  (ipmi_addr_t *) &addr, sizeof(addr),
-				  &msg, session_activated, rspi);
+    rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
+				       (ipmi_addr_t *) &addr, sizeof(addr),
+				       &msg, session_activated, rspi);
     return rv;
 }
 
@@ -2988,9 +3168,9 @@ send_challenge(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     memcpy(data+1, lan->username, IPMI_USERNAME_MAX);
     msg.data_len += IPMI_USERNAME_MAX;
 
-    rv = lan_send_command_forceip(ipmi, addr_num,
-				  (ipmi_addr_t *) &addr, sizeof(addr),
-				  &msg, challenge_done, rspi);
+    rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
+				       (ipmi_addr_t *) &addr, sizeof(addr),
+				       &msg, challenge_done, rspi);
     return rv;
 }
 
@@ -3117,6 +3297,7 @@ auth_cap_done_p(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     if (msg->data[4] & 0x02) {
 	/* We have RMCP+ support!  Use it. */
+	lan->use_two_keys = (msg->data[3] >> 5) & 1;
 	return start_rmcpp(ipmi, lan, rspi, addr_num);
     } else {
 	if (lan->specified_authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
@@ -3147,6 +3328,9 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
     ipmi_msgi_t                  *rspi;
     ipmi_ll_rsp_handler_t        rsp_handler;
 
+    /* FIXME - a system may only support RMCP+ and not RMCP.  We need
+       a way to detect and handle that.  */
+
     rspi = ipmi_mem_alloc(sizeof(*rspi));
     if (!rspi)
 	return ENOMEM;
@@ -3171,9 +3355,9 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
 	rsp_handler = auth_cap_done;
     }
 
-    rv = lan_send_command_forceip(ipmi, addr_num,
-				  (ipmi_addr_t *) &addr, sizeof(addr),
-				  &msg, rsp_handler, rspi);
+    rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
+				       (ipmi_addr_t *) &addr, sizeof(addr),
+				       &msg, rsp_handler, rspi);
     if (rv)
 	ipmi_mem_free(rspi);
     return rv;
@@ -3338,6 +3522,10 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     unsigned int username_len = 0;
     void         *password = NULL;
     unsigned int password_len = 0;
+    /* Pick algorithms that are mandatory and secure. */
+    unsigned int conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
+    unsigned int integ = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
+    unsigned int auth = IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_SHA1;
 
 
     for (i=0; i<num_parms; i++) {
@@ -3372,6 +3560,39 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 		return EINVAL;
 	    ports = parms[i].parm_data;
 	    num_ip_addrs = parms[i].parm_data_len;
+	    break;
+
+	case IPMI_LANP_AUTHENTICATION_ALGORITHM:
+	    auth = parms[i].parm_val;
+	    if (auth != IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK)
+	    {
+		if (auth >= 64)
+		    return EINVAL;
+		if (auths[auth])
+		    return ENOSYS;
+	    }
+	    break;
+
+	case IPMI_LANP_INTEGRITY_ALGORITHM:
+	    integ = parms[i].parm_val;
+	    if (integ != IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK)
+	    {
+		if (integ >= 64)
+		    return EINVAL;
+		if (integs[integ])
+		    return ENOSYS;
+	    }
+	    break;
+
+	case IPMI_LANP_CONFIDENTIALITY_ALGORITHM:
+	    conf = parms[i].parm_val;
+	    if (conf != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK)
+	    {
+		if (conf >= 64)
+		    return EINVAL;
+		if (integs[conf])
+		    return ENOSYS;
+	    }
 	    break;
 
 	default:
@@ -3418,10 +3639,10 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     lan->is_active = 1;
     lan->specified_authtype = authtype;
     lan->chosen_authtype = IPMI_AUTHTYPE_DEFAULT;
-    lan->requested_auth = IPMI_LANP_AUTHENTICATION_ALGORITHM_DEFAULT;
-    lan->requested_integ = IPMI_LANP_INTEGRITY_ALGORITHM_DEFAULT;
-    lan->requested_conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_DEFAULT;
     lan->privilege = privilege;
+    lan->requested_auth = auth;
+    lan->requested_integ = integ;
+    lan->requested_conf = conf;
     count = 0;
 #ifdef HAVE_GETADDRINFO
     for (i=0; i<num_ip_addrs; i++) {

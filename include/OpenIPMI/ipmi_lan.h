@@ -36,6 +36,7 @@
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_addr.h>
+#include <OpenIPMI/ipmi_conn.h>
 #include <netinet/in.h>
 
 #ifdef __cplusplus
@@ -132,45 +133,23 @@ int ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
    of this must match the length of the number of addresses. */
 #define IPMI_LANP_PARMID_PORTS		6
 
-/* Set the specific cypher suite the user wants to use.  If none is
-   specified, this will default to RAKP-HMAC-SHA1, HMAC-SHA1-96,
-   AES-CBC-128.  Note that this just sets the algorithm, integrity,
-   and confidentiality settings (below this). */
-#define IPMI_LANP_CIPHER_SUITE		7
-#define IPMI_LANP_CIPHER_SUITE_DEFAULT	(~0)
-#define IPMI_LANP_CIPHER_SUITE_RAKP__NONE__NONE				0
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__NONE__NONE		1
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__HMAC_SHA1_96__NONE	2
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__HMAC_SHA1_96__AES_CBC_128 3
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__HMAC_SHA1_96__xRC4_128	4
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_SHA1__HMAC_SHA1_96__xRC4_40	5
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__NONE__NONE		6
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__HMAC_MD5_128__NONE	7
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__HMAC_MD5_128__AES_CBC_128	8
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__HMAC_MD5_128__xRC4_128	9
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__HMAC_MD5_128__xRC4_40	10
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__MD5_128__NONE		11
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__MD5_128__AES_CBC_128	12
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__MD5_128__xRC4_128		13
-#define IPMI_LANP_CIPHER_SUITE_RAKP_HMAC_MD5__MD5_128__xRC4_40		14
-
 /* Allow the specific authentication, integrity, and confidentiality
    algorithms to be specified by the user.  Note that you can specify
-   OEM values here.  If you pick the default values, that will let the
-   BMC pick the authentication algorithms. */
-#define IPMI_LANP_AUTHENTICATION_ALGORITHM	8
-#define IPMI_LANP_AUTHENTICATION_ALGORITHM_DEFAULT		(~0)
+   OEM values here.  The defaults are RACKP_HMAC_SHA1, HMAC_SHA1_96, and
+   AES_CBC_128 for the best mandatory security. */
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM	7
+#define IPMI_LANP_AUTHENTICATION_ALGORITHM_BMCPICK		(~0)
 #define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_NONE		0
 #define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_SHA1	1
 #define IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_MD5	2
-#define IPMI_LANP_INTEGRITY_ALGORITHM		9
-#define IPMI_LANP_INTEGRITY_ALGORITHM_DEFAULT			(~0)
+#define IPMI_LANP_INTEGRITY_ALGORITHM		8
+#define IPMI_LANP_INTEGRITY_ALGORITHM_BMCPICK			(~0)
 #define IPMI_LANP_INTEGRITY_ALGORITHM_NONE			0
 #define IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96		1
 #define IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_MD5_128		2
 #define IPMI_LANP_INTEGRITY_ALGORITHM_MD5_128			3
-#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM	10
-#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_DEFAULT		(~0)
+#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM	9
+#define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_BMCPICK		(~0)
 #define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE		0
 #define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128		1
 #define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_128		2
@@ -299,32 +278,66 @@ typedef struct ipmi_payload_s
 			      unsigned int  data_len);
 } ipmi_payload_t;
 
-int ipmi_lan_register_payload(unsigned int   payload_type,
-			      ipmi_payload_t *payload);
+int ipmi_rmcpp_register_payload(unsigned int   payload_type,
+				ipmi_payload_t *payload);
 
 /*
  * RMCP+ algorithm handling.
+ *
+ * Note that all registered data structures should be static.  Note that
+ * you can deregister an algorithm by setting it to zero, but this is
+ * discouraged because of race conditions.  You should also not change
+ * these pointers dynamically, as the RMCP code may copy these to internal
+ * places for its own and you wouldn't be able to change those copies.
  */
 
-typedef void (*ipmi_rmcpp_finish_auth_cb)(ipmi_con_t *ipmi,
-					  int        err,
-					  void       *cb_data);
-
-typedef struct ipmi_rmcp_authentication_s
+typedef struct ipmi_rmcpp_auth_info_s
 {
-    int (*auth_init)(void **auth_data);
-    void (*auth_free)(void *auth_data);
+    /* Filled in by the base RMCP code before calling the auth algorithm. */
+    uint32_t      session_id;
+    uint32_t      mgsys_session_id;
+    uint8_t       role;
+    unsigned char username[16];
+    unsigned int  username_len;
+    unsigned char password[20];
+    unsigned int  password_len;
+    int           use_two_keys;
+    unsigned char bmc_key[20];
 
+    /* Filled in by the auth algorithm. */
+    unsigned char my_rand_num[16];
+    unsigned char mgsys_rand_num[16];
+    unsigned char mgsys_guid[16];
+} ipmi_rmcpp_auth_info_t;
+
+typedef void (*ipmi_rmcpp_finish_auth_cb)(ipmi_con_t    *ipmi,
+					  int           err,
+					  int           addr_num,
+					  void          *cb_data);
+typedef int (*ipmi_rmcpp_set_info_cb)(ipmi_con_t             *ipmi,
+				      int                    addr_num,
+				      ipmi_rmcpp_auth_info_t *ainfo,
+				      void                   *cb_data);
+
+typedef struct ipmi_rmcpp_authentication_s
+{
+    /* Call the set function after the key info is obtained but before
+       the final "ack".  This lets the algorithm fail the connection
+       if the lan code cannot set up the data. */
     int (*start_auth)(ipmi_con_t                *ipmi,
-		      uint32_t                  session_id,
-		      uint32_t                  mgsys_session_id,
+		      int                       addr_num,
+		      ipmi_rmcpp_auth_info_t    *ainfo,
+		      ipmi_rmcpp_set_info_cb    set,
 		      ipmi_rmcpp_finish_auth_cb done,
 		      void                      *cb_data);
-} ipmi_rmcp_authentication_t;
+} ipmi_rmcpp_authentication_t;
 
-typedef struct ipmi_rmcp_confidentiality_s
+int ipmi_rmcpp_register_authentication(unsigned int                auth_num,
+				       ipmi_rmcpp_authentication_t *auth);
+
+typedef struct ipmi_rmcpp_confidentiality_s
 {
-    int (*conf_init)(void **conf_data);
+    int (*conf_init)(ipmi_rmcpp_auth_info_t *ainfo, void **conf_data);
     void (*conf_free)(void *conf_data);
 
     /* This adds the confidentiality header and trailer.  The payload
@@ -353,11 +366,15 @@ typedef struct ipmi_rmcp_confidentiality_s
 		      unsigned char **payload,
 		      unsigned int  *payload_len);
 
-} ipmi_rmcp_confidentiality_t;
+} ipmi_rmcpp_confidentiality_t;
 
-typedef struct ipmi_rmcp_integrity_s
+int ipmi_rmcpp_register_confidentiality(unsigned int                 conf_num,
+					ipmi_rmcpp_confidentiality_t *conf);
+
+
+typedef struct ipmi_rmcpp_integrity_s
 {
-    int (*integ_init)(void **integ_data);
+    int (*integ_init)(ipmi_rmcpp_auth_info_t *ainfo, void **integ_data);
     void (*integ_free)(void *integ_data);
 
     /* This adds the integrity trailer after the payload data.  It
@@ -382,7 +399,20 @@ typedef struct ipmi_rmcp_integrity_s
 		       unsigned int  payload_len,
 		       unsigned int  total_len);
 
-} ipmi_rmcp_integrity_t;
+} ipmi_rmcpp_integrity_t;
+
+int ipmi_rmcpp_register_integrity(unsigned int           integ_num,
+				  ipmi_rmcpp_integrity_t *integ);
+
+/* Authentication algorithms should use this to send messages. */
+int ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
+				  int                   addr_num,
+				  ipmi_addr_t           *addr,
+				  unsigned int          addr_len,
+				  ipmi_msg_t            *msg,
+				  ipmi_ll_rsp_handler_t rsp_handler,
+				  ipmi_msgi_t           *rspi);
+
 
 #ifdef __cplusplus
 }

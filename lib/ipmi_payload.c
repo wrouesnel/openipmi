@@ -1,5 +1,5 @@
 /*
- * ipmi_msg_format.c
+ * ipmi_payload.c
  *
  * MontaVista IPMI code for handling IPMI-specific data formatting
  *
@@ -7,7 +7,7 @@
  *         Corey Minyard <minyard@mvista.com>
  *         source@mvista.com
  *
- * Copyright 2002,2003 MontaVista Software Inc.
+ * Copyright 2002,2003,2004 MontaVista Software Inc.
  *
  *  This program is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public License
@@ -67,13 +67,14 @@ ipmb_checksum(unsigned char *data, int size)
 	return -csum;
 }
 
-static int ipmi_format_msg(ipmi_con_t    *ipmi,
-			   ipmi_addr_t   *addr,
-			   unsigned int  addr_len,
-			   ipmi_msg_t    *msg,
-			   unsigned char *out_data,
-			   unsigned int  *out_data_len,
-			   unsigned char seq)
+static int
+ipmi_format_msg(ipmi_con_t    *ipmi,
+		ipmi_addr_t   *addr,
+		unsigned int  addr_len,
+		ipmi_msg_t    *msg,
+		unsigned char *out_data,
+		unsigned int  *out_data_len,
+		unsigned char seq)
 {
     unsigned char *tmsg = out_data;
     int           pos;
@@ -148,10 +149,11 @@ static int ipmi_format_msg(ipmi_con_t    *ipmi,
     return 0;
 }
 
-static int ipmi_get_recv_seq(ipmi_con_t    *ipmi,
-			     unsigned char *data,
-			     unsigned int  data_len,
-			     unsigned char *seq)
+static int
+ipmi_get_recv_seq(ipmi_con_t    *ipmi,
+		  unsigned char *data,
+		  unsigned int  data_len,
+		  unsigned char *seq)
 {
     if (data_len < 8) { /* Minimum size of an IPMI msg. */
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -171,13 +173,14 @@ static int ipmi_get_recv_seq(ipmi_con_t    *ipmi,
     return 0;
 }
 
-static int ipmi_handle_recv(ipmi_con_t    *ipmi,
-			    ipmi_msgi_t   *rspi,
-			    ipmi_addr_t   *orig_addr,
-			    unsigned int  orig_addr_len,
-			    ipmi_msg_t    *orig_msg,
-			    unsigned char *data,
-			    unsigned int  data_len)
+static int
+ipmi_handle_recv(ipmi_con_t    *ipmi,
+		 ipmi_msgi_t   *rspi,
+		 ipmi_addr_t   *orig_addr,
+		 unsigned int  orig_addr_len,
+		 ipmi_msg_t    *orig_msg,
+		 unsigned char *data,
+		 unsigned int  data_len)
 {
     ipmi_msg_t    *msg = &(rspi->msg);
     ipmi_addr_t   *addr = &(rspi->addr);
@@ -366,7 +369,7 @@ static int ipmi_handle_recv(ipmi_con_t    *ipmi,
     return 0;
 }
 
-void
+static void
 ipmi_handle_recv_async(ipmi_con_t    *ipmi,
 		       unsigned char *tmsg,
 		       unsigned int  data_len)
@@ -426,4 +429,3 @@ ipmi_handle_recv_async(ipmi_con_t    *ipmi,
 ipmi_payload_t _ipmi_payload =
 { ipmi_format_msg, ipmi_get_recv_seq, ipmi_handle_recv,
   ipmi_handle_recv_async };
-

@@ -125,10 +125,10 @@ struct ipmi_lan_addr
 
 /* Used for sending messages that are raw RMCP+ outside a session. */
 #define IPMI_RMCPP_NOSESSION_ADDR_TYPE   0x100
-typedef struct ipmi_rmcp_nosession_addr
+typedef struct ipmi_rmcpp_nosession_addr
 {
 	int           addr_type;
-} ipmi_rmcp_nosession_addr_t;
+} ipmi_rmcpp_nosession_addr_t;
 
 /* RMCP+ address types are in this range.  These map to payloads.  Note
    that 0x100 is specially used; it would be IPMI if there was no
