@@ -1312,7 +1312,11 @@ sensor_read_handler(ipmi_entity_t *ent, void *cb_data)
 {
     ent_active_detect_t *info = cb_data;
     
-    presence_changed(ent, info->present, NULL);
+    if (!info->present)
+	/* Nothing present from the sensors, try the children. */
+	presence_parent_handler(NULL, ent, NULL);
+    else
+	presence_changed(ent, info->present, NULL);
 }
 
 static void
@@ -1390,6 +1394,11 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
     } else if (ent->presence_bit_sensor) {
 	/* Presence bit sensor overrides everything but presence. */
 	rv = ipmi_states_get(ent->presence_bit_sensor, states_bit_read, ent);
+    } else if ((ent->frudev_present) && (ent->frudev_active)) {
+	/* Even though the spec lists the frudev check last, since
+	   these are an "or" relationship except for the presence
+	   bits, and this is the simplest check, we do it first. */
+	presence_changed(ent, ent->frudev_active, NULL);
     } else if (! ilist_empty(ent->sensors)) {
 	/* It has sensors, try to see if any of those are active. */
 	detect = ipmi_mem_alloc(sizeof(*detect));
@@ -1404,14 +1413,10 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	/* I couldn't message any sensors, the thing must be gone. */
 	if (detect->sensor_try_count == 0) {
 	    ipmi_mem_free(detect);
-	    if (ent->frudev_present)
-		goto try_frudev;
-	    else
-		presence_changed(ent, 0, NULL);
+
+	    /* Try the children last. */
+	    presence_parent_handler(NULL, ent, NULL);
 	}
-    } else if (ent->frudev_present) {
-    try_frudev:	
-	presence_changed(ent, ent->frudev_active, NULL);
     } else {
 	/* Maybe it has children that can handle it's presence. */
 	presence_parent_handler(NULL, ent, NULL);
