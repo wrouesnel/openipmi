@@ -34,7 +34,10 @@ libOpenIPMIui_la_LIBADD =
 libOpenIPMIui_la_LDFLAGS = -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIui.map
 
-noinst_PROGRAMS = test_heap
+noinst_PROGRAMS = test_heap ipmisample
+
+ipmisample_SOURCES = sample.c ui_os.c
+ipmisample_LDADD = -lOpenIPMI
 
 ipmicmd_SOURCES = ipmicmd.c
 ipmicmd_LDADD = -lpopt

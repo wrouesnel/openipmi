@@ -1,4 +1,8 @@
 
+2003-03-13 Jeff Zheng <Jeff.Zheng@Intel.com>
+
+	* sample.c: Added a simple sample application.
+
 2003-03-12 Corey Minyard <cminyard@mvista.com>
 
 	* mc.c: Fixed a cleanup case in the routine that finds or creates
