@@ -817,13 +817,30 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
 	    for (j=(sdr.data[18] & 0x0f)-1; j>=0; j--) {
 		int len;
 
-		memcpy(s[p+j], s[p], sizeof(ipmi_sensor_t));
+		if (j != 0) {
+		    /* The first one is already allocated, we are
+                       using it to copy to the other ones, so this is
+                       not necessary. */
+		    s[p+j] = ipmi_mem_alloc(sizeof(ipmi_sensor_t));
+		    if (!s[p+j]) {
+			rv = ENOMEM;
+			goto out_err;
+		    }
+		    memcpy(s[p+j], s[p], sizeof(ipmi_sensor_t));
+		    
+		    s[p+j]->waitq = opq_alloc(ipmi_mc_get_os_hnd(bmc));
+		    if (!s[p+j]->waitq) {
+			rv = ENOMEM;
+			goto out_err;
+		    }
 
-		s[p+j]->num += j;
+		    s[p+j]->num += j;
 
-		if (sdr.data[19] & 0x80) {
-		    s[p+j]->entity_instance += j;
+		    if (sdr.data[19] & 0x80) {
+			s[p+j]->entity_instance += j;
+		    }
 		}
+
 		val = (sdr.data[19] & 0x3f) + j;
 		len = strlen(s[p+j]->id);
 		switch ((sdr.data[18] >> 4) & 0x03) {
