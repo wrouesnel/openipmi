@@ -25,6 +25,9 @@
 
 	* configure.in: Move to version 1.2.13.
 
+	* lib/oem_motorola_mxp.c: Add fan speed raw/cooked conversion
+	function.
+
 2004-02-17 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_conn.h: Added a "broadcast broken" flag

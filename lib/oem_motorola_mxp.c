@@ -3780,6 +3780,42 @@ fan_revision_get(ipmi_control_t                 *control,
     return rv;
 }
 
+static int
+mxp_fan_speed_convert_from_raw(ipmi_sensor_t *sensor,
+			       int           val,
+			       double        *result)
+{
+    double dval = val;
+
+    *result = 468750.0 / dval;
+    return 0;
+}
+
+static int
+mxp_fan_speed_convert_to_raw(ipmi_sensor_t     *sensor,
+			     enum ipmi_round_e rounding,
+			     double            val,
+			     int               *result)
+{
+    switch (rounding)
+    {
+    case ROUND_NORMAL:
+	val += .5;
+	break;
+
+    case ROUND_UP:
+	val = ceil(val);
+	break;
+
+    case ROUND_DOWN:
+	val = floor(val);
+	break;
+    }
+
+    *result = 468750.0 / val;
+    return 0;
+}
+
 static void
 mxp_fan_reading_cb(ipmi_sensor_t *sensor,
 		   int           err,
@@ -3944,8 +3980,9 @@ static int
 mxp_add_fan_sensors(mxp_info_t *info,
 		    mxp_fan_t  *fan)
 {
-    int          rv;
-    unsigned int assert, deassert;
+    int               rv;
+    unsigned int      assert, deassert;
+    ipmi_sensor_cbs_t cbs;
 
     /* Fan presence sensor */
     rv = mxp_alloc_discrete_sensor(info->mc,
@@ -3981,6 +4018,10 @@ mxp_add_fan_sensors(mxp_info_t *info,
 				    &fan->fan);
     if (rv)
 	goto out_err;
+    ipmi_sensor_get_callbacks(fan->fan, &cbs);
+    cbs.ipmi_sensor_convert_from_raw = mxp_fan_speed_convert_from_raw;
+    cbs.ipmi_sensor_convert_to_raw = mxp_fan_speed_convert_to_raw;
+    ipmi_sensor_set_callbacks(fan->fan, &cbs);
     rv = mxp_add_sensor(info->mc, 
 			&fan->fan,
 			MXP_FAN_SPEED_NUM(fan->idx),
