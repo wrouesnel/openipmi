@@ -1420,7 +1420,7 @@ data_handler(int            fd,
         msg.netfn = tmsg[1] >> 2;
         msg.cmd = tmsg[5];
         msg.data = tmsg+6;
-        msg.data_len = data_len - 8;
+        msg.data_len = data_len - 7;
     } else {
 	/* It's not encapsulated in a send message response. */
 
