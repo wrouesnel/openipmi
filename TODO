@@ -1,0 +1,7 @@
+
+Add sensor SDRs back into the main SDR repository (if they can from
+there).
+
+Support for multiple LAN connections to the same box in ipmi_lan.
+
+Fix the logging to support severity levels.

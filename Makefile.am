@@ -9,7 +9,7 @@ VERSION_CURRENT = $(wordlist 1, 1, $(SPACE_VERSION))
 VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
 VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
 
-EXTRA_DIST = 
+EXTRA_DIST = TODO
 
 AM_CFLAGS = -Wall -Werror -Iinclude
 SUBDIRS = include
