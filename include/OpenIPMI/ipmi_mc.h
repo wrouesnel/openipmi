@@ -252,6 +252,10 @@ void ipmi_start_ipmb_mc_scan(ipmi_mc_t    *bmc,
                              ipmi_bmc_cb  done_handler,
 			     void         *cb_data);
 
+/* If OEM code gets and event and it doesn't deliver it to the user,
+   it should deliver it this way, that way it can be delivered to the
+   user to be deleted. */
+void ipmi_handle_unhandled_event(ipmi_mc_t *bmc, ipmi_event_t *event);
 
 /* Set and get the OEM data pointer in the mc. */
 void ipmi_mc_set_oem_data(ipmi_mc_t *mc, void *data);

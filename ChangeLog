@@ -1,6 +1,10 @@
 
 2003-01-09 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c, include/OpenIPMI/mc.h, entity.c: Added support for
+	handling unhandled (not delivered to the user) events, so the user
+	can delete them if they like.
+
 	* ui.c: The info wasn't being passed into the id-to-pointer
 	converted for the mccmd command.
 	

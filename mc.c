@@ -522,11 +522,24 @@ mc_event_cb(ipmi_mc_t *mc, void *cb_data)
 					      mc->oem_event_handler_cb_data);
 }
 
+void
+ipmi_handle_unhandled_event(ipmi_mc_t *bmc, ipmi_event_t *event)
+{
+    ipmi_event_handler_id_t *l;
+
+    ipmi_lock(bmc->bmc->event_handlers_lock);
+    l = bmc->bmc->event_handlers;
+    while (l) {
+	l->handler(bmc, event, l->event_data);
+	l = l->next;
+    }
+    ipmi_unlock(bmc->bmc->event_handlers_lock);
+}
+
 static void
 system_event_handler(ipmi_mc_t    *bmc,
 		     ipmi_event_t *event)
 {
-    ipmi_event_handler_id_t *l;
     int                     rv = 1;
     ipmi_sensor_id_t        id;
     event_sensor_info_t     info;
@@ -582,21 +595,14 @@ system_event_handler(ipmi_mc_t    *bmc,
 	id.sensor_num = event->data[8];
 
 	rv = ipmi_sensor_pointer_cb(id, event_sensor_cb, &info);
-	if (rv) {
+	if (!rv) {
 	    rv = info.err;
 	}
     }
 
     /* It's an event from system software, or the info couldn't be found. */
-    if (rv) {
-	ipmi_lock(bmc->bmc->event_handlers_lock);
-	l = bmc->bmc->event_handlers;
-	while (l) {
-	    l->handler(bmc, event, l->event_data);
-	    l = l->next;
-	}
-	ipmi_unlock(bmc->bmc->event_handlers_lock);
-    }
+    if (rv)
+	ipmi_handle_unhandled_event(bmc, event);
 }
 
 /* Got a new event in the system event log that we didn't have before. */

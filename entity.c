@@ -505,16 +505,22 @@ presence_changed(ipmi_entity_t *ent,
 		 int           present,
 		 ipmi_event_t  *event)
 {
-    /* FIXME - do we need to delete the event? */
+    int handled = 0;
+
     if (present != ent->present) {
 	ent->present = present;
-	if (ent->presence_handler)
+	if (ent->presence_handler) {
 	    ent->presence_handler(ent, present, ent->presence_cb_data, event);
+	    handled = 1;
+	}
 
 	/* If our presence changes, that can affect parents, too.  So we
 	   rescan them. */
 	ipmi_entity_iterate_parents(ent, presence_parent_handler, NULL);
     }
+
+    if (!handled)
+	ipmi_handle_unhandled_event(ent->bmc, event);
 }
 
 static void
@@ -558,8 +564,6 @@ presence_sensor_changed(ipmi_sensor_t         *sensor,
 			ipmi_event_t          *event)
 {
     ipmi_entity_t *ent = cb_data;
-
-    /* FIXME - do we need to delete the event? */
 
     /* zero means the sensor is present, 1 or 2 means it absent or
        disabled */
