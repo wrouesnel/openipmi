@@ -1657,6 +1657,67 @@ mxp_alloc_control(ipmi_mc_t               *mc,
     return rv;
 }
 
+static int
+mxp_alloc_id_control(ipmi_mc_t                          *mc,
+		     ipmi_entity_t                      *entity,
+		     unsigned int                       num,
+		     void                               *data,
+		     unsigned int                       control_type,
+		     char                               *id,
+		     int                                size,
+		     ipmi_control_identifier_set_val_cb set_val,
+		     ipmi_control_identifier_get_val_cb get_val,
+		     ipmi_control_t                     **control)
+{
+    int                  rv;
+    ipmi_control_cbs_t   cbs;
+    mxp_control_header_t *hdr;
+
+    hdr = ipmi_mem_alloc(sizeof(*hdr));
+    if (!hdr)
+	return ENOMEM;
+
+    hdr->data = data;
+
+    /* Allocate the control. */
+    rv = ipmi_control_alloc_nonstandard(control);
+    if (rv) {
+	ipmi_mem_free(hdr);
+	return rv;
+    }
+
+    /* Fill out default values. */
+    ipmi_control_set_oem_info(*control, hdr, mxp_cleanup_control_oem_info);
+    ipmi_control_set_type(*control, control_type);
+    ipmi_control_set_id(*control, id, IPMI_ASCII_STR, strlen(id));
+    ipmi_control_set_ignore_if_no_entity(*control, 1);
+
+    /* Assume we can read and set the value. */
+    if (set_val)
+	ipmi_control_set_settable(*control, 1);
+    if (get_val)
+	ipmi_control_set_readable(*control, 1);
+
+    /* Create all the callbacks in the data structure. */
+    memset(&cbs, 0, sizeof(cbs));
+    ipmi_control_identifier_set_max_length(*control, 4);
+    cbs.set_identifier_val = set_val;
+    cbs.get_identifier_val = get_val;
+
+    ipmi_control_set_callbacks(*control, &cbs);
+
+    /* Add it to the MC and entity. */
+    rv = ipmi_control_add_nonstandard(mc, mc, *control, num, entity,
+				      NULL, NULL);
+    if (rv) {
+	ipmi_control_destroy(*control);
+	ipmi_mem_free(hdr);
+	*control = NULL;
+    }
+
+    return rv;
+}
+
 /***********************************************************************
  *
  * Chassis-specific controls and sensors start here.
@@ -2316,9 +2377,7 @@ relay_get(ipmi_control_t      *control,
 static int
 mxp_add_chassis_sensors(mxp_info_t *info)
 {
-    int                rv;
-    ipmi_control_cbs_t control_cbs;
-
+    int rv;
 
     /* The System LEDS (both OOS and inserv controls). */
     rv = mxp_alloc_control(info->mc, info->chassis_ent,
@@ -2334,42 +2393,30 @@ mxp_add_chassis_sensors(mxp_info_t *info)
     ipmi_control_light_set_lights(info->sys_led, 3, sys_leds);
 
     /* The Chassis Type. */
-    rv = mxp_alloc_control(info->mc, info->chassis_ent,
-			   MXP_CHASSIS_TYPE_CONTROL_NUM,
-			   info,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "Chassis Type",
-			   NULL,
-			   NULL,
-			   &(info->chassis_type_control));
+    rv = mxp_alloc_id_control(info->mc, info->chassis_ent,
+			      MXP_CHASSIS_TYPE_CONTROL_NUM,
+			      info,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "Chassis Type",
+			      1,
+			      chassis_type_set,
+			      chassis_type_get,
+			      &(info->chassis_type_control));
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(info->chassis_type_control, 1);
-    ipmi_control_get_callbacks(info->chassis_type_control, &control_cbs);
-    control_cbs.set_identifier_val = chassis_type_set;
-    control_cbs.get_identifier_val = chassis_type_get;
-    ipmi_control_set_settable(info->chassis_type_control, 1);
-    ipmi_control_set_readable(info->chassis_type_control, 1);
-    ipmi_control_set_callbacks(info->chassis_type_control, &control_cbs);
 
     /* The Shelf Geographic Address (GA). */
-    rv = mxp_alloc_control(info->mc, info->chassis_ent,
-			   MXP_SHELF_GA_CONTROL_NUM,
-			   info,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "Shelf GA",
-			   NULL,
-			   NULL,
-			   &(info->shelf_ga_control));
+    rv = mxp_alloc_id_control(info->mc, info->chassis_ent,
+			      MXP_SHELF_GA_CONTROL_NUM,
+			      info,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "Shelf GA",
+			      1,
+			      shelf_ga_set,
+			      shelf_ga_get,
+			      &(info->shelf_ga_control));
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(info->shelf_ga_control, 1);
-    ipmi_control_get_callbacks(info->shelf_ga_control, &control_cbs);
-    control_cbs.set_identifier_val = shelf_ga_set;
-    control_cbs.get_identifier_val = shelf_ga_get;
-    ipmi_control_set_settable(info->shelf_ga_control, 1);
-    ipmi_control_set_readable(info->shelf_ga_control, 1);
-    ipmi_control_set_callbacks(info->shelf_ga_control, &control_cbs);
 
     /* Now the relays. */
     rv = mxp_alloc_control(info->mc, info->chassis_ent,
@@ -3822,9 +3869,8 @@ static int
 mxp_add_power_supply_sensors(mxp_info_t         *info,
 			     mxp_power_supply_t *ps)
 {
-    int                rv;
-    unsigned int       assert, deassert;
-    ipmi_control_cbs_t control_cbs;
+    int          rv;
+    unsigned int assert, deassert;
 
     /* Power supply presence */
     rv = mxp_alloc_discrete_sensor(info->mc, ps->ent,
@@ -3897,38 +3943,30 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     ipmi_control_light_set_lights(ps->inserv_led, 1, green_led);
 
     /* Power Supply Type ID */
-    rv = mxp_alloc_control(info->mc, ps->ent,
-			   MXP_PS_TYPE_NUM(ps->idx),
-			   ps,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "type",
-			   NULL,
-			   NULL,
-			   &ps->ps_type);
+    rv = mxp_alloc_id_control(info->mc, ps->ent,
+			      MXP_PS_TYPE_NUM(ps->idx),
+			      ps,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "type",
+			      1,
+			      NULL,
+			      ps_type_get,
+			      &ps->ps_type);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(ps->ps_type, 1);
-    ipmi_control_get_callbacks(ps->ps_type, &control_cbs);
-    control_cbs.get_identifier_val = ps_type_get;
-    ipmi_control_set_readable(ps->ps_type, 1);
-    ipmi_control_set_callbacks(ps->ps_type, &control_cbs);
 
     /* Power Supply Revision */
-    rv = mxp_alloc_control(info->mc, ps->ent,
-			   MXP_PS_REVISION_NUM(ps->idx),
-			   ps,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "revision",
-			   NULL,
-			   NULL,
-			   &ps->ps_revision);
+    rv = mxp_alloc_id_control(info->mc, ps->ent,
+			      MXP_PS_REVISION_NUM(ps->idx),
+			      ps,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "revision",
+			      2,
+			      NULL,
+			      ps_revision_get,
+			      &ps->ps_revision);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(ps->ps_revision, 2);
-    ipmi_control_get_callbacks(ps->ps_revision, &control_cbs);
-    control_cbs.get_identifier_val = ps_revision_get;
-    ipmi_control_set_readable(ps->ps_revision, 1);
-    ipmi_control_set_callbacks(ps->ps_revision, &control_cbs);
 
     /* Power supply I2C isolate control */
     rv = mxp_alloc_control(info->mc, ps->ent,
@@ -4018,38 +4056,30 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     ipmi_control_light_set_lights(ps->fan_inserv_led, 1, red_led);
 	       
     /* Fan Type ID */
-    rv = mxp_alloc_control(info->mc, ps->fan_ent,
-			   MXP_FAN_TYPE_NUM(ps->idx),
-			   ps,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "type",
-			   NULL,
-			   NULL,
-			   &ps->fan_type);
+    rv = mxp_alloc_id_control(info->mc, ps->fan_ent,
+			      MXP_FAN_TYPE_NUM(ps->idx),
+			      ps,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "type",
+			      1,
+			      NULL,
+			      fan_type_get,
+			      &ps->fan_type);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(ps->fan_type, 1);
-    ipmi_control_get_callbacks(ps->fan_type, &control_cbs);
-    control_cbs.get_identifier_val = fan_type_get;
-    ipmi_control_set_readable(ps->fan_type, 1);
-    ipmi_control_set_callbacks(ps->fan_type, &control_cbs);
 
     /* Fan Revision */
-    rv = mxp_alloc_control(info->mc, ps->fan_ent,
-			   MXP_FAN_REVISION_NUM(ps->idx),
-			   ps,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "revision",
-			   NULL,
-			   NULL,
-			   &ps->fan_revision);
+    rv = mxp_alloc_id_control(info->mc, ps->fan_ent,
+			      MXP_FAN_REVISION_NUM(ps->idx),
+			      ps,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "revision",
+			      1,
+			      NULL,
+			      fan_revision_get,
+			      &ps->fan_revision);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(ps->fan_revision, 1);
-    ipmi_control_get_callbacks(ps->fan_revision, &control_cbs);
-    control_cbs.get_identifier_val = fan_revision_get;
-    ipmi_control_set_readable(ps->fan_revision, 1);
-    ipmi_control_set_callbacks(ps->fan_revision, &control_cbs);
 
     /* Voltage sensors */
     /* There aren't any */
@@ -6152,8 +6182,7 @@ new_board_sensors(ipmi_mc_t           *mc,
 		  mxp_info_t          *info,
 		  board_sensor_info_t *sinfo)
 {
-    int                rv;
-    ipmi_control_cbs_t control_cbs;
+    int rv;
 
     /* The slot sensor */
     rv = mxp_alloc_discrete_sensor(
@@ -6215,21 +6244,17 @@ new_board_sensors(ipmi_mc_t           *mc,
     ipmi_control_set_hot_swap_indicator(sinfo->blue_led, 1, 1, 0, 2, 1);
 
     /* Slot gegraphic address */
-    rv = mxp_alloc_control(mc, ent,
-			   MXP_BOARD_SLOT_GA_NUM,
-			   NULL,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "Geog Addr",
-			   NULL,
-			   NULL,
-			   &sinfo->slot_ga);
+    rv = mxp_alloc_id_control(mc, ent,
+			      MXP_BOARD_SLOT_GA_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "Geog Addr",
+			      1,
+			      NULL,
+			      slot_ga_get,
+			      &sinfo->slot_ga);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(sinfo->slot_ga, 1);
-    ipmi_control_get_callbacks(sinfo->slot_ga, &control_cbs);
-    control_cbs.get_identifier_val = slot_ga_get;
-    ipmi_control_set_readable(sinfo->slot_ga, 1);
-    ipmi_control_set_callbacks(sinfo->slot_ga, &control_cbs);
 
     /* Board power mode */
     rv = mxp_alloc_control(mc, ent,
@@ -6245,23 +6270,17 @@ new_board_sensors(ipmi_mc_t           *mc,
     ipmi_control_set_num_elements(sinfo->power_config, 3);
 
     /* The Chassis ID. */
-    rv = mxp_alloc_control(mc, ent,
-			   MXP_BOARD_CHASSIS_ID_CONTROL_NUM,
-			   NULL,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "Chassis ID",
-			   NULL,
-			   NULL,
-			   &sinfo->chassis_id);
+    rv = mxp_alloc_id_control(mc, ent,
+			      MXP_BOARD_CHASSIS_ID_CONTROL_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "Chassis ID",
+			      4,
+			      chassis_id_set,
+			      chassis_id_get,
+			      &sinfo->chassis_id);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(sinfo->chassis_id, 4);
-    ipmi_control_get_callbacks(sinfo->chassis_id, &control_cbs);
-    control_cbs.set_identifier_val = chassis_id_set;
-    control_cbs.get_identifier_val = chassis_id_get;
-    ipmi_control_set_settable(sinfo->chassis_id, 1);
-    ipmi_control_set_readable(sinfo->chassis_id, 1);
-    ipmi_control_set_callbacks(sinfo->chassis_id, &control_cbs);
 
  out_err:
     return rv;
@@ -6956,7 +6975,6 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_entity_info_t *ents;
     unsigned int       assert, deassert;
     char               *name;
-    ipmi_control_cbs_t control_cbs;
     int (*get)(ipmi_sensor_t *, ipmi_reading_done_cb, void *)
 	= ipmi_standard_sensor_cb.ipmi_reading_get;
     int                v1_amc = ipmi_mc_major_fw_revision(mc) < 5;
@@ -7059,88 +7077,66 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_control_light_set_lights(info->temp_cool_led, 2, amc_temp_cool_leds);
 
     /* Last reset reason. */
-    rv = mxp_alloc_control(mc, info->ent,
-			   MXP_BOARD_LAST_RESET_REASON_NUM,
-			   NULL,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "Last Reset Rsn",
-			   NULL,
-			   NULL,
-			   &info->last_reset_reason);
+    rv = mxp_alloc_id_control(mc, info->ent,
+			      MXP_BOARD_LAST_RESET_REASON_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "Last Reset Rsn",
+			      1,
+			      NULL,
+			      amc_last_reset_reason_get,
+			      &info->last_reset_reason);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(info->last_reset_reason, 1);
-    ipmi_control_get_callbacks(info->last_reset_reason, &control_cbs);
-    control_cbs.get_identifier_val = amc_last_reset_reason_get;
-    ipmi_control_set_readable(info->last_reset_reason, 1);
-    ipmi_control_set_callbacks(info->last_reset_reason, &control_cbs);
 
-    rv = mxp_alloc_control(mc, info->ent,
-			   MXP_BOARD_HW_VER_NUM,
-			   NULL,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "hw version",
-			   NULL,
-			   NULL,
-			   &info->hw_version);
+    rv = mxp_alloc_id_control(mc, info->ent,
+			      MXP_BOARD_HW_VER_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "hw version",
+			      1,
+			      NULL,
+			      amc_hw_version_get,
+			      &info->hw_version);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(info->hw_version, 1);
-    ipmi_control_get_callbacks(info->hw_version, &control_cbs);
-    control_cbs.get_identifier_val = amc_hw_version_get;
-    ipmi_control_set_readable(info->hw_version, 1);
-    ipmi_control_set_callbacks(info->hw_version, &control_cbs);
 
-    rv = mxp_alloc_control(mc, info->ent,
-			   MXP_BOARD_FW_VER_NUM,
-			   NULL,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "fw version",
-			   NULL,
-			   NULL,
-			   &info->fw_version);
+    rv = mxp_alloc_id_control(mc, info->ent,
+			      MXP_BOARD_FW_VER_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "fw version",
+			      1,
+			      NULL,
+			      amc_fw_version_get,
+			      &info->fw_version);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(info->fw_version, 1);
-    ipmi_control_get_callbacks(info->fw_version, &control_cbs);
-    control_cbs.get_identifier_val = amc_fw_version_get;
-    ipmi_control_set_readable(info->fw_version, 1);
-    ipmi_control_set_callbacks(info->fw_version, &control_cbs);
 
-    rv = mxp_alloc_control(mc, info->ent,
-			   MXP_BOARD_FPGA_VER_NUM,
-			   NULL,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "fpga version",
-			   NULL,
-			   NULL,
-			   &info->fpga_version);
+    rv = mxp_alloc_id_control(mc, info->ent,
+			      MXP_BOARD_FPGA_VER_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "fpga version",
+			      1,
+			      NULL,
+			      amc_fpga_version_get,
+			      &info->fpga_version);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(info->fpga_version, 1);
-    ipmi_control_get_callbacks(info->fpga_version, &control_cbs);
-    control_cbs.get_identifier_val = amc_fpga_version_get;
-    ipmi_control_set_readable(info->fpga_version, 1);
-    ipmi_control_set_callbacks(info->fpga_version, &control_cbs);
 
     /* The Chassis ID. */
-    rv = mxp_alloc_control(mc, info->ent,
-			   MXP_BOARD_CHASSIS_ID_CONTROL_NUM,
-			   NULL,
-			   IPMI_CONTROL_IDENTIFIER,
-			   "Chassis ID",
-			   NULL,
-			   NULL,
-			   &info->chassis_id);
+    rv = mxp_alloc_id_control(mc, info->ent,
+			      MXP_BOARD_CHASSIS_ID_CONTROL_NUM,
+			      NULL,
+			      IPMI_CONTROL_IDENTIFIER,
+			      "Chassis ID",
+			      4,
+			      chassis_id_set,
+			      chassis_id_get,
+			      &info->chassis_id);
     if (rv)
 	goto out_err;
-    ipmi_control_identifier_set_max_length(info->chassis_id, 4);
-    ipmi_control_get_callbacks(info->chassis_id, &control_cbs);
-    control_cbs.set_identifier_val = chassis_id_set;
-    control_cbs.get_identifier_val = chassis_id_get;
-    ipmi_control_set_settable(info->chassis_id, 1);
-    ipmi_control_set_readable(info->chassis_id, 1);
-    ipmi_control_set_callbacks(info->chassis_id, &control_cbs);
 
     /* The SDRS are right for newer AMCs.  We just use those with the
        proper sensor fixups. */
