@@ -132,7 +132,7 @@
 #define MXP_OEM_GET_DATA_INOUT_CMD		0x3b
 #define MXP_OEM_SET_SLOT_INIT_CMD		0x3c
 #define MXP_OEM_SET_QUEUE_LOCK_CMD		0x3e
-#define MXP_OEM_SET_MSQ_QUEUE_CMD		0x40
+#define MXP_OEM_GET_SLOT_SIGNALS_CMD		0x40
 #define MXP_OEM_SET_DUAL_CONTROL_CMD		0x4a
 
 #define MXP_CHASSIS_CONFIG_6U		0
@@ -183,7 +183,6 @@
 #define MXP_BOARD_SENSNUM_START 64
 #define MXP_BOARD_SENSOR_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_SENSNUM_START)
 #define MXP_BOARD_PRESENCE_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 1)
-#define MXP_BOARD_HEALTHY_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 2)
 
 #define MXP_BOARD_CONTROLNUM_START 40
 #define MXP_BOARD_CONTROL_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_CONTROLNUM_START)
@@ -448,6 +447,9 @@ struct mxp_sens_info_s
     /* Generic info for use by the specific sensor. */
     void                  *sdinfo;
 
+    /* The miminum length of the response message. */
+    unsigned int          min_rsp_length;
+
     /* Routines to handle getting the states from the data.  The
        err_states routine does not have to be supplied (may be NULL),
        in that case the error from the message is returned. */
@@ -511,6 +513,17 @@ mxp_sensor_get_done(ipmi_sensor_t *sensor,
 		 rsp->data[0]);
 	if (sens_info->done)
 	    sens_info->done(sensor, IPMI_IPMI_ERR_VAL(rsp->data[0]),
+			    &states, sens_info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < sens_info->min_rsp_length) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "mxp_sensor_get_done: Received invalid msg length: %d,"
+		 " expected %d",
+		 rsp->data_len, sens_info->min_rsp_length);
+	if (sens_info->done)
+	    sens_info->done(sensor, EINVAL,
 			    &states, sens_info->cb_data);
 	goto out;
     }
@@ -2563,6 +2576,7 @@ ps_presence_states_get(ipmi_sensor_t       *sensor,
 	return ENOMEM;
     get_info->get_states = ps_presence_states_get_cb;
     get_info->err_states = ps_presence_states_err_cb;
+    get_info->min_rsp_length = 6;
     rv = ipmi_sensor_add_opq(sensor, ps_presence_states_get_start,
 			     &(get_info->sdata), get_info);
     if (rv)
@@ -2659,6 +2673,7 @@ ps_ps_states_get(ipmi_sensor_t       *sensor,
 	return ENOMEM;
     get_info->get_states = ps_ps_states_get_cb;
     get_info->err_states = ps_ps_states_err_cb;
+    get_info->min_rsp_length = 7;
     rv = ipmi_sensor_add_opq(sensor, ps_ps_states_get_start,
 			     &(get_info->sdata), get_info);
     if (rv)
@@ -3211,6 +3226,7 @@ fan_presence_states_get(ipmi_sensor_t       *sensor,
 	return ENOMEM;
     get_info->get_states = fan_presence_states_get_cb;
     get_info->err_states = fan_presence_states_err_cb;
+    get_info->min_rsp_length = 6;
 
     rv = ipmi_sensor_add_opq(sensor, fan_presence_states_get_start,
 			     &(get_info->sdata), get_info);
@@ -4052,70 +4068,20 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 
 /***********************************************************************
  *
- * Board sensors handled by the AMC start here.
+ * Board sensors and controls handled by the AMC start here.
  *
  **********************************************************************/
 
 static void
-board_presence_states_get2(ipmi_sensor_t *sensor, void *cb_data)
+board_presence_states_get_cb(ipmi_sensor_t   *sensor,
+			     mxp_sens_info_t *sens_info,
+			     unsigned char   *data,
+			     ipmi_states_t   *states)
 {
-    mxp_sensor_header_t *hdr = ipmi_sensor_get_oem_info(sensor);
-    mxp_board_t         *binfo = hdr->data;
-    mxp_sens_info_t     *get_info = cb_data;
-    ipmi_states_t       states;
-
-    ipmi_init_states(&states);
-    ipmi_set_sensor_scanning_enabled(&states, 1);
-
-    /* If we get an error back from the device ID command, we assume the
-       board is not present. */
-    if (get_info->rsp->data[0] == 0) {
-	ipmi_set_state(&states, 0, 1); /* present */
-
-	/* Scan the MC if we haven't already. */
-	if (!binfo->presence_read) {
-	    binfo->presence_read = 1;
-	    ipmi_start_ipmb_mc_scan(binfo->info->domain, 0,
-				    binfo->ipmb_addr, binfo->ipmb_addr,
-				    NULL, NULL);
-	}
-    } else
-	ipmi_set_state(&states, 1, 1); /* absent */
-
-    if (get_info->done)
-	get_info->done(sensor, 0, &states, get_info->cb_data);
-}
-
-static void
-board_presence_states_get_cb(ipmi_sensor_t *sensor,
-			     int           err,
-			     ipmi_msg_t    *rsp,
-			     void          *cb_data)
-{
-    mxp_sens_info_t *get_info = cb_data;
-    int             rv;
-    ipmi_states_t   states;
-
-    ipmi_init_states(&states);
-    ipmi_set_sensor_scanning_enabled(&states, 1);
-
-    get_info->rsp = rsp;
-
-    if (err == ENXIO) {
-	/* Special handling if we didn't have an MC. */
-	rv = ipmi_sensor_pointer_cb(get_info->sens_id,
-				    board_presence_states_get2,
-				    get_info);
-	if (rv)
-	    get_info->done(sensor, rv, &states, get_info->cb_data);
-    } else if (err) {
-        get_info->done(sensor, err, &states, get_info->cb_data);
-    } else {
-	board_presence_states_get2(sensor, get_info);
-    }
-
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(get_info);
+    if (data[4] & 1)
+	ipmi_set_state(states, 0, 1); /* present */
+    else
+	ipmi_set_state(states, 1, 1); /* absent */
 }
 
 static void
@@ -4163,25 +4129,23 @@ board_presence_states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	ipmi_sensor_opq_done(sensor);
 	ipmi_mem_free(get_info);
     } else {
-	ipmi_ipmb_addr_t addr;
+	unsigned char data[4];
 
-	msg.netfn = IPMI_APP_NETFN;
-	msg.cmd = IPMI_GET_DEVICE_ID_CMD;
-	msg.data_len = 0;
-	msg.data = NULL;
-	addr.addr_type = IPMI_IPMB_ADDR_TYPE;
-	addr.channel = 0;
-	addr.lun = 0;
-	addr.slave_addr = binfo->ipmb_addr;
-	rv = ipmi_sensor_send_command_addr(binfo->info->domain, sensor,
-					   (ipmi_addr_t *) &addr, sizeof(addr),
-					   &msg, board_presence_states_get_cb,
-					   &(get_info->sdata), get_info);
+	msg.netfn = MXP_NETFN_MXP1;
+	msg.cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
+	msg.data_len = 4;
+	msg.data = data;
+	add_mxp_mfg_id(data);
+	data[3] = binfo->ipmb_addr;
+	rv = ipmi_sensor_send_command(sensor, binfo->info->mc, 0,
+				      &msg, mxp_sensor_get_done,
+				      &(get_info->sdata), get_info);
 	if (rv) {
 	    if (get_info->done)
 		get_info->done(sensor, rv, &states, get_info->cb_data);
 	    ipmi_sensor_opq_done(sensor);
 	    ipmi_mem_free(get_info);
+	    return;
 	}
     }
 }
@@ -4201,6 +4165,8 @@ board_presence_states_get(ipmi_sensor_t       *sensor,
     if (!get_info)
 	return ENOMEM;
     get_info->sens_id = ipmi_sensor_convert_to_id(sensor);
+    get_info->get_states = board_presence_states_get_cb;
+    get_info->min_rsp_length = 5;
 
     rv = ipmi_sensor_add_opq(sensor, board_presence_states_get_start,
 			     &(get_info->sdata), get_info);
@@ -4428,13 +4394,12 @@ bd_sel_set(ipmi_control_t     *control,
     return rv;
 }
 
-#if 0 /* When we can get the bd_sel states from the AMC. */
 static int
 bd_sel_get_cb(ipmi_control_t     *control,
 	      mxp_control_info_t *control_info,
 	      unsigned char      *data)
 {
-  return ?;
+    return (data[0] >> 2) & 1;
 }
 
 static void
@@ -4455,7 +4420,7 @@ bd_sel_get_start(ipmi_control_t *control, int err, void *cb_data)
     }
 
     msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = ???;
+    msg.cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
     msg.data_len = 4;
     msg.data = data;
     add_mxp_mfg_id(data);
@@ -4494,7 +4459,6 @@ bd_sel_get(ipmi_control_t      *control,
 	ipmi_mem_free(control_info);
     return rv;
 }
-#endif
 
 static void
 pci_reset_set_start(ipmi_control_t *control, int err, void *cb_data)
@@ -4556,13 +4520,12 @@ pci_reset_set(ipmi_control_t     *control,
     return rv;
 }
 
-#if 0 /* When we can get the pci_reset states from the AMC. */
 static int
 pci_reset_get_cb(ipmi_control_t     *control,
 		 mxp_control_info_t *control_info,
 		 unsigned char      *data)
 {
-  return ?;
+    return (data[0] >> 3) & 1;
 }
 
 static void
@@ -4583,7 +4546,7 @@ pci_reset_get_start(ipmi_control_t *control, int err, void *cb_data)
     }
 
     msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = ???;
+    msg.cmd = MXP_OEM_GET_SLOT_SIGNALS_CMD;
     msg.data_len = 4;
     msg.data = data;
     add_mxp_mfg_id(data);
@@ -4622,7 +4585,6 @@ pci_reset_get(ipmi_control_t      *control,
 	ipmi_mem_free(control_info);
     return rv;
 }
-#endif
 
 static void
 slot_init_set_start(ipmi_control_t *control, int err, void *cb_data)
@@ -4741,7 +4703,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 			       IPMI_CONTROL_POWER,
 			       "Bd Sel",
 			       bd_sel_set,
-			       NULL /* bd_sel_get */,
+			       bd_sel_get,
 			       &(board->bd_sel));
 	if (rv)
 	    goto out_err;
@@ -4754,7 +4716,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 			       IPMI_CONTROL_RESET,
 			       "PCI Reset",
 			       pci_reset_set,
-			       NULL /* pci_reset_get */,
+			       pci_reset_get,
 			       &(board->pci_reset));
 	if (rv)
 	    goto out_err;
@@ -5320,6 +5282,7 @@ board_slot_get(ipmi_sensor_t       *sensor,
     if (!get_info)
 	return ENOMEM;
     get_info->get_states = board_slot_get_cb;
+    get_info->min_rsp_length = 14;
 
     rv = ipmi_sensor_add_opq(sensor, board_slot_get_start,
 			     &(get_info->sdata), get_info);

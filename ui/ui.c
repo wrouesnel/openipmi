@@ -2385,6 +2385,8 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 
 	curr_control_id = ipmi_control_convert_to_id(control);
 
+	control_ops_to_read_count = 1;
+
 	if (! ipmi_control_is_readable(control)) {
 	    /* If the control can't be read, then just display it now. */
 	    display_control(entity, control);
@@ -2392,7 +2394,6 @@ control_handler(ipmi_entity_t *entity, ipmi_control_t *control, void *cb_data)
 	}
 
 	control_displayed = 0;
-	control_ops_to_read_count = 1;
 
 	control_type = ipmi_control_get_type(control);
 	switch (control_type) {

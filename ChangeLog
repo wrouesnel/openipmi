@@ -10,6 +10,10 @@
 	compare the netfn as well as the command when looking for sendmsg
 	and event msg buffer commands.
 
+	* lib/oem_motorola_mxp.c: Modified the presence sensor for normal
+	boards to use the CPCI healthy signal instead of the wierd thing
+	it was doing.
+
 2004-01-08 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/fru.c: Added error info logs to tell why a FRU was bad.
