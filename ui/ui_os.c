@@ -119,8 +119,8 @@ add_fd(os_handler_t       *handler,
 static int
 remove_fd(os_handler_t *handler, os_hnd_fd_id_t *fd_data)
 {
-    sel_clear_fd_handlers(ui_sel, fd_data->fd);
     sel_set_fd_read_handler(ui_sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
+    sel_clear_fd_handlers(ui_sel, fd_data->fd);
     /* fd_data gets freed in the free_fd_data callback registered at
        set time. */
     return 0;

@@ -102,6 +102,7 @@ add_fd(os_handler_t       *handler,
     fd_data->cb_data = cb_data;
     fd_data->data_ready = data_ready;
     fd_data->handler = handler;
+    fd_data->freed = freed;
     sel_set_fd_write_handler(posix_sel, fd, SEL_FD_HANDLER_DISABLED);
     sel_set_fd_except_handler(posix_sel, fd, SEL_FD_HANDLER_DISABLED);
     rv = sel_set_fd_handlers(posix_sel, fd, fd_data, fd_handler, NULL, NULL,
