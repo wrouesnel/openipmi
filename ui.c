@@ -2209,7 +2209,7 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 	ui_log("  raw value is 0x%x\n", raw_value);
     }
     if (event)
-	ui_log("Due to log 0x%4.4x\n", event->record_id);
+	ui_log("Due to event 0x%4.4x\n", event->record_id);
 }
 
 static void
@@ -2236,7 +2236,7 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
     if (prev_severity != -1)
 	ui_log("  prev severity is %d\n", prev_severity);
     if (event)
-	ui_log("Due to log 0x%4.4x\n", event->record_id);
+	ui_log("Due to event 0x%4.4x\n", event->record_id);
 }
 
 static void
@@ -2327,7 +2327,7 @@ entity_presence_handler(ipmi_entity_t *entity,
     instance = ipmi_entity_get_entity_instance(entity);
     ui_log("Entity %d.%d, presence is %d\n", id, instance, present);
     if (event)
-	ui_log("Due to log 0x%4.4x\n", event->record_id);
+	ui_log("Due to event 0x%4.4x\n", event->record_id);
 }
 
 static void
