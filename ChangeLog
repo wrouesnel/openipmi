@@ -1,3 +1,13 @@
+2004-01-26 Corey Minyard <cminyard@mvista.com> 
+
+	* configure.in: Move to version 1.2.4.
+
+	* lib/domain.c, lib/sensor.c, lib/mc.c: Fixed some domain shutdown
+	problems.
+
+	* lib/oem_motorola_mxp.c: Reworked the control and sensor creation
+	so the object is fully correct and available when reported.
+
 2004-01-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sensor.c: Lots of cleanups and error handling consolidation.
