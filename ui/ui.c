@@ -1120,7 +1120,7 @@ entity_handler(ipmi_entity_t *entity,
 		    name,  present);
 
     display_pad_out("  type = %s\n", ent_types[type]);
-    display_pad_out("  id name = %s\n",
+    display_pad_out("  entity id string = %s\n",
 		    ipmi_entity_get_entity_id_string(entity));
     display_pad_out("  is%s fru\n",
 		    ipmi_entity_get_is_fru(entity) ? "" : " not");

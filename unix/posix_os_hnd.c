@@ -252,8 +252,7 @@ sposix_vlog(os_handler_t         *handler,
 	    char                 *format,
 	    va_list              ap)
 {
-    if (posix_vlog)
-	posix_vlog(format, log_type, ap);
+    posix_vlog(format, log_type, ap);
 }
 
 static os_handler_t ipmi_posix_os_handler =

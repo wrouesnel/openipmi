@@ -1978,9 +1978,9 @@ check_oem_handlers(ipmi_mc_t *mc)
     handler_cmp_t  tmp;
 
     tmp.rv = 0;
-    tmp.manufacturer_id = mc->devid.manufacturer_id;
-    tmp.first_product_id = mc->devid.product_id;
-    tmp.last_product_id = mc->devid.product_id;
+    tmp.manufacturer_id = mc->pending_devid.manufacturer_id;
+    tmp.first_product_id = mc->pending_devid.product_id;
+    tmp.last_product_id = mc->pending_devid.product_id;
     tmp.mc = mc;
     locked_list_iterate(oem_handlers, oem_handler_call, &tmp);
     return tmp.rv;
@@ -2169,7 +2169,7 @@ int
 _ipmi_mc_get_device_id_data_from_rsp(ipmi_mc_t *mc, ipmi_msg_t *rsp)
 {
     unsigned char *rsp_data = rsp->data;
-    int           rv;
+    int           rv = 0;
 
     if (rsp_data[0] != 0) {
 	return IPMI_IPMI_ERR_VAL(rsp_data[0]);

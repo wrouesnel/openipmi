@@ -2,6 +2,9 @@
 
 	* lib/entity.c: Check for a null event in call_presence_handlers().
 
+	* unix/posix_os_hnd.c, unix/posix_thread_os_hnd.c: Fixed up some
+	problems with posix_vlog.
+
 2004-05-21 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Add a callback for fetching FRU information even
