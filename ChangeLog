@@ -1,3 +1,9 @@
+2004-01-29 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/oem_motorola_mxp.c: Move the AMC chassis id and temp cool
+	LED to the main chassis entity, since only the active AMC handles
+	it.
+
 2004-01-28 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Move to version 1.2.5.

@@ -1173,6 +1173,14 @@ Most controls have individually settable values that are integers.  Some
 controls, namely displays and identifiers, have special needs and are
 thus represented specially.
 
+Simple controls are set and read by the @code{ipmi_control_set_val()}
+and @code{ipmi_control_get_val()} functions.  As well, some control
+may be able to generate events when their values change.  If an event
+can do this, then @code{ipmi_control_has_events()} will return true
+for the control, and you can add and remove an event handler using
+@code{ipmi_control_add_val_event_handler()} and
+@code{ipmi_control_remove_val_event_handler()} for simple controls.
+
 @menu
 * Simple Controls::
 * Lights::

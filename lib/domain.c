@@ -3296,6 +3296,8 @@ got_dev_id(ipmi_mc_t  *mc,
 
     domain->major_version = rsp->data[5] & 0xf;
     domain->minor_version = (rsp->data[5] >> 4) & 0xf;
+    domain->SDR_repository_support = (rsp->data[6] >> 1) & 1;
+
     if ((domain->major_version != 1)
 	|| ((domain->major_version == 1)
 	    && (domain->minor_version != 5)
