@@ -1,6 +1,8 @@
 
 2003-04-17 Corey Minyard <cminyard@mvista.com>
 
+	* ui.c: Fixed a double free on set_control error conditions.
+
 	* mc.c: Added set functions for all the specific MC capabilities.
 
 	* configure.in: Move to version 0.3.1.
