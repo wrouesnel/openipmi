@@ -1148,7 +1148,7 @@ found_entity_for_sensor(ipmi_entity_t *entity,
 {
     struct sensor_info sinfo;
 
-    sinfo.name = strtok_r(NULL, ".", toks2);
+    sinfo.name = strtok_r(NULL, "", toks2);
     if (!sinfo.name) {
 	waddstr(cmd_win, "Invalid sensor given\n");
 	return;

@@ -56,18 +56,23 @@ int ipmi_find_sensor(ipmi_mc_t *mc, int lun, int num,
 /* Allocate a sensor, it will not be associated with anything yet. */
 int ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor);
 
-/* Destroy a sensors. */
-void ipmi_sensor_destroy_nonstandard(ipmi_sensor_t *sensor);
+typedef void (*ipmi_sensor_destroy_cb)(ipmi_sensor_t *sensor,
+				       void          *cb_data);
 
 /* Add a sensor for the given MC and put it into the given entity.
    Note that sensor will NOT appear as owned by the MC, the MC is used
-   for the OS handler and such. */
-int ipmi_sensor_add_nonstandard(ipmi_mc_t     *mc,
-				ipmi_sensor_t *sensor,
-				ipmi_entity_t *ent);
+   for the OS handler and such.  A handler can be supplied if the OEM
+   code wants to be called when the sensor is destroyed, or NULL can
+   be supplied if none is needed. */
+int ipmi_sensor_add_nonstandard(
+    ipmi_mc_t              *mc,
+    ipmi_sensor_t          *sensor,
+    ipmi_entity_t          *ent,
+    ipmi_sensor_destroy_cb destroy_handler,
+    void                   *destroy_handler_cb_data);
 
-/* Remove the given sensor from the entity. */
-int ipmi_sensor_remove_nonstandard(ipmi_sensor_t *sensor);
+/* Destroy the sensor from the internal data. */
+void ipmi_sensor_destroy(ipmi_sensor_t *sensor);
 
 /* Called by when an event occurs for the given sensor.  This may be use
    by OEM code to deliver non-standard events to sensors. */

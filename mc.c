@@ -72,6 +72,10 @@ typedef struct ipmi_bmc_s
     unsigned char    msg_int_type;
     unsigned char    event_msg_int_type;
 
+    /* The sensors that came from the main SDR. */
+    ipmi_sensor_t **sensors_in_my_sdr;
+    unsigned int  sensors_in_my_sdr_count;
+
     ilist_t            *mc_list;
     ipmi_lock_t        *mc_list_lock;
 
@@ -118,7 +122,14 @@ struct ipmi_mc_s
     /* The device SDRs on the MC. */
     ipmi_sdr_info_t *sdrs;
 
+    /* The sensors that came from the device SDR on this MC. */
+    ipmi_sensor_t **sensors_in_my_sdr;
+    unsigned int  sensors_in_my_sdr_count;
+
+    /* Sensors that this MC owns (you message this MC to talk to this
+       sensor, and events report the MC as the owner. */
     ipmi_sensor_info_t  *sensors;
+
     ipmi_control_info_t *controls;
 
     int provides_device_sdrs : 1;
@@ -281,6 +292,33 @@ find_mc_by_addr(ipmi_mc_t   *bmc,
     memcpy(&(info.addr), addr, addr_len);
     info.addr_len = addr_len;
     return ilist_search(bmc->bmc->mc_list, mc_cmp, &info);
+}
+
+int
+ipmi_mc_find_or_create_mc_by_slave_addr(ipmi_mc_t    *bmc,
+					unsigned int slave_addr,
+					ipmi_mc_t    **new_mc)
+{
+    ipmi_mc_t        *mc;
+    ipmi_ipmb_addr_t addr;
+    int              rv;
+
+    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+    addr.channel = 0;
+    addr.lun = 0;
+    addr.slave_addr = slave_addr;
+
+    mc = find_mc_by_addr(bmc, (ipmi_addr_t *) &addr, sizeof(addr));
+    if (mc) {
+	*new_mc = mc;
+	return 0;
+    }
+
+    rv = ipmi_create_mc(bmc, (ipmi_addr_t *) &addr, sizeof(addr), &mc);
+    if (rv)
+	return rv;
+    *new_mc = mc;
+    return 0;
 }
 
 static void ll_rsp_handler(ipmi_con_t   *ipmi,
@@ -680,6 +718,7 @@ ipmi_close_connection(ipmi_mc_t    *mc,
 {
     int        rv;
     ipmi_con_t *ipmi;
+    int        i;
 
     if (mc->bmc_mc != mc)
 	return EINVAL;
@@ -691,6 +730,22 @@ ipmi_close_connection(ipmi_mc_t    *mc,
     ipmi = mc->bmc->conn;
 
     /* FIXME - handle cleaning up the mc list. */
+
+    if (mc->sensors_in_my_sdr) {
+	for (i=0; i<mc->sensors_in_my_sdr_count; i++) {
+	    ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
+	}
+	free(mc->sensors_in_my_sdr);
+    }
+
+    if (mc->bmc->sensors_in_my_sdr) {
+	for (i=0; i<mc->bmc->sensors_in_my_sdr_count; i++) {
+	    ipmi_sensor_destroy(mc->bmc->sensors_in_my_sdr[i]);
+	}
+	free(mc->bmc->sensors_in_my_sdr);
+    }
+
+    free(mc->sensors_in_my_sdr);
 
     if (mc->sdrs)
 	ipmi_sdr_destroy(mc->sdrs, NULL, NULL);
@@ -763,11 +818,27 @@ get_device_id_data_from_rsp(ipmi_mc_t  *mc,
 void
 ipmi_cleanup_mc(ipmi_mc_t *mc)
 {
+    int i;
+
+    if (mc->sensors_in_my_sdr) {
+	for (i=0; i<mc->sensors_in_my_sdr_count; i++) {
+	    ipmi_sensor_destroy(mc->sensors_in_my_sdr[i]);
+	}
+	free(mc->sensors_in_my_sdr);
+    }
+
     if (mc->sensors)
 	ipmi_sensors_destroy(mc->sensors);
     if (mc->controls)
 	ipmi_controls_destroy(mc->controls);
     if (mc->bmc) {
+	if (mc->bmc->sensors_in_my_sdr) {
+	    for (i=0; i<mc->bmc->sensors_in_my_sdr_count; i++) {
+		ipmi_sensor_destroy(mc->bmc->sensors_in_my_sdr[i]);
+	    }
+	    free(mc->bmc->sensors_in_my_sdr);
+	}
+
 	if (mc->bmc->mc_list)
 	    free_ilist(mc->bmc->mc_list);
 	if (mc->bmc->mc_list_lock)
@@ -806,9 +877,9 @@ ipmi_cleanup_mc(ipmi_mc_t *mc)
 
 int
 ipmi_create_mc(ipmi_mc_t    *bmc,
-	      ipmi_addr_t  *addr,
-	      unsigned int addr_len,
-	      ipmi_mc_t    **new_mc)
+	       ipmi_addr_t  *addr,
+	       unsigned int addr_len,
+	       ipmi_mc_t    **new_mc)
 {
     ipmi_mc_t *mc;
     int       rv = 0;
@@ -824,6 +895,8 @@ ipmi_create_mc(ipmi_mc_t    *bmc,
 
     mc->bmc = NULL;
     mc->sensors = NULL;
+    mc->sensors_in_my_sdr = NULL;
+    mc->sensors_in_my_sdr_count = 0;
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
 
@@ -1341,6 +1414,8 @@ setup_bmc(ipmi_con_t  *ipmi,
 
     mc->bmc = NULL;
     mc->sensors = NULL;
+    mc->sensors_in_my_sdr = NULL;
+    mc->sensors_in_my_sdr_count = 0;
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
 
@@ -1642,6 +1717,36 @@ ipmi_control_info_t *
 ipmi_mc_get_controls(ipmi_mc_t *mc)
 {
     return mc->controls;
+}
+
+void
+ipmi_mc_get_sdr_sensors(ipmi_mc_t     *bmc,
+			ipmi_mc_t     *mc,
+			ipmi_sensor_t ***sensors,
+			unsigned int  *count)
+{
+    if (mc) {
+	*sensors = mc->sensors_in_my_sdr;
+	*count = mc->sensors_in_my_sdr_count;
+    } else {
+	*sensors = bmc->bmc->sensors_in_my_sdr;
+	*count = bmc->bmc->sensors_in_my_sdr_count;
+    }
+}
+
+void
+ipmi_mc_set_sdr_sensors(ipmi_mc_t     *bmc,
+			ipmi_mc_t     *mc,
+			ipmi_sensor_t **sensors,
+			unsigned int  count)
+{
+    if (mc) {
+	mc->sensors_in_my_sdr = sensors;
+	mc->sensors_in_my_sdr_count = count;
+    } else {
+	bmc->bmc->sensors_in_my_sdr = sensors;
+	bmc->bmc->sensors_in_my_sdr_count = count;
+    }
 }
 
 ipmi_sdr_info_t *

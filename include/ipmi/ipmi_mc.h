@@ -211,6 +211,22 @@ int ipmi_create_mc(ipmi_mc_t    *bmc,
 		   unsigned int addr_len,
 		   ipmi_mc_t    **new_mc);
 
+/* Attempt to find the MC, and if it doesn't exist create it and
+   return it. */
+int ipmi_mc_find_or_create_mc_by_slave_addr(ipmi_mc_t    *bmc,
+					    unsigned int slave_addr,
+					    ipmi_mc_t    **mc);
+
+void ipmi_mc_get_sdr_sensors(ipmi_mc_t     *bmc,
+			     ipmi_mc_t     *mc,
+			     ipmi_sensor_t ***sensors,
+			     unsigned int  *count);
+
+void ipmi_mc_set_sdr_sensors(ipmi_mc_t     *bmc,
+			     ipmi_mc_t     *mc,
+			     ipmi_sensor_t **sensors,
+			     unsigned int  count);
+
 /* Add an MC to the list of MCs in the BMC. */
 int ipmi_add_mc_to_bmc(ipmi_mc_t *bmc, ipmi_mc_t *mc);
 

@@ -67,6 +67,15 @@ struct ipmi_sensor_s
     ipmi_mc_t     *mc; /* My owner, NOT the SMI mc (unless that
                           happens to be my direct owner). */
 
+    ipmi_mc_t     *source_mc; /* If the sensor came from the main SDR,
+				 this will be NULL.  Otherwise, it
+				 will be the MC that owned the device
+				 SDR this came from. */
+    int           source_idx; /* The index into the source array where
+				 this is stored.  This will be -1 if
+				 it does not have a source index (ie
+				 it's a non-standard sensor) */
+
     int           destroyed;
 
     unsigned char owner;
@@ -164,6 +173,9 @@ struct ipmi_sensor_s
 
     /* OEM info */
     void *oem_info;
+
+    ipmi_sensor_destroy_cb destroy_handler;
+    void                   *destroy_handler_cb_data;
 };
 
 ipmi_sensor_id_t
@@ -277,7 +289,7 @@ ipmi_find_sensor(ipmi_mc_t *mc, int lun, int num,
 
     ipmi_mc_entity_lock(mc);
     sensors = ipmi_mc_get_sensors(mc);
-    if (num > sensors->idx_size[lun])
+    if (num >= sensors->idx_size[lun])
 	rv = EINVAL;
     else if (sensors->sensors_by_idx[lun][num] == NULL)
 	rv = EINVAL;
@@ -328,16 +340,12 @@ ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
     return 0;
 }
 
-void
-ipmi_sensor_destroy_nonstandard(ipmi_sensor_t *sensor)
-{
-    free(sensor);
-}
-
 int
-ipmi_sensor_add_nonstandard(ipmi_mc_t     *mc,
-			    ipmi_sensor_t *sensor,
-			    ipmi_entity_t *ent)
+ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
+			    ipmi_sensor_t          *sensor,
+			    ipmi_entity_t          *ent,
+			    ipmi_sensor_destroy_cb destroy_handler,
+			    void                   *destroy_handler_cb_data)
 {
     int                i;
     int                found = 0;
@@ -388,36 +396,20 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t     *mc,
     sensors->sensors_by_idx[4][i] = sensor;
     sensor->entity_id = ipmi_entity_get_entity_id(ent);
     sensor->entity_instance = ipmi_entity_get_entity_instance(ent);
+    sensor->destroy_handler = destroy_handler;
+    sensor->destroy_handler_cb_data = destroy_handler_cb_data;
 
     ipmi_entity_add_sensor(ent, mc, sensor->lun, sensor->num, sensor, link);
 
     return 0;
 }
 
-int
-ipmi_sensor_remove_nonstandard(ipmi_sensor_t *sensor)
-{
-    ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(sensor->mc);
-    ipmi_entity_info_t *ents = ipmi_mc_get_entities(sensor->mc);
-    ipmi_entity_t      *ent;
-    int                rv;
-
-    rv = ipmi_entity_find(ents,
-			  sensor->mc,
-			  sensor->entity_id,
-			  sensor->entity_instance,
-			  &ent);
-    if (!rv)
-	ipmi_entity_remove_sensor(ent, sensor->mc,
-				  sensor->lun, sensor->num, sensor);
-
-    sensors->sensors_by_idx[4][sensor->num] = 0;
-    return 0;
-}
-
 static void
 sensor_final_destroy(ipmi_sensor_t *sensor)
 {
+    if (sensor->destroy_handler)
+	sensor->destroy_handler(sensor, sensor->destroy_handler_cb_data);
+
     opq_destroy(sensor->waitq);
     free(sensor);
 }
@@ -455,10 +447,11 @@ ipmi_sensors_destroy(ipmi_sensor_info_t *sensors)
 }
 
 static int
-get_sensors_from_sdrs(ipmi_mc_t          *mc,
+get_sensors_from_sdrs(ipmi_mc_t          *bmc,
+		      ipmi_mc_t          *source_mc,
 		      ipmi_sdr_info_t    *sdrs,
-		      ipmi_sensor_t      **(new_by_idx[4]),
-		      int                new_idx_size[4])
+		      ipmi_sensor_t      ***sensors,
+		      unsigned int       *sensor_count)
 {
     ipmi_sdr_t    sdr;
     unsigned int  count;
@@ -467,18 +460,13 @@ get_sensors_from_sdrs(ipmi_mc_t          *mc,
     int           val;
     int           rv;
     int           i, j;
-    int           max_sensor_num[4];
-    ipmi_sensor_t **sl[4];
-
-    for (i=0; i<4; i++) {
-	max_sensor_num[i] = 0;
-	sl[i] = NULL;
-    }
 
     rv = ipmi_get_sdr_count(sdrs, &count);
     if (rv)
 	goto out_err;
 
+    /* Get a real count on the number of sensors, since a single SDR can
+       contain multiple sensors. */
     p = 0;
     for (i=0; i<count; i++) {
 	int incr;
@@ -499,11 +487,10 @@ get_sensors_from_sdrs(ipmi_mc_t          *mc,
 	} else
 	    continue;
 
-	if ((sdr.data[2]+incr-1) > max_sensor_num[lun])
-	    max_sensor_num[lun] = sdr.data[2] + incr - 1;
 	p += incr;
     }
 
+    /* Setup memory to hold the sensors. */
     s = malloc(sizeof(*s) * p);
     if (!s) {
 	rv = ENOMEM;
@@ -511,17 +498,6 @@ get_sensors_from_sdrs(ipmi_mc_t          *mc,
     }
     s_size = p;
     memset(s, 0, sizeof(*s) * p);
-
-    for (i=0; i<4; i++) {
-	if (max_sensor_num[i] >= 0) {
-	    sl[i] = malloc(sizeof(*(sl[i])) * (max_sensor_num[i]+1));
-	    if (! sl[i]) {
-		rv = ENOMEM;
-		goto out_err;
-	    }
-	    memset(sl[i], 0, sizeof(*(sl[i])) * (max_sensor_num[i]+1));
-	}
-    }
 
     p = 0;
     for (i=0; i<count; i++) {
@@ -537,16 +513,24 @@ get_sensors_from_sdrs(ipmi_mc_t          *mc,
 	    rv = ENOMEM;
 	    goto out_err;
 	}
+	memset(s[p], 0, sizeof(*s[p]));
 
-	s[p]->waitq = opq_alloc(ipmi_mc_get_os_hnd(mc));
+	s[p]->waitq = opq_alloc(ipmi_mc_get_os_hnd(bmc));
 	if (!s[p]->waitq) {
 	    rv = ENOMEM;
 	    goto out_err;
 	}
 
 	s[p]->destroyed = 0;
+	s[p]->destroy_handler = NULL;
 
-	s[p]->mc = mc;
+	rv = ipmi_mc_find_or_create_mc_by_slave_addr(bmc,
+						     sdr.data[0],
+						     &(s[p]->mc));
+	if (rv)
+	    goto out_err;
+	s[p]->source_mc = source_mc;
+	s[p]->source_idx = p;
 	s[p]->owner = sdr.data[0];
 	s[p]->channel = sdr.data[1] >> 4;
 	s[p]->lun = sdr.data[1] & 0x03;
@@ -630,8 +614,6 @@ get_sensors_from_sdrs(ipmi_mc_t          *mc,
 	    ipmi_get_device_string(sdr.data+42, sdr.length-42, s[p]->id,
 				   SENSOR_ID_LEN);
 
-	    sl[s[p]->lun][s[p]->num] = s[p];
-
 	    p++;
 	} else {
 	    /* FIXME - make sure this is not a threshold sensor.  The
@@ -644,16 +626,15 @@ get_sensors_from_sdrs(ipmi_mc_t          *mc,
 	    ipmi_get_device_string(sdr.data+26, sdr.length-26, s[p]->id,
 				   SENSOR_ID_LEN);
 
-	    /* Go backwards to avoid destroying the first one until we finish
-	       the others. */
+	    /* Duplicate the sensor records for each instance.  Go
+	       backwards to avoid destroying the first one until we
+	       finish the others. */
 	    for (j=(sdr.data[18] & 0x0f)-1; j>=0; j--) {
 		int len;
 
 		s[p+j] = s[p];
 
 		s[p+j]->num += j;
-
-		sl[s[p+j]->lun][s[p+j]->num] = s[p+j];
 
 		if (sdr.data[19] & 0x80) {
 		    s[p+j]->entity_instance += j;
@@ -696,16 +677,11 @@ get_sensors_from_sdrs(ipmi_mc_t          *mc,
 	}
     }
 
-    memcpy(new_by_idx, sl, sizeof(sl));
-    for (i=0; i<4; i++)
-	new_idx_size[i] = max_sensor_num[i] + 1;
-    free(s);
+    *sensors = s;
+    *sensor_count = s_size;
     return 0;
 
  out_err:
-    for (i=0; i<4; i++)
-	if (sl[i])
-	    free(sl[i]);
     if (s) {
 	for (i=0; i<s_size; i++)
 	    if (s[i])
@@ -717,14 +693,15 @@ get_sensors_from_sdrs(ipmi_mc_t          *mc,
 
 typedef struct sdr_fetch_info_s
 {
-    ipmi_mc_t                *mc;
+    ipmi_mc_t                *bmc;
+    ipmi_mc_t                *source_mc; /* This is used to scan the SDRs. */
     ipmi_mc_done_cb          done;
     void                     *done_data;
     ipmi_sensor_info_t       *sensors;
 } sdr_fetch_info_t;
 
 static void
-handle_new_sensor(ipmi_mc_t     *mc,
+handle_new_sensor(ipmi_mc_t     *bmc,
 		  ipmi_sensor_t *sensor,
 		  void          *link)
 {
@@ -745,17 +722,17 @@ handle_new_sensor(ipmi_mc_t     *mc,
     sensor->modifier_unit_string
 	= ipmi_get_unit_type_string(sensor->modifier_unit);
 
-    ents = ipmi_mc_get_entities(mc);
+    ents = ipmi_mc_get_entities(bmc);
 
     /* This can't fail, we have pre-added it while we held the lock. */
     ipmi_entity_find(ents,
-		     mc,
+		     bmc,
 		     sensor->entity_id,
 		     sensor->entity_instance,
 		     &ent);
 
-    if (! ipmi_bmc_oem_new_sensor(ipmi_mc_get_bmc(mc), ent, sensor, link)) {
-	ipmi_entity_add_sensor(ent, mc,
+    if (! ipmi_bmc_oem_new_sensor(bmc, ent, sensor, link)) {
+	ipmi_entity_add_sensor(ent, bmc,
 			       sensor->lun, sensor->num, sensor, link);
     }
 }
@@ -839,73 +816,29 @@ static int cmp_sensor(ipmi_sensor_t *s1,
 }
 
 static void
-swap_sensor_info(ipmi_mc_t         *mc,
-		 ipmi_sensor_t     **old,
-		 ipmi_sensor_t     **new)
-{
-    opq_t         *tmp_waitq = (*old)->waitq;
-    ipmi_sensor_t tmp, *ptmp;
-
-    /* Swap the information int he new and old sensor structure. */
-    tmp = **old;
-    **old = **new;
-    **new = tmp;
-
-    /* We keep the waitq unchanged, though. */
-    (*old)->waitq = (*new)->waitq;
-    (*new)->waitq = tmp_waitq;
-
-    /* Now swap the pointers. */
-    ptmp = *old;
-    *old = *new;
-    *new = ptmp;
-}
-
-static void
-handle_changed_sensor(ipmi_mc_t         *mc,
-		      ipmi_sensor_t     *old,
-		      ipmi_sensor_t     *new)
-{
-    ipmi_entity_info_t *ents;
-    ipmi_entity_t      *ent;
-
-    ents = ipmi_mc_get_entities(mc);
-
-    ipmi_entity_find(ents,
-		     mc,
-		     old->entity_id,
-		     old->entity_instance,
-		     &ent);
-
-    /* The entity has to be there because it's in the list, no need to
-       check for errors. */
-    ipmi_entity_sensor_changed(ent, mc, old->lun, old->num, old, new);
-}
-
-static void
-handle_deleted_sensor(ipmi_mc_t         *mc,
+handle_deleted_sensor(ipmi_mc_t         *bmc,
 		      ipmi_sensor_t     *sensor)
 {
     ipmi_entity_info_t *ents;
     ipmi_entity_t      *ent;
     int                rv;
 
-    ents = ipmi_mc_get_entities(mc);
+    ents = ipmi_mc_get_entities(bmc);
 
     rv = ipmi_entity_find(ents,
-			  mc,
+			  bmc,
 			  sensor->entity_id,
 			  sensor->entity_instance,
 			  &ent);
     if (!rv)
-	ipmi_entity_remove_sensor(ent, mc, sensor->lun, sensor->num, sensor);
+	ipmi_entity_remove_sensor(ent, bmc, sensor->lun, sensor->num, sensor);
 }
 
 static void
 sensor_reread_done(sdr_fetch_info_t *info, int err)
 {
     if (info->done)
-	info->done(info->mc, err, info->done_data);
+	info->done(info->bmc, err, info->done_data);
     opq_op_done(info->sensors->sensor_wait_q);
     free(info);
 }
@@ -915,6 +848,161 @@ struct dummy_link_s
 {
     dummy_link_t *next;
 };
+int
+ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
+			ipmi_mc_t       *source_mc,
+			ipmi_sdr_info_t *sdrs)
+{
+    int                rv;
+    int                i, j;
+    dummy_link_t       *sref = NULL;
+    dummy_link_t       *snext = NULL;
+    ipmi_sensor_t      **sdr_sensors;
+    ipmi_sensor_t      **old_sdr_sensors;
+    unsigned int       old_count;
+    unsigned int       count;
+    ipmi_entity_info_t *ents;
+
+    rv = get_sensors_from_sdrs(bmc, source_mc, sdrs, &sdr_sensors, &count);
+    if (rv)
+	goto out_err;
+
+    ipmi_mc_entity_lock(bmc);
+
+    ents = ipmi_mc_get_entities(bmc);
+
+    /* Pre-allocate all the links we will need for registering sensors
+       with the entities, and we make sure all the entities exist. */
+    for (i=0; i<count; i++) {
+	ipmi_sensor_t      *nsensor = sdr_sensors[i];
+	ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(nsensor->mc);
+
+	if (nsensor != NULL) {
+	    /* Make sure the entity exists for ALL sensors in the
+	       new list.  This way, if a sensor has changed
+	       entities, the new entity will exist. */
+	    rv = ipmi_entity_add(ents,
+				 nsensor->mc,
+				 i,
+				 nsensor->entity_id,
+				 nsensor->entity_instance,
+				 "",
+				 NULL,
+				 NULL,
+				 NULL);
+	    if (rv)
+		goto out_err_unlock_free;
+
+	    /* There's not enough room in the sensor repository for the new
+	       item, so expand the array. */
+	    if (nsensor->num >= sensors->idx_size[nsensor->lun]) {
+		ipmi_sensor_t **new_by_idx;
+		unsigned int  new_size = nsensor->num+10;
+		new_by_idx = malloc(sizeof(ipmi_sensor_t *) * new_size);
+		if (!new_by_idx) {
+		    rv = ENOMEM;
+		    goto out_err_unlock_free;
+		}
+		memcpy(new_by_idx,
+		       sensors->sensors_by_idx[nsensor->lun],
+		       sensors->idx_size[nsensor->lun]);
+		for (j=sensors->idx_size[nsensor->lun]; j<new_size; j++)
+		    new_by_idx[j] = NULL;
+		free(sensors->sensors_by_idx[nsensor->lun]);
+		sensors->sensors_by_idx[nsensor->lun] = new_by_idx;
+		sensors->idx_size[nsensor->lun] = new_size;
+	    }
+
+	    /* Just in case, allocate a sensor link for it. */
+	    snext = ipmi_entity_alloc_sensor_link();
+	    if (!snext) {
+		rv = ENOMEM;
+		goto out_err_unlock_free;
+	    }
+	    snext->next = sref;
+	    sref = snext;
+	}
+    }
+
+    /* FIXME - find and report duplicate sensors numbers/luns. */
+
+    /* After this point, the operation cannot fail. */
+
+    ipmi_mc_get_sdr_sensors(bmc, source_mc, &old_sdr_sensors, &old_count);
+
+    /* For each new sensor, put it into the MC it belongs with. */
+    for (i=0; i<count; i++) {
+	ipmi_sensor_t *nsensor = sdr_sensors[i];
+	ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(nsensor->mc);
+	ipmi_sensor_t *osensor;
+
+	osensor = sensors->sensors_by_idx[nsensor->lun][nsensor->num];
+	if (osensor == NULL) {
+	    /* It's a new sensor. */
+	    sensors->sensors_by_idx[nsensor->lun][nsensor->num] = nsensor;
+	    snext = sref;
+	    sref = sref->next;
+	    handle_new_sensor(bmc, nsensor, snext);
+	} else {
+	    /* It's already there. */
+	    if (cmp_sensor(nsensor, osensor)) {
+		/* They compare, prefer to keep the old data. */
+		free(nsensor);
+		sdr_sensors[i] = osensor;
+		old_sdr_sensors[osensor->source_idx] = NULL;
+		osensor->source_idx = i;
+	    } else {
+		/* Destroy the old sensor, add the new one. */
+		handle_deleted_sensor(bmc, osensor);
+		old_sdr_sensors[osensor->source_idx] = NULL;
+		free(osensor);
+		sensors->sensors_by_idx[nsensor->lun][nsensor->num] = nsensor;
+		snext = sref;
+		sref = sref->next;
+		handle_new_sensor(bmc, nsensor, snext);
+	    }
+	}
+    }
+
+    ipmi_mc_set_sdr_sensors(bmc, source_mc, sdr_sensors, count);
+
+    if (old_sdr_sensors) {
+	for (i=0; i<old_count; i++) {
+	    ipmi_sensor_t *osensor = old_sdr_sensors[i];
+	    if (osensor != NULL) {
+		/* This sensor was not in the new repository, so it must
+		   have been deleted. */
+		
+		ipmi_sensor_info_t *sensors = ipmi_mc_get_sensors(osensor->mc);
+		
+		handle_deleted_sensor(bmc, old_sdr_sensors[i]);
+		sensors->sensors_by_idx[osensor->lun][osensor->num] = NULL;
+		free(osensor);
+	    }
+	}
+	free(old_sdr_sensors);
+    }
+
+    /* Free up the extra links that we didn't use. */
+    while (sref) {
+	snext = sref->next;
+	ipmi_entity_free_sensor_link(sref);
+	sref = snext;
+    }
+    return 0;
+
+ out_err_unlock_free:
+    ipmi_mc_entity_unlock(bmc);
+ out_err:
+    while (sref) {
+	snext = sref->next;
+	free(sref);
+	sref = snext;
+    }
+    return rv;
+}
+			
+
 static void
 sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	     int             err,
@@ -923,214 +1011,15 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	     void            *cb_data)
 {
     sdr_fetch_info_t   *info = (sdr_fetch_info_t *) cb_data;
-    ipmi_mc_t          *mc = info->mc;
     int                rv;
-    int                i, j;
-    ipmi_sensor_t      **(old_by_idx[4]);
-    int                old_idx_size[4];
-    ipmi_sensor_t      **(new_by_idx[4]);
-    int                new_idx_size[4];
-    dummy_link_t       *sref = NULL;
-    dummy_link_t       *snext = NULL;
 
     if (err) {
-	rv = err;
-	goto out_err;
+	sensor_reread_done(info, err);
+	return;
     }
 
-    for (i=0; i<4; i++) {
-	old_by_idx[i] = info->sensors->sensors_by_idx[i];
-	old_idx_size[i] = info->sensors->idx_size[i];
-    }
-
-    rv = get_sensors_from_sdrs(mc, sdrs, new_by_idx, new_idx_size);
-    if (rv)
-	goto out_err;
-
-    ipmi_mc_entity_lock(mc);
-
-    /* Pre-allocate all the links we will need for registering sensors
-       with the entities, and we make sure all the entities exist. */
-    for (i=0; i<4; i++) {
-	ipmi_entity_info_t *ents = ipmi_mc_get_entities(mc);
-
-	for (j=0; j<new_idx_size[i]; j++) {
-	    ipmi_sensor_t *nsensor = new_by_idx[i][j];
-	    if (nsensor != NULL) {
-		/* Make sure the entity exists for ALL sensors in the
-		   new list.  This way, if a sensor has changed
-		   entities, the new entity will exist. */
-		rv = ipmi_entity_add(ents,
-				     mc,
-				     i,
-				     nsensor->entity_id,
-				     nsensor->entity_instance,
-				     "",
-				     NULL,
-				     NULL,
-				     NULL);
-		if (rv)
-		    goto out_err_unlock_free;
-
-		/* A sensor is new if it's number is beyond the old
-                   number, if it's number didn't exist in the old
-                   list, or if it's entity changed. */
-		if ((j >= old_idx_size[i])
-		    || (old_by_idx[i][j] == NULL)
-		    || ((old_by_idx[i][j]->entity_id
-			 != new_by_idx[i][j]->entity_id)
-			|| (old_by_idx[i][j]->entity_instance
-			    != new_by_idx[i][j]->entity_instance)))
-		{
-		    /* It's a new sensor, allocate a link item for
-                       it. */
-		    snext = ipmi_entity_alloc_sensor_link();
-		    if (!snext) {
-			rv = ENOMEM;
-			goto out_err_unlock_free;
-		    }
-		    snext->next = sref;
-		    sref = snext;
-		}
-	    }
-	}
-    }
-
-    /* FIXME - find and report duplicate sensors numbers/luns. */
-
-    /* After this point, the operation cannot fail. */
-
-    /* We prefer to keep the old sensor data structures, because that
-       way the pointers don't change and we don't have to do any
-       messing around in any other tables. */
-    for (i=0; i<4; i++) {
-	for (j=0; j<old_idx_size[i] && j<new_idx_size[i]; j++) {
-	    if (old_by_idx[i][j] && new_by_idx[i][j]) {
-		if ((old_by_idx[i][j]->entity_id
-		     != new_by_idx[i][j]->entity_id)
-		    || (old_by_idx[i][j]->entity_instance
-			!= new_by_idx[i][j]->entity_instance))
-		{
-		    /* In this case, we are destroying the old sensor and
-		       creating a new sensor, so no need to copy. */
-		} else {
-		    /* If we have a sensor that existed before, swap the
-		       old and the new, we prefer to keep the pointers th
-		       same. */
-		    swap_sensor_info(mc,
-				     &(old_by_idx[i][j]),
-				     &(new_by_idx[i][j]));
-		}
-	    }
-	}
-    }
-
-    for (i=0; i<4; i++) {
-	info->sensors->sensors_by_idx[i] = new_by_idx[i];
-	info->sensors->idx_size[i] = new_idx_size[i];
-    }
-
-    /* Now go through all the sensors and try to find new ones, ones
-       that have changed, and ones that have gone away. */
-    for (i=0; i<4; i++) {
-	for (j=0; j<old_idx_size[i] && j<new_idx_size[i]; j++) {
-	    if ((old_by_idx[i][j] == NULL)
-		&& (new_by_idx[i][j] != NULL))
-	    {
-		snext = sref;
-		sref = sref->next;
-		handle_new_sensor(mc, new_by_idx[i][j], snext);
-	    }
-	}
-	for (; j<new_idx_size[i]; j++) {
-	    if (new_by_idx[i][j]) {
-		snext = sref;
-		sref = sref->next;
-		handle_new_sensor(mc, new_by_idx[i][j], snext);
-	    }
-	}
-    }
-
-    for (i=0; i<4; i++) {
-	for (j=0; j<old_idx_size[i] && j<new_idx_size[i]; j++) {
-	    if (old_by_idx[i][j] && new_by_idx[i][j]) {
-		if ((old_by_idx[i][j]->entity_id
-		     != new_by_idx[i][j]->entity_id)
-		    || (old_by_idx[i][j]->entity_instance
-			!= new_by_idx[i][j]->entity_instance))
-		{
-		    /* If the sensor changes target IDs, we need to delete the
-		       old sensor and add the new one, since it's really a new
-		       sensor. */
-		    handle_deleted_sensor(mc, old_by_idx[i][j]);
-		    snext = sref;
-		    sref = sref->next;
-		    handle_new_sensor(mc, new_by_idx[i][j], snext);
-		} else if (cmp_sensor(old_by_idx[i][j],
-				      new_by_idx[i][j]))
-		    handle_changed_sensor(mc,
-					  old_by_idx[i][j],
-					  new_by_idx[i][j]);
-	    }
-	}
-    }
-
-    for (i=0; i<4; i++) {
-	for (j=0; j<new_idx_size[i] && j<old_idx_size[i]; j++) {
-	    if ((old_by_idx[i][j] != NULL)
-		&& (new_by_idx[i][j] == NULL))
-	    {
-		handle_deleted_sensor(mc, old_by_idx[i][j]);
-	    }
-	}
-	for (; j<old_idx_size[i]; j++)
-	    if (old_by_idx[i][j])
-		handle_deleted_sensor(mc, old_by_idx[i][j]);
-    }
-
-    ipmi_mc_entity_unlock(mc);
-
-    /* Free all the old information. */
-    for (i=0; i<4; i++) {
-	for (j=0; j<old_idx_size[i]; j++) {
-	    if (old_by_idx[i][j]) {
-		ipmi_sensor_destroy(old_by_idx[i][j]);
-	    }
-	}
-	if (old_by_idx[i])
-	    free(old_by_idx[i]);
-    }
-
-    sensor_reread_done(info, err);
-
-    /* These should be all used up, but just in case... */
-    while (sref) {
-	snext = sref->next;
-	ipmi_entity_free_sensor_link(sref);
-	sref = snext;
-    }
-    return;
-
- out_err_unlock_free:
-    ipmi_mc_entity_unlock(mc);
-    for (i=0; i<4; i++) {
-	for (j=0; j<new_idx_size[i]; j++) {
-	    if (new_by_idx[i][j]) {
-		if (new_by_idx[i][j]->waitq)
-		    opq_destroy(new_by_idx[i][j]->waitq);
-		free(new_by_idx[i][j]);
-	    }
-	}
-	if (new_by_idx[i])
-	    free(new_by_idx[i]);
-    }
- out_err:
-    while (sref) {
-	snext = sref->next;
-	free(sref);
-	sref = snext;
-    }
-    sensor_reread_done(info, err);
+    rv = ipmi_sensor_handle_sdrs(info->bmc, info->source_mc, sdrs);
+    sensor_reread_done(info, rv);
 }
 
 static void
@@ -1144,7 +1033,7 @@ sensor_read_handler(void *cb_data, int shutdown)
 	return;
     }
 
-    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(info->mc), sdrs_fetched, info);
+    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(info->source_mc), sdrs_fetched, info);
     if (rv)
 	sensor_reread_done(info, rv);
 }
@@ -1162,17 +1051,19 @@ int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 
     info->sensors = ipmi_mc_get_sensors(mc);
 
-    info->mc = mc;
+    info->source_mc = mc;
+    info->bmc = ipmi_mc_get_bmc(mc);
     info->done = done;
     info->done_data = done_data;
 
-    if (! opq_new_op(info->sensors->sensor_wait_q, sensor_read_handler, info, 0))
+    if (! opq_new_op(info->sensors->sensor_wait_q,
+		     sensor_read_handler, info, 0))
 	rv = ENOMEM;
 
     if (rv) {
 	free(info);
     } else {
-	ipmi_detect_bmc_presence_changes(info->mc, 0);
+	ipmi_detect_bmc_presence_changes(info->bmc, 0);
     }
     return rv;
 }
