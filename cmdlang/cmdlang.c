@@ -972,20 +972,22 @@ void
 ipmi_cmdlang_connection_handler(ipmi_cmd_info_t *cmd_info)
 {
     char *domain, *class, *obj;
-    int  rv;
 
     if (cmd_info->curr_arg >= cmd_info->argc) {
 	domain = class = obj = NULL;
     } else {
-	rv = parse_ipmi_objstr(cmd_info->argv[cmd_info->curr_arg],
-			       &domain, &class, &obj);
-	if (rv) {
+	domain = cmd_info->argv[cmd_info->curr_arg];
+	class = NULL;
+	obj = strrchr(domain, '.');
+	if (!obj) {
 	    cmd_info->cmdlang->errstr = "Invalid connection";
-	    cmd_info->cmdlang->err = rv;
+	    cmd_info->cmdlang->err = EINVAL;
 	    cmd_info->cmdlang->location
 		= "cmdlang.c(ipmi_cmdlang_connection_handler)";
 	    return;
 	}
+	*obj = '\0';
+	obj++;
 	cmd_info->curr_arg++;
     }
 
