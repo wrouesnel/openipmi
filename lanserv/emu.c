@@ -174,6 +174,8 @@ struct lmc_data_s
 {
     emu_data_t *emu;
 
+    int enabled;
+
     unsigned char ipmb;
 
     /* Get Device Id contents. */
@@ -231,6 +233,10 @@ struct emu_data_s
 
     int         atca_mode;
     atca_site_t atca_sites[128]; /* Indexed by HW address. */
+
+    void *user_data;
+
+    ipmi_emu_sleep_cb sleeper;
 };
 
 static void picmg_led_set(lmc_data_t *mc, sensor_t *sensor);
@@ -3524,7 +3530,7 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 	}
 	slave = data[0];
 	mc = emu->ipmb[slave >> 1];
-	if (!mc) {
+	if (!mc || !mc->enabled) {
 	    rdata[0] = 0x83; /* NAK on Write */
 	    *rdata_len = 1;
 	    return;
@@ -3539,7 +3545,7 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 	msg = &smsg;
     } else {
 	mc = emu->ipmb[emu->bmc_mc >> 1];
-	if (!mc) {
+	if (!mc || !mc->enabled) {
 	    rdata[0] = 0xff;
 	    *rdata_len = 1;
 	    return;
@@ -3590,16 +3596,32 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 }
 
 emu_data_t *
-ipmi_emu_alloc(void)
+ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper)
 {
     emu_data_t *data = malloc(sizeof(*data));
 
-    if (data)
+    if (data) {
 	memset(data, 0, sizeof(*data));
+	data->user_data = user_data;
+	data->sleeper = sleeper;
+    }
+	
     return data;
 }
 
-static void
+void
+ipmi_emu_sleep(emu_data_t *emu, struct timeval *time)
+{
+    emu->sleeper(emu, time);
+}
+
+void *
+ipmi_emu_get_user_data(emu_data_t *emu)
+{
+    return emu->user_data;
+}
+
+void
 ipmi_mc_destroy(lmc_data_t *mc)
 {
     sel_entry_t *entry, *n_entry;
@@ -3611,6 +3633,18 @@ ipmi_mc_destroy(lmc_data_t *mc)
 	entry = n_entry;
     }
     free(mc);
+}
+
+void
+ipmi_mc_disable(lmc_data_t *mc)
+{
+    mc->enabled = 0;
+}
+
+void
+ipmi_mc_enable(lmc_data_t *mc)
+{
+    mc->enabled = 1;
 }
 
 int

@@ -7,7 +7,13 @@
 typedef struct emu_data_s emu_data_t;
 typedef struct lmc_data_s lmc_data_t;
 
-emu_data_t *ipmi_emu_alloc(void);
+typedef void (*ipmi_emu_sleep_cb)(emu_data_t *emu, struct timeval *time);
+
+emu_data_t *ipmi_emu_alloc(void *user_data, ipmi_emu_sleep_cb sleeper);
+
+void *ipmi_emu_get_user_data(emu_data_t *emu);
+
+void ipmi_emu_sleep(emu_data_t *emu, struct timeval *time);
 
 void ipmi_emu_handle_msg(emu_data_t     *emu,
 			 unsigned char  lun,
@@ -26,6 +32,12 @@ int ipmi_emu_add_mc(emu_data_t    *emu,
 		    unsigned char mfg_id[3],
 		    unsigned char product_id[2],
 		    unsigned char dynamic_sensor_population);
+
+void ipmi_mc_destroy(lmc_data_t *mc);
+
+void ipmi_mc_disable(lmc_data_t *mc);
+void ipmi_mc_enable(lmc_data_t *mc);
+
 int ipmi_emu_set_bmc_mc(emu_data_t *emu, unsigned char ipmb);
 
 int ipmi_emu_get_mc_by_addr(emu_data_t    *emu,

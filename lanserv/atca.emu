@@ -18,6 +18,8 @@ mc_add_fru_data 20 0 400 \
 		c4 'T 'e 's 't c4 'T 'e \
 		's 't c4 'T 'e 's 't c1 \
 		00 00 00 00 00 00 00 45
+mc_enable 20
+
 
 ## Add a shelf FRU device at 0x10
 ## Entity id 0xf2 60
@@ -67,6 +69,7 @@ device_sdr_add 10 0 \
 	       10 00 00 f2 60 ff c0 f0 6f ff 00 ff 00 ff 00 00 \
 	       00 00 00 00 00 00 00 00 00 00 c7 'H 'o 't 's 'w \
 	       'a 'p
+mc_enable 10
 
 
 # Add a shelf FRU device at 0x12
@@ -116,6 +119,8 @@ device_sdr_add 12 0 \
 	       12 00 00 f2 60 ff c0 f0 6f ff 00 ff 00 ff 00 00 \
 	       00 00 00 00 00 00 00 00 00 00 c7 'H 'o 't 's 'w \
 	       'a 'p
+mc_enable 12
+
 
 # Add a board in site 1 (0x82)
 # Entity id 0xa0 60
@@ -145,3 +150,4 @@ device_sdr_add 82 0 \
 	       82 00 00 a0 60 ff c0 f0 6f ff 00 ff 00 ff 00 00 \
 	       00 00 00 00 00 00 00 00 00 00 c7 'H 'o 't 's 'w \
 	       'a 'p
+mc_enable 82

@@ -61,8 +61,11 @@
 
 typedef struct misc_data
 {
+    int max_fd;
     int lan_fd[MAX_ADDR];
     char *config_file;
+    struct timeval next_tick_time;
+    lan_data_t *lan;
 } misc_data_t;
 
 static void *
@@ -204,6 +207,20 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
     }
 
     return fd;
+}
+
+static int
+cmp_timeval(struct timeval *tv1, struct timeval *tv2)
+{
+    if (tv1->tv_sec < tv2->tv_sec)
+        return -1;
+    if (tv1->tv_sec > tv2->tv_sec)
+        return 1;
+    if (tv1->tv_usec < tv2->tv_usec)
+        return -1;
+    if (tv1->tv_usec > tv2->tv_usec)
+        return 1;
+    return 0;
 }
 
 static void
@@ -372,10 +389,8 @@ handle_user_data_ready(void)
     int count;
 
     count = read(0, &rc, 1);
-    while (count > 0) {
+    if (count > 0)
 	handle_user_char(rc);
-	count = read(0, &rc, 1);
-    }
 }
 
 struct termios old_termios;
@@ -392,8 +407,6 @@ init_term(void)
 			     |INLCR|IGNCR|ICRNL|IXON);
     new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
     tcsetattr(0, TCSADRAIN, &new_termios);
-    old_flags = fcntl(0, F_GETFL) & O_ACCMODE;
-    fcntl(0, F_SETFL, old_flags | O_NONBLOCK);
 }
 
 void
@@ -405,19 +418,65 @@ ipmi_emu_shutdown(void)
     exit(0);
 }
 
+/* Sleep and don't take any user input. */
+static void
+sleeper(emu_data_t *emu, struct timeval *time)
+{
+    misc_data_t    *data = ipmi_emu_get_user_data(emu);
+    struct timeval timeout;
+    struct timeval left = *time;
+    struct timeval time_now;
+    int            i;
+    int            rv;
+    int            done_on_timeout = 0;
+
+    for (;;) {
+	fd_set readfds;
+
+	fflush(stdout);
+
+	FD_ZERO(&readfds);
+
+	for (i=0; i<num_addr; i++)
+	    FD_SET(data->lan_fd[i], &readfds);
+
+	gettimeofday(&time_now, NULL);
+	diff_timeval(&timeout, &data->next_tick_time, &time_now);
+	if (cmp_timeval(&timeout, &left) < 0) {
+	    diff_timeval(&left, &left, &timeout);
+	} else {
+	    timeout = left;
+	    done_on_timeout = 1;
+	}
+	rv = select(data->max_fd, &readfds, NULL, NULL, &timeout);
+	if ((rv == -1) && (errno == EINTR))
+	    continue;
+
+	if (rv == 0) {
+	    if (done_on_timeout)
+		return;
+	    ipmi_lan_tick(data->lan, 10);
+	    gettimeofday(&data->next_tick_time, NULL);
+	    data->next_tick_time.tv_sec += 10;
+	} else {
+	    for (i=0; i<num_addr; i++) {
+		if (FD_ISSET(data->lan_fd[i], &readfds))
+		    handle_msg_lan(data->lan_fd[i], data->lan);
+	    }
+	}
+    }
+}
 
 int
 main(int argc, const char *argv[])
 {
     lan_data_t  lan;
     misc_data_t data;
-    int max_fd;
     int rv;
     int o;
     int i;
     poptContext poptCtx;
     struct timeval timeout;
-    struct timeval time_next;
     struct timeval time_now;
 
     poptCtx = poptGetContext(argv[0], argc, argv, poptOpts, 0);
@@ -431,7 +490,7 @@ main(int argc, const char *argv[])
 
     data.config_file = config_file;
 
-    emu = ipmi_emu_alloc();
+    emu = ipmi_emu_alloc(&data, sleeper);
 
     memset(&lan, 0, sizeof(lan));
     lan.user_info = &data;
@@ -473,15 +532,17 @@ main(int argc, const char *argv[])
     if (rv)
 	return 1;
 
+    data.lan = &lan;
+
     init_term();
     printf("> ");
 
-    max_fd = -1;
+    data.max_fd = -1;
     for (i=0; i<num_addr; i++) {
-	if (data.lan_fd[i] > max_fd)
-	    max_fd = data.lan_fd[i];
+	if (data.lan_fd[i] > data.max_fd)
+	    data.max_fd = data.lan_fd[i];
     }
-    max_fd++;
+    data.max_fd++;
 
     if (command_string) {
 	ipmi_emu_cmd(emu, command_string);
@@ -490,8 +551,8 @@ main(int argc, const char *argv[])
     if (command_file)
 	read_command_file(emu, command_file);
 
-    gettimeofday(&time_next, NULL);
-    time_next.tv_sec += 10;
+    gettimeofday(&data.next_tick_time, NULL);
+    data.next_tick_time.tv_sec += 10;
     for (;;) {
 	fd_set readfds;
 
@@ -504,14 +565,15 @@ main(int argc, const char *argv[])
 	    FD_SET(data.lan_fd[i], &readfds);
 
 	gettimeofday(&time_now, NULL);
-	diff_timeval(&timeout, &time_next, &time_now);
-	rv = select(max_fd, &readfds, NULL, NULL, &timeout);
+	diff_timeval(&timeout, &data.next_tick_time, &time_now);
+	rv = select(data.max_fd, &readfds, NULL, NULL, &timeout);
 	if ((rv == -1) && (errno == EINTR))
 	    continue;
 
 	if (rv == 0) {
 	    ipmi_lan_tick(&lan, 10);
-	    time_next.tv_sec += 10;
+	    gettimeofday(&data.next_tick_time, NULL);
+	    data.next_tick_time.tv_sec += 10;
 	} else {
 	    if (FD_ISSET(0, &readfds))
 		handle_user_data_ready();
@@ -523,3 +585,4 @@ main(int argc, const char *argv[])
 	}
     }
 }
+

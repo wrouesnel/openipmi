@@ -1,3 +1,11 @@
+2004-04-09 Corey Minyard <cminyard@mvista.com> 
+
+	* lanserv/emu.c, lanserv/emu.h, lanserv/emu_cmd.c: Added
+	capabilities to disable, enable, and remove MCs, also added a
+	sleep command.
+
+	* lanserv/lanserv_emu.c: Added support for the sleep command.
+
 2004-04-08 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_smi.c, lib/ipmi_lan.c, lib/domain.c: Remove the broken

@@ -566,6 +566,27 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
+mc_delete(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    ipmi_mc_destroy(mc);
+    return 0;
+}
+
+static int
+mc_disable(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    ipmi_mc_disable(mc);
+    return 0;
+}
+
+static int
+mc_enable(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    ipmi_mc_enable(mc);
+    return 0;
+}
+
+static int
 mc_set_power(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     unsigned char power;
@@ -700,6 +721,23 @@ read_cmds(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
+sleep_cmd(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    unsigned int   time;
+    struct timeval tv;
+    int            rv;
+
+    rv = get_uint(toks, &time, "timeout");
+    if (rv)
+	return rv;
+
+    tv.tv_sec = time / 1000;
+    tv.tv_usec = (time % 1000) * 1000;
+    ipmi_emu_sleep(emu, &tv);
+    return 0;
+}
+
+static int
 quit(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     ipmi_emu_shutdown();
@@ -730,10 +768,14 @@ static struct {
     { "mc_add_fru_data",MC,		mc_add_fru_data },
     { "mc_set_num_leds",MC,		mc_set_num_leds },
     { "mc_add",		NOMC,		mc_add },
+    { "mc_delete",	MC,		mc_delete },
+    { "mc_disable",	MC,		mc_disable },
+    { "mc_enable",	MC,		mc_enable },
     { "mc_setbmc",      NOMC,		mc_setbmc },
     { "atca_enable",    NOMC,	        atca_enable },
     { "atca_set_site",	NOMC,		atca_set_site },
     { "read_cmds",	NOMC,		read_cmds },
+    { "sleep",		NOMC,		sleep_cmd },
     { NULL }
 };
 

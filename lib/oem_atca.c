@@ -2030,14 +2030,35 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
 }
 
 static void
+ipmc_active(ipmi_mc_t *mc, int active, void *cb_data)
+{
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+
+    if (active)
+	atca_handle_new_mc(domain, mc, cb_data);
+    else
+	atca_ipmc_removal_handler(domain, mc, cb_data);
+}
+
+static void
 atca_mc_update_handler(enum ipmi_update_e op,
 		       ipmi_domain_t      *domain,
 		       ipmi_mc_t          *mc,
 		       void               *cb_data)
 {
+    int rv;
+
     switch (op) {
     case IPMI_ADDED:
-	atca_handle_new_mc(domain, mc, cb_data);
+	rv = ipmi_mc_add_active_handler(mc, ipmc_active, cb_data);
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		 "%soem_atca.c(atca_mc_update_handler): "
+		     "Could not set active handler for mc: 0x%x",
+		     MC_NAME(mc), rv);
+	}
+	if (ipmi_mc_is_active(mc))
+	    atca_handle_new_mc(domain, mc, cb_data);
 	break;
 
     case IPMI_DELETED:
