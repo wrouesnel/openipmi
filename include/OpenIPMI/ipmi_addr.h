@@ -88,9 +88,8 @@ typedef struct ipmi_lan_addr
 	int           addr_type;
 	short         channel;
 	unsigned char session_handle;
-	unsigned char dest; /* Destination (really the source on
+	unsigned char dest; /* Destination SWID (really the source on
 			       received messages) */
-	unsigned char src; /* Our id. */
 	unsigned char lun;
 } ipmi_lan_addr_t;
 

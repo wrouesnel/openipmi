@@ -13,6 +13,12 @@
 
 	* include/OpenIPMI/ipmi_addr.h: Added a LAN address type.
 
+	* lib/domain.c: Modified the bus scanning to put a second delay
+	between attempts when checking for an MC that has been removed,
+	just in case of a transitional failure.
+
+	* sample/ipmicmd.c: Added support for LAN addresses.
+
 2004-02-08 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Don't subtract 0x60 from device-relative entity

@@ -289,6 +289,8 @@ get_addr_type(int type)
 	    return "ipmb";
 	case IPMI_IPMB_BROADCAST_ADDR_TYPE:
 	    return "ipmb broadcast";
+	case IPMI_LAN_ADDR_TYPE:
+	    return "lan";
 	default:
 	    return "UNKNOWN";
     }
@@ -300,6 +302,7 @@ dump_msg_data(ipmi_msg_t *msg, ipmi_addr_t *addr, char *type)
     ipmi_system_interface_addr_t *smi_addr = NULL;
     int                          i;
     ipmi_ipmb_addr_t             *ipmb_addr = NULL;
+    ipmi_lan_addr_t              *lan_addr = NULL;
 
     if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	smi_addr = (struct ipmi_system_interface_addr *) addr;
@@ -307,6 +310,8 @@ dump_msg_data(ipmi_msg_t *msg, ipmi_addr_t *addr, char *type)
 	       || (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE))
     {
 	ipmb_addr = (struct ipmi_ipmb_addr *) addr;
+    } else if (addr->addr_type == IPMI_LAN_ADDR_TYPE) {
+	lan_addr = (struct ipmi_lan_addr *) addr;
     }
 
     if (interactive)
@@ -321,6 +326,11 @@ dump_msg_data(ipmi_msg_t *msg, ipmi_addr_t *addr, char *type)
 	    printf("    slave addr = %x,%x\n",
 		   ipmb_addr->slave_addr,
 		   ipmb_addr->lun);
+	else if (lan_addr)
+	    printf("    lan addr = %x,%x,%x\n",
+		   lan_addr->session_handle,
+		   lan_addr->dest,
+		   lan_addr->lun);
 	printf("  netfn     = 0x%x\n", msg->netfn);
 	printf("  cmd       = 0x%x\n", msg->cmd);
 	printf("  data      =");
@@ -504,6 +514,7 @@ process_input_line(char *buf)
     short              channel;
     unsigned char      seq = 0;
     unsigned int       time_count = 0;
+    int                lan_addr = 0;
 
     if (v == NULL)
 	return -1;
@@ -515,8 +526,10 @@ process_input_line(char *buf)
 	printf("  help - This help\n");
 	printf("  0f <lun> <netfn> <cmd> <data.....> - send a command\n");
 	printf("      to the local BMC\n");
-	printf("  <channel> <dest addr> <lun> <netfn> <cmd> <data...> -\n");
-	printf("      send a command on the channel.\n");
+	printf("  <channel> [ipmb] <dest addr> <lun> <netfn> <cmd> <data...> -\n");
+	printf("      send an IPMB command on the channel.\n");
+	printf("  <channel> lan <handle> <dest swid> <lun> <netfn> <cmd> <data...> -\n");
+	printf("      send a command on a LAN channel.\n");
 	printf("  <channel> 00 <dest addr> <lun> <netfn> <cmd> <data...> -\n");
 	printf("      broadcast a command on the channel.\n");
 	printf("  test_lat <count> <command> - Send the command and wait for\n"
@@ -580,11 +593,19 @@ process_input_line(char *buf)
     if (strcmp(v, "test_lat") == 0) {
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
 	if (!v) {
-	    printf("No netfn for regcmd\n");
+	    printf("No count for test_lat\n");
 	    return -1;
 	}
 	time_count = strtoul(v, &endptr, 16);
 
+	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
+    }
+
+    if (strcmp(v, "lan") == 0) {
+	lan_addr = 1;
+	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
+    } else if (strcmp(v, "ipmb") == 0) {
+	lan_addr = 0;
 	v = strtok_r(NULL, " \t\r\n,.", &strtok_data);
     }
 
@@ -617,6 +638,21 @@ process_input_line(char *buf)
 	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si->channel = IPMI_BMC_CHANNEL;
 	addr_len = sizeof(*si);
+    } else if (lan_addr) {
+	struct ipmi_lan_addr *lan = (void *) &addr;
+
+	if ((pos-start) < 3) {
+	    printf("No LAN address specified\n");
+	    return -1;
+	}
+
+	lan->addr_type = IPMI_LAN_ADDR_TYPE;
+	lan->channel = channel;
+	lan->session_handle = outbuf[start]; start++;
+	lan->dest = outbuf[start]; start++;
+	lan->lun = outbuf[start]; start++;
+	msg.netfn = outbuf[start]; start++;
+	addr_len = sizeof(*lan);
     } else {
 	struct ipmi_ipmb_addr *ipmb = (void *) &addr;
 

@@ -87,6 +87,11 @@ struct mc_ipbm_scan_info_s
     void                *cb_data;
     mc_ipmb_scan_info_t *next;
     unsigned int        missed_responses;
+    int                 cancelled;
+    int                 timer_running;
+    os_handler_t        *os_hnd;
+    os_hnd_timer_id_t   *timer;
+    ipmi_lock_t         *lock;
 };
 
 /* This structure tracks messages sent to the domain, it is primarily
@@ -481,8 +486,21 @@ cleanup_domain(ipmi_domain_t *domain)
 	mc_ipmb_scan_info_t *item;
 	while (domain->bus_scans_running) {
 	    item = domain->bus_scans_running;
+	    ipmi_lock(item->lock);
+	    if (item->timer_running) {
+		if (item->os_hnd->stop_timer(item->os_hnd, item->timer)) {
+		    item->cancelled = 1;
+		    ipmi_unlock(item->lock);
+		    item = NULL;
+		}
+	    }
 	    domain->bus_scans_running = item->next;
-	    ipmi_mem_free(item);
+	    if (item) {
+		ipmi_unlock(item->lock);
+		item->os_hnd->free_timer(item->os_hnd, item->timer);
+		ipmi_destroy_lock(item->lock);
+		ipmi_mem_free(item);
+	    }
 	}
     }
     if (domain->mc_list_lock)
@@ -1568,6 +1586,78 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 				 unsigned int  addr_len,
 				 ipmi_msg_t    *msg,
 				 void          *rsp_data1,
+				 void          *rsp_data2);
+
+static void
+rescan_timeout_handler(void *cb_data, os_hnd_timer_id_t *id)
+{
+    mc_ipmb_scan_info_t *info = cb_data;
+    int                 rv;
+    ipmi_ipmb_addr_t    *ipmb;
+    ipmi_domain_t       *domain;
+
+    ipmi_lock(info->lock);
+    if (info->cancelled) {
+	ipmi_unlock(info->lock);
+	info->os_hnd->free_timer(info->os_hnd, info->timer);
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	return;
+    }
+    info->timer_running = 0;
+    ipmi_unlock(info->lock);
+
+    ipmi_read_lock();
+    domain = info->domain;
+    rv = ipmi_domain_validate(domain);
+    if (rv) {
+	ipmi_log(IPMI_LOG_INFO,
+		 "%sdomain.c(devid_bc_rsp_handler): "
+		 "BMC went away while scanning for MCs",
+		 DOMAIN_NAME(domain));
+	ipmi_read_unlock();
+	return;
+    }
+
+    goto retry_addr;
+
+ next_addr_nolock:
+    ipmb = (ipmi_ipmb_addr_t *) &info->addr;
+    if ((info->addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
+	|| (ipmb->slave_addr >= info->end_addr)) {
+	/* We've hit the end, we can quit now. */
+	if (info->done_handler)
+	    info->done_handler(domain, 0, info->cb_data);
+	remove_bus_scans_running(domain, info);
+	info->os_hnd->free_timer(info->os_hnd, info->timer);
+	ipmi_destroy_lock(info->lock);
+	ipmi_mem_free(info);
+	goto out;
+    }
+    ipmb->slave_addr += 2;
+    info->missed_responses = 0;
+    if (in_ipmb_ignores(domain, ipmb->slave_addr))
+	goto next_addr_nolock;
+
+ retry_addr:
+    rv = ipmi_send_command_addr(domain,
+				&(info->addr),
+				info->addr_len,
+				&(info->msg),
+				devid_bc_rsp_handler,
+				info, NULL);
+    if (rv)
+	goto next_addr_nolock;
+
+ out:
+    ipmi_read_unlock();
+}
+
+static void devid_bc_rsp_handler(ipmi_domain_t *domain,
+				 ipmi_addr_t   *addr,
+				 unsigned int  addr_len,
+				 ipmi_msg_t    *msg,
+				 void          *rsp_data1,
 				 void          *rsp_data2)
 {
     mc_ipmb_scan_info_t *info = rsp_data1;
@@ -1611,6 +1701,8 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 		    if (info->done_handler)
 			info->done_handler(domain, 0, info->cb_data);
 		    remove_bus_scans_running(domain, info);
+		    info->os_hnd->free_timer(info->os_hnd, info->timer);
+		    ipmi_destroy_lock(info->lock);
 		    ipmi_mem_free(info);
 		    ipmi_unlock(domain->mc_list_lock);
 		    goto out;
@@ -1646,9 +1738,27 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 	    _ipmi_cleanup_mc(mc);
 	    goto next_addr;
 	} else {
-	    /* Try again right now. */
+	    /* Try again after a second. */
+	    struct timeval timeout;
+
 	    ipmi_unlock(domain->mc_list_lock);
-	    goto retry_addr;
+
+	    if (msg->data[0] == IPMI_TIMEOUT_CC)
+		/* If we timed out, then no need to time, since a
+		   second has gone by already. */
+		goto retry_addr;
+
+	    ipmi_lock(info->lock);
+	    timeout.tv_sec = 1;
+	    timeout.tv_usec = 0;
+	    info->timer_running = 1;
+	    info->os_hnd->start_timer(info->os_hnd,
+				      info->timer,
+				      &timeout,
+				      rescan_timeout_handler,
+				      info);
+	    ipmi_unlock(info->lock);
+	    goto out;
 	}
     }
 
@@ -1663,6 +1773,8 @@ static void devid_bc_rsp_handler(ipmi_domain_t *domain,
 	if (info->done_handler)
 	    info->done_handler(domain, 0, info->cb_data);
 	remove_bus_scans_running(domain, info);
+	info->os_hnd->free_timer(info->os_hnd, info->timer);
+	ipmi_destroy_lock(info->lock);
 	ipmi_mem_free(info);
 	goto out;
     }
@@ -1702,6 +1814,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return;
+    memset(info, 0, sizeof(*info));
 
     info->domain = domain;
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;
@@ -1721,6 +1834,14 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     info->done_handler = done_handler;
     info->cb_data = cb_data;
     info->missed_responses = 0;
+    info->os_hnd = domain->os_hnd;
+    rv = info->os_hnd->alloc_timer(info->os_hnd, &info->timer);
+    if (rv)
+	goto out_err;
+
+    rv = ipmi_create_lock(domain, &info->lock);
+    if (rv)
+	goto out_err;
 
     /* Skip addresses we must ignore. */
     while ((in_ipmb_ignores(domain, ipmb->slave_addr))
@@ -1740,12 +1861,20 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 	    ipmb->slave_addr += 2;
     }
 
-    if (rv) {
-	if (info->done_handler)
-	    info->done_handler(domain, rv, info->cb_data);
-	ipmi_mem_free(info);
-    } else
+    if (rv)
+	goto out_err;
+    else
 	add_bus_scans_running(domain, info);
+    return;
+
+ out_err:
+    if (info->done_handler)
+	info->done_handler(domain, rv, info->cb_data);
+    if (info->timer)
+	info->os_hnd->free_timer(info->os_hnd, info->timer);
+    if (info->lock)
+	ipmi_destroy_lock(info->lock);
+    ipmi_mem_free(info);
 }
 
 void
