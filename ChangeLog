@@ -7,6 +7,8 @@
 	* lib/mc.c: Removed setting the event receiver for SEL devices
 	that are not event generators.
 
+	* ui/ui.c: Fixed problems printing entities.
+
 2003-10-07 Tony Griffiths <tonyg@agile.tv>
 
 	* lib/domain.c: Fixed channel scanning to go on if it gets an

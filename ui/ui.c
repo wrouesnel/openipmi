@@ -787,14 +787,14 @@ get_entity_loc(ipmi_entity_t *entity, char *str, int strlen)
     id = ipmi_entity_convert_to_id(entity);
     if (curr_entity_id.address != 0)
 	snprintf(str, strlen, "r%d.%d.%d.%d",
-		 curr_entity_id.channel,
-		 curr_entity_id.address,
-		 curr_entity_id.entity_id,
-		 curr_entity_id.entity_instance);
+		 id.channel,
+		 id.address,
+		 id.entity_id,
+		 id.entity_instance);
     else
 	snprintf(str, strlen, "%d.%d",
-		 curr_entity_id.entity_id,
-		 curr_entity_id.entity_instance);
+		 id.entity_id,
+		 id.entity_instance);
     return str;
 }
 
@@ -4071,7 +4071,7 @@ entity_change(enum ipmi_update_e op,
 
     switch (op) {
 	case IPMI_ADDED:
-	    ui_log("Entity added: %d.%d\n",
+	    ui_log("Entity added: %s\n",
 		   get_entity_loc(entity, loc, sizeof(loc)));
 	    rv = ipmi_entity_set_sensor_update_handler(entity,
 						       sensor_change,
@@ -4102,11 +4102,11 @@ entity_change(enum ipmi_update_e op,
 	    }
 	    break;
 	case IPMI_DELETED:
-	    ui_log("Entity deleted: %d.%d\n",
+	    ui_log("Entity deleted: %s\n",
 		   get_entity_loc(entity, loc, sizeof(loc)));
 	    break;
 	case IPMI_CHANGED:
-	    ui_log("Entity changed: %d.%d\n",
+	    ui_log("Entity changed: %s\n",
 		   get_entity_loc(entity, loc, sizeof(loc)));
 	    break;
     }
