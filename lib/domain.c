@@ -128,6 +128,9 @@ struct ipmi_domain_s
     /* Used to handle shutdown race conditions. */
     int             valid;
 
+    /* Used to handle startup race conditions. */
+    int             in_startup;
+
     /* OS handler to use for domain operations. */
     os_handler_t *os_hnd;
 
@@ -2937,6 +2940,7 @@ call_con_fails(ipmi_domain_t *domain,
     con_change_info_t info = {domain, err, conn_num, port_num, still_connected};
     ilist_iter(domain->con_change_handlers, iterate_con_changes, &info);
     domain->connecting = 0;
+    domain->in_startup = 0;
 }
 
 static void
@@ -3544,7 +3548,8 @@ ll_con_changed(ipmi_con_t   *ipmi,
     else
 	domain->port_up[port_num][u] = 1;
 
-    ipmi_start_si_scan(domain, u, NULL, NULL);
+    if (!domain->in_startup)
+    	ipmi_start_si_scan(domain, u, NULL, NULL);
 
     if (still_connected) {
 	domain->con_up[u] = 1;
@@ -3618,6 +3623,7 @@ ipmi_init_domain(ipmi_con_t               *con[],
     if (rv)
 	return rv;
 
+    domain->in_startup = 1;
     for (i=0; i<num_con; i++) {
 	con[i]->set_con_change_handler(con[i], ll_con_changed, domain);
 	con[i]->set_ipmb_addr_handler(con[i], ll_addr_changed, domain);
