@@ -157,7 +157,7 @@
  * that are global (owned by the AMC(s) are as follows:
  *
  * Chassis sensors/controls: 1-6
- * 7 is currently unused
+ * 0,7-13 are currently unused
  * Power supply sensors/controls: 14-43 (6 each, 5 power supplies)
  * Fan sensors/controls: 44-63 (4 each, 5 fans)
  * Board sensors/controls: 64-195 (6 each, 22 boards)
@@ -177,12 +177,12 @@
 
 /* Power supply and fan sensors */
 #define MXP_PS_SENSNUM_START 14
-#define MXP_PS_SENSOR_NUM(idx, num) (((idx)*16)+(num)+MXP_PS_SENSNUM_START)
+#define MXP_PS_SENSOR_NUM(idx, num) (((idx)*6)+(num)+MXP_PS_SENSNUM_START)
 #define MXP_PS_PRESENCE_NUM(idx) MXP_PS_SENSOR_NUM(idx, 0)
 #define MXP_PS_PS_NUM(idx) MXP_PS_SENSOR_NUM(idx, 1)
 
 #define MXP_FAN_SENSNUM_START 44
-#define MXP_FAN_SENSOR_NUM(idx, num) (((idx)*16)+(num)+MXP_FAN_SENSNUM_START)
+#define MXP_FAN_SENSOR_NUM(idx, num) (((idx)*4)+(num)+MXP_FAN_SENSNUM_START)
 #define MXP_FAN_PRESENCE_NUM(idx) MXP_FAN_SENSOR_NUM(idx, 0)
 #define MXP_FAN_SPEED_NUM(idx) MXP_FAN_SENSOR_NUM(idx, 1)
 #define MXP_FAN_COOLING_NUM(idx) MXP_FAN_SENSOR_NUM(idx, 2)
@@ -206,7 +206,7 @@
 
 /* Board senors/controls. */
 #define MXP_BOARD_SENSNUM_START 64
-#define MXP_BOARD_SENSOR_NUM(idx,num) (((idx)*8)+(num)+MXP_BOARD_SENSNUM_START)
+#define MXP_BOARD_SENSOR_NUM(idx,num) (((idx)*6)+(num)+MXP_BOARD_SENSNUM_START)
 #define MXP_BOARD_PRESENCE_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 0)
 #define MXP_BOARD_HEALTHY_NUM(idx) MXP_BOARD_SENSOR_NUM(idx, 1)
 
@@ -229,7 +229,8 @@ typedef struct mxp_sensor_header_s
     unsigned int deassert_events;
 
     /* Depending on the sensor, this will hold:
-       Power Supply/fans - A pointer to mxp_power_supply_t
+       Power Supply - A pointer to mxp_power_supply_t
+       Fan - A pointer to mxp_fan_t
        Boards, switches, and AMC presense sensors  - A pointer
        to the mxp_board_t structure for the board.
        Board/switch/AMC slot sensors - not used (NULL)
@@ -247,7 +248,8 @@ typedef struct mxp_sensor_header_s
 typedef struct mxp_control_header_s
 {
     /* Depending on the control, this will hold:
-       Power Supply/fans - A pointer to mxp_power_supply_t
+       Power Supply - A pointer to mxp_power_supply_t
+       Fan - A pointer to mxp_fan_t
        Boards, switches, and AMC led controls  - A pointer
        to the mxp_board_t structure for the board.
        Board/switch/AMC blue light controls - not used (NULL)
@@ -8380,7 +8382,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     int        i;
 
     for (i=0; i<MXP_POWER_SUPPLIES; i++) {
-	if (info->power_supply[i].ent)
+	if ((info->chassis_ent) && (info->power_supply[i].ent))
 	    ipmi_entity_remove_child(info->chassis_ent,
 				     info->power_supply[i].ent);
 	if (info->power_supply[i].presence)
@@ -8402,7 +8404,7 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     }
 
     for (i=0; i<MXP_FANS; i++) {
-	if (info->fan[i].fan_ent)
+	if ((info->chassis_ent) && (info->fan[i].fan_ent))
 	    ipmi_entity_remove_child(info->chassis_ent,
 				     info->fan[i].fan_ent);
 	if (info->fan[i].fan_presence)
