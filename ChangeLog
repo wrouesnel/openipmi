@@ -1,6 +1,9 @@
 
 2003-09-02 Corey Minyard <cminyard@mvista.com>
 
+	* lib/oem_motorola_mxp.c: Fixed the -12V voltage sensor on the
+	5365 card to be 10% tolerance.
+
 	* lib/mc.c: Fixed process to continue when the SDR fetch
 	fails.
 
