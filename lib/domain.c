@@ -1220,22 +1220,33 @@ _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 				      unsigned int  slave_addr,
 				      ipmi_mc_t     **new_mc)
 {
-    ipmi_mc_t        *mc;
-    ipmi_ipmb_addr_t addr;
-    int              rv;
+    ipmi_mc_t   *mc;
+    ipmi_addr_t addr;
+    int         addr_size;
+    int         rv;
 
-    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
-    addr.channel = channel;
-    addr.lun = 0;
-    addr.slave_addr = slave_addr;
+    if (channel == IPMI_BMC_CHANNEL) {
+	ipmi_system_interface_addr_t *saddr = (void *) &addr;
+	saddr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	saddr->channel = slave_addr;
+	saddr->lun = 0;
+	addr_size = sizeof(*saddr);
+    } else {
+	ipmi_ipmb_addr_t *iaddr = (void *) &addr;
+	iaddr->addr_type = IPMI_IPMB_ADDR_TYPE;
+	iaddr->channel = channel;
+	iaddr->lun = 0;
+	iaddr->slave_addr = slave_addr;
+	addr_size = sizeof(*iaddr);
+    }
 
-    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+    mc = _ipmi_find_mc_by_addr(domain, &addr, addr_size);
     if (mc) {
 	*new_mc = mc;
 	return 0;
     }
 
-    rv = _ipmi_create_mc(domain, (ipmi_addr_t *) &addr, sizeof(addr), &mc);
+    rv = _ipmi_create_mc(domain, &addr, addr_size, &mc);
     if (rv)
 	return rv;
 
