@@ -360,6 +360,26 @@ handle_sel_clear(ipmi_mc_t  *mc,
  out:
 }
 
+static int
+send_sel_clear(ipmi_sel_info_t *sel)
+{
+    unsigned char      cmd_data[MAX_IPMI_DATA_SIZE];
+    ipmi_msg_t         cmd_msg;
+
+    cmd_msg.data = cmd_data;
+    cmd_msg.netfn = IPMI_STORAGE_NETFN;
+    cmd_msg.cmd = IPMI_CLEAR_SEL_CMD;
+    cmd_msg.data_len = 6;
+    ipmi_set_uint16(cmd_msg.data, sel->reservation);
+    cmd_msg.data[2] = 'C';
+    cmd_msg.data[3] = 'L';
+    cmd_msg.data[4] = 'R';
+    cmd_msg.data[5] = 0xaa;
+
+    return ipmi_send_command(sel->mc, sel->lun, &cmd_msg,
+			     handle_sel_clear, sel);
+}
+
 static int start_fetch(ipmi_sel_info_t *sel);
 
 static void
@@ -463,20 +483,9 @@ handle_sel_data(ipmi_mc_t  *mc,
 	   our SEL is deleted, then clear it with our old
 	   reservation. */
 	if ((sel->num_sels == 0) && (!ilist_empty(sel->events))) {
-	    cmd_msg.data = cmd_data;
-	    cmd_msg.netfn = IPMI_STORAGE_NETFN;
-	    cmd_msg.cmd = IPMI_CLEAR_SEL_CMD;
-	    cmd_msg.data_len = 6;
-	    ipmi_set_uint16(cmd_msg.data, sel->reservation);
-	    cmd_msg.data[2] = 'C';
-	    cmd_msg.data[3] = 'L';
-	    cmd_msg.data[4] = 'R';
-	    cmd_msg.data[5] = 0xaa;
-
 	    /* We don't care if this fails, because it will just
 	       happen again later if it does. */
-	    rv = ipmi_send_command(sel->mc, sel->lun, &cmd_msg,
-				   handle_sel_clear, sel);
+	    rv = send_sel_clear(sel);
 	    if (rv)
 		fetch_complete(sel, 0);
 	    rv = 0;
@@ -572,7 +581,20 @@ handle_sel_info(ipmi_mc_t  *mc,
 	&& (add_timestamp == sel->last_addition_timestamp)
 	&& (erase_timestamp == sel->last_erase_timestamp))
     {
-	fetch_complete(sel, 0);
+	/* If the operation completed successfully and everything in
+	   our SEL is deleted, then clear it with our old
+	   reservation. */
+	if ((sel->num_sels == 0) && (!ilist_empty(sel->events))) {
+	    /* We don't care if this fails, because it will just
+	       happen again later if it does. */
+	    rv = send_sel_clear(sel);
+	    if (rv)
+		fetch_complete(sel, 0);
+	    rv = 0;
+	} else {
+	    fetch_complete(sel, 0);
+	}
+
 	goto out;
     }
 
