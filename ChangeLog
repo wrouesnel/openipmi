@@ -56,6 +56,8 @@
 	* doc/OpenIPMI.texi: Reworked docs to add info on the event
 	rework.
 
+	* lib/Makefile.am: Upped the library revision.
+
 	* configure.in: Move to version 1.3.0.
 
 2004-02-25 Corey Minyard <cminyard@mvista.com> 
