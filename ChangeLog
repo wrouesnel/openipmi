@@ -17,6 +17,8 @@
 
 	* lib/sel.c: Hacks for broken hardware.
 
+	* lib/mc: Added some information for changed MCs.
+
 2005-02-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Some more fixups for the Intel chassis.
