@@ -2350,7 +2350,10 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
     ipmi_mc_t  *mc = (ipmi_mc_t *) cb_data;
     int        rv;
 
-    if (err) {
+    /* If we get an error while querying device SDRs, then we just
+       don't have any device SDRs. */
+    if (err && (mc->bmc->state != QUERYING_SENSOR_SDRS)) {
+
 	rv = err;
 	goto out_err;
     }

@@ -1,4 +1,9 @@
 
+2003-02-24 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Ignore device SDRs if we get an error back from querying
+	them.
+
 2003-02-21 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Moved to version 0.2.0.
