@@ -154,7 +154,7 @@ ipmi_event_get_data(ipmi_event_t *event, unsigned char *data,
 	return 0;
 
     if (offset+len > event->data_len)
-	len = event->data_len = offset;
+	len = event->data_len - offset;
 
     memcpy(data, event->data+offset, len);
 
