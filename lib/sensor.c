@@ -4648,7 +4648,7 @@ static double c_linear(double val)
     return val;
 }
 
-static double log2(double val)
+static double c_log2(double val)
 {
     return log(val) / 0.69314718 /* log(2) */;
 }
@@ -4689,7 +4689,7 @@ static linearizer linearize[12] =
     c_linear,
     log,
     log10,
-    log2,
+    c_log2,
     exp,
     c_exp10,
     c_exp2,

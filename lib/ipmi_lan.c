@@ -1072,11 +1072,15 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	lock = fd_list_lock;
 	list = &fd_list;
 	free_list = &fd_free_list;
-    } else if (family == PF_INET6) {
+    }
+#ifdef PF_INET6
+    else if (family == PF_INET6) {
 	lock = fd6_list_lock;
 	list = &fd6_list;
 	free_list = &fd6_free_list;
-    } else {
+    }
+#endif
+    else {
 	return NULL;
     }
 
@@ -2900,7 +2904,7 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
     unsigned int  data_len;
     int           rv;
 
-    if (data[4] == IPMI_AUTHTYPE_NONE) {
+    if ((data[4] & 0x0f) == IPMI_AUTHTYPE_NONE) {
 	if (len < 14) { /* Minimum size of an IPMI msg. */
 	    if (lan->stat_too_short)
 		ipmi->add_stat(ipmi->user_data, lan->stat_too_short, 1);
@@ -2946,7 +2950,7 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
     /* FIXME - need a lock on the session data. */
 
     /* Drop if the authtypes are incompatible. */
-    if (lan->ip[addr_num].working_authtype != data[4]) {
+    if (lan->ip[addr_num].working_authtype != (data[4] & 0x0f)) {
 	if (lan->stat_invalid_auth)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_invalid_auth, 1);
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -2966,7 +2970,7 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 
     seq = ipmi_get_uint32(data+5);
 
-    if (data[4] != 0) {
+    if ((data[4] & 0x0f) != 0) {
 	/* Validate the message's authcode.  Do this before checking
            the session seq num so we know the data is valid. */
 	rv = auth_check(lan, data+9, data+5, data+30, data[29], data+13,
@@ -3223,7 +3227,7 @@ data_handler(int            fd,
 	return;
     }
 
-    if (data[4] == IPMI_AUTHTYPE_RMCP_PLUS) {
+    if ((data[4] & 0x0f) == IPMI_AUTHTYPE_RMCP_PLUS) {
 	ipmi = rmcpp_find_ipmi(item, data, len, &ipaddrd, &addr_num);
     } else {
 	ipmi = rmcp_find_ipmi(item, data, len, &ipaddrd, &addr_num);
@@ -3239,7 +3243,7 @@ data_handler(int            fd,
     if (lan->stat_recv_packets)
 	ipmi->add_stat(ipmi->user_data, lan->stat_recv_packets, 1);
 
-    if (data[4] == IPMI_AUTHTYPE_RMCP_PLUS) {
+    if ((data[4] & 0x0f) == IPMI_AUTHTYPE_RMCP_PLUS) {
 	handle_rmcpp_recv(ipmi, lan, addr_num, data, len);
     } else {
 	handle_lan15_recv(ipmi, lan, addr_num, data, len);
@@ -4534,6 +4538,8 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     lan_data_t *lan;
     int        rv;
     int        addr_num = (long) rspi->data4;
+    int        supports_ipmi2;
+    int        extended_capabilities_reported;
 
     if (!ipmi) {
 	handle_connected(ipmi, ECANCELED, addr_num);
@@ -4544,6 +4550,37 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     if ((msg->data[0] != 0) || (msg->data_len < 9)) {
 	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+
+    extended_capabilities_reported = (msg->data[2] & 0x80);
+    supports_ipmi2 = (msg->data[4] & 0x02);
+    if (extended_capabilities_reported && supports_ipmi2) {
+	/* We have RMCP+ support!  Use it. */
+	lan->use_two_keys = (msg->data[3] >> 5) & 1;
+	memcpy(lan->oem_iana, msg->data+5, 3);
+	lan->oem_aux = msg->data[8];
+	return start_rmcpp(ipmi, lan, rspi, addr_num);
+    }
+    else if (supports_ipmi2)
+    {
+	/*
+	 * The BMC has said that it supports RMCP+/IPMI 2.0 in the extended response fields,
+	 * but has not indicated that we should USE the extended response fields!
+	 * (The SuperMicro AOC-IPMI20-E does this).
+	 */
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		"%sipmi_lan.c(auth_cap_done): "
+		"BMC is confused about whether or not it supports RMCP+.  Disabling RMCP+ support.",
+		IPMI_CONN_NAME(lan->ipmi));
+    } 
+    if (lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
+	/* The user specified RMCP+, but the system doesn't have it. */
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		"%sipmi_lan.c(auth_cap_done): "
+		"User requested RMCP+, but not supported",
+		IPMI_CONN_NAME(lan->ipmi));
+	handle_connected(ipmi, ENOENT, addr_num);
 	goto out;
     }
 
@@ -4651,25 +4688,8 @@ auth_cap_done_p(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	goto out;
     }
 
-    if (msg->data[4] & 0x02) {
-	/* We have RMCP+ support!  Use it. */
-	lan->use_two_keys = (msg->data[3] >> 5) & 1;
-	memcpy(lan->oem_iana, msg->data+5, 3);
-	lan->oem_aux = msg->data[8];
-	return start_rmcpp(ipmi, lan, rspi, addr_num);
-    } else {
-	if (lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS) {
-	    /* The user specified RMCP+, but the system doesn't have it. */
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sipmi_lan.c(auth_cap_done_p): "
-		     "Use requested RMCP+, but not supported",
-		     IPMI_CONN_NAME(lan->ipmi));
-	    handle_connected(ipmi, ENOENT, addr_num);
-	    goto out;
-	}
 
-	return auth_cap_done(ipmi, rspi);
-    }
+    return auth_cap_done(ipmi, rspi);
 
  out:
     return IPMI_MSG_ITEM_NOT_USED;

@@ -35,6 +35,7 @@
 #define _IPMI_FRU_H
 
 #include <OpenIPMI/ipmi_types.h>
+#include <time.h>
 
 #define IPMI_FRU_NAME_LEN 64
 

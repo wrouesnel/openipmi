@@ -1,3 +1,24 @@
+2005-03-24 Darius Davis <dariusd@users.sourceforge.net>
+
+	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Moved #include<time.h>
+	to fru.h.
+
+	* lib/ipmi_lan.c: #ifdef around more PF_INET6 dependent code.
+
+	* lib/ipmi_lan.c: when reading AuthType field, only take low
+	nybble.
+
+	* lib/ipmi_lan.c: raise a warning if the BMC reports that it
+	supports IPMI2 in extended capabilities, but doesn't say it
+	provides extended capabilities.
+
+	* lib/ipmi_lan.c: move RMCP+ support detection from
+	auth_cap_done_p to auth_cap_done so we can give a warning for BMCs
+	that don't handle Get Channel Auth Conf properly.
+
+	* lib/sensor.c: change log2 to c_log2 for platforms that define
+	log2 as a macro (Cygwin).
+
 2005-03-23 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/mxp.h: Fixed the license to be LGPL, as
