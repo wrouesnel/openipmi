@@ -4586,9 +4586,9 @@ ipmi_init_domain(ipmi_con_t               *con[],
 }
 
 int
-ipmi_domain_entity_update_handler(ipmi_domain_t         *domain,
-				  ipmi_domain_entity_cb handler,
-				  void                  *cb_data)
+ipmi_domain_set_entity_update_handler(ipmi_domain_t         *domain,
+				      ipmi_domain_entity_cb handler,
+				      void                  *cb_data)
 {
     int rv = 0;
 
