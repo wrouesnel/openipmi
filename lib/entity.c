@@ -6004,6 +6004,7 @@ check_power(ipmi_control_t *control,
 		 " get power value, error %x",
 		 CONTROL_NAME(control), err);
 	ipmi_mem_free(info);
+	return;
     }
 
     info->power = val[0];
@@ -6011,7 +6012,7 @@ check_power(ipmi_control_t *control,
     if (ent->hot_swap_requester) {
 	rv = ipmi_states_get(ent->hot_swap_requester,
 			     check_requester,
-			     ent);
+			     info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sentity.c(power_checked): Unable to"
@@ -6020,7 +6021,7 @@ check_power(ipmi_control_t *control,
 	    ipmi_mem_free(info);
 	}
     } else {
-	if (val[0])
+	if (info->power)
 	    set_hot_swap_state(ent, IPMI_HOT_SWAP_ACTIVE, NULL);
 	else
 	    set_hot_swap_state(ent, IPMI_HOT_SWAP_INACTIVE, NULL);
