@@ -35,6 +35,7 @@
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/selector.h>
 
 /* This sample application demostrates a very simple method to use
@@ -63,6 +64,12 @@ usage(void)
 	   "     username and password must be provided if the authtype is\n"
 	   "     not none.\n", progname, progname);
 }
+
+int control_set = 0;
+ipmi_control_id_t control_id;
+
+struct timeval check_timeout;
+os_hnd_timer_id_t *check_timer;
 
 int entity_id;
 int entity_instance;
@@ -135,6 +142,55 @@ void got_id(ipmi_control_t *control,
 }
 
 
+void
+check_control(ipmi_control_t *control, void *cb_data)
+{
+    int rv = 0;
+
+    switch(ipmi_control_get_type(control))
+    {
+    case IPMI_CONTROL_RELAY:
+    case IPMI_CONTROL_ALARM:
+    case IPMI_CONTROL_RESET:
+    case IPMI_CONTROL_POWER:
+    case IPMI_CONTROL_FAN_SPEED:
+    case IPMI_CONTROL_OUTPUT:
+    case IPMI_CONTROL_LIGHT:
+	rv = ipmi_control_get_val(control, got_val, NULL);
+	break;
+
+    case IPMI_CONTROL_IDENTIFIER:
+	rv = ipmi_control_identifier_get_val(control, got_id, NULL);
+	break;
+	    
+    default:
+	printf("Invalid control type\n");
+	leave();
+    }
+    if (rv) {
+	printf("Unable to get control val: %x\n", rv);
+	leave();
+    }
+}
+
+void
+control_check_timeout(void *cb_data, os_hnd_timer_id_t *id)
+{
+    int rv;
+
+    if (control_set) {
+	rv = ipmi_control_pointer_cb(control_id, check_control, NULL);
+	if (rv) {
+	    printf("Unable to convert control to pointer: %d\n", rv);
+	    leave();
+	}
+    }
+
+    ipmi_ui_cb_handlers.start_timer(&ipmi_ui_cb_handlers,
+				    check_timer, &check_timeout,
+				    control_check_timeout, NULL);
+}
+
 /* Whenever the status of a control changes, the function is called
    We display the information of the control if we find a new control
 */
@@ -146,7 +202,6 @@ control_change(enum ipmi_update_e op,
 {
     int id, instance;
     char name[33];
-    int rv = 0;
 
     id = ipmi_entity_get_entity_id(ent);
     instance = ipmi_entity_get_entity_instance(ent);
@@ -156,30 +211,8 @@ control_change(enum ipmi_update_e op,
 	    && (instance == entity_instance)
 	    && (strcmp(control_name, name) == 0))
 	{
-	    switch(ipmi_control_get_type(control))
-	    {
-	    case IPMI_CONTROL_RELAY:
-	    case IPMI_CONTROL_ALARM:
-	    case IPMI_CONTROL_RESET:
-	    case IPMI_CONTROL_POWER:
-	    case IPMI_CONTROL_FAN_SPEED:
-	    case IPMI_CONTROL_OUTPUT:
-	    case IPMI_CONTROL_LIGHT:
-		rv = ipmi_control_get_val(control, got_val, NULL);
-		break;
-
-	    case IPMI_CONTROL_IDENTIFIER:
-		rv = ipmi_control_identifier_get_val(control, got_id, NULL);
-		break;
-
-	    default:
-		printf("Invalid control type\n");
-		leave();
-	    }
-	    if (rv) {
-		printf("Unable to get control val: %x\n", rv);
-		leave();
-	    }
+	    control_id = ipmi_control_convert_to_id(control);
+	    control_set = 1;
 	}
     }
 }
@@ -283,6 +316,18 @@ main(int argc, const char *argv[])
 	fprintf(stderr, "ipmi_init_domain: %s\n", strerror(rv));
 	exit(1);
     }
+
+    rv = ipmi_ui_cb_handlers.alloc_timer(&ipmi_ui_cb_handlers, &check_timer);
+    if (rv) {
+	fprintf(stderr, "alloc_timer: %x\n", rv);
+	leave();
+    }
+
+    check_timeout.tv_sec = 5;
+    check_timeout.tv_usec = 0;
+    ipmi_ui_cb_handlers.start_timer(&ipmi_ui_cb_handlers,
+				    check_timer, &check_timeout,
+				    control_check_timeout, NULL);
 
     /* This is the main loop of the event-driven program. 
        Try <CTRL-C> to exit the program */ 
