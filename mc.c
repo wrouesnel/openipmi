@@ -1032,9 +1032,11 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
 
     timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
     timeout.tv_usec = 0;
-    bmc->bmc->conn->os_hnd->restart_timer(bmc->bmc->conn->os_hnd,
-					  id,
-					  &timeout);
+    bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
+					id,
+					&timeout,
+					bmc_reread_sel,
+					info);
     ipmi_unlock(bmc->bmc->mc_list_lock);
 }
 
@@ -1062,11 +1064,18 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
     info->cancelled = 0;
     timeout.tv_sec = IPMI_SEL_QUERY_INTERVAL;
     timeout.tv_usec = 0;
-    rv = mc->bmc->conn->os_hnd->add_timer(mc->bmc->conn->os_hnd,
-					  &timeout,
-					  bmc_reread_sel,
-					  info,
-					  &(mc->bmc->sel_timer));
+    rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd,
+					    &(mc->bmc->sel_timer));
+    if (!rv) {
+	rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
+						mc->bmc->sel_timer,
+						&timeout,
+						bmc_reread_sel,
+						info);
+	if (rv)
+	    mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd,
+					      mc->bmc->sel_timer);
+    }
     if (rv) {
 	free(info);
 	ipmi_log("Unable to start the system event log timer."
@@ -1283,11 +1292,14 @@ bmc_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 	return;
     }
     ipmi_lock(bmc->bmc->mc_list_lock);
+    start_mc_scan(bmc);
     timeout.tv_sec = IPMI_RESCAN_BUS_INTERVAL;
     timeout.tv_usec = 0;
-    bmc->bmc->conn->os_hnd->restart_timer(bmc->bmc->conn->os_hnd,
-					  id,
-					  &timeout);
+    bmc->bmc->conn->os_hnd->start_timer(bmc->bmc->conn->os_hnd,
+					id,
+					&timeout,
+					bmc_rescan_bus,
+					info);
     ipmi_unlock(bmc->bmc->mc_list_lock);
 }
 
@@ -1326,11 +1338,18 @@ set_operational(ipmi_mc_t *mc)
 	info->cancelled = 0;
         timeout.tv_sec = IPMI_RESCAN_BUS_INTERVAL;
         timeout.tv_usec = 0;
-        rv = mc->bmc->conn->os_hnd->add_timer(mc->bmc->conn->os_hnd,
-					      &timeout,
-					      bmc_rescan_bus,
-					      info,
-					      &(mc->bmc->bus_scan_timer));
+        rv = mc->bmc->conn->os_hnd->alloc_timer(mc->bmc->conn->os_hnd,
+						&(mc->bmc->bus_scan_timer));
+	if (!rv) {
+	    rv = mc->bmc->conn->os_hnd->start_timer(mc->bmc->conn->os_hnd,
+						    mc->bmc->bus_scan_timer,
+						    &timeout,
+						    bmc_rescan_bus,
+						    info);
+	    if (rv)
+		mc->bmc->conn->os_hnd->free_timer(mc->bmc->conn->os_hnd,
+						  mc->bmc->bus_scan_timer);
+	}
     }
     if (rv) {
 	ipmi_log("Unable to start the bus scan timer."

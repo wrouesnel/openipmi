@@ -82,33 +82,33 @@ struct os_handler_s
     int (*remove_fd_to_wait_for)(os_handler_t   *handler,
 				 os_hnd_fd_id_t *id);
 
-    /* This is called by the user code to register a callback handler
-       to be called at the given time or after (absolute time, as seen
-       by gettimeofday).  After the given time has passed, the
-       "timed_out" should be called with the given cb_data.  This should
-       return an identifier in "id" that can be used to cancel the
-       timer later.  Note that these calls may NOT block.  If these
-       are NULL, you may only call the commands ending in "_wait",
-       event-driven code will return errors, and you may not receive
-       commands or events. */
-    int (*add_timer)(os_handler_t      *handler,
-		     struct timeval    *timeout,
-		     os_timed_out_t    timed_out,
-		     void              *cb_data,
-		     os_hnd_timer_id_t **id);
+    /* Create a timer.  This will allocate all the data required for
+       the timer, so no other timer operations should fail due to lack
+       of memory. */
+    int (*alloc_timer)(os_handler_t      *handler,
+		       os_hnd_timer_id_t **id);
+    /* Free the memory for the given timer.  If the timer is running,
+       stop it first. */
+    int (*free_timer)(os_handler_t      *handler,
+		      os_hnd_timer_id_t *id);
+    /* This is called to register a callback handler to be called at
+       the given time or after (absolute time, as seen by
+       gettimeofday).  After the given time has passed, the
+       "timed_out" will be called with the given cb_data.  The
+       identifier in "id" just be one previously allocated with
+       alloc_timer().  Note that timed_out may NOT block. */
+    int (*start_timer)(os_handler_t      *handler,
+		       os_hnd_timer_id_t *id,
+		       struct timeval    *timeout,
+		       os_timed_out_t    timed_out,
+		       void              *cb_data);
     /* Cancel the given timer.  If the timer has already been called
        (or is in the process of being called) this should return
        ESRCH, and it may not return ESRCH for any other reason.  In
        other words, if ESRCH is returned, the timer is valid and the
        timeout handler has or will be called.  */
-    int (*remove_timer)(os_handler_t      *handler,
-			os_hnd_timer_id_t *id);
-    /* From the context of a timeout, restart the given timer.  This
-       can ONLY be called inside a timeout handler for the given id.
-       This routine cannot fail. */
-    void (*restart_timer)(os_handler_t      *handler,
-			  os_hnd_timer_id_t *id,
-			  struct timeval    *timeout);
+    int (*stop_timer)(os_handler_t      *handler,
+		      os_hnd_timer_id_t *id);
 
     /* Used to implement locking primitives for multi-threaded access.
        If these are NULL, then the code will assume that the system is

@@ -431,7 +431,11 @@ rsp_timeout_handler(void              *cb_data,
 	if (!rv) {
 	    timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
 	    timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
-	    ipmi->os_hnd->restart_timer(ipmi->os_hnd, id, &timeout);
+	    ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				      id,
+				      &timeout,
+				      rsp_timeout_handler,
+				      cb_data);
 	}
 	if (rv) {
 	    /* If we get an error resending the message, report an unknown
@@ -687,14 +691,16 @@ data_handler(int            fd,
 	goto out_unlock;
 
     /* The command matches up, cancel the timer and deliver it */
-    rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd, lan->seq_table[seq].timer);
+    rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, lan->seq_table[seq].timer);
     if (rv)
 	/* Couldn't cancel the timer, make sure the timer doesn't do the
 	   callback. */
 	lan->seq_table[seq].timer_info->cancelled = 1;
-    else
+    else {
 	/* Timer is cancelled, free its data. */
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, lan->seq_table[seq].timer);
 	free(lan->seq_table[seq].timer_info);
+    }
 
     handler = lan->seq_table[seq].rsp_handler;
     rsp_data = lan->seq_table[seq].rsp_data;
@@ -772,11 +778,18 @@ lan_send_command(ipmi_con_t            *ipmi,
 
     timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
     timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
-    rv = ipmi->os_hnd->add_timer(ipmi->os_hnd,
-				 &timeout,
-				 rsp_timeout_handler,
-				 info,
-				 &(lan->seq_table[seq].timer));
+    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd,
+				   &(lan->seq_table[seq].timer));
+    if (!rv) {
+	rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				       lan->seq_table[seq].timer,
+				       &timeout,
+				       rsp_timeout_handler,
+				       info);
+	if (rv)
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd,
+				     lan->seq_table[seq].timer);
+    }
     if (rv) {
 	lan->seq_table[seq].rsp_handler = NULL;
 	goto out_unlock;
@@ -787,14 +800,17 @@ lan_send_command(ipmi_con_t            *ipmi,
 	int err;
 
 	lan->seq_table[seq].rsp_handler = NULL;
-	err = ipmi->os_hnd->remove_timer(ipmi->os_hnd,
-					 lan->seq_table[seq].timer);
+	err = ipmi->os_hnd->stop_timer(ipmi->os_hnd,
+				       lan->seq_table[seq].timer);
 	/* Special handling, if we can't remove the timer, then it
            will time out on us, so we need to not free the command and
            instead let the timeout handle freeing it. */
 	if (err) {
 	    info->cancelled = 1;
 	    info = NULL;
+	} else {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd,
+				     lan->seq_table[seq].timer);
 	}
 	goto out_unlock;
     }
@@ -962,12 +978,15 @@ lan_close_connection(ipmi_con_t *ipmi)
     ipmi_lock(lan->seq_num_lock);
     for (i=0; i<64; i++) {
 	if (lan->seq_table[i].rsp_handler) {
-	    rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd,
-					    lan->seq_table[i].timer);
+	    rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd,
+					  lan->seq_table[i].timer);
 	    if (rv)
 		lan->seq_table[i].timer_info->cancelled = 1;
-	    else
+	    else {
+		ipmi->os_hnd->free_timer(ipmi->os_hnd,
+					 lan->seq_table[i].timer);
 		free(lan->seq_table[i].timer_info);
+	    }
 
 	    lan->seq_table[i].rsp_handler = NULL;
 	}

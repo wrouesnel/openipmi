@@ -103,45 +103,35 @@ struct os_hnd_timer_id_s
 };
 
 static void
-free_timer(os_hnd_timer_id_t *timer)
-{
-    sel_free_timer(timer->timer);
-    free(timer);
-}
-
-static void
 timer_handler(selector_t  *sel,
 	      sel_timer_t *timer,
 	      void        *data)
 {
     os_hnd_timer_id_t *timer_data = (os_hnd_timer_id_t *) data;
+    void              *cb_data;
+    os_timed_out_t    timed_out;
 
+    timed_out = timer_data->timed_out;
+    cb_data = timer_data->cb_data;
     timer_data->running = 0;
-    timer_data->timed_out(timer_data->cb_data, timer_data);
-
-    /* The timer might have been restarted. */
-    if (!timer_data->running)
-	free_timer(timer_data);
+    timed_out(cb_data, timer_data);
 }
 
 static int
-add_timer(os_handler_t      *handler, 
-	  struct timeval    *timeout,
-	  os_timed_out_t    timed_out,
-	  void              *cb_data,
-	  os_hnd_timer_id_t **id)
+start_timer(os_handler_t      *handler, 
+	    os_hnd_timer_id_t *id,
+	    struct timeval    *timeout,
+	    os_timed_out_t    timed_out,
+	    void              *cb_data)
 {
-    os_hnd_timer_id_t *timer_data;
-    int               rv;
     struct timeval    now;
 
-    timer_data = malloc(sizeof(*timer_data));
-    if (!timer_data)
-	return ENOMEM;
+    if (id->running)
+	return EBUSY;
 
-    timer_data->running = 1;
-    timer_data->cb_data = cb_data;
-    timer_data->timed_out = timed_out;
+    id->running = 1;
+    id->cb_data = cb_data;
+    id->timed_out = timed_out;
 
     gettimeofday(&now, NULL);
     now.tv_sec += timeout->tv_sec;
@@ -150,6 +140,29 @@ add_timer(os_handler_t      *handler,
 	now.tv_usec -= 1000000;
 	now.tv_sec += 1;
     }
+
+    return sel_start_timer(id->timer, &now);
+}
+
+static int
+stop_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
+{
+    return sel_stop_timer(timer_data->timer);
+}
+
+static int
+alloc_timer(os_handler_t      *handler, 
+	    os_hnd_timer_id_t **id)
+{
+    os_hnd_timer_id_t *timer_data;
+    int               rv;
+
+    timer_data = malloc(sizeof(*timer_data));
+    if (!timer_data)
+	return ENOMEM;
+
+    timer_data->running = 0;
+    timer_data->timed_out = NULL;
 
     rv = sel_alloc_timer(ui_sel, timer_handler, timer_data,
 			 &(timer_data->timer));
@@ -158,43 +171,15 @@ add_timer(os_handler_t      *handler,
 	return rv;
     }
 
-    rv = sel_start_timer(timer_data->timer, &now);
-    if (rv) {
-	free_timer(timer_data);
-	return rv;
-    }
-
     *id = timer_data;
     return 0;
 }
 
-static void
-restart_timer(os_handler_t      *handler,
-	      os_hnd_timer_id_t *id,
-	      struct timeval    *timeout)
-{
-    struct timeval    now;
-
-
-    gettimeofday(&now, NULL);
-    now.tv_sec += timeout->tv_sec;
-    now.tv_usec += timeout->tv_usec;
-    while (now.tv_usec >= 1000000) {
-	now.tv_usec -= 1000000;
-	now.tv_sec += 1;
-    }
-
-    id->running = 1;
-
-    /* This really can't fail, it can only fail if the timer is already
-       running, and that won't be the case here. */
-    sel_start_timer(id->timer, &now);
-}
-
 static int
-remove_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
+free_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
-    free_timer(timer_data);
+    sel_free_timer(timer_data->timer);
+    free(timer_data);
     return 0;
 }
 
@@ -247,9 +232,10 @@ os_handler_t ipmi_ui_cb_handlers =
 {
     .add_fd_to_wait_for = add_fd,
     .remove_fd_to_wait_for = remove_fd,
-    .add_timer = add_timer,
-    .remove_timer = remove_timer,
-    .restart_timer = restart_timer,
+    .start_timer = start_timer,
+    .stop_timer = stop_timer,
+    .alloc_timer = alloc_timer,
+    .free_timer = free_timer,
     .create_lock = NULL,
     .destroy_lock = NULL,
     .lock = NULL,

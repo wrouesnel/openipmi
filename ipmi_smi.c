@@ -354,6 +354,7 @@ rsp_timeout_handler(void              *cb_data,
 
  out_unlock2:
     ipmi_read_unlock();
+    ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
     free(cmd);
 }
 
@@ -391,13 +392,16 @@ handle_response(ipmi_con_t *ipmi, ipmi_recv_t *recv)
 
     remove_cmd(ipmi, smi, cmd);
 
-    rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd, cmd->timeout_id);
+    rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, cmd->timeout_id);
     if (rv)
 	/* Can't cancel the timer, so the timer will run, let the timer
 	   free the command when that happens. */
 	cmd->cancelled = 1;
-    else
+    else {
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
 	free(cmd);
+    }
+	
 
     cmd = NULL; /* It's gone after this point. */
 
@@ -581,11 +585,18 @@ smi_send_command(ipmi_con_t            *ipmi,
 
     timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
     timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
-    rv = ipmi->os_hnd->add_timer(ipmi->os_hnd,
-				 &timeout,
-				 rsp_timeout_handler,
-				 cmd,
-				 &(cmd->timeout_id));
+    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd,
+				   &(cmd->timeout_id));
+    if (!rv) {
+	rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				       cmd->timeout_id,
+				       &timeout,
+				       rsp_timeout_handler,
+				       cmd);
+	if (rv)
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd,
+				     cmd->timeout_id);
+    }
     if (rv) {
 	remove_cmd(ipmi, smi, cmd);
 	free(cmd);
@@ -597,13 +608,14 @@ smi_send_command(ipmi_con_t            *ipmi,
 	int err;
 
 	remove_cmd(ipmi, smi, cmd);
-	err = ipmi->os_hnd->remove_timer(ipmi->os_hnd, cmd->timeout_id);
+	err = ipmi->os_hnd->stop_timer(ipmi->os_hnd, cmd->timeout_id);
 	/* Special handling, if we can't remove the timer, then it
            will time out on us, so we need to not free the command and
            instead let the timeout handle freeing it. */
-	if (!err)
+	if (!err) {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd->timeout_id);
 	    free(cmd);
-	else
+	} else
 	    cmd->cancelled = 1;
 	goto out_unlock;
     }
@@ -798,9 +810,11 @@ smi_close_connection(ipmi_con_t *ipmi)
     smi->pending_cmds = NULL;
     while (cmd_to_free) {
 	next_cmd = cmd_to_free->next;
-	rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd, cmd_to_free->timeout_id);
-	if (rv) {
+	rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd, cmd_to_free->timeout_id);
+	if (rv)
 	    cmd_to_free->cancelled = 1;
+	else {
+	    ipmi->os_hnd->free_timer(ipmi->os_hnd, cmd_to_free->timeout_id);
 	    free(cmd_to_free);
 	}
 	cmd_to_free = next_cmd;
@@ -981,8 +995,8 @@ ipmi_smi_setup_con(int               if_num,
 
     if (!handlers->add_fd_to_wait_for
 	|| !handlers->remove_fd_to_wait_for
-	|| !handlers->add_timer
-	|| !handlers->remove_timer)
+	|| !handlers->alloc_timer
+	|| !handlers->free_timer)
 	return ENOSYS;
 
     err = setup(if_num, handlers, user_data, &con);
