@@ -1202,6 +1202,8 @@ handle_new_sensor(ipmi_domain_t *domain,
 		     sensor->entity_instance,
 		     &sensor->entity);
 
+    sensor_set_name(sensor);
+
     if ((sensor->source_mc)
 	&& (_ipmi_mc_new_sensor(sensor->source_mc, sensor->entity,
 				sensor, link)))

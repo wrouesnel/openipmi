@@ -3702,8 +3702,11 @@ ipmi_emu_add_mc(emu_data_t    *emu,
     gettimeofday(&t, NULL);
     mc->sel.time_offset = -t.tv_sec;
     mc->main_sdrs.time_offset = -t.tv_sec;
-    for (i=0; i<4; i++)
+    mc->main_sdrs.next_entry = 1;
+    for (i=0; i<4; i++) {
 	mc->device_sdrs[i].time_offset = -t.tv_sec;
+	mc->device_sdrs[i].next_entry = 1;
+    }
 
     mc->event_receiver = 0x20;
     mc->event_receiver_lun = 0;

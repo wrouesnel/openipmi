@@ -31,6 +31,8 @@
  * Add support for setting the power up timeout
  */
 
+#define BROKEN_ATCA
+
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -2530,7 +2532,11 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     info->curr_shelf_fru = 1;
     rv = ipmi_fru_alloc(domain,
 			1,
+#ifdef BROKEN_ATCA
+			0x20,
+#else
 			info->shelf_fru_ipmb,
+#endif
 			1,
 			0,
 			0,

@@ -143,6 +143,22 @@ typedef struct activate_timer_info_s
 
 typedef struct domain_check_oem_s domain_check_oem_t;
 
+/* This is used to hold a list of management controllers.  It is
+   unfortunate that this structure is required.  It exists becuase it
+   is possible for the destruction of one management controller to
+   result in the destruction of another management controller (due to
+   the SDR of the management controller being destroyed) Thus if we
+   are destroying using the list, we do not remove the list item of
+   anything, we just mark it destroyed and remove it later.  Since we
+   do two passes at destruction time (using the list) this works even
+   for previous items in the list. */
+typedef struct ipmi_mc_list_item_s
+{
+    int          removed;
+    ipmi_mc_t    *mc;
+    ilist_item_t item;
+} ipmi_mc_list_item_t;
+
 struct ipmi_domain_s
 {
     /* Used for error reporting. */
@@ -182,6 +198,8 @@ struct ipmi_domain_s
 
     ilist_t            *mc_list;
     ipmi_lock_t        *mc_list_lock;
+    /* We are currently destroying all the MCs in the mc_list. */
+    int                in_mc_list_cleanup;
 
     /* A list of outstanding messages.  We use this so we can reroute
        messages to another connection in case a connection fails. */
@@ -341,7 +359,16 @@ get_con_num(ipmi_domain_t *domain, ipmi_con_t *ipmi)
 static void
 iterate_cleanup_mc(ilist_iter_t *iter, void *item, void *cb_data)
 {
-    _ipmi_cleanup_mc(item);
+    ipmi_mc_list_item_t *li = item;
+
+    if (li->removed) {
+	/* It has already been destroyed, but we had to leave it in
+	   the list.  Just remove it from the list now. */
+	ilist_delete(iter);
+	ipmi_mem_free(li);
+    } else {
+	_ipmi_cleanup_mc(li->mc);
+    }
 }
 
 void
@@ -451,8 +478,10 @@ cleanup_domain(ipmi_domain_t *domain)
        other MCs SDR repositories.  The second pass will get them
        all. */
     if (domain->mc_list) {
+	domain->in_mc_list_cleanup = 1;
 	ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
 	ilist_iter(domain->mc_list, iterate_cleanup_mc, NULL);
+	domain->in_mc_list_cleanup = 0;
     }
 
     if (domain->si_mc)
@@ -1048,13 +1077,18 @@ typedef struct mc_cmp_info_s
     int         addr_len;
 } mc_cmp_info_t;
 
-static
-int mc_cmp(void *item, void *cb_data)
+static int
+mc_cmp(void *item, void *cb_data)
 {
-    ipmi_mc_t     *mc = item;
-    mc_cmp_info_t *info = cb_data;
-    ipmi_addr_t   addr;
-    unsigned int  addr_len;
+    ipmi_mc_list_item_t *li = item;
+    ipmi_mc_t           *mc = li->mc;
+    mc_cmp_info_t       *info = cb_data;
+    ipmi_addr_t         addr;
+    unsigned int        addr_len;
+
+    /* The MC has been destroyed already. */
+    if (li->removed)
+	return 0;
 
     ipmi_mc_get_ipmi_address(mc, &addr, &addr_len);
 
@@ -1067,7 +1101,8 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
 		      ipmi_addr_t   *addr,
 		      unsigned int  addr_len)
 {
-    mc_cmp_info_t    info;
+    ipmi_mc_list_item_t *li;
+    mc_cmp_info_t       info;
 
     if (addr_len > sizeof(ipmi_addr_t))
 	return NULL;
@@ -1080,7 +1115,11 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
 
     memcpy(&(info.addr), addr, addr_len);
     info.addr_len = addr_len;
-    return ilist_search(domain->mc_list, mc_cmp, &info);
+    li = ilist_search(domain->mc_list, mc_cmp, &info);
+    if (li)
+	return li->mc;
+    else
+	return NULL;
 }
 
 static int
@@ -1149,15 +1188,24 @@ iterate_mc_upds(ilist_iter_t *iter, void *item, void *cb_data)
 static int
 add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
-    int rv = 0;
-    int success;
+    ipmi_mc_list_item_t *li;
+    int                 rv = 0;
+    int                 success;
 
     CHECK_DOMAIN_LOCK(domain);
     CHECK_MC_LOCK(mc);
 
-    success = ilist_add_tail(domain->mc_list, mc, NULL);
-    if (!success)
+    li = ipmi_mem_alloc(sizeof(*li));
+    if (!li)
+	return ENOMEM;
+
+    li->removed = 0;
+    li->mc = mc;
+    success = ilist_add_tail(domain->mc_list, li, &li->item);
+    if (!success) {
+	ipmi_mem_free(li);
 	rv = ENOMEM;
+    }
 
     return rv;
 }
@@ -1223,16 +1271,28 @@ ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
 int
 _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
 {
-    int          rv;
-    int          found = 0;
-    ilist_iter_t iter;
+    ipmi_mc_list_item_t *li;
+    int                 rv;
+    int                 found = 0;
+    ilist_iter_t        iter;
 
     ipmi_lock(domain->mc_list_lock);
     ilist_init_iter(&iter, domain->mc_list);
     rv = ilist_first(&iter);
     while (rv) {
-	if (ilist_get(&iter) == mc) {
-	    ilist_delete(&iter);
+	li = ilist_get(&iter);
+	if (li->mc == mc) {
+	    if (domain->in_mc_list_cleanup) {
+		/* We are currently cleaning up MCs, so this may not
+		   be the current MC being worked on.  So we have to
+		   destroy it later, since when iterating a list you
+		   can only destroy the item currently being worked
+		   on. */
+		li->removed = 1;
+	    } else {
+		ilist_delete(&iter);
+		ipmi_mem_free(li);
+	    }
 	    found = 1;
 	    break;
 	}
@@ -2882,8 +2942,13 @@ typedef struct iterate_mc_info_s
 static void
 iterate_mcs_handler(ilist_iter_t *iter, void *item, void *cb_data)
 {
-    iterate_mc_info_t *info = cb_data;
-    info->handler(info->domain, item, info->cb_data);
+    ipmi_mc_list_item_t *li = item;
+    iterate_mc_info_t   *info = cb_data;
+
+    if (li->removed)
+	return;
+
+    info->handler(info->domain, li->mc, info->cb_data);
 }
 
 int
