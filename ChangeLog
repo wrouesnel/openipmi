@@ -1,3 +1,13 @@
+2004-12-25 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/mc.c: Fixed some minor bugs in user handling.
+
+	* lib/cmd_mc.c: Fixed a missing put and some error strings.
+
+	* include/OpenIPMI/lanserv.h, lanserv/lanserv_ipmi.c: Added
+	support for all the user bits in the set and get user access
+	commands.
+
 2004-12-23 Corey Minyard <cminyard@mvista.com> 
 
 	* sample/ipmicmd.c: Removed the ipmi_log() func, it was junk

@@ -1724,13 +1724,13 @@ handle_app_netfn(lmc_data_t    *mc,
 		 unsigned int  *rdata_len)
 {
     switch(msg->cmd) {
-	case IPMI_GET_DEVICE_ID_CMD:
-	    handle_get_device_id(mc, msg, rdata, rdata_len);
-	    break;
+    case IPMI_GET_DEVICE_ID_CMD:
+	handle_get_device_id(mc, msg, rdata, rdata_len);
+	break;
 
-	default:
-	    handle_invalid_cmd(mc, rdata, rdata_len);
-	    break;
+    default:
+	handle_invalid_cmd(mc, rdata, rdata_len);
+	break;
     }
 }
 

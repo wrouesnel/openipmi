@@ -1399,7 +1399,7 @@ got_users(ipmi_mc_t        *mc,
 
     if (err) {
 	cmdlang->err = err;
-	cmdlang->errstr = "Error setting user info";
+	cmdlang->errstr = "Error getting user info";
 	goto out_err;
     }
 
@@ -1467,10 +1467,12 @@ got_users(ipmi_mc_t        *mc,
     }
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_cmd_info_put(cmd_info);
+    return;
 
  out_err:
     ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
     cmdlang->location = "cmd_mc.c(got_users)";
+    ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
 static void

@@ -139,6 +139,8 @@ typedef struct session_s
 typedef struct user_s
 {
     unsigned char valid;
+    unsigned char link_auth;
+    unsigned char cb_only;
     unsigned char username[16];
     unsigned char pw[16];
     unsigned char privilege;

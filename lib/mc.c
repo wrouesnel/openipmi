@@ -3723,7 +3723,8 @@ ipmi_user_list_copy(ipmi_user_list_t *list)
 void
 ipmi_user_list_free(ipmi_user_list_t *list)
 {
-    ipmi_mem_free(list->users);
+    if (list->users)
+	ipmi_mem_free(list->users);
     ipmi_mem_free(list);
 }
 
@@ -3798,7 +3799,7 @@ got_user2(ipmi_mc_t  *mc,
     return;
 
  out_err:
-    ipmi_mem_free(list);
+    ipmi_user_list_free(list);
 }
 
 static void
@@ -3854,13 +3855,26 @@ got_user1(ipmi_mc_t  *mc,
     list->users[idx].msg_enabled = (rsp->data[4] >> 4) & 1;
     list->users[idx].privilege_limit = rsp->data[4] & 0x0f;
 
-    msg.netfn = IPMI_APP_NETFN;
-    msg.cmd = IPMI_GET_USER_NAME_CMD;
-    msg.data = data;
-    msg.data_len = 1;
-    data[0] = list->curr;
+    if (list->curr == 1) {
+	/* User 1 does not have a name, don't try to fetch it. */
+	memset(list->users[list->idx].name, 0, 17);
+	list->idx++;
+	if (list->curr >= list->max) {
+	    user_list_done(mc, list);
+	    rv = 0;
+	} else {
+	    list->curr++;
+	    rv = list_next_user(mc, list);
+	}
+    } else {
+	msg.netfn = IPMI_APP_NETFN;
+	msg.cmd = IPMI_GET_USER_NAME_CMD;
+	msg.data = data;
+	msg.data_len = 1;
+	data[0] = list->curr;
 
-    rv = ipmi_mc_send_command(mc, 0, &msg, got_user2, list);
+	rv = ipmi_mc_send_command(mc, 0, &msg, got_user2, list);
+    }
     if (rv) {
 	list->handler(mc, rv, list, list->cb_data);
 	goto out_err;
@@ -3869,7 +3883,7 @@ got_user1(ipmi_mc_t  *mc,
     return;
 
  out_err:
-    ipmi_mem_free(list);
+    ipmi_user_list_free(list);
 }
 
 static int
@@ -3948,7 +3962,7 @@ ipmi_user_free(ipmi_user_t *user)
 static void
 set_user_done(ipmi_mc_t *mc, int err, ipmi_user_t *user)
 {
-    user->handler(mc, 0, user->cb_data);
+    user->handler(mc, err, user->cb_data);
     ipmi_user_free(user);
 }
 

@@ -1146,11 +1146,19 @@ handle_set_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
     }
 
     if (msg->data[0] & 0x80) {
-	/* The other bits are callback/PPP oriented, and we ignore
-           them. */
 	newv = (msg->data[0] >> 4) & 1;
 	if (newv != lan->users[user].valid) {
 	    lan->users[user].valid = newv;
+	    changed = 1;
+	}
+	newv = (msg->data[0] >> 5) & 1;
+	if (newv != lan->users[user].link_auth) {
+	    lan->users[user].link_auth = newv;
+	    changed = 1;
+	}
+	newv = (msg->data[0] >> 6) & 1;
+	if (newv != lan->users[user].cb_only) {
+	    lan->users[user].cb_only = newv;
 	    changed = 1;
 	}
     }
@@ -1213,7 +1221,10 @@ handle_get_user_access(lan_data_t *lan, session_t *session, msg_t *msg)
     /* Only fixed user name is user 1. */
     data[3] = lan->users[1].valid;
 
-    data[4] = (lan->users[user].valid << 4) | lan->users[user].privilege;
+    data[4] = ((lan->users[user].valid << 4)
+	       | (lan->users[user].link_auth << 5)
+	       | (lan->users[user].cb_only << 6)
+	       | lan->users[user].privilege);
 
     return_rsp_data(lan, msg, session, data, 5);
 }
