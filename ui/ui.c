@@ -6448,16 +6448,31 @@ entity_change(enum ipmi_update_e op,
 }
 
 static void
+mc_active(ipmi_mc_t *mc, int active, void *cb_data)
+{
+    int addr = ipmi_mc_get_address(mc);
+    int channel = ipmi_mc_get_channel(mc);
+
+    ui_log("MC is %s: (%d %x)\n",
+	   active ? "active" : "inactive",
+	   channel, addr);
+}
+
+static void
 mc_change(enum ipmi_update_e op,
 	  ipmi_domain_t      *domain,
 	  ipmi_mc_t          *mc,
 	  void               *cb_data)
 {
-    int  addr = ipmi_mc_get_address(mc);
-    int  channel = ipmi_mc_get_channel(mc);
+    int addr = ipmi_mc_get_address(mc);
+    int channel = ipmi_mc_get_channel(mc);
+    int rv;
 
     switch (op) {
 	case IPMI_ADDED:
+	    rv = ipmi_mc_add_active_handler(mc, mc_active, NULL);
+	    if (rv)
+		ui_log("Unable to add MC active handler: 0x%x\n", rv);
 	    ui_log("MC added: (%d %x)\n", channel, addr);
 	    break;
 	case IPMI_DELETED:

@@ -1,3 +1,7 @@
+2004-04-07 Corey Minyard <cminyard@mvista.com> 
+
+	* ui/ui.c: Added an MC active callback to the UI.
+
 2004-04-02 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sensor.c, lib/control.c: Make sure that calls that send
