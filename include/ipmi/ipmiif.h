@@ -626,8 +626,9 @@ int ipmi_states_get(ipmi_sensor_t       *sensor,
 int ipmi_ind_get_type(ipmi_ind_t *ind);
 int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
 void ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
-int ipmi_entity_get_entity_id(ipmi_entity_t *ent);
-int ipmi_entity_get_entity_instance(ipmi_entity_t *ent);
+int ipmi_ind_get_entity_id(ipmi_ind_t *ind);
+int ipmi_ind_get_entity_instance(ipmi_ind_t *ind);
+ipmi_entity_t *ipmi_ind_get_entity(ipmi_ind_t *ind);
 
 /* For LIGHT types.  */
 /* Get the number of colors the light supports (1 for 1-color leds and
@@ -645,13 +646,17 @@ int ipmi_ind_get_color(ipmi_ind_t *ind, unsigned int color_num);
 typedef void (*ipmi_ind_op_cb)(ipmi_ind_t *ind, int err, void *cb_data);
 
 /* Set the setting of an indicator. */
-int ipmi_ind_set_val(ipmi_ind_t *ind, int val,
-		     ipmi_ind_op_cb *handler, void *cb_data);
+int ipmi_ind_set_val(ipmi_ind_t     *ind,
+		     int            val,
+		     ipmi_ind_op_cb handler,
+		     void           *cb_data);
 
 /* Get the setting of an indicator. */
 typedef void (*ipmi_ind_val_cb)(ipmi_ind_t *ind, int err,
 				int val, void *cb_data);
-int ipmi_ind_get_val(ipmi_ind_t *ind, ipmi_ind_val_cb *handler, void *cb_data);
+int ipmi_ind_get_val(ipmi_ind_t      *ind,
+		     ipmi_ind_val_cb handler,
+		     void            *cb_data);
 
 
 /* For DISPLAY types, which are string displays. */
@@ -666,7 +671,7 @@ int ipmi_ind_set_display_string(ipmi_ind_t     *ind,
 				unsigned int   start_column,
 				char           *str,
 				unsigned int   len,
-				ipmi_ind_op_cb *handler,
+				ipmi_ind_op_cb handler,
 				void           *cb_data);
 				
 /* Fetch a string from the display. */
@@ -679,7 +684,7 @@ int ipmi_ind_get_display_string(ipmi_ind_t      *ind,
 				unsigned int    start_row,
 				unsigned int    start_column,
 				unsigned int    len,
-				ipmi_ind_str_cb *handler,
+				ipmi_ind_str_cb handler,
 				void            *cb_data);
 
 /*

@@ -46,8 +46,6 @@
 #include "ilist.h"
 #include "opq.h"
 
-extern ipmi_sensor_cbs_t standard_sensor_cb;
-
 struct ipmi_sensor_info_s
 {
     int                      destroyed;
@@ -732,7 +730,7 @@ handle_new_sensor(ipmi_mc_t     *mc,
 
 
     /* Call this before the OEM call so the OEM call can replace it. */
-    sensor->cbs = standard_sensor_cb;
+    sensor->cbs = ipmi_standard_sensor_cb;
     sensor->sensor_type_string
 	= ipmi_get_sensor_type_string(sensor->sensor_type);
     sensor->event_reading_type_string

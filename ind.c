@@ -56,6 +56,7 @@ struct ipmi_ind_info_s
     int  wait_err;
 };
 
+#define IND_ID_LENGTH 32
 struct ipmi_ind_s
 {
     ipmi_mc_t *mc;
@@ -77,10 +78,12 @@ struct ipmi_ind_s
     unsigned int columns;
     unsigned int rows;
 
-    char id[32];
+    char id[IND_ID_LENGTH+1];
 
     ipmi_ind_cbs_t cbs;
     opq_t *waitq;
+
+    void *oem_info;
 };
 
 ipmi_ind_id_t
@@ -337,13 +340,13 @@ ipmi_inds_destroy(ipmi_ind_info_t *inds)
 
 int
 ipmi_ind_set_val(ipmi_ind_t *ind, int val,
-		 ipmi_ind_op_cb *handler, void *cb_data)
+		 ipmi_ind_op_cb handler, void *cb_data)
 {
     return ind->cbs.set_val(ind, val, handler, cb_data);
 }
 
 int
-ipmi_ind_get_val(ipmi_ind_t *ind, ipmi_ind_val_cb *handler, void *cb_data)
+ipmi_ind_get_val(ipmi_ind_t *ind, ipmi_ind_val_cb handler, void *cb_data)
 {
     return ind->cbs.get_val(ind, handler, cb_data);
 }
@@ -355,7 +358,7 @@ ipmi_ind_set_display_string(ipmi_ind_t     *ind,
 			    unsigned int   start_column,
 			    char           *str,
 			    unsigned int   len,
-			    ipmi_ind_op_cb *handler,
+			    ipmi_ind_op_cb handler,
 			    void           *cb_data)
 {
     return ind->cbs.set_display_string(ind,
@@ -370,7 +373,7 @@ ipmi_ind_get_display_string(ipmi_ind_t      *ind,
 			    unsigned int    start_row,
 			    unsigned int    start_column,
 			    unsigned int    len,
-			    ipmi_ind_str_cb *handler,
+			    ipmi_ind_str_cb handler,
 			    void            *cb_data)
 {
     return ind->cbs.get_display_string(ind,
@@ -386,6 +389,12 @@ ipmi_ind_get_type(ipmi_ind_t *ind)
     return ind->type;
 }
 
+void
+ipmi_ind_set_type(ipmi_ind_t *ind, int val)
+{
+    ind->type = val;
+}
+
 int
 ipmi_ind_get_id_length(ipmi_ind_t *ind)
 {
@@ -396,6 +405,53 @@ void
 ipmi_ind_get_id(ipmi_ind_t *ind, char *id, int length)
 {
     strncpy(id, ind->id, length);
+}
+
+void
+ipmi_ind_set_id(ipmi_ind_t *ind, char *id)
+{
+    strncpy(ind->id, id, IND_ID_LENGTH);
+    ind->id[IND_ID_LENGTH] = '\0';
+}
+
+int
+ipmi_ind_get_entity_id(ipmi_ind_t *ind)
+{
+    return ind->entity_id;
+}
+
+int
+ipmi_ind_get_entity_instance(ipmi_ind_t *ind)
+{
+    return ind->entity_instance;
+}
+
+ipmi_entity_t *
+ipmi_ind_get_entity(ipmi_ind_t *ind)
+{
+    int           rv;
+    ipmi_entity_t *ent;
+
+    rv = ipmi_entity_find(ipmi_mc_get_entities(ind->mc),
+			  ind->mc,
+			  ind->entity_id,
+			  ind->entity_instance,
+			  &ent);
+    if (rv)
+	return NULL;
+    return ent;
+}
+
+void
+ipmi_ind_set_oem_info(ipmi_ind_t *ind, void *oem_info)
+{
+    ind->oem_info = oem_info;
+}
+
+void *
+ipmi_ind_get_oem_info(ipmi_ind_t *ind)
+{
+    return ind->oem_info;
 }
 
 unsigned int

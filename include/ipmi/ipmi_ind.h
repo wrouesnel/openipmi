@@ -71,11 +71,11 @@ int ipmi_ind_remove_nonstandard(ipmi_ind_t *ind);
 
 typedef int (*ipmi_ind_set_val_cb)(ipmi_ind_t     *ind,
 				   int            val,
-				   ipmi_ind_op_cb *handler,
+				   ipmi_ind_op_cb handler,
 				   void           *cb_data);
 
 typedef int (*ipmi_ind_get_val_cb)(ipmi_ind_t      *ind,
-				   ipmi_ind_val_cb *handler,
+				   ipmi_ind_val_cb handler,
 				   void            *cb_data);
 
 typedef int (*ipmi_ind_set_display_string_cb)(ipmi_ind_t     *ind,
@@ -83,14 +83,14 @@ typedef int (*ipmi_ind_set_display_string_cb)(ipmi_ind_t     *ind,
 					      unsigned int   start_column,
 					      char           *str,
 					      unsigned int   len,
-					      ipmi_ind_op_cb *handler,
+					      ipmi_ind_op_cb handler,
 					      void           *cb_data);
 
 typedef int (*ipmi_ind_get_display_string_cb)(ipmi_ind_t      *ind,
 					      unsigned int    start_row,
 					      unsigned int    start_column,
 					      unsigned int    len,
-					      ipmi_ind_str_cb *handler,
+					      ipmi_ind_str_cb handler,
 					      void            *cb_data);
 
 typedef struct ipmi_ind_cbs_s
@@ -100,6 +100,12 @@ typedef struct ipmi_ind_cbs_s
     ipmi_ind_set_display_string_cb set_display_string;
     ipmi_ind_get_display_string_cb get_display_string;
 } ipmi_ind_cbs_t;
+
+void ipmi_ind_set_id(ipmi_ind_t *ind, char *id);
+void ipmi_ind_set_type(ipmi_ind_t *ind, int val);
+
+void ipmi_ind_set_oem_info(ipmi_ind_t *ind, void *oem_info);
+void *ipmi_ind_get_oem_info(ipmi_ind_t *ind);
 
 /* Can be used by OEM code to replace some or all of the callbacks for
    a indicator. */
