@@ -158,9 +158,16 @@ static ilist_t *oem_handlers;
 int
 ipmi_mc_init(void)
 {
+    static int mc_initialized = 0;
+
+    if (mc_initialized)
+	return 0;
+
     oem_handlers = alloc_ilist();
     if (!oem_handlers)
 	return ENOMEM;
+
+    mc_initialized = 1;
 
     return 0;
 }
@@ -172,6 +179,12 @@ ipmi_register_oem_handler(unsigned int                 manufacturer_id,
 			  void                         *cb_data)
 {
     oem_handlers_t *new_item;
+    int            rv;
+
+    /* This might be called before initialization, so be 100% sure.. */
+    rv = ipmi_mc_init();
+    if (rv)
+	return rv;
 
     new_item = malloc(sizeof(*new_item));
     if (!new_item)
