@@ -326,11 +326,24 @@ ipmi_debug_malloc_cleanup(void)
 void *
 ipmi_mem_alloc(int size)
 {
+    void          *rv;
+    unsigned char *c;
+    static int    seed;
+    int           i;
+
     if (DEBUG_MALLOC) {
 	void *tb[TB_SIZE+1];
 	memset(tb, 0, sizeof(tb));
 	backtrace(tb, TB_SIZE+1);
-	return ipmi_debug_malloc(size, tb+1);
+	rv = ipmi_debug_malloc(size, tb+1);
+	if (rv) {
+	    c = rv;
+	    /* Fill it with junk to catch using before initializing. */
+	    for (i=0; i<size; i++)
+		*c++ = i + seed;
+	    seed += size;
+	}
+	return rv;
     } else
 	return malloc(size);
 }
