@@ -4774,7 +4774,7 @@ addevent_cmd(char *cmd, char **toks, void *cb_data)
 	    return 0;
     }
 
-    rv = ipmi_mc_pointer_cb(info.mc_id, addevent_cmder, &info);
+    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, addevent_cmder, &info);
     if (rv) {
 	cmd_win_out("Unable to convert domain id to a pointer\n");
 	return 0;

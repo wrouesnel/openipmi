@@ -1804,6 +1804,7 @@ typedef struct sel_add_cb_handler_data_s
     void                      *cb_data;
     unsigned int              record_id;
     ipmi_event_t              event;
+    int                       rv;
 } sel_add_cb_handler_data_t;
 
 static void
@@ -1895,16 +1896,8 @@ sel_add_event_cb(ipmi_mc_t *mc, void *cb_data)
     data[2] = event->type;
     memcpy(data+3, event->data, IPMI_MAX_SEL_DATA);
 
-    rv = ipmi_mc_send_command(mc, sel->lun, &msg, sel_add_event_done, info);
-    if (rv) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "sel.c(sel_add_event_cb): could not send cmd: %x",
-		 rv);
-	sel_add_op_done(info, rv);
-	goto out;
-    }
-
-    sel_unlock(sel);
+    info->rv = ipmi_mc_send_command(mc, sel->lun, &msg, sel_add_event_done,
+				    info);
  out:
     return;
 }
@@ -1932,7 +1925,14 @@ sel_add_event_op(void *cb_data, int shutdown)
 		 "MC went away during delete");
 	sel_add_op_done(info, ECANCELED);
 	goto out;
+    } else if (info->rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sel.c(sel_add_event_cb): could not send cmd: %x",
+		 rv);
+	sel_add_op_done(info, info->rv);
+	goto out;
     }
+
     sel_unlock(sel);
  out:
     return;
@@ -1945,7 +1945,7 @@ ipmi_sel_add_event_to_sel(ipmi_sel_info_t           *sel,
 			  void                      *cb_data)
 {
     sel_add_cb_handler_data_t *info = cb_data;
-    int                       rv;
+    int                       rv = 0;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)

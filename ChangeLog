@@ -8,6 +8,9 @@
 	about how the object pointer callbacks are always called
 	immediately.
 
+	* lib/sel.c: Initialize the return value in
+	ipmi_sel_add_event_to_sel().
+
 2004-02-11 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sensor.c: Reworked sensor naming to include the entity
