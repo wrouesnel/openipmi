@@ -88,7 +88,7 @@ typedef struct ipmi_auth_s
 #define IPMI_AUTHTYPE_MD2	1
 #define IPMI_AUTHTYPE_MD5	2
 #define IPMI_AUTHTYPE_STRAIGHT	4
-char *ipmi_authtype_string(int authtype);
+const char *ipmi_authtype_string(int authtype);
 
 /* This is a table of authentication algorithms. */
 #define MAX_IPMI_AUTHS		6
@@ -100,7 +100,7 @@ extern ipmi_auth_t ipmi_auths[MAX_IPMI_AUTHS];
 #define IPMI_PRIVILEGE_OPERATOR		3
 #define IPMI_PRIVILEGE_ADMIN		4
 #define IPMI_PRIVILEGE_OEM		5
-char *ipmi_privilege_string(int privilege);
+const char *ipmi_privilege_string(int privilege);
 
 
 /* Tell if a specific command is permitted for the given priviledge

@@ -52,9 +52,13 @@ typedef struct ipmi_cmdlang_s ipmi_cmdlang_t;
 
 /* Output is done in name:value pairs.  If you don't have a value,
    pass in NULL. */
-typedef void (*cmd_out_cb)(ipmi_cmdlang_t *info, char *name, char *value);
-typedef void (*cmd_out_b_cb)(ipmi_cmdlang_t *info, char *name,
-			     char *value, unsigned int len);
+typedef void (*cmd_out_cb)(ipmi_cmdlang_t *info,
+			   const char     *name,
+			   const char     *value);
+typedef void (*cmd_out_b_cb)(ipmi_cmdlang_t *info,
+			     const char     *name,
+			     const char     *value,
+			     unsigned int   len);
 
 /* Command-specific info. */
 typedef void (*cmd_info_cb)(ipmi_cmdlang_t *info);
@@ -204,26 +208,26 @@ void ipmi_cmdlang_pef_handler(ipmi_cmd_info_t *cmd_info);
 /* All output from the command language is in name/value pairs.  The
    value field may be NULL. */
 void ipmi_cmdlang_out(ipmi_cmd_info_t *info,
-		      char            *name,
-		      char            *value);
+		      const char      *name,
+		      const char      *value);
 void ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
-			  char            *name,
+			  const char      *name,
 			  int             value);
 void ipmi_cmdlang_out_double(ipmi_cmd_info_t *info,
-			     char            *name,
+			     const char      *name,
 			     double          value);
 void ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
-			  char            *name,
+			  const char      *name,
 			  int             value);
 void ipmi_cmdlang_out_long(ipmi_cmd_info_t *info,
-			   char            *name,
+			   const char      *name,
 			   long            value);
 void ipmi_cmdlang_out_binary(ipmi_cmd_info_t *info,
-			     char            *name,
+			     const char      *name,
 			     char            *value,
 			     unsigned int    len);
 void ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
-			      char            *name,
+			      const char      *name,
 			      char            *value,
 			      unsigned int    len);
 void ipmi_cmdlang_out_type(ipmi_cmd_info_t      *info,
@@ -232,19 +236,19 @@ void ipmi_cmdlang_out_type(ipmi_cmd_info_t      *info,
 			   char                 *value,
 			   unsigned int         len);
 void ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
-			 char            *name,
+			 const char      *name,
 			 struct in_addr  *ip_addr);
 void ipmi_cmdlang_out_mac(ipmi_cmd_info_t *info,
-			  char            *name,
+			  const char      *name,
 			  unsigned char   mac_addr[6]);
 void ipmi_cmdlang_out_bool(ipmi_cmd_info_t *info,
-			   char            *name,
+			   const char      *name,
 			   int             value);
 void ipmi_cmdlang_out_time(ipmi_cmd_info_t *info,
-			   char            *name,
+			   const char      *name,
 			   ipmi_time_t     value);
 void ipmi_cmdlang_out_timeout(ipmi_cmd_info_t *info,
-			      char            *name,
+			      const char      *name,
 			      ipmi_timeout_t  value);
 
 /* Generate info for an event. */

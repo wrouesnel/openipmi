@@ -63,6 +63,14 @@ int ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
 			 ipmi_lanparm_done_cb handler,
 			 void                 *cb_data);
 
+/* Used to track references to a lanparm.  You can use this instead of
+   ipmi_lanparm_destroy, but use of the destroy function is
+   recommended.  This is primarily here to help reference-tracking
+   garbage collection systems like what is in Perl to be able to
+   automatically destroy lanparms when they are done. */
+void ipmi_lanparm_ref(ipmi_lanparm_t *lanparm);
+void ipmi_lanparm_deref(ipmi_lanparm_t *lanparm);
+
 void ipmi_lanparm_iterate_lanparms(ipmi_domain_t       *domain,
 				   ipmi_lanparm_ptr_cb handler,
 				   void                *cb_data);
@@ -213,6 +221,10 @@ void ipmi_lanconfig_data_free(void *data);
 unsigned int ipmi_lanconfig_str_to_parm(char *name);
 /* Convert the parm to a string name. */
 const char *ipmi_lanconfig_parm_to_str(unsigned int parm);
+/* Get the type of a specific parm. */
+int ipmi_lanconfig_parm_to_type(unsigned int                 parm,
+				enum ipmi_lanconf_val_type_e *valtype);
+
 
 /* The first set of parameters here must be present, so they are
    returned directly, no errors for getting.  Setting returns an

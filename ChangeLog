@@ -1,3 +1,34 @@
+2004-12-30 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_strings.h: Converted return strings to
+	be const because the user can't change them.
+	* include/OpenIPMI/ipmiif.h.in: ditto
+	* include/OpenIPMI/ipmi_auth.h: ditto
+	* include/OpenIPMI/ipmi_bits.h: ditto
+	* include/OpenIPMI/ipmi_cmdlang.h: ditto
+	* include/OpenIPMI/internal/ipmi_sensor.h: ditto
+	* cmdlang/cmd_sensor.c: ditto
+	* cmdlang/cmdlang.c: ditto
+	* cmdlang/ipmish.c: ditto
+	* lib/control.c: ditto
+	* lib/entity.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/sensor.c: ditto
+	* lib/strings.c: ditto
+	* sample/sample3.c: ditto
+	* swig/OpenIPMI.i: ditto
+
+	* include/OpenIPMI/ipmi_lanparm.h, lib/lanparm.c: Added a way to
+	get a config parm type from the parm number and added refcount
+	stuff for perl.
+
+	* swig/OpenIPMI.i: Finished adding lanparm stuff.
+
+	* lib/lanparm.c: Changes to the last alert destintation can
+	be fetched.
+
+	* swig/perl/test_lanparm: Added lanparm tests.
+
 2004-12-29 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c: Added printing of if the sensor/control should be

@@ -125,6 +125,18 @@ lanparm_put(ipmi_lanparm_t *lanparm)
     lanparm_unlock(lanparm);
 }
 
+void
+ipmi_lanparm_ref(ipmi_lanparm_t *lanparm)
+{
+    lanparm_get(lanparm);
+}
+
+void
+ipmi_lanparm_deref(ipmi_lanparm_t *lanparm)
+{
+    lanparm_put(lanparm);
+}
+
 static int
 destroy_lanparm(void *cb_data, void *item1, void *item2)
 {
@@ -1048,6 +1060,8 @@ static int gnd(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
     if (num == 0)
 	return 0;
 
+    num++;
+
     lanc->alert_dest_type = ipmi_mem_alloc(sizeof(alert_dest_type_t) * num);
     if (!lanc->alert_dest_type)
 	return ENOMEM;
@@ -1435,7 +1449,8 @@ set_clear(ipmi_lanparm_t *lanparm,
 
     if (lanc->err)
 	err = lanc->err;
-    lanc->set_done(lanparm, err, lanc->cb_data);
+    if (lanc->set_done)
+	lanc->set_done(lanparm, err, lanc->cb_data);
     ipmi_lan_free_config(lanc);
     lanparm->locked = 0;
     lanparm_put(lanparm);
@@ -2062,42 +2077,42 @@ unsigned int ret_user_cnt(ipmi_lan_config_t *lanc)
 
 static lanparm_gendata_t gdata[] =
 {
-    F_BOOL(support_auth_oem),
+    F_BOOL(support_auth_oem),				/* 0 */
     F_BOOL(support_auth_straight),
     F_BOOL(support_auth_md5),
     F_BOOL(support_auth_md2),
     F_BOOL(support_auth_none),
-    F_INT(ip_addr_source),
+    F_INT(ip_addr_source),				/* 5 */
     F_INTR(num_alert_destinations),
     F_INTV(ipv4_ttl),
     F_INTV(ipv4_flags),
     F_INTV(ipv4_precedence),
-    F_INTV(ipv4_tos),
+    F_INTV(ipv4_tos),					/* 10 */
     F_BOOLIV(enable_auth_oem, ret_user_cnt),
     F_BOOLIV(enable_auth_straight, ret_user_cnt),
     F_BOOLIV(enable_auth_md5, ret_user_cnt),
     F_BOOLIV(enable_auth_md2, ret_user_cnt),
-    F_BOOLIV(enable_auth_none, ret_user_cnt),
+    F_BOOLIV(enable_auth_none, ret_user_cnt),		/* 15 */
     F_IP(ip_addr),
     F_MAC(mac_addr),
     F_IP(subnet_mask),
     F_INTV(port_rmcp_primary),
-    F_INTV(port_rmcp_secondary),
+    F_INTV(port_rmcp_secondary),			/* 20 */
     F_BOOLV(bmc_generated_arps),
     F_BOOLV(bmc_generated_garps),
     F_INTV(garp_interval),
     F_IP(default_gateway_ip_addr),
-    F_MAC(default_gateway_mac_addr),
+    F_MAC(default_gateway_mac_addr),			/* 25 */
     F_IP(backup_gateway_ip_addr),
     F_MAC(backup_gateway_mac_addr),
     F_DATA(community_string),
-    F_INTIV(alert_ack, ipmi_lanconfig_get_num_alert_destinations),
-    F_INTIV(dest_type, ipmi_lanconfig_get_num_alert_destinations),
+    F_BOOLIV(alert_ack, ipmi_lanconfig_get_num_alert_destinations),
+    F_INTIV(dest_type, ipmi_lanconfig_get_num_alert_destinations), /* 30 */
     F_INTIV(alert_retry_interval, ipmi_lanconfig_get_num_alert_destinations),
     F_INTIV(max_alert_retries, ipmi_lanconfig_get_num_alert_destinations),
     F_INTIV(dest_format, ipmi_lanconfig_get_num_alert_destinations),
     F_INTIV(gw_to_use, ipmi_lanconfig_get_num_alert_destinations),
-    F_IPIV(dest_ip_addr, ipmi_lanconfig_get_num_alert_destinations),
+    F_IPIV(dest_ip_addr, ipmi_lanconfig_get_num_alert_destinations), /* 35 */
     F_MACIV(dest_mac_addr, ipmi_lanconfig_get_num_alert_destinations)
 };
 #define NUM_GDATA_ENTRIES (sizeof(gdata) / sizeof(lanparm_gendata_t))
@@ -2122,6 +2137,8 @@ ipmi_lanconfig_get_val(ipmi_lan_config_t *lanc,
 	return EINVAL;
     if (valtype)
 	*valtype = gdata[parm].datatype;
+    if (name)
+	*name = gdata[parm].fname;
 
     if (gdata[parm].iv_cnt) {
 	count = gdata[parm].iv_cnt(lanc);
@@ -2259,4 +2276,14 @@ ipmi_lanconfig_parm_to_str(unsigned int parm)
     if (parm >= NUM_GDATA_ENTRIES)
 	return NULL;
     return gdata[parm].fname;
+}
+
+int
+ipmi_lanconfig_parm_to_type(unsigned int                 parm,
+			    enum ipmi_lanconf_val_type_e *valtype)
+{
+    if (parm >= NUM_GDATA_ENTRIES)
+	return EINVAL;
+    *valtype = gdata[parm].datatype;
+    return 0;
 }

@@ -183,11 +183,11 @@ struct ipmi_sensor_s
     unsigned int id_len;
     char id[SENSOR_ID_LEN]; /* The ID from the device SDR. */
 
-    char *sensor_type_string;
-    char *event_reading_type_string;
-    char *rate_unit_string;
-    char *base_unit_string;
-    char *modifier_unit_string;
+    const char *sensor_type_string;
+    const char *event_reading_type_string;
+    const char *rate_unit_string;
+    const char *base_unit_string;
+    const char *modifier_unit_string;
 
     /* A list of handlers to call when an event for the sensor comes
        in. */
@@ -3028,7 +3028,7 @@ ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor)
     return sensor->oem_info;
 }
 
-char *
+const char *
 ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -3037,12 +3037,12 @@ ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor)
 }
 
 void
-ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str)
+ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, const char *str)
 {
     sensor->sensor_type_string = str;
 }
 
-char *
+const char *
 ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -3051,12 +3051,13 @@ ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor)
 }
 
 void
-ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor, char *str)
+ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,
+					  const char    *str)
 {
     sensor->event_reading_type_string = str;
 }
 
-char *
+const char *
 ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -3065,12 +3066,13 @@ ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor)
 }
 
 void
-ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str)
+ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor,
+				 const char    *str)
 {
     sensor->rate_unit_string = str;
 }
 
-char *
+const char *
 ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -3079,12 +3081,12 @@ ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor)
 }
 
 void
-ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str)
+ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, const char *str)
 {
     sensor->base_unit_string = str;
 }
 
-char *
+const char *
 ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -3093,7 +3095,7 @@ ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor)
 }
 
 void
-ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str)
+ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, const char *str)
 {
     sensor->modifier_unit_string = str;
 }
@@ -4904,7 +4906,7 @@ stand_ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy)
     return 0;
 }
 
-static char *
+static const char *
 stand_ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset)
 {
     return ipmi_get_reading_name(sensor->event_reading_type,
@@ -5153,7 +5155,7 @@ ipmi_sensor_get_states(ipmi_sensor_t         *sensor,
     return sensor->cbs.ipmi_sensor_get_states(sensor, done, cb_data);
 }
 
-char *
+const char *
 ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset)
 {
     CHECK_SENSOR_LOCK(sensor);

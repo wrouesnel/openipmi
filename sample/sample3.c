@@ -197,11 +197,11 @@ got_thresh_reading(ipmi_sensor_t             *sensor,
 	break;
     case IPMI_BOTH_VALUES_PRESENT:
 	{
-	    char *percent = "";
-	    char *base;
-	    char *mod_use = "";
-	    char *modifier = "";
-	    char *rate;
+	    const char *percent = "";
+	    const char *base;
+	    const char *mod_use = "";
+	    const char *modifier = "";
+	    const char *rate;
 
 	    base = ipmi_sensor_get_base_unit_string(sensor);
 	    if (ipmi_sensor_get_percentage(sensor))

@@ -81,6 +81,7 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int             num, lun;
     char            *str;
+    const char      *cstr;
     int             event_support;
     int             event_reading_type;
     int             len;
@@ -244,11 +245,11 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
 			     ipmi_sensor_get_base_unit(sensor));
 	ipmi_cmdlang_out(cmd_info, "Base Unit Name",
 			 ipmi_sensor_get_base_unit_string(sensor));
-	str = ipmi_sensor_get_rate_unit_string(sensor);
-	if (strlen(str)) {
+	cstr = ipmi_sensor_get_rate_unit_string(sensor);
+	if (strlen(cstr)) {
 	    ipmi_cmdlang_out_int(cmd_info, "Rate Unit",
 				 ipmi_sensor_get_rate_unit(sensor));
-	    ipmi_cmdlang_out(cmd_info, "Rate Unit Name", str);
+	    ipmi_cmdlang_out(cmd_info, "Rate Unit Name", cstr);
 	}
 	switch (ipmi_sensor_get_modifier_unit_use(sensor)) {
 	case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
@@ -283,9 +284,9 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
 	    ipmi_cmdlang_out(cmd_info, "Event", NULL);
 	    ipmi_cmdlang_down(cmd_info);
 	    ipmi_cmdlang_out_int(cmd_info, "Offset", event);
-	    str = ipmi_sensor_reading_name_string(sensor, event);
-	    if (strcmp(str, "unknown") != 0)
-		ipmi_cmdlang_out(cmd_info, "Name", str);
+	    cstr = ipmi_sensor_reading_name_string(sensor, event);
+	    if (strcmp(cstr, "unknown") != 0)
+		ipmi_cmdlang_out(cmd_info, "Name", cstr);
 	    
 	    for (dir = IPMI_ASSERTION;
 		 dir <= IPMI_DEASSERTION;
@@ -433,8 +434,8 @@ read_sensor_states(ipmi_sensor_t *sensor,
     ipmi_cmdlang_out_bool(cmd_info, "Initial Update In Progress",
 			  ipmi_is_initial_update_in_progress(states));
     for (i=0; i<15; i++) {
-	int  ival;
-	char *str;
+	int        ival;
+	const char *str;
 
 	rv = ipmi_sensor_discrete_event_readable(sensor, i, &ival);
 	if ((rv) || !ival)
@@ -973,8 +974,8 @@ sensor_get_event_enables_done(ipmi_sensor_t      *sensor,
 	    }
 	}
     } else {
-	int  offset;
-	char *str;
+	int        offset;
+	const char *str;
 
 	for (offset=0; offset<15; offset++) {
 	    rv = ipmi_sensor_discrete_event_readable(sensor, offset, &val);

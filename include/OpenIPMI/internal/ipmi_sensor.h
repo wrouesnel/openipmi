@@ -362,7 +362,7 @@ typedef int (*ipmi_sensor_get_reading_func)(ipmi_sensor_t          *sensor,
 typedef int (*ipmi_sensor_get_states_func)(ipmi_sensor_t         *sensor,
 					   ipmi_sensor_states_cb done,
 					   void                  *cb_data);
-typedef char *(*ipmi_sensor_reading_name_string_func)
+typedef const char *(*ipmi_sensor_reading_name_string_func)
      (ipmi_sensor_t *sensor, int val);
 
 typedef struct ipmi_sensor_cbs_s
@@ -483,12 +483,16 @@ int ipmi_sensor_send_command_addr(ipmi_domain_t         *domain,
    structure.  You should use a static string here, which should
    always be doable, I think.  If not, a management interface needs to
    be added for these. */
-void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str);
+void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor,
+					const char    *str);
 void ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,
-					       char          *str);
-void ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str);
-void ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str);
-void ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str);
+					       const char    *str);
+void ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor,
+				      const char    *str);
+void ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor,
+				      const char     *str);
+void ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor,
+					  const char    *str);
 
 /* Get the MC that the message is sent to for reading and controlling
    the sensor. */

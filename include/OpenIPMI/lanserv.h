@@ -156,8 +156,8 @@ typedef struct lan_data_s lan_data_t;
 
 typedef struct lanparm_dest_data_s
 {
-    unsigned char type[3];
-    unsigned char addr[12];
+    unsigned char type[4];
+    unsigned char addr[13];
 } lanparm_dest_data_t;
 
 typedef struct lanparm_data_s lanparm_data_t;

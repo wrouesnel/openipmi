@@ -1509,7 +1509,7 @@ handle_ipmi_set_lan_config_parms(lan_data_t *lan,
 	else if (idx > lan->lanparm.num_destinations)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    memcpy(lan->lanparm.dest[idx].type, msg->data+3, 3);
+	    memcpy(lan->lanparm.dest[idx].type, msg->data+2, 4);
 	    lan->lanparm.changed.dest_type[idx] = 1;
 	}
 	break;
@@ -1521,7 +1521,7 @@ handle_ipmi_set_lan_config_parms(lan_data_t *lan,
 	else if (idx > lan->lanparm.num_destinations)
 	    err = IPMI_INVALID_DATA_FIELD_CC;
 	else {
-	    memcpy(lan->lanparm.dest[idx].addr, msg->data+3, 12);
+	    memcpy(lan->lanparm.dest[idx].addr, msg->data+2, 13);
 	    lan->lanparm.changed.dest_addr[idx] = 1;
 	}
 	break;
@@ -1673,7 +1673,7 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
 	    return;
 	} else {
 	    data = lan->lanparm.dest[idx].type;
-	    length = 3;
+	    length = 4;
 	}
 	break;
 
@@ -1684,7 +1684,7 @@ handle_ipmi_get_lan_config_parms(lan_data_t *lan,
 	    return;
 	} else {
 	    data = lan->lanparm.dest[idx].addr;
-	    length = 12;
+	    length = 13;
 	}
 	break;
 
@@ -2073,6 +2073,12 @@ ipmi_lan_init(lan_data_t *lan)
 
     for (i=0; i<=MAX_SESSIONS; i++) {
 	lan->sessions[i].idx = i;
+    }
+
+    lan->lanparm.num_destinations = 15;
+    for (i=0; i<16; i++) {
+	lan->lanparm.dest[i].addr[0] = i;
+	lan->lanparm.dest[i].type[0] = i;
     }
 
     /* Force user 1 to be a null user. */

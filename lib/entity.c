@@ -184,7 +184,7 @@ struct ipmi_entity_s
     locked_list_t *sensors;
     locked_list_t *controls;
 
-    char *entity_id_string;
+    const char *entity_id_string;
 
     /* A standard presence sensor.  This one overrides everything. */
     ipmi_sensor_t    *presence_sensor;
@@ -1612,6 +1612,7 @@ detect_frudev(ipmi_mc_t  *mc,
 {
     ent_active_detect_t *info = rsp_data;
 
+    _ipmi_mc_put(mc);
     ipmi_lock(info->lock);
     info->msg = rsp;
     if (ipmi_entity_pointer_cb(info->ent_id, detect_frudev_handler, info))
@@ -1642,11 +1643,13 @@ try_presence_frudev(ipmi_entity_t *ent, ent_active_detect_t *info)
 
     /* Send a message to the FRU device and see if we can get some
        data. */
+    _ipmi_mc_get(ent->frudev_mc);
     rv = ipmi_mc_send_command(ent->frudev_mc, ent->info.lun, &msg,
 			      detect_frudev, info);
-    if (rv)
+    if (rv) {
+	_ipmi_mc_put(ent->frudev_mc);
 	detect_done(ent, info);
-    else
+    }else
 	ipmi_unlock(info->lock);
 }
 
@@ -4552,7 +4555,7 @@ ipmi_entity_id_is_present(ipmi_entity_id_t id, int *present)
     return ipmi_entity_pointer_cb(id, entity_id_is_present_cb, present);
 }
 
-char *
+const char *
 ipmi_entity_get_entity_id_string(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);

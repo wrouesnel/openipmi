@@ -970,7 +970,7 @@ mc_channel_got_users(ipmi_mc_t        *mc,
 
     if (info) {
 	count = ipmi_user_list_get_user_count(info);
-	info_ref = ipmi_mem_alloc(count * sizeof(swig_ref *));
+	info_ref = malloc(count * sizeof(swig_ref *));
 	if (!info_ref) {
 	    count = 0;
 	    info_ref = &dummy;
@@ -990,7 +990,7 @@ mc_channel_got_users(ipmi_mc_t        *mc,
     swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
     for (i=0; i<count; i++)
 	swig_free_ref(info_ref[i]);
-    ipmi_mem_free(info_ref);
+    free(info_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -1945,7 +1945,7 @@ light_setting_to_str(ipmi_light_setting_t *e)
 
     for (i=0; i<count; i++) {
 	int val;
-	char *ov;
+	const char *ov;
 
 	val = 0;
 	ipmi_light_setting_in_local_control(e, i, &val);
@@ -2090,6 +2090,7 @@ lanparm_get_parm(ipmi_lanparm_t *lanparm,
 		 data_len, (char *) data);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
+    swig_free_ref(lanparm_ref);
 }
 
 static void
@@ -2104,6 +2105,57 @@ lanparm_set_parm(ipmi_lanparm_t *lanparm,
     swig_call_cb(cb, "lanparm_set_parm_cb", "%p%d", &lanparm_ref, err);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
+    swig_free_ref(lanparm_ref);
+}
+
+static void
+lanparm_get_config(ipmi_lanparm_t    *lanparm,
+		   int               err,
+		   ipmi_lan_config_t *config,
+		   void              *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    lanparm_ref;
+    swig_ref    config_ref;
+
+    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
+    config_ref = swig_make_ref_destruct(config, "OpenIPMI::ipmi_lan_config_t");
+    swig_call_cb(cb, "lanparm_got_config_cb", "%p%d%p", &lanparm_ref, err,
+		 &config_ref);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(lanparm_ref);
+    swig_free_ref(config_ref);
+}
+
+static void
+lanparm_set_config(ipmi_lanparm_t    *lanparm,
+		   int               err,
+		   void              *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    lanparm_ref;
+
+    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
+    swig_call_cb(cb, "lanparm_set_config_cb", "%p%d", &lanparm_ref, err);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(lanparm_ref);
+}
+
+static void
+lanparm_clear_lock(ipmi_lanparm_t    *lanparm,
+		   int               err,
+		   void              *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    lanparm_ref;
+
+    lanparm_ref = swig_make_ref_destruct(lanparm, "OpenIPMI::ipmi_lanparm_t");
+    swig_call_cb(cb, "lanparm_clear_lock_cb", "%p%d", &lanparm_ref, err);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+    swig_free_ref(lanparm_ref);
 }
 
 %}
@@ -2482,10 +2534,22 @@ set_log_handler(swig_cb handler)
 	deref_swig_cb_val(old_handler);
 }
 
-static char *
+static const char *
 color_string(int color)
 {
     return ipmi_get_color_string(color);
+}
+
+static const char *
+lanparm_parm_to_str(int parm)
+{
+    return ipmi_lanconfig_parm_to_str(parm);
+}
+
+static int
+lanparm_str_to_parm(char *str)
+{
+    return ipmi_lanconfig_str_to_parm(str);
 }
 
 %}
@@ -2542,6 +2606,10 @@ void set_log_handler(swig_cb handler = NULL);
  * Convert the given color to a string.
  */
 char *color_string(int color);
+
+/* Convert between lanparm string names and parm numbers. */
+char *lanparm_parm_to_str(int parm);
+int lanparm_str_to_parm(char *str);
 
 /* These two defines simplify the functions that do addition/removal
    of callbacks.  The type is the object type (domain, entity, etc)
@@ -2822,7 +2890,7 @@ char *color_string(int color);
      * Return the type of the domain, either unknown, mxp, or atca.
      * Others may be added later.
      */
-    char *get_type()
+    const char *get_type()
     {
 	return ipmi_domain_get_type_string(ipmi_domain_get_type(self));
     }
@@ -5523,7 +5591,7 @@ char *color_string(int color);
      * The sensor type.  This return sa string representing the sensor
      * type.
      */
-    char *get_sensor_type_string()
+    const char *get_sensor_type_string()
     {
 	return ipmi_sensor_get_sensor_type_string(self);
     }
@@ -5582,7 +5650,7 @@ char *color_string(int color);
      * "threshold", then this is a threshold sensor.  Otherwise it is
      * a discrete sensor.
      */
-    char *get_event_reading_type_string()
+    const char *get_event_reading_type_string()
     {
 	return ipmi_sensor_get_event_reading_type_string(self);
     }
@@ -5614,7 +5682,7 @@ char *color_string(int color);
      * Get the string for the sensor's rate unit.  This will be blank
      * if there is not a rate unit for this sensor.
      */
-    char *get_rate_unit_string()
+    const char *get_rate_unit_string()
     {
 	return ipmi_sensor_get_rate_unit_string(self);
     }
@@ -5638,7 +5706,7 @@ char *color_string(int color);
     /*
      * Get the string for the sensor's base unit.
      */
-    char *get_base_unit_string()
+    const char *get_base_unit_string()
     {
 	return ipmi_sensor_get_base_unit_string(self);
     }
@@ -5749,7 +5817,7 @@ char *color_string(int color);
      * Get the modifier unit string for the sensor, this will be an empty
      * string if there is none.
      */
-    char *get_modifier_unit_string()
+    const char *get_modifier_unit_string()
     {
 	return ipmi_sensor_get_modifier_unit_string(self);
     }
@@ -5787,7 +5855,7 @@ char *color_string(int color);
      * This way, OEM sensors can supply their own strings as necessary
      * for the various offsets.  This is only for discrete sensors.
      */
-    char *reading_name_string(int offset)
+    const char *reading_name_string(int offset)
     {
 	return ipmi_sensor_reading_name_string(self, offset);
     }
@@ -6228,7 +6296,7 @@ char *color_string(int color);
     /*
      * Get the string type of control.
      */
-    char *get_type_string()
+    const char *get_type_string()
     {
 	return ipmi_control_get_type_string(self);
     }
@@ -6927,7 +6995,7 @@ char *color_string(int color);
 
     /*
      * Set a specific data item by index (see the get function for more
-     * info on what index and num mean).  Note that the "num "field is
+     * info on what index and num mean).  Note that the "num" field is
      * not updated by this call, unlike the get function.
      *
      * The type passed in tells the kind of data being passed in.  It is
@@ -7242,7 +7310,7 @@ char *color_string(int color);
 %extend ipmi_lanparm_t {
     ~ipmi_lanparm_t()
     {
-	ipmi_lanparm_destroy(self, NULL, NULL);
+	ipmi_lanparm_deref(self);
     }
 
     %newobject get_mc_id;
@@ -7285,7 +7353,7 @@ char *color_string(int color);
      * and set (parm2) and block (parm3) are specified, along with a
      * handler (parm4).  The lanparm_got_parm_cb method on the handler
      * will be called when the the operation completes with the
-     * following parms: <self> <lanparm> <err> <data1> [<data2> ...]
+     * following parms: <self> <lanparm> <err> <parm_rev> <data1> [<data2> ...]
      */
     int get_parm(int parm, int set, int block, swig_cb handler)
     {
@@ -7295,10 +7363,13 @@ char *color_string(int color);
 	if (!valid_swig_cb(handler))
 	    return EINVAL;
 	handler_val = ref_swig_cb(handler);
+	ipmi_lanparm_ref(self);
 	rv = ipmi_lanparm_get_parm(self, parm, set, block, lanparm_get_parm,
 				   handler_val);
-	if (rv)
+	if (rv) {
+	    ipmi_lanparm_deref(self);
 	    deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 
@@ -7329,9 +7400,12 @@ char *color_string(int color);
 	    handler_val = ref_swig_cb(handler);
 	}
 
+	ipmi_lanparm_ref(self);
 	rv = ipmi_lanparm_set_parm(self, parm, data, length,
 				   done, handler_val);
 	free(data);
+	if (rv)
+	    ipmi_lanparm_deref(self);
 	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
 	return rv;
@@ -7347,7 +7421,7 @@ char *color_string(int color);
      * The string value is in the form "0xNN 0xNN ...", basically
      * a string of integer values.
      */
-    int set_parm(int parm, intarray value, swig_cb handler = NULL)
+    int set_parm_array(int parm, intarray value, swig_cb handler = NULL)
     {
 	int                  rv;
 	swig_cb_val          handler_val = NULL;
@@ -7368,9 +7442,94 @@ char *color_string(int color);
 	    handler_val = ref_swig_cb(handler);
 	}
 
+	ipmi_lanparm_ref(self);
 	rv = ipmi_lanparm_set_parm(self, parm, data, length,
 				   done, handler_val);
 	free(data);
+	if (rv)
+	    ipmi_lanparm_deref(self);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Get the full standard configuration for the lanparms.  When
+     * done, the lanparm_got_config_cb method will be called on the
+     * handler (first parm) with the following parms: <self> <lanparm>
+     * <err> <lanconfig>.  The lanconfig will be an object of type
+     * ipmi_lan_config_t.
+     */
+    int get_config(swig_cb handler)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+
+	if (!valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = ref_swig_cb(handler);
+
+	ipmi_lanparm_ref(self);
+	rv = ipmi_lan_get_config(self, lanparm_get_config, handler_val);
+	if (rv) {
+	    ipmi_lanparm_deref(self);
+	    deref_swig_cb_val(handler_val);
+	}
+	return rv;
+	
+    }
+
+    /*
+     * Set the full standard configuration for the lanparms.  The
+     * config to set is the first parm of type ipmi_lan_config_t.  When
+     * done, the lanparm_set_config_cb method will be called on the
+     * handler (second parm) with the following parms: <self>
+     * <lanparm> <err>.
+     */
+    int set_config(ipmi_lan_config_t *config, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_lanparm_done_cb done = NULL;
+
+	if (valid_swig_cb(handler)) {
+	    done = lanparm_set_config;
+	    handler_val = ref_swig_cb(handler);
+	}
+
+	ipmi_lanparm_ref(self);
+	rv = ipmi_lan_set_config(self, config, done, handler_val);
+	if (rv)
+	    ipmi_lanparm_deref(self);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    /*
+     * Unlock the lock for the lanparm.  The config to set is the
+     * first parm of type ipmi_lan_config_t and may be undefined
+     * (meaning that the MC of the lanparm will be unlocked).  If the
+     * config is supplied, it will be marked as unlocked.  When done,
+     * the lanparm_clear_lock_cb method will be called on the handler
+     * (second parm) with the following parms: <self> <lanparm> <err>.
+     */
+    int clear_lock(ipmi_lan_config_t *config = NULL, swig_cb handler = NULL)
+    {
+	int                  rv;
+	swig_cb_val          handler_val = NULL;
+	ipmi_lanparm_done_cb done = NULL;
+
+	if (valid_swig_cb(handler)) {
+	    done = lanparm_clear_lock;
+	    handler_val = ref_swig_cb(handler);
+	}
+
+	ipmi_lanparm_ref(self);
+	rv = ipmi_lan_clear_lock(self, config, done, handler_val);
+	if (rv)
+	    ipmi_lanparm_deref(self);
 	if (rv && handler_val)
 	    deref_swig_cb_val(handler_val);
 	return rv;
@@ -7383,5 +7542,253 @@ char *color_string(int color);
 	ipmi_lan_free_config(self);
     }
 
+    /*
+     * Get a value from the lanconfig.  The first parameter is the
+     * parm number, the second is the parm index (which is a pointer
+     * to an integer).  The returned value will be undefined if
+     * an error occurred, it will be of the format:
+     *   "<name> <type> <data>"
+     * The type and data will not be present if the data value is not
+     * supported or the index is out of range, but the name will still
+     * be present.
+     *
+     * The supports types are: integer, bool, data, ip, and mac.  The
+     * data for an integer is a number.  The data for a bool is true
+     * or false.  The data for ip is an IP address in the form
+     * "n.n.n.n".  Data for mac is a mac address in the form
+     * "nn.nn.nn.nn.nn.nn"
+     *
+     * The second parameter (the index) is zero based and should be
+     * set to zero when fetching an index for the first time.  It will
+     * be unchanged if the data item does not support multiple items.
+     * If it does support multiple items, then the number will be
+     * changed to the next supported value, or to -1 if this is the
+     * last item.
+     *
+     * Be careful with the index, it must be a real number, not something
+     * that can be interpreted to a number.  If necessary, in perl, you
+     * must do $idx = int($idx) in some cases.
+     */
+    %newobject get_val;
+    char *get_val(int parm, int *index)
+    {
+	enum ipmi_lanconf_val_type_e valtype;
+	unsigned int      ival = 0;
+	unsigned char     *dval = NULL;
+	unsigned int      dval_len = 0;
+	const char        *name;
+	char              dummy[1];
+	char              *str = NULL, *s;
+	int               rv;
+	int               i;
+	unsigned int      len;
 
+	rv = ipmi_lanconfig_get_val(self, parm, &name, index, &valtype,
+				    &ival, &dval, &dval_len);
+	if ((rv == ENOSYS) || (rv == E2BIG))
+	    return strdup(name);
+	else if (rv)
+	    return NULL;
+
+	switch (valtype) {
+	case IPMI_LANCONFIG_INT:
+	    len = snprintf(dummy, 1, "%s integer %d", name, ival);
+	    str = malloc(len + 1);
+	    sprintf(str, "%s integer %d", name, ival);
+	    break;
+	    
+	case IPMI_LANCONFIG_BOOL:
+	    len = snprintf(dummy, 1, "%s bool %s", name,
+			   ival ? "true" : "false");
+	    str = malloc(len + 1);
+	    sprintf(str, "%s bool %s", name, 
+		    ival ? "true" : "false");
+	    break;
+	    
+	case IPMI_LANCONFIG_DATA:
+	    len = snprintf(dummy, 1, "%s data", name);
+	    len += dval_len * 5;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "%s data", name);
+	    for (i=0; i<dval_len; i++)
+		s += sprintf(s, " 0x%2.2x", dval[i]);
+	    break;
+
+	case IPMI_LANCONFIG_IP:
+	    len = snprintf(dummy, 1, "%s ip", name);
+	    len += 4 * 4; /* worst case */
+	    str = malloc(len + 1);
+	    sprintf(str, "%s ip %d.%d.%d.%d", name,
+		    dval[0], dval[1], dval[2], dval[3]);
+	    break;
+
+	case IPMI_LANCONFIG_MAC:
+	    len = snprintf(dummy, 1, "%s mac", name);
+	    len += 6 * 3;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "%s mac ", name);
+	    for (i=0; i<5; i++)
+		s += sprintf(s, "%2.2x:", dval[i]);
+	    sprintf(s, "%2.2x", dval[i]);
+	    break;
+	}
+
+	if (dval)
+	    ipmi_lanconfig_data_free(dval);
+
+	return str;
+    }
+
+    /*
+     * Set a value in the lanconfig.  The first parameter is the parm
+     * number, the second is the parm index.  The type is a string
+     * in the third parm.  The data is the fourth parm.
+     *
+     * The supports types are: integer, bool, data, ip, and mac.  The
+     * data for an integer is a number.  The data for a bool is true
+     * or false.  The data for ip is an IP address in the form
+     * "n.n.n.n".  Data for mac is a mac address in the form
+     * "nn.nn.nn.nn.nn.nn"
+     *
+     * The index is ignored for types that do not use it.
+     */
+    int set_val(int parm, int idx, char *type, char *value) {
+	enum ipmi_lanconf_val_type_e valtype;
+	int               rv;
+	unsigned int      ival = 0;
+	unsigned char     *dval = NULL;
+	unsigned int      dval_len = 0;
+
+	rv = ipmi_lanconfig_parm_to_type(parm, &valtype);
+	if (rv)
+	    return rv;
+
+	switch (valtype) {
+	case IPMI_LANCONFIG_INT:
+	{
+	    char *endstr;
+	    if (strcmp(type, "integer") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    if (*value == '\0')
+		return EINVAL;
+	    ival = strtol(value, &endstr, 0);
+	    if (*endstr != '\0')
+		return EINVAL;
+	    break;
+	}
+	    
+	case IPMI_LANCONFIG_BOOL:
+	    if (strcmp(type, "bool") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    if (strcasecmp(value, "true") == 0)
+		ival = 1;
+	    else if (strcasecmp(value, "false") == 0)
+		ival = 0;
+	    else if (strcasecmp(value, "on") == 0)
+		ival = 1;
+	    else if (strcasecmp(value, "off") == 0)
+		ival = 0;
+	    else
+		return EINVAL;
+	    break;
+	    
+	case IPMI_LANCONFIG_DATA:
+	    if (strcmp(type, "data") != 0)
+		return EINVAL;
+	    if (!value)
+		return EINVAL;
+	    dval = parse_raw_str_data(value, &dval_len);
+	    if (!dval)
+		return ENOMEM;
+	    break;
+
+	case IPMI_LANCONFIG_IP:
+	    if (strcmp(type, "ip") != 0)
+		return EINVAL;
+	    dval = malloc(4);
+#ifdef HAVE_GETADDRINFO
+	    {
+		struct addrinfo hints, *res0, *s;
+		struct sockaddr_in *paddr;
+ 
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = PF_UNSPEC;
+		hints.ai_socktype = SOCK_DGRAM;
+		rv = getaddrinfo(value, "100", &hints, &res0);
+		if (rv) {
+		    free(dval);
+		    return EINVAL;
+		}
+		/* Only get the first ipv4 */
+		s = res0;
+		while (s) {
+		    if (s->ai_family == PF_INET)
+			break;
+		    s = s->ai_next;
+		}
+		if (!s) {
+		    free(dval);
+		    freeaddrinfo(res0);
+		    return EINVAL;
+		}
+		paddr = (struct sockaddr_in *) s->ai_addr;
+		memcpy(dval, &paddr->sin_addr, 4);
+		freeaddrinfo(res0);
+	    }
+#else
+	    /* System does not support getaddrinfo, just for IPv4*/
+	    {
+		struct hostent *ent;
+		ent = gethostbyname(value);
+		if (!ent)
+		    return EINVAL;
+		memcpy(dval, ent->h_addr_list[0], 4);
+	    }
+#endif
+	    dval_len = 4;
+	    break;
+
+	case IPMI_LANCONFIG_MAC:
+	{
+	    int  i;
+	    char *s;
+	    char *endstr;
+
+	    if (strcmp(type, "mac") != 0)
+		return EINVAL;
+	    s = value;
+	    while (isspace(*s))
+		s++;
+	    if (! isxdigit(*s))
+		return EINVAL;
+	    dval = malloc(6);
+	    for (i=0; i<5; i++) {
+		dval[i] = strtoul(s, &endstr, 16);
+		if (*endstr != ':') {
+		    free(dval);
+		    return EINVAL;
+		}
+		s = endstr+1;
+	    }
+	    dval[i] = strtoul(s, &endstr, 16);
+	    if (*endstr != '\0') {
+		free(dval);
+		return EINVAL;
+	    }
+	    dval_len = 6;
+	    break;
+	}
+	}
+
+	rv = ipmi_lanconfig_set_val(self, parm, idx, ival, dval, dval_len);
+	if (dval)
+	    free(dval);
+	return rv;
+    }
 }

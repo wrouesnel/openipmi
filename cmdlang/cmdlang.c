@@ -1418,8 +1418,8 @@ ipmi_cmdlang_unlock(ipmi_cmd_info_t *info)
 
 void
 ipmi_cmdlang_out(ipmi_cmd_info_t *info,
-		 char            *name,
-		 char            *value)
+		 const char      *name,
+		 const char      *value)
 {
     info->did_output = 1;
     info->cmdlang->out(info->cmdlang, name, value);
@@ -1427,7 +1427,7 @@ ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
-		     char            *name,
+		     const char      *name,
 		     int             value)
 {
     char sval[20];
@@ -1438,7 +1438,7 @@ ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_double(ipmi_cmd_info_t *info,
-			char            *name,
+			const char      *name,
 			double          value)
 {
     char sval[80];
@@ -1449,7 +1449,7 @@ ipmi_cmdlang_out_double(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
-		     char            *name,
+		     const char      *name,
 		     int             value)
 {
     char sval[20];
@@ -1460,7 +1460,7 @@ ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_long(ipmi_cmd_info_t *info,
-		      char            *name,
+		      const char      *name,
 		      long            value)
 {
     char sval[32];
@@ -1471,7 +1471,7 @@ ipmi_cmdlang_out_long(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_binary(ipmi_cmd_info_t *info,
-			char            *name,
+			const char      *name,
 			char            *value,
 			unsigned int    len)
 {
@@ -1480,7 +1480,7 @@ ipmi_cmdlang_out_binary(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
-			 char            *name,
+			 const char      *name,
 			 char            *value,
 			 unsigned int    len)
 {
@@ -1509,7 +1509,7 @@ ipmi_cmdlang_out_type(ipmi_cmd_info_t      *info,
 
 void
 ipmi_cmdlang_out_bool(ipmi_cmd_info_t *info,
-		      char            *name,
+		      const char      *name,
 		      int             value)
 {
     if (value)
@@ -1520,7 +1520,7 @@ ipmi_cmdlang_out_bool(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_time(ipmi_cmd_info_t *info,
-		      char            *name,
+		      const char      *name,
 		      ipmi_time_t     value)
 {
     char sval[40];
@@ -1531,7 +1531,7 @@ ipmi_cmdlang_out_time(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_timeout(ipmi_cmd_info_t *info,
-			 char            *name,
+			 const char      *name,
 			 ipmi_timeout_t  value)
 {
     char sval[40];
@@ -1542,7 +1542,7 @@ ipmi_cmdlang_out_timeout(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
-		    char            *name,
+		    const char      *name,
 		    struct in_addr  *ip_addr)
 {
     char outstr[16];
@@ -1559,7 +1559,7 @@ ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
 
 void
 ipmi_cmdlang_out_mac(ipmi_cmd_info_t *info,
-		     char            *name,
+		     const char      *name,
 		     unsigned char   mac_addr[6])
 {
     char outstr[18];
@@ -2168,7 +2168,7 @@ struct ipmi_cmdlang_event_s
 };
 
 void
-event_out(ipmi_cmdlang_t *cmdlang, char *name, char *value)
+event_out(ipmi_cmdlang_t *cmdlang, const char *name, const char *value)
 {
     ipmi_cmdlang_event_entry_t *entry;
     ipmi_cmdlang_event_t       *event = cmdlang->user_data;
@@ -2221,8 +2221,8 @@ event_out(ipmi_cmdlang_t *cmdlang, char *name, char *value)
 }
 
 static void
-event_out_binary(ipmi_cmdlang_t *cmdlang, char *name,
-		 char *value, unsigned int len)
+event_out_binary(ipmi_cmdlang_t *cmdlang, const char *name,
+		 const char *value, unsigned int len)
 {
     ipmi_cmdlang_event_entry_t *entry;
     ipmi_cmdlang_event_t       *event = cmdlang->user_data;
@@ -2274,8 +2274,8 @@ event_out_binary(ipmi_cmdlang_t *cmdlang, char *name,
 }
 
 static void
-event_out_unicode(ipmi_cmdlang_t *cmdlang, char *name,
-		  char *value, unsigned int len)
+event_out_unicode(ipmi_cmdlang_t *cmdlang, const char *name,
+		  const char *value, unsigned int len)
 {
     ipmi_cmdlang_event_entry_t *entry;
     ipmi_cmdlang_event_t       *event = cmdlang->user_data;

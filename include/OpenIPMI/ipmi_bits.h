@@ -43,7 +43,7 @@ extern "C" {
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
 enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
-char *ipmi_update_e_string(enum ipmi_update_e val);
+const char *ipmi_update_e_string(enum ipmi_update_e val);
 
 /*
  * When dealing with strings, they can be unicode or ASCII, and some
@@ -70,19 +70,19 @@ enum ipmi_value_present_e { IPMI_NO_VALUES_PRESENT,
 #define IPMI_HYSTERESIS_SUPPORT_READABLE	1
 #define IPMI_HYSTERESIS_SUPPORT_SETTABLE	2
 #define IPMI_HYSTERESIS_SUPPORT_FIXED		3
-char *ipmi_get_hysteresis_support_string(unsigned int val);
+const char *ipmi_get_hysteresis_support_string(unsigned int val);
 
 #define IPMI_THRESHOLD_ACCESS_SUPPORT_NONE	0
 #define IPMI_THRESHOLD_ACCESS_SUPPORT_READABLE	1
 #define IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE	2
 #define IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED	3
-char *ipmi_get_threshold_access_support_string(unsigned int val);
+const char *ipmi_get_threshold_access_support_string(unsigned int val);
 
 #define IPMI_EVENT_SUPPORT_PER_STATE		0
 #define IPMI_EVENT_SUPPORT_ENTIRE_SENSOR	1
 #define IPMI_EVENT_SUPPORT_GLOBAL_ENABLE	2
 #define IPMI_EVENT_SUPPORT_NONE			3
-char *ipmi_get_event_support_string(unsigned int val);
+const char *ipmi_get_event_support_string(unsigned int val);
 
 
 #define IPMI_SENSOR_TYPE_TEMPERATURE			0x01
@@ -126,7 +126,7 @@ char *ipmi_get_event_support_string(unsigned int val);
 #define IPMI_SENSOR_TYPE_LAN				0x27
 #define IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH	0x28
 #define IPMI_SENSOR_TYPE_BATTERY			0x29
-char *ipmi_get_sensor_type_string(unsigned int val);
+const char *ipmi_get_sensor_type_string(unsigned int val);
 
 #define IPMI_EVENT_READING_TYPE_THRESHOLD			0x01
 #define IPMI_EVENT_READING_TYPE_DISCRETE_USAGE			0x02
@@ -141,16 +141,16 @@ char *ipmi_get_sensor_type_string(unsigned int val);
 #define IPMI_EVENT_READING_TYPE_DISCRETE_REDUNDANCY		0x0b
 #define IPMI_EVENT_READING_TYPE_DISCRETE_ACPI_POWER		0x0c
 #define IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC			0x6f
-char *ipmi_get_event_reading_type_string(unsigned int val);
+const char *ipmi_get_event_reading_type_string(unsigned int val);
 
 #define IPMI_SENSOR_DIRECTION_UNSPECIFIED	0
 #define IPMI_SENSOR_DIRECTION_INPUT		1
 #define IPMI_SENSOR_DIRECTION_OUTPUT		2
-char *ipmi_get_sensor_direction_string(unsigned int val);
+const char *ipmi_get_sensor_direction_string(unsigned int val);
 
-char *ipmi_get_reading_name(unsigned int event_reading_type,
-			    unsigned int sensor_type,
-			    unsigned int val);
+const char *ipmi_get_reading_name(unsigned int event_reading_type,
+				  unsigned int sensor_type,
+				  unsigned int val);
 
 #define IPMI_ANALOG_DATA_FORMAT_UNSIGNED   0
 #define IPMI_ANALOG_DATA_FORMAT_1_COMPL    1
@@ -166,7 +166,7 @@ enum ipmi_rate_unit_e {
     IPMI_RATE_UNIT_HOUR,
     IPMI_RATE_UNIT_DAY,
 };
-char *ipmi_get_rate_unit_string(enum ipmi_rate_unit_e val);
+const char *ipmi_get_rate_unit_string(enum ipmi_rate_unit_e val);
 
 enum ipmi_unit_type_e {
     IPMI_UNIT_TYPE_UNSPECIFIED = 0,
@@ -263,7 +263,7 @@ enum ipmi_unit_type_e {
     IPMI_UNIT_TYPE_FATAL_ERRORS,
     IPMI_UNIT_TYPE_GRAMS,
 };
-char *ipmi_get_unit_type_string(enum ipmi_unit_type_e val);
+const char *ipmi_get_unit_type_string(enum ipmi_unit_type_e val);
 
 enum ipmi_modifier_unit_use_e {
     IPMI_MODIFIER_UNIT_NONE = 0,
@@ -294,19 +294,19 @@ enum ipmi_thresh_e {
     IPMI_UPPER_CRITICAL,
     IPMI_UPPER_NON_RECOVERABLE
 };
-char *ipmi_get_threshold_string(enum ipmi_thresh_e val);
+const char *ipmi_get_threshold_string(enum ipmi_thresh_e val);
 
 enum ipmi_event_value_dir_e {
     IPMI_GOING_LOW = 0,
     IPMI_GOING_HIGH
 };
-char *ipmi_get_value_dir_string(enum ipmi_event_value_dir_e val);
+const char *ipmi_get_value_dir_string(enum ipmi_event_value_dir_e val);
 
 enum ipmi_event_dir_e {
     IPMI_ASSERTION = 0,
     IPMI_DEASSERTION
 };
-char *ipmi_get_event_dir_string(enum ipmi_event_dir_e val);
+const char *ipmi_get_event_dir_string(enum ipmi_event_dir_e val);
 
 /* Global init field for MC device locator SDR. */
 #define IPMI_GLOBAL_INIT_ENABLE_EVENT_MSG_GENERATION 0
@@ -369,7 +369,7 @@ char *ipmi_get_event_dir_string(enum ipmi_event_dir_e val);
 #define IPMI_ENTITY_ID_SCSI_BUS				50
 #define IPMI_ENTITY_ID_SATA_SAS_BUS			51
 #define IPMI_ENTITY_ID_PROCESSOR_FRONT_SIDE_BUS		52
-char *ipmi_get_entity_id_string(unsigned int val);
+const char *ipmi_get_entity_id_string(unsigned int val);
 
 
 /*
@@ -386,7 +386,7 @@ char *ipmi_get_entity_id_string(unsigned int val);
 #define IPMI_CONTROL_ONE_SHOT_RESET	9
 #define IPMI_CONTROL_OUTPUT		10
 #define IPMI_CONTROL_ONE_SHOT_OUTPUT	11
-char *ipmi_get_control_type_string(unsigned int val);
+const char *ipmi_get_control_type_string(unsigned int val);
 
 #define IPMI_CONTROL_COLOR_BLACK	0
 #define IPMI_CONTROL_COLOR_WHITE	1
@@ -395,7 +395,7 @@ char *ipmi_get_control_type_string(unsigned int val);
 #define IPMI_CONTROL_COLOR_BLUE		4
 #define IPMI_CONTROL_COLOR_YELLOW	5
 #define IPMI_CONTROL_COLOR_ORANGE	6
-char *ipmi_get_color_string(unsigned int val);
+const char *ipmi_get_color_string(unsigned int val);
 
 
 /*

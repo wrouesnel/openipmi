@@ -85,7 +85,7 @@ struct ipmi_control_s
     int add_pending;
 
     int type;
-    char *type_str;
+    const char *type_str;
 
     int settable;
     int readable;
@@ -1239,7 +1239,7 @@ ipmi_control_set_type(ipmi_control_t *control, int val)
     control->type_str = ipmi_get_control_type_string(val);
 }
 
-char *
+const char *
 ipmi_control_get_type_string(ipmi_control_t *control)
 {
     CHECK_CONTROL_LOCK(control);

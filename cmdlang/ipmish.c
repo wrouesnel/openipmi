@@ -385,11 +385,11 @@ typedef struct out_data_s
 static int columns = 80;
 
 static void
-out_help(FILE *s, int indent, char *name, char *v)
+out_help(FILE *s, int indent, const char *name, const char *v)
 {
     int pos, endpos;
-    char *endword;
-    char *endspace;
+    const char *endword;
+    const char *endspace;
 
     pos = fprintf(s, "%*s%s ", indent, "", name);
     while (*v) {
@@ -419,7 +419,7 @@ out_help(FILE *s, int indent, char *name, char *v)
 }
 
 static void
-out_value(ipmi_cmdlang_t *info, char *name, char *value)
+out_value(ipmi_cmdlang_t *info, const char *name, const char *value)
 {
     out_data_t *out_data = info->user_data;
 
@@ -436,7 +436,8 @@ out_value(ipmi_cmdlang_t *info, char *name, char *value)
 }
 
 static void
-out_binary(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
+out_binary(ipmi_cmdlang_t *info, const char *name, const char *value,
+	   unsigned int len)
 {
     out_data_t *out_data = info->user_data;
     unsigned char *data = (unsigned char *) value;
@@ -459,7 +460,8 @@ out_binary(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
 }
 
 static void
-out_unicode(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
+out_unicode(ipmi_cmdlang_t *info, const char *name, const char *value,
+	    unsigned int len)
 {
     out_binary(info, name, value, len);
 }

@@ -37,6 +37,10 @@
     $1 = $input;
 }
 
+%typemap(arginit) intarray {
+    $1.val = NULL;
+}
+
 %typemap(in) intarray {
     AV *tempav;
     I32 len;
@@ -58,6 +62,7 @@
 }
 
 %typemap(freearg) intarray {
+    if ($1.val)
         free($1.val);
 };
 

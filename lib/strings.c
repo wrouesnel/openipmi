@@ -38,7 +38,7 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmiif.h>
 
-char *
+const char *
 ipmi_update_e_string(enum ipmi_update_e val)
 {
     switch (val) {
@@ -57,7 +57,7 @@ static char *hysteresis_support_types[] =
     "fixed",
 };
 #define NUM_HYSTERESIS_SUPPORT_TYPES (sizeof(hysteresis_support_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_hysteresis_support_string(unsigned int val)
 {
     if (val >= NUM_HYSTERESIS_SUPPORT_TYPES)
@@ -73,7 +73,7 @@ static char *threshold_access_support_types[] =
     "fixed",
 };
 #define NUM_THRESHOLD_ACCESS_SUPPORT_TYPES (sizeof(threshold_access_support_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_threshold_access_support_string(unsigned int val)
 {
     if (val >= NUM_THRESHOLD_ACCESS_SUPPORT_TYPES)
@@ -89,7 +89,7 @@ static char *event_support_types[] =
     "none",
 };
 #define NUM_EVENT_SUPPORT_TYPES (sizeof(event_support_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_event_support_string(unsigned int val)
 {
     if (val >= NUM_EVENT_SUPPORT_TYPES)
@@ -143,7 +143,7 @@ static char *sensor_types[] =
     "battery",
 };
 #define NUM_SENSOR_TYPES (sizeof(sensor_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_sensor_type_string(unsigned int val)
 {
     if (val >= NUM_SENSOR_TYPES)
@@ -168,7 +168,7 @@ static char *event_reading_types[] =
     "discrete_acpi_power",
 };
 #define NUM_EVENT_READING_TYPES (sizeof(event_reading_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_event_reading_type_string(unsigned int val)
 {
     if (val == IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC)
@@ -186,7 +186,7 @@ static char *sensor_directions[] =
     "output",
 };
 #define NUM_SENSOR_DIRECTIONS (sizeof(sensor_directions)/sizeof(char *))
-char *
+const char *
 ipmi_get_sensor_direction_string(unsigned int val)
 {
     if (val >= NUM_SENSOR_DIRECTIONS)
@@ -205,7 +205,7 @@ static char *rate_unit_types[] =
     "/day",
 };
 #define NUM_RATE_UNIT_TYPES (sizeof(rate_unit_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_rate_unit_string(unsigned int val)
 {
     if (val >= NUM_RATE_UNIT_TYPES)
@@ -310,7 +310,7 @@ static char *unit_types[] =
     "grams",
 };
 #define NUM_UNIT_TYPES (sizeof(unit_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_unit_type_string(unsigned int val)
 {
     if (val >= NUM_UNIT_TYPES)
@@ -328,7 +328,7 @@ static char *threshold_types[] =
     "upper non-recoverable"
 };
 #define NUM_THRESHOLD_TYPES (sizeof(threshold_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_threshold_string(enum ipmi_thresh_e val)
 {
     if (val > NUM_THRESHOLD_TYPES)
@@ -342,7 +342,7 @@ static char *value_dir_types[] =
     "going-high"
 };
 #define NUM_VALUE_DIR_TYPES (sizeof(value_dir_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_value_dir_string(enum ipmi_event_value_dir_e val)
 {
     if (val > NUM_VALUE_DIR_TYPES)
@@ -356,7 +356,7 @@ static char *event_dir_types[] =
     "deassertion"
 };
 #define NUM_EVENT_DIR_TYPES (sizeof(event_dir_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_event_dir_string(enum ipmi_event_dir_e val)
 {
     if (val > NUM_EVENT_DIR_TYPES)
@@ -421,7 +421,7 @@ static char *entity_id_types[] =
     "processor front side bus",
 };
 #define NUM_ENTITY_ID_TYPES (sizeof(entity_id_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_entity_id_string(unsigned int val)
 {
     if (val >= NUM_ENTITY_ID_TYPES)
@@ -697,7 +697,7 @@ static char *sensor_states[256][16] =
     },
 };
 
-char *
+const char *
 ipmi_get_reading_name(unsigned int event_reading_type,
 		      unsigned int sensor_type,
 		      unsigned int val)
@@ -733,7 +733,7 @@ static char *control_types[] =
     "one-shot output",
 };
 #define NUM_CONTROL_TYPES (sizeof(control_types)/sizeof(char *))
-char *
+const char *
 ipmi_get_control_type_string(unsigned int val)
 {
     if (val >= NUM_CONTROL_TYPES)
@@ -752,7 +752,7 @@ static char *colors[] =
     "orange",
 };
 #define NUM_COLORS (sizeof(colors)/sizeof(char *))
-char *
+const char *
 ipmi_get_color_string(unsigned int val)
 {
     if (val >= NUM_COLORS)
@@ -1173,7 +1173,7 @@ ipmi_get_cc_string(unsigned int cc,
 }
 
 /* Get a string name fo the hot swap state. */
-char *
+const char *
 ipmi_hot_swap_state_name(enum ipmi_hot_swap_states state)
 {
     switch (state) {
@@ -1197,7 +1197,7 @@ static char *domain_types[] =
 };
 #define NUM_DOMAIN_TYPES (sizeof(domain_types)/sizeof(char *))
 
-char *
+const char *
 ipmi_domain_get_type_string(enum ipmi_domain_type dtype)
 {
     if ((dtype < 0) || (dtype >= NUM_DOMAIN_TYPES))
@@ -1205,7 +1205,7 @@ ipmi_domain_get_type_string(enum ipmi_domain_type dtype)
     return domain_types[dtype];
 }
 
-char *
+const char *
 ipmi_authtype_string(int authtype)
 {
     switch(authtype) {
@@ -1224,7 +1224,7 @@ ipmi_authtype_string(int authtype)
     }
 }
 
-char *
+const char *
 ipmi_privilege_string(int privilege)
 {
     switch(privilege) {

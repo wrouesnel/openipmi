@@ -2999,7 +2999,7 @@ ps_ps_states_get(ipmi_sensor_t         *sensor,
     return rv;
 }
 
-static char *
+const static char *
 ps_ps_reading_name_string(ipmi_sensor_t *sensor, int val)
 {
     if (val == 13)
@@ -3009,8 +3009,8 @@ ps_ps_reading_name_string(ipmi_sensor_t *sensor, int val)
 	/* Feed B offset */
 	return "feed B failure";
     else
-	return ipmi_standard_sensor_cb.ipmi_sensor_reading_name_string(
-								       sensor, val);
+	return ipmi_standard_sensor_cb.ipmi_sensor_reading_name_string
+	    (sensor, val);
 }
 
 static void
