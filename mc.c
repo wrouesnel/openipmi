@@ -1408,7 +1408,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 	    if (rv)
 		ipmi_cleanup_mc(mc);
 	}
-    } else {
+    } else if (mc) {
 	/* Didn't get a response.  Maybe the MC has gone away? */
 	mc->missed_responses++;
 	if (mc->missed_responses >= MAX_MC_MISSED_RESPONSES) {
