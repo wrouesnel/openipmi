@@ -1,3 +1,7 @@
+2005-03-28 Corey Minyard <cminyard@mvista.com> 
+
+	* Release version 2.0.0
+
 2005-03-24 Corey Minyard <cminyard@mvista.com> 
 
 	* cmdlang/cmdlang.c: Cast ipmi_time_t to long long when outputting
