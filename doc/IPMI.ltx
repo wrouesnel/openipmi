@@ -1146,7 +1146,7 @@ This defines functions for handling events.\\
 This defines internal entity interfaces.\\
 
 \verb=ipmi_fru.h= &
-This defines internal FRU interfaces.\\
+This defines internal \ac{FRU} interfaces.\\
 
 \verb=ipmi_control.h= &
 This defines internal control interfaces.\\
@@ -1194,8 +1194,8 @@ POSIX program:
 \begin{verbatim}
     os_hnd = ipmi_posix_setup_os_handler();
     if (!os_hnd) {
-	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
-	exit(1);
+        printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
+        exit(1);
     }
 
     /* Initialize the OpenIPMI library. */
@@ -1239,11 +1239,11 @@ change callback looks like:
 \begin{verbatim}
 static void
 con_change(ipmi_domain_t *domain,
-	   int           err,
-	   unsigned int  conn_num,
-	   unsigned int  port_num,
-	   int           still_connected,
-	   void          *user_data)
+           int           err,
+           unsigned int  conn_num,
+           unsigned int  port_num,
+           int           still_connected,
+           void          *user_data)
 {
   ...
 }
@@ -1296,7 +1296,7 @@ long is:
 \begin{showmsg}
 \hline
 \msgitem{0}{Bits 0-1 - Destination \acs{LUN}\\
-	    Bits 2-7 - \acs{NetFN}}
+            Bits 2-7 - \acs{NetFN}}
 \msgitem{1}{Command}
 \msgitem{2 - n-1}{Message Data}
 \end{showmsg}
@@ -1775,96 +1775,96 @@ possible channel.
 \begin{showmsg}
 \msgtag{Request}
 \msgitem{0}{
-	\begin{description}
-	\item[bits 0-3] - Channel number
-	\item[bits 4-7] - reserved
-	\end{description}}
+        \begin{description}
+        \item[bits 0-3] - Channel number
+        \item[bits 4-7] - reserved
+        \end{description}}
 \msgtag{Response}
 \msgitem{0}{Completion Code}
 \msgitem{1}{
-	\begin{description}
-	\item[bits 0-3] - Actual channel number (if you put Eh in the
-	  request, the real channel number is returned here)
-	\item[bits 4-7] - reserved
-	\end{description}}
+        \begin{description}
+        \item[bits 0-3] - Actual channel number (if you put Eh in the
+          request, the real channel number is returned here)
+        \item[bits 4-7] - reserved
+        \end{description}}
 \msgitem{2}{
-	\begin{description}
-	\item[bits 0-6] - Channel medium type.  Valid values are:
-	  \begin{description}
-	  \item[00h] - reserved
-	  \item[01h] - \acs{IPMB} (\acs{I$^2$C})
-	  \item[02h] - \acs{ICMB} version 1.0
-	  \item[03h] - \acs{ICMB} version 0.9
-	  \item[04h] - 802.3 (Ethernet)
-	  \item[05h] - Async serial/modem (RS-232)
-	  \item[06h] - Other \acs{LAN}
-	  \item[07h] - PCI SMBus
-	  \item[08h] - SMBus Versions 1.0/1.1
-	  \item[09h] - SMBus Version 2.0
-	  \item[0Ah] - reserved for USB 1.x
-	  \item[0Bh] - reserved for USB 2.x
-	  \item[0Ch] - System Interface
-	  \item[60h-7Fh] - \acs{OEM}
-	  \end{description}
-	  All other values are reserved.
-	\item[bit 7] - reserved
-	\end{description}}
+        \begin{description}
+        \item[bits 0-6] - Channel medium type.  Valid values are:
+          \begin{description}
+          \item[00h] - reserved
+          \item[01h] - \acs{IPMB} (\acs{I$^2$C})
+          \item[02h] - \acs{ICMB} version 1.0
+          \item[03h] - \acs{ICMB} version 0.9
+          \item[04h] - 802.3 (Ethernet)
+          \item[05h] - Async serial/modem (RS-232)
+          \item[06h] - Other \acs{LAN}
+          \item[07h] - PCI SMBus
+          \item[08h] - SMBus Versions 1.0/1.1
+          \item[09h] - SMBus Version 2.0
+          \item[0Ah] - reserved for USB 1.x
+          \item[0Bh] - reserved for USB 2.x
+          \item[0Ch] - System Interface
+          \item[60h-7Fh] - \acs{OEM}
+          \end{description}
+          All other values are reserved.
+        \item[bit 7] - reserved
+        \end{description}}
 \msgitem{3}{
-	\begin{description}
-	\item[bits 0-4] - Channel protocol type.  Valid values are:
-	  \begin{description}
-	  \item[00h] - reserved
-	  \item[01h] - \acs{IPMB}-1.0, used for acs{IPMB}, serial/modem
-	    basic mode, and \acs{LAN}.
-	  \item[02h] - \acs{ICMB}-1.0, see section \ref{sec-icmb}
-	  \item[03h] - reserved
-	  \item[04h] - \acs{IPMI} over SMBus
-	  \item[05h] - \acs{KCS}, see section \ref{sec-kcs}
-	  \item[06h] - \acs{SMIC}, see section \ref{sec-smic}
-	  \item[07h] - \acs{BT} from IPMI v1.0, see section \ref{sec-bt}
-	  \item[08h] - \acs{BT} from IPMI v1.5, see section \ref{sec-bt}
-	  \item[09h] - Terminal mode, see section \ref{sec-terminal-mode}
-	  \item[1Ch-1Fh] - \acs{OEM}
-	  \end{description}
-	  All other values are reserved.
-	\item[bits 5-7] - reserved
-	\end{description}}
+        \begin{description}
+        \item[bits 0-4] - Channel protocol type.  Valid values are:
+          \begin{description}
+          \item[00h] - reserved
+          \item[01h] - \acs{IPMB}-1.0, used for acs{IPMB}, serial/modem
+            basic mode, and \acs{LAN}.
+          \item[02h] - \acs{ICMB}-1.0, see section \ref{sec-icmb}
+          \item[03h] - reserved
+          \item[04h] - \acs{IPMI} over SMBus
+          \item[05h] - \acs{KCS}, see section \ref{sec-kcs}
+          \item[06h] - \acs{SMIC}, see section \ref{sec-smic}
+          \item[07h] - \acs{BT} from IPMI v1.0, see section \ref{sec-bt}
+          \item[08h] - \acs{BT} from IPMI v1.5, see section \ref{sec-bt}
+          \item[09h] - Terminal mode, see section \ref{sec-terminal-mode}
+          \item[1Ch-1Fh] - \acs{OEM}
+          \end{description}
+          All other values are reserved.
+        \item[bits 5-7] - reserved
+        \end{description}}
 \msgitem{4}{This field describes session information about the channel.
-	See section \ref{sec-session-support} for details on sessions.
-	\begin{description}
-	\item[bits 0-5] - The number of sessions that have been activated
-	  on a given channel.  This is only valid if the channel has session
-	  support.
-	\item[bits 6-7] - Session support, values are:
-	  \begin{description}
-	  \item[00b] - channel does not support sessions.
-	  \item[01b] - channel is single-session. 
-	  \item[10b] - channel is multi-session.
-	  \item[11b] - channel is sessions based, but may switch
-	    between single and multiple sessions.
-	  \end{description}
-	\end{description}}
+        See section \ref{sec-session-support} for details on sessions.
+        \begin{description}
+        \item[bits 0-5] - The number of sessions that have been activated
+          on a given channel.  This is only valid if the channel has session
+          support.
+        \item[bits 6-7] - Session support, values are:
+          \begin{description}
+          \item[00b] - channel does not support sessions.
+          \item[01b] - channel is single-session. 
+          \item[10b] - channel is multi-session.
+          \item[11b] - channel is sessions based, but may switch
+            between single and multiple sessions.
+          \end{description}
+        \end{description}}
 \msgitem{5-7}{Vendor ID, used to specify the IANA number for the organization
-	the defined the protocol.  This should always be the IPMI IANA,
-	which is 7154 (decimal), or F2H, 1Bh, and 00H for these bytes.}
+        the defined the protocol.  This should always be the IPMI IANA,
+        which is 7154 (decimal), or F2H, 1Bh, and 00H for these bytes.}
 \msgitem{8-9}{Auxiliary channel info.
 
-	For channel Fh, this is byte 8 is the interrupt for the system
-	interface, byte 9 is the interrupt for the event message buffer
-	interface.  Valid values are:
-	\begin{description}
-	\item[00h-0Fh] - IRQ 0-15
-	\item[10h-13h] - PCI A-D, respectively
-	\item[14h] - SMI
-	\item[15h] - SCI
-	\item[20h-5Fh] - System interrupt 0-62, respecitively
-	\item[60h] - Assigned by ACPI, SMBIOS, or a plug and play mechanism.
-	\item[FFh] - No interrupt or unspecified
-	\end{description}
-	All other values are reserved.
+        For channel Fh, this is byte 8 is the interrupt for the system
+        interface, byte 9 is the interrupt for the event message buffer
+        interface.  Valid values are:
+        \begin{description}
+        \item[00h-0Fh] - IRQ 0-15
+        \item[10h-13h] - PCI A-D, respectively
+        \item[14h] - SMI
+        \item[15h] - SCI
+        \item[20h-5Fh] - System interrupt 0-62, respecitively
+        \item[60h] - Assigned by ACPI, SMBIOS, or a plug and play mechanism.
+        \item[FFh] - No interrupt or unspecified
+        \end{description}
+        All other values are reserved.
 
-	For \ac{OEM} channel types, this value is OEM defined. These
-	bytes are reserved for all other channel types.}
+        For \ac{OEM} channel types, this value is OEM defined. These
+        bytes are reserved for all other channel types.}
 \msgcaption{\label{get-channel-info-cmd}Get Channel Info Command,
   NetFN App (06h), Cmd 42h}
 \end{showmsg}
@@ -1880,30 +1880,30 @@ different manner.
 \begin{showmsg}
 \msgtag{Request}
 \msgitem{0}{Channel information, bits are:
-	\begin{description}
-	\item[0-4] - Channel number
-	\item[4-5] - reserved
-	\item[6-7] - tracking type.  See section \ref{sec-message-tracking}
-	  for more information.  Values are:
-	  \begin{description}
-	  \item[00b] - No tracking
-	  \item[01b] - Track request
-	  \item[10b] - Send raw.  This is a test mechanism or a mechanism
-	    used for transmitting proprietary protocols.  It is optional.
-	  \item[11b] - reserved
-	  \end{description}
-	\end{description}}
+        \begin{description}
+        \item[0-4] - Channel number
+        \item[4-5] - reserved
+        \item[6-7] - tracking type.  See section \ref{sec-message-tracking}
+          for more information.  Values are:
+          \begin{description}
+          \item[00b] - No tracking
+          \item[01b] - Track request
+          \item[10b] - Send raw.  This is a test mechanism or a mechanism
+            used for transmitting proprietary protocols.  It is optional.
+          \item[11b] - reserved
+          \end{description}
+        \end{description}}
 \msgitem{1-n}{Message data.  The format depends on the channel type.  See
-	the section on the specific channel type for more information.}
+        the section on the specific channel type for more information.}
 \msgtag{Response}
 \msgitem{0}{Completion code.  If transmitting on an \acs{IPMB}, SMBus, or
-	PCI management bus, the following return codes are used to inform
-	the sender of sending problems:
-	\begin{description}
-	\item[81h] - lost arbitration
-	\item[82h] - Bus Error
-	\item[83h] - NAK on Write
-	\end{description}}
+        PCI management bus, the following return codes are used to inform
+        the sender of sending problems:
+        \begin{description}
+        \item[81h] - lost arbitration
+        \item[82h] - Bus Error
+        \item[83h] - NAK on Write
+        \end{description}}
 \msgcaption{\label{send-msg-cmd}Send Message Command,
   NetFN App (06h), Cmd 34h}
 \end{showmsg}
@@ -1946,36 +1946,36 @@ Message command described in table \ref{get-msg-cmd}.
 \msgtag{Response}
 \msgitem{0}{Completion code}
 \msgitem{1}{Channel information, bits are:
-	\begin{description}
-	\item[0-4] - Channel number
-	\item[4-7] - Inferred privilege leel for the message.  Table
-	  \ref{ipmi-priv-levels} describes the privilege levels.
+        \begin{description}
+        \item[0-4] - Channel number
+        \item[4-7] - Inferred privilege leel for the message.  Table
+          \ref{ipmi-priv-levels} describes the privilege levels.
 
-	  If the message is received from a session-oriented channel,
-	  this will generally be set to the maximum privilege level of
-	  the session.
+          If the message is received from a session-oriented channel,
+          this will generally be set to the maximum privilege level of
+          the session.
 
-	  If per-message authentication is enabled, this will be set to
-	  User privilege for unauthenticated messages.
+          If per-message authentication is enabled, this will be set to
+          User privilege for unauthenticated messages.
 
-	  The privilege will be then lowered based on the privilege
-	  limit set by the Set Session Privilege Level command.
+          The privilege will be then lowered based on the privilege
+          limit set by the Set Session Privilege Level command.
 
-	  For messages from sessionless channels, this will always
-	  be set to ``None''.
+          For messages from sessionless channels, this will always
+          be set to ``None''.
 
-	  Privilege levels are:
-	  \begin{description}
-	  \item[0] - None (unspecified)
-	  \item[1] - Callback
-	  \item[2] - User
-	  \item[3] - Operator
-	  \item[4] - Admin
-	  \item[5] - OEM
-	  \end{description}
-	\end{description}}
+          Privilege levels are:
+          \begin{description}
+          \item[0] - None (unspecified)
+          \item[1] - Callback
+          \item[2] - User
+          \item[3] - Operator
+          \item[4] - Admin
+          \item[5] - OEM
+          \end{description}
+        \end{description}}
 \msgitem{2-n}{Message data.  The format depends on the channel type.  See
-	the section on the specific channel type for more information.}
+        the section on the specific channel type for more information.}
 \msgcaption{\label{get-msg-cmd}Get Message Command,
   NetFN App (06h), Cmd 33h}
 \end{showmsg}
@@ -1992,16 +1992,16 @@ bit will be set in the response to tell it something is in the queue.
 \msgtag{Response}
 \msgitem{0}{Completion code}
 \msgitem{1}{Flags.  The bits are:
-	\begin{description}
-	\item[0] - message(s) in the receive message queue.
-	\item[1] - Event message buffer is full
-	\item[2] - reserved
-	\item[3] - Watchdog pre-timeout
-	\item[4] - reserved
-	\item[5] - OEM 0
-	\item[6] - OEM 1
-	\item[7] - OEM 2
-	\end{description}}
+        \begin{description}
+        \item[0] - message(s) in the receive message queue.
+        \item[1] - Event message buffer is full
+        \item[2] - reserved
+        \item[3] - Watchdog pre-timeout
+        \item[4] - reserved
+        \item[5] - OEM 0
+        \item[6] - OEM 1
+        \item[7] - OEM 2
+        \end{description}}
 \msgcaption{\label{get-msg-flags}Get Message Flags Command,
   NetFN App (06h), Cmd 31h}
 \end{showmsg}
@@ -2054,35 +2054,35 @@ with the \ac{IPMI} message.  The sent data is always the same, and is:
 0 & 20h & \acs{LAN} Responder address, this is the BMC's IPMB, generally\\
 \hline
 1 & 18h & \acs{LAN} Responder \acs{LUN} in bits 0-1 (0 in this case),
-	 Send Message \acs{NetFN} in bits 2-7 (6 in this case)\\
+         Send Message \acs{NetFN} in bits 2-7 (6 in this case)\\
 \hline
 2 & C8h & Checksum for the previous two bytes\\
 \hline
 3 & 81h & \acs{LAN} Requester address (this is the value for system managmenet
-	software)\\
+        software)\\
 \hline
 4 & B8h & Requester LUN in bits 0-1 (0 in this case), Sequence number
-	in bits 2-7 (2eh in this case).  Note that the sequence number
-	is returned in the response as-is and helps differentiate the
-	messages.\\
+        in bits 2-7 (2eh in this case).  Note that the sequence number
+        is returned in the response as-is and helps differentiate the
+        messages.\\
 \hline
 5 & 34h & The command, a Send Message for \acs{NetFN} 6.\\
 \hline
 6 & 40h & The channel number in bits 0-4 (0 in this case), and message
-	tracking selection in bits 6-7 (10b in this case, message tracking
-	is on).\\
+        tracking selection in bits 6-7 (10b in this case, message tracking
+        is on).\\
 \hline
 7 & C0h & The destination \acs{IPMB} address\\
 \hline
 8 & 18h & \acs{IPMB} Responder \acs{LUN} in bits 0-1 (0 in this case),
-	 Get Device ID \acs{NetFN} in bits 2-7 (6 in this case)\\
+         Get Device ID \acs{NetFN} in bits 2-7 (6 in this case)\\
 \hline
 9 & 28h & Checksum for the previous two bytes\\
 \hline
 10 & 20h & Source address, the IPMB address of the BMC.\\
 \hline
 11 & BEh & Requester LUN in bits 0-1 (2 in this case, although it generally
-	doesn't matter), Sequence number in bits 2-7 (2fh in this case).\\
+        doesn't matter), Sequence number in bits 2-7 (2fh in this case).\\
 \hline
 12 & 01h & The command, a Get Device Id for \acs{NetFN} 6\\
 \hline
@@ -2113,14 +2113,14 @@ previously sent:
 0 & 81 & Requester Address\\
 \hline
 1 & 1c & \acs{LAN} Requester \acs{LUN} in bits 0-1 (0 in this case),
-	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+         Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
 \hline
 2 & 63 & Checksum for the previous two bytes\\
 \hline
 3 & 20 & Responder Address\\
 \hline
 4 & b8 & Responder LUN in bits 0-1 (0 in this case), Sequence number
-	in bits 2-7 (2eh in this case).\\
+        in bits 2-7 (2eh in this case).\\
 \hline
 5 & 34 & The command, a Send Message response in this case.\\
 \hline
@@ -2129,14 +2129,14 @@ previously sent:
 7 & 20 & IPMB Destination address (the BMC's IPMB address)\\
 \hline
 8 & 1E & \acs{IPMB} Requester \acs{LUN} in bits 0-1 (2 in this case),
-	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+         Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
 \hline
 9 & C2 & Checksum for the previous two bytes\\
 \hline
 10 & C0 & Responder IPMB address\\
 \hline
 11 & BC & Requester LUN in bits 0-1 (0 in this case), Sequence number
-	in bits 2-7 (2fh in this case).\\
+        in bits 2-7 (2fh in this case).\\
 \hline
 12 & 01 & Command, a Get Device ID response\\
 \hline
@@ -2196,14 +2196,14 @@ this format:
 0 & 81 & Requester Address\\
 \hline
 1 & 1c & \acs{LAN} Requester \acs{LUN} in bits 0-1 (0 in this case),
-	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+         Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
 \hline
 2 & 63 & Checksum for the previous two bytes\\
 \hline
 3 & 20 & Responder Address\\
 \hline
 4 & b8 & Responder LUN in bits 0-1 (0 in this case), Sequence number
-	in bits 2-7 (2eh in this case).\\
+        in bits 2-7 (2eh in this case).\\
 \hline
 5 & 34 & The command, a Send Message response in this case.\\
 \hline
@@ -2222,14 +2222,14 @@ The following is the second message, the IPMB response:
 0 & 20 & IPMB Destination address (the BMC's IPMB address)\\
 \hline
 1 & 1E & \acs{IPMB} Requester \acs{LUN} in bits 0-1 (2 in this case),
-	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+         Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
 \hline
 2 & C2 & Checksum for the previous two bytes\\
 \hline
 3 & C0 & Responder IPMB address\\
 \hline
 4 & BC & Requester LUN in bits 0-1 (0 in this case), Sequence number
-	in bits 2-7 (2fh in this case).\\
+        in bits 2-7 (2fh in this case).\\
 \hline
 5 & 01 & Command, a Get Device ID response\\
 \hline
@@ -2293,14 +2293,14 @@ The first response for the Get Device ID would be:
 0 & 81 & Requester Address\\
 \hline
 1 & 1c & \acs{LAN} Requester \acs{LUN} in bits 0-1 (0 in this case),
-	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+         Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
 \hline
 2 & 63 & Checksum for the previous two bytes\\
 \hline
 3 & 20 & Responder Address\\
 \hline
 4 & b8 & Responder LUN in bits 0-1 (0 in this case), Sequence number
-	in bits 2-7 (2eh in this case).\\
+        in bits 2-7 (2eh in this case).\\
 \hline
 5 & 34 & The command, a Send Message response in this case.\\
 \hline
@@ -2320,14 +2320,14 @@ response would be:
 0 & 81 & Requester Address\\
 \hline
 1 & 1c & \acs{LAN} Requester \acs{LUN} in bits 0-1 (0 in this case),
-	 Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
+         Send Message response \acs{NetFN} in bits 2-7 (7 in this case)\\
 \hline
 2 & 63 & Checksum for the previous two bytes\\
 \hline
 3 & 20 & Responder Address\\
 \hline
 4 & b8 & Responder LUN in bits 0-1 (0 in this case), Sequence number
-	in bits 2-7 (2eh in this case).\\
+        in bits 2-7 (2eh in this case).\\
 \hline
 5 & 01 & Command, a Get Device ID response\\
 \hline
@@ -2394,11 +2394,11 @@ The format of an \ac{IPMB} message of $n$ bytes is:
 \hline
 \msgitem{0}{Destination \acs{IPMB} address}
 \msgitem{1}{Bits 0-1 - Destination \acs{LUN}\\
-	    Bits 2-7 - \acs{NetFN}}
+            Bits 2-7 - \acs{NetFN}}
 \msgitem{2}{Checksum for bytes 0-1}
 \msgitem{3}{Source \acs{IPMB} address}
 \msgitem{4}{Bits 0-1 - Source \acs{LUN}\\
-	    Bits 2-7 - Sequence Number}
+            Bits 2-7 - Sequence Number}
 \msgitem{5}{Command}
 \msgitem{6 .. n-2}{Message Contents}
 \msgitem{n-1}{Checksum for the whole message}
@@ -2491,18 +2491,18 @@ To set up the \acs{LAN} configuration table, the command shown in table
 \begin{showmsg}
 \msgtag{Request}
 \msgitem{0}{Bits 0-3 - Channel Number\\
-	    Bits 4-7 - reserved}
+            Bits 4-7 - reserved}
 \msgitem{1}{Parameter Selector.  This selects the entry in the table that you
-	want to set.}
+        want to set.}
 \msgitem{2-n}{The data for the parameter.  You must look up the entry in
-	table \ref{lan-conf-parms} for the exact contents, it depends on
-	which entry you are setting.}
+        table \ref{lan-conf-parms} for the exact contents, it depends on
+        which entry you are setting.}
 \msgtag{Response}
 \msgitem{0}{Completion code.  Standard completion codes, plus:\\
-	80h - Parameter not supported\\
-	81h - Attempt to set the ``set in progress' value (parm 0) when
-		the parameter is not in the free (set complete) state.\\
-	82h - Attempt to write a read-only parameter.}
+        80h - Parameter not supported\\
+        81h - Attempt to set the ``set in progress' value (parm 0) when
+                the parameter is not in the free (set complete) state.\\
+        82h - Attempt to write a read-only parameter.}
 \msgcaption{\label{set-lan-conf-cmd}Set \acs{LAN} Configuration Parameters
   Command, NetFN Transport (0Ch), Cmd 01h}
 \end{showmsg}
@@ -2513,28 +2513,28 @@ parameters.
 \begin{showmsg}
 \msgtag{Request}
 \msgitem{0}{Bits 0-3 - Channel Number\\
-	    Bits 4-6 - reserved\\
-	    Bit 7 - If 1, only get parameter revision}
+            Bits 4-6 - reserved\\
+            Bit 7 - If 1, only get parameter revision}
 \msgitem{1}{Parameter Selector.  This selects the entry in the table that you
-	want to get.}
+        want to get.}
 \msgitem{2}{Set Selector.  Some parameters are in an array, this tells which
-	array element to set.  Set to zero if the parameter does not have a
-	set selector.}
+        array element to set.  Set to zero if the parameter does not have a
+        set selector.}
 \msgitem{3}{Block Selector.  Some parameters have two levels of arrays
-	(an array inside of the array).  The Set Selector is the first
-	level array specifier, this is the second level.  No standard
-	\acs{LAN} parameters use this, although OEM ones might.  Set to zero
-	if the parameter does not have a block selector.}
+        (an array inside of the array).  The Set Selector is the first
+        level array specifier, this is the second level.  No standard
+        \acs{LAN} parameters use this, although OEM ones might.  Set to zero
+        if the parameter does not have a block selector.}
 \msgtag{Response}
 \msgitem{0}{Completion code.  Standard codes, plus:\\
-	80h - parameter not supported}
+        80h - parameter not supported}
 \msgitem{1}{Parameter revision.  Format is:\\
-	Bits 0-3 - Oldest revision parameter is backward compatible with\\
-	Bits 4-7 - Current parameter revision}
+        Bits 0-3 - Oldest revision parameter is backward compatible with\\
+        Bits 4-7 - Current parameter revision}
 \msgitem{2-n}{Parameter data.  This will not be present if bit 7 of byte 0
-	of the response is set to 1.  The contents of this depends on the
-	particular parameter being fetched, see table \ref{lan-conf-parms}
-	for the	parameters.}
+        of the response is set to 1.  The contents of this depends on the
+        particular parameter being fetched, see table \ref{lan-conf-parms}
+        for the parameters.}
 \msgcaption{\label{get-lan-conf-cmd}Get \acs{LAN} Configuration Parameters
   Command, NetFN Transport (0Ch), Cmd 02h}
 \end{showmsg}
@@ -2568,229 +2568,229 @@ will survive removal of power.
 \endhead
 \hline
 Set In Progress (volatile) & 0 &
-	Used to indicate that the parameters are being updated.
-	Bits 2-7 are reserved.  Bits 0-1 have the following values:
-	\begin{description}
-	\item[00b] - set complete.  This is the state the system comes up in.
-		This means that any user is finished updating the
-		parameters.  If rollback is implemented, setting this
-		value will cause any changes made since last setting
-		this value to ``set in progress'' to be undone.
-	\item[01b] - set in progress.  A user will set this value to inform
-		others that it is updating these parameters.  This value
-		can only be set if the current value is ``set complete''.
-	\item[10b] - commit write (optional).  This will commit any changes
-		that
-		are pending and go to ``set complete'' state.  Some systems
-		may not support this, if setting this returns an error you
-		should set this value to ``set complete'' by hand.
-	\end{description}\\
+        Used to indicate that the parameters are being updated.
+        Bits 2-7 are reserved.  Bits 0-1 have the following values:
+        \begin{description}
+        \item[00b] - set complete.  This is the state the system comes up in.
+                This means that any user is finished updating the
+                parameters.  If rollback is implemented, setting this
+                value will cause any changes made since last setting
+                this value to ``set in progress'' to be undone.
+        \item[01b] - set in progress.  A user will set this value to inform
+                others that it is updating these parameters.  This value
+                can only be set if the current value is ``set complete''.
+        \item[10b] - commit write (optional).  This will commit any changes
+                that
+                are pending and go to ``set complete'' state.  Some systems
+                may not support this, if setting this returns an error you
+                should set this value to ``set complete'' by hand.
+        \end{description}\\
 \hline
 Authentication Type Support (Read only) & 1 &
-	A read only field showing which authentication types are supported.
-	The format for this is defined in table \ref{auth-bitmask}.\\
+        A read only field showing which authentication types are supported.
+        The format for this is defined in table \ref{auth-bitmask}.\\
 \hline
 Authentication Type Enables & 2 &
-	A 5 byte field that holds the allowed authentication type for each
-	privilege level.  The bytes are:
-	\begin{description}
-	\item[byte 0] - callback
-	\item[byte 1] - user
-	\item[byte 2] - operator
-	\item[byte 3] - admin
-	\item[byte 4] - oem
-	\end{description}
-	The format for each byte is defined in table \ref{auth-bitmask}.\\
+        A 5 byte field that holds the allowed authentication type for each
+        privilege level.  The bytes are:
+        \begin{description}
+        \item[byte 0] - callback
+        \item[byte 1] - user
+        \item[byte 2] - operator
+        \item[byte 3] - admin
+        \item[byte 4] - oem
+        \end{description}
+        The format for each byte is defined in table \ref{auth-bitmask}.\\
 \hline
 \acs{IP} Address & 3 &
-	A 4 byte field holding the \acs{IP} address, in network order.  This
-	is the local \acs{IP} address used for this particular channel.  You
-	only need to set this is parameter 4 is set to ``static address''.\\
+        A 4 byte field holding the \acs{IP} address, in network order.  This
+        is the local \acs{IP} address used for this particular channel.  You
+        only need to set this is parameter 4 is set to ``static address''.\\
 \hline
 \acs{IP} Address Source & 4 &
-	One byte field telling the BMC where to get its IP address. Bits 4-7
-	are reserved.  Values for bits 0-3 are:
-	\begin{description}
-	\item[0] - unspecified (I don't know what that means)
-	\item[1] - static address, configured from parameter 3
-	\item[2] - get address from DHCP
-	\item[3] - get address from BIOS or system software
-	\item[4] - get address by some other method
-	\end{description}
-	As you probably can tell, static address and DHCP are really the
-	only useful values.\\
+        One byte field telling the BMC where to get its IP address. Bits 4-7
+        are reserved.  Values for bits 0-3 are:
+        \begin{description}
+        \item[0] - unspecified (I don't know what that means)
+        \item[1] - static address, configured from parameter 3
+        \item[2] - get address from DHCP
+        \item[3] - get address from BIOS or system software
+        \item[4] - get address by some other method
+        \end{description}
+        As you probably can tell, static address and DHCP are really the
+        only useful values.\\
 \hline
 \acs{MAC} Address & 5 &
-	A 6 byte field.  This is the Ethernet \ac{MAC} address to use as the
-	source when transmitting packets, in network order.  You must set
-	this value properly.\\
+        A 6 byte field.  This is the Ethernet \ac{MAC} address to use as the
+        source when transmitting packets, in network order.  You must set
+        this value properly.\\
 \hline
 Subnet Mask & 6 &
-	A 4 byte field holding the subnet mask for the \acs{IP} connection,
-	in network order.\\
+        A 4 byte field holding the subnet mask for the \acs{IP} connection,
+        in network order.\\
 \hline
 IPv4 Header Parms & 7 &
-	A 3 byte field controlling some parameters in the \acs{IP} header.
-	The bytes are:
-	\begin{description}
-	  \item[byte 0] - time to live (default 40h) - The number of network
-	    hops allowed for \acs{IP} packets sent by the \acs{BMC}.
-	  \item[byte 1]
-	    \begin{description}
-	      \item[bits 0-4] - reserved
-	      \item[bits 5-7] - flags.  Sets the of the flags field in the
-		IP header.  The default value is 010b, or do not fragment.
-	    \end{description}
-	  \item[byte 2]  This is the setting of the 8-bit type of service
-	    field in the \acs{IP} header. Only one of bits 1-4 should be
-	    set.
-	    \begin{description}
-	    \item[bit 0] - unused, set to zero.
-	    \item[bit 1] - minimize monetary cost
-	    \item[bit 2] - maximize reliability
-	    \item[bit 3] - maximize throughput
-	    \item[bit 4] - minimize delay
-	    \item[bits 5-7] - Precedence, which is unused by IP systems now.
-	    \end{description}
-	    The default value is 00010000b.
-	\end{description}\\
+        A 3 byte field controlling some parameters in the \acs{IP} header.
+        The bytes are:
+        \begin{description}
+          \item[byte 0] - time to live (default 40h) - The number of network
+            hops allowed for \acs{IP} packets sent by the \acs{BMC}.
+          \item[byte 1]
+            \begin{description}
+              \item[bits 0-4] - reserved
+              \item[bits 5-7] - flags.  Sets the of the flags field in the
+                IP header.  The default value is 010b, or do not fragment.
+            \end{description}
+          \item[byte 2]  This is the setting of the 8-bit type of service
+            field in the \acs{IP} header. Only one of bits 1-4 should be
+            set.
+            \begin{description}
+            \item[bit 0] - unused, set to zero.
+            \item[bit 1] - minimize monetary cost
+            \item[bit 2] - maximize reliability
+            \item[bit 3] - maximize throughput
+            \item[bit 4] - minimize delay
+            \item[bits 5-7] - Precedence, which is unused by IP systems now.
+            \end{description}
+            The default value is 00010000b.
+        \end{description}\\
 \hline
 Primary RMCP port number (optional) & 8 &
-	A 2 byte field holding the \acs{UDP} port number to use for primary
-	\acs{RMCP}.  Default value is 623.\\
+        A 2 byte field holding the \acs{UDP} port number to use for primary
+        \acs{RMCP}.  Default value is 623.\\
 \hline
 Secondary RMCP port number (optional) & 9 &
-	A 2 byte field holding the \acs{UDP} port number to use for the
-	secure aux bus \acs{RMCP} port.  IPMI does not use this, but it is
-	here for completeness.  Default value is 664.\\
+        A 2 byte field holding the \acs{UDP} port number to use for the
+        secure aux bus \acs{RMCP} port.  IPMI does not use this, but it is
+        here for completeness.  Default value is 664.\\
 \hline
 \acs{BMC}-generated \acs{ARP} control (optional) & 10 &
-	A 1 byte field controlling how the BMC generates \acs{ARP}s.  If a
-	user attempts to set
-	an unsupported field, the \acs{BMC} will return an error.  The
-	bits are:
-	\begin{description}
-	\item[bit 0] - set to 1 to enable \acs{BMC} generated gratuitous
-	  \acs{ARP}s.
-	\item[bit 1] - set to 1 to enable \acs{BMC} generated \acs{ARP}
-	  responses.
-	\item[bits 2-7] - reserved
-	\end{description}\\
+        A 1 byte field controlling how the BMC generates \acs{ARP}s.  If a
+        user attempts to set
+        an unsupported field, the \acs{BMC} will return an error.  The
+        bits are:
+        \begin{description}
+        \item[bit 0] - set to 1 to enable \acs{BMC} generated gratuitous
+          \acs{ARP}s.
+        \item[bit 1] - set to 1 to enable \acs{BMC} generated \acs{ARP}
+          responses.
+        \item[bits 2-7] - reserved
+        \end{description}\\
 \hline
 Gratuitous \acs{ARP} interval (optional) & 11 &
-	A one byte field holding the interval between gratuitous \acs{ARP}s.
-	The interval is specified in 500 millisecond increments, with a 10\%
-	accuracy.  If this is not implemented, the interval will be 2
-	seconds.\\
+        A one byte field holding the interval between gratuitous \acs{ARP}s.
+        The interval is specified in 500 millisecond increments, with a 10\%
+        accuracy.  If this is not implemented, the interval will be 2
+        seconds.\\
 \hline
 Default gateway address & 12 &
-	A 4 byte field holding the IP address of the default gateway, in
-	network order.  The BMC will send packets to this address if the
-	destination is not on its subnet, if this gateway is chosen as
-	the gateway to use.\\
+        A 4 byte field holding the IP address of the default gateway, in
+        network order.  The BMC will send packets to this address if the
+        destination is not on its subnet, if this gateway is chosen as
+        the gateway to use.\\
 \hline
 Default gateway \acs{MAC} address & 13 &
-	A 6 byte filed holding the Ethernet MAC address to use in
-	the destination when
-	sending packets to the default gateway.\\
+        A 6 byte filed holding the Ethernet MAC address to use in
+        the destination when
+        sending packets to the default gateway.\\
 \hline
 Backup gateway address & 14 &
-	A 4 byte field holding the IP address of the backup gateway, in
-	network order.  The BMC will send packets to this address if the
-	destination is not on its subnet, if this gateway is chosen as
-	the gateway to use.\\
+        A 4 byte field holding the IP address of the backup gateway, in
+        network order.  The BMC will send packets to this address if the
+        destination is not on its subnet, if this gateway is chosen as
+        the gateway to use.\\
 \hline
 Backup gateway \acs{MAC} address & 15 &
-	A 6 byte filed holding the Ethernet MAC address to use in the
-	destiination when
-	sending packets to the backup gateway.\\
+        A 6 byte filed holding the Ethernet MAC address to use in the
+        destiination when
+        sending packets to the backup gateway.\\
 \hline
 Community String & 16 &
-	An 18 byte field holding the \acs{SNMP} community string to
-	use in traps send by the BMC.  The default is ``public''.\\
+        An 18 byte field holding the \acs{SNMP} community string to
+        use in traps send by the BMC.  The default is ``public''.\\
 \hline
 Number of Destinations (read only) & 17 &
-	The number of entries in the destination type and destination address
-	tables in parameters 18 and 19.\\
+        The number of entries in the destination type and destination address
+        tables in parameters 18 and 19.\\
 \hline
 Destination type & 18 &
-	This is an array of destination types, each 4 bytes long.  The first
-	byte in bits 0-3 is the index into the array, you put the index
-	here when you set the value, and that index gets set.  This index
-	comes from the alert policy entry destination field
-	defined in table \ref{alert-policy-table-entry}.  Destination 0 is
-	special and used by the Alert Immediate command as described in
-	section \label{sec-alert-immediate}.  The fields are:
-	\begin{description}
-	\item[byte 0]
-	  \begin{description}
-	    \item[bits 0-3] - The index into the array
-	    \item[bits 4-7] - reserved
-	  \end{description}
-	\item[byte 1] The destination type.  The bits are:
-	  \begin{description}
-	  \item[bits 0-2] - Destination type, values are:
-	    \begin{description}
-	    \item[000b] - PET Trap
-	    \item[001b-101b] - reserved
-	    \item[110b] - OEM 1
-	    \item[111b] - OEM 1
-	    \end{description}
-	  \item[bits 3-6] - reserved
-	  \item[bit 7] - If zero, the alert does not need to be acknowledged
-	    to be considered successful.  If 1, the alert needs to be
-	    acknowledged with a \acs{PET} Acknowledge Command as defined
-	    in table \ref{pet-ack-cmd}.
-	  \end{description}
-	\item[byte 2] \acs{PET} Retry Time.  This specified the amount
-	  of time between resends when waiting for an acknowledge of
-	  the sent trap.
-	\item[byte 3] Max \acs{PET} Retries.
-	  \begin{description}
-	  \item[bits 0-2] - The maximum number of retries of a trap before
-	    giving up.
-	  \item[bits 3-7] - reserved
-	  \end{description}
-	\end{description}\\
+        This is an array of destination types, each 4 bytes long.  The first
+        byte in bits 0-3 is the index into the array, you put the index
+        here when you set the value, and that index gets set.  This index
+        comes from the alert policy entry destination field
+        defined in table \ref{alert-policy-table-entry}.  Destination 0 is
+        special and used by the Alert Immediate command as described in
+        section \label{sec-alert-immediate}.  The fields are:
+        \begin{description}
+        \item[byte 0]
+          \begin{description}
+            \item[bits 0-3] - The index into the array
+            \item[bits 4-7] - reserved
+          \end{description}
+        \item[byte 1] The destination type.  The bits are:
+          \begin{description}
+          \item[bits 0-2] - Destination type, values are:
+            \begin{description}
+            \item[000b] - PET Trap
+            \item[001b-101b] - reserved
+            \item[110b] - OEM 1
+            \item[111b] - OEM 1
+            \end{description}
+          \item[bits 3-6] - reserved
+          \item[bit 7] - If zero, the alert does not need to be acknowledged
+            to be considered successful.  If 1, the alert needs to be
+            acknowledged with a \acs{PET} Acknowledge Command as defined
+            in table \ref{pet-ack-cmd}.
+          \end{description}
+        \item[byte 2] \acs{PET} Retry Time.  This specified the amount
+          of time between resends when waiting for an acknowledge of
+          the sent trap.
+        \item[byte 3] Max \acs{PET} Retries.
+          \begin{description}
+          \item[bits 0-2] - The maximum number of retries of a trap before
+            giving up.
+          \item[bits 3-7] - reserved
+          \end{description}
+        \end{description}\\
 \hline
 Destination address & 19 &
-	This is an array of destination address, each 13 bytes long.  The
-	first byte in bits 0-3 is the index into the array, you put the index
-	here when you set the value, and that index gets set.  This index
-	comes from the alert policy entry destination field
-	defined in table \ref{alert-policy-table-entry}. Destination 0 is
-	special and used by the Alert Immediate command as described in
-	section \label{sec-alert-immediate}.  The fields are:
-	\begin{description}
-	\item[byte 0]
-	  \begin{description}
-	    \item[bits 0-3] - The index into the array
-	    \item[bits 4-7] - reserved
-	  \end{description}
-	\item[byte 1] The address format:
-	  \begin{description}
-	    \item[bits 0-3] - The address type, 0h is the only valid
-	      value, specifying IP.
-	    \item[bits 4-7] - reserved
-	  \end{description}
-	\item[byte 2] Gateway selector
-	  \begin{description}
-	  \item[bit 0]
-	    \begin{description}
-	    \item[0] - use the default gateway
-	    \item[0] - use the backup gateway
-	    \item[bits 1-7] - reserved
-	    \end{description}
-	  \end{description}
-	\item[bytes 3-6] The \acs{IP} address to send the alert to when using
-	  this destination, in network order.
-	\item[bytes 7-12] The Ethernet \acs{MAC} address to send the alert
-	  to when using this destination, in network order.
-	\end{description}\\
+        This is an array of destination address, each 13 bytes long.  The
+        first byte in bits 0-3 is the index into the array, you put the index
+        here when you set the value, and that index gets set.  This index
+        comes from the alert policy entry destination field
+        defined in table \ref{alert-policy-table-entry}. Destination 0 is
+        special and used by the Alert Immediate command as described in
+        section \label{sec-alert-immediate}.  The fields are:
+        \begin{description}
+        \item[byte 0]
+          \begin{description}
+            \item[bits 0-3] - The index into the array
+            \item[bits 4-7] - reserved
+          \end{description}
+        \item[byte 1] The address format:
+          \begin{description}
+            \item[bits 0-3] - The address type, 0h is the only valid
+              value, specifying IP.
+            \item[bits 4-7] - reserved
+          \end{description}
+        \item[byte 2] Gateway selector
+          \begin{description}
+          \item[bit 0]
+            \begin{description}
+            \item[0] - use the default gateway
+            \item[0] - use the backup gateway
+            \item[bits 1-7] - reserved
+            \end{description}
+          \end{description}
+        \item[bytes 3-6] The \acs{IP} address to send the alert to when using
+          this destination, in network order.
+        \item[bytes 7-12] The Ethernet \acs{MAC} address to send the alert
+          to when using this destination, in network order.
+        \end{description}\\
 \hline
 OEM & 192+ &
-	Parameters 192 to 255 are OEM parameters.  The rest of the
-	parameters are reserved.\\
+        Parameters 192 to 255 are OEM parameters.  The rest of the
+        parameters are reserved.\\
 \hline
 \end{longtable}
 
@@ -2828,12 +2828,12 @@ OpenIPMI provides.  After you have allocated a \verb=lanparm=
 structure these, the function:
 \begin{verbatim}
 typedef void (*ipmi_lan_get_config_cb)(ipmi_lanparm_t    *lanparm,
-				       int               err,
-				       ipmi_lan_config_t *config,
-				       void              *cb_data);
+                                       int               err,
+                                       ipmi_lan_config_t *config,
+                                       void              *cb_data);
 int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
-			ipmi_lan_get_config_cb done,
-			void                   *cb_data);
+                        ipmi_lan_get_config_cb done,
+                        void                   *cb_data);
 \end{verbatim}
 will fetch the full current configuration.  Note that when you call
 this, you will be holding a lock if it succeeds.  You must release the
@@ -2846,9 +2846,9 @@ making the changes, you must commit them back to the BMC.  To do this,
 call:
 \begin{verbatim}
 int ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
-			ipmi_lan_config_t    *config,
-			ipmi_lanparm_done_cb done,
-			void                 *cb_data);
+                        ipmi_lan_config_t    *config,
+                        ipmi_lanparm_done_cb done,
+                        void                 *cb_data);
 \end{verbatim}
 After this point in time, the \verb=config= cannot be used for future
 set operation, because it has been committed.  You must re-read it to
@@ -2858,9 +2858,9 @@ If you do not wish to modify the configuration, you still need to
 clear the lock.  Do that with:
 \begin{verbatim}
 int ipmi_lan_clear_lock(ipmi_lanparm_t       *lanparm,
-			ipmi_lan_config_t    *config,
-			ipmi_lanparm_done_cb done,
-			void                 *cb_data);
+                        ipmi_lan_config_t    *config,
+                        ipmi_lanparm_done_cb done,
+                        void                 *cb_data);
 \end{verbatim}
 
 Once you are done with the \verb=config= structure, you must free it with:
@@ -2871,8 +2871,8 @@ void ipmi_lan_free_config(ipmi_lan_config_t *config);
 When you are done with a \verb=lanparm= structure, you must free it with:
 \begin{verbatim}
 int ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
-			 ipmi_lanparm_done_cb handler,
-			 void                 *cb_data);
+                         ipmi_lanparm_done_cb handler,
+                         void                 *cb_data);
 \end{verbatim}
 If the \verb=lanparm= structure currently has operations pending on
 it, the destroy will be delayed until those operations are complete.
@@ -3046,14 +3046,14 @@ power cycle & 2 & (optional) Power off the system, then power it back on.\\
 reset & 3 & (mandatory) Reset the main processor in the system.\\
 \hline
 Diagnostic Interrupt & 4 & (optional) Send a system-defined diagnostic
-	interrupt to the main processor in the system.  This is generall
-	an \ac{NMI}.\\
+        interrupt to the main processor in the system.  This is generall
+        an \ac{NMI}.\\
 \hline
 Send Alert & 5 & Send an alert of some type, via an \acs{SNMP} trap,
-	a page, or a modem dialin.  Note that unlike the rest of the
-	actions, this action will still be done if a higher priority
-	action is done.  Alerts can also be prioritized via the
-	Alert Policy Table as described in section \ref{sec-pef-conf-parms}.\\
+        a page, or a modem dialin.  Note that unlike the rest of the
+        actions, this action will still be done if a higher priority
+        action is done.  Alerts can also be prioritized via the
+        Alert Policy Table as described in section \ref{sec-pef-conf-parms}.\\
 \hline
 \acs{OEM} & \acs{OEM} & (optional) Priority is defined by the \acs{OEM}.\\
 \hline
@@ -3095,21 +3095,21 @@ alert capabilities a BMC has.
 \msgtag{Response}
 \msgitem{0}{Completion Code}
 \msgitem{1}{\acs{PEF} version, encoded as:
-	\begin{description}
-	\item[bits 0-3] - Major version \#
-	\item[bits 4-7] - Minor version \#
-	\end{description}}
+        \begin{description}
+        \item[bits 0-3] - Major version \#
+        \item[bits 4-7] - Minor version \#
+        \end{description}}
 \msgitem{2}{Supported PEF actions, if the bit is one then the action is
-	supported:
-	\begin{description}
-	\item[bit 0] - alert
-	\item[bit 1] - power down
-	\item[bit 2] - reset
-	\item[bit 3] - power cycle
-	\item[bit 4] - OEM action
-	\item[bit 5] - diagnostic interrupt
-	\item[bits 6-7] - reserved
-	\end{description}}
+        supported:
+        \begin{description}
+        \item[bit 0] - alert
+        \item[bit 1] - power down
+        \item[bit 2] - reset
+        \item[bit 3] - power cycle
+        \item[bit 4] - OEM action
+        \item[bit 5] - diagnostic interrupt
+        \item[bits 6-7] - reserved
+        \end{description}}
 \msgitem{3}{Number of entries in teh event filter table}
 \msgcaption{\label{get-pef-cap-cmd}Get \acs{PEF} Capabilities Command,
   NetFN S/E (04h), Cmd 10h}
@@ -3121,16 +3121,16 @@ Table \ref{set-pef-conf-cmd} shows the command used to set the
 \begin{showmsg}
 \msgtag{Request}
 \msgitem{0}{Parameter Selector.  This selects the entry in the table that you
-	want to set.}
+        want to set.}
 \msgitem{1-n}{The data for the parameter.  You must look up the entry in
-	table \ref{pef-conf-parms} for the exact contents, it depends on
-	which entry you are setting.}
+        table \ref{pef-conf-parms} for the exact contents, it depends on
+        which entry you are setting.}
 \msgtag{Response}
 \msgitem{0}{Completion code.  Standard completion codes, plus:\\
-	80h - Parameter not supported\\
-	81h - Attempt to set the ``set in progress' value (parm 0) when
-		the parameter is not in the free (set complete) state.\\
-	82h - Attempt to write a read-only parameter.}
+        80h - Parameter not supported\\
+        81h - Attempt to set the ``set in progress' value (parm 0) when
+                the parameter is not in the free (set complete) state.\\
+        82h - Attempt to write a read-only parameter.}
 \msgcaption{\label{set-pef-conf-cmd}Set \acs{PEF} Configuration Parameters
   Command, NetFN S/E (04h), Cmd 12h}
 \end{showmsg}
@@ -3141,27 +3141,27 @@ configuration parameters in a BMC.
 \begin{showmsg}
 \msgtag{Request}
 \msgitem{0}{\begin{description}
-	\item[bits 0-6] - Parameter Selector.  This selects the entry in the
-	  table that you want to get.\\
-	\item[bit 7] - If 1, only get parameter revision
-	\end{description}}
+        \item[bits 0-6] - Parameter Selector.  This selects the entry in the
+          table that you want to get.\\
+        \item[bit 7] - If 1, only get parameter revision
+        \end{description}}
 \msgitem{1}{Set Selector.  Some parameters are in an array, this tells which
-	array element to set.  Set to zero if the parameter does not have a
-	set selector.}
+        array element to set.  Set to zero if the parameter does not have a
+        set selector.}
 \msgitem{2}{Block Selector.  Some parameters have two levels of arrays
-	(an array inside of the array).  The Set Selector is the first
-	level array specifier, this is the second level.  Set to zero
-	if the parameter does not have a block selector.}
+        (an array inside of the array).  The Set Selector is the first
+        level array specifier, this is the second level.  Set to zero
+        if the parameter does not have a block selector.}
 \msgtag{Response}
 \msgitem{0}{Completion code.  Standard codes, plus:\\
-	80h - parameter not supported}
+        80h - parameter not supported}
 \msgitem{1}{Parameter revision.  Format is:\\
-	Bits 0-3 - Oldest revision parameter is backward compatible with\\
-	Bits 4-7 - Current parameter revision}
+        Bits 0-3 - Oldest revision parameter is backward compatible with\\
+        Bits 4-7 - Current parameter revision}
 \msgitem{2-n}{Parameter data.  This will not be present if bit 7 of byte 0
-	of the response is set to 1.  The contents of this depends on the
-	particular parameter being fetched, see table \ref{pef-conf-parms}
-	for the	parameters.}
+        of the response is set to 1.  The contents of this depends on the
+        particular parameter being fetched, see table \ref{pef-conf-parms}
+        for the parameters.}
 \msgcaption{\label{get-pef-conf-cmd}Get \acs{PEF} Configuration Parameters
   Command, NetFN S/E (04h), Cmd 13h}
 \end{showmsg}
@@ -3226,240 +3226,240 @@ removal of power.
 \endhead
 \hline
 Set In Progress (volatile) & 0 &
-	Used to indicate that the parameters are being updated.
-	Bits 2-7 are reserved.  Bits 0-1 have the following values:
-	\begin{description}
-	\item[00b] - set complete.  This is the state the system comes up in.
-		This means that any user is finished updating the
-		parameters.  If rollback is implemented, setting this
-		value will cause any changes made since last setting
-		this value to ``set in progress'' to be undone.
-	\item[01b] - set in progress.  A user will set this value to inform
-		others that it is updating these parameters.  This value
-		can only be set if the current value is ``set complete''.
-	\item[10b] - commit write (optional).  This will commit any changes
-		that
-		are pending and go to ``set complete'' state.  Some systems
-		may not support this, if setting this returns an error you
-		should set this value to ``set complete'' by hand.
-	\end{description}\\
+        Used to indicate that the parameters are being updated.
+        Bits 2-7 are reserved.  Bits 0-1 have the following values:
+        \begin{description}
+        \item[00b] - set complete.  This is the state the system comes up in.
+                This means that any user is finished updating the
+                parameters.  If rollback is implemented, setting this
+                value will cause any changes made since last setting
+                this value to ``set in progress'' to be undone.
+        \item[01b] - set in progress.  A user will set this value to inform
+                others that it is updating these parameters.  This value
+                can only be set if the current value is ``set complete''.
+        \item[10b] - commit write (optional).  This will commit any changes
+                that
+                are pending and go to ``set complete'' state.  Some systems
+                may not support this, if setting this returns an error you
+                should set this value to ``set complete'' by hand.
+        \end{description}\\
 \hline
 \acs{PEF} Control & 1 &
-	One byte field global control bits for the \acs{PEF}:
-	\begin{description}
-	\item[bit 0] - Set to one to enable the PEF.
-	\item[bit 1] - Set to one to cause event messages to be sent for
-	  each action triggered by a filter.  These events are send as the
-	  System Event Sensor (12h), offset 04h, see table
-	  \ref{sensor-type-codes}.  Note that these events are subject
-	  to PEF filtering, so be careful not to cause an infinite
-	  event message send.
-	\item[bit 2] - PEF Startup Delay Enable (optional).  When set
-	  to one, this bit enables a PEF startup delay on manual
-	  startup of a chassis and on all system resets.  If this bit
-	  is supported, the spec says that the implementation must
-	  supply a way for the user to diable the PEF in case the filter
-	  entries are causing an infinite loop.  I have no idea what that
-	  means.  If this bit is not implemented, the spec says that there
-	  must always be a startup delay.  Parameter 3 of this table
-	  sets the time.
-	\item[bit 3] - PEF Alert Startup Delay Enable (optional).  When
-	  set to one, this bit enables a delay between startup time and
-	  when alerts are allowed to be sent.  Parameter 4 of this table
-	  sets the time.
-	\item[bits 4-7] - reserved
-	\end{description}\\
+        One byte field global control bits for the \acs{PEF}:
+        \begin{description}
+        \item[bit 0] - Set to one to enable the PEF.
+        \item[bit 1] - Set to one to cause event messages to be sent for
+          each action triggered by a filter.  These events are send as the
+          System Event Sensor (12h), offset 04h, see table
+          \ref{sensor-type-codes}.  Note that these events are subject
+          to PEF filtering, so be careful not to cause an infinite
+          event message send.
+        \item[bit 2] - PEF Startup Delay Enable (optional).  When set
+          to one, this bit enables a PEF startup delay on manual
+          startup of a chassis and on all system resets.  If this bit
+          is supported, the spec says that the implementation must
+          supply a way for the user to diable the PEF in case the filter
+          entries are causing an infinite loop.  I have no idea what that
+          means.  If this bit is not implemented, the spec says that there
+          must always be a startup delay.  Parameter 3 of this table
+          sets the time.
+        \item[bit 3] - PEF Alert Startup Delay Enable (optional).  When
+          set to one, this bit enables a delay between startup time and
+          when alerts are allowed to be sent.  Parameter 4 of this table
+          sets the time.
+        \item[bits 4-7] - reserved
+        \end{description}\\
 \hline
 \acs{PEF} Action Global Control & 2 &
-	A one byte field for controlling whether specific \acs{PEF} actions
-	are enabled at all.  If the bit is set to one, it is enabled.  The
-	bits are:
-	\begin{description}
-	\item[bit 0] - alert
-	\item[bit 0] - power down
-	\item[bit 0] - reset
-	\item[bit 0] - power cycle
-	\item[bit 0] - OEM
-	\item[bit 0] - diagnostic interrupt
-	\item[bits 6-7] - reserved
-	\end{description}\\
+        A one byte field for controlling whether specific \acs{PEF} actions
+        are enabled at all.  If the bit is set to one, it is enabled.  The
+        bits are:
+        \begin{description}
+        \item[bit 0] - alert
+        \item[bit 0] - power down
+        \item[bit 0] - reset
+        \item[bit 0] - power cycle
+        \item[bit 0] - OEM
+        \item[bit 0] - diagnostic interrupt
+        \item[bits 6-7] - reserved
+        \end{description}\\
 \hline
 PEF Startup Delay (optional) & 3 &
-	A one byte field giving the \acs{PEF} startup delay, in
-	seconds, 10\% accuracy.  A zero value means no delay.  This
-	goes along with bit 2 of byte 1 of parameter 1 of this table,
-	see that for more details.\\
+        A one byte field giving the \acs{PEF} startup delay, in
+        seconds, 10\% accuracy.  A zero value means no delay.  This
+        goes along with bit 2 of byte 1 of parameter 1 of this table,
+        see that for more details.\\
 \hline
 PEF Alert Startup Delay (optional) & 4 &
-	A one byte field giving the \acs{PEF} Alert startup delay, in
-	seconds, 10\% accuracy.  A zero value means no delay.  This
-	goes along with bit 3 of byte 1 of parameter 1 of this table,
-	see that for more details.\\
+        A one byte field giving the \acs{PEF} Alert startup delay, in
+        seconds, 10\% accuracy.  A zero value means no delay.  This
+        goes along with bit 3 of byte 1 of parameter 1 of this table,
+        see that for more details.\\
 \hline
 Number of Event Filters (read only) & 5 &
-	The number of array entries in the event filter table, parameter
-	6 of this table.  The bits are:
-	\begin{description}
-	\item[bits 0-6] - The number of event filter entries.  A zero
-	  here means that events filters are not supported.
-	\item[bit 7] - reserved
-	\end{description}\\
+        The number of array entries in the event filter table, parameter
+        6 of this table.  The bits are:
+        \begin{description}
+        \item[bits 0-6] - The number of event filter entries.  A zero
+          here means that events filters are not supported.
+        \item[bit 7] - reserved
+        \end{description}\\
 \hline
 Event Filter Table & 6 &
-	This is a 21 byte field giving access to the event filter table.
-	\begin{description}
-	\item[byte 0]
-	  \begin{description}
-	  \item[bits 0-6] - The set selector, the array index of which
-	    event filter to set.  00h is reserved and not used and does
-	    not count in the number of event filters.
-	  \item[bit 7] - reserved
-	  \end{description}
-	\item[bytes 1-20] - The filter data for the array element given
-	  by byte 1 of this parameter.  See table \ref{pef-table-entry}
-	  for the contents of this data.
-	\end{description}\\
+        This is a 21 byte field giving access to the event filter table.
+        \begin{description}
+        \item[byte 0]
+          \begin{description}
+          \item[bits 0-6] - The set selector, the array index of which
+            event filter to set.  00h is reserved and not used and does
+            not count in the number of event filters.
+          \item[bit 7] - reserved
+          \end{description}
+        \item[bytes 1-20] - The filter data for the array element given
+          by byte 1 of this parameter.  See table \ref{pef-table-entry}
+          for the contents of this data.
+        \end{description}\\
 \hline
 Event Filter Table Byte 1 & 7 &
-	This is a 2 byte field giving access to the first byte of an
-	event filter table entry.  This makes it convenient to set the
-	first byte without having to read-modify-write the whole entry.
-	\begin{description}
-	\item[byte 0]
-	  \begin{description}
-	  \item[bits 0-6] - The set selector, the array index of which
-	    event filter to set.  00h is reserved and not used and does
-	    not count in the number of event filters.
-	  \item[bit 7] - reserved
-	  \end{description}
-	\item[byte 1] - Byte 1 of the event filter table entry.  See
-	  table \ref{pef-table-entry} for the contents of this data.
-	\end{description}\\
+        This is a 2 byte field giving access to the first byte of an
+        event filter table entry.  This makes it convenient to set the
+        first byte without having to read-modify-write the whole entry.
+        \begin{description}
+        \item[byte 0]
+          \begin{description}
+          \item[bits 0-6] - The set selector, the array index of which
+            event filter to set.  00h is reserved and not used and does
+            not count in the number of event filters.
+          \item[bit 7] - reserved
+          \end{description}
+        \item[byte 1] - Byte 1 of the event filter table entry.  See
+          table \ref{pef-table-entry} for the contents of this data.
+        \end{description}\\
 \hline
 Number of Alert Policies (read only) & 7 &
-	The number of array entries in the alert policy table, parameter
-	9 of this table.  The bits are:
-	\begin{description}
-	\item[bits 0-6] - The number of event filter entries.  A zero
-	  here means that alert policies are not supported.
-	\item[bit 7] - reserved
-	\end{description}\\
+        The number of array entries in the alert policy table, parameter
+        9 of this table.  The bits are:
+        \begin{description}
+        \item[bits 0-6] - The number of event filter entries.  A zero
+          here means that alert policies are not supported.
+        \item[bit 7] - reserved
+        \end{description}\\
 \hline
 Alert Policy Table & 8 &
-	This is a 4 byte field giving access to the alert policy table.
-	\begin{description}
-	\item[byte 0]
-	  \begin{description}
-	  \item[bits 0-6] - The set selector, the array index of which
-	    alert policy to set.  00h is reserved and not used and does
-	    not count in the number of event filters.
-	  \item[bit 7] - reserved
-	  \end{description}
-	\item[bytes 1-3] - The filter data for the array element given
-	  by byte 1 of this parameter.  See table
-	  \ref{alert-policy-table-entry}
-	  for the contents of this data.
-	\end{description}\\
+        This is a 4 byte field giving access to the alert policy table.
+        \begin{description}
+        \item[byte 0]
+          \begin{description}
+          \item[bits 0-6] - The set selector, the array index of which
+            alert policy to set.  00h is reserved and not used and does
+            not count in the number of event filters.
+          \item[bit 7] - reserved
+          \end{description}
+        \item[bytes 1-3] - The filter data for the array element given
+          by byte 1 of this parameter.  See table
+          \ref{alert-policy-table-entry}
+          for the contents of this data.
+        \end{description}\\
 \hline
 System \acs{GUID} & 9 &
-	A 17 byte field telling how to get the system \acs{GUID} for \acs{PET}
-	traps.
-	\begin{description}
-	\item[byte 0]
-	  \begin{description}
-	  \item[bit 0] - If one, use the value in bytes 1-16 of this field
-	    as the \acs{GUID} in traps.  If not set, use the value returned
-	    from the Get System \acs{GUID} command.
-	  \item[bits 1-7] - reserved
-	  \end{description}
-	\item[bytes 1-16] - The system \acs{GUID}
-	\end{description}\\
+        A 17 byte field telling how to get the system \acs{GUID} for \acs{PET}
+        traps.
+        \begin{description}
+        \item[byte 0]
+          \begin{description}
+          \item[bit 0] - If one, use the value in bytes 1-16 of this field
+            as the \acs{GUID} in traps.  If not set, use the value returned
+            from the Get System \acs{GUID} command.
+          \item[bits 1-7] - reserved
+          \end{description}
+        \item[bytes 1-16] - The system \acs{GUID}
+        \end{description}\\
 \hline
 Number of Alert String Keys (read only) & 11 &
-	The number of array entries in the alert string keys, parameter
-	12 of this table.  The bits are:
-	\begin{description}
-	\item[bits 0-6] - The number of alert string keys.  A zero
-	  here means that alert policies are not supported.
-	\item[bit 7] - reserved
-	\end{description}\\
+        The number of array entries in the alert string keys, parameter
+        12 of this table.  The bits are:
+        \begin{description}
+        \item[bits 0-6] - The number of alert string keys.  A zero
+          here means that alert policies are not supported.
+        \item[bit 7] - reserved
+        \end{description}\\
 \hline
 Alert String Keys (some parts are volatile) & 12 &
-	Some actions require alert strings for paging an operator.  This
-	key is used in conjunction with the alert policy table (table
-	\ref{alert-policy-table-entry}) in some cases.  If bit 7 of byte
-	3 of an alert policy table entry is set to 1, then it will use
-	the alert string set field from that table and the event filter
-	number from the event being processed to search this table.
-	If it finds a match, it will use the alert string that corresponds
-	with the same index as the entry in this table.
+        Some actions require alert strings for paging an operator.  This
+        key is used in conjunction with the alert policy table (table
+        \ref{alert-policy-table-entry}) in some cases.  If bit 7 of byte
+        3 of an alert policy table entry is set to 1, then it will use
+        the alert string set field from that table and the event filter
+        number from the event being processed to search this table.
+        If it finds a match, it will use the alert string that corresponds
+        with the same index as the entry in this table.
 
-	For instance, if entry 4h of this table has a 3h in byte 1 and
-	a 7h in byte 2, if event filter 4 matches an event and the
-	alert policy used has 87h in byte 3, then the alert string
-	entry 4h of the alert strings are used.
-	\begin{description}
-	\item[byte 0]
-	  \begin{description}
-	  \item[bits 0-6] - The set selector, the array index of which
-	    alert key to set.  Entry 0h is volatile and used by the
-	    Alert Immediate command as described in section
-	    \label{sec-alert-immediate}.  Entries 1h-7h are
-	    non-volatile.  All other entries are reserved.
-	  \item[bit 7] - reserved
-	  \end{description}
-	\item[byte 1]
-	  \begin{description}
-	  \item[bits 0-6] - Event filter number to match
-	  \item[bit 7] - reserved
-	  \end{description}
-	\item[byte 2]
-	  \begin{description}
-	  \item[bits 0-6] - Alert String Set to match
-	  \item[bit 7] - reserved
-	  \end{description}
-	\end{description}\\
+        For instance, if entry 4h of this table has a 3h in byte 1 and
+        a 7h in byte 2, if event filter 4 matches an event and the
+        alert policy used has 87h in byte 3, then the alert string
+        entry 4h of the alert strings are used.
+        \begin{description}
+        \item[byte 0]
+          \begin{description}
+          \item[bits 0-6] - The set selector, the array index of which
+            alert key to set.  Entry 0h is volatile and used by the
+            Alert Immediate command as described in section
+            \label{sec-alert-immediate}.  Entries 1h-7h are
+            non-volatile.  All other entries are reserved.
+          \item[bit 7] - reserved
+          \end{description}
+        \item[byte 1]
+          \begin{description}
+          \item[bits 0-6] - Event filter number to match
+          \item[bit 7] - reserved
+          \end{description}
+        \item[byte 2]
+          \begin{description}
+          \item[bits 0-6] - Alert String Set to match
+          \item[bit 7] - reserved
+          \end{description}
+        \end{description}\\
 \hline
 Alert Strings (some parts are volatile) & 13 &
-	Some actions require alert strings for paging an operator.
-	This table holds the actual alert strings.  This table is
-	indexed by the alert policy table (table
-	\ref{alert-policy-table-entry}) either directly if bit 7 of
-	byte 3 of an alert policy table entry is set to 0, or indirectly
-	through parameter 12 of this table if that bit is one.
+        Some actions require alert strings for paging an operator.
+        This table holds the actual alert strings.  This table is
+        indexed by the alert policy table (table
+        \ref{alert-policy-table-entry}) either directly if bit 7 of
+        byte 3 of an alert policy table entry is set to 0, or indirectly
+        through parameter 12 of this table if that bit is one.
 
-	The meanings of the values in this table are dependend on the
-	alert type and channel.
+        The meanings of the values in this table are dependend on the
+        alert type and channel.
 
-	For dial paging, this string will have a carraige return
-	automatically appended to the string.
+        For dial paging, this string will have a carraige return
+        automatically appended to the string.
 
-	For TAP paging, this string corresonds to 'Field 2', the pager
-	message.  Note that TAP only supports 7-bit ASCII and the
-	\acs{BMC} will zero the high bit when doing TAP paging.
+        For TAP paging, this string corresonds to 'Field 2', the pager
+        message.  Note that TAP only supports 7-bit ASCII and the
+        \acs{BMC} will zero the high bit when doing TAP paging.
 
-	\begin{description}
-	\item[byte 0]
-	  \begin{description}
-	  \item[bits 0-6] - The set selector, the array index of which
-	    alert string to set.  Entry 0h is volatile and used by the
-	    Alert Immediate command as described in section
-	    \label{sec-alert-immediate}.  Entries 1h-7h are
-	    non-volatile.  All other entries are reserved.
-	  \item[bit 7] - reserved
-	  \end{description}
-	\item[byte 1] - Block selector.  The strings may be much larger than
-	  can be set in a single message.  This selects which block to
-	  write, in 16-byte increments.  So, a 0 here is the first 16 bytes,
-	  a 1 is the second 16 bytes, and so on.
-	\item[byte 2-n] - The bytes to write into the specific block
-	  If this is less than 16 bytes, then only the given number of
-	  bytes are written.
-	\end{description}\\
+        \begin{description}
+        \item[byte 0]
+          \begin{description}
+          \item[bits 0-6] - The set selector, the array index of which
+            alert string to set.  Entry 0h is volatile and used by the
+            Alert Immediate command as described in section
+            \label{sec-alert-immediate}.  Entries 1h-7h are
+            non-volatile.  All other entries are reserved.
+          \item[bit 7] - reserved
+          \end{description}
+        \item[byte 1] - Block selector.  The strings may be much larger than
+          can be set in a single message.  This selects which block to
+          write, in 16-byte increments.  So, a 0 here is the first 16 bytes,
+          a 1 is the second 16 bytes, and so on.
+        \item[byte 2-n] - The bytes to write into the specific block
+          If this is less than 16 bytes, then only the given number of
+          bytes are written.
+        \end{description}\\
 \hline
 OEM Parmeters & 96+ &
-	Parameters 96-127 are allowed for OEM use.  All other parameters
-	are reserved.\\
+        Parameters 96-127 are allowed for OEM use.  All other parameters
+        are reserved.\\
 \hline
 \end{longtable}
 
@@ -3480,131 +3480,131 @@ the different alerts.
 \endhead
 \hline
 0 & Filter Configuration &
-	Bits that control the operation of this filter:
-	\begin{description}
-	\item{bits 0-4} - reserved
-	\item{bits 5-6} - filter type
-	  \begin{description}
-	  \item[00b] - Software configurable filter.  A manging system may
-	    configure all parts of this filter.
-	  \item[01b] - reserved
-	  \item[10b] - pre-configured filters.  A managing system should
-	    not modify the contents of this filter, although it may turn
-	    on and off the filter using bit 7 of this field.
-	  \item[11b] - reserved
-	  \end{description}
-	\end{description}\\
+        Bits that control the operation of this filter:
+        \begin{description}
+        \item{bits 0-4} - reserved
+        \item{bits 5-6} - filter type
+          \begin{description}
+          \item[00b] - Software configurable filter.  A manging system may
+            configure all parts of this filter.
+          \item[01b] - reserved
+          \item[10b] - pre-configured filters.  A managing system should
+            not modify the contents of this filter, although it may turn
+            on and off the filter using bit 7 of this field.
+          \item[11b] - reserved
+          \end{description}
+        \end{description}\\
 \hline
 1 & Event filter action &
-	These bits set what action this filter will do if it matches.
-	These bits are enable if set to one.
-	\begin{description}
-	\item[bit 0] - alert
-	\item[bit 1] - power off
-	\item[bit 2] - reset
-	\item[bit 3] - power cycle
-	\item[bit 4] - OEM action
-	\item[bit 5] - diagnostic interrupt
-	\item[bits 6-7] - reserved
-	\end{description}\\
+        These bits set what action this filter will do if it matches.
+        These bits are enable if set to one.
+        \begin{description}
+        \item[bit 0] - alert
+        \item[bit 1] - power off
+        \item[bit 2] - reset
+        \item[bit 3] - power cycle
+        \item[bit 4] - OEM action
+        \item[bit 5] - diagnostic interrupt
+        \item[bits 6-7] - reserved
+        \end{description}\\
 \hline
 2 & Alert Policy Number &
-	\begin{description}
-	\item[bits 0-3] - If alert is selected in byte 1, this chooses the
-	  policy number to use in the alert policy table.
-	\item[bits 4-7] - reserved
-	\end{description}\\
+        \begin{description}
+        \item[bits 0-3] - If alert is selected in byte 1, this chooses the
+          policy number to use in the alert policy table.
+        \item[bits 4-7] - reserved
+        \end{description}\\
 \hline
 3 & Event Severity &
-	This is the value that will be put into the event severity field
-	of the \ac{PET} trap.  If more than one event filter matches, the
-	highest priority in all event filters will be used.  Valid values
-	are:
-	\begin{description}
-	\item[00h] - unspecified
-	\item[01h] - monitor
-	\item[02h] - information
-	\item[04h] - OK (returned to OK condition)
-	\item[08h] - non-critical condition
-	\item[10h] - critical condition
-	\item[20h] - non-recoverable condition
-	\end{description}\\
+        This is the value that will be put into the event severity field
+        of the \ac{PET} trap.  If more than one event filter matches, the
+        highest priority in all event filters will be used.  Valid values
+        are:
+        \begin{description}
+        \item[00h] - unspecified
+        \item[01h] - monitor
+        \item[02h] - information
+        \item[04h] - OK (returned to OK condition)
+        \item[08h] - non-critical condition
+        \item[10h] - critical condition
+        \item[20h] - non-recoverable condition
+        \end{description}\\
 \hline
 4 & Generator ID byte 1 &
-	This matches the slave address or software id in the event.
-	It must be an exact match.  Use FFh to ignore this field when
-	comparing events.\\
+        This matches the slave address or software id in the event.
+        It must be an exact match.  Use FFh to ignore this field when
+        comparing events.\\
 \hline
 5 & Generator ID byte 2 &
-	This matches the channel and LUN in the event.  It must be an
-	exact match.  Use FFh to ignore this field when comparing events.\\
+        This matches the channel and LUN in the event.  It must be an
+        exact match.  Use FFh to ignore this field when comparing events.\\
 \hline
 6 & Sensor type &
-	This matches the sensor type field in the event.  It must be an
-	exact match.  Use FFh to ignore this field when comparing events.\\
+        This matches the sensor type field in the event.  It must be an
+        exact match.  Use FFh to ignore this field when comparing events.\\
 \hline
 7 & Sensor Number &
-	This matches the sensor number field in the event.  It must be an
-	exact match.  Use FFh to ignore this field when comparing events.\\
+        This matches the sensor number field in the event.  It must be an
+        exact match.  Use FFh to ignore this field when comparing events.\\
 \hline
 8 & Event Trigger &
-	This matches the event direction and event type byte (byte 13)
-	in the event.  It must be an
-	exact match.  Use FFh to ignore this field when comparing events.\\
+        This matches the event direction and event type byte (byte 13)
+        in the event.  It must be an
+        exact match.  Use FFh to ignore this field when comparing events.\\
 \hline
 9-10 & Event data 1 low nibble values &
-	This field is a bitmask specifying which values in the low 4 bits
-	of the event data 1 field will match.  If a bit is set, then the
-	corresponding value will match for this filter.  For instance, if
-	bits 2 and 7 are set, then a value of 2 or 7 in the low nibble
-	of event data 1 will cause a filter match (if everything else
-	matches too, of course).
-	\begin{description}
-	\item[byte 9] - bit positions 0-7
-	\item[byte 10] - bit positions 8-15
-	\end{description}\\
+        This field is a bitmask specifying which values in the low 4 bits
+        of the event data 1 field will match.  If a bit is set, then the
+        corresponding value will match for this filter.  For instance, if
+        bits 2 and 7 are set, then a value of 2 or 7 in the low nibble
+        of event data 1 will cause a filter match (if everything else
+        matches too, of course).
+        \begin{description}
+        \item[byte 9] - bit positions 0-7
+        \item[byte 10] - bit positions 8-15
+        \end{description}\\
 \hline
 11 & Event data 1 AND mask &
-	This bit indicates which bits in event data 1 are used for
-	comparison.  If a bit in the mask is zero, then the bit is not
-	used for comparison.  if a bit is one, then the corresponding
-	bit in event data 1 is used for comparison using
-	the next two bytes of the table.\\
+        This bit indicates which bits in event data 1 are used for
+        comparison.  If a bit in the mask is zero, then the bit is not
+        used for comparison.  if a bit is one, then the corresponding
+        bit in event data 1 is used for comparison using
+        the next two bytes of the table.\\
 \hline
 12 & Event data 1 compare 1 &
-	This byte tells how the bits in event data 1 are compared.  For
-	every bit set to one in this byte and one in the AND mask, the
-	corresponding bit in event data 1 must exactly match the data
-	in the compare 2 field.  For all bits set to zero in this byte
-	and one in the AND mask, if any of those bits must be set to the
-	same value as the bit in the compare 2 field, it is considered
-	a match for that byte.
+        This byte tells how the bits in event data 1 are compared.  For
+        every bit set to one in this byte and one in the AND mask, the
+        corresponding bit in event data 1 must exactly match the data
+        in the compare 2 field.  For all bits set to zero in this byte
+        and one in the AND mask, if any of those bits must be set to the
+        same value as the bit in the compare 2 field, it is considered
+        a match for that byte.
 
-	For instance, if the AND mask is 00001111b, the compare 1 field
-	is 00001100b, and the compare 2 field is 00001010b, then the
-	event data 1 byte matches this comparison if:
-	\begin{verbatim}
-	  ((bit0 == 0) || (bit1 == 1))
-	  && (bit2 == 0) && (bit3 == 1)
-	\end{verbatim}
-	Because there are zeroes in bits 4-7, those are not used in the
-	mask.  Exact matches are required in bits 2 and 3 to compare 2,
-	and one of bits 0 and 1 must be set the same as compare 2.
+        For instance, if the AND mask is 00001111b, the compare 1 field
+        is 00001100b, and the compare 2 field is 00001010b, then the
+        event data 1 byte matches this comparison if:
+        \begin{verbatim}
+          ((bit0 == 0) || (bit1 == 1))
+          && (bit2 == 0) && (bit3 == 1)
+        \end{verbatim}
+        Because there are zeroes in bits 4-7, those are not used in the
+        mask.  Exact matches are required in bits 2 and 3 to compare 2,
+        and one of bits 0 and 1 must be set the same as compare 2.
 
-	Setting bytes 11-13 to all zero will cause event data 1 to be
-	ignored for comparison (it will always match).\\
+        Setting bytes 11-13 to all zero will cause event data 1 to be
+        ignored for comparison (it will always match).\\
 \hline
 13 & Event data 1 compare 2 &
-	This byte is used to compare the values of event data 1.  See
-	byte 12 for more details on how this works.\\
+        This byte is used to compare the values of event data 1.  See
+        byte 12 for more details on how this works.\\
 \hline
 14-16 & Event data 2 fields &
-	These bytes work the same a bytes 11-13, but apply to event data
-	2.  See those fields for details.\\
+        These bytes work the same a bytes 11-13, but apply to event data
+        2.  See those fields for details.\\
 \hline
 17-19 & Event data 3 fields &
-	These bytes work the same a bytes 11-13, but apply to event data
-	3.  See those fields for details.\\
+        These bytes work the same a bytes 11-13, but apply to event data
+        3.  See those fields for details.\\
 \hline
 \end{longtable}
 
@@ -3622,62 +3622,62 @@ policy, the \acs{BMC} may go to the next alert policy or stop.
 \endhead
 \hline
 0 & Policy Number and Policy &
-	\begin{description}
-	\item[bits 0-2] - The policy.  Valid values are:
-	  \begin{description}
-	  \item[0h] - Alway do this alert if chosen, even if other
-	    alert policy tables tell the \acs{BMC} to stop.
-	  \item[1h] - If an alert to a previous destination was successful,
-	    do not do this alert.  If no alert has been successful so far,
-	    do this alert.  Then go to the next entry in the policy table.
-	  \item[2h] - If an alert to a previous destination was successful,
-	    do not do this alert.  If no alert has been successful so far,
-	    do this alert.  Then stop processing the policy table (except
-	    for entries with a 0h policy).
-	  \item[3h] - If an alert to a previous destination was successful,
-	    do not do this alert.  If no alert has been successful so far,
-	    do this alert.  Then proceed to the next policy entry that
-	    has a different channel.
-	  \item[4h] - If an alert to a previous destination was successful,
-	    do not do this alert.  If no alert has been successful so far,
-	    do this alert.  Then proceed to the next policy entry that
-	    has a different destination type.
-	  \end{description}
-	\item[bit 3] - Entry enable.  If set to one, the entry is enabled,
-	  if set to zero it is ignored.
-	\item[bits 4-7] - The policy number, the array index of which
-	  policy table entry to set.
-	\end{description}\\
+        \begin{description}
+        \item[bits 0-2] - The policy.  Valid values are:
+          \begin{description}
+          \item[0h] - Alway do this alert if chosen, even if other
+            alert policy tables tell the \acs{BMC} to stop.
+          \item[1h] - If an alert to a previous destination was successful,
+            do not do this alert.  If no alert has been successful so far,
+            do this alert.  Then go to the next entry in the policy table.
+          \item[2h] - If an alert to a previous destination was successful,
+            do not do this alert.  If no alert has been successful so far,
+            do this alert.  Then stop processing the policy table (except
+            for entries with a 0h policy).
+          \item[3h] - If an alert to a previous destination was successful,
+            do not do this alert.  If no alert has been successful so far,
+            do this alert.  Then proceed to the next policy entry that
+            has a different channel.
+          \item[4h] - If an alert to a previous destination was successful,
+            do not do this alert.  If no alert has been successful so far,
+            do this alert.  Then proceed to the next policy entry that
+            has a different destination type.
+          \end{description}
+        \item[bit 3] - Entry enable.  If set to one, the entry is enabled,
+          if set to zero it is ignored.
+        \item[bits 4-7] - The policy number, the array index of which
+          policy table entry to set.
+        \end{description}\\
 \hline
 1 & Channel / Destination &
-	\begin{description}
-	\item[bits 0-3] - The destination selector.  For the chosen
-	  channel, this is the specific destination in the channel
-	  to use to send the alert.  See the \acs{LAN} Configuration Table
-	  (table \ref{lan-conf-parms}) or the Serial Configuration Table
-	  (table \ref{serial-conf-parms}) for information on what the
-	  destination selectors can do.
-	\item[bits 4-7] - The channel.  This tells the BMC which channel
-	  to send the alert over.
-	\end{description}\\
+        \begin{description}
+        \item[bits 0-3] - The destination selector.  For the chosen
+          channel, this is the specific destination in the channel
+          to use to send the alert.  See the \acs{LAN} Configuration Table
+          (table \ref{lan-conf-parms}) or the Serial Configuration Table
+          (table \ref{serial-conf-parms}) for information on what the
+          destination selectors can do.
+        \item[bits 4-7] - The channel.  This tells the BMC which channel
+          to send the alert over.
+        \end{description}\\
 \hline
 2 & Alert String Info &
-	Some types of alerts need a string associated with them, this
-	chooses the string.  The specific strings are stored in the \ac{PEF}
-	configuration parameters 12 and 13 in table \ref{pef-conf-parms}.
+        Some types of alerts need a string associated with them, this
+        chooses the string.  The specific strings are stored in the \ac{PEF}
+        configuration parameters 12 and 13 in table \ref{pef-conf-parms}.
 
-	If bit 7 of this byte is one, then the string is dependent on
-	the event filter number that was matched for this alert policy.
-	Bits 0-6 of this byte are the alert string set.
-	The event filter number and the alert string set are looked up in
-	the table in parameter 12 of the \ac{PEF} configuration to choose the
-	alert string to use.  See that parameter for more details on how
-	this works.
+        If bit 7 of this byte is one, then the string is dependent on
+        the event filter number that was matched for this alert policy.
+        Bits 0-6 of this byte are the alert string set.
+        The event filter number and the alert string set are looked up in
+        the table in parameter 12 of the \ac{PEF} configuration to choose the
+        alert string to use.  See that parameter for more details on how
+        this works.
 
-	if bit 7 of this byte is zero, then the bits 0-6 of this field
-	are the alert string selector.  The alert string selector is
-	used as a direct index into the alert string table in parameter
-	13 of the \ac{PEF} configuration.\\
+        if bit 7 of this byte is zero, then the bits 0-6 of this field
+        are the alert string selector.  The alert string selector is
+        used as a direct index into the alert string table in parameter
+        13 of the \ac{PEF} configuration.\\
 \hline
 \end{longtable}
 
@@ -3707,17 +3707,17 @@ things.  The function call is:
 
 \begin{verbatim}
 int ipmi_pet_create(ipmi_domain_t    *domain,
-		    unsigned int     connection,
-		    unsigned int     channel,
-		    struct in_addr   ip_addr,
-		    unsigned char    mac_addr[6],
-		    unsigned int     eft_sel,
-		    unsigned int     policy_num,
-		    unsigned int     apt_sel,
-		    unsigned int     lan_dest_sel,
-		    ipmi_pet_done_cb done,
-		    void             *cb_data,
-		    ipmi_pet_t       **pet);
+                    unsigned int     connection,
+                    unsigned int     channel,
+                    struct in_addr   ip_addr,
+                    unsigned char    mac_addr[6],
+                    unsigned int     eft_sel,
+                    unsigned int     policy_num,
+                    unsigned int     apt_sel,
+                    unsigned int     lan_dest_sel,
+                    ipmi_pet_done_cb done,
+                    void             *cb_data,
+                    ipmi_pet_t       **pet);
 \end{verbatim}
 
 \begin{description}
@@ -3754,8 +3754,8 @@ use the following:
 
 \begin{verbatim}
 int ipmi_pet_destroy(ipmi_pet_t       *pet,
-		     ipmi_pet_done_cb done,
-		     void             *cb_data);
+                     ipmi_pet_done_cb done,
+                     void             *cb_data);
 \end{verbatim}
 
 \subsubsection{Handling Incoming Traps}
@@ -3772,11 +3772,11 @@ Once you have a trap, you must call:
 
 \begin{verbatim}
 int ipmi_handle_snmp_trap_data(void            *src_addr,
-			       unsigned int    src_addr_len,
-			       int             src_addr_type,
-			       long            specific,
-			       unsigned char   *data,
-			       unsigned int    data_len);
+                               unsigned int    src_addr_len,
+                               int             src_addr_type,
+                               long            specific,
+                               unsigned char   *data,
+                               unsigned int    data_len);
 \end{verbatim}
 
 Where \verb=src_addr= is the \acs{IP} source address
@@ -3813,9 +3813,9 @@ The main OpenIPMI address structure is:
 \begin{verbatim}
 struct ipmi_addr
 {
-	int   addr_type;
-	short channel;
-	char  data[IPMI_MAX_ADDR_SIZE];
+        int   addr_type;
+        short channel;
+        char  data[IPMI_MAX_ADDR_SIZE];
 };
 \end{verbatim}
 
@@ -3828,12 +3828,12 @@ A system interface address is used to route the message to the local
 management controller.  It is:
 
 \begin{verbatim}
-#define IPMI_SYSTEM_INTERFACE_ADDR_TYPE	...
+#define IPMI_SYSTEM_INTERFACE_ADDR_TYPE ...
 struct ipmi_system_interface_addr
 {
-	int           addr_type;
-	short         channel;
-	unsigned char lun;
+        int           addr_type;
+        short         channel;
+        unsigned char lun;
 };
 \end{verbatim}
 
@@ -3843,14 +3843,14 @@ generally be zero.
 An \acs{IPMI} address routes messages on the \ac{IPMB}.  The format is:
 
 \begin{verbatim}
-#define IPMI_IPMB_ADDR_TYPE		...
-#define IPMI_IPMB_BROADCAST_ADDR_TYPE	...
+#define IPMI_IPMB_ADDR_TYPE             ...
+#define IPMI_IPMB_BROADCAST_ADDR_TYPE   ...
 struct ipmi_ipmb_addr
 {
-	int           addr_type;
-	short         channel;
-	unsigned char slave_addr;
-	unsigned char lun;
+        int           addr_type;
+        short         channel;
+        unsigned char slave_addr;
+        unsigned char lun;
 };
 \end{verbatim}
 
@@ -3868,13 +3868,13 @@ A \acs{LAN} to system interface address is:
 #define IPMI_LAN_ADDR_TYPE ...
 struct ipmi_lan_addr
 {
-	int           addr_type;
-	short         channel;
-	unsigned char privilege;
-	unsigned char session_handle;
-	unsigned char remote_SWID;
-	unsigned char local_SWID;
-	unsigned char lun;
+        int           addr_type;
+        short         channel;
+        unsigned char privilege;
+        unsigned char session_handle;
+        unsigned char remote_SWID;
+        unsigned char local_SWID;
+        unsigned char lun;
 };
 \end{verbatim}
 
@@ -3883,6 +3883,198 @@ SWIDs used are the requester SWID and responder SWID.  For this
 message, the remote SWID is other end and the local SWID is this end.
 This way, there is no confusion when sending and receiving messages,
 and no special handling of the SWIDs needs to be done.
+
+%---------------------------------------------------------------------
+\chapter{The \acs{MC}}
+\label{ipmi-mc}
+
+The \ac{MC} is the ``intelligent'' device in an OpenIPMI system.  It
+is a processor that is always on and handles management operations in
+the system.  It is the thing that receives commands, processes them,
+and returns the results.
+
+An \ac{IPMI} system will have at least one \ac{MC}, the \ac{BMC}.  The
+\ac{BMC} is the ``main'' management controller; it handles most of the
+interfaces into the system.
+
+\section{OpenIPMI and MCs}
+
+\emph{Note: This section deals with OpenIPMI internals.  The user does
+not generally need to know about management controllers, as they are
+internal to the operation of OpenIPMI.  However, they are discussed
+because users writing plugins or fixup code will need to know about
+them.  Plus, these interfaces are subject to change.}
+
+\subsection{Discovering \acs{MC}s}
+
+In OpenIPMI, the \ac{MC} devices in a system are part of the domain.
+When the user creates the domain, OpenIPMI will start scanning for
+\acs{MC}s in the system.  The user can discover the \acs{MC}s in a
+domain in two ways: iterating or registering callbacks.
+
+Iterating the \acs{MC}s in a domain simply involves calling the
+iterator function with a callback function:
+
+\begin{verbatim}
+static void
+handle_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+{
+  my_data_t *my_data = cb_data;
+  /* Process the MC here */
+}
+
+void
+iterate_mcs(ipmi_domain_t *domain, my_data_t *my_data)
+{
+  int rv;
+  rv = ipmi_domain_iterate_mcs(domain, handle_mc, my_data);
+  if (rv)
+    handle_error();
+}
+\end{verbatim}
+
+This is relatively simple to do, but you will not be able to know
+immediately when new \acs{MC}s are added to the system.  To know that,
+you must register a callback function as follows:
+
+\begin{verbatim}
+static void
+handle_mc(enum ipmi_update_e op,
+          ipmi_domain_t *domain,
+          ipmi_mc_t *mc,
+          void *cb_data)
+{
+  my_data_t *my_data = cb_data;
+  /* Process the MC here */
+}
+
+void
+handle_new_domain(ipmi_domain_t *domain, my_data_t *my_data)
+{
+  int rv;
+  rv = ipmi_domain_add_mc_updated_handler(domain, handle_mc, my_data);
+  if (rv)
+    handle_error();
+}
+\end{verbatim}
+
+You should call the function to add an MC updated handler when the
+domain is reported up (or even before); the way you will be able to
+catch all the \acs{MC}s this way.
+
+\subsection{\acs{MC} Active}
+
+An \ac{MC} may be referenced by another part of they system, but may
+not be present.  For instance, it may be on a plug-in card.  An
+\ac{MC} that is not present is called ``inactive'', an \ac{MC} that is
+present is called ``active''.  OpenIPMI automatically detects whether
+\ac{MC}s are active or inactive.
+
+The \verb=ipmi_mc_is_active= function is used to tell if an \ac{MC} is
+active.  As wall, callback handlers can be registered with
+\verb=ipmi_mc_add_active_handler= to know immediately when an \ac{MC}
+is set active or inactive.
+
+\subsection{\acs{MC} Information}
+
+OpenIPMI will extract information about the MC from the Get Device ID
+command; you can fetch this with functions.  The functions are almost
+all of the form:
+
+\begin{verbatim}
+int ipmi_mc_xxx(ipmi_mc_t *mc)
+\end{verbatim}
+
+The fields available (replace ``xxx'' with these in the previous
+definition) are:
+
+\begin{longtable}{|l|p{0.65\textwidth}|}
+\hline
+provides\_device\_sdrs & Returns true if the \ac{MC} has device \ac{SDR}s,
+        false if not.\\
+\hline
+device\_available & Return false if the \ac{MC} is operating normally, or true
+        if the \ac{MC} is updating its firmware.\\
+\hline
+chassis\_support & Returns true if the \ac{MC} supports the chassis commands,
+        false if not.\\
+\hline
+bridge\_support & Returns true if the \ac{MC} support bridge commands
+        (generally for ICMB), false if not.\\
+\hline
+ipmb\_event\_generator\_support & Return true if the \ac{MC} will generate
+        events
+        on the \ac{IPMB}.  Note that if this is false, it can still generate
+        events and store them on a local \ac{SEL}, like on a \ac{BMC}.\\
+\hline
+ipmb\_event\_receiver\_support & Returns true if the \ac{MC} can receive
+        events from other \acs{MC}s on the \ac{IPMB}.\\
+\hline
+fru\_inventory\_support & If true, the \ac{MC} support \ac{FRU} inventory
+        commands.\\
+\hline
+sel\_device\_support & If true, the \ac{MC} has an event log on it.\\
+\hline
+sdr\_repository\_support & If true, the \ac{MC} supports a writable \ac{SDR}
+        repository.  This is \emph{not} a device \ac{SDR} repository.\\
+\hline
+sensor\_device\_support & If true, this \ac{MC} supports sensor commands.\\
+\hline
+device\_id & The device id of the \ac{MC}.  This helps identify the
+        capabilities of the \ac{MC}; it is used along with the product
+        and manufacturer IDs to know the exact capabilities of the device.
+        It's use is \acs{OEM}-specific, though.\\
+\hline
+device\_revision & The hardware revision for the \ac{MC} and associated
+        hardware.  It's use is \acs{OEM}-specific, though.\\
+\hline
+major\_fw\_revision & The major revision of the firmware running on the
+        \ac{MC}.\\
+\hline
+minor\_fw\_revision & The minor revision of the firmware running on the
+        \ac{MC}.\\
+\hline
+major\_version & The major version of the \ac{IPMI} specification version
+        supported by the \ac{MC}.\\
+\hline
+minor\_version & The minor version of the \ac{IPMI} specification version
+        supported by the \ac{MC}.\\
+\hline
+manufacturer\_id & A 24-bit number assigned by the IANA for the manufacturer
+        of the MC hardware.\\
+\hline
+product\_id & A 16-bit number assigned by the manufacturer to identify
+        the specific MC hardware.\\
+\hline
+\end{longtable}
+
+In addition, the following function:
+
+\begin{verbatim}
+void ipmi_mc_aux_fw_revision(ipmi_mc_t *mc, unsigned char val[]);
+\end{verbatim}
+
+returns the optional 4-byte auxiliary firmware revision information
+field.  The meaning of this field is vendor-specific and the field may
+not be present (in which case all zeros is returned).
+
+\subsection{\acs{MC} Reset}
+
+OpenIPMI has a function to reset an MC.  It is:
+
+\begin{verbatim}
+#define IPMI_MC_RESET_COLD ...
+#define IPMI_MC_RESET_WARM ...
+int ipmi_mc_reset(ipmi_mc_t       *mc,
+                  int             reset_type,
+                  ipmi_mc_done_cb done,
+                  void            *cb_data);
+\end{verbatim}
+
+Note that this resets the \ac{MC}, not the main processor on the board
+the \ac{MC} is located on.  There are two types of reset, cold and
+warm. Not all systems support resetting the MC and the effects of the
+reset are system-dependent.
 
 %---------------------------------------------------------------------
 \chapter{\acs{IPMI} Commands}
@@ -3914,43 +4106,43 @@ have even \ac{NetFN}s, and all responses have odd \ac{NetFN}s.
 00h, 01h & Chassis & Common chassis control and status functions.\\
 \hline
 02h, 03h & Bridge & Messaging for bridging to another bus, generally
-	ICMB.\\
+        ICMB.\\
 \hline
 04h, 05h & Sensor/Event & Handling of sensors and events.\\
 \hline
 06h, 07h & Application & General control and status of a connection
-	and basic operations.  This is the ``catch all'' where things
-	that don't really fit elsewhere fall, too.\\
+        and basic operations.  This is the ``catch all'' where things
+        that don't really fit elsewhere fall, too.\\
 \hline
 08h, 09h & Firmware & Used for formware checking and upgrade, generally.
-	The messaging for this is completely proprietary and not defined
-	by the spec.\\
+        The messaging for this is completely proprietary and not defined
+        by the spec.\\
 \hline
 0Ah, 0Bh & Storage & Non-volatile storage handling, the \ac{SDR}s and
-	\ac{SEL}.\\
+        \ac{SEL}.\\
 \hline
 0Ch, 0Dh & Tranport & Configuration of the \acs{LAN} and serial interfaces.\\
 \hline
 0Eh-2Bh & Reserved & \\
 \hline
 2Ch, 2Dh & Group Extensions & A way for external groups to define their
-	own extensions without conflicting.  The first byte of the
-	command and second byte of the response are a field that
-	identifies the entity defining the messages; these bytes are, in
-	effect, an extension of the \ac{NetFN}.  The external groups
-	are free to define the message outside those bounds.  Current
-	defined external groups are:
-	\begin{description}
-	\item[00h] CompactPCI
-	\item[01h] DMTF Pre-OS Working Group ASF Specification
-	\end{description}
-	All other values are reserved.\\
+        own extensions without conflicting.  The first byte of the
+        command and second byte of the response are a field that
+        identifies the entity defining the messages; these bytes are, in
+        effect, an extension of the \ac{NetFN}.  The external groups
+        are free to define the message outside those bounds.  Current
+        defined external groups are:
+        \begin{description}
+        \item[00h] CompactPCI
+        \item[01h] DMTF Pre-OS Working Group ASF Specification
+        \end{description}
+        All other values are reserved.\\
 \hline
 2Eh, 2Fh & OEM/Group & Basically more group extensions, except that the
-	first three bytes (bytes 0-2) of commands and second three bytes
-	(bytes 1-3) of responses are the IANA enterprise number.  The
-	owner of the IANA enterprise number is free to define these
-	values any way they like.\\
+        first three bytes (bytes 0-2) of commands and second three bytes
+        (bytes 1-3) of responses are the IANA enterprise number.  The
+        owner of the IANA enterprise number is free to define these
+        values any way they like.\\
 \hline
 30h-3Fh & OEM & OEMs are free to use these messages any way they like.\\
 \hline
@@ -3972,104 +4164,104 @@ error codes in IPMI.
 00h & & No error, command completed normally\\
 \hline
 01h-7Eh & & OEM error codes.  Implementors may use these error codes for
-	their own commands if a standard error code does not apply.\\
+        their own commands if a standard error code does not apply.\\
 \hline
 7Fh & & reserved\\
 \hline
 80h-BEh & & Command-specific error codes.  Some commands have specific
-	errors they return that only apply to that command.  These
-	are defined by the command.\\
+        errors they return that only apply to that command.  These
+        are defined by the command.\\
 \hline
 BFh & & reserved\\
 \hline
 C0h & Node Busy & The command could not complete because command processing
-	resources on the \ac{MC} are temporarily unavailable.\\
+        resources on the \ac{MC} are temporarily unavailable.\\
 \hline
 C1h & Invalid Command & The \ac{MC} did not support the given \ac{NetFN}
-	and command.\\
+        and command.\\
 \hline
 C2h & Invalid Command for \acs{LUN} & The given command was not supported
-	on the \ac{LUN} it was sent to.\\
+        on the \ac{LUN} it was sent to.\\
 \hline
 C3h & Timeout & A timeout occurred while processing the command.\\
 \hline
 C4h & Out of Space & There was not enough storage space to perform the
-	given command.\\
+        given command.\\
 \hline
 C5h & Reservation Invalid & This is for commands that require reservations
-	(like \ac{SEL} and \ac{SDR} commands).  This means the reservation
-	number given was invalid or the reservation was lost.\\
+        (like \ac{SEL} and \ac{SDR} commands).  This means the reservation
+        number given was invalid or the reservation was lost.\\
 \hline
 C6h & Data Truncated & The request data was truncated (it is unknown what
-	this means).\\
+        this means).\\
 \hline
 C7h & Command Length Invalid & The received command was the wrong length
-	for the command.\\
+        for the command.\\
 \hline
 C8h & Command Field Too Long & A field in a command was too long for the
-	given command.\\
+        given command.\\
 \hline
 C9h & Parameter Out of Range & One or more fields in a command were outside the
-	range of allowed values.  According to the spec, ``This is different
-	from the 'Invalid data field' (CCh) code in that it indicates that
-	the erroneous field(s) has a contiguous range of possible values.''
-	The meaning of that enigmatic statement is unknown.\\
+        range of allowed values.  According to the spec, ``This is different
+        from the 'Invalid data field' (CCh) code in that it indicates that
+        the erroneous field(s) has a contiguous range of possible values.''
+        The meaning of that enigmatic statement is unknown.\\
 \hline
 CAh & Too Many Requested Bytes & A request was made for some data, but the
-	requested number of bytes was either beyond the end of the data or
-	too long to fit into the return response.\\
+        requested number of bytes was either beyond the end of the data or
+        too long to fit into the return response.\\
 \hline
 CBh & Invalid Object & The requested sensor, record, or data was not present.
-	The command is supported, but the specific object asked for does
-	not exist.\\
+        The command is supported, but the specific object asked for does
+        not exist.\\
 \hline
 CCh & Invalid Data Field & An invalid data field was in the request.  See
-	error C9h for more details.\\
+        error C9h for more details.\\
 \hline
 CDh & Command Invalid for Object & The specific sensor, record, or data
-	does not support the given command.\\
+        does not support the given command.\\
 \hline
 CEh & No Response & The command response could not be provided.  The meaning
-	of this is unknown.\\
+        of this is unknown.\\
 \hline
 CFh & Duplicate Request & A duplicate request was received and ignored.
-	The spec says ``This completion code is for devices which cannot
-	return the response that was returned for the original instance of
-	the request.  Such devices should provide separate commands that
-	allow the completion status of the original request to be determined.
-	An Event Reciever does not use this completion code, but returns
-	the 00h completion code in response to (valid) duplicate requests.''
-	The meaning of this statement is unknown.  However, in general IPMI
-	should be stateless because reponses can be lost and commands
-	retransmitted.  Commands that have intermediate state need to be
-	handled very carefully (and there are none in the main spec).\\
+        The spec says ``This completion code is for devices which cannot
+        return the response that was returned for the original instance of
+        the request.  Such devices should provide separate commands that
+        allow the completion status of the original request to be determined.
+        An Event Reciever does not use this completion code, but returns
+        the 00h completion code in response to (valid) duplicate requests.''
+        The meaning of this statement is unknown.  However, in general IPMI
+        should be stateless because reponses can be lost and commands
+        retransmitted.  Commands that have intermediate state need to be
+        handled very carefully (and there are none in the main spec).\\
 \hline
 D0h & SDR Respository Being Updated & The SDR repository is currently
-	in update mode so the given command could not be executed.\\
+        in update mode so the given command could not be executed.\\
 \hline
 D1h & Firmware Being Updated & The given command could not be executed
-	because firmware on the system is being updated.\\
+        because firmware on the system is being updated.\\
 \hline
 D2h & \ac{BMC} Initializing & The given command could not be executed because
-	the \ac{BMC} (or probably any \ac{MC}) is currently initializing.\\
+        the \ac{BMC} (or probably any \ac{MC}) is currently initializing.\\
 \hline
 D3h & Destination Unavailable & An \ac{MC} could not deliver the command
-	to the given destination.  For instance, if you send a ``Send Message''
-	command to a channel that is not active, it may return this.\\
+        to the given destination.  For instance, if you send a ``Send Message''
+        command to a channel that is not active, it may return this.\\
 \hline
 D4h & Insufficient Privilege & The user does not have sufficient privilege
-	to execute the command.\\
+        to execute the command.\\
 \hline
 D5h & Invalid State & The given command cannot be supported in the present
-	state.\\
+        state.\\
 \hline
 D6h & Subfunction Disabled & The given command cannot be executed because
-	the subfunction required has been disabled.\\
+        the subfunction required has been disabled.\\
 \hline
 D7h-FEh &  & reserved\\
 \hline
 FFh & Unspecified & Some error occurred, but the true error could not be
-	determined.\\
+        determined.\\
 \hline
 \end{longtable}
 
@@ -4077,13 +4269,213 @@ The actual mechanics of sending a message depend on the interface, see
 the interface sections in chapter \ref{ipmi-interfaces} for the
 details of sending over specific interfaces.
 
-\section{Sending Commands in OpenIPMI}
+\section{Sending Commands in the OpenIPMI Library}
+
+The OpenIPMI library hides most of the details of sending a command
+and handles all the aspects of talking to sensors, controls, and
+\acs{MC}s.  You should generally not need to send a command to an
+\ac{MC}.  However, exceptions exist, so the operation is described
+here.
+
+First, you should probably decide if you want a clean interface to the
+function through a control.  A control provides a clean interface to a
+device and should probably be used if possible.  You would then send
+the messages from functions that are part of the control interface.
+
+To send a message, you can either send it to an address in the domain
+or to an \acs{MC}.  To send to an address, you must have or construct
+a valid IPMI address and use:
+
+\begin{verbatim}
+ipmi_send_command_addr(ipmi_domain_t                *domain,
+                       ipmi_addr_t                  *addr,
+                       unsigned int                 addr_len,
+                       ipmi_msg_t                   *msg,
+                       ipmi_addr_response_handler_t rsp_handler,
+                       void                         *rsp_data1,
+                       void                         *rsp_data2);
+\end{verbatim}
+
+To send to an \acs{MC}, you must have a valid MC.  You can usually
+extract this from a control or sensor (the MC the sensor belongs to)
+or you can iterate or keep the \ac{MC} id around.  The function to do
+this is:
+
+\begin{verbatim}
+int ipmi_mc_send_command(ipmi_mc_t                  *mc,
+                         unsigned int               lun,
+                         ipmi_msg_t                 *cmd,
+                         ipmi_mc_response_handler_t rsp_handler,
+                         void                       *rsp_data);
+\end{verbatim}
+
 
 %---------------------------------------------------------------------
 \chapter{\acs{SDR} Repositories}
 
 %---------------------------------------------------------------------
 \chapter{Entities}
+
+Though you might not know it from a cursory reading of the \ac{IPMI}
+spec, entities are an important part of IPMI.  They define what a
+sensor (and in OpenIPMI, a control) monitors (or controls).  They are,
+in essence, the physical parts of the system.  For instance, if a
+system has a temperature sensor on the processor and another
+temperature sensor on the main board, the temperature sensors will be
+attached to the processor entity and board entity, respectively.  This
+way, you can tell what the sensor monitors.
+
+Entities are defined by two numbers, the entity id and the entity
+instance.  The entity id defines the type of thing, such as a power
+supply, processor, board, or memory.  The entity instance defines the
+instance of the thing.  For instance, a system may have 4 DIMMs.  Each
+of these DIMMs would be the same entity id (memory), but they would
+each have a different instance.  From now on these are referred to as
+($<$entity id$>$,$<$entity instance$>$).  For example, entity (3,1)
+would be the first processor in the system.
+
+\ac{IPMI} defines two types of entities: system-relative and
+device-relative.  System-relative entities are unique throughout the
+entire system (the domain, in OpenIPMI terms).  Thus if sensors on
+different \acs{MC}s referred entity (3,1), they would all be referring
+to exactly the same physical thing.  System-relative entity instances
+are defined to be less than 96.
+
+Device-relative entities are unique on the management controller that
+controls them.  These entity's instances are numbered 96-128.  These
+are referred to using their LUN and IPMB address in the form
+r($<$LUN$>$,$<$IPMB$>$,$<$entity id$>$,$<$entity instance$>$-96).  For
+instance, if an \acs{MC} at address C0h had a sensor on LUN 0 that
+monitored entity id 3, instance 97, that would be r(0,C0,3,1)
+
+Entities may or may not have specific information describing them.
+Entities that do have specific information describing them have device
+locator records
+
+Entity IDs defined by \ac{IPMI} are:
+
+\begin{longtable}{|l|p{0.30\textwidth}|p{0.50\textwidth}|}
+\hline
+\bfseries{\#} & \bfseries{Name} & \bfseries{description}\\
+\hline
+ 0 & UNSPECIFIED & The entity id is not used.\\
+\hline
+ 1 & OTHER & Something else?\\
+\hline
+ 2 & UNKOWN & It's hard to understand why the entity id wouldn't be
+	known, but this is defined by the spec.\\
+\hline
+ 3 & PROCESSOR & A processor\\
+\hline
+ 4 & DISK & A disk or disk bay\\
+\hline
+ 5 & PERIPHERAL & A peripheral bay\\
+\hline
+ 6 & SYSTEM \_MANAGEMENT \_MODULE & A separate board for system management\\
+\hline
+ 7 & SYSTEM\_BOARD & The main system board\\
+\hline
+ 8 & MEMORY\_MODULE & A memory module (a DIMM, for instance)\\
+\hline
+ 9 & PROCESSOR \_MODULE & A device that holds processors, if they are not
+	mounted on the system board.  This would generally be a socket.\\
+\hline
+10 & POWER\_SUPPLY & The main power supplies for the system use this.\\
+\hline
+11 & ADD\_IN\_CARD & A plug-in card in a system, a PCI card for instance.\\
+\hline
+12 & FRONT\_PANEL \_BOARD & A front panel display and/or control panel.\\
+\hline
+13 & BACK\_PANEL\_BOARD & A rear panel display and/or control panel.\\
+\hline
+14 & POWER\_SYSTEM \_BOARD & A board that power supplies plug in to\\
+\hline
+15 & DRIVE\_BACKPLANE & A board that disk drives plug in to\\
+\hline
+16 & SYSTEM\_INTERNAL \_EXPANSION\_BOARD & A board that contains expansion
+	slots.  A PCI riser board, for instance.\\
+\hline
+17 & OTHER\_SYSTEM \_BOARD & Some other board in the system.\\
+\hline
+18 & PROCESSOR\_BOARD & A separate board that holds one or more processors.\\
+\hline
+19 & POWER\_UNIT & A logical grouping for a set of power supplies\\
+\hline
+20 & POWER\_MODULE & Used for internal DC-to-DC converters, like one that
+	is on a board.  Note that you would \emph{not} use this for the
+	main power supply in a system, even it it was a DC-to-DC converter.\\
+\hline
+21 & POWER \_MANAGEMENT \_BOARD & A board for managing and distributing
+	power in the system\\
+\hline
+22 & CHASSIS\_BACK \_PANEL\_BOARD & A rear board in a chassis.\\
+\hline
+23 & SYSTEM\_CHASSIS & The main chassis in the system.\\
+\hline
+24 & SUB\_CHASSIS & A sub-unit of the main chassis.\\
+\hline
+25 & OTHER\_CHASSIS \_BOARD & Some other board that doesn't fit the
+	given categories.\\
+\hline
+26 & DISK\_DRIVE\_BAY & A sub-chassis that holds a set of disk drives.\\
+\hline
+27 & PERIPHERAL\_BAY & A sub-chassis that holds a set of peripherals.\\
+\hline
+28 & DEVICE\_BAY & A sub-chassis that holds a set of devices.  The
+	difference between a peripheral and a device is not known.\\
+\hline
+29 & FAN\_COOLING & A fan or other cooling device.\\
+\hline
+30 & COOLING\_UNIT & A group of fans or other cooling devices.\\
+\hline
+31 & CABLE \_INTERCONNECT & A cable routing device.\\
+\hline
+32 & MEMORY\_DEVICE & A replacable memory device, like a DIMM.  This should
+	not be used for individual memory chips, but for the board that
+	holds the memory chips.\\
+\hline
+33 & SYSTEM \_MANAGEMENT \_SOFTWARE & The meaning of this is unknown.\\
+\hline
+34 & BIOS & The BIOS running on the system.\\
+\hline
+35 & OPERATING\_SYSTEM & The operating system running on the system.\\
+\hline
+36 & SYSTEM\_BUS & The main interconnect bus in a system.\\
+\hline
+37 & GROUP & A generic grouping of entities if no physical thing groups
+	them but they need to be groups.\\
+\hline
+38 & REMOTE\_MGMT \_COMM\_DEVICE & A communication device used for
+	remote management.\\
+\hline
+39 & EXTERNAL \_ENVIRONMENT & The environment outside the chassis.  For
+	instance, a temperature sensor outside the chassis that monitored
+	external temperature would use this.  Different instances may be
+	used to specify different regions outside the box.\\
+\hline
+40 & BATTERY & A battery\\
+\hline
+41 & PROCESSING\_BLADE & A single-board computer, generally a board that
+	has one or more processors, memory, etc. that plugs into a
+	backplane.\\
+\hline
+42 & CONNECTIVITY \_SWITCH & A network switch that plugs into a system
+	to provide connectivity between independent processors in a
+	system.\\
+\hline
+43 & PROCESSOR \_MEMORY \_MODULE & ?\\
+\hline
+44 & IO\_MODULE & ?\\
+\hline
+45 & PROCESSOR\_IO \_MODULE & ?\\
+\hline
+46 & MGMT \_CONTROLLER \_FIRMWARE & The firmware running on an \ac{MC}.\\
+\hline
+\end{longtable}
+
+\section{Entity Containment}
+
+Entities may be contained inside other entities.  
 
 \section{\acs{FRU} Data}
 
@@ -4158,8 +4550,14 @@ That information may be fetched by the user.
 \chapter{Events}
 \label{events}
 
+OpenIPMI automatically sets the event receiver.
+
 \section{Event Format}
 \label{event-format}
+
+\section{\acs{MC} Event Enables}
+
+\section{Coordinating Multiple Users of an \acs{SEL}}
 
 %---------------------------------------------------------------------
 \appendix
