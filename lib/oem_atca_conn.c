@@ -94,7 +94,7 @@ lan_atca_ipmb_fetch(ipmi_con_t           *conn,
     int                          rv;
     ipmi_msgi_t                  *rspi;
 
-    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi)
 	return ENOMEM;
 
@@ -113,7 +113,7 @@ lan_atca_ipmb_fetch(ipmi_con_t           *conn,
     rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			    atca_ipmb_handler, rspi);
     if (rv)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     return rv;
 }
 
@@ -172,7 +172,7 @@ atca_oem_check(ipmi_con_t               *conn,
     int                          rv;
     ipmi_msgi_t                  *rspi;
 
-    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi)
 	return ENOMEM;
 
@@ -191,7 +191,7 @@ atca_oem_check(ipmi_con_t               *conn,
     rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			    atca_oem_finish_check, rspi);
     if (rv)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     return rv;
 }
 

@@ -73,7 +73,7 @@ force_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
     int                          rv;
     ipmi_msgi_t                  *rspi;
 
-    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi)
 	return ENOMEM;
 
@@ -91,7 +91,7 @@ force_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
     rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			    ipmb_handler, rspi);
     if (rv)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     return rv;
 }
 
@@ -133,7 +133,7 @@ send_activate(ipmi_con_t           *ipmi,
     int                          rv;
     ipmi_msgi_t                  *rspi;
 
-    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi)
 	return ENOMEM;
 
@@ -155,7 +155,7 @@ send_activate(ipmi_con_t           *ipmi,
     rv = ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			    activate_handler, rspi);
     if (rv)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     return rv;
 }
 
@@ -191,7 +191,7 @@ force_activate(ipmi_con_t           *conn,
 	/* Deactivate any existing BMCs. */
 	ipmi_msgi_t      *rspi;
 
-	rspi = ipmi_mem_alloc(sizeof(*rspi));
+	rspi = ipmi_alloc_msg_item();
 	if (!rspi)
 	    return ENOMEM;
 
@@ -213,7 +213,7 @@ force_activate(ipmi_con_t           *conn,
 				&msg,
 				deactivated, rspi);
 	if (rv)
-	    ipmi_mem_free(rspi);
+	    ipmi_free_msg_item(rspi);
 	return rv;
     }
 

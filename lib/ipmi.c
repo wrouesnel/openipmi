@@ -1598,6 +1598,59 @@ ipmi_openipmi_version(void)
     return OPENIPMI_VERSION;
 }
 
+ipmi_msgi_t *
+ipmi_alloc_msg_item(void)
+{
+    ipmi_msgi_t *rv;
+
+    rv = ipmi_mem_alloc(sizeof(ipmi_msgi_t));
+    if (!rv)
+	return NULL;
+    memset(rv, 0, sizeof(rv));
+    rv->msg.data = rv->data;
+    return rv;
+}
+
+void
+ipmi_free_msg_item(ipmi_msgi_t *item)
+{
+    if (item->msg.data && (item->msg.data != item->data))
+	ipmi_free_msg_item_data(item->msg.data);
+    ipmi_mem_free(item);
+}
+
+void *
+ipmi_alloc_msg_item_data(unsigned int size)
+{
+    return ipmi_mem_alloc(size);
+}
+
+void
+ipmi_free_msg_item_data(void *data)
+{
+    ipmi_mem_free(data);
+}
+
+void
+ipmi_move_msg_item(ipmi_msgi_t *new_item, ipmi_msgi_t *old_item)
+{
+    if (new_item->msg.data && (new_item->msg.data != new_item->data))
+	ipmi_free_msg_item_data(new_item->msg.data);
+    memcpy(&new_item->addr, &old_item->addr, old_item->addr_len);
+    new_item->addr_len = old_item->addr_len;
+    new_item->msg = old_item->msg;
+
+    if (!old_item->msg.data) {
+	/* Nothing to do */
+    } else if (old_item->msg.data != old_item->data) {
+	/* Copied the actual data pointer. */
+	old_item->msg.data = NULL;
+    } else {
+	memcpy(new_item->data, old_item->data, old_item->msg.data_len);
+	new_item->msg.data = new_item->data;
+    }
+}
+
 void
 ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
 			     ipmi_msgi_t           *rspi,
@@ -1619,7 +1672,7 @@ ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
 	used = rsp_handler(ipmi, rspi);
 
     if (!used)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
 }
 
 void
@@ -1639,7 +1692,7 @@ ipmi_handle_rsp_item_copymsg(ipmi_con_t            *ipmi,
 	used = rsp_handler(ipmi, rspi);
 
     if (!used)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
 }
 
 void
@@ -1654,6 +1707,6 @@ ipmi_handle_rsp_item(ipmi_con_t            *ipmi,
 	used = rsp_handler(ipmi, rspi);
 
     if (!used)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
 }
 

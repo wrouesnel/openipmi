@@ -237,16 +237,23 @@ int ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 				   ipmi_msg_t      *msg,
 				   unsigned char   *pet_ack);
 
+/*
+ * RMCP+ payload handling.  To register a payload, pass in a static
+ * ipmi_payload_t stucture with the various functions set.  Note that
+ * IPMI and OEM expicit payloads have special handling, you cannot
+ * register those payload types.  Registering a NULL payload removes
+ * the handler.
+ */
 #define IPMI_RMCPP_PAYLOAD_TYPE_IPMI		0
 #define IPMI_RMCPP_PAYLOAD_TYPE_SOL		1
 #define IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT	2
 
 #define IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST	0x10
 #define IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE	0x11
-#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_1			0x11
-#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_2			0x12
-#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3			0x13
-#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_4			0x14
+#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_1			0x12
+#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_2			0x13
+#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3			0x14
+#define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_4			0x15
 
 typedef struct ipmi_payload_s
 {
@@ -274,15 +281,46 @@ typedef struct ipmi_payload_s
 			unsigned int  data_len,
 			unsigned char *seq);
 
-    /* Fill in the rspi data structure from the given data. */
-    int (*handle_recv)(ipmi_con_t    *conn,
-		       ipmi_msgi_t   *rspi,
-		       ipmi_addr_t   *orig_addr,
-		       unsigned int  orig_addr_len,
-		       ipmi_msg_t    *orig_msg,
-		       unsigned char *data,
-		       unsigned int  data_len);
+    /* Fill in the rspi data structure from the given data, responses
+       only.  This does *not* deliver the message, that is done by the
+       LAN code. */
+    int (*handle_recv_rsp)(ipmi_con_t    *conn,
+			   ipmi_msgi_t   *rspi,
+			   ipmi_addr_t   *orig_addr,
+			   unsigned int  orig_addr_len,
+			   ipmi_msg_t    *orig_msg,
+			   unsigned char *data,
+			   unsigned int  data_len);
+
+    /* Handle an asynchronous message.  This *should* deliver the
+       message, if possible. */
+    void (*handle_recv_async)(ipmi_con_t    *conn,
+			      unsigned char *data,
+			      unsigned int  data_len);
 } ipmi_payload_t;
+
+int ipmi_lan_register_payload(unsigned int   payload_type,
+			      ipmi_payload_t *payload);
+
+/*
+ * RMCP+ algorithm handling.
+ */
+
+typedef void (*ipmi_rmcpp_finish_auth_cb)(ipmi_con_t *ipmi,
+					  int        err,
+					  void       *cb_data);
+
+typedef struct ipmi_rmcp_authentication_s
+{
+    int (*auth_init)(void **auth_data);
+    void (*auth_free)(void *auth_data);
+
+    int (*start_auth)(ipmi_con_t                *ipmi,
+		      uint32_t                  session_id,
+		      uint32_t                  mgsys_session_id,
+		      ipmi_rmcpp_finish_auth_cb done,
+		      void                      *cb_data);
+} ipmi_rmcp_authentication_t;
 
 typedef struct ipmi_rmcp_confidentiality_s
 {

@@ -564,6 +564,7 @@ ipmb_handler(ipmi_con_t   *ipmi,
 
     if (ipmb != smi->slave_addr) {
 	smi->slave_addr = ipmb;
+	ipmi->ipmb_addr = ipmb;
 	if (smi->ipmb_addr_handler)
 	    smi->ipmb_addr_handler(ipmi, err, ipmb, active, 0,
 				   smi->ipmb_addr_cb_data);
@@ -702,24 +703,27 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 static ipmi_mcid_t invalid_mcid = IPMI_MCID_INVALID;
 
 static void
-handle_async_event(ipmi_con_t *ipmi, struct ipmi_recv *recv)
+handle_async_event(ipmi_con_t  *ipmi,
+		   ipmi_addr_t *addr,
+		   unsigned int addr_len,
+		   ipmi_msg_t   *msg)
 {
     smi_data_t                 *smi = (smi_data_t *) ipmi->con_data;
     ipmi_ll_event_handler_id_t *elem, *next;
     ipmi_event_t               *event;
     ipmi_time_t                timestamp;
-    unsigned int               type = recv->msg.data[2];
-    unsigned int               record_id = ipmi_get_uint16(recv->msg.data);
+    unsigned int               type = msg->data[2];
+    unsigned int               record_id = ipmi_get_uint16(msg->data);
 
     if (type < 0xe0)
-	timestamp = ipmi_seconds_to_time(ipmi_get_uint32(recv->msg.data+3));
+	timestamp = ipmi_seconds_to_time(ipmi_get_uint32(msg->data+3));
     else
 	timestamp = -1;
     event = ipmi_event_alloc(invalid_mcid,
 			     record_id,
 			     type,
 			     timestamp,
-			     recv->msg.data+3, 13);
+			     msg->data+3, 13);
     if (!event)
 	/* We missed it here, but the SEL fetch should catch it later. */
 	return;
@@ -732,8 +736,7 @@ handle_async_event(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 	next = elem->next;
 
 	/* call the user handler. */
-	elem->handler(ipmi,
-		      (ipmi_addr_t *) recv->addr, recv->addr_len,
+	elem->handler(ipmi, addr, addr_len,
 		      event, elem->event_data, elem->data2);
 
 	elem = next;
@@ -812,7 +815,8 @@ gen_recv_msg(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 	    break;
 
 	case IPMI_ASYNC_EVENT_RECV_TYPE:
-	    handle_async_event(ipmi, recv);
+	    handle_async_event(ipmi, (ipmi_addr_t *) recv->addr,
+			       recv->addr_len, &recv->msg);
 	    break;
 
 	case IPMI_CMD_RECV_TYPE:
@@ -961,7 +965,7 @@ smi_send_command(ipmi_con_t            *ipmi,
     smi = (smi_data_t *) ipmi->con_data;
 
     if (!rspi) {
-	rspi = ipmi_mem_alloc(sizeof(*rspi));
+	rspi = ipmi_alloc_msg_item();
 	if (!rspi)
 	    return ENOMEM;
     }
@@ -1019,7 +1023,7 @@ smi_send_command(ipmi_con_t            *ipmi,
     if (rv) {
 	/* If we allocated an rspi, free it. */
 	if (!trspi && rspi)
-	    ipmi_mem_free(rspi);
+	    ipmi_free_msg_item(rspi);
     }
     return rv;
 }
@@ -1278,6 +1282,7 @@ smi_set_ipmb_addr(ipmi_con_t    *ipmi,
 
     if (smi->slave_addr != ipmb) {
 	smi->slave_addr = ipmb;
+	ipmi->ipmb_addr = ipmb;
 	if (smi->ipmb_addr_handler)
 	    smi->ipmb_addr_handler(ipmi, 0, ipmb, active, 0,
 				   smi->ipmb_addr_cb_data);
@@ -1335,6 +1340,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     }
 
     smi->slave_addr = ipmb_addr;
+    ipmi->ipmb_addr = ipmb_addr;
     finish_connection(ipmi, smi);
     if (smi->ipmb_addr_handler)
 	smi->ipmb_addr_handler(ipmi, err, ipmb_addr, active, 0,
@@ -1473,6 +1479,7 @@ setup(int          if_num,
     ipmi->os_hnd = handlers;
     ipmi->con_type = "smi";
     ipmi->priv_level = IPMI_PRIVILEGE_ADMIN; /* Always admin privilege. */
+    ipmi->ipmb_addr = 0x20; /* Assume this until told otherwise */
 
     smi = ipmi_mem_alloc(sizeof(*smi));
     if (!smi) {
@@ -1527,6 +1534,7 @@ setup(int          if_num,
     ipmi->deregister_for_command = smi_deregister_for_command;
     ipmi->close_connection = smi_close_connection;
     ipmi->close_connection_done = smi_close_connection_done;
+    ipmi->handle_async_event = handle_async_event;
 
     if (smi->using_socket) {
 	rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,

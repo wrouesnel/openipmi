@@ -130,7 +130,7 @@ typedef struct ipmi_rmcp_nosession_addr
 	int           addr_type;
 } ipmi_rmcp_nosession_addr_t;
 
-/* RMCP address types are in this range.  These map to payloads.  Note
+/* RMCP+ address types are in this range.  These map to payloads.  Note
    that 0x100 is specially used; it would be IPMI if there was no
    special handling, but it is used for RMCP messages outside the
    session. */
@@ -139,7 +139,7 @@ typedef struct ipmi_rmcp_nosession_addr
 
 /* This is outside the range of normal NETFNs, it is used for
    registering for RMCP things. */
-#define IPMI_RMCP_DUMMY_NETFN		0x40
+#define IPMI_RMCPP_DUMMY_NETFN		0x40
 
 /* Generate types for the kernel versions of these. */
 typedef struct ipmi_addr ipmi_addr_t;

@@ -1248,7 +1248,6 @@ rsp_timeout_handler(void              *cb_data,
 
     rspi->msg.netfn = lan->seq_table[seq].msg.netfn | 1;
     rspi->msg.cmd = lan->seq_table[seq].msg.cmd;
-    rspi->msg.data = rspi->data;
     rspi->msg.data_len = 1;
 
     memcpy(&rspi->addr, &(lan->seq_table[seq].addr),
@@ -2941,7 +2940,7 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
     int                          rv;
     ipmi_msgi_t                  *rspi;
 
-    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi)
 	return ENOMEM;
 
@@ -2960,7 +2959,7 @@ send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num)
 				  (ipmi_addr_t *) &addr, sizeof(addr),
 				  &msg, auth_cap_done, rspi);
     if (rv)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     return rv;
 }
 
@@ -3058,6 +3057,7 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
     ipmi->scan_sysaddr = 1;
     ipmi->user_data = user_data;
     ipmi->os_hnd = handlers;
+    ipmi->ipmb_addr = 0x20; /* Assume this until told otherwise */
 
     lan = ipmi_mem_alloc(sizeof(*lan));
     if (!lan) {

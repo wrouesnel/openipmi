@@ -80,7 +80,7 @@ typedef struct ipmi_auth_s
 } ipmi_auth_t;
 
 #define IPMI_USERNAME_MAX	16
-#define IPMI_PASSWORD_MAX	16
+#define IPMI_PASSWORD_MAX	20
 
 /* Standard IPMI authentication algorithms. */
 #define IPMI_AUTHTYPE_DEFAULT	(~0) /* Choose the most secure available */

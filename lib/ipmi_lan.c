@@ -174,9 +174,6 @@ typedef struct lan_data_s
     unsigned int               num_ip_addr;
     unsigned int               num_sends;
 
-    /* Hacks reported by OEM code. */
-    unsigned int               hacks;
-
     /* If 0, we don't have a connection to the BMC right now. */
     int                        connected;
 
@@ -195,19 +192,19 @@ typedef struct lan_data_s
     uint32_t                   outbound_seq_num[MAX_IP_ADDR];
     uint32_t                   inbound_seq_num[MAX_IP_ADDR];
     uint16_t                   recv_msg_map[MAX_IP_ADDR];
-
-    /* IPMI LAN 1.5 info. */
-    unsigned int               specified_authtype;
-    unsigned char              chosen_authtype;
     unsigned char              privilege;
     unsigned char              username[IPMI_USERNAME_MAX];
     unsigned char              username_len;
     unsigned char              password[IPMI_PASSWORD_MAX];
     unsigned char              password_len;
+
+    /* IPMI LAN 1.5 specific info. */
+    unsigned int               specified_authtype;
+    unsigned char              chosen_authtype;
     unsigned char              challenge_string[16];
     ipmi_authdata_t            authdata;
 
-    /* RMCP+ info */
+    /* RMCP+ specific info */
     unsigned int               requested_auth : 6;
     unsigned int               requested_integ : 6;
     unsigned int               requested_conf : 6;
@@ -216,6 +213,7 @@ typedef struct lan_data_s
     uint16_t                   unauth_recv_msg_map[MAX_IP_ADDR];
     unsigned char              working_integ[MAX_IP_ADDR];
     unsigned char              working_conf[MAX_IP_ADDR];
+    uint32_t                   mgsys_session_id[MAX_IP_ADDR];
 
     ipmi_rmcp_confidentiality_t conf_info[MAX_IP_ADDR];
     void                        *conf_data[MAX_IP_ADDR];
@@ -294,31 +292,27 @@ typedef struct lan_data_s
     struct lan_data_s *next, *prev;
 } lan_data_t;
 
-static int ipmi_format_msg(ipmi_con_t    *conn,
-			   ipmi_addr_t   *addr,
-			   unsigned int  addr_len,
-			   ipmi_msg_t    *msg,
-			   unsigned char *out_data,
-			   unsigned int  *out_data_len,
-			   unsigned char seq);
+extern ipmi_payload_t _ipmi_payload;
 
-static int ipmi_get_recv_seq(ipmi_con_t    *conn,
-			     unsigned char *data,
-			     unsigned int  data_len,
-			     unsigned char *seq);
-
-static int ipmi_handle_recv(ipmi_con_t    *conn,
-			    ipmi_msgi_t   *rspi,
-			    ipmi_addr_t   *orig_addr,
-			    unsigned int  orig_addr_len,
-			    ipmi_msg_t    *orig_msg,
-			    unsigned char *data,
-			    unsigned int  data_len);
-
-static ipmi_payload_t payloads[64] =
+static ipmi_payload_t *payloads[64] =
 {
-    { ipmi_format_msg, ipmi_get_recv_seq, ipmi_handle_recv }
+    &_ipmi_payload
 };
+
+
+
+int
+ipmi_lan_register_payload(unsigned int   payload_type,
+			  ipmi_payload_t *payload)
+{
+    if ((payload_type == 0) || (payload_type == 2) || (payload_type >= 64))
+	return EINVAL;
+    if (payloads[payload_type] && payload)
+	return EAGAIN;
+
+    payloads[payload_type] = payload;
+    return 0;
+}
 
 static void check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan);
 static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
@@ -440,17 +434,6 @@ open_lan_fd(int pf_family)
     /* Bind is not necessary, we don't care what port we are. */
 
     return fd;
-}
-
-static unsigned char
-ipmb_checksum(unsigned char *data, int size)
-{
-	unsigned char csum = 0;
-	
-	for (; size > 0; size--, data++)
-		csum += *data;
-
-	return -csum;
 }
 
 static int
@@ -678,13 +661,13 @@ lan_send_addr(lan_data_t  *lan,
 	payload_type = msg->cmd;
 	in_session = 0;
 	tmsg[0] = seq; /* We use the message tag for the sequence # */
-    } else if (!payloads[payload_type].format_for_xmit) {
+    } else if (!payloads[payload_type]) {
 	return ENOSYS;
     } else {
 	pos = IPMI_MAX_LAN_LEN,
-	rv = payloads[payload_type].format_for_xmit(lan->ipmi, addr, addr_len,
-						    msg, tmsg, &pos,
-						    seq);
+	rv = payloads[payload_type]->format_for_xmit(lan->ipmi, addr, addr_len,
+						     msg, tmsg, &pos,
+						     seq);
 	if (rv)
 	    return rv;
     }
@@ -792,9 +775,10 @@ ipmb_handler(ipmi_con_t   *ipmi,
     if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
 	lan->slave_addr = ipmb;
 	lan->is_active = active;
-	lan->hacks = hacks;
+	ipmi->hacks = hacks;
+	ipmi->ipmb_addr = ipmb;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, err, ipmb, active, lan->hacks,
+	    lan->ipmb_addr_handler(ipmi, err, ipmb, active, hacks,
 				   lan->ipmb_addr_cb_data);
     }
 }
@@ -928,6 +912,7 @@ reset_session_data(lan_data_t *lan, int addr_num)
     lan->outbound_seq_num[addr_num] = 0;
     lan->inbound_seq_num[addr_num] = 0;
     lan->session_id[addr_num] = 0;
+    lan->mgsys_session_id[addr_num] = 0;
     lan->recv_msg_map[addr_num] = 0;
     lan->unauth_recv_msg_map[addr_num] = 0;
     lan->working_authtype[addr_num] = 0;
@@ -1173,23 +1158,26 @@ handle_async_event(ipmi_con_t   *ipmi,
 {
     lan_data_t                 *lan = (lan_data_t *) ipmi->con_data;
     ipmi_ll_event_handler_id_t *elem, *next;
-    ipmi_event_t               *event;
+    ipmi_event_t               *event = NULL;
     ipmi_time_t                timestamp;
-    unsigned int               type = msg->data[2];
-    unsigned int               record_id = ipmi_get_uint16(msg->data);
 
-    if (type < 0xe0)
-	timestamp = ipmi_seconds_to_time(ipmi_get_uint32(msg->data+3));
-    else
-	timestamp = -1;
-    event = ipmi_event_alloc(invalid_mcid,
-			     record_id,
-			     type,
-			     timestamp,
-			     msg->data+3, 13);
-    if (!event)
-	/* We missed it here, but the SEL fetch should catch it later. */
-	return;
+    if (msg) {
+	unsigned int type = msg->data[2];
+	unsigned int record_id = ipmi_get_uint16(msg->data);
+
+	if (type < 0xe0)
+	    timestamp = ipmi_seconds_to_time(ipmi_get_uint32(msg->data+3));
+	else
+	    timestamp = -1;
+	event = ipmi_event_alloc(invalid_mcid,
+				 record_id,
+				 type,
+				 timestamp,
+				 msg->data+3, 13);
+	if (!event)
+	    /* We missed it here, but the SEL fetch should catch it later. */
+	    return;
+    }
 
     ipmi_lock(lan->event_handlers_lock);
     elem = lan->event_handlers;
@@ -1205,7 +1193,8 @@ handle_async_event(ipmi_con_t   *ipmi,
 	elem = next;
     }
     ipmi_unlock(lan->event_handlers_lock);
-    ipmi_event_free(event);
+    if (event)
+	ipmi_event_free(event);
 }
 
 /* Must be called with the message sequence lock held. */
@@ -1432,15 +1421,6 @@ check_session_seq_num(uint32_t seq, uint32_t *in_seq, uint16_t *map)
 }
 
 static void
-handle_rakp(ipmi_con_t    *ipmi,
-	    lan_data_t    *lan,
-	    int           payload_type,
-	    unsigned char *tmsg,
-	    unsigned int  payload_len)
-{
-}
-
-static void
 handle_payload(ipmi_con_t    *ipmi,
 	       lan_data_t    *lan,
 	       int           addr_num,
@@ -1448,94 +1428,106 @@ handle_payload(ipmi_con_t    *ipmi,
 	       unsigned char *tmsg,
 	       unsigned int  payload_len)
 {
-    if ((payload_type >= IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST)
-	&& (payload_type <= IPMI_RMCPP_PAYLOAD_TYPE_RAKP_4))
-    {
-	handle_rakp(ipmi, lan, payload_type, tmsg, payload_len);
+    ipmi_ll_rsp_handler_t handler;
+    ipmi_msgi_t           *rspi;
+    unsigned char         seq;
+    int                   rv;
+
+    if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_RESPONSE) {
+	if (payload_len < 1) {
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+		ipmi_log(IPMI_LOG_DEBUG, "Payload length to short");
+	    goto out;
+	}
+
+	/* We use the message tag field to store the sequence #. */
+	seq = tmsg[0] & 0x3f;
     } else if (payload_type == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT) {
 #if 0
+	/* FIXME - add handling of OEM payloads. */
 	handle_oem_payload(ipmi, lan, oem_iana, oem_payload_id,
 			   tmsg, payload_len);
+#else
+	goto out;
 #endif
-    } else if (! payloads[payload_type].get_recv_seq) {
+    } else if (! payloads[payload_type]) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Unhandled payload: 0x%x",
 		     payload_type);
+	goto out;
     } else {
-	unsigned char seq;
-	int           rv;
-	rv = payloads[payload_type].get_recv_seq(ipmi, tmsg,
-						 payload_len, &seq);
+	rv = payloads[payload_type]->get_recv_seq(ipmi, tmsg,
+						  payload_len, &seq);
 	if (rv == ENOSYS) {
-	aaaa: /* FIXME - handle async msgs. */
-	    return;
+	    payloads[payload_type]->handle_recv_async(ipmi, tmsg, payload_len);
+	    goto out;
 	} else if (rv) {
 	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 		ipmi_log(IPMI_LOG_DEBUG, "Error getting sequence: 0x%x",
 			 rv);
-	    return;
-	} else {
-	    ipmi_ll_rsp_handler_t handler;
-	    ipmi_msgi_t           *rspi;
-
-	    ipmi_lock(lan->seq_num_lock);
-	    if (! lan->seq_table[seq].inuse) {
-		if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		    ipmi_log(IPMI_LOG_DEBUG,
-			     "Dropped message seq not in use: 0x%x",
-			     seq);
-		ipmi_unlock(lan->seq_num_lock);
-		return;
-	    }
-
-	    rv = payloads[payload_type].handle_recv
-		(ipmi,
-		 lan->seq_table[seq].rsp_item,
-		 &lan->seq_table[seq].addr,
-		 lan->seq_table[seq].addr_len,
-		 &lan->seq_table[seq].msg,
-		 tmsg,
-		 payload_len);
-	    if (rv) {
-		ipmi_unlock(lan->seq_num_lock);
-		return;
-	    }
-
-	    /* We got a response from the connection, so reset the failure
-	       count. */
-	    lan->consecutive_ip_failures[addr_num] = 0;
-
-	    /* The command matches up, cancel the timer and deliver it */
-	    rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd,
-					  lan->seq_table[seq].timer);
-	    if (rv)
-		/* Couldn't cancel the timer, make sure the timer
-		   doesn't do the callback. */
-		lan->seq_table[seq].timer_info->cancelled = 1;
-	    else {
-		/* Timer is cancelled, free its data. */
-		ipmi->os_hnd->free_timer(ipmi->os_hnd,
-					 lan->seq_table[seq].timer);
-		ipmi_mem_free(lan->seq_table[seq].timer_info);
-	    }
-
-	    handler = lan->seq_table[seq].rsp_handler;
-	    rspi = lan->seq_table[seq].rsp_item;
-	    lan->seq_table[seq].inuse = 0;
-
-	    if (lan->seq_table[seq].use_orig_addr) {
-		/* We did an address translation, so translate back. */
-		memcpy(&rspi->addr, &lan->seq_table[seq].orig_addr,
-		       lan->seq_table[seq].orig_addr_len);
-		rspi->addr_len = lan->seq_table[seq].orig_addr_len;
-	    }
-
-	    check_command_queue(ipmi, lan);
-	    ipmi_unlock(lan->seq_num_lock);
-
-	    ipmi_handle_rsp_item(ipmi, rspi, handler);
+	    goto out;
 	}
     }
+
+    ipmi_lock(lan->seq_num_lock);
+    if (! lan->seq_table[seq].inuse) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG,
+		     "Dropped message seq not in use: 0x%x",
+		     seq);
+	goto out_unlock;
+    }
+
+    rv = payloads[payload_type]->handle_recv_rsp
+	(ipmi,
+	 lan->seq_table[seq].rsp_item,
+	 &lan->seq_table[seq].addr,
+	 lan->seq_table[seq].addr_len,
+	 &lan->seq_table[seq].msg,
+	 tmsg,
+	 payload_len);
+    if (rv)
+	goto out_unlock;
+
+    /* We got a response from the connection, so reset the failure
+       count. */
+    lan->consecutive_ip_failures[addr_num] = 0;
+
+    /* The command matches up, cancel the timer and deliver it */
+    rv = ipmi->os_hnd->stop_timer(ipmi->os_hnd,
+				  lan->seq_table[seq].timer);
+    if (rv)
+	/* Couldn't cancel the timer, make sure the timer
+	   doesn't do the callback. */
+	lan->seq_table[seq].timer_info->cancelled = 1;
+    else {
+	/* Timer is cancelled, free its data. */
+	ipmi->os_hnd->free_timer(ipmi->os_hnd,
+				 lan->seq_table[seq].timer);
+	ipmi_mem_free(lan->seq_table[seq].timer_info);
+    }
+
+    handler = lan->seq_table[seq].rsp_handler;
+    rspi = lan->seq_table[seq].rsp_item;
+    lan->seq_table[seq].inuse = 0;
+
+    if (lan->seq_table[seq].use_orig_addr) {
+	/* We did an address translation, so translate back. */
+	memcpy(&rspi->addr, &lan->seq_table[seq].orig_addr,
+	       lan->seq_table[seq].orig_addr_len);
+	rspi->addr_len = lan->seq_table[seq].orig_addr_len;
+    }
+
+    check_command_queue(ipmi, lan);
+    ipmi_unlock(lan->seq_num_lock);
+    
+    ipmi_handle_rsp_item(ipmi, rspi, handler);
+
+ out:
+    return;
+
+ out_unlock:
+    ipmi_unlock(lan->seq_num_lock);
 }
 
 static void
@@ -2449,9 +2441,10 @@ lan_set_ipmb_addr(ipmi_con_t    *ipmi,
     if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
 	lan->slave_addr = ipmb;
 	lan->is_active = active;
-	lan->hacks = hacks;
+	ipmi->hacks = hacks;
+	ipmi->ipmb_addr = ipmb;
 	if (lan->ipmb_addr_handler)
-	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active, lan->hacks,
+	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active, hacks,
 				   lan->ipmb_addr_cb_data);
     }
 }
@@ -2474,10 +2467,11 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 
     lan->slave_addr = ipmb_addr;
     lan->is_active = active;
-    lan->hacks = hacks;
+    ipmi->hacks = hacks;
+    ipmi->ipmb_addr = ipmb_addr;
     finish_connection(ipmi, lan, addr_num);
     if (lan->ipmb_addr_handler)
-	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active, lan->hacks,
+	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active, hacks,
 			       lan->ipmb_addr_cb_data);
 }
 
@@ -2645,8 +2639,116 @@ send_set_session_privilege(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
 }
 
 static int
+check_rakp_rsp(ipmi_con_t   *ipmi,
+	       ipmi_msg_t   *msg,
+	       char         *caller,
+	       unsigned int min_length,
+	       int          addr_num)
+{
+    if (!ipmi) {
+	handle_connected(ipmi, ECANCELED, addr_num);
+	return ECANCELED;
+    }
+
+    if (msg->data_len < 2) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(%s): Message data too short: %d",
+		 caller, msg->data_len);
+	handle_connected(ipmi, EINVAL, addr_num);
+	return EINVAL;
+    }
+
+    if (msg->data[1]) {
+	/* Got an RMCP+ error. */
+	handle_connected(ipmi, IPMI_RMCPP_ERR_VAL(msg->data[1]), addr_num);
+	return EINVAL;
+    }
+
+    if (msg->data_len < min_length) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(%s): Message data too short: %d",
+		 caller, msg->data_len);
+	handle_connected(ipmi, EINVAL, addr_num);
+	return EINVAL;
+    }
+
+    return 0;
+}
+
+static int
 got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
 {
+    ipmi_msg_t *msg = &rspi->msg;
+    lan_data_t *lan;
+    int        addr_num = (long) rspi->data4;
+    uint32_t   session_id;
+    uint32_t   mgsys_session_id;
+    int        privilege;
+    int        auth, integ, conf;
+
+    if (check_rakp_rsp(ipmi, msg, "got_rmcpp_open_session_rsp", 36, addr_num))
+	goto out;
+
+    lan = (lan_data_t *) ipmi->con_data;
+
+    privilege = msg->data[2] & 0xf;
+    if (privilege != lan->privilege) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 " Expected privilege %d, got %d",
+		 lan->privilege, privilege);
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+
+    session_id = ipmi_get_uint32(msg->data+4);
+    if (session_id != lan->session_id[addr_num]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 " Got wrong session id: 0x%x",
+		 session_id);
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+
+    mgsys_session_id = ipmi_get_uint32(msg->data+8);
+    if (mgsys_session_id == 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 " Got NULL mgd system session id");
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+
+    if ((msg->data[12] != 0) || (msg->data[15] != 8)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 " Got NULL or invalid authentication payload");
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+    auth = msg->data[16] & 0x3f;
+
+    if ((msg->data[20] != 0) || (msg->data[23] != 8)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 " Got NULL or invalid integrity payload");
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+    integ = msg->data[24] & 0x3f;
+
+    if ((msg->data[28] != 0) || (msg->data[31] != 8)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan.c(got_rmcpp_open_session_rsp): "
+		 " Got NULL or invalid confidentiality payload");
+	handle_connected(ipmi, EINVAL, addr_num);
+	goto out;
+    }
+    conf = msg->data[32] & 0x3f;
+
+    
+
     return IPMI_MSG_ITEM_USED;
 
  out:
@@ -2665,7 +2767,7 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
     memset(data, 0, sizeof(data));
     data[0] = 0;
     data[1] = lan->privilege;
-    ipmi_set_uint32(data+4, 1); /* Use session 1, don't really care. */
+    ipmi_set_uint32(data+4, lan->session_id[addr_num]);
     data[8] = 0; /* auth algorithm */
     if (lan->requested_auth == IPMI_LANP_AUTHENTICATION_ALGORITHM_DEFAULT)
 	data[11] = 0; /* Let the BMC pick */
@@ -2688,7 +2790,7 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
 	data[28] = lan->requested_integ;
     }
 
-    msg.netfn = 0;
+    msg.netfn = IPMI_RMCPP_DUMMY_NETFN;
     msg.cmd = IPMI_RMCPP_PAYLOAD_TYPE_OPEN_SESSION_REQUEST;
     msg.data = data;
     msg.data_len = 32;
@@ -2713,7 +2815,7 @@ start_rmcpp(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi, int addr_num)
     lan->unauth_out_seq_num[addr_num] = 0;
     lan->inbound_seq_num[addr_num] = 0;
     lan->unauth_in_seq_num[addr_num] = 0;
-    lan->session_id[addr_num] = 0;
+    lan->session_id[addr_num] = 1; /* Use session 1, don't really care. */
     lan->working_conf[addr_num] = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
     lan->working_integ[addr_num] = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
 
@@ -3300,6 +3402,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->os_hnd = handlers;
     ipmi->con_type = "rmcp";
     ipmi->priv_level = privilege;
+    ipmi->ipmb_addr = 0x20; /* Assume this until told otherwise */
 
     lan = ipmi_mem_alloc(sizeof(*lan));
     if (!lan) {
@@ -3417,6 +3520,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->deregister_for_command = lan_deregister_for_command;
     ipmi->close_connection = lan_close_connection;
     ipmi->close_connection_done = lan_close_connection_done;
+    ipmi->handle_async_event = handle_async_event;
 
     /* Add the waiter last. */
     rv = handlers->add_fd_to_wait_for(handlers,
@@ -3490,7 +3594,6 @@ snmp_got_match(lan_data_t *lan, ipmi_msg_t *msg, unsigned char *pet_ack)
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = 0xf;
     si.lun = 0;
- out: /* FIXME - this won't work, msg may be NULL */
     handle_async_event(lan->ipmi, (ipmi_addr_t *) &si, sizeof(si), msg);
 
     /* Send the ack directly. */
@@ -3580,354 +3683,4 @@ _ipmi_lan_shutdown(void)
 	ipmi_destroy_lock(lan_list_lock);
 	lan_list_lock = NULL;
     }
-}
-
-/****************************************************************************
- *
- * IPMI-specific data formatting.
- *
- ***************************************************************************/
-static int ipmi_format_msg(ipmi_con_t    *ipmi,
-			   ipmi_addr_t   *addr,
-			   unsigned int  addr_len,
-			   ipmi_msg_t    *msg,
-			   unsigned char *out_data,
-			   unsigned int  *out_data_len,
-			   unsigned char seq)
-{
-    unsigned char *tmsg = out_data;
-    lan_data_t    *lan = ipmi->con_data;
-    int           pos;
-    int           msgstart;
-
-    if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-	/* It's a message straight to the BMC. */
-	ipmi_system_interface_addr_t *si_addr
-	    = (ipmi_system_interface_addr_t *) addr;
-
-	if ((msg->data_len + 7) > *out_data_len)
-	    return E2BIG;
-	if (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
-	    tmsg[0] = 0x20;
-	else
-	    tmsg[0] = lan->slave_addr; /* To the BMC. */
-	tmsg[1] = (msg->netfn << 2) | si_addr->lun;
-	tmsg[2] = ipmb_checksum(tmsg, 2);
-	tmsg[3] = 0x81; /* Remote console IPMI Software ID */
-	tmsg[4] = seq << 2;
-	tmsg[5] = msg->cmd;
-	memcpy(tmsg+6, msg->data, msg->data_len);
-	pos = msg->data_len + 6;
-	tmsg[pos] = ipmb_checksum(tmsg+3, pos-3);
-	pos++;
-    } else {
-	/* It's an IPMB address, route it using a send message
-           command. */
-	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) addr;
-	int              do_broadcast = 0;
-
-	if ((addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
-	    && (!lan->ipmi->broadcast_broken))
-	{
-	    do_broadcast = 1;
-	}
-
-	if ((msg->data_len + 15 + do_broadcast) > *out_data_len)
-	    return E2BIG;
-
-	pos = 0;
-	if (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
-	    tmsg[pos++] = 0x20;
-	else
-	    tmsg[pos++] = lan->slave_addr; /* BMC is the bridge. */
-	tmsg[pos++] = (IPMI_APP_NETFN << 2) | 0;
-	tmsg[pos++] = ipmb_checksum(tmsg, 2);
-	tmsg[pos++] = 0x81; /* Remote console IPMI Software ID */
-	tmsg[pos++] = (seq << 2) | 0; /* LUN is zero */
-	tmsg[pos++] = IPMI_SEND_MSG_CMD;
-	tmsg[pos++] = ((ipmb_addr->channel & 0xf)
-		       | (1 << 6)); /* Turn on tracking. */
-	if (do_broadcast)
-	    tmsg[pos++] = 0; /* Do a broadcast. */
-	msgstart = pos;
-	tmsg[pos++] = ipmb_addr->slave_addr;
-	tmsg[pos++] = (msg->netfn << 2) | ipmb_addr->lun;
-	tmsg[pos++] = ipmb_checksum(tmsg+msgstart, 2);
-	msgstart = pos;
-	tmsg[pos++] = lan->slave_addr;
-	tmsg[pos++] = (seq << 2) | 2; /* add 2 as the SMS LUN */
-	tmsg[pos++] = msg->cmd;
-	memcpy(tmsg+pos, msg->data, msg->data_len);
-	pos += msg->data_len;
-	tmsg[pos] = ipmb_checksum(tmsg+msgstart, pos-msgstart);
-	pos++;
-	tmsg[pos] = ipmb_checksum(tmsg+3, pos-3);
-	pos++;
-    }
-
-    *out_data_len = pos;
-    return 0;
-}
-
-static int ipmi_get_recv_seq(ipmi_con_t    *ipmi,
-			     unsigned char *data,
-			     unsigned int  data_len,
-			     unsigned char *seq)
-{
-    if (data_len < 8) { /* Minimum size of an IPMI msg. */
-	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG,
-		     "Dropped message because too small(6)");
-	return EINVAL;
-    }
-
-    if ((data[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD)
-	&& ((data[1] >> 2) == (IPMI_APP_NETFN | 1)))
-    {
-	/* An async event has no seq #, but we return one anyway because
-	   we handle it in the recv code. */
-	*seq = 0;
-	return 0;
-    }
-
-    *seq = data[4] >> 2;
-    return 0;
-}
-
-static int ipmi_handle_recv(ipmi_con_t    *ipmi,
-			    ipmi_msgi_t   *rspi,
-			    ipmi_addr_t   *orig_addr,
-			    unsigned int  orig_addr_len,
-			    ipmi_msg_t    *orig_msg,
-			    unsigned char *data,
-			    unsigned int  data_len)
-{
-    ipmi_msg_t    *msg = &(rspi->msg);
-    ipmi_addr_t   *addr = &(rspi->addr);
-    ipmi_addr_t   addr2;
-    unsigned int  addr_len;
-    unsigned int  seq;
-    unsigned char *tmsg = data;
-    lan_data_t    *lan = ipmi->con_data;
-
-    if (data_len < 8) { /* Minimum size of an IPMI msg. */
-	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG,
-		     "Dropped message because too small(6)");
-	return EINVAL;
-    }
-
-    /* We don't check the checksums, because the network layer should
-       validate all this for us. */
-
-    seq = data[4] >> 2;
-
-    if ((tmsg[5] == IPMI_SEND_MSG_CMD)
-	&& ((tmsg[1] >> 2) == (IPMI_APP_NETFN | 1)))
-    {
-	/* It's a response to a sent message. */
-	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) addr;
-	ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *) orig_addr;
-
-	/* FIXME - this entire thing is a cheap hack. */
-	if (tmsg[6] != 0) {
-	    /* Got an error from the send message.  We don't have any
-               IPMB information to work with, so just extract it from
-               the original message. */
-	    memcpy(ipmb_addr, ipmb2, sizeof(*ipmb_addr));
-	    /* Just in case it's a broadcast. */
-	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-	    addr_len = sizeof(ipmi_ipmb_addr_t);
-	    msg->netfn = orig_msg->netfn | 1;
-	    msg->cmd = orig_msg->cmd;
-	    msg->data = tmsg + 6;
-	    msg->data_len = 1;
-	    if (ipmi->handle_send_rsp_err) {
-		ipmi->handle_send_rsp_err(ipmi, msg);
-	    }
-	} else {
-	    if (data_len < 15)
-		/* The response to a send message was not carrying the
-		   payload. */
-		return EINVAL;
-
-	    if (tmsg[10] == lan->slave_addr) {
-		ipmi_system_interface_addr_t *si_addr
-		    = (ipmi_system_interface_addr_t *) addr;
-
-		/* It's directly from the BMC, so it's a system interface
-		   message. */
-		si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-		si_addr->channel = 0xf;
-		si_addr->lun = tmsg[11] & 3;
-	    } else {
-		/* This is a hack, but the channel does not come back in the
-		   message.  So we use the channel from the original
-		   instead. */
-		ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-		ipmb_addr->channel = ipmb2->channel;
-		ipmb_addr->slave_addr = tmsg[10];
-		ipmb_addr->lun = tmsg[11] & 0x3;
-	    }
-	    msg->netfn = tmsg[8] >> 2;
-	    msg->cmd = tmsg[12];
-	    addr_len = sizeof(ipmi_ipmb_addr_t);
-	    msg->data = tmsg+13;
-	    msg->data_len = data_len - 15;
-	}
-    } else if ((tmsg[5] == IPMI_READ_EVENT_MSG_BUFFER_CMD)
-	       && ((tmsg[1] >> 2) == (IPMI_APP_NETFN | 1)))
-    {
-	/* It is an event from the event buffer. */
-	ipmi_system_interface_addr_t *si_addr
-	    = (ipmi_system_interface_addr_t *) addr;
-
-	if (tmsg[6] != 0) {
-	    /* An error getting the events, just ignore it. */
-	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-		ipmi_log(IPMI_LOG_DEBUG, "Dropped message err getting event");
-	    return EINVAL;
-	}
-
-	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si_addr->channel = 0xf;
-	si_addr->lun = tmsg[4] & 3;
-
-	msg->netfn = tmsg[1] >> 2;
-	msg->cmd = tmsg[5];
-	addr_len = sizeof(ipmi_system_interface_addr_t);
-	msg->data = tmsg+6;
-	msg->data_len = data_len - 6;
-        if (DEBUG_MSG) {
-	    char buf1[32], buf2[32], buf3[32];
-	    ipmi_log(IPMI_LOG_DEBUG_START, "incoming async event\n addr =");
-	    dump_hex((unsigned char *) addr, addr_len);
-            ipmi_log(IPMI_LOG_DEBUG_CONT,
-		     "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
-		     ipmi_get_netfn_string(msg->netfn, buf1, 32),
-		     ipmi_get_command_string(msg->netfn, msg->cmd, buf2, 32),
-		     msg->data_len,
-		     ipmi_get_cc_string(msg->data[0], buf3, 32));
-	    if (msg->data_len) {
-		ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(len=%d.) =\n  ",
-			 msg->data_len);
-		dump_hex(msg->data, msg->data_len);
-	    }
-	    ipmi_log(IPMI_LOG_DEBUG_END, " ");
-        }
-	handle_async_event(ipmi, addr, addr_len, msg);
-	return ENOSYS;
-    } else if ((orig_addr->addr_type != IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
-	       && (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
-		    && (tmsg[3] == 0x20))
-		   || ((! (lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		       && (tmsg[3] == lan->slave_addr))))
-    {
-        /* In some cases, a message from the IPMB looks like it came
-	   from the BMC itself, IMHO a misinterpretation of the
-	   errata.  IPMIv1_5_rev1_1_0926 markup, section 6.12.4,
-	   didn't clear things up at all.  Some manufacturers have
-	   interpreted it this way, but IMHO it is incorrect. */
-        memcpy(addr, orig_addr, orig_addr_len);
-        addr_len = orig_addr_len;
-	if (addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
-	    addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-        msg->netfn = tmsg[1] >> 2;
-        msg->cmd = tmsg[5];
-        msg->data = tmsg+6;
-        msg->data_len = data_len - 7;
-    } else {
-	/* It's not encapsulated in a send message response. */
-
-	if (((lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
-	     && (tmsg[3] == 0x20))
-	    || ((!(lan->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		&& (tmsg[3] == lan->slave_addr)))
-	{
-	    ipmi_system_interface_addr_t *si_addr
-		= (ipmi_system_interface_addr_t *) addr;
-
-	    /* It's directly from the BMC, so it's a system interface
-	       message. */
-	    si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	    si_addr->channel = 0xf;
-	    si_addr->lun = tmsg[4] & 3;
-	} else {
-	    ipmi_ipmb_addr_t *ipmb_addr	= (ipmi_ipmb_addr_t *) addr;
-	    ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *) orig_addr;
-
-	    /* A message from the IPMB. */
-	    ipmb_addr->addr_type = IPMI_IPMB_ADDR_TYPE;
-	    /* This is a hack, but the channel does not come back in the
-	       message.  So we use the channel from the original
-	       instead. */
-	    ipmb_addr->channel = ipmb2->channel;
-	    ipmb_addr->slave_addr = tmsg[3];
-	    ipmb_addr->lun = tmsg[4] & 0x3;
-	}
-
-	msg->netfn = tmsg[1] >> 2;
-	msg->cmd = tmsg[5];
-	addr_len = sizeof(ipmi_system_interface_addr_t);
-	msg->data = tmsg+6;
-	msg->data_len = data_len - 6;
-	msg->data_len--; /* Remove the checksum */
-    }
-    
-    /* Convert broadcast addresses to regular IPMB addresses, since
-       they come back that way. */
-    memcpy(&addr2, orig_addr, orig_addr_len);
-    if (addr2.addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
-	addr2.addr_type = IPMI_IPMB_ADDR_TYPE;
-
-    /* Validate that this response if for this command. */
-    if (((orig_msg->netfn | 1) != msg->netfn)
-	|| (orig_msg->cmd != msg->cmd)
-	|| (! ipmi_addr_equal(&addr2, orig_addr_len, addr, addr_len)))
-    {
-	if (DEBUG_RAWMSG || DEBUG_MSG_ERR) {
-	    ipmi_log(IPMI_LOG_DEBUG_START,
-                     "Dropped message seq %d - netfn/cmd/addr mismatch\n"
-                     " netfn     = %2.2x, exp netfn = %2.2x\n"
-                     " cmd       = %2.2x, exp cmd   = %2.2x\n"
-                     " addr      =",
-                     seq,
-		     msg->netfn, orig_msg->netfn | 1,
-		     msg->cmd, orig_msg->cmd);
-	    dump_hex(addr, addr_len);
-	    ipmi_log(IPMI_LOG_DEBUG_CONT,
-		     "\n exp addr=");
-	    dump_hex(&addr2, orig_addr_len);
-	    if (data_len) {
-		ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data     =\n  ");
-		dump_hex(tmsg, data_len);
-	    }
-	    dump_hex(addr, addr_len);
-            ipmi_log(IPMI_LOG_DEBUG_END, " ");
-	}
-	return EINVAL;
-    }
-
-    rspi->addr_len = addr_len;
-    memcpy(rspi->data, msg->data, msg->data_len);
-    msg->data = rspi->data;
-
-    if (DEBUG_MSG) {
-	char buf1[32], buf2[32], buf3[32];
-        ipmi_log(IPMI_LOG_DEBUG_START, "incoming msg from IPMB addr =");
-        dump_hex((unsigned char *) addr, addr_len);
-        ipmi_log(IPMI_LOG_DEBUG_CONT,
-                "\n msg  = netfn=%s cmd=%s data_len=%d. cc=%s",
-		ipmi_get_netfn_string(msg->netfn, buf1, 32),
-                ipmi_get_command_string(msg->netfn, msg->cmd, buf2, 32),
-		 msg->data_len,
-		ipmi_get_cc_string(msg->data[0], buf3, 32));
-	if (msg->data_len) {
-	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data =\n  ");
-	    dump_hex(msg->data, msg->data_len);
-	}
-        ipmi_log(IPMI_LOG_DEBUG_END, " ");
-    }
-
-    return 0;
 }

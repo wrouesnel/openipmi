@@ -390,7 +390,7 @@ deliver_rsp(ipmi_domain_t                *domain,
 	used = rsp_handler(domain, rspi);
 
     if (!used)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
 }
 
 /***********************************************************************
@@ -523,17 +523,16 @@ cleanup_domain(ipmi_domain_t *domain)
 	ilist_init_iter(&iter, domain->cmds);
 	ok = ilist_first(&iter);
 	while (ok) {
-	    unsigned char err;
-	    ipmi_msgi_t   *rspi;
+	    ipmi_msgi_t *rspi;
 
 	    nmsg = ilist_get(&iter);
 	    rspi = nmsg->rsp_item;
 
 	    rspi->msg.netfn = nmsg->msg.netfn | 1;
 	    rspi->msg.cmd = nmsg->msg.cmd;
-	    rspi->msg.data = &err;
+	    rspi->msg.data = rspi->data;
 	    rspi->msg.data_len = 1;
-	    err = IPMI_UNKNOWN_ERR_CC;
+	    rspi->msg.data[0] = IPMI_UNKNOWN_ERR_CC;
 	    deliver_rsp(domain, nmsg->rsp_handler, rspi);
 	    
 	    ilist_delete(&iter);
@@ -1688,15 +1687,10 @@ ll_rsp_handler(ipmi_con_t   *ipmi,
 
     rspi = nmsg->rsp_item;
     if (nmsg->rsp_handler) {
-	memcpy(&rspi->addr, &orspi->addr, orspi->addr_len);
-	rspi->addr_len = orspi->addr_len;
-	rspi->msg = orspi->msg;
-	memcpy(rspi->data, orspi->data, orspi->msg.data_len);
-	rspi->msg.data = rspi->data;
-
+	ipmi_move_msg_item(rspi, orspi);
 	deliver_rsp(domain, nmsg->rsp_handler, rspi);
     } else
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     ipmi_mem_free(nmsg);
  out_unlock:
     _ipmi_domain_put(domain);
@@ -1723,19 +1717,19 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 
-    si = (ipmi_system_interface_addr_t *) &rspi->addr;
-    si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-    si->channel = (long) orspi->data4;
-    si->lun = ipmi_addr_get_lun(&rspi->addr);
-    rspi->addr_len = sizeof(*si);
-
     if (nmsg->rsp_handler) {
-	rspi->msg = orspi->msg;
-	memcpy(rspi->data, orspi->data, orspi->msg.data_len);
-	rspi->msg.data = rspi->data;
+	ipmi_move_msg_item(rspi, orspi);
+
+	/* Override the address with the system interface address. */
+	si = (ipmi_system_interface_addr_t *) &rspi->addr;
+	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+	si->channel = (long) orspi->data4;
+	si->lun = ipmi_addr_get_lun(&rspi->addr);
+	rspi->addr_len = sizeof(*si);
+
 	deliver_rsp(domain, nmsg->rsp_handler, rspi);
     } else
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     ipmi_mem_free(nmsg);
 
     _ipmi_domain_put(domain);
@@ -1800,7 +1794,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     nmsg = ipmi_mem_alloc(sizeof(*nmsg));
     if (!nmsg)
 	return ENOMEM;
-    nmsg->rsp_item = ipmi_mem_alloc(sizeof(ipmi_msgi_t));
+    nmsg->rsp_item = ipmi_alloc_msg_item();
     if (!nmsg->rsp_item) {
 	ipmi_mem_free(nmsg);
 	return ENOMEM;
@@ -1870,7 +1864,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     if (is_ipmb)
 	data4 = (void *) (long) domain->conn_seq;
 
-    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi) {
 	rv = ENOMEM;
 	goto out;
@@ -1887,7 +1881,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 				       rspi);
 
     if (rv) {
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
 	goto out_unlock;
     } else if (is_ipmb) {
 	/* If it's a system interface we don't add it to the list of
@@ -1900,7 +1894,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 
  out:
     if (rv) {
-	ipmi_mem_free(nmsg->rsp_item);
+	ipmi_free_msg_item(nmsg->rsp_item);
 	ipmi_mem_free(nmsg);
     }
     return rv;
@@ -1932,7 +1926,7 @@ reroute_cmds(ipmi_domain_t *domain, int new_con)
                                    will not match. */
 	    nmsg->con = new_con;
 
-	    rspi = ipmi_mem_alloc(sizeof(*rspi));
+	    rspi = ipmi_alloc_msg_item();
 	    if (!rspi)
 		goto send_err;
 
@@ -1947,7 +1941,7 @@ reroute_cmds(ipmi_domain_t *domain, int new_con)
 						     ll_rsp_handler,
 						     rspi);
 	    if (rv) {
-		ipmi_mem_free(rspi);
+		ipmi_free_msg_item(rspi);
 	    send_err:
 		/* Couldn't send the message, just fail it. */
 		if (nmsg->rsp_handler) {

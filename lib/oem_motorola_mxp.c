@@ -8998,7 +8998,7 @@ mxp_handler(ipmi_mc_t *mc,
 /* We don't actually fetch the IPMB address, since it is alway 0x20.
    Instead, we get the AMC status to see if we are active or not. */
 static int
-ipmb_handler(ipmi_con_t   *ipmi, ipmi_msgi_t  *rspi)
+ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
     ipmi_msg_t           *msg = &rspi->msg;
     ipmi_ll_ipmb_addr_cb handler = rspi->data1;
@@ -9037,7 +9037,7 @@ mxp_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
     int                          rv;
     ipmi_msgi_t                  *rspi;
 
-    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi)
 	return ENOMEM;
 
@@ -9056,7 +9056,7 @@ mxp_ipmb_fetch(ipmi_con_t *conn, ipmi_ll_ipmb_addr_cb handler, void *cb_data)
     rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			    ipmb_handler, rspi);
     if (rv)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     return rv;
 }
 
@@ -9096,7 +9096,7 @@ mxp_activate(ipmi_con_t           *conn,
     int                          rv;
     ipmi_msgi_t                  *rspi;
 
-    rspi = ipmi_mem_alloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi)
 	return ENOMEM;
 
@@ -9121,7 +9121,7 @@ mxp_activate(ipmi_con_t           *conn,
     rv = conn->send_command(conn, (ipmi_addr_t *) &si, sizeof(si), &msg,
 			    activate_handler, rspi);
     if (rv)
-	ipmi_mem_free(rspi);
+	ipmi_free_msg_item(rspi);
     return rv;
 }
 
@@ -9138,7 +9138,7 @@ mxp_handle_send_rsp_err(ipmi_con_t *ipmi, ipmi_msg_t *rsp)
 	ipmi_msgi_t *rspi;
 	int         rv;
 
-	rspi = ipmi_mem_alloc(sizeof(*rspi));
+	rspi = ipmi_alloc_msg_item();
 	if (!rspi)
 	    goto out_continue;
 
@@ -9153,7 +9153,7 @@ mxp_handle_send_rsp_err(ipmi_con_t *ipmi, ipmi_msg_t *rsp)
 	rv = ipmi->send_command(ipmi, (ipmi_addr_t *) &si, sizeof(si), &msg,
 				NULL, rspi);
 	if (rv)
-	    ipmi_mem_free(rspi);
+	    ipmi_free_msg_item(rspi);
 
 	/* Don't handle the message, let a timeout and resend occur. */
     out_continue:

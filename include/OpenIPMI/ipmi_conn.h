@@ -269,6 +269,19 @@ struct ipmi_con_s
 				 ipmi_ll_con_closed_cb handler,
 				 void                  *cb_data);
 
+    /* Hacks reported by OEM code.  This should be set by the lower
+       layer. */
+    unsigned int  hacks;
+
+    /* The IPMB address as reported by the lower layer. */
+    unsigned char ipmb_addr;
+
+    /* Handle an async event for the connection reported by something
+       else. */
+    void (*handle_async_event)(ipmi_con_t   *con,
+			       ipmi_addr_t  *addr,
+			       unsigned int addr_len,
+			       ipmi_msg_t   *msg);
 };
 
 #define IPMI_CONN_NAME(c) (c->name ? c->name : "")
@@ -333,6 +346,20 @@ void ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
 				  unsigned int          addr_len,
 				  ipmi_msg_t            *msg,
 				  ipmi_ll_rsp_handler_t rsp_handler);
+
+/* You should use these for allocating and freeing mesage items.  Note
+   that if you set item->msg.data to a non-NULL value that is not
+   item->data, the system will free it with ipmi_free_msg_item_data().
+   So you should allocate it with ipmi_alloc_msg_item_data9). */
+ipmi_msgi_t *ipmi_alloc_msg_item(void);
+void ipmi_free_msg_item(ipmi_msgi_t *item);
+void *ipmi_alloc_msg_item_data(unsigned int size);
+void ipmi_free_msg_item_data(void *data);
+/* Move the data from the old message item to the new one, NULL-ing
+   out the old item's data.  This will free the new_item's original
+   data if necessary.  This will *not* copy the data items, just the
+   address and message. */
+void ipmi_move_msg_item(ipmi_msgi_t *new_item, ipmi_msgi_t *old_item);
 
 #ifdef __cplusplus
 }

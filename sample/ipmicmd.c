@@ -348,7 +348,8 @@ timed_rsp_handler(ipmi_con_t *con, ipmi_msgi_t *rspi)
 	if (rv) {
 	    printf("Error sending command: %x\n", rv);
 	    free(data);
-	}
+	} else
+    	    return IPMI_MSG_ITEM_USED;
     }
     return IPMI_MSG_ITEM_NOT_USED;
 }
@@ -370,9 +371,9 @@ time_msgs(ipmi_con_t    *con,
 	return;
     }
 
-    rspi = malloc(sizeof(*rspi));
+    rspi = ipmi_alloc_msg_item();
     if (!rspi) {
-	free(rspi);
+	free(data);
 	printf("No memory to perform command\n");
 	return;
     }
@@ -398,6 +399,7 @@ time_msgs(ipmi_con_t    *con,
     if (rv) {
 	printf("Error sending command: %x\n", rv);
 	free(data);
+	ipmi_free_msg_item(rspi);
     }
 }
 
