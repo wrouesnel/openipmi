@@ -184,21 +184,23 @@ swig_make_ref_i(void *item, swig_type_info *class)
 
 /* Get the underlying callback object reference. */
 static swig_cb_val
-get_swig_cb(swig_cb cb)
+get_swig_cb_i(swig_cb cb)
 {
     swig_cb_val rv = SvRV(cb);
     return rv;
 }
+#define get_swig_cb(cb, func) get_swig_cb_i(cb)
 
 /* Get the underlying callback object reference and increment its refcount. */
 static swig_cb_val
-ref_swig_cb(swig_cb cb)
+ref_swig_cb_i(swig_cb cb)
 {
     swig_cb_val rv = SvRV(cb);
 
     SvREFCNT_inc(rv);
     return rv;
 }
+#define ref_swig_cb(cb, func) ref_swig_cb_i(cb)
 
 /* Get the underlying callback object reference and decrement its refcount. */
 static swig_cb_val
