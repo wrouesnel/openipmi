@@ -1,12 +1,23 @@
 \documentclass{book}
-\usepackage{graphicx,moreverb,tabularx,acronym}
+\usepackage{graphicx,moreverb,tabularx,acronym,longtable,alltt}
 \title{IPMI -- A Gentle Introduction\\with OpenIPMI}
 \author{Corey Minyard $<$minyard@acm.org$>$\\
         Montavista Software}
 \date{\today}
 %
-\newcommand{\msgitem}[2]{#1&\parbox{0.7\textwidth}{\vspace{.15em}#2\vspace{.15em}} \\ \hline}
+\newcommand{\msgitem}[2]{#1&\parbox{0.8\textwidth}{\vspace{.15em}#2\vspace{.15em}} \\ \hline}
 \newenvironment{showmsg}{\noindent\begin{tabular}{|p{.5in}|l|}\hline}{\end{tabular}}
+%\begin{table}
+%\emph{Request}\\
+%\begin{showmsg}
+%\msgitem{}{}
+%\end{showmsg}
+%\\\emph{Response}\\
+%\begin{showmsg}
+%\msgitem{}{}
+%\end{showmsg}
+%\caption{\label{get-lan-conf-cmd}Get \acs{LAN} Configuration Parameters Command}
+%\end{table}
 %
 \begin{document}
 \maketitle
@@ -40,6 +51,8 @@ minor management functions.  However, many companies and organizations
 have built more extensive management control using \acs{OEM} extensions to
 \acs{IPMI}.
 
+The specification for \acs{IPMI} is \cite{ipmi-spec}.
+
 \tableofcontents
 
 \chapter{Acronyms}
@@ -64,14 +77,18 @@ have built more extensive management control using \acs{OEM} extensions to
 \acro{SEL}{System Event Log}
 \acro{PPP}{Point to Point Protocol}
 \acro{RMCP}{Remote Management Control Protocol}
+\acro{IP}{Internet Protocol}
+\acro{UDP}{User Datagram Protocol}
+\acro{MD2}{Message Digest 2}
+\acro{MD5}{Message Digest 5}
+\acro{PDU}{Protocol Data Unit}
+  In SNMP, this is a packet holding an SNMP operation.
+\acro{PEF}{Platform Event Filter}
+\acro{MAC}{Media Access Code?}
+\acro{ARP}{Address Resolution Protocol}
 \end{acronym}
 
 \chapter{Documents}
-
-\begin{tabularx}{\textwidth}{lX}
-IPMI Spec & \\
-RMCP & \\
-\end{tabularx}
 
 \mainmatter
 
@@ -1104,7 +1121,7 @@ This is the messaging interface for talking to local IPMI interfaces
 
 \begin{tabularx}{\textwidth}{lX}
 \verb=ipmi_pef.h= &
-Contains code for configuring the Platform Event Filter (PEF).\\
+Contains code for configuring the \ac{PEF}.\\
 
 \verb=ipmi_lanparm.h= &
 Contains code for configuring the \acs{LAN} configuration data.\\
@@ -1257,6 +1274,8 @@ matter how you interface to an \acs{IPMI} system, the messages will work the
 same.
 
 \section{OpenIPMI Generic Interface}
+\label{openipmi-generic-interface}
+
 The OpenIPMI libary has a generic interface to the various
 connections.  You use a per-interface command to set up the interface,
 but once set up, the interfaces all work the same.  The file shown in
@@ -1770,6 +1789,8 @@ decoding the response, and resending messages.
 
 \section{ICMB}
 
+TBD - write this.
+
 \section{\acs{LAN}}
 The \ac{IPMI} \acs{LAN} interface allows users to connect to \ac{IPMI}
 systems over an Ethernet interface.  This can generally even be done
@@ -1779,9 +1800,331 @@ the main processor even when the operating system is not operational
 on the system.
 
 The \ac{IPMI} \acs{LAN} protocol runs over a subset of the \ac{RMCP}
-protocol.
+protocol.  \ac{RMCP} is defined in RMCP\cite{rmcp}.
 
-\subsection{\acs{SNMP} Traps}
+The \ac{IPMI} \acs{LAN} is not well defined in the spec.  Many valid
+interpretations of the spec were possible.  Some errata has been
+issued, but that really only added one more possible interpretation.
+OpenIPMI implements the three different common interpretations of the
+spec.  They can interwork seamlessly, so it is not a problem.
+
+TBD - describe the protocol in detail.
+
+\subsection{\acs{LAN} Configuration}
+\label{lan-config}
+Most systems have tools to configure the \ac{IPMI} \acs{LAN}
+interface.  IPMI has a built-in way to do this, too, through a set of
+tables.
+
+To set up these table, the command shown in table
+\ref{set-lan-conf-cmd} is used to set parameters and the command shown
+in table \ref{get-lan-conf-cmd} is used to get the parameters.
+
+\begin{table}
+\emph{Request}\\
+\begin{showmsg}
+\msgitem{0}{Bits 0-3 - Channel Number\\
+	    Bits 4-7 - reserved}
+\msgitem{1}{Parameter Selector.  This selects the entry in the table that you
+	want to set.}
+\msgitem{2-n}{The data for the parameter.  You must look up the entry in
+	table \ref{lan-conf-parms} for the exact contents, it depends on
+	which entry you are setting.}
+\end{showmsg}
+\\\emph{Response}\\
+\begin{showmsg}
+\msgitem{0}{Completion code.  Standard completion codes, plus:\\
+	80h - Parameter not supported\\
+	81h - Attempt to set the ``set in progress' value (parm 0) when
+		the parameter is not in the free (set complete) state.\\
+	82h - Attempt to write a read-only parameter.}
+\end{showmsg}
+\caption{\label{set-lan-conf-cmd}Set \acs{LAN} Configuration Parameters Command}
+\end{table}
+
+\begin{table}
+\emph{Request}\\
+\begin{showmsg}
+\msgitem{0}{Bits 0-3 - Channel Number\\
+	    Bits 4-6 - reserved\\
+	    Bit 7 - If 1, only get parameter revision}
+\msgitem{1}{Parameter Selector.  This selects the entry in the table that you
+	want to get.}
+\msgitem{2}{Set Selector.  Some parameters are in an array, this tells which
+	array element to set.  Set to zero if the parameter does not have a
+	set selector.}
+\msgitem{3}{Block Selector.  Some parameters have two levels of arrays
+	(an array inside of the array).  The Set Selector is the first
+	level array specifier, this is the second level.  No standard
+	LAN parameters use this, although OEM ones might.  Set to zero
+	if the parameter does not have a block selector.}
+\end{showmsg}
+\\\emph{Response}\\
+\begin{showmsg}
+\msgitem{0}{Completion code.  Standard codes, plus:\\
+	80h - parameter not supported}
+\msgitem{1}{Parameter revision.  Format is:\\
+	Bits 0-3 - Oldest revision parameter is backward compatible with\\
+	Bits 4-7 - Current parameter revision}
+\msgitem{2-n}{Parameter data.  This will not be present if bit 7 of byte 0
+	of the response is set to 1.  The contents of this depends on the
+	particular parameter being fetched, see table \ref{lan-conf-parms}
+	for the	parameters.}
+\end{showmsg}
+\caption{\label{get-lan-conf-cmd}Get \acs{LAN} Configuration Parameters Command}
+\end{table}
+
+The \acs{LAN} configuration table has an unusual locking mechanism
+(although it is usual for \acs{IPMI}).  Parameter zero is a lock.  If
+you set the value to one, it will only succeed if the value is zero.
+Thus, to lock the table, you set the value to one until it succeeds.
+You then set it to zero when you are done.  This locking mechanism
+leads to problem if the locker dies while it holds the lock, so you
+probably need some way to override the lock if this happens.  The lock
+does not actually keep anyone from changing the data, it is simply a
+common mechanism to mutual exclusion.  Note also that the lock has a
+``commit'' mechanism, writing two to the lock will commit the contents
+if the system supports it.  If the system supports rollback, setting
+the value to zero will rollback and not commit the changes you made.
+So for correctness, you should write a two when you are complete, and
+if that fails then write a zero.
+
+All network parameters such as \acs{IP} address, port, and \acs{MAC}
+address are in network order, also called big endian or most
+significant byte first.
+
+\begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
+\caption{\acs{LAN} Configuration Parameters\label{lan-conf-parms}}
+\\ \hline
+\bfseries{Parameter} & \bfseries{\#} & \bfseries{Description}\\
+\endhead
+\hline
+Set In Progress & 0 &
+	Used to indicate that the parameters are being updated.
+	Bits 2-7 are reserved.  Bits 0-1 have the following values:
+	\begin{description}
+	\item[00b] - set complete.  This is the state the system comes up in.
+		This means that any user is finished updating the
+		parameters.  If rollback is implemented, setting this
+		value will cause any changes made since last setting
+		this value to ``set in progress'' to be undone.
+	\item[01b] - set in progress.  A user will set this value to inform
+		others that it is updating these parameters.  This value
+		can only be set if the current value is ``set complete''.
+	\item[10b] - commit write (optional).  This will commit any changes
+		that
+		are pending and go to ``set complete'' state.  Some systems
+		may not support this, if setting this returns an error you
+		should set this value to ``set complete'' by hand.
+	\end{description}\\
+\hline
+Authentication Type Support (Read only) & 1 &
+	A read only field showing which authentication types are supported.
+	The format for this is defined in table \ref{auth-bitmask}.\\
+\hline
+Authentication Type Enables & 2 &
+	A 5 byte field that holds the allowed authentication type for each
+	privilege level.  The bytes are:
+	\begin{description}
+	\item[byte 0] - callback
+	\item[byte 1] - user
+	\item[byte 2] - operator
+	\item[byte 3] - admin
+	\item[byte 4] - oem
+	\end{description}
+	The format for each byte is defined in table \ref{auth-bitmask}.\\
+\hline
+\acs{IP} Address & 3 &
+	A 4 byte field holding the \acs{IP} address, in network order.  This
+	is the local \acs{IP} address used for this particular channel.  You
+	only need to set this is parameter 4 is set to ``static address''.\\
+\hline
+\acs{IP} Address Source & 4 &
+	One byte field telling the BMC where to get its IP address. Bits 4-7
+	are reserved.  Values for bits 0-3 are:
+	\begin{description}
+	\item[0] - unspecified (I don't know what that means)
+	\item[1] - static address, configured from parameter 3
+	\item[2] - get address from DHCP
+	\item[3] - get address from BIOS or system software
+	\item[4] - get address by some other method
+	\end{description}
+	As you probably can tell, static address and DHCP are really the
+	only useful values.\\
+\hline
+\acs{MAC} Address & 5 &
+	A 6 byte field.  This is the Ethernet \ac{MAC} address to use as the
+	source when transmitting packets, in network order.  You must set
+	this value properly.\\
+\hline
+Subnet Mask & 6 &
+	A 4 byte field holding the subnet mask for the \acs{IP} connection,
+	in network order.\\
+\hline
+IPv4 Header Parms & 7 &
+	A 3 byte field controlling some parameters in the \acs{IP} header.
+	The bytes are:
+	\begin{description}
+	  \item[byte 0] - time to live (default 40h) - The number of network
+	    hops allowed for \acs{IP} packets sent by the \acs{BMC}.
+	  \item[byte 1]
+	    \begin{description}
+	      \item[bits 0-4] - reserved
+	      \item[bits 5-7] - flags.  Sets the of the flags field in the
+		IP header.  The default value is 010b, or do not fragment.
+	    \end{description}
+	  \item[byte 2]  This is the setting of the 8-bit type of service
+	    field in the \acs{IP} header. Only one of bits 1-4 should be
+	    set.
+	    \begin{description}
+	    \item[bit 0] - unused, set to zero.
+	    \item[bit 1] - minimize monetary cost
+	    \item[bit 2] - maximize reliability
+	    \item[bit 3] - maximize throughput
+	    \item[bit 4] - minimize delay
+	    \item[bits 5-7] - Precedence, which is unused by IP systems now.
+	    \end{description}
+	    The default value is 00010000b.
+	\end{description}\\
+\hline
+Primary RMCP port number (optional) & 8 &
+	A 2 byte field holding the \acs{UDP} port number to use for primary
+	\acs{RMCP}.  Default value is 623.\\
+\hline
+Secondary RMCP port number (optional) & 9 &
+	A 2 byte field holding the \acs{UDP} port number to use for the
+	secure aux bus \acs{RMCP} port.  IPMI does not use this, but it is
+	here for completeness.  Default value is 664.\\
+\hline
+\acs{BMC}-generated \acs{ARP} control (optional) & 10 &
+	A 1 byte field controlling how the BMC generates \acs{ARP}s.  If a
+	user attempts to set
+	an unsupported field, the \acs{BMC} will return an error.  The
+	bits are:
+	\begin{description}
+	\item[bit 0] - set to 1 to enable \acs{BMC} generated gratuitous
+	  \acs{ARP}s.
+	\item[bit 1] - set to 1 to enable \acs{BMC} generated \acs{ARP}
+	  responses.
+	\item[bits 2-7] - reserved
+	\end{description}\\
+\hline
+Gratuitous \acs{ARP} interval (optional) & 11 &
+	A one byte field holding the interval between gratuitous \acs{ARP}s.
+	The interval is specified in 500 millisecond increments, with a 10\%
+	accuracy.  If this is not implemented, the interval will be 2
+	seconds.\\
+\hline
+Default gateway address & 12 &
+	A 4 byte field holding the IP address of the default gateway, in
+	network order.  The BMC will send packets to this address if the
+	destination is not on its subnet, if this gateway is chosen as
+	the gateway to use.\\
+\hline
+Default gateway \acs{MAC} address & 13 &
+	A 6 byte filed holding the Ethernet MAC address to use in
+	the destination when
+	sending packets to the default gateway.\\
+\hline
+Backup gateway address & 14 &
+	A 4 byte field holding the IP address of the backup gateway, in
+	network order.  The BMC will send packets to this address if the
+	destination is not on its subnet, if this gateway is chosen as
+	the gateway to use.\\
+\hline
+Backup gateway \acs{MAC} address & 15 &
+	A 6 byte filed holding the Ethernet MAC address to use in the
+	destiination when
+	sending packets to the backup gateway.\\
+\hline
+Community String & 16 &
+	An 18 byte field holding the \acs{SNMP} community string to
+	use in traps send by the BMC.  The default is ``public''.\\
+\hline
+Number of Destinations (read only) & 17 &
+	The number of entries in the destination type and destination address
+	tables in parameters 18 and 19.\\
+\hline
+Destination type & 18 &
+	This is an array of destination types, each 4 bytes long.  The first
+	byte in bits 0-3 is the index into the array, you put the index
+	here when you set the value, and that index gets set.  This index
+	comes from the alert policy entry
+	defined in table \ref{alert-policy-table-entry}. The fields are:
+	\begin{description}
+	\item[byte 0]
+	  \begin{description}
+	    \item[bits 0-3] - The index into the array
+	    \item[bits 4-7] - reserved
+	  \end{description}
+	\item[byte 1] The destination type.  The bits are:
+	  \begin{description}
+	  \item[bits 0-2] - Destination type, values are:
+	    \begin{description}
+	    \item[000b] - PET Trap
+	    \item[001b-101b] - reserved
+	    \item[110b] - OEM 1
+	    \item[111b] - OEM 1
+	    \end{description}
+	  \item[bits 3-6] - reserved
+	  \item[bit 7] - If zero, the alert does not need to be acknowledged
+	    to be considered successful.  If 1, the alert needs to be
+	    acknowledged with a \acs{PET} Acknowledge Command as defined
+	    in table \ref{pet-ack-cmd}.
+	  \end{description}
+	\item[byte 2] \acs{PET} Retry Time.  This specified the amount
+	  of time between resends when waiting for an acknowledge of
+	  the sent trap.
+	\item[byte 3] Max \acs{PET} Retries.
+	  \begin{description}
+	  \item[bits 0-2] - The maximum number of retries of a trap before
+	    giving up.
+	  \item[bits 3-7] - reserved
+	  \end{description}
+	\end{description}\\
+\hline
+Destination address & 19 &
+	This is an array of destination address, each 13 bytes long.  The
+	first byte in bits 0-3 is the index into the array, you put the index
+	here when you set the value, and that index gets set.  This index
+	comes from the alert policy entry
+	defined in table \ref{alert-policy-table-entry}. The fields are:
+	\begin{description}
+	\item[byte 0]
+	  \begin{description}
+	    \item[bits 0-3] - The index into the array
+	    \item[bits 4-7] - reserved
+	  \end{description}
+	\item[byte 1] The address format:
+	  \begin{description}
+	    \item[bits 0-3] - The address type, 0h is the only valid
+	      value, specifying IP.
+	    \item[bits 4-7] - reserved
+	  \end{description}
+	\item[byte 2] Gateway selector
+	  \begin{description}
+	  \item[bit 0]
+	    \begin{description}
+	    \item[0] - use the default gateway
+	    \item[0] - use the backup gateway
+	    \item[bits 1-7] - reserved
+	    \end{description}
+	  \end{description}
+	\item[bytes 3-6] The \acs{IP} address to send the alert to when using
+	  this destination, in network order.
+	\item[bytes 7-12] The Ethernet \acs{MAC} address to send the alert
+	  to when using this destination, in network order.
+	\end{description}\\
+\hline
+OEM & 192+ &
+	Parameters 192 to 255 are OEM parameters.  The rest of the
+	parameters are reserved.\\
+\hline
+\end{longtable}
+
+\subsubsection{ARP control}
+
+\subsection{The \acs{PEF} Table and \acs{SNMP} Traps}
 Many \ac{IPMI} systems can send \acs{SNMP} traps to inform the the
 management system that something has happened.  Generally, it is
 saying that an event has been placed into the event log.  Most of the
@@ -1789,10 +2132,105 @@ event information is in the SNMP trap, but unfortunately, some key
 information is not there.  It does give the system an immediate
 notification.
 
-\subsection{\acs{LAN} Configuration}
-Most systems have tools to configure the \ac{IPMI} \acs{LAN}
-interface.  IPMI has a built-in way to do this, too, through a set of
-tables.
+To have a system send traps, two tables must be set up.  The \acs{LAN}
+configuration table described in section \ref{lan-config} has
+parameters to set the \acs{SNMP} community string and the trap
+destination addresses available.  The \ac{PEF} table contains
+information about how to filter traps.  Different events can cause
+different traps to be sent to different places.  As well, specific
+events can do other things, such as reset or power off the system.
+The thing we are interested in is the ``Alert'' capability.
+
+Note that alerts can also cause telephone pages, serial dialups and
+things like that to happen.
+
+\begin{table}
+\caption{\label{pef-table-entry}}
+\end{table}
+
+\begin{table}
+\caption{\label{alert-policy-table-entry}}
+\end{table}
+
+\begin{table}
+\caption{\label{pet-ack-cmd}}
+\end{table}
+
+\subsection{OpenIPMI \acs{LAN} Configuration}
+OpenIPMI has some support for handling the \acs{LAN} configuration.
+This is defined in the \verb=ipmi_lanparm.h= include file; it has all
+the details on how to use this.
+
+To configure the \acs{LAN} parameters for a BMC, you must first
+allocate a lanparm structure with:
+\begin{verbatim}
+int ipmi_lanparm_alloc(ipmi_mc_t      *mc,
+                       unsigned int   channel,
+                       ipmi_lanparm_t **new_lanparm);
+\end{verbatim}
+
+The channel is the \acs{IPMI} channel number of the LAN port you are
+configuring.  Generally, if a server has more than one port, it will
+have a separate channel for each port, you will have to find the
+channel numbers from the manufacturer, although channels 6 and 7 are
+commonly used as the LAN channels.
+
+Once you have a \verb=lanparm= structure, you can get and set
+individual parms assuming you follow all the rules associated with the
+configuration table.  However, there is a much easier way that
+OpenIPMI provides.  After you have allocated a \verb=lanparm=
+structure these, the function:
+\begin{verbatim}
+typedef void (*ipmi_lan_get_config_cb)(ipmi_lanparm_t    *lanparm,
+				       int               err,
+				       ipmi_lan_config_t *config,
+				       void              *cb_data);
+int ipmi_lan_get_config(ipmi_lanparm_t         *lanparm,
+			ipmi_lan_get_config_cb done,
+			void                   *cb_data);
+\end{verbatim}
+will fetch the full current configuration.  Note that when you call
+this, you will be holding a lock if it succeeds.  You must release the
+lock when you are done, or no one else will be able to change the
+configuration unless they forcefully remove your lock.
+
+At this point, you can change the value in the \verb=config=
+structure.  But those changes are only local.  When you have complete
+making the changes, you must commit them back to the BMC.  To do this,
+call:
+\begin{verbatim}
+int ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
+			ipmi_lan_config_t    *config,
+			ipmi_lanparm_done_cb done,
+			void                 *cb_data);
+\end{verbatim}
+After this point in time, the \verb=config= cannot be used for future
+set operation, because it has been committed.  You must re-read it to
+modify parameters again.
+
+If you do not wish to modify the configuration, you still need to
+clear the lock.  Do that with:
+\begin{verbatim}
+int ipmi_lan_clear_lock(ipmi_lanparm_t       *lanparm,
+			ipmi_lan_config_t    *config,
+			ipmi_lanparm_done_cb done,
+			void                 *cb_data);
+\end{verbatim}
+
+Once you are done with the \verb=config= structure, you must free it with:
+\begin{verbatim}
+void ipmi_lan_free_config(ipmi_lan_config_t *config);
+\end{verbatim}
+
+When you are done with a \verb=lanparm= structure, you must free it with:
+\begin{verbatim}
+int ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
+			 ipmi_lanparm_done_cb handler,
+			 void                 *cb_data);
+\end{verbatim}
+If the \verb=lanparm= structure currently has operations pending on
+it, the destroy will be delayed until those operations are complete.
+The handler will be called when the actual destroy takes place.
 
 \subsection{The OpenIPMI \acs{LAN} Interface}
 The LAN interface is complicated, but OpenIPMI handles most of the
@@ -1816,7 +2254,91 @@ int ipmi_ip_setup_con(char         * const ip_addrs[],
                       ipmi_con_t   **new_con);
 \end{verbatim}
 
+The parameters are:
+
+\begin{description}
+\item[\texttt{ip\_addrs}] An array of \acs{IP} addresses.  Each \acs{IP}
+address must be an address that connects to the exact same management
+controller.
+If you need connections to multiple management controllers, you must set
+up two different connections and use multiple connections in the domain.
+\item[\texttt{ports}] An array of \acs{UDP} ports for each IP address.  This is
+defined as 623 in the \acs{IPMI} spec, but is here for flexibility.
+\item[\texttt{num\_ip\_addrs}] The number of IP addresses and ports.
+\item[\texttt{authtype}] The authentication type to use for the connection.
+Table \ref{ipmi-authtypes} describes the different authentication types.
+\item[\texttt{privilege}] The privilege level to connect at.  Table
+\ref{ipmi-priv-levels} describes the different privilege levels.
+\item[\texttt{username}] The username to connect as.  See section
+\ref{user-mgmt} for details on users.
+\item[\texttt{username\_len}] The length of the username.  Required because
+usernames can be binary and contain zeros.
+\item[\texttt{password}] The password for the user.  See section \ref{user-mgmt}
+for details on users.
+\item[\texttt{password\_len}] The length of the password.  Required because
+usernames can be binary and contain zeros.
+\item[\texttt{handlers}] The OS handler to use for this domain.  See section
+\ref{openipmi-os-handlers} for more details.
+\item[\texttt{user\_data}] This is a field that will be put into the connection
+data structure of the same name.  This is for user use and OpenIPMI will
+not use it.
+\item[\texttt{new\_con}] The new connection is returned in this field.
+\end{description}
+
+Once you have a connection, it works like a normal connection as 
+defined in section \ref{openipmi-generic-interface}.
+
 \subsection{OpenIPMI and \acs{SNMP} Traps}
+
+\subsubsection{Setting Up A System To Send Traps}
+
+Setting up a system to send traps with OpenIPMI can be done two basic
+ways.  The hard way is to set up each table individually.  This is
+more work, but is very flexible.  The easy way just sets up for SNMP
+traps but does all the work for you.
+
+\paragraph{Setting Up the \acs{PEF} Table and \acs{LAN} Configuration Table}
+
+For a system to send traps, you must set up the \acs{PEF} table and
+the \acs{LAN} configuration table.  
+
+\paragraph{Setting Up For Traps the Easy Way}
+
+\subsubsection{Handling Incoming Traps}
+
+OpenIPMI has some ability to handle \acs{SNMP} traps.  It does not
+implement its own \acs{SNMP} stack though, so it cannot do all the
+work for you.  Indeed, different \acs{SNMP} exist and OpenIPMI would
+not want to presume that you would only use one of them.  You must
+have your own stack, like NetSNMP\cite{netsnmp}, and catch the traps
+with that.
+
+Once you have a trap, you must call:
+
+\begin{verbatim}
+int ipmi_handle_snmp_trap_data(void            *src_addr,
+			       unsigned int    src_addr_len,
+			       int             src_addr_type,
+			       long            specific,
+			       unsigned char   *data,
+			       unsigned int    data_len);
+\end{verbatim}
+
+Where \verb=src_addr= is the \acs{IP} source address
+(\verb=struct sockaddr_in=) and length is the length of the address
+structure.  Only \acs{IP} is supported for now, so
+\verb=src_addr_type= must be \verb=IPMI_EXTERN_ADDR_IP=.  The
+\verb=specific= field is the field of the same name from the
+\acs{SNMP} \ac{PDU}.  The \verb=data= field is a pointer to the user
+data from the \acs{SNMP} \ac{PDU}, and the length of that data is in
+\verb=data_len=.
+
+The data in the trap is not enough information to fully decode the
+event, so currently an incoming trap will only cause an SEL fetch on
+the proper \acs{SEL}.
+
+Note that \acs{SNMP} traps can only be recieved on one port, and that
+port is privileged, so you must run as root to receive SNMP traps.
 
 \section{Serial}
 
@@ -1825,6 +2347,61 @@ int ipmi_ip_setup_con(char         * const ip_addrs[],
 \subsection{Serial over \acs{PPP}}
 
 \section{User Management}
+\label{user-mgmt}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\verb=IPMI_AUTHTYPE_NONE= & No authentication.\\
+\hline
+\verb=IPMI_AUTHTYPE_MD2= & \acs{MD2} style authentication.\\
+\hline
+\verb=IPMI_AUTHTYPE_MD5= & \acs{MD5} style authentication.  This is the
+recommended type of authentication.\\
+\hline
+\verb=IPMI_AUTHTYPE_STRAIGHT= & Puts the password into the message in
+plain text.  Don't use this.\\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-authtypes}Authentication types in IPMI}
+\end{table}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|X|}
+\hline
+\verb=IPMI_PRIVILEGE_CALLBACK= & The user is only allowed to request
+that the IPMI system call back home.\\
+\hline
+\verb=IPMI_PRIVILEGE_USER= & A ``read-only'' user.  The user can look
+at system state, but not change anything.  For instance, the user can
+fetch \acs{SEL} entries, but not delete them.\\
+\hline
+\verb=IPMI_PRIVILEGE_OPERATOR= & This user can do everything but configuration
+commands.  For instance, they can clear the SEL and configure sensors, but
+they cannot add users or configure LAN parameters.\\
+\hline
+\verb=IPMI_PRIVILEGE_ADMIN= & This user can do pretty much anything on an
+IPMI system.\\
+\hline
+\verb=IPMI_PRIVILEGE_OEM= & Undefined by the spec, it's whatever the \acs{OEM}
+wants.\\
+\hline
+\end{tabularx}
+\caption{\label{ipmi-priv-levels}Privilege levels in IPMI}
+\end{table}
+
+\begin{table}
+\begin{tabularx}{\textwidth}{lX}
+0 & no authentication\\
+1 & MD2 authentication\\
+2 & MD5 authentication\\
+3 & reserved\\
+4 & straight password authentication\\
+5 & OEM authentication\\
+6-7 & reserved\\
+\end{tabularx}
+\caption{\label{auth-bitmask}Authentication bitmask often used in \acs{IPMI}}
+\end{table}
 
 \section{OpenIPMI Addressing}
 \label{openipmi-addressing}
@@ -1987,5 +2564,7 @@ That information may be fetched by the user.
 \label{os-handler-h}
 \verbatimtabinput{../include/OpenIPMI/os_handler.h}
 
+\bibliographystyle{plain}
+\bibliography{ipmi}
 \backmatter
 \end{document}
