@@ -1,0 +1,255 @@
+SDR Configuration
+
+The SDR configuration for a sensor is quite complicated, due partially
+to the complexity of sensors and partially to the poor IPMI
+documentation.  I will attempt to explain each field in the type 1
+SDR, then talk about Entity Association Records (types 8 and 9) and
+the other record types.
+
+Sensor SDRs
+-----------
+
+In ATCA, the sensors on the boards should all be in the device SDR
+repository.  This means they are accessed using the the Get Device xxx
+messages described in section 29 (the sensors section), not using the
+messages described in section 27 (the SDRs section).  This is
+important.  A system may only have one SDR that is accessed using the
+messages from section 27.
+
+Each sensor should have an SDR in that repository.  I'll start at byte
+6 and describe each part:
+
+6     - Sensor Owner ID.  This is the IPMB address of the device that
+        you send messages to for controlling the sensor.  Bit 0 should
+        always be 0, as this is an IPMB address.  You cannot address
+        sensor commands to system software ids.  Note that in ATCA,
+	this field will change depending on the slot, so it has to
+	be dynamically updated somehow.
+
+7     - Sensor Owner LUN.  The channel should be zero for ATCA (but is
+        generally used for multiple IPMB busses in a system).  The
+        LUN depends on the device, but is generally zero.  The LUNs are
+        there if you have more sensor than can be held in a single
+        sensor number (255), you can use LUN 1 and 3 for expansions.
+        You can also use them if you have some sort of logical
+        partition of your sensors behind the main device.  LUN 2 is
+        reserved for messaging the main processor on the board.
+
+8     - Sensor Number.  This is the number you put into the sensor
+        messages to tell (along with the LUN) what sensor you want to
+        talk to.
+
+9     - Entity ID.  The entity in an IPMI system identifies some
+        physical part of the system that the sensor is measuring.
+        For instance, if the sensor is on a CPU, you would use the
+        processor entity id.  If it is on a battery, there is an
+        entity id for that.
+
+10    - Entity Instance.  This identifies the particular entity
+        of a given type.  For instance, if you had two processors
+        on a board, you would use different instances so the system software
+        could tell them apart.  In ATCA, these are all required to be
+        device relative and must start at 60h.
+
+11    - Sensor Initialization.  Bits 0 and 1 describe the power-up
+        state of the sensor.  Bits 2-6 describe what you want the
+        BMC or shelf manager to do to the sensor at startup.
+
+12    - Sensor Capabilities.  This describes the threshold, hystersis,
+        and event generation support of the sensor, and is pretty
+        self-explanitory.  Bit 7 tells if the sensor is operational
+        even if the entity it is associated with is not present.  Read
+        section 34 of the spec for a description of entity presence,
+        but be forwarned that you will have to study it carefully to
+        understand it.  But basically, if the entity in question is
+        not installed, bit 7 tells if the sensor for the device is
+        still operational.
+
+13    - Sensor type.  The kind of sensor (voltage, current, etc.)
+        This is fairly self-explanatory.
+
+14    - Event/Reading Type code.  This tell what type of readings the
+        sensor returns.  For threshold sensors (volts, amps, fan speed,
+        etc.) this should be set to threshold.  For discrete sensors,
+        this tells the type of reading.  If the sensor fits into
+        certain reading types as described by the spec, it should be
+        6Fh and the sensor type tells what the readings mean.
+
+15-16 - For discrete sensors, this tells what events the sensor can
+        generate when an offset for the sensor is set to 1 (an assertion).
+        For threshold sensors, it tells what assertion events the
+        sensor can generate (when the sensor goes out of range).
+	It also has some bits dealing with what lower thresholds can be
+	returned in a reading command.
+
+17-18 - For discrete sensors, this tells what events the sensor can
+        generate when an offset for the sensor is set to 0 (a deassertion).
+        For threshold sensors, it tells what deassertion events the
+        sensor can generate (when the sensor goes back into range).
+	It also has some bits dealing with what upperthresholds can be
+	returned in a reading command.
+
+19-20 - For discrete sensors, this tells what bits will be valid when
+        a sensor reading is returned.  For threshold sensors, this
+	tells which thresholds in the sensor can be read and
+	modified.
+
+Note that IMHO, every supported event should have assertion,
+deassertion, and reading support, so for discrete sensors the three
+previous fields should be exactly the same.  For threshold sensors,
+you should always make the sensor's thresholds readable and generally
+make the sensor's thresholds settable unless you have a good reason
+not to.
+
+21    - Sensor Units 1.  Information about the units the sensor is
+	measuring.  Bits 6-7 tell how to interpret the raw reading.
+	I suggest that you use 2's complement or unsigned depending
+	on the sensor.  IMHO, sensors should *always* return
+	readings, so don't use 11b.  Bits 3-5 tell the rate unit.
+	This lets you add a "per unit time" to the measurement.
+	For instance, for a fan (if there was not already an RPM
+	sensor unit), the main unit type could be revolutions and
+	the modifier could be "per minute" for revolutions per
+	minute.  Bits 1-2 tell how the modifier unit is applied.
+	For instance, if you needed ergs, you could put dynes
+	as the base unit and centimeters as the modifier unit
+	and 10b as bits 1-2 here (for multiplier).  Bit 0 tells
+	if the measurement is a percentage.
+
+22    - Base unit.  This is the first (and usually only) unit
+	for the sensor.  Generally voltage, amps, celcius, or
+	something like that.
+
+23    - Modifier unit.  See bit 21 for an explanation.
+
+24-30 - These bits deal with the formula for converting the raw
+	values from the sensor into useful values.  Section 30
+	(Sensor Type and Data Conversion) deals with these
+	fields.  They take some care to use, but it's not
+	terribly hard and the descriptions in the spec aren't
+	too bad.
+
+31    - This tells if certain fields are available in the next
+	three bytes.
+
+32    - Nominal Reading.  This is the "normal" value you should
+	see.  A 3.3V sensor, for instance, would be a raw value
+	that would convert to 3.3 (or a little higher if on the
+	inside of a power supply).  This is optional (based on
+	byte 31).
+
+33    - Normal Maximum.  This is the largest value
+	in the sensor's normal range.  The spec is not clear here
+	but I expect this is the largest value you would see before
+	something would be considered wrong with the value.
+
+34    - Normal Minimum.  This is the smallest value in the sensor's
+	normal range.  See byte 33.
+
+35    - Sensor Maximum.  The maximum possible value the sensor can
+	return.
+
+36    - Sensor Minimum.  The minimum possible value the sensor can
+	return.
+
+37-42 - These values should be the initial power-up values of the
+	thresholds for the sensor.
+
+43-44 - The initial values for the hystersis of these sensor.
+
+
+Type 2 SDRs are mostly a subset of type 1, but bytes 24-25 are unique.
+These bytes allow one sensor record to describe more than one sensor.
+For instance, if you had 8 disk drives and each of them had a presence
+sensor, you could have one sensor record to describe all the presence
+sensors.
+
+A type 2 sensor should only be used for discrete sensors because it
+does not provide reading value capability.
+
+It is my opinion that if an entity may or may not be present (for
+instance, a DIMM in a slot or a disk driver), it should have a
+presence sensor (sensor type code 25h).  The rest of entity presence
+is somewhat fuzzy, but the presence sensor is quite clear and provides
+the most accurate way to tell if a removable or optional device is
+present.
+
+
+Entity Association Records
+--------------------------
+
+Type 8h and 9h SDRs show how entities are related.  In ATCA, the
+top-level entity for the board is defined to be entity id F0h, entity
+instance 60h.  Every other entity on the board should be contained in
+that entity.  This means that every entity specified on the board
+should appear in a contained entity field of a type 9 SDR (because
+they are device-relative) with either F0h as the container entity or
+some other entity on the board as the container entity.  I say "some
+other entity" because there may be more than one level of containment.
+For instance, if a board has a daughter board, the daughter board
+would be an entity and each entity on the daughter board would be
+contained in the daughter board's entity, and the daughter board's
+entity would be contained in the main board's entity.
+
+Entity containment is important for HPI (and is fully supported by
+OpenIPMI) so it is a fairly important concept.
+
+
+Device Locator Records
+----------------------
+
+SDR types 10-12 describe entities in the system.  ATCA specifies that
+each board have a type 12 SDR describing the management controller on
+that board.  In addition, if there are entities on the board that have
+FRU data, they should each have a FRU device locator record (type 11).
+Type 10 SDRs should generally not be used, but if you wish to describe
+other entities in the system (primarily give them a name) then you
+could theoretically use this record, although it wouldn't be 100%
+correct.
+
+
+Other SDR Types
+---------------
+
+The other SDR types have no real use in an ATCA system.
+
+
+SELs on the Boards
+------------------
+
+Note that the boards may have SEL devices for locally storing logs.
+This is technically a violation of the IPMI spec, since it says there
+can only be one SEL device in a system.  However, local storage of
+this information is useful in some cases.
+
+The SELs on the boards can confuse system software, though.  The same
+events will go into the board's SEL device and the main SEL device on
+the shelf manager; multiple copies of events can cause confusion and
+is rather inefficient.
+
+My recommendation on this is to have the SEL device on the boards, but
+not advertise the capability to the shelf manager.  This means that if
+you receive a get device id command from the IPMB bus, you should not
+set the SEL Device bit in that response.  It should not be set in the
+MC device locator record.  It is probably ok to set the bit in a
+response to a get device id from the local system interface (KCS, BT,
+SMIC, etc.)  so the local processor knows it can pull those logs.  The
+IPMB Event Reciever should never be set.
+
+
+Send Message Errors and Broadcast
+---------------------------------
+
+IPMI provides a mechanism to scan the IPMB bus to see what management
+controllers are available.  However, many vendors to not properly
+support the broadcast get device id (section 17.9).  This is required
+by the spec and should be supported.
+
+Also, many vendors do not properly detect errors on the IPMB bus and
+provide quick responses to messages sent to non-existant IPMB
+addresses.  If a Send Message command is addresses to an IPMB address
+that does not response (no MC is present), the BMC should be able to
+detect this in a few tens of milliseconds and should response
+immediately with a response with the completion code set to 83h as
+described in the send message command (section 18.7).  This makes bus
+scans go much more quickly since the messages do not have to time out.
