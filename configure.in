@@ -133,7 +133,7 @@ if test "x$tryperl" != "xno"; then
    AC_PATH_PROG(perlprog, perl)
 fi
 if test "x$perlprog" != "x"; then
-   perldir=`$perlprog -V:ccdlflags`
+   perldir=`$perlprog -e 'for $i (@INC) { if (-r "$i/CORE/perl.h") { print "$i/CORE"; last; } }'`
    if test "x$perldir" == "x"; then
       perldir=
    else
