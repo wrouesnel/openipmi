@@ -1,3 +1,17 @@
+2003-10-30 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c: Fixed MC scanning to skip addresses properly at
+	the beginning of a scan.
+
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Modified the MC
+	scanning ignoring to use ranges.
+
+	* lib/domain.c: The previous fix to handle an MC-less case by just
+	allowing scanning the BMC at 0x20, not scanning the sysaddr.  The
+	sysaddr stuff was just too tied to the redundant BMC case.
+
+	* lib/ipmi_smi.c: Send messages with the proper size.
+
 2003-10-31  Louis Zhuang  <louis.zhuang@linux.intel.com>
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Add const qualifier into function

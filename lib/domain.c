@@ -804,13 +804,16 @@ static int
 in_ipmb_ignores(ipmi_domain_t *domain, unsigned char ipmb_addr)
 {
     unsigned long addr;
+    unsigned char first, last;
     ilist_iter_t iter;
 
     ilist_init_iter(&iter, domain->ipmb_ignores);
     ilist_unpositioned(&iter);
     while (ilist_next(&iter)) {
 	addr = (unsigned long) ilist_get(&iter);
-	if (addr == ipmb_addr)
+	first = addr & 0xff;
+	last = (addr >> 8) & 0xff;
+	if ((ipmb_addr >= first) && (ipmb_addr <= last))
 	    return 1;
     }
 
@@ -820,7 +823,20 @@ in_ipmb_ignores(ipmi_domain_t *domain, unsigned char ipmb_addr)
 int
 ipmi_domain_add_ipmb_ignore(ipmi_domain_t *domain, unsigned char ipmb_addr)
 {
-    unsigned long addr = ipmb_addr;
+    unsigned long addr = ipmb_addr | (ipmb_addr << 8);
+
+    if (! ilist_add_tail(domain->ipmb_ignores, (void *) addr, NULL))
+	return ENOMEM;
+
+    return 0;
+}
+
+int
+ipmi_domain_add_ipmb_ignore_range(ipmi_domain_t *domain,
+				  unsigned char first_ipmb_addr,
+				  unsigned char last_ipmb_addr)
+{
+    unsigned long addr = first_ipmb_addr | (last_ipmb_addr << 8);
 
     if (! ilist_add_tail(domain->ipmb_ignores, (void *) addr, NULL))
 	return ENOMEM;
@@ -1448,20 +1464,23 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     info->done_handler = done_handler;
     info->cb_data = cb_data;
     info->missed_responses = 0;
-    rv = ipmi_send_command_addr(domain,
-				&info->addr,
-				info->addr_len,
-				&(info->msg),
-				devid_bc_rsp_handler,
-				info, NULL);
-    while ((rv) && (ipmb->slave_addr < end_addr)) {
+
+    /* Skip addresses we must ignore. */
+    while ((in_ipmb_ignores(domain, ipmb->slave_addr))
+	   && (ipmb->slave_addr < end_addr))
+    {
 	ipmb->slave_addr += 2;
+    }
+    rv = -1;
+    while ((rv) && (ipmb->slave_addr < end_addr)) {
 	rv = ipmi_send_command_addr(domain,
 				    &info->addr,
 				    info->addr_len,
 				    &(info->msg),
 				    devid_bc_rsp_handler,
 				    info, NULL);
+	if (rv)
+	    ipmb->slave_addr += 2;
     }
 
     if (rv)
@@ -2736,17 +2755,16 @@ con_up_complete(ipmi_domain_t *domain)
     /* This is an unusual looking piece of code, but is required for
        systems that do not have an IPMB.  If they don't have an IPMB,
        then we won't scan them and thus won't find anything.  So we
-       force scanning the sysaddr (which is the right thing to use in
-       this case, anyway) if no IPMBs are present. */
+       force scanning just the BMC if no IPMBs are present. */
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (domain->chan[i].medium == 1)
 	    break;
     }
     if (i == MAX_IPMI_USED_CHANNELS) {
-	for (i=0; i<MAX_CONS; i++) {
-	    if (domain->conn[i])
-		domain->conn[i]->scan_sysaddr = 1;
-	}
+	domain->chan[0].medium = 1;
+	/* If these fail its really no big deal. */
+	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x18);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0x22, 0xfe);
     }
 
     domain->connection_up = 1;

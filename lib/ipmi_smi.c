@@ -374,7 +374,7 @@ smi_send(smi_data_t   *smi,
 	smsg->msgid = msgid;
 	memcpy(smsg->data, msg->data, smsg->data_len);
 
-	rv = sendto(fd, smsg, sizeof(smsg) + msg->data_len, 0,
+	rv = sendto(fd, smsg, sizeof(*smsg) + msg->data_len, 0,
 		    (struct sockaddr *) &saddr,
 		    addr_len + SOCKADDR_IPMI_OVERHEAD);
     } else {
