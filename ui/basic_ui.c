@@ -97,8 +97,9 @@ int snmp_input(int op,
 	       struct snmp_pdu *pdu,
 	       void *magic)
 {
-    struct sockaddr_in *src_ip;
-    uint32_t           specific;
+    struct sockaddr_in   *src_ip;
+    uint32_t             specific;
+    struct variable_list *var;
 
     if (op != RECEIVED_MESSAGE)
 	goto out;
@@ -112,10 +113,28 @@ int snmp_input(int op,
     }
     if (pdu->trap_type != SNMP_TRAP_ENTERPRISESPECIFIC)
 	goto out;
+
     src_ip = (struct sockaddr_in *) &pdu->agent_addr;
     specific = pdu->specific_type;
 
+    var = pdu->variables;
+    if (var == NULL)
+	goto out;
+    if (var->type != ASN_OCTET_STR)
+	goto out;
+    if (snmp_oid_compare(ipmi_oid, IPMI_OID_SIZE, var->name, var->name_length)
+	!= 0)
+    {
+	goto out;
+    }
+    if (var->val_len < 46)
+	goto out;
     
+    ipmi_handle_snmp_trap_data(src_ip,
+			       IPMI_EXTERN_ADDR_IP,
+			       specific,
+			       var->val.string,
+			       var->val_len);
 
  out:
     return 1;

@@ -213,6 +213,9 @@ typedef struct lan_data_s
 	int                   last_ip_num;
     } seq_table[64];
     ipmi_lock_t               *seq_num_lock;
+
+    /* The current sequence number.  Note that we reserve sequence
+       number 0 for our own neferous purposes. */
     unsigned int              last_seq;
 
     /* The number of messages that are outstanding with the remote
@@ -220,7 +223,8 @@ typedef struct lan_data_s
     unsigned int outstanding_msg_count;
 
     /* The maximum number of outstanding messages.  This must NEVER be
-       larger than 64. */
+       larger than 63 (64 sequence numbers minus 1 for our reserved
+       sequence zero. */
     unsigned int max_outstanding_msg_count;
 
     /* List of messages waiting to be sent. */
@@ -954,15 +958,19 @@ handle_msg_send(lan_timer_info_t      *info,
     unsigned int   orig_addr_len = 0;
 
     seq = (lan->last_seq + 1) % 64;
+    if (seq == 0)
+	seq++;
     while (lan->seq_table[seq].inuse) {
 	if (seq == lan->last_seq) {
-	    /* This cannot really happen if max_outstanding_msg_count <= 64. */
+	    /* This cannot really happen if max_outstanding_msg_count <= 63. */
 	    ipmi_log(IPMI_LOG_FATAL,
 		     "ipmi_lan: Attempted to start too many messages");
 	    abort();
 	}
 
 	seq = (seq + 1) % 64;
+	if (seq == 0)
+	    seq++;
     }
 
     if ((addr->addr_type == IPMI_IPMB_ADDR_TYPE)
@@ -1321,6 +1329,10 @@ data_handler(int            fd,
        validate all this for us. */
 
     seq = tmsg[4] >> 2;
+    if (seq == 0)
+	/* We use sequence zero for messages that don't care about a
+	   response. */
+	goto out_unlock2;
     addr3 = &lan->seq_table[seq].addr;
 
     if ((tmsg[5] == IPMI_SEND_MSG_CMD)
@@ -2775,11 +2787,84 @@ _ipmi_lan_set_ipmi(ipmi_con_t *ipmi)
     lan->ipmi = ipmi;
 }
 
-void
-ipmi_lan_handle_snmp_trap_data(struct in_addr src_ip,
-			       long           specific,
-			       unsigned char  *data,
-			       unsigned int   data_len)
+static void
+snmp_got_match(lan_data_t *lan, ipmi_msg_t *msg, unsigned char *pet_ack)
 {
+    ipmi_system_interface_addr_t si;
+    ipmi_msg_t                   ack;
+    int                          dummy_send_ip;
+
+    si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    si.channel = 0xf;
+    si.lun = 0;
+    
+    handle_async_event(lan->ipmi, (ipmi_addr_t *) &si, sizeof(si), msg);
+
+    /* Send the ack directly. */
+    ack.netfn = IPMI_SENSOR_EVENT_NETFN;
+    ack.cmd = IPMI_PET_ACKNOWLEDGE_CMD;
+    ack.data = pet_ack;
+    ack.data_len = 12;
+    lan_send(lan, (ipmi_addr_t *) &si, sizeof(si), &ack, 0, &dummy_send_ip);
 }
-			       
+
+int
+ipmi_lan_handle_external_event(struct sockaddr *src_addr,
+			       ipmi_msg_t      *msg,
+			       unsigned char   *pet_ack)
+{
+    lan_data_t *elem;
+    int        i;
+    int        found = 0;
+
+    ipmi_read_lock();
+    elem = lan_list;
+    while (elem) {
+	for (i=0; i<elem->num_ip_addr; i++) {
+	    if (elem->ip_addr[i].s_ipsock.s_addr.sa_family
+		!= src_addr->sa_family)
+	    {
+		continue;
+	    }
+	    switch (src_addr->sa_family)
+	    {
+	    case PF_INET:
+	    {
+		struct sockaddr_in *src, *dst;
+		src = (struct sockaddr_in *) src_addr;
+		dst = &(elem->ip_addr[i].s_ipsock.s_addr4);
+		if (src->sin_addr.s_addr == src->sin_addr.s_addr) {
+		    /* We have a match, handle it */
+		    snmp_got_match(elem, msg, pet_ack);
+		    found = 1;
+		    goto out_unlock;
+		}
+	    }
+	    break;
+#ifdef PF_INET6
+	    case PF_INET6:
+	    {
+		struct sockaddr_in6 *src, *dst;
+		src = (struct sockaddr_in6 *) src_addr;
+		dst = &(elem->ip_addr[i].s_ipsock.s_addr6);
+		if (memcmp(src->sin6_addr.s6_addr,
+			   src->sin6_addr.s6_addr,
+			   sizeof(struct in6_addr))
+		    == 0)
+		{
+		    /* We have a match, handle it */
+		    snmp_got_match(elem, msg, pet_ack);
+		    found = 1;
+		    goto out_unlock;
+		}
+	    }
+	    break;
+#endif
+	    }
+	}
+	elem = elem->next;
+    }
+ out_unlock:
+    ipmi_read_unlock();
+    return found;
+}

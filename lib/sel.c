@@ -1776,6 +1776,8 @@ ipmi_sel_event_add(ipmi_sel_info_t *sel,
 	    holder->deleted = 0;
 	    sel->num_sels++;
 	    sel->del_sels--;
+	} else {
+	    rv = EEXIST;
 	}
     }
 

@@ -53,7 +53,10 @@ typedef void (*ipmi_ll_rsp_handler_t)(ipmi_con_t   *ipmi,
 				      void         *rsp_data3,
 				      void         *rsp_data4);
 
-/* Called when an IPMI event comes in from the BMC. */
+/* Called when an IPMI event comes in from the BMC.  Note that the
+   event may be NULL, meaning that an event came in but did not have
+   enough information to build a full event message.  So this is just
+   an indication that there is a new event in the event log. */
 typedef void (*ipmi_ll_evt_handler_t)(ipmi_con_t   *ipmi,
 				      ipmi_addr_t  *addr,
 				      unsigned int addr_len,
@@ -259,5 +262,17 @@ int __ipmi_validate(ipmi_con_t *ipmi);
 /* Initialization code for the initialization the connection code. */
 int _ipmi_conn_init(void);
 void _ipmi_conn_shutdown(void);
+
+
+/* Address types for external addresses. */
+#define IPMI_EXTERN_ADDR_IP	1
+
+/* Handle a trap from an external SNMP source.  It returns 1 if the
+   event was handled an zero if it was not. */
+int ipmi_handle_snmp_trap_data(void            *src_addr,
+			       int             src_addr_type,
+			       long            specific,
+			       unsigned char   *data,
+			       unsigned int    data_len);
 
 #endif /* _IPMI_CONN_H */

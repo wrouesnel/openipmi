@@ -509,10 +509,10 @@ _ipmi_mc_check_sel_oem_event_handler(ipmi_mc_t *mc, ipmi_event_t *event)
  *
  **********************************************************************/
 
-void
+int
 _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event)
 {
-    ipmi_sel_event_add(mc->sel, event);
+    return ipmi_sel_event_add(mc->sel, event);
 }
 
 unsigned long

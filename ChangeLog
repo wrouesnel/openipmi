@@ -1,3 +1,25 @@
+2004-01-13 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_conn.h, lib/ipmi.c: Added an external SNMP
+	trap handler.
+
+	* include/OpenIPMI/ipmi_lan.h, lib/ipmi_lan.c: Added an external
+	trap handler.
+
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: Added a return code from
+	adding an event to know if the event was a duplicate.
+	* include/OpenIPMI/ipmi_sel.h, lib/sel.c: Ditto
+
+	* lib/domain.c: Modified the incoming event handler so that if it
+	gets a NUL event message, to rescan the SEL from the source MC.
+
+	* lib/ipmi_lan.c: Modified the sequence number handling to not use
+	a zero sequence number, and to ignore zero sequence numbers.  This
+	allows things to send messages with ignored responses by setting
+	the sequence to zero.
+
+	* ui/basic_ui.c: Added support for SNMP traps.
+
 2004-01-12 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/pet.c, include/OpenIPMI/ipmi_pet.h: Modified the PET code to

@@ -93,13 +93,11 @@ int ipmi_lan_setup_con(struct in_addr *ip_addrs,
 		       void           *user_data,
 		       ipmi_con_t     **new_con);
 
-/* Used to handle SNMP traps.  The IP address is the source, specific
-   is the value of the specific trap field, data is the variable
-   bindings field and data_len is the length of the variable
-   bindings. */
-void ipmi_lan_handle_snmp_trap_data(struct in_addr src_ip,
-				    long           specific,
-				    unsigned char  *data,
-				    unsigned int   data_len);
+/* Used to handle SNMP traps.  If the msg is NULL, that means that the
+   trap sender didn't send enough information to handle the trap
+   immediately, and the SEL needs to be scanned. */
+int ipmi_lan_handle_external_event(struct sockaddr *src_addr,
+				   ipmi_msg_t      *msg,
+				   unsigned char   *pet_ack);
 
 #endif /* __IPMI_LAN_H */

@@ -1236,5 +1236,4 @@ int ipmi_args_setup_con(ipmi_args_t  *args,
 			void         *user_data,
 			ipmi_con_t   **con);
 
-
 #endif /* __IPMIIF_H */

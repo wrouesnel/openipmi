@@ -46,6 +46,7 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_smi.h>
+#include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/mxp.h>
 
 static os_hnd_rwlock_t *global_lock;
@@ -1409,4 +1410,108 @@ ipmi_args_setup_con(ipmi_args_t  *args,
     default:
 	return EINVAL;
     }
+}
+
+/* This is the number of seconds between 1/1/70 (IPMI event date) and
+   1/1/98 (ipmi SNMP trap local timestamp). */
+#define IPMI_SNMP_DATE_OFFSET 883612800
+
+int
+ipmi_handle_snmp_trap_data(void            *src_addr,
+			   int             src_addr_type,
+			   long            specific,
+			   unsigned char   *data,
+			   unsigned int    data_len)
+{
+    int            handled = 0;
+    unsigned char  pet_ack[12];
+    ipmi_msg_t     *msg = NULL;
+
+    if (data_len < 46)
+	return 0;
+
+    /* I will take this opportunity to note that the SNMP trap format
+       from IPMI is insufficient to actually perform the job.  It does
+       not have:
+       1 A guaranteed way to correlate the timestamp to the SEL.
+       2 A guaranteed way to correlate the record id to the SEL.
+       3 The channel or the LUN for the event generator.
+
+       Because of these, there is no guaranteed way to correlate the
+       data from the SNMP trap to an SEL event.  This can result in
+       duplicate events, which is very bad.  So we currently do not
+       deliver the events this way, we pass a NULL in the event
+       message to tell the domain code to rescan the SEL for this MC.
+       In addition, item 3 above means that you cannot determine which
+       sensor issued the event, since the channel and the LUN are
+       required to find the sensor.
+    */
+
+ /* Until we have some way to get full valid data from the trap, we
+    just disable it. */
+#if 0
+    ipmi_msg_t     tmsg;
+    unsigned char  edata[17];
+    unsigned long  timestamp;
+    int16_t        utc_off;
+    unsigned short record_id;
+    timestamp = ntohl(*((uint32_t *) (data+18)));
+    if (data[27] == 0xff)
+	/* Can't handle unspecific event generator */
+	return 0;
+    if ((data[28] == 0xff) || (data[28] == 0x00))
+	/* Can't handle unspecific sensor */
+	return 0;
+    if (timestamp == 0)
+	/* Can't handle unspecified timestamp. */
+	return 0;
+    utc_off = ntohs(*((uint16_t *) (data+22)));
+    if (utc_off == -1)
+	/* If unspecified (0xffff), we assume zero (UTC). */
+	utc_off = 0;
+    timestamp -= utc_off; /* Remove timezone offset */
+    timestamp += IPMI_SNMP_DATE_OFFSET; /* Convert to 1/1/70 offset */
+
+    /* We assume the record id is in the sequence # field, since that
+       makes the most sense. */
+    record_id = ntohs(*((uint16_t *) (data+16)));
+
+    tmsg.netfn = IPMI_APP_NETFN;
+    tmsg.cmd = IPMI_READ_EVENT_MSG_BUFFER_CMD;
+    tmsg.data = edata;
+    tmsg.data_len = 17;
+    msg = &tmsg;
+    edata[0] = 0;
+    edata[1] = record_id & 0xff;
+    edata[2] = (record_id >> 8) & 0xff;
+    edata[3] = 2; /* record type - system event */
+    edata[4] = timestamp & 0xff;
+    edata[5] = (timestamp >> 8) & 0xff;
+    edata[6] = (timestamp >> 16) & 0xff;
+    edata[7] = (timestamp >> 24) & 0xff;
+    edata[8] = data[27]; /* Event generator */
+    /* FIXME - is there a way to get the LUN? */
+    edata[9] = 0; /* Assume channel 0, lun 0 */
+    edata[10] = 0x04; /* IPMI 1.5 revision */
+    edata[11] = (specific >> 16) & 0xff; /* Sensor type */
+    edata[12] = data[28]; /* Sensor number */
+    edata[13] = (specific >> 8) & 0xff; /* Event dir/type */
+    memcpy(edata+14, data+31, 3); /* Event data 1-3 */
+#endif
+
+    pet_ack[0] = data[17]; /* Record id */
+    pet_ack[1] = data[16];
+    pet_ack[2] = data[21]; /* Timestamp */
+    pet_ack[3] = data[20];
+    pet_ack[4] = data[19];
+    pet_ack[5] = data[18];
+    pet_ack[6] = data[25]; /* Event source type */
+    pet_ack[7] = data[27]; /* Sensor device */
+    pet_ack[8] = data[28]; /* Sensor number */
+    memcpy(pet_ack+9, data+31, 3); /* Event data 1-3 */
+    
+    if (src_addr_type == IPMI_EXTERN_ADDR_IP)
+	handled = ipmi_lan_handle_external_event(src_addr, msg, pet_ack);
+
+    return handled;
 }

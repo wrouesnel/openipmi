@@ -135,7 +135,8 @@ int ipmi_sel_get_supports_get_sel_allocation(ipmi_sel_info_t *sel,
 					     int             *val);
 int ipmi_sel_get_last_addition_timestamp(ipmi_sel_info_t *sel, int *val);
 
-/* Add a event to the internal representation of the system event log. */
+/* Add a event to the internal representation of the system event log.
+   This will return EEXIST if the event already exists. */
 int ipmi_sel_event_add(ipmi_sel_info_t *sel,
 		       ipmi_event_t    *new_event);
 

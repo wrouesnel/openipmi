@@ -1973,16 +1973,23 @@ ll_event_handler(ipmi_con_t   *ipmi,
     if (!mc)
 	goto out;
 
-    devent.mcid = ipmi_mc_convert_to_id(mc);
-    devent.record_id = ipmi_get_uint16(event->data);
-    devent.type = event->data[2];
-    memcpy(devent.data, event+3, IPMI_MAX_SEL_DATA);
+    if (event == NULL) {
+	/* The incoming event didn't carry the full event information.
+	   Just scan for events in the MC's SEL. */
+	ipmi_mc_reread_sel(mc, NULL, NULL);
+    } else {
+	devent.mcid = ipmi_mc_convert_to_id(mc);
+	devent.record_id = ipmi_get_uint16(event->data);
+	devent.type = event->data[2];
+	memcpy(devent.data, event+3, IPMI_MAX_SEL_DATA);
 
-    /* Add it to the mc's event log. */
-    _ipmi_mc_sel_event_add(mc, &devent);
+	/* Add it to the mc's event log. */
+	rv = _ipmi_mc_sel_event_add(mc, &devent);
 
-    /* Call the handler on it. */
-    _ipmi_domain_system_event_handler(domain, mc, &devent);
+	if (rv != EEXIST)
+	    /* Call the handler on it if it wasn't already in there. */
+	    _ipmi_domain_system_event_handler(domain, mc, &devent);
+    }
 
  out:
     ipmi_read_unlock();

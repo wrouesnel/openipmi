@@ -237,8 +237,8 @@ void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
 int _ipmi_mc_init(void);
 void _ipmi_mc_shutdown(void);
 
-
-void _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
+/* Returns EEXIST if the event is already there. */
+int _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
 
 int ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event);
 int ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event);
