@@ -638,8 +638,12 @@ int ipmi_entity_get_id_length(ipmi_entity_t *ent);
 enum ipmi_str_type_e ipmi_entity_get_id_type(ipmi_entity_t *ent);
 int ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
 
-/* Is the entity currently present? */
+/* Is the entity currently present?  Note that this value can change
+   dynamically, so an "_id_" function is provided, too, that takes an
+   entity id as well as an entity.  Note that this call returns an
+   error can fail if the entity has ceased to exist. */
 int ipmi_entity_is_present(ipmi_entity_t *ent);
+int ipmi_entity_id_is_present(ipmi_entity_id_t id, int *present);
 
 /* A generic callback for entities. */
 typedef void (*ipmi_entity_cb)(ipmi_entity_t *ent,
@@ -814,6 +818,41 @@ int ipmi_entity_set_hot_swap_indicator(ipmi_entity_t  *ent,
 int ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
 				       ipmi_entity_val_cb handler,
 				       void               *cb_data);
+
+/* Entity ID based versions of some of the above calls. */
+int ipmi_entity_id_get_hot_swap_state(ipmi_entity_id_t        id,
+				      ipmi_entity_hot_swap_cb handler,
+				      void                    *cb_data);
+int ipmi_entity_id_get_auto_activate_time(ipmi_entity_id_t    id,
+					  ipmi_entity_time_cb handler,
+					  void                *cb_data);
+int ipmi_entity_id_set_auto_activate_time(ipmi_entity_id_t  id,
+					  ipmi_timeout_t    auto_act,
+					  ipmi_entity_cb    done,
+					  void              *cb_data);
+int ipmi_entity_id_get_auto_deactivate_time(ipmi_entity_id_t    id,
+					    ipmi_entity_time_cb handler,
+					    void                *cb_data);
+int ipmi_entity_id_set_auto_deactivate_time(ipmi_entity_id_t id,
+					    ipmi_timeout_t   auto_deact,
+					    ipmi_entity_cb   done,
+					    void             *cb_data);
+int ipmi_entity_id_activate(ipmi_entity_id_t id,
+			    ipmi_entity_cb   done,
+			    void             *cb_data);
+int ipmi_entity_id_deactivate(ipmi_entity_id_t id,
+			      ipmi_entity_cb   done,
+			      void             *cb_data);
+int ipmi_entity_id_get_hot_swap_indicator(ipmi_entity_id_t   id,
+					  ipmi_entity_val_cb handler,
+					  void               *cb_data);
+int ipmi_entity_id_set_hot_swap_indicator(ipmi_entity_id_t id,
+					  int              val,
+					  ipmi_entity_cb   done,
+					  void             *cb_data);
+int ipmi_entity_id_get_hot_swap_requester(ipmi_entity_id_t   id,
+					  ipmi_entity_val_cb handler,
+					  void               *cb_data);
 
 
 /* Handles events from the given sensor with the handler.  Only one
