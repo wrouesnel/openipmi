@@ -10,7 +10,7 @@ VERSION_REVISION = $(wordlist 3, 3, $(SPACE_VERSION))
 VERSION_AGE = $(wordlist 2, 2, $(SPACE_VERSION))
 LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
-AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
+AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS `glib-config --cflags gthread`
 
 lib_LTLIBRARIES = libOpenIPMIcmdlang.la
 
@@ -25,12 +25,16 @@ libOpenIPMIcmdlang_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 
 bin_PROGRAMS = ipmish
 
+GLIBLIBS = $(shell glib-config --libs gthread)
+
 ipmish_SOURCES = ipmish.c
 ipmish_LDADD =  libOpenIPMIcmdlang.la \
 		$(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/lib/libOpenIPMI.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
+		$(top_builddir)/glib/libOpenIPMIglib.la \
 		$(SNMPLIBS)
+ipmish_LDFLAGS = $(GLIBLIBS)
 
 clean:
 	rm -f *.map

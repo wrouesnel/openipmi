@@ -313,7 +313,10 @@ lock(os_handler_t  *handler,
 	id->prev = &locks;
 	id->next->prev = id;
 	locks.next = id;
-    }
+    } else
+	IPMI_REPORT_LOCK_ERROR(handler,
+			       "lock called recursively\n");
+
     id->lock_count++;
     return 0;
 }

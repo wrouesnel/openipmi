@@ -109,7 +109,7 @@ add_fd(os_handler_t       *handler,
     if (!fd_data)
 	return ENOMEM;
     memset(fd_data, 0, sizeof(fd_data));
-    fd_data->chan = g_io_channel_unix_new(0);
+    fd_data->chan = g_io_channel_unix_new(fd);
     if (!fd_data->chan) {
 	g_free(fd_data);
 	return ENOMEM;
@@ -163,7 +163,7 @@ timer_handler(gpointer data)
     cb_data = timer_data->cb_data;
     timer_data->running = 0;
     timed_out(cb_data, timer_data);
-    return TRUE;
+    return FALSE;
 }
 
 static int
@@ -235,6 +235,18 @@ free_timer(os_handler_t *handler, os_hnd_timer_id_t *id)
 static int
 get_random(os_handler_t *handler, void *data, unsigned int len)
 {
+#if GLIB_MAJOR_VERSION < 2
+    int fd = open("/dev/urandom", O_RDONLY);
+    int rv;
+
+    if (fd == -1)
+	return errno;
+
+    rv = read(fd, data, len);
+
+    close(fd);
+    return rv;
+#else
     gint32 val;
     char   *out = data;
 
@@ -252,6 +264,7 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
     }
 
     return 0;
+#endif
 }
 
 static GStaticPrivate vlog_private = G_STATIC_PRIVATE_INIT;

@@ -43,8 +43,11 @@
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmi_posix.h>
+#include <OpenIPMI/ipmi_glib.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_debug.h>
+
+#include <glib.h>
 
 /* Internal includes, do not use in your programs */
 #include <OpenIPMI/internal/ipmi_malloc.h>
@@ -155,6 +158,9 @@ static void
 enable_term_fd(ipmi_cmdlang_t *cmdlang)
 {
     int rv;
+
+    if (term_fd_id)
+	return;
 
     rv = cmdlang->os_hnd->add_fd_to_wait_for(cmdlang->os_hnd, 0, 
 					     user_input_ready,
@@ -700,8 +706,6 @@ setup_term(os_handler_t *os_hnd)
     lout_data.stream = stdout;
 
     cmdlang.os_hnd = os_hnd;
-
-    enable_term_fd(&cmdlang);
 }
 
 static void
@@ -898,6 +902,7 @@ main(int argc, char *argv[])
     os_handler_t     *os_hnd;
     int              use_debug_os = 0;
     char             *colstr;
+    int              use_glib = 0;
 
     colstr = getenv("COLUMNS");
     if (colstr) {
@@ -935,6 +940,8 @@ main(int argc, char *argv[])
 	} else if (strcmp(arg, "--snmp") == 0) {
 	    init_snmp = 1;
 #endif
+	} else if (strcmp(arg, "--glib") == 0) {
+	    use_glib = 1;
 	} else if (strcmp(arg, "--help") == 0) {
 	    usage(argv[0]);
 	    return 0;
@@ -955,6 +962,16 @@ main(int argc, char *argv[])
 #ifdef HAVE_UCDSNMP
 	sel = debug_sel;
 #endif
+    } else if (use_glib) {
+	init_snmp = 0; /* No SNMP support for glib yet. */
+	g_thread_init(NULL);
+	os_hnd = ipmi_glib_get_os_handler();
+	if (!os_hnd) {
+	    fprintf(stderr,
+		    "ipmi_smi_setup_con: Unable to allocate os handler\n");
+	    return 1;
+	}
+	sel = NULL;
     } else {
 	os_hnd = ipmi_posix_setup_os_handler();
 	if (!os_hnd) {
@@ -1006,7 +1023,7 @@ main(int argc, char *argv[])
     fflush(stdout);
 
     handling_input = 1;
-    sel_set_fd_read_handler(sel, 0, SEL_FD_HANDLER_ENABLED);
+    enable_term_fd(&cmdlang);
 
     while (!done)
 	os_hnd->perform_one_op(os_hnd, NULL);

@@ -20,8 +20,26 @@
 	* lib/oem_motorola_mxp_intf.c: ditto
 	* lib/sdr.c: ditto
 	* unix/posix_thread_os_hnd.c: ditto
+	* include/OpenIPMI/ipmi_glib.h: ditto
 	
 	* ui/ui.c: Add internal MC include file.
+
+	* cmdlang/Makefile.am: Work on adding glib support.
+	* glib/Makefile.am: ditto
+	* include/OpenIPMI/Makefile.am: ditto
+	* cmdlang/ipmish.c: ditto
+
+	* cmdlang/os_debug.c: Rework locking to not allow recursive locks,
+	and fix tons of problems with the locking.
+	* glib/glib_os_hnd.c: ditto
+	* lib/domain.c: ditto
+	* lib/entity.c: ditto
+	* lib/lanparm.c: ditto
+	* lib/mc.c: ditto
+	* lib/pef.c: ditto
+	* lib/sdr.c: ditto
+	* lib/sel.c: ditto
+	* lib/sensor.c: ditto
 	
 2004-10-19 Corey Minyard <cminyard@mvista.com> 
 

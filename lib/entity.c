@@ -1084,20 +1084,18 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
     return 0;
 }
 
-/* Must be called with both the child and parent entities used. */
+/* Must be called with both the child and parent entities used and the
+   domain entity lock held. */
 static void
 add_child(ipmi_entity_t       *ent,
 	  ipmi_entity_t       *child,
 	  locked_list_entry_t *entry1,
 	  locked_list_entry_t *entry2)
 {
-    _ipmi_domain_entity_lock(ent->domain);
     locked_list_add_entry(ent->child_entities, child, NULL, entry1);
     locked_list_add_entry(child->parent_entities, ent, NULL, entry2);
 
     ent->presence_possibly_changed = 1;
-
-    _ipmi_domain_entity_unlock(ent->domain);
 }
 
 int
@@ -3896,8 +3894,8 @@ ipmi_entity_set_id(ipmi_entity_t *ent, char *id,
     memcpy(ent->info.id, id, length);
     ent->info.id_type = type;
     ent->info.id_len = length;
-    entity_set_name(ent);
     ipmi_unlock(ent->lock);
+    entity_set_name(ent);
 }
 
 int

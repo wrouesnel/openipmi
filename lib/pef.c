@@ -535,6 +535,8 @@ fetch_complete(ipmi_pef_t *pef, int err, pef_fetch_handler_t *elem)
     if (pef->in_destroy)
 	goto out;
 
+    pef_unlock(pef);
+
     if (elem->handler)
 	elem->handler(pef, err, elem->data, elem->data_len, elem->cb_data);
 
@@ -542,6 +544,9 @@ fetch_complete(ipmi_pef_t *pef, int err, pef_fetch_handler_t *elem)
 
     if (!pef->destroyed)
 	opq_op_done(pef->opq);
+
+    pef_put(pef);
+    return;
 
  out:
     pef_unlock(pef);
@@ -665,12 +670,8 @@ ipmi_pef_get_parm(ipmi_pef_t      *pef,
     elem->block = block;
     elem->rv = 0;
 
-    pef_lock(pef);
-
     if (!opq_new_op(pef->opq, start_config_fetch, elem, 0))
 	rv = ENOMEM;
-
-    pef_unlock(pef);
 
     if (rv)
 	ipmi_mem_free(elem);
@@ -706,8 +707,15 @@ set_complete(ipmi_pef_t *pef, int err, pef_set_handler_t *elem)
     ipmi_mem_free(elem);
 
     pef_lock(pef);
-    if (!pef->destroyed)
+    if (!pef->destroyed) {
+	pef_unlock(pef);
 	opq_op_done(pef->opq);
+    } else {
+	pef_unlock(pef);
+    }
+
+    pef_put(pef);
+    return;
 
  out:
     pef_unlock(pef);
@@ -825,12 +833,8 @@ ipmi_pef_set_parm(ipmi_pef_t       *pef,
     elem->data_len = data_len + 1;
     elem->rv = 0;
 
-    pef_lock(pef);
-
     if (!opq_new_op(pef->opq, start_config_set, elem, 0))
 	rv = ENOMEM;
-
-    pef_unlock(pef);
 
     if (rv)
 	ipmi_mem_free(elem);

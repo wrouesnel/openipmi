@@ -453,6 +453,8 @@ fetch_complete(ipmi_lanparm_t *lanparm, int err, lanparm_fetch_handler_t *elem)
     if (lanparm->in_destroy)
 	goto out;
 
+    lanparm_unlock(lanparm);
+
     if (elem->handler)
 	elem->handler(lanparm, err, elem->data, elem->data_len, elem->cb_data);
 
@@ -460,6 +462,9 @@ fetch_complete(ipmi_lanparm_t *lanparm, int err, lanparm_fetch_handler_t *elem)
 
     if (!lanparm->destroyed)
 	opq_op_done(lanparm->opq);
+
+    lanparm_put(lanparm);
+    return;
 
  out:
     lanparm_unlock(lanparm);
@@ -587,12 +592,8 @@ ipmi_lanparm_get_parm(ipmi_lanparm_t      *lanparm,
     elem->block = block;
     elem->rv = 0;
 
-    lanparm_lock(lanparm);
-
     if (!opq_new_op(lanparm->opq, start_config_fetch, elem, 0))
 	rv = ENOMEM;
-
-    lanparm_unlock(lanparm);
 
     if (rv)
 	ipmi_mem_free(elem);
@@ -628,8 +629,15 @@ set_complete(ipmi_lanparm_t *lanparm, int err, lanparm_set_handler_t *elem)
     ipmi_mem_free(elem);
 
     lanparm_lock(lanparm);
-    if (!lanparm->destroyed)
+    if (!lanparm->destroyed) {
+	lanparm_unlock(lanparm);
 	opq_op_done(lanparm->opq);
+    } else {
+	lanparm_unlock(lanparm);
+    }
+
+    lanparm_put(lanparm);
+    return;
 
  out:
     lanparm_unlock(lanparm);
@@ -751,12 +759,8 @@ ipmi_lanparm_set_parm(ipmi_lanparm_t       *lanparm,
     elem->data_len = data_len + 2;
     elem->rv = 0;
 
-    lanparm_lock(lanparm);
-
     if (!opq_new_op(lanparm->opq, start_config_set, elem, 0))
 	rv = ENOMEM;
-
-    lanparm_unlock(lanparm);
 
     if (rv)
 	ipmi_mem_free(elem);

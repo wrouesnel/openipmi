@@ -373,7 +373,9 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
 	return;
     }
 
+    sel_unlock(sel);
     opq_op_done(sel->opq);
+    return;
 
  out:
     sel_unlock(sel);
@@ -933,11 +935,12 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 
 	elem->next = NULL;
 	sel->fetch_handlers = elem;
+	sel_unlock(sel);
 	if (!opq_new_op(sel->opq, start_fetch, elem, 0)) {
 	    sel->fetch_handlers = NULL;
 	    info->rv = ENOMEM;
-	    goto out_unlock;
 	}
+	goto out;
     } else if (elem->handler) {
 	/* Add it to the list of waiting fetch handlers, if it has a
 	   handler. */
@@ -947,8 +950,9 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 	info->rv = EEXIST;
     }
 
- out_unlock:
     sel_unlock(sel);
+ out:
+    return;
 }
 
 int
@@ -1022,8 +1026,8 @@ sel_op_done(sel_cb_handler_data_t *data,
 	/* This will unlock the lock. */
 	internal_destroy_sel(sel);
     } else {
-	opq_op_done(sel->opq);
 	sel_unlock(sel);
+	opq_op_done(sel->opq);
     }
     if (data->event)
 	ipmi_event_free(data->event);
@@ -1312,7 +1316,7 @@ start_del_sel_cb(ipmi_mc_t *mc, void *cb_data)
     ipmi_sel_info_t       *sel = data->sel;
     int                   rv;
 
-    sel_lock(sel);
+    /* Called with SEL lock held. */
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_del_sel_cb): "
@@ -1359,13 +1363,14 @@ start_del_sel(void *cb_data, int shutdown)
 
     rv = ipmi_mc_pointer_cb(sel->mc, start_del_sel_cb, data);
     if (rv) {
+	sel_unlock(sel);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_del_sel_cb): MC went away during delete",
 		 sel->name);
 	sel_op_done(data, ECANCELED);
 	goto out;
     }
-    sel_unlock(sel);
+
  out:
     return;
 }
@@ -1443,13 +1448,16 @@ sel_del_event_cb(ipmi_mc_t *mc, void *cb_data)
 
 	/* We don't return a return code, because we don't really
            care.  If this fails, it will just be handled later. */
+	sel_unlock(sel);
 	if (!opq_new_op(sel->opq, start_del_sel, data, 0))
 	    ipmi_mem_free(data);
     } else {
+	sel_unlock(sel);
 	/* Don't really delete the event, but report is as done. */
 	info->handler(sel, info->cb_data, 0);
 	ipmi_event_free(event);
     }
+    return;
 
  out_unlock:
     sel_unlock(sel);
@@ -1964,8 +1972,8 @@ sel_add_op_done(sel_add_cb_handler_data_t *data,
 	/* This will unlock the lock. */
 	internal_destroy_sel(sel);
     } else {
-	opq_op_done(sel->opq);
 	sel_unlock(sel);
+	opq_op_done(sel->opq);
     }
     if (data->event)
 	ipmi_event_free(data->event);
@@ -2105,14 +2113,19 @@ ipmi_sel_add_event_to_sel(ipmi_sel_info_t           *sel,
 	goto out_unlock;
     }
 
+    sel_unlock(sel);
+
     /* Schedule this to run at the end of the queue. */
     if (!opq_new_op(sel->opq, sel_add_event_op, info, 0)) {
 	rv = ENOMEM;
 	goto out_unlock;
     }
+    goto out;
 
  out_unlock:
     sel_unlock(sel);
+
+ out:
     if (rv)
 	ipmi_mem_free(info);
     return rv;

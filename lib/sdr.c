@@ -1427,7 +1427,6 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	}
     }
 
-    sdr_lock(sdrs);
     if (! opq_new_op_with_done(sdrs->sdr_wait_q,
 			       handle_start_fetch,
 			       sdrs,
@@ -1436,7 +1435,6 @@ sdr_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     {
 	info->rv = ENOMEM;
     }
-    sdr_unlock(sdrs);
 
  out:
     if (info->rv)

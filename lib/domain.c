@@ -616,14 +616,12 @@ cleanup_domain(ipmi_domain_t *domain)
     ipmi_domain_iterate_mcs(domain, iterate_cleanup_mc, NULL);
     ipmi_domain_iterate_mcs(domain, iterate_cleanup_mc, NULL);
 
-    ipmi_lock(domain->mc_lock);
     if (domain->si_mc) {
 	_ipmi_mc_get(domain->si_mc);
 	_ipmi_mc_release(domain->si_mc);
 	_ipmi_cleanup_mc(domain->si_mc);
 	_ipmi_mc_put(domain->si_mc);
     }
-    ipmi_unlock(domain->mc_lock);
 
     /* Destroy the main SDR repository, if it exists. */
     if (domain->main_sdrs)
@@ -789,8 +787,6 @@ setup_domain(char          *name,
     rv = ipmi_create_lock(domain, &domain->mc_lock);
     if (rv)
 	goto out_err;
-    /* Lock this first thing. */
-    ipmi_lock(domain->mc_lock);
 
     rv = ipmi_create_lock(domain, &domain->con_lock);
     if (rv)
@@ -923,9 +919,6 @@ setup_domain(char          *name,
  out_err:
     if (domain->si_mc)
 	_ipmi_mc_put(domain->si_mc);
-
-    if (domain->mc_lock)
-	ipmi_unlock(domain->mc_lock);
 
     if (rv)
 	cleanup_domain(domain);
@@ -2119,8 +2112,6 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 
-    ipmi_lock(domain->mc_lock);
-
     mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
     if (msg->data[0] == 0) {
 	if (mc && ipmi_mc_is_active(mc)
@@ -2147,7 +2138,6 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		    info->os_hnd->free_timer(info->os_hnd, info->timer);
 		    ipmi_destroy_lock(info->lock);
 		    ipmi_mem_free(info);
-		    ipmi_unlock(domain->mc_lock);
 		    goto out;
 		}
 
@@ -2207,8 +2197,6 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	    /* Try again after a second. */
 	    struct timeval timeout;
 
-	    ipmi_unlock(domain->mc_lock);
-
 	    if (msg->data[0] == IPMI_TIMEOUT_CC)
 		/* If we timed out, then no need to time, since a
 		   second has gone by already. */
@@ -2229,8 +2217,6 @@ devid_bc_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     }
 
  next_addr:
-    ipmi_unlock(domain->mc_lock);
-
     if (mc_added)
 	call_mc_upd_handlers(domain, mc, IPMI_ADDED);
 
@@ -3265,8 +3251,8 @@ ipmi_domain_iterate_mcs(ipmi_domain_t              *domain,
 	if (mc && !_ipmi_mc_get(mc)) {
 	    ipmi_unlock(domain->mc_lock);
 	    handler(domain, mc, cb_data);
-	    ipmi_lock(domain->mc_lock);
 	    _ipmi_mc_put(mc);
+	    ipmi_lock(domain->mc_lock);
 	}
     }
     for (i=0; i<IPMB_HASH; i++) {
@@ -3277,8 +3263,8 @@ ipmi_domain_iterate_mcs(ipmi_domain_t              *domain,
 	    if (mc && !_ipmi_mc_get(mc)) {
 		ipmi_unlock(domain->mc_lock);
 		handler(domain, mc, cb_data);
-		ipmi_lock(domain->mc_lock);
 		_ipmi_mc_put(mc);
+		ipmi_lock(domain->mc_lock);
 	    }
 	}
     }
@@ -3304,8 +3290,8 @@ ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
 	    if (mc && !_ipmi_mc_get(mc)) {
 		ipmi_unlock(domain->mc_lock);
 		handler(domain, mc, cb_data);
-		ipmi_lock(domain->mc_lock);
 		_ipmi_mc_put(mc);
+		ipmi_lock(domain->mc_lock);
 	    }
 	}
     }
@@ -3314,8 +3300,8 @@ ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
 	if (mc && !_ipmi_mc_get(mc)) {
 	    ipmi_unlock(domain->mc_lock);
 	    handler(domain, mc, cb_data);
-	    ipmi_lock(domain->mc_lock);
 	    _ipmi_mc_put(mc);
+	    ipmi_lock(domain->mc_lock);
 	}
     }
     ipmi_unlock(domain->mc_lock);

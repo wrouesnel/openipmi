@@ -1814,8 +1814,16 @@ _ipmi_mc_put(ipmi_mc_t *mc)
 	}
 
 	/* If we need to cleanup the MC, do so. */
-	if (mc->cleanup)
+	if (mc->cleanup) {
+	    _ipmi_domain_mc_unlock(mc->domain);
 	    cleanup_mc(mc);
+	    _ipmi_domain_mc_lock(mc->domain);
+
+	    /* Something grabbed the MC while we were out, don't do
+	       any more transitions. */
+	    if (mc->usecount != 1)
+		goto out;
+	}
 
 	/* Do as many active transitions as necessary to bring the MC
 	   to the proper state. */

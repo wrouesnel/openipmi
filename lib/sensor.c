@@ -1704,6 +1704,8 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	ent_item = ent_item->next;
     }
 
+    _ipmi_domain_entity_unlock(domain);
+
     /* After this point, the operation cannot fail.  Nothing above
        this actually changes anything, it just gets it ready.  Now we
        put into place all the changes. */
@@ -1782,8 +1784,6 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	    }
 	}
     }
-
-    _ipmi_domain_entity_unlock(domain);
 
     if (old_sdr_sensors) {
 	for (i=0; i<old_count; i++) {
