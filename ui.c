@@ -2318,7 +2318,7 @@ mc_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
     mccmd_info_t *info = cb_data;
 
     info->mc_id.bmc = bmc;
-    ipmi_mc_pointer_cb(info->mc_id, mc_handler, cb_data);
+    ipmi_mc_pointer_noseq_cb(info->mc_id, mc_handler, cb_data);
 }
 
 int
@@ -2437,7 +2437,7 @@ mccmd_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
     mccmd_info_t *info = cb_data;
 
     info->mc_id.bmc = bmc;
-    ipmi_mc_pointer_cb(info->mc_id, mccmd_handler, cb_data);
+    ipmi_mc_pointer_noseq_cb(info->mc_id, mccmd_handler, cb_data);
 }
 
 int
@@ -2959,7 +2959,7 @@ sdrs_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
     sdrs_info_t *info = cb_data;
 
     info->mc_id.bmc = bmc;
-    ipmi_mc_pointer_cb(info->mc_id, sdrs_mcs_handler, info);
+    ipmi_mc_pointer_noseq_cb(info->mc_id, sdrs_mcs_handler, info);
 }
 
 static int
