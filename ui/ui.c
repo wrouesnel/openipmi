@@ -596,6 +596,23 @@ leave(int rv, char *format, ...)
 	tcdrain(0);
     }
 
+    if (pef_config) {
+	ipmi_pef_free_config(pef_config);
+	pef_config = NULL;
+    }
+    if (pef) {
+	ipmi_pef_destroy(pef, NULL, NULL);
+	pef = NULL;
+    }
+    if (lanparm_config) {
+	ipmi_lan_free_config(lanparm_config);
+	lanparm_config = NULL;
+    }
+    if (lanparm) {
+	ipmi_lanparm_destroy(lanparm, NULL, NULL);
+	lanparm = NULL;
+    }
+
     if (line_buffer) {
 	ipmi_mem_free(line_buffer);
     }
