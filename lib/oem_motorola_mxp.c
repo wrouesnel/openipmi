@@ -6954,6 +6954,23 @@ mxp_board_power_changed_event(ipmi_sensor_t *sensor, void *cb_data)
 }
 
 static void
+mxp_board_power_control_event(ipmi_control_t *control, void *cb_data)
+{
+    mc_event_info_t       *einfo = cb_data;
+    int                   vals[1];
+    int                   valid_vals[1];
+
+    if (einfo->data[10])
+	vals[0] = 1;
+    else
+	vals[0] = 0;
+    valid_vals[0] = 1;
+
+    ipmi_control_call_val_event_handlers(control, valid_vals, vals,
+					 &einfo->event, NULL);
+}
+
+static void
 mxp_board_ejector_changed_event(ipmi_sensor_t *sensor, void *cb_data)
 {
     mc_event_info_t       *einfo = cb_data;
@@ -7327,12 +7344,13 @@ mxp_amc_failover_event(ipmi_sensor_t *sensor, void *cb_data)
 static void
 mc_event(ipmi_mc_t *mc, void *cb_data)
 {
-    mc_event_info_t  *einfo = cb_data;
-    mxp_info_t       *info = einfo->info;
-    ipmi_sensor_id_t id;
-    mxp_board_t      *binfo;
-    int              rv;
-    int              i;
+    mc_event_info_t   *einfo = cb_data;
+    mxp_info_t        *info = einfo->info;
+    ipmi_sensor_id_t  id;
+    ipmi_control_id_t cid;
+    mxp_board_t       *binfo;
+    int               rv;
+    int               i;
 
     id.mcid = ipmi_mc_convert_to_id(mc);
     id.mcid.channel = 0;
@@ -7342,6 +7360,7 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
     {
     case 0xd0:
 	if ((einfo->data[8] == 0x01) || (einfo->data[8] == 0x02)) {
+	    int rv2;
 	    /* HS Power and HS Bdsel.  We treat these the same, they
 	       should both mean that a board power is present or
 	       absent. */
@@ -7350,7 +7369,17 @@ mc_event(ipmi_mc_t *mc, void *cb_data)
 	    rv = ipmi_sensor_pointer_noseq_cb(id,
 					      mxp_board_power_changed_event,
 					      einfo);
-	    if (!rv)
+
+	    cid.mcid = ipmi_mc_convert_to_id(mc);
+	    cid.mcid.mc_num = einfo->data[4];
+	    cid.mcid.channel = 0;
+	    cid.mcid.mc_num = 0x20;
+	    cid.lun = 4;
+	    cid.control_num = MXP_BOARD_POWER_CONFIG_NUM;
+	    rv2 = ipmi_control_pointer_noseq_cb(cid,
+						mxp_board_power_control_event,
+						einfo);
+	    if ((!rv) || (!rv2))
 		einfo->handled = 1;
 	} else if ((einfo->data[8] == 0x03) || (einfo->data[8] == 0x0e)) {
 	    /* HS Reset and HS Healthy, we use it to trigger that a

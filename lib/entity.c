@@ -1363,6 +1363,9 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	return;
     ent->presence_possibly_changed = 0;
 
+    if (ent->hot_swappable)
+	ipmi_entity_check_hot_swap_state(ent);
+
     if (ent->presence_sensor) {
 	/* Presence sensor overrides everything. */
 	rv = ipmi_states_get(ent->presence_sensor, states_read, ent);

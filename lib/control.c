@@ -199,6 +199,29 @@ ipmi_control_pointer_cb(ipmi_control_id_t   id,
     return rv;
 }
 
+int
+ipmi_control_pointer_noseq_cb(ipmi_control_id_t   id,
+			      ipmi_control_ptr_cb handler,
+			      void                *cb_data)
+{
+    int               rv;
+    mc_cb_info_t      info;
+
+    if (id.lun >= 5)
+	return EINVAL;
+
+    info.handler = handler;
+    info.cb_data = cb_data;
+    info.id = id;
+    info.err = 0;
+
+    rv = ipmi_mc_pointer_noseq_cb(id.mcid, mc_cb, &info);
+    if (!rv)
+	rv = info.err;
+
+    return rv;
+}
+
 typedef struct control_find_info_s
 {
     ipmi_control_id_t id;

@@ -28,6 +28,14 @@
 	* lib/domain.c: Fix the ordering of OEM handling and reporting
 	things so the MC is ready for commands at that time.
 
+	* lib/entity.c: Add checking of hot-swap state along with
+	presence.
+
+	* lib/oem_motorola_mxp.c: Added an event for the power control.
+
+	* lib/control.c, include/OpenIPMI/ipmi_control.h: Added a way to
+	do noseq callbacks to controls.
+
 2004-04-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lanserv/emu.c, lanserv/emu_cmd.c, lanserv/emu.h: Added a start

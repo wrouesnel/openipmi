@@ -295,4 +295,11 @@ ipmi_mc_t *ipmi_control_get_mc(ipmi_control_t *control);
 #define IPMI_CHASSIS_POWER_CONTROL	0xf0
 #define IPMI_CHASSIS_RESET_CONTROL	0xf1
 
+/* Do a pointer callback but ignore the sequence number in the MC.
+   This is primarily for handling incoming events, where the sequence
+   number doesn't matter. */
+int ipmi_control_pointer_noseq_cb(ipmi_control_id_t   id,
+				  ipmi_control_ptr_cb handler,
+				  void                *cb_data);
+
 #endif /* _IPMI_CONTROL_H */
