@@ -196,7 +196,7 @@ parse_ipmi_data(intarray data, unsigned char *odata,
 
 %}
 
-#include "OpenIPMI_lang.i"
+%import "OpenIPMI_lang.i"
 
 %nodefault;
 
