@@ -749,12 +749,14 @@ ipmi_posix_thread_get_os_handler(void)
     }
     rv->internal_data = info;
 
+#ifdef HAVE_GDBM
     err = pthread_mutex_init(&info->gdbm_lock, NULL);
     if (err) {
 	free(info);
 	free(rv);
 	rv = NULL;
     }
+#endif
 
     return rv;
 }

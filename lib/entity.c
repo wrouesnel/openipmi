@@ -2769,8 +2769,6 @@ decode_ear(ipmi_sdr_t *sdr,
     int i;
     int pos;
 
-    memset(info, 0, sizeof(*info));
-
     info->type = IPMI_ENTITY_EAR;
     info->output_handler = NULL;
 
@@ -2798,8 +2796,6 @@ decode_drear(ipmi_sdr_t *sdr,
 {
     int i;
     int pos;
-
-    memset(info, 0, sizeof(*info));
 
     info->type = IPMI_ENTITY_DREAR;
     info->output_handler = NULL;
@@ -2869,8 +2865,6 @@ decode_gdlr(ipmi_sdr_t         *sdr,
 	    dlr_info_t         *info)
 {
     unsigned char *str;
-
-    memset(info, 0, sizeof(*info));
 
     info->type = IPMI_ENTITY_GENERIC;
     info->output_handler = gdlr_output;
@@ -2944,8 +2938,6 @@ decode_frudlr(ipmi_sdr_t         *sdr,
 	      dlr_info_t         *info)
 {
     unsigned char *str;
-
-    memset(info, 0, sizeof(*info));
 
     info->type = IPMI_ENTITY_FRU;
     info->output_handler = frudlr_output;
@@ -3029,8 +3021,6 @@ decode_mcdlr(ipmi_sdr_t *sdr,
     unsigned char *data;
     unsigned char *str;
 
-
-    memset(info, 0, sizeof(*info));
 
     info->type = IPMI_ENTITY_MC;
     info->output_handler = mcdlr_output;
@@ -3263,6 +3253,9 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 	    j--;
 	    if ((infos->found+j)->found)
 		continue;
+	    if ((infos->dlrs[j]->type != IPMI_ENTITY_EAR)
+		&& (infos->dlrs[j]->type != IPMI_ENTITY_DREAR))
+		continue;
 	    found = infos->found+j;
 
 	    /* Since this is an EAR and we are putting it's entries in
@@ -3338,10 +3331,8 @@ put_entities(entity_sdr_info_t *infos)
 }
 
 static int
-cmp_dlr(const void *a, const void *b)
+cmp_dlr(const dlr_info_t *d1, const dlr_info_t *d2)
 {
-    const dlr_info_t *d1 = a;
-    const dlr_info_t *d2 = b;
 
     if (d1->entity_id < d2->entity_id)
 	return -1;
@@ -3351,7 +3342,16 @@ cmp_dlr(const void *a, const void *b)
 	return -1;
     if (d1->entity_instance > d2->entity_instance)
 	return 1;
-    return memcmp(a, b, sizeof(dlr_info_t));
+    return memcmp(d1, d2, sizeof(dlr_info_t));
+}
+
+static int
+cmp_dlr_qsort(const void *a, const void *b)
+{
+    const dlr_info_t *d1 = *((dlr_info_t **) a);
+    const dlr_info_t *d2 = *((dlr_info_t **) b);
+
+    return cmp_dlr(d1, d2);
 }
 
 struct locked_list_entry_s
@@ -3386,6 +3386,8 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
 	if (rv)
 	    return rv;
+
+	memset(&dlr, 0, sizeof(dlr));
 
 	switch (sdr.type) {
 	    case IPMI_SDR_ENITY_ASSOCIATION_RECORD:
@@ -3450,7 +3452,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
     /* Sort the DLRs by parent entity id/entity instance/rest of data.
        This makes the rest of the operations here O(n) instead of
        O(n^2). */
-    qsort(infos.dlrs, infos.next, sizeof(dlr_info_t *), cmp_dlr);
+    qsort(infos.dlrs, infos.next, sizeof(dlr_info_t *), cmp_dlr_qsort);
 
     /* For every item in the new array, try to find it in the old
        array.  Both arrays are sorted by entity id/entity
@@ -3458,7 +3460,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
     i=0;
     j=0;
     while ((i < infos.next) && (j < old_infos->next)) {
-	int c = cmp_dlr(infos.dlrs+i, old_infos->dlrs+j);
+	int c = cmp_dlr(infos.dlrs[i], old_infos->dlrs[j]);
 	if (c == 0) {
 	    infos.found[i].found = 1;
 	    old_infos->found[j].found = 1;

@@ -1,3 +1,12 @@
+2005-02-08 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/entity.c: Fixed some problems with the use of qsort and the
+	sorting and comparing of device locator records and entity
+	association records.
+
+	* glib/Makefile.am: Changed the name of a field to be glib, not
+	posix.
+
 2005-02-02 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/os_handler.h, lib/ipmi.c: Added an interface to
