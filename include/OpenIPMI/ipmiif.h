@@ -333,7 +333,7 @@ int ipmi_entity_set_presence_handler(ipmi_entity_t           *ent,
    then it will only do this if OpenIPMI has some reason to think the
    presence has changed.  If "force" is non-zero, it will force OpenIPMI
    to detect the current presence of the entity. */
-int ipmi_detect_entity_presence_change(ipmi_entity_t *entity, int force)
+int ipmi_detect_entity_presence_change(ipmi_entity_t *entity, int force);
 
 /* Get information about an entity.  Most of this is IPMI specific. */
 ipmi_domain_t *ipmi_entity_get_domain(ipmi_entity_t *ent);
