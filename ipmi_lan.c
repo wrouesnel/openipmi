@@ -204,6 +204,9 @@ typedef struct lan_data_s
     lan_report_con_failure_cb lan_con_fail_handler;
     void                      *lan_con_fail_cb_data;
 
+    ipmi_ll_init_con_done_cb lan_start_con_handler;
+    void                     *lan_start_con_cb_data;
+
     struct lan_data_s *next, *prev;
 } lan_data_t;
 
@@ -1593,43 +1596,40 @@ static void session_privilege_set(ipmi_con_t   *ipmi,
 				  void         *data3)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
-    int        rv;
 
     if (msg->data[0] != 0) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL,
-			   ipmi->setup_cb_data,
-			   IPMI_IPMI_ERR_VAL(msg->data[0]));
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi,
+				       IPMI_IPMI_ERR_VAL(msg->data[0]),
+				       NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
     if (msg->data_len < 2) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, EINVAL, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
     if (lan->privilege != (msg->data[1] & 0xf)) {
 	/* Requested privilege level did not match. */
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, EINVAL, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
     if (! lan->initialized) {
 	lan->initialized = 1;
 
-	/* Assume we are at address 0x20, the OEM code can fix it up if
-	   necessary. */
-	rv = ipmi_init_con(ipmi, addr, addr_len, 0x20);
-	if (rv) {
-	    if (ipmi->setup_cb)
-		ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	    cleanup_con(ipmi);
-	}
+	if (lan->lan_start_con_handler)
+	    /* Assume slave address is 0x20. */
+	    lan->lan_start_con_handler(ipmi, 0, addr, addr_len, 0x20,
+				       lan->lan_start_con_cb_data);
+
+	lan->lan_start_con_handler = NULL;
     } else {
 	lan->connected = 1;
 	connection_up(lan, lan->curr_ip_addr);
@@ -1674,18 +1674,18 @@ static void session_activated(ipmi_con_t   *ipmi,
 
 
     if (msg->data[0] != 0) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL,
-			   ipmi->setup_cb_data,
-			   IPMI_IPMI_ERR_VAL(msg->data[0]));
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi,
+				       IPMI_IPMI_ERR_VAL(msg->data[0]),
+				       NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
     if (msg->data_len < 11) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, EINVAL, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
@@ -1694,9 +1694,9 @@ static void session_activated(ipmi_con_t   *ipmi,
 	&& (lan->working_authtype != lan->authtype))
     {
 	/* Eh?  It didn't return a valid authtype. */
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, EINVAL, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
@@ -1705,9 +1705,9 @@ static void session_activated(ipmi_con_t   *ipmi,
 
     rv = send_set_session_privilege(ipmi, lan);
     if (rv) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, rv, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
     }
 }
 
@@ -1752,18 +1752,18 @@ static void challenge_done(ipmi_con_t   *ipmi,
 
 
     if (msg->data[0] != 0) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL,
-			   ipmi->setup_cb_data,
-			   IPMI_IPMI_ERR_VAL(msg->data[0]));
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi,
+				       IPMI_IPMI_ERR_VAL(msg->data[0]),
+				       NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
     if (msg->data_len < 21) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, EINVAL, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
@@ -1780,9 +1780,9 @@ static void challenge_done(ipmi_con_t   *ipmi,
 	rv = ipmi->os_hnd->get_random(ipmi->os_hnd,
 				      &(lan->inbound_seq_num), 4);
 	if (!rv) {
-	    if (ipmi->setup_cb)
-		ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
-	    cleanup_con(ipmi);
+	    if (lan->lan_start_con_handler)
+		lan->lan_start_con_handler(ipmi, rv, NULL, 0, 0,
+					   lan->lan_start_con_cb_data);
 	    return;
 	}
     }
@@ -1790,9 +1790,9 @@ static void challenge_done(ipmi_con_t   *ipmi,
     lan->retries = 0;
     rv = send_activate_session(ipmi, lan);
     if (rv) {
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, rv, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
@@ -1841,29 +1841,26 @@ auth_cap_done(ipmi_con_t   *ipmi,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "No authentication supported, but an authorization"
 		     " type was requested");
-	    if (ipmi->setup_cb)
-	        ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	    cleanup_con(ipmi);
+	    if (lan->lan_start_con_handler)
+		lan->lan_start_con_handler(ipmi, EINVAL, NULL, 0, 0,
+					   lan->lan_start_con_cb_data);
 	    return;
 	}
         /* No authentication capabilities, assume we can just message
 	   the thing directly. */
 	/* Assume we are at address 0x20, the OEM code can fix it up
 	   if necessary. */
-        rv = ipmi_init_con(ipmi, addr, addr_len, 0x20);
-	if (rv) {
-	    if (ipmi->setup_cb)
-	        ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
-	    cleanup_con(ipmi);
-	}
+	if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, 0, addr, addr_len, 0x20,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
     if (!(msg->data[2] & (1 << lan->authtype))) {
         ipmi_log(IPMI_LOG_ERR_INFO, "Requested authentication not supported");
-	if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, EINVAL);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, EINVAL, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
 	return;
     }
 
@@ -1871,9 +1868,9 @@ auth_cap_done(ipmi_con_t   *ipmi,
     if (rv) {
         ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Unable to send challenge command: 0x%x", rv);
-        if (ipmi->setup_cb)
-	    ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
-	cleanup_con(ipmi);
+        if (lan->lan_start_con_handler)
+	    lan->lan_start_con_handler(ipmi, rv, NULL, 0, 0,
+				       lan->lan_start_con_cb_data);
     }
 }
 
@@ -1912,6 +1909,53 @@ lan_set_con_fail_handler(ipmi_con_t            *ipmi,
     lan->con_fail_cb_data = cb_data;
 }
 
+static int
+lan_start_con(ipmi_con_t               *ipmi,
+	      ipmi_ll_init_con_done_cb handler,
+	      void                     *cb_data)
+{
+    lan_data_t     *lan = (lan_data_t *) ipmi->con_data;
+    int            rv;
+    struct timeval timeout;
+
+    lan->lan_start_con_handler = handler;
+    lan->lan_start_con_cb_data = cb_data;
+
+    /* Start the timer to audit the connections. */
+    lan->audit_info = ipmi_mem_alloc(sizeof(*(lan->audit_info)));
+    if (!lan->audit_info) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    lan->audit_info->cancelled = 0;
+    lan->audit_info->ipmi = ipmi;
+    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(lan->audit_timer));
+    if (rv)
+	goto out_err;
+    timeout.tv_sec = LAN_AUDIT_TIMEOUT / 1000000;
+    timeout.tv_usec = LAN_AUDIT_TIMEOUT % 1000000;
+    rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				   lan->audit_timer,
+				   &timeout,
+				   audit_timeout_handler,
+				   lan->audit_info);
+    if (rv) {
+	ipmi_mem_free(lan->audit_info);
+	lan->audit_info = NULL;
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, lan->audit_timer);
+	lan->audit_timer = NULL;
+	goto out_err;
+    }
+
+    rv = send_auth_cap(ipmi, lan);
+    if (rv)
+	goto out_err;
+
+ out_err:
+    return rv;
+}
+
 int
 ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 		   int                       *ports,
@@ -1924,16 +1968,14 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 		   unsigned int              password_len,
 		   os_handler_t              *handlers,
 		   void                      *user_data,
-		   ipmi_setup_done_t         setup_cb,
 		   lan_report_con_failure_cb fail_con_cb,
-		   void                      *cb_data)
+		   void                      *cb_data,
+		   ipmi_con_t                **new_con)
 {
     ipmi_con_t     *ipmi = NULL;
     lan_data_t     *lan = NULL;
     int            rv;
     int            i;
-    struct timeval timeout;
-
 
     if (username_len > IPMI_USERNAME_MAX)
 	return EINVAL;
@@ -2000,34 +2042,12 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     if (rv)
 	goto out_err;
 
-    /* Start the timer to audit the connections. */
-    lan->audit_info = ipmi_mem_alloc(sizeof(*(lan->audit_info)));
-    if (!lan->audit_info)
-	goto out_err;
-
-    lan->audit_info->cancelled = 0;
-    lan->audit_info->ipmi = ipmi;
-    rv = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &(lan->audit_timer));
-    if (rv)
-	goto out_err;
-    timeout.tv_sec = LAN_AUDIT_TIMEOUT / 1000000;
-    timeout.tv_usec = LAN_AUDIT_TIMEOUT % 1000000;
-    rv = ipmi->os_hnd->start_timer(ipmi->os_hnd,
-				   lan->audit_timer,
-				   &timeout,
-				   audit_timeout_handler,
-				   lan->audit_info);
-    if (rv) {
-	ipmi->os_hnd->free_timer(ipmi->os_hnd, lan->audit_timer);
-	lan->audit_timer = NULL;
-	goto out_err;
-    }
-
     memcpy(lan->username, username, username_len);
     lan->username_len = username_len;
     memcpy(lan->password, password, password_len);
     lan->password_len = password_len;
 
+    ipmi->start_con = lan_start_con;
     ipmi->set_con_fail_handler = lan_set_con_fail_handler;
     ipmi->send_command = lan_send_command;
     ipmi->register_for_events = lan_register_for_events;
@@ -2051,8 +2071,8 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     if (rv)
 	goto out_err;
 
-    ipmi->setup_cb = setup_cb;
-    ipmi->setup_cb_data = cb_data;
+    lan->lan_con_fail_handler = fail_con_cb;
+    lan->lan_con_fail_cb_data = cb_data;
 
     /* Add it to the list of valid IPMIs so it will validate. */
     ipmi_write_lock();
@@ -2064,11 +2084,10 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
     ipmi_write_unlock();
 
     lan->retries = 0;
-    rv = send_auth_cap(ipmi, lan);
-    if (rv)
-	goto out_err;
 
-    return rv;
+    *new_con = ipmi;
+
+    return 0;
 
  out_err:
     cleanup_con(ipmi);

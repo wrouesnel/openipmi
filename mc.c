@@ -168,6 +168,10 @@ typedef struct ipmi_bmc_s
 
     /* Is the low-level connection up? */
     int connection_up;
+
+    ipmi_bmc_cb setup_done;
+    void        *setup_done_cb_data;
+
 } ipmi_bmc_t;
 
 struct ipmi_mc_s
@@ -2313,8 +2317,8 @@ set_operational(ipmi_mc_t *bmc)
        sensors so the user can register a callback handler for
        those. */
     bmc->bmc->state = OPERATIONAL;
-    if (bmc->bmc->conn->setup_cb)
-	bmc->bmc->conn->setup_cb(bmc, bmc->bmc->conn->setup_cb_data, 0);
+    if (bmc->bmc->setup_done)
+	bmc->bmc->setup_done(bmc, 0, bmc->bmc->setup_done_cb_data);
 
     /* Call the OEM setup finish if it is registered. */
     if (bmc->bmc->setup_finished_handler)
@@ -2423,8 +2427,8 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
     }
 
     if (rv) {
-	if (mc->bmc->conn->setup_cb)
-	    mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, rv);
+	if (mc->bmc->setup_done)
+	    mc->bmc->setup_done(mc, rv, mc->bmc->setup_done_cb_data);
 	ipmi_close_connection(mc, NULL, NULL);
 	return;
     }
@@ -2545,8 +2549,8 @@ sdr_handler(ipmi_sdr_info_t *sdrs,
     return;
 
  out_err:
-    if (mc->bmc->conn->setup_cb)
-	mc->bmc->conn->setup_cb(mc, mc->bmc->conn->setup_cb_data, rv);
+    if (mc->bmc->setup_done)
+	mc->bmc->setup_done(mc, rv, mc->bmc->setup_done_cb_data);
     ipmi_close_connection(mc, NULL, NULL);
 }
 
@@ -2575,8 +2579,8 @@ got_slave_addr(ipmi_mc_t    *bmc,
 
  out:
     if (rv) {
-	if (bmc->bmc->conn->setup_cb)
-	    bmc->bmc->conn->setup_cb(bmc, bmc->bmc->conn->setup_cb_data, rv);
+	if (bmc->bmc->setup_done)
+	    bmc->bmc->setup_done(bmc, rv, bmc->bmc->setup_done_cb_data);
 	ipmi_close_connection(bmc, NULL, NULL);
     }
 
@@ -2616,8 +2620,8 @@ dev_id_rsp_handler(ipmi_mc_t  *bmc,
     }
 
     if (rv) {
-	if (bmc->bmc->conn->setup_cb)
-	    bmc->bmc->conn->setup_cb(bmc, bmc->bmc->conn->setup_cb_data, rv);
+	if (bmc->bmc->setup_done)
+	    bmc->bmc->setup_done(bmc, rv, bmc->bmc->setup_done_cb_data);
 	ipmi_close_connection(bmc, NULL, NULL);
     }
     ipmi_unlock(bmc->bmc->mc_list_lock);
@@ -2761,19 +2765,34 @@ setup_bmc(ipmi_con_t   *ipmi,
     return rv;
 }
 
-int
+typedef struct init_con_info_s
+{
+    ipmi_bmc_cb handler;
+    void        *cb_data;
+} init_con_info_t;
+
+static void
 ipmi_init_con(ipmi_con_t   *ipmi,
+	      int          err,
 	      ipmi_addr_t  *mc_addr,
 	      int          mc_addr_len,
-	      unsigned int my_slave_addr)
+	      unsigned int my_slave_addr,
+	      void         *cb_data)
 {
-    ipmi_msg_t cmd_msg;
-    int        rv = 0;
-    ipmi_mc_t  *mc;
+    init_con_info_t *info = cb_data;
+    ipmi_msg_t      cmd_msg;
+    int             rv = 0;
+    ipmi_mc_t       *mc;
 
     rv = setup_bmc(ipmi, mc_addr, mc_addr_len, my_slave_addr, &mc);
-    if (rv)
-	return rv;
+    if (rv) {
+	ipmi->close_connection(ipmi);
+	info->handler(NULL, rv, info->cb_data);
+	goto out;
+    }
+
+    mc->bmc->setup_done = info->handler;
+    mc->bmc->setup_done_cb_data = info->cb_data;
 
     ipmi_lock(mc->bmc_mc->bmc->mc_list_lock);
 
@@ -2788,12 +2807,31 @@ ipmi_init_con(ipmi_con_t   *ipmi,
     mc->bmc->state = QUERYING_DEVICE_ID;
 
  close_and_quit:
-    if (rv)
+    if (rv) {
 	ipmi_close_connection(mc, NULL, NULL);
+	info->handler(NULL, rv, info->cb_data);
+    }
 
     ipmi_unlock(mc->bmc_mc->bmc->mc_list_lock);
 
-    return rv;
+ out:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_init_bmc(ipmi_con_t  *con,
+	      ipmi_bmc_cb handler,
+	      void        *cb_data)
+{
+    init_con_info_t *info;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    info->handler = handler;
+    info->cb_data = cb_data;
+    return con->start_con(con, ipmi_init_con, info);
 }
 
 int

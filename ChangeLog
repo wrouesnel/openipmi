@@ -4,6 +4,25 @@
 	* ipmi_lan.c, include/OpenIPMI/ipmi_lan.h: Added multiple IP
 	addresses for a BMC.
 
+	* include/OpenIPMI/ipmi_conn.h: Started restructuring the
+	connection code so that the user allocates the connection and
+	passed it into the main IPMI code.  This decouples the main IPMI
+	code from the connection code, and readies support for having more
+	than one BMC connection into a box.
+	* include/OpenIPMI/ipmi_lan.h: ditto
+	* include/OpenIPMI/ipmi_smi.h: ditto
+	* include/OpenIPMI/ipmi_ui.h: ditto
+	* include/OpenIPMI/ipmiif.h: ditto
+	* mc.c: ditto
+	* ipmi_lan.c: ditto
+	* ipmi_smi.c: ditto
+	* basic_ui.c: ditto
+	* sample.c: ditto
+	* ui.c: ditto
+
+	* include/OpenIPMI/ipmi_types.h: Moved ipmi_con_t as an opaque
+	type into here, so the user can access it.
+	
 2003-04-28 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv.c, lanserv.h, lanserv_ipmi.c: Added logs for error and

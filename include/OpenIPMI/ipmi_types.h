@@ -137,4 +137,7 @@ typedef struct ipmi_event_s
     unsigned char data[IPMI_MAX_SEL_DATA];
 } ipmi_event_t;
 
+/* This represents a low-level connection. */
+typedef struct ipmi_con_s ipmi_con_t;
+
 #endif /* _IPMI_TYPES_H */

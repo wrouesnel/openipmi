@@ -40,9 +40,6 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/os_handler.h>
 
-/* This represents a low-level connection. */
-typedef struct ipmi_con_s ipmi_con_t;
-
 /* This represents a registration for an event handler. */
 typedef struct ipmi_ll_event_handler_id_s ipmi_ll_event_handler_id_t;
 
@@ -73,6 +70,15 @@ typedef void (*ipmi_ll_cmd_handler_t)(ipmi_con_t   *ipmi,
 				      void         *data2,
 				      void         *data3);
 
+/* This should be called by the low-level connection code once it has
+   a working channel up to the BMC. */
+typedef void (*ipmi_ll_init_con_done_cb)(ipmi_con_t   *con,
+					 int          rv,
+					 ipmi_addr_t  *mc_addr,
+					 int          mc_addr_len,
+					 unsigned int slave_addr,
+					 void         *cb_data);
+
 /* Called when a low-level connection has failed or come up.  If err
    is zero, the connection has come up after being failed.  if err is
    non-zero, it's an error number to report why the failure
@@ -93,16 +99,16 @@ struct ipmi_con_s
        like. */
     void *user_data;
 
-    /* This is called by the IPMI code when it finishes setting up a
-       connections, fetching SDRs, detecting sensors, etc. */
-    ipmi_setup_done_t setup_cb;
-    void              *setup_cb_data;
-
     /* Connection-specific data for the underlying connection. */
     void *con_data;
 
     /* Calls for the interface.  These should all return standard
        "errno" errors if they fail. */
+
+    /* Start processing on a connection. */
+    int (*start_con)(ipmi_con_t               *ipmi,
+		     ipmi_ll_init_con_done_cb handler,
+		     void                     *cb_data);
 
     /* Set the callback to call when the connection goes down or up.
        There is only one of these handlers, changing it overwrites it.
@@ -168,15 +174,6 @@ struct ipmi_con_s
     /* Close an IPMI connection. */
     int (*close_connection)(ipmi_con_t *ipmi);
 };
-
-/* This should be called by the low-level connection code once it has
-   a working channel up to the BMC.  This will continue the
-   registration process.  Make sure to pass in the IPMB address of the
-   BMC as my_slave_addr. */
-int ipmi_init_con(ipmi_con_t   *con,
-		  ipmi_addr_t  *mc_addr,
-		  int          mc_addr_len,
-		  unsigned int my_slave_addr);
 
 /* Different types of low-level handlers must register themselves with
    the IPMI code.  This is currently used so the IPMI code can validate

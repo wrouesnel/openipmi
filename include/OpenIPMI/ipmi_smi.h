@@ -47,11 +47,11 @@
  *  setup_cb - The function to call when the setup of the connection is
  *     complete, or when the connection setup fails.
  *  cb_data - passed to setup_cb when it is called.
+ *  new_con - the newly created connection is returned here.
  */
 int ipmi_smi_setup_con(int                if_num,
 		       os_handler_t       *handlers,
 		       void               *user_data,
-		       ipmi_setup_done_t  setup_cb,
-		       void               *cb_data);
+		       ipmi_con_t         **new_con);
 
 #endif /* __IPMI_SMI_H */

@@ -42,7 +42,7 @@ int ipmi_ui_init(selector_t **selector, int full_screen);
 void ipmi_ui_shutdown(void);
 
 void ipmi_ui_setup_done(ipmi_mc_t *mc,
-			void      *user_data,
-			int       err);
+			int       err,
+			void      *user_data);
 
 #endif /* _IPMI_UI_H */

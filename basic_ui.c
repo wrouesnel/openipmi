@@ -31,12 +31,13 @@ static char           password[17];
    disconnected. */
 void ui_reconnect(void)
 {
-    int rv;
+    int        rv;
+    ipmi_con_t *con;
 
     if (con_type == SMI) {
 	rv = ipmi_smi_setup_con(smi_intf,
 				&ipmi_ui_cb_handlers, selector,
-				ipmi_ui_setup_done, NULL);
+			        &con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_smi_setup_con: %s\n", strerror(rv));
 	    exit(1);
@@ -47,12 +48,19 @@ void ui_reconnect(void)
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, selector,
-				ipmi_ui_setup_done, NULL, NULL);
+				NULL, NULL, &con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
 	    exit(1);
 	}
     }
+
+    rv = ipmi_init_bmc(con, ipmi_ui_setup_done, NULL);
+    if (rv) {
+	fprintf(stderr, "ipmi_init_bmc: %s\n", strerror(rv));
+	exit(1);
+    }
+
 }
 
 int
@@ -62,6 +70,7 @@ main(int argc, char *argv[])
     int        curr_arg = 1;
     char       *arg;
     int        full_screen = 1;
+    ipmi_con_t *con;
 
     while ((argc > 1) && (argv[curr_arg][0] == '-')) {
 	arg = argv[curr_arg];
@@ -99,7 +108,7 @@ main(int argc, char *argv[])
 	smi_intf = atoi(argv[curr_arg+1]);
 	rv = ipmi_smi_setup_con(smi_intf,
 				&ipmi_ui_cb_handlers, selector,
-				ipmi_ui_setup_done, NULL);
+				&con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_smi_setup_con: %s\n", strerror(rv));
 	    exit(1);
@@ -162,15 +171,21 @@ main(int argc, char *argv[])
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, selector,
-				ipmi_ui_setup_done, NULL, NULL);
+				NULL, NULL, &con);
 	if (rv) {
-	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
+	    fprintf(stderr, "ipmi_lan_setup_con: %s\n", strerror(rv));
 	    rv = EINVAL;
 	    goto out;
 	}
     } else {
 	fprintf(stderr, "Invalid mode\n");
 	rv = EINVAL;
+	goto out;
+    }
+
+    rv = ipmi_init_bmc(con, ipmi_ui_setup_done, NULL);
+    if (rv) {
+	fprintf(stderr, "ipmi_init_bmc: %s\n", strerror(rv));
 	goto out;
     }
 

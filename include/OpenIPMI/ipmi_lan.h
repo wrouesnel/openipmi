@@ -76,6 +76,7 @@ typedef void (*lan_report_con_failure_cb)(int  addr_num,
  *  setup_cb - The function to call when the setup of the connection is
  *     complete, or when the connection setup fails.
  *  cb_data - passed to setup_cb when it is called.
+ *  new_con - The new connection is passed in here.
  */
 int ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 		       int                       *ports,
@@ -88,8 +89,8 @@ int ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 		       unsigned int              password_len,
 		       os_handler_t              *handlers,
 		       void                      *user_data,
-		       ipmi_setup_done_t         setup_cb,
 		       lan_report_con_failure_cb fail_con_cb,
-		       void                      *cb_data);
+		       void                      *cb_data,
+		       ipmi_con_t                **new_con);
 
 #endif /* __IPMI_LAN_H */

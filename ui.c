@@ -3582,8 +3582,8 @@ redisplay_timeout(selector_t  *sel,
 
 void
 ipmi_ui_setup_done(ipmi_mc_t *mc,
-		   void      *user_data,
-		   int       err)
+		   int       err,
+		   void      *user_data)
 {
     int             rv;
 

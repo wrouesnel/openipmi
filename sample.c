@@ -144,8 +144,8 @@ entity_change(enum ipmi_update_e op,
    search all entities in the system */ 
 void
 setup_done(ipmi_mc_t *mc,
-	   void      *user_data,
-	   int       err)
+	   int       err,
+	   void      *user_data)
 {
     int rv;
 
@@ -159,8 +159,9 @@ setup_done(ipmi_mc_t *mc,
 int
 main(int argc, char *argv[])
 {
-    int rv;
-    int curr_arg = 1;
+    int        rv;
+    int        curr_arg = 1;
+    ipmi_con_t *con;
 
     progname = argv[0];
 
@@ -179,7 +180,7 @@ main(int argc, char *argv[])
        When there is response message from BMC, the status of file descriptor
        in selector is changed and predefined callback is called. After the
        connection is established, setup_done will be called. */
-    rv = ipmi_smi_setup_con(0, &ipmi_ui_cb_handlers, ui_sel, setup_done, NULL);
+    rv = ipmi_smi_setup_con(0, &ipmi_ui_cb_handlers, ui_sel, &con);
     if (rv) {
 	printf("ipmi_smi_setup_con", rv);
 	exit(1);
@@ -225,7 +226,7 @@ main(int argc, char *argv[])
 	smi_intf = atoi(argv[curr_arg+1]);
 	rv = ipmi_smi_setup_con(smi_intf,
 				&ipmi_ui_cb_handlers, ui_sel,
-				setup_done, NULL);
+				&con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_smi_setup_con: %s\n", strerror(rv));
 	    exit(1);
@@ -300,7 +301,7 @@ main(int argc, char *argv[])
 				username, strlen(username),
 				password, strlen(password),
 				&ipmi_ui_cb_handlers, ui_sel,
-				setup_done, NULL, NULL);
+				NULL, NULL, &con);
 	if (rv) {
 	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
 	    exit(1);
@@ -311,6 +312,12 @@ main(int argc, char *argv[])
 	exit(1);
     }
 #endif
+
+    rv = ipmi_init_bmc(con, setup_done, NULL);
+    if (rv) {
+	fprintf(stderr, "ipmi_init_bmc: %s\n", strerror(rv));
+	exit(1);
+    }
 
     /* This is the main loop of the event-driven program. 
        Try <CTRL-C> to exit the program */ 

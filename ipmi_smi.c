@@ -807,6 +807,32 @@ smi_set_con_fail_handler(ipmi_con_t            *ipmi,
 }
 
 static int
+smi_start_con(ipmi_con_t               *ipmi,
+	      ipmi_ll_init_con_done_cb handler,
+	      void                     *cb_data)
+{
+    smi_data_t                   *smi = (smi_data_t *) ipmi->con_data;
+    int                          err;
+    ipmi_system_interface_addr_t addr;
+    unsigned int                 my_slave_addr;
+
+    err = ioctl(smi->fd, IPMICTL_GET_MY_ADDRESS_CMD, &my_slave_addr);
+    if (err)
+	return err;
+
+    addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
+    addr.channel = IPMI_BMC_CHANNEL;
+    addr.lun = 0;
+
+    handler(ipmi, 0,
+	    (ipmi_addr_t *) &addr, sizeof(addr),
+	    my_slave_addr,
+	    cb_data);
+
+    return 0;
+}
+
+static int
 setup(int          if_num,
       os_handler_t *handlers,
       void         *user_data,
@@ -870,6 +896,7 @@ setup(int          if_num,
 
     smi->if_num = if_num;
 
+    ipmi->start_con = smi_start_con;
     ipmi->set_con_fail_handler = smi_set_con_fail_handler;
     ipmi->send_command = smi_send_command;
     ipmi->register_for_events = smi_register_for_events;
@@ -910,14 +937,9 @@ int
 ipmi_smi_setup_con(int               if_num,
 		   os_handler_t      *handlers,
 		   void              *user_data,
-		   ipmi_setup_done_t setup_cb,
-		   void              *cb_data)
+		   ipmi_con_t        **new_con)
 {
-    ipmi_con_t                   *con;
     int                          err;
-    ipmi_system_interface_addr_t addr;
-    unsigned int                 my_slave_addr;
-    smi_data_t                   *smi;
 
     if (!handlers->add_fd_to_wait_for
 	|| !handlers->remove_fd_to_wait_for
@@ -925,21 +947,6 @@ ipmi_smi_setup_con(int               if_num,
 	|| !handlers->free_timer)
 	return ENOSYS;
 
-    err = setup(if_num, handlers, user_data, &con);
-    if (!err) {
-	smi = con->con_data;
-	err = ioctl(smi->fd, IPMICTL_GET_MY_ADDRESS_CMD, &my_slave_addr);
-	addr.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	addr.channel = IPMI_BMC_CHANNEL;
-	addr.lun = 0;
-	con->setup_cb = setup_cb;
-	con->setup_cb_data = cb_data;
-	err = ipmi_init_con(con,
-			    (ipmi_addr_t *) &addr, sizeof(addr),
-			    my_slave_addr);
-	if (err)
-	    cleanup_con(con);
-    }
-
+    err = setup(if_num, handlers, user_data, new_con);
     return err;
 }

@@ -897,6 +897,12 @@ int ipmi_control_get_display_string(ipmi_control_t      *control,
    an OS handler to use for the system. */
 int ipmi_init(os_handler_t *handler);
 
+/* Create a new bmc with the given IPMI connection. */
+int ipmi_init_bmc(ipmi_con_t  *con,
+		  ipmi_bmc_cb handler,
+		  void        *cb_data);
+
+
 /* This will clean up all the memory associated with IPMI. */
 void ipmi_shutdown(void);
 
@@ -910,15 +916,6 @@ typedef void (*close_done_t)(void *cb_data);
 int ipmi_close_connection(ipmi_mc_t    *mc,
 			  close_done_t close_done,
 			  void         *cb_data);
-
-/* This function will be called when the IPMI BMC has completed
-   all the operations required to be fully functional.  It may be
-   NULL, and then will be ignored.  If "err" is non-zero, then an
-   error has occured, and the ipmi connection is not operational and
-   will be closed automatically by the system. */
-typedef void (*ipmi_setup_done_t)(ipmi_mc_t *mc,
-				  void      *user_data,
-				  int       err);
 
 /* Extract a 32-bit integer from the data, IPMI (little-endian) style. */
 unsigned int ipmi_get_uint32(unsigned char *data);
