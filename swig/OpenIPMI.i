@@ -2032,8 +2032,9 @@ wait_io(int timeout)
 %constant int ecanceled = ECANCELED;
 %constant int enosys = ENOSYS;
 %constant int eexist = EEXIST;
-%constant int enodev = ENODEV;
+%constant int enoent = ENOENT;
 %constant int eagain = EAGAIN;
+%constant int eperm = EPERM;
 
 /*
  * A bug in swig (default parameters not used in inline) causes this
