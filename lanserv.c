@@ -829,8 +829,6 @@ static struct poptOption poptOpts[]=
     }	
 };
 
-int init_oem_force(lan_data_t *lan);
-
 int
 main(int argc, const char *argv[])
 {
@@ -928,9 +926,6 @@ main(int argc, const char *argv[])
     }
 
     syslog(LOG_INFO, "%s startup", argv[0]);
-
-    /* Initialize OEM handlers. */
-    init_oem_force(&lan);
 
     max_fd = data.smi_fd;
     for (i=0; i<num_addr; i++) {

@@ -75,6 +75,9 @@
 /*** PVCS LOG SECTION ********************************************************
 *
 * $Log: not supported by cvs2svn $
+* Revision 1.6  2003/05/15 20:38:43  cminyard
+* Lots of rework, see changelog.
+*
 * Revision 1.5  2003/05/14 18:03:00  cminyard
 * Work on connection handling for IPMB handling.
 * Added a lot of OEM handling to lanserv.
@@ -206,8 +209,6 @@ ipmi_read_unlock()
 {
 }
 
-int init_oem_force(void);
-
 unsigned int __ipmi_log_mask = 0;
 
 void
@@ -319,7 +320,7 @@ void ipmi_destroy_lock(ipmi_lock_t *lock)
 
 void printInfo( )
 {
-    printf( "ipmicmd\t$,$Date: 2003-05-15 20:38:43 $,$Author: cminyard $\n");
+    printf( "ipmicmd\t$,$Date: 2003-05-15 21:34:10 $,$Author: cminyard $\n");
     printf( "Kontron Canada Inc.\n");
     printf( "-\n");
     printf( "This little utility is an ipmi command tool ;-)\n");
@@ -798,11 +799,6 @@ main(int argc, const char *argv[])
     rv = _ipmi_conn_init();
     if (rv) {
 	fprintf(stderr, "Error initializing connections: 0x%x\n", rv);
-	exit(1);
-    }
-    rv = init_oem_force();
-    if (rv) {
-	fprintf(stderr, "Error initializing Force OEM: 0x%x\n", rv);
 	exit(1);
     }
 

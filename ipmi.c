@@ -909,8 +909,6 @@ ipmi_check_lock(ipmi_lock_t *lock, char *str)
 }
 #endif
 
-int init_oem_force(void);
-
 int
 ipmi_init(os_handler_t *handler)
 {
@@ -938,8 +936,6 @@ ipmi_init(os_handler_t *handler)
     ipmi_os_handler = handler;
     _ipmi_domain_init();
     _ipmi_mc_init();
-
-    init_oem_force();
 
     return 0;
 
