@@ -312,6 +312,14 @@ parse_ipmi_data(intarray data, unsigned char *odata,
 };
 
 %{
+
+#define swig_free_ref_check(r, c) \
+	do {								\
+	    if (SvREFCNT(SvRV(r.val)) != 1)				\
+		warn("***You cannot keep pointers of class %s", c);	\
+	    swig_free_ref(r);						\
+	} while(0)
+
 static void
 handle_domain_cb(ipmi_domain_t *domain, void *cb_data)
 {
@@ -320,7 +328,7 @@ handle_domain_cb(ipmi_domain_t *domain, void *cb_data)
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     swig_call_cb(cb, "domain_cb", "%p", &domain_ref);
-    swig_free_ref(domain_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
 }
 
 static void
@@ -337,18 +345,19 @@ domain_connect_change_handler(ipmi_domain_t *domain,
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     swig_call_cb(cb, "conn_change_cb", "%p%d%d%d%d",
 		 &domain_ref, err, conn_num, port_num, still_connected);
-    swig_free_ref(domain_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
 }
 
 static void
-iterate_connections_handler(ipmi_domain_t *domain, int conn, void *cb_data)
+domain_iterate_connections_handler(ipmi_domain_t *domain, int conn,
+				   void *cb_data)
 {
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
-    swig_call_cb(cb, "connection_iter_cb", "%p%d", &domain_ref, conn);
-    swig_free_ref(domain_ref);
+    swig_call_cb(cb, "domain_iter_connection_cb", "%p%d", &domain_ref, conn);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
 }
 
 static void
@@ -362,7 +371,7 @@ domain_event_handler(ipmi_domain_t *domain, ipmi_event_t *event, void *cb_data)
     event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
 				       "OpenIPMI::ipmi_event_t");
     swig_call_cb(cb, "event_cb", "%p%p", &domain_ref, &event_ref);
-    swig_free_ref(domain_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     swig_free_ref(event_ref);
 }
 
@@ -378,8 +387,8 @@ domain_mc_updated_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
     swig_call_cb(cb, "mc_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &domain_ref, &mc_ref);
-    swig_free_ref(domain_ref);
-    swig_free_ref(mc_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
 }
 
 static void
@@ -394,8 +403,8 @@ domain_entity_update_handler(enum ipmi_update_e op, ipmi_domain_t *domain,
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     swig_call_cb(cb, "entity_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &domain_ref, &entity_ref);
-    swig_free_ref(domain_ref);
-    swig_free_ref(entity_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
 }
 
 static void
@@ -406,7 +415,7 @@ domain_fully_up(ipmi_domain_t *domain, void *cb_data)
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     swig_call_cb(cb, "domain_up_cb", "%p", &domain_ref);
-    swig_free_ref(domain_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
@@ -422,7 +431,7 @@ domain_close_done(void *cb_data)
 }
 
 static void
-iterate_entities_handler(ipmi_entity_t *entity, void *cb_data)
+domain_iterate_entities_handler(ipmi_entity_t *entity, void *cb_data)
 {
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
@@ -432,8 +441,8 @@ iterate_entities_handler(ipmi_entity_t *entity, void *cb_data)
 			       "OpenIPMI::ipmi_domain_t");
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     swig_call_cb(cb, "entity_iter_cb", "%p%p", &domain_ref, &entity_ref);
-    swig_free_ref(entity_ref);
-    swig_free_ref(domain_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
 }
 
 static void
@@ -444,7 +453,7 @@ ipmb_mc_scan_handler(ipmi_domain_t *domain, int err, void *cb_data)
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     swig_call_cb(cb, "ipmb_mc_scan_cb", "%p%i", &domain_ref, err);
-    swig_free_ref(domain_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
 }
 
 static void
@@ -455,7 +464,7 @@ domain_reread_sels_handler(ipmi_domain_t *domain, int err, void *cb_data)
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     swig_call_cb(cb, "reread_sels_cb", "%p%i", &domain_ref, err);
-    swig_free_ref(domain_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
 }
 
 static int
@@ -473,24 +482,13 @@ domain_msg_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     swig_call_cb(cb, "addr_cmd_cb", "%p%s%d%d%d%*s", &domain_ref, addr_str,
 		 lun, msg->netfn, msg->cmd, msg->data_len, msg->data);
-    swig_free_ref(domain_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
 static void
-handle_entity_cb(ipmi_entity_t *entity, void *cb_data)
-{
-    swig_cb_val cb = cb_data;
-    swig_ref    entity_ref;
-
-    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    swig_call_cb(cb, "entity_cb", "%p", &entity_ref);
-    swig_free_ref(entity_ref);
-}
-
-static void
-iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+domain_iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     swig_cb_val cb = cb_data;
     swig_ref    domain_ref;
@@ -498,9 +496,9 @@ iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 
     domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
-    swig_call_cb(cb, "mc_iter_cb", "%p%p", &domain_ref, &mc_ref);
-    swig_free_ref(mc_ref);
-    swig_free_ref(domain_ref);
+    swig_call_cb(cb, "domain_iter_mcs_cb", "%p%p", &domain_ref, &mc_ref);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
 }
 
 static void
@@ -511,7 +509,179 @@ handle_mc_cb(ipmi_mc_t *mc, void *cb_data)
 
     mc_ref = swig_make_ref(mc, "OpenIPMI::ipmi_mc_t");
     swig_call_cb(cb, "mc_cb", "%p", &mc_ref);
-    swig_free_ref(mc_ref);
+    swig_free_ref_check(mc_ref, "OpenIPMI::ipmi_mc_t");
+}
+
+static void
+handle_entity_cb(ipmi_entity_t *entity, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    swig_call_cb(cb, "entity_cb", "%p", &entity_ref);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+}
+
+static void
+entity_iterate_entities_handler(ipmi_entity_t *ent1,
+				ipmi_entity_t *ent2,
+				void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    ent1_ref;
+    swig_ref    ent2_ref;
+
+    ent1_ref = swig_make_ref(ent1, "OpenIPMI::ipmi_entity_t");
+    ent2_ref = swig_make_ref(ent2, "OpenIPMI::ipmi_entity_t");
+    swig_call_cb(cb, "entity_iter_entities_cb", "%p%p", &ent1_ref, &ent2_ref);
+    swig_free_ref_check(ent2_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(ent1_ref, "OpenIPMI::ipmi_entity_t");
+}
+
+static void
+entity_iterate_sensors_handler(ipmi_entity_t *entity,
+			       ipmi_sensor_t *sensor,
+			       void          *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+    swig_ref    sensor_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "entity_iter_sensors_cb", "%p%p",
+		 &entity_ref, &sensor_ref);
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+}
+
+static void
+entity_iterate_controls_handler(ipmi_entity_t  *entity,
+				ipmi_control_t *control,
+				void           *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+    swig_ref    control_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    swig_call_cb(cb, "entity_iter_controls_cb", "%p%p",
+		 &entity_ref, &control_ref);
+    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+}
+
+static int
+entity_presence_handler(ipmi_entity_t *entity,
+			int           present,
+			void          *cb_data,
+			ipmi_event_t  *event)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+    swig_ref    event_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
+				       "OpenIPMI::ipmi_event_t");
+    swig_call_cb(cb, "entity_presence_cb", "%p%i",
+		 &entity_ref, present);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref(event_ref);
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
+static void
+entity_sensor_update_handler(enum ipmi_update_e op,
+			     ipmi_entity_t      *entity,
+			     ipmi_sensor_t      *sensor,
+			     void               *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+    swig_ref    sensor_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    sensor_ref = swig_make_ref(sensor, "OpenIPMI::ipmi_sensor_t");
+    swig_call_cb(cb, "entity_sensor_cb", "%s%p%p",
+		 ipmi_update_e_string(op), &entity_ref, &sensor_ref);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(sensor_ref, "OpenIPMI::ipmi_sensor_t");
+}
+
+static void
+entity_control_update_handler(enum ipmi_update_e op,
+			      ipmi_entity_t      *entity,
+			      ipmi_control_t      *control,
+			      void               *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+    swig_ref    control_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    control_ref = swig_make_ref(control, "OpenIPMI::ipmi_control_t");
+    swig_call_cb(cb, "entity_control_cb", "%s%p%p",
+		 ipmi_update_e_string(op), &entity_ref, &control_ref);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(control_ref, "OpenIPMI::ipmi_control_t");
+}
+
+static void
+entity_fru_update_handler(enum ipmi_update_e op,
+			  ipmi_entity_t      *entity,
+			  void               *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+    swig_ref    fru_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    fru_ref = swig_make_ref(ipmi_entity_get_fru, "OpenIPMI::ipmi_fru_t");
+    swig_call_cb(cb, "entity_fru_cb", "%s%p%p",
+		 ipmi_update_e_string(op), &entity_ref, &fru_ref);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
+}
+
+static int
+entity_hot_swap_handler(ipmi_entity_t             *entity,
+			enum ipmi_hot_swap_states last_state,
+			enum ipmi_hot_swap_states curr_state,
+			void                      *cb_data,
+			ipmi_event_t              *event)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+    swig_ref    event_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    event_ref = swig_make_ref_destruct(ipmi_event_dup(event),
+				       "OpenIPMI::ipmi_event_t");
+    swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%s%s%p", &entity_ref,
+		 ipmi_hot_swap_state_name(last_state),
+		 ipmi_hot_swap_state_name(curr_state),
+		 &event_ref);
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
+    swig_free_ref(event_ref);
+    return IPMI_EVENT_NOT_HANDLED;
+}
+
+static void
+entity_get_hot_swap_handler(ipmi_entity_t             *entity,
+			    int                       err,
+			    enum ipmi_hot_swap_states state,
+			    void                      *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    entity_ref;
+
+    entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
+    swig_call_cb(cb, "entity_hot_swap_update_cb", "%p%i%s", &entity_ref,
+		 err, ipmi_hot_swap_state_name(state));
+    swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
 }
 
 %}
@@ -871,9 +1041,9 @@ void set_log_handler(swig_cb handler = NULL);
 
     /*
      * Iterate through all the connections in the object.  The
-     * connection_iter_cb method will be called on the first parameter for
-     * each connection in the domain.  The parameters it receives will be:
-     * <self>, <domain>, <connection (integer)>.
+     * domain_iter_connection_cb method will be called on the first
+     * parameter for each connection in the domain.  The parameters it
+     * receives will be: <self>, <domain>, <connection (integer)>.
      */
     int iterate_connections(swig_cb handler)
     {
@@ -883,7 +1053,8 @@ void set_log_handler(swig_cb handler = NULL);
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
-	ipmi_domain_iterate_connections(self, iterate_connections_handler,
+	ipmi_domain_iterate_connections(self,
+					domain_iterate_connections_handler,
 					handler_val);
 	return 0;
     }
@@ -961,9 +1132,9 @@ void set_log_handler(swig_cb handler = NULL);
 
     /*
      * Iterate through all the entities in the object.  The
-     * entity_iter_cb method will be called on the first parameter for
-     * each entity in the domain.  The parameters it receives will be:
-     * <self>, <domain>, <entity>.
+     * domain_iter_entities_cb method will be called on the first
+     * parameter for each entity in the domain.  The parameters it
+     * receives will be: <self>, <domain>, <entity>.
      */
     int iterate_entities(swig_cb handler)
     {
@@ -973,7 +1144,7 @@ void set_log_handler(swig_cb handler = NULL);
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
-	ipmi_domain_iterate_entities(self, iterate_entities_handler,
+	ipmi_domain_iterate_entities(self, domain_iterate_entities_handler,
 				     handler_val);
 	return 0;
     }
@@ -1011,7 +1182,7 @@ void set_log_handler(swig_cb handler = NULL);
 	    return EINVAL;
 
 	handler_val = get_swig_cb(handler);
-	ipmi_domain_iterate_mcs(self, iterate_mcs_handler, handler_val);
+	ipmi_domain_iterate_mcs(self, domain_iterate_mcs_handler, handler_val);
 	return 0;
     }
 
@@ -1301,6 +1472,543 @@ void set_log_handler(swig_cb handler = NULL);
 	    *rv = ipmi_entity_convert_to_id(self);
 	return rv;
     }
+
+    /*
+     * Iterate through all the entity's children.  The
+     * entity_iter_entities_cb method will be called on the first
+     * parameter for each child entity of the parent.  The parameters
+     * it receives will be: <self> <parent> <child>.
+     */
+    int iterate_children(swig_cb handler)
+    {
+	swig_cb_val handler_val;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	ipmi_entity_iterate_children(self, entity_iterate_entities_handler,
+				     handler_val);
+	return 0;
+    }
+
+    /*
+     * Iterate through all the entity's parents.  The
+     * entity_iter_entities_cb method will be called on the first
+     * parameter for each parent entity of the child.  The parameters
+     * it receives will be: <self> <child> <parent>.
+     */
+    int iterate_parents(swig_cb handler)
+    {
+	swig_cb_val handler_val;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	ipmi_entity_iterate_parents(self, entity_iterate_entities_handler,
+				    handler_val);
+	return 0;
+    }
+
+    /*
+     * Iterate through all the entity's sensors.  The
+     * entity_iter_sensors_cb method will be called on the first
+     * parameter for each sensor of the entity.  The parameters
+     * it receives will be: <self> <entity> <sensor>.
+     */
+    int iterate_sensors(swig_cb handler)
+    {
+	swig_cb_val handler_val;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	ipmi_entity_iterate_sensors(self, entity_iterate_sensors_handler,
+				    handler_val);
+	return 0;
+    }
+
+    /*
+     * Iterate through all the entity's controls.  The
+     * entity_iter_controls_cb method will be called on the first
+     * parameter for each control of the entity.  The parameters
+     * it receives will be: <self> <entity> <control>.
+     */
+    int iterate_controls(swig_cb handler)
+    {
+	swig_cb_val handler_val;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	ipmi_entity_iterate_controls(self, entity_iterate_controls_handler,
+				     handler_val);
+	return 0;
+    }
+
+    /*
+     * Add a handler to be called when an entity's presence
+     * changes. When the presence changes the entity_presence_cb
+     * method on the first parameter will be called with the following
+     * parameters: <self> <entity> <present (boolean integer)> <event>.
+     * The event is optional and may not be present.
+     */
+    int add_presence_handler(swig_cb handler)
+    {
+	cb_add(entity, presence);
+    }
+
+    /*
+     * Remove the presence handler.
+     */
+    int remove_presence_handler(swig_cb handler)
+    {
+	cb_rm(entity, presence);
+    }
+
+    /*
+     * Add a handler to be called when a sensor in the entity is added,
+     * deleted, or updated.  When the sensor changes the entity_sensor_cb
+     * method on the first parameter will be called with the following
+     * parameters: <self> added|deleted|changed <entity> <sensor>.
+     */
+    int add_sensor_update_handler(swig_cb handler)
+    {
+	cb_add(entity, sensor_update);
+    }
+
+    /*
+     * Remove the sensor update handler.
+     */
+    int remove_sensor_update_handler(swig_cb handler)
+    {
+	cb_rm(entity, sensor_update);
+    }
+
+    /*
+     * Add a handler to be called when a control in the entity is added,
+     * deleted, or updated.  When the control changes the entity_control_cb
+     * method on the first parameter will be called with the following
+     * parameters: <self> added|deleted|changed <entity> <control>.
+     */
+    int add_control_update_handler(swig_cb handler)
+    {
+	cb_add(entity, control_update);
+    }
+
+    /*
+     * Remove the control update handler.
+     */
+    int remove_control_update_handler(swig_cb handler)
+    {
+	cb_rm(entity, control_update);
+    }
+
+    /*
+     * Add a handler to be called when the FRU data in the entity is added,
+     * deleted, or updated.  When the FRU data changes the entity_fru_cb
+     * method on the first parameter will be called with the following
+     * parameters: <self> added|deleted|changed <entity> <fru>.
+     */
+    int add_fru_update_handler(swig_cb handler)
+    {
+	cb_add(entity, fru_update);
+    }
+
+    /*
+     * Remove the FRU data update handler.
+     */
+    int remove_fru_update_handler(swig_cb handler)
+    {
+	cb_rm(entity, fru_update);
+    }
+
+    /*
+     * Get the entities type, return "mc", "fru", "generic", or "unknown".
+     */
+    char *get_type()
+    {
+	switch (ipmi_entity_get_type(self)) {
+	case IPMI_ENTITY_MC: return "mc";
+	case IPMI_ENTITY_FRU: return "fru";
+	case IPMI_ENTITY_GENERIC: return "generic";
+	default: return "unknown";
+	}
+    }
+
+    /*
+     * Returns if the entity has FRU data or not.
+     */
+    int is_fru()
+    {
+	return ipmi_entity_get_is_fru(self);
+    }
+
+    /*
+     * Returns the domain for the entity.
+     */
+    ipmi_domain_t *get_domain()
+    {
+	return ipmi_entity_get_domain(self);
+    }
+
+    /*
+     * Get the entity id for the entity
+     */
+    int get_entity_id()
+    {
+	return ipmi_entity_get_entity_id(self);
+    }
+
+    /*
+     * Get the entity instance for the entity
+     */
+    int get_entity_instance()
+    {
+	return ipmi_entity_get_entity_instance(self);
+    }
+
+    /*
+     * Get the channel for the entity.  Only valid if the entity
+     * instance is 0x60 or larger.
+     */
+    int get_entity_device_channel()
+    {
+	return ipmi_entity_get_device_channel(self);
+    }
+
+    /*
+     * Get the address for the entity.  Only valid if the entity
+     * instance is 0x60 or larger.
+     */
+    int get_entity_device_address()
+    {
+	return ipmi_entity_get_device_address(self);
+    }
+
+    /*
+     * Get the FRU data for the entity.  Note that you cannot hold the
+     * FRU data pointer outside the context of where the entity pointer
+     * is valid.
+     */
+    ipmi_fru_t *get_fru()
+    {
+	return ipmi_entity_get_fru(self);
+    }
+
+    /*
+     * If this returns true, then the presence sensor is always there
+     * for this entity.
+     */
+    int get_presence_sensor_always_there()
+    {
+	return ipmi_entity_get_presence_sensor_always_there(self);
+    }
+
+    /*
+     * Returns if the entity has a parent.
+     */
+    int is_child()
+    {
+	return ipmi_entity_get_is_child(self);
+    }
+
+    /*
+     * Returns if the entity has a child.
+     */
+    int is_parent()
+    {
+	return ipmi_entity_get_is_parent(self);
+    }
+
+    /*
+     * Return the channel from the device locator record.  Valid for
+     * all entities except unknown.
+     */
+    int get_channel(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_channel(self);
+    }
+
+    /*
+     * Return the LUN from the device locator record.  Valid for
+     * all entities except unknown.
+     */
+    int get_lun(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_lun(self);
+    }
+
+    /*
+     * Return the OEM byte from the device locator record.  Valid for
+     * all entities except unknown.
+     */
+    int get_oem(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_oem(self);
+    }
+
+    /*
+     * Return the access address from the device locator record.  Valid for
+     * FRU and generic entities.
+     */
+    int get_access_address(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_access_address(self);
+    }
+
+    /*
+     * Return the private bus id from the device locator record.  Valid for
+     * FRU and generic entities.
+     */
+    int get_private_bus_id(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_private_bus_id(self);
+    }
+
+    /*
+     * Return the device type from the device locator record.  Valid for
+     * FRU and generic entities.
+     */
+    int get_device_type(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_device_type(self);
+    }
+
+    /*
+     * Return the device modifier from the device locator record.
+     * Valid for FRU and generic entities.
+     */
+    int get_device_modifier(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_device_modifier(self);
+    }
+
+    /*
+     * Return the slave address from the device locator record.  Valid for
+     * MC and generic entities.
+     */
+    int get_slave_address(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_slave_address(self);
+    }
+
+
+    /*
+     * Return if the FRU is logical (from the device locator record).
+     * Valid for FRU entities.
+     */
+    int get_is_logical_fru(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_is_logical_fru(self);
+    }
+
+    /*
+     * Return the device id from the device locator record.  Valid for
+     * FRU entities.
+     */
+    int get_fru_device_id(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_fru_device_id(self);
+    }
+
+    /*
+     * Return the ACPI system power notify required bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_ACPI_system_power_notify_required(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_ACPI_system_power_notify_required(self);
+    }
+
+    /*
+     * Return the ACPI device power notify required bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_ACPI_device_power_notify_required(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_ACPI_device_power_notify_required(self);
+    }
+
+    /*
+     * Return the controller logs init agent errors bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_controller_logs_init_agent_errors(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_controller_logs_init_agent_errors(self);
+    }
+
+    /*
+     * Return the log init agent errors accessing bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_log_init_agent_errors_accessing(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_log_init_agent_errors_accessing(self);
+    }
+
+    /*
+     * Return the global init bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_global_init(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_global_init(self);
+    }
+
+    /*
+     * Return the chassis device bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_chassis_device(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_chassis_device(self);
+    }
+
+    /*
+     * Return the !bridge bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_bridge(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_bridge(self);
+    }
+
+    /*
+     * Return the IPMB event generator bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_IPMB_event_generator(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_IPMB_event_generator(self);
+    }
+
+    /*
+     * Return the IPMB event receiver bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_IPMB_event_receiver(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_IPMB_event_receiver(self);
+    }
+
+    /*
+     * Return the FRU inventory device bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_FRU_inventory_device(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_FRU_inventory_device(self);
+    }
+
+    /*
+     * Return the SEL device bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_SEL_device(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_SEL_device(self);
+    }
+
+    /*
+     * Return the SDR repository device bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_SDR_repository_device(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_SDR_repository_device(self);
+    }
+
+    /*
+     * Return the sensor device bit from the
+     * device locator record.  Valid for MC entities.
+     */
+    int get_sensor_device(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_sensor_device(self);
+    }
+
+    /*
+     * Return the address span from the device locator record.  Valid
+     * for generic entities.
+     */
+    int get_address_span(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_get_address_span(self);
+    }
+
+    %newobject get_id;
+    /*
+     * Return the id string from the DLR.
+     */
+    char *get_dlr_id()
+    {
+	/* FIXME - no unicode handling. */
+	int len = ipmi_entity_get_id_length(self) + 1;
+	char *id = malloc(len);
+	ipmi_entity_get_id(self, id, len);
+	return id;
+    }
+
+    /*
+     * Returns true if the entity is present, false if not.
+     */
+    int is_present(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_is_present(self);
+    }
+
+    /*
+     * Returns true if the entity is hot-swappable, false if not.
+     */
+    int is_hot_swappable(ipmi_entity_t *ent)
+    {
+	return ipmi_entity_hot_swappable(self);
+    }
+
+    /*
+     * Add a handler to be called when the hot-swap state for the
+     * entity changes.  When the hot-swap state changes the
+     * entity_hot_swap_update_cb method on the first parameter will be
+     * called with the following parameters: <self> <entity> <old
+     * state> <new state> <event>.  The event is optional and may not
+     * be present.
+     */
+    int add_hot_swap_handler(swig_cb handler)
+    {
+	cb_add(entity, hot_swap);
+    }
+
+    /*
+     * Remove the hot-swap update handler.
+     */
+    int remove_hot_swap_handler(swig_cb handler)
+    {
+	cb_rm(entity, hot_swap);
+    }
+
+    /*
+     * Get the current hot-swap state for the entity.  The
+     * entity_hot_swap_cb handler will be called with the following
+     * parameters: <self> <entity> <err> <state>
+     */
+    int get_hot_swap_state(swig_cb handler)
+    {
+	swig_cb_val handler_val;
+
+	if (! valid_swig_cb(handler))
+	    return EINVAL;
+
+	handler_val = get_swig_cb(handler);
+	return ipmi_entity_get_hot_swap_state(self,
+					      entity_get_hot_swap_handler,
+					      handler_val);
+    }
+
 }
 
 /*
