@@ -191,18 +191,6 @@ struct ipmi_mc_s
 
     ipmi_control_info_t *controls;
 
-    unsigned int provides_device_sdrs : 1;
-    unsigned int device_available : 1;
-
-    unsigned int chassis_support : 1;
-    unsigned int bridge_support : 1;
-    unsigned int IPMB_event_generator_support : 1;
-    unsigned int IPMB_event_receiver_support : 1;
-    unsigned int FRU_inventory_support : 1;
-    unsigned int SEL_device_support : 1;
-    unsigned int SDR_repository_support : 1;
-    unsigned int sensor_device_support : 1;
-
     unsigned int in_bmc_list : 1; /* Tells if we are in the list of
                                      our BMC yet. */
 
@@ -218,9 +206,41 @@ struct ipmi_mc_s
     os_hnd_timer_id_t *sel_timer;
     mc_reread_sel_t   *sel_timer_info;
 
+
+    /* This is a retry count for missed pings from an MC query. */
+    int missed_responses;
+
+    void *oem_data;
+
+    ipmi_mc_oem_new_sensor_cb new_sensor_handler;
+    void                      *new_sensor_cb_data;
+
+    ipmi_oem_event_handler_cb oem_event_handler;
+    void                      *oem_event_handler_cb_data;
+
+    ipmi_mc_oem_removed_cb removed_mc_handler;
+    void                   *removed_mc_cb_data;
+
+    /* The rest is the actual data from the SDRs.  There's the real
+       version and the normal version, the real version is the one
+       from the get device id response, the normal version may have
+       been adjusted by the OEM code. */
+
     uint8_t device_id;
 
     uint8_t device_revision;
+
+    unsigned int provides_device_sdrs : 1;
+    unsigned int device_available : 1;
+
+    unsigned int chassis_support : 1;
+    unsigned int bridge_support : 1;
+    unsigned int IPMB_event_generator_support : 1;
+    unsigned int IPMB_event_receiver_support : 1;
+    unsigned int FRU_inventory_support : 1;
+    unsigned int SEL_device_support : 1;
+    unsigned int SDR_repository_support : 1;
+    unsigned int sensor_device_support : 1;
 
     uint8_t major_fw_revision;
     uint8_t minor_fw_revision;
@@ -233,19 +253,33 @@ struct ipmi_mc_s
 
     uint8_t  aux_fw_revision[4];
 
-    ipmi_mc_oem_new_sensor_cb new_sensor_handler;
-    void                      *new_sensor_cb_data;
+    uint8_t real_device_id;
 
-    ipmi_oem_event_handler_cb oem_event_handler;
-    void                      *oem_event_handler_cb_data;
+    uint8_t real_device_revision;
 
-    ipmi_mc_oem_removed_cb removed_mc_handler;
-    void                   *removed_mc_cb_data;
+    unsigned int real_provides_device_sdrs : 1;
+    unsigned int real_device_available : 1;
 
-    /* This is a retry count for missed pings from an MC query. */
-    int missed_responses;
+    unsigned int real_chassis_support : 1;
+    unsigned int real_bridge_support : 1;
+    unsigned int real_IPMB_event_generator_support : 1;
+    unsigned int real_IPMB_event_receiver_support : 1;
+    unsigned int real_FRU_inventory_support : 1;
+    unsigned int real_SEL_device_support : 1;
+    unsigned int real_SDR_repository_support : 1;
+    unsigned int real_sensor_device_support : 1;
 
-    void *oem_data;
+    uint8_t real_major_fw_revision;
+    uint8_t real_minor_fw_revision;
+
+    uint8_t real_major_version;
+    uint8_t real_minor_version;
+
+    uint32_t real_manufacturer_id;
+    uint16_t real_product_id;
+
+    uint8_t  real_aux_fw_revision[4];
+
 };
 
 struct ipmi_event_handler_id_s
@@ -1220,6 +1254,29 @@ get_device_id_data_from_rsp(ipmi_mc_t  *mc,
 	memcpy(mc->aux_fw_revision, rsp_data + 12, 4);
     }
 
+    /* Copy these to the version we use for comparison. */
+
+    mc->real_device_id = mc->device_id;
+    mc->real_device_revision = mc->device_revision;
+    mc->real_provides_device_sdrs = mc->provides_device_sdrs;
+    mc->real_device_available = mc->device_available;
+    mc->real_chassis_support = mc->chassis_support;
+    mc->real_bridge_support = mc->bridge_support;
+    mc->real_IPMB_event_generator_support = mc->IPMB_event_generator_support;
+    mc->real_IPMB_event_receiver_support = mc->IPMB_event_receiver_support;
+    mc->real_FRU_inventory_support = mc->FRU_inventory_support;
+    mc->real_SEL_device_support = mc->SEL_device_support;
+    mc->real_SDR_repository_support = mc->SDR_repository_support;
+    mc->real_sensor_device_support = mc->sensor_device_support;
+    mc->real_major_fw_revision = mc->major_fw_revision;
+    mc->real_minor_fw_revision = mc->minor_fw_revision;
+    mc->real_major_version = mc->major_version;
+    mc->real_minor_version = mc->minor_version;
+    mc->real_manufacturer_id = mc->manufacturer_id;
+    mc->real_product_id = mc->product_id;
+    memcpy(mc->real_aux_fw_revision, mc->aux_fw_revision,
+	   sizeof(mc->real_aux_fw_revision));
+
     return check_oem_handlers(mc);
 }
 
@@ -1234,71 +1291,71 @@ mc_device_data_compares(ipmi_mc_t  *mc,
 	return EINVAL;
     }
 
-    if (mc->device_id != rsp_data[1])
+    if (mc->real_device_id != rsp_data[1])
 	return 0;
 
-    if (mc->device_revision != (rsp_data[2] & 0xf))
+    if (mc->real_device_revision != (rsp_data[2] & 0xf))
 	return 0;
     
-    if (mc->provides_device_sdrs != ((rsp_data[2] & 0x80) == 0x80))
+    if (mc->real_provides_device_sdrs != ((rsp_data[2] & 0x80) == 0x80))
 	return 0;
 
-    if (mc->device_available != ((rsp_data[3] & 0x80) == 0x80))
+    if (mc->real_device_available != ((rsp_data[3] & 0x80) == 0x80))
 	return 0;
 
-    if (mc->major_fw_revision != (rsp_data[3] & 0x7f))
+    if (mc->real_major_fw_revision != (rsp_data[3] & 0x7f))
 	return 0;
 
-    if (mc->minor_fw_revision != (rsp_data[4]))
+    if (mc->real_minor_fw_revision != (rsp_data[4]))
 	return 0;
 
-    if (mc->major_version != (rsp_data[5] & 0xf))
+    if (mc->real_major_version != (rsp_data[5] & 0xf))
 	return 0;
 
-    if (mc->minor_version != ((rsp_data[5] >> 4) & 0xf))
+    if (mc->real_minor_version != ((rsp_data[5] >> 4) & 0xf))
 	return 0;
 
-    if (mc->chassis_support != ((rsp_data[6] & 0x80) == 0x80))
+    if (mc->real_chassis_support != ((rsp_data[6] & 0x80) == 0x80))
 	return 0;
 
-    if (mc->bridge_support != ((rsp_data[6] & 0x40) == 0x40))
+    if (mc->real_bridge_support != ((rsp_data[6] & 0x40) == 0x40))
 	return 0;
 
-    if (mc->IPMB_event_generator_support != ((rsp_data[6] & 0x20) == 0x20))
+    if (mc->real_IPMB_event_generator_support != ((rsp_data[6] & 0x20)==0x20))
 	return 0;
 
-    if (mc->IPMB_event_receiver_support != ((rsp_data[6] & 0x10) == 0x10))
+    if (mc->real_IPMB_event_receiver_support != ((rsp_data[6] & 0x10) == 0x10))
 	return 0;
 
-    if (mc->FRU_inventory_support != ((rsp_data[6] & 0x08) == 0x08))
+    if (mc->real_FRU_inventory_support != ((rsp_data[6] & 0x08) == 0x08))
 	return 0;
 
-    if (mc->SEL_device_support != ((rsp_data[6] & 0x04) == 0x04))
+    if (mc->real_SEL_device_support != ((rsp_data[6] & 0x04) == 0x04))
 	return 0;
 
-    if (mc->SDR_repository_support != ((rsp_data[6] & 0x02) == 0x02))
+    if (mc->real_SDR_repository_support != ((rsp_data[6] & 0x02) == 0x02))
 	return 0;
 
-    if (mc->sensor_device_support != ((rsp_data[6] & 0x01) == 0x01))
+    if (mc->real_sensor_device_support != ((rsp_data[6] & 0x01) == 0x01))
 	return 0;
 
-    if (mc->manufacturer_id != (rsp_data[7]
-				| (rsp_data[8] << 8)
-				| (rsp_data[9] << 16)))
+    if (mc->real_manufacturer_id != (rsp_data[7]
+				     | (rsp_data[8] << 8)
+				     | (rsp_data[9] << 16)))
 	return 0;
 
-    if (mc->product_id != (rsp_data[10] | (rsp_data[11] << 8)))
+    if (mc->real_product_id != (rsp_data[10] | (rsp_data[11] << 8)))
 	return 0;
 
     if (rsp->data_len < 16) {
 	/* no aux revision, it should be all zeros. */
-	if ((mc->aux_fw_revision[0] != 0)
-	    || (mc->aux_fw_revision[1] != 0)
-	    || (mc->aux_fw_revision[2] != 0)
-	    || (mc->aux_fw_revision[3] != 0))
+	if ((mc->real_aux_fw_revision[0] != 0)
+	    || (mc->real_aux_fw_revision[1] != 0)
+	    || (mc->real_aux_fw_revision[2] != 0)
+	    || (mc->real_aux_fw_revision[3] != 0))
 	    return 0;
     } else {
-	if (memcmp(mc->aux_fw_revision, rsp_data + 12, 4) != 0)
+	if (memcmp(mc->real_aux_fw_revision, rsp_data + 12, 4) != 0)
 	    return 0;
     }
 

@@ -1,6 +1,11 @@
 
 2003-02-20 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c: Since the OEM code can change the values from get device
+	id, the comparison code (to tell if an MC has changed) was changed
+	to used a real copy of the values from the get device id, instead
+	of the used values.
+
 	* Makefile.am, ipmi.c, ipmi_malloc.c: Split off the memory
 	debugging stuff into a separate file.
 
