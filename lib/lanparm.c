@@ -1348,11 +1348,12 @@ ipmi_lan_set_config(ipmi_lanparm_t       *lanparm,
 	       sizeof(alert_dest_type_t) * lanc->num_alert_destinations);
     }
 
-    lanc->curr_parm = 0;
+    lanc->curr_parm = 1;
     lanc->curr_sel = 0;
     lanc->set_done = done;
     lanc->cb_data = cb_data;
 
+    /* Parm 1 is known good. */
     lp = &(lanparms[lanc->curr_parm]);
     lp->set_handler(lanc, lp, data);
     rv = ipmi_lanparm_set_parm(lanparm, lanc->curr_parm,
