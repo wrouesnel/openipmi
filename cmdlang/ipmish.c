@@ -292,7 +292,7 @@ out_binary(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 8) == 0))
 	    fprintf(out_data->stream, "\n%*s", indent2, "");
-	fprintf(out_data->stream, " 0x%2.2x", data[i]);
+	fprintf(out_data->stream, " 0x%2.2x", (data[i] & 0xff));
     }
     fprintf(out_data->stream, "\n");
     
@@ -427,7 +427,7 @@ ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
 	    for (i=0; i<len; i++) {
 		if ((i != 0) && ((i % 8) == 0))
 		    printf("\n  %*s", indent2, "");
-		printf(" 0x%2.2x", value[i]);
+		printf(" 0x%2.2x", value[i] & 0xff);
 	    }
 	    printf("\n");
     
@@ -600,6 +600,44 @@ shutdown_domain_handler(ipmi_domain_t *domain, void *cb_data)
 	(*count)++;
 }
 
+static void
+evinfo(ipmi_cmd_info_t *cmd_info)
+{
+    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int            curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int            argc = ipmi_cmdlang_get_argc(cmd_info);
+    char           **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int            do_evinfo;
+
+    if ((argc - curr_arg) < 1) {
+	cmdlang->errstr = "True or False not entered";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_bool(argv[curr_arg], &do_evinfo, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "True or False not entered";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_set_evinfo(do_evinfo);
+
+ out_err:
+    if (cmdlang->err)
+	cmdlang->location = "cmdlang.c(evinfo)";
+}
+
+static ipmi_cmdlang_init_t cmds_global[] =
+{
+    { "evinfo", NULL,
+      "<true | false> - Enable/disable printing info about the object"
+      " when an event is reported on it (such as entity info, domain"
+      " info, etc.)",
+      evinfo, NULL, NULL },
+};
+#define CMDS_GLOBAL_LEN (sizeof(cmds_global)/sizeof(ipmi_cmdlang_init_t))
 
 int
 main(int argc, const char *argv[])
@@ -661,6 +699,12 @@ main(int argc, const char *argv[])
     rv = ipmi_cmdlang_init();
     if (rv) {
 	fprintf(stderr, "Unable to initialize command processor: 0x%x\n", rv);
+	return 1;
+    }
+
+    rv = ipmi_cmdlang_reg_table(cmds_global, CMDS_GLOBAL_LEN);
+    if (rv) {
+	fprintf(stderr, "Unable to add global commands: 0x%x\n", rv);
 	return 1;
     }
 

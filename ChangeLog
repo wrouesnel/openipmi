@@ -1,3 +1,17 @@
+2004-10-01 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/domain.c, include/OpenIPMI/ipmiif.h.in: Add support for a
+	global domain change handler to report addition and removal of
+	domains.
+
+	* lib/pet.c: Removed an extraneous mc put, cleaned up close
+	handling to be done in the proper order.
+
+2004-09-25 Chetan Hiremath <chetan.hiremath@intel.com> 
+
+	* lib/ipmi_smi.c: Use the proper address on received commands and
+	async events.
+
 2004-09-23 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_pet.h, lib/pet.c: Modified the PETs to be

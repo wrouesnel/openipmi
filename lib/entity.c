@@ -913,6 +913,8 @@ entity_add(ipmi_entity_info_t *ents,
 
     ent->usecount = 1;
 
+    entity_set_name(ent);
+
     if (! locked_list_add(ents->entities, ent, NULL))
 	goto out_err;
 
@@ -927,6 +929,7 @@ entity_add(ipmi_entity_info_t *ents,
     return 0;
 
  out_err:
+    _ipmi_domain_entity_unlock(ent->domain);
     if (ent->hot_swap_act_timer)
 	ent->os_hnd->free_timer(ent->os_hnd, ent->hot_swap_act_timer);
     if (ent->hot_swap_deact_timer)
@@ -3728,7 +3731,10 @@ ipmi_entity_get_id_length(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);
 
-    return ent->info.id_len;
+    if (ent->info.id_type == IPMI_ASCII_STR)
+	return ent->info.id_len+1;
+    else
+	return ent->info.id_len;
 }
 
 enum ipmi_str_type_e

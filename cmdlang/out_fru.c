@@ -210,17 +210,18 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	ipmi_cmdlang_out_int(cmd_info, "Internal area version", ucval);
 
     rv = ipmi_fru_get_internal_use_length(fru, &uival);
-    if (!rv)
+    if (!rv) {
 	ipmi_cmdlang_out_int(cmd_info, "Internal area length", uival);
 
-    buf = ipmi_mem_alloc(uival);
-    if (!buf) {
-	cmdlang->err = ENOMEM;
-	cmdlang->errstr = "Out of memory";
-	goto out_err;
+	buf = ipmi_mem_alloc(uival);
+	if (!buf) {
+	    cmdlang->err = ENOMEM;
+	    cmdlang->errstr = "Out of memory";
+	    goto out_err;
+	}
+	ipmi_cmdlang_out_binary(cmd_info, "Internal area data", buf, uival);
+	ipmi_mem_free(buf);
     }
-    ipmi_cmdlang_out_binary(cmd_info, "Internal area data", buf, uival);
-    ipmi_mem_free(buf);
 
     rv = ipmi_fru_get_chassis_info_version(fru, &ucval);
     if (!rv)

@@ -607,7 +607,7 @@ handle_async_event(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 
 	/* call the user handler. */
 	elem->handler(ipmi,
-		      (ipmi_addr_t *) &(recv->addr), recv->addr_len,
+		      (ipmi_addr_t *) recv->addr, recv->addr_len,
 		      event, elem->event_data, elem->data2);
 
 	elem = next;
@@ -644,13 +644,13 @@ handle_incoming_command(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 	msg.data = data;
 	msg.data_len = 1;
 	smi_send(smi, smi->fd,
-		 (ipmi_addr_t *) &(recv->addr), recv->addr_len,
+		 (ipmi_addr_t *) recv->addr, recv->addr_len,
 		 &msg, recv->msgid);
 	goto out_unlock;
     }
 
     elem->handler(ipmi,
-		  (ipmi_addr_t *) &(recv->addr), recv->addr_len,
+		  (ipmi_addr_t *) recv->addr, recv->addr_len,
 		  &(recv->msg), recv->msgid,
 		  elem->cmd_data, elem->data2, elem->data3);
 

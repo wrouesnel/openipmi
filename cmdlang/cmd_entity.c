@@ -91,17 +91,23 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
     enum ipmi_dlr_type_e type;
     static char     *ent_types[] = { "unknown", "mc", "fru",
 				     "generic", "invalid" };
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
 
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
     type = ipmi_entity_get_type(entity);
     if (type > IPMI_ENTITY_GENERIC)
 	type = IPMI_ENTITY_GENERIC + 1;
     ipmi_cmdlang_out(cmd_info, "Type", ent_types[type]);
 
-    ipmi_cmdlang_out_int(cmd_info, "Present", ipmi_entity_is_present(entity));
-    ipmi_cmdlang_out_int(cmd_info, "Presence sensor always there",
+    ipmi_cmdlang_out_bool(cmd_info, "Present", ipmi_entity_is_present(entity));
+    ipmi_cmdlang_out_bool(cmd_info, "Presence sensor always there",
 			 ipmi_entity_get_presence_sensor_always_there(entity));
-    ipmi_cmdlang_out_int(cmd_info, "Hot swappable",
-			 ipmi_entity_hot_swappable(entity));
+    ipmi_cmdlang_out_bool(cmd_info, "Hot swappable",
+			  ipmi_entity_hot_swappable(entity));
 
     if (ipmi_entity_get_is_child(entity)) {
 	ipmi_cmdlang_out(cmd_info, "Parents", NULL);
@@ -124,38 +130,38 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
 	ipmi_cmdlang_out_hex(cmd_info, "OEM", ipmi_entity_get_oem(entity));
 	ipmi_cmdlang_out_hex(cmd_info, "Slave Address",
 			     ipmi_entity_get_slave_address(entity));
-	ipmi_cmdlang_out_int(cmd_info, "ACPI_system_power_notify_required",
+	ipmi_cmdlang_out_bool(cmd_info, "ACPI_system_power_notify_required",
 		    ipmi_entity_get_ACPI_system_power_notify_required(entity));
-	ipmi_cmdlang_out_int(cmd_info, "ACPI_device_power_notify_required",
+	ipmi_cmdlang_out_bool(cmd_info, "ACPI_device_power_notify_required",
 		    ipmi_entity_get_ACPI_device_power_notify_required(entity));
-	ipmi_cmdlang_out_int(cmd_info, "controller_logs_init_agent_errors",
+	ipmi_cmdlang_out_bool(cmd_info, "controller_logs_init_agent_errors",
 		    ipmi_entity_get_controller_logs_init_agent_errors(entity));
-	ipmi_cmdlang_out_int(cmd_info, "log_init_agent_errors_accessing",
+	ipmi_cmdlang_out_bool(cmd_info, "log_init_agent_errors_accessing",
 		    ipmi_entity_get_log_init_agent_errors_accessing(entity));
-	ipmi_cmdlang_out_int(cmd_info, "global_init",
-			 ipmi_entity_get_global_init(entity));
-	ipmi_cmdlang_out_int(cmd_info, "chassis_device",
-			 ipmi_entity_get_chassis_device(entity));
-	ipmi_cmdlang_out_int(cmd_info, "bridge",
-			 ipmi_entity_get_bridge(entity));
-	ipmi_cmdlang_out_int(cmd_info, "IPMB_event_generator",
-			 ipmi_entity_get_IPMB_event_generator(entity));
-	ipmi_cmdlang_out_int(cmd_info, "IPMB_event_receiver",
-			 ipmi_entity_get_IPMB_event_receiver(entity));
-	ipmi_cmdlang_out_int(cmd_info, "FRU_inventory_device",
-			ipmi_entity_get_FRU_inventory_device(entity));
-	ipmi_cmdlang_out_int(cmd_info, "SEL_device",
-			 ipmi_entity_get_SEL_device(entity));
-	ipmi_cmdlang_out_int(cmd_info, "SDR_repository_device",
-			 ipmi_entity_get_SDR_repository_device(entity));
-	ipmi_cmdlang_out_int(cmd_info, "sensor_device",
-			 ipmi_entity_get_sensor_device(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "global_init",
+			      ipmi_entity_get_global_init(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "chassis_device",
+			      ipmi_entity_get_chassis_device(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "bridge",
+			      ipmi_entity_get_bridge(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "IPMB_event_generator",
+			      ipmi_entity_get_IPMB_event_generator(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "IPMB_event_receiver",
+			      ipmi_entity_get_IPMB_event_receiver(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "FRU_inventory_device",
+			      ipmi_entity_get_FRU_inventory_device(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "SEL_device",
+			      ipmi_entity_get_SEL_device(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "SDR_repository_device",
+			      ipmi_entity_get_SDR_repository_device(entity));
+	ipmi_cmdlang_out_bool(cmd_info, "sensor_device",
+			      ipmi_entity_get_sensor_device(entity));
 	break;
 
     case IPMI_ENTITY_FRU:
 	ipmi_cmdlang_out_int(cmd_info, "Channel",
 			     ipmi_entity_get_channel(entity));
-	ipmi_cmdlang_out_int(cmd_info, "Lun", ipmi_entity_get_lun(entity));
+	ipmi_cmdlang_out_int(cmd_info, "LUN", ipmi_entity_get_lun(entity));
 	ipmi_cmdlang_out_hex(cmd_info, "OEM", ipmi_entity_get_oem(entity));
 	ipmi_cmdlang_out_hex(cmd_info, "access_address",
 			 ipmi_entity_get_access_address(entity));
@@ -165,7 +171,7 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
 			 ipmi_entity_get_device_type(entity));
 	ipmi_cmdlang_out_int(cmd_info, "device_modifier",
 			 ipmi_entity_get_device_modifier(entity));
-	ipmi_cmdlang_out_int(cmd_info, "is_logical_fru",
+	ipmi_cmdlang_out_bool(cmd_info, "is_logical_fru",
 			 ipmi_entity_get_is_logical_fru(entity));
 	ipmi_cmdlang_out_hex(cmd_info, "fru_device_id",
 			 ipmi_entity_get_fru_device_id(entity));
@@ -174,7 +180,7 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
     case IPMI_ENTITY_GENERIC:
 	ipmi_cmdlang_out_int(cmd_info, "Channel",
 			     ipmi_entity_get_channel(entity));
-	ipmi_cmdlang_out_int(cmd_info, "Lun", ipmi_entity_get_lun(entity));
+	ipmi_cmdlang_out_int(cmd_info, "LUN", ipmi_entity_get_lun(entity));
 	ipmi_cmdlang_out_hex(cmd_info, "OEM", ipmi_entity_get_oem(entity));
 	ipmi_cmdlang_out_hex(cmd_info, "access_address",
 			 ipmi_entity_get_access_address(entity));
@@ -193,6 +199,7 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
     default:
 	break;
     }
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -200,6 +207,13 @@ fru_info(ipmi_entity_t *entity, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_fru_t      *fru;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    ipmi_cmdlang_out(cmd_info, "Entity", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", entity_name);
 
     /* We cheat here and don't call the entity functions, but that
        allows us to reuse the FRU output functions.  If you are
@@ -207,6 +221,114 @@ fru_info(ipmi_entity_t *entity, void *cb_data)
     fru = ipmi_entity_get_fru(entity);
     if (fru)
 	ipmi_cmdlang_dump_fru_info(cmd_info, fru);
+    ipmi_cmdlang_up(cmd_info);
+}
+
+void ipmi_cmdlang_sensor_change(enum ipmi_update_e op,
+				ipmi_entity_t      *entity,
+				ipmi_sensor_t      *sensor,
+				void               *cb_data);
+
+void fru_change(enum ipmi_update_e op,
+		ipmi_entity_t      *entity,
+		void               *cb_data)
+{
+    char            *errstr;
+    int             rv;
+    ipmi_cmd_info_t *evi;
+    ipmi_fru_t      *fru;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "Entity FRU");
+    ipmi_cmdlang_out(evi, "Name", entity_name);
+
+    switch (op) {
+    case IPMI_ADDED:
+	ipmi_cmdlang_out(evi, "Operation", "Add");
+	if (ipmi_cmdlang_get_evinfo()) {
+	    ipmi_cmdlang_down(evi);
+	    fru = ipmi_entity_get_fru(entity);
+	    if (fru)
+		ipmi_cmdlang_dump_fru_info(evi, fru);
+	    ipmi_cmdlang_up(evi);
+	}
+	break;
+
+    case IPMI_DELETED:
+	ipmi_cmdlang_out(evi, "Operation", "Delete");
+	break;
+
+    case IPMI_CHANGED:
+	ipmi_cmdlang_out(evi, "Operation", "Change");
+	if (ipmi_cmdlang_get_evinfo()) {
+	    ipmi_cmdlang_down(evi);
+	    fru = ipmi_entity_get_fru(entity);
+	    if (fru)
+		ipmi_cmdlang_dump_fru_info(evi, fru);
+	    ipmi_cmdlang_up(evi);
+	}
+	break;
+    }
+
+    ipmi_cmdlang_cmd_info_put(evi);
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(entity_name,
+			    "cmd_entity.c(fru_change)",
+			    errstr, rv);
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+}
+
+static int
+presence_change(ipmi_entity_t *entity,
+		int           present,
+		void          *cb_data,
+		ipmi_event_t  *event)
+{
+    char            *errstr;
+    int             rv;
+    ipmi_cmd_info_t *evi;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "Entity");
+    ipmi_cmdlang_out(evi, "Name", entity_name);
+    ipmi_cmdlang_out(evi, "Operation", "Presence Change");
+    ipmi_cmdlang_out_bool(evi, "Present", present);
+
+    if (event)
+	ipmi_cmdlang_event_out(event, evi);
+
+    ipmi_cmdlang_cmd_info_put(evi);
+    return IPMI_EVENT_HANDLED;
+
+ out_err:
+    ipmi_cmdlang_global_err(entity_name,
+			    "cmd_entity.c(presence_change)",
+			    errstr, rv);
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+
+    return IPMI_EVENT_NOT_HANDLED;
 }
 
 void
@@ -215,7 +337,7 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 			   ipmi_entity_t      *entity,
 			   void               *cb_data)
 {
-    char            *errstr = NULL;
+    char            *errstr;
     int             rv;
     ipmi_cmd_info_t *evi;
     char            entity_name[IPMI_ENTITY_NAME_LEN];
@@ -235,22 +357,16 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	ipmi_cmdlang_out(evi, "Operation", "Add");
-	ipmi_cmdlang_down(evi);
-	entity_info(entity, evi);
-	ipmi_cmdlang_up(evi);
-#if 0
+	if (ipmi_cmdlang_get_evinfo()) {
+	    ipmi_cmdlang_down(evi);
+	    entity_info(entity, evi);
+	    ipmi_cmdlang_up(evi);
+	}
 	rv = ipmi_entity_add_sensor_update_handler(entity,
-						   sensor_change,
+						   ipmi_cmdlang_sensor_change,
 						   entity);
 	if (rv) {
 	    errstr = "ipmi_entity_add_sensor_update_handler";
-	    goto out_err;
-	}
-	rv = ipmi_entity_add_control_update_handler(entity,
-						    control_change,
-						    entity);
-	if (rv) {
-	    errstr = "ipmi_entity_add_control_update_handler";
 	    goto out_err;
 	}
 	rv = ipmi_entity_add_fru_update_handler(entity,
@@ -261,10 +377,18 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 	    goto out_err;
 	}
 	rv = ipmi_entity_add_presence_handler(entity,
-					      entity_presence,
+					      presence_change,
 					      NULL);
 	if (rv) {
 	    errstr = "ipmi_entity_add_presence_handler";
+	    goto out_err;
+	}
+#if 0
+	rv = ipmi_entity_add_control_update_handler(entity,
+						    control_change,
+						    entity);
+	if (rv) {
+	    errstr = "ipmi_entity_add_control_update_handler";
 	    goto out_err;
 	}
 	rv = ipmi_entity_add_hot_swap_handler(entity,
@@ -283,9 +407,11 @@ ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 
 	case IPMI_CHANGED:
 	    ipmi_cmdlang_out(evi, "Operation", "Change");
-	    ipmi_cmdlang_down(evi);
-	    entity_info(entity, evi);
-	    ipmi_cmdlang_up(evi);
+	    if (ipmi_cmdlang_get_evinfo()) {
+		ipmi_cmdlang_down(evi);
+		entity_info(entity, evi);
+		ipmi_cmdlang_up(evi);
+	    }
 	    break;
     }
 
@@ -338,5 +464,6 @@ ipmi_cmdlang_entity_init(void)
     * activate <entity> - activate the given entity
     * deactivate <entity> - deactivate the given entity
     * state <entity> - Return the current hot-swap state of the given entity
+      FIXME - combine this in with the entity info.
     * check <domain> - Audit all the entity hot-swap states
 #endif

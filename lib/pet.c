@@ -198,12 +198,12 @@ pet_op_done(ipmi_pet_t *pet)
 
     pet->in_progress--;
 
-    if (pet->lanparm) {
-	ipmi_lanparm_destroy(pet->lanparm, NULL, NULL);
-	pet->lanparm = NULL;
-    }
-
     if (pet->in_progress == 0) {
+	if (pet->lanparm) {
+	    ipmi_lanparm_destroy(pet->lanparm, NULL, NULL);
+	    pet->lanparm = NULL;
+	}
+
 	if (pet->done) {
 	    pet->done(pet, 0, pet->cb_data);
 	    pet->done = NULL;
@@ -767,8 +767,12 @@ start_pet_setup(ipmi_mc_t  *mc,
 {
     int  rv = 0;
 
-    if (pet->in_progress)
+    ipmi_lock(pet->timer_info->lock);
+
+    if (pet->in_progress) {
+	ipmi_unlock(pet->timer_info->lock);
 	return EAGAIN;
+    }
 
     pet->pet = pet;
     pet->pef_lock_broken = 0;
@@ -777,13 +781,13 @@ start_pet_setup(ipmi_mc_t  *mc,
     pet->lanparm_err = 0;
 
     pet->pef_check_pos = 0;
+    pet->in_progress++;
     rv = ipmi_pef_alloc(mc, pef_alloced, pet, &pet->pef);
     if (rv) {
+	pet->in_progress--;
 	ipmi_log(IPMI_LOG_WARNING,
 		 "start_pet_setup: Unable to allocate pef: 0x%x", rv);
 	goto out;
-    } else {
-	pet->in_progress++;
     }
 
     /* Now that we have the channel, set up the lan parms. */
@@ -794,6 +798,7 @@ start_pet_setup(ipmi_mc_t  *mc,
 		 "start_pet_setup: Unable to allocate lanparm: 0x%x",
 		 rv);
     } else {
+	pet->in_progress++;
 	rv = ipmi_lanparm_get_parm(pet->lanparm,
 				   IPMI_LANPARM_DEST_TYPE,
 				   pet->lan_dest_sel,
@@ -801,19 +806,18 @@ start_pet_setup(ipmi_mc_t  *mc,
 				   lanparm_got_config,
 				   pet);
 	if (rv) {
+	    pet->in_progress--;
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "start_pet_setup: Unable to get dest type: 0x%x",
 		     rv);
 	    ipmi_lanparm_destroy(pet->lanparm, NULL, NULL);
 	    pet->lanparm = NULL;
-	} else {
-	    pet->in_progress++;
 	}
     }
     rv = 0; /* We continue with the PEF run, even if the lanparm fails. */
 
  out:
-    _ipmi_mc_put(mc);
+    ipmi_unlock(pet->timer_info->lock);
     return rv;
 }
 

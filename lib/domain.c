@@ -382,6 +382,52 @@ deliver_rsp(ipmi_domain_t                *domain,
  *
  **********************************************************************/
 
+static locked_list_t *domain_change_handlers;
+
+int
+ipmi_domain_add_domain_change_handler(ipmi_domain_change_cb handler,
+				      void                  *cb_data)
+{
+    if (locked_list_add(domain_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return ENOMEM;
+}
+
+int
+ipmi_domain_remove_domain_change_handler(ipmi_domain_change_cb handler,
+					 void                  *cb_data)
+{
+    if (locked_list_remove(domain_change_handlers, handler, cb_data))
+	return 0;
+    else
+	return EINVAL;
+}
+
+typedef struct domain_change_info_s
+{
+    enum ipmi_update_e op;
+    ipmi_domain_t      *domain;
+} domain_change_info_t;
+
+static int
+iterate_domain_changes(void *cb_data, void *item1, void *item2)
+{
+    domain_change_info_t  *info = cb_data;
+    ipmi_domain_change_cb handler = item1;
+
+    handler(info->domain, info->op, item2);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+call_domain_change(ipmi_domain_t      *domain,
+		   enum ipmi_update_e op)
+{
+    domain_change_info_t info = { op, domain };
+    locked_list_iterate(domain_change_handlers, iterate_domain_changes, &info);
+}
+
 static void
 iterate_cleanup_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
@@ -588,6 +634,11 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->entities_lock)
 	ipmi_destroy_lock(domain->entities_lock);
 
+    /* If it has not been reported yet, in_startup will be true and we
+       don't want to report the delete. */
+    if (!domain->in_startup)
+	call_domain_change(domain, IPMI_DELETED);
+
     /* The MC list should no longer have anything in it. */
     if (domain->mc_upd_handlers)
 	locked_list_destroy(domain->mc_upd_handlers);
@@ -641,6 +692,8 @@ setup_domain(char          *name,
     if (!domain)
 	return ENOMEM;
     memset(domain, 0, sizeof(*domain));
+
+    domain->in_startup = 1;
 
     strncpy(domain->name, name, sizeof(domain->name)-2);
     i = strlen(domain->name);
@@ -3497,6 +3550,7 @@ call_con_fails(ipmi_domain_t *domain,
 		     DOMAIN_NAME(domain));
 	}
 	domain->in_startup = 0;
+	call_domain_change(domain, IPMI_ADDED);
     }
     ipmi_unlock(domain->con_lock);
 }
@@ -4229,7 +4283,6 @@ ipmi_open_domain(char               *name,
     if (rv)
 	return rv;
 
-    domain->in_startup = 1;
     for (i=0; i<num_con; i++) {
 	con[i]->set_con_change_handler(con[i], ll_con_changed, domain);
 	con[i]->set_ipmb_addr_handler(con[i], ll_addr_changed, domain);
@@ -4448,12 +4501,19 @@ _ipmi_domain_init(void)
 {
     int rv;
 
-    domains_list = locked_list_alloc(ipmi_get_global_os_handler());
-    if (!domains)
+    domain_change_handlers = locked_list_alloc(ipmi_get_global_os_handler());
+    if (!domain_change_handlers)
 	return ENOMEM;
+
+    domains_list = locked_list_alloc(ipmi_get_global_os_handler());
+    if (!domains) {
+	locked_list_destroy(domain_change_handlers);
+	return ENOMEM;
+    }
 
     oem_handlers = alloc_ilist();
     if (!oem_handlers) {
+	locked_list_destroy(domain_change_handlers);
 	locked_list_destroy(domains_list);
 	domains_list = NULL;
 	return ENOMEM;
@@ -4461,6 +4521,7 @@ _ipmi_domain_init(void)
 
     rv = ipmi_create_global_lock(&domains_lock);
     if (rv) {
+	locked_list_destroy(domain_change_handlers);
 	locked_list_destroy(domains_list);
 	domains_list = NULL;
 	free_ilist(oem_handlers);
@@ -4474,6 +4535,7 @@ _ipmi_domain_init(void)
 void
 _ipmi_domain_shutdown(void)
 {
+    locked_list_destroy(domain_change_handlers);
     locked_list_destroy(domains_list);
     domains_list = NULL;
     free_ilist(oem_handlers);

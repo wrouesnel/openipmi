@@ -1744,6 +1744,16 @@ int ipmi_close_connection(ipmi_domain_t             *domain,
 			  ipmi_domain_close_done_cb close_done,
 			  void                      *cb_data);
 
+
+/* Domain monitoring, catches add and deletes. */
+typedef void (*ipmi_domain_change_cb)(ipmi_domain_t      *domain,
+				      enum ipmi_update_e op,
+				      void               *cb_data);
+int ipmi_domain_add_domain_change_handler(ipmi_domain_change_cb handler,
+					  void                  *cb_data);
+int ipmi_domain_remove_domain_change_handler(ipmi_domain_change_cb handler,
+					     void                  *cb_data);
+
 /* The following is a convenience function for parsing IPMI arguments
    in some standard manner. */
 

@@ -70,8 +70,14 @@ static void
 mc_info(ipmi_mc_t *mc, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    unsigned char vals[4];
-    char          str[100];
+    unsigned char   vals[4];
+    char            str[100];
+    char            mc_name[IPMI_MC_NAME_LEN];
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "MC", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", mc_name);
 
     ipmi_cmdlang_out_bool(cmd_info, "provides_device_sdrs",
 			  ipmi_mc_provides_device_sdrs(mc));
@@ -110,6 +116,7 @@ mc_info(ipmi_mc_t *mc, void *cb_data)
     ipmi_cmdlang_out_hex(cmd_info, "product_id", ipmi_mc_product_id(mc));
     ipmi_mc_aux_fw_revision(mc, vals);
     ipmi_cmdlang_out_binary(cmd_info, "aux_fw_revision", vals, sizeof(vals));
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -274,8 +281,9 @@ get_sel_time_handler(ipmi_mc_t *mc, int err, unsigned long time, void *cb_data)
 	cmdlang->location = "cmd_mc.c(get_sel_time_handler)";
     } else {
 	ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
-	ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+	ipmi_cmdlang_out(cmd_info, "MC", NULL);
 	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_out(cmd_info, "Name", mc_name);
 	ipmi_cmdlang_out_long(cmd_info, "SEL Time", time);
 	ipmi_cmdlang_up(cmd_info);
     }
@@ -411,13 +419,147 @@ mc_msg(ipmi_mc_t *mc, void *cb_data)
     }
 }
 
+typedef struct sdr_info_s
+{
+    ipmi_cmd_info_t *cmd_info;
+    char            mc_name[IPMI_MC_NAME_LEN];
+} sdr_info_t;
+
+void
+sdrs_fetched(ipmi_sdr_info_t *sdrs,
+	     int             err,
+	     int             changed,
+	     unsigned int    count,
+	     void            *cb_data)
+{
+    sdr_info_t      *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             i;
+    int             rv;
+    int             total_size = 0;
+
+    if (err) {
+	cmdlang->err = err;
+	cmdlang->errstr = "Error fetchding SDRs";
+	goto out_err;
+    }
+
+    if (!sdrs) {
+	cmdlang->err = ECANCELED;
+	cmdlang->errstr = "MC went away during SDR fetch";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(cmd_info, "MC", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", info->mc_name);
+    for (i=0; i<count; i++) {
+	ipmi_sdr_t sdr;
+	char       str[20];
+
+	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
+	if (rv)
+	    continue;
+
+        ipmi_cmdlang_out(cmd_info, "SDR", NULL);
+	ipmi_cmdlang_down(cmd_info);
+        ipmi_cmdlang_out_int(cmd_info, "Record ID", sdr.record_id);
+        ipmi_cmdlang_out_int(cmd_info, "Type", sdr.type);
+	snprintf(str, sizeof(str), "%d.%d", sdr.major_version,
+		 sdr.minor_version);
+        ipmi_cmdlang_out(cmd_info, "Version", str);
+	ipmi_cmdlang_out_binary(cmd_info, "Data", sdr.data, sdr.length);
+	ipmi_cmdlang_up(cmd_info);
+	total_size += sdr.length+5;
+    }
+    ipmi_cmdlang_out_int(cmd_info, "Total Size", total_size);
+    ipmi_cmdlang_up(cmd_info);
+
+ out_err:
+    if (cmdlang->err) {
+	cmdlang->location = "cmd_mc.c(sdrs_fetched)";
+    }
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_sdr_info_destroy(sdrs, NULL, NULL);
+    ipmi_mem_free(info);
+}
+
+static void
+mc_sdrs(ipmi_mc_t *mc, void *cb_data)
+{
+    sdr_info_t      *info = NULL;
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             do_sensor;
+    ipmi_sdr_info_t *sdrs;
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+
+
+    if ((argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    if (strcmp(argv[curr_arg], "main") == 0) {
+	do_sensor = 0;
+    } else if (strcmp(argv[curr_arg], "sensor") == 0) {
+	do_sensor = 1;
+    } else {
+	cmdlang->err = EINVAL;
+	cmdlang->errstr = "Fetch type was not sensor or main";
+	goto out_err;
+    }
+    curr_arg++;
+
+    rv = ipmi_sdr_info_alloc(ipmi_mc_get_domain(mc),
+			     mc, 0, do_sensor, &sdrs);
+    if (rv) {
+	cmdlang->err = rv;
+	cmdlang->errstr = "Could not allocate SDR info";
+	goto out_err;
+    }
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->err = ENOMEM;
+	cmdlang->errstr = "Could not allocate SDR data";
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+    ipmi_mc_get_name(mc, info->mc_name, sizeof(info->mc_name));
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_sdr_fetch(sdrs, sdrs_fetched, info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Could not start SDR fetch";
+	ipmi_sdr_info_destroy(sdrs, NULL, NULL);
+	goto out_err;
+    }
+
+    return;
+
+ out_err:
+    ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
+    cmdlang->location = "cmd_mc.c(mc_sdrs)";
+    if (info)
+	ipmi_mem_free(info);
+}
+
 void
 ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 		       ipmi_domain_t      *domain,
 		       ipmi_mc_t          *mc,
 		       void               *cb_data)
 {
-    char            *errstr = NULL;
+    char            *errstr;
     int             rv;
     ipmi_cmd_info_t *evi;
     char            mc_name[IPMI_MC_NAME_LEN];
@@ -437,9 +579,11 @@ ipmi_cmdlang_mc_change(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	ipmi_cmdlang_out(evi, "Operation", "Add");
-	ipmi_cmdlang_down(evi);
-	mc_info(mc, evi);
-	ipmi_cmdlang_up(evi);
+	if (ipmi_cmdlang_get_evinfo()) {
+	    ipmi_cmdlang_down(evi);
+	    mc_info(mc, evi);
+	    ipmi_cmdlang_up(evi);
+	}
 #if 0
 	if (ipmi_mc_is_active(mc)) {
 	    ipmi_mc_set_sdrs_first_read_handler(mc, mc_sdrs_read, NULL);
@@ -454,9 +598,11 @@ ipmi_cmdlang_mc_change(enum ipmi_update_e op,
 
 	case IPMI_CHANGED:
 	    ipmi_cmdlang_out(evi, "Operation", "Change");
-	    ipmi_cmdlang_down(evi);
-	    mc_info(mc, evi);
-	    ipmi_cmdlang_up(evi);
+	    if (ipmi_cmdlang_get_evinfo()) {
+		ipmi_cmdlang_down(evi);
+		mc_info(mc, evi);
+		ipmi_cmdlang_up(evi);
+	    }
 	    break;
     }
 
@@ -508,6 +654,10 @@ static ipmi_cmdlang_init_t cmds_mc[] =
       "<mc> <LUN> <NetFN> <Cmd> [data...] - Send the given command"
       " to the management controller and display the response.",
       ipmi_cmdlang_mc_handler, mc_msg, NULL },
+    { "sdrs", &mc_cmds,
+      "<mc> <main | sensor> - fetch either the main or sensor"
+      " SDRs from the given MC.",
+      ipmi_cmdlang_mc_handler, mc_sdrs, NULL },
 };
 #define CMDS_MC_LEN (sizeof(cmds_mc)/sizeof(ipmi_cmdlang_init_t))
 
@@ -516,11 +666,3 @@ ipmi_cmdlang_mc_init(void)
 {
     return ipmi_cmdlang_reg_table(cmds_mc, CMDS_MC_LEN);
 }
-
-#if 0
-/*
-* mc
-  * sdrs <mc> <main | sensor> - list the SDRs for the mc.  Either gets
-    the main SDR repository or the sensor SDR repository.
-*/
-#endif

@@ -106,6 +106,10 @@ struct ipmi_cmdlang_s
    done function when complete. */
 void ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str);
 
+/* If the event info is true, then the system will output object
+   information with each add or change event. */
+void ipmi_cmdlang_set_evinfo(int evinfo);
+int ipmi_cmdlang_get_evinfo(void);
 
 /*
  * This is used to hold command information.
@@ -190,6 +194,9 @@ void ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 void ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
 			  char            *name,
 			  int             value);
+void ipmi_cmdlang_out_double(ipmi_cmd_info_t *info,
+			     char            *name,
+			     double          value);
 void ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
 			  char            *name,
 			  int             value);
@@ -204,6 +211,11 @@ void ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
 			      char            *name,
 			      char            *value,
 			      unsigned int    len);
+void ipmi_cmdlang_out_type(ipmi_cmd_info_t      *info,
+			   char                 *name,
+			   enum ipmi_str_type_e type,
+			   char                 *value,
+			   unsigned int         len);
 void ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
 			 char            *name,
 			 struct in_addr  *ip_addr);
@@ -213,6 +225,10 @@ void ipmi_cmdlang_out_mac(ipmi_cmd_info_t *info,
 void ipmi_cmdlang_out_bool(ipmi_cmd_info_t *info,
 			   char            *name,
 			   int             value);
+
+/* Generate info for an event. */
+void ipmi_cmdlang_event_out(ipmi_event_t    *event,
+			    ipmi_cmd_info_t *cmd_info);
 
 /* The output from the command language is done at a nesting level.
    When you start outputting data for a new thing, you should "down"

@@ -1983,6 +1983,11 @@ ipmi_sensor_threshold_event_supported(ipmi_sensor_t               *sensor,
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
+    if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_NONE) {
+	/* No thresholds supported. */
+	*val = 0;
+	return 0;
+    }
 
     if (dir == IPMI_ASSERTION)
 	mask = sensor->mask1;
@@ -2036,6 +2041,12 @@ ipmi_sensor_threshold_reading_supported(ipmi_sensor_t      *sensor,
 					enum ipmi_thresh_e thresh,
 					int                *val)
 {
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
+	/* Not a threshold sensor, it doesn't have readings. */
+	return ENOSYS;
+
     switch(thresh) {
     case IPMI_LOWER_NON_CRITICAL:
 	*val = sensor->mask1[12];
@@ -2071,6 +2082,11 @@ ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
+    if (sensor->threshold_access != IPMI_THRESHOLD_ACCESS_SUPPORT_SETTABLE) {
+	/* Threshold setting not supported for any thresholds. */
+	*val = 0;
+	return 0;
+    }
 
     if (event > IPMI_UPPER_NON_RECOVERABLE)
 	return EINVAL;
@@ -2104,6 +2120,13 @@ ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
     if (sensor->event_reading_type != IPMI_EVENT_READING_TYPE_THRESHOLD)
 	/* Not a threshold sensor, it doesn't have readings. */
 	return ENOSYS;
+    if ((sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_NONE)
+	|| (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED))
+    {
+	/* Threshold reading not supported for any thresholds. */
+	*val = 0;
+	return 0;
+    }
 
     if (event > IPMI_UPPER_NON_RECOVERABLE)
 	return EINVAL;
@@ -2567,7 +2590,10 @@ ipmi_sensor_get_id_length(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
 
-    return sensor->id_len;
+    if (sensor->id_type == IPMI_ASCII_STR)
+	return sensor->id_len+1;
+    else
+	return sensor->id_len;
 }
 
 enum ipmi_str_type_e

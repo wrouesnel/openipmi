@@ -85,6 +85,8 @@ pet_info(ipmi_pet_t *pet, void *cb_data)
     unsigned char   mac_addr[6];
     struct in_addr  ip_addr;
 
+    ipmi_cmdlang_out(cmd_info, "PET", NULL);
+    ipmi_cmdlang_down(cmd_info);
     rv = ipmi_mc_pointer_cb(ipmi_pet_get_mc_id(pet), get_mc_name, cmd_info);
     if (rv)
 	ipmi_cmdlang_out(cmd_info, "Domain", NULL);
@@ -99,6 +101,7 @@ pet_info(ipmi_pet_t *pet, void *cb_data)
     ipmi_cmdlang_out_int(cmd_info, "APT Selector", ipmi_pet_get_apt_sel(pet));
     ipmi_cmdlang_out_int(cmd_info, "LAN Dest Selector",
 			 ipmi_pet_get_lan_dest_sel(pet));
+    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -373,7 +376,7 @@ static ipmi_cmdlang_init_t cmds_pet[] =
       " - Set up the domain to send PET traps from the given connection"
       " to the given IP/MAC address over the given channel",
       ipmi_cmdlang_domain_handler, pet_new, NULL },
-    { "nmcew", &pet_cmds,
+    { "mcnew", &pet_cmds,
       "<mc> <channel> <ip addr> <mac_addr> <eft selector>"
       " <policy num> <apt selector> <lan dest selector>"
       " - Set up the domain to send PET traps from the given connection"

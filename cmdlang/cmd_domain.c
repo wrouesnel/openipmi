@@ -65,10 +65,7 @@ domain_list_handler(ipmi_domain_t *domain, void *cb_data)
 static void
 domain_list(ipmi_cmd_info_t *cmd_info)
 {
-    ipmi_cmdlang_out(cmd_info, "Domains", NULL);
-    ipmi_cmdlang_down(cmd_info);
     ipmi_domain_iterate_domains(domain_list_handler, cmd_info);
-    ipmi_cmdlang_up(cmd_info);
 }
 
 static void
@@ -79,121 +76,24 @@ domain_info(ipmi_domain_t *domain, void *cb_data)
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
+    ipmi_cmdlang_out(cmd_info, "Domain", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
     ipmi_cmdlang_out(cmd_info, "Type",
 		    ipmi_domain_get_type_string(ipmi_domain_get_type(domain)));
     ipmi_cmdlang_out_int(cmd_info, "SEL Rescan Time",
 			 ipmi_domain_get_sel_rescan_time(domain));
     ipmi_cmdlang_out_int(cmd_info, "IPMB Rescan Time",
 			 ipmi_domain_get_ipmb_rescan_time(domain));
+    ipmi_cmdlang_up(cmd_info);
 }
 
-static void
-domain_con_change(ipmi_domain_t *domain,
-		  int           err,
-		  unsigned int  conn_num,
-		  unsigned int  port_num,
-		  int           still_connected,
-		  void          *cb_data)
-{
-    char            *errstr = NULL;
-    int             rv = 0;
-    ipmi_cmd_info_t *evi;
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
-
-    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
-
-    evi = ipmi_cmdlang_alloc_event_info();
-    if (!evi) {
-	rv = ENOMEM;
-	errstr = "Out of memory";
-	goto out_err;
-    }
-
-    ipmi_cmdlang_out(evi, "Object Type", "Domain");
-    ipmi_cmdlang_out(evi, "Operation", "Connection Change");
-    ipmi_cmdlang_out(evi, "Name", domain_name);
-    ipmi_cmdlang_out_int(evi, "Connection Number", conn_num);
-    ipmi_cmdlang_out_int(evi, "Port Number", port_num);
-    ipmi_cmdlang_out_int(evi, "Any Connection Up", still_connected);
-    ipmi_cmdlang_out_int(evi, "Error", err);
-
- out_err:
-    if (rv) {
-	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
-	ipmi_cmdlang_global_err(domain_name, "cmd_domain.c(domain_con_change)",
-				errstr, rv);
-    }
-    if (evi)
-	ipmi_cmdlang_cmd_info_put(evi);
-}
-
-static void
-get_mc_name(ipmi_mc_t *mc, void *cb_data)
-{
-    char *mc_name = cb_data;
-
-    ipmi_mc_get_name(mc, mc_name, IPMI_MC_NAME_LEN);
-}
-
-static void
-domain_event_handler(ipmi_domain_t *domain,
-		     ipmi_event_t  *event,
-		     void          *cb_data)
-{
-    char            *errstr = NULL;
-    int             rv = 0;
-    ipmi_cmd_info_t *evi;
-    ipmi_mcid_t     mcid;
-    char            mc_name[IPMI_MC_NAME_LEN];
-    unsigned int    len;
-    unsigned char   *data;
-    unsigned int    i;
-
-    evi = ipmi_cmdlang_alloc_event_info();
-    if (!evi) {
-	rv = ENOMEM;
-	errstr = "Out of memory";
-	goto out_err;
-    }
-
-    mcid = ipmi_event_get_mcid(event);
-    rv = ipmi_mc_pointer_cb(mcid, get_mc_name, mc_name);
-    if (rv) {
-	/* The MC went away, that's actually ok, just ignore it. */
-	ipmi_cmdlang_cmd_info_put(evi);
-	return;
-    }
-
-    ipmi_cmdlang_out(evi, "Object Type", "Event");
-    ipmi_cmdlang_out(evi, "MC", mc_name);
-    ipmi_cmdlang_out_int(evi, "Record ID", ipmi_event_get_record_id(event));
-    ipmi_cmdlang_out_int(evi, "Event type", ipmi_event_get_type(event));
-    ipmi_cmdlang_out_long(evi, "Timestamp",
-			  (long) ipmi_event_get_timestamp(event));
-    len = ipmi_event_get_data_len(event);
-    if (len) {
-	ipmi_cmdlang_out(evi, "Data", NULL);
-	ipmi_cmdlang_down(evi);
-	data = ipmi_event_get_data_ptr(event);
-	for (i=0; i<len; i++) {
-	    ipmi_cmdlang_out_hex(evi, "Event byte", data[i]);
-	}
-	ipmi_cmdlang_up(evi);
-    }
-
- out_err:
-    if (rv) {
-	char domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
-
-	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
-	ipmi_cmdlang_global_err(domain_name,
-				"cmd_domain.c(domain_event_handler)",
-				errstr, rv);
-    }
-    if (evi)
-	ipmi_cmdlang_cmd_info_put(evi);
-}
-
+static void domain_con_change(ipmi_domain_t *domain,
+			      int           err,
+			      unsigned int  conn_num,
+			      unsigned int  port_num,
+			      int           still_connected,
+			      void          *cb_data);
 void ipmi_cmdlang_entity_change(enum ipmi_update_e op,
 				ipmi_domain_t      *domain,
 				ipmi_entity_t      *entity,
@@ -212,85 +112,27 @@ domain_new_done(ipmi_domain_t *domain,
 		void          *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
-    int             rv, rv2;
-    char            *errstr;
-    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+    int             rv;
 
-    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
 
     /* This call will detect and ignore duplicates, no special
        handling required. */
-    rv2 = ipmi_domain_add_connect_change_handler(domain, domain_con_change,
-						 NULL);
+    ipmi_domain_add_connect_change_handler(domain, domain_con_change, NULL);
 
-    /* Remove ourselves from the connection change list. */
+    /* Remove ourselves from the connection change list.  This may fail,
+       but that means it's already been done and we don't care. */
     rv = ipmi_domain_remove_connect_change_handler(domain, domain_new_done,
 						   cb_data);
-    if (rv) {
-	/* If we were unable to remove ourselves, then we must not
-	   have been the first one that got called in this callback.
-	   Not a big deal, call the asynchronous handler. */
-	domain_con_change(domain, err, conn_num, port_num, still_connected,
-			  NULL);
-	return;
-    }
 
-    if (rv2) {
-	errstr = "Error adding connect change handler";
-	rv = rv2;
-	goto out_err;
-    }
 
-    /* Register handlers. */
-    rv = ipmi_domain_add_event_handler(domain, domain_event_handler, NULL);
-    if (rv) {
-	errstr = "ipmi_register_for_events";
-	goto out_err;
-    }
+    /* Handle the rest as a normal event. */
+    domain_con_change(domain, err, conn_num, port_num, still_connected,
+		      NULL);
 
-    rv = ipmi_domain_enable_events(domain);
-    if (rv) {
-	errstr = "ipmi_domain_enable_events";
-	goto out_err;
-    }
-
-    rv = ipmi_domain_add_entity_update_handler(domain,
-					       ipmi_cmdlang_entity_change,
-					       domain);
-    if (rv) {
-	errstr = "ipmi_bmc_set_entity_update_handler";
-	goto out_err;
-    }
-
-    rv = ipmi_domain_add_mc_updated_handler(domain,
-					    ipmi_cmdlang_mc_change,
-					    domain);
-    if (rv) {
-	errstr = "ipmi_bmc_set_entity_update_handler";
-	goto out_err;
-    }
-
-    ipmi_cmdlang_lock(cmd_info);
-    ipmi_cmdlang_out(cmd_info, "New Domain", NULL);
-    ipmi_cmdlang_out(cmd_info, "Name", domain_name);
-    ipmi_cmdlang_down(cmd_info);
-    ipmi_cmdlang_out_int(cmd_info, "Connection Number", conn_num);
-    ipmi_cmdlang_out_int(cmd_info, "Port Number", port_num);
-    ipmi_cmdlang_out_int(cmd_info, "Any Connection Up", still_connected);
-    ipmi_cmdlang_out_int(cmd_info, "Error", err);
-    ipmi_cmdlang_up(cmd_info);
-    ipmi_cmdlang_unlock(cmd_info);
-
-    ipmi_cmdlang_cmd_info_put(cmd_info);
-    return;
-
- out_err:
-    /* FIXME - should we shut the connection down on errors? */
-    {
-	ipmi_cmdlang_global_err(domain_name, "cmd_domain.c(domain_new_done)",
-				errstr, rv);
-    }
-    ipmi_cmdlang_cmd_info_put(cmd_info);
+    if (!rv)
+	/* If we get an error removing the connect change handler,
+	   that means this has already been done. */
+	ipmi_cmdlang_cmd_info_put(cmd_info);
 }
 
 static void
@@ -811,7 +653,6 @@ domain_ipmb_rescan_time(ipmi_domain_t *domain, void *cb_data)
     }
 }
 
-
 static void
 final_close(void *cb_data)
 {
@@ -834,6 +675,204 @@ domain_close(ipmi_domain_t *domain, void *cb_data)
 	ipmi_domain_get_name(domain, cmdlang->objstr,
 			     cmdlang->objstr_len);
 	cmdlang->location = "cmd_domain.c(domain_close)";
+    }
+}
+
+
+/**********************************************************************
+ *
+ * Domain event handling.
+ *
+ **********************************************************************/
+
+static void
+domain_event_handler(ipmi_domain_t *domain,
+		     ipmi_event_t  *event,
+		     void          *cb_data)
+{
+    char            *errstr = NULL;
+    int             rv = 0;
+    ipmi_cmd_info_t *evi;
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_event_out(event, evi);
+
+ out_err:
+    if (rv) {
+	char domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+	ipmi_cmdlang_global_err(domain_name,
+				"cmd_domain.c(domain_event_handler)",
+				errstr, rv);
+    }
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+}
+
+static void
+domain_con_change(ipmi_domain_t *domain,
+		  int           err,
+		  unsigned int  conn_num,
+		  unsigned int  port_num,
+		  int           still_connected,
+		  void          *cb_data)
+{
+    char            *errstr;
+    int             rv = 0;
+    ipmi_cmd_info_t *evi;
+    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "Domain");
+    ipmi_cmdlang_out(evi, "Operation", "Connection Change");
+    ipmi_cmdlang_out(evi, "Name", domain_name);
+    ipmi_cmdlang_out_int(evi, "Connection Number", conn_num);
+    ipmi_cmdlang_out_int(evi, "Port Number", port_num);
+    ipmi_cmdlang_out_int(evi, "Any Connection Up", still_connected);
+    ipmi_cmdlang_out_int(evi, "Error", err);
+
+    errstr = NULL; /* Get rid of warning */
+
+ out_err:
+    if (rv) {
+	ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+	ipmi_cmdlang_global_err(domain_name, "cmd_domain.c(domain_con_change)",
+				errstr, rv);
+    }
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+}
+
+void
+domain_change(ipmi_domain_t      *domain,
+	      enum ipmi_update_e op,
+	      void               *cb_data)
+{
+    ipmi_cmd_info_t *evi;
+    int             rv = 0;
+    char            *errstr = NULL;
+    char            domain_name[IPMI_MAX_DOMAIN_NAME_LEN];
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	errstr = "Out of memory";
+	goto out_err;
+    }
+
+    ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+
+
+    ipmi_cmdlang_out(evi, "Object Type", "Domain");
+    ipmi_cmdlang_out(evi, "Name", domain_name);
+
+    switch (op) {
+    case IPMI_ADDED:
+	ipmi_cmdlang_out(evi, "Operation", "Add");
+	if (ipmi_cmdlang_get_evinfo()) {
+	    ipmi_cmdlang_down(evi);
+	    domain_info(domain, evi);
+	    ipmi_cmdlang_up(evi);
+	}
+	/* Register handlers. */
+	rv = ipmi_domain_add_event_handler(domain, domain_event_handler, NULL);
+	if (rv) {
+	    errstr = "ipmi_register_for_events";
+	    goto out_err;
+	}
+
+	rv = ipmi_domain_enable_events(domain);
+	if (rv) {
+	    errstr = "ipmi_domain_enable_events";
+	    goto out_err;
+	}
+
+	rv = ipmi_domain_add_entity_update_handler(domain,
+						   ipmi_cmdlang_entity_change,
+						   domain);
+	if (rv) {
+	    errstr = "ipmi_bmc_set_entity_update_handler";
+	    goto out_err;
+	}
+
+	rv = ipmi_domain_add_mc_updated_handler(domain,
+						ipmi_cmdlang_mc_change,
+						domain);
+	if (rv) {
+	    errstr = "ipmi_bmc_set_entity_update_handler";
+	    goto out_err;
+	}
+	break;
+
+    case IPMI_DELETED:
+	ipmi_cmdlang_out(evi, "Operation", "Delete");
+	break;
+
+    default:
+	break;
+    }
+
+ out_err:
+    /* FIXME - should we shut the connection down on errors? */
+    if (rv) {
+	ipmi_cmdlang_global_err(domain_name, "cmd_domain.c(domain_new_done)",
+				errstr, rv);
+    }
+    if (evi)
+	ipmi_cmdlang_cmd_info_put(evi);
+}
+
+static void
+get_mc_name(ipmi_mc_t *mc, void *cb_data)
+{
+    char *mc_name = cb_data;
+
+    ipmi_mc_get_name(mc, mc_name, IPMI_MC_NAME_LEN);
+}
+
+void
+ipmi_cmdlang_event_out(ipmi_event_t    *event,
+		       ipmi_cmd_info_t *cmd_info)
+{
+    ipmi_mcid_t     mcid;
+    char            mc_name[IPMI_MC_NAME_LEN];
+    unsigned int    len;
+    int             rv;
+
+    mcid = ipmi_event_get_mcid(event);
+    rv = ipmi_mc_pointer_cb(mcid, get_mc_name, mc_name);
+    if (rv) {
+	/* The MC went away, that's actually ok, just ignore it. */
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	return;
+    }
+
+    ipmi_cmdlang_out(cmd_info, "Object Type", "Event");
+    ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+    ipmi_cmdlang_out_int(cmd_info, "Record ID",
+			 ipmi_event_get_record_id(event));
+    ipmi_cmdlang_out_int(cmd_info, "Event type", ipmi_event_get_type(event));
+    ipmi_cmdlang_out_long(cmd_info, "Timestamp",
+			  (long) ipmi_event_get_timestamp(event));
+    len = ipmi_event_get_data_len(event);
+    if (len) {
+	ipmi_cmdlang_out_binary(cmd_info, "Data",
+				ipmi_event_get_data_ptr(event), len);
     }
 }
 
@@ -887,5 +926,11 @@ static ipmi_cmdlang_init_t cmds_domain[] =
 int
 ipmi_cmdlang_domain_init(void)
 {
+    int rv;
+
+    rv = ipmi_domain_add_domain_change_handler(domain_change, NULL);
+    if (rv)
+	return rv;
+
     return ipmi_cmdlang_reg_table(cmds_domain, CMDS_DOMAIN_LEN);
 }

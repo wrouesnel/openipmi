@@ -172,12 +172,8 @@ for_each_domain_handler(ipmi_domain_t *domain, void *cb_data)
 	return;
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
-    if ((!info->cmpstr) || (strcmp(info->cmpstr, domain_name) == 0)) {
-	ipmi_cmdlang_out(cmd_info, "Domain", domain_name);
-	ipmi_cmdlang_down(cmd_info);
+    if ((!info->cmpstr) || (strcmp(info->cmpstr, domain_name) == 0))
 	info->handler(domain, info->cb_data);
-	ipmi_cmdlang_up(cmd_info);
-    }
 }
 
 static void
@@ -253,12 +249,8 @@ for_each_pet_handler(ipmi_pet_t *pet, void *cb_data)
 	return;
 
     ipmi_pet_get_name(pet, name, sizeof(name));
-    if ((! info->cmdstr) || (strcmp(info->cmdstr, name) == 0)) {
-	ipmi_cmdlang_out(cmd_info, "PET", name);
-	ipmi_cmdlang_down(cmd_info);
+    if ((! info->cmdstr) || (strcmp(info->cmdstr, name) == 0))
 	info->handler(pet, info->cb_data);
-	ipmi_cmdlang_up(cmd_info);
-    }
 }
 
 static void
@@ -318,16 +310,24 @@ for_each_entity_handler(ipmi_entity_t *entity, void *cb_data)
 
     ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
     c = strchr(entity_name, '(');
+    if (!c)
+	goto out_err;
     c++;
     c2 = strchr(c, ')');
+    if (!c2)
+	goto out_err;
     *c2 = '\0';
     if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0)) {
 	*c2 = ')';
-	ipmi_cmdlang_out(cmd_info, "Entity", entity_name);
-	ipmi_cmdlang_down(cmd_info);
 	info->handler(entity, info->cb_data);
-	ipmi_cmdlang_up(cmd_info);
-    }
+    } else
+	*c2 = ')';
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(entity_name,
+			    "cmdlang.c(for_each_entity_handler)",
+			    "Bad entity name", EINVAL);
 }
 
 static void
@@ -404,19 +404,28 @@ for_each_sensor_handler(ipmi_entity_t *entity,
 			void          *cb_data)
 {
     sensor_iter_info_t *info = cb_data;
-    ipmi_cmd_info_t    *cmd_info = info->cmd_info;
     char               sensor_name[IPMI_SENSOR_NAME_LEN];
     char               *c;
 
     ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
-    c = strchr(sensor_name, '.');
+    c = strchr(sensor_name, '(');
+    if (!c)
+	goto out_err;
+    c = strchr(c, ')');
+    if (!c)
+	goto out_err;
+    c = strchr(c, '.');
+    if (!c)
+	goto out_err;
     c++;
-    if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0)) {
-	ipmi_cmdlang_out(cmd_info, "Sensor", sensor_name);
-	ipmi_cmdlang_down(cmd_info);
+    if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0))
 	info->handler(sensor, info->cb_data);
-	ipmi_cmdlang_up(cmd_info);
-    }
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(sensor_name,
+			    "cmdlang.c(for_each_sensor_handler)",
+			    "Bad sensor name", EINVAL);
 }
 
 static void
@@ -435,7 +444,7 @@ for_each_sensor(ipmi_cmd_info_t    *cmd_info,
 {
     sensor_iter_info_t info;
 
-    info.cmpstr = class;
+    info.cmpstr = obj;
     info.handler = handler;
     info.cb_data = cb_data;
     info.cmd_info = cmd_info;
@@ -486,19 +495,28 @@ for_each_control_handler(ipmi_entity_t  *entity,
 			 void           *cb_data)
 {
     control_iter_info_t *info = cb_data;
-    ipmi_cmd_info_t     *cmd_info = info->cmd_info;
     char                control_name[IPMI_CONTROL_NAME_LEN];
     char               *c;
 
     ipmi_control_get_name(control, control_name, sizeof(control_name));
-    c = strchr(control_name, '.');
+    c = strchr(control_name, '(');
+    if (!c)
+	goto out_err;
+    c = strchr(c, ')');
+    if (!c)
+	goto out_err;
+    c = strchr(c, '.');
+    if (!c)
+	goto out_err;
     c++;
-    if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0)) {
-	ipmi_cmdlang_out(cmd_info, "Control", control_name);
-	ipmi_cmdlang_down(cmd_info);
+    if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0))
 	info->handler(control, info->cb_data);
-	ipmi_cmdlang_up(cmd_info);
-    }
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(control_name,
+			    "cmdlang.c(for_each_control_handler)",
+			    "Bad control name", EINVAL);
 }
 
 static void
@@ -517,7 +535,7 @@ for_each_control(ipmi_cmd_info_t     *cmd_info,
 {
     control_iter_info_t info;
 
-    info.cmpstr = class;
+    info.cmpstr = obj;
     info.handler = handler;
     info.cb_data = cb_data;
     info.cmd_info = cmd_info;
@@ -566,22 +584,29 @@ static void
 for_each_mc_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {
     mc_iter_info_t  *info = cb_data;
-    ipmi_cmd_info_t *cmd_info = info->cmd_info;
     char            mc_name[IPMI_MC_NAME_LEN];
     char            *c, *c2;
 
     ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
     c = strchr(mc_name, '(');
+    if (!c)
+	goto out_err;
     c++;
     c2 = strchr(c, ')');
+    if (!c2)
+	goto out_err;
     *c2 = '\0';
     if ((!info->cmpstr) || (strcmp(info->cmpstr, c) == 0)) {
 	*c2 = ')';
-	ipmi_cmdlang_out(cmd_info, "MC", mc_name);
-	ipmi_cmdlang_down(cmd_info);
 	info->handler(mc, info->cb_data);
-	ipmi_cmdlang_up(cmd_info);
-    }
+    } else
+	*c2 = ')';
+    return;
+
+ out_err:
+    ipmi_cmdlang_global_err(mc_name,
+			    "cmdlang.c(for_each_entity_handler)",
+			    "Bad mc name", EINVAL);
 }
 
 static void
@@ -656,14 +681,9 @@ static void
 for_each_conn_handler(ipmi_domain_t *domain, int conn, void *cb_data)
 {
     conn_iter_info_t *info = cb_data;
-    ipmi_cmd_info_t  *cmd_info = info->cmd_info;
 
-    if ((info->conn == -1) || (info->conn == conn)) {
-	ipmi_cmdlang_out_int(cmd_info, "Connection", info->conn);
-	ipmi_cmdlang_down(cmd_info);
+    if ((info->conn == -1) || (info->conn == conn))
 	info->handler(domain, conn, info->cb_data);
-	ipmi_cmdlang_up(cmd_info);
-    }
 }
 
 static void
@@ -1064,6 +1084,17 @@ ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
 }
 
 void
+ipmi_cmdlang_out_double(ipmi_cmd_info_t *info,
+			char            *name,
+			double          value)
+{
+    char sval[80];
+
+    sprintf(sval, "%e", value);
+    ipmi_cmdlang_out(info, name, sval);
+}
+
+void
 ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
 		     char            *name,
 		     int             value)
@@ -1101,6 +1132,26 @@ ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
 			 unsigned int    len)
 {
     info->cmdlang->out_unicode(info->cmdlang, name, value, len);
+}
+
+void
+ipmi_cmdlang_out_type(ipmi_cmd_info_t      *info,
+		      char                 *name,
+		      enum ipmi_str_type_e type,
+		      char                 *value,
+		      unsigned int         len)
+{
+    switch(type) {
+    case IPMI_ASCII_STR:
+	ipmi_cmdlang_out(info, name, value);
+	break;
+    case IPMI_UNICODE_STR:
+	ipmi_cmdlang_out_unicode(info, name, value, len);
+	break;
+    case IPMI_BINARY_STR:
+	ipmi_cmdlang_out_binary(info, name, value, len);
+	break;
+    }
 }
 
 void
@@ -1695,6 +1746,7 @@ int ipmi_cmdlang_domain_init(void);
 int ipmi_cmdlang_entity_init(void);
 int ipmi_cmdlang_mc_init(void);
 int ipmi_cmdlang_pet_init(void);
+int ipmi_cmdlang_sensor_init(void);
 
 int
 ipmi_cmdlang_init(void)
@@ -1711,6 +1763,9 @@ ipmi_cmdlang_init(void)
     if (rv) return rv;
 
     rv = ipmi_cmdlang_pet_init();
+    if (rv) return rv;
+
+    rv = ipmi_cmdlang_sensor_init();
     if (rv) return rv;
 
     return 0;
@@ -1736,18 +1791,23 @@ ipmi_cmdlang_cleanup(void)
     cleanup_level(cmd_list);
 }
 
+static int do_evinfo = 0;
+
+void
+ipmi_cmdlang_set_evinfo(int evinfo)
+{
+    do_evinfo = evinfo;
+}
+
+int
+ipmi_cmdlang_get_evinfo(void)
+{
+    return do_evinfo;
+}
+
 /*
 The command hierarchy is:
 
-* sensor
-  * help
-  * list <entity> - List all sensors
-  * info <sensor> 
-  * rearm <sensor> - rearm the current sensor
-  * set_hysteresis - Sets the hysteresis for the current sensor
-  * get_hysteresis - Gets the hysteresis for the current sensor
-  * events_enable <events> <scanning> <assertion bitmask> <deassertion bitmask>
-    - set the events enable data for the sensor
 * control
   * help
   * list <entity> - List all controls

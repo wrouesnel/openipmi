@@ -1248,7 +1248,10 @@ ipmi_control_get_id_length(ipmi_control_t *control)
 {
     CHECK_CONTROL_LOCK(control);
 
-    return control->id_len;
+    if (control->id_type == IPMI_ASCII_STR)
+	return control->id_len+1;
+    else
+	return control->id_len;
 }
 
 int
