@@ -2325,6 +2325,13 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
     if (!entity)
 	return;
 
+    if (! ipmi_control_is_readable(control)) {
+	wmove(display_pad, value_pos.y, value_pos.x);
+	display_pad_out("not readable");
+	display_pad_refresh();
+	return;
+    }
+
     if (!ipmi_entity_is_present(entity)
 	&& ipmi_control_get_ignore_if_no_entity(control))
     {

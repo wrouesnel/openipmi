@@ -4728,44 +4728,46 @@ mxp_add_board_sensors(mxp_info_t  *info,
     ipmi_control_light_set_lights(board->inserv_led, 1, green_led);
     ipmi_control_set_ignore_if_no_entity(board->inserv_led, 0);
 
-    /* Board Select control */
-    rv = mxp_alloc_control(board->info->mc, board->ent,
-			   MXP_BOARD_BD_SEL_NUM(board->idx),
-			   board,
-			   IPMI_CONTROL_POWER,
-			   "Bd Sel",
-			   bd_sel_set,
-			   NULL /* bd_sel_get */,
-			   &(board->bd_sel));
-    if (rv)
-	goto out_err;
-    ipmi_control_set_num_elements(board->bd_sel, 1);
+    if (!board->is_amc) {
+	/* Board Select control */
+	rv = mxp_alloc_control(board->info->mc, board->ent,
+			       MXP_BOARD_BD_SEL_NUM(board->idx),
+			       board,
+			       IPMI_CONTROL_POWER,
+			       "Bd Sel",
+			       bd_sel_set,
+			       NULL /* bd_sel_get */,
+			       &(board->bd_sel));
+	if (rv)
+	    goto out_err;
+	ipmi_control_set_num_elements(board->bd_sel, 1);
 
-    /* PCI Reset control */
-    rv = mxp_alloc_control(board->info->mc, board->ent,
-			   MXP_BOARD_PCI_RESET_NUM(board->idx),
-			   board,
-			   IPMI_CONTROL_RESET,
-			   "PCI Reset",
-			   pci_reset_set,
-			   NULL /* pci_reset_get */,
-			   &(board->pci_reset));
-    if (rv)
-	goto out_err;
-    ipmi_control_set_num_elements(board->pci_reset, 1);
+	/* PCI Reset control */
+	rv = mxp_alloc_control(board->info->mc, board->ent,
+			       MXP_BOARD_PCI_RESET_NUM(board->idx),
+			       board,
+			       IPMI_CONTROL_RESET,
+			       "PCI Reset",
+			       pci_reset_set,
+			       NULL /* pci_reset_get */,
+			       &(board->pci_reset));
+	if (rv)
+	    goto out_err;
+	ipmi_control_set_num_elements(board->pci_reset, 1);
 
-    /* Board init control */
-    rv = mxp_alloc_control(board->info->mc, board->ent,
-			   MXP_SLOT_INIT_NUM(board->idx),
-			   board,
-			   IPMI_CONTROL_ONE_SHOT_OUTPUT,
-			   "Board Init",
-			   slot_init_set,
-			   NULL,
-			   &(board->slot_init));
-    if (rv)
-	goto out_err;
-    ipmi_control_set_num_elements(board->slot_init, 1);
+	/* Slot init control */
+	rv = mxp_alloc_control(board->info->mc, board->ent,
+			       MXP_SLOT_INIT_NUM(board->idx),
+			       board,
+			       IPMI_CONTROL_ONE_SHOT_OUTPUT,
+			       "Slot Init",
+			       slot_init_set,
+			       NULL,
+			       &(board->slot_init));
+	if (rv)
+	    goto out_err;
+	ipmi_control_set_num_elements(board->slot_init, 1);
+    }
 
  out_err:
     return rv;
@@ -5864,7 +5866,7 @@ amc_temp_cool_led_set_start(ipmi_control_t *control, int err, void *cb_data)
     }
 
     msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_SET_SLOT_BLUE_LED_CMD;
+    msg.cmd = MXP_OEM_SET_AMC_LED_CMD;
     msg.data_len = 4;
     msg.data = data;
     add_mxp_mfg_id(data);

@@ -3,7 +3,7 @@
 
 *2: Add reset controls for chassis reset, and warm and cold reset on the BMC.
 
-2: Add identifier control for the shelf geographic address.
+!2: Add identifier control for the shelf geographic address.
 
 *1: Add a way to set active/standby modes of the AMCs.
 
