@@ -6870,10 +6870,14 @@ static int
 mxp_handler(ipmi_mc_t *mc,
 	    void      *cb_data)
 {
-    int rv;
+    int           rv;
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
 
     /* The MXP AMC does not support generating events on the IPMB. */
     ipmi_mc_set_ipmb_event_generator_support(mc, 0);
+
+    /* Broadcasting is currently broken on the MXP. */
+    ipmi_domain_set_broadcast_broken(domain, 1);
 
     if (ipmi_mc_get_channel(mc) == IPMI_BMC_CHANNEL) {
 	rv = amc_board_handler(mc);

@@ -18,6 +18,13 @@
 
 	* ui/ui.c: Added support for the PET.
 
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Added a "broadcast
+	broken" field so systems that have non-working broadcasting can
+	set this.  Then bus scanning wll use normal messages, not
+	broadcasts.
+
+	* lib/oem_motorola_mxp.c: Set the broadcast broken flag.
+
 2004-01-05 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c, ui/basic_ui.c: Added a way to free things allocated in

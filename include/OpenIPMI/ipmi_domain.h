@@ -170,6 +170,10 @@ int ipmi_domain_set_bus_scan_handler(ipmi_domain_t  *domain,
 				     ipmi_domain_cb handler,
 				     void           *cb_data);
 
+/* Sets the "broadcast broken" flag.  If a system cannot properly
+   handle broadcasts, it should set this to true. */
+void ipmi_domain_set_broadcast_broken(ipmi_domain_t *domain, int val);
+
 /* Scan a system interface address for an MC. */
 void ipmi_start_si_scan(ipmi_domain_t *domain,
 			int            si_num,

@@ -165,8 +165,11 @@ struct ipmi_domain_s
     ipmi_oem_event_handler_cb oem_event_handler;
     void                      *oem_event_cb_data;
 
+    /* Is broadcasting broken in this domain? */
+    int broadcast_broken;
+ 
     /* Are we in the middle of an MC bus scan? */
-    int                scanning_bus;
+    int scanning_bus;
 
     ipmi_entity_info_t    *entities;
     ipmi_lock_t           *entities_lock;
@@ -1437,6 +1440,14 @@ ipmi_domain_set_full_bus_scan(ipmi_domain_t *domain, int val)
     return 0;
 }
 
+void
+ipmi_domain_set_broadcast_broken(ipmi_domain_t *domain, int val)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    domain->broadcast_broken = val;
+}
+
 static void
 add_bus_scans_running(ipmi_domain_t *domain, mc_ipmb_scan_info_t *info)
 {
@@ -1602,7 +1613,10 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 
     info->domain = domain;
     ipmb = (ipmi_ipmb_addr_t *) &info->addr;
-    ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
+    if (domain->broadcast_broken)
+	ipmb->addr_type = IPMI_IPMB_ADDR_TYPE;
+    else
+        ipmb->addr_type = IPMI_IPMB_BROADCAST_ADDR_TYPE;
     ipmb->channel = channel;
     ipmb->slave_addr = start_addr;
     ipmb->lun = 0;
