@@ -1644,7 +1644,7 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     info.msg.data = data;
 
     info.found = 0;
-    rv = ipmi_mc_pointer_cb(bmc_id, mccmd_cmd_bmcer, NULL);
+    rv = ipmi_mc_pointer_cb(bmc_id, mccmd_cmd_bmcer, &info);
     if (rv) {
 	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
 	return 0;

@@ -1,6 +1,9 @@
 
 2003-01-09 Corey Minyard <cminyard@mvista.com>
 
+	* ui.c: The info wasn't being passed into the id-to-pointer
+	converted for the mccmd command.
+	
 	* OpenIPMI.texi: More work on docs.
 
 	* control.c: Fixed the calculation size for the non-standard entry
