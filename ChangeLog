@@ -1,4 +1,13 @@
 
+2003-06-11 Corey Minyard <cminyard@mvista.com>
+
+	* include/net/af_ipmi.h: Added include file for IPMI socket.
+	* Makefile.am: ditto
+	* configure.in: ditto
+	* include/net/Makefile.am: ditto
+
+	* lanserv.c: Modified to use IPMI socket if available.
+
 2003-06-07 Corey Minyard <cminyard@mvista.com>
 
 	* Makefile.am: Clean up so that every '.c' is only listed once.
