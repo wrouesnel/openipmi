@@ -1277,7 +1277,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
     if ((addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
 	&& (addr->channel != IPMI_BMC_CHANNEL))
     {
-	u = addr->channel - 1;
+	u = addr->channel;
 
 	/* Messages to system interface addresses use the channel to
            choose which system address to message. */
@@ -1292,7 +1292,7 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 	addr = (ipmi_addr_t *) &si;
 	addr_len = sizeof(si);
 	handler = ll_si_rsp_handler;
-	data4 = (void *) (long) addr->channel;
+	data4 = (void *) (long) u;
 	is_si = 1;
     } else {
 	u = domain->working_conn;
@@ -1708,7 +1708,7 @@ start_mc_scan(ipmi_domain_t *domain)
        system address for that connection. */
     for (i=0; i<MAX_CONS; i++) {
 	if ((domain->con_up[i]) && domain->conn[i]->scan_sysaddr) {
-	    ipmi_start_si_scan(domain, i+1, mc_scan_done, NULL);
+	    ipmi_start_si_scan(domain, i, mc_scan_done, NULL);
 	}
     }
 
