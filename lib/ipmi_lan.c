@@ -2778,13 +2778,20 @@ ipmi_ip_setup_con(char         * const ip_addrs[],
 }
 
 /* This is a hack of a function so the MXP code can switch the
-   connection over properly. */
+   connection over properly.  Must be called with the global read lock
+   held. */
 void
 _ipmi_lan_set_ipmi(ipmi_con_t *ipmi)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
     lan->ipmi = ipmi;
+}
+
+/* Another cheap hack so the MXP code can call this. */
+void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv)
+{
+    handle_connected(ipmi, rv);
 }
 
 static void

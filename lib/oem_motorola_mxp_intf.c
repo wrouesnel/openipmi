@@ -195,6 +195,8 @@ typedef struct lan_data_s
     unsigned int               num_ip_addr;
     unsigned int               num_sends;
 
+    ipmi_con_t                 *real_ipmi_lan_con;
+
     unsigned int               consecutive_ip_failures[MAX_IP_ADDR];
     struct timeval             ip_failure_time[MAX_IP_ADDR];
 
@@ -2358,6 +2360,8 @@ lan_close_connection(ipmi_con_t *ipmi)
 	}
     }
 
+    if (lan->real_ipmi_lan_con)
+	lan->real_ipmi_lan_con->close_connection(lan->real_ipmi_lan_con);
     if (lan->msg_queue_lock)
 	ipmi_destroy_lock(lan->msg_queue_lock);
     if (lan->seq_num_lock)
@@ -2393,6 +2397,9 @@ cleanup_lan(lan_data_t *lan, os_handler_t *handlers)
     else
 	lan_list = lan->next;
     ipmi_write_unlock();
+
+    if (lan->real_ipmi_lan_con)
+	lan->real_ipmi_lan_con->close_connection(lan->real_ipmi_lan_con);
 
     if (lan->msg_queue_lock)
 	ipmi_destroy_lock(lan->msg_queue_lock);
@@ -2534,6 +2541,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
 
 /* A hack, don't want this in include files. */
 void _ipmi_lan_set_ipmi(ipmi_con_t *ipmi);
+void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv);
 
 static void
 handle_dev_id(ipmi_con_t   *ipmi,
@@ -2571,47 +2579,38 @@ handle_dev_id(ipmi_con_t   *ipmi,
     {
 	/* It's a new revision AMC that uses the standard LAN
 	   protocol, switch over to that. */
-	ipmi_con_t     *lancon;
-	struct in_addr ip_addr[MAX_IP_ADDR];
-	int	       port[MAX_IP_ADDR];
-	ipmi_con_t     oldcon;
-	int            i;
+	ipmi_con_t     *lancon = lan->real_ipmi_lan_con;
+	ipmi_con_t     tmpcon;
 
-	for (i=0; i<lan->num_ip_addr; i++) {
-	    ip_addr[i] = lan->ip_addr[i].sin_addr;
-	    port[i] = lan->ip_addr[i].sin_port;
-	}
-	err = ipmi_lan_setup_con(ip_addr, port, lan->num_ip_addr,
-				 lan->authtype, lan->privilege,
-				 lan->username, lan->username_len,
-				 lan->password, lan->password_len,
-				 ipmi->os_hnd, ipmi->user_data,
-				 &lancon);
-	if (err)
-	    goto out_err;
-
-	/* Make a copy of the previous data, just in case we get an
-	   error. */
-	memcpy(&oldcon, ipmi, sizeof(oldcon));
-
-	/* Switch our connection over to the new LAN one. */
+	/* Switch our connection over to the new LAN one.  We *must*
+	   reuse the old ipmi structure because that is what our user
+	   is holding. */
+	memcpy(&tmpcon, ipmi, sizeof(tmpcon));
 	memcpy(ipmi, lancon, sizeof(*ipmi));
+	memcpy(lancon, &tmpcon, sizeof(*lancon));
 	_ipmi_lan_set_ipmi(ipmi);
+	lan->ipmi = lancon;
+
+	/* After this, we are switched. */
+
 	ipmi->set_con_change_handler(ipmi, lan->con_change_handler,
 				     lan->con_change_cb_data);
+	lan->con_change_handler = NULL;
 	ipmi->set_ipmb_addr_handler(ipmi, lan->ipmb_addr_handler,
 				    lan->ipmb_addr_cb_data);
-	err = ipmi->start_con(ipmi);
-	if (err) {
-	    memcpy(ipmi, &oldcon, sizeof(*ipmi));
-	    lancon->close_connection(lancon);
-	    goto out_err;
-	}
+	lan->ipmb_addr_handler = NULL;
 
-	/* We successfully started the LAN connection, let it take
-	   over. */
-	cleanup_lan(lan, oldcon.os_hnd);
+	/* The old connection is gone, just close it. */
+	lan_close_connection(lancon);
+
+	err = ipmi->start_con(ipmi);
+	if (err)
+	    _ipmi_lan_handle_connected(ipmi, err);
 	return;
+    } else {
+	/* It's an old MXP, stick with the old connection. */
+	lan->real_ipmi_lan_con->close_connection(lan->real_ipmi_lan_con);
+	lan->real_ipmi_lan_con = NULL;
     }
 
     if (!lan->oem_conn_handlers_called) {
@@ -3030,6 +3029,17 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
     }
     memset(lan, 0, sizeof(*lan));
     ipmi->con_data = lan;
+
+    /* Go ahead an allocate a real LAN connection in case we need to
+       switch over to it. */
+    rv = ipmi_lan_setup_con(ip_addrs, ports, num_ip_addrs,
+			    authtype, privilege,
+			    username, username_len,
+			    password, password_len,
+			    handlers, user_data,
+			    &lan->real_ipmi_lan_con);
+    if (rv)
+	goto out_err;
 
     lan->ipmi = ipmi;
     lan->slave_addr = 0x20; /* Assume this until told otherwise */
