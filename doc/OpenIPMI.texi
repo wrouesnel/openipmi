@@ -738,10 +738,10 @@ you need only to supply the interface number, an OS handler and a
 user-defined piece of data, like:
 @example
     rv = ipmi_smi_setup_con(if_num, &sample_cb_handlers, my_data, &con);
-    if (rv) {
-	printf("ipmi_smi_setup_con: %s", strerror(rv));
-	exit(1);
-    }
+    if (rv) @{
+        printf("ipmi_smi_setup_con: %s", strerror(rv));
+        exit(1);
+    @}
 @end example
 
 LAN connections have a lot more parameters due to authentication
@@ -780,16 +780,16 @@ The new connection is returned here.
 
 For example, you may have the following code to set up a single address:
 @example
-	rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
-				IPMI_AUTHTYPE_MD5, IPMI_PRIVILEGE_ADMIN,
-				username, strlen(username),
-				password, strlen(password),
-				&sample_cb_handlers, my_data,
-				&con);
-	if (rv) {
-	    fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
-	    exit(1);
-	}
+        rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
+                                IPMI_AUTHTYPE_MD5, IPMI_PRIVILEGE_ADMIN,
+                                username, strlen(username),
+                                password, strlen(password),
+                                &sample_cb_handlers, my_data,
+                                &con);
+        if (rv) @{
+            fprintf(stderr, "ipmi_lan_setup_con: %s", strerror(rv));
+            exit(1);
+        @}
 @end example
 
 @node    The Domain, Entities, The Connection, Using OpenIPMI
