@@ -6812,8 +6812,10 @@ mc_change(enum ipmi_update_e op,
 	    if (ipmi_mc_is_active(mc)) {
 		ipmi_mc_set_sdrs_first_read_handler(mc, mc_sdrs_read, NULL);
 		ipmi_mc_set_sels_first_read_handler(mc, mc_sels_read, NULL);
+		ui_log("MC added: (%d %x) - (active)\n", channel, addr);
+	    } else {
+		ui_log("MC added: (%d %x) - (inactive)\n", channel, addr);
 	    }
-	    ui_log("MC added: (%d %x)\n", channel, addr);
 	    break;
 	case IPMI_DELETED:
 	    ui_log("MC deleted: (%d %x)\n", channel, addr);
@@ -6975,6 +6977,12 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
     sel_set_fd_handlers(ui_sel, 0, NULL, user_input_ready, NULL, NULL, NULL);
     sel_set_fd_read_handler(ui_sel, 0, SEL_FD_HANDLER_ENABLED);
 
+    ipmi_init(&ipmi_ui_cb_handlers);
+
+    /* This is a dummy allocation just to make sure that the malloc
+       debugger is working. */
+    ipmi_mem_alloc(10);
+
     rv = init_commands();
     if (rv) {
 	fprintf(stderr, "Could not initialize commands\n");
@@ -7009,8 +7017,6 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
     help_cmd(NULL, NULL, NULL);
 
     ui_log("Starting setup, wait until complete before entering commands.\n");
-
-    ipmi_init(&ipmi_ui_cb_handlers);
 
     {
 	struct timeval now;

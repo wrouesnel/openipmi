@@ -697,8 +697,22 @@ free_os_handler(os_handler_t *os_hnd)
     ipmi_posix_thread_free_os_handler(os_hnd);
 }
 
+static void *
+posix_malloc(int size)
+{
+    return malloc(size);
+}
+
+static void
+posix_free(void *data)
+{
+    free(data);
+}
+
 static os_handler_t ipmi_posix_thread_os_handler =
 {
+    .mem_alloc = posix_malloc,
+    .mem_free = posix_free,
     .add_fd_to_wait_for = add_fd,
     .remove_fd_to_wait_for = remove_fd,
     .start_timer = start_timer,
@@ -787,6 +801,36 @@ ipmi_posix_thread_setup_os_handler(int wake_sig)
 
  out:
     return os_hnd;
+}
+
+/*
+ * Support for the selector code.
+ */
+
+int
+posix_mutex_alloc(void **val)
+{
+    void *m = malloc(sizeof(pthread_mutex_t));
+    if (!m)
+	return ENOMEM;
+
+    *val = m;
+    return 0;
+}
+
+void posix_mutex_free(void *val)
+{
+    ipmi_mem_free(val);
+}
+
+void posix_mutex_lock(void *val)
+{
+    pthread_mutex_lock(val);
+}
+
+void posix_mutex_unlock(void *val)
+{
+    pthread_mutex_unlock(val);
 }
 
 /*

@@ -57,6 +57,16 @@
 # endif
 #endif
 
+/* This is here because the POSIX library requires it, but we only
+   pull the posix library to get the selector code, so this is not
+   used. */
+void
+posix_vlog(char *format,
+	   enum ipmi_log_type_e log_type,
+	   va_list ap)
+{
+}
+
 #ifdef HAVE_UCDSNMP
 #define IPMI_OID_SIZE 9
 static oid ipmi_oid[IPMI_OID_SIZE] = {1,3,6,1,4,1,3183,1,1};

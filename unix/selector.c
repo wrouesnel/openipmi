@@ -38,9 +38,8 @@
    things happen on those file descriptors this code will call
    routines registered with it. */
 
+#include <OpenIPMI/ipmi_posix.h>
 #include <OpenIPMI/selector.h>
-#include <OpenIPMI/ipmi_malloc.h>
-#include <OpenIPMI/ipmi_locks.h>
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -50,6 +49,7 @@
 #include <syslog.h>
 #include <signal.h>
 #include <string.h>
+#include <malloc.h>
 
 typedef struct fd_state_s
 {
@@ -152,7 +152,7 @@ struct selector_s
     volatile fd_set write_set;
     volatile fd_set except_set;
 
-    ipmi_lock_t *fd_lock;
+    void *fd_lock;
 
     volatile int maxfd; /* The largest file descriptor registered with
 			   this code. */
@@ -160,7 +160,7 @@ struct selector_s
     /* The timer heap. */
     theap_t timer_heap;
 
-    ipmi_lock_t *timer_lock;
+    void *timer_lock;
 
     /* The timeout */
     sel_send_sig_cb send_sig;
@@ -229,9 +229,9 @@ remove_sel_wait_list(selector_t *sel, sel_wait_list_t *item)
 static void
 wake_sel_thread_lock(selector_t *sel)
 {
-    ipmi_lock(sel->timer_lock);
+    posix_mutex_lock(sel->timer_lock);
     wake_sel_thread(sel);
-    ipmi_unlock(sel->timer_lock);
+    posix_mutex_unlock(sel->timer_lock);
 }
 
 /* Initialize a single file descriptor. */
@@ -258,21 +258,21 @@ sel_set_fd_handlers(selector_t        *sel,
     fd_control_t *fdc;
     fd_state_t   *state;
 
-    state = ipmi_mem_alloc(sizeof(*state));
+    state = malloc(sizeof(*state));
     if (!state)
 	return ENOMEM;
     state->deleted = 0;
     state->use_count = 0;
     state->done = done;
 
-    ipmi_lock(sel->fd_lock);
+    posix_mutex_lock(sel->fd_lock);
     fdc = (fd_control_t *) &(sel->fds[fd]);
     if (fdc->state) {
 	fdc->state->deleted = 1;
 	if (fdc->state->use_count == 0) {
 	    if (fdc->state->done)
 		fdc->state->done(fd, fdc->data);
-	    ipmi_mem_free(fdc->state);
+	    free(fdc->state);
 	}
     }
     fdc->state = state;
@@ -287,7 +287,7 @@ sel_set_fd_handlers(selector_t        *sel,
     }
 
     wake_sel_thread_lock(sel);
-    ipmi_unlock(sel->fd_lock);
+    posix_mutex_unlock(sel->fd_lock);
     return 0;
 }
 
@@ -298,7 +298,7 @@ sel_clear_fd_handlers(selector_t *sel,
 		      int        fd)
 {
     fd_control_t *fdc;
-    ipmi_lock(sel->fd_lock);
+    posix_mutex_lock(sel->fd_lock);
     fdc = (fd_control_t *) &(sel->fds[fd]);
 
     if (fdc->state) {
@@ -306,7 +306,7 @@ sel_clear_fd_handlers(selector_t *sel,
 	if (fdc->state->use_count == 0) {
 	    if (fdc->state->done)
 		fdc->state->done(fd, fdc->data);
-	    ipmi_mem_free(fdc->state);
+	    free(fdc->state);
 	}
 	fdc->state = NULL;
     }
@@ -324,7 +324,7 @@ sel_clear_fd_handlers(selector_t *sel,
     }
 
     wake_sel_thread_lock(sel);
-    ipmi_unlock(sel->fd_lock);
+    posix_mutex_unlock(sel->fd_lock);
 }
 
 /* Set whether the file descriptor will be monitored for data ready to
@@ -332,14 +332,14 @@ sel_clear_fd_handlers(selector_t *sel,
 void
 sel_set_fd_read_handler(selector_t *sel, int fd, int state)
 {
-    ipmi_lock(sel->fd_lock);
+    posix_mutex_lock(sel->fd_lock);
     if (state == SEL_FD_HANDLER_ENABLED) {
 	FD_SET(fd, &sel->read_set);
     } else if (state == SEL_FD_HANDLER_DISABLED) {
 	FD_CLR(fd, &sel->read_set);
     }
     wake_sel_thread_lock(sel);
-    ipmi_unlock(sel->fd_lock);
+    posix_mutex_unlock(sel->fd_lock);
 }
 
 /* Set whether the file descriptor will be monitored for when the file
@@ -347,14 +347,14 @@ sel_set_fd_read_handler(selector_t *sel, int fd, int state)
 void
 sel_set_fd_write_handler(selector_t *sel, int fd, int state)
 {
-    ipmi_lock(sel->fd_lock);
+    posix_mutex_lock(sel->fd_lock);
     if (state == SEL_FD_HANDLER_ENABLED) {
 	FD_SET(fd, &sel->write_set);
     } else if (state == SEL_FD_HANDLER_DISABLED) {
 	FD_CLR(fd, &sel->write_set);
     }
     wake_sel_thread_lock(sel);
-    ipmi_unlock(sel->fd_lock);
+    posix_mutex_unlock(sel->fd_lock);
 }
 
 /* Set whether the file descriptor will be monitored for exceptions
@@ -362,14 +362,14 @@ sel_set_fd_write_handler(selector_t *sel, int fd, int state)
 void
 sel_set_fd_except_handler(selector_t *sel, int fd, int state)
 {
-    ipmi_lock(sel->fd_lock);
+    posix_mutex_lock(sel->fd_lock);
     if (state == SEL_FD_HANDLER_ENABLED) {
 	FD_SET(fd, &sel->except_set);
     } else if (state == SEL_FD_HANDLER_DISABLED) {
 	FD_CLR(fd, &sel->except_set);
     }
     wake_sel_thread_lock(sel);
-    ipmi_unlock(sel->fd_lock);
+    posix_mutex_unlock(sel->fd_lock);
 }
 
 static void
@@ -404,7 +404,7 @@ sel_alloc_timer(selector_t            *sel,
 {
     sel_timer_t *timer;
 
-    timer = ipmi_mem_alloc(sizeof(*timer));
+    timer = malloc(sizeof(*timer));
     if (!timer)
 	return ENOMEM;
 
@@ -420,12 +420,12 @@ sel_alloc_timer(selector_t            *sel,
 int
 sel_free_timer(sel_timer_t *timer)
 {
-    ipmi_lock(timer->val.sel->timer_lock);
+    posix_mutex_lock(timer->val.sel->timer_lock);
     if (timer->val.in_heap) {
 	sel_stop_timer(timer);
     }
-    ipmi_unlock(timer->val.sel->timer_lock);
-    ipmi_mem_free(timer);
+    posix_mutex_unlock(timer->val.sel->timer_lock);
+    free(timer);
 
     return 0;
 }
@@ -436,9 +436,9 @@ sel_start_timer(sel_timer_t    *timer,
 {
     volatile sel_timer_t *top;
 
-    ipmi_lock(timer->val.sel->timer_lock);
+    posix_mutex_lock(timer->val.sel->timer_lock);
     if (timer->val.in_heap) {
-	ipmi_unlock(timer->val.sel->timer_lock);
+	posix_mutex_unlock(timer->val.sel->timer_lock);
 	return EBUSY;
     }
 
@@ -454,7 +454,7 @@ sel_start_timer(sel_timer_t    *timer,
 	/* If the top value changed, restart the waiting thread. */
 	wake_sel_thread(timer->val.sel);
     }
-    ipmi_unlock(timer->val.sel->timer_lock);
+    posix_mutex_unlock(timer->val.sel->timer_lock);
     return 0;
 }
 
@@ -463,9 +463,9 @@ sel_stop_timer(sel_timer_t *timer)
 {
     volatile sel_timer_t *top;
 
-    ipmi_lock(timer->val.sel->timer_lock);
+    posix_mutex_lock(timer->val.sel->timer_lock);
     if (!timer->val.in_heap) {
-	ipmi_unlock(timer->val.sel->timer_lock);
+	posix_mutex_unlock(timer->val.sel->timer_lock);
 	return ETIMEDOUT;
     }
 
@@ -480,7 +480,7 @@ sel_stop_timer(sel_timer_t *timer)
 	/* If the top value changed, restart the waiting thread. */
 	wake_sel_thread(timer->val.sel);
     }
-    ipmi_unlock(timer->val.sel->timer_lock);
+    posix_mutex_unlock(timer->val.sel->timer_lock);
 
     return 0;
 }
@@ -505,11 +505,11 @@ process_timers(selector_t	       *sel,
 	called = 1;
 	theap_remove(&(sel->timer_heap), timer);
 	timer->val.in_heap = 0;
-	ipmi_unlock(sel->timer_lock);
+	posix_mutex_unlock(sel->timer_lock);
 	
 	timer->val.handler(sel, timer, timer->val.user_data);
 	
-	ipmi_lock(sel->timer_lock);
+	posix_mutex_lock(sel->timer_lock);
 	timer = theap_get_top(&sel->timer_heap);
     }
 
@@ -548,7 +548,7 @@ process_fds(selector_t	            *sel,
     int err;
     int num_fds;
     
-    ipmi_lock(sel->fd_lock);
+    posix_mutex_lock(sel->fd_lock);
     memcpy(&tmp_read_set, (void *) &sel->read_set, sizeof(tmp_read_set));
     memcpy(&tmp_write_set, (void *) &sel->write_set, sizeof(tmp_write_set));
     memcpy(&tmp_except_set, (void *) &sel->except_set, sizeof(tmp_except_set));
@@ -567,7 +567,7 @@ process_fds(selector_t	            *sel,
 	    *timeout= ttimeout;
 	}	      
     }
-    ipmi_unlock(sel->fd_lock);
+    posix_mutex_unlock(sel->fd_lock);
 
     err = select(num_fds,
 		 &tmp_read_set,
@@ -590,7 +590,7 @@ process_fds(selector_t	            *sel,
 	    void             *data;
 	    fd_state_t       *state;
 
-	    ipmi_lock(sel->fd_lock);
+	    posix_mutex_lock(sel->fd_lock);
 	    if (sel->fds[i].handle_read == NULL) {
 		/* Somehow we don't have a handler for this.
 		   Just shut it down. */
@@ -600,24 +600,24 @@ process_fds(selector_t	            *sel,
 		data = sel->fds[i].data;
 		state = sel->fds[i].state;
 		state->use_count++;
-		ipmi_unlock(sel->fd_lock);
+		posix_mutex_unlock(sel->fd_lock);
 		handle_read(i, data);
-		ipmi_lock(sel->fd_lock);
+		posix_mutex_lock(sel->fd_lock);
 		state->use_count--;
 		if (state->deleted && state->use_count == 0) {
 		    if (state->done)
 			state->done(i, data);
-		    ipmi_mem_free(state);
+		    free(state);
 		}
 	    }
-	    ipmi_unlock(sel->fd_lock);
+	    posix_mutex_unlock(sel->fd_lock);
 	}
 	if (FD_ISSET(i, &tmp_write_set)) {
 	    sel_fd_handler_t handle_write;
 	    void             *data;
 	    fd_state_t       *state;
 
-	    ipmi_lock(sel->fd_lock);
+	    posix_mutex_lock(sel->fd_lock);
 	    if (sel->fds[i].handle_write == NULL) {
 		/* Somehow we don't have a handler for this.
                    Just shut it down. */
@@ -627,24 +627,24 @@ process_fds(selector_t	            *sel,
 		data = sel->fds[i].data;
 		state = sel->fds[i].state;
 		state->use_count++;
-		ipmi_unlock(sel->fd_lock);
+		posix_mutex_unlock(sel->fd_lock);
 		handle_write(i, data);
-		ipmi_lock(sel->fd_lock);
+		posix_mutex_lock(sel->fd_lock);
 		state->use_count--;
 		if (state->deleted && state->use_count == 0) {
 		    if (state->done)
 			state->done(i, data);
-		    ipmi_mem_free(state);
+		    free(state);
 		}
 	    }
-	    ipmi_unlock(sel->fd_lock);
+	    posix_mutex_unlock(sel->fd_lock);
 	}
 	if (FD_ISSET(i, &tmp_except_set)) {
 	    sel_fd_handler_t handle_except;
 	    void             *data;
 	    fd_state_t       *state;
 
-	    ipmi_lock(sel->fd_lock);
+	    posix_mutex_lock(sel->fd_lock);
 	    if (sel->fds[i].handle_except == NULL) {
 		/* Somehow we don't have a handler for this.
                    Just shut it down. */
@@ -654,17 +654,17 @@ process_fds(selector_t	            *sel,
 		data = sel->fds[i].data;
 		state = sel->fds[i].state;
 		state->use_count++;
-		ipmi_unlock(sel->fd_lock);
+		posix_mutex_unlock(sel->fd_lock);
 	        handle_except(i, data);
-		ipmi_lock(sel->fd_lock);
+		posix_mutex_lock(sel->fd_lock);
 		state->use_count--;
 		if (state->deleted && state->use_count == 0) {
 		    if (state->done)
 			state->done(i, data);
-		    ipmi_mem_free(state);
+		    free(state);
 		}
 	    }
-	    ipmi_unlock(sel->fd_lock);
+	    posix_mutex_unlock(sel->fd_lock);
 	}
     }
 out:
@@ -682,20 +682,20 @@ sel_select(selector_t      *sel,
     struct timeval  loc_timeout;
     sel_wait_list_t wait_entry;
 
-    ipmi_lock(sel->timer_lock);
+    posix_mutex_lock(sel->timer_lock);
     process_timers(sel, (struct timeval *)(&loc_timeout));
     if (timeout) { 
 	if (cmp_timeval((struct timeval *)(&loc_timeout), timeout) >= 0)
 	    memcpy(&loc_timeout, timeout, sizeof(loc_timeout));
     }
     add_sel_wait_list(sel, &wait_entry, thread_id, &loc_timeout);
-    ipmi_unlock(sel->timer_lock); 
+    posix_mutex_unlock(sel->timer_lock); 
 
     err = process_fds(sel, send_sig, thread_id, cb_data, &loc_timeout);
 
-    ipmi_lock(sel->timer_lock);
+    posix_mutex_lock(sel->timer_lock);
     remove_sel_wait_list(sel, &wait_entry);
-    ipmi_unlock(sel->timer_lock); 
+    posix_mutex_unlock(sel->timer_lock); 
     return err;
 }
 
@@ -713,16 +713,16 @@ sel_select_loop(selector_t      *sel,
     struct timeval  loc_timeout;
 
     for (;;) {
-	ipmi_lock(sel->timer_lock);
+	posix_mutex_lock(sel->timer_lock);
     	process_timers(sel, &loc_timeout);
 	add_sel_wait_list(sel, &wait_entry, thread_id, &loc_timeout);
-	ipmi_unlock(sel->timer_lock); 
+	posix_mutex_unlock(sel->timer_lock); 
 	
 	err = process_fds(sel, send_sig, thread_id, cb_data, &loc_timeout);
 
-	ipmi_lock(sel->timer_lock);
+	posix_mutex_lock(sel->timer_lock);
 	remove_sel_wait_list(sel, &wait_entry);
-	ipmi_unlock(sel->timer_lock); 
+	posix_mutex_unlock(sel->timer_lock); 
 
     	if ((err < 0) && (errno != EINTR)) {
 	    err = errno;
@@ -741,12 +741,12 @@ ipmi_sel_set_read_fds_handler(selector_t                 *sel,
 			      ipmi_sel_check_timeout_cb  timeout,
 			      void                       *cb_data)
 {
-    ipmi_lock(sel->fd_lock);
+    posix_mutex_lock(sel->fd_lock);
     sel->add_read = add;
     sel->check_read = handle;
     sel->check_timeout = timeout;
     sel->read_cb_data = cb_data;
-    ipmi_unlock(sel->fd_lock);
+    posix_mutex_unlock(sel->fd_lock);
 }
 
 /* Initialize the select code. */
@@ -757,7 +757,7 @@ sel_alloc_selector(os_handler_t *os_hnd, selector_t **new_selector)
     int        i;
     int        rv;
 
-    sel = ipmi_mem_alloc(sizeof(*sel));
+    sel = malloc(sizeof(*sel));
     if (!sel)
 	return ENOMEM;
     memset(sel, 0, sizeof(*sel));
@@ -766,11 +766,11 @@ sel_alloc_selector(os_handler_t *os_hnd, selector_t **new_selector)
     sel->wait_list.next = &sel->wait_list;
     sel->wait_list.prev = &sel->wait_list;
 
-    rv = ipmi_create_lock_os_hnd(os_hnd, &(sel->timer_lock));
+    rv = posix_mutex_alloc(&(sel->timer_lock));
     if (rv)
 	goto out_err;
 
-    rv = ipmi_create_lock_os_hnd(os_hnd, &(sel->fd_lock));
+    rv = posix_mutex_alloc(&(sel->fd_lock));
     if (rv)
 	goto out_err;
 
@@ -789,10 +789,10 @@ sel_alloc_selector(os_handler_t *os_hnd, selector_t **new_selector)
  out_err:
     if (rv) {
 	if (sel->timer_lock)
-	    ipmi_destroy_lock(sel->timer_lock);
+	    posix_mutex_free(sel->timer_lock);
 	if (sel->fd_lock)
-	    ipmi_destroy_lock(sel->fd_lock);
-	ipmi_mem_free(sel);
+	    posix_mutex_free(sel->fd_lock);
+	free(sel);
     }
     return rv;
 }
@@ -803,17 +803,17 @@ sel_free_selector(selector_t *sel)
     sel_timer_t *elem;
 
     if (sel->timer_lock)
-	ipmi_destroy_lock(sel->timer_lock);
+	posix_mutex_free(sel->timer_lock);
     if (sel->fd_lock)
-	ipmi_destroy_lock(sel->fd_lock);
+	posix_mutex_free(sel->fd_lock);
 
     elem = theap_get_top(&(sel->timer_heap));
     while (elem) {
 	theap_remove(&(sel->timer_heap), elem);
-	ipmi_mem_free(elem);
+	free(elem);
 	elem = theap_get_top(&(sel->timer_heap));
     }
-    ipmi_mem_free(sel);
+    free(sel);
 
     return 0;
 }

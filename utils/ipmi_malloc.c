@@ -31,11 +31,11 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <malloc.h>
 #include <string.h>
 #include <execinfo.h> /* For backtrace() */
 #include <OpenIPMI/ipmi_malloc.h>
 #include <OpenIPMI/ipmi_log.h>
+#include <OpenIPMI/os_handler.h>
 #include <OpenIPMI/ilist.h>
 
 void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type, char *format, ...)
@@ -53,6 +53,8 @@ void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type, char *format, ...)
 #define BYTE_SIGNATURE 0x74
 
 int __ipmi_debug_malloc = 0;
+
+os_handler_t *malloc_os_hnd;
 
 struct dbg_malloc_header
 {
@@ -103,9 +105,9 @@ ipmi_debug_malloc(size_t size, void **tb)
 
     real_size = dbg_align(size);
 
-    data = malloc(real_size
-		  + sizeof(struct dbg_malloc_header)
-		  + sizeof(struct dbg_malloc_trailer));
+    data = malloc_os_hnd->mem_alloc(real_size
+				    + sizeof(struct dbg_malloc_header)
+				    + sizeof(struct dbg_malloc_trailer));
     if (!data)
 	return NULL;
 
@@ -215,7 +217,7 @@ dbg_remove_free_queue(void)
 	mem_debug_log(data, hdr, trlr, NULL, "Write while free");
 
  out:
-    free(hdr);
+    malloc_os_hnd->mem_free(hdr);
 }
 
 static void
@@ -274,16 +276,20 @@ ipmi_debug_free(void *to_free, void **tb)
 	trlr2->prev = trlr->prev;
     } else {
 	alloced_tail = trlr->prev;
-	trlr2 = trlr_from_hdr(alloced_tail);
-	trlr2->next = NULL;
+	if (alloced_tail) {
+	    trlr2 = trlr_from_hdr(alloced_tail);
+	    trlr2->next = NULL;
+	}
     }
     if (trlr->prev) {
 	trlr2 = trlr_from_hdr(trlr->prev);
 	trlr2->next = trlr->next;
     } else {
 	alloced = trlr->next;
-	trlr2 = trlr_from_hdr(alloced);
-	trlr2->prev = NULL;
+	if (alloced) {
+	    trlr2 = trlr_from_hdr(alloced);
+	    trlr2->prev = NULL;
+	}
     }
 
     real_size = dbg_align(hdr->size);
@@ -330,7 +336,7 @@ ipmi_debug_malloc_cleanup(void)
 			  alloced, NULL, NULL, "Never freed");
 	    to_free = alloced;
 	    alloced = trlr->next;
-	    free(to_free);
+	    malloc_os_hnd->mem_free(to_free);
 	}
     }
 }
@@ -357,7 +363,7 @@ ipmi_mem_alloc(int size)
 	}
 	return rv;
     } else
-	return malloc(size);
+	return malloc_os_hnd->mem_alloc(size);
 }
 
 void
@@ -369,7 +375,7 @@ ipmi_mem_free(void *data)
 	backtrace(tb, TB_SIZE+1);
 	ipmi_debug_free(data, tb+1);
     } else
-	free(data);
+	malloc_os_hnd->mem_free(data);
 }
 
 void *
@@ -394,4 +400,11 @@ ipmi_strdup(const char *str)
 
     strcpy(rv, str);
     return rv;
+}
+
+int
+ipmi_malloc_init(os_handler_t *os_hnd)
+{
+    malloc_os_hnd = os_hnd;
+    return 0;
 }

@@ -107,6 +107,14 @@ void ipmi_posix_thread_free_os_handler(os_handler_t *os_hnd);
 void ipmi_posix_thread_os_handler_set_sel(os_handler_t *os_hnd,
 					  selector_t   *sel);
 
+/**********************************************************************
+ * Internals for the selector code, pay not attention to the man
+ * behind the curtains...
+ *********************************************************************/
+int posix_mutex_alloc(void**);
+void posix_mutex_free(void *);
+void posix_mutex_lock(void *);
+void posix_mutex_unlock(void *);
 
 /**********************************************************************
  * Cruft, do not use these function any more.

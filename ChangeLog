@@ -1,3 +1,41 @@
+2004-09-02 Corey Minyard <cminyard@mvista.com> 
+
+	* ui/ui.c: Print active information about MCs when reported.
+
+	* utils/selector.c, utils/heap.c, utils/test_heap.c, utils/Makefile.am:
+	Moved the selector code into the unix directory, where it really
+	belonged.
+	* unix/selector.c, unix/heap.c, unix/test_heap.c, unix/Makefile.am:
+	New location
+
+	* include/OpenIPMI/os_handler.h: Added memory allocation into
+	the os handlers.  Lots of things had to change.
+	* utils/ipmi_mem_alloc.c: ditto.
+	* ui/os_hnd.c: ditto
+	* unix/posix_os_hnd.c: ditto
+	* unix/posix_thread_os_hnd.c: ditto
+	* lib/ipmi.c: Add mem alloc initialization
+
+	* unix/selector.c: Converted over to using "malloc" instead of
+	ipmi_mem_alloc() to avoid startup race conditions.  This code is
+	now unix-specific, so that should be fine.
+
+	* unix/selector.c, include/OpenIPMI/ipmi_posix.h: Reworked the
+	selector code to directly use POSIX locks.
+	* unix/posix_os_hnd.c: ditto
+	* unix/posix_thread_os_hnd.c: ditto
+
+	* ui/ui.c: Reworked initialization because of the mem alloc
+	changes.
+
+	* ui/basic_ui.c, ui/Makefile.am: Have to link with
+	libOpenIPMIposix now to get the selector code.
+
+	* utils/ipmi_mem_alloc.c: Fixed a bug handling the head and
+	tail elements of the debug malloc list.
+
+	* configure.in: Move to version 1.4.2
+
 2004-09-01 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/chassis.c: Fixed a problem where the wrong error was being
@@ -11,7 +49,7 @@
 
 	* lib/oem_atca.c: Fixed problems due to the new refcount code.
 	Modify the address control numbers to just be assigned
-	sequentially; you cannot use the IPMB address since multipl
+	sequentially; you cannot use the IPMB address since multiple
 	functions may be at the same IPMB.
 
 	* lib/control.c: Fix problems with not unlocking locks in

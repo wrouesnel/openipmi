@@ -14,16 +14,25 @@ AM_CFLAGS = -Wall -I$(top_srcdir)/include
 
 lib_LTLIBRARIES = libOpenIPMIposix.la libOpenIPMIpthread.la
 
-libOpenIPMIpthread_la_SOURCES = posix_thread_os_hnd.c
+libOpenIPMIpthread_la_SOURCES = posix_thread_os_hnd.c selector.c
 libOpenIPMIpthread_la_LIBADD = -lpthread \
 	$(top_builddir)/utils/libOpenIPMIutils.la
 libOpenIPMIpthread_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIpthread.map
 
-libOpenIPMIposix_la_SOURCES = posix_os_hnd.c
+libOpenIPMIposix_la_SOURCES = posix_os_hnd.c selector.c
 libOpenIPMIposix_la_LIBADD =  $(top_builddir)/utils/libOpenIPMIutils.la
 libOpenIPMIposix_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIposix.map
+
+noinst_HEADERS = heap.h
+
+noinst_PROGRAMS = test_heap
+
+test_heap_SOURCES = test_heap.c
+test_heap_LDADD = 
+
+TESTS = test_heap
 
 clean:
 	rm -f *.map

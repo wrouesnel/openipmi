@@ -77,6 +77,12 @@ typedef void (*os_timer_freed_t)(void *data);
 typedef struct os_handler_s os_handler_t;
 struct os_handler_s
 {
+    /* Allocate and free data, like malloc() and free().  These are
+       only used in the "main" os handler, too, not in the oned
+       registered for domains. */
+    void *(*mem_alloc)(int size);
+    void (*mem_free)(void *data);
+
     /* This is called by the user code to register a callback handler
        to be called when data is ready to be read on the given file
        descriptor.  I know, it's kind of wierd, a callback to register

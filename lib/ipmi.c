@@ -926,6 +926,9 @@ ipmi_init(os_handler_t *handler)
 {
     int rv;
 
+    /* Set up memory allocation first */
+    ipmi_malloc_init(handler);
+
     /* Set up logging in malloc code. */
     ipmi_malloc_log = ipmi_log;
 

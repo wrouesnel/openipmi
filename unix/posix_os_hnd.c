@@ -281,8 +281,22 @@ free_os_handler(os_handler_t *os_hnd)
     ipmi_posix_free_os_handler(os_hnd);
 }
 
+static void *
+posix_malloc(int size)
+{
+    return malloc(size);
+}
+
+static void
+posix_free(void *data)
+{
+    free(data);
+}
+
 static os_handler_t ipmi_posix_os_handler =
 {
+    .mem_alloc = posix_malloc,
+    .mem_free = posix_free,
     .add_fd_to_wait_for = add_fd,
     .remove_fd_to_wait_for = remove_fd,
     .start_timer = start_timer,
@@ -349,6 +363,29 @@ ipmi_posix_setup_os_handler(void)
 
  out:
     return os_hnd;
+}
+
+/*
+ * Support for the selector code.
+ */
+
+int
+posix_mutex_alloc(void **val)
+{
+    *val = NULL;
+    return 0;
+}
+
+void posix_mutex_free(void *val)
+{
+}
+
+void posix_mutex_lock(void *val)
+{
+}
+
+void posix_mutex_unlock(void *val)
+{
 }
 
 /*

@@ -476,8 +476,22 @@ check_no_locks(os_handler_t *handler)
 }
 #endif
 
+static void *
+ui_malloc(int size)
+{
+    return malloc(size);
+}
+
+static void
+ui_free(void *data)
+{
+    free(data);
+}
+
 os_handler_t ipmi_ui_cb_handlers =
 {
+    .mem_alloc = ui_malloc,
+    .mem_free = ui_free,
     .add_fd_to_wait_for = add_fd,
     .remove_fd_to_wait_for = remove_fd,
     .start_timer = start_timer,
