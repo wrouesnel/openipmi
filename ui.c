@@ -106,7 +106,7 @@ enum scroll_wins_e curr_win = LOG_WIN_SCROLL;
 
 /* The current thing display in the display pad. */
 enum {
-    DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_ENTITY, DISPLAY_SENSORS,
+    DISPLAY_NONE, DISPLAY_SENSOR, DISPLAY_SENSORS,
     DISPLAY_CONTROLS, DISPLAY_CONTROL, DISPLAY_ENTITIES, DISPLAY_MCS,
     DISPLAY_RSP, HELP
 } curr_display_type;
@@ -545,7 +545,6 @@ entities_handler(ipmi_entity_t *entity,
 
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
-    curr_display_type = DISPLAY_ENTITY;
     curr_entity_id = ipmi_entity_convert_to_id(entity);
     ipmi_entity_get_id(entity, name, 32);
     if (ipmi_entity_is_present(entity))
@@ -558,7 +557,11 @@ entities_handler(ipmi_entity_t *entity,
 static void
 entities_cmd_bmcer(ipmi_mc_t *bmc, void *cb_data)
 {
+    werase(display_pad);
+    wmove(display_pad, 0, 0);
+    waddstr(display_pad, "Entities:\n");
     ipmi_bmc_iterate_entities(bmc, entities_handler, NULL);
+    display_pad_refresh();
 }
 
 static int
@@ -571,16 +574,12 @@ entities_cmd(char *cmd, char **toks, void *cb_data)
 	return 0;
     }
 
-    werase(display_pad);
-    wmove(display_pad, 0, 0);
-    curr_display_type = DISPLAY_ENTITIES;
-    waddstr(display_pad, "Entities:\n");
     rv = ipmi_mc_pointer_cb(bmc_id, entities_cmd_bmcer, NULL);
     if (rv) {
 	waddstr(cmd_win, "Unable to convert BMC id to a pointer\n");
 	return 0;
     }
-    display_pad_refresh();
+    curr_display_type = DISPLAY_ENTITIES;
     return 0;
 }
 
@@ -2411,7 +2410,7 @@ redisplay_timeout(selector_t  *sel,
     struct timeval now;
     int            rv;
 
-    if (curr_display_type == DISPLAY_ENTITY) {
+    if (curr_display_type == DISPLAY_ENTITIES) {
 	rv = ipmi_mc_pointer_cb(bmc_id, entities_cmd_bmcer, NULL);
 	if (rv)
 	    ui_log("redisplay_timeout:"
