@@ -104,6 +104,8 @@ typedef void (*sel_send_sig_cb)(long thread_id, void *cb_data);
  * return >0 if sel_select did something (ran a timer or fd)
  *         0 if timeout
  *        <0 if error (errno will be set)
+ * The timeout is a relative timeout (just like normal select() on
+ * *nix).
  */
 int sel_select(selector_t      *sel,
 	       sel_send_sig_cb send_sig,
@@ -112,10 +114,12 @@ int sel_select(selector_t      *sel,
 	       struct timeval  *timeout);
 
 /* This is the main loop for the program.  If NULL is passed in to
-   send_sig, then the signal sender is not used. */
-void sel_select_loop(selector_t      *sel,
-		     sel_send_sig_cb send_sig,
-		     long            thread_id,
-		     void            *cb_data);
+   send_sig, then the signal sender is not used.  If this encounters
+   an unrecoverable problem with select(), it will return the errno.
+   Otherwise it will loop forever. */
+int sel_select_loop(selector_t      *sel,
+		    sel_send_sig_cb send_sig,
+		    long            thread_id,
+		    void            *cb_data);
 
 #endif /* SELECTOR */

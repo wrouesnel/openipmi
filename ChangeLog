@@ -1,4 +1,10 @@
 
+2003-09-19 Corey Minyard <cminyard@mvista.com>
+
+	*lib/selector.c, include/OpenIPMI/selector.h: Change
+	sel_select_loop() to return an error if select fails(), instead of
+	calling exit().
+
 2003-09-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_motorola_mxp_intf.c: Changed the timer for MXP messages

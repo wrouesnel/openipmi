@@ -547,7 +547,7 @@ sel_select(selector_t      *sel,
 /* The main loop for the program.  This will select on the various
    sets, then scan for any available I/O to process.  It also monitors
    the time and call the timeout handlers periodically. */
-void
+int
 sel_select_loop(selector_t      *sel,
 		sel_send_sig_cb send_sig,
 		long            thread_id,
@@ -562,10 +562,11 @@ sel_select_loop(selector_t      *sel,
 	err = process_fds(sel, send_sig, thread_id, cb_data, 
 			  (struct timeval *)(&sel->timeout));
     	if ((err < 0) && (errno != EINTR)) {
+	    err = errno;
 	    /* An error occurred. */
 	    /* An error is bad, we need to abort. */
 	    syslog(LOG_ERR, "select_loop() - select: %m");
-	    exit(1);
+	    return err;
 	}
     }
 }
