@@ -222,7 +222,7 @@ snmp_init(selector_t *sel)
 #endif /* HAVE_UCDSNMP */
     
 int
-main(int argc, const char *argv[])
+main(int argc, char *argv[])
 {
     int              rv;
     int              curr_arg = 1;

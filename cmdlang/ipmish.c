@@ -1,5 +1,5 @@
 /*
- * basic_ui.c
+ * ipmish.c
  *
  * MontaVista IPMI basic UI to use the main UI code.
  *
@@ -280,6 +280,35 @@ out_value(ipmi_cmdlang_t *info, char *name, char *value)
     fflush(out_data->stream);
 }
 
+static void
+out_binary(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
+{
+    out_data_t *out_data = info->user_data;
+    unsigned char *data = (unsigned char *) value;
+    int indent2 = (out_data->indent * 2) + strlen(name) + 1;
+    int i;
+
+    fprintf(out_data->stream, "%*s%s:", out_data->indent*2, "", name);
+    for (i=0; i<len; i++) {
+	if ((i != 0) && ((i % 8) == 0))
+	    fprintf(out_data->stream, "\n%*s", indent2, "");
+	fprintf(out_data->stream, " 0x%2.2x", data[i]);
+    }
+    fprintf(out_data->stream, "\n");
+    
+    fflush(out_data->stream);
+}
+
+static void
+out_unicode(ipmi_cmdlang_t *info, char *name, char *value, unsigned int len)
+{
+    out_data_t *out_data = info->user_data;
+
+    fprintf(out_data->stream, "%*s%s: %s\n", out_data->indent*2, "",
+	    name, "Unicode!");
+    fflush(out_data->stream);
+}
+
 void
 down_level(ipmi_cmdlang_t *info)
 {
@@ -303,9 +332,12 @@ static out_data_t lout_data =
     .stream = NULL,
     .indent = 0,
 };
+static char cmdlang_objstr[IPMI_MAX_NAME_LEN];
 static ipmi_cmdlang_t cmdlang =
 {
     .out = out_value,
+    .out_binary = out_binary,
+    .out_unicode = out_unicode,
     .down = down_level,
     .up = up_level,
     .done = cmd_done,
@@ -314,6 +346,9 @@ static ipmi_cmdlang_t cmdlang =
     .selector = NULL,
 
     .user_data = &lout_data,
+
+    .objstr = cmdlang_objstr,
+    .objstr_len = sizeof(cmdlang_objstr),
 };
 
 void
@@ -322,8 +357,23 @@ cmd_done(ipmi_cmdlang_t *info)
     out_data_t *out_data = info->user_data;
 
     if (info->err) {
-	fprintf(out_data->stream, "error: %s\n", info->errstr);
+	if (!info->location)
+	    info->location = "";
+	if (strlen(info->objstr) == 0) {
+	    fprintf(out_data->stream, "error: %s: %s (0x%x)\n",
+		    info->location, info->errstr,
+		    info->err);
+	} else {
+	    fprintf(out_data->stream, "error: %s %s: %s (0x%x)\n",
+		    info->location, info->objstr, info->errstr,
+		    info->err);
+	}
+	if (info->errstr_dynalloc)
+	    ipmi_mem_free(info->errstr);
+	info->errstr_dynalloc = 0;
 	info->errstr = NULL;
+	info->location = NULL;
+	info->objstr[0] = '\0';
 	info->err = 0;
     }
 
@@ -333,6 +383,36 @@ cmd_done(ipmi_cmdlang_t *info)
     fflush(out_data->stream);
 }
 
+
+void
+ipmi_cmdlang_global_err(char *objstr,
+			char *location,
+			char *errstr,
+			int  errval)
+{
+    if (objstr)
+	fprintf(stderr, "global error: %s %s: %s (0x%x)", location, objstr,
+		errstr, errval);
+    else
+	fprintf(stderr, "global error: %s: %s (0x%x)", location,
+		errstr, errval);
+}
+
+void
+ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event)
+{
+    unsigned int level;
+    char         *name, *value;
+
+    ipmi_cmdlang_event_restart(event);
+    printf("Event\n");
+    while (ipmi_cmdlang_event_next_field(event, &level, &name, &value)) {
+	if (value)
+	    printf("  %*s%s: %s\n", level*2, "", name, value);
+	else
+	    printf("  %*s%s\n", level*2, "", name);
+    }
+}
 
 static char *line_buffer;
 static int  line_buffer_max = 0;
@@ -373,6 +453,8 @@ user_input_ready(int fd, void *data)
 
 		cmdlang.err = 0;
 		cmdlang.errstr = NULL;
+		cmdlang.errstr_dynalloc = 0;
+		cmdlang.location = NULL;
 		ipmi_cmdlang_handle(&cmdlang, line_buffer);
 		line_buffer_pos = 0;
 	    } else {

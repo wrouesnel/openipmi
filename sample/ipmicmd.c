@@ -788,7 +788,7 @@ con_changed_handler(ipmi_con_t   *ipmi,
 }
 
 int
-main(int argc, const char *oargv[])
+main(int argc, char *argv[])
 {
     int         rv;
     int         pos;
@@ -796,10 +796,10 @@ main(int argc, const char *oargv[])
     char        *bufline = NULL;
     int         curr_arg;
     ipmi_args_t *args;
-    const char  **argv;
+    const char  **oargv = (const char **) argv;
 
 
-    poptContext poptCtx = poptGetContext("ipmicmd", argc, oargv,poptOpts,0);
+    poptContext poptCtx = poptGetContext("ipmicmd", argc, oargv, poptOpts, 0);
 
     while (( o = poptGetNextOpt(poptCtx)) >= 0)
     {   
@@ -823,7 +823,7 @@ main(int argc, const char *oargv[])
 	}
     }
 
-    argv = poptGetArgs(poptCtx);
+    argv = (char **) poptGetArgs(poptCtx);
 
     if (!argv) {
 	fprintf(stderr, "Not enough arguments\n");

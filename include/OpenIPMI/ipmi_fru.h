@@ -60,6 +60,9 @@ int ipmi_fru_destroy(ipmi_fru_t            *fru,
 		     ipmi_fru_destroyed_cb handler,
 		     void                  *cb_data);
 
+/* The the domain the FRU uses.  For internal use only. */
+ipmi_domain_t *ipmi_fru_get_domain(ipmi_fru_t *fru);
+
 /* NOTE! - do not use the functions from portable programs, use the
    entity functions to fetch these. */
 int ipmi_fru_get_internal_use_version(ipmi_fru_t    *fru,

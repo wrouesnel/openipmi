@@ -14,7 +14,8 @@ AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
 lib_LTLIBRARIES = libOpenIPMIcmdlang.la
 
-libOpenIPMIcmdlang_la_SOURCES = cmdlang.c cmd_domain.c cmd_entity.c
+libOpenIPMIcmdlang_la_SOURCES = cmdlang.c cmd_domain.c cmd_entity.c cmd_mc.c \
+	out_fru.c
 libOpenIPMIcmdlang_la_LIBADD = -lm \
 	$(top_builddir)/utils/libOpenIPMIutils.la \
 	$(top_builddir)/lib/libOpenIPMI.la

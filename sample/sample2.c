@@ -275,7 +275,7 @@ thread(void *data)
 }
 
 int
-main(int argc, const char *argv[])
+main(int argc, char *argv[])
 {
     int         rv;
     int         curr_arg = 4;

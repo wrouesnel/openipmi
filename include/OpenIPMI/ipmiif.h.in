@@ -104,6 +104,9 @@
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/os_handler.h>
 
+/* This is the maximum size of any name in OpenIPMI */
+#define IPMI_MAX_NAME_LEN 64
+
 /* This is how you convert a pointer to and ID and convert an ID to a
    pointer.  Pointers are ONLY valid in callbacks, the system is free
    to change the pointer value outside the callback.  So you should
@@ -386,8 +389,8 @@ int ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
    All these function return error, not lengths.
 
    The string return functions allow you to fetch the type and length.
-   The length returns for ASCII strings does *not* include the nil
-   character, but for ASCII strings it will be put on to the end.
+   The length returns for ASCII strings does include the nil
+   character, and it will be put on to the end of the get string.
    Also, when fetching the string, you must set the max_len variable
    to the maximum length of the returned data.  The actual length
    copied into the output string is returned in max_len. */

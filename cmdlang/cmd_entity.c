@@ -36,8 +36,6 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <OpenIPMI/ipmiif.h>
-#include <OpenIPMI/ipmi_domain.h>
-#include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_conn.h>
@@ -67,7 +65,7 @@ entity_iterate_handler(ipmi_entity_t *entity, ipmi_entity_t *parent,
     if (cmd_info->cmdlang->err)
 	return;
 
-    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+    ipmi_entity_get_name(parent, entity_name, sizeof(entity_name));
 
     ipmi_cmdlang_out(cmd_info, "Name", entity_name);
 }
@@ -96,6 +94,8 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
     ipmi_cmdlang_out_int(cmd_info, "Present", ipmi_entity_is_present(entity));
     ipmi_cmdlang_out_int(cmd_info, "Presence sensor always there",
 			 ipmi_entity_get_presence_sensor_always_there(entity));
+    ipmi_cmdlang_out_int(cmd_info, "Hot swappable",
+			 ipmi_entity_hot_swappable(entity));
 
     if (ipmi_entity_get_is_child(entity)) {
 	ipmi_cmdlang_out(cmd_info, "Parents", NULL);
@@ -187,6 +187,98 @@ entity_info(ipmi_entity_t *entity, void *cb_data)
     default:
 	break;
     }
+}
+
+void
+entity_change(enum ipmi_update_e op,
+	      ipmi_domain_t      *domain,
+	      ipmi_entity_t      *entity,
+	      void               *cb_data)
+{
+    char            *errstr = NULL;
+    int             rv;
+    ipmi_cmd_info_t *evi;
+    char            entity_name[IPMI_ENTITY_NAME_LEN];
+
+    ipmi_entity_get_name(entity, entity_name, sizeof(entity_name));
+
+    evi = ipmi_cmdlang_alloc_event_info();
+    if (!evi) {
+	rv = ENOMEM;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_out(evi, "Object Type", "Entity");
+
+    switch (op) {
+    case IPMI_ADDED:
+	ipmi_cmdlang_out(evi, "Operation", "Add");
+	ipmi_cmdlang_out(evi, "Name", entity_name);
+	ipmi_cmdlang_down(evi);
+	entity_info(entity, evi);
+	ipmi_cmdlang_up(evi);
+#if 0
+	rv = ipmi_entity_add_sensor_update_handler(entity,
+						   sensor_change,
+						   entity);
+	if (rv) {
+	    errstr = "ipmi_entity_add_sensor_update_handler";
+	    goto out_err;
+	}
+	rv = ipmi_entity_add_control_update_handler(entity,
+						    control_change,
+						    entity);
+	if (rv) {
+	    errstr = "ipmi_entity_add_control_update_handler";
+	    goto out_err;
+	}
+	rv = ipmi_entity_add_fru_update_handler(entity,
+						fru_change,
+						entity);
+	if (rv) {
+	    errstr = "ipmi_entity_add_control_fru_handler";
+	    goto out_err;
+	}
+	rv = ipmi_entity_add_presence_handler(entity,
+					      entity_presence,
+					      NULL);
+	if (rv) {
+	    errstr = "ipmi_entity_add_presence_handler";
+	    goto out_err;
+	}
+	rv = ipmi_entity_add_hot_swap_handler(entity,
+					      entity_hot_swap,
+					      NULL);
+	if (rv) {
+	    errstr = "ipmi_entity_add_hot_swap_handler";
+	    goto out_err;
+	}
+#endif
+	break;
+
+	case IPMI_DELETED:
+	    ipmi_cmdlang_out(evi, "Operation", "Delete");
+	    ipmi_cmdlang_out(evi, "Name", entity_name);
+	    break;
+
+	case IPMI_CHANGED:
+	    ipmi_cmdlang_out(evi, "Operation", "Change");
+	    ipmi_cmdlang_out(evi, "Name", entity_name);
+	    ipmi_cmdlang_down(evi);
+	    entity_info(entity, evi);
+	    ipmi_cmdlang_up(evi);
+	    break;
+    }
+
+    ipmi_cmdlang_cmd_info_put(evi);
+    return;
+
+ out_err:
+    evi->cmdlang->err = rv;
+    evi->cmdlang->errstr = errstr;
+    evi->cmdlang->location = "cmd_entity.c(entity_change)";
+    strncpy(evi->cmdlang->objstr, entity_name, evi->cmdlang->objstr_len);
+    ipmi_cmdlang_cmd_info_put(evi);
 }
 
 static ipmi_cmdlang_cmd_t *entity_cmds;

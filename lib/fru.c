@@ -324,7 +324,7 @@ fru_variable_string_to_out(char *out, unsigned int *length,
 			   fru_variable_t *in, unsigned int num)
 {
     if (num >= in->next)
-	return EINVAL;
+	return ENOSYS;
 
     return fru_string_to_out(out, length, &in->strings[num]);
 }
@@ -335,9 +335,12 @@ fru_variable_string_length(fru_variable_t *in,
 			   unsigned int   *length)
 {
     if (num >= in->next)
-	return EINVAL;
+	return ENOSYS;
 
-    *length = in->strings[num].length;
+    if (in->strings[num].type == IPMI_ASCII_STR)
+	*length = in->strings[num].length + 1;
+    else
+	*length = in->strings[num].length;
     return 0;
 }
 
@@ -347,7 +350,7 @@ fru_variable_string_type(fru_variable_t       *in,
 			 enum ipmi_str_type_e *type)
 {
     if (num >= in->next)
-	return EINVAL;
+	return ENOSYS;
 
     *type = in->strings[num].type;
     return 0;
@@ -449,7 +452,10 @@ ipmi_fru_get_ ## lcname ## _ ## fname ## _len(ipmi_fru_t   *fru,	\
 	fru_unlock(fru);						\
 	return ENOSYS;							\
     }									\
-    *length = u->fname.length;						\
+    if (u->fname.type == IPMI_ASCII_STR)				\
+	*length = u->fname.length + 1;					\
+    else								\
+	*length = u->fname.length;					\
     fru_unlock(fru);							\
     return 0;								\
 }									\
@@ -1245,7 +1251,7 @@ ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return EINVAL;
+	return ENOSYS;
     *type = u->records[num].type;
     return 0;
 }
@@ -1261,7 +1267,7 @@ ipmi_fru_get_multi_record_format_version(ipmi_fru_t    *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return EINVAL;
+	return ENOSYS;
     *ver = u->records[num].format_version;
     return 0;
 }
@@ -1277,7 +1283,7 @@ ipmi_fru_get_multi_record_data_len(ipmi_fru_t   *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return EINVAL;
+	return ENOSYS;
     *len = u->records[num].length;
     return 0;
 }
@@ -1294,7 +1300,7 @@ ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return EINVAL;
+	return ENOSYS;
     if (*length < u->records[num].length)
 	return EINVAL;
     memcpy(data, u->records[num].data, u->records[num].length);
@@ -1313,7 +1319,7 @@ ipmi_fru_get_multi_record_data_offset(ipmi_fru_t    *fru,
 	return ENOSYS;
     u = fru_record_get_data(fru->multi_record);
     if (num >= u->num_records)
-	return EINVAL;
+	return ENOSYS;
     *offset = u->records[num].offset;
     return 0;
 }
@@ -1765,4 +1771,10 @@ ipmi_fru_alloc(ipmi_domain_t       *domain,
     if (new_fru)
 	*new_fru = fru;
     return 0;
+}
+
+ipmi_domain_t *
+ipmi_fru_get_domain(ipmi_fru_t *fru)
+{
+    return fru->domain;
 }

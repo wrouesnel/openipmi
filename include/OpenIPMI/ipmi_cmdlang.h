@@ -49,10 +49,14 @@ typedef struct ipmi_cmdlang_s ipmi_cmdlang_t;
 /* Output is done in name:value pairs.  If you don't have a value,
    pass in NULL. */
 typedef void (*cmd_out_cb)(ipmi_cmdlang_t *info, char *name, char *value);
+typedef void (*cmd_out_b_cb)(ipmi_cmdlang_t *info, char *name,
+			     char *value, unsigned int len);
 
 /* Command-specific info. */
 typedef void (*cmd_info_cb)(ipmi_cmdlang_t *info);
 
+/* The user provides one of these when they call the command language
+   interpreter.  It is used to report errors and generate output. */
 struct ipmi_cmdlang_s
 {
     cmd_out_cb   out;	   /* Generate output with this. */
@@ -63,15 +67,37 @@ struct ipmi_cmdlang_s
     cmd_info_cb  done;     /* Called when the command is done.  If
 			      there was an error, the err value in
 			      info will be non-null. */
+    cmd_out_b_cb out_binary; /* Generate binary output with this. */
+    cmd_out_b_cb out_unicode; /* Generate unicode output with this. */
 
-    /* OS handler and selector to use for the commands */
+    /* OS handler and selector to use for the commands.  Note that
+       these may be set to NULL if not required, don't depend on them
+       except in certain circumstances. */
     os_handler_t *os_hnd;
     selector_t   *selector;
 
+    /*
+     * Error reporting
+     */
     int          err;      /* If non-zero, the errno code of the error
 			      that occurred. */
-    char         *errstr;  /* If non-NULL, an error occurred and this
-			      is the error info. */
+
+    /* If non-NULL, an error occurred and this is the error info.  If
+       the error string is dynamically allocated (and thus should be
+       freed), errstr_dynalloc should be set to true. */
+    char         *errstr;
+    int          errstr_dynalloc;
+
+    /* If an error occurs, this will be set to the object name that
+       was dealing with the error.  It may be an empty string if
+       no object is handling the error.  This must be pre-allocated
+       and the length set properly. */
+    char         *objstr;
+    int          objstr_len;
+
+    /* This is the location of an error. */
+    char         *location;
+
 
     void         *user_data; /* User data for anything the user wants */
 };
@@ -149,9 +175,16 @@ struct ipmi_cmd_info_s
     int                curr_arg;      /* Argument you should start at */
     int                argc;          /* Total number of arguments */
     char               **argv;        /* The arguments */
-    ipmi_cmdlang_t     *cmdlang;      /* The cmdlang structure to use */
-    ipmi_cmdlang_cmd_t *cmd;          /* The matching cmd structure. */
 
+    /* The cmdlang structure the user passed in.  Use this for output
+       and error reporting. */
+    ipmi_cmdlang_t     *cmdlang;
+
+    /* The matching cmd structure for the command being executed.  May
+       be NULL if no command is being processed. */
+    ipmi_cmdlang_cmd_t *cmd;
+
+    /* Refcount for the structure. */
     unsigned int       usecount;
 
     /* For use by the user commands */
@@ -159,6 +192,8 @@ struct ipmi_cmd_info_s
 };
 
 
+/* All output from the command language is in name/value pairs.  The
+   value field may be NULL. */
 void ipmi_cmdlang_out(ipmi_cmd_info_t *info,
 		      char            *name,
 		      char            *value);
@@ -168,13 +203,74 @@ void ipmi_cmdlang_out_int(ipmi_cmd_info_t *info,
 void ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
 			  char            *name,
 			  int             value);
+void ipmi_cmdlang_out_long(ipmi_cmd_info_t *info,
+			   char            *name,
+			   long            value);
+void ipmi_cmdlang_out_binary(ipmi_cmd_info_t *info,
+			     char            *name,
+			     char            *value,
+			     unsigned int    len);
+void ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
+			      char            *name,
+			      char            *value,
+			      unsigned int    len);
+
+/* The output from the command language is done at a nesting level.
+   When you start outputting data for a new thing, you should "down"
+   to create a new nesting level.  When you are done, you should
+   "up". */
 void ipmi_cmdlang_down(ipmi_cmd_info_t *info);
 void ipmi_cmdlang_up(ipmi_cmd_info_t *info);
+
+/* A cmd info structure is refcounted, if you save a pointer to it you
+   must "get" it.  When you are done, you must "put" it.  It will be
+   destroyed (and the done routine called) after the last user puts it. */
 void ipmi_cmdlang_cmd_info_get(ipmi_cmd_info_t *info);
 void ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *info);
 
+/* Helper functions */
+void ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmdlang_t *cmdlang);
+void ipmi_cmdlang_get_uchar(char *str, unsigned char *val,
+			    ipmi_cmdlang_t *cmdlang);
+void ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmdlang_t *cmdlang);
 
+/* Call these to initialize and setup the command interpreter.  init
+   should be called after the IPMI library proper is initialized, but
+   before using it. */
 int ipmi_cmdlang_init(void);
 void ipmi_cmdlang_cleanup(void);
+
+
+/* Allocate a cmd info structure that can be used to generate
+   information to an event.  Make sure to call the put function when
+   all the data has been output.  Note that the refcounts work like
+   normal, you get it at one, when it goes to zero the structure will
+   be returned. */
+ipmi_cmd_info_t *ipmi_cmdlang_alloc_event_info(void);
+
+typedef struct ipmi_cmdlang_event_s ipmi_cmdlang_event_t;
+
+/* Move to the first field. */
+void ipmi_cmdlang_event_restart(ipmi_cmdlang_event_t *event);
+
+/* Returns true if successful, false if no more fields left. */
+int ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t *event,
+				  unsigned int         *level,
+				  char                 **name,
+				  char                 **value);
+
+/* Supplied by the user, used to report global errors (ones that don't
+   deal with a specific command invocation).  The objstr is the name
+   of the object dealing with the error (like the domain name, entity
+   name, etc) or NULL if none.  The location is the file and procedure
+   where the error occurred.  The errstr is a descriptive string and
+   errval is an IPMI error value to be printed. */
+void ipmi_cmdlang_global_err(char *objstr,
+			     char *location,
+			     char *errstr,
+			     int  errval);
+
+/* Supplied by the user to report events. */
+void ipmi_cmdlang_report_event(ipmi_cmdlang_event_t *event);
 
 #endif /* __IPMI_CMDLANG_H */

@@ -455,7 +455,7 @@ setup_done(ipmi_domain_t *domain,
 static os_handler_t *os_hnd;
 
 int
-main(int argc, const char *argv[])
+main(int argc, char *argv[])
 {
     int         rv;
     int         curr_arg = 1;

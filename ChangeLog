@@ -1,3 +1,11 @@
+2004-09-17 Corey Minyard <cminyard@mvista.com> 
+
+	* include/ipmiif.h.in, lib/fru.c: Modified the FRU length returned
+	to include the NIL character for ASCII strings.
+
+	* include/ipmiif.h.in, lib/fru.c: Added a way to get the domain
+	from the fru type.
+
 2004-09-13 Corey Minyard <cminyard@mvista.com> 
 
 	* FAQ: Added some information about the driver.

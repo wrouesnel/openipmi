@@ -159,6 +159,7 @@ for_each_domain(ipmi_cmd_info_t    *cmd_info,
     if (class || obj) {
 	cmd_info->cmdlang->errstr = "Invalid domain";
 	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_domain)";
 	return;
     }
 
@@ -183,6 +184,8 @@ ipmi_cmdlang_domain_handler(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmd_info->cmdlang->errstr = "Invalid domain";
 	    cmd_info->cmdlang->err = rv;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_domain_handler)";
 	    return;
 	}
 	cmd_info->curr_arg++;
@@ -242,6 +245,7 @@ for_each_entity(ipmi_cmd_info_t    *cmd_info,
     if (obj) {
 	cmd_info->cmdlang->errstr = "Invalid entity";
 	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_entity)";
 	return;
     }
 
@@ -267,6 +271,8 @@ ipmi_cmdlang_entity_handler(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmd_info->cmdlang->errstr = "Invalid entity";
 	    cmd_info->cmdlang->err = rv;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_entity_handler)";
 	    return;
 	}
 	cmd_info->curr_arg++;
@@ -344,6 +350,8 @@ ipmi_cmdlang_sensor_handler(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmd_info->cmdlang->errstr = "Invalid sensor";
 	    cmd_info->cmdlang->err = rv;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_sensor_handler)";
 	    return;
 	}
 	cmd_info->curr_arg++;
@@ -421,6 +429,8 @@ ipmi_cmdlang_control_handler(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmd_info->cmdlang->errstr = "Invalid control";
 	    cmd_info->cmdlang->err = rv;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_control_handler)";
 	    return;
 	}
 	cmd_info->curr_arg++;
@@ -477,6 +487,7 @@ for_each_mc(ipmi_cmd_info_t *cmd_info,
     if (obj) {
 	cmd_info->cmdlang->errstr = "Invalid MC";
 	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_mc)";
 	return;
     }
 
@@ -502,6 +513,8 @@ ipmi_cmdlang_mc_handler(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmd_info->cmdlang->errstr = "Invalid MC";
 	    cmd_info->cmdlang->err = rv;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_mc_handler)";
 	    return;
 	}
 	cmd_info->curr_arg++;
@@ -557,6 +570,7 @@ for_each_connection(ipmi_cmd_info_t        *cmd_info,
     if (class) {
 	cmd_info->cmdlang->errstr = "Invalid connection";
 	cmd_info->cmdlang->err = EINVAL;
+	cmd_info->cmdlang->location = "cmdlang.c(for_each_connection)";
 	return;
     }
 
@@ -564,12 +578,14 @@ for_each_connection(ipmi_cmd_info_t        *cmd_info,
 	if (!isdigit(obj[0])) {
 	    cmd_info->cmdlang->errstr = "Invalid connection number";
 	    cmd_info->cmdlang->err = EINVAL;
+	    cmd_info->cmdlang->location = "cmdlang.c(for_each_connection)";
 	    return;
 	}
 	info.conn = strtoul(class, &endptr, 0);
 	if (*endptr != '\0') {
 	    cmd_info->cmdlang->errstr = "Invalid connection number";
 	    cmd_info->cmdlang->err = EINVAL;
+	    cmd_info->cmdlang->location = "cmdlang.c(for_each_connection)";
 	    return;
 	}
     } else {
@@ -596,6 +612,8 @@ ipmi_cmdlang_connection_handler(ipmi_cmd_info_t *cmd_info)
 	if (rv) {
 	    cmd_info->cmdlang->errstr = "Invalid connection";
 	    cmd_info->cmdlang->err = rv;
+	    cmd_info->cmdlang->location
+		= "cmdlang.c(ipmi_cmdlang_connection_handler)";
 	    return;
 	}
 	cmd_info->curr_arg++;
@@ -677,6 +695,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
     if (!info) {
 	cmdlang->errstr = "Out of memory";
 	cmdlang->err = ENOMEM;
+	cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
 	goto done;
     }
     memset(info, 0, sizeof(*info));
@@ -690,6 +709,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 		break;
 	    cmdlang->errstr = "Invalid string";
 	    cmdlang->err = rv;
+	    cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
 	    goto done;
 	}
     }
@@ -698,6 +718,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	/* Too many arguments */
 	cmdlang->errstr = "Too many arguments";
 	cmdlang->err = E2BIG;
+	cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
 	goto done;
     }
 
@@ -708,6 +729,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
     if (argc == curr_arg) {
 	cmdlang->errstr = "No command";
 	cmdlang->err = ENOMSG;
+	cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
 	goto done;
     }
     if (strcmp(argv[curr_arg], "help") == 0) {
@@ -740,6 +762,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	    if (!cmd) {
 		cmdlang->errstr = "Command not found";
 		cmdlang->err = ENOSYS;
+		cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
 		goto done_help;
 	    }
 
@@ -755,6 +778,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 
 	    cmdlang->errstr = "Command not found";
 	    cmdlang->err = ENOSYS;
+	    cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
 	    goto done_help;
 	}
 
@@ -766,6 +790,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	if (argc == curr_arg) {
 	    cmdlang->errstr = "Missing command";
 	    cmdlang->err = ENOMSG;
+	    cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
 	    goto done;
 	}
 
@@ -793,6 +818,7 @@ ipmi_cmdlang_handle(ipmi_cmdlang_t *cmdlang, char *str)
 	if (!cmd) {
 	    cmdlang->errstr = "Command not found";
 	    cmdlang->err = ENOSYS;
+	    cmdlang->location = "cmdlang.c(ipmi_cmdlang_handle)";
 	    goto done;
 	}
     }
@@ -891,6 +917,35 @@ ipmi_cmdlang_out_hex(ipmi_cmd_info_t *info,
 }
 
 void
+ipmi_cmdlang_out_long(ipmi_cmd_info_t *info,
+		      char            *name,
+		      long            value)
+{
+    char sval[32];
+
+    sprintf(sval, "%ld", value);
+    ipmi_cmdlang_out(info, name, sval);
+}
+
+void
+ipmi_cmdlang_out_binary(ipmi_cmd_info_t *info,
+			char            *name,
+			char            *value,
+			unsigned int    len)
+{
+    info->cmdlang->out_binary(info->cmdlang, name, value, len);
+}
+
+void
+ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
+			 char            *name,
+			 char            *value,
+			 unsigned int    len)
+{
+    info->cmdlang->out_unicode(info->cmdlang, name, value, len);
+}
+
+void
 ipmi_cmdlang_down(ipmi_cmd_info_t *info)
 {
     info->cmdlang->down(info->cmdlang);
@@ -917,6 +972,269 @@ ipmi_cmdlang_cmd_info_put(ipmi_cmd_info_t *cmd_info)
 	ipmi_mem_free(cmd_info);
     }
 }
+
+void
+ipmi_cmdlang_get_int(char *str, int *val, ipmi_cmdlang_t *cmdlang)
+{
+    char *end;
+    int  rv;
+
+    if (cmdlang->err)
+	return;
+
+    rv = strtoul(str, &end, 0);
+    if (*end != '\0') {
+	cmdlang->errstr = "Invalid integer";
+	cmdlang->err = EINVAL;
+	cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
+	return;
+    }
+
+    *val = rv;
+}
+
+void
+ipmi_cmdlang_get_uchar(char *str, unsigned char *val, ipmi_cmdlang_t *cmdlang)
+{
+    char *end;
+    int  rv;
+
+    if (cmdlang->err)
+	return;
+
+    rv = strtoul(str, &end, 0);
+    if (*end != '\0') {
+	cmdlang->errstr = "Invalid integer";
+	cmdlang->err = EINVAL;
+	cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_int)";
+	return;
+    }
+
+    *val = rv;
+}
+
+void
+ipmi_cmdlang_get_bool(char *str, int *val, ipmi_cmdlang_t *cmdlang)
+{
+    int  rv;
+
+    if (cmdlang->err)
+	return;
+
+    if ((strcasecmp(str, "true") == 0)
+	|| (strcasecmp(str, "t") == 0)
+	|| (strcmp(str, "1") == 0))
+    {
+	rv = 1;
+    } else if ((strcasecmp(str, "false") == 0)
+	       || (strcasecmp(str, "f") == 0)
+	       || (strcmp(str, "0") == 0))
+    {
+	rv = 0;
+    } else {
+	cmdlang->errstr = "Invalid boolean";
+	cmdlang->err = EINVAL;
+	cmdlang->location = "cmdlang.c(ipmi_cmdlang_get_bool)";
+	return;
+    }
+
+    *val = rv;
+}
+
+typedef struct ipmi_cmdlang_event_entry_s ipmi_cmdlang_event_entry_t;
+struct ipmi_cmdlang_event_entry_s
+{
+    char *name;
+    char *value;
+    int  level;
+    ipmi_cmdlang_event_entry_t *next;
+};
+
+struct ipmi_cmdlang_event_s
+{
+    int curr_level;
+    ipmi_cmd_info_t *info;
+    ipmi_cmdlang_event_entry_t *head, *tail;
+    ipmi_cmdlang_event_entry_t *curr;
+};
+
+void event_out(ipmi_cmdlang_t *cmdlang, char *name, char *value)
+{
+    ipmi_cmdlang_event_entry_t *entry;
+    ipmi_cmdlang_event_t       *event = cmdlang->user_data;
+
+    if (cmdlang->err)
+	return;
+
+    entry = ipmi_mem_alloc(sizeof(*entry));
+    if (!entry)
+	goto out_nomem;
+
+    entry->name = ipmi_strdup(name);
+    if (!entry->name) {
+	ipmi_mem_free(entry);
+	goto out_nomem;
+    }
+
+    if (value) {
+	entry->value = ipmi_strdup(value);
+	if (!entry->value) {
+	    ipmi_mem_free(entry->name);
+	    ipmi_mem_free(entry);
+	    goto out_nomem;
+	}
+    } else
+	entry->value = NULL;
+
+    entry->level = event->curr_level;
+
+    entry->next = NULL;
+    if (event->head) {
+	event->tail->next = entry;
+	event->tail = entry;
+    } else {
+	event->head = entry;
+	event->tail = entry;
+    }
+
+    return;
+
+ out_nomem:
+    cmdlang->err = ENOMEM;
+    cmdlang->errstr = "Out of memory";
+    cmdlang->location = "cmdlang.c(event_out)";
+}
+
+void event_up(ipmi_cmdlang_t *cmdlang)
+{
+    ipmi_cmdlang_event_t *event = cmdlang->user_data;
+
+    if (cmdlang->err)
+	return;
+
+    event->curr_level++;
+}
+
+void event_down(ipmi_cmdlang_t *cmdlang)
+{
+    ipmi_cmdlang_event_t *event = cmdlang->user_data;
+
+    if (cmdlang->err)
+	return;
+
+    event->curr_level--;
+}
+
+void event_done(ipmi_cmdlang_t *cmdlang)
+{
+    ipmi_cmdlang_event_entry_t *entry;
+    ipmi_cmdlang_event_t       *event = cmdlang->user_data;
+    ipmi_cmd_info_t            *info = event->info;
+
+    if (strlen(info->cmdlang->objstr) == 0) {
+	ipmi_mem_free(info->cmdlang->objstr);
+	cmdlang->objstr = NULL;
+    }
+
+    if (info->cmdlang->err) {
+	ipmi_cmdlang_global_err(cmdlang->objstr,
+				cmdlang->location,
+				cmdlang->errstr,
+				cmdlang->err);
+	if (cmdlang->errstr_dynalloc)
+	    ipmi_mem_free(cmdlang->errstr);
+    } else {
+	ipmi_cmdlang_report_event(event);
+    }
+
+    if (cmdlang->objstr)
+	ipmi_mem_free(cmdlang->objstr);
+    ipmi_mem_free(cmdlang);
+
+    entry = event->head;
+    while (entry) {
+	event->head = entry->next;
+	ipmi_mem_free(entry->name);
+	if (entry->value)
+	    ipmi_mem_free(entry->value);
+	ipmi_mem_free(entry);
+	entry = event->head;
+    }
+    ipmi_mem_free(event);
+}
+
+ipmi_cmd_info_t *ipmi_cmdlang_alloc_event_info(void)
+{
+    ipmi_cmd_info_t      *cmdinfo = NULL;
+    ipmi_cmdlang_event_t *event;
+
+    cmdinfo = ipmi_mem_alloc(sizeof(*cmdinfo));
+    if (!cmdinfo)
+	return NULL;
+    memset(cmdinfo, 0, sizeof(*cmdinfo));
+    cmdinfo->usecount = 1;
+
+    cmdinfo->cmdlang = ipmi_mem_alloc(sizeof(*cmdinfo->cmdlang));
+    if (!cmdinfo->cmdlang) {
+	ipmi_mem_free(cmdinfo);
+	return NULL;
+    }
+    memset(cmdinfo->cmdlang, 0, sizeof(*cmdinfo->cmdlang));
+
+    cmdinfo->cmdlang->objstr = ipmi_mem_alloc(IPMI_MAX_NAME_LEN);
+    if (!cmdinfo->cmdlang->objstr) {
+	ipmi_mem_free(cmdinfo->cmdlang);
+	ipmi_mem_free(cmdinfo);
+	return NULL;
+    }
+    cmdinfo->cmdlang->objstr[0] = '\0';
+    cmdinfo->cmdlang->objstr_len = IPMI_MAX_NAME_LEN;
+
+    cmdinfo->cmdlang->user_data	= ipmi_mem_alloc(sizeof(ipmi_cmdlang_event_t));
+    if (!cmdinfo->cmdlang->user_data) {
+	ipmi_mem_free(cmdinfo->cmdlang->objstr);
+	ipmi_mem_free(cmdinfo->cmdlang);
+	ipmi_mem_free(cmdinfo);
+	return NULL;
+    }
+
+    event = cmdinfo->cmdlang->user_data;
+    memset(event, 0, sizeof(*event));
+    event->info = cmdinfo;
+
+    cmdinfo->cmdlang->out = event_out;
+    cmdinfo->cmdlang->down = event_down;
+    cmdinfo->cmdlang->up = event_up;
+    cmdinfo->cmdlang->done = event_done;
+
+    return cmdinfo;
+}
+
+/* Move to the first field. */
+void ipmi_cmdlang_event_restart(ipmi_cmdlang_event_t *event)
+{
+    event->curr = event->head;
+}
+
+/* Returns true if successful, false if no more fields left. */
+int ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t *event,
+				  unsigned int         *level,
+				  char                 **name,
+				  char                 **value)
+{
+    ipmi_cmdlang_event_entry_t *curr = event->curr;
+
+    if (!curr)
+	return 0;
+
+    *level = curr->level;
+    *name = curr->name;
+    *value = curr->value;
+
+    event->curr = curr->next;
+    return 1;
+}
+
 
 int ipmi_cmdlang_domain_init(void);
 int ipmi_cmdlang_entity_init(void);
