@@ -1175,7 +1175,7 @@ smi_deregister_for_command(ipmi_con_t    *ipmi,
     reg.netfn = netfn;
     reg.cmd = cmd;
     if (smi->using_socket)
-	rv = ioctl(smi->fd, SIOCIPMIREGCMD, &reg);
+	rv = ioctl(smi->fd, SIOCIPMIUNREGCMD, &reg);
     else
 	rv = ioctl(smi->fd, IPMICTL_UNREGISTER_FOR_CMD, &reg);
     if (rv == -1) {

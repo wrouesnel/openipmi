@@ -3,7 +3,7 @@ AC_CANONICAL_TARGET
 OPENIPMI_PKG_NAME=OpenIPMI
 OPENIPMI_VERSION_MAJOR=1
 OPENIPMI_VERSION_MINOR=4
-OPENIPMI_VERSION_RELEASE=5
+OPENIPMI_VERSION_RELEASE=6
 OPENIPMI_VERSION_EXTRA=
 AM_INIT_AUTOMAKE(OpenIPMI, ${OPENIPMI_VERSION_MAJOR}.${OPENIPMI_VERSION_MINOR}.${OPENIPMI_VERSION_RELEASE}${OPENIPMI_VERSION_EXTRA})
 
@@ -48,7 +48,26 @@ AC_ARG_WITH(glib,
     fi,
 )
 
+glibver=
+AC_ARG_WITH(glibver,
+[  --with-glibver=ver              Set the glib version, either 1.2 or 2.0.],
+    glibver="$withval",
+)
+
+glibcflags=
+AC_ARG_WITH(glibcflags,
+[  --with-glibcflags=flags         Set the flags to compile with glib.],
+    glibcflags="$withval",
+)
+
+gliblibs=
+AC_ARG_WITH(gliblibs,
+[  --with-gliblibs=libs            Set the libraries to link with glib.],
+    gliblibs="$withval",
+)
+
 tryperl=yes
+perldir=
 AC_ARG_WITH(perl,
 [  --with-perl[=PATH]              Look for perl, with the optional path.],
     if test "x$withval" = "xyes"; then
@@ -61,18 +80,30 @@ AC_ARG_WITH(perl,
     fi,
 )
 
+perlinstalldir=
 AC_ARG_WITH(perlinstall,
-[  --with-perlinstall=PATH         Look for perl, with the optional path.],
+[  --with-perlinstall=PATH         Install perl modules in the given location.],
     perlinstalldir="$withval",
 )
 
+perlcflags=
+AC_ARG_WITH(perlcflags,
+[  --with-perlcflags=PATH          Use the given flags when compiling perl parts.],
+    perlcflags="$withval",
+)
+
 tryswig=yes
+swigprog=
 AC_ARG_WITH(swig,
-[  --with-swig                     Look for swig.],
-    if test "x$withval" = "xyes"; then
+[  --with-swig                     Look for swig, either "yes", "no", or the path to swig.],
+    if test "x$withval" = "x"; then
+      tryswig=yes
+    elif test "x$withval" = "xyes"; then
       tryswig=yes
     elif test "x$withval" = "xno"; then
       tryswig=no
+    else
+      swigprog=$withval
     fi,
 )
 
@@ -92,33 +123,43 @@ pkgprog=
 AC_PATH_PROG(pkgprog, pkg-config)
 
 # Handle GLIB support
-glibprog=
-if test "x$tryglib" != "xno"; then
-   if test "x$pkgprog" != "x"; then
-      glibprog=$pkgprog
-   else
-      AC_PATH_PROG(glibprog, glib-config)
-   fi
-fi
-GLIB_CFLAGS=
-GLIB_LIBS=
-if test "x$glibprog" != "x"; then
-   # Try 2.0 first
-   GLIB_CFLAGS=`$glibprog --cflags gthread-2.0 2>/dev/null`
-   if test $? = 0; then
-      GLIB_VERSION='2.0'
-      GLIB_LIBS=`$glibprog --libs gthread-2.0 2>/dev/null`
-   else
-      # Now try 1.2
-      GLIB_CFLAGS=`$glibprog --cflags gthread`
-      if test $? = 0; then
-	 GLIB_VERSION='1.2'
-	 GLIB_LIBS=`$glibprog --libs gthread`
+haveglib=no
+if test "x$glibver" = "x" -o "x$glibcflags" = "x" -o "x$gliblibs" = "x"; then
+   glibprog=
+   if test "x$tryglib" != "xno"; then
+      if test "x$pkgprog" != "x"; then
+         glibprog=$pkgprog
+      else
+         AC_PATH_PROG(glibprog, glib-config)
       fi
    fi
+   GLIB_CFLAGS=
+   GLIB_LIBS=
+   if test "x$glibprog" != "x"; then
+      # Try 2.0 first
+      GLIB_CFLAGS=`$glibprog --cflags gthread-2.0 2>/dev/null`
+      if test $? = 0; then
+         haveglib=yes
+         GLIB_VERSION='2.0'
+         GLIB_LIBS=`$glibprog --libs gthread-2.0 2>/dev/null`
+      else
+         # Now try 1.2
+         GLIB_CFLAGS=`$glibprog --cflags gthread`
+         if test $? = 0; then
+            haveglib=yes
+	    GLIB_VERSION='1.2'
+	    GLIB_LIBS=`$glibprog --libs gthread`
+         fi
+      fi
+   fi
+else
+   haveglib=yes
+   GLIB_CFLAGS="$glibcflags"
+   GLIB_VERSION="$glibver"
+   GLIB_LIBS="$gliblibs"
 fi
    
-if test "x$GLIB_CFLAGS" != "x"; then
+if test "x$haveglib" = "xyes"; then
    AC_DEFINE(HAVE_GLIB)
    GLIB_DIR=glib
    GLIB_LIB='$(top_builddir)/glib/libOpenIPMIglib.la'
@@ -128,67 +169,81 @@ else
    GLIB_LIB=
    GLIB_PKGCONF=
 fi
-AC_SUBST(GLIB_DIR)
 AC_SUBST(GLIB_VERSION)
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
+
+AC_SUBST(GLIB_DIR)
 AC_SUBST(GLIB_LIB)
 AC_SUBST(GLIB_PKGCONF)
 
 # Handle PERL support
-perlprog=
-if test "x$tryperl" != "xno"; then
-   AC_PATH_PROG(perlprog, perl)
-fi
-if test "x$perlprog" != "x"; then
-   # Find the place where perl lives.
-   if test "x$perldir" == "x"; then
-      perldir=`$perlprog -e 'for $i (@INC) { if (-r "$i/CORE/perl.h") { print "$i"; last; } }'`
+if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
+   perlprog=
+   if test "x$tryperl" != "xno"; then
+      AC_PATH_PROG(perlprog, perl)
+   fi
+   if test "x$perlprog" != "x"; then
+      # Find the place where perl lives.
+      if test "x$perldir" == "x"; then
+	 perldir=`$perlprog -e 'for $i (@INC) { if (-r "$i/CORE/perl.h") { print "$i"; last; } }'`
+      fi
+
+      # Now find a proper installation location.
+      if test "x$perlinstalldir" == "x"; then
+	 perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /site_perl\/.+\/.+/) { print "$i"; last; } }'`
+	 if test "x$perlinstalldir" == "x" -o ! -d "$perlinstalldir"; then
+	    perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /vendor_perl\/.+\/.+/) { print "$i"; last; } }'`
+	 fi
+	 if test "x$perlinstalldir" == "x" -o ! -d "$perlinstalldir"; then
+	    perlinstalldir=$perldir
+	 fi
+      fi
    fi
 
-   # Now find a proper installation location.
-   if test "x$perlinstalldir" == "x"; then
-      perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /site_perl\/.+\/.+/) { print "$i"; last; } }'`
-      if test "x$perlinstalldir" == "x" -o ! -d "$perlinstalldir"; then
-	 perlinstalldir=`$perlprog -e 'for $i (@INC) { if ($i =~ /vendor_perl\/.+\/.+/) { print "$i"; last; } }'`
+   if test "x$perldir" != "x"; then
+      tpprog=`$perlprog -e "\\$p = \"$perlinstalldir\"; \\$u = \"$prefix\"; \\$p =~ s/\\$u//; print \\$p"`
+      AC_DEFINE(HAVE_PERL)
+      PERL_DIR=perl
+      if test "x$perlcflags" = "x"; then
+         PERL_CFLAGS="-I $perldir/CORE `$perlprog -V:ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
+      else
+	  PERL_CFLAGS="$perlcflags"
       fi
-      if test "x$perlinstalldir" == "x" -o ! -d "$perlinstalldir"; then
-	 perlinstalldir=$perldir
+      if test "$tpprog" == "$perlinstalldir"; then
+	 PERL_INSTALL_DIR="$perlinstalldir"
+      else
+	 PERL_INSTALL_DIR="\${prefix}$tpprog"
       fi
-   fi
-fi
-
-if test "x$perldir" != "x"; then
-   tpprog=`$perlprog -e "\\$p = \"$perlinstalldir\"; \\$u = \"$prefix\"; \\$p =~ s/\\$u//; print \\$p"`
-   AC_DEFINE(HAVE_PERL)
-   PERL_DIR=perl
-   PERL_CFLAGS="-I $perldir/CORE `$perlprog -V:ccflags | sed 's/^.*ccflags=.\(.*\).;$/\1/'`"
-   if test "$tpprog" == "$perlinstalldir"; then
-      PERL_INSTALL_DIR="$perlinstalldir"
    else
-      PERL_INSTALL_DIR="\${prefix}$tpprog"
+      PERL_DIR=
+      PERL_CFLAGS=
+      PERL_INSTALL_DIR=
    fi
 else
-   PERL_DIR=
-   PERL_CFLAGS=
-   PERL_INSTALL_DIR=
+   AC_DEFINE(HAVE_PERL)
+   PERL_DIR=perl
+   PERL_CFLAGS="$perlcflags"
+   PERL_INSTALL_DIR="$perlinstalldir"
 fi
 AC_SUBST(PERL_DIR)
 AC_SUBST(PERL_CFLAGS)
 AC_SUBST(PERL_INSTALL_DIR)
 
 # Now check for swig
-swigprog=
-if test "x$tryswig" != "xno"; then
+if test "x$swigprog" = "x" -a "x$tryswig" = "xyes"; then
    AC_PATH_PROG(swigprog, swig)
 fi
 if test "x$swigprog" != "x"; then
    AC_DEFINE(HAVE_SWIG)
    SWIG_DIR=swig
+   SWIG=$swigprog
 else
    SWIG_DIR=
+   SWIG=
 fi
 AC_SUBST(SWIG_DIR)
+AC_SUBST(SWIG)
 
 # Handle SNMP support
 if test "x$tryucdsnmp" != "xno"; then

@@ -1,3 +1,14 @@
+2004-11-18 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi_smi.c: Fix the unregister ioctl for the socket interface.
+
+	* configure.in: Fix comments on perlinstall option.
+
+	* configure.in: Allow perl, swig, and glib options to be overriden
+	to support cross-compilation.
+
+	* configure.in: Move to version 1.4.6.
+
 2004-11-16 Corey Minyard <cminyard@mvista.com> 
 
 	* cmdlang/cmd_mc.c: Added support for the user information
@@ -5,7 +16,6 @@
 
 	* man/ipmi_cmdlang.7: Added information about the channel
 	and user commands just added.
-
 
 2004-11-15 Corey Minyard <cminyard@mvista.com> 
 
