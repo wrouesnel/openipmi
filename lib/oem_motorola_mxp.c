@@ -1137,15 +1137,14 @@ mxp_cleanup_sensor_oem_info(ipmi_sensor_t *sensor, void *oem_info)
 /* Call this to allocate the sensor.  Then fix it up and call the
    finish operation */
 static int
-mxp_alloc_basic_sensor(
-		       void                               *data,
-		       void			       (*data_freer)(void *),
-		       unsigned int                       sensor_type,
-		       unsigned int                       reading_type,
-		       char                               *id,
-		       unsigned int                       assert_events,
-		       unsigned int                       deassert_events,
-		       ipmi_sensor_t                      **sensor)
+mxp_alloc_basic_sensor(void          *data,
+		       void	     (*data_freer)(void *),
+		       unsigned int  sensor_type,
+		       unsigned int  reading_type,
+		       char          *id,
+		       unsigned int  assert_events,
+		       unsigned int  deassert_events,
+		       ipmi_sensor_t **sensor)
 {
     int                 rv;
     mxp_sensor_header_t *hdr;
@@ -1200,41 +1199,37 @@ mxp_alloc_basic_sensor(
 
 /* Add the sensor to the domain. */
 static int
-mxp_finish_sensor(ipmi_mc_t     *mc,
-		  ipmi_sensor_t *sensor,
-		  unsigned int  num,
-		  ipmi_entity_t *entity)
+mxp_add_sensor(ipmi_mc_t     *mc,
+	       ipmi_sensor_t **sensor,
+	       unsigned int  num,
+	       ipmi_entity_t *entity)
 {
     int rv;
 
     /* Add it to the MC and entity. */
-    rv = ipmi_sensor_add_nonstandard(mc, mc, sensor, num, 0, entity,
+    rv = ipmi_sensor_add_nonstandard(mc, mc, *sensor, num, 0, entity,
 				     NULL, NULL);
     if (rv) {
-	void *hdr;
-	hdr = ipmi_sensor_get_oem_info(sensor);
-	ipmi_sensor_destroy(sensor);
-	ipmi_mem_free(hdr);
+	ipmi_sensor_destroy(*sensor);
+	*sensor = NULL;
     }
 
     return rv;
 }
 
 static int
-mxp_alloc_discrete_sensor(
-			  ipmi_mc_t                          *mc,
-			  ipmi_entity_t                      *entity,
-			  unsigned int                       num,
-			  void                               *data,
-			  void			       (*data_freer)(void *),
-			  unsigned int                       sensor_type,
-			  unsigned int                       reading_type,
-			  char                               *id,
-			  unsigned int                       assert_events,
-			  unsigned int                       deassert_events,
-			  ipmi_states_get_cb                 states_get,
-			  ipmi_sensor_reading_name_string_cb sensor_reading_name_string,
-			  ipmi_sensor_t                      **sensor)
+mxp_alloc_discrete_sensor
+(ipmi_mc_t                          *mc,
+ void                               *data,
+ void			           (*data_freer)(void *),
+ unsigned int                       sensor_type,
+ unsigned int                       reading_type,
+ char                               *id,
+ unsigned int                       assert_events,
+ unsigned int                       deassert_events,
+ ipmi_states_get_cb                 states_get,
+ ipmi_sensor_reading_name_string_cb sensor_reading_name_string,
+ ipmi_sensor_t                      **sensor)
 {
     int                 rv;
     ipmi_sensor_cbs_t   cbs;
@@ -1282,30 +1277,26 @@ mxp_alloc_discrete_sensor(
 
     ipmi_sensor_set_callbacks(*sensor, &cbs);
 
-    rv = mxp_finish_sensor(mc, *sensor, num, entity);
-
-    return rv;
+    return 0;
 }
 
 /* Allocate a threshold sensor and use the MXP-specific conversion
    routines. */
 static int
-mxp_alloc_threshold_sensor(
-			   ipmi_mc_t                          *mc,
-			   ipmi_entity_t                      *entity,
-			   unsigned int                       num,
-			   void                               *data,
-			   void			       (*data_freer)(void *),
-			   unsigned int                       sensor_type,
-			   unsigned int                       base_unit,
-			   char                               *id,
-			   unsigned int                       assert_events,
-			   unsigned int                       deassert_events,
-			   ipmi_reading_get_cb                reading_get,
-			   int                                raw_nominal, /* -1 disables. */
-			   int                                raw_normal_min, /* -1 disables. */
-			   int                                raw_normal_max, /* -1 disables. */
-			   ipmi_sensor_t                      **sensor)
+mxp_alloc_threshold_sensor
+(ipmi_mc_t                          *mc,
+ void                               *data,
+ void			            (*data_freer)(void *),
+ unsigned int                       sensor_type,
+ unsigned int                       base_unit,
+ char                               *id,
+ unsigned int                       assert_events,
+ unsigned int                       deassert_events,
+ ipmi_reading_get_cb                reading_get,
+ int                                raw_nominal, /* -1 disables. */
+ int                                raw_normal_min, /* -1 disables. */
+ int                                raw_normal_max, /* -1 disables. */
+ ipmi_sensor_t                      **sensor)
 {
     int                 rv;
     ipmi_sensor_cbs_t   cbs;
@@ -1426,35 +1417,31 @@ mxp_alloc_threshold_sensor(
     cbs.ipmi_reading_get = reading_get;
     ipmi_sensor_set_callbacks(*sensor, &cbs);
 
-    rv = mxp_finish_sensor(mc, *sensor, num, entity);
-
-    return rv;
+    return 0;
 }
 
 /* Allocate a threshold sensor and supply the conversion values.  This
    code will set it up so the standard conversion code will work with
    the sensor. */
 static int
-mxp_alloc_semi_stand_threshold_sensor(
-				      ipmi_mc_t                          *mc,
-				      ipmi_entity_t                      *entity,
-				      unsigned int                       num,
-				      void                               *data,
-				      void			       (*data_freer)(void *),
-				      unsigned int                       sensor_type,
-				      unsigned int                       base_unit,
-				      char                               *id,
-				      unsigned int                       assert_events,
-				      unsigned int                       deassert_events,
-				      ipmi_reading_get_cb                reading_get,
-				      int                                raw_nominal, /* -1 disables. */
-				      int                                raw_normal_min, /* -1 disables. */
-				      int                                raw_normal_max, /* -1 disables. */
-				      int                                m,
-				      int                                b,
-				      int                                b_exp,
-				      int                                r_exp,
-				      ipmi_sensor_t                      **sensor)
+mxp_alloc_semi_stand_threshold_sensor
+(ipmi_mc_t                          *mc,
+ void                               *data,
+ void			            (*data_freer)(void *),
+ unsigned int                       sensor_type,
+ unsigned int                       base_unit,
+ char                               *id,
+ unsigned int                       assert_events,
+ unsigned int                       deassert_events,
+ ipmi_reading_get_cb                reading_get,
+ int                                raw_nominal, /* -1 disables. */
+ int                                raw_normal_min, /* -1 disables. */
+ int                                raw_normal_max, /* -1 disables. */
+ int                                m,
+ int                                b,
+ int                                b_exp,
+ int                                r_exp,
+ ipmi_sensor_t                      **sensor)
 {
     int                 rv;
     ipmi_sensor_cbs_t   cbs;
@@ -1577,9 +1564,7 @@ mxp_alloc_semi_stand_threshold_sensor(
     cbs.ipmi_reading_get = reading_get;
     ipmi_sensor_set_callbacks(*sensor, &cbs);
 
-    rv = mxp_finish_sensor(mc, *sensor, num, entity);
-
-    return rv;
+    return 0;
 }
 
 /***********************************************************************
@@ -1600,8 +1585,6 @@ mxp_cleanup_control_oem_info(ipmi_control_t *control, void *oem_info)
 
 static int
 mxp_alloc_control(ipmi_mc_t               *mc,
-		  ipmi_entity_t           *entity,
-		  unsigned int            num,
 		  void                    *data,
 		  unsigned int            control_type,
 		  char                    *id,
@@ -1645,15 +1628,23 @@ mxp_alloc_control(ipmi_mc_t               *mc,
 
     ipmi_control_set_callbacks(*control, &cbs);
 
-    /* Add it to the MC and entity. */
+    return 0;
+}
+
+int
+mxp_add_control(ipmi_mc_t      *mc,
+		ipmi_control_t **control,
+		unsigned int   num, 
+		ipmi_entity_t  *entity)
+{
+    int rv;
+
     rv = ipmi_control_add_nonstandard(mc, mc, *control, num, entity,
 				      NULL, NULL);
     if (rv) {
 	ipmi_control_destroy(*control);
-	ipmi_mem_free(hdr);
 	*control = NULL;
     }
-
     return rv;
 }
 
@@ -2380,17 +2371,22 @@ mxp_add_chassis_sensors(mxp_info_t *info)
     int rv;
 
     /* The System LEDS (both OOS and inserv controls). */
-    rv = mxp_alloc_control(info->mc, info->chassis_ent,
-			   MXP_SYS_LED_CONTROL_NUM,
+    rv = mxp_alloc_control(info->mc,
 			   info,
 			   IPMI_CONTROL_LIGHT,
 			   "SYS LEDS",
 			   sys_led_set,
 			   sys_led_get,
-			   &(info->sys_led));
+			   &info->sys_led);
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(info->sys_led, 3, sys_leds);
+    rv = mxp_add_control(info->mc, 
+			 &info->sys_led,
+			 MXP_SYS_LED_CONTROL_NUM,
+			 info->chassis_ent);
+    if (rv)
+	goto out_err;
 
     /* The Chassis Type. */
     rv = mxp_alloc_id_control(info->mc, info->chassis_ent,
@@ -2419,17 +2415,22 @@ mxp_add_chassis_sensors(mxp_info_t *info)
 	goto out_err;
 
     /* Now the relays. */
-    rv = mxp_alloc_control(info->mc, info->chassis_ent,
-			   MXP_RELAY_CONTROL_NUM,
+    rv = mxp_alloc_control(info->mc,
 			   info,
 			   IPMI_CONTROL_RELAY,
 			   "Telco Relays",
 			   relay_set,
 			   relay_get,
-			   &(info->relays));
+			   &info->relays);
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(info->relays, 4);
+    rv = mxp_add_control(info->mc, 
+			 &info->relays,
+			 MXP_RELAY_CONTROL_NUM,
+			 info->chassis_ent);
+    if (rv)
+	goto out_err;
 
  out_err:
     return rv;
@@ -3873,8 +3874,7 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     unsigned int assert, deassert;
 
     /* Power supply presence */
-    rv = mxp_alloc_discrete_sensor(info->mc, ps->ent,
-				   MXP_PS_PRESENCE_NUM(ps->idx),
+    rv = mxp_alloc_discrete_sensor(info->mc,
 				   ps, NULL,
 				   IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
 				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
@@ -3882,17 +3882,21 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				   0x3, 0x3,
 				   ps_presence_states_get,
 				   NULL,
-				   &(ps->presence));
+				   &ps->presence);
     if (rv)
 	goto out_err;
     ipmi_sensor_set_ignore_if_no_entity(ps->presence, 0);
+    rv = mxp_add_sensor(info->mc, 
+			&ps->presence,
+			MXP_PS_PRESENCE_NUM(ps->idx),
+			ps->ent);
+    if (rv)
+	goto out_err;
 
     /* Power supply sensor.  Offset 0 and 1 are standard presence and
        failure bits.  Offsets 13 and 14 are a-feed and b-feed
        sensors. */
-    rv = mxp_alloc_discrete_sensor(
-				   info->mc, ps->ent,
-				   MXP_PS_PS_NUM(ps->idx),
+    rv = mxp_alloc_discrete_sensor(info->mc,
 				   ps, NULL,
 				   IPMI_SENSOR_TYPE_POWER_SUPPLY,
 				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
@@ -3900,13 +3904,18 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				   0x6003, 0x6003,
 				   ps_ps_states_get,
 				   ps_ps_reading_name_string,
-				   &(ps->ps));
+				   &ps->ps);
+    if (rv)
+	goto out_err;
+    rv = mxp_add_sensor(info->mc, 
+			&ps->ps,
+			MXP_PS_PS_NUM(ps->idx),
+			ps->ent);
     if (rv)
 	goto out_err;
 
     /* Enabled control */
-    rv = mxp_alloc_control(info->mc, ps->ent,
-			   MXP_PS_ENABLE_NUM(ps->idx),
+    rv = mxp_alloc_control(info->mc,
 			   ps,
 			   IPMI_CONTROL_POWER,
 			   "enable",
@@ -3916,31 +3925,47 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(ps->enable, 1);
-	       
+    rv = mxp_add_control(info->mc, 
+			 &ps->enable,
+			 MXP_PS_ENABLE_NUM(ps->idx),	       
+			 ps->ent);
+    if (rv)
+	goto out_err;
+
     /* LED controls */
-    rv = mxp_alloc_control(info->mc, ps->ent,
-			   MXP_PS_OOS_LED_NUM(ps->idx),
+    rv = mxp_alloc_control(info->mc,
 			   ps,
 			   IPMI_CONTROL_LIGHT,
 			   "OOS LED",
 			   ps_led_set,
 			   ps_led_get,
-			   &(ps->oos_led));
+			   &ps->oos_led);
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(ps->oos_led, 1, red_led);
+    rv = mxp_add_control(info->mc, 
+			 &ps->oos_led,
+			 MXP_PS_OOS_LED_NUM(ps->idx),	       
+			 ps->ent);
+    if (rv)
+	goto out_err;
 
-    rv = mxp_alloc_control(info->mc, ps->ent,
-			   MXP_PS_INS_LED_NUM(ps->idx),
+    rv = mxp_alloc_control(info->mc,
 			   ps,
 			   IPMI_CONTROL_LIGHT,
 			   "InS LED",
 			   ps_led_set,
 			   ps_led_get,
-			   &(ps->inserv_led));
+			   &ps->inserv_led);
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(ps->inserv_led, 1, green_led);
+    rv = mxp_add_control(info->mc, 
+			 &ps->inserv_led,
+			 MXP_PS_INS_LED_NUM(ps->idx),	       
+			 ps->ent);
+    if (rv)
+	goto out_err;
 
     /* Power Supply Type ID */
     rv = mxp_alloc_id_control(info->mc, ps->ent,
@@ -3969,21 +3994,25 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 	goto out_err;
 
     /* Power supply I2C isolate control */
-    rv = mxp_alloc_control(info->mc, ps->ent,
-			   MXP_PS_I2C_ISOLATE_NUM(ps->idx),
+    rv = mxp_alloc_control(info->mc,
 			   ps,
 			   IPMI_CONTROL_OUTPUT,
 			   "I2C Isolate",
 			   ps_i2c_isolate_set,
 			   ps_i2c_isolate_get,
-			   &(ps->ps_i2c_isolate));
+			   &ps->ps_i2c_isolate);
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(ps->ps_i2c_isolate, 1);
+    rv = mxp_add_control(info->mc, 
+			 &ps->ps_i2c_isolate,
+			 MXP_PS_I2C_ISOLATE_NUM(ps->idx),	       
+			 ps->ent);
+    if (rv)
+	goto out_err;
 
     /* Fan presence sensor */
-    rv = mxp_alloc_discrete_sensor(info->mc, ps->fan_ent,
-				   MXP_FAN_PRESENCE_NUM(ps->idx),
+    rv = mxp_alloc_discrete_sensor(info->mc,
 				   ps, NULL,
 				   IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
 				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
@@ -3991,16 +4020,21 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				   0x7, 0,
 				   fan_presence_states_get,
 				   NULL,
-				   &(ps->fan_presence));
+				   &ps->fan_presence);
     if (rv)
 	goto out_err;
     ipmi_sensor_set_ignore_if_no_entity(ps->fan_presence, 0);
+    rv = mxp_add_sensor(info->mc, 
+			&ps->fan_presence,
+			MXP_FAN_PRESENCE_NUM(ps->idx),
+			ps->fan_ent);
+    if (rv)
+	goto out_err;
 
     /* Fan speed sensor */
     assert = 1 << ((IPMI_LOWER_CRITICAL * 2) + IPMI_GOING_LOW);
     deassert = 1 << ((IPMI_LOWER_CRITICAL * 2) + IPMI_GOING_LOW);
-    rv = mxp_alloc_threshold_sensor(info->mc, ps->fan_ent,
-				    MXP_FAN_SPEED_NUM(ps->idx),
+    rv = mxp_alloc_threshold_sensor(info->mc,
 				    ps, NULL,
 				    IPMI_SENSOR_TYPE_FAN,
 				    IPMI_UNIT_TYPE_RPM,
@@ -4008,7 +4042,13 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				    assert, deassert,
 				    mxp_fan_reading_get_cb,
 				    -1, -1, -1,
-				    &(ps->fan));
+				    &ps->fan);
+    if (rv)
+	goto out_err;
+    rv = mxp_add_sensor(info->mc, 
+			&ps->fan,
+			MXP_FAN_SPEED_NUM(ps->idx),
+			ps->fan_ent);
     if (rv)
 	goto out_err;
 
@@ -4017,8 +4057,7 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 	      | (1 << ((IPMI_UPPER_CRITICAL * 2) + IPMI_GOING_HIGH)));
     deassert = ((1 << ((IPMI_UPPER_NON_CRITICAL * 2) + IPMI_GOING_HIGH))
 		| (1 << ((IPMI_UPPER_CRITICAL * 2) + IPMI_GOING_HIGH)));
-    rv = mxp_alloc_threshold_sensor(info->mc, ps->fan_ent,
-				    MXP_FAN_COOLING_NUM(ps->idx),
+    rv = mxp_alloc_threshold_sensor(info->mc,
 				    ps, NULL,
 				    IPMI_SENSOR_TYPE_COOLING_DEVICE,
 				    IPMI_UNIT_TYPE_UNSPECIFIED,
@@ -4026,25 +4065,35 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
 				    assert, deassert,
 				    mxp_fan_reading_get_cb,
 				    -1, -1, -1,
-				    &(ps->cooling));
+				    &ps->cooling);
+    if (rv)
+	goto out_err;
+    rv = mxp_add_sensor(info->mc, 
+			&ps->cooling,
+			MXP_FAN_COOLING_NUM(ps->idx),
+			ps->fan_ent);
     if (rv)
 	goto out_err;
 
     /* FAN LED controls. */
-    rv = mxp_alloc_control(info->mc, ps->fan_ent,
-			   MXP_FAN_OOS_LED_NUM(ps->idx),
+    rv = mxp_alloc_control(info->mc,
 			   ps,
 			   IPMI_CONTROL_LIGHT,
 			   "OOS LED",
 			   fan_led_set,
 			   fan_led_get,
-			   &(ps->fan_oos_led));
+			   &ps->fan_oos_led);
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(ps->fan_oos_led, 1, red_led);
+    rv = mxp_add_control(info->mc, 
+			 &ps->fan_oos_led,
+			 MXP_FAN_OOS_LED_NUM(ps->idx),
+			 ps->fan_ent);
+    if (rv)
+	goto out_err;
 
-    rv = mxp_alloc_control(info->mc, ps->fan_ent,
-			   MXP_FAN_INS_LED_NUM(ps->idx),
+    rv = mxp_alloc_control(info->mc,
 			   ps,
 			   IPMI_CONTROL_LIGHT,
 			   "InS LED",
@@ -4054,6 +4103,12 @@ mxp_add_power_supply_sensors(mxp_info_t         *info,
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(ps->fan_inserv_led, 1, red_led);
+    rv = mxp_add_control(info->mc, 
+			 &ps->fan_inserv_led,
+			 MXP_FAN_INS_LED_NUM(ps->idx),
+			 ps->fan_ent);
+    if (rv)
+	goto out_err;
 	       
     /* Fan Type ID */
     rv = mxp_alloc_id_control(info->mc, ps->fan_ent,
@@ -4911,8 +4966,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
     int rv;
 
     /* Presence sensor */
-    rv = mxp_alloc_discrete_sensor(board->info->mc, board->ent,
-				   MXP_BOARD_PRESENCE_NUM(board->idx),
+    rv = mxp_alloc_discrete_sensor(board->info->mc,
 				   board, NULL,
 				   IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
 				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
@@ -4920,13 +4974,12 @@ mxp_add_board_sensors(mxp_info_t  *info,
 				   0x3, 0x3,
 				   mxpv1_board_presence_states_get,
 				   NULL,
-				   &(board->presence));
+				   &board->presence);
 #if 0
     /* Can't use healthy for board presence, because it depends on bd sel */
     if (info->mxp_version == MXP_V1) {
     } else {
-	rv = mxp_alloc_discrete_sensor(board->info->mc, board->ent,
-				       MXP_BOARD_PRESENCE_NUM(board->idx),
+	rv = mxp_alloc_discrete_sensor(board->info->mc,
 				       board, NULL,
 				       IPMI_SENSOR_TYPE_ENTITY_PRESENCE,
 				       IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
@@ -4934,30 +4987,40 @@ mxp_add_board_sensors(mxp_info_t  *info,
 				       0x3, 0x3,
 				       board_presence_states_get,
 				       NULL,
-				       &(board->presence));
+				       &board->presence);
     }
 #endif
     if (rv)
 	goto out_err;
     ipmi_sensor_set_ignore_if_no_entity(board->presence, 0);
+    rv = mxp_add_sensor(board->info->mc, 
+			&board->presence,
+			MXP_BOARD_PRESENCE_NUM(board->idx),
+			board->ent);
+    if (rv)
+	goto out_err;
 
     /* out-of-service LED control */
-    rv = mxp_alloc_control(board->info->mc, board->ent,
-			   MXP_BOARD_OOS_LED_NUM(board->idx),
+    rv = mxp_alloc_control(board->info->mc,
 			   board,
 			   IPMI_CONTROL_LIGHT,
 			   "OOS LED",
 			   board_led_set,
 			   board_led_get,
-			   &(board->oos_led));
+			   &board->oos_led);
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(board->oos_led, 1, red_led);
     ipmi_control_set_ignore_if_no_entity(board->oos_led, 0);
+    rv = mxp_add_control(board->info->mc, 
+			 &board->oos_led,
+			 MXP_BOARD_OOS_LED_NUM(board->idx),
+			 board->ent);
+    if (rv)
+	goto out_err;
 
     /* in-service LED control */
-    rv = mxp_alloc_control(board->info->mc, board->ent,
-			   MXP_BOARD_INS_LED_NUM(board->idx),
+    rv = mxp_alloc_control(board->info->mc,
 			   board,
 			   IPMI_CONTROL_LIGHT,
 			   "InS LED",
@@ -4968,63 +5031,90 @@ mxp_add_board_sensors(mxp_info_t  *info,
 	goto out_err;
     ipmi_control_light_set_lights(board->inserv_led, 1, green_led);
     ipmi_control_set_ignore_if_no_entity(board->inserv_led, 0);
+    rv = mxp_add_control(board->info->mc, 
+			 &board->inserv_led,
+			 MXP_BOARD_INS_LED_NUM(board->idx),
+			 board->ent);
+    if (rv)
+	goto out_err;
 
     if (!board->is_amc) {
 	/* Board Select control */
-	rv = mxp_alloc_control(board->info->mc, board->ent,
-			       MXP_BOARD_BD_SEL_NUM(board->idx),
+	rv = mxp_alloc_control(board->info->mc,
 			       board,
 			       IPMI_CONTROL_POWER,
 			       "Bd Sel",
 			       bd_sel_set,
 			       bd_sel_get,
-			       &(board->bd_sel));
+			       &board->bd_sel);
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->bd_sel, 1);
         ipmi_control_set_ignore_if_no_entity(board->bd_sel, 0);
+	rv = mxp_add_control(board->info->mc, 
+			     &board->bd_sel,
+			     MXP_BOARD_BD_SEL_NUM(board->idx),
+			     board->ent);
+	if (rv)
+	    goto out_err;
 
 	/* PCI Reset control */
-	rv = mxp_alloc_control(board->info->mc, board->ent,
-			       MXP_BOARD_PCI_RESET_NUM(board->idx),
+	rv = mxp_alloc_control(board->info->mc,
 			       board,
 			       IPMI_CONTROL_RESET,
 			       "PCI Reset",
 			       pci_reset_set,
 			       pci_reset_get,
-			       &(board->pci_reset));
+			       &board->pci_reset);
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->pci_reset, 1);
         ipmi_control_set_ignore_if_no_entity(board->pci_reset, 0);
+	rv = mxp_add_control(board->info->mc, 
+			     &board->pci_reset,
+			     MXP_BOARD_PCI_RESET_NUM(board->idx),
+			     board->ent);
+	if (rv)
+	    goto out_err;
+
 
 	/* Slot init control */
-	rv = mxp_alloc_control(board->info->mc, board->ent,
-			       MXP_SLOT_INIT_NUM(board->idx),
+	rv = mxp_alloc_control(board->info->mc,
 			       board,
 			       IPMI_CONTROL_ONE_SHOT_OUTPUT,
 			       "Slot Init",
 			       slot_init_set,
 			       NULL,
-			       &(board->slot_init));
+			       &board->slot_init);
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->slot_init, 1);
         ipmi_control_set_ignore_if_no_entity(board->slot_init, 0);
+	rv = mxp_add_control(board->info->mc, 
+			     &board->slot_init,
+			     MXP_SLOT_INIT_NUM(board->idx),
+			     board->ent);
+	if (rv)
+	    goto out_err;
 
 	/* I2C enable control */
-	rv = mxp_alloc_control(board->info->mc, board->ent,
-			       MXP_SLOT_I2C_ISOLATE_NUM(board->idx),
+	rv = mxp_alloc_control(board->info->mc,
 			       board,
 			       IPMI_CONTROL_OUTPUT,
 			       "I2C Isolate",
 			       i2c_isolate_set,
 			       NULL,
-			       &(board->i2c_isolate));
+			       &board->i2c_isolate);
 	if (rv)
 	    goto out_err;
 	ipmi_control_set_num_elements(board->i2c_isolate, 1);
         ipmi_control_set_ignore_if_no_entity(board->i2c_isolate, 0);
+	rv = mxp_add_control(board->info->mc, 
+			     &board->i2c_isolate,
+			     MXP_SLOT_I2C_ISOLATE_NUM(board->idx),
+			     board->ent);
+	if (rv)
+	    goto out_err;
     }
 
  out_err:
@@ -6185,63 +6275,84 @@ new_board_sensors(ipmi_mc_t           *mc,
     int rv;
 
     /* The slot sensor */
-    rv = mxp_alloc_discrete_sensor(
-				   mc, ent,
-				   MXP_BOARD_SLOT_NUM,
+    rv = mxp_alloc_discrete_sensor(mc,
 				   NULL, NULL,
 				   IPMI_SENSOR_TYPE_SLOT_CONNECTOR,
 				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
 				   "slot",
-				   0x60, 0x60, /* offsets 5 and 6 are supported (power and
-						  hot-swap requester). */
+				   0x60, 0x60, /* offsets 5 and 6 are
+						  supported (power and
+						  hot-swap
+						  requester). */
 				   board_slot_get,
 				   NULL,
-				   &(sinfo->slot));
+				   &sinfo->slot);
     if (rv)
 	goto out_err;
     ipmi_sensor_set_hot_swap_requester(sinfo->slot, 6, 1); /* offset 6 is for
 							      hot-swap */
+    rv = mxp_add_sensor(mc, 
+			&sinfo->slot,
+			MXP_BOARD_SLOT_NUM,
+			ent);
+    if (rv)
+	goto out_err;
 
     /* Reset control */
-    rv = mxp_alloc_control(mc, ent,
-			   MXP_BOARD_RESET_NUM,
+    rv = mxp_alloc_control(mc,
 			   NULL,
 			   IPMI_CONTROL_RESET,
 			   "reset",
 			   board_reset_set,
 			   NULL,
-			   &(sinfo->reset));
+			   &sinfo->reset);
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(sinfo->reset, 1);
+    rv = mxp_add_control(mc, 
+			 &sinfo->reset,
+			 MXP_BOARD_RESET_NUM,
+			 ent);
+    if (rv)
+	goto out_err;
 
     /* Power control */
-    rv = mxp_alloc_control(mc, ent,
-			   MXP_BOARD_POWER_NUM,
+    rv = mxp_alloc_control(mc,
 			   NULL,
 			   IPMI_CONTROL_POWER,
 			   "power",
 			   board_power_set,
 			   board_power_get,
-			   &(sinfo->power));
+			   &sinfo->power);
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(sinfo->power, 1);
     ipmi_control_set_ignore_if_no_entity(sinfo->power, 0);
+    rv = mxp_add_control(mc, 
+			 &sinfo->power,
+			 MXP_BOARD_POWER_NUM,
+			 ent);
+    if (rv)
+	goto out_err;
 
     /* Blue LED control */
-    rv = mxp_alloc_control(mc, ent,
-			   MXP_BOARD_BLUE_LED_NUM,
+    rv = mxp_alloc_control(mc,
 			   NULL,
 			   IPMI_CONTROL_LIGHT,
 			   "blue led",
 			   board_blue_led_set,
 			   board_blue_led_get,
-			   &(sinfo->blue_led));
+			   &sinfo->blue_led);
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(sinfo->blue_led, 1, blue_blinking_led);
     ipmi_control_set_hot_swap_indicator(sinfo->blue_led, 1, 1, 0, 2, 1);
+    rv = mxp_add_control(mc, 
+			 &sinfo->blue_led,
+			 MXP_BOARD_BLUE_LED_NUM,
+			 ent);
+    if (rv)
+	goto out_err;
 
     /* Slot gegraphic address */
     rv = mxp_alloc_id_control(mc, ent,
@@ -6257,8 +6368,7 @@ new_board_sensors(ipmi_mc_t           *mc,
 	goto out_err;
 
     /* Board power mode */
-    rv = mxp_alloc_control(mc, ent,
-			   MXP_BOARD_POWER_CONFIG_NUM,
+    rv = mxp_alloc_control(mc,
 			   NULL,
 			   IPMI_CONTROL_OUTPUT,
 			   "Power Config",
@@ -6268,6 +6378,12 @@ new_board_sensors(ipmi_mc_t           *mc,
     if (rv)
 	goto out_err;
     ipmi_control_set_num_elements(sinfo->power_config, 3);
+    rv = mxp_add_control(mc, 
+			 &sinfo->power_config,
+			 MXP_BOARD_POWER_CONFIG_NUM,
+			 ent);
+    if (rv)
+	goto out_err;
 
     /* The Chassis ID. */
     rv = mxp_alloc_id_control(mc, ent,
@@ -7019,26 +7135,31 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_mc_set_sel_device_support(mc, 1);
 
     /* AMC slot sensor */
-    rv = mxp_alloc_discrete_sensor
-      (mc, info->ent,
-       MXP_BOARD_SLOT_NUM,
-       NULL, NULL,
-       IPMI_SENSOR_TYPE_SLOT_CONNECTOR,
-       IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
-       "slot",
-       0x40, 0x40, /* offset 6 is supported (hot-swap requester). */
-       board_slot_get,
-       NULL,
-       &info->slot);
+    rv = mxp_alloc_discrete_sensor(mc,
+				   NULL, NULL,
+				   IPMI_SENSOR_TYPE_SLOT_CONNECTOR,
+				   IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
+				   "slot",
+				   0x40, 0x40, /* offset 6 is
+						  supported (hot-swap
+						  requester). */
+				   board_slot_get,
+				   NULL,
+				   &info->slot);
     if (rv)
 	goto out_err;
     /* offset 6 is for hot-swap */
     ipmi_sensor_set_hot_swap_requester(info->slot, 6, 1);
+    rv = mxp_add_sensor(mc, 
+			&info->slot,
+			MXP_BOARD_SLOT_NUM,
+			info->ent);
+    if (rv)
+	goto out_err;
 
     /* AMC offline sensor */
     rv = mxp_alloc_discrete_sensor
-      (mc, info->ent,
-       MXP_AMC_OFFLINE_NUM,
+      (mc,
        NULL, NULL,
        IPMI_SENSOR_TYPE_MANAGEMENT_SUBSYSTEM_HEALTH,
        IPMI_EVENT_READING_TYPE_SENSOR_SPECIFIC,
@@ -7049,9 +7170,14 @@ amc_board_handler(ipmi_mc_t *mc)
        &info->offline);
     if (rv)
 	goto out_err;
+    rv = mxp_add_sensor(mc, 
+			&info->offline,
+			MXP_AMC_OFFLINE_NUM,
+			info->ent);
+    if (rv)
+	goto out_err;
 
-    rv = mxp_alloc_control(mc, info->ent,
-			   MXP_BOARD_BLUE_LED_NUM,
+    rv = mxp_alloc_control(mc,
 			   NULL,
 			   IPMI_CONTROL_LIGHT,
 			   "blue led",
@@ -7062,10 +7188,15 @@ amc_board_handler(ipmi_mc_t *mc)
 	goto out_err;
     ipmi_control_light_set_lights(info->blue_led, 1, blue_led);
     ipmi_control_set_hot_swap_indicator(info->blue_led, 1, 1, 0, 2, 1);
+    rv = mxp_add_control(mc, 
+			 &info->blue_led,
+			 MXP_BOARD_BLUE_LED_NUM,
+			 info->ent);
+    if (rv)
+	goto out_err;
 
     /* Temperature and cooling LEDs. */
-    rv = mxp_alloc_control(mc, info->ent,
-			   MXP_BOARD_TEMP_COOL_LED_NUM,
+    rv = mxp_alloc_control(mc,
 			   NULL,
 			   IPMI_CONTROL_LIGHT,
 			   "temp cool led",
@@ -7075,6 +7206,12 @@ amc_board_handler(ipmi_mc_t *mc)
     if (rv)
 	goto out_err;
     ipmi_control_light_set_lights(info->temp_cool_led, 2, amc_temp_cool_leds);
+    rv = mxp_add_control(mc, 
+			 &info->temp_cool_led,
+			 MXP_BOARD_TEMP_COOL_LED_NUM,
+			 info->ent);
+    if (rv)
+	goto out_err;
 
     /* Last reset reason. */
     rv = mxp_alloc_id_control(mc, info->ent,
@@ -7144,8 +7281,7 @@ amc_board_handler(ipmi_mc_t *mc)
 	/* 5V */
 	assert = 0;
 	deassert = 0;
-	rv = mxp_alloc_threshold_sensor(mc, info->ent,
-					MXP_5V_SENSOR_NUM,
+	rv = mxp_alloc_threshold_sensor(mc,
 					info, NULL,
 					IPMI_SENSOR_TYPE_VOLTAGE,
 					IPMI_UNIT_TYPE_VOLTS,
@@ -7153,16 +7289,21 @@ amc_board_handler(ipmi_mc_t *mc)
 					assert, deassert,
 					mxp_voltage_reading_get_cb,
 					50, 48, 52,
-					&(info->s5v));
+					&info->s5v);
 	if (rv)
 	    goto out_err;
 	ipmi_sensor_set_ignore_if_no_entity(info->s5v, 0);
+	rv = mxp_add_sensor(mc, 
+			    &info->s5v,
+			    MXP_5V_SENSOR_NUM,
+			    info->ent);
+	if (rv)
+	    goto out_err;
 
 	/* 3.3V */
 	assert = 0;
 	deassert = 0;
-	rv = mxp_alloc_threshold_sensor(mc, info->ent,
-					MXP_3_3V_SENSOR_NUM,
+	rv = mxp_alloc_threshold_sensor(mc,
 					info, NULL,
 					IPMI_SENSOR_TYPE_VOLTAGE,
 					IPMI_UNIT_TYPE_VOLTS,
@@ -7170,15 +7311,20 @@ amc_board_handler(ipmi_mc_t *mc)
 					assert, deassert,
 					mxp_voltage_reading_get_cb,
 					33, 32, 34,
-					&(info->s3_3v));
+					&info->s3_3v);
+	if (rv)
+	    goto out_err;
+	rv = mxp_add_sensor(mc,
+			    &info->s3_3v,
+			    MXP_3_3V_SENSOR_NUM,
+			    info->ent);
 	if (rv)
 	    goto out_err;
 
 	/* 2.5V */
 	assert = 0;
 	deassert = 0;
-	rv = mxp_alloc_threshold_sensor(mc, info->ent,
-					MXP_2_5V_SENSOR_NUM,
+	rv = mxp_alloc_threshold_sensor(mc,
 					info, NULL,
 					IPMI_SENSOR_TYPE_VOLTAGE,
 					IPMI_UNIT_TYPE_VOLTS,
@@ -7186,15 +7332,20 @@ amc_board_handler(ipmi_mc_t *mc)
 					assert, deassert,
 					mxp_voltage_reading_get_cb,
 					25, 24, 26,
-					&(info->s2_5v));
+					&info->s2_5v);
+	if (rv)
+	    goto out_err;
+	rv = mxp_add_sensor(mc,
+			    &info->s2_5v,
+			    MXP_2_5V_SENSOR_NUM,
+			    info->ent);
 	if (rv)
 	    goto out_err;
 
 	/* 8V */
 	assert = 0;
 	deassert = 0;
-	rv = mxp_alloc_threshold_sensor(mc, info->ent,
-					MXP_8V_SENSOR_NUM,
+	rv = mxp_alloc_threshold_sensor(mc,
 					info, NULL,
 					IPMI_SENSOR_TYPE_VOLTAGE,
 					IPMI_UNIT_TYPE_VOLTS,
@@ -7202,22 +7353,34 @@ amc_board_handler(ipmi_mc_t *mc)
 					assert, deassert,
 					mxp_voltage_reading_get_cb,
 					80, 76, 84,
-					&(info->s8v));
+					&info->s8v);
+	if (rv)
+	    goto out_err;
+	rv = mxp_add_sensor(mc,
+			    &info->s8v,
+			    MXP_8V_SENSOR_NUM,
+			    info->ent);
 	if (rv)
 	    goto out_err;
 
 	/* Temperature */
-	rv = mxp_alloc_semi_stand_threshold_sensor(mc, info->ent,
-						   MXP_AMC_TEMP_SENSOR_NUM,
-						   info, NULL,
-						   IPMI_SENSOR_TYPE_TEMPERATURE,
-						   IPMI_UNIT_TYPE_DEGREES_C,
-						   "Temp",
-						   0, 0,
-						   get,
-						   -1, -1, -1,
-						   1, 0, 0, 0,
-						   &info->temp);
+	rv = mxp_alloc_semi_stand_threshold_sensor
+	    (mc,
+	     info, NULL,
+	     IPMI_SENSOR_TYPE_TEMPERATURE,
+	     IPMI_UNIT_TYPE_DEGREES_C,
+	     "Temp",
+	     0, 0,
+	     get,
+	     -1, -1, -1,
+	     1, 0, 0, 0,
+	     &info->temp);
+	if (rv)
+	    goto out_err;
+	rv = mxp_add_sensor(mc,
+			    &info->temp,
+			    MXP_AMC_TEMP_SENSOR_NUM,
+			    info->ent);
 	if (rv)
 	    goto out_err;
     }
@@ -8119,10 +8282,8 @@ typedef struct zynx_info_s
 } zynx_info_t;
 
 static void
-zynx_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+zynx_destroyer(ipmi_mc_t *mc, zynx_info_t *sinfo)
 {
-    zynx_info_t *sinfo = cb_data;
-
     destroy_board_sensors(mc, &(sinfo->board));
     if (sinfo->board_temp)
 	ipmi_sensor_destroy(sinfo->board_temp);
@@ -8135,6 +8296,14 @@ zynx_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     if (sinfo->v5)
 	ipmi_sensor_destroy(sinfo->v5);
     ipmi_mem_free(sinfo);
+}
+
+static void
+zynx_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
+{
+    zynx_info_t *sinfo = cb_data;
+
+    zynx_destroyer(mc, sinfo);
 }
 
 static int
@@ -8197,7 +8366,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 
     /* This is the temperature sensor on the board.  It's accessed
        using a standard reading command, but there's no SDR for it. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x60, info, NULL,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
 					       IPMI_SENSOR_TYPE_TEMPERATURE,
 					       IPMI_UNIT_TYPE_DEGREES_C,
 					       "Board Temp",
@@ -8205,14 +8374,19 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       get,
 					       -1, -1, 55,
 					       1, 0, 0, 0,
-					       &(sinfo->board_temp));
+					       &sinfo->board_temp);
     if (rv)
 	goto out;
     ipmi_sensor_set_analog_data_format(sinfo->board_temp,
 				       IPMI_ANALOG_DATA_FORMAT_2_COMPL);
     ipmi_sensor_set_raw_sensor_max(sinfo->board_temp, 0x7f);
     ipmi_sensor_set_raw_sensor_min(sinfo->board_temp, 0x80);
-
+    rv = mxp_add_sensor(mc,
+			&sinfo->board_temp,
+			0x60,
+			ent);
+    if (rv)
+	goto out;
 
     /*
      * Here's the calculations from ZYNX for converting the voltage
@@ -8233,7 +8407,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 
     /* This is the voltage sensors on the board.  It's accessed
        using a standard reading command, but there's no SDR for it. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x41, info, NULL,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
 					       "2.5V",
@@ -8244,8 +8418,14 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       &(sinfo->v2_5));
     if (rv)
 	goto out;
+    rv = mxp_add_sensor(mc,
+			&sinfo->v2_5,
+			0x41,
+			ent);
+    if (rv)
+	goto out;
 
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x42, info, NULL,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
 					       "1.8V",
@@ -8253,11 +8433,17 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       get,
 					       139, 133, 146,
 					       129, 0, 0, -4,
-					       &(sinfo->v1_8));
+					       &sinfo->v1_8);
+    if (rv)
+	goto out;
+    rv = mxp_add_sensor(mc,
+			&sinfo->v1_8,
+			0x42,
+			ent);
     if (rv)
 	goto out;
 
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x43, info, NULL,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
 					       "3.3V",
@@ -8265,11 +8451,17 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       get,
 					       153, 146, 160,
 					       216, 0, 0, -4,
-					       &(sinfo->v3_3));
+					       &sinfo->v3_3);
+    if (rv)
+	goto out;
+    rv = mxp_add_sensor(mc,
+			&sinfo->v3_3,
+			0x43,
+			ent);
     if (rv)
 	goto out;
 
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, 0x45, info, NULL,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc, info, NULL,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
 					       "5V",
@@ -8277,7 +8469,13 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 					       get,
 					       156, 148, 163,
 					       321, 0, 0, -4,
-					       &(sinfo->v5));
+					       &sinfo->v5);
+    if (rv)
+	goto out;
+    rv = mxp_add_sensor(mc,
+			&sinfo->v5,
+			0x45,
+			ent);
     if (rv)
 	goto out;
 
@@ -8285,7 +8483,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
 
  out:
     if (rv && sinfo)
-	ipmi_mem_free(sinfo);
+	zynx_destroyer(mc, sinfo);
     ipmi_domain_entity_unlock(domain);
     return rv;
 }
@@ -8324,7 +8522,7 @@ alloc_adm1021_sensor(ipmi_mc_t             *mc,
     i2c_write(mc, bus, addr, 0xa, 4); /* Do 1 conversion a second. */
     i2c_write(mc, bus, addr, 0x9, 0); /* Enable conversion. */
 
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_TEMPERATURE,
 					       IPMI_UNIT_TYPE_DEGREES_C,
@@ -8333,17 +8531,23 @@ alloc_adm1021_sensor(ipmi_mc_t             *mc,
 					       i2c_sens_get_reading,
 					       -1, -1, 105,
 					       1, 0, 0, 0,
-					       &(sinfo->sensor));
-    if (rv) {
-	ipmi_mem_free(info);
+					       &sinfo->sensor);
+    if (rv)
 	goto out;
-    }
     ipmi_sensor_set_analog_data_format(sinfo->sensor,
 				       IPMI_ANALOG_DATA_FORMAT_2_COMPL);
     ipmi_sensor_set_raw_sensor_max(sinfo->sensor, 0x7f);
     ipmi_sensor_set_raw_sensor_min(sinfo->sensor, 0x80);
+    rv = mxp_add_sensor(mc,
+			&sinfo->sensor,
+			num,
+			ent);
+    if (rv)
+	goto out;
 
  out:
+    if (rv)
+	ipmi_mem_free(info);
     return rv;
 }
 
@@ -8396,7 +8600,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info->bus = bus;
     info->addr = addr;
     info->offset = 0x27; /* Offset 0x27 is the temp sens. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_TEMPERATURE,
 					       IPMI_UNIT_TYPE_DEGREES_C,
@@ -8405,7 +8609,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 					       i2c_sens_get_reading,
 					       -1, -1, 55,
 					       1, 0, 0, 0,
-					       &(sinfo->board_temp));
+					       &sinfo->board_temp);
     if (rv) {
 	ipmi_mem_free(info);
 	goto out;
@@ -8414,6 +8618,14 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 				       IPMI_ANALOG_DATA_FORMAT_2_COMPL);
     ipmi_sensor_set_raw_sensor_max(sinfo->board_temp, 0x7f);
     ipmi_sensor_set_raw_sensor_min(sinfo->board_temp, 0x80);
+    rv = mxp_add_sensor(mc,
+			&sinfo->board_temp,
+			num,
+			ent);
+    if (rv) {
+	ipmi_mem_free(info);
+	goto out;
+    }
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -8422,7 +8634,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info->addr = addr;
     info->offset = 0x20; /* Offset 0x20 is the 1.5V sens. */
     /* Nominal is 117 (1.5V), step is 13mV. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num+1,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
@@ -8436,6 +8648,14 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 	ipmi_mem_free(info);
 	goto out;
     }
+    rv = mxp_add_sensor(mc,
+			&sinfo->v1_5,
+			num+1,
+			ent);
+    if (rv) {
+	ipmi_mem_free(info);
+	goto out;
+    }
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -8444,7 +8664,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info->addr = addr;
     info->offset = 0x22; /* Offset 0x22 is the 3.3V sens. */
     /* Nominal is 192 (3.3V), step is 17.2mV. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num+2,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
@@ -8453,7 +8673,15 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 					       i2c_sens_get_reading,
 					       192, 182, 202,
 					       172, 24, 0, -4,
-					       &(sinfo->v3_3));
+					       &sinfo->v3_3);
+    if (rv) {
+	ipmi_mem_free(info);
+	goto out;
+    }
+    rv = mxp_add_sensor(mc,
+			&sinfo->v3_3,
+			num+2,
+			ent);
     if (rv) {
 	ipmi_mem_free(info);
 	goto out;
@@ -8466,7 +8694,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info->addr = addr;
     info->offset = 0x23; /* Offset 0x23 is the 5V sens. */
     /* Nominal is 192 (5V), step is 26mV. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num+3,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
@@ -8475,7 +8703,15 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 					       i2c_sens_get_reading,
 					       192, 183, 201,
 					       26, 8, 0, -3,
-					       &(sinfo->v5));
+					       &sinfo->v5);
+    if (rv) {
+	ipmi_mem_free(info);
+	goto out;
+    }
+    rv = mxp_add_sensor(mc,
+			&sinfo->v5,
+			num+3,
+			ent);
     if (rv) {
 	ipmi_mem_free(info);
 	goto out;
@@ -8490,7 +8726,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     /* Nominal is 192 (12V), step is 62.5mV.  Since 625 is too
        large for 10-bit signed, we use 63 and modify the B value
        to make it exactly 12v at the nominal value. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num+4,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
@@ -8499,7 +8735,15 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 					       i2c_sens_get_reading,
 					       192, 183, 201,
 					       63, -96, 0, -3,
-					       &(sinfo->v12));
+					       &sinfo->v12);
+    if (rv) {
+	ipmi_mem_free(info);
+	goto out;
+    }
+    rv = mxp_add_sensor(mc,
+			&sinfo->v12,
+			num+4,
+			ent);
     if (rv) {
 	ipmi_mem_free(info);
 	goto out;
@@ -8515,7 +8759,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
        per step and zero-based, the equation for the resistor network is
        V = (4.8265 * Vccp1) - 19.1326. */
     /* Note - due to the was measured, the tolerances here are 15%. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num+5,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
@@ -8529,6 +8773,14 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 	ipmi_mem_free(info);
 	goto out;
     }
+    rv = mxp_add_sensor(mc,
+			&sinfo->vneg12,
+			num+5,
+			ent);
+    if (rv) {
+	ipmi_mem_free(info);
+	goto out;
+    }
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -8537,7 +8789,7 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
     info->addr = addr;
     info->offset = 0x25; /* Offset 0x25 is the Vcpp2 sens., which is 1.5V */
     /* Nominal is 117 (1.5V), step is 14.1mV. */
-    rv = mxp_alloc_semi_stand_threshold_sensor(mc, ent, num+6,
+    rv = mxp_alloc_semi_stand_threshold_sensor(mc,
 					       info, ipmi_mem_free,
 					       IPMI_SENSOR_TYPE_VOLTAGE,
 					       IPMI_UNIT_TYPE_VOLTS,
@@ -8547,6 +8799,14 @@ alloc_adm9240_sensor(ipmi_mc_t             *mc,
 					       117, 112, 122,
 					       141, -70, 0, -4,
 					       &sinfo->vccp);
+    if (rv) {
+	ipmi_mem_free(info);
+	goto out;
+    }
+    rv = mxp_add_sensor(mc,
+			&sinfo->vccp,
+			num+6,
+			ent);
     if (rv) {
 	ipmi_mem_free(info);
 	goto out;
