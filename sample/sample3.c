@@ -285,7 +285,7 @@ got_discrete_states(ipmi_sensor_t *sensor,
     for (i=0; i<15; i++) {
 	int val, rv;
 
-	rv = ipmi_discrete_event_readable(sensor, i, &val);
+	rv = ipmi_sensor_discrete_event_readable(sensor, i, &val);
 	if (rv || !val)
 	    continue;
 
