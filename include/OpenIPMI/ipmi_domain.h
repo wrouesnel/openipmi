@@ -237,6 +237,18 @@ int ipmi_register_domain_oem_check(ipmi_domain_oem_check check,
 int ipmi_deregister_domain_oem_check(ipmi_domain_oem_check check,
 				     void                  *cb_data);
 
+/* Register OEM data for the domain.  Note that you can set a function
+   that will be called after all the domain messages have been flushed
+   but before anything else is destroyed.  If the OEM data or
+   destroyer is NULL, it will not be called. */
+typedef void (*ipmi_domain_destroy_oem_data_cb)(ipmi_domain_t *domain,
+						void          *oem_data);
+void ipmi_domain_set_oem_data(ipmi_domain_t                   *domain,
+			      void                            *oem_data,
+			      ipmi_domain_destroy_oem_data_cb destroyer);
+void *ipmi_domain_get_oem_data(ipmi_domain_t *domain);
+
+
 /* Initialize the domain code, called only once at init time. */
 int _ipmi_domain_init(void);
 

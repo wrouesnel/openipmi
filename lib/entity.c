@@ -3728,6 +3728,60 @@ FRU_VAL_GET(enum ipmi_str_type_e, product_info_fru_file_id_type)
 FRU_STR_GET(product_info_fru_file_id)
 FRU_CUSTOM_GET(product_info)
 
+unsigned int
+ipmi_entity_get_num_multi_records(ipmi_entity_t *entity)
+{
+    CHECK_ENTITY_LOCK(entity);
+    if (!entity->fru)
+	return 0;
+    return ipmi_fru_get_num_multi_records(entity->fru);
+}
+
+int
+ipmi_entity_get_multi_record_type(ipmi_entity_t *entity,
+				  unsigned int  num,
+				  unsigned char *type)
+{
+    CHECK_ENTITY_LOCK(entity);
+    if (!entity->fru)
+	return ENOSYS;
+    return ipmi_fru_get_multi_record_type(entity->fru, num, type);
+}
+
+int
+ipmi_entity_get_multi_record_format_version(ipmi_entity_t *entity,
+					    unsigned int  num,
+					    unsigned char *ver)
+{
+    CHECK_ENTITY_LOCK(entity);
+    if (!entity->fru)
+	return ENOSYS;
+    return ipmi_fru_get_multi_record_format_version(entity->fru, num, ver);
+}
+
+int
+ipmi_entity_get_multi_record_data_len(ipmi_entity_t *entity,
+				      unsigned int  num,
+				      unsigned int  *len)
+{
+    CHECK_ENTITY_LOCK(entity);
+    if (!entity->fru)
+	return ENOSYS;
+    return ipmi_fru_get_multi_record_data_len(entity->fru, num, len);
+}
+
+int
+ipmi_entity_get_multi_record_data(ipmi_entity_t *entity,
+				  unsigned int  num,
+				  unsigned char *data,
+				  unsigned int  *length)
+{
+    CHECK_ENTITY_LOCK(entity);
+    if (!entity->fru)
+	return ENOSYS;
+    return ipmi_fru_get_multi_record_data(entity->fru, num, data, length);
+}
+
 /***************************************************************************
  *
  * Hot swap

@@ -216,6 +216,24 @@ int ipmi_fru_get_product_info_custom(ipmi_fru_t   *fru,
 				     char         *str,
 				     unsigned int *strlen);
 
+unsigned int ipmi_fru_get_num_multi_records(ipmi_fru_t *fru);
+int ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
+				   unsigned int  num,
+				   unsigned char *type);
+int ipmi_fru_get_multi_record_format_version(ipmi_fru_t    *fru,
+					     unsigned int  num,
+					     unsigned char *ver);
+int ipmi_fru_get_multi_record_data_len(ipmi_fru_t   *fru,
+				       unsigned int num,
+				       unsigned int *len);
+/* Note that length is a in/out parameter, you must set the length to
+   the length of the buffer and the function will set it tot he actual
+   length. */
+int ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
+				   unsigned int  num,
+				   unsigned char *data,
+				   unsigned int  *length);
+
 /* FIXME - for OEM code (if ever necessary) add a way to create an
    empty FRU, fill it with data, and put it into an entity. */
 

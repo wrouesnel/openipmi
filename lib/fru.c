@@ -1042,6 +1042,244 @@ GET_DATA_STR(product_info, PRODUCT_INFO, asset_tag)
 GET_DATA_STR(product_info, PRODUCT_INFO, fru_file_id)
 GET_CUSTOM_STR(product_info, PRODUCT_INFO)
 
+typedef struct ipmi_fru_record_elem_s
+{
+    unsigned char type;
+    unsigned char format_version;
+    unsigned char length;
+    unsigned char *data;
+} ipmi_fru_record_elem_t;
+
+typedef struct ipmi_fru_multi_record_s
+{
+    unsigned int           num_records;
+    ipmi_fru_record_elem_t *records;
+} ipmi_fru_multi_record_t;
+
+static void
+fru_multi_record_area_free(ipmi_fru_record_t *rec)
+{
+    ipmi_fru_multi_record_t *u = fru_record_get_data(rec);
+    int                     i;
+
+    if (u->records) {
+	for (i=0; i<u->num_records; i++) {
+	    if (u->records[i].data)
+		ipmi_mem_free(u->records[i].data);
+	}
+	ipmi_mem_free(u->records);
+    }
+    fru_record_free(rec);
+}
+
+fru_record_handlers_t multi_record_handlers =
+{
+    .free = fru_multi_record_area_free,
+};
+
+static int
+fru_decode_multi_record_area(ipmi_fru_t        *fru,
+			     unsigned char     *data,
+			     unsigned int      data_len,
+			     ipmi_fru_record_t **rrec)
+{
+    ipmi_fru_record_t       *rec;
+    int                     err;
+    int                     i;
+    unsigned int            num_records;
+    unsigned char           *orig_data = data;
+    unsigned int            orig_data_len = data_len;
+    ipmi_fru_multi_record_t *u;
+    ipmi_fru_record_elem_t  *r;
+    unsigned char           sum;
+    unsigned int            length;
+
+    /* First scan for the number of records. */
+    num_records = 0;
+    for (;;) {
+	if (data_len < 5) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_decode_multi_record_area):"
+		     " Data not long enough for multi record",
+		     FRU_DOMAIN_NAME(fru));
+	    return EBADMSG;
+	}
+
+	if (checksum(data, 5) != 0) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_decode_multi_record_area):"
+		     " Header checksum for record %d failed",
+		     FRU_DOMAIN_NAME(fru), num_records+1);
+	    return EBADMSG;
+	}
+
+	length = data[2];
+	if ((length + 5) > data_len) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_decode_multi_record_area):"
+		     " Record went past end of data",
+		     FRU_DOMAIN_NAME(fru));
+	    return EBADMSG;
+	}
+
+	sum = checksum(data+5, length) + data[3];
+	if (sum != 0) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_decode_multi_record_area):"
+		     " Data checksum for record %d failed",
+		     FRU_DOMAIN_NAME(fru), num_records+1);
+	    return EBADMSG;
+	}
+
+	num_records++;
+
+	if (data[1] & 0x80)
+	    /* End of list */
+	    break;
+
+	data += length + 5;
+    }
+
+    rec = fru_record_alloc(IPMI_FRU_FTR_MULTI_RECORD_AREA,
+			   &multi_record_handlers,
+			   sizeof(ipmi_fru_multi_record_t));
+    if (!rec)
+	return ENOMEM;
+
+    u = fru_record_get_data(rec);
+    u->num_records = num_records;
+    u->records = ipmi_mem_alloc(sizeof(ipmi_fru_record_elem_t) * num_records);
+    if (!u->records) {
+	err = ENOMEM;
+	goto out_err;
+    }
+    memset(u->records, 0, sizeof(ipmi_fru_record_elem_t) * num_records);
+
+    data = orig_data;
+    data_len = orig_data_len;
+    for (i=0; i<num_records; i++) {
+	if (data_len < 5) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_decode_multi_record_area):"
+		     " Data not long enough for multi record",
+		     FRU_DOMAIN_NAME(fru));
+	    return EBADMSG;
+	}
+
+	length = data[2];
+	if ((length + 5) > data_len) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_decode_multi_record_area):"
+		     " Record went past end of data",
+		     FRU_DOMAIN_NAME(fru));
+	    return EBADMSG;
+	}
+
+	r = u->records + i;
+	r->data = ipmi_mem_alloc(length);
+	if (!r->data) {
+	    err = ENOMEM;
+	    goto out_err;
+	}
+
+	memcpy(r->data, data+5, length);
+	r->length = length;
+	r->type = data[0];
+	r->format_version = data[1] & 0xf;
+
+	data += length + 5;
+    }
+
+    *rrec = rec;
+
+    return 0;
+
+ out_err:
+    fru_multi_record_area_free(rec);
+    return err;
+}
+
+unsigned int
+ipmi_fru_get_num_multi_records(ipmi_fru_t *fru)
+{
+    ipmi_fru_multi_record_t *u;
+
+    if (!fru->multi_record)
+	return 0;
+
+    u = fru_record_get_data(fru->multi_record);
+    return u->num_records;
+}
+
+int
+ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
+			       unsigned int  num,
+			       unsigned char *type)
+{
+    ipmi_fru_multi_record_t *u;
+
+    if (!fru->multi_record)
+	return ENOSYS;
+    u = fru_record_get_data(fru->multi_record);
+    if (num >= u->num_records)
+	return EINVAL;
+    *type = u->records[num].type;
+    return 0;
+}
+
+int
+ipmi_fru_get_multi_record_format_version(ipmi_fru_t    *fru,
+					 unsigned int  num,
+					 unsigned char *ver)
+{
+    ipmi_fru_multi_record_t *u;
+
+    if (!fru->multi_record)
+	return ENOSYS;
+    u = fru_record_get_data(fru->multi_record);
+    if (num >= u->num_records)
+	return EINVAL;
+    *ver = u->records[num].format_version;
+    return 0;
+}
+
+int
+ipmi_fru_get_multi_record_data_len(ipmi_fru_t   *fru,
+				   unsigned int num,
+				   unsigned int *len)
+{
+    ipmi_fru_multi_record_t *u;
+
+    if (!fru->multi_record)
+	return ENOSYS;
+    u = fru_record_get_data(fru->multi_record);
+    if (num >= u->num_records)
+	return EINVAL;
+    *len = u->records[num].length;
+    return 0;
+}
+
+int
+ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
+			       unsigned int  num,
+			       unsigned char *data,
+			       unsigned int  *length)
+{
+    ipmi_fru_multi_record_t *u;
+
+    if (!fru->multi_record)
+	return ENOSYS;
+    u = fru_record_get_data(fru->multi_record);
+    if (num >= u->num_records)
+	return EINVAL;
+    if (*length < u->records[num].length)
+	return EINVAL;
+    memcpy(data, u->records[num].data, u->records[num].length);
+    *length = u->records[num].length;
+    return 0;
+}
+
+
 typedef struct fru_offset_s
 {
     int type;
@@ -1128,7 +1366,8 @@ process_fru_info(ipmi_fru_t *fru)
 	    break;
 
 	case IPMI_FRU_FTR_MULTI_RECORD_AREA:
-	    /* FIXME */
+	    err = fru_decode_multi_record_area(fru, data+offset, plen,
+					       &fru->multi_record);
 	    break;
 	}
 

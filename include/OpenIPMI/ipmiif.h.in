@@ -109,12 +109,16 @@
    off to another thread. */
 /* The comparisons below return -1 if id1<id2, 0 if id1==id2, and 1 if
    id1>id2. */
+/* This ipmi_xxx_id_set_invalid() functions set the passed in domain
+   id to an invalid value that is always the same and guaranteed to be
+   invalid. */
 ipmi_domain_id_t ipmi_domain_convert_to_id(ipmi_domain_t *domain);
 typedef void (*ipmi_domain_ptr_cb)(ipmi_domain_t *domain, void *cb_data);
 int ipmi_domain_pointer_cb(ipmi_domain_id_t   id,
 			   ipmi_domain_ptr_cb handler,
 			   void               *cb_data);
 int ipmi_cmp_domain_id(ipmi_domain_id_t id1, ipmi_domain_id_t id2);
+void ipmi_domain_id_set_invalid(ipmi_domain_id_t *id);
 
 ipmi_entity_id_t ipmi_entity_convert_to_id(ipmi_entity_t *ent);
 typedef void (*ipmi_entity_ptr_cb)(ipmi_entity_t *entity, void *cb_data);
@@ -125,6 +129,7 @@ int ipmi_entity_find_id(ipmi_domain_id_t domain_id,
 			int entity_id, int entity_instance,
 			int channel, int slave_address,
 			ipmi_entity_id_t *id);
+void ipmi_entity_id_set_invalid(ipmi_entity_id_t *id);
 
 ipmi_sensor_id_t ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor);
 typedef void (*ipmi_sensor_ptr_cb)(ipmi_sensor_t *sensor, void *cb_data);
@@ -137,6 +142,7 @@ int ipmi_sensor_find_id(ipmi_domain_id_t domain_id,
 			int channel, int slave_address,
 			char *id_name,
 			ipmi_sensor_id_t *id);
+void ipmi_sensor_id_set_invalid(ipmi_sensor_id_t *id);
 
 ipmi_control_id_t ipmi_control_convert_to_id(ipmi_control_t *control);
 typedef void (*ipmi_control_ptr_cb)(ipmi_control_t *control, void *cb_data);
@@ -149,6 +155,7 @@ int ipmi_control_find_id(ipmi_domain_id_t domain_id,
 			 int channel, int slave_address,
 			 char *id_name,
 			 ipmi_control_id_t *id);
+void ipmi_control_id_set_invalid(ipmi_control_id_t *id);
 
 /* Callback used for generic domain reporting. */
 typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
@@ -499,6 +506,24 @@ int ipmi_entity_get_product_info_custom(ipmi_entity_t *entity,
 					unsigned int  num,
 					char          *str,
 					unsigned int  *strlen);
+
+unsigned int ipmi_entity_get_num_multi_records(ipmi_entity_t *entity);
+int ipmi_entity_get_multi_record_type(ipmi_entity_t *entity,
+				      unsigned int  num,
+				      unsigned char *type);
+int ipmi_entity_get_multi_record_format_version(ipmi_entity_t *entity,
+						unsigned int  num,
+						unsigned char *ver);
+int ipmi_entity_get_multi_record_data_len(ipmi_entity_t *entity,
+					  unsigned int  num,
+					  unsigned int  *len);
+/* Note that length is a in/out parameter, you must set the length to
+   the length of the buffer and the function will set it tot he actual
+   length. */
+int ipmi_entity_get_multi_record_data(ipmi_entity_t *entity,
+				      unsigned int  num,
+				      unsigned char *data,
+				      unsigned int  *length);
 
 /* For the given entity, iterate over all the children of the entity,
    calling the given handler with each child.  The children will not

@@ -1,3 +1,16 @@
+2004-02-20 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Added multi-record
+	FRU handling.
+
+	* lib/entity.c, include/OpenIPMI/ipmiif.h: Added multi-record
+	FRU handling.
+
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Added OEM
+	information for a domain.
+
+	* lib/oem_atca.c: More ATCA work.
+
 2004-02-19 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/lanparm.c: Initialize the callback data when cleaning

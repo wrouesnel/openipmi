@@ -153,6 +153,10 @@ struct ipmi_domain_s
        somehow stored in this data structure. */
     void *entities_in_main_sdr;
 
+    /* OEM data for OEM code. */
+    void                            *oem_data;
+    ipmi_domain_destroy_oem_data_cb oem_data_destroyer;
+
     /* Major and minor versions of the connection. */
     unsigned int major_version : 4;
     unsigned int minor_version : 4;
@@ -370,6 +374,9 @@ cleanup_domain(ipmi_domain_t *domain)
 	ipmi_destroy_lock(domain->cmds_lock);
     if (domain->cmds)
 	free_ilist(domain->cmds);
+
+    if (domain->oem_data && domain->oem_data_destroyer)
+	domain->oem_data_destroyer(domain, domain->oem_data);
 
     /* Delete the sensors from the main SDR repository. */
     if (domain->sensors_in_main_sdr) {
@@ -4059,6 +4066,21 @@ ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int *len)
 	memcpy(name, data, slen);
     name[slen] = '\0';
     *len = slen + 1; /* Include the null char */
+}
+
+void
+ipmi_domain_set_oem_data(ipmi_domain_t                   *domain,
+			 void                            *oem_data,
+			 ipmi_domain_destroy_oem_data_cb destroyer)
+{
+    domain->oem_data = oem_data;
+    domain->oem_data_destroyer = destroyer;
+}
+
+void *
+ipmi_domain_get_oem_data(ipmi_domain_t *domain)
+{
+    return domain->oem_data;
 }
 
 /***********************************************************************
