@@ -988,6 +988,7 @@ Identifier controls hold identification information for a system, such
 as a chassis id, chassis type, geographic address, or whatever.
 
 \subsubsection{Events}
+\label{sec-openipmi-events}
 
 When an external event comes into OpenIPMI, the user will always
 receive that event in some manner (unless they do not register with a
@@ -1002,6 +1003,10 @@ it is responsible for deleting the event from the event log with
 \verb=ipmi_event_delete()=.  If no callback handles the event, then it
 will be delivered to the main event handler(s).  This allows calls to
 receive events but the events to be managed in a single location.
+
+To handle the event, the event handler should return
+\verb=IPMI_EVENT_HANDLED=.  To pass the event on, it should return
+\verb=IPMI_EVENT_NOT_HANDLED=.
 
 If a callback handles the event, then all future callbacks called due
 to the event will receive a \verb=NULL= for the event.  So be ready to
@@ -4370,12 +4375,15 @@ Both SDR repository types support the concept of a reservation.
 
 \section{The Main \acs{SDR} Repository}
 
+TBD - write this
 
 \subsection{Modal and Non-Modal \acs{SDR} Repositories}
 
 \subsection{Commands for Main \acs{SDR} Repositories}
 
 \section{Device \acs{SDR} Repositories}
+
+TBD - write this
 
 \subsection{Dynamic Device \acs{SDR} Repositories}
 
@@ -4944,6 +4952,8 @@ int ipmi_entity_remove_presence_handler
  ipmi_entity_presence_change_cb handler,
  void                           *cb_data);
 \end{verbatim}
+This is a standard event handler as defined in
+section~\vref{sec-openipmi-events}.
 
 \section{Entity Types and Info}
 Entities come in four different flavors:
@@ -5262,10 +5272,16 @@ print_sensors(ipmi_entity_t *entity)
 
 \section{Entity Hot-Swap}
 
+TBD - write this
+
 \section{\acs{FRU} Data}
+
+TBD - write this
 
 \section{Entity \acs{SDR}s}
 \label{sec-entity-sdrs}
+
+TBD - write this
 
 %---------------------------------------------------------------------
 \chapter{Sensors}
@@ -5396,10 +5412,16 @@ threshold.
 \section{Discrete Sensors}
 
 Discrete sensors report their readings in a 16-bit bitmask, each bit
-generally representing a discrete state.  You enable events on the
-sensor by specifying which bits you want to generate events.  Like
-threshold sensors, these events may or may not be user-controllable.
-The capabilities of the sensor may be fetched by the user.
+generally representing a discrete state.  For instance, consider the
+slot/connector sensor.  Bit 0 tells if there is a fault.  Bit 2 tells
+if a device is present in the slot.  Bit 5 tells if power is off on
+the slot.  Each bit tells a completely independent state and they may
+each be zero or one independently.
+
+You enable events on the sensor by specifying which bits you want to
+generate events.  Like threshold sensors, these events may or may not
+be user-controllable.  The capabilities of the sensor may be fetched
+by the user.
 
 \begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
 \caption{Sensor Types and Codes\label{sensor-type-codes}}
@@ -5408,6 +5430,10 @@ The capabilities of the sensor may be fetched by the user.
 \endhead
 \hline
 \end{longtable}
+
+\section{Commands Dealing with Sensors}
+
+TBD - write this
 
 \section{Using Sensors in OpenIPMI}
 As mentioned before, \acs{IPMI} sensors are very complicated.
@@ -5896,7 +5922,7 @@ char *ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset);
 
 The following section applies to all sensor types.
 
-\subsubsection{Entity Information}
+\subsubsection{Sensor Entity Information}
 Every sensor is associated with a specific entity, these calls let you
 fetch the entity information.  The following calls return the numeric
 entity id and instance:
@@ -5924,6 +5950,14 @@ int ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
 \end{verbatim}
 See appendix~\ref{appendix-ipmi-strings} for more information about
 these strings.
+
+The function
+\begin{verbatim}
+int ipmi_sensor_get_name(ipmi_sensor_t *sensor, char *name, int length);
+\end{verbatim}
+returns a fully qualified name for the sensor with the entity name
+prepended.  The name array is filled with the name, up to the length
+given.  This is useful for printing string names for the sensor.
 
 \subsubsection{Sensor Event Support in OpenIPMI}
 \label{sec-sensor-event-support-in-openipmi}
@@ -5963,6 +5997,53 @@ enables, it will also support the entire sensor and global enables.
 The entire sensor enable being off will override all per-state
 enables.  The global enable will turn off all events from a management
 controller no matter what other settings are present.
+
+To receive events from a sensor, an event handler must be registered.
+An event handler may also be dynamically removed.  The following
+functions do this for discrete sensors:
+\begin{verbatim}
+typedef int (*ipmi_sensor_discrete_event_cb)(
+    ipmi_sensor_t         *sensor,
+    enum ipmi_event_dir_e dir,
+    int                   offset,
+    int                   severity,
+    int                   prev_severity,
+    void                  *cb_data,
+    ipmi_event_t          *event);
+int ipmi_sensor_add_discrete_event_handler(
+    ipmi_sensor_t                 *sensor,
+    ipmi_sensor_discrete_event_cb handler,
+    void                          *cb_data);
+int ipmi_sensor_remove_discrete_event_handler(
+    ipmi_sensor_t                 *sensor,
+    ipmi_sensor_discrete_event_cb handler,
+    void                          *cb_data);
+\end{verbatim}
+The following functions do this for threshold sensors:
+\begin{verbatim}
+typedef int (*ipmi_sensor_threshold_event_cb)(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_event_dir_e       dir,
+    enum ipmi_thresh_e          threshold,
+    enum ipmi_event_value_dir_e high_low,
+    enum ipmi_value_present_e   value_present,
+    unsigned int                raw_value,
+    double                      value,
+    void                        *cb_data,
+    ipmi_event_t                *event);
+int ipmi_sensor_add_threshold_event_handler(
+    ipmi_sensor_t                  *sensor,
+    ipmi_sensor_threshold_event_cb handler,
+    void                           *cb_data);
+int ipmi_sensor_remove_threshold_event_handler(
+    ipmi_sensor_t                  *sensor,
+    ipmi_sensor_threshold_event_cb handler,
+    void                           *cb_data);
+\end{verbatim}
+This function should generally be registered in the entity callback
+that reports the sensor being added, so that no events will be missed.
+This is a standard event handler as defined in
+section~\vref{sec-openipmi-events}.
 
 \subsubsection{Sensor/Entity Existance Interaction}
 Some sensors are present even if the entity they are attached to is
@@ -6252,7 +6333,7 @@ The specific threshold values in the enumeration are:
 \end{itemize}
 The function
 \begin{verbatim}
-char *ipmi_get_threshold_string(unsigned int val);
+char *ipmi_get_threshold_string(enum ipmi_thresh_e val);
 \end{verbatim}
 converts the value to a string.
 
@@ -6337,8 +6418,8 @@ The \texttt{dir} parameter specifies if the ``assertion'' or ``deassertion''
 Using these, all the thresholds and directions may be iterated through
 to find out what the sensor supports.  The functions
 \begin{verbatim}
-char *ipmi_get_value_dir_string(unsigned int val);
-char *ipmi_get_event_dir_string(unsigned int val);
+char *ipmi_get_value_dir_string(enum ipmi_event_value_dir_e val);
+char *ipmi_get_event_dir_string(enum ipmi_event_dir_e val);
 \end{verbatim}
 converts the \texttt{value\_dir} and \texttt{dir} values to strings.
 
@@ -6366,28 +6447,191 @@ int ipmi_is_threshold_event_set(ipmi_event_state_t          *events,
 
 \subsubsection{Threshold Sensor Units in OpenIPMI}
 
-TBD - write this.
+In \acs{IPMI}, the \acs{SDR} gives quite a bit of information about
+what the converted value means.  The units are specified, unit
+modifiers and rates, and whether the measurement is a percentage.
 
+Unit come in three types, the normal unit, the rate unit (which give a
+``per time'' modifiers) and a modifier unit (which gives whether the
+measurement has a modifier unit, and whether it is a division or a
+multiplication.
+
+The units on a sensor are specified as a base unit, and optional
+modifier unit and how that is used, and a rate unit.  The modifier
+unit is specified in the same type as a base unit.  A boolean
+specifying whether the value is a percentage is also available.
+
+This may sound somewhat complicated, but it is not as bad as it
+sounds.  In most cases only the base unit is used, the modifier unit
+use is none (thus the modifier is turned off), the rate unit is none,
+and it is not a percentage.  But you can use all of these.  For
+instance, if a sensor measures percent of newton$\times$meters per second,
+that would use all of these.  The base unit would be newtons, the
+modifier unit use would be multiply, the modifier unit would be
+meters, the rate unit would be per second, and the percentage would be
+true.
+
+The following functions return these units for a sensor:
 \begin{verbatim}
-/* Returns IPMI_RATE_UNIT_xxx */
-int ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_MODIFIER_UNIT_xxx */
-int ipmi_sensor_get_modifier_unit_use(ipmi_sensor_t *sensor);
-
-/* Returns if the value is a percentage. */
+enum ipmi_unit_type_e ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor);
+enum ipmi_unit_type_e ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor);
+enum ipmi_rate_unit_e ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
+enum ipmi_modifier_unit_use_e ipmi_sensor_get_modifier_unit_use(
+    ipmi_sensor_t *sensor);
 int ipmi_sensor_get_percentage(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_UNIT_TYPE_xxx */
-int ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor);
-
-/* Returns IPMI_UNIT_TYPE_xxx */
-int ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor);
-
+\end{verbatim}
+The following return string representations for the units:
+\begin{verbatim}
 char *ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor);
 char *ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor);
 \end{verbatim}
+Note that for OEM values, OEM code may set the strings even though the
+unit enumerations return an invalid value.  So use the strings if you
+can.
+
+As a quick example, the following code will print out a value with all
+the various units attached:
+\begin{verbatim}
+char *percent = "";
+char *base;
+char *mod_use = "";
+char *modifier = "";
+char *rate;
+
+base = ipmi_sensor_get_base_unit_string(sensor);
+if (ipmi_sensor_get_percentage(sensor))
+    percent = "%";
+switch (ipmi_sensor_get_modifier_unit_use(sensor)) {
+case IPMI_MODIFIER_UNIT_NONE:
+    break;
+case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
+    mod_use = "/";
+    modifier = ipmi_sensor_get_modifier_unit_string(sensor);
+    break;
+case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
+    mod_use = "*";
+    modifier = ipmi_sensor_get_modifier_unit_string(sensor);
+    break;
+}
+rate = ipmi_sensor_get_rate_unit_string(sensor);
+
+printf("  value: %lf%s %s%s%s%s\n", val, percent,
+	   base, mod_use, modifier, rate);
+\end{verbatim}
+
+The modifier units uses in OpenIPMI are:
+\begin{itemize}
+\item IPMI\_MODIFIER\_UNIT\_NONE
+\item IPMI\_MODIFIER\_UNIT\_BASE\_DIV\_MOD
+\item IPMI\_MODIFIER\_UNIT\_BASE\_MULT\_MOD
+\end{itemize}
+The rate units are:
+\begin{itemize}
+\item IPMI\_RATE\_UNIT\_NONE
+\item IPMI\_RATE\_UNIT\_PER\_US
+\item IPMI\_RATE\_UNIT\_PER\_MS
+\item IPMI\_RATE\_UNIT\_PER\_SEC
+\item IPMI\_RATE\_UNIT\_MIN
+\item IPMI\_RATE\_UNIT\_HOUR
+\item IPMI\_RATE\_UNIT\_DAY
+\end{itemize}
+The normal units are:
+\begin{itemize}
+\item IPMI\_UNIT\_TYPE\_UNSPECIFIED
+\item IPMI\_UNIT\_TYPE\_DEGREES\_C
+\item IPMI\_UNIT\_TYPE\_DEGREES\_F
+\item IPMI\_UNIT\_TYPE\_DEGREES\_K
+\item IPMI\_UNIT\_TYPE\_VOLTS
+\item IPMI\_UNIT\_TYPE\_AMPS
+\item IPMI\_UNIT\_TYPE\_WATTS
+\item IPMI\_UNIT\_TYPE\_JOULES
+\item IPMI\_UNIT\_TYPE\_COULOMBS
+\item IPMI\_UNIT\_TYPE\_VA
+\item IPMI\_UNIT\_TYPE\_NITS
+\item IPMI\_UNIT\_TYPE\_LUMENS
+\item IPMI\_UNIT\_TYPE\_LUX
+\item IPMI\_UNIT\_TYPE\_CANDELA
+\item IPMI\_UNIT\_TYPE\_KPA
+\item IPMI\_UNIT\_TYPE\_PSI
+\item IPMI\_UNIT\_TYPE\_NEWTONS
+\item IPMI\_UNIT\_TYPE\_CFM
+\item IPMI\_UNIT\_TYPE\_RPM
+\item IPMI\_UNIT\_TYPE\_HZ
+\item IPMI\_UNIT\_TYPE\_USECONDS
+\item IPMI\_UNIT\_TYPE\_MSECONDS
+\item IPMI\_UNIT\_TYPE\_SECONDS
+\item IPMI\_UNIT\_TYPE\_MINUTE
+\item IPMI\_UNIT\_TYPE\_HOUR
+\item IPMI\_UNIT\_TYPE\_DAY
+\item IPMI\_UNIT\_TYPE\_WEEK
+\item IPMI\_UNIT\_TYPE\_MIL
+\item IPMI\_UNIT\_TYPE\_INCHES
+\item IPMI\_UNIT\_TYPE\_FEET
+\item IPMI\_UNIT\_TYPE\_CUBIC\_INCHS
+\item IPMI\_UNIT\_TYPE\_CUBIC\_FEET
+\item IPMI\_UNIT\_TYPE\_MILLIMETERS
+\item IPMI\_UNIT\_TYPE\_CENTIMETERS
+\item IPMI\_UNIT\_TYPE\_METERS
+\item IPMI\_UNIT\_TYPE\_CUBIC\_CENTIMETERS
+\item IPMI\_UNIT\_TYPE\_CUBIC\_METERS
+\item IPMI\_UNIT\_TYPE\_LITERS
+\item IPMI\_UNIT\_TYPE\_FL\_OZ
+\item IPMI\_UNIT\_TYPE\_RADIANS
+\item IPMI\_UNIT\_TYPE\_SERADIANS
+\item IPMI\_UNIT\_TYPE\_REVOLUTIONS
+\item IPMI\_UNIT\_TYPE\_CYCLES
+\item IPMI\_UNIT\_TYPE\_GRAVITIES
+\item IPMI\_UNIT\_TYPE\_OUNCES
+\item IPMI\_UNIT\_TYPE\_POUNDS
+\item IPMI\_UNIT\_TYPE\_FOOT\_POUNDS
+\item IPMI\_UNIT\_TYPE\_OUNCE\_INCHES
+\item IPMI\_UNIT\_TYPE\_GAUSS
+\item IPMI\_UNIT\_TYPE\_GILBERTS
+\item IPMI\_UNIT\_TYPE\_HENRIES
+\item IPMI\_UNIT\_TYPE\_MHENRIES
+\item IPMI\_UNIT\_TYPE\_FARADS
+\item IPMI\_UNIT\_TYPE\_UFARADS
+\item IPMI\_UNIT\_TYPE\_OHMS
+\item IPMI\_UNIT\_TYPE\_SIEMENS
+\item IPMI\_UNIT\_TYPE\_MOLES
+\item IPMI\_UNIT\_TYPE\_BECQUERELS
+\item IPMI\_UNIT\_TYPE\_PPM
+\item IPMI\_UNIT\_TYPE\_reserved1
+\item IPMI\_UNIT\_TYPE\_DECIBELS
+\item IPMI\_UNIT\_TYPE\_DbA
+\item IPMI\_UNIT\_TYPE\_DbC
+\item IPMI\_UNIT\_TYPE\_GRAYS
+\item IPMI\_UNIT\_TYPE\_SIEVERTS
+\item IPMI\_UNIT\_TYPE\_COLOR\_TEMP\_DEG\_K
+\item IPMI\_UNIT\_TYPE\_BITS
+\item IPMI\_UNIT\_TYPE\_KBITS
+\item IPMI\_UNIT\_TYPE\_MBITS
+\item IPMI\_UNIT\_TYPE\_GBITS
+\item IPMI\_UNIT\_TYPE\_BYTES
+\item IPMI\_UNIT\_TYPE\_KBYTES
+\item IPMI\_UNIT\_TYPE\_MBYTES
+\item IPMI\_UNIT\_TYPE\_GBYTES
+\item IPMI\_UNIT\_TYPE\_WORDS
+\item IPMI\_UNIT\_TYPE\_DWORDS
+\item IPMI\_UNIT\_TYPE\_QWORDS
+\item IPMI\_UNIT\_TYPE\_LINES
+\item IPMI\_UNIT\_TYPE\_HITS
+\item IPMI\_UNIT\_TYPE\_MISSES
+\item IPMI\_UNIT\_TYPE\_RETRIES
+\item IPMI\_UNIT\_TYPE\_RESETS
+\item IPMI\_UNIT\_TYPE\_OVERRUNS
+\item IPMI\_UNIT\_TYPE\_UNDERRUNS
+\item IPMI\_UNIT\_TYPE\_COLLISIONS
+\item IPMI\_UNIT\_TYPE\_PACKETS
+\item IPMI\_UNIT\_TYPE\_MESSAGES
+\item IPMI\_UNIT\_TYPE\_CHARACTERS
+\item IPMI\_UNIT\_TYPE\_ERRORS
+\item IPMI\_UNIT\_TYPE\_CORRECTABLE\_ERRORS
+\item IPMI\_UNIT\_TYPE\_UNCORRECTABLE\_ERRORS
+\end{itemize}
+The meanings of these values are not defined by the spec, but should
+be fairly obvious.
 
 \subsubsection{Threshold Sensor Hysteresis in OpenIPMI}
 
@@ -6400,21 +6644,37 @@ int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
 
 \subsubsection{Threshold Sensor Reading Information in OpenIPMI}
 
-TBD - write this
-
+In addition to all this, \acs{IPMI} gives some more information about
+the readings.  The following allow the user to get the accuracy and
+tolerance of the readings from the sensor:
 \begin{verbatim}
-/* Sensor reading information from the SDR. */
 int ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
                               int           val,
                               double        *tolerance);
 int ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy);
+\end{verbatim}
+
+The sensor also may have defined ranges and nominal readings.  If a
+value of this type is specified, then the \texttt{\_specified}
+functions below will return true and the specific value will be
+available:
+\begin{verbatim}
 int ipmi_sensor_get_normal_min_specified(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min);
+
 int ipmi_sensor_get_normal_max_specified(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max);
+
 int ipmi_sensor_get_nominal_reading_specified(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
                                     double *nominal_reading);
-int ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max);
-int ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min);
+\end{verbatim}
+The normal min and max give the standard operating range of a sensor.
+The nominal reading is the ``normal'' value the sensor should read.
+
+The sensor may also have absolute minimum and maximum values.  These
+can be fetched with the following functions:
+\begin{verbatim}
 int ipmi_sensor_get_sensor_max(ipmi_sensor_t *sensor, double *sensor_max);
 int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
 \end{verbatim}
@@ -6496,9 +6756,170 @@ TBD - write this
 %---------------------------------------------------------------------
 \chapter{Controls and Miscellany}
 
-\section{Watchdog Timer}
+\section{Controls}
 
-\section{Chassis}
+Standard \acs{IPMI} has no provision for an output device besides a
+few simple functions like reset and power.  However, many systems have
+OEM extensions that allow control of lights, display panels, relays,
+and a lot of other things.  OpenIPMI adds the concept of a
+``control'', which is an output device.
+
+Each control has a specific type, that is fetched with:
+\begin{verbatim}
+int ipmi_control_get_type(ipmi_control_t *control);
+\end{verbatim}
+It returns one of the following values:
+\begin{description}
+\item[IPMI\_CONTROL\_LIGHT] - A light of some time, like an LED or a lamp.
+\item[IPMI\_CONTROL\_RELAY] - A relay output
+\item[IPMI\_CONTROL\_DISPLAY] - A 2-D text display
+\item[IPMI\_CONTROL\_ALARM] - Some type of audible or visible warning device
+\item[IPMI\_CONTROL\_RESET] - A reset line to reset something.  This type
+  allows the value to be set as either on or off.
+\item[IPMI\_CONTROL\_POWER] - Control of the power of something.
+\item[IPMI\_CONTROL\_FAN\_SPEED] - Control of the fan speed.
+\item[IPMI\_CONTROL\_IDENTIFIER] - A general identifier for the entity in
+  question.  This is things like a serial number, a board type, or things
+  of that nature.  These may or may not be writable.
+\item[IPMI\_CONTROL\_ONE\_SHOT\_RESET] - A reset line, but setting the value
+  to one does a reset and release of reset, you cannot hold the device
+  in reset with one of these.
+\item[IPMI\_CONTROL\_OUTPUT] - A general output device like a digital output.
+\item[IPMI\_CONTROL\_ONE\_SHOT\_OUTPUT] - A general one-shot output device.
+\end{description}
+The function:
+\begin{verbatim}
+char *ipmi_control_get_type_string(ipmi_control_t *control);
+\end{verbatim}
+returns a string representation of the control type for the control.
+
+Some controls may have multiple objects that cannot be independently
+controlled.  For example, if a message is sent to set the value of
+three LEDs and it has one byte for each LED and no way to set ``only
+set this one'', then there is no generally and guaranteed way to
+independently control each LED.  In these cases, OpenIPMI represents
+these as a control with multiple values.  When setting, all the values
+must be specified.  When reading, all the values are returned.  To get
+the number of values for a control, use the following function:
+\begin{verbatim}
+int ipmi_control_get_num_vals(ipmi_control_t *control);
+\end{verbatim}
+
+\subsubsection{Control Entity Information}
+Every control is associated with a specific entity, these calls let you
+fetch the entity information.  The following calls return the numeric
+entity id and instance:
+\begin{verbatim}
+int ipmi_control_get_entity_id(ipmi_control_t *control);
+int ipmi_control_get_entity_instance(ipmi_control_t *control);
+\end{verbatim}
+Generally, though, that is note what you want.  You want the actual
+entity object, which may be fetched with the following:
+\begin{verbatim}
+ipmi_entity_t *ipmi_control_get_entity(ipmi_control_t *control);
+\end{verbatim}
+Note that the entity is refcounted when the control is claimed, so the
+entity will exist while you have a valid reference to a control it
+contains.
+
+\subsection{Control Name}
+
+Controls are given a name by the OEM code that creates them.  This is
+useful for printing out control information.  The functions to get
+this are:
+\begin{verbatim}
+int ipmi_control_get_id_length(ipmi_control_t *control);
+enum ipmi_str_type_e ipmi_control_get_id_type(ipmi_control_t *control);
+int ipmi_control_get_id(ipmi_control_t *control, char *id, int length);
+\end{verbatim}
+See appendix~\ref{appendix-ipmi-strings} for more information about
+these strings.
+
+The function
+\begin{verbatim}
+int ipmi_control_get_name(ipmi_control_t *control, char *name, int length);
+\end{verbatim}
+returns a fully qualified name for the control with the entity name
+prepended.  The name array is filled with the name, up to the length
+given.  This is useful for printing string names for the control.
+
+\subsection{Controls and Events}
+
+Controls may support events, much like sensors.  The function:
+\begin{verbatim}
+int ipmi_control_has_events(ipmi_control_t *control);
+\end{verbatim}
+tells if a control supports events.
+
+To register/unregister for control events, use the functions:
+\begin{verbatim}
+typedef int (*ipmi_control_val_event_cb)(ipmi_control_t *control,
+					 int            *valid_vals,
+					 int            *vals,
+					 void           *cb_data,
+					 ipmi_event_t   *event);
+int ipmi_control_add_val_event_handler(ipmi_control_t            *control,
+				       ipmi_control_val_event_cb handler,
+				       void                      *cb_data);
+int ipmi_control_remove_val_event_handler(ipmi_control_t            *control,
+					  ipmi_control_val_event_cb handler,
+					  void                      *cb_data);
+\end{verbatim}
+In the callback, not all values may be present.  The \verb=valid_vals=
+parameter is an array of booleans telling if specific values are
+present.  If an item in that array is true, then the corresponding
+value in the \verb=vals= array is a valid value.  This is a standard
+event handler as defined in section~\vref{sec-openipmi-events}.
+
+\subsection{Basic Type Controls}
+This section describes the more ``normal'' controls, that generally
+have a single value that is a binary or some type of direct setting.
+These take an integer value per control for their setting.  These
+control types are:
+\begin{description}
+\item[relay]
+\item[alarm]
+\item[reset]
+\item[power]
+\item[fan speed]
+\item[one-shot reset]
+\item[output]
+\item[one-shot output]
+\end{description}
+
+To set the value of one of these controls, use the following:
+\begin{verbatim}
+int ipmi_control_set_val(ipmi_control_t     *control,
+			 int                *val,
+			 ipmi_control_op_cb handler,
+			 void               *cb_data);
+\end{verbatim}
+Pass in an array of integers for the values, the length of which
+should be the number of values the control supports.  To get the value
+of a control, use:
+\begin{verbatim}
+typedef void (*ipmi_control_val_cb)(ipmi_control_t *control,
+				    int            err,
+				    int            *val,
+				    void           *cb_data);
+int ipmi_control_get_val(ipmi_control_t      *control,
+			 ipmi_control_val_cb handler,
+			 void                *cb_data);
+\end{verbatim}
+The \texttt{val} returns is an array of integers, the length is the
+number of values the control supports.
+
+\subsection{Light}
+
+\subsubsection{Light}
+
+\subsection{Display}
+
+\subsection{Identifier}
+
+\subsection{Chassis Controls}
+
+\section{Watchdog Timer}
 
 \section{Direct \acs{I$^2$C} Access}
 

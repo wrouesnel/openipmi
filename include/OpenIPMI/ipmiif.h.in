@@ -1239,19 +1239,20 @@ int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
 				 int           *val);
 
 /* Returns IPMI_RATE_UNIT_xxx */
-int ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
+enum ipmi_rate_unit_e ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
 
 /* Returns IPMI_MODIFIER_UNIT_xxx */
-int ipmi_sensor_get_modifier_unit_use(ipmi_sensor_t *sensor);
+enum ipmi_modifier_unit_use_e ipmi_sensor_get_modifier_unit_use(
+    ipmi_sensor_t *sensor);
 
 /* Returns if the value is a percentage. */
 int ipmi_sensor_get_percentage(ipmi_sensor_t *sensor);
 
 /* Returns IPMI_UNIT_TYPE_xxx */
-int ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor);
+enum ipmi_unit_type_e ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor);
 
 /* Returns IPMI_UNIT_TYPE_xxx */
-int ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor);
+enum ipmi_unit_type_e ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor);
 
 /* Sensor reading information from the SDR. */
 int ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
@@ -1441,7 +1442,9 @@ int ipmi_sensor_id_states_get(ipmi_sensor_id_t    sensor_id,
    length of the "name" array. */
 int ipmi_control_get_name(ipmi_control_t *sensor, char *name, int length);
 
+/* The type of control.  Returns something in the form IPMI_CONTROL_xxx */
 int ipmi_control_get_type(ipmi_control_t *control);
+
 int ipmi_control_get_id_length(ipmi_control_t *control);
 enum ipmi_str_type_e ipmi_control_get_id_type(ipmi_control_t *control);
 int ipmi_control_get_id(ipmi_control_t *control, char *id, int length);
@@ -1451,6 +1454,10 @@ int ipmi_control_is_settable(ipmi_control_t *control);
 int ipmi_control_is_readable(ipmi_control_t *control);
 ipmi_entity_t *ipmi_control_get_entity(ipmi_control_t *control);
 char *ipmi_control_get_type_string(ipmi_control_t *control);
+
+/* Returns true if the control can generate events upon change, and
+   false if not. */
+int ipmi_control_has_events(ipmi_control_t *control);
 
 /* Get the number of values the control supports. */
 int ipmi_control_get_num_vals(ipmi_control_t *control);
@@ -1481,10 +1488,6 @@ typedef void (*ipmi_control_val_cb)(ipmi_control_t *control,
 int ipmi_control_get_val(ipmi_control_t      *control,
 			 ipmi_control_val_cb handler,
 			 void                *cb_data);
-
-/* Returns true if the control can generate events upon change, and
-   false if not. */
-int ipmi_control_has_events(ipmi_control_t *control);
 
 /* Register a handler that will be called when the control changes
    value.  Note that if the control does not support this operation,
@@ -1602,7 +1605,7 @@ int ipmi_control_light_is_color_supported(ipmi_control_t *control,
 
 /* ALARM types have no settings. */
 
-/* CONTROL types are represented as arrays of unsigned data.
+/* IDENTIFIER types are represented as arrays of unsigned data.
    Identifiers do not support multiple elements, and have their own
    setting function. */
 typedef void (*ipmi_control_identifier_val_cb)(ipmi_control_t *control,

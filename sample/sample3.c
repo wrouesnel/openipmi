@@ -197,7 +197,33 @@ got_thresh_reading(ipmi_sensor_t             *sensor,
 	printf("  no value present\n");
 	break;
     case IPMI_BOTH_VALUES_PRESENT:
-	printf("  value: %lf\n", val);
+	{
+	    char *percent = "";
+	    char *base;
+	    char *mod_use = "";
+	    char *modifier = "";
+	    char *rate;
+
+	    base = ipmi_sensor_get_base_unit_string(sensor);
+	    if (ipmi_sensor_get_percentage(sensor))
+		percent = "%";
+	    switch (ipmi_sensor_get_modifier_unit_use(sensor)) {
+	    case IPMI_MODIFIER_UNIT_NONE:
+		break;
+	    case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
+		mod_use = "/";
+		modifier = ipmi_sensor_get_modifier_unit_string(sensor);
+		break;
+	    case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
+		mod_use = "*";
+		modifier = ipmi_sensor_get_modifier_unit_string(sensor);
+		break;
+	    }
+	    rate = ipmi_sensor_get_rate_unit_string(sensor);
+	    
+	    printf("  value: %lf%s %s%s%s%s\n", val, percent,
+		   base, mod_use, modifier, rate);
+	}
 	/* FALLTHROUGH */
     case IPMI_RAW_VALUE_PRESENT:
 	printf("  raw value: 0x%2.2x\n", raw_value);

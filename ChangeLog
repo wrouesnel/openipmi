@@ -4,6 +4,12 @@
 	to tell if the threshold is returned by the sensor when the
 	value is read.
 
+	* include/OpenIPMI/ipmi_bits.h, include/OpenIPMI/ipmiif.h:
+	Made the various unit value into enums so it is easier to know
+	what returns what.
+	* lib/sensor.c: ditto
+	* lib/strings.c: ditto
+
 2004-08-03 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in, lib/sensor.c: Added more

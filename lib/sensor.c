@@ -2323,7 +2323,7 @@ ipmi_sensor_get_analog_data_format(ipmi_sensor_t *sensor)
     return sensor->analog_data_format;
 }
 
-int
+enum ipmi_rate_unit_e
 ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -2331,7 +2331,7 @@ ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor)
     return sensor->rate_unit;
 }
 
-int
+enum ipmi_modifier_unit_use_e
 ipmi_sensor_get_modifier_unit_use(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -2347,7 +2347,7 @@ ipmi_sensor_get_percentage(ipmi_sensor_t *sensor)
     return sensor->percentage;
 }
 
-int
+enum ipmi_unit_type_e
 ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
@@ -2355,7 +2355,7 @@ ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor)
     return sensor->base_unit;
 }
 
-int
+enum ipmi_unit_type_e
 ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);

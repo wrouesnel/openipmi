@@ -299,7 +299,7 @@ static char *threshold_types[] =
 };
 #define NUM_THRESHOLD_TYPES (sizeof(threshold_types)/sizeof(char *))
 char *
-ipmi_get_threshold_string(unsigned int val)
+ipmi_get_threshold_string(enum ipmi_thresh_e val)
 {
     if (val > NUM_THRESHOLD_TYPES)
 	return "invalid";
@@ -313,7 +313,7 @@ static char *value_dir_types[] =
 };
 #define NUM_VALUE_DIR_TYPES (sizeof(value_dir_types)/sizeof(char *))
 char *
-ipmi_get_value_dir_string(unsigned int val)
+ipmi_get_value_dir_string(enum ipmi_event_value_dir_e val)
 {
     if (val > NUM_VALUE_DIR_TYPES)
 	return "invalid";
@@ -327,7 +327,7 @@ static char *event_dir_types[] =
 };
 #define NUM_EVENT_DIR_TYPES (sizeof(event_dir_types)/sizeof(char *))
 char *
-ipmi_get_event_dir_string(unsigned int val)
+ipmi_get_event_dir_string(enum ipmi_event_dir_e val)
 {
     if (val > NUM_EVENT_DIR_TYPES)
 	return "invalid";

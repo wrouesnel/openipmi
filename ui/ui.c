@@ -1694,15 +1694,18 @@ display_sensor(ipmi_entity_t *entity, ipmi_sensor_t *sensor)
 			ipmi_sensor_get_base_unit_string(sensor),
 			ipmi_sensor_get_rate_unit_string(sensor));
 	switch(ipmi_sensor_get_modifier_unit_use(sensor)) {
-	    case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
-		display_pad_out("/%s",
-				ipmi_sensor_get_modifier_unit_string(sensor));
-		break;
+	case IPMI_MODIFIER_UNIT_BASE_DIV_MOD:
+	    display_pad_out("/%s",
+			    ipmi_sensor_get_modifier_unit_string(sensor));
+	    break;
 		
-	    case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
-		display_pad_out("*%s",
-				ipmi_sensor_get_modifier_unit_string(sensor));
-		break;
+	case IPMI_MODIFIER_UNIT_BASE_MULT_MOD:
+	    display_pad_out("*%s",
+			    ipmi_sensor_get_modifier_unit_string(sensor));
+	    break;
+
+	case IPMI_MODIFIER_UNIT_NONE:
+	    break;
 	}
 	display_pad_out("\n");
 
