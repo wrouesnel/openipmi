@@ -35,6 +35,7 @@
 #define __IPMI_LAN_H
 
 #include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_addr.h>
 #include <netinet/in.h>
 
 #ifdef __cplusplus
@@ -247,6 +248,42 @@ int ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 #define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3			0x13
 #define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_4			0x14
 
+typedef struct ipmi_payload_s
+{
+    /* Format a message for transmit on this payload.  The address and
+       message is the one specified by the user.  The out_data is a
+       pointer to where to store the output, out_data_len will point
+       to the length of the buffer to store the output and should be
+       updatated to be the actual length.  The seq is a 6-bit value
+       that should be store somewhere so the that response to this
+       message can be identified.  If the netfn is odd, the sequence
+       number is not used. */
+    int (*format_for_xmit)(ipmi_con_t    *conn,
+			   ipmi_addr_t   *addr,
+			   unsigned int  addr_len,
+			   ipmi_msg_t    *msg,
+			   unsigned char *out_data,
+			   unsigned int  *out_data_len,
+			   unsigned char seq);
+
+    /* Get the recv sequence number from the message.  Return ENOSYS
+       if the sequence number is not valid for the message (it is
+       asynchronous). */
+    int (*get_recv_seq)(ipmi_con_t    *conn,
+			unsigned char *data,
+			unsigned int  data_len,
+			unsigned char *seq);
+
+    /* Fill in the rspi data structure from the given data. */
+    int (*handle_recv)(ipmi_con_t    *conn,
+		       ipmi_msgi_t   *rspi,
+		       ipmi_addr_t   *orig_addr,
+		       unsigned int  orig_addr_len,
+		       ipmi_msg_t    *orig_msg,
+		       unsigned char *data,
+		       unsigned int  data_len);
+} ipmi_payload_t;
+
 typedef struct ipmi_rmcp_confidentiality_s
 {
     int (*conf_init)(void **conf_data);
@@ -268,6 +305,16 @@ typedef struct ipmi_rmcp_confidentiality_s
 		    unsigned int  *payload_len,
 		    unsigned int  max_payload_len);
 
+
+    /* Decrypt the given data (in place).  The payload starts at
+       beginning of the confidentiality header and the payload length
+       includes the confidentiality trailer.  This function should
+       update the payload to remove the header and the payload_len to
+       remove any headers and trailers, including all padding. */
+    int (*conf_check)(void          *conf_data,
+		      unsigned char **payload,
+		      unsigned int  *payload_len);
+
 } ipmi_rmcp_confidentiality_t;
 
 typedef struct ipmi_rmcp_integrity_s
@@ -286,6 +333,17 @@ typedef struct ipmi_rmcp_integrity_s
 		     unsigned int  *payload_len,
 		     unsigned int  *trailer_len,
 		     unsigned int  max_payload_len);
+
+    /* Verify the integrity of the given data.  The payload starts at
+       beginning of the user message (the RMCP version).  The payload
+       length is the length including any integrity padding but not
+       the next header or authcode data. The total length includes all
+       the data, including the autocode data. */
+    int (*integ_check)(void          *integ_data,
+		       unsigned char *payload,
+		       unsigned int  payload_len,
+		       unsigned int  total_len);
+
 } ipmi_rmcp_integrity_t;
 
 #ifdef __cplusplus

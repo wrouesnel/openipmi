@@ -123,12 +123,23 @@ struct ipmi_lan_addr
 
 #endif /* _LINUX_IPMI_H */
 
-/* Used for sending messages that are raw RMCP+ */
+/* Used for sending messages that are raw RMCP+ outside a session. */
 #define IPMI_RMCPP_NOSESSION_ADDR_TYPE   0x100
 typedef struct ipmi_rmcp_nosession_addr
 {
 	int           addr_type;
 } ipmi_rmcp_nosession_addr_t;
+
+/* RMCP address types are in this range.  These map to payloads.  Note
+   that 0x100 is specially used; it would be IPMI if there was no
+   special handling, but it is used for RMCP messages outside the
+   session. */
+#define IPMI_RMCPP_ADDR_START		0x100
+#define IPMI_RMCPP_ADDR_END		0x13f
+
+/* This is outside the range of normal NETFNs, it is used for
+   registering for RMCP things. */
+#define IPMI_RMCP_DUMMY_NETFN		0x40
 
 /* Generate types for the kernel versions of these. */
 typedef struct ipmi_addr ipmi_addr_t;
