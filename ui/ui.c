@@ -53,6 +53,7 @@
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_pef.h>
 #include <OpenIPMI/ipmi_lanparm.h>
+#include <OpenIPMI/ipmi_pet.h>
 
 #include "ui_keypad.h"
 #include "ui_command.h"
@@ -326,6 +327,76 @@ get_uint(char **toks, unsigned int *val, char *errstr)
 	return EINVAL;
     }
 
+    return 0;
+}
+
+static int
+get_ip_addr(char **toks, struct in_addr *ip_addr, char *errstr)
+{
+    u_int32_t     addr;
+    unsigned char val;
+    char          *str, *tmpstr, *istr;
+    char          *ntok;
+    int           i;
+
+    str = strtok_r(NULL, " \t\n", toks);
+    if (!str) {
+	if (errstr)
+	    cmd_win_out("No %s given\n", errstr);
+	return EINVAL;
+    }
+
+    addr = 0;
+    for (i=0; i<4; i++) {
+	istr = strtok_r(str, ".", &ntok);
+	str = NULL;
+	if (!istr) {
+	    if (errstr)
+		cmd_win_out("%s: invalid IP address\n", errstr);
+	    return EINVAL;
+	}
+	val = strtoul(istr, &tmpstr, 10);
+	if (*tmpstr != '\0') {
+	    if (errstr)
+		cmd_win_out("%s: Invalid IP address\n", errstr);
+	    return EINVAL;
+	}
+	addr = (addr << 8) | val;
+    }
+
+    ip_addr->s_addr = addr;
+    return 0;
+}
+
+static int
+get_mac_addr(char **toks, unsigned char *mac_addr, char *errstr)
+{
+    char *str, *tmpstr, *istr;
+    char *ntok;
+    int  i;
+
+    str = strtok_r(NULL, " \t\n", toks);
+    if (!str) {
+	if (errstr)
+	    cmd_win_out("No %s given\n", errstr);
+	return EINVAL;
+    }
+
+    for (i=0; i<6; i++) {
+	istr = strtok_r(str, ":", &ntok);
+	str = NULL;
+	if (!istr) {
+	    if (errstr)
+		cmd_win_out("%s: invalid IP address\n", errstr);
+	    return EINVAL;
+	}
+	mac_addr[i] = strtoul(istr, &tmpstr, 16);
+	if (*tmpstr != '\0') {
+	    if (errstr)
+		cmd_win_out("%s: Invalid IP address\n", errstr);
+	    return EINVAL;
+	}
+    }
     return 0;
 }
 
@@ -3899,8 +3970,8 @@ viewlanparm_cmd(char *cmd, char **toks, void *cb_data)
 }
 
 void writelanparm_done(ipmi_lanparm_t *lanparm,
-		   int        err,
-		   void       *cb_data)
+		       int            err,
+		       void           *cb_data)
 {
     if (err)
 	ui_log("Error writing LANPARM: %x\n", err);
@@ -4203,6 +4274,76 @@ setlanparm_cmd(char *cmd, char **toks, void *cb_data)
     if (rv)
 	cmd_win_out("Error setting parm: 0x%x\n", rv);
     return 0;
+}
+
+static ipmi_pet_t *pet;
+
+typedef struct pet_info_s
+{
+    struct in_addr ip_addr;
+    unsigned char  mac_addr[6];
+    unsigned int   eft_sel;
+    unsigned int   policy_num;
+    unsigned int   apt_sel;
+    unsigned int   lan_dest_sel;
+} pet_info_t;
+
+static void
+pet_done(ipmi_pet_t *pet, int err, void *cb_data)
+{
+    if (err)
+	ui_log("Error setting pet: %x\n", err);
+    else
+	ui_log("PET set");	
+}
+
+static void
+pet_domain_cb(ipmi_domain_t *domain, void *cb_data)
+{
+    pet_info_t *info = cb_data;
+    int        rv;
+
+    rv = ipmi_pet_create(domain,
+			 info->ip_addr,
+			 info->mac_addr,
+			 info->eft_sel,
+			 info->policy_num,
+			 info->apt_sel,
+			 info->lan_dest_sel,
+			 pet_done,
+			 NULL,
+			 &pet);
+    if (rv)
+	cmd_win_out("Error creating PET: %x\n", rv);
+}
+
+static int
+pet_cmd(char *cmd, char **toks, void *cb_data)
+{
+    pet_info_t info;
+    int        rv;
+
+    if (pet) {
+	ipmi_pet_destroy(pet, NULL, NULL);
+	pet = NULL;
+    }
+
+    if (get_ip_addr(toks, &info.ip_addr, "IP address"))
+	return 0;
+    if (get_mac_addr(toks, info.mac_addr, "MAC address"))
+	return 0;
+    if (get_uint(toks, &info.eft_sel, "eft selector"))
+	return 0;
+    if (get_uint(toks, &info.policy_num, "policy_num"))
+	return 0;
+    if (get_uint(toks, &info.apt_sel, "apt selector"))
+	return 0;
+    if (get_uint(toks, &info.lan_dest_sel, "LAN dest selector"))
+	return 0;
+
+    rv = ipmi_domain_pointer_cb(domain_id, pet_domain_cb, &info);
+    if (rv)
+	cmd_win_out("Error converting domain");
 }
 
 typedef struct msg_cmd_data_s
@@ -4998,6 +5139,10 @@ static struct {
       " <config> [<selector>] <value>"
       " - Set the given config item to the value.  The optional selector"
       " is used for items that take a selector" },
+    { "pet",		pet_cmd,
+      " <ip addr> <mac_addr> <eft selector> <policy num> <apt selector>"
+      " <lan dest selector> - "
+      "Set up the domain to send PET traps to the given IP/MAc address" },
     { "delevent",	delevent_cmd,
       " <channel> <mc num> <log number> - "
       "Delete the given event number from the SEL" },

@@ -16,6 +16,8 @@
 	support proper locking and to support the proper setup of the
 	policy number.
 
+	* ui/ui.c: Added support for the PET.
+
 2004-01-05 Corey Minyard <cminyard@mvista.com> 
 
 	* ui/ui.c, ui/basic_ui.c: Added a way to free things allocated in
