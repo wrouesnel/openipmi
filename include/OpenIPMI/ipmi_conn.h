@@ -402,6 +402,8 @@ int ipmi_con_find_attribute(ipmi_con_t      *con,
 			    char             *name,
 			    ipmi_con_attr_t **attr);
 void *ipmi_con_attr_get_data(ipmi_con_attr_t *attr);
+/* You must call the put operation of every attribute returned by
+   register or find. */
 void ipmi_con_attr_put(ipmi_con_attr_t *attr);
 int ipmi_con_attr_init(ipmi_con_t *con);
 void ipmi_con_attr_cleanup(ipmi_con_t *con);
