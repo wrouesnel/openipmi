@@ -156,6 +156,14 @@ int ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 #define IPMI_LANP_CONFIDENTIALITY_ALGORITHM_xRC4_40		3
 
 /*
+ * If true (the default) this will do a classic IPMI 1.5 name lookup.
+ * If false, this will use the privilege as part of the lookup and
+ * will match the first user with the matching name and privilege.
+ * See the RAKP message 1 for details.
+ */
+#define IPMI_LANP_NAME_LOOKUP_ONLY		10
+
+/*
  * Set up an IPMI LAN connection.  The boatload of parameters are:
  *
  *  ip_addrs - The IP addresses of the remote BMC.  You may list
@@ -404,7 +412,9 @@ typedef struct ipmi_rmcpp_integrity_s
 int ipmi_rmcpp_register_integrity(unsigned int           integ_num,
 				  ipmi_rmcpp_integrity_t *integ);
 
-/* Authentication algorithms should use this to send messages. */
+/* Authentication algorithms should use this to send messages.  Note
+   that when yo use this interface, it will always set rspi->data4 to
+   the address number, you must cast it with (long) rspi->data4. */
 int ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
 				  int                   addr_num,
 				  ipmi_addr_t           *addr,
@@ -412,7 +422,6 @@ int ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
 				  ipmi_msg_t            *msg,
 				  ipmi_ll_rsp_handler_t rsp_handler,
 				  ipmi_msgi_t           *rspi);
-
 
 #ifdef __cplusplus
 }

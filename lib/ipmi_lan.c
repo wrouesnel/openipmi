@@ -209,6 +209,7 @@ typedef struct lan_data_s
     unsigned int               requested_integ;
     unsigned int               requested_conf;
     unsigned int               use_two_keys : 1;
+    unsigned int               name_lookup_only : 1;
     uint32_t                   unauth_out_seq_num[MAX_IP_ADDR];
     uint32_t                   unauth_in_seq_num[MAX_IP_ADDR];
     uint16_t                   unauth_recv_msg_map[MAX_IP_ADDR];
@@ -2912,7 +2913,7 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     memset(&ainfo, 0, sizeof(ainfo));
     ainfo.session_id = session_id;
     ainfo.mgsys_session_id = mgsys_session_id;
-    ainfo.role = lan->privilege;
+    ainfo.role = (lan->name_lookup_only << 8) | lan->privilege;
     memcpy(ainfo.username, lan->username, lan->username_len);
     ainfo.username_len = lan->username_len;
     memcpy(ainfo.password, lan->password, lan->password_len);
@@ -3526,6 +3527,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     unsigned int conf = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_AES_CBC_128;
     unsigned int integ = IPMI_LANP_INTEGRITY_ALGORITHM_HMAC_SHA1_96;
     unsigned int auth = IPMI_LANP_AUTHENTICATION_ALGORITHM_RACKP_HMAC_SHA1;
+    int          name_lookup_only = 1;
 
 
     for (i=0; i<num_parms; i++) {
@@ -3595,6 +3597,10 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 	    }
 	    break;
 
+	case IPMI_LANP_NAME_LOOKUP_ONLY:
+	    name_lookup_only = parms[i].parm_val != 0;
+	    break;
+
 	default:
 	    return EINVAL;
 	}
@@ -3643,6 +3649,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     lan->requested_auth = auth;
     lan->requested_integ = integ;
     lan->requested_conf = conf;
+    lan->name_lookup_only = name_lookup_only;
     count = 0;
 #ifdef HAVE_GETADDRINFO
     for (i=0; i<num_ip_addrs; i++) {
