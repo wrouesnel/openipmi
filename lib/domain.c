@@ -80,8 +80,8 @@ typedef struct audit_domain_info_s
 } audit_domain_info_t;
 
 /* Used to keep a record of a bus scan. */
-typedef struct mc_ipbm_scan_info_s mc_ipmb_scan_info_t;
-struct mc_ipbm_scan_info_s
+typedef struct mc_ipmb_scan_info_s mc_ipmb_scan_info_t;
+struct mc_ipmb_scan_info_s
 {
     ipmi_addr_t         addr;
     unsigned int        addr_len;
@@ -2283,6 +2283,9 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     if (channel > MAX_IPMI_USED_CHANNELS)
 	return EINVAL;
 
+    if (domain->chan[channel].medium != 1) /* Make sure it is IPMB */
+	return ENOSYS;
+
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -3772,20 +3775,10 @@ chan_info_rsp_handler(ipmi_mc_t  *mc,
     }
 
     if (rv) {
-	/* Got an error, could be out of channels. */
-	if (curr == 0) {
-	    /* Didn't get any channels, just set up a default channel
-	       zero and IPMB. */
-	    domain->chan[0].medium = 1; /* IPMB */
-	    domain->chan[0].xmit_support = 1;
-	    domain->chan[0].recv_lun = 0;
-	    domain->chan[0].protocol = 1; /* IPMB */
-	    domain->chan[0].session_support = 0; /* Session-less */
-	    domain->chan[0].vendor_id = 0x001bf2;
-	    domain->chan[0].aux_info = 0;
-	} else {
-	    memset(&domain->chan[curr], 0, sizeof(domain->chan[curr]));
- 	}
+	/* Got an error, invalidate the channel.  IPMI requires that
+	   1.5 systems implement this command if they have
+	   channels. */
+	memset(&domain->chan[curr], 0, sizeof(domain->chan[curr]));
 	/* Keep going, there may be more channels. */
     } else {
         /* Get the info from the channel info response. */

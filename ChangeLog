@@ -1,3 +1,26 @@
+2005-02-01 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/sdr.c: Add support for dynamically resizing SDR fetches if
+	the system cannot support the size required.  This allowed an
+	increase in the starting size but can support smaller sizes than
+	were supported.
+	* lib/fru.c: Ditto, but for FRU data.
+
+	* lib/domain.c: Fixed channel handling to not scan the IPMB if
+	there is not one from the channel info command.  This may cause
+	some broken 1.5 systems (that do not implement the get channel
+	info command properly) to not work, but that's too bad, they are
+	broken.  Systems without IPMB will work much better with this
+	change.
+
+	* lib/oem_atca.c: Force instance to be 0x60 on all main units that
+	came in as entity id 7 or 0.
+
+2005-01-30 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/lanparm.c: Allow zero-length parm responses to represent
+	optional unsupported parms.
+
 2005-01-27 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Changes "==" to "=".

@@ -44,8 +44,11 @@
 #include <OpenIPMI/internal/ipmi_mc.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 
-/* Max bytes to try to get at a time. */
-#define MAX_SDR_FETCH 20
+/* Max bytes to try to get at a time, the minimum allowed, and the
+   amount to decrement between tries. */
+#define MAX_SDR_FETCH_BYTES 28
+#define MIN_SDR_FETCH_BYTES 10
+#define SDR_FETCH_BYTES_DECR 6
 
 /* Do up to this many retries when the reservation is lost. */
 #define MAX_SDR_FETCH_RETRIES 10
@@ -72,7 +75,7 @@ typedef struct fetch_info_s
     unsigned int idx;
     unsigned int offset;
     unsigned int read_len;
-    unsigned char data[MAX_SDR_FETCH+2];
+    unsigned char data[MAX_SDR_FETCH_BYTES+2];
 
     ilist_item_t link;
 } fetch_info_t;
@@ -136,6 +139,8 @@ struct ipmi_sdr_info_s
     int                    curr_rec_id;
     int                    read_offset; /* Next data to read, -1 if
                                            the header */
+
+    int                    fetch_size;
 
     int                    curr_read_rec_id;
     int                    next_read_rec_id;
@@ -254,6 +259,7 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     sdrs->lun = lun;
     sdrs->sensor = sensor;
     sdrs->sdr_wait_q = NULL;
+    sdrs->fetch_size = MAX_SDR_FETCH_BYTES;
 
     /* Assume we have a dynamic population until told otherwise. */
     sdrs->dynamic_population = 1;
@@ -820,6 +826,37 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	goto out;
     }
 
+    if (rsp->data[0] == IPMI_CANNOT_RETURN_REQ_LENGTH_CC) {
+	/* It's more than the system can return in a single messages,
+	   decrease the size. */
+	ilist_add_tail(sdrs->free_fetch, info, &info->link);
+
+	sdrs->fetch_size -= SDR_FETCH_BYTES_DECR;
+	if (sdrs->fetch_size < MIN_SDR_FETCH_BYTES) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "SDR target chould not support the minimum fetch size");
+
+	    sdrs->fetch_err = IPMI_IPMI_ERR_VAL(rsp->data[0]);
+
+	    if (!ilist_empty(sdrs->outstanding_fetch))
+		goto out_unlock;
+
+	    fetch_complete(sdrs, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	    goto out;
+	} else {
+	    /* Cancel any current or newer pending operations. */
+	    cancel_same_or_newer(sdrs, info->idx);
+
+	    /* Re-start the fetch on this SDR. */
+	    sdrs->next_read_offset = -1;
+	    sdrs->read_size = -1;
+	    sdrs->next_read_rec_id = info->sdr_rec;
+	    sdrs->curr_read_idx = info->idx-1;
+
+	    goto out_nextmsg;
+	}
+    }
+
     if (rsp->data[0] != 0) {
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;
@@ -974,8 +1011,8 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	    info->read_len = SDR_HEADER_SIZE;
 	} else {
 	    info->read_len = sdrs->read_size - sdrs->next_read_offset;
-	    if (info->read_len > MAX_SDR_FETCH)
-		info->read_len = MAX_SDR_FETCH;
+	    if (info->read_len > sdrs->fetch_size)
+		info->read_len = sdrs->fetch_size;
 	    info->offset = sdrs->next_read_offset;
 	    sdrs->next_read_offset += info->read_len;
 	}
@@ -1016,6 +1053,11 @@ initial_sdr_fetch(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
     }
     info->sdr_rec = sdrs->curr_rec_id;
     info->offset = 0;
+    /* If all systems were implemented correctly, we could do a big
+       fetch here and if it was too big then they would just return
+       what was available.  Some systems, though, are picky about the
+       sizes being exactly right.  So we fetch the header first so we
+       can get the size. */
     info->read_len = SDR_HEADER_SIZE;
     info->fetch_retry_num = sdrs->fetch_retry_count;
     info->idx = sdrs->curr_read_idx;
@@ -1854,7 +1896,7 @@ start_sdr_write(ipmi_sdr_info_t *sdrs,
     cmd_msg.data[8] = sdr->major_version | (sdr->minor_version << 4);
     cmd_msg.data[9] = sdr->type;
     cmd_msg.data[10] = sdr->length;
-    if (sdr->length >= (MAX_SDR_FETCH - 5)) {
+    if (sdr->length >= (sdrs->fetch_size - 5)) {
 	cmd_msg.data[5] = 1;
 	memcpy(cmd_msg.data+11, sdr->data, sdr->length);
 	cmd_msg.data_len = 11 + sdr->length;
@@ -1862,9 +1904,9 @@ start_sdr_write(ipmi_sdr_info_t *sdrs,
 				    handle_sdr_write_done, sdr);
     } else {
 	cmd_msg.data[5] = 0;
-	memcpy(cmd_msg.data+11, sdr->data, (MAX_SDR_FETCH - 5));
-	cmd_msg.data_len = 11 + (MAX_SDR_FETCH - 5);
-	sdrs->sdr_data_write = MAX_SDR_FETCH - 5;
+	memcpy(cmd_msg.data+11, sdr->data, (sdrs->fetch_size - 5));
+	cmd_msg.data_len = 11 + (sdrs->fetch_size - 5);
+	sdrs->sdr_data_write = sdrs->fetch_size - 5;
 	return ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
 				    handle_sdr_write, sdr);
     }
@@ -1933,7 +1975,7 @@ handle_sdr_write(ipmi_mc_t  *mc,
     ipmi_set_uint16(cmd_msg.data+2, sdrs->curr_rec_id);
     cmd_msg.data[4] = sdrs->sdr_data_write;
     wleft = sdr->length - sdrs->sdr_data_write;
-    if (wleft >= MAX_SDR_FETCH) {
+    if (wleft >= sdrs->fetch_size) {
 	cmd_msg.data[5] = 1;
 	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_write, wleft);
 	cmd_msg.data_len = 6 + wleft;
@@ -1941,9 +1983,10 @@ handle_sdr_write(ipmi_mc_t  *mc,
 				  handle_sdr_write_done, sdr);
     } else {
 	cmd_msg.data[5] = 0;
-	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_write, MAX_SDR_FETCH);
-	cmd_msg.data_len = 6 + MAX_SDR_FETCH;
-	sdrs->sdr_data_write += MAX_SDR_FETCH;
+	memcpy(cmd_msg.data+6, sdr->data+sdrs->sdr_data_write,
+	       sdrs->fetch_size);
+	cmd_msg.data_len = 6 + sdrs->fetch_size;
+	sdrs->sdr_data_write += sdrs->fetch_size;
 	rv = ipmi_mc_send_command(mc, sdrs->lun, &cmd_msg,
 				  handle_sdr_write, sdr);
     }

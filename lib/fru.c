@@ -54,7 +54,10 @@
 
 #define IPMI_LANG_CODE_ENGLISH	25
 
-#define MAX_FRU_DATA_FETCH 16
+#define MAX_FRU_DATA_FETCH 32
+#define FRU_DATA_FETCH_DECR 8
+#define MIN_FRU_DATA_FETCH 16
+
 #define MAX_FRU_DATA_WRITE 16
 #define MAX_FRU_WRITE_RETRIES 30
 
@@ -184,6 +187,8 @@ struct ipmi_fru_s
     unsigned char *data;
     unsigned int  data_len;
     unsigned int  curr_pos;
+
+    int           fetch_size;
 
     /* Is this in the list of FRUs? */
     int in_frulist;
@@ -2725,6 +2730,7 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     fru->lun = lun;
     fru->private_bus = private_bus;
     fru->channel = channel;
+    fru->fetch_size = MAX_FRU_DATA_FETCH;
 
     len = sizeof(fru->name);
     p = ipmi_domain_get_name(domain, fru->name, len);
@@ -3039,6 +3045,29 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	goto out;
     }
 
+    /* The timeout and unknown errors should not be necessary, but
+       some broken systems just don't return anything if the response
+       is too big. */
+    if (((data[0] == IPMI_CANNOT_RETURN_REQ_LENGTH_CC)
+	 || (data[0] == IPMI_TIMEOUT_CC)
+	 || (data[0] == IPMI_UNKNOWN_ERR_CC))
+	&& (fru->fetch_size > MIN_FRU_DATA_FETCH))
+    {
+	/* System couldn't support the given size, try decreasing and
+	   starting again. */
+	fru->fetch_size -= FRU_DATA_FETCH_DECR;
+	err = request_next_data(domain, fru, addr, addr_len);
+	if (err) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fru_data_handler): "
+		     "Error requesting next FRU data (2)",
+		     FRU_DOMAIN_NAME(fru));
+	    fetch_complete(domain, fru, err);
+	    goto out;
+	}
+	goto out_unlock;
+    }
+
     if (data[0] != 0) {
 	if (fru->curr_pos >= 8) {
 	    /* Some screwy cards give more size in the info than they
@@ -3107,6 +3136,7 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	goto out;
     }
 
+ out_unlock:
     fru_unlock(fru);
  out:
     return IPMI_MSG_ITEM_NOT_USED;
@@ -3125,8 +3155,8 @@ request_next_data(ipmi_domain_t *domain,
     /* We only request as much as we have to.  Don't always reqeust
        the maximum amount, some machines don't like this. */
     to_read = fru->data_len - fru->curr_pos;
-    if (to_read > MAX_FRU_DATA_FETCH)
-	to_read = MAX_FRU_DATA_FETCH;
+    if (to_read > fru->fetch_size)
+	to_read = fru->fetch_size;
 
     cmd_data[0] = fru->device_id;
     ipmi_set_uint16(cmd_data+1, fru->curr_pos >> fru->access_by_words);

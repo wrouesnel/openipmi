@@ -1444,6 +1444,12 @@ got_parm(ipmi_lanparm_t    *lanparm,
 
     /* Check the length, and don't forget the revision byte must be added. */
     if ((!err) && (data_len < (lp->length+1))) {
+	if ((data_len == 1) && (lp->optional_offset)) {
+	    /* Some systems return zero-length data for optional parms. */
+	    unsigned char *opt = ((unsigned char *)lanc) + lp->optional_offset;
+	    *opt = 0;
+	    goto next_parm;
+	}
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "lanparm.c(got_parm): "
 		 " Invalid data length on parm %d was %d, should have been %d",

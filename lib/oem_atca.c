@@ -3383,11 +3383,14 @@ atca_entity_fixup(ipmi_mc_t *mc, unsigned char *id, unsigned char *instance)
 	if ((addr == 0x62) || (addr == 0x64)) {
 	    /* Power unit. */
 	    *id = 10;
+	    inst = 0x60;
 	} else if (addr == 0x42) {
 	    /* Fan tray */
 	    *id = 30;
+	    inst = 0x60;
 	} else {
 	    *id = 0xa0;
+	    inst = 0x60;
 	}
 	break;
 
