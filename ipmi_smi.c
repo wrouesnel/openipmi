@@ -42,8 +42,6 @@
 #include <unistd.h>
 #include <string.h>
 
-#define DEBUG_MSG
-
 #include <linux/ipmi.h>
 #include <ipmi/ipmi_conn.h>
 #include <ipmi/ipmi_msgbits.h>
@@ -58,9 +56,9 @@ dump_hex(unsigned char *data, int len)
     int i;
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 16) == 0)) {
-	    printf("\n  ");
+	    ipmi_log("\n  ");
 	}
-	printf(" %2.2x", data[i]);
+	ipmi_log(" %2.2x", data[i]);
     }
 }
 #endif
@@ -272,14 +270,18 @@ remove_cmd_registration(ipmi_con_t    *ipmi,
 static int
 open_smi_fd(int if_num)
 {
-    char devname[20];
+    char devname[30];
     int  fd;
 
-    sprintf(devname, "/dev/ipmi/%d", if_num);
+    sprintf(devname, "/dev/ipmidev/%d", if_num);
     fd = open(devname, O_RDWR);
     if (fd == -1) {
-	sprintf(devname, "/dev/ipmi%d", if_num);
+	sprintf(devname, "/dev/ipmi/%d", if_num);
 	fd = open(devname, O_RDWR);
+	if (fd == -1) {
+	    sprintf(devname, "/dev/ipmi%d", if_num);
+	    fd = open(devname, O_RDWR);
+	}
     }
 
     return fd;
@@ -295,13 +297,13 @@ smi_send(smi_data_t   *smi,
 {
     ipmi_req_t     req;
 
-#ifdef DEBUG_MSG
-    printf("outgoing, addr = ");
-    dump_hex((unsigned char *) addr, addr_len);
-    printf("\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", msg->netfn, msg->cmd);
-    dump_hex(msg->data, msg->data_len);
-    printf("\n");
-#endif    
+    if (DEBUG_MSG) {
+	ipmi_log("outgoing, addr = ");
+	dump_hex((unsigned char *) addr, addr_len);
+	ipmi_log("\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", msg->netfn, msg->cmd);
+	dump_hex(msg->data, msg->data_len);
+	ipmi_log("\n");
+    }
     req.addr = (unsigned char *) addr;
     req.addr_len = addr_len;
     req.msgid = (long) smi;
@@ -389,7 +391,7 @@ handle_response(ipmi_con_t *ipmi, ipmi_recv_t *recv)
 
     remove_cmd(ipmi, smi, cmd);
 
-    rv = ipmi->os_hnd->remove_timer(cmd->timeout_id);
+    rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd, cmd->timeout_id);
     if (rv)
 	/* Can't cancel the timer, so the timer will run, let the timer
 	   free the command when that happens. */
@@ -508,14 +510,14 @@ data_handler(int            fd,
 	    goto out_unlock2;
     }
 
-#ifdef DEBUG_MSG
-    printf("incoming, addr = ");
-    dump_hex(recv.addr, recv.addr_len);
-    printf("\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", recv.msg.netfn, 
-	   recv.msg.cmd);
-    dump_hex(recv.msg.data, recv.msg.data_len);
-    printf("\n");
-#endif
+    if (DEBUG_MSG) {
+	ipmi_log("incoming, addr = ");
+	dump_hex(recv.addr, recv.addr_len);
+	ipmi_log("\nmsg (netfn=%2.2x, cmd=%2.2x):\n  ", recv.msg.netfn, 
+		 recv.msg.cmd);
+	dump_hex(recv.msg.data, recv.msg.data_len);
+	ipmi_log("\n");
+    }
 
     switch (recv.recv_type) {
 	case IPMI_RESPONSE_RECV_TYPE:
@@ -579,7 +581,8 @@ smi_send_command(ipmi_con_t            *ipmi,
 
     timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
     timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
-    rv = ipmi->os_hnd->add_timer(&timeout,
+    rv = ipmi->os_hnd->add_timer(ipmi->os_hnd,
+				 &timeout,
 				 rsp_timeout_handler,
 				 cmd,
 				 &(cmd->timeout_id));
@@ -594,7 +597,7 @@ smi_send_command(ipmi_con_t            *ipmi,
 	int err;
 
 	remove_cmd(ipmi, smi, cmd);
-	err = ipmi->os_hnd->remove_timer(cmd->timeout_id);
+	err = ipmi->os_hnd->remove_timer(ipmi->os_hnd, cmd->timeout_id);
 	/* Special handling, if we can't remove the timer, then it
            will time out on us, so we need to not free the command and
            instead let the timeout handle freeing it. */
@@ -795,7 +798,7 @@ smi_close_connection(ipmi_con_t *ipmi)
     smi->pending_cmds = NULL;
     while (cmd_to_free) {
 	next_cmd = cmd_to_free->next;
-	rv = ipmi->os_hnd->remove_timer(cmd_to_free->timeout_id);
+	rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd, cmd_to_free->timeout_id);
 	if (rv) {
 	    cmd_to_free->cancelled = 1;
 	    free(cmd_to_free);
@@ -827,7 +830,7 @@ smi_close_connection(ipmi_con_t *ipmi)
     if (smi->cmd_lock)
 	ipmi_destroy_lock(smi->cmd_lock);
     if (smi->fd_wait_id)
-	ipmi->os_hnd->remove_fd_to_wait_for(smi->fd_wait_id);
+	ipmi->os_hnd->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
 
     /* Close the fd after we have deregistered it. */
     close(smi->fd);
@@ -864,7 +867,7 @@ cleanup_con(ipmi_con_t *ipmi)
 	if (smi->fd != -1)
 	    close(smi->fd);
 	if (smi->fd_wait_id)
-	    handlers->remove_fd_to_wait_for(smi->fd_wait_id);
+	    handlers->remove_fd_to_wait_for(ipmi->os_hnd, smi->fd_wait_id);
 	free(smi);
     }
 }
@@ -938,7 +941,8 @@ setup(int          if_num,
     ipmi->deregister_for_command = smi_deregister_for_command;
     ipmi->close_connection = smi_close_connection;
 
-    rv = handlers->add_fd_to_wait_for(smi->fd,
+    rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
+				      smi->fd,
 				      data_handler, 
 				      ipmi,
 				      &(smi->fd_wait_id));

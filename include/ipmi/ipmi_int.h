@@ -83,4 +83,8 @@ int ipmi_bmc_oem_new_sensor(ipmi_mc_t     *mc,
    it has registered for this. */
 void ipmi_bmc_oem_new_entity(ipmi_mc_t *bmc, ipmi_entity_t *ent);
 
+/* Various logging stuff (mostly for debugging) */
+extern unsigned int __ipmi_log_mask;
+#define DEBUG_MSG_BIT	(1 << 0)
+#define DEBUG_MSG	(__ipmi_log_mask & DEBUG_MSG_BIT)
 #endif /* _IPMI_INT_H */

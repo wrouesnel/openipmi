@@ -730,4 +730,7 @@ void ipmi_set_device_string(char          *input,
 			    unsigned char *output,
 			    int           *out_len);
 
+/* Log information for the IPMI log. */
+void ipmi_log(char *format, ...);
+
 #endif /* __IPMIIF_H */

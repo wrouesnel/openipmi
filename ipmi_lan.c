@@ -50,8 +50,6 @@
 #include <ipmi/ipmi_err.h>
 #include <ipmi/ipmi_lan.h>
 
-#define DEBUG_MSG
-
 #ifdef DEBUG_MSG
 static void
 dump_hex(unsigned char *data, int len)
@@ -59,9 +57,9 @@ dump_hex(unsigned char *data, int len)
     int i;
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 16) == 0)) {
-	    printf("\n  ");
+	    ipmi_log("\n  ");
 	}
-	printf(" %2.2x", data[i]);
+	ipmi_log(" %2.2x", data[i]);
     }
 }
 #endif
@@ -361,13 +359,13 @@ lan_send(lan_data_t  *lan,
 	    (lan->outbound_seq_num)++;
     }
 
-#ifdef DEBUG_MSG
-    printf("outgoing\n addr =");
-    dump_hex((unsigned char *) &(lan->addr), sizeof(lan->addr));
-    printf("\n data =\n  ");
-    dump_hex(data, pos);
-    printf("\n");
-#endif    
+    if (DEBUG_MSG) {
+	printf("outgoing\n addr =");
+	dump_hex((unsigned char *) &(lan->addr), sizeof(lan->addr));
+	printf("\n data =\n  ");
+	dump_hex(data, pos);
+	printf("\n");
+    }
 
     rv = sendto(lan->fd, data, pos, 0,
 		(struct sockaddr *) &(lan->addr), sizeof(lan->addr));
@@ -433,7 +431,7 @@ rsp_timeout_handler(void              *cb_data,
 	if (!rv) {
 	    timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
 	    timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
-	    ipmi->os_hnd->restart_timer(id, &timeout);
+	    ipmi->os_hnd->restart_timer(ipmi->os_hnd, id, &timeout);
 	}
 	if (rv) {
 	    /* If we get an error resending the message, report an unknown
@@ -535,13 +533,13 @@ data_handler(int            fd,
     if (len < 0)
 	goto out_unlock2;
 
-#ifdef DEBUG_MSG
-    printf("incoming\n addr = ");
-    dump_hex((unsigned char *) &ipaddrd, from_len);
-    printf("\n data =\n  ");
-    dump_hex(data, len);
-    printf("\n");
-#endif
+    if (DEBUG_MSG) {
+	printf("incoming\n addr = ");
+	dump_hex((unsigned char *) &ipaddrd, from_len);
+	printf("\n data =\n  ");
+	dump_hex(data, len);
+	printf("\n");
+    }
 
     /* Make sure the source IP matches what we expect the other end to
        be. */
@@ -686,7 +684,7 @@ data_handler(int            fd,
 	goto out_unlock2;
 
     /* The command matches up, cancel the timer and deliver it */
-    rv = ipmi->os_hnd->remove_timer(lan->seq_table[seq].timer);
+    rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd, lan->seq_table[seq].timer);
     if (rv)
 	/* Couldn't cancel the timer, make sure the timer doesn't do the
 	   callback. */
@@ -767,7 +765,8 @@ lan_send_command(ipmi_con_t            *ipmi,
 
     timeout.tv_sec = IPMI_RSP_TIMEOUT / 1000;
     timeout.tv_usec = (IPMI_RSP_TIMEOUT % 1000) * 1000;
-    rv = ipmi->os_hnd->add_timer(&timeout,
+    rv = ipmi->os_hnd->add_timer(ipmi->os_hnd,
+				 &timeout,
 				 rsp_timeout_handler,
 				 info,
 				 &(lan->seq_table[seq].timer));
@@ -781,7 +780,8 @@ lan_send_command(ipmi_con_t            *ipmi,
 	int err;
 
 	lan->seq_table[seq].rsp_handler = NULL;
-	err = ipmi->os_hnd->remove_timer(lan->seq_table[seq].timer);
+	err = ipmi->os_hnd->remove_timer(ipmi->os_hnd,
+					 lan->seq_table[seq].timer);
 	/* Special handling, if we can't remove the timer, then it
            will time out on us, so we need to not free the command and
            instead let the timeout handle freeing it. */
@@ -955,7 +955,8 @@ lan_close_connection(ipmi_con_t *ipmi)
     ipmi_lock(lan->seq_num_lock);
     for (i=0; i<64; i++) {
 	if (lan->seq_table[i].rsp_handler) {
-	    rv = ipmi->os_hnd->remove_timer(lan->seq_table[i].timer);
+	    rv = ipmi->os_hnd->remove_timer(ipmi->os_hnd,
+					    lan->seq_table[i].timer);
 	    if (rv)
 		lan->seq_table[i].timer_info->cancelled = 1;
 	    else
@@ -980,7 +981,7 @@ lan_close_connection(ipmi_con_t *ipmi)
     if (lan->seq_num_lock)
 	ipmi_destroy_lock(lan->seq_num_lock);
     if (lan->fd_wait_id)
-	ipmi->os_hnd->remove_fd_to_wait_for(lan->fd_wait_id);
+	ipmi->os_hnd->remove_fd_to_wait_for(ipmi->os_hnd, lan->fd_wait_id);
     if (lan->authdata)
 	ipmi_auths[lan->authtype].authcode_cleanup(lan->authdata);
 
@@ -1028,7 +1029,7 @@ cleanup_con(ipmi_con_t *ipmi)
 	if (lan->fd != -1)
 	    close(lan->fd);
 	if (lan->fd_wait_id)
-	    handlers->remove_fd_to_wait_for(lan->fd_wait_id);
+	    handlers->remove_fd_to_wait_for(handlers, lan->fd_wait_id);
 	if (lan->authdata)
 	    ipmi_auths[lan->authtype].authcode_cleanup(lan->authdata);
 	free(lan);
@@ -1151,7 +1152,8 @@ static void challenge_done(ipmi_con_t   *ipmi,
     /* Get a random number of the other end to start sending me sequence
        numbers at, but don't let it be zero. */
     while (lan->inbound_seq_num == 0) {
-	rv = ipmi->os_hnd->get_random(&(lan->inbound_seq_num), 4);
+	rv = ipmi->os_hnd->get_random(ipmi->os_hnd,
+				      &(lan->inbound_seq_num), 4);
 	if (rv) {
 	    if (ipmi->setup_cb)
 		ipmi->setup_cb(NULL, ipmi->setup_cb_data, rv);
@@ -1278,7 +1280,8 @@ ipmi_lan_setup_con(struct in_addr    addr,
     ipmi->close_connection = lan_close_connection;
 
     /* Add the waiter last. */
-    rv = handlers->add_fd_to_wait_for(lan->fd,
+    rv = handlers->add_fd_to_wait_for(handlers,
+				      lan->fd,
 				      data_handler, 
 				      ipmi,
 				      &(lan->fd_wait_id));

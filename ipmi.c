@@ -46,28 +46,30 @@
 static os_hnd_rwlock_t *global_lock;
 static os_handler_t *ipmi_os_handler;
 
+unsigned int __ipmi_log_mask = 0;
+
 void ipmi_read_lock(void)
 {
     if (global_lock)
-	ipmi_os_handler->read_lock(global_lock);
+	ipmi_os_handler->read_lock(ipmi_os_handler, global_lock);
 }
 
 void ipmi_read_unlock(void)
 {
     if (global_lock)
-	ipmi_os_handler->read_unlock(global_lock);
+	ipmi_os_handler->read_unlock(ipmi_os_handler, global_lock);
 }
 
 void ipmi_write_lock(void)
 {
     if (global_lock)
-	ipmi_os_handler->write_lock(global_lock);
+	ipmi_os_handler->write_lock(ipmi_os_handler, global_lock);
 }
 
 void ipmi_write_unlock(void)
 {
     if (global_lock)
-	ipmi_os_handler->write_unlock(global_lock);
+	ipmi_os_handler->write_unlock(ipmi_os_handler, global_lock);
 }
 
 struct ipmi_lock_s
@@ -88,7 +90,7 @@ ipmi_create_lock_os_hnd(os_handler_t *os_hnd, ipmi_lock_t **new_lock)
 
     lock->os_hnd = os_hnd;
     if (lock->os_hnd->create_lock) {
-	rv = lock->os_hnd->create_lock(&(lock->ll_lock));
+	rv = lock->os_hnd->create_lock(lock->os_hnd, &(lock->ll_lock));
 	if (rv) {
 	    free(lock);
 	    return rv;
@@ -111,22 +113,31 @@ ipmi_create_lock(ipmi_mc_t *mc, ipmi_lock_t **new_lock)
 void ipmi_destroy_lock(ipmi_lock_t *lock)
 {
     if (lock->ll_lock)
-	lock->os_hnd->destroy_lock(lock->ll_lock);
+	lock->os_hnd->destroy_lock(lock->os_hnd, lock->ll_lock);
     free(lock);
 }
 
 void ipmi_lock(ipmi_lock_t *lock)
 {
     if (lock->ll_lock)
-	lock->os_hnd->lock(lock->ll_lock);
+	lock->os_hnd->lock(lock->os_hnd, lock->ll_lock);
 }
 
 void ipmi_unlock(ipmi_lock_t *lock)
 {
     if (lock->ll_lock)
-	lock->os_hnd->unlock(lock->ll_lock);
+	lock->os_hnd->unlock(lock->os_hnd, lock->ll_lock);
 }
 
+void
+ipmi_log(char *format, ...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    ipmi_os_handler->vlog(ipmi_os_handler, format, ap);
+    va_end(ap);
+}
 
 static ll_ipmi_t *ipmi_ll = NULL;
 
@@ -620,7 +631,7 @@ ipmi_init(os_handler_t *handler)
     int rv;
 
     if (handler->create_rwlock) {
-	rv = handler->create_rwlock(&global_lock);
+	rv = handler->create_rwlock(handler, &global_lock);
 	if (rv)
 	    return rv;
     } else {

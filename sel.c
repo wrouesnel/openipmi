@@ -111,13 +111,13 @@ struct ipmi_sel_info_s
 static inline void sel_lock(ipmi_sel_info_t *sel)
 {
     if (sel->os_hnd->lock)
-	sel->os_hnd->lock(sel->sel_lock);
+	sel->os_hnd->lock(sel->os_hnd, sel->sel_lock);
 }
 
 static inline void sel_unlock(ipmi_sel_info_t *sel)
 {
     if (sel->os_hnd->lock)
-	sel->os_hnd->unlock(sel->sel_lock);
+	sel->os_hnd->unlock(sel->os_hnd, sel->sel_lock);
 }
 
 int
@@ -155,7 +155,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
     sel->working_sels = NULL;
 
     if (sel->os_hnd->create_lock) {
-	rv = sel->os_hnd->create_lock(&sel->sel_lock);
+	rv = sel->os_hnd->create_lock(sel->os_hnd, &sel->sel_lock);
 	if (rv)
 	    goto out_unlock;
     }
@@ -164,7 +164,7 @@ ipmi_sel_alloc(ipmi_mc_t       *mc,
     if (rv) {
 	if (sel) {
 	    if (sel->sel_lock)
-		sel->os_hnd->destroy_lock(sel->sel_lock);
+		sel->os_hnd->destroy_lock(sel->os_hnd, sel->sel_lock);
 	    free(sel);
 	}
     } else {
@@ -182,7 +182,7 @@ internal_destroy_sel(ipmi_sel_info_t *sel)
     sel_unlock(sel);
 
     if (sel->sel_lock)
-	sel->os_hnd->destroy_lock(sel->sel_lock);
+	sel->os_hnd->destroy_lock(sel->os_hnd, sel->sel_lock);
 
     /* Do this after we have gotten rid of all external dependencies,
        but before it is free. */
@@ -514,17 +514,22 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
 
 
     elem = malloc(sizeof(*elem));
-    if (!elem)
+    if (!elem) {
+	ipmi_log("ipmi_sel_get: could not allocate the sel element\n");
 	return ENOMEM;
+    }
 
     elem->handler = handler;
     elem->cb_data = cb_data;
 
     ipmi_read_lock();
-    if ((rv = ipmi_mc_validate(sel->mc)))
+    if ((rv = ipmi_mc_validate(sel->mc))) {
+	ipmi_log("ipmi_sel_get: MC is not valid\n");
 	goto out_unlock2;
+    }
 
     if (!ipmi_mc_sel_device_support(sel->mc)) {
+	ipmi_log("ipmi_sel_get: No support for the system event log\n");
 	rv = ENOSYS;
 	goto out_unlock2;
     }

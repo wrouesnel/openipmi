@@ -1097,7 +1097,7 @@ dev_id_rsp_handler(ipmi_mc_t  *mc,
     if (!rv)
 	rv = ipmi_sdr_alloc(mc, 0, 0, &mc->bmc->main_sdrs);
     if (!rv)
-	rv = ipmi_sdr_alloc(mc, 0, 0, &mc->sdrs);
+	rv = ipmi_sdr_alloc(mc, 0, 1, &mc->sdrs);
     if (!rv) {
 	if (mc->SDR_repository_support)
 	    rv = ipmi_sdr_fetch(mc->bmc->main_sdrs, sdr_handler, mc);

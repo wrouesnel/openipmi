@@ -61,14 +61,14 @@ static void
 opq_lock(opq_t *opq)
 {
     if (opq->lock)
-	opq->os_hnd->lock(opq->lock);
+	opq->os_hnd->lock(opq->os_hnd, opq->lock);
 }
 
 static void
 opq_unlock(opq_t *opq)
 {
     if (opq->lock)
-	opq->os_hnd->unlock(opq->lock);
+	opq->os_hnd->unlock(opq->os_hnd, opq->lock);
 }
 
 opq_t *
@@ -90,7 +90,7 @@ opq_alloc(os_handler_t *os_hnd)
     }
 
     if (os_hnd->create_lock) {
-	rv = os_hnd->create_lock(&(opq->lock));
+	rv = os_hnd->create_lock(opq->os_hnd, &(opq->lock));
 	if (rv) {
 	    free_ilist(opq->ops);
 	    free(opq);
@@ -118,7 +118,7 @@ opq_destroy(opq_t *opq)
     ilist_iter(opq->ops, opq_destroy_item, NULL);
     free_ilist(opq->ops);
     if (opq->lock)
-	opq->os_hnd->destroy_lock(opq->lock);
+	opq->os_hnd->destroy_lock(opq->os_hnd, opq->lock);
     free(opq);
 }
 

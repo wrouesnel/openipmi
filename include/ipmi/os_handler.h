@@ -34,6 +34,7 @@
 #ifndef __OS_HANDLER_H
 #define __OS_HANDLER_H
 
+#include <stdarg.h>
 #include <sys/time.h>
 
 /* An os-independent normal lock. */
@@ -58,7 +59,9 @@ typedef struct os_hnd_timer_id_s os_hnd_timer_id_t;
    if possible. */
 typedef void (*os_data_ready_t)(int fd, void *cb_data, os_hnd_fd_id_t *id);
 typedef void (*os_timed_out_t)(void *cb_data, os_hnd_timer_id_t *id);
-typedef struct os_handler_s
+
+typedef struct os_handler_s os_handler_t;
+struct os_handler_s
 {
     /* This is called by the user code to register a callback handler
        to be called when data is ready to be read on the given file
@@ -71,11 +74,13 @@ typedef struct os_handler_s
        may only call the commands ending in "_wait", the event-driven
        code will return errors.  You also may not receive commands or
        event.  Note that these calls may NOT block. */
-    int (*add_fd_to_wait_for)(int             fd,
+    int (*add_fd_to_wait_for)(os_handler_t    *handler,
+			      int             fd,
 			      os_data_ready_t data_ready,
 			      void            *cb_data,
 			      os_hnd_fd_id_t  **id);
-    int (*remove_fd_to_wait_for)(os_hnd_fd_id_t *id);
+    int (*remove_fd_to_wait_for)(os_handler_t   *handler,
+				 os_hnd_fd_id_t *id);
 
     /* This is called by the user code to register a callback handler
        to be called at the given time or after (absolute time, as seen
@@ -86,7 +91,8 @@ typedef struct os_handler_s
        are NULL, you may only call the commands ending in "_wait",
        event-driven code will return errors, and you may not receive
        commands or events. */
-    int (*add_timer)(struct timeval    *timeout,
+    int (*add_timer)(os_handler_t      *handler,
+		     struct timeval    *timeout,
 		     os_timed_out_t    timed_out,
 		     void              *cb_data,
 		     os_hnd_timer_id_t **id);
@@ -95,37 +101,68 @@ typedef struct os_handler_s
        ESRCH, and it may not return ESRCH for any other reason.  In
        other words, if ESRCH is returned, the timer is valid and the
        timeout handler has or will be called.  */
-    int (*remove_timer)(os_hnd_timer_id_t *id);
+    int (*remove_timer)(os_handler_t      *handler,
+			os_hnd_timer_id_t *id);
     /* From the context of a timeout, restart the given timer.  This
        can ONLY be called inside a timeout handler for the given id.
        This routine cannot fail. */
-    void (*restart_timer)(os_hnd_timer_id_t *id,
+    void (*restart_timer)(os_handler_t      *handler,
+			  os_hnd_timer_id_t *id,
 			  struct timeval    *timeout);
 
     /* Used to implement locking primitives for multi-threaded access.
        If these are NULL, then the code will assume that the system is
        single-threaded and doesn't need locking.  Note that these must
        be recursive locks. */
-    int (*create_lock)(os_hnd_lock_t **id);
-    int (*destroy_lock)(os_hnd_lock_t *id);
-    int (*lock)(os_hnd_lock_t *id);
-    int (*unlock)(os_hnd_lock_t *id);
-    int (*create_rwlock)(os_hnd_rwlock_t **id);
-    int (*destroy_rwlock)(os_hnd_rwlock_t *id);
-    int (*read_lock)(os_hnd_rwlock_t *id);
-    int (*read_unlock)(os_hnd_rwlock_t *id);
-    int (*write_lock)(os_hnd_rwlock_t *id);
-    int (*write_unlock)(os_hnd_rwlock_t *id);
+    int (*create_lock)(os_handler_t  *handler,
+		       os_hnd_lock_t **id);
+    int (*destroy_lock)(os_handler_t  *handler,
+			os_hnd_lock_t *id);
+    int (*lock)(os_handler_t  *handler,
+		os_hnd_lock_t *id);
+    int (*unlock)(os_handler_t  *handler,
+		  os_hnd_lock_t *id);
+    int (*create_rwlock)(os_handler_t  *handler,
+			 os_hnd_rwlock_t **id);
+    int (*destroy_rwlock)(os_handler_t  *handler,
+			  os_hnd_rwlock_t *id);
+    int (*read_lock)(os_handler_t  *handler,
+		     os_hnd_rwlock_t *id);
+    int (*read_unlock)(os_handler_t  *handler,
+		       os_hnd_rwlock_t *id);
+    int (*write_lock)(os_handler_t  *handler,
+		      os_hnd_rwlock_t *id);
+    int (*write_unlock)(os_handler_t  *handler,
+			os_hnd_rwlock_t *id);
 
     /* Condition variables, like in POSIX Threads. */
-    int (*create_cond)(os_hnd_cond_t **cond);
-    int (*destroy_cond)(os_hnd_cond_t *cond);
-    int (*cond_wait)(os_hnd_cond_t *cond, os_hnd_lock_t *lock);
-    int (*cond_wake)(os_hnd_cond_t *cond);
-    int (*cond_broadcast)(os_hnd_cond_t *cond);
+    int (*create_cond)(os_handler_t  *handler,
+		       os_hnd_cond_t **cond);
+    int (*destroy_cond)(os_handler_t  *handler,
+			os_hnd_cond_t *cond);
+    int (*cond_wait)(os_handler_t  *handler,
+		     os_hnd_cond_t *cond,
+		     os_hnd_lock_t *lock);
+    int (*cond_wake)(os_handler_t  *handler,
+		     os_hnd_cond_t *cond);
+    int (*cond_broadcast)(os_handler_t  *handler,
+			  os_hnd_cond_t *cond);
 
     /* Return "len" bytes of random data into "data". */
-    int (*get_random)(void *data, unsigned int len);
-} os_handler_t;
+    int (*get_random)(os_handler_t  *handler,
+		      void          *data,
+		      unsigned int  len);
+
+    /* Report an error. */
+    void (*log)(os_handler_t  *handler,
+		char          *format,
+		...);
+    void (*vlog)(os_handler_t  *handler,
+		 char          *format,
+		 va_list       ap);
+
+    /* The user may use this for whatever they like. */
+    void *user_data;
+};
 
 #endif /* __OS_HANDLER_H */

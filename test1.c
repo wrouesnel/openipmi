@@ -78,7 +78,8 @@ fd_handler(int fd, void *data)
 }
 
 static int
-add_fd(int             fd,
+add_fd(os_handler_t    *handler,
+       int             fd,
        os_data_ready_t data_ready,
        void            *cb_data,
        os_hnd_fd_id_t  **id)
@@ -102,7 +103,7 @@ add_fd(int             fd,
 }
 
 static int
-remove_fd(os_hnd_fd_id_t *fd_data)
+remove_fd(os_handler_t   *handler, os_hnd_fd_id_t *fd_data)
 {
     sel_clear_fd_handlers(sel, fd_data->fd);
     sel_set_fd_read_handler(sel, fd_data->fd, SEL_FD_HANDLER_DISABLED);
@@ -141,7 +142,8 @@ timer_handler(selector_t  *sel,
 }
 
 static int
-add_timer(struct timeval    *timeout,
+add_timer(os_handler_t      *handler,
+	  struct timeval    *timeout,
 	  os_timed_out_t    timed_out,
 	  void              *cb_data,
 	  os_hnd_timer_id_t **id)
@@ -183,7 +185,8 @@ add_timer(struct timeval    *timeout,
 }
 
 static void
-restart_timer(os_hnd_timer_id_t *id,
+restart_timer(os_handler_t      *handler,
+	      os_hnd_timer_id_t *id,
 	      struct timeval    *timeout)
 {
     struct timeval    now;
@@ -205,14 +208,14 @@ restart_timer(os_hnd_timer_id_t *id,
 }
 
 static int
-remove_timer(os_hnd_timer_id_t *timer_data)
+remove_timer(os_handler_t *handler, os_hnd_timer_id_t *timer_data)
 {
     free_timer(timer_data);
     return 0;
 }
 
 static int
-get_random(void *data, unsigned int len)
+get_random(os_handler_t *handler, void *data, unsigned int len)
 {
     int fd = open("/dev/random", O_RDONLY);
     int rv;
@@ -224,6 +227,26 @@ get_random(void *data, unsigned int len)
 
     close(fd);
     return rv;
+}
+
+static void
+sui_log(os_handler_t *handler,
+	char         *format,
+	...)
+{
+    va_list ap;
+
+    va_start(ap, format);
+    vprintf(format, ap);
+    va_end(ap);
+}
+
+static void
+sui_vlog(os_handler_t *handler,
+	 char         *format,
+	 va_list      ap)
+{
+    vprintf(format, ap);
 }
 
 os_handler_t ipmi_cb_handlers =
@@ -238,6 +261,8 @@ os_handler_t ipmi_cb_handlers =
     .lock = NULL,
     .unlock = NULL,
     .get_random = get_random,
+    .log = sui_log,
+    .vlog = sui_vlog
 };
 
 
@@ -340,7 +365,7 @@ void got_sdrs(ipmi_sdr_info_t *sdr,
 
     rv = ipmi_sel_get(sel, got_sels, mc);
     if (rv) {
-	report_error("ipmi_close_connection", rv);
+	report_error("ipmi_sel_get", rv);
 	exit(1);
     }
 }

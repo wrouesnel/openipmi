@@ -20,7 +20,7 @@ LD_VERSION = $(VERSION_CURRENT):$(VERSION_REVISION):$(VERSION_AGE)
 
 lib_LTLIBRARIES = libOpenIPMI.la
 
-bin_PROGRAMS = 
+bin_PROGRAMS = ipmi_ui
 
 libOpenIPMI_la_SOURCES = entity.c ipmi.c mc.c sdr.c selector.c ind.c \
 	ilist.c ipmi_smi.c opq.c sel.c sensor.c ipmi_lan.c md5.c md2.c
@@ -32,6 +32,9 @@ noinst_PROGRAMS = test1
 
 test1_SOURCES = test1.c
 test1_LDADD = libOpenIPMI.la
+
+ipmi_ui_SOURCES = ui.c ui_os.c
+ipmi_ui_LDADD = libOpenIPMI.la -lncurses
 
 TESTS = 
 
