@@ -3303,46 +3303,24 @@ void writepef_done(ipmi_pef_t *pef,
 	ui_log("PEF written\n");
 }
 
-void
-writepef_mc_handler(ipmi_mc_t *mc, void *cb_data)
-{
-    mccmd_info_t *info = cb_data;
-
-    info->found = 1;
-
-    if (!pef) {
-	ui_log("No PEF to write\n");
-	return;
-    }
-    if (!pef_config) {
-	ui_log("No PEF config to write\n");
-	return;
-    }
-
-    ipmi_pef_set_config(pef, pef_config, writepef_done, NULL);
-}
-
 int
 writepef_cmd(char *cmd, char **toks, void *cb_data)
 {
-    mccmd_info_t  info;
-    int           rv;
+    int rv;
 
-    if (get_mc_id(toks, &info.mc_id))
+    if (!pef) {
+	cmd_win_out("No PEF to write\n");
 	return 0;
+    }
+    if (!pef_config) {
+	cmd_win_out("No PEF config to write\n");
+	return 0;
+    }
 
-    info.found = 0;
-    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, writepef_mc_handler, &info);
+    rv = ipmi_pef_set_config(pef, pef_config, writepef_done, NULL);
     if (rv) {
-	cmd_win_out("Unable to find MC\n");
-	return 0;
+	cmd_win_out("Error writing pef parms: %x\n", rv);
     }
-    if (!info.found) {
-	cmd_win_out("Unable to find MC (%d %x)\n",
-		    info.mc_id.channel, info.mc_id.mc_num);
-    }
-    display_pad_refresh();
-
     return 0;
 }
 
@@ -3930,46 +3908,24 @@ void writelanparm_done(ipmi_lanparm_t *lanparm,
 	ui_log("LANPARM written\n");
 }
 
-void
-writelanparm_mc_handler(ipmi_mc_t *mc, void *cb_data)
-{
-    mccmd_info_t *info = cb_data;
-
-    info->found = 1;
-
-    if (!lanparm) {
-	ui_log("No LANPARM to write\n");
-	return;
-    }
-    if (!lanparm_config) {
-	ui_log("No LANPARM config to write\n");
-	return;
-    }
-
-    ipmi_lan_set_config(lanparm, lanparm_config, writelanparm_done, NULL);
-}
-
 int
 writelanparm_cmd(char *cmd, char **toks, void *cb_data)
 {
-    mccmd_info_t  info;
-    int           rv;
+    int rv;
 
-    if (get_mc_id(toks, &info.mc_id))
+    if (!lanparm) {
+	cmd_win_out("No LANPARM to write\n");
 	return 0;
+    }
+    if (!lanparm_config) {
+	cmd_win_out("No LANPARM config to write\n");
+	return 0;
+    }
 
-    info.found = 0;
-    rv = ipmi_mc_pointer_noseq_cb(info.mc_id, writelanparm_mc_handler, &info);
+    rv = ipmi_lan_set_config(lanparm, lanparm_config, writelanparm_done, NULL);
     if (rv) {
-	cmd_win_out("Unable to find MC\n");
-	return 0;
+	cmd_win_out("Error writing lan parms: %x\n", rv);
     }
-    if (!info.found) {
-	cmd_win_out("Unable to find MC (%d %x)\n",
-		    info.mc_id.channel, info.mc_id.mc_num);
-    }
-    display_pad_refresh();
-
     return 0;
 }
 
