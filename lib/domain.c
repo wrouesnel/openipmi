@@ -2908,7 +2908,10 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 			domain);
 	    }
 	}
-    }
+    } else if (active)
+        /* Always pick the last working active connection to use. */
+	domain->working_conn = u;
+
 
     /* Start the timer to activate the connection, if necessary. */
     if (domain->conn[u]->set_active_state)

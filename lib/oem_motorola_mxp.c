@@ -6611,6 +6611,9 @@ mxp_chassis_type_rsp(ipmi_mc_t  *src,
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "mxp_chassis_type_rsp: Error getting chassis id: 0x%x",
 		 msg->data[0]);
+	/* Destroy the MC so it will be detected again late,r and hopefully
+	   will work that time. */
+	_ipmi_cleanup_mc(src);
 	return;
     }
 
@@ -6702,7 +6705,9 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     ipmi_control_destroy(info->relays);
     ipmi_control_destroy(info->sys_led);
 
-    ipmi_domain_remove_con_change_handler(domain, info->con_ch_info->con_chid);
+    if (info->con_ch_info)
+    	ipmi_domain_remove_con_change_handler(domain,
+					      info->con_ch_info->con_chid);
     ipmi_domain_remove_mc_upd_handler(domain, info->mc_upd_id);
     ipmi_mem_free(info->con_ch_info);
 
