@@ -1,4 +1,14 @@
 
+2003-03-12 Corey Minyard <cminyard@mvista.com>
+
+	* mc.c: Fixed a cleanup case in the routine that finds or creates
+	an MC.
+
+	* sensor.c: Minor sensor cleanup additions.
+
+	* sensor.c: Fixed compact sensor records to copy the data contents
+	instead of the pointer.
+
 2003-03-06 Corey Minyard <cminyard@mvista.com>
 
 	* configure.in: Move to version 0.2.4.

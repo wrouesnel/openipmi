@@ -181,6 +181,9 @@ struct ipmi_sensor_s
     void                   *destroy_handler_cb_data;
 };
 
+static void handle_deleted_sensor(ipmi_mc_t         *bmc,
+				  ipmi_sensor_t     *sensor);
+
 ipmi_sensor_id_t
 ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor)
 {
@@ -579,6 +582,8 @@ ipmi_sensor_destroy(ipmi_sensor_t *sensor)
     if (sensor != sensors->sensors_by_idx[sensor->lun][sensor->num])
 	return EINVAL;
 
+    handle_deleted_sensor(bmc, sensor);
+
     if (sensor->source_array)
 	sensor->source_array[sensor->source_idx] = NULL;
 
@@ -812,7 +817,7 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
 	    for (j=(sdr.data[18] & 0x0f)-1; j>=0; j--) {
 		int len;
 
-		s[p+j] = s[p];
+		memcpy(s[p+j], s[p], sizeof(ipmi_sensor_t));
 
 		s[p+j]->num += j;
 
@@ -825,7 +830,7 @@ get_sensors_from_sdrs(ipmi_mc_t          *bmc,
 		    case 0: /* Numeric */
 			if ((val / 10) > 0) {
 			    if (len < SENSOR_ID_LEN) {
-				s[p+j]->id[len] =  (val/10) + '0';
+				s[p+j]->id[len] = (val/10) + '0';
 				len++;
 			    }
 			}
@@ -1147,6 +1152,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 
 		if (cmp_sensor(nsensor, osensor)) {
 		    /* They compare, prefer to keep the old data. */
+		    opq_destroy(nsensor->waitq);
 		    ipmi_mem_free(nsensor);
 		    sdr_sensors[i] = osensor;
 		    osensor->source_idx = i;
@@ -1154,6 +1160,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 		} else {
 		    /* Destroy the old sensor, add the new one. */
 		    handle_deleted_sensor(bmc, osensor);
+		    opq_destroy(osensor->waitq);
 		    ipmi_mem_free(osensor);
 		    sensors->sensors_by_idx[nsensor->lun][nsensor->num]
 			= nsensor;
@@ -1184,6 +1191,7 @@ ipmi_sensor_handle_sdrs(ipmi_mc_t       *bmc,
 		
 		handle_deleted_sensor(bmc, old_sdr_sensors[i]);
 		sensors->sensors_by_idx[osensor->lun][osensor->num] = NULL;
+		opq_destroy(osensor->waitq);
 		ipmi_mem_free(osensor);
 	    }
 	}

@@ -519,8 +519,10 @@ ipmi_mc_find_or_create_mc_by_slave_addr(ipmi_mc_t    *bmc,
 	return rv;
 
     rv = ipmi_add_mc_to_bmc(bmc, mc);
-    if (rv)
+    if (rv) {
+	ipmi_cleanup_mc(mc);
 	return rv;
+    }
 
     *new_mc = mc;
     return 0;
