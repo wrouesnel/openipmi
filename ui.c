@@ -2962,6 +2962,22 @@ reconnect_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static int
+quit_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int rv;
+
+    if (!bmc_ready) {
+	leave(0, "");
+    }
+
+    rv = ipmi_mc_pointer_cb(bmc_id, leave_cmd_bmcer, NULL);
+    if (rv) {
+	leave(0, "");
+    }
+    return 0;
+}
+
 static int help_cmd(char *cmd, char **toks, void *cb_data);
 
 static struct {
@@ -3016,6 +3032,8 @@ static struct {
       " - set the events enable data for the sensor" },
     { "scan",  scan_cmd,
       " <ipmb addr> - scan an IPMB to add or remove it" },
+    { "quit",  quit_cmd,
+      " - leave the program" },
     { "reconnect",  reconnect_cmd,
       " - scan an IPMB to add or remove it" },
     { "help",		help_cmd,

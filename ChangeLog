@@ -6,6 +6,8 @@
 	* ui.c: Added a log at startup to tell you to wait until startup
 	is complete.
 
+	* ui.c: Added a quit command.
+
 2003-03-25 Corey Minyard <cminyard@mvista.com>
 
 	* ui.c: The UI will no longer attempt to read unreadable
