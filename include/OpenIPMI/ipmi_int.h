@@ -149,9 +149,9 @@ extern unsigned int __ipmi_log_mask;
 
 #define DEBUG_CON_FAIL(con)    (__ipmi_log_mask & (DEBUG_CON0_FAIL_BIT << con))
 #define DEBUG_CON_FAIL_ENABLE(con) \
-	__ipmi_log_mask |= (DEBUG_CON0_FAIL_BIT << con))
+	__ipmi_log_mask |= (DEBUG_CON0_FAIL_BIT << con)
 #define DEBUG_CON_FAIL_DISABLE(con) \
-	__ipmi_log_mask &= ~(DEBUG_CON0_FAIL_BIT << con))
+	__ipmi_log_mask &= ~(DEBUG_CON0_FAIL_BIT << con)
 
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */

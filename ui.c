@@ -1912,6 +1912,14 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
 	if (val) DEBUG_LOCKS_ENABLE(); else DEBUG_LOCKS_DISABLE();
     } else if (strcmp(type, "events") == 0) {
 	if (val) DEBUG_EVENTS_ENABLE(); else DEBUG_EVENTS_DISABLE();
+    } else if (strcmp(type, "con0") == 0) {
+	if (val) DEBUG_CON_FAIL_ENABLE(0); else DEBUG_CON_FAIL_DISABLE(0);
+    } else if (strcmp(type, "con1") == 0) {
+	if (val) DEBUG_CON_FAIL_ENABLE(1); else DEBUG_CON_FAIL_DISABLE(1);
+    } else if (strcmp(type, "con2") == 0) {
+	if (val) DEBUG_CON_FAIL_ENABLE(2); else DEBUG_CON_FAIL_DISABLE(2);
+    } else if (strcmp(type, "con3") == 0) {
+	if (val) DEBUG_CON_FAIL_ENABLE(3); else DEBUG_CON_FAIL_DISABLE(3);
     } else {
 	wprintw(cmd_win, "Invalid debug type specified: '%s'\n", type);
 	goto out;
