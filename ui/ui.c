@@ -711,10 +711,8 @@ user_input_ready(int fd, void *data)
 	int count;
 
 	count = read(0, &rc, 1);
-	while (count > 0) {
+	if (count > 0)
 	    handle_user_char(rc);
-	    count = read(0, &rc, 1);
-	}
     }
 }
 
@@ -6439,7 +6437,7 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 	new_termios.c_lflag &= ~(ECHO|ECHONL|ICANON|ISIG|IEXTEN);
 	tcsetattr(0, TCSADRAIN, &new_termios);
 	old_flags = fcntl(0, F_GETFL) & O_ACCMODE;
-	fcntl(0, F_SETFL, old_flags | O_NONBLOCK);
+//	fcntl(0, F_SETFL, old_flags | O_NONBLOCK);
     }
 
     help_cmd(NULL, NULL, NULL);
