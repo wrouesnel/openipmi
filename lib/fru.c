@@ -1088,24 +1088,25 @@ ipmi_fru_destroy(ipmi_fru_t            *fru,
 void
 fetch_complete(ipmi_fru_t *fru, int err)
 {
-    fru->fetch_in_progress = 0;
     if (fru->data)
 	ipmi_mem_free(fru->data);
+    fru->data = NULL;
 
     if (err) {
 	if (fru->fetched_handler)
 	    fru->fetched_handler(fru, err, fru->fetched_cb_data);
+	fru->fetch_in_progress = 0;
 
-	if (fru->deleted)
-	    final_fru_destroy(fru);
-	else
-	    fru_unlock(fru);
     } else {
 	err = process_fru_info(fru);
 	if (fru->fetched_handler)
 	    fru->fetched_handler(fru, err, fru->fetched_cb_data);
-	fru_unlock(fru);
+	fru->fetch_in_progress = 0;
     }
+    if (fru->deleted)
+      final_fru_destroy(fru);
+    else
+      fru_unlock(fru);
 }
 
 static int request_next_data(ipmi_fru_t   *fru,
@@ -1235,13 +1236,19 @@ fru_inventory_area_handler(ipmi_domain_t *domain,
     if (msg->data_len < 4) {
 	ipmi_log(IPMI_LOG_ERR_INFO, "FRU inventory area too small");
 	fetch_complete(fru, EINVAL);
-	return;
+	goto out;
     }
 
     fru->data_len = ipmi_get_uint16(data+1);
     fru->fetch_by_words = data[3] & 1;
 
-    fru->data = ipmi_mem_alloc(fru->data_len << fru->fetch_by_words);
+    if (fru->data_len < 8) {
+	ipmi_log(IPMI_LOG_ERR_INFO, "FRU space less than the header");
+	fetch_complete(fru, EMSGSIZE);
+	goto out;
+    }
+
+    fru->data = ipmi_mem_alloc(fru->data_len);
     if (!fru->data) {
 	ipmi_log(IPMI_LOG_ERR_INFO, "Error allocating FRU data");
 	fetch_complete(fru, ENOMEM);
@@ -1344,6 +1351,7 @@ ipmi_fru_alloc(ipmi_domain_t *domain,
 	return err;
     }
 
-    *new_fru = fru;
+    if (new_fru)
+	*new_fru = fru;
     return 0;
 }

@@ -50,9 +50,7 @@
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_ui.h>
-#ifdef WITH_FRU
 #include "OpenIPMI/ipmi_fru.h"
-#endif
 
 #include "ui_keypad.h"
 #include "ui_command.h"
@@ -2264,92 +2262,185 @@ rearm_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
-#ifdef WITH_FRU
-static void
-found_entity_for_frus(ipmi_entity_t *entity,
-                      char          **toks,
-                      char          **toks2,
-                      void          *cb_data)
+static int
+dump_fru_str(ipmi_fru_t *fru,
+	     char       *str,
+	     int (*glen)(ipmi_fru_t   *fru,
+			 unsigned int *length),
+	     int (*gtype)(ipmi_fru_t           *fru,
+			  enum ipmi_str_type_e *type),
+	     int (*gstr)(ipmi_fru_t   *fru,
+			 char         *str,
+			 unsigned int *strlen))
 {
-    ipmi_fru_info_t *frus;
-    ipmi_fru_t *fru;
-    int n;
-    int i;
+    enum ipmi_str_type_e type;
+    int rv;
+    char buf[128];
+    unsigned int len;
 
-    int  id, instance;
-    char *present;
-    char name[33];
-
-    id = ipmi_entity_get_entity_id(entity);
-    instance = ipmi_entity_get_entity_instance(entity);
-    curr_entity_id = ipmi_entity_convert_to_id(entity);
-    ipmi_entity_get_id(entity, name, 32);
-
-    display_pad_clear();
-
-    if (ipmi_entity_is_present(entity))
-	present = "present";
-    else
-	present = "not present";
-
-    frus = ipmi_entity_frus(entity);
-    if (!frus)
-        cmd_win_out("Unable to get FRUs of entity %d.%d\n", id, instance);
-
-    display_pad_out("FRUs of entity %d.%d (%s) %s:\n", id, instance, name, present);
-
-    if (ipmi_get_fru_count(frus, &n))
-        return;
-
-    for(i = 0; i < n; i++) {
-        fru = ipmi_get_fru_by_index(frus, i);
-
-        if (!fru)
-            break;
-
-	display_pad_out("%d\n", ipmi_fru_get_id( fru ) );
+    rv = gtype(fru, &type);
+    if (rv) {
+	if (rv != ENOSYS)
+	    display_pad_out("  Error fetching type for %s: %x\n", str, rv);
+	return rv;
     }
 
-    display_pad_refresh();
-}
+    if (type == IPMI_BINARY_STR) {
+	display_pad_out("  %s is in binary\n", str);
+	return 0;
+    } else if (type == IPMI_UNICODE_STR) {
+	display_pad_out("  %s is in unicode\n", str);
+	return 0;
+    } else if (type != IPMI_ASCII_STR) {
+	display_pad_out("  %s is in unknown format\n", str);
+	return 0;
+    }
 
-int
-frus_cmd(char *cmd, char **toks, void *cb_data)
-{
-    entity_finder(cmd, toks, found_entity_for_frus, NULL);
+    len = sizeof(buf);
+    rv = gstr(fru, buf, &len);
+    if (rv) {
+	display_pad_out("  Error fetching string for %s: %x\n", str, rv);
+	return rv;
+    }
+
+    display_pad_out("  %s: %s\n", str, buf);
     return 0;
 }
 
-static void
-display_text_buffer(const char *txt, int rv, ipmi_text_buffer_t *tb)
+static int
+dump_fru_custom_str(ipmi_fru_t *fru,
+		    char       *str,
+		    int        num,
+		    int (*glen)(ipmi_fru_t   *fru,
+				unsigned int num,
+				unsigned int *length),
+		    int (*gtype)(ipmi_fru_t           *fru,
+				 unsigned int         num,
+				 enum ipmi_str_type_e *type),
+		    int (*gstr)(ipmi_fru_t   *fru,
+				unsigned int num,
+				char         *str,
+				unsigned int *strlen))
 {
-  display_pad_out("%s: ", txt);
+    enum ipmi_str_type_e type;
+    int rv;
+    char buf[128];
+    unsigned int len;
 
-  if (rv) {
-      display_pad_out("<error %d>\n", rv);
-      return;
-  }
+    rv = gtype(fru, num, &type);
+    if (rv) {
+	if (rv != ENOSYS)
+	    display_pad_out("  Error fetching type for %s custom %d: %x\n",
+			    str, num, rv);
+	return rv;
+    }
 
-  char buffer[255];
+    if (type == IPMI_BINARY_STR) {
+	display_pad_out("  %s custom %d is in binary\n", str, num);
+	return 0;
+    } else if (type == IPMI_UNICODE_STR) {
+	display_pad_out("  %s custom %d is in unicode\n", str, num);
+	return 0;
+    } else if (type != IPMI_ASCII_STR) {
+	display_pad_out("  %s custom %d is in unknown format\n", str, num);
+	return 0;
+    }
 
-  int l = ipmi_text_buffer_to_ascii(tb, buffer, 255);
+    len = sizeof(buf);
+    rv = gstr(fru, num, buf, &len);
+    if (rv) {
+	display_pad_out("  Error fetching string for %s custom %d: %x\n",
+			str, num, rv);
+	return rv;
+    }
 
-  if (l < 0) {
-      display_pad_out("<conv error>\n");
-      return;
-  }
+    display_pad_out("  %s custom %d: %s\n", str, num, buf);
+    return 0;
+}
 
-  int i;
+#define DUMP_FRU_STR(name, str) \
+dump_fru_str(fru, str, ipmi_fru_get_ ## name ## _len, \
+             ipmi_fru_get_ ## name ## _type, \
+             ipmi_fru_get_ ## name)
 
-  for(i = 0; i < l; i++) {
-      if (   buffer[i] != '\t' && buffer[i] != '\r' 
-          && buffer[i] != '\n' && isprint(buffer[i]))
-          display_pad_out("%c", buffer[i]);
-      else
-          display_pad_out("<0x%02x>", (unsigned int)(unsigned char)buffer[i]);
-  }
+#define DUMP_FRU_CUSTOM_STR(name, str) \
+do {									\
+    int i, _rv;								\
+    for (i=0; ; i++) {							\
+        _rv = dump_fru_custom_str(fru, str, i,				\
+				  ipmi_fru_get_ ## name ## _custom_len, \
+				  ipmi_fru_get_ ## name ## _custom_type, \
+				  ipmi_fru_get_ ## name ## _custom);	\
+    }									\
+} while (0)
 
-  display_pad_out("\n");
+static void
+dump_fru_info(ipmi_fru_t *fru)
+{
+    unsigned char ucval;
+    unsigned int  uival;
+    int           rv;
+
+    rv = ipmi_fru_get_internal_use_version(fru, &ucval);
+    if (!rv)
+	display_pad_out("  internal area version: 0x%2.2x\n", ucval);
+
+    rv = ipmi_fru_get_internal_use_length(fru, &uival);
+    if (!rv)
+	display_pad_out("  internal area length: %d\n", uival);
+
+    /* FIXME - dump internal use data. */
+
+    rv = ipmi_fru_get_chassis_info_version(fru, &ucval);
+    if (!rv)
+	display_pad_out("  chassis info version: 0x%2.2x\n", ucval);
+
+    rv = ipmi_fru_get_chassis_info_type(fru, &ucval);
+    if (!rv)
+	display_pad_out("  chassis info type: 0x%2.2x\n", ucval);
+
+    DUMP_FRU_STR(chassis_info_part_number, "chassis info part number");
+    DUMP_FRU_STR(chassis_info_serial_number, "chassis info serial number");
+    DUMP_FRU_CUSTOM_STR(chassis_info, "chassis info");
+
+    rv = ipmi_fru_get_board_info_version(fru, &ucval);
+    if (!rv)
+	display_pad_out("  board info version: 0x%2.2x\n", ucval);
+
+    rv = ipmi_fru_get_board_info_lang_code(fru, &ucval);
+    if (!rv)
+	display_pad_out("  board info lang code: 0x%2.2x\n", ucval);
+
+    DUMP_FRU_STR(board_info_board_manufacturer,
+		 "board info board manufacturer");
+    DUMP_FRU_STR(board_info_board_product_name,
+		 "board info board product name");
+    DUMP_FRU_STR(board_info_board_serial_number,
+		 "board info board serial number");
+    DUMP_FRU_STR(board_info_board_part_number,
+		 "board info board part number");
+    DUMP_FRU_STR(board_info_fru_file_id, "board info fru file id");
+    DUMP_FRU_CUSTOM_STR(board_info, "board info");
+
+    rv = ipmi_fru_get_product_info_version(fru, &ucval);
+    if (!rv)
+	display_pad_out("  product info version: 0x%2.2x\n", ucval);
+
+    rv = ipmi_fru_get_product_info_lang_code(fru, &ucval);
+    if (!rv)
+	display_pad_out("  product info lang code: 0x%2.2x\n", ucval);
+
+    DUMP_FRU_STR(product_info_manufacturer_name,
+		 "product info manufacturer name");
+    DUMP_FRU_STR(product_info_product_name, "product info product name");
+    DUMP_FRU_STR(product_info_product_part_model_number,
+		 "product info product part model number");
+    DUMP_FRU_STR(product_info_product_version, "product info product version");
+    DUMP_FRU_STR(product_info_product_serial_number,
+		 "product info product serial number");
+    DUMP_FRU_STR(product_info_asset_tag, "product info asset_tag");
+    DUMP_FRU_STR(product_info_fru_file_id, "product info fru file id");
+    DUMP_FRU_CUSTOM_STR(product_info, "product info");
 }
 
 static void
@@ -2358,180 +2449,99 @@ found_entity_for_fru(ipmi_entity_t *entity,
                      char          **toks2,
                      void          *cb_data)
 {
-    unsigned char val;
+    int           id = ipmi_entity_get_entity_id(entity);
+    int           instance = ipmi_entity_get_entity_instance(entity);
+    ipmi_fru_t    *fru = ipmi_entity_get_fru(entity);
 
     display_pad_clear();
 
-    if (get_uchar(toks, &val, "FRU id"))
-	return;
-
-    int fru_id = val;
-
-    int id = ipmi_entity_get_entity_id(entity);
-    int instance = ipmi_entity_get_entity_instance(entity);
-
-    ipmi_fru_info_t *frus = ipmi_entity_frus(entity);
-
-    if (!frus) {
-        cmd_win_out("Unable to get FRUs %d.%d\n", id, instance);
-        return;
-    }
-
-    ipmi_fru_t *fru = ipmi_get_fru_by_id(frus, fru_id);
-
     if (!fru) {
-        cmd_win_out("Unable to get FRU %d.%d %d\n", id, instance, fru_id);
+        cmd_win_out("No FRU for entity %d.%d\n", id, instance);
         return;
     }
 
-    display_pad_out("FRU %d.%d %d\n", id, instance, fru_id);
+    display_pad_out("FRU for entity %d.%d\n", id, instance);
 
-    // fru info
-    ipmi_text_buffer_t *tb = ipmi_text_buffer_alloc();
-    ipmi_fru_record_t *r;
-    uint8_t ui;
-    int i;
-    int n;
-    time_t t;
-    int rv;
-
-    // internal area info
-    r = ipmi_fru_get_internal(fru);
-
-    if (ipmi_fru_get_record_type(r) == FTR_INTERNAL_USE_AREA) {
-        display_pad_out("internal area info:\n");
-
-        rv = ipmi_fru_get_internal_version(r, &ui);
-        display_pad_out("\tversion          : 0x%02x\n", ui);
-
-        rv = ipmi_fru_get_internal_length(r, &i);
-        display_pad_out("\tdata length      : %d\n", i);
-    }
-
-    // chassis area info
-    r = ipmi_fru_get_chassis(fru);
-
-    if (ipmi_fru_get_record_type(r) == FTR_CHASSIS_INFO_AREA) {
-        display_pad_out("chassis area info:\n");
-
-        rv = ipmi_fru_get_chassis_version(r, &ui);
-        display_pad_out("\tversion          : 0x%02x\n", ui);
-
-        rv = ipmi_fru_get_chassis_type(r, &ui);
-        display_pad_out("\tchassis type     : 0x%02x\n", ui);
-
-        rv = ipmi_fru_get_chassis_part_number(r, tb);
-        display_text_buffer("\tpart number      ", rv, tb);
-
-        rv = ipmi_fru_get_chassis_serial_number(r, tb);
-        display_text_buffer("\tserial number    ", rv, tb);
-
-        n = ipmi_fru_get_chassis_num_custom_fields(r);
-
-        for(i = 0; i < n; i++) {
-            rv = ipmi_fru_get_chassis_custom_field(r, i, tb);
-            display_text_buffer("\tcustom           ", rv, tb);
-        }
-    }
-
-    // board area info
-    r = ipmi_fru_get_board(fru);
-
-    if (ipmi_fru_get_record_type(r) == FTR_BOARD_INFO_AREA) {
-        display_pad_out("board area info:\n");
-      
-        rv = ipmi_fru_get_board_version(r, &ui);
-        display_pad_out("\tversion          : 0x%02x\n", ui);
-
-        rv = ipmi_fru_get_board_language(r, &ui);
-        display_pad_out("\tlanguage         : %d\n", ui);
-
-        rv = ipmi_fru_get_board_mfg_date(r, &t);
-        display_pad_out("\tmfg date         : %s", ctime(&t));
-
-        rv = ipmi_fru_get_board_manufacturer(r, tb);
-        display_text_buffer("\tmanufacturer     ", rv, tb);
-
-        rv = ipmi_fru_get_board_product_name(r, tb);
-        display_text_buffer("\tname             ", rv, tb);
-          
-        rv = ipmi_fru_get_board_serial_number(r, tb);
-        display_text_buffer("\tserial number    ", rv, tb);
-          
-        rv = ipmi_fru_get_board_part_number(r, tb);
-        display_text_buffer("\tpart number      ", rv, tb);
-          
-        rv = ipmi_fru_get_board_fru_file_id(r, tb);
-        display_text_buffer("\tfru file id      ", rv, tb);
-          
-        n = ipmi_fru_get_board_num_custom_fields(r);
-
-        for(i = 0; i < n; i++) {
-            rv = ipmi_fru_get_board_custom_field(r, i, tb);
-            display_text_buffer("\tcustom           ", rv, tb);
-        }
-    }
-
-    // product area info
-    r = ipmi_fru_get_product(fru);
-
-    if (ipmi_fru_get_record_type(r) == FTR_PRODUCT_INFO_AREA) {
-        display_pad_out("product area info:\n");
-
-        rv = ipmi_fru_get_product_version(r, &ui);
-        display_pad_out("\tversion          : 0x%02x\n", ui);
-
-        rv = ipmi_fru_get_product_language(r, &ui);
-        display_pad_out("\tlanguage         : %d\n", ui);
-
-        rv = ipmi_fru_get_product_manufacturer(r,tb);
-        display_text_buffer("\tmanufacturer     ", rv, tb);
-
-        rv = ipmi_fru_get_product_name(r,tb);
-        display_text_buffer("\tproduct name     ", rv, tb);
-
-        rv = ipmi_fru_get_product_part_number(r, tb);
-        display_text_buffer("\tpart number      ", rv, tb);
-          
-        rv = ipmi_fru_get_product_product_version(r, tb);
-        display_text_buffer("\tproduct version  ", rv, tb);
-
-        rv = ipmi_fru_get_product_serial_number(r, tb);
-        display_text_buffer("\tserial number    ", rv, tb);
-
-        rv =  ipmi_fru_get_product_asset_tag(r, tb);
-        display_text_buffer("\tasser tag        ", rv, tb);
-
-        rv = ipmi_fru_get_product_fru_file_id(r, tb);
-        display_text_buffer("\tfru file id      ", rv, tb);
-
-        n = ipmi_fru_get_product_num_custom_fields(r);
-
-        for(i = 0; i < n; i++) {
-            rv = ipmi_fru_get_product_custom_field(r, i, tb);
-            display_text_buffer("\tcustom           ", rv, tb);
-        }
-    }
-
-    // multi record
-    r = ipmi_fru_get_multirecord(fru);
-
-    if (ipmi_fru_get_record_type(r) == FTR_MULTI_RECORD_AREA) {
-        display_pad_out("multirecord:\n");
-    }
-
-    ipmi_text_buffer_destroy(tb);
+    dump_fru_info(fru);
 
     display_pad_refresh();
 }
 
-int
+static int
 fru_cmd(char *cmd, char **toks, void *cb_data)
 {
     entity_finder(cmd, toks, found_entity_for_fru, NULL);
     return 0;
 }
-#endif
+
+static void
+fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
+{
+    display_pad_clear();
+    if (err)
+	display_pad_out("Error fetching fru: %x\n", err);
+    else
+	dump_fru_info(fru);
+    display_pad_refresh();
+    if (err != ECANCELED)
+	ipmi_fru_destroy(fru, NULL, NULL);
+}
+
+typedef struct fru_rec_s
+{
+    unsigned char is_logical;
+    unsigned char device_address;
+    unsigned char device_id;
+    unsigned char lun;
+    unsigned char private_bus;
+    unsigned char channel;
+} fru_rec_t;
+
+static void
+dump_fru_cmder(ipmi_domain_t *domain, void *cb_data)
+{
+    fru_rec_t *info = cb_data;
+    int       rv;
+
+    rv = ipmi_fru_alloc(domain,
+			info->is_logical,
+			info->device_address,
+			info->device_id,
+			info->lun,
+			info->private_bus,
+			info->channel,
+			fru_fetched,
+			NULL,
+			NULL);
+    if (rv)
+	cmd_win_out("Unable to allocate fru: %x\n", rv);
+}
+
+static int
+dump_fru_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int rv;
+    fru_rec_t info;
+
+    if (get_uchar(toks, &info.is_logical, "is_logical"))
+	return 0;
+    if (get_uchar(toks, &info.device_address, "device_address"))
+	return 0;
+    if (get_uchar(toks, &info.device_id, "device_id"))
+	return 0;
+    if (get_uchar(toks, &info.lun, "lun"))
+	return 0;
+    if (get_uchar(toks, &info.private_bus, "private_bus"))
+	return 0;
+    if (get_uchar(toks, &info.channel, "channel"))
+	return 0;
+
+    rv = ipmi_domain_pointer_cb(domain_id, dump_fru_cmder, &info);
+    if (rv)
+	cmd_win_out("Unable to convert domain id to a pointer\n");
+
+    return 0;
+}
 
 static char y_or_n(int val)
 {
@@ -2597,8 +2607,6 @@ void mc_handler(ipmi_mc_t *mc, void *cb_data)
     ipmi_mc_aux_fw_revision(mc, vals);
     display_pad_out("         aux_fw_revision: %2.2x %2.2x %2.2x %2.2x\n",
 		    vals[0], vals[1], vals[2], vals[3]);
-    
-
 }
 
 int
@@ -3427,12 +3435,11 @@ static struct {
     { "sensor",		sensor_cmd,
       " <sensor name> - Pull up all the information on the sensor and start"
       " monitoring it" },
-#ifdef WITH_FRU
-    { "frus",           frus_cmd,
-      " <entity name> - list all the frus" },
     { "fru",		fru_cmd,
-      " <entity name> <fru id> - dump fru information" },
-#endif
+      " <entity name> - dump fru information" },
+    { "dump_fru",	dump_fru_cmd,
+      " <is_logical> <device_address> <device_id> <lun> <private_bus>"
+      "  <channel> - dump a fru given all it's insundry information" },
     { "rearm",		rearm_cmd,
       " - rearm the current sensor" },
     { "controls",	controls_cmd,

@@ -1,6 +1,8 @@
 
 2003-09-24 Corey Minyard <cminyard@mvista.com>
 
+	* ui/ui.c: Added some FRU handling commands.
+
 	* lib/mc.c: Added entity scanning to device SDRs.
 	
 	* lib/entity.c: Reworked the entity SDR handling code so that it

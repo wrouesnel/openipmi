@@ -333,8 +333,8 @@ int ipmi_fru_get_chassis_info_custom(ipmi_fru_t   *fru,
 
 int ipmi_fru_get_board_info_version(ipmi_fru_t    *fru,
 				    unsigned char *version);
-int ipmi_fru_get_board_lang_code(ipmi_fru_t    *fru,
-				 unsigned char *type);
+int ipmi_fru_get_board_info_lang_code(ipmi_fru_t    *fru,
+				      unsigned char *type);
 int ipmi_fru_get_board_info_board_manufacturer_len(ipmi_fru_t   *fru,
 						   unsigned int *length);
 int ipmi_fru_get_board_info_board_manufacturer_type(ipmi_fru_t           *fru,
@@ -541,6 +541,10 @@ int ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
 
 /* Is the entity currently present? */
 int ipmi_entity_is_present(ipmi_entity_t *ent);
+
+/* Return the FRU for this entity, or NULL if it doesn't have one
+   or the fetch has not completed. */
+ipmi_fru_t *ipmi_entity_get_fru(ipmi_entity_t *ent);
 
 /* Register a handler that will be called when a fru is added,
    deleted, or modified.  If you call this in

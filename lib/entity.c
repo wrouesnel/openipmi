@@ -146,9 +146,6 @@ struct ipmi_entity_s
        mainly for other SDRs that reference this entity). */
     unsigned int ref_count;
 
-    uint8_t entity_id;
-    uint8_t entity_instance;
-
     ilist_t *sub_entities;
     ilist_t *parent_entities;
 
@@ -308,8 +305,8 @@ search_entity(void *item, void *cb_data)
 
     return ((ent->info.device_num.channel == info->device_num.channel)
 	    && (ent->info.device_num.address == info->device_num.address)
-	    && (ent->entity_id == info->entity_id)
-	    && (ent->entity_instance == info->entity_instance));
+	    && (ent->info.entity_id == info->entity_id)
+	    && (ent->info.entity_instance == info->entity_instance));
 }
 
 static int
@@ -410,8 +407,8 @@ entity_add(ipmi_entity_info_t *ents,
 
     ent->info.type = IPMI_DLR_UNKNOWN;
     ent->info.device_num = device_num;
-    ent->entity_id = entity_id;
-    ent->entity_instance = entity_instance;
+    ent->info.entity_id = entity_id;
+    ent->info.entity_instance = entity_instance;
     ent->info.id_type = IPMI_ASCII_STR;
 
     ent->entity_id_string = ipmi_get_entity_id_string(entity_id);
@@ -1444,8 +1441,8 @@ mcdlr_output(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs, void *cb_data)
     sdr.data[4] = 0;
     sdr.data[5] = 0;
     sdr.data[6] = 0;
-    sdr.data[7] = ent->entity_id;
-    sdr.data[8] = ent->entity_instance;
+    sdr.data[7] = ent->info.entity_id;
+    sdr.data[8] = ent->info.entity_instance;
     sdr.data[9] = info->oem;
     len = 16;
     ipmi_set_device_string(info->id,
@@ -1755,6 +1752,8 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
     entity_child_link_t *eclink;
     entity_found_t      *found;
 
+    memset(&infos, 0, sizeof(infos));
+
     rv = ipmi_get_sdr_count(sdrs, &count);
     if (rv)
 	return rv;
@@ -2049,13 +2048,13 @@ cmp_entities(void *item1, void *item2)
     ipmi_entity_t *ent1 = item1;
     ipmi_entity_t *ent2 = item2;
 
-    if (ent1->entity_id < ent2->entity_id)
+    if (ent1->info.entity_id < ent2->info.entity_id)
 	return -1;
-    if (ent1->entity_id > ent2->entity_id)
+    if (ent1->info.entity_id > ent2->info.entity_id)
 	return 1;
-    if (ent1->entity_instance < ent2->entity_instance)
+    if (ent1->info.entity_instance < ent2->info.entity_instance)
 	return -1;
-    if (ent1->entity_instance > ent2->entity_instance)
+    if (ent1->info.entity_instance > ent2->info.entity_instance)
 	return 1;
     return 0;
 }
@@ -2085,9 +2084,9 @@ do_ear_output(ipmi_sdr_info_t *sdrs,
 	    sdr->data[2] |= 1 << 6;
 	pos = 3;
 	for (i=0; i<len; i++) {
-	    sdr->data[pos] = ents[i]->entity_id;
+	    sdr->data[pos] = ents[i]->info.entity_id;
 	    pos++;
-	    sdr->data[pos] = ents[i]->entity_instance;
+	    sdr->data[pos] = ents[i]->info.entity_instance;
 	    pos++;
 	}
     } else {
@@ -2105,9 +2104,9 @@ do_ear_output(ipmi_sdr_info_t *sdrs,
 	    pos++;
 	    sdr->data[pos] = ents[i]->info.device_num.channel;
 	    pos++;
-	    sdr->data[pos] = ents[i]->entity_id;
+	    sdr->data[pos] = ents[i]->info.entity_id;
 	    pos++;
-	    sdr->data[pos] = ents[i]->entity_instance;
+	    sdr->data[pos] = ents[i]->info.entity_instance;
 	    pos++;
 	}
     }
@@ -2139,8 +2138,8 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
 
     sdr.major_version = IPMI_MAJOR_NUM_SDR;
     sdr.minor_version = IPMI_MINOR_NUM_SDR;
-    sdr.data[0] = ent->entity_id;
-    sdr.data[1] = ent->entity_instance;
+    sdr.data[0] = ent->info.entity_id;
+    sdr.data[1] = ent->info.entity_instance;
 
     if ((sdr.major_version == 1) && (sdr.minor_version < 5)) {
 	/* IPMI 1.0, we can olny use normal entity association
@@ -2167,14 +2166,14 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
 	next = NULL;
     while (next) {
 	curr = next;
-	prev_inst = curr->entity_instance;
+	prev_inst = curr->info.entity_instance;
 	if (ilist_next(&iter))
 	    next = ilist_get(&iter);
 	else
 	    next = NULL;
 	while (next
-	       && (next->entity_id == curr->entity_id)
-	       && (next->entity_instance == prev_inst+1))
+	       && (next->info.entity_id == curr->info.entity_id)
+	       && (next->info.entity_instance == prev_inst+1))
 	{
 	    last = next;
 	    if (ilist_next(&iter))
@@ -2183,7 +2182,7 @@ output_child_ears(ipmi_entity_t *ent, ipmi_sdr_info_t *sdrs)
 		next = NULL;
 	    prev_inst++;
 	}
-	if (prev_inst > curr->entity_instance) {
+	if (prev_inst > curr->info.entity_instance) {
 	    /* We have a range. */
 	    if ((curr_dlr_entry > 0) && (!is_range)) {
 		rv = do_ear_output(sdrs, &sdr, ents,
@@ -2779,6 +2778,14 @@ ipmi_entity_set_entity_id_string(ipmi_entity_t *ent, char *str)
     ent->entity_id_string = str;
 }
 
+ipmi_fru_t *
+ipmi_entity_get_fru(ipmi_entity_t *ent)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    return ent->fru;
+}
+
 typedef struct iterate_child_info_s
 {
     ipmi_entity_t                *ent;
@@ -2932,8 +2939,8 @@ ipmi_entity_convert_to_id(ipmi_entity_t *ent)
     CHECK_ENTITY_LOCK(ent);
 
     val.domain_id = ent->domain_id;
-    val.entity_id = ent->entity_id;
-    val.entity_instance = ent->entity_instance;
+    val.entity_id = ent->info.entity_id;
+    val.entity_instance = ent->info.entity_instance;
     val.channel = ent->info.device_num.channel;
     val.address = ent->info.device_num.address;
     val.seq = ent->seq;
