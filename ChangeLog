@@ -1,6 +1,9 @@
 
 2003-01-09 Corey Minyard <cminyard@mvista.com>
 
+	* mc.c: Added a periodic rescan of the presence sensors
+	periodically (with the bus scan).
+	
 	* ui.c: Added rescanning of entities when displaying them.
 	
 	* mc.c, include/OpenIPMI/mc.h, entity.c: Added support for

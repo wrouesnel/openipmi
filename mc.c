@@ -1081,6 +1081,8 @@ bmc_reread_sel(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_unlock(bmc->bmc->mc_list_lock);
 }
 
+/* This is called after the first sensor scan for the MC, we start up
+   timers and things like that here. */
 static void
 sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 {
@@ -1167,6 +1169,7 @@ mc_sdr_handler(ipmi_sdr_info_t *sdrs,
 	if (mc->bmc_mc->bmc->new_mc_handler)
 	    mc->bmc_mc->bmc->new_mc_handler(mc->bmc_mc, mc,
 					    mc->bmc_mc->bmc->new_mc_cb_data);
+	/* Scan all the sensors and call sensors_reread() when done. */
 	ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     }
 }
@@ -1351,6 +1354,10 @@ bmc_rescan_bus(void *cb_data, os_hnd_timer_id_t *id)
 	free(info);
 	return;
     }
+
+    /* Rescan all the presence sensors to make sure they are valid. */
+    ipmi_detect_bmc_presence_changes(bmc, 1);
+
     ipmi_lock(bmc->bmc->mc_list_lock);
     start_mc_scan(bmc);
     timeout.tv_sec = IPMI_RESCAN_BUS_INTERVAL;
@@ -1386,6 +1393,7 @@ set_operational(ipmi_mc_t *mc)
     ipmi_entity_scan_sdrs(mc->bmc->entities, mc->bmc->main_sdrs);
     ipmi_sensor_handle_sdrs(mc, NULL, mc->bmc->main_sdrs);
 
+    /* Scan all the sensors and call sensors_reread() when done. */
     ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
     start_mc_scan(mc);
 
