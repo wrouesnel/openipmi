@@ -1467,19 +1467,22 @@ fetch_complete(ipmi_fru_t *fru, int err)
 {
     if (!err)
 	err = process_fru_info(fru);
+    fru_unlock(fru);
 
     if (fru->fetched_handler)
 	fru->fetched_handler(fru, err, fru->fetched_cb_data);
-    fru->fetch_in_progress = 0;
+
+    fru_lock(fru);
+    fru->fetch_in_progress--;
 
     if (fru->data)
 	ipmi_mem_free(fru->data);
     fru->data = NULL;
 
     if (fru->deleted)
-      final_fru_destroy(fru);
+	final_fru_destroy(fru);
     else
-      fru_unlock(fru);
+	fru_unlock(fru);
 }
 
 static int request_next_data(ipmi_fru_t   *fru,
@@ -1757,7 +1760,7 @@ ipmi_fru_alloc(ipmi_domain_t       *domain,
     fru->fetched_cb_data = fetched_cb_data;
 
     fru->deleted = 0;
-    fru->fetch_in_progress = 1;
+    fru->fetch_in_progress++;
 
     if (fru->is_logical)
 	err = start_logical_fru_fetch(fru);

@@ -1,5 +1,37 @@
 #!/usr/bin/perl
 
+# sample
+#
+# A sample file that uses most of the perl/OpenIPMI interface
+#
+# Author: MontaVista Software, Inc.
+#         Corey Minyard <minyard@mvista.com>
+#         source@mvista.com
+#
+# Copyright 2004 MontaVista Software Inc.
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU Lesser General Public License
+#  as published by the Free Software Foundation; either version 2 of
+#  the License, or (at your option) any later version.
+#
+#
+#  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+#  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+#  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+#  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+#  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+#  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+#  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+#  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+#  You should have received a copy of the GNU Lesser General Public
+#  License along with this program; if not, write to the Free
+#  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
 use OpenIPMI;
 
 {
@@ -487,8 +519,44 @@ use OpenIPMI;
 	my $op = shift;
 	my $entity = shift;
 	my $fru = shift;
+	my $rv;
 
 	print $op, " fru for ", $entity->get_name(), "\n";
+	if (($op eq "added") || ($op eq "changed")) {
+	    my $i, $j, $k;
+
+	    $i = $fru->str_to_index("internal_use_version");
+	    if ($i == -1) {
+		print("*** FRU string 'internal_use_version' was invalid\n");
+	    } else {
+		print("  internal_use_version index is $i\n");
+	    }
+	    $i = $fru->str_to_index("blah blah");
+	    if ($i != -1) {
+		print("*** FRU string 'blah blah' was valid\n");
+	    }
+
+	    $i = 0;
+	    $j = 0;
+	    $k = $j;
+	    $rv = $fru->get($i, \$j);
+	    while ($rv) {
+		if (split(/ /, $rv) > 1) {
+		    print "  ", $rv, "\n";
+		}
+		if ($j != $k) {
+		    if ($j == -1) {
+			$i++;
+			$j = 0;
+		    }
+		} else {
+		    $i++;
+		    $j = 0;
+		}
+		$k = $j;
+		$rv = $fru->get($i, \$j);
+	    }
+	}
     }
 
     sub entity_hot_swap_update_cb {
@@ -575,6 +643,10 @@ use OpenIPMI;
 		if ($rv) {
 		    print "***Unable to add hot-swap handler: $rv\n";
 		}
+		$rv = $entity->add_fru_update_handler($self);
+		if ($rv) {
+		    print "***Unable to add fru handler: $rv\n";
+		}
 	    }
 	} elsif ($op eq "deleted") {
 	    $rv = $entity->remove_presence_handler($self);
@@ -592,6 +664,10 @@ use OpenIPMI;
 	    $rv = $entity->remove_hot_swap_handler($self);
 	    if ($rv) {
 		print "***Unable to remove hot-swap handler: $rv\n";
+	    }
+	    $rv = $entity->remove_fru_update_handler($self);
+	    if ($rv) {
+		print "***Unable to add fru handler: $rv\n";
 	    }
 	}
     }

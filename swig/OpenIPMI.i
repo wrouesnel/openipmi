@@ -1,3 +1,35 @@
+/*
+ * OpenIPMI.i
+ *
+ * A SWIG interface file for OpenIPMI
+ *
+ * Author: MontaVista Software, Inc.
+ *         Corey Minyard <minyard@mvista.com>
+ *         source@mvista.com
+ *
+ * Copyright 2004 MontaVista Software Inc.
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public License
+ *  as published by the Free Software Foundation; either version 2 of
+ *  the License, or (at your option) any later version.
+ *
+ *
+ *  THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+ *  WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ *  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS
+ *  OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ *  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
+ *  TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ *  USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this program; if not, write to the Free
+ *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
 
 %module OpenIPMI
 
@@ -20,96 +52,6 @@ typedef struct intarray
 } intarray;
 
 os_handler_t *swig_os_hnd;
-
-swig_cb_val swig_log_handler;
-
-void
-posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
-{
-    char *pfx = "";
-    static char log[1024];
-    static int curr = 0;
-    swig_cb_val handler = swig_log_handler;
-
-    if (! handler)
-	return;
-
-    switch(log_type)
-    {
-    case IPMI_LOG_INFO:
-	pfx = "INFO";
-	break;
-
-    case IPMI_LOG_WARNING:
-	pfx = "WARN";
-	break;
-
-    case IPMI_LOG_SEVERE:
-	pfx = "SEVR";
-	break;
-
-    case IPMI_LOG_FATAL:
-	pfx = "FATL";
-	break;
-
-    case IPMI_LOG_ERR_INFO:
-	pfx = "EINF";
-	break;
-
-    case IPMI_LOG_DEBUG:
-	pfx = "DEBG";
-	break;
-
-    case IPMI_LOG_DEBUG_START:
-    case IPMI_LOG_DEBUG_CONT:
-	if (curr < sizeof(log))
-	    curr += vsnprintf(log+curr, sizeof(log)-curr, format, ap);
-	return;
-
-    case IPMI_LOG_DEBUG_END:
-	if (curr < sizeof(log))
-	    vsnprintf(log+curr, sizeof(log)-curr, format, ap);
-	pfx = "DEBG";
-	curr = 0;
-	goto plog;
-    }
-
-    vsnprintf(log, sizeof(log), format, ap);
-
- plog:
-    swig_call_cb(handler, "log", "%s%s", pfx, log);
-}
-
-#ifdef HAVE_GLIB
-#include <glib.h>
-static void
-glib_handle_log(const gchar *log_domain,
-		GLogLevelFlags log_level,
-		const gchar *message,
-		gpointer user_data)
-{
-    char *pfx = "";
-    swig_cb_val handler = swig_log_handler;
-
-    if (! handler)
-	return;
-
-    if (log_level & G_LOG_LEVEL_ERROR)
-	pfx = "FATL";
-    else if (log_level & G_LOG_LEVEL_CRITICAL)
-	pfx = "SEVR";
-    else if (log_level & G_LOG_LEVEL_WARNING)
-	pfx = "WARN";
-    else if (log_level & G_LOG_LEVEL_MESSAGE)
-	pfx = "EINF";
-    else if (log_level & G_LOG_LEVEL_INFO)
-	pfx = "INFO";
-    else if (log_level & G_LOG_LEVEL_DEBUG)
-	pfx = "DEBG";
-
-    swig_call_cb(handler, "log", "%s%s", pfx, message);
-}
-#endif
 
 static int
 next_parm(char *s, int *start, int *next)
@@ -254,145 +196,100 @@ parse_ipmi_data(intarray data, unsigned char *odata,
 
 %}
 
+#include "OpenIPMI_lang.i"
+
 %nodefault;
 
-%typemap(in) swig_cb {
-    if (!SvROK($input))
-	croak("Argument $argnum is not a reference.");
-    $1 = $input;
-}
-
-%typemap(in) intarray {
-    AV *tempav;
-    I32 len;
-    int i;
-    SV  **tv;
-    if (!SvROK($input))
-	croak("Argument $argnum is not a reference.");
-    if (SvTYPE(SvRV($input)) != SVt_PVAV)
-	croak("Argument $argnum is not an array.");
-    tempav = (AV*)SvRV($input);
-    len = av_len(tempav);
-    $1.val = (int *) malloc((len+2)*sizeof(int));
-    $1.len = len + 1;
-    
-    for (i = 0; i <= len; i++) {
-	tv = av_fetch(tempav, i, 0);
-	$1.val[i] = SvIV(*tv);
-    }
-}
-
-%typemap(freearg) intarray {
-        free($1.val);
-};
-
-%typemap(out) intarray {
-    AV *tempav;
-    SV **svs;
-    int i;
-
-    svs = (SV **) malloc($1.len*sizeof(SV *));
-    for (i=0; i<$1.len; i++) {
-	svs[i] = sv_newmortal();
-	sv_setiv(svs[i], $1.val[i]);
-    }
-    tempav = av_make($1.len, svs);
-    free(svs);
-    $result = newRV((SV *) tempav);
-    sv_2mortal($result);
-    argvi++;
-}
-
-%typemap(in) char ** {
-    AV *tempav;
-    I32 len;
-    int i;
-    SV  **tv;
-    if (!SvROK($input))
-	croak("Argument $argnum is not a reference.");
-    if (SvTYPE(SvRV($input)) != SVt_PVAV)
-	croak("Argument $argnum is not an array.");
-    tempav = (AV*)SvRV($input);
-    len = av_len(tempav);
-    $1 = (char **) malloc((len+2)*sizeof(char *));
-    for (i = 0; i <= len; i++) {
-	tv = av_fetch(tempav, i, 0);
-	$1[i] = (char *) SvPV(*tv,PL_na);
-    }
-    $1[i] = NULL;
-};
-
-%typemap(freearg) char ** {
-    free($1);
-};
-
-%typemap(in) double * (double dvalue) {
-    SV* tempsv;
-    if (!SvROK($input)) {
-	croak("expected a reference\n");
-    }
-    tempsv = SvRV($input);
-    if ((!SvNOK(tempsv)) && (!SvIOK(tempsv))) {
-	croak("expected a double reference\n");
-    }
-    dvalue = SvNV(tempsv);
-    $1 = &dvalue;
-}
-
-%typemap(argout) double * {
-    SV *tempsv;
-    tempsv = SvRV($input);
-    sv_setnv(tempsv, *$1);
-}
-
-%typemap(in) double * (double dvalue) {
-    SV* tempsv;
-    if (!SvROK($input)) {
-	croak("expected a reference\n");
-    }
-    tempsv = SvRV($input);
-    if ((!SvNOK(tempsv)) && (!SvIOK(tempsv))) {
-	dvalue = 0.0;
-    } else {
-	dvalue = SvNV(tempsv);
-    }
-    $1 = &dvalue;
-}
-
-%typemap(argout) double * {
-    SV *tempsv;
-    tempsv = SvRV($input);
-    sv_setnv(tempsv, *$1);
-}
-
-%typemap(in) int * (int ivalue) {
-    SV* tempsv;
-    if (!SvROK($input)) {
-	croak("expected a reference\n");
-    }
-    tempsv = SvRV($input);
-    if (!SvIOK(tempsv)) {
-	ivalue = 0;
-    } else {
-	ivalue = SvIV(tempsv);
-    }
-    $1 = &ivalue;
-}
-
-%typemap(argout) int * {
-    SV *tempsv;
-    tempsv = SvRV($input);
-    sv_setiv(tempsv, *$1);
-}
-
 %{
+swig_cb_val swig_log_handler;
 
-#define swig_free_ref_check(r, c) \
-	do {								\
-	    if (SvREFCNT(SvRV(r.val)) != 1)				\
-		warn("***You cannot keep pointers of class %s", c);	\
-	    swig_free_ref(r);						\
-	} while(0)
+void
+posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
+{
+    char *pfx = "";
+    static char log[1024];
+    static int curr = 0;
+    swig_cb_val handler = swig_log_handler;
+
+    if (! handler)
+	return;
+
+    switch(log_type)
+    {
+    case IPMI_LOG_INFO:
+	pfx = "INFO";
+	break;
+
+    case IPMI_LOG_WARNING:
+	pfx = "WARN";
+	break;
+
+    case IPMI_LOG_SEVERE:
+	pfx = "SEVR";
+	break;
+
+    case IPMI_LOG_FATAL:
+	pfx = "FATL";
+	break;
+
+    case IPMI_LOG_ERR_INFO:
+	pfx = "EINF";
+	break;
+
+    case IPMI_LOG_DEBUG:
+	pfx = "DEBG";
+	break;
+
+    case IPMI_LOG_DEBUG_START:
+    case IPMI_LOG_DEBUG_CONT:
+	if (curr < sizeof(log))
+	    curr += vsnprintf(log+curr, sizeof(log)-curr, format, ap);
+	return;
+
+    case IPMI_LOG_DEBUG_END:
+	if (curr < sizeof(log))
+	    vsnprintf(log+curr, sizeof(log)-curr, format, ap);
+	pfx = "DEBG";
+	curr = 0;
+	goto plog;
+    }
+
+    vsnprintf(log, sizeof(log), format, ap);
+
+ plog:
+    swig_call_cb(handler, "log", "%s%s", pfx, log);
+}
+
+#ifdef HAVE_GLIB
+#include <glib.h>
+static void
+glib_handle_log(const gchar *log_domain,
+		GLogLevelFlags log_level,
+		const gchar *message,
+		gpointer user_data)
+{
+    char *pfx = "";
+    swig_cb_val handler = swig_log_handler;
+
+    if (! handler)
+	return;
+
+    if (log_level & G_LOG_LEVEL_ERROR)
+	pfx = "FATL";
+    else if (log_level & G_LOG_LEVEL_CRITICAL)
+	pfx = "SEVR";
+    else if (log_level & G_LOG_LEVEL_WARNING)
+	pfx = "WARN";
+    else if (log_level & G_LOG_LEVEL_MESSAGE)
+	pfx = "EINF";
+    else if (log_level & G_LOG_LEVEL_INFO)
+	pfx = "INFO";
+    else if (log_level & G_LOG_LEVEL_DEBUG)
+	pfx = "DEBG";
+
+    swig_call_cb(handler, "log", "%s%s", pfx, message);
+}
+#endif
 
 static void
 handle_domain_cb(ipmi_domain_t *domain, void *cb_data)
@@ -708,7 +605,8 @@ entity_fru_update_handler(enum ipmi_update_e op,
     swig_ref    fru_ref;
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
-    fru_ref = swig_make_ref(ipmi_entity_get_fru, "OpenIPMI::ipmi_fru_t");
+    fru_ref = swig_make_ref(ipmi_entity_get_fru(entity),
+			    "OpenIPMI::ipmi_fru_t");
     swig_call_cb(cb, "entity_fru_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &fru_ref);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
@@ -1987,8 +1885,6 @@ typedef struct {
 typedef struct {
 } ipmi_control_id_t;
 
-%newobject open_domain;
-
 %inline %{
 /*
  * Initialize the OS handler and use the POSIX version.
@@ -2169,6 +2065,7 @@ color_string(int color)
 
 %}
 
+%newobject open_domain;
 /*
  * Create a new domain.  The domain will be named with the first parm,
  * the startup arguments are in a list in the second parm (\@args),
@@ -5737,7 +5634,7 @@ char *color_string(int color);
 %extend ipmi_fru_t {
     /*
      * Convert the string to a FRU index.  Use this if you have a specfiic
-     * fru data object you are after.
+     * fru data object you are after.  Returns -1 if the name is not valid.
      */
     int str_to_index(char *name)
     {
@@ -5783,7 +5680,7 @@ char *color_string(int color);
 	data = NULL;
 	rv = ipmi_fru_get(self, index, &name, num, &dtype, &intval,
 			  &time, &data, &data_len);
-	if (rv == ENOSYS)
+	if ((rv == ENOSYS) || (rv == E2BIG))
 	    return strdup(name);
 	else if (rv)
 	    return NULL;
