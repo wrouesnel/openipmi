@@ -173,6 +173,9 @@ struct ipmi_domain_s
     void                            *oem_data;
     ipmi_domain_destroy_oem_data_cb oem_data_destroyer;
 
+    /* The type of domain, defaults to unknown */
+    enum ipmi_domain_type domain_type;
+
     /* Major and minor versions of the connection. */
     unsigned int major_version : 4;
     unsigned int minor_version : 4;
@@ -4355,6 +4358,18 @@ void *
 ipmi_domain_get_oem_data(ipmi_domain_t *domain)
 {
     return domain->oem_data;
+}
+
+enum ipmi_domain_type
+ipmi_domain_get_type(ipmi_domain_t *domain)
+{
+    return domain->domain_type;
+}
+
+void
+ipmi_domain_set_type(ipmi_domain_t *domain, enum ipmi_domain_type dtype)
+{
+    domain->domain_type = dtype;
 }
 
 /***********************************************************************

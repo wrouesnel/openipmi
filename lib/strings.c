@@ -1151,3 +1151,19 @@ ipmi_hot_swap_state_name(enum ipmi_hot_swap_states state)
     default: return "invalid_state";
     }
 }
+
+static char *domain_types[] =
+{
+    "unknown",
+    "MXP",
+    "ATCA",
+};
+#define NUM_DOMAIN_TYPES (sizeof(domain_types)/sizeof(char *))
+
+char *
+ipmi_domain_get_type_string(enum ipmi_domain_type dtype)
+{
+    if ((dtype < 0) || (dtype >= NUM_DOMAIN_TYPES))
+	return "invalid";
+    return domain_types[dtype];
+}

@@ -1,3 +1,16 @@
+2004-06-18 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h.in, include/OpenIPMI/ipmi_domain.h:
+	Added a ipmi_domain_get_type() function for determining the type
+	of domain.  This is so things like ATCA domains can be detected.
+	* lib/domain.c: ditto
+
+	* lib/oem_motorola_mxp.c, lib/oem_atca.c: Added domain type
+	setting for MXP and ATCA.
+
+	* include/OpenIPMI/ipmiif.h.in, lib/strings.h: Added strings for
+	the domain type.
+
 2004-06-17 Philipp Matthias Hahn <pmhahn@titan.lahn.de>
 
 	* man/ipmi_ui.1, man/ipmicmd.1, man/ipmilan.8: Cleanups for the

@@ -6902,7 +6902,8 @@ ipmi_ui_setup_done(ipmi_domain_t *domain,
 	ui_log("All IPMI connections down\n");
 	return;
     } else if (!domain_initialized[dnum])
-	ui_log("Completed setup for the IPMI connection\n");
+	ui_log("Completed setup for the IPMI connection, domain type %s\n",
+	       ipmi_domain_get_type_string(ipmi_domain_get_type(domain)));
     else {
 	return;
     }

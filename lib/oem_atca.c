@@ -3362,6 +3362,7 @@ check_if_atca_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
     if (msg->data[0] == 0) {
 	/* It's an ATCA system, set it up */
+	ipmi_domain_set_type(domain, IPMI_DOMAIN_TYPE_ATCA);
 	set_up_atca_domain(domain, msg, done, rspi->data2);
     } else {
 	done(domain, ENOSYS, rspi->data2);

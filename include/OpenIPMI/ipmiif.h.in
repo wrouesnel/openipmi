@@ -191,6 +191,19 @@ typedef void (*ipmi_domain_cb)(ipmi_domain_t *domain, int err, void *cb_data);
 void ipmi_domain_set_name(ipmi_domain_t *domain, char *name);
 void ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int *len);
 
+/* Domains come in different flavors.  It might be useful to know the
+   type of domain you are hooked to, so this function will return the
+   domain type (assuming it can be determined).  Also includes a
+   function to convert the name to a human-readable string. */
+enum ipmi_domain_type
+{
+    IPMI_DOMAIN_TYPE_UNKNOWN = 0,
+    IPMI_DOMAIN_TYPE_MXP,
+    IPMI_DOMAIN_TYPE_ATCA,
+};
+enum ipmi_domain_type ipmi_domain_get_type(ipmi_domain_t *domain);
+char *ipmi_domain_get_type_string(enum ipmi_domain_type dtype);
+
 /* Add and remove a function to be called when the connection or port
    to the domain goes down or back up.  Being down does NOT mean the
    domain has been shutdown, it is still active, and OpenIPMI will

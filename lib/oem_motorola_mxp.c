@@ -8820,6 +8820,8 @@ mxp_bmc_handler(ipmi_mc_t *mc)
     mxp_info_t    *info;
     ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
 
+    ipmi_domain_set_type(domain, IPMI_DOMAIN_TYPE_MXP);
+
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
