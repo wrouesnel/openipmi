@@ -170,8 +170,6 @@ send_rakp3(ipmi_con_t *ipmi, rakp_info_t *info,
     unsigned char       data[64];
     ipmi_msg_t          msg;
     ipmi_rmcpp_addr_t   addr;
-    const unsigned char *p;
-    unsigned int        plen;
 
     memset(data, 0, sizeof(data));
     data[0] = info->msg_tag;
@@ -194,9 +192,15 @@ send_rakp3(ipmi_con_t *ipmi, rakp_info_t *info,
 	msg.data_len = len;
     }
 
-    rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
-				       (ipmi_addr_t *) &addr, sizeof(addr),
-				       &msg, handle_rakp4, rspi);
+    if (err)
+	/* Don't handle the responst (if one comes back) on an error. */
+	rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
+					   (ipmi_addr_t *) &addr, sizeof(addr),
+					   &msg, NULL, rspi);
+    else
+	rv = ipmi_lan_send_command_forceip(ipmi, addr_num,
+					   (ipmi_addr_t *) &addr, sizeof(addr),
+					   &msg, handle_rakp4, rspi);
     return rv;
 }
 
@@ -269,9 +273,13 @@ handle_rakp2(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     return IPMI_MSG_ITEM_USED;
 
  out:
-    send_rakp3(ipmi, info, rspi, addr_num, err);
+    rv = send_rakp3(ipmi, info, rspi, addr_num, err);
     rakp_done(info, ipmi, addr_num, rv);
-    return IPMI_MSG_ITEM_NOT_USED;
+    if (rv)
+	return IPMI_MSG_ITEM_NOT_USED;
+    else
+	/* Yes, we use it to send the error response. */
+	return IPMI_MSG_ITEM_USED;
 }
 
 static int

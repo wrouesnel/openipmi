@@ -3124,10 +3124,10 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
     data[12] = 0;
     data[15] = 8;
     data[16] = auth;
-    data[20] = 0;
+    data[20] = 1;
     data[23] = 8;
     data[24] = integ;
-    data[28] = 0;
+    data[28] = 2;
     data[31] = 8;
     data[32] = conf;
 

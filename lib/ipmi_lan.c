@@ -1452,6 +1452,9 @@ rmcpp_format_msg(lan_data_t *lan, int addr_num,
 	&& (lan->ip[addr_num].working_conf
 	    != IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE))
     {
+	if (! lan->ip[addr_num].working)
+	    return EAGAIN;
+
 	/* Note: This may encrypt the data, the old data will be lost. */
 	rv = lan->ip[addr_num].conf_info->conf_encrypt
 	    (lan->ipmi,
@@ -3259,6 +3262,9 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
     int              rv;
     /* We store the address number in data4. */
 
+
+    if (addr_num >= MAX_IP_ADDR)
+	return EINVAL;
 
     if (addr_len > sizeof(ipmi_addr_t))
 	return EINVAL;
