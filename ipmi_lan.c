@@ -179,17 +179,23 @@ open_lan_fd(void)
 {
     int                fd;
     struct sockaddr_in addr;
+    int                curr_port;
     int                rv;
 
     fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1)
 	return fd;
 
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(623);
-    addr.sin_addr.s_addr = INADDR_ANY;
+    curr_port = 7000;
+    do {
+	curr_port++;
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(curr_port);
+	addr.sin_addr.s_addr = INADDR_ANY;
 
-    rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
+	rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
+    } while ((curr_port < 7100) && (rv == -1));
+
     if (rv == -1)
     {
 	int tmp_errno = errno;
@@ -280,7 +286,10 @@ lan_send(lan_data_t  *lan,
     data[4] = lan->working_authtype;
     ipmi_set_uint32(data+5, lan->outbound_seq_num);
     ipmi_set_uint32(data+9, lan->session_id);
-    tmsg = data+30;
+    if (lan->working_authtype == 0)
+	tmsg = data+14;
+    else
+	tmsg = data+30;
 
     if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	/* It's a message straight to the BMC. */
@@ -328,11 +337,17 @@ lan_send(lan_data_t  *lan,
 	pos++;
     }
 
-    data[29] = pos;
-    rv = auth_gen(lan, data+13, tmsg, pos);
-    if (rv)
-	return rv;
-    pos += 30; /* Convert to pos in data */
+    if (lan->working_authtype == 0) {
+	/* No authentication, so no authcode. */
+	data[13] = pos;
+	pos += 14; /* Convert to pos in data */
+    } else {
+	data[29] = pos;
+	rv = auth_gen(lan, data+13, tmsg, pos);
+	if (!rv)
+	    return rv;
+	pos += 30; /* Convert to pos in data */
+    }
 
     /* FIXME - need locks for the sequence numbers. */
 
@@ -537,13 +552,21 @@ data_handler(int            fd,
     if (len < 21) /* Minimum size of an IPMI msg. */
 	goto out_unlock2;
 
-    if (len < 37) /* Minimum size of an authenticated IPMI msg. */
-	goto out_unlock2;
-    /* authcode in message, add 16 to the above checks. */
-    if (len < (data[29] + 30))
-	/* Not enough data was supplied, reject the message. */
-	goto out_unlock2;
-    data_len = data[29];
+    if (data[4] == 0) {
+	/* No authentication. */
+	if (len < (data[13] + 14))
+	    /* Not enough data was supplied, reject the message. */
+	    goto out_unlock2;
+	data_len = data[13];
+    } else {
+	if (len < 37) /* Minimum size of an authenticated IPMI msg. */
+	    goto out_unlock2;
+	/* authcode in message, add 16 to the above checks. */
+	if (len < (data[29] + 30))
+	    /* Not enough data was supplied, reject the message. */
+	    goto out_unlock2;
+	data_len = data[29];
+    }
 
     /* Validate the RMCP portion of the message. */
     if ((data[0] != 6)
@@ -564,12 +587,16 @@ data_handler(int            fd,
 
     seq = ipmi_get_uint32(data+5);
 
-    /* Validate the message's authcode.  Do this before checking
-       the session seq num so we know the data is valid. */
-    rv = auth_check(lan, sess_id, seq, data+30, data[29], data+13);
-    if (rv)
-	goto out_unlock2;
-    tmsg = data + 30;
+    if (data[4] != 0) {
+	/* Validate the message's authcode.  Do this before checking
+           the session seq num so we know the data is valid. */
+	rv = auth_check(lan, sess_id, seq, data+30, data[29], data+13);
+	if (rv)
+	    goto out_unlock2;
+	tmsg = data + 30;
+    } else {
+	tmsg = data + 14;
+    }
 
     /* Check the sequence number. */
     if ((seq - lan->inbound_seq_num) <= 8) {
@@ -636,7 +663,7 @@ data_handler(int            fd,
 
 	si_addr->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
 	si_addr->channel = 0xf;
-	si_addr->lun = 0; /* FIXME - should be tmsg[1] & 3; */
+	si_addr->lun = tmsg[1] & 3;
 
 	seq = tmsg[4] >> 2;
 	msg.netfn = tmsg[1] >> 2;
