@@ -29,6 +29,9 @@
 	SEL.
 
 	* configure.in: Move to version 1.2.10.
+
+	* lib/OpenIPMI/ipmi_addr.h, lib/ipmi_utils.c: Added a privilege
+	field to the IPMI LAN address.
 	
 2004-02-11 Corey Minyard <cminyard@mvista.com> 
 

@@ -108,6 +108,7 @@ ipmi_addr_equal(ipmi_addr_t *addr1,
 
 		return ((lan_addr1->remote_SWID == lan_addr2->remote_SWID)
 			&& (lan_addr1->local_SWID == lan_addr2->local_SWID)
+			&& (lan_addr1->privilege == lan_addr2->privilege)
 			&& (lan_addr1->session_handle
 			    == lan_addr2->session_handle)
 			&& (lan_addr1->lun == lan_addr2->lun));

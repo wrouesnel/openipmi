@@ -100,6 +100,7 @@ struct ipmi_lan_addr
 {
 	int           addr_type;
 	short         channel;
+	unsigned char privilege;
 	unsigned char session_handle;
 	unsigned char remote_SWID;
 	unsigned char local_SWID;
