@@ -36,6 +36,9 @@
  *  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+/* I rewrote this because I needed access to individual data items,
+   not just a full configuration. -Corey */
+
 #include <string.h>
 #include <math.h>
 
@@ -686,6 +689,11 @@ num_event_filter_table_entries(ipmi_pef_t *pef)
     return pef->num_eft_entries;
 }
 
+ipmi_mcid_t
+ipmi_pef_get_mc(ipmi_pef_t *pef)
+{
+    return pef->mc;
+}
 
 typedef struct ipmi_eft_s
 {

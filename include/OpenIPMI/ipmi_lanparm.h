@@ -45,8 +45,7 @@ typedef void (*ipmi_lanparm_done_cb)(ipmi_lanparm_t *lanparm,
 				     int            err,
 				     void           *cb_data);
 
-/* Allocate a LANPARM.  The LANPARM will not be usable (it can only be
-   destroyed) until the done callback is called. */
+/* Allocate a LANPARM. */
 int ipmi_lanparm_alloc(ipmi_mc_t      *mc,
 		       unsigned int   channel,
 		       ipmi_lanparm_t **new_lanparm);

@@ -1,3 +1,26 @@
+2004-01-05 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_int.h, lib/ipmi.c: Added a way for
+	internal code to fetch the global OS handler.
+
+	* lib/pef.c, include/OpenIPMI/ipmi_pef.h: Added a way to get the
+	MC for a PEF.
+
+	* lib/impi_lan.c: Added system address scanning for all LAN
+	connections.
+
+	* lib/ipmi.c: Added PET init and shutdown functions.
+
+	* lib/ipmi.c, include/OpenIPMI/ipmi_int.h: Added a method to get
+	the main OS handler.
+
+	* include/OpenIPMI/ipmi_addr.h: Added a define for the "self"
+	channel.
+
+	* lib/pet.c, include/OpenIPMI/ipmi_pet.c, lib/Makefile.am: Added a
+	way to easily set up the platform event trap stuff for just
+	getting all events.
+
 2004-01-02 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmi_int.h: Added ipmi_strdup for use by

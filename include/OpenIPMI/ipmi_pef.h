@@ -92,6 +92,9 @@ int ipmi_pef_supports_reset(ipmi_pef_t *pef);
 int ipmi_pef_supports_power_down(ipmi_pef_t *pef);
 int ipmi_pef_supports_alert(ipmi_pef_t *pef);
 
+/* Return the MC this PEF uses. */
+ipmi_mcid_t ipmi_pef_get_mc(ipmi_pef_t *pef);
+
 unsigned int ipmi_pef_major_version(ipmi_pef_t *pef);
 unsigned int ipmi_pef_minor_version(ipmi_pef_t *pef);
 

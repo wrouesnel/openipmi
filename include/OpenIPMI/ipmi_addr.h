@@ -82,6 +82,10 @@ typedef struct ipmi_ipmb_addr
    channel, This is for the system interface address type only.
    FIXME - is this right, or should we use -1? */
 #define IPMI_BMC_CHANNEL  0xf
+
+/* The channel that means "The channel we are talking on". */
+#define IPMI_SELF_CHANNEL 0xe
+
 #define IPMI_NUM_CHANNELS 0x10
 
 #else /* _LINUX_IPMI_H */

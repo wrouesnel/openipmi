@@ -40,6 +40,9 @@
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_addr.h>
 
+/* Get the "global" OS handlers used for non-domain operations. */
+os_handler_t *ipmi_get_global_os_handler(void);
+
 /* There is a global read/write lock that protects the addition and
    removal of MCs and high-level information that doesn't change very
    much.  Grabbing the read lock keep anything from adding or removing
