@@ -122,6 +122,9 @@ int ipmi_sensor_get_raw_normal_min(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_raw_sensor_max(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_raw_sensor_min(ipmi_sensor_t *sensor);
 
+/* Returns IPMI_ANALOG_DATA_FORMAT_xxx */
+int ipmi_sensor_get_analog_data_format(ipmi_sensor_t *sensor);
+
 int ipmi_sensor_get_default_threshold_raw(ipmi_sensor_t *sensor,
 					  int           threshold,
 					  int           *raw);
@@ -147,9 +150,6 @@ int ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 
 int ipmi_sensor_get_positive_going_threshold_hysteresis(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_negative_going_threshold_hysteresis(ipmi_sensor_t *sensor);
-
-int ipmi_get_default_sensor_thresholds(ipmi_sensor_t     *sensor,
-				       ipmi_thresholds_t *th);
 
 /* These calls allow OEM code to set up a sensor. */
 void ipmi_sensor_set_owner(ipmi_sensor_t *sensor, int owner);

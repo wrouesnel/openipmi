@@ -1,3 +1,14 @@
+2004-08-02 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmiif.h.in: Renamed some parameters to be more
+	clear, moved some things around that were in the wrong places.
+	* include/OpenIPMI/ipmi_sensor.h: ditto
+
+	* lib/entity.c: Added the processor bit presence sensor, since
+	there is a presence bit for processor sensors.
+
+	* lib/oem_atca.c: Fixed an error log.
+	
 2004-07-29 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c, include/OpenIPMI/domain.h: Added a way to fetch

@@ -4085,6 +4085,27 @@ the \ac{MC} is located on.  There are two types of reset, cold and
 warm. Not all systems support resetting the MC and the effects of the
 reset are system-dependent.
 
+\subsection{Global Event Enables}
+\label{sec-global-event-enables}
+
+An MC has a global event enable.  If events are disabled, then all
+events from the MC are disabled.  If events are enabled, then the
+sending of events depends on more specific event settings on the
+sensors.  The value is a true-false, setting it to true enables
+events.  False disables events.  The functions are:
+
+\begin{verbatim}
+int ipmi_mc_get_events_enable(ipmi_mc_t *mc);
+int ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
+			      int             val,
+			      ipmi_mc_done_cb done,
+			      void            *cb_data);
+\end{verbatim}
+
+The setting is fetched and held locally, so the ``get'' function is
+immediate.  The ``set'' function requires sending a message and thus
+it has a callback.
+
 %---------------------------------------------------------------------
 \chapter{\acs{IPMI} Commands}
 \label{ipmi-commands}
@@ -5253,13 +5274,14 @@ Sensors, of course, are probably the most interesting part of
 \ac{IPMI}.  Really, everything else is there so the sensors may be
 known and monitored.  Unfortunately, sensors are also the most
 complicated part of \ac{IPMI}.  OpenIPMI is really unable to hide a
-lot of this complexity, it is passed on to the user.
+lot of this complexity, it is passed on to the user, so expect to have
+to do some reading and understanding.
 
 \acs{IPMI} defines two basic different types of sensors.  Threshold
 sensors monitor ``analog'' things like temperature, voltage, or fan
 speed.  Discrete sensors monitor events or states, like entity
 presence, software initialization progress, or if external power is
-present to the system.  Table~\ref{event-reading-type-codes} describes
+applied to the system.  Table~\ref{event-reading-type-codes} describes
 the basic types of sensors.
 
 \begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
@@ -5271,6 +5293,22 @@ the basic types of sensors.
 \end{longtable}
 
 
+\section{Sensor Events}
+Both threshold and discrete sensors may generate events.  This is
+optional, the \acs{SDR} for the sensor describes the sensor's event
+support.
+
+Some sensors support each individual bit or state being enabled or
+disabled.  Others may only support events for the whole sensor being
+enabled or disabled.  Still others may only support a global enable
+for the entire \ac{MC}.
+
+\section{Rearm}
+``Rearm'' means setting the sensor so it will go off again.
+
+TBD - write this.
+
+
 \section{Threshold Sensors}
 
 Threshold sensors report their readings in values from 0-255.
@@ -5280,14 +5318,59 @@ using various formulas.  OpenIPMI implements all these and provides
 ways for \acs{OEM} functions to plug in to provide their own
 converters.  If you have a sensor that cannot be represented using the
 standard mechanisms, you need to get the \acs{OEM} algorithms for this
-and implement them in an \acs{OEM} plug-in for the sensors.
+and implement them in an \acs{OEM} plug-in for the sensor.
 
-You may enable events on a threshold sensor by specifying values (called
-thresholds) where you want the sensor to report an event.  Then you can
-enable the events for the specific thresholds.  Not all sensors support
-all thresholds, some cannot have their events enabled and others cannot
-have them disabled.  The capabilities of a sensor may all be queried
-by the user to determine what it can do.
+\subsection{Threshold Sensor Events}
+\label{sec-threshold-sensor-events}
+
+You may have events on a threshold sensor by specifying values (called
+thresholds) where you want the sensor to report an event.  Then you
+can enable the events for the specific thresholds.  Not all sensors
+support all thresholds, some cannot have their events enabled and
+others cannot have them disabled.  The capabilities of a sensor may
+all be queried by the user to determine what it can do.  When the
+value of the sensor goes outside the threshold an event may be
+generated.  An event may be generated when the value goes back into
+the threshold.
+
+Events for threshold sensors are mind-bogglingly complicated.  Each
+threshold has four different possible events that can be supported.
+Only two of them make sense to support for any given threshold,
+thankfully.  And a sensor can have six different thresholds.
+
+\acs{IPMI} supports events on going below (going low) the threshold
+and going above the threshold (going high).  For each of those, it
+supports an assertion and deassertion event.  Most sensors are either
+a lower bound (and would thus support an eventgoing below the
+threshold) or an upper bound (and would thus support an event going
+above the threshold). Figure~\vref{fig-thresh} shows an upper and
+lower threshold sensor.  When the value of an upper threshold sensor
+goes above the threshold, that is an assertion going high.  When it
+goes back below the threshold, that is a deassertion going high.  On a
+lower threshold, going below the threshold is a assertion going low.
+When the value goes back above the threshold, it is an deassertion
+going low.
+\begin{figure}
+\includegraphics[width=\textwidth]{Thresh.eps}
+\caption{\label{fig-thresh}Examples of thresholds}
+\end{figure}
+
+Each sensor may have six different thresholds:
+\begin{itemize}
+\item upper non-recoverable
+\item upper critical
+\item upper non-critical
+\item lower non-critical
+\item lower critical
+\item lower non-recoverable
+\end{itemize}
+The meanings of these are not defined by \acs{IPMI}, but the meanings
+are pretty obvious.  You may ask, though, why there are both upper and
+lower thresholds and separate going high and going low events.  A
+going low event is kind of silly on an upper threshold, for instance.
+The author has no idea.
+
+\subsection{Hysteresis}
 
 Threshold sensors may have hysteresis, meaning that when the threshold
 goes on above or below the specified value, the transition point where
@@ -5301,13 +5384,22 @@ which means that if the speed goes below 150 RPM, then it must go above
 160 RPM for the threshold to be disabled.  Hysteresis may be settable or
 may be fixed for the sensor.
 
+Figure~\vref{fig-hyst} shows an example of going high and going low
+thresholds with hysteresis.  Notice that the deassertion events don't
+get triggered right at the threshold, but as some point beyond the
+threshold.
+\begin{figure}
+\includegraphics[width=\textwidth]{Hyst.eps}
+\caption{\label{fig-hyst}Examples of hysteresis}
+\end{figure}
+
 \section{Discrete Sensors}
 
 Discrete sensors report their readings in a 16-bit bitmask, each bit
-representing a dicrete value.  You enable events on the sensor by
-specifying which discrete values you want to generate events.  Like
+generally representing a discrete state.  You enable events on the
+sensor by specifying which bits you want to generate events.  Like
 threshold sensors, these events may or may not be user-controllable.
-That information may be fetched by the user.
+The capabilities of the sensor may be fetched by the user.
 
 \begin{longtable}{|p{0.2\textwidth}|l|p{0.65\textwidth}|}
 \caption{Sensor Types and Codes\label{sensor-type-codes}}
@@ -5325,7 +5417,7 @@ can only do so much.
 So starting at the beginning, the first thing you need to know about a
 sensor is it's type.  You fetch that with the function:
 \begin{verbatim}
-int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_event_reading_type(ipmi_sensor_t *sensor);
 \end{verbatim}
 This returns a value from the following table.  The names in this
 table are shortened, all these begin with
@@ -5461,6 +5553,878 @@ SENSOR\_SPECIFIC & This setting means that the offsets in the sensor are
 \hline
 \end{longtable}
 
+Note that for some operations, threshold sensors and discrete sensor
+have different functions, and some other functions work a little
+differently.
+
+To know the type of sensor, the function:
+\begin{verbatim}
+int ipmi_sensor_get_sensor_type(ipmi_sensor_t *sensor);
+\end{verbatim}
+returns the type.  The returns values for this are integer defines
+that start with IPMI\_SENSOR\_TYPE\_ and have the specific values defined
+in the following table.  Note that discrete sensors in this list have
+define bit settings; those settings are also defined in this list.
+\begin{longtable}{|p{0.27\textwidth}|p{0.65\textwidth}|}
+\hline
+TEMPERATURE & \\
+\hline
+VOLTAGE & \\
+\hline
+CURRENT & \\
+\hline
+FAN & \\
+\hline
+PHYSICAL\_SECURITY & The chassis was opened or accessed.
+	\begin{description}
+	\item[00h] - General chassis intrusion
+	\item[01h] - Drive bay intrusion
+	\item[02h] - I/O card area intrusion
+	\item[03h] - Processor area intrusion
+	\item[04h] - LAN cable is unplugged
+	\item[05h] - Unauthorized dock/undock
+	\item[06h] - Fan area intrusion (including unauthorized hot-plugs
+	  of fans).
+	\end{description}\\
+\hline
+PLATFORM\_SECURITY &
+	\begin{description}
+	\item[00h] - The spec says ``Secure Mode (Front Panel Lockout)
+	  Violation attempt''.  The meaning of this is unknown.
+	\item[01h] - User pre-boot password failure.
+	\item[02h] - Setup pre-boot password failure.
+	\item[03h] - Network pre-boot password failure.
+	\item[04h] - Other pre-boot password failure.
+	\item[05h] - Out-of-band pre-boot password failure.
+	\end{description}\\
+\hline
+PROCESSOR & Various processor failures.  Most of these are very Intel processor
+	centric, you may need to reference the processor manual for the
+	meaning of the failure.
+	\begin{description}
+	\item[00h] - IERR
+	\item[01h] - Thermal Trip
+	\item[02h] - FRB1/BIST failure
+	\item[03h] - FRB2/Hang in POST failure, if the failure is believed
+	  to be due to a processor failure.
+	\item[04h] - FRB3/Processor Startup/Initialization failure (CPU
+	  didn't start).
+	\item[05h] - Configuration Error
+	\item[06h] - SMBIOS ``Uncorrectable CPU-complex error''
+	\item[07h] - Processor presence detected
+	\item[08h] - Processor disabled
+	\item[09h] - Terminator presence detected
+	\end{description}\\
+\hline
+POWER\_SUPPLY & 
+	\begin{description}
+	\item[00h] - Presence detected
+	\item[01h] - Failure detected
+	\item[02h] - Predictive failure.  This probably means that the
+	  power supply is still working but may fail soon.
+	\item[03h] - AC lost
+	\item[04h] - AC lost or out-of-range
+	\item[05h] - AC present but out of range
+	\end{description}\\
+\hline
+POWER\_UNIT & 
+	\begin{description}
+	\item[00h] - Power off
+	\item[01h] - Power cycle
+	\item[02h] - 240VA power down
+	\item[03h] - Interlock power down
+	\item[04h] - AC lost
+	\item[05h] - Soft power control failure (unit did not response to
+	  request)
+	\item[06h] - Failure detected
+	\item[07h] - Predictive failure.  This probably means that the
+	  power unit is still working but may fail soon.
+	\end{description}\\
+\hline
+COOLING\_DEVICE & \\
+\hline
+OTHER\_UNITS\_BASED\_SENSOR & The sensor is a threshold sensor, but not one
+	specified directly by the spec.  The units can be fetched with
+	the calls to get the units.\\
+\hline
+MEMORY & 
+	\begin{description}
+	\item[00h] - Correctable memory error
+	\item[01h] - Uncorrectable memory error
+	\item[02h] - Parity error
+	\item[03h] - Memory scrub failed, probably stuck bit
+	\item[04h] - Memory device disabled
+	\item[05h] - Reached log limit for correctable memory errors
+	\end{description}\\
+\hline
+DRIVE\_SLOT & \\
+\hline
+POWER\_MEMORY \_RESIZE & \\
+\hline
+SYSTEM \_FIRMWARE \_PROGRESS &  Information about the system firmware (BIOS).
+	In an event, the event data 2 may give further information about
+	the error.  See section~\ref{sec-event-data-info-for-events} for
+	more info.
+	\begin{description}
+	\item[00h] - System firmware error (power-on-self-test error)
+	\item[01h] - System firmware hang
+	\item[02h] - System firmware progress
+	\end{description}\\
+\hline
+EVENT \_LOGGING \_DISABLED & 
+	\begin{description}
+	\item[00h] - Correctable memory error logging disabled
+	\item[01h] - Event logging has been disabled for the sensor
+	  specified in the event information.  In an event, event data
+	  provides more information about the event, see
+	  section~\ref{sec-event-data-info-for-events} for more info.
+	\item[02h] - Log area cleared
+	\item[03h] - All event logging disabled
+	\end{description}\\
+\hline
+WATCHDOG\_1 & This is for IPMI version 0.9 and old 1.0 only.  Later 1.0 and
+	newer specs use	the watchdog 2 sensor type.
+	\begin{description}
+	\item[00h] - BIOS watchdog reset
+	\item[01h] - OS watchdog reset
+	\item[02h] - OS watchdog shutdown
+	\item[03h] - OS watchdog power down
+	\item[04h] - OS watchdog power cycle
+	\item[05h] - OS watchdog NMI or diagnostic interrupt
+	\item[06h] - OS watchdog expired, status only
+	\item[07h] - OS watchdog pre-timeout interrupt, not NMI
+	\end{description}\\
+\hline
+SYSTEM\_EVENT & 
+	\begin{description}
+	\item[00h] - System reconfigured
+	\item[01h] - OEM system boot event
+	\item[02h] - Undetermined system hardware failure
+	\item[03h] - Entry added to the auxilliary log.  In an event,
+	  event data provides more information about the event, see
+	  section~\ref{sec-event-data-info-for-events} for more info.
+	\item[04h] - PEF action.  In an event, event data provides
+	  more information about the event, see
+	  section~\ref{sec-event-data-info-for-events} for more info.
+	\end{description}\\
+\hline
+CRITICAL\_INTERRUPT &
+	\begin{description}
+	\item[00h] - Front panel NMI/Diagnostic interrupt
+	\item[01h] - Bus timeout
+	\item[02h] - I/O channel check NMI
+	\item[03h] - Software NMI
+	\item[04h] - PCI PERR
+	\item[05h] - PCI SERR
+	\item[06h] - EISA fail safe timeout
+	\item[07h] - Bus correctable error
+	\item[08h] - Bus uncorrectable error
+	\item[09h] - Fatal NMI (port 61h, bit 7)
+	\end{description}\\
+\hline
+BUTTON & 
+	\begin{description}
+	\item[00h] - Power button pressed
+	\item[01h] - Sleep button pressed
+	\item[02h] - Reset button pressed
+	\end{description}\\
+\hline
+MODULE\_BOARD & \\
+\hline
+MICROCONTROLLER\_COPROCESSOR & \\
+\hline
+ADD\_IN\_CARD & \\
+\hline
+CHASSIS & \\
+\hline
+CHIP\_SET & \\
+\hline
+OTHER\_FRU & \\
+\hline
+CABLE\_INTERCONNECT & \\
+\hline
+TERMINATOR & \\
+\hline
+SYSTEM\_BOOT\_INITIATED &
+	\begin{description}
+	\item[00h] - Power up
+	\item[01h] - Hard reset
+	\item[02h] - Warm reset
+	\item[03h] - User requested PXE boot
+	\item[04h] - Automatic boot to diagnostic
+	\end{description}\\
+\hline
+BOOT\_ERROR & 
+	\begin{description}
+	\item[00h] - No bootable media
+	\item[01h] - Non-bootable disk in drive
+	\item[02h] - PXE server not found
+	\item[03h] - Invalid boot sector
+	\item[04h] - Timeout waiting for user selection of boot source
+	\end{description}\\
+\hline
+OS\_BOOT & 
+	\begin{description}
+	\item[00h] - A: boot completed
+	\item[00h] - C: boot completed
+	\item[00h] - PXE boot completed
+	\item[00h] - Diagnostic boot completed
+	\item[00h] - CDROM boot completed
+	\item[00h] - ROM boot completed
+	\item[00h] - Boot completed, boot device not specified
+	\end{description}\\
+\hline
+OS\_CRITICAL\_STOP & 
+	\begin{description}
+	\item[00h] - Stop during OS load or initialization
+	\item[01h] - Stop during OS operation
+	\end{description}\\
+\hline
+SLOT\_CONNECTOR & Note that ready for installation, ready for removal, and
+	power states can transition together.  In an event, event data provides
+	more information about the event, see
+	section~\ref{sec-event-data-info-for-events} for more info.
+	\begin{description}
+	\item[00h] - Fault status
+	\item[01h] - Identify status
+	\item[02h] - Device installed (includes doc events)
+	\item[03h] - Ready for device installation.  This generally means
+	  that the power is off.
+	\item[04h] - Ready for device removal.
+	\item[05h] - Power is off
+	\item[06h] - Removal request.  This generally means that the user
+	  has asserted some mechanism that requests removal.
+	\item[07h] - Interlock.  This is generally some mechanical device
+	  that disables power to the slot.  Assertion means that the
+	  disable is active.
+	\item[08h] - Slot is disabled.
+	\end{description}\\
+\hline
+SYSTEM\_ACPI\_POWER\_STATE & 
+	\begin{description}
+	\item[00h] - S0/G0 ``Working''
+	\item[01h] - S1 ``Sleeping, system h/w and processor
+	  context maintained''
+	\item[02h] - S2 ``Sleeping, processor context lost''
+	\item[03h] - S3 ``Sleeping, system h/w and processor
+	  context lost, memory maintained''
+	\item[04h] - S4 ``non-volatile sleep or suspend to disk''
+	\item[05h] - S5/G2 ``soft off''
+	\item[06h] - S4/S5 soft-off, particular S4/S5 state cannot be
+	  determined.
+	\item[07h] - G3 ``Mechanical off''
+	\item[08h] - Sleeping in an S1, S2, or S3 state, particular state
+	  cannot be determined.
+	\item[09h] - G1 sleeping, S1-S4 state cannot be determined
+	\item[0Ah] - S5 state entered by override
+	\item[0Bh] - Legacy on state
+	\item[0Ch] - Legacy off state
+	\item[0Eh] - Unknown
+	\end{description}\\
+\hline
+WATCHDOG\_2 & This is for newer IPMI 1.0 systems and later specs.  In an
+	event, event data provides more information about the event, see
+	section~\ref{sec-event-data-info-for-events} for more info.
+	\begin{description}
+	\item[00h] - Timer expired, status only, no action
+	\item[01h] - Hard reset
+	\item[02h] - Power down
+	\item[03h] - Power cycle
+	\item[08h] - Timer interrupts.
+	\end{description}\\
+\hline
+PLATFORM\_ALERT & Used for monitoring the platform management firmware,
+	status can be fetched and events generated on platform management
+	actions.
+	\begin{description}
+	\item[00h] - Page sent
+	\item[01h] - LAN alert sent
+	\item[02h] - Event trap sent per IPMI PET specification
+	\item[03h] - Event trap sent using OEM format
+	\end{description}\\
+\hline
+ENTITY\_PRESENCE & This is the sensor used to tell if an entity is present
+	or not.  This applied to the entity the sensor is attached to.
+	\begin{description}
+	\item[00h] - Entity is present
+	\item[01h] - Entity is absent
+	\item[02h] - Entity is present but disabled
+	\end{description}\\
+\hline
+MONITOR\_ASIC\_IC & \\
+\hline
+LAN & 
+	\begin{description}
+	\item[00h] - LAN heartbeat lost
+	\item[01h] - LAN heartbeat present
+	\end{description}\\
+\hline
+MANAGEMENT\_SUBSYSTEM\_HEALTH & 
+	\begin{description}
+	\item[00h] - Sensor access degraded or unavailable
+	\item[01h] - Controller access degraded or unavailable
+	\item[02h] - Management controller offline
+	\item[03h] - Management controller unavailable
+	\end{description}\\
+\hline
+BATTERY & 
+	\begin{description}
+	\item[00h] - Battery is low
+	\item[01h] - Battery failed
+	\item[02h] - Battery is present.
+	\end{description}\\
+\hline
+\end{longtable}
+
+Strings are available from the sensor that describe the sensor type
+and event reading type.  Note that these may be set to valid values
+by OEM code even if the values are OEM, so these can be very
+useful.
+\begin{verbatim}
+char *ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor);
+\end{verbatim}
+
+As well as the strings, the specific reading information from the above
+table is also available, supply the sensor type and offset and a string
+is returned.  The function is:
+\begin{verbatim}
+char *ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset);
+\end{verbatim}
+
+\subsection{General Information About Sensors in OpenIPMI}
+
+The following section applies to all sensor types.
+
+\subsubsection{Entity Information}
+Every sensor is associated with a specific entity, these calls let you
+fetch the entity information.  The following calls return the numeric
+entity id and instance:
+\begin{verbatim}
+int ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_entity_instance(ipmi_sensor_t *sensor);
+\end{verbatim}
+Generally, though, that is note what you want.  You want the actual
+entity object, which may be fetched with the following:
+\begin{verbatim}
+ipmi_entity_t *ipmi_sensor_get_entity(ipmi_sensor_t *sensor);
+\end{verbatim}
+Note that the entity is refcounted when the sensor is claimed, so the
+entity will exist while you have a valid reference to a sensor it
+contains.
+
+\subsubsection{Sensor Name}
+The SDR contains a string giving a name for the sensor.  This is
+useful for printing out sensorinformation.  The functions to get
+this are:
+\begin{verbatim}
+int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
+enum ipmi_str_type_e ipmi_sensor_get_id_type(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
+\end{verbatim}
+See appendix~\ref{appendix-ipmi-strings} for more information about
+these strings.
+
+\subsubsection{Sensor Event Support in OpenIPMI}
+\label{sec-sensor-event-support-in-openipmi}
+
+Sensors may support event enables in different ways.  The following
+function returns what type of event enable is supported:
+\begin{verbatim}
+int ipmi_sensor_get_event_support(ipmi_sensor_t *sensor);
+\end{verbatim}
+
+The return values are all prepended with IPMI\_EVENT\_SUPPORT\_,
+values are:
+\begin{longtable}{|p{0.27\textwidth}|p{0.65\textwidth}|}
+\hline
+PER\_STATE & Each individual state or threshold may individually have
+	its events turned off and on.  This means that the individual
+	thresholds and states may be individually enabled.\\
+\hline
+ENTIRE\_SENSOR & The entire sensor may have events enabled and disabled
+	using the events\_enabled setting when setting the event
+	enables.  Section~\ref{sec-sensor-event-states} describes this
+	setting.\\
+\hline
+GLOBAL\_ENABLE & Events may only be enabled and disabled for the whole
+	managment controller.  Events are disabled by setting the
+	event receiver to 00h, or enabled by setting them to the proper
+	event receiver.  See section~\ref{sec-global-event-enables}
+	for more details.\\
+\hline
+NONE & The sensor does not support events.\\
+\hline
+\end{longtable}
+
+Note that the more general event enables work and override the more
+specific ones, so if, for instance, a sensor supports per-state event
+enables, it will also support the entire sensor and global enables.
+The entire sensor enable being off will override all per-state
+enables.  The global enable will turn off all events from a management
+controller no matter what other settings are present.
+
+\subsubsection{Sensor/Entity Existance Interaction}
+Some sensors are present even if the entity they are attached to is
+not present.  The following will return true if the entity should be
+ignore if the entity is not present.  It will return false if the
+sensor is present even when the entity is not present.
+
+\begin{verbatim}
+int ipmi_sensor_get_ignore_if_no_entity(ipmi_sensor_t *sensor);
+\end{verbatim}
+
+\subsubsection{Sensor States}
+\label{sec-sensor-states}
+When reading the value of a sensor or handling an even, a state data
+structure is generally available in a read-only data structure.  This
+tells the state of the various thresholds or bits in the sensor.  This
+is an opaque data structure, you do not have access to any of the
+contents.  The data structure is defined as:
+\begin{verbatim}
+typedef struct ipmi_states_s ipmi_states_t;
+\end{verbatim}
+
+To keep your own copy of a states data structure, you may allocate and
+copy one using the following functions:
+\begin{verbatim}
+unsigned int ipmi_states_size(void);
+void ipmi_copy_states(ipmi_states_t *dest, ipmi_states_t *src);
+\end{verbatim}
+This allows you to find the size and copy the information in one of
+these structures.  For example, to make your own copy, do something
+like:
+\begin{verbatim}
+my_states = malloc(ipmi_states_size());
+if (!my_states)
+  handle_error()
+else
+  ipmi_copy_states(my_states, states);
+\end{verbatim}
+
+Information about the whole sensor is available using the following
+functions:
+\begin{verbatim}
+int ipmi_is_event_messages_enabled(ipmi_states_t *states);
+int ipmi_is_sensor_scanning_enabled(ipmi_states_t *states);
+int ipmi_is_initial_update_in_progress(ipmi_states_t *states);
+\end{verbatim}
+If event messages are enabled, then the sensor may generate events.
+If scanning is enabled, then the sensor is ``turned on'' and working.
+If initial update is in progress, the information from the sensor is
+not valid since the sensor is still trying to get a valid reading.
+
+For discrete sensor, the function:
+\begin{verbatim}
+int ipmi_is_state_set(ipmi_states_t *states,
+		      int           state_num);
+\end{verbatim}
+will return true if the given state (bit) is set and false if it is
+not set.
+
+For threshold sensors, the function:
+\begin{verbatim}
+int ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
+				   enum ipmi_thresh_e thresh);
+\end{verbatim}
+will return true if the given threshold is out of rant and false if
+not.
+
+\subsubsection{Sensor Event State Information}
+\label{sec-sensor-event-states}
+
+The event state structure is an opaque structure that is used to
+control the event settings of a sensor, if it supports at least
+individual sensor event control.  This is much like the state data
+structure defined in section~\ref{sec-sensor-states}, but it is used
+to control event settings instead of just get the current state.  The
+data structure is defined as:
+\begin{verbatim}
+typedef struct ipmi_event_state_s ipmi_event_state_t;
+\end{verbatim}
+It is an opaque data structure, so you cannot directly access the
+contents or directly declare one.
+
+To create or keep your own copy of an event state data structure, you
+may allocate and copy one using the following functions:
+\begin{verbatim}
+unsigned int ipmi_event_state_size(void);
+void ipmi_copy_event_state(ipmi_event_state_t *dest, ipmi_event_state_t *src);
+\end{verbatim}
+This allows you to find the size and copy the information in one of
+these structures.  For example, to make your own copy, do something
+like:
+\begin{verbatim}
+my_states = malloc(ipmi_event_state_size());
+if (!my_states)
+  handle_error()
+else
+  ipmi_copy_event_state(my_states, states);
+\end{verbatim}
+
+If you want to create one, allocate it as above and initialize it with
+\begin{verbatim}
+void ipmi_event_state_init(ipmi_event_state_t *events);
+\end{verbatim}
+This clears all settings.  The following functions are then available
+to set and get global items in the event state:
+\begin{verbatim}
+void ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val);
+int ipmi_event_state_get_events_enabled(ipmi_event_state_t *events);
+void ipmi_event_state_set_scanning_enabled(ipmi_event_state_t *events,int val);
+int ipmi_event_state_get_scanning_enabled(ipmi_event_state_t *events);
+void ipmi_event_state_set_busy(ipmi_event_state_t *events, int val);
+int ipmi_event_state_get_busy(ipmi_event_state_t *events);
+\end{verbatim}
+If events are enabled, then the sensor can generate events.  This acts
+as an off switch for the whole sensor.  If events are enabled, and if
+per-state event enables are supported, then the individual state
+settings control which events are generated.  Scanning means watching
+for events; if scanning is off then the sensor, in effect, is turned
+off and will not report valid reading or generate events.  If busy is
+true on a return from a query, then the sensor is currently in busy with
+some operation and cannot be read.
+
+See section~\ref{sec-discrete-sensor-events-in-openipmi} for discrete
+sensors and section~\vref{sec-threshold-sensor-events-in-openipmi} for
+threshold events for the details on setting the individual event
+enables.
+
+Note that once you have created an event state, you have to send it to
+the sensor.  Just creating and setting the values doesn't do anything
+directly to the sensor; it must be sent.  To send them, use one of the
+following:
+\begin{verbatim}
+int ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
+				  ipmi_event_state_t    *states,
+				  ipmi_sensor_done_cb   done,
+				  void                  *cb_data);
+int ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
+			      ipmi_event_state_t    *states,
+			      ipmi_sensor_done_cb   done,
+			      void                  *cb_data);
+int ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
+			       ipmi_event_state_t    *states,
+			       ipmi_sensor_done_cb   done,
+			       void                  *cb_data);
+\end{verbatim}
+The ``set'' function will set the states to exactly what is set in the
+event state structure.  The ``enable'' function will only enable the
+states that are set in the event state structure.  The ``disable''
+function will disable the events that are set in the event state
+structure.  Note that the disable does \emph{not} disable the events
+that are not set, it really disables the events that \emph{are} set.
+All of these functions will set the event enable and scanning enable
+to the values in the event state structure.
+
+To query the current event state settings, use the following function:
+\begin{verbatim}
+typedef void (*ipmi_event_enables_get_cb)(ipmi_sensor_t      *sensor,
+					  int                err,
+					  ipmi_event_state_t *states,
+					  void               *cb_data);
+int ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
+				  ipmi_event_enables_get_cb done,
+				  void                      *cb_data);
+\end{verbatim}
+
+\subsubsection{Rearm in OpenIPMI}
+
+TBD - write this.
+
+\begin{verbatim}
+int ipmi_sensor_get_supports_auto_rearm(ipmi_sensor_t *sensor);
+
+int ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
+		      int                 global_enable,
+		      ipmi_event_state_t  *state,
+		      ipmi_sensor_done_cb done,
+		      void                *cb_data);
+\end{verbatim}
+
+\subsubsection{Initialization}
+When a sensor is stored in the main SDR repository of a system, the
+\acs{BMC} may initialize certain aspects of the sensor at power up.
+The following fetch if these aspects are initialized at power up.
+Note that ``pu'' means ``Power Up'' in the following names.
+
+\begin{verbatim}
+int ipmi_sensor_get_sensor_init_scanning(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_events(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_thresholds(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_hysteresis(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_type(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_pu_events(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_sensor_init_pu_scanning(ipmi_sensor_t *sensor);
+\end{verbatim}
+
+\subsection{Threshold Sensors in OpenIPMI}
+As mentioned before, threshold sensors monitor analog values.  This
+means that they have a lot of information about how to convert the
+values from the raw readings (the 0-255 value returned from the
+sensor) into useful readings, what thresholds are supported,
+hysteresis settings, and a plethora of other settings.  This is not
+complicated (and OpenIPMI handles the most difficult parts of this)
+but there are a lot of things to do.
+
+\subsubsection{Threshold Sensor Readings in OpenIPMI}
+The reading of a threshold sensor is done with the following:
+\begin{verbatim}
+typedef void (*ipmi_reading_done_cb)(ipmi_sensor_t             *sensor,
+				     int                       err,
+				     enum ipmi_value_present_e value_present,
+				     unsigned int              raw_value,
+				     double                    val,
+				     ipmi_states_t             *states,
+				     void                      *cb_data);
+int ipmi_reading_get(ipmi_sensor_t        *sensor,
+		     ipmi_reading_done_cb done,
+		     void                 *cb_data);
+\end{verbatim}
+
+Assuming there was no error, the \texttt{value\_present} field will be set
+to one of the following:
+\begin{description}
+\item[IPMI\_NO\_VALUES\_PRESENT] - Neither the raw or the converted values
+  are present.  Only the states are valid.  This will be the case for
+  thresholds sensors that cannot have their value read.
+\item[IPMI\_RAW\_VALUE\_PRESENT] - Only the raw value is present.
+  This will be the case if there was no conversion algorithm available
+  for the sensor.
+\item[IPMI\_BOTH\_VALUES\_PRESENT] - Both the raw and converted values are
+  present.
+\end{description}
+
+\subsubsection{Threshold Sensor Events in OpenIPMI}
+\label{sec-threshold-sensor-events-in-openipmi}
+
+Section~\vref{sec-sensor-event-support-in-openipmi} shows the general
+support for events for all sensor types.  Threshold sensors have their
+own special routines for handling the thresholds.
+
+Thresholds in a sensor may be settable or fixed and may or may not be
+able to be read.  The function
+\begin{verbatim}
+int ipmi_sensor_get_threshold_access(ipmi_sensor_t *sensor);
+\end{verbatim}
+returns the event threshold access support of the sensor, return values are
+\begin{description}
+\item[IPMI\_THRESHOLD\_ACCESS\_SUPPORT\_NONE] - The sensor does not support
+  thresholds.
+\item[IPMI\_THRESHOLD\_ACCESS\_SUPPORT\_READABLE] - The sensor
+  supports thresholds and their values may be read with
+  ipmi\_thresholds\_get, but cannot be written.
+\item[IPMI\_THRESHOLD\_ACCESS\_SUPPORT\_SETTABLE] - The sensor supports
+  thresholds and they may be read and written.
+\item[IPMI\_THRESHOLD\_ACCESS\_SUPPORT\_FIXED] - The sensor supports
+  thresholds and they are fixed and may not be read or changed.
+  ipmi\_get\_default\_sensor\_thresholds should return the fixed
+  values of this sensor.
+\end{description}
+
+In addition to this, individual thresholds may be readable or settable
+individually.  To find this, the following functions will return true
+if a specific threshold is readable or settable, and false if not:
+\begin{verbatim}
+int ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
+				   enum ipmi_thresh_e threshold,
+				   int                *val);
+int ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
+				   enum ipmi_thresh_e threshold,
+				   int                *val);
+\end{verbatim}
+The specific threshold values in the enumeration are:
+\begin{itemize}
+\item IPMI\_LOWER\_NON\_CRITICAL
+\item IPMI\_LOWER\_CRITICAL
+\item IPMI\_LOWER\_NON\_RECOVERABLE
+\item IPMI\_UPPER\_NON\_CRITICAL
+\item IPMI\_UPPER\_CRITICAL
+\item IPMI\_UPPER\_NON\_RECOVERABLE
+\end{itemize}
+
+To actually get and set the thresholds for a sensor, a threshold data
+structure is used.  This data structure is opaque.
+
+To create or keep your own copy of a threshold data structure, you
+may allocate and copy one using the following functions:
+\begin{verbatim}
+unsigned int ipmi_threshold_size(void);
+void ipmi_copy thresholds(ipmi_thresholds_t *dest, ipmi_thresholds_t *src);
+\end{verbatim}
+This allows you to find the size and copy the information in one of
+these structures.  For example, to make your own copy, do something
+like:
+\begin{verbatim}
+my_th = malloc(ipmi_thresholds_size());
+if (!my_th)
+  handle_error()
+else
+  ipmi_copy_thresholds(my_th, th);
+\end{verbatim}
+
+If you want to create one, allocate it as above and initialize it with
+\begin{verbatim}
+void ipmi_thresholds_init(ipmi_thresholds_t *th);
+\end{verbatim}
+This clears all settings.  The following functions are then available
+to set the various threshold values:
+\begin{verbatim}
+int ipmi_threshold_set(ipmi_thresholds_t  *th,
+		       ipmi_sensor_t      *sensor,
+		       enum ipmi_thresh_e threshold,
+		       double             value);
+int ipmi_threshold_get(ipmi_thresholds_t  *th,
+		       enum ipmi_thresh_e threshold,
+		       double             *value);
+\end{verbatim}
+These get and set the values in the data structure.  This does not
+affect the actual sensor until you send the thresholds to the sensor.
+
+To send a set of thresholds to a sensor, use the following function:
+\begin{verbatim}
+int ipmi_thresholds_set(ipmi_sensor_t       *sensor,
+			ipmi_thresholds_t   *thresholds,
+			ipmi_sensor_done_cb done,
+			void                *cb_data);
+\end{verbatim}
+To get the current threshold settings of a sensor, use:
+\begin{verbatim}
+typedef void (*ipmi_thresh_get_cb)(ipmi_sensor_t     *sensor,
+				   int               err,
+				   ipmi_thresholds_t *th,
+				   void              *cb_data);
+int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
+			ipmi_thresh_get_cb done,
+			void               *cb_data);
+\end{verbatim}
+
+To find out which thresholds support events, the following can be used
+to tell if a specific thresholds support a specific event:
+\begin{verbatim}
+int ipmi_sensor_threshold_assertion_event_supported(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_thresh_e          threshold,
+    enum ipmi_event_value_dir_e dir,
+    int                         *val);
+int ipmi_sensor_threshold_deassertion_event_supported(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_thresh_e          threshold,
+    enum ipmi_event_value_dir_e dir,
+    int                         *val);
+\end{verbatim}
+The \texttt{dir} parameter specifies if the ``going low'' or ``going
+high'' events are being queried.  Value for this are:
+\begin{itemize}
+\item IPMI_GOING_LOW
+\item IPMI_GOING_HIGH
+\end{itemize}
+Using these, all the thresholds and directions may be iterated through
+to find out what the sensor supports.
+
+To actually enable or disable individual events for a sensor, an event
+state structure must be created.  An event state structure is passed
+in when the event state of a sensor is queried.  To set or clear
+individual events in one of these structures, use the following:
+\begin{verbatim}
+void ipmi_threshold_event_clear(ipmi_event_state_t          *events,
+				enum ipmi_thresh_e          threshold,
+				enum ipmi_event_value_dir_e value_dir,
+				enum ipmi_event_dir_e       dir);
+void ipmi_threshold_event_set(ipmi_event_state_t          *events,
+			      enum ipmi_thresh_e          threshold,
+			      enum ipmi_event_value_dir_e value_dir,
+			      enum ipmi_event_dir_e       dir);
+\end{verbatim}
+To see if a specific event is set, use:
+\begin{verbatim}
+int ipmi_is_threshold_event_set(ipmi_event_state_t          *events,
+				enum ipmi_thresh_e          threshold,
+				enum ipmi_event_value_dir_e value_dir,
+				enum ipmi_event_dir_e       dir);
+\end{verbatim}
+The \texttt{dir} parameter tells whether the assertion or deassertion
+event is generated.  Valid values are:
+\begin{itemize}
+\item IPMI_ASSERTION
+\item IPMI_DEASSERTION
+\end{itemize}
+The \texttt{value\_dir} parameter tells if this is the going low or
+going high event.
+
+\subsubsection{Threshold Sensor Units in OpenIPMI}
+
+\begin{verbatim}
+/* Returns IPMI_RATE_UNIT_xxx */
+int ipmi_sensor_get_rate_unit(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_MODIFIER_UNIT_xxx */
+int ipmi_sensor_get_modifier_unit_use(ipmi_sensor_t *sensor);
+
+/* Returns if the value is a percentage. */
+int ipmi_sensor_get_percentage(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_UNIT_TYPE_xxx */
+int ipmi_sensor_get_base_unit(ipmi_sensor_t *sensor);
+
+/* Returns IPMI_UNIT_TYPE_xxx */
+int ipmi_sensor_get_modifier_unit(ipmi_sensor_t *sensor);
+
+char *ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor);
+char *ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor);
+\end{verbatim}
+
+\subsubsection{Threshold Sensor Hysteresis in OpenIPMI}
+
+\begin{verbatim}
+/* Returns IPMI_HYSTERESIS_SUPPORT_xxx */
+int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
+\end{verbatim}
+
+\subsubsection{Threshold Sensor Reading Information in OpenIPMI}
+
+\begin{verbatim}
+/* Sensor reading information from the SDR. */
+int ipmi_sensor_get_tolerance(ipmi_sensor_t *sensor,
+			      int           val,
+			      double        *tolerance);
+int ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy);
+int ipmi_sensor_get_normal_min_specified(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_normal_max_specified(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_nominal_reading_specified(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
+				    double *nominal_reading);
+int ipmi_sensor_get_normal_max(ipmi_sensor_t *sensor, double *normal_max);
+int ipmi_sensor_get_normal_min(ipmi_sensor_t *sensor, double *normal_min);
+int ipmi_sensor_get_sensor_max(ipmi_sensor_t *sensor, double *sensor_max);
+int ipmi_sensor_get_sensor_min(ipmi_sensor_t *sensor, double *sensor_min);
+\end{verbatim}
+
+\subsection{Discrete Sensors in OpenIPMI}
+
+\begin{verbatim}
+/* Returns if the assertion of a specific event can send an event */
+int ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
+						   int           event,
+						   int           *val);
+
+/* Returns if the deassertion of a specific event can send an event */
+int ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
+						     int           event,
+						     int           *val);
+
+/* Returns if the specific event can be read (is supported). */
+int ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
+				 int           event,
+				 int           *val);
+\end{verbatim}
+
+\subsubsection{Discrete Sensor Events in OpenIPMI}
+\label{sec-discrete-sensor-events-in-openipmi}
+
+Talk about event states
+
 \section{Sensor \acs{SDR}s}
 \label{sec-sensor-sdrs}
 
@@ -5482,7 +6446,49 @@ OpenIPMI automatically sets the event receiver.
 \section{Event Format}
 \label{event-format}
 
+\section{Event Data Information for Events}
+\label{sec-event-data-info-for-events}
+
+\begin{longtable}{|p{0.27\textwidth}|l|p{0.85\textwidth}|}
+\hline
+SYSTEM \_FIRMWARE \_PROGRESS & 00h &
+	\begin{description}
+	\item[] - 
+	\end{description}\\
+ & 01h & Uses the same values as offset 00h.\\
+ & 02h & 
+	\begin{description}
+	\item[] - 
+	\end{description}\\
+\hline
+EVENT \_LOGGING \_DISABLED & 01h &
+	\begin{description}
+	\item[] - 
+	\end{description}\\
+\hline
+SYSTEM\_EVENT & 03h &
+	\begin{description}
+	\item[] - 
+	\end{description}\\
+ & 04h &
+	\begin{description}
+	\item[] - 
+	\end{description}\\
+\hline
+SLOT\_CONNECTOR & all &
+	\begin{description}
+	\item[] - 
+	\end{description}\\
+\hline
+WATCHDOG\_2 & all &
+	\begin{description}
+	\item[] - 
+	\end{description}\\
+\hline
+\end{longtable}
+
 \section{\acs{MC} Event Enables}
+Note there is a section in the MC chapter about this.
 
 \section{Coordinating Multiple Users of an \acs{SEL}}
 

@@ -1665,7 +1665,7 @@ add_fru_control_mc_cb(ipmi_mc_t *mc, void *cb_info)
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(add_fru_control_mc_cb): "
-		 "Could not convert an mcid to a pointer: 0x%x",
+		 "Could allocate the reset control: 0x%x",
 		 ENTITY_NAME(finfo->entity), rv);
     }
 
