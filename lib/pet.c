@@ -1141,6 +1141,7 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->lanparm_check[1].mask[1] = 0xf0;
     pet->lanparm_check[1].data[2] = 0x00;
     pet->lanparm_check[1].mask[2] = 0x01;
+    memset(pet->lanparm_check[1].mask+3, 0xff, 10);
     memcpy(pet->lanparm_check[1].data+3, &ip_addr, 4);
     memcpy(pet->lanparm_check[1].data+7, mac_addr, 6);
 

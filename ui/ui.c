@@ -364,7 +364,7 @@ get_ip_addr(char **toks, struct in_addr *ip_addr, char *errstr)
 	addr = (addr << 8) | val;
     }
 
-    ip_addr->s_addr = addr;
+    ip_addr->s_addr = htonl(addr);
     return 0;
 }
 
@@ -3234,7 +3234,7 @@ display_pef_config(void)
     }
 
     count = ipmi_pefconfig_get_num_alert_policies(pef_config);
-    display_pad_out("  num_event_filters: %d\n", count);
+    display_pad_out("  num_alert_policies: %d\n", count);
     for (i=0; i<count; i++) {
 	display_pad_out("  alert policy %d:\n", i+1);
 	for (j=0; apt_table[j].name != NULL; j++) {
@@ -3249,7 +3249,7 @@ display_pef_config(void)
     }
 
     count = ipmi_pefconfig_get_num_alert_strings(pef_config);
-    display_pad_out("  num_event_filters: %d\n", count);
+    display_pad_out("  num_alert_strings: %d\n", count);
     for (i=0; i<count; i++) {
 	display_pad_out("  alert string %d:\n", i);
 	for (j=0; ask_table[j].name != NULL; j++) {
@@ -4067,7 +4067,7 @@ clearlanparmlock_cmd(char *cmd, char **toks, void *cb_data)
 	if (get_mc_id(&ntoks, &info.mc_id))
 	    return 0;
 
-	if (get_uchar(toks, &val, "lanparm channel"))
+	if (get_uchar(&ntoks, &val, "lanparm channel"))
 	    return 0;
 	info.channel = val;
 
