@@ -37,6 +37,8 @@
 #include <curses.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <unistd.h>
+#include <termios.h>
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_err.h>
 #include <OpenIPMI/ipmi_msgbits.h>
@@ -69,6 +71,7 @@ ipmi_mc_id_t bmc_id;
 extern os_handler_t ipmi_ui_cb_handlers;
 
 static int full_screen;
+struct termios old_termios;
 
 #define STATUS_WIN_LINES 2
 #define STATUS_WIN_COLS COLS
@@ -398,6 +401,9 @@ leave(int rv, char *format, ...)
 
     if (full_screen)
 	endwin();
+    else
+	tcsetattr(0, 0, &old_termios);
+
     sel_free_selector(ui_sel);
 
     va_start(ap, format);
@@ -475,7 +481,14 @@ user_input_ready(int fd, void *data)
 	    c = wgetch(cmd_win);
 	}
     } else {
-	c = getchar();
+	char rc;
+	int count;
+
+	count = read(0, &rc, 1);
+	if (count == 0)
+	    c = -1;
+	else
+	    c = rc;
 	handle_user_char(c);
     }
 }
@@ -2347,6 +2360,9 @@ init_keypad(void)
 	    err = keypad_bind_key(keymap, KEY_F(1), key_set_display);
 	if (!err)
 	    err = keypad_bind_key(keymap, KEY_F(2), key_set_log);
+    } else {
+	if (!err)
+	    err = keypad_bind_key(keymap, -1, key_leave);
     }
     if (err)
 	goto out_err;
@@ -2736,6 +2752,12 @@ ipmi_ui_init(selector_t **selector, int do_full_screen)
 	    fprintf(stderr, "Could not initialize curses\n");
 	    exit(1);
 	}
+    } else {
+	struct termios new_termios;
+	tcgetattr(0, &old_termios);
+	new_termios = old_termios;
+	cfmakeraw(&new_termios);
+	tcsetattr(0, 0,&new_termios);
     }
 
     help_cmd(NULL, NULL, NULL);
