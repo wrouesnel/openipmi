@@ -730,6 +730,7 @@ understand the include files.
 * Initialization::
 * The Connection::
 * The Domain::
+* Events::
 * Entities::
 * Sensors::
 * Controls::
@@ -817,6 +818,9 @@ The file holding information about IPMI addresses.
 
 @item @file{ipmi_conn.h}
 This defines the interface for the messaging interfaces.
+
+@item @file{ipmi_event.h}
+This defines functions for handling events.
 
 @item @file{ipmi_entity.h}
 This defines internal entity interfaces.
@@ -980,7 +984,41 @@ have a handler or if the event was not delivered to the user by another
 mechanism.  This is so that the user can know the event exists and needs
 to be deleted.
 
-@node    Entities, Sensors, The Domain, Using OpenIPMI
+@node    Events, Entities, The Domain, Using OpenIPMI
+@section Events
+
+Events in OpenIPMI are opaque refcounted structures.  Events generally
+come from the system and are given to you via callbacks.  The event
+given to you in a callback @emph{may not} be kept by you, although you
+can use it in the callback function.  To keep the event for later use,
+you must create a duplicate of the event using
+@code{ipmi_event_dup()}.  If you duplicate an event this way, you must
+free it with @code{ipmi_event_free()}.  If you do not free your
+events, you will leak memory.
+
+The events are kept in the system event log (SEL).  You have to manage
+the SEL yourself, if you don't then it will fill up and you will run
+out of memory.  To delete events from the SEL, use
+@code{ipmi_domain_del_event()} when you wish to delete the event.  You
+can use the original event from a callback, or a duplicate you kept,
+or an event fetched from the SEL.
+
+You can look through your local copy of the SEL using
+@code{ipmi_domain_first_event()}, @code{ipmi_domain_last_event()},
+@code{ipmi_domain_next_event()}, and @code{ipmi_domain_prev_event()}.
+Note that these function duplicate the events, so you @emph{must} free
+the events you fetch with these function.
+
+In the callback functions that receive events, you may or may not want
+to manage the event from that function.  If you want to manage the
+event, then return @var{IPMI_EVENT_HANDLED} and any other handler that
+might be called because of that event will get a NULL.  You are
+expected to free the event.  Return @var{IPMI_EVENT_NOT_HANDLED} if
+you do not wish to handle the event.  Any events that are not handled
+by an event handler will be delivered to the functions registered with
+@code{ipmi_register_for_events()}.
+
+@node    Entities, Sensors, Events, Using OpenIPMI
 @section Entities
 
 Entities are the things that sensors monitor and controls can change

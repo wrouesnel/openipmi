@@ -45,6 +45,7 @@
 #include <linux/ipmi.h>
 #include <net/af_ipmi.h>
 #include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_smi.h>
@@ -571,11 +572,30 @@ handle_response(ipmi_con_t *ipmi, struct ipmi_recv *recv)
     ipmi_unlock(smi->cmd_lock);
 }
 
+static ipmi_mcid_t invalid_mcid = IPMI_MCID_INVALID;
+
 static void
 handle_async_event(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 {
     smi_data_t                 *smi = (smi_data_t *) ipmi->con_data;
     ipmi_ll_event_handler_id_t *elem, *next;
+    ipmi_event_t               *event;
+    ipmi_time_t                timestamp;
+    unsigned int               type = recv->msg.data[2];
+    unsigned int               record_id = ipmi_get_uint16(recv->msg.data);
+
+    if (type < 0xe0)
+	timestamp = ipmi_get_uint32(recv->msg.data+3);
+    else
+	timestamp = -1;
+    event = ipmi_event_alloc(invalid_mcid,
+			     record_id,
+			     type,
+			     timestamp,
+			     recv->msg.data+3, 13);
+    if (!event)
+	/* We missed it here, but the SEL fetch should catch it later. */
+	return;
 
     ipmi_lock(smi->event_handlers_lock);
     elem = smi->event_handlers;
@@ -587,11 +607,12 @@ handle_async_event(ipmi_con_t *ipmi, struct ipmi_recv *recv)
 	/* call the user handler. */
 	elem->handler(ipmi,
 		      (ipmi_addr_t *) &(recv->addr), recv->addr_len,
-		      &(recv->msg), elem->event_data, elem->data2);
+		      event, elem->event_data, elem->data2);
 
 	elem = next;
     }
     ipmi_unlock(smi->event_handlers_lock);
+    ipmi_event_free(event);
 }
 
 static void

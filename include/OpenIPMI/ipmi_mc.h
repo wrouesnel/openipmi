@@ -199,7 +199,7 @@ int ipmi_bmc_set_smi_slave_addr_fetcher(
    this value will be set to zero after the first SEL fetch, it really
    not good for anything but comparing timestamps to see if the event
    is old. */
-unsigned long ipmi_mc_get_startup_SEL_time(ipmi_mc_t *bmc);
+ipmi_time_t ipmi_mc_get_startup_SEL_time(ipmi_mc_t *bmc);
 
 /* Reread the sel.  When the hander is called, all the events in the
    SEL have been fetched into the local copy of the SEL (with the
@@ -273,13 +273,12 @@ void _ipmi_mc_shutdown(void);
 /* Returns EEXIST if the event is already there. */
 int _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event);
 
-int ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event);
-int ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event);
-int ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);
-int ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
-int ipmi_mc_event_by_recid(ipmi_mc_t *mc,
-                           unsigned int record_id,
-                           ipmi_event_t *event);
+ipmi_event_t *ipmi_mc_first_event(ipmi_mc_t *mc);
+ipmi_event_t *ipmi_mc_last_event(ipmi_mc_t *mc);
+ipmi_event_t *ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);
+ipmi_event_t *ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
+ipmi_event_t *ipmi_mc_event_by_recid(ipmi_mc_t *mc,
+				     unsigned int record_id);
 int ipmi_mc_sel_count(ipmi_mc_t *mc);
 int ipmi_mc_sel_entries_used(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_major_version(ipmi_mc_t *mc);

@@ -36,6 +36,7 @@
 #include <math.h>
 
 #include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_sdr.h>
 #include <OpenIPMI/ipmi_sensor.h>
 #include <OpenIPMI/ipmi_entity.h>
@@ -2909,14 +2910,16 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
 	enum ipmi_value_present_e   value_present;
 	unsigned int                raw_value;
 	double                      value;
+	unsigned char               *data;
 
-	dir = event->data[9] >> 7;
-	threshold = (event->data[10] >> 1) & 0x07;
-	high_low = event->data[10] & 1;
-	raw_value = event->data[11];
+	data = ipmi_event_get_data_ptr(event);
+	dir = data[9] >> 7;
+	threshold = (data[10] >> 1) & 0x07;
+	high_low = data[10] & 1;
+	raw_value = data[11];
 	value = 0.0;
 
-	if ((event->data[10] >> 6) == 2) {
+	if ((data[10] >> 6) == 2) {
 	    rv = ipmi_sensor_convert_from_raw(sensor, raw_value, &value);
 	    if (!rv)
 		value_present = IPMI_RAW_VALUE_PRESENT;
@@ -2937,12 +2940,14 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
 	int                   offset;
 	int                   severity = 0;
 	int                   prev_severity = 0;
+	unsigned char         *data;
 
-	dir = event->data[9] >> 7;
-	offset = event->data[10] & 0x0f;
-	if ((event->data[10] >> 6) == 2) {
-	    severity = event->data[11] >> 4;
-	    prev_severity = event->data[11] & 0xf;
+	data = ipmi_event_get_data_ptr(event);
+	dir = data[9] >> 7;
+	offset = data[10] & 0x0f;
+	if ((data[10] >> 6) == 2) {
+	    severity = data[11] >> 4;
+	    prev_severity = data[11] & 0xf;
 	    if (severity == 0xf)
 		severity = -1;
 	    if (prev_severity == 0xf)

@@ -128,7 +128,7 @@ struct ipmi_mc_s
     /* The SEL time when the connection first came up.  Only used at
        startup, after the SEL has been read the first time this will
        be set to zero. */
-    unsigned long startup_SEL_time;
+    ipmi_time_t startup_SEL_time;
 
     void *oem_data;
 
@@ -562,7 +562,7 @@ _ipmi_mc_sel_event_add(ipmi_mc_t *mc, ipmi_event_t *event)
     return ipmi_sel_event_add(mc->sel, event);
 }
 
-unsigned long
+ipmi_time_t
 ipmi_mc_get_startup_SEL_time(ipmi_mc_t *mc)
 {
     return mc->startup_SEL_time;
@@ -714,36 +714,35 @@ ipmi_mc_add_event_to_sel(ipmi_mc_t                 *mc,
     return rv;
 }
 
-int
+ipmi_event_t *
 ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event)
 {
     return ipmi_sel_get_next_event(mc->sel, event);
 }
 
-int
+ipmi_event_t *
 ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event)
 {
     return ipmi_sel_get_prev_event(mc->sel, event);
 }
 
-int
-ipmi_mc_last_event(ipmi_mc_t *mc, ipmi_event_t *event)
+ipmi_event_t *
+ipmi_mc_last_event(ipmi_mc_t *mc)
 {
-    return ipmi_sel_get_last_event(mc->sel, event);
+    return ipmi_sel_get_last_event(mc->sel);
 }
 
-int
-ipmi_mc_first_event(ipmi_mc_t *mc, ipmi_event_t *event)
+ipmi_event_t *
+ipmi_mc_first_event(ipmi_mc_t *mc)
 {
-    return ipmi_sel_get_first_event(mc->sel, event);
+    return ipmi_sel_get_first_event(mc->sel);
 }
 
-int
-ipmi_mc_event_by_recid(ipmi_mc_t *mc,
-                       unsigned int record_id,
-                       ipmi_event_t *event)
+ipmi_event_t *
+ipmi_mc_event_by_recid(ipmi_mc_t    *mc,
+                       unsigned int record_id)
 {
-    return ipmi_sel_get_event_by_recid(mc->sel, record_id, event);
+    return ipmi_sel_get_event_by_recid(mc->sel, record_id);
 }
 
 int
@@ -1117,7 +1116,7 @@ ipmi_mc_set_current_sel_time(ipmi_mc_t       *mc,
     msg.data = data;
     msg.data_len = 4;
     ipmi_set_uint32(data, time->tv_sec);
-    mc->startup_SEL_time = time->tv_sec;
+    mc->startup_SEL_time = time->tv_sec * 1000000000;
     rv = ipmi_mc_send_command(mc, 0, &msg, set_sel_time, NULL);
     if (rv)
 	ipmi_mem_free(info);
@@ -1311,7 +1310,7 @@ first_sel_op(ipmi_mc_t *mc)
     msg.data_len = 4;
     gettimeofday(&now, NULL);
     ipmi_set_uint32(data, now.tv_sec);
-    mc->startup_SEL_time = now.tv_sec;
+    mc->startup_SEL_time = now.tv_sec * 1000000000;
     rv = ipmi_mc_send_command(mc, 0, &msg, startup_set_sel_time, NULL);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,

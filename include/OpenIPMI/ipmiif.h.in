@@ -251,28 +251,50 @@ int ipmi_register_for_events(ipmi_domain_t           *domain,
 int ipmi_deregister_for_events(ipmi_domain_t           *domain,
 			       ipmi_event_handler_id_t *id);
 
-/* Globally enable or disable events on the mc. */
+/* Globally enable or disable events on the domain's interfaces. */
 int ipmi_domain_enable_events(ipmi_domain_t *domain);
 int ipmi_domain_disable_events(ipmi_domain_t *domain);
 
-/* When you are done with an event, you should delete it.  This frees up
+
+/* Events in OpenIPMI are opaque structures.  If an event is given to
+   you in a callback (such as the event handler), you *cannot* keep
+   that event, you may keep a duplicate made with ipmi_event_dup().
+   If you fetch an event using ipmi_domain_xxx_event(), you are given
+   a duplicated copy.  You *must* free that event, or you will leak.
+   Note that the duplicates are currently kept with refcounts (since
+   the events are immutable) so duplicating an event doesn't take any
+   more memory or much CPU.  */
+
+/* Copy an event.  If you need to keep your own local copy of an event
+   (to delete later, for instance) you should use this. */
+ipmi_event_t *ipmi_event_dup(ipmi_event_t *event);
+
+/* When you are done with an event, you should free it.  This frees up
    the internal store for the event and removes it from the external
-   system event event. */
-/* Delete a specific event. */
+   system event event.  Note that you must delete every event you
+   duplicate. Note that this does *NOT* remove the event from the
+   event log, you have to call ipmi_event_delete() for that. */
+void ipmi_event_free(ipmi_event_t *event);
+
+/* When you are done with an event, you should delete it.  This
+   removes the event from the local event queue and removes it from
+   the external system event log. */
 int ipmi_domain_del_event(ipmi_domain_t  *domain,
 			  ipmi_event_t   *event,
 			  ipmi_domain_cb done_handler,
 			  void           *cb_data);
 
 /* You can also scan the current set of events stored in the system.
-   They return an error if the SEL is empty, or if you try to go past
+   They return an NULL if the SEL is empty, or if you try to go past
    the last or before the first event.  The first and last function
-   return the event, the next and prev function take the current event in
-   "event" and return the next or previous event in "event". */
-int ipmi_domain_first_event(ipmi_domain_t *domain, ipmi_event_t *event);
-int ipmi_domain_last_event(ipmi_domain_t *domain, ipmi_event_t *event);
-int ipmi_domain_next_event(ipmi_domain_t *domain, ipmi_event_t *event);
-int ipmi_domain_prev_event(ipmi_domain_t *domain, ipmi_event_t *event);
+   return the event, the next and prev function take the current event
+   in "event" and return the next or previous event in "event".  Note
+   that you must free any events returned with this using
+   ipmi_event_free(). */
+ipmi_event_t *ipmi_domain_first_event(ipmi_domain_t *domain);
+ipmi_event_t *ipmi_domain_last_event(ipmi_domain_t *domain);
+ipmi_event_t *ipmi_domain_next_event(ipmi_domain_t *domain, ipmi_event_t *p);
+ipmi_event_t *ipmi_domain_prev_event(ipmi_domain_t *domain, ipmi_event_t *n);
 
 /* Return the number of non-deleted entries in the local copy of the
    SEL. */

@@ -17,7 +17,7 @@ noinst_HEADERS = heap.h
 lib_LTLIBRARIES = libOpenIPMI.la
 
 libOpenIPMI_la_SOURCES = entity.c ipmi.c domain.c mc.c sdr.c selector.c \
-	control.c ipmi_utils.c conn.c fru.c chassis.c pet.c \
+	control.c ipmi_utils.c conn.c fru.c chassis.c pet.c event.c \
 	ilist.c ipmi_smi.c opq.c sel.c sensor.c pef.c lanparm.c ipmi_lan.c \
 	strings.c ipmi_malloc.c oem_force_conn.c \
 	oem_motorola_mxp.c oem_motorola_mxp_intf.c oem_atca_conn.c oem_atca.c

@@ -56,11 +56,13 @@ typedef void (*ipmi_ll_rsp_handler_t)(ipmi_con_t   *ipmi,
 /* Called when an IPMI event comes in from the BMC.  Note that the
    event may be NULL, meaning that an event came in but did not have
    enough information to build a full event message.  So this is just
-   an indication that there is a new event in the event log. */
+   an indication that there is a new event in the event log.  Note that
+   if an event is delivered here, it's mcid might be invalid, so that
+   may need to be established here. */
 typedef void (*ipmi_ll_evt_handler_t)(ipmi_con_t   *ipmi,
 				      ipmi_addr_t  *addr,
 				      unsigned int addr_len,
-				      ipmi_msg_t   *event,
+				      ipmi_event_t *event,
 				      void         *event_data,
 				      void         *data2);
 

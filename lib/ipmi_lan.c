@@ -45,6 +45,7 @@
 #include <netdb.h>
 
 #include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_int.h>
 #include <OpenIPMI/ipmi_auth.h>
@@ -921,6 +922,8 @@ rsp_timeout_handler(void              *cb_data,
     ipmi_mem_free(info);
 }
 
+static ipmi_mcid_t invalid_mcid = IPMI_MCID_INVALID;
+
 static void
 handle_async_event(ipmi_con_t   *ipmi,
 		   ipmi_addr_t  *addr,
@@ -929,6 +932,23 @@ handle_async_event(ipmi_con_t   *ipmi,
 {
     lan_data_t                 *lan = (lan_data_t *) ipmi->con_data;
     ipmi_ll_event_handler_id_t *elem, *next;
+    ipmi_event_t               *event;
+    ipmi_time_t                timestamp;
+    unsigned int               type = msg->data[2];
+    unsigned int               record_id = ipmi_get_uint16(msg->data);
+
+    if (type < 0xe0)
+	timestamp = ipmi_get_uint32(msg->data+3);
+    else
+	timestamp = -1;
+    event = ipmi_event_alloc(invalid_mcid,
+			     record_id,
+			     type,
+			     timestamp,
+			     msg->data+3, 13);
+    if (!event)
+	/* We missed it here, but the SEL fetch should catch it later. */
+	return;
 
     ipmi_lock(lan->event_handlers_lock);
     elem = lan->event_handlers;
@@ -938,11 +958,13 @@ handle_async_event(ipmi_con_t   *ipmi,
 	next = elem->next;
 
 	/* call the user handler. */
-	elem->handler(ipmi, addr, addr_len, msg, elem->event_data, elem->data2);
+	elem->handler(ipmi, addr, addr_len, event,
+		      elem->event_data, elem->data2);
 
 	elem = next;
     }
     ipmi_unlock(lan->event_handlers_lock);
+    ipmi_event_free(event);
 }
 
 /* Must be called with the message sequence lock held. */

@@ -49,6 +49,7 @@
 
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_conn.h>
+#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_smi.h>
 #include <OpenIPMI/ipmi_auth.h>
@@ -400,11 +401,21 @@ void
 event_handler(ipmi_con_t   *ipmi,
 	      ipmi_addr_t  *addr,
 	      unsigned int addr_len,
-	      ipmi_msg_t   *event,
+	      ipmi_event_t *event,
 	      void         *data1,
 	      void         *data2)
 {
-    dump_msg_data(event, addr, "event");
+    unsigned int  record_id = ipmi_event_get_record_id(event);
+    unsigned int  type = ipmi_event_get_type(event);
+    unsigned int  data_len = ipmi_event_get_data_len(event);
+    unsigned char *data = ipmi_event_get_data_ptr(event);
+    int           i;
+
+    printf("Got event:\n");
+    printf("  %4.4x (%2.2x):", record_id, type);
+    for (i=0; i<data_len; i++)
+	printf(" %2.2x", data[i]);
+    printf("\n");
 }
 
 typedef struct timed_data_s

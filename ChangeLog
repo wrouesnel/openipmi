@@ -28,6 +28,36 @@
 	the slot, if it's a switch slot then use the switch entity id,
 	otherwise use the processing blade entity id.
 
+	* ipmi_conn.h: Modified the event reporting to actually send
+	an event, not the event message.
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+	* lib/domain.c: ditto
+	* sample/ipmicmd.c: ditto
+
+	* include/OpenIPMI/ipmi_types.h: Added ipmi_time_t
+
+	* include/OpenIPMI/ipmi_mc.c: Modified the SEL time to be
+	ipmi_time_t.
+	* lib/oem_motorola_mxp.c: ditto.
+
+	* include/OpenIPMI/ipmi_event.h, lib/event.c: Added these files
+	and reworked the events to be opaque and easier to use.
+	* lib/Makefile.am, include/OpenIPMI/Makefile.am: ditto
+	* include/OpenIPMI/ipmi_sel.h, lib/sel.c: ditto
+	* include/OpenIPMI/ipmi_mc.h, lib/mc.c: ditto
+	* include/OpenIPMI/ipmiif.h.in, lib/domain.c: ditto
+	* include/OpenIPMI/ipmi_types.h: ditto
+	* lib/sensors.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+
+	* ui/ui.c: Adjusted for all the event rework.
+
+	* doc/OpenIPMI.texi: Reworked docs to add info on the event
+	rework.
+
+	* configure.in: Move to version 1.3.0.
+
 2004-02-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a few problems were callbacks can receive

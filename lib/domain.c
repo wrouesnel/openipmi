@@ -35,6 +35,7 @@
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
 #include <OpenIPMI/ipmi_sdr.h>
@@ -47,6 +48,20 @@
 #include <OpenIPMI/ipmi_oem.h>
 
 #include <OpenIPMI/ilist.h>
+
+#ifdef DEBUG_EVENTS
+static void
+dump_hex(unsigned char *data, int len)
+{
+    int i;
+    for (i=0; i<len; i++) {
+	if ((i != 0) && ((i % 16) == 0)) {
+	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n  ");
+	}
+	ipmi_log(IPMI_LOG_DEBUG_CONT, " %2.2x", data[i]);
+    }
+}
+#endif
 
 /* Rescan the bus for MCs every 10 minutes by default. */
 #define IPMI_RESCAN_BUS_INTERVAL 600
@@ -2124,21 +2139,22 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 				  ipmi_mc_t     *ev_mc,
 				  ipmi_event_t  *event)
 {
-    int                 rv = 1;
-    unsigned long       timestamp;
+    int          rv = 1;
+    ipmi_time_t  timestamp = ipmi_event_get_timestamp(event);
+    unsigned int type = ipmi_event_get_type(event);
 
     if (DEBUG_EVENTS) {
-	ipmi_log(IPMI_LOG_DEBUG,
-		 "Event recid mc (0x%x):%4.4x type:%2.2x:"
-		 " %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
-		 " %2.2x %2.2x %2.2x %2.2x %2.2x",
-		 event->mcid.mc_num,
-		 event->record_id, event->type,
-		 event->data[0], event->data[1], event->data[2],
-		 event->data[3], event->data[4], event->data[5],
-		 event->data[6], event->data[7], event->data[8],
-		 event->data[9], event->data[10], event->data[11],
-		 event->data[12]);
+	ipmi_mcid_t mcid = ipmi_event_get_mcid(event);
+	unsigned int record_id = ipmi_event_get_record_id(event);
+	unsigned int data_len = ipmi_event_get_data_len(event);
+	unsigned char *data;
+
+	ipmi_log(IPMI_LOG_DEBUG_START,
+		 "Event recid mc (0x%x):%4.4x type:%2.2x timestamp %llu:\n",
+		 mcid.mc_num, record_id, type, (uint64_t) timestamp);
+	data = ipmi_event_get_data_ptr(event);
+	dump_hex(data, data_len);
+	ipmi_log(IPMI_LOG_DEBUG_END, "\n");
     }
 
     /* Let the OEM handler for the MC that the message came from have
@@ -2147,27 +2163,29 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
     if (_ipmi_mc_check_sel_oem_event_handler(ev_mc, event))
 	return;
 
-    timestamp = ipmi_get_uint32(&(event->data[0]));
-
     /* It's a system event record from an MC, and the timestamp is
        later than our startup timestamp. */
-    if ((event->type == 0x02)
+    if ((type == 0x02)
+	&& (timestamp != -1)
 	&& (timestamp >= ipmi_mc_get_startup_SEL_time(ev_mc)))
     {
+	/* It's a standard IPMI event. */
 	ipmi_mc_t           *mc;
 	ipmi_ipmb_addr_t    addr;
 	ipmi_sensor_id_t    id;
 	event_sensor_info_t info;
+	unsigned char       *data;
 
+	data = ipmi_event_get_data_ptr(event);
 	addr.addr_type = IPMI_IPMB_ADDR_TYPE;
 	/* See if the MC has an OEM handler for this. */
-	if (event->data[6] == 0x03) {
+	if (data[6] == 0x03) {
 	    addr.channel = 0;
 	} else {
-	    addr.channel = event->data[5] >> 4;
+	    addr.channel = data[5] >> 4;
 	}
-	if ((event->data[4] & 0x01) == 0) {
-	    addr.slave_addr = event->data[4];
+	if ((data[4] & 0x01) == 0) {
+	    addr.slave_addr = data[4];
 	} else {
 	    /* A software ID, assume it comes from the MC where we go it. */
 	    ipmi_addr_t iaddr;
@@ -2191,8 +2209,8 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 
 	/* The OEM code didn't handle it. */
 	id.mcid = ipmi_mc_convert_to_id(mc);
-	id.lun = event->data[5] & 0x3;
-	id.sensor_num = event->data[8];
+	id.lun = data[5] & 0x3;
+	id.sensor_num = data[8];
 
 	info.event = event;
 
@@ -2211,11 +2229,10 @@ static void
 ll_event_handler(ipmi_con_t   *ipmi,
 		 ipmi_addr_t  *addr,
 		 unsigned int addr_len,
-		 ipmi_msg_t   *event,
+		 ipmi_event_t *event,
 		 void         *event_data,
 		 void         *data2)
 {
-    ipmi_event_t                 devent;
     ipmi_domain_t                *domain = data2;
     ipmi_mc_t                    *mc;
     int                          rv;
@@ -2246,23 +2263,19 @@ ll_event_handler(ipmi_con_t   *ipmi,
     mc = _ipmi_find_mc_by_addr(domain, addr, addr_len);
     if (!mc)
 	goto out;
+    ipmi_event_set_mcid(event, ipmi_mc_convert_to_id(mc));
 
     if (event == NULL) {
 	/* The incoming event didn't carry the full event information.
 	   Just scan for events in the MC's SEL. */
 	ipmi_mc_reread_sel(mc, NULL, NULL);
     } else {
-	devent.mcid = ipmi_mc_convert_to_id(mc);
-	devent.record_id = ipmi_get_uint16(event->data);
-	devent.type = event->data[2];
-	memcpy(devent.data, event+3, IPMI_MAX_SEL_DATA);
-
 	/* Add it to the mc's event log. */
-	rv = _ipmi_mc_sel_event_add(mc, &devent);
+	rv = _ipmi_mc_sel_event_add(mc, event);
 
 	if (rv != EEXIST)
 	    /* Call the handler on it if it wasn't already in there. */
-	    _ipmi_domain_system_event_handler(domain, mc, &devent);
+	    _ipmi_domain_system_event_handler(domain, mc, event);
     }
 
  out:
@@ -2419,6 +2432,7 @@ ipmi_domain_del_event(ipmi_domain_t  *domain,
 {
     int              rv;
     del_event_info_t *info;
+    ipmi_mcid_t      mcid = ipmi_event_get_mcid(event);
 
     CHECK_DOMAIN_LOCK(domain);
 
@@ -2431,7 +2445,7 @@ ipmi_domain_del_event(ipmi_domain_t  *domain,
     info->done_handler = done_handler;
     info->cb_data = cb_data;
     info->rv = 0;
-    rv = ipmi_mc_pointer_cb(event->mcid, del_event_handler, info);
+    rv = ipmi_mc_pointer_cb(mcid, del_event_handler, info);
     if (rv) {
 	ipmi_mem_free(info);
 	return rv;
@@ -2441,8 +2455,9 @@ ipmi_domain_del_event(ipmi_domain_t  *domain,
 
 typedef struct next_event_handler_info_s
 {
-    int          rv;
+    ipmi_event_t *rv;
     ipmi_event_t *event;
+    ipmi_mcid_t  event_mcid;
     int          found_curr_mc;
     int          do_prev; /* If going backwards, this will be 1. */
 } next_event_handler_info_t;
@@ -2453,7 +2468,7 @@ next_event_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
     next_event_handler_info_t *info = cb_data;
     ipmi_mcid_t               mcid = ipmi_mc_convert_to_id(mc);
 
-    if (!info->rv)
+    if (info->rv)
 	/* We've found an event already, just return. */
 	return;
 
@@ -2461,8 +2476,8 @@ next_event_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	if (info->found_curr_mc)
 	    /* We've found the MC that had the event, but it didn't have
 	       any more events.  Look for last events now. */
-	    info->rv = ipmi_mc_last_event(mc, info->event);
-	else if (ipmi_cmp_mc_id(info->event->mcid, mcid) == 0) {
+	    info->rv = ipmi_mc_last_event(mc);
+	else if (ipmi_cmp_mc_id(info->event_mcid, mcid) == 0) {
 	    info->found_curr_mc = 1;
 	    info->rv = ipmi_mc_prev_event(mc, info->event);
 	}
@@ -2470,88 +2485,78 @@ next_event_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	if (info->found_curr_mc)
 	    /* We've found the MC that had the event, but it didn't have
 	       any more events.  Look for first events now. */
-	    info->rv = ipmi_mc_first_event(mc, info->event);
-	else if (ipmi_cmp_mc_id(info->event->mcid, mcid) == 0) {
+	    info->rv = ipmi_mc_first_event(mc);
+	else if (ipmi_cmp_mc_id(info->event_mcid, mcid) == 0) {
 	    info->found_curr_mc = 1;
 	    info->rv = ipmi_mc_next_event(mc, info->event);
 	}
     }
 }
 
-int
-ipmi_domain_first_event(ipmi_domain_t *domain, ipmi_event_t *event)
+ipmi_event_t *
+ipmi_domain_first_event(ipmi_domain_t *domain)
 {
-    int                       rv;
     next_event_handler_info_t info;
 
     CHECK_DOMAIN_LOCK(domain);
 
-    info.rv = ENODEV;
-    info.event = event;
+    info.rv = NULL;
+    info.event = NULL;
     info.found_curr_mc = 1;
     info.do_prev = 0;
-    rv = ipmi_domain_iterate_mcs(domain, next_event_handler, &info);
-    if (!rv)
-	rv = info.rv;
+    ipmi_domain_iterate_mcs(domain, next_event_handler, &info);
 
-    return rv;
+    return info.rv;
 }
 
-int
-ipmi_domain_last_event(ipmi_domain_t *domain, ipmi_event_t *event)
+ipmi_event_t *
+ipmi_domain_last_event(ipmi_domain_t *domain)
 {
-    int                       rv;
     next_event_handler_info_t info;
 
     CHECK_DOMAIN_LOCK(domain);
 
-    info.rv = ENODEV;
-    info.event = event;
+    info.rv = NULL;
+    info.event = NULL;
     info.found_curr_mc = 1;
     info.do_prev = 1;
-    rv = ipmi_domain_iterate_mcs_rev(domain, next_event_handler, &info);
-    if (!rv)
-	rv = info.rv;
+    ipmi_domain_iterate_mcs_rev(domain, next_event_handler, &info);
 
-    return rv;
+    return info.rv;
 }
 
-int
+ipmi_event_t *
 ipmi_domain_next_event(ipmi_domain_t *domain, ipmi_event_t *event)
 {
-    int                       rv;
     next_event_handler_info_t info;
 
     CHECK_DOMAIN_LOCK(domain);
 
-    info.rv = ENODEV;
+    info.rv = NULL;
     info.event = event;
     info.found_curr_mc = 0;
     info.do_prev = 0;
-    rv = ipmi_domain_iterate_mcs(domain, next_event_handler, &info);
-    if (!rv)
-	rv = info.rv;
+    info.event_mcid = ipmi_event_get_mcid(event);
+    ipmi_domain_iterate_mcs(domain, next_event_handler, &info);
 
-    return rv;
+    return info.rv;
 }
 
-int
+ipmi_event_t *
 ipmi_domain_prev_event(ipmi_domain_t *domain, ipmi_event_t *event)
 {
-    int                       rv;
     next_event_handler_info_t info;
 
     CHECK_DOMAIN_LOCK(domain);
 
-    info.rv = ENODEV;
+    info.rv = NULL;
     info.event = event;
     info.found_curr_mc = 0;
     info.do_prev = 1;
-    rv = ipmi_domain_iterate_mcs_rev(domain, next_event_handler, &info);
-    if (!rv)
-	rv = info.rv;
+    info.event_mcid = ipmi_event_get_mcid(event);
+    ipmi_domain_iterate_mcs_rev(domain, next_event_handler, &info);
 
-    return rv;
+    return info.rv;
 }
 
 static void

@@ -66,7 +66,13 @@ typedef struct ipmi_sensor_id_s ipmi_sensor_id_t;
 typedef struct ipmi_control_s ipmi_control_t;
 typedef struct ipmi_control_id_s ipmi_control_id_t;
 
+/* Used to represent a time difference, in nanoseconds. */
 typedef int64_t ipmi_timeout_t;
+
+#define IPMI_INVALID_TIME INT64_MIN
+/* Used to represent an absolute time, in nanoseconds since 00:00 Jan
+   1, 1970 */
+typedef int64_t ipmi_time_t;
 
 #ifndef __LINUX_IPMI_H /* Don't include this is we are including the kernel */
 
@@ -146,17 +152,8 @@ struct ipmi_control_id_s
 };
 #define IPMI_CONTROL_ID_INVALID { IPMI_MCID_INVALID, 0, 0 }
 
-/* Maximum amount of data allowed in a SEL. */
-#define IPMI_MAX_SEL_DATA 13
-/* An entry from the system event log. */
-typedef struct ipmi_event_s
-{
-    ipmi_mcid_t   mcid; /* The MC this event is stored in. */
-
-    unsigned int  record_id;
-    unsigned int  type;
-    unsigned char data[IPMI_MAX_SEL_DATA];
-} ipmi_event_t;
+/* The event structure is no longer public. */
+typedef struct ipmi_event_s ipmi_event_t;
 
 /* This represents a low-level connection. */
 typedef struct ipmi_con_s ipmi_con_t;

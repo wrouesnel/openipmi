@@ -41,9 +41,11 @@
 #include <termios.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/time.h>
 #include <ctype.h>
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/ipmi_event.h>
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_domain.h>
 #include <OpenIPMI/ipmi_mc.h>
@@ -4774,26 +4776,30 @@ delevent_cmder(ipmi_domain_t *domain, void *cb_data)
 {
     int             rv;
     delevent_info_t *info = cb_data;
-    ipmi_event_t    event;
+    ipmi_event_t    *event, *n;
     int             found = 0;
 
     info->mc_id.domain_id = domain_id;
 
-    rv = ipmi_domain_first_event(domain, &event);
-    while (!rv && !found) {
-	if ((ipmi_cmp_mc_id_noseq(event.mcid, info->mc_id) == 0)
-	    && (event.record_id == info->record_id))
+    event = ipmi_domain_first_event(domain);
+    while (event) {
+	if ((ipmi_cmp_mc_id_noseq(ipmi_event_get_mcid(event),info->mc_id) == 0)
+	    && (ipmi_event_get_record_id(event) == info->record_id))
 	{
-	    found = 1;
-	    rv = ipmi_domain_del_event(domain, &event, delevent_cb, NULL);
+	    rv = ipmi_domain_del_event(domain, event, delevent_cb, NULL);
 	    if (rv)
 		cmd_win_out("error deleting log: %x\n", rv);
+	    ipmi_event_free(event);
+	    found = 1;
+	    break;
 	} else {
-	    rv = ipmi_domain_next_event(domain, &event);
+	    n = ipmi_domain_next_event(domain, event);
+	    ipmi_event_free(event);
+	    event = n;
 	}
     }
     if (!found)
-	cmd_win_out("log not found\n", rv);
+	cmd_win_out("log not found\n");
 }
 
 static int
@@ -4828,7 +4834,10 @@ addevent_cb(ipmi_mc_t *mc, unsigned int record_id, int err, void *cb_data)
 typedef struct addevent_info_s
 {
     ipmi_mcid_t   mc_id;
-    ipmi_event_t  event;
+    unsigned int  record_id;
+    unsigned int  type;
+    ipmi_time_t   timestamp;
+    unsigned char data[13];
 } addevent_info_t;
 
 static void
@@ -4836,10 +4845,23 @@ addevent_cmder(ipmi_mc_t *mc, void *cb_data)
 {
     int             rv;
     addevent_info_t *info = cb_data;
+    ipmi_event_t    *event;
 
-    rv = ipmi_mc_add_event_to_sel(mc, &info->event, addevent_cb, NULL);
+    event = ipmi_event_alloc(ipmi_mc_convert_to_id(mc),
+			     info->record_id,
+			     info->type,
+			     info->timestamp,
+			     info->data,
+			     13);
+    if (!event) {
+	cmd_win_out("Could not allocate event\n");
+	return;
+    }
+			     
+    rv = ipmi_mc_add_event_to_sel(mc, event, addevent_cb, NULL);
     if (rv)
 	cmd_win_out("Unable to send add event: %x\n", rv);
+    ipmi_event_free(event);
 }
 
 static int
@@ -4848,20 +4870,24 @@ addevent_cmd(char *cmd, char **toks, void *cb_data)
     addevent_info_t info;
     int             rv;
     int             i;
+    struct timeval  time;
 
     if (get_mc_id(toks, &info.mc_id))
 	return 0;
 
-    if (get_uint(toks, &info.event.record_id, "record id"))
+    if (get_uint(toks, &info.record_id, "record id"))
 	return 0;
 
-    if (get_uint(toks, &info.event.type, "record type"))
+    if (get_uint(toks, &info.type, "record type"))
 	return 0;
 
     for (i=0; i<13; i++) {
-	if (get_uchar(toks, &info.event.data[i], "data"))
+	if (get_uchar(toks, &info.data[i], "data"))
 	    return 0;
     }
+
+    gettimeofday(&time, NULL);
+    info.timestamp = time.tv_sec * 1000000000;
 
     rv = ipmi_mc_pointer_noseq_cb(info.mc_id, addevent_cmder, &info);
     if (rv) {
@@ -4925,15 +4951,13 @@ debug_cmd(char *cmd, char **toks, void *cb_data)
 static void
 clear_sel_cmder(ipmi_domain_t *domain, void *cb_data)
 {
-    int          rv;
-    ipmi_event_t event, event2;
+    ipmi_event_t *event, *event2;
 
-    rv = ipmi_domain_first_event(domain, &event2);
-    while (!rv) {
-	event = event2;
-	rv = ipmi_domain_next_event(domain, &event2);
-	ipmi_domain_del_event(domain, &event, NULL, NULL);
-	event = event2;
+    event = ipmi_domain_first_event(domain);
+    while (event) {
+	event2 = event;
+	event = ipmi_domain_next_event(domain, event2);
+	ipmi_domain_del_event(domain, event2, NULL, NULL);
     }
 }
 
@@ -4954,7 +4978,7 @@ static void
 list_sel_cmder(ipmi_domain_t *domain, void *cb_data)
 {
     int          rv;
-    ipmi_event_t event;
+    ipmi_event_t *event, *event2;
     unsigned int count1, count2;
 
     curr_display_type = EVENTS;
@@ -4968,26 +4992,24 @@ list_sel_cmder(ipmi_domain_t *domain, void *cb_data)
     display_pad_out("Event counts: %d entries, %d slots used\n",
 		    count1, count2);
     display_pad_out("Events:\n");
-    rv = ipmi_domain_first_event(domain, &event);
-    while (!rv) {
-	display_pad_out("  (%x %x) %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
-			" %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
-			event.mcid.channel, event.mcid.mc_num,
-			event.record_id, event.type,
-			event.data[0],
-			event.data[1],
-			event.data[2],
-			event.data[3],
-			event.data[4],
-			event.data[5],
-			event.data[6],
-			event.data[7],
-			event.data[8],
-			event.data[9],
-			event.data[10],
-			event.data[11],
-			event.data[12]);
-	rv = ipmi_domain_next_event(domain, &event);
+    event = ipmi_domain_first_event(domain);
+    while (event) {
+	ipmi_mcid_t   mcid = ipmi_event_get_mcid(event);
+	unsigned int  record_id = ipmi_event_get_record_id(event);
+	unsigned int  type = ipmi_event_get_type(event);
+	ipmi_time_t   timestamp = ipmi_event_get_timestamp(event);
+	unsigned int  data_len = ipmi_event_get_data_len(event);
+	unsigned char *data = ipmi_event_get_data_ptr(event);
+	int           i;
+
+	display_pad_out("  (%x %x) %4.4x:%2.2x %d:",
+			mcid.channel, mcid.mc_num, record_id, type, timestamp);
+	for (i=0; i<data_len; i++)
+	    display_pad_out(" %2.2x", data[i]);
+	display_pad_out("\n");
+	event2 = ipmi_domain_next_event(domain, event);
+	ipmi_event_free(event);
+	event = event2;
     }
     display_pad_refresh();
 }
@@ -5766,7 +5788,7 @@ sensor_threshold_event_handler(ipmi_sensor_t               *sensor,
 	ui_log("  raw value is 0x%x\n", raw_value);
     }
     if (event)
-	ui_log("Due to event 0x%4.4x\n", event->record_id);
+	ui_log("Due to event 0x%4.4x\n", ipmi_event_get_record_id(event));
 }
 
 static void
@@ -5793,7 +5815,7 @@ sensor_discrete_event_handler(ipmi_sensor_t         *sensor,
     if (prev_severity != -1)
 	ui_log("  prev severity is %d\n", prev_severity);
     if (event)
-	ui_log("Due to event 0x%4.4x\n", event->record_id);
+	ui_log("Due to event 0x%4.4x\n", ipmi_event_get_record_id(event));
 }
 
 static void
@@ -5888,7 +5910,7 @@ entity_presence_handler(ipmi_entity_t *entity,
 	   get_entity_loc(entity, loc, sizeof(loc)),
 	   present);
     if (event)
-	ui_log("Due to event 0x%4.4x\n", event->record_id);
+	ui_log("Due to event 0x%4.4x\n", ipmi_event_get_record_id(event));
     return IPMI_EVENT_NOT_HANDLED;
 }
 
@@ -5996,25 +6018,20 @@ event_handler(ipmi_domain_t *domain,
 	      ipmi_event_t  *event,
 	      void          *event_data)
 {
-    /* FIXME - fill this out. */
-    ui_log("Unknown event from mc (%x %x)\n",
-	   event->mcid.channel, event->mcid.mc_num);
-    ui_log("  %4.4x:%2.2x: %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x"
-	   " %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x %2.2x\n",
-	   event->record_id, event->type,
-	   event->data[0],
-	   event->data[1],
-	   event->data[2],
-	   event->data[3],
-	   event->data[4],
-	   event->data[5],
-	   event->data[6],
-	   event->data[7],
-	   event->data[8],
-	   event->data[9],
-	   event->data[10],
-	   event->data[11],
-	   event->data[12]);
+    ipmi_mcid_t   mcid = ipmi_event_get_mcid(event);
+    unsigned int  record_id = ipmi_event_get_record_id(event);
+    unsigned int  type = ipmi_event_get_type(event);
+    ipmi_time_t   timestamp = ipmi_event_get_timestamp(event);
+    unsigned int  data_len = ipmi_event_get_data_len(event);
+    unsigned char *data = ipmi_event_get_data_ptr(event);
+    int           i;
+
+    ui_log("Unknown event from mc (%x %x)\n"
+	   "%4.4x:%2.2x %d:",
+	   mcid.channel, mcid.mc_num, record_id, type, timestamp); 
+    for (i=0; i<data_len; i++)
+	ui_log(" %2.2x", data[i]);
+    display_pad_out("\n");
 }
 
 static void
