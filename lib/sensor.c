@@ -4502,6 +4502,9 @@ ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
 			      ipmi_sensor_done_cb   done,
 			      void                  *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_sensor_events_enable_set)
@@ -4518,6 +4521,9 @@ ipmi_sensor_events_enable(ipmi_sensor_t         *sensor,
 			  ipmi_sensor_done_cb   done,
 			  void                  *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_sensor_events_enable)
@@ -4534,6 +4540,9 @@ ipmi_sensor_events_disable(ipmi_sensor_t         *sensor,
 			   ipmi_sensor_done_cb   done,
 			   void                  *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_sensor_events_disable)
@@ -4551,6 +4560,9 @@ ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
 		  ipmi_sensor_done_cb done,
 		  void                *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_sensor_rearm)
@@ -4567,6 +4579,9 @@ ipmi_sensor_events_enable_get(ipmi_sensor_t             *sensor,
 			      ipmi_event_enables_get_cb done,
 			      void                      *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_sensor_events_enable_get)
@@ -4581,6 +4596,9 @@ ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
 			   ipmi_hysteresis_get_cb done,
 			   void                   *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_sensor_get_hysteresis)
@@ -4597,6 +4615,9 @@ ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 			   ipmi_sensor_done_cb done,
 			   void                *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_sensor_set_hysteresis)
@@ -4613,6 +4634,9 @@ ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 		    ipmi_thresh_get_cb done,
 		    void               *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_thresholds_get)
@@ -4626,6 +4650,9 @@ ipmi_thresholds_set(ipmi_sensor_t       *sensor,
 		    ipmi_sensor_done_cb done,
 		    void                *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_thresholds_set)
@@ -4638,6 +4665,9 @@ ipmi_reading_get(ipmi_sensor_t        *sensor,
 		 ipmi_reading_done_cb done,
 		 void                 *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_reading_get)
@@ -4650,6 +4680,9 @@ ipmi_states_get(ipmi_sensor_t       *sensor,
 		ipmi_states_read_cb done,
 		void                *cb_data)
 {
+    if (sensor->destroyed)
+	return ECANCELED;
+      
     CHECK_SENSOR_LOCK(sensor);
 
     if (!sensor->cbs.ipmi_states_get)

@@ -1,5 +1,10 @@
 2004-04-02 Corey Minyard <cminyard@mvista.com> 
 
+	* lib/sensor.c, lib/control.c: Make sure that calls that send
+	messages cannot be done on destroyed sensors.
+
+2004-04-02 Corey Minyard <cminyard@mvista.com> 
+
 	* lib/entity.c, lib/sensor.c, lib/control.c: Fixed a rather nasty
 	race condition.  Sensors and control may go away after the MC goes
 	away underneath them if the sensor or control has an operation

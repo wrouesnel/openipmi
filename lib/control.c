@@ -733,6 +733,9 @@ ipmi_control_set_val(ipmi_control_t     *control,
 		     ipmi_control_op_cb handler,
 		     void               *cb_data)
 {
+    if (control->destroyed)
+	return ECANCELED;
+      
     CHECK_CONTROL_LOCK(control);
 
     if (!control->cbs.set_val)
@@ -745,6 +748,9 @@ ipmi_control_get_val(ipmi_control_t      *control,
 		     ipmi_control_val_cb handler,
 		     void                *cb_data)
 {
+    if (control->destroyed)
+	return ECANCELED;
+      
     CHECK_CONTROL_LOCK(control);
 
     if (!control->cbs.get_val)
@@ -761,6 +767,9 @@ ipmi_control_set_display_string(ipmi_control_t     *control,
 				ipmi_control_op_cb handler,
 				void               *cb_data)
 {
+    if (control->destroyed)
+	return ECANCELED;
+      
     CHECK_CONTROL_LOCK(control);
 
     if (!control->cbs.set_display_string)
@@ -782,6 +791,9 @@ ipmi_control_get_display_string(ipmi_control_t      *control,
 {
     CHECK_CONTROL_LOCK(control);
 
+    if (control->destroyed)
+	return ECANCELED;
+      
     if (!control->cbs.get_display_string)
 	return ENOSYS;
     return control->cbs.get_display_string(control,
@@ -796,6 +808,9 @@ ipmi_control_identifier_get_val(ipmi_control_t                 *control,
 				ipmi_control_identifier_val_cb handler,
 				void                           *cb_data)
 {
+    if (control->destroyed)
+	return ECANCELED;
+      
     CHECK_CONTROL_LOCK(control);
 
     if (!control->cbs.get_identifier_val)
@@ -810,6 +825,9 @@ ipmi_control_identifier_set_val(ipmi_control_t     *control,
 				ipmi_control_op_cb handler,
 				void               *cb_data)
 {
+    if (control->destroyed)
+	return ECANCELED;
+      
     CHECK_CONTROL_LOCK(control);
 
     if (!control->cbs.set_identifier_val)
