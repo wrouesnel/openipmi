@@ -282,7 +282,6 @@ typedef struct mxp_board_s {
 
     ipmi_control_t *oos_led;
     ipmi_control_t *inserv_led;
-//    ipmi_control_t *blue_led;
     ipmi_control_t *bd_sel;
     ipmi_control_t *pci_reset;
     ipmi_control_t *slot_init;
@@ -5051,7 +5050,7 @@ mxp_add_board_sensors(mxp_info_t  *info,
 			       &(board->i2c_enable));
 	if (rv)
 	    goto out_err;
-	ipmi_control_set_num_elements(board->pci_reset, 1);
+	ipmi_control_set_num_elements(board->i2c_enable, 1);
     }
 
  out_err:
@@ -6713,7 +6712,7 @@ amc_board_handler(ipmi_mc_t *mc)
 	0x04, 0x04, /* Management Controller Offline. */
 	amc_active_get,
 	NULL,
-	&info->slot);
+	&info->active);
     if (rv)
 	goto out_err;
 
@@ -8760,6 +8759,8 @@ mxp_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 	    ipmi_control_destroy(info->board[i].pci_reset);
 	if (info->board[i].slot_init)
 	    ipmi_control_destroy(info->board[i].slot_init);
+	if (info->board[i].i2c_enable)
+	    ipmi_control_destroy(info->board[i].i2c_enable);
     }
     
     if (info->chassis_id)

@@ -1,7 +1,7 @@
 2004-01-09 Corey Minyard <cminyard@mvista.com> 
 
-	* include/OpenIPMI/ipmi_bits.h, ui/ui.c: Added one-shot reset,
-	general output, and one-shot ouput controls.
+	* include/OpenIPMI/ipmi_bits.h, ui/ui.c, lib/strings.c: Added
+	one-shot reset, general output, and one-shot ouput controls.
 
 	* lib/oem_motorola_mxp.c: Added a bunch of controls for various
 	things in the chassis and boards.
@@ -13,6 +13,9 @@
 	* lib/oem_motorola_mxp.c: Modified the presence sensor for normal
 	boards to use the CPCI healthy signal instead of the wierd thing
 	it was doing.
+
+	* lib/mc.c: Don't delete the MC removed handlers unless the MC is
+	really deleted.
 
 2004-01-08 Corey Minyard <cminyard@mvista.com> 
 

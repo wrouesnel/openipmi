@@ -691,6 +691,9 @@ static char *control_types[] =
     "power",
     "fan speed",
     "identifier",
+    "one-shot reset",
+    "output",
+    "one-shot output",
 };
 #define NUM_CONTROL_TYPES (sizeof(control_types)/sizeof(char *))
 char *
