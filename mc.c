@@ -303,6 +303,8 @@ static ilist_t *oem_handlers;
 
 static int mc_initialized = 0;
 
+static void start_mc_scan(ipmi_mc_t *bmc);
+
 int
 ipmi_mc_init(void)
 {
@@ -605,8 +607,12 @@ ll_con_failed(ipmi_con_t *ipmi,
 
     if (err)
 	bmc->bmc->connection_up = 0;
-    else
+    else {
 	bmc->bmc->connection_up = 1;
+	ipmi_lock(bmc->bmc->mc_list_lock);
+	start_mc_scan(bmc);
+	ipmi_unlock(bmc->bmc->mc_list_lock);
+    }
 
     ilist_iter(bmc->bmc->con_fail_handlers, iterate_con_fails, &info);
 
