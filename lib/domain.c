@@ -1469,7 +1469,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 
     /* Skip addresses we must ignore. */
     while ((in_ipmb_ignores(domain, ipmb->slave_addr))
-	   && (ipmb->slave_addr < end_addr))
+	   && (ipmb->slave_addr <= end_addr))
     {
 	ipmb->slave_addr += 2;
     }
@@ -2767,8 +2767,8 @@ con_up_complete(ipmi_domain_t *domain)
     }
     if (i == MAX_IPMI_USED_CHANNELS) {
 	domain->chan[0].medium = 1;
-	/* If these fail its really no big deal. */
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x18);
+	/* If these fail it's really no big deal. */
+	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1e);
 	ipmi_domain_add_ipmb_ignore_range(domain, 0x22, 0xfe);
     }
 
