@@ -1175,7 +1175,7 @@ static void devid_bc_rsp_handler(ipmi_con_t   *ipmi,
 
     ipmi_read_lock();
     rv = ipmi_mc_validate(info->bmc);
-    if (!rv) {
+    if (rv) {
 	ipmi_log(IPMI_LOG_INFO,
 		 "BMC went away while scanning for MCs");
 	ipmi_read_unlock();
