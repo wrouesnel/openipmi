@@ -93,7 +93,10 @@ struct ipmi_control_s
     /* For identifier types. */
     unsigned int identifier_length;
 
-    char id[CONTROL_ID_LENGTH+1];
+    /* Note that this is *not* nil terminated. */
+    enum ipmi_str_type_e id_type;
+    unsigned int id_len;
+    char id[CONTROL_ID_LENGTH];
 
     ipmi_control_cbs_t cbs;
     opq_t *waitq;
@@ -660,22 +663,43 @@ ipmi_control_get_id_length(ipmi_control_t *control)
 {
     CHECK_CONTROL_LOCK(control);
 
-    return strlen(control->id);
+    return control->id_len;
 }
 
-void
+int
 ipmi_control_get_id(ipmi_control_t *control, char *id, int length)
 {
+    int clen;
+
     CHECK_CONTROL_LOCK(control);
 
-    strncpy(id, control->id, length);
+    if (control->id_len > length)
+	clen = length;
+    else
+	clen = control->id_len;
+    memcpy(id, control->id, clen);
+
+    if (control->id_type == IPMI_ASCII_STR) {
+	/* NIL terminate the ASCII string. */
+	if (clen == length)
+	    clen--;
+
+	id[clen] = '\0';
+    }
+
+    return clen;
 }
 
 void
-ipmi_control_set_id(ipmi_control_t *control, char *id)
+ipmi_control_set_id(ipmi_control_t *control, char *id,
+		    enum ipmi_str_type_e type, int length)
 {
-    strncpy(control->id, id, CONTROL_ID_LENGTH);
-    control->id[CONTROL_ID_LENGTH] = '\0';
+    if (length > CONTROL_ID_LENGTH)
+	length = CONTROL_ID_LENGTH;
+    
+    memcpy(control->id, id, length);
+    control->id_type = type;
+    control->id_len = length;
 }
 
 int

@@ -201,16 +201,19 @@ __ipmi_validate(ipmi_con_t *ipmi)
     return EINVAL;
 }
 
-static void
+static unsigned int
 ipmi_get_unicode(int len,
 		 unsigned char *d, int in_len,
 		 char *out, int out_len)
 {
-    /* FIXME - no unicode handling. */
-    *out = '\0';
+    if (out_len < len)
+	len = out_len;
+
+    memcpy(out, d, len);
+    return len;
 }
 
-static void
+static unsigned int
 ipmi_get_bcd_plus(int len,
 		  unsigned char *d, int in_len,
 		  char *out, int out_len)
@@ -224,6 +227,7 @@ ipmi_get_bcd_plus(int len,
     int val = 0;
     int i;
     int real_length;
+    char *out_s = out;
 
     real_length = (in_len * 8) / 6;
     if (len > real_length)
@@ -249,10 +253,10 @@ ipmi_get_bcd_plus(int len,
 	*out = table[val];
 	out++;
     }
-    *out = '\0';
+    return out - out_s;
 }
 
-static void
+static unsigned int
 ipmi_get_6_bit_ascii(int len,
 		     unsigned char *d, int in_len,
 		     char *out, int out_len)
@@ -272,6 +276,7 @@ ipmi_get_6_bit_ascii(int len,
     int val = 0;
     int i;
     int real_length;
+    char *out_s = out;
 
     real_length = (in_len * 8) / 6;
     if (len > real_length)
@@ -310,10 +315,11 @@ ipmi_get_6_bit_ascii(int len,
 	*out = table[val];
 	out++;
     }
-    *out = '\0';
+
+    return out - out_s;
 }
 
-static void
+static unsigned int
 ipmi_get_8_bit_ascii(int len,
 		     unsigned char *d, int in_len,
 		     char *out, int out_len)
@@ -332,48 +338,60 @@ ipmi_get_8_bit_ascii(int len,
 	out++;
 	d++;
     }
-    *out = '\0';
+    return len;
 };
 
-void
-ipmi_get_device_string(unsigned char *input,
-		       int           in_len,
-		       char          *output,
-		       int           max_out_len)
+unsigned int
+ipmi_get_device_string(unsigned char        *input,
+		       unsigned int         in_len,
+		       char                 *output,
+		       int                  force_unicode,
+		       enum ipmi_str_type_e *stype,
+		       unsigned int         max_out_len)
 {
-    int type;
-    int len;
+    int          type;
+    int          len;
+    unsigned int olen;
 
-    if (max_out_len <= 0)
-	return;
+    if (max_out_len == 0)
+	return 0;
 
     if (in_len < 2) {
 	*output = '\0';
-	return;
+	return 0;
     }
 
-    /* Remove the nil from the length. */
-    max_out_len--;
-
     type = (*input >> 6) & 3;
+
+    /* Special case for FRU data, type 3 is unicode if the language is
+       non-english. */
+    if ((force_unicode) && (type == 3))
+	type = 0;
+
     len = *input & 0x1f;
     input++;
     in_len--;
+    *stype = IPMI_ASCII_STR;
     switch (type)
     {
 	case 0: /* Unicode */
-	    ipmi_get_unicode(len, input, in_len, output, max_out_len);
+	    olen = ipmi_get_unicode(len, input, in_len, output, max_out_len);
+	    *stype = IPMI_UNICODE_STR;
 	    break;
 	case 1: /* BCD Plus */
-	    ipmi_get_bcd_plus(len, input, in_len, output, max_out_len);
+	    olen = ipmi_get_bcd_plus(len, input, in_len, output, max_out_len);
 	    break;
 	case 2: /* 6-bit ASCII */
-	    ipmi_get_6_bit_ascii(len, input, in_len, output, max_out_len);
+	    olen=ipmi_get_6_bit_ascii(len, input, in_len, output, max_out_len);
 	    break;
 	case 3: /* 8-bit ASCII */
-	    ipmi_get_8_bit_ascii(len, input, in_len, output, max_out_len);
+	    olen=ipmi_get_8_bit_ascii(len, input, in_len, output, max_out_len);
 	    break;
+        default:
+	    olen = 0;
     }
+
+    return olen;
 }
 
 /* Element will be zero if not present, n-1 if present. */
@@ -548,35 +566,63 @@ ipmi_set_8_bit_ascii(char          *input,
     output[0] = (0x02 << 6) | len;
 }
 
+static void
+ipmi_set_8_bit_ascii_to_unicode(char          *input,
+				unsigned char *output,
+				int           *out_len)
+{
+    /* FIXME - this is not implemented yet. */
+    *out_len = 0;
+}
+
 void
-ipmi_set_device_string(char          *input,
-		       unsigned char *output,
-		       int           *out_len)
+ipmi_set_device_string(char                 *input,
+		       enum ipmi_str_type_e type,
+		       unsigned int         in_len,
+		       unsigned char        *output,
+		       int                  force_unicode,
+		       int                  *out_len)
 {
     char *s = input+1;
     int  bsize = 0; /* Start with 4-bit. */
 
-    /* Max size is 30. */
-    if (*out_len > 30)
-	*out_len = 30;
+    /* Max size is 63 (62 bytes + the type byte). */
+    if (*out_len > 63)
+	*out_len = 63;
 
-    while (*s != '\0') {
-	if ((bsize == 0) && (table_4_bit[(int) *s] == 0))
-	    bsize = 1;
-	if ((bsize == 1) && (table_6_bit[(int) *s] == 0)) {
-	    bsize = 2;
-	    break;
+    if (type == IPMI_ASCII_STR) {
+	while (*s != '\0') {
+	    if (table_4_bit[(int) *s] == 0)
+		bsize |= 1;
+	    else if (table_6_bit[(int) *s] == 0) {
+		bsize |= 2;
+		break;
+	    }
 	}
-    }
-    if (bsize == 0) {
-	/* We can encode it in 4-bit BCD+ */
-	ipmi_set_bcdplus(input, output, out_len);
-    } else if (bsize == 1) {
-	/* We can encode it in 6-bit ASCII. */
-	ipmi_set_6_bit_ascii(input, output, out_len);
+	if (bsize == 0) {
+	    /* We can encode it in 4-bit BCD+ */
+	    ipmi_set_bcdplus(input, output, out_len);
+	} else if (bsize == 1) {
+	    /* We can encode it in 6-bit ASCII. */
+	    ipmi_set_6_bit_ascii(input, output, out_len);
+	} else {
+	    /* Hack for FRU information, if the language is
+	       non-english and the type is ascii, it's unicode. */
+	    if (force_unicode) {
+		/* The input is ASCII and the output is unicode. */
+		ipmi_set_8_bit_ascii_to_unicode(input, output, out_len);
+	    } else {
+		/* 8-bit ASCII is required. */
+		ipmi_set_8_bit_ascii(input, output, out_len);
+	    }
+	}
     } else {
-	/* 8-bit ASCII is required. */
-	ipmi_set_8_bit_ascii(input, output, out_len);
+	/* The input and output are unicode. */
+	if (in_len > *out_len-1)
+	    in_len = *out_len-1;
+	*output = in_len;
+	memcpy(output+1, input, in_len);
+	*out_len = in_len + 1;
     }
 }
 

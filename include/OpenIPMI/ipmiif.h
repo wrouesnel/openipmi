@@ -280,6 +280,171 @@ int ipmi_domain_set_main_SDRs_read_handler(ipmi_domain_t  *domain,
 					   void           *cb_data);
 
 
+/* FRU information for an entity. */
+typedef struct ipmi_fru_s ipmi_fru_t;
+
+/* The following structures get boadloads of information from the FRU.
+   These all will return ENOSYS if the information is not available.
+   All these function return error, not lengths.
+
+   The string return functions allow you to fetch the type and length.
+   The length returns for ASCII strings does *not* include the nil
+   character, but for ASCII strings it will be put on to the end.
+   Also, when fetching the string, you must set the max_len variable
+   to the maximum length of the returned data.  The actual length
+   copied into the output string is returned in max_len. */
+int ipmi_fru_get_internal_use_version(ipmi_fru_t    *fru,
+				      unsigned char *version);
+int ipmi_fru_get_internal_use_length(ipmi_fru_t   *fru,
+				     unsigned int *length);
+int  ipmi_fru_get_internal_use_data(ipmi_fru_t    *fru,
+				    unsigned char *data,
+				    unsigned int  *max_len);
+
+int ipmi_fru_get_chassis_info_version(ipmi_fru_t    *fru,
+				      unsigned char *version);
+int  ipmi_fru_get_chassis_info_type(ipmi_fru_t    *fru,
+				    unsigned char *type);
+
+int ipmi_fru_get_chassis_info_part_number_len(ipmi_fru_t   *fru,
+					      unsigned int *length);
+int ipmi_fru_get_chassis_info_part_number_type(ipmi_fru_t           *fru,
+					       enum ipmi_str_type_e *type);
+int ipmi_fru_get_chassis_info_part_number(ipmi_fru_t   *fru,
+					  char         *str,
+					  unsigned int *strlen);
+int ipmi_fru_get_chassis_info_serial_number_len(ipmi_fru_t   *fru,
+						unsigned int *length);
+int ipmi_fru_get_chassis_info_serial_number_type(ipmi_fru_t           *fru,
+						 enum ipmi_str_type_e *type);
+int ipmi_fru_get_chassis_info_serial_number(ipmi_fru_t   *fru,
+					    char         *str,
+					    unsigned int *strlen);
+int ipmi_fru_get_chassis_info_custom_len(ipmi_fru_t   *fru,
+					 unsigned int num,
+					 unsigned int *length);
+int ipmi_fru_get_chassis_info_custom_type(ipmi_fru_t           *fru,
+					  unsigned int         num,
+					  enum ipmi_str_type_e *type);
+int ipmi_fru_get_chassis_info_custom(ipmi_fru_t   *fru,
+				     unsigned int num,
+				     char         *str,
+				     unsigned int *strlen);
+
+int ipmi_fru_get_board_info_version(ipmi_fru_t    *fru,
+				    unsigned char *version);
+int ipmi_fru_get_board_lang_code(ipmi_fru_t    *fru,
+				 unsigned char *type);
+int ipmi_fru_get_board_info_board_manufacturer_len(ipmi_fru_t   *fru,
+						   unsigned int *length);
+int ipmi_fru_get_board_info_board_manufacturer_type(ipmi_fru_t           *fru,
+						    enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_board_manufacturer(ipmi_fru_t   *fru,
+					       char         *str,
+					       unsigned int *strlen);
+int ipmi_fru_get_board_info_board_product_name_len(ipmi_fru_t   *fru,
+						   unsigned int *length);
+int ipmi_fru_get_board_info_board_product_name_type(ipmi_fru_t           *fru,
+						    enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_board_product_name(ipmi_fru_t   *fru,
+					       char         *str,
+					       unsigned int *strlen);
+int ipmi_fru_get_board_info_board_serial_number_len(ipmi_fru_t   *fru,
+						    unsigned int *length);
+int ipmi_fru_get_board_info_board_serial_number_type(ipmi_fru_t           *fru,
+						     enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_board_serial_number(ipmi_fru_t   *fru,
+						char         *str,
+						unsigned int *strlen);
+int ipmi_fru_get_board_info_board_part_number_len(ipmi_fru_t   *fru,
+						  unsigned int *length);
+int ipmi_fru_get_board_info_board_part_number_type(ipmi_fru_t           *fru,
+						   enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_board_part_number(ipmi_fru_t   *fru,
+					      char         *str,
+					      unsigned int *strlen);
+int ipmi_fru_get_board_info_fru_file_id_len(ipmi_fru_t   *fru,
+					    unsigned int *length);
+int ipmi_fru_get_board_info_fru_file_id_type(ipmi_fru_t           *fru,
+					     enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_fru_file_id(ipmi_fru_t   *fru,
+					char         *str,
+					unsigned int *strlen);
+int ipmi_fru_get_board_info_custom_len(ipmi_fru_t   *fru,
+				       unsigned int num,
+				       unsigned int *length);
+int ipmi_fru_get_board_info_custom_type(ipmi_fru_t           *fru,
+					unsigned int         num,
+					enum ipmi_str_type_e *type);
+int ipmi_fru_get_board_info_custom(ipmi_fru_t   *fru,
+				   unsigned int num,
+				   char         *str,
+				   unsigned int *strlen);
+
+int ipmi_fru_get_product_info_version(ipmi_fru_t    *fru,
+				      unsigned char *version);
+int ipmi_fru_get_product_info_lang_code(ipmi_fru_t    *fru,
+					unsigned char *type);
+int ipmi_fru_get_product_info_manufacturer_name_len(ipmi_fru_t   *fru,
+						    unsigned int *length);
+int ipmi_fru_get_product_info_manufacturer_name_type(ipmi_fru_t           *fru,
+						     enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_manufacturer_name(ipmi_fru_t   *fru,
+						char         *str,
+						unsigned int *strlen);
+int ipmi_fru_get_product_info_product_name_len(ipmi_fru_t   *fru,
+					       unsigned int *length);
+int ipmi_fru_get_product_info_product_name_type(ipmi_fru_t           *fru,
+						enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_product_name(ipmi_fru_t   *fru,
+					   char         *str,
+					   unsigned int *strlen);
+int ipmi_fru_get_product_info_product_part_model_number_len(ipmi_fru_t   *fru,
+							    unsigned int *length);
+int ipmi_fru_get_product_info_product_part_model_number_type(ipmi_fru_t           *fru,
+							     enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_product_part_model_number(ipmi_fru_t   *fru,
+							char         *str,
+							unsigned int *strlen);
+int ipmi_fru_get_product_info_product_version_len(ipmi_fru_t   *fru,
+						  unsigned int *length);
+int ipmi_fru_get_product_info_product_version_type(ipmi_fru_t           *fru,
+						   enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_product_version(ipmi_fru_t   *fru,
+					      char         *str,
+					      unsigned int *strlen);
+int ipmi_fru_get_product_info_product_serial_number_len(ipmi_fru_t   *fru,
+							unsigned int *length);
+int ipmi_fru_get_product_info_product_serial_number_type(ipmi_fru_t           *fru,
+							 enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_product_serial_number(ipmi_fru_t   *fru,
+						    char         *str,
+						    unsigned int *strlen);
+int ipmi_fru_get_product_info_asset_tag_len(ipmi_fru_t   *fru,
+					    unsigned int *length);
+int ipmi_fru_get_product_info_asset_tag_type(ipmi_fru_t           *fru,
+					     enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_asset_tag(ipmi_fru_t   *fru,
+					char         *str,
+					unsigned int *strlen);
+int ipmi_fru_get_product_info_fru_file_id_len(ipmi_fru_t   *fru,
+					      unsigned int *length);
+int ipmi_fru_get_product_info_fru_file_id_type(ipmi_fru_t           *fru,
+					       enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_fru_file_id(ipmi_fru_t   *fru,
+					  char         *str,
+					  unsigned int *strlen);
+int ipmi_fru_get_product_info_custom_len(ipmi_fru_t   *fru,
+					 unsigned int num,
+					 unsigned int *length);
+int ipmi_fru_get_product_info_custom_type(ipmi_fru_t           *fru,
+					  unsigned int         num,
+					  enum ipmi_str_type_e *type);
+int ipmi_fru_get_product_info_custom(ipmi_fru_t   *fru,
+				     unsigned int num,
+				     char         *str,
+				     unsigned int *strlen);
+
 /* For the given entity, iterate over all the children of the entity,
    calling the given handler with each child.  The children will not
    change while this is happening. */
@@ -365,14 +530,29 @@ int ipmi_entity_get_FRU_inventory_device(ipmi_entity_t *ent);
 int ipmi_entity_get_SEL_device(ipmi_entity_t *ent);
 int ipmi_entity_get_SDR_repository_device(ipmi_entity_t *ent);
 int ipmi_entity_get_sensor_device(ipmi_entity_t *ent);
+
+/* You shouldn't use this as it won't work with Unicode. */
 char *ipmi_entity_get_entity_id_string(ipmi_entity_t *ent);
 
 /* The ID from the SDR. */
 int ipmi_entity_get_id_length(ipmi_entity_t *ent);
-void ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
+enum ipmi_str_type_e ipmi_entity_get_id_type(ipmi_entity_t *ent);
+int ipmi_entity_get_id(ipmi_entity_t *ent, char *id, int length);
 
 /* Is the entity currently present? */
 int ipmi_entity_is_present(ipmi_entity_t *ent);
+
+/* Register a handler that will be called when a fru is added,
+   deleted, or modified.  If you call this in
+   the entity added callback for the domain, you are guaranteed to get
+   this set before any fru exist. */
+typedef void (*ipmi_entity_fru_cb)(enum ipmi_update_e op,
+				   ipmi_entity_t      *ent,
+				   ipmi_fru_t         *fru,
+				   void               *cb_data);
+int ipmi_entity_set_fru_update_handler(ipmi_entity_t     *ent,
+				       ipmi_entity_fru_cb handler,
+				       void              *cb_data);
 
 /* Register a handler that will be called when a sensor that monitors
    this entity is added, deleted, or modified.  If you call this in
@@ -701,7 +881,8 @@ int ipmi_sensor_get_oem1(ipmi_sensor_t *sensor);
 
 /* The ID string from the SDR. */
 int ipmi_sensor_get_id_length(ipmi_sensor_t *sensor);
-void ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
+enum ipmi_str_type_e ipmi_sensor_get_id_type(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length);
 
 /* Returns true if the sensor reports when an operator want to remove
    the hot-swappable entity from the system.  If this returns true,
@@ -824,7 +1005,8 @@ int ipmi_states_get(ipmi_sensor_t       *sensor,
  */
 int ipmi_control_get_type(ipmi_control_t *control);
 int ipmi_control_get_id_length(ipmi_control_t *control);
-void ipmi_control_get_id(ipmi_control_t *control, char *id, int length);
+enum ipmi_str_type_e ipmi_control_get_id_type(ipmi_control_t *control);
+int ipmi_control_get_id(ipmi_control_t *control, char *id, int length);
 int ipmi_control_get_entity_id(ipmi_control_t *control);
 int ipmi_control_get_entity_instance(ipmi_control_t *control);
 int ipmi_control_is_settable(ipmi_control_t *control);
@@ -979,35 +1161,5 @@ typedef void (*close_done_t)(void *cb_data);
 int ipmi_close_connection(ipmi_domain_t *domain,
 			  close_done_t  close_done,
 			  void          *cb_data);
-
-/* Extract a 32-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint32(unsigned char *data);
-
-/* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint16(unsigned char *data);
-
-/* Add a 32-bit integer to the data, IPMI (little-endian) style. */
-void ipmi_set_uint32(unsigned char *data, int val);
-
-/* Add a 16-bit integer to the data, IPMI (little-endian) style. */
-void ipmi_set_uint16(unsigned char *data, int val);
-
-/* Fetch an IPMI device string as defined in section 37.14 of the IPMI
-   version 1.5 manual.  The in_len is the number of input bytes in the
-   string, including the type/length byte.  The max_out_len is the
-   maximum number of characters to output, including the nil */
-void ipmi_get_device_string(unsigned char *input,
-			    int           in_len,
-			    char          *output,
-			    int           max_out_len);
-
-/* Store an IPMI device string in the most compact form possible.
-   input is the input string (nil terminated), output is where to
-   place the output (including the type/length byte) and out_len is a
-   pointer to the max size of output (including the type/length byte).
-   Upon return, out_len will be set to the actual output length. */
-void ipmi_set_device_string(char          *input,
-			    unsigned char *output,
-			    int           *out_len);
 
 #endif /* __IPMIIF_H */

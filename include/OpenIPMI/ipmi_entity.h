@@ -35,6 +35,7 @@
 #define _IPMI_ENTITY_H
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmiif.h>
 
 /* This is an abstract type that identifies an entity. */
@@ -68,9 +69,16 @@ int ipmi_entity_add(ipmi_entity_info_t *ents,
 		    int                entity_id,
 		    int                entity_instance,
 		    char               *id,
+		    enum ipmi_str_type_e id_type,
+		    unsigned int       id_len,
 		    entity_sdr_add_cb  sdr_gen_output,
 		    void               *sdr_gen_cb_data,
 		    ipmi_entity_t      **new_ent);
+
+/* Called only when the MC that the entity came from is destroyed.
+   Note that this may not actually remove the entity, that depends on
+   if it has sensors referencing it. */
+int ipmi_sdr_entity_destroy(void *info);
 
 /* More OEM stuff, handle entity associations. */
 int ipmi_entity_add_child(ipmi_entity_t       *ent,
@@ -133,8 +141,12 @@ int ipmi_entity_append_to_sdrs(ipmi_entity_info_t *ents,
 
 /* Scan the SDRs (generally from the main set) for association records
    and other entity-related things.  This will create new entities and
-   add them to the "ents". */
-int ipmi_entity_scan_sdrs(ipmi_entity_info_t *ents,
+   add them to the "ents".  The MC should be the MC the entity came
+   from, or NULL if from the main SDR repository and the the domain
+   should be set. */
+int ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
+			  ipmi_mc_t          *mc,
+			  ipmi_entity_info_t *ents,
 			  ipmi_sdr_info_t    *sdrs);
 
 /* Sets a handler that will be called when an entity in the list
@@ -157,20 +169,28 @@ void ipmi_entities_iterate_entities(ipmi_entity_info_t              *ent,
 int ipmi_detect_ents_presence_changes(ipmi_entity_info_t *ents, int force);
 
 /* Fetch various entity-related IPMI information. */
+enum ipmi_dlr_type_e { IPMI_DLR_UNKNOWN = 0,
+		       IPMI_DLR_MC,
+		       IPMI_DLR_FRU,
+		       IPMI_DLR_GENERIC,
+		       IPMI_DLR_EAR,
+		       IPMI_DLR_DREAR };
+
 void ipmi_entity_set_access_address(ipmi_entity_t *ent, int access_address);
 void ipmi_entity_set_slave_address(ipmi_entity_t *ent, int slave_address);
 void ipmi_entity_set_channel(ipmi_entity_t *ent, int channel);
 void ipmi_entity_set_lun(ipmi_entity_t *ent, int lun);
 void ipmi_entity_set_private_bus_id(ipmi_entity_t *ent, int private_bus_id);
 void ipmi_entity_set_is_logical_fru(ipmi_entity_t *ent, int is_logical_fru);
-void ipmi_entity_set_is_fru(ipmi_entity_t *ent, int is_fru);
+void ipmi_entity_set_type(ipmi_entity_t *ent, enum ipmi_dlr_type_e type);
 void ipmi_entity_set_device_type(ipmi_entity_t *ent, int device_type);
 void ipmi_entity_set_device_modifier(ipmi_entity_t *ent, int device_modifier);
 void ipmi_entity_set_oem(ipmi_entity_t *ent, int oem);
 
 /* This value is copied into an internal array, so no need to save or
    manage. */
-void ipmi_entity_set_id(ipmi_entity_t *ent, char *id);
+void ipmi_entity_set_id(ipmi_entity_t *ent, char *id,
+			enum ipmi_str_type_e type, int length);
 
 void ipmi_entity_set_presence_sensor_always_there(ipmi_entity_t *ent, int val);
 void ipmi_entity_set_ACPI_system_power_notify_required(ipmi_entity_t *ent,

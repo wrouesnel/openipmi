@@ -37,6 +37,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <ctype.h>
+#include <time.h>
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_sel.h>
@@ -46,6 +48,10 @@
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/selector.h>
 #include <OpenIPMI/ipmi_int.h>
+#ifdef WITH_FRU
+#include <OpenIPMI/ipmi_domain.h>
+#include "OpenIPMI/ipmi_fru.h"
+#endif
 
 /* This sample application demostrates a very simple method to use
    OpenIPMI. It just search all sensors in the system.  From this
@@ -107,9 +113,199 @@ sensor_change(enum ipmi_update_e op,
     id = ipmi_entity_get_entity_id(ent);
     instance = ipmi_entity_get_entity_instance(ent);
     ipmi_sensor_get_id(sensor, name, 32);
-    if ( op == IPMI_ADDED ) 
+    if (op == IPMI_ADDED) 
 	printf("Sensor added: %d.%d.%s\n", id, instance, name);
 }
+
+
+#ifdef WITH_FRU
+static void
+print_text_buffer(const char *txt, int rv, ipmi_text_buffer_t *tb)
+{
+  printf("%s: ", txt);
+
+  if (rv) {
+      printf("<error %d>\n", rv);
+      return;
+  }
+
+  char buffer[255];
+
+  int l = ipmi_text_buffer_to_ascii(tb, buffer, 255);
+
+  if (l < 0) {
+      printf("<conv error>\n");
+      return;
+  }
+
+  int i;
+
+  for(i = 0; i < l; i++) {
+      if (   buffer[i] != '\t' && buffer[i] != '\r' 
+          && buffer[i] != '\n' && isprint(buffer[i]))
+          printf("%c", buffer[i]);
+      else
+          printf("<0x%02x>", (unsigned int)(unsigned char)buffer[i]);
+  }
+
+  printf("\n");
+}
+
+
+static void
+fru_change(enum ipmi_update_e op,
+           ipmi_entity_t     *ent,
+           ipmi_fru_t        *fru,
+           void              *cb_data)
+{
+  int rv;
+
+  if (op == IPMI_ADDED) {
+      if (!fru)
+          return;
+
+      ipmi_fru_record_t *r;
+      ipmi_text_buffer_t *tb = ipmi_text_buffer_alloc();
+      uint8_t ui;
+      int i;
+      int n;
+      time_t t;
+      int id, instance;
+
+      id = ipmi_entity_get_entity_id(ent);
+      instance = ipmi_entity_get_entity_instance(ent);
+
+      printf("FRU added: %d.%d %d\n", id, instance, ipmi_fru_get_id(fru));
+
+      // internal area info
+      r = ipmi_fru_get_internal(fru);
+
+      if (ipmi_fru_get_record_type(r) == FTR_INTERNAL_USE_AREA) {
+          printf("\tinternal area info:\n");
+
+          rv = ipmi_fru_get_internal_version(r, &ui);
+          printf("\t\tversion          : 0x%02x\n", ui);
+
+          rv = ipmi_fru_get_internal_length(r, &i);
+          printf("\t\tdata length      : %d\n", i);
+      }
+
+      // chassis area info
+      r = ipmi_fru_get_chassis(fru);
+
+      if (ipmi_fru_get_record_type(r) == FTR_CHASSIS_INFO_AREA) {
+          printf("\tchassis area info:\n");
+
+          rv = ipmi_fru_get_chassis_version(r, &ui);
+          printf("\t\tversion          : 0x%02x\n", ui);
+
+          rv = ipmi_fru_get_chassis_type(r, &ui);
+          printf("\t\tchassis type     : 0x%02x\n", ui);
+
+          rv = ipmi_fru_get_chassis_part_number(r, tb);
+          print_text_buffer("\t\tpart number      ", rv, tb);
+
+          rv = ipmi_fru_get_chassis_serial_number(r, tb);
+          print_text_buffer("\t\tserial number    ", rv, tb);
+          
+          n = ipmi_fru_get_chassis_num_custom_fields(r);
+
+          for(i = 0; i < n; i++) {
+              rv = ipmi_fru_get_chassis_custom_field(r, i, tb);
+              print_text_buffer("\t\tcustom           ", rv, tb);
+          }
+      }
+
+      // board area info
+      r = ipmi_fru_get_board(fru);
+
+      if (ipmi_fru_get_record_type(r) == FTR_BOARD_INFO_AREA) {
+          printf("\tboard area info:\n");
+      
+          rv = ipmi_fru_get_board_version(r, &ui);
+          printf("\t\tversion          : 0x%02x\n", ui);
+
+          rv = ipmi_fru_get_board_language(r, &ui);
+          printf("\t\tlanguage         : %d\n", ui);
+
+          rv = ipmi_fru_get_board_mfg_date(r, &t);
+          printf("\t\tmfg date         : %s", ctime(&t));
+
+          rv = ipmi_fru_get_board_manufacturer(r, tb);
+          print_text_buffer("\t\tmanufacturer     ", rv, tb);
+
+          rv = ipmi_fru_get_board_product_name(r, tb);
+          print_text_buffer("\t\tname             ", rv, tb);
+          
+          rv = ipmi_fru_get_board_serial_number(r, tb);
+          print_text_buffer("\t\tserial number    ", rv, tb);
+          
+          rv = ipmi_fru_get_board_part_number(r, tb);
+          print_text_buffer("\t\tpart number      ", rv, tb);
+          
+          rv = ipmi_fru_get_board_fru_file_id(r, tb);
+          print_text_buffer("\t\tfru file id      ", rv, tb);
+          
+          n = ipmi_fru_get_board_num_custom_fields(r);
+
+          for(i = 0; i < n; i++) {
+              rv = ipmi_fru_get_board_custom_field(r, i, tb);
+              print_text_buffer("\t\tcustom           ", rv, tb);
+          }
+      }
+
+      // product area info
+      r = ipmi_fru_get_product(fru);
+
+      if (ipmi_fru_get_record_type(r) == FTR_PRODUCT_INFO_AREA) {
+          printf("\tproduct area info:\n");
+
+          rv = ipmi_fru_get_product_version(r, &ui);
+          printf("\t\tversion          : 0x%02x\n", ui);
+
+          rv = ipmi_fru_get_product_language(r, &ui);
+          printf("\t\tlanguage         : %d\n", ui);
+
+          rv = ipmi_fru_get_product_manufacturer(r,tb);
+          print_text_buffer("\t\tmanufacturer     ", rv, tb);
+
+          rv = ipmi_fru_get_product_name(r,tb);
+          print_text_buffer("\t\tproduct name     ", rv, tb);
+
+          rv = ipmi_fru_get_product_part_number(r, tb);
+          print_text_buffer("\t\tpart number      ", rv, tb);
+          
+          rv = ipmi_fru_get_product_product_version(r, tb);
+          print_text_buffer("\t\tproduct version  ", rv, tb);
+
+          rv = ipmi_fru_get_product_serial_number(r, tb);
+          print_text_buffer("\t\tserial number    ", rv, tb);
+
+          rv =  ipmi_fru_get_product_asset_tag(r, tb);
+          print_text_buffer("\t\tasser tag        ", rv, tb);
+
+          rv = ipmi_fru_get_product_fru_file_id(r, tb);
+          print_text_buffer("\t\tfru file id      ", rv, tb);
+
+          n = ipmi_fru_get_product_num_custom_fields(r);
+
+          for(i = 0; i < n; i++) {
+              rv = ipmi_fru_get_product_custom_field(r, i, tb);
+              print_text_buffer("\t\tcustom           ", rv, tb);
+          }
+      }
+
+      // multi record
+      r = ipmi_fru_get_multirecord(fru);
+
+      if (ipmi_fru_get_record_type(r) == FTR_MULTI_RECORD_AREA) {
+          printf("\tmultirecord:\n");
+      }
+
+      ipmi_text_buffer_destroy(tb);
+  }
+}
+#endif
 
 /* Whenever the status of an entity changes, the function is called
    When a new entity is created, we search all sensors that belong 
@@ -136,6 +332,16 @@ entity_change(enum ipmi_update_e op,
 		printf("ipmi_entity_set_sensor_update_handler: 0x%x", rv);
 		exit(1);
 	    }
+
+#ifdef WITH_FRU
+            rv = ipmi_entity_set_fru_update_handler(entity,
+                                                    fru_change,
+                                                    0);
+	    if (rv) {
+		printf("ipmi_entity_set_fru_update_handler: 0x%x", rv);
+		exit(1);
+	    }
+#endif
     }
 }
 
@@ -155,8 +361,10 @@ setup_done(ipmi_domain_t *domain,
     /* Register a callback functin entity_change. When a new entities 
        is created, entity_change is called */
     rv = ipmi_domain_set_entity_update_handler(domain, entity_change, domain);
-    if (rv) 
-	printf("ipmi_domain_iterate_entities return error\n");
+    if (rv) {      
+	printf("ipmi_domain_set_entity_update_handler return error: %d\n", rv);
+	return;
+    }
 }
 
 int
@@ -282,23 +490,12 @@ main(int argc, char *argv[])
 	    exit(1);
 	}
 
-	if (authtype == IPMI_AUTHTYPE_NONE) {
-	    username[0] = '\0';
-	    password[0] = '\0';
-	} else {
-	    if (argc < 8) {
-		fprintf(stderr, "Username and password not provided\n");
-		usage();
-		exit(1);
-	    }
-
-	    memset(username, 0, sizeof(username));
-	    memset(password, 0, sizeof(password));
-	    strncpy(username, argv[curr_arg+5], 16);
-	    username[16] = '\0';
-	    strncpy(password, argv[curr_arg+6], 16);
-	    password[16] = '\0';
-	}
+	memset(username, 0, sizeof(username));
+	memset(password, 0, sizeof(password));
+	strncpy(username, argv[curr_arg+5], 16);
+	username[16] = '\0';
+	strncpy(password, argv[curr_arg+6], 16);
+	password[16] = '\0';
 
 	rv = ipmi_lan_setup_con(&lan_addr, &lan_port, 1,
 				authtype, privilege,

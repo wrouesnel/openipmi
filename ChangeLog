@@ -1,6 +1,47 @@
 
 2003-09-24 Corey Minyard <cminyard@mvista.com>
 
+	* lib/mc.c: Added entity scanning to device SDRs.
+	
+	* lib/entity.c: Reworked the entity SDR handling code so that it
+	tracks the old values, detects when values change, and does the
+	appropriate thing.
+	
+	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Added FRU handling code.
+	* include/OpenIPMI/ipmiif.h: ditto
+	* lib/Makefile.am, include/OpenIPMI/Makefile.am: ditto
+	* lib/entity.c: ditto
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.c: Allow the entity code to
+	store MC-specific SDR information in the MC.
+
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.c: ditto, but for the
+	main SDR repository.
+
+	* include/OpenIPMI/ipmi_bits.h: Added unicode support.
+	* include/OpenIPMI/ipmi_control.h: ditto
+	* include/OpenIPMI/ipmi_entity.h: ditto
+	* include/OpenIPMI/ipmi_int.h: ditto
+	* include/OpenIPMI/ipmi_sensor.h: ditto
+	* include/OpenIPMI/ipmiif.h: ditto
+	* lib/control.c: ditto
+	* lib/entity.c: ditto
+	* lib/ipmi.c: ditto
+	* lib/oem_motorola_mxp.c: ditto
+	* lib/sensor.c: ditto
+
+	* include/OpenIPMI/ipmi_sensor.h, include/OpenIPMI/ipmi_mc.h:
+	Moved the sdr fetching code to the MC code where it belonged, but
+	had to export the sensors waitq to do this.
+	* lib/mc.c, lib/sensor.c: ditto
+
+	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_int.h: Moved
+	the string decoding and data decoding functions into the internal
+	functions.
+	
+
+2003-09-24 Corey Minyard <cminyard@mvista.com>
+
 	* configure.in: Move to version 1.0.4.
 
 	* lib/selector.c: Allow the selector code to be called from

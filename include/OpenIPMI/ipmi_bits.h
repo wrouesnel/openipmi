@@ -35,6 +35,16 @@
 #define _IPMI_BITS_H
 
 /*
+ * When dealing with strings, they can be unicode or ASCII, and some
+ * can be binary.
+ */
+enum ipmi_str_type_e {
+  IPMI_ASCII_STR	= 0,
+  IPMI_UNICODE_STR	= 1,
+  IPMI_BINARY_STR	= 2,
+};
+
+/*
  * Sensor bits
  */
 #define IPMI_HYSTERESIS_SUPPORT_NONE		0

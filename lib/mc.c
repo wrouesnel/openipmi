@@ -87,6 +87,10 @@ struct ipmi_mc_s
     ipmi_sensor_t **sensors_in_my_sdr;
     unsigned int  sensors_in_my_sdr_count;
 
+    /* The entities that came from the device SDR on this MC are
+       somehow stored in this data structure. */
+    void *entities_in_my_sdr;
+
     /* Sensors that this MC owns (you message this MC to talk to this
        sensor, and events report the MC as the owner. */
     ipmi_sensor_info_t  *sensors;
@@ -237,6 +241,7 @@ _ipmi_create_mc(ipmi_domain_t *domain,
     mc->sensors = NULL;
     mc->sensors_in_my_sdr = NULL;
     mc->sensors_in_my_sdr_count = 0;
+    mc->entities_in_my_sdr = NULL;
     mc->controls = NULL;
     mc->new_sensor_handler = NULL;
     mc->removed_mc_handler = NULL;
@@ -309,6 +314,11 @@ _ipmi_cleanup_mc(ipmi_mc_t *mc)
 	}
 	ipmi_mem_free(mc->sensors_in_my_sdr);
 	mc->sensors_in_my_sdr = NULL;
+    }
+
+    if (mc->entities_in_my_sdr) {
+	ipmi_sdr_entity_destroy(mc->entities_in_my_sdr);
+	mc->entities_in_my_sdr = NULL;
     }
 
     /* Make sure the timer stops. */
@@ -1220,6 +1230,105 @@ check_oem_handlers(ipmi_mc_t *mc)
     return 0;
 }
 
+
+/***********************************************************************
+ *
+ * device SDR handling.
+ *
+ **********************************************************************/
+
+typedef struct sdr_fetch_info_s
+{
+    ipmi_domain_t            *domain;
+    ipmi_mc_t                *source_mc; /* This is used to scan the SDRs. */
+    ipmi_mc_done_cb          done;
+    void                     *done_data;
+    opq_t                    *sensor_wait_q;
+} sdr_fetch_info_t;
+
+static void
+sdr_reread_done(sdr_fetch_info_t *info, int err)
+{
+    if (info->done)
+	info->done(info->source_mc, err, info->done_data);
+    opq_op_done(info->sensor_wait_q);
+    ipmi_mem_free(info);
+}
+
+static void
+sdrs_fetched(ipmi_sdr_info_t *sdrs,
+	     int             err,
+	     int             changed,
+	     unsigned int    count,
+	     void            *cb_data)
+{
+    sdr_fetch_info_t   *info = (sdr_fetch_info_t *) cb_data;
+    int                rv;
+
+    if (err) {
+	sdr_reread_done(info, err);
+	return;
+    }
+
+    ipmi_entity_scan_sdrs(info->domain, info->source_mc,
+			  ipmi_domain_get_entities(info->domain),
+			  sdrs);
+    rv = ipmi_sensor_handle_sdrs(info->domain, info->source_mc, sdrs);
+
+    if (!rv)
+	ipmi_detect_domain_presence_changes(info->domain, 0);
+
+    sdr_reread_done(info, rv);
+}
+
+static void
+sensor_read_handler(void *cb_data, int shutdown)
+{
+    sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
+    int              rv;
+
+    if (shutdown) {
+	sdr_reread_done(info, ECANCELED);
+	return;
+    }
+
+    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(info->source_mc), sdrs_fetched, info);
+    if (rv)
+	sdr_reread_done(info, rv);
+}
+
+int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
+			   ipmi_mc_done_cb done,
+			   void            *done_data)
+{
+    sdr_fetch_info_t   *info;
+    int                rv = 0;
+    ipmi_sensor_info_t *sensors;
+
+    CHECK_MC_LOCK(mc);
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+
+    sensors = _ipmi_mc_get_sensors(mc);
+
+    info->source_mc = mc;
+    info->domain = ipmi_mc_get_domain(mc);
+    info->done = done;
+    info->done_data = done_data;
+    info->sensor_wait_q = _ipmi_sensors_get_waitq(sensors);
+
+    if (! opq_new_op(info->sensor_wait_q,
+		     sensor_read_handler, info, 0))
+	rv = ENOMEM;
+
+    if (rv)
+	ipmi_mem_free(info);
+
+    return rv;
+}
+
 /***********************************************************************
  *
  * Handle the boatloads of information from a get device id.
@@ -1375,6 +1484,12 @@ _ipmi_mc_device_data_compares(ipmi_mc_t  *mc,
     return 1;
 }
 
+/***********************************************************************
+ *
+ * Get/set the information for an MC.
+ *
+ **********************************************************************/
+
 void
 _ipmi_mc_get_sdr_sensors(ipmi_mc_t     *mc,
 			 ipmi_sensor_t ***sensors,
@@ -1393,11 +1508,17 @@ _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
     mc->sensors_in_my_sdr_count = count;
 }
 
-/***********************************************************************
- *
- * Get/set the information for an MC.
- *
- **********************************************************************/
+void *
+_ipmi_mc_get_sdr_entities(ipmi_mc_t *mc)
+{
+    return mc->entities_in_my_sdr;
+}
+
+void
+_ipmi_mc_set_sdr_entities(ipmi_mc_t *mc, void *entities)
+{
+    mc->entities_in_my_sdr = entities;
+}
 
 int
 ipmi_mc_provides_device_sdrs(ipmi_mc_t *mc)

@@ -181,7 +181,8 @@ typedef struct ipmi_control_cbs_s
 void ipmi_control_identifier_set_max_length(ipmi_control_t *control,
 					    unsigned int   val);
 
-void ipmi_control_set_id(ipmi_control_t *control, char *id);
+void ipmi_control_set_id(ipmi_control_t *control, char *id,
+			 enum ipmi_str_type_e type, int length);
 void ipmi_control_set_type(ipmi_control_t *control, int val);
 void ipmi_control_set_settable(ipmi_control_t *control, int val);
 void ipmi_control_set_readable(ipmi_control_t *control, int val);

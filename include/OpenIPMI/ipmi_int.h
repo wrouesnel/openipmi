@@ -108,6 +108,50 @@ int ipmi_check_oem_conn_handlers(ipmi_con_t   *conn,
 				 unsigned int manufacturer_id,
 				 unsigned int product_id);
 
+/* IPMI data handling. */
+
+/* Extract a 32-bit integer from the data, IPMI (little-endian) style. */
+unsigned int ipmi_get_uint32(unsigned char *data);
+
+/* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
+unsigned int ipmi_get_uint16(unsigned char *data);
+
+/* Add a 32-bit integer to the data, IPMI (little-endian) style. */
+void ipmi_set_uint32(unsigned char *data, int val);
+
+/* Add a 16-bit integer to the data, IPMI (little-endian) style. */
+void ipmi_set_uint16(unsigned char *data, int val);
+
+/* If we have a 6-bit field, we can have up to 63 items, and with BCD
+   there may be 2 characters per byte, so 126 max. */
+#define IPMI_MAX_STR_LEN 126
+
+/* Fetch an IPMI device string as defined in section 37.14 of the IPMI
+   version 1.5 manual.  The in_len is the number of input bytes in the
+   string, including the type/length byte.  The max_out_len is the
+   maximum number of characters to output, including the nil.  The
+   type will be set to either unicode or ASCII.  The number of bytes
+   put into the output string is returned. */
+unsigned int ipmi_get_device_string(unsigned char        *input,
+				    unsigned int         in_len,
+				    char                 *output,
+				    int                  force_unicode,
+				    enum ipmi_str_type_e *type,
+				    unsigned int         max_out_len);
+
+/* Store an IPMI device string in the most compact form possible.
+   input is the input string (nil terminated), output is where to
+   place the output (including the type/length byte) and out_len is a
+   pointer to the max size of output (including the type/length byte).
+   Upon return, out_len will be set to the actual output length. */
+void ipmi_set_device_string(char                 *input,
+			    enum ipmi_str_type_e type,
+			    unsigned int         in_len,
+			    unsigned char        *output,
+			    int                  force_unicode,
+			    int                  *out_len);
+
+
 /* IPMI uses this for memory allocation, so it can easily be
    substituted, etc. */
 void *ipmi_mem_alloc(int size);

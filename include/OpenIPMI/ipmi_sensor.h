@@ -36,6 +36,7 @@
 
 #include <OpenIPMI/ipmi_types.h>
 #include <OpenIPMI/ipmi_addr.h>
+#include <OpenIPMI/opq.h>
 
 /* The abstract type for sensors. */
 typedef struct ipmi_sensor_info_s ipmi_sensor_info_t;
@@ -48,6 +49,10 @@ int ipmi_sensors_destroy(ipmi_sensor_info_t *sensors);
 
 /* Return the number of sensors in the data structure. */
 unsigned int ipmi_sensors_get_count(ipmi_sensor_info_t *sensors);
+
+/* Get the waitq for the sensors repository.  This is used to
+   serialize SDR fetches. */
+opq_t *_ipmi_sensors_get_waitq(ipmi_sensor_info_t *sensors);
 
 /*
  * These are for OEM code to create their own sensors.
@@ -252,7 +257,8 @@ void ipmi_sensor_set_oem1(ipmi_sensor_t *sensor, int oem1);
 
 /* This value is copied into an internal array, so no need to save or
    manage. */
-void ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id);
+void ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id,
+			enum ipmi_str_type_e type, int length);
 
 void ipmi_sensor_set_discrete_assertion_event_supported(
     ipmi_sensor_t *sensor,

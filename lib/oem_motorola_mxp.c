@@ -1085,7 +1085,7 @@ mxp_alloc_basic_sensor(
 
     ipmi_sensor_set_sensor_type(*sensor, sensor_type);
     ipmi_sensor_set_event_reading_type(*sensor, reading_type);
-    ipmi_sensor_set_id(*sensor, id);
+    ipmi_sensor_set_id(*sensor, id, IPMI_ASCII_STR, strlen(id));
 
     ipmi_sensor_set_sensor_type_string(
 	*sensor,
@@ -1535,7 +1535,7 @@ mxp_alloc_control(ipmi_mc_t               *mc,
     /* Fill out default values. */
     ipmi_control_set_oem_info(*control, hdr, mxp_cleanup_control_oem_info);
     ipmi_control_set_type(*control, control_type);
-    ipmi_control_set_id(*control, id);
+    ipmi_control_set_id(*control, id, IPMI_ASCII_STR, strlen(id));
     ipmi_control_set_ignore_if_no_entity(*control, 1);
 
     /* Assume we can read and set the value. */
@@ -3853,13 +3853,15 @@ mxp_create_entities(ipmi_mc_t  *mc,
     int                i;
     int                ipmb_addr;
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
+    char               *name;
 
     ipmi_domain_entity_lock(domain);
 
     ents = ipmi_domain_get_entities(domain);
+    name = "Chassis";
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_SYSTEM_CHASSIS, 0,
-			 "Chassis",
+			 name, IPMI_ASCII_STR, strlen(name),
 			 mxp_entity_sdr_add,
 			 NULL, &(info->chassis_ent));
     if (rv) {
@@ -3876,10 +3878,11 @@ mxp_create_entities(ipmi_mc_t  *mc,
     for (i=0; i<MXP_ALARM_CARDS; i++) {
 	int idx = MXP_ALARM_CARD_IDX_OFFSET + i;
 	ipmb_addr = 0x20;
+	name = board_entity_str[idx];
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     MXP_ENTITY_ID_ALARM_CARD,
 			     i+1,
-			     board_entity_str[idx],
+			     name, IPMI_ASCII_STR, strlen(name),
 			     mxp_entity_sdr_add,
 			     NULL, &(info->board[idx].ent));
 	if (rv) {
@@ -3917,10 +3920,11 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	else
 	    ipmb_addr = 0xe4 + (i*2);
 
+	name = board_entity_str[idx];
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_CONNECTIVITY_SWITCH,
 			     i+1,
-			     board_entity_str[idx],
+			     name, IPMI_ASCII_STR, strlen(name),
 			     mxp_entity_sdr_add,
 			     NULL, &(info->board[idx].ent));
 	if (rv) {
@@ -3950,10 +3954,11 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	ipmb_addr = 0x54 + (i*2);
 	info->power_supply[i].ipmb_addr = ipmb_addr;
 
+	name = ps_entity_str[i];
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_POWER_SUPPLY,
 			     i+1,
-			     ps_entity_str[i],
+			     name, IPMI_ASCII_STR, strlen(name),
 			     mxp_entity_sdr_add,
 			     NULL, &(info->power_supply[i].ent));
 	if (rv) {
@@ -3962,10 +3967,11 @@ mxp_create_entities(ipmi_mc_t  *mc,
 		     rv);
 	    goto out;
 	}
+	name = fan_entity_str[i];
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_FAN_COOLING,
 			     i+1,
-			     fan_entity_str[i],
+			     name, IPMI_ASCII_STR, strlen(name),
 			     mxp_entity_sdr_add,
 			     NULL, &(info->power_supply[i].fan_ent));
 	if (rv) {
@@ -4007,10 +4013,11 @@ mxp_create_entities(ipmi_mc_t  *mc,
 	if (ipmb_addr >= 0xc2)
 	    ipmb_addr += 2;
 
+	name = board_entity_str[idx];
 	rv = ipmi_entity_add(ents, domain, info->mc, 0,
 			     IPMI_ENTITY_ID_PROCESSING_BLADE,
 			     mxp_addr_to_instance(ipmb_addr),
-			     board_entity_str[idx],
+			     name, IPMI_ASCII_STR, strlen(name),
 			     mxp_entity_sdr_add,
 			     NULL, &(info->board[idx].ent));
 	if (rv) {
@@ -4707,6 +4714,7 @@ amc_board_handler(ipmi_mc_t *mc)
     ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
     ipmi_entity_info_t *ents;
     unsigned int       assert, deassert;
+    char               *name;
 
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
@@ -4727,10 +4735,11 @@ amc_board_handler(ipmi_mc_t *mc)
     /* Get whether we are card 1 or 2. */
     i = ipmi_mc_get_address(mc);
 
+    name = board_entity_str[MXP_ALARM_CARD_IDX_OFFSET+i];
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 MXP_ENTITY_ID_ALARM_CARD,
 			 i+1,
-			 board_entity_str[MXP_ALARM_CARD_IDX_OFFSET+i],
+			 name, IPMI_ASCII_STR, strlen(name),
 			 mxp_entity_sdr_add,
 			 NULL, &info->ent);
     if (rv) {
@@ -5759,7 +5768,7 @@ mxp_805_handler(ipmi_mc_t     *mc,
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_PROCESSING_BLADE,
 			 mxp_addr_to_instance(slave_addr),
-			 board_name,
+			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
 			 NULL, &ent);
     if (rv)
@@ -6100,7 +6109,7 @@ mxp_5365_handler(ipmi_mc_t     *mc,
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_PROCESSING_BLADE,
 			 mxp_addr_to_instance(slave_addr),
-			 board_name,
+			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
 			 NULL, &ent);
     if (rv)
@@ -6189,7 +6198,7 @@ mxp_5385_handler(ipmi_mc_t     *mc,
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_PROCESSING_BLADE,
 			 mxp_addr_to_instance(slave_addr),
-			 board_name,
+			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
 			 NULL, &ent);
     if (rv)
@@ -6269,7 +6278,7 @@ mxp_pprb_handler(ipmi_mc_t     *mc,
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_PROCESSING_BLADE,
 			 mxp_addr_to_instance(slave_addr),
-			 board_name,
+			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
 			 NULL, &ent);
     if (rv)
@@ -6491,7 +6500,7 @@ zynx_switch_handler(ipmi_mc_t     *mc,
     rv = ipmi_entity_add(ents, domain, mc, 0,
 			 IPMI_ENTITY_ID_CONNECTIVITY_SWITCH,
 			 mxp_addr_to_instance(slave_addr),
-			 board_name,
+			 board_name, IPMI_ASCII_STR, strlen(board_name),
 			 mxp_entity_sdr_add,
 			 NULL, &ent);
     if (rv)

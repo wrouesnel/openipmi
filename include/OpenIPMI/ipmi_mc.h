@@ -230,12 +230,19 @@ int _ipmi_mc_device_data_compares(ipmi_mc_t *mc, ipmi_msg_t *rsp);
    processing it. */
 int _ipmi_mc_handle_new(ipmi_mc_t *mc);
 
+/* Allow sensors to keep information that came from an MC in the MC
+   itself so that when the MC is destroyed, it can be cleaned up. */
 void _ipmi_mc_get_sdr_sensors(ipmi_mc_t     *mc,
 			      ipmi_sensor_t ***sensors,
 			      unsigned int  *count);
 void _ipmi_mc_set_sdr_sensors(ipmi_mc_t     *mc,
 			      ipmi_sensor_t **sensors,
 			      unsigned int  count);
+
+/* Allow entities to keep information that came from an MC in the MC
+   itself so that when the MC is destroyed, it can be cleaned up. */
+void *_ipmi_mc_get_sdr_entities(ipmi_mc_t *mc);
+void _ipmi_mc_set_sdr_entities(ipmi_mc_t *mc, void *entities);
 
 ipmi_mcid_t _ipmi_mc_convert_to_id(ipmi_mc_t *mc);
 typedef void (*_ipmi_mc_ptr_cb)(ipmi_mc_t *mc, void *cb_data);

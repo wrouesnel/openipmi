@@ -64,7 +64,7 @@ struct ipmi_sensor_info_s
     int  wait_err;
 };
 
-#define SENSOR_ID_LEN 32
+#define SENSOR_ID_LEN 32 /* 16 bytes are allowed for a sensor. */
 struct ipmi_sensor_s
 {
     ipmi_mc_t     *mc; /* My owner, NOT the SMI mc (unless that
@@ -159,7 +159,10 @@ struct ipmi_sensor_s
 
     unsigned char oem1;
 
-    char id[SENSOR_ID_LEN+1]; /* The ID from the device SDR. */
+    /* Note that the ID is *not* nil terminated. */
+    enum ipmi_str_type_e id_type;
+    unsigned int id_len;
+    char id[SENSOR_ID_LEN]; /* The ID from the device SDR. */
 
     char *sensor_type_string;
     char *event_reading_type_string;
@@ -544,6 +547,12 @@ ipmi_sensors_get_count(ipmi_sensor_info_t *sensors)
     return sensors->sensor_count;
 }
 
+opq_t *
+_ipmi_sensors_get_waitq(ipmi_sensor_info_t *sensors)
+{
+    return sensors->sensor_wait_q;
+}
+
 int
 ipmi_sensor_alloc_nonstandard(ipmi_sensor_t **new_sensor)
 {
@@ -850,8 +859,9 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->negative_going_threshold_hysteresis = sdr.data[38];
 	    s[p]->oem1 = sdr.data[41];
 
-	    ipmi_get_device_string(sdr.data+42, sdr.length-42, s[p]->id,
-				   SENSOR_ID_LEN);
+	    s[p]->id_len = ipmi_get_device_string(sdr.data+42, sdr.length-42,
+						  s[p]->id, 0, &s[p]->id_type,
+						  SENSOR_ID_LEN);
 
 	    p++;
 	} else {
@@ -862,8 +872,9 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->negative_going_threshold_hysteresis = sdr.data[21];
 	    s[p]->oem1 = sdr.data[25];
 
-	    ipmi_get_device_string(sdr.data+26, sdr.length-26, s[p]->id,
-				   SENSOR_ID_LEN);
+	    s[i]->id_len = ipmi_get_device_string(sdr.data+26, sdr.length-26,
+						  s[p]->id, 0, &s[p]->id_type,
+						  SENSOR_ID_LEN);
 
 	    /* Duplicate the sensor records for each instance.  Go
 	       backwards to avoid destroying the first one until we
@@ -898,7 +909,7 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 		}
 
 		val = (sdr.data[19] & 0x3f) + j;
-		len = strlen(s[p+j]->id);
+		len = s[p+j]->id_len;
 		switch ((sdr.data[18] >> 4) & 0x03) {
 		    case 0: /* Numeric */
 			if ((val / 10) > 0) {
@@ -924,8 +935,9 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 			    len++;
 			}
 			break;
+		    /* FIXME - unicode handling? */
 		}
-		s[p+j]->id[len] = '\0';
+		s[p+j]->id_len = len;
 	    }
 
 	    if (sdr.data[18] & 0x0f)
@@ -948,15 +960,6 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
     }
     return rv;
 }
-
-typedef struct sdr_fetch_info_s
-{
-    ipmi_domain_t            *domain;
-    ipmi_mc_t                *source_mc; /* This is used to scan the SDRs. */
-    ipmi_mc_done_cb          done;
-    void                     *done_data;
-    ipmi_sensor_info_t       *sensors;
-} sdr_fetch_info_t;
 
 static void
 handle_new_sensor(ipmi_domain_t *domain,
@@ -1071,18 +1074,11 @@ static int cmp_sensor(ipmi_sensor_t *s1,
 	return 0;
     if (s1->oem1 != s2->oem1) return 0;
 
-    if (strcmp(s1->id, s2->id) != 0) return 0;
+    if (s1->id_type != s2->id_type) return 0;
+    if (s1->id_len != s2->id_len) return 0;
+    if (memcmp(s1->id, s2->id, s1->id_len) != 0) return 0;
     
     return 1;
-}
-
-static void
-sensor_reread_done(sdr_fetch_info_t *info, int err)
-{
-    if (info->done)
-	info->done(info->source_mc, err, info->done_data);
-    opq_op_done(info->sensors->sensor_wait_q);
-    ipmi_mem_free(info);
 }
 
 typedef struct dummy_link_s dummy_link_t;
@@ -1136,6 +1132,8 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 				 nsensor->entity_id,
 				 nsensor->entity_instance,
 				 "",
+				 IPMI_ASCII_STR,
+				 0,
 				 NULL,
 				 NULL,
 				 NULL);
@@ -1265,74 +1263,6 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     return rv;
 }
 			
-
-static void
-sdrs_fetched(ipmi_sdr_info_t *sdrs,
-	     int             err,
-	     int             changed,
-	     unsigned int    count,
-	     void            *cb_data)
-{
-    sdr_fetch_info_t   *info = (sdr_fetch_info_t *) cb_data;
-    int                rv;
-
-    if (err) {
-	sensor_reread_done(info, err);
-	return;
-    }
-
-    rv = ipmi_sensor_handle_sdrs(info->domain, info->source_mc, sdrs);
-    sensor_reread_done(info, rv);
-}
-
-static void
-sensor_read_handler(void *cb_data, int shutdown)
-{
-    sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
-    int              rv;
-
-    if (shutdown) {
-	sensor_reread_done(info, ECANCELED);
-	return;
-    }
-
-    rv = ipmi_sdr_fetch(ipmi_mc_get_sdrs(info->source_mc), sdrs_fetched, info);
-    if (rv)
-	sensor_reread_done(info, rv);
-}
-
-int ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
-			   ipmi_mc_done_cb done,
-			   void            *done_data)
-{
-    sdr_fetch_info_t *info;
-    int              rv = 0;
-
-    CHECK_MC_LOCK(mc);
-
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
-
-    info->sensors = _ipmi_mc_get_sensors(mc);
-
-    info->source_mc = mc;
-    info->domain = ipmi_mc_get_domain(mc);
-    info->done = done;
-    info->done_data = done_data;
-
-    if (! opq_new_op(info->sensors->sensor_wait_q,
-		     sensor_read_handler, info, 0))
-	rv = ENOMEM;
-
-    if (rv) {
-	ipmi_mem_free(info);
-    } else {
-	ipmi_detect_domain_presence_changes(info->domain, 0);
-    }
-    return rv;
-}
-
 int
 ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
 				double *nominal_reading)
@@ -2190,16 +2120,39 @@ ipmi_sensor_get_id_length(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
 
-    return strlen(sensor->id);
+    return sensor->id_len;
 }
 
-void
-ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length)
+enum ipmi_str_type_e
+ipmi_sensor_get_id_type(ipmi_sensor_t *sensor)
 {
     CHECK_SENSOR_LOCK(sensor);
 
-    strncpy(id, sensor->id, length);
-    id[length] = '\0';
+    return sensor->id_type;
+}
+
+int
+ipmi_sensor_get_id(ipmi_sensor_t *sensor, char *id, int length)
+{
+    int clen;
+
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->id_len > length)
+	clen = length;
+    else
+	clen = sensor->id_len;
+    memcpy(id, sensor->id, clen);
+
+    if (sensor->id_type == IPMI_ASCII_STR) {
+	/* NIL terminate the ASCII string. */
+	if (clen == length)
+	    clen--;
+
+	id[clen] = '\0';
+    }
+
+    return clen;
 }
 
 void
@@ -2539,10 +2492,15 @@ ipmi_sensor_set_oem1(ipmi_sensor_t *sensor, int oem1)
 }
 
 void
-ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id)
+ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id,
+		   enum ipmi_str_type_e type, int length)
 {
-    strncpy(sensor->id, id, SENSOR_ID_LEN);
-    sensor->id[SENSOR_ID_LEN] = '\0';
+    if (length > SENSOR_ID_LEN)
+	length = SENSOR_ID_LEN;
+    
+    memcpy(sensor->id, id, length);
+    sensor->id_type = type;
+    sensor->id_len = length;
 }
 
 int
@@ -2731,7 +2689,6 @@ enables_set(ipmi_sensor_t *sensor,
 
     if (info->do_disable) {
 	/* Enables were set, now disable all the other ones. */
-	cmd_msg.data = cmd_data;
 	cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
 	cmd_msg.cmd = IPMI_SET_SENSOR_EVENT_ENABLE_CMD;
 	cmd_msg.data_len = 6;

@@ -136,6 +136,10 @@ struct ipmi_domain_s
     ipmi_sensor_t **sensors_in_main_sdr;
     unsigned int  sensors_in_main_sdr_count;
 
+    /* The entities that came from the device SDR on this MC are
+       somehow stored in this data structure. */
+    void *entities_in_main_sdr;
+
     /* Major and minor versions of the connection. */
     unsigned int major_version : 4;
     unsigned int minor_version : 4;
@@ -339,6 +343,11 @@ cleanup_domain(ipmi_domain_t *domain)
 		ipmi_sensor_destroy(domain->sensors_in_main_sdr[i]);
 	}
 	ipmi_mem_free(domain->sensors_in_main_sdr);
+    }
+
+    if (domain->entities_in_main_sdr) {
+	ipmi_sdr_entity_destroy(domain->entities_in_main_sdr);
+	domain->entities_in_main_sdr = NULL;
     }
 
     if (domain->activate_timer_info) {
@@ -2159,6 +2168,31 @@ _ipmi_set_sdr_sensors(ipmi_domain_t *domain,
     }
 }
 
+void *
+_ipmi_get_sdr_entities(ipmi_domain_t *domain,
+		       ipmi_mc_t     *mc)
+{
+    if (mc) {
+	return _ipmi_mc_get_sdr_entities(mc);
+    } else {
+	CHECK_DOMAIN_LOCK(domain);
+	return domain->entities_in_main_sdr;
+    }
+}
+
+void
+_ipmi_set_sdr_entities(ipmi_domain_t *domain,
+		       ipmi_mc_t     *mc,
+		       void          *entities)
+{
+    if (mc) {
+	_ipmi_mc_set_sdr_entities(mc, entities);
+    } else {
+	CHECK_DOMAIN_LOCK(domain);
+	domain->entities_in_main_sdr = entities;
+    }
+}
+
 int
 ipmi_domain_set_entity_update_handler(ipmi_domain_t         *domain,
 				      ipmi_domain_entity_cb handler,
@@ -2541,7 +2575,8 @@ call_con_change(ipmi_domain_t *domain,
 		unsigned int  port_num,
 		int           still_connected)
 {
-    con_change_info_t info = {domain, err, conn_num, port_num, still_connected};
+    con_change_info_t info = {domain, err, conn_num, port_num,
+			      still_connected};
     ilist_iter(domain->con_change_handlers, iterate_con_changes, &info);
 }
 
@@ -2568,10 +2603,11 @@ con_up_complete(ipmi_domain_t *domain)
     ipmi_unlock(domain->mc_list_lock);
     ipmi_detect_ents_presence_changes(domain->entities, 1);
 
-    ipmi_entity_scan_sdrs(domain->entities, domain->main_sdrs);
+    ipmi_entity_scan_sdrs(domain, NULL, domain->entities, domain->main_sdrs);
     ipmi_sensor_handle_sdrs(domain, NULL, domain->main_sdrs);
     if (domain->SDRs_read_handler)
-	domain->SDRs_read_handler(domain, 0, domain->SDRs_read_handler_cb_data);
+	domain->SDRs_read_handler(domain, 0,
+				  domain->SDRs_read_handler_cb_data);
 }
 
 static void

@@ -123,6 +123,14 @@ void _ipmi_set_sdr_sensors(ipmi_domain_t *domain,
 			   ipmi_sensor_t **sensors,
 			   unsigned int  count);
 
+/* Returns/set the SDRs entity info for the given MC, or the main set
+   of SDRs if the MC is NULL. */
+void *_ipmi_get_sdr_entities(ipmi_domain_t *domain,
+			     ipmi_mc_t     *mc);
+void _ipmi_set_sdr_entities(ipmi_domain_t *domain,
+			    ipmi_mc_t     *mc,
+			    void          *entities);
+
 /* Add an MC to the list of MCs in the domain. */
 int ipmi_add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
