@@ -756,7 +756,7 @@ get_sel_time(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "Get SEL time response too short for MC at 0x%x",
 		 ipmi_addr_get_slave_addr(&mc->addr));
-	info->handler(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), 0, info->cb_data);
+	info->handler(mc, EINVAL, 0, info->cb_data);
 	goto out;
     }
 
@@ -783,10 +783,10 @@ ipmi_mc_get_current_sel_time(ipmi_mc_t       *mc,
     info->cb_data = cb_data;
 
     msg.netfn = IPMI_STORAGE_NETFN;
-    msg.cmd = IPMI_SET_SEL_TIME_CMD;
+    msg.cmd = IPMI_GET_SEL_TIME_CMD;
     msg.data = NULL;
     msg.data_len = 0;
-    rv = ipmi_mc_send_command(mc, 0, &msg, get_sel_time, NULL);
+    rv = ipmi_mc_send_command(mc, 0, &msg, get_sel_time, info);
     if (rv)
 	ipmi_mem_free(info);
     return rv;

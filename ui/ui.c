@@ -2786,7 +2786,9 @@ typedef struct mccmd_info_s
 void mc_handler(ipmi_mc_t *mc, void *cb_data)
 {
     unsigned char vals[4];
+    mccmd_info_t  *info = cb_data;
 
+    info->found = 1;
     display_pad_clear();
     display_pad_out("MC (%x %x) - %s\n",
 		    ipmi_mc_get_channel(mc),
@@ -3385,6 +3387,71 @@ list_sel_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+void
+sel_time_fetched(ipmi_mc_t     *mc,
+		 int           err,
+		 unsigned long time,
+		 void          *cb_data)
+{
+    if (!mc) {
+	display_pad_out("MC went away while fetching SEL time\n");
+	goto out;
+    }
+
+    if (err) {
+	display_pad_out("Error fetching SEL time: %x\n", err);
+	goto out;
+    }
+
+    display_pad_out("SEL time is 0x%x\n", time);
+
+ out:
+    display_pad_refresh();
+}
+
+void get_sel_time_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    mccmd_info_t *info = cb_data;
+    int          rv;
+
+    info->found = 1;
+    rv = ipmi_mc_get_current_sel_time(mc, sel_time_fetched, NULL);
+    if (rv)
+	cmd_win_out("Error sending SEL time fetch: %x\n", rv);
+}
+
+int
+get_sel_time_cmd(char *cmd, char **toks, void *cb_data)
+{
+    mccmd_info_t  info;
+    int           rv;
+    unsigned char val;
+
+    if (get_uchar(toks, &val, "mc channel"))
+	return 0;
+    info.mc_id.channel = val;
+
+    if (get_uchar(toks, &val, "MC num"))
+	return 0;
+    info.mc_id.mc_num = val;
+
+    info.mc_id.domain_id = domain_id;
+
+    info.found = 0;
+    rv = _ipmi_mc_pointer_noseq_cb(info.mc_id, get_sel_time_handler, &info);
+    if (rv) {
+	cmd_win_out("Unable to find MC\n");
+	return 0;
+    }
+    if (!info.found) {
+	cmd_win_out("Unable to find MC (%d %x)\n",
+		    info.mc_id.channel, info.mc_id.mc_num);
+    }
+    display_pad_refresh();
+
+    return 0;
+}
+
 typedef struct sdrs_info_s
 {
     int           found;
@@ -3701,6 +3768,8 @@ static struct {
       " - clear the system event log" },
     { "list_sel",	list_sel_cmd,
       " - list the local copy of the system event log" },
+    { "get_sel_time",	get_sel_time_cmd,
+      " <channel> <mc num> - Get the time in the SEL for the given MC" },
     { "sdrs",		sdrs_cmd,
       " <channel> <mc num> <do_sensors> - list the SDRs for the mc."
       "  If do_sensors is"
