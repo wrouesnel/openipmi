@@ -64,7 +64,7 @@ void _ipmi_domain_put(ipmi_domain_t *domain);
 typedef void (*ipmi_domain_iterate_mcs_cb)(ipmi_domain_t *domain,
 					   ipmi_mc_t     *mc,
 					   void          *cb_data);
-int ipmi_domain_iterate_mcs(ipmi_domain_t              *mc,
+int ipmi_domain_iterate_mcs(ipmi_domain_t              *domain,
 			    ipmi_domain_iterate_mcs_cb handler,
 			    void                       *cb_data);
 int ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,

@@ -1,3 +1,7 @@
+2004-07-13 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_domain.h: Fixed a misnamed parm.
+	
 2004-06-28 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a theoretical race condition in fetching
