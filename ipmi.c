@@ -830,6 +830,12 @@ unsigned int ipmi_event_state_size(void)
 }
 
 void
+ipmi_copy_event_state(ipmi_event_state_t *dest, ipmi_event_state_t *src)
+{
+    *dest = *src;
+}
+
+void
 ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val)
 {
     if (val)
@@ -874,9 +880,73 @@ ipmi_event_state_get_busy(ipmi_event_state_t *events)
     return (events->status >> 5) & 1;
 }
 
+unsigned int ipmi_thresholds_size(void)
+{
+    return sizeof(ipmi_thresholds_t);
+}
+
+void
+ipmi_copy_thresholds(ipmi_thresholds_t *dest, ipmi_thresholds_t *src)
+{
+    *dest = *src;
+}
+
+int ipmi_thresholds_init(ipmi_thresholds_t *th)
+{
+    int i;
+    for (i=0; i<6; i++)
+	th->vals[i].status = 0;
+    return 0;
+}
+
+int ipmi_threshold_set(ipmi_thresholds_t  *th,
+		       ipmi_sensor_t      *sensor,
+		       enum ipmi_thresh_e threshold,
+		       double             value)
+{
+    int rv = 0;
+
+    if (threshold > IPMI_UPPER_NON_RECOVERABLE)
+	return EINVAL;
+
+    if (sensor) {
+	int val;
+	rv = ipmi_sensor_threshold_settable(sensor, threshold, &val);
+	if (rv)
+	    return rv;
+	if (!val)
+	    return ENOTSUP;
+    }
+
+    th->vals[threshold].status = 1;
+    th->vals[threshold].val = value;
+    return 0;
+}
+
+int ipmi_threshold_get(ipmi_thresholds_t  *th,
+		       enum ipmi_thresh_e threshold,
+		       double             *value)
+{
+    if (threshold > IPMI_UPPER_NON_RECOVERABLE)
+	return EINVAL;
+
+    if (th->vals[threshold].status) {
+	*value = th->vals[threshold].val;
+	return 0;
+    } else {
+	return ENOTSUP;
+    }
+}
+
 unsigned int ipmi_states_size(void)
 {
     return sizeof(ipmi_states_t);
+}
+
+void
+ipmi_copy_states(ipmi_states_t *dest, ipmi_states_t *src)
+{
+    *dest = *src;
 }
 
 void
@@ -905,3 +975,40 @@ ipmi_is_initial_update_in_progress(ipmi_states_t *states)
 {
     return states->__initial_update_in_progress;
 }
+
+int
+ipmi_is_state_set(ipmi_states_t *states,
+		  int           state_num)
+{
+    return (states->__states & (1 << state_num)) != 0;
+}
+
+void
+ipmi_set_state(ipmi_states_t *states,
+	       int           state_num,
+	       int           val)
+{
+    if (val)
+	states->__states |= 1 << state_num;
+    else
+	states->__states &= ~(1 << state_num);
+}
+
+int
+ipmi_is_threshold_out_of_range(ipmi_states_t      *states,
+			       enum ipmi_thresh_e thresh)
+{
+    return (states->__states & (1 << thresh)) != 0;
+}
+
+void
+ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
+				enum ipmi_thresh_e thresh,
+				int                val)
+{
+    if (val)
+	states->__states |= 1 << thresh;
+    else
+	states->__states &= ~(1 << thresh);
+}
+

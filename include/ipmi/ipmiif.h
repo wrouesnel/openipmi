@@ -366,8 +366,9 @@ ipmi_sensor_discrete_set_event_handler(
 typedef struct ipmi_event_state_s ipmi_event_state_t;
 
 /* Return the size of an event state data structure, so you can
-   allocate your own. */
+   allocate your own and copy them. */
 unsigned int ipmi_event_state_size(void);
+void ipmi_copy_event_state(ipmi_event_state_t *dest, ipmi_event_state_t *src);
 
 /* Routines to init, clear, set, and query values in the event state. */
 void ipmi_event_state_set_events_enabled(ipmi_event_state_t *events, int val);
@@ -541,8 +542,9 @@ int ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor);
 typedef struct ipmi_thresholds_s ipmi_thresholds_t;
 
 /* Return the size of a threshold data structure, so you can allocate
-   your own. */
+   your own and copy them. */
 unsigned int ipmi_thresholds_size(void);
+void ipmi_copy_thresholds(ipmi_thresholds_t *dest, ipmi_thresholds_t *src);
 
 int ipmi_thresholds_init(ipmi_thresholds_t *th);
 
@@ -576,8 +578,10 @@ int ipmi_thresholds_get(ipmi_sensor_t      *sensor,
 /* Discrete states, or threshold status. */
 typedef struct ipmi_states_s ipmi_states_t;
 
-/* Get the size of ipmi_states_t, so you can allocate your own. */
+/* Get the size of ipmi_states_t, so you can allocate your own and
+   copy them. */
 unsigned int ipmi_states_size(void);
+void ipmi_copy_states(ipmi_states_t *dest, ipmi_states_t *src);
 
 void ipmi_init_states(ipmi_states_t *states);
 int ipmi_is_event_messages_disabled(ipmi_states_t *states);
