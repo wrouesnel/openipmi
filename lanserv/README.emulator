@@ -56,23 +56,23 @@ sensor_add <mc> <LUN> <sensor num> <sensor type> <event reading code>
   Add a sensor to the MC with the given LUN and sensor number.  The
   type and reading code are also set.
 
-sensor_set_bit <LUN> <sensor num> <bit to set> <bit value> <generate event>
+sensor_set_bit <mc> <LUN> <sensor num> <bit to set> <bit value> <generate event>
   Only for discrete sensors.  Set the given bit in the sensor to the
   given value.  If <generate event> is non-zero, then an event will be
   generated if the sensor is set up to generate events.
 
-sensor_set_bit_clr_rest <LUN> <sensor num> <bit to set>	<generate event>
+sensor_set_bit_clr_rest <mc> <LUN> <sensor num> <bit to set> <generate event>
   Only for discrete sensors.  Like sensor_set_bit, but clears the rest
   of the bits, and only sets the one bit given to 1.  This is for sensors
   where only one bit is valid, like the ATCA hot-swap sensor or a BIOS
   state sensor.
 
-sensor_set_value <LUN> <sensor num> <value> <generate event>
+sensor_set_value <mc> <LUN> <sensor num> <value> <generate event>
   Only for threshold sensors.  Set the sensor to the given value.  If
   <generate event> is non-zero, send an event if the value change
   should cause one based on thresholds.
 
-sensor_set_hysteresis <LUN> <sensor num> <support> <pos> <neg>
+sensor_set_hysteresis <mc> <LUN> <sensor num> <support> <pos> <neg>
   Only for threshold sensors.  Set the hysteresis for the sensor.
   <support> is the standard values from the SDR, which are:
 	0 - IPMI_HYSTERESIS_SUPPORT_NONE
@@ -82,7 +82,7 @@ sensor_set_hysteresis <LUN> <sensor num> <support> <pos> <neg>
   <pos> is the positive hysteresis value, and <neg> is the negative
   one.
 
-sensor_set_threshold <LUN> <sensor num> <support> <enabled> <val0> .. <val5>
+sensor_set_threshold <mc> <LUN> <sensor num> <support> <enabled> <val0> .. <val5>
   Only for threshold sensors.  This sets the threshold support type,
   supported thresholds, and initial values.  <support> is the standard
   values from the SDR, which are:
@@ -101,7 +101,7 @@ sensor_set_threshold <LUN> <sensor num> <support> <enabled> <val0> .. <val5>
 	5 - upper non recoverable
   <valx> sets the initial value of the threshold.
 
-sensor_set_event_support <LUN> <sensor num> <enable> <scanning> <support>
+sensor_set_event_support <mc> <LUN> <sensor num> <enable> <scanning> <support>
 	<assertions supported> <deassertions supported>
 	<assertions enabled> <deassertions enabled>
   Sets the event support for the sensors.  <support> is the standard

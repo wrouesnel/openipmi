@@ -305,15 +305,15 @@ cards, it makes mainenance easier.
 So now we've got a \ac{BMC}, \ac{MC}s, and things like that.  But how are you
 expected to use raw \acs{IPMI}?
 
-The first things you must do, of course, it connect to the \ac{BMC}.  If it's
-a direct SMI connection (A \ac{SMIC}, \ac{KCS}, or \ac{BT} interface, or perhaps a
-non-standard serial interface), you just open the driver on the
-operating system and start messaging.  If it's a \acs{LAN}-type connection,
-you have to go through an authentication sequence.  One you have a
-connection to the \ac{BMC}, things are pretty much the same no matter what
-interface you have.  There are a few messaging for doing special
-controls on a \acs{LAN} interface, but they don't generally matter to the
-user.
+The first things you must do, of course, it connect to the \ac{BMC}.
+If it's a direct SMI connection (A \ac{SMIC}, \ac{KCS}, or \ac{BT}
+interface, or perhaps a non-standard serial interface), you just open
+the driver on the operating system and start messaging.  If it's a
+\acs{LAN}-type connection, you have to go through an authentication
+sequence.  One you have a connection to the \ac{BMC}, things are
+pretty much the same no matter what interface you have.  There are a
+few messaging for doing special controls on a \acs{LAN} interface, but
+they don't generally matter to the user.
 
 Once the connection to the \ac{BMC} is up, the user should query to see what
 channels the \ac{BMC} supports.  For 1.5 and later, it gets this from a
@@ -1032,12 +1032,26 @@ As you will discover, OpenIPMI is very callback based.  The callbacks
 are somewhat fined grained; you register for exactly what you want to
 see on individual objects.  This is not as bad as you might imagine
 (even though it may seem somewhat strange).  It does mean that you
-have to do a lot of registering in all the right places, though.  \acs{IPMI}
-has a large number of asyncronous things that it has to inform you
-about.  If it delivered all these through one interface, you would
-have to look at each call and try to figure out what type of things
-was being reported, what object is was associated, etc.  In effect,
-that work is done by OpenIPMI.
+have to do a lot of registering in all the right places, though.
+\acs{IPMI} has a large number of asyncronous things that it has to
+inform you about.  If it delivered all these through one interface,
+you would have to look at each call and try to figure out what type of
+things was being reported, what object is was associated, etc.  In
+effect, that work is done by OpenIPMI.
+
+For user-level callbacks, the object the callback is for will always
+be valid, it will never be NULL.  This means, for instance, if you
+request a reading from a sensor, the reading response will always get
+called and the sensor parameter will always be valid.  It may be in
+the destruction process and you cannot set any setting, get any
+readings, or anything else that requires sending a message.  If the
+handler gets an \verb=ECANCELED= error, the sensor is being destroyed.
+This also applies to all control, entity, and most domain callbacks.
+This is new for OpenIPMI 1.4, but is fully backwards compatible.
+
+This does \emph{not} apply to internal interfaces, especially ones that
+send messages.  If you send a message to a \acs{MC}, for instance, the
+\acs{MC} can be NULL when the response comes back.  Be very careful.
 
 \subsubsection{Updated Callbacks}
 
@@ -5321,7 +5335,7 @@ These may be converted to a string name with the function:
 char *ipmi_hot_swap_state_name(enum ipmi_hot_swap_states state);
 \end{verbatim}
 
-Figure\~vref{fig-simple-hot-swap-state-machine} shows a simple
+Figure~\vref{fig-simple-hot-swap-state-machine} shows a simple
 hot-swap state machine for an entity that only supports presence.  In
 effect, the entity is either not present or present.
 \begin{figure}
@@ -5332,7 +5346,7 @@ effect, the entity is either not present or present.
   state machine}
 \end{figure}
 
-Figure\~vref{fig-complex-hot-swap-state-machine} shows a more complex
+Figure~\vref{fig-complex-hot-swap-state-machine} shows a more complex
 hot-swap state machine.  This would be used for an entity that
 supported some type of power control (the entity can be present but
 inactive).
@@ -5367,7 +5381,8 @@ extraction procedure and just pulls the board.  The state may also go
 from any state to out of communication.  This occurs if the board is
 present (or the board presence cannot be detected) and the system
 looses communication with the entity.  If communication is restored,
-the entity goes to the current state it is in.
+the entity goes to the current state it is in.  Some systems may
+support some manual means to move the entity's state to not present.
 
 When a hot-swap device is inserted, it may or may not be automatically
 activated.  This depends on the policies and capabilities of the
@@ -5497,7 +5512,36 @@ immediately, set the value to \verb=IPMI_TIMEOUT_NOW=.
 
 \section{\acs{FRU} Data}
 
-TBD - write this
+OpenIPMI supports fetching all the \acs{FRU} data supported by the
+IPMI spec.  It is able to fetch all the standard data and all the
+custom data stored in multi-records.
+
+Most of the string functions have a ``type'' function, a ``len''
+function, and a function to actually get the strings.  For instance:
+\begin{verbatim}
+int ipmi_entity_get_chassis_info_part_number_len(ipmi_entity_t *entity,
+						 unsigned int  *length);
+int ipmi_entity_get_chassis_info_part_number_type(ipmi_entity_t        *entity,
+						  enum ipmi_str_type_e *type);
+int ipmi_entity_get_chassis_info_part_number(ipmi_entity_t *entity,
+					     char          *str,
+					     unsigned int  *strlen);
+\end{verbatim}
+The ``len'' function returns the length of the string.  The ``type''
+function returns the type of string per standard OpenIPMI string
+handling.  See section~\vref{appendix-ipmi-strings} for more details.
+The last function returns the actual string.  The integer that
+\verb=strlen= points to must be set to the length of the \verb=str=
+array.  Upon return, the integer that \verb=strlen= points to will
+contain the actual length.  If there is not enough space for the whole
+string, the beginning of the string that fills the array will be
+copied in.  All these functions return an error; the only current
+return is ENOSYS if the parameter is not present.
+
+There are a very large number of FRU variables and they are fairly
+well defined in the \acs{IPMI} \acs{FRU} document; see that document
+and the \verb=ipmiif.h= include file for details on the \acs{FRU}
+data.
 
 \section{Entity \acs{SDR}s}
 \label{sec-entity-sdrs}
@@ -5605,7 +5649,11 @@ The meanings of these are not defined by \acs{IPMI}, but the meanings
 are pretty obvious.  You may ask, though, why there are both upper and
 lower thresholds and separate going high and going low events.  A
 going low event is kind of silly on an upper threshold, for instance.
-The author has no idea.
+The reasoning is not in the spec, but it may be that there are sensors
+where the ``middle'' of the range is not ok.  So for instance, it may
+be ok if the temperature is above 100C or below 5C, but the range
+between those values is not ok.  This is extremely unlikely, but this
+type of structure allows it.
 
 \subsection{Hysteresis}
 
@@ -5630,6 +5678,15 @@ threshold.
 \caption{\label{fig-hyst}Examples of hysteresis}
 \end{figure}
 
+There is only one pair of hysteresis values for a sensor.  That pair
+is used for all thresholds in the sensor.  One of the members of the
+pair is a positive threshold, meaning that is is applied to thresholds
+that go over a specific value.  The value must go that much below the
+threshold before the threshold goes back in range.  The other member is
+a negative threshold, meaning that it is applied to thresholds that go
+below a given value.  The value must go that much above the threshold
+before the threshold goes back in range.
+
 \section{Discrete Sensors}
 
 Discrete sensors report their readings in a 16-bit bitmask, each bit
@@ -5652,7 +5709,7 @@ by the user.
 \hline
 \end{longtable}
 
-\section{Commands Dealing with Sensors}
+\section{\acs{IPMI} Commands Dealing with Sensors}
 
 TBD - write this
 
@@ -6856,11 +6913,66 @@ be fairly obvious.
 
 \subsubsection{Threshold Sensor Hysteresis in OpenIPMI}
 
-TBD - write this
+OpenIPMI allows hysteresis to be fetched form a sensor and written to
+a sensor.  Unfortunately, OpenIPMI does not have a very good way to
+represent the actual hysteresis value.  The trouble is that hysteresis
+is not set per-threshold; it only has one hysteresis value that is
+applied to all thresholds for a sensor.  This means that you cannot
+set a floating-point offset for hysteresis because the same
+floating-point hysteresis value may result in a different raw
+hysteresis value for each sensor\footnote{This is due to the fact that
+some sensors are non-linear.}.  This is one of the rare situations
+where IPMI could have been a bit more flexible (usually it is too
+flexible).  Because of this situation, the hysteresis value is set as
+a raw value.
 
+A separate positive and negative hysteresis can exist for a sensor.
+The positive value is for the ``going higher'' thresholds, it is the
+amount that must be subtracted from the threshold where the threshold
+will go back in range.  The negative value is for the ``going lower''
+thresholds, it is the amount that must be added to the threshold where
+the threshold will go back in range.
+
+To know what type of hysteresis a sensor supports, use:
 \begin{verbatim}
-/* Returns IPMI_HYSTERESIS_SUPPORT_xxx */
 int ipmi_sensor_get_hysteresis_support(ipmi_sensor_t *sensor);
+\end{verbatim}
+This returns one of the following values:
+\begin{description}
+\item[IPMI\_HYSTERESIS\_SUPPORT\_NONE] - The sensor does not support
+  hysteresis.
+\item[IPMI\_HYSTERESIS\_SUPPORT\_READABLE] - The sensor has hysteresis, but
+  the value cannot be set.  It can be read.
+\item[IPMI\_HYSTERESIS\_SUPPORT\_SETTABLE] - The sensor has hysteresis and
+  the value can be both set and read.
+\item[IPMI\_HYSTERESIS\_SUPPORT\_FIXED] - The sensor has hysteresis
+  but the value cannot be read or set.  If the default hysteresis values
+  are non-zero, then they are the fixed hysteresis for the sensor.  Otherwise
+  the values are unknown.
+\end{description}
+
+The default hystersis can be read using:
+\begin{verbatim}
+int ipmi_sensor_get_positive_going_threshold_hysteresis(ipmi_sensor_t *sensor);
+int ipmi_sensor_get_negative_going_threshold_hysteresis(ipmi_sensor_t *sensor);
+\end{verbatim}
+To fetch and set the current threshold values for a sensor (assuming
+it support these operations), use:
+\begin{verbatim}
+typedef void (*ipmi_hysteresis_get_cb)(ipmi_sensor_t *sensor,
+				       int           err,
+				       unsigned int  positive_hysteresis,
+				       unsigned int  negative_hysteresis,
+				       void          *cb_data);
+int ipmi_sensor_get_hysteresis(ipmi_sensor_t           *sensor,
+			       ipmi_hysteresis_get_cb done,
+			       void                   *cb_data);
+
+int ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
+			       unsigned int        positive_hysteresis,
+			       unsigned int        negative_hysteresis,
+			       ipmi_sensor_done_cb done,
+			       void                *cb_data);
 \end{verbatim}
 
 \subsubsection{Threshold Sensor Reading Information in OpenIPMI}

@@ -573,7 +573,7 @@ entity_set_name(ipmi_entity_t *entity)
 			   entity->info.device_num.channel,
 			   entity->info.device_num.address,
 			   entity->info.entity_id,
-			   entity->info.entity_instance);
+			   entity->info.entity_instance - 0x60);
     } else {
 	length += snprintf(entity->name+length, ENTITY_NAME_LEN-length-3,
 			   "%d.%d", entity->info.entity_id,
@@ -6344,6 +6344,9 @@ ipmi_entity_add_opq(ipmi_entity_t         *entity,
 		    ipmi_entity_op_info_t *info,
 		    void                  *cb_data)
 {
+    if (entity->destroyed)
+	return EINVAL;
+
     info->__entity = entity;
     info->__entity_id = ipmi_entity_convert_to_id(entity);
     info->__cb_data = cb_data;
@@ -6440,6 +6443,9 @@ ipmi_entity_send_command(ipmi_entity_t         *entity,
     int rv;
 
     CHECK_ENTITY_LOCK(entity);
+
+    if (entity->destroyed)
+	return EINVAL;
 
     info->__entity = entity;
     info->__entity_id = ipmi_entity_convert_to_id(entity);

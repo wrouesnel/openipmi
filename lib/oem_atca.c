@@ -2324,9 +2324,12 @@ atca_entity_update_handler(enum ipmi_update_e op,
     /* We only care about FRU and MC entities. */
     if (etype == IPMI_ENTITY_FRU)
 	finfo = atca_find_fru_info(info, entity);
-    else if (etype == IPMI_ENTITY_MC)
+    else if (etype == IPMI_ENTITY_MC) {
+	if (ipmi_entity_get_slave_address(entity) == 0x20)
+	    /* We ignore the floating IPMB address if it comes up. */
+	    return;
 	finfo = atca_find_mc_fru_info(info, entity);
-    else
+    } else
 	return;
 
     if (!finfo) {
@@ -2452,6 +2455,9 @@ atca_ipmc_removal_handler(ipmi_domain_t *domain, ipmi_mc_t *mc,
     int           rv;
 
     ipmb_addr = ipmi_mc_get_address(mc);
+    if (ipmb_addr == 0x20)
+	/* We ignore the floating IPMB address if it comes up. */
+	return;
 
     for (i=0; i<info->num_ipmcs; i++) {
 	if (ipmb_addr == info->ipmcs[i].ipmb_address) {
@@ -2514,6 +2520,9 @@ atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
     unsigned int  ipmb_addr;
 
     ipmb_addr = ipmi_mc_get_address(mc);
+    if (ipmb_addr == 0x20)
+	/* We ignore the floating IPMB address if it comes up. */
+	return;
 
     for (i=0; i<info->num_ipmcs; i++) {
 	if (ipmb_addr == info->ipmcs[i].ipmb_address) {

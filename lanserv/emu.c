@@ -2234,6 +2234,8 @@ handle_set_sensor_event_enable(lmc_data_t    *mc,
 	if (msg->data_len <= i)
 	    break;
 	for (j=0; j<8; j++, e++) {
+	    if (e >= 15)
+		break;
 	    if ((msg->data[i] >> j) & 1)
 		sensor->event_enabled[0][e] = op;
 	}
@@ -2243,6 +2245,8 @@ handle_set_sensor_event_enable(lmc_data_t    *mc,
 	if (msg->data_len <= i)
 	    break;
 	for (j=0; j<8; j++, e++) {
+	    if (e >= 15)
+		break;
 	    if ((msg->data[i] >> j) & 1)
 		sensor->event_enabled[1][e] = op;
 	}
@@ -2294,14 +2298,20 @@ handle_get_sensor_event_enable(lmc_data_t    *mc,
     e = 0;
     for (i=2; i<=3; i++) {
 	rdata[i] = 0;
-	for (j=0; j<8; j++, e++)
+	for (j=0; j<8; j++, e++) {
+	    if (e >= 15)
+		break;
 	    rdata[i] |= sensor->event_enabled[0][e] << j;
+	}
     }
     e = 0;
     for (i=4; i<=5; i++) {
 	rdata[i] = 0;
-	for (j=0; j<8; j++, e++)
+	for (j=0; j<8; j++, e++) {
+	    if (e >= 15)
+		break;
 	    rdata[i] |= sensor->event_enabled[1][e] << j;
+	}
     }
 
     *rdata_len = 6;
@@ -2374,8 +2384,11 @@ handle_get_sensor_reading(lmc_data_t    *mc,
     e = 0;
     for (i=3; i<=4; i++) {
 	rdata[i] = 0;
-	for (j=0; j<8; j++, e++)
+	for (j=0; j<8; j++, e++) {
+	    if (e >= 15)
+		break;
 	    rdata[i] |= sensor->event_status[e] << j;
+	}
     }
     *rdata_len = 5;
 }

@@ -489,6 +489,9 @@ ipmi_sensor_add_opq(ipmi_sensor_t         *sensor,
 		    ipmi_sensor_op_info_t *info,
 		    void                  *cb_data)
 {
+    if (sensor->destroyed)
+	return EINVAL;
+
     info->__sensor = sensor;
     info->__sensor_id = ipmi_sensor_convert_to_id(sensor);
     info->__cb_data = cb_data;
@@ -607,6 +610,9 @@ ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
 
     CHECK_MC_LOCK(mc);
     CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->destroyed)
+	return EINVAL;
 
     info->__sensor = sensor;
     info->__sensor_id = ipmi_sensor_convert_to_id(sensor);
@@ -3300,6 +3306,8 @@ sensor_done_check_rsp(ipmi_sensor_t          *sensor,
     }
 
     if (!sensor) {
+	/* This *should* never happen, but we check it to shake out
+	   bugs. */
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssensor.c(%s): Sensor when away during operation",
 		 SENSOR_NAME(sensor), name);

@@ -148,9 +148,6 @@ int ipmi_sensor_convert_to_raw(ipmi_sensor_t     *sensor,
 			       double            val,
 			       int               *result);
 
-int ipmi_sensor_get_positive_going_threshold_hysteresis(ipmi_sensor_t *sensor);
-int ipmi_sensor_get_negative_going_threshold_hysteresis(ipmi_sensor_t *sensor);
-
 /* These calls allow OEM code to set up a sensor. */
 void ipmi_sensor_set_owner(ipmi_sensor_t *sensor, int owner);
 void ipmi_sensor_set_channel(ipmi_sensor_t *sensor, int channel);

@@ -185,11 +185,11 @@ got_thresh_reading(ipmi_sensor_t             *sensor,
 
     printf("Got threshold reading for sensor %s\n", sdata->name);
     if (ipmi_is_event_messages_enabled(states))
-	printf("  event messages enabled");
+	printf("  event messages enabled\n");
     if (ipmi_is_sensor_scanning_enabled(states))
-	printf("  sensor scanning enabled");
+	printf("  sensor scanning enabled\n");
     if (ipmi_is_initial_update_in_progress(states))
-	printf("  initial update in progress");
+	printf("  initial update in progress\n");
 
     switch (value_present)
     {
@@ -277,11 +277,11 @@ got_discrete_states(ipmi_sensor_t *sensor,
 
     printf("Got state reading for sensor %s\n", sdata->name);
     if (ipmi_is_event_messages_enabled(states))
-	printf("  event messages enabled");
+	printf("  event messages enabled\n");
     if (ipmi_is_sensor_scanning_enabled(states))
-	printf("  sensor scanning enabled");
+	printf("  sensor scanning enabled\n");
     if (ipmi_is_initial_update_in_progress(states))
-	printf("  initial update in progress");
+	printf("  initial update in progress\n");
 
     for (i=0; i<15; i++) {
 	int val, rv;
@@ -362,9 +362,9 @@ got_events(ipmi_sensor_t      *sensor,
 		    
 		    if (ipmi_is_threshold_event_set(states, thresh,
 						    value_dir, dir))
-			v = " not";
-		    else
 			v = "";
+		    else
+			v = " not";
 		    
 		    printf("  %s %s %s was%s enabled\n",
 			   ipmi_get_threshold_string(thresh),
@@ -394,9 +394,9 @@ got_events(ipmi_sensor_t      *sensor,
 		    continue;
 		    
 		if (ipmi_is_discrete_event_set(states, i, dir))
-		    v = " not";
-		else
 		    v = "";
+		else
+		    v = " not";
 		    
 		printf("  bit %d %s was%s enabled\n",
 		       i,
@@ -409,7 +409,7 @@ got_events(ipmi_sensor_t      *sensor,
     }
 
     rv = ipmi_sensor_events_enable_set(sensor, sdata->es,
-				       event_set_done, sdata->name);
+				       event_set_done, sdata);
     if (rv) {
 	printf("Error 0x%x enabling events for sensor %s\n", err, sdata->name);
 	goto out_err;

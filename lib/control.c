@@ -489,6 +489,9 @@ ipmi_control_add_opq(ipmi_control_t         *control,
 		     ipmi_control_op_info_t *info,
 		     void                   *cb_data)
 {
+    if (control->destroyed)
+	return EINVAL;
+
     info->__control = control;
     info->__control_id = ipmi_control_convert_to_id(control);
     info->__cb_data = cb_data;
@@ -581,6 +584,9 @@ ipmi_control_send_command(ipmi_control_t         *control,
 
     CHECK_MC_LOCK(mc);
     CHECK_CONTROL_LOCK(control);
+
+    if (control->destroyed)
+	return EINVAL;
 
     info->__control = control;
     info->__control_id = ipmi_control_convert_to_id(control);

@@ -1,3 +1,24 @@
+2004-08-06 Corey Minyard <cminyard@mvista.com> 
+
+	* lanserv/emu.c: Fixed some problems with handling event
+	masks.
+
+	* sample/sample3.c: Fixed some bugs so this works correctly.
+
+	* lib/entity.c: Fixed the relative entity strings to subtract
+	off 0x60 from the instance (per the spec).
+
+	* lib/oem_atca.c: Ignore the floating IPMB address (0x20) for ATCA
+	functions, since it's really not a physical device but a virtual
+	device.
+
+	* include/OpenIPMI/ipmiif.h, include/OpenIPMI/ipmi_sensor.h: Move
+	some user-needed functions into ipmiif.h and do some minor
+	cleanups.
+
+	* lib/entity.c, lib/control.c, lib/sensor.c: Don't allow
+	operations on destroyed objects.
+
 2004-08-04 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h.in, lib/sensor.c: Added a way
