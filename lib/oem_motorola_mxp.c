@@ -8506,6 +8506,7 @@ cpci5365_v2_sdrs_fixup(ipmi_mc_t       *mc,
 	slot = (ipmb - 0xb0) / 2;
     else
 	slot = ((ipmb - 0xb0) / 2) + 1;
+ipmi_log(IPMI_LOG_DEBUG, "Fixup for ipmb %d, slot %d", ipmb, slot);
 
     for (i=0; i<count; i++) {
 	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
@@ -8515,6 +8516,7 @@ cpci5365_v2_sdrs_fixup(ipmi_mc_t       *mc,
 	/* Fix up the entity instances for the SDRs. */
 	switch (sdr.type) {
 	case IPMI_SDR_FULL_SENSOR_RECORD:
+	    sdr.data[0] = ipmb;
 	    sdr.data[3] = IPMI_ENTITY_ID_PROCESSING_BLADE;
 	    sdr.data[4] = slot;
 	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
@@ -8534,7 +8536,7 @@ cpci5365_v2_sdrs_fixup(ipmi_mc_t       *mc,
 	    sdr.data[0] = ipmb;
 	    sdr.data[7] = IPMI_ENTITY_ID_PROCESSING_BLADE;
 	    sdr.data[8] = slot;
-	    sprintf(str, "bd%2.2d", slot);
+	    sprintf(str, "BD%2.2d", slot);
 	    len = 16;
 	    ipmi_set_device_string(str, IPMI_ASCII_STR, strlen(str),
 			    	   sdr.data+10, 0, &len);

@@ -852,7 +852,6 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	/* We read a header. */
 	sdrs->read_size = rsp->data[7] + SDR_HEADER_SIZE;
 	sdrs->next_read_rec_id = ipmi_get_uint16(rsp->data+1);
-	ipmi_log(IPMI_LOG_DEBUG, "Got next record %4.4x", sdrs->next_read_rec_id);
 	sdrs->next_read_offset = info->read_len;
     }
 
