@@ -303,6 +303,12 @@ typedef void (*ipmi_domain_entity_cb)(enum ipmi_update_e op,
 int ipmi_domain_set_entity_update_handler(ipmi_domain_t         *domain,
 					  ipmi_domain_entity_cb handler,
 					  void                  *cb_data);
+int ipmi_domain_add_entity_update_handler(ipmi_domain_t         *domain,
+					  ipmi_domain_entity_cb handler,
+					  void                  *cb_data);
+int ipmi_domain_remove_entity_update_handler(ipmi_domain_t         *domain,
+					     ipmi_domain_entity_cb handler,
+					     void                  *cb_data);
 
 /* Iterate over all the entities in the domain, calling the given
    function with each entity.  The entities will not change while this
