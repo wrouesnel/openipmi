@@ -1,6 +1,8 @@
 
 2003-02-24 Corey Minyard <cminyard@mvista.com>
 
+	* test1.c, Makefile.am: Removed this bogus file.
+
 	* sensor.c: Handle the same sensor received multiple times from
 	the same SDR.  This actually moves the sdr_sensors source array
 	into the sensor itself so it can be deleted regardless of where it
