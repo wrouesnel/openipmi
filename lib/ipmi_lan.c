@@ -134,6 +134,7 @@ typedef struct lan_data_s
     int                        fd;
 
     unsigned char              slave_addr;
+    int                        is_active;
 
     int                        curr_ip_addr;
     struct sockaddr_in         ip_addr[MAX_IP_ADDR];
@@ -561,8 +562,9 @@ ipmb_handler(ipmi_con_t   *ipmi,
     if (err)
 	return;
 
-    if (ipmb != lan->slave_addr) {
+    if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
 	lan->slave_addr = ipmb;
+	lan->is_active = active;
 	if (lan->ipmb_addr_handler)
 	    lan->ipmb_addr_handler(ipmi, err, ipmb, active,
 				   lan->ipmb_addr_cb_data);
@@ -1840,9 +1842,12 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 {
     ipmi_con_t *ipmi = cb_data;
 
-    ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
-
-    handle_connected(ipmi, 0);
+    ipmi_write_lock();
+    if (lan_valid_ipmi(ipmi)) {
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
+	handle_connected(ipmi, 0);
+    }
+    ipmi_write_unlock();
 }
 
 static void
@@ -1886,8 +1891,9 @@ lan_set_ipmb_addr(ipmi_con_t *ipmi, unsigned char ipmb, int active)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
-    if (lan->slave_addr != ipmb) {
+    if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
 	lan->slave_addr = ipmb;
+	lan->is_active = active;
 	if (lan->ipmb_addr_handler)
 	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active,
 				   lan->ipmb_addr_cb_data);
@@ -1909,6 +1915,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     }
 
     lan->slave_addr = ipmb_addr;
+    lan->is_active = active;
     finish_connection(ipmi, lan);
     if (lan->ipmb_addr_handler)
 	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active,
@@ -2345,6 +2352,7 @@ ipmi_lan_setup_con(struct in_addr            *ip_addrs,
 
     lan->ipmi = ipmi;
     lan->slave_addr = 0x20; /* Assume this until told otherwise */
+    lan->is_active = 1;
     lan->authtype = authtype;
     lan->privilege = privilege;
 

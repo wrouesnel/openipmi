@@ -2599,6 +2599,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     int           rv;
     int           u;
 
+
     ipmi_read_lock();
     rv = ipmi_domain_validate(domain);
     if (rv)

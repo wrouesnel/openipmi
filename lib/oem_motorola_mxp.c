@@ -113,6 +113,7 @@
 #define MXP_OEM_SET_EVENT_TRIGGER_CMD		0x3c
 #define MXP_OEM_SET_QUEUE_LOCK_CMD		0x3e
 #define MXP_OEM_SET_MSQ_QUEUE_CMD		0x40
+#define MXP_OEM_SET_DUAL_CONTROL_CMD		0x4a
 
 #define MXP_CHASSIS_CONFIG_6U		0
 #define MXP_CHASSIS_CONFIG_3U		1
@@ -6419,8 +6420,12 @@ ipmb_handler(ipmi_con_t   *ipmi,
 	err = IPMI_IPMI_ERR_VAL(msg->data[0]);
     else if (msg->data_len < 23)
 	err = EINVAL;
+    /* The MXP doc says "0" is inactive, but the AMC seems to return 2
+       when inactive. */
+    else if ((msg->data[4] == 0) || (msg->data[4] == 2))
+	active = 0;
     else
-	active = msg->data[4];
+	active = 1;
 
     if (!err)
 	ipmi->set_ipmb_addr(ipmi, 0x20, active);
@@ -6495,7 +6500,7 @@ mxp_activate(ipmi_con_t           *conn,
     si.lun = 0;
 
     msg.netfn = MXP_NETFN_MXP1;
-    msg.cmd = MXP_OEM_GET_AMC_STATUS_CMD;
+    msg.cmd = MXP_OEM_SET_DUAL_CONTROL_CMD;
     msg.data = data;
     msg.data_len = 5;
     add_mxp_mfg_id(data);

@@ -214,7 +214,7 @@ main(int argc, char *argv[])
 	} else if (strcmp(argv[curr_arg], "straight") == 0) {
 	    con_parms[last_con].authtype = IPMI_AUTHTYPE_STRAIGHT;
 	} else if (con_parms[last_con].num_addr == 1) {
-	    if (argc < 8) {
+	    if (argc < 6) {
 		fprintf(stderr, "Not enough arguments\n");
 		ipmi_ui_shutdown();
 		exit(1);
@@ -333,7 +333,7 @@ main(int argc, char *argv[])
 	} else if (strcmp(argv[curr_arg], "straight") == 0) {
 	    con_parms[last_con].authtype = IPMI_AUTHTYPE_STRAIGHT;
 	} else if (con_parms[last_con].num_addr == 1) {
-	    if (argc < 8) {
+	    if (argc < 7) {
 		fprintf(stderr, "Not enough arguments\n");
 		ipmi_ui_shutdown();
 		exit(1);

@@ -181,6 +181,7 @@ typedef struct lan_data_s
     int                        fd;
 
     unsigned char              slave_addr;
+    int                        is_active;
 
     int                        curr_ip_addr;
     struct sockaddr_in         ip_addr[MAX_IP_ADDR];
@@ -772,8 +773,9 @@ ipmb_handler(ipmi_con_t   *ipmi,
     if (err)
 	return;
 
-    if (ipmb != lan->slave_addr) {
+    if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
 	lan->slave_addr = ipmb;
+	lan->is_active = active;
 	if (lan->ipmb_addr_handler)
 	    lan->ipmb_addr_handler(ipmi, err, ipmb, active,
 				   lan->ipmb_addr_cb_data);
@@ -1626,7 +1628,14 @@ data_handler(int            fd,
 	    
 	case LAN_WAIT_LOCK:
 	    if (tmsg[5] == MXP_OEM_SET_QUEUE_LOCK_CMD) {
-		if (tmsg[6] != 0) {
+		if (tmsg[6] == 0xc2) {
+		    /* We got a mode error, this means that the AMC we
+                       are talking to is no longer active.  Just fail
+                       the message. */
+		    handle_recv_err(ipmi, lan, tmsg[6], &del);
+		    lan->state = LAN_IDLE;
+		    start_next_msg(ipmi, lan);
+		} else if (tmsg[6] != 0) {
 		    /* We couldn't grab the lock, retry. */
 		    send_lock_msg(lan);
 		} else if (lan->msg_queue[lan->curr_msg].is_ipmb_msg) {
@@ -1651,7 +1660,14 @@ data_handler(int            fd,
 
 	case LAN_WAIT_SEL_LOCK:
 	    if (tmsg[5] == 0x4b) {
-		if (tmsg[6] != 0) {
+		if (tmsg[6] == 0xc2) {
+		    /* We got a mode error, this means that the AMC we
+                       are talking to is no longer active.  Just fail
+                       the message. */
+		    handle_recv_err(ipmi, lan, tmsg[6], &del);
+		    lan->state = LAN_IDLE;
+		    start_next_msg(ipmi, lan);
+		} else if (tmsg[6] != 0) {
 		    /* Got an error, try again. */
 		    send_sel_lock_msg(lan);
 		} else {
@@ -1680,7 +1696,14 @@ data_handler(int            fd,
 
 	case LAN_WAIT_CLEAR:
 	    if (tmsg[5] == IPMI_GET_MSG_CMD) {
-		if (tmsg[6] == 0) {
+		if (tmsg[6] == 0xc2) {
+		    /* We got a mode error, this means that the AMC we
+                       are talking to is no longer active.  Just fail
+                       the message. */
+		    handle_recv_err(ipmi, lan, tmsg[6], &del);
+		    lan->state = LAN_IDLE;
+		    start_next_msg(ipmi, lan);
+		} else if (tmsg[6] == 0) {
 		    /* We grabbed a message from the queue.  Just
                        throw it away and request the next message,
                        since we are clearing the queue. */
@@ -1703,7 +1726,14 @@ data_handler(int            fd,
 
 	case LAN_WAIT_SEND_RSP:
 	    if (tmsg[5] == IPMI_SEND_MSG_CMD) {
-		if (tmsg[6] == 0x82) {
+		if (tmsg[6] == 0xc2) {
+		    /* We got a mode error, this means that the AMC we
+                       are talking to is no longer active.  Just fail
+                       the message. */
+		    handle_recv_err(ipmi, lan, tmsg[6], &del);
+		    lan->state = LAN_IDLE;
+		    start_next_msg(ipmi, lan);
+		} else if (tmsg[6] == 0x82) {
 		    ipmi_msg_t msg;
 		    char data[3];
 		    unsigned char *addr;
@@ -1751,7 +1781,14 @@ data_handler(int            fd,
 
 	case LAN_WAIT_GET_RSP:
 	    if (tmsg[5] == IPMI_GET_MSG_CMD) {
-	        if (tmsg[6] == 0x80) {
+	        if (tmsg[6] == 0xc2) {
+		    /* We got a mode error, this means that the AMC we
+                       are talking to is no longer active.  Just fail
+                       the message. */
+		    handle_recv_err(ipmi, lan, tmsg[6], &del);
+		    lan->state = LAN_IDLE;
+		    start_next_msg(ipmi, lan);
+		} else if (tmsg[6] == 0x80) {
 		    /* We got a response, so reset the fail retry
                        counter. */
 		    lan->conn_fail_retries = GET_CONN_FAILED_RETRIES;
@@ -2305,9 +2342,12 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 {
     ipmi_con_t *ipmi = cb_data;
 
-    ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
-
-    handle_connected(ipmi, 0);
+    ipmi_write_lock();
+    if (lan_valid_ipmi(ipmi)) {
+	ipmi->os_hnd->free_timer(ipmi->os_hnd, id);
+	handle_connected(ipmi, 0);
+    }
+    ipmi_write_unlock();
 }
 
 static void
@@ -2351,8 +2391,9 @@ lan_set_ipmb_addr(ipmi_con_t *ipmi, unsigned char ipmb, int active)
 {
     lan_data_t *lan = (lan_data_t *) ipmi->con_data;
 
-    if (lan->slave_addr != ipmb) {
+    if ((lan->slave_addr != ipmb) || (lan->is_active != active))  {
 	lan->slave_addr = ipmb;
+	lan->is_active = active;
 	if (lan->ipmb_addr_handler)
 	    lan->ipmb_addr_handler(ipmi, 0, ipmb, active,
 				   lan->ipmb_addr_cb_data);
@@ -2374,6 +2415,7 @@ handle_ipmb_addr(ipmi_con_t   *ipmi,
     }
 
     lan->slave_addr = ipmb_addr;
+    lan->is_active = active;
     finish_connection(ipmi, lan);
     if (lan->ipmb_addr_handler)
 	lan->ipmb_addr_handler(ipmi, err, ipmb_addr, active,
@@ -2810,6 +2852,7 @@ mxp_lan_setup_con(struct in_addr            *ip_addrs,
 
     lan->ipmi = ipmi;
     lan->slave_addr = 0x20; /* Assume this until told otherwise */
+    lan->is_active = 1;
     lan->authtype = authtype;
     lan->privilege = privilege;
 
