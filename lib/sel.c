@@ -861,11 +861,12 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 	elem->next = NULL;
 	sel->fetch_handlers = elem;
     } else if (elem->handler) {
-	/* Add it to the list of waiting fetch handlers. */
+	/* Add it to the list of waiting fetch handlers, if it has a
+	   handler. */
 	elem->next = sel->fetch_handlers;
 	sel->fetch_handlers = elem;
     } else {
-	ipmi_mem_free(elem);
+	elem->rv = EEXIST;
     }
 
  out_unlock:
@@ -897,6 +898,12 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
 	rv = elem->rv;
     if (rv)
 	ipmi_mem_free(elem);
+    if (rv == EEXIST)
+	/* EEXIST means that a operation was already running, and no
+	   handler was given.  We want to free the element, but we
+	   still want to return success. */
+	rv = 0;
+
     return rv;
 }
 
