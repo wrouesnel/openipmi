@@ -355,8 +355,6 @@ handle_sel_clear(ipmi_mc_t  *mc,
     }
 
     fetch_complete(sel, 0);
-
-    sel_unlock(sel);
  out:
 }
 
