@@ -2654,13 +2654,18 @@ fill_in_entities(ipmi_entity_info_t  *ents,
 	if (found->found)
 	    continue;
 
-	rv = entity_add(ents, infos->dlrs[i]->device_num,
-			infos->dlrs[i]->entity_id,
-			infos->dlrs[i]->entity_instance,
-			infos->dlrs[i]->output_handler, NULL,
-			&found->ent);
-	if (rv)
-	    goto out_err;
+	if (infos->dlrs[i]->entity_id) {
+	    rv = entity_add(ents, infos->dlrs[i]->device_num,
+			    infos->dlrs[i]->entity_id,
+			    infos->dlrs[i]->entity_instance,
+			    infos->dlrs[i]->output_handler, NULL,
+			    &found->ent);
+	    if (rv)
+		goto out_err;
+	} else {
+	    /* If entity id is null, it should be ignored. */
+	    found->ent = NULL;
+	}
 
 	if ((infos->dlrs[i]->type != IPMI_ENTITY_EAR)
 	    && (infos->dlrs[i]->type != IPMI_ENTITY_DREAR))
@@ -2868,6 +2873,9 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	if (found->found)
 	    continue;
 
+	if (!found->ent)
+	    continue;
+
 	if ((infos.dlrs[i]->type != IPMI_ENTITY_EAR)
 	    && (infos.dlrs[i]->type != IPMI_ENTITY_DREAR))
 	{
@@ -2876,7 +2884,6 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 
 	    /* A real DLR, increment the refcount, and copy the info. */
 	    found->ent->ref_count++;
-	    memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
 	    entity_set_name(found->ent);
 	    /* Don't fetch FRU information until present. */
 
@@ -2884,11 +2891,23 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    if (infos.dlrs[i]->type == IPMI_ENTITY_FRU) {
 		channel = infos.dlrs[i]->channel;
 		ipmb = infos.dlrs[i]->slave_address;
+		memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
 	    }
 	    else if (infos.dlrs[i]->type == IPMI_ENTITY_MC)
 	    {
-		channel = infos.dlrs[i]->channel;
-		ipmb = infos.dlrs[i]->access_address;
+		if (infos.dlrs[i]->FRU_inventory_device) {
+		    channel = infos.dlrs[i]->channel;
+		    ipmb = infos.dlrs[i]->access_address;
+		    memcpy(&found->ent->info, infos.dlrs[i],
+			   sizeof(dlr_info_t));
+		} else if (!found->ent->info.FRU_inventory_device) {
+		    /* We prefer to only keep the information from the
+		       FRU inventory device MCDLR. */
+		    memcpy(&found->ent->info, infos.dlrs[i],
+			   sizeof(dlr_info_t));
+		}
+	    } else {
+		memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
 	    }
 
 	    /* If we can use the FRU device presence to detect whether
