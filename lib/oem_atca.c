@@ -2554,7 +2554,9 @@ atca_oem_domain_shutdown_handler(ipmi_domain_t *domain)
 	    atca_ipmc_t *b = &(info->ipmcs[i]);
 
 	    destroy_fru_controls(b->frus[0]);
-	    ipmi_entity_remove_child(info->shelf_entity, b->frus[0]->entity);
+	    if (b->frus[0]->entity)
+		ipmi_entity_remove_child(info->shelf_entity,
+					 b->frus[0]->entity);
 	}
     }
 }
@@ -2681,6 +2683,121 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 
 /***********************************************************************
  *
+ * Various fixups
+ *
+ **********************************************************************/
+
+static void
+atca_entity_fixup(ipmi_mc_t *mc, unsigned char *id, unsigned char *instance)
+{
+    unsigned char inst = *instance & 0x7f;
+    unsigned char addr;
+
+    switch (*id) {
+    case 0:
+    case 7:
+	addr = ipmi_mc_get_address(mc);
+	if ((addr == 0x62) || (addr == 0x64)) {
+	    /* Power unit. */
+	    *id = 10;
+	    inst = 0x60;
+	} else if (addr == 0x42) {
+	    /* Fan tray */
+	    *id = 30;
+	    inst = 0x60;
+	} else {
+	    *id = 0xa0;
+	    inst = 0x60;
+	}
+	break;
+
+    case 6:
+	*id = 0xf0;
+	inst += 0x60;
+	break;
+
+    case 3:
+	if (inst < 0x60)
+	    inst += 0x60;
+	break;
+
+    case 23:
+	if ((inst == 1) || (inst == 2)) {
+	    *id = 0xf2;
+	    inst = 0x60;
+	} else if (inst == 3) {
+	    *id = 0xf1;
+	    inst = 0x60;
+	}
+	break;
+
+    case 34:
+	inst = 0x60;
+	break;
+    }
+
+    *instance = (*instance & 0x80) | (inst & 0x7f);
+}
+
+static void
+misc_sdrs_fixup(ipmi_mc_t       *mc,
+		ipmi_sdr_info_t *sdrs,
+		void            *cb_data)
+{
+    unsigned int count;
+    int          i;
+    ipmi_sdr_t   sdr;
+    int          rv;
+
+    rv = ipmi_get_sdr_count(sdrs, &count);
+    if (rv)
+	return;
+
+    for (i=0; i<count; i++) {
+	rv = ipmi_get_sdr_by_index(sdrs, i, &sdr);
+	if (rv)
+	    break;
+
+	/* Fix up the entity instances for the SDRs. */
+	switch (sdr.type) {
+	case IPMI_SDR_FULL_SENSOR_RECORD:
+	case IPMI_SDR_COMPACT_SENSOR_RECORD:
+	    /* Make it device relative. */
+	    atca_entity_fixup(mc, &sdr.data[3], &sdr.data[4]);
+	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    break;
+	case IPMI_SDR_MC_DEVICE_LOCATOR_RECORD:
+	case IPMI_SDR_FRU_DEVICE_LOCATOR_RECORD:
+	    atca_entity_fixup(mc, &sdr.data[7], &sdr.data[8]);
+	    ipmi_set_sdr_by_index(sdrs, i, &sdr);
+	    break;
+	}
+    }
+}
+
+static int
+misc_sdrs_fixup_reg(ipmi_mc_t     *mc,
+		    void          *cb_data)
+{
+    ipmi_mc_set_sdrs_fixup_handler(mc, misc_sdrs_fixup, NULL);
+    return 0;
+}
+
+static void
+atca_register_fixups(void)
+{
+    ipmi_register_oem_handler(0x000157, 0x7008,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0x000157, 0x0808,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0xf00157, 0x0808,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+    ipmi_register_oem_handler(0x000157, 0x0841,
+			      misc_sdrs_fixup_reg, NULL, NULL);
+}
+
+/***********************************************************************
+ *
  * ATCA initialization and detection
  *
  **********************************************************************/
@@ -2739,6 +2856,8 @@ int
 ipmi_oem_atca_init(void)
 {
     int rv;
+
+    atca_register_fixups();
 
     rv = ipmi_register_domain_oem_check(check_if_atca, NULL);
     if (rv)

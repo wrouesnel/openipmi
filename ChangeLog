@@ -45,6 +45,10 @@
 
 	* lib/oem_atca.c: Fixed some SEL handling and report MC scan done
 	when it is done.
+
+	* lib/oem_atca.c: Added hacks for broken SDRs.
+
+	* configure.in: Move to version 1.3.3.
 	
 2004-04-09 Corey Minyard <cminyard@mvista.com> 
 
