@@ -1192,7 +1192,10 @@ call_presence_handlers(ipmi_entity_t *ent, int present,
 
     info.ent = ent;
     info.present = present;
-    info.event = *event;
+    if (!event)
+	info.event = NULL;
+    else
+	info.event = *event;
     info.handled = handled;
     ipmi_lock(ent->lock);
     if (ent->cruft_presence_handler) {
@@ -1205,7 +1208,8 @@ call_presence_handlers(ipmi_entity_t *ent, int present,
 	ipmi_unlock(ent->lock);
     locked_list_iterate(ent->presence_handlers, call_presence_handler,
 			&info);
-    *event = info.event;
+    if (event)
+	*event = info.event;
     return info.handled;
 }
 
@@ -4321,6 +4325,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	    /* Keep it if we got it, it might have some useful
 	       information. */
 	    ent->fru = info->fru;
+	call_fru_handlers(ent, IPMI_CHANGED);
     }
 }
 
