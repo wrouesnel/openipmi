@@ -1,4 +1,78 @@
 
+2: Add a one-shot reset control.
+
+2: Add reset controls for chassis reset, and warm and cold reset on the BMC.
+
+2: Add identifier control for the shelf geographic address.
+
+1: Add a way to set active/standby modes of the AMCs.
+
+5: Add a way to set the managed/autonomous mode on the AMCs.
+
+2: Add identifier control for the slot geographic address.
+
+3: Add a way to get the reason for the last AMC reset.
+
+1: Add identifier control for AMC HW version
+
+1: Add identifier control for AMC FW version
+
+1: Add identifier control for AMC  FPGA version
+
+5: Add identifier control for display panel HW version
+
+5: Add identifier control for display panel SW version
+
+5: Add a way to get/set slot atonomous/managed mode
+
+2: Add control for board power mode
+
+4: Add control for board power wait for command
+
+4: Add control for board power delay
+
+1: Add control for slot bd_sel
+
+1: Add control for slot healthy
+
+1: Add control for slot PCI reset
+
+5: Add control for heartbeat source
+
+5: Add control for heartbeat timeout
+
+5: Add control for heartbeat action
+
+1: Add control for AMC cooling LED
+
+1: Add control for AMC temp LED
+
+5: Add sensor for digital input value
+
+5: Add control for digital output value
+
+1: Initialize I2C and bd_sel states for a slot
+
+1: Add code for AMC IPMB auto-isolate
+
+5: Do an AMC firmware upgrade
+
+5: Do an AMC FPGA upgrade
+
+1: Add an identifier control for power supply type
+
+?: Add an identifier control for power supply revision
+
+1: Add control for fan I2C enabled state
+
+1: Add control for fan identity
+
+1: Add control for fan revision
+
+1: Add getting the actual fan speed
+
+
+
 Add sensor SDRs back into the main SDR repository (if they can from
 there).
 

@@ -5035,6 +5035,69 @@ presence_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
+static void
+is_con_active_cmder(ipmi_domain_t *domain, void *cb_data)
+{
+    int          rv;
+    unsigned int *connection = cb_data;
+    unsigned int val;
+
+    rv = ipmi_domain_is_connection_active(domain, *connection, &val);
+    if (rv)
+	cmd_win_out("Invalid connection number %d: %x\n", *connection, rv);
+    else
+	cmd_win_out("Connection %d is%s active\n",
+		    *connection, val ? "" : " not");
+}
+
+static int
+is_con_active_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int          rv;
+    unsigned int connection;
+
+    if (get_uint(toks, &connection, "connection"))
+	return 0;
+
+    rv = ipmi_domain_pointer_cb(domain_id, is_con_active_cmder, &connection);
+    if (rv) {
+	cmd_win_out("Unable to convert domain id to a pointer\n");
+	return 0;
+    }
+    
+    return 0;
+}
+
+static void
+activate_con_cmder(ipmi_domain_t *domain, void *cb_data)
+{
+    int          rv;
+    unsigned int *connection = cb_data;
+    unsigned int val;
+
+    rv = ipmi_domain_activate_connection(domain, *connection);
+    if (rv)
+	cmd_win_out("Invalid connection number %d: %x\n", *connection, rv);
+}
+
+static int
+activate_con_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int          rv;
+    unsigned int connection;
+
+    if (get_uint(toks, &connection, "connection"))
+	return 0;
+
+    rv = ipmi_domain_pointer_cb(domain_id, activate_con_cmder, &connection);
+    if (rv) {
+	cmd_win_out("Unable to convert domain id to a pointer\n");
+	return 0;
+    }
+    
+    return 0;
+}
+
 static int
 quit_cmd(char *cmd, char **toks, void *cb_data)
 {
@@ -5168,6 +5231,10 @@ static struct {
       " - set the events enable data for the sensor" },
     { "scan",  scan_cmd,
       " <ipmb addr> - scan an IPMB to add or remove it" },
+    { "is_con_active",  is_con_active_cmd,
+      " <connection> - print out if the given connection is active or not" },
+    { "activate_con",  activate_con_cmd,
+      " <connection> - Activate the given connection" },
     { "quit",  quit_cmd,
       " - leave the program" },
     { "check_presence", presence_cmd,

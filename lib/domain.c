@@ -3338,6 +3338,39 @@ activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
     ipmi_read_unlock();
 }
 
+int
+ipmi_domain_activate_connection(ipmi_domain_t *domain, unsigned int connection)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    if ((connection >= MAX_CONS) || !domain->conn[connection])
+	return EINVAL;
+
+    if (!domain->conn[connection]->set_active_state)
+	return ENOTSUP;
+
+    domain->conn[connection]->set_active_state(domain->conn[connection], 1, 
+					       ll_addr_changed, domain);
+
+    /* The other connections will be deactivated when this one
+       activates, if that is required. */
+    return 0;
+}
+
+int
+ipmi_domain_is_connection_active(ipmi_domain_t *domain,
+				 unsigned int  connection,
+				 unsigned int  *active)
+{
+    CHECK_DOMAIN_LOCK(domain);
+
+    if ((connection >= MAX_CONS) || !domain->conn[connection])
+	return EINVAL;
+
+    *active = domain->con_active[connection];
+    return 0;
+}
+
 /* If the activate timer is not running, then start it.  This
    allows some time for other connections to become active before
    we go off and start activating things.  We wait a random amount
@@ -3405,7 +3438,7 @@ ll_addr_changed(ipmi_con_t   *ipmi,
     ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[u],
 			    domain->con_ipmb_addr[u], NULL, NULL);
 
-    start_connection =  (active && (first_active_con(domain) == -1));
+    start_connection = (active && (first_active_con(domain) == -1));
 
     if (domain->con_active[u] != active) {
 	domain->con_active[u] = active;

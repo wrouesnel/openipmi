@@ -199,8 +199,17 @@ void _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 				       ipmi_mc_t     *mc,
 				       ipmi_event_t  *event);
 
-/* Returns if the domain things it has a connection up. */
+/* Returns if the domain thinks it has a connection up. */
 int ipmi_domain_con_up(ipmi_domain_t *domain);
+
+/* Attempt to activate a given connection. */
+int ipmi_domain_activate_connection(ipmi_domain_t *domain,
+				    unsigned int  connection);
+
+/* Returns if a connection is active. */
+int ipmi_domain_is_connection_active(ipmi_domain_t *domain,
+				     unsigned int  connection,
+				     unsigned int  *active);
 
 /* Get the number of channels the domain supports. */
 int ipmi_domain_get_num_channels(ipmi_domain_t *domain, int *val);

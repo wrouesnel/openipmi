@@ -5,6 +5,12 @@
 	* doc/OpenIPMI.texi: Added documenataion for the new PEF, PET, and
 	LAN configuration items.
 
+	* lib/domain.c, include/OpenIPMI/ipmi_domain.h: Added code to
+	check if a specific connection is active and to activate a
+	connection explicitly.
+	
+	* ui/ui.c: Added support for the connection activation.
+
 2003-01-08 Jeff Zheng <jeff.zheng@intel.com>
 
 	* lib/pef.c: Various fixes for PEF handling.
