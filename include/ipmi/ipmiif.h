@@ -116,8 +116,8 @@ int ipmi_sensor_pointer_cb(ipmi_sensor_id_t id,
 			   void             *cb_data);
 int ipmi_cmp_sensor_id(ipmi_sensor_id_t id1, ipmi_sensor_id_t id2);
 
-ipmi_control_id_t ipmi_control_convert_to_id(ipmi_control_t *ind);
-typedef void (*ipmi_control_cb)(ipmi_control_t *ind, void *cb_data);
+ipmi_control_id_t ipmi_control_convert_to_id(ipmi_control_t *control);
+typedef void (*ipmi_control_cb)(ipmi_control_t *control, void *cb_data);
 int ipmi_control_pointer_cb(ipmi_control_id_t id,
 			    ipmi_control_cb   handler,
 			    void              *cb_data);
@@ -201,9 +201,9 @@ void ipmi_entity_iterate_sensors(ipmi_entity_t                 *ent,
 				 ipmi_entity_iterate_sensor_cb handler,
 				 void                          *cb_data);
 
-/* Iterate over all the indicators of an entity. */
+/* Iterate over all the controls of an entity. */
 typedef void (*ipmi_entity_iterate_control_cb)(ipmi_entity_t  *ent,
-					       ipmi_control_t *ind,
+					       ipmi_control_t *control,
 					       void           *cb_data);
 void ipmi_entity_iterate_controls(ipmi_entity_t                  *ent,
 				  ipmi_entity_iterate_control_cb handler,
@@ -269,13 +269,13 @@ int ipmi_entity_set_sensor_update_handler(ipmi_entity_t         *ent,
 					  ipmi_entity_sensor_cb handler,
 					  void                  *cb_data);
 
-/* Register a handler that will be called when an indicator on
+/* Register a handler that will be called when an control on
    this entity is added, deleted, or modified.  If you call this in
    the entity added callback for the BMC, you are guaranteed to get
    this set before any sensors exist. */
 typedef void (*ipmi_entity_control_cb)(enum ipmi_update_e op,
 				       ipmi_entity_t      *ent,
-				       ipmi_control_t     *ind,
+				       ipmi_control_t     *control,
 				       void               *cb_data);
 int ipmi_entity_set_control_update_handler(ipmi_entity_t          *ent,
 					   ipmi_entity_control_cb handler,
@@ -638,62 +638,64 @@ int ipmi_states_get(ipmi_sensor_t       *sensor,
 
 
 /*
- * Indicators are lights, relays, displays, alarms, or other things of
+ * Controls are lights, relays, displays, alarms, or other things of
  * that nature.  Basically, output devices.  IPMI does not define
  * these, but they are pretty fundamental for system management.  */
-int ipmi_control_get_type(ipmi_control_t *ind);
+int ipmi_control_get_type(ipmi_control_t *control);
 int ipmi_control_get_id_length(ipmi_control_t *control);
 void ipmi_control_get_id(ipmi_control_t *control, char *id, int length);
-int ipmi_control_get_entity_id(ipmi_control_t *ind);
-int ipmi_control_get_entity_instance(ipmi_control_t *ind);
+int ipmi_control_get_entity_id(ipmi_control_t *control);
+int ipmi_control_get_entity_instance(ipmi_control_t *control);
 int ipmi_control_is_settable(ipmi_control_t *control);
 int ipmi_control_is_readable(ipmi_control_t *control);
-ipmi_entity_t *ipmi_control_get_entity(ipmi_control_t *ind);
-char *ipmi_control_get_type_string(ipmi_control_t *ind);
+ipmi_entity_t *ipmi_control_get_entity(ipmi_control_t *control);
+char *ipmi_control_get_type_string(ipmi_control_t *control);
 
 /* Returns true if this control is a hot-swap indicator, meaning that
    is is used to indicate to the operator when it is save to remove a
    hot-swappable device. */
 int ipmi_control_is_hot_swap_indicator(ipmi_control_t *control);
 
-/* Get the number of values the indicator supports. */
-int ipmi_control_get_num_vals(ipmi_control_t *ind);
+/* Get the number of values the control supports. */
+int ipmi_control_get_num_vals(ipmi_control_t *control);
 
 
-/* A general callback for indicator operations that don't received
+/* A general callback for control operations that don't received
    any data. */
-typedef void (*ipmi_control_op_cb)(ipmi_control_t *ind, int err, void *cb_data);
+typedef void (*ipmi_control_op_cb)(ipmi_control_t *control,
+				   int            err,
+				   void           *cb_data);
 
-/* Set the setting of an indicator.  Note that an indicator may
+/* Set the setting of an control.  Note that an control may
  support more than one element, the array passed in to "val" must
- match the number of elements the indicator supports.  All the
+ match the number of elements the control supports.  All the
  elements will be set simultaneously. */
-int ipmi_control_set_val(ipmi_control_t     *ind,
+int ipmi_control_set_val(ipmi_control_t     *control,
 			 int                *val,
 			 ipmi_control_op_cb handler,
 			 void               *cb_data);
 
-/* Get the setting of an indicator.  Like setting indicators, this
+/* Get the setting of an control.  Like setting controls, this
    returns an array of values, one for each of the number of elements
-   the indicator supports. */
-typedef void (*ipmi_control_val_cb)(ipmi_control_t *ind,
+   the control supports. */
+typedef void (*ipmi_control_val_cb)(ipmi_control_t *control,
 				    int            err,
 				    int            *val,
 				    void           *cb_data);
-int ipmi_control_get_val(ipmi_control_t      *ind,
+int ipmi_control_get_val(ipmi_control_t      *control,
 			 ipmi_control_val_cb handler,
 			 void                *cb_data);
 
 /* For LIGHT types.  */
 
-/* A light indicator may control one or more lights.  If a light
-   indicator controls more than one light, the lights may not
+/* A light control may control one or more lights.  If a light
+   control controls more than one light, the lights may not
    be set individually, they are controlled as a group, one set
    command will set them all. */
 
 /* Get the number of settings the light supports. */
-int ipmi_control_get_num_light_settings(ipmi_control_t   *ind,
-				    unsigned int light);
+int ipmi_control_get_num_light_settings(ipmi_control_t *control,
+					unsigned int   light);
 
 /* This describes a setting for a light.  For each setting each light
    is defined to go through a number of transitions.  Each transition
@@ -703,17 +705,17 @@ int ipmi_control_get_num_light_settings(ipmi_control_t   *ind,
 
 /* Get the setting for the specific setting.  These return -1 for
    an invalid num. */
-int ipmi_control_get_num_light_transitions(ipmi_control_t   *ind,
-				       unsigned int light,
-				       unsigned int setting);
-int ipmi_control_get_light_color(ipmi_control_t   *ind,
-			     unsigned int light,
-			     unsigned int setting,
-			     unsigned int num);
-int ipmi_control_get_light_color_time(ipmi_control_t   *ind,
-				  unsigned int light,
-				  unsigned int setting,
-				  unsigned int num);
+int ipmi_control_get_num_light_transitions(ipmi_control_t *control,
+					   unsigned int   light,
+					   unsigned int   setting);
+int ipmi_control_get_light_color(ipmi_control_t *control,
+				 unsigned int   light,
+				 unsigned int   setting,
+				 unsigned int   num);
+int ipmi_control_get_light_color_time(ipmi_control_t *control,
+				      unsigned int   light,
+				      unsigned int   setting,
+				      unsigned int   num);
 
 /* RELAY types have no settings. */
 
@@ -722,31 +724,31 @@ int ipmi_control_get_light_color_time(ipmi_control_t   *ind,
 /* CONTROL types are represented as arrays of unsigned data.
    Identifiers do not support multiple elements, and have their own
    setting function. */
-typedef void (*ipmi_control_identifier_val_cb)(ipmi_control_t *ind,
+typedef void (*ipmi_control_identifier_val_cb)(ipmi_control_t *control,
 					       int            err,
 					       unsigned char  *val,
 					       int            length,
 					       void           *cb_data);
-int ipmi_control_identifier_get_val(ipmi_control_t                 *ind,
+int ipmi_control_identifier_get_val(ipmi_control_t                 *control,
 				    ipmi_control_identifier_val_cb handler,
 				    void                           *cb_data);
-int ipmi_control_identifier_set_val(ipmi_control_t     *ind,
+int ipmi_control_identifier_set_val(ipmi_control_t     *control,
 				    ipmi_control_op_cb handler,
 				    unsigned char      *val,
 				    int                length,
 				    void               *cb_data);
-unsigned int ipmi_control_identifier_get_max_length(ipmi_control_t *ind);
+unsigned int ipmi_control_identifier_get_max_length(ipmi_control_t *control);
 
 
 /* For DISPLAY types, which are string displays. Displays do not
    support multiple elements, and have their own setting function. */
 /* Get the dimensions of the display device.  This assumes a square, which
    is usually (but maybe not always) a good assumption. */
-void ipmi_control_get_display_dimensions(ipmi_control_t *ind,
+void ipmi_control_get_display_dimensions(ipmi_control_t *control,
 					 unsigned int   *columns,
 					 unsigned int   *rows);
 
-int ipmi_control_set_display_string(ipmi_control_t     *ind,
+int ipmi_control_set_display_string(ipmi_control_t     *control,
 				    unsigned int       start_row,
 				    unsigned int       start_column,
 				    char               *str,
@@ -755,12 +757,12 @@ int ipmi_control_set_display_string(ipmi_control_t     *ind,
 				    void               *cb_data);
 				
 /* Fetch a string from the display. */
-typedef void (*ipmi_control_str_cb)(ipmi_control_t *ind,
+typedef void (*ipmi_control_str_cb)(ipmi_control_t *control,
 				    int            err,
 				    char           *str,
 				    unsigned int   len,
 				    void           *cb_data);
-int ipmi_control_get_display_string(ipmi_control_t      *ind,
+int ipmi_control_get_display_string(ipmi_control_t      *control,
 				    unsigned int        start_row,
 				    unsigned int        start_column,
 				    unsigned int        len,

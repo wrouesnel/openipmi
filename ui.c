@@ -1500,10 +1500,60 @@ mccmd_cmd(char *cmd, char **toks, void *cb_data)
     return 0;
 }
 
-int
-enable_cmd(char *cmd, char **toks, void *cb_data)
+static void
+set_control(ipmi_control_t *control, void *cb_data)
 {
-    if (
+    char **toks = cb_data;
+    int  num_vals = ipmi_control_get_num_vals(control);
+    int  i;
+    int  *vals;
+    char *tok;
+    char *estr;
+    int  rv;
+
+    vals = malloc(sizeof(*vals) * num_vals);
+    if (!vals) {
+	wprintw(cmd_win, "set_control: out of memory\n");
+	goto out;
+    }
+	
+    for (i=0; i<num_vals; i++) {
+	tok = strtok_r(NULL, " \t\n", toks);
+	if (!tok) {
+	    wprintw(cmd_win, "set_control: Value %d is not present\n", i);
+	    goto out;
+	}
+	vals[i] = strtol(tok, &estr, 0);
+	if (*estr != '\0') {
+	    wprintw(cmd_win, "set_control: Value %d is invalid\n", i);
+	    goto out;
+	}
+    }
+
+    rv = ipmi_control_set_val(control, vals, NULL, NULL);
+    if (rv) {
+	wprintw(cmd_win, "set_control: Returned error 0x%x\n", rv);
+    }
+ out:
+}
+
+static int
+set_control_cmd(char *cmd, char **toks, void *cb_data)
+{
+    int rv;
+
+    if (curr_display_type != DISPLAY_CONTROL) {
+	wprintw(cmd_win, "The current displayed item is not a control\n");
+	goto out;
+    }
+
+    rv = ipmi_control_pointer_cb(curr_control_id, set_control, toks);
+    if (rv)
+	wprintw(cmd_win,
+		"set_control: Unable to get control pointer: 0x%x\n",
+		rv);
+
+ out:
     return 0;
 }
 
@@ -1518,7 +1568,7 @@ static struct {
     { "enable",				enable_cmd },
     { "controls",			controls_cmd },
     { "control",			control_cmd },
-    { "set ",				set_cmd },
+    { "set_control",			set_control_cmd },
     { "mcs",				mcs_cmd },
     { "mccmd",				mccmd_cmd },
     { NULL,				NULL}
