@@ -1,12 +1,12 @@
 \documentclass{book}
-\usepackage{graphicx,moreverb}
+\usepackage{graphicx,moreverb,tabularx}
 \title{IPMI -- A Gentle Introduction\\with OpenIPMI}
 \author{Corey Minyard $<$minyard@acm.org$>$\\
         Montavista Software}
 \date{\today}
 %
-\newcommand{\msgitem}[2]{#1&#2\\ \hline}
-\newenvironment{showmsg}{\begin{tabular}{|l|l|}\hline}{\end{tabular}}
+\newcommand{\msgitem}[2]{#1&\parbox{0.7\textwidth}{\vspace{.15em}#2\vspace{.15em}} \\ \hline}
+\newenvironment{showmsg}{\noindent\begin{tabular}{|p{.5in}|l|}\hline}{\end{tabular}}
 %
 \begin{document}
 \maketitle
@@ -278,10 +278,11 @@ in case the event queue missed any events coming in.)
 Also, the user should start scanning the IPMB bus with broadcast get
 device id commands to detect any MCs on the bus.
 
-This is what OpenIPMI does for you.  Beyond this, it also represents the
-sensors, controls, and entities in a nice OO fashion, and it handles the
-details of addressing, message routing, and other things you don't
-really care about.  It lets you get right at the sensors and entities.
+This is what the OpenIPMI library does for you.  Beyond this, it also
+represents the sensors, controls, and entities in a nice OO fashion,
+and it handles the details of addressing, message routing, and other
+things you don't really care about.  It lets you get right at the
+sensors and entities.
 
 \section{The User View}
 
@@ -969,6 +970,15 @@ processor of a system and the management controller.  Obviously, this
 interface isn't very useful if the system is turned off, but it allows
 a running system to monitor itself.
 
+The format of a system interface message that is $n$ bytes long is:
+
+\begin{showmsg}
+\msgitem{0}{Bits 0-1 - Destination LUN\\
+	    Bits 2-7 - NetFN}
+\msgitem{1}{Command}
+\msgitem{2 - n-1}{Message Data}
+\end{showmsg}
+
 \subsection{SMIC}
 SMIC interfaces have been around a long time, but mostly during a
 period when IPMI was not popular.  SMIC stands for Server Management
@@ -1303,6 +1313,35 @@ ioctl to perform the request:
 rv = ioctl(fd, IPMICTL_SEND_COMMAND_SETTIME, &req_time);
 \end{verbatim}
 
+\subsubsection{Setting Your Local IPMB Address}
+Unfortunately, IPMI has no standard way to determing your local IPMB
+address.  It is usually set to 20h, but especially in bussed systems,
+the local management controller may have a different address.
+
+If you do not set your IPMB address properly, messages out on the IPMB
+will not have the proper source address and thus the response will go
+to the wrong place.  To avoid this problem, the OpenIPMI allows the
+user to set the local IPMB address and the local LUN.  The following
+shows how to get and set the IPMB address:
+
+\begin{verbatim}
+unsigned int ipmb_addr;
+
+rv = ioctl(fd, IPMICTL_GET_MY_ADDRESS_CMD, &ipmb_addr);
+if (rv == -1)
+  error handling...
+
+printf("My address was: %x", ipmb_addr);
+
+ipmb_addr = 0xb2;
+rv = ioctl(fd, IPMICTL_SET_MY_ADDRESS_CMD, &ipmb_addr);
+if (rv == -1)
+  error handling...
+\end{verbatim}
+
+The driver also has ioctls to get and set the LUN, but you should
+almost certainly leave that alone.
+
 \subsection{The OpenIPMI System Interface}
 The OpenIPMI library system interface can be set up with the
 following function:
@@ -1322,6 +1361,44 @@ handler data to use for the connection (as described in section
 the \verb=user_data= filed in the \verb=ipmi_con_t= data structure.  A
 new connection is returned in \verb=new_con=.
 
+The OpenIPMI library understands how to get the local IPMB address for
+certain sytems.  If it can get the local IPMB address, it will set it
+automatically.
+
+\section{Channels}
+
+The IPMI interfaces on a management controller are called
+``channels''.  These are messaging channels.  LAN, IPMB, system
+interface, and any other messaging interfaces will each have their own
+channel on the MC.
+
+Messages directly sent to the local management controller do nor
+require any type of channel information.  When the user sends a
+message out to another interface, it must specify the channel.  This
+is called ``bridging''.  Channels also may have some type of
+configuration information such as users and passwords.
+
+\begin{table}
+\begin{tabularx}{\textwidth}{|l|l|X|}
+\hline
+0h & Primary IPMB & Channel 0 is the primary IPMB bus on the system.\\
+\hline
+1h-7h & \parbox{1in}{Implementation-specific} & These channel may be any
+type of channel, including IPMB, and LAN interfaces.\\
+\hline
+8h-Dh & & Reserved\\
+\hline
+Eh & Present I/F & This specifies the channel the message is going over.
+It's not really very useful, since you have to put the real channel in
+the command to send a message to it.\\
+\hline
+Fh & System Interface & This specifies the system interface, but is
+really never used.\\
+\hline
+\end{tabularx}
+\caption{\label{channel-list}Channel Numbers}
+\end{table}
+
 \section{IPMB}
 
 IPMB provides the main channel for transferring messages around an
@@ -1332,13 +1409,40 @@ same time, both messages will be lost.  Because of this, IPMB does not
 scale very well; careful use needs to be made of the bandwith on the
 bus.
 
+The format of an IPMB message of $n$ bytes is:
+
 \begin{showmsg}
 \msgitem{0}{Destination IPMB address}
-\msgitem{1}{\parbox{1in}{Bits 0-1 - LUN\\
-	    Bits 2-7 - NetFN}}
+\msgitem{1}{Bits 0-1 - Destination LUN\\
+	    Bits 2-7 - NetFN}
+\msgitem{2}{Checksum for bytes 0-1}
+\msgitem{3}{Source IPMB address}
+\msgitem{4}{Bits 0-1 - Source LUN\\
+	    Bits 2-7 - Sequence Number}
+\msgitem{5}{Command}
+\msgitem{6 .. n-2}{Message Contents}
+\msgitem{n-1}{Checksum for the whole message}
 \end{showmsg}
 
- resends, error recovery, broadcast
+Unfortunately, IPMI does not have any type of routing handling or
+transparency of messages.  To send a message out on the IPMB, you
+encapsulate the entire IPMB message in a \textit{Send Message}
+command and send it over the proper channel.
+
+One special type of message is the broadcast IPMB message.  This
+message is exactly like a normal IPMB message, but it has a 0 byte
+prepended to the message.  This can only be a \textit{Get Device Id}
+command.  It is used to discover management controllers in the system.
+Broadcast is a really bad name, because it will not actually
+broadcast, it will go to the IPMB address is the second byte of the
+message.  This is used for discovery because it will not have any
+effect on I$^2$C devices on the bus, but IPMI devices will do a normal
+response.
+
+Since IPMB can lose messages, the OpenIPMI device driver implements a
+resend mechanism on commands sent over IPMB; if a response is not seen
+withing a given period of time, the command will be resent.  This will
+be done a few times before an error is returned.
 
 \section{ICMB}
 
@@ -1358,6 +1462,64 @@ bus.
 
 \section{OpenIPMI Addressing}
 \label{openipmi-addressing}
+
+The OpenIPMI driver and library use a common addressing scheme.  This
+attempts to normalize the messaging from the user's point of view.
+The message data will look the same no matter where you send it.  The
+only difference is the message.
+
+The main OpenIPMI address structure is:
+
+\begin{verbatim}
+struct ipmi_addr
+{
+	int   addr_type;
+	short channel;
+	char  data[IPMI_MAX_ADDR_SIZE];
+};
+\end{verbatim}
+
+The \verb=addr_type= and \verb=channel= are common to all OpenIPMI
+addresses.  You have to look at the \verb=addr_type= to determine the
+type of address being used and cast it to the proper address.
+
+A system interface address is used to route the message to the local
+management controller.  It is:
+
+\begin{verbatim}
+#define IPMI_SYSTEM_INTERFACE_ADDR_TYPE	...
+struct ipmi_system_interface_addr
+{
+	int           addr_type;
+	short         channel;
+	unsigned char lun;
+};
+\end{verbatim}
+
+The channel should be \verb=IPMI_BMC_CHANNEL= and the lun should
+generally be zero.
+
+An IPMI address routes messages on the IPMB.  The format is:
+
+\begin{verbatim}
+#define IPMI_IPMB_ADDR_TYPE		...
+#define IPMI_IPMB_BROADCAST_ADDR_TYPE	...
+struct ipmi_ipmb_addr
+{
+	int           addr_type;
+	short         channel;
+	unsigned char slave_addr;
+	unsigned char lun;
+};
+\end{verbatim}
+
+The \verb=channel= should be the IPMB bus channel number, the
+\verb=slave_address= should be the IPMB address of the destination,
+and the \verb=lun= should be the destination LUN.  Notice that two
+address types can be used with this command, a normal IPMB message and
+a broadcast IPMB can be sent with this.  Note that if you send a
+broadcast IPMB, you will receive a normal IPMB address in the
+response.
 
 %---------------------------------------------------------------------
 \chapter{IPMI Commands}
