@@ -2812,14 +2812,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    found->ent->ref_count++;
 	    memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
 	    entity_set_name(found->ent);
-
-	    if ((infos.dlrs[i]->type == IPMI_ENTITY_MC)
-		|| (infos.dlrs[i]->type == IPMI_ENTITY_FRU))
-	    {
-		ipmi_entity_fetch_frus(found->ent);
-		/* No worry on error, an audit will pick it up. */
-		/* FIXME - write the audit. */
-	    }
+	    /* Don't fetch FRU information until present. */
 	} else {
 	    /* It's an EAR, so handling adding the children. */
 	    for (j=0; j<found->cent_next; j++) {
