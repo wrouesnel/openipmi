@@ -228,6 +228,18 @@ int ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc);
 int ipmi_mc_sel_get_last_addition_timestamp(ipmi_mc_t *mc);
 
 
+/* Get the MC's full IPMI address. */
+void ipmi_mc_get_ipmi_address(ipmi_mc_t    *mc,
+			      ipmi_addr_t  *addr,
+			      unsigned int *addr_len);
+
+/* Get the IPMI slave address of the given MC. */
+unsigned ipmi_mc_get_address(ipmi_mc_t *mc);
+
+/* Get the channel for the given MC. */
+unsigned ipmi_mc_get_channel(ipmi_mc_t *mc);
+
+
 /***********************************************************************
  *
  * Channel handling for MCs.

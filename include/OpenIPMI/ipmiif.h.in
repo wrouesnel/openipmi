@@ -1737,6 +1737,12 @@ int ipmi_open_domain(char               *name,
    is GMT, so timezones/DST don't matter. */
 #define IPMI_OPEN_OPTION_SET_SEL_TIME   8
 
+/* If possible, activate the connection that we are using.  This is
+   system-dependent, on some systems it sets the IPMB address of the
+   connection, on some it enables operations on one connection.  By
+   default this is true.  This is not affected by option_all. */
+#define IPMI_OPEN_OPTION_ACTIVATE_IF_POSSIBLE 9
+
 
 /* Close an IPMI connection.  This will free all memory associated
    with the connections, any outstanding responses will be lost, etc.

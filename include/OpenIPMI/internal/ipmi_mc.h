@@ -82,17 +82,6 @@ void _ipmi_cleanup_mc(ipmi_mc_t *mc);
 /* Get the device SDRs for the given MC. */
 ipmi_sdr_info_t *ipmi_mc_get_sdrs(ipmi_mc_t *mc);
 
-/* Get the IPMI slave address of the given MC. */
-unsigned ipmi_mc_get_address(ipmi_mc_t *mc);
-
-/* Get the MC's full IPMI address. */
-void ipmi_mc_get_ipmi_address(ipmi_mc_t    *mc,
-			      ipmi_addr_t  *addr,
-			      unsigned int *addr_len);
-
-/* Get the channel for the given MC. */
-unsigned ipmi_mc_get_channel(ipmi_mc_t *mc);
-
 /* These are called to claim and release the use of an MC.  An MC will
    not change while it has been gotten.  Must be holding the
    domain->mc_lock to call these. */

@@ -315,6 +315,7 @@ struct ipmi_domain_s
     unsigned int option_OEM_init : 1;
     unsigned int option_set_event_rcvr : 1;
     unsigned int option_set_sel_time : 1;
+    unsigned int option_activate_if_possible : 1;
 };
 
 /* A list of all domains in the system. */
@@ -766,6 +767,7 @@ setup_domain(char          *name,
     domain->option_all = 1;
     domain->option_set_event_rcvr = 1;
     domain->option_set_sel_time = 1;
+    domain->option_activate_if_possible = 1;
 
     strncpy(domain->name, name, sizeof(domain->name)-2);
     i = strlen(domain->name);
@@ -4066,6 +4068,11 @@ initial_ipmb_addr_cb(ipmi_con_t   *ipmi,
 	goto out_unlock;
     }
 
+    /* If we are not activating connections, just use whatever we get
+       and don't worry if it is active or not. */
+    if (! domain->option_activate_if_possible)
+	active = 1;
+
     if (active) {
         domain->working_conn = u;
 	rv = start_con_up(domain);
@@ -4120,6 +4127,7 @@ activate_timer_cb(void *cb_data, os_hnd_timer_id_t *id)
     }
     u = to_activate;
     if ((u != -1)
+	&& domain->option_activate_if_possible
 	&& ! domain->con_active[u]
 	&& domain->conn[u]->set_active_state)
     {
@@ -4148,7 +4156,8 @@ ipmi_domain_activate_connection(ipmi_domain_t *domain, unsigned int connection)
     if ((connection >= MAX_CONS) || !domain->conn[connection])
 	return EINVAL;
 
-    if (!domain->conn[connection]->set_active_state)
+    if (!domain->conn[connection]->set_active_state
+	|| !domain->option_activate_if_possible)
 	return ENOSYS;
 
     domain->conn[connection]->set_active_state(domain->conn[connection], 1, 
@@ -4327,6 +4336,11 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 	ipmi_start_ipmb_mc_scan(domain, 0, ipmb, ipmb, NULL, NULL);
     }
 
+    /* If we are not activating connections, just use whatever we get
+       and don't worry if it is active or not. */
+    if (! domain->option_activate_if_possible)
+	active = 1;
+
     start_connection = (active && (first_active_con(domain) == -1));
 
     if (domain->con_active[u] != active) {
@@ -4348,18 +4362,23 @@ ll_addr_changed(ipmi_con_t   *ipmi,
 		    continue;
 		}
 
-		if (domain->conn[u]->set_active_state)
+		if (domain->conn[u]->set_active_state
+		    && domain->option_activate_if_possible)
+		{
 		    domain->conn[u]->set_active_state(
 			domain->conn[u],
 			0,
 			ll_addr_changed,
 			domain);
+		}
 	    }
 	}
     } else if (active) {
         /* Always pick the last working active connection to use. */
 	domain->working_conn = u;
-    } else if (domain->conn[u]->set_active_state) {
+    } else if (domain->conn[u]->set_active_state
+	       && domain->option_activate_if_possible)
+    {
         /* Start the timer to activate the connection, if necessary. */
 	start_activate_timer(domain);
     }
@@ -4450,7 +4469,8 @@ ll_con_changed(ipmi_con_t   *ipmi,
 	if (domain->working_conn == -1)
 	    domain->connection_up = 0;
 	else if ((!domain->con_active[domain->working_conn])
-		 && (domain->conn[domain->working_conn]->set_active_state))
+		 && (domain->conn[domain->working_conn]->set_active_state)
+		 && domain->option_activate_if_possible)
 	{
 	    domain->conn[domain->working_conn]->set_active_state(
 		domain->conn[domain->working_conn],
@@ -4509,6 +4529,12 @@ ipmi_option_set_sel_time(ipmi_domain_t *domain)
     return domain->option_set_sel_time;
 }
 
+int
+ipmi_option_activate_if_possible(ipmi_domain_t *domain)
+{
+    return domain->option_activate_if_possible;
+}
+
 
 static int
 process_options(ipmi_domain_t      *domain, 
@@ -4543,6 +4569,9 @@ process_options(ipmi_domain_t      *domain,
 	    break;
 	case IPMI_OPEN_OPTION_SET_SEL_TIME:
 	    domain->option_set_sel_time = options[i].ival != 0;
+	    break;
+	case IPMI_OPEN_OPTION_ACTIVATE_IF_POSSIBLE:
+	    domain->option_activate_if_possible = options[i].ival != 0;
 	    break;
 	default:
 	    return EINVAL;

@@ -1191,6 +1191,7 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "-[no]ipmbscan - IPMB bus scanning\n"
       "-[no]oeminit - special OEM processing (like ATCA)\n"
       "-[no]seteventrcvr - setting event receivers\n"
+      "-[no]activate - connection activation\n"
       "-[no]setseltime - setting time of the SEL\n"
       "-wait_til_up - wait until the domain is up before returning",
       domain_new, NULL, NULL },
@@ -1228,6 +1229,7 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "-[no]ipmbscan - IPMB bus scanning\n"
       "-[no]oeminit - special OEM processing (like ATCA)\n"
       "-[no]seteventrcvr - setting event receivers\n"
+      "-[no]activate - connection activation\n"
       "-wait_til_up - wait until the domain is up before returning",
       domain_open, NULL, NULL },
     { "close", &domain_cmds,

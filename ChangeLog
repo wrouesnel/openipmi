@@ -11,6 +11,12 @@
 	* lib/domain.c: ditto
 	* sample/ipmicmd.c: ditto
 
+	* include/OpenIPMI/ipmiif.h.in: Added a domain option to not
+	activate the interfaces.
+	* include/OpenIPMI/internal/ipmi_domain.c: ditto
+	* lib/domain.c: ditto
+	* lib/ipmi.c: ditto
+
 2005-01-13 Corey Minyard <cminyard@mvista.com> 
 
 	* include/OpenIPMI/ipmiif.h, lib/entity.c: Undeprecated the

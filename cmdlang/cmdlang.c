@@ -2525,6 +2525,7 @@ evinfo(ipmi_cmd_info_t *cmd_info)
     }
 
     ipmi_cmdlang_set_evinfo(do_evinfo);
+    ipmi_cmdlang_out(cmd_info, "event info set", NULL);
     return;
 
  out_err:

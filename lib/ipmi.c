@@ -1409,6 +1409,12 @@ ipmi_parse_options(ipmi_open_option_t *option,
     } else if (strcmp(arg, "-seteventrcvr") == 0) {
 	option->option = IPMI_OPEN_OPTION_SET_EVENT_RCVR;
 	option->ival = 1;
+    } else if (strcmp(arg, "-noactivate") == 0) {
+	option->option = IPMI_OPEN_OPTION_ACTIVATE_IF_POSSIBLE;
+	option->ival = 0;
+    } else if (strcmp(arg, "-activate") == 0) {
+	option->option = IPMI_OPEN_OPTION_ACTIVATE_IF_POSSIBLE;
+	option->ival = 1;
     } else if (strcmp(arg, "-nosetseltime") == 0) {
 	option->option = IPMI_OPEN_OPTION_SET_SEL_TIME;
 	option->ival = 0;
