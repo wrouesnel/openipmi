@@ -886,12 +886,12 @@ get_entity_loc(ipmi_entity_t *entity, char *str, int strlen)
     ipmi_entity_id_t id;
 
     id = ipmi_entity_convert_to_id(entity);
-    if (curr_entity_id.address != 0)
+    if (id.entity_instance >= 0x60)
 	snprintf(str, strlen, "r%d.%d.%d.%d",
 		 id.channel,
 		 id.address,
 		 id.entity_id,
-		 id.entity_instance);
+		 id.entity_instance - 0x60);
     else
 	snprintf(str, strlen, "%d.%d",
 		 id.entity_id,
@@ -1043,6 +1043,9 @@ entity_finder(char *cmd, char **toks,
 	cmd_win_out("Invalid entity instance given\n");
 	return EINVAL;
     }
+    if (ent_name[0] == 'r')
+	info.instance += 0x60;
+
     info.found = 0;
 
     info.handler = handler;
@@ -1052,7 +1055,13 @@ entity_finder(char *cmd, char **toks,
 
     rv = ipmi_domain_pointer_cb(domain_id, entity_finder_d, &info);
     if (!info.found) {
-	cmd_win_out("Entity %d.%d not found\n", info.id, info.instance);
+	if (ent_name[0] == 'r')
+	    cmd_win_out("Entity r%d.%d.%d.%d not found\n",
+			info.channel, info.address, info.id,
+			info.instance-0x60);
+	else
+	    cmd_win_out("Entity %d.%d not found\n", info.id, info.instance);
+
 	return EINVAL;
     }
 

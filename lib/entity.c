@@ -503,7 +503,6 @@ ipmi_entity_find(ipmi_entity_info_t *ents,
     if (mc && entity_instance >= 0x60) {
 	device_num.channel = ipmi_mc_get_channel(mc);
 	device_num.address = ipmi_mc_get_address(mc);
-	entity_instance -= 0x60;
     } else {
 	device_num.channel = 0;
 	device_num.address = 0;
@@ -651,7 +650,6 @@ ipmi_entity_add(ipmi_entity_info_t *ents,
     if (mc && (entity_instance >= 0x60)) {
 	device_num.channel = ipmi_mc_get_channel(mc);
 	device_num.address = ipmi_mc_get_address(mc);
-	entity_instance -= 0x60;
     } else {
 	device_num.channel = 0;
 	device_num.address = 0;
@@ -1679,7 +1677,7 @@ decode_drear(ipmi_sdr_t *sdr,
     info->is_ranges = (sdr->data[4] & 0x80) == 0x80;
 
     for (i=0,pos=5; pos<21; pos+=4,i++) {
-	if (sdr->data[pos+1] >= 0x60) {
+	if (sdr->data[pos+3] >= 0x60) {
 	    info->contained_entities[i].device_num.address = sdr->data[pos];
 	    info->contained_entities[i].device_num.channel = sdr->data[pos+1];
 	}
@@ -1920,13 +1918,13 @@ decode_mcdlr(ipmi_sdr_t *sdr,
     info->global_init                       = (data[0] >> 0) & 3;
 
     info->chassis_device = (data[1] >> 7) & 1;
-    info->bridge = (sdr->data[1] >> 6) & 1;
-    info->IPMB_event_generator = (sdr->data[1] >> 5) & 1;
-    info->IPMB_event_receiver = (sdr->data[1] >> 4) & 1;
-    info->FRU_inventory_device = (sdr->data[1] >> 3) & 1;
-    info->SEL_device = (sdr->data[1] >> 2) & 1;
-    info->SDR_repository_device = (sdr->data[1] >> 1) & 1;
-    info->sensor_device = (sdr->data[1] >> 0) & 1;
+    info->bridge = (data[1] >> 6) & 1;
+    info->IPMB_event_generator = (data[1] >> 5) & 1;
+    info->IPMB_event_receiver = (data[1] >> 4) & 1;
+    info->FRU_inventory_device = (data[1] >> 3) & 1;
+    info->SEL_device = (data[1] >> 2) & 1;
+    info->SDR_repository_device = (data[1] >> 1) & 1;
+    info->sensor_device = (data[1] >> 0) & 1;
 
     info->entity_id = data[5];
     info->entity_instance = data[6];
@@ -2304,6 +2302,7 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 	    /* A real DLR, increment the refcount, and copy the info. */
 	    found->ent->ref_count++;
 	    memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));
+	    entity_set_name(found->ent);
 
 	    if ((infos.dlrs[i]->type == IPMI_ENTITY_MC)
 		|| (infos.dlrs[i]->type == IPMI_ENTITY_FRU))
@@ -2946,6 +2945,7 @@ ipmi_entity_set_id(ipmi_entity_t *ent, char *id,
     memcpy(ent->info.id, id, length);
     ent->info.id_type = type;
     ent->info.id_len = length;
+    entity_set_name(ent);
 }
 
 int
