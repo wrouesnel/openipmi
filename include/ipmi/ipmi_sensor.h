@@ -370,18 +370,54 @@ extern ipmi_sensor_cbs_t ipmi_standard_sensor_cb;
 void ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info);
 void *ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor);
 
-typedef void (*ipmi_sensor_opq_cb)(ipmi_sensor_t *sensor,
+/* Operations and callbacks for sensor operations.  Operations on a
+   sensor that can be delayed should be serialized (to avoid user
+   confusion and for handling multi-part operations properly), thus
+   each sensor has an operation queue, only one operation at a time
+   may be running.  If you want to do an operation that requires
+   sending a message and getting a response, you must put that
+   operation into the opq.  When the handler you registered in the opq
+   is called, you can actually perform the operation.  When your
+   operation completes (no matter what, you must call it, even if the
+   operation fails), you must call ipmi_sensor_opq_done.  The sensor
+   will be locked properly for your callback.  To handle the sensor
+   locking for you for command responses, you can send the message
+   with ipmi_sensor_send_command, it will return the response when it
+   comes in to your handler with the sensor locked. */
+
+typedef void (*ipmi_sensor_op_cb)(ipmi_sensor_t *sensor,
+				  int           err,
+				  void          *cb_data);
+
+typedef void (*ipmi_sensor_rsp_cb)(ipmi_sensor_t *sensor,
 				   int           err,
+				   ipmi_msg_t    *rsp,
 				   void          *cb_data);
 
-typedef struct ipmi_sensor_opq_info_s
+typedef struct ipmi_sensor_op_info_s
 {
-    ipmi_sensor_id_t     sensor_id;
-    ipmi_sensor_t        *sensor;
-    void                 *cb_data;
-    ipmi_sensor_opq_cb   handler;
-    ipmi_msg_t           *rsp;
-} ipmi_sensor_opq_info_t;
+    ipmi_sensor_id_t   __sensor_id;
+    ipmi_sensor_t      *__sensor;
+    void               *__cb_data;
+    ipmi_sensor_op_cb  __handler;
+    ipmi_sensor_rsp_cb __rsp_handler;
+    ipmi_msg_t         *__rsp;
+} ipmi_sensor_op_info_t;
+
+int ipmi_sensor_add_opq(ipmi_sensor_t         *sensor,
+			ipmi_sensor_op_cb     handler,
+			ipmi_sensor_op_info_t *info,
+			void                  *cb_data);
+
+void ipmi_sensor_opq_done(ipmi_sensor_t *sensor);
+
+int ipmi_sensor_send_command(ipmi_sensor_t         *sensor,
+			     ipmi_mc_t             *mc,
+			     unsigned int          lun,
+			     ipmi_msg_t            *msg,
+			     ipmi_sensor_rsp_cb    handler,
+			     ipmi_sensor_op_info_t *info,
+			     void                  *cb_data);
 
 void ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str);
 void ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor,
