@@ -1548,6 +1548,13 @@ ipmi_control_id_set_invalid(ipmi_control_id_t *id)
     memset(id, 0, sizeof(*id));
 }
 
+int
+ipmi_control_id_is_invalid(ipmi_control_id_t *id)
+{
+    return (id->mcid.domain_id.domain == NULL);
+}
+
+
 void
 ipmi_control_set_hot_swap_indicator(ipmi_control_t *control,
 				    int            val,

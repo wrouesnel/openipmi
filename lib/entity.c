@@ -218,6 +218,13 @@ struct ipmi_entity_s
     ipmi_entity_presence_cb presence_handler;
     void                    *presence_cb_data;
 
+    /* Queue we use for operations. */
+    opq_t *waitq;
+
+    /* OEM info assigned to an entity, for use by plugins. */
+    void                            *oem_info;
+    ipmi_entity_cleanup_oem_info_cb oem_info_cleanup_handler;
+
     /* Name we use for reporting */
     char name[ENTITY_NAME_LEN];
 };
@@ -244,9 +251,9 @@ struct ipmi_entity_info_s
  * The internal hot-swap callbacks.
  *
  **********************************************************************/
-static int e_get_hot_swap_state(ipmi_entity_t           *ent,
-				ipmi_entity_hot_swap_cb handler,
-				void                    *cb_data);
+static int e_get_hot_swap_state(ipmi_entity_t                 *ent,
+				ipmi_entity_hot_swap_state_cb handler,
+				void                          *cb_data);
 
 static int e_set_auto_activate(ipmi_entity_t  *ent,
 			       ipmi_timeout_t auto_act,
@@ -337,20 +344,47 @@ ipmi_entity_info_alloc(ipmi_domain_t *domain, ipmi_entity_info_t **new_info)
 }
 
 static void
-destroy_entity(ilist_iter_t *iter, void *item, void *cb_data)
+entity_final_destroy(ipmi_entity_t *ent)
 {
-    ipmi_entity_t *ent = (ipmi_entity_t *) item;
-    int           rv;
+    if ((ent->running_timer_count != 0)
+	|| (!opq_stuff_in_progress(ent->waitq)))
+    {
+	ipmi_unlock(ent->timer_lock);
+	return;
+    }
+
+    if (ent->oem_info_cleanup_handler)
+	ent->oem_info_cleanup_handler(ent, ent->oem_info);
 
     if (ent->fru)
 	ipmi_fru_destroy(ent->fru, NULL, NULL);
+
+    if (ent->waitq)
+	opq_destroy(ent->waitq);
 
     free_ilist(ent->parent_entities);
     free_ilist(ent->sub_entities);
     free_ilist(ent->sensors);
     free_ilist(ent->controls);
-    ipmi_lock(ent->timer_lock);
+    ilist_twoitem_destroy(ent->hot_swap_handlers);
+    ilist_twoitem_destroy(ent->presence_handlers);
+    ilist_twoitem_destroy(ent->fru_handlers);
+    ilist_twoitem_destroy(ent->control_handlers);
+    ilist_twoitem_destroy(ent->sensor_handlers);
+
+    ipmi_destroy_lock(ent->timer_lock);
+    ipmi_mem_free(ent);
+}
+
+static void
+destroy_entity(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    ipmi_entity_t *ent = (ipmi_entity_t *) item;
+    int           rv;
+
     ent->destroyed = 1;
+
+    ipmi_lock(ent->timer_lock);
     if (ent->hot_swap_act_timer_running) {
 	rv = ent->os_hnd->stop_timer(ent->os_hnd, ent->hot_swap_act_timer);
 	if (!rv) {
@@ -371,16 +405,8 @@ destroy_entity(ilist_iter_t *iter, void *item, void *cb_data)
     } else {
 	ent->os_hnd->free_timer(ent->os_hnd, ent->hot_swap_deact_timer);
     }
-    ipmi_unlock(ent->timer_lock);
-    ilist_twoitem_destroy(ent->hot_swap_handlers);
-    ilist_twoitem_destroy(ent->presence_handlers);
-    ilist_twoitem_destroy(ent->fru_handlers);
-    ilist_twoitem_destroy(ent->control_handlers);
-    ilist_twoitem_destroy(ent->sensor_handlers);
-    if (ent->running_timer_count == 0) {
-	ipmi_destroy_lock(ent->timer_lock);
-	ipmi_mem_free(ent);
-    }
+
+    entity_final_destroy(ent); /* Unlocks the lock */
 }
 
 int
@@ -425,6 +451,7 @@ cleanup_entity(ipmi_entity_t *ent)
 	|| (!ilist_empty(ent->controls)))
 	return 0;
 
+    /* Tell the user I was destroyed. */
     /* Call the update handler list. */
     info.op = IPMI_DELETED;
     info.entity = ent;
@@ -432,9 +459,7 @@ cleanup_entity(ipmi_entity_t *ent)
     ilist_iter_twoitem(ent->ents->update_handlers,
 		       call_entity_info_update_handler,
 		       &info);
-
-	/* Call the old version handler. */
-    /* Tell the user I was destroyed. */
+    /* Call the old version handler. */
     if (ent->ents->handler)
 	ent->ents->handler(IPMI_DELETED, ent->domain, ent, ent->ents->cb_data);
 
@@ -452,6 +477,22 @@ cleanup_entity(ipmi_entity_t *ent)
        now, we can just destroy it. */
     destroy_entity(NULL, ent, NULL);
     return 1;
+}
+
+void
+ipmi_entity_set_oem_info(ipmi_entity_t *entity, void *oem_info,
+			 ipmi_entity_cleanup_oem_info_cb cleanup_handler)
+{
+    entity->oem_info = oem_info;
+    entity->oem_info_cleanup_handler = cleanup_handler;
+}
+
+void *
+ipmi_entity_get_oem_info(ipmi_entity_t *entity)
+{
+    CHECK_ENTITY_LOCK(entity);
+
+    return entity->oem_info;
 }
 
 static void
@@ -585,6 +626,7 @@ entity_add(ipmi_entity_info_t *ents,
     int                            rv;
     ipmi_entity_t                  *ent;
     ent_info_update_handler_info_t info;
+    os_handler_t                   *os_hnd;
 
     rv = entity_find(ents, device_num, entity_id, entity_instance, new_ent);
     if (! rv) {
@@ -599,6 +641,8 @@ entity_add(ipmi_entity_info_t *ents,
     if (!ent)
 	return ENOMEM;
     memset(ent, 0, sizeof(*ent));
+
+    os_hnd = ipmi_domain_get_os_hnd(ents->domain);
 
     ent->sdr_gen_output = sdr_gen_output;
     ent->sdr_gen_cb_data = sdr_gen_cb_data;
@@ -630,6 +674,10 @@ entity_add(ipmi_entity_info_t *ents,
     ent->presence_handlers = alloc_ilist();
     if (!ent->presence_handlers)
 	goto out_err;
+
+    ent->waitq = opq_alloc(os_hnd);
+    if (! ent->waitq)
+	return ENOMEM;
 
     ent->fru_handlers = alloc_ilist();
     if (!ent->fru_handlers)
@@ -697,6 +745,8 @@ entity_add(ipmi_entity_info_t *ents,
 	ipmi_destroy_lock(ent->timer_lock);
     if (ent->presence_handlers)
 	ilist_twoitem_destroy(ent->presence_handlers);
+    if (ent->waitq)
+	opq_destroy(ent->waitq);
     if (ent->fru_handlers)
 	ilist_twoitem_destroy(ent->fru_handlers);
     if (ent->control_handlers)
@@ -787,7 +837,8 @@ add_child(ipmi_entity_t       *ent,
 	  entity_child_link_t **new_link,
 	  entity_child_link_t **linkptr)
 {
-    entity_child_link_t *link;
+    entity_child_link_t            *link;
+    ent_info_update_handler_info_t info;
 
     link = ilist_search(ent->sub_entities, search_child, child);
     if (link != NULL)
@@ -808,6 +859,24 @@ add_child(ipmi_entity_t       *ent,
     ilist_add_tail(child->parent_entities, ent, &link->parent_link);
 
     ent->presence_possibly_changed = 1;
+
+    info.op = IPMI_CHANGED;
+    info.entity = ent;
+    info.domain = ent->domain;
+    ilist_iter_twoitem(ent->ents->update_handlers,
+		       call_entity_info_update_handler,
+		       &info);
+    if (ent->ents->handler)
+	ent->ents->handler(IPMI_CHANGED, ent->domain, ent, ent->ents->cb_data);
+
+    info.entity = child;
+    info.domain = child->domain;
+    ilist_iter_twoitem(child->ents->update_handlers,
+		       call_entity_info_update_handler,
+		       &info);
+    if (child->ents->handler)
+	child->ents->handler(IPMI_CHANGED, child->domain, child,
+			     child->ents->cb_data);
 
  found:
     if (new_link)
@@ -831,8 +900,9 @@ int
 ipmi_entity_remove_child(ipmi_entity_t     *ent,
 			 ipmi_entity_t     *child)
 {
-    entity_child_link_t *link;
-    ilist_iter_t        iter;
+    entity_child_link_t            *link;
+    ilist_iter_t                   iter;
+    ent_info_update_handler_info_t info;
 
     CHECK_ENTITY_LOCK(ent);
     CHECK_ENTITY_LOCK(child);
@@ -858,6 +928,24 @@ ipmi_entity_remove_child(ipmi_entity_t     *ent,
     ipmi_mem_free(link);
 
     ent->presence_possibly_changed = 1;
+
+    info.op = IPMI_CHANGED;
+    info.entity = ent;
+    info.domain = ent->domain;
+    ilist_iter_twoitem(ent->ents->update_handlers,
+		       call_entity_info_update_handler,
+		       &info);
+    if (ent->ents->handler)
+	ent->ents->handler(IPMI_CHANGED, ent->domain, ent, ent->ents->cb_data);
+
+    info.entity = child;
+    info.domain = child->domain;
+    ilist_iter_twoitem(child->ents->update_handlers,
+		       call_entity_info_update_handler,
+		       &info);
+    if (child->ents->handler)
+	child->ents->handler(IPMI_CHANGED, child->domain, child,
+			     child->ents->cb_data);
 
     return 0;
 }
@@ -2543,8 +2631,13 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 				      found->ent->ents->cb_data);      
 
 	for (j=0; j<found->cent_next; j++) {
+	    info.entity = found->cent[j];
+	    ilist_iter_twoitem(found->cent[j]->ents->update_handlers,
+			       call_entity_info_update_handler,
+			       &info);
 	    if (found->cent[j]->ents->handler)
-		found->cent[j]->ents->handler(IPMI_CHANGED, domain, found->ent,
+		found->cent[j]->ents->handler(IPMI_CHANGED, domain,
+					      found->cent[j],
 					      found->cent[j]->ents->cb_data);
 	}
     }
@@ -3654,6 +3747,12 @@ ipmi_entity_id_set_invalid(ipmi_entity_id_t *id)
     ipmi_domain_id_set_invalid(&id->domain_id);
 }
 
+int
+ipmi_entity_id_is_invalid(ipmi_entity_id_t *id)
+{
+    return (id->domain_id.domain == NULL);
+}
+
 
 void
 ipmi_entity_lock(ipmi_entity_t *ent)
@@ -4068,6 +4167,17 @@ ipmi_entity_remove_hot_swap_handler(ipmi_entity_t           *ent,
 	return EINVAL;
 }
 
+void
+ipmi_entity_set_hot_swap_control(ipmi_entity_t          *ent,
+				 ipmi_entity_hot_swap_t *cbs)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    ent->hs_cb = *cbs;
+}
+
+
+
 typedef struct hot_swap_handler_info_s
 {
     ipmi_entity_t             *ent;
@@ -4112,9 +4222,9 @@ ipmi_entity_call_hot_swap_handlers(ipmi_entity_t             *ent,
 }
 
 int
-ipmi_entity_get_hot_swap_state(ipmi_entity_t           *ent,
-			       ipmi_entity_hot_swap_cb handler,
-			       void                    *cb_data)
+ipmi_entity_get_hot_swap_state(ipmi_entity_t                 *ent,
+			       ipmi_entity_hot_swap_state_cb handler,
+			       void                          *cb_data)
 {
     if (!ent->hot_swappable)
 	return ENOSYS;
@@ -4242,9 +4352,9 @@ ipmi_entity_get_hot_swap_requester(ipmi_entity_t      *ent,
 
 typedef struct entity_hot_swap_cb_info_s
 {
-    int                     rv;
-    ipmi_entity_hot_swap_cb handler;
-    void                    *cb_data;
+    int                           rv;
+    ipmi_entity_hot_swap_state_cb handler;
+    void                          *cb_data;
 } entity_hot_swap_cb_info_t;
 
 typedef struct entity_cb_info_s
@@ -4280,9 +4390,9 @@ entity_id_get_hot_swap_state_cb(ipmi_entity_t *entity, void *cb_data)
 }
 
 int
-ipmi_entity_id_get_hot_swap_state(ipmi_entity_id_t        id,
-				  ipmi_entity_hot_swap_cb handler,
-				  void                    *cb_data)
+ipmi_entity_id_get_hot_swap_state(ipmi_entity_id_t              id,
+				  ipmi_entity_hot_swap_state_cb handler,
+				  void                          *cb_data)
 {
     int                       rv;
     entity_hot_swap_cb_info_t info;
@@ -4669,12 +4779,7 @@ hot_swap_act_timeout(void *cb_data, os_hnd_timer_id_t *timer)
     ent->hot_swap_act_timer_running = 0;
 
     if (ent->destroyed) {
-	if (ent->running_timer_count == 0) {
-	    ipmi_unlock(ent->timer_lock);
-	    ipmi_mem_free(ent);
-	    return;
-	}
-	ipmi_unlock(ent->timer_lock);
+	entity_final_destroy(ent); /* Unlocks the lock */
 	return;
     }
     entity_id = ipmi_entity_convert_to_id(ent);
@@ -4747,12 +4852,7 @@ hot_swap_deact_timeout(void *cb_data, os_hnd_timer_id_t *timer)
     ent->hot_swap_deact_timer_running = 0;
 
     if (ent->destroyed) {
-	if (ent->running_timer_count == 0) {
-	    ipmi_unlock(ent->timer_lock);
-	    ipmi_mem_free(ent);
-	    return;
-	}
-	ipmi_unlock(ent->timer_lock);
+	entity_final_destroy(ent); /* Unlocks the lock */
 	return;
     }
     entity_id = ipmi_entity_convert_to_id(ent);
@@ -5100,12 +5200,12 @@ handle_hot_swap_presence(ipmi_entity_t  *ent,
 }
 
 static int
-e_get_hot_swap_state(ipmi_entity_t           *ent,
-		     ipmi_entity_hot_swap_cb handler,
-		     void                    *cb_data)
+e_get_hot_swap_state(ipmi_entity_t                 *ent,
+		     ipmi_entity_hot_swap_state_cb handler,
+		     void                          *cb_data)
 {
     if (handler)
-	handler(ent, ent->hot_swap_state, ent->hot_swap_state, cb_data, NULL);
+	handler(ent, 0, ent->hot_swap_state, cb_data);
     return 0;
 }
 
@@ -5321,3 +5421,156 @@ e_get_hot_swap_requester(ipmi_entity_t      *ent,
 	ipmi_mem_free(info);
     return rv;
 }
+
+/***********************************************************************
+ *
+ * Entity message handling.
+ *
+ **********************************************************************/
+
+static void
+entity_opq_ready2(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_entity_op_info_t *info = cb_data;
+    if (info->__handler)
+	info->__handler(entity, 0, info->__cb_data);
+}
+
+static void
+entity_opq_ready(void *cb_data, int shutdown)
+{
+    ipmi_entity_op_info_t *info = cb_data;
+    int                   rv;
+
+    if (shutdown) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sentity.c(entity_opq_ready): "
+		 "Entity was destroyed while an operation was in progress",
+		 ENTITY_NAME(info->__entity));
+	if (info->__handler)
+	    info->__handler(info->__entity, ECANCELED, info->__cb_data);
+	return;
+    }
+
+    rv = ipmi_entity_pointer_cb(info->__entity_id, entity_opq_ready2, info);
+    if (rv)
+	if (info->__handler)
+	    info->__handler(info->__entity, rv, info->__cb_data);
+}
+
+int
+ipmi_entity_add_opq(ipmi_entity_t         *entity,
+		    ipmi_entity_cb        handler,
+		    ipmi_entity_op_info_t *info,
+		    void                  *cb_data)
+{
+    info->__entity = entity;
+    info->__entity_id = ipmi_entity_convert_to_id(entity);
+    info->__cb_data = cb_data;
+    info->__handler = handler;
+    if (!opq_new_op(entity->waitq, entity_opq_ready, info, 0))
+	return ENOMEM;
+    return 0;
+}
+
+void
+ipmi_entity_opq_done(ipmi_entity_t *entity)
+{
+    /* Protect myself from NULL entitys.  This way, it doesn't have to
+       be done in each call. */
+    if (!entity)
+	return;
+
+    CHECK_ENTITY_LOCK(entity);
+
+    opq_op_done(entity->waitq);
+}
+
+static void
+entity_rsp_handler2(ipmi_entity_t *entity, void *cb_data)
+{
+    ipmi_entity_op_info_t *info = cb_data;
+
+    if (info->__rsp_handler)
+	info->__rsp_handler(entity, 0, info->__rsp, info->__cb_data);
+}
+
+static void
+entity_rsp_handler(ipmi_mc_t  *mc,
+		   ipmi_msg_t *rsp,
+		   void       *rsp_data)
+{
+    ipmi_entity_op_info_t *info = rsp_data;
+    int                    rv;
+    ipmi_entity_t          *entity = info->__entity;
+
+    if (entity->destroyed) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sentity.c(entity_rsp_handler): "
+		 "Entity was destroyed while an operation was in progress",
+		 ENTITY_NAME(entity));
+	if (info->__rsp_handler)
+	    info->__rsp_handler(entity, ECANCELED, NULL, info->__cb_data);
+	entity_final_destroy(entity);
+	return;
+    }
+
+    if (!mc) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "entity.c(entity_rsp_handler): "
+		 "MC was destroyed while a entity operation was in progress");
+	if (info->__rsp_handler)
+	    info->__rsp_handler(entity, ECANCELED, NULL, info->__cb_data);
+	return;
+    }
+
+    /* Call the next stage with the lock held. */
+    info->__rsp = rsp;
+    rv = ipmi_entity_pointer_cb(info->__entity_id,
+				 entity_rsp_handler2,
+				 info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sentity.c(entity_rsp_handler): "
+		 "Could not convert entity id to a pointer",
+		 MC_NAME(mc));
+	if (info->__rsp_handler)
+	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
+    }
+}
+
+static void
+send_command_mc_cb(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_entity_op_info_t *info = cb_data;
+
+    info->__err = ipmi_mc_send_command(mc, info->__lun, info->__msg,
+				       entity_rsp_handler, info);
+}
+
+int
+ipmi_entity_send_command(ipmi_entity_t         *entity,
+			 ipmi_mcid_t           mcid,
+			 unsigned int          lun,
+			 ipmi_msg_t            *msg,
+			 ipmi_entity_rsp_cb    handler,
+			 ipmi_entity_op_info_t *info,
+			 void                  *cb_data)
+{
+    int rv;
+
+    CHECK_ENTITY_LOCK(entity);
+
+    info->__entity = entity;
+    info->__entity_id = ipmi_entity_convert_to_id(entity);
+    info->__cb_data = cb_data;
+    info->__rsp_handler = handler;
+    info->__err = 0;
+    info->__msg = msg;
+    info->__lun = lun;
+    rv = ipmi_mc_pointer_cb(mcid, send_command_mc_cb, info);
+    if (!rv)
+	rv = info->__err;
+    return rv;
+}
+

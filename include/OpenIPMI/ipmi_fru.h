@@ -234,6 +234,15 @@ int ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
 				   unsigned char *data,
 				   unsigned int  *length);
 
+/* Get the start offset in the FRU of the multi-record data.  This
+   includes the multi-record header.  This is here to allow the
+   offsets of data in multi-record areas to be computed so that values
+   can be modified. */
+int ipmi_fru_get_multi_record_data_offset(ipmi_fru_t    *fru,
+					  unsigned int  num,
+					  unsigned int  *offset);
+
+
 /* FIXME - for OEM code (if ever necessary) add a way to create an
    empty FRU, fill it with data, and put it into an entity. */
 

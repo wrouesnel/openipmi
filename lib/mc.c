@@ -1592,6 +1592,12 @@ ipmi_mc_id_set_invalid(ipmi_mcid_t *id)
     memset(id, 0, sizeof(*id));
 }
 
+int
+ipmi_mc_id_is_invalid(ipmi_mcid_t *id)
+{
+    return (id->domain_id.domain == NULL);
+}
+
 /***********************************************************************
  *
  * Handle sending commands and getting responses.

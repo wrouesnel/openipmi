@@ -243,6 +243,12 @@ ipmi_sensor_id_set_invalid(ipmi_sensor_id_t *id)
     memset(id, 0, sizeof(*id));
 }
 
+int
+ipmi_sensor_id_is_invalid(ipmi_sensor_id_t *id)
+{
+    return (id->mcid.domain_id.domain == NULL);
+}
+
 typedef struct mc_cb_info_s
 {
     ipmi_sensor_ptr_cb handler;
@@ -451,6 +457,33 @@ ipmi_sensor_add_opq(ipmi_sensor_t         *sensor,
     if (!opq_new_op(sensor->waitq, sensor_opq_ready, info, 0))
 	return ENOMEM;
     return 0;
+}
+
+static void
+sensor_id_add_opq_cb(ipmi_sensor_t *sensor, void *cb_data)
+{
+    ipmi_sensor_op_info_t *info = cb_data;
+
+    info->__sensor = sensor;
+    if (!opq_new_op(sensor->waitq, sensor_opq_ready, info, 0))
+	info->__err = ENOMEM;
+}
+
+int
+ipmi_sensor_id_add_opq(ipmi_sensor_id_t      sensor_id,
+		       ipmi_sensor_op_cb     handler,
+		       ipmi_sensor_op_info_t *info,
+		       void                  *cb_data)
+{
+    int rv;
+
+    info->__sensor_id = sensor_id;
+    info->__cb_data = cb_data;
+    info->__handler = handler;
+    info->__err = 0;
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_id_add_opq_cb, info);
+    if (!rv)
+	rv = info->__err;
 }
 
 void

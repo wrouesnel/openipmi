@@ -1,3 +1,29 @@
+2004-02-26 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added a way to check if an
+	ID is invalid.
+	* include/OpenIPMI/ipmiif.h.in: ditto for domains, sensors,
+	controls, and entities.
+	* lib/domain.c: ditto
+	* lib/sensor.c: ditto
+	* lib/control.c: ditto
+	* lib/entity.c: ditto
+
+	* lib/entity.c: Do a changed callback on the parent and child when
+	a parent-child relationship is created or destroyed.
+
+	* include/OpenIPMI/ipmi_entity.h, lib/entity.c: Added an operation
+	queue and handling functions for entities.
+
+	* include/OpenIPMI/ipmi_entity.h, lib/entity.c: Added OEM
+	information for entities.
+
+	* include/OpenIPMI/ipmi_entity.h, lib/entity.c: Modified the
+	hot-swap get state routine to take a more sensible callback.
+
+	* include/OpenIPMI/ipmi_fru.h, lib/fru.h: Added a way to get the
+	offset of a multi-record so it may be written.
+
 2004-02-25 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/domain.c: Fixed a few problems were callbacks can receive

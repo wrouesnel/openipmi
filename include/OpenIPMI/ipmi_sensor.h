@@ -432,6 +432,7 @@ typedef struct ipmi_sensor_op_info_s
     ipmi_sensor_op_cb  __handler;
     ipmi_sensor_rsp_cb __rsp_handler;
     ipmi_msg_t         *__rsp;
+    int                __err;
 } ipmi_sensor_op_info_t;
 
 /* Add an operation to the sensor operation queue.  If nothing is in
@@ -443,6 +444,10 @@ int ipmi_sensor_add_opq(ipmi_sensor_t         *sensor,
 			ipmi_sensor_op_cb     handler,
 			ipmi_sensor_op_info_t *info,
 			void                  *cb_data);
+int ipmi_sensor_id_add_opq(ipmi_sensor_id_t      sensor_id,
+			   ipmi_sensor_op_cb     handler,
+			   ipmi_sensor_op_info_t *info,
+			   void                  *cb_data);
 
 /* When an operation is completed (even if it fails), this *MUST* be
    called to cause the next operation to run. */

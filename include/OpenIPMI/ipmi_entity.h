@@ -222,6 +222,12 @@ void ipmi_entity_set_SDR_repository_device(ipmi_entity_t *ent,
 void ipmi_entity_set_sensor_device(ipmi_entity_t *ent,
 				   int           val);
 
+typedef void (*ipmi_entity_cleanup_oem_info_cb)(ipmi_entity_t *entity,
+						void           *oem_info);
+void ipmi_entity_set_oem_info(ipmi_entity_t *entity, void *oem_info,
+			      ipmi_entity_cleanup_oem_info_cb cleanup_handler);
+void *ipmi_entity_get_oem_info(ipmi_entity_t *entity);
+
 /* This pointer is kept in the data structure.  You should use a
    static string here, which should always be doable, I think.  If
    not, a management interface needs to be added for this. */
@@ -241,9 +247,9 @@ int ipmi_entity_set_hot_swappable(ipmi_entity_t *ent, int val);
 typedef struct ipmi_entity_hot_swap_s
 {
     /* Fetch the value of the current hot-swap state for the entity. */
-    int (*get_hot_swap_state)(ipmi_entity_t           *ent,
-			      ipmi_entity_hot_swap_cb handler,
-			      void                    *cb_data);
+    int (*get_hot_swap_state)(ipmi_entity_t                 *ent,
+			      ipmi_entity_hot_swap_state_cb handler,
+			      void                          *cb_data);
 
     /* Set the auto-activate value for the entity.  If auto_act is
        larger than can be timed with this mechanism, this routine
@@ -335,6 +341,64 @@ void ipmi_entity_set_hot_swap_control(ipmi_entity_t          *ent,
    all the time, but should generally appear except in not present
    state.
 */
+
+/* Operations and callbacks for entity operations.  Operations on a
+   entity that can be delayed should be serialized (to avoid user
+   confusion and for handling multi-part operations properly), thus
+   each entity has an operation queue, only one operation at a time
+   may be running.  If you want to do an operation that requires
+   sending a message and getting a response, you must put that
+   operation into the opq.  When the handler you registered in the opq
+   is called, you can actually perform the operation.  When your
+   operation completes (no matter what, you must call it, even if the
+   operation fails), you must call ipmi_entity_opq_done.  The entity
+   will be locked properly for your callback.  To handle the entity
+   locking for you for command responses, you can send the message
+   with ipmi_entity_send_command, it will return the response when it
+   comes in to your handler with the entity locked. */
+
+typedef void (*ipmi_entity_rsp_cb)(ipmi_entity_t *entity,
+				   int           err,
+				   ipmi_msg_t    *rsp,
+				   void          *cb_data);
+
+typedef struct ipmi_entity_op_info_s
+{
+    ipmi_entity_id_t   __entity_id;
+    ipmi_entity_t      *__entity;
+    void               *__cb_data;
+    ipmi_entity_cb     __handler;
+    ipmi_entity_rsp_cb __rsp_handler;
+    ipmi_msg_t         *__rsp;
+    ipmi_msg_t         *__msg;
+    int                __err;
+    int                __lun;
+} ipmi_entity_op_info_t;
+
+/* Add an operation to the entity operation queue.  If nothing is in
+   the operation queue, the handler will be performed immediately.  If
+   something else is currently being operated on, the operation will
+   be queued until other operations before it have been completed.
+   Then the handler will be called. */
+int ipmi_entity_add_opq(ipmi_entity_t         *entity,
+			ipmi_entity_cb        handler,
+			ipmi_entity_op_info_t *info,
+			void                  *cb_data);
+
+/* When an operation is completed (even if it fails), this *MUST* be
+   called to cause the next operation to run. */
+void ipmi_entity_opq_done(ipmi_entity_t *entity);
+
+/* Send an IPMI command to a specific MC.  The response handler will
+   be called with the entity locked. */
+int ipmi_entity_send_command(ipmi_entity_t         *entity,
+			     ipmi_mcid_t           mcid,
+			     unsigned int          lun,
+			     ipmi_msg_t            *msg,
+			     ipmi_entity_rsp_cb    handler,
+			     ipmi_entity_op_info_t *info,
+			     void                  *cb_data);
+
 
 /* Locks for the entity. */
 void ipmi_entity_lock(ipmi_entity_t *ent);

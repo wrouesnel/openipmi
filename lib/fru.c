@@ -524,6 +524,8 @@ ipmi_fru_get_ ## lcname ## _ ## custom(ipmi_fru_t	 *fru,		\
 
 typedef struct ipmi_fru_internal_use_area_s
 {
+    unsigned int   offset;
+
     /* version bit 7-4 reserved (0000), bit 3-0 == 0001 */
     unsigned char  version;
     unsigned short length;
@@ -549,6 +551,7 @@ static int
 fru_decode_internal_use_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
 			     unsigned int      data_len,
+			     unsigned int      start_offset,
 			     ipmi_fru_record_t **rrec)
 {
     ipmi_fru_internal_use_area_t *u;
@@ -562,6 +565,7 @@ fru_decode_internal_use_area(ipmi_fru_t        *fru,
 
     u = fru_record_get_data(rec);
 
+    u->offset = start_offset;
     u->version = *data;
     u->length = data_len-1;
     u->data = ipmi_mem_alloc(u->length);
@@ -636,6 +640,8 @@ ipmi_fru_get_internal_use_data(ipmi_fru_t    *fru,
 
 typedef struct ipmi_fru_chassis_info_area_s
 {
+    unsigned int   offset;
+
     /* version bit 7-4 reserved (0000), bit 3-0 == 0001 */
     unsigned char  version;
     unsigned char  type;  /* chassis type CT_xxxx */
@@ -665,6 +671,7 @@ static int
 fru_decode_chassis_info_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
 			     unsigned int      data_len,
+			     unsigned int      start_offset,
 			     ipmi_fru_record_t **rrec)
 {
     ipmi_fru_chassis_info_area_t *u;
@@ -701,6 +708,7 @@ fru_decode_chassis_info_area(ipmi_fru_t        *fru,
 
     u = fru_record_get_data(rec);
 
+    u->offset = start_offset;
     u->version = version;
     data += 2; data_len -= 2;
     u->type = *data;
@@ -757,6 +765,8 @@ GET_CUSTOM_STR(chassis_info, CHASSIS_INFO)
 
 typedef struct ipmi_fru_board_info_area_s
 {
+    unsigned int   offset;
+
     /* version bit 7-4 reserved (0000), bit 3-0 == 0001 */
     unsigned char  version;
     unsigned char  lang_code;
@@ -792,6 +802,7 @@ static int
 fru_decode_board_info_area(ipmi_fru_t        *fru,
 			   unsigned char     *data,
 			   unsigned int      data_len,
+			   unsigned int      start_offset,
 			   ipmi_fru_record_t **rrec)
 {
     ipmi_fru_board_info_area_t *u;
@@ -828,6 +839,7 @@ fru_decode_board_info_area(ipmi_fru_t        *fru,
 
     u = fru_record_get_data(rec);
 
+    u->offset = start_offset;
     u->version = version;
     data += 2; data_len -= 2;
     u->lang_code = *data;
@@ -909,6 +921,8 @@ GET_CUSTOM_STR(board_info, BOARD_INFO)
 
 typedef struct ipmi_fru_product_info_area_s
 {
+    unsigned int   offset;
+
     /* version bit 7-4 reserved (0000), bit 3-0 == 0001 */
     unsigned char  version;
     unsigned char  lang_code;
@@ -947,6 +961,7 @@ static int
 fru_decode_product_info_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
 			     unsigned int      data_len,
+			     unsigned int      start_offset,
 			     ipmi_fru_record_t **rrec)
 {
     ipmi_fru_product_info_area_t *u;
@@ -983,6 +998,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
 
     u = fru_record_get_data(rec);
 
+    u->offset = start_offset;
     u->version = version;
     data += 2; data_len -= 2;
     u->lang_code = *data;
@@ -1044,6 +1060,7 @@ GET_CUSTOM_STR(product_info, PRODUCT_INFO)
 
 typedef struct ipmi_fru_record_elem_s
 {
+    unsigned int  offset;
     unsigned char type;
     unsigned char format_version;
     unsigned char length;
@@ -1052,6 +1069,8 @@ typedef struct ipmi_fru_record_elem_s
 
 typedef struct ipmi_fru_multi_record_s
 {
+    unsigned int           offset;
+
     unsigned int           num_records;
     ipmi_fru_record_elem_t *records;
 } ipmi_fru_multi_record_t;
@@ -1081,6 +1100,7 @@ static int
 fru_decode_multi_record_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
 			     unsigned int      data_len,
+			     unsigned int      start_offset,
 			     ipmi_fru_record_t **rrec)
 {
     ipmi_fru_record_t       *rec;
@@ -1147,6 +1167,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	return ENOMEM;
 
     u = fru_record_get_data(rec);
+    u->offset = start_offset;
     u->num_records = num_records;
     u->records = ipmi_mem_alloc(sizeof(ipmi_fru_record_elem_t) * num_records);
     if (!u->records) {
@@ -1183,11 +1204,13 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	}
 
 	memcpy(r->data, data+5, length);
+	r->offset = start_offset;
 	r->length = length;
 	r->type = data[0];
 	r->format_version = data[1] & 0xf;
 
 	data += length + 5;
+	start_offset += length + 5;
     }
 
     *rrec = rec;
@@ -1279,6 +1302,22 @@ ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
     return 0;
 }
 
+int
+ipmi_fru_get_multi_record_data_offset(ipmi_fru_t    *fru,
+				      unsigned int  num,
+				      unsigned int  *offset)
+{
+    ipmi_fru_multi_record_t *u;
+
+    if (!fru->multi_record)
+	return ENOSYS;
+    u = fru_record_get_data(fru->multi_record);
+    if (num >= u->num_records)
+	return EINVAL;
+    *offset = u->records[num].offset;
+    return 0;
+}
+
 
 typedef struct fru_offset_s
 {
@@ -1346,27 +1385,27 @@ process_fru_info(ipmi_fru_t *fru)
 
 	switch (foff[i].type) {
 	case IPMI_FRU_FTR_INTERNAL_USE_AREA:
-	    err = fru_decode_internal_use_area(fru, data+offset, plen,
+	    err = fru_decode_internal_use_area(fru, data+offset, plen, offset,
 					       &fru->internal_use);
 	    break;
 
 	case IPMI_FRU_FTR_CHASSIS_INFO_AREA:
-	    err = fru_decode_chassis_info_area(fru, data+offset, plen,
+	    err = fru_decode_chassis_info_area(fru, data+offset, plen, offset,
 					       &fru->chassis_info);
 	    break;
 
 	case IPMI_FRU_FTR_BOARD_INFO_AREA:
-	    err = fru_decode_board_info_area(fru, data+offset, plen,
+	    err = fru_decode_board_info_area(fru, data+offset, plen, offset,
 					       &fru->board_info);
 	    break;
 
 	case IPMI_FRU_FTR_PRODUCT_INFO_AREA:
-	    err = fru_decode_product_info_area(fru, data+offset, plen,
+	    err = fru_decode_product_info_area(fru, data+offset, plen, offset,
 					       &fru->product_info);
 	    break;
 
 	case IPMI_FRU_FTR_MULTI_RECORD_AREA:
-	    err = fru_decode_multi_record_area(fru, data+offset, plen,
+	    err = fru_decode_multi_record_area(fru, data+offset, plen, offset,
 					       &fru->multi_record);
 	    break;
 	}

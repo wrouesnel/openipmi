@@ -3052,6 +3052,12 @@ ipmi_domain_id_set_invalid(ipmi_domain_id_t *id)
     id->domain = NULL;
 }
 
+int
+ipmi_domain_id_is_invalid(ipmi_domain_id_t *id)
+{
+    return (id->domain == NULL);
+}
+
 /***********************************************************************
  *
  * Connection setup and handling
