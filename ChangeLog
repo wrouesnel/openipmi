@@ -1,3 +1,10 @@
+2004-04-14 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/entity.c: Scan MCs from MCDLRs even if the information is
+	not used for anything else.
+
+	* doc/OpenIPMI.texi: Add information about callbacks.
+
 2004-04-13 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Prefer to keep the MCDLR information for an entity

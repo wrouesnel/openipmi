@@ -2929,11 +2929,20 @@ ipmi_entity_scan_sdrs(ipmi_domain_t      *domain,
 		    ipmb = infos.dlrs[i]->access_address;
 		    memcpy(&found->ent->info, infos.dlrs[i],
 			   sizeof(dlr_info_t));
-		} else if (!found->ent->info.FRU_inventory_device) {
-		    /* We prefer to only keep the information from the
-		       FRU inventory device MCDLR. */
-		    memcpy(&found->ent->info, infos.dlrs[i],
-			   sizeof(dlr_info_t));
+		} else {
+		    if (!found->ent->info.FRU_inventory_device) {
+			/* We prefer to only keep the information from the
+			   FRU inventory device MCDLR. */
+			memcpy(&found->ent->info, infos.dlrs[i],
+			       sizeof(dlr_info_t));
+		    }
+
+		    /* Go ahead and scan the MC if we don't do
+		       anything else with this data. */
+		    ipmi_start_ipmb_mc_scan(domain, infos.dlrs[i]->channel,
+					    infos.dlrs[i]->access_address,
+					    infos.dlrs[i]->access_address,
+					    NULL, NULL);
 		}
 	    } else {
 		memcpy(&found->ent->info, infos.dlrs[i], sizeof(dlr_info_t));

@@ -265,6 +265,7 @@ are accepted practice and by far the best way to build control systems.
 * Error Handling::
 * Locking::
 * OpenIPMI Objects::
+* Callbacks::
 @end menu
 
 @node    Event-Driven Systems, The OS Handler, OpenIPMI Concepts, OpenIPMI Concepts
@@ -587,7 +588,7 @@ check_if_my_entity_present(my_data_t *data)
 So, it is recommended that you collect all the static information that
 you need from an object when it is reported to you.
 
-@node    OpenIPMI Objects, , Locking, OpenIPMI Concepts
+@node    OpenIPMI Objects, Callbacks, Locking, OpenIPMI Concepts
 @section OpenIPMI Objects
 
 In OpenIPMI, the user deals with six basic objects: connections,
@@ -737,6 +738,66 @@ to the event will receive a @var{NULL} for the event.  So be ready to
 handle a @var{NULL} event in all your event handlers.  A @var{NULL}
 may also be passed to an event handler if the callback was not due to
 an event.
+
+@node    Callbacks, , OpenIPMI Objects, OpenIPMI Concepts
+@section Callbacks
+
+As you will discover, OpenIPMI is very callback based.  The callbacks
+are somewhat fined grained; you register for exactly what you want to
+see on individual objects.  This is not as bad as you might imagine
+(even though it may seem somewhat strange).  It does mean that you
+have to do a lot of registering in all the right places, though.  IPMI
+has a large number of asyncronous things that it has to inform you
+about.  If it delivered all these through one interface, you would
+have to look at each call and try to figure out what type of things
+was being reported, what object is was associated, etc.  In effect,
+that work is done by OpenIPMI.
+
+@subsection Updated Callbacks
+
+Updated callbacks tell you when an object comes into existance, is
+destroyed, or if configuration information about an object has
+changed.  On an entity, for instance, when an entity is first added,
+the entity update handler on the domain will be called with the
+entity.  when an SDR is read and causes a change to the entity, the
+updated handler will be called again with the change.  When the entity
+is deleted, it will be called again.
+
+In general, you should add updated handlers whenever the thing you
+want to register against comes into existance.  So for entities and
+the main event handler, you should register them in the setup_done
+callback for the domain.  The entity update handler should register
+the update handlers for sensors, controls, and FRU information.  It
+should register the event handlers for presence and hot-swap there,
+too.
+
+Sensor and control update handlers should set up and register for
+events from the sensor.
+
+@subsection Event Based Callbacks
+
+Event based callbacks tell you when asynchronous things happen in the
+system.  For instance, a card gets plugged in and an entity becomes
+present.  You will be told with the present callback on the entity.
+The hot-swap state of an entity changes.  That is reported via the
+hot-swap state callback.  Events because of sensors going out of range
+is another example.
+
+Note that the handlers don't get called with current state when you
+add an event-based callback handler.
+
+@subsection Synchronous Callbacks
+
+Synchronous callbacks are callbacks for things you request and are
+one-shot operations.  For instance, if you want to know the current
+value of a sensor, you call call @code{ipmi_reading_get()} and you
+give it a handler to call when the reading has been fetched.
+
+This is always done for things that OpenIPMI might hav to send a
+message to do.  If it a result of OpenIPMI's requirement to be able to
+work in non-threaded systems and still be responsive to operations
+while waiting.
+
 
 @c **********************************************************************
 @node    Using OpenIPMI, How to Write OEM Plugins, OpenIPMI Concepts, Top
