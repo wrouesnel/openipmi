@@ -1,3 +1,8 @@
+2004-03-25 Corey Minyard <cminyard@mvista.com> 
+
+	* entity.c: Always rescan FRU info on an entity presence change
+	for an entity that has FRU info.
+
 2004-03-23 Corey Minyard <cminyard@mvista.com> 
 
 	* entity.c: Call _ipmi_find_or_create_mc_by_slave_addr() on new

@@ -254,6 +254,16 @@ struct ipmi_entity_info_s
     ilist_t               *entities;
 };
 
+typedef struct fru_ent_info_s
+{
+    enum ipmi_update_e op;
+    ipmi_entity_t      *entity;
+    ipmi_fru_t         *fru;
+    int                err;
+} fru_ent_info_t;
+
+static void call_fru_handler(void *data, void *cb_data1, void *cb_data2);
+
 /***********************************************************************
  *
  * The internal hot-swap callbacks.
@@ -1078,6 +1088,7 @@ presence_changed(ipmi_entity_t *ent,
 {
     int                     handled = IPMI_EVENT_NOT_HANDLED;
     presence_handler_info_t info;
+    ipmi_fru_t              *fru;
 
     if (present != ent->present) {
 	if (handled == IPMI_EVENT_HANDLED)
@@ -1087,9 +1098,27 @@ presence_changed(ipmi_entity_t *ent,
 
 	handled = handle_hot_swap_presence(ent, present, event);
 
-	/* When the board becomes present, fetch it's FRUs. */
-	if (present && ipmi_entity_get_is_fru(ent) && (ent->fru == NULL))
-	    ipmi_entity_fetch_frus(ent);
+	/* When the entity becomes present or absent, fetch or destroy
+	   its FRU info. */
+	if (ipmi_entity_get_is_fru(ent)) {
+	    if (present) {
+		ipmi_entity_fetch_frus(ent);
+	    } else if (ent->fru != NULL) {
+		fru_ent_info_t info;
+
+		fru = ent->fru;
+		ent->fru = NULL;
+		ipmi_fru_destroy(fru, NULL, NULL);
+
+		info.op = IPMI_DELETED;
+		info.entity = ent;
+		info.fru = NULL;
+		info.err = 0;
+		ilist_iter_twoitem(ent->fru_handlers, call_fru_handler, &info);
+		if (ent->fru_handler)
+		    ent->fru_handler(IPMI_DELETED, ent, ent->fru_cb_data);
+	    }
+	}
 	if (ent->presence_handler) {
 	    ent->presence_handler(ent, present, ent->presence_cb_data, event);
 	    handled = IPMI_EVENT_HANDLED;
@@ -4034,14 +4063,6 @@ ipmi_entity_set_update_handler(ipmi_entity_info_t    *ents,
     ents->cb_data = cb_data;
     return 0;
 }
-
-typedef struct fru_ent_info_s
-{
-    enum ipmi_update_e op;
-    ipmi_entity_t      *entity;
-    ipmi_fru_t         *fru;
-    int                err;
-} fru_ent_info_t;
 
 static void call_fru_handler(void *data, void *cb_data1, void *cb_data2)
 {
