@@ -189,9 +189,6 @@ typedef struct lan_data_s
     unsigned char              slave_addr;
     int                        is_active;
 
-    /* tell the audit handler to destroy this connection. */
-    int                        destroyed;
-
     int                        curr_ip_addr;
     struct sockaddr_in         ip_addr[MAX_IP_ADDR];
     int                        ip_working[MAX_IP_ADDR];
@@ -838,19 +835,6 @@ audit_timeout_handler(void              *cb_data,
     }
 
     lan = ipmi->con_data;
-
-    if (lan->destroyed) {
-	/* Start the timer so the close will destroy it. */
-	timeout.tv_sec = 100000;
-	timeout.tv_usec = 0;
-	ipmi->os_hnd->start_timer(ipmi->os_hnd,
-				  id,
-				  &timeout,
-				  audit_timeout_handler,
-				  cb_data);
-	ipmi_read_unlock();
-	ipmi->close_connection(ipmi);
-    }
 
     /* Send message to all addresses we think are down.  If the
        connection is down, this will bring it up, otherwise it
@@ -2560,6 +2544,14 @@ int _ipmi_lan_set_ipmi(ipmi_con_t *old, ipmi_con_t *new);
 void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv);
 
 static void
+switchover_con_finish(void *cb_data, os_hnd_timer_id_t *id)
+{
+    ipmi_con_t *ipmi = cb_data;
+
+    ipmi->close_connection(ipmi);
+}
+
+static void
 handle_dev_id(ipmi_con_t   *ipmi,
 	      ipmi_addr_t  *addr,
 	      unsigned int addr_len,
@@ -2597,6 +2589,14 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	   protocol, switch over to that. */
 	ipmi_con_t     *lancon = lan->real_ipmi_lan_con;
 	ipmi_con_t     tmpcon;
+	struct timeval    timeout;
+	os_hnd_timer_id_t *timer;
+
+	/* Schedule this to run in a timeout, so we are not holding
+           the read lock. */
+	err = ipmi->os_hnd->alloc_timer(ipmi->os_hnd, &timer);
+	if (err)
+	    goto out_err;
 
 	/* Switch our connection over to the new LAN one.  We *must*
 	   reuse the old ipmi structure because that is what our user
@@ -2620,9 +2620,14 @@ handle_dev_id(ipmi_con_t   *ipmi,
 	lan->ipmb_addr_handler = NULL;
 	lan->real_ipmi_lan_con = NULL;
 
-	/* The old connection is gone, just force it to be closed on
-	   the next audit. */
-	lan->destroyed = 1;
+	/* Start the timer to close the original connection. */
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 0;
+	ipmi->os_hnd->start_timer(ipmi->os_hnd,
+				  timer,
+				  &timeout,
+				  switchover_con_finish,
+				  ipmi);
 
 	err = ipmi->start_con(ipmi);
 	if (err)
