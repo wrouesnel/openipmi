@@ -191,6 +191,12 @@ struct ipmi_sensor_s
     void                   *destroy_handler_cb_data;
 };
 
+/***********************************************************************
+ *
+ * Sensor ID handling.
+ *
+ **********************************************************************/
+
 ipmi_sensor_id_t
 ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor)
 {
@@ -300,6 +306,12 @@ ipmi_sensor_pointer_noseq_cb(ipmi_sensor_id_t   id,
 
     return rv;
 }
+
+/***********************************************************************
+ *
+ * Various sensor allocation/deallocation/opq/etc.
+ *
+ **********************************************************************/
 
 static void
 sensor_final_destroy(ipmi_sensor_t *sensor)
@@ -433,7 +445,8 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 				info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Could not convert sensor id to a pointer");
+		 "sensor.c(sensor_rsp_handler):"
+		 " Could not convert sensor id to a pointer");
 	if (info->__rsp_handler)
 	    info->__rsp_handler(NULL, rv, NULL, info->__cb_data);
     }
@@ -486,6 +499,9 @@ sensor_addr_response_handler(ipmi_domain_t *domain,
 				sensor_rsp_handler2,
 				info);
     if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sensor.c(sensor_addr_rsp_handler):"
+		 " Could not convert sensor id to a pointer");
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
     }
@@ -709,6 +725,12 @@ ipmi_sensors_destroy(ipmi_sensor_info_t *sensors)
     ipmi_mem_free(sensors);
     return 0;
 }
+
+/***********************************************************************
+ *
+ * Sensor SDR handlnig
+ *
+ **********************************************************************/
 
 static int
 get_sensors_from_sdrs(ipmi_domain_t      *domain,
@@ -1219,7 +1241,8 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 		    /* It's from the same SDR repository, log an error
                        and continue to delete the first one. */
 		    ipmi_log(IPMI_LOG_WARNING,
-			     "Sensor 0x%x is the same as sensor 0x%x in the"
+			     "sensor.c(ipmi_sensor_handle_sdrs):"
+			     " Sensor 0x%x is the same as sensor 0x%x in the"
 			     " repository", 
 			     osensor->source_idx,
 			     nsensor->source_idx);
@@ -1285,6 +1308,12 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
     return rv;
 }
 			
+/***********************************************************************
+ *
+ * Get/set various local information about a sensor.
+ *
+ **********************************************************************/
+
 int
 ipmi_sensor_get_nominal_reading(ipmi_sensor_t *sensor,
 				double *nominal_reading)
@@ -2364,6 +2393,146 @@ ipmi_sensor_set_id(ipmi_sensor_t *sensor, char *id,
     sensor->id_len = length;
 }
 
+void
+ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info,
+			 ipmi_sensor_cleanup_oem_info_cb cleanup_handler)
+{
+    sensor->oem_info = oem_info;
+    sensor->oem_info_cleanup_handler = cleanup_handler;
+}
+
+void *
+ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->oem_info;
+}
+
+char *
+ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->sensor_type_string;
+}
+
+void
+ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->sensor_type_string = str;
+}
+
+char *
+ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->event_reading_type_string;
+}
+
+void
+ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->event_reading_type_string = str;
+}
+
+char *
+ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->rate_unit_string;
+}
+
+void
+ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->rate_unit_string = str;
+}
+
+char *
+ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->base_unit_string;
+}
+
+void
+ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->base_unit_string = str;
+}
+
+char *
+ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    return sensor->modifier_unit_string;
+}
+
+void
+ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str)
+{
+    sensor->modifier_unit_string = str;
+}
+
+ipmi_entity_t *
+ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
+{
+    int           rv;
+    ipmi_entity_t *ent;
+    ipmi_domain_t *domain;
+
+    CHECK_SENSOR_LOCK(sensor);
+
+    domain = ipmi_mc_get_domain(sensor->mc);
+
+    rv = ipmi_entity_find(ipmi_domain_get_entities(domain),
+			  sensor->mc,
+			  sensor->entity_id,
+			  sensor->entity_instance,
+			  &ent);
+    if (rv)
+	return NULL;
+    return ent;
+}
+
+void
+ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
+				   unsigned int  offset,
+				   unsigned int  val_when_requesting)
+{
+    sensor->hot_swap_requester = offset;
+    sensor->hot_swap_requester_val = val_when_requesting;
+}
+
+int
+ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
+				  unsigned int  *offset,
+				  unsigned int  *val_when_requesting)
+{
+    CHECK_SENSOR_LOCK(sensor);
+
+    if (sensor->hot_swap_requester != -1) {
+	if (offset)
+	    *offset = sensor->hot_swap_requester;
+	if (val_when_requesting)
+	    *val_when_requesting = sensor->hot_swap_requester_val;
+	return 1;
+    }
+    return 0;
+}
+
+
+/***********************************************************************
+ *
+ * Incoming event handling for sensors.
+ *
+ **********************************************************************/
+
 int
 ipmi_sensor_threshold_set_event_handler(
     ipmi_sensor_t                          *sensor,
@@ -2653,6 +2822,58 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
     return 0;
 }
 
+/***********************************************************************
+ *
+ * Standard sensor messaging.
+ *
+ **********************************************************************/
+
+typedef void (*sensor_done_handler_cb)(ipmi_sensor_t *sensor,
+				       int           err,
+				       void          *sinfo);
+
+static int
+sensor_done_check_rsp(ipmi_sensor_t          *sensor,
+		      int                    err,
+		      ipmi_msg_t             *rsp,
+		      unsigned int           min_length,
+		      char                   *name,
+		      sensor_done_handler_cb done,
+		      void                   *sinfo)
+{
+    if (err) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sensor.c(%s): Got error: %x", name, err);
+	done(sensor, err, sinfo);
+	return err;
+    }
+
+    if (!sensor) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sensor.c(%s): Sensor when away during operation", name);
+	done(sensor, ECANCELED, sinfo);
+	return ECANCELED;
+    }
+
+    if (rsp && rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sensor.c(%s): Got IPMI error in response: %x",
+		 name, rsp->data[0]);
+	done(sensor, IPMI_IPMI_ERR_VAL(rsp->data[0]), sinfo);
+	return IPMI_IPMI_ERR_VAL(rsp->data[0]);
+    }
+
+    if (rsp && (rsp->data_len < min_length)) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sensor.c(%s): Response was too short, got %d, expected %d",
+		 name, rsp->data_len, min_length);
+	done(sensor, EINVAL, sinfo);
+	return EINVAL;
+    }
+
+    return 0;
+}
+
 typedef struct event_enable_info_s
 {
     ipmi_sensor_op_info_t sdata;
@@ -2663,6 +2884,18 @@ typedef struct event_enable_info_s
     int                   do_disable;
 } event_enable_info_t;
 
+static void enables_done_handler(ipmi_sensor_t *sensor,
+				 int           err,
+				 void          *sinfo)
+{
+    event_enable_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
+
 static void
 disables_set(ipmi_sensor_t *sensor,
 	     int           err,
@@ -2671,28 +2904,11 @@ disables_set(ipmi_sensor_t *sensor,
 {
     event_enable_info_t *info = cb_data;
 
-    if (err) {
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 1, "disables_set",
+			      enables_done_handler, info))
 	return;
-    }
 
-    if (rsp->data[0]) {
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    if (info->done)
-	info->done(sensor, 0, info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    enables_done_handler(sensor, 0, info);
 }
 
 static void
@@ -2706,27 +2922,9 @@ enables_set(ipmi_sensor_t *sensor,
     ipmi_msg_t          cmd_msg;
     int                 rv;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error setting sensor enables: %x", err);
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 1, "enables_set",
+			      enables_done_handler, info))
 	return;
-    }
-
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error setting sensor enables: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
 
     if (info->do_disable) {
 	/* Enables were set, now disable all the other ones. */
@@ -2745,19 +2943,14 @@ enables_set(ipmi_sensor_t *sensor,
 				      &(info->sdata), info);
 	if (rv) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "Error sending event enable command to clear events: %x",
+		     "sensors.c(enables_set):"
+		     " Error sending event enable command to clear events: %x",
 		     rv);
-	    if (info->done)
-		info->done(sensor, rv, info->cb_data);
-	    ipmi_sensor_opq_done(sensor);
-	    ipmi_mem_free(info);
+	    enables_done_handler(sensor, rv, info);
 	}
     } else {
 	/* Just doing enables, we are done. */
-	if (info->done)
-	    info->done(sensor, 0, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+	enables_done_handler(sensor, 0, info);
     }
 }
 
@@ -2770,15 +2963,9 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     int                 event_support;
     int                 rv;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting sensor enables: %x", err);
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "event_enable_set_start",
+			      enables_done_handler, info))
 	return;
-    }
 
     event_support = ipmi_sensor_get_event_support(sensor);
 
@@ -2826,11 +3013,9 @@ event_enable_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     }
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending event enable command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+		 "sensor.c(event_enable_set_start):"
+		 " Error sending event enable command: %x", rv);
+	enables_done_handler(sensor, rv, info);
     }
 }
 
@@ -2967,6 +3152,18 @@ typedef struct event_enable_get_info_s
     void                      *cb_data;
 } event_enable_get_info_t;
 
+static void enables_get_done_handler(ipmi_sensor_t *sensor,
+				     int           err,
+				     void          *sinfo)
+{
+    event_enable_get_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, &info->state, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
+
 static void
 enables_get(ipmi_sensor_t *sensor,
 	    int           err,
@@ -2975,42 +3172,9 @@ enables_get(ipmi_sensor_t *sensor,
 {
     event_enable_get_info_t *info = cb_data;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting sensor enables: %x", err);
-	if (info->done)
-	    info->done(sensor, err, &info->state, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 2, "enables_get",
+			      enables_get_done_handler, info))
 	return;
-    }
-
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error getting sensor enables: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       &info->state,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    if (rsp->data_len < 2) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "sensor.c(enables_get):"
-		 " get sensor enables response too short");
-	if (info->done)
-	    info->done(sensor,
-		       EINVAL,
-		       &info->state,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
 
     info->state.status = rsp->data[1] & 0xc0;
     if (rsp->data_len >= 4)
@@ -3019,10 +3183,7 @@ enables_get(ipmi_sensor_t *sensor,
     if (rsp->data_len >= 6)
         info->state.__deassertion_events = (rsp->data[4]
 					    | (rsp->data[5] << 8));
-    if (info->done)
-	info->done(sensor, 0, &info->state, info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    enables_get_done_handler(sensor, 0, info);
 }
 
 static void
@@ -3033,15 +3194,9 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     ipmi_msg_t              cmd_msg;
     int                     rv;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting getting sensor enables: %x", err);
-	if (info->done)
-	    info->done(sensor, err, &info->state, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "event_enable_get_start",
+			      enables_get_done_handler, info))
 	return;
-    }
 
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
@@ -3053,11 +3208,9 @@ event_enable_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, enables_get, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending get event enables command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv, &info->state, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+		 "sensor.c(event_enable_get_start):"
+		 " Error sending get event enables command: %x", rv);
+	enables_get_done_handler(sensor, rv, info);
     }
 }
 
@@ -3090,40 +3243,31 @@ typedef struct sensor_rearm_info_s
     void                  *cb_data;
 } sensor_rearm_info_t;
 
+static void sensor_rearm_done_handler(ipmi_sensor_t *sensor,
+				      int           err,
+				      void          *sinfo)
+{
+    sensor_rearm_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
+
 static void
 sensor_rearm(ipmi_sensor_t *sensor,
-	 int           err,
-	 ipmi_msg_t    *rsp,
-	 void          *cb_data)
+	     int           err,
+	     ipmi_msg_t    *rsp,
+	     void          *cb_data)
 {
     sensor_rearm_info_t *info = cb_data;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error setting hysteresis: %x", err);
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 1, "sensor_rearm",
+			      sensor_rearm_done_handler, info))
 	return;
-    }
 
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error setting hysteresis: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    if (info->done)
-	info->done(sensor, 0, info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    sensor_rearm_done_handler(sensor, 0, info);
 }
 
 static void
@@ -3134,15 +3278,9 @@ sensor_rearm_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     ipmi_msg_t      cmd_msg;
     int             rv;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting hysteresis set: %x", err);
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "sensor_rearm_start",
+			      sensor_rearm_done_handler, info))
 	return;
-    }
 
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
@@ -3167,11 +3305,9 @@ sensor_rearm_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending rearm command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+		 "sensor.c(sensor_rearm_start):"
+		 " Error sending rearm command: %x", rv);
+	sensor_rearm_done_handler(sensor, rv, info);
     }
 }
 
@@ -3207,7 +3343,21 @@ typedef struct hyst_get_info_s
     ipmi_sensor_op_info_t  sdata;
     ipmi_hysteresis_get_cb done;
     void                   *cb_data;
+    unsigned int           positive;
+    unsigned int           negative;
 } hyst_get_info_t;
+
+static void hyst_get_done_handler(ipmi_sensor_t *sensor,
+				  int           err,
+				  void          *sinfo)
+{
+    hyst_get_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, info->positive, info->negative, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
 
 static void
 hyst_get(ipmi_sensor_t *sensor,
@@ -3217,38 +3367,13 @@ hyst_get(ipmi_sensor_t *sensor,
 {
     hyst_get_info_t *info = cb_data;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting hysteresis: %x", err);
-	if (info->done)
-	    info->done(sensor, err, 0, 0, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 3, "hyst_get",
+			      hyst_get_done_handler, info))
 	return;
-    }
 
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error getting hysteresis: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       0,
-		       0,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    if (info->done)
-	info->done(sensor,
-		   0,
-		   rsp->data[1],
-		   rsp->data[2],
-		   info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    info->positive = rsp->data[1];
+    info->negative = rsp->data[2];
+    hyst_get_done_handler(sensor, 0, info);
 }
 
 static void
@@ -3259,15 +3384,9 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     ipmi_msg_t          cmd_msg;
     int                 rv;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting hysteresis get: %x", err);
-	if (info->done)
-	    info->done(sensor, err, 0, 0, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "hyst_get_start",
+			      hyst_get_done_handler, info))
 	return;
-    }
 
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
@@ -3280,11 +3399,9 @@ hyst_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, hyst_get, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending hysteresis get command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv, 0, 0, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+		 "sensor.c(hyst_get_start):"
+		 " Error sending hysteresis get command: %x", rv);
+	hyst_get_done_handler(sensor, rv, info);
     }
 }
 
@@ -3307,6 +3424,7 @@ stand_ipmi_sensor_get_hysteresis(ipmi_sensor_t          *sensor,
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
+    memset(info, 0, sizeof(*info));
     info->done = done;
     info->cb_data = cb_data;
     rv = ipmi_sensor_add_opq(sensor, hyst_get_start, &(info->sdata), info);
@@ -3323,6 +3441,18 @@ typedef struct hyst_set_info_s
     void                  *cb_data;
 } hyst_set_info_t;
 
+static void hyst_set_done_handler(ipmi_sensor_t *sensor,
+				  int           err,
+				  void          *sinfo)
+{
+    hyst_set_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
+
 static void
 hyst_set(ipmi_sensor_t *sensor,
 	 int           err,
@@ -3331,32 +3461,11 @@ hyst_set(ipmi_sensor_t *sensor,
 {
     hyst_set_info_t *info = cb_data;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error setting hysteresis: %x", err);
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 1, "hyst_set",
+			      hyst_set_done_handler, info))
 	return;
-    }
 
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error setting hysteresis: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    if (info->done)
-	info->done(sensor, 0, info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    hyst_set_done_handler(sensor, 0, info);
 }
 
 static void
@@ -3367,15 +3476,9 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     ipmi_msg_t      cmd_msg;
     int             rv;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting hysteresis set: %x", err);
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "hyst_set_start",
+			      hyst_set_done_handler, info))
 	return;
-    }
 
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
@@ -3390,11 +3493,9 @@ hyst_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, hyst_set, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending hysteresis set command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+		 "sensor.c(hyst_set_start):"
+		 " Error sending hysteresis set command: %x", rv);
+	hyst_set_done_handler(sensor, rv, info);
     }
 }
 
@@ -3434,7 +3535,20 @@ typedef struct thresh_get_info_s
     ipmi_thresholds_t     th;
     ipmi_thresh_get_cb    done;
     void                  *cb_data;
+    
 } thresh_get_info_t;
+
+static void thresh_get_done_handler(ipmi_sensor_t *sensor,
+				    int           err,
+				    void          *sinfo)
+{
+    thresh_get_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, &info->th, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
 
 static void
 thresh_get(ipmi_sensor_t *sensor,
@@ -3445,28 +3559,9 @@ thresh_get(ipmi_sensor_t *sensor,
     thresh_get_info_t  *info = cb_data;
     enum ipmi_thresh_e th;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting thresholds: %x", err);
-	if (info->done)
-	    info->done(sensor, err, &(info->th), info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 8, "thresh_get",
+			      thresh_get_done_handler, info))
 	return;
-    }
-
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error getting thresholds: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       &(info->th),
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
     
     for (th=IPMI_LOWER_NON_CRITICAL; th<=IPMI_UPPER_NON_RECOVERABLE; th++) {
 	int rv;
@@ -3477,10 +3572,9 @@ thresh_get(ipmi_sensor_t *sensor,
 					      &(info->th.vals[th].val));
 	    if (rv) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
-			 "Could not convert raw threshold value: %x", rv);
-		info->done(sensor, rv, &(info->th), info->cb_data);
-		ipmi_sensor_opq_done(sensor);
-		ipmi_mem_free(info);
+			 "sensor.c(thresh_get):"
+			 " Could not convert raw threshold value: %x", rv);
+		thresh_get_done_handler(sensor, rv, info);
 		return;
 	    }
 	} else {
@@ -3488,10 +3582,7 @@ thresh_get(ipmi_sensor_t *sensor,
 	}
     }
 
-    if (info->done)
-	info->done(sensor, 0, &(info->th), info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    thresh_get_done_handler(sensor, 0, info);
 }
 
 int
@@ -3526,16 +3617,10 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     ipmi_msg_t        cmd_msg;
     int               rv;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting threshold get: %x", err);
-	if (info->done)
-	    info->done(sensor, err, &(info->th), info->cb_data);
-	ipmi_mem_free(info);
-	ipmi_sensor_opq_done(sensor);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "thresh_get_start",
+			      thresh_get_done_handler, info))
 	return;
-    }
-
+    
     if (sensor->threshold_access == IPMI_THRESHOLD_ACCESS_SUPPORT_FIXED) {
 	int thnum;
 	/* Thresholds are fixed, they cannot be read. */
@@ -3545,10 +3630,7 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 	{
 	    info->th.vals[thnum].status = 0;
 	}
-	if (info->done)
-	    info->done(sensor, 0, &(info->th), info->cb_data);
-	ipmi_mem_free(info);
-	ipmi_sensor_opq_done(sensor);
+	thresh_get_done_handler(sensor, 0, info);
 	return;
     }
 
@@ -3562,11 +3644,9 @@ thresh_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, thresh_get, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending threshold get command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv, &(info->th), info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+		 "sensor.c(thresh_get_start):"
+		 " Error sending threshold get command: %x", rv);
+	thresh_get_done_handler(sensor, rv, info);
     }
 }
 
@@ -3604,6 +3684,18 @@ typedef struct thresh_set_info_s
     void                  *cb_data;
 } thresh_set_info_t;
 
+static void thresh_set_done_handler(ipmi_sensor_t *sensor,
+				    int           err,
+				    void          *sinfo)
+{
+    thresh_set_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
+
 static void
 thresh_set(ipmi_sensor_t *sensor,
 	   int           err,
@@ -3612,32 +3704,11 @@ thresh_set(ipmi_sensor_t *sensor,
 {
     thresh_set_info_t *info = cb_data;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error setting thresholds: %x", err);
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 1, "thresh_set",
+			      thresh_set_done_handler, info))
 	return;
-    }
 
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error setting thresholds: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
-    if (info->done)
-	info->done(sensor, 0, info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    thresh_set_done_handler(sensor, 0, info);
 }
 
 static void
@@ -3649,14 +3720,9 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     int                rv;
     enum ipmi_thresh_e th;
 
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting threshold set: %x", err);
-	if (info->done)
-	    info->done(sensor, err, info->cb_data);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "thresh_set_start",
+			      thresh_set_done_handler, info))
 	return;
-    }
 
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
@@ -3675,9 +3741,9 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 					    &val);
 	    if (rv) {
 		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "sensor.c(thresh_set_start):"
 			 "Error converting threshold to raw: %x", rv);
-		info->done(sensor, rv, info->cb_data);
-		ipmi_mem_free(info);
+		thresh_set_done_handler(sensor, rv, info);
 		return;
 	    }
 	    cmd_data[th+2] = val;
@@ -3688,11 +3754,9 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &cmd_msg, thresh_set, &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sensor.c(thresh_set_start):"
 		 "Error sending thresholds set command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+	thresh_set_done_handler(sensor, rv, info);
     }
 }
 
@@ -3726,10 +3790,28 @@ stand_ipmi_thresholds_set(ipmi_sensor_t       *sensor,
 
 typedef struct reading_get_info_s
 {
-    ipmi_sensor_op_info_t sdata;
-    ipmi_reading_done_cb  done;
-    void                  *cb_data;
+    ipmi_sensor_op_info_t     sdata;
+    ipmi_reading_done_cb      done;
+    void                      *cb_data;
+    ipmi_states_t             states;
+    enum ipmi_value_present_e value_present;
+    double                    raw_val;
+    double                    cooked_val;
 } reading_get_info_t;
+
+static void reading_get_done_handler(ipmi_sensor_t *sensor,
+				     int           err,
+				     void          *sinfo)
+{
+    reading_get_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, info->value_present,
+		   info->raw_val, info->cooked_val, &info->states,
+		   info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
 
 static void
 reading_get(ipmi_sensor_t *sensor,
@@ -3738,78 +3820,32 @@ reading_get(ipmi_sensor_t *sensor,
 	    void          *rsp_data)
 {
     reading_get_info_t        *info = rsp_data;
-    ipmi_states_t             states;
     int                       rv;
-    double                    val = 0.0;
-    enum ipmi_value_present_e val_present;
 
-    ipmi_init_states(&states);
-
-    if (!sensor) {
-	ipmi_log(IPMI_LOG_WARNING,
-		 "Sensor was destroyed while getting reading");
-	if (info->done)
-	    info->done(sensor, err,
-		       IPMI_NO_VALUES_PRESENT, 0, 0.0,
-		       &states, info->cb_data);
-    }
-
-    if (err) {
-	char id[40];
-	ipmi_sensor_get_id(sensor, id, sizeof(id));
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting reading for sensor %s: %x", id, err);
-	if (info->done)
-	    info->done(sensor, err,
-		       IPMI_NO_VALUES_PRESENT, 0, 0.0,
-		       &states, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 3, "reading_get",
+			      reading_get_done_handler, info))
 	return;
-    }
 
-    if (rsp->data[0]) {
-	char id[40];
-	ipmi_sensor_get_id(sensor, id, sizeof(id));
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error getting reading for sensor %s: %x",
-		 id, rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       IPMI_NO_VALUES_PRESENT,
-		       0,
-		       0.0,
-		       &states,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
-
+    info->raw_val = rsp->data[1];
     if (sensor->analog_data_format != IPMI_ANALOG_DATA_FORMAT_NOT_ANALOG) {
 	rv = ipmi_sensor_convert_from_raw(sensor,
-					  rsp->data[1],
-					  &val);
+					  info->cooked_val,
+					  &info->cooked_val);
 	if (rv)
-	    val_present = IPMI_RAW_VALUE_PRESENT;
+	    info->value_present = IPMI_RAW_VALUE_PRESENT;
 	else
-	    val_present = IPMI_BOTH_VALUES_PRESENT;
+	    info->value_present = IPMI_BOTH_VALUES_PRESENT;
     } else {
-	val_present = IPMI_NO_VALUES_PRESENT;
+	info->value_present = IPMI_NO_VALUES_PRESENT;
     }
 
-    states.__event_messages_enabled = (rsp->data[2] >> 7) & 1;
-    states.__sensor_scanning_enabled = (rsp->data[2] >> 6) & 1;
-    states.__initial_update_in_progress = (rsp->data[2] >> 5) & 1;
-    states.__states = rsp->data[3];
+    info->states.__event_messages_enabled = (rsp->data[2] >> 7) & 1;
+    info->states.__sensor_scanning_enabled = (rsp->data[2] >> 6) & 1;
+    info->states.__initial_update_in_progress = (rsp->data[2] >> 5) & 1;
+    if (rsp->data_len >= 4)
+	info->states.__states = rsp->data[3];
 
-    if (info->done)
-	info->done(sensor, 0,
-		   val_present, rsp->data[1], val, &states,
-		   info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    reading_get_done_handler(sensor, 0, info);
 }
 
 static void
@@ -3819,21 +3855,10 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     unsigned char      cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t         cmd_msg;
     int                rv;
-    ipmi_states_t      states;
 
-    ipmi_init_states(&states);
-
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting reading get: %x", err);
-	if (info->done)
-	    info->done(sensor, err,
-		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "reading_get_start",
+			      reading_get_done_handler, info))
 	return;
-    }
 
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
@@ -3846,13 +3871,9 @@ reading_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "sensor.c(reading_get_start):"
 		 "Error sending reading get command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv,
-		       IPMI_NO_VALUES_PRESENT, 0, 0.0, &states,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+	reading_get_done_handler(sensor, rv, info);
     }
 }
 
@@ -3873,6 +3894,10 @@ stand_ipmi_reading_get(ipmi_sensor_t        *sensor,
 	return ENOMEM;
     info->done = done;
     info->cb_data = cb_data;
+    info->value_present = IPMI_NO_VALUES_PRESENT;
+    info->raw_val = 0;
+    info->cooked_val = 0.0;
+    ipmi_init_states(&info->states);
     rv = ipmi_sensor_add_opq(sensor, reading_get_start, &(info->sdata), info);
     if (rv)
 	ipmi_mem_free(info);
@@ -3885,7 +3910,20 @@ typedef struct states_get_info_s
     ipmi_sensor_op_info_t sdata;
     ipmi_states_read_cb   done;
     void                  *cb_data;
+    ipmi_states_t         states;
 } states_get_info_t;
+
+static void states_get_done_handler(ipmi_sensor_t *sensor,
+				    int           err,
+				    void          *sinfo)
+{
+    states_get_info_t *info = sinfo;
+
+    if (info->done)
+	info->done(sensor, err, &info->states, info->cb_data);
+    ipmi_sensor_opq_done(sensor);
+    ipmi_mem_free(info);
+}
 
 static void
 states_get(ipmi_sensor_t *sensor,
@@ -3894,42 +3932,17 @@ states_get(ipmi_sensor_t *sensor,
 	   void          *cb_data)
 {
     states_get_info_t *info = cb_data;
-    ipmi_states_t     states;
 
-    ipmi_init_states(&states);
-
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error getting states: %x", err);
-	if (info->done)
-	    info->done(sensor, err, &states, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, rsp, 5, "states_get",
+			      states_get_done_handler, info))
 	return;
-    }
 
-    if (rsp->data[0]) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "IPMI error getting states: %x", rsp->data[0]);
-	if (info->done)
-	    info->done(sensor,
-		       IPMI_IPMI_ERR_VAL(rsp->data[0]),
-		       &states,
-		       info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
-	return;
-    }
+    info->states.__event_messages_enabled = (rsp->data[2] >> 7) & 1;
+    info->states.__sensor_scanning_enabled = (rsp->data[2] >> 6) & 1;
+    info->states.__initial_update_in_progress = (rsp->data[2] >> 5) & 1;
+    info->states.__states = (rsp->data[4] << 8) | rsp->data[3];
 
-    states.__event_messages_enabled = (rsp->data[2] >> 7) & 1;
-    states.__sensor_scanning_enabled = (rsp->data[2] >> 6) & 1;
-    states.__initial_update_in_progress = (rsp->data[2] >> 5) & 1;
-    states.__states = (rsp->data[4] << 8) | rsp->data[3];
-
-    if (info->done)
-	info->done(sensor, 0, &states, info->cb_data);
-    ipmi_sensor_opq_done(sensor);
-    ipmi_mem_free(info);
+    states_get_done_handler(sensor, 0, info);
 }
 
 static void
@@ -3939,19 +3952,10 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     unsigned char     cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t        cmd_msg;
     int               rv;
-    ipmi_states_t     states;
 
-    ipmi_init_states(&states);
-
-    if (err) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error starting states get: %x", err);
-	if (info->done)
-	    info->done(sensor, err, &states, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+    if (sensor_done_check_rsp(sensor, err, NULL, 0, "states_get_start",
+			      states_get_done_handler, info))
 	return;
-    }
 
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
@@ -3964,11 +3968,9 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 				  &(info->sdata), info);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "Error sending states get command: %x", rv);
-	if (info->done)
-	    info->done(sensor, rv, &states, info->cb_data);
-	ipmi_sensor_opq_done(sensor);
-	ipmi_mem_free(info);
+		 "states.c(states_get_start):"
+		 " Error sending states get command: %x", rv);
+	states_get_done_handler(sensor, 0, info);
     }
 }
 
@@ -3989,11 +3991,18 @@ stand_ipmi_states_get(ipmi_sensor_t       *sensor,
 	return ENOMEM;
     info->done = done;
     info->cb_data = cb_data;
+    ipmi_init_states(&info->states);
     rv = ipmi_sensor_add_opq(sensor, states_get_start, &(info->sdata), info);
     if (rv)
 	ipmi_mem_free(info);
     return rv;
 }
+
+/***********************************************************************
+ *
+ * Various data conversion stuff.
+ *
+ **********************************************************************/
 
 static double c_linear(double val)
 {
@@ -4270,6 +4279,12 @@ stand_ipmi_sensor_reading_name_string(ipmi_sensor_t *sensor, int offset)
 				 offset);
 }
 
+/***********************************************************************
+ *
+ * The standard callback structure
+ *
+ **********************************************************************/
+
 const ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
 {
     .ipmi_sensor_events_enable_set = stand_ipmi_sensor_events_enable_set,
@@ -4291,6 +4306,24 @@ const ipmi_sensor_cbs_t ipmi_standard_sensor_cb =
     .ipmi_states_get               = stand_ipmi_states_get,
     .ipmi_sensor_reading_name_string = stand_ipmi_sensor_reading_name_string,
 };
+
+void
+ipmi_sensor_get_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs)
+{
+    *cbs = sensor->cbs;
+}
+
+void
+ipmi_sensor_set_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs)
+{
+    sensor->cbs = *cbs;
+}
+
+/***********************************************************************
+ *
+ * Polymorphic calls to the callback handlers.
+ *
+ **********************************************************************/
 
 int
 ipmi_sensor_events_enable_set(ipmi_sensor_t         *sensor,
@@ -4510,151 +4543,6 @@ ipmi_sensor_get_accuracy(ipmi_sensor_t *sensor, int val, double *accuracy)
     if (!sensor->cbs.ipmi_sensor_get_accuracy)
 	return ENOSYS;
     return sensor->cbs.ipmi_sensor_get_accuracy(sensor, val, accuracy);
-}
-
-void
-ipmi_sensor_get_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs)
-{
-    *cbs = sensor->cbs;
-}
-
-void
-ipmi_sensor_set_callbacks(ipmi_sensor_t *sensor, ipmi_sensor_cbs_t *cbs)
-{
-    sensor->cbs = *cbs;
-}
-
-void
-ipmi_sensor_set_oem_info(ipmi_sensor_t *sensor, void *oem_info,
-			 ipmi_sensor_cleanup_oem_info_cb cleanup_handler)
-{
-    sensor->oem_info = oem_info;
-    sensor->oem_info_cleanup_handler = cleanup_handler;
-}
-
-void *
-ipmi_sensor_get_oem_info(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->oem_info;
-}
-
-char *
-ipmi_sensor_get_sensor_type_string(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->sensor_type_string;
-}
-
-void
-ipmi_sensor_set_sensor_type_string(ipmi_sensor_t *sensor, char *str)
-{
-    sensor->sensor_type_string = str;
-}
-
-char *
-ipmi_sensor_get_event_reading_type_string(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->event_reading_type_string;
-}
-
-void
-ipmi_sensor_set_event_reading_type_string(ipmi_sensor_t *sensor, char *str)
-{
-    sensor->event_reading_type_string = str;
-}
-
-char *
-ipmi_sensor_get_rate_unit_string(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->rate_unit_string;
-}
-
-void
-ipmi_sensor_set_rate_unit_string(ipmi_sensor_t *sensor, char *str)
-{
-    sensor->rate_unit_string = str;
-}
-
-char *
-ipmi_sensor_get_base_unit_string(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->base_unit_string;
-}
-
-void
-ipmi_sensor_set_base_unit_string(ipmi_sensor_t *sensor, char *str)
-{
-    sensor->base_unit_string = str;
-}
-
-char *
-ipmi_sensor_get_modifier_unit_string(ipmi_sensor_t *sensor)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    return sensor->modifier_unit_string;
-}
-
-void
-ipmi_sensor_set_modifier_unit_string(ipmi_sensor_t *sensor, char *str)
-{
-    sensor->modifier_unit_string = str;
-}
-
-ipmi_entity_t *
-ipmi_sensor_get_entity(ipmi_sensor_t *sensor)
-{
-    int           rv;
-    ipmi_entity_t *ent;
-    ipmi_domain_t *domain;
-
-    CHECK_SENSOR_LOCK(sensor);
-
-    domain = ipmi_mc_get_domain(sensor->mc);
-
-    rv = ipmi_entity_find(ipmi_domain_get_entities(domain),
-			  sensor->mc,
-			  sensor->entity_id,
-			  sensor->entity_instance,
-			  &ent);
-    if (rv)
-	return NULL;
-    return ent;
-}
-
-void
-ipmi_sensor_set_hot_swap_requester(ipmi_sensor_t *sensor,
-				   unsigned int  offset,
-				   unsigned int  val_when_requesting)
-{
-    sensor->hot_swap_requester = offset;
-    sensor->hot_swap_requester_val = val_when_requesting;
-}
-
-int
-ipmi_sensor_is_hot_swap_requester(ipmi_sensor_t *sensor,
-				  unsigned int  *offset,
-				  unsigned int  *val_when_requesting)
-{
-    CHECK_SENSOR_LOCK(sensor);
-
-    if (sensor->hot_swap_requester != -1) {
-	if (offset)
-	    *offset = sensor->hot_swap_requester;
-	if (val_when_requesting)
-	    *val_when_requesting = sensor->hot_swap_requester_val;
-	return 1;
-    }
-    return 0;
 }
 
 #ifdef IPMI_CHECK_LOCKS
