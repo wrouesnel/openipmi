@@ -775,7 +775,7 @@ pef_got_config(ipmi_pef_t    *pef,
     for (i=0; i<check->data_len; i++) {
 	unsigned char checkdata;
 
-	if ((check->conf_num == IPMI_PEFPARM_ALERT_POLICY_TABLE) && (i == 1))
+	if ((check->conf_num == IPMI_PEFPARM_ALERT_POLICY_TABLE) && (i == 2))
 	    /* Channel may vary between connections. */
 	    checkdata = (info->pef_channel << 4) | check->data[i];
 	else
@@ -790,10 +790,10 @@ pef_got_config(ipmi_pef_t    *pef,
 	for (i=0; i<check->data_len; i++) {
 	    unsigned char checkdata;
 	    if ((check->conf_num == IPMI_PEFPARM_ALERT_POLICY_TABLE)
-		&& (i == 1))
+		&& (i == 2))
 	    {
 		/* Channel may vary between connections. */
-		checkdata = info->pef_channel;
+		checkdata = (info->pef_channel << 4) | check->data[i];
 	    } else {
 		checkdata = check->data[i];
 	    }
@@ -1105,7 +1105,7 @@ ipmi_pet_create(ipmi_domain_t    *domain,
     pet->pef_check[2].data[4] = 0;
     pet->pef_check[3].conf_num = IPMI_PEFPARM_ALERT_POLICY_TABLE;
     pet->pef_check[3].set = apt_sel;
-    pet->pef_check[3].data_len = 3;
+    pet->pef_check[3].data_len = 4;
     pet->pef_check[3].data[0] = apt_sel;
     pet->pef_check[3].mask[0] = 0x7f;
     pet->pef_check[3].data[1] = 0x08 | (policy_num << 4);
