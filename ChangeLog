@@ -1,3 +1,9 @@
+2003-12-26 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_domain.h, lib/domain.c: Added a domain OEM
+	handler for detecting and setting up special types of domains,
+	mainly in preparation for ATCA.
+	
 2003-12-09  Louis Zhuang  <louis.zhuang@linux.intel.com>
 
 	* lib/ilist.c: Fix a bug in the routine to go to the previous

@@ -209,6 +209,24 @@ int ipmi_domain_get_channel(ipmi_domain_t    *domain,
 			    int              index,
 			    ipmi_chan_info_t *chan);
 
+/* These calls deal with OEM-type handlers for domains.  Certain
+   domains can be detected with special means (beyond just the
+   manufacturer and product id) and this allows handlers for these
+   types of domains to be registered.  At the very initial connection
+   of every domain, the handler will be called and it must detect
+   whether this is the specific type of domain or not, do any setup
+   for that domain type, and then call the done routine passed in.
+   Note that the done routine may be called later, (allowing this
+   handler to send messages and the like) but it *must* be called. */
+typedef void (*ipmi_domain_oem_check_done)(ipmi_domain_t *domain,
+					   void          *cb_data);
+typedef int (*ipmi_domain_oem_check)(ipmi_domain_t              *domain,
+				     ipmi_domain_oem_check_done done,
+				     void                       *cb_data);
+int ipmi_register_domain_oem_check(ipmi_domain_oem_check check,
+				   void                  *cb_data);
+int ipmi_deregister_domain_oem_check(ipmi_domain_oem_check check,
+				     void                  *cb_data);
 
 /* Initialize the domain code, called only once at init time. */
 int _ipmi_domain_init(void);

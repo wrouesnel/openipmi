@@ -121,6 +121,8 @@ typedef struct activate_timer_info_s
     volatile int  running;
 } activate_timer_info_t;
 
+typedef struct domain_check_oem_s domain_check_oem_t;
+
 struct ipmi_domain_s
 {
     /* Used to handle shutdown race conditions. */
@@ -230,6 +232,10 @@ struct ipmi_domain_s
     /* Used to inform the user that the bus scanning has been done */
     ipmi_domain_cb bus_scan_handler;
     void           *bus_scan_handler_cb_data;
+
+    /* If we are running a domain OEM check, then this will be the
+       check that is running.  Otherwise it is NULL. */
+    domain_check_oem_t *check;
 	
     /* Keep a linked-list of these. */
     ipmi_domain_t *next, *prev;
@@ -239,6 +245,8 @@ static int remove_event_handler(ipmi_domain_t           *domain,
 				ipmi_event_handler_id_t *event);
 
 static void domain_rescan_bus(void *cb_data, os_hnd_timer_id_t *id);
+
+static void cancel_domain_oem_check(ipmi_domain_t *domain);
 
 /***********************************************************************
  *
@@ -305,7 +313,11 @@ cleanup_domain(ipmi_domain_t *domain)
     int i;
     int rv;
 
-    /* Nuke all outstanding messages first. */
+    /* This must be first, so that nuking the oustanding messages will
+       cause the right thing to happen. */
+    cancel_domain_oem_check(domain);
+
+    /* Nuke all outstanding messages. */
     if ((domain->cmds_lock) && (domain->cmds)) {
 	ll_msg_t     *nmsg;
 	int          ok;
@@ -753,6 +765,134 @@ ipmi_domain_validate(ipmi_domain_t *domain)
 	return EINVAL;
 
     return 0;
+}
+
+/***********************************************************************
+ *
+ * Handle global OEM callbacks new domains.
+ *
+ **********************************************************************/
+typedef struct oem_handlers_s {
+    ipmi_domain_oem_check check;
+    void                  *cb_data;
+} oem_handlers_t;
+
+/* FIXME - do we need a lock?  Probably, add it. */
+static ilist_t *oem_handlers;
+
+int
+ipmi_register_domain_oem_check(ipmi_domain_oem_check check,
+			       void                  *cb_data)
+{
+    oem_handlers_t *new_item;
+
+    new_item = ipmi_mem_alloc(sizeof(*new_item));
+    if (!new_item)
+	return ENOMEM;
+
+    new_item->check = check;
+    new_item->cb_data = cb_data;
+
+    if (! ilist_add_tail(oem_handlers, new_item, NULL)) {
+	ipmi_mem_free(new_item);
+	return ENOMEM;
+    }
+
+    return 0;
+}
+
+static int
+oem_handler_cmp(void *item, void *cb_data)
+{
+    oem_handlers_t *hndlr = item;
+    oem_handlers_t *cmp = cb_data;
+
+    return ((hndlr->check == cmp->check)
+	    && (hndlr->cb_data == cmp->cb_data));
+}
+
+int
+ipmi_deregister_domain_oem_check(ipmi_domain_oem_check check,
+				 void                  *cb_data)
+{
+    oem_handlers_t *hndlr;
+    oem_handlers_t tmp;
+    ilist_iter_t   iter;
+
+    tmp.check = check;
+    tmp.cb_data = cb_data;
+    ilist_init_iter(&iter, oem_handlers);
+    ilist_unpositioned(&iter);
+    hndlr = ilist_search_iter(&iter, oem_handler_cmp, &tmp);
+    if (hndlr) {
+	ilist_delete(&iter);
+	ipmi_mem_free(hndlr);
+	return 0;
+    }
+    return ENOENT;
+}
+
+struct domain_check_oem_s
+{
+    int                        cancelled;
+    ilist_iter_t               iter;
+    ipmi_domain_oem_check_done done;
+    void                       *cb_data;
+};
+
+static void
+domain_oem_check_done(ipmi_domain_t              *domain,
+		      void                       *cb_data)
+{
+    domain_check_oem_t *check = cb_data;
+    oem_handlers_t     *h;
+    int                rv = -1;
+
+    if (check->cancelled) {
+	    check->done(NULL, check->cb_data);
+	    ipmi_mem_free(check);
+	    return;
+    }
+
+    while (rv) {
+	if (!ilist_next(&check->iter)) {
+	    ipmi_mem_free(check);
+	    domain->check = NULL;
+	    check->done(domain, check->cb_data);
+	} else {
+	    h = ilist_get(&check->iter);
+	    rv = h->check(domain, domain_oem_check_done, check);
+	}
+    }
+}
+
+static int
+check_oem_handlers(ipmi_domain_t              *domain,
+		   ipmi_domain_oem_check_done done,
+		   void                       *cb_data)
+{
+    domain_check_oem_t         *check;
+
+    check = ipmi_mem_alloc(sizeof(*check));
+    if (!check)
+	return ENOMEM;
+
+    check->cancelled = 0;
+    check->done = done;
+    check->cb_data = cb_data;
+    ilist_init_iter(&check->iter, oem_handlers);
+    ilist_unpositioned(&check->iter);
+    domain->check = check;
+    domain_oem_check_done(domain, check);
+    
+    return 0;
+}
+
+static void
+cancel_domain_oem_check(ipmi_domain_t *domain)
+{
+    if (domain->check)
+	domain->check->cancelled = 1;
 }
 
 /***********************************************************************
@@ -3043,11 +3183,25 @@ got_dev_id(ipmi_mc_t  *mc,
 	call_con_fails(domain, rv, 0, 0, 0);
 }
 
+static void
+domain_send_mc_id(ipmi_domain_t *domain, void *cb_data)
+{
+    ipmi_msg_t msg;
+    int        rv;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_DEVICE_ID_CMD;
+    msg.data_len = 0;
+    msg.data = NULL;
+
+    rv = ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
+    if (rv)
+	call_con_fails(domain, rv, 0, 0, 0);
+}
+
 static int
 start_con_up(ipmi_domain_t *domain)
 {
-    ipmi_msg_t msg;
-
     ipmi_lock(domain->con_lock);
     if (domain->connecting || domain->connection_up) {
 	ipmi_unlock(domain->con_lock);
@@ -3056,12 +3210,7 @@ start_con_up(ipmi_domain_t *domain)
     domain->connecting = 1;
     ipmi_unlock(domain->con_lock);
 
-    msg.netfn = IPMI_APP_NETFN;
-    msg.cmd = IPMI_GET_DEVICE_ID_CMD;
-    msg.data_len = 0;
-    msg.data = NULL;
-
-    return ipmi_mc_send_command(domain->si_mc, 0, &msg, got_dev_id, domain);
+    return check_oem_handlers(domain, domain_send_mc_id, NULL);
 }
 
 static void start_activate_timer(ipmi_domain_t *domain);
