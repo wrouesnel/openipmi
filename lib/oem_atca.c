@@ -1807,9 +1807,21 @@ atca_mc_update_handler(enum ipmi_update_e op,
     switch (op) {
     case IPMI_ADDED:
 	atca_handle_new_mc(domain, mc, cb_data);
+	break;
 
-	/* FALLTHROUGH */
+    default:
+	break;
+    }
+}
 
+static void
+atca_fix_sel_handler(enum ipmi_update_e op,
+		     ipmi_domain_t      *domain,
+		     ipmi_mc_t          *mc,
+		     void               *cb_data)
+{
+    switch (op) {
+    case IPMI_ADDED:
     case IPMI_CHANGED:
 	/* Turn off SEL device support for all devices that are not
 	   the BMC. */
@@ -2069,6 +2081,10 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 
     ipmi_domain_set_oem_data(domain, info, atca_oem_data_destroyer);
 
+    ipmi_domain_register_mc_update_handler(domain,
+					   atca_fix_sel_handler,
+					   info,
+					   NULL);
  out:
     return;
 }
