@@ -909,6 +909,7 @@ ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
+int ipmi_oem_intel_init(void);
 int _ipmi_pet_init(void);
 int _ipmi_conn_init(void);
 int ipmi_oem_atca_conn_init(void);
@@ -916,6 +917,7 @@ int ipmi_oem_atca_init(void);
 int init_oem_test(void);
 
 void ipmi_oem_atca_conn_shutdown(void);
+void ipmi_oem_intel_shutdown(void);
 void ipmi_oem_atca_shutdown(void);
 void _ipmi_pet_shutdown(void);
 
@@ -959,6 +961,7 @@ ipmi_init(os_handler_t *handler)
     /* Call the OEM handlers. */
     ipmi_oem_force_conn_init();
     ipmi_oem_motorola_mxp_init();
+    ipmi_oem_intel_init();
     ipmi_oem_atca_conn_init();
     ipmi_oem_atca_init();
     init_oem_test();
@@ -966,6 +969,7 @@ ipmi_init(os_handler_t *handler)
     return 0;
 
  out_err:
+    ipmi_oem_intel_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
     if (global_lock)
@@ -980,6 +984,7 @@ ipmi_shutdown(void)
 {
     ipmi_oem_atca_shutdown();
     ipmi_oem_atca_conn_shutdown();
+    ipmi_oem_intel_shutdown();
     _ipmi_pet_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();

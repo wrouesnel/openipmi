@@ -5,6 +5,10 @@
 
 	* doc/OpenIPMI.texi: Add information about callbacks.
 
+	* lib/oem_intel.c, lib/ipmi.c, lib/Makefile.am: Added an Intel
+	server-specific file for handling special things about Intel's
+	servers.
+
 2004-04-13 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/entity.c: Prefer to keep the MCDLR information for an entity
