@@ -51,6 +51,7 @@
 /* Timer structure for rereading the SEL. */
 typedef struct mc_reread_sel_s
 {
+    int                 timer_running;
     int                 cancelled;
     ipmi_mc_t           *mc;
     ipmi_domain_t       *domain;
@@ -243,6 +244,8 @@ static void con_up_handler(ipmi_domain_t *domain,
 
 static void call_active_handlers(ipmi_mc_t *mc);
 
+static void cleanup_mc(ipmi_mc_t *mc);
+
 typedef struct mc_name_info
 {
     char name[IPMI_MC_NAME_LEN];
@@ -428,6 +431,7 @@ check_mc_destroy(ipmi_mc_t *mc)
 	&& (ipmi_sensors_get_count(mc->sensors) == 0)
 	&& (mc->usercount == 0))
     {
+	cleanup_mc(mc);
 	/* There are no sensors associated with this MC, so it's safe
            to delete it.  If there are sensors that still reference
            this MC (such as from another MC's SDR repository, or the
@@ -506,13 +510,19 @@ cleanup_mc(ipmi_mc_t *mc)
 
     /* Make sure the timer stops. */
     if (mc->sel_timer_info) {
-	mc->sel_timer_info->cancelled = 1;
-	rv = os_hnd->stop_timer(os_hnd, mc->sel_timer);
-	if (!rv) {
-	    /* If we can stop the timer, free it and it's info.
-	       If we can't stop the timer, that means that the
-	       code is currently in the timer handler, so we let
-	       the "cancelled" value do this for us. */
+	if (mc->sel_timer_info->timer_running) {
+	    mc->sel_timer_info->cancelled = 1;
+	    rv = os_hnd->stop_timer(os_hnd, mc->sel_timer);
+	    if (!rv) {
+		/* If we can stop the timer, free it and it's info.
+		   If we can't stop the timer, that means that the
+		   code is currently in the timer handler, so we let
+		   the "cancelled" value do this for us. */
+		os_hnd->free_timer(os_hnd, mc->sel_timer);
+		mc->sel_timer = NULL;
+		ipmi_mem_free(mc->sel_timer_info);
+	    }
+	} else {
 	    os_hnd->free_timer(os_hnd, mc->sel_timer);
 	    mc->sel_timer = NULL;
 	    ipmi_mem_free(mc->sel_timer_info);
@@ -991,11 +1001,14 @@ sels_fetched_start_timer(ipmi_sel_info_t *sel,
 	os_hnd = mc_get_os_hnd(mc);
 	timeout.tv_sec = mc->sel_scan_interval;
 	timeout.tv_usec = 0;
+	info->timer_running = 1;
 	os_hnd->start_timer(os_hnd,
 			    mc->sel_timer,
 			    &timeout,
 			    mc_reread_sel_timeout,
 			    info);
+    } else {
+	info->timer_running = 0;
     }
 }
 
@@ -1103,8 +1116,9 @@ ipmi_mc_reread_sel(ipmi_mc_t       *mc,
     }
     ipmi_unlock(mc->lock);
 
-    if (rv && info)
+    if (rv && info) {
 	ipmi_mem_free(info);
+    }
 
     return rv;
 }
@@ -1427,6 +1441,7 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 		     void       *rsp_data)
 {
     mc_name_info_t *info = rsp_data;
+    int            rv;
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_WARNING,
@@ -1448,7 +1463,14 @@ startup_set_sel_time(ipmi_mc_t  *mc,
 	mc->startup_SEL_time = 0;
     }
 
-    ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
+    rv = ipmi_sel_get(mc->sel, sels_fetched_start_timer, mc->sel_timer_info);
+    if (rv) {
+	sels_fetched_start_timer(mc->sel,
+				 rv,
+				 0,
+				 0,
+				 mc->sel_timer_info);
+    }
 
  out:
     ipmi_mem_free(info);

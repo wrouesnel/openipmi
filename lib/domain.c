@@ -534,7 +534,7 @@ cleanup_domain(ipmi_domain_t *domain)
 	    rspi->msg.data = &err;
 	    rspi->msg.data_len = 1;
 	    err = IPMI_UNKNOWN_ERR_CC;
-	    deliver_rsp(NULL, nmsg->rsp_handler, rspi);
+	    deliver_rsp(domain, nmsg->rsp_handler, rspi);
 	    
 	    ilist_delete(&iter);
 	    ipmi_mem_free(nmsg);
@@ -3061,9 +3061,9 @@ reread_sel_handler(ipmi_mc_t *mc, int err, void *cb_data)
 	if (info->handler)
 	    info->handler(info->domain, info->err, info->cb_data);
 	ipmi_destroy_lock(info->lock);
-	ipmi_mem_free(info);
 	if (info->domain)
 	    _ipmi_domain_put(info->domain);
+	ipmi_mem_free(info);
     }
 }
 
@@ -4813,14 +4813,17 @@ ipmi_domain_get_unique_num(ipmi_domain_t *domain)
  *
  **********************************************************************/
 
-typedef struct ipmi_domain_attr_s
+struct ipmi_domain_attr_s
 {
     char *name;
     void *data;
 
+    ipmi_lock_t *lock;
+    unsigned int refcount;
+
     ipmi_domain_attr_kill_cb destroy;
     void                     *cb_data;
-} ipmi_domain_attr_t;
+};
 
 static int
 destroy_attr(void *cb_data, void *item1, void *item2)
@@ -4828,12 +4831,8 @@ destroy_attr(void *cb_data, void *item1, void *item2)
     ipmi_domain_t      *domain = cb_data;
     ipmi_domain_attr_t *attr = item1;
 
-    if (attr->destroy)
-	attr->destroy(domain, attr->cb_data, attr->data);
     locked_list_remove(domain->attr, item1, item2);
-    ipmi_mem_free(attr->name);
-    ipmi_mem_free(attr);
-
+    ipmi_domain_attr_put(attr);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
@@ -4863,7 +4862,7 @@ ipmi_domain_register_attribute(ipmi_domain_t            *domain,
 			       ipmi_domain_attr_init_cb init,
 			       ipmi_domain_attr_kill_cb destroy,
 			       void                     *cb_data,
-			       void                     **data)
+			       ipmi_domain_attr_t       **attr)
 {
     ipmi_domain_attr_t  *val = NULL;
     domain_attr_cmp_t   info;
@@ -4872,10 +4871,13 @@ ipmi_domain_register_attribute(ipmi_domain_t            *domain,
 
     info.name = name;
     info.attr = NULL;
-    ipmi_lock(domain->domain_lock);
-    locked_list_iterate(domain->attr, domain_attr_cmp, &info);
+    locked_list_lock(domain->attr);
+    locked_list_iterate_nolock(domain->attr, domain_attr_cmp, &info);
     if (info.attr) {
-	*data = info.attr->data;
+	ipmi_lock(info.attr->lock);
+	info.attr->refcount++;
+	ipmi_unlock(info.attr->lock);
+	*attr = info.attr;
 	goto out_unlock;
     }
 
@@ -4900,6 +4902,15 @@ ipmi_domain_register_attribute(ipmi_domain_t            *domain,
 	goto out_unlock;
     }
 
+    rv = ipmi_create_lock(domain, &val->lock);
+    if (rv) {
+	locked_list_free_entry(entry);
+	ipmi_mem_free(val->name);
+	ipmi_mem_free(val);
+	goto out_unlock;
+    }
+
+    val->refcount = 2;
     val->destroy = destroy;
     val->cb_data = cb_data;
     val->data = NULL;
@@ -4907,6 +4918,7 @@ ipmi_domain_register_attribute(ipmi_domain_t            *domain,
     if (init) {
 	rv = init(domain, cb_data, &val->data);
 	if (rv) {
+	    ipmi_destroy_lock(val->lock);
 	    locked_list_free_entry(entry);
 	    ipmi_mem_free(val->name);
 	    ipmi_mem_free(val);
@@ -4915,21 +4927,21 @@ ipmi_domain_register_attribute(ipmi_domain_t            *domain,
 	}
     }
 
-    locked_list_add_entry(domain->attr, val, NULL, entry);
+    locked_list_add_entry_nolock(domain->attr, val, NULL, entry);
 
-    *data = val->data;
+    *attr = val;
 
  out_unlock:
-    ipmi_unlock(domain->domain_lock);
+    locked_list_unlock(domain->attr);
     return rv;
 }
 			       
 int
-ipmi_domain_find_attribute(ipmi_domain_t            *domain,
-			   char                     *name,
-			   void                     **data)
+ipmi_domain_find_attribute(ipmi_domain_t      *domain,
+			   char               *name,
+			   ipmi_domain_attr_t **attr)
 {
-    domain_attr_cmp_t   info;
+    domain_attr_cmp_t info;
 
     if (!domain->attr)
 	return EINVAL;
@@ -4939,12 +4951,66 @@ ipmi_domain_find_attribute(ipmi_domain_t            *domain,
     info.attr = NULL;
     locked_list_iterate(domain->attr, domain_attr_cmp, &info);
     if (info.attr) {
-	*data = info.attr->data;
+	ipmi_lock(info.attr->lock);
+	info.attr->refcount++;
+	ipmi_unlock(info.attr->lock);
+	*attr = info.attr;
 	return 0;
     }
     return EINVAL;
 }
+
+void *
+ipmi_domain_attr_get_data(ipmi_domain_attr_t *attr)
+{
+    return attr->data;
+}
+
+void
+ipmi_domain_attr_put(ipmi_domain_attr_t *attr)
+{
+    ipmi_lock(attr->lock);
+    attr->refcount--;
+    if (attr->refcount > 0) {
+	ipmi_unlock(attr->lock);
+	return;
+    }
+    ipmi_unlock(attr->lock);
+    if (attr->destroy)
+	attr->destroy(attr->cb_data, attr->data);
+    ipmi_destroy_lock(attr->lock);
+    ipmi_mem_free(attr->name);
+    ipmi_mem_free(attr);
+}
 			       
+typedef struct find_attr_s
+{
+    char               *name;
+    ipmi_domain_attr_t **attr;
+    int                rv;
+} find_attr_t;
+
+static void
+find_attr_2(ipmi_domain_t *domain, void *cb_data)
+{
+    find_attr_t *info = cb_data;
+
+    info->rv = ipmi_domain_find_attribute(domain, info->name, info->attr);
+}
+
+int
+ipmi_domain_id_find_attribute(ipmi_domain_id_t   domain_id,
+			      char               *name,
+			      ipmi_domain_attr_t **attr)
+{
+    find_attr_t info = { name, attr, 0 };
+    int  rv;
+
+    rv = ipmi_domain_pointer_cb(domain_id, find_attr_2, &info);
+    if (!rv)
+	rv = info.rv;
+    return rv;
+}
 
 /***********************************************************************
  *

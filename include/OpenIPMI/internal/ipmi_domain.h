@@ -247,7 +247,8 @@ int ipmi_option_set_sel_time(ipmi_domain_t *domain);
  * "oem_<type>_".  Other names are free for use by the application.
  *
  * Note that attributes are ummutable after creation and cannot be
- * destroyed.  Destruction only happens when the domain goes away.
+ * destroyed.  Destruction only happens when the domain goes away, but
+ * may be delayed to after the domain is gone due to race conditions.
  */
 
 /* Attr init function.  Return the data item in the data field.  Returns
@@ -255,9 +256,11 @@ int ipmi_option_set_sel_time(ipmi_domain_t *domain);
 typedef int (*ipmi_domain_attr_init_cb)(ipmi_domain_t *domain, void *cb_data,
 					void **data);
 
-/* Called when the domain is destroyed for all existing attributes. */
-typedef void (*ipmi_domain_attr_kill_cb)(ipmi_domain_t *domain, void *cb_data,
-					 void *data);
+/* Called when the attribute is destroyed.  Note that this may happen
+   after domain destruction, so the domain may not exist any more. */
+typedef void (*ipmi_domain_attr_kill_cb)(void *cb_data, void *data);
+
+typedef struct ipmi_domain_attr_s ipmi_domain_attr_t;
 
 /* Find an attribute for a domain.  If the attribute is not found,
    register the attribute.  If the registration occurs, the init()
@@ -269,13 +272,24 @@ int ipmi_domain_register_attribute(ipmi_domain_t            *domain,
 				   ipmi_domain_attr_init_cb init,
 				   ipmi_domain_attr_kill_cb destroy,
 				   void                     *cb_data,
-				   void                     **data);
+				   ipmi_domain_attr_t       **attr);
 
 /* Find an attribute in an domain.  Returns EINVAL if the name is not
    registered.  Returns 0 on success, and the data item is
    returned. */
-int ipmi_domain_find_attribute(ipmi_domain_t            *domain,
-			       char                     *name,
-			       void                     **data);
+int ipmi_domain_find_attribute(ipmi_domain_t      *domain,
+			       char               *name,
+			       ipmi_domain_attr_t **attr);
+
+/* Like the previous call, but takes a domain id. */
+int ipmi_domain_id_find_attribute(ipmi_domain_id_t   domain_id,
+				  char               *name,
+				  ipmi_domain_attr_t **data);
+
+/* Get the data item from the attr. */
+void *ipmi_domain_attr_get_data(ipmi_domain_attr_t *attr);
+
+/* Call this when you are done with the attr. */
+void ipmi_domain_attr_put(ipmi_domain_attr_t *attr);
 
 #endif /* _IPMI_DOMAIN_H */

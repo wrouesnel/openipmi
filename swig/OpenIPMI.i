@@ -43,6 +43,9 @@
 #include <OpenIPMI/ipmi_glib.h>
 #include <OpenIPMI/ipmi_debug.h>
 
+/* For ipmi_debug_malloc_cleanup() */
+#include <OpenIPMI/internal/ipmi_malloc.h>
+
 #include "OpenIPMI.h"
 
 typedef struct intarray
@@ -526,26 +529,37 @@ domain_iterate_mcs_handler(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 }
 
 static void
-fru_written_done(ipmi_fru_t *fru, int err, void *cb_data)
+fru_written_done(ipmi_domain_t *domain, ipmi_fru_t *fru,
+		 int err, void *cb_data)
 {
     swig_cb_val cb = cb_data;
+    swig_ref    domain_ref;
     swig_ref    fru_ref;
 
-    fru_ref = swig_make_ref(fru, "OpenIPMI::ipmi_fru_t");
-    swig_call_cb(cb, "fru_written", "%p%d", &fru_ref, err);
+    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    fru_ref = swig_make_ref_destruct(fru, "OpenIPMI::ipmi_fru_t");
+    /* The FRU is already referenced because of the callback, no need
+       to mess with refcounts. */
+    swig_call_cb(cb, "fru_written", "%p%p%d", &domain_ref, &fru_ref, err);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     swig_free_ref(fru_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
 }
 
 static void
-fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
+fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err, void *cb_data)
 {
     swig_cb_val cb = cb_data;
+    swig_ref    domain_ref;
     swig_ref    fru_ref;
 
-    fru_ref = swig_make_ref(fru, "OpenIPMI::ipmi_fru_t");
-    swig_call_cb(cb, "fru_fetched", "%p%d", &fru_ref, err);
+    domain_ref = swig_make_ref(domain, "OpenIPMI::ipmi_domain_t");
+    fru_ref = swig_make_ref_destruct(fru, "OpenIPMI::ipmi_fru_t");
+    /* The FRU is already referenced because of the callback, no need
+       to mess with refcounts. */
+    swig_call_cb(cb, "fru_fetched", "%p%p%d", &domain_ref, &fru_ref, err);
+    swig_free_ref_check(domain_ref, "OpenIPMI::ipmi_domain_t");
     swig_free_ref(fru_ref);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -680,12 +694,13 @@ entity_fru_update_handler(enum ipmi_update_e op,
 
     entity_ref = swig_make_ref(entity, "OpenIPMI::ipmi_entity_t");
     fru = ipmi_entity_get_fru(entity);
-    fru_ref = swig_make_ref(fru, "OpenIPMI::ipmi_fru_t");
+    if (fru)
+	ipmi_fru_ref(fru);
+    fru_ref = swig_make_ref_destruct(fru, "OpenIPMI::ipmi_fru_t");
     swig_call_cb(cb, "entity_fru_update_cb", "%s%p%p",
 		 ipmi_update_e_string(op), &entity_ref, &fru_ref);
     swig_free_ref_check(entity_ref, "OpenIPMI::ipmi_entity_t");
-    if (fru)
-	swig_free_ref_check(fru_ref, "OpenIPMI::ipmi_fru_t");
+    swig_free_ref(fru_ref);
 }
 
 static int
@@ -1961,12 +1976,41 @@ typedef struct {
 } ipmi_control_id_t;
 
 %inline %{
+void enable_debug_malloc()
+{
+    if (!swig_os_hnd) {
+	DEBUG_MALLOC_ENABLE();
+    }
+}
+
+void enable_debug_msg()
+{
+    DEBUG_MSG_ENABLE();
+}
+
+void disable_debug_msg()
+{
+    DEBUG_MSG_DISABLE();
+}
+
+void enable_debug_rawmsg()
+{
+    DEBUG_RAWMSG_ENABLE();
+}
+
+void disable_debug_rawmsg()
+{
+    DEBUG_RAWMSG_DISABLE();
+}
+
 /*
  * Initialize the OS handler and use the POSIX version.
  */
 void
 init_posix(void)
 {
+    if (swig_os_hnd)
+	return;
     swig_os_hnd = ipmi_posix_setup_os_handler();
     ipmi_init(swig_os_hnd);
 }
@@ -1978,6 +2022,8 @@ init_posix(void)
 void
 init_glib(void)
 {
+    if (swig_os_hnd)
+	return;
     swig_os_hnd = ipmi_glib_get_os_handler();
     g_thread_init(NULL);
     ipmi_init(swig_os_hnd);
@@ -2006,6 +2052,18 @@ init(void)
 #else
     init_posix();
 #endif
+}
+
+/*
+ * Free up all the memory used by OpenIPMI.
+ */
+void
+shutdown_everything()
+{
+    ipmi_shutdown();
+    ipmi_debug_malloc_cleanup();
+    swig_os_hnd->free_os_handler(swig_os_hnd);
+    swig_os_hnd = NULL;
 }
 
 /*
@@ -2719,7 +2777,7 @@ char *color_string(int color);
 	cb_rm(domain, event);
     }
 
-    %newobject ipmi_domain_first_event;
+    %newobject first_event;
     /*
      * Retrieve the first event from the domain.  Return NULL (undef)
      * if the event does not exist.
@@ -2729,7 +2787,7 @@ char *color_string(int color);
 	return ipmi_domain_first_event(self);
     }
 
-    %newobject ipmi_domain_last_event;
+    %newobject last_event;
     /*
      * Retrieve the last event from the domain.
      */
@@ -2738,7 +2796,7 @@ char *color_string(int color);
 	return ipmi_domain_last_event(self);
     }
 
-    %newobject ipmi_domain_next_event;
+    %newobject next_event;
     /*
      * Retrieve the event after the given event from the domain.
      */
@@ -2747,7 +2805,7 @@ char *color_string(int color);
 	return ipmi_domain_next_event(self, event);
     }
 
-    %newobject ipmi_domain_prev_event;;
+    %newobject prev_event;
     /*
      * Retrieve the event before the given event from the domain.
      */
@@ -2818,9 +2876,11 @@ char *color_string(int color);
      *  channel - The channel where the device is located.
      * If the handler is supplied, then the fru_fetched method on that
      * will be called upon completion with the handler object as the first
-     * parameter, the FRU as the second, and an error value as the third.
+     * parameter, the domain as the second, the FRU as the third, and an
+     * error value as the fourth.
      * This returns the FRU, or undefined if a failure occurred.
      */
+    %newobject fru_alloc;
     ipmi_fru_t *fru_alloc(int is_logical, int device_address, int device_id,
 			  int lun, int private_bus, int channel,
 			  swig_cb handler = NULL)
@@ -2828,19 +2888,25 @@ char *color_string(int color);
 	ipmi_fru_t *fru;
 	int         rv;
 	swig_cb_val handler_val = NULL;
-	ipmi_fru_fetched_cb cb_handler = NULL;
+	ipmi_fru_cb cb_handler = NULL;
 
 	if (valid_swig_cb(handler)) {
 	    cb_handler = fru_fetched;
 	    handler_val = ref_swig_cb(handler);
 	}
 
-	rv = ipmi_fru_alloc(self, is_logical, device_address, device_id,
-			    lun, private_bus, channel, cb_handler,
-			    handler_val, &fru);
+	rv = ipmi_domain_fru_alloc(self, is_logical, device_address, device_id,
+				   lun, private_bus, channel, cb_handler,
+				   handler_val, &fru);
 	if (rv) {
-	    deref_swig_cb_val(handler_val);
+	    if (handler_val)
+		deref_swig_cb_val(handler_val);
 	    return NULL;
+	} else {
+	    /* We have one ref for the callback already, add a ref for
+	       the returned value. */
+	    if (handler_val)
+		ipmi_fru_ref(fru);
 	}
 
 	return fru;
@@ -3183,9 +3249,13 @@ char *color_string(int color);
      * FRU data pointer outside the context of where the entity pointer
      * is valid.
      */
+    %newobject get_fru;
     ipmi_fru_t *get_fru()
     {
-	return ipmi_entity_get_fru(self);
+	ipmi_fru_t *fru = ipmi_entity_get_fru(self);
+	if (fru)
+	    ipmi_fru_ref(fru);
+	return fru;
     }
 
     /*
@@ -5903,6 +5973,11 @@ char *color_string(int color);
  */
 %extend ipmi_fru_t {
 
+    ~ipmi_fru_t()
+    {
+	ipmi_fru_deref(self);
+    }
+
 /* Area numbers */
 #define FRU_INTERNAL_USE_AREA 0
 #define FRU_CHASSIS_INFO_AREA 1
@@ -5910,12 +5985,16 @@ char *color_string(int color);
 #define FRU_PRODUCT_INFO_AREA 3
 #define FRU_MULTI_RECORD_AREA 4
 
+    %newobject get_domain_id;
     /*
      * Get the domain the FRU belongs to.
      */
-    ipmi_domain_t *get_domain()
+    ipmi_domain_id_t *get_domain_id()
     {
-	return ipmi_fru_get_domain(self);
+	ipmi_domain_id_t *rv = malloc(sizeof(*rv));
+	if (rv)
+	    *rv = ipmi_fru_get_domain_id(self);
+	return rv;
     }
 
     /*
@@ -6392,21 +6471,27 @@ char *color_string(int color);
     /*
      * Write the contents of the fru back into the FRU device.  If the
      * handler (first parm) is non-null, the "fru_written" method on
-     * that object will be called with the FRU as the first parameter and
-     * the error value for the write as the second parameter.
+     * that object will be called with the domain as the first
+     * parameter, the FRU as the second parameter and the error value
+     * for the write as the third parameter.
      */
     int write(swig_cb handler = NULL)
     {
 	int         rv;
-	swig_cb_val handler_val;
+	swig_cb_val handler_val = NULL;
+	ipmi_fru_cb cb_handler = NULL;
 
-	if (! valid_swig_cb(handler))
-	    return EINVAL;
+	if (valid_swig_cb(handler)) {
+	    cb_handler = fru_written_done;
+	    handler_val = ref_swig_cb(handler);
+	    ipmi_fru_ref(self);
+	}
 
-	handler_val = ref_swig_cb(handler);
-	rv = ipmi_fru_write(self, fru_written_done, handler_val);
-	if (rv)
-	    deref_swig_cb_val(handler_val);
+	rv = ipmi_fru_write(self, cb_handler, handler_val);
+	if (rv) {
+	    if (handler_val)
+		deref_swig_cb_val(handler_val);
+	}
 	return rv;
     }
 }

@@ -1125,9 +1125,9 @@ main(int argc, char *argv[])
     ipmi_cmdlang_cleanup();
     ipmi_shutdown();
 
-    os_hnd->free_os_handler(os_hnd);
-
     ipmi_debug_malloc_cleanup();
+
+    os_hnd->free_os_handler(os_hnd);
 
     if (evcount)
 	printf("\n");

@@ -134,7 +134,7 @@ fru_areainfo(ipmi_fru_t *fru, void *cb_data)
 }
 
 static void
-fru_written(ipmi_fru_t *fru, int err, void *cb_data)
+fru_written(ipmi_domain_t *domain, ipmi_fru_t *fru, int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);

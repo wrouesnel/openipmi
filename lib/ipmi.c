@@ -405,14 +405,11 @@ ipmi_set_bcdplus(char          *input,
     int  count = 0;
 
     while (in_len > 0) {
-	if (pos >= len) {
-	    output[0] = (0x01 << 6) | count;
-	    *out_len = pos + 1;
-	    return;
-	}
 	switch(bit) {
 	    case 0:
 		pos++;
+		if (pos >= len)
+		    goto out_overflow;
 		output[pos] = table_4_bit[(int) *s] - 1;
 		bit = 4;
 		break;
@@ -426,8 +423,10 @@ ipmi_set_bcdplus(char          *input,
 	in_len--;
 	s++;
     }
+    pos++;
+ out_overflow:
     output[0] = (0x01 << 6) | count;
-    *out_len = pos+1;
+    *out_len = pos;
 }
 
 static void
@@ -483,8 +482,7 @@ ipmi_set_6_bit_ascii(char          *input,
 	count++;
 	in_len--;
     }
-    if (bit != 0)
-	pos++;
+    pos++;
  out_overflow:
     output[0] = (0x02 << 6) | count;
     *out_len = pos;

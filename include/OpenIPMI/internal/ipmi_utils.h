@@ -26,18 +26,19 @@
 /* Do a hash on a pointer value. */
 unsigned int ipmi_hash_pointer(void *);
 
-typedef void (*ipmi_fru_ifetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
+typedef void (*ipmi_ifru_cb)(ipmi_domain_t *domain, ipmi_fru_t *fru,
+			     int err, void *cb_data);
 /* Allocate a FRU, but don't make it visible to the list of FRUs. */
-int ipmi_fru_alloc_notrack(ipmi_domain_t       *domain,
-			   unsigned char       is_logical,
-			   unsigned char       device_address,
-			   unsigned char       device_id,
-			   unsigned char       lun,
-			   unsigned char       private_bus,
-			   unsigned char       channel,
-			   ipmi_fru_ifetched_cb fetched_handler,
-			   void                *fetched_cb_data,
-			   ipmi_fru_t          **new_fru);
+int ipmi_fru_alloc_notrack(ipmi_domain_t *domain,
+			   unsigned char is_logical,
+			   unsigned char device_address,
+			   unsigned char device_id,
+			   unsigned char lun,
+			   unsigned char private_bus,
+			   unsigned char channel,
+			   ipmi_ifru_cb  fetched_handler,
+			   void          *fetched_cb_data,
+			   ipmi_fru_t    **new_fru);
 
 /*
  * Used for destroying notrack FRUs only.

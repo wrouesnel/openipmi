@@ -1,3 +1,53 @@
+2004-12-16 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/fru.c: Fixed a problem with FRU area creation, where the
+	versions where not set properly.
+
+	* lib/ipmi.c: Fixed some last bugs dealing with IPMI strings.
+
+	* swig/OpenIPMI.i: Added handling for properly deleting FRU
+	information when we are done with it.
+	
+	* lib/fru.c: Fixed some race conditions with the new list stuff
+	and FRU destruction.
+
+	* include/OpenIPMI/ipmi_fru.h, lib/fru.c: Added refcount functions
+	for keeping track of FRUs.
+
+	* swig/perl/test_fru: Finished up FRU tests.
+
+	* include/OpenIPMI/ipmi_fru.h, lib/fru.c: Added a FRU alloc
+	function that has the domain in the callback.  Converted the
+	domain pointer in the FRU to a domain id and modified the
+	function to get the FRU's domain to return the domain id.
+
+	* include/OpenIPMI/internal/ipmi_util.h, lib/fru.c: Modified the
+	notrack FRU allocater to take the domain pointer
+	* lib/entity.c: ditto
+	* lib/domain.c: ditto
+
+	* swig/OpenIPMI.i: Fixed the FRU functions to call the FRU
+	destructor when the FRU was dereffed.  Modified the FRU
+	alloc and write functions to also supply the domain as the
+	first parameter. Added debugging setup functions.
+
+	* swig/perl/test_fru, swig/perl/sample: Adjusted for the
+	previous changes.
+
+	* lib/domain.c: Pass in domain during shutdown clearing of
+	messages.
+
+	* lib/mc.c: Fixed some problems where the refetch callbacks
+	were not always being called in certain error situations.
+	
+	* lib/domain.c, include/OpenIPMI/internal/ipmi_domain.c:
+	Modified the domain attributes to be refcount based, since
+	they could theoretically go away while still in use.
+	* lib/lanparm.c: ditto
+	* lib/pef.c: ditto
+	* lib/pet.c: ditto
+	* lib/fru.c: ditto
+
 2004-12-15 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/fru.c, include/OpenIPMI/ipmi_fru.c: Fixe the name of the set

@@ -689,24 +689,39 @@ use OpenIPMI;
 	my $self = shift;
 	my $mc = shift;
 	my $err = shift;
+	my $domain = $mc->get_domain();
 
 	print "Events enabled for ", $mc->get_name(), " err = $err\n";
+	$stop_count--;
+	if ($stop_count == 0) {
+	    $domain->close($main::h);
+	}
     }
 
     sub mc_reread_sel_cb {
 	my $self = shift;
 	my $mc = shift;
 	my $err = shift;
+	my $domain = $mc->get_domain();
 
 	print "SEL reread for ", $mc->get_name(), " err = $err\n";
+	$stop_count--;
+	if ($stop_count == 0) {
+	    $domain->close($main::h);
+	}
     }
 
     sub mc_reread_sensors_cb {
 	my $self = shift;
 	my $mc = shift;
 	my $err = shift;
+	my $domain = $mc->get_domain();
 
 	print "Sensors reread for ", $mc->get_name(), " err = $err\n";
+	$stop_count--;
+	if ($stop_count == 0) {
+	    $domain->close($main::h);
+	}
     }
 
     sub mc_get_sel_time_cb {
@@ -714,8 +729,13 @@ use OpenIPMI;
 	my $mc = shift;
 	my $err = shift;
 	my $time = shift;
+	my $domain = $mc->get_domain();
 
 	print "SEL time for ", $mc->get_name(), " is $time, err = $err\n";
+	$stop_count--;
+	if ($stop_count == 0) {
+	    $domain->close($main::h);
+	}
     }
 
     sub mc_update_cb {
@@ -778,32 +798,42 @@ use OpenIPMI;
 	    print "  get_sel_rescan_time = ",
 		  $mc->get_sel_rescan_time(), "\n";
 
+	    $stop_count++;
 	    $rv = $mc->set_events_enable(1, $self);
 	    if ($rv) {
 		print "***Error enabling MC events: $rv\n";
+		$stop_count--;
 	    }
 
+	    $stop_count++;
 	    $rv = $mc->reread_sensors($self);
 	    if ($rv) {
 		print "***Error rereading MC sensors: $rv\n";
+		$stop_count--;
 	    }
 
 	    $mc->set_sel_rescan_time(5);
 
+	    $stop_count++;
 	    $rv = $mc->reread_sel($self);
 	    if ($rv) {
 		print "***Error rereading MC SEL: $rv\n";
+		$stop_count--;
 	    }
 
+	    $stop_count++;
 	    $rv = $mc->get_current_sel_time($self);
 	    if ($rv) {
 		print "***Error getting current MC SEL time: $rv\n";
+		$stop_count--;
 	    }
 
+	    $stop_count++;
 	    $rv = $mc->send_command(0, 10, 0x43,
 				    [ 0, 0, 0, 0, 0, 0xff ], $self);
 	    if ($rv) {
 		print "***Unable to send command: $rv\n";
+		$stop_count--;
 	    }
 
 	    if ($op eq "added") {
@@ -844,6 +874,7 @@ use OpenIPMI;
 	my $mc = shift;
 	my $netfn = shift;
 	my $cmd = shift;
+	my $domain = $mc->get_domain();
 
 	print "Got message from ", $mc->get_name(), "\n";
 	print " netfn=$netfn, cmd=$cmd\n";
@@ -852,6 +883,10 @@ use OpenIPMI;
 	    printf " %2.2x", $val;
 	}
 	print "\n";
+	$stop_count--;
+	if ($stop_count == 0) {
+	    $domain->close($main::h);
+	}
     }
 
     sub conn_change_cb {
@@ -909,8 +944,6 @@ use OpenIPMI;
 	my $rv;
 	my $event;
 
-	$stop_count = 0;
-
 	print "Domain up: ", $domain->get_name(), "\n";
 	print "  type = ", $domain->get_type(), "\n";
 	print "  sel_rescan_type = ", $domain->get_sel_rescan_time(), "\n";
@@ -926,18 +959,18 @@ use OpenIPMI;
 	    $event = $domain->next_event($event);
 	}
 
+	$stop_count++;
 	$rv = $domain->start_ipmb_mc_scan(0, 0x20, 0x20, $self);
 	if ($rv) {
 	    print "Error starting IPMB scan: $rv\n";
-	} else {
-	    $stop_count++;
+	    $stop_count--;
 	}
 
+	$stop_count++;
 	$rv = $domain->reread_sels($self);
 	if ($rv) {
 	    print "Error starting IPMB scan: $rv\n";
-	} else {
-	    $stop_count++;
+	    $stop_count--;
 	}
     }
 
@@ -949,7 +982,7 @@ use OpenIPMI;
 	print "SEL rescan done for ", $domain->get_name(), " err=$err\n";
 	$stop_count--;
 	if ($stop_count == 0) {
-	    $domain->close($self);
+	    $domain->close($main::h);
 	}
     }
 
@@ -967,7 +1000,7 @@ use OpenIPMI;
 	print "IPMB scan done for ", $domain->get_name(), " err=$err\n";
 	$stop_count--;
 	if ($stop_count == 0) {
-	    $domain->close($self);
+	    $domain->close($main::h);
 	}
     }
 
@@ -1037,7 +1070,10 @@ use OpenIPMI;
     }
 }
 
-OpenIPMI::init();
+$Handlers::stop_count = 0;
+
+OpenIPMI::enable_debug_malloc();
+OpenIPMI::init_posix();
 
 $h = Handlers::new("hello");
 
@@ -1053,5 +1089,6 @@ while ($$h ne "done") {
     OpenIPMI::wait_io(1000);
 }
 
+OpenIPMI::shutdown_everything();
 print "done\n";
 exit 0;

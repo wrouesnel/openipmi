@@ -2747,7 +2747,8 @@ atca_iterate_entities(ipmi_entity_t *entity, void *cb_data)
 			       entity, cb_data);
 }
 
-static void shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data);
+static void shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru,
+			      int err, void *cb_data);
 
 static void
 atca_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
@@ -2961,10 +2962,10 @@ alt_shelf_fru_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 }
 
 static void
-shelf_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
+shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
+		  void *cb_data)
 {
     atca_shelf_t       *info = cb_data;
-    ipmi_domain_t      *domain = info->domain;
     int                count;
     int                found;
     int                i, j, k, l;

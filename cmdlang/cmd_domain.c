@@ -401,11 +401,11 @@ domain_open(ipmi_cmd_info_t *cmd_info)
 
 
 static void
-domain_fru_fetched(ipmi_fru_t *fru, int err, void *cb_data)
+domain_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru,
+		   int err, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    ipmi_domain_t   *domain = ipmi_fru_get_domain(fru);
     char            domain_name[IPMI_DOMAIN_NAME_LEN];
 
     ipmi_cmdlang_lock(cmd_info);
@@ -499,16 +499,16 @@ domain_fru(ipmi_domain_t *domain, void *cb_data)
     curr_arg++;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
-    rv = ipmi_fru_alloc(domain,
-			is_logical,
-			device_addr,
-			device_id,
-			lun,
-			private_bus,
-			channel,
-			domain_fru_fetched,
-			cmd_info,
-			NULL);
+    rv = ipmi_domain_fru_alloc(domain,
+			       is_logical,
+			       device_addr,
+			       device_id,
+			       lun,
+			       private_bus,
+			       channel,
+			       domain_fru_fetched,
+			       cmd_info,
+			       NULL);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);
 	cmdlang->errstr = "Error allocating FRU info";

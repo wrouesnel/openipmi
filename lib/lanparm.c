@@ -61,6 +61,7 @@ struct ipmi_lanparm_s
     unsigned int destroyed : 1;
     unsigned int in_destroy : 1;
     unsigned int locked : 1;
+    unsigned int in_list : 1;
 
     /* Something to call when the destroy is complete. */
     ipmi_lanparm_done_cb destroy_handler;
@@ -86,27 +87,6 @@ lanparm_attr_init(ipmi_domain_t *domain, void *cb_data, void **data)
 
     *data = lanparml;
     return 0;
-}
-
-static int lanparm_destroy_handler(ipmi_domain_t        *domain,
-				   ipmi_lanparm_t       *lanparm,
-				   ipmi_lanparm_done_cb done,
-				   void                 *cb_data);
-
-static int
-destroy_lanparm(void *cb_data, void *item1, void *item2)
-{
-    lanparm_destroy_handler(cb_data, item1, NULL, NULL);
-    return LOCKED_LIST_ITER_CONTINUE;
-}
-
-static void
-lanparm_attr_destroy(ipmi_domain_t *domain, void *cb_data, void *data)
-{
-    locked_list_t *lanparml = data;
-
-    locked_list_iterate(lanparml, destroy_lanparm, domain);
-    locked_list_destroy(lanparml);
 }
 
 static void
@@ -145,6 +125,26 @@ lanparm_put(ipmi_lanparm_t *lanparm)
     lanparm_unlock(lanparm);
 }
 
+static int
+destroy_lanparm(void *cb_data, void *item1, void *item2)
+{
+    ipmi_lanparm_t *lanparm = item1;
+
+    lanparm_lock(lanparm);
+    lanparm->in_list = 1;
+    lanparm_unlock(lanparm);
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+static void
+lanparm_attr_destroy(void *cb_data, void *data)
+{
+    locked_list_t *lanparml = data;
+
+    locked_list_iterate(lanparml, destroy_lanparm, NULL);
+    locked_list_destroy(lanparml);
+}
+
 typedef struct iterate_lanparms_info_s
 {
     ipmi_lanparm_ptr_cb handler;
@@ -173,20 +173,21 @@ ipmi_lanparm_iterate_lanparms(ipmi_domain_t       *domain,
 			      void                *cb_data)
 {
     iterate_lanparms_info_t info;
-    void                *attr_data;
-    locked_list_t       *lanparms;
-    int                 rv;
+    ipmi_domain_attr_t      *attr;
+    locked_list_t           *lanparms;
+    int                     rv;
 
     rv = ipmi_domain_find_attribute(domain, IPMI_LANPARM_ATTR_NAME,
-				    &attr_data);
+				    &attr);
     if (rv)
 	return;
-    lanparms = attr_data;
+    lanparms = ipmi_domain_attr_get_data(attr);
 
     info.handler = handler;
     info.cb_data = cb_data;
     locked_list_iterate_prefunc(lanparms, lanparms_prefunc,
 				lanparms_handler, &info);
+    ipmi_domain_attr_put(attr);
 }
 
 ipmi_mcid_t
@@ -274,12 +275,12 @@ ipmi_lanparm_alloc(ipmi_mc_t      *mc,
 		   unsigned int   channel,
 		   ipmi_lanparm_t **new_lanparm)
 {
-    ipmi_lanparm_t *lanparm = NULL;
-    int            rv = 0;
-    ipmi_domain_t  *domain = ipmi_mc_get_domain(mc);
-    int            p, len;
-    locked_list_t  *lanparml;
-    void           *attr_data;
+    ipmi_lanparm_t     *lanparm = NULL;
+    int                rv = 0;
+    ipmi_domain_t      *domain = ipmi_mc_get_domain(mc);
+    int                p, len;
+    locked_list_t      *lanparml;
+    ipmi_domain_attr_t *attr;
 
     CHECK_MC_LOCK(mc);
 
@@ -287,10 +288,10 @@ ipmi_lanparm_alloc(ipmi_mc_t      *mc,
 					lanparm_attr_init,
 					lanparm_attr_destroy,
 					NULL,
-					&attr_data);
+					&attr);
     if (rv)
 	return rv;
-    lanparml = attr_data;
+    lanparml = ipmi_domain_attr_get_data(attr);
 
     lanparm = ipmi_mem_alloc(sizeof(*lanparm));
     if (!lanparm) {
@@ -300,6 +301,7 @@ ipmi_lanparm_alloc(ipmi_mc_t      *mc,
     memset(lanparm, 0, sizeof(*lanparm));
 
     lanparm->refcount = 1;
+    lanparm->in_list = 1;
     lanparm->mc = ipmi_mc_convert_to_id(mc);
     lanparm->domain = ipmi_domain_convert_to_id(domain);
     len = sizeof(lanparm->name);
@@ -341,6 +343,7 @@ ipmi_lanparm_alloc(ipmi_mc_t      *mc,
     } else {
 	*new_lanparm = lanparm;
     }
+    ipmi_domain_attr_put(attr);
     return rv;
 }
 
@@ -349,9 +352,28 @@ internal_destroy_lanparm(ipmi_lanparm_t *lanparm)
 {
     lanparm->in_destroy = 1;
 
-    /* We don't have to have a valid ipmi to destroy an SEL, the are
-       designed to live after the ipmi has been destroyed. */
-    lanparm_unlock(lanparm);
+    /* We don't have to have a valid ipmi to destroy a lanparm, they
+       are designed to live after the ipmi has been destroyed. */
+
+    if (lanparm->in_list) {
+	int                rv;
+	ipmi_domain_attr_t *attr;
+	locked_list_t      *lanparml;
+
+	rv = ipmi_domain_id_find_attribute(lanparm->domain,
+					   IPMI_LANPARM_ATTR_NAME,
+					   &attr);
+	if (!rv) {
+	    lanparm->in_list = 0;
+	    lanparm_unlock(lanparm);
+	    lanparml = ipmi_domain_attr_get_data(attr);
+
+	    locked_list_remove(lanparml, lanparm, NULL);
+	    ipmi_domain_attr_put(attr);
+	}
+    } else {
+	lanparm_unlock(lanparm);
+    }
 
     if (lanparm->opq)
 	opq_destroy(lanparm->opq);
@@ -367,78 +389,45 @@ internal_destroy_lanparm(ipmi_lanparm_t *lanparm)
     ipmi_mem_free(lanparm);
 }
 
-static int
-lanparm_destroy_handler(ipmi_domain_t        *domain,
-			ipmi_lanparm_t       *lanparm,
-			ipmi_lanparm_done_cb handler,
-			void                 *cb_data)
-{
-    int           rv;
-    void          *attr_data;
-    locked_list_t *lanparml;
-    
-    rv = ipmi_domain_find_attribute(domain, IPMI_LANPARM_ATTR_NAME,
-				    &attr_data);
-    if (rv)
-	return rv;
-    lanparml = attr_data;
-
-    if (! locked_list_remove(lanparml, lanparm, NULL))
-	/* Not in the list, it's already been removed. */
-	return EINVAL;
-
-    lanparm_lock(lanparm);
-    if (lanparm->destroyed) {
-	lanparm_unlock(lanparm);
-	return EINVAL;
-    }
-    lanparm->destroyed = 1;
-    lanparm_unlock(lanparm);
-    lanparm->destroy_handler = handler;
-    lanparm->destroy_cb_data = cb_data;
-
-    lanparm_put(lanparm);
-    return 0;
-}
-
-typedef struct lanparm_destroy_s
-{
-    int            err;
-    ipmi_lanparm_t *lanparm;
-
-    ipmi_lanparm_done_cb done;
-    void             *cb_data;
-} lanparm_destroy_t;
-
-static void
-lanparm_destroy_handler_domain(ipmi_domain_t *domain, void *cb_data)
-{
-    lanparm_destroy_t *info = cb_data;
-
-    info->err = lanparm_destroy_handler(domain, info->lanparm,
-					info->done, info->cb_data);
-}
-
 int
 ipmi_lanparm_destroy(ipmi_lanparm_t       *lanparm,
 		     ipmi_lanparm_done_cb done,
 		     void                 *cb_data)
 
 {
-    lanparm_destroy_t info;
-    int           rv;
+    lanparm_lock(lanparm);
+    if (lanparm->in_list) {
+	int                rv;
+	ipmi_domain_attr_t *attr;
+	locked_list_t      *lanparml;
 
-    info.err = 0;
-    info.lanparm = lanparm;
-    info.done = done;
-    info.cb_data = cb_data;
-    rv = ipmi_domain_pointer_cb(lanparm->domain,
-				lanparm_destroy_handler_domain,
-				&info);
-    if (!rv)
-	rv = info.err;
+	rv = ipmi_domain_id_find_attribute(lanparm->domain,
+					   IPMI_LANPARM_ATTR_NAME,
+					   &attr);
+	if (rv) {
+	    lanparm_unlock(lanparm);
+	    return rv;
+	}
+	lanparm->in_list = 0;
+	lanparm_unlock(lanparm);
+	lanparml = ipmi_domain_attr_get_data(attr);
 
-    return rv;
+	locked_list_remove(lanparml, lanparm, NULL);
+	ipmi_domain_attr_put(attr);
+	lanparm_lock(lanparm);
+    }
+
+    if (lanparm->destroyed) {
+	lanparm_unlock(lanparm);
+	return EINVAL;
+    }
+    lanparm->destroyed = 1;
+    lanparm_unlock(lanparm);
+    lanparm->destroy_handler = done;
+    lanparm->destroy_cb_data = cb_data;
+
+    lanparm_put(lanparm);
+    return 0;
 }
 
 typedef struct lanparm_fetch_handler_s

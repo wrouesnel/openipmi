@@ -306,11 +306,14 @@ int ipmi_fru_str_to_index(char *name);
    empty FRU, fill it with data, and put it into an entity. */
 
 /* The the domain the FRU uses. */
-ipmi_domain_t *ipmi_fru_get_domain(ipmi_fru_t *fru);
+ipmi_domain_id_t ipmi_fru_get_domain_id(ipmi_fru_t *fru);
 
 /* Name of the FRU. */
 int ipmi_fru_get_name(ipmi_fru_t *fru, char *name, int length);
 
+/*
+ * Allocate a FRU and start fetching it.
+ */
 typedef void (*ipmi_fru_fetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
 int ipmi_fru_alloc(ipmi_domain_t       *domain,
 		   unsigned char       is_logical,
@@ -323,8 +326,27 @@ int ipmi_fru_alloc(ipmi_domain_t       *domain,
 		   void                *fetched_cb_data,
 		   ipmi_fru_t          **new_fru);
 
+/*
+ * Allocate a FRU and start fetching it.  Like the above, but the
+ * callback passes the domain.
+ */
+typedef void (*ipmi_fru_cb)(ipmi_domain_t *domain,
+			    ipmi_fru_t    *fru,
+			    int           err,
+			    void          *cb_data);
+int ipmi_domain_fru_alloc(ipmi_domain_t *domain,
+			  unsigned char is_logical,
+			  unsigned char device_address,
+			  unsigned char device_id,
+			  unsigned char lun,
+			  unsigned char private_bus,
+			  unsigned char channel,
+			  ipmi_fru_cb   fetched_handler,
+			  void          *fetched_cb_data,
+			  ipmi_fru_t    **new_fru);
+
 /* Destroy an FRU.  Note that if the FRU is currently fetching SDRs,
-   the destroy cannot complete immediatly, it will be marked for
+   the destroy cannot complete immediately, it will be marked for
    destruction later.  You can supply a callback that, if not NULL,
    will be called when the sdr is destroyed. */
 typedef void (*ipmi_fru_destroyed_cb)(ipmi_fru_t *fru, void *cb_data);
@@ -345,6 +367,14 @@ void ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
    corrupt, you can create areas and fields and write out to the
    FRU. */
 unsigned int ipmi_fru_get_data_length(ipmi_fru_t *fru);
+
+/* Used to track references to a FRU.  You can use this instead of
+   ipmi_fru_destroy, but use of the destroy function is recommended.
+   This is primarily here to help reference-tracking garbage
+   collection systems like what is in Perl to be able to automatically
+   destroy FRUs when they are done. */
+void ipmi_fru_ref(ipmi_fru_t *fru);
+void ipmi_fru_deref(ipmi_fru_t *fru);
 
 /*
  * Create and destroy FRU areas and get information about them.  Note
@@ -529,7 +559,7 @@ int ipmi_fru_set_data_val(ipmi_fru_t                *fru,
  * can be simultaneously writing the FRU data without knowing about it,
  * resulting in corruptions.  Be careful.
  */
-int ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data);
+int ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_cb done, void *cb_data);
 
 /************************************************************************
  *

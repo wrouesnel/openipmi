@@ -4609,7 +4609,8 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 }
 
 static void
-fru_fetched_handler(ipmi_fru_t *fru, int err, void *cb_data)
+fru_fetched_handler(ipmi_domain_t *domain, ipmi_fru_t *fru,
+		    int err, void *cb_data)
 {
     ipmi_entity_id_t *ent_id = cb_data;
     fru_ent_info_t   info;
@@ -4624,7 +4625,7 @@ fru_fetched_handler(ipmi_fru_t *fru, int err, void *cb_data)
 	ipmi_fru_destroy_internal(fru, NULL, NULL);
 
     ipmi_mem_free(ent_id);
-    _ipmi_put_domain_fully_up(ipmi_fru_get_domain(fru));
+    _ipmi_put_domain_fully_up(domain);
 }
 
 int

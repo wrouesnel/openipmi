@@ -60,6 +60,18 @@
 
 #define IPMI_FRU_ATTR_NAME "ipmi_fru"
 
+/*
+ * A note of FRUs, fru attributes, and locking.
+ *
+ * Because we keep a list of FRUs, that makes locking a lot more
+ * complicated.  While we are deleting a FRU another thread can come
+ * along and iterate and find it.  The lock on the locked list is used
+ * along with the FRU lock to prevent this from happening.  Since in
+ * this situation, the locked list lock is held when the FRU is
+ * referenced, when we destroy the FRU we make sure that it wasn't
+ * resurrected after being deleted from this list.
+ */
+
 /* Records used to hold the FRU. */
 typedef struct ipmi_fru_record_s ipmi_fru_record_t;
 
@@ -100,6 +112,7 @@ typedef struct fru_area_info_s {
 		  unsigned int      data_len,
 		  ipmi_fru_record_t **rrec);
     int (*encode)(ipmi_fru_t *fru, unsigned char *data);
+    void (*setup_new)(ipmi_fru_record_t *rec);
 } fru_area_info_t;
 
 extern fru_area_info_t fru_area_info[IPMI_FRU_FTR_NUMBER];
@@ -152,7 +165,7 @@ struct ipmi_fru_s
 
     ipmi_lock_t *lock;
 
-    ipmi_domain_t        *domain;
+    ipmi_domain_id_t     domain_id;
     unsigned char        is_logical;
     unsigned char        device_address;
     unsigned char        device_id;
@@ -161,6 +174,7 @@ struct ipmi_fru_s
     unsigned char        channel;
 
     ipmi_fru_fetched_cb fetched_handler;
+    ipmi_fru_cb         domain_fetched_handler;
     void                *fetched_cb_data;
 
     ipmi_fru_destroyed_cb destroy_handler;
@@ -217,6 +231,9 @@ fru_unlock(ipmi_fru_t *fru)
     ipmi_unlock(fru->lock);
 }
 
+/*
+ * Must already be holding the FRU lock to call this.
+ */
 static void
 fru_get(ipmi_fru_t *fru)
 {
@@ -226,13 +243,27 @@ fru_get(ipmi_fru_t *fru)
 static void
 fru_put(ipmi_fru_t *fru)
 {
-    ipmi_lock(fru->lock);
+    fru_lock(fru);
     fru->refcount--;
     if (fru->refcount == 0) {
 	final_fru_destroy(fru);
 	return;
     }
-    ipmi_unlock(fru->lock);
+    fru_unlock(fru);
+}
+
+void
+ipmi_fru_ref(ipmi_fru_t *fru)
+{
+    fru_lock(fru);
+    fru_get(fru);
+    fru_unlock(fru);
+}
+
+void
+ipmi_fru_deref(ipmi_fru_t *fru)
+{
+    fru_put(fru);
 }
 
 static unsigned char
@@ -751,6 +782,9 @@ fru_record_alloc(int area)
     rec->handlers = fru_area_info + area;
     rec->data = ((char *) rec) + sizeof(ipmi_fru_record_t);
 
+    if (fru_area_info[area].setup_new)
+	fru_area_info[area].setup_new(rec);
+
     return rec;
 }
 
@@ -938,6 +972,14 @@ internal_use_area_free(ipmi_fru_record_t *rec)
     fru_record_free(rec);
 }
 
+static void
+internal_use_area_setup(ipmi_fru_record_t *rec)
+{
+    ipmi_fru_internal_use_area_t *u = fru_record_get_data(rec);
+
+    u->version = 1;
+}
+
 static int
 fru_decode_internal_use_area(ipmi_fru_t        *fru,
 			     unsigned char     *data,
@@ -988,7 +1030,7 @@ ipmi_fru_get_internal_use_version(ipmi_fru_t    *fru,
 static int
 ipmi_fru_set_internal_use_version(ipmi_fru_t *fru, unsigned char data)
 {
-    return EINVAL;
+    return EPERM;
 }
 
 int 
@@ -1045,7 +1087,8 @@ ipmi_fru_set_internal_use(ipmi_fru_t *fru, unsigned char *data,
 	fru_unlock(fru);
 	return ENOMEM;
     }
-    ipmi_mem_free(u->data);
+    if (u->data)
+	ipmi_mem_free(u->data);
     u->data = new_val;
     memcpy(u->data, data, len);
     u->length = len;
@@ -1107,6 +1150,14 @@ chassis_info_area_free(ipmi_fru_record_t *rec)
 
     fru_free_variable_string(&u->fields);
     fru_record_free(rec);
+}
+
+static void
+chassis_info_area_setup(ipmi_fru_record_t *rec)
+{
+    ipmi_fru_internal_use_area_t *u = fru_record_get_data(rec);
+
+    u->version = 1;
 }
 
 static fru_variable_t *
@@ -1200,7 +1251,7 @@ ipmi_fru_get_chassis_info_version(ipmi_fru_t    *fru,
 static int
 ipmi_fru_set_chassis_info_version(ipmi_fru_t *fru, unsigned char data)
 {
-    return EINVAL;
+    return EPERM;
 }
 
 int 
@@ -1307,6 +1358,14 @@ board_info_area_free(ipmi_fru_record_t *rec)
     fru_record_free(rec);
 }
 
+static void
+board_info_area_setup(ipmi_fru_record_t *rec)
+{
+    ipmi_fru_internal_use_area_t *u = fru_record_get_data(rec);
+
+    u->version = 1;
+}
+
 static fru_variable_t *
 board_info_get_fields(ipmi_fru_record_t *rec)
 {
@@ -1407,7 +1466,7 @@ ipmi_fru_get_board_info_version(ipmi_fru_t    *fru,
 static int
 ipmi_fru_set_board_info_version(ipmi_fru_t *fru, unsigned char data)
 {
-    return EINVAL;
+    return EPERM;
 }
 
 int 
@@ -1546,6 +1605,14 @@ product_info_area_free(ipmi_fru_record_t *rec)
     fru_record_free(rec);
 }
 
+static void
+product_info_area_setup(ipmi_fru_record_t *rec)
+{
+    ipmi_fru_internal_use_area_t *u = fru_record_get_data(rec);
+
+    u->version = 1;
+}
+
 static fru_variable_t *
 product_info_get_fields(ipmi_fru_record_t *rec)
 {
@@ -1643,7 +1710,7 @@ ipmi_fru_get_product_info_version(ipmi_fru_t    *fru,
 static int
 ipmi_fru_set_product_info_version(ipmi_fru_t *fru, unsigned char data)
 {
-    return EINVAL;
+    return EPERM;
 }
 
 int 
@@ -2195,19 +2262,24 @@ static fru_area_info_t fru_area_info[IPMI_FRU_FTR_NUMBER] =
 {
     { 0, 0,  1, NULL,                    internal_use_area_free,
       sizeof(ipmi_fru_internal_use_area_t),
-      fru_decode_internal_use_area, fru_encode_internal_use_area },
+      fru_decode_internal_use_area, fru_encode_internal_use_area,
+      internal_use_area_setup },
     { 2, 3,  7, chassis_info_get_fields, chassis_info_area_free,
       sizeof(ipmi_fru_chassis_info_area_t),
-      fru_decode_chassis_info_area, fru_encode_chassis_info_area },
+      fru_decode_chassis_info_area, fru_encode_chassis_info_area,
+      chassis_info_area_setup },
     { 5, 6, 13, board_info_get_fields,   board_info_area_free,
       sizeof(ipmi_fru_board_info_area_t),
-      fru_decode_board_info_area, fru_encode_board_info_area },
+      fru_decode_board_info_area, fru_encode_board_info_area,
+      board_info_area_setup },
     { 7, 3, 12, product_info_get_fields, product_info_area_free,
       sizeof(ipmi_fru_product_info_area_t),
-      fru_decode_product_info_area, fru_encode_product_info_area },
+      fru_decode_product_info_area, fru_encode_product_info_area,
+      product_info_area_setup },
     { 0, 0,  0, NULL,                    multi_record_area_free,
       sizeof(ipmi_fru_multi_record_area_t),
-      fru_decode_multi_record_area, fru_encode_multi_record_area },
+      fru_decode_multi_record_area, fru_encode_multi_record_area,
+      NULL },
 };
 
 static int
@@ -2223,8 +2295,8 @@ check_rec_position(ipmi_fru_t   *fru,
     if ((offset == 0) || ((offset % 8) != 0))
 	return EINVAL;
 
-    /* Make sure it fits into the used area */
-    if (length < fru->recs[recn]->used_length)
+    /* Make sure the used area still fits. */
+    if (fru->recs[recn] && (length < fru->recs[recn]->used_length))
 	return E2BIG;
 
     /* FRU data record starts cannot exceed 2040 bytes.  The offsets
@@ -2476,6 +2548,37 @@ final_fru_destroy(ipmi_fru_t *fru)
 {
     int i;
 
+    if (fru->in_frulist) {
+	int                rv;
+	ipmi_domain_attr_t *attr;
+	locked_list_t      *frul;
+
+	fru->in_frulist = 0;
+	rv = ipmi_domain_id_find_attribute(fru->domain_id, IPMI_FRU_ATTR_NAME,
+					   &attr);
+	if (!rv) {
+	    fru->refcount++;
+	    fru_unlock(fru);
+	    frul = ipmi_domain_attr_get_data(attr);
+	    locked_list_remove(frul, fru, NULL);
+	    ipmi_domain_attr_put(attr);
+	    fru_lock(fru);
+	    /* While we were unlocked, someone may have come in and
+	       grabbed the FRU by iterating the list of FRUs.  That's
+	       ok, we just let them handle the destruction since this
+	       code will not be entered again. */
+	    if (fru->refcount != 1) {
+		fru->refcount--;
+		fru_unlock(fru);
+		return;
+	    }
+	}
+    }
+    fru_unlock(fru);
+
+    /* No one else can be referencing this here, so it is safe to
+       release the lock now. */
+
     if (fru->destroy_handler)
 	fru->destroy_handler(fru, fru->destroy_cb_data);
 
@@ -2486,7 +2589,6 @@ final_fru_destroy(ipmi_fru_t *fru)
 	fru->update_recs = to_free->next;
 	ipmi_mem_free(to_free);
     }
-    fru_unlock(fru);
     ipmi_destroy_lock(fru->lock);
     ipmi_mem_free(fru);
 }
@@ -2514,47 +2616,61 @@ ipmi_fru_destroy(ipmi_fru_t            *fru,
 		 ipmi_fru_destroyed_cb handler,
 		 void                  *cb_data)
 {
-    void          *attr_data;
-    locked_list_t *frul;
-    int           rv;
+    ipmi_domain_attr_t *attr;
+    locked_list_t      *frul;
+    int                rv;
 
+    fru_lock(fru);
     if (fru->in_frulist) {
-	rv = ipmi_domain_find_attribute(fru->domain, IPMI_FRU_ATTR_NAME,
-					&attr_data);
-	if (!rv)
+	rv = ipmi_domain_id_find_attribute(fru->domain_id, IPMI_FRU_ATTR_NAME,
+					   &attr);
+	if (rv) {
+	    fru_unlock(fru);
 	    return rv;
-
-	frul = attr_data;
-	if (! locked_list_remove(frul, fru, NULL))
-	    /* Not in the list, it's already been removed. */
-	    return EINVAL;
+	}
 	fru->in_frulist = 0;
+	fru_unlock(fru);
+
+	frul = ipmi_domain_attr_get_data(attr);
+	if (! locked_list_remove(frul, fru, NULL)) {
+	    /* Not in the list, it's already been removed. */
+	    ipmi_domain_attr_put(attr);
+	    fru_unlock(fru);
+	    return EINVAL;
+	}
+	ipmi_domain_attr_put(attr);
+	fru_put(fru); /* It's not in the list any more. */
     } else {
 	/* User can't destroy FRUs he didn't allocate. */
+	fru_unlock(fru);
 	return EPERM;
     }
 
     return ipmi_fru_destroy_internal(fru, handler, cb_data);
 }
 
-static int start_logical_fru_fetch(ipmi_fru_t *fru);
-static int start_physical_fru_fetch(ipmi_fru_t *fru);
+static int start_logical_fru_fetch(ipmi_domain_t *domain, ipmi_fru_t *fru);
+static int start_physical_fru_fetch(ipmi_domain_t *domain, ipmi_fru_t *fru);
 
 static int
 destroy_fru(void *cb_data, void *item1, void *item2)
 {
     ipmi_fru_t *fru = item1;
+
+    /* Users are responsible for handling their own FRUs, we don't
+       delete here, just mark not in the list. */
+    fru_lock(fru);
     fru->in_frulist = 0;
-    ipmi_fru_destroy(fru, NULL, NULL);
+    fru_unlock(fru);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static void
-fru_attr_destroy(ipmi_domain_t *domain, void *cb_data, void *data)
+fru_attr_destroy(void *cb_data, void *data)
 {
     locked_list_t *frul = data;
 
-    locked_list_iterate(frul, destroy_fru, domain);
+    locked_list_iterate(frul, destroy_fru, NULL);
     locked_list_destroy(frul);
 }
 
@@ -2602,7 +2718,7 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     fru->refcount = 2;
     fru->in_use = 1;
 
-    fru->domain = domain;
+    fru->domain_id = ipmi_domain_convert_to_id(domain);
     fru->is_logical = is_logical;
     fru->device_address = device_address;
     fru->device_id = device_id;
@@ -2626,9 +2742,9 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
 
     fru_lock(fru);
     if (fru->is_logical)
-	err = start_logical_fru_fetch(fru);
+	err = start_logical_fru_fetch(domain, fru);
     else
-	err = start_physical_fru_fetch(fru);
+	err = start_physical_fru_fetch(domain, fru);
     if (err) {
 	fru_unlock(fru);
 	ipmi_destroy_lock(fru->lock);
@@ -2637,6 +2753,64 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     }
 
     *new_fru = fru;
+    return 0;
+}
+
+int
+ipmi_domain_fru_alloc(ipmi_domain_t *domain,
+		      unsigned char is_logical,
+		      unsigned char device_address,
+		      unsigned char device_id,
+		      unsigned char lun,
+		      unsigned char private_bus,
+		      unsigned char channel,
+		      ipmi_fru_cb   fetched_handler,
+		      void          *fetched_cb_data,
+		      ipmi_fru_t    **new_fru)
+{
+    ipmi_fru_t         *nfru;
+    int                rv;
+    ipmi_domain_attr_t *attr;
+    locked_list_t      *frul;
+
+    rv = ipmi_domain_register_attribute(domain, IPMI_FRU_ATTR_NAME,
+					fru_attr_init,
+					fru_attr_destroy,
+					NULL,
+					&attr);
+    if (rv)
+	return rv;
+    frul = ipmi_domain_attr_get_data(attr);
+
+    /* Be careful with locking, a FRU fetch is already going on when
+       the alloc_internal function returns. */
+    locked_list_lock(frul);
+    rv = ipmi_fru_alloc_internal(domain, is_logical, device_address,
+				 device_id, lun, private_bus, channel,
+				 NULL, NULL, &nfru);
+    if (rv) {
+	locked_list_unlock(frul);
+	ipmi_domain_attr_put(attr);
+	return rv;
+    }
+
+    nfru->in_frulist = 1;
+
+    if (! locked_list_add_nolock(frul, nfru, NULL)) {
+	locked_list_unlock(frul);
+	nfru->fetched_handler = NULL;
+	ipmi_fru_destroy(nfru, NULL, NULL);
+	ipmi_domain_attr_put(attr);
+	return ENOMEM;
+    }
+    nfru->domain_fetched_handler = fetched_handler;
+    nfru->fetched_cb_data = fetched_cb_data;
+    fru_unlock(nfru);
+    locked_list_unlock(frul);
+    ipmi_domain_attr_put(attr);
+
+    if (new_fru)
+	*new_fru = nfru;
     return 0;
 }
 
@@ -2652,36 +2826,44 @@ ipmi_fru_alloc(ipmi_domain_t       *domain,
 	       void                *fetched_cb_data,
 	       ipmi_fru_t          **new_fru)
 {
-    ipmi_fru_t    *nfru;
-    int           rv;
-    void          *attr_data;
-    locked_list_t *frul;
+    ipmi_fru_t         *nfru;
+    int                rv;
+    ipmi_domain_attr_t *attr;
+    locked_list_t      *frul;
 
     rv = ipmi_domain_register_attribute(domain, IPMI_FRU_ATTR_NAME,
 					fru_attr_init,
 					fru_attr_destroy,
 					NULL,
-					&attr_data);
+					&attr);
     if (rv)
 	return rv;
-    frul = attr_data;
+    frul = ipmi_domain_attr_get_data(attr);
 
+    /* Be careful with locking, a FRU fetch is already going on when
+       the alloc_internal function returns. */
+    locked_list_lock(frul);
     rv = ipmi_fru_alloc_internal(domain, is_logical, device_address,
 				 device_id, lun, private_bus, channel,
 				 fetched_handler, fetched_cb_data, &nfru);
     if (rv) {
-	fru_unlock(nfru);
+	ipmi_domain_attr_put(attr);
+	locked_list_unlock(frul);
 	return rv;
     }
 
-    if (! locked_list_add(frul, nfru, NULL)) {
-	ipmi_fru_destroy(nfru, NULL, NULL);
+    nfru->in_frulist = 1;
+
+    if (! locked_list_add_nolock(frul, nfru, NULL)) {
+	locked_list_unlock(frul);
 	nfru->fetched_handler = NULL;
-	fru_unlock(nfru);
+	ipmi_fru_destroy(nfru, NULL, NULL);
+	ipmi_domain_attr_put(attr);
 	return ENOMEM;
     }
-    nfru->in_frulist = 1;
     fru_unlock(nfru);
+    locked_list_unlock(frul);
+    ipmi_domain_attr_put(attr);
 
     if (new_fru)
 	*new_fru = nfru;
@@ -2689,26 +2871,28 @@ ipmi_fru_alloc(ipmi_domain_t       *domain,
 }
 
 int
-ipmi_fru_alloc_notrack(ipmi_domain_t       *domain,
-		       unsigned char       is_logical,
-		       unsigned char       device_address,
-		       unsigned char       device_id,
-		       unsigned char       lun,
-		       unsigned char       private_bus,
-		       unsigned char       channel,
-		       ipmi_fru_ifetched_cb fetched_handler,
-		       void                *fetched_cb_data,
-		       ipmi_fru_t          **new_fru)
+ipmi_fru_alloc_notrack(ipmi_domain_t *domain,
+		       unsigned char is_logical,
+		       unsigned char device_address,
+		       unsigned char device_id,
+		       unsigned char lun,
+		       unsigned char private_bus,
+		       unsigned char channel,
+		       ipmi_ifru_cb  fetched_handler,
+		       void          *fetched_cb_data,
+		       ipmi_fru_t    **new_fru)
 {
     ipmi_fru_t *nfru;
     int        rv;
 
     rv = ipmi_fru_alloc_internal(domain, is_logical, device_address,
 				 device_id, lun, private_bus, channel,
-				 fetched_handler, fetched_cb_data, &nfru);
-    fru_unlock(nfru);
+				 NULL, NULL, &nfru);
     if (rv)
 	return rv;
+    nfru->domain_fetched_handler = fetched_handler;
+    nfru->fetched_cb_data = fetched_cb_data;
+    fru_unlock(nfru);
 
     if (new_fru)
 	*new_fru = nfru;
@@ -2812,7 +2996,7 @@ process_fru_info(ipmi_fru_t *fru)
 }
 
 void
-fetch_complete(ipmi_fru_t *fru, int err)
+fetch_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
 {
     if (!err)
 	err = process_fru_info(fru);
@@ -2826,13 +3010,16 @@ fetch_complete(ipmi_fru_t *fru, int err)
 
     if (fru->fetched_handler)
 	fru->fetched_handler(fru, err, fru->fetched_cb_data);
+    else if (fru->domain_fetched_handler)
+	fru->domain_fetched_handler(domain, fru, err, fru->fetched_cb_data);
 
     fru_put(fru);
 }
 
-static int request_next_data(ipmi_fru_t   *fru,
-			     ipmi_addr_t  *addr,
-			     unsigned int addr_len);
+static int request_next_data(ipmi_domain_t *domain,
+			     ipmi_fru_t    *fru,
+			     ipmi_addr_t   *addr,
+			     unsigned int  addr_len);
 
 static int
 fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
@@ -2848,7 +3035,7 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     fru_lock(fru);
 
     if (fru->deleted) {
-	fetch_complete(fru, ECANCELED);
+	fetch_complete(domain, fru, ECANCELED);
 	goto out;
     }
 
@@ -2861,13 +3048,13 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		     "IPMI error getting FRU data: %x",
 		     FRU_DOMAIN_NAME(fru), data[0]);
 	    fru->data_len = fru->curr_pos;
-	    fetch_complete(fru, 0);
+	    fetch_complete(domain, fru, 0);
 	} else {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sfru.c(fru_data_handler): "
 		     "IPMI error getting FRU data: %x",
 		     FRU_DOMAIN_NAME(fru), data[0]);
-	    fetch_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
+	    fetch_complete(domain, fru, IPMI_IPMI_ERR_VAL(data[0]));
 	}
 	goto out;
     }
@@ -2877,7 +3064,7 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_data_handler): "
 		 "FRU data response too small",
 		 FRU_DOMAIN_NAME(fru));
-	fetch_complete(fru, EINVAL);
+	fetch_complete(domain, fru, EINVAL);
 	goto out;
     }
 
@@ -2888,7 +3075,7 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_data_handler): "
 		 "FRU got zero-sized data, must make progress!",
 		 FRU_DOMAIN_NAME(fru));
-	fetch_complete(fru, EINVAL);
+	fetch_complete(domain, fru, EINVAL);
 	goto out;
     }
 
@@ -2897,7 +3084,7 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_data_handler): "
 		 "FRU data count mismatch",
 		 FRU_DOMAIN_NAME(fru));
-	fetch_complete(fru, EINVAL);
+	fetch_complete(domain, fru, EINVAL);
 	goto out;
     }
 
@@ -2906,17 +3093,17 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
     if (fru->curr_pos < fru->data_len) {
 	/* More to fetch. */
-	err = request_next_data(fru, addr, addr_len);
+	err = request_next_data(domain, fru, addr, addr_len);
 	if (err) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%sfru.c(fru_data_handler): "
 		     "Error requesting next FRU data",
 		     FRU_DOMAIN_NAME(fru));
-	    fetch_complete(fru, err);
+	    fetch_complete(domain, fru, err);
 	    goto out;
 	}
     } else {
-	fetch_complete(fru, 0);
+	fetch_complete(domain, fru, 0);
 	goto out;
     }
 
@@ -2926,9 +3113,10 @@ fru_data_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 }
 
 static int
-request_next_data(ipmi_fru_t   *fru,
-		  ipmi_addr_t  *addr,
-		  unsigned int addr_len)
+request_next_data(ipmi_domain_t *domain,
+		  ipmi_fru_t    *fru,
+		  ipmi_addr_t   *addr,
+		  unsigned int  addr_len)
 {
     unsigned char cmd_data[4];
     ipmi_msg_t    msg;
@@ -2948,7 +3136,7 @@ request_next_data(ipmi_fru_t   *fru,
     msg.data = cmd_data;
     msg.data_len = 4;
 
-    return ipmi_send_command_addr(fru->domain,
+    return ipmi_send_command_addr(domain,
 				  addr, addr_len,
 				  &msg,
 				  fru_data_handler,
@@ -2969,7 +3157,7 @@ fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     fru_lock(fru);
 
     if (fru->deleted) {
-	fetch_complete(fru, ECANCELED);
+	fetch_complete(domain, fru, ECANCELED);
 	goto out;
     }
 
@@ -2978,7 +3166,7 @@ fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_inventory_area_handler): "
 		 "IPMI error getting FRU inventory area: %x",
 		 FRU_DOMAIN_NAME(fru), data[0]);
-	fetch_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
+	fetch_complete(domain, fru, IPMI_IPMI_ERR_VAL(data[0]));
 	goto out;
     }
 
@@ -2987,7 +3175,7 @@ fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_inventory_area_handler): "
 		 "FRU inventory area too small",
 		 FRU_DOMAIN_NAME(fru));
-	fetch_complete(fru, EINVAL);
+	fetch_complete(domain, fru, EINVAL);
 	goto out;
     }
 
@@ -2999,7 +3187,7 @@ fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_inventory_area_handler): "
 		 "FRU space less than the header",
 		 FRU_DOMAIN_NAME(fru));
-	fetch_complete(fru, EMSGSIZE);
+	fetch_complete(domain, fru, EMSGSIZE);
 	goto out;
     }
 
@@ -3009,17 +3197,17 @@ fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_inventory_area_handler): "
 		 "Error allocating FRU data",
 		 FRU_DOMAIN_NAME(fru));
-	fetch_complete(fru, ENOMEM);
+	fetch_complete(domain, fru, ENOMEM);
 	goto out;
     }
 
-    err = request_next_data(fru, addr, addr_len);
+    err = request_next_data(domain, fru, addr, addr_len);
     if (err) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%sfru.c(fru_inventory_area_handler): "
 		 "Error requesting next FRU data",
 		 FRU_DOMAIN_NAME(fru));
-	fetch_complete(fru, err);
+	fetch_complete(domain, fru, err);
 	goto out;
     }
 
@@ -3029,7 +3217,7 @@ fru_inventory_area_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 }
 
 static int
-start_logical_fru_fetch(ipmi_fru_t *fru)
+start_logical_fru_fetch(ipmi_domain_t *domain, ipmi_fru_t *fru)
 {
     unsigned char    cmd_data[1];
     ipmi_ipmb_addr_t ipmb;
@@ -3046,7 +3234,7 @@ start_logical_fru_fetch(ipmi_fru_t *fru)
     msg.data = cmd_data;
     msg.data_len = 1;
 
-    return ipmi_send_command_addr(fru->domain,
+    return ipmi_send_command_addr(domain,
 				  (ipmi_addr_t *) &ipmb,
 				  sizeof(ipmb),
 				  &msg,
@@ -3056,7 +3244,7 @@ start_logical_fru_fetch(ipmi_fru_t *fru)
 }
 
 static int
-start_physical_fru_fetch(ipmi_fru_t *fru)
+start_physical_fru_fetch(ipmi_domain_t *domain, ipmi_fru_t *fru)
 {
     /* FIXME - this is going to suck, but needs to be implemented. */
     return ENOSYS;
@@ -3068,11 +3256,11 @@ start_physical_fru_fetch(ipmi_fru_t *fru)
  *
  **********************************************************************/
 
-static int next_fru_write(ipmi_fru_t *fru, ipmi_addr_t *addr,
-			  unsigned int addr_len);
+static int next_fru_write(ipmi_domain_t *domain, ipmi_fru_t *fru,
+			  ipmi_addr_t *addr, unsigned int addr_len);
 
 void
-write_complete(ipmi_fru_t *fru, int err)
+write_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
 {
     int i;
 
@@ -3100,8 +3288,8 @@ write_complete(ipmi_fru_t *fru, int err)
     fru->in_use = 0;
     fru_unlock(fru);
 
-    if (fru->fetched_handler)
-	fru->fetched_handler(fru, err, fru->fetched_cb_data);
+    if (fru->domain_fetched_handler)
+	fru->domain_fetched_handler(domain, fru, err, fru->fetched_cb_data);
 
     fru_put(fru);
 }
@@ -3125,7 +3313,7 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	/* Got a busy response.  Try again if we haven't run out of
 	   retries. */
 	if (fru->retry_count >= MAX_FRU_WRITE_RETRIES) {
-	    write_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
+	    write_complete(domain, fru, IPMI_IPMI_ERR_VAL(data[0]));
 	    goto out;
 	}
 	fru->retry_count++;
@@ -3133,14 +3321,14 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	msg.cmd = IPMI_WRITE_FRU_DATA_CMD;
 	msg.data = fru->last_cmd;
 	msg.data_len = fru->last_cmd_len;
-	rv = ipmi_send_command_addr(fru->domain,
+	rv = ipmi_send_command_addr(domain,
 				    addr, addr_len,
 				    &msg,
 				    fru_data_handler,
 				    fru,
 				    NULL);
 	if (rv) {
-	    write_complete(fru, rv);
+	    write_complete(domain, fru, rv);
 	    goto out;
 	}
 	goto out_cmd;
@@ -3149,7 +3337,7 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_write_handler): "
 		 "IPMI error writing FRU data: %x",
 		 FRU_DOMAIN_NAME(fru), data[0]);
-	write_complete(fru, IPMI_IPMI_ERR_VAL(data[0]));
+	write_complete(domain, fru, IPMI_IPMI_ERR_VAL(data[0]));
 	goto out;
     }
 
@@ -3158,7 +3346,7 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 		 "%sfru.c(fru_write_handler): "
 		 "FRU write response too small",
 		 FRU_DOMAIN_NAME(fru));
-	write_complete(fru, EINVAL);
+	write_complete(domain, fru, EINVAL);
 	goto out;
     }
 
@@ -3174,13 +3362,13 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 
     if (fru->update_recs) {
 	/* More to do. */
-	rv = next_fru_write(fru, addr, addr_len);
+	rv = next_fru_write(domain, fru, addr, addr_len);
 	if (rv) {
-	    write_complete(fru, rv);
+	    write_complete(domain, fru, rv);
 	    goto out;
 	}
     } else {
-	write_complete(fru, 0);
+	write_complete(domain, fru, 0);
 	goto out;
     }
 
@@ -3191,7 +3379,10 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 }
 
 static int
-next_fru_write(ipmi_fru_t *fru, ipmi_addr_t *addr, unsigned int addr_len)
+next_fru_write(ipmi_domain_t *domain,
+	       ipmi_fru_t    *fru,
+	       ipmi_addr_t   *addr,
+	       unsigned int  addr_len)
 {
     unsigned char *data = fru->last_cmd;
     int           offset, length = 0, left, noff, tlen;
@@ -3232,7 +3423,7 @@ next_fru_write(ipmi_fru_t *fru, ipmi_addr_t *addr, unsigned int addr_len)
     msg.data_len = length + 3;
     fru->last_cmd_len = msg.data_len;
 
-    return ipmi_send_command_addr(fru->domain,
+    return ipmi_send_command_addr(domain,
 				  addr, addr_len,
 				  &msg,
 				  fru_write_handler,
@@ -3240,22 +3431,20 @@ next_fru_write(ipmi_fru_t *fru, ipmi_addr_t *addr, unsigned int addr_len)
 				  NULL);
 }
 
-int
-ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
+typedef struct start_domain_fru_write_s
 {
-    int              rv;
-    ipmi_ipmb_addr_t ipmb;
-    int              i;
+    ipmi_fru_t *fru;
+    int        rv;
+} start_domain_fru_write_t;
 
-    fru_lock(fru);
-    if (fru->in_use) {
-	/* Something else is happening with the FRU, error this
-	   operation. */
-	fru_unlock(fru);
-	return EAGAIN;
-    }
-    fru->in_use = 1;
-    fru_get(fru);
+static void
+start_domain_fru_write(ipmi_domain_t *domain, void *cb_data)
+{
+    start_domain_fru_write_t *info = cb_data;
+    ipmi_ipmb_addr_t         ipmb;
+    int                      rv;
+    int                      i;
+    ipmi_fru_t               *fru = info->fru;
 
     /* We allocate and format the entire FRU data.  We do this because
        of the stupid word access capability, which means we cannot
@@ -3310,26 +3499,26 @@ ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
 	fru->data = NULL;
 	fru_unlock(fru);
 
-	done(fru, 0, cb_data);
-	return 0;
+	if (fru->domain_fetched_handler)
+	    fru->domain_fetched_handler(domain, fru, 0, fru->fetched_cb_data);
+	return;
     }
 
     ipmb.addr_type = IPMI_IPMB_ADDR_TYPE;
-    ipmb.channel = fru->channel;
-    ipmb.slave_addr = fru->device_address;
-    ipmb.lun = fru->lun;
+    ipmb.channel = info->fru->channel;
+    ipmb.slave_addr = info->fru->device_address;
+    ipmb.lun = info->fru->lun;
 
     /* Data is fully encoded and the update records are in place.
        Start the write process. */
-    rv = next_fru_write(fru, (ipmi_addr_t *) &ipmb, sizeof(ipmb));
+    rv = next_fru_write(domain, fru,
+			(ipmi_addr_t *) &ipmb, sizeof(ipmb));
     if (rv)
 	goto out_err;
 
-    fru->fetched_handler = done;
-    fru->fetched_cb_data = cb_data;
-
+    fru_get(fru);
     fru_unlock(fru);
-    return 0;
+    return;
 
  out_err:
     while (fru->update_recs) {
@@ -3339,9 +3528,37 @@ ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
     }
     ipmi_mem_free(fru->data);
     fru->data = NULL;
-    fru_unlock(fru);
     fru->in_use = 0;
-    fru_put(fru);
+    fru_unlock(fru);
+    info->rv = rv;
+}
+
+int
+ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_cb done, void *cb_data)
+{
+    int                      rv;
+    start_domain_fru_write_t info = {fru, 0};
+
+    fru_lock(fru);
+    if (fru->in_use) {
+	/* Something else is happening with the FRU, error this
+	   operation. */
+	fru_unlock(fru);
+	return EAGAIN;
+    }
+    fru->in_use = 1;
+
+    fru->domain_fetched_handler = done;
+    fru->fetched_cb_data = cb_data;
+
+    /* Data is fully encoded and the update records are in place.
+       Start the write process. */
+    rv = ipmi_domain_pointer_cb(fru->domain_id, start_domain_fru_write, &info);
+    if (!rv)
+	rv = info.rv;
+    else
+	fru_unlock(fru);
+
     return rv;
 }
 
@@ -3350,10 +3567,10 @@ ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_fetched_cb done, void *cb_data)
  * Misc stuff.
  *
  **********************************************************************/
-ipmi_domain_t *
-ipmi_fru_get_domain(ipmi_fru_t *fru)
+ipmi_domain_id_t
+ipmi_fru_get_domain_id(ipmi_fru_t *fru)
 {
-    return fru->domain;
+    return fru->domain_id;
 }
 
 void
@@ -3423,19 +3640,20 @@ ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
 		      void            *cb_data)
 {
     iterate_frus_info_t info;
-    void                *attr_data;
+    ipmi_domain_attr_t  *attr;
     locked_list_t       *frus;
     int                 rv;
 
     rv = ipmi_domain_find_attribute(domain, IPMI_FRU_ATTR_NAME,
-				    &attr_data);
+				    &attr);
     if (rv)
 	return;
-    frus = attr_data;
+    frus = ipmi_domain_attr_get_data(attr);
 
     info.handler = handler;
     info.cb_data = cb_data;
     locked_list_iterate_prefunc(frus, frus_prefunc, frus_handler, &info);
+    ipmi_domain_attr_put(attr);
 }
 
 /***********************************************************************

@@ -37,17 +37,21 @@ use threads::shared;
 use Thread::Semaphore;
 use Lanserv;
 use OpenIPMI;
-use POSIX;
 
-my $errcount : shared = 0;
+my $errcountholder : shared = 0;
+$errcount = \$errcountholder;
 
 my $fru_field_table = {};
 
 sub reg_err {
     my $str = shift;
 
-    $main::errcount++;
+    $$errcount++;
     print STDERR "***", $str, "\n";
+}
+
+sub get_errcount {
+    return $$errcount;
 }
 
 # Check a data field from the fru.  Parameters are:
@@ -359,6 +363,82 @@ sub check_area {
     check_area_used_length($fru, $area, $exp_used_length);
 }
 
+sub dup_fru {
+    my $newfru = shift;
+    my $oldfru = shift;
+    my $i;
+    my $rv;
+    my $str;
+    my $num;
+    my $oldnum;
+
+    for $i (0 .. 4) {
+	my ($offset, $length);
+	$rv = $oldfru->area_get_offset($i, \$offset);
+	if ($rv) {
+	    main::reg_err("Error getting old FRU offset: $rv");
+	    $h->close();
+	    return $rv;
+	}
+	$rv = $oldfru->area_get_length($i, \$length);
+	if ($rv) {
+	    main::reg_err("Error getting old FRU offset: $rv");
+	    $h->close();
+	    return $rv;
+	}
+	$rv = $newfru->add_area($i, $offset, $length);
+	if ($rv) {
+	    main::reg_err("Error adding FRU area: $rv");
+	    $h->close();
+	    return $rv;
+	}
+    }
+
+    $i = 0;
+    $num = 0;
+    $oldnum = $num;
+    $str = $oldfru->get($i, \$num);
+    while (defined $str) {
+	my ($name, $type, $val) = split /\s+/, $str, 3;
+	
+	if (defined $type) {
+	    $rv = $newfru->set($i, $oldnum, $type, $val);
+
+	    # Check if we didn't have write permissions, that's ok just go on.
+	    if ($rv && ($rv != $OpenIPMI::eperm)) {
+		main::reg_err("Error setting fru field $i [$num]: $rv");
+		  $h->close();
+		  return $rv;
+	      }
+	}
+	if ($num < 1) {
+	    $num = 0;
+	    $i++;
+	}
+	$oldnum = $num;
+	$str = $oldfru->get($i, \$num);
+    }
+
+    $num = $oldfru->get_num_multi_records() - 1;
+    for $i (0 .. $num) {
+	my ($type, $ver, $val) = split /\s+/, $oldfru->get_multirecord($i), 3;
+
+	# If the data is empty for the record, val will be undefined by
+	# the split, but we need to define it because undefined means
+	# delete.
+	if (!defined $val) {
+	    $val = "";
+	}
+
+	$rv = $newfru->set_multirecord($i, $type, $ver, $val);
+	if ($rv) {
+	    main::reg_err("Error setting multi-record [$i]: $rv");
+	    $h->close();
+	    return $rv;
+	}
+    }
+}
+
 {
     package CloseDomain;
     sub new {
@@ -375,7 +455,7 @@ sub check_area {
 	$domain->close($$self);
     }
 
-    package CheckRead3;
+    package CheckRead4;
 
     sub new {
 	my $self = shift;
@@ -386,13 +466,72 @@ sub check_area {
 
     sub fru_fetched {
 	my $self = shift;
+	my $domain = shift;
 	my $fru = shift;
 	my $err = shift;
 	my $h = $$self->{handler};
 	my $rv;
 	my $i;
 	my $num;
-	my $domain = $fru->get_domain();
+	my $str;
+
+	if ($err) {
+	    main::reg_err("Error reading the FRU: $err");
+	    $h->close();
+	    return;
+	}
+
+	print "Second FRU fetched\n";
+	main::fru_1_data_check($fru, 1);
+
+	# Done with tests
+	$h->close();
+    }
+
+    package CheckRead3;
+
+    sub new {
+	my $self = shift;
+	my $a = {};
+	$a->{handler} = shift;
+	return bless \$a;
+    }
+
+    sub fru_written {
+	my $self = shift;
+	my $domain = shift;
+	my $fru = shift;
+	my $err = shift;
+	my $h = $$self->{handler};
+	my $rv;
+
+	if ($err) {
+	    main::reg_err("Error writing the FRU: $err");
+	    $h->close();
+	    return;
+	}
+
+	print "FRU written\n";
+
+	# Now re-read the FRU.
+	$rv = $domain->fru_alloc(1, 0x20, 1, 0, 0, 0, CheckRead4->new($h));
+	if (! defined $rv) {
+	    main::reg_err("Error starting fru fetch: $rv");
+	    $self->close();
+	    return;
+	}
+    }
+
+    sub fru_fetched {
+	my $self = shift;
+	my $domain = shift;
+	my $fru = shift;
+	my $err = shift;
+	my $h = $$self->{handler};
+	my $rv;
+	my $i;
+	my $num;
+	my $str;
 
 	if ($err != $OpenIPMI::ebadf) {
 	    main::reg_err("Wrong error reading the FRU: $err");
@@ -400,10 +539,23 @@ sub check_area {
 	    return;
 	}
 
-	print "Bad FRU fetched\n";
+	print "Bad FRU fetched, copy the prevous FRU to it\n";
+	main::dup_fru($fru, $main::tmpfru);
+	if (main::get_errcount()) {
+	    $h->close();
+	    return;
+	}
+	main::fru_1_data_check($fru, 1);
+	if (main::get_errcount()) {
+	    $h->close();
+	    return;
+	}
 
-	# tmp close
-	$h->close();
+	$rv = $fru->write($self);
+	if ($rv) {
+	    main::reg_err("Error writing FRU: $rv");
+	    $h->close();
+	}
     }
 
     package CheckRead2;
@@ -417,13 +569,13 @@ sub check_area {
 
     sub fru_fetched {
 	my $self = shift;
+	my $domain = shift;
 	my $fru = shift;
 	my $err = shift;
 	my $h = $$self->{handler};
 	my $rv;
 	my $i;
 	my $num;
-	my $domain = $fru->get_domain();
 
 	if ($err) {
 	    main::reg_err("Error reading the FRU: $err");
@@ -439,13 +591,13 @@ sub check_area {
 	print "FRU refetched\n";
 	main::fru_1_data_check($fru, 1);
 
-	$tmpfru = $fru;
+	$main::tmpfru = $fru;
 
-	# Fetch a bad FRU.
+	print "Fetch a bad FRU\n";
 	$rv = $domain->fru_alloc(1, 0x20, 1, 0, 0, 0, CheckRead3->new($h));
 	if (! defined $rv) {
 	    main::reg_err("Error starting fru fetch: $rv");
-	    $self->close();
+	    $h->close();
 	    return;
 	}
     }
@@ -461,10 +613,11 @@ sub check_area {
 
     sub fru_written {
 	my $self = shift;
+	my $domain = shift;
 	my $fru = shift;
 	my $err = shift;
 	my $h = $$self->{handler};
-	my $domain = $fru->get_domain();
+	my $rv;
 
 	if ($err) {
 	    main::reg_err("Error writing the FRU: $err");
@@ -481,11 +634,11 @@ sub check_area {
 	    $self->close();
 	    return;
 	}
-	
     }
 
     sub fru_fetched {
 	my $self = shift;
+	my $domain = shift;
 	my $fru = shift;
 	my $err = shift;
 	my $h = $$self->{handler};
@@ -508,7 +661,7 @@ sub check_area {
 
 	main::fru_1_data_check($fru, 0);
 
-	if ($main::errcount) {
+	if (main::get_errcount()) {
 	    $h->close();
 	    return;
 	}
@@ -909,6 +1062,8 @@ $lanserv->cmd("mc_add_fru_data 20 1 400 01");
 
 $lanserv->cmd("mc_enable 20");
 
+OpenIPMI::enable_debug_malloc();
+
 # Now start OpenIPMI
 OpenIPMI::init();
 
@@ -937,5 +1092,9 @@ while ($$h->{keepon}) {
     OpenIPMI::wait_io(1000);
 }
 
+# Make sure our copy of the FRU is destroyed.
+$main::tmpfru = undef;
+
 $lanserv->close();
-exit $main::errcount;
+OpenIPMI::shutdown_everything();
+exit main::get_errcount();
