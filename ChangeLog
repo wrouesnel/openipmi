@@ -1,3 +1,16 @@
+2004-02-24 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/control.c: Added an option for light controls to be able to
+	set their color, on, and off times directly.
+	* include/OpenIPMI/ipmiif.h: ditto
+	* include/OpenIPMI/ipmi_control.h: ditto
+
+	* include/OpenIPMI/ipmi_bits.h, lib/strings.h: Added an "orange"
+	light color.
+
+	* lib/oem_atca.c: Started serious work into handling for ATCA
+	LEDs.
+
 2004-02-23 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/mc.c: Fixed a race condition dealing with an MC going away

@@ -100,6 +100,7 @@ struct ipmi_control_s
 
     /* For light types. */
     ipmi_control_light_t *lights;
+    unsigned int         colors;
 
     /* For display types. */
     unsigned int columns;
@@ -1259,6 +1260,13 @@ ipmi_control_get_num(ipmi_control_t *control,
     return 0;
 }
 
+int
+ipmi_control_light_set_with_setting(ipmi_control_t *control)
+{
+    return ((control->cbs.set_light != NULL)
+	    || (control->cbs.get_light != NULL));
+}
+
 void
 ipmi_control_light_set_lights(ipmi_control_t       *control,
 			      unsigned int         num_lights,
@@ -1337,6 +1345,184 @@ ipmi_control_get_light_color_time(ipmi_control_t   *control,
 	return -1;
 
     return control->lights[light].settings[set].transitions[num].time;
+}
+
+int
+ipmi_control_set_light(ipmi_control_t       *control,
+		       ipmi_light_setting_t *settings,
+		       ipmi_control_op_cb   handler,
+		       void                 *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (!control->cbs.set_val)
+	return ENOSYS;
+    return control->cbs.set_light(control, settings, handler, cb_data);
+}
+
+int
+ipmi_control_get_light(ipmi_control_t         *control,
+		       ipmi_light_settings_cb handler,
+		       void                   *cb_data)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    if (!control->cbs.get_val)
+	return ENOSYS;
+    return control->cbs.get_light(control, handler, cb_data);
+}
+
+
+typedef struct ipmi_light_s
+{
+    int color;
+    int on_time;
+    int off_time;
+} ipmi_light_t;
+
+struct ipmi_light_setting_s
+{
+    unsigned int count;
+    ipmi_light_t *lights;
+};
+
+unsigned int
+ipmi_light_setting_get_count(ipmi_light_setting_t *setting)
+{
+    return setting->count;
+}
+
+int
+ipmi_light_setting_get_color(ipmi_light_setting_t *setting, int num,
+			     int *color)
+{
+    if (num > setting->count)
+	return EINVAL;
+
+    *color = setting->lights[num].color;
+    return 0;
+}
+
+int
+ipmi_light_setting_set_color(ipmi_light_setting_t *setting, int num,
+			     int color)
+{
+    if (num > setting->count)
+	return EINVAL;
+
+    setting->lights[num].color = color;
+    return 0;
+}
+
+int
+ipmi_light_setting_get_on_time(ipmi_light_setting_t *setting, int num,
+			       int *time)
+{
+    if (num > setting->count)
+	return EINVAL;
+
+    *time = setting->lights[num].on_time;
+    return 0;
+}
+
+int
+ipmi_light_setting_set_on_time(ipmi_light_setting_t *setting, int num,
+			       int time)
+{
+    if (num > setting->count)
+	return EINVAL;
+
+    setting->lights[num].on_time = time;
+    return 0;
+}
+
+int
+ipmi_light_setting_get_off_time(ipmi_light_setting_t *setting, int num,
+				int *time)
+{
+    if (num > setting->count)
+	return EINVAL;
+
+    *time = setting->lights[num].off_time;
+    return 0;
+}
+
+int
+ipmi_light_setting_set_off_time(ipmi_light_setting_t *setting, int num,
+				int time)
+{
+    if (num > setting->count)
+	return EINVAL;
+
+    setting->lights[num].off_time = time;
+    return 0;
+}
+
+ipmi_light_setting_t *
+ipmi_alloc_light_settings(unsigned int count)
+{
+    ipmi_light_setting_t *rv;
+
+    if (count == 0)
+	return NULL;
+
+    rv = ipmi_mem_alloc(sizeof(*rv));
+    if (!rv)
+	return NULL;
+
+    rv->lights = ipmi_mem_alloc(sizeof(ipmi_light_t) * count);
+    if (!rv->lights) {
+	ipmi_mem_free(rv);
+	return NULL;
+    }
+
+    rv->count = count;
+    memset(rv->lights, 0, sizeof(ipmi_light_t) * count);
+    return rv;
+}
+
+void
+ipmi_free_light_settings(ipmi_light_setting_t *settings)
+{
+    ipmi_mem_free(settings->lights);
+    ipmi_mem_free(settings);
+}
+
+ipmi_light_setting_t *
+ipmi_light_settings_dup(ipmi_light_setting_t *settings)
+{
+    ipmi_light_setting_t *rv;
+
+    rv = ipmi_mem_alloc(sizeof(*rv));
+    if (!rv)
+	return NULL;
+
+    rv->lights = ipmi_mem_alloc(sizeof(ipmi_light_t) * settings->count);
+    if (!rv->lights) {
+	ipmi_mem_free(rv);
+	return NULL;
+    }
+
+    rv->count = settings->count;
+    memcpy(rv->lights, settings->lights,
+	   sizeof(ipmi_light_t) * settings->count);
+    return rv;
+}
+
+void
+ipmi_control_add_light_color_support(ipmi_control_t *control,
+				     unsigned int   color)
+{
+    control->colors |= (1 << color);
+}
+
+int
+ipmi_control_light_is_color_supported(ipmi_control_t *control,
+				      unsigned int   color)
+{
+    CHECK_CONTROL_LOCK(control);
+
+    return (control->colors & (1 << color)) != 0;
 }
 
 int

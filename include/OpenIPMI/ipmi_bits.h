@@ -361,6 +361,7 @@ char *ipmi_get_control_type_string(unsigned int val);
 #define IPMI_CONTROL_COLOR_GREEN	3
 #define IPMI_CONTROL_COLOR_BLUE		4
 #define IPMI_CONTROL_COLOR_YELLOW	5
+#define IPMI_CONTROL_COLOR_ORANGE	6
 char *ipmi_get_color_string(unsigned int val);
 
 

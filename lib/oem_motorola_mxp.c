@@ -1774,7 +1774,7 @@ mxp_alloc_semi_stand_threshold_sensor
 static void
 mxp_cleanup_control_oem_info(ipmi_control_t *control, void *oem_info)
 {
-    mxp_sensor_header_t *hdr = oem_info;
+    mxp_control_header_t *hdr = oem_info;
 
     if (hdr) {
 	ipmi_mem_free(hdr);

@@ -172,15 +172,29 @@ typedef int (*ipmi_control_identifier_set_val_cb)(ipmi_control_t     *control,
 						  ipmi_control_op_cb handler,
 						  void               *cb_data);
 
+typedef int (*ipmi_control_set_light_cb)(ipmi_control_t       *control,
+					 ipmi_light_setting_t *settings,
+					 ipmi_control_op_cb   handler,
+					 void                 *cb_data);
+typedef int (*ipmi_control_get_light_cb)(ipmi_control_t         *control,
+					 ipmi_light_settings_cb handler,
+					 void                   *cb_data);
+
 typedef struct ipmi_control_cbs_s
 {
-    ipmi_control_set_val_cb		   set_val;
-    ipmi_control_get_val_cb		   get_val;
-    ipmi_control_set_display_string_cb set_display_string;
-    ipmi_control_get_display_string_cb get_display_string;
-    ipmi_control_identifier_get_val_cb get_identifier_val;
-    ipmi_control_identifier_set_val_cb set_identifier_val;
+    ipmi_control_set_val_cb	          set_val;
+    ipmi_control_get_val_cb	          get_val;
+    ipmi_control_set_display_string_cb    set_display_string;
+    ipmi_control_get_display_string_cb    get_display_string;
+    ipmi_control_identifier_get_val_cb    get_identifier_val;
+    ipmi_control_identifier_set_val_cb    set_identifier_val;
+    ipmi_control_set_light_cb             set_light;
+    ipmi_control_get_light_cb             get_light;
 } ipmi_control_cbs_t;
+
+/* For settings-based LEDs. */
+void ipmi_control_add_light_color_support(ipmi_control_t *control,
+					  unsigned int   color);
 
 void ipmi_control_identifier_set_max_length(ipmi_control_t *control,
 					    unsigned int   val);
@@ -234,7 +248,6 @@ void ipmi_control_call_val_event_handlers(ipmi_control_t *control,
 					  int            *vals,
 					  ipmi_event_t   **event,
 					  int            *handled);
-
 
 typedef struct ipmi_control_transition_s
 {

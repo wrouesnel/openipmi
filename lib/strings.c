@@ -712,6 +712,7 @@ static char *colors[] =
     "green",
     "blue",
     "yellow",
+    "orange",
 };
 #define NUM_COLORS (sizeof(colors)/sizeof(char *))
 char *
