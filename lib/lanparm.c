@@ -995,12 +995,12 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	break;
 
     case IPMI_LANPARM_DEST_TYPE:
-	if ((data[0] & 0xf) != lanc->curr_sel) {
+	if ((data[1] & 0xf) != lanc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "ipmi_lanparm_got_parm: Error fetching dest type %d,"
 		     " wrong selector came back, expecting %d, was %d",
-		     lanc->curr_parm, lanc->curr_sel, data[0] & 0xf);
+		     lanc->curr_parm, lanc->curr_sel, data[1] & 0xf);
 	    err = EINVAL;
 	    goto done;
 	}
@@ -1012,12 +1012,12 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	break;
 
     case IPMI_LANPARM_DEST_ADDR:
-	if ((data[0] & 0xf) != lanc->curr_sel) {
+	if ((data[1] & 0xf) != lanc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "ipmi_lanparm_got_parm: Error fetching dest addr %d,"
 		     " wrong selector came back, expecting %d, was %d",
-		     lanc->curr_parm, lanc->curr_sel, data[0] & 0xf);
+		     lanc->curr_parm, lanc->curr_sel, data[1] & 0xf);
 	    err = EINVAL;
 	    goto done;
 	}

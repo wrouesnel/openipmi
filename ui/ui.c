@@ -3032,7 +3032,7 @@ display_pef(void)
     if (ipmi_pef_supports_alert(pef))
 	display_pad_out(" alert");
     display_pad_out("\n");
-    display_pad_out("Num event filter table entries: %d\n",
+    display_pad_out("  Num event filter table entries: %d\n",
 		    num_event_filter_table_entries(pef));
 }
 
@@ -3209,6 +3209,7 @@ readpef_getconf_handler(ipmi_pef_t        *pef,
 
     pef_config = config;
     display_pef_config();
+    display_pad_refresh();
 }
 
 void
@@ -3402,6 +3403,7 @@ display_lanparm_config(void)
 	return;
     }
 
+    display_pad_out("LAN parameters:");
     display_pad_out("  auth supported:");
     if (ipmi_lanconfig_get_support_auth_oem(lanparm_config))
 	display_pad_out(" oem");

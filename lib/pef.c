@@ -943,7 +943,7 @@ static int gnef(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     if (num == 0)
 	return 0;
 
-    pefc->efts = ipmi_mem_alloc(sizeof(ipmi_eft_t) * (num+1));
+    pefc->efts = ipmi_mem_alloc(sizeof(ipmi_eft_t) * num);
     if (!pefc->efts)
 	return ENOMEM;
 
@@ -956,8 +956,11 @@ static int gnef(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 static int geft(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 		unsigned char *data, unsigned int data_len)
 {
-    int        pos = data[0] & 0x7f;
+    int        pos;
     ipmi_eft_t *t;
+
+    data++; /* Skip the revision byte. */
+    pos = data[0] & 0x7f;
 
     if (err)
 	return err;
@@ -965,7 +968,6 @@ static int geft(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	return 0; /* Another error check will get this later. */
 
     pos--; /* Make it zero-based. */
-    data++; /* Skip the revision byte. */
 
     t = &(pefc->efts[pos]);
     t->enable_filter = (data[1] >> 7) & 0x1;
@@ -1055,7 +1057,7 @@ static int gnap(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
     if (num == 0)
 	return 0;
 
-    pefc->apts = ipmi_mem_alloc(sizeof(ipmi_apt_t) * (num + 1));
+    pefc->apts = ipmi_mem_alloc(sizeof(ipmi_apt_t) * num);
     if (!pefc->apts)
 	return ENOMEM;
 
@@ -1068,8 +1070,11 @@ static int gnap(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 static int gapt(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 		unsigned char *data, unsigned int data_len)
 {
-    int        pos = data[0] & 0x7f;
+    int        pos;
     ipmi_apt_t *t;
+
+    data++; /* Skip the revision byte. */
+    pos = data[0] & 0x7f;
 
     if (err)
 	return err;
@@ -1077,7 +1082,6 @@ static int gapt(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	return 0; /* Another error check will get this later. */
 
     pos--; /* Make it zero-based. */
-    data++; /* Skip the revision byte. */
 
     t = &(pefc->apts[pos]);
     t->policy_num = (data[1] >> 4) & 0xf;
@@ -1186,15 +1190,16 @@ static int gnas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 static int gask(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 		unsigned char *data, unsigned int data_len)
 {
-    int        pos = data[0] & 0x7f;
+    int        pos;
     ipmi_ask_t *t;
+
+    data++; /* Skip the revision byte. */
+    pos = data[0] & 0x7f;
 
     if (err)
 	return err;
     if (pos >= pefc->num_alert_strings)
 	return 0; /* Another error check will get this later. */
-
-    data++; /* Skip the revision byte. */
 
     t = &(pefc->asks[pos]);
 
@@ -1219,10 +1224,14 @@ static void sask(ipmi_pef_config_t *pefc, pefparms_t *lp, unsigned char *data,
 static int gas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	       unsigned char *data, unsigned int data_len)
 {
-    int           pos = data[0] & 0x7f;
-    unsigned char **t = &(pefc->alert_strings[pos]);
+    int           pos;
+    unsigned char **t;
     unsigned char *s1, *s2;
     int           len;
+
+    data++; /* Skip the revision byte. */
+    pos = data[0] & 0x7f;
+    t = &(pefc->alert_strings[pos]);
 
     if (err)
 	return err;
@@ -1230,8 +1239,6 @@ static int gas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	return 0; /* Another error check will get this later. */
     if (data_len-3 == 0)
 	return 0;
-
-    data++; /* Skip the revision byte. */
 
     data += 2;
     data_len -= 2;
@@ -1351,12 +1358,12 @@ got_parm(ipmi_pef_t     *pef,
 	break;
 
     case IPMI_PEFPARM_EVENT_FILTER_TABLE:
-	if ((data[0] & 0x7f) != pefc->curr_sel) {
+	if ((data[1] & 0x7f) != pefc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "ipmi_pefparm_got_parm: Error fetching eft %d,"
 		     " wrong selector came back, expecting %d, was %d",
-		     pefc->curr_parm, pefc->curr_sel, data[0] & 0x7f);
+		     pefc->curr_parm, pefc->curr_sel, data[1] & 0x7f);
 	    err = EINVAL;
 	    goto done;
 	}
@@ -1376,12 +1383,12 @@ got_parm(ipmi_pef_t     *pef,
 	break;
 
     case IPMI_PEFPARM_ALERT_POLICY_TABLE:
-	if ((data[0] & 0x7f) != pefc->curr_sel) {
+	if ((data[1] & 0x7f) != pefc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "ipmi_pefparm_got_parm: Error fetching apt %d,"
 		     " wrong selector came back, expecting %d, was %d",
-		     pefc->curr_parm, pefc->curr_sel, data[0] & 0x7f);
+		     pefc->curr_parm, pefc->curr_sel, data[1] & 0x7f);
 	    err = EINVAL;
 	    goto done;
 	}
@@ -1400,12 +1407,12 @@ got_parm(ipmi_pef_t     *pef,
 	break;
 
     case IPMI_PEFPARM_ALERT_STRING_KEY:
-	if ((data[0] & 0x7f) != pefc->curr_sel) {
+	if ((data[1] & 0x7f) != pefc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "ipmi_pefparm_got_parm: Error fetching ask %d,"
 		     " wrong selector came back, expecting %d, was %d",
-		     pefc->curr_parm, pefc->curr_sel, data[0] & 0x7f);
+		     pefc->curr_parm, pefc->curr_sel, data[1] & 0x7f);
 	    err = EINVAL;
 	    goto done;
 	}
@@ -1418,26 +1425,26 @@ got_parm(ipmi_pef_t     *pef,
 	break;
 
     case IPMI_PEFPARM_ALERT_STRING:
-	if ((data[0] & 0x7f) != pefc->curr_sel) {
+	if ((data[1] & 0x7f) != pefc->curr_sel) {
 	    /* Yikes, wrong selector came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "ipmi_pefparm_got_parm: Error fetching ask %d,"
 		     " wrong selector came back, expecting %d, was %d",
-		     pefc->curr_parm, pefc->curr_sel, data[0] & 0x7f);
+		     pefc->curr_parm, pefc->curr_sel, data[1] & 0x7f);
 	    err = EINVAL;
 	    goto done;
 	}
-	if (data[1] != pefc->curr_block) {
+	if (data[2] != pefc->curr_block) {
 	    /* Yikes, wrong block came back! */
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "ipmi_pefparm_got_parm: Error fetching ask %d,"
 		     " wrong block came back, expecting %d, was %d",
-		     pefc->curr_parm, pefc->curr_block, data[1]);
+		     pefc->curr_parm, pefc->curr_block, data[2]);
 	    err = EINVAL;
 	    goto done;
 	}
-	if ((data_len < 18) ||
-	    (memchr(data+2, '\0', data_len-2)))
+	if ((data_len < 19) ||
+	    (memchr(data+3, '\0', data_len-3)))
 	{
 	    /* End of string, either a subsize-block or a nil
 	       character in the data. */
@@ -1716,24 +1723,24 @@ ipmi_pef_set_config(ipmi_pef_t        *pef,
 
     if (pefc->num_event_filters) {
 	sc->pefc->efts = ipmi_mem_alloc(sizeof(ipmi_eft_t)
-					* (pefc->num_event_filters+1));
+					* pefc->num_event_filters);
 	if (!sc->pefc->efts) {
 	    rv = ENOMEM;
 	    goto out;
 	}
 	memcpy(sc->pefc->efts, pefc->efts,
-	       sizeof(ipmi_eft_t) * (pefc->num_event_filters + 1));
+	       sizeof(ipmi_eft_t) * pefc->num_event_filters);
     }
 
     if (pefc->num_alert_policies) {
 	sc->pefc->apts = ipmi_mem_alloc(sizeof(ipmi_apt_t)
-					* (pefc->num_alert_policies + 1));
+					* pefc->num_alert_policies);
 	if (!sc->pefc->apts) {
 	    rv = ENOMEM;
 	    goto out;
 	}
 	memcpy(sc->pefc->apts, pefc->apts,
-	       sizeof(ipmi_apt_t) * (pefc->num_alert_policies + 1));
+	       sizeof(ipmi_apt_t) * pefc->num_alert_policies);
     }
 
     if (pefc->num_alert_strings) {
