@@ -1,4 +1,15 @@
 
+2003-07-29 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_motorola_mxp.c: Fixed a few little things required
+	for the new firmware.
+
+	* lib/oem_motorola_mxp_intf.c: Modified messages directly to the
+	system interface to use the sequence number queue from the
+	standard IPMI LAN code.  You couldn't use the standard message
+	queue because those are one-at-a-time and the messages get gummed
+	up in there.
+
 2003-07-25 Corey Minyard <cminyard@mvista.com>
 
 	* doc/OpenIPMI.texi: Minor doc updates about authentication.

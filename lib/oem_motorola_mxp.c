@@ -4263,7 +4263,8 @@ mxp_board_presence_event(ipmi_sensor_t *sensor, void *cb_data)
 		 "mxp_board_presence_event: unable to allocate timer");
 	return;
     }
-    timeout.tv_sec = 1;
+    timeout.tv_sec = 3; /* The Zynx switches seem to need 3 seconds to
+			   get started. */
     timeout.tv_usec = 0;
     rv = hnd->start_timer(hnd, timer, &timeout, timed_rescan_bus, info);
     if (rv) {
@@ -4603,12 +4604,12 @@ mxp_event_handler(ipmi_mc_t    *mc,
     mc_event_info_t einfo;
     unsigned long   timestamp;
 
-    if ((event->type != 2) && (event->type != 3))
+    if ((event->type != 2) && (event->type != 3) && (event->type != 0xc0))
 	/* Not a system event record or MXP event. */
 	return 0;
 
-    if (event->data[6] != 3)
-	/* Not a 1.5 event version */
+    if ((event->data[6] != 3) && (event->data[6] != 4))
+	/* Not a 1.5 event version or an MXP event */
 	return 0;
 
     timestamp = ipmi_get_uint32(&(event->data[0]));

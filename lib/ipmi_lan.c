@@ -67,7 +67,7 @@ dump_hex(void *vdata, int len)
 
 #define LAN_AUDIT_TIMEOUT 10000000
 
-/* Timeout to wait for IPMI responses, in milliseconds. */
+/* Timeout to wait for IPMI responses, in microseconds. */
 #define LAN_RSP_TIMEOUT 1000000
 
 /* # of times to try a message before we fail it. */
