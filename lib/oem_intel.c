@@ -418,4 +418,7 @@ void
 ipmi_oem_intel_shutdown(void)
 {
     ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x000c);
+    ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x001b);
+    ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x0103);
+    ipmi_deregister_oem_handler(NSC_MANUFACTURER_ID, 0x4311);
 }
