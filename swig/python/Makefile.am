@@ -1,0 +1,43 @@
+
+AM_CFLAGS = $(PYTHON_CFLAGS) \
+	    $(GLIB_CFLAGS) \
+	    -I $(top_builddir)/include \
+	    -I $(top_srcdir)/include \
+	    -I $(top_srcdir)/swig/python
+
+CC = @CC@ -Wall
+CFLAGS = @CFLAGS@ -fPIC
+DEFS = @DEFS@
+
+COMPILE = $(CC) $(DEFS) $(AM_CFLAGS) $(CFLAGS)
+
+all: _OpenIPMI.so
+
+OpenIPMI_SRC = OpenIPMI_wrap.c
+OpenIPMI_OBJ = OpenIPMI_wrap.o
+
+OpenIPMI_LIB = $(top_builddir)/unix/libOpenIPMIposix.la \
+	       $(top_builddir)/lib/libOpenIPMI.la \
+	       $(top_builddir)/utils/libOpenIPMIutils.la \
+	       $(GLIB_LIB)
+
+EXTRA_DIST = OpenIPMI_lang.i OpenIPMI.h
+
+_OpenIPMI.so: $(OpenIPMI_OBJ)
+	$(LIBTOOL) --mode=link $(CC) -shared -o $@ $^ $(OpenIPMI_LIB)
+	rm _OpenIPMI.so
+	mv .libs/_OpenIPMI.so .
+	rm -rf .libs
+
+OpenIPMI_wrap.o: OpenIPMI_wrap.c OpenIPMI.h
+	$(COMPILE) -c $<
+
+OpenIPMI_wrap.c: $(top_srcdir)/swig/OpenIPMI.i OpenIPMI_lang.i
+	$(SWIG) $(DEFS) -python -o $@ -I$(top_srcdir)/swig/python $<
+
+CLEANFILES = $(OpenIPMI_OBJ) OpenIPMI.so OpenIPMI_wrap.c
+
+install-exec-local: OpenIPMI.so
+	$(INSTALL) -d $(DESTDIR)$(PYTHON_INSTALL_DIR)
+	$(INSTALL_PROGRAM) OpenIPMI.so $(DESTDIR)$(PYTHON_INSTALL_DIR)
+

@@ -2615,6 +2615,8 @@ open_domain(char *name, char **args, swig_cb done, swig_cb up)
 	    done_val = ref_swig_cb(done, conn_change_cb);
 	    con_change = domain_connect_change_handler;
 	} else {
+	    if (domain_up)
+		deref_swig_cb(up);
 	    free(nd);
 	    nd = NULL;
 	    goto out;
@@ -2721,6 +2723,8 @@ open_domain2(char *name, char **args, swig_cb done, swig_cb up)
 	    done_val = ref_swig_cb(done, conn_change_cb);
 	    con_change = domain_connect_change_handler;
 	} else {
+	    if (domain_up)
+		deref_swig_cb(up);
 	    free(nd);
 	    nd = NULL;
 	    goto out;
