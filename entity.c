@@ -355,7 +355,7 @@ entity_add(ipmi_entity_info_t *ents,
     }
 
     if (ents->handler)
-	ents->handler(ADDED, ent->bmc, ent, ents->cb_data);
+	ents->handler(IPMI_ADDED, ent->bmc, ent, ents->cb_data);
 
     if (new_ent)
 	*new_ent = ent;
@@ -756,7 +756,7 @@ ipmi_entity_add_sensor(ipmi_entity_t *ent,
     } else {
 	ilist_add_tail(ent->sensors, link, &(link->list_link));
 	if (ent->sensor_handler)
-	    ent->sensor_handler(ADDED, ent, sensor, ent->cb_data);
+	    ent->sensor_handler(IPMI_ADDED, ent, sensor, ent->cb_data);
     }
 }
 
@@ -840,7 +840,8 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 	    free(ref);
 
 	    if (ent->sensor_handler)
-		ent->sensor_handler(DELETED, ent, info.sensor, ent->cb_data);
+		ent->sensor_handler(IPMI_DELETED, ent, info.sensor,
+				    ent->cb_data);
 
 	} else {
 	    ent->presence_sensor = NULL;
@@ -857,7 +858,7 @@ ipmi_entity_remove_sensor(ipmi_entity_t     *ent,
 	free(ref);
 
 	if (ent->sensor_handler)
-	    ent->sensor_handler(DELETED, ent, sensor, ent->cb_data);
+	    ent->sensor_handler(IPMI_DELETED, ent, sensor, ent->cb_data);
     }
 }
 
@@ -869,7 +870,7 @@ void ipmi_entity_sensor_changed(ipmi_entity_t *ent,
 				ipmi_sensor_t *new)
 {
     if (ent->sensor_handler)
-	ent->sensor_handler(CHANGED, ent, new, ent->cb_data);
+	ent->sensor_handler(IPMI_CHANGED, ent, new, ent->cb_data);
 }
 
 void
@@ -890,7 +891,7 @@ ipmi_entity_add_control(ipmi_entity_t  *ent,
     link->list_link.malloced = 0;
     ilist_add_tail(ent->controls, link, &(link->list_link));
     if (ent->control_handler)
-	ent->control_handler(ADDED, ent, control, ent->cb_data);
+	ent->control_handler(IPMI_ADDED, ent, control, ent->cb_data);
 }
 
 typedef struct control_info_s
@@ -934,7 +935,7 @@ ipmi_entity_remove_control(ipmi_entity_t  *ent,
     free(ref);
 
     if (ent->control_handler)
-	ent->control_handler(DELETED, ent, control, ent->cb_data);
+	ent->control_handler(IPMI_DELETED, ent, control, ent->cb_data);
 }
 
 void ipmi_entity_control_changed(ipmi_entity_t  *ent,
@@ -945,7 +946,7 @@ void ipmi_entity_control_changed(ipmi_entity_t  *ent,
 				 ipmi_control_t *new)
 {
     if (ent->control_handler)
-	ent->control_handler(CHANGED, ent, new, ent->cb_data);
+	ent->control_handler(IPMI_CHANGED, ent, new, ent->cb_data);
 }
 
 int

@@ -386,7 +386,7 @@ sensor_change(enum ipmi_update_e op,
     instance = ipmi_entity_get_entity_instance(ent);
     ipmi_sensor_get_num(sensor, &lun, &num);
     switch (op) {
-	case ADDED:
+	case IPMI_ADDED:
 	    printf("Sensor added: %d.%d.%d.%d\n", id, instance, lun, num);
 	    ipmi_sensor_get_id(sensor, name, 33);
 	    printf(" id=%s\n", name);
@@ -432,10 +432,10 @@ sensor_change(enum ipmi_update_e op,
 	    rv = ipmi_sensor_get_lower_non_critical_threshold(sensor, &val);
 	    put_float(rv, val, "lower non-critical threshold");
 	    break;
-	case DELETED:
+	case IPMI_DELETED:
 	    printf("Sensor deleted: %d.%d.%d.%d\n", id, instance, lun, num);
 	    break;
-	case CHANGED:
+	case IPMI_CHANGED:
 	    printf("Sensor changed: %d.%d.%d.%d\n", id, instance, lun, num);
 	    break;
     }
@@ -466,7 +466,7 @@ entity_change(enum ipmi_update_e op,
     id = ipmi_entity_get_entity_id(entity);
     instance = ipmi_entity_get_entity_instance(entity);
     switch (op) {
-	case ADDED:
+	case IPMI_ADDED:
 	    printf("Entity added: %d.%d\n", id, instance);
 	    rv = ipmi_entity_set_sensor_update_handler(entity,
 						       sensor_change,
@@ -483,10 +483,10 @@ entity_change(enum ipmi_update_e op,
 		exit(1);
 	    }
 	    break;
-	case DELETED:
+	case IPMI_DELETED:
 	    printf("Entity deleted: %d.%d\n", id, instance);
 	    break;
-	case CHANGED:
+	case IPMI_CHANGED:
 	    printf("Entity changed: %d.%d\n", id, instance);
 	    break;
     }

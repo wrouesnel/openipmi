@@ -38,7 +38,7 @@
  * This is the main include file for dealing with IPMI.  It provides
  * an abstract interface to the IPMI system, so you don't have to deal
  * with all the nitty-gritty details of IPMI.  You only deal with
- * three things:
+ * four things:
  *
  *  The BMC - This is the main interface to the IPMI system.
  *  Entities - These are things that sensors monitor, they can be
@@ -48,13 +48,13 @@
  *
  * You don't have to deal with Management Controllers (MCs), IPMI
  * addressing, or anything like that.  This software will go out onto
- * the IPMI bus, detect all the entities present there, and call you
- * when it detects something.  It reads the SDR database and detects
- * all the entities and entity relationships.  It lets you add
+ * the IPMB bus, detect all the MCs and entities present there, and
+ * call you when it detects something.  It reads the SDR database and
+ * detects all the entities and entity relationships.  It lets you add
  * entities and relationships to the local copies, and write the
  * information back into the database.
  *
- * You have to be careful with locking in this system.  The three things
+ * You have to be careful with locking in this system.  The four things
  * you deal with all have two ways to get at them: An ID, and a pointer.
  * The ID is always valid, you can store that off on your own and use it
  * later.  The pointer is only valid inside a callback, the system is
@@ -79,7 +79,8 @@
  * Callbacks are possible on things that have ceased to exist.  For
  * example, if you start an operation on a sensor and the sensor
  * ceases to exist during the operation, you will get an error
- * callback with a NULL sensor.  The same goes for 
+ * callback with a NULL sensor.  The same goes for controls, entities,
+ * or anything else.
  *
  * You should NEVER block in a callback.  Locks are held in callbacks,
  * so you will constipate the system if you block in callbacks.  Just
@@ -178,7 +179,7 @@ int ipmi_bmc_prev_log(ipmi_mc_t *bmc, ipmi_log_t *log);
 
 /* Used in various operations to tell what has happened to a sensor,
    control, entity, or whatever. */
-enum ipmi_update_e { ADDED, DELETED, CHANGED };
+enum ipmi_update_e { IPMI_ADDED, IPMI_DELETED, IPMI_CHANGED };
 
 /* A callback that will be called when entities are added to and
    removed from the BMC, and when their presence changes. */

@@ -1,5 +1,10 @@
 
-2003-12-18 Corey Minyard <cminyard@mvista.com>
+2003-01-06 Corey Minyard <cminyard@mvista.com>
+
+	* entity.c, include/OPneIPMI/ipmiif.h, ui.c:  Added IPMI_ in front
+	of some enumeration values.
+
+2003-01-03 Corey Minyard <cminyard@mvista.com>
 
 	* sensor.c: Modified the way the reporting of the hot-swap sensor
 	is done, so it can support being a single offset in a sensor (like
@@ -13,7 +18,7 @@
 	* mc.c: ditto
 	* test1.c: ditto
 	* ui_os.c: ditto
-	* include/OpenIPMI/os_handler.c: ditto
+	* include/OpenIPMI/os_handler.h: ditto
 
 2002-12-18 Corey Minyard <cminyard@mvista.com>
 
