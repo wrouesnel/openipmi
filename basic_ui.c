@@ -108,6 +108,8 @@ main(int argc, char *argv[])
     } else if (strcmp(argv[curr_arg], "lan") == 0) {
 	struct hostent *ent;
 
+	con_type = LAN;
+
 	if (argc < 8) {
 	    fprintf(stderr, "Not enough arguments\n");
 	    exit(1);
