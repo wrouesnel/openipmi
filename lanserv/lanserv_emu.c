@@ -59,6 +59,12 @@
 
 #define MAX_ADDR 4
 
+static char *config_file = "/etc/ipmi_lan.conf";
+static char *command_string = NULL;
+static char *command_file = NULL;
+static int debug = 0;
+static int port = -1;
+
 typedef struct misc_data
 {
     int max_fd;
@@ -201,6 +207,10 @@ open_lan_fd(struct sockaddr *addr, socklen_t addr_len)
 {
     int                fd;
     int                rv;
+    struct sockaddr_in *ipaddr = (struct sockaddr_in *) addr;
+
+    if (port > 0)
+	ipaddr->sin_port = htons(port);
 
     fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (fd == -1) {
@@ -286,11 +296,6 @@ lanserv_log(int logtype, msg_t *msg, char *format, ...)
     va_end(ap);
 }
 
-static char *config_file = "/etc/ipmi_lan.conf";
-static char *command_string = NULL;
-static char *command_file = NULL;
-static int debug = 0;
-
 static struct poptOption poptOpts[]=
 {
     {
@@ -327,6 +332,15 @@ static struct poptOption poptOpts[]=
 	NULL,
 	'd',
 	"debug",
+	""
+    },
+    {
+	"port",
+	'p',
+	POPT_ARG_INT,
+	&port,
+	'p',
+	"port",
 	""
     },
     POPT_AUTOHELP
@@ -528,7 +542,10 @@ main(int argc, const char *argv[])
     if (num_addr == 0) {
 	struct sockaddr_in *ipaddr = (void *) &addr[0];
 	ipaddr->sin_family = AF_INET;
-	ipaddr->sin_port = htons(623);
+	if (port > 0)
+	    ipaddr->sin_port = htons(port);
+	else
+	    ipaddr->sin_port = htons(623);
 	ipaddr->sin_addr.s_addr = INADDR_ANY;
 	addr_len[0] = sizeof(*ipaddr);
 	num_addr++;

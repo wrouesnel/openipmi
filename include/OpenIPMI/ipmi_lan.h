@@ -292,6 +292,12 @@ typedef struct ipmi_payload_s
     void (*handle_recv_async)(ipmi_con_t    *conn,
 			      unsigned char *data,
 			      unsigned int  data_len);
+
+    /* If the message has a tag, return it in "tag".  This may be
+       NULL.  If present, it should return an error if the message is
+       not valid or the tag could not be extracted. */
+    int (*get_msg_tag)(unsigned char *data, unsigned int data_len,
+		       unsigned char *tag);
 } ipmi_payload_t;
 
 int ipmi_rmcpp_register_payload(unsigned int   payload_type,
@@ -394,9 +400,12 @@ typedef struct ipmi_rmcpp_authentication_s
 {
     /* Call the set function after the key info is obtained but before
        the final "ack".  This lets the algorithm fail the connection
-       if the lan code cannot set up the data. */
+       if the lan code cannot set up the data.  The msg_tag is a value
+       that should be extractable from the message response (ie the
+       rakp message tag). */
     int (*start_auth)(ipmi_con_t                *ipmi,
 		      int                       addr_num,
+		      unsigned char             msg_tag,
 		      ipmi_rmcpp_auth_t         *ainfo,
 		      ipmi_rmcpp_set_info_cb    set,
 		      ipmi_rmcpp_finish_auth_cb done,

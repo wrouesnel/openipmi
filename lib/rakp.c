@@ -61,6 +61,8 @@ struct rakp_info_s
     ipmi_rmcpp_finish_auth_cb done;
     void                      *cb_data;
 
+    unsigned char msg_tag;
+
     void *key_data;
 
     /* Check an set the auth keys for the various rakp messages.  The
@@ -172,6 +174,7 @@ send_rakp3(ipmi_con_t *ipmi, rakp_info_t *info,
     unsigned int        plen;
 
     memset(data, 0, sizeof(data));
+    data[0] = info->msg_tag;
     data[1] = err;
     ipmi_set_uint32(data+4, ipmi_rmcpp_auth_get_mgsys_session_id(info->ainfo));
     p = ipmi_rmcpp_auth_get_my_rand(info->ainfo, &plen);
@@ -293,7 +296,7 @@ send_rakp1(ipmi_con_t *ipmi, rakp_info_t *info,
     unsigned int        plen;
 
     memset(data, 0, sizeof(data));
-    data[0] = 0;
+    data[0] = info->msg_tag;
     ipmi_set_uint32(data+4, ipmi_rmcpp_auth_get_mgsys_session_id(info->ainfo));
 
     p = ipmi_rmcpp_auth_get_my_rand(info->ainfo, &plen);
@@ -324,6 +327,7 @@ send_rakp1(ipmi_con_t *ipmi, rakp_info_t *info,
 static int
 start_rakp(ipmi_con_t                *ipmi,
 	   int                       addr_num,
+	   unsigned char             msg_tag,
 	   ipmi_rmcpp_auth_t         *ainfo,
 	   init_cb                   init,
 	   cleanup_cb                cleanup,
@@ -351,6 +355,7 @@ start_rakp(ipmi_con_t                *ipmi,
 	return ENOMEM;
     }
 
+    info->msg_tag = msg_tag;
     info->ainfo = ainfo;
     info->cleanup = cleanup;
     info->set = set;
@@ -396,12 +401,13 @@ start_rakp(ipmi_con_t                *ipmi,
 static int
 start_rakp_none(ipmi_con_t                *ipmi,
 		int                       addr_num,
+		unsigned char             msg_tag,
 		ipmi_rmcpp_auth_t         *ainfo,
 		ipmi_rmcpp_set_info_cb    set,
 		ipmi_rmcpp_finish_auth_cb done,
 		void                      *cb_data)
 {
-    return start_rakp(ipmi, addr_num, ainfo,
+    return start_rakp(ipmi, addr_num, msg_tag, ainfo,
 		      NULL, NULL, NULL, NULL, NULL,
 		      set, done, cb_data);
 }
@@ -590,12 +596,13 @@ rakp_sha1_init(rakp_info_t *info)
 static int
 start_rakp_hmac_sha1(ipmi_con_t                *ipmi,
 		     int                       addr_num,
+		     unsigned char             msg_tag,
 		     ipmi_rmcpp_auth_t         *ainfo,
 		     ipmi_rmcpp_set_info_cb    set,
 		     ipmi_rmcpp_finish_auth_cb done,
 		     void                      *cb_data)
 {
-    return start_rakp(ipmi, addr_num, ainfo,
+    return start_rakp(ipmi, addr_num, msg_tag, ainfo,
 		      rakp_sha1_init, rakp_hmac_cleanup,
 		      rakp_hmac_c2, rakp_hmac_s3, rakp_hmac_c4,
 		      set, done, cb_data);
@@ -623,12 +630,13 @@ rakp_md5_init(rakp_info_t *info)
 static int
 start_rakp_hmac_md5(ipmi_con_t                *ipmi,
 		    int                       addr_num,
+		    unsigned char             msg_tag,
 		    ipmi_rmcpp_auth_t         *ainfo,
 		    ipmi_rmcpp_set_info_cb    set,
 		    ipmi_rmcpp_finish_auth_cb done,
 		    void                      *cb_data)
 {
-    return start_rakp(ipmi, addr_num, ainfo,
+    return start_rakp(ipmi, addr_num, msg_tag, ainfo,
 		      rakp_md5_init, rakp_hmac_cleanup,
 		      rakp_hmac_c2, rakp_hmac_s3, rakp_hmac_c4,
 		      set, done, cb_data);
@@ -704,9 +712,20 @@ rakp_handle_recv_async(ipmi_con_t    *ipmi,
 {
 }
 
+static int
+rakp_get_msg_tag(unsigned char *tmsg,
+		 unsigned int  data_len,
+		 unsigned char *tag)
+{
+    if (data_len < 1)
+	return EINVAL;
+    *tag = tmsg[0];
+    return 0;
+}
+
 static ipmi_payload_t rakp_payload =
 { rakp_format_msg, rakp_get_recv_seq, rakp_handle_recv,
-  rakp_handle_recv_async };
+  rakp_handle_recv_async, rakp_get_msg_tag };
 
 int
 _ipmi_rakp_init(void)

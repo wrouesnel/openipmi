@@ -1,3 +1,19 @@
+2005-01-21 Corey Minyard <cminyard@mvista.com> 
+
+	* include/OpenIPMI/ipmi_lan.h: Added a function to payloads to get
+	the message tag for a message, and added a message tag parm to
+	starting an authentication session.  This is primarily to allow
+	the LAN code to set the message tags and get them.
+	* lib/rakp.c: ditto
+	* lib/ipmi_lan.c: ditto
+
+	* lib/ipmi_lan.c: Modified the LAN code to allow the same socket
+	to be reused for multiple LAN connections.  This should increase
+	scalability by a large amount.
+
+	* lanserv/lanserv_emu.c: Added an option to override the port
+	number.
+
 2005-01-20 Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Allow the SNMP and OpenSSL libraries and compile

@@ -184,6 +184,8 @@ struct lan_link_s
     lan_data_t *lan;
 };
 
+typedef struct lan_fd_s lan_fd_t;
+
 #if IPMI_MAX_MSG_LENGTH > 80
 # define LAN_MAX_RAW_MSG IPMI_MAX_MSG_LENGTH
 #else
@@ -195,7 +197,8 @@ struct lan_data_s
     unsigned int	       users;
 
     ipmi_con_t                 *ipmi;
-    int                        fd;
+    lan_fd_t                   *fd;
+    int                        fd_slot;
 
     unsigned char              slave_addr;
     int                        is_active;
@@ -229,7 +232,9 @@ struct lan_data_s
     /* We keep a session on each LAN connection.  I don't think all
        systems require that, but it's safer. */
 
-    /* For both RMCP and RMCP+ */
+    /* For both RMCP and RMCP+.  For RMCP+, the session id is the one
+       I receive and the sequence numbers are the authenticated
+       ones. */
     unsigned char              working_authtype[MAX_IP_ADDR];
     uint32_t                   session_id[MAX_IP_ADDR];
     uint32_t                   outbound_seq_num[MAX_IP_ADDR];
@@ -313,7 +318,6 @@ struct lan_data_s
     unsigned int               retries;
     os_hnd_timer_id_t          *timer;
 
-    os_hnd_fd_id_t             *fd_wait_id;
     locked_list_t              *event_handlers;
 
     os_hnd_timer_id_t          *audit_timer;
@@ -407,9 +411,20 @@ open_handle_recv_async(ipmi_con_t    *ipmi,
 {
 }
 
+static int
+open_get_msg_tag(unsigned char *tmsg,
+		 unsigned int  data_len,
+		 unsigned char *tag)
+{
+    if (data_len < 1)
+	return EINVAL;
+    *tag = tmsg[0];
+    return 0;
+}
+
 static ipmi_payload_t open_payload =
 { open_format_msg, open_get_recv_seq, open_handle_recv,
-  open_handle_recv_async };
+  open_handle_recv_async, open_get_msg_tag };
 
 static ipmi_payload_t *payloads[64] =
 {
@@ -976,6 +991,173 @@ static void check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan);
 static int send_auth_cap(ipmi_con_t *ipmi, lan_data_t *lan, int addr_num,
 			 int force_ipmiv15);
 
+static os_handler_t *lan_os_hnd;
+
+#define MAX_CONS_PER_FD	32
+struct lan_fd_s
+{
+    int            fd;
+    os_hnd_fd_id_t *fd_wait_id;
+    unsigned int   cons_in_use;
+    lan_data_t     *lan[MAX_CONS_PER_FD];
+    lan_fd_t       *next, *prev;
+    ipmi_lock_t    *con_lock;
+
+    /* Main list info. */
+    ipmi_lock_t    *lock;
+    lan_fd_t       **free_list;
+    lan_fd_t       *list;
+};
+
+/* This is a list, but the only searching is to find an fd with a free
+   slot (when creating a new lan).  This is O(1) because the first
+   entry is guaranteed to have a free slot if any have free slots.
+   Note that once one of these is created, it is never destroyed
+   (destruction is very difficult because of the race conditions). */
+static ipmi_lock_t *fd_list_lock = NULL;
+static lan_fd_t fd_list;
+static lan_fd_t *fd_free_list;
+#ifdef PF_INET6
+static ipmi_lock_t *fd6_list_lock = NULL;
+static lan_fd_t fd6_list;
+static lan_fd_t *fd6_free_list;
+#endif
+
+static void data_handler(int            fd,
+			 void           *cb_data,
+			 os_hnd_fd_id_t *id);
+
+static lan_fd_t *
+find_free_lan_fd(int family, lan_data_t *lan, int *slot)
+{
+    ipmi_lock_t *lock;
+    lan_fd_t    *list, *item;
+    lan_fd_t    **free_list;
+    int         rv;
+    int         i;
+
+    if (family == PF_INET) {
+	lock = fd_list_lock;
+	list = &fd_list;
+	free_list = &fd_free_list;
+    } else if (family == PF_INET6) {
+	lock = fd6_list_lock;
+	list = &fd6_list;
+	free_list = &fd6_free_list;
+    } else {
+	return NULL;
+    }
+
+    ipmi_lock(lock);
+    item = list->next;
+    if (item->cons_in_use < MAX_CONS_PER_FD) {
+	/* Got an entry with a slot, just reuse it. */
+	for (i=0; i<MAX_CONS_PER_FD; i++) {
+	    if (! item->lan[i])
+		break;
+	}
+	item->cons_in_use++;
+	item->lan[i] = lan;
+	*slot = i;
+
+	if (item->cons_in_use == MAX_CONS_PER_FD) {
+	    /* Out of connections in this item, move it to the end of
+	       the list. */
+	    item->next->prev = item->prev;
+	    item->prev->next = item->next;
+	    item->next = list;
+	    item->prev = list->prev;
+	    list->prev->next = item;
+	    list->prev = item;
+	}
+    } else {
+	/* No free entries, create one */
+	if (*free_list) {
+	    /* Pull them off the free list first. */
+	    item = *free_list;
+	    *free_list = item->next;
+	} else {
+	    item = ipmi_mem_alloc(sizeof(*item));
+	    if (item) {
+		memset(item, 0, sizeof(*item));
+		rv = ipmi_create_global_lock(&item->con_lock);
+		if (rv) {
+		    ipmi_mem_free(item);
+		    goto out_unlock;
+		}
+		item->lock = lock;
+		item->free_list = free_list;
+		item->list = list;
+	    }
+	}
+	if (!item)
+	    goto out_unlock;
+
+	item->fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
+	if (item->fd == -1) {
+	    item->next = *free_list;
+	    *free_list = item;
+	    item = NULL;
+	    goto out_unlock;
+	}
+
+	/* Bind is not necessary, we don't care what port we are. */
+
+	rv = lan_os_hnd->add_fd_to_wait_for(lan_os_hnd,
+					    item->fd,
+					    data_handler, 
+					    item,
+					    NULL,
+					    &(item->fd_wait_id));
+	if (rv) {
+	    close(item->fd);
+	    item->next = *free_list;
+	    *free_list = item;
+	    item = NULL;
+	    goto out_unlock;
+	}
+
+	item->cons_in_use++;
+	item->lan[0] = lan;
+	*slot = 0;
+
+	/* This will have free items, put it at the head of the list. */
+	item->next = list->next;
+	item->prev = list;
+	list->next->prev = item;
+	list->next = item;
+    }
+ out_unlock:
+    ipmi_unlock(lock);
+    return item;
+}
+
+static void
+release_lan_fd(lan_fd_t *item, int slot)
+{
+    ipmi_lock(item->lock);
+    item->lan[slot] = NULL;
+    item->cons_in_use--;
+    if (item->cons_in_use == 0) {
+	lan_os_hnd->remove_fd_to_wait_for(lan_os_hnd, item->fd_wait_id);
+	close(item->fd);
+	item->next->prev = item->prev;
+	item->prev->next = item->next;
+	item->next = *(item->free_list);
+	*(item->free_list) = item;
+    } else {
+	/* This has free connections, move it to the head of the
+	   list. */
+	item->next->prev = item->prev;
+	item->prev->next = item->next;
+	item->next = item->list->next;
+	item->prev = item->list;
+	item->list->next->prev = item;
+	item->list->next = item;
+    }
+    ipmi_unlock(item->lock);
+}
+
 /*
  * We keep two hash tables, one by IP address and one by connection
  * address.
@@ -1089,7 +1271,8 @@ lan_find_con(ipmi_con_t *ipmi)
 	    break;
 	l = l->next;
     }
-    l->lan->refcount++;
+    if (l->lan)
+	l->lan->refcount++;
     ipmi_unlock(lan_list_lock);
 
     return l->lan;
@@ -1162,18 +1345,6 @@ lan_put(ipmi_con_t *ipmi)
 
     if (done)
 	lan_cleanup(ipmi);
-}
-
-static int
-open_lan_fd(int pf_family)
-{
-    int fd;
-
-    fd = socket(pf_family, SOCK_DGRAM, IPPROTO_UDP);
-
-    /* Bind is not necessary, we don't care what port we are. */
-
-    return fd;
 }
 
 static int
@@ -1498,7 +1669,7 @@ lan_send_addr(lan_data_t  *lan,
 	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
-    rv = sendto(lan->fd, tmsg, pos, 0,
+    rv = sendto(lan->fd->fd, tmsg, pos, 0,
 		(struct sockaddr *) &(lan->cparm.ip_addr[addr_num]),
 		sizeof(sockaddr_ip_t));
     if (rv == -1)
@@ -2718,34 +2889,190 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
     return;
 }
 
+static int
+addr_match(sockaddr_ip_t *a1, sockaddr_ip_t *a2)
+{
+    if (a1->s_ipsock.s_addr.sa_family != a2->s_ipsock.s_addr.sa_family) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG, "Address family mismatch: %d %d",
+		     a1->s_ipsock.s_addr.sa_family,
+		     a2->s_ipsock.s_addr.sa_family);
+	return 0;
+    }
+
+    switch (a1->s_ipsock.s_addr.sa_family) {
+    case PF_INET:
+	{
+	    struct sockaddr_in *ip1 = &a1->s_ipsock.s_addr4;
+	    struct sockaddr_in *ip2 = &a2->s_ipsock.s_addr4;
+
+	    if ((ip1->sin_port == ip2->sin_port)
+		&& (ip1->sin_addr.s_addr == ip2->sin_addr.s_addr))
+		return 1;
+	}
+	break;
+
+#ifdef PF_INET6
+    case PF_INET6:
+	{
+	    struct sockaddr_in6 *ip1 = &a1->s_ipsock.s_addr6;
+	    struct sockaddr_in6 *ip2 = &a2->s_ipsock.s_addr6;
+	    if ((ip1->sin6_port == ip2->sin6_port)
+		&& (bcmp(ip1->sin6_addr.s6_addr, ip2->sin6_addr.s6_addr,
+			 sizeof(struct in6_addr)) == 0))
+		return 1;
+	}
+	break;
+#endif
+    default:
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "ipmi_lan: Unknown protocol family: 0x%x",
+		 a1->s_ipsock.s_addr.sa_family);
+	break;
+    }
+
+    return 0;
+}
+
+static int
+addr_match_lan(lan_data_t *lan, uint32_t sid, sockaddr_ip_t *addr,
+	       int *raddr_num)
+{
+    int addr_num;
+
+    /* Make sure the source address matches one we expect from
+       this system. */
+    for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
+	if ((!sid || (lan->session_id[addr_num] == sid))
+	    && addr_match(&(lan->cparm.ip_addr[addr_num]), addr))
+	{
+	    *raddr_num = addr_num;
+	    return 1;
+	}
+    }
+    return 0;
+}
+
+static ipmi_con_t *
+rmcpp_find_ipmi(lan_fd_t      *item,
+		unsigned char *data,
+		unsigned int  len,
+		sockaddr_ip_t *addr,
+		int           *addr_num)
+{
+    /* This is easy, the session id is our slot in the fd or is a
+       message tag. */
+    unsigned char payload;
+    uint32_t      tag;
+    uint32_t      sid;
+    unsigned char ctag;
+    unsigned int  mlen;
+    unsigned char *d;
+    ipmi_con_t    *ipmi = NULL;
+    lan_data_t    *lan;
+
+    /* We need to find the sessions id; it's position depends on
+       the payload type. */
+    if (len < 16) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG, "Message too short(2): %d", len);
+	return NULL;
+    }
+    payload = data[5] & 0x3f;
+    if (payload == IPMI_RMCPP_PAYLOAD_TYPE_OEM_EXPLICIT) {
+	if (len < 22) {
+	    if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+		ipmi_log(IPMI_LOG_DEBUG, "Message too short(3): %d", len);
+	    return NULL;
+	}
+	d = data+12;
+    } else {
+	d = data+6;
+    }
+
+    mlen = ipmi_get_uint16(data+8);
+    if ((mlen + 10 + (d-data)) > len) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG,
+		     "Dropped message payload length doesn't match up");
+	return NULL;
+    }
+
+    sid = ipmi_get_uint32(d);
+    if (payloads[payload]->get_msg_tag) {
+	int rv = payloads[payload]->get_msg_tag(d+10, mlen, &ctag);
+	if (rv)
+	    return NULL;
+	tag = ctag;
+    } else
+	tag = sid;
+
+    if (tag >= MAX_CONS_PER_FD) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG, "tag is out of range: %d", tag);
+    }
+
+    ipmi_lock(item->con_lock);
+    lan = item->lan[tag];
+    if (lan && addr_match_lan(lan, sid, addr, addr_num))
+	ipmi = lan->ipmi;
+    ipmi_unlock(item->con_lock);
+
+    return ipmi;
+}
+
+static ipmi_con_t *
+rmcp_find_ipmi(lan_fd_t      *item,
+	       unsigned char *data,
+	       unsigned int  len,
+	       sockaddr_ip_t *addr,
+	       int           *addr_num)
+{
+    /* Old RMCP is harder, we have to hunt. */
+    uint32_t   sid;
+    lan_data_t *lan;
+    int        i;
+    ipmi_con_t *ipmi = NULL;
+
+    if (len < 13) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG, "Message too short(4): %d", len);
+	return NULL;
+    }
+
+    sid = ipmi_get_uint32(data+9);
+    ipmi_lock(item->con_lock);
+    for (i=0; i<MAX_CONS_PER_FD; i++) {
+	lan = item->lan[i];
+	if (lan && addr_match_lan(lan, sid, addr, addr_num)) {
+	    ipmi = lan->ipmi;
+	    break;
+	}
+    }
+    ipmi_unlock(item->con_lock);
+
+    return ipmi;
+}
+
 static void
 data_handler(int            fd,
 	     void           *cb_data,
 	     os_hnd_fd_id_t *id)
 {
-    ipmi_con_t         *ipmi = (ipmi_con_t *) cb_data;
+    lan_fd_t           *item = cb_data;
+    ipmi_con_t         *ipmi;
     lan_data_t         *lan;
     unsigned char      data[IPMI_MAX_LAN_LEN];
     sockaddr_ip_t      ipaddrd;
-    struct sockaddr_in *paddr;
     socklen_t          from_len;
-    int                addr_num;
     int                len;
-
-    if (!lan_valid_ipmi(ipmi))
-	/* We can have due to a race condition, just return and
-           everything should be fine. */
-	return;
-
-    lan = ipmi->con_data;
+    int                addr_num;
 
     from_len = sizeof(ipaddrd);
     len = recvfrom(fd, data, sizeof(data), 0, (struct sockaddr *)&ipaddrd, 
 		   &from_len);
-    if (len < 5)
-	goto out;
 
-    if (DEBUG_RAWMSG) {
+    if (DEBUG_RAWMSG && (len > 0)) {
 	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr = ");
 	dump_hex((unsigned char *) &ipaddrd, from_len);
 	if (len) {
@@ -2755,56 +3082,10 @@ data_handler(int            fd,
 	ipmi_log(IPMI_LOG_DEBUG_END, " ");
     }
 
-    /* Make sure the source IP matches what we expect the other end to
-       be. */
-    paddr = (struct sockaddr_in *)&ipaddrd;
-    switch (paddr->sin_family) {
-    case PF_INET:
-	{
-	    struct sockaddr_in *ipaddr;
-	    struct sockaddr_in *ipaddr4;
-	    ipaddr = (struct sockaddr_in *)&(ipaddrd);
-            for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
-		ipaddr4 = (struct sockaddr_in *)
-		    &(lan->cparm.ip_addr[addr_num]);
-		if ((ipaddr->sin_port == ipaddr4->sin_port)
-		    && (ipaddr->sin_addr.s_addr
-			== ipaddr4->sin_addr.s_addr))
-		    break;
-	    }
-	}
-            break;
-#ifdef PF_INET6
-    case PF_INET6:
-	{
-            struct sockaddr_in6 *ipa6;
-            struct sockaddr_in6 *ipaddr6;
-            ipa6 = (struct sockaddr_in6 *)&(ipaddrd);
-            for (addr_num = 0; addr_num < lan->cparm.num_ip_addr; addr_num++) {
-		ipaddr6 = (struct sockaddr_in6 *)
-		    &(lan->cparm.ip_addr[addr_num]);
-		if ((ipa6->sin6_port == ipaddr6->sin6_port)
-		    && (bcmp(ipa6->sin6_addr.s6_addr,
-			     ipaddr6->sin6_addr.s6_addr,
-			     sizeof(struct in6_addr)) == 0))
-		    break;
-	    }
-	}
-	break;
-#endif
-    default:
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "ipmi_lan: Unknown protocol family: 0x%x",
-		 paddr->sin_family);
-	goto out;
-	break;
-    }
-
-    if (addr_num >= lan->cparm.num_ip_addr) {
+    if (len < 5) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
-	    ipmi_log(IPMI_LOG_DEBUG,
-		     "ipmi_lan: Dropped message due to invalid IP");
-	goto out;
+	    ipmi_log(IPMI_LOG_DEBUG, "Message too short(1): %d", len);
+	return;
     }
 
     /* Validate the RMCP portion of the message. */
@@ -2814,8 +3095,21 @@ data_handler(int            fd,
     {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
 	    ipmi_log(IPMI_LOG_DEBUG, "Dropped message not valid IPMI/RMCP");
-	goto out;
+	return;
     }
+
+    if (data[4] == IPMI_AUTHTYPE_RMCP_PLUS) {
+	ipmi = rmcpp_find_ipmi(item, data, len, &ipaddrd, &addr_num);
+    } else {
+	ipmi = rmcp_find_ipmi(item, data, len, &ipaddrd, &addr_num);
+    }
+
+    if (!lan_valid_ipmi(ipmi))
+	/* We can have due to a race condition, just return and
+           everything should be fine. */
+	return;
+
+    lan = ipmi->con_data;
 
     if (data[4] == IPMI_AUTHTYPE_RMCP_PLUS) {
 	handle_rmcpp_recv(ipmi, lan, addr_num, data, len);
@@ -2823,7 +3117,6 @@ data_handler(int            fd,
 	handle_lan15_recv(ipmi, lan, addr_num, data, len);
     }
     
- out:
     lan_put(ipmi);
     return;
 }
@@ -3167,8 +3460,6 @@ lan_cleanup(ipmi_con_t *ipmi)
 	locked_list_destroy(lan->ipmb_change_handlers);
     if (lan->seq_num_lock)
 	ipmi_destroy_lock(lan->seq_num_lock);
-    if (lan->fd_wait_id)
-	ipmi->os_hnd->remove_fd_to_wait_for(ipmi->os_hnd, lan->fd_wait_id);
     if (lan->authdata)
 	ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
     for (i=0; i<MAX_IP_ADDR; i++) {
@@ -3181,8 +3472,8 @@ lan_cleanup(ipmi_con_t *ipmi)
     memset(lan->cparm.password, 0, sizeof(lan->cparm.password));
     memset(lan->cparm.bmc_key, 0, sizeof(lan->cparm.bmc_key));
 
-    /* Close the fd after we have deregistered it. */
-    close(lan->fd);
+    if (lan->fd)
+	release_lan_fd(lan->fd, lan->fd_slot);
 
     ipmi_mem_free(lan);
     ipmi_mem_free(ipmi);
@@ -3236,9 +3527,8 @@ lan_close_connection(ipmi_con_t *ipmi)
 static void
 cleanup_con(ipmi_con_t *ipmi)
 {
-    lan_data_t   *lan = (lan_data_t *) ipmi->con_data;
-    os_handler_t *handlers = ipmi->os_hnd;
-    int          i;
+    lan_data_t *lan = (lan_data_t *) ipmi->con_data;
+    int        i;
 
     if (ipmi) {
 	ipmi_con_attr_cleanup(ipmi);
@@ -3262,10 +3552,8 @@ cleanup_con(ipmi_con_t *ipmi)
 	    locked_list_destroy(lan->ipmb_change_handlers);
 	if (lan->seq_num_lock)
 	    ipmi_destroy_lock(lan->seq_num_lock);
-	if (lan->fd != -1)
-	    close(lan->fd);
-	if (lan->fd_wait_id)
-	    handlers->remove_fd_to_wait_for(handlers, lan->fd_wait_id);
+	if (lan->fd)
+	    release_lan_fd(lan->fd, lan->fd_slot);
 	if (lan->authdata)
 	    ipmi_auths[lan->chosen_authtype].authcode_cleanup(lan->authdata);
 	for (i=0; i<MAX_IP_ADDR; i++) {
@@ -3791,7 +4079,8 @@ got_rmcpp_open_session_rsp(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     info->lan = lan;
     info->rspi = rspi;
 
-    rv = authp->start_auth(ipmi, addr_num, &(lan->ainfo[addr_num]),
+    rv = authp->start_auth(ipmi, addr_num, lan->fd_slot,
+			   &(lan->ainfo[addr_num]),
 			   rmcpp_set_info, rmcpp_auth_finished,
 			   info);
     if (rv) {
@@ -3816,7 +4105,7 @@ send_rmcpp_open_session(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi,
     ipmi_rmcpp_addr_t addr;
 
     memset(data, 0, sizeof(data));
-    data[0] = 0;
+    data[0] = lan->fd_slot;
     data[1] = lan->cparm.privilege;
     ipmi_set_uint32(data+4, lan->precon_session_id[addr_num]);
     data[8] = 0; /* auth algorithm */
@@ -3867,7 +4156,9 @@ start_rmcpp(ipmi_con_t *ipmi, lan_data_t *lan, ipmi_msgi_t *rspi, int addr_num)
     lan->unauth_out_seq_num[addr_num] = 0;
     lan->inbound_seq_num[addr_num] = 0;
     lan->unauth_in_seq_num[addr_num] = 0;
-    lan->precon_session_id[addr_num] = 1; /* Use session 1, don't really care. */
+    /* Use our fd_slot in the fd for the session id, so we can look it
+       up quickly. */
+    lan->precon_session_id[addr_num] = lan->fd_slot;
     lan->working_conf[addr_num] = IPMI_LANP_CONFIDENTIALITY_ALGORITHM_NONE;
     lan->working_integ[addr_num] = IPMI_LANP_INTEGRITY_ALGORITHM_NONE;
 
@@ -4637,8 +4928,8 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     lan->wait_q_tail = NULL;
 
     pa = (struct sockaddr_in *)&(lan->cparm.ip_addr[0]);
-    lan->fd = open_lan_fd(pa->sin_family);
-    if (lan->fd == -1) {
+    lan->fd = find_free_lan_fd(pa->sin_family, lan, &lan->fd_slot);
+    if (! lan->fd) {
 	rv = errno;
 	goto out_err;
     }
@@ -4690,16 +4981,6 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     ipmi->close_connection_done = lan_close_connection_done;
     ipmi->handle_async_event = handle_async_event;
 
-    /* Add the waiter last. */
-    rv = handlers->add_fd_to_wait_for(handlers,
-				      lan->fd,
-				      data_handler, 
-				      ipmi,
-				      NULL,
-				      &(lan->fd_wait_id));
-    if (rv)
-	goto out_err;
-
     /* Add it to the list of valid IPMIs so it will validate.  This
        must be done last, after a point where it cannot fail. */
     lan_add_con(lan);
@@ -4712,32 +4993,6 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
 
  out_err:
     cleanup_con(ipmi);
-    return rv;
-}
-
-/* This is a hack of a function so the MXP code can switch the
-   connection over properly.  Must be called with the global read lock
-   held. */
-int
-_ipmi_lan_set_ipmi(ipmi_con_t *old, ipmi_con_t *new)
-{
-    lan_data_t     *lan = (lan_data_t *) old->con_data;
-    os_hnd_fd_id_t *fd_wait_id;
-    int            rv;
-
-    old->os_hnd->remove_fd_to_wait_for(old->os_hnd, lan->fd_wait_id);
-    lan->fd_wait_id = NULL;
-    rv = old->os_hnd->add_fd_to_wait_for(old->os_hnd,
-					 lan->fd,
-					 data_handler, 
-					 new,
-					 NULL,
-					 &fd_wait_id);
-    if (!rv) {
-	lan->fd_wait_id = fd_wait_id;
-	lan->ipmi = new;
-    }
-
     return rv;
 }
 
@@ -4871,6 +5126,24 @@ _ipmi_lan_init(os_handler_t *os_hnd)
     if (rv)
 	return rv;
 
+    rv = ipmi_create_global_lock(&fd_list_lock);
+    if (rv)
+	return rv;
+    memset(&fd_list, 0, sizeof(fd_list));
+    fd_list.next = &fd_list;
+    fd_list.prev = &fd_list;
+    fd_list.cons_in_use = MAX_CONS_PER_FD;
+
+#ifdef PF_INET6
+    rv = ipmi_create_global_lock(&fd6_list_lock);
+    if (rv)
+	return rv;
+    memset(&fd6_list, 0, sizeof(fd6_list));
+    fd6_list.next = &fd6_list;
+    fd6_list.prev = &fd6_list;
+    fd6_list.cons_in_use = MAX_CONS_PER_FD;
+#endif
+
     for (i=0; i<LAN_HASH_SIZE; i++) {
 	lan_list[i].next = &(lan_list[i]);
 	lan_list[i].prev = &(lan_list[i]);
@@ -4887,6 +5160,8 @@ _ipmi_lan_init(os_handler_t *os_hnd)
     rv = ipmi_create_global_lock(&lan_auth_lock);
     if (rv)
 	return rv;
+
+    lan_os_hnd = os_hnd;
 
     return 0;
 }
@@ -4926,4 +5201,45 @@ _ipmi_lan_shutdown(void)
 	oem_integ_list = e->next;
 	ipmi_mem_free(e);
     }
+    if (fd_list_lock) {
+	ipmi_destroy_lock(fd_list_lock);
+	fd_list_lock = NULL;
+    }
+    while (fd_list.next != &fd_list) {
+	lan_fd_t *e = fd_list.next;
+	e->next->prev = e->prev;
+	e->prev->next = e->next;
+	lan_os_hnd->remove_fd_to_wait_for(lan_os_hnd, e->fd_wait_id);
+	close(e->fd);
+	ipmi_destroy_lock(e->con_lock);
+	ipmi_mem_free(e);
+    }
+    while (fd_free_list) {
+	lan_fd_t *e = fd_free_list;
+	fd_free_list = e->next;
+	ipmi_destroy_lock(e->con_lock);
+	ipmi_mem_free(e);
+    }
+#ifdef PF_INET6
+    if (fd6_list_lock) {
+	ipmi_destroy_lock(fd6_list_lock);
+	fd6_list_lock = NULL;
+    }
+    while (fd6_list.next != &fd6_list) {
+	lan_fd_t *e = fd6_list.next;
+	e->next->prev = e->prev;
+	e->prev->next = e->next;
+	lan_os_hnd->remove_fd_to_wait_for(lan_os_hnd, e->fd_wait_id);
+	close(e->fd);
+	ipmi_destroy_lock(e->con_lock);
+	ipmi_mem_free(e);
+    }
+    while (fd6_free_list) {
+	lan_fd_t *e = fd6_free_list;
+	fd6_free_list = e->next;
+	ipmi_destroy_lock(e->con_lock);
+	ipmi_mem_free(e);
+    }
+#endif
+    lan_os_hnd = NULL;
 }
