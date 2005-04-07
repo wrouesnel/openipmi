@@ -2,6 +2,8 @@
 
 	* OpenIPMI.spec.in: Added solterm, reorganized a little.
 
+	* swig/OpenIPMI.h: Added domaim monitoring interfaces.
+
 2005-04-07 Darius Davis <darius@cyclades.com>
 
 	* sample/solterm.c, sample/Makefile.am: Added solterm sample program.

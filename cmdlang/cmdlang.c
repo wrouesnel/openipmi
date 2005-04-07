@@ -2468,11 +2468,16 @@ ipmi_cmdlang_event_next_field(ipmi_cmdlang_event_t        *event,
     if (!curr)
 	return 0;
 
-    *level = curr->level;
-    *name = curr->name;
-    *value = curr->value;
-    *type = curr->type;
-    *len = curr->len;
+    if (level)
+	*level = curr->level;
+    if (name)
+	*name = curr->name;
+    if (value)
+	*value = curr->value;
+    if (type)
+	*type = curr->type;
+    if (len)
+	*len = curr->len;
 
     event->curr = curr->next;
     return 1;

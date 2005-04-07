@@ -2530,6 +2530,36 @@ wait_io(int timeout)
 %constant int eagain = EAGAIN;
 %constant int eperm = EPERM;
 
+
+/* These two defines simplify the functions that do addition/removal
+   of callbacks.  The type is the object type (domain, entity, etc)
+   and the name is the stuff in the middle of the name, ie
+   (ipmi_<type>_add_<name>_handler.  The function that will be called
+   with the info is <type>_<name>_handler. */
+#define cb_add(type, name, func) \
+	int         rv;						\
+	swig_cb_val handler_val;				\
+	if (! valid_swig_cb(handler, func))			\
+	    return EINVAL;					\
+	handler_val = ref_swig_cb(handler, func);		\
+	rv = ipmi_ ## type ## _add_ ## name ## _handler		\
+	    (self, type ## _ ## name ## _handler, handler_val);	\
+	if (rv)							\
+	    deref_swig_cb_val(handler_val);			\
+	return rv;
+#define cb_rm(type, name, func) \
+	int         rv;						\
+	swig_cb_val handler_val;				\
+	if (! valid_swig_cb(handler, func))			\
+	    return EINVAL;					\
+	handler_val = get_swig_cb(handler, func);		\
+	rv = ipmi_ ## type ## _remove_ ## name ##_handler	\
+	    (self, type ## _ ## name ## _handler, handler_val);	\
+	if (!rv)						\
+	    deref_swig_cb_val(handler_val);			\
+	return rv;
+    
+
 /*
  * A bug in swig (default parameters not used in inline) causes this
  * to have to not be in an inline and done the hard way.
@@ -2793,6 +2823,49 @@ pef_str_to_parm(char *str)
     return ipmi_pefconfig_str_to_parm(str);
 }
 
+static void
+domain_change_handler(ipmi_domain_t      *domain,
+		      enum ipmi_update_e op,
+		      void               *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    domain_ref;
+    domain_ref = swig_make_ref(domain, ipmi_domain_t);
+    swig_call_cb(cb, "domain_change_cb", "%s%p",
+		 ipmi_update_e_string(op), &domain_ref);
+    swig_free_ref_check(domain_ref, ipmi_domain_t);
+}
+
+int
+add_domain_change_handler(swig_cb handler)
+{
+    int rv;
+    swig_cb_val handler_val;
+    if (! valid_swig_cb(handler, domain_change_cb))
+	return EINVAL;
+    handler_val = ref_swig_cb(handler, domain_change_cb);
+    rv = ipmi_domain_add_domain_change_handler(domain_change_handler,
+					       handler_val);
+    if (rv)
+	deref_swig_cb_val(handler_val);
+    return rv;
+}
+
+int
+remove_domain_change_handler(swig_cb handler)
+{
+    int rv;
+    swig_cb_val handler_val;
+    if (! valid_swig_cb(handler, domain_change_cb))
+	return EINVAL;
+    handler_val = get_swig_cb(handler, domain_change_cb);
+    rv = ipmi_domain_remove_domain_change_handler(domain_change_handler,
+						  handler_val);
+    if (!rv)
+	deref_swig_cb_val(handler_val);
+    return rv;
+}
+
 %}
 
 %newobject open_domain;
@@ -2833,6 +2906,19 @@ ipmi_domain_id_t *open_domain2(char *name, char **args,
 			       swig_cb done = NULL, swig_cb up = NULL);
 
 /*
+ * Add a handler to be called whenever a domain is added or removed.
+ * The handler will be called with the following parameters:
+ *   <self> added|deleted|changed <domain>
+ */
+int add_domain_change_handler(swig_cb handler);
+
+/*
+ * Remove a previously registered domain handler.
+ */
+int
+remove_domain_change_handler(swig_cb handler);
+
+/*
  * Set the handler for OpenIPMI logs.  This is a global value and
  * there is only one, setting it replaces the old one.  The logs will
  * be sent to the "log" method of the first parameter.  The log method
@@ -2855,35 +2941,6 @@ int lanparm_str_to_parm(char *str);
 /* Convert between pef string names and parm numbers. */
 char *pef_parm_to_str(int parm);
 int pef_str_to_parm(char *str);
-
-/* These two defines simplify the functions that do addition/removal
-   of callbacks.  The type is the object type (domain, entity, etc)
-   and the name is the stuff in the middle of the name, ie
-   (ipmi_<type>_add_<name>_handler.  The function that will be called
-   with the info is <type>_<name>_handler. */
-#define cb_add(type, name, func) \
-	int         rv;						\
-	swig_cb_val handler_val;				\
-	if (! valid_swig_cb(handler, func))			\
-	    return EINVAL;					\
-	handler_val = ref_swig_cb(handler, func);		\
-	rv = ipmi_ ## type ## _add_ ## name ## _handler		\
-	    (self, type ## _ ## name ## _handler, handler_val);	\
-	if (rv)							\
-	    deref_swig_cb_val(handler_val);			\
-	return rv;
-#define cb_rm(type, name, func) \
-	int         rv;						\
-	swig_cb_val handler_val;				\
-	if (! valid_swig_cb(handler, func))			\
-	    return EINVAL;					\
-	handler_val = get_swig_cb(handler, func);		\
-	rv = ipmi_ ## type ## _remove_ ## name ##_handler	\
-	    (self, type ## _ ## name ## _handler, handler_val);	\
-	if (!rv)						\
-	    deref_swig_cb_val(handler_val);			\
-	return rv;
-    
 
 /*
  * A domain id object.  This object is guaranteed to be valid and
