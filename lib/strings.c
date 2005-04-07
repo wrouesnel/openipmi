@@ -37,6 +37,9 @@
 #include <OpenIPMI/ipmi_msgbits.h>
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmiif.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <string.h>
+#include <OpenIPMI/internal/ipmi_malloc.h>
 
 const char *
 ipmi_update_e_string(enum ipmi_update_e val)
@@ -1170,6 +1173,96 @@ ipmi_get_cc_string(unsigned int cc,
     snprintf(buffer, buf_len, cc_fs, cc);
 
     return buffer;
+}
+
+
+static const char *sol_error_codes[] =
+{
+	"SoLCharTransUnavail",
+	"SoLDeactivated",
+	"SoLNotAvailable",
+	"SoLDisconnected",
+	"SoLUnconfirmOp",
+	"SoLFlushed",
+	"SoLUnknown"
+};
+
+static const char *rmcpp_error_codes[] =
+{
+	"InsufResourForSess",
+	"InvalSessID",
+	"InvalPayloadType",
+	"InvalAuthAlg",
+	"InvalIntegAlg",
+	"NoMatchAuthPayld",
+	"NoMatchIntegPayld",
+	"InactSessID",
+	"InvalidRole",
+	"UnauthRoleOrPriv",
+	"InsufResourForRole",
+	"InvalNameLength",
+	"UnauthName",
+	"UnauthGUID",
+	"InvalIntegChkVal",
+	"InvalConfidAlg",
+	"NoCipherSuiteMatch",
+	"IllegalParam",
+	"RMCPPUnknown"
+};
+
+char *
+ipmi_get_error_string(unsigned int err,
+			char *buffer,
+			unsigned int buf_len)
+{
+	if (err == 0)
+	{
+		strncpy(buffer, "Success (No error)", buf_len);
+		return buffer;
+	}
+
+	char *temp_buffer = ipmi_mem_alloc(buf_len);
+	char *err_type;
+
+	if (!temp_buffer)
+		temp_buffer = buffer;
+
+	if (IPMI_IS_OS_ERR(err))
+	{
+		strncpy(temp_buffer, strerror(IPMI_GET_OS_ERR(err)), buf_len);
+		err_type = "OS";
+	} else if (IPMI_IS_IPMI_ERR(err))
+	{
+		ipmi_get_cc_string(IPMI_GET_IPMI_ERR(err), temp_buffer, buf_len);
+		err_type = "IPMI";
+	} else if (IPMI_IS_RMCPP_ERR(err))
+	{
+		int rmcpp_err = IPMI_GET_RMCPP_ERR(err);
+		if ((rmcpp_err <= 0) && (rmcpp_err > 0x12))
+			rmcpp_err = 0x13;
+		snprintf(temp_buffer, buf_len, "%s (0x%02x)", rmcpp_error_codes[rmcpp_err - 1], IPMI_GET_RMCPP_ERR(err));
+		err_type = "RMCP+";
+	} else if (IPMI_IS_SOL_ERR(err))
+	{
+		int sol_err = IPMI_GET_SOL_ERR(err);
+		if ((sol_err < 1) || (sol_err > 7))
+			sol_err = 7;
+		snprintf(temp_buffer, buf_len, sol_error_codes[sol_err - 1]);
+		err_type = "SoL";
+	}
+	else
+	{
+		strncpy(temp_buffer, "Unknown", buf_len);
+		err_type = "Unknown";
+	}
+
+	if (temp_buffer != buffer)
+	{
+		snprintf(buffer, buf_len, "%s: %s", err_type, temp_buffer);
+		ipmi_mem_free(temp_buffer);
+	}
+
+	return buffer;
 }
 
 /* Get a string name fo the hot swap state. */

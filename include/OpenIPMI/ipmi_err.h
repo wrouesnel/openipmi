@@ -46,6 +46,7 @@
 #define IPMI_OS_ERR_TOP		0x00000000
 #define IPMI_IPMI_ERR_TOP	0x01000000
 #define IPMI_RMCPP_ERR_TOP	0x02000000
+#define IPMI_SOL_ERR_TOP	0x03000000
 #define IPMI_IS_OS_ERR(E)	(((E) & 0xffffff00) == IPMI_OS_ERR_TOP)
 #define IPMI_GET_OS_ERR(E)	((E) & 0xff)
 #define IPMI_OS_ERR_VAL(v)	((v) | IPMI_OS_ERR_TOP)
@@ -55,6 +56,9 @@
 #define IPMI_IS_RMCPP_ERR(E)	(((E) & 0xffffff00) == IPMI_RMCPP_ERR_TOP)
 #define IPMI_GET_RMCPP_ERR(E)	((E) & 0xff)
 #define IPMI_RMCPP_ERR_VAL(v)	((v) | IPMI_RMCPP_ERR_TOP)
+#define IPMI_IS_SOL_ERR(E)	(((E) & 0xffffff00) == IPMI_SOL_ERR_TOP)
+#define IPMI_GET_SOL_ERR(E)	((E) & 0xff)
+#define IPMI_SOL_ERR_VAL(v)	((v) | IPMI_SOL_ERR_TOP)
 
 /* The following local system completion codes are defined to be
  * returned by OpenIPMI:
@@ -118,6 +122,16 @@
 #define IPMI_RMCPP_NO_CIPHER_SUITE_MATCHES		0x11
 #define IPMI_RMCPP_ILLEGAL_PARAMETER			0x12
 
+/**
+ * Serial-over-LAN error codes
+ */
+#define IPMI_SOL_CHARACTER_TRANSFER_UNAVAILABLE	0x01 ///< The request was NACKed because Char Trans was Unavail
+#define IPMI_SOL_DEACTIVATED			0x02 ///< The managed system deactivated SoL
+#define IPMI_SOL_NOT_AVAILABLE			0x03 ///< SoL is not available due to managed system configuration.
+#define IPMI_SOL_DISCONNECTED			0x04 ///< The connection has been forcibly disconnected.
+#define IPMI_SOL_UNCONFIRMABLE_OPERATION	0x05 ///< The operation has been attempted, but no confirmation is possible.
+#define IPMI_SOL_FLUSHED			0x06 ///< The packet containing the request was flushed before transmission.
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -128,6 +142,11 @@ extern "C" {
 char *ipmi_get_cc_string(unsigned int cc,
 			 char         *buffer,
 			 unsigned int buf_len);
+
+char *
+ipmi_get_error_string(unsigned int err,
+			char *buffer,
+			unsigned int buf_len);
 
 #ifdef __cplusplus
 }

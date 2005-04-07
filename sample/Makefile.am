@@ -1,7 +1,7 @@
 
 AM_CFLAGS = -Wall -I$(top_srcdir)/include -DIPMI_CHECK_LOCKS
 
-bin_PROGRAMS = ipmicmd
+bin_PROGRAMS = ipmicmd solterm
 
 noinst_PROGRAMS = ipmisample ipmisample2 ipmisample3
 
@@ -29,5 +29,11 @@ ipmicmd_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
 		$(top_builddir)/unix/libOpenIPMIposix.la \
 		$(OPENSSLLIBS)
 ipmicmd_LDFLAGS = -rdynamic
+
+solterm_SOURCES = solterm.c
+solterm_LDADD = $(POPTLIBS) $(top_builddir)/utils/libOpenIPMIutils.la \
+                $(top_builddir)/lib/libOpenIPMI.la \
+                $(top_builddir)/unix/libOpenIPMIposix.la \
+                $(OPENSSLLIBS)
 
 EXTRA_DIST = example_oem.c

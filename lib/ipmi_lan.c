@@ -1725,7 +1725,13 @@ lan_send_addr(lan_data_t  *lan,
     if ((addr->addr_type >= IPMI_RMCPP_ADDR_START)
 	&& (addr->addr_type <= IPMI_RMCPP_ADDR_END))
     {
-	if (lan->ip[addr_num].working_authtype != IPMI_AUTHTYPE_RMCP_PLUS)
+	/*
+	 * Let through the dodgy IPMI 1.5 Serial-over-LAN packets, but block
+	 * anything else that tries to send an RMCP+ packet to a non-RMCP+
+	 * host.
+	 */
+	if ((addr->addr_type != IPMI_RMCPP_ADDR_SOL)
+		&& (lan->ip[addr_num].working_authtype != IPMI_AUTHTYPE_RMCP_PLUS))
 	    return EINVAL;
 	payload_type = addr->addr_type - IPMI_RMCPP_ADDR_START;
     } else {
@@ -1790,6 +1796,12 @@ lan_send_addr(lan_data_t  *lan,
 			      oem_iana, oem_payload_id);
     } else {
 	rv = lan15_format_msg(lan, addr_num, &tmsg, &pos);
+	if (addr->addr_type == IPMI_RMCPP_ADDR_SOL)
+		/*
+		 * We're sending SoL over IPMI 1.5, which requires that we set
+		 * a "reserved" bit.  This is dodgy.
+		 */
+		tmsg[4] |= 0x80;
     }
     if (rv)
 	return rv;
@@ -2953,6 +2965,8 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
 				   &(lan->ip[addr_num].unauth_recv_msg_map));
     ipmi_unlock(lan->ip_lock);
     if (rv) {
+	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
+	    ipmi_log(IPMI_LOG_DEBUG, "Invalid sequence number");
 	if (lan->stat_seq_out_of_range)
 	    ipmi->add_stat(ipmi->user_data, lan->stat_seq_out_of_range, 1);
 	goto out;
@@ -3101,8 +3115,16 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
     if (rv)
 	goto out;
 
-    handle_payload(ipmi, lan, addr_num,
-		   IPMI_RMCPP_PAYLOAD_TYPE_IPMI, tmsg, data_len);
+    /*
+     * Special case for Serial-over-LAN IPMI 1.5 packets, which use the
+     * "reserved" nybble to identify the SoL payload.
+     */
+    if ((data[4] & 0xf0) == 0x80)
+	    handle_payload(ipmi, lan, addr_num,
+			   IPMI_RMCPP_PAYLOAD_TYPE_SOL, tmsg, data_len);
+    else
+	    handle_payload(ipmi, lan, addr_num,
+			   IPMI_RMCPP_PAYLOAD_TYPE_IPMI, tmsg, data_len);
 
  out:
     return;
@@ -4622,11 +4644,12 @@ auth_cap_done(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	/*
 	 * The BMC has said that it supports RMCP+/IPMI 2.0 in the extended response fields,
 	 * but has not indicated that we should USE the extended response fields!
-	 * (The SuperMicro AOC-IPMI20-E does this).
+	 * The SuperMicro AOC-IPMI20-E currently does this (April 2005), and will do so
+	 * until they provide BMC firmware that supports RMCP+.
 	 */
-	ipmi_log(IPMI_LOG_ERR_INFO,
+	ipmi_log(IPMI_LOG_WARNING,
 		"%sipmi_lan.c(auth_cap_done): "
-		"BMC is confused about whether or not it supports RMCP+.  Disabling RMCP+ support.",
+		"BMC confused about RMCP+ support. Disabling RMCP+.",
 		IPMI_CONN_NAME(lan->ipmi));
     } 
     if (lan->cparm.authtype == IPMI_AUTHTYPE_RMCP_PLUS) {

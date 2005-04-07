@@ -1,3 +1,39 @@
+2005-04-07 Corey Minyard <cminyard@mvista.com>
+
+	* OpenIPMI.spec.in: Added solterm, reorganized a little.
+
+2005-04-07 Darius Davis <darius@cyclades.com>
+
+	* sample/solterm.c, sample/Makefile.am: Added solterm sample program.
+
+2005-04-07 Darius Davis <darius@cyclades.com>
+
+	* include/OpenIPMI/ipmi_err.h: Added error codes and macros for Serial
+	over LAN support
+
+	* include/OpenIPMI/ipmi_err.h: Added prototype for ipmi_get_error_string.
+
+	* include/OpenIPMI/ipmi_lan.h: #defined IPMI_RMCPP_ADDR_SOL to provide
+	the RMCP+ address for the SoL payload.
+
+	* include/OpenIPMI/ipmi_sol.h: New file: Serial over LAN (SoL)
+	interface.
+
+	* lib/Makefile.am: Added ipmi_sol.c.
+
+	* lib/ipmi_lan.c: Added support for Serial over LAN on an IPMI 1.5
+	connection, using the most significant "reserved" bit in the AuthType
+	field.  Even on an IPMI 1.5 connection, the outgoing and incoming
+	SoL packets are treated exactly the same as packets for the SoL RMCP+
+	payload.
+
+	* lib/ipmi_sol.c: New file: Serial over LAN (SoL) support.
+
+	* lib/strings.c: Added descriptions for SoL and RMCP+ errors.
+
+	* lib/strings.c: Added ipmi_get_error_string function to generate a
+	textual description from an error code regardless of the error class.
+
 2005-03-31 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Cleaned up some minor things.

@@ -83,13 +83,8 @@ make DESTDIR=%{buildroot} install
 %{_libdir}/libOpenIPMI.la
 %{_libdir}/libOpenIPMIutils.so*
 %{_libdir}/libOpenIPMIutils.la
-%{_bindir}/ipmish
 %doc COPYING COPYING.LIB FAQ INSTALL README README.Force
 %doc README.MotorolaMXP
-%doc %{_mandir}/man1/ipmicmd.1*
-%doc %{_mandir}/man1/ipmish.1*
-%doc %{_mandir}/man7/ipmi_cmdlang.7*
-%doc %{_mandir}/man8/ipmilan.8*
 
 ###################################################
 %files perl
@@ -113,9 +108,14 @@ make DESTDIR=%{buildroot} install
 %defattr(-,root,root)
 %{_bindir}/ipmi_ui
 %{_bindir}/ipmicmd
+%{_bindir}/ipmish
+%{_bindir}/solterm
 %{_libdir}/libOpenIPMIui.so*
 %{_libdir}/libOpenIPMIui.la
 %doc %{_mandir}/man1/ipmi_ui.1*
+%doc %{_mandir}/man1/ipmicmd.1*
+%doc %{_mandir}/man1/ipmish.1*
+%doc %{_mandir}/man7/ipmi_cmdlang.7*
 
 ###################################################
 %files lanserv
@@ -124,4 +124,5 @@ make DESTDIR=%{buildroot} install
 %{_bindir}/ipmilan
 %{_libdir}/libIPMIlanserv.so*
 %{_libdir}/libIPMIlanserv.la
+%doc %{_mandir}/man8/ipmilan.8*
 

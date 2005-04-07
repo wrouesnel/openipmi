@@ -248,6 +248,8 @@ int ipmi_lan_handle_external_event(struct sockaddr *src_addr,
 #define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_3			0x14
 #define IPMI_RMCPP_PAYLOAD_TYPE_RAKP_4			0x15
 
+#define IPMI_RMCPP_ADDR_SOL (IPMI_RMCPP_ADDR_START + IPMI_RMCPP_PAYLOAD_TYPE_SOL)
+
 typedef struct ipmi_payload_s
 {
     /* Format a message for transmit on this payload.  The address and
