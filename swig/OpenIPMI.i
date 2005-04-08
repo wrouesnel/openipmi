@@ -3137,7 +3137,7 @@ int pef_str_to_parm(char *str);
 
     /*
      * Add a handler to be called when an entity is added, updated, or
-     * removed. When the entity is updated the entity_updated_cb
+     * removed. When the entity is updated the entity_update_cb
      * method on the first parameter will be called with the following
      * parameters: <self>, added|deleted|changed <domain>, <entity>.
      */

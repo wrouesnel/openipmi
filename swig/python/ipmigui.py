@@ -12,6 +12,9 @@ class IPMIGui:
         return gtk.FALSE
 
 
+    def open_domain(self, w, data):
+        print("open")
+
     def in_key_pass_group(self, event):
         if (event.state & gtk.gdk.CONTROL_MASK):
             return True
@@ -180,13 +183,14 @@ class IPMIGui:
         self.max_log_buffer_size = 1000
 
         self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-        self.window.set_size_request(200, 300)
+        self.window.set_size_request(500, 300)
         self.window.connect("key_press_event", self.key_press_handler)
         self.window.connect("delete_event", self.delete_event)
         vbox = gtk.VBox(gtk.FALSE, 1);
         self.menu_items = (
             ( "/_File",         None,           None, 0, "<Branch>" ),
             ( "/File/Quit",     "<control>Q",   gtk.main_quit, 0, None ),
+            ( "/File/Open Domain","<control>O", self.open_domain, 0, None ),
             )
         self.window.set_title("IPMI GUI")
         self.window.add(vbox);
@@ -194,14 +198,15 @@ class IPMIGui:
         menubar = self.get_main_menu(self.window);
         vbox.pack_start(menubar, gtk.FALSE, gtk.TRUE, 0)
 
-        hbox = gtk.HBox(gtk.FALSE, 1)
+        hbox = gtk.HPaned()
         vbox.pack_start(hbox, gtk.TRUE, gtk.TRUE, 0)
 
         tree = self.get_tree(self.window)
-        hbox.pack_start(tree, gtk.TRUE, gtk.TRUE, 0)
+        hbox.add1(tree)
 
         log = self.get_log(self.window)
-        hbox.pack_end(log, gtk.TRUE, gtk.TRUE, 0)
+        hbox.add2(log)
+        hbox.set_position(200)
 
         cmd = self.get_cmd(self.window)
         vbox.pack_start(cmd, gtk.TRUE, gtk.TRUE, 0)
@@ -236,28 +241,67 @@ class IPMIGui:
         return self.treestore.remove(store)
     
 
+    def add_mc(self, parent, name):
+        return self.treestore.append(parent, name)
+
+    
+    def remove_mc(self, store):
+        return self.treestore.remove(store)
+    
+
 class Entity:
     def __init__(self, domain, entity):
         self.domain = domain
+        self.entity = entity
         domain.entities[entity] = self
-        self.store = 
-        
+        self.ui = domain.ui;
+        self.store = self.ui.add_entity(domain.entity_store, [entity.get_name()])
+
+    def remove(self):
+        self.ui.remove_entity(self.store)
+        self.domain.entities.pop(self.entity)
+
+
+class MC:
+    def __init__(self, domain, mc):
+        self.domain = domain
+        self.mc = mc
+        domain.mcs[mc] = self
+        self.ui = domain.ui;
+        self.store = self.ui.add_mc(domain.mc_store, [mc.get_name()])
+
+    def remove(self):
+        self.ui.remove_mc(self.store)
+        self.domain.mcs.pop(self.mc)
+
 
 class Domain:
-    def entity_updated_cb(self, op, domain, entity):
+    def entity_update_cb(self, op, domain, entity):
+        if (op == "added"):
+            Entity(self, entity)
+        elif (op == "removed"):
+            self.entities[entity].remove()
         
+    def mc_update_cb(self, op, domain, mc):
+        if (op == "added"):
+            MC(self, mc)
+        elif (op == "removed"):
+            self.entities[mc].remove()
         
     def __init__(self, main_handler, domain):
         self.main_handler = main_handler;
         self.domain = domain;
         self.name = domain.get_name();
+        self.ui = main_handler.ui
+        domain.add_entity_update_handler(self)
+        domain.add_mc_update_handler(self)
         main_handler.domains[domain] = self
-        self.entities = { };
-        self.mcs = { };
-        self.store, self.entities, self.mcs = main_handler.ui.add_domain(self.name);
+        self.entities = { }
+        self.mcs = { }
+        self.store, self.entity_store, self.mc_store = self.ui.add_domain(self.name);
 
     def remove(self):
-        self.main_handler.ui.remove_domain(self.store);
+        self.ui.remove_domain(self.store);
         self.main_handler.domains.pop(self.domain);
         
 
