@@ -1,3 +1,8 @@
+2005-04-08 Corey Minyard <cminyard@mvista.com> 
+
+	* sample/ipmicmd.c: Make sure all error output goes to stderr and
+	only submit the command once in LAN mode.
+	
 2005-04-07 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.spec.in: Added solterm, reorganized a little.
