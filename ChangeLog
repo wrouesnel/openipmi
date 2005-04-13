@@ -1,3 +1,12 @@
+2005-04-13 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/strings.c, lib/ipmi_sol.c, sample/solterm.c: Fix compile
+	problems with older compilers.
+
+	* lib/oem_atca.c: Modify the ATCA detection to use a Get PICMG
+	Properties command instead of getting the shelf FRU info address,
+	since not all systems get the shelf FRU properly.
+
 2005-04-08 Corey Minyard <cminyard@mvista.com> 
 
 	* sample/ipmicmd.c: Make sure all error output goes to stderr and

@@ -1215,15 +1215,16 @@ ipmi_get_error_string(unsigned int err,
 			char *buffer,
 			unsigned int buf_len)
 {
+	char *temp_buffer;
+	char *err_type;
+
 	if (err == 0)
 	{
 		strncpy(buffer, "Success (No error)", buf_len);
 		return buffer;
 	}
 
-	char *temp_buffer = ipmi_mem_alloc(buf_len);
-	char *err_type;
-
+	temp_buffer = ipmi_mem_alloc(buf_len);
 	if (!temp_buffer)
 		temp_buffer = buffer;
 

@@ -2951,6 +2951,9 @@ alt_shelf_fru_cb(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     info->shelf_fru_ipmb = msg->data[3];
     info->shelf_fru_device_id = msg->data[5];
 
+    if (info->shelf_address_only_on_bmc)
+	info->shelf_fru_ipmb = 0x20;
+
     rv = ipmi_fru_alloc_notrack(domain,
 				1,
 				info->shelf_fru_ipmb,
@@ -3283,7 +3286,7 @@ atca_event_handler(ipmi_domain_t *domain,
 }
 
 static void
-set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
+set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 		   ipmi_domain_oem_check_done done, void *done_cb_data)
 {
     ipmi_system_interface_addr_t saddr;
@@ -3291,7 +3294,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     atca_shelf_t *info;
     int          rv;
 
-    if (get_addr->data_len < 8) {
+    if (get_properties->data_len < 5) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(set_up_atca_domain): "
 		 "ATCA get address response not long enough",
@@ -3342,8 +3345,6 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
     info->startup_done = done;
     info->startup_done_cb_data = done_cb_data;
     info->domain = domain;
-    info->shelf_fru_ipmb = get_addr->data[3];
-    info->shelf_fru_device_id = get_addr->data[5];
 
     /* We don't fetch the shelf FRU from the slelf FRU devices at
        first. We fetch it from the shelf manager (per the ECN 1.1
@@ -3364,6 +3365,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_addr,
 	goto out;
     }
 
+printf("****A\n");
     /* Per ECN, FRU data is on a shelf manager FRU id 254 */
     rv = ipmi_fru_alloc_notrack(domain,
 				1,
@@ -3715,21 +3717,17 @@ check_if_atca(ipmi_domain_t              *domain,
 {
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   msg;
-    unsigned char 		 data[5];
+    unsigned char 		 data[1];
 
     /* Send the ATCA Get Address Info command to get the shelf FRU info. */
     si.addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
     si.channel = 0xf;
     si.lun = 0;
     msg.netfn = IPMI_GROUP_EXTENSION_NETFN;
-    msg.cmd = IPMI_PICMG_CMD_GET_ADDRESS_INFO;
+    msg.cmd = IPMI_PICMG_CMD_GET_PROPERTIES;
     data[0] = IPMI_PICMG_GRP_EXT;
-    data[1] = 0; /* Ignored for physical address */
-    data[2] = PICMG_ADDRESS_KEY_PHYSICAL;
-    data[3] = 1; /* Look for Shelf FRU 1 */
-    data[4] = PICMG_SITE_TYPE_SHELF_FRU_INFO;
     msg.data = data;
-    msg.data_len = 5;
+    msg.data_len = 1;
 
     return ipmi_send_command_addr(domain,
 				  (ipmi_addr_t *) &si, sizeof(si),

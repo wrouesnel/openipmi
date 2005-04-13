@@ -538,11 +538,10 @@ static void stdin_data_avail(int fd, void *cb_data, os_hnd_fd_id_t *id)
 {
 	struct timeval tv;
 	char c;
+	fd_set theSet;
 
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
-
-	fd_set theSet;
 
 	FD_ZERO(&theSet);
 	FD_SET(STDIN_FILENO, &theSet);

@@ -960,13 +960,12 @@ static void dispose_of_outstanding_packet(ipmi_sol_transmitter_context_t *transm
 static int transmit_outstanding_packet(ipmi_sol_transmitter_context_t *transmitter)
 {
 	int rv;
-
-	ipmi_lock(transmitter->packet_lock);
-
 	/*
 	 * Pack the packet into a pseudo-IPMI message.
 	 */
 	ipmi_msg_t msg;
+
+	ipmi_lock(transmitter->packet_lock);
 
 	msg.netfn = 1;
 	msg.cmd = 0;
@@ -1148,11 +1147,13 @@ static void transmitter_prod(ipmi_sol_transmitter_context_t *transmitter)
  */
 static void dequeue_head(ipmi_sol_transmitter_context_t *transmitter, int error)
 {
+	ipmi_sol_outgoing_queue_item_t *qitem;
+
 	ipmi_lock(transmitter->queue_lock);
 
 	transmitter->bytes_acked_at_head = 0;
+	qitem = transmitter->outgoing_queue->head;
 
-	ipmi_sol_outgoing_queue_item_t *qitem = transmitter->outgoing_queue->head;
 	if (qitem)
 	{
 		if (qitem->transmit_complete_callback)
@@ -1215,6 +1216,9 @@ static void transmitter_handle_acknowledge(ipmi_sol_conn_t *conn, int error, int
 
 	do
 	{
+		int avail_this_pkt;
+		int this_ack;
+
 		qitem = conn->transmitter.outgoing_queue->head;
 		if (!qitem)
 		{
@@ -1239,8 +1243,8 @@ static void transmitter_handle_acknowledge(ipmi_sol_conn_t *conn, int error, int
 		 * acknowledged_char_count is zero.
 		 */
 
-		int avail_this_pkt = qitem->data_len - conn->transmitter.bytes_acked_at_head;
-		int this_ack = (avail_this_pkt < acknowledged_char_count ? avail_this_pkt : acknowledged_char_count);
+		avail_this_pkt = qitem->data_len - conn->transmitter.bytes_acked_at_head;
+		this_ack = (avail_this_pkt < acknowledged_char_count ? avail_this_pkt : acknowledged_char_count);
 
 		conn->transmitter.bytes_acked_at_head += this_ack;
 		if (conn->transmitter.bytes_acked_at_head == qitem->data_len)
