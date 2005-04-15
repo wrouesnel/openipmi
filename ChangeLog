@@ -1,3 +1,8 @@
+2005-04-14 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/ipmi_lan.c: Fix a bug with multiple IPMI connections on the
+	same FD.
+
 2005-04-13 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/strings.c, lib/ipmi_sol.c, sample/solterm.c: Fix compile

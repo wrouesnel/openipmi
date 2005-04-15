@@ -1194,7 +1194,7 @@ find_free_lan_fd(int family, lan_data_t *lan, int *slot)
 	    goto retry;
 	}
 	item->cons_in_use++;
-	item->lan[i] = lan;
+	item->lan[tslot] = lan;
 	*slot = tslot;
 
 	if (item->cons_in_use == MAX_CONS_PER_FD)
