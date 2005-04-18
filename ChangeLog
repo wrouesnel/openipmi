@@ -1,3 +1,9 @@
+2005-04-18 Corey Minyard <cminyard@mvista.com> 
+
+	* lib/sel.c: Fix a bug where deleting the last record of the SEL
+	cause the SEL fetch to not work any more on systems that support
+	individual deletes.
+
 2005-04-14 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/ipmi_lan.c: Fix a bug with multiple IPMI connections on the

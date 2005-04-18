@@ -621,6 +621,15 @@ handle_sel_data(ipmi_mc_t  *mc,
 	}
     }
     if (rsp->data[0] != 0) {
+	if (sel->curr_rec_id != 0) {
+	    /* If we get a fetch error and it is not a lost
+	       reservation, it may be that another system deleted our
+	       "current" record.  Start over from the beginning of the
+	       SEL. */
+	    sel->curr_rec_id = 0;
+	    del_event = NULL;
+	    goto start_request_sel_data;
+	}
 	if (sel->sel_fetch_errors)
 	    ipmi_domain_stat_add(sel->sel_fetch_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
@@ -731,6 +740,7 @@ handle_sel_data(ipmi_mc_t  *mc,
     }
     sel->curr_rec_id = sel->next_rec_id;
 
+ start_request_sel_data:
     /* Request some more data. */
     cmd_msg.data = cmd_data;
     cmd_msg.netfn = IPMI_STORAGE_NETFN;
@@ -1388,8 +1398,13 @@ handle_sel_check(ipmi_mc_t  *mc,
 		     sel->name, rv);
 	    sel_op_done(data, rv);
 	    goto out;
-	}
+	} else if (data->record_id == sel->curr_rec_id)
+	    /* We are deleting our "current" record (used for finding
+	       the next record), make sure we start again from
+	       scratch on the next fetch. */
+	    sel->curr_rec_id = 0;
     }
+	
 
     sel_unlock(sel);
 
