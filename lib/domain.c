@@ -3706,7 +3706,10 @@ call_con_fails(ipmi_domain_t *domain,
 {
     ipmi_lock(domain->con_lock);
     domain->connecting = 0;
-    if (domain->in_startup) {
+    if (err) {
+	/* Nothing really to do, can't start anything up, just report it. */
+	ipmi_unlock(domain->con_lock);
+    } else if (domain->in_startup) {
 	if (! locked_list_add(domains_list, domain, NULL)) {
 	    ipmi_log(IPMI_LOG_SEVERE,
 		     "%sdomain.c(sdr_handler): "

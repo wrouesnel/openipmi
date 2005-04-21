@@ -284,8 +284,12 @@ perform_one_op(os_handler_t   *os_hnd,
 	       struct timeval *timeout)
 {
     iposix_info_t *info = os_hnd->internal_data;
+    int           rv;
 
-    return sel_select(info->sel, NULL, 0, NULL, timeout);
+    rv = sel_select(info->sel, NULL, 0, NULL, timeout);
+    if (rv == -1)
+	return errno;
+    return 0;
 }
 
 static void

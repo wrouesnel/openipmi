@@ -98,6 +98,7 @@ struct poptOption poptOpts[]=
 selector_t *sel;
 os_handler_t *os_hnd;
 static ipmi_con_t *con;
+static int continue_operation = 1;
 
 /* We cobbled everything in the next section together to provide the
    things that the low-level handlers need. */
@@ -263,7 +264,7 @@ rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 {
     dump_msg_data(&rspi->msg, &rspi->addr, "response");
     if (!interactive)
-	leave(0);
+	continue_operation = 0;
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -423,7 +424,7 @@ process_input_line(char *buf)
     }
 
     if (strcmp(v, "quit") == 0) {
-	leave(0);
+	continue_operation = 0;
 	return 0;
     }
 
@@ -616,7 +617,8 @@ user_input_ready(int fd, void *data)
 	if( interactive)
 	    printf("\n"); 
     	con->close_connection(con);
-	leave(0);
+	continue_operation = 0;
+	return;
     }
     
     for (i=0; count > 0; i++, count--) {
@@ -783,7 +785,13 @@ main(int argc, char *argv[])
 	printf("=> ");
     fflush(stdout);
 
-    sel_select_loop(sel, NULL, 0, NULL);
+    while (continue_operation) {
+	rv = os_hnd->perform_one_op(os_hnd, NULL);
+	if (rv)
+	    break;
+    }
+
+    leave(rv);
 
     return rv;
 }

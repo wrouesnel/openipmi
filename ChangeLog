@@ -1,3 +1,12 @@
+2005-04-20 Corey Minyard <cminyard@mvista.com> 
+
+	* unix/posix_os_h.c, unix/posix_thread_os_hnd.c: Fix incorrect
+	return values from perform_one_op() in these os handlers.
+
+	* sample/ipmicmd.c: When performoning a non-interactive operation,
+	make sure to not exit in the message handler, because that is done
+	with the LAN object still refcounted (so it won't shut down).
+
 2005-04-18 Corey Minyard <cminyard@mvista.com> 
 
 	* lib/sel.c: Fix a bug where deleting the last record of the SEL

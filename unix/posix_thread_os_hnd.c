@@ -544,9 +544,13 @@ perform_one_op(os_handler_t   *os_hnd,
 {
     pthread_t        self = pthread_self();
     pt_os_hnd_data_t *info = os_hnd->internal_data;
+    int              rv;
 
-    return sel_select(info->sel, posix_thread_send_sig, (long) &self, info,
-		      timeout);
+    rv = sel_select(info->sel, posix_thread_send_sig, (long) &self, info,
+		    timeout);
+    if (rv == -1)
+	return errno;
+    return 0;
 }
 
 static void
