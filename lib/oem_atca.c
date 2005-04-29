@@ -293,14 +293,14 @@ check_for_msg_err(ipmi_mc_t *mc, int *rv, ipmi_msg_t *msg,
 		  char *func_name)
 {
     if (rv && *rv) {
-	ipmi_log(IPMI_LOG_SEVERE,
+	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "oem_atca.c(%s): "
 		 "Error from message", func_name);
 	return 1;
     }
 
     if (!mc) {
-	ipmi_log(IPMI_LOG_SEVERE,
+	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "oem_atca.c(%s): "
 		 "MC went away", func_name);
 	if (rv)
@@ -339,6 +339,32 @@ check_for_msg_err(ipmi_mc_t *mc, int *rv, ipmi_msg_t *msg,
     }
 
     return 0;
+}
+
+static atca_ipmc_t *
+atca_find_minfo_from_ipmb(unsigned int ipmb_addr, atca_shelf_t *info)
+{
+    atca_ipmc_t *minfo = NULL;
+    int         i;
+
+    if (ipmb_addr == 0x20)
+	/* We ignore the floating IPMB address if it comes up. */
+	return NULL;
+
+    for (i=0; i<info->num_ipmcs; i++) {
+	if (ipmb_addr == info->ipmcs[i].ipmb_address) {
+	    minfo = &(info->ipmcs[i]);
+	    break;
+	}
+    }
+
+    return minfo;
+}
+
+static atca_ipmc_t *
+atca_find_minfo_from_mc(ipmi_mc_t *mc, atca_shelf_t *info)
+{
+    return atca_find_minfo_from_ipmb(ipmi_mc_get_address(mc), info);
 }
 
 
@@ -862,6 +888,18 @@ fetched_hot_swap_state(ipmi_sensor_t *sensor,
     return;
 }
 
+static void
+atca_event_scan_mc_done(ipmi_domain_t *domain, int err, void *cb_data)
+{
+    ipmi_entity_t *entity = cb_data;
+
+    if (!entity)
+	return;
+
+    ipmi_detect_entity_presence_change(entity, 1);
+    _ipmi_entity_put(entity);
+}
+
 static int
 hot_swap_state_changed(ipmi_sensor_t         *sensor,
 		       enum ipmi_event_dir_e dir,
@@ -874,6 +912,7 @@ hot_swap_state_changed(ipmi_sensor_t         *sensor,
     atca_fru_t                *finfo = cb_data;
     enum ipmi_hot_swap_states old_state;
     int                       handled = IPMI_EVENT_NOT_HANDLED;
+    ipmi_entity_t             *entity;
 
     /* We only want assertions. */
     if (dir != IPMI_ASSERTION)
@@ -883,14 +922,28 @@ hot_swap_state_changed(ipmi_sensor_t         *sensor,
 	/* eh? */
 	return handled;
 
+    entity = ipmi_sensor_get_entity(sensor);
+
     /* The OpenIPMI hot-swap states map directly to the ATCA ones. */
     old_state = finfo->hs_state;
     finfo->hs_state = offset;
-    ipmi_entity_call_hot_swap_handlers(ipmi_sensor_get_entity(sensor),
+    ipmi_entity_call_hot_swap_handlers(entity,
 				       old_state,
 				       finfo->hs_state,
 				       &event,
 				       &handled);
+    if (finfo->hs_state == IPMI_HOT_SWAP_NOT_PRESENT) {
+	/* The new state is not present, scan the mc to clear it out. */
+	unsigned char ipmb_addr = finfo->minfo->ipmb_address;
+	int           rv;
+
+	_ipmi_entity_get(entity);
+	rv = ipmi_start_ipmb_mc_scan(ipmi_entity_get_domain(entity),
+				     0, ipmb_addr, ipmb_addr,
+				     atca_event_scan_mc_done, entity);
+	if (rv)
+	    _ipmi_entity_put(entity);
+    }
 
     return handled;
 }
@@ -2629,24 +2682,12 @@ atca_con_up(ipmi_domain_t *domain, void *cb_data)
 static void
 atca_handle_new_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, atca_shelf_t *info)
 {
-    atca_ipmc_t   *minfo = NULL;
     ipmi_msg_t    msg;
     unsigned char data[1];
     int           rv;
-    int           i;
-    unsigned int  ipmb_addr;
+    atca_ipmc_t   *minfo;
 
-    ipmb_addr = ipmi_mc_get_address(mc);
-    if (ipmb_addr == 0x20)
-	/* We ignore the floating IPMB address if it comes up. */
-	return;
-
-    for (i=0; i<info->num_ipmcs; i++) {
-	if (ipmb_addr == info->ipmcs[i].ipmb_address) {
-	    minfo = &(info->ipmcs[i]);
-	    break;
-	}
-    }
+    minfo = atca_find_minfo_from_mc(mc, info);
     if (!minfo) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%soem_atca.c(atca_handle_new_mc): "
@@ -3273,16 +3314,16 @@ atca_event_handler(ipmi_domain_t *domain,
 	/* Not a hot-swap event. */
 	return;
 
-    if (((data[10] & 0xf) == 0) || ((data[11] & 0xf) != 0))
-	/* We only scan if the current or previous state was not
-	   installed. */
+    if (ipmi_event_is_old(event))
+	/* It's an old event, ignore it. */
 	return;
 
-    /* We have a hot-swap event where the previous state was not
-       installed or the current state is not installed.  Scan the
-       MC. */
-    ipmi_start_ipmb_mc_scan(domain, data[5] & 0xf, data[4], data[4],
-			    NULL, 0);
+    if ((data[11] & 0xf) == 0) {
+	/* We have a hot-swap event where the previous state was not
+	   installed.  Scan the MC to make it appear. */
+	ipmi_start_ipmb_mc_scan(domain, (data[5] >> 4) & 0xf,
+				data[4], data[4], NULL, NULL);
+    }
 }
 
 static void
@@ -3346,7 +3387,7 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
     info->startup_done_cb_data = done_cb_data;
     info->domain = domain;
 
-    /* We don't fetch the shelf FRU from the slelf FRU devices at
+    /* We don't fetch the shelf FRU from the shelf FRU devices at
        first. We fetch it from the shelf manager (per the ECN 1.1
        spec, it's at 0xfe on the shelf manager).  If that fails, we go
        onto shelf FRUs. */
@@ -3365,7 +3406,6 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 	goto out;
     }
 
-printf("****A\n");
     /* Per ECN, FRU data is on a shelf manager FRU id 254 */
     rv = ipmi_fru_alloc_notrack(domain,
 				1,

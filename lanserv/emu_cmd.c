@@ -569,6 +569,34 @@ mc_add(emu_data_t *emu, lmc_data_t *mc, char **toks)
 }
 
 static int
+mc_setchan(emu_data_t *emu, lmc_data_t *mc, char **toks)
+{
+    unsigned char channel;
+    unsigned char medium_type;
+    unsigned char protocol_type;
+    unsigned char session_support;
+    int           rv;
+
+    rv = get_uchar(toks, &channel, "Channel Number", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &medium_type, "Medium Type", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &protocol_type, "Protocol Type", 0);
+    if (rv)
+	return rv;
+    rv = get_uchar(toks, &session_support, "Session Support", 0);
+    if (rv)
+	return rv;
+    rv = ipmi_emu_set_mc_channel(mc, channel, medium_type, protocol_type,
+				 session_support);
+    if (rv)
+	printf("**Unable to set up channel, error 0x%x\n", rv);
+    return rv;
+}
+
+static int
 mc_delete(emu_data_t *emu, lmc_data_t *mc, char **toks)
 {
     ipmi_mc_destroy(mc);
@@ -806,6 +834,7 @@ static struct {
     { "mc_disable",	MC,		mc_disable },
     { "mc_enable",	MC,		mc_enable },
     { "mc_setbmc",      NOMC,		mc_setbmc },
+    { "mc_setchan",	MC,		mc_setchan },
     { "atca_enable",    NOMC,	        atca_enable },
     { "atca_set_site",	NOMC,		atca_set_site },
     { "read_cmds",	NOMC,		read_cmds },

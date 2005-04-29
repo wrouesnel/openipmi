@@ -67,6 +67,9 @@ int ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
 			int             sensor,
 			ipmi_sdr_info_t **new_sdrs);
 
+/* Remove all the SDRs, but don't destroy the SDR repository. */
+void ipmi_sdr_clean_out_sdrs(ipmi_sdr_info_t *sdrs);
+
 /* Destroy an SDR.  Note that if the SDR is currently fetching SDRs,
    the destroy cannot complete immediatly, it will be marked for
    destruction later.  You can supply a callback that, if not NULL,

@@ -1536,49 +1536,6 @@ presence_bit_sensor_changed(ipmi_sensor_t         *sensor,
     return IPMI_EVENT_NOT_HANDLED;
 }
 
-static void
-states_read(ipmi_sensor_t *sensor,
-	    int           err,
-	    ipmi_states_t *states,
-	    void          *cb_data)
-{
-    int           present;
-    ipmi_entity_t *ent = cb_data;
-    int           val;
-    int           rv;
-
-    if (err)
-	return;
-
-    rv = ipmi_sensor_discrete_event_readable(sensor, 0, &val);
-    if (rv || !val)
-	/* The present bit is not supported, so use the not present bit. */
-	present = ! ipmi_is_state_set(states, 1);
-    else
-	/* The present bit is supported. */
-	present = ipmi_is_state_set(states, 0);
-
-    presence_changed(ent, present, NULL);
-    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
-}
-
-static void
-states_bit_read(ipmi_sensor_t *sensor,
-		int           err,
-		ipmi_states_t *states,
-		void          *cb_data)
-{
-    int           present;
-    ipmi_entity_t *ent = cb_data;
-
-    if (err)
-	return;
-
-    present = ipmi_is_state_set(states, ent->presence_bit_offset);
-    presence_changed(ent, present, NULL);
-    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
-}
-
 typedef struct ent_detect_info_s
 {
     int force;
@@ -1983,11 +1940,95 @@ try_presence_sensors(ipmi_entity_t *ent, ent_active_detect_t *info)
 }
 
 static void
+detect_no_presence_sensor_presence(ipmi_entity_t *ent)
+{
+    ent_active_detect_t *detect;
+    int                 rv;
+
+    detect = ipmi_mem_alloc(sizeof(*detect));
+    if (!detect) {
+	_ipmi_put_domain_fully_up(ent->domain);
+	return;
+    }
+    rv = ipmi_create_lock(ent->domain, &detect->lock);
+    if (rv) {
+	_ipmi_put_domain_fully_up(ent->domain);
+	ipmi_mem_free(detect);
+	return;
+    }
+
+    detect->start_presence_event_count = ent->presence_event_count;
+    detect->ent_id = ipmi_entity_convert_to_id(ent);
+    detect->present = 0;
+    ipmi_lock(detect->lock);
+
+    /* The successful one below will unlock the lock and free detect. */
+    if (! try_presence_sensors(ent, detect)) {
+	/* Success with sensors, nothing to do */
+    } else if (! try_presence_controls(ent, detect)) {
+	/* Note that controls are not technically part of the spec,
+	   but since we have them we use them for presence
+	   detection. */
+	/* Success with controls, nothing to do */
+    } else if (! try_presence_children(ent, detect)) {
+	/* Success with children, nothing to do */
+    } else {
+	try_presence_frudev(ent, detect);
+    }
+}
+
+static void
+states_read(ipmi_sensor_t *sensor,
+	    int           err,
+	    ipmi_states_t *states,
+	    void          *cb_data)
+{
+    int           present;
+    ipmi_entity_t *ent = cb_data;
+    int           val;
+    int           rv;
+
+    if (err) {
+	detect_no_presence_sensor_presence(ent);
+	return;
+    }
+
+    rv = ipmi_sensor_discrete_event_readable(sensor, 0, &val);
+    if (rv || !val)
+	/* The present bit is not supported, so use the not present bit. */
+	present = ! ipmi_is_state_set(states, 1);
+    else
+	/* The present bit is supported. */
+	present = ipmi_is_state_set(states, 0);
+
+    presence_changed(ent, present, NULL);
+    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
+}
+
+static void
+states_bit_read(ipmi_sensor_t *sensor,
+		int           err,
+		ipmi_states_t *states,
+		void          *cb_data)
+{
+    int           present;
+    ipmi_entity_t *ent = cb_data;
+
+    if (err) {
+	detect_no_presence_sensor_presence(ent);
+	return;
+    }
+
+    present = ipmi_is_state_set(states, ent->presence_bit_offset);
+    presence_changed(ent, present, NULL);
+    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
+}
+
+static void
 ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 {
     ent_detect_info_t   *info = cb_data;
     int                 rv;
-    ent_active_detect_t *detect;
 
     if ((!info->force) && (! ent->presence_possibly_changed))
 	return;
@@ -2010,36 +2051,7 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
 	if (rv)
 	    _ipmi_put_domain_fully_up(ent->domain);
     } else {
-	detect = ipmi_mem_alloc(sizeof(*detect));
-	if (!detect) {
-	    _ipmi_put_domain_fully_up(ent->domain);
-	    return;
-	}
-	rv = ipmi_create_lock(ent->domain, &detect->lock);
-	if (rv) {
-	    _ipmi_put_domain_fully_up(ent->domain);
-	    ipmi_mem_free(detect);
-	    return;
-	}
-
-	detect->start_presence_event_count = ent->presence_event_count;
-    	detect->ent_id = ipmi_entity_convert_to_id(ent);
-	detect->present = 0;
-	ipmi_lock(detect->lock);
-
-	/* The successful one below will unlock the lock and free detect. */
-	if (! try_presence_sensors(ent, detect)) {
-	    /* Success with sensors, nothing to do */
-	} else if (! try_presence_controls(ent, detect)) {
-	    /* Note that controls are not technically part of the spec,
-	       but since we have them we use them for presence
-	       detection. */
-	    /* Success with controls, nothing to do */
-	} else if (! try_presence_children(ent, detect)) {
-	    /* Success with children, nothing to do */
-	} else {
-	    try_presence_frudev(ent, detect);
-	}
+	detect_no_presence_sensor_presence(ent);
     }
 }
 
@@ -3776,6 +3788,7 @@ ipmi_sdr_entity_destroy(void *info)
 		}
 	    }
 	}
+	ipmi_detect_entity_presence_change(ent, 0);
 	_ipmi_entity_put(ent);
     }
 

@@ -7625,7 +7625,6 @@ mxp_event_handler(ipmi_mc_t    *mc,
     ipmi_mcid_t     mc_id = ipmi_mc_convert_to_id(mc);
     int             rv;
     mc_event_info_t einfo;
-    unsigned long   timestamp;
     amc_info_t      *ainfo = cb_data;
     unsigned int    etype = ipmi_event_get_type(event);
 
@@ -7638,9 +7637,7 @@ mxp_event_handler(ipmi_mc_t    *mc,
 	/* Not a 1.5 event version or an MXP event */
 	return 0;
 
-    timestamp = ipmi_get_uint32(&(einfo.data[0]));
-
-    if (timestamp < ipmi_mc_get_startup_SEL_time(mc))
+    if (ipmi_event_is_old(event))
 	/* It's an old event, ignore it. */
 	return 0;
 

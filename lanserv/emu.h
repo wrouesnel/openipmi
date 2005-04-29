@@ -16,6 +16,7 @@ void *ipmi_emu_get_user_data(emu_data_t *emu);
 void ipmi_emu_sleep(emu_data_t *emu, struct timeval *time);
 
 void ipmi_emu_handle_msg(emu_data_t     *emu,
+			 unsigned char  chan,
 			 unsigned char  lun,
 			 ipmi_msg_t     *msg,
 			 unsigned char  *rdata,
@@ -39,6 +40,12 @@ void ipmi_mc_disable(lmc_data_t *mc);
 void ipmi_mc_enable(lmc_data_t *mc);
 
 int ipmi_emu_set_bmc_mc(emu_data_t *emu, unsigned char ipmb);
+
+int ipmi_emu_set_mc_channel(lmc_data_t    *mc,
+			    unsigned char channel,
+			    unsigned char medium_type,
+			    unsigned char protocol_type,
+			    unsigned char session_support);
 
 int ipmi_emu_get_mc_by_addr(emu_data_t    *emu,
 			    unsigned char ipmb,

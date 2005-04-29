@@ -251,7 +251,8 @@ _ipmi_sensor_put(ipmi_sensor_t *sensor)
 	    _ipmi_domain_entity_lock(sensor->domain);
 	}
 	if (sensor->destroyed
-	    && (!opq_stuff_in_progress(sensor->waitq)))
+	    && (!sensor->waitq
+		|| (!opq_stuff_in_progress(sensor->waitq))))
 	{
 	    _ipmi_domain_entity_unlock(domain);
 	    sensor_final_destroy(sensor);
@@ -559,9 +560,14 @@ ipmi_sensor_opq_done(ipmi_sensor_t *sensor)
 	return;
 
     /* This gets called on ECANCELLED error cases, if the sensor is
-       already destroyed there is nothing to do. */
-    if (sensor->destroyed)
+       already we need to clear out the opq. */
+    if (sensor->destroyed) {
+	if (sensor->waitq) {
+	    opq_destroy(sensor->waitq);
+	    sensor->waitq = NULL;
+	}
 	return;
+    }
 
     /* No check for the sensor lock.  It will sometimes fail at
        destruction time. */
@@ -588,13 +594,22 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
     ipmi_sensor_t         *sensor = info->__sensor;
 
     if (sensor->destroyed) {
-	if (info->__rsp_handler)
-	    info->__rsp_handler(sensor, ECANCELED, NULL, info->__cb_data);
+	ipmi_entity_t *entity = NULL;
 
 	_ipmi_domain_entity_lock(sensor->domain);
 	sensor->usecount++;
 	_ipmi_domain_entity_unlock(sensor->domain);
+
+	rv = _ipmi_entity_get(sensor->entity);
+	if (! rv)
+	    entity = sensor->entity;
+
+	if (info->__rsp_handler)
+	    info->__rsp_handler(sensor, ECANCELED, NULL, info->__cb_data);
+
 	_ipmi_sensor_put(sensor);
+	if (entity)
+	    _ipmi_entity_put(entity);
 	return;
     }
 
@@ -874,6 +889,7 @@ ipmi_sensor_add_nonstandard(ipmi_mc_t              *mc,
 static void
 sensor_final_destroy(ipmi_sensor_t *sensor)
 {
+    _ipmi_entity_get(sensor->entity);
     _ipmi_entity_call_sensor_handlers(sensor->entity, sensor, IPMI_DELETED);
 
     sensor->mc = NULL;
@@ -893,6 +909,7 @@ sensor_final_destroy(ipmi_sensor_t *sensor)
     if (sensor->entity)
 	ipmi_entity_remove_sensor(sensor->entity, sensor);
 
+    _ipmi_entity_put(sensor->entity);
     ipmi_mem_free(sensor);
 }
 

@@ -353,12 +353,16 @@ chassis_power_get(ipmi_control_t      *control,
 }
 
 static void
-chassis_mc_control_removal_handler(ipmi_domain_t *domain,
-				   ipmi_mc_t     *mc,
-				   void          *cb_data)
+chassis_mc_control_active_handler(ipmi_mc_t *mc,
+				  int       active,
+				  void      *cb_data)
 {
     ipmi_control_t *control = cb_data;
     ipmi_entity_t  *entity = ipmi_control_get_entity(control);
+    ipmi_domain_t  *domain = ipmi_mc_get_domain(mc);
+
+    if (active)
+	return;
 
     _ipmi_domain_entity_lock(domain);
     _ipmi_entity_get(entity);
@@ -421,9 +425,9 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 	goto out;
     }
 
-    rv = ipmi_mc_add_oem_removed_handler(mc,
-					 chassis_mc_control_removal_handler,
-					 power_control);
+    rv = ipmi_mc_add_active_handler(mc,
+				    chassis_mc_control_active_handler,
+				    power_control);
     if (rv) {
 	ipmi_control_destroy(power_control);
 	goto out;
@@ -458,9 +462,9 @@ _ipmi_chassis_create_controls(ipmi_mc_t *mc)
 	goto out;
     }
 
-    rv = ipmi_mc_add_oem_removed_handler(mc,
-					 chassis_mc_control_removal_handler,
-					 reset_control);
+    rv = ipmi_mc_add_active_handler(mc,
+				    chassis_mc_control_active_handler,
+				    reset_control);
     if (rv) {
 	ipmi_control_destroy(reset_control);
 	goto out;

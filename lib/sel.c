@@ -654,6 +654,17 @@ handle_sel_data(ipmi_mc_t  *mc,
 				 timestamp,
 				 rsp->data+6,
 				 13);
+    if (!del_event) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssel.c(handle_sel_data): "
+		 "Could not allocate event for SEL",
+		 sel->name);
+	fetch_complete(sel, ENOMEM);
+	goto out;
+    }
+
+    if ((timestamp > 0) && (timestamp < ipmi_mc_get_startup_SEL_time(mc)))
+	ipmi_event_set_is_old(del_event, 1);
 
     holder = find_event(sel->events, record_id);
     if (!holder) {

@@ -449,6 +449,12 @@ ipmi_sdr_info_alloc(ipmi_domain_t   *domain,
     return rv;
 }
 
+void
+ipmi_sdr_set_mc(ipmi_sdr_info_t *sdrs, ipmi_mc_t *mc)
+{
+    sdrs->mc = ipmi_mc_convert_to_id(mc);
+}
+
 static void
 internal_destroy_sdr_info(ipmi_sdr_info_t *sdrs)
 {
@@ -480,6 +486,16 @@ internal_destroy_sdr_info(ipmi_sdr_info_t *sdrs)
     if (sdrs->sdrs)
 	ipmi_mem_free(sdrs->sdrs);
     ipmi_mem_free(sdrs);
+}
+
+void
+ipmi_sdr_clean_out_sdrs(ipmi_sdr_info_t *sdrs)
+{
+    if (sdrs->sdrs)
+	ipmi_mem_free(sdrs->sdrs);
+    sdrs->sdrs = NULL;
+    sdrs->dynamic_population = 1;
+    sdrs->fetched = 0;
 }
 
 int

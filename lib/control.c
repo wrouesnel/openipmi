@@ -170,7 +170,8 @@ _ipmi_control_put(ipmi_control_t *control)
 	    _ipmi_domain_entity_lock(control->domain);
 	}
 	if (control->destroyed
-	    && (!opq_stuff_in_progress(control->waitq)))
+	    && (!control->waitq
+		|| (!opq_stuff_in_progress(control->waitq))))
 	{
 	    _ipmi_domain_entity_unlock(control->domain);
 	    control_final_destroy(control);
@@ -369,6 +370,7 @@ ipmi_control_find_id(ipmi_domain_id_t domain_id,
 static void
 control_final_destroy(ipmi_control_t *control)
 {
+    _ipmi_entity_get(control->entity);
     _ipmi_entity_call_control_handlers(control->entity, control, IPMI_DELETED);
 
     control->mc = NULL;
@@ -389,6 +391,7 @@ control_final_destroy(ipmi_control_t *control)
     if (control->entity)
 	ipmi_entity_remove_control(control->entity, control);
 
+    _ipmi_entity_put(control->entity);
     ipmi_mem_free(control);
 }
 
@@ -514,6 +517,16 @@ ipmi_control_opq_done(ipmi_control_t *control)
     if (!control)
 	return;
 
+     /* This gets called on ECANCELLED error cases, if the sensor is
+	already we need to clear out the opq. */
+    if (control->destroyed) {
+	if (control->waitq) {
+	    opq_destroy(control->waitq);
+	    control->waitq = NULL;
+	}
+ 	return;
+    }
+
     /* No check for the lock.  It will sometimes fail at destruction
        time. */
 
@@ -539,6 +552,16 @@ control_rsp_handler(ipmi_mc_t  *mc,
     ipmi_control_t         *control = info->__control;
 
     if (control->destroyed) {
+	ipmi_entity_t *entity = NULL;
+
+	_ipmi_domain_entity_lock(control->domain);
+	control->usecount++;
+	_ipmi_domain_entity_unlock(control->domain);
+
+	rv = _ipmi_entity_get(control->entity);
+	if (! rv)
+	    entity = control->entity;
+
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%scontrol.c(control_rsp_handler): "
 		 "Control was destroyed while an operation was in progress",
@@ -546,10 +569,9 @@ control_rsp_handler(ipmi_mc_t  *mc,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(control, ECANCELED, NULL, info->__cb_data);
 
-	_ipmi_domain_entity_lock(control->domain);
-	control->usecount++;
-	_ipmi_domain_entity_unlock(control->domain);
 	_ipmi_control_put(control);
+	if (entity)
+	    _ipmi_entity_put(entity);
 	return;
     }
 

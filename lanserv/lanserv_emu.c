@@ -135,7 +135,8 @@ smi_send(lan_data_t *lan, msg_t *msg)
     imsg.data = msg->data;
     imsg.data_len = msg->len;
 
-    ipmi_emu_handle_msg(emu, msg->rs_lun, &imsg, data, &data_len);
+    /* LAN is defined to be channel 1. */
+    ipmi_emu_handle_msg(emu, 1, msg->rs_lun, &imsg, data, &data_len);
 
     ipmi_handle_smi_rsp(lan, msg, data, data_len);
     return 0;
@@ -403,7 +404,7 @@ handle_user_char(char c)
     default:
 	if (pos >= sizeof(buffer)-1) {
 	    printf("\nCommand is too long, max of %d characters\n",
-		   sizeof(buffer)-1);
+		   (int) sizeof(buffer)-1);
 	} else {
 	    buffer[pos] = c;
 	    pos++;

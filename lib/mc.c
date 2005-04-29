@@ -514,6 +514,9 @@ cleanup_mc(ipmi_mc_t *mc)
 	mc->entities_in_my_sdr = NULL;
     }
 
+    if (mc->sdrs)
+	ipmi_sdr_clean_out_sdrs(mc->sdrs);
+
     /* Make sure the timer stops. */
     if (mc->sel_timer_info) {
 	if (mc->sel_timer_info->timer_running) {
@@ -1793,7 +1796,8 @@ got_guid(ipmi_mc_t  *mc,
     }
 
     if (((mc->devid.provides_device_sdrs) || (mc->treat_main_as_device_sdrs))
-	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc))) {
+	&& ipmi_option_SDRs(ipmi_mc_get_domain(mc)))
+    {
 	rv = ipmi_mc_reread_sensors(mc, sensors_reread, NULL);
 	if (rv)
 	    sensors_reread(mc, 0, NULL);
@@ -1818,8 +1822,13 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 
     if (mc->devid.chassis_support && (ipmi_mc_get_address(mc) == 0x20)) {
         rv = _ipmi_chassis_create_controls(mc);
-	if (rv)
+	if (rv) {
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%smc.c(ipmi_mc_setup_new): "
+		     "Unable to create chassis controls.",
+		     mc->name);
 	    return rv;
+	}
     }
 
     /* FIXME - handle errors setting up OEM comain information. */
@@ -1831,9 +1840,13 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
 
     _ipmi_get_domain_fully_up(mc->domain);
     rv = ipmi_mc_send_command(mc, 0, &msg, got_guid, NULL);
-    if (rv)
+    if (rv) {
 	_ipmi_put_domain_fully_up(mc->domain);
-
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%smc.c(ipmi_mc_setup_new): "
+		 "Unable to send get guid command.",
+		 mc->name);
+    }
     return rv;
 }
 

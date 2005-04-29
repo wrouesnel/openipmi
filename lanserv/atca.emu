@@ -5,6 +5,8 @@ atca_enable
 # Entity id 0xf0 1
 mc_add 20 0 1 23 9 8 1f 1291 f02
 mc_setbmc 20
+mc_setchan 20 0 1 1 0
+mc_setchan 20 1 4 1 2
 main_sdr_add 20 00 00 51 12 0f 20 00 00 1f 00 00 00 f0 1 0 c4 'T 'e 's 't
 sel_enable 20 100 0b
 mc_add_fru_data 20 0 400 \
@@ -124,8 +126,8 @@ mc_enable 12
 # Add a board in site 1 (0x82)
 # Entity id 0xa0 60
 mc_add 82 0 1 19 4 3 29 1291 f04
-main_sdr_add 20 00 00 51 12 12 \
-	     82 00 00 29 00 00 00 a0 60 0 c6 'B 'o 'a 'r 'd '1
+#main_sdr_add 20 00 00 51 12 12 \
+#	     82 00 00 29 00 00 00 a0 60 0 c6 'B 'o 'a 'r 'd '1
 atca_set_site 41 0 1
 mc_add_fru_data 82 0 400 \
 		01 00 01 03 00 00 00 fb \
@@ -144,6 +146,9 @@ sensor_add 82 0 0 f0 6f
 sensor_set_event_support 82 0 0 1 1 0 \
 	000000011111111 000000000000000 000000011111111 000000000000000
 sensor_set_bit_clr_rest 82 0 0 1 1
+device_sdr_add 82 0 \
+	       00 00 51 12 12 \
+	       82 00 00 29 00 00 00 a0 60 0 c6 'B 'o 'a 'r 'd '1
 device_sdr_add 82 0 \
 	       00 00 51 02 22 \
 	       82 00 00 a0 60 ff c0 f0 6f ff 00 ff 00 ff 00 00 \

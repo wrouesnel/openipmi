@@ -1,4 +1,42 @@
-2005-04-20 Corey Minyard <cminyard@mvista.com> 
+2005-04-27 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_sdr.h, lib/sdr.c: Added the ability
+	to clear out and SDR like it has never been fetched.
+
+	* include/OpenIPMI/internal/ipmi_event.h, lib/event.c, lib/sel.c:
+	Added setting if the event is old into the event itself.
+
+	* lib/oem_atca.c, lib/oem_motorola_mxp.c, lib/domain.c: Use the
+	old event info in the event itself to reject old events.
+	
+	* lanserv/README.emulator: Added channel info fetching.
+	* lanserv/atca.emu: ditto
+	* lanserv/emu.c: ditto
+	* lanserv/emu.h: ditto
+	* lanserv/emu_cmd.c: ditto
+	* lanserv/lanserv_emu.c: ditto
+
+	* lib/chassis.c: Tie into the MC going inactive to remove the
+	chassis controls.
+
+	* lib/control.c: Fix handling of shutdown when destroyed to clear
+	out the waitq when the control does an opq done and the control is
+	destroyed.  Also fix some refcount problems on some error
+	situations.
+	* lib/sensor.c: Ditto, but for sensors.
+
+	* lib/mc.c: Make sure the clear out the SDR repository to an
+	intial state when the MC goes inactive.  Also add some useful
+	error messages.
+
+	* lib/oem_atca.c: Fix the detection of going to or from not
+	installed state to be correct.
+
+	* lib/entity.c: Fixed a problem where if a presence sensor got an
+	error on a reading, it would not continue to try other presence
+	methods.
+
+2005-04-20 Corey Minyard <cminyard@mvista.com>
 
 	* unix/posix_os_h.c, unix/posix_thread_os_hnd.c: Fix incorrect
 	return values from perform_one_op() in these os handlers.
@@ -7,7 +45,7 @@
 	make sure to not exit in the message handler, because that is done
 	with the LAN object still refcounted (so it won't shut down).
 
-2005-04-18 Corey Minyard <cminyard@mvista.com> 
+2005-04-18 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sel.c: Fix a bug where deleting the last record of the SEL
 	cause the SEL fetch to not work any more on systems that support

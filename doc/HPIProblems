@@ -105,3 +105,9 @@
   and events should just be delivered to the application.
 
 11. There is no "physical slot" indicator in HPI.
+
+12. There is no concept of "out of communication" in HPI
+
+  You may loose connectivity to a system, but there is no way to represent
+  this in HPI.  Thus software using it may make bad decisions based upon
+  errors received.

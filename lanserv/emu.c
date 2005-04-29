@@ -170,6 +170,14 @@ typedef struct led_data_s
     unsigned char def_override_color;
 } led_data_t;
 
+#define IPMI_MAX_CHANNELS 8
+typedef struct lmc_channel_info_s
+{
+    unsigned char medium_type;
+    unsigned char protocol_type;
+    unsigned char session_support;
+} lmc_channel_info_t;
+
 struct lmc_data_s
 {
     emu_data_t *emu;
@@ -187,6 +195,8 @@ struct lmc_data_s
     unsigned char device_support;  /* byte 7 */
     unsigned char mfg_id[3];	   /* bytes 8-10 */
     unsigned char product_id[2];   /* bytes 11-12 */
+
+    lmc_channel_info_t chans[IPMI_MAX_CHANNELS];
 
     sel_t sel;
 
@@ -1717,7 +1727,52 @@ handle_get_device_id(lmc_data_t    *mc,
 }
 
 static void
+handle_get_channel_info(lmc_data_t    *mc,
+			unsigned char chan,
+			ipmi_msg_t    *msg,
+			unsigned char *rdata,
+			unsigned int  *rdata_len)
+{
+    unsigned char lchan;
+
+    if (msg->data_len < 1) {
+	rdata[0] = IPMI_REQUEST_DATA_LENGTH_INVALID_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    lchan = msg->data[0];
+    if (lchan == 0xe)
+	lchan = chan;
+    else if (lchan >= IPMI_MAX_CHANNELS) {
+	rdata[0] = IPMI_INVALID_DATA_FIELD_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    if (! mc->chans[lchan].medium_type) {
+	rdata[0] = IPMI_NOT_PRESENT_CC;
+	*rdata_len = 1;
+	return;
+    }
+
+    rdata[0] = 0;
+    rdata[1] = lchan;
+    rdata[2] = mc->chans[lchan].medium_type;
+    rdata[3] = mc->chans[lchan].protocol_type;
+    /* FIXME - no handling of active sessions */
+    rdata[4] = mc->chans[lchan].session_support << 6;
+    rdata[5] = 0xf2;
+    rdata[6] = 0x1b;
+    rdata[7] = 0x00;
+    rdata[8] = 0x00;
+    rdata[9] = 0x00;
+    *rdata_len = 10;
+}
+
+static void
 handle_app_netfn(lmc_data_t    *mc,
+		 unsigned char chan,
 		 unsigned char lun,
 		 ipmi_msg_t    *msg,
 		 unsigned char *rdata,
@@ -1726,6 +1781,10 @@ handle_app_netfn(lmc_data_t    *mc,
     switch(msg->cmd) {
     case IPMI_GET_DEVICE_ID_CMD:
 	handle_get_device_id(mc, msg, rdata, rdata_len);
+	break;
+
+    case IPMI_GET_CHANNEL_INFO_CMD:
+	handle_get_channel_info(mc, chan, msg, rdata, rdata_len);
 	break;
 
     default:
@@ -3528,6 +3587,7 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 
 void
 ipmi_emu_handle_msg(emu_data_t     *emu,
+		    unsigned char  chan,
 		    unsigned char  lun,
 		    ipmi_msg_t     *msg,
 		    unsigned char  *rdata,
@@ -3578,6 +3638,7 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 	smsg.data_len = data_len - 7; /* Subtract off the header and
 					 the end checksum */
 	msg = &smsg;
+	chan = 0; /* IPMB channel is 0 */
     } else {
 	mc = emu->ipmb[emu->bmc_mc >> 1];
 	if (!mc || !mc->enabled) {
@@ -3589,7 +3650,7 @@ ipmi_emu_handle_msg(emu_data_t     *emu,
 
     switch (msg->netfn) {
     case IPMI_APP_NETFN:
-	handle_app_netfn(mc, lun, msg, rdata, rdata_len);
+	handle_app_netfn(mc, chan, lun, msg, rdata, rdata_len);
 	break;
 
     case IPMI_SENSOR_EVENT_NETFN:
@@ -3668,6 +3729,21 @@ ipmi_mc_destroy(lmc_data_t *mc)
 	entry = n_entry;
     }
     free(mc);
+}
+
+int
+ipmi_emu_set_mc_channel(lmc_data_t    *mc,
+			unsigned char channel,
+			unsigned char medium_type,
+			unsigned char protocol_type,
+			unsigned char session_support)
+{
+    if (channel >= IPMI_MAX_CHANNELS)
+	return EINVAL;
+    mc->chans[channel].medium_type = medium_type;
+    mc->chans[channel].protocol_type = protocol_type;
+    mc->chans[channel].session_support = session_support & 0x3;
+    return 0;
 }
 
 void

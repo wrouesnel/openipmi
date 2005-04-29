@@ -2652,10 +2652,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 
     /* It's a system event record from an MC, and the timestamp is
        later than our startup timestamp. */
-    if ((type == 0x02)
-	&& (timestamp != -1)
-	&& (timestamp >= ipmi_mc_get_startup_SEL_time(ev_mc)))
-    {
+    if ((type == 0x02) && !ipmi_event_is_old(event)) {
 	/* It's a standard IPMI event. */
 	ipmi_mc_t           *mc;
 	ipmi_ipmb_addr_t    addr;

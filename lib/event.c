@@ -50,6 +50,7 @@ struct ipmi_event_s
     unsigned int  type;
     ipmi_time_t   timestamp;
     unsigned int  data_len;
+    unsigned char old;
     unsigned char data[0];
 };
 
@@ -76,6 +77,7 @@ ipmi_event_alloc(ipmi_mcid_t   mcid,
     rv->type = type;
     rv->timestamp = timestamp;
     rv->data_len = data_len;
+    rv->old = 0;
     if (data_len)
 	memcpy(rv->data, data, data_len);
 
@@ -165,6 +167,18 @@ unsigned char *
 ipmi_event_get_data_ptr(ipmi_event_t *event)
 {
     return event->data;
+}
+
+int
+ipmi_event_is_old(ipmi_event_t *event)
+{
+    return event->old;
+}
+
+void
+ipmi_event_set_is_old(ipmi_event_t *event, int val)
+{
+    event->old = val;
 }
 
 typedef struct del_event_info_s

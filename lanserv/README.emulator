@@ -177,6 +177,10 @@ mc_setbmc <IPMB>
   Set the given MC to the "bmc" device.  This should generally be MC
   0x20.
 
+mc_setchan <IPMB> <channel> <medium type> <protocol type> <session
+  support> Set up a channel for the given MC.  Channel 0 is IPMB and
+  channel 1 is LAN, but you need to set those up on the right MC.
+
 read_cmds <file>
   Read and execute the commands from the given file.
 
