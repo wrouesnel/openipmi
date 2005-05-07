@@ -1,3 +1,8 @@
+2005-05-06 Paul Drews <paul.drews at intel.com>
+
+	* unix/posix_thread_os_hnd.c: Initialize the mutex structure
+	after it is allocated.
+
 2005-04-27 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_sdr.h, lib/sdr.c: Added the ability

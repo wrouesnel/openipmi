@@ -814,6 +814,7 @@ posix_mutex_alloc(void **val)
     if (!m)
 	return ENOMEM;
 
+    pthread_mutex_init(m, NULL);         
     *val = m;
     return 0;
 }
