@@ -1,3 +1,8 @@
+2005-05-10 Paul Drews <paul.drews at intel.com>
+
+	* unix/posix_thread_os_hnd.c: Clear the internal_data structure
+	after allocating.
+
 2005-05-06 Paul Drews <paul.drews at intel.com>
 
 	* unix/posix_thread_os_hnd.c: Initialize the mutex structure

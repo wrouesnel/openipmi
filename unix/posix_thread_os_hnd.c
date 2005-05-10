@@ -311,8 +311,10 @@ create_lock(os_handler_t  *handler,
     if (!lock)
 	return ENOMEM;
     rv = pthread_mutex_init(&lock->mutex, NULL);
-    if (rv)
+    if (rv) {
+	free(lock);
 	return rv;
+    }
     lock->lock_count = 0;
     *id = lock;
     return 0;
@@ -753,6 +755,7 @@ ipmi_posix_thread_get_os_handler(void)
 	free(rv);
 	return NULL;
     }
+    memset(info, 0, sizeof(*info));
     rv->internal_data = info;
 
 #ifdef HAVE_GDBM
@@ -811,10 +814,16 @@ int
 posix_mutex_alloc(void **val)
 {
     void *m = malloc(sizeof(pthread_mutex_t));
+    int  rv;
+
     if (!m)
 	return ENOMEM;
 
-    pthread_mutex_init(m, NULL);         
+    rv = pthread_mutex_init(m, NULL);         
+    if (rv) {
+	free(m);
+	return rv;
+    }
     *val = m;
     return 0;
 }
