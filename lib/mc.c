@@ -3223,6 +3223,162 @@ ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
     return rv;
 }
 
+typedef struct ipmi_get_event_log_info_s
+{
+    ipmi_mc_data_done_cb done;
+    void                 *cb_data;
+} ipmi_get_event_log_info_t;
+
+static void
+got_event_log_enable(ipmi_mc_t  *mc,
+		     ipmi_msg_t *rsp,
+		     void       *cb_data)
+{
+    ipmi_get_event_log_info_t *info = cb_data;
+
+    if (rsp->data[0] != 0) {
+	info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), 0, info->cb_data);
+	goto out;
+    }
+
+    if (rsp->data_len < 2) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(got_event_log_enable): response too small",
+		 mc->name);
+	info->done(mc, EINVAL, 0, info->cb_data);
+	goto out;
+    }
+
+    info->done(mc, 0, (rsp->data[1] >> 3) & 1, info->cb_data);
+
+ out:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_get_event_log_enable(ipmi_mc_t            *mc,
+			     ipmi_mc_data_done_cb done,
+			     void                 *cb_data)
+{
+    int                       rv;
+    ipmi_msg_t                msg;
+    ipmi_get_event_log_info_t *info;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if(!info)
+	return ENOMEM;
+
+    info->done = done;
+    info->cb_data = cb_data;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_BMC_GLOBAL_ENABLES_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, got_event_log_enable, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
+
+typedef struct ipmi_set_event_log_info_s
+{
+    ipmi_mc_done_cb done;
+    void            *cb_data;
+    int             val;
+} ipmi_set_event_log_info_t;
+
+static void
+set_event_log_enable_2(ipmi_mc_t  *mc,
+		       ipmi_msg_t *rsp,
+		       void       *cb_data)
+{
+    ipmi_set_event_log_info_t *info = cb_data;
+
+
+    if (rsp->data[0] != 0) {
+	info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
+	goto out;
+    }
+
+    info->done(mc, 0, info->cb_data);
+ out:
+    ipmi_mem_free(info);
+}
+
+static void
+set_event_log_enable(ipmi_mc_t  *mc,
+		     ipmi_msg_t *rsp,
+		     void       *cb_data)
+{
+    ipmi_set_event_log_info_t *info = cb_data;
+    int                       rv;
+    ipmi_msg_t                msg;
+    unsigned char             data[1];
+
+
+    if (rsp->data[0] != 0) {
+	info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
+	goto out_err;
+    }
+
+    if (rsp->data_len < 2) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(set_event_log_enable): response too small",
+		 mc->name);
+	info->done(mc, EINVAL, info->cb_data);
+	goto out_err;
+    }
+
+    data[0] = (rsp->data[1] & ~0x08) | (info->val << 3);
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_SET_BMC_GLOBAL_ENABLES_CMD;
+    msg.data = data;
+    msg.data_len = 1;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, set_event_log_enable_2, info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%smc.c(set_event_log_enable): Can't send set: 0x%x",
+		 mc->name, rv);
+	info->done(mc, rv, info->cb_data);
+	goto out_err;
+    }
+    return;
+
+ out_err:
+    ipmi_mem_free(info);
+}
+
+int
+ipmi_mc_set_event_log_enable(ipmi_mc_t       *mc,
+			     int             val,
+			     ipmi_mc_done_cb done,
+			     void            *cb_data)
+{
+    int                       rv;
+    ipmi_msg_t                msg;
+    ipmi_set_event_log_info_t *info;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if(!info)
+	return ENOMEM;
+
+    info->done = done;
+    info->cb_data = cb_data;
+    info->val = val != 0;
+
+    msg.netfn = IPMI_APP_NETFN;
+    msg.cmd = IPMI_GET_BMC_GLOBAL_ENABLES_CMD;
+    msg.data = NULL;
+    msg.data_len = 0;
+
+    rv = ipmi_mc_send_command(mc, 0, &msg, set_event_log_enable, info);
+    if (rv)
+	ipmi_mem_free(info);
+    return rv;
+}
 
 /***********************************************************************
  *

@@ -669,7 +669,7 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
 
     if (err) {
 	cmdlang->err = err;
-	cmdlang->errstr = "Error fetchding SDRs";
+	cmdlang->errstr = "Error fetching SDRs";
 	goto out_err;
     }
 
@@ -779,6 +779,156 @@ mc_sdrs(ipmi_mc_t *mc, void *cb_data)
     cmdlang->location = "cmd_mc.c(mc_sdrs)";
     if (info)
 	ipmi_mem_free(info);
+}
+
+typedef struct event_log_s
+{
+    ipmi_cmd_info_t *cmd_info;
+} event_log_t;
+
+static void
+mc_got_event_log_enable(ipmi_mc_t *mc, int err, int val, void *cb_data)
+{
+    event_log_t     *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char             mc_name[IPMI_MC_NAME_LEN];
+
+    if (err) {
+	cmdlang->err = err;
+	cmdlang->errstr = "Error getting event log enable";
+	goto out_err;
+    }
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "MC", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "Name", mc_name);
+    ipmi_cmdlang_out_bool(cmd_info, "Event Log Enabled", val);
+    ipmi_cmdlang_up(cmd_info);
+
+ out_err:
+    if (cmdlang->err) {
+	cmdlang->location = "cmd_mc.c(mc_got_event_log_enable)";
+    }
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static void
+mc_get_event_log_enable(ipmi_mc_t *mc, void *cb_data)
+{
+    event_log_t     *info;
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             rv;
+
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->err = ENOMEM;
+	cmdlang->errstr = "Could not allocate SDR data";
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_get_event_log_enable(mc, mc_got_event_log_enable, info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Could not start event log enable fetch";
+	goto out_err;
+    }
+
+    return;
+
+ out_err:
+    ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
+    cmdlang->location = "cmd_mc.c(mc_get_event_log_enable)";
+    if (info)
+	ipmi_mem_free(info);
+}
+
+static void
+mc_event_log_enable_set(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    event_log_t     *info = cb_data;
+    ipmi_cmd_info_t *cmd_info = info->cmd_info;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    char             mc_name[IPMI_MC_NAME_LEN];
+
+    if (err) {
+	cmdlang->err = err;
+	cmdlang->errstr = "Error setting event log enable";
+	goto out_err;
+    }
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+    ipmi_cmdlang_out(cmd_info, "Event Log Enable Set", NULL);
+    ipmi_cmdlang_down(cmd_info);
+    ipmi_cmdlang_out(cmd_info, "MC", mc_name);
+    ipmi_cmdlang_up(cmd_info);
+
+ out_err:
+    if (cmdlang->err) {
+	cmdlang->location = "cmd_mc.c(mc_event_log_enable_set)";
+    }
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+    ipmi_mem_free(info);
+}
+
+static void
+mc_set_event_log_enable(ipmi_mc_t *mc, void *cb_data)
+{
+    event_log_t     *info = NULL;
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             val;
+    int             rv;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info) {
+	cmdlang->err = ENOMEM;
+	cmdlang->errstr = "Could not allocate SDR data";
+	goto out_err;
+    }
+    info->cmd_info = cmd_info;
+
+    if ((argc - curr_arg) < 1) {
+	/* Not enough parameters */
+	cmdlang->errstr = "Not enough parameters";
+	cmdlang->err = EINVAL;
+	goto out_err;
+    }
+
+    ipmi_cmdlang_get_bool(argv[curr_arg], &val, cmd_info);
+    if (cmdlang->err) {
+	cmdlang->errstr = "invalid enable setting";
+	goto out_err;
+    }
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_set_event_log_enable(mc, val, mc_event_log_enable_set, info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->err = rv;
+	cmdlang->errstr = "Could not start event log enable set";
+	goto out_err;
+    }
+
+    return;
+
+ out_err:
+    ipmi_mc_get_name(mc, cmdlang->objstr, cmdlang->objstr_len);
+    cmdlang->location = "cmd_mc.c(mc_get_event_log_enable)";
+    if (info)
+	ipmi_mem_free(info);
+    
 }
 
 void
@@ -1986,6 +2136,12 @@ static ipmi_cmdlang_init_t cmds_mc[] =
       "<mc> <main | sensor> - fetch either the main or sensor"
       " SDRs from the given MC.",
       ipmi_cmdlang_mc_handler, mc_sdrs, NULL },
+    { "get_event_log_enable", &mc_cmds,
+      " <mc> - Get whether the event log is enabled on the MC.",
+      ipmi_cmdlang_mc_handler, mc_get_event_log_enable, NULL },
+    { "set_event_log_enable", &mc_cmds,
+      " <mc> <on|off> - Set whether the event log is enabled on the MC.",
+      ipmi_cmdlang_mc_handler, mc_set_event_log_enable, NULL },
     { "chan", &mc_cmds,
       " Control and information for channels",
       NULL, NULL, &mc_chan_cmds },

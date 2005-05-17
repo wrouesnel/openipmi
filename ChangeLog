@@ -1,3 +1,9 @@
+2005-05-17 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h, swig/OpenIPMI.i: Add the
+	(dangerous) ability to set the system event log enable for an MC.
+	* cmdlang/cmd_mc.c: ditto
+
 2005-05-10 Paul Drews <paul.drews at intel.com>
 
 	* unix/posix_thread_os_hnd.c: Clear the internal_data structure

@@ -927,6 +927,33 @@ mc_events_enable_handler(ipmi_mc_t *mc, int err, void *cb_data)
 }
 
 static void
+mc_get_event_log_enable_handler(ipmi_mc_t *mc, int err, int val, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
+    swig_call_cb(cb, "mc_get_event_log_enable_cb", "%p%d%d",
+		 &mc_ref, err, val);
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
+mc_set_event_log_enable_handler(ipmi_mc_t *mc, int err, void *cb_data)
+{
+    swig_cb_val cb = cb_data;
+    swig_ref    mc_ref;
+
+    mc_ref = swig_make_ref(mc, ipmi_mc_t);
+    swig_call_cb(cb, "mc_set_event_log_enable_cb", "%p%d", &mc_ref, err);
+    swig_free_ref_check(mc_ref, ipmi_mc_t);
+    /* One-time call, get rid of the CB. */
+    deref_swig_cb_val(cb);
+}
+
+static void
 mc_reread_sensors_handler(ipmi_mc_t *mc, int err, void *cb_data)
 {
     swig_cb_val cb = cb_data;
@@ -4824,6 +4851,40 @@ int pef_str_to_parm(char *str);
 	return rv;
     }
 
+    int get_event_log_enable(swig_cb handler)
+    {
+	swig_cb_val handler_val;
+	int         rv;
+
+	if (! valid_swig_cb(handler, mc_get_event_log_enable_cb))
+		return EINVAL;
+	handler_val = ref_swig_cb(handler, mc_get_event_log_enable_cb);
+
+	rv = ipmi_mc_get_event_log_enable(self,
+					  mc_get_event_log_enable_handler,
+					  handler_val);
+	if (rv)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
+
+    int get_event_log_enable(int val, swig_cb handler = NULL)
+    {
+	swig_cb_val     handler_val = NULL;
+	ipmi_mc_done_cb done = NULL;
+	int             rv;
+
+	if (!nil_swig_cb(handler)) {
+	    if (! valid_swig_cb(handler, mc_set_event_log_enable_cb))
+		return EINVAL;
+	    handler_val = ref_swig_cb(handler, mc_set_event_log_enable_cb);
+	    done = mc_set_event_log_enable_handler;
+	}
+	rv = ipmi_mc_set_event_log_enable(self, val, done, handler_val);
+	if (rv && handler_val)
+	    deref_swig_cb_val(handler_val);
+	return rv;
+    }
 
     /*
      * Reread all the sensors for a given mc.  This will request the

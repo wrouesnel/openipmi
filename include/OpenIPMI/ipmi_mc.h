@@ -63,6 +63,8 @@ int ipmi_mc_id_is_invalid(ipmi_mcid_t *id);
 
 /* Generic callback type for MCs */
 typedef void (*ipmi_mc_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
+typedef void (*ipmi_mc_data_done_cb)(ipmi_mc_t *mc, int err, int value,
+				     void *cb_data);
 
 /* Get the name of an MC. */
 #define IPMI_MC_NAME_LEN (IPMI_DOMAIN_NAME_LEN + 32)
@@ -154,6 +156,28 @@ int ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
 			      ipmi_mc_done_cb done,
 			      void            *cb_data);
 
+/*
+ * Get and set the event log enable flag on the MC.  If this is
+ * enabled (true), events will go into the event log on the MC.  If
+ * this is disabled, events will be ignored by the MC (except for ones
+ * added directly with an add_event call).
+ *
+ * NOTE: This is a somewhat dangerous call to set, since other flags
+ * are also set in the same message and there is no way to set them
+ * individually.  The set function does a read-modify-write, but there
+ * is a race condition.  If other things are also setting the same
+ * flags (like a device driver), it is recommended that you *NOT* use
+ * this function.  In fact, in general, it is recommended that you not
+ * use this function except perhaps to ensure that events are on.
+ * They should be on by default, anyway.
+ */
+int ipmi_mc_get_event_log_enable(ipmi_mc_t            *mc,
+				 ipmi_mc_data_done_cb done,
+				 void                 *cb_data);
+int ipmi_mc_set_event_log_enable(ipmi_mc_t       *mc,
+				 int             val,
+				 ipmi_mc_done_cb done,
+				 void            *cb_data);
 
 /* Reread all the sensors for a given mc.  This will request the
    device SDRs for that mc (And only for that MC) and change the
