@@ -3707,12 +3707,6 @@ call_con_fails(ipmi_domain_t *domain,
 	/* Nothing really to do, can't start anything up, just report it. */
 	ipmi_unlock(domain->con_lock);
     } else if (domain->in_startup) {
-	if (! locked_list_add(domains_list, domain, NULL)) {
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%sdomain.c(sdr_handler): "
-		     "Out of memory, could not add domain to the domains list",
-		     DOMAIN_NAME(domain));
-	}
 	domain->in_startup = 0;
 	ipmi_unlock(domain->con_lock);
 
@@ -4730,6 +4724,13 @@ ipmi_open_domain(char               *name,
     if (new_domain)
 	*new_domain = ipmi_domain_convert_to_id(domain);
     
+    if (! locked_list_add(domains_list, domain, NULL)) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%sdomain.c(sdr_handler): "
+		 "Out of memory, could not add domain to the domains list",
+		 DOMAIN_NAME(domain));
+    }
+
  out:
     _ipmi_domain_put(domain);
     return rv;
@@ -5690,6 +5691,13 @@ ipmi_init_domain(ipmi_con_t               *con[],
     if (new_domain)
 	*new_domain = ipmi_domain_convert_to_id(domain);
     
+    if (! locked_list_add(domains_list, domain, NULL)) {
+	ipmi_log(IPMI_LOG_SEVERE,
+		 "%sdomain.c(sdr_handler): "
+		 "Out of memory, could not add domain to the domains list",
+		 DOMAIN_NAME(domain));
+    }
+
  out:
     _ipmi_domain_put(domain);
     return rv;

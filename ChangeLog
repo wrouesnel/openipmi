@@ -4,6 +4,10 @@
 	(dangerous) ability to set the system event log enable for an MC.
 	* cmdlang/cmd_mc.c: ditto
 
+	* lib/domain.c: Move adding the domain to the domain list to
+	right where the domain is created.  That way it will be cleaned
+	up properly even if it never comes up.
+
 2005-05-10 Paul Drews <paul.drews at intel.com>
 
 	* unix/posix_thread_os_hnd.c: Clear the internal_data structure
