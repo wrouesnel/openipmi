@@ -1,3 +1,22 @@
+2005-05-18 Corey Minyard <cminyard@mvista.com>
+
+	* lanserv/lanserv_ipmi.c: Use K1 instead of SIK for the initial
+	key for hmac_sha1, per the IPMI 2.0 R2 errata.
+
+	* lanserv/lanserv_ipmi.c: Adjust the range of allowed sequence
+	numbers for RMCP+, per the IPMI 2.0 R2 errata.
+
+	* lib/ipmi_lan.c: Adjust the range of allowed sequence numbers for
+	RMCP+, per the IPMI 2.0 R2 errata.
+
+	* lib/entity.c: Add presence bit sensors entries for drive slot
+	and memory sensor types, per the newly added bits in the IPMI 2.0
+	R2 errata.
+
+	* lib/strings.c: Add strings for sensor bit readings for memory
+	sensors, drive slot sensors, and cable sensors, per the IPMI 2.0
+	R2 errata.
+
 2005-05-17 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, include/OpenIPMI/ipmi_mc.h, swig/OpenIPMI.i: Add the

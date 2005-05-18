@@ -2455,6 +2455,8 @@ is_presence_bit_sensor(ipmi_sensor_t *sensor, int *bit_offset)
     case IPMI_SENSOR_TYPE_BATTERY: bit = 2; break;
     case IPMI_SENSOR_TYPE_SLOT_CONNECTOR: bit = 2; break;
     case IPMI_SENSOR_TYPE_PROCESSOR: bit = 7; break;
+    case IPMI_SENSOR_TYPE_DRIVE_SLOT: bit = 0; break;
+    case IPMI_SENSOR_TYPE_MEMORY: bit = 6; break;
     default:
 	return 0;
     }

@@ -2657,7 +2657,7 @@ static int
 hmac_sha1_init(lan_data_t *lan, session_t *session)
 {
     session->auth_data.ikey2 = EVP_sha1();
-    session->auth_data.ikey = session->auth_data.sik;
+    session->auth_data.ikey = session->auth_data.k1;
     session->auth_data.ikey_len = 20;
     session->auth_data.integ_len = 12;
     return 0;
@@ -3496,7 +3496,7 @@ ipmi_handle_rmcpp_msg(lan_data_t *lan, msg_t *msg)
 	else
 	    seq = &session->unauth_recv_seq;
 	diff = msg->seq - *seq;
-	if ((diff < -8) || (diff > 8)) {
+	if ((diff < -16) || (diff > 15)) {
 	    lan->log(INVALID_MSG, msg,
 		     "Normal session message failure: SEQ out of range");
 	    return;

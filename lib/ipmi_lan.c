@@ -2666,18 +2666,21 @@ check_command_queue(ipmi_con_t *ipmi, lan_data_t *lan)
 	lan->outstanding_msg_count--;
 }
 
+/* Per the spec, RMCP and RMCP+ have different allowed sequence number
+   ranges, so adjust for this. */
 static int
 check_session_seq_num(lan_data_t *lan, uint32_t seq,
-		      uint32_t *in_seq, uint16_t *map)
+		      uint32_t *in_seq, uint16_t *map,
+		      int gt_allowed, int lt_allowed)
 {
     /* Check the sequence number. */
-    if ((seq - *in_seq) <= 8) {
+    if ((seq - *in_seq) <= gt_allowed) {
 	/* It's after the current sequence number, but within 8.  We
            move the sequence number forward. */
 	*map <<= seq - *in_seq;
 	*map |= 1;
 	*in_seq = seq;
-    } else if ((*in_seq - seq) <= 8) {
+    } else if ((*in_seq - seq) <= lt_allowed) {
 	/* It's before the current sequence number, but within 8. */
 	uint8_t bit = 1 << (*in_seq - seq);
 	if (*map & bit) {
@@ -2703,6 +2706,20 @@ check_session_seq_num(lan_data_t *lan, uint32_t seq,
     }
 
     return 0;
+}
+
+static int
+check_15_session_seq_num(lan_data_t *lan, uint32_t seq,
+			 uint32_t *in_seq, uint16_t *map)
+{
+    return check_session_seq_num(lan, seq, in_seq, map, 8, 8);
+}
+
+static int
+check_20_session_seq_num(lan_data_t *lan, uint32_t seq,
+			 uint32_t *in_seq, uint16_t *map)
+{
+    return check_session_seq_num(lan, seq, in_seq, map, 15, 16);
 }
 
 static void
@@ -2954,15 +2971,15 @@ handle_rmcpp_recv(ipmi_con_t    *ipmi,
     }
 
     if (authenticated)
-	rv = check_session_seq_num(lan, session_seq,
-				   &(lan->ip[addr_num].inbound_seq_num),
-				   &(lan->ip[addr_num].recv_msg_map));
+	rv = check_20_session_seq_num(lan, session_seq,
+				      &(lan->ip[addr_num].inbound_seq_num),
+				      &(lan->ip[addr_num].recv_msg_map));
     else if (session_id == 0)
 	rv = 0; /* seq num not used for out-of-session messages. */
     else
-	rv = check_session_seq_num(lan, session_seq,
-				   &(lan->ip[addr_num].unauth_in_seq_num),
-				   &(lan->ip[addr_num].unauth_recv_msg_map));
+	rv = check_20_session_seq_num(lan, session_seq,
+				      &(lan->ip[addr_num].unauth_in_seq_num),
+				      &(lan->ip[addr_num].unauth_recv_msg_map));
     ipmi_unlock(lan->ip_lock);
     if (rv) {
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -3109,8 +3126,9 @@ handle_lan15_recv(ipmi_con_t    *ipmi,
 	ipmi_lock(lan->ip_lock);
     }
 
-    rv = check_session_seq_num(lan, seq, &(lan->ip[addr_num].inbound_seq_num),
-			       &(lan->ip[addr_num].recv_msg_map));
+    rv = check_15_session_seq_num(lan, seq,
+				  &(lan->ip[addr_num].inbound_seq_num),
+				  &(lan->ip[addr_num].recv_msg_map));
     ipmi_unlock(lan->ip_lock);
     if (rv)
 	goto out;

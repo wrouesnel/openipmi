@@ -549,8 +549,22 @@ static char *sensor_states[256][16] =
 	"memory scrub failed (stuck bit)",
 	"memory device disabled",
 	"correctable ECC log limit reached",
+	"presence detected",
+	"configuration error",
+	"spare",
+	"memory automatically throttled",
     },
-    {}, /* 0x0d */
+    { /* 0x0d */
+	"drive presence",
+	"drive fault",
+	"predictive failure",
+	"hot spare",
+	"consistancy/parity check in progress",
+	"in critical array",
+	"in failed array",
+	"rebuild/remap in progress",
+	"rebuild/remap aborted",
+    },
     {}, /* 0x0e */
     { /* 0x0f */
 	"system firmware error",
@@ -603,7 +617,10 @@ static char *sensor_states[256][16] =
     {}, /* 0x18 */
     {}, /* 0x19 */
     {}, /* 0x1a */
-    {}, /* 0x1b */
+    { /* 0x1b */
+	"cable/interconnect is connected",
+	"configuration error",
+    },
     {}, /* 0x1c */
     { /* 0x1d */
 	"initiated by power up",
