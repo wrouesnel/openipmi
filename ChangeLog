@@ -1,3 +1,7 @@
+2005-05-19 Forrest Zhao <forrest.zhao@intel.com>
+	* include/OpenIPMI/ipmiif.h,lib/domain.c, lib/oem_atca.c,
+	  lib/sensor.c: Add callback for OEM-specific sensor types.
+
 2005-05-18 Corey Minyard <cminyard@mvista.com>
 
 	* lanserv/lanserv_ipmi.c: Use K1 instead of SIK for the initial

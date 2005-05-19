@@ -3327,6 +3327,19 @@ atca_event_handler(ipmi_domain_t *domain,
 }
 
 static void
+atca_new_sensor_handler(ipmi_domain_t *domain,
+                        ipmi_sensor_t *sensor,
+                        void          *cb_data)
+{
+    int sensor_type = ipmi_sensor_get_sensor_type(sensor);
+    if (sensor_type == 0xf0) {
+        ipmi_sensor_set_sensor_type_string(sensor, "ATCA Hotswap");
+    } else if (sensor_type == 0xf1) {
+        ipmi_sensor_set_sensor_type_string(sensor, "ATCA IPMB Stat");
+    }
+}
+
+static void
 set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 		   ipmi_domain_oem_check_done done, void *done_cb_data)
 {
@@ -3437,6 +3450,8 @@ set_up_atca_domain(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
 				       info);
 
     ipmi_domain_set_con_up_handler(domain, atca_con_up, info);
+
+    ipmi_domain_add_new_sensor_handler(domain, atca_new_sensor_handler, NULL);
 
  out:
     return;

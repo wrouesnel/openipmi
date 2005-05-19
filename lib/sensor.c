@@ -1414,6 +1414,8 @@ handle_new_sensor(ipmi_domain_t *domain,
     } else {
 	ipmi_entity_add_sensor(sensor->entity, sensor, link);
     }
+
+    _call_new_sensor_handlers(domain, sensor);
 }
 
 static int cmp_sensor(ipmi_sensor_t *s1,

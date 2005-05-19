@@ -293,4 +293,28 @@ void *ipmi_domain_attr_get_data(ipmi_domain_attr_t *attr);
 /* Call this when you are done with the attr. */
 void ipmi_domain_attr_put(ipmi_domain_attr_t *attr);
 
+/* Add/Remove a function, that is called when any new sensor is
+   added to the system and it allows OEM code to update information
+   about  it if there are domain-specific sensor types that need
+   to be adjusted.
+*/
+typedef void (*ipmi_domain_sensor_cb)(ipmi_domain_t *domain,
+                                      ipmi_sensor_t *sensor,
+                                      void          *cb_data);
+
+int
+ipmi_domain_add_new_sensor_handler(ipmi_domain_t         *domain,
+                                   ipmi_domain_sensor_cb handler,
+                                   void                  *cb_data);
+
+int
+ipmi_domain_remove_new_sensor_handler(ipmi_domain_t        *domain,
+                                      ipmi_domain_sensor_cb handler,
+                                      void                *cb_data);
+
+int
+_call_new_sensor_handlers(ipmi_domain_t *domain,
+                         ipmi_sensor_t *sensor);
+
+
 #endif /* _IPMI_DOMAIN_H */

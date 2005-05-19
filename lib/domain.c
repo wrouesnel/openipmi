@@ -207,6 +207,9 @@ struct ipmi_domain_s
     ipmi_oem_event_handler_cb oem_event_handler;
     void                      *oem_event_cb_data;
 
+    locked_list_t            *new_sensor_handlers; /* callbacks for
+                                             OEM-specific sensors*/
+
     ipmi_domain_shutdown_cb shutdown_handler;
 
     /* Are we in the middle of an MC bus scan? */
@@ -678,6 +681,9 @@ cleanup_domain(ipmi_domain_t *domain)
     if (domain->con_change_handlers)
 	locked_list_destroy(domain->con_change_handlers);
 
+    if (domain->new_sensor_handlers)
+        locked_list_destroy(domain->new_sensor_handlers);
+
     if (domain->ipmb_ignores) {
 	ilist_iter_t iter;
 	ilist_init_iter(&iter, domain->ipmb_ignores);
@@ -906,6 +912,12 @@ setup_domain(char          *name,
     if (! domain->mc_upd_handlers) {
 	rv = ENOMEM;
 	goto out_err;
+    }
+
+    domain->new_sensor_handlers = locked_list_alloc(domain->os_hnd);
+    if (! domain->new_sensor_handlers) {
+        rv = ENOMEM;
+        goto out_err;
     }
 
     rv = ipmi_create_lock(domain, &domain->ipmb_ignores_lock);
@@ -4926,6 +4938,60 @@ ipmi_domain_get_unique_num(ipmi_domain_t *domain)
     domain->uniq_num++;
     ipmi_unlock(domain->domain_lock);
     return rv;
+}
+
+
+/*OEM-specific sensors handling*/
+int
+ipmi_domain_add_new_sensor_handler(ipmi_domain_t         *domain,
+                                   ipmi_domain_sensor_cb handler,
+                                   void                  *cb_data)
+{
+    if (locked_list_add(domain->new_sensor_handlers, handler, cb_data))
+        return 0;
+    else
+        return ENOMEM;
+}
+
+int
+ipmi_domain_remove_new_sensor_handler(ipmi_domain_t        *domain,
+                                      ipmi_domain_sensor_cb handler,
+                                       void                *cb_data)
+{
+    if (locked_list_remove(domain->new_sensor_handlers, handler, cb_data))
+        return 0;
+    else
+        return EINVAL;
+}
+
+typedef struct new_sensor_handler_info_s
+{
+    ipmi_domain_t *domain;
+    ipmi_sensor_t *sensor;
+} new_sensor_handler_info_t;
+
+static int
+call_new_sensor_handler(void *cb_data, void *item1, void *item2)
+{
+    new_sensor_handler_info_t *info = cb_data;
+    ipmi_domain_sensor_cb     handler = item1;
+
+    handler(info->domain, info->sensor, item2);
+    return 0;
+}
+
+int
+_call_new_sensor_handlers(ipmi_domain_t *domain,
+                         ipmi_sensor_t *sensor)
+{
+    new_sensor_handler_info_t info;
+
+    info.domain = domain;
+    info.sensor = sensor;
+
+    locked_list_iterate(domain->new_sensor_handlers, call_new_sensor_handler,
+		        &info);
+    return 0;
 }
 
 /***********************************************************************
