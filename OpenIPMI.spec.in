@@ -13,6 +13,9 @@ BuildRequires: pkgconfig, perl >= 5, swig >= 1.3
 Summary: IPMI Library
 Group: Utilities
 
+# Perl is usually installed in /usr/lib, not /usr/lib64 on 64-bit platforms.
+%define perl_libdir %{_exec_prefix}/lib
+
 %description 
 This package contains a shared library implementation of IPMI and the
 basic tools used with OpenIPMI.
@@ -90,7 +93,7 @@ make DESTDIR=%{buildroot} install
 %files perl
 ###################################################
 %defattr(-,root,root)
-%{_libdir}/perl5
+%{perl_libdir}/perl5
 %doc swig/OpenIPMI.i swig/perl/sample swig/perl/ipmi_powerctl
 
 ###################################################

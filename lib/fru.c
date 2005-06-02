@@ -301,9 +301,9 @@ read_fru_time(unsigned char **data,
     if (*len < 3)
 	return EBADF;
 
-    t = *d++ * 256 * 256;
+    t = *d++;
     t += *d++ * 256;
-    t += *d++;
+    t += *d++ * 256 * 256;
 
     *len -= 3;
     *data += 3;
@@ -3539,6 +3539,7 @@ start_domain_fru_write(ipmi_domain_t *domain, void *cb_data)
 	/* No data changed, no write is needed. */
 	ipmi_mem_free(fru->data);
 	fru->data = NULL;
+	fru->in_use = 0;
 	fru_unlock(fru);
 
 	if (fru->domain_fetched_handler)
