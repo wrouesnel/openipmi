@@ -207,6 +207,12 @@ int ipmi_fru_get_product_info_custom(ipmi_fru_t   *fru,
 				     char         *str,
 				     unsigned int *strlen);
 
+/*
+ * Multi-records work differently from other record types.  They are always
+ * blocks of binary data.  The "type" field (along with the other fields)
+ * is the field from the record.  It does not tell you the data type like
+ * the above "type" fields do.
+ */
 unsigned int ipmi_fru_get_num_multi_records(ipmi_fru_t *fru);
 int ipmi_fru_get_multi_record_type(ipmi_fru_t    *fru,
 				   unsigned int  num,

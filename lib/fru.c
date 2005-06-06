@@ -117,7 +117,8 @@ typedef struct fru_area_info_s {
     void (*setup_new)(ipmi_fru_record_t *rec);
 } fru_area_info_t;
 
-extern fru_area_info_t fru_area_info[IPMI_FRU_FTR_NUMBER];
+/* Forward declaration */
+static fru_area_info_t fru_area_info[IPMI_FRU_FTR_NUMBER];
 
 struct ipmi_fru_record_s
 {
@@ -3366,7 +3367,7 @@ fru_write_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	rv = ipmi_send_command_addr(domain,
 				    addr, addr_len,
 				    &msg,
-				    fru_data_handler,
+				    fru_write_handler,
 				    fru,
 				    NULL);
 	if (rv) {

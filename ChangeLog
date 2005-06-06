@@ -1,3 +1,14 @@
+2005-06-05 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_fru.h: Add some docs explaining how the
+	type field works in multi-records.
+
+	* lib/fru.c: Fix the definition of fru_area_info to be static
+	and not extern for the forward definition.
+
+	* lib/fru.c: Call fru_write_handler, not fru_data_handler, on
+	a write retry.
+
 2005-06-02 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Fix the byte ordering on reading FRU time.  Make sure
