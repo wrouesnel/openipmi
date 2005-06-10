@@ -1650,8 +1650,8 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 	if (csensor) {
 	    ipmi_log(IPMI_LOG_WARNING,
 		     "%ssensor.c(ipmi_sensor_handle_sdrs):"
-		     " Sensor record %d has the same number sensor record"
-		     " %d in the repository.  Ignoring second sensor. "
+		     " SDR record %d has the same sensor number as record"
+		     " %d in the repository.  Ignoring second sensor."
 		     " Fix your SDRs!",
 		     SENSOR_NAME(nsensor),
 		     csensor->source_recid,

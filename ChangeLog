@@ -1,3 +1,12 @@
+2005-06-10 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c: Fix some english grammar problems in a pring.
+
+	* swig/python/Makefile.am, OpenIPMI.spec.in: Fix so python
+	installs correctly.
+
+	* configure.in: Move to version 2.0.1.
+
 2005-06-05 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_fru.h: Add some docs explaining how the
