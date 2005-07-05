@@ -246,7 +246,11 @@ sub fru_1_data_check {
     # OpenIPMI converts 0 to 25 (english)
     main::check_fru_data($fru, "product_info_lang_code", -1, "integer", "25");
     main::check_fru_data($fru, "product_info_manufacturer_name", -1, "ascii", "");
-    main::check_fru_data($fru, "product_info_product_name", -1, "ascii", "Te6");
+    if ($version == 0) {
+	main::check_fru_data($fru, "product_info_product_name", -1, "ascii", "Te6");
+    } else {
+	main::check_fru_data($fru, "product_info_product_name", -1, "ascii", "TE");
+    }
     main::check_fru_data($fru, "product_info_product_part_model_number", -1, "ascii",
 			 "abcdefghijklmnopqrstuvwxyz012345abcdefghijklmnopqrstuvwxyz01234");
     main::check_fru_data($fru, "product_info_product_version", -1, "binary",
@@ -841,6 +845,18 @@ sub dup_fru {
 	}
 	main::check_fru_data($fru, "product_info_custom", 2, "ascii",
 			     "ASDF1234*()");
+
+	# Convert an 8-bit field to a 6-bit field
+	$rv = $fru->set($fru_field_table->{product_info_product_name}, -1, "ascii",
+			"TE");
+	if ($rv) {
+	    main::reg_err("Error setting product info product name: $rv");
+	    $h->close();
+	    return;
+	}
+	main::check_fru_data($fru, "product_info_product_name", -1, "ascii",
+			     "TE");
+
 	$rv = $fru->set($fru_field_table->{product_info_custom}, 7, "ascii",
 			"1234567890--.");
 	if ($rv) {

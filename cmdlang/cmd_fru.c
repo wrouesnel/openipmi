@@ -369,6 +369,10 @@ fru_setval(ipmi_fru_t *fru, void *cb_data)
 	    cmdlang->err = rv;
 	    goto out_err;
 	}
+
+    case IPMI_FRU_DATA_SUB_NODE:
+	/* Not relevant for normal FRU data. */
+	break;
     }
 
     goto out;

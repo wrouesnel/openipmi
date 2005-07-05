@@ -50,6 +50,7 @@
 #include <OpenIPMI/internal/ipmi_domain.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/internal/ipmi_utils.h>
+#include <OpenIPMI/internal/ipmi_oem.h>
 
 #define IPMI_LANG_CODE_ENGLISH	25
 
@@ -209,6 +210,8 @@ struct ipmi_fru_s
     unsigned char last_cmd[MAX_FRU_DATA_WRITE+4];
     unsigned int  last_cmd_len;
     unsigned int  retry_count;
+
+    os_handler_t *os_hnd;
 
     ipmi_fru_record_t *recs[IPMI_FRU_FTR_NUMBER];
 
@@ -2736,6 +2739,7 @@ ipmi_fru_alloc_internal(ipmi_domain_t       *domain,
     fru->channel = channel;
     fru->fetch_mask = fetch_mask;
     fru->fetch_size = MAX_FRU_DATA_FETCH;
+    fru->os_hnd = ipmi_domain_get_os_hnd(domain);
 
     len = sizeof(fru->name);
     p = ipmi_domain_get_name(domain, fru->name, len);
@@ -4133,6 +4137,203 @@ ipmi_fru_set_data_val(ipmi_fru_t                *fru,
 
     return rv;
 }
+
+/************************************************************************
+ *
+ * For OEM-specific FRU multi-record decode and field get
+ *
+ ************************************************************************/
+
+static locked_list_t *fru_multi_record_oem_handlers;
+
+typedef struct fru_multi_record_oem_handlers_s {
+    unsigned int                               manufacturer_id;
+    unsigned char                              record_type_id;
+    ipmi_fru_oem_multi_record_get_root_node_cb get_root;
+    void                                       *cb_data;
+} fru_multi_record_oem_handlers_t;
+
+int
+_ipmi_fru_register_multi_record_oem_handler
+(unsigned int                               manufacturer_id,
+ unsigned char                              record_type_id,
+ ipmi_fru_oem_multi_record_get_root_node_cb get_root,
+ void                                       *cb_data)
+{
+    fru_multi_record_oem_handlers_t *new_item;
+
+    new_item = ipmi_mem_alloc(sizeof(*new_item));
+    if (!new_item)
+	return ENOMEM;
+
+    new_item->manufacturer_id = manufacturer_id;
+    new_item->record_type_id = record_type_id;
+    new_item->get_root = get_root;
+    new_item->cb_data = cb_data;
+
+    if (!locked_list_add(fru_multi_record_oem_handlers, new_item, NULL)) {
+        ipmi_mem_free(new_item);
+	return ENOMEM;
+    }
+    return 0;
+}
+
+static int
+fru_multi_record_oem_handler_cmp_dereg(void *cb_data, void *item1, void *item2)
+{
+    fru_multi_record_oem_handlers_t *hndlr = item1;
+    fru_multi_record_oem_handlers_t *cmp = cb_data;
+
+    if ((hndlr->manufacturer_id == cmp->manufacturer_id)
+	&& (hndlr->record_type_id == cmp->record_type_id))
+    {
+	/* We re-use the cb_data as a marker to tell we found it. */
+        cmp->cb_data = cmp;
+        locked_list_remove(fru_multi_record_oem_handlers, item1, item2);
+        ipmi_mem_free(hndlr);
+	return LOCKED_LIST_ITER_STOP;
+    }
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+int
+_ipmi_fru_deregister_multi_record_oem_handler(unsigned int manufacturer_id,
+					      unsigned char record_type_id)
+{
+    fru_multi_record_oem_handlers_t tmp;
+
+    tmp.manufacturer_id = manufacturer_id;
+    tmp.record_type_id = record_type_id;
+    tmp.cb_data = NULL;
+    locked_list_iterate(fru_multi_record_oem_handlers,
+                        fru_multi_record_oem_handler_cmp_dereg,
+                        &tmp);
+    if (!tmp.cb_data)
+	return ENOENT;
+    return 0;
+}
+
+typedef struct oem_search_node_s
+{
+    unsigned int    manufacturer_id;
+    unsigned char   record_type_id;
+    ipmi_fru_t      *fru;
+    ipmi_fru_node_t *node;
+    unsigned char   *mr_data;
+    unsigned char   mr_data_len;
+    char            *name;
+    int             rv;
+} oem_search_node_t;
+
+static int
+get_root_node(void *cb_data, void *item1, void *item2)
+{
+    fru_multi_record_oem_handlers_t *hndlr = item1;
+    oem_search_node_t               *cmp = cb_data;
+
+    if ((hndlr->manufacturer_id == cmp->manufacturer_id)
+	&& (hndlr->record_type_id == cmp->record_type_id))
+    {
+	cmp->rv = hndlr->get_root(cmp->fru, cmp->manufacturer_id,
+				  cmp->record_type_id,
+				  cmp->mr_data, cmp->mr_data_len,
+				  hndlr->cb_data, &cmp->name, &cmp->node);
+	
+	return LOCKED_LIST_ITER_STOP;
+    } else {
+        cmp->rv = EINVAL;
+    }
+    return LOCKED_LIST_ITER_CONTINUE;
+}
+
+int
+ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
+				    unsigned int    record_num,
+				    char            **name,
+				    ipmi_fru_node_t **node)
+{
+    ipmi_fru_multi_record_area_t *u;
+    unsigned char                *d;
+    oem_search_node_t            cmp;
+
+    fru_lock(fru);
+    if (!fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
+	fru_unlock(fru);
+	return ENOSYS;
+    }
+    u = fru_record_get_data(fru->recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+    if (record_num >= u->num_records) {
+	fru_unlock(fru);
+	return E2BIG;
+    }
+    if (u->records[record_num].length < 3) {
+	fru_unlock(fru);
+	return EINVAL;
+    }
+
+    d = u->records[record_num].data;
+    cmp.manufacturer_id = d[0] | (d[1] << 8) | (d[2] << 16);
+    cmp.record_type_id = u->records[record_num].type;
+    cmp.fru = fru;
+    cmp.node = NULL;
+    cmp.mr_data = d;
+    cmp.mr_data_len = u->records[record_num].length;
+    cmp.name = 0;
+    cmp.rv = 0;
+    locked_list_iterate(fru_multi_record_oem_handlers, get_root_node, &cmp);
+    fru_unlock(fru);
+    if (cmp.rv)
+	return cmp.rv;
+    *node = cmp.node;
+    return 0;
+}
+
+void
+ipmi_fru_put_node(ipmi_fru_node_t *node)
+{
+    node->put(node);
+}
+
+int
+ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
+			unsigned int              index,
+			char                      **name,
+			enum ipmi_fru_data_type_e *dtype,
+			int                       *intval,
+			time_t                    *time,
+			char                      **data,
+			unsigned int              *data_len,
+			ipmi_fru_node_t           **sub_node)
+{
+    return node->get_field(node, index, name, dtype, intval, time,
+			   data, data_len, sub_node);
+}
+
+/************************************************************************
+ *
+ * Init/shutdown
+ *
+ ************************************************************************/
+int
+_ipmi_fru_init()
+{
+    fru_multi_record_oem_handlers = locked_list_alloc
+	(ipmi_get_global_os_handler());
+    if (!fru_multi_record_oem_handlers)
+        return ENOMEM;
+
+    return 0;
+}
+
+void
+_ipmi_fru_shutdown()
+{
+    if (fru_multi_record_oem_handlers) {
+	locked_list_destroy(fru_multi_record_oem_handlers);
+	fru_multi_record_oem_handlers = NULL;
+    }
+}
+
 
 /************************************************************************
  *

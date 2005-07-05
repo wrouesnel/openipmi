@@ -242,7 +242,12 @@ enum ipmi_fru_data_type_e
     IPMI_FRU_DATA_ASCII,
     IPMI_FRU_DATA_BINARY,
     IPMI_FRU_DATA_UNICODE,
+
+    /* Currently only used for multi-records. */
+    IPMI_FRU_DATA_SUB_NODE,
 };
+
+typedef struct ipmi_fru_node_s ipmi_fru_node_t;
 
 /*
  * Find the index number for the given string.  Returns -1 if the string
@@ -567,6 +572,56 @@ int ipmi_fru_set_data_val(ipmi_fru_t                *fru,
  * resulting in corruptions.  Be careful.
  */
 int ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_cb done, void *cb_data);
+
+
+/* The interface to get individual field from the decoded OEM FRU
+ * multi-record hierarchy.  Usage:
+ *
+ * Step 1: before traversing the hierarchy, you first need to call
+ * ipmi_fru_multi_record_get_root_node() to get the root node.  you
+ * may think of node as the root node of sub-hierarchy.
+ *
+ * Step 2: ipmi_fru_multi_record_get_field() is similar to
+ * ipmi_fru_get(), the only special part is "sub_node", which is an
+ * output parameter.  If the data type is IPMI_FRU_DATA_SUB_NODE, the
+ * given index is the root to a sub-parameter.  The sub_node will be
+ * set and if the node is an array, the intval will be set to the
+ * length of the array.  The intval will be set to -1 if it is not an
+ * array.  You may notice that this is a recursive process.
+ *
+ * Step 3: after finishing traversing a node, you need to call
+ * ipmi_fru_multi_record_put_node() to return the resource to system.
+ *
+ * Note that if the returned "name" is NULL, then the node is an array
+ * element (the parent is an array) and the name of the first parent
+ * object with a name is the one to use for the array.
+ *
+ * There's a sample code to demonstrate how to use this interface in
+ * dump_fru_info() in ui/ui.c.  This is a very flexible interface, you
+ * can choose whatever way you like to traverse the decoded OEM FRU
+ * hierarchy. Enjoy it!
+ *
+ * Fetching the root node is multi-thread safe, but the operations
+ * on fru nodes are not.  If you have multiple threads accessing the
+ * same FRU node, you must provide your own locks.
+ */
+
+int ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
+					unsigned int    record_num,
+					char            **name,
+					ipmi_fru_node_t **node);
+
+void ipmi_fru_put_node(ipmi_fru_node_t *node);
+
+int ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
+			    unsigned int              index,
+			    char                      **name,
+			    enum ipmi_fru_data_type_e *dtype,
+			    int                       *intval,
+			    time_t                    *time,
+			    char                      **data,
+			    unsigned int              *data_len,
+			    ipmi_fru_node_t           **sub_node);
 
 /************************************************************************
  *

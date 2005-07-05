@@ -40,6 +40,7 @@
 
 #include <OpenIPMI/ipmiif.h>
 #include <OpenIPMI/ipmi_sdr.h>
+#include <OpenIPMI/ipmi_fru.h>
 
 /* This registers an OEM handler.  If an MC is detected that has the
    given manufacturer id and product id, the handler will be
@@ -151,5 +152,66 @@ int ipmi_mc_set_oem_event_handler(ipmi_mc_t                 *mc,
 int ipmi_mc_set_sel_oem_event_handler(ipmi_mc_t                 *mc,
 				      ipmi_oem_event_handler_cb handler,
 				      void                      *cb_data);
+
+os_handler_t *_ipmi_fru_get_os_handler(ipmi_fru_t *fru);
+
+/* The callbacks for FRU multi-record OEM handler, to decode the multi-record 
+   and get individual field.
+   ipmi_fru_multi_record_oem_decoder_cb(): record is the raw binary multi-record
+      record_len is the length of this raw binary multi-record,
+      the doceded OEM FRU information is outputted and stored in *explain_data_p.
+   ipmi_fru_get_multi_record_oem_field_handler_cb(): this callback is called
+      when user call ipmi_fru_multi_record_get_field(). Please refer to the 
+      comments for ipmi_fru_multi_record_get_field().
+   ipmi_fru_multi_record_free_explain_data_cb(): this callback is used to free
+   the OEM FRU specific data structures.
+
+*/
+
+/* Free the data in the OEM node (but not the oem node itself) */
+typedef void (*ipmi_fru_oem_put_node_cb)(ipmi_fru_node_t *node);
+
+typedef int (*ipmi_fru_oem_node_get_field_cb)
+     (ipmi_fru_node_t           *node,
+      unsigned int              index,
+      char                      **name,
+      enum ipmi_fru_data_type_e *dtype,
+      int                       *intval,
+      time_t                    *time,
+      char                      **data,
+      unsigned int              *data_len,
+      ipmi_fru_node_t           **sub_node);
+
+struct ipmi_fru_node_s
+{
+    void                           *data;
+    void                           *data2;
+    ipmi_fru_oem_node_get_field_cb get_field;
+    ipmi_fru_oem_put_node_cb       put;
+};
+
+/* Get the root node of a multi-record.  Note that the root record
+   must not be an array.  Note that you cannot keep a copy of the fru
+   pointer around after this call returns; it will be unlocked and
+   could go away after this returns. */
+typedef int (*ipmi_fru_oem_multi_record_get_root_node_cb)
+     (ipmi_fru_t          *fru,
+      unsigned int        manufacturer_id,
+      unsigned char       record_type_id,
+      unsigned char       *mr_data,
+      unsigned int        mr_data_len,
+      void                *cb_data,
+      char                **name,
+      ipmi_fru_node_t     **node);
+
+int _ipmi_fru_register_multi_record_oem_handler
+(unsigned int                               manufacturer_id,
+ unsigned char                              record_type_id,
+ ipmi_fru_oem_multi_record_get_root_node_cb get_root,
+ void                                       *cb_data);
+
+int _ipmi_fru_deregister_multi_record_oem_handler
+(unsigned int  manufacturer_id,
+ unsigned char record_type_id);
 
 #endif /* IPMI_OEM_H */

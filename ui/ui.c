@@ -3273,6 +3273,83 @@ do {									\
     }									\
 } while (0)
 
+static int
+traverse_fru_multi_record_tree(ipmi_fru_node_t *node,
+			       int             indent)
+{
+    char                      *name;
+    unsigned int              i, k;
+    enum ipmi_fru_data_type_e dtype;
+    int                       intval, rv;
+    time_t                    time;
+    char                      *data;
+    unsigned int              data_len;
+    ipmi_fru_node_t           *sub_node;
+    
+    for (i=0; ; i++) {
+        rv = ipmi_fru_node_get_field(node, i, &name, &dtype, &intval,
+				     &time, &data, &data_len, &sub_node);
+        if ((rv == EINVAL) || (rv == ENOSYS))
+            break;
+        else if (rv)
+            continue;
+
+	if (name)
+	    display_pad_out("%*sName: %s \n", indent, "", name);
+	else
+	    /* An array index. */
+	    display_pad_out("%*%d: \n", indent, "", i);
+        switch (dtype) {
+	case IPMI_FRU_DATA_INT:
+	    display_pad_out("%*sType: integer\n", indent, "");
+	    display_pad_out("%*sData: %d\n", indent, "", intval);
+	    break;
+
+	case IPMI_FRU_DATA_TIME:
+	    display_pad_out("%*sType: time\n", indent, "");
+	    display_pad_out("%*sData: %ld\n", indent, "", (long)time);
+	    break;
+
+	case IPMI_FRU_DATA_BINARY:
+	    display_pad_out("%*sType: binary\n", indent, "");
+	    display_pad_out("%*sData:", indent, "");
+	    for(k=0; k<data_len; k++)
+		display_pad_out(" %2.2x", data[k]);
+	    display_pad_out("\n");
+	    break;
+
+	case IPMI_FRU_DATA_ASCII:
+	    display_pad_out("%*sType: ascii\n", indent, "");
+	    display_pad_out("%*sData: %s\n", indent, "", data);
+	    break;
+
+	case IPMI_FRU_DATA_UNICODE:
+	    display_pad_out("%*sType: unicode\n", indent, "");
+	    display_pad_out("%*sData:", indent, "");
+	    for (k=0; k<data_len; k++)
+		display_pad_out(" %2.2x", data[k]);
+	    display_pad_out("\n");
+	    break;
+
+	case IPMI_FRU_DATA_SUB_NODE:
+	    if (intval == -1)
+		display_pad_out("%*sType: Record\n", indent, "");
+	    else
+		display_pad_out("%*sType: Array\n", indent, "");
+	    traverse_fru_multi_record_tree(sub_node, indent+2);
+	    break;
+	    
+	default:
+	    display_pad_out("Type: unknown\n");
+	    break;
+	}
+    }
+    
+    ipmi_fru_put_node(node);
+
+    return 0;
+}
+
 static void
 dump_fru_info(ipmi_fru_t *fru)
 {
@@ -3348,10 +3425,12 @@ dump_fru_info(ipmi_fru_t *fru)
     DUMP_FRU_CUSTOM_STR(product_info, "product info");
     num_multi = ipmi_fru_get_num_multi_records(fru);
     for (i=0; i<num_multi; i++) {
-	unsigned char type, ver;
-	unsigned int  j;
-	unsigned int  len;
-	unsigned char *data;
+	unsigned char   type, ver;
+	unsigned int    j;
+	unsigned int    len;
+	unsigned char   *data;
+        ipmi_fru_node_t *node;
+	char            *name;
 
 	rv = ipmi_fru_get_multi_record_type(fru, i, &type);
 	if (rv)
@@ -3385,6 +3464,14 @@ dump_fru_info(ipmi_fru_t *fru)
 		display_pad_out(" %2.2x", data[j]);
 	    }
 	    display_pad_out("\n");
+            rv = ipmi_fru_multi_record_get_root_node(fru, i, &name, &node);
+            if ( !rv ) {
+		display_pad_out("Multi-record decode: %s", name);
+                traverse_fru_multi_record_tree(node, 2);
+            } else if ((rv != ENOSYS) && (rv != EINVAL)) {
+                display_pad_out(" multi-record %d, error get root obj: %x\n ",
+                                i, rv);
+            }
 	}
 	ipmi_mem_free(data);
     }

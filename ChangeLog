@@ -1,3 +1,9 @@
+2005-06-14 Forrest Zhao <forrest.zhao@intel.com>, Corey Minyard <cminyard@mvista.com>
+        * include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_oem.h 
+          lib/fru.c, lib/oem_atca.c, ui/ui.c: Add support for OEM FRU
+          multirecord decode, providing a hierarchy interface for user to
+          get each field of decoded OEM FRU multirecord.
+ 
 2005-06-10 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Fix some english grammar problems in a pring.
