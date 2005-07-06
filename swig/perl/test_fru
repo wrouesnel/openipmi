@@ -236,7 +236,11 @@ sub fru_1_data_check {
     main::check_fru_data($fru, "board_info_lang_code", -1, "integer", "25");
     main::check_fru_data($fru, "board_info_mfg_time", -1, "time", "820476000");
     main::check_fru_data($fru, "board_info_board_manufacturer", -1, "ascii", "Tes1");
-    main::check_fru_data($fru, "board_info_board_product_name", -1, "ascii", "Tes2");
+    if ($version == 0) {
+    	main::check_fru_data($fru, "board_info_board_product_name", -1, "ascii", "am4001");
+    } else {
+    	main::check_fru_data($fru, "board_info_board_product_name", -1, "ascii", "AM4001");
+    }
     main::check_fru_data($fru, "board_info_board_serial_number", -1, "ascii", "Tes3");
     main::check_fru_data($fru, "board_info_board_part_number", -1, "ascii", "Tes4");
     main::check_fru_data($fru, "board_info_fru_file_id", -1, "ascii", "Tes5");
@@ -594,6 +598,11 @@ sub dup_fru {
 
 	print "FRU refetched\n";
 	main::fru_1_data_check($fru, 1);
+	main::check_area($fru, 0, 8, 16, 16);
+	main::check_area($fru, 1, 24, 16, 11);
+	main::check_area($fru, 2, 96, 40, 34);
+	main::check_area($fru, 3, 192, 256, 181);
+	main::check_area($fru, 4, 512, 512, 28);
 
 	$main::tmpfru = $fru;
 
@@ -659,7 +668,7 @@ sub dup_fru {
 	print "FRU data read, checking\n";
 	main::check_area($fru, 0, 8, 8, 8);
 	main::check_area($fru, 1, 16, 24, 20);
-	main::check_area($fru, 2, 48, 40, 33);
+	main::check_area($fru, 2, 48, 40, 35);
 	main::check_area($fru, 3, 88, 104, 100);
 	main::check_area($fru, 4, 192, 832, 26);
 
@@ -747,7 +756,7 @@ sub dup_fru {
 
 	main::check_area($fru, 0, 8, 8, 8);
 	main::check_area($fru, 1, 24, 24, 17);
-	main::check_area($fru, 2, 48, 40, 33);
+	main::check_area($fru, 2, 48, 40, 35);
 	main::check_area($fru, 3, 88, 104, 100);
 	main::check_area($fru, 4, 192, 832, 26);
 
@@ -772,7 +781,7 @@ sub dup_fru {
 
 	main::check_area($fru, 0, 8, 8, 8);
 	main::check_area($fru, 1, 24, 16, 16);
-	main::check_area($fru, 2, 48, 40, 33);
+	main::check_area($fru, 2, 48, 40, 35);
 	main::check_area($fru, 3, 88, 104, 100);
 	main::check_area($fru, 4, 192, 832, 26);
 
@@ -808,7 +817,7 @@ sub dup_fru {
 
 	main::check_area($fru, 0, 8, 8, 8);
 	main::check_area($fru, 1, 24, 16, 16);
-	main::check_area($fru, 2, 96, 40, 33);
+	main::check_area($fru, 2, 96, 40, 35);
 	main::check_area($fru, 3, 192, 104, 100);
 	main::check_area($fru, 4, 512, 512, 26);
 
@@ -821,7 +830,7 @@ sub dup_fru {
 	}
 	main::check_area($fru, 0, 8, 8, 8);
 	main::check_area($fru, 1, 24, 16, 16);
-	main::check_area($fru, 2, 96, 40, 33);
+	main::check_area($fru, 2, 96, 40, 35);
 	main::check_area($fru, 3, 192, 256, 100);
 	main::check_area($fru, 4, 512, 512, 26);
 
@@ -845,6 +854,16 @@ sub dup_fru {
 	}
 	main::check_fru_data($fru, "product_info_custom", 2, "ascii",
 			     "ASDF1234*()");
+	main::check_area($fru, 3, 192, 256, 174);
+
+	# Convert an 8-bit field to a 6-bit field in board info
+	$rv = $fru->set($fru_field_table->{board_info_board_product_name}, -1,
+			"ascii", "AM4001");
+	if ($rv) {
+	    main::reg_err("Error setting board info board product name: $rv");
+	    $h->close();
+	    return;
+	}
 
 	# Convert an 8-bit field to a 6-bit field
 	$rv = $fru->set($fru_field_table->{product_info_product_name}, -1, "ascii",
@@ -1048,10 +1067,10 @@ $lanserv->cmd
      " 00 00 00 00 00 00 00 00" .
 # Board info
      " 01 05 00 00 00 00 c4 'T" .
-     " 'e 's '1 c4 'T 'e 's '2" .
-     " c4 'T 'e 's '3 c4 'T 'e" .
-     " 's '4 c4 'T 'e 's '5 c1" .
-     " 00 00 00 00 00 00 00 8a" .
+     " 'e 's '1 c6 'a 'm '4 '0" .
+     " '0 '1 c4 'T 'e 's '3 c4" .
+     " 'T 'e 's '4 c4 'T 'e 's" .
+     " '5 c1 00 00 00 00 00 53" .
 #Product Info
      " 01 0d 00 c0 c3 'T 'e '6" .
      " ff 'a 'b 'c 'd 'e 'f 'g" .

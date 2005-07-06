@@ -1,3 +1,8 @@
+2005-07-06 Corey Minyard <cminyard@mvista.com>
+
+	* swig/perl/test_fru: Added some more tests trying to reproduce
+	a user problem.
+
 2005-06-14 Forrest Zhao <forrest.zhao@intel.com>, Corey Minyard <cminyard@mvista.com>
         * include/OpenIPMI/ipmi_fru.h, include/OpenIPMI/internal/ipmi_oem.h 
           lib/fru.c, lib/oem_atca.c, ui/ui.c: Add support for OEM FRU
