@@ -125,9 +125,11 @@ read_command_file(emu_data_t *emu, char *command_file)
 		continue;
 	    if ((pos > 0) && (buffer[pos] == '\\')) {
 		/* Continue the line. */
-		pos--;
+		/* Don't do pos--, write over the "\\" */
 		continue;
 	    }
+	    pos++;
+	    buffer[pos] = 0;
 	    
 	    rv = ipmi_emu_cmd(emu, buffer);
 	    if (rv)

@@ -1,3 +1,21 @@
+2005-07-12 Corey Minyard <cminyard@mvista.com>
+
+	* lib/fru.c: Fix a problem with uninitialized variable FRU string
+	data and another problem with encoding later fields after a
+	changed field.
+
+	* cmdlang/cmd_fru.c: Must reference the FRU again before deleting;
+	the caller is holding their own reference and will dereference it
+	themselves.
+
+	* lanserv/emu_cmd.c: Fixed a problem reading continued command
+	strings in the emulator.
+
+	* lanserv/README.emulator: Fixed some documentation for FRU handling.
+
+	* lib/sdr.c: When checking the length of SDR data, allow extra
+	data at the end.
+
 2005-07-06 Corey Minyard <cminyard@mvista.com>
 
 	* swig/perl/test_fru: Added some more tests trying to reproduce

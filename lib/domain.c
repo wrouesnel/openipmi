@@ -190,8 +190,8 @@ struct ipmi_domain_s
 
 #define IPMB_HASH 32
     mc_table_t ipmb_mcs[IPMB_HASH];
-#define SYS_INTF_MCS 2
-    ipmi_mc_t *sys_intf_mcs[SYS_INTF_MCS];
+#define MAX_CONS 2
+    ipmi_mc_t *sys_intf_mcs[MAX_CONS];
     ipmi_lock_t *mc_lock;
 
     /* A list of outstanding messages.  We use this so we can reroute
@@ -218,7 +218,6 @@ struct ipmi_domain_s
     ipmi_entity_info_t    *entities;
     ipmi_lock_t           *entities_lock;
 
-#define MAX_CONS 2
     ipmi_lock_t   *con_lock;
     int           working_conn;
     ipmi_con_t    *conn[MAX_CONS];
@@ -1374,7 +1373,7 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
     if (addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
 	if (addr->channel == IPMI_BMC_CHANNEL)
 	    mc = domain->si_mc;
-	else if (addr->channel < SYS_INTF_MCS)
+	else if (addr->channel < MAX_CONS)
 	    mc = domain->sys_intf_mcs[addr->channel];
     } else if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
 	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
@@ -1497,7 +1496,7 @@ add_mc_to_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
     ipmi_lock(domain->mc_lock);
 
     if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-	if (addr.channel > SYS_INTF_MCS)
+	if (addr.channel >= MAX_CONS)
 	    rv = EINVAL;
 	else
 	    domain->sys_intf_mcs[addr.channel] = mc;
@@ -1590,7 +1589,7 @@ _ipmi_remove_mc_from_domain(ipmi_domain_t *domain, ipmi_mc_t *mc)
     ipmi_mc_get_ipmi_address(mc, &addr, &addr_len);
     
     if (addr.addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE) {
-	if ((addr.channel < SYS_INTF_MCS)
+	if ((addr.channel < MAX_CONS)
 	    && (mc == domain->sys_intf_mcs[addr.channel]))
 	{
 	    domain->sys_intf_mcs[addr.channel] = NULL;
@@ -1756,7 +1755,6 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
     ipmi_domain_t                *domain = orspi->data1;
     ll_msg_t                     *nmsg = orspi->data2;
     int                          rv;
-    ipmi_system_interface_addr_t *si;
 
     rspi = nmsg->rsp_item;
 
@@ -1771,14 +1769,8 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 
     if (nmsg->rsp_handler) {
 	ipmi_move_msg_item(rspi, orspi);
-
-	/* Override the address with the system interface address. */
-	si = (ipmi_system_interface_addr_t *) &rspi->addr;
-	si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-	si->channel = (long) orspi->data4;
-	si->lun = ipmi_addr_get_lun(&rspi->addr);
-	rspi->addr_len = sizeof(*si);
-
+	/* Set the LUN from the response message. */
+	ipmi_addr_set_lun(&rspi->addr, ipmi_addr_get_lun(&rspi->addr));
 	deliver_rsp(domain, nmsg->rsp_handler, rspi);
     } else
 	ipmi_free_msg_item(rspi);
@@ -1796,15 +1788,17 @@ matching_domain_sysaddr(ipmi_domain_t *domain, ipmi_addr_t *addr,
 	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
 	int              i;
 
-	if (ipmb->channel == 0)
+	if (ipmb->channel != 0)
 	    return 0;
 
 	for (i=0; i<MAX_CONS; i++) {
 	    if (domain->con_active[i]
-		&& (domain->con_ipmb_addr[i] == ipmb->slave_addr))
+		&& domain->con_up[i]
+		&& (domain->con_ipmb_addr[i] == ipmb->slave_addr)
+		&& domain->sys_intf_mcs[i])
 	    {
 		si->addr_type = IPMI_SYSTEM_INTERFACE_ADDR_TYPE;
-		si->channel = 0;
+		si->channel = i;
 		si->lun = ipmb->lun;
 		return 1;
 	    }
@@ -1852,14 +1846,19 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 	return ENOMEM;
     }
 
+    /* Copy the address here because where we send it may change.  But
+       we want the response address to match what we sent. */
+    memcpy(&nmsg->rsp_item->addr, addr, addr_len);
+    nmsg->rsp_item->addr_len = addr_len;
+
     if (matching_domain_sysaddr(domain, addr, &si)) {
-	/* We have a direct connection to this BMC, so talk directly
-	   to it. */
+	/* We have a direct connection to this BMC and it is up and
+	   operational, so talk directly to it. */
 	u = si.channel;
+	si.channel = IPMI_BMC_CHANNEL;
 	addr = (ipmi_addr_t *) &si;
 	addr_len = sizeof(si);
 	handler = ll_si_rsp_handler;
-	data4 = (void *) (long) u;
     } else if ((addr->addr_type == IPMI_SYSTEM_INTERFACE_ADDR_TYPE)
 	&& (addr->channel != IPMI_BMC_CHANNEL))
     {
@@ -1882,7 +1881,6 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 	addr = (ipmi_addr_t *) &si;
 	addr_len = sizeof(si);
 	handler = ll_si_rsp_handler;
-	data4 = (void *) (long) u;
     } else {
 	u = domain->working_conn;
 
@@ -1896,8 +1894,6 @@ ipmi_send_command_addr(ipmi_domain_t                *domain,
 
     nmsg->domain = domain;
     nmsg->con = u;
-    memcpy(&nmsg->rsp_item->addr, addr, addr_len);
-    nmsg->rsp_item->addr_len = addr_len;
 
     memcpy(&nmsg->msg, msg, sizeof(nmsg->msg));
     nmsg->msg.data = nmsg->msg_data;
@@ -3310,7 +3306,7 @@ ipmi_domain_iterate_mcs(ipmi_domain_t              *domain,
     CHECK_DOMAIN_LOCK(domain);
 
     ipmi_lock(domain->mc_lock);
-    for (i=0; i<SYS_INTF_MCS; i++) {
+    for (i=0; i<MAX_CONS; i++) {
 	ipmi_mc_t *mc = domain->sys_intf_mcs[i];
 	if (mc && !_ipmi_mc_get(mc)) {
 	    ipmi_unlock(domain->mc_lock);
@@ -3359,7 +3355,7 @@ ipmi_domain_iterate_mcs_rev(ipmi_domain_t              *domain,
 	    }
 	}
     }
-    for (i=SYS_INTF_MCS-1; i>=0; i--) {
+    for (i=MAX_CONS-1; i>=0; i--) {
 	ipmi_mc_t *mc = domain->sys_intf_mcs[i];
 	if (mc && !_ipmi_mc_get(mc)) {
 	    ipmi_unlock(domain->mc_lock);

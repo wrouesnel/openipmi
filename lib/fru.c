@@ -385,15 +385,7 @@ fru_encode_fields(ipmi_fru_t        *fru,
 	    return EBADF;
 	}
 
-	if (s->changed) {
-	    len = IPMI_MAX_STR_LEN;
-	    ipmi_set_device_string(s->str, s->type, s->length,
-				   data+offset, 1, &len);
-	    if (s->raw_data) {
-		ipmi_mem_free(s->raw_data);
-		s->raw_data = NULL;
-	    }
-	} else if (s->raw_data) {
+	if (s->raw_data) {
 	    memcpy(data+offset, s->raw_data, s->raw_len);
 	    len = s->raw_len;
 	} else if (s->str) {
@@ -697,8 +689,9 @@ fru_decode_variable_string(ipmi_fru_t     *fru,
     int err;
 
     if (v->next == v->len) {
+#define FRU_STR_ALLOC_INCREMENT	5
 	fru_string_t *n;
-	int          n_len = v->len + 5;
+	int          n_len = v->len + FRU_STR_ALLOC_INCREMENT;
 
 	n = ipmi_mem_alloc(sizeof(fru_string_t) * n_len);
 	if (!n)
@@ -708,6 +701,8 @@ fru_decode_variable_string(ipmi_fru_t     *fru,
 	    memcpy(n, v->strings, sizeof(fru_string_t) * v->len);
 	    ipmi_mem_free(v->strings);
 	}
+	memset(n + v->len, 0,
+	       sizeof(fru_string_t) * FRU_STR_ALLOC_INCREMENT);
 	v->strings = n;
 	v->len = n_len;
     }

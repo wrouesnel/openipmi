@@ -1030,7 +1030,7 @@ handle_sdr_data(ipmi_mc_t  *mc,
 	goto out;
     }
 
-    if (rsp->data_len != info->read_len+3) {
+    if (rsp->data_len < info->read_len+3) {
 	/* We got back an invalid amount of data, abort */
 	ilist_add_tail(sdrs->free_fetch, info, &info->link);
 	sdrs->fetch_retry_count = MAX_SDR_FETCH_RETRIES+1;

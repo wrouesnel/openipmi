@@ -197,6 +197,10 @@ fru_close(ipmi_fru_t *fru, void *cb_data)
     int             rv;
 
     ipmi_cmdlang_cmd_info_get(cmd_info);
+    /* We need to be holding our own reference to the FRU because
+       ipmi_fru_destroy will do a deref on it, but the calling code
+       will also be doing a deref.. */
+    ipmi_fru_ref(fru);
     rv = ipmi_fru_destroy(fru, fru_deleted, cmd_info);
     if (rv) {
 	ipmi_cmdlang_cmd_info_put(cmd_info);

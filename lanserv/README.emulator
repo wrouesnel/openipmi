@@ -151,11 +151,14 @@ mc_set_power <mc> <power> <generate event>
 	14
 	15
 
-mc_add_fru_data <mc> <length> <device id> <data 1> .. <data n>
+mc_add_fru_data <mc> <device id> <length> <data 1> .. <data n>
   Set the FRU data for the given MC/device id to be <length> bytes
   long and initialize the data to the given values.  Note that the
   initial data need not be as long as the full length of the FRU
   data.
+
+mc_dump_fru_data <mc> <device id>
+  Dump all the data for the FRU device.
 
 mc_add <IPMB> <dev id> <has device SDRs> <device revision>
 	<major FW rev> <minor FW rev> <device support>
