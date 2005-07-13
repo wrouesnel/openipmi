@@ -48,7 +48,7 @@
 os_handler_t *ipmi_get_global_os_handler(void);
 
 /* Create a lock, using the OS handlers for the given MC. */
-int ipmi_create_lock(const ipmi_domain_t *mc, ipmi_lock_t **lock);
+int ipmi_create_lock(ipmi_domain_t *mc, ipmi_lock_t **lock);
 
 /* Create a lock using the main os handler registered with ipmi_init(). */
 int ipmi_create_global_lock(ipmi_lock_t **new_lock);

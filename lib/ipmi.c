@@ -80,7 +80,7 @@ ipmi_create_global_lock(ipmi_lock_t **new_lock)
 }
 
 int
-ipmi_create_lock(const ipmi_domain_t *domain, ipmi_lock_t **new_lock)
+ipmi_create_lock(ipmi_domain_t *domain, ipmi_lock_t **new_lock)
 {
     return ipmi_create_lock_os_hnd(ipmi_domain_get_os_hnd(domain), new_lock);
 }

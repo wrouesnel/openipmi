@@ -3,6 +3,8 @@
 	* include/OpenIPMI/internal/ipmi_sensor.c, include/OpenIPMI/ipmiif.h.in:
 	Move ipmi_sensor_get_owner() to ipmiif.h for the CIM mapping.
 
+	* everything: A massive update to improve const correcteness.
+
 2005-07-12 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Fix a problem with uninitialized variable FRU string

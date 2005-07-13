@@ -47,10 +47,10 @@ int _ipmi_domain_get(ipmi_domain_t *domain);
 void _ipmi_domain_put(ipmi_domain_t *domain);
 
 /* Return the OS handler used by the mc. */
-os_handler_t *ipmi_domain_get_os_hnd(const ipmi_domain_t *domain);
+os_handler_t *ipmi_domain_get_os_hnd(ipmi_domain_t *domain);
 
 /* Return the entity info for the given domain. */
-ipmi_entity_info_t *ipmi_domain_get_entities(const ipmi_domain_t *domain);
+ipmi_entity_info_t *ipmi_domain_get_entities(ipmi_domain_t *domain);
 
 /* Should the BMC do a full bus scan at startup?  This is so OEM
    code can turn this function off.  The value is a boolean. */
@@ -76,9 +76,9 @@ int _ipmi_find_or_create_mc_by_slave_addr(ipmi_domain_t *domain,
 
 /* Find the MC with the given IPMI address, or return NULL if not
    found. */
-ipmi_mc_t *_ipmi_find_mc_by_addr(const ipmi_domain_t *domain,
-				 const ipmi_addr_t   *addr,
-				 unsigned int        addr_len);
+ipmi_mc_t *_ipmi_find_mc_by_addr(ipmi_domain_t     *domain,
+				 const ipmi_addr_t *addr,
+				 unsigned int      addr_len);
 
 /* Return the SDRs for the given MC, or the main set of SDRs if the MC
    is NULL. */

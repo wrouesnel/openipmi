@@ -1360,9 +1360,9 @@ cancel_domain_oem_check(ipmi_domain_t *domain)
 #define HASH_SLAVE_ADDR(x) (((x) >> 1) & (IPMB_HASH-1))
 
 ipmi_mc_t *
-_ipmi_find_mc_by_addr(const ipmi_domain_t *domain,
-		      const ipmi_addr_t   *addr,
-		      unsigned int        addr_len)
+_ipmi_find_mc_by_addr(ipmi_domain_t     *domain,
+		      const ipmi_addr_t *addr,
+		      unsigned int      addr_len)
 {
     ipmi_mc_t     *mc = NULL;
 
@@ -1781,7 +1781,7 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 }
 
 static int
-matching_domain_sysaddr(const ipmi_domain_t *domain, const ipmi_addr_t *addr,
+matching_domain_sysaddr(ipmi_domain_t *domain, const ipmi_addr_t *addr,
 			ipmi_system_interface_addr_t *si)
 {
     if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
@@ -2030,7 +2030,7 @@ ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain, unsigned int seconds)
 }
 
 unsigned int
-ipmi_domain_get_ipmb_rescan_time(const ipmi_domain_t *domain)
+ipmi_domain_get_ipmb_rescan_time(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
 
@@ -3045,7 +3045,7 @@ ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
 }
 
 unsigned int
-ipmi_domain_get_sel_rescan_time(const ipmi_domain_t *domain)
+ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
 
@@ -3193,14 +3193,14 @@ ipmi_detect_domain_presence_changes(ipmi_domain_t *domain, int force)
 }
 
 os_handler_t *
-ipmi_domain_get_os_hnd(const ipmi_domain_t *domain)
+ipmi_domain_get_os_hnd(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     return domain->os_hnd;
 }
 
 ipmi_entity_info_t *
-ipmi_domain_get_entities(const ipmi_domain_t *domain)
+ipmi_domain_get_entities(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     return domain->entities;
@@ -4824,7 +4824,7 @@ ipmi_domain_get_channel(ipmi_domain_t    *domain,
 }
 
 int
-ipmi_domain_get_guid(const ipmi_domain_t *domain, unsigned char *guid)
+ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid)
 {
     int rv;
     _ipmi_mc_get(domain->si_mc);
@@ -4834,7 +4834,7 @@ ipmi_domain_get_guid(const ipmi_domain_t *domain, unsigned char *guid)
 }
 
 int
-ipmi_domain_con_up(const ipmi_domain_t *domain)
+ipmi_domain_con_up(ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     return domain->connection_up;
@@ -4869,7 +4869,7 @@ _ipmi_domain_name(const ipmi_domain_t *domain)
 }
 
 int
-ipmi_domain_get_name(const ipmi_domain_t *domain, char *name, int length)
+ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int length)
 {
     int  slen;
 
@@ -4913,7 +4913,7 @@ ipmi_domain_get_oem_data(ipmi_domain_t *domain)
 }
 
 enum ipmi_domain_type
-ipmi_domain_get_type(const ipmi_domain_t *domain)
+ipmi_domain_get_type(ipmi_domain_t *domain)
 {
     return domain->domain_type;
 }
