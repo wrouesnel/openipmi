@@ -48,7 +48,7 @@
 os_handler_t *ipmi_get_global_os_handler(void);
 
 /* Create a lock, using the OS handlers for the given MC. */
-int ipmi_create_lock(ipmi_domain_t *mc, ipmi_lock_t **lock);
+int ipmi_create_lock(const ipmi_domain_t *mc, ipmi_lock_t **lock);
 
 /* Create a lock using the main os handler registered with ipmi_init(). */
 int ipmi_create_global_lock(ipmi_lock_t **new_lock);
@@ -91,10 +91,10 @@ int ipmi_check_oem_conn_handlers(ipmi_con_t   *conn,
 /* IPMI data handling. */
 
 /* Extract a 32-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint32(unsigned char *data);
+unsigned int ipmi_get_uint32(const unsigned char *data);
 
 /* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint16(unsigned char *data);
+unsigned int ipmi_get_uint16(const unsigned char *data);
 
 /* Add a 32-bit integer to the data, IPMI (little-endian) style. */
 void ipmi_set_uint32(unsigned char *data, int val);
@@ -116,7 +116,7 @@ void ipmi_set_uint16(unsigned char *data, int val);
    character after the used data. */
 #define IPMI_STR_SDR_SEMANTICS	0
 #define IPMI_STR_FRU_SEMANTICS	1
-unsigned int ipmi_get_device_string(unsigned char        **input,
+unsigned int ipmi_get_device_string(unsigned char        ** const input,
 				    unsigned int         in_len,
 				    char                 *output,
 				    int                  semantics,
@@ -129,7 +129,7 @@ unsigned int ipmi_get_device_string(unsigned char        **input,
    place the output (including the type/length byte) and out_len is a
    pointer to the max size of output (including the type/length byte).
    Upon return, out_len will be set to the actual output length. */
-void ipmi_set_device_string(char                 *input,
+void ipmi_set_device_string(const char           *input,
 			    enum ipmi_str_type_e type,
 			    unsigned int         in_len,
 			    unsigned char        *output,
@@ -138,19 +138,19 @@ void ipmi_set_device_string(char                 *input,
 
 /* Generate a log.  Note that logs should not end in a newline, that
    will be automatically added as needed to the log.  */
-void ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
+void ipmi_log(enum ipmi_log_type_e log_type, const char *format, ...)
 #ifdef __GNUC__
      __attribute__ ((__format__ (__printf__, 2, 3)))
 #endif
 ;
 
 /* Internal function to get the name of a domain. */
-char *_ipmi_domain_name(ipmi_domain_t *domain);
-char *_ipmi_mc_name(ipmi_mc_t *mc);
-char *_ipmi_sensor_name(ipmi_sensor_t *sensor);
-char *_ipmi_control_name(ipmi_control_t *control);
-char *_ipmi_entity_name(ipmi_entity_t *entity);
-char *_ipmi_entity_id_name(ipmi_entity_id_t entity_id);
+const char *_ipmi_domain_name(const ipmi_domain_t *domain);
+const char *_ipmi_mc_name(const ipmi_mc_t *mc);
+const char *_ipmi_sensor_name(const ipmi_sensor_t *sensor);
+const char *_ipmi_control_name(const ipmi_control_t *control);
+const char *_ipmi_entity_name(const ipmi_entity_t *entity);
+const char *_ipmi_entity_id_name(const ipmi_entity_id_t entity_id);
 #define DOMAIN_NAME(d) ((d) ? _ipmi_domain_name(d) : "")
 #define MC_NAME(m) ((m) ? _ipmi_mc_name(m) : "")
 #define ENTITY_NAME(e) ((e) ? _ipmi_entity_name(e) : "")
@@ -169,19 +169,19 @@ void _ipmi_domain_mc_unlock(ipmi_domain_t *domain);
 #ifdef IPMI_CHECK_LOCKS
 /* Various lock-checking information. */
 /* Nothing for now. */
-void __ipmi_check_mc_lock(ipmi_mc_t *mc);
+void __ipmi_check_mc_lock(const ipmi_mc_t *mc);
 #define CHECK_MC_LOCK(mc) __ipmi_check_mc_lock(mc)
 
-void __ipmi_check_domain_lock(ipmi_domain_t *domain);
+void __ipmi_check_domain_lock(const ipmi_domain_t *domain);
 #define CHECK_DOMAIN_LOCK(domain) __ipmi_check_domain_lock(domain)
-void __ipmi_check_entity_lock(ipmi_entity_t *entity);
+void __ipmi_check_entity_lock(const ipmi_entity_t *entity);
 #define CHECK_ENTITY_LOCK(entity) __ipmi_check_entity_lock(entity)
-void __ipmi_check_sensor_lock(ipmi_sensor_t *sensor);
+void __ipmi_check_sensor_lock(const ipmi_sensor_t *sensor);
 #define CHECK_SENSOR_LOCK(sensor) __ipmi_check_sensor_lock(sensor)
-void __ipmi_check_control_lock(ipmi_control_t *control);
+void __ipmi_check_control_lock(const ipmi_control_t *control);
 #define CHECK_CONTROL_LOCK(control) __ipmi_check_control_lock(control)
 
-void ipmi_check_lock(ipmi_lock_t *lock, char *str);
+void ipmi_check_lock(const ipmi_lock_t *lock, const char *str);
 #else
 #define CHECK_MC_LOCK(mc) do {} while (0)
 #define CHECK_DOMAIN_LOCK(domain) do {} while (0)

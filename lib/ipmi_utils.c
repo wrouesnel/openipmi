@@ -35,7 +35,7 @@
 
 #include <OpenIPMI/internal/ipmi_int.h>
 
-unsigned int ipmi_get_uint32(unsigned char *data)
+unsigned int ipmi_get_uint32(const unsigned char *data)
 {
     return (data[0]
 	    | (data[1] << 8)
@@ -44,7 +44,7 @@ unsigned int ipmi_get_uint32(unsigned char *data)
 }
 
 /* Extract a 16-bit integer from the data, IPMI (little-endian) style. */
-unsigned int ipmi_get_uint16(unsigned char *data)
+unsigned int ipmi_get_uint16(const unsigned char *data)
 {
     return (data[0]
 	    | (data[1] << 8));
@@ -67,10 +67,10 @@ void ipmi_set_uint16(unsigned char *data, int val)
 }
 
 int
-ipmi_addr_equal(ipmi_addr_t *addr1,
-		int         addr1_len,
-		ipmi_addr_t *addr2,
-		int         addr2_len)
+ipmi_addr_equal(const ipmi_addr_t *addr1,
+		int               addr1_len,
+		const ipmi_addr_t *addr2,
+		int               addr2_len)
 {
     if (addr1_len != addr2_len)
 	return 0;
@@ -121,10 +121,10 @@ ipmi_addr_equal(ipmi_addr_t *addr1,
 }
 
 int
-ipmi_addr_equal_nolun(ipmi_addr_t *addr1,
-		      int         addr1_len,
-		      ipmi_addr_t *addr2,
-		      int         addr2_len)
+ipmi_addr_equal_nolun(const ipmi_addr_t *addr1,
+		      int               addr1_len,
+		      const ipmi_addr_t *addr2,
+		      int               addr2_len)
 {
     if (addr1_len != addr2_len)
 	return 0;
@@ -168,7 +168,7 @@ ipmi_addr_equal_nolun(ipmi_addr_t *addr1,
 }
 
 unsigned int
-ipmi_addr_get_lun(ipmi_addr_t *addr)
+ipmi_addr_get_lun(const ipmi_addr_t *addr)
 {
     switch (addr->addr_type)
     {
@@ -243,7 +243,7 @@ ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun)
 
 /* Returns 0 if the address doesn't have a slave address. */
 unsigned int
-ipmi_addr_get_slave_addr(ipmi_addr_t *addr)
+ipmi_addr_get_slave_addr(const ipmi_addr_t *addr)
 {
     switch (addr->addr_type)
     {

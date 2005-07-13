@@ -162,22 +162,22 @@ typedef struct ipmi_802_3_addr_s
 
 /* Compare two IPMI addresses, and return false if they are equal and
    true if they are not. */
-int ipmi_addr_equal(ipmi_addr_t *addr1,
-		    int         addr1_len,
-		    ipmi_addr_t *addr2,
-		    int         addr2_len);
-unsigned int ipmi_addr_get_lun(ipmi_addr_t *addr);
+int ipmi_addr_equal(const ipmi_addr_t *addr1,
+		    int               addr1_len,
+		    const ipmi_addr_t *addr2,
+		    int               addr2_len);
+unsigned int ipmi_addr_get_lun(const ipmi_addr_t *addr);
 int ipmi_addr_set_lun(ipmi_addr_t *addr, unsigned int lun);
 
 /* Like the above, but do not use the LUN in the comparison. */
-int ipmi_addr_equal_nolun(ipmi_addr_t *addr1,
-			  int         addr1_len,
-			  ipmi_addr_t *addr2,
-			  int         addr2_len);
+int ipmi_addr_equal_nolun(const ipmi_addr_t *addr1,
+			  int               addr1_len,
+			  const ipmi_addr_t *addr2,
+			  int               addr2_len);
 
 /* Get the slave address from the address, returns 0 if the address
    does not have a slave address. */
-unsigned int ipmi_addr_get_slave_addr(ipmi_addr_t *addr);
+unsigned int ipmi_addr_get_slave_addr(const ipmi_addr_t *addr);
 
 #ifdef __cplusplus
 }

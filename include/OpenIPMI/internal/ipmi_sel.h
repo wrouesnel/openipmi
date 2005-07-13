@@ -85,8 +85,10 @@ int ipmi_get_sel_entries_used(ipmi_sel_info_t *sel,
 
 ipmi_event_t *ipmi_sel_get_first_event(ipmi_sel_info_t *sel);
 ipmi_event_t *ipmi_sel_get_last_event(ipmi_sel_info_t *sel);
-ipmi_event_t *ipmi_sel_get_next_event(ipmi_sel_info_t *sel, ipmi_event_t *p);
-ipmi_event_t *ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, ipmi_event_t *n);
+ipmi_event_t *ipmi_sel_get_next_event(ipmi_sel_info_t    *sel,
+				      const ipmi_event_t *p);
+ipmi_event_t *ipmi_sel_get_prev_event(ipmi_sel_info_t    *sel,
+				      const ipmi_event_t *n);
 ipmi_event_t *ipmi_sel_get_event_by_recid(ipmi_sel_info_t *sel,
 					  unsigned int    record_id);
 

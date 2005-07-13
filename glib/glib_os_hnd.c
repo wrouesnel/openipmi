@@ -328,7 +328,7 @@ get_vlog_data(void)
 
 static void
 add_vlog_data(vlog_data_t *info,
-	      char        *format,
+	      const char  *format,
 	      va_list     ap)
 {
     int len;
@@ -361,7 +361,7 @@ add_vlog_data(vlog_data_t *info,
 static void
 glib_vlog(os_handler_t         *handler,
 	  enum ipmi_log_type_e log_type,
-	  char                 *format,
+	  const char           *format,
 	  va_list              ap)
 {
     GLogLevelFlags flags;
@@ -410,7 +410,7 @@ glib_vlog(os_handler_t         *handler,
 static void
 glib_log(os_handler_t         *handler,
 	 enum ipmi_log_type_e log_type,
-	 char                 *format,
+	 const char           *format,
 	 ...)
 {
     va_list ap;

@@ -202,7 +202,7 @@ log_pad_refresh(int newlines)
 }
 
 void
-vlog_pad_out(char *format, va_list ap)
+vlog_pad_out(const char *format, va_list ap)
 {
     if (full_screen)
 	vw_printw(log_pad, format, ap);
@@ -422,7 +422,7 @@ draw_lines()
 }    
 
 void
-ui_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
+ui_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     int do_nl = 1;
     struct timeval now;
@@ -5662,13 +5662,13 @@ list_sel_cmder(ipmi_domain_t *domain, void *cb_data)
     display_pad_out("Events:\n");
     event = ipmi_domain_first_event(domain);
     while (event) {
-	ipmi_mcid_t   mcid = ipmi_event_get_mcid(event);
-	unsigned int  record_id = ipmi_event_get_record_id(event);
-	unsigned int  type = ipmi_event_get_type(event);
-	ipmi_time_t   timestamp = ipmi_event_get_timestamp(event);
-	unsigned int  data_len = ipmi_event_get_data_len(event);
-	unsigned char *data = ipmi_event_get_data_ptr(event);
-	int           i;
+	ipmi_mcid_t         mcid = ipmi_event_get_mcid(event);
+	unsigned int        record_id = ipmi_event_get_record_id(event);
+	unsigned int        type = ipmi_event_get_type(event);
+	ipmi_time_t         timestamp = ipmi_event_get_timestamp(event);
+	unsigned int        data_len = ipmi_event_get_data_len(event);
+	const unsigned char *data = ipmi_event_get_data_ptr(event);
+	int                 i;
 
 	display_pad_out("  (%x %x) %4.4x:%2.2x %lld:",
 			mcid.channel, mcid.mc_num, record_id, type, timestamp);
@@ -6928,15 +6928,15 @@ event_handler(ipmi_domain_t *domain,
 	      ipmi_event_t  *event,
 	      void          *event_data)
 {
-    ipmi_mcid_t   mcid = ipmi_event_get_mcid(event);
-    unsigned int  record_id = ipmi_event_get_record_id(event);
-    unsigned int  type = ipmi_event_get_type(event);
-    ipmi_time_t   timestamp = ipmi_event_get_timestamp(event);
-    unsigned int  data_len = ipmi_event_get_data_len(event);
-    unsigned char *data = ipmi_event_get_data_ptr(event);
-    int           i;
-    char          str[200];
-    int           pos;
+    ipmi_mcid_t         mcid = ipmi_event_get_mcid(event);
+    unsigned int        record_id = ipmi_event_get_record_id(event);
+    unsigned int        type = ipmi_event_get_type(event);
+    ipmi_time_t         timestamp = ipmi_event_get_timestamp(event);
+    unsigned int        data_len = ipmi_event_get_data_len(event);
+    const unsigned char *data = ipmi_event_get_data_ptr(event);
+    int                 i;
+    char                str[200];
+    int                 pos;
 
     pos = 0;
     for (i=0; i<data_len; i++)

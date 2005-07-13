@@ -113,7 +113,7 @@ ipmi_event_free(ipmi_event_t *event)
 }
 
 ipmi_mcid_t
-ipmi_event_get_mcid(ipmi_event_t *event)
+ipmi_event_get_mcid(const ipmi_event_t *event)
 {
     return event->mcid;
 }
@@ -125,31 +125,31 @@ ipmi_event_set_mcid(ipmi_event_t *event, ipmi_mcid_t mcid)
 }
 
 unsigned int
-ipmi_event_get_record_id(ipmi_event_t *event)
+ipmi_event_get_record_id(const ipmi_event_t *event)
 {
     return event->record_id;
 }
 
 unsigned int
-ipmi_event_get_type(ipmi_event_t *event)
+ipmi_event_get_type(const ipmi_event_t *event)
 {
     return event->type;
 }
 
 ipmi_time_t
-ipmi_event_get_timestamp(ipmi_event_t *event)
+ipmi_event_get_timestamp(const ipmi_event_t *event)
 {
     return event->timestamp;
 }
 
 unsigned int
-ipmi_event_get_data_len(ipmi_event_t *event)
+ipmi_event_get_data_len(const ipmi_event_t *event)
 {
     return event->data_len;
 }
 
 unsigned int
-ipmi_event_get_data(ipmi_event_t *event, unsigned char *data,
+ipmi_event_get_data(const ipmi_event_t *event, unsigned char *data,
 		    unsigned int offset, unsigned int len)
 {
     if (offset > event->data_len)
@@ -163,14 +163,14 @@ ipmi_event_get_data(ipmi_event_t *event, unsigned char *data,
     return len;
 }
 
-unsigned char *
-ipmi_event_get_data_ptr(ipmi_event_t *event)
+const unsigned char *
+ipmi_event_get_data_ptr(const ipmi_event_t *event)
 {
     return event->data;
 }
 
 int
-ipmi_event_is_old(ipmi_event_t *event)
+ipmi_event_is_old(const ipmi_event_t *event)
 {
     return event->old;
 }

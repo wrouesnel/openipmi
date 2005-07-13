@@ -224,16 +224,16 @@ void ipmi_cmdlang_out_long(ipmi_cmd_info_t *info,
 			   long            value);
 void ipmi_cmdlang_out_binary(ipmi_cmd_info_t *info,
 			     const char      *name,
-			     char            *value,
+			     const char      *value,
 			     unsigned int    len);
 void ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
 			      const char      *name,
-			      char            *value,
+			      const char      *value,
 			      unsigned int    len);
 void ipmi_cmdlang_out_type(ipmi_cmd_info_t      *info,
 			   char                 *name,
 			   enum ipmi_str_type_e type,
-			   char                 *value,
+			   const char           *value,
 			   unsigned int         len);
 void ipmi_cmdlang_out_ip(ipmi_cmd_info_t *info,
 			 const char      *name,

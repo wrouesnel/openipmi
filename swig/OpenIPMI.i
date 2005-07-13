@@ -328,7 +328,7 @@ parse_mac_addr(char *str, unsigned char *addr)
 swig_cb_val swig_log_handler;
 
 void
-posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
+posix_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     char *pfx = "";
     static char log[1024];

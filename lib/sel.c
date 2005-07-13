@@ -202,10 +202,10 @@ static int
 event_cmp(ipmi_event_t *event1, ipmi_event_t *event2)
 {
     int rv;
-    unsigned int  record_id1, record_id2;
-    unsigned int  type1, type2;
-    unsigned int  data_len1, data_len2;
-    unsigned char *ptr1, *ptr2;
+    unsigned int        record_id1, record_id2;
+    unsigned int        type1, type2;
+    unsigned int        data_len1, data_len2;
+    const unsigned char *ptr1, *ptr2;
 
     rv = ipmi_cmp_mc_id(ipmi_event_get_mcid(event1),
 			ipmi_event_get_mcid(event2));
@@ -1800,7 +1800,7 @@ ipmi_sel_get_last_event(ipmi_sel_info_t *sel)
 }
 
 ipmi_event_t *
-ipmi_sel_get_next_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
+ipmi_sel_get_next_event(ipmi_sel_info_t *sel, const ipmi_event_t *event)
 {
     ilist_iter_t iter;
     ipmi_event_t *rv = NULL;
@@ -1832,7 +1832,7 @@ ipmi_sel_get_next_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
 }
 
 ipmi_event_t *
-ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, ipmi_event_t *event)
+ipmi_sel_get_prev_event(ipmi_sel_info_t *sel, const ipmi_event_t *event)
 {
     ilist_iter_t iter;
     ipmi_event_t *rv = NULL;

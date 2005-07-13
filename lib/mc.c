@@ -312,8 +312,8 @@ ipmi_mc_get_name(ipmi_mc_t *mc, char *name, int length)
     return slen;
 }
 
-char *
-_ipmi_mc_name(ipmi_mc_t *mc)
+const char *
+_ipmi_mc_name(const ipmi_mc_t *mc)
 {
     return mc->name;
 }
@@ -815,13 +815,13 @@ ipmi_mc_add_event_to_sel(ipmi_mc_t                 *mc,
 }
 
 ipmi_event_t *
-ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event)
+ipmi_mc_next_event(ipmi_mc_t *mc, const ipmi_event_t *event)
 {
     return ipmi_sel_get_next_event(mc->sel, event);
 }
 
 ipmi_event_t *
-ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event)
+ipmi_mc_prev_event(ipmi_mc_t *mc, const ipmi_event_t *event)
 {
     return ipmi_sel_get_prev_event(mc->sel, event);
 }
@@ -2106,7 +2106,7 @@ addr_rsp_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 int
 ipmi_mc_send_command(ipmi_mc_t                  *mc,
 		     unsigned int               lun,
-		     ipmi_msg_t                 *msg,
+		     const ipmi_msg_t           *msg,
 		     ipmi_mc_response_handler_t rsp_handler,
 		     void                       *rsp_data)
 {
@@ -3432,7 +3432,7 @@ _ipmi_mc_shutdown(void)
  **********************************************************************/
 
 void
-__ipmi_check_mc_lock(ipmi_mc_t *mc)
+__ipmi_check_mc_lock(const ipmi_mc_t *mc)
 {
     if (!mc)
 	return;

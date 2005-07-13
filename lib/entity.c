@@ -677,8 +677,8 @@ entity_set_name(ipmi_entity_t *entity)
     ipmi_unlock(entity->lock);
 }
 
-char *
-_ipmi_entity_name(ipmi_entity_t *entity)
+const char *
+_ipmi_entity_name(const ipmi_entity_t *entity)
 {
     return entity->name;
 }
@@ -690,7 +690,7 @@ entity_get_name_cb(ipmi_entity_t *entity, void *cb_data)
     *name = entity->name;
 }
 
-char *
+const char *
 _ipmi_entity_id_name(ipmi_entity_id_t entity_id)
 {
     char *name = "";
@@ -4854,7 +4854,7 @@ ipmi_entity_id_set_invalid(ipmi_entity_id_t *id)
 }
 
 int
-ipmi_entity_id_is_invalid(ipmi_entity_id_t *id)
+ipmi_entity_id_is_invalid(const ipmi_entity_id_t *id)
 {
     return (id->domain_id.domain == NULL);
 }
@@ -4862,7 +4862,7 @@ ipmi_entity_id_is_invalid(ipmi_entity_id_t *id)
 
 #ifdef IPMI_CHECK_LOCKS
 void
-__ipmi_check_entity_lock(ipmi_entity_t *entity)
+__ipmi_check_entity_lock(const ipmi_entity_t *entity)
 {
     if (!entity)
 	return;

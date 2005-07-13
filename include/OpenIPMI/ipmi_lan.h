@@ -226,9 +226,9 @@ int ipmi_lan_setup_con(struct in_addr *ip_addrs,
 /* Used to handle SNMP traps.  If the msg is NULL, that means that the
    trap sender didn't send enough information to handle the trap
    immediately, and the SEL needs to be scanned. */
-int ipmi_lan_handle_external_event(struct sockaddr *src_addr,
-				   ipmi_msg_t      *msg,
-				   unsigned char   *pet_ack);
+int ipmi_lan_handle_external_event(const struct sockaddr *src_addr,
+				   const ipmi_msg_t      *msg,
+				   const unsigned char   *pet_ack);
 
 /*
  * RMCP+ payload handling.  To register a payload, pass in a static
@@ -262,14 +262,14 @@ typedef struct ipmi_payload_s
        number is not used.  The out_of_session variable is set to zero
        by default; if the message is meant to be sent out of session,
        then the formatter should set this value to 1. */
-    int (*format_for_xmit)(ipmi_con_t    *conn,
-			   ipmi_addr_t   *addr,
-			   unsigned int  addr_len,
-			   ipmi_msg_t    *msg,
-			   unsigned char *out_data,
-			   unsigned int  *out_data_len,
-			   int           *out_of_session,
-			   unsigned char seq);
+    int (*format_for_xmit)(ipmi_con_t        *conn,
+			   const ipmi_addr_t *addr,
+			   unsigned int      addr_len,
+			   const ipmi_msg_t  *msg,
+			   unsigned char     *out_data,
+			   unsigned int      *out_data_len,
+			   int               *out_of_session,
+			   unsigned char     seq);
 
     /* Get the recv sequence number from the message.  Return ENOSYS
        if the sequence number is not valid for the message (it is

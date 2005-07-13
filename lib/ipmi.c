@@ -51,9 +51,9 @@
 
 #if defined(DEBUG_MSG) || defined(DEBUG_RAWMSG)
 static void
-dump_hex(void *vdata, int len)
+dump_hex(const void *vdata, int len)
 {
-    unsigned char *data = vdata;
+    const unsigned char *data = vdata;
     int i;
     for (i=0; i<len; i++) {
 	if ((i != 0) && ((i % 16) == 0)) {
@@ -80,13 +80,13 @@ ipmi_create_global_lock(ipmi_lock_t **new_lock)
 }
 
 int
-ipmi_create_lock(ipmi_domain_t *domain, ipmi_lock_t **new_lock)
+ipmi_create_lock(const ipmi_domain_t *domain, ipmi_lock_t **new_lock)
 {
     return ipmi_create_lock_os_hnd(ipmi_domain_get_os_hnd(domain), new_lock);
 }
 
 void
-ipmi_log(enum ipmi_log_type_e log_type, char *format, ...)
+ipmi_log(enum ipmi_log_type_e log_type, const char *format, ...)
 {
     va_list ap;
 
@@ -246,7 +246,7 @@ ipmi_get_8_bit_ascii(int len,
 };
 
 unsigned int
-ipmi_get_device_string(unsigned char        **pinput,
+ipmi_get_device_string(unsigned char        ** const pinput,
 		       unsigned int         in_len,
 		       char                 *output,
 		       int                  semantics,
@@ -392,16 +392,16 @@ static char table_6_bit[256] =
 };
 
 static void
-ipmi_set_bcdplus(char          *input,
+ipmi_set_bcdplus(const char    *input,
 		 unsigned int  in_len,
 		 unsigned char *output,
 		 int           *out_len)
 {
-    int  len = *out_len;
-    char *s = input;
-    int  pos = 0;
-    int  bit = 0;
-    int  count = 0;
+    int        len = *out_len;
+    const char *s = input;
+    int        pos = 0;
+    int        bit = 0;
+    int        count = 0;
 
     while (in_len > 0) {
 	switch(bit) {
@@ -429,18 +429,18 @@ ipmi_set_bcdplus(char          *input,
 }
 
 static void
-ipmi_set_6_bit_ascii(char          *input,
+ipmi_set_6_bit_ascii(const char    *input,
 		     unsigned int  in_len,
 		     unsigned char *output,
 		     int           *out_len)
 {
-    int  len = *out_len;
-    char *s = input;
-    int  pos = 0;
-    int  bit = 0;
-    int  count = 0;
-    int  cval;
-    int  oval;
+    int        len = *out_len;
+    const char *s = input;
+    int        pos = 0;
+    int        bit = 0;
+    int        count = 0;
+    int        cval;
+    int        oval;
 
     while (in_len > 0) {
 	cval = *s;
@@ -488,7 +488,7 @@ ipmi_set_6_bit_ascii(char          *input,
 }
 
 static void
-ipmi_set_8_bit_ascii(char          *input,
+ipmi_set_8_bit_ascii(const char    *input,
 		     int           in_len,
 		     unsigned char *output,
 		     int           *out_len)
@@ -513,14 +513,14 @@ ipmi_set_8_bit_ascii(char          *input,
 }
 
 void
-ipmi_set_device_string(char                 *input,
+ipmi_set_device_string(const char           *input,
 		       enum ipmi_str_type_e type,
 		       unsigned int         in_len,
 		       unsigned char        *output,
 		       int                  force_unicode,
 		       int                  *out_len)
 {
-    char         *s = input;
+    const char   *s = input;
     int          bsize = 0; /* Start with 4-bit. */
     unsigned int i;
 
@@ -1550,12 +1550,12 @@ ipmi_args_setup_con(ipmi_args_t  *args,
 #define IPMI_SNMP_DATE_OFFSET 883612800
 
 int
-ipmi_handle_snmp_trap_data(void            *src_addr,
-			   unsigned int    src_addr_len,
-			   int             src_addr_type,
-			   long            specific,
-			   unsigned char   *data,
-			   unsigned int    data_len)
+ipmi_handle_snmp_trap_data(const void          *src_addr,
+			   unsigned int        src_addr_len,
+			   int                 src_addr_type,
+			   long                specific,
+			   const unsigned char *data,
+			   unsigned int        data_len)
 {
     int           handled = 0;
     unsigned char pet_ack[12];
@@ -1720,9 +1720,9 @@ ipmi_move_msg_item(ipmi_msgi_t *new_item, ipmi_msgi_t *old_item)
 void
 ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
 			     ipmi_msgi_t           *rspi,
-			     ipmi_addr_t           *addr,
+			     const ipmi_addr_t     *addr,
 			     unsigned int          addr_len,
-			     ipmi_msg_t            *msg,
+			     const ipmi_msg_t      *msg,
 			     ipmi_ll_rsp_handler_t rsp_handler)
 {
     int used = IPMI_MSG_ITEM_NOT_USED;
@@ -1744,7 +1744,7 @@ ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
 void
 ipmi_handle_rsp_item_copymsg(ipmi_con_t            *ipmi,
 			     ipmi_msgi_t           *rspi,
-			     ipmi_msg_t            *msg,
+			     const ipmi_msg_t      *msg,
 			     ipmi_ll_rsp_handler_t rsp_handler)
 {
     int used = IPMI_MSG_ITEM_NOT_USED;

@@ -259,13 +259,13 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
     return rv;
 }
 
-extern void debug_vlog(char *format, enum ipmi_log_type_e log_type,
+extern void debug_vlog(const char *format, enum ipmi_log_type_e log_type,
 		       va_list ap);
 
 static void
 sdebug_log(os_handler_t         *handler,
 	enum ipmi_log_type_e log_type,
-	char                 *format,
+	const char            *format,
 	...)
 {
     va_list ap;
@@ -277,9 +277,9 @@ sdebug_log(os_handler_t         *handler,
 
 static void
 sdebug_vlog(os_handler_t         *handler,
-	 enum ipmi_log_type_e log_type,
-	 char                 *format,
-	 va_list              ap)
+	    enum ipmi_log_type_e log_type,
+	    const char           *format,
+	    va_list              ap)
 {
     debug_vlog(format, log_type, ap);
 }

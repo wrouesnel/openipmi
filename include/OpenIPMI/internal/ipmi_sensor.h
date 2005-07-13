@@ -104,7 +104,6 @@ int ipmi_sensor_destroy(ipmi_sensor_t *sensor);
 int ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event);
 
 /* Fetch boatloads of internal information about sensors. */
-int ipmi_sensor_get_owner(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_channel(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_entity_id(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_entity_instance(ipmi_sensor_t *sensor);

@@ -54,21 +54,21 @@ typedef int (*ipmi_ll_rsp_handler_t)(ipmi_con_t   *ipmi,
    an indication that there is a new event in the event log.  Note that
    if an event is delivered here, it's mcid might be invalid, so that
    may need to be established here. */
-typedef void (*ipmi_ll_evt_handler_t)(ipmi_con_t   *ipmi,
-				      ipmi_addr_t  *addr,
-				      unsigned int addr_len,
-				      ipmi_event_t *event,
-				      void         *cb_data);
+typedef void (*ipmi_ll_evt_handler_t)(ipmi_con_t         *ipmi,
+				      const ipmi_addr_t  *addr,
+				      unsigned int       addr_len,
+				      ipmi_event_t       *event,
+				      void               *cb_data);
 
 /* Called when an incoming command is received by the IPMI code. */
-typedef void (*ipmi_ll_cmd_handler_t)(ipmi_con_t   *ipmi,
-				      ipmi_addr_t  *addr,
-				      unsigned int addr_len,
-				      ipmi_msg_t   *cmd,
-				      long         sequence,
-				      void         *cmd_data,
-				      void         *data2,
-				      void         *data3);
+typedef void (*ipmi_ll_cmd_handler_t)(ipmi_con_t        *ipmi,
+				      const ipmi_addr_t *addr,
+				      unsigned int      addr_len,
+				      const ipmi_msg_t  *cmd,
+				      long              sequence,
+				      void              *cmd_data,
+				      void              *data2,
+				      void              *data3);
 
 /* Called when a low-level connection has failed or come up.  If err
    is zero, the connection has come up after being failed.  if err is
@@ -211,9 +211,9 @@ struct ipmi_con_s
        reponse handler is called, even if it fails or the message is
        dropped. */
     int (*send_command)(ipmi_con_t            *ipmi,
-			ipmi_addr_t           *addr,
+			const ipmi_addr_t     *addr,
 			unsigned int          addr_len,
-			ipmi_msg_t            *msg,
+			const ipmi_msg_t      *msg,
 			ipmi_ll_rsp_handler_t rsp_handler,
 			ipmi_msgi_t           *rspi);
 
@@ -230,11 +230,11 @@ struct ipmi_con_s
     /* Send a response message.  This is not supported on all
        interfaces, primarily only on system management interfaces.  If
        not supported, this should return ENOSYS. */
-    int (*send_response)(ipmi_con_t   *ipmi,
-			 ipmi_addr_t  *addr,
-			 unsigned int addr_len,
-			 ipmi_msg_t   *msg,
-			 long         sequence);
+    int (*send_response)(ipmi_con_t        *ipmi,
+			 const ipmi_addr_t *addr,
+			 unsigned int      addr_len,
+			 const ipmi_msg_t  *msg,
+			 long              sequence);
 
     /* Register to receive incoming commands.  This is not supported
        on all interfaces, primarily only on system management
@@ -291,10 +291,10 @@ struct ipmi_con_s
 
     /* Handle an async event for the connection reported by something
        else. */
-    void (*handle_async_event)(ipmi_con_t   *con,
-			       ipmi_addr_t  *addr,
-			       unsigned int addr_len,
-			       ipmi_msg_t   *msg);
+    void (*handle_async_event)(ipmi_con_t        *con,
+			       const ipmi_addr_t *addr,
+			       unsigned int      addr_len,
+			       const ipmi_msg_t  *msg);
 
     /* Used by the connection attribute code.  Don't do anything with
        this yourself!.  The thing that creates this connection should
@@ -322,12 +322,12 @@ void _ipmi_conn_shutdown(void);
 
 /* Handle a trap from an external SNMP source.  It returns 1 if the
    event was handled an zero if it was not. */
-int ipmi_handle_snmp_trap_data(void            *src_addr,
-			       unsigned int    src_addr_len,
-			       int             src_addr_type,
-			       long            specific,
-			       unsigned char   *data,
-			       unsigned int    data_len);
+int ipmi_handle_snmp_trap_data(const void          *src_addr,
+			       unsigned int        src_addr_len,
+			       int                 src_addr_type,
+			       long                specific,
+			       const unsigned char *data,
+			       unsigned int        data_len);
 
 /* These calls deal with OEM-type handlers for connections.  Certain
    connections can be detected with special means (beyond just the
@@ -363,14 +363,14 @@ void ipmi_handle_rsp_item(ipmi_con_t            *ipmi,
 
 void ipmi_handle_rsp_item_copymsg(ipmi_con_t            *ipmi,
 				  ipmi_msgi_t           *rspi,
-				  ipmi_msg_t            *msg,
+				  const ipmi_msg_t      *msg,
 				  ipmi_ll_rsp_handler_t rsp_handler);
 
 void ipmi_handle_rsp_item_copyall(ipmi_con_t            *ipmi,
 				  ipmi_msgi_t           *rspi,
-				  ipmi_addr_t           *addr,
+				  const ipmi_addr_t     *addr,
 				  unsigned int          addr_len,
-				  ipmi_msg_t            *msg,
+				  const ipmi_msg_t      *msg,
 				  ipmi_ll_rsp_handler_t rsp_handler);
 
 /* You should use these for allocating and freeing mesage items.  Note

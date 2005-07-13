@@ -53,7 +53,7 @@
 
 #ifdef DEBUG_EVENTS
 static void
-dump_hex(unsigned char *data, int len)
+dump_hex(const unsigned char *data, int len)
 {
     int i;
     for (i=0; i<len; i++) {
@@ -984,7 +984,7 @@ setup_domain(char          *name,
 
 #ifdef IPMI_CHECK_LOCKS
 void
-__ipmi_check_domain_lock(ipmi_domain_t *domain)
+__ipmi_check_domain_lock(const ipmi_domain_t *domain)
 {
     if (!domain)
 	return;
@@ -1360,9 +1360,9 @@ cancel_domain_oem_check(ipmi_domain_t *domain)
 #define HASH_SLAVE_ADDR(x) (((x) >> 1) & (IPMB_HASH-1))
 
 ipmi_mc_t *
-_ipmi_find_mc_by_addr(ipmi_domain_t *domain,
-		      ipmi_addr_t   *addr,
-		      unsigned int  addr_len)
+_ipmi_find_mc_by_addr(const ipmi_domain_t *domain,
+		      const ipmi_addr_t   *addr,
+		      unsigned int        addr_len)
 {
     ipmi_mc_t     *mc = NULL;
 
@@ -1376,12 +1376,12 @@ _ipmi_find_mc_by_addr(ipmi_domain_t *domain,
 	else if (addr->channel < MAX_CONS)
 	    mc = domain->sys_intf_mcs[addr->channel];
     } else if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
-	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
-	int              idx;
-	mc_table_t       *tab;
-	ipmi_addr_t      addr2;
-	unsigned int     addr2_len;
-	int              i;
+	const ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
+	int                    idx;
+	const mc_table_t       *tab;
+	ipmi_addr_t            addr2;
+	unsigned int           addr2_len;
+	int                    i;
 
 	if (addr_len >= sizeof(*ipmb)) {
 	    idx = HASH_SLAVE_ADDR(ipmb->slave_addr);
@@ -1781,7 +1781,7 @@ ll_si_rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *orspi)
 }
 
 static int
-matching_domain_sysaddr(ipmi_domain_t *domain, ipmi_addr_t *addr,
+matching_domain_sysaddr(const ipmi_domain_t *domain, const ipmi_addr_t *addr,
 			ipmi_system_interface_addr_t *si)
 {
     if (addr->addr_type == IPMI_IPMB_ADDR_TYPE) {
@@ -1810,9 +1810,9 @@ matching_domain_sysaddr(ipmi_domain_t *domain, ipmi_addr_t *addr,
 
 int
 ipmi_send_command_addr(ipmi_domain_t                *domain,
-		       ipmi_addr_t		    *addr,
+		       const ipmi_addr_t	    *addr,
 		       unsigned int                 addr_len,
-		       ipmi_msg_t                   *msg,
+		       const ipmi_msg_t             *msg,
 		       ipmi_addr_response_handler_t rsp_handler,
 		       void                         *rsp_data1,
 		       void                         *rsp_data2)
@@ -2030,7 +2030,7 @@ ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain, unsigned int seconds)
 }
 
 unsigned int
-ipmi_domain_get_ipmb_rescan_time(ipmi_domain_t *domain)
+ipmi_domain_get_ipmb_rescan_time(const ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
 
@@ -2636,10 +2636,10 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
        single-threaded, so ordering is always preserved there. */
 
     if (DEBUG_EVENTS) {
-	ipmi_mcid_t mcid = ipmi_event_get_mcid(event);
-	unsigned int record_id = ipmi_event_get_record_id(event);
-	unsigned int data_len = ipmi_event_get_data_len(event);
-	unsigned char *data;
+	ipmi_mcid_t         mcid = ipmi_event_get_mcid(event);
+	unsigned int        record_id = ipmi_event_get_record_id(event);
+	unsigned int        data_len = ipmi_event_get_data_len(event);
+	const unsigned char *data;
 
 	ipmi_log(IPMI_LOG_DEBUG_START,
 		 "Event recid mc (0x%x):%4.4x type:%2.2x timestamp %lld:",
@@ -2666,7 +2666,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 	ipmi_ipmb_addr_t    addr;
 	ipmi_sensor_id_t    id;
 	event_sensor_info_t info;
-	unsigned char       *data;
+	const unsigned char *data;
 
 	data = ipmi_event_get_data_ptr(event);
 	addr.addr_type = IPMI_IPMB_ADDR_TYPE;
@@ -2722,11 +2722,11 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 }
 
 static void
-ll_event_handler(ipmi_con_t   *ipmi,
-		 ipmi_addr_t  *addr,
-		 unsigned int addr_len,
-		 ipmi_event_t *event,
-		 void         *cb_data)
+ll_event_handler(ipmi_con_t        *ipmi,
+		 const ipmi_addr_t *addr,
+		 unsigned int      addr_len,
+		 ipmi_event_t      *event,
+		 void              *cb_data)
 {
     ipmi_domain_t                *domain = cb_data;
     ipmi_mc_t                    *mc;
@@ -2887,11 +2887,11 @@ ipmi_domain_del_event(ipmi_domain_t  *domain,
 
 typedef struct next_event_handler_info_s
 {
-    ipmi_event_t *rv;
-    ipmi_event_t *event;
-    ipmi_mcid_t  event_mcid;
-    int          found_curr_mc;
-    int          do_prev; /* If going backwards, this will be 1. */
+    ipmi_event_t       *rv;
+    const ipmi_event_t *event;
+    ipmi_mcid_t        event_mcid;
+    int                found_curr_mc;
+    int                do_prev; /* If going backwards, this will be 1. */
 } next_event_handler_info_t;
 
 static void
@@ -2958,7 +2958,7 @@ ipmi_domain_last_event(ipmi_domain_t *domain)
 }
 
 ipmi_event_t *
-ipmi_domain_next_event(ipmi_domain_t *domain, ipmi_event_t *event)
+ipmi_domain_next_event(ipmi_domain_t *domain, const ipmi_event_t *event)
 {
     next_event_handler_info_t info;
 
@@ -2975,7 +2975,7 @@ ipmi_domain_next_event(ipmi_domain_t *domain, ipmi_event_t *event)
 }
 
 ipmi_event_t *
-ipmi_domain_prev_event(ipmi_domain_t *domain, ipmi_event_t *event)
+ipmi_domain_prev_event(ipmi_domain_t *domain, const ipmi_event_t *event)
 {
     next_event_handler_info_t info;
 
@@ -3045,7 +3045,7 @@ ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
 }
 
 unsigned int
-ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain)
+ipmi_domain_get_sel_rescan_time(const ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
 
@@ -3193,14 +3193,14 @@ ipmi_detect_domain_presence_changes(ipmi_domain_t *domain, int force)
 }
 
 os_handler_t *
-ipmi_domain_get_os_hnd(ipmi_domain_t *domain)
+ipmi_domain_get_os_hnd(const ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     return domain->os_hnd;
 }
 
 ipmi_entity_info_t *
-ipmi_domain_get_entities(ipmi_domain_t *domain)
+ipmi_domain_get_entities(const ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     return domain->entities;
@@ -3507,7 +3507,7 @@ ipmi_domain_id_set_invalid(ipmi_domain_id_t *id)
 }
 
 int
-ipmi_domain_id_is_invalid(ipmi_domain_id_t *id)
+ipmi_domain_id_is_invalid(const ipmi_domain_id_t *id)
 {
     return (id->domain == NULL);
 }
@@ -4824,7 +4824,7 @@ ipmi_domain_get_channel(ipmi_domain_t    *domain,
 }
 
 int
-ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid)
+ipmi_domain_get_guid(const ipmi_domain_t *domain, unsigned char *guid)
 {
     int rv;
     _ipmi_mc_get(domain->si_mc);
@@ -4834,7 +4834,7 @@ ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid)
 }
 
 int
-ipmi_domain_con_up(ipmi_domain_t *domain)
+ipmi_domain_con_up(const ipmi_domain_t *domain)
 {
     CHECK_DOMAIN_LOCK(domain);
     return domain->connection_up;
@@ -4862,14 +4862,14 @@ ipmi_domain_get_event_rcvr(ipmi_domain_t *domain)
     return addr;
 }
 
-char *
-_ipmi_domain_name(ipmi_domain_t *domain)
+const char *
+_ipmi_domain_name(const ipmi_domain_t *domain)
 {
     return domain->name;
 }
 
 int
-ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int length)
+ipmi_domain_get_name(const ipmi_domain_t *domain, char *name, int length)
 {
     int  slen;
 
@@ -4913,7 +4913,7 @@ ipmi_domain_get_oem_data(ipmi_domain_t *domain)
 }
 
 enum ipmi_domain_type
-ipmi_domain_get_type(ipmi_domain_t *domain)
+ipmi_domain_get_type(const ipmi_domain_t *domain)
 {
     return domain->domain_type;
 }
@@ -5224,8 +5224,8 @@ destroy_stat(void *cb_data, void *item1, void *item2)
 
 typedef struct domain_stat_cmp_s
 {
-    char               *name;
-    char               *instance;
+    const char         *name;
+    const char         *instance;
     ipmi_domain_stat_t *stat;
 } domain_stat_cmp_t;
 
@@ -5247,8 +5247,8 @@ domain_stat_cmp(void *cb_data, void *item1, void *item2)
 
 int
 ipmi_domain_stat_register(ipmi_domain_t      *domain,
-			  char               *name,
-			  char               *instance,
+			  const char         *name,
+			  const char         *instance,
 			  ipmi_domain_stat_t **stat)
 {
     ipmi_domain_stat_t  *val = NULL;
@@ -5322,8 +5322,8 @@ ipmi_domain_stat_register(ipmi_domain_t      *domain,
 
 int
 ipmi_domain_find_stat(ipmi_domain_t      *domain,
-		      char               *name,
-		      char               *instance,
+		      const char         *name,
+		      const char         *instance,
 		      ipmi_domain_stat_t **stat)
 {
     domain_stat_cmp_t   info;
@@ -5406,8 +5406,8 @@ ipmi_domain_stat_get_instance(ipmi_domain_stat_t *stat)
 typedef struct stat_iterate_s
 {
     ipmi_domain_t *domain;
-    char          *name;
-    char          *instance;
+    const char    *name;
+    const char    *instance;
     ipmi_stat_cb  handler;
     void          *cb_data;
 } stat_iterate_t;
@@ -5445,8 +5445,8 @@ domain_stat_iter(void *cb_data, void *item1, void *item2)
 
 void
 ipmi_domain_stat_iterate(ipmi_domain_t *domain,
-			 char          *name,
-			 char          *instance,
+			 const char    *name,
+			 const char    *instance,
 			 ipmi_stat_cb  handler,
 			 void          *cb_data)
 {

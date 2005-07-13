@@ -129,7 +129,7 @@ typedef void (*ipmi_mc_response_handler_t)(ipmi_mc_t  *src,
 					   void       *rsp_data);
 int ipmi_mc_send_command(ipmi_mc_t                  *mc,
 			 unsigned int               lun,
-			 ipmi_msg_t                 *cmd,
+			 const ipmi_msg_t           *cmd,
 			 ipmi_mc_response_handler_t rsp_handler,
 			 void                       *rsp_data);
 
@@ -238,8 +238,8 @@ int ipmi_mc_del_event(ipmi_mc_t                 *mc,
 
 ipmi_event_t *ipmi_mc_first_event(ipmi_mc_t *mc);
 ipmi_event_t *ipmi_mc_last_event(ipmi_mc_t *mc);
-ipmi_event_t *ipmi_mc_next_event(ipmi_mc_t *mc, ipmi_event_t *event);
-ipmi_event_t *ipmi_mc_prev_event(ipmi_mc_t *mc, ipmi_event_t *event);
+ipmi_event_t *ipmi_mc_next_event(ipmi_mc_t *mc, const ipmi_event_t *event);
+ipmi_event_t *ipmi_mc_prev_event(ipmi_mc_t *mc, const ipmi_event_t *event);
 ipmi_event_t *ipmi_mc_event_by_recid(ipmi_mc_t *mc,
 				     unsigned int record_id);
 int ipmi_mc_sel_count(ipmi_mc_t *mc);

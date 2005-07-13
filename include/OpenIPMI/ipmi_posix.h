@@ -45,7 +45,7 @@ extern "C" {
    threading.  If you use these (and thus link with the OpenIPMIposix
    or OpenIPMIpthread libraries) you must provide posix_vlog().  It is
    not provided by the library. */
-void posix_vlog(char *format,
+void posix_vlog(const char *format,
 		enum ipmi_log_type_e log_type,
 		va_list ap);
 

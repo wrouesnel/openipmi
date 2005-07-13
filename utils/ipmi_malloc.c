@@ -43,7 +43,7 @@
 #include <OpenIPMI/internal/ipmi_malloc.h>
 #include <OpenIPMI/internal/ilist.h>
 
-void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type, char *format, ...)
+void (*ipmi_malloc_log)(enum ipmi_log_type_e log_type, const char *format, ...)
 #if __GNUC__ > 2
      __attribute__ ((__format__ (__printf__, 2, 3)))
 #endif

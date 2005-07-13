@@ -172,11 +172,11 @@ struct os_handler_s
        handling these. */
     void (*log)(os_handler_t         *handler,
 		enum ipmi_log_type_e log_type, 
-		char                 *format,
+		const char           *format,
 		...);
     void (*vlog)(os_handler_t         *handler,
 		 enum ipmi_log_type_e log_type, 
-		 char                 *format,
+		 const char           *format,
 		 va_list              ap);
 
     /* The user may use this for whatever they like. */

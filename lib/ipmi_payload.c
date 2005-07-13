@@ -68,14 +68,14 @@ ipmb_checksum(unsigned char *data, int size)
 }
 
 static int
-ipmi_format_msg(ipmi_con_t    *ipmi,
-		ipmi_addr_t   *addr,
-		unsigned int  addr_len,
-		ipmi_msg_t    *msg,
-		unsigned char *out_data,
-		unsigned int  *out_data_len,
-		int           *out_of_session,
-		unsigned char seq)
+ipmi_format_msg(ipmi_con_t        *ipmi,
+		const ipmi_addr_t *addr,
+		unsigned int      addr_len,
+		const ipmi_msg_t  *msg,
+		unsigned char     *out_data,
+		unsigned int      *out_data_len,
+		int               *out_of_session,
+		unsigned char     seq)
 {
     unsigned char *tmsg = out_data;
     int           pos;

@@ -663,14 +663,14 @@ static ipmi_rmcpp_authentication_t rakp_hmac_md5_auth =
  *********************************************************************/
 
 static int
-rakp_format_msg(ipmi_con_t    *ipmi,
-		ipmi_addr_t   *addr,
-		unsigned int  addr_len,
-		ipmi_msg_t    *msg,
-		unsigned char *out_data,
-		unsigned int  *out_data_len,
-		int	      *out_of_session,
-		unsigned char seq)
+rakp_format_msg(ipmi_con_t        *ipmi,
+		const ipmi_addr_t *addr,
+		unsigned int      addr_len,
+		const ipmi_msg_t  *msg,
+		unsigned char     *out_data,
+		unsigned int      *out_data_len,
+		int	          *out_of_session,
+		unsigned char     seq)
 {
     if (msg->data_len > *out_data_len)
 	return E2BIG;

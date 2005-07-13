@@ -2243,14 +2243,15 @@ int ipmi_sol_free(ipmi_sol_conn_t *conn)
    by default; if the message is meant to be sent out of session,
    then the formatter should set this value to 1. */
 
-static int sol_format_msg(ipmi_con_t    *conn,
-		   ipmi_addr_t   *addr,
-		   unsigned int  addr_len,
-		   ipmi_msg_t    *msg,
-		   unsigned char *out_data,
-		   unsigned int  *out_data_len,
-		   int           *out_of_session,
-		   unsigned char seq)
+static int
+sol_format_msg(ipmi_con_t        *conn,
+	       const ipmi_addr_t *addr,
+	       unsigned int      addr_len,
+	       const ipmi_msg_t  *msg,
+	       unsigned char     *out_data,
+	       unsigned int      *out_data_len,
+	       int               *out_of_session,
+	       unsigned char     seq)
 {
 	if (*out_data_len < msg->data_len)
 		return E2BIG;

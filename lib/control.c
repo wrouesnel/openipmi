@@ -436,8 +436,8 @@ control_set_name(ipmi_control_t *control)
     length++;
 }
 
-char *
-_ipmi_control_name(ipmi_control_t *control)
+const char *
+_ipmi_control_name(const ipmi_control_t *control)
 {
     return control->name;
 }
@@ -1797,7 +1797,7 @@ ipmi_control_id_set_invalid(ipmi_control_id_t *id)
 }
 
 int
-ipmi_control_id_is_invalid(ipmi_control_id_t *id)
+ipmi_control_id_is_invalid(const ipmi_control_id_t *id)
 {
     return (id->mcid.domain_id.domain == NULL);
 }
@@ -1878,7 +1878,7 @@ ipmi_control_get_domain(ipmi_control_t *control)
 
 #ifdef IPMI_CHECK_LOCKS
 void
-__ipmi_check_control_lock(ipmi_control_t *control)
+__ipmi_check_control_lock(const ipmi_control_t *control)
 {
     if (!control)
 	return;

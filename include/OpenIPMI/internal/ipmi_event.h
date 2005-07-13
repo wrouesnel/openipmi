@@ -55,11 +55,11 @@ void ipmi_event_set_mcid(ipmi_event_t *event, ipmi_mcid_t mcid);
 
 /* Get a pointer to the event's data.  Note that this pointer will be
    valid only as long as the event is valid. */
-unsigned char *ipmi_event_get_data_ptr(ipmi_event_t *event);
+const unsigned char *ipmi_event_get_data_ptr(const ipmi_event_t *event);
 
 /* Returns true if the event came in before the time we started up.
    false if not. */
-int ipmi_event_is_old(ipmi_event_t *event);
+int ipmi_event_is_old(const ipmi_event_t *event);
 void ipmi_event_set_is_old(ipmi_event_t *event, int val);
 
 #endif /* __IPMI_EVENT_H */

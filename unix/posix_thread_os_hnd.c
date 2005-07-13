@@ -271,7 +271,7 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
 static void
 sposix_log(os_handler_t         *handler,
 	   enum ipmi_log_type_e log_type,
-	   char                 *format,
+	   const char           *format,
 	   ...)
 {
     va_list ap;
@@ -284,7 +284,7 @@ sposix_log(os_handler_t         *handler,
 static void
 sposix_vlog(os_handler_t         *handler,
 	    enum ipmi_log_type_e log_type,
-	    char                 *format,
+	    const char           *format,
 	    va_list              ap)
 {
     posix_vlog(format, log_type, ap);

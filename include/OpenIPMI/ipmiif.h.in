@@ -140,7 +140,7 @@ int ipmi_domain_pointer_cb(ipmi_domain_id_t   id,
 			   void               *cb_data);
 int ipmi_cmp_domain_id(ipmi_domain_id_t id1, ipmi_domain_id_t id2);
 void ipmi_domain_id_set_invalid(ipmi_domain_id_t *id);
-int ipmi_domain_id_is_invalid(ipmi_domain_id_t *id);
+int ipmi_domain_id_is_invalid(const ipmi_domain_id_t *id);
 
 ipmi_entity_id_t ipmi_entity_convert_to_id(ipmi_entity_t *ent);
 int ipmi_cmp_entity_id(ipmi_entity_id_t id1, ipmi_entity_id_t id2);
@@ -154,7 +154,7 @@ int ipmi_entity_find_id(ipmi_domain_id_t domain_id,
 			ipmi_entity_id_t *id);
 int ipmi_cmp_entity_id(ipmi_entity_id_t id1, ipmi_entity_id_t id2);
 void ipmi_entity_id_set_invalid(ipmi_entity_id_t *id);
-int ipmi_entity_id_is_invalid(ipmi_entity_id_t *id);
+int ipmi_entity_id_is_invalid(const ipmi_entity_id_t *id);
 
 ipmi_sensor_id_t ipmi_sensor_convert_to_id(ipmi_sensor_t *sensor);
 typedef void (*ipmi_sensor_ptr_cb)(ipmi_sensor_t *sensor, void *cb_data);
@@ -168,7 +168,7 @@ int ipmi_sensor_find_id(ipmi_domain_id_t domain_id,
 			char *id_name,
 			ipmi_sensor_id_t *id);
 void ipmi_sensor_id_set_invalid(ipmi_sensor_id_t *id);
-int ipmi_sensor_id_is_invalid(ipmi_sensor_id_t *id);
+int ipmi_sensor_id_is_invalid(const ipmi_sensor_id_t *id);
 
 ipmi_control_id_t ipmi_control_convert_to_id(ipmi_control_t *control);
 typedef void (*ipmi_control_ptr_cb)(ipmi_control_t *control, void *cb_data);
@@ -182,7 +182,7 @@ int ipmi_control_find_id(ipmi_domain_id_t domain_id,
 			 char *id_name,
 			 ipmi_control_id_t *id);
 void ipmi_control_id_set_invalid(ipmi_control_id_t *id);
-int ipmi_control_id_is_invalid(ipmi_control_id_t *id);
+int ipmi_control_id_is_invalid(const ipmi_control_id_t *id);
 
 
 /************************************************************************
@@ -201,7 +201,7 @@ void ipmi_domain_iterate_domains(ipmi_domain_ptr_cb handler,
 /* Get the "name" for the domain.  Returns the length of the string
    (minus the closing \0). */
 #define IPMI_DOMAIN_NAME_LEN 32
-int ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int length);
+int ipmi_domain_get_name(const ipmi_domain_t *domain, char *name, int length);
 
 /* Domains come in different flavors.  It might be useful to know the
    type of domain you are hooked to, so this function will return the
@@ -213,13 +213,13 @@ enum ipmi_domain_type
     IPMI_DOMAIN_TYPE_MXP,
     IPMI_DOMAIN_TYPE_ATCA,
 };
-enum ipmi_domain_type ipmi_domain_get_type(ipmi_domain_t *domain);
+enum ipmi_domain_type ipmi_domain_get_type(const ipmi_domain_t *domain);
 const char *ipmi_domain_get_type_string(enum ipmi_domain_type dtype);
 
 /* Return the system GUID for the domain.  The guid must point to an
    array of 16 characters.  Returns ENOSYS if the domain didn't have a
    GUID. */
-int ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid);
+int ipmi_domain_get_guid(const ipmi_domain_t *domain, unsigned char *guid);
 
 /* Add and remove a function to be called when the connection or port
    to the domain goes down or back up.  Being down does NOT mean the
@@ -292,9 +292,9 @@ typedef int (*ipmi_addr_response_handler_t)(ipmi_domain_t *domain,
 					    ipmi_msgi_t   *rspi);
 int
 ipmi_send_command_addr(ipmi_domain_t                *domain,
-		       ipmi_addr_t	            *addr,
+		       const ipmi_addr_t            *addr,
 		       unsigned int                 addr_len,
-		       ipmi_msg_t                   *msg,
+		       const ipmi_msg_t             *msg,
 		       ipmi_addr_response_handler_t rsp_handler,
 		       void                         *rsp_data1,
 		       void                         *rsp_data2);
@@ -314,7 +314,7 @@ int ipmi_detect_domain_presence_changes(ipmi_domain_t *domain, int force);
    value to zero, it will turn off SEL scanning. */
 void ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
 				     unsigned int  seconds);
-unsigned int ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain);
+unsigned int ipmi_domain_get_sel_rescan_time(const ipmi_domain_t *domain);
 
 /* The IPMB rescan timer is the time between scans of the IPMB bus to
    see if new MCs have appeared on the bus.  The timer is in seconds,
@@ -324,7 +324,7 @@ unsigned int ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain);
    insertion of devices more quickly.  */
 void ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain,
 				      unsigned int  seconds);
-unsigned int ipmi_domain_get_ipmb_rescan_time(ipmi_domain_t *domain);
+unsigned int ipmi_domain_get_ipmb_rescan_time(const ipmi_domain_t *domain);
 
 /* Events come in this format. */
 typedef void (*ipmi_event_handler_cb)(ipmi_domain_t *domain,
@@ -366,8 +366,10 @@ int ipmi_domain_del_event(ipmi_domain_t  *domain,
    ipmi_event_free(). */
 ipmi_event_t *ipmi_domain_first_event(ipmi_domain_t *domain);
 ipmi_event_t *ipmi_domain_last_event(ipmi_domain_t *domain);
-ipmi_event_t *ipmi_domain_next_event(ipmi_domain_t *domain, ipmi_event_t *p);
-ipmi_event_t *ipmi_domain_prev_event(ipmi_domain_t *domain, ipmi_event_t *n);
+ipmi_event_t *ipmi_domain_next_event(ipmi_domain_t *domain,
+				     const ipmi_event_t *p);
+ipmi_event_t *ipmi_domain_prev_event(ipmi_domain_t *domain,
+				     const ipmi_event_t *n);
 
 /* Return the number of non-deleted entries in the local copy of the
    SEL. */
@@ -420,7 +422,7 @@ int ipmi_domain_store_entities(ipmi_domain_t  *domain,
 			       void           *cb_data);
 
 /* Returns if the domain thinks it has a connection up. */
-int ipmi_domain_con_up(ipmi_domain_t *domain);
+int ipmi_domain_con_up(const ipmi_domain_t *domain);
 
 /* Iterate through the connections on a domain. */
 typedef void (*ipmi_connection_ptr_cb)(ipmi_domain_t *domain, int conn,
@@ -470,15 +472,15 @@ typedef void (*ipmi_stat_cb)(ipmi_domain_t *domain, ipmi_domain_stat_t *stat,
    instance already exists.  You must put() the statistic when you are
    done with it. */
 int ipmi_domain_stat_register(ipmi_domain_t      *domain,
-			      char               *name,
-			      char               *instance,
+			      const char         *name,
+			      const char         *instance,
 			      ipmi_domain_stat_t **stat);
 
 /* Find a statistic by name and instance.  You must put() the
    statistic when you are done with it. */
 int ipmi_domain_find_stat(ipmi_domain_t      *domain,
-			  char               *name,
-			  char               *instance,
+			  const char         *name,
+			  const char         *instance,
 			  ipmi_domain_stat_t **stat);
 
 /* Say you are done with a statistic. */
@@ -502,8 +504,8 @@ const char *ipmi_domain_stat_get_instance(ipmi_domain_stat_t *stat);
    for you, you should not put the stat (unless you make your own
    copy). */
 void ipmi_domain_stat_iterate(ipmi_domain_t *domain,
-			      char          *name,
-			      char          *instance,
+			      const char    *name,
+			      const char    *instance,
 			      ipmi_stat_cb  handler,
 			      void          *cb_data);
 
@@ -543,28 +545,30 @@ int ipmi_event_delete(ipmi_event_t   *event,
 
 /* Return the management controller that "owns" the event (where the
    event is stored). */
-ipmi_mcid_t ipmi_event_get_mcid(ipmi_event_t *event);
+ipmi_mcid_t ipmi_event_get_mcid(const ipmi_event_t *event);
 
 /* Return a unique (in the MC) record identifier for the event. */
-unsigned int ipmi_event_get_record_id(ipmi_event_t *event);
+unsigned int ipmi_event_get_record_id(const ipmi_event_t *event);
 
 #define OPENIPMI_OEM_EVENT_START	0x10000
 /* Return the event type.  Normal IPMI events should be in the
    000-0xff range.  Other events should start at
    OPENIPMI_OEM_EVENT_START and higher.*/
-unsigned int ipmi_event_get_type(ipmi_event_t *event);
+unsigned int ipmi_event_get_type(const ipmi_event_t *event);
 
 /* Get the timestamp for the event.  This will be IPMI_INVALID_TIME if
    the timestamp is invalid. */
-ipmi_time_t ipmi_event_get_timestamp(ipmi_event_t *event);
+ipmi_time_t ipmi_event_get_timestamp(const ipmi_event_t *event);
 
 /* Get the length of the data attached to the event. */
-unsigned int ipmi_event_get_data_len(ipmi_event_t *event);
+unsigned int ipmi_event_get_data_len(const ipmi_event_t *event);
 
 /* Copy some of the data attached to the event, starting at the given
    offset to an array.  Copy "len" bytes. */
-unsigned int ipmi_event_get_data(ipmi_event_t *event, unsigned char *data,
-				 unsigned int offset, unsigned int len);
+unsigned int ipmi_event_get_data(const ipmi_event_t *event,
+				 unsigned char      *data,
+				 unsigned int       offset,
+				 unsigned int       len);
 
 
 /************************************************************************
@@ -1151,8 +1155,10 @@ int ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 			       ipmi_sensor_done_cb done,
 			       void                *cb_data);
 
-/* Get the LUN and sensor number for the sensor, as viewed from its
-   management controller. */
+/* Get the sensor's Owner ID, and the LUN and sensor number for the sensor,
+   as viewed from its management controller.  These are really kind of
+   internal but are required for CIM mappings. */
+int ipmi_sensor_get_owner(ipmi_sensor_t *sensor);
 int ipmi_sensor_get_num(ipmi_sensor_t *sensor,
 			int           *lun,
 			int           *num);

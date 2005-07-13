@@ -123,7 +123,7 @@ ipmi_read_unlock()
 }
 
 void
-posix_vlog(char *format, enum ipmi_log_type_e log_type, va_list ap)
+posix_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
 {
     vfprintf(stderr, format, ap);
     fprintf(stderr, "\n");
@@ -171,7 +171,7 @@ get_addr_type(int type)
 }
 
 void
-dump_msg_data(ipmi_msg_t *msg, ipmi_addr_t *addr, char *type)
+dump_msg_data(const ipmi_msg_t *msg, const ipmi_addr_t *addr, const char *type)
 {
     ipmi_system_interface_addr_t *smi_addr = NULL;
     int                          i;
@@ -246,14 +246,14 @@ dump_msg_data(ipmi_msg_t *msg, ipmi_addr_t *addr, char *type)
 }
 
 void
-cmd_handler(ipmi_con_t   *ipmi,
-	    ipmi_addr_t  *addr,
-	    unsigned int addr_len,
-	    ipmi_msg_t   *cmd,
-	    long         sequence,
-	    void         *data1,
-	    void         *data2,
-	    void         *data3)
+cmd_handler(ipmi_con_t        *ipmi,
+	    const ipmi_addr_t *addr,
+	    unsigned int      addr_len,
+	    const ipmi_msg_t  *cmd,
+	    long              sequence,
+	    void              *data1,
+	    void              *data2,
+	    void              *data3)
 {
     dump_msg_data(cmd, addr, "command");
     printf("Command sequence = 0x%lx\n", sequence);
@@ -269,17 +269,17 @@ rsp_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 }
 
 void
-event_handler(ipmi_con_t   *ipmi,
-	      ipmi_addr_t  *addr,
-	      unsigned int addr_len,
-	      ipmi_event_t *event,
-	      void         *cb_data)
+event_handler(ipmi_con_t        *ipmi,
+	      const ipmi_addr_t *addr,
+	      unsigned int      addr_len,
+	      ipmi_event_t      *event,
+	      void              *cb_data)
 {
-    unsigned int  record_id = ipmi_event_get_record_id(event);
-    unsigned int  type = ipmi_event_get_type(event);
-    unsigned int  data_len = ipmi_event_get_data_len(event);
-    unsigned char *data = ipmi_event_get_data_ptr(event);
-    int           i;
+    unsigned int        record_id = ipmi_event_get_record_id(event);
+    unsigned int        type = ipmi_event_get_type(event);
+    unsigned int        data_len = ipmi_event_get_data_len(event);
+    const unsigned char *data = ipmi_event_get_data_ptr(event);
+    int                 i;
 
     printf("Got event:\n");
     printf("  %4.4x (%2.2x):", record_id, type);

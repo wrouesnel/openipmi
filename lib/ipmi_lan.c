@@ -381,14 +381,14 @@ struct lan_data_s
 extern ipmi_payload_t _ipmi_payload;
 
 static int
-open_format_msg(ipmi_con_t    *ipmi,
-		ipmi_addr_t   *addr,
-		unsigned int  addr_len,
-		ipmi_msg_t    *msg,
-		unsigned char *out_data,
-		unsigned int  *out_data_len,
-		int           *out_of_session,
-		unsigned char seq)
+open_format_msg(ipmi_con_t        *ipmi,
+		const ipmi_addr_t *addr,
+		unsigned int      addr_len,
+		const ipmi_msg_t  *msg,
+		unsigned char     *out_data,
+		unsigned int      *out_data_len,
+		int               *out_of_session,
+		unsigned char     seq)
 {
     unsigned char *tmsg = out_data;
 
@@ -1305,7 +1305,7 @@ static lan_link_t lan_list[LAN_HASH_SIZE];
 static lan_link_t lan_ip_list[LAN_HASH_SIZE];
 
 static int
-hash_lan(ipmi_con_t *ipmi)
+hash_lan(const ipmi_con_t *ipmi)
 {
     int idx;
 
@@ -1316,7 +1316,7 @@ hash_lan(ipmi_con_t *ipmi)
 }
 
 static int
-hash_lan_addr(struct sockaddr *addr)
+hash_lan_addr(const struct sockaddr *addr)
 {
     int idx;
     switch (addr->sa_family)
@@ -1705,12 +1705,12 @@ lan15_format_msg(lan_data_t *lan, int addr_num,
 }
 
 static int
-lan_send_addr(lan_data_t  *lan,
-	      ipmi_addr_t *addr,
-	      int         addr_len,
-	      ipmi_msg_t  *msg,
-	      uint8_t     seq,
-	      int         addr_num)
+lan_send_addr(lan_data_t        *lan,
+	      const ipmi_addr_t *addr,
+	      int               addr_len,
+	      const ipmi_msg_t  *msg,
+	      uint8_t           seq,
+	      int               addr_num)
 {
     unsigned char  data[IPMI_MAX_LAN_LEN+IPMI_LAN_MAX_HEADER];
     unsigned char  *tmsg;
@@ -1839,12 +1839,12 @@ lan_send_addr(lan_data_t  *lan,
 }
 
 static int
-lan_send(lan_data_t  *lan,
-	 ipmi_addr_t *addr,
-	 int         addr_len,
-	 ipmi_msg_t  *msg,
-	 uint8_t     seq,
-	 int         *send_ip_num)
+lan_send(lan_data_t        *lan,
+	 const ipmi_addr_t *addr,
+	 int               addr_len,
+	 const ipmi_msg_t  *msg,
+	 uint8_t           seq,
+	 int               *send_ip_num)
 {
     int curr_ip_addr;
 
@@ -2389,10 +2389,10 @@ rsp_timeout_handler(void              *cb_data,
 
 typedef struct call_event_handler_s
 {
-    lan_data_t   *lan;
-    ipmi_addr_t  *addr;
-    unsigned int addr_len;
-    ipmi_event_t *event;
+    lan_data_t        *lan;
+    const ipmi_addr_t *addr;
+    unsigned int      addr_len;
+    ipmi_event_t      *event;
 } call_event_handler_t;
 
 static int
@@ -2434,10 +2434,10 @@ lan_remove_event_handler(ipmi_con_t            *ipmi,
 static ipmi_mcid_t invalid_mcid = IPMI_MCID_INVALID;
 
 static void
-handle_async_event(ipmi_con_t   *ipmi,
-		   ipmi_addr_t  *addr,
-		   unsigned int addr_len,
-		   ipmi_msg_t   *msg)
+handle_async_event(ipmi_con_t        *ipmi,
+		   const ipmi_addr_t *addr,
+		   unsigned int      addr_len,
+		   const ipmi_msg_t  *msg)
 {
     lan_data_t           *lan = (lan_data_t *) ipmi->con_data;
     ipmi_event_t         *event = NULL;
@@ -2479,20 +2479,20 @@ handle_async_event(ipmi_con_t   *ipmi,
 static int
 handle_msg_send(lan_timer_info_t      *info,
 		int                   addr_num,
-		ipmi_addr_t           *addr,
+		const ipmi_addr_t     *addr,
 		unsigned int          addr_len,
-		ipmi_msg_t            *msg,
+		const ipmi_msg_t      *msg,
 		ipmi_ll_rsp_handler_t rsp_handler,
 		ipmi_msgi_t           *rspi)
 {
-    ipmi_con_t     *ipmi = info->ipmi;
-    lan_data_t     *lan = ipmi->con_data;
-    unsigned int   seq;
-    struct timeval timeout;
-    int            rv;
-    ipmi_addr_t    tmp_addr;
-    ipmi_addr_t    *orig_addr = NULL;
-    unsigned int   orig_addr_len = 0;
+    ipmi_con_t        *ipmi = info->ipmi;
+    lan_data_t        *lan = ipmi->con_data;
+    unsigned int      seq;
+    struct timeval    timeout;
+    int               rv;
+    ipmi_addr_t       tmp_addr;
+    const ipmi_addr_t *orig_addr = NULL;
+    unsigned int      orig_addr_len = 0;
 
     seq = (lan->last_seq + 1) % 64;
     if (seq == 0)
@@ -3423,9 +3423,9 @@ ipmi_lan_send_command_forceip(ipmi_con_t            *ipmi,
 
 static int
 lan_send_command(ipmi_con_t            *ipmi,
-		 ipmi_addr_t           *addr,
+		 const ipmi_addr_t     *addr,
 		 unsigned int          addr_len,
-		 ipmi_msg_t            *msg,
+		 const ipmi_msg_t      *msg,
 		 ipmi_ll_rsp_handler_t rsp_handler,
 		 ipmi_msgi_t           *trspi)
 {
@@ -3530,11 +3530,11 @@ lan_send_command(ipmi_con_t            *ipmi,
 }
 
 static int
-lan_send_response(ipmi_con_t   *ipmi,
-		  ipmi_addr_t  *addr,
-		  unsigned int addr_len,
-		  ipmi_msg_t   *msg,
-		  long         sequence)
+lan_send_response(ipmi_con_t        *ipmi,
+		  const ipmi_addr_t *addr,
+		  unsigned int      addr_len,
+		  const ipmi_msg_t  *msg,
+		  long              sequence)
 {
     return ENOSYS;
 }
@@ -5361,7 +5361,9 @@ void _ipmi_lan_handle_connected(ipmi_con_t *ipmi, int rv, int addr_num)
 }
 
 static void
-snmp_got_match(lan_data_t *lan, ipmi_msg_t *msg, unsigned char *pet_ack)
+snmp_got_match(lan_data_t          *lan,
+	       const ipmi_msg_t    *msg,
+	       const unsigned char *pet_ack)
 {
     ipmi_system_interface_addr_t si;
     ipmi_msg_t                   ack;
@@ -5375,7 +5377,7 @@ snmp_got_match(lan_data_t *lan, ipmi_msg_t *msg, unsigned char *pet_ack)
     /* Send the ack directly. */
     ack.netfn = IPMI_SENSOR_EVENT_NETFN;
     ack.cmd = IPMI_PET_ACKNOWLEDGE_CMD;
-    ack.data = pet_ack;
+    ack.data = (unsigned char *) pet_ack;
     ack.data_len = 12;
     lan_send(lan, (ipmi_addr_t *) &si, sizeof(si), &ack, 0, &dummy_send_ip);
 }
@@ -5387,9 +5389,9 @@ typedef struct lan_do_evt_s
 } lan_do_evt_t;
 
 int
-ipmi_lan_handle_external_event(struct sockaddr *src_addr,
-			       ipmi_msg_t      *msg,
-			       unsigned char   *pet_ack)
+ipmi_lan_handle_external_event(const struct sockaddr *src_addr,
+			       const ipmi_msg_t      *msg,
+			       const unsigned char   *pet_ack)
 {
     lan_link_t   *l;
     lan_data_t   *lan;

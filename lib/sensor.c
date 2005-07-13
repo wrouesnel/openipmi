@@ -303,7 +303,7 @@ ipmi_sensor_id_set_invalid(ipmi_sensor_id_t *id)
 }
 
 int
-ipmi_sensor_id_is_invalid(ipmi_sensor_id_t *id)
+ipmi_sensor_id_is_invalid(const ipmi_sensor_id_t *id)
 {
     return (id->mcid.domain_id.domain == NULL);
 }
@@ -979,8 +979,8 @@ sensor_set_name(ipmi_sensor_t *sensor)
     length++;
 }
 
-char *
-_ipmi_sensor_name(ipmi_sensor_t *sensor)
+const char *
+_ipmi_sensor_name(const ipmi_sensor_t *sensor)
 {
     return sensor->name;
 }
@@ -3400,7 +3400,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
 	enum ipmi_value_present_e   value_present;
 	unsigned int                raw_value;
 	double                      value;
-	unsigned char               *data;
+	const unsigned char         *data;
 
 	data = ipmi_event_get_data_ptr(event);
 	dir = data[9] >> 7;
@@ -3430,7 +3430,7 @@ ipmi_sensor_event(ipmi_sensor_t *sensor, ipmi_event_t *event)
 	int                   offset;
 	int                   severity = 0;
 	int                   prev_severity = 0;
-	unsigned char         *data;
+	const unsigned char   *data;
 
 	data = ipmi_event_get_data_ptr(event);
 	dir = data[9] >> 7;
@@ -5642,7 +5642,7 @@ ipmi_sensor_id_get_states(ipmi_sensor_id_t      sensor_id,
 
 #ifdef IPMI_CHECK_LOCKS
 void
-__ipmi_check_sensor_lock(ipmi_sensor_t *sensor)
+__ipmi_check_sensor_lock(const ipmi_sensor_t *sensor)
 {
     if (!sensor)
 	return;
