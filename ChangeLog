@@ -3,7 +3,7 @@
 	* lib/sensor.c: Make sure the entity for a sensor is locked even
 	if the MC is bad.
 
-	* lib/sel.c: Remove a bogux sel_unlock().
+	* lib/sel.c: Remove a bogus sel_unlock().
 
 	* include/OpenIPMI/os_handler.h: Add a way to directly set the
 	log handler for an os handler.
