@@ -26,8 +26,9 @@
 	* sample/ipmicmd.c: Remove posix_vlog and use the default one.
 	* sample/sample2.c: ditto
 	* sample/sample3.c: ditto
-	
 
+	* configure.in: Move to version 2.0.2
+	
 2005-07-13 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_sensor.c, include/OpenIPMI/ipmiif.h.in:
