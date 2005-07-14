@@ -201,7 +201,7 @@ void ipmi_domain_iterate_domains(ipmi_domain_ptr_cb handler,
 /* Get the "name" for the domain.  Returns the length of the string
    (minus the closing \0). */
 #define IPMI_DOMAIN_NAME_LEN 32
-int ipmi_domain_get_name(const ipmi_domain_t *domain, char *name, int length);
+int ipmi_domain_get_name(ipmi_domain_t *domain, char *name, int length);
 
 /* Domains come in different flavors.  It might be useful to know the
    type of domain you are hooked to, so this function will return the
@@ -213,13 +213,13 @@ enum ipmi_domain_type
     IPMI_DOMAIN_TYPE_MXP,
     IPMI_DOMAIN_TYPE_ATCA,
 };
-enum ipmi_domain_type ipmi_domain_get_type(const ipmi_domain_t *domain);
+enum ipmi_domain_type ipmi_domain_get_type(ipmi_domain_t *domain);
 const char *ipmi_domain_get_type_string(enum ipmi_domain_type dtype);
 
 /* Return the system GUID for the domain.  The guid must point to an
    array of 16 characters.  Returns ENOSYS if the domain didn't have a
    GUID. */
-int ipmi_domain_get_guid(const ipmi_domain_t *domain, unsigned char *guid);
+int ipmi_domain_get_guid(ipmi_domain_t *domain, unsigned char *guid);
 
 /* Add and remove a function to be called when the connection or port
    to the domain goes down or back up.  Being down does NOT mean the
@@ -314,7 +314,7 @@ int ipmi_detect_domain_presence_changes(ipmi_domain_t *domain, int force);
    value to zero, it will turn off SEL scanning. */
 void ipmi_domain_set_sel_rescan_time(ipmi_domain_t *domain,
 				     unsigned int  seconds);
-unsigned int ipmi_domain_get_sel_rescan_time(const ipmi_domain_t *domain);
+unsigned int ipmi_domain_get_sel_rescan_time(ipmi_domain_t *domain);
 
 /* The IPMB rescan timer is the time between scans of the IPMB bus to
    see if new MCs have appeared on the bus.  The timer is in seconds,
@@ -324,7 +324,7 @@ unsigned int ipmi_domain_get_sel_rescan_time(const ipmi_domain_t *domain);
    insertion of devices more quickly.  */
 void ipmi_domain_set_ipmb_rescan_time(ipmi_domain_t *domain,
 				      unsigned int  seconds);
-unsigned int ipmi_domain_get_ipmb_rescan_time(const ipmi_domain_t *domain);
+unsigned int ipmi_domain_get_ipmb_rescan_time(ipmi_domain_t *domain);
 
 /* Events come in this format. */
 typedef void (*ipmi_event_handler_cb)(ipmi_domain_t *domain,
@@ -422,7 +422,7 @@ int ipmi_domain_store_entities(ipmi_domain_t  *domain,
 			       void           *cb_data);
 
 /* Returns if the domain thinks it has a connection up. */
-int ipmi_domain_con_up(const ipmi_domain_t *domain);
+int ipmi_domain_con_up(ipmi_domain_t *domain);
 
 /* Iterate through the connections on a domain. */
 typedef void (*ipmi_connection_ptr_cb)(ipmi_domain_t *domain, int conn,

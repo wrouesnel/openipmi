@@ -429,7 +429,10 @@ setup_done(ipmi_domain_t *domain,
 static os_handler_t *os_hnd;
 
 static void
-my_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
+my_vlog(os_handler_t         *handler,
+	const char           *format,
+	enum ipmi_log_type_e log_type,
+	va_list              ap)
 {
     int do_nl = 1;
 
