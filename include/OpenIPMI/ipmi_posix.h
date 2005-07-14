@@ -45,9 +45,15 @@ extern "C" {
    threading.  If you use these (and thus link with the OpenIPMIposix
    or OpenIPMIpthread libraries) you must provide posix_vlog().  It is
    not provided by the library. */
-void posix_vlog(const char *format,
+/* DEPRECATED - This should no longer be used, you should use the
+   OS-handler function to set your log handler.  If you do not supply
+   your own os_vlog handler, logs will go to stderr.  If you supply a
+   posix_vlog handler and don't call set_log_handler in the OS handler,
+   posix_vlog() will still be used.
+void posix_vlog(char *format,
 		enum ipmi_log_type_e log_type,
 		va_list ap);
+*/
 
 /* Non-threaded os handler operations */
 

@@ -1568,7 +1568,6 @@ start_del_sel(void *cb_data, int shutdown)
 
     rv = ipmi_mc_pointer_cb(sel->mc, start_del_sel_cb, data);
     if (rv) {
-	sel_unlock(sel);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_del_sel_cb): MC went away during delete",
 		 sel->name);

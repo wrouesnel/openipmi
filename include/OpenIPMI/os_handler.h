@@ -92,6 +92,13 @@ typedef void (*os_fd_data_freed_t)(int fd, void *data);
 typedef void (*os_timer_freed_t)(void *data);
 
 typedef struct os_handler_s os_handler_t;
+
+/* A function to output logs, used to override the default functions. */
+typedef void (*os_vlog_t)(os_handler_t         *handler,
+			  const char           *format,
+			  enum ipmi_log_type_e log_type,
+			  va_list              ap);
+
 struct os_handler_s
 {
     /* Allocate and free data, like malloc() and free().  These are
@@ -303,6 +310,10 @@ struct os_handler_s
        proper does not use this. */
     int (*database_set_filename)(os_handler_t *handler,
 				 char         *name);
+
+    /* Set the function to send logs to. */
+    void (*set_log_handler)(os_handler_t *handler,
+			    os_vlog_t    log_handler);
 };
 
 /* Only use these to allocate/free OS handlers. */

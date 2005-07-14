@@ -98,10 +98,11 @@ redraw_cmdline(int force)
     }
 }
 
-void
-posix_vlog(const char *format,
-	   enum ipmi_log_type_e log_type,
-	   va_list ap)
+static void
+my_vlog(os_handler_t         *handler,
+	const char           *format,
+	enum ipmi_log_type_e log_type,
+	va_list              ap)
 {
     int do_nl = 1;
     static int last_was_cont = 0;
@@ -152,13 +153,6 @@ posix_vlog(const char *format,
 	printf("\n");
 	redraw_cmdline(0);
     }
-}
-void
-debug_vlog(const char *format,
-	   enum ipmi_log_type_e log_type,
-	   va_list ap)
-{
-    posix_vlog(format, log_type, ap);
 }
 
 #ifdef HAVE_GLIB
@@ -1070,6 +1064,8 @@ main(int argc, char *argv[])
 	sel = ipmi_posix_os_handler_get_sel(os_hnd);
 #endif
     }
+
+    os_hnd->set_log_handler(os_hnd, my_vlog);
 
     /* Initialize the OpenIPMI library. */
     ipmi_init(os_hnd);

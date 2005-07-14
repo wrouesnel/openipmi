@@ -428,6 +428,53 @@ setup_done(ipmi_domain_t *domain,
 
 static os_handler_t *os_hnd;
 
+static void
+my_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
+{
+    int do_nl = 1;
+
+    switch(log_type)
+    {
+	case IPMI_LOG_INFO:
+	    printf("INFO: ");
+	    break;
+
+	case IPMI_LOG_WARNING:
+	    printf("WARN: ");
+	    break;
+
+	case IPMI_LOG_SEVERE:
+	    printf("SEVR: ");
+	    break;
+
+	case IPMI_LOG_FATAL:
+	    printf("FATL: ");
+	    break;
+
+	case IPMI_LOG_ERR_INFO:
+	    printf("EINF: ");
+	    break;
+
+	case IPMI_LOG_DEBUG_START:
+	    do_nl = 0;
+	    /* FALLTHROUGH */
+	case IPMI_LOG_DEBUG:
+	    printf("DEBG: ");
+	    break;
+
+	case IPMI_LOG_DEBUG_CONT:
+	    do_nl = 0;
+	    /* FALLTHROUGH */
+	case IPMI_LOG_DEBUG_END:
+	    break;
+    }
+
+    vprintf(format, ap);
+
+    if (do_nl)
+	printf("\n");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -444,6 +491,9 @@ main(int argc, char *argv[])
 	printf("ipmi_smi_setup_con: Unable to allocate os handler\n");
 	exit(1);
     }
+
+    /* Override the default log handler (just to show how). */
+    os_hnd->set_log_handler(os_hnd, my_vlog);
 
     /* Initialize the OpenIPMI library. */
     ipmi_init(os_hnd);
@@ -502,51 +552,4 @@ main(int argc, char *argv[])
 
     /* Technically, we can't get here, but this is an example. */
     os_hnd->free_os_handler(os_hnd);
-}
-
-void
-posix_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
-{
-    int do_nl = 1;
-
-    switch(log_type)
-    {
-	case IPMI_LOG_INFO:
-	    printf("INFO: ");
-	    break;
-
-	case IPMI_LOG_WARNING:
-	    printf("WARN: ");
-	    break;
-
-	case IPMI_LOG_SEVERE:
-	    printf("SEVR: ");
-	    break;
-
-	case IPMI_LOG_FATAL:
-	    printf("FATL: ");
-	    break;
-
-	case IPMI_LOG_ERR_INFO:
-	    printf("EINF: ");
-	    break;
-
-	case IPMI_LOG_DEBUG_START:
-	    do_nl = 0;
-	    /* FALLTHROUGH */
-	case IPMI_LOG_DEBUG:
-	    printf("DEBG: ");
-	    break;
-
-	case IPMI_LOG_DEBUG_CONT:
-	    do_nl = 0;
-	    /* FALLTHROUGH */
-	case IPMI_LOG_DEBUG_END:
-	    break;
-    }
-
-    vprintf(format, ap);
-
-    if (do_nl)
-	printf("\n");
 }

@@ -48,6 +48,8 @@
 /* Internal includes, do not use in your programs */
 #include <OpenIPMI/internal/ipmi_malloc.h>
 
+static os_vlog_t log_handler;
+
 #ifdef HAVE_GDBM
 #include <gdbm.h>
 
@@ -263,6 +265,16 @@ extern void debug_vlog(const char *format, enum ipmi_log_type_e log_type,
 		       va_list ap);
 
 static void
+sdebug_vlog(os_handler_t         *handler,
+	    enum ipmi_log_type_e log_type,
+	    const char           *format,
+	    va_list              ap)
+{
+    if (log_handler)
+	log_handler(handler, format, log_type, ap);
+}
+
+static void
 sdebug_log(os_handler_t         *handler,
 	enum ipmi_log_type_e log_type,
 	const char            *format,
@@ -271,17 +283,8 @@ sdebug_log(os_handler_t         *handler,
     va_list ap;
 
     va_start(ap, format);
-    debug_vlog(format, log_type, ap);
+    sdebug_vlog(handler, log_type, format, ap);
     va_end(ap);
-}
-
-static void
-sdebug_vlog(os_handler_t         *handler,
-	    enum ipmi_log_type_e log_type,
-	    const char           *format,
-	    va_list              ap)
-{
-    debug_vlog(format, log_type, ap);
 }
 
 #ifdef IPMI_CHECK_LOCKS
@@ -497,6 +500,12 @@ set_gdbm_filename(os_handler_t *os_hnd, char *name)
 }
 #endif
 
+void sset_log_handler(os_handler_t *handler,
+		      os_vlog_t    log_handler)
+{
+    log_handler = log_handler;
+}
+
 os_handler_t ipmi_debug_os_handlers =
 {
     .mem_alloc = debug_malloc,
@@ -530,4 +539,5 @@ os_handler_t ipmi_debug_os_handlers =
     .database_free = database_free,
     .database_set_filename = set_gdbm_filename,
 #endif
+    .set_log_handler = sset_log_handler,
 };

@@ -40,7 +40,8 @@
 extern "C" {
 #endif
 
-/* Logs go to the standard glib log hander. */
+/* Logs go to the standard glib log hander, unless overridden by
+   set_log_handler in the os_handler. */
 
 /* Allocate and configure an OS handler. */
 os_handler_t *ipmi_glib_get_os_handler(void);

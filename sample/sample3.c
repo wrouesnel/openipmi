@@ -672,6 +672,8 @@ main(int argc, char *argv[])
 	exit(1);
     }
 
+    /* Use the default log handler. */
+
     /* Initialize the OpenIPMI library. */
     ipmi_init(os_hnd);
 
@@ -704,51 +706,4 @@ main(int argc, char *argv[])
     /* Technically, we can't get here, but this is an example. */
     os_hnd->free_os_handler(os_hnd);
     return 0;
-}
-
-void
-posix_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
-{
-    int do_nl = 1;
-
-    switch(log_type)
-    {
-	case IPMI_LOG_INFO:
-	    printf("INFO: ");
-	    break;
-
-	case IPMI_LOG_WARNING:
-	    printf("WARN: ");
-	    break;
-
-	case IPMI_LOG_SEVERE:
-	    printf("SEVR: ");
-	    break;
-
-	case IPMI_LOG_FATAL:
-	    printf("FATL: ");
-	    break;
-
-	case IPMI_LOG_ERR_INFO:
-	    printf("EINF: ");
-	    break;
-
-	case IPMI_LOG_DEBUG_START:
-	    do_nl = 0;
-	    /* FALLTHROUGH */
-	case IPMI_LOG_DEBUG:
-	    printf("DEBG: ");
-	    break;
-
-	case IPMI_LOG_DEBUG_CONT:
-	    do_nl = 0;
-	    /* FALLTHROUGH */
-	case IPMI_LOG_DEBUG_END:
-	    break;
-    }
-
-    vprintf(format, ap);
-
-    if (do_nl)
-	printf("\n");
 }

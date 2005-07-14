@@ -55,11 +55,13 @@
 
 typedef struct g_os_hnd_data_s
 {
-    gint priority;
+    gint      priority;
+    os_vlog_t log_handler;
+
 #ifdef HAVE_GDBM
-    char *gdbm_filename;
+    char      *gdbm_filename;
     GDBM_FILE gdbmf;
-    GMutex *gdbm_lock;
+    GMutex    *gdbm_lock;
 #endif
 } g_os_hnd_data_t;
 
@@ -364,8 +366,15 @@ glib_vlog(os_handler_t         *handler,
 	  const char           *format,
 	  va_list              ap)
 {
-    GLogLevelFlags flags;
-    vlog_data_t    *info;
+    GLogLevelFlags  flags;
+    vlog_data_t     *info;
+    g_os_hnd_data_t *ginfo = handler->internal_data;
+    os_vlog_t       log_handler = ginfo->log_handler;
+
+    if (log_handler) {
+	log_handler(handler, format, log_type, ap);
+	return;
+    }
 
     switch (log_type) {
     case IPMI_LOG_INFO:		flags = G_LOG_LEVEL_INFO; break;
@@ -751,6 +760,14 @@ set_gdbm_filename(os_handler_t *os_hnd, char *name)
 }
 #endif
 
+void sset_log_handler(os_handler_t *handler,
+		      os_vlog_t    log_handler)
+{
+    g_os_hnd_data_t *info = handler->internal_data;
+
+    info->log_handler = log_handler;
+}
+
 static os_handler_t ipmi_glib_os_handler =
 {
     .mem_alloc = glib_malloc,
@@ -796,6 +813,7 @@ static os_handler_t ipmi_glib_os_handler =
     .database_free = database_free,
     .database_set_filename = set_gdbm_filename,
 #endif
+    .set_log_handler = sset_log_handler,
 };
 
 os_handler_t *

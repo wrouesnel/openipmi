@@ -55,9 +55,17 @@
 
 #include <OpenIPMI/internal/ipmi_int.h>
 
+/* CHEAP HACK - we don't want the user to have to provide this any
+   more. */
+extern void posix_vlog(const char           *format,
+		       enum ipmi_log_type_e log_type,
+		       va_list              ap);
+#pragma weak posix_vlog
+
 typedef struct pt_os_hnd_data_s
 {
     selector_t       *sel;
+    os_vlog_t        log_handler;
     int              wake_sig;
     struct sigaction oldact;
 #ifdef HAVE_GDBM
@@ -269,6 +277,72 @@ get_random(os_handler_t *handler, void *data, unsigned int len)
 }
 
 static void
+default_vlog(const char           *format,
+	     enum ipmi_log_type_e log_type,
+	     va_list              ap)
+{
+    int do_nl = 1;
+
+    switch(log_type)
+    {
+	case IPMI_LOG_INFO:
+	    fprintf(stderr, "INFO: ");
+	    break;
+
+	case IPMI_LOG_WARNING:
+	    fprintf(stderr, "WARN: ");
+	    break;
+
+	case IPMI_LOG_SEVERE:
+	    fprintf(stderr, "SEVR: ");
+	    break;
+
+	case IPMI_LOG_FATAL:
+	    fprintf(stderr, "FATL: ");
+	    break;
+
+	case IPMI_LOG_ERR_INFO:
+	    fprintf(stderr, "EINF: ");
+	    break;
+
+	case IPMI_LOG_DEBUG_START:
+	    do_nl = 0;
+	    /* FALLTHROUGH */
+	case IPMI_LOG_DEBUG:
+	    fprintf(stderr, "DEBG: ");
+	    break;
+
+	case IPMI_LOG_DEBUG_CONT:
+	    do_nl = 0;
+	    /* FALLTHROUGH */
+	case IPMI_LOG_DEBUG_END:
+	    break;
+    }
+
+    vfprintf(stderr, format, ap);
+
+    if (do_nl)
+	fprintf(stderr, "\n");
+}
+
+static void
+sposix_vlog(os_handler_t         *handler,
+	    enum ipmi_log_type_e log_type,
+	    const char           *format,
+	    va_list              ap)
+{
+    pt_os_hnd_data_t *info = handler->internal_data;
+    os_vlog_t        log_handler = info->log_handler;
+
+    if (log_handler)
+	log_handler(handler, format, log_type, ap);
+    else if (posix_vlog)
+	posix_vlog(format, log_type, ap);
+    else
+	default_vlog(format, log_type, ap);
+}
+
+static void
 sposix_log(os_handler_t         *handler,
 	   enum ipmi_log_type_e log_type,
 	   const char           *format,
@@ -279,15 +353,6 @@ sposix_log(os_handler_t         *handler,
     va_start(ap, format);
     posix_vlog(format, log_type, ap);
     va_end(ap);
-}
-
-static void
-sposix_vlog(os_handler_t         *handler,
-	    enum ipmi_log_type_e log_type,
-	    const char           *format,
-	    va_list              ap)
-{
-    posix_vlog(format, log_type, ap);
 }
 
 struct os_hnd_lock_s
@@ -699,6 +764,14 @@ set_gdbm_filename(os_handler_t *os_hnd, char *name)
 }
 #endif
 
+void sset_log_handler(os_handler_t *handler,
+		      os_vlog_t    log_handler)
+{
+    pt_os_hnd_data_t *info = handler->internal_data;
+
+    info->log_handler = log_handler;
+}
+
 static os_handler_t ipmi_posix_thread_os_handler =
 {
     .mem_alloc = posix_malloc,
@@ -733,6 +806,7 @@ static os_handler_t ipmi_posix_thread_os_handler =
     .database_free = database_free,
     .database_set_filename = set_gdbm_filename,
 #endif
+    .set_log_handler = sset_log_handler,
 };
 
 os_handler_t *

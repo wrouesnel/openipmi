@@ -122,13 +122,6 @@ ipmi_read_unlock()
 {
 }
 
-void
-posix_vlog(const char *format, enum ipmi_log_type_e log_type, va_list ap)
-{
-    vfprintf(stderr, format, ap);
-    fprintf(stderr, "\n");
-}
-
 static void
 leave(int ret)
 {
