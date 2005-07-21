@@ -1,3 +1,8 @@
+2005-07-21 Darius Davis <dariusd@users.sourceforge.net>
+
+	* lib/ipmi_sol.c: Fix potential crash due to a dodgy memset().
+	Fixed an incorrect warning text string.
+
 2005-07-14 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Make sure the entity for a sensor is locked even
@@ -214,11 +219,11 @@
 
 	* swig/OpenIPMI.h: Added domaim monitoring interfaces.
 
-2005-04-07 Darius Davis <darius@cyclades.com>
+2005-04-07 Darius Davis <dariusd@users.sourceforge.net>
 
 	* sample/solterm.c, sample/Makefile.am: Added solterm sample program.
 
-2005-04-07 Darius Davis <darius@cyclades.com>
+2005-04-07 Darius Davis <dariusd@users.sourceforge.net>
 
 	* include/OpenIPMI/ipmi_err.h: Added error codes and macros for Serial
 	over LAN support
@@ -301,7 +306,7 @@
 	The integrity length for RAKP4 messages was 12 bytes, not 20
 	bytes.
 
-2005-03-29 Darius Davis <darius.davis@cyclades.com>, Corey Minyard <cminyard@mvista.com> 
+2005-03-29 Darius Davis <dariusd@users.sourceforge.net>, Corey Minyard <cminyard@mvista.com> 
 
 	* configure.in: Add test for execinfo.h
 

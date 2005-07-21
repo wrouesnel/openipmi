@@ -1630,7 +1630,7 @@ int ipmi_sol_create(
 	if (!new_conn)
 		return ENOMEM;
 
-	memset((void *)new_conn, 0, sizeof(new_conn));
+	memset((void *)new_conn, 0, sizeof(*new_conn));
 
     	rv = ipmi_create_lock_os_hnd(ipmi->os_hnd, &new_conn->transmitter.packet_lock);
     	if (rv)
@@ -1695,7 +1695,7 @@ static int get_sane_payload_size(int b1, int b2)
 		result = (b1 << 8) + b2;
 		if ((result > 0x0103) || (result < 5))
 		{
-			ipmi_log(IPMI_LOG_WARNING, "BMC did not supply a sensible buffer size (0x%02x, 0x%02x). Defaulting to 32.",
+			ipmi_log(IPMI_LOG_WARNING, "BMC did not supply a sensible buffer size (0x%02x, 0x%02x). Defaulting to 16.",
 				b1, b2);
 			result = 0x10; /* 16 bytes should be a safe buffer size. */
 		}
