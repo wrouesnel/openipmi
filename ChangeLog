@@ -1,3 +1,28 @@
+2005-08-02 Corey Minyard <cminyard@mvista.com>
+
+	* cmdlang/os_debug.c: Fix so log handler gets set correctly.
+
+	* cmdlang/out_fru.c: Add support for multi-record parsing.
+
+	* include/OpenIPMI/ipmi_fru.h, lib/fru.c: Add consts where needed.
+	* include/OpenIPMI/internal/ipmi_int.h: ditto
+	* include/OpenIPMI/internal/ipmi_oem.h: ditto
+
+	* lanserv/atca.emu: Add more multi-records for testing.
+
+	* lib/fru.c: Fix return of the multi-record root name.
+
+	* lib/oem_atca.c: Fix problems with the multi-record parsing, add
+	support for the ATCA address table.
+
+	* swig/OpenIPMI.i: Add support for the fru nodes and multi-record
+	parsing.
+	* swig/perl/OpenIPMI_lang.i, swig/python/OpenIPMI_lang.i: new
+	types for multi-record parsing.
+
+	* ui/ui.c: Some const fixes.
+	
+
 2005-07-21 Darius Davis <dariusd@users.sourceforge.net>
 
 	* lib/ipmi_sol.c: Fix potential crash due to a dodgy memset().

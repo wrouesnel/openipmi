@@ -83,7 +83,7 @@
     argvi++;
 }
 
-%typemap(in) char ** {
+%typemap(in) arg_array {
     AV *tempav;
     I32 len;
     int i;
@@ -94,7 +94,7 @@
 	croak("Argument $argnum is not an array.");
     tempav = (AV*)SvRV($input);
     len = av_len(tempav);
-    $1 = (char **) malloc((len+2)*sizeof(char *));
+    $1 = (arg_array) malloc((len+2)*sizeof(char *));
     for (i = 0; i <= len; i++) {
 	tv = av_fetch(tempav, i, 0);
 	$1[i] = (char *) SvPV(*tv,PL_na);
@@ -102,7 +102,7 @@
     $1[i] = NULL;
 };
 
-%typemap(freearg) char ** {
+%typemap(freearg) arg_array {
     free($1);
 };
 
@@ -144,6 +144,62 @@
     SV *tempsv;
     tempsv = SvRV($input);
     sv_setiv(tempsv, *$1);
+}
+
+%typemap(in) const char ** (char *svalue) {
+    SV* tempsv;
+    if (!SvROK($input)) {
+	croak("expected a reference\n");
+    }
+    tempsv = SvRV($input);
+    if (!SvOK(tempsv)) {
+	svalue = NULL;
+    } else {
+	svalue = SvPV_nolen(tempsv);
+    }
+    $1 = &svalue;
+}
+
+%typemap(argout) const char ** {
+    SV *tempsv;
+    tempsv = SvRV($input);
+    sv_setpv(tempsv, *$1);
+}
+
+%typemap(in) char ** (char *svalue) {
+    SV* tempsv;
+    if (!SvROK($input)) {
+	croak("expected a reference\n");
+    }
+    tempsv = SvRV($input);
+    if (!SvOK(tempsv)) {
+	svalue = NULL;
+    } else {
+	svalue = SvPV_nolen(tempsv);
+    }
+    $1 = &svalue;
+}
+
+%typemap(argout) char ** {
+    SV *tempsv;
+    tempsv = SvRV($input);
+    sv_setpv(tempsv, *$1);
+    free(*$1);
+}
+
+%typemap(in) ipmi_fru_node_t ** (ipmi_fru_node_t *pvalue) {
+    if (!SvROK($input)) {
+	croak("expected a reference\n");
+    }
+    pvalue = NULL;
+    $1 = &pvalue;
+}
+
+%typemap(argout) ipmi_fru_node_t ** {
+    SV *tempsv;
+    tempsv = SvRV($input);
+    SWIG_MakePtr(tempsv, $1, SWIGTYPE_p_ipmi_fru_node_t,
+		 SWIG_SHADOW|SWIG_OWNER);
 }
 
 %{

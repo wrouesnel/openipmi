@@ -58,14 +58,99 @@ fru_out_data(ipmi_cmd_info_t *cmd_info, unsigned char type,
     }
 }
 
+static int
+traverse_fru_multi_record_tree(ipmi_cmd_info_t *cmd_info,
+			       ipmi_fru_node_t *node)
+{
+    const char                *name;
+    unsigned int              i;
+    enum ipmi_fru_data_type_e dtype;
+    int                       intval, rv;
+    time_t                    time;
+    char                      *data;
+    unsigned int              data_len;
+    ipmi_fru_node_t           *sub_node;
+    
+    for (i=0; ; i++) {
+	data = NULL;
+        rv = ipmi_fru_node_get_field(node, i, &name, &dtype, &intval,
+				     &time, &data, &data_len, &sub_node);
+        if ((rv == EINVAL) || (rv == ENOSYS))
+            break;
+        else if (rv)
+            continue;
+
+	if (name) {
+	    ipmi_cmdlang_out(cmd_info, "Field", NULL);
+	    ipmi_cmdlang_down(cmd_info);
+	    ipmi_cmdlang_out(cmd_info, "Name", name);
+	} else {
+	    ipmi_cmdlang_out(cmd_info, "Element", NULL);
+	    ipmi_cmdlang_down(cmd_info);
+	    ipmi_cmdlang_out_int(cmd_info, "Index", i);
+	}
+
+        switch (dtype) {
+	case IPMI_FRU_DATA_INT:
+	    ipmi_cmdlang_out(cmd_info, "Type", "integer");
+	    ipmi_cmdlang_out_int(cmd_info, "Data", intval);
+	    break;
+
+	case IPMI_FRU_DATA_TIME:
+	    ipmi_cmdlang_out(cmd_info, "Type", "integer");
+	    ipmi_cmdlang_out_long(cmd_info, "Data", (long) time);
+	    break;
+
+	case IPMI_FRU_DATA_BINARY:
+	    ipmi_cmdlang_out(cmd_info, "Type", "binary");
+	    ipmi_cmdlang_out_binary(cmd_info, "Data", data, data_len);
+	    break;
+
+	case IPMI_FRU_DATA_UNICODE:
+	    ipmi_cmdlang_out(cmd_info, "Type", "unicode");
+	    ipmi_cmdlang_out_unicode(cmd_info, "Data", data, data_len);
+	    break;
+
+	case IPMI_FRU_DATA_ASCII:
+	    ipmi_cmdlang_out(cmd_info, "Type", "ascii");
+	    ipmi_cmdlang_out(cmd_info, "Data", data);
+	    break;
+
+	case IPMI_FRU_DATA_SUB_NODE:
+	    if (intval == -1)
+		ipmi_cmdlang_out(cmd_info, "Record", NULL);
+	    else
+		ipmi_cmdlang_out(cmd_info, "Array", NULL);
+	    ipmi_cmdlang_down(cmd_info);
+	    if (intval != -1)
+		ipmi_cmdlang_out_int(cmd_info, "Element Count", intval);
+	    traverse_fru_multi_record_tree(cmd_info, sub_node);
+	    ipmi_cmdlang_up(cmd_info);
+	    break;
+	    
+	default:
+	    ipmi_cmdlang_out(cmd_info, "Type", "unknown");
+	    break;
+	}
+
+	ipmi_cmdlang_up(cmd_info);
+	if (data)
+	    ipmi_fru_data_free(data);
+    }
+    
+    ipmi_fru_put_node(node);
+
+    return 0;
+}
+
 void
 ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 {
-    ipmi_cmdlang_t *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    ipmi_cmdlang_t            *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int                       rv;
     int                       i;
     int                       num, onum;
-    char                      *name;
+    const char                *name;
     enum ipmi_fru_data_type_e dtype;
     int                       intval;
     time_t                    time;
@@ -73,6 +158,7 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
     unsigned int              data_len;
     unsigned int              num_multi;
     char                      fru_name[IPMI_FRU_NAME_LEN];
+    ipmi_fru_node_t           *node;
 
     ipmi_cmdlang_out(cmd_info, "FRU", NULL);
     ipmi_cmdlang_down(cmd_info);
@@ -180,6 +266,15 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	ipmi_cmdlang_out_int(cmd_info, "Type", type);
 	ipmi_cmdlang_out_int(cmd_info, "Number", i);
 	fru_out_data(cmd_info, IPMI_BINARY_STR, data, len);
+	rv = ipmi_fru_multi_record_get_root_node(fru, i, &name, &node);
+	if (!rv) {
+	    ipmi_cmdlang_out(cmd_info, "Decode", NULL);
+	    ipmi_cmdlang_down(cmd_info);
+	    ipmi_cmdlang_out(cmd_info, "Name", name);
+	    traverse_fru_multi_record_tree(cmd_info, node);
+	    ipmi_cmdlang_up(cmd_info);
+	}
+
 	ipmi_cmdlang_up(cmd_info);
 	ipmi_mem_free(data);
     }

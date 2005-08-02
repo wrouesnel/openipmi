@@ -3865,7 +3865,7 @@ ipmi_fru_index_to_str(int index)
 int
 ipmi_fru_get(ipmi_fru_t                *fru,
 	     int                       index,
-	     char                      **name,
+	     const char                **name,
 	     int                       *num,
 	     enum ipmi_fru_data_type_e *dtype,
 	     int                       *intval,
@@ -4216,7 +4216,7 @@ typedef struct oem_search_node_s
     ipmi_fru_node_t *node;
     unsigned char   *mr_data;
     unsigned char   mr_data_len;
-    char            *name;
+    const char      *name;
     int             rv;
 } oem_search_node_t;
 
@@ -4244,7 +4244,7 @@ get_root_node(void *cb_data, void *item1, void *item2)
 int
 ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
 				    unsigned int    record_num,
-				    char            **name,
+				    const char      **name,
 				    ipmi_fru_node_t **node)
 {
     ipmi_fru_multi_record_area_t *u;
@@ -4273,13 +4273,18 @@ ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
     cmp.node = NULL;
     cmp.mr_data = d;
     cmp.mr_data_len = u->records[record_num].length;
-    cmp.name = 0;
+    cmp.name = NULL;
     cmp.rv = 0;
     locked_list_iterate(fru_multi_record_oem_handlers, get_root_node, &cmp);
     fru_unlock(fru);
     if (cmp.rv)
 	return cmp.rv;
-    *node = cmp.node;
+    if (node)
+	*node = cmp.node;
+    else
+	ipmi_fru_put_node(cmp.node);
+    if (name)
+	*name = cmp.name;
     return 0;
 }
 
@@ -4292,7 +4297,7 @@ ipmi_fru_put_node(ipmi_fru_node_t *node)
 int
 ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
 			unsigned int              index,
-			char                      **name,
+			const char                **name,
 			enum ipmi_fru_data_type_e *dtype,
 			int                       *intval,
 			time_t                    *time,

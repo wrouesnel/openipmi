@@ -3277,7 +3277,7 @@ static int
 traverse_fru_multi_record_tree(ipmi_fru_node_t *node,
 			       int             indent)
 {
-    char                      *name;
+    const char                *name;
     unsigned int              i, k;
     enum ipmi_fru_data_type_e dtype;
     int                       intval, rv;
@@ -3430,7 +3430,7 @@ dump_fru_info(ipmi_fru_t *fru)
 	unsigned int    len;
 	unsigned char   *data;
         ipmi_fru_node_t *node;
-	char            *name;
+	const char      *name;
 
 	rv = ipmi_fru_get_multi_record_type(fru, i, &type);
 	if (rv)

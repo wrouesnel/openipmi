@@ -174,7 +174,7 @@ typedef void (*ipmi_fru_oem_put_node_cb)(ipmi_fru_node_t *node);
 typedef int (*ipmi_fru_oem_node_get_field_cb)
      (ipmi_fru_node_t           *node,
       unsigned int              index,
-      char                      **name,
+      const char                **name,
       enum ipmi_fru_data_type_e *dtype,
       int                       *intval,
       time_t                    *time,
@@ -201,7 +201,7 @@ typedef int (*ipmi_fru_oem_multi_record_get_root_node_cb)
       unsigned char       *mr_data,
       unsigned int        mr_data_len,
       void                *cb_data,
-      char                **name,
+      const char          **name,
       ipmi_fru_node_t     **node);
 
 int _ipmi_fru_register_multi_record_oem_handler

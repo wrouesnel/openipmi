@@ -320,6 +320,11 @@ parse_mac_addr(char *str, unsigned char *addr)
 }
 %}
 
+%{
+typedef char **arg_array;
+%}
+typedef char **arg_array;
+
 %include "OpenIPMI_lang.i"
 
 %nodefault;
@@ -2395,6 +2400,9 @@ typedef struct {
 } ipmi_fru_t;
 
 typedef struct {
+} ipmi_fru_node_t;
+
+typedef struct {
 } ipmi_mc_t;
 
 typedef struct {
@@ -2593,7 +2601,7 @@ wait_io(int timeout)
  */
 %{
 static ipmi_domain_id_t *
-open_domain(char *name, char **args, swig_cb done, swig_cb up)
+open_domain(char *name, arg_array args, swig_cb done, swig_cb up)
 {
     int                i, j;
     int                len;
@@ -2701,7 +2709,7 @@ open_domain(char *name, char **args, swig_cb done, swig_cb up)
 }
 
 static ipmi_domain_id_t *
-open_domain2(char *name, char **args, swig_cb done, swig_cb up)
+open_domain2(char *name, arg_array args, swig_cb done, swig_cb up)
 {
     int                i, j;
     int                len;
@@ -2922,14 +2930,14 @@ remove_domain_change_handler(swig_cb handler)
  * allow you to turn on and off various automatic operations that
  * OpenIPMI does, such as scanning SDRs, fetching the SEL, etc.
  */
-ipmi_domain_id_t *open_domain(char *name, char **args,
+ipmi_domain_id_t *open_domain(char *name, arg_array args,
 			      swig_cb done = NULL, swig_cb up = NULL);
 
 /*
  * Like open_domain, but takes the new parameter types and is more
  * flexible.  This is required for RMCP+.
  */
-ipmi_domain_id_t *open_domain2(char *name, char **args,
+ipmi_domain_id_t *open_domain2(char *name,  arg_array args,
 			       swig_cb done = NULL, swig_cb up = NULL);
 
 /*
@@ -7396,7 +7404,7 @@ int pef_str_to_parm(char *str);
     %newobject get;
     char *get(int index, int *num)
     {
-	char                      *name;
+	const char                *name;
 	enum ipmi_fru_data_type_e dtype;
 	int                       intval;
 	time_t                    time;
@@ -7490,7 +7498,7 @@ int pef_str_to_parm(char *str);
 	int           rv;
 	char          dummy[1];
 	char          *str, *s;
-	int           strlen;
+	int           str_len;
 	int           i;
 
 	rv = ipmi_fru_get_multi_record_type(self, num, &type);
@@ -7514,9 +7522,9 @@ int pef_str_to_parm(char *str);
 	    return NULL;
 	}
 
-	strlen = snprintf(dummy, 1, "%d %d", type, version);
-	strlen += length * 5;
-	str = malloc(strlen + 1);
+	str_len = snprintf(dummy, 1, "%d %d", type, version);
+	str_len += length * 5;
+	str = malloc(str_len + 1);
 	if (!str) {
 	    free(data);
 	    return NULL;
@@ -7861,6 +7869,110 @@ int pef_str_to_parm(char *str);
 		deref_swig_cb_val(handler_val);
 	}
 	return rv;
+    }
+
+    int multi_record_get_root_node(unsigned int    record_num,
+				   const char      **name,
+				   ipmi_fru_node_t **sub_node)
+    {
+	return ipmi_fru_multi_record_get_root_node(self, record_num,
+						   name, sub_node);
+    }
+}
+
+/*
+ * A FRU node object
+ */
+%extend ipmi_fru_node_t {
+    ~ipmi_fru_node_t()
+    {
+	ipmi_fru_put_node(self);
+    }
+
+    int get_field(unsigned        index,
+		  const char      **name,
+		  const char      **type,
+		  char            **value,
+		  ipmi_fru_node_t **sub_node)
+    {
+	int                       rv;
+	enum ipmi_fru_data_type_e dtype;
+	int                       intval;
+	time_t                    time;
+	char                      *data;
+	unsigned int              data_len;
+	int                       len;
+	char                      dummy[1];
+	char                      *str, *s;
+	int                       i;
+	
+	rv = ipmi_fru_node_get_field(self,
+				     index,
+				     name,
+				     &dtype,
+				     &intval,
+				     &time,
+				     &data,
+				     &data_len,
+				     sub_node);
+	if (rv)
+	    return rv;
+
+	switch(dtype) {
+	case IPMI_FRU_DATA_INT:
+	    len = snprintf(dummy, 1, "%d", intval);
+	    str = malloc(len + 1);
+	    sprintf(str, "%d", intval);
+	    *type = "integer";
+	    break;
+
+	case IPMI_FRU_DATA_TIME:
+	    len = snprintf(dummy, 1, "%ld", (long) time);
+	    str = malloc(len + 1);
+	    sprintf(str, "%ld", (long) time);
+	    *type = "time";
+	    break;
+
+	case IPMI_FRU_DATA_BINARY:
+	    len = data_len * 5;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "0x%2.2x", (unsigned char) data[0]);
+	    for (i=1; i<data_len; i++)
+		s += sprintf(s, " 0x%2.2x", (unsigned char) data[i]);
+	    *type = "binary";
+	    break;
+
+	case IPMI_FRU_DATA_UNICODE:
+	    len = data_len * 5;
+	    str = malloc(len + 1);
+	    s = str;
+	    s += sprintf(s, "0x%2.2x", (unsigned char) data[0]);
+	    for (i=1; i<data_len; i++)
+		s += sprintf(s, " 0x%2.2x", (unsigned char) data[i]);
+	    *type = "unicode";
+	    break;
+
+	case IPMI_FRU_DATA_ASCII:
+	    str = strdup(data);
+	    *type = "ascii";
+	    break;
+
+	case IPMI_FRU_DATA_SUB_NODE:
+	    str = NULL;
+	    *type = "subnode";
+	    break;
+
+	default:
+	    str = NULL;
+	}
+
+	if (data)
+	    ipmi_fru_data_free(data);
+
+	*value = str;
+
+	return 0;
     }
 }
 

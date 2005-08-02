@@ -501,9 +501,9 @@ set_gdbm_filename(os_handler_t *os_hnd, char *name)
 #endif
 
 void sset_log_handler(os_handler_t *handler,
-		      os_vlog_t    log_handler)
+		      os_vlog_t    rlog_handler)
 {
-    log_handler = log_handler;
+    log_handler = rlog_handler;
 }
 
 os_handler_t ipmi_debug_os_handlers =

@@ -100,7 +100,7 @@
     $result = list;
 }
 
-%typemap(in) char ** {
+%typemap(in) arg_array {
     int i, len;
 
     if (!PySequence_Check($input)) {
@@ -108,7 +108,7 @@
 	return NULL;
     }
     len = PyObject_Length($input);
-    $1 = (char **) malloc((len+1)*sizeof(char *));
+    $1 = (arg_array) malloc((len+1)*sizeof(char *));
     for (i=0; i<len; i++) {
 	PyObject *o = PySequence_GetItem($input,i);
 	if (!o) {
@@ -126,7 +126,7 @@
     $1[i] = NULL;
 };
 
-%typemap(freearg) char ** {
+%typemap(freearg) arg_array {
     free($1);
 };
 
@@ -229,6 +229,100 @@
     }
     if (PySequence_SetItem($input, 0, o) == -1) {
 	PyErr_SetString(PyExc_TypeError, "Unable to set int object item");
+	Py_DECREF(o);
+	return NULL;
+    }
+    Py_DECREF(o);
+}
+
+%typemap(in) const char ** (char *svalue) {
+    PyObject *o;
+    if (!PySequence_Check($input)) {
+	PyErr_SetString(PyExc_ValueError, "Expecting a sequence");
+	return NULL;
+    }
+    o = PySequence_GetItem($input, 0);
+    if (!o) {
+	PyErr_SetString(PyExc_ValueError, "Expecting a string");
+	return NULL;
+    }
+    if (!PyString_Check(o)) {
+	Py_DECREF(o);
+	PyErr_SetString(PyExc_ValueError, "expected a string");
+	return NULL;
+    }
+    svalue = PyString_AS_STRING(o);
+    Py_DECREF(o);
+    $1 = &svalue;
+}
+
+%typemap(argout) const char ** {
+    PyObject *o = PyString_FromString(*$1);
+    if (!o) {
+	PyErr_SetString(PyExc_TypeError, "Unable to allocate string object");
+	return NULL;
+    }
+    if (PySequence_SetItem($input, 0, o) == -1) {
+	PyErr_SetString(PyExc_TypeError, "Unable to set string object item");
+	Py_DECREF(o);
+	return NULL;
+    }
+    Py_DECREF(o);
+}
+
+%typemap(in) char ** (char *svalue) {
+    PyObject *o;
+    if (!PySequence_Check($input)) {
+	PyErr_SetString(PyExc_ValueError, "Expecting a sequence");
+	return NULL;
+    }
+    o = PySequence_GetItem($input, 0);
+    if (!o) {
+	PyErr_SetString(PyExc_ValueError, "Expecting a string");
+	return NULL;
+    }
+    if (!PyString_Check(o)) {
+	Py_DECREF(o);
+	PyErr_SetString(PyExc_ValueError, "expected a string");
+	return NULL;
+    }
+    svalue = PyString_AS_STRING(o);
+    Py_DECREF(o);
+    $1 = &svalue;
+}
+
+%typemap(argout) char ** {
+    PyObject *o = PyString_FromString(*$1);
+    if (!o) {
+	PyErr_SetString(PyExc_TypeError, "Unable to allocate string object");
+	return NULL;
+    }
+    if (PySequence_SetItem($input, 0, o) == -1) {
+	PyErr_SetString(PyExc_TypeError, "Unable to set string object item");
+	Py_DECREF(o);
+	return NULL;
+    }
+    Py_DECREF(o);
+    free(*$1);
+}
+
+%typemap(in) ipmi_fru_node_t ** (ipmi_fru_node_t *pvalue) {
+    if (!PySequence_Check($input)) {
+	PyErr_SetString(PyExc_ValueError, "Expecting a sequence");
+	return NULL;
+    }
+    pvalue = NULL;
+    $1 = &pvalue;
+}
+
+%typemap(argout) ipmi_fru_node_t ** {
+    PyObject *o = SWIG_NewPointerObj(*$1, SWIGYTPE_p_ipmi_fru_node_t, 1);
+    if (!o) {
+	PyErr_SetString(PyExc_TypeError, "Unable to allocate object");
+	return NULL;
+    }
+    if (PySequence_SetItem($input, 0, o) == -1) {
+	PyErr_SetString(PyExc_TypeError, "Unable to set object item");
 	Py_DECREF(o);
 	return NULL;
     }

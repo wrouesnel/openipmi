@@ -116,7 +116,7 @@ void ipmi_set_uint16(unsigned char *data, int val);
    character after the used data. */
 #define IPMI_STR_SDR_SEMANTICS	0
 #define IPMI_STR_FRU_SEMANTICS	1
-unsigned int ipmi_get_device_string(unsigned char        ** const input,
+unsigned int ipmi_get_device_string(unsigned char        **input,
 				    unsigned int         in_len,
 				    char                 *output,
 				    int                  semantics,

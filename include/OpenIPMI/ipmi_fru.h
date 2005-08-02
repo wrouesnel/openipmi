@@ -292,7 +292,7 @@ int ipmi_fru_str_to_index(char *name);
  */
 int ipmi_fru_get(ipmi_fru_t                *fru,
 		 int                       index,
-		 char                      **name,
+		 const char                **name,
 		 int                       *num,
 		 enum ipmi_fru_data_type_e *dtype,
 		 int                       *intval,
@@ -608,14 +608,14 @@ int ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_cb done, void *cb_data);
 
 int ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
 					unsigned int    record_num,
-					char            **name,
+					const char      **name,
 					ipmi_fru_node_t **node);
 
 void ipmi_fru_put_node(ipmi_fru_node_t *node);
 
 int ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
 			    unsigned int              index,
-			    char                      **name,
+			    const char                **name,
 			    enum ipmi_fru_data_type_e *dtype,
 			    int                       *intval,
 			    time_t                    *time,
