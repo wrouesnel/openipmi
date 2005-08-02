@@ -316,7 +316,7 @@
 }
 
 %typemap(argout) ipmi_fru_node_t ** {
-    PyObject *o = SWIG_NewPointerObj(*$1, SWIGYTPE_p_ipmi_fru_node_t, 1);
+    PyObject *o = SWIG_NewPointerObj(*$1, SWIGTYPE_p_ipmi_fru_node_t, 1);
     if (!o) {
 	PyErr_SetString(PyExc_TypeError, "Unable to allocate object");
 	return NULL;
