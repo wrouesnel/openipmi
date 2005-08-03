@@ -4226,8 +4226,9 @@ get_root_node(void *cb_data, void *item1, void *item2)
     fru_multi_record_oem_handlers_t *hndlr = item1;
     oem_search_node_t               *cmp = cb_data;
 
-    if ((hndlr->manufacturer_id == cmp->manufacturer_id)
-	&& (hndlr->record_type_id == cmp->record_type_id))
+    if ((hndlr->record_type_id == cmp->record_type_id)
+	&& ((hndlr->record_type_id < 0xc0)
+	    || (hndlr->manufacturer_id == cmp->manufacturer_id)))
     {
 	cmp->rv = hndlr->get_root(cmp->fru, cmp->manufacturer_id,
 				  cmp->record_type_id,
@@ -4301,13 +4302,622 @@ ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
 			enum ipmi_fru_data_type_e *dtype,
 			int                       *intval,
 			time_t                    *time,
+			double                    *floatval,
 			char                      **data,
 			unsigned int              *data_len,
 			ipmi_fru_node_t           **sub_node)
 {
     return node->get_field(node, index, name, dtype, intval, time,
-			   data, data_len, sub_node);
+			   floatval, data, data_len, sub_node);
 }
+
+/************************************************************************
+ *
+ * Standard multi-record handlers.
+ *
+ ************************************************************************/
+
+static int
+convert_int_to_fru_int(const char                *name,
+		       int                       val,
+		       const char                **rname,
+		       enum ipmi_fru_data_type_e *dtype,
+		       int                       *intval)
+{
+    if (rname)
+	*rname = name;
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_INT;
+    if (intval)
+	*intval = val;
+    return 0;
+}
+
+static int
+convert_float_to_fru_float(const char                *name,
+			   double                    val,
+			   const char                **rname,
+			   enum ipmi_fru_data_type_e *dtype,
+			   double                    *floatval)
+{
+    if (rname)
+	*rname = name;
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_FLOAT;
+    if (floatval)
+	*floatval = val;
+    return 0;
+}
+
+static int
+convert_int_to_fru_boolean(const char                *name,
+			   int                       val,
+			   const char                **rname,
+			   enum ipmi_fru_data_type_e *dtype,
+			   int                       *intval)
+{
+    if (rname)
+	*rname = name;
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_BOOLEAN;
+    if (intval)
+	*intval = val != 0;
+    return 0;
+}
+
+typedef struct std_power_supply_info_s
+{
+    unsigned char data[24];
+    unsigned int refcount;
+} std_power_supply_info_t;
+
+static void std_power_supply_info_cleanup_rec(std_power_supply_info_t *rec)
+{
+    ipmi_mem_free(rec);
+}
+
+static void
+std_power_supply_info_root_put(ipmi_fru_node_t *node)
+{
+    std_power_supply_info_t *rec = node->data;
+    if (rec->refcount == 1) {
+	std_power_supply_info_cleanup_rec(rec);
+	ipmi_mem_free(node);
+    } else
+	rec->refcount--;
+}
+
+static int
+std_power_supply_info_get_field(ipmi_fru_node_t           *pnode,
+				unsigned int              index,
+				const char                **name,
+				enum ipmi_fru_data_type_e *dtype,
+				int                       *intval,
+				time_t                    *time,
+				double                    *floatval,
+				char                      **data,
+				unsigned int              *data_len,
+				ipmi_fru_node_t           **sub_node)
+{
+    std_power_supply_info_t *rec = pnode->data;
+    unsigned char           *d = rec->data;
+    int                     rv = 0;
+    int                     val;
+    double                  fval;
+
+    switch(index) {
+    case 0: /* overall capacity */
+	rv = convert_int_to_fru_int("overall capacity",
+				    (d[0] | (d[1] << 8)) & 0x0fff,
+				    name, dtype, intval);
+	break;
+
+    case 1: /* Peak VA */
+	val = d[2] | (d[3] << 8);
+	if (val == 0xffff)
+	    rv = ENOSYS;
+	else
+	    rv = convert_int_to_fru_int("peak VA", val, name, dtype, intval);
+	break;
+
+    case 2: /* inrush current */
+	if (d[4] == 0xff)
+	    rv = ENOSYS;
+	else
+	    rv = convert_int_to_fru_int("inrush current", d[4],
+					name, dtype, intval);
+	break;
+
+    case 3: /* inrush interval (in ms) */
+	if (d[4] == 0xff) /* Yes, d[4] is correct, not valid if inrush
+			     current not specified. */
+	    rv = ENOSYS;
+	else {
+	    fval = ((double) d[4]) / 1000.0;
+	    rv = convert_float_to_fru_float("inrush interval", fval,
+					    name, dtype, floatval);
+	}
+	break;
+
+    case 4: /* low input voltage 1 */
+	fval = ((double) (d[6] | (d[7] << 8))) / 100.0;
+	rv = convert_float_to_fru_float("low input voltage 1", fval,
+					name, dtype, floatval);
+	break;
+
+    case 5: /* high input voltage 1 */
+	fval = ((double) (d[8] | (d[9] << 8))) / 100.0;
+	rv = convert_float_to_fru_float("high input voltage 1", fval,
+					name, dtype, floatval);
+	break;
+
+    case 6: /* low input voltage 2 */
+	fval = ((double) (d[10] | (d[11] << 8))) / 100.0;
+	rv = convert_float_to_fru_float("low input voltage 2", fval,
+					name, dtype, floatval);
+	break;
+
+    case 7: /* high input voltage 2 */
+	fval = ((double) (d[12] | (d[13] << 8))) / 100.0;
+	rv = convert_float_to_fru_float("high input voltage 2", fval,
+					name, dtype, floatval);
+	break;
+
+    case 8: /* low frequency */
+	rv = convert_int_to_fru_int("low frequency", d[14],
+				    name, dtype, intval);
+	break;
+
+    case 9: /* high frequency */
+	rv = convert_int_to_fru_int("low frequency", d[15],
+				    name, dtype, intval);
+	break;
+
+    case 10: /* A/C dropout tolerance (in ms) */
+	fval = ((double) d[4]) / 1000.0;
+	rv = convert_float_to_fru_float("A/C dropout tolerance", fval,
+					name, dtype, floatval);
+	break;
+
+    case 11: /* tach pulses per rotation */
+	rv = convert_int_to_fru_boolean("tach pulses per rotation",
+					d[17] & 0x10,
+					name, dtype, intval);
+	break;
+
+    case 12: /* hot swap support */
+	rv = convert_int_to_fru_boolean("hot swap support", d[17] & 0x08,
+					name, dtype, intval);
+	break;
+
+    case 13: /* autoswitch */
+	rv = convert_int_to_fru_boolean("autoswitch", d[17] & 0x04,
+					name, dtype, intval);
+	break;
+
+    case 14: /* power factor correction */
+	rv = convert_int_to_fru_boolean("power factor correction",
+					d[17] & 0x02,
+					name, dtype, intval);
+	break;
+
+    case 15: /* predictive fail support */
+	rv = convert_int_to_fru_boolean("predictive fail support",
+					d[17] & 0x01,
+					name, dtype, intval);
+	break;
+
+    case 16: /* peak capacity hold up time (in sec) */
+	rv = convert_int_to_fru_int("peak capacity hold up time", d[19] >> 4,
+				    name, dtype, intval);
+	break;
+
+    case 17: /* peak capacity */
+	rv = convert_int_to_fru_int("peak capacity",
+				    (d[18] | (d[19] << 8)) & 0xfff,
+				    name, dtype, intval);
+	break;
+
+    case 18: /* combined wattage voltage 1 */
+	if ((d[20] == 0) && (d[21] == 0) && (d[22] == 0))
+	    return ENOSYS;
+	switch (d[20] >> 4) {
+	case 0: fval = 12.0; break;
+	case 1: fval = -12.0; break;
+	case 2: fval = 5.0; break;
+	case 3: fval = 3.3; break;
+	default: fval = 0.0;
+	}
+	rv = convert_float_to_fru_float("combined wattage voltage 1", fval,
+					name, dtype, floatval);
+	break;
+
+    case 19: /* combined wattage voltage 2 */
+	if ((d[20] == 0) && (d[21] == 0) && (d[22] == 0))
+	    return ENOSYS;
+	switch (d[20] & 0x0f) {
+	case 0: fval = 12.0; break;
+	case 1: fval = -12.0; break;
+	case 2: fval = 5.0; break;
+	case 3: fval = 3.3; break;
+	default: fval = 0.0;
+	}
+	rv = convert_float_to_fru_float("combined wattage voltage 2", fval,
+					name, dtype, floatval);
+	break;
+
+    case 20: /* combined wattage */
+	if ((d[20] == 0) && (d[21] == 0) && (d[22] == 0))
+	    return ENOSYS;
+	rv = convert_int_to_fru_int("combined wattage", d[21] | (d[22] << 8),
+				    name, dtype, intval);
+	break;
+
+    case 21: /* predictive fail tack low threshold */
+	rv = convert_int_to_fru_int("predictive fail tack low threshold",
+				    d[23] & 0x0f,
+				    name, dtype, intval);
+	break;
+
+    default:
+	rv = EINVAL;
+    }
+
+    return rv;
+}
+
+static int
+std_get_power_supply_info_root(ipmi_fru_t          *fru,
+			       unsigned char       *mr_data,
+			       unsigned int        mr_data_len,
+			       const char          **name,
+			       ipmi_fru_node_t     **rnode)
+{
+    std_power_supply_info_t *rec;
+    ipmi_fru_node_t         *node;
+    int                     rv;
+
+    if (mr_data_len < 24)
+	return EINVAL;
+    
+    rec = ipmi_mem_alloc(sizeof(*rec));
+    if (!rec)
+	return ENOMEM;
+    memcpy(rec->data, mr_data, 24);
+    rec->refcount = 1;
+
+    node = ipmi_mem_alloc(sizeof(*node));
+    if (!node)
+	goto out_no_mem;
+
+    node->data = rec;
+    node->data2 = NULL;
+    node->get_field = std_power_supply_info_get_field;
+    node->put = std_power_supply_info_root_put;
+    *rnode = node;
+
+    if (name)
+	*name = "Power Supply Information";
+
+    return 0;
+
+ out_no_mem:
+    rv = ENOMEM;
+    goto out_cleanup;
+
+ out_cleanup:
+    std_power_supply_info_cleanup_rec(rec);
+    return rv;
+}
+
+typedef struct std_dc_output_s
+{
+    unsigned char data[13];
+    unsigned int refcount;
+} std_dc_output_t;
+
+static void std_dc_output_cleanup_rec(std_dc_output_t *rec)
+{
+    ipmi_mem_free(rec);
+}
+
+static void
+std_dc_output_root_put(ipmi_fru_node_t *node)
+{
+    std_dc_output_t *rec = node->data;
+    if (rec->refcount == 1) {
+	std_dc_output_cleanup_rec(rec);
+	ipmi_mem_free(node);
+    } else
+	rec->refcount--;
+}
+
+static int
+std_dc_output_get_field(ipmi_fru_node_t           *pnode,
+			unsigned int              index,
+			const char                **name,
+			enum ipmi_fru_data_type_e *dtype,
+			int                       *intval,
+			time_t                    *time,
+			double                    *floatval,
+			char                      **data,
+			unsigned int              *data_len,
+			ipmi_fru_node_t           **sub_node)
+{
+    std_dc_output_t *rec = pnode->data;
+    unsigned char   *d = rec->data;
+    int             rv = 0;
+    double          fval;
+    int16_t         val16;
+
+    switch(index) {
+    case 0: /* output number */
+	rv = convert_int_to_fru_int("output number", d[0] & 0x0f,
+				    name, dtype, intval);
+	break;
+
+    case 1: /* standby */
+	rv = convert_int_to_fru_boolean("standby", d[0] & 0x80,
+					name, dtype, intval);
+	break;
+
+    case 2: /* nominal voltage */
+	val16 = d[1] | (d[2] << 8);
+	fval = ((double) val16) / 100.0;
+	rv = convert_float_to_fru_float("nominal voltage", fval,
+					name, dtype, floatval);
+	break;
+
+    case 3: /* max negative voltage deviation */
+	val16 = d[3] | (d[4] << 8);
+	fval = ((double) val16) / 100.0;
+	rv = convert_float_to_fru_float("max negative voltage deviation", fval,
+					name, dtype, floatval);
+	break;
+
+    case 4: /* max positive voltage deviation */
+	val16 = d[5] | (d[6] << 8);
+	fval = ((double) val16) / 100.0;
+	rv = convert_float_to_fru_float("max positive voltage deviation", fval,
+					name, dtype, floatval);
+	break;
+
+    case 5: /* ripple */
+	val16 = d[7] | (d[8] << 8);
+	fval = ((double) val16) / 1000.0;
+	rv = convert_float_to_fru_float("ripple", fval,
+					name, dtype, floatval);
+	break;
+
+    case 6: /* min current */
+	val16 = d[9] | (d[10] << 8);
+	fval = ((double) val16) / 1000.0;
+	rv = convert_float_to_fru_float("min current", fval,
+					name, dtype, floatval);
+	break;
+
+    case 7: /* max current */
+	val16 = d[11] | (d[12] << 8);
+	fval = ((double) val16) / 1000.0;
+	rv = convert_float_to_fru_float("max current", fval,
+					name, dtype, floatval);
+	break;
+
+    default:
+	rv = EINVAL;
+    }
+
+    return rv;
+}
+
+static int
+std_get_dc_output_root(ipmi_fru_t          *fru,
+		       unsigned char       *mr_data,
+		       unsigned int        mr_data_len,
+		       const char          **name,
+		       ipmi_fru_node_t     **rnode)
+{
+    std_dc_output_t *rec;
+    ipmi_fru_node_t *node;
+    int             rv;
+
+    if (mr_data_len < 13)
+	return EINVAL;
+    
+    rec = ipmi_mem_alloc(sizeof(*rec));
+    if (!rec)
+	return ENOMEM;
+    memcpy(rec->data, mr_data, 13);
+    rec->refcount = 1;
+
+    node = ipmi_mem_alloc(sizeof(*node));
+    if (!node)
+	goto out_no_mem;
+
+    node->data = rec;
+    node->data2 = NULL;
+    node->get_field = std_dc_output_get_field;
+    node->put = std_dc_output_root_put;
+    *rnode = node;
+
+    if (name)
+	*name = "DC Output";
+
+    return 0;
+
+ out_no_mem:
+    rv = ENOMEM;
+    goto out_cleanup;
+
+ out_cleanup:
+    std_dc_output_cleanup_rec(rec);
+    return rv;
+}
+
+typedef struct std_dc_load_s
+{
+    unsigned char data[13];
+    unsigned int refcount;
+} std_dc_load_t;
+
+static void std_dc_load_cleanup_rec(std_dc_load_t *rec)
+{
+    ipmi_mem_free(rec);
+}
+
+static void
+std_dc_load_root_put(ipmi_fru_node_t *node)
+{
+    std_dc_load_t *rec = node->data;
+    if (rec->refcount == 1) {
+	std_dc_load_cleanup_rec(rec);
+	ipmi_mem_free(node);
+    } else
+	rec->refcount--;
+}
+
+static int
+std_dc_load_get_field(ipmi_fru_node_t           *pnode,
+		      unsigned int              index,
+		      const char                **name,
+		      enum ipmi_fru_data_type_e *dtype,
+		      int                       *intval,
+		      time_t                    *time,
+		      double                    *floatval,
+		      char                      **data,
+		      unsigned int              *data_len,
+		      ipmi_fru_node_t           **sub_node)
+{
+    std_dc_load_t *rec = pnode->data;
+    unsigned char   *d = rec->data;
+    int             rv = 0;
+    double          fval;
+    int16_t         val16;
+
+    switch(index) {
+    case 0: /* output number */
+	rv = convert_int_to_fru_int("output number", d[0] & 0x0f,
+				    name, dtype, intval);
+	break;
+
+    case 1: /* nominal voltage */
+	val16 = d[1] | (d[2] << 8);
+	fval = ((double) val16) / 100.0;
+	rv = convert_float_to_fru_float("nominal voltage", fval,
+					name, dtype, floatval);
+	break;
+
+    case 2: /* min voltage */
+	val16 = d[3] | (d[4] << 8);
+	fval = ((double) val16) / 100.0;
+	rv = convert_float_to_fru_float("min voltage", fval,
+					name, dtype, floatval);
+	break;
+
+    case 3: /* max voltage */
+	val16 = d[5] | (d[6] << 8);
+	fval = ((double) val16) / 100.0;
+	rv = convert_float_to_fru_float("max voltage", fval,
+					name, dtype, floatval);
+	break;
+
+    case 4: /* ripple */
+	val16 = d[7] | (d[8] << 8);
+	fval = ((double) val16) / 1000.0;
+	rv = convert_float_to_fru_float("ripple", fval,
+					name, dtype, floatval);
+	break;
+
+    case 5: /* min current */
+	val16 = d[9] | (d[10] << 8);
+	fval = ((double) val16) / 1000.0;
+	rv = convert_float_to_fru_float("min current", fval,
+					name, dtype, floatval);
+	break;
+
+    case 6: /* max current */
+	val16 = d[11] | (d[12] << 8);
+	fval = ((double) val16) / 1000.0;
+	rv = convert_float_to_fru_float("max current", fval,
+					name, dtype, floatval);
+	break;
+
+    default:
+	rv = EINVAL;
+    }
+
+    return rv;
+}
+
+static int
+std_get_dc_load_root(ipmi_fru_t          *fru,
+		     unsigned char       *mr_data,
+		     unsigned int        mr_data_len,
+		     const char          **name,
+		     ipmi_fru_node_t     **rnode)
+{
+    std_dc_load_t   *rec;
+    ipmi_fru_node_t *node;
+    int             rv;
+
+    if (mr_data_len < 13)
+	return EINVAL;
+    
+    rec = ipmi_mem_alloc(sizeof(*rec));
+    if (!rec)
+	return ENOMEM;
+    memcpy(rec->data, mr_data, 13);
+    rec->refcount = 1;
+
+    node = ipmi_mem_alloc(sizeof(*node));
+    if (!node)
+	goto out_no_mem;
+
+    node->data = rec;
+    node->data2 = NULL;
+    node->get_field = std_dc_load_get_field;
+    node->put = std_dc_load_root_put;
+    *rnode = node;
+
+    if (name)
+	*name = "DC Load";
+
+    return 0;
+
+ out_no_mem:
+    rv = ENOMEM;
+    goto out_cleanup;
+
+ out_cleanup:
+    std_dc_load_cleanup_rec(rec);
+    return rv;
+}
+
+static int
+std_get_mr_root(ipmi_fru_t          *fru,
+		unsigned int        manufacturer_id,
+		unsigned char       record_type_id,
+		unsigned char       *mr_data,
+		unsigned int        mr_data_len,
+		void                *cb_data,
+		const char          **name,
+		ipmi_fru_node_t     **node)
+{
+    switch (record_type_id) {
+    case 0x00:
+	return std_get_power_supply_info_root(fru, mr_data, mr_data_len,
+					      name, node);
+    case 0x01:
+	return std_get_dc_output_root(fru, mr_data, mr_data_len,
+				      name, node);
+    case 0x02:
+	return std_get_dc_load_root(fru, mr_data, mr_data_len,
+				    name, node);
+    default:
+	return EINVAL;
+    }
+}
+
 
 /************************************************************************
  *
@@ -4317,11 +4927,31 @@ ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
 int
 _ipmi_fru_init()
 {
+    int rv;
+
     fru_multi_record_oem_handlers = locked_list_alloc
 	(ipmi_get_global_os_handler());
     if (!fru_multi_record_oem_handlers)
         return ENOMEM;
 
+    rv = _ipmi_fru_register_multi_record_oem_handler(0,
+						     0x00,
+						     std_get_mr_root,
+						     NULL);
+    if (rv)
+	return rv;
+    rv = _ipmi_fru_register_multi_record_oem_handler(0,
+						     0x01,
+						     std_get_mr_root,
+						     NULL);
+    if (rv)
+	return rv;
+    rv = _ipmi_fru_register_multi_record_oem_handler(0,
+						     0x02,
+						     std_get_mr_root,
+						     NULL);
+    if (rv)
+	return rv;
     return 0;
 }
 
@@ -4329,6 +4959,9 @@ void
 _ipmi_fru_shutdown()
 {
     if (fru_multi_record_oem_handlers) {
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x00);
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x01);
+	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x02);
 	locked_list_destroy(fru_multi_record_oem_handlers);
 	fru_multi_record_oem_handlers = NULL;
     }

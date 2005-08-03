@@ -3281,14 +3281,15 @@ traverse_fru_multi_record_tree(ipmi_fru_node_t *node,
     unsigned int              i, k;
     enum ipmi_fru_data_type_e dtype;
     int                       intval, rv;
+    double                    floatval;
     time_t                    time;
     char                      *data;
     unsigned int              data_len;
     ipmi_fru_node_t           *sub_node;
     
     for (i=0; ; i++) {
-        rv = ipmi_fru_node_get_field(node, i, &name, &dtype, &intval,
-				     &time, &data, &data_len, &sub_node);
+        rv = ipmi_fru_node_get_field(node, i, &name, &dtype, &intval, &time,
+				     &floatval, &data, &data_len, &sub_node);
         if ((rv == EINVAL) || (rv == ENOSYS))
             break;
         else if (rv)
@@ -3308,6 +3309,17 @@ traverse_fru_multi_record_tree(ipmi_fru_node_t *node,
 	case IPMI_FRU_DATA_TIME:
 	    display_pad_out("%*sType: time\n", indent, "");
 	    display_pad_out("%*sData: %ld\n", indent, "", (long)time);
+	    break;
+
+	case IPMI_FRU_DATA_BOOLEAN:
+	    display_pad_out("%*sType: boolean\n", indent, "");
+	    display_pad_out("%*sData: %ls\n", indent, "",
+			    intval ? "true" : "false");
+	    break;
+
+	case IPMI_FRU_DATA_FLOAT:
+	    display_pad_out("%*sType: float\n", indent, "");
+	    display_pad_out("%*sData: %lf\n", indent, "", floatval);
 	    break;
 
 	case IPMI_FRU_DATA_BINARY:

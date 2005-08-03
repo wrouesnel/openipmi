@@ -67,14 +67,15 @@ traverse_fru_multi_record_tree(ipmi_cmd_info_t *cmd_info,
     enum ipmi_fru_data_type_e dtype;
     int                       intval, rv;
     time_t                    time;
+    double                    floatval;
     char                      *data;
     unsigned int              data_len;
     ipmi_fru_node_t           *sub_node;
     
     for (i=0; ; i++) {
 	data = NULL;
-        rv = ipmi_fru_node_get_field(node, i, &name, &dtype, &intval,
-				     &time, &data, &data_len, &sub_node);
+        rv = ipmi_fru_node_get_field(node, i, &name, &dtype, &intval, &time,
+				     &floatval, &data, &data_len, &sub_node);
         if ((rv == EINVAL) || (rv == ENOSYS))
             break;
         else if (rv)
@@ -114,6 +115,16 @@ traverse_fru_multi_record_tree(ipmi_cmd_info_t *cmd_info,
 	case IPMI_FRU_DATA_ASCII:
 	    ipmi_cmdlang_out(cmd_info, "Type", "ascii");
 	    ipmi_cmdlang_out(cmd_info, "Data", data);
+	    break;
+
+	case IPMI_FRU_DATA_BOOLEAN:
+	    ipmi_cmdlang_out(cmd_info, "Type", "boolean");
+	    ipmi_cmdlang_out_bool(cmd_info, "Data", intval);
+	    break;
+
+	case IPMI_FRU_DATA_FLOAT:
+	    ipmi_cmdlang_out(cmd_info, "Type", "float");
+	    ipmi_cmdlang_out_double(cmd_info, "Data", floatval);
 	    break;
 
 	case IPMI_FRU_DATA_SUB_NODE:
@@ -220,6 +231,11 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 	case IPMI_FRU_DATA_ASCII:
 	    ipmi_cmdlang_out(cmd_info, "Type", "ascii");
 	    ipmi_cmdlang_out(cmd_info, "Data", data);
+	    break;
+
+	case IPMI_FRU_DATA_BOOLEAN:
+	    ipmi_cmdlang_out(cmd_info, "Type", "boolean");
+	    ipmi_cmdlang_out_bool(cmd_info, "Data", intval);
 	    break;
 
 	default:

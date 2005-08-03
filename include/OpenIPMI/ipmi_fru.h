@@ -242,6 +242,8 @@ enum ipmi_fru_data_type_e
     IPMI_FRU_DATA_ASCII,
     IPMI_FRU_DATA_BINARY,
     IPMI_FRU_DATA_UNICODE,
+    IPMI_FRU_DATA_BOOLEAN,
+    IPMI_FRU_DATA_FLOAT,
 
     /* Currently only used for multi-records. */
     IPMI_FRU_DATA_SUB_NODE,
@@ -619,6 +621,7 @@ int ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
 			    enum ipmi_fru_data_type_e *dtype,
 			    int                       *intval,
 			    time_t                    *time,
+			    double                    *floatval,
 			    char                      **data,
 			    unsigned int              *data_len,
 			    ipmi_fru_node_t           **sub_node);

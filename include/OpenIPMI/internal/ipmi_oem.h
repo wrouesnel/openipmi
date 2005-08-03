@@ -178,6 +178,7 @@ typedef int (*ipmi_fru_oem_node_get_field_cb)
       enum ipmi_fru_data_type_e *dtype,
       int                       *intval,
       time_t                    *time,
+      double                    *floatval,
       char                      **data,
       unsigned int              *data_len,
       ipmi_fru_node_t           **sub_node);
@@ -204,6 +205,9 @@ typedef int (*ipmi_fru_oem_multi_record_get_root_node_cb)
       const char          **name,
       ipmi_fru_node_t     **node);
 
+/* Register/deregister a multi-record handler.  Note taht if the
+   record type id is < 0xc0 (not OEM) then the manufacturer id does
+   not matter. */
 int _ipmi_fru_register_multi_record_oem_handler
 (unsigned int                               manufacturer_id,
  unsigned char                              record_type_id,

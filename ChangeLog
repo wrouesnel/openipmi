@@ -25,6 +25,19 @@
 	* lib/lanparm.c: Fixed the RMCP+ cipher suites lanparm entry so it
 	is optional.
 
+	* include/OpenIPMI/internal/ipmi_oem.h: Add comments on
+	registering FRU multi-record handlers.
+
+	* lib/fru.c, include/internal/ipmi_oem.h, include/ipmi_fru.h:
+	Modified the fru node to return floating point and boolean
+	values.
+	* lib/oem_atca.c: ditto
+	* ui/ui.c: ditto
+	* cmdlang/out_fru.c: ditto
+
+	* lib/fru.c: Added support for the standard FRU multi-record for
+	power supplies (types 0-2).
+
 2005-07-21 Darius Davis <dariusd@users.sourceforge.net>
 
 	* lib/ipmi_sol.c: Fix potential crash due to a dodgy memset().
