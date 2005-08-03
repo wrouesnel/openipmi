@@ -21,7 +21,9 @@
 	types for multi-record parsing.
 
 	* ui/ui.c: Some const fixes.
-	
+
+	* lib/lanparm.c: Fixed the RMCP+ cipher suites lanparm entry so it
+	is optional.
 
 2005-07-21 Darius Davis <dariusd@users.sourceforge.net>
 

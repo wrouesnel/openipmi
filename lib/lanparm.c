@@ -881,6 +881,7 @@ struct ipmi_lan_config_s
 
     unsigned char  num_cipher_suites;
     unsigned char  cipher_suite_entries[16];
+    unsigned char  max_priv_for_cipher_suite_supported;
     unsigned char  max_priv_for_cipher_suite[16];
 
     unsigned char num_alert_destinations;
@@ -1268,10 +1269,20 @@ static int gcs(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 static int gcp(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 	       unsigned char *data)
 {
-    int i, j;
+    unsigned char *opt;
+    int           i, j;
 
-    if (err)
+    opt = ((unsigned char *) lanc) + lp->optional_offset;
+    if (err) {
+	if (err == IPMI_IPMI_ERR_VAL(0x80)) {
+	    *opt = 0;
+	    return 0;
+	}
 	return err;
+    }
+
+    if (opt)
+	*opt = 1;
 
     data++; /* Skip over the revision byte. */
     data++; /* Skip over reserved byte */
@@ -1416,7 +1427,9 @@ static lanparms_t lanparms[NUM_LANPARMS] =
     { 1, S, 1, 0, gvp, svp   }, /* IPMI_LANPARM_VLAN_PRIORITY                */
     { 1, 0, 1, 0, gnc, NULL  }, /* IPMI_LANPARM_NUM_CIPHER_SUITE_ENTRIES     */
     { 1, 0, 17, 0, gcs, NULL }, /* IPMI_LANPARM_CIPHER_SUITE_ENTRY_SUPPORT   */
-    { 1, 0, 9, 0, gcp, scp   }, /* IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV      */
+#undef S
+#define S OFFSET_OF(max_priv_for_cipher_suite_supported)
+    { 1, S, 9, 0, gcp, scp   }, /* IPMI_LANPARM_CIPHER_SUITE_ENTRY_PRIV      */
 #undef S
 #define S OFFSET_OF(vlan_tag_supported)
     { 1, S, 4, 0, gvt, svt   }, /* IPMI_LANPARM_DEST_VLAN_TAG                */
@@ -2311,6 +2324,8 @@ ipmi_lanconfig_set_cipher_suite_entry(ipmi_lan_config_t *lanc,
 				      unsigned int      entry,
 				      unsigned int      val)
 {
+    if (! lanc->max_priv_for_cipher_suite_supported)
+	return ENOSYS;
     if (entry >= lanc->num_cipher_suites)
 	return EINVAL;
     lanc->cipher_suite_entries[entry] = val;
@@ -2322,6 +2337,8 @@ ipmi_lanconfig_get_max_priv_for_cipher_suite(ipmi_lan_config_t *lanc,
 					     unsigned int      entry,
 					     unsigned int      *val)
 {
+    if (! lanc->max_priv_for_cipher_suite_supported)
+	return ENOSYS;
     if (entry >= lanc->num_cipher_suites)
 	return EINVAL;
     *val = lanc->max_priv_for_cipher_suite[entry];
