@@ -1,3 +1,8 @@
+2005-08-05 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c: Fix an entity destruction problem that could
+	result in a SEGV in some situations.
+
 2005-08-02 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/os_debug.c: Fix so log handler gets set correctly.

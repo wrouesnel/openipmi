@@ -3789,8 +3789,8 @@ ipmi_sdr_entity_destroy(void *info)
 		    _ipmi_entity_put(child);
 		}
 	    }
+	    ipmi_detect_entity_presence_change(ent, 0);
 	}
-	ipmi_detect_entity_presence_change(ent, 0);
 	_ipmi_entity_put(ent);
     }
 
