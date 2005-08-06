@@ -271,39 +271,29 @@
 }
 
 %typemap(in) char ** (char *svalue) {
-    PyObject *o;
     if (!PySequence_Check($input)) {
 	PyErr_SetString(PyExc_ValueError, "Expecting a sequence");
 	return NULL;
     }
-    o = PySequence_GetItem($input, 0);
-    if (!o) {
-	PyErr_SetString(PyExc_ValueError, "Expecting a string");
-	return NULL;
-    }
-    if (!PyString_Check(o)) {
-	Py_DECREF(o);
-	PyErr_SetString(PyExc_ValueError, "expected a string");
-	return NULL;
-    }
-    svalue = PyString_AS_STRING(o);
-    Py_DECREF(o);
+    svalue = NULL;
     $1 = &svalue;
 }
 
 %typemap(argout) char ** {
-    PyObject *o = PyString_FromString(*$1);
-    if (!o) {
-	PyErr_SetString(PyExc_TypeError, "Unable to allocate string object");
-	return NULL;
-    }
-    if (PySequence_SetItem($input, 0, o) == -1) {
-	PyErr_SetString(PyExc_TypeError, "Unable to set string object item");
+    if (*$1) {
+	PyObject *o = PyString_FromString(*$1);
+	if (!o) {
+	    PyErr_SetString(PyExc_TypeError, "Unable to allocate string object");
+	    return NULL;
+	}
+	if (PySequence_SetItem($input, 0, o) == -1) {
+	    PyErr_SetString(PyExc_TypeError, "Unable to set string object item");
+	    Py_DECREF(o);
+	    return NULL;
+	}
 	Py_DECREF(o);
-	return NULL;
+	free(*$1);
     }
-    Py_DECREF(o);
-    free(*$1);
 }
 
 %typemap(in) ipmi_fru_node_t ** (ipmi_fru_node_t *pvalue) {
@@ -316,17 +306,19 @@
 }
 
 %typemap(argout) ipmi_fru_node_t ** {
-    PyObject *o = SWIG_NewPointerObj(*$1, SWIGTYPE_p_ipmi_fru_node_t, 1);
-    if (!o) {
-	PyErr_SetString(PyExc_TypeError, "Unable to allocate object");
-	return NULL;
-    }
-    if (PySequence_SetItem($input, 0, o) == -1) {
-	PyErr_SetString(PyExc_TypeError, "Unable to set object item");
+    if (*$1) {
+	PyObject *o = SWIG_NewPointerObj(*$1, SWIGTYPE_p_ipmi_fru_node_t, 1);
+	if (!o) {
+	    PyErr_SetString(PyExc_TypeError, "Unable to allocate object");
+	    return NULL;
+	}
+	if (PySequence_SetItem($input, 0, o) == -1) {
+	    PyErr_SetString(PyExc_TypeError, "Unable to set object item");
+	    Py_DECREF(o);
+	    return NULL;
+	}
 	Py_DECREF(o);
-	return NULL;
     }
-    Py_DECREF(o);
 }
 
 %{

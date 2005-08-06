@@ -516,6 +516,33 @@ use OpenIPMI;
 	}
     }
 
+    sub print_multirecord {
+	my $node = shift;
+	my $indent = shift;
+	my $rv;
+	my $name;
+	my $type;
+	my $value;
+	my $sub_node;
+	my $i;
+    
+	$i = 0;
+	while (1) {
+	    $rv = $node->get_field($i, \$name, \$type, \$value, \$sub_node);
+	    if (($rv == $OpenIPMI::enosys) || ($rv == $OpenIPMI::einval)) {
+		return;
+	    }
+	    $i++;
+	    if ($rv) {
+		next;
+	    }
+	    print $indent . "$name, $type, $value\n";
+	    if ($type eq "subnode") {
+		print_multirecord($subnode, $indent . "  ");
+	    }
+	}
+    }
+
     sub entity_fru_update_cb {
 	my $self = shift;
 	my $op = shift;
@@ -560,6 +587,19 @@ use OpenIPMI;
 		}
 		$k = $j;
 		$rv = $fru->get($i, \$j);
+	    }
+	    $j = $fru->get_num_multi_records();
+	    print "$j multirecords\n";
+	    for $i (0 .. $j-1) {
+		my $name = "";
+		my $sub_node;
+		$rv = $fru->multi_record_get_root_node(i, \$name, \$sub_node);
+		if ($rv) {
+		    print "Multirecord $i has no decoder\n";
+		    next;
+		}
+		print "Multirecord $i ($name)\n";
+		print_multirecord($sub_node, "  ");
 	    }
 	}
     }
@@ -799,6 +839,7 @@ use OpenIPMI;
 		  $mc->get_sel_rescan_time(), "\n";
 
 	    $stop_count++;
+	    $stop_count++;
 	    $rv = $mc->set_events_enable(1, $self);
 	    if ($rv) {
 		print "***Error enabling MC events: $rv\n";
@@ -828,7 +869,7 @@ use OpenIPMI;
 		$stop_count--;
 	    }
 
-	    $stop_count++;
+	    # Stop count for this incremented at first.
 	    $rv = $mc->send_command(0, 10, 0x43,
 				    [ 0, 0, 0, 0, 0, 0xff ], $self);
 	    if ($rv) {
@@ -959,6 +1000,7 @@ use OpenIPMI;
 	    $event = $domain->next_event($event);
 	}
 
+	# stop count is incremented at domain startup, don't need another.
 	$stop_count++;
 	$rv = $domain->start_ipmb_mc_scan(0, 0x20, 0x20, $self);
 	if ($rv) {
@@ -966,7 +1008,6 @@ use OpenIPMI;
 	    $stop_count--;
 	}
 
-	$stop_count++;
 	$rv = $domain->reread_sels($self);
 	if ($rv) {
 	    print "Error starting IPMB scan: $rv\n";
@@ -1070,7 +1111,7 @@ use OpenIPMI;
     }
 }
 
-$Handlers::stop_count = 0;
+$Handlers::stop_count = 1;
 
 OpenIPMI::enable_debug_malloc();
 OpenIPMI::init_posix();
@@ -1079,7 +1120,7 @@ $h = Handlers::new("hello");
 
 OpenIPMI::set_log_handler($h);
 
-$a = OpenIPMI::open_domain("test", \@ARGV, $h, $h);
+$a = OpenIPMI::open_domain2("test", \@ARGV, $h, $h);
 if (! $a) {
     print "open failed\n";
     exit 1;

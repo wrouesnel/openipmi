@@ -7875,8 +7875,10 @@ int pef_str_to_parm(char *str);
 				   const char      **name,
 				   ipmi_fru_node_t **sub_node)
     {
-	return ipmi_fru_multi_record_get_root_node(self, record_num,
-						   name, sub_node);
+	int rv;
+	rv = ipmi_fru_multi_record_get_root_node(self, record_num,
+						 name, sub_node);
+	return rv;
     }
 }
 
@@ -7898,8 +7900,9 @@ int pef_str_to_parm(char *str);
 	int                       rv;
 	enum ipmi_fru_data_type_e dtype;
 	int                       intval;
+	double                    floatval;
 	time_t                    time;
-	char                      *data;
+	char                      *data = NULL;
 	unsigned int              data_len;
 	int                       len;
 	char                      dummy[1];
@@ -7912,6 +7915,7 @@ int pef_str_to_parm(char *str);
 				     &dtype,
 				     &intval,
 				     &time,
+				     &floatval,
 				     &data,
 				     &data_len,
 				     sub_node);
@@ -7926,11 +7930,25 @@ int pef_str_to_parm(char *str);
 	    *type = "integer";
 	    break;
 
+	case IPMI_FRU_DATA_BOOLEAN:
+	    len = snprintf(dummy, 1, "%d", intval);
+	    str = malloc(len + 1);
+	    sprintf(str, "%d", intval);
+	    *type = "boolean";
+	    break;
+
 	case IPMI_FRU_DATA_TIME:
 	    len = snprintf(dummy, 1, "%ld", (long) time);
 	    str = malloc(len + 1);
 	    sprintf(str, "%ld", (long) time);
 	    *type = "time";
+	    break;
+
+	case IPMI_FRU_DATA_FLOAT:
+	    len = snprintf(dummy, 1, "%lf", floatval);
+	    str = malloc(len + 1);
+	    sprintf(str, "%lf", floatval);
+	    *type = "float";
 	    break;
 
 	case IPMI_FRU_DATA_BINARY:

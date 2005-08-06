@@ -3,6 +3,11 @@
 	* lib/entity.c: Fix an entity destruction problem that could
 	result in a SEGV in some situations.
 
+	* swig/OpenIPMI.i: Fix the fru multi-record node handling.
+	* swig/perl/OpenIPMI_lang.i: ditto
+	* swig/python/OpenIPMI_lang.i: ditto
+	* swig/perl/sample: Added code for dumping multirecords.
+
 2005-08-02 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/os_debug.c: Fix so log handler gets set correctly.

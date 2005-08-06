@@ -167,16 +167,10 @@
 }
 
 %typemap(in) char ** (char *svalue) {
-    SV* tempsv;
     if (!SvROK($input)) {
 	croak("expected a reference\n");
     }
-    tempsv = SvRV($input);
-    if (!SvOK(tempsv)) {
-	svalue = NULL;
-    } else {
-	svalue = SvPV_nolen(tempsv);
-    }
+    svalue = NULL;
     $1 = &svalue;
 }
 
@@ -197,9 +191,11 @@
 
 %typemap(argout) ipmi_fru_node_t ** {
     SV *tempsv;
-    tempsv = SvRV($input);
-    SWIG_MakePtr(tempsv, $1, SWIGTYPE_p_ipmi_fru_node_t,
-		 SWIG_SHADOW|SWIG_OWNER);
+    if (*$1) {
+	tempsv = SvRV($input);
+	SWIG_MakePtr(tempsv, *$1, SWIGTYPE_p_ipmi_fru_node_t,
+		     SWIG_SHADOW|SWIG_OWNER);
+    }
 }
 
 %{
