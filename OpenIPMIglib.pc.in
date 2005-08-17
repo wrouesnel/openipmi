@@ -7,5 +7,5 @@ Name: OpenIPMIglib
 Description: GLIB threaded OS handler for OpenIPMI
 Version: @VERSION@
 Requires: 
-Libs: -L${libdir} -lOpenIPMIglib `glib-config --cflags gthread`
+Libs: -L${libdir} -lOpenIPMIutils -lOpenIPMIglib `glib-config --cflags gthread`
 Cflags: -I${includedir} `glib-config --libs gthread`

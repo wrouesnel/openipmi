@@ -7,5 +7,5 @@ Name: OpenIPMIcmdlang
 Description: Command language for OpenIPMI
 Version: @VERSION@
 Requires: OpenIPMIutils OpenIPMI
-Libs: -L${libdir} -lOpenIPMIcmdlang -lOpenIPMIutils -lOpenIPMI
+Libs: -L${libdir} -lOpenIPMIutils -lOpenIPMI -lOpenIPMIcmdlang
 Cflags: -I${includedir}

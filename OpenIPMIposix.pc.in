@@ -7,5 +7,5 @@ Name: OpenIPMIposix
 Description: POSIX unthreaded OS handler for OpenIPMI
 Version: @VERSION@
 Requires: OpenIPMIutils
-Libs: -L${libdir} -lOpenIPMIposix -lOpenIPMIutils
+Libs: -L${libdir} -lOpenIPMIutils -lOpenIPMIposix
 Cflags: -I${includedir}

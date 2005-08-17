@@ -7,5 +7,5 @@ Name: OpenIPMI
 Description: Library to make using IPMI easier
 Version: @VERSION@
 Requires: 
-Libs: -L${libdir} -lOpenIPMI
+Libs: -L${libdir} -lOpenIPMIutils -lOpenIPMI
 Cflags: -I${includedir}

@@ -7,5 +7,5 @@ Name: OpenIPMIui
 Description: UI front-end for OpenIPMI
 Version: @VERSION@
 Requires: OpenIPMI ncurses
-Libs: -L${libdir} -lOpenIPMIui -lOpenIPMI -lncurses
+Libs: -L${libdir} -lOpenIPMIutils -lOpenIPMIui -lOpenIPMI -lncurses
 Cflags: -I${includedir}
