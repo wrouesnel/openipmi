@@ -1,3 +1,10 @@
+2005-08-18 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca.c: When a hot-swap event comes in and the MC
+	already exists, it is probably an AMC insertion/removal.
+	Rescan the SDRs on the IPMC when this occurs, as it probably has
+	new sensors.
+
 2005-08-16 Corey Minyard <cminyard@mvista.com>
 
 	* OpenIPMI.pc.in: Fix linking and order for libOpenIPMIutils.

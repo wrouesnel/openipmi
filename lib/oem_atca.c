@@ -3298,6 +3298,8 @@ atca_event_handler(ipmi_domain_t *domain,
 		   void          *event_data)
 {
     unsigned char data[13];
+    unsigned char old_state;
+    unsigned char new_state;
 
     /* Here we look for hot-swap events so we know to start the
        process of scanning for an IPMC when it is installed. */
@@ -3318,9 +3320,33 @@ atca_event_handler(ipmi_domain_t *domain,
 	/* It's an old event, ignore it. */
 	return;
 
-    if ((data[11] & 0xf) == 0) {
-	/* We have a hot-swap event where the previous state was not
-	   installed.  Scan the MC to make it appear. */
+    old_state = data[10] & 0xf;
+    new_state = data[11] & 0xf;
+    if ((old_state == 0) || (new_state == 0)) {
+	if (data[13] != 0) {
+	    /* FRU id is not 0, it's an AMC module (or something else the
+	       IPMC manages).  If the device has gone away or is newly
+	       inserted, rescan the SDRs on the IPMC. */
+	    ipmi_ipmb_addr_t addr;
+	    ipmi_mc_t        *mc;
+
+	    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+	    addr.channel = data[5] >> 4;
+	    addr.slave_addr = data[4];
+	    addr.lun = 0;
+
+	    mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr,
+				       sizeof(addr));
+	    if (mc) {
+		ipmi_mc_reread_sensors(mc, NULL, NULL);
+		_ipmi_mc_put(mc);
+	    }
+	}
+    } else {
+	/* We have a hot-swap event on the main where the previous
+	   state was not installed.  Scan the MC to make it appear.
+	   Note that we always do this, in case we missed a hot-swap
+	   removal and this is a changed MC. */
 	ipmi_start_ipmb_mc_scan(domain, (data[5] >> 4) & 0xf,
 				data[4], data[4], NULL, NULL);
     }
