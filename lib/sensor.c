@@ -135,9 +135,12 @@ struct ipmi_sensor_s
 
     unsigned char event_reading_type;
 
-    unsigned char mask1[16];
-    unsigned char mask2[16];
-    unsigned char mask3[16];
+#define IPMI_SENSOR_GET_MASK_BIT(mask, bit) (((mask) >> (bit)) & 1)
+#define IPMI_SENSOR_SET_MASK_BIT(mask, bit, v) \
+	(mask) = v ? (mask) | (1 << (bit)) : (mask) & ~(1 << (bit))
+    uint16_t mask1;
+    uint16_t mask2;
+    uint16_t mask3;
 
     unsigned int  analog_data_format : 2;
 
@@ -1176,21 +1179,9 @@ get_sensors_from_sdrs(ipmi_domain_t      *domain,
 	    s[p]->sensor_type = sdr.data[7];
 	    s[p]->event_reading_type = sdr.data[8];
 
-	    val = ipmi_get_uint16(sdr.data+9);
-	    for (j=0; j<16; j++) {
-		s[p]->mask1[j] = val & 1;
-		val >>= 1;
-	    }
-	    val = ipmi_get_uint16(sdr.data+11);
-	    for (j=0; j<16; j++) {
-		s[p]->mask2[j] = val & 1;
-		val >>= 1;
-	    }
-	    val = ipmi_get_uint16(sdr.data+13);
-	    for (j=0; j<16; j++) {
-		s[p]->mask3[j] = val & 1;
-		val >>= 1;
-	    }
+	    s[p]->mask1 = ipmi_get_uint16(sdr.data+9);
+	    s[p]->mask2 = ipmi_get_uint16(sdr.data+11);
+	    s[p]->mask3 = ipmi_get_uint16(sdr.data+13);
 
 	    s[p]->analog_data_format = (sdr.data[15] >> 6) & 3;
 	    s[p]->rate_unit = (sdr.data[15] >> 3) & 7;
@@ -1455,11 +1446,9 @@ static int cmp_sensor(ipmi_sensor_t *s1,
     if (s1->sensor_type != s2->sensor_type) return 0;
     if (s1->event_reading_type != s2->event_reading_type) return 0;
 
-    for (i=0; i<16; i++) {
-	if (s1->mask1[i] != s2->mask1[i]) return 0;
-	if (s1->mask2[i] != s2->mask2[i]) return 0;
-	if (s1->mask3[i] != s2->mask3[i]) return 0;
-    }
+    if (s1->mask1 != s2->mask1) return 0;
+    if (s1->mask2 != s2->mask2) return 0;
+    if (s1->mask3 != s2->mask3) return 0;
     
     if (s1->analog_data_format != s2->analog_data_format) return 0;
     if (s1->rate_unit != s2->rate_unit) return 0;
@@ -2072,6 +2061,23 @@ ipmi_sensor_get_num(ipmi_sensor_t *sensor,
     return 0;
 }
 
+static void
+ipmi_sensor_get_event_masks(ipmi_sensor_t *sensor,
+			    uint16_t      *mask1,
+			    uint16_t      *mask2)
+{
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD) {
+	/* Remove the reading mask, as that is not part of the event
+	   values allowed. */
+	*mask1 = sensor->mask1 & 0x0fff;
+	*mask2 = sensor->mask2 & 0x0fff;
+    } else {
+	/* Cannot set bit 15 */
+	*mask1 = sensor->mask1 & 0x7fff;
+	*mask2 = sensor->mask2 & 0x7fff;
+    }
+}
+
 int
 ipmi_sensor_threshold_event_supported(ipmi_sensor_t               *sensor,
 				      enum ipmi_thresh_e          event,
@@ -2079,8 +2085,8 @@ ipmi_sensor_threshold_event_supported(ipmi_sensor_t               *sensor,
 				      enum ipmi_event_dir_e       dir,
 				      int                         *val)
 {
-    int idx;
-    unsigned char *mask;
+    int      idx;
+    uint16_t mask;
 
     CHECK_SENSOR_LOCK(sensor);
 
@@ -2104,7 +2110,7 @@ ipmi_sensor_threshold_event_supported(ipmi_sensor_t               *sensor,
     if (idx > 11)
 	return EINVAL;
 
-    *val = mask[idx];
+    *val = IPMI_SENSOR_GET_MASK_BIT(mask, idx);
     return 0;
 }
 
@@ -2121,7 +2127,7 @@ ipmi_sensor_set_threshold_assertion_event_supported(
     if (idx > 11)
 	return;
 
-    sensor->mask1[idx] = val;
+    IPMI_SENSOR_SET_MASK_BIT(sensor->mask1, idx, val);
 }
 
 void
@@ -2137,7 +2143,7 @@ ipmi_sensor_set_threshold_deassertion_event_supported(
     if (idx > 11)
 	return;
 
-    sensor->mask2[idx] = val;
+    IPMI_SENSOR_SET_MASK_BIT(sensor->mask2, idx, val);
 }
 
 int
@@ -2153,22 +2159,22 @@ ipmi_sensor_threshold_reading_supported(ipmi_sensor_t      *sensor,
 
     switch(thresh) {
     case IPMI_LOWER_NON_CRITICAL:
-	*val = sensor->mask1[12];
+	*val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask1, 12);
 	break;
     case IPMI_LOWER_CRITICAL:
-	*val = sensor->mask1[13];
+	*val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask1, 13);
 	break;
     case IPMI_LOWER_NON_RECOVERABLE:
-	*val = sensor->mask1[14];
+	*val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask1, 14);
 	break;
     case IPMI_UPPER_NON_CRITICAL:
-	*val = sensor->mask2[12];
+	*val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask2, 12);
 	break;
     case IPMI_UPPER_CRITICAL:
-	*val = sensor->mask2[13];
+	*val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask2, 13);
 	break;
     case IPMI_UPPER_NON_RECOVERABLE:
-	*val = sensor->mask2[14];
+	*val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask2, 14);
 	break;
     default:
 	return EINVAL;
@@ -2195,7 +2201,7 @@ ipmi_sensor_threshold_settable(ipmi_sensor_t      *sensor,
     if (event > IPMI_UPPER_NON_RECOVERABLE)
 	return EINVAL;
 
-    *val = sensor->mask3[event + 8];
+    *val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask3, event + 8);
     return 0;
 }
 
@@ -2211,7 +2217,7 @@ ipmi_sensor_threshold_set_settable(ipmi_sensor_t      *sensor,
     if (event > IPMI_UPPER_NON_RECOVERABLE)
 	return;
 
-    sensor->mask3[event + 8] = val;
+    IPMI_SENSOR_SET_MASK_BIT(sensor->mask3, event + 8, val);
 }
 
 int
@@ -2235,7 +2241,7 @@ ipmi_sensor_threshold_readable(ipmi_sensor_t      *sensor,
     if (event > IPMI_UPPER_NON_RECOVERABLE)
 	return EINVAL;
 
-    *val = sensor->mask3[event];
+    *val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask3, event);
     return 0;
 }
 
@@ -2251,7 +2257,7 @@ ipmi_sensor_threshold_set_readable(ipmi_sensor_t      *sensor,
     if (event > IPMI_UPPER_NON_RECOVERABLE)
 	return;
 
-    sensor->mask3[event] = val;
+    IPMI_SENSOR_SET_MASK_BIT(sensor->mask3, event, val);
 }
 
 int
@@ -2260,7 +2266,7 @@ ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
 				     enum ipmi_event_dir_e dir,
 				     int                   *val)
 {
-    unsigned char *mask;
+    uint16_t mask;
 
     CHECK_SENSOR_LOCK(sensor);
 
@@ -2278,7 +2284,7 @@ ipmi_sensor_discrete_event_supported(ipmi_sensor_t         *sensor,
     if (event > 14)
 	return EINVAL;
 
-    *val = mask[event];
+    *val = IPMI_SENSOR_GET_MASK_BIT(mask, event);
     return 0;
 }
 
@@ -2290,7 +2296,7 @@ ipmi_sensor_set_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
     if (event > 14)
 	return;
 
-    sensor->mask1[event] = val;
+    IPMI_SENSOR_SET_MASK_BIT(sensor->mask1, event, val);
 }
 
 void
@@ -2301,7 +2307,7 @@ ipmi_sensor_set_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
     if (event > 14)
 	return;
 
-    sensor->mask2[event] = val;
+    IPMI_SENSOR_SET_MASK_BIT(sensor->mask2, event, val);
 }
 
 int
@@ -2318,7 +2324,7 @@ ipmi_sensor_discrete_event_readable(ipmi_sensor_t *sensor,
     if (event > 14)
 	return EINVAL;
 
-    *val = sensor->mask3[event];
+    *val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask3, event);
     return 0;
 }
 
@@ -2334,7 +2340,7 @@ ipmi_sensor_discrete_set_event_readable(ipmi_sensor_t *sensor,
     if (event > 14)
 	return;
 
-    sensor->mask3[event] = val;
+    IPMI_SENSOR_SET_MASK_BIT(sensor->mask3, event, val);
 }
 
 int
@@ -3585,17 +3591,21 @@ enables_set(ipmi_sensor_t *sensor,
 	return;
 
     if (info->do_disable) {
-	/* Enables were set, now disable all the other ones. */
+	/* Enables were set, now disable all the other ones.  Make
+	   sure we only set event bits that we support. */
+	uint16_t val1, val2;
+
 	cmd_msg.netfn = IPMI_SENSOR_EVENT_NETFN;
 	cmd_msg.cmd = IPMI_SET_SENSOR_EVENT_ENABLE_CMD;
 	cmd_msg.data_len = 6;
 	cmd_msg.data = cmd_data;
 	cmd_data[0] = sensor->num;
 	cmd_data[1] = (info->state.status & 0xc0) | (0x02 << 4);
-	cmd_data[2] = ~(info->state.__assertion_events & 0xff);
-	cmd_data[3] = ~(info->state.__assertion_events >> 8);
-	cmd_data[4] = ~(info->state.__deassertion_events & 0xff);
-	cmd_data[5] = ~(info->state.__deassertion_events >> 8);
+	ipmi_sensor_get_event_masks(sensor, &val1, &val2);
+	val1 &= ~info->state.__assertion_events;
+	val2 &= ~info->state.__deassertion_events;
+	ipmi_set_uint16(cmd_data+2, val1);
+	ipmi_set_uint16(cmd_data+4, val2);
 	rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,
 				      &cmd_msg, disables_set,
 				      &(info->sdata), info);
@@ -3703,17 +3713,15 @@ check_events_capability(ipmi_sensor_t      *sensor,
     }
 
     if (event_support == IPMI_EVENT_SUPPORT_PER_STATE) {
-	int i;
-	for (i=0; i<16; i++) {
-	    unsigned int bit = 1 << i;
+	uint16_t mask1, mask2;
 
-	    if (((!sensor->mask1[i]) && (bit & states->__assertion_events))
-		|| ((!sensor->mask2[i]) && (bit & states->__deassertion_events)))
-	    {
-		/* The user is attempting to set a state that the
-                   sensor does not support. */
-		return EINVAL;
-	    }
+	ipmi_sensor_get_event_masks(sensor, &mask1, &mask2);
+	if (((~mask1) & states->__assertion_events)
+	    || ((~mask2) & states->__deassertion_events))
+	{
+	    /* The user is attempting to set a state that the
+	       sensor does not support. */
+	    return EINVAL;
 	}
     }
 
@@ -5700,7 +5708,7 @@ ipmi_sensor_threshold_assertion_event_supported(
     if (idx > 11)
 	return EINVAL;
 
-    *val = sensor->mask1[idx];
+    *val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask1, idx);
     return 0;
 }
 
@@ -5723,7 +5731,7 @@ ipmi_sensor_threshold_deassertion_event_supported(
     if (idx > 11)
 	return 0;
 
-    *val = sensor->mask2[idx];
+    *val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask2, idx);
     return 0;
 }
 
@@ -5741,7 +5749,7 @@ ipmi_sensor_discrete_assertion_event_supported(ipmi_sensor_t *sensor,
     if (event > 14)
 	return EINVAL;
 
-    *val = sensor->mask1[event];
+    *val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask1, event);
     return 0;
 }
 
@@ -5759,7 +5767,7 @@ ipmi_sensor_discrete_deassertion_event_supported(ipmi_sensor_t *sensor,
     if (event > 14)
 	return EINVAL;
 
-    *val = sensor->mask2[event];
+    *val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask2, event);
     return 0;
 }
 
@@ -5912,6 +5920,6 @@ ipmi_discrete_event_readable(ipmi_sensor_t *sensor,
     if (event > 14)
 	return EINVAL;
 
-    *val = sensor->mask3[event];
+    *val = IPMI_SENSOR_GET_MASK_BIT(sensor->mask3, event);
     return 0;
 }

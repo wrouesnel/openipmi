@@ -1,3 +1,8 @@
+2005-08-19 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c: When doing a "set sensor enable", only disable the
+	bits that the sensor says it supports.
+
 2005-08-18 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: When a hot-swap event comes in and the MC
