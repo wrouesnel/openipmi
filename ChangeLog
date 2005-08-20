@@ -3,6 +3,9 @@
 	* lib/sensor.c: When doing a "set sensor enable", only disable the
 	bits that the sensor says it supports.
 
+	* lib/lanparm.c: Added a hack for working with broken systems that
+	return the wrong alert destination number with the response.
+
 2005-08-18 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: When a hot-swap event comes in and the MC

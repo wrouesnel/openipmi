@@ -1107,7 +1107,18 @@ static int gdt(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 
     data++; /* Skip over the revision byte. */
 
-    sel = data[0] & 0xf;
+    if ((data[0] & 0xf) != lanc->curr_sel) {
+	/* Yikes, wrong selector came back! */
+	ipmi_log(IPMI_LOG_WARNING,
+		 "lanparm.c(got_parm): "
+		 "Error fetching dest type %d,"
+		 " wrong selector came back, expecting %d, was %d."
+		 "  Assuming it is %d.",
+		 lanc->curr_parm, lanc->curr_sel, data[0] & 0xf,
+		 lanc->curr_sel);
+    }
+
+    sel = lanc->curr_sel;
     if (sel > lanc->num_alert_destinations)
 	return 0; /* Another error check will get this later. */
 
@@ -1146,7 +1157,18 @@ static int gda(ipmi_lan_config_t *lanc, lanparms_t *lp, int err,
 
     data++; /* Skip over the revision byte. */
 
-    sel = data[0] & 0xf;
+    if ((data[0] & 0xf) != lanc->curr_sel) {
+	/* Yikes, wrong selector came back! */
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "lanparm.c(got_parm): "
+		 "Error fetching dest addr %d,"
+		 " wrong selector came back, expecting %d, was %d."
+		 "  Assuming it is %d.",
+		 lanc->curr_parm, lanc->curr_sel, data[0] & 0xf,
+		 lanc->curr_sel);
+    }
+
+    sel = lanc->curr_sel;
     if (sel > lanc->num_alert_destinations)
 	return 0; /* Another error check will get this later. */
 
@@ -1496,16 +1518,6 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	break;
 
     case IPMI_LANPARM_DEST_TYPE:
-	if ((data[1] & 0xf) != lanc->curr_sel) {
-	    /* Yikes, wrong selector came back! */
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "lanparm.c(got_parm): "
-		     "Error fetching dest type %d,"
-		     " wrong selector came back, expecting %d, was %d",
-		     lanc->curr_parm, lanc->curr_sel, data[1] & 0xf);
-	    err = EINVAL;
-	    goto done;
-	}
 	lanc->curr_sel++;
 	if (lanc->curr_sel >= lanc->num_alert_destinations) {
 	    lanc->curr_parm++;
@@ -1514,16 +1526,6 @@ got_parm(ipmi_lanparm_t    *lanparm,
 	break;
 
     case IPMI_LANPARM_DEST_ADDR:
-	if ((data[1] & 0xf) != lanc->curr_sel) {
-	    /* Yikes, wrong selector came back! */
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "lanparm.c(got_parm): "
-		     "Error fetching dest addr %d,"
-		     " wrong selector came back, expecting %d, was %d",
-		     lanc->curr_parm, lanc->curr_sel, data[1] & 0xf);
-	    err = EINVAL;
-	    goto done;
-	}
 	lanc->curr_sel++;
 	if (lanc->curr_sel >= lanc->num_alert_destinations) {
 	    lanc->curr_parm = IPMI_LANPARM_VLAN_ID;
