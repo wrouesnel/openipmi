@@ -1417,9 +1417,9 @@ static ipmi_cmdlang_init_t cmds_sensor[] =
     { "set_thresholds", &sensor_cmds,
       "<sensor> <threshold> <value> ... - Set the sensor's thresholds to"
       " the given values.  If a threshold is not specified, it will not"
-      " be modified.  Thresholds are unc, uc, unr, lnr, lc.  The u stands"
-      " for upper, l for lower, nc for non-critical, c for critical, and"
-      " nr for non-recoverable.  The value is floating point.",
+      " be modified.  Thresholds are un, uc, ur, lr, lc, ln.  The u stands"
+      " for upper, l for lower, n for non-critical, c for critical, and"
+      " r for non-recoverable.  The value is floating point.",
       ipmi_cmdlang_sensor_handler, sensor_set_thresholds, NULL },
     { "get_hysteresis", &sensor_cmds,
       "<sensor> - Get the sensor's hysteresis values",

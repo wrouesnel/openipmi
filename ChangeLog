@@ -1,3 +1,8 @@
+2005-08-23 Corey Minyard <cminyard@mvista.com>
+
+	* cmdlang/cmd_sensor.c, man/ipmi_cmdlang.7: Fixed the docs on the
+	threshold names.
+
 2005-08-19 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: When doing a "set sensor enable", only disable the
