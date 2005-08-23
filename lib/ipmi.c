@@ -877,6 +877,7 @@ ipmi_set_threshold_out_of_range(ipmi_states_t      *states,
 void ipmi_oem_force_conn_init(void);
 int ipmi_oem_motorola_mxp_init(void);
 int ipmi_oem_intel_init(void);
+int ipmi_oem_kontron_conn_init(void);
 int ipmi_oem_atca_conn_init(void);
 int ipmi_oem_atca_init(void);
 int init_oem_test(void);
@@ -892,6 +893,7 @@ void _ipmi_fru_shutdown(void);
 
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
+void ipmi_oem_kontron_conn_shutdown(void);
 void ipmi_oem_atca_shutdown(void);
 int _ipmi_smi_shutdown(void);
 int _ipmi_lan_shutdown(void);
@@ -955,6 +957,7 @@ ipmi_init(os_handler_t *handler)
     ipmi_oem_force_conn_init();
     ipmi_oem_motorola_mxp_init();
     ipmi_oem_intel_init();
+    ipmi_oem_kontron_conn_init();
     ipmi_oem_atca_conn_init();
     ipmi_oem_atca_init();
     init_oem_test();
@@ -967,6 +970,7 @@ ipmi_init(os_handler_t *handler)
 #endif
     _ipmi_lan_shutdown();
     ipmi_oem_intel_shutdown();
+    ipmi_oem_kontron_conn_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
     _ipmi_fru_shutdown();
@@ -986,6 +990,7 @@ ipmi_shutdown(void)
     ipmi_oem_atca_shutdown();
     ipmi_oem_atca_conn_shutdown();
     ipmi_oem_intel_shutdown();
+    ipmi_oem_kontron_conn_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
     _ipmi_conn_shutdown();

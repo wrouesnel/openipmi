@@ -1,3 +1,8 @@
+2005-08-23 Gerhard Obrecht <varnhalt2 at users.sourceforge.net>
+
+	* lib/ipmi.c, lib/Makefile.am, lib/oem_kontron_conn.c: Add
+	support for the Kontron system interface.
+
 2005-08-23 Corey Minyard <cminyard@mvista.com>
 
 	* cmdlang/cmd_sensor.c, man/ipmi_cmdlang.7: Fixed the docs on the
