@@ -4406,8 +4406,8 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
     cmd_data[0] = sensor->num;
     cmd_data[1] = 0;
     for (th=IPMI_LOWER_NON_CRITICAL; th<=IPMI_UPPER_NON_RECOVERABLE; th++) {
+	int val;
 	if (info->th.vals[th].status) {
-	    int val;
 	    cmd_data[1] |= (1 << th);
 	    rv = ipmi_sensor_convert_to_raw(sensor,
 					    ROUND_NORMAL,
@@ -4421,8 +4421,10 @@ thresh_set_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 		thresh_set_done_handler(sensor, rv, info);
 		return;
 	    }
-	    cmd_data[th+2] = val;
+	} else {
+	    val = 0;
 	}
+	cmd_data[th+2] = val;
     }
 
     rv = ipmi_sensor_send_command(sensor, sensor->mc, sensor->send_lun,

@@ -8,6 +8,9 @@
 	* cmdlang/cmd_sensor.c, man/ipmi_cmdlang.7: Fixed the docs on the
 	threshold names.
 
+	* lib/sensor.c: Fix threshold setting to clear out the unused
+	threshold values (just so random data isn't sent).
+
 2005-08-19 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: When doing a "set sensor enable", only disable the
