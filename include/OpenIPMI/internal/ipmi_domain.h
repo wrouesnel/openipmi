@@ -221,6 +221,8 @@ int _ipmi_domain_init(void);
 /* Clean up the global domain memory. */
 void _ipmi_domain_shutdown(void);
 
+/* Is the domain currently in shutdown? */
+int _ipmi_domain_in_shutdown(ipmi_domain_t *domain);
 
 /* Used as a refcount to know when the domain is completely
    operational. */

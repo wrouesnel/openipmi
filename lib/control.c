@@ -367,6 +367,14 @@ ipmi_control_find_id(ipmi_domain_id_t domain_id,
  *
  **********************************************************************/
 
+static int
+control_ok_to_use(ipmi_control_t *control)
+{
+    return (   !control->destroyed
+	    && ipmi_mc_is_active(control->mc)
+	    && !_ipmi_domain_in_shutdown(control->domain));
+}
+
 static void
 control_final_destroy(ipmi_control_t *control)
 {
@@ -517,7 +525,7 @@ ipmi_control_opq_done(ipmi_control_t *control)
     if (!control)
 	return;
 
-     /* This gets called on ECANCELLED error cases, if the sensor is
+     /* This gets called on ECANCELLED error cases, if the control is
 	already we need to clear out the opq. */
     if (control->destroyed) {
 	if (control->waitq) {
@@ -885,7 +893,7 @@ ipmi_control_set_val(ipmi_control_t     *control,
 		     ipmi_control_op_cb handler,
 		     void               *cb_data)
 {
-    if (control->destroyed)
+    if (!control_ok_to_use(control))
 	return ECANCELED;
       
     CHECK_CONTROL_LOCK(control);
@@ -900,7 +908,7 @@ ipmi_control_get_val(ipmi_control_t      *control,
 		     ipmi_control_val_cb handler,
 		     void                *cb_data)
 {
-    if (control->destroyed)
+    if (!control_ok_to_use(control))
 	return ECANCELED;
       
     CHECK_CONTROL_LOCK(control);
@@ -919,7 +927,7 @@ ipmi_control_set_display_string(ipmi_control_t     *control,
 				ipmi_control_op_cb handler,
 				void               *cb_data)
 {
-    if (control->destroyed)
+    if (!control_ok_to_use(control))
 	return ECANCELED;
       
     CHECK_CONTROL_LOCK(control);
@@ -941,11 +949,11 @@ ipmi_control_get_display_string(ipmi_control_t      *control,
 				ipmi_control_str_cb handler,
 				void                *cb_data)
 {
-    CHECK_CONTROL_LOCK(control);
-
-    if (control->destroyed)
+    if (!control_ok_to_use(control))
 	return ECANCELED;
       
+    CHECK_CONTROL_LOCK(control);
+
     if (!control->cbs.get_display_string)
 	return ENOSYS;
     return control->cbs.get_display_string(control,
@@ -960,7 +968,7 @@ ipmi_control_identifier_get_val(ipmi_control_t                 *control,
 				ipmi_control_identifier_val_cb handler,
 				void                           *cb_data)
 {
-    if (control->destroyed)
+    if (!control_ok_to_use(control))
 	return ECANCELED;
       
     CHECK_CONTROL_LOCK(control);
@@ -977,7 +985,7 @@ ipmi_control_identifier_set_val(ipmi_control_t     *control,
 				ipmi_control_op_cb handler,
 				void               *cb_data)
 {
-    if (control->destroyed)
+    if (!control_ok_to_use(control))
 	return ECANCELED;
       
     CHECK_CONTROL_LOCK(control);

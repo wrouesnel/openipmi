@@ -499,6 +499,12 @@ call_domain_change(ipmi_domain_t      *domain,
     locked_list_iterate(domain_change_handlers, iterate_domain_changes, &info);
 }
 
+int
+_ipmi_domain_in_shutdown(ipmi_domain_t *domain)
+{
+    return domain->in_shutdown;
+}
+
 static void
 iterate_cleanup_mc(ipmi_domain_t *domain, ipmi_mc_t *mc, void *cb_data)
 {

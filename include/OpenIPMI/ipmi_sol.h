@@ -74,17 +74,20 @@
 /**
  * Queue identification constants for ipmi_sol_flush(...).
  */
-#define IPMI_SOL_BMC_TRANSMIT_QUEUE 0x01
-#define IPMI_SOL_BMC_RECEIVE_QUEUE 0x02
+#define IPMI_SOL_BMC_TRANSMIT_QUEUE                0x01
+#define IPMI_SOL_BMC_RECEIVE_QUEUE                 0x02
 #define IPMI_SOL_MANAGEMENT_CONSOLE_TRANSMIT_QUEUE 0x04
-#define IPMI_SOL_MANAGEMENT_CONSOLE_RECEIVE_QUEUE 0x08
+#define IPMI_SOL_MANAGEMENT_CONSOLE_RECEIVE_QUEUE  0x08
 
-#define IPMI_SOL_BMC_QUEUES \
-	(IPMI_SOL_BMC_TRANSMIT_QUEUE | IPMI_SOL_BMC_RECEIVE_QUEUE)
+#define IPMI_SOL_BMC_QUEUES (IPMI_SOL_BMC_TRANSMIT_QUEUE \
+			     | IPMI_SOL_BMC_RECEIVE_QUEUE)
+
 #define IPMI_SOL_MANAGEMENT_CONSOLE_QUEUES \
-	(IPMI_SOL_MANAGEMENT_CONSOLE_TRANSMIT_QUEUE | IPMI_SOL_MANAGEMENT_CONSOLE_RECEIVE_QUEUE)
-#define IPMI_SOL_ALL_QUEUES \
-	(IPMI_SOL_BMC_QUEUES | IPMI_SOL_MANAGEMENT_CONSOLE_QUEUES)
+	(IPMI_SOL_MANAGEMENT_CONSOLE_TRANSMIT_QUEUE \
+	 | IPMI_SOL_MANAGEMENT_CONSOLE_RECEIVE_QUEUE)
+
+#define IPMI_SOL_ALL_QUEUES (IPMI_SOL_BMC_QUEUES \
+			     | IPMI_SOL_MANAGEMENT_CONSOLE_QUEUES)
 
 
 /**
@@ -101,15 +104,25 @@
 /**
  * The possible states of a SoL connection object.
  */
-typedef enum { ipmi_sol_state_closed, ipmi_sol_state_connecting, ipmi_sol_state_connected,
-	ipmi_sol_state_connected_ctu, ipmi_sol_state_closing } ipmi_sol_state;
+typedef enum
+{
+    ipmi_sol_state_closed,
+    ipmi_sol_state_connecting,
+    ipmi_sol_state_connected,
+    ipmi_sol_state_connected_ctu,
+    ipmi_sol_state_closing
+} ipmi_sol_state;
 
 
 /**
  * Values to specify serial alert behavior while SoL is activated.
  */
-typedef enum {ipmi_sol_serial_alerts_fail=0, ipmi_sol_serial_alerts_deferred=1,
-	ipmi_sol_serial_alerts_succeed=2} ipmi_sol_serial_alert_behavior;
+typedef enum
+{
+    ipmi_sol_serial_alerts_fail = 0,
+    ipmi_sol_serial_alerts_deferred = 1,
+    ipmi_sol_serial_alerts_succeed = 2
+} ipmi_sol_serial_alert_behavior;
 
 
 /**
@@ -146,11 +159,10 @@ typedef struct ipmi_sol_conn_s ipmi_sol_conn_t;
  * @param [in] cb_data	The user-defined value provided when registering
  *			for the callback.
  */
-typedef void (*ipmi_sol_connection_state_cb)(
-	ipmi_sol_conn_t *conn,
-	int state,
-	int error,
-	void *cb_data);
+typedef void (*ipmi_sol_connection_state_cb)(ipmi_sol_conn_t *conn,
+					     int             state,
+					     int             error,
+					     void            *cb_data);
 
 
 /**
@@ -174,10 +186,9 @@ typedef void (*ipmi_sol_connection_state_cb)(
  * @param [in] cb_data	The user-defined value provided when registering
  *			for the callback.
  */
-typedef void (*ipmi_sol_transmit_complete_cb)(
-	ipmi_sol_conn_t *conn,
-	int error,
-	void *cb_data);
+typedef void (*ipmi_sol_transmit_complete_cb)(ipmi_sol_conn_t *conn,
+					      int             error,
+					      void            *cb_data);
 
 
 /**
@@ -197,11 +208,10 @@ typedef void (*ipmi_sol_transmit_complete_cb)(
  * @return	Zero if the data is accepted, nonzero if the data should be
  *		NACKed.
  */
-typedef int (*ipmi_sol_data_received_cb)(
-	ipmi_sol_conn_t *conn,
-	const void *buf,
-	size_t count,
-	void *cb_data);
+typedef int (*ipmi_sol_data_received_cb)(ipmi_sol_conn_t *conn,
+					 const void      *buf,
+					 size_t          count,
+					 void            *cb_data);
 
 
 /**
@@ -224,11 +234,10 @@ typedef int (*ipmi_sol_data_received_cb)(
  * @param [in] cb_data	The user-defined value provided when registering
  *			for the callback.
  */
-typedef void (*ipmi_sol_flush_complete_cb)(
-	ipmi_sol_conn_t *conn,
-	int error,
-	int queue_selectors_flushed,
-	void *cb_data);
+typedef void (*ipmi_sol_flush_complete_cb)(ipmi_sol_conn_t *conn,
+					   int             error,
+					   int         queue_selectors_flushed,
+					   void            *cb_data);
 
 
 /**
@@ -241,9 +250,8 @@ typedef void (*ipmi_sol_flush_complete_cb)(
  * @param [in] cb_data	The user-defined value provided when registering
  *			for the callback.
  */
-typedef void (*ipmi_sol_break_detected_cb)(
-	ipmi_sol_conn_t *conn,
-	void *cb_data);
+typedef void (*ipmi_sol_break_detected_cb)(ipmi_sol_conn_t *conn,
+					   void            *cb_data);
 
 
 /**
@@ -257,10 +265,8 @@ typedef void (*ipmi_sol_break_detected_cb)(
  * @param [in] cb_data	The user-defined value provided when registering
  *			for the callback.
  */
-typedef void (*ipmi_sol_bmc_transmit_overrun_cb)(
-	ipmi_sol_conn_t *conn,
-	void *cb_data);
-
+typedef void (*ipmi_sol_bmc_transmit_overrun_cb)(ipmi_sol_conn_t *conn,
+						 void            *cb_data);
 
 
 /**
@@ -273,10 +279,8 @@ typedef void (*ipmi_sol_bmc_transmit_overrun_cb)(
  *				IPMI SoL connection structure.
  * @return	zero on success, or ENOMEM if memory allocation fails.
  */
-int ipmi_sol_create(
-	ipmi_con_t *ipmi,
-	ipmi_sol_conn_t **sol_conn
-);
+int ipmi_sol_create(ipmi_con_t      *ipmi,
+		    ipmi_sol_conn_t **sol_conn);
 
 
 
@@ -295,27 +299,32 @@ int ipmi_sol_create(
  * @return Zero on success, or a nonzero error code.
  */
 int ipmi_sol_register_connection_state_callback(ipmi_sol_conn_t *conn,
-	ipmi_sol_connection_state_cb cb, void *cb_data);
+					       ipmi_sol_connection_state_cb cb,
+						void            *cb_data);
 int ipmi_sol_deregister_connection_state_callback(ipmi_sol_conn_t *conn,
-	ipmi_sol_connection_state_cb cb, void *cb_data);
+					       ipmi_sol_connection_state_cb cb,
+						  void *cb_data);
 
 int ipmi_sol_register_data_received_callback(ipmi_sol_conn_t *conn,
-	ipmi_sol_data_received_cb cb, void *cb_data);
+					     ipmi_sol_data_received_cb cb,
+					     void            *cb_data);
 int ipmi_sol_deregister_data_received_callback(ipmi_sol_conn_t *conn,
-	ipmi_sol_data_received_cb cb, void *cb_data);
+					       ipmi_sol_data_received_cb cb,
+					       void            *cb_data);
 
 int ipmi_sol_register_break_detected_callback(ipmi_sol_conn_t *conn,
-	ipmi_sol_break_detected_cb cb, void *cb_data);
+					      ipmi_sol_break_detected_cb cb,
+					      void            *cb_data);
 int ipmi_sol_deregister_break_detected_callback(ipmi_sol_conn_t *conn,
-	ipmi_sol_break_detected_cb cb, void *cb_data);
+						ipmi_sol_break_detected_cb cb,
+						void            *cb_data);
 
 int ipmi_sol_register_bmc_transmit_overrun_callback(ipmi_sol_conn_t *conn,
-	ipmi_sol_bmc_transmit_overrun_cb cb, void *cb_data);
+					   ipmi_sol_bmc_transmit_overrun_cb cb,
+						    void            *cb_data);
 int ipmi_sol_deregister_bmc_transmit_overrun_callback(ipmi_sol_conn_t *conn,
-	ipmi_sol_bmc_transmit_overrun_cb cb, void *cb_data);
-
-
-
+					   ipmi_sol_bmc_transmit_overrun_cb cb,
+						      void           *cb_data);
 
 
 /**
@@ -348,7 +357,7 @@ void ipmi_sol_set_ACK_retries(ipmi_sol_conn_t *conn, int retries);
  * @return	Zero on success, otherwise an error code.
  */
 int ipmi_sol_set_use_authentication(ipmi_sol_conn_t *conn,
-	int use_authentication);
+				    int             use_authentication);
 
 /**
  * Query the authentication configuration for the SoL packets.
@@ -391,7 +400,7 @@ int ipmi_sol_get_use_encryption(ipmi_sol_conn_t *conn);
  * @return	Zero on success, otherwise an error code.
  */
 int ipmi_sol_set_shared_serial_alert_behavior(ipmi_sol_conn_t *conn,
-	ipmi_sol_serial_alert_behavior behavior);
+				      ipmi_sol_serial_alert_behavior behavior);
 
 /**
  * Query the shared serial alerts behavior configuration for the SoL connection.
@@ -400,7 +409,8 @@ int ipmi_sol_set_shared_serial_alert_behavior(ipmi_sol_conn_t *conn,
  * @return	A value identifying the shared serial alert behavior that
  *		will be in force during the connection.
  */
-ipmi_sol_serial_alert_behavior ipmi_sol_get_shared_serial_alert_behavior(ipmi_sol_conn_t *conn);
+ipmi_sol_serial_alert_behavior ipmi_sol_get_shared_serial_alert_behavior
+						      (ipmi_sol_conn_t *conn);
 
 
 /**
@@ -413,7 +423,7 @@ ipmi_sol_serial_alert_behavior ipmi_sol_get_shared_serial_alert_behavior(ipmi_so
  * @return	Zero on success, otherwise an error code.
  */
 int ipmi_sol_set_deassert_CTS_DCD_DSR_on_connect(ipmi_sol_conn_t *conn,
-	int assert);
+						 int             assert);
 
 /**
  * Query the CTS, DCD and DSR deassert-on-connect configuration for the 
@@ -544,8 +554,11 @@ int ipmi_sol_free(ipmi_sol_conn_t *conn);
  *		EINVAL	if a request is made to transmit zero bytes
  *		or a nonzero IPMI error code on failure.
  */
-int ipmi_sol_write(ipmi_sol_conn_t *conn, const void *buf, int count,
-	ipmi_sol_transmit_complete_cb cb, void *cb_data);
+int ipmi_sol_write(ipmi_sol_conn_t *conn,
+		   const void      *buf,
+		   int             count,
+		   ipmi_sol_transmit_complete_cb cb,
+		   void            *cb_data);
 
 
 /**
@@ -563,7 +576,8 @@ int ipmi_sol_write(ipmi_sol_conn_t *conn, const void *buf, int count,
  * 		data.
  */
 int ipmi_sol_send_break(ipmi_sol_conn_t *conn,
-	ipmi_sol_transmit_complete_cb cb, void *cb_data);
+			ipmi_sol_transmit_complete_cb cb,
+			void            *cb_data);
 
 
 /**
@@ -589,8 +603,10 @@ int ipmi_sol_send_break(ipmi_sol_conn_t *conn,
  *		this request unless it is sent at the same time as a block of
  * 		data.
  */
-int ipmi_sol_set_CTS_assertable(ipmi_sol_conn_t *conn, int asserted,
-	ipmi_sol_transmit_complete_cb cb, void *cb_data);
+int ipmi_sol_set_CTS_assertable(ipmi_sol_conn_t *conn,
+				int             asserted,
+				ipmi_sol_transmit_complete_cb cb,
+				void            *cb_data);
 
 
 /**
@@ -608,8 +624,10 @@ int ipmi_sol_set_CTS_assertable(ipmi_sol_conn_t *conn, int asserted,
  *		this request unless it is sent at the same time as a block of
  * 		data.
  */
-int ipmi_sol_set_DCD_DSR_asserted(ipmi_sol_conn_t *conn, int asserted,
-	ipmi_sol_transmit_complete_cb cb, void *cb_data);
+int ipmi_sol_set_DCD_DSR_asserted(ipmi_sol_conn_t *conn,
+				  int             asserted,
+				  ipmi_sol_transmit_complete_cb cb,
+				  void            *cb_data);
 
 
 /**
@@ -630,8 +648,10 @@ int ipmi_sol_set_DCD_DSR_asserted(ipmi_sol_conn_t *conn, int asserted,
  *		this request unless it is sent at the same time as a block of
  * 		data.
  */
-int ipmi_sol_set_RI_asserted(ipmi_sol_conn_t *conn, int asserted,
-	ipmi_sol_transmit_complete_cb cb, void *cb_data);
+int ipmi_sol_set_RI_asserted(ipmi_sol_conn_t *conn,
+			     int             asserted,
+			     ipmi_sol_transmit_complete_cb cb,
+			     void            *cb_data);
 
 
 /**
@@ -662,5 +682,7 @@ int ipmi_sol_set_RI_asserted(ipmi_sol_conn_t *conn, int asserted,
  *		this request unless it is sent at the same time as a block of
  * 		data.
  */
-int ipmi_sol_flush(ipmi_sol_conn_t *conn, int queue_selectors,
-	ipmi_sol_flush_complete_cb cb, void *cb_data);
+int ipmi_sol_flush(ipmi_sol_conn_t *conn,
+		   int             queue_selectors,
+		   ipmi_sol_flush_complete_cb cb,
+		   void            *cb_data);

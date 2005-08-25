@@ -480,6 +480,14 @@ ipmi_sensor_find_id(ipmi_domain_id_t domain_id,
  *
  **********************************************************************/
 
+static int
+sensor_ok_to_use(ipmi_sensor_t *sensor)
+{
+    return (   !sensor->destroyed
+	    && ipmi_mc_is_active(sensor->mc)
+	    && !_ipmi_domain_in_shutdown(sensor->domain));
+}
+
 static void sensor_set_name(ipmi_sensor_t *sensor);
 
 static void
@@ -563,7 +571,7 @@ ipmi_sensor_opq_done(ipmi_sensor_t *sensor)
 	return;
 
     /* This gets called on ECANCELLED error cases, if the sensor is
-       already we need to clear out the opq. */
+       already destroyed we need to clear out the opq. */
     if (sensor->destroyed) {
 	if (sensor->waitq) {
 	    opq_destroy(sensor->waitq);
@@ -4654,7 +4662,7 @@ states_get_start(ipmi_sensor_t *sensor, int err, void *cb_data)
 		 "%sstates.c(states_get_start):"
 		 " Error sending states get command: %x",
 		 SENSOR_NAME(sensor), rv);
-	states_get_done_handler(sensor, 0, info);
+	states_get_done_handler(sensor, rv, info);
     }
 }
 
@@ -5015,7 +5023,7 @@ ipmi_sensor_set_event_enables(ipmi_sensor_t         *sensor,
 			      ipmi_sensor_done_cb   done,
 			      void                  *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5034,7 +5042,7 @@ ipmi_sensor_enable_events(ipmi_sensor_t         *sensor,
 			  ipmi_sensor_done_cb   done,
 			  void                  *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5053,7 +5061,7 @@ ipmi_sensor_disable_events(ipmi_sensor_t         *sensor,
 			   ipmi_sensor_done_cb   done,
 			   void                  *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5073,7 +5081,7 @@ ipmi_sensor_rearm(ipmi_sensor_t       *sensor,
 		  ipmi_sensor_done_cb done,
 		  void                *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5092,7 +5100,7 @@ ipmi_sensor_get_event_enables(ipmi_sensor_t                *sensor,
 			      ipmi_sensor_event_enables_cb done,
 			      void                         *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5109,7 +5117,7 @@ ipmi_sensor_get_hysteresis(ipmi_sensor_t             *sensor,
 			   ipmi_sensor_hysteresis_cb done,
 			   void                      *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5128,7 +5136,7 @@ ipmi_sensor_set_hysteresis(ipmi_sensor_t       *sensor,
 			   ipmi_sensor_done_cb done,
 			   void                *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5147,7 +5155,7 @@ ipmi_sensor_get_thresholds(ipmi_sensor_t             *sensor,
 			   ipmi_sensor_thresholds_cb done,
 			   void                      *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5163,7 +5171,7 @@ ipmi_sensor_set_thresholds(ipmi_sensor_t       *sensor,
 			   ipmi_sensor_done_cb done,
 			   void                *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5179,7 +5187,7 @@ ipmi_sensor_get_reading(ipmi_sensor_t          *sensor,
 			ipmi_sensor_reading_cb done,
 			void                   *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);
@@ -5194,7 +5202,7 @@ ipmi_sensor_get_states(ipmi_sensor_t         *sensor,
 		       ipmi_sensor_states_cb done,
 		       void                  *cb_data)
 {
-    if (sensor->destroyed)
+    if (!sensor_ok_to_use(sensor))
 	return ECANCELED;
       
     CHECK_SENSOR_LOCK(sensor);

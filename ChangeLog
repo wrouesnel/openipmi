@@ -1,7 +1,25 @@
+2005-08-24 Corey Minyard <cminyard@mvista.com>
+
+	* lib/domain.c, include/OpenIPMI/internal/ipmi_domain.h: Added a
+	way to tell if the domain is in shutdown.
+
+	* lib/sensor.c: Don't allow operations if the domain/mc it is
+	attached to is in shutdown or is not active.  There was a problem
+	where if a sensor was getting refetched in the fetch completion
+	handler, and it blew the stack because the fetch would go through
+	the opq, fail, call the handler, start the fetch, etc.
+	* lib/control.c: ditto
+
+	* lib/sensor.c: Fix an error path in states_get_start() that was
+	incorrectly returning success.  Fix a typo in a comment.
+
+	* include/OpenIPMI/ipmi_sol.h: Make this into a normal unix text
+	file (remove carraige returns) and general formatting cleanups.
+
 2005-08-23 Gerhard Obrecht <varnhalt2 at users.sourceforge.net>
 
 	* lib/ipmi.c, lib/Makefile.am, lib/oem_kontron_conn.c: Add
-	support for the Kontron system interface.
+	support for the Kontron system interface IPMB address setting.
 
 2005-08-23 Corey Minyard <cminyard@mvista.com>
 
