@@ -1,0 +1,346 @@
+#!/bin/sh
+#############################################################################
+#
+# ipmi:		OpenIPMI Driver init script
+#
+# Authors:	Matt Domsch <Matt_Domsch@dell.com>
+#               Chris Poblete <Chris_Poblete@dell.com>
+#
+# chkconfig: 2345 04 96
+# description: OpenIPMI Driver init script
+#
+### BEGIN INIT INFO
+# Provides: ipmidrv
+# Required-Start: $localfs $remotefs $syslog
+# Required-Stop: $localfs $remotefs $syslog
+# Default-Start:
+# Default-Stop:
+# Short-Description: OpenIPMI Driver init script
+# Description: OpenIPMI Driver init script
+### END INIT INFO
+#
+# Exit Status values
+# from start:
+# 0 = no errors
+# 1 = a necessary requested module did not load (error)
+# 2 = an optional but requested module did not load (warning)
+# 2 = could not create the proper /dev device node (warning)
+
+
+#
+#############################################################################
+# for log_success_msg and friends
+[ -r /lib/lsb/init-functions ] && . /lib/lsb/init-functions
+# source config info
+[ -r /etc/sysconfig/ipmi ] && . /etc/sysconfig/ipmi
+
+#############################################################################
+# GLOBALS
+#############################################################################
+MODULE_NAME="ipmi"
+INTF_NUM=0
+
+IPMI_SMB_MODULE_NAME="ipmi_smb"
+IPMI_SI_MODULE_NAME="ipmi_si"
+kernel=`uname -r | cut -d. -f1-2`
+if [ "${kernel}" == "2.4" ]; then
+    IPMI_SMB_MODULE_NAME="ipmi_smb_intf"
+    IPMI_SI_MODULE_NAME="ipmi_si_drv"
+fi
+
+MODULES_INTERFACES="ipmi_imb ipmi_devintf"
+MODULES_FEATURES="ipmi_watchdog ipmi_poweroff"
+MODULES_HW="${IPMI_SMB_MODULE_NAME} ${IPMI_SI_MODULE_NAME}"
+MODULES_BASE="ipmi_msghandler"
+MODULES="${MODULES_INTERFACES} ${MODULES_FEATURES} ${MODULES_HW} ${MODULES_BASE}"
+
+
+RETVAL=0
+LOCKFILE=/var/lock/subsys/ipmi
+
+
+#############################################################################
+load_si()
+{
+	if [ "${IPMI_SI}" = "1" ]; then
+		modprobe ${IPMI_SI_MODULE_NAME} || RETVAL=1
+	fi
+}
+
+load_smb()
+{
+	if [ "${IPMI_SMB}" = "1" ]; then
+		modprobe ${IPMI_SMB_MODULE_NAME} || RETVAL=1
+	fi
+}
+
+load_hw_modules()
+{
+	load_si
+	load_smb
+}
+
+start_watchdog()
+{
+	if [ "${IPMI_WATCHDOG}" = "1" ]; then
+		load_hw_modules
+		modprobe ipmi_watchdog ${IPMI_WATCHDOG_OPTIONS} || RETVAL=2
+		if [ ! -x /sbin/udev -a ! -e /dev/watchdog ]; then
+			mknod -m 0600 /dev/watchdog c 10 130 || RETVAL=2
+		fi
+	fi
+}
+
+stop_watchdog()
+{
+	modprobe -q -r ipmi_watchdog
+	[ ! -x /sbin/udev ] && rm -f /dev/watchdog
+}
+
+start_powercontrol()
+{
+	local poweroff_opts=""
+	if [ "${IPMI_POWEROFF}" = "1" ]; then
+		load_hw_modules
+		[ "${IPMI_POWERCYCLE}" == "1" ] && poweroff_opts="poweroff_control=2"
+		modprobe ipmi_poweroff "${poweroff_opts}" || RETVAL=2
+	fi
+}
+
+stop_powercontrol()
+{
+	modprobe -q -r ipmi_poweroff
+}
+
+#############################################################################
+unload_all_ipmi_modules()
+{
+	[ ! -x /sbin/udev ] && rm -f "/dev/ipmi${INTF_NUM}"
+	stop_watchdog
+	for m in ${MODULES}; do
+		modprobe -q -r ${m}
+	done
+}
+
+unload_ipmi_modules_leave_features()
+{
+	[ ! -x /sbin/udev ] && rm -f "/dev/ipmi${INTF_NUM}"
+	for m in ${MODULES_INTERFACES}; do
+		modprobe -q -r ${m}
+	done
+	lsmod | egrep -q "ipmi_(poweroff|watchdog)"
+	if [ "$?" -ne "0" ]; then
+		stop_watchdog
+		for m in ${MODULES}; do
+			modprobe -q -r ${m}
+		done
+	fi
+}
+
+#############################################################################
+load_ipmi_modules ()
+{
+	modprobe ipmi_msghandler || RETVAL=1
+	load_hw_modules
+	[ "${RETVAL}" = "1" ] && unload_all_ipmi_modules && return
+
+	start_watchdog
+	start_powercontrol
+
+	if [ "${DEV_IPMI}" = "1" ]; then
+		modprobe ipmi_devintf || RETVAL=2
+		if [ "${RETVAL}" != "2" ]; then
+			if [ ! -x /sbin/udev ]; then
+				DEVMAJOR=`cat /proc/devices | awk '/ipmidev/{print $1}'`
+				rm -f /dev/ipmi${INTF_NUM}
+				mknod -m 0600 /dev/ipmi${INTF_NUM} c ${DEVMAJOR} 0 || RETVAL=2
+			fi
+		fi
+	fi
+
+	if [ "${IPMI_IMB}" = "1" ]; then
+		modprobe ipmi_imb || RETVAL=2
+		if [ "${RETVAL}" != "2" ]; then
+			DEVMAJOR=`cat /proc/devices | awk '/imb/{print $1}'`
+			rm -f /dev/imb
+			mknod -m 0600 /dev/imb c ${DEVMAJOR} 0 || RETVAL=2
+		fi
+	fi
+
+	# Per Corey Minyard, essentially no one uses ipmi_radisys
+	# and we don't want to encourage its further use
+	# so it won't be handled here.
+	return
+}
+
+#############################################################################
+start()
+{
+	echo -n $"Starting ${MODULE_NAME} drivers: "
+	load_ipmi_modules
+	[ "${RETVAL}" = "1" ] && log_failure_msg && return
+	[ "${RETVAL}" = "2" ] && touch ${LOCKFILE} && log_warning_msg
+	[ "${RETVAL}" = "0" ] && touch ${LOCKFILE} && log_success_msg
+}
+
+#############################################################################
+stop()
+{
+	echo -n $"Stopping ${MODULE_NAME} drivers: "
+	unload_ipmi_modules_leave_features
+	rm -f ${LOCKFILE}
+	log_success_msg
+}
+
+stop_all()
+{
+	echo -n $"Stopping all ${MODULE_NAME} drivers: "
+	unload_all_ipmi_modules
+	rm -f ${LOCKFILE}
+	log_success_msg
+}
+
+#############################################################################
+restart()
+{
+	stop_all
+	start
+}
+
+#############################################################################
+
+modules_loaded()
+{
+	OnePlusLoaded=0
+	OnePlusUnloaded=0
+	for m in $@; do
+		if /sbin/lsmod | grep $m >/dev/null 2>&1 ; then
+			echo "$m module loaded."
+			OnePlusLoaded=1
+		else
+			echo "$m module not loaded."
+			OnePlusUnLoaded=1
+		fi
+	done
+}
+
+device_node_exists()
+{
+	if [ -e "$1" ]; then
+		echo "$1 exists."
+		return 1
+	fi
+	echo "$1 does not exist."
+	return 0
+}
+
+minimum_modules_loaded()
+{
+	modules_loaded ${MODULES_BASE}
+	[ ${OnePlusLoaded} -eq 0 ] && return 0
+	    
+	modules_loaded ${MODULES_HW}
+	[ ${OnePlusLoaded} -eq 0 ]  && return 0
+
+	return 1
+}
+
+# Status return code bits
+# bit 0 set = minimum modules aren't loaded
+# bit 1 set = requested module isn't loaded
+# bit 2 set = /dev/ipmi0 doesn't exist
+# bit 3 set = /dev/watchdog doesn't exist
+# bit 4 set = lockfile doesn't exist
+
+status_all()
+{
+	RETVAL=0
+	modules_loaded ${MODULES}
+	[ ${OnePlusUnloaded} -ne 0 ] && RETVAL=$((RETVAL | 2))
+
+	device_node_exists /dev/ipmi${INTF_NUM}
+	[ $? -eq 0 ] && RETVAL=$((RETVAL | 4))
+
+	device_node_exists /dev/watchdog
+	[ $? -eq 0 ] && RETVAL=$((RETVAL | 8))
+
+	[ ! -e ${LOCKFILE} ] && RETVAL=$((RETVAL | 16))
+}
+
+status()
+{
+	RETVAL=0
+	minimum_modules_loaded
+	[ $? -eq 0 ] && RETVAL=$((RETVAL | 1))
+	
+	modules_loaded ipmi_devintf
+	[ ${OnePlusLoaded} -eq 0 ] && RETVAL=$((RETVAL | 2))
+
+	device_node_exists /dev/ipmi${INTF_NUM}
+	[ $? -eq 0 ] && RETVAL=$((RETVAL | 4))
+}
+
+status_watchdog()
+{
+	RETVAL=0
+	minimum_modules_loaded
+	[ $? -eq 0 ] && RETVAL=$((RETVAL | 1))
+
+	modules_loaded ipmi_watchdog
+	[ ${OnePlusLoaded} -eq 0 ] && RETVAL=$((RETVAL | 2))
+
+	device_node_exists /dev/watchdog
+	[ $? -eq 0 ] && RETVAL=$((RETVAL | 8))
+}
+
+status_powercontrol()
+{
+	RETVAL=0
+	minimum_modules_loaded
+	[ $? -eq 0 ] && RETVAL=$((RETVAL | 1))
+
+	modules_loaded ipmi_powercontrol
+	[ ${OnePlusLoaded} -eq 0 ] && RETVAL=$((RETVAL | 2))
+}
+
+#############################################################################
+usage ()
+{
+	echo $"Usage: $0 {start|stop|status|restart|condrestart|" 1>&2
+	echo $"          start-watchdog|stop-watchdog|status-watchdog" 1>&2
+	echo $"          start-powercontrol|stop-powercontrol|status-powercontrol" 1>&2
+	echo $"          stop-all|status-all}" 1>&2
+	RETVAL=1
+}
+
+condrestart ()
+{
+	[ -e ${LOCKFILE} ] && restart
+}
+
+#############################################################################
+# MAIN
+#############################################################################
+case "$1" in
+	start) start ;;
+	stop)  stop ;;
+	restart) restart ;;
+	status)	status ;;
+	status-all) status_all ;;
+	condrestart) condrestart ;;
+	start-watchdog) start_watchdog ;;
+	stop-watchdog) stop_watchdog ;;
+	status-watchdog) status_watchdog ;;
+	start-powercontrol) start_powercontrol ;;
+	stop-powercontrol) stop_powercontrol ;;
+	status-powercontrol) status_powercontrol ;;
+	stop-all) stop_all ;;
+	*) usage ;;
+esac
+
+exit ${RETVAL}
+
+#############################################################################
+# end of file
+#############################################################################
+

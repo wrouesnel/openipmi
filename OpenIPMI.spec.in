@@ -77,6 +77,20 @@ make
 ###################################################
 rm -rf %{buildroot}
 make DESTDIR=%{buildroot} install
+install -d %{buildroot}/etc/init.d
+install -d %{buildroot}/etc/sysconfig
+install ipmi.init %{buildroot}/etc/init.d/ipmi
+install ipmi.sysconf %{buildroot}/etc/sysconfig/ipmi
+
+###################################################
+%post
+###################################################
+chkconfig --add ipmi
+
+###################################################
+%preun
+###################################################
+chkconfig --del ipmi
 
 ###################################################
 %files
@@ -96,6 +110,9 @@ make DESTDIR=%{buildroot} install
 %{_libdir}/libOpenIPMIutils.la
 %doc COPYING COPYING.LIB FAQ INSTALL README README.Force
 %doc README.MotorolaMXP
+/etc/init.d/ipmi
+/etc/sysconfig/ipmi
+
 
 ###################################################
 %files perl

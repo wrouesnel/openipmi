@@ -1,3 +1,11 @@
+2005-08-26 Corey Minyard <cminyard@mvista.com>
+
+	* ipmi.init, ipmi.sysconf, Makefile.am, OpenIPMI.spec.in: Add init
+	script stuff.
+
+	* include/OpenIPMI/ipmi_fru.h, lib/fru.c, cmdlang/cmd_fru.c: Add
+	general FRU float handling.
+
 2005-08-25 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c, lib/control.c: Fix so proper counts are held in

@@ -229,8 +229,9 @@ fru_setval(ipmi_fru_t *fru, void *cb_data)
     enum ipmi_fru_data_type_e dtype;
     int             i;
     int             num;
-    char            *name;
+    const char      *name;
     int             ival;
+    double          dval;
     int             rv;
     int             len;
     unsigned char   *data;
@@ -302,6 +303,36 @@ fru_setval(ipmi_fru_t *fru, void *cb_data)
 	}
 	curr_arg++;
 	rv = ipmi_fru_set_int_val(fru, i, num, ival);
+	if (rv) {
+	    cmdlang->errstr = "value invalid";
+	    cmdlang->err = EINVAL;
+	    goto out_err;
+	}
+	break;
+
+    case IPMI_FRU_DATA_BOOLEAN:
+	ipmi_cmdlang_get_bool(argv[curr_arg], &ival, cmd_info);
+	if (cmdlang->err) {
+	    cmdlang->errstr = "value invalid";
+	    goto out_err;
+	}
+	curr_arg++;
+	rv = ipmi_fru_set_int_val(fru, i, num, ival);
+	if (rv) {
+	    cmdlang->errstr = "value invalid";
+	    cmdlang->err = EINVAL;
+	    goto out_err;
+	}
+	break;
+
+    case IPMI_FRU_DATA_FLOAT:
+	ipmi_cmdlang_get_double(argv[curr_arg], &dval, cmd_info);
+	if (cmdlang->err) {
+	    cmdlang->errstr = "value invalid";
+	    goto out_err;
+	}
+	curr_arg++;
+	rv = ipmi_fru_set_float_val(fru, i, num, dval);
 	if (rv) {
 	    cmdlang->errstr = "value invalid";
 	    cmdlang->err = EINVAL;

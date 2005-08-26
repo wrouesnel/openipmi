@@ -557,6 +557,10 @@ int ipmi_fru_set_time_val(ipmi_fru_t *fru,
 			  int        index,
 			  int        num,
 			  time_t     time);
+int ipmi_fru_set_float_val(ipmi_fru_t *fru,
+			   int        index,
+			   int        num,
+			   double     val);
 int ipmi_fru_set_data_val(ipmi_fru_t                *fru,
 			  int                       index,
 			  int                       num,
