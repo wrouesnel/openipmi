@@ -1805,7 +1805,7 @@ try_presence_controls(ipmi_entity_t *ent, ent_active_detect_t *info)
     info->done_count = 0;
     ipmi_entity_iterate_controls(ent, control_detect_send, info);
 
-    /* I couldn't message any sensors, go on. */
+    /* I couldn't message any controls, go on. */
     if (info->try_count == 1)
 	return ENOSYS;
     info->done_count++;

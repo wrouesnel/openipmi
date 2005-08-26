@@ -624,6 +624,10 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
     }
 
     if (!mc) {
+	_ipmi_domain_entity_lock(sensor->domain);
+	sensor->usecount++;
+	_ipmi_domain_entity_unlock(sensor->domain);
+
 	rv = _ipmi_entity_get(sensor->entity);
 	if (! rv)
 	    entity = sensor->entity;
@@ -631,6 +635,7 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, ECANCELED, rsp, info->__cb_data);
 
+	_ipmi_sensor_put(sensor);
 	if (entity)
 	    _ipmi_entity_put(entity);
 	return;
@@ -649,6 +654,10 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 		 " Could not convert sensor id to a pointer",
 		 MC_NAME(mc));
 
+	_ipmi_domain_entity_lock(sensor->domain);
+	sensor->usecount++;
+	_ipmi_domain_entity_unlock(sensor->domain);
+
 	nrv = _ipmi_entity_get(sensor->entity);
 	if (! nrv)
 	    entity = sensor->entity;
@@ -656,6 +665,7 @@ sensor_rsp_handler(ipmi_mc_t  *mc,
 	if (info->__rsp_handler)
 	    info->__rsp_handler(sensor, rv, NULL, info->__cb_data);
 
+	_ipmi_sensor_put(sensor);
 	if (entity)
 	    _ipmi_entity_put(entity);
     }
