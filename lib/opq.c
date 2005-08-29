@@ -59,6 +59,7 @@ struct opq_s
     opq_done_cb    done_handler;
     void           *done_data;
     int            blocked;
+    int            in_destroy;
 };
 
 static void
@@ -120,6 +121,16 @@ opq_destroy_item(ilist_iter_t *iter, void *item, void *cb_data)
 void
 opq_destroy(opq_t *opq)
 {
+    /* Only allow this to be done once.  Callbacks might call this
+       again. */
+    opq_lock(opq);
+    if (opq->in_destroy) {
+	opq_unlock(opq);
+	return;
+    }
+    opq->in_destroy = 1;
+    opq_unlock(opq);
+
     ilist_iter(opq->ops, opq_destroy_item, NULL);
     free_ilist(opq->ops);
     if (opq->lock)

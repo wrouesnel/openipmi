@@ -1,3 +1,11 @@
+2005-08-29 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi_lan.c: Fixed a possible race during shutdown with timer
+	handling.
+
+	* lib/opq.c: Only allow the opq destroy to be done once, in case
+	it is called again from the destroy callbacks.
+
 2005-08-26 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi.init, ipmi.sysconf, Makefile.am, OpenIPMI.spec.in: Add init

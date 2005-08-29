@@ -3635,6 +3635,15 @@ lan_cleanup(ipmi_con_t *ipmi)
 
 	    lan->seq_table[i].inuse = 0;
 
+	    /* Wait until here to free the info, as we use it above.
+	       But we must be holding the lock while we do this. */
+	    if (rv)
+		info->cancelled = 1;
+	    else {
+		ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
+		ipmi_mem_free(info);
+	    }
+
 	    ipmi_unlock(lan->seq_num_lock);
 
 	    /* The unlock is safe here because the connection is no
@@ -3643,13 +3652,6 @@ lan_cleanup(ipmi_con_t *ipmi)
                validate. */
 	    
 	    ipmi_handle_rsp_item(NULL, rspi, handler);
-
-	    if (rv)
-		info->cancelled = 1;
-	    else {
-		ipmi->os_hnd->free_timer(ipmi->os_hnd, info->timer);
-		ipmi_mem_free(info);
-	    }
 
 	    ipmi_lock(lan->seq_num_lock);
 	}
