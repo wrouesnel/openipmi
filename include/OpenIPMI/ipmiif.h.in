@@ -544,8 +544,18 @@ int ipmi_event_delete(ipmi_event_t   *event,
 		      void           *cb_data);
 
 /* Return the management controller that "owns" the event (where the
-   event is stored). */
+   event is stored, *not* the mc that generated the event). */
 ipmi_mcid_t ipmi_event_get_mcid(const ipmi_event_t *event);
+
+/* Return the sensor id the event is associated with.  Returns an
+   invalid sensor id (test with ipmi_sensor_id_is_invalid()) if the
+   event has no sensor.  The "sel_mc" is the MC that holds the SEL the
+   event came from (fetched with ipmi_event_get_mcid()) and is only
+   used for software ID based events.  You may pass in NULL if you
+   don't care about software ID based events. */
+ipmi_sensor_id_t ipmi_event_get_generating_sensor_id(ipmi_domain_t *domain,
+						     ipmi_mc_t     *sel_mc,
+						     const ipmi_event_t *event);
 
 /* Return a unique (in the MC) record identifier for the event. */
 unsigned int ipmi_event_get_record_id(const ipmi_event_t *event);

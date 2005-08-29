@@ -2669,34 +2669,11 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
     if ((type == 0x02) && !ipmi_event_is_old(event)) {
 	/* It's a standard IPMI event. */
 	ipmi_mc_t           *mc;
-	ipmi_ipmb_addr_t    addr;
 	ipmi_sensor_id_t    id;
 	event_sensor_info_t info;
 	const unsigned char *data;
 
-	data = ipmi_event_get_data_ptr(event);
-	addr.addr_type = IPMI_IPMB_ADDR_TYPE;
-	/* See if the MC has an OEM handler for this. */
-	if (data[6] == 0x03) {
-	    addr.channel = 0;
-	} else {
-	    addr.channel = data[5] >> 4;
-	}
-	if ((data[4] & 0x01) == 0) {
-	    addr.slave_addr = data[4];
-	} else {
-	    /* A software ID, assume it comes from the MC where we go it. */
-	    ipmi_addr_t iaddr;
-
-	    ipmi_mc_get_ipmi_address(ev_mc, &iaddr, NULL);
-	    addr.slave_addr = ipmi_addr_get_slave_addr(&iaddr);
-	    if (addr.slave_addr == 0)
-		/* A system interface, just assume it's the BMC. */
-		addr.slave_addr = 0x20;
-	}
-	addr.lun = 0;
-
-	mc = _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+	mc = _ipmi_event_get_generating_mc(domain, ev_mc, event);
 	if (!mc)
 	    goto out;
 
@@ -2708,6 +2685,7 @@ _ipmi_domain_system_event_handler(ipmi_domain_t *domain,
 	}
 
 	/* The OEM code didn't handle it. */
+	data = ipmi_event_get_data_ptr(event);
 	id.mcid = ipmi_mc_convert_to_id(mc);
 	id.lun = data[5] & 0x3;
 	id.sensor_num = data[8];

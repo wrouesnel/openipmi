@@ -39,6 +39,7 @@
 #include <OpenIPMI/internal/ipmi_event.h>
 #include <OpenIPMI/internal/ipmi_int.h>
 #include <OpenIPMI/internal/ipmi_mc.h>
+#include <OpenIPMI/internal/ipmi_domain.h>
 
 struct ipmi_event_s
 {
@@ -239,4 +240,77 @@ ipmi_event_delete(ipmi_event_t   *event,
 	rv = info.rv;
 
     return rv;
+}
+
+ipmi_mc_t *
+_ipmi_event_get_generating_mc(ipmi_domain_t *domain,
+			      ipmi_mc_t     *sel_mc,
+			      ipmi_event_t  *event)
+{
+    ipmi_ipmb_addr_t    addr;
+    unsigned char       *data;
+    unsigned int        type = ipmi_event_get_type(event);
+
+    if (type != 0x02)
+	/* It's not a standard IPMI event. */
+	return NULL;
+
+    data = ipmi_event_get_data_ptr(event);
+    addr.addr_type = IPMI_IPMB_ADDR_TYPE;
+    /* See if the MC has an OEM handler for this. */
+    if (data[6] == 0x03) {
+	addr.channel = 0;
+    } else {
+	addr.channel = data[5] >> 4;
+    }
+    if ((data[4] & 0x01) == 0) {
+	addr.slave_addr = data[4];
+    } else if (sel_mc) {
+	/* A software ID, assume it comes from the MC where we go it. */
+	ipmi_addr_t iaddr;
+
+	ipmi_mc_get_ipmi_address(sel_mc, &iaddr, NULL);
+	addr.slave_addr = ipmi_addr_get_slave_addr(&iaddr);
+	if (addr.slave_addr == 0)
+	    /* A system interface, just assume it's the BMC. */
+	    addr.slave_addr = 0x20;
+    } else {
+	return NULL;
+    }
+    addr.lun = 0;
+
+    return _ipmi_find_mc_by_addr(domain, (ipmi_addr_t *) &addr, sizeof(addr));
+}
+
+ipmi_sensor_id_t
+ipmi_event_get_sensor_id(ipmi_domain_t *domain,
+			 ipmi_mc_t     *sel_mc,
+			 ipmi_event_t  *event)
+{
+    ipmi_sensor_id_t id;
+    ipmi_mc_t        *mc;
+    unsigned char    *data;
+    unsigned int     type = ipmi_event_get_type(event);
+
+
+    if (type != 0x02)
+	/* It's not a standard IPMI event. */
+	goto out_invalid;
+
+    mc = _ipmi_event_get_generating_mc(domain, sel_mc, event);
+    if (!mc)
+	goto out_invalid;
+
+    data = ipmi_event_get_data_ptr(event);
+    id.mcid = ipmi_mc_convert_to_id(mc);
+    id.lun = data[5] & 0x3;
+    id.sensor_num = data[8];
+
+    _ipmi_mc_put(mc);
+
+    return id;
+
+ out_invalid:
+    ipmi_sensor_id_set_invalid(&id);
+    return id;
 }

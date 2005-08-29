@@ -6,6 +6,15 @@
 	* lib/opq.c: Only allow the opq destroy to be done once, in case
 	it is called again from the destroy callbacks.
 
+	* lib/event.c, include/OpenIPMI/internal/ipmi_event.h: Add a way
+	to get the generating MC from a standard IPMI event.
+
+	* lib/event.c, include/OpenIPMI/ipmiif.h.in: Add a way
+	to get the generating sensor from a standard IPMI event.
+
+	* lib/domain.c: Convert over to the new function to get the
+	generating MC.
+
 2005-08-26 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi.init, ipmi.sysconf, Makefile.am, OpenIPMI.spec.in: Add init

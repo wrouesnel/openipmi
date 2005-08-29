@@ -62,4 +62,14 @@ const unsigned char *ipmi_event_get_data_ptr(const ipmi_event_t *event);
 int ipmi_event_is_old(const ipmi_event_t *event);
 void ipmi_event_set_is_old(ipmi_event_t *event, int val);
 
+/* Return the MC the event originally came from (or NULL if not
+   known).  This will return the MC "gotten", you must put it when
+   done.  The "sel_mc" is the MC that holds the SEL the event came
+   from (fetched with ipmi_event_get_mcid()) and is only used for
+   software ID based events.  You may pass in NULL if you don't care
+   about software ID based events.  */
+ipmi_mc_t *_ipmi_event_get_generating_mc(ipmi_domain_t *domain,
+					 ipmi_mc_t     *sel_mc,
+					 ipmi_event_t  *event);
+
 #endif /* __IPMI_EVENT_H */
