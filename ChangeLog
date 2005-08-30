@@ -15,6 +15,14 @@
 	* lib/domain.c: Convert over to the new function to get the
 	generating MC.
 
+	* lib/fru.c, include/OpenIPMI/internal/ipmi_fru.h: Removed all the
+	"normal" FRU processing and made interfaces so it can be put into
+	another file and abstracted (to allow multiple FRU data types).
+	Not quite done yet, but a long way down the road.
+
+	* lib/normal_fru.c, lib/Makefile.am, lib/ipmi.c: The "normal" fru
+	processing moved here.
+
 2005-08-26 Corey Minyard <cminyard@mvista.com>
 
 	* ipmi.init, ipmi.sysconf, Makefile.am, OpenIPMI.spec.in: Add init
