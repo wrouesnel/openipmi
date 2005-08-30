@@ -243,12 +243,12 @@ ipmi_event_delete(ipmi_event_t   *event,
 }
 
 ipmi_mc_t *
-_ipmi_event_get_generating_mc(ipmi_domain_t *domain,
-			      ipmi_mc_t     *sel_mc,
-			      ipmi_event_t  *event)
+_ipmi_event_get_generating_mc(ipmi_domain_t      *domain,
+			      ipmi_mc_t          *sel_mc,
+			      const ipmi_event_t *event)
 {
     ipmi_ipmb_addr_t    addr;
-    unsigned char       *data;
+    const unsigned char *data;
     unsigned int        type = ipmi_event_get_type(event);
 
     if (type != 0x02)
@@ -283,14 +283,14 @@ _ipmi_event_get_generating_mc(ipmi_domain_t *domain,
 }
 
 ipmi_sensor_id_t
-ipmi_event_get_sensor_id(ipmi_domain_t *domain,
-			 ipmi_mc_t     *sel_mc,
-			 ipmi_event_t  *event)
+ipmi_event_get_generating_sensor_id(ipmi_domain_t       *domain,
+			            ipmi_mc_t           *sel_mc,
+			            const ipmi_event_t  *event)
 {
-    ipmi_sensor_id_t id;
-    ipmi_mc_t        *mc;
-    unsigned char    *data;
-    unsigned int     type = ipmi_event_get_type(event);
+    ipmi_sensor_id_t    id;
+    ipmi_mc_t           *mc;
+    const unsigned char *data;
+    unsigned int        type = ipmi_event_get_type(event);
 
 
     if (type != 0x02)
