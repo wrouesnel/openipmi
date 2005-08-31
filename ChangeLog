@@ -1,3 +1,6 @@
+2005-08-31 Matt Domsch <Matt_Domsch@dell.com>
+	* Updated initscript to return sane status values from all commands.
+
 2005-08-31 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Create a new abstract
