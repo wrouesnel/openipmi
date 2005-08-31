@@ -43,6 +43,186 @@
 extern "C" {
 #endif
 
+enum ipmi_fru_data_type_e
+{
+    IPMI_FRU_DATA_INT,
+    IPMI_FRU_DATA_TIME,
+    IPMI_FRU_DATA_ASCII,
+    IPMI_FRU_DATA_BINARY,
+    IPMI_FRU_DATA_UNICODE,
+    IPMI_FRU_DATA_BOOLEAN,
+    IPMI_FRU_DATA_FLOAT,
+    IPMI_FRU_DATA_SUB_NODE,
+};
+
+typedef struct ipmi_fru_node_s ipmi_fru_node_t;
+
+
+
+/* The the domain the FRU uses. */
+ipmi_domain_id_t ipmi_fru_get_domain_id(ipmi_fru_t *fru);
+
+/* Name of the FRU. */
+int ipmi_fru_get_name(ipmi_fru_t *fru, char *name, int length);
+
+/*
+ * Allocate a FRU and start fetching it.
+ */
+typedef void (*ipmi_fru_fetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
+int ipmi_fru_alloc(ipmi_domain_t       *domain,
+		   unsigned char       is_logical,
+		   unsigned char       device_address,
+		   unsigned char       device_id,
+		   unsigned char       lun,
+		   unsigned char       private_bus,
+		   unsigned char       channel,
+		   ipmi_fru_fetched_cb fetched_handler,
+		   void                *fetched_cb_data,
+		   ipmi_fru_t          **new_fru);
+
+/*
+ * Allocate a FRU and start fetching it.  Like the above, but the
+ * callback passes the domain.
+ */
+typedef void (*ipmi_fru_cb)(ipmi_domain_t *domain,
+			    ipmi_fru_t    *fru,
+			    int           err,
+			    void          *cb_data);
+int ipmi_domain_fru_alloc(ipmi_domain_t *domain,
+			  unsigned char is_logical,
+			  unsigned char device_address,
+			  unsigned char device_id,
+			  unsigned char lun,
+			  unsigned char private_bus,
+			  unsigned char channel,
+			  ipmi_fru_cb   fetched_handler,
+			  void          *fetched_cb_data,
+			  ipmi_fru_t    **new_fru);
+
+/* Destroy an FRU.  Note that if the FRU is currently fetching SDRs,
+   the destroy cannot complete immediately, it will be marked for
+   destruction later.  You can supply a callback that, if not NULL,
+   will be called when the sdr is destroyed. */
+typedef void (*ipmi_fru_destroyed_cb)(ipmi_fru_t *fru, void *cb_data);
+int ipmi_fru_destroy(ipmi_fru_t            *fru,
+		     ipmi_fru_destroyed_cb handler,
+		     void                  *cb_data);
+
+/* Generic callback for iterating. */
+typedef void (*ipmi_fru_ptr_cb)(ipmi_fru_t *fru,
+				void       *cb_data);
+void ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
+			   ipmi_fru_ptr_cb handler,
+			   void            *cb_data);
+
+/* Return the length of the data in the FRU.  Note that this will be
+   non-zero if the FRU information was fetched, even if there was an
+   error reading the data.  So if this is non-zero, even if the FRU is
+   corrupt, you can create areas and fields and write out to the
+   FRU. */
+unsigned int ipmi_fru_get_data_length(ipmi_fru_t *fru);
+
+/* Used to track references to a FRU.  You can use this instead of
+   ipmi_fru_destroy, but use of the destroy function is recommended.
+   This is primarily here to help reference-tracking garbage
+   collection systems like what is in Perl to be able to automatically
+   destroy FRUs when they are done. */
+void ipmi_fru_ref(ipmi_fru_t *fru);
+void ipmi_fru_deref(ipmi_fru_t *fru);
+
+/*
+ * The following is the node-based access to the FRU information.
+ * This is an abstract, tree structured interface that lets you get at
+ * the data in the FRU without having to know anything about it
+ * beforehand.
+ *
+ * A "node" here is a data structure holding fields.  It may have
+ * sub-nodes (thus making the tree structure)
+ *
+ * To dump all the FRU data, get the root node first.  Then dump all
+ * the fields in that node.  If you get a node with dtype
+ * IPMI_FRU_DATA_SUB_NODE, then dump all the data in the sub node you
+ * get.
+ */
+
+/* Return the main node of a FRU and the type of fru.  You must free
+   the returned node using ipmi_fru_put_node(). */
+int ipmi_fru_get_root_node(ipmi_fru_t      *fru,
+			   const char      **type,
+			   ipmi_fru_node_t **node);
+
+/* If you need to copy a fru node for your own use (store it someplace
+   else), you should probably "get" the node when you copy it and
+   "put" the node when you are done with it.  These are refcount type
+   things for the pointers. */
+void ipmi_fru_get_node(ipmi_fru_node_t *node);
+void ipmi_fru_put_node(ipmi_fru_node_t *node);
+
+/*
+ * Fetch a field in a FRU node.  The fields are sequentially indexed
+ * items in a node.
+ *
+ * There are two types of nodes.  An array node is simply an array,
+ * the individual elements are not named.  The "index" is an index
+ * into the array itself, starting at 0.  The elements of an array
+ * node will always set the "name" to NULL.  If you fetch beyond the
+ * end of an array, it will return EINVAL.
+ *
+ * A record node is a node that has a set of elements that are named,
+ * the "name" will always be set to a value when fetching one of
+ * these.  The index tells which field of the record to fetch.  Note
+ * that, unlike arrays, individual fields in a record node may not be
+ * present.  Fetching these fields will return ENOSYS, but there may
+ * be valid fields after this.
+ *
+ * The various dtypes are:
+ *    IPMI_FRU_DATA_INT  - sets "intval"
+ *    IPMI_FRU_DATA_TIME - sets "time"
+ *    IPMI_FRU_DATA_ASCII - sets "data" and "data_len"
+ *    IPMI_FRU_DATA_BINARY - sets "data" and "data_len"
+ *    IPMI_FRU_DATA_UNICODE - sets "data" and "data_len"
+ *    IPMI_FRU_DATA_BOOLEAN - sets "intval"
+ *    IPMI_FRU_DATA_FLOAT - sets "floatval"
+ *    IPMI_FRU_DATA_SUB_NODE - sets "sub_node".  "intval" will be -1
+ *          if not an array or the array length if it is an array.
+ *
+ * Note that if data is set, you must free the data passed back using
+ * ipmi_fru_data_free().
+ *
+ * For sub-nodes, you must free the returned sub_node using
+ * ipmi_fru_put_node().
+ *
+ * Any of the return values may be NULL, that value will just not be
+ * returned.
+ */
+int ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
+			    unsigned int              index,
+			    const char                **name,
+			    enum ipmi_fru_data_type_e *dtype,
+			    int                       *intval,
+			    time_t                    *time,
+			    double                    *floatval,
+			    char                      **data,
+			    unsigned int              *data_len,
+			    ipmi_fru_node_t           **sub_node);
+
+
+/* Free data that comes from ipmi_fru_node_get_field if the data return is
+   non-NULL. */
+void ipmi_fru_data_free(char *data);
+
+
+/************************************************************************
+ *
+ * Everything below this is "old", it only works with standard FRU
+ * information and doesn't use the new, more abstract, interface to
+ * FRU data.
+ *
+ * You need the stuff below if you are setting data in a standard FRU.
+ * Otherwise, you should probably use the standard interface.
+ *
+ ************************************************************************/
+
 /* The following functions get boatloads of information from the FRU.
    These all will return ENOSYS if the information is not available.
    All these function return error, not lengths.
@@ -235,28 +415,6 @@ int ipmi_fru_get_multi_record_data(ipmi_fru_t    *fru,
  * This interface lets you get the FRU data by name.
  */
 
-enum ipmi_fru_data_type_e
-{
-    IPMI_FRU_DATA_INT,
-    IPMI_FRU_DATA_TIME,
-    IPMI_FRU_DATA_ASCII,
-    IPMI_FRU_DATA_BINARY,
-    IPMI_FRU_DATA_UNICODE,
-    IPMI_FRU_DATA_BOOLEAN,
-    IPMI_FRU_DATA_FLOAT,
-
-    /* Currently only used for multi-records. */
-    IPMI_FRU_DATA_SUB_NODE,
-};
-
-typedef struct ipmi_fru_node_s ipmi_fru_node_t;
-
-/*
- * Find the index number for the given string.  Returns -1 if the string
- * is invalid.
- */
-int ipmi_fru_str_to_index(char *name);
-
 /*
  * Get the FRU information by index.  This is a rather complex
  * function, but gives probably the simplest possible way to iterate
@@ -291,6 +449,9 @@ int ipmi_fru_str_to_index(char *name);
  * Any of the return values may be passed NULL to ignore the data.
  *
  * This does *not* include the multi-records.
+ *
+ * Note this is old an you should use the fru node stuf at the top of
+ * this file.
  */
 int ipmi_fru_get(ipmi_fru_t                *fru,
 		 int                       index,
@@ -302,15 +463,14 @@ int ipmi_fru_get(ipmi_fru_t                *fru,
 		 char                      **data,
 		 unsigned int              *data_len);
 
-/* Free data that comes from ipmi_fru_get if the data return is
-   non-NULL. */
-void ipmi_fru_data_free(char *data);
-
 /* Convert an idx to a name (does not require a FRU).  Return an error
    if the index is out of range. */
 char *ipmi_fru_index_to_str(int idx);
 
-/* Convert a name to an index.  Returns -1 if the name is not valid. */
+/*
+ * Find the index number for the given string.  Returns -1 if the string
+ * is invalid.
+ */
 int ipmi_fru_str_to_index(char *name);
 
 /* More internal stuff.  The average user will not need to be able
@@ -319,76 +479,6 @@ int ipmi_fru_str_to_index(char *name);
 /* FIXME - for OEM code (if ever necessary) add a way to create an
    empty FRU, fill it with data, and put it into an entity. */
 
-/* The the domain the FRU uses. */
-ipmi_domain_id_t ipmi_fru_get_domain_id(ipmi_fru_t *fru);
-
-/* Name of the FRU. */
-int ipmi_fru_get_name(ipmi_fru_t *fru, char *name, int length);
-
-/*
- * Allocate a FRU and start fetching it.
- */
-typedef void (*ipmi_fru_fetched_cb)(ipmi_fru_t *fru, int err, void *cb_data);
-int ipmi_fru_alloc(ipmi_domain_t       *domain,
-		   unsigned char       is_logical,
-		   unsigned char       device_address,
-		   unsigned char       device_id,
-		   unsigned char       lun,
-		   unsigned char       private_bus,
-		   unsigned char       channel,
-		   ipmi_fru_fetched_cb fetched_handler,
-		   void                *fetched_cb_data,
-		   ipmi_fru_t          **new_fru);
-
-/*
- * Allocate a FRU and start fetching it.  Like the above, but the
- * callback passes the domain.
- */
-typedef void (*ipmi_fru_cb)(ipmi_domain_t *domain,
-			    ipmi_fru_t    *fru,
-			    int           err,
-			    void          *cb_data);
-int ipmi_domain_fru_alloc(ipmi_domain_t *domain,
-			  unsigned char is_logical,
-			  unsigned char device_address,
-			  unsigned char device_id,
-			  unsigned char lun,
-			  unsigned char private_bus,
-			  unsigned char channel,
-			  ipmi_fru_cb   fetched_handler,
-			  void          *fetched_cb_data,
-			  ipmi_fru_t    **new_fru);
-
-/* Destroy an FRU.  Note that if the FRU is currently fetching SDRs,
-   the destroy cannot complete immediately, it will be marked for
-   destruction later.  You can supply a callback that, if not NULL,
-   will be called when the sdr is destroyed. */
-typedef void (*ipmi_fru_destroyed_cb)(ipmi_fru_t *fru, void *cb_data);
-int ipmi_fru_destroy(ipmi_fru_t            *fru,
-		     ipmi_fru_destroyed_cb handler,
-		     void                  *cb_data);
-
-/* Generic callback for iterating. */
-typedef void (*ipmi_fru_ptr_cb)(ipmi_fru_t *fru,
-				void       *cb_data);
-void ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
-			   ipmi_fru_ptr_cb handler,
-			   void            *cb_data);
-
-/* Return the length of the data in the FRU.  Note that this will be
-   non-zero if the FRU information was fetched, even if there was an
-   error reading the data.  So if this is non-zero, even if the FRU is
-   corrupt, you can create areas and fields and write out to the
-   FRU. */
-unsigned int ipmi_fru_get_data_length(ipmi_fru_t *fru);
-
-/* Used to track references to a FRU.  You can use this instead of
-   ipmi_fru_destroy, but use of the destroy function is recommended.
-   This is primarily here to help reference-tracking garbage
-   collection systems like what is in Perl to be able to automatically
-   destroy FRUs when they are done. */
-void ipmi_fru_ref(ipmi_fru_t *fru);
-void ipmi_fru_deref(ipmi_fru_t *fru);
 
 /*
  * Create and destroy FRU areas and get information about them.  Note
@@ -587,7 +677,7 @@ int ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_cb done, void *cb_data);
  * ipmi_fru_multi_record_get_root_node() to get the root node.  you
  * may think of node as the root node of sub-hierarchy.
  *
- * Step 2: ipmi_fru_multi_record_get_field() is similar to
+ * Step 2: ipmi_fru_node_get_field() is similar to
  * ipmi_fru_get(), the only special part is "sub_node", which is an
  * output parameter.  If the data type is IPMI_FRU_DATA_SUB_NODE, the
  * given index is the root to a sub-parameter.  The sub_node will be
@@ -596,7 +686,7 @@ int ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_cb done, void *cb_data);
  * array.  You may notice that this is a recursive process.
  *
  * Step 3: after finishing traversing a node, you need to call
- * ipmi_fru_multi_record_put_node() to return the resource to system.
+ * ipmi_fru_put_node() to return the resource to system.
  *
  * Note that if the returned "name" is NULL, then the node is an array
  * element (the parent is an array) and the name of the first parent
@@ -617,18 +707,6 @@ int ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
 					const char      **name,
 					ipmi_fru_node_t **node);
 
-void ipmi_fru_put_node(ipmi_fru_node_t *node);
-
-int ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
-			    unsigned int              index,
-			    const char                **name,
-			    enum ipmi_fru_data_type_e *dtype,
-			    int                       *intval,
-			    time_t                    *time,
-			    double                    *floatval,
-			    char                      **data,
-			    unsigned int              *data_len,
-			    ipmi_fru_node_t           **sub_node);
 
 /************************************************************************
  *

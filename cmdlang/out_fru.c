@@ -33,6 +33,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <values.h>
 #include <OpenIPMI/ipmi_bits.h>
 #include <OpenIPMI/ipmi_fru.h>
 #include <OpenIPMI/ipmi_cmdlang.h>
@@ -40,27 +41,10 @@
 /* Internal includes, do not use in your programs */
 #include <OpenIPMI/internal/ipmi_malloc.h>
 
-static void
-fru_out_data(ipmi_cmd_info_t *cmd_info, unsigned char type,
-	     char *buf, unsigned int len)
-{
-    if (type == IPMI_BINARY_STR) {
-	ipmi_cmdlang_out(cmd_info, "Type", "binary");
-	ipmi_cmdlang_out_binary(cmd_info, "Data", buf, len);
-    } else if (type == IPMI_UNICODE_STR) {
-	ipmi_cmdlang_out(cmd_info, "Type", "unicode");
-	ipmi_cmdlang_out_unicode(cmd_info, "Data", buf, len);
-    } else if (type == IPMI_ASCII_STR) {
-	ipmi_cmdlang_out(cmd_info, "Type", "ascii");
-	ipmi_cmdlang_out(cmd_info, "Data", buf);
-    } else {
-	ipmi_cmdlang_out(cmd_info, "Type", "unknown");
-    }
-}
-
 static int
-traverse_fru_multi_record_tree(ipmi_cmd_info_t *cmd_info,
-			       ipmi_fru_node_t *node)
+traverse_fru_node_tree(ipmi_cmd_info_t *cmd_info,
+		       ipmi_fru_node_t *node,
+		       int             length)
 {
     const char                *name;
     unsigned int              i;
@@ -72,11 +56,11 @@ traverse_fru_multi_record_tree(ipmi_cmd_info_t *cmd_info,
     unsigned int              data_len;
     ipmi_fru_node_t           *sub_node;
     
-    for (i=0; ; i++) {
+    for (i=0; i<length; i++) {
 	data = NULL;
         rv = ipmi_fru_node_get_field(node, i, &name, &dtype, &intval, &time,
 				     &floatval, &data, &data_len, &sub_node);
-        if ((rv == EINVAL) || (rv == ENOSYS))
+        if (rv == EINVAL)
             break;
         else if (rv)
             continue;
@@ -135,7 +119,9 @@ traverse_fru_multi_record_tree(ipmi_cmd_info_t *cmd_info,
 	    ipmi_cmdlang_down(cmd_info);
 	    if (intval != -1)
 		ipmi_cmdlang_out_int(cmd_info, "Element Count", intval);
-	    traverse_fru_multi_record_tree(cmd_info, sub_node);
+	    else
+		intval = MAXINT;
+	    traverse_fru_node_tree(cmd_info, sub_node, MAXINT);
 	    ipmi_cmdlang_up(cmd_info);
 	    break;
 	    
@@ -159,144 +145,24 @@ ipmi_cmdlang_dump_fru_info(ipmi_cmd_info_t *cmd_info, ipmi_fru_t *fru)
 {
     ipmi_cmdlang_t            *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
     int                       rv;
-    int                       i;
-    int                       num, onum;
-    const char                *name;
-    enum ipmi_fru_data_type_e dtype;
-    int                       intval;
-    time_t                    time;
-    char                      *data;
-    unsigned int              data_len;
-    unsigned int              num_multi;
     char                      fru_name[IPMI_FRU_NAME_LEN];
     ipmi_fru_node_t           *node;
+    const char                *type;
 
     ipmi_cmdlang_out(cmd_info, "FRU", NULL);
     ipmi_cmdlang_down(cmd_info);
     ipmi_fru_get_name(fru, fru_name, sizeof(fru_name));
     ipmi_cmdlang_out(cmd_info, "Name", fru_name);
 
-    num = 0;
-    for (i=0; ;) {
-	onum = num;
-	data = NULL;
-	rv = ipmi_fru_get(fru, i, &name, &num, &dtype, &intval, &time,
-			  &data, &data_len);
-	if (rv == EINVAL)
-	    break;
-	else if ((rv == ENOSYS) || (rv == E2BIG)) {
-	    i++;
-	    num = 0;
-	    continue;
-	} else if (rv) {
-	    cmdlang->err = rv;
-	    cmdlang->errstr = strerror(rv);
-	    goto out_err;
-	}
-
-	ipmi_cmdlang_out(cmd_info, "Record", NULL);
-	ipmi_cmdlang_down(cmd_info);
-	ipmi_cmdlang_out(cmd_info, "Name", name);
-	if (num != onum) {
-	    ipmi_cmdlang_out_int(cmd_info, "Number", onum);
-	    if (num == -1) {
-		i++;
-		num = 0;
-	    }
-	} else {
-	    i++;
-	    num = 0;
-	}
-	switch(dtype) {
-	case IPMI_FRU_DATA_INT:
-	    ipmi_cmdlang_out(cmd_info, "Type", "integer");
-	    ipmi_cmdlang_out_int(cmd_info, "Data", intval);
-	    break;
-
-	case IPMI_FRU_DATA_TIME:
-	    ipmi_cmdlang_out(cmd_info, "Type", "integer");
-	    ipmi_cmdlang_out_long(cmd_info, "Data", (long) time);
-	    break;
-
-	case IPMI_FRU_DATA_BINARY:
-	    ipmi_cmdlang_out(cmd_info, "Type", "binary");
-	    ipmi_cmdlang_out_binary(cmd_info, "Data", data, data_len);
-	    break;
-
-	case IPMI_FRU_DATA_UNICODE:
-	    ipmi_cmdlang_out(cmd_info, "Type", "unicode");
-	    ipmi_cmdlang_out_unicode(cmd_info, "Data", data, data_len);
-	    break;
-
-	case IPMI_FRU_DATA_ASCII:
-	    ipmi_cmdlang_out(cmd_info, "Type", "ascii");
-	    ipmi_cmdlang_out(cmd_info, "Data", data);
-	    break;
-
-	case IPMI_FRU_DATA_BOOLEAN:
-	    ipmi_cmdlang_out(cmd_info, "Type", "boolean");
-	    ipmi_cmdlang_out_bool(cmd_info, "Data", intval);
-	    break;
-
-	default:
-	    ipmi_cmdlang_out(cmd_info, "Type", "unknown");
-	    break;
-	}
-	ipmi_cmdlang_up(cmd_info);
-
-	if (data)
-	    ipmi_fru_data_free(data);
+    rv = ipmi_fru_get_root_node(fru, &type, &node);
+    if (!rv) {
+	ipmi_cmdlang_out(cmd_info, "Type", type);
+	rv = traverse_fru_node_tree(cmd_info, node, MAXINT);
     }
 
-    num_multi = ipmi_fru_get_num_multi_records(fru);
-    for (i=0; i<num_multi; i++) {
-	unsigned char type, ver;
-	unsigned int  len;
-	char          *data = NULL;
-
-	rv = ipmi_fru_get_multi_record_type(fru, i, &type);
-	if (!rv)
-	    rv = ipmi_fru_get_multi_record_format_version(fru, i, &ver);
-	if (!rv)
-	    rv = ipmi_fru_get_multi_record_data_len(fru, i, &len);
-	if (!rv) {
-	    data = ipmi_mem_alloc(len);
-	    if (!data) {
-		cmdlang->err = ENOMEM;
-		cmdlang->errstr = "Out of memory";
-		goto out_err;
-	    }
-	    rv = ipmi_fru_get_multi_record_data(fru, i, data, &len);
-	    if (rv)
-		ipmi_mem_free(data);
-	}
-
-	if (rv) {
-	    cmdlang->err = rv;
-	    cmdlang->errstr = "Error getting FRU info";
-	    goto out_err;
-	}
-
-	ipmi_cmdlang_out(cmd_info, "Multi-record", NULL);
-	ipmi_cmdlang_down(cmd_info);
-	ipmi_cmdlang_out_int(cmd_info, "Type", type);
-	ipmi_cmdlang_out_int(cmd_info, "Number", i);
-	fru_out_data(cmd_info, IPMI_BINARY_STR, data, len);
-	rv = ipmi_fru_multi_record_get_root_node(fru, i, &name, &node);
-	if (!rv) {
-	    ipmi_cmdlang_out(cmd_info, "Decode", NULL);
-	    ipmi_cmdlang_down(cmd_info);
-	    ipmi_cmdlang_out(cmd_info, "Name", name);
-	    traverse_fru_multi_record_tree(cmd_info, node);
-	    ipmi_cmdlang_up(cmd_info);
-	}
-
-	ipmi_cmdlang_up(cmd_info);
-	ipmi_mem_free(data);
-    }
-
- out_err:
     ipmi_cmdlang_up(cmd_info);
-    if (cmdlang->err)
+    if (rv) {
+	cmdlang->err = rv;
 	cmdlang->location = "cmd_domain.c(dump_fru_info)";
+    }
 }

@@ -2479,238 +2479,6 @@ ipmi_fru_area_get_used_length(ipmi_fru_t *fru,
     return 0;
 }
 
-
-/***********************************************************************
- *
- * Normal-fru-specific processing
- *
- **********************************************************************/
-static void
-fru_record_destroy(ipmi_fru_record_t *rec)
-{
-    if (rec)
-	rec->handlers->free(rec);
-}
-
-static void
-fru_cleanup_recs(ipmi_fru_t *fru)
-{
-    normal_fru_rec_data_t *info = _ipmi_fru_get_rec_data(fru);
-    int                   i;
-
-    if (!info)
-	return;
-
-    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++)
-	fru_record_destroy(info->recs[i]);
-
-    ipmi_mem_free(info);
-    _ipmi_fru_set_rec_data(fru, NULL);
-}
-
-static void
-fru_write_complete(ipmi_fru_t *fru)
-{
-    ipmi_fru_record_t **recs = normal_fru_get_recs(fru);
-    int               i;
-
-    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
-	ipmi_fru_record_t *rec = recs[i];
-	if (rec) {
-	    rec->rewrite = 0;
-	    rec->changed = 0;
-	    rec->orig_used_length = rec->used_length;
-	    if (rec->handlers->get_fields) {
-		fru_variable_t *f = rec->handlers->get_fields(rec);
-		int j;
-		for (j=0; j<f->next; j++)
-		    f->strings[i].changed = 0;
-	    }
-	}
-    }
-}
-
-static int
-fru_write(ipmi_fru_t *fru)
-{
-    normal_fru_rec_data_t *info = _ipmi_fru_get_rec_data(fru);
-    ipmi_fru_record_t     **recs = normal_fru_get_recs(fru);
-    int                   i;
-    int                   rv;
-    unsigned char         *data = _ipmi_fru_get_data_ptr(fru);
-
-    data[0] = 1; /* Version */
-    for (i=0; i<IPMI_FRU_FTR_MULTI_RECORD_AREA; i++) {
-	if (recs[i])
-	    data[i+1] = recs[i]->offset / 8;
-	else
-	    data[i+1] = 0;
-    }
-    if (recs[i] && recs[i]->used_length)
-	data[i+1] = recs[i]->offset / 8;
-    else
-	data[i+1] = 0;
-    data[6] = 0;
-    data[7] = -checksum(data, 7);
-
-    if (info->header_changed) {
-	rv = _ipmi_fru_new_update_record(fru, 0, 8);
-	if (rv)
-	    return rv;
-    }
-
-    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
-	ipmi_fru_record_t *rec = recs[i];
-
-	if (rec) {
-	    rv = rec->handlers->encode(fru, data);
-	    if (rv)
-		return rv;
-	    if (rec->rewrite) {
-		if (i == IPMI_FRU_FTR_MULTI_RECORD_AREA)
-		    rv = _ipmi_fru_new_update_record(fru, rec->offset,
-						     rec->used_length);
-		else
-		    rv = _ipmi_fru_new_update_record(fru, rec->offset,
-						     rec->length);
-		if (rv)
-		    return rv;
-		
-	    }
-	}
-    }    
-
-    return 0;
-}
-
-/***********************************************************************
- *
- * FRU reading
- *
- **********************************************************************/
-typedef struct fru_offset_s
-{
-    int type;
-    int offset;
-} fru_offset_t;
-
-static ipmi_fru_op_t normal_ops =
-{
-    .cleanup_recs   = fru_cleanup_recs,
-    .write_complete = fru_write_complete,
-    .write          = fru_write
-};
-
-static int
-process_fru_info(ipmi_fru_t *fru)
-{
-    normal_fru_rec_data_t *info;
-    ipmi_fru_record_t **recs;
-    unsigned char     *data = _ipmi_fru_get_data_ptr(fru);
-    unsigned int      data_len = _ipmi_fru_get_data_len(fru);
-    fru_offset_t      foff[IPMI_FRU_FTR_NUMBER];
-    int               i, j;
-    int               err = 0;
-    unsigned char     version;
-
-    if (checksum(data, 8) != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(process_fru_info):"
-		 " FRU checksum failed",
-		 _ipmi_fru_get_iname(fru));
-	return EBADF;
-    }
-
-    version = *data;
-    if (version != 1)
-	/* Only support version 1 */
-	return EBADF;
-
-    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
-	foff[i].type = i;
-	if (! (_ipmi_fru_get_fetch_mask(fru) & (1 << i))) {
-	    foff[i].offset = 0;
-	    continue;
-	}
-	foff[i].offset = data[i+1] * 8;
-	if (foff[i].offset >= data_len) {
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(process_fru_info):"
-		     " FRU offset exceeds data length",
-		     _ipmi_fru_get_iname(fru));
-	    return EBADF;
-	}
-    }
-
-    /* Fields are *supposed* to occur in the specified order.  Verify
-       this. */
-    for (i=0, j=1; j<IPMI_FRU_FTR_NUMBER; i=j, j++) {
-	if (foff[i].offset == 0)
-	    continue;
-	while (foff[j].offset == 0) {
-	    j++;
-	    if (j >= IPMI_FRU_FTR_NUMBER)
-	        goto check_done;
-	}
-	if (foff[i].offset >= foff[j].offset) {
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(process_fru_info):"
-		     " FRU fields did not occur in the correct order",
-		     _ipmi_fru_get_iname(fru));
-	    return EBADF;
-	}
-    }
- check_done:
-
-    info = ipmi_mem_alloc(sizeof(*info));
-    if (!info)
-	return ENOMEM;
-    memset(info, 0, sizeof(*info));
-
-    _ipmi_fru_set_rec_data(fru, info);
-
-    info->version = version;
-
-    recs = info->recs;
-
-    _ipmi_fru_set_ops(fru, &normal_ops);
-    _ipmi_fru_set_is_normal_fru(fru, 1);
-
-    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
-	int plen, next_off, offset;
-	ipmi_fru_record_t *rec;
-
-	offset = foff[i].offset;
-	if (offset == 0)
-	    continue;
-
-	for (j=i+1; j<IPMI_FRU_FTR_NUMBER; j++) {
-	    if (foff[j].offset)
-		break;
-	}
-	
-	if (j >= IPMI_FRU_FTR_NUMBER)
-	    next_off = data_len;
-	else
-	    next_off = foff[j].offset;
-	plen = next_off - offset;
-
-	rec = NULL;
-	err = fru_area_info[i].decode(fru, data+offset, plen, &recs[i]);
-	if (err)
-	    goto out_err;
-
-	if (recs[i])
-	    recs[i]->offset = offset;
-    }
-
-    return 0;
-
- out_err:
-    fru_cleanup_recs(fru);
-    return err;
-}
-
 /***********************************************************************
  *
  * Handling for FRU generic interface.
@@ -3181,6 +2949,430 @@ ipmi_fru_set_data_val(ipmi_fru_t                *fru,
     return rv;
 }
 
+/***********************************************************************
+ *
+ * FRU node handling
+ *
+ **********************************************************************/
+static void
+fru_node_destroy(ipmi_fru_node_t *node)
+{
+    ipmi_fru_t *fru = _ipmi_fru_node_get_data(node);
+
+    ipmi_fru_deref(fru);
+}
+
+typedef struct fru_mr_array_idx_s
+{
+    int             index;
+    const char      *name;
+    ipmi_fru_node_t *mr_node;
+    ipmi_fru_t      *fru;
+} fru_mr_array_idx_t;
+
+static void
+fru_mr_array_idx_destroy(ipmi_fru_node_t *node)
+{
+    fru_mr_array_idx_t *info = _ipmi_fru_node_get_data(node);
+    ipmi_fru_t         *fru = info->fru;
+
+    ipmi_fru_deref(fru);
+    ipmi_fru_put_node(info->mr_node);
+    ipmi_mem_free(info);
+}
+
+static int
+fru_mr_array_idx_get_field(ipmi_fru_node_t           *pnode,
+			   unsigned int              index,
+			   const char                **name,
+			   enum ipmi_fru_data_type_e *dtype,
+			   int                       *intval,
+			   time_t                    *time,
+			   double                    *floatval,
+			   char                      **data,
+			   unsigned int              *data_len,
+			   ipmi_fru_node_t           **sub_node)
+{
+    fru_mr_array_idx_t *info = _ipmi_fru_node_get_data(pnode);
+    int                rv;
+    unsigned int       rlen;
+    unsigned char      *rdata;
+
+    if (index == 0) {
+	/* Raw FRU data */
+	rv = ipmi_fru_get_multi_record_data_len(info->fru, info->index, &rlen);
+	if (rv)
+	    return rv;
+	if (data) {
+	    rdata = ipmi_mem_alloc(rlen);
+	    if (!rdata)
+		return ENOMEM;
+	    rv = ipmi_fru_get_multi_record_data(info->fru, info->index, rdata,
+						&rlen);
+	    if (rv) {
+		ipmi_mem_free(rdata);
+		return rv;
+	    }
+	    *data = rdata;
+	}
+
+	if (data_len)
+	    *data_len = rlen;
+
+	if (dtype)
+	    *dtype = IPMI_FRU_DATA_BINARY;
+
+	if (name)
+	    *name = "raw-data";
+
+	return 0;
+    } else if (index == 1) {
+	/* FRU node itself. */
+	if (info->mr_node == NULL)
+	    return EINVAL;
+
+	if (intval)
+	    *intval = -1;
+	if (name)
+	    *name = info->name;
+	if (dtype)
+	    *dtype = IPMI_FRU_DATA_SUB_NODE;
+	if (sub_node) {
+	    ipmi_fru_get_node(info->mr_node);
+	    *sub_node = info->mr_node;
+	}
+	return 0;
+    } else
+	return EINVAL;
+}
+
+static int
+fru_mr_array_get_field(ipmi_fru_node_t           *pnode,
+		       unsigned int              index,
+		       const char                **name,
+		       enum ipmi_fru_data_type_e *dtype,
+		       int                       *intval,
+		       time_t                    *time,
+		       double                    *floatval,
+		       char                      **data,
+		       unsigned int              *data_len,
+		       ipmi_fru_node_t           **sub_node)
+{
+    fru_mr_array_idx_t *info;
+    ipmi_fru_t         *fru = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t    *node;
+    ipmi_fru_node_t    *snode;
+    const char         *sname;
+    int                rv = 0;
+
+    if (index >= ipmi_fru_get_num_multi_records(fru))
+	return EINVAL;
+
+    if (name)
+	*name = NULL;
+    if (dtype)
+	*dtype = IPMI_FRU_DATA_SUB_NODE;
+    if (intval)
+	*intval = -1;
+    if (sub_node) {
+	node = _ipmi_fru_node_alloc(fru);
+	if (!node)
+	    return ENOMEM;
+	info = ipmi_mem_alloc(sizeof(*info));
+	if (!info) {
+	    ipmi_fru_put_node(node);
+	    return ENOMEM;
+	}
+	memset(info, 0, sizeof(*info));
+	info->index = index;
+	info->fru = fru;
+	ipmi_fru_ref(fru);
+	_ipmi_fru_node_set_data(node, info);
+
+	rv = ipmi_fru_multi_record_get_root_node(fru, index, &sname, &snode);
+	if (rv) {
+	    /* No decode data, just do a "raw" node. */
+	    info->mr_node = NULL;
+	    info->name = "multirecord";
+	} else {
+	    info->mr_node = snode;
+	    info->name = sname;
+	}
+	_ipmi_fru_node_set_get_field(node, fru_mr_array_idx_get_field);
+	_ipmi_fru_node_set_destructor(node, fru_mr_array_idx_destroy);
+
+	*sub_node = node;
+    }
+    return rv;
+}
+
+typedef struct fru_array_s
+{
+    int        index;
+    ipmi_fru_t *fru;
+} fru_array_t;
+
+static void
+fru_array_idx_destroy(ipmi_fru_node_t *node)
+{
+    fru_array_t *info = _ipmi_fru_node_get_data(node);
+    ipmi_fru_t  *fru = info->fru;
+
+    ipmi_fru_deref(fru);
+    ipmi_mem_free(info);
+}
+
+static int
+fru_array_idx_get_field(ipmi_fru_node_t           *pnode,
+			unsigned int              index,
+			const char                **name,
+			enum ipmi_fru_data_type_e *dtype,
+			int                       *intval,
+			time_t                    *time,
+			double                    *floatval,
+			char                      **data,
+			unsigned int              *data_len,
+			ipmi_fru_node_t           **sub_node)
+{
+    fru_array_t *info = _ipmi_fru_node_get_data(pnode);
+    int         num = index;
+    int         rv;
+
+    if (name)
+	*name = NULL;
+
+    rv = ipmi_fru_get(info->fru, info->index, NULL, &num, dtype,
+		      intval, time, data, data_len);
+    if ((rv == E2BIG) || (rv == ENOSYS))
+	rv = EINVAL;
+    return rv;
+}
+
+static int
+fru_node_get_field(ipmi_fru_node_t           *pnode,
+		   unsigned int              index,
+		   const char                **name,
+		   enum ipmi_fru_data_type_e *dtype,
+		   int                       *intval,
+		   time_t                    *time,
+		   double                    *floatval,
+		   char                      **data,
+		   unsigned int              *data_len,
+		   ipmi_fru_node_t           **sub_node)
+{
+    ipmi_fru_record_t            **recs;
+    ipmi_fru_multi_record_area_t *u;
+    ipmi_fru_t                   *fru = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t              *node;
+    int                          rv;
+    int                          num;
+    int                          len;
+
+    if ((index >= 0) && (index < NUM_FRUL_ENTRIES)) {
+	num = 0;
+	rv = ipmi_fru_get(fru, index, name, &num, NULL, NULL, NULL, NULL,
+			  NULL);
+	if (rv)
+	    return rv;
+
+	if (num != 0) {
+	    fru_array_t *info;
+	    /* name is set by the previous call */
+	    if (dtype)
+		*dtype = IPMI_FRU_DATA_SUB_NODE;
+	    if (intval) {
+		/* Get the length of the array by searching. */
+		len = 1;
+		while (num != -1) {
+		    len++;
+		    rv = ipmi_fru_get(fru, index, NULL, &num, NULL, NULL,
+				      NULL, NULL, NULL);
+		    if (rv)
+			return rv;
+		}
+		*intval = len;
+	    }
+	    if (sub_node) {
+		node = _ipmi_fru_node_alloc(fru);
+		if (!node)
+		    return ENOMEM;
+		info = ipmi_mem_alloc(sizeof(*info));
+		if (!info) {
+		    ipmi_fru_put_node(node);
+		    return ENOMEM;
+		}
+		info->index = index;
+		info->fru = fru;
+		_ipmi_fru_node_set_data(node, info);
+		_ipmi_fru_node_set_get_field(node, fru_array_idx_get_field);
+		_ipmi_fru_node_set_destructor(node, fru_array_idx_destroy);
+		ipmi_fru_ref(fru);
+
+		*sub_node = node;
+	    }
+	    return 0;
+	} else
+	    /* Not an array, everything is ok. */
+	    return ipmi_fru_get(fru, index, name, NULL, dtype, intval, time,
+				data, data_len);
+
+    } else if (index == NUM_FRUL_ENTRIES) {
+	/* Handle multi-records. */
+	_ipmi_fru_lock(fru);
+	recs = normal_fru_get_recs(fru);
+	if (!recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]) {
+	    _ipmi_fru_unlock(fru);
+	    return ENOSYS;
+	}
+	if (intval) {
+	    u = fru_record_get_data(recs[IPMI_FRU_FTR_MULTI_RECORD_AREA]);
+	    *intval = u->num_records;
+	}
+	_ipmi_fru_unlock(fru);
+
+	if (name)
+	    *name = "multirecords";
+	if (dtype)
+	    *dtype = IPMI_FRU_DATA_SUB_NODE;
+	if (sub_node) {
+	    node = _ipmi_fru_node_alloc(fru);
+	    if (!node)
+		return ENOMEM;
+	    _ipmi_fru_node_set_data(node, fru);
+	    _ipmi_fru_node_set_get_field(node, fru_mr_array_get_field);
+	    _ipmi_fru_node_set_destructor(node, fru_node_destroy);
+	    ipmi_fru_ref(fru);
+
+	    *sub_node = node;
+	}
+	return 0;
+    } else
+	return EINVAL;
+}
+
+/***********************************************************************
+ *
+ * Normal-fru-specific processing
+ *
+ **********************************************************************/
+static void
+fru_record_destroy(ipmi_fru_record_t *rec)
+{
+    if (rec)
+	rec->handlers->free(rec);
+}
+
+static void
+fru_cleanup_recs(ipmi_fru_t *fru)
+{
+    normal_fru_rec_data_t *info = _ipmi_fru_get_rec_data(fru);
+    int                   i;
+
+    if (!info)
+	return;
+
+    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++)
+	fru_record_destroy(info->recs[i]);
+
+    ipmi_mem_free(info);
+    _ipmi_fru_set_rec_data(fru, NULL);
+}
+
+static void
+fru_write_complete(ipmi_fru_t *fru)
+{
+    ipmi_fru_record_t **recs = normal_fru_get_recs(fru);
+    int               i;
+
+    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
+	ipmi_fru_record_t *rec = recs[i];
+	if (rec) {
+	    rec->rewrite = 0;
+	    rec->changed = 0;
+	    rec->orig_used_length = rec->used_length;
+	    if (rec->handlers->get_fields) {
+		fru_variable_t *f = rec->handlers->get_fields(rec);
+		int j;
+		for (j=0; j<f->next; j++)
+		    f->strings[i].changed = 0;
+	    }
+	}
+    }
+}
+
+static int
+fru_write(ipmi_fru_t *fru)
+{
+    normal_fru_rec_data_t *info = _ipmi_fru_get_rec_data(fru);
+    ipmi_fru_record_t     **recs = normal_fru_get_recs(fru);
+    int                   i;
+    int                   rv;
+    unsigned char         *data = _ipmi_fru_get_data_ptr(fru);
+
+    data[0] = 1; /* Version */
+    for (i=0; i<IPMI_FRU_FTR_MULTI_RECORD_AREA; i++) {
+	if (recs[i])
+	    data[i+1] = recs[i]->offset / 8;
+	else
+	    data[i+1] = 0;
+    }
+    if (recs[i] && recs[i]->used_length)
+	data[i+1] = recs[i]->offset / 8;
+    else
+	data[i+1] = 0;
+    data[6] = 0;
+    data[7] = -checksum(data, 7);
+
+    if (info->header_changed) {
+	rv = _ipmi_fru_new_update_record(fru, 0, 8);
+	if (rv)
+	    return rv;
+    }
+
+    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
+	ipmi_fru_record_t *rec = recs[i];
+
+	if (rec) {
+	    rv = rec->handlers->encode(fru, data);
+	    if (rv)
+		return rv;
+	    if (rec->rewrite) {
+		if (i == IPMI_FRU_FTR_MULTI_RECORD_AREA)
+		    rv = _ipmi_fru_new_update_record(fru, rec->offset,
+						     rec->used_length);
+		else
+		    rv = _ipmi_fru_new_update_record(fru, rec->offset,
+						     rec->length);
+		if (rv)
+		    return rv;
+		
+	    }
+	}
+    }    
+
+    return 0;
+}
+
+static int
+fru_get_root_node(ipmi_fru_t *fru, const char **name, ipmi_fru_node_t **rnode)
+{
+    ipmi_fru_node_t *node;
+
+    if (name)
+	*name = "standard FRU";
+    if (rnode) {
+	node = _ipmi_fru_node_alloc(fru);
+	if (!node)
+	    return ENOMEM;
+	_ipmi_fru_node_set_data(node, fru);
+	_ipmi_fru_node_set_get_field(node, fru_node_get_field);
+	_ipmi_fru_node_set_destructor(node, fru_node_destroy);
+	ipmi_fru_ref(fru);
+	*rnode = node;
+    }
+    return 0;
+}
+
 /************************************************************************
  *
  * For OEM-specific FRU multi-record decode and field get
@@ -3342,28 +3534,6 @@ ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
     return 0;
 }
 
-void
-ipmi_fru_put_node(ipmi_fru_node_t *node)
-{
-    node->put(node);
-}
-
-int
-ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
-			unsigned int              index,
-			const char                **name,
-			enum ipmi_fru_data_type_e *dtype,
-			int                       *intval,
-			time_t                    *time,
-			double                    *floatval,
-			char                      **data,
-			unsigned int              *data_len,
-			ipmi_fru_node_t           **sub_node)
-{
-    return node->get_field(node, index, name, dtype, intval, time,
-			   floatval, data, data_len, sub_node);
-}
-
 /************************************************************************
  *
  * Standard multi-record handlers.
@@ -3421,7 +3591,6 @@ convert_int_to_fru_boolean(const char                *name,
 typedef struct std_power_supply_info_s
 {
     unsigned char data[24];
-    unsigned int refcount;
 } std_power_supply_info_t;
 
 static void std_power_supply_info_cleanup_rec(std_power_supply_info_t *rec)
@@ -3430,14 +3599,10 @@ static void std_power_supply_info_cleanup_rec(std_power_supply_info_t *rec)
 }
 
 static void
-std_power_supply_info_root_put(ipmi_fru_node_t *node)
+std_power_supply_info_root_destroy(ipmi_fru_node_t *node)
 {
-    std_power_supply_info_t *rec = node->data;
-    if (rec->refcount == 1) {
-	std_power_supply_info_cleanup_rec(rec);
-	ipmi_mem_free(node);
-    } else
-	rec->refcount--;
+    std_power_supply_info_t *rec = _ipmi_fru_node_get_data(node);
+    std_power_supply_info_cleanup_rec(rec);
 }
 
 static int
@@ -3452,7 +3617,7 @@ std_power_supply_info_get_field(ipmi_fru_node_t           *pnode,
 				unsigned int              *data_len,
 				ipmi_fru_node_t           **sub_node)
 {
-    std_power_supply_info_t *rec = pnode->data;
+    std_power_supply_info_t *rec = _ipmi_fru_node_get_data(pnode);
     unsigned char           *d = rec->data;
     int                     rv = 0;
     int                     val;
@@ -3637,16 +3802,14 @@ std_get_power_supply_info_root(ipmi_fru_t          *fru,
     if (!rec)
 	return ENOMEM;
     memcpy(rec->data, mr_data, 24);
-    rec->refcount = 1;
 
-    node = ipmi_mem_alloc(sizeof(*node));
+    node = _ipmi_fru_node_alloc(fru);
     if (!node)
 	goto out_no_mem;
 
-    node->data = rec;
-    node->data2 = NULL;
-    node->get_field = std_power_supply_info_get_field;
-    node->put = std_power_supply_info_root_put;
+    _ipmi_fru_node_set_data(node, rec);
+    _ipmi_fru_node_set_get_field(node, std_power_supply_info_get_field);
+    _ipmi_fru_node_set_destructor(node, std_power_supply_info_root_destroy);
     *rnode = node;
 
     if (name)
@@ -3666,7 +3829,6 @@ std_get_power_supply_info_root(ipmi_fru_t          *fru,
 typedef struct std_dc_output_s
 {
     unsigned char data[13];
-    unsigned int refcount;
 } std_dc_output_t;
 
 static void std_dc_output_cleanup_rec(std_dc_output_t *rec)
@@ -3675,14 +3837,10 @@ static void std_dc_output_cleanup_rec(std_dc_output_t *rec)
 }
 
 static void
-std_dc_output_root_put(ipmi_fru_node_t *node)
+std_dc_output_root_destroy(ipmi_fru_node_t *node)
 {
-    std_dc_output_t *rec = node->data;
-    if (rec->refcount == 1) {
-	std_dc_output_cleanup_rec(rec);
-	ipmi_mem_free(node);
-    } else
-	rec->refcount--;
+    std_dc_output_t *rec = _ipmi_fru_node_get_data(node);
+    std_dc_output_cleanup_rec(rec);
 }
 
 static int
@@ -3697,7 +3855,7 @@ std_dc_output_get_field(ipmi_fru_node_t           *pnode,
 			unsigned int              *data_len,
 			ipmi_fru_node_t           **sub_node)
 {
-    std_dc_output_t *rec = pnode->data;
+    std_dc_output_t *rec = _ipmi_fru_node_get_data(pnode);
     unsigned char   *d = rec->data;
     int             rv = 0;
     double          fval;
@@ -3781,16 +3939,14 @@ std_get_dc_output_root(ipmi_fru_t          *fru,
     if (!rec)
 	return ENOMEM;
     memcpy(rec->data, mr_data, 13);
-    rec->refcount = 1;
 
-    node = ipmi_mem_alloc(sizeof(*node));
+    node = _ipmi_fru_node_alloc(fru);
     if (!node)
 	goto out_no_mem;
 
-    node->data = rec;
-    node->data2 = NULL;
-    node->get_field = std_dc_output_get_field;
-    node->put = std_dc_output_root_put;
+    _ipmi_fru_node_set_data(node, rec);
+    _ipmi_fru_node_set_get_field(node, std_dc_output_get_field);
+    _ipmi_fru_node_set_destructor(node, std_dc_output_root_destroy);
     *rnode = node;
 
     if (name)
@@ -3810,7 +3966,6 @@ std_get_dc_output_root(ipmi_fru_t          *fru,
 typedef struct std_dc_load_s
 {
     unsigned char data[13];
-    unsigned int refcount;
 } std_dc_load_t;
 
 static void std_dc_load_cleanup_rec(std_dc_load_t *rec)
@@ -3819,14 +3974,10 @@ static void std_dc_load_cleanup_rec(std_dc_load_t *rec)
 }
 
 static void
-std_dc_load_root_put(ipmi_fru_node_t *node)
+std_dc_load_root_destroy(ipmi_fru_node_t *node)
 {
-    std_dc_load_t *rec = node->data;
-    if (rec->refcount == 1) {
-	std_dc_load_cleanup_rec(rec);
-	ipmi_mem_free(node);
-    } else
-	rec->refcount--;
+    std_dc_load_t *rec = _ipmi_fru_node_get_data(node);
+    std_dc_load_cleanup_rec(rec);
 }
 
 static int
@@ -3841,11 +3992,11 @@ std_dc_load_get_field(ipmi_fru_node_t           *pnode,
 		      unsigned int              *data_len,
 		      ipmi_fru_node_t           **sub_node)
 {
-    std_dc_load_t *rec = pnode->data;
-    unsigned char   *d = rec->data;
-    int             rv = 0;
-    double          fval;
-    int16_t         val16;
+    std_dc_load_t *rec = _ipmi_fru_node_get_data(pnode);
+    unsigned char *d = rec->data;
+    int           rv = 0;
+    double        fval;
+    int16_t       val16;
 
     switch(index) {
     case 0: /* output number */
@@ -3920,16 +4071,14 @@ std_get_dc_load_root(ipmi_fru_t          *fru,
     if (!rec)
 	return ENOMEM;
     memcpy(rec->data, mr_data, 13);
-    rec->refcount = 1;
 
-    node = ipmi_mem_alloc(sizeof(*node));
+    node = _ipmi_fru_node_alloc(fru);
     if (!node)
 	goto out_no_mem;
 
-    node->data = rec;
-    node->data2 = NULL;
-    node->get_field = std_dc_load_get_field;
-    node->put = std_dc_load_root_put;
+    _ipmi_fru_node_set_data(node, rec);
+    _ipmi_fru_node_set_get_field(node, std_dc_load_get_field);
+    _ipmi_fru_node_set_destructor(node, std_dc_load_root_destroy);
     *rnode = node;
 
     if (name)
@@ -3969,6 +4118,136 @@ std_get_mr_root(ipmi_fru_t          *fru,
     default:
 	return EINVAL;
     }
+}
+
+/***********************************************************************
+ *
+ * FRU decoding
+ *
+ **********************************************************************/
+
+typedef struct fru_offset_s
+{
+    int type;
+    int offset;
+} fru_offset_t;
+
+static ipmi_fru_op_t normal_ops =
+{
+    .cleanup_recs   = fru_cleanup_recs,
+    .write_complete = fru_write_complete,
+    .write          = fru_write,
+    .get_root_node  = fru_get_root_node
+};
+
+static int
+process_fru_info(ipmi_fru_t *fru)
+{
+    normal_fru_rec_data_t *info;
+    ipmi_fru_record_t **recs;
+    unsigned char     *data = _ipmi_fru_get_data_ptr(fru);
+    unsigned int      data_len = _ipmi_fru_get_data_len(fru);
+    fru_offset_t      foff[IPMI_FRU_FTR_NUMBER];
+    int               i, j;
+    int               err = 0;
+    unsigned char     version;
+
+    if (checksum(data, 8) != 0) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%sfru.c(process_fru_info):"
+		 " FRU checksum failed",
+		 _ipmi_fru_get_iname(fru));
+	return EBADF;
+    }
+
+    version = *data;
+    if (version != 1)
+	/* Only support version 1 */
+	return EBADF;
+
+    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
+	foff[i].type = i;
+	if (! (_ipmi_fru_get_fetch_mask(fru) & (1 << i))) {
+	    foff[i].offset = 0;
+	    continue;
+	}
+	foff[i].offset = data[i+1] * 8;
+	if (foff[i].offset >= data_len) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(process_fru_info):"
+		     " FRU offset exceeds data length",
+		     _ipmi_fru_get_iname(fru));
+	    return EBADF;
+	}
+    }
+
+    /* Fields are *supposed* to occur in the specified order.  Verify
+       this. */
+    for (i=0, j=1; j<IPMI_FRU_FTR_NUMBER; i=j, j++) {
+	if (foff[i].offset == 0)
+	    continue;
+	while (foff[j].offset == 0) {
+	    j++;
+	    if (j >= IPMI_FRU_FTR_NUMBER)
+	        goto check_done;
+	}
+	if (foff[i].offset >= foff[j].offset) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(process_fru_info):"
+		     " FRU fields did not occur in the correct order",
+		     _ipmi_fru_get_iname(fru));
+	    return EBADF;
+	}
+    }
+ check_done:
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return ENOMEM;
+    memset(info, 0, sizeof(*info));
+
+    _ipmi_fru_set_rec_data(fru, info);
+
+    info->version = version;
+
+    recs = info->recs;
+
+    _ipmi_fru_set_ops(fru, &normal_ops);
+    _ipmi_fru_set_is_normal_fru(fru, 1);
+
+    for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
+	int plen, next_off, offset;
+	ipmi_fru_record_t *rec;
+
+	offset = foff[i].offset;
+	if (offset == 0)
+	    continue;
+
+	for (j=i+1; j<IPMI_FRU_FTR_NUMBER; j++) {
+	    if (foff[j].offset)
+		break;
+	}
+	
+	if (j >= IPMI_FRU_FTR_NUMBER)
+	    next_off = data_len;
+	else
+	    next_off = foff[j].offset;
+	plen = next_off - offset;
+
+	rec = NULL;
+	err = fru_area_info[i].decode(fru, data+offset, plen, &recs[i]);
+	if (err)
+	    goto out_err;
+
+	if (recs[i])
+	    recs[i]->offset = offset;
+    }
+
+    return 0;
+
+ out_err:
+    fru_cleanup_recs(fru);
+    return err;
 }
 
 /************************************************************************

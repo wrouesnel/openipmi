@@ -53,6 +53,7 @@
 #include <OpenIPMI/internal/ipmi_control.h>
 #include <OpenIPMI/internal/ipmi_entity.h>
 #include <OpenIPMI/internal/ipmi_utils.h>
+#include <OpenIPMI/internal/ipmi_fru.h>
 
 /* Uncomment this if you *really* want direct power control.  Note
    that I think this is a bad idea, you should *really* use the
@@ -3889,7 +3890,7 @@ typedef struct atca_p2p_cr_s
     unsigned char      version;
     unsigned int       desc_count;
     atca_p2p_cr_desc_t *descs;
-    unsigned int       refcount;
+    ipmi_fru_t         *fru;
 } atca_p2p_cr_t;
 
 static void atca_p2p_cleanup_rec(atca_p2p_cr_t *rec)
@@ -3907,22 +3908,18 @@ static void atca_p2p_cleanup_rec(atca_p2p_cr_t *rec)
 }
 
 static void
-atca_p2p_root_put(ipmi_fru_node_t *node)
+atca_p2p_root_destroy(ipmi_fru_node_t *node)
 {
-    atca_p2p_cr_t *rec = node->data;
-    if (rec->refcount == 1) {
-	atca_p2p_cleanup_rec(rec);
-	ipmi_mem_free(node);
-    } else
-	rec->refcount--;
+    atca_p2p_cr_t *rec = _ipmi_fru_node_get_data(node);
+    ipmi_fru_deref(rec->fru);
+    atca_p2p_cleanup_rec(rec);
 }
 
 static void
-atca_p2p_sub_put(ipmi_fru_node_t *node)
+atca_p2p_sub_destroy(ipmi_fru_node_t *node)
 {
-    ipmi_fru_node_t *root_node = node->data2;
-    atca_p2p_root_put(root_node);
-    ipmi_mem_free(node);
+    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data(node);
+    ipmi_fru_put_node(root_node);
 }
 
 static int
@@ -3937,7 +3934,7 @@ atca_p2p_desc_entry_get_field(ipmi_fru_node_t           *pnode,
 			      unsigned int              *data_len,
 			      ipmi_fru_node_t           **sub_node)
 {
-    uint32_t rec = *((uint32_t *) pnode->data);
+    uint32_t rec = *((uint32_t *) _ipmi_fru_node_get_data(pnode));
     int      rv = 0;
 
     switch(index) {
@@ -3975,17 +3972,13 @@ atca_p2p_desc_entry_array_get_field(ipmi_fru_node_t           *pnode,
 				    unsigned int              *data_len,
 				    ipmi_fru_node_t           **sub_node)
 {
-    atca_p2p_cr_desc_t *rec = pnode->data;
-    ipmi_fru_node_t    *rnode = pnode->data2;
-    atca_p2p_cr_t      *rrec = rnode->data;
+    atca_p2p_cr_desc_t *rec = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t    *rnode = _ipmi_fru_node_get_data2(pnode);
+    atca_p2p_cr_t      *rrec = _ipmi_fru_node_get_data(rnode);
     ipmi_fru_node_t    *node;
 
     if (index >= rec->channel_count)
 	return EINVAL;
-
-    node = ipmi_mem_alloc(sizeof(*node));
-    if (!node)
-	return ENOMEM;
 
     if (name)
 	*name = NULL; /* We are an array */
@@ -3994,12 +3987,16 @@ atca_p2p_desc_entry_array_get_field(ipmi_fru_node_t           *pnode,
     if (intval)
 	*intval = -1; /* Sub element is not an array */
     if (sub_node) {
-	node->data = rec->chans + index;
-	node->data2 = rnode;
-	node->get_field = atca_p2p_desc_entry_get_field;
-	node->put = atca_p2p_sub_put;
+	node = _ipmi_fru_node_alloc(rrec->fru);
+	if (!node)
+	    return ENOMEM;
+	
+	_ipmi_fru_node_set_data(node, rec->chans + index);
+	_ipmi_fru_node_set_data2(node, rnode);
+	_ipmi_fru_node_set_get_field(node, atca_p2p_desc_entry_get_field);
+	_ipmi_fru_node_set_destructor(node, atca_p2p_sub_destroy);
+
 	*sub_node = node;
-	rrec->refcount++;
     }
     return 0;
 }
@@ -4017,9 +4014,9 @@ atca_p2p_desc_get_field(ipmi_fru_node_t           *pnode,
 			unsigned int              *data_len,
 			ipmi_fru_node_t           **sub_node)
 {
-    atca_p2p_cr_desc_t *rec = pnode->data;
-    ipmi_fru_node_t    *rnode = pnode->data2;
-    atca_p2p_cr_t      *rrec = rnode->data;
+    atca_p2p_cr_desc_t *rec = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t    *rnode = _ipmi_fru_node_get_data2(pnode);
+    atca_p2p_cr_t      *rrec = _ipmi_fru_node_get_data(rnode);
     ipmi_fru_node_t    *node;
     int                rv = 0;
 
@@ -4042,15 +4039,15 @@ atca_p2p_desc_get_field(ipmi_fru_node_t           *pnode,
 	if (intval)
 	    *intval = rec->channel_count;
 	if (sub_node) {
-	    node = ipmi_mem_alloc(sizeof(*node));
+	    node = _ipmi_fru_node_alloc(rrec->fru);
 	    if (!node)
 		return ENOMEM;
-	    node->data = rec;
-	    node->data2 = rnode;
-	    node->get_field = atca_p2p_desc_entry_array_get_field;
-	    node->put = atca_p2p_sub_put;
+	    _ipmi_fru_node_set_data(node, rec);
+	    _ipmi_fru_node_set_data2(node, rnode);
+	    _ipmi_fru_node_set_get_field(node,
+					 atca_p2p_desc_entry_array_get_field);
+	    _ipmi_fru_node_set_destructor(node, atca_p2p_sub_destroy);
 	    *sub_node = node;
-	    rrec->refcount++;
 	}
 	break;
 
@@ -4073,17 +4070,13 @@ atca_p2p_desc_array_get_field(ipmi_fru_node_t           *pnode,
 			      unsigned int              *data_len,
 			      ipmi_fru_node_t           **sub_node)
 {
-    atca_p2p_cr_t   *rec = pnode->data;
-    ipmi_fru_node_t *rnode = pnode->data2;
-    atca_p2p_cr_t   *rrec = rnode->data;
+    atca_p2p_cr_t   *rec = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t *rnode = _ipmi_fru_node_get_data2(pnode);
+    atca_p2p_cr_t   *rrec = _ipmi_fru_node_get_data(rnode);
     ipmi_fru_node_t *node;
 
     if (index >= rec->desc_count)
 	return EINVAL;
-
-    node = ipmi_mem_alloc(sizeof(*node));
-    if (!node)
-	return ENOMEM;
 
     if (name)
 	*name = NULL; /* We are an array */
@@ -4092,12 +4085,16 @@ atca_p2p_desc_array_get_field(ipmi_fru_node_t           *pnode,
     if (intval)
 	*intval = -1; /* Sub element is not an array */
     if (sub_node) {
-	node->data = rec->descs + index;
-	node->data2 = rnode;
-	node->get_field = atca_p2p_desc_get_field;
-	node->put = atca_p2p_sub_put;
+	node = _ipmi_fru_node_alloc(rrec->fru);
+	if (!node)
+	    return ENOMEM;
+
+	_ipmi_fru_node_set_data(node, rec->descs + index);
+	_ipmi_fru_node_set_data2(node, rnode);
+	_ipmi_fru_node_set_get_field(node, atca_p2p_desc_get_field);
+	_ipmi_fru_node_set_destructor(node, atca_p2p_sub_destroy);
+
 	*sub_node = node;
-	rrec->refcount++;
     }
     return 0;
 }
@@ -4114,7 +4111,7 @@ atca_p2p_root_get_field(ipmi_fru_node_t           *rnode,
 			unsigned int              *data_len,
 			ipmi_fru_node_t           **sub_node)
 {
-    atca_p2p_cr_t   *rec = rnode->data;
+    atca_p2p_cr_t   *rec = _ipmi_fru_node_get_data(rnode);
     ipmi_fru_node_t *node;
     int             rv = 0;
 
@@ -4132,15 +4129,14 @@ atca_p2p_root_get_field(ipmi_fru_node_t           *rnode,
 	if (intval)
 	    *intval = rec->desc_count;
 	if (sub_node) {
-	    node = ipmi_mem_alloc(sizeof(*node));
+	    node = _ipmi_fru_node_alloc(rec->fru);
 	    if (!node)
 		return ENOMEM;
-	    node->data = rec;
-	    node->data2 = rnode;
-	    node->get_field = atca_p2p_desc_array_get_field;
-	    node->put = atca_p2p_sub_put;
+	    _ipmi_fru_node_set_data(node, rec);
+	    _ipmi_fru_node_set_data2(node, rnode);
+	    _ipmi_fru_node_set_get_field(node, atca_p2p_desc_array_get_field);
+	    _ipmi_fru_node_set_destructor(node, atca_p2p_sub_destroy);
 	    *sub_node = node;
-	    rec->refcount++;
 	}
 	break;
 
@@ -4179,7 +4175,6 @@ atca_root_mr_p2p_cr(ipmi_fru_t          *fru,
     if (!rec)
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
-    rec->refcount = 1;
 
     rec->version = mr_data[0];
     mr_data++;
@@ -4223,14 +4218,17 @@ atca_root_mr_p2p_cr(ipmi_fru_t          *fru,
 	i++;
     }
 
-    node = ipmi_mem_alloc(sizeof(*node));
+    node = _ipmi_fru_node_alloc(fru);
     if (!node)
       goto out_no_mem;
 
-    node->data = rec;
-    node->data2 = NULL;
-    node->get_field = atca_p2p_root_get_field;
-    node->put = atca_p2p_root_put;
+    rec->fru = fru;
+    ipmi_fru_ref(fru);
+
+    _ipmi_fru_node_set_data(node, rec);
+    _ipmi_fru_node_set_get_field(node, atca_p2p_root_get_field);
+    _ipmi_fru_node_set_destructor(node, atca_p2p_root_destroy);
+
     *rnode = node;
 
     if (name)
@@ -4266,7 +4264,7 @@ typedef struct atca_addr_tab_s
     char                 shelf_addr[64];
     unsigned char        addr_count;
     atca_addr_tab_desc_t *addrs;
-    unsigned int         refcount;
+    ipmi_fru_t           *fru;
 } atca_addr_tab_t;
 
 static void atca_addr_tab_cleanup_rec(atca_addr_tab_t *rec)
@@ -4277,22 +4275,17 @@ static void atca_addr_tab_cleanup_rec(atca_addr_tab_t *rec)
 }
 
 static void
-atca_addr_tab_root_put(ipmi_fru_node_t *node)
+atca_addr_tab_root_destroy(ipmi_fru_node_t *node)
 {
-    atca_addr_tab_t *rec = node->data;
-    if (rec->refcount == 1) {
-	atca_addr_tab_cleanup_rec(rec);
-	ipmi_mem_free(node);
-    } else
-	rec->refcount--;
+    atca_addr_tab_t *rec = _ipmi_fru_node_get_data(node);
+    atca_addr_tab_cleanup_rec(rec);
 }
 
 static void
-atca_addr_tab_sub_put(ipmi_fru_node_t *node)
+atca_addr_tab_sub_destroy(ipmi_fru_node_t *node)
 {
-    ipmi_fru_node_t *root_node = node->data2;
-    atca_addr_tab_root_put(root_node);
-    ipmi_mem_free(node);
+    ipmi_fru_node_t *root_node = _ipmi_fru_node_get_data2(node);
+    ipmi_fru_put_node(root_node);
 }
 
 static int
@@ -4307,7 +4300,7 @@ atca_addr_tab_desc_get_field(ipmi_fru_node_t           *pnode,
 			     unsigned int              *data_len,
 			     ipmi_fru_node_t           **sub_node)
 {
-    atca_addr_tab_desc_t *rec = pnode->data;
+    atca_addr_tab_desc_t *rec = _ipmi_fru_node_get_data(pnode);
     int                  rv = 0;
 
     switch(index) {
@@ -4345,17 +4338,13 @@ atca_addr_tab_desc_array_get_field(ipmi_fru_node_t           *pnode,
 				   unsigned int              *data_len,
 				   ipmi_fru_node_t           **sub_node)
 {
-    atca_addr_tab_t *rec = pnode->data;
-    ipmi_fru_node_t *rnode = pnode->data2;
-    atca_addr_tab_t *rrec = rnode->data;
+    atca_addr_tab_t *rec = _ipmi_fru_node_get_data(pnode);
+    ipmi_fru_node_t *rnode = _ipmi_fru_node_get_data2(pnode);
+    atca_addr_tab_t *rrec = _ipmi_fru_node_get_data(rnode);
     ipmi_fru_node_t *node;
 
     if (index >= rec->addr_count)
 	return EINVAL;
-
-    node = ipmi_mem_alloc(sizeof(*node));
-    if (!node)
-	return ENOMEM;
 
     if (name)
 	*name = NULL; /* We are an array */
@@ -4364,12 +4353,15 @@ atca_addr_tab_desc_array_get_field(ipmi_fru_node_t           *pnode,
     if (intval)
 	*intval = -1; /* Sub element is not an array */
     if (sub_node) {
-	node->data = rec->addrs + index;
-	node->data2 = rnode;
-	node->get_field = atca_addr_tab_desc_get_field;
-	node->put = atca_addr_tab_sub_put;
+	node = _ipmi_fru_node_alloc(rrec->fru);
+	if (!node)
+	    return ENOMEM;
+
+	_ipmi_fru_node_set_data(node, rec->addrs + index);
+	_ipmi_fru_node_set_data2(node, rnode);
+	_ipmi_fru_node_set_get_field(node, atca_addr_tab_desc_get_field);
+	_ipmi_fru_node_set_destructor(node, atca_addr_tab_sub_destroy);
 	*sub_node = node;
-	rrec->refcount++;
     }
     return 0;
 }
@@ -4386,7 +4378,7 @@ atca_addr_tab_root_get_field(ipmi_fru_node_t           *rnode,
 			     unsigned int              *data_len,
 			     ipmi_fru_node_t           **sub_node)
 {
-    atca_addr_tab_t *rec = rnode->data;
+    atca_addr_tab_t *rec = _ipmi_fru_node_get_data(rnode);
     ipmi_fru_node_t *node;
     int             rv = 0;
 
@@ -4410,15 +4402,15 @@ atca_addr_tab_root_get_field(ipmi_fru_node_t           *rnode,
 	if (intval)
 	    *intval = rec->addr_count;
 	if (sub_node) {
-	    node = ipmi_mem_alloc(sizeof(*node));
+	    node = _ipmi_fru_node_alloc(rec->fru);
 	    if (!node)
 		return ENOMEM;
-	    node->data = rec;
-	    node->data2 = rnode;
-	    node->get_field = atca_addr_tab_desc_array_get_field;
-	    node->put = atca_addr_tab_sub_put;
+	    _ipmi_fru_node_set_data(node, rec);
+	    _ipmi_fru_node_set_data2(node, rnode);
+	    _ipmi_fru_node_set_get_field(node,
+					 atca_addr_tab_desc_array_get_field);
+	    _ipmi_fru_node_set_destructor(node, atca_addr_tab_sub_destroy);
 	    *sub_node = node;
-	    rec->refcount++;
 	}
 	break;
 
@@ -4456,7 +4448,6 @@ atca_root_mr_addr_tab(ipmi_fru_t          *fru,
     if (!rec)
 	return ENOMEM;
     memset(rec, 0, sizeof(*rec));
-    rec->refcount = 1;
 
     rec->version = mr_data[0];
     mr_data++;
@@ -4492,14 +4483,16 @@ atca_root_mr_addr_tab(ipmi_fru_t          *fru,
 	mr_data_len -= 3;
     }
 
-    node = ipmi_mem_alloc(sizeof(*node));
+    node = _ipmi_fru_node_alloc(fru);
     if (!node)
-      goto out_no_mem;
+	goto out_no_mem;
 
-    node->data = rec;
-    node->data2 = NULL;
-    node->get_field = atca_addr_tab_root_get_field;
-    node->put = atca_addr_tab_root_put;
+    rec->fru = fru;
+    ipmi_fru_ref(fru);
+
+    _ipmi_fru_node_set_data(node, rec);
+    _ipmi_fru_node_set_get_field(node, atca_addr_tab_root_get_field);
+    _ipmi_fru_node_set_destructor(node, atca_addr_tab_root_destroy);
     *rnode = node;
 
     if (name)

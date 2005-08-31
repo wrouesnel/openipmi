@@ -1,3 +1,22 @@
+2005-08-31 Corey Minyard <cminyard@mvista.com>
+
+	* lib/fru.c, include/OpenIPMI/ipmi_fru.h: Create a new abstract
+	FRU interface based upon the node stuff done with multi-records.
+	This is getting ready for FRU data that is not standard IPMI (SPD
+	in DIMMs, for instance).
+
+	* include/OpenIPMI/internal/ipmi_oem.h:  Move some FRU-specific
+	interfaces out of here.
+	
+	* include/OpenIPMI/internal/ipmi_fru.h: Move the FRU-specific
+	interfaces into here.
+
+	* lib/normal_fru.c, lib/oem_atca.c: Convert over to the new FRU
+	interfaces.  This changed all the multi-record interfaces, but is
+	much cleaner.
+
+	* cmdlang/out_fru.c: Use new FRU data dumping interface.
+
 2005-08-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fixed a possible race during shutdown with timer

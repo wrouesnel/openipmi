@@ -1310,6 +1310,131 @@ ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
 
 /************************************************************************
  *
+ * FRU node handling
+ *
+ ************************************************************************/
+
+int
+ipmi_fru_get_root_node(ipmi_fru_t      *fru,
+		       const char      **name,
+		       ipmi_fru_node_t **node)
+{
+    return fru->ops->get_root_node(fru, name, node);
+}
+
+struct ipmi_fru_node_s
+{
+    ipmi_lock_t                    *lock;
+    unsigned int                   refcount;
+
+    void                           *data;
+    void                           *data2;
+    ipmi_fru_oem_node_get_field_cb get_field;
+    ipmi_fru_oem_node_cb           destroy;
+};
+
+ipmi_fru_node_t *
+_ipmi_fru_node_alloc(ipmi_fru_t *fru)
+{
+    ipmi_fru_node_t *node = ipmi_mem_alloc(sizeof(*node));
+    int             rv;
+
+    if (!node)
+	return NULL;
+    memset(node, 0, sizeof(*node));
+
+    rv = ipmi_create_lock_os_hnd(fru->os_hnd, &node->lock);
+    if (rv) {
+	ipmi_mem_free(node);
+	return NULL;
+    }
+
+    node->refcount = 1;
+    return node;
+}
+
+void
+ipmi_fru_get_node(ipmi_fru_node_t *node)
+{
+    ipmi_lock(node->lock);
+    node->refcount++;
+    ipmi_unlock(node->lock);
+}
+
+void
+ipmi_fru_put_node(ipmi_fru_node_t *node)
+{
+    ipmi_lock(node->lock);
+    if (node->refcount > 1) {
+	node->refcount--;
+	ipmi_unlock(node->lock);
+	return;
+    }
+    ipmi_unlock(node->lock);
+
+    if (node->destroy)
+	node->destroy(node);
+    ipmi_destroy_lock(node->lock);
+    ipmi_mem_free(node);
+}
+
+int
+ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
+			unsigned int              index,
+			const char                **name,
+			enum ipmi_fru_data_type_e *dtype,
+			int                       *intval,
+			time_t                    *time,
+			double                    *floatval,
+			char                      **data,
+			unsigned int              *data_len,
+			ipmi_fru_node_t           **sub_node)
+{
+    return node->get_field(node, index, name, dtype, intval, time,
+			   floatval, data, data_len, sub_node);
+}
+
+void *
+_ipmi_fru_node_get_data(ipmi_fru_node_t *node)
+{
+    return node->data;
+}
+
+void
+_ipmi_fru_node_set_data(ipmi_fru_node_t *node, void *data)
+{
+    node->data = data;
+}
+
+void *
+_ipmi_fru_node_get_data2(ipmi_fru_node_t *node)
+{
+    return node->data2;
+}
+
+void
+_ipmi_fru_node_set_data2(ipmi_fru_node_t *node, void *data2)
+{
+    node->data2 = data2;
+}
+
+void
+_ipmi_fru_node_set_destructor(ipmi_fru_node_t      *node,
+			      ipmi_fru_oem_node_cb destroy)
+{
+    node->destroy = destroy;
+}
+
+void
+_ipmi_fru_node_set_get_field(ipmi_fru_node_t                *node,
+			     ipmi_fru_oem_node_get_field_cb get_field)
+{
+    node->get_field = get_field;
+}
+
+
+/************************************************************************
+ *
  * Misc external interfaces
  *
  ************************************************************************/
