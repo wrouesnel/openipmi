@@ -20,6 +20,9 @@
 
 	* cmdlang/out_fru.c: Use new FRU data dumping interface.
 
+	* swig/OpenIPMI.i: Added an interface to get the FRU's root node,
+	for the new abstract FRU interface.
+
 2005-08-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi_lan.c: Fixed a possible race during shutdown with timer

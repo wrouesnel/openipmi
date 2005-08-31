@@ -131,38 +131,39 @@ unsigned int _ipmi_fru_get_fetch_mask(ipmi_fru_t *fru);
 int _ipmi_fru_is_normal_fru(ipmi_fru_t *fru);
 void _ipmi_fru_set_is_normal_fru(ipmi_fru_t *fru, int val);
 
-/* Operations registered by the decode for a FRU. */
-typedef struct ipmi_fru_op_s
-{
-    /* Called to free all the data associated with fru record data. */
-    void (*cleanup_recs)(ipmi_fru_t *fru);
+/*
+ * Interface between the generic FRU code and the specific FRU
+ * decoders.
+ */
 
-    /* Called when the FRU data has been written, to mark all the data
-       as unchanged from the FRU contents. */
-    void (*write_complete)(ipmi_fru_t *fru);
+typedef void (*ipmi_fru_void_op)(ipmi_fru_t *fru);
+typedef int (*ipmi_fru_err_op)(ipmi_fru_t *fru);
+typedef int (*ipmi_fru_get_root_node_op)(ipmi_fru_t      *fru,
+					 const char      **name,
+					 ipmi_fru_node_t **rnode);
 
-    /* Called to write any changed data into the fru and mark what is
-       changed. */
-    int (*write)(ipmi_fru_t *fru);
+/* Add a function to cleanup the FRU record data (free all the memory)
+   as the FRU is destroyed. */
+void _ipmi_fru_set_op_cleanup_recs(ipmi_fru_t *fru, ipmi_fru_void_op op);
 
-    /* Get the root node for this FRU. */
-    int (*get_root_node)(ipmi_fru_t      *fru,
-			 const char      **name,
-			 ipmi_fru_node_t **rnode);
-} ipmi_fru_op_t;
+/* Called when a write operations completes successfully, to clear out
+   all the write information. */
+void _ipmi_fru_set_op_write_complete(ipmi_fru_t *fru, ipmi_fru_void_op op);
 
-void _ipmi_fru_set_ops(ipmi_fru_t *fru, ipmi_fru_op_t *ops);
+/* Called to copy all the changed data into the FRU block of data and
+   add update records for the changed data. */
+void _ipmi_fru_set_op_write(ipmi_fru_t *fru, ipmi_fru_err_op op);
 
-/* Register a decoder for FRU data.  This should return success if the
-   FRU is supported and can be decoded properly, ENOSYS if the FRU
-   information doesn't match the format, or anything else for invalid
-   FRU data. */
-typedef struct ipmi_fru_reg_s
-{
-    int (*decode)(ipmi_fru_t *fru);
-} ipmi_fru_reg_t;
-int _ipmi_fru_register_decoder(ipmi_fru_reg_t *reg);
-int _ipmi_fru_deregister_decoder(ipmi_fru_reg_t *reg);
+/* Get the root node for the user to decode. */
+void _ipmi_fru_set_op_get_root_node(ipmi_fru_t                *fru,
+				    ipmi_fru_get_root_node_op op);
+
+/* Register a decoder for FRU data.  The provided function should
+   return success if the FRU is supported and can be decoded properly,
+   ENOSYS if the FRU information doesn't match the format, or anything
+   else for invalid FRU data.  It should register the nodes  */
+int _ipmi_fru_register_decoder(ipmi_fru_err_op op);
+int _ipmi_fru_deregister_decoder(ipmi_fru_err_op op);
 
 
 #endif /* _IPMI_FRU_INTERNAL_H */

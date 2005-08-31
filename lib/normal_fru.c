@@ -4132,14 +4132,6 @@ typedef struct fru_offset_s
     int offset;
 } fru_offset_t;
 
-static ipmi_fru_op_t normal_ops =
-{
-    .cleanup_recs   = fru_cleanup_recs,
-    .write_complete = fru_write_complete,
-    .write          = fru_write,
-    .get_root_node  = fru_get_root_node
-};
-
 static int
 process_fru_info(ipmi_fru_t *fru)
 {
@@ -4212,7 +4204,11 @@ process_fru_info(ipmi_fru_t *fru)
 
     recs = info->recs;
 
-    _ipmi_fru_set_ops(fru, &normal_ops);
+    _ipmi_fru_set_op_cleanup_recs(fru, fru_cleanup_recs);
+    _ipmi_fru_set_op_write_complete(fru, fru_write_complete);
+    _ipmi_fru_set_op_write(fru, fru_write);
+    _ipmi_fru_set_op_get_root_node(fru, fru_get_root_node);
+
     _ipmi_fru_set_is_normal_fru(fru, 1);
 
     for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
@@ -4256,11 +4252,6 @@ process_fru_info(ipmi_fru_t *fru)
  *
  ************************************************************************/
 
-static ipmi_fru_reg_t normal_reg =
-{
-    .decode = process_fru_info
-};
-
 int
 _ipmi_normal_fru_init(void)
 {
@@ -4290,7 +4281,7 @@ _ipmi_normal_fru_init(void)
     if (rv)
 	return rv;
 
-    rv = _ipmi_fru_register_decoder(&normal_reg);
+    rv = _ipmi_fru_register_decoder(process_fru_info);
     if (rv)
 	return rv;
 
@@ -4300,7 +4291,7 @@ _ipmi_normal_fru_init(void)
 void
 _ipmi_normal_fru_shutdown(void)
 {
-    _ipmi_fru_deregister_decoder(&normal_reg);
+    _ipmi_fru_deregister_decoder(process_fru_info);
     if (fru_multi_record_oem_handlers) {
 	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x00);
 	_ipmi_fru_deregister_multi_record_oem_handler(0, 0x01);

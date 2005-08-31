@@ -83,6 +83,26 @@ struct fru_update_s
     fru_update_t   *next;
 };
 
+/* Operations registered by the decode for a FRU. */
+typedef struct ipmi_fru_op_s
+{
+    /* Called to free all the data associated with fru record data. */
+    void (*cleanup_recs)(ipmi_fru_t *fru);
+
+    /* Called when the FRU data has been written, to mark all the data
+       as unchanged from the FRU contents. */
+    void (*write_complete)(ipmi_fru_t *fru);
+
+    /* Called to write any changed data into the fru and mark what is
+       changed. */
+    int (*write)(ipmi_fru_t *fru);
+
+    /* Get the root node for this FRU. */
+    int (*get_root_node)(ipmi_fru_t      *fru,
+			 const char      **name,
+			 ipmi_fru_node_t **rnode);
+} ipmi_fru_op_t;
+
 struct ipmi_fru_s
 {
     char name[IPMI_FRU_NAME_LEN+1];
@@ -139,7 +159,7 @@ struct ipmi_fru_s
 
     char *fru_rec_type;
     void *rec_data;
-    ipmi_fru_op_t *ops;
+    ipmi_fru_op_t ops;
 
 
     char iname[IPMI_FRU_NAME_LEN+1];
@@ -210,17 +230,17 @@ ipmi_fru_deref(ipmi_fru_t *fru)
 static locked_list_t *fru_decode_handlers;
 
 int
-_ipmi_fru_register_decoder(ipmi_fru_reg_t *reg)
+_ipmi_fru_register_decoder(ipmi_fru_err_op op)
 {
-    if (!locked_list_add(fru_decode_handlers, reg, NULL))
+    if (!locked_list_add(fru_decode_handlers, op, NULL))
 	return ENOMEM;
     return 0;
 }
 
 int
-_ipmi_fru_deregister_decoder(ipmi_fru_reg_t *reg)
+_ipmi_fru_deregister_decoder(ipmi_fru_err_op op)
 {
-    if (!locked_list_remove(fru_decode_handlers, reg, NULL))
+    if (!locked_list_remove(fru_decode_handlers, op, NULL))
 	return ENODEV;
     return 0;
 }
@@ -234,11 +254,11 @@ typedef struct fru_decode_s
 static int
 fru_call_decoder(void *cb_data, void *item1, void *item2)
 {
-    fru_decode_t   *info = cb_data;
-    ipmi_fru_reg_t *reg = item1;
-    int            err;
+    fru_decode_t    *info = cb_data;
+    ipmi_fru_err_op op = item1;
+    int             err;
 
-    err = reg->decode(info->fru);
+    err = op(info->fru);
     if (!err) {
 	info->err = 0;
 	return LOCKED_LIST_ITER_STOP;
@@ -255,6 +275,31 @@ fru_call_decoders(ipmi_fru_t *fru)
     info.fru = fru;
     locked_list_iterate(fru_decode_handlers, fru_call_decoder, &info);
     return info.err;
+}
+
+void
+_ipmi_fru_set_op_cleanup_recs(ipmi_fru_t *fru, ipmi_fru_void_op op)
+{
+    fru->ops.cleanup_recs = op;
+}
+
+void
+_ipmi_fru_set_op_write_complete(ipmi_fru_t *fru, ipmi_fru_void_op op)
+{
+    fru->ops.write_complete = op;
+}
+
+void
+_ipmi_fru_set_op_write(ipmi_fru_t *fru, ipmi_fru_err_op op)
+{
+    fru->ops.write = op;
+}
+
+void
+_ipmi_fru_set_op_get_root_node(ipmi_fru_t                *fru,
+			       ipmi_fru_get_root_node_op op)
+{
+    fru->ops.get_root_node = op;
 }
 
 
@@ -301,8 +346,8 @@ final_fru_destroy(ipmi_fru_t *fru)
     if (fru->destroy_handler)
 	fru->destroy_handler(fru, fru->destroy_cb_data);
 
-    if (fru->ops)
-	fru->ops->cleanup_recs(fru);
+    if (fru->ops.cleanup_recs)
+	fru->ops.cleanup_recs(fru);
 
     while (fru->update_recs) {
 	fru_update_t *to_free = fru->update_recs;
@@ -962,7 +1007,7 @@ write_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
 {
     if (!err)
 	/* If we succeed, set everything unchanged. */
-	fru->ops->write_complete(fru);
+	fru->ops.write_complete(fru);
     if (fru->data)
 	ipmi_mem_free(fru->data);
     fru->data = NULL;
@@ -1139,7 +1184,7 @@ start_domain_fru_write(ipmi_domain_t *domain, void *cb_data)
     }
     memset(fru->data, 0, fru->data_len);
 
-    rv = fru->ops->write(fru);
+    rv = fru->ops.write(fru);
     if (rv)
 	goto out_err;
 
@@ -1319,7 +1364,7 @@ ipmi_fru_get_root_node(ipmi_fru_t      *fru,
 		       const char      **name,
 		       ipmi_fru_node_t **node)
 {
-    return fru->ops->get_root_node(fru, name, node);
+    return fru->ops.get_root_node(fru, name, node);
 }
 
 struct ipmi_fru_node_s
@@ -1484,12 +1529,6 @@ void
 _ipmi_fru_set_is_normal_fru(ipmi_fru_t *fru, int val)
 {
     fru->normal_fru = val;
-}
-
-void
-_ipmi_fru_set_ops(ipmi_fru_t *fru, ipmi_fru_op_t *ops)
-{
-    fru->ops = ops;
 }
 
 /************************************************************************

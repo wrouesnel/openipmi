@@ -7880,6 +7880,11 @@ int pef_str_to_parm(char *str);
 						 name, sub_node);
 	return rv;
     }
+
+    int get_root_node(const char **type, ipmi_fru_node_t **sub_node)
+    {
+	return ipmi_fru_get_root_node(self, type, sub_node);
+    }
 }
 
 /*
