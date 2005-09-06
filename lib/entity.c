@@ -4103,6 +4103,32 @@ ipmi_entity_set_channel(ipmi_entity_t *ent, int channel)
 }
 
 int
+ipmi_entity_get_mc_id(ipmi_entity_t *ent, ipmi_mcid_t *mc_id)
+{
+    ipmi_ipmb_addr_t sa;
+    ipmi_mc_t        *mc;
+
+    if ((ent->info.type != IPMI_ENTITY_MC)
+	&& (ent->info.type != IPMI_ENTITY_GENERIC))
+    {
+	return ENOSYS;
+    }
+
+    sa.addr_type = IPMI_IPMB_ADDR_TYPE;
+    sa.channel = ent->info.channel;
+    sa.slave_addr = ent->info.slave_address;
+    sa.lun = ent->info.lun;
+
+    mc = _ipmi_find_mc_by_addr(ent->domain, (ipmi_addr_t *) &sa, sizeof(sa));
+    if (!mc)
+	return ENODEV;
+
+    *mc_id = ipmi_mc_convert_to_id(mc);
+
+    return 0;
+}
+
+int
 ipmi_entity_get_lun(ipmi_entity_t *ent)
 {
     CHECK_ENTITY_LOCK(ent);

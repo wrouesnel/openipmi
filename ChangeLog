@@ -1,5 +1,11 @@
+2005-08-31 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmiif.in, lib/entity.c: Added a function to
+	get the mcid of an entity, for MC and generic entities.
+
 2005-08-31 Matt Domsch <Matt_Domsch@dell.com>
-	* Updated initscript to return sane status values from all commands.
+	* ipmi.init: Updated initscript to return sane status values from
+	all commands.
 
 2005-08-31 Corey Minyard <cminyard@mvista.com>
 

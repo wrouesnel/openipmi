@@ -700,6 +700,7 @@ int ipmi_entity_get_device_modifier(ipmi_entity_t *ent);
 
 /* Valid for MC and Generic */
 int ipmi_entity_get_slave_address(ipmi_entity_t *ent);
+int ipmi_entity_get_mc_id(ipmi_entity_t *ent, ipmi_mcid_t *mc_id);
 
 /* Valid for FRU only. */
 int ipmi_entity_get_is_logical_fru(ipmi_entity_t *ent);
