@@ -1005,9 +1005,11 @@ static int next_fru_write(ipmi_domain_t *domain, ipmi_fru_t *fru,
 void
 write_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
 {
-    if (!err)
+    if (!err) {
 	/* If we succeed, set everything unchanged. */
-	fru->ops.write_complete(fru);
+	if (fru->ops.write_complete)
+	    fru->ops.write_complete(fru);
+    }
     if (fru->data)
 	ipmi_mem_free(fru->data);
     fru->data = NULL;
@@ -1235,6 +1237,9 @@ ipmi_fru_write(ipmi_fru_t *fru, ipmi_fru_cb done, void *cb_data)
 {
     int                      rv;
     start_domain_fru_write_t info = {fru, 0};
+
+    if (!fru->ops.write)
+	return ENOSYS;
 
     _ipmi_fru_lock(fru);
     if (fru->in_use) {
