@@ -134,7 +134,7 @@ minimum_modules_loaded()
 load_si()
 {
 	if [ "${IPMI_SI}" = "1" ]; then
-		modprobe ${IPMI_SI_MODULE_NAME}
+		modprobe ${IPMI_SI_MODULE_NAME} > /dev/null 2>&1
 		modules_loaded ${IPMI_SI_MODULE_NAME}
 		[ ${OnePlusLoaded} -ne 1 ] && RETVAL=$((RETVAL | 1))
 	fi
@@ -143,7 +143,7 @@ load_si()
 load_smb()
 {
 	if [ "${IPMI_SMB}" = "1" ]; then
-		modprobe ${IPMI_SMB_MODULE_NAME}
+		modprobe ${IPMI_SMB_MODULE_NAME} > /dev/null 2>&1
 		modules_loaded ${IPMI_SMB_MODULE_NAME}
 		[ ${OnePlusLoaded} -ne 1 ] && RETVAL=$((RETVAL | 1))
 	fi
@@ -158,7 +158,7 @@ load_hw_modules()
 start_watchdog_common()
 {
 	load_hw_modules
-	modprobe ipmi_watchdog ${IPMI_WATCHDOG_OPTIONS}
+	modprobe ipmi_watchdog ${IPMI_WATCHDOG_OPTIONS} > /dev/null 2>&1
 	modules_loaded ipmi_watchdog
 	[ ${OnePlusUnloaded} -ne 0 ] &&
 		RETVAL=$((RETVAL | 2)) &&
@@ -195,7 +195,7 @@ start_watchdog()
 stop_watchdog()
 {
 	echo -n $"Stopping ipmi_watchdog driver: "
-	modprobe -q -r ipmi_watchdog
+	modprobe -q -r ipmi_watchdog > /dev/null 2>&1
 	modules_loaded ipmi_watchdog
 	if [ ${OnePlusLoaded} -ne 0 ]; then
 	    RETVAL=$((RETVAL | 32))
@@ -210,7 +210,7 @@ stop_watchdog()
 
 stop_watchdog_quiet()
 {
-	modprobe -q -r ipmi_watchdog
+	modprobe -q -r ipmi_watchdog > /dev/null 2>&1
 	modules_loaded ipmi_watchdog
 	if [ ${OnePlusLoaded} -ne 0 ]; then
 	    RETVAL=$((RETVAL | 32))
@@ -226,7 +226,7 @@ start_powercontrol_common()
 	local poweroff_opts=""
 	load_hw_modules
 	[ "${IPMI_POWERCYCLE}" == "1" ] && poweroff_opts="poweroff_control=2"
-	modprobe ipmi_poweroff "${poweroff_opts}"
+	modprobe ipmi_poweroff "${poweroff_opts}" > /dev/null 2>&1
 	modules_loaded ipmi_poweroff
 	[ ${OnePlusUnloaded} -ne 0 ] &&
 		RETVAL=$((RETVAL | 2)) &&
@@ -256,7 +256,7 @@ start_powercontrol()
 stop_powercontrol()
 {
 	echo -n $"Stopping ipmi_poweroff driver: "
-	modprobe -q -r ipmi_poweroff
+	modprobe -q -r ipmi_poweroff > /dev/null 2>&1
 	modules_loaded ipmi_poweroff
 	if [ ${OnePlusLoaded} -ne 0 ]; then
 	    RETVAL=$((RETVAL | 32))
@@ -268,7 +268,7 @@ stop_powercontrol()
 
 stop_powercontrol_quiet()
 {
-	modprobe -q -r ipmi_poweroff
+	modprobe -q -r ipmi_poweroff > /dev/null 2>&1
 	modules_loaded ipmi_poweroff
 	[ ${OnePlusLoaded} -ne 0 ] && RETVAL=$((RETVAL | 32))
 }
@@ -280,7 +280,7 @@ unload_all_ipmi_modules()
 	stop_watchdog_quiet
 	stop_powercontrol_quiet
 	for m in ${MODULES}; do
-		modprobe -q -r ${m}
+		modprobe -q -r ${m} > /dev/null 2>&1
 	done
 }
 
@@ -288,14 +288,14 @@ unload_ipmi_modules_leave_features()
 {
 	rm -f "/dev/ipmi${INTF_NUM}"
 	for m in ${MODULES_INTERFACES}; do
-		modprobe -q -r ${m}
+		modprobe -q -r ${m} > /dev/null 2>&1
 	done
 	lsmod | egrep -q "ipmi_(poweroff|watchdog)"
 	if [ "$?" -ne "0" ]; then
 		stop_watchdog_quiet
 		stop_powercontrol_quiet
 		for m in ${MODULES}; do
-			modprobe -q -r ${m}
+			modprobe -q -r ${m} > /dev/null 2>&1
 		done
 	fi
 }
@@ -304,14 +304,14 @@ unload_ipmi_modules_leave_features()
 load_ipmi_modules ()
 {
 	local locdelay
-	modprobe ipmi_msghandler
+	modprobe ipmi_msghandler > /dev/null 2>&1
 	modules_loaded ipmi_msghandler
 	[ ${OnePlusLoaded} -ne 1 ] && unload_all_ipmi_modules && RETVAL=$((RETVAL | 1)) && return
 	load_hw_modules
 	[ $((RETVAL & 1)) -eq 1 ] && unload_all_ipmi_modules && RETVAL=$((RETVAL | 1)) && return
 
 	if [ "${DEV_IPMI}" = "1" ]; then
-		modprobe ipmi_devintf
+		modprobe ipmi_devintf > /dev/null 2>&1
 		modules_loaded ipmi_devintf
 		RETVAL=$((RETVAL & ~2))
 		[ ${OnePlusLoaded} -eq 0 ] && RETVAL=$((RETVAL | 2))
@@ -333,7 +333,7 @@ load_ipmi_modules ()
 	fi
 
 	if [ "${IPMI_IMB}" = "1" ]; then
-		modprobe ipmi_imb
+		modprobe ipmi_imb > /dev/null 2>&1
 		modules_loaded ipmi_imb
 		RETVAL=$((RETVAL & ~2))
 		[ ${OnePlusLoaded} -eq 0 ] && RETVAL=$((RETVAL | 2))

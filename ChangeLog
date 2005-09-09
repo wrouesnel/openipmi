@@ -1,3 +1,7 @@
+2005-09-08 Matt Domsch <Matt_Domsch@dell.com>
+
+	* ipmi.init: silence modprobe output, matches Fedora again
+	
 2005-09-06 Corey Minyard <cminyard@mvista.com>
 
 	* lib/fru.c: Check that the write and write complete functions are
