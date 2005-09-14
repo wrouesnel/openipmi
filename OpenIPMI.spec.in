@@ -1,7 +1,7 @@
 Name: OpenIPMI
 Summary: %{name} - Library interface to IPMI
 Version: @OPENIPMI_VERSION_MAJOR@.@OPENIPMI_VERSION_MINOR@.@OPENIPMI_VERSION_RELEASE@
-Release: 1
+Release: 2
 License: LGPL
 URL: http://openipmi.sourceforge.net
 Group: Utilities
@@ -90,7 +90,17 @@ chkconfig --add ipmi
 ###################################################
 %preun
 ###################################################
-chkconfig --del ipmi
+if [ $1 = 0 ]; then
+   /etc/init.d/ipmi stop >/dev/null 2>&1
+   /sbin/chkconfig --del ipmi
+fi
+
+###################################################
+%postun
+###################################################
+if [ "$1" -ge "1" ]; then
+    /etc/init.d/ipmi condrestart >/dev/null 2>&1 || :
+fi
 
 ###################################################
 %files
