@@ -225,7 +225,12 @@ start_powercontrol_common()
 {
 	local poweroff_opts=""
 	load_hw_modules
-	[ "${IPMI_POWERCYCLE}" == "1" ] && poweroff_opts="poweroff_control=2"
+	if [ "${IPMI_POWERCYCLE}" == "1" ]; then
+	    modinfo ipmi_poweroff 2>/dev/null | grep poweroff_control > /dev/null 2>&1 && \
+		poweroff_opts="poweroff_control=2"
+	    modinfo ipmi_poweroff 2>/dev/null | grep poweroff_powercycle > /dev/null 2>&1 && \
+		poweroff_opts="poweroff_powercycle=1"
+	fi
 	modprobe ipmi_poweroff "${poweroff_opts}" > /dev/null 2>&1
 	modules_loaded ipmi_poweroff
 	[ ${OnePlusUnloaded} -ne 0 ] &&
@@ -290,7 +295,7 @@ unload_ipmi_modules_leave_features()
 	for m in ${MODULES_INTERFACES}; do
 		modprobe -q -r ${m} > /dev/null 2>&1
 	done
-	lsmod | egrep -q "ipmi_(poweroff|watchdog)"
+	lsmod | egrep -q "ipmi_(poweroff|watchdog)" > /dev/null 2>&1
 	if [ "$?" -ne "0" ]; then
 		stop_watchdog_quiet
 		stop_powercontrol_quiet

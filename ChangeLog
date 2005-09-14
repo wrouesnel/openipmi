@@ -1,3 +1,9 @@
+2005-09-14 Matt Domsch <Matt_Domsch@dell.com>
+
+	* ipmi.init: use poweroff_control or poweroff_powercycle module
+	option to ipmi_poweroff as appropriate.  kernel 2.6.14-rc1
+	(driver 36.0) and newer uses poweroff_powercycle.
+
 2005-09-08 Matt Domsch <Matt_Domsch@dell.com>
 
 	* ipmi.init: silence modprobe output, matches Fedora again
