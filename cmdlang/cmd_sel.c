@@ -44,6 +44,80 @@
 #include <OpenIPMI/internal/ipmi_event.h>
 #include <OpenIPMI/internal/ipmi_malloc.h>
 
+static int
+discrete_event_handler(ipmi_sensor_t         *sensor,
+		       enum ipmi_event_dir_e dir,
+		       int                   offset,
+		       int                   severity,
+		       int                   prev_severity,
+		       void                  *cb_data,
+		       ipmi_event_t          *event)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            sensor_name[IPMI_SENSOR_NAME_LEN];
+
+    ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
+
+    ipmi_cmdlang_out(cmd_info, "Object Type", "Sensor");
+    ipmi_cmdlang_out(cmd_info, "Name", sensor_name);
+    ipmi_cmdlang_out(cmd_info, "Operation", "Event");
+    ipmi_cmdlang_out_int(cmd_info, "Offset", offset);
+    ipmi_cmdlang_out(cmd_info, "Direction", ipmi_get_event_dir_string(dir));
+    ipmi_cmdlang_out_int(cmd_info, "Severity", severity);
+    ipmi_cmdlang_out_int(cmd_info, "Prcmd_infoous Severity", prev_severity);
+    if (event) {
+	ipmi_cmdlang_out(cmd_info, "Event", NULL);
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_event_out(event, cmd_info);
+	ipmi_cmdlang_up(cmd_info);
+    }
+    return IPMI_EVENT_HANDLED;
+}
+
+static int
+threshold_event_handler(ipmi_sensor_t               *sensor,
+			enum ipmi_event_dir_e       dir,
+			enum ipmi_thresh_e          threshold,
+			enum ipmi_event_value_dir_e high_low,
+			enum ipmi_value_present_e   value_present,
+			unsigned int                raw_value,
+			double                      value,
+			void                        *cb_data,
+			ipmi_event_t                *event)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    char            sensor_name[IPMI_SENSOR_NAME_LEN];
+
+    ipmi_sensor_get_name(sensor, sensor_name, sizeof(sensor_name));
+
+    ipmi_cmdlang_out(cmd_info, "Object Type", "Sensor");
+    ipmi_cmdlang_out(cmd_info, "Name", sensor_name);
+    ipmi_cmdlang_out(cmd_info, "Operation", "Event");
+    ipmi_cmdlang_out(cmd_info, "Threshold",
+		     ipmi_get_threshold_string(threshold));
+    ipmi_cmdlang_out(cmd_info, "High/Low",
+		     ipmi_get_value_dir_string(high_low));
+    ipmi_cmdlang_out(cmd_info, "Direction", ipmi_get_event_dir_string(dir));
+    switch (value_present) {
+    case IPMI_BOTH_VALUES_PRESENT:
+	ipmi_cmdlang_out_double(cmd_info, "Value", value);
+	/* FALLTHRU */
+    case IPMI_RAW_VALUE_PRESENT:
+	ipmi_cmdlang_out_int(cmd_info, "Raw Value", raw_value);
+	break;
+
+    default:
+	break;
+    }
+    if (event) {
+	ipmi_cmdlang_out(cmd_info, "Event", NULL);
+	ipmi_cmdlang_down(cmd_info);
+	ipmi_cmdlang_event_out(event, cmd_info);
+	ipmi_cmdlang_up(cmd_info);
+    }
+    return IPMI_EVENT_HANDLED;
+}
+
 static void
 sel_list(ipmi_domain_t *domain, void *cb_data)
 {
@@ -52,8 +126,35 @@ sel_list(ipmi_domain_t *domain, void *cb_data)
     int             rv;
     unsigned int    count1, count2;
     ipmi_event_t    *event, *event2;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int             interp = 0;
+    ipmi_event_handlers_t *h = NULL;
 
     ipmi_domain_get_name(domain, domain_name, sizeof(domain_name));
+
+    if ((argc - curr_arg) >= 1) {
+	if (strcmp(argv[curr_arg], "interp") == 0)
+	    interp = 1;
+	else {
+	    cmdlang->errstr = "Invalid parameter";
+	    cmdlang->err = EINVAL;
+	    goto out_err;
+	}
+    }
+
+    if (interp) {
+	h = ipmi_event_handlers_alloc();
+	if (!h) {
+	    cmdlang->errstr = "Out of memory";
+	    cmdlang->err = ENOMEM;
+	    goto out_err;
+	}
+	ipmi_event_handlers_set_threshold(h, threshold_event_handler);
+	ipmi_event_handlers_set_discrete(h, discrete_event_handler);
+    }
 
     ipmi_cmdlang_out(cmd_info, "Domain", NULL);
     ipmi_cmdlang_down(cmd_info);
@@ -72,12 +173,24 @@ sel_list(ipmi_domain_t *domain, void *cb_data)
 	ipmi_cmdlang_out(cmd_info, "Event", NULL);
 	ipmi_cmdlang_down(cmd_info);
 	ipmi_cmdlang_event_out(event, cmd_info);
+	if (h)
+	    ipmi_event_call_handler(domain, h, event, cmd_info);
 	ipmi_cmdlang_up(cmd_info);
 	event2 = ipmi_domain_next_event(domain, event);
 	ipmi_event_free(event);
 	event = event2;
     }
     ipmi_cmdlang_up(cmd_info);
+    if (h)
+	ipmi_event_handlers_free(h);
+    return;
+
+ out_err:
+    ipmi_domain_get_name(domain, cmdlang->objstr,
+			 cmdlang->objstr_len);
+    cmdlang->location = "cmd_sel.c(sel_list)";
+    if (h)
+	ipmi_event_handlers_free(h);
 }
 
 static void
@@ -86,8 +199,36 @@ mc_sel_list(ipmi_mc_t *mc, void *cb_data)
     ipmi_cmd_info_t *cmd_info = cb_data;
     char            mc_name[IPMI_MC_NAME_LEN];
     ipmi_event_t    *event, *event2;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    int             interp = 0;
+    ipmi_event_handlers_t *h = NULL;
+    ipmi_domain_t   *domain = ipmi_mc_get_domain(mc);
 
     ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    if ((argc - curr_arg) >= 1) {
+	if (strcmp(argv[curr_arg], "interp") == 0)
+	    interp = 1;
+	else {
+	    cmdlang->errstr = "Invalid parameter";
+	    cmdlang->err = EINVAL;
+	    goto out_err;
+	}
+    }
+
+    if (interp) {
+	h = ipmi_event_handlers_alloc();
+	if (!h) {
+	    cmdlang->errstr = "Out of memory";
+	    cmdlang->err = ENOMEM;
+	    goto out_err;
+	}
+	ipmi_event_handlers_set_threshold(h, threshold_event_handler);
+	ipmi_event_handlers_set_discrete(h, discrete_event_handler);
+    }
 
     ipmi_cmdlang_out(cmd_info, "MC", NULL);
     ipmi_cmdlang_down(cmd_info);
@@ -101,12 +242,24 @@ mc_sel_list(ipmi_mc_t *mc, void *cb_data)
 	ipmi_cmdlang_out(cmd_info, "Event", NULL);
 	ipmi_cmdlang_down(cmd_info);
 	ipmi_cmdlang_event_out(event, cmd_info);
+	if (h)
+	    ipmi_event_call_handler(domain, h, event, cmd_info);
 	ipmi_cmdlang_up(cmd_info);
 	event2 = ipmi_mc_next_event(mc, event);
 	ipmi_event_free(event);
 	event = event2;
     }
     ipmi_cmdlang_up(cmd_info);
+    if (h)
+	ipmi_event_handlers_free(h);
+    return;
+
+ out_err:
+    ipmi_mc_get_name(mc, cmdlang->objstr,
+		     cmdlang->objstr_len);
+    cmdlang->location = "cmd_sel.c(mc_sel_list)";
+    if (h)
+	ipmi_event_handlers_free(h);
 }
 
 typedef struct sel_delete_s
@@ -330,7 +483,8 @@ static ipmi_cmdlang_init_t cmds_sel[] =
       "- Commands dealing with the SEL",
       NULL, NULL, &sel_cmds},
     { "list", &sel_cmds,
-      "<domain> - List all the events in the domain",
+      "<domain> [interp] - List all the events in the domain.  If interp is"
+      " specified, then interpret the event data if possible",
       ipmi_cmdlang_domain_handler, sel_list, NULL },
     { "mc_list", &sel_cmds,
       "<domain> - List all the events in the given MC's SEL",

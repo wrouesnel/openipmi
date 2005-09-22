@@ -580,6 +580,62 @@ unsigned int ipmi_event_get_data(const ipmi_event_t *event,
 				 unsigned int       offset,
 				 unsigned int       len);
 
+/* The following deal with interpreting existing events.  You can take
+   an existing event and pass it through these functions to do the
+   processing that normally happens on incoming events.
+
+   To use this, you must allocate an event with
+   ipmi_event_handlers_alloc() and set the event handlers you want
+   (either threshold, discrete, or both) to be called for the event.
+   The data in the event_handlers_t has no state, so you can use the
+   same allocated event handler structure for multiple calls, eg you
+   can allocate one ahead of time and use it for everything that needs
+   those particular functions.
+
+   Then call ipmi_event_call_handler() with the domain, event, and
+   handlers.  It will return EINVAL if the sensor for the event is no
+   longer value, EAGAIN if you didn't register an event handler for
+   that type (threshold or discrete).  If successfull, the proper
+   event handler will be called.
+
+   The return values from the event handlers is currently ignored, but
+   you should generally return either IPMI_EVENT_NOT_HANDLED or
+   IPMI_EVENT_HANDLED depending on if you did or did not handle the
+   event. */
+
+typedef struct ipmi_event_handlers_s ipmi_event_handlers_t;
+
+typedef int (*ipmi_sensor_threshold_event_cb)(
+    ipmi_sensor_t               *sensor,
+    enum ipmi_event_dir_e       dir,
+    enum ipmi_thresh_e          threshold,
+    enum ipmi_event_value_dir_e high_low,
+    enum ipmi_value_present_e   value_present,
+    unsigned int                raw_value,
+    double                      value,
+    void                        *cb_data,
+    ipmi_event_t                *event);
+
+typedef int (*ipmi_sensor_discrete_event_cb)(
+    ipmi_sensor_t         *sensor,
+    enum ipmi_event_dir_e dir,
+    int                   offset,
+    int                   severity,
+    int                   prev_severity,
+    void                  *cb_data,
+    ipmi_event_t          *event);
+
+ipmi_event_handlers_t *ipmi_event_handlers_alloc(void);
+void ipmi_event_handlers_free(ipmi_event_handlers_t *handlers);
+void ipmi_event_handlers_set_threshold(ipmi_event_handlers_t         *handlers,
+				       ipmi_sensor_threshold_event_cb handler);
+void ipmi_event_handlers_set_discrete(ipmi_event_handlers_t         *handlers,
+				      ipmi_sensor_discrete_event_cb handler);
+
+int ipmi_event_call_handler(ipmi_domain_t         *domain,
+			    ipmi_event_handlers_t *handlers,
+			    ipmi_event_t          *event,
+			    void                  *cb_data);
 
 /************************************************************************
  * 
@@ -1003,16 +1059,6 @@ int ipmi_entity_id_check_hot_swap_state(ipmi_entity_id_t id);
    the event means that is will manage the event (delete it when it is
    time).  If no sensor handles the event, then it will be delivered
    to the "main" unhandled event handler for the domain. */
-typedef int (*ipmi_sensor_threshold_event_cb)(
-    ipmi_sensor_t               *sensor,
-    enum ipmi_event_dir_e       dir,
-    enum ipmi_thresh_e          threshold,
-    enum ipmi_event_value_dir_e high_low,
-    enum ipmi_value_present_e   value_present,
-    unsigned int                raw_value,
-    double                      value,
-    void                        *cb_data,
-    ipmi_event_t                *event);
 int ipmi_sensor_add_threshold_event_handler(
     ipmi_sensor_t                  *sensor,
     ipmi_sensor_threshold_event_cb handler,
@@ -1030,14 +1076,6 @@ int ipmi_sensor_remove_threshold_event_handler(
    the event means that is will manage the event (delete it when it is
    time).  If no sensor handles the event, then it will be delivered
    to the "main" unhandled event handler for the domain. */
-typedef int (*ipmi_sensor_discrete_event_cb)(
-    ipmi_sensor_t         *sensor,
-    enum ipmi_event_dir_e dir,
-    int                   offset,
-    int                   severity,
-    int                   prev_severity,
-    void                  *cb_data,
-    ipmi_event_t          *event);
 int ipmi_sensor_add_discrete_event_handler(
     ipmi_sensor_t                 *sensor,
     ipmi_sensor_discrete_event_cb handler,

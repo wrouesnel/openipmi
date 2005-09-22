@@ -1,3 +1,12 @@
+2005-09-21 Matt Domsch <Matt_Domsch@dell.com>
+
+	* lib/event.c, include/OpenIPMI/ipmiif.h.in: Added a way to
+	"interpret" an existing event the same way that new incoming
+	events are interpreted.
+	
+	* cmdlang/cmd_sel.c: Added an "interp" option to the event
+	listing command to interpret the event.
+
 2005-09-14 Matt Domsch <Matt_Domsch@dell.com>
 
 	* ipmi.init: use poweroff_control or poweroff_powercycle module
