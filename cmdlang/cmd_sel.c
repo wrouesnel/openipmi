@@ -64,13 +64,7 @@ discrete_event_handler(ipmi_sensor_t         *sensor,
     ipmi_cmdlang_out_int(cmd_info, "Offset", offset);
     ipmi_cmdlang_out(cmd_info, "Direction", ipmi_get_event_dir_string(dir));
     ipmi_cmdlang_out_int(cmd_info, "Severity", severity);
-    ipmi_cmdlang_out_int(cmd_info, "Prcmd_infoous Severity", prev_severity);
-    if (event) {
-	ipmi_cmdlang_out(cmd_info, "Event", NULL);
-	ipmi_cmdlang_down(cmd_info);
-	ipmi_cmdlang_event_out(event, cmd_info);
-	ipmi_cmdlang_up(cmd_info);
-    }
+    ipmi_cmdlang_out_int(cmd_info, "Previous Severity", prev_severity);
     return IPMI_EVENT_HANDLED;
 }
 
@@ -108,12 +102,6 @@ threshold_event_handler(ipmi_sensor_t               *sensor,
 
     default:
 	break;
-    }
-    if (event) {
-	ipmi_cmdlang_out(cmd_info, "Event", NULL);
-	ipmi_cmdlang_down(cmd_info);
-	ipmi_cmdlang_event_out(event, cmd_info);
-	ipmi_cmdlang_up(cmd_info);
     }
     return IPMI_EVENT_HANDLED;
 }

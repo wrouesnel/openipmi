@@ -890,8 +890,10 @@ int _ipmi_hmac_init(void);
 int _ipmi_md5_init(void);
 int _ipmi_fru_init(void);
 int _ipmi_normal_fru_init(void);
+int _ipmi_fru_spd_decoder_init(void);
 void _ipmi_fru_shutdown(void);
 void _ipmi_normal_fru_shutdown(void);
+void _ipmi_fru_spd_decoder_shutdown(void);
 
 void ipmi_oem_atca_conn_shutdown(void);
 void ipmi_oem_intel_shutdown(void);
@@ -899,6 +901,7 @@ void ipmi_oem_kontron_conn_shutdown(void);
 void ipmi_oem_atca_shutdown(void);
 int _ipmi_smi_shutdown(void);
 int _ipmi_lan_shutdown(void);
+
 
 int
 ipmi_init(os_handler_t *handler)
@@ -959,6 +962,10 @@ ipmi_init(os_handler_t *handler)
     if (rv)
 	goto out_err;
 
+    rv = _ipmi_fru_spd_decoder_init();
+    if (rv)
+	goto out_err;
+
     /* Call the OEM handlers. */
     ipmi_oem_force_conn_init();
     ipmi_oem_motorola_mxp_init();
@@ -979,6 +986,7 @@ ipmi_init(os_handler_t *handler)
     ipmi_oem_kontron_conn_shutdown();
     _ipmi_mc_shutdown();
     _ipmi_domain_shutdown();
+    _ipmi_fru_spd_decoder_shutdown();
     _ipmi_normal_fru_shutdown();
     _ipmi_fru_shutdown();
     if (seq_lock)

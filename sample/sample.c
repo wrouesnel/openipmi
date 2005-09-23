@@ -46,6 +46,7 @@
 #include <OpenIPMI/ipmi_auth.h>
 #include <OpenIPMI/ipmi_lan.h>
 #include <OpenIPMI/ipmi_posix.h>
+#include <OpenIPMI/ipmi_fru.h>
 
 /* This sample application demostrates a very simple method to use
    OpenIPMI. It just search all sensors in the system.  From this
@@ -177,129 +178,101 @@ sensor_change(enum ipmi_update_e op,
     }
 }
 
-
 static int
-dump_fru_str(ipmi_entity_t *entity,
-	     char          *str,
-	     int (*glen)(ipmi_entity_t *fru,
-			 unsigned int  *length),
-	     int (*gtype)(ipmi_entity_t        *fru,
-			  enum ipmi_str_type_e *type),
-	     int (*gstr)(ipmi_entity_t *fru,
-			 char          *str,
-			 unsigned int  *strlen))
+traverse_fru_node_tree(int indent, ipmi_fru_node_t *node)
 {
-    enum ipmi_str_type_e type;
-    int rv;
-    char buf[128];
-    unsigned int len;
+    const char                *name;
+    unsigned int              i;
+    int                       j;
+    enum ipmi_fru_data_type_e dtype;
+    int                       intval, rv;
+    time_t                    time;
+    double                    floatval;
+    char                      *data;
+    unsigned int              data_len;
+    ipmi_fru_node_t           *sub_node;
+    
+    for (i=0; ; i++) {
+	data = NULL;
+        rv = ipmi_fru_node_get_field(node, i, &name, &dtype, &intval, &time,
+				     &floatval, &data, &data_len, &sub_node);
+        if (rv == EINVAL)
+            break;
+        else if (rv)
+            continue;
 
-    rv = gtype(entity, &type);
-    if (rv) {
-	if (rv != ENOSYS)
-	    printf("  Error fetching type for %s: %x\n", str, rv);
-	return rv;
+	if (name)
+	    printf("%*s%s: ", indent, "", name);
+	else
+	    printf("%*s[%d]: ", indent, "", i);
+
+        switch (dtype) {
+	case IPMI_FRU_DATA_INT:
+	    printf("(integer) %d\n", intval);
+	    break;
+
+	case IPMI_FRU_DATA_TIME:
+	    printf("(integer) %ld\n", (long) time);
+	    break;
+
+	case IPMI_FRU_DATA_BINARY:
+	    printf("(binary)");
+	    for (j=0; j<data_len; j++)
+		printf(" %2.2x", data[i]);
+	    printf("\n");
+	    break;
+
+	case IPMI_FRU_DATA_UNICODE:
+	    printf("(unicode)");
+	    for (j=0; j<data_len; j++)
+		printf(" %2.2x", data[i]);
+	    printf("\n");
+	    break;
+
+	case IPMI_FRU_DATA_ASCII:
+	    printf("(ascii) \"%s\"\n", data);
+	    break;
+
+	case IPMI_FRU_DATA_BOOLEAN:
+	    printf("(boolean) \"%s\"\n", intval ? "true" : "false");
+	    break;
+
+	case IPMI_FRU_DATA_FLOAT:
+	    printf("(float) %f\n", floatval);
+	    break;
+
+	case IPMI_FRU_DATA_SUB_NODE:
+	    if (intval == -1)
+		printf("(record)\n");
+	    else
+		printf("(array) %d\n", intval);
+	    traverse_fru_node_tree(indent+2, sub_node);
+	    break;
+	    
+	default:
+	    printf("(unknown)");
+	    break;
+	}
+
+	if (data)
+	    ipmi_fru_data_free(data);
     }
+    
+    ipmi_fru_put_node(node);
 
-    if (type == IPMI_BINARY_STR) {
-	printf("    %s is in binary\n", str);
-	return 0;
-    } else if (type == IPMI_UNICODE_STR) {
-	printf("    %s is in unicode\n", str);
-	return 0;
-    } else if (type != IPMI_ASCII_STR) {
-	printf("    %s is in unknown format\n", str);
-	return 0;
-    }
-
-    len = sizeof(buf);
-    rv = gstr(entity, buf, &len);
-    if (rv) {
-	printf("    Error fetching string for %s: %x\n", str, rv);
-	return rv;
-    }
-
-    printf("    %s: %s\n", str, buf);
     return 0;
 }
-
-static int
-dump_fru_custom_str(ipmi_entity_t *entity,
-		    char       *str,
-		    int        num,
-		    int (*glen)(ipmi_entity_t   *entity,
-				unsigned int num,
-				unsigned int *length),
-		    int (*gtype)(ipmi_entity_t           *entity,
-				 unsigned int         num,
-				 enum ipmi_str_type_e *type),
-		    int (*gstr)(ipmi_entity_t   *entity,
-				unsigned int num,
-				char         *str,
-				unsigned int *strlen))
-{
-    enum ipmi_str_type_e type;
-    int rv;
-    char buf[128];
-    unsigned int len;
-
-    rv = gtype(entity, num, &type);
-    if (rv)
-	return rv;
-
-    if (type == IPMI_BINARY_STR) {
-	printf("    %s custom %d is in binary\n", str, num);
-	return 0;
-    } else if (type == IPMI_UNICODE_STR) {
-	printf("    %s custom %d is in unicode\n", str, num);
-	return 0;
-    } else if (type != IPMI_ASCII_STR) {
-	printf("    %s custom %d is in unknown format\n", str, num);
-	return 0;
-    }
-
-    len = sizeof(buf);
-    rv = gstr(entity, num, buf, &len);
-    if (rv) {
-	printf("  Error fetching string for %s custom %d: %x\n",
-			str, num, rv);
-	return rv;
-    }
-
-    printf("    %s custom %d: %s\n", str, num, buf);
-    return 0;
-}
-
-#define DUMP_FRU_STR(name, str) \
-dump_fru_str(entity, str, ipmi_entity_get_ ## name ## _len, \
-             ipmi_entity_get_ ## name ## _type, \
-             ipmi_entity_get_ ## name)
-
-#define DUMP_FRU_CUSTOM_STR(name, str) \
-do {									\
-    int i, _rv;								\
-    for (i=0; ; i++) {							\
-        _rv = dump_fru_custom_str(entity, str, i,			\
-				  ipmi_entity_get_ ## name ## _custom_len, \
-				  ipmi_entity_get_ ## name ## _custom_type, \
-				  ipmi_entity_get_ ## name ## _custom);	\
-	if (_rv)							\
-	    break;							\
-    }									\
-} while (0)
-
 
 static void
 fru_change(enum ipmi_update_e op,
            ipmi_entity_t     *entity,
            void              *cb_data)
 {
-    int id, instance;
-    int rv;
-    unsigned char ucval;
-    unsigned int  uival;
-    time_t        tval;
-    
+    int           id, instance;
+    int           rv;
+    ipmi_fru_t    *fru = ipmi_entity_get_fru(entity);
+    const char    *type;
+    ipmi_fru_node_t *node;
 
     if (op == IPMI_ADDED) {
 	id = ipmi_entity_get_entity_id(entity);
@@ -307,63 +280,14 @@ fru_change(enum ipmi_update_e op,
 
 	printf("FRU added for: %d.%d\n", id, instance);
 
-	printf("  internal area info:\n");
-	rv = ipmi_entity_get_internal_use_version(entity, &ucval);
-	if (!rv)
-	    printf("    version: 0x%2.2x\n", ucval);
-	rv = ipmi_entity_get_internal_use_length(entity, &uival);
-	if (!rv)
-	    printf("    length: %d\n", uival);
+	if (!fru)
+	    return;
 
-	printf("  chassis area info:\n");
-	rv = ipmi_entity_get_chassis_info_version(entity, &ucval);
-	if (!rv)
-	    printf("    version: 0x%2.2x\n", ucval);
-	rv = ipmi_entity_get_chassis_info_type(entity, &ucval);
-	if (!rv)
-	    printf("    chassis type: %d\n", uival);
-	DUMP_FRU_STR(chassis_info_part_number, "part number");
-	DUMP_FRU_STR(chassis_info_serial_number, "serial number");
-	DUMP_FRU_CUSTOM_STR(chassis_info, "chassis");
-
-	printf("  board area info:\n");
-	rv = ipmi_entity_get_board_info_version(entity, &ucval);
-	if (!rv)
-	    printf("    version: 0x%2.2x\n", ucval);
-	rv = ipmi_entity_get_board_info_lang_code(entity, &ucval);
-	if (!rv)
-	    printf("    language: %d\n", uival);
-	rv = ipmi_entity_get_board_info_mfg_time(entity, &tval);
-	if (!rv)
-	    printf("    mfg time: %s\n", ctime(&tval));
-	DUMP_FRU_STR(board_info_board_manufacturer, "manufacturer");
-	DUMP_FRU_STR(board_info_board_product_name, "name");
-	DUMP_FRU_STR(board_info_board_serial_number, "serial number");
-	DUMP_FRU_STR(board_info_board_part_number, "part number");
-	DUMP_FRU_STR(board_info_fru_file_id, "fru file id");
-	DUMP_FRU_CUSTOM_STR(board_info, "board");
-
-	printf("product area info:\n");
-	rv = ipmi_entity_get_product_info_version(entity, &ucval);
-	if (!rv)
-	    printf("    version: 0x%2.2x\n", ucval);
-	rv = ipmi_entity_get_product_info_lang_code(entity, &ucval);
-	if (!rv)
-	    printf("    language: %d\n", uival);
-	DUMP_FRU_STR(product_info_manufacturer_name,
-		     "manufacturer");
-	DUMP_FRU_STR(product_info_product_name, "product name");
-	DUMP_FRU_STR(product_info_product_part_model_number,
-		     "part model number");
-	DUMP_FRU_STR(product_info_product_version, "product version");
-	DUMP_FRU_STR(product_info_product_serial_number,
-		     "serial number");
-	DUMP_FRU_STR(product_info_asset_tag, "asset tag");
-	DUMP_FRU_STR(product_info_fru_file_id, "fru file id");
-	DUMP_FRU_CUSTOM_STR(product_info, "product info");
-
-	/* multi record */
-	/* FIXME - not implemented */
+	rv = ipmi_fru_get_root_node(fru, &type, &node);
+	if (rv)
+	    return;
+	printf("FRU type: %s", type);
+	traverse_fru_node_tree(2, node);
     }
 }
 

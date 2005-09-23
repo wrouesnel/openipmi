@@ -1,4 +1,17 @@
-2005-09-21 Matt Domsch <Matt_Domsch@dell.com>
+2005-09-22 Corey Minyard <minyard@acm.org>
+
+	* lib/fru.c: Added an error when FRU decode failed.
+
+	* lib/normal_fru.c: Fixed the filename in error prints and remove
+	an error log when the checksum fails.
+
+	* lib/ipmi.c, lib/fru_spd_decode.c: Added FRU info decoding for
+	SPD FRU information.  This info type occurs in DRAMs.
+
+	* lib/sample.c: Switched over to use the new FRU decode fetching
+	method.
+
+2005-09-21 Corey Minyard <minyard@acm.org>
 
 	* lib/event.c, include/OpenIPMI/ipmiif.h.in: Added a way to
 	"interpret" an existing event the same way that new incoming

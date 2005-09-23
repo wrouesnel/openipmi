@@ -1046,7 +1046,7 @@ fru_decode_chassis_info_area(ipmi_fru_t        *fru,
     length = (*(data+1)) * 8;
     if ((length == 0) || (length > data_len)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(fru_decode_chassis_info_area):"
+		 "%snormal_fru.c(fru_decode_chassis_info_area):"
 		 " FRU string goes past data length",
 		 _ipmi_fru_get_iname(fru));
 	return EBADF;
@@ -1054,7 +1054,7 @@ fru_decode_chassis_info_area(ipmi_fru_t        *fru,
 
     if (checksum(data, length) != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(fru_decode_chassis_info_area):"
+		 "%snormal_fru.c(fru_decode_chassis_info_area):"
 		 " FRU string checksum failed",
 		 _ipmi_fru_get_iname(fru));
 	return EBADF;
@@ -1255,7 +1255,7 @@ fru_decode_board_info_area(ipmi_fru_t        *fru,
     length = (*(data+1)) * 8;
     if ((length == 0) || (length > data_len)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(fru_decode_board_info_area):"
+		 "%snormal_fru.c(fru_decode_board_info_area):"
 		 " FRU string goes past data length",
 		 _ipmi_fru_get_iname(fru));
 	return EBADF;
@@ -1263,7 +1263,7 @@ fru_decode_board_info_area(ipmi_fru_t        *fru,
 
     if (checksum(data, length) != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(fru_decode_board_info_area):"
+		 "%snormal_fru.c(fru_decode_board_info_area):"
 		 " FRU string checksum failed",
 		 _ipmi_fru_get_iname(fru));
 	return EBADF;
@@ -1506,7 +1506,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
     length = (*(data+1)) * 8;
     if ((length == 0) || (length > data_len)) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(fru_decode_product_info_area):"
+		 "%snormal_fru.c(fru_decode_product_info_area):"
 		 " FRU string goes past data length",
 		 _ipmi_fru_get_iname(fru));
 	return EBADF;
@@ -1514,7 +1514,7 @@ fru_decode_product_info_area(ipmi_fru_t        *fru,
 
     if (checksum(data, length) != 0) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(fru_decode_product_info_area):"
+		 "%snormal_fru.c(fru_decode_product_info_area):"
 		 " FRU string checksum failed",
 		 _ipmi_fru_get_iname(fru));
 	return EBADF;
@@ -1738,7 +1738,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 
 	if (left < 5) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(fru_decode_multi_record_area):"
+		     "%snormal_fru.c(fru_decode_multi_record_area):"
 		     " Data not long enough for multi record",
 		     _ipmi_fru_get_iname(fru));
 	    return EBADF;
@@ -1746,7 +1746,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 
 	if (checksum(data, 5) != 0) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(fru_decode_multi_record_area):"
+		     "%snormal_fru.c(fru_decode_multi_record_area):"
 		     " Header checksum for record %d failed",
 		     _ipmi_fru_get_iname(fru), num_records+1);
 	    return EBADF;
@@ -1755,7 +1755,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	length = data[2];
 	if ((length + 5) > left) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(fru_decode_multi_record_area):"
+		     "%snormal_fru.c(fru_decode_multi_record_area):"
 		     " Record went past end of data",
 		     _ipmi_fru_get_iname(fru));
 	    return EBADF;
@@ -1764,7 +1764,7 @@ fru_decode_multi_record_area(ipmi_fru_t        *fru,
 	sum = checksum(data+5, length) + data[3];
 	if (sum != 0) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(fru_decode_multi_record_area):"
+		     "%snormal_fru.c(fru_decode_multi_record_area):"
 		     " Data checksum for record %d failed",
 		     _ipmi_fru_get_iname(fru), num_records+1);
 	    return EBADF;
@@ -4144,13 +4144,8 @@ process_fru_info(ipmi_fru_t *fru)
     int               err = 0;
     unsigned char     version;
 
-    if (checksum(data, 8) != 0) {
-	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%sfru.c(process_fru_info):"
-		 " FRU checksum failed",
-		 _ipmi_fru_get_iname(fru));
+    if (checksum(data, 8) != 0)
 	return EBADF;
-    }
 
     version = *data;
     if (version != 1)
@@ -4166,7 +4161,7 @@ process_fru_info(ipmi_fru_t *fru)
 	foff[i].offset = data[i+1] * 8;
 	if (foff[i].offset >= data_len) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(process_fru_info):"
+		     "%snormal_fru.c(process_fru_info):"
 		     " FRU offset exceeds data length",
 		     _ipmi_fru_get_iname(fru));
 	    return EBADF;
@@ -4185,7 +4180,7 @@ process_fru_info(ipmi_fru_t *fru)
 	}
 	if (foff[i].offset >= foff[j].offset) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%sfru.c(process_fru_info):"
+		     "%snormal_fru.c(process_fru_info):"
 		     " FRU fields did not occur in the correct order",
 		     _ipmi_fru_get_iname(fru));
 	    return EBADF;

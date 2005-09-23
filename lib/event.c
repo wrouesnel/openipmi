@@ -354,6 +354,7 @@ ipmi_event_handlers_set_discrete(ipmi_event_handlers_t         *handlers,
 
 typedef struct event_call_handlers_s
 {
+    ipmi_domain_t         *domain;
     ipmi_event_handlers_t *handlers;
     ipmi_event_t          *event;
     int                   rv;
@@ -434,6 +435,20 @@ sensor_event_call(ipmi_sensor_t *sensor, void *cb_data)
     }
 }
 
+static void
+sel_mc_handler(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_sensor_id_t      sensor_id;
+    event_call_handlers_t *info = cb_data;
+    int                   rv;
+
+    sensor_id = ipmi_event_get_generating_sensor_id(info->domain, mc,
+						    info->event);
+    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_event_call, info);
+    if (rv)
+	info->rv = rv;
+}
+
 int
 ipmi_event_call_handler(ipmi_domain_t         *domain,
 			ipmi_event_handlers_t *handlers,
@@ -444,14 +459,22 @@ ipmi_event_call_handler(ipmi_domain_t         *domain,
 
     ipmi_sensor_id_t      sensor_id;
     event_call_handlers_t info;
-    int                   rv;
+    int                   rv = 0;
+    ipmi_mcid_t           mc_id;
 
+    info.domain = domain;
     info.handlers = handlers;
     info.event = event;
     info.rv = 0;
     info.cb_data = cb_data;
-    sensor_id = ipmi_event_get_generating_sensor_id(domain, NULL, event);
-    rv = ipmi_sensor_pointer_cb(sensor_id, sensor_event_call, &info);
+
+    /* We try first to get the MC the event is stored in.  If that
+       doesn't work, then just attempt to do the sensor without an MC. */
+    mc_id = ipmi_event_get_mcid(event);
+    if (ipmi_mc_pointer_cb(mc_id, sel_mc_handler, &info) != 0) {
+	sensor_id = ipmi_event_get_generating_sensor_id(domain, NULL, event);
+	rv = ipmi_sensor_pointer_cb(sensor_id, sensor_event_call, &info);
+    }
     if (!rv)
 	rv = info.rv;
     return rv;

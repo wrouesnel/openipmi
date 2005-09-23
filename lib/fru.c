@@ -679,8 +679,15 @@ ipmi_fru_alloc_notrack(ipmi_domain_t *domain,
 void
 fetch_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
 {
-    if (!err)
+    if (!err) {
 	err = fru_call_decoders(fru);
+	if (err) {
+	    ipmi_log(IPMI_LOG_ERR_INFO,
+		     "%sfru.c(fetch_complete):"
+		     " Unable to decode FRU information",
+		     _ipmi_fru_get_iname(fru));
+	}
+    }
 
     if (fru->data)
 	ipmi_mem_free(fru->data);
