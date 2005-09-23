@@ -90,7 +90,7 @@ typedef struct _SPDInfo
     const char    *voltageInterface;
     const char    *errorDetection;
     const char    *manufacturer;
-    char          partNumber[32];
+    char          partNumber[19];
     unsigned char rawData[128];
 } SPD_info_t;
 
@@ -106,19 +106,28 @@ static int
 set_fru_str_info(const char                **name,
 		 enum ipmi_fru_data_type_e *dtype,
 		 char                      **data,
+		 unsigned int              *data_len,
 		 const char                *iname,
 		 const char                *idata)
 {
+    int len = 0;
     if (name)
 	*name = iname;
     if (dtype)
 	*dtype = IPMI_FRU_DATA_ASCII;
     if (data) {
-	char *d = ipmi_mem_alloc(strlen(idata) + 1);
+	char *d;
+	len = strlen(idata) + 1;
+	d = ipmi_mem_alloc(len);
 	if (!d)
 	    return ENOMEM;
 	strcpy(d, idata);
 	*data = d;
+    }
+    if (data_len) {
+	if (!len)
+	    len = strlen(idata) + 1;
+	*data_len = len;
     }
     return 0;
 }
@@ -151,27 +160,27 @@ fru_node_get_field (ipmi_fru_node_t           *pnode,
 	break;
 
     case 1:
-	rv = set_fru_str_info(name, dtype, data, "memory_type",
+	rv = set_fru_str_info(name, dtype, data, data_len, "memory_type",
 			      spd_info->memoryType);
 	break;
 
     case 2:
-	rv = set_fru_str_info(name, dtype, data, "voltage_interface",
+	rv = set_fru_str_info(name, dtype, data, data_len, "voltage_interface",
 			      spd_info->voltageInterface);
 	break;
 
     case 3:
-	rv = set_fru_str_info(name, dtype, data, "error_detection",
+	rv = set_fru_str_info(name, dtype, data, data_len, "error_detection",
 			      spd_info->errorDetection);
 	break;
 
     case 4:
-	rv = set_fru_str_info(name, dtype, data, "manufacturer",
+	rv = set_fru_str_info(name, dtype, data, data_len, "manufacturer",
 			      spd_info->manufacturer);
 	break;
 
     case 5:
-	rv = set_fru_str_info(name, dtype, data, "part_number",
+	rv = set_fru_str_info(name, dtype, data, data_len, "part_number",
 			      spd_info->partNumber);
 	break;
 
@@ -265,7 +274,7 @@ loadInfo(SPD_info_t *spd_info, unsigned char *spd_data)
 		break;
 	    spd_info->partNumber[i] = spd_data[73+i];
 	}
-	spd_info->partNumber[18] = '\0';
+	spd_info->partNumber[i] = '\0';
     } else {
 	strcpy(spd_info->partNumber, "Unknown");
     }
