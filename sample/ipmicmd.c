@@ -404,11 +404,11 @@ process_input_line(char *buf)
 	printf("  help - This help\n");
 	printf("  0f <lun> <netfn> <cmd> <data.....> - send a command\n");
 	printf("      to the local BMC\n");
-	printf("  <channel> [ipmb] <dest addr> <lun> <netfn> <cmd> <data...> -\n");
-	printf("      send an IPMB command on the channel.\n");
-	printf("  <channel> lan <handle> <remote swid> <local swid> <lun> <netfn> <cmd> <data...> -\n");
-	printf("      send a command on a LAN channel.\n");
-	printf("  <channel> 00 <dest addr> <lun> <netfn> <cmd> <data...> -\n");
+	printf("  [ipmb] <channel> <dest addr> <lun> <netfn> [seq] <cmd> <data...> -\n");
+	printf("      send an IPMB command on the channel.  seq is used if this is a response\n");
+	printf("  lan <channel> <handle> <remote swid> <local swid> <lun> <netfn> [seq] <cmd> <data...> -\n");
+	printf("      send a command on a LAN channel.  seq is used if this is a response\n");
+	printf("  [ipmb] <channel> 00 <dest addr> <lun> <netfn> <cmd> <data...> -\n");
 	printf("      broadcast a command on the channel.\n");
 	printf("  test_lat <count> <command> - Send the command and wait for\n"
 	       "      the response <count> times and measure the average\n"

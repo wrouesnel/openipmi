@@ -269,3 +269,20 @@
      the traps and then you can tell OpenIPMI about them.  The
      ui/basic_ui.c code has some example SNMP trap code using the
      netsmp and ucsdsnmp libraries.
+
+ 2.21) Why does it take a long time to get events from OpenIPMI
+
+    The standard interface to the event log is polled, and the polling
+    time is 5 seconds by default.  You can change the polling time if
+    you don't care about the additional load.
+
+    A system interface (SMI) does have an immediate event receive
+    capability; when an event comes in it goes into the system log and
+    into a queue.  OpenIPMI does nt enable tis by default, you must
+    enable it yourself with a "Set BMC Global Enables Command".
+
+    LAN interfaces may be capable of sending SNMP traps when an event
+    comes in.  This is through the Platform Event Traps and is fairly
+    complicated.  OpenIPMI provides a way to configure this more
+    easily, but you still have to know what you are doing.  See
+    question 2.20 for how to handle these traps.

@@ -1,3 +1,8 @@
+2005-09-29 Corey Minyard <cminyard@mvista.com>
+
+	* lib/oem_atca.c: Make sure the shelf entity is reported
+	before any child entities of the ATCA shelf.
+
 2005-09-22 Corey Minyard <minyard@acm.org>
 
 	* lib/fru.c: Added an error when FRU decode failed.

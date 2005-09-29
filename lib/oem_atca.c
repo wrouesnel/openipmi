@@ -2833,6 +2833,13 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	goto out;
     }
 
+    /* Make sure the shelf entity is reported first. */
+    if (info->shelf_entity) {
+	_ipmi_entity_add_ref(info->shelf_entity);
+	_ipmi_entity_put(info->shelf_entity);
+	_ipmi_entity_get(info->shelf_entity);
+    }
+
     info->ipmcs = ipmi_mem_alloc(sizeof(atca_ipmc_t) * info->num_addresses);
     if (!info->ipmcs) {
 	ipmi_log(IPMI_LOG_SEVERE,
@@ -2953,11 +2960,8 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
     info->setup = 1;
 
  out:
-    if (info->shelf_entity) {
-	_ipmi_entity_add_ref(info->shelf_entity);
+    if (info->shelf_entity)
 	_ipmi_entity_put(info->shelf_entity);
-    }
-    return;
 }
 
 static int
