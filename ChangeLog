@@ -1,3 +1,26 @@
+2005-10-02 Corey Minyard <cminyard@mvista.com>
+
+	* utils/*.c, lanserv/*.c, lanserv/*.h: Relicense part of OpenIPMI
+	under a dual LGPL/BSD license so it may be used as part of a BMC
+	implementation.
+	* include/OpenIPMI/internal/ilist.h: ditto
+	* include/OpenIPMI/internal/md2.h: ditto
+	* include/OpenIPMI/internal/md5.h: ditto
+	* include/OpenIPMI/internal/ipmi_malloc.h: ditto
+	* include/OpenIPMI/internal/ipmi_locks.h: ditto
+	* include/OpenIPMI/internal/locked_list.h: ditto
+	* include/OpenIPMI/ipmi_auth.h: ditto
+	* include/OpenIPMI/ipmi_err.h: ditto
+	* include/OpenIPMI/ipmi_log.h: ditto
+	* include/OpenIPMI/os_handler.h: ditto
+	* include/OpenIPMI/ipmi_debug.h: ditto
+	* include/OpenIPMI/ipmi_addr.h: ditto
+	* include/OpenIPMI/ipmi_msgbits.h: ditto
+	* include/OpenIPMI/ipmi_picmg.h: ditto
+	* include/OpenIPMI/ipmi_bits.h: ditto
+	* include/OpenIPMI/ipmi_types.h: ditto
+	* include/OpenIPMI/lanserv.h: ditto
+
 2005-09-29 Corey Minyard <cminyard@mvista.com>
 
 	* lib/oem_atca.c: Make sure the shelf entity is reported
