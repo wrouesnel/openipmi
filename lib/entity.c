@@ -297,7 +297,6 @@ struct ipmi_entity_info_s
     locked_list_t         *entities;
 };
 
-static void call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op);
 static void entity_mc_active(ipmi_mc_t *mc, int active, void *cb_data);
 static int call_presence_handlers(ipmi_entity_t *ent, int present,
 				  int handled, ipmi_event_t **event);
@@ -745,6 +744,7 @@ void
 _ipmi_entity_put(ipmi_entity_t *ent)
 {
     ipmi_domain_t *domain = ent->domain;
+    int           entity_fru_fetch = 0;
     _ipmi_domain_entity_lock(domain);
  retry:
     if (ent->usecount == 1) {
@@ -753,7 +753,7 @@ _ipmi_entity_put(ipmi_entity_t *ent)
 	    ent->info = ent->pending_info;
             /* If the entity became a fru and is present, get its fru info. */
             if (!was_fru && ipmi_entity_get_is_fru(ent) && ent->present)
-                ipmi_entity_fetch_frus(ent);
+		entity_fru_fetch = 1;
 	    entity_set_name(ent);
 	    ent->pending_info_ready = 0;
 	}
@@ -814,6 +814,10 @@ _ipmi_entity_put(ipmi_entity_t *ent)
  out:
     ent->usecount--;
  out2:
+    /* Wait till here to start fetching FRUs, as we want to report the
+       entity first before we start the fetch. */
+    if (entity_fru_fetch)
+	ipmi_entity_fetch_frus(ent);
     _ipmi_domain_entity_unlock(domain);
 }
 
@@ -1448,7 +1452,7 @@ presence_changed(ipmi_entity_t *ent,
 		ent->fru = NULL;
 		ipmi_fru_destroy_internal(fru, NULL, NULL);
 
-		call_fru_handlers(ent, IPMI_DELETED);
+		_ipmi_entity_call_fru_handlers(ent, IPMI_DELETED);
 	    }
 	}
 
@@ -4948,8 +4952,8 @@ call_fru_handler(void *cb_data, void *item1, void *item2)
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
-static void
-call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op)
+void
+_ipmi_entity_call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op)
 {
     fru_handler_t info;
 
@@ -4980,7 +4984,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	}
 	ent->fru = info->fru;
 
-	call_fru_handlers(ent, op);
+	_ipmi_entity_call_fru_handlers(ent, op);
     } else {
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%sentity.c(fru_fetched_ent_cb):"
@@ -4994,7 +4998,7 @@ fru_fetched_ent_cb(ipmi_entity_t *ent, void *cb_data)
 	    /* Keep it if we got it, it might have some useful
 	       information. */
 	    ent->fru = info->fru;
-	call_fru_handlers(ent, IPMI_CHANGED);
+	_ipmi_entity_call_fru_handlers(ent, IPMI_CHANGED);
     }
 }
 
@@ -5063,6 +5067,16 @@ ipmi_entity_get_fru(ipmi_entity_t *ent)
     CHECK_ENTITY_LOCK(ent);
 
     return ent->fru;
+}
+
+void
+_ipmi_entity_set_fru(ipmi_entity_t *ent, ipmi_fru_t *fru)
+{
+    CHECK_ENTITY_LOCK(ent);
+
+    if (ent->fru)
+	ipmi_fru_destroy_internal(ent->fru, NULL, NULL);
+    ent->fru = fru;
 }
 
 /***************************************************************************

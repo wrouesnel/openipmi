@@ -186,6 +186,15 @@ void ipmi_entity_set_physical_slot_num(ipmi_entity_t *ent,
 				       int present,
 				       unsigned int val);
 
+/* Set the FRU data for an entity and free any FRU data that exists
+   already.  Note that this must be a notrack allocated FRU.  For
+   internal use only. */ 
+void _ipmi_entity_set_fru(ipmi_entity_t *ent, ipmi_fru_t *fru);
+
+/* Call all the FRU handlers for an entity.  Should be done after
+   setting FRU information. */
+void _ipmi_entity_call_fru_handlers(ipmi_entity_t *ent, enum ipmi_update_e op);
+
 /* This value is copied into an internal array, so no need to save or
    manage. */
 void ipmi_entity_set_id(ipmi_entity_t *ent, char *id,

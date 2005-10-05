@@ -1,3 +1,20 @@
+2005-10-05 Corey Minyard <cminyard@mvista.com>
+
+	* lib/entity.c, include/OpenIPMI/internal/ipmi_entity.h: Added a
+	way to set the FRU for an entity.
+
+	* lib/oem_atca.c: Put the shelf FRU info into the chassis entity
+	(the 23.1 entity).
+
+	* lib/oem_atca.c: Fix some problems with references on the
+	multirecord decoding.
+
+	* lib/normal_fru.c: Make sure the fru is unlocked while calling
+	the root node handlers.
+
+	* lib/fru.c: Make sure the FRU is unlocked while decoding the FRU
+	data.
+
 2005-10-04 Matt Domsch <Matt_Domsch@dell.com>
 	* ipmi.init: don't strictly require LSB functions on Red Hat / VMware
 	

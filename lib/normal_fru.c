@@ -3175,6 +3175,10 @@ fru_node_get_field(ipmi_fru_node_t           *pnode,
 	if (rv)
 	    return rv;
 
+	if (num == -1)
+	    /* No elements in the array. */
+	    return E2BIG;
+
 	if (num != 0) {
 	    fru_array_t *info;
 	    /* name is set by the previous call */
@@ -3511,8 +3515,13 @@ ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
 	_ipmi_fru_unlock(fru);
 	return EINVAL;
     }
+    d = ipmi_mem_alloc(u->records[record_num].length);
+    if (!d) {
+	_ipmi_fru_unlock(fru);
+	return ENOMEM;
+    }
 
-    d = u->records[record_num].data;
+    memcpy(d, u->records[record_num].data, u->records[record_num].length);
     cmp.manufacturer_id = d[0] | (d[1] << 8) | (d[2] << 16);
     cmp.record_type_id = u->records[record_num].type;
     cmp.fru = fru;
@@ -3521,8 +3530,10 @@ ipmi_fru_multi_record_get_root_node(ipmi_fru_t      *fru,
     cmp.mr_data_len = u->records[record_num].length;
     cmp.name = NULL;
     cmp.rv = 0;
-    locked_list_iterate(fru_multi_record_oem_handlers, get_root_node, &cmp);
     _ipmi_fru_unlock(fru);
+
+    locked_list_iterate(fru_multi_record_oem_handlers, get_root_node, &cmp);
+    ipmi_mem_free(d);
     if (cmp.rv)
 	return cmp.rv;
     if (node)

@@ -680,6 +680,7 @@ void
 fetch_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
 {
     if (!err) {
+	_ipmi_fru_unlock(fru);
 	err = fru_call_decoders(fru);
 	if (err) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
@@ -687,12 +688,12 @@ fetch_complete(ipmi_domain_t *domain, ipmi_fru_t *fru, int err)
 		     " Unable to decode FRU information",
 		     _ipmi_fru_get_iname(fru));
 	}
+	_ipmi_fru_lock(fru);
     }
 
     if (fru->data)
 	ipmi_mem_free(fru->data);
     fru->data = NULL;
-
     fru->in_use = 0;
     _ipmi_fru_unlock(fru);
 
