@@ -477,7 +477,7 @@ control_opq_ready2(ipmi_control_t *control, void *cb_data)
 	info->__handler(control, 0, info->__cb_data);
 }
 
-static void
+static int
 control_opq_ready(void *cb_data, int shutdown)
 {
     ipmi_control_op_info_t *info = cb_data;
@@ -490,13 +490,14 @@ control_opq_ready(void *cb_data, int shutdown)
 		 CONTROL_NAME(info->__control));
 	if (info->__handler)
 	    info->__handler(info->__control, ECANCELED, info->__cb_data);
-	return;
+	return OPQ_HANDLER_STARTED;
     }
 
     rv = ipmi_control_pointer_cb(info->__control_id, control_opq_ready2, info);
     if (rv)
 	if (info->__handler)
 	    info->__handler(info->__control, rv, info->__cb_data);
+    return OPQ_HANDLER_STARTED;
 }
 
 int

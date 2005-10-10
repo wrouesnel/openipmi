@@ -38,10 +38,15 @@
 
 typedef struct opq_s opq_t;
 
-/* The callback to start an operation.  If shutdown is true, then
-   the queue is being destroyed, and the callee should take
-   appropriate action. */
-typedef void (*opq_handler_cb)(void *cb_data, int shutdown);
+#define OPQ_HANDLER_STARTED	0
+#define OPQ_HANDLER_ABORTED	1
+/* The callback to start an operation.  If shutdown is true, then the
+   queue is being destroyed, and the callee should take appropriate
+   action.  This should return either IPQ_HANDLER_STARTED if the
+   operation is started or OPQ_HANDLER_ABORTED if the operation does
+   not start for some reason.  If this returns OPQ_HANDLER_ABORTED,
+   the opq will go on to the next operation. */
+typedef int (*opq_handler_cb)(void *cb_data, int shutdown);
 
 /* The callback from opq done operations.  If shutdown is true, then
    the queue is being destroyed, and the callee should take
@@ -60,6 +65,21 @@ void opq_destroy(opq_t *opq);
    return immediately with -1 if it would have been queued.  Returns 1
    on success, 0 on failure, or -1 if it would have been queued. */
 int opq_new_op(opq_t *opq, opq_handler_cb handler, void *cb_data, int nowait);
+
+typedef struct opq_elem_s opq_elem_t;
+opq_elem_t *opq_alloc_elem(void);
+void opq_free_elem(opq_elem_t *elem);
+
+/* Like opq_new_op, but allows the head or tail to be specified.  The
+   interface is open to support real priorities, but there's no
+   requirement for that yet.  Also allows an opq_elem_t to be passed
+   in; then the operation cannot fail.  Note that if this succeeds,
+   you do *not* need to free the elem, and the elem must be allocated
+   with opq_alloc_elem(). */
+#define OPQ_ADD_HEAD	100
+#define OPQ_ADD_TAIL	0
+int opq_new_op_prio(opq_t *opq, opq_handler_cb handler, void *cb_data,
+		    int nowait, int prio, opq_elem_t *elem);
 
 /* A new operation is ready.  If the opq is empty, the handler will be
    called immediately and the opq will be set in use.  Otherwise, the

@@ -498,7 +498,7 @@ sensor_opq_ready2(ipmi_sensor_t *sensor, void *cb_data)
 	info->__handler(sensor, 0, info->__cb_data);
 }
 
-static void
+static int
 sensor_opq_ready(void *cb_data, int shutdown)
 {
     ipmi_sensor_op_info_t *info = cb_data;
@@ -507,13 +507,14 @@ sensor_opq_ready(void *cb_data, int shutdown)
     if (shutdown) {
 	if (info->__handler)
 	    info->__handler(info->__sensor, ECANCELED, info->__cb_data);
-	return;
+	return OPQ_HANDLER_STARTED;
     }
 
     rv = ipmi_sensor_pointer_cb(info->__sensor_id, sensor_opq_ready2, info);
     if (rv)
 	if (info->__handler)
 	    info->__handler(info->__sensor, rv, info->__cb_data);
+    return OPQ_HANDLER_STARTED;
 }
 
 int

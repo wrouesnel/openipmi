@@ -1,3 +1,40 @@
+2005-10-09 Corey Minyard <cminyard@mvista.com>
+
+	* lib/opq.c: Added a way to pre-allocaste opq entries, a way to
+	put an item at the front of the opq instead of at the end, and a
+	way for an opq operation to return if it was started or not (an
+	optimization to keep from blowing the stack in operations that
+	might heavily nest).
+
+	* lib/control.c: Adjusted for the opq changes.
+	* lib/entity.c: ditto
+	* lib/lanparm.c: ditto
+	* lib/mc.c: ditto
+	* lib/pef.c: ditto
+	* lib/sdr.c: ditto
+	* lib/sensor.c: ditto
+	
+	* lib/sel.c: Optimized SEL clearing.  If the SEL detects that all
+	entries are deleted, it will immediately add a fetch operation at
+	the head of the queue.  If the fetch operation succeeds and clears
+	the SEL, any pending deletes are marked as already done and will
+	return a success for the operation.
+
+	* lib/sel.c, include/OpenIPMI/internal/ipmi_sel.h: Added a way to
+	try to force an SEL clear immediately.  NOTE: Do not use this.
+	This is only for HPI.
+
+	* lib/mc.c, include/OpenIPMI/ipmi_mc.h: Added an SEL clear
+	function for the MC.  NOTE: Do not use this.  This is only for
+	HPI.
+
+	* include/OpenIPMI/internal/ipmi_mc.h: Added a way to set a custom
+	clear handler.
+
+	* cmdlang/cmd_sel.c: Added a way to force-clear an MC's SEL.
+
+	* lanserv/emu.c: Fixed some bugs in SEL handling.
+
 2005-10-05 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c, include/OpenIPMI/internal/ipmi_entity.h: Added a

@@ -125,6 +125,18 @@ int ipmi_sel_del_event_by_recid(ipmi_sel_info_t       *sel,
 				ipmi_sel_op_done_cb_t handler,
 				void                  *cb_data);
 
+/* Clear all events in the SEL, but only if the last event in the SEL
+   matches "last_event".  If the clear operation fails or cannot be
+   done because the event doesn't match up, then an error is returned.
+   Note that use of this is *HIGHLY* discouraged.  This is only here
+   for HPI support.  In general, you should delete individual events
+   and OpenIPMI will do the right thing (do a clear if they are all
+   done, do individual deletes if possible otherwise, etc.) */
+int ipmi_sel_clear(ipmi_sel_info_t       *sel,
+		   ipmi_event_t          *last_event,
+		   ipmi_sel_op_done_cb_t handler,
+		   void                  *cb_data);
+
 /* Get various information from the IPMI SEL info commands. */
 int ipmi_sel_get_major_version(ipmi_sel_info_t *sel, int *val);
 int ipmi_sel_get_minor_version(ipmi_sel_info_t *sel, int *val);

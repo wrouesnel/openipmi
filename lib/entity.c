@@ -6786,7 +6786,7 @@ entity_opq_ready2(ipmi_entity_t *entity, void *cb_data)
 	info->__handler(entity, 0, info->__cb_data);
 }
 
-static void
+static int
 entity_opq_ready(void *cb_data, int shutdown)
 {
     ipmi_entity_op_info_t *info = cb_data;
@@ -6800,7 +6800,7 @@ entity_opq_ready(void *cb_data, int shutdown)
 		 ENTITY_NAME(info->__entity));
 	if (info->__handler)
 	    info->__handler(info->__entity, ECANCELED, info->__cb_data);
-	return;
+	return OPQ_HANDLER_STARTED;
     }
 
     rv = ipmi_entity_pointer_cb(info->__entity_id, entity_opq_ready2, info);
@@ -6813,6 +6813,8 @@ entity_opq_ready(void *cb_data, int shutdown)
 	if (info->__handler)
 	    info->__handler(info->__entity, rv, info->__cb_data);
     }
+
+    return OPQ_HANDLER_STARTED;
 }
 
 int

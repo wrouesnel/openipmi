@@ -463,6 +463,61 @@ sel_clear(ipmi_domain_t *domain, void *cb_data)
     ipmi_cmdlang_out(cmd_info, "SEL Clear done", domain_name);
 }
 
+static void
+sel_force_clear_done(ipmi_mc_t *mc,
+		     int       err,
+		     void      *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+
+    ipmi_cmdlang_lock(cmd_info);
+    if (err) {
+	cmdlang->errstr = "Error forcing SEL clear";
+	cmdlang->err = err;
+	ipmi_mc_get_name(mc, cmdlang->objstr,
+			 cmdlang->objstr_len);
+	cmdlang->location = "cmd_sel.c(sel_force_clear_done)";
+    } else {
+	char mc_name[IPMI_MC_NAME_LEN];
+
+	ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+	ipmi_cmdlang_out(cmd_info, "MC force clear done", mc_name);
+    }
+    ipmi_cmdlang_unlock(cmd_info);
+    ipmi_cmdlang_cmd_info_put(cmd_info);
+}
+
+static void
+sel_force_clear(ipmi_mc_t *mc, void *cb_data)
+{
+    ipmi_cmd_info_t *cmd_info = cb_data;
+    ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
+    ipmi_event_t    *event;
+    char            mc_name[IPMI_MC_NAME_LEN];
+    int             rv;
+
+    ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
+
+    event = ipmi_mc_last_event(mc);
+    if (!event) {
+	ipmi_cmdlang_out(cmd_info, "SEL force clear done, SEL already empty",
+			 mc_name);
+    } else {
+	ipmi_cmdlang_cmd_info_get(cmd_info);
+	rv = ipmi_mc_sel_clear(mc, event, sel_force_clear_done, cmd_info);
+	if (rv) {
+	    ipmi_cmdlang_cmd_info_put(cmd_info);
+	    cmdlang->errstr = "Error forcing clear";
+	    cmdlang->err = rv;
+	    ipmi_mc_get_name(mc, cmdlang->objstr,
+			     cmdlang->objstr_len);
+	    cmdlang->location = "cmd_sel.c(sel_add)";
+	}
+	ipmi_event_free(event);
+    }
+}
+
 static ipmi_cmdlang_cmd_t *sel_cmds;
 
 static ipmi_cmdlang_init_t cmds_sel[] =
@@ -487,6 +542,9 @@ static ipmi_cmdlang_init_t cmds_sel[] =
     { "clear", &sel_cmds,
       "<domain> - Delete all events in the domain.",
       ipmi_cmdlang_domain_handler, sel_clear, NULL },
+    { "force_clear", &sel_cmds,
+      "<mc> - Force a clear of the SEL in the MC.",
+      ipmi_cmdlang_mc_handler, sel_force_clear, NULL },
 };
 #define CMDS_SEL_LEN (sizeof(cmds_sel)/sizeof(ipmi_cmdlang_init_t))
 

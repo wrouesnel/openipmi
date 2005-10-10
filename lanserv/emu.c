@@ -636,6 +636,7 @@ handle_delete_sel_entry(lmc_data_t    *mc,
     ipmi_set_uint16(rdata+1, entry->record_id);
     *rdata_len = 3;
 
+    mc->sel.count--;
     free(entry);
 }
 
@@ -685,8 +686,10 @@ handle_clear_sel(lmc_data_t    *mc,
     }
 
     rdata[1] = 1;
-    if (op == 0) {
+    if (op == 0xaa) {
 	entry = mc->sel.entries;
+	mc->sel.entries = NULL;
+	mc->sel.count = 0;
 	while (entry) {
 	    n_entry = entry->next;
 	    free(entry);

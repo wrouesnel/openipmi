@@ -293,19 +293,19 @@ db_fetched(void          *cb_data,
     opq_op_done(sdrs->sdr_wait_q);
 }
 
-static void
+static int
 start_db_fetch(void *cb_data, int shutdown)
 {
     ipmi_sdr_info_t *sdrs = cb_data;
     int             rv = ENOSYS;
 
     if (shutdown)
-	return;
+	return OPQ_HANDLER_STARTED;
 
     sdr_lock(sdrs);
     if (sdrs->destroyed) {
 	internal_destroy_sdr_info(sdrs);
-	return;
+	return OPQ_HANDLER_STARTED;
     }
 
     /* Go ahead and do the database fetch here if we have support. */
@@ -336,9 +336,11 @@ start_db_fetch(void *cb_data, int shutdown)
     if (rv) {
 	sdrs->db_fetching = 0;
 	sdr_unlock(sdrs);
-	opq_op_done(sdrs->sdr_wait_q);
-    } else
+	return OPQ_HANDLER_ABORTED;
+    } else {
 	sdr_unlock(sdrs);
+	return OPQ_HANDLER_STARTED;
+    }
 }
 
 int
@@ -1541,14 +1543,14 @@ handle_start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     }
 }
 
-static void
+static int
 handle_start_fetch(void *cb_data, int shutdown)
 {
     int             rv;
     ipmi_sdr_info_t *sdrs = (ipmi_sdr_info_t *) cb_data;
 
     if (shutdown)
-	return;
+	return OPQ_HANDLER_STARTED;
 
     rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_fetch_cb, sdrs);
     if (rv) {
@@ -1558,6 +1560,7 @@ handle_start_fetch(void *cb_data, int shutdown)
 	sdrs->wait_err = rv;
 	fetch_complete(sdrs, rv);
     }
+    return OPQ_HANDLER_STARTED;
 }
 
 static void
@@ -2414,14 +2417,14 @@ handle_start_save_cb(ipmi_mc_t *mc, void *cb_data)
     }
 }
 
-static void
+static int
 handle_start_save(void *cb_data, int shutdown)
 {
     int             rv;
     ipmi_sdr_info_t *sdrs = cb_data;
 
     if (shutdown)
-	return;
+	return OPQ_HANDLER_STARTED;
 
     rv = ipmi_mc_pointer_cb(sdrs->mc, handle_start_save_cb, sdrs);
     if (rv) {
@@ -2431,6 +2434,7 @@ handle_start_save(void *cb_data, int shutdown)
 	sdrs->wait_err = rv;
 	fetch_complete(sdrs, rv);
     }
+    return OPQ_HANDLER_STARTED;
 }
 
 static void

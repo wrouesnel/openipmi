@@ -40,7 +40,7 @@
 #include <OpenIPMI/internal/ilist.h>
 #include <OpenIPMI/internal/opq.h>
 
-typedef struct opq_elem_s
+struct opq_elem_s
 {
     int               block;
     opq_handler_cb    handler;
@@ -48,7 +48,8 @@ typedef struct opq_elem_s
     opq_done_cb       done;
     void              *done_data;
     struct opq_elem_s *next;
-} opq_elem_t;
+    ilist_item_t      ilist_item;
+};
 
 struct opq_s
 {
@@ -115,7 +116,7 @@ opq_destroy_item(ilist_iter_t *iter, void *item, void *cb_data)
     opq_elem_t *elem = (opq_elem_t *) item;
 
     elem->handler(elem->handler_data, 1);
-    ipmi_mem_free(elem);
+    opq_free_elem(elem);
 }
 
 void
@@ -138,10 +139,52 @@ opq_destroy(opq_t *opq)
     ipmi_mem_free(opq);
 }
 
-int
-opq_new_op(opq_t *opq, opq_handler_cb handler, void *cb_data, int nowait)
+static void
+start_next_op(opq_t *opq)
+{
+    ilist_iter_t iter;
+    opq_elem_t   *elem;
+    int          success;
+
+    ilist_init_iter(&iter, opq->ops);
+    ilist_first(&iter);
+    elem = ilist_get(&iter);
+    while (elem) {
+	ilist_delete(&iter);
+	opq->done_handler = elem->done;
+	opq->done_data = elem->done_data;
+	opq_unlock(opq);
+	success = elem->handler(elem->handler_data, 0);
+	opq_free_elem(elem);
+	opq_lock(opq);
+	if (success == OPQ_HANDLER_STARTED)
+	    break;
+	ilist_first(&iter);
+	elem = ilist_get(&iter);
+    }
+    if (!elem)
+	opq->in_handler = 0;
+}
+
+opq_elem_t *
+opq_alloc_elem(void)
 {
     opq_elem_t *elem;
+    elem = ipmi_mem_alloc(sizeof(opq_elem_t));
+    return elem;
+}
+
+void
+opq_free_elem(opq_elem_t *elem)
+{
+    ipmi_mem_free(elem);
+}
+
+int
+opq_new_op_prio(opq_t *opq, opq_handler_cb handler, void *cb_data,
+		int nowait, int prio, opq_elem_t *elem)
+{
+    int        success;
 
     opq_lock(opq);
     if (opq->in_handler) {
@@ -149,25 +192,35 @@ opq_new_op(opq_t *opq, opq_handler_cb handler, void *cb_data, int nowait)
 	    opq_unlock(opq);
 	    return -1;
 	}
-	elem = ipmi_mem_alloc(sizeof(*elem));
-	if (!elem)
-	    goto out_err;
+	if (!elem) {
+	    elem = opq_alloc_elem();
+	    if (!elem)
+		goto out_err;
+	}
 	elem->handler = handler;
 	elem->done = NULL;
 	elem->handler_data = cb_data;
 	elem->block = 1;
-	if (! ilist_add_tail(opq->ops, elem, NULL)) {
-	    ipmi_mem_free(elem);
-	    goto out_err;
-	}
+	if (prio)
+	    ilist_add_head(opq->ops, elem, &elem->ilist_item);
+	else
+	    ilist_add_tail(opq->ops, elem, &elem->ilist_item);
 	opq->blocked = 0;
 	opq_unlock(opq);
     } else {
+	if (elem)
+	    opq_free_elem(elem);
 	opq->blocked = 0;
 	opq->in_handler = 1;
 	opq->done_handler = NULL;
 	opq_unlock(opq);
-	handler(cb_data, 0);
+	success = handler(cb_data, 0);
+	if (success == OPQ_HANDLER_ABORTED) {
+	    /* In case any were added while I was unlocked. */
+	    opq_lock(opq);
+	    start_next_op(opq);
+	    opq_unlock(opq);
+	}
     }
 
     return 1;
@@ -178,6 +231,12 @@ opq_new_op(opq_t *opq, opq_handler_cb handler, void *cb_data, int nowait)
 }
 
 int
+opq_new_op(opq_t *opq, opq_handler_cb handler, void *cb_data, int nowait)
+{
+    return opq_new_op_prio(opq, handler, cb_data, nowait, OPQ_ADD_TAIL, NULL);
+}
+
+int
 opq_new_op_with_done(opq_t          *opq,
 		     opq_handler_cb handler,
 		     void           *handler_data,
@@ -185,6 +244,7 @@ opq_new_op_with_done(opq_t          *opq,
 		     void           *done_data)
 {
     opq_elem_t *elem;
+    int        success;
 
     opq_lock(opq);
     if (opq->in_handler) {
@@ -196,10 +256,7 @@ opq_new_op_with_done(opq_t          *opq,
 	elem->done = done;
 	elem->done_data = done_data;
 	elem->block = opq->blocked;
-	if (! ilist_add_tail(opq->ops, elem, NULL)) {
-	    ipmi_mem_free(elem);
-	    goto out_err;
-	}
+	ilist_add_tail(opq->ops, elem, &elem->ilist_item);
 	opq->blocked = 0;
 	opq_unlock(opq);
     } else {
@@ -208,7 +265,13 @@ opq_new_op_with_done(opq_t          *opq,
 	opq->done_handler = done;
 	opq->done_data = done_data;
 	opq_unlock(opq);
-	handler(handler_data, 0);
+	success = handler(handler_data, 0);
+	if (success == OPQ_HANDLER_ABORTED) {
+	    /* In case any were added while I was unlocked. */
+	    opq_lock(opq);
+	    start_next_op(opq);
+	    opq_unlock(opq);
+	}
     }
 
     return 1;
@@ -261,7 +324,7 @@ opq_op_done(opq_t *opq)
 	while (list) {
 	    next = list->next;
 	    list->done(list->done_data, 0);
-	    ipmi_mem_free(list);
+	    opq_free_elem(list);
 	    list = next;
 	}
 
@@ -271,18 +334,8 @@ opq_op_done(opq_t *opq)
 	ilist_first(&iter);
 	elem = ilist_get(&iter);
     }
-    if (elem) {
-	ilist_delete(&iter);
-	opq->done_handler = elem->done;
-	opq->done_data = elem->done_data;
-	opq_unlock(opq);
-	elem->handler(elem->handler_data, 0);
-	ipmi_mem_free(elem);
-    } else {
-	/* The list is empty. */
-	opq->in_handler = 0;
-	opq_unlock(opq);
-    }
+    start_next_op(opq);
+    opq_unlock(opq);
 }
 
 int

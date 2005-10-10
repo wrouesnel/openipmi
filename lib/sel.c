@@ -60,9 +60,47 @@ typedef struct sel_fetch_handler_s
 /* Holds an event in the list of events. */
 typedef struct sel_event_holder_s
 {
-    int          deleted;
+    unsigned int deleted : 1;
+    unsigned int cancelled : 1;
+    unsigned int refcount;
     ipmi_event_t *event;
 } sel_event_holder_t;
+
+static sel_event_holder_t *
+sel_event_holder_alloc(void)
+{
+    sel_event_holder_t *holder = ipmi_mem_alloc(sizeof(*holder));
+
+    if (!holder)
+	return NULL;
+    holder->deleted = 0;
+    holder->cancelled = 0;
+    holder->refcount = 1;
+    holder->event = NULL;
+    return holder;
+}
+
+static void
+sel_event_holder_get(sel_event_holder_t *holder)
+{
+    holder->refcount++;
+}
+
+static void
+sel_event_holder_put(sel_event_holder_t *holder)
+{
+    holder->refcount--;
+    if (holder->refcount == 0) {
+	ipmi_event_free(holder->event);
+	ipmi_mem_free(holder);
+    }
+}
+
+typedef struct sel_clear_req_s
+{
+    ipmi_event_t *last_event;
+    struct sel_clear_req_s *next;
+} sel_clear_req_t;
 
 #define SEL_NAME_LEN (IPMI_DOMAIN_NAME_LEN + 32)
 
@@ -175,9 +213,9 @@ static void
 free_event(ilist_iter_t *iter, void *item, void *cb_data)
 {
     sel_event_holder_t *holder = item;
-    ipmi_event_free(holder->event);
-    ipmi_mem_free(holder);
+    sel_event_holder_put(holder);
 }
+
 static void
 free_events(ilist_t *events)
 {
@@ -351,11 +389,12 @@ internal_destroy_sel(ipmi_sel_info_t *sel)
 
     /* We don't have to have a valid ipmi to destroy an SEL, the are
        designed to live after the ipmi has been destroyed. */
-    sel_unlock(sel);
 
-    free_events(sel->events);
-    if (sel->events)
+    if (sel->events) {
+	free_events(sel->events);
 	free_ilist(sel->events);
+    }
+    sel_unlock(sel);
 
     if (sel->opq)
 	opq_destroy(sel->opq);
@@ -427,7 +466,7 @@ ipmi_sel_destroy(ipmi_sel_info_t      *sel,
 /* This should be called with the sel locked.  It will unlock the sel
    before returning. */
 static void
-fetch_complete(ipmi_sel_info_t *sel, int err)
+fetch_complete(ipmi_sel_info_t *sel, int err, int do_opq_done)
 {
     sel_fetch_handler_t *elem, *next;
     int                 sels_changed;
@@ -465,7 +504,8 @@ fetch_complete(ipmi_sel_info_t *sel, int err)
 	return;
     }
 
-    opq_op_done(sel->opq);
+    if (do_opq_done)
+	opq_op_done(sel->opq);
     return;
 
  out:
@@ -476,17 +516,20 @@ static void
 free_deleted_event(ilist_iter_t *iter, void *item, void *cb_data)
 {
     sel_event_holder_t *holder = item;
+    ipmi_sel_info_t    *sel = cb_data;
 
     if (holder->deleted) {
 	ilist_delete(iter);
-	ipmi_event_free(holder->event);
-	ipmi_mem_free(holder);
+	holder->cancelled = 1;
+	sel->del_sels--;
+	sel_event_holder_put(holder);
     }
 }
+
 static void
-free_deleted_events(ilist_t *events)
+free_deleted_events(ipmi_sel_info_t *sel)
 {
-    ilist_iter(events, free_deleted_event, NULL);
+    ilist_iter(sel->events, free_deleted_event, sel);
 }
 
 static void
@@ -503,7 +546,7 @@ handle_sel_clear(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_clear): "
 		 "SEL info was destroyed while an operation was in"
 		 " progress(1)", sel->name);
-	fetch_complete(sel, ECANCELED);
+	fetch_complete(sel, ECANCELED, 1);
 	goto out;
     }
 
@@ -512,7 +555,7 @@ handle_sel_clear(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_clear): "
 		 "MC went away while SEL op was in progress",
 		 sel->name);
-        fetch_complete(sel, ECANCELED);
+        fetch_complete(sel, ECANCELED, 1);
 	goto out;
     }
 
@@ -521,7 +564,7 @@ handle_sel_clear(ipmi_mc_t  *mc,
 	    ipmi_domain_stat_add(sel->sel_good_clears, 1);
 
 	/* Success!  We can free the data. */
-	free_deleted_events(sel->events);
+	free_deleted_events(sel);
 	sel->del_sels = 0;
     } else if (rsp->data[0] == IPMI_INVALID_RESERVATION_CC) {
 	if (sel->sel_clear_lost_reservation)
@@ -531,7 +574,7 @@ handle_sel_clear(ipmi_mc_t  *mc,
 	    ipmi_domain_stat_add(sel->sel_clear_errors, 1);
     }
 
-    fetch_complete(sel, 0);
+    fetch_complete(sel, 0, 1);
  out:
     return;
 }
@@ -557,7 +600,7 @@ send_sel_clear(sel_fetch_handler_t *elem, ipmi_mc_t *mc)
 				handle_sel_clear, elem);
 }
 
-static void start_fetch(void *cb_data, int shutdown);
+static int start_fetch(void *cb_data, int shutdown);
 
 static void
 handle_sel_data(ipmi_mc_t  *mc,
@@ -582,7 +625,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_data): "
 		 "SEL info was destroyed while an operation was in"
 		 " progress(2)", sel->name);
-	fetch_complete(sel, ECANCELED);
+	fetch_complete(sel, ECANCELED, 1);
 	goto out;
     }
 
@@ -591,7 +634,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_data): "
 		 "handle_sel_data: MC went away while SEL op was in progress",
 		 sel->name);
-        fetch_complete(sel, ECANCELED);
+        fetch_complete(sel, ECANCELED, 1);
 	goto out;
     }
 	
@@ -613,7 +656,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 		     "%ssel.c(handle_sel_data): "
 		     "Too many lost reservations in SEL fetch",
 		     sel->name);
-	    fetch_complete(sel, EAGAIN);
+	    fetch_complete(sel, EAGAIN, 1);
 	    goto out;
 	} else {
 	    start_fetch(elem, 0);
@@ -636,7 +679,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_data): "
 		 "IPMI error from SEL fetch: %x",
 		 sel->name, rsp->data[0]);
-	fetch_complete(sel, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	fetch_complete(sel, IPMI_IPMI_ERR_VAL(rsp->data[0]), 1);
 	goto out;
     }
 
@@ -659,7 +702,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_data): "
 		 "Could not allocate event for SEL",
 		 sel->name);
-	fetch_complete(sel, ENOMEM);
+	fetch_complete(sel, ENOMEM, 1);
 	goto out;
     }
 
@@ -668,13 +711,13 @@ handle_sel_data(ipmi_mc_t  *mc,
 
     holder = find_event(sel->events, record_id);
     if (!holder) {
-	holder = ipmi_mem_alloc(sizeof(*holder));
+	holder = sel_event_holder_alloc();
 	if (!holder) {
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%ssel.c(handle_sel_data): "
 		     "Could not allocate log information for SEL",
 		     sel->name);
-	    fetch_complete(sel, ENOMEM);
+	    fetch_complete(sel, ENOMEM, 1);
 	    goto out;
 	}
 	if (!ilist_add_tail(sel->events, holder, NULL)) {
@@ -683,7 +726,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 		     "%ssel.c(handle_sel_data): "
 		     "Could not link log onto the log linked list",
 		     sel->name);
-	    fetch_complete(sel, ENOMEM);
+	    fetch_complete(sel, ENOMEM, 1);
 	    goto out;
 	}
 	holder->event = del_event;
@@ -739,13 +782,13 @@ handle_sel_data(ipmi_mc_t  *mc,
 	       happen again later if it does. */
 	    rv = send_sel_clear(elem, mc);
 	    if (rv) {
-		fetch_complete(sel, 0);
+		fetch_complete(sel, 0, 1);
 		goto out;
 	    }
 	    rv = 0;
 	    goto out_unlock;
 	} else {
-	    fetch_complete(sel, 0);
+	    fetch_complete(sel, 0, 1);
 	    goto out;
 	}
     }
@@ -766,7 +809,7 @@ handle_sel_data(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_clear): "
 		 "Could not send SEL fetch command: %x", sel->name, rv);
-	fetch_complete(sel, rv);
+	fetch_complete(sel, rv, 1);
 	goto out;
     }
 
@@ -812,7 +855,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_info): "
 		 "SEL info was destroyed while an operation was in progress",
 		 sel->name);
-	fetch_complete(sel, ECANCELED);
+	fetch_complete(sel, ECANCELED, 1);
 	goto out;
     }
 
@@ -821,7 +864,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_info): "
 		 "MC went away while SEL op was in progress",
 		 sel->name);
-        fetch_complete(sel, ECANCELED);
+        fetch_complete(sel, ECANCELED, 1);
 	goto out;
     }
 	
@@ -832,7 +875,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_info): "
 		 "IPMI error from SEL info fetch: %x",
 		 sel->name, rsp->data[0]);
-	fetch_complete(sel, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	fetch_complete(sel, IPMI_IPMI_ERR_VAL(rsp->data[0]), 1);
 	goto out;
     }
 
@@ -841,7 +884,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 	    ipmi_domain_stat_add(sel->sel_fetch_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_info): SEL info too short", sel->name);
-	fetch_complete(sel, EINVAL);
+	fetch_complete(sel, EINVAL, 1);
 	goto out;
     }
 
@@ -878,12 +921,12 @@ handle_sel_info(ipmi_mc_t  *mc,
 	       happen again later if it does. */
 	    rv = send_sel_clear(elem, mc);
 	    if (rv) {
-		fetch_complete(sel, 0);
+		fetch_complete(sel, 0, 1);
 		goto out;
 	    }
 	    goto out_unlock;
 	} else {
-	    fetch_complete(sel, 0);
+	    fetch_complete(sel, 0, 1);
 	    goto out;
 	}
     }
@@ -911,7 +954,7 @@ handle_sel_info(ipmi_mc_t  *mc,
 	sel->last_addition_timestamp = sel->curr_addition_timestamp;
 	sel->last_erase_timestamp = sel->curr_erase_timestamp;
 
-	fetch_complete(sel, 0);
+	fetch_complete(sel, 0, 1);
 	goto out;
     }
 
@@ -930,13 +973,27 @@ handle_sel_info(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_info): "
 		 "Could not send first SEL fetch command: %x",
 		 sel->name, rv);
-	fetch_complete(sel, rv);
+	fetch_complete(sel, rv, 1);
 	goto out;
     }
  out_unlock:
     sel_unlock(sel);
  out:
     return;
+}
+
+static int
+send_get_sel_info(sel_fetch_handler_t *elem, ipmi_mc_t *mc)
+{
+    ipmi_sel_info_t *sel = elem->sel;
+    ipmi_msg_t      cmd_msg;
+
+    /* Fetch the repository info. */
+    cmd_msg.netfn = IPMI_STORAGE_NETFN;
+    cmd_msg.cmd = IPMI_GET_SEL_INFO_CMD;
+    cmd_msg.data = NULL;
+    cmd_msg.data_len = 0;
+    return ipmi_mc_send_command(mc, sel->lun, &cmd_msg, handle_sel_info, elem);
 }
 
 static void
@@ -946,8 +1003,6 @@ sel_handle_reservation(ipmi_mc_t  *mc,
 {
     sel_fetch_handler_t *elem = rsp_data;
     ipmi_sel_info_t     *sel = elem->sel;
-    unsigned char       cmd_data[MAX_IPMI_DATA_SIZE];
-    ipmi_msg_t          cmd_msg;
     int                 rv;
 
     sel_lock(sel);
@@ -956,7 +1011,7 @@ sel_handle_reservation(ipmi_mc_t  *mc,
 		 "%ssel.c(sel_handle_reservation): "
 		 "SEL info was destroyed while an operation was in progress",
 		 sel->name);
-	fetch_complete(sel, ECANCELED);
+	fetch_complete(sel, ECANCELED, 1);
 	goto out;
     }
 
@@ -965,7 +1020,7 @@ sel_handle_reservation(ipmi_mc_t  *mc,
 		 "%ssel.c(sel_handle_reservation): "
 		 "MC went away while SEL op was in progress",
 		 sel->name);
-        fetch_complete(sel, ECANCELED);
+        fetch_complete(sel, ECANCELED, 1);
 	goto out;
     }
 	
@@ -975,7 +1030,7 @@ sel_handle_reservation(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_handle_reservation): "
 		 "Failed getting reservation", sel->name);
-	fetch_complete(sel, ENOSYS);
+	fetch_complete(sel, ENOSYS, 1);
 	goto out;
     } else if (rsp->data_len < 3) {
 	if (sel->sel_fetch_errors)
@@ -983,23 +1038,18 @@ sel_handle_reservation(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_handle_reservation): "
 		 "got invalid reservation length", sel->name);
-	fetch_complete(sel, EINVAL);
+	fetch_complete(sel, EINVAL, 1);
 	goto out;
     }
 
     sel->reservation = ipmi_get_uint16(rsp->data+1);
 
-    /* Fetch the repository info. */
-    cmd_msg.data = cmd_data;
-    cmd_msg.netfn = IPMI_STORAGE_NETFN;
-    cmd_msg.cmd = IPMI_GET_SEL_INFO_CMD;
-    cmd_msg.data_len = 0;
-    rv = ipmi_mc_send_command(mc, sel->lun, &cmd_msg, handle_sel_info, elem);
+    rv = send_get_sel_info(elem, mc);
     if (rv) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_handle_reservation): "
 		 "Could not send SEL info command: %x", sel->name, rv);
-	fetch_complete(sel, rv);
+	fetch_complete(sel, rv, 1);
 	goto out;
     }
     sel_unlock(sel);
@@ -1016,13 +1066,12 @@ start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     ipmi_msg_t          cmd_msg;
     int                 rv;
 
-    sel_lock(sel);
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_fetch_cb): "
 		 "SEL info was destroyed while an operation was in progress",
 		 sel->name);
-	fetch_complete(sel, ECANCELED);
+	elem->rv = ECANCELED;
 	goto out;
     }
 
@@ -1051,40 +1100,47 @@ start_fetch_cb(ipmi_mc_t *mc, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_fetch_cb): could not send cmd: %x",
 		 sel->name, rv);
-	fetch_complete(sel, ECANCELED);
+	elem->rv = rv;
 	goto out;
     }
 
-    sel_unlock(sel);
  out:
     return;
 }
 
-static void
+static int
 start_fetch(void *cb_data, int shutdown)
 {
     sel_fetch_handler_t *elem = cb_data;
     int                 rv;
 
+    sel_lock(elem->sel);
     if (shutdown) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_fetch): "
 		 "SEL info was destroyed while an operation was in progress",
 		 elem->sel->name);
-	sel_lock(elem->sel);
-	fetch_complete(elem->sel, ECANCELED);
-	return;
+	fetch_complete(elem->sel, ECANCELED, 0);
+	return OPQ_HANDLER_ABORTED;
     }
 
     /* The read lock must be claimed before the sel lock to avoid
        deadlock. */
     rv = ipmi_mc_pointer_cb(elem->sel->mc, start_fetch_cb, elem);
-    if (rv) {
+    if (rv)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_fetch): MC is not valid", elem->sel->name);
-	sel_lock(elem->sel);
-	fetch_complete(elem->sel, rv);
+    else
+	rv = elem->rv;
+
+    if (rv) {
+	fetch_complete(elem->sel, rv, 0);
+	return OPQ_HANDLER_ABORTED;
     }
+
+    sel_unlock(elem->sel);
+
+    return OPQ_HANDLER_STARTED;
 }
 
 /* We have to have this because the allocate element can go away (the
@@ -1122,7 +1178,12 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 	elem->next = NULL;
 	sel->fetch_handlers = elem;
 	sel_unlock(sel);
-	if (!opq_new_op(sel->opq, start_fetch, elem, 0)) {
+	/* Always put a fetch ahead of everything else.  If there are
+	   deletes in progress and a clear gets done, we can complete
+	   all the deletes. */
+	if (!opq_new_op_prio(sel->opq, start_fetch, elem, 0, OPQ_ADD_HEAD,
+			    NULL))
+	{
 	    sel->fetch_handlers = NULL;
 	    info->rv = ENOMEM;
 	}
@@ -1133,6 +1194,8 @@ ipmi_sel_get_cb(ipmi_mc_t *mc, void *cb_data)
 	elem->next = sel->fetch_handlers;
 	sel->fetch_handlers = elem;
     } else {
+	/* No handler and fetch was already in progress.  Return an
+	   error so the caller knows what happened. */
 	info->rv = EEXIST;
     }
 
@@ -1182,7 +1245,7 @@ ipmi_sel_get(ipmi_sel_info_t     *sel,
 /* Don't do this forever. */
 #define MAX_DEL_RESERVE_RETRIES		10
 
-typedef struct sel_cb_handler_data_s
+typedef struct sel_del_handler_data_s
 {
     ipmi_sel_info_t       *sel;
     ipmi_sel_op_done_cb_t handler;
@@ -1192,19 +1255,32 @@ typedef struct sel_cb_handler_data_s
     unsigned int          lun;
     unsigned int          count;
     ipmi_event_t          *event;
-} sel_cb_handler_data_t;
+    sel_event_holder_t    *holder;
 
-static int send_reserve_sel_for_delete(sel_cb_handler_data_t *data,
+    /* If true, we do a clear operation if the given record is the
+       last record in the SEL. */
+    int                   do_clear;
+} sel_del_handler_data_t;
+
+static int send_reserve_sel_for_delete(sel_del_handler_data_t *data,
 				       ipmi_mc_t *mc);
 
 static void
-sel_op_done(sel_cb_handler_data_t *data,
-	    int                   rv)
+sel_op_done(sel_del_handler_data_t *data,
+	    int                    rv,
+	    int                    do_op_done)
 {
     ipmi_sel_info_t *sel = data->sel;
 
+    if (data->holder)
+	sel_event_holder_put(data->holder);
+
+    sel_unlock(sel);
+
     if (data->handler)
 	data->handler(sel, data->cb_data, rv);
+
+    sel_lock(sel);
 
     if (sel->in_destroy) {
 	/* Nothing to do */
@@ -1214,7 +1290,8 @@ sel_op_done(sel_cb_handler_data_t *data,
 	internal_destroy_sel(sel);
     } else {
 	sel_unlock(sel);
-	opq_op_done(sel->opq);
+	if (do_op_done)
+	    opq_op_done(sel->opq);
     }
     if (data->event)
 	ipmi_event_free(data->event);
@@ -1222,13 +1299,99 @@ sel_op_done(sel_cb_handler_data_t *data,
 }
 
 static void
+free_all_event(ilist_iter_t *iter, void *item, void *cb_data)
+{
+    sel_event_holder_t *holder = item;
+    ipmi_sel_info_t    *sel = cb_data;
+
+    if (holder->deleted) {
+	ilist_delete(iter);
+	sel->del_sels--;
+	holder->cancelled = 1;
+    }
+    sel_event_holder_put(holder);
+}
+
+static void
+free_all_events(ipmi_sel_info_t *sel)
+{
+    ilist_iter(sel->events, free_all_event, sel);
+}
+
+static void
+handle_del_sel_clear(ipmi_mc_t  *mc,
+		     ipmi_msg_t *rsp,
+		     void       *rsp_data)
+{
+    sel_del_handler_data_t *data = rsp_data;
+    ipmi_sel_info_t        *sel = data->sel;
+
+    sel_lock(sel);
+    if (sel->destroyed) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssel.c(handle_del_sel_clear): "
+		 "SEL info was destroyed while an operation was in progress",
+		 sel->name);
+	sel_op_done(data, ECANCELED, 1);
+	goto out;
+    }
+
+    if (!mc) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssel.c(handle_del_sel_clear): "
+		 "MC went away while SEL fetch was in progress",
+		 sel->name);
+	sel_op_done(data, ECANCELED, 1);
+	goto out;
+    }
+
+    if (rsp->data[0]) {
+	ipmi_log(IPMI_LOG_ERR_INFO,
+		 "%ssel.c(handle_del_sel_clear): "
+		 "IPMI error clearing SEL: 0x%x",
+		 sel->name, rsp->data[0]);
+	sel_op_done(data, IPMI_IPMI_ERR_VAL(rsp->data[0]), 1);
+	goto out;
+    }
+
+    free_all_events(sel);
+    sel->num_sels = 0;
+
+    sel_op_done(data, 0, 1);
+
+ out:
+    return;
+}
+
+static int
+send_del_clear(sel_del_handler_data_t *data, ipmi_mc_t *mc)
+{
+    ipmi_sel_info_t *sel = data->sel;
+    unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
+    ipmi_msg_t      cmd_msg;
+
+    cmd_msg.data = cmd_data;
+    cmd_msg.netfn = IPMI_STORAGE_NETFN;
+    cmd_msg.cmd = IPMI_CLEAR_SEL_CMD;
+    cmd_msg.data_len = 6;
+    ipmi_set_uint16(cmd_msg.data, data->reservation);
+    cmd_msg.data[2] = 'C';
+    cmd_msg.data[3] = 'L';
+    cmd_msg.data[4] = 'R';
+    cmd_msg.data[5] = 0xaa;
+
+    return ipmi_mc_send_command(mc, sel->lun, &cmd_msg,
+				handle_del_sel_clear, data);
+}
+
+static void
 handle_sel_delete(ipmi_mc_t  *mc,
 		  ipmi_msg_t *rsp,
 		  void       *rsp_data)
 {
-    sel_cb_handler_data_t *data = (sel_cb_handler_data_t *) rsp_data;
-    ipmi_sel_info_t       *sel = data->sel;
-    int                   rv = 0;
+    sel_del_handler_data_t *data = rsp_data;
+    ipmi_sel_info_t        *sel = data->sel;
+    int                    rv = 0;
     
     sel_lock(sel);
     if (sel->destroyed) {
@@ -1236,7 +1399,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_delete): "
 		 "SEL info was destroyed while an operation was in progress",
 		 sel->name);
-	sel_op_done(data, ECANCELED);
+	sel_op_done(data, ECANCELED, 1);
 	goto out;
     }
 
@@ -1245,7 +1408,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_delete): "
 		 "MC went away while SEL fetch was in progress",
 		 sel->name);
-	sel_op_done(data, ECANCELED);
+	sel_op_done(data, ECANCELED, 1);
 	goto out;
     }
 
@@ -1285,7 +1448,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 		 "%ssel.c(handle_sel_delete): "
 		 "IPMI error from SEL delete: %x", sel->name, rsp->data[0]);
 	rv = IPMI_IPMI_ERR_VAL(rsp->data[0]);
-    } else {
+    } else {	
 	/* We deleted the entry, so remove it from our database. */
 	sel_event_holder_t *real_holder;
 	ilist_iter_t       iter;
@@ -1296,13 +1459,12 @@ handle_sel_delete(ipmi_mc_t  *mc,
 					&(data->record_id));
 	if (real_holder) {
 	    ilist_delete(&iter);
-	    ipmi_event_free(real_holder->event);
-	    ipmi_mem_free(real_holder);
+	    sel_event_holder_put(real_holder);
 	    sel->del_sels--;
 	}
     }
 
-    sel_op_done(data, rv);
+    sel_op_done(data, rv, 1);
 
  out:
     return;
@@ -1312,7 +1474,7 @@ handle_sel_delete(ipmi_mc_t  *mc,
 }
 
 static int
-send_del_sel(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
+send_del_sel(sel_del_handler_data_t *data, ipmi_mc_t *mc)
 {
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
@@ -1335,41 +1497,42 @@ handle_sel_check(ipmi_mc_t  *mc,
 		 ipmi_msg_t *rsp,
 		 void       *rsp_data)
 {
-    sel_cb_handler_data_t *data = (sel_cb_handler_data_t *) rsp_data;
-    ipmi_sel_info_t       *sel = data->sel;
-    int                   rv = 0;
+    sel_del_handler_data_t *data = rsp_data;
+    ipmi_sel_info_t        *sel = data->sel;
+    int                    rv = 0;
     
     sel_lock(sel);
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_check): "
-		 "SEL info was destroyed while an operation was in progress",
+		 "SEL info was destroyed while SEL delete element was in"
+		 " progress",
 		 sel->name);
-	sel_op_done(data, ECANCELED);
+	sel_op_done(data, ECANCELED, 1);
 	goto out;
     }
 
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(handle_sel_check): "
-		 "MC went away while SEL fetch was in progress",
+		 "MC went away while SEL delete element was in progress",
 		 sel->name);
-	sel_op_done(data, ECANCELED);
+	sel_op_done(data, ECANCELED, 1);
 	goto out;
     }
 
     /* Special return codes. */
     if (rsp->data[0] == IPMI_NOT_PRESENT_CC) {
 	/* The entry is already gone, so just return no error. */
-	sel_op_done(data, 0);
+	sel_op_done(data, 0, 1);
 	goto out;
     } else if (rsp->data[0]) {
 	if (sel->sel_delete_errors)
 	    ipmi_domain_stat_add(sel->sel_delete_errors, 1);
 	ipmi_log(IPMI_LOG_ERR_INFO,
-		 "%ssel.c(handle_sel_check): IPMI error from SEL get: %x",
+		 "%ssel.c(handle_sel_check): IPMI error from SEL check: %x",
 		 sel->name, rsp->data[0]);
-	sel_op_done(data, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	sel_op_done(data, IPMI_IPMI_ERR_VAL(rsp->data[0]), 1);
 	goto out;
     } else {
 	ipmi_event_t *ch_event;
@@ -1389,31 +1552,56 @@ handle_sel_check(ipmi_mc_t  *mc,
 	    ipmi_log(IPMI_LOG_ERR_INFO,
 		     "%ssel.c(handle_sel_check): Could not allocate memory",
 		     sel->name);
-	    sel_op_done(data, ENOMEM);
+	    sel_op_done(data, ENOMEM, 1);
 	    goto out;
 	}
 
 	if (event_cmp(ch_event, data->event) != 0) {
 	    /* The event's don't match, so just finish. */
 	    ipmi_event_free(ch_event);
-	    sel_op_done(data, 0);
+	    sel_op_done(data, 0, 1);
 	    goto out;
 	}
 	ipmi_event_free(ch_event);
 
-	rv = send_del_sel(data, mc);
-	if (rv) {
-	    ipmi_log(IPMI_LOG_ERR_INFO,
-		     "%ssel.c(handle_sel_check): "
-		     "Could not send SEL delete command: %x",
-		     sel->name, rv);
-	    sel_op_done(data, rv);
-	    goto out;
-	} else if (data->record_id == sel->curr_rec_id)
-	    /* We are deleting our "current" record (used for finding
-	       the next record), make sure we start again from
-	       scratch on the next fetch. */
-	    sel->curr_rec_id = 0;
+	if (data->do_clear) {
+	    /* Make sure that there is no next event. */
+	    uint16_t next_ev = ipmi_get_uint16(rsp->data+1);
+
+	    if (next_ev != 0xffff) {
+		/* A new event was added after this one.  Fail the op. */
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "%ssel.c(handle_sel_check): "
+			 "Clear SEL failed, new events in SEL",
+			 sel->name);
+		sel_op_done(data, EAGAIN, 1);
+		goto out;
+	    }
+
+	    rv = send_del_clear(data, mc);
+	    if (rv) {
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "%ssel.c(handle_sel_check): "
+			 "Could not send SEL clear command: %x",
+			 sel->name, rv);
+		sel_op_done(data, rv, 1);
+		goto out;
+	    }
+	} else {
+	    rv = send_del_sel(data, mc);
+	    if (rv) {
+		ipmi_log(IPMI_LOG_ERR_INFO,
+			 "%ssel.c(handle_sel_check): "
+			 "Could not send SEL delete command: %x",
+			 sel->name, rv);
+		sel_op_done(data, rv, 1);
+		goto out;
+	    } else if (data->record_id == sel->curr_rec_id)
+		/* We are deleting our "current" record (used for finding
+		   the next record), make sure we start again from
+		   scratch on the next fetch. */
+		sel->curr_rec_id = 0;
+	}
     }
 	
 
@@ -1425,7 +1613,7 @@ handle_sel_check(ipmi_mc_t  *mc,
 
 /* First get the entry, to make sure we are deleting the right one. */
 static int
-send_check_sel(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
+send_check_sel(sel_del_handler_data_t *data, ipmi_mc_t *mc)
 {
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
@@ -1450,24 +1638,26 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
 			ipmi_msg_t *rsp,
 			void       *rsp_data)
 {
-    sel_cb_handler_data_t *data = rsp_data;
-    ipmi_sel_info_t       *sel = data->sel;
-    int                   rv;
+    sel_del_handler_data_t *data = rsp_data;
+    ipmi_sel_info_t        *sel = data->sel;
+    int                    rv;
 
     sel_lock(sel);
     if (sel->destroyed) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_reserved_for_delete): "
-		 "SEL info was destroyed while an operation was in progress",
+		 "SEL info was destroyed while SEL delete element was in"
+		 " progress",
 		 sel->name);
-	sel_op_done(data, ECANCELED);
+	sel_op_done(data, ECANCELED, 1);
 	goto out;
     }
     if (!mc) {
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_reserved_for_delete): "
-		 "MC went away while SEL fetch was in progress", sel->name);
-	sel_op_done(data, ECANCELED);
+		 "MC went away while SEL delete element was in progress",
+		 sel->name);
+	sel_op_done(data, ECANCELED, 1);
 	goto out;
     }
 
@@ -1478,7 +1668,7 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
 		 "%ssel.c(sel_reserved_for_delete): "
 		 "IPMI error from SEL delete reservation: %x",
 		 sel->name, rsp->data[0]);
-	sel_op_done(data, IPMI_IPMI_ERR_VAL(rsp->data[0]));
+	sel_op_done(data, IPMI_IPMI_ERR_VAL(rsp->data[0]), 1);
 	goto out;
     }
 
@@ -1488,7 +1678,7 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(sel_reserved_for_delete): "
 		 "Could not send SEL get command: %x", sel->name, rv);
-	sel_op_done(data, rv);
+	sel_op_done(data, rv, 1);
 	goto out;
     }
 
@@ -1498,7 +1688,7 @@ sel_reserved_for_delete(ipmi_mc_t  *mc,
 }
 
 static int
-send_reserve_sel_for_delete(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
+send_reserve_sel_for_delete(sel_del_handler_data_t *data, ipmi_mc_t *mc)
 {
     unsigned char   cmd_data[MAX_IPMI_DATA_SIZE];
     ipmi_msg_t      cmd_msg;
@@ -1517,9 +1707,9 @@ send_reserve_sel_for_delete(sel_cb_handler_data_t *data, ipmi_mc_t *mc)
 static void
 start_del_sel_cb(ipmi_mc_t *mc, void *cb_data)
 {
-    sel_cb_handler_data_t *data = cb_data;
-    ipmi_sel_info_t       *sel = data->sel;
-    int                   rv;
+    sel_del_handler_data_t *data = cb_data;
+    ipmi_sel_info_t        *sel = data->sel;
+    int                    rv;
 
     /* Called with SEL lock held. */
     if (sel->destroyed) {
@@ -1527,7 +1717,7 @@ start_del_sel_cb(ipmi_mc_t *mc, void *cb_data)
 		 "%ssel.c(start_del_sel_cb): "
 		 "SEL info was destroyed while an operation was in progress",
 		 sel->name);
-	sel_op_done(data, ECANCELED);
+	sel_op_done(data, ECANCELED, 1);
 	goto out;
     }
 
@@ -1540,7 +1730,7 @@ start_del_sel_cb(ipmi_mc_t *mc, void *cb_data)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_del_sel_cb): could not send cmd: %x",
 		 sel->name, rv);
-	sel_op_done(data, rv);
+	sel_op_done(data, rv, 1);
 	goto out;
     }
 
@@ -1549,12 +1739,12 @@ start_del_sel_cb(ipmi_mc_t *mc, void *cb_data)
     return;
 }
 
-static void
+static int
 start_del_sel(void *cb_data, int shutdown)
 {
-    sel_cb_handler_data_t *data = cb_data;
-    ipmi_sel_info_t       *sel = data->sel;
-    int                   rv;
+    sel_del_handler_data_t *data = cb_data;
+    ipmi_sel_info_t        *sel = data->sel;
+    int                    rv;
 
     sel_lock(sel);
     if (shutdown) {
@@ -1562,8 +1752,14 @@ start_del_sel(void *cb_data, int shutdown)
 		 "%ssel.c(start_del_sel): "
 		 "SEL info was destroyed while an operation was in progress",
 		 sel->name);
-	sel_op_done(data, ECANCELED);
-	goto out;
+	sel_op_done(data, ECANCELED, 0);
+	return OPQ_HANDLER_ABORTED;
+    }
+
+    if (data->holder->cancelled) {
+	/* Deleted by a clear, everything is ok. */
+	sel_op_done(data, 0, 0);
+	return OPQ_HANDLER_ABORTED;
     }
 
     rv = ipmi_mc_pointer_cb(sel->mc, start_del_sel_cb, data);
@@ -1571,12 +1767,11 @@ start_del_sel(void *cb_data, int shutdown)
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%ssel.c(start_del_sel_cb): MC went away during delete",
 		 sel->name);
-	sel_op_done(data, ECANCELED);
-	goto out;
+	sel_op_done(data, ECANCELED, 0);
+	return OPQ_HANDLER_ABORTED;
     }
 
- out:
-    return;
+    return OPQ_HANDLER_STARTED;
 }
 
 typedef struct sel_del_event_info_s
@@ -1588,6 +1783,7 @@ typedef struct sel_del_event_info_s
     void                  *cb_data;
     int                   cmp_event;
     int                   rv;
+    int                   do_clear;
 } sel_del_event_info_t;
 
 static void
@@ -1597,10 +1793,9 @@ sel_del_event_cb(ipmi_mc_t *mc, void *cb_data)
     ipmi_sel_info_t       *sel = info->sel;
     ipmi_event_t          *event = info->event;
     int                   cmp_event = info->cmp_event;
-    sel_cb_handler_data_t *data;
     sel_event_holder_t    *real_holder;
     ilist_iter_t          iter;
-    int                   lun;
+    int                   start_fetch;
 
     sel_lock(sel);
     if (sel->destroyed) {
@@ -1622,45 +1817,71 @@ sel_del_event_cb(ipmi_mc_t *mc, void *cb_data)
 	goto out_unlock;
     }
 
-    if (real_holder->deleted) {
-	info->rv = EINVAL;
-	goto out_unlock;
-    }
+    if (! info->do_clear) {
+	if (real_holder->deleted) {
+	    info->rv = EINVAL;
+	    goto out_unlock;
+	}
 
-    real_holder->deleted = 1;
-    sel->num_sels--;
-    sel->del_sels++;
+	real_holder->deleted = 1;
+	sel->num_sels--;
+	sel->del_sels++;
 
-    lun = sel->lun;
+	start_fetch = (sel->num_sels == 0) && (sel->del_sels > 1);
+    } else
+	start_fetch = 0;
 
-    if (sel->supports_delete_sel) {
+    /* Note that at this point we cannot check num_sels to see if it
+       is zero and do a bulk clear.  A new event might be added to the
+       SEL after this point, thus failing the bulk clear, and that
+       would prevent the individual delete from happening.  But we can
+       start a fetch if the value reaches zero, which is just as
+       good. */
+
+    if (sel->supports_delete_sel || info->do_clear) {
+	sel_del_handler_data_t *data;
+	opq_elem_t             *elem;
+
 	/* We can delete the entry immediately, just do it. */
 	data = ipmi_mem_alloc(sizeof(*data));
-	if (!data)
-	    /* We will eventually free this anyway, so no need to
-               worry. */
+	elem = opq_alloc_elem();
+	if (!data || !elem) {
+	    if (! info->do_clear) {
+		real_holder->deleted = 0;
+		sel->num_sels++;
+		sel->del_sels--;
+	    }
+	    info->rv = ENOMEM;
+	    if (data)
+		ipmi_mem_free(data);
+	    if (elem)
+		opq_free_elem(elem);
 	    goto out_unlock;
+	}
 
 	data->sel = sel;
 	data->handler = info->handler;
 	data->cb_data = info->cb_data;
-	data->lun = lun;
+	data->lun = sel->lun;
 	data->record_id = info->record_id;
 	data->count = 0;
 	data->event = event;
+	data->holder = real_holder;
+	data->do_clear = info->do_clear;
+	sel_event_holder_get(real_holder);
 	event = NULL;
 
-	/* We don't return a return code, because we don't really
-           care.  If this fails, it will just be handled later. */
 	sel_unlock(sel);
-	if (!opq_new_op(sel->opq, start_del_sel, data, 0))
-	    ipmi_mem_free(data);
+	opq_new_op_prio(sel->opq, start_del_sel, data, 0, OPQ_ADD_TAIL, elem);
     } else {
 	sel_unlock(sel);
 	/* Don't really delete the event, but report is as done. */
 	info->handler(sel, info->cb_data, 0);
 	ipmi_event_free(event);
     }
+
+    if (start_fetch)
+	ipmi_sel_get(sel, NULL, NULL);
     return;
 
  out_unlock:
@@ -1673,7 +1894,8 @@ sel_del_event(ipmi_sel_info_t       *sel,
 	      unsigned int          record_id,
 	      ipmi_sel_op_done_cb_t handler,
 	      void                  *cb_data,
-	      int                   cmp_event)
+	      int                   cmp_event,
+	      int                   do_clear)
 {
     sel_del_event_info_t info;
     int                  rv;
@@ -1685,6 +1907,7 @@ sel_del_event(ipmi_sel_info_t       *sel,
     info.cb_data = cb_data;
     info.cmp_event = cmp_event;
     info.rv = 0;
+    info.do_clear = do_clear;
     rv = ipmi_mc_pointer_cb(sel->mc, sel_del_event_cb, &info);
     if (!rv)
 	rv = info.rv;
@@ -1700,7 +1923,7 @@ ipmi_sel_del_event(ipmi_sel_info_t       *sel,
 		   void                  *cb_data)
 {
     return sel_del_event(sel, event, ipmi_event_get_record_id(event),
-			 handler, cb_data, 1);
+			 handler, cb_data, 1, 0);
 }
 
 int
@@ -1709,7 +1932,17 @@ ipmi_sel_del_event_by_recid(ipmi_sel_info_t       *sel,
 			    ipmi_sel_op_done_cb_t handler,
 			    void                  *cb_data)
 {
-    return sel_del_event(sel, NULL, record_id, handler, cb_data, 0);
+    return sel_del_event(sel, NULL, record_id, handler, cb_data, 0, 0);
+}
+
+int
+ipmi_sel_clear(ipmi_sel_info_t       *sel,
+	       ipmi_event_t          *last_event,
+	       ipmi_sel_op_done_cb_t handler,
+	       void                  *cb_data)
+{
+    return sel_del_event(sel, last_event, ipmi_event_get_record_id(last_event),
+			 handler, cb_data, 1, 1);
 }
 
 int
@@ -2120,7 +2353,7 @@ ipmi_sel_event_add(ipmi_sel_info_t *sel,
     record_id = ipmi_event_get_record_id(new_event);
     holder = find_event(sel->events, record_id);
     if (!holder) {
-	holder = ipmi_mem_alloc(sizeof(*holder));
+	holder = sel_event_holder_alloc();
 	if (!holder) {
 	    rv = ENOMEM;
 	    goto out_unlock;
@@ -2255,7 +2488,7 @@ sel_add_event_cb(ipmi_mc_t *mc, void *cb_data)
 				    info);
 }
 
-static void
+static int
 sel_add_event_op(void *cb_data, int shutdown)
 {
     sel_add_cb_handler_data_t *info = cb_data;
@@ -2289,7 +2522,7 @@ sel_add_event_op(void *cb_data, int shutdown)
 
     sel_unlock(sel);
  out:
-    return;
+    return OPQ_HANDLER_STARTED;
 }
 
 int

@@ -236,6 +236,18 @@ int ipmi_mc_del_event(ipmi_mc_t                 *mc,
 		      ipmi_mc_del_event_done_cb handler,
 		      void                      *cb_data);
 
+/* Clear out all the events in the SEL if and only if the last_event
+   passed in is the last event in the SEL.  Note that use of this is
+   *HIGHLY* discouraged.  This is only here for HPI support.  In
+   general, you should delete individual events and OpenIPMI will do
+   the right thing (do a clear if they are all gone, do individual
+   deletes if possible otherwise, etc.) */
+int ipmi_mc_sel_clear(ipmi_mc_t                 *mc,
+		      ipmi_event_t              *last_event, 
+		      ipmi_mc_del_event_done_cb handler,
+		      void                      *cb_data);
+
+
 ipmi_event_t *ipmi_mc_first_event(ipmi_mc_t *mc);
 ipmi_event_t *ipmi_mc_last_event(ipmi_mc_t *mc);
 ipmi_event_t *ipmi_mc_next_event(ipmi_mc_t *mc, const ipmi_event_t *event);

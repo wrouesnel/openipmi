@@ -160,6 +160,7 @@ struct ipmi_mc_s
        handler. */
     ipmi_mc_del_event_cb sel_del_event_handler;
     ipmi_mc_add_event_cb sel_add_event_handler;
+    ipmi_mc_del_event_cb sel_clear_handler;
 
     /* Timer for rescanning the sel periodically. */
     os_hnd_timer_id_t *sel_timer;
@@ -683,6 +684,13 @@ ipmi_mc_set_add_event_handler(ipmi_mc_t            *mc,
 }
 
 void
+ipmi_mc_set_sel_clear_handler(ipmi_mc_t            *mc,
+			      ipmi_mc_del_event_cb handler)
+{
+    mc->sel_clear_handler = handler;
+}
+
+void
 ipmi_mc_set_sel_rescan_time(ipmi_mc_t *mc, unsigned int seconds)
 {
     unsigned int old_time;
@@ -755,6 +763,39 @@ ipmi_mc_del_event(ipmi_mc_t                 *mc,
     sel_info->cb_data = cb_data;
 
     rv = ipmi_sel_del_event(mc->sel, event, sel_op_done, sel_info);
+    if (rv)
+	ipmi_mem_free(sel_info);
+
+    return rv;
+}
+
+int
+ipmi_mc_sel_clear(ipmi_mc_t                 *mc,
+		  ipmi_event_t              *last_event, 
+		  ipmi_mc_del_event_done_cb handler,
+		  void                      *cb_data)
+{
+    sel_op_done_info_t *sel_info;
+    int                rv;
+
+    if (!mc->devid.SEL_device_support)
+	return EINVAL;
+
+    /* If we have an OEM handler, call it instead. */
+    if (mc->sel_clear_handler) {
+	rv = mc->sel_clear_handler(mc, last_event, handler, cb_data);
+	return rv;
+    }
+
+    sel_info = ipmi_mem_alloc(sizeof(*sel_info));
+    if (!sel_info)
+	return ENOMEM;
+
+    sel_info->mc = mc;
+    sel_info->done = handler;
+    sel_info->cb_data = cb_data;
+
+    rv = ipmi_sel_clear(mc->sel, last_event, sel_op_done, sel_info);
     if (rv)
 	ipmi_mem_free(sel_info);
 
@@ -2411,7 +2452,7 @@ sensor_read_mc_cb(ipmi_mc_t *mc, void *cb_data)
 	sdr_reread_done(info, mc, rv, 1);
 }
 
-static void
+static int
 sensor_read_handler(void *cb_data, int shutdown)
 {
     sdr_fetch_info_t *info = (sdr_fetch_info_t *) cb_data;
@@ -2419,12 +2460,13 @@ sensor_read_handler(void *cb_data, int shutdown)
 
     if (shutdown) {
 	sdr_reread_done(info, NULL, ECANCELED, 0);
-	return;
+	return OPQ_HANDLER_STARTED;
     }
 
     rv = ipmi_mc_pointer_cb(info->source_mc, sensor_read_mc_cb, info);
     if (rv)
 	sdr_reread_done(info, NULL, ECANCELED, 0);
+    return OPQ_HANDLER_STARTED;
 }
 
 int

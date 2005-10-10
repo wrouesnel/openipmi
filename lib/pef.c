@@ -624,7 +624,7 @@ start_config_fetch_cb(ipmi_mc_t *mc, void *cb_data)
     return;
 }
 
-static void
+static int
 start_config_fetch(void *cb_data, int shutdown)
 {
     pef_fetch_handler_t *elem = cb_data;
@@ -636,7 +636,7 @@ start_config_fetch(void *cb_data, int shutdown)
 		 "PEF was destroyed while an operation was in progress");
 	pef_lock(elem->pef);
 	fetch_complete(elem->pef, ECANCELED, elem);
-	return;
+	return OPQ_HANDLER_STARTED;
     }
 
     /* The read lock must be claimed before the pef lock to avoid
@@ -647,6 +647,7 @@ start_config_fetch(void *cb_data, int shutdown)
 	pef_lock(elem->pef);
 	fetch_complete(elem->pef, rv, elem);
     }
+    return OPQ_HANDLER_STARTED;
 }
 
 int
@@ -785,7 +786,7 @@ start_config_set_cb(ipmi_mc_t *mc, void *cb_data)
     return;
 }
 
-static void
+static int
 start_config_set(void *cb_data, int shutdown)
 {
     pef_set_handler_t *elem = cb_data;
@@ -797,7 +798,7 @@ start_config_set(void *cb_data, int shutdown)
 		 "PEF was destroyed while an operation was in progress");
 	pef_lock(elem->pef);
 	set_complete(elem->pef, ECANCELED, elem);
-	return;
+	return OPQ_HANDLER_STARTED;
     }
 
     /* The read lock must be claimed before the pef lock to avoid
@@ -808,6 +809,7 @@ start_config_set(void *cb_data, int shutdown)
 	pef_lock(elem->pef);
 	set_complete(elem->pef, rv, elem);
     }
+    return OPQ_HANDLER_STARTED;
 }
 
 int

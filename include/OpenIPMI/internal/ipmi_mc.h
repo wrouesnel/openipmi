@@ -131,6 +131,8 @@ typedef int (*ipmi_mc_add_event_cb)(ipmi_mc_t                 *mc,
 				    void                      *cb_data);
 void ipmi_mc_set_add_event_handler(ipmi_mc_t            *mc,
 				   ipmi_mc_add_event_cb handler);
+void ipmi_mc_set_sel_clear_handler(ipmi_mc_t            *mc,
+				   ipmi_mc_del_event_cb handler);
 
 /* Check the event receiver for the MC. */
 void _ipmi_mc_check_event_rcvr(ipmi_mc_t *mc);
