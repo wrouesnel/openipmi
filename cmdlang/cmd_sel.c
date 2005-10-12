@@ -461,6 +461,7 @@ sel_clear(ipmi_domain_t *domain, void *cb_data)
 	ipmi_event_free(event2);
     }
     ipmi_cmdlang_out(cmd_info, "SEL Clear done", domain_name);
+    return;
 }
 
 static void
@@ -493,29 +494,57 @@ sel_force_clear(ipmi_mc_t *mc, void *cb_data)
 {
     ipmi_cmd_info_t *cmd_info = cb_data;
     ipmi_cmdlang_t  *cmdlang = ipmi_cmdinfo_get_cmdlang(cmd_info);
-    ipmi_event_t    *event;
+    int             curr_arg = ipmi_cmdlang_get_curr_arg(cmd_info);
+    int             argc = ipmi_cmdlang_get_argc(cmd_info);
+    char            **argv = ipmi_cmdlang_get_argv(cmd_info);
+    ipmi_event_t    *event = NULL;
     char            mc_name[IPMI_MC_NAME_LEN];
     int             rv;
+    int             force = 0;
+
+    if (curr_arg < argc) {
+	if (strcmp(argv[curr_arg], "nocheck") == 0)
+	    force = 1;
+	else {
+	    cmdlang->err = EINVAL;
+	    cmdlang->errstr = "Invalid parameter";
+	    goto out_err;
+	}
+	curr_arg++;
+    }
 
     ipmi_mc_get_name(mc, mc_name, sizeof(mc_name));
 
-    event = ipmi_mc_last_event(mc);
-    if (!event) {
-	ipmi_cmdlang_out(cmd_info, "SEL force clear done, SEL already empty",
-			 mc_name);
-    } else {
-	ipmi_cmdlang_cmd_info_get(cmd_info);
-	rv = ipmi_mc_sel_clear(mc, event, sel_force_clear_done, cmd_info);
-	if (rv) {
-	    ipmi_cmdlang_cmd_info_put(cmd_info);
-	    cmdlang->errstr = "Error forcing clear";
-	    cmdlang->err = rv;
-	    ipmi_mc_get_name(mc, cmdlang->objstr,
-			     cmdlang->objstr_len);
-	    cmdlang->location = "cmd_sel.c(sel_add)";
+    if (force)
+	event = NULL;
+    else {
+	event = ipmi_mc_last_event(mc);
+	if (!event) {
+	    ipmi_cmdlang_out(cmd_info,
+			     "SEL force clear done, SEL already empty",
+			     mc_name);
+	    return;
 	}
-	ipmi_event_free(event);
     }
+
+    ipmi_cmdlang_cmd_info_get(cmd_info);
+    rv = ipmi_mc_sel_clear(mc, event, sel_force_clear_done, cmd_info);
+    if (rv) {
+	ipmi_cmdlang_cmd_info_put(cmd_info);
+	cmdlang->errstr = "Error forcing clear";
+	cmdlang->err = rv;
+	goto out_err;
+    }
+    if (event)
+	ipmi_event_free(event);
+    return;
+
+ out_err:
+    ipmi_mc_get_name(mc, cmdlang->objstr,
+		     cmdlang->objstr_len);
+    cmdlang->location = "cmd_sel.c(mc_force_clear)";
+    if (event)
+	ipmi_event_free(event);
 }
 
 static ipmi_cmdlang_cmd_t *sel_cmds;
@@ -543,7 +572,9 @@ static ipmi_cmdlang_init_t cmds_sel[] =
       "<domain> - Delete all events in the domain.",
       ipmi_cmdlang_domain_handler, sel_clear, NULL },
     { "force_clear", &sel_cmds,
-      "<mc> - Force a clear of the SEL in the MC.",
+      "<mc> [nocheck] - Force a clear of the SEL in the MC.  nocheck means"
+      " don't check that any events were added during the clear, just force a"
+      " clear.",
       ipmi_cmdlang_mc_handler, sel_force_clear, NULL },
 };
 #define CMDS_SEL_LEN (sizeof(cmds_sel)/sizeof(ipmi_cmdlang_init_t))

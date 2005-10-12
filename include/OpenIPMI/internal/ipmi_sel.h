@@ -131,7 +131,9 @@ int ipmi_sel_del_event_by_recid(ipmi_sel_info_t       *sel,
    Note that use of this is *HIGHLY* discouraged.  This is only here
    for HPI support.  In general, you should delete individual events
    and OpenIPMI will do the right thing (do a clear if they are all
-   done, do individual deletes if possible otherwise, etc.) */
+   done, do individual deletes if possible otherwise, etc.).  If you
+   pass in NULL for last_event, it forces a clear of the SEL without
+   checking anything.  Very dangerous, events can be lost. */
 int ipmi_sel_clear(ipmi_sel_info_t       *sel,
 		   ipmi_event_t          *last_event,
 		   ipmi_sel_op_done_cb_t handler,
