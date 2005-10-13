@@ -136,7 +136,6 @@ struct ipmi_fru_record_s
 
 static void fru_record_destroy(ipmi_fru_record_t *rec);
 
-
 typedef struct normal_fru_rec_data_s
 {
     int               version;
@@ -147,6 +146,9 @@ typedef struct normal_fru_rec_data_s
 
     ipmi_fru_record_t *recs[IPMI_FRU_FTR_NUMBER];
 } normal_fru_rec_data_t;
+
+static normal_fru_rec_data_t *setup_normal_fru(ipmi_fru_t    *fru,
+					       unsigned char version);
 
 static ipmi_fru_record_t **
 normal_fru_get_recs(ipmi_fru_t *fru)
@@ -2244,11 +2246,15 @@ ipmi_fru_add_area(ipmi_fru_t   *fru,
     ipmi_fru_record_t     *rec;
     int                   rv;
 
-    if (!_ipmi_fru_is_normal_fru(fru))
-	return ENOSYS;
-
     if (area >= IPMI_FRU_FTR_NUMBER)
 	return EINVAL;
+
+    if (!_ipmi_fru_is_normal_fru(fru)) {
+	/* This was not a normal FRU.  Convert it over to a normal one. */
+	info = setup_normal_fru(fru, 1);
+	if (!info)
+	    return ENOMEM;
+    }
 
     /* Truncate the length to a multiple of 8. */
     length = length & ~(8-1);
@@ -3279,7 +3285,6 @@ fru_cleanup_recs(ipmi_fru_t *fru)
 	fru_record_destroy(info->recs[i]);
 
     ipmi_mem_free(info);
-    _ipmi_fru_set_rec_data(fru, NULL);
 }
 
 static void
@@ -4143,6 +4148,29 @@ typedef struct fru_offset_s
     int offset;
 } fru_offset_t;
 
+static normal_fru_rec_data_t *
+setup_normal_fru(ipmi_fru_t *fru, unsigned char version)
+{
+    normal_fru_rec_data_t *info;
+
+    info = ipmi_mem_alloc(sizeof(*info));
+    if (!info)
+	return NULL;
+    memset(info, 0, sizeof(*info));
+
+    _ipmi_fru_set_rec_data(fru, info);
+
+    info->version = version;
+
+    _ipmi_fru_set_op_cleanup_recs(fru, fru_cleanup_recs);
+    _ipmi_fru_set_op_write_complete(fru, fru_write_complete);
+    _ipmi_fru_set_op_write(fru, fru_write);
+    _ipmi_fru_set_op_get_root_node(fru, fru_get_root_node);
+
+    _ipmi_fru_set_is_normal_fru(fru, 1);
+    return info;
+}
+
 static int
 process_fru_info(ipmi_fru_t *fru)
 {
@@ -4199,27 +4227,13 @@ process_fru_info(ipmi_fru_t *fru)
     }
  check_done:
 
-    info = ipmi_mem_alloc(sizeof(*info));
+    info = setup_normal_fru(fru, version);
     if (!info)
 	return ENOMEM;
-    memset(info, 0, sizeof(*info));
-
-    _ipmi_fru_set_rec_data(fru, info);
-
-    info->version = version;
 
     recs = info->recs;
-
-    _ipmi_fru_set_op_cleanup_recs(fru, fru_cleanup_recs);
-    _ipmi_fru_set_op_write_complete(fru, fru_write_complete);
-    _ipmi_fru_set_op_write(fru, fru_write);
-    _ipmi_fru_set_op_get_root_node(fru, fru_get_root_node);
-
-    _ipmi_fru_set_is_normal_fru(fru, 1);
-
     for (i=0; i<IPMI_FRU_FTR_NUMBER; i++) {
 	int plen, next_off, offset;
-	ipmi_fru_record_t *rec;
 
 	offset = foff[i].offset;
 	if (offset == 0)
@@ -4236,7 +4250,6 @@ process_fru_info(ipmi_fru_t *fru)
 	    next_off = foff[j].offset;
 	plen = next_off - offset;
 
-	rec = NULL;
 	err = fru_area_info[i].decode(fru, data+offset, plen, &recs[i]);
 	if (err)
 	    goto out_err;

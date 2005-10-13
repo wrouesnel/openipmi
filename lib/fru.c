@@ -1506,6 +1506,8 @@ _ipmi_fru_get_rec_data(ipmi_fru_t *fru)
 void
 _ipmi_fru_set_rec_data(ipmi_fru_t *fru, void *rec_data)
 {
+    if (fru->rec_data && fru->ops.cleanup_recs)
+	fru->ops.cleanup_recs(fru);
     fru->rec_data = rec_data;
 }
 

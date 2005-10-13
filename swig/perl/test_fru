@@ -541,7 +541,7 @@ sub dup_fru {
 	my $num;
 	my $str;
 
-	if ($err != $OpenIPMI::ebadf) {
+	if ($err != $OpenIPMI::enosys) {
 	    main::reg_err("Wrong error reading the FRU: $err");
 	    $h->close();
 	    return;

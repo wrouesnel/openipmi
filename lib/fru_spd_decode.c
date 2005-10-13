@@ -220,8 +220,7 @@ fru_cleanup_recs (ipmi_fru_t *fru)
     if (!spd_info)
 	return;
 
-    ipmi_mem_free (spd_info);
-    _ipmi_fru_set_rec_data (fru, NULL);
+    ipmi_mem_free(spd_info);
 }
 
 

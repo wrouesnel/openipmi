@@ -114,7 +114,9 @@ int _ipmi_fru_new_update_record(ipmi_fru_t   *fru,
 				unsigned int offset,
 				unsigned int length);
 
-/* Get/set the fru-type secific data */
+/* Get/set the fru-type secific data.  Note that the cleanup_recs
+   function will be called on any rec_data.  The right way to set this
+   data is to set the rec data then set your ops. */
 void *_ipmi_fru_get_rec_data(ipmi_fru_t *fru);
 void _ipmi_fru_set_rec_data(ipmi_fru_t *fru, void *rec_data);
 

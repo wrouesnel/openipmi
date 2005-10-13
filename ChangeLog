@@ -8,6 +8,16 @@
 	* unix/Makefile.am: ditto
 	* utils/Makefile.am: ditto
 
+	* lib/fru.c: Added a call to cleanup the old FRU recs when the rec
+	data for the FRU information is set and old FRU data exists.
+
+	* lib/fru_spd_decode.c: Don't free the FRU data at shutdown.
+
+	* lib/normal_fru.c: If you add a record area to a non-normal FRU,
+	convert it to a normal FRU.  This lets you edit a corrupt FRU.
+
+	* lib/oem_intel.c: Add support for the Intel SE7520 motherboard.
+
 2005-10-09 Corey Minyard <cminyard@mvista.com>
 
 	* lib/opq.c: Added a way to pre-allocaste opq entries, a way to

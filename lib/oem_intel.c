@@ -482,9 +482,25 @@ simple_handler(ipmi_mc_t *mc,
 
 static int
 hsbp_handler(ipmi_mc_t *mc,
-	       void      *cb_data)
+	     void      *cb_data)
 {
 	return(tig_handler(mc, 1, cb_data));
+}
+
+static int
+noipmb_handler(ipmi_mc_t *mc,
+	       void      *cb_data)
+{
+    ipmi_domain_t *domain = ipmi_mc_get_domain(mc);
+    unsigned int  channel = ipmi_mc_get_channel(mc);
+    unsigned int  addr    = ipmi_mc_get_address(mc);
+    
+    if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
+	/* We only scan 0x20. */
+	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1f);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0xff);
+    }
+    return 0;
 }
 
 int
@@ -524,6 +540,15 @@ ipmi_oem_intel_init(void)
     if (rv)
 	return rv;
 
+    /* SE7520 doesn't really have anything on the IPMB. */
+    rv = ipmi_register_oem_handler(INTEL_MANUFACTURER_ID,
+				   0x23,
+				   noipmb_handler,
+				   NULL,
+				   NULL);
+    if (rv)
+	return rv;
+
     return 0;
 }
 
@@ -533,5 +558,6 @@ ipmi_oem_intel_shutdown(void)
     ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x000c);
     ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x001b);
     ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x0103);
+    ipmi_deregister_oem_handler(INTEL_MANUFACTURER_ID, 0x0023);
     ipmi_deregister_oem_handler(NSC_MANUFACTURER_ID, 0x4311);
 }
