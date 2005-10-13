@@ -20,5 +20,4 @@ libOpenIPMIutils_la_SOURCES = md5.c md2.c ipmi_auth.c \
 libOpenIPMIutils_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIutils.map
 
-clean:
-	rm -f *.map
+CLEANFILES = libOpenIPMIutils.map

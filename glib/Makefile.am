@@ -19,5 +19,4 @@ libOpenIPMIglib_la_LIBADD = $(GDBM_LIB)
 libOpenIPMIglib_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMIglib.map $(GLIB_LIBS)
 
-clean:
-	rm -f *.map
+CLEANFILES = libOpenIPMIglib.map

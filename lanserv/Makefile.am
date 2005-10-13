@@ -40,5 +40,4 @@ lanserv_emu_LDFLAGS = -rdynamic
 
 EXTRA_DIST = atca.emu README.emulator
 
-clean:
-	rm -f *.map
+CLEANFILES = libIPMIlanserv.map

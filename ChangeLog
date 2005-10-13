@@ -1,3 +1,13 @@
+2005-10-13 Corey Minyard <cminyard@mvista.com>
+	
+	* cmdlang/Makefile.am: Fix the clean to work properly.
+	* glib/Makefile.am: ditto
+	* lanserv/Makefile.am: ditto
+	* lib/Makefile.am: ditto
+	* ui/Makefile.am: ditto
+	* unix/Makefile.am: ditto
+	* utils/Makefile.am: ditto
+
 2005-10-09 Corey Minyard <cminyard@mvista.com>
 
 	* lib/opq.c: Added a way to pre-allocaste opq entries, a way to

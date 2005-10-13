@@ -35,5 +35,4 @@ test_heap_LDADD =
 
 TESTS = test_heap
 
-clean:
-	rm -f *.map
+CLEANFILES = libOpenIPMIposix.map libOpenIPMIpthread.map

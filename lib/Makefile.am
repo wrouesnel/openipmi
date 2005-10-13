@@ -27,5 +27,4 @@ libOpenIPMI_la_LIBADD = -lm $(top_builddir)/utils/libOpenIPMIutils.la \
 libOpenIPMI_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
 	-Wl,-Map -Wl,libOpenIPMI.map
 
-clean:
-	rm -f *.map
+CLEANFILES = libOpenIPMI.map
