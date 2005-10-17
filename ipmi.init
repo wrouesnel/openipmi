@@ -13,7 +13,7 @@
 # Provides: ipmidrv
 # Required-Start: $localfs $remotefs $syslog
 # Required-Stop: $localfs $remotefs $syslog
-# Default-Start:
+# Default-Start: 2 3 5
 # Default-Stop:
 # Short-Description: OpenIPMI Driver init script
 # Description: OpenIPMI Driver init script
@@ -95,16 +95,16 @@ if [ "${kernel}" == "2.4" ]; then
 fi
 
 MODULES_INTERFACES=""
-[ "${DEV_IPMI}" = "1" ] && MODULES_INTERFACES="${MODULES_INTERFACES} ipmi_devintf"
-[ "${IPMI_IMB}" = "1" ] && MODULES_INTERFACES="${MODULES_INTERFACES} ipmi_imb"
+[ "${DEV_IPMI}" = "yes" ] && MODULES_INTERFACES="${MODULES_INTERFACES} ipmi_devintf"
+[ "${IPMI_IMB}" = "yes" ] && MODULES_INTERFACES="${MODULES_INTERFACES} ipmi_imb"
 
 MODULES_FEATURES=""
-[ "${IPMI_WATCHDOG}" = "1" ] && MODULES_FEATURES="${MODULES_FEATURES} ipmi_watchdog"
-[ "${IPMI_POWEROFF}" = "1" ] && MODULES_FEATURES="${MODULES_FEATURES} ipmi_poweroff"
+[ "${IPMI_WATCHDOG}" = "yes" ] && MODULES_FEATURES="${MODULES_FEATURES} ipmi_watchdog"
+[ "${IPMI_POWEROFF}" = "yes" ] && MODULES_FEATURES="${MODULES_FEATURES} ipmi_poweroff"
 
 MODULES_HW=""
-[ "${IPMI_SI}"  = "1" ] && MODULES_HW="${MODULES_HW} ${IPMI_SI_MODULE_NAME}"
-[ "${IPMI_SMB}" = "1" ] && MODULES_HW="${MODULES_HW} ${IPMI_SMB_MODULE_NAME}"
+[ "${IPMI_SI}"  = "yes" ] && MODULES_HW="${MODULES_HW} ${IPMI_SI_MODULE_NAME}"
+[ "${IPMI_SMB}" = "yes" ] && MODULES_HW="${MODULES_HW} ${IPMI_SMB_MODULE_NAME}"
 
 MODULES_BASE="ipmi_msghandler"
 MODULES="${MODULES_INTERFACES} ${MODULES_FEATURES} ${MODULES_HW} ${MODULES_BASE}"
@@ -176,7 +176,7 @@ minimum_modules_loaded()
 
 load_si()
 {
-	if [ "${IPMI_SI}" = "1" ]; then
+	if [ "${IPMI_SI}" = "yes" ]; then
 		modprobe ${IPMI_SI_MODULE_NAME} > /dev/null 2>&1
 		modules_loaded ${IPMI_SI_MODULE_NAME}
 		[ ${OnePlusLoaded} -ne 1 ] && RETVAL=$((RETVAL | 1))
@@ -185,7 +185,7 @@ load_si()
 
 load_smb()
 {
-	if [ "${IPMI_SMB}" = "1" ]; then
+	if [ "${IPMI_SMB}" = "yes" ]; then
 		modprobe ${IPMI_SMB_MODULE_NAME} > /dev/null 2>&1
 		modules_loaded ${IPMI_SMB_MODULE_NAME}
 		[ ${OnePlusLoaded} -ne 1 ] && RETVAL=$((RETVAL | 1))
@@ -219,7 +219,7 @@ start_watchdog_common()
 
 start_watchdog_quiet()
 {
-	[ "${IPMI_WATCHDOG}" != "1" ] &&
+	[ "${IPMI_WATCHDOG}" != "yes" ] &&
 		return
 	echo -n $"Starting ipmi_watchdog driver: "
 	start_watchdog_common
@@ -228,7 +228,7 @@ start_watchdog_quiet()
 start_watchdog()
 {
 	echo -n $"Starting ipmi_watchdog driver: "
-	[ "${IPMI_WATCHDOG}" != "1" ] &&
+	[ "${IPMI_WATCHDOG}" != "yes" ] &&
 		RETVAL=$((RETVAL | 2)) &&
 		log_failure_msg "not configured" &&
 		return
@@ -244,7 +244,7 @@ stop_watchdog()
 	    RETVAL=$((RETVAL | 32))
 	    log_failure_msg
 	else
-	    if [ "${IPMI_WATCHDOG}" = "1" ]; then
+	    if [ "${IPMI_WATCHDOG}" = "yes" ]; then
 		[ ! -x /sbin/udev ] && rm -f /dev/watchdog
 	    fi
 	    log_success_msg
@@ -258,7 +258,7 @@ stop_watchdog_quiet()
 	if [ ${OnePlusLoaded} -ne 0 ]; then
 	    RETVAL=$((RETVAL | 32))
 	else
-	    if [ "${IPMI_WATCHDOG}" = "1" ]; then
+	    if [ "${IPMI_WATCHDOG}" = "yes" ]; then
 		[ ! -x /sbin/udev ] && rm -f /dev/watchdog
 	    fi
 	fi
@@ -268,7 +268,7 @@ start_powercontrol_common()
 {
 	local poweroff_opts=""
 	load_hw_modules
-	if [ "${IPMI_POWERCYCLE}" == "1" ]; then
+	if [ "${IPMI_POWERCYCLE}" == "yes" ]; then
 	    modinfo ipmi_poweroff 2>/dev/null | grep poweroff_control > /dev/null 2>&1 && \
 		poweroff_opts="poweroff_control=2"
 	    modinfo ipmi_poweroff 2>/dev/null | grep poweroff_powercycle > /dev/null 2>&1 && \
@@ -285,7 +285,7 @@ start_powercontrol_common()
 
 start_powercontrol_quiet()
 {
-	[ "${IPMI_POWEROFF}" != "1" ] &&
+	[ "${IPMI_POWEROFF}" != "yes" ] &&
 		return
 	echo -n $"Starting ipmi_poweroff driver: "
 	start_powercontrol_common
@@ -294,7 +294,7 @@ start_powercontrol_quiet()
 start_powercontrol()
 {
 	echo -n $"Starting ipmi_poweroff driver: "
-	[ "${IPMI_POWEROFF}" != "1" ] &&
+	[ "${IPMI_POWEROFF}" != "yes" ] &&
 		RETVAL=$((RETVAL | 2)) &&
 		log_failure_msg "not configured" &&
 		return
@@ -324,20 +324,24 @@ stop_powercontrol_quiet()
 #############################################################################
 unload_all_ipmi_modules()
 {
-	rm -f "/dev/ipmi${INTF_NUM}"
 	stop_watchdog_quiet
 	stop_powercontrol_quiet
 	for m in ${MODULES}; do
 		modprobe -q -r ${m} > /dev/null 2>&1
 	done
+        # delete interface node ONLY if ipmi_devintf is unloaded
+        [ `lsmod | grep -c "ipmi_devintf"` -eq 0 ] &&
+	        rm -f "/dev/ipmi${INTF_NUM}"
 }
 
 unload_ipmi_modules_leave_features()
 {
-	rm -f "/dev/ipmi${INTF_NUM}"
 	for m in ${MODULES_INTERFACES}; do
 		modprobe -q -r ${m} > /dev/null 2>&1
 	done
+        # delete interface node ONLY if ipmi_devintf is unloaded
+        [ `lsmod | grep -c "ipmi_devintf"` -eq 0 ] &&
+	        rm -f "/dev/ipmi${INTF_NUM}"
 	lsmod | egrep -q "ipmi_(poweroff|watchdog)" > /dev/null 2>&1
 	if [ "$?" -ne "0" ]; then
 		stop_watchdog_quiet
@@ -358,7 +362,7 @@ load_ipmi_modules ()
 	load_hw_modules
 	[ $((RETVAL & 1)) -eq 1 ] && unload_all_ipmi_modules && RETVAL=$((RETVAL | 1)) && return
 
-	if [ "${DEV_IPMI}" = "1" ]; then
+	if [ "${DEV_IPMI}" = "yes" ]; then
 		modprobe ipmi_devintf > /dev/null 2>&1
 		modules_loaded ipmi_devintf
 		RETVAL=$((RETVAL & ~2))
@@ -380,7 +384,7 @@ load_ipmi_modules ()
 		fi
 	fi
 
-	if [ "${IPMI_IMB}" = "1" ]; then
+	if [ "${IPMI_IMB}" = "yes" ]; then
 		modprobe ipmi_imb > /dev/null 2>&1
 		modules_loaded ipmi_imb
 		RETVAL=$((RETVAL & ~2))
@@ -463,17 +467,17 @@ status_all()
 	modules_loaded_verbose ${MODULES_FEATURES} ${MODULES_INTERFACES}
 	[ ${OnePlusUnloaded} -ne 0 ] && RETVAL=$((RETVAL | 2))
 
-	if [ "${DEV_IPMI}" = "1" ]; then 
+	if [ "${DEV_IPMI}" = "yes" ]; then 
 	    device_node_exists /dev/ipmi${INTF_NUM}
 	    [ $? -eq 0 ] && RETVAL=$((RETVAL | 4))
 	fi
 
-	if [ "${IPMI_IMB}" = "1" ]; then
+	if [ "${IPMI_IMB}" = "yes" ]; then
 	    device_node_exists /dev/imb
 	    [ $? -eq 0 ] && RETVAL=$((RETVAL | 4))
 	fi
 
-	if [ "${IPMI_WATCHDOG}" = "1" ]; then
+	if [ "${IPMI_WATCHDOG}" = "yes" ]; then
 	    device_node_exists /dev/watchdog
 	    [ $? -eq 0 ] && RETVAL=$((RETVAL | 8))
 	fi
@@ -486,7 +490,7 @@ status()
 	minimum_modules_loaded
 	[ $? -eq 0 ] && RETVAL=$((RETVAL | 1))
 	
-	if [ "${DEV_IPMI}" = "1" ]; then 
+	if [ "${DEV_IPMI}" = "yes" ]; then 
 	    modules_loaded_verbose ipmi_devintf
 	    [ ${OnePlusLoaded} -eq 0 ] && RETVAL=$((RETVAL | 2))
 
@@ -494,7 +498,7 @@ status()
 	    [ $? -eq 0 ] && RETVAL=$((RETVAL | 4))
 	fi
 
-	if [ "${IPMI_IMB}" = "1" ]; then
+	if [ "${IPMI_IMB}" = "yes" ]; then
 	    device_node_exists /dev/imb
 	    [ $? -eq 0 ] && RETVAL=$((RETVAL | 4))
 	fi
@@ -524,7 +528,7 @@ status_powercontrol()
 #############################################################################
 usage ()
 {
-	echo $"Usage: $0 {start|stop|status|restart|condrestart|" 1>&2
+	echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart" 1>&2
 	echo $"          start-watchdog|stop-watchdog|status-watchdog" 1>&2
 	echo $"          start-powercontrol|stop-powercontrol|status-powercontrol" 1>&2
 	echo $"          stop-all|status-all}" 1>&2
@@ -546,6 +550,7 @@ case "$1" in
 	status)	status ;;
 	status-all) status_all ;;
 	condrestart) condrestart ;;
+	try-restart) condrestart ;;
 	start-watchdog) start_watchdog ;;
 	stop-watchdog) stop_watchdog ;;
 	status-watchdog) status_watchdog ;;

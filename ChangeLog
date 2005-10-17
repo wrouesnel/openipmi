@@ -1,3 +1,8 @@
+2005-10-17 Matt Domsch <Matt_Domsch@dell.com>
+	* ipmi.init: if ipmi_devintf can't be removed, don't delete /dev/ipmi0
+	* ipmi.init: merge SuSE config file foo=yes vs foo=1  changes.
+	* ipmi.sysconf: ditto
+
 2005-10-13 Corey Minyard <cminyard@mvista.com>
 	
 	* cmdlang/Makefile.am: Fix the clean to work properly.
