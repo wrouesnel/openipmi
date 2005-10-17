@@ -1,3 +1,24 @@
+2005-10-17 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_fru.h: Add ipmi_bits.h include.
+
+	* include/OpenIPMI/internal/ipmi_fru.h: Add some needed includes.
+
+	* lib/oem_atca.c, lib/oem_atca_fru.c: Move the FRU decoding to a
+	different file.
+
+	* include/OpenIPMI/ipmiif.h.in, lib/strings.c: Added ATCA blade
+	domain type, and the option for local-only domains.
+
+	* lib/domain.c, lib/ipmi.c, include/OpenIPMI/internal/ipmi_domain.h:
+	Added local-only domain options support.
+
+	* lib/domain.c, include/OpenIPMI/internal/ipmi_domain.h: Added a
+	way to get the connections for a domain.
+
+	* lib/oem_atca.c: Added support for local blade domains when coming
+	in from an system interface.
+	
 2005-10-17 Matt Domsch <Matt_Domsch@dell.com>
 	* ipmi.init: if ipmi_devintf can't be removed, don't delete /dev/ipmi0
 	* ipmi.init: merge SuSE config file foo=yes vs foo=1  changes.

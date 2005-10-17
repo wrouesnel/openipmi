@@ -1467,6 +1467,12 @@ ipmi_parse_options(ipmi_open_option_t *option,
     } else if (strcmp(arg, "-setseltime") == 0) {
 	option->option = IPMI_OPEN_OPTION_SET_SEL_TIME;
 	option->ival = 1;
+    } else if (strcmp(arg, "-nolocalonly") == 0) {
+	option->option = IPMI_OPEN_OPTION_LOCAL_ONLY;
+	option->ival = 0;
+    } else if (strcmp(arg, "-localonly") == 0) {
+	option->option = IPMI_OPEN_OPTION_LOCAL_ONLY;
+	option->ival = 1;
     } else
 	return EINVAL;
 

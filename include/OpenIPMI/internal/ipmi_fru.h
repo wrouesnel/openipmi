@@ -35,6 +35,8 @@
 #define _IPMI_FRU_INTERNAL_H
 
 #include <OpenIPMI/ipmi_fru.h>
+#include <OpenIPMI/ipmi_err.h>
+#include <OpenIPMI/os_handler.h>
 
 os_handler_t *_ipmi_fru_get_os_handler(ipmi_fru_t *fru);
 

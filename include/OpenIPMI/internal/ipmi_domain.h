@@ -229,6 +229,10 @@ int _ipmi_domain_in_shutdown(ipmi_domain_t *domain);
 void _ipmi_get_domain_fully_up(ipmi_domain_t *domain);
 void _ipmi_put_domain_fully_up(ipmi_domain_t *domain);
 
+/* Return connections for a domain. */
+int _ipmi_domain_get_connection(ipmi_domain_t *domain,
+				int           con_num,
+				ipmi_con_t    **con);
 
 /* Option settings. */
 int ipmi_option_SDRs(ipmi_domain_t *domain);
@@ -239,6 +243,10 @@ int ipmi_option_OEM_init(ipmi_domain_t *domain);
 int ipmi_option_set_event_rcvr(ipmi_domain_t *domain);
 int ipmi_option_set_sel_time(ipmi_domain_t *domain);
 int ipmi_option_activate_if_possible(ipmi_domain_t *domain);
+int ipmi_option_local_only(ipmi_domain_t *domain);
+
+void _ipmi_option_set_local_only_if_not_specified(ipmi_domain_t *domain,
+						  int           val);
 
 /*
  * Domain attribute handling.

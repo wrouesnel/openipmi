@@ -1305,6 +1305,7 @@ static char *domain_types[] =
     "unknown",
     "MXP",
     "ATCA",
+    "ATCA_BLADE",
 };
 #define NUM_DOMAIN_TYPES (sizeof(domain_types)/sizeof(char *))
 

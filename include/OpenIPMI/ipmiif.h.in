@@ -212,6 +212,7 @@ enum ipmi_domain_type
     IPMI_DOMAIN_TYPE_UNKNOWN = 0,
     IPMI_DOMAIN_TYPE_MXP,
     IPMI_DOMAIN_TYPE_ATCA,
+    IPMI_DOMAIN_TYPE_ATCA_BLADE /* A local blade domain on an ATCA system */
 };
 enum ipmi_domain_type ipmi_domain_get_type(ipmi_domain_t *domain);
 const char *ipmi_domain_get_type_string(enum ipmi_domain_type dtype);
@@ -1858,6 +1859,17 @@ int ipmi_open_domain(char               *name,
    connection, on some it enables operations on one connection.  By
    default this is true.  This is not affected by option_all. */
 #define IPMI_OPEN_OPTION_ACTIVATE_IF_POSSIBLE 9
+
+/* Only with the the "local" resource.  This is system-dependent, but
+   in general, when working in a larger system, This causes the system
+   to only operate on the "local" resource.  In ATCA, when run on a
+   blade, for instance, this allows just the resources on a blade to
+   appear.  It won't go out to the system manager or on the IPMB bus.
+   This is not affected by option_all and does not apply to all
+   systems.  The default value depends on the system, but will
+   generally default to "true" on local connections and "false" on
+   external connections. */
+#define IPMI_OPEN_OPTION_LOCAL_ONLY 10
 
 
 /* Close an IPMI connection.  This will free all memory associated

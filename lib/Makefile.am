@@ -21,7 +21,8 @@ libOpenIPMI_la_SOURCES = entity.c ipmi.c domain.c mc.c sdr.c \
 	opq.c sel.c sensor.c pef.c lanparm.c strings.c normal_fru.c \
 	oem_force_conn.c oem_motorola_mxp.c oem_atca_conn.c oem_atca.c \
 	ipmi_lan.c oem_test.c oem_intel.c ipmi_payload.c rakp.c aes_cbc.c \
-	hmac.c md5.c ipmi_smi.c ipmi_sol.c oem_kontron_conn.c fru_spd_decode.c
+	hmac.c md5.c ipmi_smi.c ipmi_sol.c oem_kontron_conn.c \
+	oem_atca_fru.c fru_spd_decode.c
 libOpenIPMI_la_LIBADD = -lm $(top_builddir)/utils/libOpenIPMIutils.la \
 	$(OPENSSLLIBS)
 libOpenIPMI_la_LDFLAGS = -rdynamic -version-info $(LD_VERSION) \
