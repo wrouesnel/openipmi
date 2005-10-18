@@ -1270,6 +1270,7 @@ static ipmi_cmdlang_init_t cmds_domain[] =
       "-[no]oeminit - special OEM processing (like ATCA)\n"
       "-[no]seteventrcvr - setting event receivers\n"
       "-[no]activate - connection activation\n"
+      "-[no]localonly - Just talk to the local BMC, (ATCA-only, for blades)\n"
       "-wait_til_up - wait until the domain is up before returning",
       domain_open, NULL, NULL },
     { "close", &domain_cmds,

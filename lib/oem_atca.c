@@ -3523,6 +3523,7 @@ atca_blade_info(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_msg_t   *msg = &rspi->msg;
     atca_shelf_t *info;
     int          rv = 0;
+    int          ipmb;
 
     if (!domain)
 	return IPMI_MSG_ITEM_NOT_USED;
@@ -3559,9 +3560,15 @@ atca_blade_info(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
 	goto out_err;
     }
 
+    ipmb = msg->data[2] << 1;
     info->addresses[0].hw_address = msg->data[2];
     info->addresses[0].site_type = msg->data[7];
     info->addresses[0].site_num = msg->data[6];
+
+    /* Completely turn off scanning except for the one address for the
+       blade. */
+    ipmi_domain_add_ipmb_ignore_range(domain, 0x00, ipmb - 1);
+    ipmi_domain_add_ipmb_ignore_range(domain, ipmb + 1, 0xff);
 
  out_err:
     info->startup_done(domain, rv, info->startup_done_cb_data);
@@ -3627,9 +3634,6 @@ set_up_atca_blade(ipmi_domain_t *domain, ipmi_msg_t *get_properties,
     info->startup_done = done;
     info->startup_done_cb_data = done_cb_data;
     info->domain = domain;
-
-    /* Completely turn off scanning. */
-    ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0xff);
 
     ipmi_domain_set_oem_data(domain, info, atca_oem_data_destroyer);
     ipmi_domain_set_oem_shutdown_handler(domain,
@@ -3963,7 +3967,7 @@ check_if_local(ipmi_domain_t *domain, int conn, void *cb_data)
 
     if (_ipmi_domain_get_connection(domain, conn, &con))
 	return;
-    if (con->name && (strcmp(con->name, "smi") == 0))
+    if (con->con_type && (strcmp(con->con_type, "smi") == 0))
 	/* It's a system management interface. */
 	_ipmi_option_set_local_only_if_not_specified(domain, 1);
 }
