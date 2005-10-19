@@ -3570,6 +3570,31 @@ atca_blade_info(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_domain_add_ipmb_ignore_range(domain, 0x00, ipmb - 1);
     ipmi_domain_add_ipmb_ignore_range(domain, ipmb + 1, 0xff);
 
+    /* Add a handler for when MCs are added to the domain, so we can
+       add in our custom sensors. */
+    rv = ipmi_domain_add_mc_updated_handler(domain,
+					    atca_mc_update_handler,
+					    info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_atca.c(atca_blade_info): "
+		 "Could not add MC update handler: %x",
+		 DOMAIN_NAME(domain), rv);
+	goto out_err;
+    }
+
+    rv = ipmi_domain_add_entity_update_handler(domain,
+					       atca_entity_update_handler,
+					       info);
+    if (rv) {
+	ipmi_log(IPMI_LOG_WARNING,
+		 "%soem_atca.c(atca_blade_info): "
+		 "Could not add entity update handler: %x",
+		 DOMAIN_NAME(domain), rv);
+	goto out_err;
+    }
+
+
  out_err:
     info->startup_done(domain, rv, info->startup_done_cb_data);
     return IPMI_MSG_ITEM_NOT_USED;
