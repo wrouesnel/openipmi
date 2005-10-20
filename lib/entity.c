@@ -1562,7 +1562,7 @@ detect_cleanup(ent_active_detect_t *info, ipmi_domain_t *domain)
     ipmi_unlock(info->lock);
     ipmi_destroy_lock(info->lock);
     ipmi_mem_free(info);
-    _ipmi_put_domain_fully_up(domain);
+    _ipmi_put_domain_fully_up(domain, "detect_cleanup");
 }
 
 static void
@@ -1572,7 +1572,7 @@ detect_done(ipmi_entity_t *ent, ent_active_detect_t *info)
     presence_changed(ent, info->present, NULL);
     ipmi_destroy_lock(info->lock);
     ipmi_mem_free(info);
-    _ipmi_put_domain_fully_up(ent->domain);
+    _ipmi_put_domain_fully_up(ent->domain, "detect_done");
 }
 
 static void
@@ -1951,12 +1951,14 @@ detect_no_presence_sensor_presence(ipmi_entity_t *ent)
 
     detect = ipmi_mem_alloc(sizeof(*detect));
     if (!detect) {
-	_ipmi_put_domain_fully_up(ent->domain);
+	_ipmi_put_domain_fully_up(ent->domain,
+				  "detect_no_presence_sensor_presence");
 	return;
     }
     rv = ipmi_create_lock(ent->domain, &detect->lock);
     if (rv) {
-	_ipmi_put_domain_fully_up(ent->domain);
+	_ipmi_put_domain_fully_up(ent->domain,
+				  "detect_no_presence_sensor_presence(2)");
 	ipmi_mem_free(detect);
 	return;
     }
@@ -2006,7 +2008,7 @@ states_read(ipmi_sensor_t *sensor,
 	present = ipmi_is_state_set(states, 0);
 
     presence_changed(ent, present, NULL);
-    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
+    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor), "states_read");
 }
 
 static void
@@ -2025,7 +2027,8 @@ states_bit_read(ipmi_sensor_t *sensor,
 
     present = ipmi_is_state_set(states, ent->presence_bit_offset);
     presence_changed(ent, present, NULL);
-    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor));
+    _ipmi_put_domain_fully_up(ipmi_sensor_get_domain(sensor),
+			      "states_bit_read");
 }
 
 static void
@@ -2041,19 +2044,19 @@ ent_detect_presence(ipmi_entity_t *ent, void *cb_data)
     if (ent->hot_swappable)
 	ipmi_entity_check_hot_swap_state(ent);
 
-    _ipmi_get_domain_fully_up(ent->domain);
+    _ipmi_get_domain_fully_up(ent->domain, "ent_detect_presence");
     if (ent->presence_sensor) {
 	/* Presence sensor overrides everything. */
 	rv = ipmi_sensor_id_get_states(ent->presence_sensor_id,
 		       		       states_read, ent);
 	if (rv)
-	    _ipmi_put_domain_fully_up(ent->domain);
+	    _ipmi_put_domain_fully_up(ent->domain, "ent_detect_presence(2)");
     } else if (ent->presence_bit_sensor) {
 	/* Presence bit sensor overrides everything but a presence sensor. */
 	rv = ipmi_sensor_id_get_states(ent->presence_bit_sensor_id,
 		       		       states_bit_read, ent);
 	if (rv)
-	    _ipmi_put_domain_fully_up(ent->domain);
+	    _ipmi_put_domain_fully_up(ent->domain, "ent_detect_presence(3)");
     } else {
 	detect_no_presence_sensor_presence(ent);
     }
@@ -5019,7 +5022,7 @@ fru_fetched_handler(ipmi_domain_t *domain, ipmi_fru_t *fru,
 	ipmi_fru_destroy_internal(fru, NULL, NULL);
 
     ipmi_mem_free(ent_id);
-    _ipmi_put_domain_fully_up(domain);
+    _ipmi_put_domain_fully_up(domain, "fru_fetched_handler");
 }
 
 int
@@ -5056,7 +5059,7 @@ ipmi_entity_fetch_frus(ipmi_entity_t *ent)
 		 " Unable to allocate the FRU: %x",
 		 ENTITY_NAME(ent), rv);
     } else
-	_ipmi_get_domain_fully_up(ent->domain);
+	_ipmi_get_domain_fully_up(ent->domain, "ipmi_entity_fetch_frus");
 
     return rv;
 }

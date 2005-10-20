@@ -2805,12 +2805,6 @@ static void shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru,
 			      int err, void *cb_data);
 
 static void
-atca_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
-{
-    _ipmi_mc_scan_done(domain);
-}
-
-static void
 setup_from_shelf_fru(ipmi_domain_t *domain,
 		     atca_shelf_t  *info)
 {
@@ -2884,14 +2878,9 @@ setup_from_shelf_fru(ipmi_domain_t *domain,
 	b->site_num = info->addresses[i].site_num;
 	ipmi_mc_id_set_invalid(&b->mcid);
 
-	if ((i+1) == info->num_addresses) {
-	    /* When the last one completes, we report that we are done. */
-	    ipmi_start_ipmb_mc_scan(domain, 0, b->ipmb_address,
-				    b->ipmb_address, atca_scan_done, NULL);
-	} else {
-	    ipmi_start_ipmb_mc_scan(domain, 0, b->ipmb_address,
-				    b->ipmb_address, NULL, NULL);
-	}
+	_ipmi_domain_mc_lock(domain);
+	_ipmi_start_mc_scan_one(domain, 0, b->ipmb_address, b->ipmb_address);
+	_ipmi_domain_mc_unlock(domain);
 
 	rv = realloc_frus(b, 1); /* Start with 1 FRU for the MC. */
 	if (rv) {

@@ -23,6 +23,24 @@
 	* everything: Cleaned up a bunch of new warnings from the gcc 4.0
 	compiler.
 
+	* include/OpenIPMI/internal/ipmi_domain.h, lib/domain.c: The MC
+	scanning functions were not following the rules properly; the done
+	function would still be called on some errors.  Some users were
+	handling this properly and some weren't.  This cleans it up to
+	follow the standard rules (return an error then no callback,
+	return success then always callback).
+	* lib/oem_motorola_mxp.c: ditto
+
+	* include/OpenIPMI/internal/ipmi_domain.h, lib/domain.c, lib/atca.c:
+	Modified the way bus scanning works so that the ATCA code can use
+	it.
+
+	* include/OpenIPMI/internal/ipmi_domain.h, lib/domain.c:  Modified
+	the domain fully up code to take a debugging parm to help know who
+	is not releasing this properly.
+	* lib/entity.c: ditto
+	* lib/mc.c: ditto
+
 2005-10-17 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_fru.h: Add ipmi_bits.h include.

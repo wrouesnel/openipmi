@@ -7148,6 +7148,7 @@ static void
 timed_rescan_bus2(ipmi_domain_t *domain, void *cb_data)
 {
     rescan_info_t *info = cb_data;
+    int           rv;
 
     if (!domain) {
         ipmi_mem_free(info);
@@ -7156,8 +7157,10 @@ timed_rescan_bus2(ipmi_domain_t *domain, void *cb_data)
 
     /* Do an MC query on the board.  If it has become present, it will
        be added.  If it has gone away it will be deleted. */
-    ipmi_start_ipmb_mc_scan(domain, 0, info->addr, info->addr,
-		            timed_rescan_bus3, info);
+    rv = ipmi_start_ipmb_mc_scan(domain, 0, info->addr, info->addr,
+				 timed_rescan_bus3, info);
+    if (rv)
+	ipmi_mem_free(info);
 }
 
 static void

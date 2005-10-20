@@ -1781,7 +1781,7 @@ mc_first_sels_read(ipmi_sel_info_t *sel,
 {
     ipmi_mc_t *mc = cb_data;
 
-    _ipmi_put_domain_fully_up(mc->domain);
+    _ipmi_put_domain_fully_up(mc->domain, "mc_first_sels_read");
 }
 
 /* This is called after the first sensor scan for the MC, we start up
@@ -1818,7 +1818,7 @@ sensors_reread(ipmi_mc_t *mc, int err, void *cb_data)
 	/* If the MC supports an SEL, start scanning its SEL. */
 	start_sel_ops(mc, 0, mc_first_sels_read, mc);
     else
-	_ipmi_put_domain_fully_up(mc->domain);
+	_ipmi_put_domain_fully_up(mc->domain, "sensors_reread");
 }
 
 static void
@@ -1879,10 +1879,10 @@ _ipmi_mc_handle_new(ipmi_mc_t *mc)
     msg.data_len = 0;
     msg.data = NULL;
 
-    _ipmi_get_domain_fully_up(mc->domain);
+    _ipmi_get_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
     rv = ipmi_mc_send_command(mc, 0, &msg, got_guid, NULL);
     if (rv) {
-	_ipmi_put_domain_fully_up(mc->domain);
+	_ipmi_put_domain_fully_up(mc->domain, "_ipmi_mc_handle_new");
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%smc.c(ipmi_mc_setup_new): "
 		 "Unable to send get guid command.",

@@ -33,6 +33,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <OpenIPMI/ipmi_conn.h>
 #include <OpenIPMI/ipmiif.h>
@@ -213,7 +214,7 @@ struct ipmi_domain_s
     ipmi_domain_shutdown_cb shutdown_handler;
 
     /* Are we in the middle of an MC bus scan? */
-    int scanning_bus;
+    int scanning_bus_count;
 
     ipmi_entity_info_t    *entities;
     ipmi_lock_t           *entities_lock;
@@ -420,7 +421,7 @@ deliver_rsp(ipmi_domain_t                *domain,
  *
  **********************************************************************/
 void
-_ipmi_get_domain_fully_up(ipmi_domain_t *domain)
+_ipmi_get_domain_fully_up(ipmi_domain_t *domain, char *name)
 {
     if (!domain->domain_fully_up)
 	return;
@@ -430,7 +431,7 @@ _ipmi_get_domain_fully_up(ipmi_domain_t *domain)
 }
 
 void
-_ipmi_put_domain_fully_up(ipmi_domain_t *domain)
+_ipmi_put_domain_fully_up(ipmi_domain_t *domain, char *name)
 {
     if (!domain->domain_fully_up)
 	return;
@@ -2401,8 +2402,6 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
     return 0;
 
  out_err:
-    if (info->done_handler)
-	info->done_handler(domain, rv, info->cb_data);
     if (info->timer)
 	info->os_hnd->free_timer(info->os_hnd, info->timer);
     if (info->lock)
@@ -2412,7 +2411,7 @@ ipmi_start_ipmb_mc_scan(ipmi_domain_t  *domain,
 		 return true.  Bus scans always succeed. */
 }
 
-void
+int
 ipmi_start_si_scan(ipmi_domain_t  *domain,
 		   int            si_num,
 		   ipmi_domain_cb done_handler,
@@ -2424,7 +2423,7 @@ ipmi_start_si_scan(ipmi_domain_t  *domain,
 
     info = ipmi_mem_alloc(sizeof(mc_ipmb_scan_info_t));
     if (!info) 
-	return;
+	return ENOMEM;
     memset(info, 0, sizeof(*info));
 
     info->domain = domain;
@@ -2460,22 +2459,15 @@ ipmi_start_si_scan(ipmi_domain_t  *domain,
 	goto out_err;
     else
 	add_bus_scans_running(domain, info);
-    return;
+    return 0;
 
  out_err:
-    if (info->done_handler)
-	info->done_handler(domain, rv, info->cb_data);
     if (info->timer)
 	info->os_hnd->free_timer(info->os_hnd, info->timer);
     if (info->lock)
 	ipmi_destroy_lock(info->lock);
     ipmi_mem_free(info);
-}
-
-static void
-bmc_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
-{
-    _ipmi_put_domain_fully_up(domain);
+    return rv;
 }
 
 static void
@@ -2485,83 +2477,138 @@ mc_scan_done(ipmi_domain_t *domain, int err, void *cb_data)
     void           *bus_scan_handler_cb_data;
 
     ipmi_lock(domain->mc_lock);
-    domain->scanning_bus = 0;
+    domain->scanning_bus_count--;
+    if (domain->scanning_bus_count) {
+	_ipmi_put_domain_fully_up(domain, "mc_scan_done");
+	ipmi_unlock(domain->mc_lock);
+	return;
+    }
+
     bus_scan_handler = domain->bus_scan_handler;
     bus_scan_handler_cb_data = domain->bus_scan_handler_cb_data;
     ipmi_unlock(domain->mc_lock);
     if (bus_scan_handler)
 	bus_scan_handler(domain, 0,
 			 bus_scan_handler_cb_data);
-    _ipmi_put_domain_fully_up(domain);
+    _ipmi_put_domain_fully_up(domain, "mc_scan_done");
 }
 
 void
-_ipmi_mc_scan_done(ipmi_domain_t *domain)
+_ipmi_start_mc_scan_one(ipmi_domain_t *domain, int chan, int first, int last)
 {
-    mc_scan_done(domain, 0, NULL);
+    int rv;
+
+    _ipmi_get_domain_fully_up(domain, "_ipmi_start_mc_scan_one");
+    domain->scanning_bus_count++;
+    rv = ipmi_start_ipmb_mc_scan(domain, chan, first, last,
+				 mc_scan_done, NULL);
+    if (rv) {
+	domain->scanning_bus_count--;
+	_ipmi_put_domain_fully_up(domain, "_ipmi_start_mc_scan_one");
+    }
 }
 
+static int
+cmp_int(const void *v1, const void *v2)
+{
+    const int *i1 = v1;
+    const int *i2 = v2;
+    if (*i1 < *i2)
+	return -1;
+    else if (*i2 > *i2)
+	return 1;
+    else
+	return 0;
+}
 
 static void
 start_mc_scan(ipmi_domain_t *domain)
 {
-    int i;
+    int i, j;
+    int rv;
+    int got_bmc = 0;
 
     ipmi_lock(domain->mc_lock);
     if (!domain->do_bus_scan || (!ipmi_option_IPMB_scan(domain))) {
 	/* Always scan the local BMC(s). */
-	int i, j;
 	for (i=0; i<MAX_CONS; i++) {
 	    if (!domain->conn[i])
 		continue;
-	    _ipmi_get_domain_fully_up(domain);
 	    for (j=0; j<MAX_IPMI_USED_CHANNELS; j++) {
 		if (domain->chan[j].medium != IPMI_CHANNEL_MEDIUM_IPMB)
 		    continue;
-		ipmi_start_ipmb_mc_scan(domain, j, domain->con_ipmb_addr[i][j],
+		_ipmi_start_mc_scan_one(domain, j,
 					domain->con_ipmb_addr[i][j],
-					bmc_scan_done, NULL);
+					domain->con_ipmb_addr[i][j]);
 		break;
 	    }
-	    if (j == MAX_IPMI_USED_CHANNELS)
+	    if (j == MAX_IPMI_USED_CHANNELS) {
 		/* Didn't find a valid channel, just scan 0 to get one. */
-		ipmi_start_ipmb_mc_scan(domain, 0, domain->con_ipmb_addr[i][0],
+		_ipmi_start_mc_scan_one(domain, 0,
 					domain->con_ipmb_addr[i][0],
-					bmc_scan_done, NULL);
+					domain->con_ipmb_addr[i][0]);
+	    }
 	}
 	ipmi_unlock(domain->mc_lock);
 	return;
     }
 
-    if (domain->scanning_bus) {
+    if (domain->scanning_bus_count) {
 	ipmi_unlock(domain->mc_lock);
 	return;
     }
-
-    domain->scanning_bus = 1;
-    ipmi_unlock(domain->mc_lock);
 
     /* If a connections supports sysaddress scanning, then scan the
        system address for that connection. */
     for (i=0; i<MAX_CONS; i++) {
 	if ((domain->con_up[i]) && domain->conn[i]->scan_sysaddr) {
-	    _ipmi_get_domain_fully_up(domain);
-	    ipmi_start_si_scan(domain, i, mc_scan_done, NULL);
+	    _ipmi_get_domain_fully_up(domain, "start_mc_scan");
+	    domain->scanning_bus_count++;
+	    rv = ipmi_start_si_scan(domain, i, mc_scan_done, NULL);
+	    if (rv) {
+		domain->scanning_bus_count--;
+		_ipmi_put_domain_fully_up(domain, "start_mc_scan");
+	    }
 	}
     }
 
     /* Now start the IPMB scans. */
     for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
 	if (domain->chan[i].medium == IPMI_CHANNEL_MEDIUM_IPMB) {
-	    /* Always scan the normal BMC first, but don't report scan
-	       done on it. */
-	    _ipmi_get_domain_fully_up(domain);
-	    ipmi_start_ipmb_mc_scan(domain, i, 0x20, 0x20, bmc_scan_done,
-				    NULL);
-	    _ipmi_get_domain_fully_up(domain);
-	    ipmi_start_ipmb_mc_scan(domain, i, 0x10, 0xf0, mc_scan_done, NULL);
+	    if (!got_bmc) {
+		got_bmc = 1;
+		/* Always scan the normal BMC first. */
+		_ipmi_start_mc_scan_one(domain, i, 0x20, 0x20);
+		_ipmi_start_mc_scan_one(domain, i, 0x10, 0xf0);
+	    } else {
+		/* This is unfortunately complicated.  We only want
+		   the BMC to show up in one place, so we only scan
+		   the BMC's address on the first one.  If we have a
+		   system with two connections (two BMCs), we want to
+		   make sure they don't show up on each others lists.
+		   So except for the first IPMB, we ignore all BMC
+		   IPMB addresses. */
+		int ignore_addr[MAX_CONS];
+		int num_ignore = 0;
+		int cstart = 0x10;
+		for (j=0; j<MAX_CONS; j++) {
+		    if (! domain->conn[j])
+			continue;
+		    ignore_addr[num_ignore] = domain->con_ipmb_addr[j][i];
+		    num_ignore++;
+		}
+		qsort(ignore_addr, num_ignore, sizeof(int), cmp_int);
+		for (j=0; j<num_ignore; j++) {
+		    _ipmi_start_mc_scan_one(domain, i,
+					    cstart, ignore_addr[j]-1);
+		    cstart = ignore_addr[j]+1;
+		}
+		if (cstart <= 0xf0)
+		    _ipmi_start_mc_scan_one(domain, i, cstart, 0xf0);
+	    }
 	}
     }
+    ipmi_unlock(domain->mc_lock);
 }
 
 static void
@@ -3794,7 +3841,7 @@ con_up_complete(ipmi_domain_t *domain)
     ipmi_unlock(domain->domain_lock);
     if (SDRs_read_handler)
 	SDRs_read_handler(domain, 0, SDRs_read_handler_cb_data);
-    _ipmi_put_domain_fully_up(domain);
+    _ipmi_put_domain_fully_up(domain, "con_up_complete");
 }
 
 static void

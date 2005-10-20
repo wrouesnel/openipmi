@@ -125,10 +125,10 @@ void ipmi_domain_remove_mc_update_handler(ipmi_domain_t        *domain,
 int _ipmi_domain_check_oem_handlers(ipmi_domain_t *domain, ipmi_mc_t *mc);
 
 /* Scan a system interface address for an MC. */
-void ipmi_start_si_scan(ipmi_domain_t *domain,
-			int            si_num,
-			ipmi_domain_cb done_handler,
-			void           *cb_data);
+int ipmi_start_si_scan(ipmi_domain_t *domain,
+		       int            si_num,
+		       ipmi_domain_cb done_handler,
+		       void           *cb_data);
 
 /* Add an IPMB address to a list of addresses to not scan.  This way,
    if you have weak puny devices in IPMB that will break if you do
@@ -210,9 +210,11 @@ void ipmi_domain_set_oem_shutdown_handler(ipmi_domain_t           *domain,
 /* Set the domain type for a domain. */
 void ipmi_domain_set_type(ipmi_domain_t *domain, enum ipmi_domain_type dtype);
 
-/* OEM code can call then when it know that an MC scan is complete, to
-   speed things up. */
-void _ipmi_mc_scan_done(ipmi_domain_t *domain);
+/* OEM code can call this to do its own bus scanning to speed things
+   up. Must be holding the domain MC lock (_ipmi_domain_mc_lock()) to
+   call this. */
+void _ipmi_start_mc_scan_one(ipmi_domain_t *domain, int chan,
+			     int first, int last);
 
 /* Can be used to generate unique numbers for a domain. */
 unsigned int ipmi_domain_get_unique_num(ipmi_domain_t *domain);
@@ -228,8 +230,8 @@ int _ipmi_domain_in_shutdown(ipmi_domain_t *domain);
 
 /* Used as a refcount to know when the domain is completely
    operational. */
-void _ipmi_get_domain_fully_up(ipmi_domain_t *domain);
-void _ipmi_put_domain_fully_up(ipmi_domain_t *domain);
+void _ipmi_get_domain_fully_up(ipmi_domain_t *domain, char *name);
+void _ipmi_put_domain_fully_up(ipmi_domain_t *domain, char *name);
 
 /* Return connections for a domain. */
 int _ipmi_domain_get_connection(ipmi_domain_t *domain,
