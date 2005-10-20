@@ -91,7 +91,7 @@ ipmi_format_msg(ipmi_con_t        *ipmi,
 	if (ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 	    tmsg[0] = 0x20;
 	else
-	    tmsg[0] = ipmi->ipmb_addr; /* To the BMC. */
+	    tmsg[0] = ipmi->ipmb_addr[0]; /* To the BMC. */
 	tmsg[1] = (msg->netfn << 2) | si_addr->lun;
 	tmsg[2] = ipmb_checksum(tmsg, 2);
 	tmsg[3] = 0x81; /* Remote console IPMI Software ID */
@@ -107,6 +107,9 @@ ipmi_format_msg(ipmi_con_t        *ipmi,
 	ipmi_ipmb_addr_t *ipmb_addr = (ipmi_ipmb_addr_t *) addr;
 	int              do_broadcast = 0;
 
+	if (ipmb_addr->channel >= MAX_IPMI_USED_CHANNELS)
+	    return EINVAL;
+
 	if ((addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
 	    && (!ipmi->broadcast_broken))
 	{
@@ -120,7 +123,7 @@ ipmi_format_msg(ipmi_con_t        *ipmi,
 	if (ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 	    tmsg[pos++] = 0x20;
 	else
-	    tmsg[pos++] = ipmi->ipmb_addr; /* BMC is the bridge. */
+	    tmsg[pos++] = ipmi->ipmb_addr[0]; /* BMC is the bridge. */
 	tmsg[pos++] = (IPMI_APP_NETFN << 2) | 0;
 	tmsg[pos++] = ipmb_checksum(tmsg, 2);
 	tmsg[pos++] = 0x81; /* Remote console IPMI Software ID */
@@ -135,7 +138,7 @@ ipmi_format_msg(ipmi_con_t        *ipmi,
 	tmsg[pos++] = (msg->netfn << 2) | ipmb_addr->lun;
 	tmsg[pos++] = ipmb_checksum(tmsg+msgstart, 2);
 	msgstart = pos;
-	tmsg[pos++] = ipmi->ipmb_addr;
+	tmsg[pos++] = ipmi->ipmb_addr[ipmb_addr->channel];
 	tmsg[pos++] = (seq << 2) | 2; /* add 2 as the SMS LUN */
 	tmsg[pos++] = msg->cmd;
 	memcpy(tmsg+pos, msg->data, msg->data_len);
@@ -189,6 +192,7 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
     unsigned int  addr_len;
     unsigned int  seq;
     unsigned char *tmsg = data;
+    int           chan;
 
     if (data_len < 8) { /* Minimum size of an IPMI msg. */
 	if (DEBUG_RAWMSG || DEBUG_MSG_ERR)
@@ -201,6 +205,14 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
        validate all this for us. */
 
     seq = data[4] >> 2;
+
+    if ((orig_addr->addr_type == IPMI_IPMB_BROADCAST_ADDR_TYPE)
+	|| (orig_addr->addr_type == IPMI_IPMB_ADDR_TYPE))
+    {
+	ipmi_ipmb_addr_t *ipmb2 = (ipmi_ipmb_addr_t *) orig_addr;
+	chan = ipmb2->channel;
+    } else
+	chan = 0;
 
     if ((tmsg[5] == IPMI_SEND_MSG_CMD)
 	&& ((tmsg[1] >> 2) == (IPMI_APP_NETFN | 1)))
@@ -231,7 +243,7 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
 		   payload. */
 		return EINVAL;
 
-	    if (tmsg[10] == ipmi->ipmb_addr) {
+	    if (tmsg[10] == ipmi->ipmb_addr[chan]) {
 		ipmi_system_interface_addr_t *si_addr
 		    = (ipmi_system_interface_addr_t *) addr;
 
@@ -259,7 +271,7 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
 	       && (((ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 		    && (tmsg[3] == 0x20))
 		   || ((! (ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		       && (tmsg[3] == ipmi->ipmb_addr))))
+		       && (tmsg[3] == ipmi->ipmb_addr[chan]))))
     {
         /* In some cases, a message from the IPMB looks like it came
 	   from the BMC itself, IMHO a misinterpretation of the
@@ -280,7 +292,7 @@ ipmi_handle_recv(ipmi_con_t    *ipmi,
 	if (((ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR)
 	     && (tmsg[3] == 0x20))
 	    || ((!(ipmi->hacks & IPMI_CONN_HACK_20_AS_MAIN_ADDR))
-		&& (tmsg[3] == ipmi->ipmb_addr)))
+		&& (tmsg[3] == ipmi->ipmb_addr[chan])))
 	{
 	    ipmi_system_interface_addr_t *si_addr
 		= (ipmi_system_interface_addr_t *) addr;

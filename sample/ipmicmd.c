@@ -387,7 +387,7 @@ process_input_line(char *buf)
     ipmi_addr_t        addr;
     unsigned int       addr_len;
     ipmi_msg_t         msg;
-    char               outbuf[MAX_IPMI_DATA_SIZE];
+    unsigned char      outbuf[MAX_IPMI_DATA_SIZE];
     int                rv = 0;
     short              channel;
     unsigned char      seq = 0;

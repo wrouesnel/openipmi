@@ -111,7 +111,7 @@ typedef struct lan_wait_queue_s
     ipmi_addr_t           addr;
     unsigned int          addr_len;
     ipmi_msg_t            msg;
-    char                  data[IPMI_MAX_MSG_LENGTH];
+    unsigned char         data[IPMI_MAX_MSG_LENGTH];
     ipmi_ll_rsp_handler_t rsp_handler;
     ipmi_msgi_t           *rsp_item;
 
@@ -1714,7 +1714,7 @@ lan_send_addr(lan_data_t        *lan,
 {
     unsigned char  data[IPMI_MAX_LAN_LEN+IPMI_LAN_MAX_HEADER];
     unsigned char  *tmsg;
-    int            pos;
+    unsigned int   pos;
     int            rv;
     int            payload_type;
     int            out_of_session = 0;

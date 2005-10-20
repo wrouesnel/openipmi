@@ -907,7 +907,7 @@ ipmi_mc_sel_entries_used(ipmi_mc_t *mc)
 int
 ipmi_mc_sel_get_major_version(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
 
     ipmi_sel_get_major_version(mc->sel, &val);
     return val;
@@ -916,7 +916,7 @@ ipmi_mc_sel_get_major_version(ipmi_mc_t *mc)
 int 
 ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
 
     ipmi_sel_get_minor_version(mc->sel, &val);
     return val;
@@ -925,7 +925,7 @@ ipmi_mc_sel_get_minor_version(ipmi_mc_t *mc)
 int
 ipmi_mc_sel_get_num_entries(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
     
     ipmi_sel_get_num_entries(mc->sel, &val);
     return val;
@@ -934,7 +934,7 @@ ipmi_mc_sel_get_num_entries(ipmi_mc_t *mc)
 int
 ipmi_mc_sel_get_free_bytes(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
     
     ipmi_sel_get_free_bytes(mc->sel, &val);
     return val;
@@ -943,7 +943,7 @@ ipmi_mc_sel_get_free_bytes(ipmi_mc_t *mc)
 int 
 ipmi_mc_sel_get_overflow(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
     
     ipmi_sel_get_overflow(mc->sel, &val);
     return val;
@@ -952,7 +952,7 @@ ipmi_mc_sel_get_overflow(ipmi_mc_t *mc)
 int
 ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
     
     ipmi_sel_get_supports_delete_sel(mc->sel, &val);
     return val;
@@ -961,7 +961,7 @@ ipmi_mc_sel_get_supports_delete_sel(ipmi_mc_t *mc)
 int
 ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
 
     ipmi_sel_get_supports_partial_add_sel(mc->sel, &val);
     return val;
@@ -970,7 +970,7 @@ ipmi_mc_sel_get_supports_partial_add_sel(ipmi_mc_t *mc)
 int
 ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
 
     ipmi_sel_get_supports_reserve_sel(mc->sel, &val);
     return val;
@@ -979,7 +979,7 @@ ipmi_mc_sel_get_supports_reserve_sel(ipmi_mc_t *mc)
 int 
 ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
 
     ipmi_sel_get_supports_get_sel_allocation(mc->sel, &val);
     return val;
@@ -988,7 +988,7 @@ ipmi_mc_sel_get_supports_get_sel_allocation(ipmi_mc_t *mc)
 int
 ipmi_mc_sel_get_last_addition_timestamp(ipmi_mc_t *mc)
 {
-    unsigned int val = 0;
+    int val = 0;
 
     ipmi_sel_get_last_addition_timestamp(mc->sel, &val);
     return val;

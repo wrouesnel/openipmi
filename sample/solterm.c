@@ -94,7 +94,7 @@ typedef enum {
 	escape_next
 } escape_status_t;
 
-unsigned char		escape_char = '~';
+char			escape_char = '~';
 escape_status_t		escape_status = escape_waiting_for_escape;
 
 struct termios orig_attr;

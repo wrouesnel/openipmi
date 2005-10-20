@@ -194,7 +194,7 @@ read_bytes(char **tokptr, unsigned char *data, char **err, unsigned int len)
 	    return -1;
 	}
 	tok[end] = '\0';
-	strncpy(data, tok, len);
+	strncpy((char *) data, tok, len);
 	cleanup_ascii(data, len);
     } else {
 	int  i;

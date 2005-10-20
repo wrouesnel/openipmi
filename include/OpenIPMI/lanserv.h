@@ -118,7 +118,7 @@ typedef struct msg_s
     unsigned char cmd;
 
     unsigned char *data;
-    int           len;
+    unsigned int  len;
 
     unsigned long ll_data; /* For use by the low-level code. */
 } msg_t;

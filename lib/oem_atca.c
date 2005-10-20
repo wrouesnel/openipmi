@@ -167,7 +167,7 @@ struct atca_shelf_s
     unsigned int mfg_id;
     unsigned int prod_id;
 
-    unsigned char        shelf_address[40];
+    char                 shelf_address[40];
     enum ipmi_str_type_e shelf_address_type;
     unsigned int         shelf_address_len;
 

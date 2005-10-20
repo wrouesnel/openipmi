@@ -166,7 +166,7 @@ deactivated(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     void                 *cb_data = rspi->data2;
     int                  active = (long) rspi->data3;
     int                  rv;
-    char                 dummy;
+    unsigned char        dummy;
 
     /* Don't care about errors from the deactivate, if no BMC was
        present then it doesn't really matter. */

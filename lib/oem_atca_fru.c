@@ -57,7 +57,7 @@ static int
 convert_str_to_fru_str(const char                *name,
 		       enum ipmi_str_type_e      type,
 		       unsigned int              len,
-		       unsigned char             *raw_data,
+		       char                      *raw_data,
 		       const char                **rname,
 		       enum ipmi_fru_data_type_e *dtype,
 		       int                       *intval,
@@ -610,7 +610,8 @@ atca_addr_tab_root_get_field(ipmi_fru_node_t           *rnode,
 
     case 1:
 	rv = convert_str_to_fru_str("shelf address", rec->shelf_addr_type,
-				    rec->shelf_addr_len, rec->shelf_addr,
+				    rec->shelf_addr_len,
+				    rec->shelf_addr,
 				    name, dtype, intval, data);
 	break;
 

@@ -390,7 +390,7 @@ handle_msg_ipmi_dev(int smi_fd, lan_data_t *lan)
     msg_t            *msg;
     misc_data_t      *info = lan->user_info;
 
-    rsp.addr = (char *) &addr;
+    rsp.addr = (unsigned char *) &addr;
     rsp.addr_len = sizeof(addr);
     rsp.msg.data = rdata;
     rsp.msg.data_len = sizeof(rdata);

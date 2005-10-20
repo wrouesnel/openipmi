@@ -144,8 +144,8 @@ HEAP_EXPORT_NAME(print)(struct heap_s *heap)
 
 static void
 HEAP_EXPORT_NAME(check_item)(struct heap_node_s *curr,
-			     int                *depth,
-			     int                max_depth,
+			     unsigned int       *depth,
+			     unsigned int       max_depth,
 			     struct heap_node_s **real_last,
 			     int                *found_last)
 {

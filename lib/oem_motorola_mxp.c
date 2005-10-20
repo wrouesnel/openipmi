@@ -9005,7 +9005,7 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     void                 *cb_data = rspi->data2;
     int                  active = 0;
     int                  err = 0;
-    char                 ipmb = 0x20;
+    unsigned char        ipmb = 0x20;
     
     if (!ipmi)
 	return IPMI_MSG_ITEM_NOT_USED;

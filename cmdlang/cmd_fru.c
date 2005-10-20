@@ -396,7 +396,7 @@ fru_setval(ipmi_fru_t *fru, void *cb_data)
 		curr_arg++;
 		j++;
 	    }
-	    rv = ipmi_fru_set_data_val(fru, i, num, dtype, data, len);
+	    rv = ipmi_fru_set_data_val(fru, i, num, dtype, (char *) data, len);
 	    ipmi_mem_free(data);
 	}
 	if (rv) {

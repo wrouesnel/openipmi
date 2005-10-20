@@ -1536,10 +1536,10 @@ ipmi_sensor_handle_sdrs(ipmi_domain_t   *domain,
 {
     int                 rv;
     int                 i, j;
-    ipmi_sensor_t       **sdr_sensors;
+    ipmi_sensor_t       **sdr_sensors = NULL;
     ipmi_sensor_t       **old_sdr_sensors;
     unsigned int        old_count;
-    unsigned int        count;
+    unsigned int        count = 0;
     ipmi_entity_info_t  *ents;
     ipmi_entity_t       *ent;
     entity_list_t       *new_sensors = NULL;

@@ -223,8 +223,8 @@ struct ipmi_entity_s
     /* Hot-swap sensors/controls */
     ipmi_sensor_t    *hot_swap_requester;
     ipmi_sensor_id_t hot_swap_requester_id;
-    int              hot_swap_offset;
-    int              hot_swap_requesting_val;
+    unsigned int     hot_swap_offset;
+    unsigned int     hot_swap_requesting_val;
     enum ipmi_hot_swap_states hot_swap_state;
     ipmi_control_t    *hot_swap_power;
     ipmi_control_id_t hot_swap_power_id;

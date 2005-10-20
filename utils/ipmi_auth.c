@@ -101,7 +101,7 @@ pw_authcode_gen(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *output)
 static int
 pw_authcode_check(ipmi_authdata_t handle, ipmi_auth_sg_t data[], void *code)
 {
-    if (strncmp(handle->data, code, 16) != 0)
+    if (strncmp((char *) handle->data, code, 16) != 0)
 	return EINVAL;
     return 0;
 }

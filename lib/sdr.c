@@ -313,7 +313,7 @@ start_db_fetch(void *cb_data, int shutdown)
     {
 	unsigned char *db_data;
 	unsigned int  db_data_len;
-	int           data_fetched = 0;
+	unsigned int  data_fetched = 0;
 
 	rv = sdrs->os_hnd->database_find(sdrs->os_hnd,
 					 sdrs->db_key,

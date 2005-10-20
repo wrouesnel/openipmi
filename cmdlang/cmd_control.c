@@ -496,7 +496,7 @@ control_get_id_done(ipmi_control_t *control,
 	goto out;
     }
 
-    ipmi_cmdlang_out_binary(cmd_info, "Data", val, length);
+    ipmi_cmdlang_out_binary(cmd_info, "Data", (char *) val, length);
 
  out:
     if (cmdlang->err) {

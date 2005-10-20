@@ -86,11 +86,11 @@ aes_cbc_encrypt(ipmi_con_t    *ipmi,
     unsigned char  *d;
     EVP_CIPHER_CTX ctx;
     int            rv;
-    unsigned int   outlen;
-    unsigned int   tmplen;
+    int            outlen;
+    int            tmplen;
     unsigned char  *padpos;
     unsigned char  padval;
-    unsigned int   padlen;
+    int            padlen;
 
     /* Check for init vector room. */
     if (*header_len < 16)
@@ -166,10 +166,10 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
     unsigned char  *d;
     unsigned char  *p;
     EVP_CIPHER_CTX ctx;
-    unsigned int   outlen;
+    int            outlen;
     int            rv = 0;
     unsigned char  *pad;
-    unsigned int   padlen;
+    int            padlen;
 
     if (l < 32)
 	/* Not possible with this algorithm. */

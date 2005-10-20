@@ -1283,7 +1283,7 @@ static int add_to_transmit_queue(ipmi_sol_transmitter_context_t *tx, const void 
 
 	if (count)
 	{
-		new_tail->data = (unsigned char *)ipmi_mem_alloc(count);
+		new_tail->data = ipmi_mem_alloc(count);
 		if (!new_tail->data)
 		{
 			ipmi_mem_free(new_tail);

@@ -2879,7 +2879,7 @@ redisplay_control(ipmi_control_t *control, void *cb_data)
 
 struct control_info {
     int found;
-    unsigned char *name;
+    char *name;
 };
 
 static void
@@ -4510,7 +4510,8 @@ setpef_cmd(char *cmd, char **toks, void *cb_data)
 	    if (get_uint(toks, &sel, "selector"))
 		return 0;
 	    str = strtok_r(NULL, "", toks);
-	    rv = ipmi_pefconfig_set_alert_string(pef_config, sel, str);
+	    rv = ipmi_pefconfig_set_alert_string(pef_config, sel,
+						 (unsigned char *) str);
 	} else {
 	    cmd_win_out("Invalid PEF config name: '%s'\n", name);
 	    return 0;
@@ -5076,7 +5077,8 @@ setlanparm_cmd(char *cmd, char **toks, void *cb_data)
 		return 0;
 	    str = strtok_r(NULL, "", toks);
 	    rv = ipmi_lanconfig_set_community_string(lanparm_config,
-						     str, strlen(str));
+						     (unsigned char *) str,
+						     strlen(str));
 	} else {
 	    cmd_win_out("Invalid LAN config name: '%s'\n", name);
 	    return 0;
@@ -5445,9 +5447,9 @@ delevent_cb(ipmi_domain_t *domain, int err, void *cb_data)
 
 typedef struct delevent_info_s
 {
-    ipmi_mcid_t mc_id;
-    int         record_id;
-    int         rv;
+    ipmi_mcid_t  mc_id;
+    unsigned int record_id;
+    int          rv;
 } delevent_info_t;
 
 static void
@@ -6113,7 +6115,7 @@ new_domain_cmd(char *cmd, char **toks, void *cb_data)
 {
     char         *parms[30];
     int          num_parms;
-    unsigned int curr_parm;
+    int          curr_parm;
     ipmi_args_t  *con_parms[2];
     int          set = 0;
     int          i;

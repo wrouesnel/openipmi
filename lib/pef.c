@@ -1043,7 +1043,7 @@ struct ipmi_pef_config_s
 
     unsigned char num_alert_strings;	/* Number of alert strings */
     ipmi_ask_t	  *asks;		/* Alert String Key Table */
-    unsigned char **alert_strings;	/* Alert strings */
+    char          **alert_strings;	/* Alert strings */
 };
 
 
@@ -1467,10 +1467,10 @@ static void sask(ipmi_pef_config_t *pefc, pefparms_t *lp, unsigned char *data,
 static int gas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 	       unsigned char *data, unsigned int data_len)
 {
-    int           pos;
-    unsigned char **t;
-    unsigned char *s1, *s2;
-    int           len;
+    int  pos;
+    char **t;
+    char *s1, *s2;
+    int  len;
 
     data++; /* Skip the revision byte. */
     data_len--;
@@ -1493,7 +1493,7 @@ static int gas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
        zeros, either. */
     s1 = *t;
     if (s1)
-	len = strlen(s1);
+	len = strlen((char *) s1);
     else
 	len = 0;
     s2 = ipmi_mem_alloc(len + data_len + 1);
@@ -1516,10 +1516,10 @@ static int gas(ipmi_pef_config_t *pefc, pefparms_t *lp, int err,
 static void sas(ipmi_pef_config_t *pefc, pefparms_t *lp, unsigned char *data,
 		unsigned int *data_len)
 {
-    int           pos = data[0] & 0x7f;
-    int           block = data[1];
-    unsigned char *t = pefc->alert_strings[pos];
-    int           len;
+    int  pos = data[0] & 0x7f;
+    int  block = data[1];
+    char *t = pefc->alert_strings[pos];
+    int  len;
 
     if (!t) {
 	data[2] = '\0';
@@ -2421,7 +2421,7 @@ ipmi_pefconfig_get_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
     *len = rlen;
     if (rlen > olen)
 	return EBADF;
-    strcpy(val, pefc->alert_strings[sel]);
+    strcpy((char *) val, pefc->alert_strings[sel]);
     return 0;
 }
 
@@ -2433,10 +2433,10 @@ ipmi_pefconfig_set_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
 
     if (sel >= pefc->num_alert_strings)
 	return EINVAL;
-    s = pefc->alert_strings[sel];
+    s = (unsigned char *) pefc->alert_strings[sel];
     pefc->alert_strings[sel] = ipmi_strdup((char *) val);
     if (! pefc->alert_strings[sel]) {
-	pefc->alert_strings[sel] = s;
+	pefc->alert_strings[sel] = (char *) s;
 	return ENOMEM;
     }
     if (s)
@@ -2448,7 +2448,7 @@ ipmi_pefconfig_set_alert_string(ipmi_pef_config_t *pefc, unsigned int sel,
 typedef struct pefparm_gendata_s
 {
     enum ipmi_pefconf_val_type_e datatype;
-    unsigned char *fname;
+    char *fname;
 
     union {
 	struct {

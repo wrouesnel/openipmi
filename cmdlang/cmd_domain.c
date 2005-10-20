@@ -86,7 +86,7 @@ domain_info(ipmi_domain_t *domain, void *cb_data)
     ipmi_cmdlang_down(cmd_info);
     ipmi_cmdlang_out(cmd_info, "Name", domain_name);
     if (ipmi_domain_get_guid(domain, guid) == 0)
-	ipmi_cmdlang_out_binary(cmd_info, "GUID", guid, 16);
+	ipmi_cmdlang_out_binary(cmd_info, "GUID", (char *) guid, 16);
     ipmi_cmdlang_out(cmd_info, "Type",
 		    ipmi_domain_get_type_string(ipmi_domain_get_type(domain)));
     ipmi_cmdlang_out_int(cmd_info, "SEL Rescan Time",
@@ -547,7 +547,8 @@ domain_msg_handler(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     ipmi_cmdlang_out_int(cmd_info, "NetFN", msg->netfn);
     ipmi_cmdlang_out_int(cmd_info, "command", msg->cmd);
     if (msg->data_len)
-	ipmi_cmdlang_out_binary(cmd_info, "Data", msg->data, msg->data_len);
+	ipmi_cmdlang_out_binary(cmd_info, "Data",
+				(char *) msg->data, msg->data_len);
     ipmi_cmdlang_unlock(cmd_info);
     ipmi_cmdlang_up(cmd_info);
 
@@ -1196,7 +1197,7 @@ ipmi_cmdlang_event_out(ipmi_event_t    *event,
     len = ipmi_event_get_data_len(event);
     if (len) {
 	ipmi_cmdlang_out_binary(cmd_info, "Data",
-				ipmi_event_get_data_ptr(event), len);
+				(char *) ipmi_event_get_data_ptr(event), len);
     }
 }
 

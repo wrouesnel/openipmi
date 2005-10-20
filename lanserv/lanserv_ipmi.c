@@ -2845,11 +2845,11 @@ aes_cbc_encrypt(lan_data_t *lan, session_t *session,
     unsigned int   i;
     EVP_CIPHER_CTX ctx;
     int            rv;
-    unsigned int   outlen;
-    unsigned int   tmplen;
+    int            outlen;
+    int            tmplen;
     unsigned char  *padpos;
     unsigned char  padval;
-    unsigned int   padlen;
+    int            padlen;
 
     if (*hdr_left < 16)
 	return E2BIG;
@@ -2919,9 +2919,9 @@ aes_cbc_decrypt(lan_data_t *lan, session_t *session, msg_t *msg)
     unsigned int   l = msg->len;
     unsigned char  *d;
     EVP_CIPHER_CTX ctx;
-    unsigned int   outlen;
+    int            outlen;
     unsigned char  *pad;
-    unsigned int   padlen;
+    int            padlen;
     int            rv = 0;
 
     if (l < 32)

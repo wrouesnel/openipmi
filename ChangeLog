@@ -20,6 +20,9 @@
 	* lib/ipmi_smi.c: Remove socket support, as nobody should be using
 	it.
 
+	* everything: Cleaned up a bunch of new warnings from the gcc 4.0
+	compiler.
+
 2005-10-17 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_fru.h: Add ipmi_bits.h include.

@@ -89,7 +89,7 @@ mc_dump(ipmi_mc_t *mc, ipmi_cmd_info_t *cmd_info)
 
     ipmi_cmdlang_out_bool(cmd_info, "Active", ipmi_mc_is_active(mc));
     if (ipmi_mc_get_guid(mc, guid) == 0)
-	ipmi_cmdlang_out_binary(cmd_info, "GUID", guid, 16);
+	ipmi_cmdlang_out_binary(cmd_info, "GUID", (char *) guid, 16);
     ipmi_cmdlang_out_int(cmd_info, "SEL Rescan Time",
 			 ipmi_mc_get_sel_rescan_time(mc));
     ipmi_cmdlang_out_bool(cmd_info, "provides_device_sdrs",
@@ -128,7 +128,8 @@ mc_dump(ipmi_mc_t *mc, ipmi_cmd_info_t *cmd_info)
 			 ipmi_mc_manufacturer_id(mc));
     ipmi_cmdlang_out_hex(cmd_info, "product_id", ipmi_mc_product_id(mc));
     ipmi_mc_aux_fw_revision(mc, vals);
-    ipmi_cmdlang_out_binary(cmd_info, "aux_fw_revision", vals, sizeof(vals));
+    ipmi_cmdlang_out_binary(cmd_info, "aux_fw_revision",
+			    (char *) vals, sizeof(vals));
 }
 
 static void
@@ -553,7 +554,8 @@ mc_msg_handler(ipmi_mc_t *mc, ipmi_msg_t *msg, void *cb_data)
     ipmi_cmdlang_out_int(cmd_info, "NetFN", msg->netfn);
     ipmi_cmdlang_out_int(cmd_info, "command", msg->cmd);
     if (msg->data_len)
-	ipmi_cmdlang_out_binary(cmd_info, "Data", msg->data, msg->data_len);
+	ipmi_cmdlang_out_binary(cmd_info, "Data",
+				(char *) msg->data, msg->data_len);
     ipmi_cmdlang_up(cmd_info);
     ipmi_cmdlang_unlock(cmd_info);
 
@@ -697,7 +699,8 @@ sdrs_fetched(ipmi_sdr_info_t *sdrs,
 	snprintf(str, sizeof(str), "%d.%d", sdr.major_version,
 		 sdr.minor_version);
         ipmi_cmdlang_out(cmd_info, "Version", str);
-	ipmi_cmdlang_out_binary(cmd_info, "Data", sdr.data, sdr.length);
+	ipmi_cmdlang_out_binary(cmd_info, "Data",
+				(char *) sdr.data, sdr.length);
 	ipmi_cmdlang_up(cmd_info);
 	total_size += sdr.length+5;
     }
@@ -979,10 +982,10 @@ got_chan_info(ipmi_mc_t           *mc,
     }
     rv = ipmi_channel_info_get_vendor_id(info, data);
     if (!rv)
-	ipmi_cmdlang_out_binary(cmd_info, "Vendor ID", data, 3);
+	ipmi_cmdlang_out_binary(cmd_info, "Vendor ID", (char *) data, 3);
     rv = ipmi_channel_info_get_aux_info(info, data);
     if (!rv)
-	ipmi_cmdlang_out_binary(cmd_info, "Aux Info", data, 2);
+	ipmi_cmdlang_out_binary(cmd_info, "Aux Info", (char *) data, 2);
     ipmi_cmdlang_up(cmd_info);
     ipmi_cmdlang_unlock(cmd_info);
 
