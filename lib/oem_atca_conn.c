@@ -58,7 +58,7 @@ atca_ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     if (!ipmi) {
 	if (handler)
-	    handler(ipmi, ECANCELED, ipmb, 1, 0, cb_data);
+	    handler(ipmi, ECANCELED, &ipmb, 1, 1, 0, cb_data);
 	return IPMI_MSG_ITEM_NOT_USED;
     }
 
@@ -76,10 +76,10 @@ atca_ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 
     /* Note that there is no "inactive" connection with ATCA. */
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, ipmb, 1, info->hacks);
+	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, 1, info->hacks);
 
     if (handler)
-	handler(ipmi, err, ipmb, 1, info->hacks, cb_data);
+	handler(ipmi, err, &ipmb, 1, 1, info->hacks, cb_data);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 

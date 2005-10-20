@@ -3565,10 +3565,10 @@ atca_blade_info(ipmi_domain_t *domain, ipmi_msgi_t *rspi)
     info->addresses[0].site_type = msg->data[7];
     info->addresses[0].site_num = msg->data[6];
 
-    /* Completely turn off scanning except for the one address for the
-       blade. */
-    ipmi_domain_add_ipmb_ignore_range(domain, 0x00, ipmb - 1);
-    ipmi_domain_add_ipmb_ignore_range(domain, ipmb + 1, 0xff);
+    /* Completely turn off scanning on channel 0 except for the one
+       address for the blade. */
+    ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x00, ipmb - 1);
+    ipmi_domain_add_ipmb_ignore_range(domain, 0, ipmb + 1, 0xff);
 
     /* Add a handler for when MCs are added to the domain, so we can
        add in our custom sensors. */

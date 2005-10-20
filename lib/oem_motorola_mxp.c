@@ -8860,19 +8860,19 @@ mxp_bmc_handler(ipmi_mc_t *mc)
     }
 
     /* Ignore the IPMB addresses of the power supplies. */
-    rv = ipmi_domain_add_ipmb_ignore(domain, 0x54);
+    rv = ipmi_domain_add_ipmb_ignore(domain, 0, 0x54);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_handler): "
 		 "could not ignore IPMB address 0x54",
 		 MC_NAME(mc));
-    rv = ipmi_domain_add_ipmb_ignore(domain, 0x56);
+    rv = ipmi_domain_add_ipmb_ignore(domain, 0, 0x56);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_handler): "
 		 "could not ignore IPMB address 0x56",
 		 MC_NAME(mc));
-    rv = ipmi_domain_add_ipmb_ignore(domain, 0x58);
+    rv = ipmi_domain_add_ipmb_ignore(domain, 0, 0x58);
     if (rv)
 	ipmi_log(IPMI_LOG_WARNING,
 		 "%soem_motorola_mxp.c(mxp_handler): "
@@ -9005,6 +9005,7 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     void                 *cb_data = rspi->data2;
     int                  active = 0;
     int                  err = 0;
+    char                 ipmb = 0x20;
     
     if (!ipmi)
 	return IPMI_MSG_ITEM_NOT_USED;
@@ -9021,10 +9022,10 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	active = 1;
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, 0x20, active, 0);
+	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, active, 0);
 
     if (handler)
-	handler(ipmi, err, 0x20, active, 0, cb_data);
+	handler(ipmi, err, &ipmb, 1, active, 0, cb_data);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -9073,12 +9074,12 @@ activate_handler(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     if (rmsg->data[0] != 0) {
 	err = IPMI_IPMI_ERR_VAL(rmsg->data[0]);
 	if (handler)
-	    handler(ipmi, err, ipmb, 0, 0, cb_data);
+	    handler(ipmi, err, &ipmb, 1, 0, 0, cb_data);
     } else {
 	rv = mxp_ipmb_fetch(ipmi, handler, cb_data);
 	if (rv) {
 	    if (handler)
-		handler(ipmi, rv, ipmb, 0, 0, cb_data);
+		handler(ipmi, rv, &ipmb, 1, 0, 0, cb_data);
 	}
     }
     return IPMI_MSG_ITEM_NOT_USED;

@@ -58,10 +58,10 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
 	ipmb = msg->data[2];
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, ipmb, ipmb == 0x20, 0);
+	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, ipmb == 0x20, 0);
 
     if (handler)
-	handler(ipmi, err, ipmb, ipmb == 0x20, 0, cb_data);
+	handler(ipmi, err, &ipmb, 1, ipmb == 0x20, 0, cb_data);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 
@@ -108,14 +108,14 @@ activate_handler(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     if (rmsg->data[0] != 0) {
 	err = IPMI_IPMI_ERR_VAL(rmsg->data[0]);
 	if (handler)
-	    handler(ipmi, err, ipmb, 0, 0, cb_data);
+	    handler(ipmi, err, &ipmb, 1, 0, 0, cb_data);
     }
     else {
 	/* Now fetch the current state. */
 	rv = force_ipmb_fetch(ipmi, handler, cb_data);
 	if (rv) {
 	    if (handler)
-		handler(ipmi, rv, ipmb, 0, 0, cb_data);
+		handler(ipmi, rv, &ipmb, 1, 0, 0, cb_data);
 	}
     }
     return IPMI_MSG_ITEM_NOT_USED;
@@ -166,13 +166,14 @@ deactivated(ipmi_con_t *ipmi, ipmi_msgi_t  *rspi)
     void                 *cb_data = rspi->data2;
     int                  active = (long) rspi->data3;
     int                  rv;
+    char                 dummy;
 
     /* Don't care about errors from the deactivate, if no BMC was
        present then it doesn't really matter. */
 
     rv = send_activate(ipmi, active, handler, cb_data);
     if (rv)
-	handler(ipmi, rv, 0, 0, 0, cb_data);
+	handler(ipmi, rv, &dummy, 0, 0, 0, cb_data);
     return IPMI_MSG_ITEM_NOT_USED;
 }
 

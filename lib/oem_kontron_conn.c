@@ -100,10 +100,10 @@ ipmb_handler_amc(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     }
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, ipmb, 1, 0);
+	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, 1, 0);
 
     if (handler)
-        handler(ipmi, err, ipmb, err == 0, 0, cb_data);
+        handler(ipmi, err, &ipmb, 1, err == 0, 0, cb_data);
 
     return IPMI_MSG_ITEM_NOT_USED;
 }
@@ -177,10 +177,10 @@ ipmb_handler(ipmi_con_t *ipmi, ipmi_msgi_t *rspi)
     }
 
     if (!err)
-	ipmi->set_ipmb_addr(ipmi, ipmb, 1, 0);
+	ipmi->set_ipmb_addr(ipmi, &ipmb, 1, 1, 0);
 
     if (handler)
-        handler(ipmi, err, ipmb, err == 0, 0, cb_data);
+        handler(ipmi, err, &ipmb, 1, err == 0, 0, cb_data);
 
     return IPMI_MSG_ITEM_NOT_USED;
 }

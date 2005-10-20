@@ -420,13 +420,13 @@ tig_handler(ipmi_mc_t *mc,
 	/* It's the SI MC, which we detect at startup.  Set up the MCs
 	   for the domain to scan. */
 	/* We scan 0x20, 0x28 (and 0xc0 for some machines) */
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1f);
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0x27);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x00, 0x1f);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x21, 0x27);
 	if (do_hsbp) {
-	    ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xbf);
-	    ipmi_domain_add_ipmb_ignore_range(domain, 0xc1, 0xff);
+	    ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x29, 0xbf);
+	    ipmi_domain_add_ipmb_ignore_range(domain, 0, 0xc1, 0xff);
 	} else {
-	    ipmi_domain_add_ipmb_ignore_range(domain, 0x29, 0xff);
+	    ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x29, 0xff);
 	}
     } else if ((channel == 0) && (addr == 0x20)) {
 	/* The MC at address 0x28 has exactly the same product id as
@@ -497,8 +497,8 @@ noipmb_handler(ipmi_mc_t *mc,
     
     if ((channel == IPMI_BMC_CHANNEL) && (addr == IPMI_BMC_CHANNEL)) {
 	/* We only scan 0x20. */
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x00, 0x1f);
-	ipmi_domain_add_ipmb_ignore_range(domain, 0x21, 0xff);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x00, 0x1f);
+	ipmi_domain_add_ipmb_ignore_range(domain, 0, 0x21, 0xff);
     }
     return 0;
 }

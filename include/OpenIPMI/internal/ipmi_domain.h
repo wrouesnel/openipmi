@@ -134,8 +134,10 @@ void ipmi_start_si_scan(ipmi_domain_t *domain,
    if you have weak puny devices in IPMB that will break if you do
    normal IPMB operations, you can have them be ignored. */
 int ipmi_domain_add_ipmb_ignore(ipmi_domain_t *domain,
+				unsigned char channel,
 				unsigned char ipmb_addr);
 int ipmi_domain_add_ipmb_ignore_range(ipmi_domain_t *domain,
+				      unsigned char channel,
 				      unsigned char first_ipmb_addr,
 				      unsigned char last_ipmb_addr);
 

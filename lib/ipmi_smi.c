@@ -115,7 +115,6 @@ typedef struct smi_data_s
     int                        refcount;
 
     ipmi_con_t                 *ipmi;
-    int                        using_socket;
     int                        fd;
     int                        if_num;
     pending_cmd_t              *pending_cmds;
@@ -126,7 +125,7 @@ typedef struct smi_data_s
     ipmi_lock_t                *smi_lock;
     locked_list_t              *event_handlers;
 
-    unsigned char              slave_addr;
+    unsigned char              slave_addr[MAX_IPMI_USED_CHANNELS];
 
     os_hnd_timer_id_t          *audit_timer;
     audit_timer_info_t         *audit_info;
@@ -384,26 +383,11 @@ remove_cmd_registration(ipmi_con_t    *ipmi,
 }
 
 static int
-open_smi_fd(int if_num, int *using_socket)
+open_smi_fd(int if_num)
 {
-    char                 devname[30];
-    int                  fd;
-    struct sockaddr_ipmi addr;
-    int                  rv;
+    char devname[30];
+    int  fd;
 
-    fd = socket(PF_IPMI, SOCK_DGRAM, 0);
-    if (fd == -1)
-	goto try_dev;
-    addr.sipmi_family = AF_IPMI;
-    addr.if_num = if_num;
-    rv = bind(fd, (struct sockaddr *) &addr, sizeof(addr));
-    if (rv != -1) {
-	*using_socket = 1;
-	goto out;
-    }
-
-    *using_socket = 0;
- try_dev:
     sprintf(devname, "/dev/ipmidev/%d", if_num);
     fd = open(devname, O_RDWR);
     if (fd == -1) {
@@ -415,7 +399,6 @@ open_smi_fd(int if_num, int *using_socket)
 	}
     }
 
- out:
     return fd;
 }
 
@@ -427,8 +410,9 @@ smi_send(smi_data_t        *smi,
 	 const ipmi_msg_t  *msg,
 	 long              msgid)
 {
-    int rv;
-    ipmi_addr_t myaddr;
+    int             rv;
+    ipmi_addr_t     myaddr;
+    struct ipmi_req req;
 
     if (DEBUG_MSG) {
 	char buf1[32], buf2[32];
@@ -459,33 +443,12 @@ smi_send(smi_data_t        *smi,
     if (msg->data_len > IPMI_MAX_MSG_LENGTH)
 	return EBADF;
 
-    if (smi->using_socket) {
-	struct sockaddr_ipmi     saddr;
-        char                     smsg_data[sizeof(struct ipmi_sock_msg)
-                                           + IPMI_MAX_MSG_LENGTH];
-        struct ipmi_sock_msg     *smsg = (void *) smsg_data;
-
-	saddr.sipmi_family = AF_IPMI;
-	memcpy(&saddr.ipmi_addr, addr, addr_len);
-
-	smsg->netfn = msg->netfn;
-	smsg->cmd = msg->cmd;
-	smsg->data_len = msg->data_len;
-	smsg->msgid = msgid;
-	memcpy(smsg->data, msg->data, smsg->data_len);
-
-	rv = sendto(fd, smsg, sizeof(*smsg) + msg->data_len, 0,
-		    (struct sockaddr *) &saddr,
-		    addr_len + SOCKADDR_IPMI_OVERHEAD);
-    } else {
-	struct ipmi_req req;
-	req.addr = (unsigned char *) addr;
-	req.addr_len = addr_len;
-	req.msgid = (long) smi;
-	req.msg = *msg;
-	req.msgid = msgid;
-	rv = ioctl(fd, IPMICTL_SEND_COMMAND, &req);
-    }
+    req.addr = (unsigned char *) addr;
+    req.addr_len = addr_len;
+    req.msgid = (long) smi;
+    req.msg = *msg;
+    req.msgid = msgid;
+    rv = ioctl(fd, IPMICTL_SEND_COMMAND, &req);
 
     if (rv == -1)
 	return errno;
@@ -496,13 +459,20 @@ smi_send(smi_data_t        *smi,
 static void
 set_ipmb_in_dev(smi_data_t *smi)
 {
-    unsigned int slave_addr = smi->slave_addr;
-    int          rv;
+    unsigned char *slave_addr = smi->slave_addr;
+    int           rv;
+    int           i;
 
-    if (smi->using_socket)
-	rv = ioctl(smi->fd, SIOCIPMISETADDR, &slave_addr);
-    else
-	rv = ioctl(smi->fd, IPMICTL_SET_MY_ADDRESS_CMD, &slave_addr);
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
+	rv = ioctl(smi->fd, IPMICTL_SET_MY_CHANNEL_ADDRESS_CMD, slave_addr[i]);
+	if (rv == -1)
+	    goto try_old_version;
+    }
+    return;
+
+ try_old_version:
+    /* We can only set one address. */
+    rv = ioctl(smi->fd, IPMICTL_SET_MY_ADDRESS_CMD, slave_addr[0]);
     if (rv) {
 	ipmi_log(IPMI_LOG_SEVERE,
 		 "%sipmi_smi.c(set_ipmb_in_dev): "
@@ -513,11 +483,12 @@ set_ipmb_in_dev(smi_data_t *smi)
 
 typedef struct call_ipmb_change_handler_s
 {
-    smi_data_t  *smi;
-    int          err;
-    unsigned int ipmb_addr;
-    int          active;
-    unsigned int hacks;
+    smi_data_t   *smi;
+    int           err;
+    const unsigned char *ipmb_addr;
+    unsigned int  num_ipmb_addr;
+    int           active;
+    unsigned int  hacks;
 } call_ipmb_change_handler_t;
 
 static int
@@ -526,13 +497,15 @@ call_ipmb_change_handler(void *cb_data, void *item1, void *item2)
     call_ipmb_change_handler_t *info = cb_data;
     ipmi_ll_ipmb_addr_cb       handler = item1;
 
-    handler(info->smi->ipmi, info->err, info->ipmb_addr, info->active,
-	    info->hacks, item2);
+    handler(info->smi->ipmi, info->err, info->ipmb_addr, info->num_ipmb_addr,
+	    info->active, info->hacks, item2);
     return LOCKED_LIST_ITER_CONTINUE;
 }
 
 static void
-call_ipmb_change_handlers(smi_data_t *smi, int err, unsigned int ipmb_addr,
+call_ipmb_change_handlers(smi_data_t *smi, int err,
+			  const unsigned char ipmb_addr[],
+			  unsigned int  num_ipmb_addr,
 			  int active, unsigned int hacks)
 {
     call_ipmb_change_handler_t info;
@@ -540,6 +513,7 @@ call_ipmb_change_handlers(smi_data_t *smi, int err, unsigned int ipmb_addr,
     info.smi = smi;
     info.err = err;
     info.ipmb_addr = ipmb_addr;
+    info.num_ipmb_addr = num_ipmb_addr;
     info.active = active;
     info.hacks = hacks;
     locked_list_iterate(smi->ipmb_change_handlers, call_ipmb_change_handler,
@@ -573,22 +547,33 @@ smi_remove_ipmb_addr_handler(ipmi_con_t           *ipmi,
 }
 
 static void
-ipmb_handler(ipmi_con_t   *ipmi,
-	     int          err,
-	     unsigned int ipmb,
-	     int          active,
-	     unsigned int hacks,
-	     void         *cb_data)
+ipmb_handler(ipmi_con_t    *ipmi,
+	     int           err,
+	     const unsigned char ipmb_addr[],
+	     unsigned int  num_ipmb_addr,
+	     int           active,
+	     unsigned int  hacks,
+	     void          *cb_data)
 {
     smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+    int        changed = 0;
+    int        i;
 
     if (err)
 	return;
 
-    if (ipmb != smi->slave_addr) {
-	smi->slave_addr = ipmb;
-	ipmi->ipmb_addr = ipmb;
-	call_ipmb_change_handlers(smi, err, ipmb, active, 0);
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	if (ipmb_addr[i] != smi->slave_addr[i]) {
+	    smi->slave_addr[i] = ipmb_addr[i];
+	    ipmi->ipmb_addr[i] = ipmb_addr[i];
+	    changed = 1;
+	}
+    }
+    if (changed) {
+	call_ipmb_change_handlers(smi, err, ipmb_addr, num_ipmb_addr,
+				  active, 0);
 	set_ipmb_in_dev(smi);
     }
 }
@@ -741,10 +726,7 @@ smi_add_event_handler(ipmi_con_t            *ipmi,
     if (!rv) {
 	if (locked_list_num_entries(smi->event_handlers) == 1) {
 	    int val = 1;
-	    if (smi->using_socket)
-		rv = ioctl(smi->fd, SIOCIPMIGETEVENT, &val);
-	    else
-		rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
+	    rv = ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
 	    if (rv == -1) {
 		locked_list_remove(smi->event_handlers, handler, cb_data);
 		rv = errno;
@@ -768,10 +750,7 @@ smi_remove_event_handler(ipmi_con_t            *ipmi,
 	rv = EINVAL;
     if (locked_list_num_entries(smi->event_handlers) == 0) {
 	int val = 0;
-	if (smi->using_socket)
-	    ioctl(smi->fd, SIOCIPMIGETEVENT, &val);
-	else
-	    ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
+	ioctl(smi->fd, IPMICTL_SET_GETS_EVENTS_CMD, &val);
     }
     ipmi_unlock(smi->smi_lock);
     return rv;
@@ -934,82 +913,6 @@ ipmi_dev_data_handler(int            fd,
     smi_put(ipmi);
 }
 
-static void
-ipmi_sock_data_handler(int            fd,
-		       void           *cb_data,
-		       os_hnd_fd_id_t *id)
-{
-    ipmi_con_t           *ipmi = (ipmi_con_t *) cb_data;
-    struct sockaddr_ipmi addr;
-    socklen_t            addr_len;
-    struct ipmi_sock_msg *smsg;
-    unsigned char        data[MAX_IPMI_DATA_SIZE + sizeof(*smsg)];
-    int                  rv;
-    struct ipmi_recv     recv;
-
-    if (!smi_valid_ipmi(ipmi)) {
-	/* We can have due to a race condition, just return and
-           everything should be fine. */
-	return;
-    }
-
-    addr_len = sizeof(addr);
-    rv = recvfrom(fd, data, sizeof(data), 0,
-		  (struct sockaddr *) &addr, &addr_len);
-    if (rv == -1) {
-	/* FIXME - no handling for EMSGSIZE. */
-	if (errno == EINTR) {
-	    goto out; /* Try again later. */
-	} else {
-	    ipmi_log(IPMI_LOG_SEVERE,
-		     "%sipmi_smi.c(ipmi_sock_data_handler): "
-		     "Error receiving message: %s",
-		     IPMI_CONN_NAME(ipmi), strerror(errno));
-	    goto out;
-	}
-    }
-    if (DEBUG_MSG) {
-	ipmi_log(IPMI_LOG_DEBUG_START, "incoming\n addr(%d.) = ", addr_len);
-	dump_hex((unsigned char *) &addr, MIN(addr_len,sizeof(addr)));
-	if (rv) {
-	    ipmi_log(IPMI_LOG_DEBUG_CONT, "\n data(%d.) =\n  ", rv);
-	    dump_hex(data, rv);
-	}
-	ipmi_log(IPMI_LOG_DEBUG_END, " ");
-    }
-
-    if (rv < sizeof(*smsg)) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%sipmi_smi.c(ipmi_sock_data_handler): "
-		 "Undersized socket message: %d bytes",
-		 IPMI_CONN_NAME(ipmi), rv);
-	goto out;
-    }
-
-    smsg = (struct ipmi_sock_msg *) data;
-    if (rv < (sizeof(*smsg) + smsg->data_len)) {
-	ipmi_log(IPMI_LOG_SEVERE,
-		 "%sipmi_smi.c(ipmi_sock_data_handler): "
-		 "Got subsized msg, size was %d, data_len was %d",
-		 IPMI_CONN_NAME(ipmi), rv, smsg->data_len);
-	goto out;
-    }
-
-    recv.recv_type = smsg->recv_type;
-    recv.addr = (unsigned char *) &addr.ipmi_addr;
-    recv.addr_len = addr_len - SOCKADDR_IPMI_OVERHEAD;
-    recv.msgid = smsg->msgid;
-    recv.msg.netfn = smsg->netfn;
-    recv.msg.cmd = smsg->cmd;
-    recv.msg.data = smsg->data;
-    recv.msg.data_len = smsg->data_len;
-
-    gen_recv_msg(ipmi, &recv);
-
- out:
-    smi_put(ipmi);
-}
-
 static int
 smi_send_command(ipmi_con_t            *ipmi,
 		 const ipmi_addr_t     *addr,
@@ -1052,7 +955,10 @@ smi_send_command(ipmi_con_t            *ipmi,
     {
 	ipmi_ipmb_addr_t *ipmb = (ipmi_ipmb_addr_t *) addr;
 
-	if (ipmb->slave_addr == smi->slave_addr) {
+	if (ipmb->channel >= MAX_IPMI_USED_CHANNELS)
+	    return EINVAL;
+
+	if (ipmb->slave_addr == smi->slave_addr[ipmb->channel]) {
 	    ipmi_system_interface_addr_t *si = (void *) &tmp_addr;
 	    /* Most systems don't handle sending to your own slave
                address, so we have to translate here. */
@@ -1135,10 +1041,7 @@ smi_register_for_command(ipmi_con_t            *ipmi,
 
     reg.netfn = netfn;
     reg.cmd = cmd;
-    if (smi->using_socket)
-	rv = ioctl(smi->fd, SIOCIPMIREGCMD, &reg);
-    else
-	rv = ioctl(smi->fd, IPMICTL_REGISTER_FOR_CMD, &reg);
+    rv = ioctl(smi->fd, IPMICTL_REGISTER_FOR_CMD, &reg);
     if (rv == -1) {
 	remove_cmd_registration(ipmi, netfn, cmd);
 	return errno;
@@ -1161,10 +1064,7 @@ smi_deregister_for_command(ipmi_con_t    *ipmi,
 
     reg.netfn = netfn;
     reg.cmd = cmd;
-    if (smi->using_socket)
-	rv = ioctl(smi->fd, SIOCIPMIUNREGCMD, &reg);
-    else
-	rv = ioctl(smi->fd, IPMICTL_UNREGISTER_FOR_CMD, &reg);
+    rv = ioctl(smi->fd, IPMICTL_UNREGISTER_FOR_CMD, &reg);
     if (rv == -1) {
 	rv = errno;
 	goto out_unlock;
@@ -1310,16 +1210,26 @@ finish_start_con(void *cb_data, os_hnd_timer_id_t *id)
 
 static void
 smi_set_ipmb_addr(ipmi_con_t    *ipmi,
-		  unsigned char ipmb,
+		  const unsigned char ipmb_addr[],
+		  unsigned int  num_ipmb_addr,
 		  int           active,
 		  unsigned int  hacks)
 {
     smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+    int        changed = 0;
+    int        i;
 
-    if (smi->slave_addr != ipmb) {
-	smi->slave_addr = ipmb;
-	ipmi->ipmb_addr = ipmb;
-	call_ipmb_change_handlers(smi, 0, ipmb, active, 0);
+    for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	if (smi->slave_addr[i] != ipmb_addr[i]) {
+	    smi->slave_addr[i] = ipmb_addr[i];
+	    ipmi->ipmb_addr[i] = ipmb_addr[i];
+	    changed = 1;
+	}
+    }
+    if (changed) {
+	call_ipmb_change_handlers(smi, 0, ipmb_addr, num_ipmb_addr, active, 0);
 	set_ipmb_in_dev(smi);
     }
 }
@@ -1356,24 +1266,30 @@ finish_connection(ipmi_con_t *ipmi, smi_data_t *smi)
 }
 
 static void
-handle_ipmb_addr(ipmi_con_t   *ipmi,
-		 int          err,
-		 unsigned int ipmb_addr,
-		 int          active,
-		 unsigned int hacks,
-		 void         *cb_data)
+handle_ipmb_addr(ipmi_con_t    *ipmi,
+		 int           err,
+		 const unsigned char ipmb_addr[],
+		 unsigned int  num_ipmb_addr,
+		 int           active,
+		 unsigned int  hacks,
+		 void          *cb_data)
 {
     smi_data_t *smi = (smi_data_t *) ipmi->con_data;
+    int        i;
 
     if (err) {
 	call_con_change_handlers(smi, err, 0, 0);
 	return;
     }
 
-    smi->slave_addr = ipmb_addr;
-    ipmi->ipmb_addr = ipmb_addr;
+    for (i=0; i<num_ipmb_addr && i<MAX_IPMI_USED_CHANNELS; i++) {
+	if (! ipmb_addr[i])
+	    continue;
+	smi->slave_addr[i] = ipmb_addr[i];
+	ipmi->ipmb_addr[i] = ipmb_addr[i];
+    }
     finish_connection(ipmi, smi);
-    call_ipmb_change_handlers(smi, err, ipmb_addr, active, 0);
+    call_ipmb_change_handlers(smi, err, ipmb_addr, num_ipmb_addr, active, 0);
     set_ipmb_in_dev(smi);
 }
 
@@ -1491,6 +1407,7 @@ setup(int          if_num,
     ipmi_con_t *ipmi = NULL;
     smi_data_t *smi = NULL;
     int        rv;
+    int        i;
 
     /* Keep things sane. */
     if (if_num >= 100)
@@ -1505,7 +1422,8 @@ setup(int          if_num,
     ipmi->os_hnd = handlers;
     ipmi->con_type = "smi";
     ipmi->priv_level = IPMI_PRIVILEGE_ADMIN; /* Always admin privilege. */
-    ipmi->ipmb_addr = 0x20; /* Assume this until told otherwise */
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++)
+	smi->slave_addr[i] = 0x20; /* Assume this until told otherwise. */
 
     rv = ipmi_con_attr_init(ipmi);
     if (rv)
@@ -1522,9 +1440,10 @@ setup(int          if_num,
 
     smi->refcount = 1;
     smi->ipmi = ipmi;
-    smi->slave_addr = 0x20; /* Assume this until told otherwise. */
+    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++)
+	smi->slave_addr[i] = 0x20; /* Assume this until told otherwise. */
 
-    smi->fd = open_smi_fd(if_num, &smi->using_socket);
+    smi->fd = open_smi_fd(if_num);
     if (smi->fd == -1) {
 	rv = errno;
 	goto out_err;
@@ -1579,21 +1498,12 @@ setup(int          if_num,
     ipmi->close_connection_done = smi_close_connection_done;
     ipmi->handle_async_event = handle_async_event;
 
-    if (smi->using_socket) {
-	rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
-					  smi->fd,
-					  ipmi_sock_data_handler, 
-					  ipmi,
-					  NULL,
-					  &(smi->fd_wait_id));
-    } else {
-	rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
-					  smi->fd,
-					  ipmi_dev_data_handler,
-					  ipmi,
-					  NULL,
-					  &(smi->fd_wait_id));
-    }
+    rv = handlers->add_fd_to_wait_for(ipmi->os_hnd,
+				      smi->fd,
+				      ipmi_dev_data_handler,
+				      ipmi,
+				      NULL,
+				      &(smi->fd_wait_id));
     if (rv) {
 	goto out_err;
     }

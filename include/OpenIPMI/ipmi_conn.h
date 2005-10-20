@@ -88,13 +88,16 @@ typedef void (*ipmi_ll_con_changed_cb)(ipmi_con_t   *ipmi,
 /* Used when fetching the IPMB address of the connection. The active
    parm tells if the interface is active or not, this callback is also
    used to inform the upper layer when the connection becomes active
-   or inactive. */
-typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t   *ipmi,
-				     int          err,
-				     unsigned int ipmb_addr,
-				     int          active,
-				     unsigned int hacks,
-				     void         *cb_data);
+   or inactive.  Note that there can be one IPMB address per channel,
+   so this allows an array of IPMBs to be passed, one per channel.
+   Set the IPMB to 0 if unknown. */
+typedef void (*ipmi_ll_ipmb_addr_cb)(ipmi_con_t    *ipmi,
+				     int           err,
+				     const unsigned char ipmb_addr[],
+				     unsigned int  num_ipmb_addr,
+				     int           active,
+				     unsigned int  hacks,
+				     void          *cb_data);
 
 /* Used to handle knowing when the connection shutdown is complete. */
 typedef void (*ipmi_ll_con_closed_cb)(ipmi_con_t *ipmi, void *cb_data);
@@ -169,7 +172,8 @@ struct ipmi_con_s
        use this to change it.  The hacks are the same as the ones in
        the IPMB address handler. */
     void (*set_ipmb_addr)(ipmi_con_t    *ipmi,
-			  unsigned char ipmb,
+			  const unsigned char ipmb_addr[],
+			  unsigned int  num_ipmb_addr,
 			  int           active,
 			  unsigned int  hacks);
 
@@ -287,7 +291,7 @@ struct ipmi_con_s
     unsigned int  hacks;
 
     /* The IPMB address as reported by the lower layer. */
-    unsigned char ipmb_addr;
+    unsigned char ipmb_addr[MAX_IPMI_USED_CHANNELS];
 
     /* Handle an async event for the connection reported by something
        else. */

@@ -1,3 +1,25 @@
+2005-10-20 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/ipmi_conn.h: Modify the ipmb-providing
+	functions to take an array of IPMB addresses, not a single ipmb
+	address.  Required for per-channel IPMB support.  An unfortunate
+	(mostly internal) interface change.
+	
+	* lib/domain.c, include/OpenIPMI/internal/ipmi_domain.h: Add
+	per-channel IPMB address support.
+	* lib/ipmi_lan.c: ditto
+	* lib/ipmi_smi.c: ditto
+	* lib/oem_atca.c: ditto
+	* lib/oem_atca_conn.c: ditto
+	* lib/oem_force_conn.c: ditto
+	* lib/oem_intel.c: ditto
+	* lib/oem_kontrol_conn.c: ditto
+
+	* include/linux/ipmi.h: Add per-channel IPMB support ioctls.
+
+	* lib/ipmi_smi.c: Remove socket support, as nobody should be using
+	it.
+
 2005-10-17 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_fru.h: Add ipmi_bits.h include.
