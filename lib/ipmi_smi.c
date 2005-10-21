@@ -1422,8 +1422,6 @@ setup(int          if_num,
     ipmi->os_hnd = handlers;
     ipmi->con_type = "smi";
     ipmi->priv_level = IPMI_PRIVILEGE_ADMIN; /* Always admin privilege. */
-    for (i=0; i<MAX_IPMI_USED_CHANNELS; i++)
-	smi->slave_addr[i] = 0x20; /* Assume this until told otherwise. */
 
     rv = ipmi_con_attr_init(ipmi);
     if (rv)
