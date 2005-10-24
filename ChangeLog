@@ -1,3 +1,7 @@
+2005-10-24 Matt Domsch <Matt_Domsch@dell.com>
+	* ipmi.sysconf: add IPMI_POWERCYCLE back in, change SuSEconfig
+	modulename to .ipmi
+
 2005-10-20 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/ipmi_conn.h: Modify the ipmb-providing
