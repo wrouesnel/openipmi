@@ -170,7 +170,7 @@ decisions are called ``policy''.
 
 In all cases these events are logged to permanent storage.  An
 operator is informed of things that need human attention.  The
-operater may also issue manual operations to configure and override
+operator may also issue manual operations to configure and override
 the management system as necessary.
 
 The operations the management system performs on the system are called
@@ -304,7 +304,7 @@ These systems generally have one or two boards that manage the system;
 this can be on a standard SBC, on another special purpose blade (like
 a blade used as a network switch), or on a standalone board with this
 purpose.  The shelf management controller(s) generally act as the \ac{BMC}
-in the system; they will have the event log and the \ac{SDR}s in the
+in the system; they will have the event log and the main \ac{SDR}s in the
 system.  A system with two shelf controllers will generally allow the
 system to be managed even if one of the shelf controllers fails.
 
@@ -429,7 +429,7 @@ them, but those sensors may not be active if the device is not
 physically present in the system.
 
 Sensors and controls are also automatically detected and reported.
-This is done through entities, you register with an entity to be told
+This is done through entities; you register with an entity to be told
 when a sensor or control has been added or removed.
 
 \section{OpenIPMI Concepts}
@@ -491,7 +491,7 @@ In an event-driven system, instead you would say:
 As you see, when you start an operation, you provide the next thing to
 call when the operation completes.  The functions passed around are
 called ``callbacks''.  You allocate and pass around chunks
-of data to be passed to the handlers.  And you register input handler
+of data to be passed to the handlers.  And you register input handlers
 that get called when certain event occur.  So the code runs in short
 non-blocking sections, registers for the next operation, then returns
 back to some invisible main loop that handles the details of scheduling
@@ -507,7 +507,7 @@ user input.
 threads.  In general, threaded systems are less reliable and more
 complicated; unless you need priorities or scalability on SMP, why use
 them?  And even if you use them, you can have much better control over
-what is running in the system.
+what is running in the system with an event-driven system..
 \item If you are building a redundant system with data replication, this
 gives you a natural way to hold your data, know when to transfer it over
 to the mate system, and continue an operation on the mate system.
@@ -587,6 +587,16 @@ they need not be provided.
 
 \item[Random Data]
 For certain operations, OpenIPMI needs random data.
+
+\item[Logging]
+Logs that OpenIPMI uses to report information and internal problems
+comes through the OS Handler.
+
+\item[Database]
+OpenIPMI can use an external database to hold persistent information
+(like SDRs) and thus avoid having to fetch them every time it starts
+up.  This interface is not required, but can greatly reduce the
+startup time of OpenIPMI.
 
 \item[User Functions]
 Not used by OpenIPMI, but available for the user for special things the
@@ -773,13 +783,13 @@ library uses this mechanism to determine whether the id you are holding
 is good.  Once it converts the id to the pointer, your pointer is
 guaranteed to be good until the function returns.
 
-These functions are named \verb=ipmi_xxx_pointer_cb()=, where ``xxx''
-is control, entity, domain, or sensor.  Unlike many other callbacks,
-the callback function you provide to these functions will be called
-immediately in the same thread of execution, this callback is not
-delayed or spawned off to another thread.  So, for instance, you can
-use data on the stack of the calling function and pass it to the
-callback function to use.
+The functions to convert an id to a pointer are named
+\verb=ipmi_xxx_pointer_cb()=, where ``xxx'' is control, entity,
+domain, or sensor.  Unlike many other callbacks, the callback function
+you provide to these functions will be called immediately in the same
+thread of execution, this callback is not delayed or spawned off to
+another thread.  So, for instance, you can use data on the stack of
+the calling function and pass it to the callback function to use.
 
 \subsubsection{Locking example}
 
@@ -827,7 +837,7 @@ of code that looks like:
 static void
 my_entity_id_cb(ipmi_entity_t *entity, void *cb_data)
 {
-    my_data_t *data;
+    my_data_t *data = cb_data;
 
     data->exists = 1;
     data->present = ipmi_entity_is_present(entity);
@@ -850,12 +860,16 @@ Most of the data about the various OpenIPMI objects is static, so you
 can pre-collect the information about the objects in the callback
 where there existance is reported.  Some local information, such as
 entity presence, whether and MC is active, and entity hot-swap state
-is dynamic, but the vast majority of information is not.  Also, many
-operation require a message to the remote system; the ones that take
-callbacks.  For these operation, functions that directly take the id
-are available.
+is dynamic, but the vast majority of information is not.  So, it is
+recommended that you collect all the static information that you need
+from an object when it is reported to you.
 
-The entity presence code could be rewritten using this to be:
+Many operation require a message to the remote system; the ones that
+take callbacks.  For these operation, functions that directly take the
+id are available.
+
+Use of the id-base functions is recommended.  The entity presence code
+could be rewritten using this to be:
 
 \begin{verbatim}
 void
@@ -872,9 +886,6 @@ check_if_my_entity_present(my_data_t *data)
         data->exists = 1;
 }
 \end{verbatim}
-
-So, it is recommended that you collect all the static information that
-you need from an object when it is reported to you.
 
 \subsubsection{Locking semantics}
 
@@ -936,7 +947,7 @@ messages to the proper elements in the system.
 \subsubsection{Domains}
 
 The domain is the container for the system, the entities in the system
-are attached to the it.  You create a domain with a connection to a
+are attached to it.  You create a domain with a connection to a
 system; the domain handles the job of discovery of the things in the
 system.
 
@@ -949,11 +960,10 @@ monitor entities, and controls are attached to entities.
 
 Entities may be grouped inside other entities, thus an entity may have a
 parent (if it is grouped inside another entity) and children (if it
-contains other entities).  These relationships are abstract; you may
-change them if it you like.  A raw system with no \ac{SDR} data will not have
+contains other entities).  A raw system with no \ac{SDR} data will not have
 any relationships defined.  Relationships are stored in the \ac{SDR}
-repository, you may change them and store them back, if you like and if
-the system supports that.
+repository.   You may change them and store them back, if you like and if
+the system supports that, but changing SDR data is not recommended.
 
 \ac{FRU} information about the entity is sometimes available.  You can
 register with an entity to see if/when it becomes available using:
@@ -975,12 +985,13 @@ entities.  They have an entity instance less than 60h.
 Other entities may not reside in a fixed location.  For instance, a
 power supply or CompactPCI board may be plugged in to one of many
 locations in a chassis; it doesn't know ahead of time which one.
-These types of entities are generally device-relative and thsu have an
+These types of entities are generally device-relative and thus have an
 entity instance of 60h or larger.  For these types of entities, the
 management controller on which they reside becomes part of the entity.
 In OpenIPMI, the \ac{IPMB} channel number and \ac{IPMB} address are
-part of the entity.  In \verb=ipmi_ui=, these are printed and entered
-as ``r$<$channel$>$.$<$ipmb$>$.$<$entity id$>$.$<$entity instance$>$''.
+part of the entity.  In \verb=ipmi_ui= and \verb=ipmish=, these are
+printed and entered as ``r$<$channel$>$.$<$ipmb$>$.$<$entity
+id$>$.$<$entity instance$>$''.
 
 \subsubsection{Sensors}
 
@@ -994,8 +1005,8 @@ Discrete sensors have a set of binary readings that may each be
 independently zero or one.  In some sensors, these may be independent.
 For instance, a power supply may have both an external power failure
 and a predictive failure at the same time.  In other cases they may be
-mutually exclusive: each bit may represent the initialization state of
-a piece of software.
+mutually exclusive.  For instance, each bit may represent the
+initialization state of a piece of software.
 
 \subsubsection{Controls}
 
