@@ -1,3 +1,14 @@
+2005-10-30 Corey Minyard <cminyard@mvista.com>
+
+	* include/OpenIPMI/internal/ipmi_mc.h, lib/mc.c: Add a way to
+	force the active value without reporting it.
+
+	* lib/domain.c: Force the system address MC to always be active,
+	since it makes no sense for it to be inactive.
+
+	* lib/cmdlang.c: Make sure output is reported properly for binary
+	and unicode output to avoid warning messages.
+
 2005-10-24 Matt Domsch <Matt_Domsch@dell.com>
 	* ipmi.sysconf: add IPMI_POWERCYCLE back in, change SuSEconfig
 	modulename to .ipmi

@@ -1475,6 +1475,7 @@ ipmi_cmdlang_out_binary(ipmi_cmd_info_t *info,
 			const char      *value,
 			unsigned int    len)
 {
+    info->did_output = 1;
     info->cmdlang->out_binary(info->cmdlang, name, value, len);
 }
 
@@ -1484,6 +1485,7 @@ ipmi_cmdlang_out_unicode(ipmi_cmd_info_t *info,
 			 const char      *value,
 			 unsigned int    len)
 {
+    info->did_output = 1;
     info->cmdlang->out_unicode(info->cmdlang, name, value, len);
 }
 

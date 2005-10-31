@@ -2824,6 +2824,16 @@ _ipmi_mc_set_active(ipmi_mc_t *mc, int val)
 }
 
 void
+_ipmi_mc_force_active(ipmi_mc_t *mc, int val)
+{
+    ipmi_lock(mc->lock);
+    mc->active = val;
+    mc->curr_active = val;
+    mc->active_transitions = 0;
+    ipmi_unlock(mc->lock);
+}
+
+void
 ipmi_mc_set_provides_device_sdrs(ipmi_mc_t *mc, int val)
 {
     CHECK_MC_LOCK(mc);

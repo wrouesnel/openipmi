@@ -63,7 +63,15 @@ void ipmi_mc_set_fru_inventory_support(ipmi_mc_t *mc, int val);
    repository. */
 int ipmi_mc_set_main_sdrs_as_device(ipmi_mc_t *mc);
 
+/* Set the MC as active via "normal" mechanisms.  It will be reported
+   to the user, etc. */
 void _ipmi_mc_set_active(ipmi_mc_t *mc, int val);
+
+/* Force the MC to be active, do not report to the user.  DON'T USE
+   THIS UNLESS YOU *REALLY* KNOW WHAT YOU ARE DOING.  It is used to
+   handle certain startup conditions on connections, and that's really
+   all it's for. */
+void _ipmi_mc_force_active(ipmi_mc_t *mc, int val);
 
 /* Get the sensors that the given MC owns. */
 ipmi_sensor_info_t *_ipmi_mc_get_sensors(ipmi_mc_t *mc);

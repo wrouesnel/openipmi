@@ -900,6 +900,11 @@ setup_domain(char          *name,
 	goto out_err;
     _ipmi_mc_use(domain->si_mc);
 
+    /* Force this one to always be active, so anything that uses it is
+       always ready to go.  Since it represents the connection, it
+       really can't every go inactive. */
+    _ipmi_mc_force_active(domain->si_mc, 1);
+
     rv = ipmi_sdr_info_alloc(domain, domain->si_mc, 0, 0, &domain->main_sdrs);
     if (rv)
 	goto out_err;
