@@ -91,6 +91,7 @@ an easier to understand introduction to IPMI.
 
 \chapter{Acronyms}
 \begin{acronym}
+\acro{ATCA}{AdvancedTCA}
 \acro{IPMI}{Intelligent Platform Mangement Interface}
 \acro{OEM}{Original Equipment Manufacturer}
 \acro{SDR}{Sensor Device Record}
@@ -103,6 +104,7 @@ an easier to understand introduction to IPMI.
 \acro{BMC}{Baseboard Management Controller}
 \acro{I$^2$C}{Inter Integrated Circuit}
 \acro{SNMP}{Simple Network Management Protocol}
+\acro{SPD}{Serial Presence Detect}
 \acro{HPI}{Hardware Platform Interface}
 \acro{LUN}{Logical Unit Number}
 \acro{NetFN}{Network FuNction}
@@ -294,7 +296,7 @@ when they detect a problem, or be dialed into by a management system.
 Figure \ref{typicalbus} shows a typical bus system.  The word ``bus''
 is perhaps a bit misleading; these types of systems used to have
 busses (like CPCI and VME) but recently have tended to not have big
-busses and use networking for interconnect (like PICMG 2.16 and ATCA).
+busses and use networking for interconnect (like PICMG 2.16 and \acs{ATCA}).
 These systems generally contain a number of processors on pluggable
 boards often called Single Board Computers (SBCs) or blades.  One or
 more power supplies power the whole system.  The boards and power
@@ -1278,7 +1280,7 @@ interface on a BMC to send \ac{SNMP} traps.\\
 
 \subsection{Semi-internal includes}
 These files expose the more IPMI-ish parts of OpenIPMI; things that
-are more-or-less raw IPMI.  You shouldn't use these unless you really
+are closer to raw IPMI.  You should not use these unless you really
 need them.
 
 \begin{tabularx}{\textwidth}{lX}
@@ -1298,7 +1300,7 @@ This defines various IPMI messages.\\
 This defines various PIGMC messages.\\
 
 \texttt{ipmi\_sdr.h} &
-This defines internal interfaces for the \ac{SDR} repostiory.\\
+This defines internal interfaces for the \ac{SDR} repository.\\
 
 \end{tabularx}
 
@@ -2954,7 +2956,7 @@ Destination type & 18 &
         comes from the alert policy entry destination field
         defined in table \ref{alert-policy-table-entry}.  Destination 0 is
         special and used by the Alert Immediate command as described in
-        section \label{sec-alert-immediate}.  The fields are:
+        section \ref{sec-alert-immediate}.  The fields are:
         \begin{tightdefs}
         \item[byte 0]
           \begin{tightdefs}
@@ -2994,7 +2996,7 @@ Destination address & 19 &
         comes from the alert policy entry destination field
         defined in table \ref{alert-policy-table-entry}. Destination 0 is
         special and used by the Alert Immediate command as described in
-        section \label{sec-alert-immediate}.  The fields are:
+        section \ref{sec-alert-immediate}.  The fields are:
         \begin{tightdefs}
         \item[byte 0]
           \begin{tightdefs}
@@ -4099,7 +4101,7 @@ the value to zero will rollback and not commit the changes you made.
 So for correctness, you should write a two when you are complete, and
 if that fails then write a zero.
 
-Table \label{perf-conf-parms} has the parameters used to configure the
+Table \ref{perf-conf-parms} has the parameters used to configure the
 event filter. Unless marked ``volatile'', all of these will survive
 removal of power.
 
@@ -4288,7 +4290,7 @@ Alert String Keys (some parts are volatile) & 12 &
           \item[bits 0-6] - The set selector, the array index of which
             alert key to set.  Entry 0h is volatile and used by the
             Alert Immediate command as described in section
-            \label{sec-alert-immediate}.  Entries 1h-7h are
+            \ref{sec-alert-immediate}.  Entries 1h-7h are
             non-volatile.  All other entries are reserved.
           \item[bit 7] - reserved
           \end{tightdefs}
@@ -4328,7 +4330,7 @@ Alert Strings (some parts are volatile) & 13 &
           \item[bits 0-6] - The set selector, the array index of which
             alert string to set.  Entry 0h is volatile and used by the
             Alert Immediate command as described in section
-            \label{sec-alert-immediate}.  Entries 1h-7h are
+            \ref{sec-alert-immediate}.  Entries 1h-7h are
             non-volatile.  All other entries are reserved.
           \item[bit 7] - reserved
           \end{tightdefs}
@@ -4577,8 +4579,8 @@ traps but does all the work for you.
 \paragraph{Setting Up the \acs{PEF} Table and \acs{LAN} Configuration Table}
 
 For a system to send traps, you must set up the \acs{PEF} table as
-described in section \label{sec-pef-conf-parms} and the \acs{LAN}
-configuration table described in section \label{sec-lan-conf-parms}.
+described in section \ref{sec-pef-conf-parms} and the \acs{LAN}
+configuration table described in section \ref{sec-lan-conf-parms}.
 However, this is a lot of work.
 
 \paragraph{Setting Up For Traps the Easy Way}
@@ -6154,7 +6156,7 @@ Unfortunately, IPMI does not have this concept, so this must be added
 by OEM code.  Several systems that support hot-swap are available in
 OpenIPMI, including the Motorola MXP (see
 appendix~\vref{app-motorola-mxp}) and chassis that adhere to the PICMG
-ATCA standard (see appendix~\vref{app-atca}).
+\acs{ATCA} standard (see appendix~\vref{app-atca}).
 
 Not all entities are hot-swappable.  If an entity is hot-swappable,
 the function:
@@ -6277,7 +6279,7 @@ the documentation for the system for more details.
 
 When a device is inserted that has these capabilities, there is
 generally some way to signal that the device is ready to be powered
-up.  In ATCA, for instance, the operator will insert the card and the
+up.  In \acs{ATCA}, for instance, the operator will insert the card and the
 entity for the card will go from not present to inactive state.  When
 the operator closes the lock-latch, that signals the system to go to
 activation requested state.
@@ -6307,7 +6309,7 @@ This will power the entity up and move it to active state.
 
 Deactivation is similar, but not quite the same.  The operator
 directly working on the device can request a removal using some
-mechanism.  In ATCA, for instance, the operator can open the lock
+mechanism.  In \acs{ATCA}, for instance, the operator can open the lock
 latch on the card and the card entity will move from active to
 deactivation requested state.  Note that unlike activation, there is
 no way for system management software to request a move to
@@ -6358,12 +6360,108 @@ immediately, set the value to \verb=IPMI_TIMEOUT_NOW=.
 \section{\acs{FRU} Data}
 
 OpenIPMI supports fetching all the \acs{FRU} data supported by the
-IPMI spec.  It is able to fetch and modify all the standard data and
-all the custom data stored in multi-records.
+IPMI spec, as well as \acs{SPD} data in DRAMs.  It also supports
+plugins for handling other types of \acs{FRU} data that can be
+provided for \acs{OEM} data.  It is able to fetch and modify all the
+standard data and all the custom data stored in multi-records and has
+a multirecord decoder plugin interface with the standard multirecords
+implements, along with some \acs{ATCA} record decoders.  \acs{SPD} data (and
+other data types, unless they provide their own interfaces) can only
+be decoded.  Standard \acs{FRU} data specified by the \acs{IPMI} spec
+can be decoded and written.
 
-\subsection{\acs{FRU} Data Organization}
+\subsection{Reading \acs{FRU} Data}
 
-FRU data is organized into areas, and the areas are organized into
+The \acs{FRU} data interface has two separate interfaces fetching data
+data from a \acs{FRU} data object.  One is a generic interface that
+works with all \acs{FRU} data type, including \acs{SPD} or \acs{OEM}
+data.  The other is an \acs{IPMI}-specified FRU interface that only works
+with the FRU data format specified by \acs{IPMI}.
+
+\subsubsection{Generic \acs{FRU} Data Interface}
+
+The generic \acs{FRU} interface represents the \acs{FRU} data as a
+tree-structured hierarchy of data.  Each level of the tree has a
+``node''.  The fields in a node are indexed by number and may contain
+both data elements and sub-nodes.
+
+Two types of nodes exist.  A record node is a set of named fields.
+The ``name'' of each field will be returned and the ``intval'' when
+the node itself is fetched will be $-1$.  An array node contains a set
+of unnamed elements.  The ``name'' of each field will be returned as
+\verb=NULL= and the ``intval'' will be the number of elements in the
+array.
+
+The nodes are refcounted.  If you are given a node, you must free the
+node using \verb=ipmi_fru_put_node()= when you are done with it.
+
+To fetch the root node of a \acs{FRU} data object, use the function:
+\begin{verbatim}
+int ipmi_fru_get_root_node(ipmi_fru_t      *fru,
+			   const char      **name,
+			   ipmi_fru_node_t **node);
+\end{verbatim}
+This function returns the name of the FRU (either ``SPD FRU'' or
+``standard FRU'' or some other OEM name and the actual root node.  If
+either of these is NULL, it will be ignored.  The root node is always
+a record node.
+
+To fetch individual fields from a record, use:
+\begin{verbatim}
+int ipmi_fru_node_get_field(ipmi_fru_node_t           *node,
+			    unsigned int              index,
+			    const char                **name,
+			    enum ipmi_fru_data_type_e *dtype,
+			    int                       *intval,
+			    time_t                    *time,
+			    double                    *floatval,
+			    char                      **data,
+			    unsigned int              *data_len,
+			    ipmi_fru_node_t           **sub_node);
+\end{verbatim}
+The index is a contiguous range from zero that holds every field.  So
+you can iterate through the indexes from 0 until it returns EINVAL to
+find all the fields.  If a field is not present in the \acs{FRU} data,
+this will return \verb=ENOSYS=.  Note that later fields may still be
+present.
+
+The \verb=name= returns the string name for the index.  Note that the
+indexes may change between release, so don't rely on absolute numbers.
+The names will remain the same, so you can rely on those.
+
+The \verb=dtype= field will be set to the data type.  The following
+values are returned:
+\begin{description}
+\item \texttt{IPMI\_FRU\_DATA\_INT} sets \verb=intval=
+\item \texttt{IPMI\_FRU\_DATA\_TIME} sets \verb=time=
+\item \texttt{IPMI\_FRU\_DATA\_ASCII} sets \verb=data= and \verb=data_len=
+\item \texttt{IPMI\_FRU\_DATA\_BINARY} sets \verb=data= and \verb=data_len=
+\item \texttt{IPMI\_FRU\_DATA\_UNICODE} sets \verb=data= and \verb=data_len=
+\item \texttt{IPMI\_FRU\_DATA\_BOOLEAN} sets \verb=intval=
+\item \texttt{IPMI\_FRU\_DATA\_FLOAT} sets \verb=floatval=
+\item \texttt{IPMI\_FRU\_DATA\_SUB\_NODE} sets \verb=sub_node=.
+  \verb=intval= will be -1 if it is not an array, or the array length if it
+  is an array.
+\end{description}
+Note that if data is returned in \verb=data=, you must free the data
+when you are done with \verb=ipmi_fru_data_free()=.
+
+Any of the return values may be passed \verb=NULL= to ignore the data.
+
+Printing all the \acs{FRU} data or searching for a data item by name
+can easily be accomplished using recursion.
+
+\subsubsection{\acs{IPMI}-specific \acs{FRU} Data Interface}
+
+The generic interface should be used for applications that only read
+the FRU data.  For applications that also write the data, another
+interface is available that allows individual data items to be
+specifically addressed and modified and the data areas of the \acs{FRU}
+data to be modified, if they need to be resized, created, or deleted.
+
+\paragraph{\acs{IPMI} \acs{FRU} Data Organization}
+
+\acs{FRU} data is organized into areas, and the areas are organized into
 fields.  The areas are:
 
 \begin{description}
@@ -6374,7 +6472,7 @@ fields.  The areas are:
 \item[multi\_record]
 \end{description}
 
-A section may or may not be present.  An area, if present, may have
+An area may or may not be present.  An area, if present, may have
 required fields and ``custom'' fields.  The required fields can be
 fetched by name, the custom fields are fetched by index number.  Note
 that you don't need to know anything about areas if you are just
@@ -6386,7 +6484,7 @@ well defined in the \acs{IPMI} \acs{FRU} document; see that document
 and the \verb=ipmiif.h= include file for details on the \acs{FRU}
 data.
 
-\subsection{Fetching FRU Data from a FRU}
+\paragraph{Fetching \acs{FRU} Data from a \acs{FRU}}
 
 Some fields are integers, some are time values, and some are strings.
 Each type has its own fetch type.  The integer and time values only
@@ -6459,7 +6557,7 @@ will be set).
 
 Any of the return values may be passed \verb=NULL= to ignore the data.
 
-\subsection{Writing FRU Data to a FRU}
+\paragraph{Writing FRU Data to a FRU}
 
 OpenIPMI supports writing FRU data.  This is a \emph{very} dangerous
 operations and should not be done by general code.  There are no locks
@@ -8674,7 +8772,7 @@ here in the future.
 \chapter{Comparison with \acs{HPI}}
 
 %---------------------------------------------------------------------
-\chapter{ATCA}
+\chapter{\acs{ATCA}}
 \label{app-atca}
 
 %---------------------------------------------------------------------

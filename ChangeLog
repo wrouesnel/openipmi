@@ -1,3 +1,16 @@
+2005-11-04 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c: Allowed null handlers in some set calls.
+
+	* include/OpenIPMI/ipmiif.h.in: Correct some documentation on
+	managed hot-swap.
+
+	* include/OpenIPMI/ipmi_fru.h: Added some missing information to
+	the comments.
+
+	* doc/IPMI.ltx: Added info on the new FRU interfaces, cleaned up a
+	few things.
+
 2005-10-30 Corey Minyard <cminyard@mvista.com>
 
 	* include/OpenIPMI/internal/ipmi_mc.h, lib/mc.c: Add a way to

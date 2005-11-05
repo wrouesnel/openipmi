@@ -109,7 +109,10 @@ int ipmi_fru_destroy(ipmi_fru_t            *fru,
 		     ipmi_fru_destroyed_cb handler,
 		     void                  *cb_data);
 
-/* Generic callback for iterating. */
+/* Generic callback for iterating.  This only applies to FRU data
+   objects that are created by the user.  Other FRUs (like ones
+   automatically fetched by entities or for other functions) do not
+   appear here. */
 typedef void (*ipmi_fru_ptr_cb)(ipmi_fru_t *fru,
 				void       *cb_data);
 void ipmi_fru_iterate_frus(ipmi_domain_t   *domain,
@@ -174,7 +177,8 @@ void ipmi_fru_put_node(ipmi_fru_node_t *node);
  * these.  The index tells which field of the record to fetch.  Note
  * that, unlike arrays, individual fields in a record node may not be
  * present.  Fetching these fields will return ENOSYS, but there may
- * be valid fields after this.
+ * be valid fields after this.  This returns EINVAL if you go beyond
+ * the last field.
  *
  * The various dtypes are:
  *    IPMI_FRU_DATA_INT  - sets "intval"

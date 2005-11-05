@@ -3258,7 +3258,8 @@ ipmi_mc_set_events_enable(ipmi_mc_t       *mc,
     if (val == mc->events_enabled) {
 	/* Didn't changed, just finish the operation. */
 	ipmi_unlock(mc->lock);
-	done(mc, 0, cb_data);
+	if (done)
+	    done(mc, 0, cb_data);
 	return 0;
     }
 
@@ -3350,11 +3351,13 @@ set_event_log_enable_2(ipmi_mc_t  *mc,
 
 
     if (rsp->data[0] != 0) {
-	info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
+	if (info->done)
+	    info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
 	goto out;
     }
 
-    info->done(mc, 0, info->cb_data);
+    if (info->done)
+	info->done(mc, 0, info->cb_data);
  out:
     ipmi_mem_free(info);
 }
@@ -3371,7 +3374,8 @@ set_event_log_enable(ipmi_mc_t  *mc,
 
 
     if (rsp->data[0] != 0) {
-	info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
+	if (info->done)
+	    info->done(mc, IPMI_IPMI_ERR_VAL(rsp->data[0]), info->cb_data);
 	goto out_err;
     }
 
@@ -3379,7 +3383,8 @@ set_event_log_enable(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%smc.c(set_event_log_enable): response too small",
 		 mc->name);
-	info->done(mc, EINVAL, info->cb_data);
+	if (info->done)
+	    info->done(mc, EINVAL, info->cb_data);
 	goto out_err;
     }
 
@@ -3394,7 +3399,8 @@ set_event_log_enable(ipmi_mc_t  *mc,
 	ipmi_log(IPMI_LOG_ERR_INFO,
 		 "%smc.c(set_event_log_enable): Can't send set: 0x%x",
 		 mc->name, rv);
-	info->done(mc, rv, info->cb_data);
+	if (info->done)
+	    info->done(mc, rv, info->cb_data);
 	goto out_err;
     }
     return;
