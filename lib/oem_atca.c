@@ -3140,12 +3140,24 @@ shelf_fru_fetched(ipmi_domain_t *domain, ipmi_fru_t *fru, int err,
 	if (data[3] != 0x10) /* Address table record id */
 	    goto next_data_item;
 
-	if (data[4] != 0) /* We only know version 0 */
+	if (data[4] != 0) { /* We only know version 0 */
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "Address table was version %d but I only know version 0",
+		     DOMAIN_NAME(domain), data[4]);
 	    goto next_data_item;
+	}
 
-	if (len < (27 + (3 * data[26])))
+	if (len < (27 + (3 * data[26]))) {
 	    /* length does not meet the minimum possible length. */
+	    ipmi_log(IPMI_LOG_SEVERE,
+		     "%soem_atca.c(shelf_fru_fetched): "
+		     "Address table was %d bytes long, but the number"
+		     " of entries (%d) requires %d bytes.  Error in the"
+		     " address table.",
+		     DOMAIN_NAME(domain), len - 27, data[26], data[26] * 3);
 	    goto next_data_item;
+	}
 
 	str = data + 5;
 	info->shelf_address_len

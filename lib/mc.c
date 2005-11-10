@@ -1323,7 +1323,6 @@ ipmi_mc_set_current_sel_time(ipmi_mc_t             *mc,
     msg.data = data;
     msg.data_len = 4;
     ipmi_set_uint32(data, time->tv_sec);
-    mc->startup_SEL_time = ipmi_timeval_to_time(*time);
     rv = ipmi_mc_send_command(mc, 0, &msg, set_sel_time, info);
     if (rv)
 	ipmi_mem_free(info);
