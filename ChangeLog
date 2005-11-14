@@ -1,3 +1,9 @@
+2005-11-13 Corey Minyard <cminyard@mvista.com>
+
+	* lib/ipmi.c: Remove some bogus additions of string nil characters
+	and fix an incorrect index for setting the second port of a LAN
+	address.
+
 2005-11-09 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sel.c: Don't set startup_SEL_time if the user hand-sets
