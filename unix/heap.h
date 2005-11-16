@@ -156,7 +156,7 @@ HEAP_EXPORT_NAME(check_item)(struct heap_node_s *curr,
 	} else if (*depth > max_depth) {
 	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt C\n");
 	    *((int *) NULL) = 0;
-	} else if (*depth < (max_depth - 1)) {
+	} else if ((*depth + 1) < max_depth) {
 	    fprintf(*HEAP_EXPORT_NAME(debug_out), "Tree corrupt D\n");
 	    *((int *) NULL) = 0;
 	} else if ((*found_last) && (*depth == max_depth)) {

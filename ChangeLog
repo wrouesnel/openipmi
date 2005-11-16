@@ -10,6 +10,9 @@
 
 	* swig/perl/OpenIPMI_lang.i: Added unsigned in typemaps for swig.
 
+	* unix/heap.h: Fix a test so an unsigned value doesn't go negative
+	in a test.
+
 2005-11-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi.c: Remove some bogus additions of string nil characters
