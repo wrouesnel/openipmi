@@ -102,6 +102,10 @@
     $1[i] = NULL;
 };
 
+%typemap(out) arg_array {
+    /* Nothing to do, input only */
+};
+
 %typemap(freearg) arg_array {
     free($1);
 };

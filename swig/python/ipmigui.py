@@ -9,7 +9,7 @@ import OpenIPMI
 class IPMIGui:
     def delete_event(self, widget, event, data=None):
         gtk.main_quit()
-        return gtk.FALSE
+        return False
 
 
     def open_domain(self, w, data):
@@ -47,7 +47,7 @@ class IPMIGui:
             start = self.cmdbuffer.get_end_iter();
             start.set_line_offset(2)
             text = self.cmdbuffer.get_text(start, end,
-                                           include_hidden_chars=gtk.FALSE)
+                                           include_hidden_chars=False)
             print("Test: " + text)
             self.cmdbuffer.place_cursor(end)
             self.cmdbuffer.insert_at_cursor("\n> ")
@@ -125,12 +125,12 @@ class IPMIGui:
                                      gtk.POLICY_AUTOMATIC)
         self.treestore = gtk.TreeStore(str)
         self.treeview = gtk.TreeView(self.treestore)
-        self.treeview.set_enable_search(gtk.FALSE)
+        self.treeview.set_enable_search(False)
         self.tvcolumn = gtk.TreeViewColumn()
         # Set a dummy widget for the column header
         self.tvcolumn.set_widget(gtk.VBox())
         self.treeview.append_column(self.tvcolumn)
-        self.cell = gtk.CellRendererText(editable=gtk.FALSE)
+        self.cell = gtk.CellRendererText()
         self.tvcolumn.pack_start(self.cell, True)
         self.tvcolumn.add_attribute(self.cell, 'text', 0)
 
@@ -143,7 +143,7 @@ class IPMIGui:
         self.scrolledlog.set_policy(gtk.POLICY_AUTOMATIC,
                                      gtk.POLICY_AUTOMATIC)
         self.logview = gtk.TextView()
-        self.logview.set_editable(gtk.FALSE)
+        self.logview.set_editable(False)
         self.logbuffer = self.logview.get_buffer()
         self.logview.set_wrap_mode(gtk.WRAP_NONE)
 
@@ -158,7 +158,7 @@ class IPMIGui:
         self.scrolledcmd.set_policy(gtk.POLICY_AUTOMATIC,
                                      gtk.POLICY_AUTOMATIC)
         self.cmdview = gtk.TextView()
-        self.cmdview.set_editable(gtk.FALSE)
+        self.cmdview.set_editable(False)
         self.cmdbuffer = self.cmdview.get_buffer()
         self.cmdview.set_wrap_mode(gtk.WRAP_NONE)
 
@@ -186,7 +186,7 @@ class IPMIGui:
         self.window.set_size_request(500, 300)
         self.window.connect("key_press_event", self.key_press_handler)
         self.window.connect("delete_event", self.delete_event)
-        vbox = gtk.VBox(gtk.FALSE, 1);
+        vbox = gtk.VBox(False, 1);
         self.menu_items = (
             ( "/_File",         None,           None, 0, "<Branch>" ),
             ( "/File/Quit",     "<control>Q",   gtk.main_quit, 0, None ),
@@ -196,10 +196,10 @@ class IPMIGui:
         self.window.add(vbox);
 
         menubar = self.get_main_menu(self.window);
-        vbox.pack_start(menubar, gtk.FALSE, gtk.TRUE, 0)
+        vbox.pack_start(menubar, False, True, 0)
 
         hbox = gtk.HPaned()
-        vbox.pack_start(hbox, gtk.TRUE, gtk.TRUE, 0)
+        vbox.pack_start(hbox, True, True, 0)
 
         tree = self.get_tree(self.window)
         hbox.add1(tree)
@@ -209,10 +209,10 @@ class IPMIGui:
         hbox.set_position(200)
 
         cmd = self.get_cmd(self.window)
-        vbox.pack_start(cmd, gtk.TRUE, gtk.TRUE, 0)
+        vbox.pack_start(cmd, True, True, 0)
 
         self.window.show_all()
-        self.cmdview.set_cursor_visible(gtk.TRUE)
+        self.cmdview.set_cursor_visible(True)
 
 
     def new_log(self, log):
