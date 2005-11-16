@@ -13,6 +13,10 @@
 	* unix/heap.h: Fix a test so an unsigned value doesn't go negative
 	in a test.
 
+	* swig/perl/Makefile.am: Add test_pef, since it was missing.
+
+	* lib/pef.c: Fix a problem writing PEF alert strings.
+
 2005-11-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi.c: Remove some bogus additions of string nil characters

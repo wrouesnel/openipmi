@@ -2288,6 +2288,7 @@ pef_get_parm(ipmi_pef_t    *pef,
     swig_cb_val cb = cb_data;
     swig_ref    pef_ref;
 
+printf("Got parm: %d %d\n", data_len, data[3]);
     pef_ref = swig_make_ref_destruct(pef, ipmi_pef_t);
     swig_call_cb(cb, "pef_got_parm_cb", "%p%d%*s", &pef_ref, err,
 		 data_len, (char *) data);

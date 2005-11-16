@@ -1989,7 +1989,7 @@ set_done(ipmi_pef_t *pef,
     if (pefc->curr_parm == IPMI_PEFPARM_ALERT_STRING) {
 	/* Special handling for blocks of an alert string */
 	if ((length < 18) ||
-	    (memchr(data+2, '\0', length)))
+	    (memchr(data+2, '\0', length-2)))
 	{
 	    /* End of string, either a subsize-block or a nil
 	       character in the data. */
