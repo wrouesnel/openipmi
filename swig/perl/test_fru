@@ -32,9 +32,6 @@
 #  Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-use threads;
-use threads::shared;
-use Thread::Semaphore;
 use Lanserv;
 use OpenIPMI;
 

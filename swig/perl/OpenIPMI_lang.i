@@ -150,6 +150,26 @@
     sv_setiv(tempsv, *$1);
 }
 
+%typemap(in) unsigned int * (unsigned int ivalue) {
+    SV* tempsv;
+    if (!SvROK($input)) {
+	croak("expected a reference\n");
+    }
+    tempsv = SvRV($input);
+    if (!SvIOK(tempsv)) {
+	ivalue = 0;
+    } else {
+	ivalue = SvIV(tempsv);
+    }
+    $1 = &ivalue;
+}
+
+%typemap(argout) unsigned int * {
+    SV *tempsv;
+    tempsv = SvRV($input);
+    sv_setiv(tempsv, *$1);
+}
+
 %typemap(in) const char ** (char *svalue) {
     SV* tempsv;
     if (!SvROK($input)) {

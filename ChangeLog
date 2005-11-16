@@ -1,3 +1,15 @@
+2005-11-16 Corey Minyard <cminyard@mvista.com>
+
+	* swig/perl/Lanserv.pm: Removed the need for threads, use fork()
+	instead, for the perl tests.
+	* swig/perl/test_chan: ditto
+	* swig/perl/test_fru: ditto
+	* swig/perl/test_lanparm: ditto
+	* swig/perl/test_pef: ditto
+	* swig/perl/test_pet: ditto
+
+	* swig/perl/OpenIPMI_lang.i: Added unsigned in typemaps for swig.
+
 2005-11-13 Corey Minyard <cminyard@mvista.com>
 
 	* lib/ipmi.c: Remove some bogus additions of string nil characters
