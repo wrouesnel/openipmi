@@ -12,6 +12,11 @@
 
 	* cmdlang/cmd_sel.c: No longer need the event.h include.
 
+	* lanserv/lanserv_ipmi.h, include/OpenIPMI/lanserv.h: Change the
+	"idx" of a session to its handle (since the index is something
+	else) and rework the "Get Session" handling code in the lan server
+	to actually be correct.
+
 2005-11-16 Corey Minyard <cminyard@mvista.com>
 
 	* swig/perl/Lanserv.pm: Removed the need for threads, use fork()

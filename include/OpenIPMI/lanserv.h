@@ -210,7 +210,7 @@ struct session_s
     unsigned int in_startup : 1;
     unsigned int rmcpplus : 1;
 
-    int           idx; /* My idx in the table. */
+    int           handle; /* My index in the table. */
 
     uint32_t        recv_seq;
     uint32_t        xmit_seq;

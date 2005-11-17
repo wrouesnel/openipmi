@@ -193,7 +193,7 @@ ipmb_checksum(uint8_t *data, int size, uint8_t start)
 	for (; size > 0; size--, data++)
 		csum += *data;
 
-	return -csum;
+	return csum;
 }
 
 
@@ -513,13 +513,13 @@ return_rsp(lan_data_t *lan, msg_t *msg, session_t *session, rsp_msg_t *rsp)
 
     pos[0] = msg->rq_addr;
     pos[1] = (rsp->netfn << 2) | msg->rq_lun;
-    pos[2] = ipmb_checksum(pos, 2, 0);
+    pos[2] = - ipmb_checksum(pos, 2, 0);
     pos[3] = msg->rs_addr;
     pos[4] = (msg->rq_seq << 2) | msg->rs_lun;
     pos[5] = rsp->cmd;
 
     csum = ipmb_checksum(pos+3, 3, 0);
-    csum = ipmb_checksum(rsp->data, rsp->data_len, csum);
+    csum = - ipmb_checksum(rsp->data, rsp->data_len, csum);
 
     vec[0].iov_base = data;
 
@@ -933,7 +933,8 @@ handle_temp_session(lan_data_t *lan, msg_t *msg)
 
     if (lan->sid_seq == 0)
 	lan->sid_seq++;
-    session->sid = (lan->sid_seq << (SESSION_BITS_REQ+1)) | (session->idx << 1);
+    session->sid = ((lan->sid_seq << (SESSION_BITS_REQ+1))
+		    | (session->handle << 1));
     lan->sid_seq++;
 
     data[0] = 0;
@@ -1114,53 +1115,57 @@ handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
 
 	sid = ipmi_get_uint32(msg->data+1);
 	nses = sid_to_session(lan, sid);
+    } else if (idx == 0xfe) {
+	int handle;
+
+	if (msg->len < 2) {
+	    return_err(lan, msg, session,
+		       IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
+	    return;
+	}
+	
+	handle = msg->data[1];
+	if (handle >= MAX_SESSIONS) {
+	    return_err(lan, msg, session, IPMI_INVALID_DATA_FIELD_CC);
+	    return;
+	}
+	if (lan->sessions[handle].active)
+	    nses = &lan->sessions[handle];
+    } else if (idx == 0) {
+	nses = session;
     } else {
-	if (idx == 0xfe) {
-	    if (msg->len < 2) {
-		return_err(lan, msg, session,
-			   IPMI_REQUEST_DATA_LENGTH_INVALID_CC);
-		return;
-	    }
+	int i;
 
-	    idx = msg->data[1];
-	} else if (idx == 0) {
-	    idx = session->idx;
-	} else {
-	    int i;
-
-	    if (idx <= lan->active_sessions) {
-		for (i=0; i<=MAX_SESSIONS; i++) {
-		    if (lan->sessions[i].active) {
-			idx--;
-			if (idx == 0) {
-			    nses = &(lan->sessions[i]);
-			    break;
-			}
+	if (idx <= lan->active_sessions) {
+	    for (i=0; i<=MAX_SESSIONS; i++) {
+		if (lan->sessions[i].active) {
+		    idx--;
+		    if (idx == 0) {
+			nses = &lan->sessions[i];
+			break;
 		    }
 		}
 	    }
 	}
     }
 
-    if (nses) {
-	data[1] = session->idx;
-	data[4] = session->userid;
-	data[5] = session->priv;
-    } else {
-	data[1] = 0;
-	data[4] = 0;
-	data[5] = 0;
-    }
-
     data[0] = 0;
     data[2] = MAX_SESSIONS;
     data[3] = lan->active_sessions;
-    data[6] = MAIN_CHANNEL;
+    if (nses) {
+	data[1] = nses->handle;
+	data[4] = nses->userid;
+	data[5] = nses->priv;
+	data[6] = MAIN_CHANNEL;
+	return_rsp_data(lan, msg, session, data, 7);
+    } else {
+	data[1] = 0;
+	return_rsp_data(lan, msg, session, data, 4);
+    }
 
     /* FIXME - We don't currently return the IP information, because
        it's hard to get.  Maybe later. */
 
-    return_rsp_data(lan, msg, session, data, 7);
 }
 
 static void
@@ -3174,7 +3179,8 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
     session->userid = 0;
     session->time_left = lan->default_session_timeout;
 
-    session->sid = (lan->sid_seq << (SESSION_BITS_REQ+1)) | (session->idx << 1);
+    session->sid = ((lan->sid_seq << (SESSION_BITS_REQ+1))
+		    | (session->handle << 1));
     lan->sid_seq++;
 
     lan->log(NEW_SESSION, msg,
@@ -3760,7 +3766,7 @@ ipmi_lan_init(lan_data_t *lan)
     }
 
     for (i=0; i<=MAX_SESSIONS; i++) {
-	lan->sessions[i].idx = i;
+	lan->sessions[i].handle = i;
     }
 
     lan->lanparm.num_destinations = 15;
