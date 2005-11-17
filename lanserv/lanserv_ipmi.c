@@ -1156,7 +1156,7 @@ handle_get_session_info(lan_data_t *lan, session_t *session, msg_t *msg)
 	data[1] = nses->handle;
 	data[4] = nses->userid;
 	data[5] = nses->priv;
-	data[6] = MAIN_CHANNEL;
+	data[6] = MAIN_CHANNEL | (session->rmcpplus << 4);
 	return_rsp_data(lan, msg, session, data, 7);
     } else {
 	data[1] = 0;
@@ -3201,6 +3201,8 @@ handle_open_session_payload(lan_data_t *lan, msg_t *msg)
     data[28] = 2;
     data[31] = 8;
     data[32] = conf;
+
+    lan->active_sessions++;
 
     return_rmcpp_rsp(lan, session, msg, 0x11, data, 36, NULL, 0);
     return;
