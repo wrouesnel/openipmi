@@ -1,3 +1,17 @@
+2005-11-17 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c: Make sure to handle all cases of partial data in a
+	set sensor event enables response.  Also be sure to mask off
+	reserved bits.
+
+	* cmdlang/cmd_sensor.c: Fix an error report function location.
+
+	* include/OpenIPMI/ipmi_mc.h: Add ipmi_event_alloc() to this file
+	so you can allocate events to add to the SEL.  Otherwise you would
+	have to include internal include files.
+
+	* cmdlang/cmd_sel.c: No longer need the event.h include.
+
 2005-11-16 Corey Minyard <cminyard@mvista.com>
 
 	* swig/perl/Lanserv.pm: Removed the need for threads, use fork()

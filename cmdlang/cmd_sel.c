@@ -41,7 +41,6 @@
 #include <OpenIPMI/ipmi_mc.h>
 
 /* Internal includes, do not use in your programs */
-#include <OpenIPMI/internal/ipmi_event.h>
 #include <OpenIPMI/internal/ipmi_malloc.h>
 
 static int

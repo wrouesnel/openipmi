@@ -309,7 +309,7 @@ sensor_dump(ipmi_sensor_t *sensor, ipmi_cmd_info_t *cmd_info)
  out_err:
     ipmi_sensor_get_name(sensor, cmdlang->objstr,
 			 cmdlang->objstr_len);
-    cmdlang->location = "cmd_sensor.c(sensor_info)";
+    cmdlang->location = "cmd_sensor.c(sensor_dump)";
 }
 
 static void

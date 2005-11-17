@@ -230,6 +230,15 @@ int ipmi_mc_add_event_to_sel(ipmi_mc_t                 *mc,
 			     ipmi_mc_add_event_done_cb handler,
 			     void                      *cb_data);
 
+/* Allocate an event with the given data.  This is required so you can
+   add it to the SEL. */
+ipmi_event_t *ipmi_event_alloc(ipmi_mcid_t   mcid,
+			       unsigned int  record_id,
+			       unsigned int  type,
+			       ipmi_time_t   timestamp,
+			       unsigned char *data,
+			       unsigned int  data_len);
+
 typedef void (ipmi_mc_del_event_done_cb)(ipmi_mc_t *mc, int err, void *cb_data);
 int ipmi_mc_del_event(ipmi_mc_t                 *mc,
 		      ipmi_event_t              *event, 

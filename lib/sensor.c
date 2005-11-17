@@ -3864,12 +3864,30 @@ enables_get(ipmi_sensor_t *sensor,
 	return;
 
     info->state.status = rsp->data[1] & 0xc0;
+    if (rsp->data_len >= 3)
+	info->state.__assertion_events = rsp->data[2];
     if (rsp->data_len >= 4)
-        info->state.__assertion_events = (rsp->data[2]
-				          | (rsp->data[3] << 8));
+        info->state.__assertion_events |= rsp->data[3] << 8;
+    if (rsp->data_len >= 5)
+        info->state.__deassertion_events = rsp->data[4];
     if (rsp->data_len >= 6)
-        info->state.__deassertion_events = (rsp->data[4]
-					    | (rsp->data[5] << 8));
+        info->state.__deassertion_events |= rsp->data[5] << 8;
+
+    /* Mask off reserved bits */
+    if (sensor->event_reading_type == IPMI_EVENT_READING_TYPE_THRESHOLD) {
+	info->state.__assertion_events &= 0x0fff;
+        info->state.__deassertion_events &= 0x0fff;
+    } else {
+	info->state.__assertion_events &= 0x7fff;
+        info->state.__deassertion_events &= 0x7fff;
+    }
+
+    /* It is possible that there are events set here that are not in
+       sensor->mask1 (assertion events) or sensor->mask2 (deassertion
+       events).  That's a bug in the sensor; it shouldn't be setting
+       those bits.  If it ever comes to the point where we need to
+       handle that here, a simple mask operation would do it. */
+
     enables_get_done_handler(sensor, 0, info);
 }
 
