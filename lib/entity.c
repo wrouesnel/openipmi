@@ -4131,6 +4131,7 @@ ipmi_entity_get_mc_id(ipmi_entity_t *ent, ipmi_mcid_t *mc_id)
 	return ENODEV;
 
     *mc_id = ipmi_mc_convert_to_id(mc);
+    _ipmi_mc_put(mc);
 
     return 0;
 }
