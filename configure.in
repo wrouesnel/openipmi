@@ -117,28 +117,6 @@ AC_ARG_WITH(gliblibs,
     gliblibs="$withval",
 )
 
-trywxwindows=yes
-AC_ARG_WITH(wxWindows,
-[  --with-wxWindows                Look for wxWindows.],
-    if test "x$withval" = "xyes"; then
-      trywxWindows=yes
-    elif test "x$withval" = "xno"; then
-      trywxWindows=no
-    fi,
-)
-
-wxWindowsflags=
-AC_ARG_WITH(wxWindowscflags,
-[  --with-wxWindowscflags=flags    Set the flags to compile with wxWindows.],
-    wxWindowscflags="$withval",
-)
-
-wxWindowslibs=
-AC_ARG_WITH(wxWindowslibs,
-[  --with-wxWindowslibs=libs       Set the libraries to link with wxWindows.],
-    wxWindowslibs="$withval",
-)
-
 tryperl=yes
 perldir=
 AC_ARG_WITH(perl,
@@ -294,41 +272,6 @@ AC_SUBST(GLIB_LIBS)
 AC_SUBST(GLIB_DIR)
 AC_SUBST(GLIB_LIB)
 AC_SUBST(GLIB_PKGCONF)
-
-if test "x$trywxWindows" != "xno"; then
-   # Handle WXWINDOWS support
-   if test "x$wxWindowsver" = "x" -o "x$wxWindowscflags" = "x" -o "x$wxWindowslibs" = "x"; then
-      wxwinconfprog=
-      AC_PATH_PROG(wxwinconfprog, wx-config)
-      if  test "x$wxwinconfprog" != "x"; then
-	 havewxWindows=yes
-	 WXWINDOWS_VERSION="`$wxwinconfprog --release`"
-         WXWINDOWS_CFLAGS="`$wxwinconfprog --cxxflags`"
-         WXWINDOWS_LIBS="`$wxwinconfprog --libs`"
-      fi
-   else
-      havewxWindows=yes
-      WXWINDOWS_VERSION="$wxWindowsver"
-      WXWINDOWS_CFLAGS="$wxWindowscflags"
-      WXWINDOWS_LIBS="$wxWindowslibs"
-   fi
-fi
-   
-if test "x$havewxWindows" = "xyes"; then
-   AC_DEFINE(HAVE_WXWINDOWS)
-   WXWINDOWS_DIR=wxWindows
-   WXWINDOWS_LIB='$(top_builddir)/wxWindows/libOpenIPMIwxWindows.la'
-   WXWINDOWS_PKGCONF=OpenIPMIwxWindows.pc
-else
-   WXWINDOWS_DIR=
-   WXWINDOWS_LIB=
-fi
-AC_SUBST(WXWINDOWS_VERSION)
-AC_SUBST(WXWINDOWS_CFLAGS)
-AC_SUBST(WXWINDOWS_LIBS)
-AC_SUBST(WXWINDOWS_DIR)
-AC_SUBST(WXWINDOWS_LIB)
-AC_SUBST(WXWINDOWS_PKGCONF)
 
 # Handle PERL support
 if test "x$perlcflags" = "x" -o "x$perlinstalldir" = "x"; then
@@ -547,7 +490,6 @@ AC_OUTPUT(Makefile
 	  lib/Makefile
 	  unix/Makefile
 	  glib/Makefile
-	  wxWindows/Makefile
 	  ui/Makefile
 	  lanserv/Makefile
 	  sample/Makefile
@@ -569,6 +511,5 @@ AC_OUTPUT(Makefile
 	  OpenIPMIpthread.pc
 	  OpenIPMIposix.pc
 	  OpenIPMIglib.pc
-	  OpenIPMIwxWindows.pc
 	  OpenIPMIcmdlang.pc
 	  OpenIPMIui.pc)
