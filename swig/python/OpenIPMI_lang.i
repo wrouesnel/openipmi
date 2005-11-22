@@ -331,8 +331,11 @@ static swig_ref
 swig_make_ref_destruct_i(void *item, swig_type_info *class)
 {
     swig_ref rv;
+    PyGILState_STATE gstate;
 
+    gstate = PyGILState_Ensure();
     rv.val = SWIG_NewPointerObj(item, class, 1);
+    PyGILState_Release(gstate);
     return rv;
 }
 
@@ -345,8 +348,11 @@ static swig_ref
 swig_make_ref_i(void *item, swig_type_info *class)
 {
     swig_ref rv;
+    PyGILState_STATE gstate;
 
+    gstate = PyGILState_Ensure();
     rv.val = SWIG_NewPointerObj(item, class, 0);
+    PyGILState_Release(gstate);
     return rv;
 }
 
@@ -356,7 +362,10 @@ swig_make_ref_i(void *item, swig_type_info *class)
 static void
 swig_free_ref(swig_ref ref)
 {
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
     Py_DECREF(ref.val);
+    PyGILState_Release(gstate);
 }
 
 static swig_cb_val
@@ -369,7 +378,10 @@ get_swig_cb_i(swig_cb cb)
 static swig_cb_val
 ref_swig_cb_i(swig_cb cb)
 {
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
     Py_INCREF(cb);
+    PyGILState_Release(gstate);
     return cb;
 }
 #define ref_swig_cb(cb, func) ref_swig_cb_i(cb)
@@ -377,26 +389,40 @@ ref_swig_cb_i(swig_cb cb)
 static swig_cb_val
 deref_swig_cb(swig_cb cb)
 {
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
     Py_DECREF(cb);
+    PyGILState_Release(gstate);
     return cb;
 }
 
 static swig_cb_val
 deref_swig_cb_val(swig_cb_val cb)
 {
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
     Py_DECREF(cb);
+    PyGILState_Release(gstate);
     return cb;
 }
 
 static int
 valid_swig_cb_i(swig_cb cb, char *func)
 {
-    PyObject *meth = PyObject_GetAttrString(cb, func);
-    if (!meth)
+    PyObject *meth;
+    PyGILState_STATE gstate;
+    gstate = PyGILState_Ensure();
+    meth = PyObject_GetAttrString(cb, func);
+    if (!meth) {
+	PyGILState_Release(gstate);
 	return 0;
-    if (!PyMethod_Check(meth))
+    }
+    if (!PyMethod_Check(meth)) {
+	PyGILState_Release(gstate);
 	return 0;
+    }
     Py_DECREF(meth);
+    PyGILState_Release(gstate);
     return 1;
 }
 #define valid_swig_cb(v, func) valid_swig_cb_i(v, #func)
@@ -477,8 +503,11 @@ swig_call_cb(swig_cb_val cb, char *method_name,
     char          *errstr;
     PyObject      *o = NULL;
     PyObject      *p;
+    PyGILState_STATE gstate;
 
     n = swig_count_format(format);
+
+    gstate = PyGILState_Ensure();
 
     args = PyTuple_New(n);
     if (!args) {
@@ -621,12 +650,15 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 	    Py_DECREF(o);
     }
     Py_DECREF(args);
+
+    PyGILState_Release(gstate);
     return;
 
  out_err:
     if (o) {
 	Py_DECREF(o);
     }
+    PyGILState_Release(gstate);
 }
 
 %}

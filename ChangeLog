@@ -1,3 +1,9 @@
+2005-11-22 Corey Minyard <cminyard@mvista.com>
+
+	* swig/python/OpenIPMI_lang.i: Fixed all the calls to grab/release
+	the lock state so things will always work properly no matter where
+	the calls come from.
+
 2005-11-21 Corey Minyard <cminyard@mvista.com>
 
 	* lib/entity.c: call _ipmi_mc_put() at the end of

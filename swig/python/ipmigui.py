@@ -327,6 +327,5 @@ if __name__ =="__main__":
     OpenIPMI.set_log_handler(main_handler);
     main_handler.ui = IPMIGui()
     OpenIPMI.open_domain2("d", ["lan", "-U", "minyard", "-P", "test",
-                                "-p", "9000", "-H", "rmcpp_integ_sik",
-                                "localhost"])
+                                "-p", "9000", "localhost"])
     main()
