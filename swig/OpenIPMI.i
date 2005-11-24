@@ -1293,13 +1293,14 @@ threshold_event_state_to_str(ipmi_event_state_t *events)
     }
 
     str = malloc(len+1);
+    str[0] = '\0';
     
     if (ipmi_event_state_get_events_enabled(events))
-	strcat("events ", str);
+	strcat(str, "events ");
     if (ipmi_event_state_get_scanning_enabled(events))
-	strcat("scanning ", str);
+	strcat(str, "scanning ");
     if (ipmi_event_state_get_busy(events))
-	strcat("busy ", str);
+	strcat(str, "busy ");
     s = str + strlen(str);
 
     for (thresh = IPMI_LOWER_NON_CRITICAL;
@@ -1403,13 +1404,14 @@ discrete_event_state_to_str(ipmi_event_state_t *events)
     }
 
     str = malloc(len+1);
+    str[0] = '\0';
     
     if (ipmi_event_state_get_events_enabled(events))
-	strcat("events ", str);
+	strcat(str, "events ");
     if (ipmi_event_state_get_scanning_enabled(events))
-	strcat("scanning ", str);
+	strcat(str, "scanning ");
     if (ipmi_event_state_get_busy(events))
-	strcat("busy ", str);
+	strcat(str, "busy ");
     s = str + strlen(str);
 
     for (offset=0; offset<15; offset++) {
@@ -1500,13 +1502,14 @@ threshold_states_to_str(ipmi_states_t *states)
     }
 
     str = malloc(len+1);
+    str[0] = '\0';
     
     if (ipmi_is_event_messages_enabled(states))
-	strcat("events ", str);
+	strcat(str, "events ");
     if (ipmi_is_sensor_scanning_enabled(states))
-	strcat("scanning ", str);
+	strcat(str, "scanning ");
     if (ipmi_is_initial_update_in_progress(states))
-	strcat("busy ", str);
+	strcat(str, "busy ");
     s = str + strlen(str);
 
     for (thresh = IPMI_LOWER_NON_CRITICAL;
@@ -1550,13 +1553,14 @@ discrete_states_to_str(ipmi_states_t *states)
     }
 
     str = malloc(len+1);
+    str[0] = '\0';
     
     if (ipmi_is_event_messages_enabled(states))
-	strcat("events ", str);
+	strcat(str, "events ");
     if (ipmi_is_sensor_scanning_enabled(states))
-	strcat("scanning ", str);
+	strcat(str, "scanning ");
     if (ipmi_is_initial_update_in_progress(states))
-	strcat("busy ", str);
+	strcat(str, "busy ");
     s = str + strlen(str);
 
     for (offset=0; offset<15; offset++) {
@@ -1878,8 +1882,8 @@ sensor_get_reading_handler(ipmi_sensor_t             *sensor,
     }
     sensor_ref = swig_make_ref(sensor, ipmi_sensor_t);
     statestr = threshold_states_to_str(states);
-    swig_call_cb(cb, "threshold_reading_cb", "%p%d%d%d%f%s", &sensor_ref,
-		 raw_set, raw_value, value_set, value, statestr);
+    swig_call_cb(cb, "threshold_reading_cb", "%p%d%d%d%d%f%s", &sensor_ref,
+		 err, raw_set, raw_value, value_set, value, statestr);
     swig_free_ref_check(sensor_ref, ipmi_sensor_t);
     free(statestr);
     /* One-time call, get rid of the CB. */

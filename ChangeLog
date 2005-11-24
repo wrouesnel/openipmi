@@ -1,3 +1,17 @@
+2005-11-23 Corey Minyard <cminyard@mvista.com>
+
+	* lib/sensor.c: Remove the check for the MC being active when
+	allowing the sensor to perform operations.  It's not always
+	accurate and shouldn't matter.
+
+	* swig/OpenIPMI.i: Fix some string handling errors.
+
+	* swig/OpenIPMI.i: Fix the threshold_reading_cb to pass the error
+	as a parameter
+
+	* swig/python/OpenIPMI_lang.i: Handle generating exception
+	information from callbacks.
+
 2005-11-22 Corey Minyard <cminyard@mvista.com>
 
 	* swig/python/OpenIPMI_lang.i: Fixed all the calls to grab/release

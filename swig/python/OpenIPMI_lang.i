@@ -648,6 +648,8 @@ swig_call_cb(swig_cb_val cb, char *method_name,
 	Py_DECREF(p);
 	if (o)
 	    Py_DECREF(o);
+	if (PyErr_Occurred())
+	    PyErr_Print();
     }
     Py_DECREF(args);
 

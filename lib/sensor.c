@@ -484,7 +484,6 @@ static int
 sensor_ok_to_use(ipmi_sensor_t *sensor)
 {
     return (   !sensor->destroyed
-	    && ipmi_mc_is_active(sensor->mc)
 	    && !_ipmi_domain_in_shutdown(sensor->domain));
 }
 
