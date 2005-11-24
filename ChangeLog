@@ -1,8 +1,16 @@
+2005-11-24 Corey Minyard <cminyard@mvista.com>
+
+	* lib/mc.c, lib/domain.c: Make sure certain things don't run when
+	the object is being destroyed.
+
+	* lib/opq.c: Fix an opq destroy error.
+
 2005-11-23 Corey Minyard <cminyard@mvista.com>
 
 	* lib/sensor.c: Remove the check for the MC being active when
 	allowing the sensor to perform operations.  It's not always
 	accurate and shouldn't matter.
+	* lib/control.c: ditto
 
 	* swig/OpenIPMI.i: Fix some string handling errors.
 

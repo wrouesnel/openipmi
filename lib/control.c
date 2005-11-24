@@ -371,7 +371,6 @@ static int
 control_ok_to_use(ipmi_control_t *control)
 {
     return (   !control->destroyed
-	    && ipmi_mc_is_active(control->mc)
 	    && !_ipmi_domain_in_shutdown(control->domain));
 }
 

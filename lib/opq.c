@@ -116,6 +116,9 @@ opq_destroy_item(ilist_iter_t *iter, void *item, void *cb_data)
     opq_elem_t *elem = (opq_elem_t *) item;
 
     elem->handler(elem->handler_data, 1);
+    /* Memory for this is in elem, so we must delete it before we free
+       the elem. */
+    ilist_delete(iter);
     opq_free_elem(elem);
 }
 

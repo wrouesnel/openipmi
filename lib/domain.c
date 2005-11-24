@@ -2533,6 +2533,9 @@ start_mc_scan(ipmi_domain_t *domain)
     int rv;
     int got_bmc = 0;
 
+    if (domain->in_shutdown)
+	return;
+
     ipmi_lock(domain->mc_lock);
     if (!domain->do_bus_scan || (!ipmi_option_IPMB_scan(domain))) {
 	/* Always scan the local BMC(s). */

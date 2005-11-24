@@ -101,6 +101,8 @@ struct ipmi_mc_s
     unsigned int usecount;
     ipmi_lock_t *lock;
 
+    int           in_destroy;
+
     ipmi_domain_t *domain;
     long          seq;
     ipmi_addr_t   addr;
@@ -438,6 +440,8 @@ check_mc_destroy(ipmi_mc_t *mc)
 	&& (ipmi_sensors_get_count(mc->sensors) == 0)
 	&& (mc->usercount == 0))
     {
+	mc->in_destroy = 1;
+
 	cleanup_mc(mc);
 	/* There are no sensors associated with this MC, so it's safe
            to delete it.  If there are sensors that still reference
@@ -2479,6 +2483,9 @@ ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
 
     CHECK_MC_LOCK(mc);
 
+    if (mc->in_destroy)
+	return ECANCELED;
+
     info = ipmi_mem_alloc(sizeof(*info));
     if (!info)
 	return ENOMEM;
@@ -2490,7 +2497,6 @@ ipmi_mc_reread_sensors(ipmi_mc_t       *mc,
     info->done = done;
     info->done_data = done_data;
     info->sensor_wait_q = _ipmi_sensors_get_waitq(sensors);
-
     if (! opq_new_op(info->sensor_wait_q,
 		     sensor_read_handler, info, 0))
 	rv = ENOMEM;
