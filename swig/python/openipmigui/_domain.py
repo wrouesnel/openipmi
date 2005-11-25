@@ -158,10 +158,14 @@ class Domain:
             attrl.append(("bmc_key", self.bmc_key))
         if (self.address2 != ""):
             attrl.append(("address2", self.address2))
-        if (self.port2 != ""):
-            attrl.append(("port2", self.port2))
-        for h in self.hacks:
-            attrl.append(("hack", h))
+            if (self.port2 != ""):
+                attrl.append(("port2", self.port2))
+        hlen = len(self.hacks)
+        if (hlen > 0):
+            hvals = self.hacks[0]
+            for i in range(1, hlen):
+                hvals = hvals + ' ' + self.hacks[i]
+            attrl.append(("hacks", hvals))
         return attrl
 
     def HandleExpand(self, event):
@@ -184,18 +188,28 @@ class Domain:
         self.password = password
 
     def SetPrivilege(self, value):
+        if (value == 'default'):
+            value = ''
         self.privilege = value
         
     def SetAuthtype(self, value):
+        if (value == 'default'):
+            value = ''
         self.authtype = value
         
     def SetAuth_alg(self, value):
+        if (value == 'default'):
+            value = ''
         self.auth_alg = value
         
     def SetInteg_alg(self, value):
+        if (value == 'default'):
+            value = ''
         self.integ_alg = value
         
     def SetConf_alg(self, value):
+        if (value == 'default'):
+            value = ''
         self.conf_alg = value
         
     def SetBmc_key(self, value):
@@ -209,6 +223,9 @@ class Domain:
         
     def AddHack(self, value):
         self.hacks.append(value)
+        
+    def AddHacks(self, values):
+        self.hacks.extend(values.split())
         
     def Lookup_uses_priv(self, value):
         self.lookup_uses_priv = value
@@ -245,14 +262,16 @@ class Domain:
                 attr.append("-Rl")
             for h in self.hacks:
                 attr.extend(["-H", h])
-            if (self.port2 != ""):
-                attr.extend(["-p2", self.port2])
             if (self.address2 != ""):
                 attr.append("-s")
+                if (self.port2 != ""):
+                    attr.extend(["-p2", self.port2])
             attr.append(self.address)
             if (self.address2 != ""):
                 attr.append(self.address2)
             self.domain_id = OpenIPMI.open_domain2(self.name, attr)
+            if (self.domain_id == None):
+                raise InvalidDomainInfo("Open domain failed, invalid parms")
         else:
             raise InvalidDomainInfo("Invalid connection type: " + self.contype)
 
@@ -288,7 +307,7 @@ class Domain:
         pass
         
     def remove(self):
-        if (hasattr(self, domain_id)):
+        if (self.domain_id != None):
             self.domain_id.convert_to_domain(self)
         self.mainhandler.domains.pop(self.name);
         self.ui.remove_domain(self)
@@ -336,8 +355,8 @@ class _DomainRestore(_saveprefs.RestoreHandler):
                 d.SetAddress2(value)
             elif (attrn == "port2"):
                 d.SetPort2(value)
-            elif (attrn == "hack"):
-                d.AddHack(value)
+            elif (attrn == "hacks"):
+                d.AddHacks(value)
             elif (attrn == "lookup_uses_priv"):
                 d.Lookup_uses_priv(True)
 

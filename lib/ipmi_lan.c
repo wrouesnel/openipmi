@@ -5223,6 +5223,7 @@ ipmi_lanp_setup_con(ipmi_lanp_parm_t *parms,
     if ((cparm.num_ip_addr == 0) || (ip_addrs == NULL))
 	return EINVAL;
     if ((cparm.authtype != IPMI_AUTHTYPE_DEFAULT)
+	&& (cparm.authtype != IPMI_AUTHTYPE_RMCP_PLUS)
 	&& ((cparm.authtype >= MAX_IPMI_AUTHS)
 	    || (ipmi_auths[cparm.authtype].authcode_init == NULL)))
 	return EINVAL;

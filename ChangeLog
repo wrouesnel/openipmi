@@ -1,3 +1,13 @@
+2005-11-25 Corey Minyard <cminyard@mvista.com>
+
+	* lib/aes_cbc.c: Make sure we don't coredump if the connection
+	doesn't get set up.
+
+	* lib/domain.c: Don't iterate the domain list if it is NULL.
+
+	* lib/ipmi_lan.c: Allow RMCP+ to be specified explicitly as a
+	connection type.
+
 2005-11-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, lib/domain.c: Make sure certain things don't run when

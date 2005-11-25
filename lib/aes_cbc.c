@@ -92,6 +92,9 @@ aes_cbc_encrypt(ipmi_con_t    *ipmi,
     unsigned char  padval;
     int            padlen;
 
+    if (!info)
+	return EINVAL;
+
     /* Check for init vector room. */
     if (*header_len < 16)
 	return E2BIG;
@@ -170,6 +173,9 @@ aes_cbc_decrypt(ipmi_con_t    *ipmi,
     int            rv = 0;
     unsigned char  *pad;
     int            padlen;
+
+    if (!info)
+	return EINVAL;
 
     if (l < 32)
 	/* Not possible with this algorithm. */

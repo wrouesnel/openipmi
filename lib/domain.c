@@ -4895,6 +4895,8 @@ ipmi_domain_iterate_domains(ipmi_domain_ptr_cb handler,
 
     if (!handler)
 	return;
+    if (!domains_list)
+	return;
 
     info.handler = handler;
     info.cb_data = cb_data;

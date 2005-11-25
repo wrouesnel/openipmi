@@ -1,11 +1,12 @@
 import wx
 import wx.lib.scrolledpanel as scrolled
+import _domain
 
 authtypes = [ 'default', 'none', 'md2', 'md5', 'straight', 'rmcp+' ]
 privileges = [ 'default', 'callback', 'user', 'operator', 'admin', 'oem' ]
 auth_algs = [ 'default', 'rakp_none', 'rakp_hmac_sha1', 'rakp_hmac_md5' ]
 integ_algs = [ 'default', 'none', 'hmac_sha1', 'hmac_md5', 'md5' ]
-conf_algs = [ 'default', 'none', 'aec_cbc_128', 'xrc4_128', 'xrc4_40' ]
+conf_algs = [ 'default', 'none', 'aes_cbc_128', 'xrc4_128', 'xrc4_40' ]
 
 class OpenDomainDialog(wx.Dialog):
     def __init__(self, mainhandler):
@@ -107,7 +108,7 @@ class OpenDomainDialog(wx.Dialog):
         self.h_intelplus.SetValue(True)
         bbox.Add(self.h_intelplus, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         self.h_rakp_wrong_rolem = wx.CheckBox(self.lanInfo, -1,
-                                              "RAKP Wrong Role(m)")
+                                              "RAKP3 Wrong Role(m)")
         bbox.Add(self.h_rakp_wrong_rolem, 0, wx.ALIGN_LEFT | wx.ALL, 5);
         self.lanInfo_sizer.Add(bbox, 0, wx.LEFT | wx.ALL, 2)
 
@@ -161,8 +162,8 @@ class OpenDomainDialog(wx.Dialog):
             self.status.SetStatusText("No name specified")
             return
         contype = self.contype.GetSelection()
+        d = _domain.Domain(self.mainhandler, name);
         try:
-            d = Domain(self.mainhandler, name);
             if (contype == 0):
                 d.SetType("smi")
                 d.SetPort(str(self.port.GetValue()))
@@ -172,6 +173,21 @@ class OpenDomainDialog(wx.Dialog):
                 d.SetPort(str(self.port.GetValue()))
                 d.SetUsername(str(self.username.GetValue()))
                 d.SetPassword(str(self.password.GetValue()))
+                d.SetPrivilege(privileges[self.privilege.GetSelection()])
+                d.SetAuthtype(authtypes[self.authtype.GetSelection()])
+                d.SetAuth_alg(auth_algs[self.auth_alg.GetSelection()])
+                d.SetInteg_alg(integ_algs[self.integ_alg.GetSelection()])
+                d.SetConf_alg(conf_algs[self.conf_alg.GetSelection()])
+                d.SetBmc_key(str(self.bmc_key.GetValue()))
+                d.Lookup_uses_priv(self.lookup_uses_priv.GetValue())
+                d.SetAddress2(str(self.address2.GetValue()))
+                d.SetPort2(str(self.port2.GetValue()))
+                if (self.h_intelplus.GetValue()):
+                    d.AddHack("intelplus")
+                if (self.h_rakp_wrong_rolem.GetValue()):
+                    d.AddHack("rakp3_wrong_rolem")
+                if (self.h_rmcpp_integ_sik.GetValue()):
+                    d.AddHack("rmcpp_intek_sik")
             d.Connect()
         except _domain.InvalidDomainInfo, e:
             d.remove()
