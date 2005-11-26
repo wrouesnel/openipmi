@@ -2122,8 +2122,15 @@ control_val_get_handler(ipmi_control_t *control, int err, int *val,
     swig_ref    control_ref;
 
     control_ref = swig_make_ref(control, ipmi_control_t);
-    swig_call_cb(cb, "control_get_val_cb", "%p%d%*p", &control_ref, err,
-		 ipmi_control_get_num_vals(control), val);
+    if (err) {
+	/* On err, value may be NULL */
+	int dummy;
+	swig_call_cb(cb, "control_get_val_cb", "%p%d%*p", &control_ref, err,
+		     1, &dummy);
+    } else {
+	swig_call_cb(cb, "control_get_val_cb", "%p%d%*p", &control_ref, err,
+		     ipmi_control_get_num_vals(control), val);
+    }
     swig_free_ref_check(control_ref, ipmi_control_t);
     /* One-time call, get rid of the CB. */
     deref_swig_cb_val(cb);
@@ -3894,12 +3901,37 @@ int pef_str_to_parm(char *str);
 #define ENTITY_ID_SATA_SAS_BUS				51
 #define ENTITY_ID_PROCESSOR_FRONT_SIDE_BUS		52
 
+    %newobject get_id_string;
+    /*
+     * Get the ID string from the SDR
+     */
+    char *get_id_string()
+    {
+	int length = ipmi_entity_get_id_length(self);
+	char *str;
+	if (length < 2)
+	    return NULL;
+	str = malloc(length);
+	if (!str)
+	    return NULL;
+	ipmi_entity_get_id(self, str, length);
+	return str;
+    }
+
     /*
      * Get the entity id for the entity
      */
     int get_entity_id()
     {
 	return ipmi_entity_get_entity_id(self);
+    }
+
+    /*
+     * Get the string representation of the entity id
+     */
+    char *get_entity_id_string()
+    {
+	return ipmi_entity_get_entity_id_string(self);
     }
 
     /*

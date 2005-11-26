@@ -8,6 +8,13 @@
 	* lib/ipmi_lan.c: Allow RMCP+ to be specified explicitly as a
 	connection type.
 
+	* swig/OpenIPMI.i: On an error, pass in a valid dummy array when
+	delivering control value lists, since they may be NULL on an
+	error.
+
+	* swig/OpenIPMI.i: Add entity SDR id and entity id string fetch
+	methods.
+	
 2005-11-24 Corey Minyard <cminyard@mvista.com>
 
 	* lib/mc.c, lib/domain.c: Make sure certain things don't run when

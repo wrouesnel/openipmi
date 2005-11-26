@@ -26,6 +26,16 @@ class IPMICloser:
         if (self.count == 0):
             self.ui.Close(True)
 
+class IPMIGUI_Timer(wx.Timer):
+    def __init__(self, ui):
+        wx.Timer.__init__(self)
+        self.ui = ui
+        self.Start(1000, oneShot=True)
+
+    def Notify(self):
+        self.ui.Timeout()
+        self.Start(1000, oneShot=True)
+
 class IPMIGUI(wx.Frame):
     def __init__(self, mainhandler):
         wx.Frame.__init__(self, None, 01, "IPMI GUI")
@@ -72,6 +82,29 @@ class IPMIGUI(wx.Frame):
 
         self.Show(True)
 
+        self.last_scan = None
+        self.timer = IPMIGUI_Timer(self)
+
+    def Timeout(self):
+        if self.last_scan != None:
+            next = self.last_scan
+        else:
+            next = self.tree.GetFirstVisibleItem()
+        callcount = 0
+        checkcount = 0
+        while (callcount < 100) and (checkcount < 1000) and next.IsOk():
+            data = self.tree.GetPyData(next)
+            if (data != None) and (hasattr(data, "DoUpdate")):
+                callcount = callcount + 1
+                data.DoUpdate()
+            next = self.tree.GetNextVisible(next)
+            checkcount = checkcount + 1
+            
+        if next.IsOk():
+            self.last_scan = next
+        else:
+            self.last_scan = None
+        
     def quit(self, event):
         self.closecount = len(self.mainhandler.domains)
         if (self.closecount == 0):
@@ -160,7 +193,7 @@ class IPMIGUI(wx.Frame):
         e.treeroot = self.tree.AppendItem(d.entityroot, str(e))
         e.sensorroot = self.tree.AppendItem(e.treeroot, "Sensors")
         e.controlroot = self.tree.AppendItem(e.treeroot, "Controls")
-        self.tree.SetPyData(e.treeroot, None)
+        self.tree.SetPyData(e.treeroot, e)
         self.tree.SetPyData(e.sensorroot, None)
         self.tree.SetPyData(e.controlroot, None)
     
@@ -170,7 +203,7 @@ class IPMIGUI(wx.Frame):
 
     def add_mc(self, d, m):
         m.treeroot = self.tree.AppendItem(d.mcroot, m.name)
-        self.tree.SetPyData(m.treeroot, None)
+        self.tree.SetPyData(m.treeroot, m)
 
     def remove_mc(self, m):
         if (hasattr(m, "treeroot")):
@@ -178,6 +211,7 @@ class IPMIGUI(wx.Frame):
 
     def add_sensor(self, e, s):
         s.treeroot = self.tree.AppendItem(e.sensorroot, str(s))
+        self.tree.SetPyData(s.treeroot, s)
 
     def remove_sensor(self, s):
         if (hasattr(s, "treeroot")):
@@ -185,6 +219,7 @@ class IPMIGUI(wx.Frame):
 
     def add_control(self, e, c):
         c.treeroot = self.tree.AppendItem(e.controlroot, str(c))
+        self.tree.SetPyData(c.treeroot, c)
 
     def remove_control(self, c):
         if (hasattr(c, "treeroot")):

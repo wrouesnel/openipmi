@@ -11,6 +11,11 @@ class Entity:
         d.entities[self.name] = self
         self.ui = d.ui
         self.ui.add_entity(self.d, self)
+        eid = entity.get_id_string()
+        if (eid == None):
+            eid = entity.get_entity_id_string()
+        if (eid != None):
+            self.ui.set_item_text(self.treeroot, str(self), eid)
         self.sensors = { }
         self.controls = { }
 
