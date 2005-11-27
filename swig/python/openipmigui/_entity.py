@@ -10,7 +10,12 @@ class Entity:
         self.entity_id = entity.get_id()
         d.entities[self.name] = self
         self.ui = d.ui
-        self.ui.add_entity(self.d, self)
+        if (entity.is_child()):
+            entity.iterate_parents(self)
+            self.ui.add_entity(self.d, self, parent=self.parent)
+            self.parent = None # Don't leave circular reference
+        else:
+            self.ui.add_entity(self.d, self)
         eid = entity.get_id_string()
         if (eid == None):
             eid = entity.get_entity_id_string()
@@ -22,6 +27,9 @@ class Entity:
     def __str__(self):
         return self.name
 
+    def entity_iter_entities_cb(self, child, parent):
+        self.parent = self.d.entities[parent.get_name()]
+        
     def remove(self):
         self.d.entities.pop(self.name)
         self.ui.remove_entity(self)

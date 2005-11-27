@@ -49,10 +49,17 @@ class IPMIGUI(wx.Frame):
         self.Bind(wx.EVT_MENU, self.quit, id=wx.ID_EXIT);
         item = filemenu.Append(-1, "&Open Domain\tCtrl-O", "Open Domain")
         self.Bind(wx.EVT_MENU, self.openDomain, item);
-        item = filemenu.Append(-1, "&Save Prefs\tCtrl-s", "Save Prefs")
+        item = filemenu.Append(-1, "&Save Prefs\tCtrl-S", "Save Prefs")
         self.Bind(wx.EVT_MENU, self.savePrefs, item);
         menubar.Append(filemenu, "&File")
         
+        viewmenu = wx.Menu()
+        item = viewmenu.Append(-1, "&Expand All\tCtrl-E", "Expand All")
+        self.Bind(wx.EVT_MENU, self.ExpandAll, item);
+        item = viewmenu.Append(-1, "&Collapse All\tCtrl-C", "Collapse All")
+        self.Bind(wx.EVT_MENU, self.CollapseAll, item);
+        menubar.Append(viewmenu, "&View")
+
         self.SetMenuBar(menubar)
 
         box = wx.BoxSizer(wx.HORIZONTAL)
@@ -121,6 +128,29 @@ class IPMIGUI(wx.Frame):
 
     def savePrefs(self, event):
         self.mainhandler.savePrefs()
+
+    def ExpandItem(self, item):
+        (child, cookie) = self.tree.GetFirstChild(item)
+        while child.IsOk():
+            if self.tree.ItemHasChildren(child):
+                self.tree.Expand(child)
+                self.ExpandItem(child)
+            (child, cookie) = self.tree.GetNextChild(item, cookie)
+        
+    def ExpandAll(self, event):
+        self.tree.Expand(self.treeroot)
+        self.ExpandItem(self.treeroot)
+        
+    def CollapseItem(self, item):
+        (child, cookie) = self.tree.GetFirstChild(item)
+        while child.IsOk():
+            if self.tree.ItemHasChildren(child):
+                self.tree.Collapse(child)
+                self.CollapseItem(child)
+            (child, cookie) = self.tree.GetNextChild(item, cookie)
+        
+    def CollapseAll(self, event):
+        self.CollapseItem(self.treeroot)
         
     def new_log(self, log):
         newlines = log.count('\n') + 1
@@ -138,22 +168,26 @@ class IPMIGUI(wx.Frame):
         d.mcroot = self.tree.AppendItem(d.treeroot, "MCs")
         self.tree.Expand(self.treeroot)
 
-    def prepend_item(self, o, name, value, data=None):
+    def prepend_item(self, o, name, value, data=None, parent=None):
+        if (parent == None):
+            parent = o.treeroot
         if (value == None):
-            item = self.tree.PrependItem(o.treeroot, name + ":")
+            item = self.tree.PrependItem(parent, name + ":")
             self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
         else:
-            item = self.tree.PrependItem(o.treeroot, name + ":\t" + value)
+            item = self.tree.PrependItem(parent, name + ":\t" + value)
             self.tree.SetItemTextColour(item, wx.BLACK)
         self.tree.SetPyData(item, data)
         return item
 
-    def append_item(self, o, name, value, data=None):
+    def append_item(self, o, name, value, data=None, parent=None):
+        if (parent == None):
+            parent = o.treeroot
         if (value == None):
-            item = self.tree.AppendItem(o.treeroot, name + ":")
+            item = self.tree.AppendItem(parent, name + ":")
             self.tree.SetItemTextColour(item, wx.LIGHT_GREY)
         else:
-            item = self.tree.AppendItem(o.treeroot, name + ":\t" + value)
+            item = self.tree.AppendItem(parent, name + ":\t" + value)
             self.tree.SetItemTextColour(item, wx.BLACK)
         self.tree.SetPyData(item, data)
         return item
@@ -189,8 +223,12 @@ class IPMIGUI(wx.Frame):
         if (hasattr(d, "treeroot")):
             self.tree.Delete(d.treeroot)
 
-    def add_entity(self, d, e):
-        e.treeroot = self.tree.AppendItem(d.entityroot, str(e))
+    def add_entity(self, d, e, parent=None):
+        if (parent == None):
+            parent = d.entityroot
+        else:
+            parent = parent.treeroot
+        e.treeroot = self.tree.AppendItem(parent, str(e))
         e.sensorroot = self.tree.AppendItem(e.treeroot, "Sensors")
         e.controlroot = self.tree.AppendItem(e.treeroot, "Controls")
         self.tree.SetPyData(e.treeroot, e)

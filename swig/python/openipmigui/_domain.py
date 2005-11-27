@@ -401,6 +401,17 @@ class Domain:
     def HandleExpand(self, event):
         self.DoUpdate()
 
+    def HandleMenu(self, event):
+        eitem = event.GetItem();
+        menu = wx.Menu();
+        item = menu.Append(-1, "Close")
+        self.ui.Bind(wx.EVT_MENU, self.CloseMenuHandler, item)
+        self.ui.PopupMenu(menu, self.ui.get_item_pos(eitem))
+        menu.Destroy()
+
+    def CloseMenuHandler(self, event):
+        self.remove()
+
     def Connect(self):
         attr = [ ]
         self.connection[0].FillinConAttr(attr)
@@ -466,6 +477,6 @@ class _DomainRestore(_saveprefs.RestoreHandler):
             d.Connect()
         except InvalidDomainInfo, e:
             d.remove()
-            print "Error making domain conneciont for " + name + ": " + str(e)
+            print "Error making domain connection for " + name + ": " + str(e)
 
 _DomainRestore()

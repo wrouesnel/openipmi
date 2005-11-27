@@ -199,6 +199,7 @@ class Control:
     def __init__(self, e, control):
         self.e = e
         self.name = control.get_name()
+        self.control_type_str = control.get_type_string()
         self.control_id = control.get_id()
         self.ui = e.ui;
         self.updater = ControlRefreshData(self)
@@ -233,6 +234,47 @@ class Control:
                 self.setter = ControlSet(self)
         else:
             self.setter = None
+
+        self.ui.prepend_item(self, "Control Type", self.control_type_str)
+        cs = [ ]
+        if (control.has_events()):
+            cs.append("generates_events")
+        if (self.is_settable):
+            cs.append("settable")
+        if (self.is_readable):
+            cs.append("readable")
+        self.ui.append_item(self, "Control Capabilities", ' '.join(cs))
+        if (self.control_type == OpenIPMI.CONTROL_LIGHT):
+            self.ui.append_item(self, "Num Lights", str(self.num_vals))
+            if (self.setting_light):
+                self.ui.append_item(self, "Light Type", "setting")
+                for i in range(0, self.num_vals):
+                    cap = [ ]
+                    if control.light_has_local_control(i):
+                        cap.append("local_control")
+                    for j in range (0, OpenIPMI.CONTROL_NUM_COLORS):
+                        if control.light_is_color_supported(i, j):
+                            cap.append(OpenIPMI.color_string(j))
+                    self.ui.append_item(self, "Light" + str(i), ' '.join(cap))
+            else:
+                self.ui.append_item(self, "Light Type", "transition")
+                for i in range(0, self.num_vals):
+                    cap = [ ]
+                    for j in range (0, control.get_num_light_values()):
+                        cap2 = [ ]
+                        for k in range (0,control.get_num_light_transitions()):
+                            cap3 = [ ]
+                            val = control.get_light_color(i, j, k)
+                            cap3.append(OpenIPMI.color_string(val))
+                            val = control.get_light_time(i, j, k)
+                            cap3.append(OpenIPMI.color_string(cval))
+                            cap2.append(cap3)
+                        cap.append(cap2)
+                    self.ui.append_item(self, "Light" + str(i), str(cap))
+        elif (self.control_type == OpenIPMI.CONTROL_IDENTIFIER):
+            self.ui.append_item(self, "Max Length", str(self.num_vals))
+        else:
+            self.ui.append_item(self, "Num Vals", str(self.num_vals))
 
     def __str__(self):
         return self.name
